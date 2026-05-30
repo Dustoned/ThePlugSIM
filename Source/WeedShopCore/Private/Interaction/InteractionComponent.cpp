@@ -8,13 +8,15 @@
 UInteractionComponent::UInteractionComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+
+	// Co-op: de component moet repliceren zodat de Server-RPC gerouteerd kan worden.
+	SetIsReplicatedByDefault(true);
 }
 
 void UInteractionComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Alleen de lokale speler heeft prompts/traces nodig.
 	if (!GetOwner() || !GetOwner()->IsA(APawn::StaticClass()))
 	{
 		UE_LOG(LogWeedShop, Warning, TEXT("UInteractionComponent hoort op een Pawn te zitten, niet op %s."),
@@ -25,7 +27,13 @@ void UInteractionComponent::BeginPlay()
 void UInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	UpdateFocus();
+
+	// Focus + prompt zijn puur lokaal: alleen voor de speler die deze pawn bestuurt.
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (OwnerPawn && OwnerPawn->IsLocallyControlled())
+	{
+		UpdateFocus();
+	}
 }
 
 bool UInteractionComponent::GetViewPoint(FVector& OutLocation, FRotator& OutRotation) const
@@ -97,6 +105,49 @@ void UInteractionComponent::TryInteract()
 		return;
 	}
 
+	// Host / single-player heeft authority -> meteen uitvoeren. Client -> via de server.
+	if (GetOwnerRole() == ROLE_Authority)
+	{
+		PerformInteract(Target);
+	}
+	else
+	{
+		ServerInteract(Target);
+	}
+}
+
+void UInteractionComponent::ServerInteract_Implementation(AActor* Target)
+{
+	// Validatie op de server: bestaat het, is het interact-baar, en staat de speler dichtbij genoeg?
+	if (!IsValid(Target) || !Target->Implements<UInteractable>())
+	{
+		return;
+	}
+
+	if (!IsWithinReach(Target))
+	{
+		return;
+	}
+
+	PerformInteract(Target);
+}
+
+void UInteractionComponent::PerformInteract(AActor* Target)
+{
 	APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	IInteractable::Execute_Interact(Target, OwnerPawn);
+}
+
+bool UInteractionComponent::IsWithinReach(const AActor* Target) const
+{
+	const AActor* OwnerActor = GetOwner();
+	if (!OwnerActor || !Target)
+	{
+		return false;
+	}
+
+	// Ruime marge bovenop de trace-afstand om client/server-latency en hitbox-grootte op te vangen.
+	const float MaxDist = InteractionDistance * 1.5f;
+	return FVector::DistSquared(OwnerActor->GetActorLocation(), Target->GetActorLocation())
+		<= FMath::Square(MaxDist);
 }

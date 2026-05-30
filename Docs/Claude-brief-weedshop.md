@@ -13,6 +13,7 @@ Deze brief is bedoeld om in de repo te zetten (`/docs/CODEX_BRIEF.md`) als de le
 ## Legenda — het complete plaatje in één blik
 
 - **Genre & perspectief:** first-person winkel-/dealer-sim, PC (muis/toetsenbord).
+- **Spelers:** **solo volledig speelbaar**, maar **online co-op (2-3 spelers)** is een vast doel. Daarom wordt **elke feature replication-aware** gebouwd vanaf dag 1 (server-authoritative state, mutaties via Server-RPC/op de server, visuals & UI lokaal). Co-op is dropdown-in, niet verplicht. Zie de co-op-principes in Sectie 4.
 - **Pitch:** begin als straatdealer in je appartement → word een legale wietwinkel → groei naar een franchise.
 - **Structuur:** endless met **milestones**; milestones unlocken producten/gear en sturen de fase-overgangen.
 - **3 fases:** (1) straatdealer/appartement **= MVP**, (2) legale winkel, (3) franchise.
@@ -148,6 +149,19 @@ eindKans   = clamp(eindKans, 0, 100)
 ---
 
 ## 4. Architectuur & mapstructuur
+
+### Co-op / replicatie-principes (geldt voor ELK systeem)
+
+De game is solo speelbaar maar wordt co-op-klaar gebouwd. Per nieuw systeem altijd vooraf bepalen:
+
+- **Wie is de authority?** Server beslist over alle gedeelde game-state. Clients vragen alleen aan.
+- **Wat repliceert?** Gedeelde data krijgt `UPROPERTY(Replicated)` of `ReplicatedUsing=OnRep_X`; UI/visuals luisteren op `OnRep_`- of multicast-delegates.
+- **Welke acties muteren state?** Die lopen via een **Server-RPC** (of draaien alleen op de server) met server-side validatie — nooit de client vertrouwen voor geld, voorraad, plant-groei, etc.
+- **Lokaal vs. gedeeld:** camera-traces, prompts, input-feedback zijn lokaal (`IsLocallyControlled`); de gevolgen zijn server-authoritative.
+- **Subsystems:** gedeelde kas/voorraad server-authoritative; per-speler-data op de (replicerende) pawn/PlayerState.
+- **Test:** elke fase testen in PIE met **2 spelers** (Listen Server) vóór door te gaan.
+
+> Het interactie-systeem (`UInteractionComponent`) is het referentie-sjabloon: lokale focus-trace → `TryInteract()` → bij authority direct, anders `ServerInteract(Target)` met validatie.
 
 ### Source (C++)
 Twee modules, zodat jouw gameplay gescheiden blijft van template-boilerplate en Git-diffs schoon blijven:
