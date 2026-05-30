@@ -161,8 +161,8 @@ void AWeedShopHUD::DrawHUD()
 				const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
 				const float CY = Canvas ? Canvas->ClipY : 720.f;
 				const bool bValid = BC->IsPlacementValid();
-				DrawText(bValid ? TEXT("Left-click to place the pot   |   Right-click / B to cancel")
-								: TEXT("Aim at the floor...   (Right-click / B to cancel)"),
+				DrawText(bValid ? TEXT("Left-click to place   |   switch hotbar slot to put it away")
+								: TEXT("Aim at the floor...   |   switch hotbar slot to put it away"),
 					bValid ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(1.f, 0.8f, 0.4f),
 					CX - 220.f, CY - 140.f, Font);
 			}
@@ -289,7 +289,7 @@ void AWeedShopHUD::DrawHUD()
 			{
 				const bool bPlaceable = (Held == FName(TEXT("Pot")));
 				HandLine = FString::Printf(TEXT("In hand: %s%s"), *PrettyItemName(Held),
-					bPlaceable ? TEXT("   -   left-click / B to place") : TEXT(""));
+					bPlaceable ? TEXT("   -   left-click to place") : TEXT(""));
 			}
 			DrawText(HandLine, FLinearColor(1.f, 0.95f, 0.6f), (ScreenW - TotalW) * 0.5f, SY - 24.f, Font);
 			DrawText(TEXT("I = inventory   |   R = roll joint   |   F = give sample (look at NPC)"),

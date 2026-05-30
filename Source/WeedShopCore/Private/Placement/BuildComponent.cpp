@@ -3,13 +3,13 @@
 #include "WeedShopCore.h"
 #include "Cultivation/GrowPlant.h"
 #include "Inventory/InventoryComponent.h"
+#include "Phone/PhoneClientComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
-#include "UObject/ConstructorHelpers.h"
 
 UBuildComponent::UBuildComponent()
 {
@@ -81,10 +81,10 @@ void UBuildComponent::StartPlacing(FName ItemId)
 			Ghost->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			Ghost->SetCastShadow(false);
 			Ghost->SetAbsolute(true, true, true); // niet meebewegen met de pawn; we zetten de wereld-transform zelf
-			static ConstructorHelpers::FObjectFinder<UStaticMesh> CylFinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-			if (CylFinder.Succeeded())
+			// LoadObject (geen ConstructorHelpers — die mag alleen in een constructor, anders crash).
+			if (UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
 			{
-				Ghost->SetStaticMesh(CylFinder.Object);
+				Ghost->SetStaticMesh(Cyl);
 			}
 		}
 	}
@@ -110,7 +110,37 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	if (!bPlacing || !OwnerPawn || !OwnerPawn->IsLocallyControlled())
+	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled())
+	{
+		return;
+	}
+
+	// Auto-preview: heb je een plaatsbaar item in de hand (en geen UI open), toon meteen de
+	// preview zodat je direct kunt plaatsen. Schakel je naar iets anders, dan verdwijnt 'ie.
+	{
+		bool bUIOpen = false;
+		if (const UPhoneClientComponent* Ph = GetOwner()->FindComponentByClass<UPhoneClientComponent>())
+		{
+			bUIOpen = Ph->IsOpen() || Ph->IsRollOpen() || Ph->IsDealOpen() || Ph->IsInventoryOpen();
+		}
+		const UInventoryComponent* Inv = GetOwnerInventory();
+		const FName Held = Inv ? Inv->GetActiveItemId() : NAME_None;
+		const bool bPlaceable = (Held == FName(TEXT("Pot")));
+
+		if (bPlaceable && !bUIOpen)
+		{
+			if (!bPlacing || PlacingItemId != Held)
+			{
+				StartPlacing(Held);
+			}
+		}
+		else if (bPlacing)
+		{
+			CancelPlacing();
+		}
+	}
+
+	if (!bPlacing)
 	{
 		return;
 	}

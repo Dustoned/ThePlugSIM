@@ -105,14 +105,9 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
 	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &AThePlugSIMCharacter::ToggleRollUI);
 
-	// Plaats-modus: links-klik = gebruik item in de hand / bevestig plaatsen; rechts-klik = annuleren.
-	// B = snelkoppeling om de pot in de hand direct te plaatsen.
+	// Plaats-modus is automatisch: een plaatsbaar item in de hand toont meteen de preview
+	// (zie UBuildComponent). Links-klik plaatst; schakel naar een ander hotbar-slot om te stoppen.
 	PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnPrimaryClick);
-	if (UBuildComponent* B = Build.Get())
-	{
-		PlayerInputComponent->BindKey(EKeys::B, IE_Pressed, this, &AThePlugSIMCharacter::UseActiveItem);
-		PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, B, &UBuildComponent::CancelPlacing);
-	}
 
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
