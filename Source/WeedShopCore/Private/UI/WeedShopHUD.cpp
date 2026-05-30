@@ -118,6 +118,11 @@ void AWeedShopHUD::DrawHUD()
 		{
 			DrawRollUI(Phone);
 		}
+		else if (PlayerOwner)
+		{
+			// Roll-UI dicht: cursor terug naar standaard (anders blijft het handje hangen).
+			PlayerOwner->CurrentMouseCursor = EMouseCursor::Default;
+		}
 	}
 
 	// Interactie-prompt.
@@ -470,12 +475,40 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 		FLinearColor::White, InnerX, y, Font);
 	y += 28.f;
 
-	// Slider met klikbare stops per gram (1..MaxG). Klik op een vakje = dat aantal gram.
+	// Slider met klikbare/sleepbare stops per gram (1..MaxG).
 	const float TrackX = InnerX;
 	const float TrackW = W - 32.f;
 	const float TrackY = y + 6.f;
 	const float TrackH = 16.f;
 	const float SegW = TrackW / float(MaxG);
+
+	// Welk gram-vak hangt de cursor boven? (betrouwbaar via hit-box hover, geen DPI-gedoe).
+	int32 HoverG = 0;
+	if (HoveredBox.IsNone() == false)
+	{
+		const FString HS = HoveredBox.ToString();
+		if (HS.StartsWith(TEXT("rollg_")))
+		{
+			HoverG = FCString::Atoi(*HS.RightChop(6));
+		}
+	}
+	const bool bOverTrack = (HoverG >= 1 && HoverG <= MaxG);
+
+	// Slepen: muisknop ingedrukt + cursor boven de balk -> volg het gram-vak onder de cursor.
+	// Werkt puur op de hover-staat (zelfde systeem als klikken), dus DPI-onafhankelijk.
+	const bool bMouseDown = PlayerOwner && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton);
+	const bool bDragging = bMouseDown && bOverTrack;
+	if (bDragging && HoverG != G)
+	{
+		Phone->SetRollGrams(HoverG);
+	}
+
+	// Cursor: handje boven de balk, dichte greep terwijl je sleept.
+	if (PlayerOwner)
+	{
+		PlayerOwner->CurrentMouseCursor = bDragging ? EMouseCursor::GrabHandClosed
+			: (bOverTrack ? EMouseCursor::GrabHand : EMouseCursor::Default);
+	}
 
 	// Achtergrond-track + gevulde balk tot het gekozen gram.
 	DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.95f), TrackX, TrackY, TrackW, TrackH);
@@ -485,10 +518,10 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	{
 		const float cx = TrackX + (g - 1) * SegW;
 		const FName Box(*FString::Printf(TEXT("rollg_%d"), g));
-		const bool bHover = (HoveredBox == Box);
+		const bool bHover = (HoverG == g);
 		const bool bSel = (g == G);
 
-		// Vak-rand bij hover/selectie zodat je ziet dat het klikbaar is.
+		// Vak-rand bij hover/selectie zodat je ziet dat het klikbaar/sleepbaar is.
 		if (bHover || bSel)
 		{
 			DrawRect(bSel ? FLinearColor(0.6f, 1.f, 0.6f, 0.35f) : FLinearColor(1.f, 1.f, 1.f, 0.20f),
@@ -497,13 +530,15 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 		DrawText(FString::Printf(TEXT("%dg"), g), bSel ? FLinearColor::White : FLinearColor(0.7f, 0.7f, 0.8f),
 			cx + SegW * 0.5f - 8.f, TrackY + TrackH + 3.f, Font);
 
-		// Klik-vak per gram (betrouwbaar, naam -> gram; geen muis-coördinaten nodig).
+		// Klik-/sleep-vak per gram (betrouwbaar, naam -> gram; geen muis-coördinaten nodig).
 		AddHitBox(FVector2D(cx, TrackY - 6.f), FVector2D(SegW, TrackH + 28.f), Box, true, 3);
 	}
 
-	// Handle op de gekozen positie.
+	// Handle op de gekozen positie — groter en geel terwijl je sleept, zodat je ziet dat je 'm vasthebt.
 	const float HandleX = TrackX + (G - 0.5f) * SegW;
-	DrawRect(FLinearColor::White, HandleX - 5.f, TrackY - 6.f, 10.f, TrackH + 12.f);
+	const float HalfW = bDragging ? 8.f : 5.f;
+	DrawRect(bDragging ? FLinearColor(1.f, 0.9f, 0.3f) : FLinearColor::White,
+		HandleX - HalfW, TrackY - 8.f, HalfW * 2.f, TrackH + 16.f);
 
 	y += 46.f;
 
