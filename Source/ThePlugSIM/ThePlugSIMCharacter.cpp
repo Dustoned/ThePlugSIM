@@ -80,30 +80,36 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AThePlugSIMCharacter::LookInput);
 	}
 
-	// Telefoon: Tab = open/sluit, Q = wissel tab, 1-6 = reserve naast klikken in de HUD.
+	// Telefoon: Tab = open/sluit, Q = wissel tab. Cijfers 1-8 kiezen een hotbar-slot (in de hand);
+	// staat de telefoon open dan werken ze als catalogus-keuze (afgehandeld in HotbarOrPhoneKey).
 	if (UPhoneClientComponent* Ph = Phone.Get())
 	{
-		PlayerInputComponent->BindKey(EKeys::Tab,   IE_Pressed, Ph, &UPhoneClientComponent::Toggle);
-		PlayerInputComponent->BindKey(EKeys::Q,     IE_Pressed, Ph, &UPhoneClientComponent::CycleTab);
-		PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
-		PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
-		PlayerInputComponent->BindKey(EKeys::Three, IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
-		PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
-		PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
-		PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
+		PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, Ph, &UPhoneClientComponent::Toggle);
+		PlayerInputComponent->BindKey(EKeys::Q,   IE_Pressed, Ph, &UPhoneClientComponent::CycleTab);
 	}
+	PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Seven, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Eight, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+
+	// Scrollwiel: vorige/volgende hotbar-slot.
+	PlayerInputComponent->BindKey(EKeys::MouseScrollUp,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarPrev);
+	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AThePlugSIMCharacter::HotbarNext);
 
 	// Straat-werving: F geeft de aangekeken NPC een gratis sample; R draait een joint.
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
 	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &AThePlugSIMCharacter::ToggleRollUI);
 
-	// Plaats-modus: B = pot plaatsen aan/uit, links-klik = bevestigen, rechts-klik = annuleren.
-	// ConfirmPlacement/CancelPlacing doen niets als je niet in plaats-modus bent, dus dit botst
-	// niet met UI-klikken.
+	// Plaats-modus: links-klik = gebruik item in de hand / bevestig plaatsen; rechts-klik = annuleren.
+	// B = snelkoppeling om de pot in de hand direct te plaatsen.
+	PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnPrimaryClick);
 	if (UBuildComponent* B = Build.Get())
 	{
-		PlayerInputComponent->BindKey(EKeys::B, IE_Pressed, B, &UBuildComponent::TogglePotPlacement);
-		PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, B, &UBuildComponent::ConfirmPlacement);
+		PlayerInputComponent->BindKey(EKeys::B, IE_Pressed, this, &AThePlugSIMCharacter::UseActiveItem);
 		PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, B, &UBuildComponent::CancelPlacing);
 	}
 
@@ -292,5 +298,78 @@ void AThePlugSIMCharacter::ToggleRollUI()
 	if (Phone)
 	{
 		Phone->ToggleRollUI();
+	}
+}
+
+void AThePlugSIMCharacter::HotbarOrPhoneKey(FKey Key)
+{
+	// Telefoon open -> catalogus-keuze; anders hotbar-slot selecteren.
+	if (Phone && Phone->IsOpen())
+	{
+		Phone->HandleNumberKey(Key);
+		return;
+	}
+	int32 Index = -1;
+	if (Key == EKeys::One)        Index = 0;
+	else if (Key == EKeys::Two)   Index = 1;
+	else if (Key == EKeys::Three) Index = 2;
+	else if (Key == EKeys::Four)  Index = 3;
+	else if (Key == EKeys::Five)  Index = 4;
+	else if (Key == EKeys::Six)   Index = 5;
+	else if (Key == EKeys::Seven) Index = 6;
+	else if (Key == EKeys::Eight) Index = 7;
+	if (Index >= 0 && Inventory)
+	{
+		Inventory->SetActiveSlot(Index);
+	}
+}
+
+void AThePlugSIMCharacter::HotbarPrev()
+{
+	if (Inventory && Phone && !Phone->IsOpen())
+	{
+		Inventory->CycleActiveSlot(-1);
+	}
+}
+
+void AThePlugSIMCharacter::HotbarNext()
+{
+	if (Inventory && Phone && !Phone->IsOpen())
+	{
+		Inventory->CycleActiveSlot(+1);
+	}
+}
+
+void AThePlugSIMCharacter::OnPrimaryClick()
+{
+	// Klik gaat naar de UI als die open is (HUD hit-boxes regelen dat zelf).
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()))
+	{
+		return;
+	}
+	// In plaats-modus: bevestig de plaatsing. Anders: gebruik het item in de hand.
+	if (Build && Build->IsPlacing())
+	{
+		Build->ConfirmPlacement();
+		return;
+	}
+	UseActiveItem();
+}
+
+void AThePlugSIMCharacter::UseActiveItem()
+{
+	if (!Inventory || !Build)
+	{
+		return;
+	}
+	// UI open? Niet gebruiken (klik is voor de UI).
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()))
+	{
+		return;
+	}
+	const FName Item = Inventory->GetActiveItemId();
+	if (Item == FName(TEXT("Pot")))
+	{
+		Build->TogglePotPlacement();
 	}
 }

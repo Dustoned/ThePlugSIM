@@ -237,7 +237,8 @@ void AWeedShopHUD::DrawHUD()
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
 			const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
-			const int32 SlotCount = FMath::Max(8, Stacks.Num());
+			const int32 SlotCount = UInventoryComponent::HotbarSize; // vaste hotbar (8 slots)
+			const int32 Active = Inv->GetActiveSlot();
 			const float SlotW = 84.f;
 			const float SlotH = 46.f;
 			const float ScreenW = Canvas ? Canvas->ClipX : 1280.f;
@@ -248,7 +249,17 @@ void AWeedShopHUD::DrawHUD()
 
 			for (int32 i = 0; i < SlotCount; ++i)
 			{
-				DrawRect(FLinearColor(0.08f, 0.08f, 0.10f, 0.85f), SX, SY, SlotW, SlotH);
+				const bool bActive = (i == Active);
+				// Achtergrond + gele rand voor het geselecteerde ("in de hand") slot.
+				if (bActive)
+				{
+					DrawRect(FLinearColor(1.f, 0.85f, 0.1f, 0.9f), SX - 3.f, SY - 3.f, SlotW + 6.f, SlotH + 6.f);
+				}
+				DrawRect(bActive ? FLinearColor(0.16f, 0.16f, 0.10f, 0.95f) : FLinearColor(0.08f, 0.08f, 0.10f, 0.85f),
+					SX, SY, SlotW, SlotH);
+				// Slotnummer (1-8).
+				DrawText(FString::Printf(TEXT("%d"), i + 1), FLinearColor(0.5f, 0.5f, 0.6f), SX + SlotW - 14.f, SY + 2.f, Font);
+
 				if (Stacks.IsValidIndex(i))
 				{
 					const FInventoryStack& S = Stacks[i];
@@ -261,8 +272,22 @@ void AWeedShopHUD::DrawHUD()
 				SX += SlotW + 6.f;
 			}
 
+			// "In de hand" + bruikbaarheid.
+			const FName Held = Inv->GetActiveItemId();
+			FString HandLine;
+			if (Held.IsNone())
+			{
+				HandLine = TEXT("In hand: (empty)   -   1-8 / scroll to select");
+			}
+			else
+			{
+				const bool bPlaceable = (Held == FName(TEXT("Pot")));
+				HandLine = FString::Printf(TEXT("In hand: %s%s"), *PrettyItemName(Held),
+					bPlaceable ? TEXT("   -   left-click / B to place") : TEXT(""));
+			}
+			DrawText(HandLine, FLinearColor(1.f, 0.95f, 0.6f), (ScreenW - TotalW) * 0.5f, SY - 24.f, Font);
 			DrawText(TEXT("R = roll joint   |   F = give sample (look at NPC)"),
-				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 22.f, Font);
+				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 44.f, Font);
 		}
 	}
 }

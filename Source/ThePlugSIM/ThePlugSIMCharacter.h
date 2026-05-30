@@ -107,6 +107,19 @@ protected:
 	/** Open/sluit het roll-paneel (toets R) — daar kies je het aantal gram. */
 	void ToggleRollUI();
 
+	/** Cijfertoets 1-8: kiest hotbar-slot als geen telefoon open is, anders telefoon-catalogus. */
+	void HotbarOrPhoneKey(FKey Key);
+
+	/** Scrollwiel: vorige/volgende hotbar-slot. */
+	void HotbarPrev();
+	void HotbarNext();
+
+	/** Links-klik: bevestig plaatsen tijdens plaats-modus, anders "gebruik" het item in de hand. */
+	void OnPrimaryClick();
+
+	/** Gebruik het geselecteerde hotbar-item (bv. Pot -> plaats-modus). */
+	void UseActiveItem();
+
 
 public:
 

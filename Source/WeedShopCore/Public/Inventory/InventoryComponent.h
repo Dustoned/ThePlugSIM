@@ -60,6 +60,24 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	const TArray<FInventoryStack>& GetStacks() const { return Stacks; }
 
+	// --- Hotbar-selectie (puur lokale UI-staat: welk slot heb je "in de hand") ---
+	// Aantal hotbar-slots (de eerste N voorraad-stapels).
+	static constexpr int32 HotbarSize = 8;
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void SetActiveSlot(int32 Slot);
+
+	// Schuif de selectie door (dir = +1 / -1), wrapt rond binnen de hotbar.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void CycleActiveSlot(int32 Dir);
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	int32 GetActiveSlot() const { return ActiveSlot; }
+
+	// Item-id van het geselecteerde slot (NAME_None als dat slot leeg is).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	FName GetActiveItemId() const;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -71,4 +89,7 @@ protected:
 
 	// Vindt de index van een stapel met dit item-id, of INDEX_NONE.
 	int32 FindStackIndex(FName ItemId) const;
+
+	// Geselecteerd hotbar-slot (lokaal, niet gerepliceerd — puur UI/“in de hand”).
+	int32 ActiveSlot = 0;
 };

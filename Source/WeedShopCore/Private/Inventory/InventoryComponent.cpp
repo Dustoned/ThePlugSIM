@@ -86,6 +86,26 @@ int32 UInventoryComponent::GetQuantity(FName ItemId) const
 	return Index != INDEX_NONE ? Stacks[Index].Quantity : 0;
 }
 
+void UInventoryComponent::SetActiveSlot(int32 Slot)
+{
+	ActiveSlot = FMath::Clamp(Slot, 0, HotbarSize - 1);
+}
+
+void UInventoryComponent::CycleActiveSlot(int32 Dir)
+{
+	if (Dir == 0)
+	{
+		return;
+	}
+	// Wrap binnen de hotbar (0..HotbarSize-1).
+	ActiveSlot = ((ActiveSlot + (Dir > 0 ? 1 : -1)) % HotbarSize + HotbarSize) % HotbarSize;
+}
+
+FName UInventoryComponent::GetActiveItemId() const
+{
+	return Stacks.IsValidIndex(ActiveSlot) ? Stacks[ActiveSlot].ItemId : NAME_None;
+}
+
 void UInventoryComponent::OnRep_Stacks()
 {
 	OnInventoryChanged.Broadcast();
