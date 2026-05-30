@@ -14,6 +14,7 @@
 
 class UEconomyComponent;
 class UDayCycleComponent;
+class UMilestoneComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
@@ -31,10 +32,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UDayCycleComponent* GetDayCycle() const { return DayCycle; }
 
+	// Gedeelde progressie (milestones + fase).
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	UMilestoneComponent* GetMilestones() const { return Milestones; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UDayCycleComponent> DayCycle;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<UMilestoneComponent> Milestones;
 };

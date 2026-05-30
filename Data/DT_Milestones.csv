@@ -1,0 +1,5 @@
+Name,Description,ThresholdEarnedCents,UnlockProductId,UnlockPhase
+M1_FirstSales,"Eerste verkopen gemaakt",2000,None,StreetDealer
+M2_Regulars,"Vaste klanten opgebouwd",10000,PreRolledJoint,StreetDealer
+M3_OpenShop,"Genoeg voor je eigen coffeeshop",100000,WeedJar_NorthernLights,Shop
+M4_Franchise,"Tijd om uit te breiden",1000000,Edible_SpaceCake,Franchise

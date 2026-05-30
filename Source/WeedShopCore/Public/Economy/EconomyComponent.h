@@ -19,6 +19,9 @@
 // Vuurt bij elke saldo-wijziging (server én clients). NewBalanceCents = nieuw saldo in cents.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBalanceChanged, int64, NewBalanceCents);
 
+// Vuurt op de server bij inkomsten (AddMoney) — voedt o.a. milestone-voortgang.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMoneyEarned, int64, AmountCents);
+
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
 class WEEDSHOPCORE_API UEconomyComponent : public UActorComponent
 {
@@ -34,6 +37,10 @@ public:
 	// UI/HUD bindt hierop om het saldo te tonen.
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Economy")
 	FOnBalanceChanged OnBalanceChanged;
+
+	// Alleen inkomsten (server). Milestones tellen hierop mee.
+	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Economy")
+	FOnMoneyEarned OnMoneyEarned;
 
 	// Server-authoritative. Voegt geld toe (cents, > 0). No-op op clients.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")

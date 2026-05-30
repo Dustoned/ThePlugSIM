@@ -6,6 +6,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
+#include "Progression/MilestoneComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
@@ -26,6 +27,22 @@ void AWeedShopHUD::DrawHUD()
 	{
 		DrawText(FString::Printf(TEXT("Kas: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
 			FLinearColor(0.4f, 1.f, 0.4f), X, Y, Font);
+		Y += 26.f;
+	}
+
+	// Fase + totaal verdiend.
+	if (GS && GS->GetMilestones())
+	{
+		const UMilestoneComponent* M = GS->GetMilestones();
+		const TCHAR* PhaseName = TEXT("Straatdealer");
+		switch (M->GetCurrentPhase())
+		{
+		case EShopPhase::Shop:      PhaseName = TEXT("Winkel"); break;
+		case EShopPhase::Franchise: PhaseName = TEXT("Franchise"); break;
+		default: break;
+		}
+		DrawText(FString::Printf(TEXT("Fase: %s   (totaal verdiend EUR %.2f)"),
+			PhaseName, M->GetTotalEarnedCents() / 100.f), FLinearColor(1.f, 0.85f, 0.3f), X, Y, Font);
 		Y += 26.f;
 	}
 

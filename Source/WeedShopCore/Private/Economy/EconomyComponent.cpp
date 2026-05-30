@@ -38,6 +38,7 @@ void UEconomyComponent::AddMoney(int64 AmountCents)
 		return;
 	}
 	SetBalance(BalanceCents + AmountCents);
+	OnMoneyEarned.Broadcast(AmountCents);
 }
 
 bool UEconomyComponent::RemoveMoney(int64 AmountCents)
