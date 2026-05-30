@@ -1,5 +1,5 @@
 Name,DisplayName,BaseThcPercent,BaseYieldGrams,GrowMinutes,SeedPriceCents,HarvestProductId
-Bagseed,"Bagseed",8,10,4,0,Bud_Bagseed
+Bagseed,"Bagseed",8,10,4,1000,Bud_Bagseed
 NorthernLights,"Northern Lights",15,14,5,500,Bud_NorthernLights
 GranddaddyPurple,"Granddaddy Purple",18,32,8,1500,Bud_GranddaddyPurple
 SourDiesel,"Sour Diesel",25,18,10,2000,Bud_SourDiesel

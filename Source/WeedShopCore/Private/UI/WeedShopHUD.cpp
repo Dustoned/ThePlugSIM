@@ -10,9 +10,23 @@
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Phone/ContactsComponent.h"
+#include "Phone/PhoneClientComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
+
+namespace
+{
+	constexpr float PhoneW = 420.f;
+	constexpr float PhoneH = 440.f;
+	constexpr float RowH = 26.f;
+}
+
+UPhoneClientComponent* AWeedShopHUD::GetPhone() const
+{
+	APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
+	return P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+}
 
 void AWeedShopHUD::DrawHUD()
 {
@@ -25,7 +39,6 @@ void AWeedShopHUD::DrawHUD()
 	float Y = 40.f;
 	const float X = 40.f;
 
-	// Kas.
 	if (GS && GS->GetEconomy())
 	{
 		DrawText(FString::Printf(TEXT("Kas: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
@@ -33,7 +46,6 @@ void AWeedShopHUD::DrawHUD()
 		Y += 26.f;
 	}
 
-	// Fase + totaal verdiend.
 	if (GS && GS->GetMilestones())
 	{
 		const UMilestoneComponent* M = GS->GetMilestones();
@@ -49,7 +61,6 @@ void AWeedShopHUD::DrawHUD()
 		Y += 26.f;
 	}
 
-	// Klok + dag/nacht.
 	if (GS && GS->GetDayCycle())
 	{
 		const UDayCycleComponent* Day = GS->GetDayCycle();
@@ -61,7 +72,6 @@ void AWeedShopHUD::DrawHUD()
 		Y += 26.f;
 	}
 
-	// Voorraad.
 	if (P)
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
@@ -82,13 +92,17 @@ void AWeedShopHUD::DrawHUD()
 		}
 	}
 
-	// Telefoon-overlay (Tab).
-	if (bPhoneOpen)
+	// Klikbare telefoon.
+	if (UPhoneClientComponent* Phone = GetPhone())
 	{
-		DrawPhone();
+		if (Phone->IsOpen())
+		{
+			HoverTooltip.Empty();
+			DrawPhone(Phone);
+		}
 	}
 
-	// Interactie-prompt (gecentreerd, iets onder het midden).
+	// Interactie-prompt.
 	if (P)
 	{
 		if (const UInteractionComponent* IC = P->FindComponentByClass<UInteractionComponent>())
@@ -108,93 +122,114 @@ void AWeedShopHUD::DrawHUD()
 	}
 }
 
-void AWeedShopHUD::DrawPhone()
+bool AWeedShopHUD::DrawButton(FName BoxName, const FString& Label, float X, float Y, float W, const FLinearColor& BaseColor)
+{
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	const bool bHover = (HoveredBox == BoxName);
+
+	DrawRect(bHover ? FLinearColor(0.25f, 0.35f, 0.5f, 0.95f) : FLinearColor(0.12f, 0.12f, 0.16f, 0.9f),
+		X, Y, W, RowH - 2.f);
+	DrawText(Label, bHover ? FLinearColor::White : BaseColor, X + 6.f, Y + 3.f, Font);
+	AddHitBox(FVector2D(X, Y), FVector2D(W, RowH - 2.f), BoxName, /*bConsumesInput*/ true, /*Priority*/ 1);
+	return bHover;
+}
+
+void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 {
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr;
+	const int32 Tab = Phone->GetTab();
 
-	const float W = 410.f;
-	const float H = 380.f;
-	const float PX = (Canvas ? Canvas->ClipX : 1280.f) - W - 30.f;
+	const float PX = (Canvas ? Canvas->ClipX : 1280.f) - PhoneW - 30.f;
 	const float PY = 80.f;
+	const float InnerX = PX + 14.f;
+	const float InnerW = PhoneW - 28.f;
 
-	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.92f), PX, PY, W, H);
+	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.94f), PX, PY, PhoneW, PhoneH);
 
 	float y = PY + 12.f;
-	DrawText(TEXT("== TELEFOON =="), FLinearColor(0.5f, 1.f, 0.5f), PX + 14.f, y, Font); y += 28.f;
+	DrawText(TEXT("TELEFOON"), FLinearColor(0.5f, 1.f, 0.5f), InnerX, y, Font); y += 26.f;
 
 	if (GS && GS->GetEconomy())
 	{
 		DrawText(FString::Printf(TEXT("Kas: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
-			FLinearColor::White, PX + 14.f, y, Font);
+			FLinearColor::White, InnerX, y, Font);
 		y += 26.f;
 	}
 
-	// Tab-balk (4 tabs).
+	// Tab-knoppen (klikbaar).
 	static const TCHAR* TabNames[4] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacten"), TEXT("Berichten") };
-	FString TabBar;
+	const float TabW = InnerW / 4.f;
 	for (int32 i = 0; i < 4; ++i)
 	{
-		TabBar += (i == PhoneTab) ? FString::Printf(TEXT("[%s] "), TabNames[i]) : FString::Printf(TEXT("%s "), TabNames[i]);
+		const FName Box(*FString::Printf(TEXT("tab_%d"), i));
+		const FLinearColor Col = (i == Tab) ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(0.7f, 0.7f, 0.8f);
+		if (DrawButton(Box, TabNames[i], InnerX + i * TabW, y, TabW - 4.f, Col))
+		{
+			HoverTooltip = FString::Printf(TEXT("Open de %s-tab"), TabNames[i]);
+		}
 	}
-	DrawText(TabBar, FLinearColor(0.6f, 0.8f, 1.f), PX + 14.f, y, Font);
-	y += 24.f;
-	DrawText(TEXT("Q: wissel tab   |   1-6: kopen"), FLinearColor(0.7f, 0.7f, 0.7f), PX + 14.f, y, Font);
-	y += 24.f;
+	y += RowH + 6.f;
 
-	const float MaxY = PY + H - 40.f;
-
-	if (PhoneTab == 1)
+	// Inhoud per tab.
+	if (Tab == 1) // Suppliers
 	{
-		// Suppliers: zaden kopen uit DT_Strains.
 		if (UStoreComponent* Store = GS ? GS->GetStore() : nullptr)
 		{
-			int32 n = 1;
+			int32 idx = 0;
 			for (const FName& Id : Store->GetSeedCatalog())
 			{
 				FText Name; int32 Price = 0;
 				if (Store->GetSeedDisplay(Id, Name, Price))
 				{
-					DrawText(FString::Printf(TEXT("%d) Zaad: %s - EUR %.2f"), n, *Name.ToString(), Price / 100.f),
-						FLinearColor::White, PX + 14.f, y, Font);
-					y += 23.f;
+					const FName Box(*FString::Printf(TEXT("buy_%d"), idx));
+					if (DrawButton(Box, FString::Printf(TEXT("Zaad: %s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
+						InnerX, y, InnerW, FLinearColor::White))
+					{
+						HoverTooltip = FString::Printf(TEXT("Koop een %s-zaadje voor EUR %.2f"), *Name.ToString(), Price / 100.f);
+					}
+					y += RowH;
 				}
-				if (++n > 6) break;
+				if (++idx >= 6) break;
 			}
 		}
 	}
-	else if (PhoneTab == 2)
+	else if (Tab == 2) // Contacten (alleen weergave)
 	{
-		// Contacten.
 		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
 		{
 			if (Con->GetContacts().Num() == 0)
 			{
-				DrawText(TEXT("(nog geen contacten - deal met klanten)"), FLinearColor::Gray, PX + 14.f, y, Font);
+				DrawText(TEXT("(nog geen contacten - deal met klanten)"), FLinearColor::Gray, InnerX, y, Font);
 				y += 22.f;
 			}
 			for (const FPhoneContact& C : Con->GetContacts())
 			{
 				DrawText(FString::Printf(TEXT("%s   (relatie %.0f%%)"), *C.DisplayName.ToString(), C.Relationship),
-					FLinearColor::White, PX + 14.f, y, Font);
+					FLinearColor::White, InnerX, y, Font);
 				y += 22.f;
-				if (y > MaxY) break;
+				if (y > PY + PhoneH - 60.f) break;
 			}
 		}
 	}
-	else if (PhoneTab == 3)
+	else if (Tab == 3) // Berichten
 	{
-		// Berichten.
 		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
 		{
-			DrawText(TEXT("Eerste open bericht:  [1] accepteren   [2] weigeren"),
-				FLinearColor(0.7f, 1.f, 0.7f), PX + 14.f, y, Font);
-			y += 24.f;
+			if (DrawButton(FName(TEXT("buy_0")), TEXT("Accepteren (eerste open bericht)"), InnerX, y, InnerW, FLinearColor(0.7f, 1.f, 0.7f)))
+			{
+				HoverTooltip = TEXT("Spreek af -> loyaliteit omhoog; klant komt op tijd langs");
+			}
+			y += RowH;
+			if (DrawButton(FName(TEXT("buy_1")), TEXT("Weigeren (eerste open bericht)"), InnerX, y, InnerW, FLinearColor(1.f, 0.75f, 0.6f)))
+			{
+				HoverTooltip = TEXT("Zeg af -> loyaliteit omlaag; klant komt niet");
+			}
+			y += RowH + 6.f;
 
 			if (Con->GetMessages().Num() == 0)
 			{
-				DrawText(TEXT("(geen berichten)"), FLinearColor::Gray, PX + 14.f, y, Font);
+				DrawText(TEXT("(geen berichten)"), FLinearColor::Gray, InnerX, y, Font);
 				y += 22.f;
 			}
 			for (const FPhoneMessage& M : Con->GetMessages())
@@ -203,31 +238,91 @@ void AWeedShopHUD::DrawPhone()
 				const FLinearColor Col = (M.Status == 1) ? FLinearColor::Green
 					: (M.Status == 2 ? FLinearColor(0.7f, 0.5f, 0.5f) : FLinearColor(0.9f, 0.95f, 1.f));
 				DrawText(FString::Printf(TEXT("%s %s: %s"), Tag, *M.SenderName.ToString(), *M.Body.ToString()),
-					Col, PX + 14.f, y, Font);
+					Col, InnerX, y, Font);
 				y += 22.f;
-				if (y > MaxY) break;
+				if (y > PY + PhoneH - 60.f) break;
 			}
 		}
 	}
-	else if (Upg)
+	else // Upgrades
 	{
-		// Upgrades.
-		int32 n = 1;
-		for (const FName& Id : Upg->GetAllUpgradeIds())
+		if (UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr)
 		{
-			FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
-			if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
+			int32 idx = 0;
+			for (const FName& Id : Upg->GetAllUpgradeIds())
 			{
-				const TCHAR* Suffix = bPurchased ? TEXT("  [gekocht]") : (bAvailable ? TEXT("") : TEXT("  [vergrendeld]"));
-				const FLinearColor Col = bPurchased ? FLinearColor::Gray
-					: (bAvailable ? FLinearColor::White : FLinearColor(0.7f, 0.45f, 0.45f));
-				DrawText(FString::Printf(TEXT("%d) %s - EUR %.2f%s"), n, *Name.ToString(), Cost / 100.f, Suffix),
-					Col, PX + 14.f, y, Font);
-				y += 23.f;
+				FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
+				if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
+				{
+					const TCHAR* Suffix = bPurchased ? TEXT("  [gekocht]") : (bAvailable ? TEXT("") : TEXT("  [vergrendeld]"));
+					const FLinearColor Col = bPurchased ? FLinearColor::Gray
+						: (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f));
+					const FName Box(*FString::Printf(TEXT("buy_%d"), idx));
+					if (DrawButton(Box, FString::Printf(TEXT("%s  -  EUR %.2f%s"), *Name.ToString(), Cost / 100.f, Suffix),
+						InnerX, y, InnerW, Col))
+					{
+						HoverTooltip = bPurchased ? TEXT("Al gekocht")
+							: (bAvailable ? FString::Printf(TEXT("Koop voor EUR %.2f"), Cost / 100.f)
+								: TEXT("Vergrendeld - bereik eerst de juiste fase"));
+					}
+					y += RowH;
+				}
+				if (++idx >= 6) break;
 			}
-			if (++n > 6) break;
 		}
 	}
 
-	DrawText(TEXT("[Tab] sluiten"), FLinearColor::Yellow, PX + 14.f, PY + H - 28.f, Font);
+	// Tooltip (hover-info).
+	if (!HoverTooltip.IsEmpty())
+	{
+		const float TipY = PY + PhoneH - 56.f;
+		DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f), PX + 6.f, TipY - 2.f, PhoneW - 12.f, 22.f);
+		DrawText(HoverTooltip, FLinearColor(1.f, 1.f, 0.6f), InnerX, TipY, Font);
+	}
+
+	// Sluit-knop.
+	if (DrawButton(FName(TEXT("close")), TEXT("Sluiten (Tab)"), InnerX, PY + PhoneH - 30.f, 130.f, FLinearColor::Yellow))
+	{
+		HoverTooltip = TEXT("Sluit de telefoon");
+	}
+}
+
+void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
+{
+	Super::NotifyHitBoxClick(BoxName);
+
+	UPhoneClientComponent* Phone = GetPhone();
+	if (!Phone)
+	{
+		return;
+	}
+
+	const FString S = BoxName.ToString();
+	if (S == TEXT("close"))
+	{
+		Phone->Toggle();
+	}
+	else if (S.StartsWith(TEXT("tab_")))
+	{
+		Phone->SetTab(FCString::Atoi(*S.RightChop(4)));
+	}
+	else if (S.StartsWith(TEXT("buy_")))
+	{
+		Phone->DoAction(FCString::Atoi(*S.RightChop(4)));
+	}
+}
+
+void AWeedShopHUD::NotifyHitBoxBeginCursorOver(FName BoxName)
+{
+	Super::NotifyHitBoxBeginCursorOver(BoxName);
+	HoveredBox = BoxName;
+}
+
+void AWeedShopHUD::NotifyHitBoxEndCursorOver(FName BoxName)
+{
+	Super::NotifyHitBoxEndCursorOver(BoxName);
+	if (HoveredBox == BoxName)
+	{
+		HoveredBox = NAME_None;
+	}
 }

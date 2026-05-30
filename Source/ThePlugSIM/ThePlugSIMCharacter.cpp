@@ -12,9 +12,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "UI/WeedShopHUD.h"
 #include "Game/WeedShopGameState.h"
-#include "Progression/UpgradeComponent.h"
-#include "Progression/StoreComponent.h"
-#include "Phone/ContactsComponent.h"
+#include "Phone/PhoneClientComponent.h"
 #include "ThePlugSIM.h"
 
 AThePlugSIMCharacter::AThePlugSIMCharacter()
@@ -52,6 +50,9 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 
 	// Voorraad-component (oogst in, verkoop uit).
 	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
+
+	// Telefoon-logica (openen, tabs, kopen, afspraken).
+	Phone = CreateDefaultSubobject<UPhoneClientComponent>(TEXT("Phone"));
 }
 
 void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -71,15 +72,18 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AThePlugSIMCharacter::LookInput);
 	}
 
-	// Telefoon: directe key-bindings (geen aparte Input Action-assets nodig).
-	PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AThePlugSIMCharacter::TogglePhone);
-	PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Q,     IE_Pressed, this, &AThePlugSIMCharacter::CyclePhoneTab);
+	// Telefoon: Tab = open/sluit, Q = wissel tab, 1-6 = reserve naast klikken in de HUD.
+	if (UPhoneClientComponent* Ph = Phone.Get())
+	{
+		PlayerInputComponent->BindKey(EKeys::Tab,   IE_Pressed, Ph, &UPhoneClientComponent::Toggle);
+		PlayerInputComponent->BindKey(EKeys::Q,     IE_Pressed, Ph, &UPhoneClientComponent::CycleTab);
+		PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
+		PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
+		PlayerInputComponent->BindKey(EKeys::Three, IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
+		PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
+		PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
+		PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
+	}
 
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
@@ -140,144 +144,4 @@ void AThePlugSIMCharacter::DoJumpEnd()
 	StopJumping();
 }
 
-void AThePlugSIMCharacter::TogglePhone()
-{
-	bPhoneOpen = !bPhoneOpen;
-
-	APlayerController* PC = Cast<APlayerController>(GetController());
-	if (!PC)
-	{
-		return;
-	}
-
-	if (AWeedShopHUD* HUD = Cast<AWeedShopHUD>(PC->GetHUD()))
-	{
-		HUD->SetPhoneOpen(bPhoneOpen);
-		HUD->SetPhoneTab(PhoneTab);
-	}
-
-	PC->SetShowMouseCursor(bPhoneOpen);
-	if (bPhoneOpen)
-	{
-		PC->SetInputMode(FInputModeGameAndUI());
-	}
-	else
-	{
-		PC->SetInputMode(FInputModeGameOnly());
-	}
-}
-
-void AThePlugSIMCharacter::BuyPhoneKey(FKey Key)
-{
-	int32 Index = -1;
-	if (Key == EKeys::One)        Index = 0;
-	else if (Key == EKeys::Two)   Index = 1;
-	else if (Key == EKeys::Three) Index = 2;
-	else if (Key == EKeys::Four)  Index = 3;
-	else if (Key == EKeys::Five)  Index = 4;
-	else if (Key == EKeys::Six)   Index = 5;
-	if (Index >= 0)
-	{
-		BuyPhoneIndex(Index);
-	}
-}
-
-void AThePlugSIMCharacter::CyclePhoneTab()
-{
-	if (!bPhoneOpen)
-	{
-		return;
-	}
-	PhoneTab = (PhoneTab + 1) % 4;
-	if (APlayerController* PC = Cast<APlayerController>(GetController()))
-	{
-		if (AWeedShopHUD* HUD = Cast<AWeedShopHUD>(PC->GetHUD()))
-		{
-			HUD->SetPhoneTab(PhoneTab);
-		}
-	}
-}
-
-void AThePlugSIMCharacter::BuyPhoneIndex(int32 Index)
-{
-	if (!bPhoneOpen)
-	{
-		return;
-	}
-	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	if (!GS)
-	{
-		return;
-	}
-
-	if (PhoneTab == 1)
-	{
-		// Suppliers: koop een zaadje.
-		if (GS->GetStore())
-		{
-			const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
-			if (Seeds.IsValidIndex(Index))
-			{
-				ServerBuySeed(Seeds[Index]);
-			}
-		}
-		return;
-	}
-
-	if (PhoneTab == 3)
-	{
-		// Berichten: 1 = accepteren, 2 = weigeren (eerste open afspraak).
-		if (Index == 0)      { ServerRespondAppointment(true); }
-		else if (Index == 1) { ServerRespondAppointment(false); }
-		return;
-	}
-
-	if (PhoneTab == 2)
-	{
-		// Contacten: alleen weergave.
-		return;
-	}
-
-	// Upgrades.
-	if (GS->GetUpgrades())
-	{
-		const TArray<FName> Ids = GS->GetUpgrades()->GetAllUpgradeIds();
-		if (Ids.IsValidIndex(Index))
-		{
-			ServerBuyUpgrade(Ids[Index]);
-		}
-	}
-}
-
-void AThePlugSIMCharacter::ServerBuyUpgrade_Implementation(FName UpgradeId)
-{
-	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
-	{
-		if (GS->GetUpgrades())
-		{
-			GS->GetUpgrades()->BuyUpgrade(UpgradeId);
-		}
-	}
-}
-
-void AThePlugSIMCharacter::ServerBuySeed_Implementation(FName StrainId)
-{
-	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
-	{
-		if (GS->GetStore())
-		{
-			GS->GetStore()->BuySeed(StrainId, Inventory);
-		}
-	}
-}
-
-void AThePlugSIMCharacter::ServerRespondAppointment_Implementation(bool bAccept)
-{
-	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
-	{
-		if (GS->GetContacts())
-		{
-			GS->GetContacts()->RespondTopPending(bAccept);
-		}
-	}
-}
+// Telefoon-logica zit nu in UPhoneClientComponent (zie Phone-component op deze pawn).

@@ -86,35 +86,9 @@ protected:
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
-	/** Telefoon openen/sluiten (Tab) — schakelt ook de muis-cursor/input-mode. */
-	void TogglePhone();
-
-	/** Handler voor de nummertoetsen 1-6: mapt de toets naar een catalogus-index. */
-	void BuyPhoneKey(FKey Key);
-
-	/** Koopt het N-de catalogus-item van de telefoon. */
-	void BuyPhoneIndex(int32 Index);
-
-	/** Wisselt de telefoon-tab (Upgrades <-> Suppliers). */
-	void CyclePhoneTab();
-
-	/** Server-RPC: koopt een upgrade via de gedeelde GameState. */
-	UFUNCTION(Server, Reliable)
-	void ServerBuyUpgrade(FName UpgradeId);
-
-	/** Server-RPC: koopt een zaadje bij de supplier. */
-	UFUNCTION(Server, Reliable)
-	void ServerBuySeed(FName StrainId);
-
-	/** Server-RPC: accepteert (true) of weigert (false) het eerste open afspraak-bericht. */
-	UFUNCTION(Server, Reliable)
-	void ServerRespondAppointment(bool bAccept);
-
-	/** Of de telefoon nu open is (lokaal). */
-	bool bPhoneOpen = false;
-
-	/** Actieve telefoon-tab: 0 = Upgrades, 1 = Suppliers. */
-	int32 PhoneTab = 0;
+	/** Telefoon-logica (openen, tabs, kopen, afspraken) — aangestuurd door input + HUD-klikken. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UPhoneClientComponent> Phone;
 
 
 public:

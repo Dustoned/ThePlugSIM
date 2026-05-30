@@ -1,12 +1,14 @@
-// AWeedShopHUD — eenvoudige on-screen overlay puur in C++ (Canvas DrawText, geen UMG nodig).
-// Toont de gedeelde kas, dag/nacht, de voorraad van de speler en de interactie-prompt.
-// Bedoeld als snelle, zichtbare feedback; een nette UMG-HUD kan dit later vervangen.
+// AWeedShopHUD — on-screen overlay puur in C++ (Canvas + hit-boxes, geen UMG nodig).
+// Toont kas, klok/dag-nacht, voorraad, interactie-prompt en de klikbare telefoon (knoppen + hover).
+// De telefoon-staat/-acties zitten in UPhoneClientComponent op de speler-pawn.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "WeedShopHUD.generated.h"
+
+class UPhoneClientComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopHUD : public AHUD
@@ -16,20 +18,24 @@ class WEEDSHOPCORE_API AWeedShopHUD : public AHUD
 public:
 	virtual void DrawHUD() override;
 
-	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void SetPhoneOpen(bool bOpen) { bPhoneOpen = bOpen; }
-
-	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
-	bool IsPhoneOpen() const { return bPhoneOpen; }
-
-	// 0 = Upgrades, 1 = Suppliers (zaden).
-	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void SetPhoneTab(int32 Tab) { PhoneTab = Tab; }
+	// Hit-box callbacks (klik + hover) voor de telefoon-knoppen.
+	virtual void NotifyHitBoxClick(FName BoxName) override;
+	virtual void NotifyHitBoxBeginCursorOver(FName BoxName) override;
+	virtual void NotifyHitBoxEndCursorOver(FName BoxName) override;
 
 protected:
-	// Tekent het telefoon-paneel (catalogus, genummerd 1..N) voor de actieve tab.
-	void DrawPhone();
+	// Tekent de klikbare telefoon voor de actieve tab.
+	void DrawPhone(UPhoneClientComponent* Phone);
 
-	bool bPhoneOpen = false;
-	int32 PhoneTab = 0;
+	// Tekent één klikbare knop-regel (rect + tekst + hit-box) en geeft true terug bij hover.
+	bool DrawButton(FName BoxName, const FString& Label, float X, float Y, float W, const FLinearColor& BaseColor);
+
+	// De telefoon-component op de bestuurde pawn (nullptr als geen).
+	UPhoneClientComponent* GetPhone() const;
+
+	// Naam van de hit-box waar de cursor nu boven hangt.
+	FName HoveredBox;
+
+	// Tooltip die deze frame getekend moet worden (leeg = geen).
+	FString HoverTooltip;
 };
