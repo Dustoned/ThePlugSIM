@@ -6,6 +6,7 @@
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Phone/ContactsComponent.h"
+#include "Npc/NpcRegistryComponent.h"
 
 AWeedShopGameState::AWeedShopGameState()
 {
@@ -16,4 +17,5 @@ AWeedShopGameState::AWeedShopGameState()
 	Upgrades = CreateDefaultSubobject<UUpgradeComponent>(TEXT("Upgrades"));
 	Store = CreateDefaultSubobject<UStoreComponent>(TEXT("Store"));
 	Contacts = CreateDefaultSubobject<UContactsComponent>(TEXT("Contacts"));
+	NpcRegistry = CreateDefaultSubobject<UNpcRegistryComponent>(TEXT("NpcRegistry"));
 }

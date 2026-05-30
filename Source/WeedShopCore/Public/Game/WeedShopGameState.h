@@ -18,6 +18,7 @@ class UMilestoneComponent;
 class UUpgradeComponent;
 class UStoreComponent;
 class UContactsComponent;
+class UNpcRegistryComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
@@ -51,6 +52,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UContactsComponent* GetContacts() const { return Contacts; }
 
+	// Register van alle NPC's met persistente per-persoon stats.
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	UNpcRegistryComponent* GetNpcRegistry() const { return NpcRegistry; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
@@ -69,4 +74,7 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UContactsComponent> Contacts;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<UNpcRegistryComponent> NpcRegistry;
 };

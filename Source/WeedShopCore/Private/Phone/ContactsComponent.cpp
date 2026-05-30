@@ -4,6 +4,7 @@
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Customer/CustomerBase.h"
+#include "Npc/NpcRegistryComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
@@ -192,30 +193,24 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		}
 	}
 
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	ACustomerBase* Cust = World->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), SpawnLoc, SpawnRot, Params);
+	// Deferred spawn zodat we NpcId zetten vóór BeginPlay (klant laadt dan z'n eigen stats).
+	const FTransform SpawnTM(SpawnRot, SpawnLoc);
+	ACustomerBase* Cust = World->SpawnActorDeferred<ACustomerBase>(
+		ACustomerBase::StaticClass(), SpawnTM, nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 	if (!Cust)
 	{
 		return;
 	}
 
+	Cust->NpcId = Msg.FromContactId; // dit is dezelfde persoon als het contact
 	Cust->ProductTable = ProductTable;
 	Cust->DesiredProductId = FName(TEXT("Bud_NorthernLights"));
 	Cust->DesiredQuantity = 2;
 	Cust->BudgetCentsPerUnit = 1500;
 	Cust->bDespawnAfterServed = true; // afspraak-klant vertrekt na de deal
 
-	// Neem de relatie uit het contact over (loyale klanten accepteren makkelijker).
-	for (const FPhoneContact& Contact : Contacts)
-	{
-		if (Contact.ContactId == Msg.FromContactId)
-		{
-			Cust->Loyalty = Contact.Relationship;
-			Cust->Respect = Contact.Relationship;
-			break;
-		}
-	}
+	Cust->FinishSpawning(SpawnTM);
 
 	UE_LOG(LogWeedShop, Log, TEXT("Afspraak-klant gespawned voor %s."), *Msg.SenderName.ToString());
 }
@@ -247,10 +242,23 @@ void UContactsComponent::RespondTopPending(bool bAccept)
 			}
 		}
 
-		// Loyaliteit van de live klant bijwerken (als die in de wereld is).
+		// Persistente loyaliteit van deze persoon bijwerken in het NPC-register.
+		if (AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+		{
+			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+			{
+				float R = 0.f, L = 0.f, A = 0.f; FText N;
+				if (Reg->GetStats(Msg.FromContactId, R, L, A, N))
+				{
+					Reg->ApplyStats(Msg.FromContactId, R, FMath::Clamp(L + Delta, 0.f, 100.f), A);
+				}
+			}
+		}
+
+		// Live klant met deze persoon ook meteen bijwerken (als die er is).
 		for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
 		{
-			if (It->GetFName() == Msg.FromContactId)
+			if (It->NpcId == Msg.FromContactId)
 			{
 				It->Loyalty = FMath::Clamp(It->Loyalty + Delta, 0.f, 100.f);
 				break;

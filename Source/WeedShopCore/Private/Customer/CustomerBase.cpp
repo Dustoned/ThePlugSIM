@@ -8,23 +8,10 @@
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Phone/ContactsComponent.h"
+#include "Npc/NpcRegistryComponent.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
-
-namespace
-{
-	// Kleine namenpool zodat elke klant een herkenbare naam krijgt voor de contacten-app.
-	FText MakeContactName(uint32 Seed)
-	{
-		static const TCHAR* Names[] = {
-			TEXT("Tom"), TEXT("Kevin"), TEXT("Sjors"), TEXT("Naomi"), TEXT("Driss"),
-			TEXT("Bram"), TEXT("Lisa"), TEXT("Youssef"), TEXT("Mees"), TEXT("Fatima")
-		};
-		const int32 Count = UE_ARRAY_COUNT(Names);
-		return FText::FromString(Names[Seed % Count]);
-	}
-}
 
 ACustomerBase::ACustomerBase()
 {
@@ -54,6 +41,22 @@ void ACustomerBase::BeginPlay()
 	{
 		State = ECustomerState::WantsToOrder;
 		BasePatienceSeconds = PatienceSeconds;
+
+		// Koppel aan een persoon in het register en laad zijn persistente stats.
+		AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+		if (GS && GS->GetNpcRegistry())
+		{
+			if (NpcId.IsNone())
+			{
+				NpcId = GS->GetNpcRegistry()->AssignNpc();
+			}
+			float R = Respect, L = Loyalty, A = Addiction;
+			FText Name;
+			if (GS->GetNpcRegistry()->GetStats(NpcId, R, L, A, Name))
+			{
+				Respect = R; Loyalty = L; Addiction = A;
+			}
+		}
 	}
 }
 
@@ -66,6 +69,20 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, Loyalty);
 	DOREPLIFETIME(ACustomerBase, Addiction);
 	DOREPLIFETIME(ACustomerBase, State);
+	DOREPLIFETIME(ACustomerBase, NpcId);
+}
+
+void ACustomerBase::WriteStatsToRegistry()
+{
+	if (NpcId.IsNone())
+	{
+		return;
+	}
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && GS->GetNpcRegistry())
+	{
+		GS->GetNpcRegistry()->ApplyStats(NpcId, Respect, Loyalty, Addiction);
+	}
 }
 
 void ACustomerBase::Tick(float DeltaSeconds)
@@ -170,6 +187,7 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 			return EDealResult::Haggle;
 		}
 		Respect = ClampAttr(Respect - 4.f);
+		WriteStatsToRegistry();
 		return EDealResult::Refused;
 	}
 
@@ -195,6 +213,7 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 	Addiction = ClampAttr(Addiction + 6.f);
 
 	State = ECustomerState::Served;
+	WriteStatsToRegistry();
 	UE_LOG(LogWeedShop, Log, TEXT("Deal: %dx %s voor %d cents (resp %.0f loy %.0f ver %.0f)."),
 		DesiredQuantity, *DesiredProductId.ToString(), Total, Respect, Loyalty, Addiction);
 	return EDealResult::Accepted;
@@ -213,12 +232,7 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
 	UInventoryComponent* Stock = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 
-	// Eerste contact -> in de telefoon-contacten.
-	if (GS && GS->GetContacts())
-	{
-		const float Rel = (Respect + Loyalty + Addiction) / 3.f;
-		GS->GetContacts()->RegisterContact(GetFName(), MakeContactName(GetUniqueID()), Rel);
-	}
+	// (Contact/'nummer' krijg je via het NPC-register zodra de loyaliteit hoog genoeg is.)
 
 	const EDealResult Result = SubmitOffer(GetMarketPriceCents(), Econ, Stock);
 	UE_LOG(LogWeedShop, Log, TEXT("Klant-interactie resultaat: %d"), static_cast<int32>(Result));

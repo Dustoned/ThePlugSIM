@@ -44,6 +44,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
 	TObjectPtr<UDataTable> ProductTable;
 
+	// Welke persoon dit is (rij in DT_NPCs). Leeg = krijgt er één toegewezen bij spawn.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "WeedShop|Customer")
+	FName NpcId = NAME_None;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Order, Category = "WeedShop|Customer")
 	FName DesiredProductId = NAME_None;
 
@@ -108,6 +112,9 @@ protected:
 
 	void LeaveAngry();
 	static float ClampAttr(float V) { return FMath::Clamp(V, 0.f, 100.f); }
+
+	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).
+	void WriteStatsToRegistry();
 
 	// Seconden sinds de klant klaar is (geholpen/vertrekt) — voor auto-despawn of cooldown.
 	float LeaveTimer = 0.f;
