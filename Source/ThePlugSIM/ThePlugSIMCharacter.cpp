@@ -89,8 +89,9 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
 	}
 
-	// Straat-werving: F geeft de aangekeken NPC een gratis sample.
+	// Straat-werving: F geeft de aangekeken NPC een gratis sample; R draait een joint.
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
+	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &AThePlugSIMCharacter::RollJoint);
 
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
@@ -179,25 +180,12 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		return;
 	}
 
-	// Zoek een gram bud in de voorraad als gratis sample.
-	if (!Inventory)
-	{
-		return;
-	}
-	FName SampleItem = NAME_None;
-	for (const FInventoryStack& Stack : Inventory->GetStacks())
-	{
-		if (Stack.ItemId.ToString().StartsWith(TEXT("Bud_")))
-		{
-			SampleItem = Stack.ItemId;
-			break;
-		}
-	}
-	if (SampleItem.IsNone() || !Inventory->RemoveItem(SampleItem, 1))
+	// Een sample is een gedraaide joint. Heb je er geen -> eerst draaien (R).
+	if (!Inventory || !Inventory->RemoveItem(FName(TEXT("Joint")), 1))
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen wiet om als sample te geven."));
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen joint om te geven — draai er eerst een (R)."));
 		}
 		return;
 	}
@@ -226,5 +214,44 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, TEXT("Gratis sample gegeven (relatie +)."));
+	}
+}
+
+void AThePlugSIMCharacter::RollJoint()
+{
+	ServerRollJoint();
+}
+
+void AThePlugSIMCharacter::ServerRollJoint_Implementation()
+{
+	if (!Inventory)
+	{
+		return;
+	}
+
+	// Zoek een gram bud om te verwerken tot een joint.
+	FName BudItem = NAME_None;
+	for (const FInventoryStack& Stack : Inventory->GetStacks())
+	{
+		if (Stack.ItemId.ToString().StartsWith(TEXT("Bud_")))
+		{
+			BudItem = Stack.ItemId;
+			break;
+		}
+	}
+
+	if (BudItem.IsNone() || !Inventory->RemoveItem(BudItem, 1))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen wiet om een joint van te draaien."));
+		}
+		return;
+	}
+
+	Inventory->AddItem(FName(TEXT("Joint")), 1);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green, TEXT("Joint gedraaid."));
 	}
 }

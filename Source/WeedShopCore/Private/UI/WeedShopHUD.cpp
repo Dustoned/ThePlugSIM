@@ -131,6 +131,38 @@ void AWeedShopHUD::DrawHUD()
 			}
 		}
 	}
+
+	// Hotbar/inventory onderaan het scherm.
+	if (P)
+	{
+		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
+			const int32 SlotCount = FMath::Max(8, Stacks.Num());
+			const float SlotW = 84.f;
+			const float SlotH = 46.f;
+			const float ScreenW = Canvas ? Canvas->ClipX : 1280.f;
+			const float ScreenH = Canvas ? Canvas->ClipY : 720.f;
+			const float TotalW = SlotCount * (SlotW + 6.f);
+			float SX = (ScreenW - TotalW) * 0.5f;
+			const float SY = ScreenH - SlotH - 24.f;
+
+			for (int32 i = 0; i < SlotCount; ++i)
+			{
+				DrawRect(FLinearColor(0.08f, 0.08f, 0.10f, 0.85f), SX, SY, SlotW, SlotH);
+				if (Stacks.IsValidIndex(i))
+				{
+					const FInventoryStack& S = Stacks[i];
+					DrawText(S.ItemId.ToString(), FLinearColor(0.85f, 0.9f, 1.f), SX + 5.f, SY + 4.f, Font);
+					DrawText(FString::Printf(TEXT("x%d"), S.Quantity), FLinearColor::White, SX + 5.f, SY + 24.f, Font);
+				}
+				SX += SlotW + 6.f;
+			}
+
+			DrawText(TEXT("R = joint draaien   |   F = sample geven (kijk NPC aan)"),
+				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 22.f, Font);
+		}
+	}
 }
 
 bool AWeedShopHUD::DrawButton(FName BoxName, const FString& Label, float X, float Y, float W, const FLinearColor& BaseColor)
