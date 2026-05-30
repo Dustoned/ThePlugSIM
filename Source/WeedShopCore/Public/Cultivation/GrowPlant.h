@@ -66,6 +66,24 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetGrowthFraction() const { return MaxGrowthSeconds > 0.f ? GrowthSeconds / MaxGrowthSeconds : 0.f; }
 
+	// Info voor de plant-UI.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	bool IsPlanted() const { return bPlanted; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetCareMultiplier() const { return CareMultiplier; }
+
+	// Geschatte real-time seconden tot oogstklaar (0 als al klaar / leeg).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetSecondsRemaining() const;
+
+	// Geschatte opbrengst (gram) en kwaliteit (THC%) bij de huidige verzorging.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetEstimatedYieldGrams() const;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetEstimatedThcPercent() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

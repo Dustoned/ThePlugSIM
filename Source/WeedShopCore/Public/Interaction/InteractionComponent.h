@@ -43,9 +43,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Interaction")
 	TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
 
-	// Minimale tijd (sec) tussen twee interacties — voorkomt spam als E ingedrukt blijft.
+	// Minimale tijd (sec) tussen twee interacties — kort; dempt frame-spam (E ingedrukt) maar
+	// laat snel klikken toe.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Interaction")
-	float InteractCooldown = 0.5f;
+	float InteractCooldown = 0.15f;
 
 	// UI bindt hierop om de interact-prompt te tonen/verbergen (lokale client).
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Interaction")

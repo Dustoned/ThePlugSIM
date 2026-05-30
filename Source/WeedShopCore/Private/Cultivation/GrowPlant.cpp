@@ -267,3 +267,25 @@ const FWeedStrainRow* AGrowPlant::GetStrain() const
 	}
 	return StrainTable->FindRow<FWeedStrainRow>(StrainId, TEXT("AGrowPlant::GetStrain"), /*bWarnIfMissing=*/false);
 }
+
+float AGrowPlant::GetSecondsRemaining() const
+{
+	if (!bPlanted || Phase == EGrowthPhase::Harvestable)
+	{
+		return 0.f;
+	}
+	const float Speed = FMath::Max(0.01f, GrowthSpeedMultiplier);
+	return FMath::Max(0.f, (MaxGrowthSeconds - GrowthSeconds) / Speed);
+}
+
+float AGrowPlant::GetEstimatedYieldGrams() const
+{
+	const FWeedStrainRow* Strain = GetStrain();
+	return Strain ? Strain->BaseYieldGrams * CareMultiplier : 0.f;
+}
+
+float AGrowPlant::GetEstimatedThcPercent() const
+{
+	const FWeedStrainRow* Strain = GetStrain();
+	return Strain ? Strain->BaseThcPercent * CareMultiplier : 0.f;
+}

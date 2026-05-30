@@ -17,6 +17,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
+#include "Cultivation/GrowPlant.h"
 
 namespace
 {
@@ -126,11 +127,61 @@ void AWeedShopHUD::DrawHUD()
 		{
 			if (AActor* Focus = IC->GetFocusedActor())
 			{
+				const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
+				const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
+
+				// Mooie info-kaart als je een plant aankijkt.
+				if (AGrowPlant* Plant = Cast<AGrowPlant>(Focus))
+				{
+					const float PW = 300.f;
+					const float PXp = CX - PW * 0.5f;
+					float PYp = CY - 150.f;
+					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, 132.f);
+					float ly = PYp + 8.f;
+					const float lx = PXp + 12.f;
+
+					if (!Plant->IsPlanted())
+					{
+						DrawText(TEXT("Lege pot"), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
+						DrawText(TEXT("Plant een zaadje (E)."), FLinearColor::White, lx, ly, Font);
+					}
+					else
+					{
+						static const TCHAR* PhaseNames[] = { TEXT("Zaailing"), TEXT("Vegetatief"), TEXT("Pre-bloei"), TEXT("Bloei"), TEXT("Oogstklaar") };
+						const int32 Pi = FMath::Clamp((int32)Plant->GetPhase(), 0, 4);
+						DrawText(FString::Printf(TEXT("%s"), *Plant->StrainId.ToString()), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
+						DrawText(FString::Printf(TEXT("Fase: %s  (%.0f%%)"), PhaseNames[Pi], Plant->GetGrowthFraction() * 100.f),
+							FLinearColor::White, lx, ly, Font); ly += 20.f;
+
+						const int32 Rem = FMath::RoundToInt(Plant->GetSecondsRemaining());
+						if (Plant->GetPhase() == EGrowthPhase::Harvestable)
+						{
+							DrawText(TEXT("OOGSTKLAAR — druk E"), FLinearColor::Green, lx, ly, Font);
+						}
+						else
+						{
+							DrawText(FString::Printf(TEXT("Tijd tot oogst: %d:%02d"), Rem / 60, Rem % 60),
+								FLinearColor::White, lx, ly, Font);
+						}
+						ly += 20.f;
+
+						// Verzorging-balk.
+						const float Care = Plant->GetCareMultiplier();
+						DrawText(FString::Printf(TEXT("Verzorging: %.0f%%"), Care * 100.f),
+							Care >= 0.8f ? FLinearColor::Green : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
+							lx, ly, Font); ly += 18.f;
+						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
+						DrawRect(FLinearColor(0.3f, 0.6f, 1.f, 0.95f), lx, ly, (PW - 24.f) * Care, 8.f); ly += 16.f;
+
+						DrawText(FString::Printf(TEXT("Verwacht: %.0fg @ %.0f%% THC"),
+							Plant->GetEstimatedYieldGrams(), Plant->GetEstimatedThcPercent()),
+							FLinearColor(0.9f, 0.9f, 0.7f), lx, ly, Font);
+					}
+				}
+
 				const FText Prompt = IInteractable::Execute_GetInteractionPrompt(Focus);
 				if (!Prompt.IsEmpty())
 				{
-					const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
-					const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
 					DrawText(FString::Printf(TEXT("[E] %s"), *Prompt.ToString()),
 						FLinearColor::Yellow, CX - 60.f, CY + 60.f, Font);
 				}
@@ -382,17 +433,6 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		Phone->SetRollGrams(FCString::Atoi(*S.RightChop(6)));
 	}
-	else if (S == TEXT("rollslider"))
-	{
-		// Bepaal de dichtstbijzijnde gram uit waar je op de track klikte.
-		float MX = 0.f, MY = 0.f;
-		const int32 MaxG = Phone->GetMaxJointGrams();
-		if (PlayerOwner && RollTrackW > 0.f && MaxG > 1 && PlayerOwner->GetMousePosition(MX, MY))
-		{
-			const float F = FMath::Clamp((MX - RollTrackX) / RollTrackW, 0.f, 1.f);
-			Phone->SetRollGrams(1 + FMath::RoundToInt(F * (MaxG - 1)));
-		}
-	}
 	else if (S == TEXT("rollconfirm"))
 	{
 		Phone->ConfirmRoll();
@@ -430,47 +470,42 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 		FLinearColor::White, InnerX, y, Font);
 	y += 28.f;
 
-	// Sleep-slider van 1g tot MaxG. Bij MaxG == 1 (maar dat komt niet voor) geen slider.
+	// Slider met klikbare stops per gram (1..MaxG). Klik op een vakje = dat aantal gram.
 	const float TrackX = InnerX;
 	const float TrackW = W - 32.f;
 	const float TrackY = y + 6.f;
-	const float TrackH = 14.f;
-	const float Frac = (MaxG > 1) ? float(G - 1) / float(MaxG - 1) : 0.f;
-
-	// Onthoud de track zodat NotifyHitBoxClick de dichtstbijzijnde gram kan berekenen.
-	RollTrackX = TrackX;
-	RollTrackW = TrackW;
-
-	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), TrackX, TrackY, TrackW, TrackH);
-	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), TrackX, TrackY, Frac * TrackW, TrackH);
-	const float HandleX = TrackX + Frac * TrackW;
-	DrawRect(FLinearColor::White, HandleX - 6.f, TrackY - 6.f, 12.f, TrackH + 12.f);
-
-	// Eén grote track-hitbox: klik ergens -> dichtstbijzijnde gram (berekend in NotifyHitBoxClick).
-	AddHitBox(FVector2D(TrackX, TrackY - 12.f), FVector2D(TrackW, TrackH + 24.f), FName(TEXT("rollslider")), true, 3);
-
-	// gram-labels onder de track.
+	const float TrackH = 16.f;
 	const float SegW = TrackW / float(MaxG);
+
+	// Achtergrond-track + gevulde balk tot het gekozen gram.
+	DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.95f), TrackX, TrackY, TrackW, TrackH);
+	DrawRect(FLinearColor(0.35f, 0.8f, 0.35f, 0.95f), TrackX, TrackY, SegW * G, TrackH);
+
 	for (int32 g = 1; g <= MaxG; ++g)
 	{
-		DrawText(FString::Printf(TEXT("%d"), g), FLinearColor(0.6f, 0.6f, 0.7f),
-			TrackX + (g - 1) * SegW + SegW * 0.5f - 4.f, TrackY + TrackH + 2.f, Font);
+		const float cx = TrackX + (g - 1) * SegW;
+		const FName Box(*FString::Printf(TEXT("rollg_%d"), g));
+		const bool bHover = (HoveredBox == Box);
+		const bool bSel = (g == G);
+
+		// Vak-rand bij hover/selectie zodat je ziet dat het klikbaar is.
+		if (bHover || bSel)
+		{
+			DrawRect(bSel ? FLinearColor(0.6f, 1.f, 0.6f, 0.35f) : FLinearColor(1.f, 1.f, 1.f, 0.20f),
+				cx, TrackY - 4.f, SegW, TrackH + 8.f);
+		}
+		DrawText(FString::Printf(TEXT("%dg"), g), bSel ? FLinearColor::White : FLinearColor(0.7f, 0.7f, 0.8f),
+			cx + SegW * 0.5f - 8.f, TrackY + TrackH + 3.f, Font);
+
+		// Klik-vak per gram (betrouwbaar, naam -> gram; geen muis-coördinaten nodig).
+		AddHitBox(FVector2D(cx, TrackY - 6.f), FVector2D(SegW, TrackH + 28.f), Box, true, 3);
 	}
 
-	// Slepen: muis ingedrukt boven de track -> dichtstbijzijnde gram.
-	if (PlayerOwner && MaxG > 1)
-	{
-		float MX = 0.f, MY = 0.f;
-		if (PlayerOwner->GetMousePosition(MX, MY) && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton))
-		{
-			if (MX >= TrackX - 10.f && MX <= TrackX + TrackW + 10.f && MY >= TrackY - 16.f && MY <= TrackY + TrackH + 16.f)
-			{
-				const float F = FMath::Clamp((MX - TrackX) / TrackW, 0.f, 1.f);
-				Phone->SetRollGrams(1 + FMath::RoundToInt(F * (MaxG - 1)));
-			}
-		}
-	}
-	y += 44.f;
+	// Handle op de gekozen positie.
+	const float HandleX = TrackX + (G - 0.5f) * SegW;
+	DrawRect(FLinearColor::White, HandleX - 5.f, TrackY - 6.f, 10.f, TrackH + 12.f);
+
+	y += 46.f;
 
 	// Kwaliteit-balk.
 	const float Quality = FMath::Clamp(G / 5.f, 0.f, 1.f);
