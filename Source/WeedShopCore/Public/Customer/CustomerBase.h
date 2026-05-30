@@ -19,6 +19,7 @@
 class UDataTable;
 class UEconomyComponent;
 class UInventoryComponent;
+class UStaticMeshComponent;
 
 UENUM(BlueprintType)
 enum class ECustomerState : uint8
@@ -89,6 +90,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	// Zichtbaar placeholder-lichaam (tot er een echte character-mesh is).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Customer")
+	TObjectPtr<UStaticMeshComponent> Body;
 
 	UFUNCTION()
 	void OnRep_Order();

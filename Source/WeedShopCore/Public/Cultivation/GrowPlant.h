@@ -52,6 +52,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
 	TArray<TObjectPtr<UStaticMesh>> PhaseMeshes;
 
+	// Versnelt de groei (1 = realistisch; hoger = sneller, handig om te testen/demoën).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
+	float GrowthSpeedMultiplier = 1.f;
+
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;

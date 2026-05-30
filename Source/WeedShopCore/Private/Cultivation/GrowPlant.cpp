@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeedStrain.h"
 #include "Inventory/InventoryComponent.h"
+#include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
 AGrowPlant::AGrowPlant()
@@ -53,7 +54,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	// Groei op echte tijd.
 	if (Phase != EGrowthPhase::Harvestable)
 	{
-		GrowthSeconds = FMath::Min(GrowthSeconds + DeltaSeconds, MaxGrowthSeconds);
+		GrowthSeconds = FMath::Min(GrowthSeconds + DeltaSeconds * FMath::Max(0.f, GrowthSpeedMultiplier), MaxGrowthSeconds);
 		UpdatePhaseFromGrowth();
 	}
 
@@ -100,15 +101,22 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
 	if (Phase == EGrowthPhase::Harvestable)
 	{
-		return NSLOCTEXT("WeedShop", "PlantHarvest", "Oogsten");
+		return FText::FromString(FString::Printf(TEXT("Oogsten  (%s)"), *StrainId.ToString()));
 	}
-	return NSLOCTEXT("WeedShop", "PlantWater", "Water geven");
+	const int32 Pct = FMath::RoundToInt(GetGrowthFraction() * 100.f);
+	return FText::FromString(FString::Printf(TEXT("Water geven  (groei %d%%, zorg %.0f%%)"),
+		Pct, CareMultiplier * 100.f));
 }
 
 void AGrowPlant::Water()
 {
 	CareMultiplier = FMath::Clamp(CareMultiplier + 0.2f, 0.3f, 1.0f);
-	UE_LOG(LogWeedShop, Verbose, TEXT("Plant %s gewaterd -> care %.2f"), *StrainId.ToString(), CareMultiplier);
+	UE_LOG(LogWeedShop, Log, TEXT("Plant %s gewaterd -> zorg %.0f%%"), *StrainId.ToString(), CareMultiplier * 100.f);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan,
+			FString::Printf(TEXT("Plant gewaterd (zorg %.0f%%)"), CareMultiplier * 100.f));
+	}
 }
 
 void AGrowPlant::Harvest(APawn* InstigatorPawn)
@@ -129,6 +137,12 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 		Inv->AddItem(Strain->HarvestProductId, YieldGrams);
 		UE_LOG(LogWeedShop, Log, TEXT("Oogst: %dg %s (THC %.1f%%) -> inventory van %s"),
 			YieldGrams, *Strain->HarvestProductId.ToString(), ActualThc, *GetNameSafe(InstigatorPawn));
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
+				FString::Printf(TEXT("Geoogst: %dg %s (THC %.0f%%)"),
+					YieldGrams, *Strain->HarvestProductId.ToString(), ActualThc));
+		}
 	}
 	else
 	{

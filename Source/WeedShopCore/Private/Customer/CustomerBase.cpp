@@ -2,10 +2,13 @@
 
 #include "WeedShopCore.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Data/WeedShopProduct.h"
 #include "Economy/EconomyComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "Engine/Engine.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 
 ACustomerBase::ACustomerBase()
@@ -14,6 +17,18 @@ ACustomerBase::ACustomerBase()
 
 	// Zorg dat de interactie-trace (ECC_Visibility) de klant raakt.
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+
+	// Zichtbaar placeholder-lichaam (capsule-vormige blob) tot er een echte mesh is.
+	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
+	Body->SetupAttachment(GetCapsuleComponent());
+	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Body->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
+	Body->SetRelativeScale3D(FVector(0.9f, 0.9f, 1.9f));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylFinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	if (CylFinder.Succeeded())
+	{
+		Body->SetStaticMesh(CylFinder.Object);
+	}
 }
 
 void ACustomerBase::BeginPlay()
@@ -163,6 +178,20 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 
 	const EDealResult Result = SubmitOffer(GetMarketPriceCents(), Econ, Stock);
 	UE_LOG(LogWeedShop, Log, TEXT("Klant-interactie resultaat: %d"), static_cast<int32>(Result));
+
+	if (GEngine)
+	{
+		FColor C = FColor::White;
+		FString Msg;
+		switch (Result)
+		{
+		case EDealResult::Accepted: C = FColor::Green;  Msg = TEXT("Verkocht!"); break;
+		case EDealResult::NoStock:  C = FColor::Orange; Msg = FString::Printf(TEXT("Geen voorraad: %s"), *DesiredProductId.ToString()); break;
+		case EDealResult::Haggle:   C = FColor::Yellow; Msg = TEXT("Klant vindt het te duur"); break;
+		default:                    C = FColor::Red;    Msg = TEXT("Klant weigert"); break;
+		}
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, C, Msg);
+	}
 }
 
 FText ACustomerBase::GetInteractionPrompt_Implementation() const
@@ -171,7 +200,10 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 	{
 	case ECustomerState::WantsToOrder:
 	case ECustomerState::Negotiating:
-		return NSLOCTEXT("WeedShop", "CustomerSell", "Verkopen");
+		return FText::FromString(FString::Printf(TEXT("Verkoop %dx %s  (~EUR %.2f)"),
+			DesiredQuantity, *DesiredProductId.ToString(), (GetMarketPriceCents() * DesiredQuantity) / 100.f));
+	case ECustomerState::Served:
+		return FText::FromString(TEXT("Tevreden klant"));
 	default:
 		return FText::GetEmpty();
 	}
