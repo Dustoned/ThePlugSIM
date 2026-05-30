@@ -85,6 +85,38 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId)
 	return true;
 }
 
+TArray<FName> UUpgradeComponent::GetAllUpgradeIds() const
+{
+	return UpgradeTable ? UpgradeTable->GetRowNames() : TArray<FName>();
+}
+
+bool UUpgradeComponent::GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32& OutCostCents,
+	bool& bOutPurchased, bool& bOutAvailable) const
+{
+	if (!UpgradeTable)
+	{
+		return false;
+	}
+	const FUpgradeRow* Row = UpgradeTable->FindRow<FUpgradeRow>(UpgradeId, TEXT("GetUpgradeDisplay"), false);
+	if (!Row)
+	{
+		return false;
+	}
+	OutName = Row->DisplayName;
+	OutCostCents = Row->CostCents;
+	bOutPurchased = Purchased.Contains(UpgradeId);
+
+	bOutAvailable = true;
+	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (const UMilestoneComponent* M = GS->GetMilestones())
+		{
+			bOutAvailable = M->GetCurrentPhase() >= Row->RequiredPhase;
+		}
+	}
+	return true;
+}
+
 float UUpgradeComponent::GetEffectTotal(FName EffectTag) const
 {
 	if (!UpgradeTable || EffectTag.IsNone())

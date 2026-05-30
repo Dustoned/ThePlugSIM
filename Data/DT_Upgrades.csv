@@ -1,5 +1,7 @@
 Name,DisplayName,Category,CostCents,RequiredPhase,EffectTag,EffectMagnitude
-Upg_BetterPot,"Betere pot (lekt niet)",GrowGear,5000,StreetDealer,CareRetention,0.5
 Upg_Nutrients,"Voeding / nutrienten",GrowGear,3000,StreetDealer,GrowthSpeed,0.25
+Upg_BetterPot,"Betere pot (lekt niet)",GrowGear,5000,StreetDealer,CareRetention,0.5
 Upg_LEDLamp,"LED groeilamp",GrowGear,15000,StreetDealer,GrowthSpeed,0.5
+Apt_Renovate,"Appartement opknappen",Premises,25000,StreetDealer,CareRetention,0.2
 Upg_Security,"Beveiliging (kluis + camera)",Security,20000,Shop,HeatResist,0.5
+Apt_BuyShop,"Eigen coffeeshop-pand",Premises,150000,Shop,GrowthSpeed,0.25

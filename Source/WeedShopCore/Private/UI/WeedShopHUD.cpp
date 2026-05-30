@@ -7,6 +7,7 @@
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
 #include "Progression/MilestoneComponent.h"
+#include "Progression/UpgradeComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
@@ -76,6 +77,12 @@ void AWeedShopHUD::DrawHUD()
 		}
 	}
 
+	// Telefoon-overlay (Tab).
+	if (bPhoneOpen)
+	{
+		DrawPhone();
+	}
+
 	// Interactie-prompt (gecentreerd, iets onder het midden).
 	if (P)
 	{
@@ -94,4 +101,50 @@ void AWeedShopHUD::DrawHUD()
 			}
 		}
 	}
+}
+
+void AWeedShopHUD::DrawPhone()
+{
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr;
+
+	const float W = 380.f;
+	const float H = 320.f;
+	const float PX = (Canvas ? Canvas->ClipX : 1280.f) - W - 30.f;
+	const float PY = 80.f;
+
+	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.92f), PX, PY, W, H);
+
+	float y = PY + 12.f;
+	DrawText(TEXT("== TELEFOON =="), FLinearColor(0.5f, 1.f, 0.5f), PX + 14.f, y, Font); y += 28.f;
+
+	if (GS && GS->GetEconomy())
+	{
+		DrawText(FString::Printf(TEXT("Kas: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
+			FLinearColor::White, PX + 14.f, y, Font);
+		y += 26.f;
+	}
+	DrawText(TEXT("Kopen (toets 1-6):"), FLinearColor(0.8f, 0.8f, 1.f), PX + 14.f, y, Font); y += 26.f;
+
+	if (Upg)
+	{
+		int32 n = 1;
+		for (const FName& Id : Upg->GetAllUpgradeIds())
+		{
+			FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
+			if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
+			{
+				const TCHAR* Suffix = bPurchased ? TEXT("  [gekocht]") : (bAvailable ? TEXT("") : TEXT("  [vergrendeld]"));
+				const FLinearColor Col = bPurchased ? FLinearColor::Gray
+					: (bAvailable ? FLinearColor::White : FLinearColor(0.7f, 0.45f, 0.45f));
+				DrawText(FString::Printf(TEXT("%d) %s - EUR %.2f%s"), n, *Name.ToString(), Cost / 100.f, Suffix),
+					Col, PX + 14.f, y, Font);
+				y += 23.f;
+			}
+			if (++n > 6) break;
+		}
+	}
+
+	DrawText(TEXT("[Tab] sluiten"), FLinearColor::Yellow, PX + 14.f, PY + H - 28.f, Font);
 }

@@ -8,7 +8,11 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "Inventory/InventoryComponent.h"
+#include "UI/WeedShopHUD.h"
+#include "Game/WeedShopGameState.h"
+#include "Progression/UpgradeComponent.h"
 #include "ThePlugSIM.h"
 
 AThePlugSIMCharacter::AThePlugSIMCharacter()
@@ -64,7 +68,17 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AThePlugSIMCharacter::LookInput);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AThePlugSIMCharacter::LookInput);
 	}
-	else
+
+	// Telefoon: directe key-bindings (geen aparte Input Action-assets nodig).
+	PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AThePlugSIMCharacter::TogglePhone);
+	PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
+
+	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
 		UE_LOG(LogThePlugSIM, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
@@ -121,4 +135,74 @@ void AThePlugSIMCharacter::DoJumpEnd()
 {
 	// pass StopJumping to the character
 	StopJumping();
+}
+
+void AThePlugSIMCharacter::TogglePhone()
+{
+	bPhoneOpen = !bPhoneOpen;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+	{
+		return;
+	}
+
+	if (AWeedShopHUD* HUD = Cast<AWeedShopHUD>(PC->GetHUD()))
+	{
+		HUD->SetPhoneOpen(bPhoneOpen);
+	}
+
+	PC->SetShowMouseCursor(bPhoneOpen);
+	if (bPhoneOpen)
+	{
+		PC->SetInputMode(FInputModeGameAndUI());
+	}
+	else
+	{
+		PC->SetInputMode(FInputModeGameOnly());
+	}
+}
+
+void AThePlugSIMCharacter::BuyPhoneKey(FKey Key)
+{
+	int32 Index = -1;
+	if (Key == EKeys::One)        Index = 0;
+	else if (Key == EKeys::Two)   Index = 1;
+	else if (Key == EKeys::Three) Index = 2;
+	else if (Key == EKeys::Four)  Index = 3;
+	else if (Key == EKeys::Five)  Index = 4;
+	else if (Key == EKeys::Six)   Index = 5;
+	if (Index >= 0)
+	{
+		BuyPhoneIndex(Index);
+	}
+}
+
+void AThePlugSIMCharacter::BuyPhoneIndex(int32 Index)
+{
+	if (!bPhoneOpen)
+	{
+		return;
+	}
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!GS || !GS->GetUpgrades())
+	{
+		return;
+	}
+	const TArray<FName> Ids = GS->GetUpgrades()->GetAllUpgradeIds();
+	if (Ids.IsValidIndex(Index))
+	{
+		ServerBuyUpgrade(Ids[Index]);
+	}
+}
+
+void AThePlugSIMCharacter::ServerBuyUpgrade_Implementation(FName UpgradeId)
+{
+	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (GS->GetUpgrades())
+		{
+			GS->GetUpgrades()->BuyUpgrade(UpgradeId);
+		}
+	}
 }

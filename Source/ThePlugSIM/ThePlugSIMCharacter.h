@@ -12,6 +12,7 @@ class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
 struct FInputActionValue;
+struct FKey;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -84,7 +85,23 @@ protected:
 
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-	
+
+	/** Telefoon openen/sluiten (Tab) — schakelt ook de muis-cursor/input-mode. */
+	void TogglePhone();
+
+	/** Handler voor de nummertoetsen 1-6: mapt de toets naar een catalogus-index. */
+	void BuyPhoneKey(FKey Key);
+
+	/** Koopt het N-de catalogus-item van de telefoon. */
+	void BuyPhoneIndex(int32 Index);
+
+	/** Server-RPC: koopt een upgrade via de gedeelde GameState. */
+	UFUNCTION(Server, Reliable)
+	void ServerBuyUpgrade(FName UpgradeId);
+
+	/** Of de telefoon nu open is (lokaal). */
+	bool bPhoneOpen = false;
+
 
 public:
 

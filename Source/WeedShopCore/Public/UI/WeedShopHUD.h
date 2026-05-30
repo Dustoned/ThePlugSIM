@@ -15,4 +15,16 @@ class WEEDSHOPCORE_API AWeedShopHUD : public AHUD
 
 public:
 	virtual void DrawHUD() override;
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void SetPhoneOpen(bool bOpen) { bPhoneOpen = bOpen; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
+	bool IsPhoneOpen() const { return bPhoneOpen; }
+
+protected:
+	// Tekent het telefoon-paneel (catalogus van upgrades, genummerd 1..N).
+	void DrawPhone();
+
+	bool bPhoneOpen = false;
 };

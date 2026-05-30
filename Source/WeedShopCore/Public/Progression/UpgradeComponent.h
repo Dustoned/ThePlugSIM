@@ -37,6 +37,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
 	int32 GetPurchasedCount() const { return Purchased.Num(); }
 
+	// Alle upgrade-id's (CSV-volgorde) — de telefoon-catalogus.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
+	TArray<FName> GetAllUpgradeIds() const;
+
+	// Weergave-info voor één upgrade (voor de telefoon-UI). False als onbekend.
+	bool GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32& OutCostCents, bool& bOutPurchased, bool& bOutAvailable) const;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
