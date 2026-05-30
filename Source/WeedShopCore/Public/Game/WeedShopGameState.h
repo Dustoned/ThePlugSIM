@@ -19,6 +19,7 @@ class UUpgradeComponent;
 class UStoreComponent;
 class UContactsComponent;
 class UNpcRegistryComponent;
+class UHeatComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
@@ -56,6 +57,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UNpcRegistryComponent* GetNpcRegistry() const { return NpcRegistry; }
 
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	UHeatComponent* GetHeat() const { return Heat; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
@@ -77,4 +81,7 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UNpcRegistryComponent> NpcRegistry;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<UHeatComponent> Heat;
 };

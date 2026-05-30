@@ -6,6 +6,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
+#include "World/HeatComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
@@ -69,6 +70,16 @@ void AWeedShopHUD::DrawHUD()
 		const int32 MM = TotalMin % 60;
 		DrawText(FString::Printf(TEXT("Tijd: %02d:%02d   (%s)"), HH, MM,
 			Day->IsNight() ? TEXT("Nacht") : TEXT("Dag")), FLinearColor::White, X, Y, Font);
+		Y += 26.f;
+	}
+
+	// Heat / politierisico.
+	if (GS && GS->GetHeat())
+	{
+		const float H = GS->GetHeat()->GetHeat();
+		const FLinearColor HeatCol = H >= 75.f ? FLinearColor::Red
+			: (H >= 40.f ? FLinearColor(1.f, 0.6f, 0.2f) : FLinearColor(0.6f, 0.8f, 0.6f));
+		DrawText(FString::Printf(TEXT("Heat: %.0f%%"), H), HeatCol, X, Y, Font);
 		Y += 26.f;
 	}
 

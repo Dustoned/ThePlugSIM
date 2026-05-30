@@ -90,6 +90,13 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UPhoneClientComponent> Phone;
 
+	/** Straat-werving: geef de aangekeken NPC een gratis sample (toets F). */
+	void GiveSample();
+
+	/** Server-RPC: voert het sample-geven authoritative uit op het aangekeken doel. */
+	UFUNCTION(Server, Reliable)
+	void ServerGiveSample(AActor* Target);
+
 
 public:
 

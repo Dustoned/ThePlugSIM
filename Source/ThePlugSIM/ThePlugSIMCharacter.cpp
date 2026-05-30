@@ -13,6 +13,10 @@
 #include "UI/WeedShopHUD.h"
 #include "Game/WeedShopGameState.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Interaction/InteractionComponent.h"
+#include "Customer/CustomerBase.h"
+#include "Npc/NpcRegistryComponent.h"
+#include "World/HeatComponent.h"
 #include "ThePlugSIM.h"
 
 AThePlugSIMCharacter::AThePlugSIMCharacter()
@@ -85,6 +89,9 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, Ph, &UPhoneClientComponent::HandleNumberKey);
 	}
 
+	// Straat-werving: F geeft de aangekeken NPC een gratis sample.
+	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
+
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
 		UE_LOG(LogThePlugSIM, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
@@ -145,3 +152,79 @@ void AThePlugSIMCharacter::DoJumpEnd()
 }
 
 // Telefoon-logica zit nu in UPhoneClientComponent (zie Phone-component op deze pawn).
+
+void AThePlugSIMCharacter::GiveSample()
+{
+	// Bepaal lokaal het aangekeken doel en stuur het naar de server.
+	if (const UInteractionComponent* IC = FindComponentByClass<UInteractionComponent>())
+	{
+		if (AActor* Focus = IC->GetFocusedActor())
+		{
+			ServerGiveSample(Focus);
+		}
+	}
+}
+
+void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
+{
+	ACustomerBase* Customer = Cast<ACustomerBase>(Target);
+	if (!Customer)
+	{
+		return;
+	}
+
+	// Reikwijdte-check.
+	if (FVector::DistSquared(GetActorLocation(), Customer->GetActorLocation()) > FMath::Square(400.f))
+	{
+		return;
+	}
+
+	// Zoek een gram bud in de voorraad als gratis sample.
+	if (!Inventory)
+	{
+		return;
+	}
+	FName SampleItem = NAME_None;
+	for (const FInventoryStack& Stack : Inventory->GetStacks())
+	{
+		if (Stack.ItemId.ToString().StartsWith(TEXT("Bud_")))
+		{
+			SampleItem = Stack.ItemId;
+			break;
+		}
+	}
+	if (SampleItem.IsNone() || !Inventory->RemoveItem(SampleItem, 1))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen wiet om als sample te geven."));
+		}
+		return;
+	}
+
+	// Werkt de relatie van deze persoon op (verslaving/loyaliteit/respect omhoog).
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone())
+	{
+		float R = 0.f, L = 0.f, A = 0.f; FText N;
+		if (GS->GetNpcRegistry()->GetStats(Customer->NpcId, R, L, A, N))
+		{
+			GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R + 3.f, L + 10.f, A + 8.f);
+		}
+	}
+	// Live klant ook bijwerken.
+	Customer->Respect = FMath::Clamp(Customer->Respect + 3.f, 0.f, 100.f);
+	Customer->Loyalty = FMath::Clamp(Customer->Loyalty + 10.f, 0.f, 100.f);
+	Customer->Addiction = FMath::Clamp(Customer->Addiction + 8.f, 0.f, 100.f);
+
+	// Straat-dealen is riskant -> heat omhoog.
+	if (GS && GS->GetHeat())
+	{
+		GS->GetHeat()->AddHeat(5.f);
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, TEXT("Gratis sample gegeven (relatie +)."));
+	}
+}
