@@ -201,14 +201,15 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 
 	if (AskPriceCentsPerUnit <= Market)
 	{
+		// Eerlijke/goedkope deal -> meer waardering.
 		Respect = ClampAttr(Respect + 5.f);
 		Loyalty = ClampAttr(Loyalty + 8.f);
 	}
 	else
 	{
-		// Boven markt maar tóch geaccepteerd: cash nu, maar uitknijpen voelt.
-		Respect = ClampAttr(Respect - 3.f);
-		Loyalty = ClampAttr(Loyalty - 2.f);
+		// Boven markt maar tóch akkoord: géén straf puur omdat hij ja zei (brief Sectie 3),
+		// wel iets minder binding dan een eerlijke deal.
+		Loyalty = ClampAttr(Loyalty + 2.f);
 	}
 	Addiction = ClampAttr(Addiction + 6.f);
 
