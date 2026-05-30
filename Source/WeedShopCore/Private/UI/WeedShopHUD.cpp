@@ -429,23 +429,33 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), TrackX, TrackY, TrackW, TrackH);
 	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), TrackX, TrackY, Frac * TrackW, TrackH);
 	const float HandleX = TrackX + Frac * TrackW;
-	DrawRect(FLinearColor::White, HandleX - 5.f, TrackY - 5.f, 10.f, TrackH + 10.f);
-	AddHitBox(FVector2D(TrackX, TrackY - 8.f), FVector2D(TrackW, TrackH + 16.f), FName(TEXT("rollslider")), true, 2);
+	DrawRect(FLinearColor::White, HandleX - 6.f, TrackY - 6.f, 12.f, TrackH + 12.f);
 
-	// Klikken of slepen op de track zet het aantal gram (1..MaxG).
+	// Klikbare segmenten per gram (1..MaxG) — betrouwbaar klikken op de slider.
+	const float SegW = TrackW / float(MaxG);
+	for (int32 g = 1; g <= MaxG; ++g)
+	{
+		const float sx = TrackX + (g - 1) * SegW;
+		AddHitBox(FVector2D(sx, TrackY - 10.f), FVector2D(SegW, TrackH + 20.f),
+			FName(*FString::Printf(TEXT("rollg_%d"), g)), true, 3);
+		// kleine gram-labels onder de track
+		DrawText(FString::Printf(TEXT("%d"), g), FLinearColor(0.6f, 0.6f, 0.7f), sx + SegW * 0.5f - 4.f, TrackY + TrackH + 2.f, Font);
+	}
+
+	// Slepen werkt ook: muis ingedrukt boven de track.
 	if (PlayerOwner && MaxG > 1)
 	{
 		float MX = 0.f, MY = 0.f;
 		if (PlayerOwner->GetMousePosition(MX, MY) && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton))
 		{
-			if (MX >= TrackX - 10.f && MX <= TrackX + TrackW + 10.f && MY >= TrackY - 12.f && MY <= TrackY + TrackH + 12.f)
+			if (MX >= TrackX - 10.f && MX <= TrackX + TrackW + 10.f && MY >= TrackY - 14.f && MY <= TrackY + TrackH + 14.f)
 			{
 				const float F = FMath::Clamp((MX - TrackX) / TrackW, 0.f, 1.f);
 				Phone->SetRollGrams(1 + FMath::RoundToInt(F * (MaxG - 1)));
 			}
 		}
 	}
-	y += 40.f;
+	y += 44.f;
 
 	// Kwaliteit-balk.
 	const float Quality = FMath::Clamp(G / 5.f, 0.f, 1.f);

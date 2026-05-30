@@ -161,8 +161,8 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	Inv->AddItem(JointId, 1);
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green,
-			FString::Printf(TEXT("Joint gedraaid (%d g)."), Grams));
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			FString::Printf(TEXT("Joint gedraaid: %dg %s + 1 vloei"), Grams, *BudItem.ToString()));
 	}
 }
 
