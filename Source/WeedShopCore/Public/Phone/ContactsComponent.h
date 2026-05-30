@@ -113,11 +113,18 @@ protected:
 	// Server: maak een afspraak-bericht van een willekeurig contact.
 	void SendRandomAppointment();
 
-	// Server: kondig afspraken aan waarvan de tijd is bereikt.
+	// Server: kondig afspraken aan waarvan de tijd is bereikt + laat de klant arriveren.
 	void CheckAppointments();
+
+	// Server: laat een klant verschijnen bij de speler voor deze (geaccepteerde) afspraak.
+	void SpawnAppointmentCustomer(const FPhoneMessage& Msg);
 
 	// Huidige tijd in de dag-cyclus (seconden) + cyclusduur, via de GameState.
 	bool GetCycleTime(float& OutNow, float& OutLength) const;
+
+	// Producten-tabel voor de arriverende klant (marktprijs-opzoek).
+	UPROPERTY()
+	TObjectPtr<class UDataTable> ProductTable;
 
 	float MessageTimer = 0.f;
 };

@@ -100,4 +100,7 @@ protected:
 
 	void LeaveAngry();
 	static float ClampAttr(float V) { return FMath::Clamp(V, 0.f, 100.f); }
+
+	// Seconden sinds de klant klaar is (geholpen/vertrekt) — voor auto-despawn.
+	float LeaveTimer = 0.f;
 };

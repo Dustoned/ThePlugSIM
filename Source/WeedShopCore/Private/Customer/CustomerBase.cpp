@@ -85,6 +85,15 @@ void ACustomerBase::Tick(float DeltaSeconds)
 			LeaveAngry();
 		}
 	}
+	// Klaar (geholpen of vertrokken) -> na een tijdje despawnen.
+	else if (State == ECustomerState::Served || State == ECustomerState::Leaving)
+	{
+		LeaveTimer += DeltaSeconds;
+		if (LeaveTimer >= 12.f)
+		{
+			Destroy();
+		}
+	}
 }
 
 int32 ACustomerBase::GetMarketPriceCents() const

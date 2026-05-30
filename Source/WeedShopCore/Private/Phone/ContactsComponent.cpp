@@ -5,13 +5,25 @@
 #include "World/DayCycleComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Engine/Engine.h"
+#include "Engine/DataTable.h"
+#include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 
 UContactsComponent::UContactsComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	SetIsReplicatedByDefault(true);
+
+	static ConstructorHelpers::FObjectFinder<UDataTable> ProdFinder(
+		TEXT("/Game/_Project/Data/DT_Products.DT_Products"));
+	if (ProdFinder.Succeeded())
+	{
+		ProductTable = ProdFinder.Object;
+	}
 }
 
 void UContactsComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -151,10 +163,60 @@ void UContactsComponent::CheckAppointments()
 			if (GEngine)
 			{
 				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
-					FString::Printf(TEXT("Afspraak: %s is er nu!"), *Msg.SenderName.ToString()));
+					FString::Printf(TEXT("Afspraak: %s is er!"), *Msg.SenderName.ToString()));
 			}
+			SpawnAppointmentCustomer(Msg);
 		}
 	}
+}
+
+void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Spawn-plek: vlak vóór de eerste speler (zodat de klant 'bij je' arriveert).
+	FVector SpawnLoc(0.f, 0.f, 150.f);
+	FRotator SpawnRot = FRotator::ZeroRotator;
+	if (const APlayerController* PC = World->GetFirstPlayerController())
+	{
+		if (const APawn* Player = PC->GetPawn())
+		{
+			SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
+			SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
+			SpawnRot.Pitch = 0.f;
+			SpawnRot.Roll = 0.f;
+		}
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	ACustomerBase* Cust = World->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), SpawnLoc, SpawnRot, Params);
+	if (!Cust)
+	{
+		return;
+	}
+
+	Cust->ProductTable = ProductTable;
+	Cust->DesiredProductId = FName(TEXT("Bud_NorthernLights"));
+	Cust->DesiredQuantity = 2;
+	Cust->BudgetCentsPerUnit = 1500;
+
+	// Neem de relatie uit het contact over (loyale klanten accepteren makkelijker).
+	for (const FPhoneContact& Contact : Contacts)
+	{
+		if (Contact.ContactId == Msg.FromContactId)
+		{
+			Cust->Loyalty = Contact.Relationship;
+			Cust->Respect = Contact.Relationship;
+			break;
+		}
+	}
+
+	UE_LOG(LogWeedShop, Log, TEXT("Afspraak-klant gespawned voor %s."), *Msg.SenderName.ToString());
 }
 
 void UContactsComponent::RespondTopPending(bool bAccept)
