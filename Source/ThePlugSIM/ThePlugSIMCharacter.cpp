@@ -268,8 +268,8 @@ void AThePlugSIMCharacter::BeginPlay()
 	if (HasAuthority() && Inventory)
 	{
 		Inventory->AddItem(FName(TEXT("Papers_Small")), 10);
-		Inventory->AddItem(FName(TEXT("Bud_Bagseed")), 5);
-		Inventory->AddItem(FName(TEXT("Seed_Bagseed")), 1);
+		Inventory->AddItem(FName(TEXT("Bud_SilverHaze")), 5);
+		Inventory->AddItem(FName(TEXT("Seed_SilverHaze")), 1);
 	}
 }
 

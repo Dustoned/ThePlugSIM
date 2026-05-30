@@ -47,31 +47,24 @@ void UPhoneClientComponent::UpdateCursor()
 		PC->bEnableMouseOverEvents = bAnyUI;
 		if (bAnyUI)
 		{
-			// GameAndUI zodat de toetsbinds (R/Tab) blijven werken, maar:
-			//  - LockAlways: cursor kan het venster niet uit (muis "vast" in de UI).
-			//  - HideCursorDuringCapture(false): cursor blijft zichtbaar als je de
-			//    muisknop indrukt (anders verdween hij bij het slepen).
+			// GameAndUI = standaard klik-/hover-routing van de HUD hit-boxes (dat werkte goed),
+			// muis vastgezet in het venster, en cursor blijft zichtbaar als je de knop indrukt
+			// (HideCursorDuringCapture(false)) zodat hij niet verdwijnt bij slepen.
 			FInputModeGameAndUI Mode;
 			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
 			Mode.SetHideCursorDuringCapture(false);
 			PC->SetInputMode(Mode);
 
-			// Belangrijkste fix voor slepen: laat de game-viewport de muis NIET vangen op
-			// een klik. Bij capture bevriest de absolute cursorpositie (de muis levert dan
-			// alleen camera-delta), waardoor hover/slepen stopte en de cursor verdween.
+			// Capture-mode op standaard (CaptureDuringMouseDown) laten staan: NoCapture brak
+			// het klikken (2-3x nodig) en de hover-events. Alleen cursor-verbergen uitzetten.
 			if (UGameViewportClient* VP = PC->GetWorld() ? PC->GetWorld()->GetGameViewport() : nullptr)
 			{
-				VP->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
 				VP->SetHideCursorDuringCapture(false);
 			}
 		}
 		else
 		{
 			PC->SetInputMode(FInputModeGameOnly());
-			if (UGameViewportClient* VP = PC->GetWorld() ? PC->GetWorld()->GetGameViewport() : nullptr)
-			{
-				VP->SetMouseCaptureMode(EMouseCaptureMode::CapturePermanently);
-			}
 		}
 	}
 }

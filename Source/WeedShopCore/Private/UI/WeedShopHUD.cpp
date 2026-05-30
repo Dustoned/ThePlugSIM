@@ -26,7 +26,7 @@ namespace
 	constexpr float RowH = 26.f;
 
 	// Leesbare naam voor een item-id, zodat de speler "Wiet" vs "Zaadje" duidelijk ziet
-	// (het strain heet "Bagseed", wat anders als zaad oogt).
+	// (zodat de speler wiet en zaadjes duidelijk uit elkaar houdt).
 	FString PrettyItemName(const FName ItemId)
 	{
 		const FString S = ItemId.ToString();
@@ -537,23 +537,27 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 		const bool bHover = (HoverG == g);
 		const bool bSel = (g == G);
 
-		// Vak-rand bij hover/selectie zodat je ziet dat het klikbaar/sleepbaar is.
-		if (bHover || bSel)
+		// Hover = duidelijk geel oplichten zodat je ziet dat dit vak klikbaar/sleepbaar is.
+		if (bHover)
 		{
-			DrawRect(bSel ? FLinearColor(0.6f, 1.f, 0.6f, 0.35f) : FLinearColor(1.f, 1.f, 1.f, 0.20f),
-				cx, TrackY - 4.f, SegW, TrackH + 8.f);
+			DrawRect(FLinearColor(1.f, 0.85f, 0.1f, 0.55f), cx, TrackY - 5.f, SegW, TrackH + 10.f);
 		}
-		DrawText(FString::Printf(TEXT("%dg"), g), bSel ? FLinearColor::White : FLinearColor(0.7f, 0.7f, 0.8f),
+		else if (bSel)
+		{
+			DrawRect(FLinearColor(0.6f, 1.f, 0.6f, 0.30f), cx, TrackY - 4.f, SegW, TrackH + 8.f);
+		}
+		DrawText(FString::Printf(TEXT("%dg"), g),
+			bHover ? FLinearColor(1.f, 0.95f, 0.4f) : (bSel ? FLinearColor::White : FLinearColor(0.7f, 0.7f, 0.8f)),
 			cx + SegW * 0.5f - 8.f, TrackY + TrackH + 3.f, Font);
 
 		// Klik-/sleep-vak per gram (betrouwbaar, naam -> gram; geen muis-coördinaten nodig).
 		AddHitBox(FVector2D(cx, TrackY - 6.f), FVector2D(SegW, TrackH + 28.f), Box, true, 3);
 	}
 
-	// Handle op de gekozen positie — groter en geel terwijl je sleept, zodat je ziet dat je 'm vasthebt.
+	// Handle op de gekozen positie — geel + groter zodra je boven de balk hovert/sleept.
 	const float HandleX = TrackX + (G - 0.5f) * SegW;
-	const float HalfW = bDragging ? 8.f : 5.f;
-	DrawRect(bDragging ? FLinearColor(1.f, 0.9f, 0.3f) : FLinearColor::White,
+	const float HalfW = bDragging ? 9.f : (bOverTrack ? 7.f : 5.f);
+	DrawRect((bDragging || bOverTrack) ? FLinearColor(1.f, 0.85f, 0.1f) : FLinearColor::White,
 		HandleX - HalfW, TrackY - 8.f, HalfW * 2.f, TrackH + 16.f);
 
 	y += 46.f;
