@@ -13,7 +13,7 @@
 #include "UI/WeedShopHUD.h"
 #include "Game/WeedShopGameState.h"
 #include "Phone/PhoneClientComponent.h"
-#include "Build/BuildComponent.h"
+#include "Placement/BuildComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Npc/NpcRegistryComponent.h"

@@ -19,7 +19,7 @@
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
 #include "Customer/CustomerBase.h"
-#include "Build/BuildComponent.h"
+#include "Placement/BuildComponent.h"
 
 namespace
 {
