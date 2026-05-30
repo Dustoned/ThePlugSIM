@@ -28,6 +28,7 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
 - [2026-05-30] **Single-player** als uitgangspunt (zoals de brief: "first-person, jij bedient zelf"). Géén co-op/replication in de MVP — dat scheelt complexiteit in elke C++-class.
 - [2026-05-30] Tweede C++-module **`WeedShopCore`** aangemaakt (Source/WeedShopCore, leeg + compileert). Alle eigen gameplay komt hierin; de template-module `ThePlugSIM` blijft boilerplate. Stap E uit het A–Z-plan. Module-naam volgt de brief (`WeedShopCore`), niet de projectnaam.
 - [2026-05-30] **Git + Git LFS** geïnitialiseerd. `.gitignore` (Binaries/Intermediate/Saved/DDC etc.) + `.gitattributes` (LFS voor *.uasset/*.umap/*.fbx/*.png/*.wav etc.). Stap D. Remote + push moet de gebruiker nog doen.
+- [2026-05-30] **Interaction-systeem** (stap I): `IInteractable` (interface, methodes `Interact` + `GetInteractionPrompt` als BlueprintNativeEvent) + `UInteractionComponent` (camera line-trace, focus-tracking, `OnFocusedInteractableChanged`-delegate voor prompt-UI, `TryInteract()` voor de input). Let op: in UE 5.7 genereert UHT zelf de default-body van interface-BlueprintNativeEvents — dus géén `_Implementation` in de .cpp zetten. `CanInteract` bewust weggelaten (auto-default zou `false` zijn); gating gebeurt binnen `Interact`.
 
 ## Nog te beslissen
 
