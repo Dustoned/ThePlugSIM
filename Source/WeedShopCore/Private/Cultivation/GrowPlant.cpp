@@ -18,6 +18,24 @@ AGrowPlant::AGrowPlant()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	SetRootComponent(Mesh);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	// Standaard pot-mesh zodat een geplaatste (lege) pot meteen zichtbaar is, ook zonder
+	// PhaseMeshes. Cylinder = 1m; schaal naar een pot van ~50cm breed, 40cm hoog, en til 'm op
+	// zodat de onderkant op de actor-origin (= vloer bij plaatsen) staat.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> PotMeshFinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	if (PotMeshFinder.Succeeded() && !Mesh->GetStaticMesh())
+	{
+		Mesh->SetStaticMesh(PotMeshFinder.Object);
+		Mesh->SetRelativeScale3D(FVector(0.5f, 0.5f, 0.4f));
+		Mesh->SetRelativeLocation(FVector(0.f, 0.f, 20.f));
+	}
+
+	// StrainTable automatisch koppelen zodat een gespawnde pot kan planten/oogsten zonder BP-setup.
+	static ConstructorHelpers::FObjectFinder<UDataTable> StrainTableFinder(TEXT("/Game/_Project/Data/DT_Strains.DT_Strains"));
+	if (StrainTableFinder.Succeeded())
+	{
+		StrainTable = StrainTableFinder.Object;
+	}
 }
 
 void AGrowPlant::BeginPlay()

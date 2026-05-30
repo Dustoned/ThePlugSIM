@@ -19,6 +19,7 @@
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
 #include "Customer/CustomerBase.h"
+#include "Build/BuildComponent.h"
 
 namespace
 {
@@ -140,6 +141,24 @@ void AWeedShopHUD::DrawHUD()
 		{
 			// Geen UI open: cursor terug naar standaard (anders blijft het handje hangen).
 			PlayerOwner->CurrentMouseCursor = EMouseCursor::Default;
+		}
+	}
+
+	// Plaats-modus hint (midden-onder).
+	if (P)
+	{
+		if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
+		{
+			if (BC->IsPlacing())
+			{
+				const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
+				const float CY = Canvas ? Canvas->ClipY : 720.f;
+				const bool bValid = BC->IsPlacementValid();
+				DrawText(bValid ? TEXT("Left-click to place the pot   |   Right-click / B to cancel")
+								: TEXT("Aim at the floor...   (Right-click / B to cancel)"),
+					bValid ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(1.f, 0.8f, 0.4f),
+					CX - 220.f, CY - 140.f, Font);
+			}
 		}
 	}
 

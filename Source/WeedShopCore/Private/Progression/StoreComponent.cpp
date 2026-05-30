@@ -96,6 +96,7 @@ namespace
 	static const FSupplyDef GSupplies[] = {
 		{ TEXT("Papers_Small"), TEXT("Papers small (up to 2g) - 10 pcs"), 500, 10 },
 		{ TEXT("Papers_Big"),   TEXT("Papers big (up to 5g) - 10 pcs"), 1500, 10 },
+		{ TEXT("Pot"),          TEXT("Grow pot (place & plant a seed)"), 2500, 1 },
 	};
 }
 

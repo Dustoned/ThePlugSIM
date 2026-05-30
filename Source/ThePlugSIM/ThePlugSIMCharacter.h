@@ -93,6 +93,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UPhoneClientComponent> Phone;
 
+	/** Plaats-modus voor placeables (kweekpot): toets B = plaatsen, links-klik = bevestigen. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UBuildComponent> Build;
+
 	/** Straat-werving: geef de aangekeken NPC een gratis sample (toets F). */
 	void GiveSample();
 

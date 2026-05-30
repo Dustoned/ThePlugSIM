@@ -13,6 +13,7 @@
 #include "UI/WeedShopHUD.h"
 #include "Game/WeedShopGameState.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Build/BuildComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Npc/NpcRegistryComponent.h"
@@ -57,6 +58,9 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 
 	// Telefoon-logica (openen, tabs, kopen, afspraken).
 	Phone = CreateDefaultSubobject<UPhoneClientComponent>(TEXT("Phone"));
+
+	// Plaats-modus voor placeables (kweekpot).
+	Build = CreateDefaultSubobject<UBuildComponent>(TEXT("Build"));
 }
 
 void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -92,6 +96,16 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	// Straat-werving: F geeft de aangekeken NPC een gratis sample; R draait een joint.
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
 	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &AThePlugSIMCharacter::ToggleRollUI);
+
+	// Plaats-modus: B = pot plaatsen aan/uit, links-klik = bevestigen, rechts-klik = annuleren.
+	// ConfirmPlacement/CancelPlacing doen niets als je niet in plaats-modus bent, dus dit botst
+	// niet met UI-klikken.
+	if (UBuildComponent* B = Build.Get())
+	{
+		PlayerInputComponent->BindKey(EKeys::B, IE_Pressed, B, &UBuildComponent::TogglePotPlacement);
+		PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, B, &UBuildComponent::ConfirmPlacement);
+		PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, B, &UBuildComponent::CancelPlacing);
+	}
 
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
