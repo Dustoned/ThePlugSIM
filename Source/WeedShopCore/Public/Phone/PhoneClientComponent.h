@@ -60,9 +60,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	int32 GetRollGrams() const { return RollGrams; }
 
-	// Min/max gram per joint.
+	// Maximaal gram per joint dat je huidige papers toelaten (basis 2; betere vloei verhoogt).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
+	int32 GetMaxJointGrams() const;
+
+	// Absolute grenzen (papers tussen MinGrams en GramsHardMax).
 	static constexpr int32 MinGrams = 1;
-	static constexpr int32 MaxGrams = 5;
+	static constexpr int32 GramsHardMax = 5;
+	static constexpr int32 BaseMaxGrams = 2;
 
 protected:
 	UFUNCTION(Server, Reliable)

@@ -1,5 +1,6 @@
 Name,DisplayName,Category,CostCents,RequiredPhase,EffectTag,EffectMagnitude
 Upg_Nutrients,"Voeding / nutrienten",GrowGear,3000,StreetDealer,GrowthSpeed,0.25
+Upg_BigPapers,"Grotere vloei (tot 5g)",GrowGear,4000,StreetDealer,JointGramMax,3
 Upg_BetterPot,"Betere pot (lekt niet)",GrowGear,5000,StreetDealer,CareRetention,0.5
 Upg_LEDLamp,"LED groeilamp",GrowGear,15000,StreetDealer,GrowthSpeed,0.5
 Apt_Renovate,"Appartement opknappen",Premises,25000,StreetDealer,CareRetention,0.2

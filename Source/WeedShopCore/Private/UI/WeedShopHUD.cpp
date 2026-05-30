@@ -237,7 +237,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 					}
 					y += RowH;
 				}
-				if (++idx >= 6) break;
+				if (++idx >= 8) break;
 			}
 		}
 	}
@@ -314,7 +314,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 					}
 					y += RowH;
 				}
-				if (++idx >= 6) break;
+				if (++idx >= 8) break;
 			}
 		}
 	}
@@ -385,23 +385,38 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	DrawText(TEXT("JOINT DRAAIEN"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
 
 	const int32 G = Phone->GetRollGrams();
-	DrawText(FString::Printf(TEXT("Gram per joint: %d   (meer gram = betere kwaliteit)"), G),
+	const int32 MaxG = Phone->GetMaxJointGrams();
+	DrawText(FString::Printf(TEXT("Gram per joint: %d   (papers tot %dg)"), G, MaxG),
 		FLinearColor::White, InnerX, y, Font);
 	y += 26.f;
 
-	// Grams-keuze als knoppenrij (klikbare "slider").
+	// Grams-keuze als knoppenrij (klikbare "slider"); boven je papers-max = vergrendeld.
 	const float BtnW = 70.f;
 	for (int32 g = 1; g <= 5; ++g)
 	{
-		const FName Box(*FString::Printf(TEXT("rollg_%d"), g));
+		const float bx = InnerX + (g - 1) * (BtnW + 6.f);
+		const bool bLocked = (g > MaxG);
 		const bool bSel = (g == G);
-		const FLinearColor Col = bSel ? FLinearColor(0.5f, 1.f, 0.5f) : FLinearColor(0.7f, 0.7f, 0.8f);
-		DrawRect(bSel ? FLinearColor(0.2f, 0.4f, 0.2f, 0.95f) : FLinearColor(0.12f, 0.12f, 0.16f, 0.9f),
-			InnerX + (g - 1) * (BtnW + 6.f), y, BtnW, 30.f);
-		DrawText(FString::Printf(TEXT("%dg"), g), Col, InnerX + (g - 1) * (BtnW + 6.f) + 22.f, y + 5.f, Font);
-		AddHitBox(FVector2D(InnerX + (g - 1) * (BtnW + 6.f), y), FVector2D(BtnW, 30.f), Box, true, 1);
+		if (bLocked)
+		{
+			DrawRect(FLinearColor(0.10f, 0.08f, 0.08f, 0.9f), bx, y, BtnW, 30.f);
+			DrawText(FString::Printf(TEXT("%dg L"), g), FLinearColor(0.5f, 0.4f, 0.4f), bx + 16.f, y + 5.f, Font);
+		}
+		else
+		{
+			const FLinearColor Col = bSel ? FLinearColor(0.5f, 1.f, 0.5f) : FLinearColor(0.7f, 0.7f, 0.8f);
+			DrawRect(bSel ? FLinearColor(0.2f, 0.4f, 0.2f, 0.95f) : FLinearColor(0.12f, 0.12f, 0.16f, 0.9f), bx, y, BtnW, 30.f);
+			DrawText(FString::Printf(TEXT("%dg"), g), Col, bx + 22.f, y + 5.f, Font);
+			AddHitBox(FVector2D(bx, y), FVector2D(BtnW, 30.f), FName(*FString::Printf(TEXT("rollg_%d"), g)), true, 1);
+		}
 	}
-	y += 42.f;
+	y += 36.f;
+	if (MaxG < 5)
+	{
+		DrawText(TEXT("Grotere papers (meer gram) koop je later via Upgrades."),
+			FLinearColor(0.7f, 0.7f, 0.7f), InnerX, y, Font);
+	}
+	y += 20.f;
 
 	// Kwaliteit-balk.
 	const float Quality = FMath::Clamp(G / 5.f, 0.f, 1.f);

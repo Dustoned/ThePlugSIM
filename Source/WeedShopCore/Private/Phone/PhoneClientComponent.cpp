@@ -71,13 +71,14 @@ void UPhoneClientComponent::ToggleRollUI()
 	if (bRollOpen)
 	{
 		bOpen = false;
+		RollGrams = FMath::Clamp(RollGrams, MinGrams, GetMaxJointGrams());
 	}
 	UpdateCursor();
 }
 
 void UPhoneClientComponent::SetRollGrams(int32 Grams)
 {
-	RollGrams = FMath::Clamp(Grams, MinGrams, MaxGrams);
+	RollGrams = FMath::Clamp(Grams, MinGrams, GetMaxJointGrams());
 }
 
 void UPhoneClientComponent::ConfirmRoll()
@@ -87,9 +88,22 @@ void UPhoneClientComponent::ConfirmRoll()
 	UpdateCursor();
 }
 
+int32 UPhoneClientComponent::GetMaxJointGrams() const
+{
+	int32 Max = BaseMaxGrams;
+	if (const AWeedShopGameState* GS = GetGS())
+	{
+		if (const UUpgradeComponent* Upg = GS->GetUpgrades())
+		{
+			Max += FMath::RoundToInt(Upg->GetEffectTotal(TEXT("JointGramMax")));
+		}
+	}
+	return FMath::Clamp(Max, MinGrams, GramsHardMax);
+}
+
 void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 {
-	Grams = FMath::Clamp(Grams, MinGrams, MaxGrams);
+	Grams = FMath::Clamp(Grams, MinGrams, GetMaxJointGrams());
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Inv)
 	{
