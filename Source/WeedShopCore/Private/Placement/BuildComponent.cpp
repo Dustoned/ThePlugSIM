@@ -12,6 +12,7 @@
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
+#include "Net/UnrealNetwork.h"
 
 UBuildComponent::UBuildComponent()
 {
@@ -22,6 +23,15 @@ UBuildComponent::UBuildComponent()
 void UBuildComponent::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void UBuildComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UBuildComponent, bRepPlacing);
+	DOREPLIFETIME(UBuildComponent, bRepValid);
+	DOREPLIFETIME(UBuildComponent, RepLocation);
+	DOREPLIFETIME(UBuildComponent, RepYaw);
 }
 
 UInventoryComponent* UBuildComponent::GetOwnerInventory() const
@@ -72,38 +82,46 @@ void UBuildComponent::StartPlacing(FName ItemId)
 	bPlacing = true;
 	bValidSpot = false;
 
-	// Maak de lokale spook-mesh aan (lichtgroen, geen collision) als die er nog niet is.
-	if (!Ghost)
-	{
-		Ghost = NewObject<UStaticMeshComponent>(GetOwner());
-		if (Ghost)
-		{
-			Ghost->SetupAttachment(GetOwner()->GetRootComponent());
-			Ghost->RegisterComponent();
-			Ghost->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			Ghost->SetCastShadow(false);
-			Ghost->SetAbsolute(true, true, true); // niet meebewegen met de pawn; we zetten de wereld-transform zelf
-			// LoadObject (geen ConstructorHelpers — die mag alleen in een constructor, anders crash).
-			if (UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
-			{
-				Ghost->SetStaticMesh(Cyl);
-			}
-			// Doorzichtig kleur-materiaal (blauw/rood) als dynamische instance.
-			if (UMaterialInterface* GhostMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost")))
-			{
-				GhostMID = UMaterialInstanceDynamic::Create(GhostMat, this);
-				if (GhostMID)
-				{
-					Ghost->SetMaterial(0, GhostMID);
-				}
-			}
-		}
-	}
+	EnsureGhost();
 	if (Ghost)
 	{
-		Ghost->SetWorldScale3D(FVector(0.5f, 0.5f, 0.4f));
 		Ghost->SetVisibility(true);
 	}
+}
+
+void UBuildComponent::EnsureGhost()
+{
+	if (Ghost || !GetOwner())
+	{
+		return;
+	}
+	// Spook-mesh (geen collision); positie zetten we zelf in wereld-coördinaten.
+	Ghost = NewObject<UStaticMeshComponent>(GetOwner());
+	if (!Ghost)
+	{
+		return;
+	}
+	Ghost->SetupAttachment(GetOwner()->GetRootComponent());
+	Ghost->RegisterComponent();
+	Ghost->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Ghost->SetCastShadow(false);
+	Ghost->SetAbsolute(true, true, true);
+	// LoadObject (geen ConstructorHelpers — die mag alleen in een constructor, anders crash).
+	if (UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+	{
+		Ghost->SetStaticMesh(Cyl);
+	}
+	// Doorzichtig kleur-materiaal (blauw/rood) als dynamische instance.
+	if (UMaterialInterface* GhostMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost")))
+	{
+		GhostMID = UMaterialInstanceDynamic::Create(GhostMat, this);
+		if (GhostMID)
+		{
+			Ghost->SetMaterial(0, GhostMID);
+		}
+	}
+	Ghost->SetWorldScale3D(FVector(0.5f, 0.5f, 0.4f));
+	Ghost->SetVisibility(false);
 }
 
 void UBuildComponent::CancelPlacing()
@@ -121,8 +139,15 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled())
+	if (!OwnerPawn)
 	{
+		return;
+	}
+
+	// Niet-lokale speler: render z'n ghost uit de gerepliceerde preview-staat (co-op zicht).
+	if (!OwnerPawn->IsLocallyControlled())
+	{
+		UpdateRemoteGhost();
 		return;
 	}
 
@@ -151,50 +176,80 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		}
 	}
 
-	if (!bPlacing)
-	{
-		return;
-	}
-
-	FVector ViewLoc; FRotator ViewRot;
-	if (!GetViewPoint(ViewLoc, ViewRot))
-	{
-		return;
-	}
-
-	const FVector Start = ViewLoc;
-	const FVector End = ViewLoc + ViewRot.Vector() * PlaceDistance;
-
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopPlaceTrace), false);
-	Params.AddIgnoredActor(GetOwner());
-
-	FHitResult Hit;
-	bAimHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
-
+	bAimHit = false;
 	bValidSpot = false;
-	if (bAimHit)
-	{
-		PreviewLocation = Hit.ImpactPoint;
-		// Recht overeind, alleen de yaw van de speler meenemen.
-		PreviewRotation = FRotator(0.f, ViewRot.Yaw, 0.f);
 
-		// Geldig = (vrijwel) vlakke vloer + geen overlap met muur/andere pot.
-		const bool bFloor = Hit.ImpactNormal.Z > 0.7f;
-		bValidSpot = bFloor && !IsSpotBlocked(PreviewLocation);
+	if (bPlacing)
+	{
+		FVector ViewLoc; FRotator ViewRot;
+		if (GetViewPoint(ViewLoc, ViewRot))
+		{
+			const FVector Start = ViewLoc;
+			const FVector End = ViewLoc + ViewRot.Vector() * PlaceDistance;
+
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopPlaceTrace), false);
+			Params.AddIgnoredActor(GetOwner());
+
+			FHitResult Hit;
+			bAimHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+			if (bAimHit)
+			{
+				PreviewLocation = Hit.ImpactPoint;
+				PreviewRotation = FRotator(0.f, ViewRot.Yaw, 0.f); // recht overeind, yaw van de speler
+				const bool bFloor = Hit.ImpactNormal.Z > 0.7f;
+				bValidSpot = bFloor && !IsSpotBlocked(PreviewLocation);
+			}
+		}
 	}
 
+	// Eigen ghost bijwerken (lokaal).
+	const bool bShow = bPlacing && bAimHit;
 	if (Ghost)
 	{
-		Ghost->SetVisibility(bAimHit);
-		if (bAimHit)
+		Ghost->SetVisibility(bShow);
+		if (bShow)
 		{
 			Ghost->SetWorldLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, 20.f), PreviewRotation);
 		}
 		if (GhostMID)
 		{
-			// Blauw = plaatsbaar, rood = niet (muur/andere pot/geen vloer).
 			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
 				bValidSpot ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
+		}
+	}
+
+	// Preview-staat naar de server sturen (getemporiseerd) zodat co-op-spelers de ghost zien.
+	PreviewSendAccum += DeltaTime;
+	if (PreviewSendAccum >= 0.066f)
+	{
+		PreviewSendAccum = 0.f;
+		ServerUpdatePreview(bShow, PreviewLocation, PreviewRotation.Yaw, bValidSpot);
+	}
+}
+
+void UBuildComponent::ServerUpdatePreview_Implementation(bool bInPlacing, FVector Location, float Yaw, bool bValid)
+{
+	bRepPlacing = bInPlacing;
+	RepLocation = Location;
+	RepYaw = Yaw;
+	bRepValid = bValid;
+}
+
+void UBuildComponent::UpdateRemoteGhost()
+{
+	EnsureGhost();
+	if (!Ghost)
+	{
+		return;
+	}
+	Ghost->SetVisibility(bRepPlacing);
+	if (bRepPlacing)
+	{
+		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, 20.f), FRotator(0.f, RepYaw, 0.f));
+		if (GhostMID)
+		{
+			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
+				bRepValid ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
 		}
 	}
 }

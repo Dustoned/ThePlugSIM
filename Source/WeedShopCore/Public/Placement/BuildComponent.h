@@ -60,6 +60,19 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerPlace(FName ItemId, FVector Location, FRotator Rotation);
 
+	// De lokale speler stuurt z'n preview-staat naar de server (die repliceert 'm naar de andere
+	// spelers, zodat zij de ghost ook zien). Unreliable + getemporiseerd.
+	UFUNCTION(Server, Unreliable)
+	void ServerUpdatePreview(bool bInPlacing, FVector Location, float Yaw, bool bValid);
+
+	// Maakt de ghost-mesh + dynamisch materiaal aan indien nodig.
+	void EnsureGhost();
+
+	// Tekent/positioneert de ghost van een NIET-lokale speler op basis van de gerepliceerde staat.
+	void UpdateRemoteGhost();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	// Camerastandpunt van de bestuurde pawn (voor de plaats-trace).
 	bool GetViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
 
@@ -84,4 +97,20 @@ protected:
 	FName PlacingItemId = NAME_None;
 	FVector PreviewLocation = FVector::ZeroVector;
 	FRotator PreviewRotation = FRotator::ZeroRotator;
+
+	// Throttle voor het versturen van de preview naar de server.
+	float PreviewSendAccum = 0.f;
+
+	// --- Gerepliceerde preview-staat (voor de ghost bij andere co-op spelers) ---
+	UPROPERTY(Replicated)
+	bool bRepPlacing = false;
+
+	UPROPERTY(Replicated)
+	bool bRepValid = false;
+
+	UPROPERTY(Replicated)
+	FVector RepLocation = FVector::ZeroVector;
+
+	UPROPERTY(Replicated)
+	float RepYaw = 0.f;
 };
