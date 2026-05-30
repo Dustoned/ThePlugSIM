@@ -1,0 +1,4 @@
+Name,DisplayName,Category,MarketPriceCents,Popularity,UnlockMilestone,WorldMesh,Icon
+WeedJar_NorthernLights,"Northern Lights (pot)",Weed,4000,0.7,None,,
+PreRolledJoint,"Voorgedraaide joint",Weed,700,0.9,None,,
+Edible_SpaceCake,"Space Cake",Edible,1200,0.4,Milestone_Edibles,,
