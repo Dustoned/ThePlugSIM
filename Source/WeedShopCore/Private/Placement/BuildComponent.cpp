@@ -9,6 +9,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
+#include "Engine/OverlapResult.h"
+#include "EngineUtils.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
@@ -205,8 +207,21 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				const bool bSnap = PC && (PC->IsInputKeyDown(EKeys::LeftShift) || PC->IsInputKeyDown(EKeys::RightShift));
 				if (bSnap && GridSize > 1.f)
 				{
-					PreviewLocation.X = FMath::GridSnap<float>(PreviewLocation.X, GridSize);
-					PreviewLocation.Y = FMath::GridSnap<float>(PreviewLocation.Y, GridSize);
+					// Veranker het raster aan de dichtstbijzijnde bestaande pot, zodat een rij
+					// netjes doorloopt vanaf de pot die je (vrij) tegen de muur zette. Geen pot
+					// in de buurt -> gewoon het wereld-raster.
+					float AnchorX = 0.f, AnchorY = 0.f, BestSq = TNumericLimits<float>::Max();
+					for (TActorIterator<AGrowPlant> It(GetWorld()); It; ++It)
+					{
+						const FVector L = It->GetActorLocation();
+						const float dSq = FMath::Square(L.X - PreviewLocation.X) + FMath::Square(L.Y - PreviewLocation.Y);
+						if (dSq < BestSq)
+						{
+							BestSq = dSq; AnchorX = L.X; AnchorY = L.Y;
+						}
+					}
+					PreviewLocation.X = AnchorX + FMath::GridSnap<float>(PreviewLocation.X - AnchorX, GridSize);
+					PreviewLocation.Y = AnchorY + FMath::GridSnap<float>(PreviewLocation.Y - AnchorY, GridSize);
 					PreviewRotation.Yaw = FMath::GridSnap<float>(PreviewRotation.Yaw, 90.f);
 
 					// Vloer-hoogte op de gesnapte XY opnieuw bepalen (recht naar beneden tracen).
@@ -289,10 +304,7 @@ bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint) const
 	{
 		return true;
 	}
-	// Box met wat ruimte rond de pot (zodat planten genoeg plek hebben), net boven de vloer
-	// zodat de vloer zelf niet meetelt maar muren/andere potten/objecten wél blokkeren.
 	const FVector Center = FloorPoint + FVector(0.f, 0.f, 20.f);
-	const FCollisionShape Box = FCollisionShape::MakeBox(FVector(32.f, 32.f, 16.f));
 
 	FCollisionObjectQueryParams ObjParams;
 	ObjParams.AddObjectTypesToQuery(ECC_WorldStatic);
@@ -301,7 +313,28 @@ bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint) const
 	FCollisionQueryParams QP(SCENE_QUERY_STAT(WeedShopPlaceOverlap), false);
 	QP.AddIgnoredActor(GetOwner());
 
-	return World->OverlapAnyTestByObjectType(Center, FQuat::Identity, ObjParams, Box, QP);
+	// 1) Niet in muren/objecten clippen: krappe box (~pot-radius) zodat je er strak tegenaan
+	//    mag zetten, maar er net niet in.
+	const FCollisionShape WallBox = FCollisionShape::MakeBox(FVector(25.f, 25.f, 16.f));
+	if (World->OverlapAnyTestByObjectType(Center, FQuat::Identity, ObjParams, WallBox, QP))
+	{
+		return true;
+	}
+
+	// 2) Tussen potten wél ruimte (plant moet kunnen groeien): ruimere box, maar alleen
+	//    andere potten (AGrowPlant) tellen mee — niet muren/meubels.
+	const FCollisionShape SpacingBox = FCollisionShape::MakeBox(FVector(33.f, 33.f, 16.f));
+	TArray<FOverlapResult> Overlaps;
+	World->OverlapMultiByObjectType(Overlaps, Center, FQuat::Identity, ObjParams, SpacingBox, QP);
+	for (const FOverlapResult& R : Overlaps)
+	{
+		if (Cast<AGrowPlant>(R.GetActor()))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void UBuildComponent::ConfirmPlacement()

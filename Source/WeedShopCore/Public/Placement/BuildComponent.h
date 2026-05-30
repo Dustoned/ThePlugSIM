@@ -32,8 +32,9 @@ public:
 	float PlaceDistance = 400.f;
 
 	// Rastergrootte (cm) voor grid-plaatsing terwijl je Shift inhoudt (netjes op een rij).
+	// Iets groter dan de pot-tussenruimte zodat gesnapte potten altijd geldig zijn.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Build")
-	float GridSize = 50.f;
+	float GridSize = 60.f;
 
 	// Start/stop de plaats-modus voor een pot (toggle). Doet niets als je geen pot hebt.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Build")
