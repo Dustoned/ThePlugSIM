@@ -57,7 +57,7 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
-				FString::Printf(TEXT("Nog niet beschikbaar: %s"), *Row->DisplayName.ToString()));
+				FString::Printf(TEXT("Not available yet: %s"), *Row->DisplayName.ToString()));
 		}
 		return false;
 	}
@@ -69,7 +69,7 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
-				FString::Printf(TEXT("Te weinig geld voor %s"), *Row->DisplayName.ToString()));
+				FString::Printf(TEXT("Not enough money for %s"), *Row->DisplayName.ToString()));
 		}
 		return false;
 	}
@@ -80,7 +80,7 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId)
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
-			FString::Printf(TEXT("Upgrade gekocht: %s"), *Row->DisplayName.ToString()));
+			FString::Printf(TEXT("Upgrade purchased: %s"), *Row->DisplayName.ToString()));
 	}
 	return true;
 }

@@ -133,7 +133,7 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen vloei — koop er bij de supplier (telefoon)."));
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No papers — buy some from the supplier (phone)."));
 		}
 		return;
 	}
@@ -169,7 +169,7 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange,
-				FString::Printf(TEXT("Niet genoeg wiet (%d g nodig)."), Grams));
+				FString::Printf(TEXT("Not enough weed (%d g needed)."), Grams));
 		}
 		return;
 	}
@@ -185,7 +185,7 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 		const FString StrainName = BudItem.ToString().StartsWith(TEXT("Bud_"))
 			? BudItem.ToString().RightChop(4) : BudItem.ToString();
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Joint gedraaid: %dg wiet (%s) + 1 vloei"), Grams, *StrainName));
+			FString::Printf(TEXT("Joint rolled: %dg weed (%s) + 1 paper"), Grams, *StrainName));
 	}
 }
 

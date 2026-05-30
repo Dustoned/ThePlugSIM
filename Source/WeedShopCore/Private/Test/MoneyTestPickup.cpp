@@ -46,5 +46,5 @@ void AMoneyTestPickup::Interact_Implementation(APawn* InstigatorPawn)
 
 FText AMoneyTestPickup::GetInteractionPrompt_Implementation() const
 {
-	return NSLOCTEXT("WeedShop", "MoneyTestPrompt", "Pak geld (test)");
+	return NSLOCTEXT("WeedShop", "MoneyTestPrompt", "Grab money (test)");
 }

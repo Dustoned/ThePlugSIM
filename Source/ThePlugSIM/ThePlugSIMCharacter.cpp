@@ -211,7 +211,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen joint om te geven — draai er eerst een (R)."));
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No joint to give — roll one first (R)."));
 		}
 		return;
 	}
@@ -230,7 +230,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
-				FString::Printf(TEXT("%s vond de joint te slap."), *Customer->NpcId.ToString()));
+				FString::Printf(TEXT("%s found the joint too weak."), *Customer->NpcId.ToString()));
 		}
 	}
 
@@ -256,7 +256,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	if (GEngine && !(bPicky && Quality < 0.5f))
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Sample gegeven (%dg joint, relatie +)."), BestGrams));
+			FString::Printf(TEXT("Sample given (%dg joint, relationship +)."), BestGrams));
 	}
 }
 

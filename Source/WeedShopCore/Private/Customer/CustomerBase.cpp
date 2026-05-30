@@ -244,10 +244,10 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 		FString Msg;
 		switch (Result)
 		{
-		case EDealResult::Accepted: C = FColor::Green;  Msg = TEXT("Verkocht!"); break;
-		case EDealResult::NoStock:  C = FColor::Orange; Msg = FString::Printf(TEXT("Geen voorraad: %s"), *DesiredProductId.ToString()); break;
-		case EDealResult::Haggle:   C = FColor::Yellow; Msg = TEXT("Klant vindt het te duur"); break;
-		default:                    C = FColor::Red;    Msg = TEXT("Klant weigert"); break;
+		case EDealResult::Accepted: C = FColor::Green;  Msg = TEXT("Sold!"); break;
+		case EDealResult::NoStock:  C = FColor::Orange; Msg = FString::Printf(TEXT("No stock: %s"), *DesiredProductId.ToString()); break;
+		case EDealResult::Haggle:   C = FColor::Yellow; Msg = TEXT("Customer thinks it's too expensive"); break;
+		default:                    C = FColor::Red;    Msg = TEXT("Customer refuses"); break;
 		}
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, C, Msg);
 	}
@@ -259,10 +259,10 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 	{
 	case ECustomerState::WantsToOrder:
 	case ECustomerState::Negotiating:
-		return FText::FromString(FString::Printf(TEXT("Verkoop %dx %s  (~EUR %.2f)"),
+		return FText::FromString(FString::Printf(TEXT("Sell %dx %s  (~EUR %.2f)"),
 			DesiredQuantity, *DesiredProductId.ToString(), (GetMarketPriceCents() * DesiredQuantity) / 100.f));
 	case ECustomerState::Served:
-		return FText::FromString(TEXT("Tevreden klant"));
+		return FText::FromString(TEXT("Satisfied customer"));
 	default:
 		return FText::GetEmpty();
 	}

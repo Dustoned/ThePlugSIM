@@ -114,7 +114,7 @@ void UHeatComponent::TriggerBust()
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 6.f, FColor::Red,
-			FString::Printf(TEXT("BUST! Politie pakte EUR %.2f"), Loss / 100.f));
+			FString::Printf(TEXT("BUST! Police took EUR %.2f"), Loss / 100.f));
 	}
 }
 
@@ -133,6 +133,6 @@ void UHeatComponent::TriggerRobbery()
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 6.f, FColor(255, 140, 0),
-			FString::Printf(TEXT("Overval! EUR %.2f gestolen"), Loss / 100.f));
+			FString::Printf(TEXT("Robbery! EUR %.2f stolen"), Loss / 100.f));
 	}
 }

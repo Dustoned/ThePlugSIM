@@ -42,7 +42,7 @@ FText AUpgradeStation::GetInteractionPrompt_Implementation() const
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetUpgrades() && GS->GetUpgrades()->IsPurchased(UpgradeId))
 	{
-		return FText::FromString(FString::Printf(TEXT("%s (gekocht)"), *UpgradeId.ToString()));
+		return FText::FromString(FString::Printf(TEXT("%s (purchased)"), *UpgradeId.ToString()));
 	}
-	return FText::FromString(FString::Printf(TEXT("Koop upgrade: %s"), *UpgradeId.ToString()));
+	return FText::FromString(FString::Printf(TEXT("Buy upgrade: %s"), *UpgradeId.ToString()));
 }

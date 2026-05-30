@@ -75,7 +75,7 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
-				FString::Printf(TEXT("Te weinig geld voor zaad %s"), *StrainId.ToString()));
+				FString::Printf(TEXT("Not enough money for seed %s"), *StrainId.ToString()));
 		}
 		return false;
 	}
@@ -84,7 +84,7 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Zaad gekocht: %s"), *Row->DisplayName.ToString()));
+			FString::Printf(TEXT("Seed bought: %s"), *Row->DisplayName.ToString()));
 	}
 	return true;
 }
@@ -94,8 +94,8 @@ namespace
 {
 	struct FSupplyDef { const TCHAR* Id; const TCHAR* Name; int32 PriceCents; int32 PackSize; };
 	static const FSupplyDef GSupplies[] = {
-		{ TEXT("Papers_Small"), TEXT("Vloei klein (tot 2g) - 10 stuks"), 500, 10 },
-		{ TEXT("Papers_Big"),   TEXT("Vloei groot (tot 5g) - 10 stuks"), 1500, 10 },
+		{ TEXT("Papers_Small"), TEXT("Papers small (up to 2g) - 10 pcs"), 500, 10 },
+		{ TEXT("Papers_Big"),   TEXT("Papers big (up to 5g) - 10 pcs"), 1500, 10 },
 	};
 }
 
@@ -143,7 +143,7 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
-				FString::Printf(TEXT("Te weinig geld voor %s"), *Name.ToString()));
+				FString::Printf(TEXT("Not enough money for %s"), *Name.ToString()));
 		}
 		return false;
 	}
@@ -152,7 +152,7 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Gekocht: %s"), *Name.ToString()));
+			FString::Printf(TEXT("Bought: %s"), *Name.ToString()));
 	}
 	return true;
 }

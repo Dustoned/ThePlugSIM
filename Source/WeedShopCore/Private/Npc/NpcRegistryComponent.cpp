@@ -131,7 +131,7 @@ void UNpcRegistryComponent::CheckUnlock(FNpcState& State)
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor(120, 200, 255),
-			FString::Printf(TEXT("Je hebt het nummer van %s gekregen!"), *State.DisplayName.ToString()));
+			FString::Printf(TEXT("You got %s's number!"), *State.DisplayName.ToString()));
 	}
 }
 

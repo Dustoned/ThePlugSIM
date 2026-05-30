@@ -73,7 +73,7 @@ void UContactsComponent::RegisterContact(FName ContactId, const FText& DisplayNa
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan,
-			FString::Printf(TEXT("Nieuw contact: %s"), *DisplayName.ToString()));
+			FString::Printf(TEXT("New contact: %s"), *DisplayName.ToString()));
 	}
 }
 
@@ -124,8 +124,8 @@ void UContactsComponent::SendRandomAppointment()
 	Msg.AppointmentTimeOfDay = ApptTime;
 	Msg.Kind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
 	Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
-		? FText::FromString(FString::Printf(TEXT("Yo, ik kom om %02d:%02d langs."), HH, MM))
-		: FText::FromString(FString::Printf(TEXT("Kun je om %02d:%02d bij mij langskomen?"), HH, MM));
+		? FText::FromString(FString::Printf(TEXT("Yo, I'll come by at %02d:%02d."), HH, MM))
+		: FText::FromString(FString::Printf(TEXT("Can you come by mine at %02d:%02d?"), HH, MM));
 
 	Messages.Insert(Msg, 0); // nieuwste bovenaan
 	if (Messages.Num() > 12)
@@ -137,7 +137,7 @@ void UContactsComponent::SendRandomAppointment()
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor(120, 180, 255),
-			FString::Printf(TEXT("Bericht van %s"), *C.DisplayName.ToString()));
+			FString::Printf(TEXT("Message from %s"), *C.DisplayName.ToString()));
 	}
 }
 
@@ -164,7 +164,7 @@ void UContactsComponent::CheckAppointments()
 			if (GEngine)
 			{
 				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
-					FString::Printf(TEXT("Afspraak: %s is er!"), *Msg.SenderName.ToString()));
+					FString::Printf(TEXT("Appointment: %s is here!"), *Msg.SenderName.ToString()));
 			}
 			SpawnAppointmentCustomer(Msg);
 		}
@@ -268,8 +268,8 @@ void UContactsComponent::RespondTopPending(bool bAccept)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
-				FString::Printf(TEXT("%s: afspraak %s"), *Msg.SenderName.ToString(),
-					bAccept ? TEXT("geaccepteerd") : TEXT("afgezegd")));
+				FString::Printf(TEXT("%s: appointment %s"), *Msg.SenderName.ToString(),
+					bAccept ? TEXT("accepted") : TEXT("cancelled")));
 		}
 
 		OnRep_Messages();

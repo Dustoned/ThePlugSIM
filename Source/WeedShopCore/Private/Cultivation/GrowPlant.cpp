@@ -155,7 +155,7 @@ bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen zaadjes in voorraad (koop bij supplier)."));
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No seeds in inventory (buy from supplier)."));
 		}
 		return false;
 	}
@@ -176,7 +176,7 @@ bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn)
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Geplant: %s"), *StrainId.ToString()));
+			FString::Printf(TEXT("Planted: %s"), *StrainId.ToString()));
 	}
 	return true;
 }
@@ -185,14 +185,14 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
 	if (!bPlanted)
 	{
-		return NSLOCTEXT("WeedShop", "PlantSeed", "Plant een zaadje");
+		return NSLOCTEXT("WeedShop", "PlantSeed", "Plant a seed");
 	}
 	if (Phase == EGrowthPhase::Harvestable)
 	{
-		return FText::FromString(FString::Printf(TEXT("Oogsten  (%s)"), *StrainId.ToString()));
+		return FText::FromString(FString::Printf(TEXT("Harvest  (%s)"), *StrainId.ToString()));
 	}
 	const int32 Pct = FMath::RoundToInt(GetGrowthFraction() * 100.f);
-	return FText::FromString(FString::Printf(TEXT("Water geven  (groei %d%%, zorg %.0f%%)"),
+	return FText::FromString(FString::Printf(TEXT("Water  (growth %d%%, care %.0f%%)"),
 		Pct, CareMultiplier * 100.f));
 }
 
@@ -203,7 +203,7 @@ void AGrowPlant::Water()
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan,
-			FString::Printf(TEXT("Plant gewaterd (zorg %.0f%%)"), CareMultiplier * 100.f));
+			FString::Printf(TEXT("Plant watered (care %.0f%%)"), CareMultiplier * 100.f));
 	}
 }
 
@@ -228,7 +228,7 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
-				FString::Printf(TEXT("Geoogst: %dg %s (THC %.0f%%)"),
+				FString::Printf(TEXT("Harvested: %dg %s (THC %.0f%%)"),
 					YieldGrams, *Strain->HarvestProductId.ToString(), ActualThc));
 		}
 	}

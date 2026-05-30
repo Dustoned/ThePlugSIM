@@ -30,11 +30,11 @@ namespace
 	FString PrettyItemName(const FName ItemId)
 	{
 		const FString S = ItemId.ToString();
-		if (S.StartsWith(TEXT("Bud_")))    { return FString::Printf(TEXT("Wiet: %s"), *S.RightChop(4)); }
-		if (S.StartsWith(TEXT("Seed_")))   { return FString::Printf(TEXT("Zaadje: %s"), *S.RightChop(5)); }
+		if (S.StartsWith(TEXT("Bud_")))    { return FString::Printf(TEXT("Weed: %s"), *S.RightChop(4)); }
+		if (S.StartsWith(TEXT("Seed_")))   { return FString::Printf(TEXT("Seed: %s"), *S.RightChop(5)); }
 		if (S.StartsWith(TEXT("Joint_")))  { return FString::Printf(TEXT("Joint %s"), *S.RightChop(6)); }
-		if (S == TEXT("Papers_Small"))     { return TEXT("Vloei (klein)"); }
-		if (S == TEXT("Papers_Big"))       { return TEXT("Vloei (groot)"); }
+		if (S == TEXT("Papers_Small"))     { return TEXT("Papers (small)"); }
+		if (S == TEXT("Papers_Big"))       { return TEXT("Papers (big)"); }
 		return S;
 	}
 }
@@ -58,7 +58,7 @@ void AWeedShopHUD::DrawHUD()
 
 	if (GS && GS->GetEconomy())
 	{
-		DrawText(FString::Printf(TEXT("Kas: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
+		DrawText(FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
 			FLinearColor(0.4f, 1.f, 0.4f), X, Y, Font);
 		Y += 26.f;
 	}
@@ -66,14 +66,14 @@ void AWeedShopHUD::DrawHUD()
 	if (GS && GS->GetMilestones())
 	{
 		const UMilestoneComponent* M = GS->GetMilestones();
-		const TCHAR* PhaseName = TEXT("Straatdealer");
+		const TCHAR* PhaseName = TEXT("Street dealer");
 		switch (M->GetCurrentPhase())
 		{
-		case EShopPhase::Shop:      PhaseName = TEXT("Winkel"); break;
+		case EShopPhase::Shop:      PhaseName = TEXT("Shop"); break;
 		case EShopPhase::Franchise: PhaseName = TEXT("Franchise"); break;
 		default: break;
 		}
-		DrawText(FString::Printf(TEXT("Fase: %s   (totaal verdiend EUR %.2f)"),
+		DrawText(FString::Printf(TEXT("Phase: %s   (total earned EUR %.2f)"),
 			PhaseName, M->GetTotalEarnedCents() / 100.f), FLinearColor(1.f, 0.85f, 0.3f), X, Y, Font);
 		Y += 26.f;
 	}
@@ -84,8 +84,8 @@ void AWeedShopHUD::DrawHUD()
 		const int32 TotalMin = FMath::RoundToInt(Day->GetCycleFraction() * 24.f * 60.f);
 		const int32 HH = (TotalMin / 60) % 24;
 		const int32 MM = TotalMin % 60;
-		DrawText(FString::Printf(TEXT("Tijd: %02d:%02d   (%s)"), HH, MM,
-			Day->IsNight() ? TEXT("Nacht") : TEXT("Dag")), FLinearColor::White, X, Y, Font);
+		DrawText(FString::Printf(TEXT("Time: %02d:%02d   (%s)"), HH, MM,
+			Day->IsNight() ? TEXT("Night") : TEXT("Day")), FLinearColor::White, X, Y, Font);
 		Y += 26.f;
 	}
 
@@ -103,16 +103,16 @@ void AWeedShopHUD::DrawHUD()
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			DrawText(TEXT("Voorraad:"), FLinearColor(0.8f, 0.8f, 1.f), X, Y, Font);
+			DrawText(TEXT("Inventory:"), FLinearColor(0.8f, 0.8f, 1.f), X, Y, Font);
 			Y += 22.f;
 			if (Inv->GetStacks().Num() == 0)
 			{
-				DrawText(TEXT("  (leeg)"), FLinearColor::Gray, X, Y, Font);
+				DrawText(TEXT("  (empty)"), FLinearColor::Gray, X, Y, Font);
 				Y += 20.f;
 			}
 			for (const FInventoryStack& Stack : Inv->GetStacks())
 			{
-				DrawText(FString::Printf(TEXT("  %s  x%d"), *Stack.ItemId.ToString(), Stack.Quantity),
+				DrawText(FString::Printf(TEXT("  %s  x%d"), *PrettyItemName(Stack.ItemId), Stack.Quantity),
 					FLinearColor::White, X, Y, Font);
 				Y += 20.f;
 			}
@@ -160,38 +160,38 @@ void AWeedShopHUD::DrawHUD()
 
 					if (!Plant->IsPlanted())
 					{
-						DrawText(TEXT("Lege pot"), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
-						DrawText(TEXT("Plant een zaadje (E)."), FLinearColor::White, lx, ly, Font);
+						DrawText(TEXT("Empty pot"), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
+						DrawText(TEXT("Plant a seed (E)."), FLinearColor::White, lx, ly, Font);
 					}
 					else
 					{
-						static const TCHAR* PhaseNames[] = { TEXT("Zaailing"), TEXT("Vegetatief"), TEXT("Pre-bloei"), TEXT("Bloei"), TEXT("Oogstklaar") };
+						static const TCHAR* PhaseNames[] = { TEXT("Seedling"), TEXT("Vegetative"), TEXT("Pre-flower"), TEXT("Flower"), TEXT("Ready to harvest") };
 						const int32 Pi = FMath::Clamp((int32)Plant->GetPhase(), 0, 4);
 						DrawText(FString::Printf(TEXT("%s"), *Plant->StrainId.ToString()), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
-						DrawText(FString::Printf(TEXT("Fase: %s  (%.0f%%)"), PhaseNames[Pi], Plant->GetGrowthFraction() * 100.f),
+						DrawText(FString::Printf(TEXT("Phase: %s  (%.0f%%)"), PhaseNames[Pi], Plant->GetGrowthFraction() * 100.f),
 							FLinearColor::White, lx, ly, Font); ly += 20.f;
 
 						const int32 Rem = FMath::RoundToInt(Plant->GetSecondsRemaining());
 						if (Plant->GetPhase() == EGrowthPhase::Harvestable)
 						{
-							DrawText(TEXT("OOGSTKLAAR — druk E"), FLinearColor::Green, lx, ly, Font);
+							DrawText(TEXT("READY TO HARVEST — press E"), FLinearColor::Green, lx, ly, Font);
 						}
 						else
 						{
-							DrawText(FString::Printf(TEXT("Tijd tot oogst: %d:%02d"), Rem / 60, Rem % 60),
+							DrawText(FString::Printf(TEXT("Time to harvest: %d:%02d"), Rem / 60, Rem % 60),
 								FLinearColor::White, lx, ly, Font);
 						}
 						ly += 20.f;
 
 						// Verzorging-balk.
 						const float Care = Plant->GetCareMultiplier();
-						DrawText(FString::Printf(TEXT("Verzorging: %.0f%%"), Care * 100.f),
+						DrawText(FString::Printf(TEXT("Care: %.0f%%"), Care * 100.f),
 							Care >= 0.8f ? FLinearColor::Green : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
 							lx, ly, Font); ly += 18.f;
 						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
 						DrawRect(FLinearColor(0.3f, 0.6f, 1.f, 0.95f), lx, ly, (PW - 24.f) * Care, 8.f); ly += 16.f;
 
-						DrawText(FString::Printf(TEXT("Verwacht: %.0fg @ %.0f%% THC"),
+						DrawText(FString::Printf(TEXT("Expected: %.0fg @ %.0f%% THC"),
 							Plant->GetEstimatedYieldGrams(), Plant->GetEstimatedThcPercent()),
 							FLinearColor(0.9f, 0.9f, 0.7f), lx, ly, Font);
 					}
@@ -237,7 +237,7 @@ void AWeedShopHUD::DrawHUD()
 				SX += SlotW + 6.f;
 			}
 
-			DrawText(TEXT("R = joint draaien   |   F = sample geven (kijk NPC aan)"),
+			DrawText(TEXT("R = roll joint   |   F = give sample (look at NPC)"),
 				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 22.f, Font);
 		}
 	}
@@ -269,17 +269,17 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.94f), PX, PY, PhoneW, PhoneH);
 
 	float y = PY + 12.f;
-	DrawText(TEXT("TELEFOON"), FLinearColor(0.5f, 1.f, 0.5f), InnerX, y, Font); y += 26.f;
+	DrawText(TEXT("PHONE"), FLinearColor(0.5f, 1.f, 0.5f), InnerX, y, Font); y += 26.f;
 
 	if (GS && GS->GetEconomy())
 	{
-		DrawText(FString::Printf(TEXT("Kas: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
+		DrawText(FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
 			FLinearColor::White, InnerX, y, Font);
 		y += 26.f;
 	}
 
 	// Tab-knoppen (klikbaar).
-	static const TCHAR* TabNames[4] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacten"), TEXT("Berichten") };
+	static const TCHAR* TabNames[4] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages") };
 	const float TabW = InnerW / 4.f;
 	for (int32 i = 0; i < 4; ++i)
 	{
@@ -287,7 +287,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		const FLinearColor Col = (i == Tab) ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(0.7f, 0.7f, 0.8f);
 		if (DrawButton(Box, TabNames[i], InnerX + i * TabW, y, TabW - 4.f, Col))
 		{
-			HoverTooltip = FString::Printf(TEXT("Open de %s-tab"), TabNames[i]);
+			HoverTooltip = FString::Printf(TEXT("Open the %s tab"), TabNames[i]);
 		}
 	}
 	y += RowH + 6.f;
@@ -305,10 +305,10 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				if (Store->GetSeedDisplay(Id, Name, Price))
 				{
 					if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), idx)),
-						FString::Printf(TEXT("Zaad: %s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
+						FString::Printf(TEXT("Seed: %s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
 						InnerX, y, InnerW, FLinearColor::White))
 					{
-						HoverTooltip = FString::Printf(TEXT("Koop een %s-zaadje"), *Name.ToString());
+						HoverTooltip = FString::Printf(TEXT("Buy a %s seed"), *Name.ToString());
 					}
 					y += RowH;
 				}
@@ -326,7 +326,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 						FString::Printf(TEXT("%s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
 						InnerX, y, InnerW, FLinearColor(0.85f, 0.95f, 0.8f)))
 					{
-						HoverTooltip = FString::Printf(TEXT("Koop %d stuks vloei"), Pack);
+						HoverTooltip = FString::Printf(TEXT("Buy %d papers"), Pack);
 					}
 					y += RowH;
 				}
@@ -340,12 +340,12 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		{
 			if (Con->GetContacts().Num() == 0)
 			{
-				DrawText(TEXT("(nog geen contacten - deal met klanten)"), FLinearColor::Gray, InnerX, y, Font);
+				DrawText(TEXT("(no contacts yet - deal with customers)"), FLinearColor::Gray, InnerX, y, Font);
 				y += 22.f;
 			}
 			for (const FPhoneContact& C : Con->GetContacts())
 			{
-				DrawText(FString::Printf(TEXT("%s   (relatie %.0f%%)"), *C.DisplayName.ToString(), C.Relationship),
+				DrawText(FString::Printf(TEXT("%s   (relationship %.0f%%)"), *C.DisplayName.ToString(), C.Relationship),
 					FLinearColor::White, InnerX, y, Font);
 				y += 22.f;
 				if (y > PY + PhoneH - 60.f) break;
@@ -356,25 +356,25 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	{
 		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
 		{
-			if (DrawButton(FName(TEXT("buy_0")), TEXT("Accepteren (eerste open bericht)"), InnerX, y, InnerW, FLinearColor(0.7f, 1.f, 0.7f)))
+			if (DrawButton(FName(TEXT("buy_0")), TEXT("Accept (first open message)"), InnerX, y, InnerW, FLinearColor(0.7f, 1.f, 0.7f)))
 			{
-				HoverTooltip = TEXT("Spreek af -> loyaliteit omhoog; klant komt op tijd langs");
+				HoverTooltip = TEXT("Make appointment -> loyalty up; customer shows up on time");
 			}
 			y += RowH;
-			if (DrawButton(FName(TEXT("buy_1")), TEXT("Weigeren (eerste open bericht)"), InnerX, y, InnerW, FLinearColor(1.f, 0.75f, 0.6f)))
+			if (DrawButton(FName(TEXT("buy_1")), TEXT("Decline (first open message)"), InnerX, y, InnerW, FLinearColor(1.f, 0.75f, 0.6f)))
 			{
-				HoverTooltip = TEXT("Zeg af -> loyaliteit omlaag; klant komt niet");
+				HoverTooltip = TEXT("Cancel -> loyalty down; customer won't come");
 			}
 			y += RowH + 6.f;
 
 			if (Con->GetMessages().Num() == 0)
 			{
-				DrawText(TEXT("(geen berichten)"), FLinearColor::Gray, InnerX, y, Font);
+				DrawText(TEXT("(no messages)"), FLinearColor::Gray, InnerX, y, Font);
 				y += 22.f;
 			}
 			for (const FPhoneMessage& M : Con->GetMessages())
 			{
-				const TCHAR* Tag = (M.Status == 1) ? TEXT("[ja]") : (M.Status == 2 ? TEXT("[nee]") : TEXT("[open]"));
+				const TCHAR* Tag = (M.Status == 1) ? TEXT("[yes]") : (M.Status == 2 ? TEXT("[no]") : TEXT("[open]"));
 				const FLinearColor Col = (M.Status == 1) ? FLinearColor::Green
 					: (M.Status == 2 ? FLinearColor(0.7f, 0.5f, 0.5f) : FLinearColor(0.9f, 0.95f, 1.f));
 				DrawText(FString::Printf(TEXT("%s %s: %s"), Tag, *M.SenderName.ToString(), *M.Body.ToString()),
@@ -394,16 +394,16 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
 				if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
 				{
-					const TCHAR* Suffix = bPurchased ? TEXT("  [gekocht]") : (bAvailable ? TEXT("") : TEXT("  [vergrendeld]"));
+					const TCHAR* Suffix = bPurchased ? TEXT("  [purchased]") : (bAvailable ? TEXT("") : TEXT("  [locked]"));
 					const FLinearColor Col = bPurchased ? FLinearColor::Gray
 						: (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f));
 					const FName Box(*FString::Printf(TEXT("buy_%d"), idx));
 					if (DrawButton(Box, FString::Printf(TEXT("%s  -  EUR %.2f%s"), *Name.ToString(), Cost / 100.f, Suffix),
 						InnerX, y, InnerW, Col))
 					{
-						HoverTooltip = bPurchased ? TEXT("Al gekocht")
-							: (bAvailable ? FString::Printf(TEXT("Koop voor EUR %.2f"), Cost / 100.f)
-								: TEXT("Vergrendeld - bereik eerst de juiste fase"));
+						HoverTooltip = bPurchased ? TEXT("Already purchased")
+							: (bAvailable ? FString::Printf(TEXT("Buy for EUR %.2f"), Cost / 100.f)
+								: TEXT("Locked - reach the required phase first"));
 					}
 					y += RowH;
 				}
@@ -421,9 +421,9 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	}
 
 	// Sluit-knop.
-	if (DrawButton(FName(TEXT("close")), TEXT("Sluiten (Tab)"), InnerX, PY + PhoneH - 30.f, 130.f, FLinearColor::Yellow))
+	if (DrawButton(FName(TEXT("close")), TEXT("Close (Tab)"), InnerX, PY + PhoneH - 30.f, 130.f, FLinearColor::Yellow))
 	{
-		HoverTooltip = TEXT("Sluit de telefoon");
+		HoverTooltip = TEXT("Close the phone");
 	}
 }
 
@@ -475,19 +475,19 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 
 	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.95f), PX, PY, W, H);
 	float y = PY + 14.f;
-	DrawText(TEXT("JOINT DRAAIEN"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
+	DrawText(TEXT("ROLL JOINT"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
 
 	const int32 G = Phone->GetRollGrams();
 	const int32 MaxG = Phone->GetMaxJointGrams();
 	if (MaxG <= 0)
 	{
-		DrawText(TEXT("Geen vloei! Koop er een pakje bij Suppliers (telefoon, Tab)."),
+		DrawText(TEXT("No papers! Buy a pack from Suppliers (phone, Tab)."),
 			FLinearColor(1.f, 0.5f, 0.5f), InnerX, y, Font);
 		y += 30.f;
-		DrawButton(FName(TEXT("rollclose")), TEXT("Sluiten (R)"), InnerX, y, 150.f, FLinearColor::Yellow);
+		DrawButton(FName(TEXT("rollclose")), TEXT("Close (R)"), InnerX, y, 150.f, FLinearColor::Yellow);
 		return;
 	}
-	DrawText(FString::Printf(TEXT("Gram per joint: %d   (jouw vloei kan tot %dg)"), G, MaxG),
+	DrawText(FString::Printf(TEXT("Grams per joint: %d   (your papers allow up to %dg)"), G, MaxG),
 		FLinearColor::White, InnerX, y, Font);
 	y += 28.f;
 
@@ -560,7 +560,7 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 
 	// Kwaliteit-balk.
 	const float Quality = FMath::Clamp(G / 5.f, 0.f, 1.f);
-	DrawText(FString::Printf(TEXT("Kwaliteit: %.0f%%"), Quality * 100.f),
+	DrawText(FString::Printf(TEXT("Quality: %.0f%%"), Quality * 100.f),
 		Quality >= 0.6f ? FLinearColor::Green : (Quality >= 0.3f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
 		InnerX, y, Font);
 	y += 24.f;
@@ -568,9 +568,9 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), InnerX, y, (W - 32.f) * Quality, 14.f);
 	y += 28.f;
 
-	DrawButton(FName(TEXT("rollconfirm")), FString::Printf(TEXT("Draai joint (kost %dg wiet)"), G),
+	DrawButton(FName(TEXT("rollconfirm")), FString::Printf(TEXT("Roll joint (costs %dg weed)"), G),
 		InnerX, y, 250.f, FLinearColor::White);
-	DrawButton(FName(TEXT("rollclose")), TEXT("Sluiten (R)"), InnerX + 260.f, y, 150.f, FLinearColor::Yellow);
+	DrawButton(FName(TEXT("rollclose")), TEXT("Close (R)"), InnerX + 260.f, y, 150.f, FLinearColor::Yellow);
 }
 
 void AWeedShopHUD::NotifyHitBoxBeginCursorOver(FName BoxName)
