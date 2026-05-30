@@ -220,8 +220,12 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					}
 				}
 
+				// Alleen op grondniveau plaatsen: niet bovenop een pot/tafel/ander object
+				// (dat ligt hoger dan je voeten). Plus vlakke vloer + genoeg vrije ruimte.
 				const bool bFloor = FloorNormalZ > 0.7f;
-				bValidSpot = bFloor && !IsSpotBlocked(PreviewLocation);
+				const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
+				const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
+				bValidSpot = bFloor && bGroundLevel && !IsSpotBlocked(PreviewLocation);
 			}
 		}
 	}
@@ -285,10 +289,10 @@ bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint) const
 	{
 		return true;
 	}
-	// Box ter grootte van de pot, opgetild zodat de vloer zelf niet meetelt; muren en andere
-	// potten binnen de footprint blokkeren wel.
-	const FVector Center = FloorPoint + FVector(0.f, 0.f, 22.f);
-	const FCollisionShape Box = FCollisionShape::MakeBox(FVector(24.f, 24.f, 18.f));
+	// Box met wat ruimte rond de pot (zodat planten genoeg plek hebben), net boven de vloer
+	// zodat de vloer zelf niet meetelt maar muren/andere potten/objecten wél blokkeren.
+	const FVector Center = FloorPoint + FVector(0.f, 0.f, 20.f);
+	const FCollisionShape Box = FCollisionShape::MakeBox(FVector(32.f, 32.f, 16.f));
 
 	FCollisionObjectQueryParams ObjParams;
 	ObjParams.AddObjectTypesToQuery(ECC_WorldStatic);
