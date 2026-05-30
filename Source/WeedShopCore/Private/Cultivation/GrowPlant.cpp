@@ -4,6 +4,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeedStrain.h"
 #include "Inventory/InventoryComponent.h"
+#include "Game/WeedShopGameState.h"
+#include "Progression/UpgradeComponent.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
@@ -51,15 +53,28 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		return;
 	}
 
-	// Groei op echte tijd.
+	// Upgrade-effecten ophalen uit de gedeelde GameState (kweek-gear).
+	float GrowthBonus = 0.f;   // bv. LED-lamp/voeding -> sneller
+	float CareRetention = 0.f; // bv. betere pot -> minder droogte
+	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (const UUpgradeComponent* Upg = GS->GetUpgrades())
+		{
+			GrowthBonus = Upg->GetEffectTotal(TEXT("GrowthSpeed"));
+			CareRetention = FMath::Clamp(Upg->GetEffectTotal(TEXT("CareRetention")), 0.f, 0.9f);
+		}
+	}
+
+	// Groei op echte tijd (versneld door demo-multiplier + kweek-upgrades).
 	if (Phase != EGrowthPhase::Harvestable)
 	{
-		GrowthSeconds = FMath::Min(GrowthSeconds + DeltaSeconds * FMath::Max(0.f, GrowthSpeedMultiplier), MaxGrowthSeconds);
+		const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus);
+		GrowthSeconds = FMath::Min(GrowthSeconds + DeltaSeconds * Speed, MaxGrowthSeconds);
 		UpdatePhaseFromGrowth();
 	}
 
-	// Langzame droogte-stress als er niet bijgewaterd wordt (geen permanente dood, wel minder yield).
-	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.002f, 0.3f, 1.0f);
+	// Langzame droogte-stress; een betere pot (CareRetention) vertraagt dit.
+	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.002f * (1.f - CareRetention), 0.3f, 1.0f);
 }
 
 void AGrowPlant::UpdatePhaseFromGrowth()

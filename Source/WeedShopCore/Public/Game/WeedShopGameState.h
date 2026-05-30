@@ -15,6 +15,7 @@
 class UEconomyComponent;
 class UDayCycleComponent;
 class UMilestoneComponent;
+class UUpgradeComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
@@ -36,6 +37,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UMilestoneComponent* GetMilestones() const { return Milestones; }
 
+	// Gedeelde, gekochte upgrades.
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	UUpgradeComponent* GetUpgrades() const { return Upgrades; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
@@ -45,4 +50,7 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UMilestoneComponent> Milestones;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<UUpgradeComponent> Upgrades;
 };
