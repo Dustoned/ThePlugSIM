@@ -3,6 +3,8 @@
 #include "Engine/Engine.h"
 #include "Engine/Canvas.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
@@ -415,29 +417,35 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	}
 	DrawText(FString::Printf(TEXT("Gram per joint: %d   (jouw vloei kan tot %dg)"), G, MaxG),
 		FLinearColor::White, InnerX, y, Font);
-	y += 26.f;
+	y += 28.f;
 
-	// Grams-keuze als knoppenrij (klikbare "slider"); boven je papers-max = vergrendeld.
-	const float BtnW = 70.f;
-	for (int32 g = 1; g <= 5; ++g)
+	// Sleep-slider van 1g tot MaxG. Bij MaxG == 1 (maar dat komt niet voor) geen slider.
+	const float TrackX = InnerX;
+	const float TrackW = W - 32.f;
+	const float TrackY = y + 6.f;
+	const float TrackH = 14.f;
+	const float Frac = (MaxG > 1) ? float(G - 1) / float(MaxG - 1) : 0.f;
+
+	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), TrackX, TrackY, TrackW, TrackH);
+	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), TrackX, TrackY, Frac * TrackW, TrackH);
+	const float HandleX = TrackX + Frac * TrackW;
+	DrawRect(FLinearColor::White, HandleX - 5.f, TrackY - 5.f, 10.f, TrackH + 10.f);
+	AddHitBox(FVector2D(TrackX, TrackY - 8.f), FVector2D(TrackW, TrackH + 16.f), FName(TEXT("rollslider")), true, 2);
+
+	// Klikken of slepen op de track zet het aantal gram (1..MaxG).
+	if (PlayerOwner && MaxG > 1)
 	{
-		const float bx = InnerX + (g - 1) * (BtnW + 6.f);
-		const bool bLocked = (g > MaxG);
-		const bool bSel = (g == G);
-		if (bLocked)
+		float MX = 0.f, MY = 0.f;
+		if (PlayerOwner->GetMousePosition(MX, MY) && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton))
 		{
-			DrawRect(FLinearColor(0.10f, 0.08f, 0.08f, 0.9f), bx, y, BtnW, 30.f);
-			DrawText(FString::Printf(TEXT("%dg L"), g), FLinearColor(0.5f, 0.4f, 0.4f), bx + 16.f, y + 5.f, Font);
-		}
-		else
-		{
-			const FLinearColor Col = bSel ? FLinearColor(0.5f, 1.f, 0.5f) : FLinearColor(0.7f, 0.7f, 0.8f);
-			DrawRect(bSel ? FLinearColor(0.2f, 0.4f, 0.2f, 0.95f) : FLinearColor(0.12f, 0.12f, 0.16f, 0.9f), bx, y, BtnW, 30.f);
-			DrawText(FString::Printf(TEXT("%dg"), g), Col, bx + 22.f, y + 5.f, Font);
-			AddHitBox(FVector2D(bx, y), FVector2D(BtnW, 30.f), FName(*FString::Printf(TEXT("rollg_%d"), g)), true, 1);
+			if (MX >= TrackX - 10.f && MX <= TrackX + TrackW + 10.f && MY >= TrackY - 12.f && MY <= TrackY + TrackH + 12.f)
+			{
+				const float F = FMath::Clamp((MX - TrackX) / TrackW, 0.f, 1.f);
+				Phone->SetRollGrams(1 + FMath::RoundToInt(F * (MaxG - 1)));
+			}
 		}
 	}
-	y += 36.f;
+	y += 34.f;
 	if (MaxG < 5)
 	{
 		DrawText(TEXT("Grotere vloei (tot 5g) koop je bij Suppliers."),
