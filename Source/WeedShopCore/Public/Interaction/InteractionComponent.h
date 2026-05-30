@@ -43,10 +43,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Interaction")
 	TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
 
-	// Minimale tijd (sec) tussen twee interacties — kort; dempt frame-spam (E ingedrukt) maar
-	// laat snel klikken toe.
+	// Minimale tijd (sec) tussen twee interacties bij snel opnieuw drukken — heel kort, dempt
+	// alleen toevallige dubbele triggers. Ingedrukt houden spamt sowieso niet (zie edge-latch).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Interaction")
-	float InteractCooldown = 0.15f;
+	float InteractCooldown = 0.05f;
 
 	// UI bindt hierop om de interact-prompt te tonen/verbergen (lokale client).
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Interaction")
@@ -63,8 +63,17 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-	// Tijdstip (wereld-seconden) van de laatste interactie — voor de cooldown.
+	// Tijdstip (wereld-seconden) van de laatste interactie — voor de korte anti-dubbel cooldown.
 	double LastInteractTime = -1000.0;
+
+	// Edge-latch: TryInteract wordt door Enhanced Input "Triggered" elke frame aangeroepen
+	// zolang de toets ingedrukt is. We voeren maar één keer per indruk uit. De latch blijft
+	// staan zolang de toets gehouden wordt en wordt pas in de tick gereset als er een frame
+	// voorbijgaat zónder TryInteract-aanroep (= toets losgelaten).
+	bool bInteractLatched = false;
+
+	// Werd TryInteract deze frame aangeroepen? In de tick gebruikt om de latch te resetten.
+	bool bInteractRequestedThisFrame = false;
 
 	// Het laatst gefocuste interact-bare object (lokaal bepaald).
 	UPROPERTY(Transient)

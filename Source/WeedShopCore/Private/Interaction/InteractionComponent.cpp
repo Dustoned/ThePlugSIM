@@ -34,6 +34,15 @@ void UInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	{
 		UpdateFocus();
 	}
+
+	// Edge-latch reset: input wordt vóór de component-tick verwerkt. Als TryInteract deze
+	// frame NIET is aangeroepen, is de toets losgelaten -> latch vrijgeven zodat de volgende
+	// indruk weer telt. Zo blijft ingedrukt houden bij precies één interactie.
+	if (!bInteractRequestedThisFrame)
+	{
+		bInteractLatched = false;
+	}
+	bInteractRequestedThisFrame = false;
 }
 
 bool UInteractionComponent::GetViewPoint(FVector& OutLocation, FRotator& OutRotation) const
@@ -99,13 +108,24 @@ void UInteractionComponent::UpdateFocus()
 
 void UInteractionComponent::TryInteract()
 {
-	AActor* Target = FocusedActor.Get();
-	if (!Target)
+	// Markeer dat de toets deze frame "Triggered" was; de tick reset de latch bij loslaten.
+	bInteractRequestedThisFrame = true;
+
+	// Al deze indruk afgehandeld? Dan negeren tot de toets is losgelaten (geen spam bij houden).
+	if (bInteractLatched)
 	{
 		return;
 	}
 
-	// Cooldown: voorkomt spam als de interact-toets ingedrukt blijft (Enhanced Input "Triggered").
+	AActor* Target = FocusedActor.Get();
+	if (!Target)
+	{
+		// Niets om mee te interacten, maar deze indruk is wel "verbruikt": niet blijven proberen.
+		bInteractLatched = true;
+		return;
+	}
+
+	// Korte anti-dubbel cooldown: vangt toevallige dubbele triggers binnen enkele frames af.
 	if (const UWorld* World = GetWorld())
 	{
 		const double Now = World->GetTimeSeconds();
@@ -115,6 +135,9 @@ void UInteractionComponent::TryInteract()
 		}
 		LastInteractTime = Now;
 	}
+
+	// Deze indruk is nu afgehandeld; pas na loslaten weer toegestaan.
+	bInteractLatched = true;
 
 	// Host / single-player heeft authority -> meteen uitvoeren. Client -> via de server.
 	if (GetOwnerRole() == ROLE_Authority)
