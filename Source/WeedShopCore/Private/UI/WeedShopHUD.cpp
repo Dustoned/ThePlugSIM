@@ -24,6 +24,19 @@ namespace
 	constexpr float PhoneW = 420.f;
 	constexpr float PhoneH = 440.f;
 	constexpr float RowH = 26.f;
+
+	// Leesbare naam voor een item-id, zodat de speler "Wiet" vs "Zaadje" duidelijk ziet
+	// (het strain heet "Bagseed", wat anders als zaad oogt).
+	FString PrettyItemName(const FName ItemId)
+	{
+		const FString S = ItemId.ToString();
+		if (S.StartsWith(TEXT("Bud_")))    { return FString::Printf(TEXT("Wiet: %s"), *S.RightChop(4)); }
+		if (S.StartsWith(TEXT("Seed_")))   { return FString::Printf(TEXT("Zaadje: %s"), *S.RightChop(5)); }
+		if (S.StartsWith(TEXT("Joint_")))  { return FString::Printf(TEXT("Joint %s"), *S.RightChop(6)); }
+		if (S == TEXT("Papers_Small"))     { return TEXT("Vloei (klein)"); }
+		if (S == TEXT("Papers_Big"))       { return TEXT("Vloei (groot)"); }
+		return S;
+	}
 }
 
 UPhoneClientComponent* AWeedShopHUD::GetPhone() const
@@ -215,7 +228,10 @@ void AWeedShopHUD::DrawHUD()
 				if (Stacks.IsValidIndex(i))
 				{
 					const FInventoryStack& S = Stacks[i];
-					DrawText(S.ItemId.ToString(), FLinearColor(0.85f, 0.9f, 1.f), SX + 5.f, SY + 4.f, Font);
+					const bool bIsSeed = S.ItemId.ToString().StartsWith(TEXT("Seed_"));
+					DrawText(PrettyItemName(S.ItemId),
+						bIsSeed ? FLinearColor(0.7f, 0.85f, 0.6f) : FLinearColor(0.85f, 0.9f, 1.f),
+						SX + 5.f, SY + 4.f, Font);
 					DrawText(FString::Printf(TEXT("x%d"), S.Quantity), FLinearColor::White, SX + 5.f, SY + 24.f, Font);
 				}
 				SX += SlotW + 6.f;

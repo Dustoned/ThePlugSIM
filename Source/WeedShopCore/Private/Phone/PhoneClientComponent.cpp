@@ -10,6 +10,7 @@
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
@@ -46,11 +47,31 @@ void UPhoneClientComponent::UpdateCursor()
 		PC->bEnableMouseOverEvents = bAnyUI;
 		if (bAnyUI)
 		{
-			PC->SetInputMode(FInputModeGameAndUI());
+			// GameAndUI zodat de toetsbinds (R/Tab) blijven werken, maar:
+			//  - LockAlways: cursor kan het venster niet uit (muis "vast" in de UI).
+			//  - HideCursorDuringCapture(false): cursor blijft zichtbaar als je de
+			//    muisknop indrukt (anders verdween hij bij het slepen).
+			FInputModeGameAndUI Mode;
+			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+			Mode.SetHideCursorDuringCapture(false);
+			PC->SetInputMode(Mode);
+
+			// Belangrijkste fix voor slepen: laat de game-viewport de muis NIET vangen op
+			// een klik. Bij capture bevriest de absolute cursorpositie (de muis levert dan
+			// alleen camera-delta), waardoor hover/slepen stopte en de cursor verdween.
+			if (UGameViewportClient* VP = PC->GetWorld() ? PC->GetWorld()->GetGameViewport() : nullptr)
+			{
+				VP->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
+				VP->SetHideCursorDuringCapture(false);
+			}
 		}
 		else
 		{
 			PC->SetInputMode(FInputModeGameOnly());
+			if (UGameViewportClient* VP = PC->GetWorld() ? PC->GetWorld()->GetGameViewport() : nullptr)
+			{
+				VP->SetMouseCaptureMode(EMouseCaptureMode::CapturePermanently);
+			}
 		}
 	}
 }
@@ -161,8 +182,10 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	Inv->AddItem(JointId, 1);
 	if (GEngine)
 	{
+		const FString StrainName = BudItem.ToString().StartsWith(TEXT("Bud_"))
+			? BudItem.ToString().RightChop(4) : BudItem.ToString();
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Joint gedraaid: %dg %s + 1 vloei"), Grams, *BudItem.ToString()));
+			FString::Printf(TEXT("Joint gedraaid: %dg wiet (%s) + 1 vloei"), Grams, *StrainName));
 	}
 }
 
