@@ -445,13 +445,7 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 			}
 		}
 	}
-	y += 34.f;
-	if (MaxG < 5)
-	{
-		DrawText(TEXT("Grotere vloei (tot 5g) koop je bij Suppliers."),
-			FLinearColor(0.7f, 0.7f, 0.7f), InnerX, y, Font);
-	}
-	y += 20.f;
+	y += 40.f;
 
 	// Kwaliteit-balk.
 	const float Quality = FMath::Clamp(G / 5.f, 0.f, 1.f);
