@@ -42,9 +42,13 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Economy")
 	FOnMoneyEarned OnMoneyEarned;
 
-	// Server-authoritative. Voegt geld toe (cents, > 0). No-op op clients.
+	// Server-authoritative. Voegt geld toe (cents, > 0) en telt als inkomsten (milestones). No-op op clients.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
 	void AddMoney(int64 AmountCents);
+
+	// Als AddMoney, maar telt NIET als 'verdiend' (voor test/debug, niet voor milestone-voortgang).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
+	void AddMoneyUntracked(int64 AmountCents);
 
 	// Server-authoritative. Schrijft af; geeft false bij onvoldoende saldo of op een client.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")

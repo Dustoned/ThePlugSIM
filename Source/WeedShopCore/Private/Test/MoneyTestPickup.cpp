@@ -39,7 +39,7 @@ void AMoneyTestPickup::Interact_Implementation(APawn* InstigatorPawn)
 		return;
 	}
 
-	GS->GetEconomy()->AddMoney(AmountCents);
+	GS->GetEconomy()->AddMoneyUntracked(AmountCents);
 	UE_LOG(LogWeedShop, Log, TEXT("MoneyTestPickup: +%d cents -> saldo nu %lld cents"),
 		AmountCents, (long long)GS->GetEconomy()->GetBalanceCents());
 }

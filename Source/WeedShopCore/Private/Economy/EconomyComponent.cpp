@@ -41,6 +41,19 @@ void UEconomyComponent::AddMoney(int64 AmountCents)
 	OnMoneyEarned.Broadcast(AmountCents);
 }
 
+void UEconomyComponent::AddMoneyUntracked(int64 AmountCents)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+	if (AmountCents <= 0)
+	{
+		return;
+	}
+	SetBalance(BalanceCents + AmountCents);
+}
+
 bool UEconomyComponent::RemoveMoney(int64 AmountCents)
 {
 	if (GetOwnerRole() != ROLE_Authority)
