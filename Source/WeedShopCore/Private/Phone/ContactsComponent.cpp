@@ -3,7 +3,9 @@
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
+#include "Customer/CustomerBase.h"
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 
 UContactsComponent::UContactsComponent()
@@ -136,7 +138,8 @@ void UContactsComponent::CheckAppointments()
 
 	for (FPhoneMessage& Msg : Messages)
 	{
-		if (Msg.bAnnounced || Msg.AppointmentTimeOfDay < 0.f)
+		// Alleen geaccepteerde afspraken kondigen we aan.
+		if (Msg.bAnnounced || Msg.Status != 1 || Msg.AppointmentTimeOfDay < 0.f)
 		{
 			continue;
 		}
@@ -151,6 +154,55 @@ void UContactsComponent::CheckAppointments()
 					FString::Printf(TEXT("Afspraak: %s is er nu!"), *Msg.SenderName.ToString()));
 			}
 		}
+	}
+}
+
+void UContactsComponent::RespondTopPending(bool bAccept)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	for (FPhoneMessage& Msg : Messages)
+	{
+		if (Msg.Status != 0)
+		{
+			continue;
+		}
+
+		Msg.Status = bAccept ? 1 : 2;
+		const float Delta = bAccept ? 5.f : -12.f;
+
+		// Relatie in de contactenlijst bijwerken.
+		for (FPhoneContact& Contact : Contacts)
+		{
+			if (Contact.ContactId == Msg.FromContactId)
+			{
+				Contact.Relationship = FMath::Clamp(Contact.Relationship + Delta, 0.f, 100.f);
+				break;
+			}
+		}
+
+		// Loyaliteit van de live klant bijwerken (als die in de wereld is).
+		for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+		{
+			if (It->GetFName() == Msg.FromContactId)
+			{
+				It->Loyalty = FMath::Clamp(It->Loyalty + Delta, 0.f, 100.f);
+				break;
+			}
+		}
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
+				FString::Printf(TEXT("%s: afspraak %s"), *Msg.SenderName.ToString(),
+					bAccept ? TEXT("geaccepteerd") : TEXT("afgezegd")));
+		}
+
+		OnRep_Messages();
+		return;
 	}
 }
 

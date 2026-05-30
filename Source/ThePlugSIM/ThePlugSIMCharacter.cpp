@@ -14,6 +14,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Phone/ContactsComponent.h"
 #include "ThePlugSIM.h"
 
 AThePlugSIMCharacter::AThePlugSIMCharacter()
@@ -223,6 +224,20 @@ void AThePlugSIMCharacter::BuyPhoneIndex(int32 Index)
 		return;
 	}
 
+	if (PhoneTab == 3)
+	{
+		// Berichten: 1 = accepteren, 2 = weigeren (eerste open afspraak).
+		if (Index == 0)      { ServerRespondAppointment(true); }
+		else if (Index == 1) { ServerRespondAppointment(false); }
+		return;
+	}
+
+	if (PhoneTab == 2)
+	{
+		// Contacten: alleen weergave.
+		return;
+	}
+
 	// Upgrades.
 	if (GS->GetUpgrades())
 	{
@@ -252,6 +267,17 @@ void AThePlugSIMCharacter::ServerBuySeed_Implementation(FName StrainId)
 		if (GS->GetStore())
 		{
 			GS->GetStore()->BuySeed(StrainId, Inventory);
+		}
+	}
+}
+
+void AThePlugSIMCharacter::ServerRespondAppointment_Implementation(bool bAccept)
+{
+	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (GS->GetContacts())
+		{
+			GS->GetContacts()->RespondTopPending(bAccept);
 		}
 	}
 }

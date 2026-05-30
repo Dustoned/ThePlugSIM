@@ -49,12 +49,15 @@ void AWeedShopHUD::DrawHUD()
 		Y += 26.f;
 	}
 
-	// Dag/nacht.
+	// Klok + dag/nacht.
 	if (GS && GS->GetDayCycle())
 	{
 		const UDayCycleComponent* Day = GS->GetDayCycle();
-		DrawText(FString::Printf(TEXT("%s  (%.0f%%)"), Day->IsNight() ? TEXT("Nacht") : TEXT("Dag"),
-			Day->GetCycleFraction() * 100.f), FLinearColor::White, X, Y, Font);
+		const int32 TotalMin = FMath::RoundToInt(Day->GetCycleFraction() * 24.f * 60.f);
+		const int32 HH = (TotalMin / 60) % 24;
+		const int32 MM = TotalMin % 60;
+		DrawText(FString::Printf(TEXT("Tijd: %02d:%02d   (%s)"), HH, MM,
+			Day->IsNight() ? TEXT("Nacht") : TEXT("Dag")), FLinearColor::White, X, Y, Font);
 		Y += 26.f;
 	}
 
@@ -185,6 +188,10 @@ void AWeedShopHUD::DrawPhone()
 		// Berichten.
 		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
 		{
+			DrawText(TEXT("Eerste open bericht:  [1] accepteren   [2] weigeren"),
+				FLinearColor(0.7f, 1.f, 0.7f), PX + 14.f, y, Font);
+			y += 24.f;
+
 			if (Con->GetMessages().Num() == 0)
 			{
 				DrawText(TEXT("(geen berichten)"), FLinearColor::Gray, PX + 14.f, y, Font);
@@ -192,8 +199,11 @@ void AWeedShopHUD::DrawPhone()
 			}
 			for (const FPhoneMessage& M : Con->GetMessages())
 			{
-				DrawText(FString::Printf(TEXT("%s: %s"), *M.SenderName.ToString(), *M.Body.ToString()),
-					FLinearColor(0.9f, 0.95f, 1.f), PX + 14.f, y, Font);
+				const TCHAR* Tag = (M.Status == 1) ? TEXT("[ja]") : (M.Status == 2 ? TEXT("[nee]") : TEXT("[open]"));
+				const FLinearColor Col = (M.Status == 1) ? FLinearColor::Green
+					: (M.Status == 2 ? FLinearColor(0.7f, 0.5f, 0.5f) : FLinearColor(0.9f, 0.95f, 1.f));
+				DrawText(FString::Printf(TEXT("%s %s: %s"), Tag, *M.SenderName.ToString(), *M.Body.ToString()),
+					Col, PX + 14.f, y, Font);
 				y += 22.f;
 				if (y > MaxY) break;
 			}

@@ -106,6 +106,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerBuySeed(FName StrainId);
 
+	/** Server-RPC: accepteert (true) of weigert (false) het eerste open afspraak-bericht. */
+	UFUNCTION(Server, Reliable)
+	void ServerRespondAppointment(bool bAccept);
+
 	/** Of de telefoon nu open is (lokaal). */
 	bool bPhoneOpen = false;
 

@@ -53,6 +53,10 @@ struct FPhoneMessage
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	EAppointmentKind Kind = EAppointmentKind::TheyComeToYou;
 
+	// 0 = open (wacht op antwoord), 1 = geaccepteerd, 2 = geweigerd.
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	uint8 Status = 0;
+
 	// Is de afspraaktijd al aangekondigd?
 	UPROPERTY()
 	bool bAnnounced = false;
@@ -89,6 +93,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	const TArray<FPhoneMessage>& GetMessages() const { return Messages; }
+
+	// Server: beantwoord het eerste open afspraak-bericht. Accept = loyaliteit +, weiger = loyaliteit -.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RespondTopPending(bool bAccept);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
