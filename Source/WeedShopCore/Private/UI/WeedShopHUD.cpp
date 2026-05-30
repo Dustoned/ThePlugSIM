@@ -219,25 +219,44 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	y += RowH + 6.f;
 
 	// Inhoud per tab.
-	if (Tab == 1) // Suppliers
+	if (Tab == 1) // Suppliers: zaden + supplies (vloei)
 	{
 		if (UStoreComponent* Store = GS ? GS->GetStore() : nullptr)
 		{
 			int32 idx = 0;
-			for (const FName& Id : Store->GetSeedCatalog())
+			const TArray<FName> Seeds = Store->GetSeedCatalog();
+			for (const FName& Id : Seeds)
 			{
 				FText Name; int32 Price = 0;
 				if (Store->GetSeedDisplay(Id, Name, Price))
 				{
-					const FName Box(*FString::Printf(TEXT("buy_%d"), idx));
-					if (DrawButton(Box, FString::Printf(TEXT("Zaad: %s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
+					if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), idx)),
+						FString::Printf(TEXT("Zaad: %s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
 						InnerX, y, InnerW, FLinearColor::White))
 					{
-						HoverTooltip = FString::Printf(TEXT("Koop een %s-zaadje voor EUR %.2f"), *Name.ToString(), Price / 100.f);
+						HoverTooltip = FString::Printf(TEXT("Koop een %s-zaadje"), *Name.ToString());
 					}
 					y += RowH;
 				}
-				if (++idx >= 8) break;
+				++idx;
+				if (idx >= 8) break;
+			}
+			// Supplies (vloei) ná de zaden, doorlopende index.
+			int32 si = Seeds.Num();
+			for (const FName& Id : Store->GetSupplyCatalog())
+			{
+				FText Name; int32 Price = 0; int32 Pack = 0;
+				if (Store->GetSupplyDisplay(Id, Name, Price, Pack) && y < PY + PhoneH - 60.f)
+				{
+					if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), si)),
+						FString::Printf(TEXT("%s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
+						InnerX, y, InnerW, FLinearColor(0.85f, 0.95f, 0.8f)))
+					{
+						HoverTooltip = FString::Printf(TEXT("Koop %d stuks vloei"), Pack);
+					}
+					y += RowH;
+				}
+				++si;
 			}
 		}
 	}
@@ -386,7 +405,15 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 
 	const int32 G = Phone->GetRollGrams();
 	const int32 MaxG = Phone->GetMaxJointGrams();
-	DrawText(FString::Printf(TEXT("Gram per joint: %d   (papers tot %dg)"), G, MaxG),
+	if (MaxG <= 0)
+	{
+		DrawText(TEXT("Geen vloei! Koop er een pakje bij Suppliers (telefoon, Tab)."),
+			FLinearColor(1.f, 0.5f, 0.5f), InnerX, y, Font);
+		y += 30.f;
+		DrawButton(FName(TEXT("rollclose")), TEXT("Sluiten (R)"), InnerX, y, 150.f, FLinearColor::Yellow);
+		return;
+	}
+	DrawText(FString::Printf(TEXT("Gram per joint: %d   (jouw vloei kan tot %dg)"), G, MaxG),
 		FLinearColor::White, InnerX, y, Font);
 	y += 26.f;
 
@@ -413,7 +440,7 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	y += 36.f;
 	if (MaxG < 5)
 	{
-		DrawText(TEXT("Grotere papers (meer gram) koop je later via Upgrades."),
+		DrawText(TEXT("Grotere vloei (tot 5g) koop je bij Suppliers."),
 			FLinearColor(0.7f, 0.7f, 0.7f), InnerX, y, Font);
 	}
 	y += 20.f;

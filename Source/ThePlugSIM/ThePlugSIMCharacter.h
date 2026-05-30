@@ -86,6 +86,9 @@ protected:
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
+	/** Geeft de speler een startvoorraad (vloei, wat wiet, een zaadje). */
+	virtual void BeginPlay() override;
+
 	/** Telefoon-logica (openen, tabs, kopen, afspraken) — aangestuurd door input + HUD-klikken. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UPhoneClientComponent> Phone;

@@ -90,22 +90,45 @@ void UPhoneClientComponent::ConfirmRoll()
 
 int32 UPhoneClientComponent::GetMaxJointGrams() const
 {
-	int32 Max = BaseMaxGrams;
-	if (const AWeedShopGameState* GS = GetGS())
+	// Bepaald door de vloei (papers) die je hebt; geen vloei = niet kunnen rollen.
+	if (UInventoryComponent* Inv = GetOwnerInventory())
 	{
-		if (const UUpgradeComponent* Upg = GS->GetUpgrades())
-		{
-			Max += FMath::RoundToInt(Upg->GetEffectTotal(TEXT("JointGramMax")));
-		}
+		if (Inv->HasItem(FName(TEXT("Papers_Big")), 1)) return GramsHardMax; // 5g
+		if (Inv->HasItem(FName(TEXT("Papers_Small")), 1)) return BaseMaxGrams; // 2g
 	}
-	return FMath::Clamp(Max, MinGrams, GramsHardMax);
+	return 0;
 }
 
 void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 {
-	Grams = FMath::Clamp(Grams, MinGrams, GetMaxJointGrams());
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Inv)
+	{
+		return;
+	}
+
+	const int32 MaxG = GetMaxJointGrams();
+	if (MaxG <= 0)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen vloei — koop er bij de supplier (telefoon)."));
+		}
+		return;
+	}
+	Grams = FMath::Clamp(Grams, MinGrams, MaxG);
+
+	// Kies de vloei: kleine vloei voor <=2g (spaart de grote), anders grote.
+	FName Paper = NAME_None;
+	if (Grams <= BaseMaxGrams && Inv->HasItem(FName(TEXT("Papers_Small")), 1))
+	{
+		Paper = FName(TEXT("Papers_Small"));
+	}
+	else if (Inv->HasItem(FName(TEXT("Papers_Big")), 1))
+	{
+		Paper = FName(TEXT("Papers_Big"));
+	}
+	if (Paper.IsNone())
 	{
 		return;
 	}
@@ -120,7 +143,7 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 			break;
 		}
 	}
-	if (BudItem.IsNone() || !Inv->RemoveItem(BudItem, Grams))
+	if (BudItem.IsNone())
 	{
 		if (GEngine)
 		{
@@ -130,6 +153,9 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 		return;
 	}
 
+	Inv->RemoveItem(BudItem, Grams);
+	Inv->RemoveItem(Paper, 1);
+
 	// Joint-kwaliteit zit in de item-id (Joint_<G>g): meer gram = betere joint.
 	const FName JointId(*FString::Printf(TEXT("Joint_%dg"), Grams));
 	Inv->AddItem(JointId, 1);
@@ -137,6 +163,17 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green,
 			FString::Printf(TEXT("Joint gedraaid (%d g)."), Grams));
+	}
+}
+
+void UPhoneClientComponent::ServerBuySupply_Implementation(FName SupplyId)
+{
+	if (AWeedShopGameState* GS = GetGS())
+	{
+		if (GS->GetStore())
+		{
+			GS->GetStore()->BuySupply(SupplyId, GetOwnerInventory());
+		}
 	}
 }
 
@@ -180,7 +217,7 @@ void UPhoneClientComponent::DoAction(int32 Index)
 		return;
 	}
 
-	if (Tab == 1) // Suppliers: zaad kopen
+	if (Tab == 1) // Suppliers: eerst zaden, daarna supplies (vloei)
 	{
 		if (GS->GetStore())
 		{
@@ -188,6 +225,15 @@ void UPhoneClientComponent::DoAction(int32 Index)
 			if (Seeds.IsValidIndex(Index))
 			{
 				ServerBuySeed(Seeds[Index]);
+			}
+			else
+			{
+				const TArray<FName> Supplies = GS->GetStore()->GetSupplyCatalog();
+				const int32 Si = Index - Seeds.Num();
+				if (Supplies.IsValidIndex(Si))
+				{
+					ServerBuySupply(Supplies[Si]);
+				}
 			}
 		}
 	}

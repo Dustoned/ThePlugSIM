@@ -37,6 +37,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
 	bool BuySeed(FName StrainId, UInventoryComponent* Buyer);
 
+	// --- Supplies (vloei e.d.), naast zaden ---
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	TArray<FName> GetSupplyCatalog() const;
+
+	// Weergave-info voor een supply (naam + prijs + hoeveel je per koop krijgt).
+	bool GetSupplyDisplay(FName SupplyId, FText& OutName, int32& OutPriceCents, int32& OutPackSize) const;
+
+	// Server: koop een supply-pakket voor Buyer.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
+	bool BuySupply(FName SupplyId, UInventoryComponent* Buyer);
+
 protected:
 	UPROPERTY()
 	TObjectPtr<UDataTable> StrainTable;

@@ -253,6 +253,19 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	}
 }
 
+void AThePlugSIMCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Startvoorraad (concept): wat vloei, een paar gram wiet en een zaadje.
+	if (HasAuthority() && Inventory)
+	{
+		Inventory->AddItem(FName(TEXT("Papers_Small")), 10);
+		Inventory->AddItem(FName(TEXT("Bud_Bagseed")), 5);
+		Inventory->AddItem(FName(TEXT("Seed_Bagseed")), 1);
+	}
+}
+
 void AThePlugSIMCharacter::ToggleRollUI()
 {
 	if (Phone)

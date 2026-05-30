@@ -77,6 +77,9 @@ protected:
 	void ServerBuySeed(FName StrainId);
 
 	UFUNCTION(Server, Reliable)
+	void ServerBuySupply(FName SupplyId);
+
+	UFUNCTION(Server, Reliable)
 	void ServerRespond(bool bAccept);
 
 	// Server: maak 1 joint van Grams gram bud (item-id Joint_<G>g; meer gram = betere kwaliteit).

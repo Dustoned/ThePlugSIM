@@ -88,3 +88,71 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 	}
 	return true;
 }
+
+// --- Supplies (vaste catalogus) ---
+namespace
+{
+	struct FSupplyDef { const TCHAR* Id; const TCHAR* Name; int32 PriceCents; int32 PackSize; };
+	static const FSupplyDef GSupplies[] = {
+		{ TEXT("Papers_Small"), TEXT("Vloei klein (tot 2g) - 10 stuks"), 500, 10 },
+		{ TEXT("Papers_Big"),   TEXT("Vloei groot (tot 5g) - 10 stuks"), 1500, 10 },
+	};
+}
+
+TArray<FName> UStoreComponent::GetSupplyCatalog() const
+{
+	TArray<FName> Out;
+	for (const FSupplyDef& S : GSupplies)
+	{
+		Out.Add(FName(S.Id));
+	}
+	return Out;
+}
+
+bool UStoreComponent::GetSupplyDisplay(FName SupplyId, FText& OutName, int32& OutPriceCents, int32& OutPackSize) const
+{
+	for (const FSupplyDef& S : GSupplies)
+	{
+		if (SupplyId == FName(S.Id))
+		{
+			OutName = FText::FromString(S.Name);
+			OutPriceCents = S.PriceCents;
+			OutPackSize = S.PackSize;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
+{
+	if (GetOwnerRole() != ROLE_Authority || !Buyer)
+	{
+		return false;
+	}
+	FText Name; int32 Price = 0; int32 Pack = 0;
+	if (!GetSupplyDisplay(SupplyId, Name, Price, Pack))
+	{
+		return false;
+	}
+
+	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	if (!Econ || !Econ->RemoveMoney(Price))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
+				FString::Printf(TEXT("Te weinig geld voor %s"), *Name.ToString()));
+		}
+		return false;
+	}
+
+	Buyer->AddItem(SupplyId, Pack);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			FString::Printf(TEXT("Gekocht: %s"), *Name.ToString()));
+	}
+	return true;
+}
