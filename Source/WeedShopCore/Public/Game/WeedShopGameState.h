@@ -13,6 +13,7 @@
 #include "WeedShopGameState.generated.h"
 
 class UEconomyComponent;
+class UDayCycleComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
@@ -26,7 +27,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UEconomyComponent* GetEconomy() const { return Economy; }
 
+	// De gedeelde dag/nacht-klok.
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	UDayCycleComponent* GetDayCycle() const { return DayCycle; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<UDayCycleComponent> DayCycle;
 };

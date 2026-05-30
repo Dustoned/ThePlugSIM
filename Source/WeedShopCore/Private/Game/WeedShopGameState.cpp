@@ -1,9 +1,11 @@
 #include "Game/WeedShopGameState.h"
 
 #include "Economy/EconomyComponent.h"
+#include "World/DayCycleComponent.h"
 
 AWeedShopGameState::AWeedShopGameState()
 {
-	// De kas als default-subobject: bestaat altijd op de GameState en repliceert mee.
+	// Gedeelde, replicerende subobjects op de GameState.
 	Economy = CreateDefaultSubobject<UEconomyComponent>(TEXT("Economy"));
+	DayCycle = CreateDefaultSubobject<UDayCycleComponent>(TEXT("DayCycle"));
 }
