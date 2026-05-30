@@ -6,6 +6,8 @@
 #include "Progression/StoreComponent.h"
 #include "Phone/ContactsComponent.h"
 #include "Inventory/InventoryComponent.h"
+#include "Economy/EconomyComponent.h"
+#include "Customer/CustomerBase.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
@@ -39,7 +41,7 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -75,6 +77,7 @@ void UPhoneClientComponent::Toggle()
 	if (bOpen)
 	{
 		bRollOpen = false; // niet allebei tegelijk
+		bDealOpen = false;
 	}
 	UpdateCursor();
 }
@@ -85,6 +88,7 @@ void UPhoneClientComponent::ToggleRollUI()
 	if (bRollOpen)
 	{
 		bOpen = false;
+		bDealOpen = false;
 		RollGrams = FMath::Clamp(RollGrams, MinGrams, GetMaxJointGrams());
 	}
 	UpdateCursor();
@@ -179,6 +183,99 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 			? BudItem.ToString().RightChop(4) : BudItem.ToString();
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
 			FString::Printf(TEXT("Joint rolled: %dg weed (%s) + 1 paper"), Grams, *StrainName));
+	}
+}
+
+// --- Deal ---
+
+void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
+{
+	if (!Customer)
+	{
+		return;
+	}
+	// Alleen onderhandelen met iemand die ook echt wil kopen.
+	if (Customer->State != ECustomerState::WantsToOrder && Customer->State != ECustomerState::Negotiating)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Silver, TEXT("This customer isn't looking to buy right now."));
+		}
+		return;
+	}
+	DealCustomer = Customer;
+	bDealOpen = true;
+	bOpen = false;
+	bRollOpen = false;
+	// Start op de marktprijs als vraagprijs (eerlijk bod).
+	DealAskCents = Customer->GetMarketPriceCents();
+	SetDealAskCents(DealAskCents);
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::SetDealAskCents(int32 Cents)
+{
+	const ACustomerBase* C = DealCustomer.Get();
+	const int32 Market = C ? C->GetMarketPriceCents() : 0;
+	if (Market <= 0)
+	{
+		DealAskCents = FMath::Max(0, Cents);
+		return;
+	}
+	// Band: 40%..200% van de markt.
+	const int32 Lo = FMath::RoundToInt(Market * 0.40f);
+	const int32 Hi = FMath::RoundToInt(Market * 2.00f);
+	DealAskCents = FMath::Clamp(Cents, Lo, Hi);
+}
+
+void UPhoneClientComponent::CloseDeal()
+{
+	bDealOpen = false;
+	DealCustomer = nullptr;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ConfirmDeal()
+{
+	if (ACustomerBase* C = DealCustomer.Get())
+	{
+		ServerSubmitOffer(C, DealAskCents);
+	}
+	bDealOpen = false;
+	DealCustomer = nullptr;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, int32 AskCents)
+{
+	if (!Customer)
+	{
+		return;
+	}
+	AWeedShopGameState* GS = GetGS();
+	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	UInventoryComponent* Stock = GetOwnerInventory();
+
+	const EDealResult Result = Customer->SubmitOffer(AskCents, Econ, Stock);
+
+	if (GEngine)
+	{
+		FColor Col = FColor::White;
+		FString Msg;
+		switch (Result)
+		{
+		case EDealResult::Accepted:
+			Col = FColor::Green;
+			Msg = FString::Printf(TEXT("Deal! Sold for EUR %.2f"), (AskCents * Customer->DesiredQuantity) / 100.f);
+			break;
+		case EDealResult::Haggle:
+			Col = FColor::Yellow;  Msg = TEXT("Too expensive — they want to haggle."); break;
+		case EDealResult::NoStock:
+			Col = FColor::Orange; Msg = TEXT("You don't have the stock for this order."); break;
+		default:
+			Col = FColor::Red;    Msg = TEXT("Customer refused the offer."); break;
+		}
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, Col, Msg);
 	}
 }
 

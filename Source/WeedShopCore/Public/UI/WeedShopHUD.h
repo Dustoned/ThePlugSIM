@@ -30,6 +30,9 @@ protected:
 	// Tekent het klikbare roll-paneel (grams-keuze + kwaliteit + draai-knop).
 	void DrawRollUI(UPhoneClientComponent* Phone);
 
+	// Tekent het deal-paneel: order van de klant + prijs-slider + live acceptatie-% + Deal/Cancel.
+	void DrawDealUI(UPhoneClientComponent* Phone);
+
 	// Tekent één klikbare knop-regel (rect + tekst + hit-box) en geeft true terug bij hover.
 	bool DrawButton(FName BoxName, const FString& Label, float X, float Y, float W, const FLinearColor& BaseColor);
 

@@ -2,6 +2,8 @@
 
 #include "WeedShopCore.h"
 #include "Interaction/Interactable.h"
+#include "Customer/CustomerBase.h"
+#include "Phone/PhoneClientComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
 
@@ -138,6 +140,17 @@ void UInteractionComponent::TryInteract()
 
 	// Deze indruk is nu afgehandeld; pas na loslaten weer toegestaan.
 	bInteractLatched = true;
+
+	// Klant -> open lokaal het deal-paneel (prijs-slider) i.p.v. direct verkopen. De bevestiging
+	// gaat daarna via een Server-RPC. Dit draait op de lokaal bestuurde speler.
+	if (Cast<ACustomerBase>(Target))
+	{
+		if (UPhoneClientComponent* Phone = GetOwner() ? GetOwner()->FindComponentByClass<UPhoneClientComponent>() : nullptr)
+		{
+			Phone->OpenDeal(Cast<ACustomerBase>(Target));
+			return;
+		}
+	}
 
 	// Host / single-player heeft authority -> meteen uitvoeren. Client -> via de server.
 	if (GetOwnerRole() == ROLE_Authority)

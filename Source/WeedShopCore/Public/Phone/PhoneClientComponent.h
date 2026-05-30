@@ -12,6 +12,7 @@
 class AWeedShopGameState;
 class APlayerController;
 class UInventoryComponent;
+class ACustomerBase;
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
 class WEEDSHOPCORE_API UPhoneClientComponent : public UActorComponent
@@ -69,6 +70,33 @@ public:
 	static constexpr int32 GramsHardMax = 5;
 	static constexpr int32 BaseMaxGrams = 2;
 
+	// --- Deal (verkoop aan een klant met prijs-slider) ---
+	// Opent het deal-paneel voor de aangekeken klant (lokaal; door de interactie aangeroepen).
+	void OpenDeal(ACustomerBase* Customer);
+
+	// Stel de vraagprijs per eenheid in (cents); wordt geklemd op een redelijke band rond de markt.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
+	void SetDealAskCents(int32 Cents);
+
+	// Stuur het bod naar de server (klant beslist op basis van prijs + respect/loyaliteit/verslaving).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
+	void ConfirmDeal();
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
+	void CloseDeal();
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	bool IsDealOpen() const { return bDealOpen; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	ACustomerBase* GetDealCustomer() const { return DealCustomer.Get(); }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	int32 GetDealAskCents() const { return DealAskCents; }
+
+	// Prijs-band: van 40% tot 200% van de marktprijs (in stappen van 10% voor de slider).
+	static constexpr int32 DealStepCount = 17; // 40,50,...,200 %
+
 protected:
 	UFUNCTION(Server, Reliable)
 	void ServerBuyUpgrade(FName UpgradeId);
@@ -86,6 +114,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerRollJoint(int32 Grams);
 
+	// Server: dien het bod in bij de klant (betaalt naar de kas, voorraad uit speler-inventory).
+	UFUNCTION(Server, Reliable)
+	void ServerSubmitOffer(ACustomerBase* Customer, int32 AskCents);
+
 	AWeedShopGameState* GetGS() const;
 	APlayerController* GetPC() const;
 	UInventoryComponent* GetOwnerInventory() const;
@@ -98,4 +130,8 @@ protected:
 
 	bool bRollOpen = false;
 	int32 RollGrams = 2;
+
+	bool bDealOpen = false;
+	TWeakObjectPtr<ACustomerBase> DealCustomer;
+	int32 DealAskCents = 0;
 };

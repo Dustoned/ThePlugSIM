@@ -18,6 +18,7 @@
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
+#include "Customer/CustomerBase.h"
 
 namespace
 {
@@ -131,9 +132,13 @@ void AWeedShopHUD::DrawHUD()
 		{
 			DrawRollUI(Phone);
 		}
+		else if (Phone->IsDealOpen())
+		{
+			DrawDealUI(Phone);
+		}
 		else if (PlayerOwner)
 		{
-			// Roll-UI dicht: cursor terug naar standaard (anders blijft het handje hangen).
+			// Geen UI open: cursor terug naar standaard (anders blijft het handje hangen).
 			PlayerOwner->CurrentMouseCursor = EMouseCursor::Default;
 		}
 	}
@@ -462,6 +467,24 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		Phone->ToggleRollUI();
 	}
+	else if (S.StartsWith(TEXT("dealp_")))
+	{
+		// Prijs-stop: index 0..N-1 -> percentage 40%..200% van de markt.
+		if (const ACustomerBase* C = Phone->GetDealCustomer())
+		{
+			const int32 Idx = FCString::Atoi(*S.RightChop(6));
+			const float Pct = 0.40f + 0.10f * Idx;
+			Phone->SetDealAskCents(FMath::RoundToInt(C->GetMarketPriceCents() * Pct));
+		}
+	}
+	else if (S == TEXT("dealconfirm"))
+	{
+		Phone->ConfirmDeal();
+	}
+	else if (S == TEXT("dealclose"))
+	{
+		Phone->CloseDeal();
+	}
 }
 
 void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
@@ -575,6 +598,126 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	DrawButton(FName(TEXT("rollconfirm")), FString::Printf(TEXT("Roll joint (costs %dg weed)"), G),
 		InnerX, y, 250.f, FLinearColor::White);
 	DrawButton(FName(TEXT("rollclose")), TEXT("Close (R)"), InnerX + 260.f, y, 150.f, FLinearColor::Yellow);
+}
+
+void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
+{
+	ACustomerBase* C = Phone->GetDealCustomer();
+	if (!C)
+	{
+		Phone->CloseDeal();
+		return;
+	}
+
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	const float W = 480.f;
+	const float H = 270.f;
+	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
+	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
+	const float InnerX = PX + 16.f;
+
+	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.96f), PX, PY, W, H);
+	float y = PY + 14.f;
+	DrawText(TEXT("DEAL"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
+
+	const int32 Market = C->GetMarketPriceCents();
+	const int32 Qty = C->DesiredQuantity;
+	const FString Product = PrettyItemName(C->DesiredProductId);
+
+	if (Market <= 0)
+	{
+		DrawText(TEXT("This customer has no clear order right now."), FLinearColor(1.f, 0.6f, 0.6f), InnerX, y, Font);
+		y += 30.f;
+		DrawButton(FName(TEXT("dealclose")), TEXT("Close"), InnerX, y, 150.f, FLinearColor::Yellow);
+		return;
+	}
+
+	DrawText(FString::Printf(TEXT("Wants: %dx %s   (market EUR %.2f / unit)"), Qty, *Product, Market / 100.f),
+		FLinearColor::White, InnerX, y, Font);
+	y += 26.f;
+
+	const int32 Ask = Phone->GetDealAskCents();
+	const float AskPct = (Market > 0) ? float(Ask) / float(Market) : 1.f;
+	DrawText(FString::Printf(TEXT("Your price: EUR %.2f / unit  (%.0f%% of market)   Total: EUR %.2f"),
+		Ask / 100.f, AskPct * 100.f, (Ask * Qty) / 100.f),
+		FLinearColor(1.f, 0.95f, 0.6f), InnerX, y, Font);
+	y += 26.f;
+
+	// --- Prijs-slider: stops van 40% tot 200% van de markt ---
+	const float TrackX = InnerX;
+	const float TrackW = W - 32.f;
+	const float TrackY = y + 6.f;
+	const float TrackH = 16.f;
+	const int32 N = UPhoneClientComponent::DealStepCount; // 17 stops (40..200%)
+	const float SegW = TrackW / float(N);
+
+	// Welke stop hangt de cursor boven? (hit-box hover, DPI-onafhankelijk).
+	int32 HoverIdx = -1;
+	if (!HoveredBox.IsNone())
+	{
+		const FString HS = HoveredBox.ToString();
+		if (HS.StartsWith(TEXT("dealp_"))) { HoverIdx = FCString::Atoi(*HS.RightChop(6)); }
+	}
+	const bool bOverTrack = (HoverIdx >= 0 && HoverIdx < N);
+
+	// Slepen: knop ingedrukt + boven de balk -> volg de stop onder de cursor.
+	const bool bMouseDown = PlayerOwner && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton);
+	const bool bDragging = bMouseDown && bOverTrack;
+	if (bDragging)
+	{
+		Phone->SetDealAskCents(FMath::RoundToInt(Market * (0.40f + 0.10f * HoverIdx)));
+	}
+	if (PlayerOwner)
+	{
+		PlayerOwner->CurrentMouseCursor = bDragging ? EMouseCursor::GrabHandClosed
+			: (bOverTrack ? EMouseCursor::GrabHand : EMouseCursor::Default);
+	}
+
+	// Welke stop is nu geselecteerd (dichtstbij het huidige bod)?
+	const int32 SelIdx = FMath::Clamp(FMath::RoundToInt((AskPct - 0.40f) / 0.10f), 0, N - 1);
+
+	DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.95f), TrackX, TrackY, TrackW, TrackH);
+	// Kleur de gevulde balk naar de prijs: goedkoop=groen, duur=rood.
+	const FLinearColor Fill = (AskPct <= 1.f) ? FLinearColor(0.4f, 0.85f, 0.4f) : FLinearColor(0.9f, 0.55f, 0.3f);
+	DrawRect(Fill, TrackX, TrackY, SegW * (SelIdx + 1), TrackH);
+
+	for (int32 i = 0; i < N; ++i)
+	{
+		const float cx = TrackX + i * SegW;
+		const FName Box(*FString::Printf(TEXT("dealp_%d"), i));
+		if (HoverIdx == i)
+		{
+			DrawRect(FLinearColor(1.f, 0.85f, 0.1f, 0.55f), cx, TrackY - 5.f, SegW, TrackH + 10.f);
+		}
+		AddHitBox(FVector2D(cx, TrackY - 6.f), FVector2D(SegW, TrackH + 26.f), Box, true, 3);
+	}
+	// Handle op de selectie.
+	const float HandleX = TrackX + (SelIdx + 0.5f) * SegW;
+	const float HalfW = (bDragging || bOverTrack) ? 8.f : 5.f;
+	DrawRect((bDragging || bOverTrack) ? FLinearColor(1.f, 0.85f, 0.1f) : FLinearColor::White,
+		HandleX - HalfW, TrackY - 8.f, HalfW * 2.f, TrackH + 16.f);
+	// Eindlabels.
+	DrawText(TEXT("cheap"), FLinearColor(0.6f, 0.9f, 0.6f), TrackX, TrackY + TrackH + 4.f, Font);
+	DrawText(TEXT("greedy"), FLinearColor(0.95f, 0.6f, 0.4f), TrackX + TrackW - 50.f, TrackY + TrackH + 4.f, Font);
+	y += 48.f;
+
+	// --- Live acceptatie-% (client kan dit lokaal: stats repliceren) ---
+	const float Chance = C->GetAcceptanceChance(Ask);
+	const FLinearColor ChanceCol = Chance >= 66.f ? FLinearColor::Green
+		: (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f));
+	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%"), Chance), ChanceCol, InnerX, y, Font);
+	y += 22.f;
+	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 12.f);
+	DrawRect(ChanceCol, InnerX, y, (W - 32.f) * FMath::Clamp(Chance / 100.f, 0.f, 1.f), 12.f);
+	y += 16.f;
+
+	// Klant-binding (respect/loyaliteit/verslaving) als context.
+	DrawText(FString::Printf(TEXT("Respect %.0f   Loyalty %.0f   Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction),
+		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
+	y += 26.f;
+
+	DrawButton(FName(TEXT("dealconfirm")), TEXT("Offer deal"), InnerX, y, 200.f, FLinearColor::White);
+	DrawButton(FName(TEXT("dealclose")), TEXT("Cancel"), InnerX + 210.f, y, 160.f, FLinearColor::Yellow);
 }
 
 void AWeedShopHUD::NotifyHitBoxBeginCursorOver(FName BoxName)
