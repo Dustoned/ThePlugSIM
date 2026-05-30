@@ -111,6 +111,10 @@ void AWeedShopHUD::DrawHUD()
 			HoverTooltip.Empty();
 			DrawPhone(Phone);
 		}
+		else if (Phone->IsRollOpen())
+		{
+			DrawRollUI(Phone);
+		}
 	}
 
 	// Interactie-prompt.
@@ -353,6 +357,65 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		Phone->DoAction(FCString::Atoi(*S.RightChop(4)));
 	}
+	else if (S.StartsWith(TEXT("rollg_")))
+	{
+		Phone->SetRollGrams(FCString::Atoi(*S.RightChop(6)));
+	}
+	else if (S == TEXT("rollconfirm"))
+	{
+		Phone->ConfirmRoll();
+	}
+	else if (S == TEXT("rollclose"))
+	{
+		Phone->ToggleRollUI();
+	}
+}
+
+void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
+{
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	const float W = 460.f;
+	const float H = 240.f;
+	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
+	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
+	const float InnerX = PX + 16.f;
+
+	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.95f), PX, PY, W, H);
+	float y = PY + 14.f;
+	DrawText(TEXT("JOINT DRAAIEN"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
+
+	const int32 G = Phone->GetRollGrams();
+	DrawText(FString::Printf(TEXT("Gram per joint: %d   (meer gram = betere kwaliteit)"), G),
+		FLinearColor::White, InnerX, y, Font);
+	y += 26.f;
+
+	// Grams-keuze als knoppenrij (klikbare "slider").
+	const float BtnW = 70.f;
+	for (int32 g = 1; g <= 5; ++g)
+	{
+		const FName Box(*FString::Printf(TEXT("rollg_%d"), g));
+		const bool bSel = (g == G);
+		const FLinearColor Col = bSel ? FLinearColor(0.5f, 1.f, 0.5f) : FLinearColor(0.7f, 0.7f, 0.8f);
+		DrawRect(bSel ? FLinearColor(0.2f, 0.4f, 0.2f, 0.95f) : FLinearColor(0.12f, 0.12f, 0.16f, 0.9f),
+			InnerX + (g - 1) * (BtnW + 6.f), y, BtnW, 30.f);
+		DrawText(FString::Printf(TEXT("%dg"), g), Col, InnerX + (g - 1) * (BtnW + 6.f) + 22.f, y + 5.f, Font);
+		AddHitBox(FVector2D(InnerX + (g - 1) * (BtnW + 6.f), y), FVector2D(BtnW, 30.f), Box, true, 1);
+	}
+	y += 42.f;
+
+	// Kwaliteit-balk.
+	const float Quality = FMath::Clamp(G / 5.f, 0.f, 1.f);
+	DrawText(FString::Printf(TEXT("Kwaliteit: %.0f%%"), Quality * 100.f),
+		Quality >= 0.6f ? FLinearColor::Green : (Quality >= 0.3f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
+		InnerX, y, Font);
+	y += 24.f;
+	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 14.f);
+	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), InnerX, y, (W - 32.f) * Quality, 14.f);
+	y += 28.f;
+
+	DrawButton(FName(TEXT("rollconfirm")), FString::Printf(TEXT("Draai joint (kost %dg wiet)"), G),
+		InnerX, y, 250.f, FLinearColor::White);
+	DrawButton(FName(TEXT("rollclose")), TEXT("Sluiten (R)"), InnerX + 260.f, y, 150.f, FLinearColor::Yellow);
 }
 
 void AWeedShopHUD::NotifyHitBoxBeginCursorOver(FName BoxName)

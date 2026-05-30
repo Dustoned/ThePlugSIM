@@ -91,7 +91,7 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 
 	// Straat-werving: F geeft de aangekeken NPC een gratis sample; R draait een joint.
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
-	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &AThePlugSIMCharacter::RollJoint);
+	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &AThePlugSIMCharacter::ToggleRollUI);
 
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
@@ -180,8 +180,27 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		return;
 	}
 
-	// Een sample is een gedraaide joint. Heb je er geen -> eerst draaien (R).
-	if (!Inventory || !Inventory->RemoveItem(FName(TEXT("Joint")), 1))
+	// Een sample is een gedraaide joint. Pak de beste joint (hoogste gram) die je hebt.
+	if (!Inventory)
+	{
+		return;
+	}
+	FName BestJoint = NAME_None;
+	int32 BestGrams = 0;
+	for (const FInventoryStack& Stack : Inventory->GetStacks())
+	{
+		const FString Id = Stack.ItemId.ToString();
+		if (Id.StartsWith(TEXT("Joint_")) && Id.EndsWith(TEXT("g")))
+		{
+			const int32 G = FCString::Atoi(*Id.Mid(6)); // "Joint_3g" -> 3
+			if (G > BestGrams)
+			{
+				BestGrams = G;
+				BestJoint = Stack.ItemId;
+			}
+		}
+	}
+	if (BestJoint.IsNone() || !Inventory->RemoveItem(BestJoint, 1))
 	{
 		if (GEngine)
 		{
@@ -190,20 +209,36 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		return;
 	}
 
-	// Werkt de relatie van deze persoon op (verslaving/loyaliteit/respect omhoog).
+	// Kwaliteit 0..1 op basis van gram. Effect schaalt met kwaliteit.
+	const float Quality = FMath::Clamp(BestGrams / 5.f, 0.f, 1.f);
+	float LoyGain = 4.f + Quality * 12.f;   // 1g ~5.6, 5g ~16
+	float AddGain = 3.f + Quality * 9.f;
+	float RespGain = 1.f + Quality * 4.f;
+
+	// Kieskeurigheid: weinig-verslaafde mensen (locals/kenners) lusten geen slappe joint.
+	const bool bPicky = Customer->Addiction < 20.f;
+	if (bPicky && Quality < 0.5f)
+	{
+		LoyGain = -3.f; RespGain = -2.f; AddGain = 1.f;
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
+				FString::Printf(TEXT("%s vond de joint te slap."), *Customer->NpcId.ToString()));
+		}
+	}
+
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone())
 	{
 		float R = 0.f, L = 0.f, A = 0.f; FText N;
 		if (GS->GetNpcRegistry()->GetStats(Customer->NpcId, R, L, A, N))
 		{
-			GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R + 3.f, L + 10.f, A + 8.f);
+			GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R + RespGain, L + LoyGain, A + AddGain);
 		}
 	}
-	// Live klant ook bijwerken.
-	Customer->Respect = FMath::Clamp(Customer->Respect + 3.f, 0.f, 100.f);
-	Customer->Loyalty = FMath::Clamp(Customer->Loyalty + 10.f, 0.f, 100.f);
-	Customer->Addiction = FMath::Clamp(Customer->Addiction + 8.f, 0.f, 100.f);
+	Customer->Respect = FMath::Clamp(Customer->Respect + RespGain, 0.f, 100.f);
+	Customer->Loyalty = FMath::Clamp(Customer->Loyalty + LoyGain, 0.f, 100.f);
+	Customer->Addiction = FMath::Clamp(Customer->Addiction + AddGain, 0.f, 100.f);
 
 	// Straat-dealen is riskant -> heat omhoog.
 	if (GS && GS->GetHeat())
@@ -211,47 +246,17 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		GS->GetHeat()->AddHeat(5.f);
 	}
 
-	if (GEngine)
+	if (GEngine && !(bPicky && Quality < 0.5f))
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, TEXT("Gratis sample gegeven (relatie +)."));
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			FString::Printf(TEXT("Sample gegeven (%dg joint, relatie +)."), BestGrams));
 	}
 }
 
-void AThePlugSIMCharacter::RollJoint()
+void AThePlugSIMCharacter::ToggleRollUI()
 {
-	ServerRollJoint();
-}
-
-void AThePlugSIMCharacter::ServerRollJoint_Implementation()
-{
-	if (!Inventory)
+	if (Phone)
 	{
-		return;
-	}
-
-	// Zoek een gram bud om te verwerken tot een joint.
-	FName BudItem = NAME_None;
-	for (const FInventoryStack& Stack : Inventory->GetStacks())
-	{
-		if (Stack.ItemId.ToString().StartsWith(TEXT("Bud_")))
-		{
-			BudItem = Stack.ItemId;
-			break;
-		}
-	}
-
-	if (BudItem.IsNone() || !Inventory->RemoveItem(BudItem, 1))
-	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen wiet om een joint van te draaien."));
-		}
-		return;
-	}
-
-	Inventory->AddItem(FName(TEXT("Joint")), 1);
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green, TEXT("Joint gedraaid."));
+		Phone->ToggleRollUI();
 	}
 }

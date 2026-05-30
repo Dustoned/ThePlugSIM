@@ -44,6 +44,26 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	int32 GetTab() const { return Tab; }
 
+	// --- Joint-rollen (roll-UI met grams-keuze) ---
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Roll")
+	void ToggleRollUI();
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Roll")
+	void SetRollGrams(int32 Grams);
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Roll")
+	void ConfirmRoll();
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
+	bool IsRollOpen() const { return bRollOpen; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
+	int32 GetRollGrams() const { return RollGrams; }
+
+	// Min/max gram per joint.
+	static constexpr int32 MinGrams = 1;
+	static constexpr int32 MaxGrams = 5;
+
 protected:
 	UFUNCTION(Server, Reliable)
 	void ServerBuyUpgrade(FName UpgradeId);
@@ -54,10 +74,20 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerRespond(bool bAccept);
 
+	// Server: maak 1 joint van Grams gram bud (item-id Joint_<G>g; meer gram = betere kwaliteit).
+	UFUNCTION(Server, Reliable)
+	void ServerRollJoint(int32 Grams);
+
 	AWeedShopGameState* GetGS() const;
 	APlayerController* GetPC() const;
 	UInventoryComponent* GetOwnerInventory() const;
 
+	// Zet muis-cursor/input-mode op basis van of er een UI open is.
+	void UpdateCursor();
+
 	bool bOpen = false;
 	int32 Tab = 0;
+
+	bool bRollOpen = false;
+	int32 RollGrams = 2;
 };

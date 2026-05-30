@@ -97,12 +97,8 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerGiveSample(AActor* Target);
 
-	/** Draai een joint uit je voorraad (toets R). */
-	void RollJoint();
-
-	/** Server-RPC: zet 1 gram bud om in 1 joint. */
-	UFUNCTION(Server, Reliable)
-	void ServerRollJoint();
+	/** Open/sluit het roll-paneel (toets R) — daar kies je het aantal gram. */
+	void ToggleRollUI();
 
 
 public:

@@ -7,6 +7,7 @@
 #include "Phone/ContactsComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
@@ -35,16 +36,15 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 	return GetOwner() ? GetOwner()->FindComponentByClass<UInventoryComponent>() : nullptr;
 }
 
-void UPhoneClientComponent::Toggle()
+void UPhoneClientComponent::UpdateCursor()
 {
-	bOpen = !bOpen;
-
+	const bool bAnyUI = bOpen || bRollOpen;
 	if (APlayerController* PC = GetPC())
 	{
-		PC->SetShowMouseCursor(bOpen);
-		PC->bEnableClickEvents = bOpen;
-		PC->bEnableMouseOverEvents = bOpen;
-		if (bOpen)
+		PC->SetShowMouseCursor(bAnyUI);
+		PC->bEnableClickEvents = bAnyUI;
+		PC->bEnableMouseOverEvents = bAnyUI;
+		if (bAnyUI)
 		{
 			PC->SetInputMode(FInputModeGameAndUI());
 		}
@@ -52,6 +52,77 @@ void UPhoneClientComponent::Toggle()
 		{
 			PC->SetInputMode(FInputModeGameOnly());
 		}
+	}
+}
+
+void UPhoneClientComponent::Toggle()
+{
+	bOpen = !bOpen;
+	if (bOpen)
+	{
+		bRollOpen = false; // niet allebei tegelijk
+	}
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ToggleRollUI()
+{
+	bRollOpen = !bRollOpen;
+	if (bRollOpen)
+	{
+		bOpen = false;
+	}
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::SetRollGrams(int32 Grams)
+{
+	RollGrams = FMath::Clamp(Grams, MinGrams, MaxGrams);
+}
+
+void UPhoneClientComponent::ConfirmRoll()
+{
+	ServerRollJoint(RollGrams);
+	bRollOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
+{
+	Grams = FMath::Clamp(Grams, MinGrams, MaxGrams);
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv)
+	{
+		return;
+	}
+
+	// Zoek een bud-stapel met genoeg gram.
+	FName BudItem = NAME_None;
+	for (const FInventoryStack& Stack : Inv->GetStacks())
+	{
+		if (Stack.ItemId.ToString().StartsWith(TEXT("Bud_")) && Stack.Quantity >= Grams)
+		{
+			BudItem = Stack.ItemId;
+			break;
+		}
+	}
+	if (BudItem.IsNone() || !Inv->RemoveItem(BudItem, Grams))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange,
+				FString::Printf(TEXT("Niet genoeg wiet (%d g nodig)."), Grams));
+		}
+		return;
+	}
+
+	// Joint-kwaliteit zit in de item-id (Joint_<G>g): meer gram = betere joint.
+	const FName JointId(*FString::Printf(TEXT("Joint_%dg"), Grams));
+	Inv->AddItem(JointId, 1);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green,
+			FString::Printf(TEXT("Joint gedraaid (%d g)."), Grams));
 	}
 }
 
