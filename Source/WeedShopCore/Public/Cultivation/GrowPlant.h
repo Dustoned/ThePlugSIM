@@ -87,6 +87,13 @@ protected:
 	UPROPERTY(Replicated)
 	float CareMultiplier = 0.6f;
 
+	// Of er een plant in de pot staat (false = lege pot, wacht op een zaadje).
+	UPROPERTY(Replicated)
+	bool bPlanted = false;
+
+	// Server: probeer een zaadje uit de inventory van de speler te planten. Geeft succes.
+	bool TryPlantFromInventory(APawn* InstigatorPawn);
+
 	// Server: water geven verhoogt de care-multiplier.
 	void Water();
 

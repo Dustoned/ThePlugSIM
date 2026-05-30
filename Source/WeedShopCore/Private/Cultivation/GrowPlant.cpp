@@ -6,6 +6,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
+#include "Progression/StoreComponent.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
@@ -25,6 +26,11 @@ void AGrowPlant::BeginPlay()
 
 	if (HasAuthority())
 	{
+		// Een vooraf-geplaatste plant met een strain telt als geplant.
+		if (!StrainId.IsNone())
+		{
+			bPlanted = true;
+		}
 		if (const FWeedStrainRow* Strain = GetStrain())
 		{
 			MaxGrowthSeconds = FMath::Max(1.f, Strain->GrowMinutes * 60.f);
@@ -42,6 +48,7 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, GrowthSeconds);
 	DOREPLIFETIME(AGrowPlant, Phase);
 	DOREPLIFETIME(AGrowPlant, CareMultiplier);
+	DOREPLIFETIME(AGrowPlant, bPlanted);
 }
 
 void AGrowPlant::Tick(float DeltaSeconds)
@@ -49,6 +56,12 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// Lege pot groeit niet.
+	if (!bPlanted)
 	{
 		return;
 	}
@@ -102,7 +115,11 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 		return;
 	}
 
-	if (Phase == EGrowthPhase::Harvestable)
+	if (!bPlanted)
+	{
+		TryPlantFromInventory(InstigatorPawn);
+	}
+	else if (Phase == EGrowthPhase::Harvestable)
 	{
 		Harvest(InstigatorPawn);
 	}
@@ -112,8 +129,64 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 	}
 }
 
+bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn)
+{
+	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv)
+	{
+		return false;
+	}
+
+	// Vind het eerste zaadje in de voorraad.
+	FName SeedItem = NAME_None;
+	FName StrainToPlant = NAME_None;
+	for (const FInventoryStack& Stack : Inv->GetStacks())
+	{
+		const FName Strain = UStoreComponent::StrainFromSeedItem(Stack.ItemId);
+		if (!Strain.IsNone())
+		{
+			SeedItem = Stack.ItemId;
+			StrainToPlant = Strain;
+			break;
+		}
+	}
+
+	if (SeedItem.IsNone() || !Inv->RemoveItem(SeedItem, 1))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Geen zaadjes in voorraad (koop bij supplier)."));
+		}
+		return false;
+	}
+
+	// Planten: reset en start de groei voor de gekozen strain.
+	StrainId = StrainToPlant;
+	bPlanted = true;
+	GrowthSeconds = 0.f;
+	CareMultiplier = 0.6f;
+	if (const FWeedStrainRow* Strain = GetStrain())
+	{
+		MaxGrowthSeconds = FMath::Max(1.f, Strain->GrowMinutes * 60.f);
+	}
+	Phase = EGrowthPhase::Seedling;
+	RefreshMesh();
+
+	UE_LOG(LogWeedShop, Log, TEXT("Geplant: %s"), *StrainId.ToString());
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			FString::Printf(TEXT("Geplant: %s"), *StrainId.ToString()));
+	}
+	return true;
+}
+
 FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
+	if (!bPlanted)
+	{
+		return NSLOCTEXT("WeedShop", "PlantSeed", "Plant een zaadje");
+	}
 	if (Phase == EGrowthPhase::Harvestable)
 	{
 		return FText::FromString(FString::Printf(TEXT("Oogsten  (%s)"), *StrainId.ToString()));
@@ -164,8 +237,12 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 		UE_LOG(LogWeedShop, Warning, TEXT("Oogst mislukt: geen InventoryComponent op de speler of HarvestProductId leeg."));
 	}
 
-	// Plant is geoogst -> verwijderen (server; repliceert naar clients). Speler plant een nieuw zaadje.
-	Destroy();
+	// Plant is geoogst -> pot wordt weer leeg en herbruikbaar (plant een nieuw zaadje).
+	bPlanted = false;
+	StrainId = NAME_None;
+	GrowthSeconds = 0.f;
+	Phase = EGrowthPhase::Seedling;
+	RefreshMesh();
 }
 
 void AGrowPlant::OnRep_Visual()

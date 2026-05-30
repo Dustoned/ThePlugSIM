@@ -13,6 +13,7 @@
 #include "UI/WeedShopHUD.h"
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
+#include "Progression/StoreComponent.h"
 #include "ThePlugSIM.h"
 
 AThePlugSIMCharacter::AThePlugSIMCharacter()
@@ -77,6 +78,7 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
 	PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
 	PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, this, &AThePlugSIMCharacter::BuyPhoneKey);
+	PlayerInputComponent->BindKey(EKeys::Q,     IE_Pressed, this, &AThePlugSIMCharacter::CyclePhoneTab);
 
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
@@ -150,6 +152,7 @@ void AThePlugSIMCharacter::TogglePhone()
 	if (AWeedShopHUD* HUD = Cast<AWeedShopHUD>(PC->GetHUD()))
 	{
 		HUD->SetPhoneOpen(bPhoneOpen);
+		HUD->SetPhoneTab(PhoneTab);
 	}
 
 	PC->SetShowMouseCursor(bPhoneOpen);
@@ -178,6 +181,22 @@ void AThePlugSIMCharacter::BuyPhoneKey(FKey Key)
 	}
 }
 
+void AThePlugSIMCharacter::CyclePhoneTab()
+{
+	if (!bPhoneOpen)
+	{
+		return;
+	}
+	PhoneTab = (PhoneTab + 1) % 2;
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (AWeedShopHUD* HUD = Cast<AWeedShopHUD>(PC->GetHUD()))
+		{
+			HUD->SetPhoneTab(PhoneTab);
+		}
+	}
+}
+
 void AThePlugSIMCharacter::BuyPhoneIndex(int32 Index)
 {
 	if (!bPhoneOpen)
@@ -185,14 +204,33 @@ void AThePlugSIMCharacter::BuyPhoneIndex(int32 Index)
 		return;
 	}
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	if (!GS || !GS->GetUpgrades())
+	if (!GS)
 	{
 		return;
 	}
-	const TArray<FName> Ids = GS->GetUpgrades()->GetAllUpgradeIds();
-	if (Ids.IsValidIndex(Index))
+
+	if (PhoneTab == 1)
 	{
-		ServerBuyUpgrade(Ids[Index]);
+		// Suppliers: koop een zaadje.
+		if (GS->GetStore())
+		{
+			const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
+			if (Seeds.IsValidIndex(Index))
+			{
+				ServerBuySeed(Seeds[Index]);
+			}
+		}
+		return;
+	}
+
+	// Upgrades.
+	if (GS->GetUpgrades())
+	{
+		const TArray<FName> Ids = GS->GetUpgrades()->GetAllUpgradeIds();
+		if (Ids.IsValidIndex(Index))
+		{
+			ServerBuyUpgrade(Ids[Index]);
+		}
 	}
 }
 
@@ -203,6 +241,17 @@ void AThePlugSIMCharacter::ServerBuyUpgrade_Implementation(FName UpgradeId)
 		if (GS->GetUpgrades())
 		{
 			GS->GetUpgrades()->BuyUpgrade(UpgradeId);
+		}
+	}
+}
+
+void AThePlugSIMCharacter::ServerBuySeed_Implementation(FName StrainId)
+{
+	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (GS->GetStore())
+		{
+			GS->GetStore()->BuySeed(StrainId, Inventory);
 		}
 	}
 }

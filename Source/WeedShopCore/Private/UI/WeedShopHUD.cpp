@@ -8,6 +8,7 @@
 #include "World/DayCycleComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
+#include "Progression/StoreComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
@@ -125,10 +126,37 @@ void AWeedShopHUD::DrawPhone()
 			FLinearColor::White, PX + 14.f, y, Font);
 		y += 26.f;
 	}
-	DrawText(TEXT("Kopen (toets 1-6):"), FLinearColor(0.8f, 0.8f, 1.f), PX + 14.f, y, Font); y += 26.f;
 
-	if (Upg)
+	// Tab-balk.
+	const bool bSuppliers = (PhoneTab == 1);
+	DrawText(bSuppliers ? TEXT("Upgrades   [SUPPLIERS]") : TEXT("[UPGRADES]   Suppliers"),
+		FLinearColor(0.6f, 0.8f, 1.f), PX + 14.f, y, Font);
+	y += 24.f;
+	DrawText(TEXT("Kopen: toets 1-6   |   Q: wissel tab"), FLinearColor(0.7f, 0.7f, 0.7f), PX + 14.f, y, Font);
+	y += 24.f;
+
+	if (bSuppliers)
 	{
+		// Suppliers: zaden kopen uit DT_Strains.
+		if (UStoreComponent* Store = GS ? GS->GetStore() : nullptr)
+		{
+			int32 n = 1;
+			for (const FName& Id : Store->GetSeedCatalog())
+			{
+				FText Name; int32 Price = 0;
+				if (Store->GetSeedDisplay(Id, Name, Price))
+				{
+					DrawText(FString::Printf(TEXT("%d) Zaad: %s - EUR %.2f"), n, *Name.ToString(), Price / 100.f),
+						FLinearColor::White, PX + 14.f, y, Font);
+					y += 23.f;
+				}
+				if (++n > 6) break;
+			}
+		}
+	}
+	else if (Upg)
+	{
+		// Upgrades.
 		int32 n = 1;
 		for (const FName& Id : Upg->GetAllUpgradeIds())
 		{

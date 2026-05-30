@@ -95,12 +95,22 @@ protected:
 	/** Koopt het N-de catalogus-item van de telefoon. */
 	void BuyPhoneIndex(int32 Index);
 
+	/** Wisselt de telefoon-tab (Upgrades <-> Suppliers). */
+	void CyclePhoneTab();
+
 	/** Server-RPC: koopt een upgrade via de gedeelde GameState. */
 	UFUNCTION(Server, Reliable)
 	void ServerBuyUpgrade(FName UpgradeId);
 
+	/** Server-RPC: koopt een zaadje bij de supplier. */
+	UFUNCTION(Server, Reliable)
+	void ServerBuySeed(FName StrainId);
+
 	/** Of de telefoon nu open is (lokaal). */
 	bool bPhoneOpen = false;
+
+	/** Actieve telefoon-tab: 0 = Upgrades, 1 = Suppliers. */
+	int32 PhoneTab = 0;
 
 
 public:
