@@ -105,6 +105,17 @@ void UInteractionComponent::TryInteract()
 		return;
 	}
 
+	// Cooldown: voorkomt spam als de interact-toets ingedrukt blijft (Enhanced Input "Triggered").
+	if (const UWorld* World = GetWorld())
+	{
+		const double Now = World->GetTimeSeconds();
+		if (Now - LastInteractTime < InteractCooldown)
+		{
+			return;
+		}
+		LastInteractTime = Now;
+	}
+
 	// Host / single-player heeft authority -> meteen uitvoeren. Client -> via de server.
 	if (GetOwnerRole() == ROLE_Authority)
 	{

@@ -43,6 +43,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Interaction")
 	TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
 
+	// Minimale tijd (sec) tussen twee interacties — voorkomt spam als E ingedrukt blijft.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Interaction")
+	float InteractCooldown = 0.5f;
+
 	// UI bindt hierop om de interact-prompt te tonen/verbergen (lokale client).
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Interaction")
 	FOnFocusedInteractableChanged OnFocusedInteractableChanged;
@@ -57,6 +61,9 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+	// Tijdstip (wereld-seconden) van de laatste interactie — voor de cooldown.
+	double LastInteractTime = -1000.0;
 
 	// Het laatst gefocuste interact-bare object (lokaal bepaald).
 	UPROPERTY(Transient)
