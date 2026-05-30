@@ -15,6 +15,7 @@
 
 class UStaticMeshComponent;
 class UInventoryComponent;
+class UMaterialInstanceDynamic;
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
 class WEEDSHOPCORE_API UBuildComponent : public UActorComponent
@@ -62,11 +63,21 @@ protected:
 	// Camerastandpunt van de bestuurde pawn (voor de plaats-trace).
 	bool GetViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
 
+	// True als een pot op deze vloer-positie een muur/andere pot zou raken (footprint-overlap).
+	bool IsSpotBlocked(const FVector& FloorPoint) const;
+
 	UInventoryComponent* GetOwnerInventory() const;
 
 	// Doorzichtige preview-mesh (lokaal; alleen voor de bestuurde speler).
 	UPROPERTY(Transient)
 	TObjectPtr<UStaticMeshComponent> Ghost;
+
+	// Dynamisch materiaal van de ghost; kleur = blauw (ok) / rood (kan niet plaatsen).
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> GhostMID;
+
+	// Of de huidige aim ergens op raakt (anders ghost verbergen).
+	bool bAimHit = false;
 
 	bool bPlacing = false;
 	bool bValidSpot = false;

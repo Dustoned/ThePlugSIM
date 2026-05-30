@@ -6,6 +6,8 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
@@ -86,6 +88,15 @@ void UBuildComponent::StartPlacing(FName ItemId)
 			{
 				Ghost->SetStaticMesh(Cyl);
 			}
+			// Doorzichtig kleur-materiaal (blauw/rood) als dynamische instance.
+			if (UMaterialInterface* GhostMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost")))
+			{
+				GhostMID = UMaterialInstanceDynamic::Create(GhostMat, this);
+				if (GhostMID)
+				{
+					Ghost->SetMaterial(0, GhostMID);
+				}
+			}
 		}
 	}
 	if (Ghost)
@@ -158,23 +169,56 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	Params.AddIgnoredActor(GetOwner());
 
 	FHitResult Hit;
-	bValidSpot = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+	bAimHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
 
-	if (bValidSpot)
+	bValidSpot = false;
+	if (bAimHit)
 	{
 		PreviewLocation = Hit.ImpactPoint;
 		// Recht overeind, alleen de yaw van de speler meenemen.
 		PreviewRotation = FRotator(0.f, ViewRot.Yaw, 0.f);
+
+		// Geldig = (vrijwel) vlakke vloer + geen overlap met muur/andere pot.
+		const bool bFloor = Hit.ImpactNormal.Z > 0.7f;
+		bValidSpot = bFloor && !IsSpotBlocked(PreviewLocation);
 	}
 
 	if (Ghost)
 	{
-		Ghost->SetVisibility(bValidSpot);
-		if (bValidSpot)
+		Ghost->SetVisibility(bAimHit);
+		if (bAimHit)
 		{
 			Ghost->SetWorldLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, 20.f), PreviewRotation);
 		}
+		if (GhostMID)
+		{
+			// Blauw = plaatsbaar, rood = niet (muur/andere pot/geen vloer).
+			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
+				bValidSpot ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
+		}
 	}
+}
+
+bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint) const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return true;
+	}
+	// Box ter grootte van de pot, opgetild zodat de vloer zelf niet meetelt; muren en andere
+	// potten binnen de footprint blokkeren wel.
+	const FVector Center = FloorPoint + FVector(0.f, 0.f, 22.f);
+	const FCollisionShape Box = FCollisionShape::MakeBox(FVector(24.f, 24.f, 18.f));
+
+	FCollisionObjectQueryParams ObjParams;
+	ObjParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+	FCollisionQueryParams QP(SCENE_QUERY_STAT(WeedShopPlaceOverlap), false);
+	QP.AddIgnoredActor(GetOwner());
+
+	return World->OverlapAnyTestByObjectType(Center, FQuat::Identity, ObjParams, Box, QP);
 }
 
 void UBuildComponent::ConfirmPlacement()
@@ -189,14 +233,24 @@ void UBuildComponent::ConfirmPlacement()
 
 void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location, FRotator Rotation)
 {
-	UInventoryComponent* Inv = GetOwnerInventory();
-	if (!Inv || !Inv->RemoveItem(ItemId, 1))
+	UWorld* World = GetWorld();
+	if (!World)
 	{
 		return;
 	}
 
-	UWorld* World = GetWorld();
-	if (!World)
+	// Server-side her-validatie (anti-cheat / lag): niet plaatsen in een muur of op een pot.
+	if (IsSpotBlocked(Location))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Can't place there (blocked)."));
+		}
+		return;
+	}
+
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv || !Inv->RemoveItem(ItemId, 1))
 	{
 		return;
 	}
