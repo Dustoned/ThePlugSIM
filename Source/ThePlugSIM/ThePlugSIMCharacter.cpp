@@ -122,9 +122,9 @@ void AThePlugSIMCharacter::LookInput(const FInputActionValue& Value)
 
 void AThePlugSIMCharacter::DoAim(float Yaw, float Pitch)
 {
-	// Geen camera-kijken terwijl een telefoon/roll-UI open is (anders draait de camera
-	// terwijl je de muis/slider gebruikt).
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen()))
+	// Geen camera-kijken terwijl er een UI open is (telefoon/roll/deal), anders draait de
+	// camera mee terwijl je de muis/slider gebruikt.
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()))
 	{
 		return;
 	}
