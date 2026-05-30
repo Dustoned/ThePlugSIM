@@ -17,6 +17,7 @@ class UDayCycleComponent;
 class UMilestoneComponent;
 class UUpgradeComponent;
 class UStoreComponent;
+class UContactsComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
@@ -46,6 +47,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UStoreComponent* GetStore() const { return Store; }
 
+	// Telefoon-contacten + berichten.
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	UContactsComponent* GetContacts() const { return Contacts; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
@@ -61,4 +66,7 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UStoreComponent> Store;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<UContactsComponent> Contacts;
 };

@@ -7,9 +7,24 @@
 #include "Economy/EconomyComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "Phone/ContactsComponent.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
+
+namespace
+{
+	// Kleine namenpool zodat elke klant een herkenbare naam krijgt voor de contacten-app.
+	FText MakeContactName(uint32 Seed)
+	{
+		static const TCHAR* Names[] = {
+			TEXT("Tom"), TEXT("Kevin"), TEXT("Sjors"), TEXT("Naomi"), TEXT("Driss"),
+			TEXT("Bram"), TEXT("Lisa"), TEXT("Youssef"), TEXT("Mees"), TEXT("Fatima")
+		};
+		const int32 Count = UE_ARRAY_COUNT(Names);
+		return FText::FromString(Names[Seed % Count]);
+	}
+}
 
 ACustomerBase::ACustomerBase()
 {
@@ -175,6 +190,13 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
 	UInventoryComponent* Stock = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+
+	// Eerste contact -> in de telefoon-contacten.
+	if (GS && GS->GetContacts())
+	{
+		const float Rel = (Respect + Loyalty + Addiction) / 3.f;
+		GS->GetContacts()->RegisterContact(GetFName(), MakeContactName(GetUniqueID()), Rel);
+	}
 
 	const EDealResult Result = SubmitOffer(GetMarketPriceCents(), Econ, Stock);
 	UE_LOG(LogWeedShop, Log, TEXT("Klant-interactie resultaat: %d"), static_cast<int32>(Result));

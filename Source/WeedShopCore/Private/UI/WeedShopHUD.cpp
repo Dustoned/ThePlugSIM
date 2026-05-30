@@ -9,6 +9,7 @@
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Phone/ContactsComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
@@ -110,8 +111,8 @@ void AWeedShopHUD::DrawPhone()
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr;
 
-	const float W = 380.f;
-	const float H = 320.f;
+	const float W = 410.f;
+	const float H = 380.f;
 	const float PX = (Canvas ? Canvas->ClipX : 1280.f) - W - 30.f;
 	const float PY = 80.f;
 
@@ -127,15 +128,21 @@ void AWeedShopHUD::DrawPhone()
 		y += 26.f;
 	}
 
-	// Tab-balk.
-	const bool bSuppliers = (PhoneTab == 1);
-	DrawText(bSuppliers ? TEXT("Upgrades   [SUPPLIERS]") : TEXT("[UPGRADES]   Suppliers"),
-		FLinearColor(0.6f, 0.8f, 1.f), PX + 14.f, y, Font);
+	// Tab-balk (4 tabs).
+	static const TCHAR* TabNames[4] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacten"), TEXT("Berichten") };
+	FString TabBar;
+	for (int32 i = 0; i < 4; ++i)
+	{
+		TabBar += (i == PhoneTab) ? FString::Printf(TEXT("[%s] "), TabNames[i]) : FString::Printf(TEXT("%s "), TabNames[i]);
+	}
+	DrawText(TabBar, FLinearColor(0.6f, 0.8f, 1.f), PX + 14.f, y, Font);
 	y += 24.f;
-	DrawText(TEXT("Kopen: toets 1-6   |   Q: wissel tab"), FLinearColor(0.7f, 0.7f, 0.7f), PX + 14.f, y, Font);
+	DrawText(TEXT("Q: wissel tab   |   1-6: kopen"), FLinearColor(0.7f, 0.7f, 0.7f), PX + 14.f, y, Font);
 	y += 24.f;
 
-	if (bSuppliers)
+	const float MaxY = PY + H - 40.f;
+
+	if (PhoneTab == 1)
 	{
 		// Suppliers: zaden kopen uit DT_Strains.
 		if (UStoreComponent* Store = GS ? GS->GetStore() : nullptr)
@@ -151,6 +158,44 @@ void AWeedShopHUD::DrawPhone()
 					y += 23.f;
 				}
 				if (++n > 6) break;
+			}
+		}
+	}
+	else if (PhoneTab == 2)
+	{
+		// Contacten.
+		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
+		{
+			if (Con->GetContacts().Num() == 0)
+			{
+				DrawText(TEXT("(nog geen contacten - deal met klanten)"), FLinearColor::Gray, PX + 14.f, y, Font);
+				y += 22.f;
+			}
+			for (const FPhoneContact& C : Con->GetContacts())
+			{
+				DrawText(FString::Printf(TEXT("%s   (relatie %.0f%%)"), *C.DisplayName.ToString(), C.Relationship),
+					FLinearColor::White, PX + 14.f, y, Font);
+				y += 22.f;
+				if (y > MaxY) break;
+			}
+		}
+	}
+	else if (PhoneTab == 3)
+	{
+		// Berichten.
+		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
+		{
+			if (Con->GetMessages().Num() == 0)
+			{
+				DrawText(TEXT("(geen berichten)"), FLinearColor::Gray, PX + 14.f, y, Font);
+				y += 22.f;
+			}
+			for (const FPhoneMessage& M : Con->GetMessages())
+			{
+				DrawText(FString::Printf(TEXT("%s: %s"), *M.SenderName.ToString(), *M.Body.ToString()),
+					FLinearColor(0.9f, 0.95f, 1.f), PX + 14.f, y, Font);
+				y += 22.f;
+				if (y > MaxY) break;
 			}
 		}
 	}

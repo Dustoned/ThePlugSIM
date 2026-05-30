@@ -187,7 +187,7 @@ void AThePlugSIMCharacter::CyclePhoneTab()
 	{
 		return;
 	}
-	PhoneTab = (PhoneTab + 1) % 2;
+	PhoneTab = (PhoneTab + 1) % 4;
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		if (AWeedShopHUD* HUD = Cast<AWeedShopHUD>(PC->GetHUD()))

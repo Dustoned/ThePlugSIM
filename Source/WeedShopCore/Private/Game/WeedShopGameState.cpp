@@ -5,6 +5,7 @@
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Phone/ContactsComponent.h"
 
 AWeedShopGameState::AWeedShopGameState()
 {
@@ -14,4 +15,5 @@ AWeedShopGameState::AWeedShopGameState()
 	Milestones = CreateDefaultSubobject<UMilestoneComponent>(TEXT("Milestones"));
 	Upgrades = CreateDefaultSubobject<UUpgradeComponent>(TEXT("Upgrades"));
 	Store = CreateDefaultSubobject<UStoreComponent>(TEXT("Store"));
+	Contacts = CreateDefaultSubobject<UContactsComponent>(TEXT("Contacts"));
 }
