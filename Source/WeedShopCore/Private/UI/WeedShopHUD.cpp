@@ -382,6 +382,17 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		Phone->SetRollGrams(FCString::Atoi(*S.RightChop(6)));
 	}
+	else if (S == TEXT("rollslider"))
+	{
+		// Bepaal de dichtstbijzijnde gram uit waar je op de track klikte.
+		float MX = 0.f, MY = 0.f;
+		const int32 MaxG = Phone->GetMaxJointGrams();
+		if (PlayerOwner && RollTrackW > 0.f && MaxG > 1 && PlayerOwner->GetMousePosition(MX, MY))
+		{
+			const float F = FMath::Clamp((MX - RollTrackX) / RollTrackW, 0.f, 1.f);
+			Phone->SetRollGrams(1 + FMath::RoundToInt(F * (MaxG - 1)));
+		}
+	}
 	else if (S == TEXT("rollconfirm"))
 	{
 		Phone->ConfirmRoll();
@@ -426,29 +437,33 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	const float TrackH = 14.f;
 	const float Frac = (MaxG > 1) ? float(G - 1) / float(MaxG - 1) : 0.f;
 
+	// Onthoud de track zodat NotifyHitBoxClick de dichtstbijzijnde gram kan berekenen.
+	RollTrackX = TrackX;
+	RollTrackW = TrackW;
+
 	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), TrackX, TrackY, TrackW, TrackH);
 	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), TrackX, TrackY, Frac * TrackW, TrackH);
 	const float HandleX = TrackX + Frac * TrackW;
 	DrawRect(FLinearColor::White, HandleX - 6.f, TrackY - 6.f, 12.f, TrackH + 12.f);
 
-	// Klikbare segmenten per gram (1..MaxG) — betrouwbaar klikken op de slider.
+	// Eén grote track-hitbox: klik ergens -> dichtstbijzijnde gram (berekend in NotifyHitBoxClick).
+	AddHitBox(FVector2D(TrackX, TrackY - 12.f), FVector2D(TrackW, TrackH + 24.f), FName(TEXT("rollslider")), true, 3);
+
+	// gram-labels onder de track.
 	const float SegW = TrackW / float(MaxG);
 	for (int32 g = 1; g <= MaxG; ++g)
 	{
-		const float sx = TrackX + (g - 1) * SegW;
-		AddHitBox(FVector2D(sx, TrackY - 10.f), FVector2D(SegW, TrackH + 20.f),
-			FName(*FString::Printf(TEXT("rollg_%d"), g)), true, 3);
-		// kleine gram-labels onder de track
-		DrawText(FString::Printf(TEXT("%d"), g), FLinearColor(0.6f, 0.6f, 0.7f), sx + SegW * 0.5f - 4.f, TrackY + TrackH + 2.f, Font);
+		DrawText(FString::Printf(TEXT("%d"), g), FLinearColor(0.6f, 0.6f, 0.7f),
+			TrackX + (g - 1) * SegW + SegW * 0.5f - 4.f, TrackY + TrackH + 2.f, Font);
 	}
 
-	// Slepen werkt ook: muis ingedrukt boven de track.
+	// Slepen: muis ingedrukt boven de track -> dichtstbijzijnde gram.
 	if (PlayerOwner && MaxG > 1)
 	{
 		float MX = 0.f, MY = 0.f;
 		if (PlayerOwner->GetMousePosition(MX, MY) && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton))
 		{
-			if (MX >= TrackX - 10.f && MX <= TrackX + TrackW + 10.f && MY >= TrackY - 14.f && MY <= TrackY + TrackH + 14.f)
+			if (MX >= TrackX - 10.f && MX <= TrackX + TrackW + 10.f && MY >= TrackY - 16.f && MY <= TrackY + TrackH + 16.f)
 			{
 				const float F = FMath::Clamp((MX - TrackX) / TrackW, 0.f, 1.f);
 				Phone->SetRollGrams(1 + FMath::RoundToInt(F * (MaxG - 1)));

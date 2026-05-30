@@ -39,6 +39,10 @@ protected:
 	// Naam van de hit-box waar de cursor nu boven hangt.
 	FName HoveredBox;
 
+	// Slider-track (scherm-pixels) van het roll-paneel, voor klik->dichtstbijzijnde gram.
+	float RollTrackX = 0.f;
+	float RollTrackW = 0.f;
+
 	// Tooltip die deze frame getekend moet worden (leeg = geen).
 	FString HoverTooltip;
 };
