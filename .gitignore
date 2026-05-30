@@ -1,0 +1,20 @@
+# Unreal Engine — gegenereerde / lokale mappen (niet versiebeheren)
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+
+# Visual Studio / projectbestanden (worden geregenereerd uit .uproject)
+*.sln
+*.suo
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+.vsconfig
+UpgradeLog.htm
+
+# Editor-backups
+Backup/

@@ -1,0 +1,30 @@
+// WeedShopCore — eigen gameplay-module (gescheiden van de template-boilerplate in ThePlugSIM).
+// Hier komt alle game-logica: economy, inventory, kweek, klanten, deal-systeem, milestones.
+
+using UnrealBuildTool;
+
+public class WeedShopCore : ModuleRules
+{
+	public WeedShopCore(ReadOnlyTargetRules Target) : base(Target)
+	{
+		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core",
+			"CoreUObject",
+			"Engine",
+			"InputCore",
+			"EnhancedInput",
+			"UMG",
+			"Slate",
+			"SlateCore"
+		});
+
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"AIModule",
+			"NavigationSystem"
+		});
+	}
+}
