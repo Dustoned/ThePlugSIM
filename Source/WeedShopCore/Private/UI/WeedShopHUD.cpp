@@ -860,6 +860,8 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	}
 
 	// Drag-state (gepolled met de muisknop + hover -> DPI-onafhankelijk, net als de sliders).
+	// Slepen kan starten vanuit de items-lijst (inv_) OF vanuit een hotbar-slot (hbar_),
+	// zodat je hotbar-items onderling kunt verwisselen.
 	if (!bDraggingItem)
 	{
 		if (bMouseDown && HS.StartsWith(TEXT("inv_")))
@@ -869,6 +871,16 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 			{
 				bDraggingItem = true;
 				DraggedItemId = Stacks[Idx].ItemId;
+			}
+		}
+		else if (bMouseDown && HS.StartsWith(TEXT("hbar_")))
+		{
+			const int32 Slot = FCString::Atoi(*HS.RightChop(5));
+			const FName SlotItem = Inv->GetHotbarItem(Slot);
+			if (!SlotItem.IsNone())
+			{
+				bDraggingItem = true;
+				DraggedItemId = SlotItem;
 			}
 		}
 	}
