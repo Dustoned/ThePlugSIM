@@ -21,7 +21,7 @@ public class ThePlugSIM : ModuleRules
 			"Slate"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] { "WeedShopCore" });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"ThePlugSIM",

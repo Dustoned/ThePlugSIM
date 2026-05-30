@@ -31,6 +31,10 @@ class AThePlugSIMCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
 
+	/** Voorraad: gevuld door oogst, gebruikt bij verkoop (server-authoritative, replicated). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UInventoryComponent> Inventory;
+
 protected:
 
 	/** Jump Input Action */
@@ -89,6 +93,9 @@ public:
 
 	/** Returns first person camera component **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+
+	/** Returns the inventory component **/
+	class UInventoryComponent* GetInventory() const { return Inventory; }
 
 };
 
