@@ -45,6 +45,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|DayNight")
 	float GetTimeOfDaySeconds() const { return TimeOfDaySeconds; }
 
+	// Server-only: zet de tijd direct (voor save/load-herstel).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|DayNight")
+	void SetTimeOfDaySeconds(float NewTime);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

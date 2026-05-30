@@ -44,6 +44,16 @@ float UDayCycleComponent::GetCycleFraction() const
 	return TimeOfDaySeconds / CycleLength();
 }
 
+void UDayCycleComponent::SetTimeOfDaySeconds(float NewTime)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+	TimeOfDaySeconds = FMath::Fmod(FMath::Max(0.f, NewTime), CycleLength());
+	CheckTransition();
+}
+
 void UDayCycleComponent::OnRep_Time()
 {
 	CheckTransition();

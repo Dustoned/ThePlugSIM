@@ -50,6 +50,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	int64 GetBalanceCents() const { return BalanceCents; }
 
+	// Server-only: zet het saldo direct (voor save/load-herstel).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
+	void SetBalanceCents(int64 NewCents);
+
 	// Saldo in hele euro's (voor UI-weergave).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	float GetBalanceEuros() const { return static_cast<float>(BalanceCents) / 100.0f; }

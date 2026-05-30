@@ -55,6 +55,15 @@ bool UEconomyComponent::RemoveMoney(int64 AmountCents)
 	return true;
 }
 
+void UEconomyComponent::SetBalanceCents(int64 NewCents)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+	SetBalance(FMath::Max<int64>(0, NewCents));
+}
+
 void UEconomyComponent::SetBalance(int64 NewCents)
 {
 	BalanceCents = NewCents;
