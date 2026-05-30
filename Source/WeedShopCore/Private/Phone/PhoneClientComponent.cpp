@@ -41,7 +41,7 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -78,6 +78,7 @@ void UPhoneClientComponent::Toggle()
 	{
 		bRollOpen = false; // niet allebei tegelijk
 		bDealOpen = false;
+		bInventoryOpen = false;
 	}
 	UpdateCursor();
 }
@@ -89,7 +90,20 @@ void UPhoneClientComponent::ToggleRollUI()
 	{
 		bOpen = false;
 		bDealOpen = false;
+		bInventoryOpen = false;
 		RollGrams = FMath::Clamp(RollGrams, MinGrams, GetMaxJointGrams());
+	}
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ToggleInventory()
+{
+	bInventoryOpen = !bInventoryOpen;
+	if (bInventoryOpen)
+	{
+		bOpen = false;
+		bRollOpen = false;
+		bDealOpen = false;
 	}
 	UpdateCursor();
 }
@@ -207,6 +221,7 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	bDealOpen = true;
 	bOpen = false;
 	bRollOpen = false;
+	bInventoryOpen = false;
 	// Start op de marktprijs als vraagprijs (eerlijk bod).
 	DealAskCents = Customer->GetMarketPriceCents();
 	SetDealAskCents(DealAskCents);

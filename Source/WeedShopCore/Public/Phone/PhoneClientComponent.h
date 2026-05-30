@@ -42,6 +42,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	bool IsOpen() const { return bOpen; }
 
+	// --- Inventory-scherm (drag-n-drop naar hotbar) ---
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void ToggleInventory();
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	bool IsInventoryOpen() const { return bInventoryOpen; }
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	int32 GetTab() const { return Tab; }
 
@@ -134,4 +141,6 @@ protected:
 	bool bDealOpen = false;
 	TWeakObjectPtr<ACustomerBase> DealCustomer;
 	int32 DealAskCents = 0;
+
+	bool bInventoryOpen = false;
 };

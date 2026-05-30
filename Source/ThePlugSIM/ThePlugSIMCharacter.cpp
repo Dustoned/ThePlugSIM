@@ -86,6 +86,7 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	{
 		PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, Ph, &UPhoneClientComponent::Toggle);
 		PlayerInputComponent->BindKey(EKeys::Q,   IE_Pressed, Ph, &UPhoneClientComponent::CycleTab);
+		PlayerInputComponent->BindKey(EKeys::I,   IE_Pressed, Ph, &UPhoneClientComponent::ToggleInventory);
 	}
 	PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
 	PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
@@ -144,7 +145,7 @@ void AThePlugSIMCharacter::DoAim(float Yaw, float Pitch)
 {
 	// Geen camera-kijken terwijl er een UI open is (telefoon/roll/deal), anders draait de
 	// camera mee terwijl je de muis/slider gebruikt.
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()))
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()))
 	{
 		return;
 	}
@@ -343,7 +344,7 @@ void AThePlugSIMCharacter::HotbarNext()
 void AThePlugSIMCharacter::OnPrimaryClick()
 {
 	// Klik gaat naar de UI als die open is (HUD hit-boxes regelen dat zelf).
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()))
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()))
 	{
 		return;
 	}
@@ -363,7 +364,7 @@ void AThePlugSIMCharacter::UseActiveItem()
 		return;
 	}
 	// UI open? Niet gebruiken (klik is voor de UI).
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()))
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()))
 	{
 		return;
 	}

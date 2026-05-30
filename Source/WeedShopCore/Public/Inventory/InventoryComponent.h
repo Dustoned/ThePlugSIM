@@ -74,9 +74,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetActiveSlot() const { return ActiveSlot; }
 
-	// Item-id van het geselecteerde slot (NAME_None als dat slot leeg is).
+	// Item-id van het geselecteerde slot (NAME_None als dat slot leeg is / niet meer op voorraad).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	FName GetActiveItemId() const;
+
+	// Het item dat aan hotbar-slot Slot is toegewezen (NAME_None = leeg).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	FName GetHotbarItem(int32 Slot) const;
+
+	// Wijs een item toe aan een hotbar-slot (drag-n-drop). Stond het item al in een ander slot,
+	// dan wisselen die twee slots (verplaatsen i.p.v. dupliceren).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void AssignHotbar(int32 Slot, FName ItemId);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -90,6 +99,14 @@ protected:
 	// Vindt de index van een stapel met dit item-id, of INDEX_NONE.
 	int32 FindStackIndex(FName ItemId) const;
 
+	// Houdt de hotbar-toewijzing netjes: verwijder items die op zijn, vul lege slots met
+	// nieuwe voorraad. Behoudt handmatige (drag-n-drop) toewijzingen. Lokaal.
+	void RefreshHotbarAuto();
+
 	// Geselecteerd hotbar-slot (lokaal, niet gerepliceerd — puur UI/“in de hand”).
 	int32 ActiveSlot = 0;
+
+	// Welk item in elk hotbar-slot zit (lokale UI-staat, niet gerepliceerd). Grootte = HotbarSize.
+	UPROPERTY(Transient)
+	TArray<FName> HotbarSlots;
 };

@@ -137,6 +137,13 @@ void AWeedShopHUD::DrawHUD()
 		{
 			DrawDealUI(Phone);
 		}
+		else if (Phone->IsInventoryOpen())
+		{
+			if (UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr)
+			{
+				DrawInventoryUI(Inv);
+			}
+		}
 		else if (PlayerOwner)
 		{
 			// Geen UI open: cursor terug naar standaard (anders blijft het handje hangen).
@@ -236,7 +243,6 @@ void AWeedShopHUD::DrawHUD()
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 			const int32 SlotCount = UInventoryComponent::HotbarSize; // vaste hotbar (8 slots)
 			const int32 Active = Inv->GetActiveSlot();
 			const float SlotW = 84.f;
@@ -260,14 +266,14 @@ void AWeedShopHUD::DrawHUD()
 				// Slotnummer (1-8).
 				DrawText(FString::Printf(TEXT("%d"), i + 1), FLinearColor(0.5f, 0.5f, 0.6f), SX + SlotW - 14.f, SY + 2.f, Font);
 
-				if (Stacks.IsValidIndex(i))
+				const FName HItem = Inv->GetHotbarItem(i);
+				if (!HItem.IsNone())
 				{
-					const FInventoryStack& S = Stacks[i];
-					const bool bIsSeed = S.ItemId.ToString().StartsWith(TEXT("Seed_"));
-					DrawText(PrettyItemName(S.ItemId),
+					const bool bIsSeed = HItem.ToString().StartsWith(TEXT("Seed_"));
+					DrawText(PrettyItemName(HItem),
 						bIsSeed ? FLinearColor(0.7f, 0.85f, 0.6f) : FLinearColor(0.85f, 0.9f, 1.f),
 						SX + 5.f, SY + 4.f, Font);
-					DrawText(FString::Printf(TEXT("x%d"), S.Quantity), FLinearColor::White, SX + 5.f, SY + 24.f, Font);
+					DrawText(FString::Printf(TEXT("x%d"), Inv->GetQuantity(HItem)), FLinearColor::White, SX + 5.f, SY + 24.f, Font);
 				}
 				SX += SlotW + 6.f;
 			}
@@ -286,7 +292,7 @@ void AWeedShopHUD::DrawHUD()
 					bPlaceable ? TEXT("   -   left-click / B to place") : TEXT(""));
 			}
 			DrawText(HandLine, FLinearColor(1.f, 0.95f, 0.6f), (ScreenW - TotalW) * 0.5f, SY - 24.f, Font);
-			DrawText(TEXT("R = roll joint   |   F = give sample (look at NPC)"),
+			DrawText(TEXT("I = inventory   |   R = roll joint   |   F = give sample (look at NPC)"),
 				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 44.f, Font);
 		}
 	}
@@ -529,6 +535,10 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		Phone->CloseDeal();
 	}
+	else if (S == TEXT("invclose"))
+	{
+		Phone->ToggleInventory();
+	}
 }
 
 void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
@@ -762,6 +772,126 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 
 	DrawButton(FName(TEXT("dealconfirm")), TEXT("Offer deal"), InnerX, y, 200.f, FLinearColor::White);
 	DrawButton(FName(TEXT("dealclose")), TEXT("Cancel"), InnerX + 210.f, y, 160.f, FLinearColor::Yellow);
+}
+
+void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
+{
+	if (!Inv)
+	{
+		return;
+	}
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	const float W = 560.f;
+	const float H = 440.f;
+	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
+	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
+	const float InnerX = PX + 16.f;
+
+	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.97f), PX, PY, W, H);
+	float y = PY + 14.f;
+	DrawText(TEXT("INVENTORY"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font);
+	DrawButton(FName(TEXT("invclose")), TEXT("Close (I)"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
+	y += 30.f;
+	DrawText(TEXT("Items  (drag onto a hotbar slot below)"), FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
+	y += 22.f;
+
+	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
+	const FString HS = HoveredBox.ToString();
+	const bool bMouseDown = PlayerOwner && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton);
+
+	// Item-lijst, elk een sleepbare regel (inv_<index>).
+	const float RowH2 = 26.f;
+	const float ItemW = W - 32.f;
+	float iy = y;
+	for (int32 i = 0; i < Stacks.Num(); ++i)
+	{
+		const FInventoryStack& S = Stacks[i];
+		const FName Box(*FString::Printf(TEXT("inv_%d"), i));
+		const bool bHover = (HoveredBox == Box);
+		const bool bIsDragged = bDraggingItem && DraggedItemId == S.ItemId;
+		DrawRect(bIsDragged ? FLinearColor(0.35f, 0.30f, 0.10f, 0.8f)
+			: (bHover ? FLinearColor(0.20f, 0.26f, 0.38f, 0.95f) : FLinearColor(0.10f, 0.10f, 0.13f, 0.9f)),
+			InnerX, iy, ItemW, RowH2 - 2.f);
+		DrawText(FString::Printf(TEXT("%s   x%d"), *PrettyItemName(S.ItemId), S.Quantity),
+			FLinearColor::White, InnerX + 6.f, iy + 3.f, Font);
+		AddHitBox(FVector2D(InnerX, iy), FVector2D(ItemW, RowH2 - 2.f), Box, true, 3);
+		iy += RowH2;
+	}
+	if (Stacks.Num() == 0)
+	{
+		DrawText(TEXT("(empty — buy seeds/supplies via the phone, or harvest a plant)"),
+			FLinearColor::Gray, InnerX + 6.f, iy + 3.f, Font);
+	}
+
+	// Hotbar-rij onderaan (hbar_<i>) als drop-doelen.
+	const float HbY = PY + H - 92.f;
+	DrawText(TEXT("Hotbar"), FLinearColor(0.7f, 0.7f, 0.8f), InnerX, HbY - 22.f, Font);
+	const float SlotW = 60.f;
+	const float SlotH = 48.f;
+	const float Gap = 4.f;
+	const int32 N = UInventoryComponent::HotbarSize;
+	const float RowW = N * (SlotW + Gap);
+	float hx = PX + (W - RowW) * 0.5f;
+	int32 DropTarget = -1;
+	for (int32 i = 0; i < N; ++i)
+	{
+		const FName Box(*FString::Printf(TEXT("hbar_%d"), i));
+		const bool bHover = (HoveredBox == Box);
+		if (bHover)
+		{
+			DropTarget = i;
+		}
+		const bool bDropHere = bDraggingItem && bHover;
+		const bool bActive = (i == Inv->GetActiveSlot());
+		DrawRect(bDropHere ? FLinearColor(1.f, 0.85f, 0.1f, 0.7f)
+			: (bActive ? FLinearColor(0.16f, 0.16f, 0.10f, 0.95f) : FLinearColor(0.10f, 0.10f, 0.13f, 0.9f)),
+			hx, HbY, SlotW, SlotH);
+		DrawText(FString::Printf(TEXT("%d"), i + 1), FLinearColor(0.5f, 0.5f, 0.6f), hx + SlotW - 12.f, HbY + 1.f, Font);
+		const FName HItem = Inv->GetHotbarItem(i);
+		if (!HItem.IsNone())
+		{
+			FString Lbl = PrettyItemName(HItem);
+			if (Lbl.Len() > 9) { Lbl = Lbl.Left(9); }
+			DrawText(Lbl, FLinearColor(0.85f, 0.9f, 1.f), hx + 4.f, HbY + 16.f, Font);
+			DrawText(FString::Printf(TEXT("x%d"), Inv->GetQuantity(HItem)), FLinearColor(0.7f, 0.7f, 0.7f), hx + 4.f, HbY + 32.f, Font);
+		}
+		AddHitBox(FVector2D(hx, HbY), FVector2D(SlotW, SlotH), Box, true, 3);
+		hx += SlotW + Gap;
+	}
+
+	// Drag-state (gepolled met de muisknop + hover -> DPI-onafhankelijk, net als de sliders).
+	if (!bDraggingItem)
+	{
+		if (bMouseDown && HS.StartsWith(TEXT("inv_")))
+		{
+			const int32 Idx = FCString::Atoi(*HS.RightChop(4));
+			if (Stacks.IsValidIndex(Idx))
+			{
+				bDraggingItem = true;
+				DraggedItemId = Stacks[Idx].ItemId;
+			}
+		}
+	}
+	else
+	{
+		DrawText(FString::Printf(TEXT("Dragging: %s   -   release on a hotbar slot"), *PrettyItemName(DraggedItemId)),
+			FLinearColor(1.f, 0.95f, 0.4f), InnerX, PY + H - 22.f, Font);
+		if (!bMouseDown)
+		{
+			// Losgelaten -> droppen op het slot onder de cursor (indien een hotbar-slot).
+			if (DropTarget >= 0)
+			{
+				Inv->AssignHotbar(DropTarget, DraggedItemId);
+			}
+			bDraggingItem = false;
+			DraggedItemId = NAME_None;
+		}
+	}
+
+	if (PlayerOwner)
+	{
+		PlayerOwner->CurrentMouseCursor = bDraggingItem ? EMouseCursor::GrabHandClosed : EMouseCursor::Default;
+	}
 }
 
 void AWeedShopHUD::NotifyHitBoxBeginCursorOver(FName BoxName)

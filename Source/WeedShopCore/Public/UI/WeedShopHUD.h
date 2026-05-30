@@ -33,6 +33,9 @@ protected:
 	// Tekent het deal-paneel: order van de klant + prijs-slider + live acceptatie-% + Deal/Cancel.
 	void DrawDealUI(UPhoneClientComponent* Phone);
 
+	// Tekent het inventory-scherm met drag-n-drop naar de hotbar.
+	void DrawInventoryUI(class UInventoryComponent* Inv);
+
 	// Tekent één klikbare knop-regel (rect + tekst + hit-box) en geeft true terug bij hover.
 	bool DrawButton(FName BoxName, const FString& Label, float X, float Y, float W, const FLinearColor& BaseColor);
 
@@ -41,6 +44,10 @@ protected:
 
 	// Naam van de hit-box waar de cursor nu boven hangt.
 	FName HoveredBox;
+
+	// Drag-n-drop staat van het inventory-scherm (item dat je nu sleept; None = niets).
+	bool bDraggingItem = false;
+	FName DraggedItemId;
 
 	// Tooltip die deze frame getekend moet worden (leeg = geen).
 	FString HoverTooltip;
