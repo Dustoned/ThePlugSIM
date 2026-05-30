@@ -204,6 +204,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	Cust->DesiredProductId = FName(TEXT("Bud_NorthernLights"));
 	Cust->DesiredQuantity = 2;
 	Cust->BudgetCentsPerUnit = 1500;
+	Cust->bDespawnAfterServed = true; // afspraak-klant vertrekt na de deal
 
 	// Neem de relatie uit het contact over (loyale klanten accepteren makkelijker).
 	for (const FPhoneContact& Contact : Contacts)

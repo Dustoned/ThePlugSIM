@@ -68,6 +68,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
 	float PatienceSeconds = 30.f;
 
+	// Na een aankoop moet de klant z'n spul eerst oproken: cooldown (sec) voordat hij weer wil.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
+	float OrderCooldownSeconds = 60.f;
+
+	// Appartement-/straat-klanten blijven (cooldown -> opnieuw bestellen). Afspraak-klanten despawnen.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
+	bool bDespawnAfterServed = false;
+
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
 	ECustomerState State = ECustomerState::WantsToOrder;
 
@@ -101,6 +109,9 @@ protected:
 	void LeaveAngry();
 	static float ClampAttr(float V) { return FMath::Clamp(V, 0.f, 100.f); }
 
-	// Seconden sinds de klant klaar is (geholpen/vertrekt) — voor auto-despawn.
+	// Seconden sinds de klant klaar is (geholpen/vertrekt) — voor auto-despawn of cooldown.
 	float LeaveTimer = 0.f;
+
+	// Begin-geduld (om te herstellen na een cooldown).
+	float BasePatienceSeconds = 30.f;
 };

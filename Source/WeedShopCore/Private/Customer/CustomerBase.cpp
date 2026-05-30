@@ -53,6 +53,7 @@ void ACustomerBase::BeginPlay()
 	if (HasAuthority())
 	{
 		State = ECustomerState::WantsToOrder;
+		BasePatienceSeconds = PatienceSeconds;
 	}
 }
 
@@ -85,13 +86,25 @@ void ACustomerBase::Tick(float DeltaSeconds)
 			LeaveAngry();
 		}
 	}
-	// Klaar (geholpen of vertrokken) -> na een tijdje despawnen.
+	// Klaar (geholpen of vertrokken).
 	else if (State == ECustomerState::Served || State == ECustomerState::Leaving)
 	{
 		LeaveTimer += DeltaSeconds;
-		if (LeaveTimer >= 12.f)
+
+		if (bDespawnAfterServed)
 		{
-			Destroy();
+			// Afspraak-klant: vertrekt na een tijdje.
+			if (LeaveTimer >= 12.f)
+			{
+				Destroy();
+			}
+		}
+		else if (LeaveTimer >= OrderCooldownSeconds)
+		{
+			// Vaste klant heeft z'n spul opgerookt -> wil weer iets.
+			State = ECustomerState::WantsToOrder;
+			PatienceSeconds = BasePatienceSeconds;
+			LeaveTimer = 0.f;
 		}
 	}
 }
