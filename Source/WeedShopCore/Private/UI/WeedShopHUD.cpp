@@ -161,8 +161,8 @@ void AWeedShopHUD::DrawHUD()
 				const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
 				const float CY = Canvas ? Canvas->ClipY : 720.f;
 				const bool bValid = BC->IsPlacementValid();
-				DrawText(bValid ? TEXT("Left-click to place   |   switch hotbar slot to put it away")
-								: TEXT("Aim at the floor...   |   switch hotbar slot to put it away"),
+				DrawText(bValid ? TEXT("Left-click to place   |   hold Shift = snap to grid   |   switch hotbar slot to put away")
+								: TEXT("Aim at the floor...   |   hold Shift = snap to grid"),
 					bValid ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(1.f, 0.8f, 0.4f),
 					CX - 220.f, CY - 140.f, Font);
 			}

@@ -12,6 +12,8 @@
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "Net/UnrealNetwork.h"
 
 UBuildComponent::UBuildComponent()
@@ -196,7 +198,29 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			{
 				PreviewLocation = Hit.ImpactPoint;
 				PreviewRotation = FRotator(0.f, ViewRot.Yaw, 0.f); // recht overeind, yaw van de speler
-				const bool bFloor = Hit.ImpactNormal.Z > 0.7f;
+				float FloorNormalZ = Hit.ImpactNormal.Z;
+
+				// Shift ingedrukt -> snap XY op het raster (en yaw op 90°-stappen) voor nette rijen.
+				const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
+				const bool bSnap = PC && (PC->IsInputKeyDown(EKeys::LeftShift) || PC->IsInputKeyDown(EKeys::RightShift));
+				if (bSnap && GridSize > 1.f)
+				{
+					PreviewLocation.X = FMath::GridSnap<float>(PreviewLocation.X, GridSize);
+					PreviewLocation.Y = FMath::GridSnap<float>(PreviewLocation.Y, GridSize);
+					PreviewRotation.Yaw = FMath::GridSnap<float>(PreviewRotation.Yaw, 90.f);
+
+					// Vloer-hoogte op de gesnapte XY opnieuw bepalen (recht naar beneden tracen).
+					FHitResult DownHit;
+					const FVector DStart(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + 250.f);
+					const FVector DEnd(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z - 250.f);
+					if (GetWorld()->LineTraceSingleByChannel(DownHit, DStart, DEnd, ECC_Visibility, Params))
+					{
+						PreviewLocation.Z = DownHit.ImpactPoint.Z;
+						FloorNormalZ = DownHit.ImpactNormal.Z;
+					}
+				}
+
+				const bool bFloor = FloorNormalZ > 0.7f;
 				bValidSpot = bFloor && !IsSpotBlocked(PreviewLocation);
 			}
 		}
