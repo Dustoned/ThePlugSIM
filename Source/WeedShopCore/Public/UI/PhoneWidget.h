@@ -50,6 +50,14 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	// Settings-app: welke categorie (0 = Controls, 1 = Status) en de rebind-staat.
+	int32 SettingsCat = 0;
+	bool bRebinding = false;
+	FName RebindAction;
+	FString RebindMsg;
+	void BuildSettingsApp();
 
 	TWeakObjectPtr<UPhoneClientComponent> Phone;
 

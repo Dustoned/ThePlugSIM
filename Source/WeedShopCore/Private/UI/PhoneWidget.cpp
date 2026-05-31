@@ -10,8 +10,10 @@
 #include "Progression/StoreComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/ContactsComponent.h"
+#include "Input/ControlSettings.h"
 #include "GameFramework/Pawn.h"
 #include "Components/ScrollBox.h"
+#include "InputCoreTypes.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -85,6 +87,107 @@ void UPhoneWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	bContentDirty = true;
+	SetIsFocusable(true); // nodig om in Settings -> Controls een toets-aanslag op te vangen (rebind)
+}
+
+FReply UPhoneWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (bRebinding)
+	{
+		const FKey K = InKeyEvent.GetKey();
+		if (K == EKeys::Escape)
+		{
+			bRebinding = false; RebindMsg = TEXT("Cancelled."); bContentDirty = true;
+			return FReply::Handled();
+		}
+		FName Conflict;
+		if (UControlSettings::Get()->SetKey(RebindAction, K, Conflict))
+		{
+			RebindMsg = FString::Printf(TEXT("'%s' -> %s"), *UControlSettings::DisplayName(RebindAction).ToString(), *K.GetDisplayName().ToString());
+		}
+		else
+		{
+			RebindMsg = Conflict.IsNone() ? TEXT("That key can't be used.")
+				: FString::Printf(TEXT("Already used by: %s"), *UControlSettings::DisplayName(Conflict).ToString());
+		}
+		bRebinding = false; bContentDirty = true;
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
+void UPhoneWidget::BuildSettingsApp()
+{
+	if (!ContentBox) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+
+	// Categorie-knoppen: Controls | Status.
+	static const TCHAR* CatNames[2] = { TEXT("Controls"), TEXT("Status") };
+	UHorizontalBox* Cats = WidgetTree->ConstructWidget<UHorizontalBox>();
+	for (int32 i = 0; i < 2; ++i)
+	{
+		const FLinearColor Col = (i == SettingsCat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		UWeedActionButton* B = MakeActionBtn(CatNames[i], Col, [this, i]() { SettingsCat = i; bRebinding = false; RebindMsg.Reset(); bContentDirty = true; }, 12);
+		UHorizontalBoxSlot* CS = Cats->AddChildToHorizontalBox(B);
+		CS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+	}
+	ContentBox->AddChildToVerticalBox(Cats)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+
+	if (SettingsCat == 0)
+	{
+		AddInfoRow(TEXT("Click a key, then press the new key (Esc cancels). Two actions can't share a key."),
+			FLinearColor(0.62f, 0.66f, 0.76f), 10);
+
+		UControlSettings* Cfg = UControlSettings::Get();
+		for (const FName& Action : UControlSettings::AllActions())
+		{
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+			UTextBlock* NameT = MakeText(UControlSettings::DisplayName(Action).ToString(), 12, FLinearColor(0.9f, 0.92f, 1.f));
+			NameT->SetClipping(EWidgetClipping::ClipToBounds);
+			UHorizontalBoxSlot* NS = Row->AddChildToHorizontalBox(NameT);
+			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
+
+			const bool bThis = bRebinding && (RebindAction == Action);
+			const FString KeyLabel = bThis ? TEXT("Press a key...") : Cfg->GetKey(Action).GetDisplayName().ToString();
+			const FLinearColor BtnCol = bThis ? FLinearColor(0.5f, 0.4f, 0.12f) : FLinearColor(0.18f, 0.22f, 0.3f);
+			Row->AddChildToHorizontalBox(MakeActionBtn(KeyLabel, BtnCol,
+				[this, Action]() { bRebinding = true; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); bContentDirty = true; }, 12));
+
+			ContentBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
+		}
+
+		if (!RebindMsg.IsEmpty())
+		{
+			AddInfoRow(RebindMsg, FLinearColor(1.f, 0.85f, 0.45f), 11);
+		}
+
+		ContentBox->AddChildToVerticalBox(MakeActionBtn(TEXT("Reset to defaults"), FLinearColor(0.4f, 0.34f, 0.16f),
+			[this]() { UControlSettings::Get()->ResetToDefaults(); bRebinding = false; RebindMsg = TEXT("Controls reset to defaults."); bContentDirty = true; }, 12))
+			->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+	}
+	else // Status
+	{
+		if (GS && GS->GetLeveling())
+		{
+			ULevelComponent* Lv = GS->GetLeveling();
+			AddInfoRow(FString::Printf(TEXT("Level %d"), Lv->GetLevel()), FLinearColor(0.7f, 1.f, 0.7f), 15);
+			UProgressBar* XpBar = WidgetTree->ConstructWidget<UProgressBar>();
+			XpBar->SetPercent(Lv->GetLevelFraction());
+			XpBar->SetFillColorAndOpacity(FLinearColor(0.3f, 0.7f, 1.f));
+			UVerticalBoxSlot* XS = ContentBox->AddChildToVerticalBox(XpBar);
+			XS->SetPadding(FMargin(0.f, 2.f, 0.f, 4.f));
+			AddInfoRow(Lv->GetLevel() >= ULevelComponent::MaxLevel ? TEXT("MAX")
+				: *FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), Lv->GetXPToNext()), FLinearColor(0.7f, 0.75f, 0.85f), 12);
+		}
+		if (GS && GS->GetHeat())
+		{
+			AddInfoRow(TEXT("Heat"), FLinearColor(1.f, 0.7f, 0.6f), 14);
+			UProgressBar* HeatBar = WidgetTree->ConstructWidget<UProgressBar>();
+			HeatBar->SetPercent(GS->GetHeat()->GetHeat() / 100.f);
+			HeatBar->SetFillColorAndOpacity(FLinearColor(1.f, 0.45f, 0.3f));
+			ContentBox->AddChildToVerticalBox(HeatBar);
+		}
+	}
 }
 
 UTextBlock* UPhoneWidget::MakeText(const FString& Txt, int32 Size, const FLinearColor& Col, bool bCenter)
@@ -711,31 +814,7 @@ void UPhoneWidget::RefreshContent()
 	}
 	else if (App == 4) // Settings
 	{
-		if (GS && GS->GetLeveling())
-		{
-			ULevelComponent* Lv = GS->GetLeveling();
-			AddInfoRow(FString::Printf(TEXT("Level %d"), Lv->GetLevel()), FLinearColor(0.7f, 1.f, 0.7f), 15);
-			UProgressBar* XpBar = WidgetTree->ConstructWidget<UProgressBar>();
-			XpBar->SetPercent(Lv->GetLevelFraction());
-			XpBar->SetFillColorAndOpacity(FLinearColor(0.3f, 0.7f, 1.f));
-			UVerticalBoxSlot* XS = ContentBox->AddChildToVerticalBox(XpBar);
-			XS->SetPadding(FMargin(0.f, 2.f, 0.f, 4.f));
-			AddInfoRow(Lv->GetLevel() >= ULevelComponent::MaxLevel ? TEXT("MAX")
-				: *FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), Lv->GetXPToNext()), FLinearColor(0.7f, 0.75f, 0.85f), 12);
-		}
-		if (GS && GS->GetHeat())
-		{
-			AddInfoRow(TEXT("Heat"), FLinearColor(1.f, 0.7f, 0.6f), 14);
-			UProgressBar* HeatBar = WidgetTree->ConstructWidget<UProgressBar>();
-			HeatBar->SetPercent(GS->GetHeat()->GetHeat() / 100.f);
-			HeatBar->SetFillColorAndOpacity(FLinearColor(1.f, 0.45f, 0.3f));
-			ContentBox->AddChildToVerticalBox(HeatBar);
-		}
-		AddInfoRow(TEXT(""), FLinearColor::White, 6);
-		AddInfoRow(TEXT("Controls"), FLinearColor(0.7f, 0.85f, 1.f), 14);
-		AddInfoRow(TEXT("Tab phone   I inventory   Q home"), FLinearColor(0.8f, 0.8f, 0.85f), 12);
-		AddInfoRow(TEXT("1-8 hotbar   LMB use   RMB roll/smoke"), FLinearColor(0.8f, 0.8f, 0.85f), 12);
-		AddInfoRow(TEXT("R rotate   G pick up   F sample"), FLinearColor(0.8f, 0.8f, 0.85f), 12);
+		BuildSettingsApp();
 	}
 	else // Map
 	{

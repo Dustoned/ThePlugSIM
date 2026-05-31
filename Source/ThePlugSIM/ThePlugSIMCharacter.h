@@ -86,6 +86,13 @@ protected:
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
+	// Bindt alle legacy BindKey-gameplaytoetsen (configureerbare lezen uit UControlSettings).
+	void BindGameplayKeys(UInputComponent* Input);
+
+	// Herbindt de gameplaytoetsen na een wijziging in UControlSettings (rebind in de telefoon).
+	UFUNCTION()
+	void RefreshKeyBindings();
+
 	/** Geeft de speler een startvoorraad (vloei, wat wiet, een zaadje). */
 	virtual void BeginPlay() override;
 

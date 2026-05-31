@@ -8,6 +8,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Cultivation/GrowPlant.h"
+#include "Input/ControlSettings.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -94,7 +95,9 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	UInteractionComponent* Interact = P->FindComponentByClass<UInteractionComponent>();
 	UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>();
 
-	// Bouw de lijst (key,label) op basis van de context.
+	// Bouw de lijst (key,label) op basis van de context. De herbindbare toetsen komen uit de instellingen.
+	UControlSettings* CS = UControlSettings::Get();
+	auto K = [CS](const TCHAR* Action) { return CS->GetKey(FName(Action)).GetDisplayName().ToString(); };
 	TArray<TPair<FString, FString>> Hints;
 
 	const bool bPlacing = Build && Build->IsPlacing();
@@ -107,20 +110,20 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bPlacing)
 	{
 		Hints.Emplace(TEXT("LMB"), TEXT("Place"));
-		Hints.Emplace(TEXT("R"), TEXT("Rotate"));
+		Hints.Emplace(K(TEXT("Rotate")), TEXT("Rotate"));
 		Hints.Emplace(TEXT("Shift"), TEXT("Snap to grid"));
 		Hints.Emplace(TEXT("Scroll"), TEXT("Put away"));
 	}
 	else if (bPhone)
 	{
 		Hints.Emplace(TEXT("LMB"), TEXT("Use"));
-		Hints.Emplace(TEXT("Q"), TEXT("Switch app"));
-		Hints.Emplace(TEXT("Tab"), TEXT("Close phone"));
+		Hints.Emplace(K(TEXT("PhoneTab")), TEXT("Switch app"));
+		Hints.Emplace(K(TEXT("Phone")), TEXT("Close phone"));
 	}
 	else if (bInv)
 	{
 		Hints.Emplace(TEXT("Drag"), TEXT("Move items"));
-		Hints.Emplace(TEXT("I"), TEXT("Close inventory"));
+		Hints.Emplace(K(TEXT("Inventory")), TEXT("Close inventory"));
 	}
 	else if (bRoll)
 	{
@@ -134,7 +137,7 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	else if (bPot)
 	{
 		Hints.Emplace(TEXT("LMB"), TEXT("Buy upgrade"));
-		Hints.Emplace(TEXT("U"), TEXT("Close"));
+		Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Close"));
 	}
 	else
 	{
@@ -149,8 +152,8 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				if (!T.IsEmpty()) { Prompt = T.ToString(); }
 			}
 			Hints.Emplace(TEXT("LMB"), Prompt);
-			if (Cast<ACustomerBase>(Focus)) { Hints.Emplace(TEXT("F"), TEXT("Give sample")); }
-			if (Cast<AGrowPlant>(Focus)) { Hints.Emplace(TEXT("U"), TEXT("Upgrade pot")); }
+			if (Cast<ACustomerBase>(Focus)) { Hints.Emplace(K(TEXT("GiveSample")), TEXT("Give sample")); }
+			if (Cast<AGrowPlant>(Focus)) { Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Upgrade pot")); }
 		}
 
 		const FName Active = Inv ? Inv->GetActiveItemId() : NAME_None;
@@ -158,8 +161,8 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (AS.StartsWith(TEXT("Papers_"))) { Hints.Emplace(TEXT("RMB"), TEXT("Roll a joint")); }
 		else if (AS.StartsWith(TEXT("Joint_"))) { Hints.Emplace(TEXT("Hold RMB"), TEXT("Smoke joint")); }
 
-		Hints.Emplace(TEXT("Tab"), TEXT("Phone"));
-		Hints.Emplace(TEXT("I"), TEXT("Inventory"));
+		Hints.Emplace(K(TEXT("Phone")), TEXT("Phone"));
+		Hints.Emplace(K(TEXT("Inventory")), TEXT("Inventory"));
 		Hints.Emplace(TEXT("1-8"), TEXT("Hotbar slot"));
 	}
 

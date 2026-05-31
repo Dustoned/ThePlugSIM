@@ -23,6 +23,7 @@
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Input/ControlSettings.h"
 #include "SmokePuff.h"
 #include "ThePlugSIM.h"
 
@@ -161,50 +162,56 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AThePlugSIMCharacter::LookInput);
 	}
 
-	// Telefoon: Tab = open/sluit, Q = wissel tab. Cijfers 1-8 kiezen een hotbar-slot (in de hand);
-	// staat de telefoon open dan werken ze als catalogus-keuze (afgehandeld in HotbarOrPhoneKey).
-	if (UPhoneClientComponent* Ph = Phone.Get())
-	{
-		PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, Ph, &UPhoneClientComponent::Toggle);
-		PlayerInputComponent->BindKey(EKeys::Q,   IE_Pressed, Ph, &UPhoneClientComponent::CycleTab);
-		PlayerInputComponent->BindKey(EKeys::I,   IE_Pressed, Ph, &UPhoneClientComponent::ToggleInventory);
-	}
-	PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Seven, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-	PlayerInputComponent->BindKey(EKeys::Eight, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
-
-	// Scrollwiel: vorige/volgende hotbar-slot.
-	PlayerInputComponent->BindKey(EKeys::MouseScrollUp,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarPrev);
-	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AThePlugSIMCharacter::HotbarNext);
-
-	// Straat-werving: F geeft de aangekeken NPC een gratis sample.
-	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
-
-	// Rechtermuisknop: indrukken (papers -> roll-paneel; joint -> rook-inhouden) + loslaten.
-	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnSecondaryPressed);
-	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Released, this, &AThePlugSIMCharacter::OnSecondaryReleased);
-
-	// R draait het te plaatsen meubel 90° tijdens de plaats-modus (anders niets).
-	if (UBuildComponent* B = Build.Get())
-	{
-		PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, B, &UBuildComponent::RotatePlacement);
-	}
-
-	// U opent het pot-upgrade-paneel voor de aangekeken pot.
-	PlayerInputComponent->BindKey(EKeys::U, IE_Pressed, this, &AThePlugSIMCharacter::OpenPotUpgradeUI);
-
-	// Plaats-modus is automatisch: een plaatsbaar item in de hand toont meteen de preview
-	// (zie UBuildComponent). Links-klik plaatst; schakel naar een ander hotbar-slot om te stoppen.
-	PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnPrimaryClick);
+	// Alle losse gameplaytoetsen (incl. de herbindbare) in één plek, zodat we ze kunnen herbinden.
+	BindGameplayKeys(PlayerInputComponent);
 
 	if (!Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
 		UE_LOG(LogThePlugSIM, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+	}
+}
+
+void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
+{
+	if (!Input) { return; }
+	UControlSettings* CS = UControlSettings::Get();
+
+	// Herbindbare acties (toets uit de instellingen).
+	if (UPhoneClientComponent* Ph = Phone.Get())
+	{
+		Input->BindKey(CS->GetKey(TEXT("Phone")),     IE_Pressed, Ph, &UPhoneClientComponent::Toggle);
+		Input->BindKey(CS->GetKey(TEXT("PhoneTab")),  IE_Pressed, Ph, &UPhoneClientComponent::CycleTab);
+		Input->BindKey(CS->GetKey(TEXT("Inventory")), IE_Pressed, Ph, &UPhoneClientComponent::ToggleInventory);
+	}
+	Input->BindKey(CS->GetKey(TEXT("GiveSample")), IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
+	if (UBuildComponent* B = Build.Get())
+	{
+		Input->BindKey(CS->GetKey(TEXT("Rotate")), IE_Pressed, B, &UBuildComponent::RotatePlacement);
+	}
+	Input->BindKey(CS->GetKey(TEXT("PotUpgrade")), IE_Pressed, this, &AThePlugSIMCharacter::OpenPotUpgradeUI);
+
+	// Vaste toetsen (niet herbindbaar): cijfers, scroll, muisknoppen.
+	Input->BindKey(EKeys::One,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::Two,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::Three, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::Four,  IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::Five,  IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::Six,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::Seven, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::Eight, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
+	Input->BindKey(EKeys::MouseScrollUp,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarPrev);
+	Input->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AThePlugSIMCharacter::HotbarNext);
+	Input->BindKey(EKeys::RightMouseButton, IE_Pressed,  this, &AThePlugSIMCharacter::OnSecondaryPressed);
+	Input->BindKey(EKeys::RightMouseButton, IE_Released, this, &AThePlugSIMCharacter::OnSecondaryReleased);
+	Input->BindKey(EKeys::LeftMouseButton,  IE_Pressed,  this, &AThePlugSIMCharacter::OnPrimaryClick);
+}
+
+void AThePlugSIMCharacter::RefreshKeyBindings()
+{
+	if (InputComponent)
+	{
+		InputComponent->KeyBindings.Empty(); // alleen de losse BindKey's; Enhanced-acties blijven staan
+		BindGameplayKeys(InputComponent);
 	}
 }
 
@@ -393,6 +400,12 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 void AThePlugSIMCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Herbind de gameplaytoetsen zodra de speler ze in de telefoon (Settings -> Controls) wijzigt.
+	if (IsLocallyControlled())
+	{
+		UControlSettings::Get()->OnBindingsChanged.AddUObject(this, &AThePlugSIMCharacter::RefreshKeyBindings);
+	}
 
 	// Startvoorraad (concept): wat vloei, een paar gram wiet en een zaadje.
 	if (HasAuthority() && Inventory)
