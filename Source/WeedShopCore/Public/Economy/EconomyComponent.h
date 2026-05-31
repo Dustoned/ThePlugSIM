@@ -118,6 +118,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	int64 GetDailyDepositRemainingCents() const { return FMath::Max<int64>(0, DailyDepositLimitCents - DepositedTodayCents); }
 
+	// === Overboeken naar een co-op vriend (vanaf de ATM) ===
+	// Fee als % van het bedrag.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	float TransferFeePct = 0.05f;
+
+	// Max aantal overboekingen per dag.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	int32 MaxTransfersPerDay = 3;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int32 GetTransfersToday() const { return TransfersToday; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int32 GetTransfersRemainingToday() const { return FMath::Max(0, MaxTransfersPerDay - TransfersToday); }
+
+	// Server: boek bankgeld over naar een co-op vriend tegen een fee, binnen de dag-limiet.
+	// (Huidige gedeelde co-op-kas: alleen de fee verlaat de bank; het bedrag blijft in de gedeelde
+	// pot. Met per-speler-geld gaat het bedrag straks echt naar de ander.) Geeft true bij succes.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
+	bool TransferBank(int64 AmountCents);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -132,6 +153,10 @@ protected:
 	UPROPERTY(Replicated)
 	int64 DepositedTodayCents = 0;
 	int32 DepositDay = 0;
+
+	// Vandaag al overgeboekt (aantal) — voor de transactielimiet.
+	UPROPERTY(Replicated)
+	int32 TransfersToday = 0;
 
 	UFUNCTION()
 	void OnRep_Balance();

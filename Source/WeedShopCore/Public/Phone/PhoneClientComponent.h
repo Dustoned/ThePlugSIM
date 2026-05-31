@@ -37,12 +37,15 @@ public:
 	void CycleTab();
 
 	// --- iPhone-achtige home/apps ---
-	static constexpr int32 AppCount = 7; // 0=Upgrades 1=Suppliers 2=Contacts 3=Messages 4=Settings 5=Map 6=Bank
-	static constexpr int32 BankAppIndex = 6;
+	static constexpr int32 AppCount = 6; // 0=Upgrades 1=Suppliers 2=Contacts 3=Messages 4=Settings 5=Map
 
-	// Open de telefoon direct op de Bank-app (gebruikt door de ATM in de wereld).
-	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void OpenBankApp();
+	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
+	void OpenAtm();
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
+	void CloseAtm();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|ATM")
+	bool IsAtmOpen() const { return bAtmOpen; }
 
 	// Open een app (zet 'm als actief scherm; verlaat het home-scherm).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
@@ -105,6 +108,10 @@ public:
 	// Stort cash -> bank (witwassen). CashAmount<=0 = maximaal (tot de dag-limiet). Client -> server.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestDeposit(int64 CashAmount);
+
+	// Boek bankgeld over naar een co-op vriend (fee + dag-limiet). Client -> server.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RequestTransfer(int64 AmountCents);
 
 	// Bezorgopties (fee = % van het besteed bedrag; tijd in seconden). Gedeeld door UI + server.
 	static float DeliveryFeePct(int32 Opt);       // 0.01 / 0.08 / 0.25
@@ -340,6 +347,9 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerDeposit(int64 CashAmount);
 
+	UFUNCTION(Server, Reliable)
+	void ServerTransfer(int64 AmountCents);
+
 	// Server: voeg alle stapels van dit item-id samen (gewogen gemiddelde THC%/Kwaliteit%).
 	UFUNCTION(Server, Reliable)
 	void ServerMergeItem(FName ItemId);
@@ -382,6 +392,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UHotkeyHintWidget> HotkeyWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UAtmWidget> AtmWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
@@ -405,6 +418,7 @@ protected:
 	double LastUiClickTime = -100.0;
 
 	bool bInventoryOpen = false;
+	bool bAtmOpen = false;
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;

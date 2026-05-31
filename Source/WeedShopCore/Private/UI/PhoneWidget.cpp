@@ -36,13 +36,13 @@
 
 namespace
 {
-	constexpr int32 GNumApps = 7;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Bank") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Shop, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin };
+	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
+	constexpr int32 GNumApps = 6;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Shop, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
-		FLinearColor(0.20f, 0.45f, 0.35f),
 	};
 
 	FSlateBrush RoundedBrush(const FLinearColor& Color, float Radius)
@@ -907,40 +907,10 @@ void UPhoneWidget::RefreshContent()
 	{
 		BuildSettingsApp();
 	}
-	else if (App == 5) // Map
+	else // Map
 	{
 		AddInfoRow(TEXT("Map"), FLinearColor(0.7f, 0.95f, 0.9f), 15);
 		AddInfoRow(TEXT("(mini-map coming to the phone)"), FLinearColor::Gray, 12);
-	}
-	else // Bank (App == 6)
-	{
-		UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
-		if (!Econ) { AddInfoRow(TEXT("Bank unavailable."), FLinearColor::Gray, 12); return; }
-
-		AddInfoRow(FString::Printf(TEXT("Cash (black):  EUR %.2f"), Econ->GetBalanceEuros()), FLinearColor(0.9f, 0.85f, 0.5f), 14);
-		AddInfoRow(FString::Printf(TEXT("Bank (white):  EUR %.2f"), Econ->GetBankEuros()), FLinearColor(0.6f, 0.9f, 1.f), 14);
-		AddInfoRow(FString::Printf(TEXT("Tax on deposits: %.0f%%   -   you can only buy online with bank money."),
-			Econ->DepositTaxPct * 100.f), FLinearColor(0.62f, 0.66f, 0.76f), 10);
-		AddInfoRow(FString::Printf(TEXT("Daily laundering left: EUR %.2f"), Econ->GetDailyDepositRemainingCents() / 100.f),
-			FLinearColor(0.8f, 0.82f, 0.9f), 12);
-		AddInfoRow(TEXT("Deposit cash -> bank (taxed, raises heat):"), FLinearColor(0.8f, 0.85f, 0.95f), 12);
-
-		// Stort-knoppen (vaste bedragen) + "Max".
-		UPhoneClientComponent* Ph = Phone.Get();
-		const int64 Amounts[3] = { 100000, 500000, 2000000 }; // EUR 1.000 / 5.000 / 20.000
-		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		for (int32 i = 0; i < 3; ++i)
-		{
-			const int64 Amt = Amounts[i];
-			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("EUR %lld"), Amt / 100), FLinearColor(0.2f, 0.42f, 0.32f),
-				[Ph, Amt]() { if (Ph) { Ph->RequestDeposit(Amt); } }, 12);
-			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
-			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
-		}
-		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
-
-		ContentBox->AddChildToVerticalBox(MakeActionBtn(TEXT("Deposit max (up to daily limit)"), FLinearColor(0.2f, 0.5f, 0.35f),
-			[Ph]() { if (Ph) { Ph->RequestDeposit(-1); } }, 13));
 	}
 }
 

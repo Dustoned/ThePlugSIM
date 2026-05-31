@@ -29,6 +29,7 @@
 #include "UI/RollWidget.h"
 #include "UI/CompassWidget.h"
 #include "UI/HotkeyHintWidget.h"
+#include "UI/AtmWidget.h"
 #include "Blueprint/UserWidget.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
@@ -57,7 +58,7 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -116,6 +117,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (CompassWidget) { CompassWidget->AddToViewport(3); }
 	HotkeyWidget = CreateWidget<UHotkeyHintWidget>(PC, UHotkeyHintWidget::StaticClass());
 	if (HotkeyWidget) { HotkeyWidget->AddToViewport(2); }
+	AtmWidget = CreateWidget<UAtmWidget>(PC, UAtmWidget::StaticClass());
+	if (AtmWidget) { AtmWidget->SetPhone(this); AtmWidget->AddToViewport(28); }
 }
 
 void UPhoneClientComponent::Toggle()
@@ -144,13 +147,17 @@ void UPhoneClientComponent::GoHome()
 	bHomeScreen = true;
 }
 
-void UPhoneClientComponent::OpenBankApp()
+void UPhoneClientComponent::OpenAtm()
 {
 	EnsureWidget();
-	bOpen = true;
-	bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false;
-	bHomeScreen = false;
-	Tab = BankAppIndex;
+	bAtmOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseAtm()
+{
+	bAtmOpen = false;
 	UpdateCursor();
 }
 
@@ -917,6 +924,17 @@ void UPhoneClientComponent::ServerDeposit_Implementation(int64 CashAmount)
 	int64 Amt = CashAmount;
 	if (Amt <= 0) { Amt = FMath::Min(Econ->GetCashCents(), Econ->GetDailyDepositRemainingCents()); } // max
 	if (Amt > 0) { Econ->Deposit(Amt); }
+}
+
+void UPhoneClientComponent::RequestTransfer(int64 AmountCents)
+{
+	ServerTransfer(AmountCents);
+}
+
+void UPhoneClientComponent::ServerTransfer_Implementation(int64 AmountCents)
+{
+	AWeedShopGameState* GS = GetGS();
+	if (UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr) { Econ->TransferBank(AmountCents); }
 }
 
 float UPhoneClientComponent::GetDeliveryProgress(const FPendingDelivery& D) const

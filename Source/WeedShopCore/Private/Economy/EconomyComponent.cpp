@@ -31,6 +31,7 @@ void UEconomyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(UEconomyComponent, BalanceCents);
 	DOREPLIFETIME(UEconomyComponent, BankCents);
 	DOREPLIFETIME(UEconomyComponent, DepositedTodayCents);
+	DOREPLIFETIME(UEconomyComponent, TransfersToday);
 }
 
 void UEconomyComponent::AddMoney(int64 AmountCents)
@@ -130,7 +131,35 @@ void UEconomyComponent::RefreshDepositDay()
 	{
 		DepositDay = Today;
 		DepositedTodayCents = 0;
+		TransfersToday = 0; // ook de overboek-teller reset per dag
 	}
+}
+
+bool UEconomyComponent::TransferBank(int64 AmountCents)
+{
+	if (GetOwnerRole() != ROLE_Authority || AmountCents <= 0) { return false; }
+	RefreshDepositDay();
+	if (GetTransfersRemainingToday() <= 0)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Daily transfer limit reached - try again tomorrow.")); }
+		return false;
+	}
+	const int64 Fee = (int64)FMath::RoundToDouble(AmountCents * TransferFeePct);
+	// Gedeelde co-op-kas: alleen de fee verlaat de bank (het bedrag blijft voor de groep beschikbaar).
+	if (BankCents < AmountCents + Fee)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough bank money for that transfer.")); }
+		return false;
+	}
+	RemoveBank(Fee);
+	++TransfersToday;
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
+			FString::Printf(TEXT("Sent EUR %.2f to a friend (fee EUR %.2f). Transfers left today: %d"),
+				AmountCents / 100.f, Fee / 100.f, GetTransfersRemainingToday()));
+	}
+	return true;
 }
 
 int64 UEconomyComponent::Deposit(int64 CashAmount)

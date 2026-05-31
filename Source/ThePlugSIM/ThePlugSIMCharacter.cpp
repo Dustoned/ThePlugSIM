@@ -20,6 +20,7 @@
 #include "Cultivation/GrowPlant.h"
 #include "Interaction/InteractionComponent.h"
 #include "Customer/CustomerBase.h"
+#include "Customer/CustomerSpawner.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
@@ -452,14 +453,24 @@ void AThePlugSIMCharacter::BeginPlay()
 		for (TActorIterator<AAtm> It(GetWorld()); It; ++It) { bHasAtm = true; break; }
 		if (!bHasAtm)
 		{
-			FVector Loc = GetActorLocation() + GetActorForwardVector() * 250.f + GetActorRightVector() * 200.f;
+			// Plek: getagde "AtmPoint" > op straat (waar klanten verschijnen) > als fallback bij de speler.
+			FVector Loc = GetActorLocation() + GetActorForwardVector() * 250.f;
+			bool bFound = false;
 			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 			{
-				if (It->ActorHasTag(FName(TEXT("AtmPoint")))) { Loc = It->GetActorLocation(); break; }
+				if (It->ActorHasTag(FName(TEXT("AtmPoint")))) { Loc = It->GetActorLocation(); bFound = true; break; }
+			}
+			if (!bFound)
+			{
+				for (TActorIterator<ACustomerSpawner> It(GetWorld()); It; ++It)
+				{
+					Loc = It->GetActorLocation() + FVector(120.f, 120.f, 0.f); // net naast de spawn, op straat
+					bFound = true; break;
+				}
 			}
 			FHitResult GroundHit;
 			FCollisionQueryParams GP; GP.AddIgnoredActor(this);
-			if (GetWorld()->LineTraceSingleByChannel(GroundHit, Loc + FVector(0, 0, 300.f), Loc - FVector(0, 0, 500.f), ECC_Visibility, GP))
+			if (GetWorld()->LineTraceSingleByChannel(GroundHit, Loc + FVector(0, 0, 400.f), Loc - FVector(0, 0, 600.f), ECC_Visibility, GP))
 			{
 				Loc.Z = GroundHit.ImpactPoint.Z + 70.f; // halve hoogte van de kast (~140cm)
 			}
@@ -538,10 +549,10 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	{
 		if (AActor* Focus = IC->GetFocusedActor())
 		{
-			// ATM -> open lokaal de Bank-app (storten/witwassen) i.p.v. een server-interactie.
+			// ATM -> open lokaal het ATM-scherm (bankieren) i.p.v. een server-interactie.
 			if (Cast<AAtm>(Focus))
 			{
-				if (Phone) { Phone->OpenBankApp(); }
+				if (Phone) { Phone->OpenAtm(); }
 				return;
 			}
 			IC->TryInteract();
