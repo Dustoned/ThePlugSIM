@@ -17,7 +17,104 @@
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "GameFramework/Pawn.h"
+#include "InputCoreTypes.h"
+#include "Input/Reply.h"
 
+// ---------------------------------------------------------------------------
+//  UInvCell — sleepbare/droppbare cel
+// ---------------------------------------------------------------------------
+TSharedRef<SWidget> UInvCell::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CellRoot"));
+		Root->SetBrush(WeedUI::Rounded(Bg, Radius));
+		Root->SetPadding(FMargin(6.f, 4.f, 6.f, 4.f));
+		WidgetTree->RootWidget = Root;
+
+		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+		Root->SetContent(VB);
+
+		if (!Line1.IsEmpty())
+		{
+			UTextBlock* T1 = WeedUI::Text(WidgetTree, Line1, 11, FLinearColor(0.9f, 0.93f, 1.f));
+			T1->SetClipping(EWidgetClipping::ClipToBounds);
+			VB->AddChildToVerticalBox(T1);
+		}
+		if (!Line2.IsEmpty())
+		{
+			VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Line2, 10, FLinearColor(0.75f, 0.8f, 0.7f)));
+		}
+		if (bShowMerge)
+		{
+			UWeedActionButton* M = WidgetTree->ConstructWidget<UWeedActionButton>();
+			M->OnClicked.AddDynamic(M, &UWeedActionButton::Handle);
+			TFunction<void()> Fn = MergeFn;
+			M->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
+			FButtonStyle S;
+			S.Normal = WeedUI::Rounded(FLinearColor(0.5f, 0.4f, 0.1f), 6.f);
+			S.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.52f, 0.13f), 6.f);
+			S.Pressed = WeedUI::Rounded(FLinearColor(0.4f, 0.32f, 0.08f), 6.f);
+			S.NormalPadding = FMargin(6.f, 3.f); S.PressedPadding = FMargin(6.f, 3.f);
+			M->SetStyle(S);
+			M->SetContent(WeedUI::Text(WidgetTree, TEXT("Merge"), 10, FLinearColor::White, true));
+			VB->AddChildToVerticalBox(M)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		}
+	}
+	// Hit-test zichtbaar zodat de cel muis/drag-events ontvangt.
+	SetVisibility(ESlateVisibility::Visible);
+	return Super::RebuildWidget();
+}
+
+FReply UInvCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (bDraggable && StackId != 0 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+	}
+	return FReply::Unhandled();
+}
+
+void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
+{
+	if (!bDraggable || StackId == 0) { return; }
+	UInvDragOp* Op = NewObject<UInvDragOp>(this);
+	Op->StackId = StackId;
+	Op->FromSlot = SlotIndex;
+	Op->Pivot = EDragPivot::MouseDown;
+
+	// Klein sleep-visueel: het label in een afgeronde kaart.
+	UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
+	Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.18f, 0.4f, 0.55f, 0.95f), 8.f));
+	Vis->SetPadding(FMargin(8.f, 5.f, 8.f, 5.f));
+	Vis->SetContent(WeedUI::Text(WidgetTree, Line1.IsEmpty() ? TEXT("item") : Line1, 11, FLinearColor::White, true));
+	Op->DefaultDragVisual = Vis;
+
+	OutOperation = Op;
+}
+
+bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	UInvDragOp* Op = Cast<UInvDragOp>(InOperation);
+	if (!Op || !Inv.IsValid() || Op->StackId == 0) { return false; }
+
+	if (SlotIndex >= 0)
+	{
+		// Drop op een hotbar-slot -> toewijzen (Assign wisselt netjes als 'ie al ergens stond).
+		Inv->AssignHotbarStack(SlotIndex, Op->StackId);
+	}
+	else
+	{
+		// Drop in het vrije rooster -> van de hotbar halen (alleen zinvol als 'ie van de hotbar kwam).
+		if (Op->FromSlot >= 0) { Inv->UnassignHotbarStack(Op->StackId); }
+	}
+	if (Owner.IsValid()) { Owner->MarkDirty(); }
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+//  UInventoryWidget
+// ---------------------------------------------------------------------------
 void UInventoryWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
 
 UInventoryComponent* UInventoryWidget::GetInv() const
@@ -41,7 +138,6 @@ void UInventoryWidget::OnInvChanged() { bDirty = true; }
 
 namespace
 {
-	// Knop met vrije callback (lokaal, voor inventory-tegels).
 	UWeedActionButton* TileButton(UWidgetTree* Tree, const FLinearColor& Col, float Radius, TFunction<void()> OnClick)
 	{
 		UWeedActionButton* B = Tree->ConstructWidget<UWeedActionButton>();
@@ -96,7 +192,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
 	// Hotbar-rij.
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Hotbar  (click an item to add, a slot to remove)"), 11, FLinearColor(0.7f, 0.7f, 0.8f)))
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Hotbar"), 12, FLinearColor(0.7f, 0.7f, 0.8f)))
 		->SetPadding(FMargin(0.f, 8.f, 0.f, 4.f));
 	HotbarBox = WidgetTree->ConstructWidget<UHorizontalBox>();
 	VB->AddChildToVerticalBox(HotbarBox);
@@ -113,84 +209,72 @@ void UInventoryWidget::RebuildContent()
 
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 
-	// --- Vrije items (niet op de hotbar) ---
+	// --- Vrije items (niet op de hotbar) — sleepbaar naar de hotbar ---
 	Grid->ClearChildren();
 	for (int32 i = 0; i < Stacks.Num(); ++i)
 	{
 		if (Inv->IsStackOnHotbar(Stacks[i].StackId)) { continue; }
 		const FInventoryStack& S = Stacks[i];
-		const int32 StackId = S.StackId;
 		const FName ItemId = S.ItemId;
 		const bool bWeed = ItemId.ToString().StartsWith(TEXT("Bud_")) || ItemId.ToString().StartsWith(TEXT("Joint_"));
 
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(126.f); Sz->SetHeightOverride(54.f);
 
-		UWeedActionButton* Tile = TileButton(WidgetTree, FLinearColor(0.11f, 0.12f, 0.16f, 0.95f), 8.f,
-			[Inv, StackId]()
-			{
-				int32 Empty = Inv->GetActiveSlot();
-				for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h) { if (Inv->GetHotbarStackId(h) == 0) { Empty = h; break; } }
-				Inv->AssignHotbarStack(Empty, StackId);
-			});
-		Sz->SetContent(Tile);
-
-		UVerticalBox* TVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		Tile->SetContent(TVB);
+		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
+		Cell->StackId = S.StackId; Cell->SlotIndex = -1; Cell->bDraggable = true;
+		Cell->Inv = Inv; Cell->Owner = this;
 		FString Nm = WeedUI::PrettyItemName(ItemId);
 		if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
-		UTextBlock* NameT = WeedUI::Text(WidgetTree, Nm, 11, FLinearColor(0.9f, 0.93f, 1.f));
-		NameT->SetClipping(EWidgetClipping::ClipToBounds);
-		TVB->AddChildToVerticalBox(NameT);
-		TVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, bWeed
+		Cell->Line1 = Nm;
+		Cell->Line2 = bWeed
 			? FString::Printf(TEXT("x%d  THC%.0f%% Q%.0f%%"), S.Quantity, S.Quality, S.QualityPct)
-			: FString::Printf(TEXT("x%d"), S.Quantity), 10, FLinearColor(0.75f, 0.8f, 0.7f)));
-
-		// Merge-knopje als er meerdere batches van dit wiet-product zijn.
+			: FString::Printf(TEXT("x%d"), S.Quantity);
 		if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
 		{
-			UWeedActionButton* M = TileButton(WidgetTree, FLinearColor(0.5f, 0.4f, 0.1f), 6.f, [Ph, ItemId]() { Ph->MergeNow(ItemId); });
-			M->SetContent(WeedUI::Text(WidgetTree, TEXT("Merge"), 10, FLinearColor::White, true));
-			TVB->AddChildToVerticalBox(M);
+			Cell->bShowMerge = true;
+			Cell->MergeFn = [Ph, ItemId]() { Ph->MergeNow(ItemId); };
 		}
-
+		Sz->SetContent(Cell);
 		Grid->AddChildToWrapBox(Sz);
 	}
 
-	// Ghost-vakjes voor resterende ruimte.
+	// Ghost-cellen (ook drop-doel om van de hotbar te halen).
 	const int32 Free = (Inv->MaxStacks > 0) ? FMath::Max(0, Inv->MaxStacks - Inv->GetUsedSlots()) : 0;
-	for (int32 g = 0; g < FMath::Min(Free, 12); ++g)
+	for (int32 g = 0; g < FMath::Min(FMath::Max(Free, 3), 12); ++g)
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(126.f); Sz->SetHeightOverride(54.f);
-		UBorder* Ghost = WidgetTree->ConstructWidget<UBorder>();
-		Ghost->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.10f, 0.13f, 0.35f), 8.f));
+		UInvCell* Ghost = WidgetTree->ConstructWidget<UInvCell>();
+		Ghost->StackId = 0; Ghost->SlotIndex = -1; Ghost->bDraggable = false;
+		Ghost->Inv = Inv; Ghost->Owner = this;
+		Ghost->Bg = FLinearColor(0.10f, 0.10f, 0.13f, 0.35f);
 		Sz->SetContent(Ghost);
 		Grid->AddChildToWrapBox(Sz);
 	}
 
-	// --- Hotbar-rij (klik = van hotbar halen) ---
+	// --- Hotbar-rij (elk slot = drop-doel; bezet slot is ook sleepbaar) ---
 	HotbarBox->ClearChildren();
 	for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h)
 	{
 		const int32 SlotStackId = Inv->GetHotbarStackId(h);
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(64.f); Sz->SetHeightOverride(46.f);
-		UWeedActionButton* SlotBtn = TileButton(WidgetTree, (h == Inv->GetActiveSlot()) ? FLinearColor(0.2f, 0.3f, 0.16f) : FLinearColor(0.10f, 0.11f, 0.14f), 6.f,
-			[Inv, SlotStackId]() { if (SlotStackId != 0) { Inv->UnassignHotbarStack(SlotStackId); } });
-		Sz->SetContent(SlotBtn);
-		UVerticalBox* SV = WidgetTree->ConstructWidget<UVerticalBox>();
-		SlotBtn->SetContent(SV);
-		SV->AddChildToVerticalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), h + 1), 9, FLinearColor(0.5f, 0.5f, 0.6f)));
+
+		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
+		Cell->StackId = SlotStackId; Cell->SlotIndex = h; Cell->bDraggable = (SlotStackId != 0);
+		Cell->Inv = Inv; Cell->Owner = this;
+		Cell->Radius = 6.f;
+		Cell->Bg = (h == Inv->GetActiveSlot()) ? FLinearColor(0.2f, 0.3f, 0.16f) : FLinearColor(0.10f, 0.11f, 0.14f);
+		Cell->Line1 = FString::Printf(TEXT("%d"), h + 1);
 		const int32 Idx = Inv->FindStackById(SlotStackId);
 		if (Stacks.IsValidIndex(Idx))
 		{
 			FString Nm = WeedUI::PrettyItemName(Stacks[Idx].ItemId);
 			if (Nm.Len() > 9) { Nm = Nm.Left(8) + TEXT("."); }
-			UTextBlock* NT = WeedUI::Text(WidgetTree, Nm, 10, FLinearColor(0.9f, 0.93f, 1.f));
-			NT->SetClipping(EWidgetClipping::ClipToBounds);
-			SV->AddChildToVerticalBox(NT);
+			Cell->Line2 = Nm;
 		}
+		Sz->SetContent(Cell);
 		UHorizontalBoxSlot* HS = HotbarBox->AddChildToHorizontalBox(Sz);
 		HS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 	}

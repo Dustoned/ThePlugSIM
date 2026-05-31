@@ -327,9 +327,9 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		return;
 	}
 
-	// Effectieve kwaliteit = mix van jointgrootte en hoe goed de wiet zelf is.
-	const float GramsQ = FMath::Clamp(BestGrams / 5.f, 0.f, 1.f);
-	const float Quality = FMath::Clamp(GramsQ * 0.4f + WeedQ * 0.6f, 0.f, 1.f);
+	// Effectieve kwaliteit = wiet-kwaliteit geschaald met het aantal gram (zelfde formule als de
+	// joint-sterkte): een dun jointje voelt zwakker en bindt/verslaaft daardoor minder.
+	const float Quality = UPhoneClientComponent::JointIntensity(BestGrams, 0.f, WeedQ * 100.f);
 	float LoyGain = 4.f + Quality * 12.f;   // top-joint ~16, brak ~4
 	float AddGain = 3.f + Quality * 9.f;    // slechte wiet verslaaft nauwelijks
 	float RespGain = 1.f + Quality * 4.f;

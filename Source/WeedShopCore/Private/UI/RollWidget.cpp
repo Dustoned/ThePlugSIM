@@ -116,8 +116,11 @@ void URollWidget::RebuildContent()
 		const FLinearColor LblCol = Intensity >= 0.6f ? FLinearColor(0.5f, 1.f, 0.55f)
 			: (Intensity >= 0.3f ? FLinearColor(1.f, 0.75f, 0.3f) : FLinearColor(1.f, 0.55f, 0.45f));
 		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
-			FString::Printf(TEXT("Joint strength: %.0f%%   (%dg  -  %.0f%% THC, %.0f%% quality)"), Intensity * 100.f, G, Thc, Qpct),
-			13, LblCol, false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+			FString::Printf(TEXT("Joint strength: %.0f%%   (%dg of %.0f%% quality weed - %.0f%% THC)"), Intensity * 100.f, G, Qpct, Thc),
+			13, LblCol, false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
+			TEXT("More grams = stronger joint. Thin/weak joints don't impress experienced or sober customers."),
+			10, FLinearColor(0.6f, 0.64f, 0.74f)))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 	}
 	else
 	{

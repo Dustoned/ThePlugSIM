@@ -246,11 +246,14 @@ int32 UPhoneClientComponent::GetMaxJointGrams() const
 
 float UPhoneClientComponent::JointIntensity(int32 Grams, float ThcPercent, float QualityPct)
 {
-	// Zelfde gewichten als het roken in de character: gram 45% + THC 45% + kwaliteit 10%.
-	return FMath::Clamp(
-		FMath::Clamp(Grams / 10.f, 0.f, 1.f) * 0.45f +
-		FMath::Clamp(ThcPercent / 36.f, 0.f, 1.f) * 0.45f +
-		FMath::Clamp(QualityPct / 100.f, 0.f, 1.f) * 0.10f, 0.f, 1.f);
+	// Joint-sterkte = KWALITEIT (niet THC; THC% verandert toch niet per joint). Het aantal gram dat je
+	// erin doet schaalt de EFFECTIEVE kwaliteit: 1g van 70%-wiet voelt zwakker dan een volle joint van
+	// dezelfde wiet. Zo levert een dun/zwak jointje minder op en zijn niet-verslaafde of doorgewinterde
+	// rokers er minder snel van onder de indruk. ~3g = volle kwaliteit; een dikke joint kan richting 100%.
+	(void)ThcPercent;
+	const float Q = FMath::Clamp(QualityPct / 100.f, 0.f, 1.f);
+	const float GramsFactor = FMath::Max(0, Grams) / 3.f; // 1g=0.33, 2g=0.67, 3g=1.0, meer=boven
+	return FMath::Clamp(Q * GramsFactor, 0.f, 1.f);
 }
 
 bool UPhoneClientComponent::GetRollWeedInfo(int32 Grams, float& OutThcPercent, float& OutQualityPct) const
