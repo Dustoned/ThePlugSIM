@@ -45,6 +45,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|DayNight")
 	float GetTimeOfDaySeconds() const { return TimeOfDaySeconds; }
 
+	// Welke dag het is (begint op 1, +1 elke keer dat de cyclus rondloopt).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|DayNight")
+	int32 GetDayNumber() const { return DayNumber; }
+
+	// Klok-tijd 0..1 binnen de huidige dag-cyclus (voor "HH:MM"). Zelfde als GetCycleFraction.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|DayNight")
+	float GetClockFraction() const { return GetCycleFraction(); }
+
 	// Server-only: zet de tijd direct (voor save/load-herstel).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|DayNight")
 	void SetTimeOfDaySeconds(float NewTime);
@@ -55,6 +63,10 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_Time)
 	float TimeOfDaySeconds = 0.f;
+
+	// Dag-teller (server telt op bij elke cyclus-wrap; gerepliceerd naar clients).
+	UPROPERTY(Replicated)
+	int32 DayNumber = 1;
 
 	UFUNCTION()
 	void OnRep_Time();

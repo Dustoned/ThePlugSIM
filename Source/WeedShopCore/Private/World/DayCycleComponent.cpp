@@ -18,6 +18,7 @@ void UDayCycleComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UDayCycleComponent, TimeOfDaySeconds);
+	DOREPLIFETIME(UDayCycleComponent, DayNumber);
 }
 
 void UDayCycleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -34,6 +35,7 @@ void UDayCycleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	if (TimeOfDaySeconds >= CycleLength())
 	{
 		TimeOfDaySeconds -= CycleLength();
+		++DayNumber; // nieuwe dag
 	}
 
 	CheckTransition();

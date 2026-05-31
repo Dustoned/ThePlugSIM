@@ -579,10 +579,10 @@ void UPhoneWidget::RefreshContent()
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
 	// Linksboven: altijd een Back-knop (terug naar het home-scherm).
 	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Back"), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f)));
-	UTextBlock* TitleText = MakeText(GAppName[App], 16, FLinearColor(0.9f, 0.95f, 1.f));
+	UTextBlock* TitleText = MakeText(GAppName[App], 15, FLinearColor(0.9f, 0.95f, 1.f));
 	TitleText->SetClipping(EWidgetClipping::ClipToBounds);
 	UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(TitleText);
-	TitleSlot->SetPadding(FMargin(12.f, 4.f, 8.f, 0.f));
+	TitleSlot->SetPadding(FMargin(10.f, 4.f, 6.f, 0.f));
 	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TitleSlot->SetVerticalAlignment(VAlign_Center);
 	if (App == 1) // Suppliers: Packages-knop rechtsboven, naast de titel.
@@ -594,14 +594,14 @@ void UPhoneWidget::RefreshContent()
 		StorePackagesToggle->OnClicked.AddDynamic(StorePackagesToggle, &UWeedActionButton::Handle);
 		StorePackagesToggle->OnAction.BindLambda([this](int32, int32) { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); });
 		FButtonStyle PS;
-		PS.Normal = RoundedBrush(PkgCol, 10.f);
-		PS.Hovered = RoundedBrush(PkgCol * 1.3f, 10.f);
-		PS.Pressed = RoundedBrush(PkgCol * 0.8f, 10.f);
-		PS.NormalPadding = FMargin(10.f, 5.f); PS.PressedPadding = FMargin(10.f, 5.f);
+		PS.Normal = RoundedBrush(PkgCol, 9.f);
+		PS.Hovered = RoundedBrush(PkgCol * 1.3f, 9.f);
+		PS.Pressed = RoundedBrush(PkgCol * 0.8f, 9.f);
+		PS.NormalPadding = FMargin(8.f, 4.f); PS.PressedPadding = FMargin(8.f, 4.f);
 		StorePackagesToggle->SetStyle(PS);
 
 		// Eén vast label dat we alleen van tekst veranderen + expliciet gecentreerd in de knop.
-		StorePackagesLabel = MakeText(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN), 13, FLinearColor::White, true);
+		StorePackagesLabel = MakeText(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN), 11, FLinearColor::White, true);
 		StorePackagesToggle->SetContent(StorePackagesLabel);
 		if (UButtonSlot* BSlot = Cast<UButtonSlot>(StorePackagesLabel->Slot))
 		{
@@ -776,8 +776,8 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (TimeText && GS->GetDayCycle())
 		{
 			const int32 T = FMath::RoundToInt(GS->GetDayCycle()->GetCycleFraction() * 24.f * 60.f);
-			TimeText->SetText(FText::FromString(FString::Printf(TEXT("%s %02d:%02d"),
-				GS->GetDayCycle()->IsNight() ? TEXT("Night") : TEXT("Day"), (T / 60) % 24, T % 60)));
+			TimeText->SetText(FText::FromString(FString::Printf(TEXT("Day %d  %02d:%02d"),
+				GS->GetDayCycle()->GetDayNumber(), (T / 60) % 24, T % 60)));
 		}
 		if (LevelText && GS->GetLeveling())
 		{

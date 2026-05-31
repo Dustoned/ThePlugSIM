@@ -142,8 +142,9 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (TimeText && GS->GetDayCycle())
 	{
 		const int32 T = FMath::RoundToInt(GS->GetDayCycle()->GetCycleFraction() * 24.f * 60.f);
-		TimeText->SetText(FText::FromString(FString::Printf(TEXT("%s  %02d:%02d"),
-			GS->GetDayCycle()->IsNight() ? TEXT("Night") : TEXT("Day"), (T / 60) % 24, T % 60)));
+		TimeText->SetText(FText::FromString(FString::Printf(TEXT("Day %d   %02d:%02d %s"),
+			GS->GetDayCycle()->GetDayNumber(), (T / 60) % 24, T % 60,
+			GS->GetDayCycle()->IsNight() ? TEXT("(night)") : TEXT(""))));
 	}
 	if (HeatBar && GS->GetHeat())
 	{
