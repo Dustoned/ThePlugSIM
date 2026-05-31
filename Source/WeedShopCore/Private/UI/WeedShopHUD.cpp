@@ -964,7 +964,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
 	y += 20.f;
 	float pR = 0.f, pL = 0.f, pA = 0.f;
-	C->PreviewDealOutcome(EffAsk, Quality01, pR, pL, pA);
+	C->PreviewDealOutcome(EffAsk, Quality01, (StockQty > 0 ? ThcShow : -1.f), pR, pL, pA);
 	DrawText(FString::Printf(TEXT("If accepted:  R %.0f->%.0f   L %.0f->%.0f   A %.0f->%.0f"),
 		C->Respect, pR, C->Loyalty, pL, C->Addiction, pA),
 		FLinearColor(0.55f, 0.95f, 0.6f), InnerX, y, Font);

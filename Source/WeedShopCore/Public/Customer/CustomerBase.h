@@ -108,9 +108,10 @@ public:
 	EDealResult SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom);
 
 	// Voorspelt de nieuwe Respect/Loyalty/Addiction ALS deze deal (bij deze prijs + kwaliteit) lukt.
-	// Voor de UI-preview; muteert niets. Quality01 (0..1) = kwaliteit van de wiet, negatief = neutraal.
+	// Voor de UI-preview; muteert niets. Quality01 (0..1) = kwaliteit, ThcPercent = potentie van de
+	// wiet (drijft verslaving). Negatief = onbekend/neutraal.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
-	void PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01,
+	void PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent,
 		float& OutRespect, float& OutLoyalty, float& OutAddiction) const;
 
 	// IInteractable

@@ -171,24 +171,33 @@ float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quali
 namespace
 {
 	// Relatie-winst van een GESLAAGDE deal (gedeeld door SubmitOffer en de UI-preview, zodat ze
-	// gegarandeerd gelijk lopen). Quality01 < 0 = neutraal (0.6). Levert de delta's op.
-	void ComputeAcceptedDeltas(int32 Ask, int32 Market, float Quality01, float& dR, float& dL, float& dA)
+	// gegarandeerd gelijk lopen). Vloeiend verloop:
+	//   * Respect/Loyalty volgen de prijs: scherp (goedkoop) bouwt op, woeker (duur) breekt af.
+	//     + een kleine bonus/straf op basis van kwaliteit.
+	//   * Verslaving (A) hangt aan de POTENTIE (THC%), niet de prijs, en is bescheiden: zwakke
+	//     17%-startwiet verslaaft maar licht, sterke wiet meer.
+	// Quality01 < 0 = neutraal (0.6); ThcPercent < 0 = neutraal (15%).
+	void ComputeAcceptedDeltas(int32 Ask, int32 Market, float Quality01, float ThcPercent,
+		float& dR, float& dL, float& dA)
 	{
 		const float Q = (Quality01 >= 0.f) ? FMath::Clamp(Quality01, 0.f, 1.f) : 0.6f;
-		const float QF = 0.4f + 0.6f * Q; // 0.4 (waardeloos) .. 1.0 (top)
-		dR = 0.f; dL = 0.f; dA = 0.f;
-		if (Ask <= Market) { dR += 5.f * QF; dL += 8.f * QF; }
-		else               { dL += 2.f * QF; }
-		dA += 6.f * QF;
-		if (Quality01 >= 0.f && Quality01 < 0.30f) { dR -= 3.f; } // echt brakke wiet kost respect
+		const float Thc = FMath::Clamp((ThcPercent >= 0.f) ? ThcPercent : 15.f, 0.f, 40.f);
+		const float Ratio = (Market > 0) ? FMath::Clamp(float(Ask) / float(Market), 0.30f, 2.20f) : 1.f;
+
+		// Respect: eerlijke/scherpe prijs verdient respect, woeker kost het. + kwaliteit-nuance.
+		dR = (1.00f - Ratio) * 6.0f + (Q - 0.50f) * 3.0f;
+		// Loyalty: bouwt op goede (goedkope + kwaliteit) deals, nauwelijks op dure.
+		dL = (1.15f - Ratio) * 7.0f + (Q - 0.50f) * 4.0f;
+		// Verslaving: gedreven door potentie, bescheiden en prijs-onafhankelijk.
+		dA = 0.5f + (Thc / 100.f) * 11.0f;
 	}
 }
 
-void ACustomerBase::PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01,
+void ACustomerBase::PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent,
 	float& OutRespect, float& OutLoyalty, float& OutAddiction) const
 {
 	float dR = 0.f, dL = 0.f, dA = 0.f;
-	ComputeAcceptedDeltas(AskPriceCentsPerUnit, GetMarketPriceCents(), Quality01, dR, dL, dA);
+	ComputeAcceptedDeltas(AskPriceCentsPerUnit, GetMarketPriceCents(), Quality01, ThcPercent, dR, dL, dA);
 	OutRespect = ClampAttr(Respect + dR);
 	OutLoyalty = ClampAttr(Loyalty + dL);
 	OutAddiction = ClampAttr(Addiction + dA);
@@ -218,8 +227,10 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 		return EDealResult::NoStock;
 	}
 
-	// Kwaliteit (0..1) van de wiet die je verkoopt: weegt mee in de acceptatie en in de relatie-winst.
+	// Kwaliteit (0..1) + potentie (THC%) van de wiet die je verkoopt: wegen mee in de acceptatie
+	// en in de relatie-winst.
 	const float Quality01 = FMath::Clamp(StockFrom->GetItemQualityPct(DesiredProductId) / 100.f, 0.f, 1.f);
+	const float ThcStock = StockFrom->GetItemQuality(DesiredProductId);
 
 	// Boven budget -> dingt af.
 	if (AskPriceCentsPerUnit > BudgetCentsPerUnit)
@@ -252,9 +263,9 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 		PayTo->AddMoney(Total);
 	}
 
-	// Kwaliteit weegt mee in de relatie-winst (gedeelde formule met de UI-preview).
+	// Kwaliteit + prijs + potentie wegen mee in de relatie-winst (gedeelde formule met de UI-preview).
 	float dR = 0.f, dL = 0.f, dA = 0.f;
-	ComputeAcceptedDeltas(AskPriceCentsPerUnit, Market, Quality01, dR, dL, dA);
+	ComputeAcceptedDeltas(AskPriceCentsPerUnit, Market, Quality01, ThcStock, dR, dL, dA);
 	Respect = ClampAttr(Respect + dR);
 	Loyalty = ClampAttr(Loyalty + dL);
 	Addiction = ClampAttr(Addiction + dA);
