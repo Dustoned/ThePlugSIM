@@ -648,57 +648,69 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 
 	const float ClipX = Canvas ? Canvas->ClipX : 1280.f;
-	const float StoreW = 720.f;
-	const float StoreH = 600.f;
+	const float StoreW = 780.f;
+	const float StoreH = 640.f;
 	const float PhoneLeft = ClipX - PhoneW - 30.f;
 	const float SX = FMath::Max(12.f, PhoneLeft - StoreW - 16.f);
-	const float SY = 70.f;
-	const float Pad = 14.f;
+	const float SY = 56.f;
+	const float Pad = 16.f;
 
-	// Mini-knop helper (rect + label + hit-box), geeft hover terug.
-	auto Mini = [this, Font](const FName& Box, const FString& Label, float bx, float by, float bw, float bh, const FLinearColor& Base) -> bool
+	// Knop-helper met gecentreerd label (rect + label + hit-box), geeft hover terug.
+	auto Btn = [this, Font](const FName& Box, const FString& Label, float bx, float by, float bw, float bh,
+		const FLinearColor& Base, const FLinearColor& TextCol) -> bool
 	{
 		const bool bH = (HoveredBox == Box);
-		DrawRect(bH ? FLinearColor(0.30f, 0.45f, 0.62f, 0.98f) : Base, bx, by, bw, bh);
-		DrawText(Label, FLinearColor::White, bx + 5.f, by + 1.f, Font);
+		DrawRect(bH ? FLinearColor(0.30f, 0.46f, 0.64f, 0.98f) : Base, bx, by, bw, bh);
+		float tw = 0.f, th = 0.f; GetTextSize(Label, tw, th, Font);
+		DrawText(Label, TextCol, bx + FMath::Max(3.f, (bw - tw) * 0.5f), by + FMath::Max(1.f, (bh - th) * 0.5f), Font);
 		AddHitBox(FVector2D(bx, by), FVector2D(bw, bh), Box, true, 5);
 		return bH;
 	};
 
-	DrawRect(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), SX, SY, StoreW, StoreH);
-
-	float y = SY + 12.f;
-	DrawText(TEXT("SUPPLIER STORE"), FLinearColor(0.6f, 1.f, 0.6f), SX + Pad, y, Font);
+	// Achtergrond + bovenbalk.
+	DrawRect(FLinearColor(0.07f, 0.08f, 0.11f, 0.99f), SX, SY, StoreW, StoreH);
+	DrawRect(FLinearColor(0.11f, 0.13f, 0.18f, 1.f), SX, SY, StoreW, 38.f);
+	DrawText(TEXT("SUPPLIER STORE"), FLinearColor(0.6f, 1.f, 0.6f), SX + Pad, SY + 10.f, Font);
 	if (GS->GetEconomy())
 	{
-		DrawText(FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
-			FLinearColor(0.85f, 0.95f, 1.f), SX + StoreW - 230.f, y, Font);
+		const FString Cash = FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros());
+		float tw = 0.f, th = 0.f; GetTextSize(Cash, tw, th, Font);
+		DrawText(Cash, FLinearColor(0.85f, 0.95f, 1.f), SX + StoreW - Pad - tw, SY + 10.f, Font);
 	}
-	y += 28.f;
 
-	// Zones: links catalogus, rechts winkelwagen.
-	const float CartW = 240.f;
+	float y = SY + 48.f;
+
+	// Zones.
+	const float CartW = 252.f;
 	const float CatX = SX + Pad;
-	const float CatZoneW = StoreW - Pad * 3.f - CartW;
 	const float CartX = SX + StoreW - Pad - CartW;
+	const float CatRight = CartX - 14.f;
+	const float CatZoneW = CatRight - CatX;
 
-	// Categorie-tabs over de catalogus-breedte.
+	// Categorie-tabs (pillen) over de catalogus-breedte.
 	static const TCHAR* CatNames[UStoreComponent::SupplierCatCount] = { TEXT("Seeds"), TEXT("Papers"), TEXT("Pots"), TEXT("Soil"), TEXT("Water"), TEXT("Sell") };
 	const int32 Cat = Phone->GetSupplierCat();
 	const float CatTabW = CatZoneW / UStoreComponent::SupplierCatCount;
 	for (int32 i = 0; i < UStoreComponent::SupplierCatCount; ++i)
 	{
-		const FLinearColor Col = (i == Cat) ? FLinearColor(0.2f, 0.5f, 0.3f, 0.98f) : FLinearColor(0.14f, 0.15f, 0.2f, 0.95f);
-		Mini(FName(*FString::Printf(TEXT("scat_%d"), i)), CatNames[i], CatX + i * CatTabW, y, CatTabW - 3.f, 24.f, Col);
+		const FLinearColor Col = (i == Cat) ? FLinearColor(0.22f, 0.52f, 0.32f, 0.98f) : FLinearColor(0.15f, 0.16f, 0.21f, 0.95f);
+		Btn(FName(*FString::Printf(TEXT("scat_%d"), i)), CatNames[i], CatX + i * CatTabW + 2.f, y, CatTabW - 4.f, 26.f, Col,
+			(i == Cat) ? FLinearColor::White : FLinearColor(0.75f, 0.78f, 0.85f));
 	}
-	y += 34.f;
+	y += 38.f;
 
 	const float ListTop = y;
-	const float RowHt = 42.f;
+	const float RowHt = 40.f;
+	const float ListBottom = SY + StoreH - Pad;
+
+	// --- Winkelwagen-paneel (rechts) tekenen we eerst als achtergrond-kolom ---
+	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.99f), CartX, ListTop, CartW, ListBottom - ListTop);
+	DrawRect(FLinearColor(0.12f, 0.14f, 0.19f, 1.f), CartX, ListTop, CartW, 28.f);
+	DrawText(FString::Printf(TEXT("CART  (%d)"), Phone->GetCartNumLines()), FLinearColor(0.7f, 1.f, 0.7f), CartX + 10.f, ListTop + 6.f, Font);
 
 	if (Cat == UStoreComponent::SupplierCatSell)
 	{
-		// Verkoop-lijst: alle verkoopbare voorraad met een Sell-knop.
+		// Verkoop-lijst in de catalogus-zone.
 		DrawText(TEXT("Sell items back (70% of value):"), FLinearColor(0.8f, 0.8f, 0.9f), CatX, y, Font);
 		y += 26.f;
 		APawn* PP = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
@@ -711,81 +723,107 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 			{
 				const int32 Val = Store->GetSellValueCents(SellStacks[si].ItemId);
 				if (Val <= 0) { continue; }
-				if (y > SY + StoreH - 40.f) { break; }
+				if (y > ListBottom - RowHt) { break; }
 				bAny = true;
-				DrawRect(FLinearColor(0.10f, 0.11f, 0.14f, 0.95f), CatX, y, StoreW - Pad * 2.f, RowHt - 4.f);
+				DrawRect(FLinearColor(0.10f, 0.11f, 0.14f, 0.95f), CatX, y, CatZoneW, RowHt - 4.f);
 				DrawText(FString::Printf(TEXT("%s   x%d"), *PrettyItemName(SellStacks[si].ItemId), SellStacks[si].Quantity),
-					FLinearColor(0.9f, 0.92f, 1.f), CatX + 8.f, y + 4.f, Font);
-				DrawText(FString::Printf(TEXT("EUR %.2f ea"), Val / 100.f), FLinearColor(1.f, 0.85f, 0.5f), CatX + 8.f, y + 20.f, Font);
-				Mini(FName(*FString::Printf(TEXT("sell_%d"), si)), TEXT("Sell 1"), CatX + StoreW - Pad * 2.f - 90.f, y + 6.f, 84.f, 24.f, FLinearColor(0.45f, 0.30f, 0.12f, 0.98f));
+					FLinearColor(0.9f, 0.92f, 1.f), CatX + 10.f, y + 3.f, Font);
+				DrawText(FString::Printf(TEXT("EUR %.2f each"), Val / 100.f), FLinearColor(1.f, 0.85f, 0.5f), CatX + 10.f, y + 19.f, Font);
+				Btn(FName(*FString::Printf(TEXT("sell_%d"), si)), TEXT("Sell 1"), CatX + CatZoneW - 92.f, y + 5.f, 86.f, RowHt - 12.f,
+					FLinearColor(0.45f, 0.30f, 0.12f, 0.98f), FLinearColor::White);
 				y += RowHt;
 			}
 		}
 		if (!bAny) { DrawText(TEXT("(nothing sellable in your inventory)"), FLinearColor::Gray, CatX, y, Font); }
-		return;
 	}
-
-	// --- Catalogus (kopen) ---
-	const TArray<FName> Items = Store->GetSupplierCategory(Cat);
-	int32 idx = 0;
-	for (const FName& Id : Items)
+	else
 	{
-		if (y > SY + StoreH - 30.f) { break; }
-		const int32 Price = Store->GetCatalogPriceCents(Id);
-		const int32 Pend = Phone->GetPendingQty(Id);
-		FString Name = Store->GetCatalogName(Id).ToString();
-		if (Name.Len() > 30) { Name = Name.Left(29) + TEXT("."); }
+		// --- Catalogus (kopen) ---
+		const TArray<FName> Items = Store->GetSupplierCategory(Cat);
+		int32 idx = 0;
+		for (const FName& Id : Items)
+		{
+			if (y > ListBottom - RowHt) { break; }
+			const int32 Price = Store->GetCatalogPriceCents(Id);
+			const int32 Pend = Phone->GetPendingQty(Id);
+			FString Name = Store->GetCatalogName(Id).ToString();
 
-		// Rij-achtergrond.
-		DrawRect(FLinearColor(0.10f, 0.11f, 0.14f, 0.95f), CatX, y, CatZoneW, RowHt - 4.f);
-		DrawText(Name, FLinearColor(0.92f, 0.95f, 1.f), CatX + 8.f, y + 4.f, Font);
+			// Rij met lichte zebra-arcering.
+			DrawRect((idx % 2 == 0) ? FLinearColor(0.11f, 0.12f, 0.15f, 0.95f) : FLinearColor(0.09f, 0.10f, 0.13f, 0.95f),
+				CatX, y, CatZoneW, RowHt - 4.f);
 
-		// Prijskaartje + stepper + add in het rechterdeel van de catalogus-rij.
-		const float control = CatX + CatZoneW - 214.f;
-		DrawRect(FLinearColor(0.16f, 0.42f, 0.22f, 0.98f), control, y + 4.f, 74.f, RowHt - 12.f);
-		DrawText(FString::Printf(TEXT("EUR %.2f"), Price / 100.f), FLinearColor(0.85f, 1.f, 0.85f), control + 5.f, y + 9.f, Font);
+			// Control-cluster rechts: prijskaartje | [-] qty [+] | ADD.
+			const float AddW = 54.f, IncW = 22.f, QtyW = 26.f, DecW = 22.f, TagW = 78.f, G = 6.f;
+			const float ClusterW = TagW + G + DecW + QtyW + IncW + G + AddW;
+			const float cxs = CatX + CatZoneW - ClusterW - 6.f;
+			const float bh = RowHt - 12.f, bty = y + 5.f;
 
-		Mini(FName(*FString::Printf(TEXT("sdec_%d"), idx)), TEXT("-"), control + 80.f, y + 4.f, 22.f, RowHt - 12.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f));
-		DrawText(FString::Printf(TEXT("%d"), Pend), FLinearColor::White, control + 108.f, y + 9.f, Font);
-		Mini(FName(*FString::Printf(TEXT("sinc_%d"), idx)), TEXT("+"), control + 128.f, y + 4.f, 22.f, RowHt - 12.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f));
-		Mini(FName(*FString::Printf(TEXT("sadd_%d"), idx)), FString::Printf(TEXT("+EUR %.2f"), (Price * Pend) / 100.f),
-			control + 154.f, y + 4.f, 60.f, RowHt - 12.f, FLinearColor(0.20f, 0.35f, 0.5f, 0.98f));
+			// Naam (afgekapt tot aan het cluster).
+			FString NameTrim = Name;
+			if (NameTrim.Len() > 26) { NameTrim = NameTrim.Left(25) + TEXT("."); }
+			DrawText(NameTrim, FLinearColor(0.92f, 0.95f, 1.f), CatX + 10.f, y + 9.f, Font);
 
-		y += RowHt;
-		++idx;
+			float bx = cxs;
+			DrawRect(FLinearColor(0.16f, 0.42f, 0.22f, 0.98f), bx, bty, TagW, bh);
+			{
+				const FString PriceStr = FString::Printf(TEXT("EUR %.2f"), Price / 100.f);
+				float tw = 0.f, th = 0.f; GetTextSize(PriceStr, tw, th, Font);
+				DrawText(PriceStr, FLinearColor(0.88f, 1.f, 0.88f), bx + FMath::Max(3.f, (TagW - tw) * 0.5f), bty + 4.f, Font);
+			}
+			bx += TagW + G;
+			Btn(FName(*FString::Printf(TEXT("sdec_%d"), idx)), TEXT("-"), bx, bty, DecW, bh, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
+			bx += DecW;
+			{
+				const FString QtyStr = FString::Printf(TEXT("%d"), Pend);
+				float tw = 0.f, th = 0.f; GetTextSize(QtyStr, tw, th, Font);
+				DrawRect(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), bx, bty, QtyW, bh);
+				DrawText(QtyStr, FLinearColor::White, bx + (QtyW - tw) * 0.5f, bty + 4.f, Font);
+			}
+			bx += QtyW;
+			Btn(FName(*FString::Printf(TEXT("sinc_%d"), idx)), TEXT("+"), bx, bty, IncW, bh, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
+			bx += IncW + G;
+			Btn(FName(*FString::Printf(TEXT("sadd_%d"), idx)), TEXT("ADD"), bx, bty, AddW, bh, FLinearColor(0.20f, 0.38f, 0.55f, 0.98f), FLinearColor::White);
+
+			y += RowHt;
+			++idx;
+		}
+		if (Items.Num() == 0) { DrawText(TEXT("(nothing here yet)"), FLinearColor::Gray, CatX, ListTop, Font); }
 	}
-	if (Items.Num() == 0) { DrawText(TEXT("(nothing here yet)"), FLinearColor::Gray, CatX, ListTop, Font); }
 
-	// --- Winkelwagen (rechts) ---
-	DrawRect(FLinearColor(0.08f, 0.09f, 0.12f, 0.98f), CartX, ListTop, CartW, StoreH - (ListTop - SY) - Pad);
-	float cy = ListTop + 8.f;
-	DrawText(FString::Printf(TEXT("CART (%d)"), Phone->GetCartNumLines()), FLinearColor(0.7f, 1.f, 0.7f), CartX + 8.f, cy, Font);
-	cy += 26.f;
-
+	// --- Winkelwagen-inhoud ---
+	float cy = ListTop + 34.f;
+	const float CartInnerX = CartX + 10.f;
+	const float CartFooterY = ListBottom - 92.f;
 	const int32 Lines = Phone->GetCartNumLines();
+	if (Lines == 0)
+	{
+		DrawText(TEXT("Cart is empty."), FLinearColor(0.6f, 0.6f, 0.68f), CartInnerX, cy, Font);
+	}
 	for (int32 li = 0; li < Lines; ++li)
 	{
 		FName LId; int32 LQty = 0;
 		if (!Phone->GetCartLine(li, LId, LQty)) { continue; }
-		if (cy > SY + StoreH - 110.f) { DrawText(TEXT("..."), FLinearColor::Gray, CartX + 8.f, cy, Font); break; }
+		if (cy > CartFooterY - 36.f) { DrawText(TEXT("..."), FLinearColor::Gray, CartInnerX, cy, Font); break; }
 		const int32 LinePrice = Store->GetCatalogPriceCents(LId) * LQty;
 		FString LName = Store->GetCatalogName(LId).ToString();
-		if (LName.Len() > 22) { LName = LName.Left(21) + TEXT("."); }
-		DrawText(FString::Printf(TEXT("%s x%d"), *LName, LQty), FLinearColor(0.9f, 0.92f, 1.f), CartX + 8.f, cy, Font);
-		DrawText(FString::Printf(TEXT("EUR %.2f"), LinePrice / 100.f), FLinearColor(1.f, 0.95f, 0.7f), CartX + 8.f, cy + 16.f, Font);
-		Mini(FName(*FString::Printf(TEXT("cdec_%d"), li)), TEXT("-"), CartX + CartW - 86.f, cy + 6.f, 22.f, 20.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f));
-		Mini(FName(*FString::Printf(TEXT("cinc_%d"), li)), TEXT("+"), CartX + CartW - 60.f, cy + 6.f, 22.f, 20.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f));
-		Mini(FName(*FString::Printf(TEXT("cdel_%d"), li)), TEXT("x"), CartX + CartW - 34.f, cy + 6.f, 22.f, 20.f, FLinearColor(0.4f, 0.18f, 0.18f, 0.98f));
-		cy += 38.f;
+		if (LName.Len() > 18) { LName = LName.Left(17) + TEXT("."); }
+		DrawRect(FLinearColor(0.09f, 0.10f, 0.13f, 0.95f), CartX + 4.f, cy - 2.f, CartW - 8.f, 38.f);
+		DrawText(FString::Printf(TEXT("%s  x%d"), *LName, LQty), FLinearColor(0.9f, 0.92f, 1.f), CartInnerX, cy, Font);
+		DrawText(FString::Printf(TEXT("EUR %.2f"), LinePrice / 100.f), FLinearColor(1.f, 0.95f, 0.7f), CartInnerX, cy + 16.f, Font);
+		Btn(FName(*FString::Printf(TEXT("cdec_%d"), li)), TEXT("-"), CartX + CartW - 84.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
+		Btn(FName(*FString::Printf(TEXT("cinc_%d"), li)), TEXT("+"), CartX + CartW - 58.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
+		Btn(FName(*FString::Printf(TEXT("cdel_%d"), li)), TEXT("x"), CartX + CartW - 32.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.42f, 0.18f, 0.18f, 0.98f), FLinearColor::White);
+		cy += 42.f;
 	}
 
-	// Totaal + knoppen onderaan de cart.
-	const float By = SY + StoreH - 70.f;
+	// Cart-footer: totaal + CHECKOUT + Clear.
+	DrawRect(FLinearColor(0.2f, 0.2f, 0.25f, 0.9f), CartX + 8.f, CartFooterY - 6.f, CartW - 16.f, 1.f);
 	DrawText(FString::Printf(TEXT("Total: EUR %.2f"), Phone->GetCartTotalCents() / 100.f),
-		FLinearColor(1.f, 0.95f, 0.55f), CartX + 8.f, By - 24.f, Font);
-	Mini(FName(TEXT("checkout")), TEXT("CHECKOUT"), CartX + 8.f, By, CartW - 16.f, 26.f,
-		Phone->GetCartNumLines() > 0 ? FLinearColor(0.2f, 0.5f, 0.25f, 0.98f) : FLinearColor(0.18f, 0.2f, 0.22f, 0.95f));
-	Mini(FName(TEXT("cartclear")), TEXT("Clear"), CartX + 8.f, By + 30.f, 90.f, 22.f, FLinearColor(0.3f, 0.2f, 0.2f, 0.95f));
+		FLinearColor(1.f, 0.95f, 0.55f), CartInnerX, CartFooterY, Font);
+	Btn(FName(TEXT("checkout")), TEXT("CHECKOUT"), CartInnerX, CartFooterY + 24.f, CartW - 20.f, 30.f,
+		Phone->GetCartNumLines() > 0 ? FLinearColor(0.2f, 0.55f, 0.27f, 0.98f) : FLinearColor(0.18f, 0.2f, 0.22f, 0.95f), FLinearColor::White);
+	Btn(FName(TEXT("cartclear")), TEXT("Clear"), CartInnerX, CartFooterY + 58.f, CartW - 20.f, 24.f,
+		FLinearColor(0.3f, 0.2f, 0.2f, 0.95f), FLinearColor(0.95f, 0.85f, 0.85f));
 }
 
 void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
