@@ -40,7 +40,7 @@ class WEEDSHOPCORE_API UPhoneWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	void SetPhone(UPhoneClientComponent* InPhone) { Phone = InPhone; }
+	void SetPhone(UPhoneClientComponent* InPhone);
 
 	// Door de knoppen aangeroepen (Action: 0=open app[Param], 1=home, 2=sluit, 3=koop[Param],
 	// 5=accept bericht, 6=decline bericht).

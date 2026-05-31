@@ -59,6 +59,11 @@ void UPhoneButton::HandleClicked()
 	}
 }
 
+void UPhoneWidget::SetPhone(UPhoneClientComponent* InPhone)
+{
+	Phone = InPhone;
+}
+
 TSharedRef<SWidget> UPhoneWidget::RebuildWidget()
 {
 	if (WidgetTree && !WidgetTree->RootWidget)

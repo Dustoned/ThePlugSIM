@@ -26,6 +26,7 @@
 #include "Customer/CustomerBase.h"
 #include "Placement/BuildComponent.h"
 #include "UI/StatusHudWidget.h"
+#include "UI/DealWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "EngineUtils.h"
 
@@ -65,6 +66,8 @@ void AWeedShopHUD::BeginPlay()
 	{
 		StatusWidget = CreateWidget<UStatusHudWidget>(PlayerOwner, UStatusHudWidget::StaticClass());
 		if (StatusWidget) { StatusWidget->AddToViewport(0); }
+		DealWidget = CreateWidget<UDealWidget>(PlayerOwner, UDealWidget::StaticClass());
+		if (DealWidget) { DealWidget->AddToViewport(30); }
 	}
 }
 
@@ -93,10 +96,7 @@ void AWeedShopHUD::DrawHUD()
 		{
 			DrawRollUI(Phone);
 		}
-		else if (Phone->IsDealOpen())
-		{
-			DrawDealUI(Phone);
-		}
+		// Het deal-scherm is nu een UMG-widget (UDealWidget) — niet meer op de canvas.
 		else if (Phone->IsInventoryOpen())
 		{
 			if (UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr)

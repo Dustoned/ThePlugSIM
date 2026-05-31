@@ -5,12 +5,32 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/Button.h"
 #include "Styling/SlateBrush.h"
 #include "Fonts/SlateFontInfo.h"
+#include "WeedUiStyle.generated.h"
 
 class UWidgetTree;
 class UWidget;
 class UTextBlock;
+
+// Herbruikbare klik-knop die een actie-id + parameter doorgeeft via een gewone delegate
+// (bind met BindLambda in C++). Voor knoppen in alle UMG-panelen.
+DECLARE_DELEGATE_TwoParams(FWeedButtonClicked, int32, int32);
+
+UCLASS()
+class WEEDSHOPCORE_API UWeedActionButton : public UButton
+{
+	GENERATED_BODY()
+
+public:
+	int32 Action = 0;
+	int32 Param = 0;
+	FWeedButtonClicked OnAction;
+
+	UFUNCTION()
+	void Handle() { OnAction.ExecuteIfBound(Action, Param); }
+};
 
 namespace WeedUI
 {

@@ -65,4 +65,8 @@ protected:
 	// Altijd-zichtbaar status-paneel (UMG).
 	UPROPERTY(Transient)
 	TObjectPtr<class UStatusHudWidget> StatusWidget;
+
+	// Deal-scherm (UMG).
+	UPROPERTY(Transient)
+	TObjectPtr<class UDealWidget> DealWidget;
 };
