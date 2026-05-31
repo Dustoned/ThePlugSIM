@@ -22,6 +22,7 @@
 #include "Customer/CustomerBase.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
+#include "Progression/LevelComponent.h"
 #include "ThePlugSIM.h"
 
 AThePlugSIMCharacter::AThePlugSIMCharacter()
@@ -293,6 +294,12 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 
 	// Prospect genoeg opgewarmd? Dan wordt het nu een echte klant ("vond het lekker, heb je meer?").
 	const bool bConverted = Customer->RefreshProspect();
+
+	// XP voor het werven: klein per sample, bonus als je iemand omzet naar koper.
+	if (GS && GS->GetLeveling())
+	{
+		GS->GetLeveling()->AddXP(bConverted ? 25 : 3);
+	}
 
 	if (GEngine && !(bPicky && Quality < 0.5f))
 	{

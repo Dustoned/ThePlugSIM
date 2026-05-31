@@ -12,6 +12,7 @@
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Progression/LevelComponent.h"
 #include "Phone/ContactsComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Inventory/InventoryComponent.h"
@@ -417,6 +418,10 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 			Left = FString::Printf(TEXT("%s  %02d:%02d"), GS->GetDayCycle()->IsNight() ? TEXT("Night") : TEXT("Day"),
 				Mins / 60, Mins % 60);
 		}
+		if (GS && GS->GetLeveling())
+		{
+			Left = FString::Printf(TEXT("Lv %d   %s"), GS->GetLeveling()->GetLevel(), *Left);
+		}
 		DrawText(Left, FLinearColor(0.7f, 0.8f, 0.95f), SX, y, Font);
 		if (GS && GS->GetEconomy())
 		{
@@ -554,6 +559,25 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		}
 		else if (App == 4) // Settings
 		{
+			// Level + XP-balk bovenaan.
+			if (GS && GS->GetLeveling())
+			{
+				ULevelComponent* Lv = GS->GetLeveling();
+				if (Lv->GetLevel() >= ULevelComponent::MaxLevel)
+				{
+					DrawText(FString::Printf(TEXT("Level %d  (MAX)"), Lv->GetLevel()), FLinearColor(0.7f, 1.f, 0.7f), InnerX, y, Font);
+					y += 22.f;
+				}
+				else
+				{
+					DrawText(FString::Printf(TEXT("Level %d   XP %d / %d"), Lv->GetLevel(), Lv->GetCurrentXP(), Lv->GetXPToNext()),
+						FLinearColor(0.7f, 1.f, 0.7f), InnerX, y, Font);
+					y += 20.f;
+					DrawRect(FLinearColor(0.15f, 0.15f, 0.18f, 0.95f), InnerX, y, InnerW, 12.f);
+					DrawRect(FLinearColor(0.3f, 0.75f, 1.f, 0.98f), InnerX, y, InnerW * Lv->GetLevelFraction(), 12.f);
+					y += 20.f;
+				}
+			}
 			DrawText(TEXT("Game"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font); y += 24.f;
 			if (GS)
 			{

@@ -9,6 +9,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Phone/ContactsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
+#include "Progression/LevelComponent.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -303,6 +304,16 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 
 	State = ECustomerState::Served;
 	WriteStatsToRegistry();
+
+	// XP: per verdiende euro + een vaste bonus per geslaagde deal.
+	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (ULevelComponent* Lv = GS->GetLeveling())
+		{
+			Lv->AddXP(5 + Total / 100);
+		}
+	}
+
 	UE_LOG(LogWeedShop, Log, TEXT("Deal: %dx %s%s voor %d cents (resp %.0f loy %.0f ver %.0f)."),
 		DesiredQuantity, *ProductId.ToString(), bSubstitute ? TEXT(" [substitute]") : TEXT(""), Total, Respect, Loyalty, Addiction);
 	return EDealResult::Accepted;

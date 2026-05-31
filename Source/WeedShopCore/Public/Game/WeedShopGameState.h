@@ -20,6 +20,7 @@ class UStoreComponent;
 class UContactsComponent;
 class UNpcRegistryComponent;
 class UHeatComponent;
+class ULevelComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
@@ -60,6 +61,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UHeatComponent* GetHeat() const { return Heat; }
 
+	// Gedeeld crew-level (1..100) + XP.
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	ULevelComponent* GetLeveling() const { return Leveling; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
@@ -84,4 +89,7 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UHeatComponent> Heat;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<ULevelComponent> Leveling;
 };

@@ -11,6 +11,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Progression/LevelComponent.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
@@ -427,6 +428,15 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 
 	if (Harvested > 0)
 	{
+		// XP voor het oogsten: per gram + bonus per plant.
+		if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (ULevelComponent* Lv = GS->GetLeveling())
+			{
+				Lv->AddXP(Harvested * 10 + TotalGrams);
+			}
+		}
+
 		// Eén oogst-actie verbruikt één soil-lading.
 		if (SoilUsesLeft > 0) { SoilUsesLeft--; }
 		if (SoilUsesLeft <= 0)

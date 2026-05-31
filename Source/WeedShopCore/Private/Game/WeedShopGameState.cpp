@@ -8,6 +8,7 @@
 #include "Phone/ContactsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
+#include "Progression/LevelComponent.h"
 
 AWeedShopGameState::AWeedShopGameState()
 {
@@ -20,4 +21,5 @@ AWeedShopGameState::AWeedShopGameState()
 	Contacts = CreateDefaultSubobject<UContactsComponent>(TEXT("Contacts"));
 	NpcRegistry = CreateDefaultSubobject<UNpcRegistryComponent>(TEXT("NpcRegistry"));
 	Heat = CreateDefaultSubobject<UHeatComponent>(TEXT("Heat"));
+	Leveling = CreateDefaultSubobject<ULevelComponent>(TEXT("Leveling"));
 }
