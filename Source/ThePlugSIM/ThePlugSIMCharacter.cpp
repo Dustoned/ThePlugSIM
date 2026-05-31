@@ -454,26 +454,24 @@ void AThePlugSIMCharacter::BeginPlay()
 		if (!bHasAtm)
 		{
 			// Plek: getagde "AtmPoint" > op straat (waar klanten verschijnen) > als fallback bij de speler.
+			// GEEN ground-trace van bovenaf (die pakte het dak); we gebruiken de grond-Z van het
+			// referentiepunt zelf, want zowel AtmPoint als de klant-spawn staan al op straatniveau.
 			FVector Loc = GetActorLocation() + GetActorForwardVector() * 250.f;
+			Loc.Z = GetActorLocation().Z - GetSimpleCollisionHalfHeight(); // voeten van de speler
 			bool bFound = false;
-			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It) // 1) getagde AtmPoint heeft voorrang
 			{
 				if (It->ActorHasTag(FName(TEXT("AtmPoint")))) { Loc = It->GetActorLocation(); bFound = true; break; }
 			}
-			if (!bFound)
+			if (!bFound) // 2) anders: op straat naast de klant-spawn
 			{
 				for (TActorIterator<ACustomerSpawner> It(GetWorld()); It; ++It)
 				{
-					Loc = It->GetActorLocation() + FVector(120.f, 120.f, 0.f); // net naast de spawn, op straat
-					bFound = true; break;
+					Loc = It->GetActorLocation() + FVector(150.f, 0.f, 0.f);
+					break;
 				}
 			}
-			FHitResult GroundHit;
-			FCollisionQueryParams GP; GP.AddIgnoredActor(this);
-			if (GetWorld()->LineTraceSingleByChannel(GroundHit, Loc + FVector(0, 0, 400.f), Loc - FVector(0, 0, 600.f), ECC_Visibility, GP))
-			{
-				Loc.Z = GroundHit.ImpactPoint.Z + 70.f; // halve hoogte van de kast (~140cm)
-			}
+			Loc.Z += 70.f; // halve hoogte van de kast (~140cm) zodat 'ie op de grond staat
 			FActorSpawnParameters SP;
 			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			GetWorld()->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP);
