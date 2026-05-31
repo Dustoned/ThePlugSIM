@@ -1,0 +1,146 @@
+#include "UI/CompassWidget.h"
+
+#include "UI/WeedUiStyle.h"
+#include "Customer/CustomerBase.h"
+
+#include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Border.h"
+#include "Components/SizeBox.h"
+#include "Components/TextBlock.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "EngineUtils.h"
+
+TSharedRef<SWidget> UCompassWidget::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
+		WidgetTree->RootWidget = Canvas;
+		BuildShell(Canvas);
+	}
+	return Super::RebuildWidget();
+}
+
+void UCompassWidget::BuildShell(UCanvasPanel* Root)
+{
+	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	// Achtergrondbalk bovenaan, gecentreerd.
+	UBorder* Bg = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CompassBg"));
+	Bg->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.7f), 10.f));
+	Bg->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Bg->SetClipping(EWidgetClipping::ClipToBounds);
+	UCanvasPanelSlot* BgS = Root->AddChildToCanvas(Bg);
+	BgS->SetAnchors(FAnchors(0.5f, 0.f, 0.5f, 0.f));
+	BgS->SetAlignment(FVector2D(0.5f, 0.f));
+	BgS->SetAutoSize(false);
+	BgS->SetSize(FVector2D(BandW, 34.f));
+	BgS->SetPosition(FVector2D(0.f, 12.f));
+
+	Band = WidgetTree->ConstructWidget<UCanvasPanel>();
+	Band->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Bg->SetContent(Band);
+
+	// Middenstreepje (jouw kijkrichting).
+	UBorder* Center = WidgetTree->ConstructWidget<UBorder>();
+	Center->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.85f), 1.f));
+	Center->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UCanvasPanelSlot* CenS = Band->AddChildToCanvas(Center);
+	CenS->SetAutoSize(false); CenS->SetSize(FVector2D(2.f, 30.f));
+	CenS->SetAlignment(FVector2D(0.5f, 0.5f)); CenS->SetPosition(FVector2D(BandW * 0.5f, 17.f));
+
+	// Windstreken.
+	static const TCHAR* Names[8] = { TEXT("N"), TEXT("NE"), TEXT("E"), TEXT("SE"), TEXT("S"), TEXT("SW"), TEXT("W"), TEXT("NW") };
+	for (int32 i = 0; i < 8; ++i)
+	{
+		UTextBlock* T = WeedUI::Text(WidgetTree, Names[i], (i % 2 == 0) ? 14 : 10, (i % 2 == 0) ? FLinearColor::White : FLinearColor(0.6f, 0.65f, 0.75f), true);
+		Band->AddChildToCanvas(T);
+		CardinalLabels.Add(T);
+		CardinalYaws.Add(i * 45.f);
+	}
+
+	// Marker-pool voor mensen buiten.
+	for (int32 i = 0; i < 24; ++i)
+	{
+		UBorder* M = WidgetTree->ConstructWidget<UBorder>();
+		M->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 0.6f, 0.2f, 0.95f), 5.f));
+		M->SetVisibility(ESlateVisibility::Collapsed);
+		UCanvasPanelSlot* MS = Band->AddChildToCanvas(M);
+		MS->SetAutoSize(false); MS->SetSize(FVector2D(9.f, 9.f)); MS->SetAlignment(FVector2D(0.5f, 0.5f));
+		Markers.Add(M);
+	}
+
+	// Waypoint-marker (later).
+	WaypointMarker = WidgetTree->ConstructWidget<UBorder>();
+	WaypointMarker->SetBrush(WeedUI::Rounded(FLinearColor(0.3f, 0.8f, 1.f, 0.98f), 3.f));
+	WaypointMarker->SetVisibility(ESlateVisibility::Collapsed);
+	UCanvasPanelSlot* WS = Band->AddChildToCanvas(WaypointMarker);
+	WS->SetAutoSize(false); WS->SetSize(FVector2D(10.f, 14.f)); WS->SetAlignment(FVector2D(0.5f, 0.5f));
+}
+
+void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y)
+{
+	if (!W) { return; }
+	if (FMath::Abs(RelAngleDeg) > HalfFov)
+	{
+		W->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+	W->SetVisibility(ESlateVisibility::HitTestInvisible);
+	const float X = BandW * 0.5f + (RelAngleDeg / HalfFov) * (BandW * 0.5f);
+	if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(W->Slot))
+	{
+		S->SetPosition(FVector2D(X, Y));
+	}
+}
+
+void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
+{
+	Super::NativeTick(MyGeometry, DeltaTime);
+	SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	APlayerController* PC = GetOwningPlayer();
+	APawn* P = GetOwningPlayerPawn();
+	if (!PC || !P) { return; }
+
+	const float PlayerYaw = PC->GetControlRotation().Yaw;
+	const FVector PL = P->GetActorLocation();
+
+	// Windstreken.
+	for (int32 i = 0; i < CardinalLabels.Num(); ++i)
+	{
+		const float Rel = FRotator::NormalizeAxis(CardinalYaws[i] - PlayerYaw);
+		PlaceOnBand(CardinalLabels[i], Rel, 11.f);
+	}
+
+	// Mensen buiten (klanten) als stipjes.
+	int32 m = 0;
+	for (TActorIterator<ACustomerBase> It(GetWorld()); It && m < Markers.Num(); ++It)
+	{
+		const FVector D = It->GetActorLocation() - PL;
+		if (D.SizeSquared2D() < 100.f) { continue; }
+		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
+		const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
+		PlaceOnBand(Markers[m], Rel, 22.f);
+		++m;
+	}
+	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
+
+	// Waypoint (optioneel, later).
+	if (WaypointMarker)
+	{
+		if (bHasWaypoint)
+		{
+			const FVector D = WaypointWorld - PL;
+			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
+			PlaceOnBand(WaypointMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+		}
+		else
+		{
+			WaypointMarker->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+}

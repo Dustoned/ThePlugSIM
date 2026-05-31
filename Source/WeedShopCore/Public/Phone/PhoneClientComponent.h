@@ -292,6 +292,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UInventoryWidget> InventoryWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UCompassWidget> CompassWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app

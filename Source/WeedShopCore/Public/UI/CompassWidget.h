@@ -1,0 +1,41 @@
+// UCompassWidget — strakke kompasbalk bovenaan (UMG): N/O/Z/W draaien mee met je kijkrichting,
+// mensen die buiten lopen verschijnen als stipjes, en later kunnen waypoints worden toegevoegd.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "CompassWidget.generated.h"
+
+class UCanvasPanel;
+class UBorder;
+class UTextBlock;
+
+UCLASS()
+class WEEDSHOPCORE_API UCompassWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	// Optioneel doel-waypoint (wereldlocatie). Zet bRelevant=false om te verbergen. Voor later gebruik.
+	void SetWaypoint(const FVector& World, bool bActive) { WaypointWorld = World; bHasWaypoint = bActive; }
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
+
+	void BuildShell(UCanvasPanel* Root);
+	void PlaceOnBand(class UWidget* W, float RelAngleDeg, float Y);
+
+	UPROPERTY() TObjectPtr<UCanvasPanel> Band;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> CardinalLabels;
+	UPROPERTY() TArray<TObjectPtr<UBorder>> Markers;       // mensen buiten
+	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;
+
+	TArray<float> CardinalYaws;
+	FVector WaypointWorld = FVector::ZeroVector;
+	bool bHasWaypoint = false;
+
+	static constexpr float BandW = 460.f;
+	static constexpr float HalfFov = 90.f; // toont 180 graden over de balk
+};

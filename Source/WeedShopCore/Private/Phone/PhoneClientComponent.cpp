@@ -22,6 +22,7 @@
 #include "UI/PlantInfoWidget.h"
 #include "UI/HotbarWidget.h"
 #include "UI/InventoryWidget.h"
+#include "UI/CompassWidget.h"
 #include "Blueprint/UserWidget.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
@@ -103,6 +104,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (HotbarWidget) { HotbarWidget->AddToViewport(5); }
 	InventoryWidget = CreateWidget<UInventoryWidget>(PC, UInventoryWidget::StaticClass());
 	if (InventoryWidget) { InventoryWidget->SetPhone(this); InventoryWidget->AddToViewport(25); }
+	CompassWidget = CreateWidget<UCompassWidget>(PC, UCompassWidget::StaticClass());
+	if (CompassWidget) { CompassWidget->AddToViewport(3); }
 }
 
 void UPhoneClientComponent::Toggle()
