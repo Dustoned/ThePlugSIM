@@ -40,9 +40,31 @@ class WEEDSHOPCORE_API UInventoryComponent : public UActorComponent
 public:
 	UInventoryComponent();
 
-	// Max aantal verschillende stapels (0 = ongelimiteerd).
+	// Max aantal verschillende stapels/slots (0 = ongelimiteerd).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")
-	int32 MaxStacks = 0;
+	int32 MaxStacks = 24;
+
+	// Max draaggewicht (abstracte kg). 0 = ongelimiteerd.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")
+	float MaxWeight = 60.f;
+
+	// Gewicht per stuk van een item (kg). Som hiervan = totaalgewicht.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	float GetUnitWeight(FName ItemId) const;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	float GetTotalWeight() const;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	int32 GetUsedSlots() const { return Stacks.Num(); }
+
+	// Of dit item-id momenteel aan een hotbar-slot is toegewezen.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	bool IsOnHotbar(FName ItemId) const;
+
+	// Haal een item van de hotbar af (alle slots die het bevatten leegmaken).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void UnassignHotbar(FName ItemId);
 
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Inventory")
 	FOnInventoryChanged OnInventoryChanged;

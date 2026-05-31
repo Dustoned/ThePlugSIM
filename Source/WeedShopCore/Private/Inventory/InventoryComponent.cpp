@@ -1,6 +1,7 @@
 #include "Inventory/InventoryComponent.h"
 
 #include "WeedShopCore.h"
+#include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
 UInventoryComponent::UInventoryComponent()
@@ -29,6 +30,16 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float Quality)
 	}
 	if (ItemId.IsNone() || Count <= 0)
 	{
+		return false;
+	}
+
+	// Gewicht-limiet (geldt voor zowel nieuwe als bestaande stapels).
+	if (MaxWeight > 0.f && GetTotalWeight() + GetUnitWeight(ItemId) * Count > MaxWeight + 0.001f)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy — sell or drop something."));
+		}
 		return false;
 	}
 
@@ -67,6 +78,42 @@ float UInventoryComponent::GetItemQuality(FName ItemId) const
 {
 	const int32 Index = FindStackIndex(ItemId);
 	return Index != INDEX_NONE ? Stacks[Index].Quality : 0.f;
+}
+
+float UInventoryComponent::GetUnitWeight(FName ItemId) const
+{
+	const FString S = ItemId.ToString();
+	if (S.StartsWith(TEXT("Bud_")))    { return 0.005f; } // per gram
+	if (S.StartsWith(TEXT("Seed_")))   { return 0.002f; }
+	if (S.StartsWith(TEXT("Joint_")))  { return 0.01f; }
+	if (S.StartsWith(TEXT("Papers_"))) { return 0.05f; } // per pakje
+	if (S.StartsWith(TEXT("Soil_")))   { return 1.5f; }  // zware zak
+	if (S.StartsWith(TEXT("Pot")))     { return 4.0f; }  // zware pot
+	if (S.StartsWith(TEXT("WaterBottle"))) { return 0.6f; }
+	return 0.2f;
+}
+
+float UInventoryComponent::GetTotalWeight() const
+{
+	float W = 0.f;
+	for (const FInventoryStack& S : Stacks)
+	{
+		W += GetUnitWeight(S.ItemId) * S.Quantity;
+	}
+	return W;
+}
+
+bool UInventoryComponent::IsOnHotbar(FName ItemId) const
+{
+	return HotbarSlots.Contains(ItemId);
+}
+
+void UInventoryComponent::UnassignHotbar(FName ItemId)
+{
+	for (FName& Slot : HotbarSlots)
+	{
+		if (Slot == ItemId) { Slot = NAME_None; }
+	}
 }
 
 bool UInventoryComponent::RemoveItem(FName ItemId, int32 Count)
@@ -166,19 +213,8 @@ void UInventoryComponent::RefreshHotbarAuto()
 		}
 	}
 
-	// 2) Vul lege slots met voorraad die nog nergens in de hotbar staat.
-	for (const FInventoryStack& S : Stacks)
-	{
-		if (HotbarSlots.Contains(S.ItemId))
-		{
-			continue;
-		}
-		const int32 Empty = HotbarSlots.IndexOfByKey(NAME_None);
-		if (Empty != INDEX_NONE)
-		{
-			HotbarSlots[Empty] = S.ItemId;
-		}
-	}
+	// Hotbar wordt NIET meer automatisch gevuld: je sleept zelf items van de inventory naar de
+	// hotbar (zo staan ze niet dubbel). RefreshHotbarAuto ruimt alleen verdwenen items op.
 }
 
 void UInventoryComponent::OnRep_Stacks()
