@@ -238,6 +238,13 @@ void UPhoneClientComponent::ConfirmRoll()
 	UpdateCursor();
 }
 
+void UPhoneClientComponent::LoadRoll()
+{
+	SetRollLoadedUI(true, RollGrams);
+	bRollOpen = false; // menu sluit; rollen door rechtermuis in te houden
+	UpdateCursor();
+}
+
 namespace
 {
 	// Paper-tiers oplopend in capaciteit (gram per joint).

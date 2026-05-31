@@ -113,17 +113,18 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			Phone->SetStonedHud(GetStonedFraction(), StonedSeconds, GetStonedIntensity(), GetStonedXpFrac());
 		}
 
-		// Rollen: vloei (geladen) in de hand + rechtermuis inhouden -> rol de joint.
+		// Rollen: geladen vloei in de hand + rechtermuis inhouden -> rol de joint. (Laden gebeurt via
+		// de "Load"-knop in het rol-menu; de lading blijft staan tot je 'm rolt.)
 		const bool bPapersInHand = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_"));
-		if (bRmbDown && !bUiOpen && bPapersInHand && bRollLoaded)
+		if (bRmbDown && !bUiOpen && bPapersInHand && Phone && Phone->IsRollLoadedUI())
 		{
 			RollHoldTime += DeltaSeconds;
 			if (!bRollFired && RollHoldTime >= RollHoldRequired)
 			{
 				bRollFired = true;
-				if (Phone) { Phone->SetRollGrams(RollLoadGrams); Phone->ConfirmRoll(); }
-				bRollLoaded = false; // gerold -> laad opnieuw (F) voor de volgende
-				if (Phone) { Phone->SetRollLoadedUI(false, 0); }
+				Phone->SetRollGrams(Phone->GetRollLoadGramsUI());
+				Phone->ConfirmRoll();
+				Phone->SetRollLoadedUI(false, 0); // gerold -> open het menu weer (F) om opnieuw te laden
 			}
 		}
 		else
@@ -673,33 +674,15 @@ void AThePlugSIMCharacter::OnLoadKey()
 	if (!Phone || !Inventory) { return; }
 	if (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsDealOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen()) { return; }
 
-	// Alleen laden met vloei in de hand.
-	if (!Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_")))
+	// F opent (of sluit) het rol-menu zolang je vloei vasthoudt. In het menu kies je het aantal gram
+	// en klik je op "Load"; daarna rechtermuis inhouden om te rollen.
+	if (Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_")) || Phone->IsRollOpen())
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Hold rolling papers (hotbar) to load a joint.")); }
-		return;
+		Phone->ToggleRollUI();
 	}
-
-	// Pak het maximaal aantal gram dat de vloei toelaat én waar je wiet voor hebt.
-	const int32 MaxG = Phone->GetMaxJointGrams();
-	int32 Grams = 0; float Thc = 0.f, Q = 0.f;
-	for (int32 g = MaxG; g >= 1; --g)
+	else if (GEngine)
 	{
-		float T = 0.f, QQ = 0.f;
-		if (Phone->GetRollWeedInfo(g, T, QQ)) { Grams = g; Thc = T; Q = QQ; break; }
-	}
-	if (Grams <= 0)
-	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No weed (or papers) to load.")); }
-		return;
-	}
-
-	bRollLoaded = true; RollLoadGrams = Grams; RollLoadThc = Thc; RollLoadQuality = Q;
-	Phone->SetRollLoadedUI(true, Grams);
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Loaded %dg (%.0f%% quality). Hold right-click to roll."), Grams, Q));
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Hold rolling papers (hotbar) to open the roll menu."));
 	}
 }
 

@@ -196,6 +196,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Roll")
 	void ConfirmRoll();
 
+	// "Load"-knop in het rol-menu: onthoud het gekozen aantal gram als geladen joint en sluit het menu.
+	// Daarna rol je door rechtermuis in te houden (afgehandeld in de character).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Roll")
+	void LoadRoll();
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	bool IsRollOpen() const { return bRollOpen; }
 
