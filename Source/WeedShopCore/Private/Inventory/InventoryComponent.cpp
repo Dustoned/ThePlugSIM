@@ -20,7 +20,7 @@ int32 UInventoryComponent::FindStackIndex(FName ItemId) const
 	return Stacks.IndexOfByPredicate([ItemId](const FInventoryStack& S) { return S.ItemId == ItemId; });
 }
 
-bool UInventoryComponent::AddItem(FName ItemId, int32 Count)
+bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float Quality)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
@@ -35,6 +35,13 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count)
 	const int32 Index = FindStackIndex(ItemId);
 	if (Index != INDEX_NONE)
 	{
+		// Kwaliteit gewogen middelen bij samenvoegen (alleen als er kwaliteit-info is).
+		if (Quality >= 0.f)
+		{
+			const int32 OldQty = Stacks[Index].Quantity;
+			const float OldQ = Stacks[Index].Quality;
+			Stacks[Index].Quality = (OldQ * OldQty + Quality * Count) / FMath::Max(1, OldQty + Count);
+		}
 		Stacks[Index].Quantity += Count;
 	}
 	else
@@ -45,11 +52,21 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count)
 				*ItemId.ToString(), MaxStacks);
 			return false;
 		}
-		Stacks.Add(FInventoryStack{ ItemId, Count });
+		FInventoryStack NewStack;
+		NewStack.ItemId = ItemId;
+		NewStack.Quantity = Count;
+		NewStack.Quality = FMath::Max(0.f, Quality);
+		Stacks.Add(NewStack);
 	}
 
 	OnRep_Stacks(); // server: lokaal broadcasten (OnRep draait hier niet vanzelf)
 	return true;
+}
+
+float UInventoryComponent::GetItemQuality(FName ItemId) const
+{
+	const int32 Index = FindStackIndex(ItemId);
+	return Index != INDEX_NONE ? Stacks[Index].Quality : 0.f;
 }
 
 bool UInventoryComponent::RemoveItem(FName ItemId, int32 Count)

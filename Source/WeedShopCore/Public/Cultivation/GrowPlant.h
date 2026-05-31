@@ -83,6 +83,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetCareMultiplier() const { return CareMultiplier; }
 
+	// Tijd-gewogen gemiddelde verzorging = de kwaliteit die je bij de oogst krijgt (0..1).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetCareAvg() const { return CareAvg; }
+
 	// Geschatte real-time seconden tot oogstklaar (0 als al klaar / leeg).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetSecondsRemaining() const;
@@ -129,9 +133,20 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_Visual)
 	EGrowthPhase Phase = EGrowthPhase::Seedling;
 
-	// 0.3..1.0 — verzorging; bepaalt yield + kwaliteit. Daalt langzaam, stijgt door water.
+	// 0.3..MaxCare — huidige verzorging ("hoe nat"). Daalt langzaam, stijgt door water geven.
 	UPROPERTY(Replicated)
 	float CareMultiplier = 0.6f;
+
+	// Tijd-gewogen gemiddelde verzorging = de uiteindelijke kwaliteit (gerepliceerd voor UI).
+	UPROPERTY(Replicated)
+	float CareAvg = 0.6f;
+
+	// Accumulatoren voor het gemiddelde (server-only).
+	float CareSum = 0.f;
+	float CareTime = 0.f;
+
+	// Maximaal haalbare verzorging op basis van gear (basis lekt -> cap < 1.0).
+	float GetMaxCare() const;
 
 	// Of er een plant in de pot staat (false = lege pot, wacht op een zaadje).
 	UPROPERTY(Replicated)

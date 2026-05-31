@@ -203,12 +203,15 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 		return;
 	}
 
+	// THC% van de gebruikte wiet -> komt mee in de joint.
+	const float BudThc = Inv->GetItemQuality(BudItem);
+
 	Inv->RemoveItem(BudItem, Grams);
 	Inv->RemoveItem(Paper, 1);
 
-	// Joint-kwaliteit zit in de item-id (Joint_<G>g): meer gram = betere joint.
+	// Joint-gram zit in de id (Joint_<G>g); de THC% bewaren we als stapel-kwaliteit.
 	const FName JointId(*FString::Printf(TEXT("Joint_%dg"), Grams));
-	Inv->AddItem(JointId, 1);
+	Inv->AddItem(JointId, 1, BudThc);
 	if (GEngine)
 	{
 		const FString StrainName = BudItem.ToString().StartsWith(TEXT("Bud_"))

@@ -22,6 +22,11 @@ struct FInventoryStack
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	int32 Quantity = 0;
+
+	// Kwaliteit/THC% van deze stapel (alleen zinvol voor wiet/joints; 0 = n.v.t.).
+	// Bij samenvoegen van dezelfde soort wordt dit gewogen gemiddeld.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+	float Quality = 0.f;
 };
 
 // Vuurt na elke voorraad-wijziging (server én clients), voor UI-refresh.
@@ -43,9 +48,14 @@ public:
 	FOnInventoryChanged OnInventoryChanged;
 
 	// Server-authoritative. Voegt Count toe aan de stapel van ItemId (maakt stapel aan indien nodig).
-	// Geeft false als er geen ruimte is voor een nieuwe stapel (MaxStacks bereikt).
+	// Quality < 0 = geen kwaliteit-info (papers/zaden/etc). Bij samenvoegen van een stapel met
+	// kwaliteit wordt het gewogen gemiddelde genomen. Geeft false als er geen ruimte is (MaxStacks).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
-	bool AddItem(FName ItemId, int32 Count);
+	bool AddItem(FName ItemId, int32 Count, float Quality = -1.f);
+
+	// Kwaliteit/THC% van de stapel met dit item-id (0 als geen/n.v.t.).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	float GetItemQuality(FName ItemId) const;
 
 	// Server-authoritative. Haalt Count weg; false bij onvoldoende voorraad.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")

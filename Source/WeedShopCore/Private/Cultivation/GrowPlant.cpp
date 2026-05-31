@@ -109,6 +109,7 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, GrowthSeconds);
 	DOREPLIFETIME(AGrowPlant, Phase);
 	DOREPLIFETIME(AGrowPlant, CareMultiplier);
+	DOREPLIFETIME(AGrowPlant, CareAvg);
 	DOREPLIFETIME(AGrowPlant, bPlanted);
 	DOREPLIFETIME(AGrowPlant, SoilId);
 	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
@@ -149,8 +150,18 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		UpdatePhaseFromGrowth();
 	}
 
-	// Langzame droogte-stress; een betere pot (CareRetention) vertraagt dit.
-	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.002f * (1.f - CareRetention), 0.3f, 1.0f);
+	// Max haalbare verzorging hangt af van je gear. Basis-setup (geen CareRetention) lekt en
+	// haalt nooit 100%: de eerste wiet is dus niet topkwaliteit. Betere pot/upgrades verhogen dit.
+	const float MaxCare = FMath::Clamp(0.7f + CareRetention, 0.7f, 1.0f);
+
+	// Droogte-stress; betere pot (CareRetention) vertraagt het lekken.
+	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.0045f * (1.f - CareRetention), 0.3f, MaxCare);
+
+	// Kwaliteit = tijd-gewogen gemiddelde van de verzorging (last-minute water geven helpt niet
+	// meer om alsnog 100% te halen).
+	CareSum += CareMultiplier * DeltaSeconds;
+	CareTime += DeltaSeconds;
+	CareAvg = (CareTime > 0.f) ? (CareSum / CareTime) : CareMultiplier;
 }
 
 void AGrowPlant::UpdatePhaseFromGrowth()
@@ -261,7 +272,10 @@ bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn, FName SeedItem)
 	StrainId = StrainToPlant;
 	bPlanted = true;
 	GrowthSeconds = 0.f;
-	CareMultiplier = 0.6f;
+	CareMultiplier = FMath::Min(0.6f, GetMaxCare());
+	CareSum = 0.f;
+	CareTime = 0.f;
+	CareAvg = CareMultiplier;
 	if (const FWeedStrainRow* Strain = GetStrain())
 	{
 		MaxGrowthSeconds = FMath::Max(1.f, Strain->GrowMinutes * 60.f);
@@ -296,6 +310,19 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 		Pct, CareMultiplier * 100.f));
 }
 
+float AGrowPlant::GetMaxCare() const
+{
+	float CareRetention = 0.f;
+	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (const UUpgradeComponent* Upg = GS->GetUpgrades())
+		{
+			CareRetention = FMath::Clamp(Upg->GetEffectTotal(TEXT("CareRetention")), 0.f, 0.9f);
+		}
+	}
+	return FMath::Clamp(0.7f + CareRetention, 0.7f, 1.0f);
+}
+
 void AGrowPlant::Water(APawn* InstigatorPawn)
 {
 	UWaterCanComponent* Can = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UWaterCanComponent>() : nullptr;
@@ -316,7 +343,7 @@ void AGrowPlant::Water(APawn* InstigatorPawn)
 		return;
 	}
 
-	CareMultiplier = FMath::Clamp(CareMultiplier + 0.2f, 0.3f, 1.0f);
+	CareMultiplier = FMath::Clamp(CareMultiplier + 0.2f, 0.3f, GetMaxCare());
 	UE_LOG(LogWeedShop, Log, TEXT("Plant %s gewaterd -> zorg %.0f%%"), *StrainId.ToString(), CareMultiplier * 100.f);
 	if (GEngine)
 	{
@@ -340,13 +367,14 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 	FSoilDef SoilDef;
 	if (GetSoilDef(SoilId, SoilDef)) { SoilYield = SoilDef.YieldMult; SoilQuality = SoilDef.QualityMult; }
 
-	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareMultiplier * SoilYield));
-	const float ActualThc = Strain->BaseThcPercent * CareMultiplier * SoilQuality * FMath::FRandRange(0.9f, 1.1f);
+	// Kwaliteit = gemiddelde verzorging over de hele groei (niet de laatste seconde).
+	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareAvg * SoilYield));
+	const float ActualThc = Strain->BaseThcPercent * CareAvg * SoilQuality * FMath::FRandRange(0.95f, 1.05f);
 
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 	if (Inv && !Strain->HarvestProductId.IsNone())
 	{
-		Inv->AddItem(Strain->HarvestProductId, YieldGrams);
+		Inv->AddItem(Strain->HarvestProductId, YieldGrams, ActualThc);
 		UE_LOG(LogWeedShop, Log, TEXT("Oogst: %dg %s (THC %.1f%%) -> inventory van %s"),
 			YieldGrams, *Strain->HarvestProductId.ToString(), ActualThc, *GetNameSafe(InstigatorPawn));
 		if (GEngine)
@@ -470,7 +498,7 @@ float AGrowPlant::GetEstimatedYieldGrams() const
 	const FWeedStrainRow* Strain = GetStrain();
 	if (!Strain) { return 0.f; }
 	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.YieldMult : 1.f;
-	return Strain->BaseYieldGrams * CareMultiplier * SoilMult;
+	return Strain->BaseYieldGrams * CareAvg * SoilMult;
 }
 
 float AGrowPlant::GetEstimatedThcPercent() const
@@ -478,5 +506,5 @@ float AGrowPlant::GetEstimatedThcPercent() const
 	const FWeedStrainRow* Strain = GetStrain();
 	if (!Strain) { return 0.f; }
 	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.QualityMult : 1.f;
-	return Strain->BaseThcPercent * CareMultiplier * SoilMult;
+	return Strain->BaseThcPercent * CareAvg * SoilMult;
 }

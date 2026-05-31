@@ -134,7 +134,10 @@ void AWeedShopHUD::DrawHUD()
 			}
 			for (const FInventoryStack& Stack : Inv->GetStacks())
 			{
-				DrawText(FString::Printf(TEXT("  %s  x%d"), *PrettyItemName(Stack.ItemId), Stack.Quantity),
+				const bool bHasThc = Stack.Quality > 0.f &&
+					(Stack.ItemId.ToString().StartsWith(TEXT("Bud_")) || Stack.ItemId.ToString().StartsWith(TEXT("Joint_")));
+				const FString ThcStr = bHasThc ? FString::Printf(TEXT("  (%.0f%% THC)"), Stack.Quality) : FString();
+				DrawText(FString::Printf(TEXT("  %s  x%d%s"), *PrettyItemName(Stack.ItemId), Stack.Quantity, *ThcStr),
 					FLinearColor::White, X, Y, Font);
 				Y += 20.f;
 			}
@@ -328,7 +331,10 @@ void AWeedShopHUD::DrawHUD()
 					DrawText(PrettyItemName(HItem),
 						bIsSeed ? FLinearColor(0.7f, 0.85f, 0.6f) : FLinearColor(0.85f, 0.9f, 1.f),
 						SX + 5.f, SY + 4.f, Font);
-					DrawText(FString::Printf(TEXT("x%d"), Inv->GetQuantity(HItem)), FLinearColor::White, SX + 5.f, SY + 24.f, Font);
+					const float HQ = Inv->GetItemQuality(HItem);
+					const bool bHThc = HQ > 0.f && (HItem.ToString().StartsWith(TEXT("Bud_")) || HItem.ToString().StartsWith(TEXT("Joint_")));
+					DrawText(FString::Printf(TEXT("x%d%s"), Inv->GetQuantity(HItem), bHThc ? *FString::Printf(TEXT("  %.0f%%"), HQ) : TEXT("")),
+						FLinearColor::White, SX + 5.f, SY + 24.f, Font);
 				}
 				SX += SlotW + 6.f;
 			}
@@ -699,14 +705,29 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 
 	y += 46.f;
 
-	// Kwaliteit-balk.
-	const float Quality = FMath::Clamp(G / 5.f, 0.f, 1.f);
-	DrawText(FString::Printf(TEXT("Quality: %.0f%%"), Quality * 100.f),
-		Quality >= 0.6f ? FLinearColor::Green : (Quality >= 0.3f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
+	// THC% van de wiet die gebruikt wordt (eerste passende Bud_-stapel) -> potentie van de joint.
+	float WeedThc = 0.f;
+	if (APawn* RP = PlayerOwner ? PlayerOwner->GetPawn() : nullptr)
+	{
+		if (const UInventoryComponent* RInv = RP->FindComponentByClass<UInventoryComponent>())
+		{
+			for (const FInventoryStack& St : RInv->GetStacks())
+			{
+				if (St.ItemId.ToString().StartsWith(TEXT("Bud_")) && St.Quantity >= G)
+				{
+					WeedThc = St.Quality;
+					break;
+				}
+			}
+		}
+	}
+	const float ThcNorm = FMath::Clamp(WeedThc / 40.f, 0.f, 1.f);
+	DrawText(FString::Printf(TEXT("Joint potency: %.0f%% THC   (size: %dg)"), WeedThc, G),
+		ThcNorm >= 0.6f ? FLinearColor::Green : (ThcNorm >= 0.3f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
 		InnerX, y, Font);
 	y += 24.f;
 	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 14.f);
-	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), InnerX, y, (W - 32.f) * Quality, 14.f);
+	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), InnerX, y, (W - 32.f) * ThcNorm, 14.f);
 	y += 28.f;
 
 	DrawButton(FName(TEXT("rollconfirm")), FString::Printf(TEXT("Roll joint (costs %dg weed)"), G),
@@ -794,24 +815,26 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	const float SegW = TrackW / float(N);
 
 	DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.95f), TrackX, TrackY, TrackW, TrackH);
-	// Kleur de gevulde balk naar de prijs: goedkoop=groen, duur=oranje. Volgt de hover.
-	const FLinearColor Fill = (EffPct <= 1.f) ? FLinearColor(0.4f, 0.85f, 0.4f) : FLinearColor(0.9f, 0.55f, 0.3f);
-	DrawRect(Fill, TrackX, TrackY, SegW * (EffIdx + 1), TrackH);
+	// Gevulde balk + handle staan op het VASTGEZETTE bod (verschuift alleen bij klik/sleep).
+	const float CommittedPct = float(CommittedAsk) / Market;
+	const FLinearColor Fill = (CommittedPct <= 1.f) ? FLinearColor(0.4f, 0.85f, 0.4f) : FLinearColor(0.9f, 0.55f, 0.3f);
+	DrawRect(Fill, TrackX, TrackY, SegW * (CommittedIdx + 1), TrackH);
 
 	for (int32 i = 0; i < N; ++i)
 	{
 		const float cx = TrackX + i * SegW;
 		const FName Box(*FString::Printf(TEXT("dealp_%d"), i));
-		if (HoverIdx == i)
+		// Hover = alleen een gele preview-markering (verschuift de balk NIET).
+		if (HoverIdx == i && HoverIdx != CommittedIdx)
 		{
-			DrawRect(FLinearColor(1.f, 0.85f, 0.1f, 0.55f), cx, TrackY - 5.f, SegW, TrackH + 10.f);
+			DrawRect(FLinearColor(1.f, 0.85f, 0.1f, 0.45f), cx, TrackY - 5.f, SegW, TrackH + 10.f);
 		}
 		AddHitBox(FVector2D(cx, TrackY - 6.f), FVector2D(SegW, TrackH + 26.f), Box, true, 3);
 	}
-	// Handle op het effectieve (preview/vastgezette) bod.
-	const float HandleX = TrackX + (EffIdx + 0.5f) * SegW;
-	const float HalfW = (bDragging || bOverTrack) ? 8.f : 5.f;
-	DrawRect((bDragging || bOverTrack) ? FLinearColor(1.f, 0.85f, 0.1f) : FLinearColor::White,
+	// Handle op het vastgezette bod.
+	const float HandleX = TrackX + (CommittedIdx + 0.5f) * SegW;
+	const float HalfW = bDragging ? 8.f : 6.f;
+	DrawRect(bDragging ? FLinearColor(1.f, 0.85f, 0.1f) : FLinearColor::White,
 		HandleX - HalfW, TrackY - 8.f, HalfW * 2.f, TrackH + 16.f);
 	// Eindlabels.
 	DrawText(TEXT("cheap"), FLinearColor(0.6f, 0.9f, 0.6f), TrackX, TrackY + TrackH + 4.f, Font);
