@@ -17,6 +17,7 @@ class WEEDSHOPCORE_API AWeedShopHUD : public AHUD
 
 public:
 	virtual void DrawHUD() override;
+	virtual void BeginPlay() override;
 
 	// Hit-box callbacks (klik + hover) voor de telefoon-knoppen.
 	virtual void NotifyHitBoxClick(FName BoxName) override;
@@ -60,4 +61,8 @@ protected:
 
 	// Tooltip die deze frame getekend moet worden (leeg = geen).
 	FString HoverTooltip;
+
+	// Altijd-zichtbaar status-paneel (UMG).
+	UPROPERTY(Transient)
+	TObjectPtr<class UStatusHudWidget> StatusWidget;
 };
