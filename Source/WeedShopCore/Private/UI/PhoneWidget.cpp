@@ -163,11 +163,7 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	CL->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CL->SetVerticalAlignment(VAlign_Center);
 	StoreCartToggle = MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"), FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bPackagesView = false; bCartView = !bCartView; RefreshStore(); }, 11);
 	CartBar->AddChildToHorizontalBox(StoreCartToggle)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
-	// Packages-knop (onderweg zijnde bestellingen) als hoofd-tab naast de winkelwagen.
-	const int32 PkgN = Ph->GetPendingCount();
-	StorePackagesToggle = MakeActionBtn(FString::Printf(TEXT("Packages (%d)"), PkgN), FLinearColor(0.42f, 0.32f, 0.5f),
-		[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 11);
-	CartBar->AddChildToHorizontalBox(StorePackagesToggle)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+	// (De Packages-knop staat rechtsboven in de app-header naast "Suppliers".)
 	Into->AddChildToVerticalBox(CartBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Scrollbare lijst (alleen deze ververst bij categorie/cart-acties).
@@ -577,12 +573,22 @@ void UPhoneWidget::RefreshContent()
 
 	const int32 App = FMath::Clamp(Phone->GetTab(), 0, 5);
 
-	// App-header: back-knop + titel.
+	// App-header: back-knop + titel (+ rechtsboven de Packages-knop in de Suppliers-app).
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
 	// Linksboven: altijd een Back-knop (terug naar het home-scherm).
 	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Back"), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f)));
 	UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(MakeText(GAppName[App], 16, FLinearColor(0.9f, 0.95f, 1.f)));
 	TitleSlot->SetPadding(FMargin(12.f, 4.f, 0.f, 0.f));
+	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	TitleSlot->SetVerticalAlignment(VAlign_Center);
+	if (App == 1) // Suppliers: Packages-knop rechtsboven, naast de titel.
+	{
+		const int32 PkgN = Phone->GetPendingCount();
+		StorePackagesToggle = MakeActionBtn(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN),
+			FLinearColor(0.42f, 0.32f, 0.5f),
+			[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 11);
+		Header->AddChildToHorizontalBox(StorePackagesToggle)->SetVerticalAlignment(VAlign_Center);
+	}
 	UVerticalBoxSlot* HeaderSlot = ContentBox->AddChildToVerticalBox(Header);
 	HeaderSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
