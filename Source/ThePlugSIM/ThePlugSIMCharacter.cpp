@@ -176,19 +176,31 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	if (!Input) { return; }
 	UControlSettings* CS = UControlSettings::Get();
 
-	// Herbindbare acties (toets uit de instellingen).
-	if (UPhoneClientComponent* Ph = Phone.Get())
+	// Herbindbare acties: bind zowel de MAIN- als de ALT-toets (als die geldig is).
+	UPhoneClientComponent* Ph = Phone.Get();
+	UBuildComponent* B = Build.Get();
+	for (int32 Slot = 0; Slot < 2; ++Slot)
 	{
-		Input->BindKey(CS->GetKey(TEXT("Phone")),     IE_Pressed, Ph, &UPhoneClientComponent::Toggle);
-		Input->BindKey(CS->GetKey(TEXT("PhoneTab")),  IE_Pressed, Ph, &UPhoneClientComponent::CycleTab);
-		Input->BindKey(CS->GetKey(TEXT("Inventory")), IE_Pressed, Ph, &UPhoneClientComponent::ToggleInventory);
+		const bool bAlt = (Slot == 1);
+		if (Ph)
+		{
+			const FKey KPhone = CS->GetKey(TEXT("Phone"), bAlt);
+			if (KPhone.IsValid()) { Input->BindKey(KPhone, IE_Pressed, Ph, &UPhoneClientComponent::Toggle); }
+			const FKey KTab = CS->GetKey(TEXT("PhoneTab"), bAlt);
+			if (KTab.IsValid()) { Input->BindKey(KTab, IE_Pressed, Ph, &UPhoneClientComponent::CycleTab); }
+			const FKey KInv = CS->GetKey(TEXT("Inventory"), bAlt);
+			if (KInv.IsValid()) { Input->BindKey(KInv, IE_Pressed, Ph, &UPhoneClientComponent::ToggleInventory); }
+		}
+		const FKey KSample = CS->GetKey(TEXT("GiveSample"), bAlt);
+		if (KSample.IsValid()) { Input->BindKey(KSample, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample); }
+		if (B)
+		{
+			const FKey KRot = CS->GetKey(TEXT("Rotate"), bAlt);
+			if (KRot.IsValid()) { Input->BindKey(KRot, IE_Pressed, B, &UBuildComponent::RotatePlacement); }
+		}
+		const FKey KUpg = CS->GetKey(TEXT("PotUpgrade"), bAlt);
+		if (KUpg.IsValid()) { Input->BindKey(KUpg, IE_Pressed, this, &AThePlugSIMCharacter::OpenPotUpgradeUI); }
 	}
-	Input->BindKey(CS->GetKey(TEXT("GiveSample")), IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
-	if (UBuildComponent* B = Build.Get())
-	{
-		Input->BindKey(CS->GetKey(TEXT("Rotate")), IE_Pressed, B, &UBuildComponent::RotatePlacement);
-	}
-	Input->BindKey(CS->GetKey(TEXT("PotUpgrade")), IE_Pressed, this, &AThePlugSIMCharacter::OpenPotUpgradeUI);
 
 	// Vaste toetsen (niet herbindbaar): cijfers, scroll, muisknoppen.
 	Input->BindKey(EKeys::One,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);

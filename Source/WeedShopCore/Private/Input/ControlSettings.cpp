@@ -36,43 +36,59 @@ FText UControlSettings::DisplayName(FName Action)
 	return FText::FromName(Action);
 }
 
-FKey UControlSettings::DefaultKey(FName Action)
+FKey UControlSettings::DefaultKey(FName Action, bool bAlt)
 {
+	if (bAlt) { return EKeys::Invalid; } // alternatief is standaard leeg
 	for (const FActionDef& A : Defs()) { if (A.Id == Action) { return A.Default; } }
 	return EKeys::Invalid;
 }
 
-FKey UControlSettings::GetKey(FName Action) const
+FKey UControlSettings::GetKey(FName Action, bool bAlt) const
 {
-	if (const FString* S = Bindings.Find(Action))
+	const TMap<FName, FString>& Map = bAlt ? KeysAlt : KeysMain;
+	if (const FString* S = Map.Find(Action))
 	{
+		if (S->IsEmpty()) { return EKeys::Invalid; } // bewust leeggemaakt
 		const FKey K = FKey(FName(**S));
-		if (K.IsValid()) { return K; }
+		return K.IsValid() ? K : EKeys::Invalid;
 	}
-	return DefaultKey(Action);
+	return DefaultKey(Action, bAlt);
 }
 
-bool UControlSettings::SetKey(FName Action, FKey NewKey, FName& OutConflict)
+bool UControlSettings::SetKey(FName Action, bool bAlt, FKey NewKey, FName& OutConflict)
 {
 	OutConflict = NAME_None;
 	if (!NewKey.IsValid()) { return false; }
 
-	// Conflict: gebruikt een andere actie deze toets al?
+	// Conflict: gebruikt een ander slot (main of alt) van een actie deze toets al?
 	for (const FName& Other : AllActions())
 	{
-		if (Other == Action) { continue; }
-		if (GetKey(Other) == NewKey) { OutConflict = Other; return false; }
+		for (int32 Slot = 0; Slot < 2; ++Slot)
+		{
+			const bool bOtherAlt = (Slot == 1);
+			if (Other == Action && bOtherAlt == bAlt) { continue; }
+			if (GetKey(Other, bOtherAlt) == NewKey) { OutConflict = Other; return false; }
+		}
 	}
 
-	Bindings.Add(Action, NewKey.GetFName().ToString());
+	(bAlt ? KeysAlt : KeysMain).Add(Action, NewKey.GetFName().ToString());
 	SaveConfig();
 	OnBindingsChanged.Broadcast();
 	return true;
 }
 
+void UControlSettings::ClearKey(FName Action, bool bAlt)
+{
+	// Lege string = expliciet leeg (anders zou de default terugkomen).
+	(bAlt ? KeysAlt : KeysMain).Add(Action, FString());
+	SaveConfig();
+	OnBindingsChanged.Broadcast();
+}
+
 void UControlSettings::ResetToDefaults()
 {
-	Bindings.Reset();
+	KeysMain.Reset();
+	KeysAlt.Reset();
 	SaveConfig();
 	OnBindingsChanged.Broadcast();
 }

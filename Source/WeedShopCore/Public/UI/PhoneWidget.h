@@ -52,12 +52,17 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
-	// Settings-app: welke categorie (0 = Controls, 1 = Status) en de rebind-staat.
+	// Settings-app: welke categorie (0 = Status [default], 1 = Controls) en de rebind-staat.
 	int32 SettingsCat = 0;
 	bool bRebinding = false;
+	bool bRebindAlt = false;     // herbinden we de alternatieve toets?
 	FName RebindAction;
 	FString RebindMsg;
-	void BuildSettingsApp();
+	UPROPERTY() TObjectPtr<UVerticalBox> SettingsBody;
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> SettingsTabBtns;
+	void BuildSettingsApp();          // bouwt tabs + body één keer
+	void FillSettingsBody();          // vult alleen de body (geen flash bij tab-wissel/rebind)
+	void RefreshSettingsTabs();       // herkleurt de categorie-knoppen
 
 	TWeakObjectPtr<UPhoneClientComponent> Phone;
 

@@ -97,7 +97,7 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	// Bouw de lijst (key,label) op basis van de context. De herbindbare toetsen komen uit de instellingen.
 	UControlSettings* CS = UControlSettings::Get();
-	auto K = [CS](const TCHAR* Action) { return CS->GetKey(FName(Action)).GetDisplayName().ToString(); };
+	auto K = [CS](const TCHAR* Action) { return CS->GetKey(FName(Action), false).GetDisplayName().ToString(); };
 	TArray<TPair<FString, FString>> Hints;
 
 	const bool bPlacing = Build && Build->IsPlacing();

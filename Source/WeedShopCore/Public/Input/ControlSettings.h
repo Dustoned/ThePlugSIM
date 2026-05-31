@@ -1,7 +1,7 @@
-// UControlSettings — herbindbare toetsen voor de gameplay-hotkeys. Config-backed (opgeslagen in
-// Game.ini), globaal benaderbaar via Get(). De character bindt zijn toetsen hier vandaan en luistert
-// op OnBindingsChanged om opnieuw te binden als de speler in de telefoon (Settings -> Controls) iets
-// wijzigt. Twee acties op dezelfde toets kan niet (SetKey weigert een conflict).
+// UControlSettings — herbindbare toetsen voor de gameplay-hotkeys, met een MAIN- en een ALT-toets per
+// actie. Config-backed (Game.ini), globaal via Get(). De character bindt beide toetsen hier vandaan en
+// luistert op OnBindingsChanged om opnieuw te binden. Een toets die al ergens in gebruik is, wordt
+// geweigerd (geen twee acties op dezelfde knop).
 
 #pragma once
 
@@ -15,29 +15,32 @@ class WEEDSHOPCORE_API UControlSettings : public UObject
 	GENERATED_BODY()
 
 public:
-	// CDO als globale singleton (config-backed).
 	static UControlSettings* Get();
 
-	// Vuurt na elke wijziging zodat luisteraars (de character) opnieuw kunnen binden.
+	// Vuurt na elke wijziging zodat de character opnieuw kan binden.
 	FSimpleMulticastDelegate OnBindingsChanged;
 
-	// Volgorde van herbindbare acties (voor de UI).
 	static const TArray<FName>& AllActions();
 	static FText DisplayName(FName Action);
-	static FKey DefaultKey(FName Action);
+	static FKey DefaultKey(FName Action, bool bAlt);
 
-	// Huidige toets voor een actie (geconfigureerd, anders de default).
-	FKey GetKey(FName Action) const;
+	// Huidige toets (bAlt=false = main, true = alternatief). Kan Invalid zijn (alt is standaard leeg).
+	FKey GetKey(FName Action, bool bAlt) const;
 
-	// Zet een nieuwe toets. Weigert (false) als een andere actie die toets al gebruikt; OutConflict
-	// bevat dan de botsende actie. Slaagt -> opslaan + OnBindingsChanged.
-	bool SetKey(FName Action, FKey NewKey, FName& OutConflict);
+	// Zet een toets. Weigert (false) als een ANDERE slot/actie die toets al gebruikt; OutConflict = die
+	// actie. Slaagt -> opslaan + OnBindingsChanged.
+	bool SetKey(FName Action, bool bAlt, FKey NewKey, FName& OutConflict);
 
-	// Zet alles terug naar de standaardtoetsen.
+	// Maak een slot leeg (bv. de alt-toets verwijderen).
+	void ClearKey(FName Action, bool bAlt);
+
 	void ResetToDefaults();
 
 protected:
-	// ActionId -> FKey-naam (als string zodat config netjes serialiseert).
+	// ActionId -> FKey-naam (string). Twee aparte maps voor main en alternatief.
 	UPROPERTY(Config)
-	TMap<FName, FString> Bindings;
+	TMap<FName, FString> KeysMain;
+
+	UPROPERTY(Config)
+	TMap<FName, FString> KeysAlt;
 };
