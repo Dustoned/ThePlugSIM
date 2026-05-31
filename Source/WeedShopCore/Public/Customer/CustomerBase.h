@@ -130,6 +130,16 @@ public:
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
+	// --- Navigatie (spawnt op één punt, loopt naar z'n plek; loopt naar huis bij vertrek) ---
+	// Laat de AI naar een wereldlocatie lopen (via de navmesh).
+	void WalkTo(const FVector& Dest);
+
+	// Plek waar de klant gaat staan (door de spawner gezet).
+	void SetSpot(const FVector& InSpot) { SpotLocation = InSpot; bHasSpot = true; }
+
+	// "Thuis"/uitgang waar de klant heen loopt als hij vertrekt.
+	void SetHome(const FVector& InHome) { HomeLocation = InHome; bHasHome = true; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -152,4 +162,11 @@ protected:
 
 	// Begin-geduld (om te herstellen na een cooldown).
 	float BasePatienceSeconds = 30.f;
+
+	// Navigatie-doelen.
+	FVector SpotLocation = FVector::ZeroVector;
+	FVector HomeLocation = FVector::ZeroVector;
+	bool bHasSpot = false;
+	bool bHasHome = false;
+	bool bWalkingHome = false;
 };

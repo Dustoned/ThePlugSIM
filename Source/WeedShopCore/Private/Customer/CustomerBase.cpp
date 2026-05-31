@@ -3,6 +3,11 @@
 #include "WeedShopCore.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "AIController.h"
+#include "Engine/SkeletalMesh.h"
+#include "Engine/DataTable.h"
 #include "Data/WeedShopProduct.h"
 #include "Economy/EconomyComponent.h"
 #include "Inventory/InventoryComponent.h"
@@ -21,16 +26,47 @@ ACustomerBase::ACustomerBase()
 	// Zorg dat de interactie-trace (ECC_Visibility) de klant raakt.
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 
-	// Zichtbaar placeholder-lichaam (capsule-vormige blob) tot er een echte mesh is.
+	// Verborgen fallback-cilinder (voor het geval de mesh niet laadt).
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
 	Body->SetupAttachment(GetCapsuleComponent());
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Body->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
-	Body->SetRelativeScale3D(FVector(0.9f, 0.9f, 1.9f));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylFinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (CylFinder.Succeeded())
+	Body->SetVisibility(false);
+
+	// Echt geanimeerd model: mannequin + unarmed locomotion-AnimBP (idle/lopen op snelheid).
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
 	{
-		Body->SetStaticMesh(CylFinder.Object);
+		static ConstructorHelpers::FObjectFinder<USkeletalMesh> MannyFinder(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
+		if (MannyFinder.Succeeded()) { MeshComp->SetSkeletalMesh(MannyFinder.Object); }
+		MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
+		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+		static ConstructorHelpers::FClassFinder<UAnimInstance> AnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
+		if (AnimFinder.Succeeded()) { MeshComp->SetAnimInstanceClass(AnimFinder.Class); }
+	}
+
+	// AI: laat een AIController de klant besturen zodat hij kan pathfinden.
+	AIControllerClass = AAIController::StaticClass();
+	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+
+	// Beweging: draai naar de looprichting, rustige loopsnelheid.
+	bUseControllerRotationYaw = false;
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->bUseControllerDesiredRotation = false;
+		Move->bOrientRotationToMovement = true;
+		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
+		Move->MaxWalkSpeed = 220.f;
+	}
+
+	// Productenlijst (voor marktprijs + willekeurig gewenst product).
+	static ConstructorHelpers::FObjectFinder<UDataTable> ProdFinder(TEXT("/Game/_Project/Data/DT_Products.DT_Products"));
+	if (ProdFinder.Succeeded()) { ProductTable = ProdFinder.Object; }
+}
+
+void ACustomerBase::WalkTo(const FVector& Dest)
+{
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		AI->MoveToLocation(Dest, 60.f, true);
 	}
 }
 
@@ -64,6 +100,23 @@ void ACustomerBase::BeginPlay()
 		if (Addiction < AddictionToBuy)
 		{
 			State = ECustomerState::Prospect;
+		}
+
+		// Geen gewenst product ingesteld (bv. gespawnd)? Kies er willekeurig één uit de productenlijst.
+		if (DesiredProductId.IsNone() && ProductTable)
+		{
+			const TArray<FName> Rows = ProductTable->GetRowNames();
+			if (Rows.Num() > 0)
+			{
+				DesiredProductId = Rows[FMath::RandRange(0, Rows.Num() - 1)];
+				DesiredQuantity = FMath::RandRange(1, 3);
+			}
+		}
+
+		// Loop naar de toegewezen plek (door de spawner gezet).
+		if (bHasSpot)
+		{
+			WalkTo(SpotLocation);
 		}
 	}
 }
@@ -133,20 +186,28 @@ void ACustomerBase::Tick(float DeltaSeconds)
 	{
 		LeaveTimer += DeltaSeconds;
 
-		if (bDespawnAfterServed)
+		const bool bShouldLeave = (State == ECustomerState::Leaving) || bDespawnAfterServed;
+		if (bShouldLeave)
 		{
-			// Afspraak-klant: vertrekt na een tijdje.
-			if (LeaveTimer >= 12.f)
+			// Loop naar huis/uitgang en verdwijn bij aankomst (of na een veiligheids-timeout).
+			if (bHasHome && !bWalkingHome)
+			{
+				bWalkingHome = true;
+				WalkTo(HomeLocation);
+			}
+			const bool bArrived = bHasHome && FVector::DistSquared2D(GetActorLocation(), HomeLocation) < FMath::Square(150.f);
+			if (bArrived || LeaveTimer >= 20.f)
 			{
 				Destroy();
 			}
 		}
 		else if (LeaveTimer >= OrderCooldownSeconds)
 		{
-			// Vaste klant heeft z'n spul opgerookt -> wil weer iets.
+			// Vaste klant heeft z'n spul opgerookt -> wil weer iets; loopt terug naar z'n plek.
 			State = ECustomerState::WantsToOrder;
 			PatienceSeconds = BasePatienceSeconds;
 			LeaveTimer = 0.f;
+			if (bHasSpot) { WalkTo(SpotLocation); }
 		}
 	}
 }
