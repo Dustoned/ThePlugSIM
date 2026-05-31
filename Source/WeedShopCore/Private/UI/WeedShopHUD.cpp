@@ -24,11 +24,12 @@
 #include "Placement/PlaceableTypes.h"
 #include "Customer/CustomerBase.h"
 #include "Placement/BuildComponent.h"
+#include "EngineUtils.h"
 
 namespace
 {
-	constexpr float PhoneW = 420.f;
-	constexpr float PhoneH = 520.f;
+	constexpr float PhoneW = 380.f;
+	constexpr float PhoneH = 660.f;
 	constexpr float RowH = 26.f;
 
 	// Leesbare naam voor een item-id, zodat de speler "Wiet" vs "Zaadje" duidelijk ziet
@@ -375,143 +376,265 @@ bool AWeedShopHUD::DrawButton(FName BoxName, const FString& Label, float X, floa
 	return bHover;
 }
 
+namespace
+{
+	// App-namen, korte tags voor het icoon en een kleur per app.
+	static const TCHAR* GAppNames[UPhoneClientComponent::AppCount] =
+		{ TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map") };
+	static const TCHAR* GAppTags[UPhoneClientComponent::AppCount] =
+		{ TEXT("UPG"), TEXT("SHOP"), TEXT("CONT"), TEXT("MSG"), TEXT("SET"), TEXT("MAP") };
+	static const FLinearColor GAppCols[UPhoneClientComponent::AppCount] = {
+		FLinearColor(0.45f, 0.35f, 0.85f, 0.98f),  // Upgrades - paars
+		FLinearColor(0.20f, 0.55f, 0.30f, 0.98f),  // Suppliers - groen
+		FLinearColor(0.20f, 0.50f, 0.80f, 0.98f),  // Contacts - blauw
+		FLinearColor(0.85f, 0.55f, 0.20f, 0.98f),  // Messages - oranje
+		FLinearColor(0.45f, 0.45f, 0.50f, 0.98f),  // Settings - grijs
+		FLinearColor(0.20f, 0.65f, 0.60f, 0.98f),  // Map - teal
+	};
+}
+
 void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 {
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	const int32 Tab = Phone->GetTab();
 
 	const float PX = (Canvas ? Canvas->ClipX : 1280.f) - PhoneW - 30.f;
-	const float PY = 80.f;
-	const float InnerX = PX + 14.f;
-	const float InnerW = PhoneW - 28.f;
+	const float PY = 50.f;
+	const float SX = PX + 14.f;   // scherm-binnenkant X
+	const float SW = PhoneW - 28.f;
 
-	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.94f), PX, PY, PhoneW, PhoneH);
+	// Telefoon-body (bezel) + scherm.
+	DrawRect(FLinearColor(0.02f, 0.02f, 0.03f, 0.99f), PX - 6.f, PY - 8.f, PhoneW + 12.f, PhoneH + 18.f);
+	DrawRect(FLinearColor(0.07f, 0.08f, 0.11f, 0.99f), PX, PY, PhoneW, PhoneH);
 
-	float y = PY + 12.f;
-	DrawText(TEXT("PHONE"), FLinearColor(0.5f, 1.f, 0.5f), InnerX, y, Font); y += 26.f;
-
-	if (GS && GS->GetEconomy())
+	// Statusbalk: dag/tijd links, cash rechts.
+	float y = PY + 8.f;
 	{
-		DrawText(FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
-			FLinearColor::White, InnerX, y, Font);
+		FString Left = TEXT("ThePlug");
+		if (GS && GS->GetDayCycle())
+		{
+			const int32 Mins = ((int32)(GS->GetDayCycle()->GetCycleFraction() * 24.f * 60.f)) % (24 * 60);
+			Left = FString::Printf(TEXT("%s  %02d:%02d"), GS->GetDayCycle()->IsNight() ? TEXT("Night") : TEXT("Day"),
+				Mins / 60, Mins % 60);
+		}
+		DrawText(Left, FLinearColor(0.7f, 0.8f, 0.95f), SX, y, Font);
+		if (GS && GS->GetEconomy())
+		{
+			DrawText(FString::Printf(TEXT("EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
+				FLinearColor(0.7f, 1.f, 0.7f), PX + PhoneW - 150.f, y, Font);
+		}
+	}
+	y += 24.f;
+	DrawRect(FLinearColor(0.2f, 0.2f, 0.25f, 0.9f), SX, y, SW, 1.f);
+	y += 10.f;
+
+	if (Phone->IsHomeScreen())
+	{
+		// --- Home-scherm: app-rooster (3 kolommen) ---
+		DrawText(TEXT("Apps"), FLinearColor(0.6f, 1.f, 0.6f), SX, y, Font);
 		y += 26.f;
+		const int32 Cols = 3;
+		const float Gap = 14.f;
+		const float IconW = (SW - Gap * (Cols - 1)) / Cols;
+		const float IconH = IconW;
+		for (int32 i = 0; i < UPhoneClientComponent::AppCount; ++i)
+		{
+			const int32 col = i % Cols;
+			const int32 row = i / Cols;
+			const float ix = SX + col * (IconW + Gap);
+			const float iy = y + row * (IconH + 30.f);
+			const FName Box(*FString::Printf(TEXT("app_%d"), i));
+			const bool bHover = (HoveredBox == Box);
+			// Icoon (afgerond-ish via gevulde rect) + highlight bij hover.
+			if (bHover) { DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.18f), ix - 3.f, iy - 3.f, IconW + 6.f, IconH + 6.f); }
+			DrawRect(GAppCols[i], ix, iy, IconW, IconH);
+			DrawText(GAppTags[i], FLinearColor::White, ix + 8.f, iy + IconH * 0.5f - 8.f, Font);
+			DrawText(GAppNames[i], FLinearColor(0.85f, 0.88f, 0.95f), ix, iy + IconH + 3.f, Font);
+			AddHitBox(FVector2D(ix, iy), FVector2D(IconW, IconH + 24.f), Box, true, 3);
+			if (bHover) { HoverTooltip = FString::Printf(TEXT("Open %s"), GAppNames[i]); }
+		}
 	}
+	else
+	{
+		// --- Geopende app: titelbalk + Home-knop, dan de inhoud ---
+		const int32 App = Phone->GetTab();
+		if (DrawButton(FName(TEXT("phonehome")), TEXT("< Home"), SX, y, 90.f, FLinearColor(0.7f, 0.85f, 1.f)))
+		{
+			HoverTooltip = TEXT("Back to the home screen");
+		}
+		DrawText(GAppNames[FMath::Clamp(App, 0, UPhoneClientComponent::AppCount - 1)],
+			FLinearColor(0.9f, 0.95f, 1.f), SX + 100.f, y + 3.f, Font);
+		y += RowH + 10.f;
 
-	// Tab-knoppen (klikbaar).
-	static const TCHAR* TabNames[4] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages") };
-	const float TabW = InnerW / 4.f;
-	for (int32 i = 0; i < 4; ++i)
-	{
-		const FName Box(*FString::Printf(TEXT("tab_%d"), i));
-		const FLinearColor Col = (i == Tab) ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(0.7f, 0.7f, 0.8f);
-		if (DrawButton(Box, TabNames[i], InnerX + i * TabW, y, TabW - 4.f, Col))
-		{
-			HoverTooltip = FString::Printf(TEXT("Open the %s tab"), TabNames[i]);
-		}
-	}
-	y += RowH + 6.f;
+		const float InnerX = SX;
+		const float InnerW = SW;
 
-	// Inhoud per tab.
-	if (Tab == 1) // Suppliers: grote webshop-achtige winkel naast de telefoon
-	{
-		DrawText(TEXT("Store open ->"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font);
-		y += 22.f;
-		DrawText(TEXT("(browse, set amounts,"), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
-		DrawText(TEXT(" add to cart, checkout)"), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
-		if (UStoreComponent* Store = GS ? GS->GetStore() : nullptr)
+		if (App == 0) // Upgrades
 		{
-			DrawStoreUI(Phone);
-		}
-	}
-	else if (Tab == 2) // Contacten (alleen weergave)
-	{
-		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
-		{
-			if (Con->GetContacts().Num() == 0)
+			if (UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr)
 			{
-				DrawText(TEXT("(no contacts yet - deal with customers)"), FLinearColor::Gray, InnerX, y, Font);
-				y += 22.f;
-			}
-			for (const FPhoneContact& C : Con->GetContacts())
-			{
-				DrawText(FString::Printf(TEXT("%s   (relationship %.0f%%)"), *C.DisplayName.ToString(), C.Relationship),
-					FLinearColor::White, InnerX, y, Font);
-				y += 22.f;
-				if (y > PY + PhoneH - 60.f) break;
-			}
-		}
-	}
-	else if (Tab == 3) // Berichten
-	{
-		if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
-		{
-			if (DrawButton(FName(TEXT("buy_0")), TEXT("Accept (first open message)"), InnerX, y, InnerW, FLinearColor(0.7f, 1.f, 0.7f)))
-			{
-				HoverTooltip = TEXT("Make appointment -> loyalty up; customer shows up on time");
-			}
-			y += RowH;
-			if (DrawButton(FName(TEXT("buy_1")), TEXT("Decline (first open message)"), InnerX, y, InnerW, FLinearColor(1.f, 0.75f, 0.6f)))
-			{
-				HoverTooltip = TEXT("Cancel -> loyalty down; customer won't come");
-			}
-			y += RowH + 6.f;
-
-			if (Con->GetMessages().Num() == 0)
-			{
-				DrawText(TEXT("(no messages)"), FLinearColor::Gray, InnerX, y, Font);
-				y += 22.f;
-			}
-			for (const FPhoneMessage& M : Con->GetMessages())
-			{
-				const TCHAR* Tag = (M.Status == 1) ? TEXT("[yes]") : (M.Status == 2 ? TEXT("[no]") : TEXT("[open]"));
-				const FLinearColor Col = (M.Status == 1) ? FLinearColor::Green
-					: (M.Status == 2 ? FLinearColor(0.7f, 0.5f, 0.5f) : FLinearColor(0.9f, 0.95f, 1.f));
-				DrawText(FString::Printf(TEXT("%s %s: %s"), Tag, *M.SenderName.ToString(), *M.Body.ToString()),
-					Col, InnerX, y, Font);
-				y += 22.f;
-				if (y > PY + PhoneH - 60.f) break;
-			}
-		}
-	}
-	else // Upgrades
-	{
-		if (UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr)
-		{
-			int32 idx = 0;
-			for (const FName& Id : Upg->GetAllUpgradeIds())
-			{
-				FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
-				if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
+				int32 idx = 0;
+				for (const FName& Id : Upg->GetAllUpgradeIds())
 				{
-					const TCHAR* Suffix = bPurchased ? TEXT("  [purchased]") : (bAvailable ? TEXT("") : TEXT("  [locked]"));
-					const FLinearColor Col = bPurchased ? FLinearColor::Gray
-						: (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f));
-					const FName Box(*FString::Printf(TEXT("buy_%d"), idx));
-					if (DrawButton(Box, FString::Printf(TEXT("%s  -  EUR %.2f%s"), *Name.ToString(), Cost / 100.f, Suffix),
-						InnerX, y, InnerW, Col))
+					FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
+					if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
 					{
-						HoverTooltip = bPurchased ? TEXT("Already purchased")
-							: (bAvailable ? FString::Printf(TEXT("Buy for EUR %.2f"), Cost / 100.f)
-								: TEXT("Locked - reach the required phase first"));
+						const TCHAR* Suffix = bPurchased ? TEXT("  [owned]") : (bAvailable ? TEXT("") : TEXT("  [locked]"));
+						const FLinearColor Col = bPurchased ? FLinearColor::Gray
+							: (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f));
+						if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), idx)),
+							FString::Printf(TEXT("%s  -  EUR %.2f%s"), *Name.ToString(), Cost / 100.f, Suffix),
+							InnerX, y, InnerW, Col))
+						{
+							HoverTooltip = bPurchased ? TEXT("Already purchased")
+								: (bAvailable ? FString::Printf(TEXT("Buy for EUR %.2f"), Cost / 100.f)
+									: TEXT("Locked - reach the required phase first"));
+						}
+						y += RowH;
 					}
-					y += RowH;
+					if (++idx >= 10) break;
 				}
-				if (++idx >= 8) break;
 			}
+		}
+		else if (App == 1) // Suppliers -> grote winkel naast de telefoon
+		{
+			DrawText(TEXT("Store open ->"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font); y += 22.f;
+			DrawText(TEXT("Browse on the left:"), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("set amount, add to cart,"), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("then checkout."), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
+			if (GS && GS->GetStore()) { DrawStoreUI(Phone); }
+		}
+		else if (App == 2) // Contacts
+		{
+			if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
+			{
+				if (Con->GetContacts().Num() == 0)
+				{
+					DrawText(TEXT("(no contacts yet - deal with"), FLinearColor::Gray, InnerX, y, Font); y += 18.f;
+					DrawText(TEXT(" customers to get numbers)"), FLinearColor::Gray, InnerX, y, Font); y += 18.f;
+				}
+				for (const FPhoneContact& C : Con->GetContacts())
+				{
+					DrawText(FString::Printf(TEXT("%s  (%.0f%%)"), *C.DisplayName.ToString(), C.Relationship),
+						FLinearColor::White, InnerX, y, Font);
+					y += 22.f;
+					if (y > PY + PhoneH - 60.f) break;
+				}
+			}
+		}
+		else if (App == 3) // Messages
+		{
+			if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
+			{
+				if (DrawButton(FName(TEXT("buy_0")), TEXT("Accept (first message)"), InnerX, y, InnerW, FLinearColor(0.7f, 1.f, 0.7f)))
+				{
+					HoverTooltip = TEXT("Make appointment -> loyalty up");
+				}
+				y += RowH;
+				if (DrawButton(FName(TEXT("buy_1")), TEXT("Decline (first message)"), InnerX, y, InnerW, FLinearColor(1.f, 0.75f, 0.6f)))
+				{
+					HoverTooltip = TEXT("Cancel -> loyalty down");
+				}
+				y += RowH + 6.f;
+				if (Con->GetMessages().Num() == 0)
+				{
+					DrawText(TEXT("(no messages)"), FLinearColor::Gray, InnerX, y, Font); y += 22.f;
+				}
+				for (const FPhoneMessage& M : Con->GetMessages())
+				{
+					const TCHAR* Tag = (M.Status == 1) ? TEXT("[yes]") : (M.Status == 2 ? TEXT("[no]") : TEXT("[open]"));
+					const FLinearColor Col = (M.Status == 1) ? FLinearColor::Green
+						: (M.Status == 2 ? FLinearColor(0.7f, 0.5f, 0.5f) : FLinearColor(0.9f, 0.95f, 1.f));
+					DrawText(FString::Printf(TEXT("%s %s: %s"), Tag, *M.SenderName.ToString(), *M.Body.ToString()),
+						Col, InnerX, y, Font);
+					y += 22.f;
+					if (y > PY + PhoneH - 60.f) break;
+				}
+			}
+		}
+		else if (App == 4) // Settings
+		{
+			DrawText(TEXT("Game"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font); y += 24.f;
+			if (GS)
+			{
+				if (GS->GetDayCycle())
+				{
+					const int32 Mins = ((int32)(GS->GetDayCycle()->GetCycleFraction() * 24.f * 60.f)) % (24 * 60);
+					DrawText(FString::Printf(TEXT("Time: %s %02d:%02d"), GS->GetDayCycle()->IsNight() ? TEXT("Night") : TEXT("Day"),
+						Mins / 60, Mins % 60),
+						FLinearColor::White, InnerX, y, Font); y += 22.f;
+				}
+				if (GS->GetEconomy())
+				{
+					DrawText(FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
+						FLinearColor::White, InnerX, y, Font); y += 22.f;
+				}
+				if (GS->GetHeat())
+				{
+					DrawText(FString::Printf(TEXT("Heat: %.0f%%"), GS->GetHeat()->GetHeat()),
+						FLinearColor(1.f, 0.7f, 0.6f), InnerX, y, Font); y += 22.f;
+				}
+				if (GS->GetMilestones())
+				{
+					DrawText(FString::Printf(TEXT("Phase: %d"), (int32)GS->GetMilestones()->GetCurrentPhase()),
+						FLinearColor::White, InnerX, y, Font); y += 22.f;
+				}
+			}
+			y += 8.f;
+			DrawText(TEXT("Controls"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font); y += 22.f;
+			DrawText(TEXT("Tab phone   I inventory"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("Q home   1-8 hotbar"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("LMB use   RMB roll papers"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("R rotate   G pick up   F sample"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 22.f;
+		}
+		else if (App == 5) // Map
+		{
+			const float MapX = InnerX, MapY = y;
+			const float MapW = InnerW, MapH = FMath::Min(InnerW, PY + PhoneH - 44.f - y);
+			DrawRect(FLinearColor(0.10f, 0.14f, 0.12f, 0.98f), MapX, MapY, MapW, MapH);
+			const float cx = MapX + MapW * 0.5f, cyc = MapY + MapH * 0.5f;
+			const float Range = 4000.f;
+			const float Scale = (MapW * 0.5f) / Range;
+			const APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
+			const FVector PL = P ? P->GetActorLocation() : FVector::ZeroVector;
+
+			// Klanten (oranje) en potten (groen) als stipjes rond de speler.
+			for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+			{
+				const FVector d = It->GetActorLocation() - PL;
+				const float px = cx + d.Y * Scale, py = cyc - d.X * Scale;
+				if (px > MapX && px < MapX + MapW && py > MapY && py < MapY + MapH)
+				{
+					DrawRect(FLinearColor(1.f, 0.6f, 0.2f), px - 3.f, py - 3.f, 6.f, 6.f);
+				}
+			}
+			for (TActorIterator<AGrowPlant> It(GetWorld()); It; ++It)
+			{
+				const FVector d = It->GetActorLocation() - PL;
+				const float px = cx + d.Y * Scale, py = cyc - d.X * Scale;
+				if (px > MapX && px < MapX + MapW && py > MapY && py < MapY + MapH)
+				{
+					DrawRect(FLinearColor(0.4f, 0.9f, 0.4f), px - 3.f, py - 3.f, 6.f, 6.f);
+				}
+			}
+			// Speler in het midden (wit).
+			DrawRect(FLinearColor::White, cx - 4.f, cyc - 4.f, 8.f, 8.f);
+			DrawText(TEXT("you"), FLinearColor::White, cx + 6.f, cyc - 6.f, Font);
+			DrawText(TEXT("orange=customer  green=plant"), FLinearColor(0.7f, 0.7f, 0.75f), MapX + 4.f, MapY + MapH - 18.f, Font);
 		}
 	}
 
 	// Tooltip (hover-info).
 	if (!HoverTooltip.IsEmpty())
 	{
-		const float TipY = PY + PhoneH - 56.f;
-		DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f), PX + 6.f, TipY - 2.f, PhoneW - 12.f, 22.f);
-		DrawText(HoverTooltip, FLinearColor(1.f, 1.f, 0.6f), InnerX, TipY, Font);
+		const float TipY = PY + PhoneH - 54.f;
+		DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f), PX + 6.f, TipY - 2.f, PhoneW - 12.f, 20.f);
+		DrawText(HoverTooltip, FLinearColor(1.f, 1.f, 0.6f), SX, TipY, Font);
 	}
 
-	// Sluit-knop.
-	if (DrawButton(FName(TEXT("close")), TEXT("Close (Tab)"), InnerX, PY + PhoneH - 30.f, 130.f, FLinearColor::Yellow))
+	// Home-indicator-balk onderaan + sluit-knop.
+	DrawRect(FLinearColor(0.5f, 0.5f, 0.55f, 0.9f), PX + PhoneW * 0.5f - 50.f, PY + PhoneH - 12.f, 100.f, 4.f);
+	if (DrawButton(FName(TEXT("close")), TEXT("Close (Tab)"), SX, PY + PhoneH - 32.f, 120.f, FLinearColor::Yellow))
 	{
 		HoverTooltip = TEXT("Close the phone");
 	}
@@ -687,6 +810,14 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	else if (S.StartsWith(TEXT("tab_")))
 	{
 		Phone->SetTab(FCString::Atoi(*S.RightChop(4)));
+	}
+	else if (S.StartsWith(TEXT("app_")))
+	{
+		Phone->OpenApp(FCString::Atoi(*S.RightChop(4)));
+	}
+	else if (S == TEXT("phonehome"))
+	{
+		Phone->GoHome();
 	}
 	else if (S.StartsWith(TEXT("buy_")))
 	{

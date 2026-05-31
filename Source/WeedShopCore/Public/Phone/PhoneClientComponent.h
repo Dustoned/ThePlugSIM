@@ -33,6 +33,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void CycleTab();
 
+	// --- iPhone-achtige home/apps ---
+	static constexpr int32 AppCount = 6; // 0=Upgrades 1=Suppliers 2=Contacts 3=Messages 4=Settings 5=Map
+
+	// Open een app (zet 'm als actief scherm; verlaat het home-scherm).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void OpenApp(int32 AppIndex);
+
+	// Terug naar het home-scherm met de app-iconen.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void GoHome();
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
+	bool IsHomeScreen() const { return bHomeScreen; }
+
 	// Supplier-subcategorie (0=Seeds,1=Papers,2=Pots,3=Soil,4=Water).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SetSupplierCat(int32 Cat);
@@ -217,6 +231,7 @@ protected:
 
 	bool bOpen = false;
 	int32 Tab = 0;
+	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
 	int32 SupplierCat = 0;
 
 	bool bRollOpen = false;

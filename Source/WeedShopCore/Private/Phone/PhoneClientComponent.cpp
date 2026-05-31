@@ -82,8 +82,20 @@ void UPhoneClientComponent::Toggle()
 		bDealOpen = false;
 		bInventoryOpen = false;
 		bPotUpgradeOpen = false;
+		bHomeScreen = true; // open altijd op het home-scherm met de apps
 	}
 	UpdateCursor();
+}
+
+void UPhoneClientComponent::OpenApp(int32 AppIndex)
+{
+	Tab = FMath::Clamp(AppIndex, 0, AppCount - 1);
+	bHomeScreen = false;
+}
+
+void UPhoneClientComponent::GoHome()
+{
+	bHomeScreen = true;
 }
 
 void UPhoneClientComponent::ToggleRollUI()
@@ -387,14 +399,16 @@ void UPhoneClientComponent::ServerBuySupply_Implementation(FName SupplyId)
 
 void UPhoneClientComponent::SetTab(int32 NewTab)
 {
-	Tab = FMath::Clamp(NewTab, 0, 3);
+	Tab = FMath::Clamp(NewTab, 0, AppCount - 1);
+	bHomeScreen = false;
 }
 
 void UPhoneClientComponent::CycleTab()
 {
+	// Q = terug naar het home-scherm (of, als je al thuis bent, niets).
 	if (bOpen)
 	{
-		Tab = (Tab + 1) % 4;
+		bHomeScreen = true;
 	}
 }
 
