@@ -127,6 +127,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	bool IsSlotPlanted(int32 Slot) const { return SlotStrain.IsValidIndex(Slot) && !SlotStrain[Slot].IsNone(); }
 
+	// Weergavenaam van de eerst-geplante strain (leeg als de pot leeg is).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	FText GetPrimaryStrainName() const;
+
+	// Basis-THC% van de eerst-geplante strain (0 als leeg).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetPrimaryBaseThc() const;
+
 	// Groeifractie van een plek (0..1) voor de progressiebalk.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetSlotFraction(int32 Slot) const;

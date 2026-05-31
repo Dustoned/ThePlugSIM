@@ -50,13 +50,15 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	TitleText = WeedUI::Text(WidgetTree, TEXT("Pot"), 15, FLinearColor(0.7f, 1.f, 0.7f), false, true);
 	VB->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	// Groei-balkjes (max 6 plekken).
+	// Groei-label + balkjes (max 6 plekken). Balken altijd groen.
+	GrowthLabel = WeedUI::Text(WidgetTree, TEXT("Growth"), 12, FLinearColor(0.85f, 0.9f, 1.f));
+	VB->AddChildToVerticalBox(GrowthLabel);
 	GrowthBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(GrowthBox);
 	for (int32 i = 0; i < 6; ++i)
 	{
 		UProgressBar* B = WidgetTree->ConstructWidget<UProgressBar>();
-		B->SetFillColorAndOpacity(FLinearColor(0.4f, 0.8f, 1.f));
+		B->SetFillColorAndOpacity(FLinearColor(0.45f, 0.9f, 0.4f));
 		UVerticalBoxSlot* S = GrowthBox->AddChildToVerticalBox(B);
 		S->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 		GrowthBars.Add(B);
@@ -118,7 +120,12 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	if (bPlanted)
 	{
-		TitleText->SetText(FText::FromString(FString::Printf(TEXT("Plants %d / %d"), Plant->GetPlantedCount(), NumSlots)));
+		// Titel = naam van de plant + basis-THC%, met aantal plekken als die >1 is.
+		const FString StrainName = Plant->GetPrimaryStrainName().ToString();
+		FString Title = FString::Printf(TEXT("%s   %.0f%% THC"), *StrainName, Plant->GetPrimaryBaseThc());
+		if (NumSlots > 1) { Title += FString::Printf(TEXT("   (%d/%d)"), Plant->GetPlantedCount(), NumSlots); }
+		TitleText->SetText(FText::FromString(Title));
+		if (GrowthLabel) { GrowthLabel->SetVisibility(ESlateVisibility::HitTestInvisible); }
 		GrowthBox->SetVisibility(ESlateVisibility::HitTestInvisible);
 		for (int32 i = 0; i < GrowthBars.Num(); ++i)
 		{
@@ -127,7 +134,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (bSlot)
 			{
 				GrowthBars[i]->SetPercent(Plant->GetSlotFraction(i));
-				GrowthBars[i]->SetFillColorAndOpacity(Plant->IsSlotReady(i) ? FLinearColor(0.45f, 0.95f, 0.35f) : FLinearColor(0.4f, 0.8f, 1.f));
+				GrowthBars[i]->SetFillColorAndOpacity(FLinearColor(0.45f, 0.9f, 0.4f));
 			}
 		}
 		if (WaterRow) { WaterRow->SetVisibility(ESlateVisibility::HitTestInvisible); }
@@ -145,6 +152,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	else
 	{
 		TitleText->SetText(FText::FromString(TEXT("Empty pot")));
+		if (GrowthLabel) { GrowthLabel->SetVisibility(ESlateVisibility::Collapsed); }
 		GrowthBox->SetVisibility(ESlateVisibility::Collapsed);
 		if (WaterRow) { WaterRow->SetVisibility(ESlateVisibility::Collapsed); }
 		if (HealthRow) { HealthRow->SetVisibility(ESlateVisibility::Collapsed); }

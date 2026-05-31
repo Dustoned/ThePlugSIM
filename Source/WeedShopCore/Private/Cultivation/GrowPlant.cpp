@@ -242,6 +242,27 @@ void AGrowPlant::UpdatePhases()
 	if (bChanged) { UpdatePlantVisual(); }
 }
 
+FText AGrowPlant::GetPrimaryStrainName() const
+{
+	for (const FName& S : SlotStrain)
+	{
+		if (S.IsNone()) { continue; }
+		if (const FWeedStrainRow* Row = GetStrainRow(S)) { return Row->DisplayName; }
+		return FText::FromName(S);
+	}
+	return FText::GetEmpty();
+}
+
+float AGrowPlant::GetPrimaryBaseThc() const
+{
+	for (const FName& S : SlotStrain)
+	{
+		if (S.IsNone()) { continue; }
+		if (const FWeedStrainRow* Row = GetStrainRow(S)) { return Row->BaseThcPercent; }
+	}
+	return 0.f;
+}
+
 float AGrowPlant::GetSlotFraction(int32 Slot) const
 {
 	if (!SlotStrain.IsValidIndex(Slot) || SlotStrain[Slot].IsNone())
