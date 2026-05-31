@@ -48,6 +48,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
 	bool BuySupply(FName SupplyId, UInventoryComponent* Buyer);
 
+	// Server: koop 1 stuk van een willekeurig catalogus-item (zaad of supply); dispatcht zelf.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
+	bool BuyAny(FName CatalogId, UInventoryComponent* Buyer);
+
+	// Stukprijs (cents) van een catalogus-item (zaad of supply). 0 als onbekend. Voor de winkel-UI.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	int32 GetCatalogPriceCents(FName CatalogId) const;
+
+	// Weergave-naam van een catalogus-item (zaad of supply).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	FText GetCatalogName(FName CatalogId) const;
+
 	// --- Supplier-categorieën voor de telefoon (netjes gesorteerd) ---
 	// 0=Seeds, 1=Papers, 2=Pots, 3=Soil, 4=Water, 5=Sell.
 	static constexpr int32 SupplierCatCount = 6;

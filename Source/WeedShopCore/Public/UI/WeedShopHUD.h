@@ -27,6 +27,9 @@ protected:
 	// Tekent de klikbare telefoon voor de actieve tab.
 	void DrawPhone(UPhoneClientComponent* Phone);
 
+	// Tekent de grote webshop-winkel (catalogus met aantal-steppers + prijskaartjes + winkelwagen).
+	void DrawStoreUI(UPhoneClientComponent* Phone);
+
 	// Tekent het klikbare roll-paneel (grams-keuze + kwaliteit + draai-knop).
 	void DrawRollUI(UPhoneClientComponent* Phone);
 

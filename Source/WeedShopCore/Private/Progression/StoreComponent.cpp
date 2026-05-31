@@ -204,6 +204,37 @@ bool UStoreComponent::SellItem(FName ItemId, UInventoryComponent* Seller)
 	return true;
 }
 
+bool UStoreComponent::BuyAny(FName CatalogId, UInventoryComponent* Buyer)
+{
+	if (GetOwnerRole() != ROLE_Authority || !Buyer || CatalogId.IsNone())
+	{
+		return false;
+	}
+	// Supply? Dan via BuySupply; anders behandelen we het als strain-zaad.
+	FText Name; int32 Price = 0; int32 Pack = 1;
+	if (GetSupplyDisplay(CatalogId, Name, Price, Pack))
+	{
+		return BuySupply(CatalogId, Buyer);
+	}
+	return BuySeed(CatalogId, Buyer);
+}
+
+int32 UStoreComponent::GetCatalogPriceCents(FName CatalogId) const
+{
+	FText Name; int32 Price = 0; int32 Pack = 1;
+	if (GetSupplyDisplay(CatalogId, Name, Price, Pack)) { return Price; }
+	if (GetSeedDisplay(CatalogId, Name, Price)) { return Price; }
+	return 0;
+}
+
+FText UStoreComponent::GetCatalogName(FName CatalogId) const
+{
+	FText Name; int32 Price = 0; int32 Pack = 1;
+	if (GetSupplyDisplay(CatalogId, Name, Price, Pack)) { return Name; }
+	if (GetSeedDisplay(CatalogId, Name, Price)) { return Name; }
+	return FText::FromName(CatalogId);
+}
+
 TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 {
 	if (Cat == 0)

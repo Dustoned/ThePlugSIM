@@ -415,6 +415,98 @@ void UPhoneClientComponent::SellInventoryIndex(int32 StackIndex)
 	}
 }
 
+// --- Winkel: aantal-keuze + winkelwagen ---
+
+int32 UPhoneClientComponent::GetPendingQty(FName ItemId) const
+{
+	const int32* P = PendingQty.Find(ItemId);
+	return P ? *P : 1;
+}
+
+void UPhoneClientComponent::AdjustPendingQty(FName ItemId, int32 Delta)
+{
+	const int32 Cur = GetPendingQty(ItemId);
+	PendingQty.Add(ItemId, FMath::Clamp(Cur + Delta, 1, 99));
+}
+
+void UPhoneClientComponent::AddToCart(FName ItemId)
+{
+	if (ItemId.IsNone()) { return; }
+	const int32 Qty = GetPendingQty(ItemId);
+	for (FCartLine& L : Cart)
+	{
+		if (L.ItemId == ItemId) { L.Qty = FMath::Clamp(L.Qty + Qty, 1, 999); return; }
+	}
+	FCartLine NewLine; NewLine.ItemId = ItemId; NewLine.Qty = Qty;
+	Cart.Add(NewLine);
+}
+
+bool UPhoneClientComponent::GetCartLine(int32 Index, FName& OutItemId, int32& OutQty) const
+{
+	if (!Cart.IsValidIndex(Index)) { return false; }
+	OutItemId = Cart[Index].ItemId;
+	OutQty = Cart[Index].Qty;
+	return true;
+}
+
+void UPhoneClientComponent::AdjustCartLine(int32 Index, int32 Delta)
+{
+	if (!Cart.IsValidIndex(Index)) { return; }
+	Cart[Index].Qty += Delta;
+	if (Cart[Index].Qty <= 0) { Cart.RemoveAt(Index); }
+}
+
+void UPhoneClientComponent::ClearCart()
+{
+	Cart.Reset();
+}
+
+int32 UPhoneClientComponent::GetCartTotalCents() const
+{
+	const AWeedShopGameState* GS = GetGS();
+	const UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	if (!Store) { return 0; }
+	int32 Total = 0;
+	for (const FCartLine& L : Cart)
+	{
+		Total += Store->GetCatalogPriceCents(L.ItemId) * L.Qty;
+	}
+	return Total;
+}
+
+void UPhoneClientComponent::Checkout()
+{
+	if (Cart.Num() == 0) { return; }
+	TArray<FName> Ids; TArray<int32> Qtys;
+	for (const FCartLine& L : Cart) { Ids.Add(L.ItemId); Qtys.Add(L.Qty); }
+	ServerBuyCart(Ids, Qtys);
+	Cart.Reset();
+}
+
+void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& ItemIds, const TArray<int32>& Quantities)
+{
+	AWeedShopGameState* GS = GetGS();
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Store || !Inv) { return; }
+
+	int32 Bought = 0, Failed = 0;
+	for (int32 i = 0; i < ItemIds.Num(); ++i)
+	{
+		const int32 Qty = Quantities.IsValidIndex(i) ? Quantities[i] : 0;
+		for (int32 q = 0; q < Qty; ++q)
+		{
+			if (Store->BuyAny(ItemIds[i], Inv)) { ++Bought; }
+			else { ++Failed; break; } // stop deze regel bij eerste mislukking (bv. geen geld)
+		}
+	}
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, Failed > 0 ? FColor::Orange : FColor::Green,
+			FString::Printf(TEXT("Checkout: %d bought%s"), Bought, Failed > 0 ? TEXT(" (some failed - low cash/phase)") : TEXT("")));
+	}
+}
+
 void UPhoneClientComponent::OpenPotUpgrade(AGrowPlant* Pot)
 {
 	if (!Pot)

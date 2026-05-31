@@ -48,6 +48,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SellInventoryIndex(int32 StackIndex);
 
+	// --- Winkel: aantal-keuze per item + winkelwagen (client-side UI) ---
+	// Gekozen aantal voor een catalogus-item (default 1).
+	int32 GetPendingQty(FName ItemId) const;
+	void AdjustPendingQty(FName ItemId, int32 Delta);
+
+	// Voeg het gekozen aantal van dit item toe aan de winkelwagen.
+	void AddToCart(FName ItemId);
+
+	// Winkelwagen-regels.
+	int32 GetCartNumLines() const { return Cart.Num(); }
+	bool GetCartLine(int32 Index, FName& OutItemId, int32& OutQty) const;
+	void AdjustCartLine(int32 Index, int32 Delta);   // Delta op het aantal; <=0 -> regel weg
+	void ClearCart();
+	int32 GetCartTotalCents() const;
+
+	// Reken de hele winkelwagen af (server koopt alles, daarna leeg).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void Checkout();
+
 	// Cijfertoets-handler (1-6) als reserve naast klikken.
 	void HandleNumberKey(FKey Key);
 
@@ -177,6 +196,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerSell(FName ItemId);
 
+	// Server: koop de hele winkelwagen (parallelle arrays item-id + aantal).
+	UFUNCTION(Server, Reliable)
+	void ServerBuyCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities);
+
 	// Server: voeg alle stapels van dit item-id samen (gewogen gemiddelde THC%/Kwaliteit%).
 	UFUNCTION(Server, Reliable)
 	void ServerMergeItem(FName ItemId);
@@ -210,6 +233,11 @@ protected:
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;
+
+	// Winkel-state (client-side): gekozen aantal per item + winkelwagen.
+	struct FCartLine { FName ItemId = NAME_None; int32 Qty = 0; };
+	TArray<FCartLine> Cart;
+	TMap<FName, int32> PendingQty;
 
 	bool bPotUpgradeOpen = false;
 	TWeakObjectPtr<AGrowPlant> UpgPot;
