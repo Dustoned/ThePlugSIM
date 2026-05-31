@@ -73,4 +73,15 @@ protected:
 	UWidget* MakeAppCell(int32 AppIndex, const FString& Name, WeedUI::EIcon Icon, const FLinearColor& Col);
 	UPhoneButton* MakeButton(const FString& Label, int32 Action, int32 Param, const FLinearColor& Col);
 	void AddInfoRow(const FString& Txt, const FLinearColor& Col, int32 Size = 13);
+
+	// Knop met een vrije callback (voor de winkel-app: categorie/qty/cart/checkout).
+	class UWeedActionButton* MakeActionBtn(const FString& Label, const FLinearColor& Col, TFunction<void()> OnClick, int32 FontSize = 12);
+
+	// Bouwt de Suppliers-app (in-telefoon webshop) in de gegeven container.
+	void BuildStoreApp(class UVerticalBox* Into);
+
+	// Markeer dat de app-inhoud opnieuw opgebouwd moet worden (na een winkel-actie).
+	void MarkDirty() { bContentDirty = true; }
+
+	bool bCartView = false; // toont de winkelwagen i.p.v. de catalogus
 };
