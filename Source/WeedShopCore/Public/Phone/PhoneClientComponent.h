@@ -134,6 +134,21 @@ public:
 	void MarkUiClickConsumed();
 	bool DidUiConsumeClickRecently() const;
 
+	// --- Wiet-batches mergen (bevestig-popup) ---
+	void OpenMerge(FName ItemId);
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void CloseMerge();
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void ConfirmMerge();
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	bool IsMergeOpen() const { return bMergeOpen; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	FName GetMergeItemId() const { return MergeItemId; }
+
 	// Prijs-band: van 40% tot 200% van de marktprijs (in stappen van 10% voor de slider).
 	static constexpr int32 DealStepCount = 17; // 40,50,...,200 %
 
@@ -162,6 +177,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerSell(FName ItemId);
 
+	// Server: voeg alle stapels van dit item-id samen (gewogen gemiddelde THC%/Kwaliteit%).
+	UFUNCTION(Server, Reliable)
+	void ServerMergeItem(FName ItemId);
+
 	// Server: koop pot-upgrade UpgIndex voor de gegeven pot (kosten van de kas).
 	UFUNCTION(Server, Reliable)
 	void ServerBuyPotUpgrade(AGrowPlant* Pot, int32 UpgIndex);
@@ -188,6 +207,9 @@ protected:
 	double LastUiClickTime = -100.0;
 
 	bool bInventoryOpen = false;
+
+	bool bMergeOpen = false;
+	FName MergeItemId = NAME_None;
 
 	bool bPotUpgradeOpen = false;
 	TWeakObjectPtr<AGrowPlant> UpgPot;

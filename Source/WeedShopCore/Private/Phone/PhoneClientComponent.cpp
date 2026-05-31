@@ -43,7 +43,7 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -111,6 +111,44 @@ void UPhoneClientComponent::ToggleInventory()
 		bPotUpgradeOpen = false;
 	}
 	UpdateCursor();
+}
+
+void UPhoneClientComponent::OpenMerge(FName ItemId)
+{
+	const UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv || Inv->CountStacksOf(ItemId) < 2)
+	{
+		return; // niets te mergen
+	}
+	MergeItemId = ItemId;
+	bMergeOpen = true;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseMerge()
+{
+	bMergeOpen = false;
+	MergeItemId = NAME_None;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ConfirmMerge()
+{
+	if (!MergeItemId.IsNone())
+	{
+		ServerMergeItem(MergeItemId);
+	}
+	bMergeOpen = false;
+	MergeItemId = NAME_None;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ServerMergeItem_Implementation(FName ItemId)
+{
+	if (UInventoryComponent* Inv = GetOwnerInventory())
+	{
+		Inv->MergeItem(ItemId);
+	}
 }
 
 void UPhoneClientComponent::SetRollGrams(int32 Grams)

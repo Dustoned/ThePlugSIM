@@ -36,6 +36,9 @@ protected:
 	// Tekent het inventory-scherm met drag-n-drop naar de hotbar.
 	void DrawInventoryUI(class UInventoryComponent* Inv);
 
+	// Tekent de merge-bevestiging: legt uit dat THC%/Kwaliteit% gemiddeld worden + Merge/Cancel.
+	void DrawMergeUI(UPhoneClientComponent* Phone, class UInventoryComponent* Inv);
+
 	// Tekent het per-pot upgrade-paneel (drainage/isolatie/bloom) voor de aangekeken pot.
 	void DrawPotUpgradeUI(UPhoneClientComponent* Phone);
 

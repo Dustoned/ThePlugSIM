@@ -146,6 +146,11 @@ void AWeedShopHUD::DrawHUD()
 			if (UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr)
 			{
 				DrawInventoryUI(Inv);
+				// Merge-bevestiging als popup bovenop de inventory.
+				if (Phone->IsMergeOpen())
+				{
+					DrawMergeUI(Phone, Inv);
+				}
 			}
 		}
 		else if (Phone->IsPotUpgradeOpen())
@@ -631,6 +636,34 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		Phone->ToggleInventory();
 	}
+	else if (S.StartsWith(TEXT("merge_")))
+	{
+		// Merge-knop op een wiet-cel: open de bevestig-popup voor dat product.
+		const int32 Idx = FCString::Atoi(*S.RightChop(6));
+		if (const APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr)
+		{
+			if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+			{
+				// Idx is de n-de vrije (niet-hotbar) stapel; vind dezelfde volgorde terug.
+				int32 n = 0; FName Target = NAME_None;
+				for (const FInventoryStack& St : Inv->GetStacks())
+				{
+					if (Inv->IsStackOnHotbar(St.StackId)) { continue; }
+					if (n == Idx) { Target = St.ItemId; break; }
+					++n;
+				}
+				if (!Target.IsNone()) { Phone->OpenMerge(Target); }
+			}
+		}
+	}
+	else if (S == TEXT("mergeconfirm"))
+	{
+		Phone->ConfirmMerge();
+	}
+	else if (S == TEXT("mergeclose"))
+	{
+		Phone->CloseMerge();
+	}
 	else if (S.StartsWith(TEXT("potupg_")))
 	{
 		Phone->BuyPotUpgrade(FCString::Atoi(*S.RightChop(7)));
@@ -1003,6 +1036,18 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		DrawText(FString::Printf(TEXT("x%d%s"), S.Quantity, *GExtra),
 			FLinearColor(0.75f, 0.75f, 0.8f), cx + 6.f, cy + 26.f, Font);
 		AddHitBox(FVector2D(cx + 2.f, cy + 2.f), FVector2D(CellW - 4.f, CellH - 4.f), Box, true, 3);
+
+		// Meerdere batches van dit wiet-product? Toon een 'MERGE'-knop (hogere prioriteit dan de cel).
+		if (bThc && Inv->CountStacksOf(S.ItemId) > 1)
+		{
+			const FName MBox(*FString::Printf(TEXT("merge_%d"), n));
+			const float mw = 52.f, mh = 16.f;
+			const float mxp = cx + CellW - mw - 4.f, myp = cy + CellH - mh - 4.f;
+			const bool bMHover = (HoveredBox == MBox);
+			DrawRect(bMHover ? FLinearColor(0.95f, 0.7f, 0.15f, 0.95f) : FLinearColor(0.5f, 0.4f, 0.1f, 0.95f), mxp, myp, mw, mh);
+			DrawText(TEXT("MERGE"), FLinearColor::White, mxp + 4.f, myp + 1.f, Font);
+			AddHitBox(FVector2D(mxp, myp), FVector2D(mw, mh), MBox, true, 5);
+		}
 	}
 
 	// Hotbar-rij (hbar_<i>).
@@ -1038,8 +1083,15 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		hx += SlotW + Gap;
 	}
 
+	// Merge-popup open? Geen drag/hotbar-interactie in de inventory (de popup vangt de klikken).
+	const bool bMergeBlocking = GetPhone() && GetPhone()->IsMergeOpen();
+
 	// Drag-state (gepolled met muisknop + hover, DPI-onafhankelijk). Start vanuit grid (inv_) of hotbar (hbar_).
-	if (!bDraggingItem)
+	if (bMergeBlocking)
+	{
+		// niets
+	}
+	else if (!bDraggingItem)
 	{
 		if (bMouseDown && HS.StartsWith(TEXT("inv_")))
 		{
@@ -1086,6 +1138,62 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	{
 		PlayerOwner->CurrentMouseCursor = bDraggingItem ? EMouseCursor::GrabHandClosed : EMouseCursor::Default;
 	}
+}
+
+void AWeedShopHUD::DrawMergeUI(UPhoneClientComponent* Phone, UInventoryComponent* Inv)
+{
+	const FName ItemId = Phone->GetMergeItemId();
+	if (ItemId.IsNone() || !Inv || Inv->CountStacksOf(ItemId) < 2)
+	{
+		Phone->CloseMerge();
+		return;
+	}
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+
+	const float W = 460.f;
+	const float H = 250.f;
+	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
+	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
+	const float InnerX = PX + 16.f;
+
+	// Donkere dim achter de popup + paneel.
+	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), 0.f, 0.f, Canvas ? Canvas->ClipX : 1280.f, Canvas ? Canvas->ClipY : 720.f);
+	DrawRect(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), PX, PY, W, H);
+
+	float y = PY + 14.f;
+	DrawText(TEXT("MERGE WEED"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
+
+	int32 Qty = 0, Batches = 0; float AvgThc = 0.f, AvgQ = 0.f;
+	Inv->GetMergePreview(ItemId, Qty, AvgThc, AvgQ, Batches);
+
+	DrawText(FString::Printf(TEXT("Combine %d separate batches of %s into one stack."), Batches, *PrettyItemName(ItemId)),
+		FLinearColor(0.9f, 0.9f, 1.f), InnerX, y, Font); y += 24.f;
+
+	// Lijst van de batches (max 4 tonen).
+	int32 shown = 0;
+	for (const FInventoryStack& S : Inv->GetStacks())
+	{
+		if (S.ItemId != ItemId) { continue; }
+		if (shown < 4)
+		{
+			DrawText(FString::Printf(TEXT("  - %dg  @  THC %.0f%%  /  Quality %.0f%%"), S.Quantity, S.Quality, S.QualityPct),
+				FLinearColor(0.78f, 0.8f, 0.85f), InnerX, y, Font);
+			y += 19.f;
+		}
+		++shown;
+	}
+	if (shown > 4) { DrawText(FString::Printf(TEXT("  ...and %d more"), shown - 4), FLinearColor(0.6f, 0.6f, 0.65f), InnerX, y, Font); y += 19.f; }
+	y += 6.f;
+
+	DrawText(TEXT("The THC% and Quality% become the weighted average:"),
+		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font); y += 22.f;
+	DrawText(FString::Printf(TEXT("Result: %dg  @  THC %.0f%%  /  Quality %.0f%%"), Qty, AvgThc, AvgQ),
+		FLinearColor(1.f, 0.95f, 0.55f), InnerX, y, Font); y += 30.f;
+
+	DrawButton(FName(TEXT("mergeconfirm")), TEXT("Merge (average)"), InnerX, y, 200.f, FLinearColor::White);
+	DrawButton(FName(TEXT("mergeclose")), TEXT("Cancel"), InnerX + 210.f, y, 150.f, FLinearColor::Yellow);
+
+	if (PlayerOwner) { PlayerOwner->CurrentMouseCursor = EMouseCursor::Default; }
 }
 
 void AWeedShopHUD::DrawPotUpgradeUI(UPhoneClientComponent* Phone)

@@ -27,6 +27,87 @@ int32 UInventoryComponent::FindStackIndex(FName ItemId) const
 	return Stacks.IndexOfByPredicate([ItemId](const FInventoryStack& S) { return S.ItemId == ItemId; });
 }
 
+int32 UInventoryComponent::FindMergeStackIndex(FName ItemId, float ThcPercent, float QualityPct) const
+{
+	// Items zonder kwaliteit-info (seeds/papers/soil, of thc/quality < 0): merge gewoon op item-id.
+	const bool bMatchQuality = (ThcPercent >= 0.f || QualityPct >= 0.f);
+	for (int32 i = 0; i < Stacks.Num(); ++i)
+	{
+		if (Stacks[i].ItemId != ItemId) { continue; }
+		if (!bMatchQuality)
+		{
+			return i;
+		}
+		// Wiet/joints: alleen samen als THC% én Kwaliteit% (vrijwel) gelijk zijn.
+		if (FMath::Abs(Stacks[i].Quality - FMath::Max(0.f, ThcPercent)) < 0.5f &&
+			FMath::Abs(Stacks[i].QualityPct - FMath::Max(0.f, QualityPct)) < 0.5f)
+		{
+			return i;
+		}
+	}
+	return INDEX_NONE;
+}
+
+int32 UInventoryComponent::CountStacksOf(FName ItemId) const
+{
+	int32 N = 0;
+	for (const FInventoryStack& S : Stacks) { if (S.ItemId == ItemId) { ++N; } }
+	return N;
+}
+
+void UInventoryComponent::GetMergePreview(FName ItemId, int32& OutQty, float& OutThcPercent, float& OutQualityPct, int32& OutBatches) const
+{
+	int32 Qty = 0, Batches = 0; double ThcSum = 0.0, QSum = 0.0;
+	for (const FInventoryStack& S : Stacks)
+	{
+		if (S.ItemId != ItemId) { continue; }
+		Qty += S.Quantity;
+		ThcSum += double(S.Quality) * S.Quantity;
+		QSum += double(S.QualityPct) * S.Quantity;
+		++Batches;
+	}
+	OutQty = Qty;
+	OutBatches = Batches;
+	OutThcPercent = Qty > 0 ? float(ThcSum / Qty) : 0.f;
+	OutQualityPct = Qty > 0 ? float(QSum / Qty) : 0.f;
+}
+
+bool UInventoryComponent::MergeItem(FName ItemId)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return false; }
+	if (CountStacksOf(ItemId) < 2) { return false; }
+
+	int32 Qty = 0; double ThcSum = 0.0, QSum = 0.0; int32 KeepIdx = INDEX_NONE;
+	for (int32 i = 0; i < Stacks.Num(); ++i)
+	{
+		if (Stacks[i].ItemId != ItemId) { continue; }
+		Qty += Stacks[i].Quantity;
+		ThcSum += double(Stacks[i].Quality) * Stacks[i].Quantity;
+		QSum += double(Stacks[i].QualityPct) * Stacks[i].Quantity;
+		if (KeepIdx == INDEX_NONE) { KeepIdx = i; }
+	}
+	if (KeepIdx == INDEX_NONE || Qty <= 0) { return false; }
+
+	// Eén stapel houden met het gewogen gemiddelde; de rest weghalen (en van de hotbar af).
+	Stacks[KeepIdx].Quantity = Qty;
+	Stacks[KeepIdx].Quality = float(ThcSum / Qty);
+	Stacks[KeepIdx].QualityPct = float(QSum / Qty);
+	for (int32 i = Stacks.Num() - 1; i >= 0; --i)
+	{
+		if (i == KeepIdx || Stacks[i].ItemId != ItemId) { continue; }
+		UnassignHotbarStack(Stacks[i].StackId);
+		Stacks.RemoveAt(i);
+	}
+
+	OnRep_Stacks();
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			FString::Printf(TEXT("Merged into %dx (THC %.0f%%, Quality %.0f%%)"), Qty, Stacks[FindStackIndex(ItemId)].Quality, Stacks[FindStackIndex(ItemId)].QualityPct));
+	}
+	return true;
+}
+
 int32 UInventoryComponent::FindStackById(int32 StackId) const
 {
 	if (StackId == 0) { return INDEX_NONE; }
@@ -57,7 +138,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 	// Slot-limiet: nieuwe stapels die erbij komen.
 	if (MaxStacks > 0)
 	{
-		const int32 ExistingIdx = FindStackIndex(ItemId);
+		const int32 ExistingIdx = FindMergeStackIndex(ItemId, ThcPercent, QualityPct);
 		const int32 NewStacks = bStackable ? (ExistingIdx != INDEX_NONE ? 0 : 1) : Count;
 		if (GetUsedSlots() + NewStacks > MaxStacks)
 		{
@@ -68,7 +149,8 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 
 	if (bStackable)
 	{
-		const int32 Index = FindStackIndex(ItemId);
+		// Wiet met afwijkende kwaliteit komt in een eigen stapel (mergen doe je later bewust).
+		const int32 Index = FindMergeStackIndex(ItemId, ThcPercent, QualityPct);
 		if (Index != INDEX_NONE)
 		{
 			const int32 OldQty = Stacks[Index].Quantity;

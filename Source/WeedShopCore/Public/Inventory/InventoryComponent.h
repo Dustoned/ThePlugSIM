@@ -93,6 +93,20 @@ public:
 	// Index van de stapel met deze StackId (INDEX_NONE als weg).
 	int32 FindStackById(int32 StackId) const;
 
+	// --- Wiet-batches mergen (verschillende oogsten met afwijkende THC%/Kwaliteit% blijven aparte
+	// stapels; de speler kan ze bewust samenvoegen tot het gewogen gemiddelde) ---
+
+	// Aantal aparte stapels van dit item-id (>1 = mergebaar).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	int32 CountStacksOf(FName ItemId) const;
+
+	// Voorbeeld van het merge-resultaat (gewogen gemiddelde) zonder iets te wijzigen.
+	void GetMergePreview(FName ItemId, int32& OutQty, float& OutThcPercent, float& OutQualityPct, int32& OutBatches) const;
+
+	// Server. Voegt alle stapels van dit item-id samen tot één (gewogen gemiddelde THC%/Kwaliteit%).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	bool MergeItem(FName ItemId);
+
 	// --- Hotbar (verwijst naar StackId's; lokale UI-staat) ---
 	static constexpr int32 HotbarSize = 8;
 
@@ -137,6 +151,10 @@ protected:
 
 	// Eerste stapel-index met dit item-id, of INDEX_NONE.
 	int32 FindStackIndex(FName ItemId) const;
+
+	// Stapel om in te mergen: zelfde item-id én (voor wiet) bijna gelijke THC%/Kwaliteit%. Wiet met
+	// afwijkende kwaliteit krijgt zo een eigen stapel; -1 voor thc/quality = geen kwaliteit-eis.
+	int32 FindMergeStackIndex(FName ItemId, float ThcPercent, float QualityPct) const;
 
 	// Hotbar netjes houden: verwijder verdwenen StackId's, vul lege slots automatisch.
 	void RefreshHotbarAuto();
