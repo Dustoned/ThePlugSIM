@@ -55,5 +55,5 @@ void AWaterSink::Interact_Implementation(APawn* InstigatorPawn)
 
 FText AWaterSink::GetInteractionPrompt_Implementation() const
 {
-	return NSLOCTEXT("WeedShop", "FillBottle", "Fill water bottle (E)");
+	return NSLOCTEXT("WeedShop", "FillBottle", "Fill water bottle");
 }

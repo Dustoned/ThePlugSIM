@@ -485,18 +485,18 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 		// Kwaliteit (gezondheid) zakt zolang je niet oogst -> waarschuwen.
 		const float Q = FMath::Clamp(CareAvg, 0.f, 1.f) * 100.f;
 		const FString Warn = (Q < 60.f) ? TEXT("  - harvest now, quality dropping!") : TEXT("");
-		return FText::FromString(FString::Printf(TEXT("Harvest %d ready plant(s)  [E]  (quality %.0f%%)%s"),
+		return FText::FromString(FString::Printf(TEXT("Harvest %d ready plant(s)  (quality %.0f%%)%s"),
 			GetReadyCount(), Q, *Warn));
 	}
 	if (!HasSoil())
 	{
-		return NSLOCTEXT("WeedShop", "AddSoil", "Hold soil + E to fill the pot");
+		return NSLOCTEXT("WeedShop", "AddSoil", "Add soil (hold soil)");
 	}
 	if (GetPlantedCount() < GetNumSlots())
 	{
-		return FText::FromString(FString::Printf(TEXT("Hold a seed + E to plant  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
+		return FText::FromString(FString::Printf(TEXT("Plant a seed (hold seed)  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
 	}
-	return FText::FromString(FString::Printf(TEXT("Hold bottle + E to water  (water %.0f%%)"), WaterLevel * 100.f));
+	return FText::FromString(FString::Printf(TEXT("Water the plant (hold bottle)  (water %.0f%%)"), WaterLevel * 100.f));
 }
 
 float AGrowPlant::GetMaxCare() const

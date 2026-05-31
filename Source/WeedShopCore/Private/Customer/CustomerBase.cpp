@@ -426,7 +426,7 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 		return FText::FromString(FString::Printf(TEXT("Deal: %dx %s  (market ~EUR %.2f)"),
 			DesiredQuantity, *DesiredProductId.ToString(), (GetMarketPriceCents() * DesiredQuantity) / 100.f));
 	case ECustomerState::Prospect:
-		return FText::FromString(FString::Printf(TEXT("Not buying yet - give a free sample [F]  (addiction %.0f/%.0f)"),
+		return FText::FromString(FString::Printf(TEXT("Not buying yet - hold a joint and give them a hit  (addiction %.0f/%.0f)"),
 			Addiction, AddictionToBuy));
 	case ECustomerState::Served:
 		return FText::FromString(TEXT("Satisfied customer"));

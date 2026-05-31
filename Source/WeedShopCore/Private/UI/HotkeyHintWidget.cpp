@@ -151,8 +151,11 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				const FText T = IInteractable::Execute_GetInteractionPrompt(Focus);
 				if (!T.IsEmpty()) { Prompt = T.ToString(); }
 			}
-			Hints.Emplace(K(TEXT("Interact")), Prompt);
-			if (Cast<ACustomerBase>(Focus)) { Hints.Emplace(K(TEXT("GiveSample")), TEXT("Give sample")); }
+			const FName ActiveF = Inv ? Inv->GetActiveItemId() : NAME_None;
+			const bool bJointHand = ActiveF.ToString().StartsWith(TEXT("Joint_"));
+			// Klant + joint in de hand -> korte hold om 'm een hit te geven; anders normaal interacten.
+			if (Cast<ACustomerBase>(Focus) && bJointHand) { Hints.Emplace(TEXT("Hold LMB"), TEXT("Give them a hit")); }
+			else { Hints.Emplace(K(TEXT("Interact")), Prompt); }
 			if (Cast<AGrowPlant>(Focus)) { Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Upgrade pot")); }
 		}
 

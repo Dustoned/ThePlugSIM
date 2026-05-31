@@ -112,6 +112,19 @@ void AWeedShopHUD::DrawHUD()
 			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
 			DrawRect(FLinearColor(0.4f, 0.9f, 0.5f, 0.95f), BX, BY, BW * Frac, BH);
 		}
+
+		// Joint-overhandigen indicator (midden-onder): korte hold.
+		const float GFrac = Ph2->GetGiveHoldFrac();
+		if (GFrac > 0.f)
+		{
+			const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
+			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
+			const float BW = 220.f, BH = 16.f;
+			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
+			DrawText(TEXT("Handing over a joint..."), FLinearColor(0.7f, 1.f, 0.8f), BX, BY - 22.f, Font);
+			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawRect(FLinearColor(0.5f, 0.85f, 1.f, 0.95f), BX, BY, BW * GFrac, BH);
+		}
 	}
 
 	// Plaats-modus hint (midden-onder).
@@ -144,16 +157,7 @@ void AWeedShopHUD::DrawHUD()
 			const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
 			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
 
-			// Niet-plant prompt (klant/meubel); planten worden door de UMG-kaart afgehandeld.
-			if (!Cast<AGrowPlant>(Focus))
-			{
-				const FText Prompt = IInteractable::Execute_GetInteractionPrompt(Focus);
-				if (!Prompt.IsEmpty())
-				{
-					DrawText(FString::Printf(TEXT("[E / left-click] %s"), *Prompt.ToString()),
-						FLinearColor::Yellow, CX - 80.f, CY + 60.f, Font);
-				}
-			}
+			// (De interactie-tekst staat nu rechtsonder in het Controls-paneel; geen wereld-prompt meer.)
 
 			// Oppak-voortgang (hold G) — voor elk oppakbaar object.
 			if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())

@@ -271,6 +271,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	float GetSmokeHoldFrac() const { return SmokeHoldFrac; }
 
+	// Voortgang van het "joint overhandigen" (links-muis inhouden bij een klant met joint in de hand).
+	void SetGiveHoldFrac(float Frac) { GiveHoldFrac = FMath::Clamp(Frac, 0.f, 1.f); }
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	float GetGiveHoldFrac() const { return GiveHoldFrac; }
+
 	// Stoned-info voor de HUD (door de character bijgewerkt): fractie resterend (0..1), resterende
 	// seconden en hoe high je bent (0..1).
 	void SetStonedHud(float Frac, float Seconds, float Intensity, float XpFrac) { StonedHudFrac = Frac; StonedHudSecs = Seconds; StonedHudIntensity = Intensity; StonedHudXpFrac = XpFrac; }
@@ -404,6 +409,7 @@ protected:
 	int32 RollGrams = 2;
 
 	float SmokeHoldFrac = 0.f; // 0..1 voortgang van rook-inhouden (lokale UI-staat)
+	float GiveHoldFrac = 0.f;  // 0..1 voortgang van joint-overhandigen
 	float StonedHudFrac = 0.f;      // 0..1 resterende high voor de HUD
 	float StonedHudSecs = 0.f;      // resterende high-seconden
 	float StonedHudIntensity = 0.f; // hoe high (0..1)

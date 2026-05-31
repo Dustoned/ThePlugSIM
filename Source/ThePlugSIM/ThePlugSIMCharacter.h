@@ -135,6 +135,9 @@ protected:
 	/** Interact-toets (E): zelfde als klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen. */
 	void OnInteractKey();
 
+	/** Links-knop losgelaten: stopt de "joint overhandigen"-hold. */
+	void OnPrimaryReleased();
+
 	/** Rechtermuisknop ingedrukt: papers -> roll-paneel; joint -> begin met "inhouden om te roken". */
 	void OnSecondaryPressed();
 
@@ -172,6 +175,12 @@ protected:
 	bool bSmokeFired = false;
 	float SmokeHoldTime = 0.f;
 	static constexpr float SmokeHoldRequired = 1.1f; // sec inhouden voor het oproken
+
+	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
+	bool bLmbDown = false;
+	bool bGiveFired = false;
+	float GiveHoldTime = 0.f;
+	static constexpr float GiveHoldRequired = 0.45f; // korte hold
 
 public:
 

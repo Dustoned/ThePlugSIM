@@ -126,6 +126,32 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		}
 	}
 
+	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
+	{
+		const bool bUiOpenG = Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()
+			|| Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen());
+		const bool bJointG = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Joint_"));
+		ACustomerBase* FocusCust = nullptr;
+		if (const UInteractionComponent* ICx = FindComponentByClass<UInteractionComponent>())
+		{
+			FocusCust = Cast<ACustomerBase>(ICx->GetFocusedActor());
+		}
+		if (bLmbDown && !bUiOpenG && bJointG && FocusCust)
+		{
+			GiveHoldTime += DeltaSeconds;
+			if (!bGiveFired && GiveHoldTime >= GiveHoldRequired)
+			{
+				bGiveFired = true;
+				GiveSample();
+			}
+		}
+		else
+		{
+			GiveHoldTime = 0.f;
+		}
+		if (Phone) { Phone->SetGiveHoldFrac(bGiveFired ? 0.f : FMath::Clamp(GiveHoldTime / GiveHoldRequired, 0.f, 1.f)); }
+	}
+
 	// Stoned = wat extra motion blur + lichte vaagheid, zodat rondkijken "high" aanvoelt.
 	if (FirstPersonCameraComponent)
 	{
@@ -196,8 +222,6 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 		}
 		const FKey KInteract = CS->GetKey(TEXT("Interact"), bAlt);
 		if (KInteract.IsValid()) { Input->BindKey(KInteract, IE_Pressed, this, &AThePlugSIMCharacter::OnInteractKey); }
-		const FKey KSample = CS->GetKey(TEXT("GiveSample"), bAlt);
-		if (KSample.IsValid()) { Input->BindKey(KSample, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample); }
 		if (B)
 		{
 			const FKey KRot = CS->GetKey(TEXT("Rotate"), bAlt);
@@ -221,6 +245,7 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	Input->BindKey(EKeys::RightMouseButton, IE_Pressed,  this, &AThePlugSIMCharacter::OnSecondaryPressed);
 	Input->BindKey(EKeys::RightMouseButton, IE_Released, this, &AThePlugSIMCharacter::OnSecondaryReleased);
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Pressed,  this, &AThePlugSIMCharacter::OnPrimaryClick);
+	Input->BindKey(EKeys::LeftMouseButton,  IE_Released, this, &AThePlugSIMCharacter::OnPrimaryReleased);
 }
 
 void AThePlugSIMCharacter::RefreshKeyBindings()
@@ -522,11 +547,13 @@ void AThePlugSIMCharacter::HotbarNext()
 
 void AThePlugSIMCharacter::OnPrimaryClick()
 {
+	bLmbDown = true; GiveHoldTime = 0.f; bGiveFired = false;
+
 	// Klik gaat naar de UI als die open is (HUD hit-boxes regelen dat zelf). Ook als een UI-knop
 	// deze klik net heeft verwerkt (bv. een paneel sloot) negeren we 'm hier, zodat dezelfde klik
 	// niet alsnog de wereld-interactie (en daarmee bv. de deal opnieuw) opent.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->DidUiConsumeClickRecently()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->DidUiConsumeClickRecently()))
 	{
 		return;
 	}
@@ -536,11 +563,17 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 		Build->ConfirmPlacement();
 		return;
 	}
-	// Kijk je een interact-baar object aan (pot/klant)? Dan links-klik = E (soil/seed/water/oogst).
+	// Joint in de hand + je kijkt een klant aan -> dat is een "joint overhandigen" (korte LMB-hold,
+	// afgehandeld in Tick). Niet meteen interacten (anders opent de deal).
+	const bool bJointInHand = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Joint_"));
 	if (UInteractionComponent* IC = FindComponentByClass<UInteractionComponent>())
 	{
 		if (AActor* Focus = IC->GetFocusedActor())
 		{
+			if (bJointInHand && Cast<ACustomerBase>(Focus))
+			{
+				return; // hold-to-give regelt dit
+			}
 			// ATM -> open lokaal het ATM-scherm (bankieren) i.p.v. een server-interactie.
 			if (Cast<AAtm>(Focus))
 			{
@@ -552,6 +585,14 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 		}
 	}
 	UseActiveItem();
+}
+
+void AThePlugSIMCharacter::OnPrimaryReleased()
+{
+	bLmbDown = false;
+	GiveHoldTime = 0.f;
+	bGiveFired = false;
+	if (Phone) { Phone->SetGiveHoldFrac(0.f); }
 }
 
 void AThePlugSIMCharacter::OnInteractKey()

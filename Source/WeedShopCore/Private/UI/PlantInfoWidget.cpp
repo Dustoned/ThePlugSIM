@@ -185,9 +185,9 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	else
 	{
 		SoilText->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 0.7f, 0.3f)));
-		SoilText->SetText(FText::FromString(TEXT("No soil - hold soil + E to fill")));
+		SoilText->SetText(FText::FromString(TEXT("No soil")));
 	}
 
-	const FText Prompt = IInteractable::Execute_GetInteractionPrompt(Plant);
-	HintText->SetText(FText::FromString(FString::Printf(TEXT("[E / left-click] %s"), *Prompt.ToString())));
+	// (De interactie-tekst staat nu rechtsonder bij Controls; geen hint-regel meer op de plantkaart.)
+	if (HintText) { HintText->SetVisibility(ESlateVisibility::Collapsed); }
 }
