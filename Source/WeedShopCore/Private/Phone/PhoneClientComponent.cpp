@@ -345,12 +345,15 @@ void UPhoneClientComponent::SetSupplierCat(int32 Cat)
 	SupplierCat = FMath::Clamp(Cat, 0, UStoreComponent::SupplierCatCount - 1);
 }
 
-void UPhoneClientComponent::SellPotTier(int32 TierIndex)
+void UPhoneClientComponent::SellInventoryIndex(int32 StackIndex)
 {
-	const TArray<FPotDef>& Pots = GetAllPots();
-	if (Pots.IsValidIndex(TierIndex))
+	if (const UInventoryComponent* Inv = GetOwnerInventory())
 	{
-		ServerSell(Pots[TierIndex].ItemId);
+		const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
+		if (Stacks.IsValidIndex(StackIndex))
+		{
+			ServerSell(Stacks[StackIndex].ItemId);
+		}
 	}
 }
 

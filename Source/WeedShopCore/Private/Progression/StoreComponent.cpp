@@ -8,6 +8,7 @@
 #include "Progression/MilestoneComponent.h"
 #include "Cultivation/SoilTypes.h"
 #include "Cultivation/PotTypes.h"
+#include "Placement/PlaceableTypes.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -141,12 +142,33 @@ bool UStoreComponent::GetSupplyDisplay(FName SupplyId, FText& OutName, int32& Ou
 	return false;
 }
 
-int32 UStoreComponent::GetSellPriceCents(FName ItemId) const
+int32 UStoreComponent::GetSellValueCents(FName ItemId) const
 {
-	FPotDef Pot;
-	if (GetPotDef(ItemId, Pot))
+	// Wiet/joints verkoop je aan klanten, niet aan de supplier.
+	const FString S = ItemId.ToString();
+	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Joint_")))
 	{
-		return Pot.SellPriceCents;
+		return 0;
+	}
+
+	// 70% terug van de koopprijs (seeds + supplies, incl. pots/soil/papers/water).
+	FText Name; int32 Buy = 0; int32 Pack = 1;
+	if (!StrainFromSeedItem(ItemId).IsNone() && GetSeedDisplay(StrainFromSeedItem(ItemId), Name, Buy))
+	{
+		return FMath::RoundToInt(Buy * 0.70f);
+	}
+	if (GetSupplyDisplay(ItemId, Name, Buy, Pack))
+	{
+		// Pack-prijs / pack-grootte = prijs per stuk, 70% terug.
+		const float PerUnit = Pack > 0 ? float(Buy) / Pack : float(Buy);
+		return FMath::RoundToInt(PerUnit * 0.70f);
+	}
+
+	// Meubels (placeables zonder koopprijs) hebben een vaste verkoopwaarde.
+	FPlaceableDef Pd;
+	if (GetPlaceableDef(ItemId, Pd) && Pd.SellCents > 0)
+	{
+		return Pd.SellCents;
 	}
 	return 0;
 }
@@ -157,7 +179,7 @@ bool UStoreComponent::SellItem(FName ItemId, UInventoryComponent* Seller)
 	{
 		return false;
 	}
-	const int32 Price = GetSellPriceCents(ItemId);
+	const int32 Price = GetSellValueCents(ItemId);
 	if (Price <= 0 || !Seller->HasItem(ItemId, 1))
 	{
 		return false;
@@ -184,14 +206,18 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 	{
 		return GetSeedCatalog();
 	}
-	const TCHAR* Prefix = TEXT("");
+	const TCHAR* Prefix = nullptr;
 	switch (Cat)
 	{
 	case 1: Prefix = TEXT("Papers_"); break;
 	case 2: Prefix = TEXT("Pot");     break;
 	case 3: Prefix = TEXT("Soil_");   break;
 	case 4: Prefix = TEXT("WaterBottle"); break;
-	default: break;
+	default: break; // Sell-tab (5) e.d.: geen koop-catalogus
+	}
+	if (!Prefix)
+	{
+		return TArray<FName>();
 	}
 	TArray<FName> Out;
 	for (const FName& Id : GetSupplyCatalog())

@@ -49,8 +49,9 @@ public:
 	bool BuySupply(FName SupplyId, UInventoryComponent* Buyer);
 
 	// --- Supplier-categorieën voor de telefoon (netjes gesorteerd) ---
-	// 0=Seeds, 1=Papers, 2=Pots, 3=Soil, 4=Water.
-	static constexpr int32 SupplierCatCount = 5;
+	// 0=Seeds, 1=Papers, 2=Pots, 3=Soil, 4=Water, 5=Sell.
+	static constexpr int32 SupplierCatCount = 6;
+	static constexpr int32 SupplierCatSell = 5;
 
 	// Item-ids in een categorie (zaden voor cat 0, anders gefilterde supplies).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
@@ -59,9 +60,11 @@ public:
 	// Of deze categorie zaden bevat (dan kopen via BuySeed i.p.v. BuySupply).
 	static bool IsSeedCategory(int32 Cat) { return Cat == 0; }
 
-	// Verkoopprijs (cents) van een item; 0 als niet verkoopbaar (nu: pot-tiers).
+	// Verkoopwaarde (cents) van een item bij de supplier: 70% van de koopprijs (seeds/supplies/
+	// pots/soil/water) of een vaste waarde voor meubels. 0 = niet verkoopbaar (bv. wiet/joints
+	// die je aan klanten verkoopt).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
-	int32 GetSellPriceCents(FName ItemId) const;
+	int32 GetSellValueCents(FName ItemId) const;
 
 	// Server: verkoop 1 van dit item uit Seller (geeft geld terug). False als niet kan.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")

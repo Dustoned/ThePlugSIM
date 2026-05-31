@@ -43,9 +43,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void DoAction(int32 Index);
 
-	// Verkoop de pot-tier op TierIndex (index in de pot-lijst) uit je inventory.
+	// Verkoop het item op voorraad-stapel StackIndex aan de supplier (70% terug).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void SellPotTier(int32 TierIndex);
+	void SellInventoryIndex(int32 StackIndex);
 
 	// Cijfertoets-handler (1-6) als reserve naast klikken.
 	void HandleNumberKey(FKey Key);

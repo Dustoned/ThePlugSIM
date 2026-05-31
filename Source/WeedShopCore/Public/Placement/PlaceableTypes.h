@@ -16,6 +16,7 @@ struct FPlaceableDef
 	FVector MeshScale = FVector(1.f);  // component-schaal
 	FVector BoxHalf = FVector(25.f, 25.f, 20.f); // halve afmetingen (cm) voor mesh-offset + footprint
 	bool bIsPot = false;               // true -> spawnt AGrowPlant i.p.v. APlaceableProp
+	int32 SellCents = 0;               // verkoopwaarde bij de supplier (meubels; pots gaan via 70% koopprijs)
 };
 
 // Alle gedefinieerde placeables.

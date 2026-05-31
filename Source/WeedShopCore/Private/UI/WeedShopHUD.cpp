@@ -396,7 +396,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		if (UStoreComponent* Store = GS ? GS->GetStore() : nullptr)
 		{
 			// Categorie-knoppen (Seeds / Papers / Pots / Soil / Water).
-			static const TCHAR* CatNames[UStoreComponent::SupplierCatCount] = { TEXT("Seeds"), TEXT("Papers"), TEXT("Pots"), TEXT("Soil"), TEXT("Water") };
+			static const TCHAR* CatNames[UStoreComponent::SupplierCatCount] = { TEXT("Seeds"), TEXT("Papers"), TEXT("Pots"), TEXT("Soil"), TEXT("Water"), TEXT("Sell") };
 			const int32 Cat = Phone->GetSupplierCat();
 			const float CatW = InnerW / UStoreComponent::SupplierCatCount;
 			for (int32 i = 0; i < UStoreComponent::SupplierCatCount; ++i)
@@ -427,26 +427,26 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				}
 				++idx;
 			}
-			if (Cat == 2)
+			if (Cat == UStoreComponent::SupplierCatSell)
 				{
 					APawn* PP = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
 					if (const UInventoryComponent* PInv = PP ? PP->FindComponentByClass<UInventoryComponent>() : nullptr)
 					{
-						int32 ti = 0;
-						for (const FPotDef& Pd : GetAllPots())
+						const TArray<FInventoryStack>& SellStacks = PInv->GetStacks();
+						for (int32 si = 0; si < SellStacks.Num(); ++si)
 						{
-							if (PInv->HasItem(Pd.ItemId, 1) && y < PY + PhoneH - 50.f)
+							const int32 Val = Store->GetSellValueCents(SellStacks[si].ItemId); if (Val > 0 && y < PY + PhoneH - 50.f)
 							{
-								DrawButton(FName(*FString::Printf(TEXT("sell_%d"), ti)),
-									FString::Printf(TEXT("Sell %s (+EUR %.2f)  x%d"), *Pd.DisplayName, Pd.SellPriceCents / 100.f, PInv->GetQuantity(Pd.ItemId)),
+								DrawButton(FName(*FString::Printf(TEXT("sell_%d"), si)),
+									FString::Printf(TEXT("Sell %s  x%d   (+EUR %.2f each)"), *PrettyItemName(SellStacks[si].ItemId), SellStacks[si].Quantity, Val / 100.f),
 									InnerX, y, InnerW, FLinearColor(1.f, 0.8f, 0.5f));
 								y += RowH;
 							}
-							++ti;
+							/* */
 						}
 					}
 				}
-				if (Items.Num() == 0)
+				if (Items.Num() == 0 && Cat != UStoreComponent::SupplierCatSell)
 			{
 				DrawText(TEXT("(nothing here yet)"), FLinearColor::Gray, InnerX, y, Font);
 			}
@@ -574,7 +574,7 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	}
 	else if (S.StartsWith(TEXT("sell_")))
 	{
-		Phone->SellPotTier(FCString::Atoi(*S.RightChop(5)));
+		Phone->SellInventoryIndex(FCString::Atoi(*S.RightChop(5)));
 	}
 	else if (S.StartsWith(TEXT("rollg_")))
 	{
@@ -915,13 +915,24 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	const int32 Cols = 5;
 	const float CellW = (W - 32.f) / Cols;
 	const float CellH = 46.f;
-	for (int32 n = 0; n < FreeStacks.Num(); ++n)
+	// Gevulde cellen (vrije items) + ghost-cellen voor de resterende vrije slots, zodat je ziet
+	// hoeveel ruimte je nog hebt. Vrije slots = totale slots - alle stapels (incl. hotbar).
+	const int32 FreeSlots = (Inv->MaxStacks > 0) ? FMath::Max(0, Inv->MaxStacks - Stacks.Num()) : 10;
+	const int32 TotalCells = FreeStacks.Num() + FreeSlots;
+	for (int32 n = 0; n < TotalCells; ++n)
 	{
 		const int32 col = n % Cols;
 		const int32 row = n / Cols;
 		const float cx = InnerX + col * CellW;
 		const float cy = GridTop + row * CellH;
 		if (cy + CellH > GridBot) { break; }
+
+		if (n >= FreeStacks.Num())
+		{
+			// Lege ghost-slot.
+			DrawRect(FLinearColor(0.10f, 0.10f, 0.13f, 0.35f), cx + 2.f, cy + 2.f, CellW - 4.f, CellH - 4.f);
+			continue;
+		}
 
 		const FInventoryStack& S = Stacks[FreeStacks[n]];
 		const FName Box(*FString::Printf(TEXT("inv_%d"), n));
@@ -937,11 +948,6 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		DrawText(FString::Printf(TEXT("x%d%s"), S.Quantity, bThc ? *FString::Printf(TEXT("  %.0f%%"), S.Quality) : TEXT("")),
 			FLinearColor(0.75f, 0.75f, 0.8f), cx + 6.f, cy + 26.f, Font);
 		AddHitBox(FVector2D(cx + 2.f, cy + 2.f), FVector2D(CellW - 4.f, CellH - 4.f), Box, true, 3);
-	}
-	if (FreeStacks.Num() == 0)
-	{
-		DrawText(TEXT("(empty — buy via the phone or harvest; drag from the hotbar to store here)"),
-			FLinearColor::Gray, InnerX + 4.f, GridTop + 4.f, Font);
 	}
 
 	// Hotbar-rij (hbar_<i>).
