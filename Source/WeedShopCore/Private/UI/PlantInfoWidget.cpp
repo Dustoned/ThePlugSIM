@@ -13,6 +13,8 @@
 #include "Components/Border.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
 #include "GameFramework/Pawn.h"
@@ -50,9 +52,16 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	TitleText = WeedUI::Text(WidgetTree, TEXT("Pot"), 15, FLinearColor(0.7f, 1.f, 0.7f), false, true);
 	VB->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	// Groei-label + balkjes (max 6 plekken). Balken altijd groen.
+	// Groei-header: "Growth" links + resterende tijd rechts.
+	UHorizontalBox* GHead = WidgetTree->ConstructWidget<UHorizontalBox>();
 	GrowthLabel = WeedUI::Text(WidgetTree, TEXT("Growth"), 12, FLinearColor(0.85f, 0.9f, 1.f));
-	VB->AddChildToVerticalBox(GrowthLabel);
+	UHorizontalBoxSlot* GLS = GHead->AddChildToHorizontalBox(GrowthLabel);
+	GLS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); GLS->SetVerticalAlignment(VAlign_Center);
+	GrowthTimeText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.7f, 0.85f, 1.f));
+	UHorizontalBoxSlot* GTS = GHead->AddChildToHorizontalBox(GrowthTimeText);
+	GTS->SetHorizontalAlignment(HAlign_Right); GTS->SetVerticalAlignment(VAlign_Center);
+	GrowthHeader = GHead;
+	VB->AddChildToVerticalBox(GHead);
 	GrowthBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(GrowthBox);
 	for (int32 i = 0; i < 6; ++i)
@@ -125,7 +134,15 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		FString Title = FString::Printf(TEXT("%s   %.0f%% THC"), *StrainName, Plant->GetPrimaryBaseThc());
 		if (NumSlots > 1) { Title += FString::Printf(TEXT("   (%d/%d)"), Plant->GetPlantedCount(), NumSlots); }
 		TitleText->SetText(FText::FromString(Title));
-		if (GrowthLabel) { GrowthLabel->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		if (GrowthHeader) { GrowthHeader->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		if (GrowthTimeText)
+		{
+			const int32 Rem = FMath::CeilToInt(Plant->GetSecondsRemaining());
+			GrowthTimeText->SetText(FText::FromString(Rem > 0
+				? FString::Printf(TEXT("%d:%02d left"), Rem / 60, Rem % 60)
+				: TEXT("READY")));
+			GrowthTimeText->SetColorAndOpacity(FSlateColor(Rem > 0 ? FLinearColor(0.7f, 0.85f, 1.f) : FLinearColor(0.45f, 0.95f, 0.4f)));
+		}
 		GrowthBox->SetVisibility(ESlateVisibility::HitTestInvisible);
 		for (int32 i = 0; i < GrowthBars.Num(); ++i)
 		{
@@ -152,7 +169,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	else
 	{
 		TitleText->SetText(FText::FromString(TEXT("Empty pot")));
-		if (GrowthLabel) { GrowthLabel->SetVisibility(ESlateVisibility::Collapsed); }
+		if (GrowthHeader) { GrowthHeader->SetVisibility(ESlateVisibility::Collapsed); }
 		GrowthBox->SetVisibility(ESlateVisibility::Collapsed);
 		if (WaterRow) { WaterRow->SetVisibility(ESlateVisibility::Collapsed); }
 		if (HealthRow) { HealthRow->SetVisibility(ESlateVisibility::Collapsed); }

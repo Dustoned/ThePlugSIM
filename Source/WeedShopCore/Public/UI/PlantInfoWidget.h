@@ -27,7 +27,9 @@ protected:
 
 	UPROPERTY() TObjectPtr<UBorder> Card;
 	UPROPERTY() TObjectPtr<UTextBlock> TitleText;
+	UPROPERTY() TObjectPtr<UWidget> GrowthHeader;
 	UPROPERTY() TObjectPtr<UTextBlock> GrowthLabel;
+	UPROPERTY() TObjectPtr<UTextBlock> GrowthTimeText;
 	UPROPERTY() TObjectPtr<UVerticalBox> GrowthBox;
 	UPROPERTY() TArray<TObjectPtr<UProgressBar>> GrowthBars;
 	UPROPERTY() TObjectPtr<UWidget> WaterRow;
