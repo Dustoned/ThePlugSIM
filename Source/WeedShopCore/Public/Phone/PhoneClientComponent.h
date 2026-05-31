@@ -355,6 +355,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UCompassWidget> CompassWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UHotkeyHintWidget> HotkeyWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app

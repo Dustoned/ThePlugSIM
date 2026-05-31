@@ -28,6 +28,7 @@
 #include "UI/InventoryWidget.h"
 #include "UI/RollWidget.h"
 #include "UI/CompassWidget.h"
+#include "UI/HotkeyHintWidget.h"
 #include "Blueprint/UserWidget.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
@@ -113,6 +114,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (RollWidget) { RollWidget->SetPhone(this); RollWidget->AddToViewport(26); }
 	CompassWidget = CreateWidget<UCompassWidget>(PC, UCompassWidget::StaticClass());
 	if (CompassWidget) { CompassWidget->AddToViewport(3); }
+	HotkeyWidget = CreateWidget<UHotkeyHintWidget>(PC, UHotkeyHintWidget::StaticClass());
+	if (HotkeyWidget) { HotkeyWidget->AddToViewport(2); }
 }
 
 void UPhoneClientComponent::Toggle()
