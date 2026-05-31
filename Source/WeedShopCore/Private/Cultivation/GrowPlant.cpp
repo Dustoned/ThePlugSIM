@@ -93,6 +93,7 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, SlotStrain);
 	DOREPLIFETIME(AGrowPlant, SlotGrowth);
 	DOREPLIFETIME(AGrowPlant, SlotPhase);
+	DOREPLIFETIME(AGrowPlant, SlotFreshness);
 	DOREPLIFETIME(AGrowPlant, CareMultiplier);
 	DOREPLIFETIME(AGrowPlant, CareAvg);
 	DOREPLIFETIME(AGrowPlant, WaterLevel);
@@ -115,6 +116,7 @@ void AGrowPlant::EnsureSlots()
 		SlotStrain.Init(NAME_None, N);
 		SlotGrowth.Init(0.f, N);
 		SlotPhase.Init(EGrowthPhase::Seedling, N);
+		SlotFreshness.Init(1.f, N);
 	}
 }
 
@@ -159,6 +161,35 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		SlotGrowth[i] = FMath::Min(SlotGrowth[i] + DeltaSeconds * Speed, SlotMaxSeconds(i));
 	}
 	UpdatePhases();
+
+	// Over-rijp verval: oogstklare plekken verliezen langzaam versheid. Het bulk-deel (1.0->0.1)
+	// loopt RotBulkFactor x zo lang als de groeitijd; de laatste 10% (0.1->0.0) gaat extra langzaam
+	// (RotSlowFactor). Versheid 0 = plant sterft, geen oogst en geen zaadje terug. Verval schaalt mee
+	// met de groeisnelheid zodat het in de demo niet té snel of té traag voelt.
+	bool bDied = false;
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
+	{
+		if (SlotStrain[i].IsNone() || SlotPhase[i] != EGrowthPhase::Harvestable) { continue; }
+		const float MaxS = FMath::Max(1.f, SlotMaxSeconds(i));
+		const float BulkRate = 0.90f / FMath::Max(1.f, MaxS * RotBulkFactor); // per (versnelde) seconde
+		const float SlowRate = 0.10f / FMath::Max(1.f, MaxS * RotSlowFactor);
+		const float Rate = (SlotFreshness[i] > 0.10f) ? BulkRate : SlowRate;
+		SlotFreshness[i] = FMath::Max(0.f, SlotFreshness[i] - DeltaSeconds * Speed * Rate);
+		if (SlotFreshness[i] <= 0.f)
+		{
+			// Plant gaat dood: plek leeg, zaadje weg.
+			SlotStrain[i] = NAME_None;
+			SlotGrowth[i] = 0.f;
+			SlotPhase[i] = EGrowthPhase::Seedling;
+			SlotFreshness[i] = 1.f;
+			bDied = true;
+		}
+	}
+	if (bDied)
+	{
+		UpdatePlantVisual();
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Red, TEXT("A plant rotted away — harvested too late. Seed lost.")); }
+	}
 
 	// Waterpeil loopt langzaam leeg (isolatie-upgrade + pot-retentie vertragen dit).
 	const float MaxCare = GetMaxCare();
@@ -301,6 +332,7 @@ bool AGrowPlant::TryPlantNextSlot(APawn* InstigatorPawn, FName SeedItem)
 	SlotStrain[Empty] = StrainToPlant;
 	SlotGrowth[Empty] = 0.f;
 	SlotPhase[Empty] = EGrowthPhase::Seedling;
+	SlotFreshness[Empty] = 1.f;
 	UpdatePlantVisual();
 	if (GEngine)
 	{
@@ -356,8 +388,10 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		const FWeedStrainRow* Row = GetStrainRow(SlotStrain[i]);
 		if (!Row || Row->HarvestProductId.IsNone()) { continue; }
 
-		const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Row->BaseYieldGrams * CareAvg * SoilYield * PotYield));
-		const float ActualThc = Row->BaseThcPercent * CareAvg * SoilQuality * FMath::FRandRange(0.95f, 1.05f);
+		// Versheid van deze plek drukt zowel opbrengst als THC (te laat oogsten = mindere wiet).
+		const float Fresh = SlotFreshness.IsValidIndex(i) ? FMath::Clamp(SlotFreshness[i], 0.f, 1.f) : 1.f;
+		const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Row->BaseYieldGrams * CareAvg * Fresh * SoilYield * PotYield));
+		const float ActualThc = Row->BaseThcPercent * CareAvg * Fresh * SoilQuality * FMath::FRandRange(0.95f, 1.05f);
 		Inv->AddItem(Row->HarvestProductId, YieldGrams, ActualThc);
 		TotalGrams += YieldGrams;
 		++Harvested;
@@ -366,6 +400,7 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		SlotStrain[i] = NAME_None;
 		SlotGrowth[i] = 0.f;
 		SlotPhase[i] = EGrowthPhase::Seedling;
+		SlotFreshness[i] = 1.f;
 	}
 
 	if (Harvested > 0)
@@ -394,7 +429,11 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
 	if (GetReadyCount() > 0)
 	{
-		return FText::FromString(FString::Printf(TEXT("Harvest %d ready plant(s)  [E]"), GetReadyCount()));
+		const float Fresh = GetMinReadyFreshness();
+		const FString FreshWarn = (Fresh < 0.99f)
+			? FString::Printf(TEXT("  (quality %.0f%% - harvest soon!)"), Fresh * 100.f)
+			: TEXT("");
+		return FText::FromString(FString::Printf(TEXT("Harvest %d ready plant(s)  [E]%s"), GetReadyCount(), *FreshWarn));
 	}
 	if (!HasSoil())
 	{
@@ -436,6 +475,18 @@ float AGrowPlant::GetSecondsRemaining() const
 		if (Best < 0.f || Rem < Best) { Best = Rem; }
 	}
 	return Best < 0.f ? 0.f : Best;
+}
+
+float AGrowPlant::GetMinReadyFreshness() const
+{
+	float Best = 1.f; bool bAny = false;
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
+	{
+		if (SlotStrain[i].IsNone() || SlotPhase[i] != EGrowthPhase::Harvestable) { continue; }
+		const float F = SlotFreshness.IsValidIndex(i) ? SlotFreshness[i] : 1.f;
+		if (!bAny || F < Best) { Best = F; bAny = true; }
+	}
+	return Best;
 }
 
 float AGrowPlant::GetEstimatedTotalYield() const

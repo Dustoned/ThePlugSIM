@@ -129,6 +129,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
 	int32 GetDealAskCents() const { return DealAskCents; }
 
+	// De HUD meldt dat een knop/hit-box deze klik heeft verwerkt; zo voorkomen we dat dezelfde
+	// muisklik (na het sluiten van een paneel) ook nog een wereld-interactie/heropening triggert.
+	void MarkUiClickConsumed();
+	bool DidUiConsumeClickRecently() const;
+
 	// Prijs-band: van 40% tot 200% van de marktprijs (in stappen van 10% voor de slider).
 	static constexpr int32 DealStepCount = 17; // 40,50,...,200 %
 
@@ -178,6 +183,9 @@ protected:
 	bool bDealOpen = false;
 	TWeakObjectPtr<ACustomerBase> DealCustomer;
 	int32 DealAskCents = 0;
+
+	// Tijdstip (wereldseconden) waarop de UI voor het laatst een klik verwerkte.
+	double LastUiClickTime = -100.0;
 
 	bool bInventoryOpen = false;
 

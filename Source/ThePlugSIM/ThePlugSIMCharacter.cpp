@@ -285,10 +285,21 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		GS->GetHeat()->AddHeat(5.f);
 	}
 
+	// Prospect genoeg opgewarmd? Dan wordt het nu een echte klant ("vond het lekker, heb je meer?").
+	const bool bConverted = Customer->RefreshProspect();
+
 	if (GEngine && !(bPicky && Quality < 0.5f))
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Sample given (%dg joint, relationship +)."), BestGrams));
+		if (bConverted)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
+				TEXT("\"Damn, that's good! Got any more to sell?\" - they'll buy now."));
+		}
+		else
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+				FString::Printf(TEXT("Sample given (%dg joint, relationship +)."), BestGrams));
+		}
 	}
 }
 
@@ -357,8 +368,11 @@ void AThePlugSIMCharacter::HotbarNext()
 
 void AThePlugSIMCharacter::OnPrimaryClick()
 {
-	// Klik gaat naar de UI als die open is (HUD hit-boxes regelen dat zelf).
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen()))
+	// Klik gaat naar de UI als die open is (HUD hit-boxes regelen dat zelf). Ook als een UI-knop
+	// deze klik net heeft verwerkt (bv. een paneel sloot) negeren we 'm hier, zodat dezelfde klik
+	// niet alsnog de wereld-interactie (en daarmee bv. de deal opnieuw) opent.
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
+		|| Phone->IsPotUpgradeOpen() || Phone->DidUiConsumeClickRecently()))
 	{
 		return;
 	}

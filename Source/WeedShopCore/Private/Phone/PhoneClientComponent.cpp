@@ -239,7 +239,10 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Silver, TEXT("This customer isn't looking to buy right now."));
+			const bool bProspect = (Customer->State == ECustomerState::Prospect);
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Silver, bProspect
+				? TEXT("They're not hooked yet - give them a free sample first (F).")
+				: TEXT("This customer isn't looking to buy right now."));
 		}
 		return;
 	}
@@ -268,6 +271,17 @@ void UPhoneClientComponent::SetDealAskCents(int32 Cents)
 	const int32 Lo = FMath::RoundToInt(Market * 0.40f);
 	const int32 Hi = FMath::RoundToInt(Market * 2.00f);
 	DealAskCents = FMath::Clamp(Cents, Lo, Hi);
+}
+
+void UPhoneClientComponent::MarkUiClickConsumed()
+{
+	if (const UWorld* W = GetWorld()) { LastUiClickTime = W->GetTimeSeconds(); }
+}
+
+bool UPhoneClientComponent::DidUiConsumeClickRecently() const
+{
+	const UWorld* W = GetWorld();
+	return W && (W->GetTimeSeconds() - LastUiClickTime) < 0.25;
 }
 
 void UPhoneClientComponent::CloseDeal()

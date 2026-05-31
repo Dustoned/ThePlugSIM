@@ -57,6 +57,13 @@ void ACustomerBase::BeginPlay()
 				Respect = R; Loyalty = L; Addiction = A;
 			}
 		}
+
+		// Nog te weinig verslaving? Dan is dit (nog) geen koper maar een prospect: eerst opwarmen
+		// met gratis samples. Wie al verslaafd genoeg is (bv. een vaste klant) wil meteen kopen.
+		if (Addiction < AddictionToBuy)
+		{
+			State = ECustomerState::Prospect;
+		}
 	}
 }
 
@@ -70,6 +77,23 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, Addiction);
 	DOREPLIFETIME(ACustomerBase, State);
 	DOREPLIFETIME(ACustomerBase, NpcId);
+}
+
+bool ACustomerBase::RefreshProspect()
+{
+	if (!HasAuthority() || State != ECustomerState::Prospect)
+	{
+		return false;
+	}
+	if (Addiction >= AddictionToBuy)
+	{
+		// Genoeg opgewarmd: wordt een kopende klant.
+		State = ECustomerState::WantsToOrder;
+		PatienceSeconds = BasePatienceSeconds;
+		LeaveTimer = 0.f;
+		return true;
+	}
+	return false;
 }
 
 void ACustomerBase::WriteStatsToRegistry()
@@ -261,6 +285,9 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 	case ECustomerState::Negotiating:
 		return FText::FromString(FString::Printf(TEXT("Deal: %dx %s  (market ~EUR %.2f)"),
 			DesiredQuantity, *DesiredProductId.ToString(), (GetMarketPriceCents() * DesiredQuantity) / 100.f));
+	case ECustomerState::Prospect:
+		return FText::FromString(FString::Printf(TEXT("Not buying yet - give a free sample [F]  (addiction %.0f/%.0f)"),
+			Addiction, AddictionToBuy));
 	case ECustomerState::Served:
 		return FText::FromString(TEXT("Satisfied customer"));
 	default:

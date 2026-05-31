@@ -27,7 +27,10 @@ enum class ECustomerState : uint8
 	WantsToOrder	UMETA(DisplayName = "Wil bestellen"),
 	Negotiating		UMETA(DisplayName = "Onderhandelt"),
 	Served			UMETA(DisplayName = "Geholpen"),
-	Leaving			UMETA(DisplayName = "Vertrekt")
+	Leaving			UMETA(DisplayName = "Vertrekt"),
+	// Prospect: nog niet klaar om te kopen (te lage verslaving/respect). Eerst gratis samples geven;
+	// zodra de verslaving hoog genoeg is wordt het een echte klant die wil kopen.
+	Prospect		UMETA(DisplayName = "Prospect")
 };
 
 UCLASS()
@@ -75,6 +78,14 @@ public:
 	// Na een aankoop moet de klant z'n spul eerst oproken: cooldown (sec) voordat hij weer wil.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
 	float OrderCooldownSeconds = 60.f;
+
+	// Verslaving die nodig is voordat een prospect echt wil kopen (samples brengen dit omhoog).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
+	float AddictionToBuy = 30.f;
+
+	// Server: kijk of een prospect genoeg "warm" is (verslaving >= drempel) en zo ja maak er een
+	// kopende klant van. Geeft true als hij deze keer overstapte (om een melding te tonen).
+	bool RefreshProspect();
 
 	// Appartement-/straat-klanten blijven (cooldown -> opnieuw bestellen). Afspraak-klanten despawnen.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")

@@ -572,6 +572,10 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 		return;
 	}
 
+	// Deze muisklik is door een UI-knop verwerkt: blokkeer dat dezelfde klik ook nog een
+	// wereld-interactie (bv. opnieuw de deal openen) triggert.
+	Phone->MarkUiClickConsumed();
+
 	const FString S = BoxName.ToString();
 	if (S == TEXT("close"))
 	{
@@ -772,6 +776,16 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	{
 		Phone->CloseDeal();
 		return;
+	}
+
+	// Loop je weg? Sluit de deal-UI automatisch (alleen onderhandelen als je dichtbij staat).
+	if (const APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr)
+	{
+		if (FVector::DistSquared(P->GetActorLocation(), C->GetActorLocation()) > FMath::Square(450.f))
+		{
+			Phone->CloseDeal();
+			return;
+		}
 	}
 
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
