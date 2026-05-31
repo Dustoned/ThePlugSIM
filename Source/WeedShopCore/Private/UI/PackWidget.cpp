@@ -112,7 +112,8 @@ void UPackWidget::FillBody()
 	if (SelStrain.IsNone() || Inv->GetQuantity(SelStrain) <= 0) { return; }
 
 	// 2) Kies een container die je hebt -> verpak.
-	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Pack %s into:"), *WeedUI::PrettyItemName(SelStrain)), 12, FLinearColor(0.8f, 0.85f, 0.95f)), FMargin(0, 8, 0, 4));
+	const int32 Batch = Ph->GetPackBatch();
+	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Pack %s into:  (this bench bags %d at a time)"), *WeedUI::PrettyItemName(SelStrain), Batch), 12, FLinearColor(0.8f, 0.85f, 0.95f)), FMargin(0, 8, 0, 4));
 	static const TCHAR* Conts[4] = { TEXT("Cont_Bag2"), TEXT("Cont_Bag5"), TEXT("Cont_Jar10"), TEXT("Cont_Jar15") };
 	bool bAnyCont = false;
 	for (int32 i = 0; i < 4; ++i)

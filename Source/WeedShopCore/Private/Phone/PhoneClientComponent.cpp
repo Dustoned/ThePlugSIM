@@ -164,9 +164,10 @@ void UPhoneClientComponent::CloseAtm()
 	UpdateCursor();
 }
 
-void UPhoneClientComponent::OpenPack()
+void UPhoneClientComponent::OpenPack(int32 Batch)
 {
 	EnsureWidget();
+	PackBatchUI = FMath::Max(1, Batch);
 	bPackOpen = true;
 	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false;
 	UpdateCursor();
@@ -190,33 +191,40 @@ int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
 
 void UPhoneClientComponent::RequestPack(FName BudId, FName ContainerId)
 {
-	ServerPack(BudId, ContainerId);
+	ServerPack(BudId, ContainerId, PackBatchUI);
 }
 
-void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName ContainerId)
+void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName ContainerId, int32 Batch)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Inv) { return; }
 	const FString BudStr = BudId.ToString();
 	if (!BudStr.StartsWith(TEXT("Bud_"))) { return; }            // alleen GEDROOGDE buds verpakken
 	const int32 Cap = ContainerCapacity(ContainerId);
-	if (Cap <= 0 || !Inv->HasItem(ContainerId, 1)) { return; }   // container nodig
+	if (Cap <= 0) { return; }
 
-	const int32 Have = Inv->GetQuantity(BudId);
-	if (Have <= 0) { return; }
-	const int32 Grams = FMath::Min(Cap, Have);
+	const FName BagId(*FString::Printf(TEXT("Bag_%s"), *BudStr.RightChop(4))); // Bud_X -> Bag_X
 	const float Thc = Inv->GetItemQuality(BudId);
 	const float Q = Inv->GetItemQualityPct(BudId);
 
-	// Verbruik 1 container + de wiet; voeg verkoopbare Bag_<strain> toe (verpakte voorraad).
-	if (!Inv->RemoveItem(BudId, Grams)) { return; }
-	Inv->RemoveItem(ContainerId, 1);
-	const FName BagId(*FString::Printf(TEXT("Bag_%s"), *BudStr.RightChop(4))); // Bud_X -> Bag_X
-	Inv->AddItem(BagId, Grams, Thc, Q);
-	if (GEngine)
+	// Verwerk tot Batch zakjes (tier van de tafel) zolang je containers + wiet hebt.
+	int32 BagsMade = 0, TotalGrams = 0;
+	const int32 N = FMath::Max(1, Batch);
+	for (int32 b = 0; b < N; ++b)
+	{
+		if (!Inv->HasItem(ContainerId, 1)) { break; }
+		const int32 Have = Inv->GetQuantity(BudId);
+		if (Have <= 0) { break; }
+		const int32 Grams = FMath::Min(Cap, Have);
+		if (!Inv->RemoveItem(BudId, Grams)) { break; }
+		Inv->RemoveItem(ContainerId, 1);
+		Inv->AddItem(BagId, Grams, Thc, Q);
+		++BagsMade; TotalGrams += Grams;
+	}
+	if (GEngine && BagsMade > 0)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Packed %dg into a bag (sellable)."), Grams));
+			FString::Printf(TEXT("Packed %d bag(s) (%dg total)."), BagsMade, TotalGrams));
 	}
 }
 

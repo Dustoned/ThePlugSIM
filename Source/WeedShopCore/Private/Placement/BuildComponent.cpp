@@ -572,7 +572,15 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	else if (Def.bIsPackBench)
 	{
-		World->SpawnActor<APackBench>(APackBench::StaticClass(), FTransform(Rotation, Location), SpawnParams);
+		// Deferred zodat de bench-tier al klopt vóór BeginPlay.
+		APackBench* Bench = World->SpawnActorDeferred<APackBench>(
+			APackBench::StaticClass(), FTransform(Rotation, Location),
+			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Bench)
+		{
+			Bench->BenchTier = ItemId;
+			Bench->FinishSpawning(FTransform(Rotation, Location));
+		}
 	}
 	else if (Def.bIsPot)
 	{

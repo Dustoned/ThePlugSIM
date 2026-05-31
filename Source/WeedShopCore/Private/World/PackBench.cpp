@@ -21,6 +21,16 @@ APackBench::APackBench()
 	if (MatFinder.Succeeded()) { Mesh->SetMaterial(0, MatFinder.Object); }
 }
 
+int32 APackBench::PackPerActionFor(FName Tier)
+{
+	const FString S = Tier.ToString();
+	if (S == TEXT("Bench_Pack2")) { return 3; }
+	if (S == TEXT("Bench_Pack3")) { return 6; }
+	return 1; // Bench_Pack (basis)
+}
+
+int32 APackBench::GetPackPerAction() const { return PackPerActionFor(BenchTier); }
+
 void APackBench::Interact_Implementation(APawn* InstigatorPawn)
 {
 	// Het verpak-menu openen gebeurt lokaal in de character (UI-actie); hier niets te doen.
@@ -28,5 +38,5 @@ void APackBench::Interact_Implementation(APawn* InstigatorPawn)
 
 FText APackBench::GetInteractionPrompt_Implementation() const
 {
-	return NSLOCTEXT("WeedShop", "PackBenchPrompt", "Use packing bench - bag your weed");
+	return FText::FromString(FString::Printf(TEXT("Use packing bench - bags %d at a time"), GetPackPerAction()));
 }

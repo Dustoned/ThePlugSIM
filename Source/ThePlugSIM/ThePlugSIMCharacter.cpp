@@ -603,10 +603,10 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 				if (Phone) { Phone->OpenAtm(); }
 				return;
 			}
-			// Verpak-tafel -> open lokaal het verpak-menu.
-			if (Cast<APackBench>(Focus))
+			// Verpak-tafel -> open lokaal het verpak-menu (met de batch-grootte van deze tafel).
+			if (APackBench* Bench = Cast<APackBench>(Focus))
 			{
-				if (Phone) { Phone->OpenPack(); }
+				if (Phone) { Phone->OpenPack(Bench->GetPackPerAction()); }
 				return;
 			}
 			IC->TryInteract();

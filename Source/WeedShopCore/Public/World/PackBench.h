@@ -18,6 +18,14 @@ class WEEDSHOPCORE_API APackBench : public AActor, public IInteractable
 public:
 	APackBench();
 
+	// Tier-id (gezet bij plaatsen). Bepaalt hoeveel zakjes je per keer verpakt (hogere tier = sneller).
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop|Pack")
+	FName BenchTier = TEXT("Bench_Pack");
+
+	// Aantal containers dat dit werkblad per keer verwerkt.
+	int32 GetPackPerAction() const;
+	static int32 PackPerActionFor(FName Tier);
+
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
 

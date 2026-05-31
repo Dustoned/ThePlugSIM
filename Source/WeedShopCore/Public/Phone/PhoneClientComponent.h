@@ -48,8 +48,10 @@ public:
 	bool IsAtmOpen() const { return bAtmOpen; }
 
 	// --- Verpak-bench (in de wereld): verdeel gedroogde wiet in bakjes/jars (verkoopbare voorraad) ---
+	// Batch = hoeveel zakjes deze tafel per keer verwerkt (tier).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
-	void OpenPack();
+	void OpenPack(int32 Batch = 1);
+	int32 GetPackBatch() const { return PackBatchUI; }
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
 	void ClosePack();
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Pack")
@@ -62,7 +64,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
 	void RequestPack(FName BudId, FName ContainerId);
 	UFUNCTION(Server, Reliable)
-	void ServerPack(FName BudId, FName ContainerId);
+	void ServerPack(FName BudId, FName ContainerId, int32 Batch);
 
 	// Open een app (zet 'm als actief scherm; verlaat het home-scherm).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
@@ -472,6 +474,7 @@ protected:
 	bool bInventoryOpen = false;
 	bool bAtmOpen = false;
 	bool bPackOpen = false;
+	int32 PackBatchUI = 1; // zakjes per verpak-actie (van de bench-tier)
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;

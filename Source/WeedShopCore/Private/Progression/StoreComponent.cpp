@@ -123,7 +123,9 @@ namespace
 		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),        TEXT("5 batches, faster (~2 min)"), 25000, 1 },
 		{ TEXT("DryRack_Pro"),   TEXT("Pro drying cabinet"), TEXT("10 batches, fast (~1 min)"),  70000, 1 },
 		// Verpak-tafel + bakjes/jars (verdeel gedroogde wiet in verkoopbare verpakkingen).
-		{ TEXT("Bench_Pack"), TEXT("Packing bench"),  TEXT("Divide dried weed into bags/jars"), 12000, 1 },
+		{ TEXT("Bench_Pack"),  TEXT("Packing bench"),            TEXT("1 bag at a time"),  12000, 1 },
+		{ TEXT("Bench_Pack2"), TEXT("Pro packing bench"),        TEXT("3 bags at a time"),  40000, 1 },
+		{ TEXT("Bench_Pack3"), TEXT("Industrial packing table"), TEXT("6 bags at a time"), 110000, 1 },
 		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Up to 2g each - 10 pcs"),   800, 10 },
 		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Up to 5g each - 10 pcs"),  1500, 10 },
 		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Up to 10g each - 5 pcs"),  2500,  5 },
