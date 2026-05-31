@@ -48,6 +48,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
 	bool BuySupply(FName SupplyId, UInventoryComponent* Buyer);
 
+	// --- Supplier-categorieën voor de telefoon (netjes gesorteerd) ---
+	// 0=Seeds, 1=Papers, 2=Pots, 3=Soil, 4=Water.
+	static constexpr int32 SupplierCatCount = 5;
+
+	// Item-ids in een categorie (zaden voor cat 0, anders gefilterde supplies).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	TArray<FName> GetSupplierCategory(int32 Cat) const;
+
+	// Of deze categorie zaden bevat (dan kopen via BuySeed i.p.v. BuySupply).
+	static bool IsSeedCategory(int32 Cat) { return Cat == 0; }
+
 protected:
 	UPROPERTY()
 	TObjectPtr<UDataTable> StrainTable;

@@ -26,7 +26,7 @@
 namespace
 {
 	constexpr float PhoneW = 420.f;
-	constexpr float PhoneH = 440.f;
+	constexpr float PhoneH = 520.f;
 	constexpr float RowH = 26.f;
 
 	// Leesbare naam voor een item-id, zodat de speler "Wiet" vs "Zaadje" duidelijk ziet
@@ -403,44 +403,45 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	y += RowH + 6.f;
 
 	// Inhoud per tab.
-	if (Tab == 1) // Suppliers: zaden + supplies (vloei)
+	if (Tab == 1) // Suppliers: subcategorie-knoppen + items van de gekozen categorie
 	{
 		if (UStoreComponent* Store = GS ? GS->GetStore() : nullptr)
 		{
-			int32 idx = 0;
-			const TArray<FName> Seeds = Store->GetSeedCatalog();
-			for (const FName& Id : Seeds)
+			// Categorie-knoppen (Seeds / Papers / Pots / Soil / Water).
+			static const TCHAR* CatNames[UStoreComponent::SupplierCatCount] = { TEXT("Seeds"), TEXT("Papers"), TEXT("Pots"), TEXT("Soil"), TEXT("Water") };
+			const int32 Cat = Phone->GetSupplierCat();
+			const float CatW = InnerW / UStoreComponent::SupplierCatCount;
+			for (int32 i = 0; i < UStoreComponent::SupplierCatCount; ++i)
 			{
-				FText Name; int32 Price = 0;
-				if (Store->GetSeedDisplay(Id, Name, Price))
+				const FLinearColor Col = (i == Cat) ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(0.7f, 0.7f, 0.8f);
+				DrawButton(FName(*FString::Printf(TEXT("scat_%d"), i)), CatNames[i], InnerX + i * CatW, y, CatW - 3.f, Col);
+			}
+			y += RowH + 6.f;
+
+			// Items van de gekozen categorie (index = positie in de lijst).
+			const bool bSeeds = UStoreComponent::IsSeedCategory(Cat);
+			const TArray<FName> Items = Store->GetSupplierCategory(Cat);
+			int32 idx = 0;
+			for (const FName& Id : Items)
+			{
+				if (y > PY + PhoneH - 50.f) { break; }
+				FText Name; int32 Price = 0; int32 Pack = 1;
+				const bool bOk = bSeeds ? Store->GetSeedDisplay(Id, Name, Price)
+										: Store->GetSupplyDisplay(Id, Name, Price, Pack);
+				if (bOk)
 				{
-					if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), idx)),
-						FString::Printf(TEXT("Seed: %s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
-						InnerX, y, InnerW, FLinearColor::White))
-					{
-						HoverTooltip = FString::Printf(TEXT("Buy a %s seed"), *Name.ToString());
-					}
+					const FString Label = bSeeds
+						? FString::Printf(TEXT("%s  -  EUR %.2f"), *Name.ToString(), Price / 100.f)
+						: FString::Printf(TEXT("%s  -  EUR %.2f"), *Name.ToString(), Price / 100.f);
+					DrawButton(FName(*FString::Printf(TEXT("buy_%d"), idx)), Label, InnerX, y, InnerW,
+						bSeeds ? FLinearColor::White : FLinearColor(0.85f, 0.95f, 0.8f));
 					y += RowH;
 				}
 				++idx;
-				if (idx >= 8) break;
 			}
-			// Supplies (vloei) ná de zaden, doorlopende index.
-			int32 si = Seeds.Num();
-			for (const FName& Id : Store->GetSupplyCatalog())
+			if (Items.Num() == 0)
 			{
-				FText Name; int32 Price = 0; int32 Pack = 0;
-				if (Store->GetSupplyDisplay(Id, Name, Price, Pack) && y < PY + PhoneH - 60.f)
-				{
-					if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), si)),
-						FString::Printf(TEXT("%s  -  EUR %.2f"), *Name.ToString(), Price / 100.f),
-						InnerX, y, InnerW, FLinearColor(0.85f, 0.95f, 0.8f)))
-					{
-						HoverTooltip = FString::Printf(TEXT("Buy %d papers"), Pack);
-					}
-					y += RowH;
-				}
-				++si;
+				DrawText(TEXT("(nothing here yet)"), FLinearColor::Gray, InnerX, y, Font);
 			}
 		}
 	}
@@ -559,6 +560,10 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	else if (S.StartsWith(TEXT("buy_")))
 	{
 		Phone->DoAction(FCString::Atoi(*S.RightChop(4)));
+	}
+	else if (S.StartsWith(TEXT("scat_")))
+	{
+		Phone->SetSupplierCat(FCString::Atoi(*S.RightChop(5)));
 	}
 	else if (S.StartsWith(TEXT("rollg_")))
 	{

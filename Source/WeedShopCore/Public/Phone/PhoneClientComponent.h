@@ -32,6 +32,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void CycleTab();
 
+	// Supplier-subcategorie (0=Seeds,1=Papers,2=Pots,3=Soil,4=Water).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void SetSupplierCat(int32 Cat);
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
+	int32 GetSupplierCat() const { return SupplierCat; }
+
 	// Voert de actie voor catalogus-index Index uit in de actieve tab (kopen / afspraak).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void DoAction(int32 Index);
@@ -74,7 +81,7 @@ public:
 
 	// Absolute grenzen (papers tussen MinGrams en GramsHardMax).
 	static constexpr int32 MinGrams = 1;
-	static constexpr int32 GramsHardMax = 5;
+	static constexpr int32 GramsHardMax = 10;
 	static constexpr int32 BaseMaxGrams = 2;
 
 	// --- Deal (verkoop aan een klant met prijs-slider) ---
@@ -134,6 +141,7 @@ protected:
 
 	bool bOpen = false;
 	int32 Tab = 0;
+	int32 SupplierCat = 0;
 
 	bool bRollOpen = false;
 	int32 RollGrams = 2;

@@ -1,6 +1,13 @@
 Name,DisplayName,BaseThcPercent,BaseYieldGrams,GrowMinutes,SeedPriceCents,HarvestProductId
-SilverHaze,"Silver Haze",10,12,4,1000,Bud_SilverHaze
-NorthernLights,"Northern Lights",15,14,5,500,Bud_NorthernLights
-GranddaddyPurple,"Granddaddy Purple",18,32,8,1500,Bud_GranddaddyPurple
-SourDiesel,"Sour Diesel",25,18,10,2000,Bud_SourDiesel
-OGKush,"OG Kush",22,22,9,1800,Bud_OGKush
+Streetweed,"Streetweed",8,18,4,300,Bud_Streetweed
+SilverHaze,"Silver Haze",12,13,5,1500,Bud_SilverHaze
+NorthernLights,"Northern Lights",16,15,6,3000,Bud_NorthernLights
+WhiteWidow,"White Widow",19,12,7,6000,Bud_WhiteWidow
+AmnesiaHaze,"Amnesia Haze",22,11,8,12000,Bud_AmnesiaHaze
+OGKush,"OG Kush",24,16,10,18000,Bud_OGKush
+GorillaGlue,"Gorilla Glue",26,13,10,28000,Bud_GorillaGlue
+GirlScoutCookies,"Girl Scout Cookies",28,10,11,45000,Bud_GirlScoutCookies
+WeddingCake,"Wedding Cake",30,9,12,80000,Bud_WeddingCake
+Gelato,"Gelato (Cali)",32,11,14,150000,Bud_Gelato
+Runtz,"Runtz (Cali)",34,9,15,250000,Bud_Runtz
+Zkittlez,"Zkittlez (Cali)",36,8,16,400000,Bud_Zkittlez

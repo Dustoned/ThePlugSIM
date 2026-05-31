@@ -120,15 +120,33 @@ void UPhoneClientComponent::ConfirmRoll()
 	UpdateCursor();
 }
 
+namespace
+{
+	// Paper-tiers oplopend in capaciteit (gram per joint).
+	struct FPaperDef { const TCHAR* Id; int32 Capacity; };
+	static const FPaperDef GPapers[] = {
+		{ TEXT("Papers_Small"),     2 },
+		{ TEXT("Papers_Big"),       5 },
+		{ TEXT("Papers_Blunt"),     7 },
+		{ TEXT("Papers_Backwoods"), 10 },
+	};
+}
+
 int32 UPhoneClientComponent::GetMaxJointGrams() const
 {
-	// Bepaald door de vloei (papers) die je hebt; geen vloei = niet kunnen rollen.
+	// Hoogste capaciteit van de papers die je hebt; geen papers = niet kunnen rollen.
+	int32 Max = 0;
 	if (UInventoryComponent* Inv = GetOwnerInventory())
 	{
-		if (Inv->HasItem(FName(TEXT("Papers_Big")), 1)) return GramsHardMax; // 5g
-		if (Inv->HasItem(FName(TEXT("Papers_Small")), 1)) return BaseMaxGrams; // 2g
+		for (const FPaperDef& P : GPapers)
+		{
+			if (Inv->HasItem(FName(P.Id), 1))
+			{
+				Max = FMath::Max(Max, P.Capacity);
+			}
+		}
 	}
-	return 0;
+	return Max;
 }
 
 void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
@@ -150,15 +168,15 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	}
 	Grams = FMath::Clamp(Grams, MinGrams, MaxG);
 
-	// Kies de vloei: kleine vloei voor <=2g (spaart de grote), anders grote.
+	// Kies de kleinste vloei die past (spaart je dure papers).
 	FName Paper = NAME_None;
-	if (Grams <= BaseMaxGrams && Inv->HasItem(FName(TEXT("Papers_Small")), 1))
+	for (const FPaperDef& P : GPapers)
 	{
-		Paper = FName(TEXT("Papers_Small"));
-	}
-	else if (Inv->HasItem(FName(TEXT("Papers_Big")), 1))
-	{
-		Paper = FName(TEXT("Papers_Big"));
+		if (P.Capacity >= Grams && Inv->HasItem(FName(P.Id), 1))
+		{
+			Paper = FName(P.Id);
+			break;
+		}
 	}
 	if (Paper.IsNone())
 	{
@@ -318,6 +336,11 @@ void UPhoneClientComponent::CycleTab()
 	}
 }
 
+void UPhoneClientComponent::SetSupplierCat(int32 Cat)
+{
+	SupplierCat = FMath::Clamp(Cat, 0, UStoreComponent::SupplierCatCount - 1);
+}
+
 void UPhoneClientComponent::HandleNumberKey(FKey Key)
 {
 	int32 Index = -1;
@@ -345,22 +368,20 @@ void UPhoneClientComponent::DoAction(int32 Index)
 		return;
 	}
 
-	if (Tab == 1) // Suppliers: eerst zaden, daarna supplies (vloei)
+	if (Tab == 1) // Suppliers: items uit de huidige subcategorie
 	{
-		if (GS->GetStore())
+		if (UStoreComponent* Store = GS->GetStore())
 		{
-			const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
-			if (Seeds.IsValidIndex(Index))
+			const TArray<FName> Items = Store->GetSupplierCategory(SupplierCat);
+			if (Items.IsValidIndex(Index))
 			{
-				ServerBuySeed(Seeds[Index]);
-			}
-			else
-			{
-				const TArray<FName> Supplies = GS->GetStore()->GetSupplyCatalog();
-				const int32 Si = Index - Seeds.Num();
-				if (Supplies.IsValidIndex(Si))
+				if (UStoreComponent::IsSeedCategory(SupplierCat))
 				{
-					ServerBuySupply(Supplies[Si]);
+					ServerBuySeed(Items[Index]);
+				}
+				else
+				{
+					ServerBuySupply(Items[Index]);
 				}
 			}
 		}

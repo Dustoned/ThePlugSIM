@@ -96,12 +96,18 @@ namespace
 {
 	struct FSupplyDef { const TCHAR* Id; const TCHAR* Name; int32 PriceCents; int32 PackSize; };
 	static const FSupplyDef GSupplies[] = {
-		{ TEXT("Papers_Small"), TEXT("Papers small (up to 2g) - 10 pcs"), 500, 10 },
-		{ TEXT("Papers_Big"),   TEXT("Papers big (up to 5g) - 10 pcs"), 1500, 10 },
-		{ TEXT("Pot"),          TEXT("Grow pot (place & plant a seed)"), 2500, 1 },
-		{ TEXT("Soil_Basic"),   TEXT("Basic soil (3 harvests)"),        1500, 1 },
-		{ TEXT("Soil_Rich"),    TEXT("Rich soil (+yield, 4 harvests)"), 4000, 1 },
-		{ TEXT("Soil_Premium"), TEXT("Premium soil (++yield, 6 harvests)"), 9000, 1 },
+		// Papers (max gram per joint loopt op).
+		{ TEXT("Papers_Small"),     TEXT("Rolling papers (up to 2g) - 10 pcs"),   500, 10 },
+		{ TEXT("Papers_Big"),       TEXT("King-size papers (up to 5g) - 10 pcs"), 1500, 10 },
+		{ TEXT("Papers_Blunt"),     TEXT("Blunt wraps (up to 7g) - 10 pcs"),      3000, 10 },
+		{ TEXT("Papers_Backwoods"), TEXT("Backwoods (up to 10g) - 5 pcs"),        5000, 5 },
+		// Pots.
+		{ TEXT("Pot"),              TEXT("Grow pot (place & plant a seed)"),      2500, 1 },
+		// Soil (betere soil = meer yield/kwaliteit, ontgrendelt met fase).
+		{ TEXT("Soil_Basic"),       TEXT("Basic soil (3 harvests)"),              1500, 1 },
+		{ TEXT("Soil_Rich"),        TEXT("Rich soil (+yield, 4 harvests)"),       4000, 1 },
+		{ TEXT("Soil_Premium"),     TEXT("Premium soil (++yield, 6 harvests)"),   9000, 1 },
+		// Water.
 		{ TEXT("WaterBottle_Plastic"), TEXT("Plastic water bottle (fill at the sink)"), 1000, 1 },
 	};
 }
@@ -129,6 +135,32 @@ bool UStoreComponent::GetSupplyDisplay(FName SupplyId, FText& OutName, int32& Ou
 		}
 	}
 	return false;
+}
+
+TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
+{
+	if (Cat == 0)
+	{
+		return GetSeedCatalog();
+	}
+	const TCHAR* Prefix = TEXT("");
+	switch (Cat)
+	{
+	case 1: Prefix = TEXT("Papers_"); break;
+	case 2: Prefix = TEXT("Pot");     break;
+	case 3: Prefix = TEXT("Soil_");   break;
+	case 4: Prefix = TEXT("WaterBottle"); break;
+	default: break;
+	}
+	TArray<FName> Out;
+	for (const FName& Id : GetSupplyCatalog())
+	{
+		if (Id.ToString().StartsWith(Prefix))
+		{
+			Out.Add(Id);
+		}
+	}
+	return Out;
 }
 
 bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
