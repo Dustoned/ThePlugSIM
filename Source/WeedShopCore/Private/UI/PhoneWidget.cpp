@@ -316,6 +316,13 @@ void UPhoneWidget::UpdateStoreCartText()
 {
 	if (StoreCartText && Phone.IsValid())
 	{
+		if (bSellApp)
+		{
+			// Sell-app: puur de verkoopwaarde van de cart (altijd "+", je ontvangt geld).
+			const int32 Sell = Phone->GetCartSellCents();
+			StoreCartText->SetText(FText::FromString(FString::Printf(TEXT("Cart %d   +EUR %.2f"), Phone->GetCartNumLines(), Sell / 100.f)));
+			return;
+		}
 		// Toon het NETTO bedrag (koop + bezorging - verkoop). Negatief = je ontvangt geld (+).
 		const int32 Net = Phone->GetCartNetCents(DeliveryOpt);
 		const FString Amt = (Net < 0)
@@ -552,8 +559,20 @@ void UPhoneWidget::FillStoreList()
 			StoreScroll->AddChild(CardB);
 			AddGap();
 		}
-		// Vaste voettekst: bezorgopties (op koopdeel) + netto-totaal (rechtsonder) + checkout.
-		if (StoreFooter)
+		// Vaste voettekst. In de Sell-app: puur verkopen (geen bezorging/koop-opbouw).
+		if (StoreFooter && bSellApp)
+		{
+			const int32 SellSub = Ph->GetCartSellCents();
+			UTextBlock* TotT = MakeText(FString::Printf(TEXT("You receive: EUR %.2f"), SellSub / 100.f),
+				15, FLinearColor(0.6f, 1.f, 0.65f));
+			TotT->SetJustification(ETextJustify::Right);
+			StoreFooter->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 6.f, 4.f, 4.f));
+
+			StoreFooter->AddChildToVerticalBox(MakeActionBtn(TEXT("SELL"), FLinearColor(0.2f, 0.55f, 0.27f),
+				[this, Ph]() { Ph->Checkout(0); bCartView = false; RefreshStore(); }, 14));
+		}
+		// Koop-app cart: bezorgopties (op koopdeel) + netto-totaal (rechtsonder) + checkout.
+		else if (StoreFooter)
 		{
 			const int32 BuySub = Ph->GetCartBuyCents();
 			const int32 SellSub = Ph->GetCartSellCents();
