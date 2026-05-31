@@ -55,8 +55,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	float GetTotalWeight() const;
 
+	// Gebruikte slots: elke waterfles telt apart (zodat meerdere flessen ook meerdere slots kosten).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
-	int32 GetUsedSlots() const { return Stacks.Num(); }
+	int32 GetUsedSlots() const;
 
 	// Of dit item-id momenteel aan een hotbar-slot is toegewezen.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")

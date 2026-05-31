@@ -39,7 +39,7 @@ namespace
 		if (S.StartsWith(TEXT("Bud_")))    { return FString::Printf(TEXT("Weed: %s"), *S.RightChop(4)); }
 		if (S.StartsWith(TEXT("Seed_")))   { return FString::Printf(TEXT("Seed: %s"), *S.RightChop(5)); }
 		if (S.StartsWith(TEXT("Soil_")))   { return FString::Printf(TEXT("Soil: %s"), *S.RightChop(5)); }
-		if (S == TEXT("WaterBottle_Plastic")) { return TEXT("Water bottle"); }
+		if (S.StartsWith(TEXT("WaterBottle_"))) { return FString::Printf(TEXT("Bottle: %s"), *S.RightChop(12)); }
 		if (S.StartsWith(TEXT("Joint_")))  { return FString::Printf(TEXT("Joint %s"), *S.RightChop(6)); }
 		if (S.StartsWith(TEXT("Papers_")))  { return FString::Printf(TEXT("Papers: %s"), *S.RightChop(7)); }
 		if (S.StartsWith(TEXT("Pot_")))     { return FString::Printf(TEXT("Pot: %s"), *S.RightChop(4)); }
@@ -940,7 +940,7 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	const float CellH = 46.f;
 	// Gevulde cellen (vrije items) + ghost-cellen voor de resterende vrije slots, zodat je ziet
 	// hoeveel ruimte je nog hebt. Vrije slots = totale slots - alle stapels (incl. hotbar).
-	const int32 FreeSlots = (Inv->MaxStacks > 0) ? FMath::Max(0, Inv->MaxStacks - Stacks.Num()) : 10;
+	const int32 FreeSlots = (Inv->MaxStacks > 0) ? FMath::Max(0, Inv->MaxStacks - Inv->GetUsedSlots()) : 10;
 	const int32 TotalCells = FreeStacks.Num() + FreeSlots;
 	for (int32 n = 0; n < TotalCells; ++n)
 	{

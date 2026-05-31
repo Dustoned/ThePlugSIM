@@ -1,5 +1,6 @@
 #include "Cultivation/WaterCanComponent.h"
 
+#include "Cultivation/BottleTypes.h"
 #include "Inventory/InventoryComponent.h"
 #include "Net/UnrealNetwork.h"
 
@@ -27,9 +28,13 @@ int32 UWaterCanComponent::GetMaxCharges() const
 	{
 		return 0;
 	}
-	// Elke fles die je draagt voegt capaciteit toe (3 slokken per plastic fles). Meer flessen =
-	// meer water dat je kunt meenemen. (Betere flessen kun je later met meer capaciteit toevoegen.)
-	return Inv->GetQuantity(FName(TEXT("WaterBottle_Plastic"))) * 3;
+	// Capaciteit = som over alle flessen die je draagt (betere fles = meer slokken).
+	int32 Total = 0;
+	for (const FBottleDef& B : GetAllBottles())
+	{
+		Total += B.Charges * Inv->GetQuantity(B.ItemId);
+	}
+	return Total;
 }
 
 void UWaterCanComponent::Fill()

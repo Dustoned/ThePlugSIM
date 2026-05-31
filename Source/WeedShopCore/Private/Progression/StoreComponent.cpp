@@ -8,6 +8,7 @@
 #include "Progression/MilestoneComponent.h"
 #include "Cultivation/SoilTypes.h"
 #include "Cultivation/PotTypes.h"
+#include "Cultivation/BottleTypes.h"
 #include "Placement/PlaceableTypes.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
@@ -112,8 +113,11 @@ namespace
 		{ TEXT("Soil_Basic"),       TEXT("Basic soil (3 harvests)"),              1500, 1 },
 		{ TEXT("Soil_Rich"),        TEXT("Rich soil (+yield, 4 harvests)"),       4000, 1 },
 		{ TEXT("Soil_Premium"),     TEXT("Premium soil (++yield, 6 harvests)"),   9000, 1 },
-		// Water.
-		{ TEXT("WaterBottle_Plastic"), TEXT("Plastic water bottle (fill at the sink)"), 1000, 1 },
+		// Water-flessen (betere fles = meer water, minder vaak vullen).
+		{ TEXT("WaterBottle_Plastic"),  TEXT("Plastic bottle (3 waterings)"),  1000,  1 },
+		{ TEXT("WaterBottle_Steel"),    TEXT("Steel bottle (6 waterings)"),    4500,  1 },
+		{ TEXT("WaterBottle_Jerrycan"), TEXT("Jerry can (12 waterings)"),     15000,  1 },
+		{ TEXT("WaterBottle_Tank"),     TEXT("Water tank (25 waterings)"),    45000,  1 },
 	};
 }
 
@@ -246,9 +250,10 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 
 	// Betere soil/pot pas vanaf de juiste fase (progressie).
 	uint8 ReqPhase = 0;
-	FSoilDef Soil; FPotDef Pot;
+	FSoilDef Soil; FPotDef Pot; FBottleDef Bottle;
 	if (GetSoilDef(SupplyId, Soil)) { ReqPhase = Soil.MinPhase; }
 	else if (GetPotDef(SupplyId, Pot)) { ReqPhase = Pot.MinPhase; }
+	else if (GetBottleDef(SupplyId, Bottle)) { ReqPhase = Bottle.MinPhase; }
 	if (ReqPhase > 0)
 	{
 		const uint8 Phase = (GS && GS->GetMilestones()) ? static_cast<uint8>(GS->GetMilestones()->GetCurrentPhase()) : 0;

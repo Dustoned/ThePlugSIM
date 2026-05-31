@@ -43,6 +43,22 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float Quality)
 		return false;
 	}
 
+	// Slot-limiet: elke waterfles kost een slot (ook bij samenvoegen), andere items 1 per nieuwe stapel.
+	if (MaxStacks > 0)
+	{
+		const bool bBottle = ItemId.ToString().StartsWith(TEXT("WaterBottle"));
+		const int32 ExistingIdx = FindStackIndex(ItemId);
+		const int32 ExtraSlots = bBottle ? Count : (ExistingIdx != INDEX_NONE ? 0 : 1);
+		if (GetUsedSlots() + ExtraSlots > MaxStacks)
+		{
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No free inventory slots."));
+			}
+			return false;
+		}
+	}
+
 	const int32 Index = FindStackIndex(ItemId);
 	if (Index != INDEX_NONE)
 	{
@@ -101,6 +117,17 @@ float UInventoryComponent::GetTotalWeight() const
 		W += GetUnitWeight(S.ItemId) * S.Quantity;
 	}
 	return W;
+}
+
+int32 UInventoryComponent::GetUsedSlots() const
+{
+	int32 Used = 0;
+	for (const FInventoryStack& S : Stacks)
+	{
+		// Waterflessen nemen elk een eigen slot in; andere stapels tellen als 1.
+		Used += S.ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? S.Quantity : 1;
+	}
+	return Used;
 }
 
 bool UInventoryComponent::IsOnHotbar(FName ItemId) const
