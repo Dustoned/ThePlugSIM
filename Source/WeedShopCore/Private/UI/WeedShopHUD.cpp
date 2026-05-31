@@ -223,20 +223,19 @@ void AWeedShopHUD::DrawHUD()
 					}
 					else
 					{
-						static const TCHAR* PhaseNames[] = { TEXT("Seedling"), TEXT("Vegetative"), TEXT("Pre-flower"), TEXT("Flower"), TEXT("Ready to harvest") };
-						const int32 Pi = FMath::Clamp((int32)Plant->GetPhase(), 0, 4);
-						DrawText(FString::Printf(TEXT("%s"), *Plant->StrainId.ToString()), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
-						DrawText(FString::Printf(TEXT("Phase: %s  (%.0f%%)"), PhaseNames[Pi], Plant->GetGrowthFraction() * 100.f),
-							FLinearColor::White, lx, ly, Font); ly += 20.f;
+						const int32 Planted = Plant->GetPlantedCount();
+						const int32 NumSlots = Plant->GetNumSlots();
+						const int32 Ready = Plant->GetReadyCount();
+						DrawText(FString::Printf(TEXT("Plants: %d / %d"), Planted, NumSlots), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 22.f;
 
 						const int32 Rem = FMath::RoundToInt(Plant->GetSecondsRemaining());
-						if (Plant->GetPhase() == EGrowthPhase::Harvestable)
+						if (Ready > 0)
 						{
-							DrawText(TEXT("READY TO HARVEST — press E"), FLinearColor::Green, lx, ly, Font);
+							DrawText(FString::Printf(TEXT("READY: %d plant(s) — press E"), Ready), FLinearColor::Green, lx, ly, Font);
 						}
 						else
 						{
-							DrawText(FString::Printf(TEXT("Time to harvest: %d:%02d"), Rem / 60, Rem % 60),
+							DrawText(FString::Printf(TEXT("Next ready in: %d:%02d"), Rem / 60, Rem % 60),
 								FLinearColor::White, lx, ly, Font);
 						}
 						ly += 20.f;
@@ -249,8 +248,8 @@ void AWeedShopHUD::DrawHUD()
 						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
 						DrawRect(FLinearColor(0.3f, 0.6f, 1.f, 0.95f), lx, ly, (PW - 24.f) * Care, 8.f); ly += 16.f;
 
-						DrawText(FString::Printf(TEXT("Expected: %.0fg @ %.0f%% THC"),
-							Plant->GetEstimatedYieldGrams(), Plant->GetEstimatedThcPercent()),
+						DrawText(FString::Printf(TEXT("Expected total: %.0fg @ %.0f%% THC"),
+							Plant->GetEstimatedTotalYield(), Plant->GetEstimatedThcPercent()),
 							FLinearColor(0.9f, 0.9f, 0.7f), lx, ly, Font); ly += 18.f;
 						if (Plant->HasSoil())
 						{

@@ -13,6 +13,7 @@
 #include "Progression/StoreComponent.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
+#include "UObject/ConstructorHelpers.h"
 
 AGrowPlant::AGrowPlant()
 {
@@ -25,59 +26,47 @@ AGrowPlant::AGrowPlant()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(Root);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-
-	// Standaard pot-mesh zodat een geplaatste (lege) pot meteen zichtbaar is, ook zonder
-	// PhaseMeshes. Cylinder = 1m; schaal naar een pot van ~50cm breed, 40cm hoog, en til 'm op
-	// zodat de onderkant op de actor-origin (= vloer bij plaatsen) staat.
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> PotMeshFinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (PotMeshFinder.Succeeded() && !Mesh->GetStaticMesh())
+	if (PotMeshFinder.Succeeded())
 	{
 		Mesh->SetStaticMesh(PotMeshFinder.Object);
 		Mesh->SetRelativeScale3D(FVector(0.5f, 0.5f, 0.4f));
 		Mesh->SetRelativeLocation(FVector(0.f, 0.f, 20.f));
 	}
 
-	// Soil-indicatie: bruin schijfje boven in de pot, zichtbaar zodra er soil in zit.
 	SoilMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SoilMesh"));
 	SoilMesh->SetupAttachment(Root);
 	SoilMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (PotMeshFinder.Succeeded())
 	{
-		SoilMesh->SetStaticMesh(PotMeshFinder.Object); // korte, brede cilinder = aarde-laag bovenop
+		SoilMesh->SetStaticMesh(PotMeshFinder.Object);
 		SoilMesh->SetRelativeScale3D(FVector(0.46f, 0.46f, 0.10f));
-		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, 42.f)); // net boven de potrand (top ~40)
+		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, 42.f));
 	}
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> SoilMatFinder(TEXT("/Game/_Project/Materials/M_Soil.M_Soil"));
-	if (SoilMatFinder.Succeeded())
-	{
-		SoilMesh->SetMaterial(0, SoilMatFinder.Object);
-	}
+	if (SoilMatFinder.Succeeded()) { SoilMesh->SetMaterial(0, SoilMatFinder.Object); }
 	SoilMesh->SetVisibility(false);
 
-	// Plantje (kegel) bovenop de pot; schaalt per groeifase.
-	PlantMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PlantMesh"));
-	PlantMesh->SetupAttachment(Root);
-	PlantMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeFinder(TEXT("/Engine/BasicShapes/Cone.Cone"));
-	if (ConeFinder.Succeeded())
-	{
-		PlantMesh->SetStaticMesh(ConeFinder.Object);
-	}
-	PlantMesh->SetRelativeLocation(FVector(0.f, 0.f, 44.f)); // basis op de aarde-laag
-	PlantMesh->SetVisibility(false);
-
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantMatFinder(TEXT("/Game/_Project/Materials/M_Plant.M_Plant"));
-	if (PlantMatFinder.Succeeded()) { PlantMat = PlantMatFinder.Object; }
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantReadyFinder(TEXT("/Game/_Project/Materials/M_PlantReady.M_PlantReady"));
+	if (PlantMatFinder.Succeeded()) { PlantMat = PlantMatFinder.Object; }
 	if (PlantReadyFinder.Succeeded()) { PlantReadyMat = PlantReadyFinder.Object; }
-	if (PlantMat) { PlantMesh->SetMaterial(0, PlantMat); }
 
-	// StrainTable automatisch koppelen zodat een gespawnde pot kan planten/oogsten zonder BP-setup.
-	static ConstructorHelpers::FObjectFinder<UDataTable> StrainTableFinder(TEXT("/Game/_Project/Data/DT_Strains.DT_Strains"));
-	if (StrainTableFinder.Succeeded())
+	// Eén plant-mesh per mogelijke plek.
+	for (int32 i = 0; i < MaxSlots; ++i)
 	{
-		StrainTable = StrainTableFinder.Object;
+		UStaticMeshComponent* PM = CreateDefaultSubobject<UStaticMeshComponent>(*FString::Printf(TEXT("Plant%d"), i));
+		PM->SetupAttachment(Root);
+		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (ConeFinder.Succeeded()) { PM->SetStaticMesh(ConeFinder.Object); }
+		if (PlantMat) { PM->SetMaterial(0, PlantMat); }
+		PM->SetVisibility(false);
+		PlantMeshes.Add(PM);
 	}
+
+	static ConstructorHelpers::FObjectFinder<UDataTable> StrainTableFinder(TEXT("/Game/_Project/Data/DT_Strains.DT_Strains"));
+	if (StrainTableFinder.Succeeded()) { StrainTable = StrainTableFinder.Object; }
 }
 
 void AGrowPlant::BeginPlay()
@@ -86,19 +75,11 @@ void AGrowPlant::BeginPlay()
 
 	if (HasAuthority())
 	{
-		// Een vooraf-geplaatste plant met een strain telt als geplant.
-		if (!StrainId.IsNone())
-		{
-			bPlanted = true;
-		}
-		if (const FWeedStrainRow* Strain = GetStrain())
-		{
-			MaxGrowthSeconds = FMath::Max(1.f, Strain->GrowMinutes * 60.f);
-		}
-		UpdatePhaseFromGrowth();
+		EnsureSlots();
+		CareMultiplier = FMath::Min(0.6f, GetMaxCare());
+		CareAvg = CareMultiplier;
 	}
 
-	RefreshMesh();
 	UpdatePotVisual();
 	UpdateSoilVisual();
 	UpdatePlantVisual();
@@ -107,36 +88,59 @@ void AGrowPlant::BeginPlay()
 void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(AGrowPlant, StrainId);
-	DOREPLIFETIME(AGrowPlant, GrowthSeconds);
-	DOREPLIFETIME(AGrowPlant, Phase);
-	DOREPLIFETIME(AGrowPlant, CareMultiplier);
-	DOREPLIFETIME(AGrowPlant, CareAvg);
-	DOREPLIFETIME(AGrowPlant, bPlanted);
-	DOREPLIFETIME(AGrowPlant, SoilId);
-	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
 	DOREPLIFETIME(AGrowPlant, PotTier);
 	DOREPLIFETIME(AGrowPlant, PotUpgradeMask);
+	DOREPLIFETIME(AGrowPlant, SlotStrain);
+	DOREPLIFETIME(AGrowPlant, SlotGrowth);
+	DOREPLIFETIME(AGrowPlant, SlotPhase);
+	DOREPLIFETIME(AGrowPlant, CareMultiplier);
+	DOREPLIFETIME(AGrowPlant, CareAvg);
+	DOREPLIFETIME(AGrowPlant, SoilId);
+	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
+}
+
+int32 AGrowPlant::SlotCapacityForTier() const
+{
+	FPotDef Pot;
+	if (GetPotDef(PotTier, Pot)) { return FMath::Clamp(Pot.PlantSlots, 1, MaxSlots); }
+	return 1;
+}
+
+void AGrowPlant::EnsureSlots()
+{
+	const int32 N = SlotCapacityForTier();
+	if (SlotStrain.Num() != N)
+	{
+		SlotStrain.Init(NAME_None, N);
+		SlotGrowth.Init(0.f, N);
+		SlotPhase.Init(EGrowthPhase::Seedling, N);
+	}
+}
+
+float AGrowPlant::SlotMaxSeconds(int32 Slot) const
+{
+	if (const FWeedStrainRow* Row = SlotStrain.IsValidIndex(Slot) ? GetStrainRow(SlotStrain[Slot]) : nullptr)
+	{
+		return FMath::Max(1.f, Row->GrowMinutes * 60.f);
+	}
+	return 240.f;
+}
+
+const FWeedStrainRow* AGrowPlant::GetStrainRow(FName StrainId) const
+{
+	if (!StrainTable || StrainId.IsNone()) { return nullptr; }
+	return StrainTable->FindRow<FWeedStrainRow>(StrainId, TEXT("AGrowPlant::GetStrainRow"), false);
 }
 
 void AGrowPlant::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-
-	if (!HasAuthority())
+	if (!HasAuthority() || GetPlantedCount() == 0)
 	{
 		return;
 	}
 
-	// Lege pot groeit niet.
-	if (!bPlanted)
-	{
-		return;
-	}
-
-	// Upgrade-effecten ophalen uit de gedeelde GameState (kweek-gear).
-	float GrowthBonus = 0.f;   // bv. LED-lamp/voeding -> sneller
-	float CareRetention = 0.f; // bv. betere pot -> minder droogte
+	float GrowthBonus = 0.f, CareRetention = 0.f;
 	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (const UUpgradeComponent* Upg = GS->GetUpgrades())
@@ -146,101 +150,98 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Groei op echte tijd (versneld door demo-multiplier + kweek-upgrades).
-	if (Phase != EGrowthPhase::Harvestable)
+	// Groei per plek.
+	const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus);
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
-		const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus);
-		GrowthSeconds = FMath::Min(GrowthSeconds + DeltaSeconds * Speed, MaxGrowthSeconds);
-		UpdatePhaseFromGrowth();
+		if (SlotStrain[i].IsNone() || SlotPhase[i] == EGrowthPhase::Harvestable) { continue; }
+		SlotGrowth[i] = FMath::Min(SlotGrowth[i] + DeltaSeconds * Speed, SlotMaxSeconds(i));
 	}
+	UpdatePhases();
 
-	// Max haalbare verzorging = pot-tier waterretentie (+ upgrades). Basis/broken pot lekt en
-	// haalt nooit 100%: je eerste wiet is geen topkwaliteit; betere pot tilt het plafond op.
+	// Verzorging pot-breed.
 	const float MaxCare = GetMaxCare();
-
-	// Droogte-stress; betere pot (CareRetention) + isolatie-upgrade vertragen het lekken.
-	const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f; // pot-upgrade: isolatie
+	const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f;
 	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.0045f * (1.f - CareRetention) * LeakMul, 0.3f, MaxCare);
-
-	// Kwaliteit = tijd-gewogen gemiddelde van de verzorging (last-minute water geven helpt niet
-	// meer om alsnog 100% te halen).
 	CareSum += CareMultiplier * DeltaSeconds;
 	CareTime += DeltaSeconds;
 	CareAvg = (CareTime > 0.f) ? (CareSum / CareTime) : CareMultiplier;
 }
 
-void AGrowPlant::UpdatePhaseFromGrowth()
+void AGrowPlant::UpdatePhases()
 {
-	const float F = GetGrowthFraction();
-	EGrowthPhase NewPhase;
-	if (F >= 1.0f)        { NewPhase = EGrowthPhase::Harvestable; }
-	else if (F >= 0.70f)  { NewPhase = EGrowthPhase::Flower; }
-	else if (F >= 0.45f)  { NewPhase = EGrowthPhase::PreFlower; }
-	else if (F >= 0.15f)  { NewPhase = EGrowthPhase::Vegetative; }
-	else                  { NewPhase = EGrowthPhase::Seedling; }
-
-	if (NewPhase != Phase)
+	bool bChanged = false;
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
-		Phase = NewPhase;
-		RefreshMesh(); // server-side; clients krijgen het via OnRep_Visual
-		UpdatePlantVisual();
+		if (SlotStrain[i].IsNone()) { continue; }
+		const float F = SlotMaxSeconds(i) > 0.f ? SlotGrowth[i] / SlotMaxSeconds(i) : 0.f;
+		EGrowthPhase NewPhase;
+		if (F >= 1.0f)       { NewPhase = EGrowthPhase::Harvestable; }
+		else if (F >= 0.70f) { NewPhase = EGrowthPhase::Flower; }
+		else if (F >= 0.45f) { NewPhase = EGrowthPhase::PreFlower; }
+		else if (F >= 0.15f) { NewPhase = EGrowthPhase::Vegetative; }
+		else                 { NewPhase = EGrowthPhase::Seedling; }
+		if (NewPhase != SlotPhase[i]) { SlotPhase[i] = NewPhase; bChanged = true; }
 	}
+	if (bChanged) { UpdatePlantVisual(); }
+}
+
+int32 AGrowPlant::GetPlantedCount() const
+{
+	int32 C = 0;
+	for (const FName& S : SlotStrain) { if (!S.IsNone()) { ++C; } }
+	return C;
+}
+
+int32 AGrowPlant::GetReadyCount() const
+{
+	int32 C = 0;
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
+	{
+		if (!SlotStrain[i].IsNone() && SlotPhase[i] == EGrowthPhase::Harvestable) { ++C; }
+	}
+	return C;
 }
 
 void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 {
-	// Draait server-authoritative (via de interactie-component).
-	if (!HasAuthority())
-	{
-		return;
-	}
+	if (!HasAuthority()) { return; }
 
-	// Hand-gestuurd: kijk wat de speler in z'n hand heeft (actief hotbar-slot).
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 	const FName Hand = Inv ? Inv->GetActiveItemId() : NAME_None;
 
-	if (!bPlanted)
+	// 1) Oogstklare planten? Oogst alles tegelijk.
+	if (GetReadyCount() > 0)
 	{
-		if (!HasSoil())
-		{
-			// Soil in de hand nodig.
-			if (IsSoilItem(Hand))
-			{
-				TryAddSoil(InstigatorPawn, Hand);
-			}
-			else if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Hold soil in your hand (1-8) to fill the pot."));
-			}
-		}
-		else
-		{
-			// Zaadje in de hand nodig.
-			if (!UStoreComponent::StrainFromSeedItem(Hand).IsNone())
-			{
-				TryPlantFromInventory(InstigatorPawn, Hand);
-			}
-			else if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Hold a seed in your hand (1-8) to plant."));
-			}
-		}
+		HarvestReady(InstigatorPawn);
+		return;
 	}
-	else if (Phase == EGrowthPhase::Harvestable)
+	// 2) Geen soil? Soil in de hand toevoegen.
+	if (!HasSoil())
 	{
-		Harvest(InstigatorPawn);
+		if (IsSoilItem(Hand)) { TryAddSoil(InstigatorPawn, Hand); }
+		else if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Hold soil in your hand (1-8) to fill the pot.")); }
+		return;
 	}
-	else
+	// 3) Lege plek + zaadje in de hand -> planten.
+	if (!UStoreComponent::StrainFromSeedItem(Hand).IsNone() && GetPlantedCount() < GetNumSlots())
 	{
-		// Waterfles in de hand nodig.
-		if (Hand.ToString().StartsWith(TEXT("WaterBottle")))
-		{
-			Water(InstigatorPawn);
-		}
-		else if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Hold your water bottle in your hand (1-8) to water."));
-		}
+		TryPlantNextSlot(InstigatorPawn, Hand);
+		return;
+	}
+	// 4) Waterfles in de hand -> hele pot water geven.
+	if (Hand.ToString().StartsWith(TEXT("WaterBottle")))
+	{
+		WaterAll(InstigatorPawn);
+		return;
+	}
+	// Anders: hint.
+	if (GEngine)
+	{
+		const FString Msg = (GetPlantedCount() < GetNumSlots())
+			? TEXT("Hold a seed (1-8) to plant, or your water bottle to water.")
+			: TEXT("Pot is full. Hold your water bottle (1-8) to water.");
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, Msg);
 	}
 }
 
@@ -248,10 +249,7 @@ bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn, FName SoilItem)
 {
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 	FSoilDef Def;
-	if (!Inv || !GetSoilDef(SoilItem, Def) || !Inv->RemoveItem(SoilItem, 1))
-	{
-		return false;
-	}
+	if (!Inv || !GetSoilDef(SoilItem, Def) || !Inv->RemoveItem(SoilItem, 1)) { return false; }
 
 	SoilId = Def.ItemId;
 	SoilUsesLeft = Def.Harvests;
@@ -259,65 +257,139 @@ bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn, FName SoilItem)
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Soil added: %s (%d harvests). Now plant a seed."), *Def.DisplayName, SoilUsesLeft));
+			FString::Printf(TEXT("Soil added: %s (%d harvests). Now plant seeds."), *Def.DisplayName, SoilUsesLeft));
 	}
 	return true;
 }
 
-bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn, FName SeedItem)
+bool AGrowPlant::TryPlantNextSlot(APawn* InstigatorPawn, FName SeedItem)
 {
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 	const FName StrainToPlant = UStoreComponent::StrainFromSeedItem(SeedItem);
-	if (!Inv || StrainToPlant.IsNone() || !Inv->RemoveItem(SeedItem, 1))
+	if (!Inv || StrainToPlant.IsNone()) { return false; }
+
+	int32 Empty = INDEX_NONE;
+	for (int32 i = 0; i < SlotStrain.Num(); ++i) { if (SlotStrain[i].IsNone()) { Empty = i; break; } }
+	if (Empty == INDEX_NONE || !Inv->RemoveItem(SeedItem, 1)) { return false; }
+
+	// Eerste plant in een lege pot: reset de verzorging-meting.
+	if (GetPlantedCount() == 0)
 	{
-		return false;
+		CareMultiplier = FMath::Min(0.6f, GetMaxCare());
+		CareSum = 0.f; CareTime = 0.f; CareAvg = CareMultiplier;
 	}
 
-	// Planten: reset en start de groei voor de gekozen strain.
-	StrainId = StrainToPlant;
-	bPlanted = true;
-	GrowthSeconds = 0.f;
-	CareMultiplier = FMath::Min(0.6f, GetMaxCare());
-	CareSum = 0.f;
-	CareTime = 0.f;
-	CareAvg = CareMultiplier;
-	if (const FWeedStrainRow* Strain = GetStrain())
-	{
-		MaxGrowthSeconds = FMath::Max(1.f, Strain->GrowMinutes * 60.f);
-	}
-	Phase = EGrowthPhase::Seedling;
-	RefreshMesh();
+	SlotStrain[Empty] = StrainToPlant;
+	SlotGrowth[Empty] = 0.f;
+	SlotPhase[Empty] = EGrowthPhase::Seedling;
 	UpdatePlantVisual();
-
-	UE_LOG(LogWeedShop, Log, TEXT("Geplant: %s"), *StrainId.ToString());
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Planted: %s"), *StrainId.ToString()));
+			FString::Printf(TEXT("Planted: %s  (%d/%d)"), *StrainToPlant.ToString(), GetPlantedCount(), GetNumSlots()));
 	}
 	return true;
+}
+
+void AGrowPlant::WaterAll(APawn* InstigatorPawn)
+{
+	if (GetPlantedCount() == 0)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Nothing planted to water yet.")); }
+		return;
+	}
+	UWaterCanComponent* Can = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UWaterCanComponent>() : nullptr;
+	if (!Can || !Can->HasBottle())
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier).")); }
+		return;
+	}
+	if (!Can->TryUseCharge())
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Water bottle is empty - fill it at the sink.")); }
+		return;
+	}
+	CareMultiplier = FMath::Clamp(CareMultiplier + 0.2f, 0.3f, GetMaxCare());
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan,
+			FString::Printf(TEXT("Pot watered (care %.0f%%, water left %d/%d)"), CareMultiplier * 100.f, Can->GetCharges(), Can->GetMaxCharges()));
+	}
+}
+
+void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
+{
+	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return; }
+
+	float SoilYield = 1.f, SoilQuality = 1.f;
+	FSoilDef SoilDef;
+	if (GetSoilDef(SoilId, SoilDef)) { SoilYield = SoilDef.YieldMult; SoilQuality = SoilDef.QualityMult; }
+	float PotYield = 1.f;
+	FPotDef PotDef;
+	if (GetPotDef(PotTier, PotDef)) { PotYield = PotDef.YieldMult; }
+	if (HasPotUpgrade(2)) { PotYield *= 1.2f; }
+
+	int32 Harvested = 0, TotalGrams = 0;
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
+	{
+		if (SlotStrain[i].IsNone() || SlotPhase[i] != EGrowthPhase::Harvestable) { continue; }
+		const FWeedStrainRow* Row = GetStrainRow(SlotStrain[i]);
+		if (!Row || Row->HarvestProductId.IsNone()) { continue; }
+
+		const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Row->BaseYieldGrams * CareAvg * SoilYield * PotYield));
+		const float ActualThc = Row->BaseThcPercent * CareAvg * SoilQuality * FMath::FRandRange(0.95f, 1.05f);
+		Inv->AddItem(Row->HarvestProductId, YieldGrams, ActualThc);
+		TotalGrams += YieldGrams;
+		++Harvested;
+
+		// Plek weer leeg.
+		SlotStrain[i] = NAME_None;
+		SlotGrowth[i] = 0.f;
+		SlotPhase[i] = EGrowthPhase::Seedling;
+	}
+
+	if (Harvested > 0)
+	{
+		// Eén oogst-actie verbruikt één soil-lading.
+		if (SoilUsesLeft > 0) { SoilUsesLeft--; }
+		if (SoilUsesLeft <= 0)
+		{
+			SoilId = NAME_None;
+			UpdateSoilVisual();
+		}
+		UpdatePlantVisual();
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
+				FString::Printf(TEXT("Harvested %d plant(s): %dg total"), Harvested, TotalGrams));
+			if (SoilId.IsNone())
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Orange, TEXT("The soil is used up - add fresh soil before replanting."));
+			}
+		}
+	}
 }
 
 FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
-	if (!bPlanted)
+	if (GetReadyCount() > 0)
 	{
-		return HasSoil()
-			? NSLOCTEXT("WeedShop", "PlantSeed", "Hold a seed + E to plant")
-			: NSLOCTEXT("WeedShop", "AddSoil", "Hold soil + E to fill the pot");
+		return FText::FromString(FString::Printf(TEXT("Harvest %d ready plant(s)  [E]"), GetReadyCount()));
 	}
-	if (Phase == EGrowthPhase::Harvestable)
+	if (!HasSoil())
 	{
-		return FText::FromString(FString::Printf(TEXT("Harvest  (%s)"), *StrainId.ToString()));
+		return NSLOCTEXT("WeedShop", "AddSoil", "Hold soil + E to fill the pot");
 	}
-	const int32 Pct = FMath::RoundToInt(GetGrowthFraction() * 100.f);
-	return FText::FromString(FString::Printf(TEXT("Hold bottle + E to water  (growth %d%%, care %.0f%%)"),
-		Pct, CareMultiplier * 100.f));
+	if (GetPlantedCount() < GetNumSlots())
+	{
+		return FText::FromString(FString::Printf(TEXT("Hold a seed + E to plant  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
+	}
+	return FText::FromString(FString::Printf(TEXT("Hold bottle + E to water  (care %.0f%%)"), CareMultiplier * 100.f));
 }
 
 float AGrowPlant::GetMaxCare() const
 {
-	// Basis-plafond = pot-tier (waterretentie). Upgrades (CareRetention) tillen het iets op.
 	float Cap = 0.7f;
 	FPotDef Pot;
 	if (GetPotDef(PotTier, Pot)) { Cap = Pot.CareCap; }
@@ -330,214 +402,105 @@ float AGrowPlant::GetMaxCare() const
 			CareRetention = FMath::Clamp(Upg->GetEffectTotal(TEXT("CareRetention")), 0.f, 0.9f);
 		}
 	}
-	const float Drainage = HasPotUpgrade(0) ? 0.10f : 0.f; // pot-upgrade: betere waterretentie
+	const float Drainage = HasPotUpgrade(0) ? 0.10f : 0.f;
 	return FMath::Clamp(Cap + CareRetention * 0.3f + Drainage, 0.4f, 1.0f);
-}
-
-void AGrowPlant::Water(APawn* InstigatorPawn)
-{
-	UWaterCanComponent* Can = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UWaterCanComponent>() : nullptr;
-	if (!Can || !Can->HasBottle())
-	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier)."));
-		}
-		return;
-	}
-	if (!Can->TryUseCharge())
-	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Water bottle is empty — fill it at the sink."));
-		}
-		return;
-	}
-
-	CareMultiplier = FMath::Clamp(CareMultiplier + 0.2f, 0.3f, GetMaxCare());
-	UE_LOG(LogWeedShop, Log, TEXT("Plant %s gewaterd -> zorg %.0f%%"), *StrainId.ToString(), CareMultiplier * 100.f);
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan,
-			FString::Printf(TEXT("Plant watered (care %.0f%%, water left %d/%d)"),
-				CareMultiplier * 100.f, Can->GetCharges(), Can->GetMaxCharges()));
-	}
-}
-
-void AGrowPlant::Harvest(APawn* InstigatorPawn)
-{
-	const FWeedStrainRow* Strain = GetStrain();
-	if (!Strain)
-	{
-		UE_LOG(LogWeedShop, Warning, TEXT("Harvest: strain '%s' niet gevonden in StrainTable."), *StrainId.ToString());
-		return;
-	}
-
-	// Soil-bonus op yield + kwaliteit; pot-tier geeft extra yield.
-	float SoilYield = 1.f, SoilQuality = 1.f;
-	FSoilDef SoilDef;
-	if (GetSoilDef(SoilId, SoilDef)) { SoilYield = SoilDef.YieldMult; SoilQuality = SoilDef.QualityMult; }
-	float PotYield = 1.f;
-	FPotDef PotDef;
-	if (GetPotDef(PotTier, PotDef)) { PotYield = PotDef.YieldMult; }
-	if (HasPotUpgrade(2)) { PotYield *= 1.2f; } // pot-upgrade: bloom booster
-
-	// Kwaliteit = gemiddelde verzorging over de hele groei (niet de laatste seconde).
-	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareAvg * SoilYield * PotYield));
-	const float ActualThc = Strain->BaseThcPercent * CareAvg * SoilQuality * FMath::FRandRange(0.95f, 1.05f);
-
-	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
-	if (Inv && !Strain->HarvestProductId.IsNone())
-	{
-		Inv->AddItem(Strain->HarvestProductId, YieldGrams, ActualThc);
-		UE_LOG(LogWeedShop, Log, TEXT("Oogst: %dg %s (THC %.1f%%) -> inventory van %s"),
-			YieldGrams, *Strain->HarvestProductId.ToString(), ActualThc, *GetNameSafe(InstigatorPawn));
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
-				FString::Printf(TEXT("Harvested: %dg %s (THC %.0f%%)"),
-					YieldGrams, *Strain->HarvestProductId.ToString(), ActualThc));
-		}
-	}
-	else
-	{
-		UE_LOG(LogWeedShop, Warning, TEXT("Oogst mislukt: geen InventoryComponent op de speler of HarvestProductId leeg."));
-	}
-
-	// Soil verbruikt een oogst; raakt 'ie op, dan moet er nieuwe soil in.
-	if (SoilUsesLeft > 0)
-	{
-		SoilUsesLeft--;
-	}
-	if (SoilUsesLeft <= 0)
-	{
-		SoilId = NAME_None;
-		UpdateSoilVisual();
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Orange, TEXT("The soil is used up — add fresh soil before replanting."));
-		}
-	}
-
-	// Plant is geoogst -> pot wordt weer leeg en herbruikbaar (zelfde soil tot 'ie op is).
-	bPlanted = false;
-	StrainId = NAME_None;
-	GrowthSeconds = 0.f;
-	Phase = EGrowthPhase::Seedling;
-	RefreshMesh();
-	UpdatePlantVisual();
-}
-
-void AGrowPlant::OnRep_Visual()
-{
-	RefreshMesh();
-	UpdatePlantVisual();
-}
-
-void AGrowPlant::OnRep_Soil()
-{
-	UpdateSoilVisual();
-}
-
-void AGrowPlant::OnRep_Pot()
-{
-	UpdatePotVisual();
-}
-
-void AGrowPlant::UpdatePotVisual()
-{
-	if (!Mesh)
-	{
-		return;
-	}
-	FPotDef Pot;
-	if (GetPotDef(PotTier, Pot))
-	{
-		Mesh->SetRelativeScale3D(Pot.MeshScale);
-	}
-}
-
-void AGrowPlant::UpdateSoilVisual()
-{
-	if (SoilMesh)
-	{
-		SoilMesh->SetVisibility(HasSoil());
-	}
-}
-
-void AGrowPlant::UpdatePlantVisual()
-{
-	if (!PlantMesh)
-	{
-		return;
-	}
-	if (!bPlanted)
-	{
-		PlantMesh->SetVisibility(false);
-		return;
-	}
-	PlantMesh->SetVisibility(true);
-
-	// Schaal per fase: zaailing klein -> volgroeid groot.
-	FVector Scale;
-	switch (Phase)
-	{
-	case EGrowthPhase::Seedling:    Scale = FVector(0.18f, 0.18f, 0.12f); break;
-	case EGrowthPhase::Vegetative:  Scale = FVector(0.26f, 0.26f, 0.32f); break;
-	case EGrowthPhase::PreFlower:   Scale = FVector(0.34f, 0.34f, 0.50f); break;
-	case EGrowthPhase::Flower:      Scale = FVector(0.42f, 0.42f, 0.64f); break;
-	default:                        Scale = FVector(0.48f, 0.48f, 0.74f); break; // Harvestable
-	}
-	PlantMesh->SetRelativeScale3D(Scale);
-
-	// Rijpe kleur bij oogstklaar.
-	UMaterialInterface* Mat = (Phase == EGrowthPhase::Harvestable && PlantReadyMat) ? PlantReadyMat : PlantMat;
-	if (Mat)
-	{
-		PlantMesh->SetMaterial(0, Mat);
-	}
-}
-
-void AGrowPlant::RefreshMesh()
-{
-	const int32 Index = static_cast<int32>(Phase);
-	if (PhaseMeshes.IsValidIndex(Index) && PhaseMeshes[Index])
-	{
-		Mesh->SetStaticMesh(PhaseMeshes[Index]);
-	}
-}
-
-const FWeedStrainRow* AGrowPlant::GetStrain() const
-{
-	if (!StrainTable || StrainId.IsNone())
-	{
-		return nullptr;
-	}
-	return StrainTable->FindRow<FWeedStrainRow>(StrainId, TEXT("AGrowPlant::GetStrain"), /*bWarnIfMissing=*/false);
 }
 
 float AGrowPlant::GetSecondsRemaining() const
 {
-	if (!bPlanted || Phase == EGrowthPhase::Harvestable)
+	float Best = -1.f;
+	const float Spd = FMath::Max(0.01f, GrowthSpeedMultiplier);
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
-		return 0.f;
+		if (SlotStrain[i].IsNone() || SlotPhase[i] == EGrowthPhase::Harvestable) { continue; }
+		const float Rem = FMath::Max(0.f, (SlotMaxSeconds(i) - SlotGrowth[i]) / Spd);
+		if (Best < 0.f || Rem < Best) { Best = Rem; }
 	}
-	const float Speed = FMath::Max(0.01f, GrowthSpeedMultiplier);
-	return FMath::Max(0.f, (MaxGrowthSeconds - GrowthSeconds) / Speed);
+	return Best < 0.f ? 0.f : Best;
 }
 
-float AGrowPlant::GetEstimatedYieldGrams() const
+float AGrowPlant::GetEstimatedTotalYield() const
 {
-	const FWeedStrainRow* Strain = GetStrain();
-	if (!Strain) { return 0.f; }
 	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.YieldMult : 1.f;
-	return Strain->BaseYieldGrams * CareAvg * SoilMult;
+	FPotDef P; float PotMult = GetPotDef(PotTier, P) ? P.YieldMult : 1.f;
+	if (HasPotUpgrade(2)) { PotMult *= 1.2f; }
+	float Total = 0.f;
+	for (const FName& St : SlotStrain)
+	{
+		if (const FWeedStrainRow* Row = GetStrainRow(St))
+		{
+			Total += Row->BaseYieldGrams * CareAvg * SoilMult * PotMult;
+		}
+	}
+	return Total;
 }
 
 float AGrowPlant::GetEstimatedThcPercent() const
 {
-	const FWeedStrainRow* Strain = GetStrain();
-	if (!Strain) { return 0.f; }
 	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.QualityMult : 1.f;
-	return Strain->BaseThcPercent * CareAvg * SoilMult;
+	float Sum = 0.f; int32 N = 0;
+	for (const FName& St : SlotStrain)
+	{
+		if (const FWeedStrainRow* Row = GetStrainRow(St))
+		{
+			Sum += Row->BaseThcPercent * CareAvg * SoilMult;
+			++N;
+		}
+	}
+	return N > 0 ? Sum / N : 0.f;
+}
+
+void AGrowPlant::OnRep_Slots()  { UpdatePlantVisual(); }
+void AGrowPlant::OnRep_Soil()   { UpdateSoilVisual(); }
+void AGrowPlant::OnRep_Pot()    { EnsureSlots(); UpdatePotVisual(); UpdatePlantVisual(); }
+
+void AGrowPlant::UpdatePotVisual()
+{
+	FPotDef Pot;
+	if (Mesh && GetPotDef(PotTier, Pot)) { Mesh->SetRelativeScale3D(Pot.MeshScale); }
+}
+
+void AGrowPlant::UpdateSoilVisual()
+{
+	if (SoilMesh) { SoilMesh->SetVisibility(HasSoil()); }
+}
+
+FVector AGrowPlant::SlotLocalOffset(int32 Slot) const
+{
+	const int32 N = SlotStrain.Num();
+	FPotDef Pot;
+	const float PotRadius = (GetPotDef(PotTier, Pot)) ? (50.f * Pot.MeshScale.X) : 25.f;
+	const float Z = 44.f;
+	if (N <= 1) { return FVector(0.f, 0.f, Z); }
+	const float R = PotRadius * 0.5f;
+	const float Ang = (2.f * PI * Slot) / N;
+	return FVector(FMath::Cos(Ang) * R, FMath::Sin(Ang) * R, Z);
+}
+
+void AGrowPlant::UpdatePlantVisual()
+{
+	const int32 N = SlotStrain.Num();
+	const float MultiScale = (N <= 1) ? 1.0f : (N <= 2 ? 0.8f : 0.55f);
+	for (int32 i = 0; i < PlantMeshes.Num(); ++i)
+	{
+		UStaticMeshComponent* PM = PlantMeshes[i];
+		if (!PM) { continue; }
+		const bool bShow = (i < N) && !SlotStrain[i].IsNone();
+		PM->SetVisibility(bShow);
+		if (!bShow) { continue; }
+
+		FVector Scale;
+		switch (SlotPhase[i])
+		{
+		case EGrowthPhase::Seedling:   Scale = FVector(0.18f, 0.18f, 0.12f); break;
+		case EGrowthPhase::Vegetative: Scale = FVector(0.26f, 0.26f, 0.32f); break;
+		case EGrowthPhase::PreFlower:  Scale = FVector(0.34f, 0.34f, 0.50f); break;
+		case EGrowthPhase::Flower:     Scale = FVector(0.42f, 0.42f, 0.64f); break;
+		default:                       Scale = FVector(0.48f, 0.48f, 0.74f); break;
+		}
+		PM->SetRelativeScale3D(Scale * MultiScale);
+		PM->SetRelativeLocation(SlotLocalOffset(i));
+		UMaterialInterface* Mat = (SlotPhase[i] == EGrowthPhase::Harvestable && PlantReadyMat) ? PlantReadyMat : PlantMat;
+		if (Mat) { PM->SetMaterial(0, Mat); }
+	}
 }

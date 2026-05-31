@@ -1,12 +1,9 @@
-// AGrowPlant — een plant die in real-time groeit (los van de in-game dag/nacht-klok), 5 fases
-// doorloopt, verzorging nodig heeft (water -> care-multiplier) en bij oogst gram aan de
-// inventory van de oogstende speler toevoegt.
+// AGrowPlant — een kweekpot met 1..N plant-plekken (bepaald door de pot-tier). Elke plek heeft
+// een eigen strain/groei/fase; verzorging (water) en soil gelden voor de hele pot. Interactie is
+// hele-pot: planten vult de volgende lege plek, water geeft alle planten water, oogst haalt alle
+// oogstklare planten tegelijk.
 //
-// CO-OP: server-authoritative. Groei/fase/care draaien op de server en repliceren; interactie
-// loopt via UInteractionComponent (server-RPC). Aankijken (E) = water geven, of oogsten als 'ie klaar is.
-//
-// Editor-koppeling: maak een BP_GrowPlant (parent = AGrowPlant), wijs DT_Strains toe aan
-// StrainTable, zet StrainId, en vul PhaseMeshes met 5 meshes voor de visuele fases (optioneel).
+// CO-OP: server-authoritative; per-plek + pot-staat repliceren; interactie via UInteractionComponent.
 
 #pragma once
 
@@ -17,6 +14,7 @@
 
 class UStaticMeshComponent;
 class UStaticMesh;
+class UMaterialInterface;
 class UDataTable;
 struct FWeedStrainRow;
 
@@ -40,55 +38,49 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
-	// DataTable met strain-rijen (FWeedStrainRow). Wijs DT_Strains toe in de BP.
+	static constexpr int32 MaxSlots = 6;
+
+	// DataTable met strain-rijen (FWeedStrainRow).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
 	TObjectPtr<UDataTable> StrainTable;
 
-	// Welke strain hier groeit (rij-naam in StrainTable).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Visual, Category = "WeedShop|Plant")
-	FName StrainId = NAME_None;
-
-	// Welke pot-tier dit is (Pot_Broken/Clay/Plastic/Fabric). Bepaalt waterretentie/yield/uiterlijk.
-	// Wordt door de plaats-component gezet vóór FinishSpawning.
+	// Pot-tier (Pot_Broken/Clay/Plastic/Fabric). Bepaalt waterretentie/yield/plekken/uiterlijk.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Pot, Category = "WeedShop|Plant")
 	FName PotTier = NAME_None;
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	FName GetPotTier() const { return PotTier; }
 
-	// Per-pot upgrades als bit-masker (bit i = upgrade i toegepast). Verdwijnt met de pot.
+	// Per-pot upgrades als bit-masker (bit i = upgrade i). Verdwijnt met de pot.
 	UPROPERTY(Replicated)
 	int32 PotUpgradeMask = 0;
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	bool HasPotUpgrade(int32 UpgIndex) const { return (PotUpgradeMask & (1 << UpgIndex)) != 0; }
 
-	// Server: pas upgrade UpgIndex toe op deze pot (zet de bit). Kosten worden elders afgehandeld.
 	void ApplyPotUpgrade(int32 UpgIndex) { PotUpgradeMask |= (1 << UpgIndex); }
 
-	// Optionele meshes per fase (index = EGrowthPhase). Leeg = geen visuele wissel.
+	// Versnelt de groei (1 = realistisch; hoger = sneller voor demo/testen).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
-	TArray<TObjectPtr<UStaticMesh>> PhaseMeshes;
-
-	// Versnelt de groei (1 = realistisch; hoger = sneller, handig om te testen/demoën).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
-	float GrowthSpeedMultiplier = 1.f;
+	float GrowthSpeedMultiplier = 20.f;
 
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
+	// --- Pot-/plek-info voor de UI ---
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
-	EGrowthPhase GetPhase() const { return Phase; }
+	int32 GetNumSlots() const { return SlotStrain.Num(); }
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
-	float GetGrowthFraction() const { return MaxGrowthSeconds > 0.f ? GrowthSeconds / MaxGrowthSeconds : 0.f; }
+	int32 GetPlantedCount() const;
 
-	// Info voor de plant-UI.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
-	bool IsPlanted() const { return bPlanted; }
+	int32 GetReadyCount() const;
 
-	// Soil: er moet soil in de pot voordat je kunt planten. Soil gaat meerdere oogsten mee.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	bool IsPlanted() const { return GetPlantedCount() > 0; }
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	bool HasSoil() const { return !SoilId.IsNone() && SoilUsesLeft > 0; }
 
@@ -101,118 +93,99 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetCareMultiplier() const { return CareMultiplier; }
 
-	// Tijd-gewogen gemiddelde verzorging = de kwaliteit die je bij de oogst krijgt (0..1).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetCareAvg() const { return CareAvg; }
 
-	// Geschatte real-time seconden tot oogstklaar (0 als al klaar / leeg).
+	// Min. resterende real-time seconden onder de groeiende planten (0 als geen / al klaar).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetSecondsRemaining() const;
 
-	// Geschatte opbrengst (gram) en kwaliteit (THC%) bij de huidige verzorging.
+	// Totale geschatte opbrengst (gram) over alle geplante plekken.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
-	float GetEstimatedYieldGrams() const;
+	float GetEstimatedTotalYield() const;
 
+	// Gemiddelde geschatte THC% over de geplante plekken.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetEstimatedThcPercent() const;
+
+	// Per-plek (voor UI / debug).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	bool IsSlotPlanted(int32 Slot) const { return SlotStrain.IsValidIndex(Slot) && !SlotStrain[Slot].IsNone(); }
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	// Scene-root op de actor-origin; de mesh hangt eronder met hoogte-offset (basis op de vloer).
+	// --- Componenten ---
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<USceneComponent> Root;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
-	TObjectPtr<UStaticMeshComponent> Mesh;
+	TObjectPtr<UStaticMeshComponent> Mesh; // pot
 
-	// Bruin schijfje boven in de pot dat zichtbaar is zodra er soil in zit (visuele indicatie).
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<UStaticMeshComponent> SoilMesh;
 
-	// Groen plantje (kegel) bovenop de pot dat per fase groter wordt; rijpe kleur bij oogstklaar.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
-	TObjectPtr<UStaticMeshComponent> PlantMesh;
+	// Eén plant-mesh per mogelijke plek.
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> PlantMeshes;
 
 	UPROPERTY(Transient)
-	TObjectPtr<class UMaterialInterface> PlantMat;
+	TObjectPtr<UMaterialInterface> PlantMat;
 
 	UPROPERTY(Transient)
-	TObjectPtr<class UMaterialInterface> PlantReadyMat;
+	TObjectPtr<UMaterialInterface> PlantReadyMat;
 
-	// Verstreken groeitijd (server-side klok), gerepliceerd voor fractie-weergave.
+	// --- Per-plek staat (parallelle arrays, gerepliceerd) ---
+	UPROPERTY(ReplicatedUsing = OnRep_Slots)
+	TArray<FName> SlotStrain;        // NAME_None = lege plek
+
 	UPROPERTY(Replicated)
-	float GrowthSeconds = 0.f;
+	TArray<float> SlotGrowth;        // verstreken groeitijd (sec)
 
-	// Totale groeiduur in seconden (uit strain.GrowMinutes), server-bepaald.
-	float MaxGrowthSeconds = 240.f;
+	UPROPERTY(ReplicatedUsing = OnRep_Slots)
+	TArray<EGrowthPhase> SlotPhase;
 
-	UPROPERTY(ReplicatedUsing = OnRep_Visual)
-	EGrowthPhase Phase = EGrowthPhase::Seedling;
-
-	// 0.3..MaxCare — huidige verzorging ("hoe nat"). Daalt langzaam, stijgt door water geven.
+	// --- Pot-brede staat ---
 	UPROPERTY(Replicated)
-	float CareMultiplier = 0.6f;
+	float CareMultiplier = 0.6f;     // huidige verzorging ("hoe nat")
 
-	// Tijd-gewogen gemiddelde verzorging = de uiteindelijke kwaliteit (gerepliceerd voor UI).
 	UPROPERTY(Replicated)
-	float CareAvg = 0.6f;
+	float CareAvg = 0.6f;            // tijd-gewogen gemiddelde = kwaliteit
 
-	// Accumulatoren voor het gemiddelde (server-only).
 	float CareSum = 0.f;
 	float CareTime = 0.f;
 
-	// Maximaal haalbare verzorging op basis van gear (basis lekt -> cap < 1.0).
-	float GetMaxCare() const;
-
-	// Of er een plant in de pot staat (false = lege pot, wacht op een zaadje).
-	UPROPERTY(Replicated)
-	bool bPlanted = false;
-
-	// Welke soil in de pot zit (NAME_None = leeg). Bepaalt yield/kwaliteit-bonus.
 	UPROPERTY(ReplicatedUsing = OnRep_Soil)
 	FName SoilId = NAME_None;
 
-	// Resterende oogsten voordat de soil op is (0 = leeg).
 	UPROPERTY(Replicated)
 	int32 SoilUsesLeft = 0;
 
-	// Server: doe de soil die je in de hand hebt (SoilItem) in de pot. Geeft succes.
+	// --- Server-acties ---
 	bool TryAddSoil(APawn* InstigatorPawn, FName SoilItem);
+	bool TryPlantNextSlot(APawn* InstigatorPawn, FName SeedItem);
+	void WaterAll(APawn* InstigatorPawn);
+	void HarvestReady(APawn* InstigatorPawn);
 
-	// Server: plant het zaadje dat je in de hand hebt (SeedItem). Geeft succes.
-	bool TryPlantFromInventory(APawn* InstigatorPawn, FName SeedItem);
+	float GetMaxCare() const;
 
-	// Server: water geven (kost 1 slok uit de waterfles van de speler) verhoogt de care-multiplier.
-	void Water(APawn* InstigatorPawn);
-
-	// Server: oogsten -> gram in de inventory van de oogster, daarna plant verwijderen.
-	void Harvest(APawn* InstigatorPawn);
+	// Maakt de per-plek arrays op maat (NumSlots uit de pot-tier).
+	void EnsureSlots();
+	int32 SlotCapacityForTier() const;
+	float SlotMaxSeconds(int32 Slot) const;
+	FVector SlotLocalOffset(int32 Slot) const;
+	const FWeedStrainRow* GetStrainRow(FName StrainId) const;
 
 	UFUNCTION()
-	void OnRep_Visual();
-
+	void OnRep_Slots();
 	UFUNCTION()
 	void OnRep_Soil();
-
 	UFUNCTION()
 	void OnRep_Pot();
 
-	// Zet de pot-mesh (breedte e.d.) op basis van de pot-tier.
 	void UpdatePotVisual();
-
-	// Toon/verberg het soil-schijfje op basis van HasSoil().
 	void UpdateSoilVisual();
-
-	// Toon/schaal het plantje op basis van de groeifase (zaailing -> volgroeid -> oogstklaar).
 	void UpdatePlantVisual();
-
-	// Werkt de fase bij op basis van de groeifractie (server).
-	void UpdatePhaseFromGrowth();
-
-	// Zet de juiste mesh voor de huidige fase (indien PhaseMeshes gevuld).
-	void RefreshMesh();
-
-	const FWeedStrainRow* GetStrain() const;
+	void UpdatePhases();
 };
