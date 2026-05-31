@@ -329,7 +329,7 @@ void AWeedShopHUD::DrawHUD()
 					bPlaceable ? TEXT("   -   left-click to place") : TEXT(""));
 			}
 			DrawText(HandLine, FLinearColor(1.f, 0.95f, 0.6f), (ScreenW - TotalW) * 0.5f, SY - 24.f, Font);
-			DrawText(TEXT("I = inventory   |   J = roll joint   |   F = give sample (look at NPC)"),
+			DrawText(TEXT("I = inventory   |   V = roll joint   |   F = give sample (look at NPC)"),
 				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 44.f, Font);
 		}
 	}
@@ -598,7 +598,7 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 		DrawText(TEXT("No papers! Buy a pack from Suppliers (phone, Tab)."),
 			FLinearColor(1.f, 0.5f, 0.5f), InnerX, y, Font);
 		y += 30.f;
-		DrawButton(FName(TEXT("rollclose")), TEXT("Close (R)"), InnerX, y, 150.f, FLinearColor::Yellow);
+		DrawButton(FName(TEXT("rollclose")), TEXT("Close (V)"), InnerX, y, 150.f, FLinearColor::Yellow);
 		return;
 	}
 	DrawText(FString::Printf(TEXT("Grams per joint: %d   (your papers allow up to %dg)"), G, MaxG),
@@ -688,7 +688,7 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 
 	DrawButton(FName(TEXT("rollconfirm")), FString::Printf(TEXT("Roll joint (costs %dg weed)"), G),
 		InnerX, y, 250.f, FLinearColor::White);
-	DrawButton(FName(TEXT("rollclose")), TEXT("Close (R)"), InnerX + 260.f, y, 150.f, FLinearColor::Yellow);
+	DrawButton(FName(TEXT("rollclose")), TEXT("Close (V)"), InnerX + 260.f, y, 150.f, FLinearColor::Yellow);
 }
 
 void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
