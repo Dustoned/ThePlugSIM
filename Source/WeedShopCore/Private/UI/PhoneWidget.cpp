@@ -197,7 +197,7 @@ void UPhoneWidget::RefreshStore()
 	if (StorePackagesToggle)
 	{
 		StorePackagesToggle->SetContent(MakeText(bPackagesView ? TEXT("Shop")
-			: FString::Printf(TEXT("Packages (%d)"), Phone->GetPendingCount()), 11, FLinearColor::White, true));
+			: FString::Printf(TEXT("Packages (%d)"), Phone->GetPendingCount()), 12, FLinearColor::White, true));
 	}
 	UpdateStoreCartText();
 	FillStoreList();
@@ -577,8 +577,10 @@ void UPhoneWidget::RefreshContent()
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
 	// Linksboven: altijd een Back-knop (terug naar het home-scherm).
 	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Back"), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f)));
-	UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(MakeText(GAppName[App], 16, FLinearColor(0.9f, 0.95f, 1.f)));
-	TitleSlot->SetPadding(FMargin(12.f, 4.f, 0.f, 0.f));
+	UTextBlock* TitleText = MakeText(GAppName[App], 16, FLinearColor(0.9f, 0.95f, 1.f));
+	TitleText->SetClipping(EWidgetClipping::ClipToBounds);
+	UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(TitleText);
+	TitleSlot->SetPadding(FMargin(12.f, 4.f, 8.f, 0.f));
 	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TitleSlot->SetVerticalAlignment(VAlign_Center);
 	if (App == 1) // Suppliers: Packages-knop rechtsboven, naast de titel.
@@ -586,8 +588,17 @@ void UPhoneWidget::RefreshContent()
 		const int32 PkgN = Phone->GetPendingCount();
 		StorePackagesToggle = MakeActionBtn(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN),
 			FLinearColor(0.42f, 0.32f, 0.5f),
-			[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 11);
-		Header->AddChildToHorizontalBox(StorePackagesToggle)->SetVerticalAlignment(VAlign_Center);
+			[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 12);
+		// Wat meer lucht: ruimere knop-padding zodat de tekst niet ingeklemd zit.
+		FButtonStyle PS;
+		PS.Normal = RoundedBrush(FLinearColor(0.42f, 0.32f, 0.5f), 8.f);
+		PS.Hovered = RoundedBrush(FLinearColor(0.42f, 0.32f, 0.5f) * 1.3f, 8.f);
+		PS.Pressed = RoundedBrush(FLinearColor(0.42f, 0.32f, 0.5f) * 0.8f, 8.f);
+		PS.NormalPadding = FMargin(12.f, 6.f); PS.PressedPadding = FMargin(12.f, 6.f);
+		StorePackagesToggle->SetStyle(PS);
+		UHorizontalBoxSlot* PkgS = Header->AddChildToHorizontalBox(StorePackagesToggle);
+		PkgS->SetVerticalAlignment(VAlign_Center);
+		PkgS->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
 	}
 	UVerticalBoxSlot* HeaderSlot = ContentBox->AddChildToVerticalBox(Header);
 	HeaderSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
@@ -777,7 +788,7 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const int32 PkgN = Phone->GetPendingCount();
 		if (StorePackagesToggle && !bPackagesView)
 		{
-			StorePackagesToggle->SetContent(MakeText(FString::Printf(TEXT("Packages (%d)"), PkgN), 11, FLinearColor::White, true));
+			StorePackagesToggle->SetContent(MakeText(FString::Printf(TEXT("Packages (%d)"), PkgN), 12, FLinearColor::White, true));
 		}
 		if (bPackagesView)
 		{
