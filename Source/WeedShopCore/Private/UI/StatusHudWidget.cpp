@@ -178,8 +178,8 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (StonedText)
 		{
 			const int32 Secs = FMath::CeilToInt(Phone->GetStonedHudSecs());
-			// XP-bonus: vol high (intensity 1.0) = +100% XP (verdubbeld). Toont de huidige boost.
-			const int32 XpBoost = FMath::RoundToInt(Phone->GetStonedHudIntensity() * 100.f);
+			// XP-bonus is gebaseerd op de THC% van de gerookte wiet (17%-joint -> +17% XP, max +50%).
+			const int32 XpBoost = FMath::RoundToInt(Phone->GetStonedHudXpFrac() * 100.f);
 			StonedText->SetText(FText::FromString(FString::Printf(TEXT("Stoned %d:%02d   XP +%d%%"),
 				Secs / 60, Secs % 60, XpBoost)));
 		}

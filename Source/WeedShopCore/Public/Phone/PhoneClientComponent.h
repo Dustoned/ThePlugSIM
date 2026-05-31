@@ -236,10 +236,11 @@ public:
 
 	// Stoned-info voor de HUD (door de character bijgewerkt): fractie resterend (0..1), resterende
 	// seconden en hoe high je bent (0..1).
-	void SetStonedHud(float Frac, float Seconds, float Intensity) { StonedHudFrac = Frac; StonedHudSecs = Seconds; StonedHudIntensity = Intensity; }
+	void SetStonedHud(float Frac, float Seconds, float Intensity, float XpFrac) { StonedHudFrac = Frac; StonedHudSecs = Seconds; StonedHudIntensity = Intensity; StonedHudXpFrac = XpFrac; }
 	float GetStonedHudFrac() const { return StonedHudFrac; }
 	float GetStonedHudSecs() const { return StonedHudSecs; }
 	float GetStonedHudIntensity() const { return StonedHudIntensity; }
+	float GetStonedHudXpFrac() const { return StonedHudXpFrac; } // XP-bonus fractie (THC-gebaseerd)
 
 	// --- Wiet-batches mergen (bevestig-popup) ---
 	void OpenMerge(FName ItemId);
@@ -355,6 +356,7 @@ protected:
 	float StonedHudFrac = 0.f;      // 0..1 resterende high voor de HUD
 	float StonedHudSecs = 0.f;      // resterende high-seconden
 	float StonedHudIntensity = 0.f; // hoe high (0..1)
+	float StonedHudXpFrac = 0.f;    // XP-bonus fractie (op THC% gebaseerd)
 
 	bool bDealOpen = false;
 	TWeakObjectPtr<ACustomerBase> DealCustomer;

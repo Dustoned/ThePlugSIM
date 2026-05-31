@@ -141,7 +141,7 @@ protected:
 
 	/** Zet de stoned-buf op alle versies van deze pawn (zodat de owner 'm ziet). */
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastApplyStoned(float Seconds, float Intensity, int32 XpBonus);
+	void MulticastApplyStoned(float Seconds, float Intensity, int32 XpBonus, float XpFrac);
 
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -149,7 +149,8 @@ protected:
 	static constexpr float StonedMaxSeconds = 150.f;
 
 	float StonedSeconds = 0.f;   // resterende high-tijd
-	float StonedIntensity = 0.f; // hoe high (0..1)
+	float StonedIntensity = 0.f; // hoe high (0..1, kwaliteit x gram)
+	float StonedXpFrac = 0.f;    // XP-bonus fractie terwijl high (op THC% gebaseerd)
 	int32 LastSmokeXp = 0;       // XP-bonus van de laatste joint (voor de HUD)
 
 	// Roken = rechtermuisknop inhouden (bewust, niet per ongeluk).
@@ -167,6 +168,10 @@ public:
 	/** Resterende high als fractie van het maximum (0..1) voor een balkje. */
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	float GetStonedFraction() const { return FMath::Clamp(StonedSeconds / StonedMaxSeconds, 0.f, 1.f); }
+
+	/** XP-bonus fractie terwijl je high bent (0..0.5), gebaseerd op de THC% van de wiet. */
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	float GetStonedXpFrac() const { return StonedSeconds > 0.f ? StonedXpFrac : 0.f; }
 
 public:
 
