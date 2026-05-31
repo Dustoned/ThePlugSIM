@@ -60,6 +60,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
 	FText GetCatalogName(FName CatalogId) const;
 
+	// Korte beschrijving onder de titel (zaad of supply).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	FText GetCatalogDesc(FName CatalogId) const;
+
 	// --- Supplier-categorieën voor de telefoon (netjes gesorteerd) ---
 	// 0=Seeds, 1=Papers, 2=Pots, 3=Soil, 4=Water, 5=Sell.
 	static constexpr int32 SupplierCatCount = 6;

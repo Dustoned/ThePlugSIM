@@ -283,15 +283,21 @@ void UPhoneWidget::FillStoreList()
 	{
 		const int32 Price = Store->GetCatalogPriceCents(Id);
 		const int32 Pend = Ph->GetPendingQty(Id);
-		FString NameStr = Store->GetCatalogName(Id).ToString();
-		if (NameStr.Len() > 26) { NameStr = NameStr.Left(25) + TEXT("."); }
 
 		UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
 		CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
 		CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 		UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		CardB->SetContent(CardVB);
-		CardVB->AddChildToVerticalBox(MakeText(NameStr, 13, FLinearColor(0.92f, 0.95f, 1.f)));
+		// Titel (kort) + beschrijving eronder.
+		CardVB->AddChildToVerticalBox(MakeText(Store->GetCatalogName(Id).ToString(), 14, FLinearColor(0.95f, 0.97f, 1.f)));
+		const FString DescStr = Store->GetCatalogDesc(Id).ToString();
+		if (!DescStr.IsEmpty())
+		{
+			UTextBlock* Desc = MakeText(DescStr, 10, FLinearColor(0.62f, 0.66f, 0.76f));
+			Desc->SetAutoWrapText(true);
+			CardVB->AddChildToVerticalBox(Desc);
+		}
 
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 		UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("EUR %.2f"), Price / 100.f), 13, FLinearColor(0.7f, 1.f, 0.7f)));

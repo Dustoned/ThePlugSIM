@@ -97,27 +97,27 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 // --- Supplies (vaste catalogus) ---
 namespace
 {
-	struct FSupplyDef { const TCHAR* Id; const TCHAR* Name; int32 PriceCents; int32 PackSize; };
+	struct FSupplyDef { const TCHAR* Id; const TCHAR* Name; const TCHAR* Desc; int32 PriceCents; int32 PackSize; };
 	static const FSupplyDef GSupplies[] = {
 		// Papers (max gram per joint loopt op).
-		{ TEXT("Papers_Small"),     TEXT("Rolling papers (up to 2g) - 10 pcs"),   500, 10 },
-		{ TEXT("Papers_Big"),       TEXT("King-size papers (up to 5g) - 10 pcs"), 1500, 10 },
-		{ TEXT("Papers_Blunt"),     TEXT("Blunt wraps (up to 7g) - 10 pcs"),      3000, 10 },
-		{ TEXT("Papers_Backwoods"), TEXT("Backwoods (up to 10g) - 5 pcs"),        5000, 5 },
-		// Pots (betere pot = betere waterretentie/kwaliteit + meer yield; hogere tiers later in de progressie).
-		{ TEXT("Pot_Broken"),       TEXT("Broken pot (leaks, low quality)"),      1500, 1 },
-		{ TEXT("Pot_Clay"),         TEXT("Clay pot (decent)"),                    4000, 1 },
-		{ TEXT("Pot_Plastic"),      TEXT("Plastic pot (+yield, 2 plants*)"),     10000, 1 },
-		{ TEXT("Pot_Fabric"),       TEXT("Fabric pot (best, 6 plants*)"),        35000, 1 },
+		{ TEXT("Papers_Small"),     TEXT("Rolling papers"),   TEXT("Up to 2g per joint - 10 pcs"),  500, 10 },
+		{ TEXT("Papers_Big"),       TEXT("King-size papers"), TEXT("Up to 5g per joint - 10 pcs"), 1500, 10 },
+		{ TEXT("Papers_Blunt"),     TEXT("Blunt wraps"),      TEXT("Up to 7g per joint - 10 pcs"), 3000, 10 },
+		{ TEXT("Papers_Backwoods"), TEXT("Backwoods"),        TEXT("Up to 10g per joint - 5 pcs"), 5000, 5 },
+		// Pots (betere pot = betere waterretentie/kwaliteit + meer yield).
+		{ TEXT("Pot_Broken"),       TEXT("Broken pot"),  TEXT("Leaks - low quality, 1 plant"),    1500, 1 },
+		{ TEXT("Pot_Clay"),         TEXT("Clay pot"),    TEXT("Decent retention, 1 plant"),       4000, 1 },
+		{ TEXT("Pot_Plastic"),      TEXT("Plastic pot"), TEXT("More yield, up to 2 plants"),     10000, 1 },
+		{ TEXT("Pot_Fabric"),       TEXT("Fabric pot"),  TEXT("Best quality, up to 6 plants"),   35000, 1 },
 		// Soil (betere soil = meer yield/kwaliteit, ontgrendelt met fase).
-		{ TEXT("Soil_Basic"),       TEXT("Basic soil (3 harvests)"),              1500, 1 },
-		{ TEXT("Soil_Rich"),        TEXT("Rich soil (+yield, 4 harvests)"),       4000, 1 },
-		{ TEXT("Soil_Premium"),     TEXT("Premium soil (++yield, 6 harvests)"),   9000, 1 },
+		{ TEXT("Soil_Basic"),       TEXT("Basic soil"),   TEXT("Lasts 3 harvests"),               1500, 1 },
+		{ TEXT("Soil_Rich"),        TEXT("Rich soil"),    TEXT("More yield - 4 harvests"),        4000, 1 },
+		{ TEXT("Soil_Premium"),     TEXT("Premium soil"), TEXT("Top yield - 6 harvests"),         9000, 1 },
 		// Water-flessen (betere fles = meer water, minder vaak vullen).
-		{ TEXT("WaterBottle_Plastic"),  TEXT("Plastic bottle (3 waterings)"),  1000,  1 },
-		{ TEXT("WaterBottle_Steel"),    TEXT("Steel bottle (6 waterings)"),    4500,  1 },
-		{ TEXT("WaterBottle_Jerrycan"), TEXT("Jerry can (12 waterings)"),     15000,  1 },
-		{ TEXT("WaterBottle_Tank"),     TEXT("Water tank (25 waterings)"),    45000,  1 },
+		{ TEXT("WaterBottle_Plastic"),  TEXT("Plastic bottle"), TEXT("3 waterings per fill"),  1000,  1 },
+		{ TEXT("WaterBottle_Steel"),    TEXT("Steel bottle"),   TEXT("6 waterings per fill"),  4500,  1 },
+		{ TEXT("WaterBottle_Jerrycan"), TEXT("Jerry can"),      TEXT("12 waterings per fill"), 15000,  1 },
+		{ TEXT("WaterBottle_Tank"),     TEXT("Water tank"),     TEXT("25 waterings per fill"), 45000,  1 },
 	};
 }
 
@@ -233,6 +233,23 @@ FText UStoreComponent::GetCatalogName(FName CatalogId) const
 	if (GetSupplyDisplay(CatalogId, Name, Price, Pack)) { return Name; }
 	if (GetSeedDisplay(CatalogId, Name, Price)) { return Name; }
 	return FText::FromName(CatalogId);
+}
+
+FText UStoreComponent::GetCatalogDesc(FName CatalogId) const
+{
+	for (const FSupplyDef& S : GSupplies)
+	{
+		if (CatalogId == FName(S.Id)) { return FText::FromString(S.Desc); }
+	}
+	// Zaad: korte beschrijving met de potentie van de strain.
+	if (StrainTable)
+	{
+		if (const FWeedStrainRow* Row = StrainTable->FindRow<FWeedStrainRow>(CatalogId, TEXT("GetCatalogDesc"), false))
+		{
+			return FText::FromString(FString::Printf(TEXT("Seed - up to %.0f%% THC"), Row->BaseThcPercent));
+		}
+	}
+	return FText::GetEmpty();
 }
 
 TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
