@@ -109,6 +109,16 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<UStaticMeshComponent> SoilMesh;
 
+	// Groen plantje (kegel) bovenop de pot dat per fase groter wordt; rijpe kleur bij oogstklaar.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
+	TObjectPtr<UStaticMeshComponent> PlantMesh;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UMaterialInterface> PlantMat;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UMaterialInterface> PlantReadyMat;
+
 	// Verstreken groeitijd (server-side klok), gerepliceerd voor fractie-weergave.
 	UPROPERTY(Replicated)
 	float GrowthSeconds = 0.f;
@@ -155,6 +165,9 @@ protected:
 
 	// Toon/verberg het soil-schijfje op basis van HasSoil().
 	void UpdateSoilVisual();
+
+	// Toon/schaal het plantje op basis van de groeifase (zaailing -> volgroeid -> oogstklaar).
+	void UpdatePlantVisual();
 
 	// Werkt de fase bij op basis van de groeifractie (server).
 	void UpdatePhaseFromGrowth();

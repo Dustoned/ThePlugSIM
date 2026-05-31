@@ -53,6 +53,24 @@ AGrowPlant::AGrowPlant()
 	}
 	SoilMesh->SetVisibility(false);
 
+	// Plantje (kegel) bovenop de pot; schaalt per groeifase.
+	PlantMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PlantMesh"));
+	PlantMesh->SetupAttachment(Root);
+	PlantMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeFinder(TEXT("/Engine/BasicShapes/Cone.Cone"));
+	if (ConeFinder.Succeeded())
+	{
+		PlantMesh->SetStaticMesh(ConeFinder.Object);
+	}
+	PlantMesh->SetRelativeLocation(FVector(0.f, 0.f, 44.f)); // basis op de aarde-laag
+	PlantMesh->SetVisibility(false);
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantMatFinder(TEXT("/Game/_Project/Materials/M_Plant.M_Plant"));
+	if (PlantMatFinder.Succeeded()) { PlantMat = PlantMatFinder.Object; }
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantReadyFinder(TEXT("/Game/_Project/Materials/M_PlantReady.M_PlantReady"));
+	if (PlantReadyFinder.Succeeded()) { PlantReadyMat = PlantReadyFinder.Object; }
+	if (PlantMat) { PlantMesh->SetMaterial(0, PlantMat); }
+
 	// StrainTable automatisch koppelen zodat een gespawnde pot kan planten/oogsten zonder BP-setup.
 	static ConstructorHelpers::FObjectFinder<UDataTable> StrainTableFinder(TEXT("/Game/_Project/Data/DT_Strains.DT_Strains"));
 	if (StrainTableFinder.Succeeded())
@@ -81,6 +99,7 @@ void AGrowPlant::BeginPlay()
 
 	RefreshMesh();
 	UpdateSoilVisual();
+	UpdatePlantVisual();
 }
 
 void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -148,6 +167,7 @@ void AGrowPlant::UpdatePhaseFromGrowth()
 	{
 		Phase = NewPhase;
 		RefreshMesh(); // server-side; clients krijgen het via OnRep_Visual
+		UpdatePlantVisual();
 	}
 }
 
@@ -248,6 +268,7 @@ bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn, FName SeedItem)
 	}
 	Phase = EGrowthPhase::Seedling;
 	RefreshMesh();
+	UpdatePlantVisual();
 
 	UE_LOG(LogWeedShop, Log, TEXT("Geplant: %s"), *StrainId.ToString());
 	if (GEngine)
@@ -361,11 +382,13 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 	GrowthSeconds = 0.f;
 	Phase = EGrowthPhase::Seedling;
 	RefreshMesh();
+	UpdatePlantVisual();
 }
 
 void AGrowPlant::OnRep_Visual()
 {
 	RefreshMesh();
+	UpdatePlantVisual();
 }
 
 void AGrowPlant::OnRep_Soil()
@@ -378,6 +401,39 @@ void AGrowPlant::UpdateSoilVisual()
 	if (SoilMesh)
 	{
 		SoilMesh->SetVisibility(HasSoil());
+	}
+}
+
+void AGrowPlant::UpdatePlantVisual()
+{
+	if (!PlantMesh)
+	{
+		return;
+	}
+	if (!bPlanted)
+	{
+		PlantMesh->SetVisibility(false);
+		return;
+	}
+	PlantMesh->SetVisibility(true);
+
+	// Schaal per fase: zaailing klein -> volgroeid groot.
+	FVector Scale;
+	switch (Phase)
+	{
+	case EGrowthPhase::Seedling:    Scale = FVector(0.18f, 0.18f, 0.12f); break;
+	case EGrowthPhase::Vegetative:  Scale = FVector(0.26f, 0.26f, 0.32f); break;
+	case EGrowthPhase::PreFlower:   Scale = FVector(0.34f, 0.34f, 0.50f); break;
+	case EGrowthPhase::Flower:      Scale = FVector(0.42f, 0.42f, 0.64f); break;
+	default:                        Scale = FVector(0.48f, 0.48f, 0.74f); break; // Harvestable
+	}
+	PlantMesh->SetRelativeScale3D(Scale);
+
+	// Rijpe kleur bij oogstklaar.
+	UMaterialInterface* Mat = (Phase == EGrowthPhase::Harvestable && PlantReadyMat) ? PlantReadyMat : PlantMat;
+	if (Mat)
+	{
+		PlantMesh->SetMaterial(0, Mat);
 	}
 }
 
