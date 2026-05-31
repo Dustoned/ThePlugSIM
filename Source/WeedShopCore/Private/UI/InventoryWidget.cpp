@@ -258,6 +258,7 @@ void UInventoryWidget::RebuildContent()
 		{
 			const FInventoryStack& S = Stacks[Idx];
 			const FName ItemId = S.ItemId;
+			const bool bWet = ItemId.ToString().StartsWith(TEXT("WetBud_"));
 			const bool bWeed = ItemId.ToString().StartsWith(TEXT("Bud_")) || ItemId.ToString().StartsWith(TEXT("Joint_"));
 			const bool bCash = (ItemId == TEXT("Cash"));
 
@@ -269,6 +270,15 @@ void UInventoryWidget::RebuildContent()
 				Cell->Bg = FLinearColor(0.10f, 0.16f, 0.10f, 0.97f);
 				Cell->Line1 = TEXT("Cash");
 				Cell->Line2 = FString::Printf(TEXT("EUR %d"), S.Quantity);
+			}
+			else if (bWet)
+			{
+				// Natte wiet: duidelijk blauwe "WET"-tint + label dat 'ie eerst moet drogen.
+				Cell->Bg = FLinearColor(0.10f, 0.16f, 0.24f, 0.97f);
+				FString Nm = WeedUI::PrettyItemName(ItemId);
+				if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
+				Cell->Line1 = Nm;
+				Cell->Line2 = FString::Printf(TEXT("x%d  WET - dry it first"), S.Quantity);
 			}
 			else
 			{
