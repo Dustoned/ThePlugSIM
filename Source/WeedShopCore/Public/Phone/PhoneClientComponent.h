@@ -47,6 +47,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|ATM")
 	bool IsAtmOpen() const { return bAtmOpen; }
 
+	// --- Verpak-bench (in de wereld): verdeel gedroogde wiet in bakjes/jars (verkoopbare voorraad) ---
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
+	void OpenPack();
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
+	void ClosePack();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Pack")
+	bool IsPackOpen() const { return bPackOpen; }
+
+	// Capaciteit (gram per bakje) van een container-item. 0 = geen container.
+	static int32 ContainerCapacity(FName ContainerId);
+
+	// Verdeel: stop tot capaciteit gram van BudId (gedroogd) in 1 container -> verkoopbare Bag_<strain>.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
+	void RequestPack(FName BudId, FName ContainerId);
+	UFUNCTION(Server, Reliable)
+	void ServerPack(FName BudId, FName ContainerId);
+
 	// Open een app (zet 'm als actief scherm; verlaat het home-scherm).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void OpenApp(int32 AppIndex);
@@ -422,6 +439,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UAtmWidget> AtmWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UPackWidget> PackWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
@@ -451,6 +471,7 @@ protected:
 
 	bool bInventoryOpen = false;
 	bool bAtmOpen = false;
+	bool bPackOpen = false;
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;

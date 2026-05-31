@@ -27,6 +27,7 @@
 #include "Progression/LevelComponent.h"
 #include "Input/ControlSettings.h"
 #include "World/Atm.h"
+#include "World/PackBench.h"
 #include "SmokePuff.h"
 #include "ThePlugSIM.h"
 
@@ -149,7 +150,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
 	{
 		const bool bUiOpenG = Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()
-			|| Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen());
+			|| Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen());
 		const bool bJointG = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Joint_"));
 		ACustomerBase* FocusCust = nullptr;
 		if (const UInteractionComponent* ICx = FindComponentByClass<UInteractionComponent>())
@@ -575,7 +576,7 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	// deze klik net heeft verwerkt (bv. een paneel sloot) negeren we 'm hier, zodat dezelfde klik
 	// niet alsnog de wereld-interactie (en daarmee bv. de deal opnieuw) opent.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->DidUiConsumeClickRecently()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->DidUiConsumeClickRecently()))
 	{
 		return;
 	}
@@ -602,6 +603,12 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 				if (Phone) { Phone->OpenAtm(); }
 				return;
 			}
+			// Verpak-tafel -> open lokaal het verpak-menu.
+			if (Cast<APackBench>(Focus))
+			{
+				if (Phone) { Phone->OpenPack(); }
+				return;
+			}
 			IC->TryInteract();
 			return;
 		}
@@ -622,7 +629,7 @@ void AThePlugSIMCharacter::OnInteractKey()
 	// E doet hetzelfde als links-klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen,
 	// maar gebruikt nooit het actieve hand-item.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen()))
 	{
 		return;
 	}
@@ -672,7 +679,7 @@ void AThePlugSIMCharacter::OnSecondaryReleased()
 void AThePlugSIMCharacter::OnLoadKey()
 {
 	if (!Phone || !Inventory) { return; }
-	if (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsDealOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen()) { return; }
+	if (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsDealOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen()) { return; }
 
 	// F opent (of sluit) het rol-menu zolang je vloei vasthoudt. In het menu kies je het aantal gram
 	// en klik je op "Load"; daarna rechtermuis inhouden om te rollen.

@@ -18,6 +18,8 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("DryRack_Cheap"), TEXT("Cheap drying rack"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.2f, 0.3f, 1.5f), FVector(60.f, 15.f, 75.f), false, 0, false, false, /*bIsDryRack*/ true },
 		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.4f, 0.3f, 1.6f), FVector(70.f, 15.f, 80.f), false, 0, false, false, true },
 		{ TEXT("DryRack_Pro"),   TEXT("Pro drying cabinet"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.6f, 0.4f, 1.8f), FVector(80.f, 20.f, 90.f), false, 0, false, false, true },
+		// Verpak-tafel: spawnt een APackBench. Binnen plaatsen.
+		{ TEXT("Bench_Pack"), TEXT("Packing bench"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.3f, 0.7f, 0.9f), FVector(65.f, 35.f, 45.f), false, 0, false, false, false, /*bIsPackBench*/ true },
 	};
 	return Defs;
 }

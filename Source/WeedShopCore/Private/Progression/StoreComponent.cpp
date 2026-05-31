@@ -122,6 +122,12 @@ namespace
 		{ TEXT("DryRack_Cheap"), TEXT("Cheap drying rack"),  TEXT("2 batches, slow (~3 min)"),    8000, 1 },
 		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),        TEXT("5 batches, faster (~2 min)"), 25000, 1 },
 		{ TEXT("DryRack_Pro"),   TEXT("Pro drying cabinet"), TEXT("10 batches, fast (~1 min)"),  70000, 1 },
+		// Verpak-tafel + bakjes/jars (verdeel gedroogde wiet in verkoopbare verpakkingen).
+		{ TEXT("Bench_Pack"), TEXT("Packing bench"),  TEXT("Divide dried weed into bags/jars"), 12000, 1 },
+		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Up to 2g each - 10 pcs"),   800, 10 },
+		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Up to 5g each - 10 pcs"),  1500, 10 },
+		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Up to 10g each - 5 pcs"),  2500,  5 },
+		{ TEXT("Cont_Jar15"), TEXT("Jars"),           TEXT("Up to 15g each - 5 pcs"),  4000,  5 },
 	};
 }
 
@@ -279,13 +285,13 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 		return GetSeedCatalog();
 	}
 	TArray<FName> Out;
-	// Pots-tab toont ook de droogrekken (grow-gear).
+	// Pots-tab toont ook droogrekken, de verpak-tafel en bakjes/jars (grow- + process-gear).
 	if (Cat == 2)
 	{
 		for (const FName& Id : GetSupplyCatalog())
 		{
 			const FString S = Id.ToString();
-			if (S.StartsWith(TEXT("Pot")) || S.StartsWith(TEXT("DryRack_"))) { Out.Add(Id); }
+			if (S.StartsWith(TEXT("Pot")) || S.StartsWith(TEXT("DryRack_")) || S.StartsWith(TEXT("Bench_")) || S.StartsWith(TEXT("Cont_"))) { Out.Add(Id); }
 		}
 		return Out;
 	}

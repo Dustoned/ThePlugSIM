@@ -30,6 +30,7 @@
 #include "UI/CompassWidget.h"
 #include "UI/HotkeyHintWidget.h"
 #include "UI/AtmWidget.h"
+#include "UI/PackWidget.h"
 #include "Blueprint/UserWidget.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
@@ -58,7 +59,7 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -119,6 +120,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (HotkeyWidget) { HotkeyWidget->AddToViewport(2); }
 	AtmWidget = CreateWidget<UAtmWidget>(PC, UAtmWidget::StaticClass());
 	if (AtmWidget) { AtmWidget->SetPhone(this); AtmWidget->AddToViewport(28); }
+	PackWidget = CreateWidget<UPackWidget>(PC, UPackWidget::StaticClass());
+	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
 }
 
 void UPhoneClientComponent::Toggle()
@@ -159,6 +162,62 @@ void UPhoneClientComponent::CloseAtm()
 {
 	bAtmOpen = false;
 	UpdateCursor();
+}
+
+void UPhoneClientComponent::OpenPack()
+{
+	EnsureWidget();
+	bPackOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ClosePack()
+{
+	bPackOpen = false;
+	UpdateCursor();
+}
+
+int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
+{
+	const FString S = ContainerId.ToString();
+	if (S == TEXT("Cont_Bag2"))  { return 2; }
+	if (S == TEXT("Cont_Bag5"))  { return 5; }
+	if (S == TEXT("Cont_Jar10")) { return 10; }
+	if (S == TEXT("Cont_Jar15")) { return 15; }
+	return 0;
+}
+
+void UPhoneClientComponent::RequestPack(FName BudId, FName ContainerId)
+{
+	ServerPack(BudId, ContainerId);
+}
+
+void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName ContainerId)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv) { return; }
+	const FString BudStr = BudId.ToString();
+	if (!BudStr.StartsWith(TEXT("Bud_"))) { return; }            // alleen GEDROOGDE buds verpakken
+	const int32 Cap = ContainerCapacity(ContainerId);
+	if (Cap <= 0 || !Inv->HasItem(ContainerId, 1)) { return; }   // container nodig
+
+	const int32 Have = Inv->GetQuantity(BudId);
+	if (Have <= 0) { return; }
+	const int32 Grams = FMath::Min(Cap, Have);
+	const float Thc = Inv->GetItemQuality(BudId);
+	const float Q = Inv->GetItemQualityPct(BudId);
+
+	// Verbruik 1 container + de wiet; voeg verkoopbare Bag_<strain> toe (verpakte voorraad).
+	if (!Inv->RemoveItem(BudId, Grams)) { return; }
+	Inv->RemoveItem(ContainerId, 1);
+	const FName BagId(*FString::Printf(TEXT("Bag_%s"), *BudStr.RightChop(4))); // Bud_X -> Bag_X
+	Inv->AddItem(BagId, Grams, Thc, Q);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor(120, 220, 160),
+			FString::Printf(TEXT("Packed %dg into a bag (sellable)."), Grams));
+	}
 }
 
 void UPhoneClientComponent::ToggleRollUI()

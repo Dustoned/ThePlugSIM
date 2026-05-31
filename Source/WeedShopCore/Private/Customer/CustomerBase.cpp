@@ -108,7 +108,10 @@ void ACustomerBase::BeginPlay()
 			const TArray<FName> Rows = ProductTable->GetRowNames();
 			if (Rows.Num() > 0)
 			{
-				DesiredProductId = Rows[FMath::RandRange(0, Rows.Num() - 1)];
+				// Klanten willen VERPAKTE wiet (Bag_<strain>); losse/natte buds kopen ze niet.
+				const FName Row = Rows[FMath::RandRange(0, Rows.Num() - 1)];
+				const FString RS = Row.ToString();
+				DesiredProductId = RS.StartsWith(TEXT("Bud_")) ? FName(*FString::Printf(TEXT("Bag_%s"), *RS.RightChop(4))) : Row;
 				DesiredQuantity = FMath::RandRange(1, 3);
 			}
 		}
@@ -226,8 +229,22 @@ int32 ACustomerBase::GetMarketPriceCents() const
 int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 {
 	if (!ProductTable || ProductId.IsNone()) { return 0; }
+	// Alleen VERPAKTE wiet is verkoopbaar aan klanten. Een Bag_<strain> wordt geprijsd via de
+	// product-rij van de strain (Bud_<strain>). Losse/natte buds -> 0 (niet verkoopbaar).
+	const FString S = ProductId.ToString();
+	FName LookupId = ProductId;
+	if (S.StartsWith(TEXT("Bag_")))
+	{
+		LookupId = FName(*FString::Printf(TEXT("Bud_%s"), *S.RightChop(4)));
+	}
+	else if (!S.StartsWith(TEXT("Bud_")))
+	{
+		// Geen verpakt product en geen tabel-rij -> niet verkoopbaar.
+	}
 	const FWeedShopProductRow* Row =
-		ProductTable->FindRow<FWeedShopProductRow>(ProductId, TEXT("ACustomerBase::GetMarketPriceForProduct"), false);
+		ProductTable->FindRow<FWeedShopProductRow>(LookupId, TEXT("ACustomerBase::GetMarketPriceForProduct"), false);
+	// Losse Bud_ (niet verpakt) is bewust NIET verkoopbaar aan klanten.
+	if (S.StartsWith(TEXT("Bud_"))) { return 0; }
 	return Row ? Row->MarketPriceCents : 0;
 }
 

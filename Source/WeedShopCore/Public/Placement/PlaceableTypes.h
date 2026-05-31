@@ -20,6 +20,7 @@ struct FPlaceableDef
 	bool bIsAtm = false;               // true -> spawnt AAtm (geldautomaat)
 	bool bAllowOutdoors = false;       // true -> mag ook buiten geplaatst (negeert de "alleen binnen"-regel)
 	bool bIsDryRack = false;           // true -> spawnt ADryingRack (RackTier = ItemId)
+	bool bIsPackBench = false;         // true -> spawnt APackBench (verpak-tafel)
 };
 
 // Alle gedefinieerde placeables.

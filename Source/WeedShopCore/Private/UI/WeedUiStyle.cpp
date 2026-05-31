@@ -59,7 +59,13 @@ namespace WeedUI
 	{
 		FString S = ItemId.ToString();
 		if (S.StartsWith(TEXT("WetBud_")))    { return S.RightChop(7) + TEXT(" (wet)"); }
+		if (S.StartsWith(TEXT("Bag_")))       { return S.RightChop(4) + TEXT(" bag"); }
 		if (S.StartsWith(TEXT("DryRack_")))   { return S.RightChop(8) + TEXT(" rack"); }
+		if (S == TEXT("Bench_Pack"))          { return TEXT("Packing bench"); }
+		if (S == TEXT("Cont_Bag2"))           { return TEXT("Small baggies"); }
+		if (S == TEXT("Cont_Bag5"))           { return TEXT("Big baggies"); }
+		if (S == TEXT("Cont_Jar10"))          { return TEXT("Small jars"); }
+		if (S == TEXT("Cont_Jar15"))          { return TEXT("Jars"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return S.RightChop(4); }
 		if (S.StartsWith(TEXT("Seed_")))      { return S.RightChop(5) + TEXT(" seed"); }
 		if (S.StartsWith(TEXT("Joint_")))     { return S.RightChop(6) + TEXT(" joint"); }

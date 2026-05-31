@@ -5,6 +5,7 @@
 #include "Placement/PlaceableTypes.h"
 #include "Placement/PlaceableProp.h"
 #include "World/Atm.h"
+#include "World/PackBench.h"
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -568,6 +569,10 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 			Rack->RackTier = ItemId;
 			Rack->FinishSpawning(FTransform(Rotation, Location));
 		}
+	}
+	else if (Def.bIsPackBench)
+	{
+		World->SpawnActor<APackBench>(APackBench::StaticClass(), FTransform(Rotation, Location), SpawnParams);
 	}
 	else if (Def.bIsPot)
 	{

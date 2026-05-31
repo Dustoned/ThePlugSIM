@@ -24,7 +24,8 @@ namespace
 	FString PrettyName(FName Id)
 	{
 		FString S = Id.ToString();
-		if (S.StartsWith(TEXT("Bud_"))) { S = S.RightChop(4); }
+		if (S.StartsWith(TEXT("Bag_"))) { S = S.RightChop(4) + TEXT(" bag"); }
+		else if (S.StartsWith(TEXT("Bud_"))) { S = S.RightChop(4); }
 		else if (S.StartsWith(TEXT("Seed_"))) { S = S.RightChop(5) + TEXT(" seed"); }
 		return S;
 	}
@@ -158,10 +159,11 @@ void UDealWidget::RebuildStrains()
 	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
 	if (!Ph || !C || !Inv) { return; }
 
+	// Klanten kopen alleen VERPAKTE wiet (Bag_<strain>); bied dus je verpakte voorraad aan.
 	TArray<FName> Buds;
 	for (const FInventoryStack& St : Inv->GetStacks())
 	{
-		if (St.ItemId.ToString().StartsWith(TEXT("Bud_")) && !Buds.Contains(St.ItemId)) { Buds.Add(St.ItemId); }
+		if (St.ItemId.ToString().StartsWith(TEXT("Bag_")) && !Buds.Contains(St.ItemId)) { Buds.Add(St.ItemId); }
 	}
 	const FName Offered = Ph->GetOfferedProduct();
 
