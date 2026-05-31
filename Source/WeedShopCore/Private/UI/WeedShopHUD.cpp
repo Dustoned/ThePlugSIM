@@ -243,6 +243,16 @@ void AWeedShopHUD::DrawHUD()
 					DrawText(FString::Printf(TEXT("[E] %s"), *Prompt.ToString()),
 						FLinearColor::Yellow, CX - 60.f, CY + 60.f, Font);
 				}
+				// Oppak-voortgang (hold G) — voor elk oppakbaar object.
+				if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
+				{
+					const float A = BC->GetPickupAlpha();
+					if (A > 0.f)
+					{
+						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), CX - 60.f, CY + 82.f, 160.f, 8.f);
+						DrawRect(FLinearColor(1.f, 0.8f, 0.2f, 0.95f), CX - 60.f, CY + 82.f, 160.f * A, 8.f);
+					}
+				}
 			}
 		}
 	}

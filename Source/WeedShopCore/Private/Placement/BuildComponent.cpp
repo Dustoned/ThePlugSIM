@@ -171,13 +171,13 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			Focus = IC->GetFocusedActor();
 		}
 		const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
-		AGrowPlant* FocusPot = Cast<AGrowPlant>(Focus);
-		if (PC && FocusPot && PC->IsInputKeyDown(EKeys::G))
+		const bool bPickable = Focus && (Cast<AGrowPlant>(Focus) || Cast<APlaceableProp>(Focus));
+		if (PC && bPickable && PC->IsInputKeyDown(EKeys::G))
 		{
 			PickupHoldAccum += DeltaTime;
 			if (PickupHoldAccum >= PickupHoldDuration)
 			{
-				ServerPickup(FocusPot);
+				ServerPickup(Focus);
 				PickupHoldAccum = 0.f;
 			}
 		}
