@@ -1,8 +1,20 @@
 #include "Inventory/InventoryComponent.h"
 
 #include "WeedShopCore.h"
+#include "Placement/PlaceableTypes.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
+
+namespace
+{
+	// Meubels (placeables die geen pot zijn) horen NIET automatisch op de hotbar; die sleep je
+	// er zelf op als je ze wil verplaatsen. Bruikbare items (seeds/wiet/pots/flessen/...) wel.
+	bool IsFurnitureItem(FName ItemId)
+	{
+		FPlaceableDef Def;
+		return GetPlaceableDef(ItemId, Def) && !Def.bIsPot;
+	}
+}
 
 UInventoryComponent::UInventoryComponent()
 {
@@ -330,10 +342,11 @@ void UInventoryComponent::RefreshHotbarAuto()
 		if (S != 0 && FindStackById(S) == INDEX_NONE) { S = 0; }
 	}
 
-	// 2) Vul lege slots met stapels die nog nergens op de hotbar staan.
+	// 2) Vul lege slots met stapels die nog nergens op de hotbar staan (meubels uitgezonderd).
 	for (const FInventoryStack& Stack : Stacks)
 	{
 		if (HotbarStacks.Contains(Stack.StackId)) { continue; }
+		if (IsFurnitureItem(Stack.ItemId)) { continue; }
 		const int32 Empty = HotbarStacks.IndexOfByKey(0);
 		if (Empty != INDEX_NONE) { HotbarStacks[Empty] = Stack.StackId; }
 	}

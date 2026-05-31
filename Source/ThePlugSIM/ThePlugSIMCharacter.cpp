@@ -14,7 +14,9 @@
 #include "Game/WeedShopGameState.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Placement/BuildComponent.h"
+#include "Placement/PlaceableProp.h"
 #include "Cultivation/WaterCanComponent.h"
+#include "EngineUtils.h"
 #include "Cultivation/GrowPlant.h"
 #include "Interaction/InteractionComponent.h"
 #include "Customer/CustomerBase.h"
@@ -321,6 +323,18 @@ void AThePlugSIMCharacter::BeginPlay()
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 2);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
+
+		// Alle meubels die in de starter-home staan gaan in de inventory (niet de hotbar): we vegen
+		// de geplaatste props op en geven het bijbehorende item. Zo begin je met een leeg huis en
+		// kun je zelf bepalen waar alles komt. (Solo/host: bij level-start bestaan alleen de
+		// map-meubels; speler-geplaatste props komen pas later.)
+		for (TActorIterator<APlaceableProp> It(GetWorld()); It; ++It)
+		{
+			APlaceableProp* Prop = *It;
+			if (!IsValid(Prop) || Prop->ItemId.IsNone()) { continue; }
+			Inventory->AddItem(Prop->ItemId, 1);
+			Prop->Destroy();
+		}
 	}
 }
 
