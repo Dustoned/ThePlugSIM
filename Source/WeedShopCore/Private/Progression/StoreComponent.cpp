@@ -130,6 +130,8 @@ namespace
 		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Up to 5g each - 10 pcs"),  1500, 10 },
 		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Up to 10g each - 5 pcs"),  2500,  5 },
 		{ TEXT("Cont_Jar15"), TEXT("Jars"),           TEXT("Up to 15g each - 5 pcs"),  4000,  5 },
+		{ TEXT("Cont_Block100"),  TEXT("Press blocks"), TEXT("100g each - 3 pcs (bulk)"),   9000, 3 },
+		{ TEXT("Cont_Garbage500"),TEXT("Garbage bags"), TEXT("500g each - 2 pcs (bulk)"),  30000, 2 },
 	};
 }
 
@@ -229,6 +231,25 @@ bool UStoreComponent::BuyAny(FName CatalogId, UInventoryComponent* Buyer)
 		return BuySupply(CatalogId, Buyer);
 	}
 	return BuySeed(CatalogId, Buyer);
+}
+
+int32 UStoreComponent::RequiredLevelFor(FName CatalogId)
+{
+	const FString S = CatalogId.ToString();
+	// Droogrekken
+	if (S == TEXT("DryRack_Std"))     { return 5; }
+	if (S == TEXT("DryRack_Pro"))     { return 12; }
+	// Verpak-tafels
+	if (S == TEXT("Bench_Pack2"))     { return 6; }
+	if (S == TEXT("Bench_Pack3"))     { return 15; }
+	// Containers
+	if (S == TEXT("Cont_Jar10") || S == TEXT("Cont_Jar15")) { return 3; }
+	if (S == TEXT("Cont_Block100"))   { return 8; }
+	if (S == TEXT("Cont_Garbage500")) { return 15; }
+	// Potten
+	if (S == TEXT("Pot_Plastic"))     { return 4; }
+	if (S == TEXT("Pot_Fabric"))      { return 10; }
+	return 0;
 }
 
 bool UStoreComponent::GrantAny(FName CatalogId, UInventoryComponent* Buyer)

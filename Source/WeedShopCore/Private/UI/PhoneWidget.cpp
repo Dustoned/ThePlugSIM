@@ -627,20 +627,28 @@ void UPhoneWidget::FillStoreList()
 	{
 		const int32 Price = Store->GetCatalogPriceCents(Id);
 		const int32 Pend = Ph->GetPendingQty(Id);
+		const int32 ReqLvl = UStoreComponent::RequiredLevelFor(Id);
+		const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
+		const bool bLocked = ReqLvl > PlayerLvl;
 
 		UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
-		CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+		CardB->SetBrush(RoundedBrush(bLocked ? FLinearColor(0.10f, 0.09f, 0.09f, 0.95f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
 		CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 		UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		CardB->SetContent(CardVB);
 		// Titel (kort) + beschrijving eronder.
-		CardVB->AddChildToVerticalBox(MakeText(Store->GetCatalogName(Id).ToString(), 14, FLinearColor(0.95f, 0.97f, 1.f)));
+		CardVB->AddChildToVerticalBox(MakeText(Store->GetCatalogName(Id).ToString(), 14, bLocked ? FLinearColor(0.6f, 0.6f, 0.62f) : FLinearColor(0.95f, 0.97f, 1.f)));
 		const FString DescStr = Store->GetCatalogDesc(Id).ToString();
 		if (!DescStr.IsEmpty())
 		{
 			UTextBlock* Desc = MakeText(DescStr, 10, FLinearColor(0.62f, 0.66f, 0.76f));
 			Desc->SetAutoWrapText(true);
 			CardVB->AddChildToVerticalBox(Desc);
+		}
+		if (ReqLvl > 0)
+		{
+			CardVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Unlocks at level %d"), ReqLvl), 10,
+				bLocked ? FLinearColor(1.f, 0.5f, 0.45f) : FLinearColor(0.5f, 0.8f, 0.55f)));
 		}
 
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();

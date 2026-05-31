@@ -4,6 +4,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Progression/LevelComponent.h"
 #include "Phone/ContactsComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Economy/EconomyComponent.h"
@@ -182,10 +183,12 @@ void UPhoneClientComponent::ClosePack()
 int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
 {
 	const FString S = ContainerId.ToString();
-	if (S == TEXT("Cont_Bag2"))  { return 2; }
-	if (S == TEXT("Cont_Bag5"))  { return 5; }
-	if (S == TEXT("Cont_Jar10")) { return 10; }
-	if (S == TEXT("Cont_Jar15")) { return 15; }
+	if (S == TEXT("Cont_Bag2"))     { return 2; }
+	if (S == TEXT("Cont_Bag5"))     { return 5; }
+	if (S == TEXT("Cont_Jar10"))    { return 10; }
+	if (S == TEXT("Cont_Jar15"))    { return 15; }
+	if (S == TEXT("Cont_Block100")) { return 100; }
+	if (S == TEXT("Cont_Garbage500")) { return 500; }
 	return 0;
 }
 
@@ -852,6 +855,18 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	UInventoryComponent* Inv = GetOwnerInventory();
 	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
 	if (!Store || !Inv || !Econ) { return; }
+
+	// 0) Level-gate: hogere tiers (rekken/tafels/containers) vereisen een minimum level.
+	const int32 PlayerLvl = GS->GetLeveling() ? GS->GetLeveling()->GetLevel() : 1;
+	for (int32 i = 0; i < BuyIds.Num(); ++i)
+	{
+		const int32 Req = UStoreComponent::RequiredLevelFor(BuyIds[i]);
+		if (Req > PlayerLvl)
+		{
+			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor::Orange, FString::Printf(TEXT("%s unlocks at level %d."), *Store->GetCatalogName(BuyIds[i]).ToString(), Req)); }
+			return;
+		}
+	}
 
 	// 1) Koop-subtotaal + bezorgkosten (alleen op het koopdeel).
 	int64 BuySub = 0;

@@ -66,6 +66,8 @@ namespace WeedUI
 		if (S == TEXT("Cont_Bag5"))           { return TEXT("Big baggies"); }
 		if (S == TEXT("Cont_Jar10"))          { return TEXT("Small jars"); }
 		if (S == TEXT("Cont_Jar15"))          { return TEXT("Jars"); }
+		if (S == TEXT("Cont_Block100"))       { return TEXT("Press blocks"); }
+		if (S == TEXT("Cont_Garbage500"))     { return TEXT("Garbage bags"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return S.RightChop(4); }
 		if (S.StartsWith(TEXT("Seed_")))      { return S.RightChop(5) + TEXT(" seed"); }
 		if (S.StartsWith(TEXT("Joint_")))     { return S.RightChop(6) + TEXT(" joint"); }

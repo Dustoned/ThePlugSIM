@@ -114,9 +114,9 @@ void UPackWidget::FillBody()
 	// 2) Kies een container die je hebt -> verpak.
 	const int32 Batch = Ph->GetPackBatch();
 	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Pack %s into:  (this bench bags %d at a time)"), *WeedUI::PrettyItemName(SelStrain), Batch), 12, FLinearColor(0.8f, 0.85f, 0.95f)), FMargin(0, 8, 0, 4));
-	static const TCHAR* Conts[4] = { TEXT("Cont_Bag2"), TEXT("Cont_Bag5"), TEXT("Cont_Jar10"), TEXT("Cont_Jar15") };
+	static const TCHAR* Conts[6] = { TEXT("Cont_Bag2"), TEXT("Cont_Bag5"), TEXT("Cont_Jar10"), TEXT("Cont_Jar15"), TEXT("Cont_Block100"), TEXT("Cont_Garbage500") };
 	bool bAnyCont = false;
-	for (int32 i = 0; i < 4; ++i)
+	for (int32 i = 0; i < 6; ++i)
 	{
 		const FName ContId(Conts[i]);
 		const int32 Owned = Inv->GetQuantity(ContId);

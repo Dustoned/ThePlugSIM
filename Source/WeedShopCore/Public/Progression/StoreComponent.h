@@ -56,6 +56,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
 	bool GrantAny(FName CatalogId, UInventoryComponent* Buyer);
 
+	// Vereist speler-level om dit item te kopen (0 = altijd). Hogere tiers (rekken/tafels/containers).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	static int32 RequiredLevelFor(FName CatalogId);
+
 	// Stukprijs (cents) van een catalogus-item (zaad of supply). 0 als onbekend. Voor de winkel-UI.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
 	int32 GetCatalogPriceCents(FName CatalogId) const;
