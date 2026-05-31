@@ -249,13 +249,14 @@ void UInventoryWidget::RebuildContent()
 		Cell->Inv = Inv; Cell->Owner = this;
 
 		const int32 Idx = Inv->FindStackById(StackId);
-		if (StackId != 0 && Stacks.IsValidIndex(Idx))
+		// Items die op de hotbar staan tonen we NIET in het rooster (ze tellen wel mee voor de slots).
+		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx) && !Inv->IsStackOnHotbar(StackId));
+		if (bShowItem)
 		{
 			const FInventoryStack& S = Stacks[Idx];
 			const FName ItemId = S.ItemId;
 			const bool bWeed = ItemId.ToString().StartsWith(TEXT("Bud_")) || ItemId.ToString().StartsWith(TEXT("Joint_"));
 			const bool bCash = (ItemId == TEXT("Cash"));
-			const bool bOnHotbar = Inv->IsStackOnHotbar(StackId);
 
 			Cell->StackId = StackId;
 			Cell->bDraggable = true; // ook briefgeld kun je verslepen (herschikken / naar de hotbar)
@@ -268,11 +269,10 @@ void UInventoryWidget::RebuildContent()
 			}
 			else
 			{
-				// Items die ook op de hotbar staan krijgen een blauwige tint zodat je ze herkent.
-				Cell->Bg = bOnHotbar ? FLinearColor(0.12f, 0.18f, 0.26f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
+				Cell->Bg = FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
 				FString Nm = WeedUI::PrettyItemName(ItemId);
 				if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
-				Cell->Line1 = bOnHotbar ? (Nm + TEXT("  *")) : Nm;
+				Cell->Line1 = Nm;
 				Cell->Line2 = bWeed
 					? FString::Printf(TEXT("x%d  THC%.0f%% Q%.0f%%"), S.Quantity, S.Quality, S.QualityPct)
 					: FString::Printf(TEXT("x%d"), S.Quantity);
@@ -285,7 +285,7 @@ void UInventoryWidget::RebuildContent()
 		}
 		else
 		{
-			// Lege cel: drop-doel (verplaatsen binnen rooster / van hotbar halen), niet sleepbaar.
+			// Lege cel (of plek van een item dat nu op de hotbar staat): drop-doel, niet sleepbaar.
 			Cell->StackId = 0; Cell->bDraggable = false;
 			Cell->Bg = FLinearColor(0.10f, 0.10f, 0.13f, 0.35f);
 		}
