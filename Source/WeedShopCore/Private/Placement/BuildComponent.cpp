@@ -4,6 +4,7 @@
 #include "Cultivation/GrowPlant.h"
 #include "Placement/PlaceableTypes.h"
 #include "Placement/PlaceableProp.h"
+#include "World/Atm.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Interaction/InteractionComponent.h"
@@ -309,7 +310,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
 				const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
 				bValidSpot = bFloor && bGroundLevel && !bOnPlaceable
-						&& IsIndoors(PreviewLocation)
+						&& (CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation))
 						&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 			}
 		}
@@ -530,8 +531,8 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		}
 		return;
 	}
-	// Alleen binnenshuis.
-	if (!IsIndoors(Location))
+	// Alleen binnenshuis (tenzij dit placeable buiten mag, bv. de ATM).
+	if (!Def.bAllowOutdoors && !IsIndoors(Location))
 	{
 		if (GEngine)
 		{
@@ -550,7 +551,12 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	SpawnParams.Owner = GetOwner();
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	if (Def.bIsPot)
+	if (Def.bIsAtm)
+	{
+		// Geldautomaat: spawn een interactieve AAtm.
+		World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rotation, Location), SpawnParams);
+	}
+	else if (Def.bIsPot)
 	{
 		// Deferred zodat de pot-tier al klopt vóór BeginPlay (bepaalt waterretentie/yield/uiterlijk).
 		AGrowPlant* Pot = World->SpawnActorDeferred<AGrowPlant>(

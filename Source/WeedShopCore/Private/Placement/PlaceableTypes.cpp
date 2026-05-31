@@ -12,6 +12,8 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("/Engine/BasicShapes/Cube.Cube"),         FVector(0.6f, 0.6f, 1.8f),  FVector(30.f, 30.f, 90.f), false, 12000 },
 		{ TEXT("Mattress"), TEXT("Mattress"), TEXT("/Engine/BasicShapes/Cube.Cube"),         FVector(2.0f, 1.0f, 0.5f),  FVector(100.f, 50.f, 25.f), false, 4000 },
 		{ TEXT("Table"),    TEXT("Table"),    TEXT("/Engine/BasicShapes/Cube.Cube"),         FVector(1.2f, 0.8f, 0.8f),  FVector(60.f, 40.f, 40.f), false, 6000 },
+		// ATM: spawnt een AAtm (interactief) en mag ook BUITEN geplaatst worden.
+		{ TEXT("Atm"), TEXT("ATM"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.5f, 0.35f, 1.4f), FVector(25.f, 18.f, 70.f), false, 0, /*bIsAtm*/ true, /*bAllowOutdoors*/ true },
 	};
 	return Defs;
 }

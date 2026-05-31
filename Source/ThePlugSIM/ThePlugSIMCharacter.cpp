@@ -431,6 +431,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 2);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
+		Inventory->AddItem(FName(TEXT("Atm")), 1); // plaatsbare geldautomaat (voor nu); zet 'm waar je wilt
 
 		// Alle meubels die in de starter-home staan gaan in de inventory (niet de hotbar): we vegen
 		// de geplaatste props op en geven het bijbehorende item. Zo begin je met een leeg huis en
@@ -445,36 +446,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		}
 	}
 
-	// Zet één ATM in de wereld (server, één keer). Bij voorkeur op een getagde "AtmPoint", anders
-	// vlakbij waar de speler start.
-	if (HasAuthority() && GetWorld())
-	{
-		bool bHasAtm = false;
-		for (TActorIterator<AAtm> It(GetWorld()); It; ++It) { bHasAtm = true; break; }
-		if (!bHasAtm)
-		{
-			// We kunnen vanuit code niet weten waar "buiten op straat" is. Daarom plaatsen we de ATM op
-			// een door jou getagde "AtmPoint"-actor. Staat die er niet, dan spawnen we 'm NIET op een
-			// gegokte plek (dat belandde op het dak / binnen) maar tonen we een hint.
-			FVector Loc; bool bFound = false;
-			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
-			{
-				if (It->ActorHasTag(FName(TEXT("AtmPoint")))) { Loc = It->GetActorLocation(); bFound = true; break; }
-			}
-			if (bFound)
-			{
-				Loc.Z += 70.f; // halve kasthoogte zodat 'ie op de grond staat
-				FActorSpawnParameters SP;
-				SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-				GetWorld()->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP);
-			}
-			else if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Yellow,
-					TEXT("No ATM placed: drop an actor tagged 'AtmPoint' (or an AAtm) on the street."));
-			}
-		}
-	}
+	// (De ATM is nu een plaatsbaar item in je inventory: zet 'm zelf neer waar je wilt, binnen of buiten.)
 }
 
 void AThePlugSIMCharacter::ToggleRollUI()
