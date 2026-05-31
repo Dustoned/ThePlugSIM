@@ -29,7 +29,7 @@ protected:
 
 	UPROPERTY() TObjectPtr<UCanvasPanel> Band;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> CardinalLabels;
-	UPROPERTY() TArray<TObjectPtr<UBorder>> Markers;       // mensen buiten
+	UPROPERTY() TArray<TObjectPtr<UWidget>> Markers;       // mensen buiten (persoon-icoon)
 	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;
 
 	TArray<float> CardinalYaws;

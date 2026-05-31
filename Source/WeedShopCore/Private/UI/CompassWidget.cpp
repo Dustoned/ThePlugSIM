@@ -62,15 +62,16 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 		CardinalYaws.Add(i * 45.f);
 	}
 
-	// Marker-pool voor mensen buiten.
+	// Marker-pool voor mensen buiten: een persoon-icoontje (groen), duidelijk anders dan objecten.
 	for (int32 i = 0; i < 24; ++i)
 	{
-		UBorder* M = WidgetTree->ConstructWidget<UBorder>();
-		M->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 0.6f, 0.2f, 0.95f), 5.f));
-		M->SetVisibility(ESlateVisibility::Collapsed);
-		UCanvasPanelSlot* MS = Band->AddChildToCanvas(M);
-		MS->SetAutoSize(false); MS->SetSize(FVector2D(9.f, 9.f)); MS->SetAlignment(FVector2D(0.5f, 0.5f));
-		Markers.Add(M);
+		USizeBox* MS2 = WidgetTree->ConstructWidget<USizeBox>();
+		MS2->SetWidthOverride(16.f); MS2->SetHeightOverride(16.f);
+		MS2->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 16.f, FLinearColor(0.4f, 0.95f, 0.5f)));
+		MS2->SetVisibility(ESlateVisibility::Collapsed);
+		UCanvasPanelSlot* MS = Band->AddChildToCanvas(MS2);
+		MS->SetAutoSize(false); MS->SetSize(FVector2D(16.f, 16.f)); MS->SetAlignment(FVector2D(0.5f, 0.5f));
+		Markers.Add(MS2);
 	}
 
 	// Waypoint-marker (later).
