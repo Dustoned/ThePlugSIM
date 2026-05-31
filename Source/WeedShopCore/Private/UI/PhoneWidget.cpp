@@ -171,15 +171,34 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 			FName LId; int32 LQty = 0;
 			if (!Ph->GetCartLine(li, LId, LQty)) { continue; }
 			const int32 LineP = Store->GetCatalogPriceCents(LId) * LQty;
+			FString LName = Store->GetCatalogName(LId).ToString();
+			if (LName.Len() > 28) { LName = LName.Left(27) + TEXT("."); }
+			const int32 Idx = li;
+
+			UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
+			CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+			CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+			UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			CardB->SetContent(CVB);
+
+			UTextBlock* NameT = MakeText(LName, 12, FLinearColor(0.9f, 0.92f, 1.f));
+			NameT->SetClipping(EWidgetClipping::ClipToBounds);
+			CVB->AddChildToVerticalBox(NameT);
+
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 			UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(MakeText(
-				FString::Printf(TEXT("%s x%d  EUR %.2f"), *Store->GetCatalogName(LId).ToString(), LQty, LineP / 100.f), 12, FLinearColor(0.9f, 0.92f, 1.f)));
+				FString::Printf(TEXT("x%d   EUR %.2f"), LQty, LineP / 100.f), 12, FLinearColor(1.f, 0.95f, 0.7f)));
 			T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
-			const int32 Idx = li;
 			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -1); MarkDirty(); }));
 			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, +1); MarkDirty(); }));
 			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("x"), FLinearColor(0.42f, 0.18f, 0.18f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -100000); MarkDirty(); }));
-			Scroll->AddChild(Row);
+			CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+
+			Scroll->AddChild(CardB);
+			UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
+			Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+			Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+			Scroll->AddChild(Gap);
 		}
 		Into->AddChildToVerticalBox(MakeActionBtn(TEXT("CHECKOUT"), FLinearColor(0.2f, 0.55f, 0.27f),
 			[this, Ph]() { Ph->Checkout(); bCartView = false; MarkDirty(); }, 14))->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
@@ -200,9 +219,12 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 				if (Val <= 0) { continue; }
 				bAny = true;
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-				UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(MakeText(
-					FString::Printf(TEXT("%s x%d  (EUR %.2f ea)"), *Store->GetCatalogName(Stacks[si].ItemId).ToString(), Stacks[si].Quantity, Val / 100.f),
-					12, FLinearColor(0.9f, 0.92f, 1.f)));
+				FString SName = Store->GetCatalogName(Stacks[si].ItemId).ToString();
+				if (SName.Len() > 18) { SName = SName.Left(17) + TEXT("."); }
+				UTextBlock* ST = MakeText(FString::Printf(TEXT("%s x%d  (EUR %.0f)"), *SName, Stacks[si].Quantity, Val / 100.f),
+					12, FLinearColor(0.9f, 0.92f, 1.f));
+				ST->SetClipping(EWidgetClipping::ClipToBounds);
+				UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(ST);
 				T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
 				const int32 Idx = si;
 				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Sell"), FLinearColor(0.4f, 0.34f, 0.18f), [this, Ph, Idx]() { Ph->SellInventoryIndex(Idx); MarkDirty(); }));
