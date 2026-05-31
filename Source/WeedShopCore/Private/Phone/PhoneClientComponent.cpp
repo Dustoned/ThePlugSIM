@@ -1253,3 +1253,14 @@ void UPhoneClientComponent::ServerRespond_Implementation(bool bAccept)
 		}
 	}
 }
+
+void UPhoneClientComponent::ServerRespondContact_Implementation(FName ContactId, bool bAccept)
+{
+	if (AWeedShopGameState* GS = GetGS())
+	{
+		if (GS->GetContacts())
+		{
+			GS->GetContacts()->RespondToContact(ContactId, bAccept);
+		}
+	}
+}

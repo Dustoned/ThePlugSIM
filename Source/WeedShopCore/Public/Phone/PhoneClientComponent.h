@@ -88,6 +88,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void DoAction(int32 Index);
 
+	// Beantwoord de afspraak van een specifiek contact vanuit hun chat-thread.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RespondChat(FName ContactId, bool bAccept) { ServerRespondContact(ContactId, bAccept); }
+
 	// Verkoop het item op voorraad-stapel StackIndex aan de supplier (70% terug).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SellInventoryIndex(int32 StackIndex);
@@ -359,6 +363,9 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerRespond(bool bAccept);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRespondContact(FName ContactId, bool bAccept);
 
 	// Server: maak 1 joint van Grams gram bud (item-id Joint_<G>g; meer gram = betere kwaliteit).
 	UFUNCTION(Server, Reliable)

@@ -90,6 +90,15 @@ protected:
 	// Knop met een vrije callback (voor de winkel-app: categorie/qty/cart/checkout).
 	class UWeedActionButton* MakeActionBtn(const FString& Label, const FLinearColor& Col, TFunction<void()> OnClick, int32 FontSize = 12);
 
+	// --- Berichten-app (echte chat) ---
+	// NAME_None = gesprekkenlijst; anders is de chat-thread van dat contact open.
+	FName OpenChatContact = NAME_None;
+	int32 LastMsgSig = -2;
+	// Bouwt de Berichten-app: gesprekkenlijst of de open chat-thread.
+	void BuildChatApp();
+	// Verandert als er een bericht bijkomt of een status wijzigt (voor live verversen).
+	int32 MessagesSignature() const;
+
 	// Bouwt de Suppliers-app (in-telefoon webshop) in de gegeven container.
 	void BuildStoreApp(class UVerticalBox* Into);
 	// Vult alleen de scrollbare lijst (catalogus/cart/sell) — geen volledige herbouw, dus geen flash.

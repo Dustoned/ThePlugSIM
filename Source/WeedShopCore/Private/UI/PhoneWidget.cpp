@@ -333,6 +333,141 @@ void UPhoneWidget::UpdateStoreCartText()
 	}
 }
 
+int32 UPhoneWidget::MessagesSignature() const
+{
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return 0; }
+	const TArray<FPhoneMessage>& Msgs = Con->GetMessages();
+	int32 Sig = Msgs.Num() * 1000003;
+	for (const FPhoneMessage& M : Msgs) { Sig = Sig * 31 + (int32)M.Status + (M.bFromMe ? 5 : 0); }
+	return Sig;
+}
+
+void UPhoneWidget::BuildChatApp()
+{
+	if (!Phone.IsValid()) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { AddInfoRow(TEXT("No messages."), FLinearColor::Gray); return; }
+	const TArray<FPhoneMessage>& Msgs = Con->GetMessages(); // nieuwste eerst
+
+	// ---- Gesprekkenlijst (geen chat open) ----
+	if (OpenChatContact.IsNone())
+	{
+		// Unieke contacten in volgorde van nieuwste bericht.
+		TArray<FName> Order;
+		for (const FPhoneMessage& M : Msgs) { Order.AddUnique(M.FromContactId); }
+		if (Order.Num() == 0) { AddInfoRow(TEXT("No messages yet."), FLinearColor::Gray, 13); return; }
+
+		UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
+		UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
+		LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		for (const FName& Cid : Order)
+		{
+			// Laatste bericht + of er een open afspraak is.
+			FString LastBody; FText Name; bool bOpen = false;
+			for (const FPhoneMessage& M : Msgs)
+			{
+				if (M.FromContactId != Cid) { continue; }
+				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; }
+				if (M.Status == 0 && !M.bFromMe) { bOpen = true; }
+			}
+			if (LastBody.Len() > 30) { LastBody = LastBody.Left(29) + TEXT("."); }
+
+			UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
+			Card->SetBrush(RoundedBrush(bOpen ? FLinearColor(0.12f, 0.17f, 0.13f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+			Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+			Card->SetContent(Row);
+			UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+			Info->AddChildToVerticalBox(MakeText(Name.ToString(), 14, FLinearColor(0.95f, 0.97f, 1.f)));
+			UTextBlock* Prev = MakeText(LastBody, 10, FLinearColor(0.62f, 0.66f, 0.76f));
+			Prev->SetClipping(EWidgetClipping::ClipToBounds);
+			Info->AddChildToVerticalBox(Prev);
+			UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
+			IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
+			if (bOpen) { Row->AddChildToHorizontalBox(MakeText(TEXT("NEW"), 11, FLinearColor(0.5f, 1.f, 0.6f)))->SetVerticalAlignment(VAlign_Center); }
+			const FName Pick = Cid;
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), FLinearColor(0.2f, 0.4f, 0.55f),
+				[this, Pick]() { OpenChatContact = Pick; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+			List->AddChild(Card);
+			List->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
+		}
+		return;
+	}
+
+	// ---- Open chat-thread ----
+	FText ContactName = FText::FromName(OpenChatContact);
+	for (const FPhoneContact& C : Con->GetContacts()) { if (C.ContactId == OpenChatContact) { ContactName = C.DisplayName; break; } }
+
+	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
+	Head->AddChildToHorizontalBox(MakeActionBtn(TEXT("< Chats"), FLinearColor(0.2f, 0.3f, 0.45f),
+		[this]() { OpenChatContact = NAME_None; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(MakeText(ContactName.ToString(), 15, FLinearColor(0.92f, 0.95f, 1.f)));
+	NS->SetVerticalAlignment(VAlign_Center); NS->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
+	ContentBox->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+
+	// Berichten chronologisch (oudste boven). Msgs is nieuwste-eerst -> achterstevoren itereren.
+	UScrollBox* Thread = WidgetTree->ConstructWidget<UScrollBox>();
+	UVerticalBoxSlot* TS = ContentBox->AddChildToVerticalBox(Thread);
+	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	bool bAny = false; bool bHasOpen = false;
+	for (int32 i = Msgs.Num() - 1; i >= 0; --i)
+	{
+		const FPhoneMessage& M = Msgs[i];
+		if (M.FromContactId != OpenChatContact) { continue; }
+		bAny = true;
+		if (M.Status == 0 && !M.bFromMe) { bHasOpen = true; }
+
+		FString Body = M.Body.ToString();
+		if (!M.bFromMe && M.Status == 1) { Body += TEXT("  (accepted)"); }
+		else if (!M.bFromMe && M.Status == 2) { Body += TEXT("  (declined)"); }
+
+		UBorder* Bub = WidgetTree->ConstructWidget<UBorder>();
+		Bub->SetBrush(RoundedBrush(M.bFromMe ? FLinearColor(0.16f, 0.35f, 0.22f, 0.97f) : FLinearColor(0.16f, 0.18f, 0.24f, 0.97f), 10.f));
+		Bub->SetPadding(FMargin(9.f, 6.f, 9.f, 6.f));
+		UTextBlock* BodyT = MakeText(Body, 12, FLinearColor(0.95f, 0.97f, 1.f));
+		BodyT->SetAutoWrapText(true);
+		Bub->SetContent(BodyT);
+
+		USizeBox* Cap = WidgetTree->ConstructWidget<USizeBox>();
+		Cap->SetMaxDesiredWidth(210.f);
+		Cap->SetContent(Bub);
+
+		UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
+		if (M.bFromMe)
+		{
+			UHorizontalBoxSlot* Sp = Line->AddChildToHorizontalBox(MakeText(TEXT(""), 1, FLinearColor::Transparent));
+			Sp->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			Line->AddChildToHorizontalBox(Cap);
+		}
+		else
+		{
+			Line->AddChildToHorizontalBox(Cap);
+			UHorizontalBoxSlot* Sp = Line->AddChildToHorizontalBox(MakeText(TEXT(""), 1, FLinearColor::Transparent));
+			Sp->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+		Thread->AddChild(Line);
+		Thread->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
+	}
+	if (!bAny) { Thread->AddChild(MakeText(TEXT("No messages with this contact yet."), 12, FLinearColor::Gray)); }
+
+	// Open afspraak? -> Accept/Decline onderaan.
+	if (bHasOpen)
+	{
+		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		const FName Pick = OpenChatContact;
+		UHorizontalBoxSlot* AS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Accept"), FLinearColor(0.2f, 0.5f, 0.28f),
+			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, true); } MarkDirty(); }, 13));
+		AS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); AS->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
+		UHorizontalBoxSlot* DS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Decline"), FLinearColor(0.5f, 0.28f, 0.2f),
+			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, false); } MarkDirty(); }, 13));
+		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	}
+}
+
 void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 {
 	if (!Phone.IsValid()) { return; }
@@ -959,31 +1094,33 @@ void UPhoneWidget::RefreshContent()
 		}
 		else
 		{
+			UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
+			UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
+			LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			for (const FPhoneContact& C : Con->GetContacts())
 			{
-				AddInfoRow(FString::Printf(TEXT("%s   (%.0f%%)"), *C.DisplayName.ToString(), C.Relationship), FLinearColor::White);
+				const FName Cid = C.ContactId;
+				UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
+				Card->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+				Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				Card->SetContent(Row);
+				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+				Info->AddChildToVerticalBox(MakeText(C.DisplayName.ToString(), 14, FLinearColor(0.95f, 0.97f, 1.f)));
+				Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Relationship %.0f%%"), C.Relationship), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+				UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
+				IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Message"), FLinearColor(0.2f, 0.4f, 0.55f),
+					[this, Cid]() { OpenChatContact = Cid; if (Phone.IsValid()) { Phone->OpenApp(3); } MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+				List->AddChild(Card);
+				UTextBlock* Gap = MakeText(TEXT(""), 4, FLinearColor::Transparent);
+				List->AddChild(Gap);
 			}
 		}
 	}
-	else if (App == 3) // Messages
+	else if (App == 3) // Messages (echte chat)
 	{
-		UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
-		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UHorizontalBoxSlot* A = Btns->AddChildToHorizontalBox(MakeButton(TEXT("Accept"), 5, 0, FLinearColor(0.2f, 0.5f, 0.28f)));
-		A->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-		Btns->AddChildToHorizontalBox(MakeButton(TEXT("Decline"), 6, 0, FLinearColor(0.5f, 0.28f, 0.2f)));
-		UVerticalBoxSlot* BSlot = ContentBox->AddChildToVerticalBox(Btns);
-		BSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-		if (Con)
-		{
-			if (Con->GetMessages().Num() == 0) { AddInfoRow(TEXT("No messages."), FLinearColor::Gray); }
-			for (const FPhoneMessage& M : Con->GetMessages())
-			{
-				const TCHAR* Tag = (M.Status == 1) ? TEXT("[yes]") : (M.Status == 2 ? TEXT("[no]") : TEXT("[open]"));
-				AddInfoRow(FString::Printf(TEXT("%s %s: %s"), Tag, *M.SenderName.ToString(), *M.Body.ToString()),
-					FLinearColor(0.88f, 0.92f, 1.f), 12);
-			}
-		}
+		BuildChatApp();
 	}
 	else if (App == 4) // Settings
 	{
@@ -1006,8 +1143,8 @@ void UPhoneWidget::HandlePhoneButton(int32 Action, int32 Param)
 	if (!Phone.IsValid()) { return; }
 	switch (Action)
 	{
-	case 0: Phone->OpenApp(Param); bCartView = false; break;
-	case 1: Phone->GoHome(); bCartView = false; break;
+	case 0: Phone->OpenApp(Param); bCartView = false; if (Param == 3) { OpenChatContact = NAME_None; } break;
+	case 1: Phone->GoHome(); bCartView = false; OpenChatContact = NAME_None; break;
 	case 2: Phone->Toggle(); break;
 	case 3: Phone->DoAction(Param); break;     // koop upgrade
 	case 5: Phone->DoAction(0); break;         // accept bericht
@@ -1077,5 +1214,12 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (Sig != LastPkgSig) { LastPkgSig = Sig; FillStoreList(); }
 			else { UpdatePackagesLive(); }
 		}
+	}
+
+	// Berichten/Contacten open: bij een nieuw bericht of statuswijziging de inhoud herbouwen.
+	if (!bHome && (App == 2 || App == 3))
+	{
+		const int32 Sig = MessagesSignature();
+		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
 	}
 }

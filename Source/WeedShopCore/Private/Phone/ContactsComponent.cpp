@@ -128,9 +128,9 @@ void UContactsComponent::SendRandomAppointment()
 		: FText::FromString(FString::Printf(TEXT("Can you come by mine at %02d:%02d?"), HH, MM));
 
 	Messages.Insert(Msg, 0); // nieuwste bovenaan
-	if (Messages.Num() > 12)
+	if (Messages.Num() > 40)
 	{
-		Messages.SetNum(12);
+		Messages.SetNum(40);
 	}
 
 	OnRep_Messages(); // server lokaal broadcasten
@@ -215,6 +215,52 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	UE_LOG(LogWeedShop, Log, TEXT("Afspraak-klant gespawned voor %s."), *Msg.SenderName.ToString());
 }
 
+FString UContactsComponent::FormatApptClock(float TimeOfDay) const
+{
+	float Now = 0.f, Length = 1800.f;
+	GetCycleTime(Now, Length);
+	if (Length <= 0.f) { Length = 1800.f; }
+	const float Frac = FMath::Fmod(FMath::Max(0.f, TimeOfDay), Length) / Length;
+	const int32 TotalMin = FMath::RoundToInt(Frac * 24.f * 60.f);
+	return FString::Printf(TEXT("%02d:%02d"), (TotalMin / 60) % 24, TotalMin % 60);
+}
+
+void UContactsComponent::ApplyRelationshipDelta(FName ContactId, float Delta)
+{
+	// Relatie in de contactenlijst bijwerken.
+	for (FPhoneContact& Contact : Contacts)
+	{
+		if (Contact.ContactId == ContactId)
+		{
+			Contact.Relationship = FMath::Clamp(Contact.Relationship + Delta, 0.f, 100.f);
+			break;
+		}
+	}
+
+	// Persistente loyaliteit van deze persoon bijwerken in het NPC-register.
+	if (AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+		{
+			float R = 0.f, L = 0.f, A = 0.f; FText N;
+			if (Reg->GetStats(ContactId, R, L, A, N))
+			{
+				Reg->ApplyStats(ContactId, R, FMath::Clamp(L + Delta, 0.f, 100.f), A);
+			}
+		}
+	}
+
+	// Live klant met deze persoon ook meteen bijwerken (als die er is).
+	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	{
+		if (It->NpcId == ContactId)
+		{
+			It->Loyalty = FMath::Clamp(It->Loyalty + Delta, 0.f, 100.f);
+			break;
+		}
+	}
+}
+
 void UContactsComponent::RespondTopPending(bool bAccept)
 {
 	if (GetOwnerRole() != ROLE_Authority)
@@ -222,59 +268,65 @@ void UContactsComponent::RespondTopPending(bool bAccept)
 		return;
 	}
 
-	for (FPhoneMessage& Msg : Messages)
+	for (const FPhoneMessage& Msg : Messages)
 	{
-		if (Msg.Status != 0)
+		if (Msg.Status == 0 && !Msg.bFromMe)
 		{
-			continue;
+			RespondToContact(Msg.FromContactId, bAccept);
+			return;
 		}
+	}
+}
 
-		Msg.Status = bAccept ? 1 : 2;
-		const float Delta = bAccept ? 5.f : -12.f;
-
-		// Relatie in de contactenlijst bijwerken.
-		for (FPhoneContact& Contact : Contacts)
-		{
-			if (Contact.ContactId == Msg.FromContactId)
-			{
-				Contact.Relationship = FMath::Clamp(Contact.Relationship + Delta, 0.f, 100.f);
-				break;
-			}
-		}
-
-		// Persistente loyaliteit van deze persoon bijwerken in het NPC-register.
-		if (AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
-		{
-			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
-			{
-				float R = 0.f, L = 0.f, A = 0.f; FText N;
-				if (Reg->GetStats(Msg.FromContactId, R, L, A, N))
-				{
-					Reg->ApplyStats(Msg.FromContactId, R, FMath::Clamp(L + Delta, 0.f, 100.f), A);
-				}
-			}
-		}
-
-		// Live klant met deze persoon ook meteen bijwerken (als die er is).
-		for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
-		{
-			if (It->NpcId == Msg.FromContactId)
-			{
-				It->Loyalty = FMath::Clamp(It->Loyalty + Delta, 0.f, 100.f);
-				break;
-			}
-		}
-
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
-				FString::Printf(TEXT("%s: appointment %s"), *Msg.SenderName.ToString(),
-					bAccept ? TEXT("accepted") : TEXT("cancelled")));
-		}
-
-		OnRep_Messages();
+void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
+{
+	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone())
+	{
 		return;
 	}
+
+	// Nieuwste open afspraak-bericht van dit contact (index 0 = nieuwste).
+	int32 Found = INDEX_NONE;
+	for (int32 i = 0; i < Messages.Num(); ++i)
+	{
+		if (Messages[i].FromContactId == ContactId && Messages[i].Status == 0 && !Messages[i].bFromMe)
+		{
+			Found = i;
+			break;
+		}
+	}
+	if (Found == INDEX_NONE)
+	{
+		return;
+	}
+
+	const float ApptTime = Messages[Found].AppointmentTimeOfDay;
+	const FText SenderName = Messages[Found].SenderName;
+	Messages[Found].Status = bAccept ? 1 : 2;
+	const float Delta = bAccept ? 5.f : -12.f;
+	ApplyRelationshipDelta(ContactId, Delta);
+
+	// Mijn antwoord als chat-regel (rechts) toevoegen.
+	FPhoneMessage Reply;
+	Reply.FromContactId = ContactId;
+	Reply.SenderName = SenderName;
+	Reply.bFromMe = true;
+	Reply.Status = 3; // antwoord, geen openstaande afspraak
+	Reply.AppointmentTimeOfDay = -1.f;
+	Reply.Body = bAccept
+		? FText::FromString(FString::Printf(TEXT("Sure, see you at %s."), *FormatApptClock(ApptTime)))
+		: FText::FromString(TEXT("Sorry, can't make it."));
+	Messages.Insert(Reply, 0);
+	if (Messages.Num() > 40) { Messages.SetNum(40); }
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
+			FString::Printf(TEXT("%s: appointment %s"), *SenderName.ToString(),
+				bAccept ? TEXT("accepted") : TEXT("cancelled")));
+	}
+
+	OnRep_Messages();
 }
 
 void UContactsComponent::OnRep_Messages()

@@ -60,6 +60,10 @@ struct FPhoneMessage
 	// Is de afspraaktijd al aangekondigd?
 	UPROPERTY()
 	bool bAnnounced = false;
+
+	// True = dit is mijn eigen antwoord in de chat (rechts uitgelijnd), niet van de klant.
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	bool bFromMe = false;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPhoneMessagesChanged);
@@ -98,6 +102,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RespondTopPending(bool bAccept);
 
+	// Server: beantwoord het nieuwste open afspraak-bericht van een specifiek contact (chat-thread).
+	// Voegt ook mijn antwoord als chat-regel toe.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RespondToContact(FName ContactId, bool bAccept);
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -109,6 +118,12 @@ protected:
 
 	UFUNCTION()
 	void OnRep_Messages();
+
+	// Server: pas de relatie/loyaliteit van een persoon aan (contactenlijst + register + live klant).
+	void ApplyRelationshipDelta(FName ContactId, float Delta);
+
+	// Formatteer een tijdstip-in-cyclus (seconden) als "HH:MM" op een 24-uurs klok.
+	FString FormatApptClock(float TimeOfDay) const;
 
 	// Server: maak een afspraak-bericht van een willekeurig contact.
 	void SendRandomAppointment();
