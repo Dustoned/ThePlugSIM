@@ -197,7 +197,7 @@ void UPhoneWidget::RefreshStore()
 	if (StorePackagesToggle)
 	{
 		StorePackagesToggle->SetContent(MakeText(bPackagesView ? TEXT("Shop")
-			: FString::Printf(TEXT("Packages (%d)"), Phone->GetPendingCount()), 12, FLinearColor::White, true));
+			: FString::Printf(TEXT("Packages (%d)"), Phone->GetPendingCount()), 13, FLinearColor::White, true));
 	}
 	UpdateStoreCartText();
 	FillStoreList();
@@ -587,18 +587,17 @@ void UPhoneWidget::RefreshContent()
 	{
 		const int32 PkgN = Phone->GetPendingCount();
 		StorePackagesToggle = MakeActionBtn(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN),
-			FLinearColor(0.42f, 0.32f, 0.5f),
-			[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 12);
-		// Wat meer lucht: ruimere knop-padding zodat de tekst niet ingeklemd zit.
+			FLinearColor(0.2f, 0.3f, 0.45f),
+			[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 13);
+		// Zelfde clean/compacte stijl als de Back-knop (rond 10, padding 10x5).
 		FButtonStyle PS;
-		PS.Normal = RoundedBrush(FLinearColor(0.42f, 0.32f, 0.5f), 8.f);
-		PS.Hovered = RoundedBrush(FLinearColor(0.42f, 0.32f, 0.5f) * 1.3f, 8.f);
-		PS.Pressed = RoundedBrush(FLinearColor(0.42f, 0.32f, 0.5f) * 0.8f, 8.f);
-		PS.NormalPadding = FMargin(12.f, 6.f); PS.PressedPadding = FMargin(12.f, 6.f);
+		PS.Normal = RoundedBrush(FLinearColor(0.2f, 0.3f, 0.45f), 10.f);
+		PS.Hovered = RoundedBrush(FLinearColor(0.2f, 0.3f, 0.45f) * 1.3f, 10.f);
+		PS.Pressed = RoundedBrush(FLinearColor(0.2f, 0.3f, 0.45f) * 0.8f, 10.f);
+		PS.NormalPadding = FMargin(10.f, 5.f); PS.PressedPadding = FMargin(10.f, 5.f);
 		StorePackagesToggle->SetStyle(PS);
 		UHorizontalBoxSlot* PkgS = Header->AddChildToHorizontalBox(StorePackagesToggle);
 		PkgS->SetVerticalAlignment(VAlign_Center);
-		PkgS->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
 	}
 	UVerticalBoxSlot* HeaderSlot = ContentBox->AddChildToVerticalBox(Header);
 	HeaderSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
@@ -788,7 +787,7 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const int32 PkgN = Phone->GetPendingCount();
 		if (StorePackagesToggle && !bPackagesView)
 		{
-			StorePackagesToggle->SetContent(MakeText(FString::Printf(TEXT("Packages (%d)"), PkgN), 12, FLinearColor::White, true));
+			StorePackagesToggle->SetContent(MakeText(FString::Printf(TEXT("Packages (%d)"), PkgN), 13, FLinearColor::White, true));
 		}
 		if (bPackagesView)
 		{
