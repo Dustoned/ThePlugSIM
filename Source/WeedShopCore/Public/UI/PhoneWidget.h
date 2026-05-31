@@ -7,6 +7,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/Button.h"
+#include "UI/WeedUiStyle.h"
 #include "PhoneWidget.generated.h"
 
 class UPhoneClientComponent;
@@ -69,7 +70,7 @@ protected:
 
 	// Bouw-helpers.
 	UTextBlock* MakeText(const FString& Txt, int32 Size, const FLinearColor& Col, bool bCenter = false);
-	UWidget* MakeAppCell(int32 AppIndex, const FString& Name, const FString& Glyph, const FLinearColor& Col);
+	UWidget* MakeAppCell(int32 AppIndex, const FString& Name, WeedUI::EIcon Icon, const FLinearColor& Col);
 	UPhoneButton* MakeButton(const FString& Label, int32 Action, int32 Param, const FLinearColor& Col);
 	void AddInfoRow(const FString& Txt, const FLinearColor& Col, int32 Size = 13);
 };

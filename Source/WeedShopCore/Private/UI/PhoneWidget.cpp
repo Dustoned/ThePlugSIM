@@ -24,11 +24,12 @@
 #include "Components/ProgressBar.h"
 #include "Styling/SlateTypes.h"
 #include "Styling/CoreStyle.h"
+#include "UI/WeedUiStyle.h"
 
 namespace
 {
 	const TCHAR* GAppName[6] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map") };
-	const TCHAR* GAppGlyph[6] = { TEXT("UP"), TEXT("EUR"), TEXT("@"), TEXT("MSG"), TEXT("SET"), TEXT("MAP") };
+	const WeedUI::EIcon GAppIcon[6] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Shop, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map };
 	const FLinearColor GAppCol[6] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
@@ -101,7 +102,7 @@ UPhoneButton* UPhoneWidget::MakeButton(const FString& Label, int32 Action, int32
 	return B;
 }
 
-UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FString& Glyph, const FLinearColor& Col)
+UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, WeedUI::EIcon Icon, const FLinearColor& Col)
 {
 	UVerticalBox* Cell = WidgetTree->ConstructWidget<UVerticalBox>();
 
@@ -113,7 +114,11 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 	S.Hovered = RoundedBrush(Col * 1.3f, 18.f);
 	S.Pressed = RoundedBrush(Col * 0.8f, 18.f);
 	Btn->SetStyle(S);
-	Btn->SetContent(MakeText(Glyph, 18, FLinearColor::White, true));
+	// Flat icoon in plaats van een letter.
+	USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
+	IcoSz->SetWidthOverride(34.f); IcoSz->SetHeightOverride(34.f);
+	IcoSz->SetContent(WeedUI::Icon(WidgetTree, Icon, 34.f, FLinearColor::White));
+	Btn->SetContent(IcoSz);
 
 	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 	Sz->SetWidthOverride(64.f);
@@ -205,7 +210,7 @@ void UPhoneWidget::RefreshContent()
 		Grid->SetSlotPadding(FMargin(10.f));
 		for (int32 i = 0; i < 6; ++i)
 		{
-			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppGlyph[i], GAppCol[i]), i / 3, i % 3);
+			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppIcon[i], GAppCol[i]), i / 3, i % 3);
 			GSlot->SetHorizontalAlignment(HAlign_Center);
 		}
 		UVerticalBoxSlot* GridSlot = ContentBox->AddChildToVerticalBox(Grid);
