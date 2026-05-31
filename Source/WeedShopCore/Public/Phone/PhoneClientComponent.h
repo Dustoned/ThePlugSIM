@@ -169,6 +169,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	int32 GetMaxJointGrams() const;
 
+	// 0..1 verwachte "high" van een joint: schaalt met gram + THC% + kwaliteit% (zelfde formule als
+	// het roken zelf). Gebruikt door de roll-UI als zinvolle sterkte-balk (beweegt mee met gram).
+	static float JointIntensity(int32 Grams, float ThcPercent, float QualityPct);
+
+	// THC% + kwaliteit% van de wiet-stapel die voor een joint van Grams gebruikt zou worden (de eerste
+	// Bud_-stapel met genoeg voorraad). Geeft false als er geen bruikbare wiet is.
+	bool GetRollWeedInfo(int32 Grams, float& OutThcPercent, float& OutQualityPct) const;
+
 	// Absolute grenzen (papers tussen MinGrams en GramsHardMax).
 	static constexpr int32 MinGrams = 1;
 	static constexpr int32 GramsHardMax = 10;
@@ -328,6 +336,9 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UInventoryWidget> InventoryWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class URollWidget> RollWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UCompassWidget> CompassWidget;

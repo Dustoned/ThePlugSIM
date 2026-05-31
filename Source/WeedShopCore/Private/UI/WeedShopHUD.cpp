@@ -86,11 +86,7 @@ void AWeedShopHUD::DrawHUD()
 			// De telefoon (incl. de Suppliers-webshop) is nu volledig UMG; niets op de canvas.
 			HoverTooltip.Empty();
 		}
-		else if (Phone->IsRollOpen())
-		{
-			DrawRollUI(Phone);
-		}
-		// Deal- en inventory-schermen zijn nu UMG-widgets — niet meer op de canvas.
+		// Roll-, deal- en inventory-schermen zijn nu UMG-widgets — niet meer op de canvas.
 		else if (Phone->IsPotUpgradeOpen())
 		{
 			DrawPotUpgradeUI(Phone);

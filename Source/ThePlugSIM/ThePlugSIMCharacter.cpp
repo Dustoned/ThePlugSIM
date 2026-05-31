@@ -567,10 +567,7 @@ void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
 		return;
 	}
 
-	const float Intensity = FMath::Clamp(
-		(FMath::Clamp(Grams / 10.f, 0.f, 1.f)) * 0.45f +
-		(FMath::Clamp(Thc / 36.f, 0.f, 1.f)) * 0.45f +
-		FMath::Clamp(Q, 0.f, 1.f) * 0.10f, 0.f, 1.f);
+	const float Intensity = UPhoneClientComponent::JointIntensity(Grams, Thc, Q * 100.f);
 
 	// XP-bonus op basis van hoe high je wordt.
 	const int32 XpBonus = 5 + FMath::RoundToInt(Intensity * 60.f);

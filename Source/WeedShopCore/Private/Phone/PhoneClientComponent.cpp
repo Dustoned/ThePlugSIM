@@ -23,6 +23,7 @@
 #include "UI/PlantInfoWidget.h"
 #include "UI/HotbarWidget.h"
 #include "UI/InventoryWidget.h"
+#include "UI/RollWidget.h"
 #include "UI/CompassWidget.h"
 #include "Blueprint/UserWidget.h"
 
@@ -105,6 +106,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (HotbarWidget) { HotbarWidget->AddToViewport(5); }
 	InventoryWidget = CreateWidget<UInventoryWidget>(PC, UInventoryWidget::StaticClass());
 	if (InventoryWidget) { InventoryWidget->SetPhone(this); InventoryWidget->AddToViewport(25); }
+	RollWidget = CreateWidget<URollWidget>(PC, URollWidget::StaticClass());
+	if (RollWidget) { RollWidget->SetPhone(this); RollWidget->AddToViewport(26); }
 	CompassWidget = CreateWidget<UCompassWidget>(PC, UCompassWidget::StaticClass());
 	if (CompassWidget) { CompassWidget->AddToViewport(3); }
 }
@@ -239,6 +242,32 @@ int32 UPhoneClientComponent::GetMaxJointGrams() const
 		}
 	}
 	return Max;
+}
+
+float UPhoneClientComponent::JointIntensity(int32 Grams, float ThcPercent, float QualityPct)
+{
+	// Zelfde gewichten als het roken in de character: gram 45% + THC 45% + kwaliteit 10%.
+	return FMath::Clamp(
+		FMath::Clamp(Grams / 10.f, 0.f, 1.f) * 0.45f +
+		FMath::Clamp(ThcPercent / 36.f, 0.f, 1.f) * 0.45f +
+		FMath::Clamp(QualityPct / 100.f, 0.f, 1.f) * 0.10f, 0.f, 1.f);
+}
+
+bool UPhoneClientComponent::GetRollWeedInfo(int32 Grams, float& OutThcPercent, float& OutQualityPct) const
+{
+	OutThcPercent = 0.f; OutQualityPct = 0.f;
+	const UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv) { return false; }
+	for (const FInventoryStack& St : Inv->GetStacks())
+	{
+		if (St.ItemId.ToString().StartsWith(TEXT("Bud_")) && St.Quantity >= Grams)
+		{
+			OutThcPercent = St.Quality;
+			OutQualityPct = St.QualityPct;
+			return true;
+		}
+	}
+	return false;
 }
 
 void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
