@@ -126,11 +126,14 @@ protected:
 	int32 DeliveryOpt = 0;
 	void UpdateStoreCartText();
 
-	// Packages-tab (onderweg zijnde bestellingen): voortgang + ETA + annuleren.
+	// Packages-app (onderweg zijnde bestellingen): voortgang + ETA + annuleren.
 	bool bPackagesView = false;
 	UPROPERTY() TMap<int32, TObjectPtr<class UProgressBar>> PkgBars;   // per OrderId
 	UPROPERTY() TMap<int32, TObjectPtr<UTextBlock>> PkgEtas;           // per OrderId
+	UPROPERTY() TObjectPtr<class UScrollBox> PackagesScroll;           // scroll van de losse Packages-app
 	int32 LastPkgSig = -1;
 	int32 PackagesSignature() const;   // verandert als de set bestellingen wijzigt
 	void UpdatePackagesLive();         // werkt bars/ETA's live bij zonder herbouw
+	void BuildPackagesApp();           // bouwt de losse Packages-app in ContentBox
+	void FillPackagesInto(class UScrollBox* Scroll); // vult de bestellingen-kaarten in een scroll
 };

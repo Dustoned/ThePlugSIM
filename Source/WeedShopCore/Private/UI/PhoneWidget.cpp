@@ -37,17 +37,18 @@
 namespace
 {
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
-	constexpr int32 GNumApps = 8;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop };
+	constexpr int32 GNumApps = 9;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Home };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
-		FLinearColor(0.85f, 0.65f, 0.20f), FLinearColor(0.30f, 0.50f, 0.70f),
+		FLinearColor(0.85f, 0.65f, 0.20f), FLinearColor(0.30f, 0.50f, 0.70f), FLinearColor(0.55f, 0.40f, 0.80f),
 	};
 	constexpr int32 GGrowApp = 1;
 	constexpr int32 GSellApp = 6;
 	constexpr int32 GSuppliesApp = 7;
+	constexpr int32 GPackagesApp = 8;
 
 	// Korte naam per categorie (0..6).
 	const TCHAR* CatName(int32 Cat)
@@ -468,6 +469,94 @@ void UPhoneWidget::BuildChatApp()
 	}
 }
 
+void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
+{
+	if (!Scroll || !Phone.IsValid()) { return; }
+	UPhoneClientComponent* Ph = Phone.Get();
+	Scroll->ClearChildren();
+	PkgBars.Reset();
+	PkgEtas.Reset();
+
+	auto AddGap = [this, Scroll]() {
+		UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
+		Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		Scroll->AddChild(Gap);
+	};
+
+	const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Ph->GetPendingDeliveries();
+	if (Pend.Num() == 0)
+	{
+		Scroll->AddChild(MakeText(TEXT("No packages on the way. Order from the Grow shop or Supplies and pick a delivery speed."), 12, FLinearColor::Gray));
+		return;
+	}
+	for (const UPhoneClientComponent::FPendingDelivery& D : Pend)
+	{
+		const int32 OrderId = D.OrderId;
+
+		UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
+		CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+		CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+		UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
+		CardB->SetContent(CVB);
+
+		// Titel-rij: bezorgnaam + aantal stuks.
+		CVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s delivery   -   %d item(s)"),
+			*UPhoneClientComponent::DeliveryName(D.DeliveryOpt), D.ItemCount), 13, FLinearColor(0.92f, 0.94f, 1.f)));
+		// Inhoud (kort).
+		{
+			FString Sum = D.Summary;
+			if (Sum.Len() > 40) { Sum = Sum.Left(39) + TEXT("."); }
+			UTextBlock* SumT = MakeText(Sum, 10, FLinearColor(0.62f, 0.66f, 0.76f));
+			SumT->SetAutoWrapText(true);
+			CVB->AddChildToVerticalBox(SumT);
+		}
+
+		const bool bArrived = D.bArrived;
+
+		// Progress bar (vol + groen als 'ie bij de deur ligt).
+		USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
+		BarSz->SetHeightOverride(14.f);
+		UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
+		Bar->SetFillColorAndOpacity(bArrived ? FLinearColor(0.4f, 0.9f, 0.45f) : FLinearColor(0.4f, 0.75f, 1.f));
+		Bar->SetPercent(bArrived ? 1.f : Ph->GetDeliveryProgress(D));
+		BarSz->SetContent(Bar);
+		CVB->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
+		if (!bArrived) { PkgBars.Add(OrderId, Bar); }
+
+		// Status-regel: ETA + Cancel (onderweg), of "bij de deur" (aangekomen).
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		if (bArrived)
+		{
+			UTextBlock* AtDoor = MakeText(TEXT("At the door - go pick it up"), 12, FLinearColor(0.6f, 1.f, 0.6f));
+			Row->AddChildToHorizontalBox(AtDoor)->SetVerticalAlignment(VAlign_Center);
+		}
+		else
+		{
+			const int32 Left = FMath::CeilToInt(Ph->GetDeliverySecondsLeft(D));
+			UTextBlock* EtaT = MakeText(FString::Printf(TEXT("Drone on the way - %d:%02d"), Left / 60, Left % 60), 12, FLinearColor(0.85f, 0.9f, 1.f));
+			UHorizontalBoxSlot* ES = Row->AddChildToHorizontalBox(EtaT);
+			ES->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); ES->SetVerticalAlignment(VAlign_Center);
+			PkgEtas.Add(OrderId, EtaT);
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.18f),
+				[this, Ph, OrderId]() { Ph->CancelDelivery(OrderId); LastPkgSig = -1; if (PackagesScroll) { FillPackagesInto(PackagesScroll); } }, 11));
+		}
+		CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
+
+		Scroll->AddChild(CardB);
+		AddGap();
+	}
+}
+
+void UPhoneWidget::BuildPackagesApp()
+{
+	PackagesScroll = WidgetTree->ConstructWidget<UScrollBox>();
+	UVerticalBoxSlot* PS = ContentBox->AddChildToVerticalBox(PackagesScroll);
+	PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	LastPkgSig = PackagesSignature();
+	FillPackagesInto(PackagesScroll);
+}
+
 void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 {
 	if (!Phone.IsValid()) { return; }
@@ -596,67 +685,7 @@ void UPhoneWidget::FillStoreList()
 	// --- Packages: onderweg zijnde bestellingen (voortgang + ETA + annuleren) ---
 	if (bPackagesView)
 	{
-		const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Ph->GetPendingDeliveries();
-		if (Pend.Num() == 0)
-		{
-			StoreScroll->AddChild(MakeText(TEXT("No packages on the way. Order from the shop and pick a delivery speed."), 12, FLinearColor::Gray));
-		}
-		for (const UPhoneClientComponent::FPendingDelivery& D : Pend)
-		{
-			const int32 OrderId = D.OrderId;
-
-			UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
-			CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
-			CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
-			UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
-			CardB->SetContent(CVB);
-
-			// Titel-rij: bezorgnaam + aantal stuks.
-			CVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s delivery   -   %d item(s)"),
-				*UPhoneClientComponent::DeliveryName(D.DeliveryOpt), D.ItemCount), 13, FLinearColor(0.92f, 0.94f, 1.f)));
-			// Inhoud (kort).
-			{
-				FString Sum = D.Summary;
-				if (Sum.Len() > 40) { Sum = Sum.Left(39) + TEXT("."); }
-				UTextBlock* SumT = MakeText(Sum, 10, FLinearColor(0.62f, 0.66f, 0.76f));
-				SumT->SetAutoWrapText(true);
-				CVB->AddChildToVerticalBox(SumT);
-			}
-
-			const bool bArrived = D.bArrived;
-
-			// Progress bar (vol + groen als 'ie bij de deur ligt).
-			USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
-			BarSz->SetHeightOverride(14.f);
-			UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
-			Bar->SetFillColorAndOpacity(bArrived ? FLinearColor(0.4f, 0.9f, 0.45f) : FLinearColor(0.4f, 0.75f, 1.f));
-			Bar->SetPercent(bArrived ? 1.f : Ph->GetDeliveryProgress(D));
-			BarSz->SetContent(Bar);
-			CVB->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
-			if (!bArrived) { PkgBars.Add(OrderId, Bar); }
-
-			// Status-regel: ETA + Cancel (onderweg), of "bij de deur" (aangekomen).
-			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			if (bArrived)
-			{
-				UTextBlock* AtDoor = MakeText(TEXT("At the door - go pick it up"), 12, FLinearColor(0.6f, 1.f, 0.6f));
-				Row->AddChildToHorizontalBox(AtDoor)->SetVerticalAlignment(VAlign_Center);
-			}
-			else
-			{
-				const int32 Left = FMath::CeilToInt(Ph->GetDeliverySecondsLeft(D));
-				UTextBlock* EtaT = MakeText(FString::Printf(TEXT("Drone on the way - %d:%02d"), Left / 60, Left % 60), 12, FLinearColor(0.85f, 0.9f, 1.f));
-				UHorizontalBoxSlot* ES = Row->AddChildToHorizontalBox(EtaT);
-				ES->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); ES->SetVerticalAlignment(VAlign_Center);
-				PkgEtas.Add(OrderId, EtaT);
-				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.18f),
-					[this, Ph, OrderId]() { Ph->CancelDelivery(OrderId); LastPkgSig = -1; RefreshStore(); }, 11));
-			}
-			CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
-
-			StoreScroll->AddChild(CardB);
-			AddGap();
-		}
+		FillPackagesInto(StoreScroll);
 		return;
 	}
 
@@ -986,7 +1015,10 @@ void UPhoneWidget::RefreshContent()
 
 	const int32 App = FMath::Clamp(Phone->GetTab(), 0, GNumApps - 1);
 
-	// App-header: back-knop + titel (+ rechtsboven de Packages-knop in de Suppliers-app).
+	// App-header: back-knop + titel. (Packages is nu een losse app, geen knop meer in de winkel.)
+	bPackagesView = false;
+	StorePackagesToggle = nullptr;
+	StorePackagesLabel = nullptr;
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
 	// Linksboven: altijd een Back-knop (terug naar het home-scherm).
 	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Back"), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f)));
@@ -996,32 +1028,6 @@ void UPhoneWidget::RefreshContent()
 	TitleSlot->SetPadding(FMargin(10.f, 4.f, 6.f, 0.f));
 	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TitleSlot->SetVerticalAlignment(VAlign_Center);
-	if (App == GGrowApp || App == GSuppliesApp) // koop-apps: Packages-knop rechtsboven, naast de titel.
-	{
-		const int32 PkgN = Phone->GetPendingCount();
-		const FLinearColor PkgCol(0.40f, 0.30f, 0.52f); // paars, voor onderscheid t.o.v. de blauwe Back
-
-		StorePackagesToggle = WidgetTree->ConstructWidget<UWeedActionButton>();
-		StorePackagesToggle->OnClicked.AddDynamic(StorePackagesToggle, &UWeedActionButton::Handle);
-		StorePackagesToggle->OnAction.BindLambda([this](int32, int32) { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); });
-		FButtonStyle PS;
-		PS.Normal = RoundedBrush(PkgCol, 9.f);
-		PS.Hovered = RoundedBrush(PkgCol * 1.3f, 9.f);
-		PS.Pressed = RoundedBrush(PkgCol * 0.8f, 9.f);
-		PS.NormalPadding = FMargin(8.f, 4.f); PS.PressedPadding = FMargin(8.f, 4.f);
-		StorePackagesToggle->SetStyle(PS);
-
-		// Eén vast label dat we alleen van tekst veranderen + expliciet gecentreerd in de knop.
-		StorePackagesLabel = MakeText(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN), 11, FLinearColor::White, true);
-		StorePackagesToggle->SetContent(StorePackagesLabel);
-		if (UButtonSlot* BSlot = Cast<UButtonSlot>(StorePackagesLabel->Slot))
-		{
-			BSlot->SetHorizontalAlignment(HAlign_Center);
-			BSlot->SetVerticalAlignment(VAlign_Center);
-		}
-		UHorizontalBoxSlot* PkgS = Header->AddChildToHorizontalBox(StorePackagesToggle);
-		PkgS->SetVerticalAlignment(VAlign_Center);
-	}
 	UVerticalBoxSlot* HeaderSlot = ContentBox->AddChildToVerticalBox(Header);
 	HeaderSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
@@ -1082,6 +1088,10 @@ void UPhoneWidget::RefreshContent()
 		AppCats = { 4, 5, 6, 7 };
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
+	}
+	else if (App == GPackagesApp) // Packages -> losse app met onderweg zijnde bestellingen
+	{
+		BuildPackagesApp();
 	}
 	else if (App == 2) // Contacts
 	{
@@ -1200,20 +1210,13 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		RefreshContent();
 	}
 
-	// Koop-app open: houd de Packages-tab levend (voortgang/ETA) en het knop-badge bij.
-	if (!bHome && (App == 1 || App == 7))
+	// Packages-app open: bij een nieuwe/gewijzigde bestelling de lijst herbouwen, anders
+	// de bars/ETA's live bijwerken (geen herbouw -> geen flash).
+	if (!bHome && App == GPackagesApp && PackagesScroll)
 	{
-		const int32 PkgN = Phone->GetPendingCount();
-		if (StorePackagesLabel && !bPackagesView)
-		{
-			StorePackagesLabel->SetText(FText::FromString(FString::Printf(TEXT("Packages (%d)"), PkgN)));
-		}
-		if (bPackagesView)
-		{
-			const int32 Sig = PackagesSignature();
-			if (Sig != LastPkgSig) { LastPkgSig = Sig; FillStoreList(); }
-			else { UpdatePackagesLive(); }
-		}
+		const int32 Sig = PackagesSignature();
+		if (Sig != LastPkgSig) { LastPkgSig = Sig; FillPackagesInto(PackagesScroll); }
+		else { UpdatePackagesLive(); }
 	}
 
 	// Berichten/Contacten open: bij een nieuw bericht of statuswijziging de inhoud herbouwen.

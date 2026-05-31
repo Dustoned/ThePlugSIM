@@ -37,7 +37,7 @@ public:
 	void CycleTab();
 
 	// --- iPhone-achtige home/apps ---
-	static constexpr int32 AppCount = 8; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies
+	static constexpr int32 AppCount = 9; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies 8 Packages
 
 	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
