@@ -316,7 +316,7 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	StoreTabBtns.Reset();
 
 	// Categorie-pillen (Seeds/Papers/Pots/Soil/Water/Sell) — blijven staan; alleen de lijst ververst.
-	static const TCHAR* CatNames[6] = { TEXT("Seeds"), TEXT("Papers"), TEXT("Pots"), TEXT("Soil"), TEXT("Water"), TEXT("Sell") };
+	static const TCHAR* CatNames[6] = { TEXT("Seeds"), TEXT("Grow"), TEXT("Drying"), TEXT("Packing"), TEXT("Papers"), TEXT("Sell") };
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 	for (int32 i = 0; i < 6; ++i)
 	{

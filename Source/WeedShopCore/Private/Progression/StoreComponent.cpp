@@ -303,39 +303,26 @@ FText UStoreComponent::GetCatalogDesc(FName CatalogId) const
 
 TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 {
+	// Tabs: 0 = Seeds, 1 = Grow (potten/aarde/water), 2 = Drying (rekken),
+	//       3 = Packing (verpak-tafels + bakjes/jars), 4 = Papers, 5 = Sell.
 	if (Cat == 0)
 	{
 		return GetSeedCatalog();
 	}
 	TArray<FName> Out;
-	// Pots-tab toont ook droogrekken, de verpak-tafel en bakjes/jars (grow- + process-gear).
-	if (Cat == 2)
-	{
-		for (const FName& Id : GetSupplyCatalog())
-		{
-			const FString S = Id.ToString();
-			if (S.StartsWith(TEXT("Pot")) || S.StartsWith(TEXT("DryRack_")) || S.StartsWith(TEXT("Bench_")) || S.StartsWith(TEXT("Cont_"))) { Out.Add(Id); }
-		}
-		return Out;
-	}
-	const TCHAR* Prefix = nullptr;
-	switch (Cat)
-	{
-	case 1: Prefix = TEXT("Papers_"); break;
-	case 3: Prefix = TEXT("Soil_");   break;
-	case 4: Prefix = TEXT("WaterBottle"); break;
-	default: break; // Sell-tab (5) e.d.: geen koop-catalogus
-	}
-	if (!Prefix)
-	{
-		return TArray<FName>();
-	}
 	for (const FName& Id : GetSupplyCatalog())
 	{
-		if (Id.ToString().StartsWith(Prefix))
+		const FString S = Id.ToString();
+		bool bMatch = false;
+		switch (Cat)
 		{
-			Out.Add(Id);
+		case 1: bMatch = S.StartsWith(TEXT("Pot")) || S.StartsWith(TEXT("Soil_")) || S.StartsWith(TEXT("WaterBottle")); break;
+		case 2: bMatch = S.StartsWith(TEXT("DryRack_")); break;
+		case 3: bMatch = S.StartsWith(TEXT("Bench_")) || S.StartsWith(TEXT("Cont_")); break;
+		case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
+		default: break; // Sell (5) e.d.: geen koop-catalogus
 		}
+		if (bMatch) { Out.Add(Id); }
 	}
 	return Out;
 }
