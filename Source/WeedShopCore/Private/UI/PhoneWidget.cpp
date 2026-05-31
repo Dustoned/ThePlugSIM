@@ -161,8 +161,13 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	StoreCartText = MakeText(FString::Printf(TEXT("Cart %d   EUR %.2f"), Ph->GetCartNumLines(), Ph->GetCartTotalCents() / 100.f), 13, FLinearColor(1.f, 0.95f, 0.6f));
 	UHorizontalBoxSlot* CL = CartBar->AddChildToHorizontalBox(StoreCartText);
 	CL->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CL->SetVerticalAlignment(VAlign_Center);
-	StoreCartToggle = MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"), FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bCartView = !bCartView; RefreshStore(); }, 11);
-	CartBar->AddChildToHorizontalBox(StoreCartToggle);
+	StoreCartToggle = MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"), FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bPackagesView = false; bCartView = !bCartView; RefreshStore(); }, 11);
+	CartBar->AddChildToHorizontalBox(StoreCartToggle)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+	// Packages-knop (onderweg zijnde bestellingen) als hoofd-tab naast de winkelwagen.
+	const int32 PkgN = Ph->GetPendingCount();
+	StorePackagesToggle = MakeActionBtn(FString::Printf(TEXT("Packages (%d)"), PkgN), FLinearColor(0.42f, 0.32f, 0.5f),
+		[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 11);
+	CartBar->AddChildToHorizontalBox(StorePackagesToggle)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 	Into->AddChildToVerticalBox(CartBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Scrollbare lijst (alleen deze ververst bij categorie/cart-acties).
@@ -193,8 +198,40 @@ void UPhoneWidget::RefreshStore()
 		StoreTabBtns[i]->SetStyle(St);
 	}
 	if (StoreCartToggle) { StoreCartToggle->SetContent(MakeText(bCartView ? TEXT("Shop") : TEXT("View cart"), 11, FLinearColor::White, true)); }
+	if (StorePackagesToggle)
+	{
+		StorePackagesToggle->SetContent(MakeText(bPackagesView ? TEXT("Shop")
+			: FString::Printf(TEXT("Packages (%d)"), Phone->GetPendingCount()), 11, FLinearColor::White, true));
+	}
 	UpdateStoreCartText();
 	FillStoreList();
+}
+
+int32 UPhoneWidget::PackagesSignature() const
+{
+	if (!Phone.IsValid()) { return 0; }
+	const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Phone->GetPendingDeliveries();
+	int32 Sig = Pend.Num() * 1000003;
+	for (const UPhoneClientComponent::FPendingDelivery& D : Pend) { Sig = Sig * 31 + D.OrderId; }
+	return Sig;
+}
+
+void UPhoneWidget::UpdatePackagesLive()
+{
+	if (!Phone.IsValid()) { return; }
+	UPhoneClientComponent* Ph = Phone.Get();
+	for (const UPhoneClientComponent::FPendingDelivery& D : Ph->GetPendingDeliveries())
+	{
+		if (TObjectPtr<UProgressBar>* B = PkgBars.Find(D.OrderId)) { if (*B) { (*B)->SetPercent(Ph->GetDeliveryProgress(D)); } }
+		if (TObjectPtr<UTextBlock>* E = PkgEtas.Find(D.OrderId))
+		{
+			if (*E)
+			{
+				const int32 Left = FMath::CeilToInt(Ph->GetDeliverySecondsLeft(D));
+				(*E)->SetText(FText::FromString(FString::Printf(TEXT("Arrives in %d:%02d"), Left / 60, Left % 60)));
+			}
+		}
+	}
 }
 
 void UPhoneWidget::FillStoreList()
@@ -208,6 +245,8 @@ void UPhoneWidget::FillStoreList()
 	StoreScroll->ClearChildren();
 	if (StoreFooter) { StoreFooter->ClearChildren(); }
 	StoreQtyTexts.Reset();
+	PkgBars.Reset();
+	PkgEtas.Reset();
 	const int32 Cat = Ph->GetSupplierCat();
 
 	auto AddGap = [this]() {
@@ -216,6 +255,63 @@ void UPhoneWidget::FillStoreList()
 		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
 		StoreScroll->AddChild(Gap);
 	};
+
+	// --- Packages: onderweg zijnde bestellingen (voortgang + ETA + annuleren) ---
+	if (bPackagesView)
+	{
+		const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Ph->GetPendingDeliveries();
+		if (Pend.Num() == 0)
+		{
+			StoreScroll->AddChild(MakeText(TEXT("No packages on the way. Order from the shop and pick a delivery speed."), 12, FLinearColor::Gray));
+		}
+		for (const UPhoneClientComponent::FPendingDelivery& D : Pend)
+		{
+			const int32 OrderId = D.OrderId;
+
+			UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
+			CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+			CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+			UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			CardB->SetContent(CVB);
+
+			// Titel-rij: bezorgnaam + aantal stuks.
+			CVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s delivery   -   %d item(s)"),
+				*UPhoneClientComponent::DeliveryName(D.DeliveryOpt), D.ItemCount), 13, FLinearColor(0.92f, 0.94f, 1.f)));
+			// Inhoud (kort).
+			{
+				FString Sum = D.Summary;
+				if (Sum.Len() > 40) { Sum = Sum.Left(39) + TEXT("."); }
+				UTextBlock* SumT = MakeText(Sum, 10, FLinearColor(0.62f, 0.66f, 0.76f));
+				SumT->SetAutoWrapText(true);
+				CVB->AddChildToVerticalBox(SumT);
+			}
+
+			// Progress bar.
+			USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
+			BarSz->SetHeightOverride(14.f);
+			UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
+			Bar->SetFillColorAndOpacity(FLinearColor(0.4f, 0.75f, 1.f));
+			Bar->SetPercent(Ph->GetDeliveryProgress(D));
+			BarSz->SetContent(Bar);
+			CVB->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
+			PkgBars.Add(OrderId, Bar);
+
+			// ETA-regel + annuleer-knop.
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+			const int32 Left = FMath::CeilToInt(Ph->GetDeliverySecondsLeft(D));
+			UTextBlock* EtaT = MakeText(FString::Printf(TEXT("Arrives in %d:%02d"), Left / 60, Left % 60), 12, FLinearColor(0.85f, 0.9f, 1.f));
+			UHorizontalBoxSlot* ES = Row->AddChildToHorizontalBox(EtaT);
+			ES->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); ES->SetVerticalAlignment(VAlign_Center);
+			PkgEtas.Add(OrderId, EtaT);
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.18f),
+				[this, Ph, OrderId]() { Ph->CancelDelivery(OrderId); LastPkgSig = -1; RefreshStore(); }, 11));
+			CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
+
+			StoreScroll->AddChild(CardB);
+			AddGap();
+		}
+		return;
+	}
 
 	if (bCartView)
 	{
@@ -667,5 +763,21 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		bLastHome = bHome; bLastApp = App; bContentDirty = false;
 		RefreshContent();
+	}
+
+	// Suppliers-app open: houd de Packages-tab levend (voortgang/ETA) en het knop-badge bij.
+	if (!bHome && App == 1)
+	{
+		const int32 PkgN = Phone->GetPendingCount();
+		if (StorePackagesToggle && !bPackagesView)
+		{
+			StorePackagesToggle->SetContent(MakeText(FString::Printf(TEXT("Packages (%d)"), PkgN), 11, FLinearColor::White, true));
+		}
+		if (bPackagesView)
+		{
+			const int32 Sig = PackagesSignature();
+			if (Sig != LastPkgSig) { LastPkgSig = Sig; FillStoreList(); }
+			else { UpdatePackagesLive(); }
+		}
 	}
 }

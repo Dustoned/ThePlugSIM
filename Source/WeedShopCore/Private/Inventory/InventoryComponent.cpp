@@ -250,10 +250,12 @@ bool UInventoryComponent::IsStackOnHotbar(int32 StackId) const
 
 void UInventoryComponent::UnassignHotbarStack(int32 StackId)
 {
+	bool bChanged = false;
 	for (int32& S : HotbarStacks)
 	{
-		if (S == StackId) { S = 0; }
+		if (S == StackId) { S = 0; bChanged = true; }
 	}
+	if (bChanged) { OnInventoryChanged.Broadcast(); }
 }
 
 bool UInventoryComponent::RemoveItem(FName ItemId, int32 Count)
@@ -330,6 +332,8 @@ void UInventoryComponent::AssignHotbarStack(int32 Slot, int32 StackId)
 		HotbarStacks[Existing] = HotbarStacks[Slot];
 	}
 	HotbarStacks[Slot] = StackId;
+	KnownStacks.Add(StackId); // handmatig geplaatst telt als "gezien"
+	OnInventoryChanged.Broadcast();
 }
 
 void UInventoryComponent::RefreshHotbarAuto()
@@ -341,12 +345,20 @@ void UInventoryComponent::RefreshHotbarAuto()
 	{
 		if (S != 0 && FindStackById(S) == INDEX_NONE) { S = 0; }
 	}
+	// Vergeten stapels uit de "gezien"-lijst halen zodat StackId's later hergebruikt kunnen worden.
+	for (auto It = KnownStacks.CreateIterator(); It; ++It)
+	{
+		if (FindStackById(*It) == INDEX_NONE) { It.RemoveCurrent(); }
+	}
 
-	// 2) Vul lege slots met stapels die nog nergens op de hotbar staan (meubels uitgezonderd).
+	// 2) Zet ALLEEN gloednieuwe stapels (nog nooit gezien) automatisch op een leeg slot. Een handmatige
+	//    unassign blijft zo gerespecteerd — we vullen 'm niet meteen weer terug. (meubels uitgezonderd)
 	for (const FInventoryStack& Stack : Stacks)
 	{
-		if (HotbarStacks.Contains(Stack.StackId)) { continue; }
+		if (KnownStacks.Contains(Stack.StackId)) { continue; }
+		KnownStacks.Add(Stack.StackId);
 		if (IsFurnitureItem(Stack.ItemId)) { continue; }
+		if (HotbarStacks.Contains(Stack.StackId)) { continue; }
 		const int32 Empty = HotbarStacks.IndexOfByKey(0);
 		if (Empty != INDEX_NONE) { HotbarStacks[Empty] = Stack.StackId; }
 	}

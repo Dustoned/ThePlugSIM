@@ -97,6 +97,15 @@ protected:
 	UPROPERTY() TObjectPtr<class UVerticalBox> StoreFooter;
 	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> StoreTabBtns;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> StoreCartToggle;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> StorePackagesToggle;
 	int32 DeliveryOpt = 0;
 	void UpdateStoreCartText();
+
+	// Packages-tab (onderweg zijnde bestellingen): voortgang + ETA + annuleren.
+	bool bPackagesView = false;
+	UPROPERTY() TMap<int32, TObjectPtr<class UProgressBar>> PkgBars;   // per OrderId
+	UPROPERTY() TMap<int32, TObjectPtr<UTextBlock>> PkgEtas;           // per OrderId
+	int32 LastPkgSig = -1;
+	int32 PackagesSignature() const;   // verandert als de set bestellingen wijzigt
+	void UpdatePackagesLive();         // werkt bars/ETA's live bij zonder herbouw
 };

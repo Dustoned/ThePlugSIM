@@ -165,6 +165,10 @@ protected:
 	UPROPERTY(Transient)
 	TArray<int32> HotbarStacks;
 
+	// Stapels die we al "gezien" hebben: alleen gloednieuwe stapels worden automatisch op de hotbar
+	// gezet. Zo blijft een handmatige unassign staan i.p.v. dat de auto-fill 'm meteen terugzet.
+	TSet<int32> KnownStacks;
+
 	// Server-teller voor unieke StackId's.
 	int32 NextStackId = 1;
 };

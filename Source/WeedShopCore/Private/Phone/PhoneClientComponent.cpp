@@ -607,8 +607,15 @@ void UPhoneClientComponent::Checkout(int32 DeliveryOption)
 	Cart.Reset();
 }
 
-void UPhoneClientComponent::DeliverCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities)
+void UPhoneClientComponent::DeliverCart(int32 OrderId, const TArray<FName>& ItemIds, const TArray<int32>& Quantities)
 {
+	// Ruim de pending-regel + timer op (ook bij directe levering geen-op als OrderId 0).
+	if (OrderId > 0)
+	{
+		PendingDeliveries.RemoveAll([OrderId](const FPendingDelivery& D) { return D.OrderId == OrderId; });
+		DeliveryTimers.Remove(OrderId);
+	}
+
 	AWeedShopGameState* GS = GetGS();
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	UInventoryComponent* Inv = GetOwnerInventory();
@@ -655,24 +662,90 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& It
 	const float Delay = DeliveryDelaySeconds(DeliveryOption);
 	if (Delay <= 0.f)
 	{
-		DeliverCart(ItemIds, Quantities); // instant
+		DeliverCart(0, ItemIds, Quantities); // instant
+		return;
 	}
-	else
+
+	// Plan de levering; items + itemprijs komen na de levertijd. Registreer een pending-regel
+	// zodat de Packages-tab voortgang/ETA kan tonen en je 'm kunt annuleren.
+	const int32 OrderId = NextOrderId++;
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+
+	FPendingDelivery PD;
+	PD.OrderId = OrderId;
+	PD.DeliveryOpt = DeliveryOption;
+	PD.FeeCents = Fee;
+	PD.PlacedTime = Now;
+	PD.ArriveTime = Now + Delay;
+	PD.Ids = ItemIds;
+	PD.Qtys = Quantities;
+	for (int32 i = 0; i < ItemIds.Num(); ++i)
 	{
-		// Plan de levering; items + itemprijs komen na de levertijd.
-		TArray<FName> CapIds = ItemIds; TArray<int32> CapQ = Quantities;
-		FTimerHandle H;
-		TWeakObjectPtr<UPhoneClientComponent> Self(this);
-		GetWorld()->GetTimerManager().SetTimer(H, [Self, CapIds, CapQ]()
-		{
-			if (Self.IsValid()) { Self->DeliverCart(CapIds, CapQ); }
-		}, Delay, false);
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
-				FString::Printf(TEXT("Order placed - %s delivery (%s). Fee EUR %.2f"), *DeliveryName(DeliveryOption), *DeliveryTimeText(DeliveryOption), Fee / 100.f));
-		}
+		const int32 Q = Quantities.IsValidIndex(i) ? Quantities[i] : 0;
+		PD.ItemCount += Q;
+		if (!PD.Summary.IsEmpty()) { PD.Summary += TEXT(", "); }
+		PD.Summary += FString::Printf(TEXT("%dx %s"), Q, *WeedUI::PrettyItemName(ItemIds[i]));
 	}
+	PendingDeliveries.Add(PD);
+
+	TArray<FName> CapIds = ItemIds; TArray<int32> CapQ = Quantities;
+	FTimerHandle H;
+	TWeakObjectPtr<UPhoneClientComponent> Self(this);
+	GetWorld()->GetTimerManager().SetTimer(H, [Self, OrderId, CapIds, CapQ]()
+	{
+		if (Self.IsValid()) { Self->DeliverCart(OrderId, CapIds, CapQ); }
+	}, Delay, false);
+	DeliveryTimers.Add(OrderId, H);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
+			FString::Printf(TEXT("Order placed - %s delivery (%s). Fee EUR %.2f"), *DeliveryName(DeliveryOption), *DeliveryTimeText(DeliveryOption), Fee / 100.f));
+	}
+}
+
+float UPhoneClientComponent::GetDeliveryProgress(const FPendingDelivery& D) const
+{
+	const float Span = D.ArriveTime - D.PlacedTime;
+	if (Span <= 0.f) { return 1.f; }
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : D.ArriveTime;
+	return FMath::Clamp((Now - D.PlacedTime) / Span, 0.f, 1.f);
+}
+
+float UPhoneClientComponent::GetDeliverySecondsLeft(const FPendingDelivery& D) const
+{
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : D.ArriveTime;
+	return FMath::Max(0.f, D.ArriveTime - Now);
+}
+
+void UPhoneClientComponent::CancelDelivery(int32 OrderId)
+{
+	ServerCancelDelivery(OrderId);
+}
+
+void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
+{
+	const int32 Idx = PendingDeliveries.IndexOfByPredicate([OrderId](const FPendingDelivery& D) { return D.OrderId == OrderId; });
+	if (Idx == INDEX_NONE) { return; }
+
+	// Stop de timer.
+	if (FTimerHandle* H = DeliveryTimers.Find(OrderId))
+	{
+		GetWorld()->GetTimerManager().ClearTimer(*H);
+		DeliveryTimers.Remove(OrderId);
+	}
+	// Bezorgkosten teruggeven (items waren nog niet afgerekend).
+	const int64 Fee = PendingDeliveries[Idx].FeeCents;
+	if (Fee > 0)
+	{
+		if (AWeedShopGameState* GS = GetGS()) { if (UEconomyComponent* Econ = GS->GetEconomy()) { Econ->AddMoneyUntracked(Fee); } }
+	}
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow,
+			FString::Printf(TEXT("Order cancelled - fee EUR %.2f refunded"), Fee / 100.f));
+	}
+	PendingDeliveries.RemoveAt(Idx);
 }
 
 void UPhoneClientComponent::OpenPotUpgrade(AGrowPlant* Pot)

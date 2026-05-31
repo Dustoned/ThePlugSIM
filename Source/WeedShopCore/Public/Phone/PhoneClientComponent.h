@@ -94,6 +94,29 @@ public:
 	static FString DeliveryName(int32 Opt);
 	static FString DeliveryTimeText(int32 Opt);
 
+	// --- Onderweg zijnde bestellingen (Packages-tab in de winkel) ---
+	struct FPendingDelivery
+	{
+		int32 OrderId = 0;
+		int32 DeliveryOpt = 0;
+		int64 FeeCents = 0;
+		int32 ItemCount = 0;      // totaal aantal stuks
+		FString Summary;          // korte omschrijving (bv. "3x Rolling papers, 2x ...")
+		float PlacedTime = 0.f;   // wereldtijd bij plaatsen
+		float ArriveTime = 0.f;   // wereldtijd van aankomst
+		TArray<FName> Ids;
+		TArray<int32> Qtys;
+	};
+	const TArray<FPendingDelivery>& GetPendingDeliveries() const { return PendingDeliveries; }
+	int32 GetPendingCount() const { return PendingDeliveries.Num(); }
+	// 0..1 voortgang van een bestelling (op aankomsttijd).
+	float GetDeliveryProgress(const FPendingDelivery& D) const;
+	// Resterende seconden tot aankomst.
+	float GetDeliverySecondsLeft(const FPendingDelivery& D) const;
+	// Annuleer een bestelling (server): timer stop, fee terug, regel weg.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void CancelDelivery(int32 OrderId);
+
 	// Cijfertoets-handler (1-6) als reserve naast klikken.
 	void HandleNumberKey(FKey Key);
 
@@ -266,7 +289,12 @@ protected:
 	void ServerBuyCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities, int32 DeliveryOption);
 
 	// Server: levert de bestelling (voegt items toe / schrijft itemprijs af). Direct of na de levertijd.
-	void DeliverCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities);
+	// OrderId>0 = ruim de bijbehorende pending-regel op na levering (0 = directe levering, geen regel).
+	void DeliverCart(int32 OrderId, const TArray<FName>& ItemIds, const TArray<int32>& Quantities);
+
+	// Server: annuleer-RPC.
+	UFUNCTION(Server, Reliable)
+	void ServerCancelDelivery(int32 OrderId);
 
 	// Server: voeg alle stapels van dit item-id samen (gewogen gemiddelde THC%/Kwaliteit%).
 	UFUNCTION(Server, Reliable)
@@ -333,6 +361,11 @@ protected:
 	// Winkel-state (client-side): gekozen aantal per item + winkelwagen.
 	struct FCartLine { FName ItemId = NAME_None; int32 Qty = 0; };
 	TArray<FCartLine> Cart;
+
+	// Onderweg zijnde bestellingen + hun timers (server-side).
+	TArray<FPendingDelivery> PendingDeliveries;
+	TMap<int32, FTimerHandle> DeliveryTimers;
+	int32 NextOrderId = 1;
 	TMap<FName, int32> PendingQty;
 
 	bool bPotUpgradeOpen = false;
