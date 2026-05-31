@@ -218,6 +218,12 @@ public:
 	// THC% + kwaliteit% van de wiet-stapel die voor een joint van Grams gebruikt zou worden (de eerste
 	// Bud_-stapel met genoeg voorraad). Geeft false als er geen bruikbare wiet is.
 	bool GetRollWeedInfo(int32 Grams, float& OutThcPercent, float& OutQualityPct) const;
+	// Idem maar ook met het item-id van de wiet (voor de naam).
+	bool GetRollWeed(int32 Grams, FName& OutItemId, float& OutThcPercent, float& OutQualityPct) const;
+
+	// Beschrijving van de geladen joint (lege string = niets geladen), bv. "2g Silver Haze - 70% Q".
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
+	FString GetRollLoadDesc() const { return RollLoadDesc; }
 
 	// Absolute grenzen (papers tussen MinGrams en GramsHardMax).
 	static constexpr int32 MinGrams = 1;
@@ -287,7 +293,7 @@ public:
 	float GetRollHoldFrac() const { return RollHoldFrac; }
 
 	// Of de vloei in de hand "geladen" is (door de character gezet) — voor de hotkey-hints.
-	void SetRollLoadedUI(bool bLoaded, int32 Grams) { bRollLoadedUI = bLoaded; RollLoadGramsUI = Grams; }
+	void SetRollLoadedUI(bool bLoaded, int32 Grams) { bRollLoadedUI = bLoaded; RollLoadGramsUI = Grams; if (!bLoaded) { RollLoadDesc.Reset(); } }
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	bool IsRollLoadedUI() const { return bRollLoadedUI; }
 	int32 GetRollLoadGramsUI() const { return RollLoadGramsUI; }
@@ -429,6 +435,7 @@ protected:
 	float RollHoldFrac = 0.f;  // 0..1 voortgang van joint-rollen
 	bool bRollLoadedUI = false;
 	int32 RollLoadGramsUI = 0;
+	FString RollLoadDesc; // omschrijving van de geladen wiet (voor de hint)
 	float StonedHudFrac = 0.f;      // 0..1 resterende high voor de HUD
 	float StonedHudSecs = 0.f;      // resterende high-seconden
 	float StonedHudIntensity = 0.f; // hoe high (0..1)

@@ -241,6 +241,17 @@ void UPhoneClientComponent::ConfirmRoll()
 void UPhoneClientComponent::LoadRoll()
 {
 	SetRollLoadedUI(true, RollGrams);
+	// Onthoud welke wiet geladen is (voor de hint rechtsonder).
+	FName WeedId; float Thc = 0.f, Q = 0.f;
+	if (GetRollWeed(RollGrams, WeedId, Thc, Q))
+	{
+		RollLoadDesc = FString::Printf(TEXT("%dg %s - %.0f%% THC, %.0f%% quality"),
+			RollGrams, *WeedUI::PrettyItemName(WeedId), Thc, Q);
+	}
+	else
+	{
+		RollLoadDesc = FString::Printf(TEXT("%dg loaded"), RollGrams);
+	}
 	bRollOpen = false; // menu sluit; rollen door rechtermuis in te houden
 	UpdateCursor();
 }
@@ -286,21 +297,28 @@ float UPhoneClientComponent::JointIntensity(int32 Grams, float ThcPercent, float
 	return FMath::Clamp(Q * GramsFactor, 0.f, 1.f);
 }
 
-bool UPhoneClientComponent::GetRollWeedInfo(int32 Grams, float& OutThcPercent, float& OutQualityPct) const
+bool UPhoneClientComponent::GetRollWeed(int32 Grams, FName& OutItemId, float& OutThcPercent, float& OutQualityPct) const
 {
-	OutThcPercent = 0.f; OutQualityPct = 0.f;
+	OutItemId = NAME_None; OutThcPercent = 0.f; OutQualityPct = 0.f;
 	const UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Inv) { return false; }
 	for (const FInventoryStack& St : Inv->GetStacks())
 	{
 		if (St.ItemId.ToString().StartsWith(TEXT("Bud_")) && St.Quantity >= Grams)
 		{
+			OutItemId = St.ItemId;
 			OutThcPercent = St.Quality;
 			OutQualityPct = St.QualityPct;
 			return true;
 		}
 	}
 	return false;
+}
+
+bool UPhoneClientComponent::GetRollWeedInfo(int32 Grams, float& OutThcPercent, float& OutQualityPct) const
+{
+	FName Id;
+	return GetRollWeed(Grams, Id, OutThcPercent, OutQualityPct);
 }
 
 void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)

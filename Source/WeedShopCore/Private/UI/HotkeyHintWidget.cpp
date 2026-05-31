@@ -163,7 +163,11 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const FString AS = Active.ToString();
 		if (AS.StartsWith(TEXT("Papers_")))
 		{
-			if (Phone->IsRollLoadedUI()) { Hints.Emplace(TEXT("Hold RMB"), FString::Printf(TEXT("Roll joint (%dg)"), Phone->GetRollLoadGramsUI())); }
+			if (Phone->IsRollLoadedUI())
+			{
+				Hints.Emplace(TEXT("Loaded"), Phone->GetRollLoadDesc());
+				Hints.Emplace(TEXT("Hold RMB"), TEXT("Roll the joint"));
+			}
 			else { Hints.Emplace(K(TEXT("RollLoad")), TEXT("Load")); }
 		}
 		else if (AS.StartsWith(TEXT("Joint_"))) { Hints.Emplace(TEXT("Hold RMB"), TEXT("Smoke joint")); }
