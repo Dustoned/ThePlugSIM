@@ -61,6 +61,7 @@ namespace
 		case 4: return TEXT("Papers");
 		case 5: return TEXT("Soil");
 		case 6: return TEXT("Water");
+		case 7: return TEXT("Furniture");
 		default: return TEXT("?");
 		}
 	}
@@ -943,7 +944,7 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GSuppliesApp) // Supplies -> algemene benodigdheden (papers, soil, water)
 	{
 		bSellApp = false;
-		AppCats = { 4, 5, 6 };
+		AppCats = { 4, 5, 6, 7 };
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}

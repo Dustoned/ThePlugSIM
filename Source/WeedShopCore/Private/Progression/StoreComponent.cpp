@@ -132,6 +132,10 @@ namespace
 		{ TEXT("Cont_Jar15"), TEXT("Jars"),           TEXT("Up to 15g each - 5 pcs"),  4000,  5 },
 		{ TEXT("Cont_Block100"),  TEXT("Press blocks"), TEXT("100g each - 3 pcs (bulk)"),   9000, 3 },
 		{ TEXT("Cont_Garbage500"),TEXT("Garbage bags"), TEXT("500g each - 2 pcs (bulk)"),  30000, 2 },
+		// Meubels (placeables, binnen neerzetten). Puur inrichting voor nu.
+		{ TEXT("Table"),    TEXT("Table"),    TEXT("A sturdy table"),       12000, 1 },
+		{ TEXT("Mattress"), TEXT("Mattress"), TEXT("Somewhere to crash"),    8000, 1 },
+		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("Keeps things cold"),    30000, 1 },
 	};
 }
 
@@ -303,7 +307,7 @@ FText UStoreComponent::GetCatalogDesc(FName CatalogId) const
 
 TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 {
-	// Categorieën: 0=Seeds, 1=Pots, 2=Drying, 3=Packing, 4=Papers, 5=Soil, 6=Water.
+	// Categorieën: 0=Seeds, 1=Pots, 2=Drying, 3=Packing, 4=Papers, 5=Soil, 6=Water, 7=Furniture.
 	// (De telefoon verdeelt deze over de Grow shop en de Supplies-app.)
 	if (Cat == 0)
 	{
@@ -322,6 +326,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 		case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
 		case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
 		case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
+		case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge")); break;
 		default: break;
 		}
 		if (bMatch) { Out.Add(Id); }
