@@ -258,7 +258,7 @@ void UInventoryWidget::RebuildContent()
 			const bool bOnHotbar = Inv->IsStackOnHotbar(StackId);
 
 			Cell->StackId = StackId;
-			Cell->bDraggable = !bCash; // briefgeld kun je niet op de hotbar slepen
+			Cell->bDraggable = true; // ook briefgeld kun je verslepen (herschikken / naar de hotbar)
 			if (bCash)
 			{
 				// Briefgeld: groen/goud, toon het bedrag i.p.v. een aantal.
