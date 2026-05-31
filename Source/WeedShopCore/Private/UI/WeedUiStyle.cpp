@@ -55,6 +55,19 @@ namespace WeedUI
 		return T;
 	}
 
+	FString PrettyItemName(FName ItemId)
+	{
+		FString S = ItemId.ToString();
+		if (S.StartsWith(TEXT("Bud_")))       { return S.RightChop(4); }
+		if (S.StartsWith(TEXT("Seed_")))      { return S.RightChop(5) + TEXT(" seed"); }
+		if (S.StartsWith(TEXT("Joint_")))     { return S.RightChop(6) + TEXT(" joint"); }
+		if (S.StartsWith(TEXT("Papers_")))    { return S.RightChop(7) + TEXT(" papers"); }
+		if (S.StartsWith(TEXT("Soil_")))      { return S.RightChop(5) + TEXT(" soil"); }
+		if (S.StartsWith(TEXT("WaterBottle_"))) { return S.RightChop(12) + TEXT(" bottle"); }
+		if (S.StartsWith(TEXT("Pot_")))       { return S.RightChop(4) + TEXT(" pot"); }
+		return S;
+	}
+
 	UWidget* Icon(UWidgetTree* Tree, EIcon Type, float Size, const FLinearColor& C)
 	{
 		UCanvasPanel* Canvas = Tree->ConstructWidget<UCanvasPanel>();

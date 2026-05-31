@@ -213,6 +213,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void ConfirmMerge();
 
+	// Merge alle stapels van dit item direct (voor de UMG-inventory; geen popup).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void MergeNow(FName ItemId) { ServerMergeItem(ItemId); }
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	bool IsMergeOpen() const { return bMergeOpen; }
 
@@ -281,6 +285,12 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UPlantInfoWidget> PlantWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UHotbarWidget> HotbarWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UInventoryWidget> InventoryWidget;
 
 	bool bOpen = false;
 	int32 Tab = 0;

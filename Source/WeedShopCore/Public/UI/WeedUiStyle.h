@@ -50,4 +50,7 @@ namespace WeedUI
 
 	// Flat icoon (size x size) opgebouwd uit vormen, in de gegeven tint (meestal wit op een gekleurde knop).
 	WEEDSHOPCORE_API UWidget* Icon(UWidgetTree* Tree, EIcon Type, float Size, const FLinearColor& Tint);
+
+	// Leesbare naam voor een item-id (Bud_X -> X, Seed_X -> X seed, etc.).
+	WEEDSHOPCORE_API FString PrettyItemName(FName ItemId);
 }

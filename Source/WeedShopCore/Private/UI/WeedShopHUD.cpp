@@ -90,19 +90,7 @@ void AWeedShopHUD::DrawHUD()
 		{
 			DrawRollUI(Phone);
 		}
-		// Het deal-scherm is nu een UMG-widget (UDealWidget) — niet meer op de canvas.
-		else if (Phone->IsInventoryOpen())
-		{
-			if (UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr)
-			{
-				DrawInventoryUI(Inv);
-				// Merge-bevestiging als popup bovenop de inventory.
-				if (Phone->IsMergeOpen())
-				{
-					DrawMergeUI(Phone, Inv);
-				}
-			}
-		}
+		// Deal- en inventory-schermen zijn nu UMG-widgets — niet meer op de canvas.
 		else if (Phone->IsPotUpgradeOpen())
 		{
 			DrawPotUpgradeUI(Phone);
@@ -184,70 +172,7 @@ void AWeedShopHUD::DrawHUD()
 		}
 	}
 
-	// Hotbar/inventory onderaan het scherm.
-	if (P)
-	{
-		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
-		{
-			const int32 SlotCount = UInventoryComponent::HotbarSize; // vaste hotbar (8 slots)
-			const int32 Active = Inv->GetActiveSlot();
-			const float SlotW = 84.f;
-			const float SlotH = 46.f;
-			const float ScreenW = Canvas ? Canvas->ClipX : 1280.f;
-			const float ScreenH = Canvas ? Canvas->ClipY : 720.f;
-			const float TotalW = SlotCount * (SlotW + 6.f);
-			float SX = (ScreenW - TotalW) * 0.5f;
-			const float SY = ScreenH - SlotH - 24.f;
-
-			for (int32 i = 0; i < SlotCount; ++i)
-			{
-				const bool bActive = (i == Active);
-				// Achtergrond + gele rand voor het geselecteerde ("in de hand") slot.
-				if (bActive)
-				{
-					DrawRect(FLinearColor(1.f, 0.85f, 0.1f, 0.9f), SX - 3.f, SY - 3.f, SlotW + 6.f, SlotH + 6.f);
-				}
-				DrawRect(bActive ? FLinearColor(0.16f, 0.16f, 0.10f, 0.95f) : FLinearColor(0.08f, 0.08f, 0.10f, 0.85f),
-					SX, SY, SlotW, SlotH);
-				// Slotnummer (1-8).
-				DrawText(FString::Printf(TEXT("%d"), i + 1), FLinearColor(0.5f, 0.5f, 0.6f), SX + SlotW - 14.f, SY + 2.f, Font);
-
-				const int32 HStackIdx = Inv->FindStackById(Inv->GetHotbarStackId(i));
-				if (Inv->GetStacks().IsValidIndex(HStackIdx))
-				{
-					const FInventoryStack& HS = Inv->GetStacks()[HStackIdx];
-					const FName HItem = HS.ItemId;
-					const bool bIsSeed = HItem.ToString().StartsWith(TEXT("Seed_"));
-					DrawText(PrettyItemName(HItem),
-						bIsSeed ? FLinearColor(0.7f, 0.85f, 0.6f) : FLinearColor(0.85f, 0.9f, 1.f),
-						SX + 5.f, SY + 4.f, Font);
-					const bool bHThc = (HItem.ToString().StartsWith(TEXT("Bud_")) || HItem.ToString().StartsWith(TEXT("Joint_")));
-					const FString HExtra = bHThc ? FString::Printf(TEXT("  THC%.0f%% Q%.0f%%"), HS.Quality, HS.QualityPct) : TEXT("");
-					DrawText(FString::Printf(TEXT("x%d%s"), HS.Quantity, *HExtra),
-						FLinearColor::White, SX + 5.f, SY + 24.f, Font);
-				}
-				SX += SlotW + 6.f;
-			}
-
-			// "In de hand" + bruikbaarheid.
-			const FName Held = Inv->GetActiveItemId();
-			FString HandLine;
-			if (Held.IsNone())
-			{
-				HandLine = TEXT("In hand: (empty)   -   1-8 / scroll to select");
-			}
-			else
-			{
-				FPlaceableDef _pd;
-				const bool bPlaceable = GetPlaceableDef(Held, _pd);
-				HandLine = FString::Printf(TEXT("In hand: %s%s"), *PrettyItemName(Held),
-					bPlaceable ? TEXT("   -   left-click to place") : TEXT(""));
-			}
-			DrawText(HandLine, FLinearColor(1.f, 0.95f, 0.6f), (ScreenW - TotalW) * 0.5f, SY - 24.f, Font);
-			DrawText(TEXT("I = inventory   |   right-click papers = roll joint   |   F = give sample"),
-				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 44.f, Font);
-		}
-	}
+	// De hotbar is nu een UMG-widget (UHotbarWidget); niets meer op de canvas.
 }
 
 bool AWeedShopHUD::DrawButton(FName BoxName, const FString& Label, float X, float Y, float W, const FLinearColor& BaseColor)

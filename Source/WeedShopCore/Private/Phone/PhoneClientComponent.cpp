@@ -20,6 +20,8 @@
 #include "UI/DealWidget.h"
 #include "UI/StatusHudWidget.h"
 #include "UI/PlantInfoWidget.h"
+#include "UI/HotbarWidget.h"
+#include "UI/InventoryWidget.h"
 #include "Blueprint/UserWidget.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
@@ -97,6 +99,10 @@ void UPhoneClientComponent::EnsureWidget()
 	if (DealWidget) { DealWidget->SetPhone(this); DealWidget->AddToViewport(30); }
 	PlantWidget = CreateWidget<UPlantInfoWidget>(PC, UPlantInfoWidget::StaticClass());
 	if (PlantWidget) { PlantWidget->AddToViewport(10); }
+	HotbarWidget = CreateWidget<UHotbarWidget>(PC, UHotbarWidget::StaticClass());
+	if (HotbarWidget) { HotbarWidget->AddToViewport(5); }
+	InventoryWidget = CreateWidget<UInventoryWidget>(PC, UInventoryWidget::StaticClass());
+	if (InventoryWidget) { InventoryWidget->SetPhone(this); InventoryWidget->AddToViewport(25); }
 }
 
 void UPhoneClientComponent::Toggle()
