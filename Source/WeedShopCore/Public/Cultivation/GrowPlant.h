@@ -118,6 +118,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	bool IsSlotPlanted(int32 Slot) const { return SlotStrain.IsValidIndex(Slot) && !SlotStrain[Slot].IsNone(); }
 
+	// Groeifractie van een plek (0..1) voor de progressiebalk.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetSlotFraction(int32 Slot) const;
+
+	// Of een plek oogstklaar is (voor de balk-kleur).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	bool IsSlotReady(int32 Slot) const { return SlotPhase.IsValidIndex(Slot) && SlotPhase[Slot] == EGrowthPhase::Harvestable; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

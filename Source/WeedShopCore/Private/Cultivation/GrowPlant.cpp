@@ -194,6 +194,16 @@ void AGrowPlant::UpdatePhases()
 	if (bChanged) { UpdatePlantVisual(); }
 }
 
+float AGrowPlant::GetSlotFraction(int32 Slot) const
+{
+	if (!SlotStrain.IsValidIndex(Slot) || SlotStrain[Slot].IsNone())
+	{
+		return 0.f;
+	}
+	const float MaxS = SlotMaxSeconds(Slot);
+	return MaxS > 0.f ? FMath::Clamp(SlotGrowth[Slot] / MaxS, 0.f, 1.f) : 0.f;
+}
+
 int32 AGrowPlant::GetPlantedCount() const
 {
 	int32 C = 0;

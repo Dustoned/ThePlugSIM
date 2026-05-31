@@ -192,8 +192,9 @@ void AWeedShopHUD::DrawHUD()
 				{
 					const float PW = 300.f;
 					const float PXp = CX - PW * 0.5f;
-					float PYp = CY - 150.f;
-					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, 184.f);
+					const float PanelH = Plant->IsPlanted() ? (150.f + Plant->GetNumSlots() * 11.f) : 96.f;
+						float PYp = CY - PanelH * 0.5f;
+					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, PanelH);
 					float ly = PYp + 8.f;
 					const float lx = PXp + 12.f;
 
@@ -228,17 +229,21 @@ void AWeedShopHUD::DrawHUD()
 						const int32 Ready = Plant->GetReadyCount();
 						DrawText(FString::Printf(TEXT("Plants: %d / %d"), Planted, NumSlots), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 22.f;
 
-						const int32 Rem = FMath::RoundToInt(Plant->GetSecondsRemaining());
-						if (Ready > 0)
+						// Groei-progressiebalk per plant (groen = oogstklaar).
+						DrawText(TEXT("Growth:"), FLinearColor(0.8f, 0.85f, 1.f), lx, ly, Font); ly += 16.f;
+						const float BarW = PW - 24.f;
+						for (int32 s = 0; s < NumSlots; ++s)
 						{
-							DrawText(FString::Printf(TEXT("READY: %d plant(s) — press E"), Ready), FLinearColor::Green, lx, ly, Font);
+							DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.9f), lx, ly, BarW, 8.f);
+							if (Plant->IsSlotPlanted(s))
+							{
+								const float Fr = Plant->GetSlotFraction(s);
+								const FLinearColor Col = Plant->IsSlotReady(s) ? FLinearColor(0.45f, 0.95f, 0.35f) : FLinearColor(0.4f, 0.8f, 1.f);
+								DrawRect(Col, lx, ly, BarW * Fr, 8.f);
+							}
+							ly += 11.f;
 						}
-						else
-						{
-							DrawText(FString::Printf(TEXT("Next ready in: %d:%02d"), Rem / 60, Rem % 60),
-								FLinearColor::White, lx, ly, Font);
-						}
-						ly += 20.f;
+						ly += 4.f;
 
 						// Water-balk (vocht nu; loopt leeg, vul bij met de fles).
 						const float Wtr = Plant->GetWaterLevel();
