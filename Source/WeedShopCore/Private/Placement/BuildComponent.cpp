@@ -256,7 +256,38 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							BestSq = dSq; AnchorX = L.X; AnchorY = L.Y; bHasAnchor = true;
 						}
 					}
-					if (bHasAnchor) PreviewLocation.X = AnchorX + FMath::GridSnap<float>(PreviewLocation.X - AnchorX, GridSize);
+					PreviewRotation.Yaw = FMath::GridSnap<float>(PreviewRotation.Yaw, 90.f);
+						{
+							// Effectieve footprint (X/Y) na de 90-graden draai.
+							const bool bSwap = FMath::IsNearlyEqual(FMath::Fmod(FMath::Abs(PreviewRotation.Yaw), 180.f), 90.f, 45.f);
+							const float EffHX = bSwap ? CurrentDef.BoxHalf.Y : CurrentDef.BoxHalf.X;
+							const float EffHY = bSwap ? CurrentDef.BoxHalf.X : CurrentDef.BoxHalf.Y;
+							if (bHasAnchor)
+							{
+								// Lijn uit op een bestaand object -> nette rij.
+								PreviewLocation.X = AnchorX + FMath::GridSnap<float>(PreviewLocation.X - AnchorX, GridSize);
+								PreviewLocation.Y = AnchorY + FMath::GridSnap<float>(PreviewLocation.Y - AnchorY, GridSize);
+							}
+							else
+							{
+								// Veranker het raster aan de dichtstbijzijnde muur per as (eerste cel = strak tegen de muur).
+								const FVector TS(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + 30.f);
+								FHitResult HX1, HX2, HY1, HY2;
+								const bool bX1 = GetWorld()->LineTraceSingleByChannel(HX1, TS, TS + FVector(1500.f, 0, 0), ECC_Visibility, Params);
+								const bool bX2 = GetWorld()->LineTraceSingleByChannel(HX2, TS, TS + FVector(-1500.f, 0, 0), ECC_Visibility, Params);
+								float OriginX = 0.f;
+								if (bX1 && (!bX2 || HX1.Distance <= HX2.Distance)) OriginX = HX1.ImpactPoint.X - EffHX;
+								else if (bX2) OriginX = HX2.ImpactPoint.X + EffHX;
+								PreviewLocation.X = OriginX + FMath::GridSnap<float>(PreviewLocation.X - OriginX, GridSize);
+
+								const bool bY1 = GetWorld()->LineTraceSingleByChannel(HY1, TS, TS + FVector(0, 1500.f, 0), ECC_Visibility, Params);
+								const bool bY2 = GetWorld()->LineTraceSingleByChannel(HY2, TS, TS + FVector(0, -1500.f, 0), ECC_Visibility, Params);
+								float OriginY = 0.f;
+								if (bY1 && (!bY2 || HY1.Distance <= HY2.Distance)) OriginY = HY1.ImpactPoint.Y - EffHY;
+								else if (bY2) OriginY = HY2.ImpactPoint.Y + EffHY;
+								PreviewLocation.Y = OriginY + FMath::GridSnap<float>(PreviewLocation.Y - OriginY, GridSize);
+							}
+						}
 					if (bHasAnchor) PreviewLocation.Y = AnchorY + FMath::GridSnap<float>(PreviewLocation.Y - AnchorY, GridSize);
 					PreviewRotation.Yaw = FMath::GridSnap<float>(PreviewRotation.Yaw, 90.f);
 
