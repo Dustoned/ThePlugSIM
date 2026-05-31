@@ -68,6 +68,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
 	bool IsPlacementValid() const { return bValidSpot; }
 
+	// Alleen binnenshuis plaatsen toestaan (er moet een plafond/dak boven de plek zitten).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Build")
+	bool bIndoorsOnly = true;
+
+	// Hoe hoog (cm) we naar boven tracen om een plafond/dak te vinden = "binnen".
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Build")
+	float CeilingTraceHeight = 800.f;
+
+	// True als er binnen CeilingTraceHeight een plafond/dak boven dit vloerpunt zit (= binnenshuis).
+	bool IsIndoors(const FVector& FloorPoint) const;
+
 protected:
 	virtual void BeginPlay() override;
 

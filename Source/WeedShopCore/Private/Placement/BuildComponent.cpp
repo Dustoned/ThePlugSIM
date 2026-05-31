@@ -309,6 +309,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
 				const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
 				bValidSpot = bFloor && bGroundLevel && !bOnPlaceable
+						&& IsIndoors(PreviewLocation)
 						&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 			}
 		}
@@ -427,6 +428,22 @@ void UBuildComponent::UpdateRemoteGhost()
 	}
 }
 
+bool UBuildComponent::IsIndoors(const FVector& FloorPoint) const
+{
+	if (!bIndoorsOnly) { return true; }
+	const UWorld* World = GetWorld();
+	if (!World) { return true; }
+
+	// Trace recht omhoog vanaf net boven de vloer: raken we een plafond/dak -> binnen.
+	// Buiten (tuin/straat) is er open lucht boven, dus geen hit.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopIndoorTrace), false);
+	if (GetOwner()) { Params.AddIgnoredActor(GetOwner()); }
+	const FVector Start = FloorPoint + FVector(0.f, 0.f, 25.f);
+	const FVector End = Start + FVector(0.f, 0.f, CeilingTraceHeight);
+	FHitResult Ceil;
+	return World->LineTraceSingleByChannel(Ceil, Start, End, ECC_Visibility, Params);
+}
+
 bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint, const FVector& BoxHalf, float Yaw, bool bPotSpacing) const
 {
 	const UWorld* World = GetWorld();
@@ -510,6 +527,15 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Can't place there (blocked)."));
+		}
+		return;
+	}
+	// Alleen binnenshuis.
+	if (!IsIndoors(Location))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("You can only place things inside the house."));
 		}
 		return;
 	}
