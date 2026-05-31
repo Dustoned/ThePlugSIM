@@ -5,6 +5,8 @@
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
 #include "Inventory/InventoryComponent.h"
+#include "Progression/MilestoneComponent.h"
+#include "Cultivation/SoilTypes.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -97,6 +99,9 @@ namespace
 		{ TEXT("Papers_Small"), TEXT("Papers small (up to 2g) - 10 pcs"), 500, 10 },
 		{ TEXT("Papers_Big"),   TEXT("Papers big (up to 5g) - 10 pcs"), 1500, 10 },
 		{ TEXT("Pot"),          TEXT("Grow pot (place & plant a seed)"), 2500, 1 },
+		{ TEXT("Soil_Basic"),   TEXT("Basic soil (3 harvests)"),        1500, 1 },
+		{ TEXT("Soil_Rich"),    TEXT("Rich soil (+yield, 4 harvests)"), 4000, 1 },
+		{ TEXT("Soil_Premium"), TEXT("Premium soil (++yield, 6 harvests)"), 9000, 1 },
 	};
 }
 
@@ -138,6 +143,23 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 	}
 
 	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+
+	// Betere soil pas vanaf de juiste fase (progressie).
+	FSoilDef Soil;
+	if (GetSoilDef(SupplyId, Soil))
+	{
+		const uint8 Phase = (GS && GS->GetMilestones()) ? static_cast<uint8>(GS->GetMilestones()->GetCurrentPhase()) : 0;
+		if (Phase < Soil.MinPhase)
+		{
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
+					FString::Printf(TEXT("%s unlocks at a later phase."), *Name.ToString()));
+			}
+			return false;
+		}
+	}
+
 	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
 	if (!Econ || !Econ->RemoveMoney(Price))
 	{

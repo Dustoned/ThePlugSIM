@@ -3,6 +3,7 @@
 #include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeedStrain.h"
+#include "Cultivation/SoilTypes.h"
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
@@ -70,6 +71,8 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, Phase);
 	DOREPLIFETIME(AGrowPlant, CareMultiplier);
 	DOREPLIFETIME(AGrowPlant, bPlanted);
+	DOREPLIFETIME(AGrowPlant, SoilId);
+	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
 }
 
 void AGrowPlant::Tick(float DeltaSeconds)
@@ -138,7 +141,15 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 
 	if (!bPlanted)
 	{
-		TryPlantFromInventory(InstigatorPawn);
+		// Eerst soil, dan pas planten.
+		if (!HasSoil())
+		{
+			TryAddSoil(InstigatorPawn);
+		}
+		else
+		{
+			TryPlantFromInventory(InstigatorPawn);
+		}
 	}
 	else if (Phase == EGrowthPhase::Harvestable)
 	{
@@ -148,6 +159,41 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 	{
 		Water();
 	}
+}
+
+bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn)
+{
+	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv)
+	{
+		return false;
+	}
+	// Pak de beste soil die de speler heeft (hoogste yield-bonus).
+	const FSoilDef* Best = nullptr;
+	for (const FSoilDef& D : GetAllSoils())
+	{
+		if (Inv->HasItem(D.ItemId, 1) && (!Best || D.YieldMult > Best->YieldMult))
+		{
+			Best = &D;
+		}
+	}
+	if (!Best || !Inv->RemoveItem(Best->ItemId, 1))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No soil — buy soil from the supplier (phone)."));
+		}
+		return false;
+	}
+
+	SoilId = Best->ItemId;
+	SoilUsesLeft = Best->Harvests;
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			FString::Printf(TEXT("Soil added: %s (%d harvests). Now plant a seed."), *Best->DisplayName, SoilUsesLeft));
+	}
+	return true;
 }
 
 bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn)
@@ -206,7 +252,9 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
 	if (!bPlanted)
 	{
-		return NSLOCTEXT("WeedShop", "PlantSeed", "Plant a seed");
+		return HasSoil()
+			? NSLOCTEXT("WeedShop", "PlantSeed", "Plant a seed")
+			: NSLOCTEXT("WeedShop", "AddSoil", "Add soil (need soil before planting)");
 	}
 	if (Phase == EGrowthPhase::Harvestable)
 	{
@@ -237,8 +285,13 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 		return;
 	}
 
-	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareMultiplier));
-	const float ActualThc = Strain->BaseThcPercent * CareMultiplier * FMath::FRandRange(0.9f, 1.1f);
+	// Soil-bonus op yield + kwaliteit.
+	float SoilYield = 1.f, SoilQuality = 1.f;
+	FSoilDef SoilDef;
+	if (GetSoilDef(SoilId, SoilDef)) { SoilYield = SoilDef.YieldMult; SoilQuality = SoilDef.QualityMult; }
+
+	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareMultiplier * SoilYield));
+	const float ActualThc = Strain->BaseThcPercent * CareMultiplier * SoilQuality * FMath::FRandRange(0.9f, 1.1f);
 
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 	if (Inv && !Strain->HarvestProductId.IsNone())
@@ -258,7 +311,21 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 		UE_LOG(LogWeedShop, Warning, TEXT("Oogst mislukt: geen InventoryComponent op de speler of HarvestProductId leeg."));
 	}
 
-	// Plant is geoogst -> pot wordt weer leeg en herbruikbaar (plant een nieuw zaadje).
+	// Soil verbruikt een oogst; raakt 'ie op, dan moet er nieuwe soil in.
+	if (SoilUsesLeft > 0)
+	{
+		SoilUsesLeft--;
+	}
+	if (SoilUsesLeft <= 0)
+	{
+		SoilId = NAME_None;
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Orange, TEXT("The soil is used up — add fresh soil before replanting."));
+		}
+	}
+
+	// Plant is geoogst -> pot wordt weer leeg en herbruikbaar (zelfde soil tot 'ie op is).
 	bPlanted = false;
 	StrainId = NAME_None;
 	GrowthSeconds = 0.f;
@@ -302,11 +369,15 @@ float AGrowPlant::GetSecondsRemaining() const
 float AGrowPlant::GetEstimatedYieldGrams() const
 {
 	const FWeedStrainRow* Strain = GetStrain();
-	return Strain ? Strain->BaseYieldGrams * CareMultiplier : 0.f;
+	if (!Strain) { return 0.f; }
+	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.YieldMult : 1.f;
+	return Strain->BaseYieldGrams * CareMultiplier * SoilMult;
 }
 
 float AGrowPlant::GetEstimatedThcPercent() const
 {
 	const FWeedStrainRow* Strain = GetStrain();
-	return Strain ? Strain->BaseThcPercent * CareMultiplier : 0.f;
+	if (!Strain) { return 0.f; }
+	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.QualityMult : 1.f;
+	return Strain->BaseThcPercent * CareMultiplier * SoilMult;
 }

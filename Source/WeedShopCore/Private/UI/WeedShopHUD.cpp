@@ -18,6 +18,7 @@
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
+#include "Cultivation/SoilTypes.h"
 #include "Customer/CustomerBase.h"
 #include "Placement/BuildComponent.h"
 
@@ -34,6 +35,7 @@ namespace
 		const FString S = ItemId.ToString();
 		if (S.StartsWith(TEXT("Bud_")))    { return FString::Printf(TEXT("Weed: %s"), *S.RightChop(4)); }
 		if (S.StartsWith(TEXT("Seed_")))   { return FString::Printf(TEXT("Seed: %s"), *S.RightChop(5)); }
+		if (S.StartsWith(TEXT("Soil_")))   { return FString::Printf(TEXT("Soil: %s"), *S.RightChop(5)); }
 		if (S.StartsWith(TEXT("Joint_")))  { return FString::Printf(TEXT("Joint %s"), *S.RightChop(6)); }
 		if (S == TEXT("Papers_Small"))     { return TEXT("Papers (small)"); }
 		if (S == TEXT("Papers_Big"))       { return TEXT("Papers (big)"); }
@@ -185,14 +187,24 @@ void AWeedShopHUD::DrawHUD()
 					const float PW = 300.f;
 					const float PXp = CX - PW * 0.5f;
 					float PYp = CY - 150.f;
-					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, 132.f);
+					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, 158.f);
 					float ly = PYp + 8.f;
 					const float lx = PXp + 12.f;
 
 					if (!Plant->IsPlanted())
 					{
 						DrawText(TEXT("Empty pot"), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
-						DrawText(TEXT("Plant a seed (E)   |   hold G to pick up"), FLinearColor::White, lx, ly, Font); ly += 18.f;
+						if (Plant->HasSoil())
+							{
+								FSoilDef _sd; const FString _sn = GetSoilDef(Plant->GetSoilId(), _sd) ? _sd.DisplayName : Plant->GetSoilId().ToString();
+								DrawText(FString::Printf(TEXT("Soil: %s  (%d harvests left)"), *_sn, Plant->GetSoilUsesLeft()), FLinearColor(0.6f, 0.9f, 0.6f), lx, ly, Font); ly += 18.f;
+								DrawText(TEXT("Plant a seed (E)   |   hold G to pick up"), FLinearColor::White, lx, ly, Font); ly += 18.f;
+							}
+							else
+							{
+								DrawText(TEXT("No soil! Add soil (E) - buy it from the supplier"), FLinearColor(1.f, 0.7f, 0.3f), lx, ly, Font); ly += 18.f;
+								DrawText(TEXT("(soil is required before planting)   |   hold G to pick up"), FLinearColor(0.7f, 0.7f, 0.7f), lx, ly, Font); ly += 18.f;
+							}
 						if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
 						{
 							const float A = BC->GetPickupAlpha();
@@ -233,7 +245,13 @@ void AWeedShopHUD::DrawHUD()
 
 						DrawText(FString::Printf(TEXT("Expected: %.0fg @ %.0f%% THC"),
 							Plant->GetEstimatedYieldGrams(), Plant->GetEstimatedThcPercent()),
-							FLinearColor(0.9f, 0.9f, 0.7f), lx, ly, Font);
+							FLinearColor(0.9f, 0.9f, 0.7f), lx, ly, Font); ly += 18.f;
+						if (Plant->HasSoil())
+						{
+							FSoilDef _sd; const FString _sn = GetSoilDef(Plant->GetSoilId(), _sd) ? _sd.DisplayName : Plant->GetSoilId().ToString();
+							DrawText(FString::Printf(TEXT("Soil: %s  (%d harvests left)"), *_sn, Plant->GetSoilUsesLeft()),
+								FLinearColor(0.6f, 0.9f, 0.6f), lx, ly, Font);
+						}
 					}
 				}
 

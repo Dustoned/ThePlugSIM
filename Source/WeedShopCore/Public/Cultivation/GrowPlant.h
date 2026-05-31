@@ -70,6 +70,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	bool IsPlanted() const { return bPlanted; }
 
+	// Soil: er moet soil in de pot voordat je kunt planten. Soil gaat meerdere oogsten mee.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	bool HasSoil() const { return !SoilId.IsNone() && SoilUsesLeft > 0; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	FName GetSoilId() const { return SoilId; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	int32 GetSoilUsesLeft() const { return SoilUsesLeft; }
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetCareMultiplier() const { return CareMultiplier; }
 
@@ -112,6 +122,17 @@ protected:
 	// Of er een plant in de pot staat (false = lege pot, wacht op een zaadje).
 	UPROPERTY(Replicated)
 	bool bPlanted = false;
+
+	// Welke soil in de pot zit (NAME_None = leeg). Bepaalt yield/kwaliteit-bonus.
+	UPROPERTY(Replicated)
+	FName SoilId = NAME_None;
+
+	// Resterende oogsten voordat de soil op is (0 = leeg).
+	UPROPERTY(Replicated)
+	int32 SoilUsesLeft = 0;
+
+	// Server: probeer soil uit de inventory in de pot te doen (beste die je hebt). Geeft succes.
+	bool TryAddSoil(APawn* InstigatorPawn);
 
 	// Server: probeer een zaadje uit de inventory van de speler te planten. Geeft succes.
 	bool TryPlantFromInventory(APawn* InstigatorPawn);
