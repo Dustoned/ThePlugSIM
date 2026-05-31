@@ -12,6 +12,7 @@
 #include "Cultivation/GrowPlant.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "TimerManager.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/GameViewportClient.h"
@@ -580,16 +581,33 @@ int32 UPhoneClientComponent::GetCartTotalCents() const
 	return Total;
 }
 
-void UPhoneClientComponent::Checkout()
+float UPhoneClientComponent::DeliveryFeePct(int32 Opt)
+{
+	switch (Opt) { case 2: return 0.25f; case 1: return 0.08f; default: return 0.01f; }
+}
+float UPhoneClientComponent::DeliveryDelaySeconds(int32 Opt)
+{
+	switch (Opt) { case 2: return 0.f; case 1: return 40.f; default: return 120.f; }
+}
+FString UPhoneClientComponent::DeliveryName(int32 Opt)
+{
+	switch (Opt) { case 2: return TEXT("Instant"); case 1: return TEXT("Express"); default: return TEXT("Standard"); }
+}
+FString UPhoneClientComponent::DeliveryTimeText(int32 Opt)
+{
+	switch (Opt) { case 2: return TEXT("now"); case 1: return TEXT("~40s"); default: return TEXT("~2 min"); }
+}
+
+void UPhoneClientComponent::Checkout(int32 DeliveryOption)
 {
 	if (Cart.Num() == 0) { return; }
 	TArray<FName> Ids; TArray<int32> Qtys;
 	for (const FCartLine& L : Cart) { Ids.Add(L.ItemId); Qtys.Add(L.Qty); }
-	ServerBuyCart(Ids, Qtys);
+	ServerBuyCart(Ids, Qtys, DeliveryOption);
 	Cart.Reset();
 }
 
-void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& ItemIds, const TArray<int32>& Quantities)
+void UPhoneClientComponent::DeliverCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities)
 {
 	AWeedShopGameState* GS = GetGS();
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
@@ -603,13 +621,57 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& It
 		for (int32 q = 0; q < Qty; ++q)
 		{
 			if (Store->BuyAny(ItemIds[i], Inv)) { ++Bought; }
-			else { ++Failed; break; } // stop deze regel bij eerste mislukking (bv. geen geld)
+			else { ++Failed; break; }
 		}
 	}
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, Failed > 0 ? FColor::Orange : FColor::Green,
-			FString::Printf(TEXT("Checkout: %d bought%s"), Bought, Failed > 0 ? TEXT(" (some failed - low cash/phase)") : TEXT("")));
+			FString::Printf(TEXT("Delivery arrived: %d item(s)%s"), Bought, Failed > 0 ? TEXT(" (some failed - low cash/phase)") : TEXT("")));
+	}
+}
+
+void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& ItemIds, const TArray<int32>& Quantities, int32 DeliveryOption)
+{
+	AWeedShopGameState* GS = GetGS();
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Store || !Inv) { return; }
+
+	// Bezorgkosten = % van het besteed bedrag (subtotaal van de wagen), nu afgeschreven.
+	int64 Subtotal = 0;
+	for (int32 i = 0; i < ItemIds.Num(); ++i)
+	{
+		Subtotal += (int64)Store->GetCatalogPriceCents(ItemIds[i]) * (Quantities.IsValidIndex(i) ? Quantities[i] : 0);
+	}
+	const int32 Fee = FMath::RoundToInt(Subtotal * DeliveryFeePct(DeliveryOption));
+	UEconomyComponent* Econ = GS->GetEconomy();
+	if (Fee > 0 && Econ && !Econ->RemoveMoney(Fee))
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough money for the delivery fee.")); }
+		return;
+	}
+
+	const float Delay = DeliveryDelaySeconds(DeliveryOption);
+	if (Delay <= 0.f)
+	{
+		DeliverCart(ItemIds, Quantities); // instant
+	}
+	else
+	{
+		// Plan de levering; items + itemprijs komen na de levertijd.
+		TArray<FName> CapIds = ItemIds; TArray<int32> CapQ = Quantities;
+		FTimerHandle H;
+		TWeakObjectPtr<UPhoneClientComponent> Self(this);
+		GetWorld()->GetTimerManager().SetTimer(H, [Self, CapIds, CapQ]()
+		{
+			if (Self.IsValid()) { Self->DeliverCart(CapIds, CapQ); }
+		}, Delay, false);
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
+				FString::Printf(TEXT("Order placed - %s delivery (%s). Fee EUR %.2f"), *DeliveryName(DeliveryOption), *DeliveryTimeText(DeliveryOption), Fee / 100.f));
+		}
 	}
 }
 

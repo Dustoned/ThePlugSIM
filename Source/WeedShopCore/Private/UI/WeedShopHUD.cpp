@@ -731,7 +731,7 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	else if (S.StartsWith(TEXT("cdec_"))) { Phone->AdjustCartLine(FCString::Atoi(*S.RightChop(5)), -1); }
 	else if (S.StartsWith(TEXT("cinc_"))) { Phone->AdjustCartLine(FCString::Atoi(*S.RightChop(5)), +1); }
 	else if (S.StartsWith(TEXT("cdel_"))) { Phone->AdjustCartLine(FCString::Atoi(*S.RightChop(5)), -100000); }
-	else if (S == TEXT("checkout"))       { Phone->Checkout(); }
+	else if (S == TEXT("checkout"))       { Phone->Checkout(0); }
 	else if (S == TEXT("cartclear"))      { Phone->ClearCart(); }
 	else if (S.StartsWith(TEXT("rollg_")))
 	{

@@ -84,9 +84,15 @@ public:
 	void ClearCart();
 	int32 GetCartTotalCents() const;
 
-	// Reken de hele winkelwagen af (server koopt alles, daarna leeg).
+	// Reken de hele winkelwagen af met een bezorgoptie (0=Standard, 1=Express, 2=Instant).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void Checkout();
+	void Checkout(int32 DeliveryOption);
+
+	// Bezorgopties (fee = % van het besteed bedrag; tijd in seconden). Gedeeld door UI + server.
+	static float DeliveryFeePct(int32 Opt);       // 0.01 / 0.08 / 0.25
+	static float DeliveryDelaySeconds(int32 Opt); // 120 / 40 / 0
+	static FString DeliveryName(int32 Opt);
+	static FString DeliveryTimeText(int32 Opt);
 
 	// Cijfertoets-handler (1-6) als reserve naast klikken.
 	void HandleNumberKey(FKey Key);
@@ -255,9 +261,12 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerSellAll(FName ItemId);
 
-	// Server: koop de hele winkelwagen (parallelle arrays item-id + aantal).
+	// Server: koop de hele winkelwagen (parallelle arrays item-id + aantal) met bezorgoptie.
 	UFUNCTION(Server, Reliable)
-	void ServerBuyCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities);
+	void ServerBuyCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities, int32 DeliveryOption);
+
+	// Server: levert de bestelling (voegt items toe / schrijft itemprijs af). Direct of na de levertijd.
+	void DeliverCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities);
 
 	// Server: voeg alle stapels van dit item-id samen (gewogen gemiddelde THC%/Kwaliteit%).
 	UFUNCTION(Server, Reliable)

@@ -94,7 +94,9 @@ protected:
 	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> StoreQtyTexts;
 	UPROPERTY() TObjectPtr<UTextBlock> StoreCartText;
 	UPROPERTY() TObjectPtr<class UScrollBox> StoreScroll;
+	UPROPERTY() TObjectPtr<class UVerticalBox> StoreFooter;
 	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> StoreTabBtns;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> StoreCartToggle;
+	int32 DeliveryOpt = 0;
 	void UpdateStoreCartText();
 };

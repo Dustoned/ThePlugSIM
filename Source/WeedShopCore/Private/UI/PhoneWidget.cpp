@@ -170,6 +170,10 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	UVerticalBoxSlot* ScS = Into->AddChildToVerticalBox(StoreScroll);
 	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
+	// Vaste voettekst onderaan (bezorgopties + totaal + checkout in de cart-weergave).
+	StoreFooter = WidgetTree->ConstructWidget<UVerticalBox>();
+	Into->AddChildToVerticalBox(StoreFooter);
+
 	FillStoreList();
 }
 
@@ -202,6 +206,7 @@ void UPhoneWidget::FillStoreList()
 	UPhoneClientComponent* Ph = Phone.Get();
 
 	StoreScroll->ClearChildren();
+	if (StoreFooter) { StoreFooter->ClearChildren(); }
 	StoreQtyTexts.Reset();
 	const int32 Cat = Ph->GetSupplierCat();
 
@@ -243,8 +248,31 @@ void UPhoneWidget::FillStoreList()
 			StoreScroll->AddChild(CardB);
 			AddGap();
 		}
-		StoreScroll->AddChild(MakeActionBtn(TEXT("CHECKOUT"), FLinearColor(0.2f, 0.55f, 0.27f),
-			[this, Ph]() { Ph->Checkout(); bCartView = false; RefreshStore(); }, 14));
+		// Vaste voettekst: bezorgopties + totaal (rechtsonder) + checkout eronder.
+		if (StoreFooter)
+		{
+			const int32 Subtotal = Ph->GetCartTotalCents();
+			StoreFooter->AddChildToVerticalBox(MakeText(TEXT("Delivery"), 11, FLinearColor(0.75f, 0.8f, 0.95f)))->SetPadding(FMargin(0.f, 4.f, 0.f, 2.f));
+			UHorizontalBox* Opts = WidgetTree->ConstructWidget<UHorizontalBox>();
+			for (int32 d = 0; d < 3; ++d)
+			{
+				const int32 OptFee = FMath::RoundToInt(Subtotal * UPhoneClientComponent::DeliveryFeePct(d));
+				const FLinearColor Col = (d == DeliveryOpt) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+				const FString Lbl = FString::Printf(TEXT("%s\n%s\nEUR %.2f"), *UPhoneClientComponent::DeliveryName(d), *UPhoneClientComponent::DeliveryTimeText(d), OptFee / 100.f);
+				UWeedActionButton* OB = MakeActionBtn(Lbl, Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
+				UHorizontalBoxSlot* OS = Opts->AddChildToHorizontalBox(OB);
+				OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+			}
+			StoreFooter->AddChildToVerticalBox(Opts)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+			const int32 Fee = FMath::RoundToInt(Subtotal * UPhoneClientComponent::DeliveryFeePct(DeliveryOpt));
+			UTextBlock* TotT = MakeText(FString::Printf(TEXT("Total: EUR %.2f"), (Subtotal + Fee) / 100.f), 15, FLinearColor(1.f, 0.95f, 0.55f));
+			TotT->SetJustification(ETextJustify::Right);
+			StoreFooter->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 2.f, 4.f, 4.f));
+
+			StoreFooter->AddChildToVerticalBox(MakeActionBtn(TEXT("CHECKOUT"), FLinearColor(0.2f, 0.55f, 0.27f),
+				[this, Ph]() { Ph->Checkout(DeliveryOpt); bCartView = false; RefreshStore(); }, 14));
+		}
 		return;
 	}
 
