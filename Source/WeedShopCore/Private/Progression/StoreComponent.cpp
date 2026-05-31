@@ -7,6 +7,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Cultivation/SoilTypes.h"
+#include "Cultivation/PotTypes.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -101,8 +102,11 @@ namespace
 		{ TEXT("Papers_Big"),       TEXT("King-size papers (up to 5g) - 10 pcs"), 1500, 10 },
 		{ TEXT("Papers_Blunt"),     TEXT("Blunt wraps (up to 7g) - 10 pcs"),      3000, 10 },
 		{ TEXT("Papers_Backwoods"), TEXT("Backwoods (up to 10g) - 5 pcs"),        5000, 5 },
-		// Pots.
-		{ TEXT("Pot"),              TEXT("Grow pot (place & plant a seed)"),      2500, 1 },
+		// Pots (betere pot = betere waterretentie/kwaliteit + meer yield; hogere tiers later in de progressie).
+		{ TEXT("Pot_Broken"),       TEXT("Broken pot (leaks, low quality)"),      1500, 1 },
+		{ TEXT("Pot_Clay"),         TEXT("Clay pot (decent)"),                    4000, 1 },
+		{ TEXT("Pot_Plastic"),      TEXT("Plastic pot (+yield, 2 plants*)"),     10000, 1 },
+		{ TEXT("Pot_Fabric"),       TEXT("Fabric pot (best, 6 plants*)"),        35000, 1 },
 		// Soil (betere soil = meer yield/kwaliteit, ontgrendelt met fase).
 		{ TEXT("Soil_Basic"),       TEXT("Basic soil (3 harvests)"),              1500, 1 },
 		{ TEXT("Soil_Rich"),        TEXT("Rich soil (+yield, 4 harvests)"),       4000, 1 },
@@ -135,6 +139,43 @@ bool UStoreComponent::GetSupplyDisplay(FName SupplyId, FText& OutName, int32& Ou
 		}
 	}
 	return false;
+}
+
+int32 UStoreComponent::GetSellPriceCents(FName ItemId) const
+{
+	FPotDef Pot;
+	if (GetPotDef(ItemId, Pot))
+	{
+		return Pot.SellPriceCents;
+	}
+	return 0;
+}
+
+bool UStoreComponent::SellItem(FName ItemId, UInventoryComponent* Seller)
+{
+	if (GetOwnerRole() != ROLE_Authority || !Seller)
+	{
+		return false;
+	}
+	const int32 Price = GetSellPriceCents(ItemId);
+	if (Price <= 0 || !Seller->HasItem(ItemId, 1))
+	{
+		return false;
+	}
+	if (!Seller->RemoveItem(ItemId, 1))
+	{
+		return false;
+	}
+	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	if (UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr)
+	{
+		Econ->AddMoneyUntracked(Price);
+	}
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green, FString::Printf(TEXT("Sold %s (+EUR %.2f)"), *ItemId.ToString(), Price / 100.f));
+	}
+	return true;
 }
 
 TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
@@ -177,12 +218,15 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 
 	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
 
-	// Betere soil pas vanaf de juiste fase (progressie).
-	FSoilDef Soil;
-	if (GetSoilDef(SupplyId, Soil))
+	// Betere soil/pot pas vanaf de juiste fase (progressie).
+	uint8 ReqPhase = 0;
+	FSoilDef Soil; FPotDef Pot;
+	if (GetSoilDef(SupplyId, Soil)) { ReqPhase = Soil.MinPhase; }
+	else if (GetPotDef(SupplyId, Pot)) { ReqPhase = Pot.MinPhase; }
+	if (ReqPhase > 0)
 	{
 		const uint8 Phase = (GS && GS->GetMilestones()) ? static_cast<uint8>(GS->GetMilestones()->GetCurrentPhase()) : 0;
-		if (Phase < Soil.MinPhase)
+		if (Phase < ReqPhase)
 		{
 			if (GEngine)
 			{

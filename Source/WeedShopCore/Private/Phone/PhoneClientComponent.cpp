@@ -8,6 +8,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Economy/EconomyComponent.h"
 #include "Customer/CustomerBase.h"
+#include "Cultivation/PotTypes.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
@@ -342,6 +343,26 @@ void UPhoneClientComponent::CycleTab()
 void UPhoneClientComponent::SetSupplierCat(int32 Cat)
 {
 	SupplierCat = FMath::Clamp(Cat, 0, UStoreComponent::SupplierCatCount - 1);
+}
+
+void UPhoneClientComponent::SellPotTier(int32 TierIndex)
+{
+	const TArray<FPotDef>& Pots = GetAllPots();
+	if (Pots.IsValidIndex(TierIndex))
+	{
+		ServerSell(Pots[TierIndex].ItemId);
+	}
+}
+
+void UPhoneClientComponent::ServerSell_Implementation(FName ItemId)
+{
+	if (AWeedShopGameState* GS = GetGS())
+	{
+		if (GS->GetStore())
+		{
+			GS->GetStore()->SellItem(ItemId, GetOwnerInventory());
+		}
+	}
 }
 
 void UPhoneClientComponent::HandleNumberKey(FKey Key)

@@ -59,6 +59,14 @@ public:
 	// Of deze categorie zaden bevat (dan kopen via BuySeed i.p.v. BuySupply).
 	static bool IsSeedCategory(int32 Cat) { return Cat == 0; }
 
+	// Verkoopprijs (cents) van een item; 0 als niet verkoopbaar (nu: pot-tiers).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	int32 GetSellPriceCents(FName ItemId) const;
+
+	// Server: verkoop 1 van dit item uit Seller (geeft geld terug). False als niet kan.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
+	bool SellItem(FName ItemId, UInventoryComponent* Seller);
+
 protected:
 	UPROPERTY()
 	TObjectPtr<UDataTable> StrainTable;

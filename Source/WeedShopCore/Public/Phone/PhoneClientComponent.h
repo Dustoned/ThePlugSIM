@@ -43,6 +43,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void DoAction(int32 Index);
 
+	// Verkoop de pot-tier op TierIndex (index in de pot-lijst) uit je inventory.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void SellPotTier(int32 TierIndex);
+
 	// Cijfertoets-handler (1-6) als reserve naast klikken.
 	void HandleNumberKey(FKey Key);
 
@@ -131,6 +135,10 @@ protected:
 	// Server: dien het bod in bij de klant (betaalt naar de kas, voorraad uit speler-inventory).
 	UFUNCTION(Server, Reliable)
 	void ServerSubmitOffer(ACustomerBase* Customer, int32 AskCents);
+
+	// Server: verkoop 1 van dit item uit de eigen inventory aan de supplier.
+	UFUNCTION(Server, Reliable)
+	void ServerSell(FName ItemId);
 
 	AWeedShopGameState* GetGS() const;
 	APlayerController* GetPC() const;

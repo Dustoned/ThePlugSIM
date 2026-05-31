@@ -48,6 +48,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Visual, Category = "WeedShop|Plant")
 	FName StrainId = NAME_None;
 
+	// Welke pot-tier dit is (Pot_Broken/Clay/Plastic/Fabric). Bepaalt waterretentie/yield/uiterlijk.
+	// Wordt door de plaats-component gezet vóór FinishSpawning.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Pot, Category = "WeedShop|Plant")
+	FName PotTier = NAME_None;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	FName GetPotTier() const { return PotTier; }
+
 	// Optionele meshes per fase (index = EGrowthPhase). Leeg = geen visuele wissel.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
 	TArray<TObjectPtr<UStaticMesh>> PhaseMeshes;
@@ -177,6 +185,12 @@ protected:
 
 	UFUNCTION()
 	void OnRep_Soil();
+
+	UFUNCTION()
+	void OnRep_Pot();
+
+	// Zet de pot-mesh (breedte e.d.) op basis van de pot-tier.
+	void UpdatePotVisual();
 
 	// Toon/verberg het soil-schijfje op basis van HasSoil().
 	void UpdateSoilVisual();

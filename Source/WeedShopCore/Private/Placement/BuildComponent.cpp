@@ -373,7 +373,8 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 			}
 			return;
 		}
-		ReturnItem = FName(TEXT("Pot"));
+		// Geef de juiste pot-tier terug (of fallback Pot_Broken voor oude potten).
+		ReturnItem = Pot->GetPotTier().IsNone() ? FName(TEXT("Pot_Broken")) : Pot->GetPotTier();
 	}
 	else if (const APlaceableProp* Prop = Cast<APlaceableProp>(Target))
 	{
@@ -525,7 +526,15 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 
 	if (Def.bIsPot)
 	{
-		World->SpawnActor<AGrowPlant>(AGrowPlant::StaticClass(), Location, Rotation, SpawnParams);
+		// Deferred zodat de pot-tier al klopt vóór BeginPlay (bepaalt waterretentie/yield/uiterlijk).
+		AGrowPlant* Pot = World->SpawnActorDeferred<AGrowPlant>(
+			AGrowPlant::StaticClass(), FTransform(Rotation, Location),
+			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Pot)
+		{
+			Pot->PotTier = ItemId;
+			Pot->FinishSpawning(FTransform(Rotation, Location));
+		}
 	}
 	else
 	{

@@ -19,7 +19,9 @@
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/SoilTypes.h"
+#include "Cultivation/PotTypes.h"
 #include "Cultivation/WaterCanComponent.h"
+#include "Placement/PlaceableTypes.h"
 #include "Customer/CustomerBase.h"
 #include "Placement/BuildComponent.h"
 
@@ -39,8 +41,8 @@ namespace
 		if (S.StartsWith(TEXT("Soil_")))   { return FString::Printf(TEXT("Soil: %s"), *S.RightChop(5)); }
 		if (S == TEXT("WaterBottle_Plastic")) { return TEXT("Water bottle"); }
 		if (S.StartsWith(TEXT("Joint_")))  { return FString::Printf(TEXT("Joint %s"), *S.RightChop(6)); }
-		if (S == TEXT("Papers_Small"))     { return TEXT("Papers (small)"); }
-		if (S == TEXT("Papers_Big"))       { return TEXT("Papers (big)"); }
+		if (S.StartsWith(TEXT("Papers_")))  { return FString::Printf(TEXT("Papers: %s"), *S.RightChop(7)); }
+		if (S.StartsWith(TEXT("Pot_")))     { return FString::Printf(TEXT("Pot: %s"), *S.RightChop(4)); }
 		return S;
 	}
 }
@@ -348,7 +350,8 @@ void AWeedShopHUD::DrawHUD()
 			}
 			else
 			{
-				const bool bPlaceable = (Held == FName(TEXT("Pot")));
+				FPlaceableDef _pd;
+				const bool bPlaceable = GetPlaceableDef(Held, _pd);
 				HandLine = FString::Printf(TEXT("In hand: %s%s"), *PrettyItemName(Held),
 					bPlaceable ? TEXT("   -   left-click to place") : TEXT(""));
 			}
@@ -445,7 +448,26 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				}
 				++idx;
 			}
-			if (Items.Num() == 0)
+			if (Cat == 2)
+				{
+					APawn* PP = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
+					if (const UInventoryComponent* PInv = PP ? PP->FindComponentByClass<UInventoryComponent>() : nullptr)
+					{
+						int32 ti = 0;
+						for (const FPotDef& Pd : GetAllPots())
+						{
+							if (PInv->HasItem(Pd.ItemId, 1) && y < PY + PhoneH - 50.f)
+							{
+								DrawButton(FName(*FString::Printf(TEXT("sell_%d"), ti)),
+									FString::Printf(TEXT("Sell %s (+EUR %.2f)  x%d"), *Pd.DisplayName, Pd.SellPriceCents / 100.f, PInv->GetQuantity(Pd.ItemId)),
+									InnerX, y, InnerW, FLinearColor(1.f, 0.8f, 0.5f));
+								y += RowH;
+							}
+							++ti;
+						}
+					}
+				}
+				if (Items.Num() == 0)
 			{
 				DrawText(TEXT("(nothing here yet)"), FLinearColor::Gray, InnerX, y, Font);
 			}
@@ -570,6 +592,10 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	else if (S.StartsWith(TEXT("scat_")))
 	{
 		Phone->SetSupplierCat(FCString::Atoi(*S.RightChop(5)));
+	}
+	else if (S.StartsWith(TEXT("sell_")))
+	{
+		Phone->SellPotTier(FCString::Atoi(*S.RightChop(5)));
 	}
 	else if (S.StartsWith(TEXT("rollg_")))
 	{

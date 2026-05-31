@@ -5,6 +5,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Data/WeedStrain.h"
 #include "Cultivation/SoilTypes.h"
+#include "Cultivation/PotTypes.h"
 #include "Cultivation/WaterCanComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -98,6 +99,7 @@ void AGrowPlant::BeginPlay()
 	}
 
 	RefreshMesh();
+	UpdatePotVisual();
 	UpdateSoilVisual();
 	UpdatePlantVisual();
 }
@@ -113,6 +115,7 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, bPlanted);
 	DOREPLIFETIME(AGrowPlant, SoilId);
 	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
+	DOREPLIFETIME(AGrowPlant, PotTier);
 }
 
 void AGrowPlant::Tick(float DeltaSeconds)
@@ -150,9 +153,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		UpdatePhaseFromGrowth();
 	}
 
-	// Max haalbare verzorging hangt af van je gear. Basis-setup (geen CareRetention) lekt en
-	// haalt nooit 100%: de eerste wiet is dus niet topkwaliteit. Betere pot/upgrades verhogen dit.
-	const float MaxCare = FMath::Clamp(0.7f + CareRetention, 0.7f, 1.0f);
+	// Max haalbare verzorging = pot-tier waterretentie (+ upgrades). Basis/broken pot lekt en
+	// haalt nooit 100%: je eerste wiet is geen topkwaliteit; betere pot tilt het plafond op.
+	const float MaxCare = GetMaxCare();
 
 	// Droogte-stress; betere pot (CareRetention) vertraagt het lekken.
 	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.0045f * (1.f - CareRetention), 0.3f, MaxCare);
@@ -312,6 +315,11 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 
 float AGrowPlant::GetMaxCare() const
 {
+	// Basis-plafond = pot-tier (waterretentie). Upgrades (CareRetention) tillen het iets op.
+	float Cap = 0.7f;
+	FPotDef Pot;
+	if (GetPotDef(PotTier, Pot)) { Cap = Pot.CareCap; }
+
 	float CareRetention = 0.f;
 	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
@@ -320,7 +328,7 @@ float AGrowPlant::GetMaxCare() const
 			CareRetention = FMath::Clamp(Upg->GetEffectTotal(TEXT("CareRetention")), 0.f, 0.9f);
 		}
 	}
-	return FMath::Clamp(0.7f + CareRetention, 0.7f, 1.0f);
+	return FMath::Clamp(Cap + CareRetention * 0.3f, 0.4f, 1.0f);
 }
 
 void AGrowPlant::Water(APawn* InstigatorPawn)
@@ -362,13 +370,16 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 		return;
 	}
 
-	// Soil-bonus op yield + kwaliteit.
+	// Soil-bonus op yield + kwaliteit; pot-tier geeft extra yield.
 	float SoilYield = 1.f, SoilQuality = 1.f;
 	FSoilDef SoilDef;
 	if (GetSoilDef(SoilId, SoilDef)) { SoilYield = SoilDef.YieldMult; SoilQuality = SoilDef.QualityMult; }
+	float PotYield = 1.f;
+	FPotDef PotDef;
+	if (GetPotDef(PotTier, PotDef)) { PotYield = PotDef.YieldMult; }
 
 	// Kwaliteit = gemiddelde verzorging over de hele groei (niet de laatste seconde).
-	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareAvg * SoilYield));
+	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareAvg * SoilYield * PotYield));
 	const float ActualThc = Strain->BaseThcPercent * CareAvg * SoilQuality * FMath::FRandRange(0.95f, 1.05f);
 
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
@@ -422,6 +433,24 @@ void AGrowPlant::OnRep_Visual()
 void AGrowPlant::OnRep_Soil()
 {
 	UpdateSoilVisual();
+}
+
+void AGrowPlant::OnRep_Pot()
+{
+	UpdatePotVisual();
+}
+
+void AGrowPlant::UpdatePotVisual()
+{
+	if (!Mesh)
+	{
+		return;
+	}
+	FPotDef Pot;
+	if (GetPotDef(PotTier, Pot))
+	{
+		Mesh->SetRelativeScale3D(Pot.MeshScale);
+	}
 }
 
 void AGrowPlant::UpdateSoilVisual()

@@ -298,6 +298,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		Inventory->AddItem(FName(TEXT("Seed_SilverHaze")), 1);
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 2);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
+		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
 	}
 }
 
