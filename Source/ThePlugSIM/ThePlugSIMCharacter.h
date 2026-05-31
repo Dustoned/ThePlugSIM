@@ -141,7 +141,7 @@ protected:
 
 	/** Zet de stoned-buf op alle versies van deze pawn (zodat de owner 'm ziet). */
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastApplyStoned(float Seconds, float Intensity);
+	void MulticastApplyStoned(float Seconds, float Intensity, int32 XpBonus);
 
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -150,6 +150,7 @@ protected:
 
 	float StonedSeconds = 0.f;   // resterende high-tijd
 	float StonedIntensity = 0.f; // hoe high (0..1)
+	int32 LastSmokeXp = 0;       // XP-bonus van de laatste joint (voor de HUD)
 
 	// Roken = rechtermuisknop inhouden (bewust, niet per ongeluk).
 	bool bRmbDown = false;

@@ -63,65 +63,122 @@ void AWeedShopHUD::DrawHUD()
 	APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
-	float Y = 40.f;
-	const float X = 40.f;
-
-	if (GS && GS->GetEconomy())
+	// ---------------- Clean status-paneel linksboven (icoontjes + balken) ----------------
 	{
-		DrawText(FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
-			FLinearColor(0.4f, 1.f, 0.4f), X, Y, Font);
-		Y += 26.f;
-	}
+		const FLinearColor IconLine(0.f, 0.f, 0.f, 0.78f); // donkere lijn-art op de badges
+		const FLinearColor TxtCol(0.92f, 0.94f, 1.f);
 
-	if (GS && GS->GetMilestones())
-	{
-		const UMilestoneComponent* M = GS->GetMilestones();
-		const TCHAR* PhaseName = TEXT("Street dealer");
-		switch (M->GetCurrentPhase())
+		// Gevuld badge-vierkant met rand.
+		auto Badge = [this](float bx, float by, float bs, const FLinearColor& Col)
 		{
-		case EShopPhase::Shop:      PhaseName = TEXT("Shop"); break;
-		case EShopPhase::Franchise: PhaseName = TEXT("Franchise"); break;
-		default: break;
+			DrawRect(FLinearColor(Col.R * 0.45f, Col.G * 0.45f, Col.B * 0.45f, 0.98f), bx - 2.f, by - 2.f, bs + 4.f, bs + 4.f);
+			DrawRect(Col, bx, by, bs, bs);
+		};
+		// Voortgangsbalk met label.
+		auto Bar = [this, Font](float bx, float by, float bw, float bh, float Frac, const FLinearColor& Fill, const FString& Label)
+		{
+			DrawRect(FLinearColor(0.08f, 0.09f, 0.11f, 0.95f), bx, by, bw, bh);
+			DrawRect(Fill, bx, by, bw * FMath::Clamp(Frac, 0.f, 1.f), bh);
+			DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.10f), bx, by, bw, 1.f);
+			DrawText(Label, FLinearColor::White, bx + 6.f, by + (bh - 12.f) * 0.5f, Font);
+		};
+
+		const float PanX = 18.f, PanY = 18.f, PanW = 296.f;
+		const float Pad = 12.f, IcoX = PanX + Pad, IcoS = 22.f, TxtX = IcoX + IcoS + 10.f;
+		const float RowH2 = 30.f, BarW = PanW - (TxtX - PanX) - Pad;
+
+		const bool bStoned = (GetPhone() && GetPhone()->GetStonedHudFrac() > 0.f);
+		const int32 NumRows = bStoned ? 5 : 4;
+		const float PanH = Pad + NumRows * RowH2 + 4.f;
+
+		// Paneel-achtergrond.
+		DrawRect(FLinearColor(0.04f, 0.05f, 0.07f, 0.82f), PanX, PanY, PanW, PanH);
+		DrawRect(FLinearColor(0.3f, 0.85f, 0.5f, 0.5f), PanX, PanY, PanW, 2.f); // accent-lijn bovenaan
+
+		float Ry = PanY + Pad;
+
+		// 1) Geld — gouden badge met "muntstapel".
+		{
+			Badge(IcoX, Ry, IcoS, FLinearColor(0.95f, 0.78f, 0.25f, 0.98f));
+			DrawRect(FLinearColor(1.f, 0.95f, 0.7f, 0.95f), IcoX + 4.f, Ry + 5.f, IcoS - 8.f, 3.f);
+			DrawRect(FLinearColor(1.f, 0.95f, 0.7f, 0.95f), IcoX + 4.f, Ry + 10.f, IcoS - 8.f, 3.f);
+			DrawRect(FLinearColor(1.f, 0.95f, 0.7f, 0.95f), IcoX + 4.f, Ry + 15.f, IcoS - 8.f, 3.f);
+			int64 Euros = 0;
+			if (GS && GS->GetEconomy()) { Euros = (int64)GS->GetEconomy()->GetBalanceEuros(); }
+			// Duizendtallen groeperen.
+			FString Raw = FString::Printf(TEXT("%lld"), Euros), Grp;
+			const int32 Ln = Raw.Len();
+			for (int32 i = 0; i < Ln; ++i) { if (i > 0 && (Ln - i) % 3 == 0) { Grp.AppendChar(TEXT('.')); } Grp.AppendChar(Raw[i]); }
+			DrawText(FString::Printf(TEXT("EUR %s"), *Grp), FLinearColor(0.7f, 1.f, 0.7f), TxtX, Ry + 4.f, Font);
+			Ry += RowH2;
 		}
-		DrawText(FString::Printf(TEXT("Phase: %s   (total earned EUR %.2f)"),
-			PhaseName, M->GetTotalEarnedCents() / 100.f), FLinearColor(1.f, 0.85f, 0.3f), X, Y, Font);
-		Y += 26.f;
-	}
 
-	if (GS && GS->GetDayCycle())
-	{
-		const UDayCycleComponent* Day = GS->GetDayCycle();
-		const int32 TotalMin = FMath::RoundToInt(Day->GetCycleFraction() * 24.f * 60.f);
-		const int32 HH = (TotalMin / 60) % 24;
-		const int32 MM = TotalMin % 60;
-		DrawText(FString::Printf(TEXT("Time: %02d:%02d   (%s)"), HH, MM,
-			Day->IsNight() ? TEXT("Night") : TEXT("Day")), FLinearColor::White, X, Y, Font);
-		Y += 26.f;
-	}
-
-	// Heat / politierisico.
-	if (GS && GS->GetHeat())
-	{
-		const float H = GS->GetHeat()->GetHeat();
-		const FLinearColor HeatCol = H >= 75.f ? FLinearColor::Red
-			: (H >= 40.f ? FLinearColor(1.f, 0.6f, 0.2f) : FLinearColor(0.6f, 0.8f, 0.6f));
-		DrawText(FString::Printf(TEXT("Heat: %.0f%%"), H), HeatCol, X, Y, Font);
-		Y += 26.f;
-	}
-
-	// Waterfles-stand.
-	if (P)
-	{
-		if (const UWaterCanComponent* Can = P->FindComponentByClass<UWaterCanComponent>())
+		// 2) Tijd — klok-badge.
 		{
-			if (Can->HasBottle())
+			const bool bNight = GS && GS->GetDayCycle() && GS->GetDayCycle()->IsNight();
+			Badge(IcoX, Ry, IcoS, bNight ? FLinearColor(0.30f, 0.34f, 0.55f, 0.98f) : FLinearColor(0.30f, 0.62f, 0.95f, 0.98f));
+			const float ccx = IcoX + IcoS * 0.5f, ccy = Ry + IcoS * 0.5f;
+			DrawLine(ccx, ccy, ccx, ccy - 6.f, IconLine, 2.f);
+			DrawLine(ccx, ccy, ccx + 5.f, ccy + 1.f, IconLine, 2.f);
+			int32 HH = 0, MM = 0;
+			if (GS && GS->GetDayCycle())
 			{
-				const int32 Cur = Can->GetCharges();
-				const int32 Max = Can->GetMaxCharges();
-				DrawText(FString::Printf(TEXT("Water: %d/%d"), Cur, Max),
-					Cur > 0 ? FLinearColor(0.5f, 0.8f, 1.f) : FLinearColor(1.f, 0.6f, 0.3f), X, Y, Font);
-				Y += 26.f;
+				const int32 T = FMath::RoundToInt(GS->GetDayCycle()->GetCycleFraction() * 24.f * 60.f);
+				HH = (T / 60) % 24; MM = T % 60;
 			}
+			DrawText(FString::Printf(TEXT("%02d:%02d   %s"), HH, MM, bNight ? TEXT("Night") : TEXT("Day")), TxtCol, TxtX, Ry + 4.f, Font);
+			Ry += RowH2;
+		}
+
+		// 3) Heat — vlam-badge + balk.
+		{
+			const float H = (GS && GS->GetHeat()) ? GS->GetHeat()->GetHeat() : 0.f;
+			Badge(IcoX, Ry, IcoS, FLinearColor(0.85f, 0.30f, 0.20f, 0.98f));
+			const float fx = IcoX + IcoS * 0.5f;
+			DrawLine(fx, Ry + 3.f, IcoX + 4.f, Ry + IcoS - 4.f, IconLine, 2.f);
+			DrawLine(fx, Ry + 3.f, IcoX + IcoS - 4.f, Ry + IcoS - 4.f, IconLine, 2.f);
+			DrawLine(IcoX + 4.f, Ry + IcoS - 4.f, IcoX + IcoS - 4.f, Ry + IcoS - 4.f, IconLine, 2.f);
+			const FLinearColor HeatFill = H >= 75.f ? FLinearColor(1.f, 0.25f, 0.2f) : (H >= 40.f ? FLinearColor(1.f, 0.6f, 0.2f) : FLinearColor(0.5f, 0.8f, 0.4f));
+			Bar(TxtX, Ry + 4.f, BarW, 16.f, H / 100.f, HeatFill, FString::Printf(TEXT("Heat  %.0f%%"), H));
+			Ry += RowH2;
+		}
+
+		// 4) Level — badge + XP-balk.
+		{
+			Badge(IcoX, Ry, IcoS, FLinearColor(0.55f, 0.40f, 0.90f, 0.98f));
+			// Chevron omhoog.
+			DrawLine(IcoX + 4.f, Ry + IcoS - 7.f, IcoX + IcoS * 0.5f, Ry + 6.f, IconLine, 2.f);
+			DrawLine(IcoX + IcoS * 0.5f, Ry + 6.f, IcoX + IcoS - 4.f, Ry + IcoS - 7.f, IconLine, 2.f);
+			if (GS && GS->GetLeveling())
+			{
+				ULevelComponent* Lv = GS->GetLeveling();
+				if (Lv->GetLevel() >= ULevelComponent::MaxLevel)
+				{
+					Bar(TxtX, Ry + 4.f, BarW, 16.f, 1.f, FLinearColor(0.5f, 0.8f, 1.f), TEXT("Level 100  (MAX)"));
+				}
+				else
+				{
+					Bar(TxtX, Ry + 4.f, BarW, 16.f, Lv->GetLevelFraction(), FLinearColor(0.45f, 0.7f, 1.f),
+						FString::Printf(TEXT("Lv %d   %d / %d XP"), Lv->GetLevel(), Lv->GetCurrentXP(), Lv->GetXPToNext()));
+				}
+			}
+			Ry += RowH2;
+		}
+
+		// 5) Stoned — alleen als je high bent: badge + resterende-tijd-balk + XP-bonus.
+		if (bStoned)
+		{
+			UPhoneClientComponent* Ph = GetPhone();
+			Badge(IcoX, Ry, IcoS, FLinearColor(0.30f, 0.70f, 0.35f, 0.98f));
+			const float lx = IcoX + IcoS * 0.5f, ly = Ry + IcoS * 0.5f;
+			DrawLine(lx, Ry + 3.f, IcoX + IcoS - 4.f, ly, IconLine, 2.f);
+			DrawLine(IcoX + IcoS - 4.f, ly, lx, Ry + IcoS - 3.f, IconLine, 2.f);
+			DrawLine(lx, Ry + IcoS - 3.f, IcoX + 4.f, ly, IconLine, 2.f);
+			DrawLine(IcoX + 4.f, ly, lx, Ry + 3.f, IconLine, 2.f);
+			const int32 Secs = FMath::CeilToInt(Ph->GetStonedHudSecs());
+			Bar(TxtX, Ry + 4.f, BarW, 16.f, Ph->GetStonedHudFrac(), FLinearColor(0.4f, 0.9f, 0.5f),
+				FString::Printf(TEXT("Stoned  %d:%02d   +%d XP"), Secs / 60, Secs % 60, Ph->GetStonedHudXp()));
+			Ry += RowH2;
 		}
 	}
 

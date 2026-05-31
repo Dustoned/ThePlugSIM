@@ -106,6 +106,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		if (Phone)
 		{
 			Phone->SetSmokeHoldFrac(bSmokeFired ? 0.f : FMath::Clamp(SmokeHoldTime / SmokeHoldRequired, 0.f, 1.f));
+			Phone->SetStonedHud(GetStonedFraction(), StonedSeconds, LastSmokeXp);
 		}
 	}
 
@@ -560,17 +561,19 @@ void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
 		(FMath::Clamp(Thc / 36.f, 0.f, 1.f)) * 0.45f +
 		FMath::Clamp(Q, 0.f, 1.f) * 0.10f, 0.f, 1.f);
 
+	// XP-bonus op basis van hoe high je wordt.
+	const int32 XpBonus = 5 + FMath::RoundToInt(Intensity * 60.f);
+
 	// Stoned-buf: duur schaalt met intensiteit (cap op het maximum).
 	const float AddSeconds = Intensity * StonedMaxSeconds;
 	const float NewSeconds = FMath::Min(StonedMaxSeconds, StonedSeconds + AddSeconds);
 	const float NewIntensity = FMath::Max(StonedIntensity, Intensity);
-	MulticastApplyStoned(NewSeconds, NewIntensity);
+	MulticastApplyStoned(NewSeconds, NewIntensity, XpBonus);
 
-	// XP-bonus op basis van hoe high je wordt.
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetLeveling())
 	{
-		GS->GetLeveling()->AddXP(5 + FMath::RoundToInt(Intensity * 60.f));
+		GS->GetLeveling()->AddXP(XpBonus);
 	}
 	if (GEngine)
 	{
@@ -579,10 +582,11 @@ void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
 	}
 }
 
-void AThePlugSIMCharacter::MulticastApplyStoned_Implementation(float Seconds, float Intensity)
+void AThePlugSIMCharacter::MulticastApplyStoned_Implementation(float Seconds, float Intensity, int32 XpBonus)
 {
 	StonedSeconds = Seconds;
 	StonedIntensity = Intensity;
+	LastSmokeXp = XpBonus;
 
 	// Klein rookwolkje uit het hoofd (cosmetisch, op elke client).
 	if (UWorld* World = GetWorld())
