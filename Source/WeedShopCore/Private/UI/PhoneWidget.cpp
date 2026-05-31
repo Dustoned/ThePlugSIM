@@ -137,46 +137,85 @@ void UPhoneWidget::UpdateStoreCartText()
 
 void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 {
-	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
-	if (!Store || !Phone.IsValid()) { return; }
+	if (!Phone.IsValid()) { return; }
 	UPhoneClientComponent* Ph = Phone.Get();
 	StoreQtyTexts.Reset();
-	StoreCartText = nullptr;
+	StoreTabBtns.Reset();
 
-	// Categorie-pillen (Seeds/Papers/Pots/Soil/Water/Sell).
+	// Categorie-pillen (Seeds/Papers/Pots/Soil/Water/Sell) — blijven staan; alleen de lijst ververst.
 	static const TCHAR* CatNames[6] = { TEXT("Seeds"), TEXT("Papers"), TEXT("Pots"), TEXT("Soil"), TEXT("Water"), TEXT("Sell") };
-	const int32 Cat = Ph->GetSupplierCat();
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 	for (int32 i = 0; i < 6; ++i)
 	{
-		const FLinearColor Col = (i == Cat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
-		UWeedActionButton* Pill = MakeActionBtn(CatNames[i], Col, [this, Ph, i]() { Ph->SetSupplierCat(i); bCartView = false; MarkDirty(); }, 10);
+		const FLinearColor Col = (i == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		UWeedActionButton* Pill = MakeActionBtn(CatNames[i], Col, [this, Ph, i]() { Ph->SetSupplierCat(i); bCartView = false; RefreshStore(); }, 10);
 		UHorizontalBoxSlot* PS = Tabs->AddChildToHorizontalBox(Pill);
 		PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		PS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+		StoreTabBtns.Add(Pill);
 	}
 	Into->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	// Winkelwagen-balk: aantal + totaal + toggle naar cart/shop.
+	// Winkelwagen-balk: totaal + toggle naar cart/shop.
 	UHorizontalBox* CartBar = WidgetTree->ConstructWidget<UHorizontalBox>();
 	StoreCartText = MakeText(FString::Printf(TEXT("Cart %d   EUR %.2f"), Ph->GetCartNumLines(), Ph->GetCartTotalCents() / 100.f), 13, FLinearColor(1.f, 0.95f, 0.6f));
 	UHorizontalBoxSlot* CL = CartBar->AddChildToHorizontalBox(StoreCartText);
 	CL->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CL->SetVerticalAlignment(VAlign_Center);
-	CartBar->AddChildToHorizontalBox(MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"),
-		FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bCartView = !bCartView; MarkDirty(); }, 11));
+	StoreCartToggle = MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"), FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bCartView = !bCartView; RefreshStore(); }, 11);
+	CartBar->AddChildToHorizontalBox(StoreCartToggle);
 	Into->AddChildToVerticalBox(CartBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	// Scrollbare lijst.
-	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
-	UVerticalBoxSlot* ScS = Into->AddChildToVerticalBox(Scroll);
+	// Scrollbare lijst (alleen deze ververst bij categorie/cart-acties).
+	StoreScroll = WidgetTree->ConstructWidget<UScrollBox>();
+	UVerticalBoxSlot* ScS = Into->AddChildToVerticalBox(StoreScroll);
 	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	FillStoreList();
+}
+
+void UPhoneWidget::RefreshStore()
+{
+	if (!Phone.IsValid()) { return; }
+	const int32 Cat = Phone->GetSupplierCat();
+	for (int32 i = 0; i < StoreTabBtns.Num(); ++i)
+	{
+		if (!StoreTabBtns[i]) { continue; }
+		const FLinearColor Col = (i == Cat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		FButtonStyle St;
+		St.Normal = RoundedBrush(Col, 8.f);
+		St.Hovered = RoundedBrush(Col * 1.3f, 8.f);
+		St.Pressed = RoundedBrush(Col * 0.8f, 8.f);
+		St.NormalPadding = FMargin(6.f, 4.f); St.PressedPadding = FMargin(6.f, 4.f);
+		StoreTabBtns[i]->SetStyle(St);
+	}
+	if (StoreCartToggle) { StoreCartToggle->SetContent(MakeText(bCartView ? TEXT("Shop") : TEXT("View cart"), 11, FLinearColor::White, true)); }
+	UpdateStoreCartText();
+	FillStoreList();
+}
+
+void UPhoneWidget::FillStoreList()
+{
+	if (!StoreScroll || !Phone.IsValid()) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	if (!Store) { return; }
+	UPhoneClientComponent* Ph = Phone.Get();
+
+	StoreScroll->ClearChildren();
+	StoreQtyTexts.Reset();
+	const int32 Cat = Ph->GetSupplierCat();
+
+	auto AddGap = [this]() {
+		UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
+		Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		StoreScroll->AddChild(Gap);
+	};
 
 	if (bCartView)
 	{
-		// --- Winkelwagen ---
 		const int32 Lines = Ph->GetCartNumLines();
-		if (Lines == 0) { Scroll->AddChild(MakeText(TEXT("Cart is empty."), 13, FLinearColor::Gray)); }
+		if (Lines == 0) { StoreScroll->AddChild(MakeText(TEXT("Cart is empty."), 13, FLinearColor::Gray)); }
 		for (int32 li = 0; li < Lines; ++li)
 		{
 			FName LId; int32 LQty = 0;
@@ -191,28 +230,21 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 			CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 			UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
 			CardB->SetContent(CVB);
-
 			UTextBlock* NameT = MakeText(LName, 12, FLinearColor(0.9f, 0.92f, 1.f));
 			NameT->SetClipping(EWidgetClipping::ClipToBounds);
 			CVB->AddChildToVerticalBox(NameT);
-
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(MakeText(
-				FString::Printf(TEXT("x%d   EUR %.2f"), LQty, LineP / 100.f), 12, FLinearColor(1.f, 0.95f, 0.7f)));
+			UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("x%d   EUR %.2f"), LQty, LineP / 100.f), 12, FLinearColor(1.f, 0.95f, 0.7f)));
 			T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -1); MarkDirty(); }));
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, +1); MarkDirty(); }));
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("x"), FLinearColor(0.42f, 0.18f, 0.18f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -100000); MarkDirty(); }));
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -1); RefreshStore(); }));
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, +1); RefreshStore(); }));
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("x"), FLinearColor(0.42f, 0.18f, 0.18f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -100000); RefreshStore(); }));
 			CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
-
-			Scroll->AddChild(CardB);
-			UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
-			Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
-			Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-			Scroll->AddChild(Gap);
+			StoreScroll->AddChild(CardB);
+			AddGap();
 		}
-		Into->AddChildToVerticalBox(MakeActionBtn(TEXT("CHECKOUT"), FLinearColor(0.2f, 0.55f, 0.27f),
-			[this, Ph]() { Ph->Checkout(); bCartView = false; MarkDirty(); }, 14))->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+		StoreScroll->AddChild(MakeActionBtn(TEXT("CHECKOUT"), FLinearColor(0.2f, 0.55f, 0.27f),
+			[this, Ph]() { Ph->Checkout(); bCartView = false; RefreshStore(); }, 14));
 		return;
 	}
 
@@ -232,18 +264,17 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				FString SName = Store->GetCatalogName(Stacks[si].ItemId).ToString();
 				if (SName.Len() > 18) { SName = SName.Left(17) + TEXT("."); }
-				UTextBlock* ST = MakeText(FString::Printf(TEXT("%s x%d  (EUR %.0f)"), *SName, Stacks[si].Quantity, Val / 100.f),
-					12, FLinearColor(0.9f, 0.92f, 1.f));
+				UTextBlock* ST = MakeText(FString::Printf(TEXT("%s x%d  (EUR %.0f)"), *SName, Stacks[si].Quantity, Val / 100.f), 12, FLinearColor(0.9f, 0.92f, 1.f));
 				ST->SetClipping(EWidgetClipping::ClipToBounds);
 				UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(ST);
 				T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
 				const int32 Idx = si;
-				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Sell"), FLinearColor(0.4f, 0.34f, 0.18f), [this, Ph, Idx]() { Ph->SellInventoryIndex(Idx); MarkDirty(); }));
-				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("All"), FLinearColor(0.45f, 0.3f, 0.12f), [this, Ph, Idx]() { Ph->SellInventoryIndexAll(Idx); MarkDirty(); }));
-				Scroll->AddChild(Row);
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Sell"), FLinearColor(0.4f, 0.34f, 0.18f), [this, Ph, Idx]() { Ph->SellInventoryIndex(Idx); RefreshStore(); }));
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("All"), FLinearColor(0.45f, 0.3f, 0.12f), [this, Ph, Idx]() { Ph->SellInventoryIndexAll(Idx); RefreshStore(); }));
+				StoreScroll->AddChild(Row);
 			}
 		}
-		if (!bAny) { Scroll->AddChild(MakeText(TEXT("(nothing sellable)"), 13, FLinearColor::Gray)); }
+		if (!bAny) { StoreScroll->AddChild(MakeText(TEXT("(nothing sellable)"), 13, FLinearColor::Gray)); }
 		return;
 	}
 
@@ -268,18 +299,14 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 		const FName PickId = Id;
 		UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, FLinearColor::White);
 		StoreQtyTexts.Add(PickId, QtyT);
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, -1); if (TObjectPtr<UTextBlock>* T = StoreQtyTexts.Find(PickId)) { (*T)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
+		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, -1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
 		Row->AddChildToHorizontalBox(QtyT)->SetVerticalAlignment(VAlign_Center);
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, +1); if (TObjectPtr<UTextBlock>* T = StoreQtyTexts.Find(PickId)) { (*T)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
+		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, +1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
 		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Add"), FLinearColor(0.2f, 0.4f, 0.55f), [this, Ph, PickId]() { Ph->AddToCart(PickId); UpdateStoreCartText(); }))->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 		CardVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 
-		Scroll->AddChild(CardB);
-		// kleine ruimte tussen kaarten
-		UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
-		Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
-		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-		Scroll->AddChild(Gap);
+		StoreScroll->AddChild(CardB);
+		AddGap();
 	}
 }
 
@@ -403,7 +430,15 @@ void UPhoneWidget::RefreshContent()
 
 	// App-header: back-knop + titel.
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Home"), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f)));
+	// Home-knop met een huis-icoontje.
+	UPhoneButton* HomeBtn = MakeButton(TEXT(""), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f));
+	{
+		USizeBox* Hs = WidgetTree->ConstructWidget<USizeBox>();
+		Hs->SetWidthOverride(22.f); Hs->SetHeightOverride(22.f);
+		Hs->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 22.f, FLinearColor::White));
+		HomeBtn->SetContent(Hs);
+	}
+	Header->AddChildToHorizontalBox(HomeBtn);
 	UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(MakeText(GAppName[App], 16, FLinearColor(0.9f, 0.95f, 1.f)));
 	TitleSlot->SetPadding(FMargin(12.f, 4.f, 0.f, 0.f));
 	UVerticalBoxSlot* HeaderSlot = ContentBox->AddChildToVerticalBox(Header);

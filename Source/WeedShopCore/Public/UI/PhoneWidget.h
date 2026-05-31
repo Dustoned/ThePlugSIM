@@ -79,6 +79,10 @@ protected:
 
 	// Bouwt de Suppliers-app (in-telefoon webshop) in de gegeven container.
 	void BuildStoreApp(class UVerticalBox* Into);
+	// Vult alleen de scrollbare lijst (catalogus/cart/sell) — geen volledige herbouw, dus geen flash.
+	void FillStoreList();
+	// Werkt de winkel bij na een actie (tab-kleuren, cart-tekst, lijst) zonder de hele app te herbouwen.
+	void RefreshStore();
 
 	// Markeer dat de app-inhoud opnieuw opgebouwd moet worden (na een winkel-actie).
 	void MarkDirty() { bContentDirty = true; }
@@ -89,5 +93,8 @@ protected:
 	// app te herbouwen (geen flash).
 	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> StoreQtyTexts;
 	UPROPERTY() TObjectPtr<UTextBlock> StoreCartText;
+	UPROPERTY() TObjectPtr<class UScrollBox> StoreScroll;
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> StoreTabBtns;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> StoreCartToggle;
 	void UpdateStoreCartText();
 };
