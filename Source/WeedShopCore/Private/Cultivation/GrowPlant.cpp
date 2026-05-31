@@ -42,9 +42,9 @@ AGrowPlant::AGrowPlant()
 	SoilMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (PotMeshFinder.Succeeded())
 	{
-		SoilMesh->SetStaticMesh(PotMeshFinder.Object); // korte, brede cilinder = aarde-laag
-		SoilMesh->SetRelativeScale3D(FVector(0.42f, 0.42f, 0.06f));
-		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, 34.f));
+		SoilMesh->SetStaticMesh(PotMeshFinder.Object); // korte, brede cilinder = aarde-laag bovenop
+		SoilMesh->SetRelativeScale3D(FVector(0.46f, 0.46f, 0.10f));
+		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, 42.f)); // net boven de potrand (top ~40)
 	}
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> SoilMatFinder(TEXT("/Game/_Project/Materials/M_Soil.M_Soil"));
 	if (SoilMatFinder.Succeeded())
