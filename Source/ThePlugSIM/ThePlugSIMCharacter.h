@@ -128,6 +128,9 @@ protected:
 	/** Links-klik: bevestig plaatsen tijdens plaats-modus, anders interact met de pot / gebruik item. */
 	void OnPrimaryClick();
 
+	/** Interact-toets (E): zelfde als klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen. */
+	void OnInteractKey();
+
 	/** Rechtermuisknop ingedrukt: papers -> roll-paneel; joint -> begin met "inhouden om te roken". */
 	void OnSecondaryPressed();
 

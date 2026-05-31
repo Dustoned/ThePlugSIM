@@ -193,6 +193,8 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 			const FKey KInv = CS->GetKey(TEXT("Inventory"), bAlt);
 			if (KInv.IsValid()) { Input->BindKey(KInv, IE_Pressed, Ph, &UPhoneClientComponent::ToggleInventory); }
 		}
+		const FKey KInteract = CS->GetKey(TEXT("Interact"), bAlt);
+		if (KInteract.IsValid()) { Input->BindKey(KInteract, IE_Pressed, this, &AThePlugSIMCharacter::OnInteractKey); }
 		const FKey KSample = CS->GetKey(TEXT("GiveSample"), bAlt);
 		if (KSample.IsValid()) { Input->BindKey(KSample, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample); }
 		if (B)
@@ -528,6 +530,34 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 		}
 	}
 	UseActiveItem();
+}
+
+void AThePlugSIMCharacter::OnInteractKey()
+{
+	// E doet hetzelfde als links-klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen,
+	// maar gebruikt nooit het actieve hand-item.
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen()))
+	{
+		return;
+	}
+	if (Build && Build->IsPlacing())
+	{
+		Build->ConfirmPlacement();
+		return;
+	}
+	if (UInteractionComponent* IC = FindComponentByClass<UInteractionComponent>())
+	{
+		if (AActor* Focus = IC->GetFocusedActor())
+		{
+			if (Cast<AAtm>(Focus))
+			{
+				if (Phone) { Phone->OpenAtm(); }
+				return;
+			}
+			IC->TryInteract();
+		}
+	}
 }
 
 void AThePlugSIMCharacter::OnSecondaryPressed()

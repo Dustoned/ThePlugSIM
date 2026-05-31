@@ -7,6 +7,7 @@ namespace
 	static const TArray<FActionDef>& Defs()
 	{
 		static const TArray<FActionDef> D = {
+			{ FName(TEXT("Interact")),    TEXT("Interact / use"),         EKeys::E   },
 			{ FName(TEXT("Phone")),       TEXT("Open / close phone"),     EKeys::Tab },
 			{ FName(TEXT("PhoneTab")),    TEXT("Switch app / home"),      EKeys::Q   },
 			{ FName(TEXT("Inventory")),   TEXT("Open / close inventory"), EKeys::I   },

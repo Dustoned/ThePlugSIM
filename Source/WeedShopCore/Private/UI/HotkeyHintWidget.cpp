@@ -151,7 +151,7 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				const FText T = IInteractable::Execute_GetInteractionPrompt(Focus);
 				if (!T.IsEmpty()) { Prompt = T.ToString(); }
 			}
-			Hints.Emplace(TEXT("LMB"), Prompt);
+			Hints.Emplace(K(TEXT("Interact")), Prompt);
 			if (Cast<ACustomerBase>(Focus)) { Hints.Emplace(K(TEXT("GiveSample")), TEXT("Give sample")); }
 			if (Cast<AGrowPlant>(Focus)) { Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Upgrade pot")); }
 		}
