@@ -135,11 +135,11 @@ protected:
 	UPROPERTY(Replicated)
 	int32 SoilUsesLeft = 0;
 
-	// Server: probeer soil uit de inventory in de pot te doen (beste die je hebt). Geeft succes.
-	bool TryAddSoil(APawn* InstigatorPawn);
+	// Server: doe de soil die je in de hand hebt (SoilItem) in de pot. Geeft succes.
+	bool TryAddSoil(APawn* InstigatorPawn, FName SoilItem);
 
-	// Server: probeer een zaadje uit de inventory van de speler te planten. Geeft succes.
-	bool TryPlantFromInventory(APawn* InstigatorPawn);
+	// Server: plant het zaadje dat je in de hand hebt (SeedItem). Geeft succes.
+	bool TryPlantFromInventory(APawn* InstigatorPawn, FName SeedItem);
 
 	// Server: water geven (kost 1 slok uit de waterfles van de speler) verhoogt de care-multiplier.
 	void Water(APawn* InstigatorPawn);

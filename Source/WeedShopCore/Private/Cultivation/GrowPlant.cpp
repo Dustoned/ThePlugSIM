@@ -159,16 +159,35 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 		return;
 	}
 
+	// Hand-gestuurd: kijk wat de speler in z'n hand heeft (actief hotbar-slot).
+	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	const FName Hand = Inv ? Inv->GetActiveItemId() : NAME_None;
+
 	if (!bPlanted)
 	{
-		// Eerst soil, dan pas planten.
 		if (!HasSoil())
 		{
-			TryAddSoil(InstigatorPawn);
+			// Soil in de hand nodig.
+			if (IsSoilItem(Hand))
+			{
+				TryAddSoil(InstigatorPawn, Hand);
+			}
+			else if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Hold soil in your hand (1-8) to fill the pot."));
+			}
 		}
 		else
 		{
-			TryPlantFromInventory(InstigatorPawn);
+			// Zaadje in de hand nodig.
+			if (!UStoreComponent::StrainFromSeedItem(Hand).IsNone())
+			{
+				TryPlantFromInventory(InstigatorPawn, Hand);
+			}
+			else if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Hold a seed in your hand (1-8) to plant."));
+			}
 		}
 	}
 	else if (Phase == EGrowthPhase::Harvestable)
@@ -177,74 +196,44 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 	}
 	else
 	{
-		Water(InstigatorPawn);
+		// Waterfles in de hand nodig.
+		if (Hand.ToString().StartsWith(TEXT("WaterBottle")))
+		{
+			Water(InstigatorPawn);
+		}
+		else if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Hold your water bottle in your hand (1-8) to water."));
+		}
 	}
 }
 
-bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn)
+bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn, FName SoilItem)
 {
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
-	if (!Inv)
+	FSoilDef Def;
+	if (!Inv || !GetSoilDef(SoilItem, Def) || !Inv->RemoveItem(SoilItem, 1))
 	{
-		return false;
-	}
-	// Pak de beste soil die de speler heeft (hoogste yield-bonus).
-	const FSoilDef* Best = nullptr;
-	for (const FSoilDef& D : GetAllSoils())
-	{
-		if (Inv->HasItem(D.ItemId, 1) && (!Best || D.YieldMult > Best->YieldMult))
-		{
-			Best = &D;
-		}
-	}
-	if (!Best || !Inv->RemoveItem(Best->ItemId, 1))
-	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No soil — buy soil from the supplier (phone)."));
-		}
 		return false;
 	}
 
-	SoilId = Best->ItemId;
-	SoilUsesLeft = Best->Harvests;
+	SoilId = Def.ItemId;
+	SoilUsesLeft = Def.Harvests;
 	UpdateSoilVisual();
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Soil added: %s (%d harvests). Now plant a seed."), *Best->DisplayName, SoilUsesLeft));
+			FString::Printf(TEXT("Soil added: %s (%d harvests). Now plant a seed."), *Def.DisplayName, SoilUsesLeft));
 	}
 	return true;
 }
 
-bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn)
+bool AGrowPlant::TryPlantFromInventory(APawn* InstigatorPawn, FName SeedItem)
 {
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
-	if (!Inv)
+	const FName StrainToPlant = UStoreComponent::StrainFromSeedItem(SeedItem);
+	if (!Inv || StrainToPlant.IsNone() || !Inv->RemoveItem(SeedItem, 1))
 	{
-		return false;
-	}
-
-	// Vind het eerste zaadje in de voorraad.
-	FName SeedItem = NAME_None;
-	FName StrainToPlant = NAME_None;
-	for (const FInventoryStack& Stack : Inv->GetStacks())
-	{
-		const FName Strain = UStoreComponent::StrainFromSeedItem(Stack.ItemId);
-		if (!Strain.IsNone())
-		{
-			SeedItem = Stack.ItemId;
-			StrainToPlant = Strain;
-			break;
-		}
-	}
-
-	if (SeedItem.IsNone() || !Inv->RemoveItem(SeedItem, 1))
-	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No seeds in inventory (buy from supplier)."));
-		}
 		return false;
 	}
 
@@ -274,15 +263,15 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 	if (!bPlanted)
 	{
 		return HasSoil()
-			? NSLOCTEXT("WeedShop", "PlantSeed", "Plant a seed")
-			: NSLOCTEXT("WeedShop", "AddSoil", "Add soil (need soil before planting)");
+			? NSLOCTEXT("WeedShop", "PlantSeed", "Hold a seed + E to plant")
+			: NSLOCTEXT("WeedShop", "AddSoil", "Hold soil + E to fill the pot");
 	}
 	if (Phase == EGrowthPhase::Harvestable)
 	{
 		return FText::FromString(FString::Printf(TEXT("Harvest  (%s)"), *StrainId.ToString()));
 	}
 	const int32 Pct = FMath::RoundToInt(GetGrowthFraction() * 100.f);
-	return FText::FromString(FString::Printf(TEXT("Water  (growth %d%%, care %.0f%%)"),
+	return FText::FromString(FString::Printf(TEXT("Hold bottle + E to water  (growth %d%%, care %.0f%%)"),
 		Pct, CareMultiplier * 100.f));
 }
 
