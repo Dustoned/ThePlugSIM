@@ -48,9 +48,9 @@ protected:
 	// Naam van de hit-box waar de cursor nu boven hangt.
 	FName HoveredBox;
 
-	// Drag-n-drop staat van het inventory-scherm (item dat je nu sleept; None = niets).
+	// Drag-n-drop staat van het inventory-scherm (stapel die je nu sleept; 0 = niets).
 	bool bDraggingItem = false;
-	FName DraggedItemId;
+	int32 DraggedStackId = 0;
 
 	// Tooltip die deze frame getekend moet worden (leeg = geen).
 	FString HoverTooltip;

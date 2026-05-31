@@ -320,16 +320,18 @@ void AWeedShopHUD::DrawHUD()
 				// Slotnummer (1-8).
 				DrawText(FString::Printf(TEXT("%d"), i + 1), FLinearColor(0.5f, 0.5f, 0.6f), SX + SlotW - 14.f, SY + 2.f, Font);
 
-				const FName HItem = Inv->GetHotbarItem(i);
-				if (!HItem.IsNone())
+				const int32 HStackIdx = Inv->FindStackById(Inv->GetHotbarStackId(i));
+				if (Inv->GetStacks().IsValidIndex(HStackIdx))
 				{
+					const FInventoryStack& HS = Inv->GetStacks()[HStackIdx];
+					const FName HItem = HS.ItemId;
 					const bool bIsSeed = HItem.ToString().StartsWith(TEXT("Seed_"));
 					DrawText(PrettyItemName(HItem),
 						bIsSeed ? FLinearColor(0.7f, 0.85f, 0.6f) : FLinearColor(0.85f, 0.9f, 1.f),
 						SX + 5.f, SY + 4.f, Font);
-					const float HQ = Inv->GetItemQuality(HItem);
+					const float HQ = HS.Quality;
 					const bool bHThc = HQ > 0.f && (HItem.ToString().StartsWith(TEXT("Bud_")) || HItem.ToString().StartsWith(TEXT("Joint_")));
-					DrawText(FString::Printf(TEXT("x%d%s"), Inv->GetQuantity(HItem), bHThc ? *FString::Printf(TEXT("  %.0f%%"), HQ) : TEXT("")),
+					DrawText(FString::Printf(TEXT("x%d%s"), HS.Quantity, bHThc ? *FString::Printf(TEXT("  %.0f%%"), HQ) : TEXT("")),
 						FLinearColor::White, SX + 5.f, SY + 24.f, Font);
 				}
 				SX += SlotW + 6.f;
@@ -932,7 +934,7 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	TArray<int32> FreeStacks;
 	for (int32 i = 0; i < Stacks.Num(); ++i)
 	{
-		if (!Inv->IsOnHotbar(Stacks[i].ItemId)) { FreeStacks.Add(i); }
+		if (!Inv->IsStackOnHotbar(Stacks[i].StackId)) { FreeStacks.Add(i); }
 	}
 
 	const int32 Cols = 5;
@@ -960,7 +962,7 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		const FInventoryStack& S = Stacks[FreeStacks[n]];
 		const FName Box(*FString::Printf(TEXT("inv_%d"), n));
 		const bool bHover = (HoveredBox == Box);
-		const bool bIsDragged = bDraggingItem && DraggedItemId == S.ItemId;
+		const bool bIsDragged = bDraggingItem && DraggedStackId == S.StackId;
 		DrawRect(bIsDragged ? FLinearColor(0.35f, 0.30f, 0.10f, 0.85f)
 			: (bHover ? FLinearColor(0.20f, 0.26f, 0.38f, 0.95f) : FLinearColor(0.10f, 0.10f, 0.13f, 0.92f)),
 			cx + 2.f, cy + 2.f, CellW - 4.f, CellH - 4.f);
@@ -993,13 +995,14 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 			: (bActive ? FLinearColor(0.16f, 0.16f, 0.10f, 0.95f) : FLinearColor(0.10f, 0.10f, 0.13f, 0.9f)),
 			hx, HbY, SlotW, SlotH);
 		DrawText(FString::Printf(TEXT("%d"), i + 1), FLinearColor(0.5f, 0.5f, 0.6f), hx + SlotW - 12.f, HbY + 1.f, Font);
-		const FName HItem = Inv->GetHotbarItem(i);
-		if (!HItem.IsNone())
+		const int32 HbStackIdx = Inv->FindStackById(Inv->GetHotbarStackId(i));
+		if (Stacks.IsValidIndex(HbStackIdx))
 		{
-			FString Lbl = PrettyItemName(HItem);
+			const FInventoryStack& HbS = Stacks[HbStackIdx];
+			FString Lbl = PrettyItemName(HbS.ItemId);
 			if (Lbl.Len() > 9) { Lbl = Lbl.Left(9); }
 			DrawText(Lbl, FLinearColor(0.85f, 0.9f, 1.f), hx + 4.f, HbY + 16.f, Font);
-			DrawText(FString::Printf(TEXT("x%d"), Inv->GetQuantity(HItem)), FLinearColor(0.7f, 0.7f, 0.7f), hx + 4.f, HbY + 32.f, Font);
+			DrawText(FString::Printf(TEXT("x%d"), HbS.Quantity), FLinearColor(0.7f, 0.7f, 0.7f), hx + 4.f, HbY + 32.f, Font);
 		}
 		AddHitBox(FVector2D(hx, HbY), FVector2D(SlotW, SlotH), Box, true, 3);
 		hx += SlotW + Gap;
@@ -1014,36 +1017,38 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 			if (FreeStacks.IsValidIndex(Idx))
 			{
 				bDraggingItem = true;
-				DraggedItemId = Stacks[FreeStacks[Idx]].ItemId;
+				DraggedStackId = Stacks[FreeStacks[Idx]].StackId;
 			}
 		}
 		else if (bMouseDown && HS.StartsWith(TEXT("hbar_")))
 		{
 			const int32 Slot = FCString::Atoi(*HS.RightChop(5));
-			const FName SlotItem = Inv->GetHotbarItem(Slot);
-			if (!SlotItem.IsNone())
+			const int32 SlotStackId = Inv->GetHotbarStackId(Slot);
+			if (SlotStackId != 0)
 			{
 				bDraggingItem = true;
-				DraggedItemId = SlotItem;
+				DraggedStackId = SlotStackId;
 			}
 		}
 	}
 	else
 	{
-		DrawText(FString::Printf(TEXT("Dragging: %s   -   drop on a hotbar slot, or back in the grid to remove"), *PrettyItemName(DraggedItemId)),
+		const int32 DragIdx = Inv->FindStackById(DraggedStackId);
+		const FName DragItem = Stacks.IsValidIndex(DragIdx) ? Stacks[DragIdx].ItemId : NAME_None;
+		DrawText(FString::Printf(TEXT("Dragging: %s   -   drop on a hotbar slot, or back in the grid to remove"), *PrettyItemName(DragItem)),
 			FLinearColor(1.f, 0.95f, 0.4f), InnerX, PY + H - 20.f, Font);
 		if (!bMouseDown)
 		{
 			if (DropTarget >= 0)
 			{
-				Inv->AssignHotbar(DropTarget, DraggedItemId);          // op hotbar zetten / wisselen
+				Inv->AssignHotbarStack(DropTarget, DraggedStackId);    // op hotbar zetten / wisselen
 			}
 			else if (HS.StartsWith(TEXT("inv_")) || HS == TEXT("invgrid"))
 			{
-				Inv->UnassignHotbar(DraggedItemId);                    // terug naar inventory (van hotbar af)
+				Inv->UnassignHotbarStack(DraggedStackId);              // terug naar inventory (van hotbar af)
 			}
 			bDraggingItem = false;
-			DraggedItemId = NAME_None;
+			DraggedStackId = 0;
 		}
 	}
 

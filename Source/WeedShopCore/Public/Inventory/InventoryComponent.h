@@ -1,9 +1,6 @@
-// UInventoryComponent — voorraad als stapels (item-id + aantal). Server-authoritative en
-// replicated, zodat co-op-spelers dezelfde voorraad zien. Item-id's verwijzen naar rij-namen
-// in DT_Products (of later DT_Strains-opbrengsten).
-//
-// Bedoeld om op de speler-pawn/PlayerState te zitten (persoonlijke voorraad) of op een
-// opslag-actor (gedeelde voorraad). Mutaties (AddItem/RemoveItem) draaien alleen op de server.
+// UInventoryComponent — voorraad als stapels. Elke stapel heeft een unieke StackId zodat
+// identieke (niet-stapelbare) items elk een eigen slot innemen (bv. losse waterflessen). De
+// hotbar verwijst naar StackId's, niet naar item-id's. Server-authoritative + replicated.
 
 #pragma once
 
@@ -11,7 +8,6 @@
 #include "Components/ActorComponent.h"
 #include "InventoryComponent.generated.h"
 
-// Eén voorraad-stapel: een item-id en hoeveel ervan.
 USTRUCT(BlueprintType)
 struct FInventoryStack
 {
@@ -24,12 +20,14 @@ struct FInventoryStack
 	int32 Quantity = 0;
 
 	// Kwaliteit/THC% van deze stapel (alleen zinvol voor wiet/joints; 0 = n.v.t.).
-	// Bij samenvoegen van dezelfde soort wordt dit gewogen gemiddeld.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	float Quality = 0.f;
+
+	// Unieke id van deze stapel (server toegekend, gerepliceerd). 0 = ongeldig.
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
+	int32 StackId = 0;
 };
 
-// Vuurt na elke voorraad-wijziging (server én clients), voor UI-refresh.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryChanged);
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
@@ -40,7 +38,7 @@ class WEEDSHOPCORE_API UInventoryComponent : public UActorComponent
 public:
 	UInventoryComponent();
 
-	// Max aantal verschillende stapels/slots (0 = ongelimiteerd).
+	// Max aantal slots (= aantal stapels; 0 = ongelimiteerd).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")
 	int32 MaxStacks = 24;
 
@@ -48,77 +46,75 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")
 	float MaxWeight = 60.f;
 
-	// Gewicht per stuk van een item (kg). Som hiervan = totaalgewicht.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	float GetUnitWeight(FName ItemId) const;
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	float GetTotalWeight() const;
 
-	// Gebruikte slots: elke waterfles telt apart (zodat meerdere flessen ook meerdere slots kosten).
+	// Gebruikte slots = aantal stapels (niet-stapelbare items zijn aparte stapels).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
-	int32 GetUsedSlots() const;
-
-	// Of dit item-id momenteel aan een hotbar-slot is toegewezen.
-	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
-	bool IsOnHotbar(FName ItemId) const;
-
-	// Haal een item van de hotbar af (alle slots die het bevatten leegmaken).
-	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
-	void UnassignHotbar(FName ItemId);
+	int32 GetUsedSlots() const { return Stacks.Num(); }
 
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Inventory")
 	FOnInventoryChanged OnInventoryChanged;
 
-	// Server-authoritative. Voegt Count toe aan de stapel van ItemId (maakt stapel aan indien nodig).
-	// Quality < 0 = geen kwaliteit-info (papers/zaden/etc). Bij samenvoegen van een stapel met
-	// kwaliteit wordt het gewogen gemiddelde genomen. Geeft false als er geen ruimte is (MaxStacks).
+	// Server. Voegt Count toe. Stapelbare items mergen; niet-stapelbare (flessen) worden losse
+	// stapels van 1 (elk een eigen slot). Quality < 0 = geen kwaliteit-info.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	bool AddItem(FName ItemId, int32 Count, float Quality = -1.f);
 
-	// Kwaliteit/THC% van de stapel met dit item-id (0 als geen/n.v.t.).
-	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
-	float GetItemQuality(FName ItemId) const;
-
-	// Server-authoritative. Haalt Count weg; false bij onvoldoende voorraad.
+	// Server. Haalt Count weg (over meerdere stapels indien nodig). False bij te weinig.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	bool RemoveItem(FName ItemId, int32 Count);
 
+	// Totaal aantal van dit item over alle stapels.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetQuantity(FName ItemId) const;
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	bool HasItem(FName ItemId, int32 Count = 1) const { return GetQuantity(ItemId) >= Count; }
 
+	// Kwaliteit/THC% van de eerste stapel met dit item-id (0 als geen).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	float GetItemQuality(FName ItemId) const;
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	const TArray<FInventoryStack>& GetStacks() const { return Stacks; }
 
-	// --- Hotbar-selectie (puur lokale UI-staat: welk slot heb je "in de hand") ---
-	// Aantal hotbar-slots (de eerste N voorraad-stapels).
+	// Index van de stapel met deze StackId (INDEX_NONE als weg).
+	int32 FindStackById(int32 StackId) const;
+
+	// --- Hotbar (verwijst naar StackId's; lokale UI-staat) ---
 	static constexpr int32 HotbarSize = 8;
 
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void SetActiveSlot(int32 Slot);
 
-	// Schuif de selectie door (dir = +1 / -1), wrapt rond binnen de hotbar.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void CycleActiveSlot(int32 Dir);
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetActiveSlot() const { return ActiveSlot; }
 
-	// Item-id van het geselecteerde slot (NAME_None als dat slot leeg is / niet meer op voorraad).
+	// Item-id van het geselecteerde hotbar-slot (NAME_None als leeg/weg).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	FName GetActiveItemId() const;
 
-	// Het item dat aan hotbar-slot Slot is toegewezen (NAME_None = leeg).
+	// StackId in hotbar-slot Slot (0 = leeg).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
-	FName GetHotbarItem(int32 Slot) const;
+	int32 GetHotbarStackId(int32 Slot) const;
 
-	// Wijs een item toe aan een hotbar-slot (drag-n-drop). Stond het item al in een ander slot,
-	// dan wisselen die twee slots (verplaatsen i.p.v. dupliceren).
+	// Of een stapel op de hotbar staat.
+	bool IsStackOnHotbar(int32 StackId) const;
+
+	// Zet een stapel in een hotbar-slot (drag-n-drop); stond 'ie al ergens, dan wisselen.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
-	void AssignHotbar(int32 Slot, FName ItemId);
+	void AssignHotbarStack(int32 Slot, int32 StackId);
+
+	// Haal een stapel van de hotbar af.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void UnassignHotbarStack(int32 StackId);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -129,17 +125,20 @@ protected:
 	UFUNCTION()
 	void OnRep_Stacks();
 
-	// Vindt de index van een stapel met dit item-id, of INDEX_NONE.
+	static bool IsStackable(FName ItemId);
+
+	// Eerste stapel-index met dit item-id, of INDEX_NONE.
 	int32 FindStackIndex(FName ItemId) const;
 
-	// Houdt de hotbar-toewijzing netjes: verwijder items die op zijn, vul lege slots met
-	// nieuwe voorraad. Behoudt handmatige (drag-n-drop) toewijzingen. Lokaal.
+	// Hotbar netjes houden: verwijder verdwenen StackId's, vul lege slots automatisch.
 	void RefreshHotbarAuto();
 
-	// Geselecteerd hotbar-slot (lokaal, niet gerepliceerd — puur UI/“in de hand”).
 	int32 ActiveSlot = 0;
 
-	// Welk item in elk hotbar-slot zit (lokale UI-staat, niet gerepliceerd). Grootte = HotbarSize.
+	// StackId per hotbar-slot (0 = leeg). Lokaal, niet gerepliceerd.
 	UPROPERTY(Transient)
-	TArray<FName> HotbarSlots;
+	TArray<int32> HotbarStacks;
+
+	// Server-teller voor unieke StackId's.
+	int32 NextStackId = 1;
 };
