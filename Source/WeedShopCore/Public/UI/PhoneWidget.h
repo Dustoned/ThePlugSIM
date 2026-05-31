@@ -102,6 +102,7 @@ protected:
 
 	bool bCartView = false; // toont de winkelwagen i.p.v. de catalogus
 	bool bSellApp = false;  // de store-app draait als losse Sell-app (alleen verkopen, geen koop-tabs)
+	TArray<int32> AppCats;  // categorie-indices die de huidige winkel-app als tabs toont
 
 	// Referenties zodat winkel-acties (qty/add) labels direct kunnen updaten zonder de hele
 	// app te herbouwen (geen flash).

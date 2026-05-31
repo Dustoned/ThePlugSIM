@@ -74,7 +74,7 @@ public:
 
 	// --- Supplier-categorieën voor de telefoon (netjes gesorteerd) ---
 	// 0=Seeds, 1=Papers, 2=Pots, 3=Soil, 4=Water, 5=Sell.
-	static constexpr int32 SupplierCatCount = 6;
+	static constexpr int32 SupplierCatCount = 7; // 0 Seeds,1 Pots,2 Drying,3 Packing,4 Papers,5 Soil,6 Water
 	static constexpr int32 SupplierCatSell = 5;
 
 	// Item-ids in een categorie (zaden voor cat 0, anders gefilterde supplies).

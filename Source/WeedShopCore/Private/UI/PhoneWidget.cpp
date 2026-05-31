@@ -37,15 +37,33 @@
 namespace
 {
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
-	constexpr int32 GNumApps = 7;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Shop, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin };
+	constexpr int32 GNumApps = 8;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
-		FLinearColor(0.85f, 0.65f, 0.20f),
+		FLinearColor(0.85f, 0.65f, 0.20f), FLinearColor(0.30f, 0.50f, 0.70f),
 	};
+	constexpr int32 GGrowApp = 1;
 	constexpr int32 GSellApp = 6;
+	constexpr int32 GSuppliesApp = 7;
+
+	// Korte naam per categorie (0..6).
+	const TCHAR* CatName(int32 Cat)
+	{
+		switch (Cat)
+		{
+		case 0: return TEXT("Seeds");
+		case 1: return TEXT("Pots");
+		case 2: return TEXT("Drying");
+		case 3: return TEXT("Packing");
+		case 4: return TEXT("Papers");
+		case 5: return TEXT("Soil");
+		case 6: return TEXT("Water");
+		default: return TEXT("?");
+		}
+	}
 
 	// Compact geldbedrag (hele euro's) zodat het in smalle balken past: 1.0M / 12k / 523.
 	FString CompactEuros(double Euros)
@@ -317,15 +335,14 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	StoreQtyTexts.Reset();
 	StoreTabBtns.Reset();
 
-	// Koop-categorieën (Suppliers). De Sell-app heeft géén koop-tabs (alleen de verkooplijst).
+	// Koop-categorieën (alleen de tabs van deze winkel-app). De Sell-app heeft géén koop-tabs.
 	if (!bSellApp)
 	{
-		static const TCHAR* CatNames[5] = { TEXT("Seeds"), TEXT("Grow"), TEXT("Drying"), TEXT("Packing"), TEXT("Papers") };
 		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
-		for (int32 i = 0; i < 5; ++i)
+		for (int32 Cat : AppCats)
 		{
-			const FLinearColor Col = (i == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
-			UWeedActionButton* Pill = MakeActionBtn(CatNames[i], Col, [this, Ph, i]() { Ph->SetSupplierCat(i); bCartView = false; RefreshStore(); }, 11);
+			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+			UWeedActionButton* Pill = MakeActionBtn(CatName(Cat), Col, [this, Ph, Cat]() { Ph->SetSupplierCat(Cat); bCartView = false; RefreshStore(); }, 11);
 			UHorizontalBoxSlot* PS = Tabs->AddChildToHorizontalBox(Pill);
 			PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			PS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
@@ -365,7 +382,8 @@ void UPhoneWidget::RefreshStore()
 	for (int32 i = 0; i < StoreTabBtns.Num(); ++i)
 	{
 		if (!StoreTabBtns[i]) { continue; }
-		const FLinearColor Col = (i == Cat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		const int32 TabCat = AppCats.IsValidIndex(i) ? AppCats[i] : i;
+		const FLinearColor Col = (TabCat == Cat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
 		FButtonStyle St;
 		St.Normal = RoundedBrush(Col, 8.f);
 		St.Hovered = RoundedBrush(Col * 1.3f, 8.f);
@@ -823,7 +841,7 @@ void UPhoneWidget::RefreshContent()
 	TitleSlot->SetPadding(FMargin(10.f, 4.f, 6.f, 0.f));
 	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TitleSlot->SetVerticalAlignment(VAlign_Center);
-	if (App == 1) // Suppliers: Packages-knop rechtsboven, naast de titel.
+	if (App == GGrowApp || App == GSuppliesApp) // koop-apps: Packages-knop rechtsboven, naast de titel.
 	{
 		const int32 PkgN = Phone->GetPendingCount();
 		const FLinearColor PkgCol(0.40f, 0.30f, 0.52f); // paars, voor onderscheid t.o.v. de blauwe Back
@@ -896,9 +914,18 @@ void UPhoneWidget::RefreshContent()
 			}
 		}
 	}
-	else if (App == 1) // Suppliers -> webshop ín de telefoon (kopen)
+	else if (App == GGrowApp) // Grow shop -> wiet-gerelateerd (seeds, potten, drogen, verpakken)
 	{
 		bSellApp = false;
+		AppCats = { 0, 1, 2, 3 };
+		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
+		BuildStoreApp(ContentBox);
+	}
+	else if (App == GSuppliesApp) // Supplies -> algemene benodigdheden (papers, soil, water)
+	{
+		bSellApp = false;
+		AppCats = { 4, 5, 6 };
+		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
 	else if (App == 2) // Contacts
@@ -1016,8 +1043,8 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		RefreshContent();
 	}
 
-	// Suppliers-app open: houd de Packages-tab levend (voortgang/ETA) en het knop-badge bij.
-	if (!bHome && App == 1)
+	// Koop-app open: houd de Packages-tab levend (voortgang/ETA) en het knop-badge bij.
+	if (!bHome && (App == 1 || App == 7))
 	{
 		const int32 PkgN = Phone->GetPendingCount();
 		if (StorePackagesLabel && !bPackagesView)

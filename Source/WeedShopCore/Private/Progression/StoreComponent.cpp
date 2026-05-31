@@ -303,8 +303,8 @@ FText UStoreComponent::GetCatalogDesc(FName CatalogId) const
 
 TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 {
-	// Tabs: 0 = Seeds, 1 = Grow (potten/aarde/water), 2 = Drying (rekken),
-	//       3 = Packing (verpak-tafels + bakjes/jars), 4 = Papers, 5 = Sell.
+	// Categorieën: 0=Seeds, 1=Pots, 2=Drying, 3=Packing, 4=Papers, 5=Soil, 6=Water.
+	// (De telefoon verdeelt deze over de Grow shop en de Supplies-app.)
 	if (Cat == 0)
 	{
 		return GetSeedCatalog();
@@ -316,11 +316,13 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 		bool bMatch = false;
 		switch (Cat)
 		{
-		case 1: bMatch = S.StartsWith(TEXT("Pot")) || S.StartsWith(TEXT("Soil_")) || S.StartsWith(TEXT("WaterBottle")); break;
+		case 1: bMatch = S.StartsWith(TEXT("Pot")); break;
 		case 2: bMatch = S.StartsWith(TEXT("DryRack_")); break;
 		case 3: bMatch = S.StartsWith(TEXT("Bench_")) || S.StartsWith(TEXT("Cont_")); break;
 		case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
-		default: break; // Sell (5) e.d.: geen koop-catalogus
+		case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
+		case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
+		default: break;
 		}
 		if (bMatch) { Out.Add(Id); }
 	}
