@@ -193,7 +193,7 @@ void AWeedShopHUD::DrawHUD()
 					const float PW = 300.f;
 					const float PXp = CX - PW * 0.5f;
 					float PYp = CY - 150.f;
-					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, 158.f);
+					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, 184.f);
 					float ly = PYp + 8.f;
 					const float lx = PXp + 12.f;
 
@@ -240,13 +240,20 @@ void AWeedShopHUD::DrawHUD()
 						}
 						ly += 20.f;
 
-						// Verzorging-balk.
-						const float Care = Plant->GetCareMultiplier();
-						DrawText(FString::Printf(TEXT("Care: %.0f%%"), Care * 100.f),
-							Care >= 0.8f ? FLinearColor::Green : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
-							lx, ly, Font); ly += 18.f;
+						// Water-balk (vocht nu; loopt leeg, vul bij met de fles).
+						const float Wtr = Plant->GetWaterLevel();
+						DrawText(FString::Printf(TEXT("Water: %.0f%%"), Wtr * 100.f),
+							Wtr >= 0.3f ? FLinearColor(0.4f, 0.8f, 1.f) : FLinearColor(1.f, 0.55f, 0.3f), lx, ly, Font); ly += 16.f;
 						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
-						DrawRect(FLinearColor(0.3f, 0.6f, 1.f, 0.95f), lx, ly, (PW - 24.f) * Care, 8.f); ly += 16.f;
+						DrawRect(FLinearColor(0.3f, 0.7f, 1.f, 0.95f), lx, ly, (PW - 24.f) * Wtr, 8.f); ly += 16.f;
+
+						// Gezondheid/care-balk (volgt het water; bepaalt de kwaliteit).
+						const float Care = Plant->GetCareMultiplier();
+						DrawText(FString::Printf(TEXT("Health: %.0f%%"), Care * 100.f),
+							Care >= 0.8f ? FLinearColor::Green : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
+							lx, ly, Font); ly += 16.f;
+						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
+						DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), lx, ly, (PW - 24.f) * Care, 8.f); ly += 16.f;
 
 						DrawText(FString::Printf(TEXT("Expected total: %.0fg @ %.0f%% THC"),
 							Plant->GetEstimatedTotalYield(), Plant->GetEstimatedThcPercent()),

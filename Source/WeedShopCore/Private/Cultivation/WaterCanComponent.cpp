@@ -27,12 +27,9 @@ int32 UWaterCanComponent::GetMaxCharges() const
 	{
 		return 0;
 	}
-	// Betere flessen later = meer capaciteit. Nu: plastic fles = 3 slokken.
-	if (Inv->HasItem(FName(TEXT("WaterBottle_Plastic")), 1))
-	{
-		return 3;
-	}
-	return 0;
+	// Elke fles die je draagt voegt capaciteit toe (3 slokken per plastic fles). Meer flessen =
+	// meer water dat je kunt meenemen. (Betere flessen kun je later met meer capaciteit toevoegen.)
+	return Inv->GetQuantity(FName(TEXT("WaterBottle_Plastic"))) * 3;
 }
 
 void UWaterCanComponent::Fill()

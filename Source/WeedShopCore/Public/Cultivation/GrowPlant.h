@@ -90,9 +90,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	int32 GetSoilUsesLeft() const { return SoilUsesLeft; }
 
+	// Gezondheid/verzorging nu (0..1) — volgt uit het waterpeil; bepaalt samen met tijd de kwaliteit.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetCareMultiplier() const { return CareMultiplier; }
 
+	// Waterpeil in de pot (0..1) — loopt leeg, vul je bij met de fles. Aparte stat van care.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetWaterLevel() const { return WaterLevel; }
+
+	// Tijd-gewogen gemiddelde gezondheid = de kwaliteit die je bij de oogst krijgt (0..1).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetCareAvg() const { return CareAvg; }
 
@@ -152,6 +158,9 @@ protected:
 
 	UPROPERTY(Replicated)
 	float CareAvg = 0.6f;            // tijd-gewogen gemiddelde = kwaliteit
+
+	UPROPERTY(Replicated)
+	float WaterLevel = 0.6f;         // vocht in de pot (0..1), apart van care
 
 	float CareSum = 0.f;
 	float CareTime = 0.f;

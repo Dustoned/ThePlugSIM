@@ -95,6 +95,7 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, SlotPhase);
 	DOREPLIFETIME(AGrowPlant, CareMultiplier);
 	DOREPLIFETIME(AGrowPlant, CareAvg);
+	DOREPLIFETIME(AGrowPlant, WaterLevel);
 	DOREPLIFETIME(AGrowPlant, SoilId);
 	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
 }
@@ -159,10 +160,17 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	}
 	UpdatePhases();
 
-	// Verzorging pot-breed.
+	// Waterpeil loopt langzaam leeg (isolatie-upgrade + pot-retentie vertragen dit).
 	const float MaxCare = GetMaxCare();
 	const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f;
-	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.0045f * (1.f - CareRetention) * LeakMul, 0.3f, MaxCare);
+	WaterLevel = FMath::Clamp(WaterLevel - DeltaSeconds * 0.02f * (1.f - CareRetention * 0.5f) * LeakMul, 0.f, 1.f);
+
+	// Gezondheid/care volgt het waterpeil: genoeg water -> stijgt richting het pot-plafond;
+	// te droog -> zakt. Last-minute water geven herstelt de gemiddelde kwaliteit dus niet.
+	const float Target = (WaterLevel >= 0.25f) ? MaxCare : 0.3f;
+	CareMultiplier = FMath::Clamp(FMath::FInterpTo(CareMultiplier, Target, DeltaSeconds, 0.2f), 0.3f, MaxCare);
+
+	// Kwaliteit = tijd-gewogen gemiddelde gezondheid.
 	CareSum += CareMultiplier * DeltaSeconds;
 	CareTime += DeltaSeconds;
 	CareAvg = (CareTime > 0.f) ? (CareSum / CareTime) : CareMultiplier;
@@ -277,6 +285,7 @@ bool AGrowPlant::TryPlantNextSlot(APawn* InstigatorPawn, FName SeedItem)
 	{
 		CareMultiplier = FMath::Min(0.6f, GetMaxCare());
 		CareSum = 0.f; CareTime = 0.f; CareAvg = CareMultiplier;
+		WaterLevel = 0.6f;
 	}
 
 	SlotStrain[Empty] = StrainToPlant;
@@ -309,11 +318,11 @@ void AGrowPlant::WaterAll(APawn* InstigatorPawn)
 		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Water bottle is empty - fill it at the sink.")); }
 		return;
 	}
-	CareMultiplier = FMath::Clamp(CareMultiplier + 0.2f, 0.3f, GetMaxCare());
+	WaterLevel = FMath::Clamp(WaterLevel + 0.6f, 0.f, 1.f);
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan,
-			FString::Printf(TEXT("Pot watered (care %.0f%%, water left %d/%d)"), CareMultiplier * 100.f, Can->GetCharges(), Can->GetMaxCharges()));
+			FString::Printf(TEXT("Pot watered (water %.0f%%, bottle %d/%d)"), WaterLevel * 100.f, Can->GetCharges(), Can->GetMaxCharges()));
 	}
 }
 
@@ -385,7 +394,7 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 	{
 		return FText::FromString(FString::Printf(TEXT("Hold a seed + E to plant  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
 	}
-	return FText::FromString(FString::Printf(TEXT("Hold bottle + E to water  (care %.0f%%)"), CareMultiplier * 100.f));
+	return FText::FromString(FString::Printf(TEXT("Hold bottle + E to water  (water %.0f%%)"), WaterLevel * 100.f));
 }
 
 float AGrowPlant::GetMaxCare() const
