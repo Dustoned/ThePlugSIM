@@ -51,6 +51,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
 	bool IsPlacing() const { return bPlacing; }
 
+	// Hoe lang (sec) je de oppak-toets moet inhouden om een pot op te pakken.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Build")
+	float PickupHoldDuration = 0.5f;
+
+	// Voortgang van het oppakken (0..1), voor de HUD. 0 als je nu niets oppakt.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
+	float GetPickupAlpha() const { return PickupHoldDuration > 0.f ? FMath::Clamp(PickupHoldAccum / PickupHoldDuration, 0.f, 1.f) : 0.f; }
+
 	// Of de huidige preview-positie geldig is (kijkt naar een vlak/de vloer).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
 	bool IsPlacementValid() const { return bValidSpot; }
@@ -69,6 +77,10 @@ protected:
 	// spelers, zodat zij de ghost ook zien). Unreliable + getemporiseerd.
 	UFUNCTION(Server, Unreliable)
 	void ServerUpdatePreview(bool bInPlacing, FVector Location, float Yaw, bool bValid);
+
+	// Server: pak een (lege) pot weer op -> terug als item in de inventory.
+	UFUNCTION(Server, Reliable)
+	void ServerPickup(AActor* Target);
 
 	// Maakt de ghost-mesh + dynamisch materiaal aan indien nodig.
 	void EnsureGhost();
@@ -105,6 +117,9 @@ protected:
 
 	// Throttle voor het versturen van de preview naar de server.
 	float PreviewSendAccum = 0.f;
+
+	// Opgebouwde tijd dat de oppak-toets ingedrukt is terwijl je een pot aankijkt.
+	float PickupHoldAccum = 0.f;
 
 	// --- Gerepliceerde preview-staat (voor de ghost bij andere co-op spelers) ---
 	UPROPERTY(Replicated)

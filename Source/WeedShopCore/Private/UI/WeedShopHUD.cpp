@@ -192,7 +192,16 @@ void AWeedShopHUD::DrawHUD()
 					if (!Plant->IsPlanted())
 					{
 						DrawText(TEXT("Empty pot"), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
-						DrawText(TEXT("Plant a seed (E)."), FLinearColor::White, lx, ly, Font);
+						DrawText(TEXT("Plant a seed (E)   |   hold G to pick up"), FLinearColor::White, lx, ly, Font); ly += 18.f;
+						if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
+						{
+							const float A = BC->GetPickupAlpha();
+							if (A > 0.f)
+							{
+								DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
+								DrawRect(FLinearColor(1.f, 0.8f, 0.2f, 0.95f), lx, ly, (PW - 24.f) * A, 8.f);
+							}
+						}
 					}
 					else
 					{

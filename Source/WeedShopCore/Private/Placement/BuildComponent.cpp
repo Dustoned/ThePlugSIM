@@ -4,6 +4,7 @@
 #include "Cultivation/GrowPlant.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Interaction/InteractionComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
@@ -155,6 +156,31 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		return;
 	}
 
+	// Oppakken: houd G ingedrukt terwijl je een pot aankijkt -> na PickupHoldDuration terug
+	// als item in de inventory (server-authoritative).
+	{
+		AActor* Focus = nullptr;
+		if (const UInteractionComponent* IC = GetOwner()->FindComponentByClass<UInteractionComponent>())
+		{
+			Focus = IC->GetFocusedActor();
+		}
+		const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
+		AGrowPlant* FocusPot = Cast<AGrowPlant>(Focus);
+		if (PC && FocusPot && PC->IsInputKeyDown(EKeys::G))
+		{
+			PickupHoldAccum += DeltaTime;
+			if (PickupHoldAccum >= PickupHoldDuration)
+			{
+				ServerPickup(FocusPot);
+				PickupHoldAccum = 0.f;
+			}
+		}
+		else
+		{
+			PickupHoldAccum = 0.f;
+		}
+	}
+
 	// Auto-preview: heb je een plaatsbaar item in de hand (en geen UI open), toon meteen de
 	// preview zodat je direct kunt plaatsen. Schakel je naar iets anders, dan verdwijnt 'ie.
 	{
@@ -201,6 +227,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				PreviewLocation = Hit.ImpactPoint;
 				PreviewRotation = FRotator(0.f, ViewRot.Yaw, 0.f); // recht overeind, yaw van de speler
 				float FloorNormalZ = Hit.ImpactNormal.Z;
+				// Mik je (onder welke hoek dan ook) op een pot -> nooit geldig (geen stapelen).
+				bool bOnPlaceable = (Cast<AGrowPlant>(Hit.GetActor()) != nullptr);
 
 				// Shift ingedrukt -> snap XY op het raster (en yaw op 90°-stappen) voor nette rijen.
 				const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
@@ -232,15 +260,16 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					{
 						PreviewLocation.Z = DownHit.ImpactPoint.Z;
 						FloorNormalZ = DownHit.ImpactNormal.Z;
+						bOnPlaceable = (Cast<AGrowPlant>(DownHit.GetActor()) != nullptr);
 					}
 				}
 
 				// Alleen op grondniveau plaatsen: niet bovenop een pot/tafel/ander object
-				// (dat ligt hoger dan je voeten). Plus vlakke vloer + genoeg vrije ruimte.
+				// (dat ligt hoger dan je voeten). Plus vlakke vloer, niet op een pot, genoeg ruimte.
 				const bool bFloor = FloorNormalZ > 0.7f;
 				const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
 				const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
-				bValidSpot = bFloor && bGroundLevel && !IsSpotBlocked(PreviewLocation);
+				bValidSpot = bFloor && bGroundLevel && !bOnPlaceable && !IsSpotBlocked(PreviewLocation);
 			}
 		}
 	}
@@ -276,6 +305,38 @@ void UBuildComponent::ServerUpdatePreview_Implementation(bool bInPlacing, FVecto
 	RepLocation = Location;
 	RepYaw = Yaw;
 	bRepValid = bValid;
+}
+
+void UBuildComponent::ServerPickup_Implementation(AActor* Target)
+{
+	AGrowPlant* Pot = Cast<AGrowPlant>(Target);
+	if (!Pot)
+	{
+		return;
+	}
+	// Afstand-check (anti-cheat/lag): pot moet dicht bij de speler staan.
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Pot->GetActorLocation()) > PlaceDistance + 150.f)
+	{
+		return;
+	}
+	// Staat er een plant in? Eerst oogsten.
+	if (Pot->IsPlanted())
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Harvest the plant before picking up the pot."));
+		}
+		return;
+	}
+	if (UInventoryComponent* Inv = GetOwnerInventory())
+	{
+		Inv->AddItem(FName(TEXT("Pot")), 1);
+	}
+	Pot->Destroy();
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Pot picked up."));
+	}
 }
 
 void UBuildComponent::UpdateRemoteGhost()
