@@ -49,6 +49,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Build")
 	void ConfirmPlacement();
 
+	// Draai het te plaatsen object 90° (toets R tijdens plaats-modus).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Build")
+	void RotatePlacement();
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
 	bool IsPlacing() const { return bPlacing; }
 
@@ -120,6 +124,9 @@ protected:
 
 	// Throttle voor het versturen van de preview naar de server.
 	float PreviewSendAccum = 0.f;
+
+	// Handmatige draai-offset (graden) bovenop de kijkrichting; toets R stapt met 90°.
+	float PlaceYawOffset = 0.f;
 
 	// Opgebouwde tijd dat de oppak-toets ingedrukt is terwijl je een pot aankijkt.
 	float PickupHoldAccum = 0.f;

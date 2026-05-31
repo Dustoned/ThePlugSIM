@@ -101,9 +101,15 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	PlayerInputComponent->BindKey(EKeys::MouseScrollUp,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarPrev);
 	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AThePlugSIMCharacter::HotbarNext);
 
-	// Straat-werving: F geeft de aangekeken NPC een gratis sample; R draait een joint.
+	// Straat-werving: F geeft de aangekeken NPC een gratis sample; J opent het joint-roll-paneel.
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
-	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &AThePlugSIMCharacter::ToggleRollUI);
+	PlayerInputComponent->BindKey(EKeys::J, IE_Pressed, this, &AThePlugSIMCharacter::ToggleRollUI);
+
+	// R draait het te plaatsen meubel 90° tijdens de plaats-modus (anders niets).
+	if (UBuildComponent* B = Build.Get())
+	{
+		PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, B, &UBuildComponent::RotatePlacement);
+	}
 
 	// Plaats-modus is automatisch: een plaatsbaar item in de hand toont meteen de preview
 	// (zie UBuildComponent). Links-klik plaatst; schakel naar een ander hotbar-slot om te stoppen.

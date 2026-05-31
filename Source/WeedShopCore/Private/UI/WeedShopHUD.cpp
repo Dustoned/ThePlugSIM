@@ -161,8 +161,8 @@ void AWeedShopHUD::DrawHUD()
 				const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
 				const float CY = Canvas ? Canvas->ClipY : 720.f;
 				const bool bValid = BC->IsPlacementValid();
-				DrawText(bValid ? TEXT("Left-click to place   |   hold Shift = snap to grid   |   switch hotbar slot to put away")
-								: TEXT("Aim at the floor...   |   hold Shift = snap to grid"),
+				DrawText(bValid ? TEXT("Left-click to place   |   R = rotate   |   Shift = snap to grid   |   switch slot to put away")
+								: TEXT("Aim at the floor...   |   R = rotate   |   Shift = snap to grid"),
 					bValid ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(1.f, 0.8f, 0.4f),
 					CX - 220.f, CY - 140.f, Font);
 			}
@@ -311,7 +311,7 @@ void AWeedShopHUD::DrawHUD()
 					bPlaceable ? TEXT("   -   left-click to place") : TEXT(""));
 			}
 			DrawText(HandLine, FLinearColor(1.f, 0.95f, 0.6f), (ScreenW - TotalW) * 0.5f, SY - 24.f, Font);
-			DrawText(TEXT("I = inventory   |   R = roll joint   |   F = give sample (look at NPC)"),
+			DrawText(TEXT("I = inventory   |   J = roll joint   |   F = give sample (look at NPC)"),
 				FLinearColor(0.7f, 0.7f, 0.7f), (ScreenW - TotalW) * 0.5f, SY - 44.f, Font);
 		}
 	}

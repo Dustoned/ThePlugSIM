@@ -86,6 +86,7 @@ void UBuildComponent::StartPlacing(FName ItemId)
 	CurrentDef = Def;
 	bPlacing = true;
 	bValidSpot = false;
+	PlaceYawOffset = 0.f;
 
 	EnsureGhost();
 	if (Ghost)
@@ -232,7 +233,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			if (bAimHit)
 			{
 				PreviewLocation = Hit.ImpactPoint;
-				PreviewRotation = FRotator(0.f, ViewRot.Yaw, 0.f); // recht overeind, yaw van de speler
+				PreviewRotation = FRotator(0.f, ViewRot.Yaw + PlaceYawOffset, 0.f); // kijkrichting + handmatige R-draai
 				float FloorNormalZ = Hit.ImpactNormal.Z;
 				// Mik je (onder welke hoek dan ook) op een pot -> nooit geldig (geen stapelen).
 				bool bOnPlaceable = (Cast<AGrowPlant>(Hit.GetActor()) != nullptr) || (Cast<APlaceableProp>(Hit.GetActor()) != nullptr);
@@ -447,6 +448,14 @@ void UBuildComponent::ConfirmPlacement()
 	}
 	ServerPlace(PlacingItemId, PreviewLocation, PreviewRotation);
 	CancelPlacing();
+}
+
+void UBuildComponent::RotatePlacement()
+{
+	if (bPlacing)
+	{
+		PlaceYawOffset = FMath::Fmod(PlaceYawOffset + 90.f, 360.f);
+	}
 }
 
 void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location, FRotator Rotation)
