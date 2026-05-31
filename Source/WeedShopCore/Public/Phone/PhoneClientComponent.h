@@ -104,6 +104,8 @@ public:
 		FString Summary;          // korte omschrijving (bv. "3x Rolling papers, 2x ...")
 		float PlacedTime = 0.f;   // wereldtijd bij plaatsen
 		float ArriveTime = 0.f;   // wereldtijd van aankomst
+		bool bArrived = false;    // drone heeft het pakket bij de deur laten vallen (wacht op oppakken)
+		TWeakObjectPtr<class ADeliveryDrone> Drone;
 		TArray<FName> Ids;
 		TArray<int32> Qtys;
 	};
@@ -113,9 +115,18 @@ public:
 	float GetDeliveryProgress(const FPendingDelivery& D) const;
 	// Resterende seconden tot aankomst.
 	float GetDeliverySecondsLeft(const FPendingDelivery& D) const;
-	// Annuleer een bestelling (server): timer stop, fee terug, regel weg.
+	// Annuleer een bestelling (server): drone weg, fee terug, regel weg. Kan alleen zolang 'ie nog vliegt.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void CancelDelivery(int32 OrderId);
+
+	// Door de drone aangeroepen: het pakket is bij de deur afgeleverd (markeer als 'aangekomen').
+	void NotifyDroneArrived(int32 OrderId);
+	// Door het pakket aangeroepen wanneer het volledig is opgepakt: ruim de pending-regel op.
+	void OnPackagePickedUp(int32 OrderId);
+	// True als de bestelling al bij de deur ligt (drone gedropt, wacht op oppakken).
+	bool IsDeliveryArrived(const FPendingDelivery& D) const { return D.bArrived; }
+	// Droppunt voor leveringen (voordeur): getagde actor "DeliveryPoint", anders een CustomerSpawner.
+	FVector FindDeliveryPoint() const;
 
 	// Cijfertoets-handler (1-6) als reserve naast klikken.
 	void HandleNumberKey(FKey Key);

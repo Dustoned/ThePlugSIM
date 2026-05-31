@@ -210,7 +210,7 @@ int32 UPhoneWidget::PackagesSignature() const
 	if (!Phone.IsValid()) { return 0; }
 	const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Phone->GetPendingDeliveries();
 	int32 Sig = Pend.Num() * 1000003;
-	for (const UPhoneClientComponent::FPendingDelivery& D : Pend) { Sig = Sig * 31 + D.OrderId; }
+	for (const UPhoneClientComponent::FPendingDelivery& D : Pend) { Sig = Sig * 31 + D.OrderId + (D.bArrived ? 7 : 0); }
 	return Sig;
 }
 
@@ -284,25 +284,35 @@ void UPhoneWidget::FillStoreList()
 				CVB->AddChildToVerticalBox(SumT);
 			}
 
-			// Progress bar.
+			const bool bArrived = D.bArrived;
+
+			// Progress bar (vol + groen als 'ie bij de deur ligt).
 			USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
 			BarSz->SetHeightOverride(14.f);
 			UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
-			Bar->SetFillColorAndOpacity(FLinearColor(0.4f, 0.75f, 1.f));
-			Bar->SetPercent(Ph->GetDeliveryProgress(D));
+			Bar->SetFillColorAndOpacity(bArrived ? FLinearColor(0.4f, 0.9f, 0.45f) : FLinearColor(0.4f, 0.75f, 1.f));
+			Bar->SetPercent(bArrived ? 1.f : Ph->GetDeliveryProgress(D));
 			BarSz->SetContent(Bar);
 			CVB->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
-			PkgBars.Add(OrderId, Bar);
+			if (!bArrived) { PkgBars.Add(OrderId, Bar); }
 
-			// ETA-regel + annuleer-knop.
+			// Status-regel: ETA + Cancel (onderweg), of "bij de deur" (aangekomen).
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			const int32 Left = FMath::CeilToInt(Ph->GetDeliverySecondsLeft(D));
-			UTextBlock* EtaT = MakeText(FString::Printf(TEXT("Arrives in %d:%02d"), Left / 60, Left % 60), 12, FLinearColor(0.85f, 0.9f, 1.f));
-			UHorizontalBoxSlot* ES = Row->AddChildToHorizontalBox(EtaT);
-			ES->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); ES->SetVerticalAlignment(VAlign_Center);
-			PkgEtas.Add(OrderId, EtaT);
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.18f),
-				[this, Ph, OrderId]() { Ph->CancelDelivery(OrderId); LastPkgSig = -1; RefreshStore(); }, 11));
+			if (bArrived)
+			{
+				UTextBlock* AtDoor = MakeText(TEXT("At the door - go pick it up"), 12, FLinearColor(0.6f, 1.f, 0.6f));
+				Row->AddChildToHorizontalBox(AtDoor)->SetVerticalAlignment(VAlign_Center);
+			}
+			else
+			{
+				const int32 Left = FMath::CeilToInt(Ph->GetDeliverySecondsLeft(D));
+				UTextBlock* EtaT = MakeText(FString::Printf(TEXT("Drone on the way - %d:%02d"), Left / 60, Left % 60), 12, FLinearColor(0.85f, 0.9f, 1.f));
+				UHorizontalBoxSlot* ES = Row->AddChildToHorizontalBox(EtaT);
+				ES->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); ES->SetVerticalAlignment(VAlign_Center);
+				PkgEtas.Add(OrderId, EtaT);
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.18f),
+					[this, Ph, OrderId]() { Ph->CancelDelivery(OrderId); LastPkgSig = -1; RefreshStore(); }, 11));
+			}
 			CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
 
 			StoreScroll->AddChild(CardB);

@@ -8,6 +8,9 @@
 #include "Inventory/InventoryComponent.h"
 #include "Economy/EconomyComponent.h"
 #include "Customer/CustomerBase.h"
+#include "Customer/CustomerSpawner.h"
+#include "World/DeliveryDrone.h"
+#include "EngineUtils.h"
 #include "Cultivation/PotTypes.h"
 #include "Cultivation/GrowPlant.h"
 #include "Engine/World.h"
@@ -691,15 +694,9 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& It
 		return;
 	}
 
-	const float Delay = DeliveryDelaySeconds(DeliveryOption);
-	if (Delay <= 0.f)
-	{
-		DeliverCart(0, ItemIds, Quantities); // instant
-		return;
-	}
-
-	// Plan de levering; items + itemprijs komen na de levertijd. Registreer een pending-regel
-	// zodat de Packages-tab voortgang/ETA kan tonen en je 'm kunt annuleren.
+	// Een bezorgdrone vliegt naar de voordeur over de levertijd en laat daar het pakket vallen.
+	// Instant krijgt een korte vlucht zodat de drone alsnog even komt aanvliegen.
+	const float Flight = FMath::Max(DeliveryDelaySeconds(DeliveryOption), 5.f);
 	const int32 OrderId = NextOrderId++;
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
 
@@ -708,7 +705,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& It
 	PD.DeliveryOpt = DeliveryOption;
 	PD.FeeCents = Fee;
 	PD.PlacedTime = Now;
-	PD.ArriveTime = Now + Delay;
+	PD.ArriveTime = Now + Flight;
 	PD.Ids = ItemIds;
 	PD.Qtys = Quantities;
 	for (int32 i = 0; i < ItemIds.Num(); ++i)
@@ -718,22 +715,87 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& It
 		if (!PD.Summary.IsEmpty()) { PD.Summary += TEXT(", "); }
 		PD.Summary += FString::Printf(TEXT("%dx %s"), Q, *WeedUI::PrettyItemName(ItemIds[i]));
 	}
-	PendingDeliveries.Add(PD);
 
-	TArray<FName> CapIds = ItemIds; TArray<int32> CapQ = Quantities;
-	FTimerHandle H;
-	TWeakObjectPtr<UPhoneClientComponent> Self(this);
-	GetWorld()->GetTimerManager().SetTimer(H, [Self, OrderId, CapIds, CapQ]()
+	// Drone spawnen die naar de voordeur vliegt en daar het pakket dropt.
+	if (UWorld* World = GetWorld())
 	{
-		if (Self.IsValid()) { Self->DeliverCart(OrderId, CapIds, CapQ); }
-	}, Delay, false);
-	DeliveryTimers.Add(OrderId, H);
+		const FVector Drop = FindDeliveryPoint();
+		const FVector Start = Drop + FVector(-1700.f, 700.f, 1500.f); // komt van buiten/boven aanvliegen
+		ADeliveryDrone* Drone = World->SpawnActor<ADeliveryDrone>(ADeliveryDrone::StaticClass(), FTransform(Start));
+		if (Drone)
+		{
+			Drone->Setup(Start, Drop, Flight, OrderId, ItemIds, Quantities, this);
+			PD.Drone = Drone;
+		}
+	}
+	PendingDeliveries.Add(PD);
 
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
-			FString::Printf(TEXT("Order placed - %s delivery (%s). Fee EUR %.2f"), *DeliveryName(DeliveryOption), *DeliveryTimeText(DeliveryOption), Fee / 100.f));
+			FString::Printf(TEXT("Order placed - %s delivery. A drone is bringing it to your door. Fee EUR %.2f"),
+				*DeliveryName(DeliveryOption), Fee / 100.f));
 	}
+}
+
+FVector UPhoneClientComponent::FindDeliveryPoint() const
+{
+	const UWorld* World = GetWorld();
+	FVector Point = FVector::ZeroVector;
+	bool bFound = false;
+
+	if (World)
+	{
+		// 1) Een door de level-designer getagde actor "DeliveryPoint".
+		for (TActorIterator<AActor> It(const_cast<UWorld*>(World)); It; ++It)
+		{
+			if (It->ActorHasTag(FName(TEXT("DeliveryPoint")))) { Point = It->GetActorLocation(); bFound = true; break; }
+		}
+		// 2) Anders: de (eerste) plek waar klanten verschijnen = bij de voordeur.
+		if (!bFound)
+		{
+			for (TActorIterator<ACustomerSpawner> It(const_cast<UWorld*>(World)); It; ++It)
+			{
+				Point = It->GetActorLocation(); bFound = true; break;
+			}
+		}
+	}
+	// 3) Fallback: voor de speler.
+	if (!bFound)
+	{
+		if (const APawn* P = Cast<APawn>(GetOwner()))
+		{
+			Point = P->GetActorLocation() + P->GetActorForwardVector() * 300.f;
+		}
+	}
+
+	// Op de grond plaatsen (recht naar beneden tracen).
+	if (World)
+	{
+		FHitResult Hit;
+		const FVector DStart = Point + FVector(0.f, 0.f, 300.f);
+		const FVector DEnd = Point - FVector(0.f, 0.f, 600.f);
+		FCollisionQueryParams Params;
+		if (GetOwner()) { Params.AddIgnoredActor(GetOwner()); }
+		if (World->LineTraceSingleByChannel(Hit, DStart, DEnd, ECC_Visibility, Params))
+		{
+			Point.Z = Hit.ImpactPoint.Z;
+		}
+	}
+	return Point;
+}
+
+void UPhoneClientComponent::NotifyDroneArrived(int32 OrderId)
+{
+	for (FPendingDelivery& D : PendingDeliveries)
+	{
+		if (D.OrderId == OrderId) { D.bArrived = true; D.Drone = nullptr; break; }
+	}
+}
+
+void UPhoneClientComponent::OnPackagePickedUp(int32 OrderId)
+{
+	PendingDeliveries.RemoveAll([OrderId](const FPendingDelivery& D) { return D.OrderId == OrderId; });
 }
 
 float UPhoneClientComponent::GetDeliveryProgress(const FPendingDelivery& D) const
@@ -760,11 +822,16 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 	const int32 Idx = PendingDeliveries.IndexOfByPredicate([OrderId](const FPendingDelivery& D) { return D.OrderId == OrderId; });
 	if (Idx == INDEX_NONE) { return; }
 
-	// Stop de timer.
-	if (FTimerHandle* H = DeliveryTimers.Find(OrderId))
+	// Ligt het pakket al bij de deur? Dan niet annuleren - gewoon oppakken.
+	if (PendingDeliveries[Idx].bArrived)
 	{
-		GetWorld()->GetTimerManager().ClearTimer(*H);
-		DeliveryTimers.Remove(OrderId);
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Already delivered - pick it up at the door.")); }
+		return;
+	}
+	// Drone nog onderweg -> laat 'm verdwijnen.
+	if (ADeliveryDrone* Drone = PendingDeliveries[Idx].Drone.Get())
+	{
+		Drone->Destroy();
 	}
 	// Bezorgkosten teruggeven (items waren nog niet afgerekend).
 	const int64 Fee = PendingDeliveries[Idx].FeeCents;
