@@ -98,6 +98,7 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> StoreTabBtns;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> StoreCartToggle;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> StorePackagesToggle;
+	UPROPERTY() TObjectPtr<UTextBlock> StorePackagesLabel;
 	int32 DeliveryOpt = 0;
 	void UpdateStoreCartText();
 

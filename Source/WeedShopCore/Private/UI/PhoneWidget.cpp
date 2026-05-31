@@ -24,6 +24,8 @@
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
 #include "Components/TextBlock.h"
+#include "Components/Button.h"
+#include "Components/ButtonSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/ProgressBar.h"
 #include "Styling/SlateTypes.h"
@@ -194,10 +196,10 @@ void UPhoneWidget::RefreshStore()
 		StoreTabBtns[i]->SetStyle(St);
 	}
 	if (StoreCartToggle) { StoreCartToggle->SetContent(MakeText(bCartView ? TEXT("Shop") : TEXT("View cart"), 11, FLinearColor::White, true)); }
-	if (StorePackagesToggle)
+	if (StorePackagesLabel)
 	{
-		StorePackagesToggle->SetContent(MakeText(bPackagesView ? TEXT("Shop")
-			: FString::Printf(TEXT("Packages (%d)"), Phone->GetPendingCount()), 13, FLinearColor::White, true));
+		StorePackagesLabel->SetText(FText::FromString(bPackagesView ? TEXT("Shop")
+			: FString::Printf(TEXT("Packages (%d)"), Phone->GetPendingCount())));
 	}
 	UpdateStoreCartText();
 	FillStoreList();
@@ -586,16 +588,26 @@ void UPhoneWidget::RefreshContent()
 	if (App == 1) // Suppliers: Packages-knop rechtsboven, naast de titel.
 	{
 		const int32 PkgN = Phone->GetPendingCount();
-		StorePackagesToggle = MakeActionBtn(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN),
-			FLinearColor(0.2f, 0.3f, 0.45f),
-			[this]() { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); }, 13);
-		// Zelfde clean/compacte stijl als de Back-knop (rond 10, padding 10x5).
+		const FLinearColor PkgCol(0.40f, 0.30f, 0.52f); // paars, voor onderscheid t.o.v. de blauwe Back
+
+		StorePackagesToggle = WidgetTree->ConstructWidget<UWeedActionButton>();
+		StorePackagesToggle->OnClicked.AddDynamic(StorePackagesToggle, &UWeedActionButton::Handle);
+		StorePackagesToggle->OnAction.BindLambda([this](int32, int32) { bPackagesView = !bPackagesView; bCartView = false; LastPkgSig = -1; RefreshStore(); });
 		FButtonStyle PS;
-		PS.Normal = RoundedBrush(FLinearColor(0.2f, 0.3f, 0.45f), 10.f);
-		PS.Hovered = RoundedBrush(FLinearColor(0.2f, 0.3f, 0.45f) * 1.3f, 10.f);
-		PS.Pressed = RoundedBrush(FLinearColor(0.2f, 0.3f, 0.45f) * 0.8f, 10.f);
+		PS.Normal = RoundedBrush(PkgCol, 10.f);
+		PS.Hovered = RoundedBrush(PkgCol * 1.3f, 10.f);
+		PS.Pressed = RoundedBrush(PkgCol * 0.8f, 10.f);
 		PS.NormalPadding = FMargin(10.f, 5.f); PS.PressedPadding = FMargin(10.f, 5.f);
 		StorePackagesToggle->SetStyle(PS);
+
+		// Eén vast label dat we alleen van tekst veranderen + expliciet gecentreerd in de knop.
+		StorePackagesLabel = MakeText(bPackagesView ? TEXT("Shop") : FString::Printf(TEXT("Packages (%d)"), PkgN), 13, FLinearColor::White, true);
+		StorePackagesToggle->SetContent(StorePackagesLabel);
+		if (UButtonSlot* BSlot = Cast<UButtonSlot>(StorePackagesLabel->Slot))
+		{
+			BSlot->SetHorizontalAlignment(HAlign_Center);
+			BSlot->SetVerticalAlignment(VAlign_Center);
+		}
 		UHorizontalBoxSlot* PkgS = Header->AddChildToHorizontalBox(StorePackagesToggle);
 		PkgS->SetVerticalAlignment(VAlign_Center);
 	}
@@ -785,9 +797,9 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (!bHome && App == 1)
 	{
 		const int32 PkgN = Phone->GetPendingCount();
-		if (StorePackagesToggle && !bPackagesView)
+		if (StorePackagesLabel && !bPackagesView)
 		{
-			StorePackagesToggle->SetContent(MakeText(FString::Printf(TEXT("Packages (%d)"), PkgN), 13, FLinearColor::White, true));
+			StorePackagesLabel->SetText(FText::FromString(FString::Printf(TEXT("Packages (%d)"), PkgN)));
 		}
 		if (bPackagesView)
 		{
