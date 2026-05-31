@@ -560,26 +560,29 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	else if (Def.bIsDryRack)
 	{
-		// Droogrek: deferred zodat de tier al klopt vóór BeginPlay.
+		// Droogrek: mesh-pivot zit in het midden -> origin een halve hoogte boven de vloer
+		// (net als de ghost) zodat 'ie niet half in de grond zakt. Deferred zodat de tier klopt.
+		const FTransform RackTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
 		ADryingRack* Rack = World->SpawnActorDeferred<ADryingRack>(
-			ADryingRack::StaticClass(), FTransform(Rotation, Location),
+			ADryingRack::StaticClass(), RackTM,
 			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 		if (Rack)
 		{
 			Rack->RackTier = ItemId;
-			Rack->FinishSpawning(FTransform(Rotation, Location));
+			Rack->FinishSpawning(RackTM);
 		}
 	}
 	else if (Def.bIsPackBench)
 	{
-		// Deferred zodat de bench-tier al klopt vóór BeginPlay.
+		// Verpak-tafel: idem, mesh-pivot in het midden -> origin een halve hoogte omhoog.
+		const FTransform BenchTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
 		APackBench* Bench = World->SpawnActorDeferred<APackBench>(
-			APackBench::StaticClass(), FTransform(Rotation, Location),
+			APackBench::StaticClass(), BenchTM,
 			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 		if (Bench)
 		{
 			Bench->BenchTier = ItemId;
-			Bench->FinishSpawning(FTransform(Rotation, Location));
+			Bench->FinishSpawning(BenchTM);
 		}
 	}
 	else if (Def.bIsPot)

@@ -47,7 +47,9 @@ protected:
 	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;
 	UPROPERTY() TObjectPtr<UTextBlock> RelationText;
 	UPROPERTY() TObjectPtr<UTextBlock> PreviewText;
+	UPROPERTY() TObjectPtr<UTextBlock> OfferLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> StrainBox;
+	UPROPERTY() TObjectPtr<UTextBlock> NoWeedText;
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<ACustomerBase> LastCustomer;

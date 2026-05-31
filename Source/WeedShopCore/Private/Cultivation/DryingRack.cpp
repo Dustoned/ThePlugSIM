@@ -4,6 +4,7 @@
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Inventory/InventoryComponent.h"
+#include "Placement/PlaceableTypes.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
@@ -32,21 +33,43 @@ ADryingRack::ADryingRack()
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeFinder(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> MatFinder(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 	if (CubeFinder.Succeeded()) { Mesh->SetStaticMesh(CubeFinder.Object); }
-	// Rek: breed en hoog, ondiep (~120 x 30 x 150 cm).
+	// Rek: breed en hoog, ondiep (~120 x 30 x 150 cm). Exacte schaal komt uit de tier-def.
 	Mesh->SetWorldScale3D(FVector(1.2f, 0.3f, 1.5f));
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	if (MatFinder.Succeeded()) { Mesh->SetMaterial(0, MatFinder.Object); }
 }
 
+void ADryingRack::SetupVisual()
+{
+	FPlaceableDef Def;
+	if (Mesh && GetPlaceableDef(RackTier, Def))
+	{
+		Mesh->SetWorldScale3D(Def.MeshScale);
+	}
+}
+
+void ADryingRack::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	SetupVisual();
+}
+
+void ADryingRack::OnRep_Tier()
+{
+	SetupVisual();
+}
+
 void ADryingRack::BeginPlay()
 {
 	Super::BeginPlay();
+	SetupVisual();
 	if (HasAuthority()) { UpdateRep(); } // capaciteit meteen repliceren (ook bij leeg rek)
 }
 
 void ADryingRack::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ADryingRack, RackTier);
 	DOREPLIFETIME(ADryingRack, RepDrying);
 	DOREPLIFETIME(ADryingRack, RepReady);
 	DOREPLIFETIME(ADryingRack, RepCapacity);

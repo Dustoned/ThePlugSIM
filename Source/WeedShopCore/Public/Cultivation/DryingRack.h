@@ -35,11 +35,18 @@ public:
 	ADryingRack();
 
 	virtual void BeginPlay() override;
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
 
-	// Tier-id (gezet bij plaatsen, net als de pot). Bepaalt capaciteit + droogtijd.
-	UPROPERTY(BlueprintReadOnly, Category = "WeedShop|Dry")
+	// Tier-id (gezet bij plaatsen, net als de pot). Bepaalt capaciteit + droogtijd + grootte.
+	UPROPERTY(ReplicatedUsing = OnRep_Tier, BlueprintReadOnly, Category = "WeedShop|Dry")
 	FName RackTier = TEXT("DryRack_Cheap");
+
+	UFUNCTION()
+	void OnRep_Tier();
+
+	// Zet mesh-schaal volgens de tier-definitie (zodat de plaatsing op de vloer klopt).
+	void SetupVisual();
 
 	// Tier-definitie: capaciteit (aantal batches) + droogtijd (sec).
 	static bool GetRackDef(FName Tier, int32& OutCapacity, float& OutDrySeconds);

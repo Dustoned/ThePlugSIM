@@ -104,7 +104,12 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	PreviewText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.55f, 0.95f, 0.6f));
 	VB->AddChildToVerticalBox(PreviewText)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Offer another strain:"), 12, FLinearColor(0.75f, 0.8f, 0.95f)));
+	// Grote, duidelijke melding als je niets te verkopen hebt (verbergt de hele prijs-flow).
+	NoWeedText = WeedUI::Text(WidgetTree, TEXT("You have no packaged weed to sell.\nGrow it, dry it, then bag it first."), 14, FLinearColor(1.f, 0.6f, 0.45f), false, true);
+	VB->AddChildToVerticalBox(NoWeedText)->SetPadding(FMargin(0.f, 14.f, 0.f, 14.f));
+
+	OfferLabel = WeedUI::Text(WidgetTree, TEXT("Offer another strain:"), 12, FLinearColor(0.75f, 0.8f, 0.95f));
+	VB->AddChildToVerticalBox(OfferLabel);
 	StrainBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(StrainBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
@@ -209,6 +214,40 @@ void UDealWidget::UpdateLive()
 	const bool bSub = Ph->IsOfferingSubstitute();
 	const int32 Market = FMath::Max(1, Ph->GetOfferMarketCents());
 	const int32 Ask = Ph->GetDealAskCents();
+
+	// Heb je überhaupt verpakte wiet (Bag_) om te verkopen? Zo niet: toon alleen een duidelijke
+	// melding en verberg de hele prijs/kans/preview-flow.
+	bool bHasWeed = false;
+	if (APawn* P = GetOwningPlayerPawn())
+	{
+		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			for (const FInventoryStack& St : Inv->GetStacks())
+			{
+				if (St.ItemId.ToString().StartsWith(TEXT("Bag_")) && St.Quantity > 0) { bHasWeed = true; break; }
+			}
+		}
+	}
+	const ESlateVisibility DealVis = bHasWeed ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+	const ESlateVisibility SliderVis = bHasWeed ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+	if (NoWeedText) { NoWeedText->SetVisibility(bHasWeed ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
+	if (PriceText)    { PriceText->SetVisibility(DealVis); }
+	if (PriceSlider)  { PriceSlider->SetVisibility(SliderVis); }
+	if (StockText)    { StockText->SetVisibility(DealVis); }
+	if (ChanceText)   { ChanceText->SetVisibility(DealVis); }
+	if (ChanceBar)    { ChanceBar->SetVisibility(DealVis); }
+	if (RelationText) { RelationText->SetVisibility(DealVis); }
+	if (PreviewText)  { PreviewText->SetVisibility(DealVis); }
+	if (OfferLabel)   { OfferLabel->SetVisibility(DealVis); }
+	if (StrainBox)    { StrainBox->SetVisibility(bHasWeed ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
+	if (SubText)      { SubText->SetVisibility(DealVis); }
+	if (!bHasWeed)
+	{
+		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.
+		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dx %s  (market EUR %.2f)"),
+			Qty, *PrettyName(C->DesiredProductId), C->GetMarketPriceCents() / 100.f)));
+		return;
+	}
 
 	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dx %s  (market EUR %.2f)"),
 		Qty, *PrettyName(C->DesiredProductId), C->GetMarketPriceCents() / 100.f)));

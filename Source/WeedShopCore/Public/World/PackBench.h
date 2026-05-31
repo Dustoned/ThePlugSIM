@@ -18,9 +18,18 @@ class WEEDSHOPCORE_API APackBench : public AActor, public IInteractable
 public:
 	APackBench();
 
+	virtual void BeginPlay() override;
+	virtual void OnConstruction(const FTransform& Transform) override;
+
 	// Tier-id (gezet bij plaatsen). Bepaalt hoeveel zakjes je per keer verpakt (hogere tier = sneller).
-	UPROPERTY(BlueprintReadOnly, Category = "WeedShop|Pack")
+	UPROPERTY(ReplicatedUsing = OnRep_Tier, BlueprintReadOnly, Category = "WeedShop|Pack")
 	FName BenchTier = TEXT("Bench_Pack");
+
+	UFUNCTION()
+	void OnRep_Tier();
+
+	// Zet mesh-schaal volgens de tier-definitie (zodat de plaatsing op de vloer klopt).
+	void SetupVisual();
 
 	// Aantal containers dat dit werkblad per keer verwerkt.
 	int32 GetPackPerAction() const;
@@ -30,6 +39,8 @@ public:
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
 protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Pack")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 };

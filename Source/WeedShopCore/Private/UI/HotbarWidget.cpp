@@ -89,13 +89,41 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (Stacks.IsValidIndex(Idx))
 		{
 			const FInventoryStack& S = Stacks[Idx];
+			const FString IdStr = S.ItemId.ToString();
 			FString Nm = WeedUI::PrettyItemName(S.ItemId);
 			if (Nm.Len() > 12) { Nm = Nm.Left(11) + TEXT("."); }
+
+			const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
+			const bool bDryBud = IdStr.StartsWith(TEXT("Bud_"));
+			const bool bJoint = IdStr.StartsWith(TEXT("Joint_"));
+
 			SlotNames[i]->SetText(FText::FromString(Nm));
-			const bool bWeed = S.ItemId.ToString().StartsWith(TEXT("Bud_")) || S.ItemId.ToString().StartsWith(TEXT("Joint_"));
-			SlotInfos[i]->SetText(FText::FromString(bWeed
-				? FString::Printf(TEXT("x%d  %.0f%%"), S.Quantity, S.Quality)
-				: FString::Printf(TEXT("x%d"), S.Quantity)));
+			// Naam-kleur: nat = blauw, droge bud = groen, joint = lichtgroen, rest = wit.
+			SlotNames[i]->SetColorAndOpacity(FSlateColor(
+				bWet ? FLinearColor(0.45f, 0.75f, 1.f)
+				: (bDryBud ? FLinearColor(0.55f, 1.f, 0.6f)
+				: FLinearColor(0.9f, 0.93f, 1.f))));
+
+			if (bWet)
+			{
+				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.45f, 0.75f, 1.f)));
+				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("%dg WET"), S.Quantity)));
+			}
+			else if (bDryBud)
+			{
+				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.95f, 0.65f)));
+				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("%dg DRY %.0f%%"), S.Quantity, S.Quality)));
+			}
+			else if (bJoint)
+			{
+				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.85f, 0.7f)));
+				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("x%d  %.0f%%"), S.Quantity, S.Quality)));
+			}
+			else
+			{
+				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.85f, 0.7f)));
+				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("x%d"), S.Quantity)));
+			}
 		}
 		else
 		{
