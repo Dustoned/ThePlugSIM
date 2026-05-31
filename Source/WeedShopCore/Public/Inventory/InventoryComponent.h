@@ -19,9 +19,13 @@ struct FInventoryStack
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	int32 Quantity = 0;
 
-	// Kwaliteit/THC% van deze stapel (alleen zinvol voor wiet/joints; 0 = n.v.t.).
+	// THC% van deze stapel (alleen zinvol voor wiet/joints; 0 = n.v.t.). Afgeleid van strain + verzorging.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	float Quality = 0.f;
+
+	// Kwaliteit% (hoe goed gekweekt, 0..100). Los van THC%: bepaalt mede hoe graag klanten 'm willen.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+	float QualityPct = 0.f;
 
 	// Unieke id van deze stapel (server toegekend, gerepliceerd). 0 = ongeldig.
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
@@ -59,10 +63,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Inventory")
 	FOnInventoryChanged OnInventoryChanged;
 
-	// Server. Voegt Count toe. Stapelbare items mergen; niet-stapelbare (flessen) worden losse
-	// stapels van 1 (elk een eigen slot). Quality < 0 = geen kwaliteit-info.
+	// Server. Voegt Count toe. Stapelbare items mergen (THC% + Kwaliteit% middelen gewogen op aantal);
+	// niet-stapelbare (flessen) worden losse stapels van 1. ThcPercent/QualityPct < 0 = geen info.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
-	bool AddItem(FName ItemId, int32 Count, float Quality = -1.f);
+	bool AddItem(FName ItemId, int32 Count, float ThcPercent = -1.f, float QualityPct = -1.f);
 
 	// Server. Haalt Count weg (over meerdere stapels indien nodig). False bij te weinig.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
@@ -75,9 +79,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	bool HasItem(FName ItemId, int32 Count = 1) const { return GetQuantity(ItemId) >= Count; }
 
-	// Kwaliteit/THC% van de eerste stapel met dit item-id (0 als geen).
+	// THC% van de eerste stapel met dit item-id (0 als geen).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	float GetItemQuality(FName ItemId) const;
+
+	// Kwaliteit% van de eerste stapel met dit item-id (0 als geen).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	float GetItemQualityPct(FName ItemId) const;
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	const TArray<FInventoryStack>& GetStacks() const { return Stacks; }

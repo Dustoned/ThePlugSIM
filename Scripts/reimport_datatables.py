@@ -7,6 +7,7 @@ DATA_DIR = PROJECT + "Data/"
 TABLES = {
     "/Game/_Project/Data/DT_Strains": DATA_DIR + "DT_Strains.csv",
     "/Game/_Project/Data/DT_Products": DATA_DIR + "DT_Products.csv",
+    "/Game/_Project/Data/DT_NPCs": DATA_DIR + "DT_NPCs.csv",
 }
 
 for asset_path, csv_path in TABLES.items():

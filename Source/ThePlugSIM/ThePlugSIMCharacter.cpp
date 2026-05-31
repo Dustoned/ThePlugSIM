@@ -239,6 +239,9 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 			}
 		}
 	}
+	// Wiet-kwaliteit van de joint (0..1) vóór we 'm weghalen — slechte wiet verslaaft/bindt minder.
+	const float WeedQ = FMath::Clamp(Inventory->GetItemQualityPct(BestJoint) / 100.f, 0.f, 1.f);
+
 	if (BestJoint.IsNone() || !Inventory->RemoveItem(BestJoint, 1))
 	{
 		if (GEngine)
@@ -248,10 +251,11 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		return;
 	}
 
-	// Kwaliteit 0..1 op basis van gram. Effect schaalt met kwaliteit.
-	const float Quality = FMath::Clamp(BestGrams / 5.f, 0.f, 1.f);
-	float LoyGain = 4.f + Quality * 12.f;   // 1g ~5.6, 5g ~16
-	float AddGain = 3.f + Quality * 9.f;
+	// Effectieve kwaliteit = mix van jointgrootte en hoe goed de wiet zelf is.
+	const float GramsQ = FMath::Clamp(BestGrams / 5.f, 0.f, 1.f);
+	const float Quality = FMath::Clamp(GramsQ * 0.4f + WeedQ * 0.6f, 0.f, 1.f);
+	float LoyGain = 4.f + Quality * 12.f;   // top-joint ~16, brak ~4
+	float AddGain = 3.f + Quality * 9.f;    // slechte wiet verslaaft nauwelijks
 	float RespGain = 1.f + Quality * 4.f;
 
 	// Kieskeurigheid: weinig-verslaafde mensen (locals/kenners) lusten geen slappe joint.
@@ -311,7 +315,8 @@ void AThePlugSIMCharacter::BeginPlay()
 	if (HasAuthority() && Inventory)
 	{
 		Inventory->AddItem(FName(TEXT("Papers_Small")), 10);
-		Inventory->AddItem(FName(TEXT("Bud_SilverHaze")), 5);
+		// Startwiet heeft een nette THC% + Kwaliteit% (geen 0%-wiet).
+		Inventory->AddItem(FName(TEXT("Bud_SilverHaze")), 5, /*THC%*/ 17.f, /*Quality%*/ 70.f);
 		Inventory->AddItem(FName(TEXT("Seed_SilverHaze")), 1);
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 2);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);

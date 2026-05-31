@@ -64,9 +64,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
 	float GrowthSpeedMultiplier = 20.f;
 
-	// Over-rijp verval: zodra een plek oogstklaar is, zakt de versheid (en dus de kwaliteit) langzaam.
-	// Het "bulk"-deel (100%->10%) duurt RotBulkFactor x de groeitijd; de laatste 10% (10%->0%, plant
-	// gaat dan dood en je verliest het zaadje) duurt RotSlowFactor x de groeitijd extra langzaam.
+	// Over-rijp verval: zodra een plek oogstklaar is en je niet oogst, zakt de gezondheid (health),
+	// en dus de kwaliteit. Het "bulk"-deel (health -> 10%) duurt RotBulkFactor x de groeitijd; de
+	// laatste 10% (10% -> 0%, dan sterft de plant en is het zaadje weg) duurt RotSlowFactor x langer.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
 	float RotBulkFactor = 2.0f;
 
@@ -135,13 +135,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	bool IsSlotReady(int32 Slot) const { return SlotPhase.IsValidIndex(Slot) && SlotPhase[Slot] == EGrowthPhase::Harvestable; }
 
-	// Versheid (0..1) van een plek; 1 = net rijp, zakt zolang je niet oogst. Onder 0 sterft de plant.
-	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
-	float GetSlotFreshness(int32 Slot) const { return SlotFreshness.IsValidIndex(Slot) ? SlotFreshness[Slot] : 1.f; }
-
-	// Laagste versheid over de oogstklare plekken (voor een UI-waarschuwing). 1 als niets rijp is.
-	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
-	float GetMinReadyFreshness() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -176,9 +169,6 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_Slots)
 	TArray<EGrowthPhase> SlotPhase;
-
-	UPROPERTY(Replicated)
-	TArray<float> SlotFreshness;     // 1 = vers; daalt zodra oogstklaar; <=0 = plant sterft
 
 	// --- Pot-brede staat ---
 	UPROPERTY(Replicated)

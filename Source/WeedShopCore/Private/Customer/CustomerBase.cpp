@@ -161,11 +161,11 @@ int32 ACustomerBase::GetMarketPriceCents() const
 	return Row ? Row->MarketPriceCents : 0;
 }
 
-float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit) const
+float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01) const
 {
 	return UWeedDealLibrary::CalculateAcceptanceChance(
 		static_cast<float>(GetMarketPriceCents()), static_cast<float>(AskPriceCentsPerUnit),
-		Respect, Loyalty, Addiction);
+		Respect, Loyalty, Addiction, Quality01);
 }
 
 EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom)
@@ -192,6 +192,9 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 		return EDealResult::NoStock;
 	}
 
+	// Kwaliteit (0..1) van de wiet die je verkoopt: weegt mee in de acceptatie en in de relatie-winst.
+	const float Quality01 = FMath::Clamp(StockFrom->GetItemQualityPct(DesiredProductId) / 100.f, 0.f, 1.f);
+
 	// Boven budget -> dingt af.
 	if (AskPriceCentsPerUnit > BudgetCentsPerUnit)
 	{
@@ -199,7 +202,7 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 		return EDealResult::Haggle;
 	}
 
-	const float Chance = GetAcceptanceChance(AskPriceCentsPerUnit);
+	const float Chance = GetAcceptanceChance(AskPriceCentsPerUnit, Quality01);
 	const bool bAccepts = FMath::FRandRange(0.f, 100.f) <= Chance;
 
 	if (!bAccepts)
@@ -223,19 +226,27 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 		PayTo->AddMoney(Total);
 	}
 
+	// Kwaliteit weegt mee in de relatie-winst: goede wiet bindt en verslaaft meer, slechte minder.
+	const float QF = 0.4f + 0.6f * Quality01; // 0.4 (waardeloos) .. 1.0 (top)
 	if (AskPriceCentsPerUnit <= Market)
 	{
 		// Eerlijke/goedkope deal -> meer waardering.
-		Respect = ClampAttr(Respect + 5.f);
-		Loyalty = ClampAttr(Loyalty + 8.f);
+		Respect = ClampAttr(Respect + 5.f * QF);
+		Loyalty = ClampAttr(Loyalty + 8.f * QF);
 	}
 	else
 	{
 		// Boven markt maar tóch akkoord: géén straf puur omdat hij ja zei (brief Sectie 3),
 		// wel iets minder binding dan een eerlijke deal.
-		Loyalty = ClampAttr(Loyalty + 2.f);
+		Loyalty = ClampAttr(Loyalty + 2.f * QF);
 	}
-	Addiction = ClampAttr(Addiction + 6.f);
+	// Slechte wiet verslaaft minder; topwiet maakt sneller verslaafd.
+	Addiction = ClampAttr(Addiction + 6.f * QF);
+	// Echt brakke wiet (<30%) kost zelfs een beetje respect.
+	if (Quality01 < 0.30f)
+	{
+		Respect = ClampAttr(Respect - 3.f);
+	}
 
 	State = ECustomerState::Served;
 	WriteStatsToRegistry();

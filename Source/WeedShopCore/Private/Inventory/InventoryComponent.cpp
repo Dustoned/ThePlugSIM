@@ -33,7 +33,7 @@ int32 UInventoryComponent::FindStackById(int32 StackId) const
 	return Stacks.IndexOfByPredicate([StackId](const FInventoryStack& S) { return S.StackId == StackId; });
 }
 
-bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float Quality)
+bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, float QualityPct)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
@@ -71,10 +71,16 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float Quality)
 		const int32 Index = FindStackIndex(ItemId);
 		if (Index != INDEX_NONE)
 		{
-			if (Quality >= 0.f)
+			const int32 OldQty = Stacks[Index].Quantity;
+			const int32 NewQty = FMath::Max(1, OldQty + Count);
+			// THC% en Kwaliteit% middelen, gewogen op aantal (mengen verschillende oogsten).
+			if (ThcPercent >= 0.f)
 			{
-				const int32 OldQty = Stacks[Index].Quantity;
-				Stacks[Index].Quality = (Stacks[Index].Quality * OldQty + Quality * Count) / FMath::Max(1, OldQty + Count);
+				Stacks[Index].Quality = (Stacks[Index].Quality * OldQty + ThcPercent * Count) / NewQty;
+			}
+			if (QualityPct >= 0.f)
+			{
+				Stacks[Index].QualityPct = (Stacks[Index].QualityPct * OldQty + QualityPct * Count) / NewQty;
 			}
 			Stacks[Index].Quantity += Count;
 		}
@@ -83,7 +89,8 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float Quality)
 			FInventoryStack NewStack;
 			NewStack.ItemId = ItemId;
 			NewStack.Quantity = Count;
-			NewStack.Quality = FMath::Max(0.f, Quality);
+			NewStack.Quality = FMath::Max(0.f, ThcPercent);
+			NewStack.QualityPct = FMath::Max(0.f, QualityPct);
 			NewStack.StackId = NextStackId++;
 			Stacks.Add(NewStack);
 		}
@@ -96,7 +103,8 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float Quality)
 			FInventoryStack NewStack;
 			NewStack.ItemId = ItemId;
 			NewStack.Quantity = 1;
-			NewStack.Quality = FMath::Max(0.f, Quality);
+			NewStack.Quality = FMath::Max(0.f, ThcPercent);
+			NewStack.QualityPct = FMath::Max(0.f, QualityPct);
 			NewStack.StackId = NextStackId++;
 			Stacks.Add(NewStack);
 		}
@@ -110,6 +118,12 @@ float UInventoryComponent::GetItemQuality(FName ItemId) const
 {
 	const int32 Index = FindStackIndex(ItemId);
 	return Index != INDEX_NONE ? Stacks[Index].Quality : 0.f;
+}
+
+float UInventoryComponent::GetItemQualityPct(FName ItemId) const
+{
+	const int32 Index = FindStackIndex(ItemId);
+	return Index != INDEX_NONE ? Stacks[Index].QualityPct : 0.f;
 }
 
 float UInventoryComponent::GetUnitWeight(FName ItemId) const

@@ -27,8 +27,10 @@ public:
 	// Acceptatie-% (0..100). Formule uit de brief (Sectie 3), attributen 0..100.
 	//   prijsRatio = ask / markt
 	//   basis      = 70 - (ratio - 1) * 100
-	//   eind       = basis + respect*0.15 + loyaliteit*0.15 + verslaving*0.25  -> clamp 0..100
+	//   eind       = basis + respect*0.15 + loyaliteit*0.15 + verslaving*0.25
+	//   + kwaliteit-term: slechte wiet schrikt vooral mensen met lage verslaving af; verslaafden
+	//     malen er minder om. Quality01 in 0..1 (negatief = neutraal). -> clamp 0..100
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
 	static float CalculateAcceptanceChance(float MarketPriceCents, float AskPriceCents,
-		float Respect, float Loyalty, float Addiction);
+		float Respect, float Loyalty, float Addiction, float Quality01 = -1.f);
 };

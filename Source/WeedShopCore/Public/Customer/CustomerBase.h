@@ -98,9 +98,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	int32 GetMarketPriceCents() const;
 
-	// Live acceptatie-% bij een bod (per eenheid) — voor de prijs-slider-UI.
+	// Live acceptatie-% bij een bod (per eenheid) — voor de prijs-slider-UI. Quality01 (0..1) is de
+	// kwaliteit van de wiet die je wil verkopen; negatief = neutraal/onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
-	float GetAcceptanceChance(int32 AskPriceCentsPerUnit) const;
+	float GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01 = -1.f) const;
 
 	// Server-authoritative bod. Betaalt naar PayTo, haalt voorraad uit StockFrom. Geeft de uitkomst.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Customer")

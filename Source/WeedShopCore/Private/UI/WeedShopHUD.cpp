@@ -329,9 +329,9 @@ void AWeedShopHUD::DrawHUD()
 					DrawText(PrettyItemName(HItem),
 						bIsSeed ? FLinearColor(0.7f, 0.85f, 0.6f) : FLinearColor(0.85f, 0.9f, 1.f),
 						SX + 5.f, SY + 4.f, Font);
-					const float HQ = HS.Quality;
-					const bool bHThc = HQ > 0.f && (HItem.ToString().StartsWith(TEXT("Bud_")) || HItem.ToString().StartsWith(TEXT("Joint_")));
-					DrawText(FString::Printf(TEXT("x%d%s"), HS.Quantity, bHThc ? *FString::Printf(TEXT("  %.0f%%"), HQ) : TEXT("")),
+					const bool bHThc = (HItem.ToString().StartsWith(TEXT("Bud_")) || HItem.ToString().StartsWith(TEXT("Joint_")));
+					const FString HExtra = bHThc ? FString::Printf(TEXT("  THC%.0f%% Q%.0f%%"), HS.Quality, HS.QualityPct) : TEXT("");
+					DrawText(FString::Printf(TEXT("x%d%s"), HS.Quantity, *HExtra),
 						FLinearColor::White, SX + 5.f, SY + 24.f, Font);
 				}
 				SX += SlotW + 6.f;
@@ -790,7 +790,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	const float W = 480.f;
-	const float H = 270.f;
+	const float H = 300.f;
 	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
 	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
 	const float InnerX = PX + 16.f;
@@ -885,10 +885,25 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	DrawText(TEXT("greedy"), FLinearColor(0.95f, 0.6f, 0.4f), TrackX + TrackW - 50.f, TrackY + TrackH + 4.f, Font);
 	y += 48.f;
 
+	// Kwaliteit van de wiet die je in voorraad hebt voor dit product (weegt mee in de acceptatie).
+	float Quality01 = -1.f; float ThcShow = 0.f; float QShow = 0.f;
+	if (const APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr)
+	{
+		if (const UInventoryComponent* PInv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			QShow = PInv->GetItemQualityPct(C->DesiredProductId);
+			ThcShow = PInv->GetItemQuality(C->DesiredProductId);
+			Quality01 = FMath::Clamp(QShow / 100.f, 0.f, 1.f);
+		}
+	}
+
 	// --- Live acceptatie-% (volgt ook de hover; client berekent dit lokaal want stats repliceren) ---
-	const float Chance = C->GetAcceptanceChance(EffAsk);
+	const float Chance = C->GetAcceptanceChance(EffAsk, Quality01);
 	const FLinearColor ChanceCol = Chance >= 66.f ? FLinearColor::Green
 		: (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f));
+	DrawText(FString::Printf(TEXT("Your stock: THC %.0f%%  Quality %.0f%%"), ThcShow, QShow),
+		FLinearColor(0.8f, 0.85f, 1.f), InnerX, y, Font);
+	y += 20.f;
 	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%"), Chance), ChanceCol, InnerX, y, Font);
 	y += 22.f;
 	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 12.f);
@@ -983,8 +998,9 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		FString Lbl = PrettyItemName(S.ItemId);
 		if (Lbl.Len() > 13) { Lbl = Lbl.Left(13); }
 		DrawText(Lbl, FLinearColor(0.85f, 0.9f, 1.f), cx + 6.f, cy + 5.f, Font);
-		const bool bThc = S.Quality > 0.f && (S.ItemId.ToString().StartsWith(TEXT("Bud_")) || S.ItemId.ToString().StartsWith(TEXT("Joint_")));
-		DrawText(FString::Printf(TEXT("x%d%s"), S.Quantity, bThc ? *FString::Printf(TEXT("  %.0f%%"), S.Quality) : TEXT("")),
+		const bool bThc = (S.ItemId.ToString().StartsWith(TEXT("Bud_")) || S.ItemId.ToString().StartsWith(TEXT("Joint_")));
+		const FString GExtra = bThc ? FString::Printf(TEXT("  THC%.0f%% Q%.0f%%"), S.Quality, S.QualityPct) : TEXT("");
+		DrawText(FString::Printf(TEXT("x%d%s"), S.Quantity, *GExtra),
 			FLinearColor(0.75f, 0.75f, 0.8f), cx + 6.f, cy + 26.f, Font);
 		AddHitBox(FVector2D(cx + 2.f, cy + 2.f), FVector2D(CellW - 4.f, CellH - 4.f), Box, true, 3);
 	}
