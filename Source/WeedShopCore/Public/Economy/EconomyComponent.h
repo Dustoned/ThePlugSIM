@@ -30,9 +30,9 @@ class WEEDSHOPCORE_API UEconomyComponent : public UActorComponent
 public:
 	UEconomyComponent();
 
-	// Startsaldo in cents. Concept: €50,00 = 5000. Door de server gezet bij BeginPlay.
+	// Startsaldo in cents. Demo: €1.000.000 = 100000000. Door de server gezet bij BeginPlay.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
-	int64 StartingBalanceCents = 5000;
+	int64 StartingBalanceCents = 100000000;
 
 	// UI/HUD bindt hierop om het saldo te tonen.
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Economy")
