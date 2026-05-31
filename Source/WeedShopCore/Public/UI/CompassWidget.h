@@ -29,12 +29,15 @@ protected:
 
 	UPROPERTY() TObjectPtr<UCanvasPanel> Band;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> CardinalLabels;
-	UPROPERTY() TArray<TObjectPtr<UWidget>> Markers;       // mensen buiten (persoon-icoon)
-	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;
+	UPROPERTY() TArray<TObjectPtr<UWidget>> Markers;       // mensen buiten (groen poppetje)
+	UPROPERTY() TObjectPtr<UWidget> HomeMarker;            // je basis (goud huisje)
+	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;        // generiek waypoint (blauw)
 
 	TArray<float> CardinalYaws;
 	FVector WaypointWorld = FVector::ZeroVector;
 	bool bHasWaypoint = false;
+	FVector HomeWorld = FVector::ZeroVector;
+	bool bHomeFound = false;
 
 	static constexpr float BandW = 460.f;
 	static constexpr float HalfFov = 90.f; // toont 180 graden over de balk

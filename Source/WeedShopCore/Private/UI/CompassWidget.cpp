@@ -2,6 +2,7 @@
 
 #include "UI/WeedUiStyle.h"
 #include "Customer/CustomerBase.h"
+#include "Customer/CustomerSpawner.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -74,6 +75,17 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 		Markers.Add(MS2);
 	}
 
+	// Home-marker: goud huisje dat naar je basis wijst.
+	{
+		USizeBox* Hs = WidgetTree->ConstructWidget<USizeBox>();
+		Hs->SetWidthOverride(18.f); Hs->SetHeightOverride(18.f);
+		Hs->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 18.f, FLinearColor(1.f, 0.82f, 0.25f)));
+		Hs->SetVisibility(ESlateVisibility::Collapsed);
+		UCanvasPanelSlot* HMS = Band->AddChildToCanvas(Hs);
+		HMS->SetAutoSize(false); HMS->SetSize(FVector2D(18.f, 18.f)); HMS->SetAlignment(FVector2D(0.5f, 0.5f));
+		HomeMarker = Hs;
+	}
+
 	// Waypoint-marker (later).
 	WaypointMarker = WidgetTree->ConstructWidget<UBorder>();
 	WaypointMarker->SetBrush(WeedUI::Rounded(FLinearColor(0.3f, 0.8f, 1.f, 0.98f), 3.f));
@@ -129,6 +141,27 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		++m;
 	}
 	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
+
+	// Home (je basis): zoek eenmalig de spawner als referentie.
+	if (!bHomeFound)
+	{
+		for (TActorIterator<ACustomerSpawner> It(GetWorld()); It; ++It)
+		{
+			HomeWorld = It->GetActorLocation();
+			bHomeFound = true;
+			break;
+		}
+	}
+	if (HomeMarker)
+	{
+		if (bHomeFound)
+		{
+			const FVector D = HomeWorld - PL;
+			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
+			PlaceOnBand(HomeMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+		}
+		else { HomeMarker->SetVisibility(ESlateVisibility::Collapsed); }
+	}
 
 	// Waypoint (optioneel, later).
 	if (WaypointMarker)
