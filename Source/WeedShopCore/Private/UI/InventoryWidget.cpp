@@ -241,6 +241,11 @@ void UInventoryWidget::RebuildContent()
 	for (int32 cell = 0; cell < Order.Num(); ++cell)
 	{
 		const int32 StackId = Order[cell];
+		const int32 Idx = Inv->FindStackById(StackId);
+		// Items die op de hotbar staan tonen we GEEN cel (ze staan in de hotbar-rij). Zo zijn de lege
+		// vakjes precies de echt vrije slots (en niet ook nog de plekken van hotbar-items).
+		if (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId)) { continue; }
+
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(126.f); Sz->SetHeightOverride(54.f);
 
@@ -248,9 +253,7 @@ void UInventoryWidget::RebuildContent()
 		Cell->SlotIndex = -1; Cell->GridCell = cell;
 		Cell->Inv = Inv; Cell->Owner = this;
 
-		const int32 Idx = Inv->FindStackById(StackId);
-		// Items die op de hotbar staan tonen we NIET in het rooster (ze tellen wel mee voor de slots).
-		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx) && !Inv->IsStackOnHotbar(StackId));
+		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx));
 		if (bShowItem)
 		{
 			const FInventoryStack& S = Stacks[Idx];

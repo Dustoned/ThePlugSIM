@@ -309,6 +309,9 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 {
 	if (!Phone.IsValid()) { return; }
 	UPhoneClientComponent* Ph = Phone.Get();
+	// Bij (her)openen van de Suppliers-app altijd standaard op de Shop-catalogus starten.
+	bCartView = false;
+	bPackagesView = false;
 	StoreQtyTexts.Reset();
 	StoreTabBtns.Reset();
 
