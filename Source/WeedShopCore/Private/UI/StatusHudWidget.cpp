@@ -133,10 +133,10 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	if (CashText && GS->GetEconomy())
 	{
-		auto Grouped = [](int64 V) { FString Raw = FString::Printf(TEXT("%lld"), V), G; const int32 Ln = Raw.Len(); for (int32 i = 0; i < Ln; ++i) { if (i > 0 && (Ln - i) % 3 == 0) { G.AppendChar(TEXT('.')); } G.AppendChar(Raw[i]); } return G; };
-		const int64 Cash = (int64)GS->GetEconomy()->GetBalanceEuros();
-		const int64 Bank = (int64)GS->GetEconomy()->GetBankEuros();
-		CashText->SetText(FText::FromString(FString::Printf(TEXT("Cash %s   Bank %s"), *Grouped(Cash), *Grouped(Bank))));
+		// Compact (1.0M / 12k / 523) zodat de kaart smal blijft en niets overlapt.
+		auto Compact = [](double E) { const double A = FMath::Abs(E); if (A >= 1000000.0) { return FString::Printf(TEXT("%.1fM"), E / 1000000.0); } if (A >= 1000.0) { return FString::Printf(TEXT("%.1fk"), E / 1000.0); } return FString::Printf(TEXT("%.0f"), E); };
+		CashText->SetText(FText::FromString(FString::Printf(TEXT("Cash %s   Bank %s"),
+			*Compact(GS->GetEconomy()->GetBalanceEuros()), *Compact(GS->GetEconomy()->GetBankEuros()))));
 	}
 	if (TimeText && GS->GetDayCycle())
 	{

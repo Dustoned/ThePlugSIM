@@ -45,6 +45,15 @@ namespace
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
 	};
 
+	// Compact geldbedrag (hele euro's) zodat het in smalle balken past: 1.0M / 12k / 523.
+	FString CompactEuros(double Euros)
+	{
+		const double A = FMath::Abs(Euros);
+		if (A >= 1000000.0) { return FString::Printf(TEXT("%.1fM"), Euros / 1000000.0); }
+		if (A >= 1000.0)    { return FString::Printf(TEXT("%.1fk"), Euros / 1000.0); }
+		return FString::Printf(TEXT("%.0f"), Euros);
+	}
+
 	FSlateBrush RoundedBrush(const FLinearColor& Color, float Radius)
 	{
 		FSlateBrush B;
@@ -287,8 +296,12 @@ void UPhoneWidget::UpdateStoreCartText()
 {
 	if (StoreCartText && Phone.IsValid())
 	{
-		StoreCartText->SetText(FText::FromString(FString::Printf(TEXT("Cart %d   EUR %.2f"),
-			Phone->GetCartNumLines(), Phone->GetCartTotalCents() / 100.f)));
+		// Toon het NETTO bedrag (koop + bezorging - verkoop). Negatief = je ontvangt geld (+).
+		const int32 Net = Phone->GetCartNetCents(DeliveryOpt);
+		const FString Amt = (Net < 0)
+			? FString::Printf(TEXT("+EUR %.2f"), -Net / 100.f)
+			: FString::Printf(TEXT("EUR %.2f"), Net / 100.f);
+		StoreCartText->SetText(FText::FromString(FString::Printf(TEXT("Cart %d   %s"), Phone->GetCartNumLines(), *Amt)));
 	}
 }
 
@@ -315,9 +328,11 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 
 	// Winkelwagen-balk: totaal + toggle naar cart/shop.
 	UHorizontalBox* CartBar = WidgetTree->ConstructWidget<UHorizontalBox>();
-	StoreCartText = MakeText(FString::Printf(TEXT("Cart %d   EUR %.2f"), Ph->GetCartNumLines(), Ph->GetCartTotalCents() / 100.f), 13, FLinearColor(1.f, 0.95f, 0.6f));
+	StoreCartText = MakeText(TEXT("Cart 0"), 13, FLinearColor(1.f, 0.95f, 0.6f));
+	StoreCartText->SetClipping(EWidgetClipping::ClipToBounds);
 	UHorizontalBoxSlot* CL = CartBar->AddChildToHorizontalBox(StoreCartText);
 	CL->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CL->SetVerticalAlignment(VAlign_Center);
+	UpdateStoreCartText();
 	StoreCartToggle = MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"), FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bPackagesView = false; bCartView = !bCartView; RefreshStore(); }, 11);
 	CartBar->AddChildToHorizontalBox(StoreCartToggle)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 	// (De Packages-knop staat rechtsboven in de app-header naast "Suppliers".)
@@ -707,6 +722,9 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	TimeText = MakeText(TEXT("Day 00:00"), 12, FLinearColor(0.7f, 0.8f, 0.95f));
 	LevelText = MakeText(TEXT("Lv 1"), 12, FLinearColor(0.6f, 1.f, 0.7f), true);
 	CashText = MakeText(TEXT("EUR 0"), 12, FLinearColor(0.7f, 1.f, 0.7f));
+	TimeText->SetClipping(EWidgetClipping::ClipToBounds);
+	LevelText->SetClipping(EWidgetClipping::ClipToBounds);
+	CashText->SetClipping(EWidgetClipping::ClipToBounds);
 	{
 		UHorizontalBoxSlot* H1 = Status->AddChildToHorizontalBox(TimeText);  H1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); H1->SetHorizontalAlignment(HAlign_Left);
 		UHorizontalBoxSlot* H2 = Status->AddChildToHorizontalBox(LevelText); H2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); H2->SetHorizontalAlignment(HAlign_Center);
@@ -951,7 +969,8 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		if (CashText && GS->GetEconomy())
 		{
-			CashText->SetText(FText::FromString(FString::Printf(TEXT("C %.0f  B %.0f"), GS->GetEconomy()->GetBalanceEuros(), GS->GetEconomy()->GetBankEuros())));
+			CashText->SetText(FText::FromString(FString::Printf(TEXT("C %s  B %s"),
+				*CompactEuros(GS->GetEconomy()->GetBalanceEuros()), *CompactEuros(GS->GetEconomy()->GetBankEuros()))));
 		}
 		if (TimeText && GS->GetDayCycle())
 		{
