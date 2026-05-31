@@ -570,28 +570,21 @@ void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
 
 	const float Intensity = UPhoneClientComponent::JointIntensity(Grams, Thc, Q * 100.f);
 
-	// XP-BONUS is gebaseerd op de THC% van de wiet (niet op hoe high je wordt), zodat je niet te snel
-	// levelt: een 17%-joint geeft +17% XP terwijl je high bent, gemaximeerd op +50% (~36% THC weed).
+	// Roken zelf geeft GEEN XP (alleen oogsten + klanten helpen leveren XP). Wel een XP-BOOST terwijl
+	// je high bent, gebaseerd op de THC% van de wiet: 17%-joint -> +17% XP, gemaximeerd op +50%.
 	const float XpFrac = FMath::Clamp(Thc / 100.f, 0.f, 0.5f);
-	// Eenmalige XP voor het oproken zelf, ook bescheiden en op THC% gebaseerd.
-	const int32 XpBonus = 3 + FMath::RoundToInt(Thc * 0.6f);
 
 	// Stoned-buf: duur schaalt met intensiteit (cap op het maximum).
 	const float AddSeconds = Intensity * StonedMaxSeconds;
 	const float NewSeconds = FMath::Min(StonedMaxSeconds, StonedSeconds + AddSeconds);
 	const float NewIntensity = FMath::Max(StonedIntensity, Intensity);
 	const float NewXpFrac = FMath::Max(StonedXpFrac, XpFrac);
-	MulticastApplyStoned(NewSeconds, NewIntensity, XpBonus, NewXpFrac);
+	MulticastApplyStoned(NewSeconds, NewIntensity, 0, NewXpFrac);
 
-	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	if (GS && GS->GetLeveling())
-	{
-		GS->GetLeveling()->AddXP(XpBonus);
-	}
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 220, 160),
-			FString::Printf(TEXT("You smoke the %dg joint... high %.0f%%  (+XP)"), Grams, Intensity * 100.f));
+			FString::Printf(TEXT("You smoke the %dg joint... high %.0f%%  (XP boost active)"), Grams, Intensity * 100.f));
 	}
 }
 
