@@ -10,8 +10,12 @@ APlaceableProp::APlaceableProp()
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 
+	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(Root);
+	Root->SetMobility(EComponentMobility::Movable);
+
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	SetRootComponent(Mesh);
+	Mesh->SetupAttachment(Root);
 	// WorldStatic + query/physics zodat de plaats-trace en footprint-overlap 'm zien.
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Mesh->SetMobility(EComponentMobility::Movable);

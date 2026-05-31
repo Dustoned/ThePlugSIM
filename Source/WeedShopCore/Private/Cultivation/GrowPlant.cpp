@@ -15,8 +15,11 @@ AGrowPlant::AGrowPlant()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 
+	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(Root);
+
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	SetRootComponent(Mesh);
+	Mesh->SetupAttachment(Root);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
 	// Standaard pot-mesh zodat een geplaatste (lege) pot meteen zichtbaar is, ook zonder

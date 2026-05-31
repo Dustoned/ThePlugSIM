@@ -41,6 +41,11 @@ protected:
 	// Zet mesh/schaal/offset op basis van de registry-definitie voor ItemId.
 	void SetupVisual();
 
+	// Scene-root (blijft op de actor-origin); de mesh hangt eronder met een hoogte-offset, zodat
+	// het instellen van de mesh-offset de actor NIET verplaatst.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Placeable")
+	TObjectPtr<USceneComponent> Root;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Placeable")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 };
