@@ -121,15 +121,51 @@ protected:
 	/** Links-klik: bevestig plaatsen tijdens plaats-modus, anders interact met de pot / gebruik item. */
 	void OnPrimaryClick();
 
-	/** Rechts-klik: met papers in de hand -> joint-roll-paneel openen. */
-	void OnSecondaryClick();
+	/** Rechtermuisknop ingedrukt: papers -> roll-paneel; joint -> begin met "inhouden om te roken". */
+	void OnSecondaryPressed();
 
-	/** Gebruik het geselecteerde hotbar-item (bv. Pot -> plaats-modus). */
+	/** Rechtermuisknop losgelaten: stopt het rook-inhouden (annuleert als je te vroeg loslaat). */
+	void OnSecondaryReleased();
+
+	/** Gebruik het geselecteerde hotbar-item (bv. Pot -> plaats-modus, of een joint oproken). */
 	void UseActiveItem();
 
 	/** Open het pot-upgrade-paneel voor de aangekeken pot (toets U). */
 	void OpenPotUpgradeUI();
 
+	/** Rook de joint die je in de hand hebt: word stoned (buf) + XP-bonus op basis van hoe high. */
+	void SmokeActiveJoint();
+
+	UFUNCTION(Server, Reliable)
+	void ServerSmokeJoint(FName JointId);
+
+	/** Zet de stoned-buf op alle versies van deze pawn (zodat de owner 'm ziet). */
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastApplyStoned(float Seconds, float Intensity);
+
+	virtual void Tick(float DeltaSeconds) override;
+
+	// Max duur van een volle high (sec). Een max-joint (backwoods vol topwiet) haalt dit ongeveer.
+	static constexpr float StonedMaxSeconds = 150.f;
+
+	float StonedSeconds = 0.f;   // resterende high-tijd
+	float StonedIntensity = 0.f; // hoe high (0..1)
+
+	// Roken = rechtermuisknop inhouden (bewust, niet per ongeluk).
+	bool bRmbDown = false;
+	bool bSmokeFired = false;
+	float SmokeHoldTime = 0.f;
+	static constexpr float SmokeHoldRequired = 1.1f; // sec inhouden voor het oproken
+
+public:
+
+	/** Hoe high je nu bent (0..1) voor de HUD. */
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	float GetStonedIntensity() const { return StonedSeconds > 0.f ? StonedIntensity : 0.f; }
+
+	/** Resterende high als fractie van het maximum (0..1) voor een balkje. */
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	float GetStonedFraction() const { return FMath::Clamp(StonedSeconds / StonedMaxSeconds, 0.f, 1.f); }
 
 public:
 

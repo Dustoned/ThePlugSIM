@@ -187,6 +187,13 @@ public:
 	void MarkUiClickConsumed();
 	bool DidUiConsumeClickRecently() const;
 
+	// Voortgang van het "rechtermuisknop inhouden om te roken" (0..1; 0 = niet bezig). De character
+	// vult dit; de HUD tekent er een duidelijke balk mee.
+	void SetSmokeHoldFrac(float Frac) { SmokeHoldFrac = FMath::Clamp(Frac, 0.f, 1.f); }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
+	float GetSmokeHoldFrac() const { return SmokeHoldFrac; }
+
 	// --- Wiet-batches mergen (bevestig-popup) ---
 	void OpenMerge(FName ItemId);
 
@@ -260,6 +267,8 @@ protected:
 
 	bool bRollOpen = false;
 	int32 RollGrams = 2;
+
+	float SmokeHoldFrac = 0.f; // 0..1 voortgang van rook-inhouden (lokale UI-staat)
 
 	bool bDealOpen = false;
 	TWeakObjectPtr<ACustomerBase> DealCustomer;

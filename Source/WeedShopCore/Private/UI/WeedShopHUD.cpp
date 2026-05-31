@@ -166,6 +166,22 @@ void AWeedShopHUD::DrawHUD()
 		}
 	}
 
+	// Rook-inhouden indicator (midden-onder): duidelijke balk zodat je bewust rookt.
+	if (UPhoneClientComponent* Ph2 = GetPhone())
+	{
+		const float Frac = Ph2->GetSmokeHoldFrac();
+		if (Frac > 0.f)
+		{
+			const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
+			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
+			const float BW = 220.f, BH = 16.f;
+			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
+			DrawText(TEXT("Lighting joint...  (hold right-click)"), FLinearColor(0.7f, 1.f, 0.8f), BX, BY - 22.f, Font);
+			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawRect(FLinearColor(0.4f, 0.9f, 0.5f, 0.95f), BX, BY, BW * Frac, BH);
+		}
+	}
+
 	// Plaats-modus hint (midden-onder).
 	if (P)
 	{

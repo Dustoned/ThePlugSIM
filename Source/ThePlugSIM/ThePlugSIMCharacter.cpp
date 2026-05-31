@@ -23,6 +23,7 @@
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
+#include "SmokePuff.h"
 #include "ThePlugSIM.h"
 
 AThePlugSIMCharacter::AThePlugSIMCharacter()
@@ -69,6 +70,65 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 
 	// Waterfles-staat (vullen bij de gootsteen).
 	WaterCan = CreateDefaultSubobject<UWaterCanComponent>(TEXT("WaterCan"));
+
+	// Tick aan voor de stoned-buf-timer.
+	PrimaryActorTick.bCanEverTick = true;
+}
+
+void AThePlugSIMCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (StonedSeconds > 0.f)
+	{
+		StonedSeconds = FMath::Max(0.f, StonedSeconds - DeltaSeconds);
+		if (StonedSeconds <= 0.f) { StonedIntensity = 0.f; }
+	}
+
+	// Roken = rechtermuisknop inhouden met een joint in de hand. Duidelijke voortgangsbalk via de HUD,
+	// zodat je niet per ongeluk je eigen joint oprookt.
+	{
+		const bool bUiOpen = Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()
+			|| Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen());
+		const bool bJointInHand = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Joint_"));
+		if (bRmbDown && !bUiOpen && bJointInHand)
+		{
+			SmokeHoldTime += DeltaSeconds;
+			if (!bSmokeFired && SmokeHoldTime >= SmokeHoldRequired)
+			{
+				bSmokeFired = true;
+				SmokeActiveJoint();
+			}
+		}
+		else
+		{
+			SmokeHoldTime = 0.f;
+		}
+		if (Phone)
+		{
+			Phone->SetSmokeHoldFrac(bSmokeFired ? 0.f : FMath::Clamp(SmokeHoldTime / SmokeHoldRequired, 0.f, 1.f));
+		}
+	}
+
+	// Stoned = wat extra motion blur + lichte vaagheid, zodat rondkijken "high" aanvoelt.
+	if (FirstPersonCameraComponent)
+	{
+		FPostProcessSettings& PP = FirstPersonCameraComponent->PostProcessSettings;
+		const float I = GetStonedIntensity();
+		if (I > 0.f)
+		{
+			PP.bOverride_MotionBlurAmount = true;   PP.MotionBlurAmount = 0.35f + I * 0.65f;
+			PP.bOverride_MotionBlurMax = true;      PP.MotionBlurMax = 8.f + I * 30.f;
+			PP.bOverride_VignetteIntensity = true;  PP.VignetteIntensity = 0.35f + I * 0.55f;
+			PP.bOverride_SceneFringeIntensity = true; PP.SceneFringeIntensity = I * 3.5f;
+		}
+		else
+		{
+			PP.bOverride_MotionBlurAmount = false;
+			PP.bOverride_MotionBlurMax = false;
+			PP.bOverride_VignetteIntensity = false;
+			PP.bOverride_SceneFringeIntensity = false;
+		}
+	}
 }
 
 void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -112,8 +172,9 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	// Straat-werving: F geeft de aangekeken NPC een gratis sample.
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
 
-	// Rechts-klik: met papers in de hand -> open/sluit het joint-roll-paneel.
-	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnSecondaryClick);
+	// Rechtermuisknop: indrukken (papers -> roll-paneel; joint -> rook-inhouden) + loslaten.
+	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnSecondaryPressed);
+	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Released, this, &AThePlugSIMCharacter::OnSecondaryReleased);
 
 	// R draait het te plaatsen meubel 90° tijdens de plaats-modus (anders niets).
 	if (UBuildComponent* B = Build.Get())
@@ -420,22 +481,35 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	UseActiveItem();
 }
 
-void AThePlugSIMCharacter::OnSecondaryClick()
+void AThePlugSIMCharacter::OnSecondaryPressed()
 {
 	if (!Phone || !Inventory)
 	{
 		return;
 	}
+	bRmbDown = true;
+	SmokeHoldTime = 0.f;
+	bSmokeFired = false;
+
 	// Andere UI open? Laat rechts-klik met rust.
 	if (Phone->IsOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen())
 	{
 		return;
 	}
-	// Papers in de hand -> joint-roll-paneel openen/sluiten.
+	// Papers in de hand -> joint-roll-paneel openen/sluiten (edge, op indrukken).
 	if (Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_")) || Phone->IsRollOpen())
 	{
 		Phone->ToggleRollUI();
 	}
+	// Joint in de hand -> roken gaat via INHOUDEN (afgehandeld in Tick), niet hier meteen.
+}
+
+void AThePlugSIMCharacter::OnSecondaryReleased()
+{
+	bRmbDown = false;
+	SmokeHoldTime = 0.f;
+	bSmokeFired = false;
+	if (Phone) { Phone->SetSmokeHoldFrac(0.f); }
 }
 
 void AThePlugSIMCharacter::UseActiveItem()
@@ -453,6 +527,77 @@ void AThePlugSIMCharacter::UseActiveItem()
 	if (Item == FName(TEXT("Pot")))
 	{
 		Build->TogglePotPlacement();
+	}
+	// Joints rook je NIET met links-klik (dat zou per ongeluk je joint opbranden); dat gaat via
+	// rechtermuisknop INHOUDEN (zie OnSecondaryPressed/Released + Tick), met een duidelijke balk.
+}
+
+void AThePlugSIMCharacter::SmokeActiveJoint()
+{
+	if (!Inventory) { return; }
+	const FName Joint = Inventory->GetActiveItemId();
+	if (!Joint.ToString().StartsWith(TEXT("Joint_"))) { return; }
+	ServerSmokeJoint(Joint);
+}
+
+void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
+{
+	if (!Inventory || !JointId.ToString().StartsWith(TEXT("Joint_"))) { return; }
+
+	// Hoe high: meer gram + hogere THC% + betere kwaliteit = sterker. Backwoods (10g) vol topwiet
+	// (~36% THC, 100% kwaliteit) tikt tegen het maximum aan.
+	const int32 Grams = FCString::Atoi(*JointId.ToString().Mid(6)); // "Joint_5g" -> 5
+	const float Thc = Inventory->GetItemQuality(JointId);            // ~0..36
+	const float Q = Inventory->GetItemQualityPct(JointId) / 100.f;   // 0..1
+
+	if (!Inventory->RemoveItem(JointId, 1))
+	{
+		return;
+	}
+
+	const float Intensity = FMath::Clamp(
+		(FMath::Clamp(Grams / 10.f, 0.f, 1.f)) * 0.45f +
+		(FMath::Clamp(Thc / 36.f, 0.f, 1.f)) * 0.45f +
+		FMath::Clamp(Q, 0.f, 1.f) * 0.10f, 0.f, 1.f);
+
+	// Stoned-buf: duur schaalt met intensiteit (cap op het maximum).
+	const float AddSeconds = Intensity * StonedMaxSeconds;
+	const float NewSeconds = FMath::Min(StonedMaxSeconds, StonedSeconds + AddSeconds);
+	const float NewIntensity = FMath::Max(StonedIntensity, Intensity);
+	MulticastApplyStoned(NewSeconds, NewIntensity);
+
+	// XP-bonus op basis van hoe high je wordt.
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && GS->GetLeveling())
+	{
+		GS->GetLeveling()->AddXP(5 + FMath::RoundToInt(Intensity * 60.f));
+	}
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 220, 160),
+			FString::Printf(TEXT("You smoke the %dg joint... high %.0f%%  (+XP)"), Grams, Intensity * 100.f));
+	}
+}
+
+void AThePlugSIMCharacter::MulticastApplyStoned_Implementation(float Seconds, float Intensity)
+{
+	StonedSeconds = Seconds;
+	StonedIntensity = Intensity;
+
+	// Klein rookwolkje uit het hoofd (cosmetisch, op elke client).
+	if (UWorld* World = GetWorld())
+	{
+		const FVector Head = FirstPersonCameraComponent
+			? FirstPersonCameraComponent->GetComponentLocation() + FirstPersonCameraComponent->GetForwardVector() * 22.f
+			: GetActorLocation() + FVector(0.f, 0.f, 70.f);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		const int32 Puffs = 1 + FMath::RoundToInt(Intensity * 2.f); // sterker = wat meer wolk
+		for (int32 i = 0; i < Puffs; ++i)
+		{
+			const FVector Off(FMath::FRandRange(-6.f, 6.f), FMath::FRandRange(-6.f, 6.f), FMath::FRandRange(0.f, 8.f));
+			World->SpawnActor<ASmokePuff>(ASmokePuff::StaticClass(), Head + Off, FRotator::ZeroRotator, Params);
+		}
 	}
 }
 
