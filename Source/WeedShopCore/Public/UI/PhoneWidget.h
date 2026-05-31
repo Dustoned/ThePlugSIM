@@ -101,6 +101,7 @@ protected:
 	void MarkDirty() { bContentDirty = true; }
 
 	bool bCartView = false; // toont de winkelwagen i.p.v. de catalogus
+	bool bSellApp = false;  // de store-app draait als losse Sell-app (alleen verkopen, geen koop-tabs)
 
 	// Referenties zodat winkel-acties (qty/add) labels direct kunnen updaten zonder de hele
 	// app te herbouwen (geen flash).

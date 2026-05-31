@@ -37,13 +37,15 @@
 namespace
 {
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
-	constexpr int32 GNumApps = 6;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Shop, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map };
+	constexpr int32 GNumApps = 7;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Suppliers"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Shop, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
+		FLinearColor(0.85f, 0.65f, 0.20f),
 	};
+	constexpr int32 GSellApp = 6;
 
 	// Compact geldbedrag (hele euro's) zodat het in smalle balken past: 1.0M / 12k / 523.
 	FString CompactEuros(double Euros)
@@ -315,19 +317,22 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	StoreQtyTexts.Reset();
 	StoreTabBtns.Reset();
 
-	// Categorie-pillen (Seeds/Papers/Pots/Soil/Water/Sell) — blijven staan; alleen de lijst ververst.
-	static const TCHAR* CatNames[6] = { TEXT("Seeds"), TEXT("Grow"), TEXT("Drying"), TEXT("Packing"), TEXT("Papers"), TEXT("Sell") };
-	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
-	for (int32 i = 0; i < 6; ++i)
+	// Koop-categorieën (Suppliers). De Sell-app heeft géén koop-tabs (alleen de verkooplijst).
+	if (!bSellApp)
 	{
-		const FLinearColor Col = (i == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
-		UWeedActionButton* Pill = MakeActionBtn(CatNames[i], Col, [this, Ph, i]() { Ph->SetSupplierCat(i); bCartView = false; RefreshStore(); }, 10);
-		UHorizontalBoxSlot* PS = Tabs->AddChildToHorizontalBox(Pill);
-		PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		PS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
-		StoreTabBtns.Add(Pill);
+		static const TCHAR* CatNames[5] = { TEXT("Seeds"), TEXT("Grow"), TEXT("Drying"), TEXT("Packing"), TEXT("Papers") };
+		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
+		for (int32 i = 0; i < 5; ++i)
+		{
+			const FLinearColor Col = (i == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+			UWeedActionButton* Pill = MakeActionBtn(CatNames[i], Col, [this, Ph, i]() { Ph->SetSupplierCat(i); bCartView = false; RefreshStore(); }, 11);
+			UHorizontalBoxSlot* PS = Tabs->AddChildToHorizontalBox(Pill);
+			PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			PS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+			StoreTabBtns.Add(Pill);
+		}
+		Into->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	}
-	Into->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Winkelwagen-balk: totaal + toggle naar cart/shop.
 	UHorizontalBox* CartBar = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -573,7 +578,7 @@ void UPhoneWidget::FillStoreList()
 		return;
 	}
 
-	if (Cat == 5) // Sell — net als de koop-pagina: aantal kiezen + Add naar de winkelwagen.
+	if (bSellApp) // Sell-app — verkooplijst: aantal kiezen + Add naar de winkelwagen.
 	{
 		APawn* P = GetOwningPlayerPawn();
 		const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
@@ -891,8 +896,9 @@ void UPhoneWidget::RefreshContent()
 			}
 		}
 	}
-	else if (App == 1) // Suppliers -> webshop ín de telefoon
+	else if (App == 1) // Suppliers -> webshop ín de telefoon (kopen)
 	{
+		bSellApp = false;
 		BuildStoreApp(ContentBox);
 	}
 	else if (App == 2) // Contacts
@@ -935,6 +941,11 @@ void UPhoneWidget::RefreshContent()
 	else if (App == 4) // Settings
 	{
 		BuildSettingsApp();
+	}
+	else if (App == GSellApp) // Sell -> aparte verkoop-app (zelfde store-UI, alleen verkopen)
+	{
+		bSellApp = true;
+		BuildStoreApp(ContentBox);
 	}
 	else // Map
 	{
