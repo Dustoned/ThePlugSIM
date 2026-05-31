@@ -166,6 +166,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
 	int32 GetDealAskCents() const { return DealAskCents; }
 
+	// Welk product je nu aanbiedt (gevraagd product, of een andere strain = substituut).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	FName GetOfferedProduct() const;
+
+	// Kies welk product je aanbiedt (NAME_None = terug naar het gevraagde product).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
+	void SetOfferedProduct(FName ProductId);
+
+	// Of het huidige aanbod een andere strain is dan gevraagd.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	bool IsOfferingSubstitute() const;
+
+	// Marktprijs (cents) van het nu aangeboden product.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	int32 GetOfferMarketCents() const;
+
 	// De HUD meldt dat een knop/hit-box deze klik heeft verwerkt; zo voorkomen we dat dezelfde
 	// muisklik (na het sluiten van een paneel) ook nog een wereld-interactie/heropening triggert.
 	void MarkUiClickConsumed();
@@ -206,9 +222,9 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerRollJoint(int32 Grams);
 
-	// Server: dien het bod in bij de klant (betaalt naar de kas, voorraad uit speler-inventory).
+	// Server: dien het bod in bij de klant op een specifiek product (betaalt naar de kas).
 	UFUNCTION(Server, Reliable)
-	void ServerSubmitOffer(ACustomerBase* Customer, int32 AskCents);
+	void ServerSubmitOffer(ACustomerBase* Customer, FName ProductId, int32 AskCents);
 
 	// Server: verkoop 1 van dit item uit de eigen inventory aan de supplier.
 	UFUNCTION(Server, Reliable)
@@ -248,6 +264,7 @@ protected:
 	bool bDealOpen = false;
 	TWeakObjectPtr<ACustomerBase> DealCustomer;
 	int32 DealAskCents = 0;
+	FName DealAltProduct = NAME_None; // andere strain die je aanbiedt (None = het gevraagde product)
 
 	// Tijdstip (wereldseconden) waarop de UI voor het laatst een klik verwerkte.
 	double LastUiClickTime = -100.0;

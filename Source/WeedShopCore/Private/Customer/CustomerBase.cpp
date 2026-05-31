@@ -161,11 +161,31 @@ int32 ACustomerBase::GetMarketPriceCents() const
 	return Row ? Row->MarketPriceCents : 0;
 }
 
+int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
+{
+	if (!ProductTable || ProductId.IsNone()) { return 0; }
+	const FWeedShopProductRow* Row =
+		ProductTable->FindRow<FWeedShopProductRow>(ProductId, TEXT("ACustomerBase::GetMarketPriceForProduct"), false);
+	return Row ? Row->MarketPriceCents : 0;
+}
+
 float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01) const
 {
 	return UWeedDealLibrary::CalculateAcceptanceChance(
 		static_cast<float>(GetMarketPriceCents()), static_cast<float>(AskPriceCentsPerUnit),
 		Respect, Loyalty, Addiction, Quality01);
+}
+
+float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01) const
+{
+	const int32 Market = GetMarketPriceForProduct(AltProductId);
+	if (Market <= 0) { return 0.f; }
+	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
+		static_cast<float>(Market), static_cast<float>(AskPriceCentsPerUnit),
+		Respect, Loyalty, Addiction, Quality01);
+	// Bereidheid om iets anders te nemen: ~50% basis, hoger bij loyaliteit/verslaving, lager eronder.
+	const float Willing = FMath::Clamp(0.50f + (Loyalty - 30.f) * 0.004f + (Addiction - 30.f) * 0.005f, 0.30f, 0.90f);
+	return Base * Willing;
 }
 
 namespace
@@ -178,7 +198,7 @@ namespace
 	//     17%-startwiet verslaaft maar licht, sterke wiet meer.
 	// Quality01 < 0 = neutraal (0.6); ThcPercent < 0 = neutraal (15%).
 	void ComputeAcceptedDeltas(int32 Ask, int32 Market, float Quality01, float ThcPercent,
-		float& dR, float& dL, float& dA)
+		bool bSubstitute, float& dR, float& dL, float& dA)
 	{
 		const float Q = (Quality01 >= 0.f) ? FMath::Clamp(Quality01, 0.f, 1.f) : 0.6f;
 		const float Thc = FMath::Clamp((ThcPercent >= 0.f) ? ThcPercent : 15.f, 0.f, 40.f);
@@ -190,20 +210,28 @@ namespace
 		dL = (1.15f - Ratio) * 7.0f + (Q - 0.50f) * 4.0f;
 		// Verslaving: gedreven door potentie, bescheiden en prijs-onafhankelijk.
 		dA = 0.5f + (Thc / 100.f) * 11.0f;
+
+		// Een andere strain dan gevraagd bindt minder: halve loyaliteit-winst.
+		if (bSubstitute) { dL *= 0.5f; }
 	}
 }
 
 void ACustomerBase::PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent,
-	float& OutRespect, float& OutLoyalty, float& OutAddiction) const
+	float& OutRespect, float& OutLoyalty, float& OutAddiction, bool bSubstitute) const
 {
 	float dR = 0.f, dL = 0.f, dA = 0.f;
-	ComputeAcceptedDeltas(AskPriceCentsPerUnit, GetMarketPriceCents(), Quality01, ThcPercent, dR, dL, dA);
+	ComputeAcceptedDeltas(AskPriceCentsPerUnit, GetMarketPriceCents(), Quality01, ThcPercent, bSubstitute, dR, dL, dA);
 	OutRespect = ClampAttr(Respect + dR);
 	OutLoyalty = ClampAttr(Loyalty + dL);
 	OutAddiction = ClampAttr(Addiction + dA);
 }
 
 EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom)
+{
+	return SubmitOfferProduct(DesiredProductId, AskPriceCentsPerUnit, PayTo, StockFrom);
+}
+
+EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom)
 {
 	if (!HasAuthority())
 	{
@@ -213,24 +241,25 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 	{
 		return EDealResult::Refused;
 	}
+	if (ProductId.IsNone()) { ProductId = DesiredProductId; }
+	const bool bSubstitute = (ProductId != DesiredProductId);
 
-	const int32 Market = GetMarketPriceCents();
+	const int32 Market = GetMarketPriceForProduct(ProductId);
 	if (Market <= 0)
 	{
 		return EDealResult::Refused;
 	}
 
-	// Voorraad-check.
-	if (!StockFrom || !StockFrom->HasItem(DesiredProductId, DesiredQuantity))
+	// Voorraad-check (op het aangeboden product).
+	if (!StockFrom || !StockFrom->HasItem(ProductId, DesiredQuantity))
 	{
-		UE_LOG(LogWeedShop, Log, TEXT("Klant: geen voorraad van %s (x%d)."), *DesiredProductId.ToString(), DesiredQuantity);
+		UE_LOG(LogWeedShop, Log, TEXT("Klant: geen voorraad van %s (x%d)."), *ProductId.ToString(), DesiredQuantity);
 		return EDealResult::NoStock;
 	}
 
-	// Kwaliteit (0..1) + potentie (THC%) van de wiet die je verkoopt: wegen mee in de acceptatie
-	// en in de relatie-winst.
-	const float Quality01 = FMath::Clamp(StockFrom->GetItemQualityPct(DesiredProductId) / 100.f, 0.f, 1.f);
-	const float ThcStock = StockFrom->GetItemQuality(DesiredProductId);
+	// Kwaliteit (0..1) + potentie (THC%) van de wiet die je verkoopt.
+	const float Quality01 = FMath::Clamp(StockFrom->GetItemQualityPct(ProductId) / 100.f, 0.f, 1.f);
+	const float ThcStock = StockFrom->GetItemQuality(ProductId);
 
 	// Boven budget -> dingt af.
 	if (AskPriceCentsPerUnit > BudgetCentsPerUnit)
@@ -239,41 +268,43 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 		return EDealResult::Haggle;
 	}
 
-	const float Chance = GetAcceptanceChance(AskPriceCentsPerUnit, Quality01);
+	// Substituut = ~50% basis (stats-afhankelijk); anders de normale kans.
+	const float Chance = bSubstitute
+		? GetSubstituteAcceptance(ProductId, AskPriceCentsPerUnit, Quality01)
+		: GetAcceptanceChance(AskPriceCentsPerUnit, Quality01);
 	const bool bAccepts = FMath::FRandRange(0.f, 100.f) <= Chance;
 
 	if (!bAccepts)
 	{
 		// Te duur -> onderhandelen; anders simpelweg geweigerd (kleine respect-knauw).
-		if (AskPriceCentsPerUnit > Market)
+		if (!bSubstitute && AskPriceCentsPerUnit > Market)
 		{
 			State = ECustomerState::Negotiating;
 			return EDealResult::Haggle;
 		}
-		Respect = ClampAttr(Respect - 4.f);
+		Respect = ClampAttr(Respect - (bSubstitute ? 2.f : 4.f));
 		WriteStatsToRegistry();
 		return EDealResult::Refused;
 	}
 
 	// Deal rond: betalen, voorraad af, attributen bijwerken.
 	const int32 Total = AskPriceCentsPerUnit * DesiredQuantity;
-	StockFrom->RemoveItem(DesiredProductId, DesiredQuantity);
+	StockFrom->RemoveItem(ProductId, DesiredQuantity);
 	if (PayTo)
 	{
 		PayTo->AddMoney(Total);
 	}
 
-	// Kwaliteit + prijs + potentie wegen mee in de relatie-winst (gedeelde formule met de UI-preview).
 	float dR = 0.f, dL = 0.f, dA = 0.f;
-	ComputeAcceptedDeltas(AskPriceCentsPerUnit, Market, Quality01, ThcStock, dR, dL, dA);
+	ComputeAcceptedDeltas(AskPriceCentsPerUnit, Market, Quality01, ThcStock, bSubstitute, dR, dL, dA);
 	Respect = ClampAttr(Respect + dR);
 	Loyalty = ClampAttr(Loyalty + dL);
 	Addiction = ClampAttr(Addiction + dA);
 
 	State = ECustomerState::Served;
 	WriteStatsToRegistry();
-	UE_LOG(LogWeedShop, Log, TEXT("Deal: %dx %s voor %d cents (resp %.0f loy %.0f ver %.0f)."),
-		DesiredQuantity, *DesiredProductId.ToString(), Total, Respect, Loyalty, Addiction);
+	UE_LOG(LogWeedShop, Log, TEXT("Deal: %dx %s%s voor %d cents (resp %.0f loy %.0f ver %.0f)."),
+		DesiredQuantity, *ProductId.ToString(), bSubstitute ? TEXT(" [substitute]") : TEXT(""), Total, Respect, Loyalty, Addiction);
 	return EDealResult::Accepted;
 }
 

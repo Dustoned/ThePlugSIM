@@ -303,22 +303,51 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	bRollOpen = false;
 	bInventoryOpen = false;
 	bPotUpgradeOpen = false;
+	DealAltProduct = NAME_None; // begin met het gevraagde product
 	// Start op de marktprijs als vraagprijs (eerlijk bod).
 	DealAskCents = Customer->GetMarketPriceCents();
 	SetDealAskCents(DealAskCents);
 	UpdateCursor();
 }
 
-void UPhoneClientComponent::SetDealAskCents(int32 Cents)
+FName UPhoneClientComponent::GetOfferedProduct() const
+{
+	if (!DealAltProduct.IsNone()) { return DealAltProduct; }
+	const ACustomerBase* C = DealCustomer.Get();
+	return C ? C->DesiredProductId : NAME_None;
+}
+
+bool UPhoneClientComponent::IsOfferingSubstitute() const
 {
 	const ACustomerBase* C = DealCustomer.Get();
-	const int32 Market = C ? C->GetMarketPriceCents() : 0;
+	return C && !DealAltProduct.IsNone() && DealAltProduct != C->DesiredProductId;
+}
+
+int32 UPhoneClientComponent::GetOfferMarketCents() const
+{
+	const ACustomerBase* C = DealCustomer.Get();
+	return C ? C->GetMarketPriceForProduct(GetOfferedProduct()) : 0;
+}
+
+void UPhoneClientComponent::SetOfferedProduct(FName ProductId)
+{
+	const ACustomerBase* C = DealCustomer.Get();
+	// None of het gevraagde product -> terug naar "normaal".
+	DealAltProduct = (C && ProductId == C->DesiredProductId) ? NAME_None : ProductId;
+	// Reset de vraagprijs naar de markt van het nu aangeboden product (eerlijk bod).
+	DealAskCents = GetOfferMarketCents();
+	SetDealAskCents(DealAskCents);
+}
+
+void UPhoneClientComponent::SetDealAskCents(int32 Cents)
+{
+	const int32 Market = GetOfferMarketCents();
 	if (Market <= 0)
 	{
 		DealAskCents = FMath::Max(0, Cents);
 		return;
 	}
-	// Band: 40%..200% van de markt.
+	// Band: 40%..200% van de markt van het aangeboden product.
 	const int32 Lo = FMath::RoundToInt(Market * 0.40f);
 	const int32 Hi = FMath::RoundToInt(Market * 2.00f);
 	DealAskCents = FMath::Clamp(Cents, Lo, Hi);
@@ -346,14 +375,15 @@ void UPhoneClientComponent::ConfirmDeal()
 {
 	if (ACustomerBase* C = DealCustomer.Get())
 	{
-		ServerSubmitOffer(C, DealAskCents);
+		ServerSubmitOffer(C, GetOfferedProduct(), DealAskCents);
 	}
 	bDealOpen = false;
 	DealCustomer = nullptr;
+	DealAltProduct = NAME_None;
 	UpdateCursor();
 }
 
-void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, int32 AskCents)
+void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, FName ProductId, int32 AskCents)
 {
 	if (!Customer)
 	{
@@ -363,7 +393,7 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
 	UInventoryComponent* Stock = GetOwnerInventory();
 
-	const EDealResult Result = Customer->SubmitOffer(AskCents, Econ, Stock);
+	const EDealResult Result = Customer->SubmitOfferProduct(ProductId, AskCents, Econ, Stock);
 
 	if (GEngine)
 	{

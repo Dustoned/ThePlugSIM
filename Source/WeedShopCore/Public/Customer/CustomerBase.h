@@ -98,21 +98,33 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	int32 GetMarketPriceCents() const;
 
+	// Marktprijs per eenheid van een willekeurig product (cents). Voor het aanbieden van een andere strain.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
+	int32 GetMarketPriceForProduct(FName ProductId) const;
+
 	// Live acceptatie-% bij een bod (per eenheid) — voor de prijs-slider-UI. Quality01 (0..1) is de
 	// kwaliteit van de wiet die je wil verkopen; negatief = neutraal/onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	float GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01 = -1.f) const;
 
-	// Server-authoritative bod. Betaalt naar PayTo, haalt voorraad uit StockFrom. Geeft de uitkomst.
+	// Acceptatie-% als je een ANDERE strain aanbiedt dan gevraagd (substituut). ~50% basis, geschaald
+	// met loyaliteit/verslaving (een trouwe/verslaafde klant neemt eerder iets anders).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
+	float GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01 = -1.f) const;
+
+	// Server-authoritative bod op het gewenste product. Betaalt naar PayTo, haalt voorraad uit StockFrom.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Customer")
 	EDealResult SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom);
 
+	// Server-authoritative bod op een specifiek product (kan een andere strain zijn = substituut).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Customer")
+	EDealResult SubmitOfferProduct(FName ProductId, int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom);
+
 	// Voorspelt de nieuwe Respect/Loyalty/Addiction ALS deze deal (bij deze prijs + kwaliteit) lukt.
-	// Voor de UI-preview; muteert niets. Quality01 (0..1) = kwaliteit, ThcPercent = potentie van de
-	// wiet (drijft verslaving). Negatief = onbekend/neutraal.
+	// Voor de UI-preview; muteert niets. bSubstitute = je biedt een andere strain aan (minder binding).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	void PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent,
-		float& OutRespect, float& OutLoyalty, float& OutAddiction) const;
+		float& OutRespect, float& OutLoyalty, float& OutAddiction, bool bSubstitute = false) const;
 
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;

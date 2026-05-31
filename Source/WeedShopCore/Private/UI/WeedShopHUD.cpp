@@ -913,12 +913,24 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	}
 	else if (S.StartsWith(TEXT("dealp_")))
 	{
-		// Prijs-stop: index 0..N-1 -> percentage 40%..200% van de markt.
-		if (const ACustomerBase* C = Phone->GetDealCustomer())
+		// Prijs-stop: index 0..N-1 -> percentage 40%..200% van de markt van het aangeboden product.
+		const int32 Idx = FCString::Atoi(*S.RightChop(6));
+		const float Pct = 0.40f + 0.10f * Idx;
+		Phone->SetDealAskCents(FMath::RoundToInt(Phone->GetOfferMarketCents() * Pct));
+	}
+	else if (S.StartsWith(TEXT("dalt_")))
+	{
+		// Kies een andere strain uit je voorraad om aan te bieden.
+		const int32 Idx = FCString::Atoi(*S.RightChop(5));
+		const APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
+		if (const UInventoryComponent* PInv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr)
 		{
-			const int32 Idx = FCString::Atoi(*S.RightChop(6));
-			const float Pct = 0.40f + 0.10f * Idx;
-			Phone->SetDealAskCents(FMath::RoundToInt(C->GetMarketPriceCents() * Pct));
+			TArray<FName> Buds;
+			for (const FInventoryStack& St : PInv->GetStacks())
+			{
+				if (St.ItemId.ToString().StartsWith(TEXT("Bud_")) && !Buds.Contains(St.ItemId)) { Buds.Add(St.ItemId); }
+			}
+			if (Buds.IsValidIndex(Idx)) { Phone->SetOfferedProduct(Buds[Idx]); }
 		}
 	}
 	else if (S == TEXT("dealconfirm"))
@@ -1120,7 +1132,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	const float W = 480.f;
-	const float H = 330.f;
+	const float H = 462.f;
 	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
 	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
 	const float InnerX = PX + 16.f;
@@ -1129,11 +1141,11 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	float y = PY + 14.f;
 	DrawText(TEXT("DEAL"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
 
-	const int32 Market = C->GetMarketPriceCents();
 	const int32 Qty = C->DesiredQuantity;
-	const FString Product = PrettyItemName(C->DesiredProductId);
+	const int32 WantMarket = C->GetMarketPriceCents();
+	const FString WantProduct = PrettyItemName(C->DesiredProductId);
 
-	if (Market <= 0)
+	if (WantMarket <= 0)
 	{
 		DrawText(TEXT("This customer has no clear order right now."), FLinearColor(1.f, 0.6f, 0.6f), InnerX, y, Font);
 		y += 30.f;
@@ -1141,9 +1153,20 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 		return;
 	}
 
-	DrawText(FString::Printf(TEXT("Wants: %dx %s   (market EUR %.2f / unit)"), Qty, *Product, Market / 100.f),
+	// Het product dat je NU aanbiedt (gevraagd of een andere strain = substituut).
+	const FName OfferedId = Phone->GetOfferedProduct();
+	const bool bSub = Phone->IsOfferingSubstitute();
+	const int32 Market = FMath::Max(1, Phone->GetOfferMarketCents());
+
+	DrawText(FString::Printf(TEXT("Wants: %dx %s   (market EUR %.2f)"), Qty, *WantProduct, WantMarket / 100.f),
 		FLinearColor::White, InnerX, y, Font);
-	y += 26.f;
+	y += 22.f;
+	if (bSub)
+	{
+		DrawText(FString::Printf(TEXT("Offering instead: %s  (substitute)"), *PrettyItemName(OfferedId)),
+			FLinearColor(1.f, 0.7f, 0.4f), InnerX, y, Font);
+		y += 22.f;
+	}
 
 	// Hover op een prijs-stop -> prijs/total/% tonen meteen díe waarde (preview), ook vóór je klikt.
 	const int32 N = UPhoneClientComponent::DealStepCount; // 17 stops (40..200%)
@@ -1215,42 +1238,45 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	DrawText(TEXT("greedy"), FLinearColor(0.95f, 0.6f, 0.4f), TrackX + TrackW - 50.f, TrackY + TrackH + 4.f, Font);
 	y += 48.f;
 
-	// Voorraad van de speler voor dit product: hoeveel + THC%/Kwaliteit%. Weegt mee in de acceptatie.
+	// Voorraad van de speler voor het AANGEBODEN product: hoeveel + THC%/Kwaliteit%.
 	float Quality01 = -1.f; float ThcShow = 0.f; float QShow = 0.f; int32 StockQty = 0;
+	const UInventoryComponent* PInv = nullptr;
 	if (const APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr)
 	{
-		if (const UInventoryComponent* PInv = P->FindComponentByClass<UInventoryComponent>())
+		PInv = P->FindComponentByClass<UInventoryComponent>();
+		if (PInv)
 		{
-			StockQty = PInv->GetQuantity(C->DesiredProductId);
+			StockQty = PInv->GetQuantity(OfferedId);
 			if (StockQty > 0)
 			{
-				QShow = PInv->GetItemQualityPct(C->DesiredProductId);
-				ThcShow = PInv->GetItemQuality(C->DesiredProductId);
+				QShow = PInv->GetItemQualityPct(OfferedId);
+				ThcShow = PInv->GetItemQuality(OfferedId);
 				Quality01 = FMath::Clamp(QShow / 100.f, 0.f, 1.f);
 			}
 		}
 	}
 
-	// Stock-regel: duidelijk of je 't überhaupt hebt; zo niet, geen valse kwaliteit-straf op de kans.
-	if (StockQty >= C->DesiredQuantity)
+	if (StockQty >= Qty)
 	{
 		DrawText(FString::Printf(TEXT("Your stock: %dg %s  -  THC %.0f%%  Quality %.0f%%"),
-			StockQty, *PrettyItemName(C->DesiredProductId), ThcShow, QShow),
+			StockQty, *PrettyItemName(OfferedId), ThcShow, QShow),
 			FLinearColor(0.8f, 0.85f, 1.f), InnerX, y, Font);
 	}
 	else
 	{
 		DrawText(FString::Printf(TEXT("Your stock: %dg of %d needed - not enough %s!"),
-			StockQty, C->DesiredQuantity, *PrettyItemName(C->DesiredProductId)),
+			StockQty, Qty, *PrettyItemName(OfferedId)),
 			FLinearColor(1.f, 0.5f, 0.4f), InnerX, y, Font);
 	}
 	y += 20.f;
 
-	// --- Live acceptatie-% (volgt ook de hover; client berekent dit lokaal want stats repliceren) ---
-	const float Chance = C->GetAcceptanceChance(EffAsk, Quality01);
+	// --- Live acceptatie-% (substituut = ~50% basis, geschaald met loyaliteit/verslaving) ---
+	const float Chance = bSub ? C->GetSubstituteAcceptance(OfferedId, EffAsk, Quality01)
+							  : C->GetAcceptanceChance(EffAsk, Quality01);
 	const FLinearColor ChanceCol = Chance >= 66.f ? FLinearColor::Green
 		: (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f));
-	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%"), Chance), ChanceCol, InnerX, y, Font);
+	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%%s"), Chance, bSub ? TEXT("   (substitute)") : TEXT("")),
+		ChanceCol, InnerX, y, Font);
 	y += 22.f;
 	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 12.f);
 	DrawRect(ChanceCol, InnerX, y, (W - 32.f) * FMath::Clamp(Chance / 100.f, 0.f, 1.f), 12.f);
@@ -1261,11 +1287,47 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
 	y += 20.f;
 	float pR = 0.f, pL = 0.f, pA = 0.f;
-	C->PreviewDealOutcome(EffAsk, Quality01, (StockQty > 0 ? ThcShow : -1.f), pR, pL, pA);
+	C->PreviewDealOutcome(EffAsk, Quality01, (StockQty > 0 ? ThcShow : -1.f), pR, pL, pA, bSub);
 	DrawText(FString::Printf(TEXT("If accepted:  R %.0f->%.0f   L %.0f->%.0f   A %.0f->%.0f"),
 		C->Respect, pR, C->Loyalty, pL, C->Addiction, pA),
 		FLinearColor(0.55f, 0.95f, 0.6f), InnerX, y, Font);
 	y += 24.f;
+
+	// --- Strain-keuze: bied desnoods een andere strain aan die je wél hebt ---
+	DrawText(TEXT("Offer strain (click to switch):"), FLinearColor(0.75f, 0.8f, 0.95f), InnerX, y, Font);
+	y += 20.f;
+	TArray<FName> Buds;
+	if (PInv)
+	{
+		for (const FInventoryStack& St : PInv->GetStacks())
+		{
+			if (St.ItemId.ToString().StartsWith(TEXT("Bud_")) && !Buds.Contains(St.ItemId)) { Buds.Add(St.ItemId); }
+		}
+	}
+	if (Buds.Num() == 0)
+	{
+		DrawText(TEXT("(no weed in your inventory)"), FLinearColor::Gray, InnerX, y, Font);
+		y += 20.f;
+	}
+	else
+	{
+		const float ChipW = (W - 32.f - 8.f) * 0.5f;
+		for (int32 i = 0; i < Buds.Num(); ++i)
+		{
+			const float bx = InnerX + (i % 2) * (ChipW + 8.f);
+			const float by = y + (i / 2) * 26.f;
+			const bool bThis = (Buds[i] == OfferedId);
+			const bool bWanted = (Buds[i] == C->DesiredProductId);
+			const FName Box(*FString::Printf(TEXT("dalt_%d"), i));
+			const bool bH = (HoveredBox == Box);
+			DrawRect(bThis ? FLinearColor(0.22f, 0.5f, 0.3f, 0.98f) : (bH ? FLinearColor(0.25f, 0.32f, 0.45f, 0.95f) : FLinearColor(0.13f, 0.14f, 0.18f, 0.95f)),
+				bx, by, ChipW, 24.f);
+			DrawText(FString::Printf(TEXT("%s%s T%.0f%%"), *PrettyItemName(Buds[i]), bWanted ? TEXT(" *") : TEXT(""), PInv->GetItemQuality(Buds[i])),
+				FLinearColor::White, bx + 6.f, by + 3.f, Font);
+			AddHitBox(FVector2D(bx, by), FVector2D(ChipW, 24.f), Box, true, 4);
+		}
+		y += FMath::CeilToFloat(Buds.Num() / 2.f) * 26.f + 6.f;
+	}
 
 	DrawButton(FName(TEXT("dealconfirm")), TEXT("Offer deal"), InnerX, y, 200.f, FLinearColor::White);
 	DrawButton(FName(TEXT("dealclose")), TEXT("Cancel"), InnerX + 210.f, y, 160.f, FLinearColor::Yellow);
