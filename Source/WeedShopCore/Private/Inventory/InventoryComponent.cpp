@@ -254,6 +254,7 @@ float UInventoryComponent::GetUnitWeight(FName ItemId) const
 {
 	const FString S = ItemId.ToString();
 	if (S == TEXT("Cash")) { return 0.f; } // briefgeld weegt (praktisch) niets
+	if (S.StartsWith(TEXT("WetBud_"))) { return 0.007f; } // nat is iets zwaarder
 	if (S.StartsWith(TEXT("Bud_")))    { return 0.005f; }
 	if (S.StartsWith(TEXT("Seed_")))   { return 0.002f; }
 	if (S.StartsWith(TEXT("Joint_")))  { return 0.01f; }

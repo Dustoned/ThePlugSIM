@@ -19,6 +19,7 @@ struct FPlaceableDef
 	int32 SellCents = 0;               // verkoopwaarde bij de supplier (meubels; pots gaan via 70% koopprijs)
 	bool bIsAtm = false;               // true -> spawnt AAtm (geldautomaat)
 	bool bAllowOutdoors = false;       // true -> mag ook buiten geplaatst (negeert de "alleen binnen"-regel)
+	bool bIsDryRack = false;           // true -> spawnt ADryingRack (RackTier = ItemId)
 };
 
 // Alle gedefinieerde placeables.

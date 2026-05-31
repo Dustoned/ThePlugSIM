@@ -118,6 +118,10 @@ namespace
 		{ TEXT("WaterBottle_Steel"),    TEXT("Steel bottle"),   TEXT("6 waterings per fill"),  4500,  1 },
 		{ TEXT("WaterBottle_Jerrycan"), TEXT("Jerry can"),      TEXT("12 waterings per fill"), 15000,  1 },
 		{ TEXT("WaterBottle_Tank"),     TEXT("Water tank"),     TEXT("25 waterings per fill"), 45000,  1 },
+		// Droogrekken (vers geoogste wiet eerst drogen voor verkoop). Meer/sneller = duurder.
+		{ TEXT("DryRack_Cheap"), TEXT("Cheap drying rack"),  TEXT("2 batches, slow (~3 min)"),    8000, 1 },
+		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),        TEXT("5 batches, faster (~2 min)"), 25000, 1 },
+		{ TEXT("DryRack_Pro"),   TEXT("Pro drying cabinet"), TEXT("10 batches, fast (~1 min)"),  70000, 1 },
 	};
 }
 
@@ -274,11 +278,21 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 	{
 		return GetSeedCatalog();
 	}
+	TArray<FName> Out;
+	// Pots-tab toont ook de droogrekken (grow-gear).
+	if (Cat == 2)
+	{
+		for (const FName& Id : GetSupplyCatalog())
+		{
+			const FString S = Id.ToString();
+			if (S.StartsWith(TEXT("Pot")) || S.StartsWith(TEXT("DryRack_"))) { Out.Add(Id); }
+		}
+		return Out;
+	}
 	const TCHAR* Prefix = nullptr;
 	switch (Cat)
 	{
 	case 1: Prefix = TEXT("Papers_"); break;
-	case 2: Prefix = TEXT("Pot");     break;
 	case 3: Prefix = TEXT("Soil_");   break;
 	case 4: Prefix = TEXT("WaterBottle"); break;
 	default: break; // Sell-tab (5) e.d.: geen koop-catalogus
@@ -287,7 +301,6 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 	{
 		return TArray<FName>();
 	}
-	TArray<FName> Out;
 	for (const FName& Id : GetSupplyCatalog())
 	{
 		if (Id.ToString().StartsWith(Prefix))

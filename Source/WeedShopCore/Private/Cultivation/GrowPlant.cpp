@@ -437,7 +437,10 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		const float ThcPercent = FMath::RoundToFloat(FMath::Max(Row->BaseThcPercent * 0.15f, FMath::Max(1.0f, ThcRaw)));
 		const float QualityPct = FMath::RoundToFloat(FMath::Max(5.f, QualityFrac * 100.f));
 
-		Inv->AddItem(Row->HarvestProductId, YieldGrams, ThcPercent, QualityPct);
+		// Vers geoogst = NAT: je krijgt "WetBud_<strain>", die moet eerst drogen op een droogrek
+		// voordat het verkoopbaar/rookbaar wordt.
+		const FName WetId(*FString::Printf(TEXT("Wet%s"), *Row->HarvestProductId.ToString()));
+		Inv->AddItem(WetId, YieldGrams, ThcPercent, QualityPct);
 		TotalGrams += YieldGrams;
 		++Harvested;
 

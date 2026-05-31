@@ -5,6 +5,7 @@
 #include "Placement/PlaceableTypes.h"
 #include "Placement/PlaceableProp.h"
 #include "World/Atm.h"
+#include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Interaction/InteractionComponent.h"
@@ -555,6 +556,18 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		// Geldautomaat: spawn een interactieve AAtm.
 		World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rotation, Location), SpawnParams);
+	}
+	else if (Def.bIsDryRack)
+	{
+		// Droogrek: deferred zodat de tier al klopt vóór BeginPlay.
+		ADryingRack* Rack = World->SpawnActorDeferred<ADryingRack>(
+			ADryingRack::StaticClass(), FTransform(Rotation, Location),
+			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Rack)
+		{
+			Rack->RackTier = ItemId;
+			Rack->FinishSpawning(FTransform(Rotation, Location));
+		}
 	}
 	else if (Def.bIsPot)
 	{

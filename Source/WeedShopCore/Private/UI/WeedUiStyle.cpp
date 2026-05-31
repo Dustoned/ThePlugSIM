@@ -58,6 +58,8 @@ namespace WeedUI
 	FString PrettyItemName(FName ItemId)
 	{
 		FString S = ItemId.ToString();
+		if (S.StartsWith(TEXT("WetBud_")))    { return S.RightChop(7) + TEXT(" (wet)"); }
+		if (S.StartsWith(TEXT("DryRack_")))   { return S.RightChop(8) + TEXT(" rack"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return S.RightChop(4); }
 		if (S.StartsWith(TEXT("Seed_")))      { return S.RightChop(5) + TEXT(" seed"); }
 		if (S.StartsWith(TEXT("Joint_")))     { return S.RightChop(6) + TEXT(" joint"); }

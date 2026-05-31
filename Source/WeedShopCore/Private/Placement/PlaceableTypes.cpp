@@ -14,6 +14,10 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Table"),    TEXT("Table"),    TEXT("/Engine/BasicShapes/Cube.Cube"),         FVector(1.2f, 0.8f, 0.8f),  FVector(60.f, 40.f, 40.f), false, 6000 },
 		// ATM: spawnt een AAtm (interactief) en mag ook BUITEN geplaatst worden.
 		{ TEXT("Atm"), TEXT("ATM"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.5f, 0.35f, 1.4f), FVector(25.f, 18.f, 70.f), false, 0, /*bIsAtm*/ true, /*bAllowOutdoors*/ true },
+		// Droogrekken: spawnen een ADryingRack (RackTier = item-id). Binnen plaatsen.
+		{ TEXT("DryRack_Cheap"), TEXT("Cheap drying rack"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.2f, 0.3f, 1.5f), FVector(60.f, 15.f, 75.f), false, 0, false, false, /*bIsDryRack*/ true },
+		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.4f, 0.3f, 1.6f), FVector(70.f, 15.f, 80.f), false, 0, false, false, true },
+		{ TEXT("DryRack_Pro"),   TEXT("Pro drying cabinet"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.6f, 0.4f, 1.8f), FVector(80.f, 20.f, 90.f), false, 0, false, false, true },
 	};
 	return Defs;
 }
