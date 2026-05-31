@@ -106,7 +106,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		if (Phone)
 		{
 			Phone->SetSmokeHoldFrac(bSmokeFired ? 0.f : FMath::Clamp(SmokeHoldTime / SmokeHoldRequired, 0.f, 1.f));
-			Phone->SetStonedHud(GetStonedFraction(), StonedSeconds, LastSmokeXp);
+			Phone->SetStonedHud(GetStonedFraction(), StonedSeconds, GetStonedIntensity());
 		}
 	}
 

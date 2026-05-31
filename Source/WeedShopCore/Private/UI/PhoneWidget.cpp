@@ -126,12 +126,23 @@ UWeedActionButton* UPhoneWidget::MakeActionBtn(const FString& Label, const FLine
 	return B;
 }
 
+void UPhoneWidget::UpdateStoreCartText()
+{
+	if (StoreCartText && Phone.IsValid())
+	{
+		StoreCartText->SetText(FText::FromString(FString::Printf(TEXT("Cart %d   EUR %.2f"),
+			Phone->GetCartNumLines(), Phone->GetCartTotalCents() / 100.f)));
+	}
+}
+
 void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 {
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	if (!Store || !Phone.IsValid()) { return; }
 	UPhoneClientComponent* Ph = Phone.Get();
+	StoreQtyTexts.Reset();
+	StoreCartText = nullptr;
 
 	// Categorie-pillen (Seeds/Papers/Pots/Soil/Water/Sell).
 	static const TCHAR* CatNames[6] = { TEXT("Seeds"), TEXT("Papers"), TEXT("Pots"), TEXT("Soil"), TEXT("Water"), TEXT("Sell") };
@@ -149,8 +160,8 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 
 	// Winkelwagen-balk: aantal + totaal + toggle naar cart/shop.
 	UHorizontalBox* CartBar = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* CL = CartBar->AddChildToHorizontalBox(MakeText(
-		FString::Printf(TEXT("Cart %d   EUR %.2f"), Ph->GetCartNumLines(), Ph->GetCartTotalCents() / 100.f), 13, FLinearColor(1.f, 0.95f, 0.6f)));
+	StoreCartText = MakeText(FString::Printf(TEXT("Cart %d   EUR %.2f"), Ph->GetCartNumLines(), Ph->GetCartTotalCents() / 100.f), 13, FLinearColor(1.f, 0.95f, 0.6f));
+	UHorizontalBoxSlot* CL = CartBar->AddChildToHorizontalBox(StoreCartText);
 	CL->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CL->SetVerticalAlignment(VAlign_Center);
 	CartBar->AddChildToHorizontalBox(MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"),
 		FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bCartView = !bCartView; MarkDirty(); }, 11));
@@ -255,10 +266,12 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 		UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("EUR %.2f"), Price / 100.f), 13, FLinearColor(0.7f, 1.f, 0.7f)));
 		PT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PT->SetVerticalAlignment(VAlign_Center);
 		const FName PickId = Id;
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, -1); MarkDirty(); }));
-		Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, FLinearColor::White))->SetVerticalAlignment(VAlign_Center);
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, +1); MarkDirty(); }));
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Add"), FLinearColor(0.2f, 0.4f, 0.55f), [this, Ph, PickId]() { Ph->AddToCart(PickId); MarkDirty(); }))->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+		UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, FLinearColor::White);
+		StoreQtyTexts.Add(PickId, QtyT);
+		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, -1); if (TObjectPtr<UTextBlock>* T = StoreQtyTexts.Find(PickId)) { (*T)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
+		Row->AddChildToHorizontalBox(QtyT)->SetVerticalAlignment(VAlign_Center);
+		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, +1); if (TObjectPtr<UTextBlock>* T = StoreQtyTexts.Find(PickId)) { (*T)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
+		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Add"), FLinearColor(0.2f, 0.4f, 0.55f), [this, Ph, PickId]() { Ph->AddToCart(PickId); UpdateStoreCartText(); }))->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 		CardVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 
 		Scroll->AddChild(CardB);

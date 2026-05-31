@@ -198,11 +198,11 @@ public:
 	float GetSmokeHoldFrac() const { return SmokeHoldFrac; }
 
 	// Stoned-info voor de HUD (door de character bijgewerkt): fractie resterend (0..1), resterende
-	// seconden en de XP-bonus van de huidige high.
-	void SetStonedHud(float Frac, float Seconds, int32 XpBonus) { StonedHudFrac = Frac; StonedHudSecs = Seconds; StonedHudXp = XpBonus; }
+	// seconden en hoe high je bent (0..1).
+	void SetStonedHud(float Frac, float Seconds, float Intensity) { StonedHudFrac = Frac; StonedHudSecs = Seconds; StonedHudIntensity = Intensity; }
 	float GetStonedHudFrac() const { return StonedHudFrac; }
 	float GetStonedHudSecs() const { return StonedHudSecs; }
-	int32 GetStonedHudXp() const { return StonedHudXp; }
+	float GetStonedHudIntensity() const { return StonedHudIntensity; }
 
 	// --- Wiet-batches mergen (bevestig-popup) ---
 	void OpenMerge(FName ItemId);
@@ -301,9 +301,9 @@ protected:
 	int32 RollGrams = 2;
 
 	float SmokeHoldFrac = 0.f; // 0..1 voortgang van rook-inhouden (lokale UI-staat)
-	float StonedHudFrac = 0.f; // 0..1 resterende high voor de HUD
-	float StonedHudSecs = 0.f; // resterende high-seconden
-	int32 StonedHudXp = 0;     // XP-bonus van de huidige high
+	float StonedHudFrac = 0.f;      // 0..1 resterende high voor de HUD
+	float StonedHudSecs = 0.f;      // resterende high-seconden
+	float StonedHudIntensity = 0.f; // hoe high (0..1)
 
 	bool bDealOpen = false;
 	TWeakObjectPtr<ACustomerBase> DealCustomer;

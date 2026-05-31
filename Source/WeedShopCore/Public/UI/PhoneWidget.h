@@ -84,4 +84,10 @@ protected:
 	void MarkDirty() { bContentDirty = true; }
 
 	bool bCartView = false; // toont de winkelwagen i.p.v. de catalogus
+
+	// Referenties zodat winkel-acties (qty/add) labels direct kunnen updaten zonder de hele
+	// app te herbouwen (geen flash).
+	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> StoreQtyTexts;
+	UPROPERTY() TObjectPtr<UTextBlock> StoreCartText;
+	void UpdateStoreCartText();
 };

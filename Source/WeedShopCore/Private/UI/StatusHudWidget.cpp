@@ -177,7 +177,8 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (StonedText)
 		{
 			const int32 Secs = FMath::CeilToInt(Phone->GetStonedHudSecs());
-			StonedText->SetText(FText::FromString(FString::Printf(TEXT("Stoned %d:%02d  +%d XP"), Secs / 60, Secs % 60, Phone->GetStonedHudXp())));
+			StonedText->SetText(FText::FromString(FString::Printf(TEXT("Stoned %d:%02d   High %.0f%%"),
+				Secs / 60, Secs % 60, Phone->GetStonedHudIntensity() * 100.f)));
 		}
 	}
 }
