@@ -72,21 +72,22 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		UHorizontalBoxSlot* S = Row->AddChildToHorizontalBox(T);
 		S->SetVerticalAlignment(VAlign_Center);
 	};
-	// Overlay (bar + tekst erop) als inhoud van een rij.
-	auto BarOverlay = [this](TObjectPtr<UProgressBar>& OutBar, TObjectPtr<UTextBlock>& OutText, const FLinearColor& Fill) -> UWidget*
+	// Een gelabelde bar: tekst BOVEN een grote, brede progress bar (niet erop).
+	auto MakeBar = [this](TObjectPtr<UProgressBar>& OutBar, TObjectPtr<UTextBlock>& OutText, const FLinearColor& Fill) -> UWidget*
 	{
+		UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
+
+		OutText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.9f, 0.93f, 1.f), false, true);
+		Col->AddChildToVerticalBox(OutText);
+
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(186.f); Sz->SetHeightOverride(18.f);
-		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
-		Sz->SetContent(Ov);
+		Sz->SetWidthOverride(224.f); Sz->SetHeightOverride(18.f);
 		OutBar = WidgetTree->ConstructWidget<UProgressBar>();
 		OutBar->SetFillColorAndOpacity(Fill);
-		Ov->AddChildToOverlay(OutBar);
-		OutText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor::White, true);
-		UOverlaySlot* TS = Ov->AddChildToOverlay(OutText);
-		TS->SetHorizontalAlignment(HAlign_Center);
-		TS->SetVerticalAlignment(VAlign_Center);
-		return Sz;
+		Sz->SetContent(OutBar);
+		UVerticalBoxSlot* BS = Col->AddChildToVerticalBox(Sz);
+		BS->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		return Col;
 	};
 
 	// 1) Geld.
@@ -104,19 +105,19 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 	// 3) Heat.
 	{
 		UHorizontalBox* Row = MakeRow(VB, (int32)WeedUI::EIcon::Flame, FLinearColor(1.f, 0.5f, 0.35f));
-		UWidget* Bar = BarOverlay(HeatBar, HeatText, FLinearColor(1.f, 0.45f, 0.3f));
+		UWidget* Bar = MakeBar(HeatBar, HeatText, FLinearColor(1.f, 0.45f, 0.3f));
 		UHorizontalBoxSlot* S = Row->AddChildToHorizontalBox(Bar); S->SetVerticalAlignment(VAlign_Center);
 	}
 	// 4) Level.
 	{
 		UHorizontalBox* Row = MakeRow(VB, (int32)WeedUI::EIcon::Level, FLinearColor(0.6f, 0.5f, 1.f));
-		UWidget* Bar = BarOverlay(LevelBar, LevelText, FLinearColor(0.35f, 0.7f, 1.f));
+		UWidget* Bar = MakeBar(LevelBar, LevelText, FLinearColor(0.35f, 0.7f, 1.f));
 		UHorizontalBoxSlot* S = Row->AddChildToHorizontalBox(Bar); S->SetVerticalAlignment(VAlign_Center);
 	}
-	// 5) Stoned (verborgen tot je high bent).
+	// 5) Stoned (verborgen tot je high bent) — toont de XP-bonus.
 	{
 		UHorizontalBox* Row = MakeRow(VB, (int32)WeedUI::EIcon::Leaf, FLinearColor(0.4f, 0.9f, 0.5f));
-		UWidget* Bar = BarOverlay(StonedBar, StonedText, FLinearColor(0.4f, 0.9f, 0.5f));
+		UWidget* Bar = MakeBar(StonedBar, StonedText, FLinearColor(0.4f, 0.9f, 0.5f));
 		UHorizontalBoxSlot* S = Row->AddChildToHorizontalBox(Bar); S->SetVerticalAlignment(VAlign_Center);
 		StonedRow = Row;
 		StonedRow->SetVisibility(ESlateVisibility::Collapsed);
@@ -177,8 +178,10 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (StonedText)
 		{
 			const int32 Secs = FMath::CeilToInt(Phone->GetStonedHudSecs());
-			StonedText->SetText(FText::FromString(FString::Printf(TEXT("Stoned %d:%02d   High %.0f%%"),
-				Secs / 60, Secs % 60, Phone->GetStonedHudIntensity() * 100.f)));
+			// XP-bonus: vol high (intensity 1.0) = +100% XP (verdubbeld). Toont de huidige boost.
+			const int32 XpBoost = FMath::RoundToInt(Phone->GetStonedHudIntensity() * 100.f);
+			StonedText->SetText(FText::FromString(FString::Printf(TEXT("Stoned %d:%02d   XP +%d%%"),
+				Secs / 60, Secs % 60, XpBoost)));
 		}
 	}
 }

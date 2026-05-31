@@ -38,6 +38,8 @@ void ULevelComponent::AddXP(int32 Amount)
 	{
 		return;
 	}
+	// Stoned-bonus e.d.: vermenigvuldig de toegekende XP.
+	Amount = FMath::Max(1, FMath::RoundToInt(Amount * XpMultiplier));
 	CurrentXP += Amount;
 
 	bool bLeveled = false;

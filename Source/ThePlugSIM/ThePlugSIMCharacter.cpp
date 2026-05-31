@@ -108,6 +108,17 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			Phone->SetSmokeHoldFrac(bSmokeFired ? 0.f : FMath::Clamp(SmokeHoldTime / SmokeHoldRequired, 0.f, 1.f));
 			Phone->SetStonedHud(GetStonedFraction(), StonedSeconds, GetStonedIntensity());
 		}
+		// Stoned = XP-bonus: bij vol high verdubbelt je XP (x2). Server zet de multiplier.
+		if (HasAuthority())
+		{
+			if (AWeedShopGameState* GSx = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+			{
+				if (ULevelComponent* Lvx = GSx->GetLeveling())
+				{
+					Lvx->SetXpMultiplier(1.f + GetStonedIntensity());
+				}
+			}
+		}
 	}
 
 	// Stoned = wat extra motion blur + lichte vaagheid, zodat rondkijken "high" aanvoelt.
