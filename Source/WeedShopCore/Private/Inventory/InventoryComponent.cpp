@@ -208,6 +208,36 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 	return true;
 }
 
+void UInventoryComponent::SetCashDisplayEuros(int64 Euros)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	const FName Cash(TEXT("Cash"));
+	const int32 Q = (int32)FMath::Clamp<int64>(Euros, 0, (int64)MAX_int32);
+	const int32 Idx = FindStackIndex(Cash);
+	bool bChanged = false;
+
+	if (Q <= 0)
+	{
+		if (Idx != INDEX_NONE) { UnassignHotbarStack(Stacks[Idx].StackId); Stacks.RemoveAt(Idx); bChanged = true; }
+	}
+	else if (Idx == INDEX_NONE)
+	{
+		FInventoryStack NewStack;
+		NewStack.ItemId = Cash;
+		NewStack.Quantity = Q;
+		NewStack.StackId = NextStackId++;
+		Stacks.Add(NewStack);
+		bChanged = true;
+	}
+	else if (Stacks[Idx].Quantity != Q)
+	{
+		Stacks[Idx].Quantity = Q;
+		bChanged = true;
+	}
+
+	if (bChanged) { OnRep_Stacks(); }
+}
+
 float UInventoryComponent::GetItemQuality(FName ItemId) const
 {
 	const int32 Index = FindStackIndex(ItemId);
@@ -223,6 +253,7 @@ float UInventoryComponent::GetItemQualityPct(FName ItemId) const
 float UInventoryComponent::GetUnitWeight(FName ItemId) const
 {
 	const FString S = ItemId.ToString();
+	if (S == TEXT("Cash")) { return 0.f; } // briefgeld weegt (praktisch) niets
 	if (S.StartsWith(TEXT("Bud_")))    { return 0.005f; }
 	if (S.StartsWith(TEXT("Seed_")))   { return 0.002f; }
 	if (S.StartsWith(TEXT("Joint_")))  { return 0.01f; }
@@ -358,6 +389,7 @@ void UInventoryComponent::RefreshHotbarAuto()
 		if (KnownStacks.Contains(Stack.StackId)) { continue; }
 		KnownStacks.Add(Stack.StackId);
 		if (IsFurnitureItem(Stack.ItemId)) { continue; }
+		if (Stack.ItemId == TEXT("Cash")) { continue; } // briefgeld hoort niet op de hotbar
 		if (HotbarStacks.Contains(Stack.StackId)) { continue; }
 		const int32 Empty = HotbarStacks.IndexOfByKey(0);
 		if (Empty != INDEX_NONE) { HotbarStacks[Empty] = Stack.StackId; }

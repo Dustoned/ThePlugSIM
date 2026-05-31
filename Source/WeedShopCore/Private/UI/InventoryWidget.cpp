@@ -254,21 +254,33 @@ void UInventoryWidget::RebuildContent()
 			const FInventoryStack& S = Stacks[Idx];
 			const FName ItemId = S.ItemId;
 			const bool bWeed = ItemId.ToString().StartsWith(TEXT("Bud_")) || ItemId.ToString().StartsWith(TEXT("Joint_"));
+			const bool bCash = (ItemId == TEXT("Cash"));
 			const bool bOnHotbar = Inv->IsStackOnHotbar(StackId);
 
-			Cell->StackId = StackId; Cell->bDraggable = true;
-			// Items die ook op de hotbar staan krijgen een blauwige tint zodat je ze herkent.
-			Cell->Bg = bOnHotbar ? FLinearColor(0.12f, 0.18f, 0.26f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
-			FString Nm = WeedUI::PrettyItemName(ItemId);
-			if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
-			Cell->Line1 = bOnHotbar ? (Nm + TEXT("  *")) : Nm;
-			Cell->Line2 = bWeed
-				? FString::Printf(TEXT("x%d  THC%.0f%% Q%.0f%%"), S.Quantity, S.Quality, S.QualityPct)
-				: FString::Printf(TEXT("x%d"), S.Quantity);
-			if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
+			Cell->StackId = StackId;
+			Cell->bDraggable = !bCash; // briefgeld kun je niet op de hotbar slepen
+			if (bCash)
 			{
-				Cell->bShowMerge = true;
-				Cell->MergeFn = [Ph, ItemId]() { Ph->MergeNow(ItemId); };
+				// Briefgeld: groen/goud, toon het bedrag i.p.v. een aantal.
+				Cell->Bg = FLinearColor(0.10f, 0.16f, 0.10f, 0.97f);
+				Cell->Line1 = TEXT("Cash");
+				Cell->Line2 = FString::Printf(TEXT("EUR %d"), S.Quantity);
+			}
+			else
+			{
+				// Items die ook op de hotbar staan krijgen een blauwige tint zodat je ze herkent.
+				Cell->Bg = bOnHotbar ? FLinearColor(0.12f, 0.18f, 0.26f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
+				FString Nm = WeedUI::PrettyItemName(ItemId);
+				if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
+				Cell->Line1 = bOnHotbar ? (Nm + TEXT("  *")) : Nm;
+				Cell->Line2 = bWeed
+					? FString::Printf(TEXT("x%d  THC%.0f%% Q%.0f%%"), S.Quantity, S.Quality, S.QualityPct)
+					: FString::Printf(TEXT("x%d"), S.Quantity);
+				if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
+				{
+					Cell->bShowMerge = true;
+					Cell->MergeFn = [Ph, ItemId]() { Ph->MergeNow(ItemId); };
+				}
 			}
 		}
 		else

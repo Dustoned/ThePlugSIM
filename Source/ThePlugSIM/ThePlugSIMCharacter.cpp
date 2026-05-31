@@ -12,6 +12,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "UI/WeedShopHUD.h"
 #include "Game/WeedShopGameState.h"
+#include "Economy/EconomyComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Placement/BuildComponent.h"
 #include "Placement/PlaceableProp.h"
@@ -449,6 +450,27 @@ void AThePlugSIMCharacter::BeginPlay()
 	}
 
 	// (De ATM is nu een plaatsbaar item in je inventory: zet 'm zelf neer waar je wilt, binnen of buiten.)
+
+	// Cash = fysiek briefgeld in de inventory: houd het gelijk aan het cash-saldo (server).
+	if (HasAuthority() && Inventory)
+	{
+		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (UEconomyComponent* Econ = GS->GetEconomy())
+			{
+				Econ->OnBalanceChanged.AddDynamic(this, &AThePlugSIMCharacter::OnCashChanged);
+				Inventory->SetCashDisplayEuros((int64)Econ->GetBalanceEuros()); // begin-sync
+			}
+		}
+	}
+}
+
+void AThePlugSIMCharacter::OnCashChanged(int64 NewCashCents)
+{
+	if (HasAuthority() && Inventory)
+	{
+		Inventory->SetCashDisplayEuros(NewCashCents / 100);
+	}
 }
 
 void AThePlugSIMCharacter::ToggleRollUI()

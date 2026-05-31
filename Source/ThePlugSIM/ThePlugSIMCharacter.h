@@ -93,6 +93,10 @@ protected:
 	UFUNCTION()
 	void RefreshKeyBindings();
 
+	// Houdt het fysieke "Cash"-briefgeld in de inventory gelijk aan het cash-saldo (server).
+	UFUNCTION()
+	void OnCashChanged(int64 NewCashCents);
+
 	/** Geeft de speler een startvoorraad (vloei, wat wiet, een zaadje). */
 	virtual void BeginPlay() override;
 

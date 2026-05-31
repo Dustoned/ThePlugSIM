@@ -76,6 +76,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetQuantity(FName ItemId) const;
 
+	// Server: spiegel het cash-saldo als fysiek "Cash"-briefgeld in de inventory (waarde in hele euro's).
+	// Eén stapel; 0 = geen briefgeld. Gewichtloos en niet bruikbaar/op de hotbar.
+	void SetCashDisplayEuros(int64 Euros);
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	bool HasItem(FName ItemId, int32 Count = 1) const { return GetQuantity(ItemId) >= Count; }
 
