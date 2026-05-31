@@ -107,6 +107,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Customer")
 	EDealResult SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom);
 
+	// Voorspelt de nieuwe Respect/Loyalty/Addiction ALS deze deal (bij deze prijs + kwaliteit) lukt.
+	// Voor de UI-preview; muteert niets. Quality01 (0..1) = kwaliteit van de wiet, negatief = neutraal.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
+	void PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01,
+		float& OutRespect, float& OutLoyalty, float& OutAddiction) const;
+
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;

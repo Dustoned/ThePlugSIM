@@ -823,7 +823,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	const float W = 480.f;
-	const float H = 300.f;
+	const float H = 330.f;
 	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
 	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
 	const float InnerX = PX + 16.f;
@@ -918,35 +918,57 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	DrawText(TEXT("greedy"), FLinearColor(0.95f, 0.6f, 0.4f), TrackX + TrackW - 50.f, TrackY + TrackH + 4.f, Font);
 	y += 48.f;
 
-	// Kwaliteit van de wiet die je in voorraad hebt voor dit product (weegt mee in de acceptatie).
-	float Quality01 = -1.f; float ThcShow = 0.f; float QShow = 0.f;
+	// Voorraad van de speler voor dit product: hoeveel + THC%/Kwaliteit%. Weegt mee in de acceptatie.
+	float Quality01 = -1.f; float ThcShow = 0.f; float QShow = 0.f; int32 StockQty = 0;
 	if (const APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr)
 	{
 		if (const UInventoryComponent* PInv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			QShow = PInv->GetItemQualityPct(C->DesiredProductId);
-			ThcShow = PInv->GetItemQuality(C->DesiredProductId);
-			Quality01 = FMath::Clamp(QShow / 100.f, 0.f, 1.f);
+			StockQty = PInv->GetQuantity(C->DesiredProductId);
+			if (StockQty > 0)
+			{
+				QShow = PInv->GetItemQualityPct(C->DesiredProductId);
+				ThcShow = PInv->GetItemQuality(C->DesiredProductId);
+				Quality01 = FMath::Clamp(QShow / 100.f, 0.f, 1.f);
+			}
 		}
 	}
+
+	// Stock-regel: duidelijk of je 't überhaupt hebt; zo niet, geen valse kwaliteit-straf op de kans.
+	if (StockQty >= C->DesiredQuantity)
+	{
+		DrawText(FString::Printf(TEXT("Your stock: %dg %s  -  THC %.0f%%  Quality %.0f%%"),
+			StockQty, *PrettyItemName(C->DesiredProductId), ThcShow, QShow),
+			FLinearColor(0.8f, 0.85f, 1.f), InnerX, y, Font);
+	}
+	else
+	{
+		DrawText(FString::Printf(TEXT("Your stock: %dg of %d needed - not enough %s!"),
+			StockQty, C->DesiredQuantity, *PrettyItemName(C->DesiredProductId)),
+			FLinearColor(1.f, 0.5f, 0.4f), InnerX, y, Font);
+	}
+	y += 20.f;
 
 	// --- Live acceptatie-% (volgt ook de hover; client berekent dit lokaal want stats repliceren) ---
 	const float Chance = C->GetAcceptanceChance(EffAsk, Quality01);
 	const FLinearColor ChanceCol = Chance >= 66.f ? FLinearColor::Green
 		: (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f));
-	DrawText(FString::Printf(TEXT("Your stock: THC %.0f%%  Quality %.0f%%"), ThcShow, QShow),
-		FLinearColor(0.8f, 0.85f, 1.f), InnerX, y, Font);
-	y += 20.f;
 	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%"), Chance), ChanceCol, InnerX, y, Font);
 	y += 22.f;
 	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 12.f);
 	DrawRect(ChanceCol, InnerX, y, (W - 32.f) * FMath::Clamp(Chance / 100.f, 0.f, 1.f), 12.f);
 	y += 16.f;
 
-	// Klant-binding (respect/loyaliteit/verslaving) als context.
+	// Klant-binding nu + voorspelling NA een geslaagde deal (zelfde formule als de server).
 	DrawText(FString::Printf(TEXT("Respect %.0f   Loyalty %.0f   Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction),
 		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
-	y += 26.f;
+	y += 20.f;
+	float pR = 0.f, pL = 0.f, pA = 0.f;
+	C->PreviewDealOutcome(EffAsk, Quality01, pR, pL, pA);
+	DrawText(FString::Printf(TEXT("If accepted:  R %.0f->%.0f   L %.0f->%.0f   A %.0f->%.0f"),
+		C->Respect, pR, C->Loyalty, pL, C->Addiction, pA),
+		FLinearColor(0.55f, 0.95f, 0.6f), InnerX, y, Font);
+	y += 24.f;
 
 	DrawButton(FName(TEXT("dealconfirm")), TEXT("Offer deal"), InnerX, y, 200.f, FLinearColor::White);
 	DrawButton(FName(TEXT("dealclose")), TEXT("Cancel"), InnerX + 210.f, y, 160.f, FLinearColor::Yellow);

@@ -168,6 +168,32 @@ float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quali
 		Respect, Loyalty, Addiction, Quality01);
 }
 
+namespace
+{
+	// Relatie-winst van een GESLAAGDE deal (gedeeld door SubmitOffer en de UI-preview, zodat ze
+	// gegarandeerd gelijk lopen). Quality01 < 0 = neutraal (0.6). Levert de delta's op.
+	void ComputeAcceptedDeltas(int32 Ask, int32 Market, float Quality01, float& dR, float& dL, float& dA)
+	{
+		const float Q = (Quality01 >= 0.f) ? FMath::Clamp(Quality01, 0.f, 1.f) : 0.6f;
+		const float QF = 0.4f + 0.6f * Q; // 0.4 (waardeloos) .. 1.0 (top)
+		dR = 0.f; dL = 0.f; dA = 0.f;
+		if (Ask <= Market) { dR += 5.f * QF; dL += 8.f * QF; }
+		else               { dL += 2.f * QF; }
+		dA += 6.f * QF;
+		if (Quality01 >= 0.f && Quality01 < 0.30f) { dR -= 3.f; } // echt brakke wiet kost respect
+	}
+}
+
+void ACustomerBase::PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01,
+	float& OutRespect, float& OutLoyalty, float& OutAddiction) const
+{
+	float dR = 0.f, dL = 0.f, dA = 0.f;
+	ComputeAcceptedDeltas(AskPriceCentsPerUnit, GetMarketPriceCents(), Quality01, dR, dL, dA);
+	OutRespect = ClampAttr(Respect + dR);
+	OutLoyalty = ClampAttr(Loyalty + dL);
+	OutAddiction = ClampAttr(Addiction + dA);
+}
+
 EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom)
 {
 	if (!HasAuthority())
@@ -226,27 +252,12 @@ EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyCompo
 		PayTo->AddMoney(Total);
 	}
 
-	// Kwaliteit weegt mee in de relatie-winst: goede wiet bindt en verslaaft meer, slechte minder.
-	const float QF = 0.4f + 0.6f * Quality01; // 0.4 (waardeloos) .. 1.0 (top)
-	if (AskPriceCentsPerUnit <= Market)
-	{
-		// Eerlijke/goedkope deal -> meer waardering.
-		Respect = ClampAttr(Respect + 5.f * QF);
-		Loyalty = ClampAttr(Loyalty + 8.f * QF);
-	}
-	else
-	{
-		// Boven markt maar tóch akkoord: géén straf puur omdat hij ja zei (brief Sectie 3),
-		// wel iets minder binding dan een eerlijke deal.
-		Loyalty = ClampAttr(Loyalty + 2.f * QF);
-	}
-	// Slechte wiet verslaaft minder; topwiet maakt sneller verslaafd.
-	Addiction = ClampAttr(Addiction + 6.f * QF);
-	// Echt brakke wiet (<30%) kost zelfs een beetje respect.
-	if (Quality01 < 0.30f)
-	{
-		Respect = ClampAttr(Respect - 3.f);
-	}
+	// Kwaliteit weegt mee in de relatie-winst (gedeelde formule met de UI-preview).
+	float dR = 0.f, dL = 0.f, dA = 0.f;
+	ComputeAcceptedDeltas(AskPriceCentsPerUnit, Market, Quality01, dR, dL, dA);
+	Respect = ClampAttr(Respect + dR);
+	Loyalty = ClampAttr(Loyalty + dL);
+	Addiction = ClampAttr(Addiction + dA);
 
 	State = ECustomerState::Served;
 	WriteStatsToRegistry();
