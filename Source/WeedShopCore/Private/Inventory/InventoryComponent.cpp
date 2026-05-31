@@ -364,8 +364,84 @@ void UInventoryComponent::RefreshHotbarAuto()
 	}
 }
 
+void UInventoryComponent::RefreshGridAuto()
+{
+	const int32 Cells = (MaxStacks > 0) ? MaxStacks : Stacks.Num();
+	if (GridOrder.Num() != Cells) { GridOrder.SetNum(Cells); } // SetNum behoudt bestaande posities
+
+	// Verwijder verdwenen stapels (laat het gat staan zodat de rest blijft staan).
+	for (int32& S : GridOrder)
+	{
+		if (S != 0 && FindStackById(S) == INDEX_NONE) { S = 0; }
+	}
+	// Nieuwe stapels in de eerste vrije cel zetten (en daarna blijven ze daar).
+	for (const FInventoryStack& St : Stacks)
+	{
+		if (GridOrder.Contains(St.StackId)) { continue; }
+		const int32 Empty = GridOrder.IndexOfByKey(0);
+		if (Empty != INDEX_NONE) { GridOrder[Empty] = St.StackId; }
+		else { GridOrder.Add(St.StackId); }
+	}
+}
+
+int32 UInventoryComponent::CategoryRank(FName ItemId)
+{
+	const FString S = ItemId.ToString();
+	if (S.StartsWith(TEXT("Bud_")))         { return 0; }
+	if (S.StartsWith(TEXT("Joint_")))       { return 1; }
+	if (S.StartsWith(TEXT("Seed_")))        { return 2; }
+	if (S.StartsWith(TEXT("Papers_")))      { return 3; }
+	if (S.StartsWith(TEXT("Pot_")))         { return 4; }
+	if (S.StartsWith(TEXT("Soil_")))        { return 5; }
+	if (S.StartsWith(TEXT("WaterBottle_"))) { return 6; }
+	return 9;
+}
+
+void UInventoryComponent::MoveStackToCell(int32 StackId, int32 Cell)
+{
+	if (StackId == 0 || !GridOrder.IsValidIndex(Cell)) { return; }
+	const int32 Cur = GridOrder.IndexOfByKey(StackId);
+	if (Cur == INDEX_NONE || Cur == Cell) { return; }
+	// Wissel de inhoud van bron- en doelcel (doel kan leeg of bezet zijn).
+	GridOrder[Cur] = GridOrder[Cell];
+	GridOrder[Cell] = StackId;
+	OnInventoryChanged.Broadcast();
+}
+
+void UInventoryComponent::SortGrid(int32 Mode)
+{
+	RefreshGridAuto();
+	TArray<int32> Ids;
+	for (int32 S : GridOrder) { if (S != 0) { Ids.Add(S); } }
+
+	Ids.Sort([this, Mode](int32 A, int32 B)
+	{
+		const int32 ia = FindStackById(A), ib = FindStackById(B);
+		if (!Stacks.IsValidIndex(ia) || !Stacks.IsValidIndex(ib)) { return false; }
+		const FInventoryStack& SA = Stacks[ia];
+		const FInventoryStack& SB = Stacks[ib];
+		if (Mode == 1) // aantal (hoog -> laag), gelijk -> op naam
+		{
+			if (SA.Quantity != SB.Quantity) { return SA.Quantity > SB.Quantity; }
+		}
+		else if (Mode == 2) // categorie, daarna naam
+		{
+			const int32 ca = CategoryRank(SA.ItemId), cb = CategoryRank(SB.ItemId);
+			if (ca != cb) { return ca < cb; }
+		}
+		return SA.ItemId.LexicalLess(SB.ItemId);
+	});
+
+	for (int32 i = 0; i < GridOrder.Num(); ++i)
+	{
+		GridOrder[i] = Ids.IsValidIndex(i) ? Ids[i] : 0;
+	}
+	OnInventoryChanged.Broadcast();
+}
+
 void UInventoryComponent::OnRep_Stacks()
 {
 	RefreshHotbarAuto();
+	RefreshGridAuto();
 	OnInventoryChanged.Broadcast();
 }

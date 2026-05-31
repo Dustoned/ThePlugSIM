@@ -138,6 +138,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void UnassignHotbarStack(int32 StackId);
 
+	// --- Rooster-indeling (items blijven staan waar je ze neerzet; nieuwe items vullen lege gaten) ---
+	// StackId per rooster-cel (0 = leeg). Vaste posities, niet automatisch herschikt.
+	const TArray<int32>& GetGridOrder() const { return GridOrder; }
+
+	// Rooster-cel van een stapel (INDEX_NONE als niet geplaatst).
+	int32 GetStackCell(int32 StackId) const { return GridOrder.IndexOfByKey(StackId); }
+
+	// Verplaats een stapel naar een rooster-cel (wisselt met wat daar stond). Voor drag-and-drop.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void MoveStackToCell(int32 StackId, int32 Cell);
+
+	// Sorteer het rooster (0=naam, 1=aantal, 2=categorie) en pak van voren aan.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void SortGrid(int32 Mode);
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -159,6 +174,13 @@ protected:
 	// Hotbar netjes houden: verwijder verdwenen StackId's, vul lege slots automatisch.
 	void RefreshHotbarAuto();
 
+	// Rooster-indeling bijwerken: verwijder verdwenen StackId's (laat het gat staan), zet nieuwe
+	// stapels in de eerste vrije cel. Bestaande posities blijven staan.
+	void RefreshGridAuto();
+
+	// Categorie-rang voor sorteren (lager = eerder): Bud, Joint, Seed, Papers, Pot, Soil, Water, rest.
+	static int32 CategoryRank(FName ItemId);
+
 	int32 ActiveSlot = 0;
 
 	// StackId per hotbar-slot (0 = leeg). Lokaal, niet gerepliceerd.
@@ -168,6 +190,10 @@ protected:
 	// Stapels die we al "gezien" hebben: alleen gloednieuwe stapels worden automatisch op de hotbar
 	// gezet. Zo blijft een handmatige unassign staan i.p.v. dat de auto-fill 'm meteen terugzet.
 	TSet<int32> KnownStacks;
+
+	// Vaste rooster-indeling: StackId per cel (0 = leeg). Lokale UI-staat, niet gerepliceerd.
+	UPROPERTY(Transient)
+	TArray<int32> GridOrder;
 
 	// Server-teller voor unieke StackId's.
 	int32 NextStackId = 1;

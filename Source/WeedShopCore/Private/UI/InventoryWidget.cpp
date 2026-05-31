@@ -14,6 +14,7 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
+#include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "GameFramework/Pawn.h"
@@ -81,6 +82,7 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	UInvDragOp* Op = NewObject<UInvDragOp>(this);
 	Op->StackId = StackId;
 	Op->FromSlot = SlotIndex;
+	Op->FromCell = GridCell;
 	Op->Pivot = EDragPivot::MouseDown;
 
 	// Klein sleep-visueel: het label in een afgeronde kaart.
@@ -103,10 +105,18 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 		// Drop op een hotbar-slot -> toewijzen (Assign wisselt netjes als 'ie al ergens stond).
 		Inv->AssignHotbarStack(SlotIndex, Op->StackId);
 	}
-	else
+	else if (GridCell >= 0)
 	{
-		// Drop in het vrije rooster -> van de hotbar halen (alleen zinvol als 'ie van de hotbar kwam).
-		if (Op->FromSlot >= 0) { Inv->UnassignHotbarStack(Op->StackId); }
+		if (Op->FromCell >= 0)
+		{
+			// Versleept binnen het rooster -> verplaats naar deze cel (wisselt met wat hier stond).
+			Inv->MoveStackToCell(Op->StackId, GridCell);
+		}
+		else if (Op->FromSlot >= 0)
+		{
+			// Vanaf de hotbar in het rooster gesleept -> snelkoppeling van de hotbar halen.
+			Inv->UnassignHotbarStack(Op->StackId);
+		}
 	}
 	if (Owner.IsValid()) { Owner->MarkDirty(); }
 	return true;
@@ -179,17 +189,33 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	WeightText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.8f, 0.85f, 1.f));
 	UHorizontalBoxSlot* WS = Head->AddChildToHorizontalBox(WeightText);
 	WS->SetVerticalAlignment(VAlign_Center); WS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+	// Sorteer-knop: cyclet Name -> Amount -> Category en sorteert het rooster.
+	static const TCHAR* SortNames[3] = { TEXT("Name"), TEXT("Amount"), TEXT("Category") };
+	UWeedActionButton* SortBtn = TileButton(WidgetTree, FLinearColor(0.2f, 0.32f, 0.46f), 8.f,
+		[this]()
+		{
+			SortMode = (SortMode + 1) % 3;
+			static const TCHAR* SN[3] = { TEXT("Name"), TEXT("Amount"), TEXT("Category") };
+			if (SortLabel) { SortLabel->SetText(FText::FromString(FString::Printf(TEXT("Sort: %s"), SN[SortMode]))); }
+			if (UInventoryComponent* I = GetInv()) { I->SortGrid(SortMode); }
+		});
+	SortLabel = WeedUI::Text(WidgetTree, FString::Printf(TEXT("Sort: %s"), SortNames[SortMode]), 12, FLinearColor::White, true);
+	SortBtn->SetContent(SortLabel);
+	Head->AddChildToHorizontalBox(SortBtn)->SetVerticalAlignment(VAlign_Center);
 	UWeedActionButton* CloseBtn = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f,
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->ToggleInventory(); } });
 	CloseBtn->SetContent(WeedUI::Text(WidgetTree, TEXT("Close (I)"), 12, FLinearColor::White, true));
-	Head->AddChildToHorizontalBox(CloseBtn)->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* CloseS = Head->AddChildToHorizontalBox(CloseBtn);
+	CloseS->SetVerticalAlignment(VAlign_Center); CloseS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	VB->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	// Item-tegels (wrap).
+	// Item-tegels (wrap) in een scrollbox zodat een vol rooster scrollt.
+	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
+	UVerticalBoxSlot* GS = VB->AddChildToVerticalBox(Scroll);
+	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	Grid = WidgetTree->ConstructWidget<UWrapBox>();
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
-	UVerticalBoxSlot* GS = VB->AddChildToVerticalBox(Grid);
-	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	Scroll->AddChild(Grid);
 
 	// Hotbar-rij.
 	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Hotbar"), 12, FLinearColor(0.7f, 0.7f, 0.8f)))
@@ -209,47 +235,49 @@ void UInventoryWidget::RebuildContent()
 
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 
-	// --- Vrije items (niet op de hotbar) — sleepbaar naar de hotbar ---
+	// --- Rooster met VASTE posities: items blijven staan waar je ze neerzet ---
 	Grid->ClearChildren();
-	for (int32 i = 0; i < Stacks.Num(); ++i)
+	const TArray<int32>& Order = Inv->GetGridOrder();
+	for (int32 cell = 0; cell < Order.Num(); ++cell)
 	{
-		if (Inv->IsStackOnHotbar(Stacks[i].StackId)) { continue; }
-		const FInventoryStack& S = Stacks[i];
-		const FName ItemId = S.ItemId;
-		const bool bWeed = ItemId.ToString().StartsWith(TEXT("Bud_")) || ItemId.ToString().StartsWith(TEXT("Joint_"));
-
+		const int32 StackId = Order[cell];
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(126.f); Sz->SetHeightOverride(54.f);
 
 		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
-		Cell->StackId = S.StackId; Cell->SlotIndex = -1; Cell->bDraggable = true;
+		Cell->SlotIndex = -1; Cell->GridCell = cell;
 		Cell->Inv = Inv; Cell->Owner = this;
-		FString Nm = WeedUI::PrettyItemName(ItemId);
-		if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
-		Cell->Line1 = Nm;
-		Cell->Line2 = bWeed
-			? FString::Printf(TEXT("x%d  THC%.0f%% Q%.0f%%"), S.Quantity, S.Quality, S.QualityPct)
-			: FString::Printf(TEXT("x%d"), S.Quantity);
-		if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
+
+		const int32 Idx = Inv->FindStackById(StackId);
+		if (StackId != 0 && Stacks.IsValidIndex(Idx))
 		{
-			Cell->bShowMerge = true;
-			Cell->MergeFn = [Ph, ItemId]() { Ph->MergeNow(ItemId); };
+			const FInventoryStack& S = Stacks[Idx];
+			const FName ItemId = S.ItemId;
+			const bool bWeed = ItemId.ToString().StartsWith(TEXT("Bud_")) || ItemId.ToString().StartsWith(TEXT("Joint_"));
+			const bool bOnHotbar = Inv->IsStackOnHotbar(StackId);
+
+			Cell->StackId = StackId; Cell->bDraggable = true;
+			// Items die ook op de hotbar staan krijgen een blauwige tint zodat je ze herkent.
+			Cell->Bg = bOnHotbar ? FLinearColor(0.12f, 0.18f, 0.26f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
+			FString Nm = WeedUI::PrettyItemName(ItemId);
+			if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
+			Cell->Line1 = bOnHotbar ? (Nm + TEXT("  *")) : Nm;
+			Cell->Line2 = bWeed
+				? FString::Printf(TEXT("x%d  THC%.0f%% Q%.0f%%"), S.Quantity, S.Quality, S.QualityPct)
+				: FString::Printf(TEXT("x%d"), S.Quantity);
+			if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
+			{
+				Cell->bShowMerge = true;
+				Cell->MergeFn = [Ph, ItemId]() { Ph->MergeNow(ItemId); };
+			}
+		}
+		else
+		{
+			// Lege cel: drop-doel (verplaatsen binnen rooster / van hotbar halen), niet sleepbaar.
+			Cell->StackId = 0; Cell->bDraggable = false;
+			Cell->Bg = FLinearColor(0.10f, 0.10f, 0.13f, 0.35f);
 		}
 		Sz->SetContent(Cell);
-		Grid->AddChildToWrapBox(Sz);
-	}
-
-	// Ghost-cellen (ook drop-doel om van de hotbar te halen).
-	const int32 Free = (Inv->MaxStacks > 0) ? FMath::Max(0, Inv->MaxStacks - Inv->GetUsedSlots()) : 0;
-	for (int32 g = 0; g < FMath::Min(FMath::Max(Free, 3), 12); ++g)
-	{
-		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(126.f); Sz->SetHeightOverride(54.f);
-		UInvCell* Ghost = WidgetTree->ConstructWidget<UInvCell>();
-		Ghost->StackId = 0; Ghost->SlotIndex = -1; Ghost->bDraggable = false;
-		Ghost->Inv = Inv; Ghost->Owner = this;
-		Ghost->Bg = FLinearColor(0.10f, 0.10f, 0.13f, 0.35f);
-		Sz->SetContent(Ghost);
 		Grid->AddChildToWrapBox(Sz);
 	}
 

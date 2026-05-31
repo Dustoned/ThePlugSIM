@@ -25,7 +25,8 @@ class WEEDSHOPCORE_API UInvDragOp : public UDragDropOperation
 	GENERATED_BODY()
 public:
 	UPROPERTY() int32 StackId = 0;
-	UPROPERTY() int32 FromSlot = -1; // -1 = vanuit het vrije rooster, >=0 = vanaf hotbar-slot
+	UPROPERTY() int32 FromSlot = -1; // >=0 = vanaf hotbar-slot
+	UPROPERTY() int32 FromCell = -1; // >=0 = vanuit een rooster-cel
 };
 
 // Eén sleepbare/droppbare cel. Bouwt zijn eigen visuele inhoud uit de meegegeven velden, zodat hij als
@@ -37,7 +38,8 @@ class WEEDSHOPCORE_API UInvCell : public UUserWidget
 	GENERATED_BODY()
 public:
 	int32 StackId = 0;        // 0 = leeg
-	int32 SlotIndex = -1;     // -1 = vrij rooster, >=0 = hotbar-slot
+	int32 SlotIndex = -1;     // >=0 = hotbar-slot
+	int32 GridCell = -1;      // >=0 = rooster-cel
 	bool bDraggable = false;
 	FString Line1, Line2;
 	FLinearColor Bg = FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
@@ -80,8 +82,10 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> WeightText;
 	UPROPERTY() TObjectPtr<UWrapBox> Grid;
 	UPROPERTY() TObjectPtr<UHorizontalBox> HotbarBox;
+	UPROPERTY() TObjectPtr<UTextBlock> SortLabel;
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<UInventoryComponent> BoundInv;
 	bool bDirty = true;
+	int32 SortMode = 0; // 0=naam, 1=aantal, 2=categorie
 };
