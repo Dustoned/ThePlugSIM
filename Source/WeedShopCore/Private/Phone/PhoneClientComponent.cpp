@@ -574,23 +574,52 @@ void UPhoneClientComponent::AdjustPendingQty(FName ItemId, int32 Delta)
 	PendingQty.Add(ItemId, FMath::Clamp(Cur + Delta, 1, 99));
 }
 
+int32 UPhoneClientComponent::GetPendingSellQty(FName ItemId) const
+{
+	const int32* P = PendingSellQty.Find(ItemId);
+	return P ? *P : 1;
+}
+
+void UPhoneClientComponent::AdjustPendingSellQty(FName ItemId, int32 Delta)
+{
+	const int32 Cur = GetPendingSellQty(ItemId);
+	PendingSellQty.Add(ItemId, FMath::Clamp(Cur + Delta, 1, 999));
+}
+
 void UPhoneClientComponent::AddToCart(FName ItemId)
 {
 	if (ItemId.IsNone()) { return; }
 	const int32 Qty = GetPendingQty(ItemId);
 	for (FCartLine& L : Cart)
 	{
-		if (L.ItemId == ItemId) { L.Qty = FMath::Clamp(L.Qty + Qty, 1, 999); return; }
+		if (L.ItemId == ItemId && !L.bSell) { L.Qty = FMath::Clamp(L.Qty + Qty, 1, 999); return; }
 	}
-	FCartLine NewLine; NewLine.ItemId = ItemId; NewLine.Qty = Qty;
+	FCartLine NewLine; NewLine.ItemId = ItemId; NewLine.Qty = Qty; NewLine.bSell = false;
 	Cart.Add(NewLine);
 }
 
-bool UPhoneClientComponent::GetCartLine(int32 Index, FName& OutItemId, int32& OutQty) const
+void UPhoneClientComponent::AddSellToCart(FName ItemId)
+{
+	if (ItemId.IsNone()) { return; }
+	// Niet meer in de wagen zetten dan je hebt.
+	const UInventoryComponent* Inv = GetOwnerInventory();
+	const int32 Have = Inv ? Inv->GetQuantity(ItemId) : 0;
+	if (Have <= 0) { return; }
+	const int32 Want = GetPendingSellQty(ItemId);
+	for (FCartLine& L : Cart)
+	{
+		if (L.ItemId == ItemId && L.bSell) { L.Qty = FMath::Clamp(L.Qty + Want, 1, Have); return; }
+	}
+	FCartLine NewLine; NewLine.ItemId = ItemId; NewLine.Qty = FMath::Min(Want, Have); NewLine.bSell = true;
+	Cart.Add(NewLine);
+}
+
+bool UPhoneClientComponent::GetCartLine(int32 Index, FName& OutItemId, int32& OutQty, bool& bOutSell) const
 {
 	if (!Cart.IsValidIndex(Index)) { return false; }
 	OutItemId = Cart[Index].ItemId;
 	OutQty = Cart[Index].Qty;
+	bOutSell = Cart[Index].bSell;
 	return true;
 }
 
@@ -608,15 +637,41 @@ void UPhoneClientComponent::ClearCart()
 
 int32 UPhoneClientComponent::GetCartTotalCents() const
 {
+	return GetCartBuyCents();
+}
+
+int32 UPhoneClientComponent::GetCartBuyCents() const
+{
 	const AWeedShopGameState* GS = GetGS();
 	const UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	if (!Store) { return 0; }
 	int32 Total = 0;
 	for (const FCartLine& L : Cart)
 	{
-		Total += Store->GetCatalogPriceCents(L.ItemId) * L.Qty;
+		if (!L.bSell) { Total += Store->GetCatalogPriceCents(L.ItemId) * L.Qty; }
 	}
 	return Total;
+}
+
+int32 UPhoneClientComponent::GetCartSellCents() const
+{
+	const AWeedShopGameState* GS = GetGS();
+	const UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	if (!Store) { return 0; }
+	int32 Total = 0;
+	for (const FCartLine& L : Cart)
+	{
+		if (L.bSell) { Total += Store->GetSellValueCents(L.ItemId) * L.Qty; }
+	}
+	return Total;
+}
+
+int32 UPhoneClientComponent::GetCartNetCents(int32 DeliveryOption) const
+{
+	const int32 Buy = GetCartBuyCents();
+	const int32 Sell = GetCartSellCents();
+	const int32 Fee = FMath::RoundToInt(Buy * DeliveryFeePct(DeliveryOption)); // bezorgkosten alleen op koopdeel
+	return Buy + Fee - Sell; // negatief = je ontvangt geld
 }
 
 float UPhoneClientComponent::DeliveryFeePct(int32 Opt)
@@ -639,9 +694,13 @@ FString UPhoneClientComponent::DeliveryTimeText(int32 Opt)
 void UPhoneClientComponent::Checkout(int32 DeliveryOption)
 {
 	if (Cart.Num() == 0) { return; }
-	TArray<FName> Ids; TArray<int32> Qtys;
-	for (const FCartLine& L : Cart) { Ids.Add(L.ItemId); Qtys.Add(L.Qty); }
-	ServerBuyCart(Ids, Qtys, DeliveryOption);
+	TArray<FName> BuyIds, SellIds; TArray<int32> BuyQ, SellQ;
+	for (const FCartLine& L : Cart)
+	{
+		if (L.bSell) { SellIds.Add(L.ItemId); SellQ.Add(L.Qty); }
+		else { BuyIds.Add(L.ItemId); BuyQ.Add(L.Qty); }
+	}
+	ServerBuyCart(BuyIds, BuyQ, SellIds, SellQ, DeliveryOption);
 	Cart.Reset();
 }
 
@@ -676,29 +735,63 @@ void UPhoneClientComponent::DeliverCart(int32 OrderId, const TArray<FName>& Item
 	}
 }
 
-void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& ItemIds, const TArray<int32>& Quantities, int32 DeliveryOption)
+void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& BuyIds, const TArray<int32>& BuyQtys,
+	const TArray<FName>& SellIds, const TArray<int32>& SellQtys, int32 DeliveryOption)
 {
 	AWeedShopGameState* GS = GetGS();
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	UInventoryComponent* Inv = GetOwnerInventory();
-	if (!Store || !Inv) { return; }
+	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	if (!Store || !Inv || !Econ) { return; }
 
-	// Bezorgkosten = % van het besteed bedrag (subtotaal van de wagen), nu afgeschreven.
-	int64 Subtotal = 0;
-	for (int32 i = 0; i < ItemIds.Num(); ++i)
+	// 1) Koop-subtotaal + bezorgkosten (alleen op het koopdeel).
+	int64 BuySub = 0;
+	for (int32 i = 0; i < BuyIds.Num(); ++i)
 	{
-		Subtotal += (int64)Store->GetCatalogPriceCents(ItemIds[i]) * (Quantities.IsValidIndex(i) ? Quantities[i] : 0);
+		BuySub += (int64)Store->GetCatalogPriceCents(BuyIds[i]) * (BuyQtys.IsValidIndex(i) ? BuyQtys[i] : 0);
 	}
-	const int32 Fee = FMath::RoundToInt(Subtotal * DeliveryFeePct(DeliveryOption));
-	UEconomyComponent* Econ = GS->GetEconomy();
-	if (Fee > 0 && Econ && !Econ->RemoveMoney(Fee))
+	const int64 Fee = FMath::RoundToInt(BuySub * DeliveryFeePct(DeliveryOption));
+
+	// 2) Verkoop-opbrengst op basis van wat de speler echt heeft (clamp; nog niet verwijderen).
+	int64 SellProceeds = 0;
+	TArray<int32> SellActual; SellActual.SetNum(SellIds.Num());
+	for (int32 i = 0; i < SellIds.Num(); ++i)
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough money for the delivery fee.")); }
+		const int32 Want = SellQtys.IsValidIndex(i) ? SellQtys[i] : 0;
+		const int32 N = FMath::Min(Want, Inv->GetQuantity(SellIds[i]));
+		SellActual[i] = N;
+		SellProceeds += (int64)Store->GetSellValueCents(SellIds[i]) * N;
+	}
+
+	// 3) Netto-check: kosten mogen niet hoger zijn dan saldo + verkoopopbrengst.
+	const int64 Cost = BuySub + Fee;
+	if (Cost > Econ->GetBalanceCents() + SellProceeds)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough money (even after selling).")); }
 		return;
 	}
 
-	// Een bezorgdrone vliegt naar de voordeur over de levertijd en laat daar het pakket vallen.
-	// Instant krijgt een korte vlucht zodat de drone alsnog even komt aanvliegen.
+	// 4) Verkoop uitvoeren (items weg, opbrengst als inkomen), daarna het koopdeel afrekenen.
+	for (int32 i = 0; i < SellIds.Num(); ++i)
+	{
+		if (SellActual[i] > 0) { Inv->RemoveItem(SellIds[i], SellActual[i]); }
+	}
+	if (SellProceeds > 0) { Econ->AddMoney(SellProceeds); }
+	if (Cost > 0) { Econ->RemoveMoney(Cost); }
+
+	// 5) Geen koop-items? Dan zijn we klaar (alleen verkocht).
+	int32 BuyCount = 0;
+	for (int32 i = 0; i < BuyIds.Num(); ++i) { BuyCount += (BuyQtys.IsValidIndex(i) ? BuyQtys[i] : 0); }
+	if (BuyCount <= 0)
+	{
+		if (GEngine && SellProceeds > 0)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, FString::Printf(TEXT("Sold for EUR %.2f"), SellProceeds / 100.f));
+		}
+		return;
+	}
+
+	// 6) Koop-items: bezorgdrone naar de voordeur (items zijn al betaald -> gratis op pickup).
 	const float Flight = FMath::Max(DeliveryDelaySeconds(DeliveryOption), 5.f);
 	const int32 OrderId = NextOrderId++;
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
@@ -707,27 +800,27 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& It
 	PD.OrderId = OrderId;
 	PD.DeliveryOpt = DeliveryOption;
 	PD.FeeCents = Fee;
+	PD.PaidCents = Cost;       // koopprijs + fee, terug bij annuleren
 	PD.PlacedTime = Now;
 	PD.ArriveTime = Now + Flight;
-	PD.Ids = ItemIds;
-	PD.Qtys = Quantities;
-	for (int32 i = 0; i < ItemIds.Num(); ++i)
+	PD.Ids = BuyIds;
+	PD.Qtys = BuyQtys;
+	for (int32 i = 0; i < BuyIds.Num(); ++i)
 	{
-		const int32 Q = Quantities.IsValidIndex(i) ? Quantities[i] : 0;
+		const int32 Q = BuyQtys.IsValidIndex(i) ? BuyQtys[i] : 0;
 		PD.ItemCount += Q;
 		if (!PD.Summary.IsEmpty()) { PD.Summary += TEXT(", "); }
-		PD.Summary += FString::Printf(TEXT("%dx %s"), Q, *WeedUI::PrettyItemName(ItemIds[i]));
+		PD.Summary += FString::Printf(TEXT("%dx %s"), Q, *WeedUI::PrettyItemName(BuyIds[i]));
 	}
 
-	// Drone spawnen die naar de voordeur vliegt en daar het pakket dropt.
 	if (UWorld* World = GetWorld())
 	{
 		const FVector Drop = FindDeliveryPoint();
-		const FVector Start = Drop + FVector(-1700.f, 700.f, 1500.f); // komt van buiten/boven aanvliegen
+		const FVector Start = Drop + FVector(-1700.f, 700.f, 1500.f);
 		ADeliveryDrone* Drone = World->SpawnActor<ADeliveryDrone>(ADeliveryDrone::StaticClass(), FTransform(Start));
 		if (Drone)
 		{
-			Drone->Setup(Start, Drop, Flight, OrderId, ItemIds, Quantities, this);
+			Drone->Setup(Start, Drop, Flight, OrderId, BuyIds, BuyQtys, this);
 			PD.Drone = Drone;
 		}
 	}
@@ -736,8 +829,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& It
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
-			FString::Printf(TEXT("Order placed - %s delivery. A drone is bringing it to your door. Fee EUR %.2f"),
-				*DeliveryName(DeliveryOption), Fee / 100.f));
+			FString::Printf(TEXT("Order placed - %s delivery. A drone is bringing it to your door."), *DeliveryName(DeliveryOption)));
 	}
 }
 
@@ -836,16 +928,16 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 	{
 		Drone->Destroy();
 	}
-	// Bezorgkosten teruggeven (items waren nog niet afgerekend).
-	const int64 Fee = PendingDeliveries[Idx].FeeCents;
-	if (Fee > 0)
+	// Het koopdeel (itemprijs + fee) was al bij checkout betaald -> volledig terugstorten.
+	const int64 Refund = PendingDeliveries[Idx].PaidCents;
+	if (Refund > 0)
 	{
-		if (AWeedShopGameState* GS = GetGS()) { if (UEconomyComponent* Econ = GS->GetEconomy()) { Econ->AddMoneyUntracked(Fee); } }
+		if (AWeedShopGameState* GS = GetGS()) { if (UEconomyComponent* Econ = GS->GetEconomy()) { Econ->AddMoneyUntracked(Refund); } }
 	}
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow,
-			FString::Printf(TEXT("Order cancelled - fee EUR %.2f refunded"), Fee / 100.f));
+			FString::Printf(TEXT("Order cancelled - EUR %.2f refunded"), Refund / 100.f));
 	}
 	PendingDeliveries.RemoveAt(Idx);
 }

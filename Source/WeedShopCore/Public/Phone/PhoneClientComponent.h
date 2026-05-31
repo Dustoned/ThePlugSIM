@@ -74,15 +74,24 @@ public:
 	int32 GetPendingQty(FName ItemId) const;
 	void AdjustPendingQty(FName ItemId, int32 Delta);
 
-	// Voeg het gekozen aantal van dit item toe aan de winkelwagen.
+	// Idem maar voor de verkoop-pagina (aparte teller per item).
+	int32 GetPendingSellQty(FName ItemId) const;
+	void AdjustPendingSellQty(FName ItemId, int32 Delta);
+
+	// Voeg het gekozen aantal van dit item toe aan de winkelwagen (koop- of verkoop-regel).
 	void AddToCart(FName ItemId);
+	void AddSellToCart(FName ItemId);
 
 	// Winkelwagen-regels.
 	int32 GetCartNumLines() const { return Cart.Num(); }
-	bool GetCartLine(int32 Index, FName& OutItemId, int32& OutQty) const;
+	bool GetCartLine(int32 Index, FName& OutItemId, int32& OutQty, bool& bOutSell) const;
 	void AdjustCartLine(int32 Index, int32 Delta);   // Delta op het aantal; <=0 -> regel weg
 	void ClearCart();
-	int32 GetCartTotalCents() const;
+	int32 GetCartTotalCents() const;     // alleen koop-subtotaal (achterwaarts compatibel)
+	int32 GetCartBuyCents() const;       // som van de koop-regels
+	int32 GetCartSellCents() const;      // som van de verkoop-regels (opbrengst)
+	// Netto te betalen incl. bezorgkosten op het koopdeel. Negatief = je ontvangt geld.
+	int32 GetCartNetCents(int32 DeliveryOption) const;
 
 	// Reken de hele winkelwagen af met een bezorgoptie (0=Standard, 1=Express, 2=Instant).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
@@ -100,6 +109,7 @@ public:
 		int32 OrderId = 0;
 		int32 DeliveryOpt = 0;
 		int64 FeeCents = 0;
+		int64 PaidCents = 0;      // betaald voor het koopdeel (itemprijs + fee) -> terug bij annuleren
 		int32 ItemCount = 0;      // totaal aantal stuks
 		FString Summary;          // korte omschrijving (bv. "3x Rolling papers, 2x ...")
 		float PlacedTime = 0.f;   // wereldtijd bij plaatsen
@@ -304,9 +314,11 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerSellAll(FName ItemId);
 
-	// Server: koop de hele winkelwagen (parallelle arrays item-id + aantal) met bezorgoptie.
+	// Server: reken de winkelwagen af — koop-regels (drone-levering) + verkoop-regels (meteen), met
+	// een netto-afrekening (verkoop trekt van de kosten af) en bezorgkosten op het koopdeel.
 	UFUNCTION(Server, Reliable)
-	void ServerBuyCart(const TArray<FName>& ItemIds, const TArray<int32>& Quantities, int32 DeliveryOption);
+	void ServerBuyCart(const TArray<FName>& BuyIds, const TArray<int32>& BuyQtys,
+		const TArray<FName>& SellIds, const TArray<int32>& SellQtys, int32 DeliveryOption);
 
 	// Server: levert de bestelling (voegt items toe / schrijft itemprijs af). Direct of na de levertijd.
 	// OrderId>0 = ruim de bijbehorende pending-regel op na levering (0 = directe levering, geen regel).
@@ -385,8 +397,8 @@ protected:
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;
 
-	// Winkel-state (client-side): gekozen aantal per item + winkelwagen.
-	struct FCartLine { FName ItemId = NAME_None; int32 Qty = 0; };
+	// Winkel-state (client-side): gekozen aantal per item + winkelwagen. bSell = verkoop-regel.
+	struct FCartLine { FName ItemId = NAME_None; int32 Qty = 0; bool bSell = false; };
 	TArray<FCartLine> Cart;
 
 	// Onderweg zijnde bestellingen + hun timers (server-side).
@@ -394,6 +406,7 @@ protected:
 	TMap<int32, FTimerHandle> DeliveryTimers;
 	int32 NextOrderId = 1;
 	TMap<FName, int32> PendingQty;
+	TMap<FName, int32> PendingSellQty;
 
 	bool bPotUpgradeOpen = false;
 	TWeakObjectPtr<AGrowPlant> UpgPot;

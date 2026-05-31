@@ -219,6 +219,22 @@ bool UStoreComponent::BuyAny(FName CatalogId, UInventoryComponent* Buyer)
 	return BuySeed(CatalogId, Buyer);
 }
 
+bool UStoreComponent::GrantAny(FName CatalogId, UInventoryComponent* Buyer)
+{
+	if (GetOwnerRole() != ROLE_Authority || !Buyer || CatalogId.IsNone()) { return false; }
+	// Supply -> voeg de pack-grootte toe; anders behandelen als strain-zaad. Geen geld, geen fase-check.
+	FText Name; int32 Price = 0; int32 Pack = 1;
+	if (GetSupplyDisplay(CatalogId, Name, Price, Pack))
+	{
+		return Buyer->AddItem(CatalogId, FMath::Max(1, Pack));
+	}
+	if (StrainTable && StrainTable->FindRow<FWeedStrainRow>(CatalogId, TEXT("GrantAny"), false))
+	{
+		return Buyer->AddItem(SeedItemId(CatalogId), 1);
+	}
+	return false;
+}
+
 int32 UStoreComponent::GetCatalogPriceCents(FName CatalogId) const
 {
 	FText Name; int32 Price = 0; int32 Pack = 1;

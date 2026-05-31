@@ -59,8 +59,9 @@ void ADeliveryPackage::Interact_Implementation(APawn* InstigatorPawn)
 		int32 Got = 0;
 		for (int32 q = 0; q < Want; ++q)
 		{
-			if (Store->BuyAny(Ids[i], Inv)) { ++Got; }
-			else { break; } // geen plek of geen geld -> stop met deze regel
+			// Al betaald bij checkout -> gewoon toevoegen (faalt alleen bij te weinig ruimte).
+			if (Store->GrantAny(Ids[i], Inv)) { ++Got; }
+			else { break; } // geen plek -> rest blijft in de doos
 		}
 		Delivered += Got;
 		if (Got < Want) { RemIds.Add(Ids[i]); RemQ.Add(Want - Got); }

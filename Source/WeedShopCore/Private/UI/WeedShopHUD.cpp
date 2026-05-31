@@ -635,8 +635,8 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 	}
 	for (int32 li = 0; li < Lines; ++li)
 	{
-		FName LId; int32 LQty = 0;
-		if (!Phone->GetCartLine(li, LId, LQty)) { continue; }
+		FName LId; int32 LQty = 0; bool bSellLine = false;
+		if (!Phone->GetCartLine(li, LId, LQty, bSellLine)) { continue; }
 		if (cy > CartFooterY - 36.f) { DrawText(TEXT("..."), FLinearColor::Gray, CartInnerX, cy, Font); break; }
 		const int32 LinePrice = Store->GetCatalogPriceCents(LId) * LQty;
 		FString LName = Store->GetCatalogName(LId).ToString();
