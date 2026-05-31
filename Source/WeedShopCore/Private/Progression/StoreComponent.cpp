@@ -102,6 +102,7 @@ namespace
 		{ TEXT("Soil_Basic"),   TEXT("Basic soil (3 harvests)"),        1500, 1 },
 		{ TEXT("Soil_Rich"),    TEXT("Rich soil (+yield, 4 harvests)"), 4000, 1 },
 		{ TEXT("Soil_Premium"), TEXT("Premium soil (++yield, 6 harvests)"), 9000, 1 },
+		{ TEXT("WaterBottle_Plastic"), TEXT("Plastic water bottle (fill at the sink)"), 1000, 1 },
 	};
 }
 

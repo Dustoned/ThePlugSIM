@@ -97,6 +97,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UBuildComponent> Build;
 
+	/** Waterfles: hoeveel water je bij je hebt (vullen bij de gootsteen, gebruiken om te water geven). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UWaterCanComponent> WaterCan;
+
 	/** Straat-werving: geef de aangekeken NPC een gratis sample (toets F). */
 	void GiveSample();
 

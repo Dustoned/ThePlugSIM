@@ -2,8 +2,10 @@
 
 #include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "Data/WeedStrain.h"
 #include "Cultivation/SoilTypes.h"
+#include "Cultivation/WaterCanComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
@@ -34,6 +36,23 @@ AGrowPlant::AGrowPlant()
 		Mesh->SetRelativeLocation(FVector(0.f, 0.f, 20.f));
 	}
 
+	// Soil-indicatie: bruin schijfje boven in de pot, zichtbaar zodra er soil in zit.
+	SoilMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SoilMesh"));
+	SoilMesh->SetupAttachment(Root);
+	SoilMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (PotMeshFinder.Succeeded())
+	{
+		SoilMesh->SetStaticMesh(PotMeshFinder.Object); // korte, brede cilinder = aarde-laag
+		SoilMesh->SetRelativeScale3D(FVector(0.42f, 0.42f, 0.06f));
+		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, 34.f));
+	}
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> SoilMatFinder(TEXT("/Game/_Project/Materials/M_Soil.M_Soil"));
+	if (SoilMatFinder.Succeeded())
+	{
+		SoilMesh->SetMaterial(0, SoilMatFinder.Object);
+	}
+	SoilMesh->SetVisibility(false);
+
 	// StrainTable automatisch koppelen zodat een gespawnde pot kan planten/oogsten zonder BP-setup.
 	static ConstructorHelpers::FObjectFinder<UDataTable> StrainTableFinder(TEXT("/Game/_Project/Data/DT_Strains.DT_Strains"));
 	if (StrainTableFinder.Succeeded())
@@ -61,6 +80,7 @@ void AGrowPlant::BeginPlay()
 	}
 
 	RefreshMesh();
+	UpdateSoilVisual();
 }
 
 void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -157,7 +177,7 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 	}
 	else
 	{
-		Water();
+		Water(InstigatorPawn);
 	}
 }
 
@@ -188,6 +208,7 @@ bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn)
 
 	SoilId = Best->ItemId;
 	SoilUsesLeft = Best->Harvests;
+	UpdateSoilVisual();
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
@@ -265,14 +286,33 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 		Pct, CareMultiplier * 100.f));
 }
 
-void AGrowPlant::Water()
+void AGrowPlant::Water(APawn* InstigatorPawn)
 {
+	UWaterCanComponent* Can = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UWaterCanComponent>() : nullptr;
+	if (!Can || !Can->HasBottle())
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier)."));
+		}
+		return;
+	}
+	if (!Can->TryUseCharge())
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Water bottle is empty — fill it at the sink."));
+		}
+		return;
+	}
+
 	CareMultiplier = FMath::Clamp(CareMultiplier + 0.2f, 0.3f, 1.0f);
 	UE_LOG(LogWeedShop, Log, TEXT("Plant %s gewaterd -> zorg %.0f%%"), *StrainId.ToString(), CareMultiplier * 100.f);
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan,
-			FString::Printf(TEXT("Plant watered (care %.0f%%)"), CareMultiplier * 100.f));
+			FString::Printf(TEXT("Plant watered (care %.0f%%, water left %d/%d)"),
+				CareMultiplier * 100.f, Can->GetCharges(), Can->GetMaxCharges()));
 	}
 }
 
@@ -319,6 +359,7 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 	if (SoilUsesLeft <= 0)
 	{
 		SoilId = NAME_None;
+		UpdateSoilVisual();
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Orange, TEXT("The soil is used up — add fresh soil before replanting."));
@@ -336,6 +377,19 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 void AGrowPlant::OnRep_Visual()
 {
 	RefreshMesh();
+}
+
+void AGrowPlant::OnRep_Soil()
+{
+	UpdateSoilVisual();
+}
+
+void AGrowPlant::UpdateSoilVisual()
+{
+	if (SoilMesh)
+	{
+		SoilMesh->SetVisibility(HasSoil());
+	}
 }
 
 void AGrowPlant::RefreshMesh()

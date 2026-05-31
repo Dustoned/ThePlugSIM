@@ -105,6 +105,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
+	// Bruin schijfje boven in de pot dat zichtbaar is zodra er soil in zit (visuele indicatie).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
+	TObjectPtr<UStaticMeshComponent> SoilMesh;
+
 	// Verstreken groeitijd (server-side klok), gerepliceerd voor fractie-weergave.
 	UPROPERTY(Replicated)
 	float GrowthSeconds = 0.f;
@@ -124,7 +128,7 @@ protected:
 	bool bPlanted = false;
 
 	// Welke soil in de pot zit (NAME_None = leeg). Bepaalt yield/kwaliteit-bonus.
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_Soil)
 	FName SoilId = NAME_None;
 
 	// Resterende oogsten voordat de soil op is (0 = leeg).
@@ -137,14 +141,20 @@ protected:
 	// Server: probeer een zaadje uit de inventory van de speler te planten. Geeft succes.
 	bool TryPlantFromInventory(APawn* InstigatorPawn);
 
-	// Server: water geven verhoogt de care-multiplier.
-	void Water();
+	// Server: water geven (kost 1 slok uit de waterfles van de speler) verhoogt de care-multiplier.
+	void Water(APawn* InstigatorPawn);
 
 	// Server: oogsten -> gram in de inventory van de oogster, daarna plant verwijderen.
 	void Harvest(APawn* InstigatorPawn);
 
 	UFUNCTION()
 	void OnRep_Visual();
+
+	UFUNCTION()
+	void OnRep_Soil();
+
+	// Toon/verberg het soil-schijfje op basis van HasSoil().
+	void UpdateSoilVisual();
 
 	// Werkt de fase bij op basis van de groeifractie (server).
 	void UpdatePhaseFromGrowth();

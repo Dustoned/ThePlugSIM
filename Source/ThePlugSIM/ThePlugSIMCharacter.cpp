@@ -14,6 +14,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Placement/BuildComponent.h"
+#include "Cultivation/WaterCanComponent.h"
 #include "Interaction/InteractionComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Npc/NpcRegistryComponent.h"
@@ -61,6 +62,9 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 
 	// Plaats-modus voor placeables (kweekpot).
 	Build = CreateDefaultSubobject<UBuildComponent>(TEXT("Build"));
+
+	// Waterfles-staat (vullen bij de gootsteen).
+	WaterCan = CreateDefaultSubobject<UWaterCanComponent>(TEXT("WaterCan"));
 }
 
 void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -293,6 +297,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		Inventory->AddItem(FName(TEXT("Bud_SilverHaze")), 5);
 		Inventory->AddItem(FName(TEXT("Seed_SilverHaze")), 1);
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 2);
+		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 	}
 }
 

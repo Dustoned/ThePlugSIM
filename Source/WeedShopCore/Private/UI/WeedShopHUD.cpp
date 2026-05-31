@@ -19,6 +19,7 @@
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/SoilTypes.h"
+#include "Cultivation/WaterCanComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Placement/BuildComponent.h"
 
@@ -36,6 +37,7 @@ namespace
 		if (S.StartsWith(TEXT("Bud_")))    { return FString::Printf(TEXT("Weed: %s"), *S.RightChop(4)); }
 		if (S.StartsWith(TEXT("Seed_")))   { return FString::Printf(TEXT("Seed: %s"), *S.RightChop(5)); }
 		if (S.StartsWith(TEXT("Soil_")))   { return FString::Printf(TEXT("Soil: %s"), *S.RightChop(5)); }
+		if (S == TEXT("WaterBottle_Plastic")) { return TEXT("Water bottle"); }
 		if (S.StartsWith(TEXT("Joint_")))  { return FString::Printf(TEXT("Joint %s"), *S.RightChop(6)); }
 		if (S == TEXT("Papers_Small"))     { return TEXT("Papers (small)"); }
 		if (S == TEXT("Papers_Big"))       { return TEXT("Papers (big)"); }
@@ -101,6 +103,22 @@ void AWeedShopHUD::DrawHUD()
 			: (H >= 40.f ? FLinearColor(1.f, 0.6f, 0.2f) : FLinearColor(0.6f, 0.8f, 0.6f));
 		DrawText(FString::Printf(TEXT("Heat: %.0f%%"), H), HeatCol, X, Y, Font);
 		Y += 26.f;
+	}
+
+	// Waterfles-stand.
+	if (P)
+	{
+		if (const UWaterCanComponent* Can = P->FindComponentByClass<UWaterCanComponent>())
+		{
+			if (Can->HasBottle())
+			{
+				const int32 Cur = Can->GetCharges();
+				const int32 Max = Can->GetMaxCharges();
+				DrawText(FString::Printf(TEXT("Water: %d/%d"), Cur, Max),
+					Cur > 0 ? FLinearColor(0.5f, 0.8f, 1.f) : FLinearColor(1.f, 0.6f, 0.3f), X, Y, Font);
+				Y += 26.f;
+			}
+		}
 	}
 
 	if (P)
