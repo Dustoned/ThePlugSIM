@@ -49,9 +49,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|DayNight")
 	int32 GetDayNumber() const { return DayNumber; }
 
-	// Klok-tijd 0..1 binnen de huidige dag-cyclus (voor "HH:MM"). Zelfde als GetCycleFraction.
+	// Wanneer de zon opkomt / ondergaat op de 24-uurs klok. De lichtfase (20 min) wordt over de
+	// dag-uren gemapt, de donkerfase (10 min) over de nacht-uren -> een normale klok.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|DayNight")
+	float SunriseHour = 6.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|DayNight")
+	float SunsetHour = 20.f;
+
+	// Huidige kloktijd op een normale 24-uurs klok (0..24), geschaald naar de 20/10-cyclus.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|DayNight")
-	float GetClockFraction() const { return GetCycleFraction(); }
+	float GetClockHour() const
+	{
+		const float DayHours = SunsetHour - SunriseHour;            // bv. 14 daglicht-uren
+		const float NightHours = 24.f - DayHours;                   // bv. 10 nacht-uren
+		if (!IsNight())
+		{
+			const float f = TimeOfDaySeconds / FMath::Max(1.f, DayLengthSeconds); // 0..1 overdag
+			return SunriseHour + f * DayHours;                      // sunrise -> sunset
+		}
+		const float f = (TimeOfDaySeconds - DayLengthSeconds) / FMath::Max(1.f, NightLengthSeconds);
+		return FMath::Fmod(SunsetHour + f * NightHours, 24.f);      // sunset -> sunrise
+	}
 
 	// Server-only: zet de tijd direct (voor save/load-herstel).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|DayNight")

@@ -775,9 +775,11 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		if (TimeText && GS->GetDayCycle())
 		{
-			const int32 T = FMath::RoundToInt(GS->GetDayCycle()->GetCycleFraction() * 24.f * 60.f);
+			const float Hour = GS->GetDayCycle()->GetClockHour();
+			const int32 H = FMath::Clamp((int32)Hour, 0, 23);
+			const int32 M = FMath::Clamp((int32)((Hour - H) * 60.f), 0, 59);
 			TimeText->SetText(FText::FromString(FString::Printf(TEXT("Day %d  %02d:%02d"),
-				GS->GetDayCycle()->GetDayNumber(), (T / 60) % 24, T % 60)));
+				GS->GetDayCycle()->GetDayNumber(), H, M)));
 		}
 		if (LevelText && GS->GetLeveling())
 		{
