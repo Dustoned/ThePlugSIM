@@ -399,12 +399,31 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	ContentBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ContentBox"));
 	Screen->SetContent(ContentBox);
 
-	// Home-indicator-balkje onderaan.
-	UBorder* HomeBar = WidgetTree->ConstructWidget<UBorder>();
-	HomeBar->SetBrush(RoundedBrush(FLinearColor(0.5f, 0.5f, 0.55f, 0.9f), 3.f));
+	// Ronde zwarte home-knop onderaan (zoals een telefoon-home-knop).
+	UWeedActionButton* HomeBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
+	HomeBtn->OnClicked.AddDynamic(HomeBtn, &UWeedActionButton::Handle);
+	HomeBtn->OnAction.BindLambda([this](int32, int32) { if (Phone.IsValid()) { Phone->GoHome(); } });
+	{
+		FButtonStyle HS;
+		HS.Normal = RoundedBrush(FLinearColor(0.02f, 0.02f, 0.03f, 1.f), 24.f);
+		HS.Hovered = RoundedBrush(FLinearColor(0.12f, 0.13f, 0.16f, 1.f), 24.f);
+		HS.Pressed = RoundedBrush(FLinearColor(0.0f, 0.0f, 0.0f, 1.f), 24.f);
+		HS.Normal.OutlineSettings.Color = FSlateColor(FLinearColor(0.5f, 0.5f, 0.55f, 0.9f));
+		HS.Normal.OutlineSettings.Width = 2.f;
+		HS.Hovered.OutlineSettings = HS.Normal.OutlineSettings;
+		HS.Pressed.OutlineSettings = HS.Normal.OutlineSettings;
+		HomeBtn->SetStyle(HS);
+	}
+	// Klein huisje in de knop.
+	{
+		USizeBox* Hi = WidgetTree->ConstructWidget<USizeBox>();
+		Hi->SetWidthOverride(20.f); Hi->SetHeightOverride(20.f);
+		Hi->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 20.f, FLinearColor(0.85f, 0.87f, 0.95f)));
+		HomeBtn->SetContent(Hi);
+	}
 	USizeBox* HbSz = WidgetTree->ConstructWidget<USizeBox>();
-	HbSz->SetWidthOverride(110.f); HbSz->SetHeightOverride(5.f);
-	HbSz->SetContent(HomeBar);
+	HbSz->SetWidthOverride(48.f); HbSz->SetHeightOverride(48.f);
+	HbSz->SetContent(HomeBtn);
 	UVerticalBoxSlot* HbSlot = VB->AddChildToVerticalBox(HbSz);
 	HbSlot->SetHorizontalAlignment(HAlign_Center);
 	HbSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
@@ -436,15 +455,8 @@ void UPhoneWidget::RefreshContent()
 
 	// App-header: back-knop + titel.
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-	// Home-knop met een huis-icoontje.
-	UPhoneButton* HomeBtn = MakeButton(TEXT(""), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f));
-	{
-		USizeBox* Hs = WidgetTree->ConstructWidget<USizeBox>();
-		Hs->SetWidthOverride(22.f); Hs->SetHeightOverride(22.f);
-		Hs->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 22.f, FLinearColor::White));
-		HomeBtn->SetContent(Hs);
-	}
-	Header->AddChildToHorizontalBox(HomeBtn);
+	// Linksboven: altijd een Back-knop (terug naar het home-scherm).
+	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Back"), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f)));
 	UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(MakeText(GAppName[App], 16, FLinearColor(0.9f, 0.95f, 1.f)));
 	TitleSlot->SetPadding(FMargin(12.f, 4.f, 0.f, 0.f));
 	UVerticalBoxSlot* HeaderSlot = ContentBox->AddChildToVerticalBox(Header);
