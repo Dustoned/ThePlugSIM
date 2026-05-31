@@ -264,7 +264,7 @@ void UPhoneWidget::FillStoreList()
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				FString SName = Store->GetCatalogName(Stacks[si].ItemId).ToString();
 				if (SName.Len() > 18) { SName = SName.Left(17) + TEXT("."); }
-				UTextBlock* ST = MakeText(FString::Printf(TEXT("%s x%d  (EUR %.0f)"), *SName, Stacks[si].Quantity, Val / 100.f), 12, FLinearColor(0.9f, 0.92f, 1.f));
+				UTextBlock* ST = MakeText(FString::Printf(TEXT("%s x%d  (EUR %.2f)"), *SName, Stacks[si].Quantity, Val / 100.f), 12, FLinearColor(0.9f, 0.92f, 1.f));
 				ST->SetClipping(EWidgetClipping::ClipToBounds);
 				UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(ST);
 				T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
@@ -458,7 +458,7 @@ void UPhoneWidget::RefreshContent()
 					UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 					FString NameStr = Name.ToString();
 					if (NameStr.Len() > 22) { NameStr = NameStr.Left(21) + TEXT("."); }
-					UTextBlock* T = MakeText(FString::Printf(TEXT("%s   EUR %.0f"), *NameStr, Cost / 100.f), 12,
+					UTextBlock* T = MakeText(FString::Printf(TEXT("%s   EUR %.2f"), *NameStr, Cost / 100.f), 12,
 						bPurchased ? FLinearColor::Gray : (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f)));
 					T->SetClipping(EWidgetClipping::ClipToBounds);
 					UHorizontalBoxSlot* L = Row->AddChildToHorizontalBox(T);
