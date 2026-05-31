@@ -118,8 +118,11 @@ protected:
 	void HotbarPrev();
 	void HotbarNext();
 
-	/** Links-klik: bevestig plaatsen tijdens plaats-modus, anders "gebruik" het item in de hand. */
+	/** Links-klik: bevestig plaatsen tijdens plaats-modus, anders interact met de pot / gebruik item. */
 	void OnPrimaryClick();
+
+	/** Rechts-klik: met papers in de hand -> joint-roll-paneel openen. */
+	void OnSecondaryClick();
 
 	/** Gebruik het geselecteerde hotbar-item (bv. Pot -> plaats-modus). */
 	void UseActiveItem();

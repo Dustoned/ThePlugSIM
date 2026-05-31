@@ -106,9 +106,11 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	PlayerInputComponent->BindKey(EKeys::MouseScrollUp,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarPrev);
 	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AThePlugSIMCharacter::HotbarNext);
 
-	// Straat-werving: F geeft de aangekeken NPC een gratis sample; V opent het joint-roll-paneel.
+	// Straat-werving: F geeft de aangekeken NPC een gratis sample.
 	PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &AThePlugSIMCharacter::GiveSample);
-	PlayerInputComponent->BindKey(EKeys::V, IE_Pressed, this, &AThePlugSIMCharacter::ToggleRollUI);
+
+	// Rechts-klik: met papers in de hand -> open/sluit het joint-roll-paneel.
+	PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnSecondaryClick);
 
 	// R draait het te plaatsen meubel 90° tijdens de plaats-modus (anders niets).
 	if (UBuildComponent* B = Build.Get())
@@ -360,13 +362,40 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	{
 		return;
 	}
-	// In plaats-modus: bevestig de plaatsing. Anders: gebruik het item in de hand.
+	// In plaats-modus: bevestig de plaatsing.
 	if (Build && Build->IsPlacing())
 	{
 		Build->ConfirmPlacement();
 		return;
 	}
+	// Kijk je een interact-baar object aan (pot/klant)? Dan links-klik = E (soil/seed/water/oogst).
+	if (UInteractionComponent* IC = FindComponentByClass<UInteractionComponent>())
+	{
+		if (IC->GetFocusedActor())
+		{
+			IC->TryInteract();
+			return;
+		}
+	}
 	UseActiveItem();
+}
+
+void AThePlugSIMCharacter::OnSecondaryClick()
+{
+	if (!Phone || !Inventory)
+	{
+		return;
+	}
+	// Andere UI open? Laat rechts-klik met rust.
+	if (Phone->IsOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen())
+	{
+		return;
+	}
+	// Papers in de hand -> joint-roll-paneel openen/sluiten.
+	if (Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_")) || Phone->IsRollOpen())
+	{
+		Phone->ToggleRollUI();
+	}
 }
 
 void AThePlugSIMCharacter::UseActiveItem()
