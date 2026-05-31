@@ -709,22 +709,8 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 		FLinearColor::White, InnerX, y, Font);
 	y += 26.f;
 
-	const int32 Ask = Phone->GetDealAskCents();
-	const float AskPct = (Market > 0) ? float(Ask) / float(Market) : 1.f;
-	DrawText(FString::Printf(TEXT("Your price: EUR %.2f / unit  (%.0f%% of market)   Total: EUR %.2f"),
-		Ask / 100.f, AskPct * 100.f, (Ask * Qty) / 100.f),
-		FLinearColor(1.f, 0.95f, 0.6f), InnerX, y, Font);
-	y += 26.f;
-
-	// --- Prijs-slider: stops van 40% tot 200% van de markt ---
-	const float TrackX = InnerX;
-	const float TrackW = W - 32.f;
-	const float TrackY = y + 6.f;
-	const float TrackH = 16.f;
+	// Hover op een prijs-stop -> prijs/total/% tonen meteen díe waarde (preview), ook vóór je klikt.
 	const int32 N = UPhoneClientComponent::DealStepCount; // 17 stops (40..200%)
-	const float SegW = TrackW / float(N);
-
-	// Welke stop hangt de cursor boven? (hit-box hover, DPI-onafhankelijk).
 	int32 HoverIdx = -1;
 	if (!HoveredBox.IsNone())
 	{
@@ -733,7 +719,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	}
 	const bool bOverTrack = (HoverIdx >= 0 && HoverIdx < N);
 
-	// Slepen: knop ingedrukt + boven de balk -> volg de stop onder de cursor.
+	// Slepen: knop ingedrukt + boven de balk -> zet het bod op de stop onder de cursor.
 	const bool bMouseDown = PlayerOwner && PlayerOwner->IsInputKeyDown(EKeys::LeftMouseButton);
 	const bool bDragging = bMouseDown && bOverTrack;
 	if (bDragging)
@@ -746,13 +732,30 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 			: (bOverTrack ? EMouseCursor::GrabHand : EMouseCursor::Default);
 	}
 
-	// Welke stop is nu geselecteerd (dichtstbij het huidige bod)?
-	const int32 SelIdx = FMath::Clamp(FMath::RoundToInt((AskPct - 0.40f) / 0.10f), 0, N - 1);
+	// Vastgezet bod + effectief (preview) bod dat de hover volgt.
+	const int32 CommittedAsk = Phone->GetDealAskCents();
+	const int32 CommittedIdx = FMath::Clamp(FMath::RoundToInt((float(CommittedAsk) / Market - 0.40f) / 0.10f), 0, N - 1);
+	const int32 EffIdx = bOverTrack ? HoverIdx : CommittedIdx;
+	const int32 EffAsk = FMath::RoundToInt(Market * (0.40f + 0.10f * EffIdx));
+	const float EffPct = float(EffAsk) / Market;
+
+	// Prijs-regel volgt de hover (met "preview"-hint zolang je nog niet geklikt hebt).
+	DrawText(FString::Printf(TEXT("Your price: EUR %.2f / unit  (%.0f%% of market)   Total: EUR %.2f%s"),
+		EffAsk / 100.f, EffPct * 100.f, (EffAsk * Qty) / 100.f, bOverTrack ? TEXT("   <- preview") : TEXT("")),
+		FLinearColor(1.f, 0.95f, 0.6f), InnerX, y, Font);
+	y += 26.f;
+
+	// --- Prijs-slider: stops van 40% tot 200% van de markt ---
+	const float TrackX = InnerX;
+	const float TrackW = W - 32.f;
+	const float TrackY = y + 6.f;
+	const float TrackH = 16.f;
+	const float SegW = TrackW / float(N);
 
 	DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.95f), TrackX, TrackY, TrackW, TrackH);
-	// Kleur de gevulde balk naar de prijs: goedkoop=groen, duur=rood.
-	const FLinearColor Fill = (AskPct <= 1.f) ? FLinearColor(0.4f, 0.85f, 0.4f) : FLinearColor(0.9f, 0.55f, 0.3f);
-	DrawRect(Fill, TrackX, TrackY, SegW * (SelIdx + 1), TrackH);
+	// Kleur de gevulde balk naar de prijs: goedkoop=groen, duur=oranje. Volgt de hover.
+	const FLinearColor Fill = (EffPct <= 1.f) ? FLinearColor(0.4f, 0.85f, 0.4f) : FLinearColor(0.9f, 0.55f, 0.3f);
+	DrawRect(Fill, TrackX, TrackY, SegW * (EffIdx + 1), TrackH);
 
 	for (int32 i = 0; i < N; ++i)
 	{
@@ -764,8 +767,8 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 		}
 		AddHitBox(FVector2D(cx, TrackY - 6.f), FVector2D(SegW, TrackH + 26.f), Box, true, 3);
 	}
-	// Handle op de selectie.
-	const float HandleX = TrackX + (SelIdx + 0.5f) * SegW;
+	// Handle op het effectieve (preview/vastgezette) bod.
+	const float HandleX = TrackX + (EffIdx + 0.5f) * SegW;
 	const float HalfW = (bDragging || bOverTrack) ? 8.f : 5.f;
 	DrawRect((bDragging || bOverTrack) ? FLinearColor(1.f, 0.85f, 0.1f) : FLinearColor::White,
 		HandleX - HalfW, TrackY - 8.f, HalfW * 2.f, TrackH + 16.f);
@@ -774,8 +777,8 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	DrawText(TEXT("greedy"), FLinearColor(0.95f, 0.6f, 0.4f), TrackX + TrackW - 50.f, TrackY + TrackH + 4.f, Font);
 	y += 48.f;
 
-	// --- Live acceptatie-% (client kan dit lokaal: stats repliceren) ---
-	const float Chance = C->GetAcceptanceChance(Ask);
+	// --- Live acceptatie-% (volgt ook de hover; client berekent dit lokaal want stats repliceren) ---
+	const float Chance = C->GetAcceptanceChance(EffAsk);
 	const FLinearColor ChanceCol = Chance >= 66.f ? FLinearColor::Green
 		: (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f));
 	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%"), Chance), ChanceCol, InnerX, y, Font);
