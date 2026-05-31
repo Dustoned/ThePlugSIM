@@ -245,19 +245,31 @@ void UPhoneWidget::RefreshContent()
 				if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
 				{
 					UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-					UHorizontalBoxSlot* L = Row->AddChildToHorizontalBox(MakeText(
-						FString::Printf(TEXT("%s  -  EUR %.2f"), *Name.ToString(), Cost / 100.f),
-						13, bPurchased ? FLinearColor::Gray : (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f))));
+					FString NameStr = Name.ToString();
+					if (NameStr.Len() > 22) { NameStr = NameStr.Left(21) + TEXT("."); }
+					UTextBlock* T = MakeText(FString::Printf(TEXT("%s   EUR %.0f"), *NameStr, Cost / 100.f), 12,
+						bPurchased ? FLinearColor::Gray : (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f)));
+					T->SetClipping(EWidgetClipping::ClipToBounds);
+					UHorizontalBoxSlot* L = Row->AddChildToHorizontalBox(T);
 					L->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 					L->SetVerticalAlignment(VAlign_Center);
+					L->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+					// Vaste-breedte rechtervak: Buy-knop of een status-label (overlapt nooit).
+					USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
+					RB->SetWidthOverride(64.f);
+					RB->SetHeightOverride(28.f);
 					if (!bPurchased && bAvailable)
 					{
-						Row->AddChildToHorizontalBox(MakeButton(TEXT("Buy"), 3, idx, FLinearColor(0.2f, 0.5f, 0.28f)));
+						RB->SetContent(MakeButton(TEXT("Buy"), 3, idx, FLinearColor(0.2f, 0.5f, 0.28f)));
 					}
 					else
 					{
-						Row->AddChildToHorizontalBox(MakeText(bPurchased ? TEXT("owned") : TEXT("locked"), 11, FLinearColor::Gray));
+						RB->SetContent(MakeText(bPurchased ? TEXT("owned") : TEXT("locked"), 11, FLinearColor::Gray, true));
 					}
+					UHorizontalBoxSlot* RS2 = Row->AddChildToHorizontalBox(RB);
+					RS2->SetVerticalAlignment(VAlign_Center);
+
 					UVerticalBoxSlot* RS = ContentBox->AddChildToVerticalBox(Row);
 					RS->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 				}

@@ -153,116 +153,37 @@ void AWeedShopHUD::DrawHUD()
 		}
 	}
 
-	// Interactie-prompt.
-	if (P)
+	// Interactie-prompt (planten hebben hun eigen UMG-kaart; niets tonen als er een UI open is).
 	{
-		if (const UInteractionComponent* IC = P->FindComponentByClass<UInteractionComponent>())
+		const UPhoneClientComponent* PhoneUI = GetPhone();
+		const bool bUiOpen = PhoneUI && (PhoneUI->IsOpen() || PhoneUI->IsDealOpen() || PhoneUI->IsInventoryOpen()
+			|| PhoneUI->IsRollOpen() || PhoneUI->IsPotUpgradeOpen());
+		const UInteractionComponent* IC = (P && !bUiOpen) ? P->FindComponentByClass<UInteractionComponent>() : nullptr;
+		AActor* Focus = IC ? IC->GetFocusedActor() : nullptr;
+		if (Focus)
 		{
-			if (AActor* Focus = IC->GetFocusedActor())
+			const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
+			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
+
+			// Niet-plant prompt (klant/meubel); planten worden door de UMG-kaart afgehandeld.
+			if (!Cast<AGrowPlant>(Focus))
 			{
-				const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
-				const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
-
-				// Mooie info-kaart als je een plant aankijkt.
-				if (AGrowPlant* Plant = Cast<AGrowPlant>(Focus))
-				{
-					const float PW = 300.f;
-					const float PXp = CX - PW * 0.5f;
-					const float PanelH = Plant->IsPlanted() ? (150.f + Plant->GetNumSlots() * 11.f) : 96.f;
-						float PYp = CY - PanelH * 0.5f;
-					DrawRect(FLinearColor(0.04f, 0.06f, 0.04f, 0.9f), PXp, PYp, PW, PanelH);
-					float ly = PYp + 8.f;
-					const float lx = PXp + 12.f;
-
-					if (!Plant->IsPlanted())
-					{
-						DrawText(TEXT("Empty pot"), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 24.f;
-						if (Plant->HasSoil())
-							{
-								FSoilDef _sd; const FString _sn = GetSoilDef(Plant->GetSoilId(), _sd) ? _sd.DisplayName : Plant->GetSoilId().ToString();
-								DrawText(FString::Printf(TEXT("Soil: %s  (%d harvests left)"), *_sn, Plant->GetSoilUsesLeft()), FLinearColor(0.6f, 0.9f, 0.6f), lx, ly, Font); ly += 18.f;
-								DrawText(TEXT("Plant a seed (E)   |   hold G to pick up"), FLinearColor::White, lx, ly, Font); ly += 18.f;
-							}
-							else
-							{
-								DrawText(TEXT("No soil! Add soil (E) - buy it from the supplier"), FLinearColor(1.f, 0.7f, 0.3f), lx, ly, Font); ly += 18.f;
-								DrawText(TEXT("(soil is required before planting)   |   hold G to pick up"), FLinearColor(0.7f, 0.7f, 0.7f), lx, ly, Font); ly += 18.f;
-							}
-						if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
-						{
-							const float A = BC->GetPickupAlpha();
-							if (A > 0.f)
-							{
-								DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
-								DrawRect(FLinearColor(1.f, 0.8f, 0.2f, 0.95f), lx, ly, (PW - 24.f) * A, 8.f);
-							}
-						}
-					}
-					else
-					{
-						const int32 Planted = Plant->GetPlantedCount();
-						const int32 NumSlots = Plant->GetNumSlots();
-						const int32 Ready = Plant->GetReadyCount();
-						DrawText(FString::Printf(TEXT("Plants: %d / %d"), Planted, NumSlots), FLinearColor(0.7f, 1.f, 0.7f), lx, ly, Font); ly += 22.f;
-
-						// Groei-progressiebalk per plant (groen = oogstklaar).
-						DrawText(TEXT("Growth:"), FLinearColor(0.8f, 0.85f, 1.f), lx, ly, Font); ly += 16.f;
-						const float BarW = PW - 24.f;
-						for (int32 s = 0; s < NumSlots; ++s)
-						{
-							DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.9f), lx, ly, BarW, 8.f);
-							if (Plant->IsSlotPlanted(s))
-							{
-								const float Fr = Plant->GetSlotFraction(s);
-								const FLinearColor Col = Plant->IsSlotReady(s) ? FLinearColor(0.45f, 0.95f, 0.35f) : FLinearColor(0.4f, 0.8f, 1.f);
-								DrawRect(Col, lx, ly, BarW * Fr, 8.f);
-							}
-							ly += 11.f;
-						}
-						ly += 4.f;
-
-						// Water-balk (vocht nu; loopt leeg, vul bij met de fles).
-						const float Wtr = Plant->GetWaterLevel();
-						DrawText(FString::Printf(TEXT("Water: %.0f%%"), Wtr * 100.f),
-							Wtr >= 0.3f ? FLinearColor(0.4f, 0.8f, 1.f) : FLinearColor(1.f, 0.55f, 0.3f), lx, ly, Font); ly += 16.f;
-						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
-						DrawRect(FLinearColor(0.3f, 0.7f, 1.f, 0.95f), lx, ly, (PW - 24.f) * Wtr, 8.f); ly += 16.f;
-
-						// Gezondheid/care-balk (volgt het water; bepaalt de kwaliteit).
-						const float Care = Plant->GetCareMultiplier();
-						DrawText(FString::Printf(TEXT("Health: %.0f%%"), Care * 100.f),
-							Care >= 0.8f ? FLinearColor::Green : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
-							lx, ly, Font); ly += 16.f;
-						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), lx, ly, PW - 24.f, 8.f);
-						DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), lx, ly, (PW - 24.f) * Care, 8.f); ly += 16.f;
-
-						DrawText(FString::Printf(TEXT("Expected total: %.0fg @ %.0f%% THC"),
-							Plant->GetEstimatedTotalYield(), Plant->GetEstimatedThcPercent()),
-							FLinearColor(0.9f, 0.9f, 0.7f), lx, ly, Font); ly += 18.f;
-						if (Plant->HasSoil())
-						{
-							FSoilDef _sd; const FString _sn = GetSoilDef(Plant->GetSoilId(), _sd) ? _sd.DisplayName : Plant->GetSoilId().ToString();
-							DrawText(FString::Printf(TEXT("Soil: %s  (%d harvests left)"), *_sn, Plant->GetSoilUsesLeft()),
-								FLinearColor(0.6f, 0.9f, 0.6f), lx, ly, Font);
-						}
-					}
-				}
-
 				const FText Prompt = IInteractable::Execute_GetInteractionPrompt(Focus);
 				if (!Prompt.IsEmpty())
 				{
 					DrawText(FString::Printf(TEXT("[E / left-click] %s"), *Prompt.ToString()),
-						FLinearColor::Yellow, CX - 60.f, CY + 60.f, Font);
+						FLinearColor::Yellow, CX - 80.f, CY + 60.f, Font);
 				}
-				// Oppak-voortgang (hold G) — voor elk oppakbaar object.
-				if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
+			}
+
+			// Oppak-voortgang (hold G) — voor elk oppakbaar object.
+			if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
+			{
+				const float A = BC->GetPickupAlpha();
+				if (A > 0.f)
 				{
-					const float A = BC->GetPickupAlpha();
-					if (A > 0.f)
-					{
-						DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), CX - 60.f, CY + 82.f, 160.f, 8.f);
-						DrawRect(FLinearColor(1.f, 0.8f, 0.2f, 0.95f), CX - 60.f, CY + 82.f, 160.f * A, 8.f);
-					}
+					DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), CX - 60.f, CY + 90.f, 160.f, 8.f);
+					DrawRect(FLinearColor(1.f, 0.8f, 0.2f, 0.95f), CX - 60.f, CY + 90.f, 160.f * A, 8.f);
 				}
 			}
 		}

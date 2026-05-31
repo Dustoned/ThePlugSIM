@@ -279,6 +279,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UDealWidget> DealWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UPlantInfoWidget> PlantWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
