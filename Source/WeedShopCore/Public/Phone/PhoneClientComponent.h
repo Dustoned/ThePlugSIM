@@ -97,6 +97,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void Checkout(int32 DeliveryOption);
 
+	// Stort cash -> bank (witwassen). CashAmount<=0 = maximaal (tot de dag-limiet). Client -> server.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RequestDeposit(int64 CashAmount);
+
 	// Bezorgopties (fee = % van het besteed bedrag; tijd in seconden). Gedeeld door UI + server.
 	static float DeliveryFeePct(int32 Opt);       // 0.01 / 0.08 / 0.25
 	static float DeliveryDelaySeconds(int32 Opt); // 120 / 40 / 0
@@ -327,6 +331,9 @@ protected:
 	// Server: annuleer-RPC.
 	UFUNCTION(Server, Reliable)
 	void ServerCancelDelivery(int32 OrderId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerDeposit(int64 CashAmount);
 
 	// Server: voeg alle stapels van dit item-id samen (gewogen gemiddelde THC%/Kwaliteit%).
 	UFUNCTION(Server, Reliable)

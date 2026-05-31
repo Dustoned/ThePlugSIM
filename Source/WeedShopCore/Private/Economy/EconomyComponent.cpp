@@ -1,6 +1,10 @@
 #include "Economy/EconomyComponent.h"
 
 #include "WeedShopCore.h"
+#include "Game/WeedShopGameState.h"
+#include "World/HeatComponent.h"
+#include "World/DayCycleComponent.h"
+#include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
 UEconomyComponent::UEconomyComponent()
@@ -16,7 +20,8 @@ void UEconomyComponent::BeginPlay()
 	// Alleen de server zet het startsaldo; het repliceert daarna naar de clients.
 	if (GetOwnerRole() == ROLE_Authority)
 	{
-		SetBalance(StartingBalanceCents);
+		SetBalance(StartingBalanceCents);   // cash (zwart)
+		SetBank(StartingBankCents);         // bank (wit) - demo: ook startgeld zodat de winkel meteen werkt
 	}
 }
 
@@ -24,6 +29,8 @@ void UEconomyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UEconomyComponent, BalanceCents);
+	DOREPLIFETIME(UEconomyComponent, BankCents);
+	DOREPLIFETIME(UEconomyComponent, DepositedTodayCents);
 }
 
 void UEconomyComponent::AddMoney(int64 AmountCents)
@@ -86,7 +93,81 @@ void UEconomyComponent::SetBalance(int64 NewCents)
 	OnBalanceChanged.Broadcast(BalanceCents);
 }
 
+void UEconomyComponent::SetBank(int64 NewCents)
+{
+	BankCents = FMath::Max<int64>(0, NewCents);
+	OnBalanceChanged.Broadcast(BalanceCents);
+}
+
 void UEconomyComponent::OnRep_Balance()
 {
 	OnBalanceChanged.Broadcast(BalanceCents);
+}
+
+// === Bank (wit) ===
+
+void UEconomyComponent::AddBank(int64 AmountCents, bool bTaxed)
+{
+	if (GetOwnerRole() != ROLE_Authority || AmountCents <= 0) { return; }
+	const int64 Tax = bTaxed ? (int64)FMath::RoundToDouble(AmountCents * DepositTaxPct) : 0;
+	SetBank(BankCents + (AmountCents - Tax));
+	OnMoneyEarned.Broadcast(AmountCents - Tax);
+}
+
+bool UEconomyComponent::RemoveBank(int64 AmountCents)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return false; }
+	if (AmountCents <= 0 || BankCents < AmountCents) { return false; }
+	SetBank(BankCents - AmountCents);
+	return true;
+}
+
+void UEconomyComponent::RefreshDepositDay()
+{
+	const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	const int32 Today = (GS && GS->GetDayCycle()) ? GS->GetDayCycle()->GetDayNumber() : 0;
+	if (Today != DepositDay)
+	{
+		DepositDay = Today;
+		DepositedTodayCents = 0;
+	}
+}
+
+int64 UEconomyComponent::Deposit(int64 CashAmount)
+{
+	if (GetOwnerRole() != ROLE_Authority || CashAmount <= 0) { return 0; }
+	if (BalanceCents < CashAmount)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough cash to deposit.")); }
+		return 0;
+	}
+	RefreshDepositDay();
+	const int64 Remaining = GetDailyDepositRemainingCents();
+	if (Remaining <= 0)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Daily laundering limit reached - come back tomorrow.")); }
+		return 0;
+	}
+	const int64 Amount = FMath::Min(CashAmount, Remaining);
+	const int64 Tax = (int64)FMath::RoundToDouble(Amount * DepositTaxPct);
+	const int64 ToBank = Amount - Tax;
+
+	SetBalance(BalanceCents - Amount);  // cash eraf
+	SetBank(BankCents + ToBank);        // bank erbij (na belasting)
+	DepositedTodayCents += Amount;
+
+	// Heat: grote stortingen zijn verdacht.
+	if (AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (UHeatComponent* Heat = GS->GetHeat())
+		{
+			Heat->AddHeat((float)Amount / 100000.f * DepositHeatPer1000);
+		}
+	}
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
+			FString::Printf(TEXT("Laundered EUR %.2f -> bank (tax EUR %.2f)"), ToBank / 100.f, Tax / 100.f));
+	}
+	return ToBank;
 }

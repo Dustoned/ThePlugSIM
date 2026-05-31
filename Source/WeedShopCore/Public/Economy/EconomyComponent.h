@@ -30,9 +30,13 @@ class WEEDSHOPCORE_API UEconomyComponent : public UActorComponent
 public:
 	UEconomyComponent();
 
-	// Startsaldo in cents. Demo: €1.000.000 = 100000000. Door de server gezet bij BeginPlay.
+	// Start-cash in cents. Demo: €1.000.000 = 100000000. Door de server gezet bij BeginPlay.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
 	int64 StartingBalanceCents = 100000000;
+
+	// Start-bankgeld (wit). Demo: ook €1.000.000 zodat de online winkel meteen bruikbaar is.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	int64 StartingBankCents = 100000000;
 
 	// UI/HUD bindt hierop om het saldo te tonen.
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Economy")
@@ -65,9 +69,54 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
 	void SetBalanceCents(int64 NewCents);
 
-	// Saldo in hele euro's (voor UI-weergave).
+	// Saldo in hele euro's (voor UI-weergave). LET OP: dit is het CASH-saldo (zwart geld).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	float GetBalanceEuros() const { return static_cast<float>(BalanceCents) / 100.0f; }
+
+	// === Cash (zwart) vs Bank (wit) ===
+	// Cash = AddMoney/RemoveMoney/GetBalanceCents hierboven (klanten betalen cash, in-persoon = cash).
+	// Bank = wit geld voor online/legale dingen (telefoon-winkel, upgrades, workers). Belast bij storten.
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int64 GetCashCents() const { return BalanceCents; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int64 GetBankCents() const { return BankCents; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	float GetBankEuros() const { return static_cast<float>(BankCents) / 100.0f; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	bool CanAffordBank(int64 AmountCents) const { return BankCents >= AmountCents; }
+
+	// Server: bankgeld erbij (wit inkomen). bTaxed = trek de inkomstenbelasting eraf bij binnenkomst.
+	void AddBank(int64 AmountCents, bool bTaxed);
+
+	// Server: bankgeld eraf; false bij onvoldoende.
+	bool RemoveBank(int64 AmountCents);
+
+	// Server: storten = cash -> bank. Trekt belasting af (% bij binnenkomst), respecteert de dag-limiet
+	// en verhoogt heat (grote stortingen = verdacht). Geeft het bedrag dat op de bank kwam (0 = mislukt).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
+	int64 Deposit(int64 CashAmount);
+
+	// Belastingpercentage op bankgeld (bij binnenkomst). 0..1.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	float DepositTaxPct = 0.25f;
+
+	// Hoeveel cash je per dag mag witwassen (storten).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	int64 DailyDepositLimitCents = 5000000; // EUR 50.000 / dag
+
+	// Heat per EUR 1.000 gestort (grote stortingen trekken aandacht).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	float DepositHeatPer1000 = 1.0f;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int64 GetDepositedTodayCents() const { return DepositedTodayCents; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int64 GetDailyDepositRemainingCents() const { return FMath::Max<int64>(0, DailyDepositLimitCents - DepositedTodayCents); }
 
 protected:
 	virtual void BeginPlay() override;
@@ -76,9 +125,21 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_Balance)
 	int64 BalanceCents = 0;
 
+	UPROPERTY(ReplicatedUsing = OnRep_Balance)
+	int64 BankCents = 0;
+
+	// Vandaag al gestort (voor de dag-limiet) + de dag waarop dat geldt.
+	UPROPERTY(Replicated)
+	int64 DepositedTodayCents = 0;
+	int32 DepositDay = 0;
+
 	UFUNCTION()
 	void OnRep_Balance();
 
-	// Zet het saldo (alleen server) en vuurt de delegate ook lokaal op de server (host).
+	// Zet het cash-saldo (alleen server) en vuurt de delegate ook lokaal op de server (host).
 	void SetBalance(int64 NewCents);
+	void SetBank(int64 NewCents);
+
+	// Reset de dag-teller voor storten als er een nieuwe dag is.
+	void RefreshDepositDay();
 };

@@ -763,21 +763,22 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 		SellProceeds += (int64)Store->GetSellValueCents(SellIds[i]) * N;
 	}
 
-	// 3) Netto-check: kosten mogen niet hoger zijn dan saldo + verkoopopbrengst.
+	// 3) De telefoon-winkel is online/legaal -> het KOOPdeel betaal je met BANKGELD (wit). De verkoop
+	//    van je waar levert CASH (zwart) op. Genoeg bankgeld voor de aankoop?
 	const int64 Cost = BuySub + Fee;
-	if (Cost > Econ->GetBalanceCents() + SellProceeds)
+	if (Cost > 0 && !Econ->CanAffordBank(Cost))
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough money (even after selling).")); }
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor::Red, TEXT("Not enough BANK money - launder some cash first (Bank app).")); }
 		return;
 	}
 
-	// 4) Verkoop uitvoeren (items weg, opbrengst als inkomen), daarna het koopdeel afrekenen.
+	// 4) Verkoop uitvoeren (items weg, opbrengst als CASH), daarna het koopdeel van de BANK afschrijven.
 	for (int32 i = 0; i < SellIds.Num(); ++i)
 	{
 		if (SellActual[i] > 0) { Inv->RemoveItem(SellIds[i], SellActual[i]); }
 	}
-	if (SellProceeds > 0) { Econ->AddMoney(SellProceeds); }
-	if (Cost > 0) { Econ->RemoveMoney(Cost); }
+	if (SellProceeds > 0) { Econ->AddMoney(SellProceeds); } // cash (zwart)
+	if (Cost > 0) { Econ->RemoveBank(Cost); }               // bank (wit)
 
 	// 5) Geen koop-items? Dan zijn we klaar (alleen verkocht).
 	int32 BuyCount = 0;
@@ -893,6 +894,21 @@ void UPhoneClientComponent::OnPackagePickedUp(int32 OrderId)
 	PendingDeliveries.RemoveAll([OrderId](const FPendingDelivery& D) { return D.OrderId == OrderId; });
 }
 
+void UPhoneClientComponent::RequestDeposit(int64 CashAmount)
+{
+	ServerDeposit(CashAmount);
+}
+
+void UPhoneClientComponent::ServerDeposit_Implementation(int64 CashAmount)
+{
+	AWeedShopGameState* GS = GetGS();
+	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	if (!Econ) { return; }
+	int64 Amt = CashAmount;
+	if (Amt <= 0) { Amt = FMath::Min(Econ->GetCashCents(), Econ->GetDailyDepositRemainingCents()); } // max
+	if (Amt > 0) { Econ->Deposit(Amt); }
+}
+
 float UPhoneClientComponent::GetDeliveryProgress(const FPendingDelivery& D) const
 {
 	const float Span = D.ArriveTime - D.PlacedTime;
@@ -932,7 +948,7 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 	const int64 Refund = PendingDeliveries[Idx].PaidCents;
 	if (Refund > 0)
 	{
-		if (AWeedShopGameState* GS = GetGS()) { if (UEconomyComponent* Econ = GS->GetEconomy()) { Econ->AddMoneyUntracked(Refund); } }
+		if (AWeedShopGameState* GS = GetGS()) { if (UEconomyComponent* Econ = GS->GetEconomy()) { Econ->AddBank(Refund, false); } } // terug op de bank
 	}
 	if (GEngine)
 	{
@@ -978,11 +994,11 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 	const int32 Cost = GetPotUpgradeCost(UpgIndex, Pot->GetPotTier());
 	AWeedShopGameState* GS = GetGS();
 	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
-	if (Cost <= 0 || !Econ || !Econ->RemoveMoney(Cost))
+	if (Cost <= 0 || !Econ || !Econ->RemoveBank(Cost)) // via telefoon -> bankgeld (wit)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Red, TEXT("Not enough money for that pot upgrade."));
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Red, TEXT("Not enough BANK money for that pot upgrade (launder cash first)."));
 		}
 		return;
 	}

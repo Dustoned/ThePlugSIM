@@ -62,14 +62,14 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId)
 		return false;
 	}
 
-	// Betalen.
+	// Betalen — upgrades koop je via de telefoon (online/legaal) -> met BANKGELD (wit).
 	UEconomyComponent* Econ = GS->GetEconomy();
-	if (!Econ || !Econ->RemoveMoney(Row->CostCents))
+	if (!Econ || !Econ->RemoveBank(Row->CostCents))
 	{
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
-				FString::Printf(TEXT("Not enough money for %s"), *Row->DisplayName.ToString()));
+				FString::Printf(TEXT("Not enough BANK money for %s (launder cash first)"), *Row->DisplayName.ToString()));
 		}
 		return false;
 	}

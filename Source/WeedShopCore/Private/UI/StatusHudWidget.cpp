@@ -133,11 +133,10 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	if (CashText && GS->GetEconomy())
 	{
-		const int64 Euros = (int64)GS->GetEconomy()->GetBalanceEuros();
-		FString Raw = FString::Printf(TEXT("%lld"), Euros), Grp;
-		const int32 Ln = Raw.Len();
-		for (int32 i = 0; i < Ln; ++i) { if (i > 0 && (Ln - i) % 3 == 0) { Grp.AppendChar(TEXT('.')); } Grp.AppendChar(Raw[i]); }
-		CashText->SetText(FText::FromString(FString::Printf(TEXT("EUR %s"), *Grp)));
+		auto Grouped = [](int64 V) { FString Raw = FString::Printf(TEXT("%lld"), V), G; const int32 Ln = Raw.Len(); for (int32 i = 0; i < Ln; ++i) { if (i > 0 && (Ln - i) % 3 == 0) { G.AppendChar(TEXT('.')); } G.AppendChar(Raw[i]); } return G; };
+		const int64 Cash = (int64)GS->GetEconomy()->GetBalanceEuros();
+		const int64 Bank = (int64)GS->GetEconomy()->GetBankEuros();
+		CashText->SetText(FText::FromString(FString::Printf(TEXT("Cash %s   Bank %s"), *Grouped(Cash), *Grouped(Bank))));
 	}
 	if (TimeText && GS->GetDayCycle())
 	{
