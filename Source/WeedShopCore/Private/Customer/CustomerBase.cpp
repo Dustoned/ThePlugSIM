@@ -245,8 +245,11 @@ float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceC
 	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
 		static_cast<float>(Market), static_cast<float>(AskPriceCentsPerUnit),
 		Respect, Loyalty, Addiction, Quality01);
-	// Bereidheid om iets anders te nemen: ~50% basis, hoger bij loyaliteit/verslaving, lager eronder.
-	const float Willing = FMath::Clamp(0.50f + (Loyalty - 30.f) * 0.004f + (Addiction - 30.f) * 0.005f, 0.30f, 0.90f);
+	// Bereidheid om iets anders te nemen: ~50% basis, hoger bij loyaliteit/verslaving, EN een scherpe
+	// prijs compenseert het substituut (goedkoper -> hij neemt het toch). Kan oplopen tot ~100%.
+	const float Ratio = FMath::Clamp(static_cast<float>(AskPriceCentsPerUnit) / static_cast<float>(Market), 0.30f, 2.20f);
+	const float PriceComp = FMath::Max(0.f, 1.f - Ratio) * 0.6f; // 40% prijs -> +0.36
+	const float Willing = FMath::Clamp(0.50f + (Loyalty - 30.f) * 0.004f + (Addiction - 30.f) * 0.005f + PriceComp, 0.30f, 1.0f);
 	return Base * Willing;
 }
 
@@ -273,8 +276,9 @@ namespace
 		// Verslaving: gedreven door potentie, bescheiden en prijs-onafhankelijk.
 		dA = 0.5f + (Thc / 100.f) * 11.0f;
 
-		// Een andere strain dan gevraagd bindt minder: halve loyaliteit-winst.
-		if (bSubstitute) { dL *= 0.5f; }
+		// Een andere strain dan gevraagd bindt iets minder (maar een scherpe prijs compenseert mee
+		// via de prijs-termen hierboven).
+		if (bSubstitute) { dL *= 0.6f; }
 	}
 }
 
