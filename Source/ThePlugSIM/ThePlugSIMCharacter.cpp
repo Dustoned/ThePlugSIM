@@ -453,28 +453,26 @@ void AThePlugSIMCharacter::BeginPlay()
 		for (TActorIterator<AAtm> It(GetWorld()); It; ++It) { bHasAtm = true; break; }
 		if (!bHasAtm)
 		{
-			// Plek: getagde "AtmPoint" > op straat (waar klanten verschijnen) > als fallback bij de speler.
-			// GEEN ground-trace van bovenaf (die pakte het dak); we gebruiken de grond-Z van het
-			// referentiepunt zelf, want zowel AtmPoint als de klant-spawn staan al op straatniveau.
-			FVector Loc = GetActorLocation() + GetActorForwardVector() * 250.f;
-			Loc.Z = GetActorLocation().Z - GetSimpleCollisionHalfHeight(); // voeten van de speler
-			bool bFound = false;
-			for (TActorIterator<AActor> It(GetWorld()); It; ++It) // 1) getagde AtmPoint heeft voorrang
+			// We kunnen vanuit code niet weten waar "buiten op straat" is. Daarom plaatsen we de ATM op
+			// een door jou getagde "AtmPoint"-actor. Staat die er niet, dan spawnen we 'm NIET op een
+			// gegokte plek (dat belandde op het dak / binnen) maar tonen we een hint.
+			FVector Loc; bool bFound = false;
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 			{
 				if (It->ActorHasTag(FName(TEXT("AtmPoint")))) { Loc = It->GetActorLocation(); bFound = true; break; }
 			}
-			if (!bFound) // 2) anders: op straat naast de klant-spawn
+			if (bFound)
 			{
-				for (TActorIterator<ACustomerSpawner> It(GetWorld()); It; ++It)
-				{
-					Loc = It->GetActorLocation() + FVector(150.f, 0.f, 0.f);
-					break;
-				}
+				Loc.Z += 70.f; // halve kasthoogte zodat 'ie op de grond staat
+				FActorSpawnParameters SP;
+				SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				GetWorld()->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP);
 			}
-			Loc.Z += 70.f; // halve hoogte van de kast (~140cm) zodat 'ie op de grond staat
-			FActorSpawnParameters SP;
-			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			GetWorld()->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP);
+			else if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Yellow,
+					TEXT("No ATM placed: drop an actor tagged 'AtmPoint' (or an AAtm) on the street."));
+			}
 		}
 	}
 }
