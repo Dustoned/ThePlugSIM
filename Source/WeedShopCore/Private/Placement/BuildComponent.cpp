@@ -246,18 +246,18 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					// Veranker het raster aan de dichtstbijzijnde bestaande pot, zodat een rij
 					// netjes doorloopt vanaf de pot die je (vrij) tegen de muur zette. Geen pot
 					// in de buurt -> gewoon het wereld-raster.
-					float AnchorX = 0.f, AnchorY = 0.f, BestSq = TNumericLimits<float>::Max();
+					float AnchorX = 0.f, AnchorY = 0.f, BestSq = FMath::Square(GridSize * 6.f); bool bHasAnchor = false;
 					for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 					{
 						AActor* A = *It; if (!Cast<AGrowPlant>(A) && !Cast<APlaceableProp>(A)) { continue; } const FVector L = A->GetActorLocation();
 						const float dSq = FMath::Square(L.X - PreviewLocation.X) + FMath::Square(L.Y - PreviewLocation.Y);
 						if (dSq < BestSq)
 						{
-							BestSq = dSq; AnchorX = L.X; AnchorY = L.Y;
+							BestSq = dSq; AnchorX = L.X; AnchorY = L.Y; bHasAnchor = true;
 						}
 					}
-					PreviewLocation.X = AnchorX + FMath::GridSnap<float>(PreviewLocation.X - AnchorX, GridSize);
-					PreviewLocation.Y = AnchorY + FMath::GridSnap<float>(PreviewLocation.Y - AnchorY, GridSize);
+					if (bHasAnchor) PreviewLocation.X = AnchorX + FMath::GridSnap<float>(PreviewLocation.X - AnchorX, GridSize);
+					if (bHasAnchor) PreviewLocation.Y = AnchorY + FMath::GridSnap<float>(PreviewLocation.Y - AnchorY, GridSize);
 					PreviewRotation.Yaw = FMath::GridSnap<float>(PreviewRotation.Yaw, 90.f);
 
 					// Vloer-hoogte op de gesnapte XY opnieuw bepalen (recht naar beneden tracen).
