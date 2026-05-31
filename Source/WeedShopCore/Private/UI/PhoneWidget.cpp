@@ -542,7 +542,8 @@ void UPhoneWidget::HandlePhoneButton(int32 Action, int32 Param)
 	case 6: Phone->DoAction(1); break;         // decline bericht
 	default: break;
 	}
-	bContentDirty = true;
+	// Geen volledige herbouw hier: dat gaf een flash. App-wissel/home herbouwt vanzelf via de
+	// change-detectie in NativeTick; in-place acties (kopen/berichten) hoeven niet te herbouwen.
 }
 
 void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
