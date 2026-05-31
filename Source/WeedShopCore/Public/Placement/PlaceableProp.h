@@ -1,0 +1,46 @@
+// APlaceableProp — generiek plaatsbaar object (meubels e.d.) dat z'n uiterlijk (mesh/schaal)
+// uit de placeable-registry haalt op basis van ItemId. Oppakbaar (hold G via UBuildComponent)
+// en herplaatsbaar als item.
+//
+// CO-OP: server-authoritative gespawnd (repliceert). ItemId repliceert zodat clients dezelfde
+// mesh tonen.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "Interaction/Interactable.h"
+#include "PlaceableProp.generated.h"
+
+class UStaticMeshComponent;
+
+UCLASS()
+class WEEDSHOPCORE_API APlaceableProp : public AActor, public IInteractable
+{
+	GENERATED_BODY()
+
+public:
+	APlaceableProp();
+
+	// Welk item dit is (rij in de placeable-registry). Bepaalt mesh/schaal.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_ItemId, Category = "WeedShop|Placeable")
+	FName ItemId = NAME_None;
+
+	// IInteractable: prompt; interact zelf doet niets (oppakken gaat via hold G).
+	virtual void Interact_Implementation(APawn* InstigatorPawn) override {}
+	virtual FText GetInteractionPrompt_Implementation() const override;
+
+protected:
+	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_ItemId();
+
+	// Zet mesh/schaal/offset op basis van de registry-definitie voor ItemId.
+	void SetupVisual();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Placeable")
+	TObjectPtr<UStaticMeshComponent> Mesh;
+};

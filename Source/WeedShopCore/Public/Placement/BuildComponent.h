@@ -11,6 +11,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Placement/PlaceableTypes.h"
 #include "BuildComponent.generated.h"
 
 class UStaticMeshComponent;
@@ -76,7 +77,7 @@ protected:
 	// De lokale speler stuurt z'n preview-staat naar de server (die repliceert 'm naar de andere
 	// spelers, zodat zij de ghost ook zien). Unreliable + getemporiseerd.
 	UFUNCTION(Server, Unreliable)
-	void ServerUpdatePreview(bool bInPlacing, FVector Location, float Yaw, bool bValid);
+	void ServerUpdatePreview(bool bInPlacing, FVector Location, float Yaw, bool bValid, FName InItemId);
 
 	// Server: pak een (lege) pot weer op -> terug als item in de inventory.
 	UFUNCTION(Server, Reliable)
@@ -93,8 +94,9 @@ protected:
 	// Camerastandpunt van de bestuurde pawn (voor de plaats-trace).
 	bool GetViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
 
-	// True als een pot op deze vloer-positie een muur/andere pot zou raken (footprint-overlap).
-	bool IsSpotBlocked(const FVector& FloorPoint) const;
+	// True als een placeable met deze footprint op deze positie/hoek een muur/object zou raken.
+	// Voor potten geldt extra tussenruimte t.o.v. andere potten (plant-groei).
+	bool IsSpotBlocked(const FVector& FloorPoint, const FVector& BoxHalf, float Yaw, bool bPotSpacing) const;
 
 	UInventoryComponent* GetOwnerInventory() const;
 
@@ -112,6 +114,7 @@ protected:
 	bool bPlacing = false;
 	bool bValidSpot = false;
 	FName PlacingItemId = NAME_None;
+	FPlaceableDef CurrentDef;            // definitie van het item dat je nu plaatst
 	FVector PreviewLocation = FVector::ZeroVector;
 	FRotator PreviewRotation = FRotator::ZeroRotator;
 
@@ -133,4 +136,7 @@ protected:
 
 	UPROPERTY(Replicated)
 	float RepYaw = 0.f;
+
+	UPROPERTY(Replicated)
+	FName RepItemId = NAME_None;
 };

@@ -2,6 +2,8 @@
 
 #include "WeedShopCore.h"
 #include "Cultivation/GrowPlant.h"
+#include "Placement/PlaceableTypes.h"
+#include "Placement/PlaceableProp.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Interaction/InteractionComponent.h"
@@ -37,6 +39,7 @@ void UBuildComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(UBuildComponent, bRepValid);
 	DOREPLIFETIME(UBuildComponent, RepLocation);
 	DOREPLIFETIME(UBuildComponent, RepYaw);
+	DOREPLIFETIME(UBuildComponent, RepItemId);
 }
 
 UInventoryComponent* UBuildComponent::GetOwnerInventory() const
@@ -73,23 +76,26 @@ void UBuildComponent::TogglePotPlacement()
 void UBuildComponent::StartPlacing(FName ItemId)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
-	if (!Inv || !Inv->HasItem(ItemId, 1))
+	FPlaceableDef Def;
+	if (!Inv || !Inv->HasItem(ItemId, 1) || !GetPlaceableDef(ItemId, Def))
 	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange,
-				TEXT("No pot to place — buy one from the supplier (phone)."));
-		}
 		return;
 	}
 
 	PlacingItemId = ItemId;
+	CurrentDef = Def;
 	bPlacing = true;
 	bValidSpot = false;
 
 	EnsureGhost();
 	if (Ghost)
 	{
+		// Ghost-mesh/-schaal van het gekozen item.
+		if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Def.MeshPath))
+		{
+			Ghost->SetStaticMesh(M);
+		}
+		Ghost->SetWorldScale3D(Def.MeshScale);
 		Ghost->SetVisibility(true);
 	}
 }
@@ -191,7 +197,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		}
 		const UInventoryComponent* Inv = GetOwnerInventory();
 		const FName Held = Inv ? Inv->GetActiveItemId() : NAME_None;
-		const bool bPlaceable = (Held == FName(TEXT("Pot")));
+		FPlaceableDef HeldDef;
+		const bool bPlaceable = GetPlaceableDef(Held, HeldDef);
 
 		if (bPlaceable && !bUIOpen)
 		{
@@ -228,7 +235,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				PreviewRotation = FRotator(0.f, ViewRot.Yaw, 0.f); // recht overeind, yaw van de speler
 				float FloorNormalZ = Hit.ImpactNormal.Z;
 				// Mik je (onder welke hoek dan ook) op een pot -> nooit geldig (geen stapelen).
-				bool bOnPlaceable = (Cast<AGrowPlant>(Hit.GetActor()) != nullptr);
+				bool bOnPlaceable = (Cast<AGrowPlant>(Hit.GetActor()) != nullptr) || (Cast<APlaceableProp>(Hit.GetActor()) != nullptr);
 
 				// Shift ingedrukt -> snap XY op het raster (en yaw op 90°-stappen) voor nette rijen.
 				const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
@@ -239,9 +246,9 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					// netjes doorloopt vanaf de pot die je (vrij) tegen de muur zette. Geen pot
 					// in de buurt -> gewoon het wereld-raster.
 					float AnchorX = 0.f, AnchorY = 0.f, BestSq = TNumericLimits<float>::Max();
-					for (TActorIterator<AGrowPlant> It(GetWorld()); It; ++It)
+					for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 					{
-						const FVector L = It->GetActorLocation();
+						AActor* A = *It; if (!Cast<AGrowPlant>(A) && !Cast<APlaceableProp>(A)) { continue; } const FVector L = A->GetActorLocation();
 						const float dSq = FMath::Square(L.X - PreviewLocation.X) + FMath::Square(L.Y - PreviewLocation.Y);
 						if (dSq < BestSq)
 						{
@@ -260,7 +267,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					{
 						PreviewLocation.Z = DownHit.ImpactPoint.Z;
 						FloorNormalZ = DownHit.ImpactNormal.Z;
-						bOnPlaceable = (Cast<AGrowPlant>(DownHit.GetActor()) != nullptr);
+						bOnPlaceable = (Cast<AGrowPlant>(DownHit.GetActor()) != nullptr) || (Cast<APlaceableProp>(DownHit.GetActor()) != nullptr);
 					}
 				}
 
@@ -269,7 +276,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				const bool bFloor = FloorNormalZ > 0.7f;
 				const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
 				const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
-				bValidSpot = bFloor && bGroundLevel && !bOnPlaceable && !IsSpotBlocked(PreviewLocation);
+				bValidSpot = bFloor && bGroundLevel && !bOnPlaceable
+						&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 			}
 		}
 	}
@@ -281,7 +289,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		Ghost->SetVisibility(bShow);
 		if (bShow)
 		{
-			Ghost->SetWorldLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, 20.f), PreviewRotation);
+			Ghost->SetWorldLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, CurrentDef.BoxHalf.Z), PreviewRotation);
 		}
 		if (GhostMID)
 		{
@@ -295,47 +303,63 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	if (PreviewSendAccum >= 0.066f)
 	{
 		PreviewSendAccum = 0.f;
-		ServerUpdatePreview(bShow, PreviewLocation, PreviewRotation.Yaw, bValidSpot);
+		ServerUpdatePreview(bShow, PreviewLocation, PreviewRotation.Yaw, bValidSpot, PlacingItemId);
 	}
 }
 
-void UBuildComponent::ServerUpdatePreview_Implementation(bool bInPlacing, FVector Location, float Yaw, bool bValid)
+void UBuildComponent::ServerUpdatePreview_Implementation(bool bInPlacing, FVector Location, float Yaw, bool bValid, FName InItemId)
 {
 	bRepPlacing = bInPlacing;
 	RepLocation = Location;
 	RepYaw = Yaw;
 	bRepValid = bValid;
+	RepItemId = InItemId;
 }
 
 void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 {
-	AGrowPlant* Pot = Cast<AGrowPlant>(Target);
-	if (!Pot)
+	if (!Target)
 	{
 		return;
 	}
-	// Afstand-check (anti-cheat/lag): pot moet dicht bij de speler staan.
-	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Pot->GetActorLocation()) > PlaceDistance + 150.f)
+	// Afstand-check (anti-cheat/lag): object moet dicht bij de speler staan.
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Target->GetActorLocation()) > PlaceDistance + 150.f)
 	{
 		return;
 	}
-	// Staat er een plant in? Eerst oogsten.
-	if (Pot->IsPlanted())
+
+	FName ReturnItem = NAME_None;
+
+	if (AGrowPlant* Pot = Cast<AGrowPlant>(Target))
 	{
-		if (GEngine)
+		// Pot met plant erin -> eerst oogsten.
+		if (Pot->IsPlanted())
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Harvest the plant before picking up the pot."));
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Harvest the plant before picking up the pot."));
+			}
+			return;
 		}
-		return;
+		ReturnItem = FName(TEXT("Pot"));
 	}
+	else if (const APlaceableProp* Prop = Cast<APlaceableProp>(Target))
+	{
+		ReturnItem = Prop->ItemId;
+	}
+	else
+	{
+		return; // niet oppakbaar
+	}
+
 	if (UInventoryComponent* Inv = GetOwnerInventory())
 	{
-		Inv->AddItem(FName(TEXT("Pot")), 1);
+		Inv->AddItem(ReturnItem, 1);
 	}
-	Pot->Destroy();
+	Target->Destroy();
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Pot picked up."));
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Picked up."));
 	}
 }
 
@@ -349,7 +373,19 @@ void UBuildComponent::UpdateRemoteGhost()
 	Ghost->SetVisibility(bRepPlacing);
 	if (bRepPlacing)
 	{
-		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, 20.f), FRotator(0.f, RepYaw, 0.f));
+		// Mesh/schaal van het item dat de andere speler plaatst.
+		FPlaceableDef Def;
+		float HalfZ = 20.f;
+		if (GetPlaceableDef(RepItemId, Def))
+		{
+			if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Def.MeshPath))
+			{
+				Ghost->SetStaticMesh(M);
+			}
+			Ghost->SetWorldScale3D(Def.MeshScale);
+			HalfZ = Def.BoxHalf.Z;
+		}
+		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, HalfZ), FRotator(0.f, RepYaw, 0.f));
 		if (GhostMID)
 		{
 			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
@@ -358,14 +394,18 @@ void UBuildComponent::UpdateRemoteGhost()
 	}
 }
 
-bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint) const
+bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint, const FVector& BoxHalf, float Yaw, bool bPotSpacing) const
 {
 	const UWorld* World = GetWorld();
 	if (!World)
 	{
 		return true;
 	}
-	const FVector Center = FloorPoint + FVector(0.f, 0.f, 20.f);
+	// Box op de footprint van het object, net boven de vloer (zodat de vloer niet meetelt),
+	// geroteerd met de plaatsings-yaw.
+	const float HalfZ = FMath::Max(4.f, BoxHalf.Z - 4.f);
+	const FVector Center = FloorPoint + FVector(0.f, 0.f, BoxHalf.Z);
+	const FQuat Rot = FRotator(0.f, Yaw, 0.f).Quaternion();
 
 	FCollisionObjectQueryParams ObjParams;
 	ObjParams.AddObjectTypesToQuery(ECC_WorldStatic);
@@ -374,24 +414,25 @@ bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint) const
 	FCollisionQueryParams QP(SCENE_QUERY_STAT(WeedShopPlaceOverlap), false);
 	QP.AddIgnoredActor(GetOwner());
 
-	// 1) Niet in muren/objecten clippen: krappe box (~pot-radius) zodat je er strak tegenaan
-	//    mag zetten, maar er net niet in.
-	const FCollisionShape WallBox = FCollisionShape::MakeBox(FVector(25.f, 25.f, 16.f));
-	if (World->OverlapAnyTestByObjectType(Center, FQuat::Identity, ObjParams, WallBox, QP))
+	// 1) Niet in muren/objecten clippen: footprint iets ingekort zodat je er strak tegenaan mag.
+	const FCollisionShape ClipBox = FCollisionShape::MakeBox(FVector(FMath::Max(2.f, BoxHalf.X - 2.f), FMath::Max(2.f, BoxHalf.Y - 2.f), HalfZ));
+	if (World->OverlapAnyTestByObjectType(Center, Rot, ObjParams, ClipBox, QP))
 	{
 		return true;
 	}
 
-	// 2) Tussen potten wél ruimte (plant moet kunnen groeien): ruimere box, maar alleen
-	//    andere potten (AGrowPlant) tellen mee — niet muren/meubels.
-	const FCollisionShape SpacingBox = FCollisionShape::MakeBox(FVector(33.f, 33.f, 16.f));
-	TArray<FOverlapResult> Overlaps;
-	World->OverlapMultiByObjectType(Overlaps, Center, FQuat::Identity, ObjParams, SpacingBox, QP);
-	for (const FOverlapResult& R : Overlaps)
+	// 2) Potten hebben extra tussenruimte nodig (plant-groei): ruimere box, alleen andere potten tellen.
+	if (bPotSpacing)
 	{
-		if (Cast<AGrowPlant>(R.GetActor()))
+		const FCollisionShape SpacingBox = FCollisionShape::MakeBox(FVector(BoxHalf.X + 8.f, BoxHalf.Y + 8.f, HalfZ));
+		TArray<FOverlapResult> Overlaps;
+		World->OverlapMultiByObjectType(Overlaps, Center, Rot, ObjParams, SpacingBox, QP);
+		for (const FOverlapResult& R : Overlaps)
 		{
-			return true;
+			if (Cast<AGrowPlant>(R.GetActor()))
+			{
+				return true;
+			}
 		}
 	}
 
@@ -416,8 +457,14 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 
-	// Server-side her-validatie (anti-cheat / lag): niet plaatsen in een muur of op een pot.
-	if (IsSpotBlocked(Location))
+	FPlaceableDef Def;
+	if (!GetPlaceableDef(ItemId, Def))
+	{
+		return;
+	}
+
+	// Server-side her-validatie (anti-cheat / lag): niet in een muur of (voor potten) te dicht.
+	if (IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
 	{
 		if (GEngine)
 		{
@@ -436,10 +483,24 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	SpawnParams.Owner = GetOwner();
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	// Nu alleen de pot (AGrowPlant). Later: item-id -> placeable-class via een tabel.
-	AGrowPlant* Pot = World->SpawnActor<AGrowPlant>(AGrowPlant::StaticClass(), Location, Rotation, SpawnParams);
-	if (Pot && GEngine)
+	if (Def.bIsPot)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green, TEXT("Pot placed — look at it and press interact to plant a seed."));
+		World->SpawnActor<AGrowPlant>(AGrowPlant::StaticClass(), Location, Rotation, SpawnParams);
+	}
+	else
+	{
+		// Generieke placeable: ItemId vóór constructie zetten zodat de mesh meteen klopt.
+		APlaceableProp* Prop = World->SpawnActorDeferred<APlaceableProp>(
+			APlaceableProp::StaticClass(), FTransform(Rotation, Location),
+			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Prop)
+		{
+			Prop->ItemId = ItemId;
+			Prop->FinishSpawning(FTransform(Rotation, Location));
+		}
+	}
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Placed."));
 	}
 }
