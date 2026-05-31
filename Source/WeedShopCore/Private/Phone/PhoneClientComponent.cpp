@@ -144,6 +144,16 @@ void UPhoneClientComponent::GoHome()
 	bHomeScreen = true;
 }
 
+void UPhoneClientComponent::OpenBankApp()
+{
+	EnsureWidget();
+	bOpen = true;
+	bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false;
+	bHomeScreen = false;
+	Tab = BankAppIndex;
+	UpdateCursor();
+}
+
 void UPhoneClientComponent::ToggleRollUI()
 {
 	bRollOpen = !bRollOpen;

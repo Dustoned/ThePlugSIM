@@ -37,7 +37,12 @@ public:
 	void CycleTab();
 
 	// --- iPhone-achtige home/apps ---
-	static constexpr int32 AppCount = 6; // 0=Upgrades 1=Suppliers 2=Contacts 3=Messages 4=Settings 5=Map
+	static constexpr int32 AppCount = 7; // 0=Upgrades 1=Suppliers 2=Contacts 3=Messages 4=Settings 5=Map 6=Bank
+	static constexpr int32 BankAppIndex = 6;
+
+	// Open de telefoon direct op de Bank-app (gebruikt door de ATM in de wereld).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void OpenBankApp();
 
 	// Open een app (zet 'm als actief scherm; verlaat het home-scherm).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")

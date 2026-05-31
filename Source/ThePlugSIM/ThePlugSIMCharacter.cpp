@@ -24,6 +24,7 @@
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
 #include "Input/ControlSettings.h"
+#include "World/Atm.h"
 #include "SmokePuff.h"
 #include "ThePlugSIM.h"
 
@@ -442,6 +443,31 @@ void AThePlugSIMCharacter::BeginPlay()
 			Prop->Destroy();
 		}
 	}
+
+	// Zet één ATM in de wereld (server, één keer). Bij voorkeur op een getagde "AtmPoint", anders
+	// vlakbij waar de speler start.
+	if (HasAuthority() && GetWorld())
+	{
+		bool bHasAtm = false;
+		for (TActorIterator<AAtm> It(GetWorld()); It; ++It) { bHasAtm = true; break; }
+		if (!bHasAtm)
+		{
+			FVector Loc = GetActorLocation() + GetActorForwardVector() * 250.f + GetActorRightVector() * 200.f;
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+			{
+				if (It->ActorHasTag(FName(TEXT("AtmPoint")))) { Loc = It->GetActorLocation(); break; }
+			}
+			FHitResult GroundHit;
+			FCollisionQueryParams GP; GP.AddIgnoredActor(this);
+			if (GetWorld()->LineTraceSingleByChannel(GroundHit, Loc + FVector(0, 0, 300.f), Loc - FVector(0, 0, 500.f), ECC_Visibility, GP))
+			{
+				Loc.Z = GroundHit.ImpactPoint.Z + 70.f; // halve hoogte van de kast (~140cm)
+			}
+			FActorSpawnParameters SP;
+			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			GetWorld()->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP);
+		}
+	}
 }
 
 void AThePlugSIMCharacter::ToggleRollUI()
@@ -510,8 +536,14 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	// Kijk je een interact-baar object aan (pot/klant)? Dan links-klik = E (soil/seed/water/oogst).
 	if (UInteractionComponent* IC = FindComponentByClass<UInteractionComponent>())
 	{
-		if (IC->GetFocusedActor())
+		if (AActor* Focus = IC->GetFocusedActor())
 		{
+			// ATM -> open lokaal de Bank-app (storten/witwassen) i.p.v. een server-interactie.
+			if (Cast<AAtm>(Focus))
+			{
+				if (Phone) { Phone->OpenBankApp(); }
+				return;
+			}
 			IC->TryInteract();
 			return;
 		}
