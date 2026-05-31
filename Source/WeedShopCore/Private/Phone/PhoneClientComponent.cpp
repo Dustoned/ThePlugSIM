@@ -9,6 +9,7 @@
 #include "Economy/EconomyComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Cultivation/PotTypes.h"
+#include "Cultivation/GrowPlant.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
@@ -42,7 +43,7 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -80,6 +81,7 @@ void UPhoneClientComponent::Toggle()
 		bRollOpen = false; // niet allebei tegelijk
 		bDealOpen = false;
 		bInventoryOpen = false;
+		bPotUpgradeOpen = false;
 	}
 	UpdateCursor();
 }
@@ -92,6 +94,7 @@ void UPhoneClientComponent::ToggleRollUI()
 		bOpen = false;
 		bDealOpen = false;
 		bInventoryOpen = false;
+		bPotUpgradeOpen = false;
 		RollGrams = FMath::Clamp(RollGrams, MinGrams, GetMaxJointGrams());
 	}
 	UpdateCursor();
@@ -105,6 +108,7 @@ void UPhoneClientComponent::ToggleInventory()
 		bOpen = false;
 		bRollOpen = false;
 		bDealOpen = false;
+		bPotUpgradeOpen = false;
 	}
 	UpdateCursor();
 }
@@ -244,6 +248,7 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	bOpen = false;
 	bRollOpen = false;
 	bInventoryOpen = false;
+	bPotUpgradeOpen = false;
 	// Start op de marktprijs als vraagprijs (eerlijk bod).
 	DealAskCents = Customer->GetMarketPriceCents();
 	SetDealAskCents(DealAskCents);
@@ -354,6 +359,59 @@ void UPhoneClientComponent::SellInventoryIndex(int32 StackIndex)
 		{
 			ServerSell(Stacks[StackIndex].ItemId);
 		}
+	}
+}
+
+void UPhoneClientComponent::OpenPotUpgrade(AGrowPlant* Pot)
+{
+	if (!Pot)
+	{
+		return;
+	}
+	UpgPot = Pot;
+	bPotUpgradeOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ClosePotUpgrade()
+{
+	bPotUpgradeOpen = false;
+	UpgPot = nullptr;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::BuyPotUpgrade(int32 UpgIndex)
+{
+	if (AGrowPlant* Pot = UpgPot.Get())
+	{
+		ServerBuyPotUpgrade(Pot, UpgIndex);
+	}
+}
+
+void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, int32 UpgIndex)
+{
+	if (!Pot || Pot->HasPotUpgrade(UpgIndex))
+	{
+		return;
+	}
+	const int32 Cost = GetPotUpgradeCost(UpgIndex, Pot->GetPotTier());
+	AWeedShopGameState* GS = GetGS();
+	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	if (Cost <= 0 || !Econ || !Econ->RemoveMoney(Cost))
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Red, TEXT("Not enough money for that pot upgrade."));
+		}
+		return;
+	}
+	Pot->ApplyPotUpgrade(UpgIndex);
+	if (GEngine)
+	{
+		const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+		const FString Name = Ups.IsValidIndex(UpgIndex) ? Ups[UpgIndex].DisplayName : TEXT("upgrade");
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, FString::Printf(TEXT("Pot upgrade installed: %s"), *Name));
 	}
 }
 

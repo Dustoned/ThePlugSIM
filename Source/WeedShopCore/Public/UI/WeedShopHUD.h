@@ -36,6 +36,9 @@ protected:
 	// Tekent het inventory-scherm met drag-n-drop naar de hotbar.
 	void DrawInventoryUI(class UInventoryComponent* Inv);
 
+	// Tekent het per-pot upgrade-paneel (drainage/isolatie/bloom) voor de aangekeken pot.
+	void DrawPotUpgradeUI(UPhoneClientComponent* Phone);
+
 	// Tekent één klikbare knop-regel (rect + tekst + hit-box) en geeft true terug bij hover.
 	bool DrawButton(FName BoxName, const FString& Label, float X, float Y, float W, const FLinearColor& BaseColor);
 

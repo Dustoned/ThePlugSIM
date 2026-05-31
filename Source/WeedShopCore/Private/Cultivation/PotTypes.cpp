@@ -29,3 +29,30 @@ bool IsPotItem(FName ItemId)
 {
 	return ItemId.ToString().StartsWith(TEXT("Pot"));
 }
+
+const TArray<FPotUpgradeDef>& GetPotUpgrades()
+{
+	static const TArray<FPotUpgradeDef> Defs = {
+		{ TEXT("Drainage"),       TEXT("+10% max quality (better water retention)"), 3000 },
+		{ TEXT("Insulation"),     TEXT("Dries out slower (less watering needed)"),    4000 },
+		{ TEXT("Bloom booster"),  TEXT("+20% harvest yield"),                          5000 },
+	};
+	return Defs;
+}
+
+int32 GetPotUpgradeCost(int32 UpgIndex, FName PotTier)
+{
+	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+	if (!Ups.IsValidIndex(UpgIndex))
+	{
+		return 0;
+	}
+	// Schaal met de tier-index (Broken=0 ... Fabric=3): duurdere potten = duurdere upgrades.
+	int32 Tier = 0;
+	const TArray<FPotDef>& Pots = GetAllPots();
+	for (int32 i = 0; i < Pots.Num(); ++i)
+	{
+		if (Pots[i].ItemId == PotTier) { Tier = i; break; }
+	}
+	return Ups[UpgIndex].BaseCostCents * (Tier + 1);
+}

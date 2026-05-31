@@ -15,6 +15,7 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Placement/BuildComponent.h"
 #include "Cultivation/WaterCanComponent.h"
+#include "Cultivation/GrowPlant.h"
 #include "Interaction/InteractionComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Npc/NpcRegistryComponent.h"
@@ -115,6 +116,9 @@ void AThePlugSIMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, B, &UBuildComponent::RotatePlacement);
 	}
 
+	// U opent het pot-upgrade-paneel voor de aangekeken pot.
+	PlayerInputComponent->BindKey(EKeys::U, IE_Pressed, this, &AThePlugSIMCharacter::OpenPotUpgradeUI);
+
 	// Plaats-modus is automatisch: een plaatsbaar item in de hand toont meteen de preview
 	// (zie UBuildComponent). Links-klik plaatst; schakel naar een ander hotbar-slot om te stoppen.
 	PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AThePlugSIMCharacter::OnPrimaryClick);
@@ -150,7 +154,7 @@ void AThePlugSIMCharacter::DoAim(float Yaw, float Pitch)
 {
 	// Geen camera-kijken terwijl er een UI open is (telefoon/roll/deal), anders draait de
 	// camera mee terwijl je de muis/slider gebruikt.
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()))
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen()))
 	{
 		return;
 	}
@@ -352,7 +356,7 @@ void AThePlugSIMCharacter::HotbarNext()
 void AThePlugSIMCharacter::OnPrimaryClick()
 {
 	// Klik gaat naar de UI als die open is (HUD hit-boxes regelen dat zelf).
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()))
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen()))
 	{
 		return;
 	}
@@ -372,7 +376,7 @@ void AThePlugSIMCharacter::UseActiveItem()
 		return;
 	}
 	// UI open? Niet gebruiken (klik is voor de UI).
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()))
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen()))
 	{
 		return;
 	}
@@ -380,5 +384,20 @@ void AThePlugSIMCharacter::UseActiveItem()
 	if (Item == FName(TEXT("Pot")))
 	{
 		Build->TogglePotPlacement();
+	}
+}
+
+void AThePlugSIMCharacter::OpenPotUpgradeUI()
+{
+	if (!Phone)
+	{
+		return;
+	}
+	if (const UInteractionComponent* IC = FindComponentByClass<UInteractionComponent>())
+	{
+		if (AGrowPlant* Pot = Cast<AGrowPlant>(IC->GetFocusedActor()))
+		{
+			Phone->OpenPotUpgrade(Pot);
+		}
 	}
 }

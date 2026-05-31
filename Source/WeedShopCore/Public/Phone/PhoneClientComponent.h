@@ -13,6 +13,7 @@ class AWeedShopGameState;
 class APlayerController;
 class UInventoryComponent;
 class ACustomerBase;
+class AGrowPlant;
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
 class WEEDSHOPCORE_API UPhoneClientComponent : public UActorComponent
@@ -59,6 +60,22 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	bool IsInventoryOpen() const { return bInventoryOpen; }
+
+	// --- Per-pot upgrades ---
+	// Open het upgrade-paneel voor de aangekeken pot (door de interactie/U-toets aangeroepen).
+	void OpenPotUpgrade(AGrowPlant* Pot);
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pot")
+	void ClosePotUpgrade();
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pot")
+	void BuyPotUpgrade(int32 UpgIndex);
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Pot")
+	bool IsPotUpgradeOpen() const { return bPotUpgradeOpen; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Pot")
+	AGrowPlant* GetUpgradePot() const { return UpgPot.Get(); }
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	int32 GetTab() const { return Tab; }
@@ -140,6 +157,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerSell(FName ItemId);
 
+	// Server: koop pot-upgrade UpgIndex voor de gegeven pot (kosten van de kas).
+	UFUNCTION(Server, Reliable)
+	void ServerBuyPotUpgrade(AGrowPlant* Pot, int32 UpgIndex);
+
 	AWeedShopGameState* GetGS() const;
 	APlayerController* GetPC() const;
 	UInventoryComponent* GetOwnerInventory() const;
@@ -159,4 +180,7 @@ protected:
 	int32 DealAskCents = 0;
 
 	bool bInventoryOpen = false;
+
+	bool bPotUpgradeOpen = false;
+	TWeakObjectPtr<AGrowPlant> UpgPot;
 };

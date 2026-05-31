@@ -23,5 +23,19 @@ const TArray<FPotDef>& GetAllPots();
 // Definitie voor een pot-item-id. False als het geen pot is.
 bool GetPotDef(FName ItemId, FPotDef& Out);
 
+// Per-pot upgrades (gekocht per geplaatste pot; verdwijnen als je de pot oppakt/verkoopt).
+struct FPotUpgradeDef
+{
+	FString DisplayName;
+	FString Desc;
+	int32 BaseCostCents = 3000;
+};
+
+// De beschikbare pot-upgrades (index = bit in het pot-upgrade-masker). Nu 3: drainage, isolatie, bloom.
+const TArray<FPotUpgradeDef>& GetPotUpgrades();
+
+// Kosten van upgrade UpgIndex voor een pot van deze tier (schaalt met de tier).
+int32 GetPotUpgradeCost(int32 UpgIndex, FName PotTier);
+
 // Of dit item-id een pot is (begint met "Pot").
 bool IsPotItem(FName ItemId);

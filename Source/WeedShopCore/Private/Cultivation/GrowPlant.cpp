@@ -116,6 +116,7 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, SoilId);
 	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
 	DOREPLIFETIME(AGrowPlant, PotTier);
+	DOREPLIFETIME(AGrowPlant, PotUpgradeMask);
 }
 
 void AGrowPlant::Tick(float DeltaSeconds)
@@ -157,8 +158,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	// haalt nooit 100%: je eerste wiet is geen topkwaliteit; betere pot tilt het plafond op.
 	const float MaxCare = GetMaxCare();
 
-	// Droogte-stress; betere pot (CareRetention) vertraagt het lekken.
-	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.0045f * (1.f - CareRetention), 0.3f, MaxCare);
+	// Droogte-stress; betere pot (CareRetention) + isolatie-upgrade vertragen het lekken.
+	const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f; // pot-upgrade: isolatie
+	CareMultiplier = FMath::Clamp(CareMultiplier - DeltaSeconds * 0.0045f * (1.f - CareRetention) * LeakMul, 0.3f, MaxCare);
 
 	// Kwaliteit = tijd-gewogen gemiddelde van de verzorging (last-minute water geven helpt niet
 	// meer om alsnog 100% te halen).
@@ -328,7 +330,8 @@ float AGrowPlant::GetMaxCare() const
 			CareRetention = FMath::Clamp(Upg->GetEffectTotal(TEXT("CareRetention")), 0.f, 0.9f);
 		}
 	}
-	return FMath::Clamp(Cap + CareRetention * 0.3f, 0.4f, 1.0f);
+	const float Drainage = HasPotUpgrade(0) ? 0.10f : 0.f; // pot-upgrade: betere waterretentie
+	return FMath::Clamp(Cap + CareRetention * 0.3f + Drainage, 0.4f, 1.0f);
 }
 
 void AGrowPlant::Water(APawn* InstigatorPawn)
@@ -377,6 +380,7 @@ void AGrowPlant::Harvest(APawn* InstigatorPawn)
 	float PotYield = 1.f;
 	FPotDef PotDef;
 	if (GetPotDef(PotTier, PotDef)) { PotYield = PotDef.YieldMult; }
+	if (HasPotUpgrade(2)) { PotYield *= 1.2f; } // pot-upgrade: bloom booster
 
 	// Kwaliteit = gemiddelde verzorging over de hele groei (niet de laatste seconde).
 	const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Strain->BaseYieldGrams * CareAvg * SoilYield * PotYield));

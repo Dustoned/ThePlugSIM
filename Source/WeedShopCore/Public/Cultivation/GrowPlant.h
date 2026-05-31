@@ -56,6 +56,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	FName GetPotTier() const { return PotTier; }
 
+	// Per-pot upgrades als bit-masker (bit i = upgrade i toegepast). Verdwijnt met de pot.
+	UPROPERTY(Replicated)
+	int32 PotUpgradeMask = 0;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	bool HasPotUpgrade(int32 UpgIndex) const { return (PotUpgradeMask & (1 << UpgIndex)) != 0; }
+
+	// Server: pas upgrade UpgIndex toe op deze pot (zet de bit). Kosten worden elders afgehandeld.
+	void ApplyPotUpgrade(int32 UpgIndex) { PotUpgradeMask |= (1 << UpgIndex); }
+
 	// Optionele meshes per fase (index = EGrowthPhase). Leeg = geen visuele wissel.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
 	TArray<TObjectPtr<UStaticMesh>> PhaseMeshes;

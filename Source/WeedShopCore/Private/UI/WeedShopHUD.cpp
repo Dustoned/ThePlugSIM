@@ -148,6 +148,10 @@ void AWeedShopHUD::DrawHUD()
 				DrawInventoryUI(Inv);
 			}
 		}
+		else if (Phone->IsPotUpgradeOpen())
+		{
+			DrawPotUpgradeUI(Phone);
+		}
 		else if (PlayerOwner)
 		{
 			// Geen UI open: cursor terug naar standaard (anders blijft het handje hangen).
@@ -610,6 +614,14 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		Phone->ToggleInventory();
 	}
+	else if (S.StartsWith(TEXT("potupg_")))
+	{
+		Phone->BuyPotUpgrade(FCString::Atoi(*S.RightChop(7)));
+	}
+	else if (S == TEXT("potupgclose"))
+	{
+		Phone->ClosePotUpgrade();
+	}
 }
 
 void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
@@ -1027,6 +1039,54 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	if (PlayerOwner)
 	{
 		PlayerOwner->CurrentMouseCursor = bDraggingItem ? EMouseCursor::GrabHandClosed : EMouseCursor::Default;
+	}
+}
+
+void AWeedShopHUD::DrawPotUpgradeUI(UPhoneClientComponent* Phone)
+{
+	AGrowPlant* Pot = Phone->GetUpgradePot();
+	if (!Pot)
+	{
+		Phone->ClosePotUpgrade();
+		return;
+	}
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	const float W = 480.f;
+	const float H = 250.f;
+	const float PX = (Canvas ? Canvas->ClipX : 1280.f) * 0.5f - W * 0.5f;
+	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
+	const float InnerX = PX + 16.f;
+
+	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.96f), PX, PY, W, H);
+	float y = PY + 14.f;
+
+	FPotDef Pd;
+	const FString PotName = GetPotDef(Pot->GetPotTier(), Pd) ? Pd.DisplayName : TEXT("Pot");
+	DrawText(FString::Printf(TEXT("POT UPGRADES  —  %s"), *PotName), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font);
+	DrawButton(FName(TEXT("potupgclose")), TEXT("Close (U)"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
+	y += 28.f;
+	DrawText(TEXT("Upgrades horen bij deze pot; verkoop je 'm, dan zijn ze weg."),
+		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
+	y += 26.f;
+
+	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+	for (int32 i = 0; i < Ups.Num(); ++i)
+	{
+		const bool bOwned = Pot->HasPotUpgrade(i);
+		const int32 Cost = GetPotUpgradeCost(i, Pot->GetPotTier());
+		DrawText(FString::Printf(TEXT("%s  —  %s"), *Ups[i].DisplayName, *Ups[i].Desc),
+			FLinearColor(0.9f, 0.9f, 0.75f), InnerX, y, Font);
+		y += 20.f;
+		if (bOwned)
+		{
+			DrawText(TEXT("   Installed"), FLinearColor(0.5f, 1.f, 0.5f), InnerX, y, Font);
+		}
+		else
+		{
+			DrawButton(FName(*FString::Printf(TEXT("potupg_%d"), i)),
+				FString::Printf(TEXT("Buy  -  EUR %.2f"), Cost / 100.f), InnerX, y, 220.f, FLinearColor::White);
+		}
+		y += RowH + 4.f;
 	}
 }
 

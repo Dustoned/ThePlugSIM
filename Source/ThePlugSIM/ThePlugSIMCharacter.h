@@ -124,6 +124,9 @@ protected:
 	/** Gebruik het geselecteerde hotbar-item (bv. Pot -> plaats-modus). */
 	void UseActiveItem();
 
+	/** Open het pot-upgrade-paneel voor de aangekeken pot (toets U). */
+	void OpenPotUpgradeUI();
+
 
 public:
 

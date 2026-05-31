@@ -213,8 +213,20 @@ void UInventoryComponent::RefreshHotbarAuto()
 		}
 	}
 
-	// Hotbar wordt NIET meer automatisch gevuld: je sleept zelf items van de inventory naar de
-	// hotbar (zo staan ze niet dubbel). RefreshHotbarAuto ruimt alleen verdwenen items op.
+	// Vul lege hotbar-slots automatisch met voorraad die nog nergens in de hotbar staat. Items op
+	// de hotbar worden niet in de inventory-grid getoond, dus geen dubbele weergave.
+	for (const FInventoryStack& S : Stacks)
+	{
+		if (HotbarSlots.Contains(S.ItemId))
+		{
+			continue;
+		}
+		const int32 Empty = HotbarSlots.IndexOfByKey(NAME_None);
+		if (Empty != INDEX_NONE)
+		{
+			HotbarSlots[Empty] = S.ItemId;
+		}
+	}
 }
 
 void UInventoryComponent::OnRep_Stacks()
