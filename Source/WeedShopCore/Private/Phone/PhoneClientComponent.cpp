@@ -429,6 +429,32 @@ void UPhoneClientComponent::SellInventoryIndex(int32 StackIndex)
 	}
 }
 
+void UPhoneClientComponent::SellInventoryIndexAll(int32 StackIndex)
+{
+	if (const UInventoryComponent* Inv = GetOwnerInventory())
+	{
+		const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
+		if (Stacks.IsValidIndex(StackIndex))
+		{
+			ServerSellAll(Stacks[StackIndex].ItemId);
+		}
+	}
+}
+
+void UPhoneClientComponent::ServerSellAll_Implementation(FName ItemId)
+{
+	AWeedShopGameState* GS = GetGS();
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Store || !Inv) { return; }
+	// Verkoop tot er niets meer van dit item is (elke SellItem checkt zelf de voorraad).
+	int32 Guard = Inv->GetQuantity(ItemId) + 4;
+	while (Guard-- > 0 && Inv->HasItem(ItemId, 1))
+	{
+		if (!Store->SellItem(ItemId, Inv)) { break; }
+	}
+}
+
 // --- Winkel: aantal-keuze + winkelwagen ---
 
 int32 UPhoneClientComponent::GetPendingQty(FName ItemId) const

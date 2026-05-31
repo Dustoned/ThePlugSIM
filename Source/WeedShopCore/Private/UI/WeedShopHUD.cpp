@@ -726,11 +726,15 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 				if (y > ListBottom - RowHt) { break; }
 				bAny = true;
 				DrawRect(FLinearColor(0.10f, 0.11f, 0.14f, 0.95f), CatX, y, CatZoneW, RowHt - 4.f);
-				DrawText(FString::Printf(TEXT("%s   x%d"), *PrettyItemName(SellStacks[si].ItemId), SellStacks[si].Quantity),
+				const int32 SQty = SellStacks[si].Quantity;
+				DrawText(FString::Printf(TEXT("%s   x%d"), *PrettyItemName(SellStacks[si].ItemId), SQty),
 					FLinearColor(0.9f, 0.92f, 1.f), CatX + 10.f, y + 3.f, Font);
-				DrawText(FString::Printf(TEXT("EUR %.2f each"), Val / 100.f), FLinearColor(1.f, 0.85f, 0.5f), CatX + 10.f, y + 19.f, Font);
-				Btn(FName(*FString::Printf(TEXT("sell_%d"), si)), TEXT("Sell 1"), CatX + CatZoneW - 92.f, y + 5.f, 86.f, RowHt - 12.f,
+				DrawText(FString::Printf(TEXT("EUR %.2f each  (all: EUR %.2f)"), Val / 100.f, (Val * SQty) / 100.f),
+					FLinearColor(1.f, 0.85f, 0.5f), CatX + 10.f, y + 19.f, Font);
+				Btn(FName(*FString::Printf(TEXT("sella_%d"), si)), TEXT("Sell all"), CatX + CatZoneW - 190.f, y + 5.f, 90.f, RowHt - 12.f,
 					FLinearColor(0.45f, 0.30f, 0.12f, 0.98f), FLinearColor::White);
+				Btn(FName(*FString::Printf(TEXT("sell_%d"), si)), TEXT("Sell 1"), CatX + CatZoneW - 92.f, y + 5.f, 86.f, RowHt - 12.f,
+					FLinearColor(0.40f, 0.34f, 0.18f, 0.98f), FLinearColor::White);
 				y += RowHt;
 			}
 		}
@@ -864,6 +868,10 @@ void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
 	else if (S.StartsWith(TEXT("scat_")))
 	{
 		Phone->SetSupplierCat(FCString::Atoi(*S.RightChop(5)));
+	}
+	else if (S.StartsWith(TEXT("sella_")))
+	{
+		Phone->SellInventoryIndexAll(FCString::Atoi(*S.RightChop(6)));
 	}
 	else if (S.StartsWith(TEXT("sell_")))
 	{

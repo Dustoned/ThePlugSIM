@@ -62,6 +62,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SellInventoryIndex(int32 StackIndex);
 
+	// Verkoop ALLE stuks van het item op voorraad-stapel StackIndex (bv. 10x in één klik).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void SellInventoryIndexAll(int32 StackIndex);
+
 	// --- Winkel: aantal-keuze per item + winkelwagen (client-side UI) ---
 	// Gekozen aantal voor een catalogus-item (default 1).
 	int32 GetPendingQty(FName ItemId) const;
@@ -209,6 +213,10 @@ protected:
 	// Server: verkoop 1 van dit item uit de eigen inventory aan de supplier.
 	UFUNCTION(Server, Reliable)
 	void ServerSell(FName ItemId);
+
+	// Server: verkoop alle stuks van dit item uit de eigen inventory aan de supplier.
+	UFUNCTION(Server, Reliable)
+	void ServerSellAll(FName ItemId);
 
 	// Server: koop de hele winkelwagen (parallelle arrays item-id + aantal).
 	UFUNCTION(Server, Reliable)
