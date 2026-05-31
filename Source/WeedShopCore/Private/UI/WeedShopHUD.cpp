@@ -189,8 +189,13 @@ void AWeedShopHUD::DrawHUD()
 	{
 		if (Phone->IsOpen())
 		{
+			// De telefoon zelf is nu een UMG-widget (UPhoneWidget). Alleen de grote winkel tekenen
+			// we nog op de canvas, wanneer de Suppliers-app open is.
 			HoverTooltip.Empty();
-			DrawPhone(Phone);
+			if (Phone->GetTab() == 1 && !Phone->IsHomeScreen())
+			{
+				DrawStoreUI(Phone);
+			}
 		}
 		else if (Phone->IsRollOpen())
 		{

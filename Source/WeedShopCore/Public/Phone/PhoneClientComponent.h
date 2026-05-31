@@ -267,6 +267,12 @@ protected:
 	// Zet muis-cursor/input-mode op basis van of er een UI open is.
 	void UpdateCursor();
 
+	// Maakt de UMG-telefoon-widget aan (lokale client, lui bij eerste opening).
+	void EnsureWidget();
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UPhoneWidget> PhoneWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app

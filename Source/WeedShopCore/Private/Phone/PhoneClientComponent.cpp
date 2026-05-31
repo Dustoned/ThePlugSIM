@@ -16,6 +16,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
+#include "UI/PhoneWidget.h"
+#include "Blueprint/UserWidget.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
 {
@@ -73,8 +75,22 @@ void UPhoneClientComponent::UpdateCursor()
 	}
 }
 
+void UPhoneClientComponent::EnsureWidget()
+{
+	if (PhoneWidget) { return; }
+	APlayerController* PC = GetPC();
+	if (!PC || !PC->IsLocalController()) { return; }
+	PhoneWidget = CreateWidget<UPhoneWidget>(PC, UPhoneWidget::StaticClass());
+	if (PhoneWidget)
+	{
+		PhoneWidget->SetPhone(this);
+		PhoneWidget->AddToViewport(20);
+	}
+}
+
 void UPhoneClientComponent::Toggle()
 {
+	EnsureWidget();
 	bOpen = !bOpen;
 	if (bOpen)
 	{
