@@ -113,6 +113,19 @@ void AWeedShopHUD::DrawHUD()
 			DrawRect(FLinearColor(0.4f, 0.9f, 0.5f, 0.95f), BX, BY, BW * Frac, BH);
 		}
 
+		// Rollen indicator (midden-onder): rechtermuis inhouden met geladen vloei.
+		const float RFrac = Ph2->GetRollHoldFrac();
+		if (RFrac > 0.f)
+		{
+			const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
+			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
+			const float BW = 220.f, BH = 16.f;
+			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
+			DrawText(TEXT("Rolling joint...  (hold right-click)"), FLinearColor(0.7f, 1.f, 0.8f), BX, BY - 22.f, Font);
+			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawRect(FLinearColor(0.9f, 0.8f, 0.4f, 0.95f), BX, BY, BW * RFrac, BH);
+		}
+
 		// Joint-overhandigen indicator (midden-onder): korte hold.
 		const float GFrac = Ph2->GetGiveHoldFrac();
 		if (GFrac > 0.f)

@@ -11,6 +11,7 @@ namespace
 			{ FName(TEXT("Phone")),       TEXT("Open / close phone"),     EKeys::Tab },
 			{ FName(TEXT("PhoneTab")),    TEXT("Switch app / home"),      EKeys::Q   },
 			{ FName(TEXT("Inventory")),   TEXT("Open / close inventory"), EKeys::I   },
+			{ FName(TEXT("RollLoad")),    TEXT("Load papers with weed"),  EKeys::F   },
 			{ FName(TEXT("Rotate")),      TEXT("Rotate while placing"),   EKeys::R   },
 			{ FName(TEXT("PotUpgrade")),  TEXT("Pot upgrade panel"),      EKeys::U   },
 		};

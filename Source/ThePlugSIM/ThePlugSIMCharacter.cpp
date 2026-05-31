@@ -112,6 +112,25 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			Phone->SetSmokeHoldFrac(bSmokeFired ? 0.f : FMath::Clamp(SmokeHoldTime / SmokeHoldRequired, 0.f, 1.f));
 			Phone->SetStonedHud(GetStonedFraction(), StonedSeconds, GetStonedIntensity(), GetStonedXpFrac());
 		}
+
+		// Rollen: vloei (geladen) in de hand + rechtermuis inhouden -> rol de joint.
+		const bool bPapersInHand = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_"));
+		if (bRmbDown && !bUiOpen && bPapersInHand && bRollLoaded)
+		{
+			RollHoldTime += DeltaSeconds;
+			if (!bRollFired && RollHoldTime >= RollHoldRequired)
+			{
+				bRollFired = true;
+				if (Phone) { Phone->SetRollGrams(RollLoadGrams); Phone->ConfirmRoll(); }
+				bRollLoaded = false; // gerold -> laad opnieuw (F) voor de volgende
+				if (Phone) { Phone->SetRollLoadedUI(false, 0); }
+			}
+		}
+		else
+		{
+			RollHoldTime = 0.f;
+		}
+		if (Phone) { Phone->SetRollHoldFrac(bRollFired ? 0.f : FMath::Clamp(RollHoldTime / RollHoldRequired, 0.f, 1.f)); }
 		// Stoned = XP-bonus op basis van de THC% van je wiet (niet hoe high je bent), zodat je niet te
 		// snel levelt. Een 17%-joint -> +17% XP, max +50%. Server zet de multiplier.
 		if (HasAuthority())
@@ -222,6 +241,8 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 		}
 		const FKey KInteract = CS->GetKey(TEXT("Interact"), bAlt);
 		if (KInteract.IsValid()) { Input->BindKey(KInteract, IE_Pressed, this, &AThePlugSIMCharacter::OnInteractKey); }
+		const FKey KLoad = CS->GetKey(TEXT("RollLoad"), bAlt);
+		if (KLoad.IsValid()) { Input->BindKey(KLoad, IE_Pressed, this, &AThePlugSIMCharacter::OnLoadKey); }
 		if (B)
 		{
 			const FKey KRot = CS->GetKey(TEXT("Rotate"), bAlt);
@@ -632,18 +653,9 @@ void AThePlugSIMCharacter::OnSecondaryPressed()
 	bRmbDown = true;
 	SmokeHoldTime = 0.f;
 	bSmokeFired = false;
-
-	// Andere UI open? Laat rechts-klik met rust.
-	if (Phone->IsOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen())
-	{
-		return;
-	}
-	// Papers in de hand -> joint-roll-paneel openen/sluiten (edge, op indrukken).
-	if (Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_")) || Phone->IsRollOpen())
-	{
-		Phone->ToggleRollUI();
-	}
-	// Joint in de hand -> roken gaat via INHOUDEN (afgehandeld in Tick), niet hier meteen.
+	RollHoldTime = 0.f;
+	bRollFired = false;
+	// Rechtermuis = INHOUDEN: papers (geladen) -> rollen, joint -> roken. Beide in Tick afgehandeld.
 }
 
 void AThePlugSIMCharacter::OnSecondaryReleased()
@@ -651,7 +663,44 @@ void AThePlugSIMCharacter::OnSecondaryReleased()
 	bRmbDown = false;
 	SmokeHoldTime = 0.f;
 	bSmokeFired = false;
-	if (Phone) { Phone->SetSmokeHoldFrac(0.f); }
+	RollHoldTime = 0.f;
+	bRollFired = false;
+	if (Phone) { Phone->SetSmokeHoldFrac(0.f); Phone->SetRollHoldFrac(0.f); }
+}
+
+void AThePlugSIMCharacter::OnLoadKey()
+{
+	if (!Phone || !Inventory) { return; }
+	if (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsDealOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen()) { return; }
+
+	// Alleen laden met vloei in de hand.
+	if (!Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_")))
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Hold rolling papers (hotbar) to load a joint.")); }
+		return;
+	}
+
+	// Pak het maximaal aantal gram dat de vloei toelaat én waar je wiet voor hebt.
+	const int32 MaxG = Phone->GetMaxJointGrams();
+	int32 Grams = 0; float Thc = 0.f, Q = 0.f;
+	for (int32 g = MaxG; g >= 1; --g)
+	{
+		float T = 0.f, QQ = 0.f;
+		if (Phone->GetRollWeedInfo(g, T, QQ)) { Grams = g; Thc = T; Q = QQ; break; }
+	}
+	if (Grams <= 0)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No weed (or papers) to load.")); }
+		return;
+	}
+
+	bRollLoaded = true; RollLoadGrams = Grams; RollLoadThc = Thc; RollLoadQuality = Q;
+	Phone->SetRollLoadedUI(true, Grams);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor(120, 220, 160),
+			FString::Printf(TEXT("Loaded %dg (%.0f%% quality). Hold right-click to roll."), Grams, Q));
+	}
 }
 
 void AThePlugSIMCharacter::UseActiveItem()

@@ -276,6 +276,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
 	float GetGiveHoldFrac() const { return GiveHoldFrac; }
 
+	// Voortgang van het rollen (rechtermuis inhouden met geladen vloei).
+	void SetRollHoldFrac(float Frac) { RollHoldFrac = FMath::Clamp(Frac, 0.f, 1.f); }
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
+	float GetRollHoldFrac() const { return RollHoldFrac; }
+
+	// Of de vloei in de hand "geladen" is (door de character gezet) — voor de hotkey-hints.
+	void SetRollLoadedUI(bool bLoaded, int32 Grams) { bRollLoadedUI = bLoaded; RollLoadGramsUI = Grams; }
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
+	bool IsRollLoadedUI() const { return bRollLoadedUI; }
+	int32 GetRollLoadGramsUI() const { return RollLoadGramsUI; }
+
 	// Stoned-info voor de HUD (door de character bijgewerkt): fractie resterend (0..1), resterende
 	// seconden en hoe high je bent (0..1).
 	void SetStonedHud(float Frac, float Seconds, float Intensity, float XpFrac) { StonedHudFrac = Frac; StonedHudSecs = Seconds; StonedHudIntensity = Intensity; StonedHudXpFrac = XpFrac; }
@@ -410,6 +421,9 @@ protected:
 
 	float SmokeHoldFrac = 0.f; // 0..1 voortgang van rook-inhouden (lokale UI-staat)
 	float GiveHoldFrac = 0.f;  // 0..1 voortgang van joint-overhandigen
+	float RollHoldFrac = 0.f;  // 0..1 voortgang van joint-rollen
+	bool bRollLoadedUI = false;
+	int32 RollLoadGramsUI = 0;
 	float StonedHudFrac = 0.f;      // 0..1 resterende high voor de HUD
 	float StonedHudSecs = 0.f;      // resterende high-seconden
 	float StonedHudIntensity = 0.f; // hoe high (0..1)

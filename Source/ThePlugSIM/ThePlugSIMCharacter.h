@@ -138,6 +138,9 @@ protected:
 	/** Links-knop losgelaten: stopt de "joint overhandigen"-hold. */
 	void OnPrimaryReleased();
 
+	/** Laad-toets (F): laad de vloei in je hand met wiet (klaar om te rollen). */
+	void OnLoadKey();
+
 	/** Rechtermuisknop ingedrukt: papers -> roll-paneel; joint -> begin met "inhouden om te roken". */
 	void OnSecondaryPressed();
 
@@ -181,6 +184,16 @@ protected:
 	bool bGiveFired = false;
 	float GiveHoldTime = 0.f;
 	static constexpr float GiveHoldRequired = 0.45f; // korte hold
+
+	// Rollen: F laadt de vloei met wiet, daarna rechtermuis inhouden om te rollen. De lading blijft
+	// staan tot je 'm rolt (dan kun je nieuwe wiet laden voor de volgende).
+	bool bRollLoaded = false;
+	int32 RollLoadGrams = 0;
+	float RollLoadThc = 0.f;
+	float RollLoadQuality = 0.f;
+	bool bRollFired = false;
+	float RollHoldTime = 0.f;
+	static constexpr float RollHoldRequired = 0.6f; // ~zo lang als de pickup-hold
 
 public:
 
