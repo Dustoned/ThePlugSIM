@@ -262,7 +262,7 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	UPhoneClientComponent* Ph = GetPhone();
 	ACustomerBase* C = Ph ? Ph->GetDealCustomer() : nullptr;
-	const bool bOpen = Ph && Ph->IsDealOpen() && C != nullptr;
+	bool bOpen = Ph && Ph->IsDealOpen() && C != nullptr;
 
 	// Loop je weg -> sluit (alleen dichtbij dealen).
 	if (bOpen)
@@ -272,14 +272,14 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (FVector::DistSquared(P->GetActorLocation(), C->GetActorLocation()) > FMath::Square(450.f))
 			{
 				Ph->CloseDeal();
-				SetVisibility(ESlateVisibility::Collapsed);
-				return;
+				bOpen = false;
 			}
 		}
 	}
 
-	SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
-	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
+	// De widget zelf blijft altijd ticken; alleen de kaart tonen/verbergen.
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen) { LastCustomer = nullptr; return; }
 
 	const FName Offered = Ph->GetOfferedProduct();
