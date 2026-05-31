@@ -30,8 +30,14 @@ namespace
 	}
 }
 
+void UDealWidget::SetPhone(UPhoneClientComponent* InPhone)
+{
+	PhoneComp = InPhone;
+}
+
 UPhoneClientComponent* UDealWidget::GetPhone() const
 {
+	if (PhoneComp.IsValid()) { return PhoneComp.Get(); }
 	APawn* P = GetOwningPlayerPawn();
 	return P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
 }

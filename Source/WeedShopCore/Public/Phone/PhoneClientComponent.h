@@ -27,6 +27,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void Toggle();
 
+	// Maakt de UMG-widgets (status/telefoon/deal) aan op de lokale client (lui, idempotent).
+	void EnsureWidget();
+
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SetTab(int32 NewTab);
 
@@ -267,11 +270,14 @@ protected:
 	// Zet muis-cursor/input-mode op basis van of er een UI open is.
 	void UpdateCursor();
 
-	// Maakt de UMG-telefoon-widget aan (lokale client, lui bij eerste opening).
-	void EnsureWidget();
-
 	UPROPERTY(Transient)
 	TObjectPtr<class UPhoneWidget> PhoneWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UStatusHudWidget> StatusWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UDealWidget> DealWidget;
 
 	bool bOpen = false;
 	int32 Tab = 0;

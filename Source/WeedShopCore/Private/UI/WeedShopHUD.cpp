@@ -61,19 +61,18 @@ UPhoneClientComponent* AWeedShopHUD::GetPhone() const
 void AWeedShopHUD::BeginPlay()
 {
 	Super::BeginPlay();
-	// Altijd-zichtbaar status-paneel als UMG-widget (clean UI).
-	if (PlayerOwner && PlayerOwner->IsLocalController() && !StatusWidget)
-	{
-		StatusWidget = CreateWidget<UStatusHudWidget>(PlayerOwner, UStatusHudWidget::StaticClass());
-		if (StatusWidget) { StatusWidget->AddToViewport(0); }
-		DealWidget = CreateWidget<UDealWidget>(PlayerOwner, UDealWidget::StaticClass());
-		if (DealWidget) { DealWidget->AddToViewport(30); }
-	}
 }
 
 void AWeedShopHUD::DrawHUD()
 {
 	Super::DrawHUD();
+
+	// Zorg dat de UMG-widgets (status/telefoon/deal) bestaan — via de bewezen component-route,
+	// zodra de pawn + controller er zijn.
+	if (UPhoneClientComponent* PhoneEnsure = GetPhone())
+	{
+		PhoneEnsure->EnsureWidget();
+	}
 
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	APawn* P = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;

@@ -17,6 +17,8 @@
 #include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
 #include "UI/PhoneWidget.h"
+#include "UI/DealWidget.h"
+#include "UI/StatusHudWidget.h"
 #include "Blueprint/UserWidget.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
@@ -80,12 +82,18 @@ void UPhoneClientComponent::EnsureWidget()
 	if (PhoneWidget) { return; }
 	APlayerController* PC = GetPC();
 	if (!PC || !PC->IsLocalController()) { return; }
+
 	PhoneWidget = CreateWidget<UPhoneWidget>(PC, UPhoneWidget::StaticClass());
 	if (PhoneWidget)
 	{
 		PhoneWidget->SetPhone(this);
 		PhoneWidget->AddToViewport(20);
 	}
+	// Status-HUD (altijd zichtbaar) + deal-scherm via dezelfde, bewezen route.
+	StatusWidget = CreateWidget<UStatusHudWidget>(PC, UStatusHudWidget::StaticClass());
+	if (StatusWidget) { StatusWidget->AddToViewport(0); }
+	DealWidget = CreateWidget<UDealWidget>(PC, UDealWidget::StaticClass());
+	if (DealWidget) { DealWidget->SetPhone(this); DealWidget->AddToViewport(30); }
 }
 
 void UPhoneClientComponent::Toggle()

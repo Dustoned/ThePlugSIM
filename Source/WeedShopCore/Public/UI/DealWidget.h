@@ -21,6 +21,9 @@ class WEEDSHOPCORE_API UDealWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
+public:
+	void SetPhone(UPhoneClientComponent* InPhone);
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
@@ -46,6 +49,7 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> PreviewText;
 	UPROPERTY() TObjectPtr<UVerticalBox> StrainBox;
 
+	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<ACustomerBase> LastCustomer;
 	FName LastOffered = NAME_None;
 	bool bSliderHeld = false;
