@@ -6,6 +6,8 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
 
 ## Vastgelegd (uit de brief, v2)
 
+- [2026-06-01] **Verkoop-flow = realistisch, NOOIT direct van het schap** (user-bevestigd). Shelves/`AStorageShelf` zijn **puur opslag/stash** (zien hoeveel je thuis hebt). Om te verkopen moet de waar fysiek **uit de pot/opslag → in je inventory → naar de packing-bench → van jar naar baggies**, en dan verkoop je vanuit je **inventory** (Sell-app of deal met NPC op straat). Potten in opslag zijn voor **losse/bulk-verkoop** (iemand wil een hele pot of je maakt er een kleinere stash van). Verkochte/over te dragen waar zit **altijd in de inventory van speler of NPC**, nooit direct vanuit een shelf. **Pas in de latere legale shop** kun je **employees** inhuren die dit pak/verdeel-werk automatisch doen. Huidige code voldoet hier al aan (shelf = Store/Take naar inventory; geen verkoop vanaf shelf).
+
 - Perspectief: first-person, PC (muis/toetsenbord) — speler staat zelf achter de toonbank/deur.
 - Structuur: endless met milestones; milestones unlocken producten/gear en sturen fase-overgangen.
 - 3 fases: straatdealer (appartement, = MVP) → legale winkel → franchise.
