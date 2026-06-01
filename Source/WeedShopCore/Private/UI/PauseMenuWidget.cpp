@@ -109,18 +109,8 @@ void UPauseMenuWidget::OnSave()
 
 void UPauseMenuWidget::OnLoad()
 {
-	bool bOk = false;
-	if (const UWorld* W = GetWorld())
-	{
-		if (UGameInstance* GI = W->GetGameInstance())
-		{
-			if (USaveGameSubsystem* Save = GI->GetSubsystem<USaveGameSubsystem>())
-			{
-				bOk = Save->HasSave() && Save->LoadGame();
-			}
-		}
-	}
-	if (StatusText) { StatusText->SetText(FText::FromString(bOk ? TEXT("Game loaded.") : TEXT("No save found."))); }
+	// Open het titelscherm met de Load-slot-keuze (zelfde scherm als het hoofdmenu).
+	if (PhoneComp.IsValid()) { PhoneComp->OpenMainMenuLoad(); }
 }
 
 void UPauseMenuWidget::OnSettings()

@@ -22,6 +22,9 @@ class WEEDSHOPCORE_API UMainMenuWidget : public UUserWidget
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 
+	// Vraag om bij het tonen meteen de slot-picker te openen (1 = New, 2 = Load). Voor pauze -> Load.
+	void RequestPicker(int32 Mode) { PendingPickerMode = Mode; }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
@@ -56,6 +59,7 @@ protected:
 
 	// Slot-picker.
 	int32 MenuMode = 0; // 0 = hoofdmenu, 1 = New Game-keuze, 2 = Load-keuze
+	int32 PendingPickerMode = 0; // bij volgende open meteen deze picker tonen (0 = geen)
 	UPROPERTY() TObjectPtr<UWidget> SlotPanel;          // de keuze-kaart (zichtbaar als MenuMode!=0)
 	UPROPERTY() TObjectPtr<UWidget> MenuCanvas;          // de 6 hoofdmenu-knoppen (verbergen tijdens picker)
 	UPROPERTY() TObjectPtr<UTextBlock> PickerTitle;

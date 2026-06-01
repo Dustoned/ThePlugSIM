@@ -266,6 +266,13 @@ void UPhoneClientComponent::HideMainMenu()
 	UpdateCursor();
 }
 
+void UPhoneClientComponent::OpenMainMenuLoad()
+{
+	EnsureWidget();
+	if (MainMenuWidget) { MainMenuWidget->RequestPicker(2); } // open meteen de Load-keuze
+	ShowMainMenu();
+}
+
 void UPhoneClientComponent::OpenToApp(int32 AppIndex)
 {
 	EnsureWidget();

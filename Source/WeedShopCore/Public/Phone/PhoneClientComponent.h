@@ -60,6 +60,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Menu")
 	bool IsMainMenuOpen() const { return bMainMenuOpen; }
 
+	// Toon het titelscherm en open meteen de Load-slot-picker (vanuit het pauze-menu).
+	void OpenMainMenuLoad();
+
 	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
 	void OpenAtm();

@@ -517,7 +517,9 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		bLastOpen = bOpen;
 		if (bOpen)
 		{
-			ClosePicker(); // altijd op het hoofdmenu beginnen
+			// Standaard op het hoofdmenu; tenzij er een picker is aangevraagd (pauze -> Load).
+			if (PendingPickerMode != 0) { OpenPicker(PendingPickerMode); PendingPickerMode = 0; }
+			else { ClosePicker(); }
 			if (StatusText) { StatusText->SetText(FText::GetEmpty()); }
 			// "Load game" dimmen als er geen save is.
 			if (ContinueBtn)
