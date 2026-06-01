@@ -257,7 +257,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 540.f, 580.f, FLinearColor(0.64f, 0.26f, 1.00f, 0.60f), 2.8f, 1.3f); // paarse grow-tent (links, meer glow, lichte flikker)
 		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
 		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
-		AddGlowAt(GlowCanvas, 0.68f, 0.20f, 380.f, 340.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.70f), 10.0f, 2.6f, /*bCandle*/ true); // warme hanglamp (kaars-flikker)
+		AddGlowAt(GlowCanvas, 0.63f, 0.27f, 360.f, 320.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.66f), 3.0f, 1.0f, /*bCandle*/ true); // warme hanglamp (rustige kaars-gloed)
 
 		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
 		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
@@ -545,14 +545,13 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		float Osc;
 		if (bCandle)
 		{
-			// Kaars/vlam: meerdere snelle, niet-harmonische golven + ruis + vaak een korte dip.
-			Osc = 0.80f
-				+ 0.10f * FMath::Sin(T * 9.0f + Ph)
-				+ 0.07f * FMath::Sin(T * 17.0f + Ph * 1.7f)
-				+ 0.06f * FMath::Sin(T * 27.0f + Ph * 2.6f)
-				+ FMath::FRandRange(-0.06f, 0.06f);
-			if (FMath::FRand() < 0.06f) { Osc *= FMath::FRandRange(0.55f, 0.85f); } // wegschietende vlam
-			Osc = FMath::Clamp(Osc, 0.35f, 1.25f);
+			// Rustige kaars-gloed: trage, zachte golven + minieme ruis + heel af en toe een lichte dip.
+			Osc = 0.93f
+				+ 0.045f * FMath::Sin(T * 2.3f + Ph)
+				+ 0.025f * FMath::Sin(T * 4.7f + Ph * 1.6f)
+				+ FMath::FRandRange(-0.012f, 0.012f);
+			if (FMath::FRand() < 0.008f) { Osc *= FMath::FRandRange(0.85f, 0.95f); } // zachte vlam-dip
+			Osc = FMath::Clamp(Osc, 0.78f, 1.08f);
 		}
 		else
 		{
