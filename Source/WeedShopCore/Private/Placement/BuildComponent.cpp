@@ -176,7 +176,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			Focus = IC->GetFocusedActor();
 		}
 		const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
-		const bool bPickable = Focus && (Cast<AGrowPlant>(Focus) || Cast<APlaceableProp>(Focus));
+		const bool bPickable = Focus && (Cast<AGrowPlant>(Focus) || Cast<APlaceableProp>(Focus)
+			|| Cast<ADryingRack>(Focus) || Cast<APackBench>(Focus) || Cast<AStorageShelf>(Focus));
 		if (PC && bPickable && PC->IsInputKeyDown(EKeys::G))
 		{
 			PickupHoldAccum += DeltaTime;
@@ -384,6 +385,30 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	else if (const APlaceableProp* Prop = Cast<APlaceableProp>(Target))
 	{
 		ReturnItem = Prop->ItemId;
+	}
+	else if (const ADryingRack* Rack = Cast<ADryingRack>(Target))
+	{
+		// Eerst leeg laten drogen/oogsten voor je het rek oppakt (anders verlies je de batches).
+		if (!Rack->IsEmpty())
+		{
+			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Empty the drying rack before picking it up.")); }
+			return;
+		}
+		ReturnItem = Rack->RackTier;
+	}
+	else if (const APackBench* Bench = Cast<APackBench>(Target))
+	{
+		ReturnItem = Bench->BenchTier; // geen opgeslagen staat -> altijd oppakbaar
+	}
+	else if (const AStorageShelf* Shelf = Cast<AStorageShelf>(Target))
+	{
+		// Eerst leeghalen voor je het schap oppakt (anders verlies je de voorraad).
+		if (Shelf->Contents.Num() > 0)
+		{
+			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Empty the shelf before picking it up.")); }
+			return;
+		}
+		ReturnItem = Shelf->ShelfTier;
 	}
 	else
 	{

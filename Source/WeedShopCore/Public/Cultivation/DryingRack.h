@@ -51,6 +51,9 @@ public:
 	// Tier-definitie: capaciteit (aantal batches) + droogtijd (sec).
 	static bool GetRackDef(FName Tier, int32& OutCapacity, float& OutDrySeconds);
 
+	// Server: zit er nog (drogende of klare) wiet in? (voor het oppakken van het rek).
+	bool IsEmpty() const { return Entries.Num() == 0; }
+
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
