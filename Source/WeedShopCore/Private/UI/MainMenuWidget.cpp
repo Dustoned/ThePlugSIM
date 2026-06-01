@@ -212,6 +212,8 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			[this]() { OnCredits(); },   // CREDITS
 			[this]() { OnQuit(); },      // EXIT GAME
 		};
+		const TCHAR* Labels[6] = { TEXT("CONTINUE"), TEXT("NEW GAME"), TEXT("LOAD GAME"), TEXT("SETTINGS"), TEXT("CREDITS"), TEXT("EXIT GAME") };
+		MenuButtons.Reset(); MenuLabels.Reset();
 		for (int32 i = 0; i < 6; ++i)
 		{
 			UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
@@ -231,10 +233,24 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 				St.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.20f), 6.f);
 				St.Pressed = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.32f), 6.f);
 			}
+			// Tekst links inspringen zodat 'ie over de geschilderde titel valt.
+			St.NormalPadding = FMargin(46.f, 0.f, 0.f, 0.f);
+			St.PressedPadding = FMargin(46.f, 0.f, 0.f, 0.f);
 			B->SetStyle(St);
+
+			// Scherpe witte titel als knop-inhoud; alleen zichtbaar bij hover (zie NativeTick),
+			// zodat 'ie helder bovenop het paars komt en de geschilderde tekst niet wazig oogt.
+			UTextBlock* Lbl = WeedUI::Text(WidgetTree, Labels[i], 17, FLinearColor::White, false, true);
+			Lbl->SetJustification(ETextJustify::Left);
+			Lbl->SetRenderOpacity(0.f);
+			B->SetContent(Lbl);
+
 			UCanvasPanelSlot* CSl = Hit->AddChildToCanvas(B);
 			CSl->SetAnchors(FAnchors(X0, Centers[i] - HalfH, X1, Centers[i] + HalfH));
 			CSl->SetOffsets(FMargin(0.f)); CSl->SetAlignment(FVector2D(0.f, 0.f));
+
+			MenuButtons.Add(B);
+			MenuLabels.Add(Lbl);
 		}
 
 		// Kleine status-tekst (laad-feedback), onderaan-midden.
@@ -368,5 +384,13 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const FLinearColor Base = GlowBase.IsValidIndex(i) ? GlowBase[i] : FLinearColor::White;
 		FLinearColor C(Base.R * Osc, Base.G * Osc, Base.B * Osc, FMath::Clamp(Base.A * Osc, 0.f, 1.f));
 		Glows[i]->SetBrushColor(C);
+	}
+
+	// Scherpe knop-titel alleen tonen op de knop die je hovert (pop bovenop het paars);
+	// anders verborgen zodat de geschilderde titel niet dubbel/wazig oogt.
+	for (int32 i = 0; i < MenuButtons.Num(); ++i)
+	{
+		if (!MenuButtons[i] || !MenuLabels.IsValidIndex(i) || !MenuLabels[i]) { continue; }
+		MenuLabels[i]->SetRenderOpacity(MenuButtons[i]->IsHovered() ? 1.f : 0.f);
 	}
 }

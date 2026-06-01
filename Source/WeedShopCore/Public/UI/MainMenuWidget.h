@@ -49,6 +49,10 @@ protected:
 	UPROPERTY() TObjectPtr<class UTexture2D> LogoTex;
 	UPROPERTY() TObjectPtr<class UTexture2D> SwatchTex; // wit masker uit de verf-streep (kleurbaar)
 
+	// Menu-knoppen + hun (scherpe) label, dat alleen bij hover bovenop het paars verschijnt.
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> MenuButtons;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> MenuLabels;
+
 	// Flikkerende neon-lampen.
 	UPROPERTY() TArray<TObjectPtr<UBorder>> Glows;
 	TArray<FLinearColor> GlowBase;
