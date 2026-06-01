@@ -2,6 +2,7 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Inventory/InventoryComponent.h"
 #include "Placement/PlaceableTypes.h"
@@ -36,7 +37,13 @@ ADryingRack::ADryingRack()
 	// Rek: breed en hoog, ondiep (~120 x 30 x 150 cm). Exacte schaal komt uit de tier-def.
 	Mesh->SetWorldScale3D(FVector(1.2f, 0.3f, 1.5f));
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	if (MatFinder.Succeeded()) { Mesh->SetMaterial(0, MatFinder.Object); }
+	if (MatFinder.Succeeded())
+	{
+		if (UMaterialInstanceDynamic* MID = Mesh->CreateDynamicMaterialInstance(0, MatFinder.Object))
+		{
+			MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.55f, 0.42f, 0.28f)); // tan / hout
+		}
+	}
 }
 
 void ADryingRack::SetupVisual()

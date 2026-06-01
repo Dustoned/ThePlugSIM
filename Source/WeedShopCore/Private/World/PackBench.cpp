@@ -2,6 +2,7 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Placement/PlaceableTypes.h"
 #include "Engine/StaticMesh.h"
@@ -21,7 +22,13 @@ APackBench::APackBench()
 	// Werktafel: breed, laag (~130 x 70 x 90 cm). Exacte schaal komt uit de tier-def.
 	Mesh->SetWorldScale3D(FVector(1.3f, 0.7f, 0.9f));
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	if (MatFinder.Succeeded()) { Mesh->SetMaterial(0, MatFinder.Object); }
+	if (MatFinder.Succeeded())
+	{
+		if (UMaterialInstanceDynamic* MID = Mesh->CreateDynamicMaterialInstance(0, MatFinder.Object))
+		{
+			MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.30f, 0.40f, 0.55f)); // staalblauw
+		}
+	}
 }
 
 void APackBench::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
