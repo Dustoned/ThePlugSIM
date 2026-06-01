@@ -37,7 +37,7 @@ public:
 	void CycleTab();
 
 	// --- iPhone-achtige home/apps ---
-	static constexpr int32 AppCount = 9; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies 8 Packages
+	static constexpr int32 AppCount = 10; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies 8 Packages 9 Bank
 
 	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
@@ -135,6 +135,17 @@ public:
 	// Boek bankgeld over naar een co-op vriend (fee + dag-limiet). Client -> server.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestTransfer(int64 AmountCents);
+
+	// === Telefoon-upgrade: ontgrendelt de Bank-app op de mobiel (i.p.v. alleen de ATM) ===
+	// Kosten in cents (bankgeld, eenmalig).
+	static constexpr int64 PhoneUpgradeCostCents = 250000; // EUR 2.500
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
+	bool IsBankAppUnlocked() const { return bBankAppUnlocked; }
+
+	// Koop de telefoon-upgrade (bankgeld). Client -> server.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RequestBuyPhoneUpgrade();
 
 	// Bezorgopties (fee = % van het besteed bedrag; tijd in seconden). Gedeeld door UI + server.
 	static float DeliveryFeePct(int32 Opt);       // 0.01 / 0.08 / 0.25
@@ -352,6 +363,8 @@ public:
 	static constexpr int32 DealStepCount = 17; // 40,50,...,200 %
 
 protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	UFUNCTION(Server, Reliable)
 	void ServerBuyUpgrade(FName UpgradeId);
 
@@ -366,6 +379,13 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerRespondContact(FName ContactId, bool bAccept);
+
+	UFUNCTION(Server, Reliable)
+	void ServerBuyPhoneUpgrade();
+
+	// Ontgrendelt de Bank-app op de mobiel (per speler, na de telefoon-upgrade).
+	UPROPERTY(Replicated)
+	bool bBankAppUnlocked = false;
 
 	// Server: maak 1 joint van Grams gram bud (item-id Joint_<G>g; meer gram = betere kwaliteit).
 	UFUNCTION(Server, Reliable)

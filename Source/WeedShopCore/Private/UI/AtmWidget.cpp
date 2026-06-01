@@ -166,7 +166,7 @@ void UAtmWidget::FillBody()
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 		}
 		Row(Btns, FMargin(0, 0, 0, 6));
-		Row(WeedUI::Text(WidgetTree, TEXT("(Goes to your co-op partner; only the fee leaves the shared funds for now.)"),
+		Row(WeedUI::Text(WidgetTree, TEXT("(The full amount lands in your co-op friend's bank; the fee is on you.)"),
 			10, FLinearColor(0.55f, 0.6f, 0.62f)), FMargin(0, 4, 0, 0));
 	}
 }

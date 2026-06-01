@@ -33,10 +33,18 @@
 #include "UI/AtmWidget.h"
 #include "UI/PackWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "Net/UnrealNetwork.h"
 
 UPhoneClientComponent::UPhoneClientComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true);
+}
+
+void UPhoneClientComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UPhoneClientComponent, bBankAppUnlocked);
 }
 
 AWeedShopGameState* UPhoneClientComponent::GetGS() const
@@ -1069,6 +1077,24 @@ void UPhoneClientComponent::ServerTransfer_Implementation(int64 AmountCents)
 	{
 		Friend->AddBank(AmountCents, false);
 	}
+}
+
+void UPhoneClientComponent::RequestBuyPhoneUpgrade()
+{
+	ServerBuyPhoneUpgrade();
+}
+
+void UPhoneClientComponent::ServerBuyPhoneUpgrade_Implementation()
+{
+	if (bBankAppUnlocked) { return; }
+	UEconomyComponent* Econ = GetOwnerEconomy();
+	if (!Econ || !Econ->RemoveBank(PhoneUpgradeCostCents))
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough BANK money for the phone upgrade (launder cash first).")); }
+		return;
+	}
+	bBankAppUnlocked = true;
+	if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green, TEXT("Phone upgraded - Bank app unlocked!")); }
 }
 
 float UPhoneClientComponent::GetDeliveryProgress(const FPendingDelivery& D) const

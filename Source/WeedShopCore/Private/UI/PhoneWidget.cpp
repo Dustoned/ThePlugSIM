@@ -37,18 +37,20 @@
 namespace
 {
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
-	constexpr int32 GNumApps = 9;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Home };
+	constexpr int32 GNumApps = 10;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Home, WeedUI::EIcon::Coin };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
 		FLinearColor(0.85f, 0.65f, 0.20f), FLinearColor(0.30f, 0.50f, 0.70f), FLinearColor(0.55f, 0.40f, 0.80f),
+		FLinearColor(0.16f, 0.55f, 0.95f),
 	};
 	constexpr int32 GGrowApp = 1;
 	constexpr int32 GSellApp = 6;
 	constexpr int32 GSuppliesApp = 7;
 	constexpr int32 GPackagesApp = 8;
+	constexpr int32 GBankApp = 9;
 
 	// Korte naam per categorie (0..6).
 	const TCHAR* CatName(int32 Cat)
@@ -555,6 +557,80 @@ void UPhoneWidget::BuildPackagesApp()
 	PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	LastPkgSig = PackagesSignature();
 	FillPackagesInto(PackagesScroll);
+}
+
+void UPhoneWidget::BuildBankApp()
+{
+	if (!ContentBox || !Phone.IsValid()) { return; }
+	UPhoneClientComponent* Ph = Phone.Get();
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+
+	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
+	UVerticalBoxSlot* SS = ContentBox->AddChildToVerticalBox(Scroll);
+	SS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	auto AddRow = [this, Scroll](UWidget* W) { Scroll->AddChild(W); };
+
+	// Nog niet ontgrendeld -> alleen de koop-knop voor de telefoon-upgrade.
+	if (!Ph->IsBankAppUnlocked())
+	{
+		AddRow(MakeText(TEXT("Mobile banking is locked."), 15, FLinearColor(0.95f, 0.8f, 0.5f)));
+		UTextBlock* Desc = MakeText(TEXT("Upgrade your phone to bank on the go - deposit and send money without finding an ATM."), 12, FLinearColor(0.7f, 0.75f, 0.85f));
+		Desc->SetAutoWrapText(true);
+		AddRow(Desc);
+		AddRow(MakeText(TEXT(""), 6, FLinearColor::Transparent));
+		const int64 Cost = UPhoneClientComponent::PhoneUpgradeCostCents;
+		AddRow(MakeActionBtn(FString::Printf(TEXT("Upgrade phone  -  EUR %.2f (bank)"), Cost / 100.f),
+			FLinearColor(0.16f, 0.5f, 0.85f), [this]() { if (Phone.IsValid()) { Phone->RequestBuyPhoneUpgrade(); } MarkDirty(); }, 14));
+		return;
+	}
+
+	if (!Econ) { AddRow(MakeText(TEXT("Out of service."), 14, FLinearColor::Gray)); return; }
+
+	// Saldo's.
+	AddRow(MakeText(FString::Printf(TEXT("Cash (black):  EUR %.2f"), Econ->GetBalanceEuros()), 14, FLinearColor(0.95f, 0.9f, 0.5f)));
+	AddRow(MakeText(FString::Printf(TEXT("Bank (white):  EUR %.2f"), Econ->GetBankEuros()), 14, FLinearColor(0.55f, 0.95f, 1.f)));
+	AddRow(MakeText(TEXT(""), 6, FLinearColor::Transparent));
+
+	// --- Storten (witwassen) ---
+	AddRow(MakeText(FString::Printf(TEXT("Deposit cash -> bank   (tax %.0f%%, raises heat)"), Econ->DepositTaxPct * 100.f), 13, FLinearColor(0.7f, 1.f, 0.75f)));
+	AddRow(MakeText(FString::Printf(TEXT("Daily room left: EUR %.2f"), Econ->GetDailyDepositRemainingCents() / 100.f), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+	{
+		const int64 Amts[3] = { 100000, 500000, 2000000 };
+		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		for (int32 i = 0; i < 3; ++i)
+		{
+			const int64 A = Amts[i];
+			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("EUR %lld"), (long long)(A / 100)), FLinearColor(0.18f, 0.42f, 0.30f),
+				[this, A]() { if (Phone.IsValid()) { Phone->RequestDeposit(A); } }, 12);
+			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
+			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+		}
+		AddRow(Btns);
+		AddRow(MakeActionBtn(TEXT("Deposit max (up to daily limit)"), FLinearColor(0.2f, 0.5f, 0.34f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestDeposit(-1); } }, 12));
+	}
+	AddRow(MakeText(TEXT(""), 8, FLinearColor::Transparent));
+
+	// --- Sturen naar co-op vriend ---
+	AddRow(MakeText(FString::Printf(TEXT("Send bank money to a co-op friend   (fee %.0f%%)"), Econ->TransferFeePct * 100.f), 13, FLinearColor(0.7f, 0.85f, 1.f)));
+	AddRow(MakeText(FString::Printf(TEXT("Transfers left today: %d / %d"), Econ->GetTransfersRemainingToday(), Econ->MaxTransfersPerDay), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+	{
+		const int64 Amts[3] = { 50000, 100000, 500000 };
+		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		for (int32 i = 0; i < 3; ++i)
+		{
+			const int64 A = Amts[i];
+			const int64 Fee = (int64)(A * Econ->TransferFeePct);
+			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("EUR %lld (fee %lld)"), (long long)(A / 100), (long long)(Fee / 100)),
+				FLinearColor(0.2f, 0.34f, 0.5f), [this, A]() { if (Phone.IsValid()) { Phone->RequestTransfer(A); } }, 11);
+			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
+			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+		}
+		AddRow(Btns);
+		AddRow(MakeText(TEXT("The full amount lands in your friend's bank; the fee is on you."), 10, FLinearColor(0.55f, 0.6f, 0.62f)));
+	}
 }
 
 void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
@@ -1093,6 +1169,10 @@ void UPhoneWidget::RefreshContent()
 	{
 		BuildPackagesApp();
 	}
+	else if (App == GBankApp) // Bank -> storten + sturen (ontgrendeld na de telefoon-upgrade)
+	{
+		BuildBankApp();
+	}
 	else if (App == 2) // Contacts
 	{
 		UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
@@ -1224,5 +1304,15 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		const int32 Sig = MessagesSignature();
 		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
+	}
+
+	// Bank-app open: bij saldo-/limiet-/unlock-wijziging de inhoud herbouwen.
+	if (!bHome && App == GBankApp && GS && GS->GetEconomy())
+	{
+		const UEconomyComponent* E = GS->GetEconomy();
+		const int32 Sig = (int32)(E->GetCashCents() / 100) * 7 + (int32)(E->GetBankCents() / 100) * 13
+			+ E->GetTransfersToday() * 101 + (int32)(E->GetDepositedTodayCents() / 100) * 3
+			+ (Phone->IsBankAppUnlocked() ? 1000003 : 0);
+		if (Sig != LastBankSig) { LastBankSig = Sig; MarkDirty(); }
 	}
 }
