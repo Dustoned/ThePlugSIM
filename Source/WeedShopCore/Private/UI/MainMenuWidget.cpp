@@ -70,31 +70,51 @@ namespace
 		const int32 W = Wrapper->GetWidth();
 		const int32 H = Wrapper->GetHeight();
 
-		// Heeft de PNG echte transparantie? Zo niet -> vorm afleiden uit donkerte (zwarte verf = vol).
+		// Echte transparantie aanwezig? (24-bit PNG met checkerboard heeft die NIET.)
 		bool bHasAlpha = false;
 		for (int64 i = 0; i + 3 < Raw.Num(); i += 4) { if (Raw[i + 3] < 250) { bHasAlpha = true; break; } }
 
-		for (int64 i = 0; i + 3 < Raw.Num(); i += 4)
+		// Per pixel een masker-alpha bepalen: penseel (donker) = vol, checkerboard/licht = weg.
+		TArray<uint8> Alpha; Alpha.SetNumUninitialized(W * H);
+		for (int64 p = 0; p < (int64)W * H; ++p)
 		{
+			const uint8 B = Raw[p * 4], G = Raw[p * 4 + 1], R = Raw[p * 4 + 2], SrcA = Raw[p * 4 + 3];
 			uint8 A;
-			if (bHasAlpha) { A = Raw[i + 3]; }
+			if (bHasAlpha) { A = SrcA; }
 			else
 			{
-				const uint8 B = Raw[i], G = Raw[i + 1], R = Raw[i + 2];
 				const uint8 MinC = FMath::Min3(R, G, B);
-				A = (uint8)(255 - MinC); // donkere (zwarte) penseel-pixels -> ondoorzichtig, lichte -> doorzichtig
+				A = (uint8)(FMath::Clamp((140.f - MinC) / 80.f, 0.f, 1.f) * 255.f); // zwart->vol, grijs/wit->0
 			}
-			Raw[i] = 255; Raw[i + 1] = 255; Raw[i + 2] = 255; Raw[i + 3] = A; // RGB->wit, alpha = penseelvorm
+			Alpha[p] = A;
 		}
 
-		UTexture2D* Tex = UTexture2D::CreateTransient(W, H, PF_B8G8R8A8);
+		// Bounding box van de penseelstreek (alpha>30), zodat we de lege marge eraf knippen.
+		int32 MinX = W, MinY = H, MaxX = 0, MaxY = 0;
+		for (int32 y = 0; y < H; ++y) for (int32 x = 0; x < W; ++x)
+		{
+			if (Alpha[y * W + x] > 30) { MinX = FMath::Min(MinX, x); MaxX = FMath::Max(MaxX, x); MinY = FMath::Min(MinY, y); MaxY = FMath::Max(MaxY, y); }
+		}
+		if (MaxX < MinX) { MinX = 0; MinY = 0; MaxX = W - 1; MaxY = H - 1; }
+		const int32 CW = MaxX - MinX + 1, CH = MaxY - MinY + 1;
+
+		// Bijgesneden BGRA: wit + masker-alpha (vult straks de hele knop).
+		TArray<uint8> Out; Out.SetNumUninitialized((int64)CW * CH * 4);
+		for (int32 y = 0; y < CH; ++y) for (int32 x = 0; x < CW; ++x)
+		{
+			const int64 o = ((int64)y * CW + x) * 4;
+			Out[o] = 255; Out[o + 1] = 255; Out[o + 2] = 255;
+			Out[o + 3] = Alpha[(MinY + y) * W + (MinX + x)];
+		}
+
+		UTexture2D* Tex = UTexture2D::CreateTransient(CW, CH, PF_B8G8R8A8);
 		if (!Tex) { return nullptr; }
 		Tex->SRGB = true;
 		void* Dest = Tex->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
-		FMemory::Memcpy(Dest, Raw.GetData(), Raw.Num());
+		FMemory::Memcpy(Dest, Out.GetData(), Out.Num());
 		Tex->GetPlatformData()->Mips[0].BulkData.Unlock();
 		Tex->UpdateResource();
-		UE_LOG(LogTemp, Log, TEXT("Swatch geladen: %dx%d (echte alpha: %d)"), W, H, bHasAlpha ? 1 : 0);
+		UE_LOG(LogTemp, Log, TEXT("Swatch geladen+bijgesneden: %dx%d -> %dx%d (echte alpha: %d)"), W, H, CW, CH, bHasAlpha ? 1 : 0);
 		return Tex;
 	}
 
@@ -182,7 +202,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 		// Exact opgemeten uit T_MainMenuBG.png (1672x941): balk x=145..370, 6 knoppen,
 		// gelijke tussenruimte, centers y=440/498/556/613/673/735, hoogte ~47px.
-		const float X0 = 0.087f, X1 = 0.221f, HalfH = 0.0255f;
+		const float X0 = 0.083f, X1 = 0.226f, HalfH = 0.029f;
 		const float Centers[6] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f, 0.7811f };
 		TFunction<void()> Acts[6] = {
 			[this]() { OnStart(); },     // CONTINUE
