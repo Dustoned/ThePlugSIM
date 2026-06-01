@@ -535,11 +535,13 @@ void AThePlugSIMCharacter::BeginPlay()
 		}
 	}
 
-	// Bij opstarten het titelscherm tonen voor de lokale speler (host/standalone; niet voor
-	// joinende co-op clients die in een lopende wereld vallen).
-	if (IsLocallyControlled() && Phone && GetNetMode() != NM_Client)
+	// Zorg dat de lokale speler z'n HUD-widgets (incl. de save-indicator) meteen heeft — ook
+	// co-op clients, zodat ze "Saving/Saved" altijd zien, waar ze ook zijn.
+	if (IsLocallyControlled() && Phone)
 	{
-		Phone->ShowMainMenu();
+		Phone->EnsureWidget();
+		// Titelscherm tonen bij opstarten (host/standalone; niet voor joinende co-op clients).
+		if (GetNetMode() != NM_Client) { Phone->ShowMainMenu(); }
 	}
 }
 
