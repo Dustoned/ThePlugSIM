@@ -110,7 +110,7 @@ void UShelfWidget::FillBody()
 
 	if (TitleText && Shelf)
 	{
-		TitleText->SetText(FText::FromString(FString::Printf(TEXT("STORAGE SHELF   (%d/%d)"), Shelf->Contents.Num(), AStorageShelf::Capacity)));
+		TitleText->SetText(FText::FromString(FString::Printf(TEXT("%s   (%d/%d)"), *Shelf->GetTitle(), Shelf->Contents.Num(), Shelf->GetCapacity())));
 	}
 
 	auto MakeRow = [this](UScrollBox* Into, const FString& Name, const FString& Sub, TFunction<void()> OneFn, const FString& OneLbl,

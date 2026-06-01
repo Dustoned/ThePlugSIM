@@ -24,11 +24,21 @@ AStorageShelf::AStorageShelf()
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	if (MatFinder.Succeeded())
 	{
-		if (UMaterialInstanceDynamic* MID = Mesh->CreateDynamicMaterialInstance(0, MatFinder.Object))
-		{
-			MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.45f, 0.30f, 0.18f)); // warm hout
-		}
+		DynMat = Mesh->CreateDynamicMaterialInstance(0, MatFinder.Object);
+		if (DynMat) { DynMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.45f, 0.30f, 0.18f)); } // warm hout
 	}
+}
+
+int32 AStorageShelf::GetCapacity() const
+{
+	return (ShelfTier == FName(TEXT("Chest"))) ? 20 : 24;
+}
+
+FString AStorageShelf::GetTitle() const
+{
+	FPlaceableDef Def;
+	if (GetPlaceableDef(ShelfTier, Def)) { return Def.DisplayName.ToUpper(); }
+	return TEXT("STORAGE");
 }
 
 void AStorageShelf::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -44,6 +54,13 @@ void AStorageShelf::SetupVisual()
 	if (Mesh && GetPlaceableDef(ShelfTier, Def))
 	{
 		Mesh->SetWorldScale3D(Def.MeshScale);
+	}
+	// Kleur per type: kist iets donkerder bruin dan het schap.
+	if (DynMat)
+	{
+		const FLinearColor Col = (ShelfTier == FName(TEXT("Chest")))
+			? FLinearColor(0.32f, 0.20f, 0.10f) : FLinearColor(0.45f, 0.30f, 0.18f);
+		DynMat->SetVectorParameterValue(TEXT("Color"), Col);
 	}
 }
 
@@ -78,7 +95,7 @@ int32 AStorageShelf::ServerStore(FName ItemId, int32 Count, float Thc, float Qua
 		}
 	}
 	// Anders een nieuwe stapel (als er ruimte is).
-	if (Contents.Num() >= Capacity) { return 0; }
+	if (Contents.Num() >= GetCapacity()) { return 0; }
 	FShelfStack NewS;
 	NewS.ItemId = ItemId; NewS.Quantity = Count; NewS.Thc = Thc; NewS.QualityPct = QualityPct;
 	Contents.Add(NewS);
@@ -103,5 +120,6 @@ void AStorageShelf::Interact_Implementation(APawn* InstigatorPawn)
 
 FText AStorageShelf::GetInteractionPrompt_Implementation() const
 {
-	return FText::FromString(FString::Printf(TEXT("Storage shelf  (%d/%d slots)"), Contents.Num(), Capacity));
+	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
+	return FText::FromString(FString::Printf(TEXT("%s  (%d/%d slots)"), bChest ? TEXT("Storage chest") : TEXT("Storage shelf"), Contents.Num(), GetCapacity()));
 }

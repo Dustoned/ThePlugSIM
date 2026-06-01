@@ -44,8 +44,11 @@ public:
 
 	void SetupVisual();
 
-	// Aantal verschillende stapels dat het schap kan bevatten.
-	static constexpr int32 Capacity = 24;
+	// Aantal verschillende stapels dat dit opslag-meubel kan bevatten (per type).
+	int32 GetCapacity() const;
+
+	// Weergavenaam voor de UI ("Storage shelf" / "Storage chest"), uit de placeable-def.
+	FString GetTitle() const;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Shelf")
 	TArray<FShelfStack> Contents;
@@ -66,4 +69,7 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Shelf")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	UPROPERTY()
+	TObjectPtr<class UMaterialInstanceDynamic> DynMat; // voor per-type kleur in SetupVisual
 };
