@@ -38,6 +38,9 @@ protected:
 	UBorder* AddGlow(class UOverlay* Layers, const FLinearColor& Color, float W, float H,
 		EHorizontalAlignment HA, EVerticalAlignment VA, const FMargin& Pad, float Freq);
 
+	// Idem maar proportioneel geplaatst op (Fx,Fy) van het scherm (volgt de foto bij elke resolutie).
+	UBorder* AddGlowAt(class UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq);
+
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
 	UPROPERTY() TObjectPtr<UWidget> Backdrop;

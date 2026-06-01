@@ -159,6 +159,22 @@ UBorder* UMainMenuWidget::AddGlow(UOverlay* Layers, const FLinearColor& Color, f
 	return Glow;
 }
 
+UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq)
+{
+	UBorder* Glow = WidgetTree->ConstructWidget<UBorder>();
+	Glow->SetBrush(WeedUI::Rounded(Color, FMath::Min(W, H) * 0.5f)); // sterk afgerond = zachte halo
+	UCanvasPanelSlot* S = C->AddChildToCanvas(Glow);
+	S->SetAnchors(FAnchors(Fx, Fy, Fx, Fy));
+	S->SetAlignment(FVector2D(0.5f, 0.5f));
+	S->SetSize(FVector2D(W, H));
+
+	Glows.Add(Glow);
+	GlowBase.Add(Color);
+	GlowPhase.Add(Glows.Num() * 1.7f);
+	GlowFreq.Add(Freq);
+	return Glow;
+}
+
 void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
@@ -190,10 +206,18 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* IS = Layers->AddChildToOverlay(BgImg);
 		IS->SetHorizontalAlignment(HAlign_Fill); IS->SetVerticalAlignment(VAlign_Fill);
 
-		// Subtiele flikker-gloeden over de lampen (plafond-buis, "Good Vibes", blauw schap).
-		AddGlow(Layers, FLinearColor(0.95f, 0.20f, 0.85f, 0.14f), 320.f, 28.f, HAlign_Center, VAlign_Top, FMargin(60.f, 95.f, 0.f, 0.f), 6.5f);
-		AddGlow(Layers, FLinearColor(1.0f, 0.25f, 0.75f, 0.14f), 180.f, 90.f, HAlign_Center, VAlign_Center, FMargin(-40.f, -120.f, 0.f, 0.f), 9.0f);
-		AddGlow(Layers, FLinearColor(0.20f, 0.45f, 1.0f, 0.14f), 150.f, 340.f, HAlign_Right, VAlign_Center, FMargin(0.f, -120.f, 110.f, 0.f), 3.5f);
+		// Zacht flikkerende neon-gloeden bovenop de lampen in de foto (proportioneel, additief gevoel).
+		UCanvasPanel* GlowCanvas = WidgetTree->ConstructWidget<UCanvasPanel>();
+		GlowCanvas->SetVisibility(ESlateVisibility::HitTestInvisible); // vangt geen klikken
+		UOverlaySlot* GC = Layers->AddChildToOverlay(GlowCanvas);
+		GC->SetHorizontalAlignment(HAlign_Fill); GC->SetVerticalAlignment(VAlign_Fill);
+
+		AddGlowAt(GlowCanvas, 0.46f, 0.17f, 380.f, 70.f,  FLinearColor(1.00f, 0.22f, 0.85f, 0.16f), 6.5f); // magenta plafond-buis
+		AddGlowAt(GlowCanvas, 0.575f, 0.36f, 220.f, 120.f, FLinearColor(1.00f, 0.28f, 0.80f, 0.15f), 9.0f); // "Good Vibes"-bordje
+		AddGlowAt(GlowCanvas, 0.875f, 0.30f, 230.f, 320.f, FLinearColor(0.25f, 0.55f, 1.00f, 0.15f), 3.5f); // blauw schap / prices
+		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 300.f, 320.f, FLinearColor(0.62f, 0.25f, 1.00f, 0.13f), 2.4f); // paarse grow-tent (links)
+		AddGlowAt(GlowCanvas, 0.50f, 0.74f, 760.f, 340.f, FLinearColor(0.55f, 0.20f, 0.95f, 0.12f), 1.8f); // paarse vloer-pool
+		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 280.f, 170.f, FLinearColor(0.22f, 0.45f, 1.00f, 0.12f), 4.2f); // blauw onder de toonbank
 
 		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
 		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
@@ -374,12 +398,12 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!Glows[i]) { continue; }
 		const float Ph = GlowPhase.IsValidIndex(i) ? GlowPhase[i] : 0.f;
 		const float Fr = GlowFreq.IsValidIndex(i) ? GlowFreq[i] : 4.f;
-		// Twee sinussen voor een onregelmatige puls + een kleine per-frame shimmer.
-		float Osc = 0.82f
-			+ 0.12f * FMath::Sin(T * Fr + Ph)
-			+ 0.07f * FMath::Sin(T * Fr * 2.7f + Ph * 1.6f)
-			+ FMath::FRandRange(-0.03f, 0.03f);
-		Osc = FMath::Clamp(Osc, 0.45f, 1.08f);
+		// Heel zachte neon-puls: twee trage sinussen + minieme per-frame shimmer.
+		float Osc = 0.90f
+			+ 0.07f * FMath::Sin(T * Fr + Ph)
+			+ 0.035f * FMath::Sin(T * Fr * 2.3f + Ph * 1.6f)
+			+ FMath::FRandRange(-0.015f, 0.015f);
+		Osc = FMath::Clamp(Osc, 0.7f, 1.1f);
 
 		const FLinearColor Base = GlowBase.IsValidIndex(i) ? GlowBase[i] : FLinearColor::White;
 		FLinearColor C(Base.R * Osc, Base.G * Osc, Base.B * Osc, FMath::Clamp(Base.A * Osc, 0.f, 1.f));
