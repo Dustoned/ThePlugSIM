@@ -39,7 +39,8 @@ protected:
 		EHorizontalAlignment HA, EVerticalAlignment VA, const FMargin& Pad, float Freq);
 
 	// Idem maar proportioneel geplaatst op (Fx,Fy) van het scherm (volgt de foto bij elke resolutie).
-	UBorder* AddGlowAt(class UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq);
+	// FlickAmount = hoe sterk deze lamp flikkert (1 = standaard rustig, hoger = nerveuzer).
+	UBorder* AddGlowAt(class UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq, float FlickAmount = 1.f);
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
@@ -62,6 +63,7 @@ protected:
 	TArray<FLinearColor> GlowBase;
 	TArray<float> GlowPhase;
 	TArray<float> GlowFreq;
+	TArray<float> GlowFlick; // per-lamp flikker-sterkte
 
 	bool bLastOpen = false;
 };

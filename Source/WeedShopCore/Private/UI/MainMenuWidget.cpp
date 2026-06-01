@@ -182,7 +182,7 @@ UBorder* UMainMenuWidget::AddGlow(UOverlay* Layers, const FLinearColor& Color, f
 	return Glow;
 }
 
-UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq)
+UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq, float FlickAmount)
 {
 	UBorder* Glow = WidgetTree->ConstructWidget<UBorder>();
 	if (GlowTex)
@@ -208,6 +208,7 @@ UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W
 	GlowBase.Add(Color);
 	GlowPhase.Add(Glows.Num() * 1.7f);
 	GlowFreq.Add(Freq);
+	GlowFlick.Add(FlickAmount);
 	return Glow;
 }
 
@@ -250,7 +251,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		GC->SetHorizontalAlignment(HAlign_Fill); GC->SetVerticalAlignment(VAlign_Fill);
 
 		AddGlowAt(GlowCanvas, 0.46f, 0.17f, 560.f, 230.f, FLinearColor(1.00f, 0.20f, 0.85f, 0.55f), 6.5f); // magenta plafond-buis
-		AddGlowAt(GlowCanvas, 0.575f, 0.36f, 360.f, 300.f, FLinearColor(1.00f, 0.26f, 0.78f, 0.50f), 9.0f); // "Good Vibes"-bordje
+		AddGlowAt(GlowCanvas, 0.575f, 0.36f, 360.f, 300.f, FLinearColor(1.00f, 0.26f, 0.78f, 0.50f), 11.0f, 3.0f); // "Good Vibes"-bordje (flikkert meer)
 		AddGlowAt(GlowCanvas, 0.875f, 0.30f, 360.f, 540.f, FLinearColor(0.28f, 0.55f, 1.00f, 0.50f), 3.5f); // blauw schap / prices
 		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 460.f, 520.f, FLinearColor(0.62f, 0.25f, 1.00f, 0.42f), 2.4f); // paarse grow-tent (links)
 		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
@@ -435,13 +436,14 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!Glows[i]) { continue; }
 		const float Ph = GlowPhase.IsValidIndex(i) ? GlowPhase[i] : 0.f;
 		const float Fr = GlowFreq.IsValidIndex(i) ? GlowFreq[i] : 4.f;
-		// Rustige, levende neon-puls: trage golf + lichte rimpel + zeldzame, ondiepe stotter.
+		// Rustige, levende neon-puls (per lamp schaalbaar): trage golf + rimpel + zeldzame stotter.
+		const float Fl = GlowFlick.IsValidIndex(i) ? GlowFlick[i] : 1.f;
 		float Osc = 0.92f
-			+ 0.07f * FMath::Sin(T * Fr + Ph)
-			+ 0.035f * FMath::Sin(T * Fr * 2.4f + Ph * 1.7f)
-			+ FMath::FRandRange(-0.015f, 0.015f);
-		if (FMath::FRand() < 0.005f) { Osc *= FMath::FRandRange(0.7f, 0.9f); } // af en toe een subtiele flikker
-		Osc = FMath::Clamp(Osc, 0.65f, 1.15f);
+			+ 0.07f * Fl * FMath::Sin(T * Fr + Ph)
+			+ 0.035f * Fl * FMath::Sin(T * Fr * 2.4f + Ph * 1.7f)
+			+ FMath::FRandRange(-0.015f * Fl, 0.015f * Fl);
+		if (FMath::FRand() < 0.005f * Fl) { Osc *= FMath::FRandRange(0.55f, 0.88f); } // korte neon-flikker (vaker bij hoge Fl)
+		Osc = FMath::Clamp(Osc, 0.45f, 1.2f);
 
 		const FLinearColor Base = GlowBase.IsValidIndex(i) ? GlowBase[i] : FLinearColor::White;
 		const float K = 0.8f + 0.2f * Osc;
