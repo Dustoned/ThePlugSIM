@@ -234,19 +234,20 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 				St.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 6.f);
 				St.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.00f), 6.f);
 			}
-			// Tekst links inspringen, netjes binnen de penseel-balk.
-			St.NormalPadding = FMargin(46.f, 0.f, 0.f, 0.f);
-			St.PressedPadding = FMargin(46.f, 0.f, 0.f, 0.f);
 			B->SetStyle(St);
-
-			// Scherpe witte titel als knop-inhoud (altijd zichtbaar; eigen menu, geen geschilderde tekst).
-			UTextBlock* Lbl = WeedUI::Text(WidgetTree, Labels[i], 18, FLinearColor(0.97f, 0.98f, 1.f), false, true);
-			Lbl->SetJustification(ETextJustify::Left);
-			B->SetContent(Lbl);
-
 			UCanvasPanelSlot* CSl = Hit->AddChildToCanvas(B);
 			CSl->SetAnchors(FAnchors(X0, Centers[i] - HalfH, X1, Centers[i] + HalfH));
 			CSl->SetOffsets(FMargin(0.f)); CSl->SetAlignment(FVector2D(0.f, 0.f));
+
+			// Scherpe witte titel als LOSSE tekst, links-uitgelijnd + verticaal gecentreerd op de balk
+			// (los van de knop-centrering, zodat 'ie netjes links staat). Vangt geen klikken.
+			UTextBlock* Lbl = WeedUI::Text(WidgetTree, Labels[i], 18, FLinearColor(0.97f, 0.98f, 1.f), false, true);
+			Lbl->SetVisibility(ESlateVisibility::HitTestInvisible);
+			UCanvasPanelSlot* LSl = Hit->AddChildToCanvas(Lbl);
+			LSl->SetAnchors(FAnchors(X0 + 0.018f, Centers[i], X0 + 0.018f, Centers[i])); // links in de balk
+			LSl->SetAlignment(FVector2D(0.f, 0.5f)); // links-midden
+			LSl->SetAutoSize(true);
+			LSl->SetPosition(FVector2D(0.f, 0.f));
 
 			MenuButtons.Add(B);
 			MenuLabels.Add(Lbl);
