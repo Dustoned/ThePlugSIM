@@ -61,15 +61,32 @@ namespace
 	UTexture2D* LoadWhiteMask(const FString& Path)
 	{
 		TArray<uint8> FileData;
-		if (!FFileHelper::LoadFileToArray(FileData, *Path)) { return nullptr; }
+		if (!FFileHelper::LoadFileToArray(FileData, *Path)) { UE_LOG(LogTemp, Warning, TEXT("Swatch: file niet gevonden: %s"), *Path); return nullptr; }
 		IImageWrapperModule& Mod = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
 		TSharedPtr<IImageWrapper> Wrapper = Mod.CreateImageWrapper(EImageFormat::PNG);
-		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num())) { return nullptr; }
-		TArray<uint8> Raw;
-		if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)) { return nullptr; }
+		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num())) { UE_LOG(LogTemp, Warning, TEXT("Swatch: PNG decode mislukt")); return nullptr; }
+		TArray64<uint8> Raw;
+		if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)) { UE_LOG(LogTemp, Warning, TEXT("Swatch: GetRaw mislukt")); return nullptr; }
 		const int32 W = Wrapper->GetWidth();
 		const int32 H = Wrapper->GetHeight();
-		for (int32 i = 0; i + 3 < Raw.Num(); i += 4) { Raw[i] = 255; Raw[i + 1] = 255; Raw[i + 2] = 255; } // RGB->wit, A blijft de vorm
+
+		// Heeft de PNG echte transparantie? Zo niet -> vorm afleiden uit donkerte (zwarte verf = vol).
+		bool bHasAlpha = false;
+		for (int64 i = 0; i + 3 < Raw.Num(); i += 4) { if (Raw[i + 3] < 250) { bHasAlpha = true; break; } }
+
+		for (int64 i = 0; i + 3 < Raw.Num(); i += 4)
+		{
+			uint8 A;
+			if (bHasAlpha) { A = Raw[i + 3]; }
+			else
+			{
+				const uint8 B = Raw[i], G = Raw[i + 1], R = Raw[i + 2];
+				const uint8 MinC = FMath::Min3(R, G, B);
+				A = (uint8)(255 - MinC); // donkere (zwarte) penseel-pixels -> ondoorzichtig, lichte -> doorzichtig
+			}
+			Raw[i] = 255; Raw[i + 1] = 255; Raw[i + 2] = 255; Raw[i + 3] = A; // RGB->wit, alpha = penseelvorm
+		}
+
 		UTexture2D* Tex = UTexture2D::CreateTransient(W, H, PF_B8G8R8A8);
 		if (!Tex) { return nullptr; }
 		Tex->SRGB = true;
@@ -77,6 +94,7 @@ namespace
 		FMemory::Memcpy(Dest, Raw.GetData(), Raw.Num());
 		Tex->GetPlatformData()->Mips[0].BulkData.Unlock();
 		Tex->UpdateResource();
+		UE_LOG(LogTemp, Log, TEXT("Swatch geladen: %dx%d (echte alpha: %d)"), W, H, bHasAlpha ? 1 : 0);
 		return Tex;
 	}
 
