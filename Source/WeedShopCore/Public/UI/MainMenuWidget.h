@@ -67,6 +67,12 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> SlotButtons;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotLabels;
 
+	// Vaste balk boven de slots: autosave aan/uit + wanneer de laatste save was.
+	UPROPERTY() TObjectPtr<class UWeedActionButton> AutosaveBtn;
+	UPROPERTY() TObjectPtr<UTextBlock> AutosaveLabel;
+	UPROPERTY() TObjectPtr<UTextBlock> LastSaveText;
+	void OnToggleAutosave();
+
 	// Vanaf schijf geladen achtergrond-foto + logo + knop-swatch (losse PNG's in Content/_Project/UI).
 	UPROPERTY() TObjectPtr<class UTexture2D> BgTex;
 	UPROPERTY() TObjectPtr<class UTexture2D> LogoTex;

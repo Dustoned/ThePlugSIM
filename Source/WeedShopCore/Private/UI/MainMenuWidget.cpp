@@ -12,6 +12,8 @@
 #include "Components/OverlaySlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "Components/Image.h"
@@ -54,6 +56,43 @@ namespace
 	{
 		UGameInstance* GI = W ? W->GetGameInstance() : nullptr;
 		return GI ? GI->GetSubsystem<USaveGameSubsystem>() : nullptr;
+	}
+
+	// "€ 12.345" met punt als duizendtal-scheiding.
+	FString FmtEuro(int64 Cents)
+	{
+		const int64 Euro = Cents / 100;
+		FString Digits = FString::Printf(TEXT("%lld"), Euro < 0 ? -Euro : Euro);
+		FString Grouped;
+		int32 Count = 0;
+		for (int32 i = Digits.Len() - 1; i >= 0; --i)
+		{
+			Grouped = Digits.Mid(i, 1) + Grouped;
+			if (++Count % 3 == 0 && i > 0) { Grouped = TEXT(".") + Grouped; }
+		}
+		return FString::Printf(TEXT("%s€ %s"), Euro < 0 ? TEXT("-") : TEXT(""), *Grouped);
+	}
+
+	// "2u 13m" / "13m" / "0m".
+	FString FmtPlaytime(double Seconds)
+	{
+		const int64 Total = (int64)FMath::Max(0.0, Seconds);
+		const int64 H = Total / 3600;
+		const int64 M = (Total % 3600) / 60;
+		if (H > 0) { return FString::Printf(TEXT("%lldu %lldm"), H, M); }
+		return FString::Printf(TEXT("%lldm"), M);
+	}
+
+	// "zojuist" / "5m geleden" / "2u geleden" / "3d geleden".
+	FString FmtAgo(const FDateTime& When)
+	{
+		if (When.GetTicks() <= 0) { return TEXT("-"); }
+		const FTimespan D = FDateTime::UtcNow() - When;
+		const double S = D.GetTotalSeconds();
+		if (S < 45) { return TEXT("zojuist"); }
+		if (S < 3600) { return FString::Printf(TEXT("%dm geleden"), FMath::RoundToInt(S / 60.0)); }
+		if (S < 86400) { return FString::Printf(TEXT("%du geleden"), FMath::RoundToInt(S / 3600.0)); }
+		return FString::Printf(TEXT("%dd geleden"), FMath::RoundToInt(S / 86400.0));
 	}
 
 	// Laadt een PNG-verf-streep en maakt er een WIT masker van (RGB->wit, alpha = vorm), zodat je
@@ -342,7 +381,39 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UVerticalBox* PickVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		PickCard->SetContent(PickVB);
 		PickerTitle = WeedUI::Text(WidgetTree, TEXT("CHOOSE A SLOT"), 20, FLinearColor(0.6f, 1.f, 0.6f), true, true);
-		PickVB->AddChildToVerticalBox(PickerTitle)->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+		PickVB->AddChildToVerticalBox(PickerTitle)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+
+		// --- Vaste balk boven de slots: Autosave aan/uit + wanneer de laatste save was ---
+		{
+			UBorder* HeadBar = WidgetTree->ConstructWidget<UBorder>();
+			HeadBar->SetBrush(WeedUI::Rounded(FLinearColor(0.09f, 0.10f, 0.14f, 0.97f), 8.f));
+			HeadBar->SetPadding(FMargin(12.f, 8.f, 12.f, 8.f));
+			UHorizontalBox* HeadRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+			HeadBar->SetContent(HeadRow);
+
+			AutosaveBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
+			AutosaveBtn->OnClicked.AddDynamic(AutosaveBtn, &UWeedActionButton::Handle);
+			AutosaveBtn->OnAction.BindLambda([this](int32, int32) { OnToggleAutosave(); });
+			FButtonStyle AS;
+			AS.Normal  = WeedUI::Rounded(FLinearColor(0.16f, 0.17f, 0.22f, 1.f), 6.f);
+			AS.Hovered = WeedUI::Rounded(FLinearColor(0.30f, 0.16f, 0.50f, 1.f), 6.f);
+			AS.Pressed = WeedUI::Rounded(FLinearColor(0.40f, 0.20f, 0.62f, 1.f), 6.f);
+			AS.NormalPadding = FMargin(12.f, 6.f); AS.PressedPadding = FMargin(12.f, 6.f);
+			AutosaveBtn->SetStyle(AS);
+			AutosaveLabel = WeedUI::Text(WidgetTree, TEXT("Autosave: aan"), 13, FLinearColor(0.7f, 1.f, 0.7f), true, true);
+			AutosaveBtn->SetContent(AutosaveLabel);
+			UHorizontalBoxSlot* ABS = HeadRow->AddChildToHorizontalBox(AutosaveBtn);
+			ABS->SetVerticalAlignment(VAlign_Center);
+
+			LastSaveText = WeedUI::Text(WidgetTree, TEXT("Laatste save: -"), 12, FLinearColor(0.78f, 0.80f, 0.92f), false);
+			LastSaveText->SetJustification(ETextJustify::Right);
+			UHorizontalBoxSlot* LSS = HeadRow->AddChildToHorizontalBox(LastSaveText);
+			LSS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			LSS->SetHorizontalAlignment(HAlign_Right); LSS->SetVerticalAlignment(VAlign_Center);
+			LSS->SetPadding(FMargin(12.f, 0.f, 2.f, 0.f));
+
+			PickVB->AddChildToVerticalBox(HeadBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+		}
 
 		SlotButtons.Reset(); SlotLabels.Reset();
 		for (int32 s = 0; s < USaveGameSubsystem::NumSlots; ++s)
@@ -456,18 +527,53 @@ void UMainMenuWidget::ClosePicker()
 
 void UMainMenuWidget::RefreshSlots()
 {
-	if (PickerTitle) { PickerTitle->SetText(FText::FromString(MenuMode == 1 ? TEXT("NEW GAME  -  choose a slot") : TEXT("LOAD GAME  -  choose a slot"))); }
+	if (PickerTitle) { PickerTitle->SetText(FText::FromString(MenuMode == 1 ? TEXT("NIEUW SPEL  -  kies een slot") : TEXT("LADEN  -  kies een slot"))); }
 	USaveGameSubsystem* Save = GetSave(GetWorld());
+
+	// Vaste balk bijwerken: autosave-status + laatste save-tijdstip.
+	if (AutosaveLabel)
+	{
+		const bool bOn = Save ? Save->IsAutosaveEnabled() : true;
+		AutosaveLabel->SetText(FText::FromString(bOn ? TEXT("Autosave: aan") : TEXT("Autosave: uit")));
+		AutosaveLabel->SetColorAndOpacity(FSlateColor(bOn ? FLinearColor(0.65f, 1.f, 0.7f) : FLinearColor(1.f, 0.6f, 0.55f)));
+	}
+	if (LastSaveText)
+	{
+		FDateTime Last;
+		const bool bAny = Save && Save->GetMostRecentSaveTime(Last);
+		LastSaveText->SetText(FText::FromString(bAny ? FString::Printf(TEXT("Laatste save: %s"), *FmtAgo(Last)) : TEXT("Nog geen save")));
+	}
+
 	for (int32 s = 0; s < SlotButtons.Num(); ++s)
 	{
-		FString Info;
-		const bool bHas = Save && Save->GetSlotInfo(s, Info);
-		const FString Line = bHas
-			? FString::Printf(TEXT("Slot %d\n%s"), s + 1, *Info)
-			: FString::Printf(TEXT("Slot %d\n(empty)"), s + 1);
+		FSaveSlotInfo Inf;
+		const bool bHas = Save && Save->GetSlotDetails(s, Inf);
+		FString Line;
+		if (bHas)
+		{
+			const FString Who = Inf.NumPlayers >= 2 ? FString::Printf(TEXT("Co-op (%d)"), Inf.NumPlayers) : TEXT("Solo");
+			// Regel 1: slot + solo/co-op + autosave-tag. Regel 2: day/saldo/level. Regel 3: speeltijd + tijdstip.
+			Line = FString::Printf(TEXT("SLOT %d     %s%s\nDay %d      %s      Lvl %d\n%s gespeeld   -   %s"),
+				s + 1, *Who, Inf.bIsAutosave ? TEXT("   (autosave)") : TEXT(""),
+				Inf.DayNumber, *FmtEuro(Inf.TotalCents), Inf.CrewLevel,
+				*FmtPlaytime(Inf.PlaytimeSeconds), *FmtAgo(Inf.SavedAt));
+		}
+		else
+		{
+			Line = FString::Printf(TEXT("SLOT %d\n(leeg)"), s + 1);
+		}
 		if (SlotLabels.IsValidIndex(s) && SlotLabels[s]) { SlotLabels[s]->SetText(FText::FromString(Line)); }
 		// In Load-modus zijn lege slots niet klikbaar; in New-modus alles.
 		if (SlotButtons[s]) { SlotButtons[s]->SetIsEnabled(MenuMode == 1 || bHas); }
+	}
+}
+
+void UMainMenuWidget::OnToggleAutosave()
+{
+	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
+	{
+		Save->SetAutosaveEnabled(!Save->IsAutosaveEnabled());
+		RefreshSlots();
 	}
 }
 

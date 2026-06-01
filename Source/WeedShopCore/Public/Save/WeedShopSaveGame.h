@@ -121,6 +121,14 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	uint8 MilestonePhase = 0;
 
+	// Gedeeld crew-level (voor de save-info).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 CrewLevel = 1;
+
+	// Totale real-life speeltijd in seconden (cumulatief over sessies).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	double PlaytimeSeconds = 0.0;
+
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	TArray<FName> PurchasedUpgrades;
 

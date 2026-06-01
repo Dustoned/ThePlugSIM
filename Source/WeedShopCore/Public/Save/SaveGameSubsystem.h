@@ -12,6 +12,21 @@ class AWeedShopGameState;
 class UWeedShopSaveGame;
 class APawn;
 
+// Samenvatting van één save-slot voor de menu-picker.
+USTRUCT(BlueprintType)
+struct FSaveSlotInfo
+{
+	GENERATED_BODY()
+	UPROPERTY() bool bExists = false;
+	UPROPERTY() int32 DayNumber = 0;
+	UPROPERTY() int64 TotalCents = 0;     // contant + bank, opgeteld over alle spelers
+	UPROPERTY() int32 CrewLevel = 1;
+	UPROPERTY() double PlaytimeSeconds = 0.0;
+	UPROPERTY() int32 NumPlayers = 0;
+	UPROPERTY() FDateTime SavedAt = FDateTime(0);
+	UPROPERTY() bool bIsAutosave = false; // het getoonde bestand is een autosave
+};
+
 UCLASS()
 class WEEDSHOPCORE_API USaveGameSubsystem : public UGameInstanceSubsystem
 {
@@ -36,6 +51,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
 	bool HasSaveInSlot(int32 Slot) const;
 	bool GetSlotInfo(int32 Slot, FString& OutSummary) const;
+
+	// Volledige info voor de menu-picker (day, saldo, level, speeltijd, spelers, tijdstip).
+	bool GetSlotDetails(int32 Slot, FSaveSlotInfo& Out) const;
+
+	// Het meest recente save-tijdstip over alle slots (handmatig + autosave). False = geen save.
+	bool GetMostRecentSaveTime(FDateTime& Out) const;
+
+	// Autosave aan/uit (in GConfig bewaard; default aan). De host slaat alleen automatisch op als aan.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
+	bool IsAutosaveEnabled() const { return bAutosaveEnabled; }
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	void SetAutosaveEnabled(bool bEnabled);
 
 	// Nieuw spel in dit slot starten (verse staat; oude save blijft tot je opnieuw opslaat).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
@@ -94,4 +121,11 @@ protected:
 
 	// Welke usernames deze sessie al hersteld zijn (voorkomt dubbel herstel bij respawn).
 	TSet<FString> RestoredPlayers;
+
+	// Speeltijd-meting: base = waarde bij sessie-start (uit save), mark = wanneer die sessie begon.
+	double PlaytimeBaseSeconds = 0.0;
+	FDateTime PlaytimeMark = FDateTime(0);
+	double CurrentPlaytimeSeconds() const;
+
+	bool bAutosaveEnabled = true;
 };

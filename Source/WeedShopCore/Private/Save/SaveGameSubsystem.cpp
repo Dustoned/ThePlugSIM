@@ -9,6 +9,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
+#include "Progression/LevelComponent.h"
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/DryingRack.h"
 #include "World/StorageShelf.h"
@@ -29,6 +30,26 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	int32 Last = 0;
 	GConfig->GetInt(TEXT("ThePlugSIM.Save"), TEXT("LastSlot"), Last, GGameIni);
 	CurrentSlot = FMath::Clamp(Last, 0, NumSlots - 1);
+
+	bAutosaveEnabled = true;
+	GConfig->GetBool(TEXT("ThePlugSIM.Save"), TEXT("Autosave"), bAutosaveEnabled, GGameIni);
+
+	// Speeltijd-meter starten (wordt overschreven bij Load/NewGame met de echte basis).
+	PlaytimeBaseSeconds = 0.0;
+	PlaytimeMark = FDateTime::UtcNow();
+}
+
+double USaveGameSubsystem::CurrentPlaytimeSeconds() const
+{
+	const FTimespan Elapsed = FDateTime::UtcNow() - PlaytimeMark;
+	return PlaytimeBaseSeconds + FMath::Max(0.0, Elapsed.GetTotalSeconds());
+}
+
+void USaveGameSubsystem::SetAutosaveEnabled(bool bEnabled)
+{
+	bAutosaveEnabled = bEnabled;
+	GConfig->SetBool(TEXT("ThePlugSIM.Save"), TEXT("Autosave"), bEnabled, GGameIni);
+	GConfig->Flush(false, GGameIni);
 }
 
 FString USaveGameSubsystem::SlotNameFor(int32 Slot) const
@@ -83,11 +104,57 @@ bool USaveGameSubsystem::GetSlotInfo(int32 Slot, FString& OutSummary) const
 	const FString Name = UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0) ? SlotNameFor(Slot) : AutoSlotNameFor(Slot);
 	if (const UWeedShopSaveGame* S = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0)))
 	{
-		OutSummary = FString::Printf(TEXT("Day %d  -  earned EUR %lld  -  %d player(s)"),
-			S->DayNumber, (long long)(S->TotalEarnedCents / 100), S->Players.Num());
+		OutSummary = FString::Printf(TEXT("Day %d  -  EUR %lld  -  %d player(s)"),
+			S->DayNumber, (long long)((S->TotalEarnedCents) / 100), S->Players.Num());
 		return true;
 	}
 	return false;
+}
+
+bool USaveGameSubsystem::GetSlotDetails(int32 Slot, FSaveSlotInfo& Out) const
+{
+	Out = FSaveSlotInfo();
+	if (!HasSaveInSlot(Slot)) { return false; }
+	// Toon de handmatige save als die er is, anders de autosave.
+	const bool bHasManual = UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0);
+	const FString Name = bHasManual ? SlotNameFor(Slot) : AutoSlotNameFor(Slot);
+	const UWeedShopSaveGame* S = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0));
+	if (!S) { return false; }
+
+	Out.bExists = true;
+	Out.DayNumber = S->DayNumber;
+	Out.CrewLevel = FMath::Max(1, S->CrewLevel);
+	Out.PlaytimeSeconds = S->PlaytimeSeconds;
+	Out.NumPlayers = S->Players.Num();
+	Out.SavedAt = S->SavedAt;
+	Out.bIsAutosave = S->bIsAutosave;
+
+	// Totaal saldo = contant + bank, opgeteld over alle spelers (co-op).
+	int64 Total = 0;
+	for (const FPlayerSaveData& P : S->Players) { Total += P.CashCents + P.BankCents; }
+	// Legacy v1: geen Players-array, maar host-velden.
+	if (S->Players.Num() == 0) { Total += S->BalanceCents + S->BankCents; }
+	Out.TotalCents = Total;
+	return true;
+}
+
+bool USaveGameSubsystem::GetMostRecentSaveTime(FDateTime& Out) const
+{
+	bool bAny = false;
+	FDateTime Best(0);
+	for (int32 s = 0; s < NumSlots; ++s)
+	{
+		for (const FString& Name : { SlotNameFor(s), AutoSlotNameFor(s) })
+		{
+			if (!UGameplayStatics::DoesSaveGameExist(Name, 0)) { continue; }
+			if (const UWeedShopSaveGame* S = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0)))
+			{
+				if (!bAny || S->SavedAt > Best) { Best = S->SavedAt; bAny = true; }
+			}
+		}
+	}
+	Out = Best;
+	return bAny;
 }
 
 void USaveGameSubsystem::NewGameInSlot(int32 Slot)
@@ -98,6 +165,8 @@ void USaveGameSubsystem::NewGameInSlot(int32 Slot)
 	if (UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(AutoSlotNameFor(Slot), 0); }
 	Loaded = nullptr;
 	RestoredPlayers.Reset();
+	PlaytimeBaseSeconds = 0.0; // verse speeltijd
+	PlaytimeMark = FDateTime::UtcNow();
 }
 
 bool USaveGameSubsystem::LoadSlot(int32 Slot)
@@ -242,6 +311,8 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 
 	Save->SavedAt = FDateTime::UtcNow();
 	Save->bIsAutosave = bAutosave;
+	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
+	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); }
 
 	// Gedeelde wereld-staat.
 	if (const UDayCycleComponent* Day = GS->GetDayCycle()) { Save->TimeOfDaySeconds = Day->GetTimeOfDaySeconds(); Save->DayNumber = Day->GetDayNumber(); }
@@ -286,6 +357,8 @@ bool USaveGameSubsystem::LoadGame(bool bPreferNewest)
 	if (!Save) { return false; }
 	Loaded = Save;
 	RestoredPlayers.Reset();
+	PlaytimeBaseSeconds = Save->PlaytimeSeconds; // speeltijd verder tellen vanaf de save
+	PlaytimeMark = FDateTime::UtcNow();
 
 	// Gedeelde staat terugzetten.
 	if (UDayCycleComponent* Day = GS->GetDayCycle()) { Day->SetTimeOfDaySeconds(Save->TimeOfDaySeconds); }
