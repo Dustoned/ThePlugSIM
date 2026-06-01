@@ -101,18 +101,9 @@ void UPauseMenuWidget::OnResume()
 
 void UPauseMenuWidget::OnSave()
 {
-	bool bOk = false;
-	if (const UWorld* W = GetWorld())
-	{
-		if (UGameInstance* GI = W->GetGameInstance())
-		{
-			if (USaveGameSubsystem* Save = GI->GetSubsystem<USaveGameSubsystem>())
-			{
-				bOk = Save->SaveGame();
-			}
-		}
-	}
-	if (StatusText) { StatusText->SetText(FText::FromString(bOk ? TEXT("Game saved.") : TEXT("Save failed."))); }
+	// Via de telefoon -> host doet de echte save (neemt alle spelers mee). Werkt voor host én client.
+	if (PhoneComp.IsValid()) { PhoneComp->RequestSaveGame(); }
+	if (StatusText) { StatusText->SetText(FText::FromString(TEXT("Saving... (host writes the save)"))); }
 }
 
 void UPauseMenuWidget::OnLoad()

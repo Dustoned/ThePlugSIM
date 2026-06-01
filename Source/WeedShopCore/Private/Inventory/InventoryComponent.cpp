@@ -323,6 +323,15 @@ bool UInventoryComponent::RemoveItem(FName ItemId, int32 Count)
 	return true;
 }
 
+void UInventoryComponent::ClearAll()
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	Stacks.Reset();
+	KnownStacks.Reset();
+	GridOrder.Reset();
+	OnRep_Stacks();
+}
+
 int32 UInventoryComponent::GetQuantity(FName ItemId) const
 {
 	int32 Total = 0;

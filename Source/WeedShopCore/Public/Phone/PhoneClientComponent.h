@@ -186,6 +186,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestBuyPhoneUpgrade();
 
+	// Vraag de host om een volledige save (neemt alle spelers mee). Werkt voor host én co-op client.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RequestSaveGame();
+
 	// Bezorgopties (fee = % van het besteed bedrag; tijd in seconden). Gedeeld door UI + server.
 	static float DeliveryFeePct(int32 Opt);       // 0.01 / 0.08 / 0.25
 	static float DeliveryDelaySeconds(int32 Opt); // 120 / 40 / 0
@@ -421,6 +425,9 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerBuyPhoneUpgrade();
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestSave();
 
 	// Ontgrendelt de Bank-app op de mobiel (per speler, na de telefoon-upgrade).
 	UPROPERTY(Replicated)

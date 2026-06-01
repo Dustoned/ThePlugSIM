@@ -41,6 +41,15 @@ void UMilestoneComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(UMilestoneComponent, ReachedMilestones);
 }
 
+void UMilestoneComponent::RestoreState(int64 InTotalEarnedCents, uint8 InPhase)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	TotalEarnedCents = FMath::Max<int64>(0, InTotalEarnedCents);
+	CurrentPhase = static_cast<EShopPhase>(InPhase);
+	CheckMilestones(); // her-evalueer ontgrendelingen op basis van het herstelde totaal
+	OnShopPhaseChanged.Broadcast(CurrentPhase);
+}
+
 void UMilestoneComponent::HandleMoneyEarned(int64 AmountCents)
 {
 	if (GetOwnerRole() != ROLE_Authority)

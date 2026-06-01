@@ -72,6 +72,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	bool RemoveItem(FName ItemId, int32 Count);
 
+	// Server. Maakt de hele inventory leeg (voor save/load-herstel).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
+	void ClearAll();
+
 	// Totaal aantal van dit item over alle stapels.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetQuantity(FName ItemId) const;

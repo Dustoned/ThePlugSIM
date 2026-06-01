@@ -36,6 +36,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Progression")
 	EShopPhase GetCurrentPhase() const { return CurrentPhase; }
 
+	// Server-only: herstel totaal-verdiend + fase (voor save/load).
+	void RestoreState(int64 InTotalEarnedCents, uint8 InPhase);
+
 	// Is een product al ontgrendeld (via een bereikte milestone, of milestone-loos)?
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Progression")
 	bool IsProductUnlocked(FName ProductId) const;

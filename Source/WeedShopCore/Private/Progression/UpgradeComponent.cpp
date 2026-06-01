@@ -90,6 +90,13 @@ TArray<FName> UUpgradeComponent::GetAllUpgradeIds() const
 	return UpgradeTable ? UpgradeTable->GetRowNames() : TArray<FName>();
 }
 
+void UUpgradeComponent::RestorePurchased(const TArray<FName>& InIds)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	Purchased = InIds;
+	for (const FName& Id : Purchased) { OnUpgradePurchased.Broadcast(Id); } // effecten/UI bijwerken
+}
+
 bool UUpgradeComponent::GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32& OutCostCents,
 	bool& bOutPurchased, bool& bOutAvailable) const
 {

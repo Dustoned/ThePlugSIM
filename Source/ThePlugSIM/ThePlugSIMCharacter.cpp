@@ -26,6 +26,8 @@
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
 #include "Progression/MilestoneComponent.h"
+#include "Save/SaveGameSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Input/ControlSettings.h"
 #include "World/Atm.h"
 #include "World/PackBench.h"
@@ -519,6 +521,16 @@ void AThePlugSIMCharacter::BeginPlay()
 			if (UMilestoneComponent* Ms = GS->GetMilestones())
 			{
 				Economy->OnMoneyEarned.AddDynamic(Ms, &UMilestoneComponent::HandleMoneyEarned);
+			}
+		}
+
+		// Als er al een save geladen is (host deed Continue/Load), herstel dan deze speler
+		// (op username) — zo krijgt een co-op vriend die later joint z'n spullen terug.
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
+			{
+				Sv->RestorePlayerByPawn(this);
 			}
 		}
 	}

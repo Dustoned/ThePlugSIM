@@ -36,6 +36,8 @@
 #include "UI/PauseMenuWidget.h"
 #include "UI/MainMenuWidget.h"
 #include "World/StorageShelf.h"
+#include "Save/SaveGameSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Blueprint/UserWidget.h"
 #include "Net/UnrealNetwork.h"
 
@@ -1226,6 +1228,22 @@ void UPhoneClientComponent::ServerTransfer_Implementation(int64 AmountCents)
 void UPhoneClientComponent::RequestBuyPhoneUpgrade()
 {
 	ServerBuyPhoneUpgrade();
+}
+
+void UPhoneClientComponent::RequestSaveGame()
+{
+	ServerRequestSave();
+}
+
+void UPhoneClientComponent::ServerRequestSave_Implementation()
+{
+	if (UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
+	{
+		if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
+		{
+			Sv->SaveGame();
+		}
+	}
 }
 
 void UPhoneClientComponent::ServerBuyPhoneUpgrade_Implementation()

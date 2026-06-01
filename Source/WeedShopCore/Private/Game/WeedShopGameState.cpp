@@ -2,8 +2,11 @@
 
 #include "Economy/EconomyComponent.h"
 #include "Engine/World.h"
+#include "Engine/GameInstance.h"
+#include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "Save/SaveGameSubsystem.h"
 #include "World/DayCycleComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
@@ -25,6 +28,27 @@ AWeedShopGameState::AWeedShopGameState()
 	NpcRegistry = CreateDefaultSubobject<UNpcRegistryComponent>(TEXT("NpcRegistry"));
 	Heat = CreateDefaultSubobject<UHeatComponent>(TEXT("Heat"));
 	Leveling = CreateDefaultSubobject<ULevelComponent>(TEXT("Leveling"));
+}
+
+void AWeedShopGameState::BeginPlay()
+{
+	Super::BeginPlay();
+	// Alleen de host/server autosavet de gedeelde + alle-spelers-staat, elke AutoSaveSeconds.
+	if (HasAuthority() && AutoSaveSeconds > 0.f && GetWorld())
+	{
+		GetWorldTimerManager().SetTimer(AutoSaveTimer, this, &AWeedShopGameState::AutoSave, AutoSaveSeconds, true);
+	}
+}
+
+void AWeedShopGameState::AutoSave()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
+		{
+			Sv->SaveGame();
+		}
+	}
 }
 
 UEconomyComponent* AWeedShopGameState::GetEconomy() const

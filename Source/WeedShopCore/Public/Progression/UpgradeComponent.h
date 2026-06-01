@@ -38,6 +38,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
 	int32 GetPurchasedCount() const { return Purchased.Num(); }
 
+	// Lijst van gekochte upgrade-ids (voor save).
+	const TArray<FName>& GetPurchasedIds() const { return Purchased; }
+
+	// Server-only: herstel de gekochte upgrades (voor load).
+	void RestorePurchased(const TArray<FName>& InIds);
+
 	// Alle upgrade-id's (CSV-volgorde) — de telefoon-catalogus.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
 	TArray<FName> GetAllUpgradeIds() const;

@@ -66,7 +66,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	ULevelComponent* GetLeveling() const { return Leveling; }
 
+	// Host-autosave: elke X seconden de volledige staat wegschrijven (0 = uit).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Save")
+	float AutoSaveSeconds = 180.f;
+
 protected:
+	virtual void BeginPlay() override;
+
+	UFUNCTION()
+	void AutoSave();
+
+	FTimerHandle AutoSaveTimer;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
 

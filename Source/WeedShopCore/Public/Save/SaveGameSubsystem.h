@@ -9,6 +9,8 @@
 #include "SaveGameSubsystem.generated.h"
 
 class AWeedShopGameState;
+class UWeedShopSaveGame;
+class APawn;
 
 UCLASS()
 class WEEDSHOPCORE_API USaveGameSubsystem : public UGameInstanceSubsystem
@@ -19,18 +21,35 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Save")
 	FString SlotName = TEXT("WeedShopSave");
 
-	// Schrijft de huidige gedeelde state naar de slot. False bij client of geen GameState.
+	// Schrijft de huidige gedeelde state + ALLE verbonden spelers (op username) naar de slot.
+	// Alleen de host/server. False bij client of geen GameState.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	bool SaveGame();
 
-	// Laadt de slot en herstelt de gedeelde state (alleen server). False als er geen save is.
+	// Laadt de slot, herstelt de gedeelde state + alle nu verbonden spelers (alleen server).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	bool LoadGame();
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
 	bool HasSave() const;
 
+	// Server: herstel één speler (op username) uit de geladen save, indien aanwezig en nog niet
+	// hersteld deze sessie. Aangeroepen wanneer een (co-op) speler de wereld in komt.
+	void RestorePlayerByPawn(APawn* Pawn);
+
 protected:
 	AWeedShopGameState* GetWeedGameState() const;
 	bool HasAuthorityWorld() const;
+
+	// Helpers om per-speler data te verzamelen/toe te passen.
+	static FString PlayerNameOf(const APawn* Pawn);
+	void GatherPlayer(APawn* Pawn, struct FPlayerSaveData& Out) const;
+	void ApplyPlayer(APawn* Pawn, const struct FPlayerSaveData& Data);
+
+	// In het geheugen gehouden geladen save (voor late-joiners die nog hersteld moeten worden).
+	UPROPERTY()
+	TObjectPtr<UWeedShopSaveGame> Loaded;
+
+	// Welke usernames deze sessie al hersteld zijn (voorkomt dubbel herstel bij respawn).
+	TSet<FString> RestoredPlayers;
 };
