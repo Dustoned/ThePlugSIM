@@ -73,8 +73,7 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 		return false;
 	}
 
-	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	UEconomyComponent* Econ = (Buyer && Buyer->GetOwner()) ? Buyer->GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
 	if (!Econ || !Econ->RemoveMoney(Row->SeedPriceCents))
 	{
 		if (GEngine)
@@ -210,8 +209,7 @@ bool UStoreComponent::SellItem(FName ItemId, UInventoryComponent* Seller)
 	{
 		return false;
 	}
-	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
-	if (UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr)
+	if (UEconomyComponent* Econ = (Seller && Seller->GetOwner()) ? Seller->GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr)
 	{
 		Econ->AddMoneyUntracked(Price);
 	}
@@ -368,7 +366,7 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 		}
 	}
 
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	UEconomyComponent* Econ = Buyer->GetOwner() ? Buyer->GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
 	if (!Econ || !Econ->RemoveMoney(Price))
 	{
 		if (GEngine)

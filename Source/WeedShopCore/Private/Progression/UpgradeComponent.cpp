@@ -28,7 +28,7 @@ void UUpgradeComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(UUpgradeComponent, Purchased);
 }
 
-bool UUpgradeComponent::BuyUpgrade(FName UpgradeId)
+bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 {
 	if (GetOwnerRole() != ROLE_Authority || !UpgradeTable || UpgradeId.IsNone())
 	{
@@ -62,8 +62,8 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId)
 		return false;
 	}
 
-	// Betalen — upgrades koop je via de telefoon (online/legaal) -> met BANKGELD (wit).
-	UEconomyComponent* Econ = GS->GetEconomy();
+	// Betalen — upgrades koop je via de telefoon (online/legaal) -> met BANKGELD (wit) van de koper.
+	UEconomyComponent* Econ = PayFrom ? PayFrom : GS->GetEconomy();
 	if (!Econ || !Econ->RemoveBank(Row->CostCents))
 	{
 		if (GEngine)

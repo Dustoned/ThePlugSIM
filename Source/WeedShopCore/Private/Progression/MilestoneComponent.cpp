@@ -27,13 +27,8 @@ void UMilestoneComponent::BeginPlay()
 
 	if (GetOwnerRole() == ROLE_Authority)
 	{
-		if (AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
-		{
-			if (UEconomyComponent* Econ = GS->GetEconomy())
-			{
-				Econ->OnMoneyEarned.AddDynamic(this, &UMilestoneComponent::HandleMoneyEarned);
-			}
-		}
+		// Inkomsten worden per speler aangemeld: elke pawn-portemonnee bindt z'n OnMoneyEarned
+		// aan HandleMoneyEarned (zie AThePlugSIMCharacter::BeginPlay). Zo telt co-op-inkomen mee.
 		CheckMilestones();
 	}
 }

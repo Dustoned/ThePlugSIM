@@ -23,9 +23,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Upgrades")
 	FOnUpgradePurchased OnUpgradePurchased;
 
-	// Server: koop een upgrade. Checkt fase + saldo, schrijft af, markeert gekocht. Geeft succes.
+	// Server: koop een upgrade. Checkt fase + saldo, schrijft af van de koper z'n bank (PayFrom;
+	// valt terug op de lokale portemonnee), markeert gekocht. Geeft succes.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Upgrades")
-	bool BuyUpgrade(FName UpgradeId);
+	bool BuyUpgrade(FName UpgradeId, class UEconomyComponent* PayFrom = nullptr);
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
 	bool IsPurchased(FName UpgradeId) const { return Purchased.Contains(UpgradeId); }

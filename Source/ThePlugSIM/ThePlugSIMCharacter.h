@@ -36,6 +36,10 @@ class AThePlugSIMCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UInventoryComponent> Inventory;
 
+	/** Persoonlijke portemonnee (cash + bank) van deze speler — co-op: ieder z'n eigen geld. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UEconomyComponent> Economy;
+
 protected:
 
 	/** Jump Input Action */
@@ -219,6 +223,9 @@ public:
 
 	/** Returns the inventory component **/
 	class UInventoryComponent* GetInventory() const { return Inventory; }
+
+	/** Returns this player's personal wallet. */
+	class UEconomyComponent* GetEconomy() const { return Economy; }
 
 };
 

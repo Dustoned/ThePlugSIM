@@ -134,8 +134,8 @@ public:
 	int32 GetTransfersRemainingToday() const { return FMath::Max(0, MaxTransfersPerDay - TransfersToday); }
 
 	// Server: boek bankgeld over naar een co-op vriend tegen een fee, binnen de dag-limiet.
-	// (Huidige gedeelde co-op-kas: alleen de fee verlaat de bank; het bedrag blijft in de gedeelde
-	// pot. Met per-speler-geld gaat het bedrag straks echt naar de ander.) Geeft true bij succes.
+	// Per-speler geld: bedrag + fee verlaten DEZE bank; de ontvanger wordt door de aanroeper
+	// (PhoneClientComponent::ServerTransfer) bijgeschreven. Geeft true bij succes.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
 	bool TransferBank(int64 AmountCents);
 

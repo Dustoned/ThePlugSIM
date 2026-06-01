@@ -410,8 +410,8 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 		return;
 	}
 
-	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	// Klanten betalen de speler die ze bedient (z'n eigen portemonnee).
+	UEconomyComponent* Econ = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UEconomyComponent>() : nullptr;
 	UInventoryComponent* Stock = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 
 	// (Contact/'nummer' krijg je via het NPC-register zodra de loyaliteit hoog genoeg is.)

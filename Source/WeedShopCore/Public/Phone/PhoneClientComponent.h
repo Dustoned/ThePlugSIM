@@ -414,6 +414,7 @@ protected:
 	AWeedShopGameState* GetGS() const;
 	APlayerController* GetPC() const;
 	UInventoryComponent* GetOwnerInventory() const;
+	class UEconomyComponent* GetOwnerEconomy() const;
 
 	// Zet muis-cursor/input-mode op basis van of er een UI open is.
 	void UpdateCursor();

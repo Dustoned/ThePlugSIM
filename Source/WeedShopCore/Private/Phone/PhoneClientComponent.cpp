@@ -58,6 +58,11 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 	return GetOwner() ? GetOwner()->FindComponentByClass<UInventoryComponent>() : nullptr;
 }
 
+UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
+{
+	return GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
+}
+
 void UPhoneClientComponent::UpdateCursor()
 {
 	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen;
@@ -576,8 +581,7 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 	{
 		return;
 	}
-	AWeedShopGameState* GS = GetGS();
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	UEconomyComponent* Econ = GetOwnerEconomy();
 	UInventoryComponent* Stock = GetOwnerInventory();
 
 	const EDealResult Result = Customer->SubmitOfferProduct(ProductId, AskCents, Econ, Stock);
@@ -853,7 +857,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	AWeedShopGameState* GS = GetGS();
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	UInventoryComponent* Inv = GetOwnerInventory();
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	UEconomyComponent* Econ = GetOwnerEconomy();
 	if (!Store || !Inv || !Econ) { return; }
 
 	// 0) Level-gate: hogere tiers (rekken/tafels/containers) vereisen een minimum level.
@@ -1025,8 +1029,7 @@ void UPhoneClientComponent::RequestDeposit(int64 CashAmount)
 
 void UPhoneClientComponent::ServerDeposit_Implementation(int64 CashAmount)
 {
-	AWeedShopGameState* GS = GetGS();
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	UEconomyComponent* Econ = GetOwnerEconomy();
 	if (!Econ) { return; }
 	int64 Amt = CashAmount;
 	if (Amt <= 0) { Amt = FMath::Min(Econ->GetCashCents(), Econ->GetDailyDepositRemainingCents()); } // max
@@ -1040,8 +1043,32 @@ void UPhoneClientComponent::RequestTransfer(int64 AmountCents)
 
 void UPhoneClientComponent::ServerTransfer_Implementation(int64 AmountCents)
 {
-	AWeedShopGameState* GS = GetGS();
-	if (UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr) { Econ->TransferBank(AmountCents); }
+	UEconomyComponent* Mine = GetOwnerEconomy();
+	if (!Mine || AmountCents <= 0) { return; }
+
+	// Zoek een co-op vriend (de portemonnee van een andere speler) om naar te sturen.
+	UEconomyComponent* Friend = nullptr;
+	if (UWorld* W = GetWorld())
+	{
+		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+		{
+			APlayerController* PC = It->Get();
+			APawn* P = PC ? PC->GetPawn() : nullptr;
+			if (!P || P == GetOwner()) { continue; }
+			if (UEconomyComponent* E = P->FindComponentByClass<UEconomyComponent>()) { Friend = E; break; }
+		}
+	}
+	if (!Friend)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("No co-op friend online to send money to.")); }
+		return;
+	}
+
+	// Bedrag + fee verlaat MIJN bank; de vriend ontvangt het volle bedrag (belastingvrij).
+	if (Mine->TransferBank(AmountCents))
+	{
+		Friend->AddBank(AmountCents, false);
+	}
 }
 
 float UPhoneClientComponent::GetDeliveryProgress(const FPendingDelivery& D) const
@@ -1083,7 +1110,7 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 	const int64 Refund = PendingDeliveries[Idx].PaidCents;
 	if (Refund > 0)
 	{
-		if (AWeedShopGameState* GS = GetGS()) { if (UEconomyComponent* Econ = GS->GetEconomy()) { Econ->AddBank(Refund, false); } } // terug op de bank
+		if (UEconomyComponent* Econ = GetOwnerEconomy()) { Econ->AddBank(Refund, false); } // terug op de bank
 	}
 	if (GEngine)
 	{
@@ -1127,8 +1154,7 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 		return;
 	}
 	const int32 Cost = GetPotUpgradeCost(UpgIndex, Pot->GetPotTier());
-	AWeedShopGameState* GS = GetGS();
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	UEconomyComponent* Econ = GetOwnerEconomy();
 	if (Cost <= 0 || !Econ || !Econ->RemoveBank(Cost)) // via telefoon -> bankgeld (wit)
 	{
 		if (GEngine)
@@ -1227,7 +1253,7 @@ void UPhoneClientComponent::ServerBuyUpgrade_Implementation(FName UpgradeId)
 	{
 		if (GS->GetUpgrades())
 		{
-			GS->GetUpgrades()->BuyUpgrade(UpgradeId);
+			GS->GetUpgrades()->BuyUpgrade(UpgradeId, GetOwnerEconomy());
 		}
 	}
 }

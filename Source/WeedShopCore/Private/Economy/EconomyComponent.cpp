@@ -125,7 +125,8 @@ bool UEconomyComponent::RemoveBank(int64 AmountCents)
 
 void UEconomyComponent::RefreshDepositDay()
 {
-	const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	// De portemonnee zit op de pawn; de gedeelde dag-klok staat op de GameState.
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const int32 Today = (GS && GS->GetDayCycle()) ? GS->GetDayCycle()->GetDayNumber() : 0;
 	if (Today != DepositDay)
 	{
@@ -145,13 +146,13 @@ bool UEconomyComponent::TransferBank(int64 AmountCents)
 		return false;
 	}
 	const int64 Fee = (int64)FMath::RoundToDouble(AmountCents * TransferFeePct);
-	// Gedeelde co-op-kas: alleen de fee verlaat de bank (het bedrag blijft voor de groep beschikbaar).
+	// Per-speler geld: het bedrag + fee verlaat MIJN bank; de ontvanger wordt elders bijgeschreven.
 	if (BankCents < AmountCents + Fee)
 	{
 		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough bank money for that transfer.")); }
 		return false;
 	}
-	RemoveBank(Fee);
+	RemoveBank(AmountCents + Fee);
 	++TransfersToday;
 	if (GEngine)
 	{
@@ -185,8 +186,8 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 	SetBank(BankCents + ToBank);        // bank erbij (na belasting)
 	DepositedTodayCents += Amount;
 
-	// Heat: grote stortingen zijn verdacht.
-	if (AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	// Heat: grote stortingen zijn verdacht (heat is gedeeld, op de GameState).
+	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (UHeatComponent* Heat = GS->GetHeat())
 		{

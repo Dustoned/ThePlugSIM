@@ -25,6 +25,7 @@
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Progression/MilestoneComponent.h"
 #include "Input/ControlSettings.h"
 #include "World/Atm.h"
 #include "World/PackBench.h"
@@ -66,6 +67,9 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 
 	// Voorraad-component (oogst in, verkoop uit).
 	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
+
+	// Persoonlijke portemonnee (cash + bank) — co-op: ieder z'n eigen geld.
+	Economy = CreateDefaultSubobject<UEconomyComponent>(TEXT("Economy"));
 
 	// Telefoon-logica (openen, tabs, kopen, afspraken).
 	Phone = CreateDefaultSubobject<UPhoneClientComponent>(TEXT("Phone"));
@@ -499,15 +503,18 @@ void AThePlugSIMCharacter::BeginPlay()
 
 	// (De ATM is nu een plaatsbaar item in je inventory: zet 'm zelf neer waar je wilt, binnen of buiten.)
 
-	// Cash = fysiek briefgeld in de inventory: houd het gelijk aan het cash-saldo (server).
-	if (HasAuthority() && Inventory)
+	// Cash = fysiek briefgeld in de inventory: houd het gelijk aan MIJN cash-saldo (server).
+	if (HasAuthority() && Inventory && Economy)
 	{
+		Economy->OnBalanceChanged.AddDynamic(this, &AThePlugSIMCharacter::OnCashChanged);
+		Inventory->SetCashDisplayEuros((int64)Economy->GetBalanceEuros()); // begin-sync
+
+		// Mijn inkomsten tellen mee voor de gedeelde milestones/fase.
 		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 		{
-			if (UEconomyComponent* Econ = GS->GetEconomy())
+			if (UMilestoneComponent* Ms = GS->GetMilestones())
 			{
-				Econ->OnBalanceChanged.AddDynamic(this, &AThePlugSIMCharacter::OnCashChanged);
-				Inventory->SetCashDisplayEuros((int64)Econ->GetBalanceEuros()); // begin-sync
+				Economy->OnMoneyEarned.AddDynamic(Ms, &UMilestoneComponent::HandleMoneyEarned);
 			}
 		}
 	}

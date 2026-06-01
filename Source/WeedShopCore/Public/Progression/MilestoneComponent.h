@@ -40,6 +40,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Progression")
 	bool IsProductUnlocked(FName ProductId) const;
 
+	// Server: tel inkomsten mee (gebonden aan elke speler-portemonnee OnMoneyEarned).
+	UFUNCTION()
+	void HandleMoneyEarned(int64 AmountCents);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -56,9 +60,6 @@ protected:
 
 	UPROPERTY(Replicated)
 	TArray<FName> ReachedMilestones;
-
-	UFUNCTION()
-	void HandleMoneyEarned(int64 AmountCents);
 
 	UFUNCTION()
 	void OnRep_Phase();

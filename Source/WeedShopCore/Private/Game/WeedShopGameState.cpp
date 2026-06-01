@@ -1,6 +1,9 @@
 #include "Game/WeedShopGameState.h"
 
 #include "Economy/EconomyComponent.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "World/DayCycleComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
@@ -22,4 +25,24 @@ AWeedShopGameState::AWeedShopGameState()
 	NpcRegistry = CreateDefaultSubobject<UNpcRegistryComponent>(TEXT("NpcRegistry"));
 	Heat = CreateDefaultSubobject<UHeatComponent>(TEXT("Heat"));
 	Leveling = CreateDefaultSubobject<ULevelComponent>(TEXT("Leveling"));
+}
+
+UEconomyComponent* AWeedShopGameState::GetEconomy() const
+{
+	// Portemonnee per speler (op de pawn). Voor lokale UI/HUD/heat/save geven we de portemonnee
+	// van de lokale speler terug; vóór er een pawn is valt het terug op de GameState-kas.
+	if (const UWorld* W = GetWorld())
+	{
+		if (const APlayerController* PC = W->GetFirstPlayerController())
+		{
+			if (const APawn* P = PC->GetPawn())
+			{
+				if (UEconomyComponent* E = P->FindComponentByClass<UEconomyComponent>())
+				{
+					return E;
+				}
+			}
+		}
+	}
+	return Economy;
 }

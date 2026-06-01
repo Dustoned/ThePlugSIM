@@ -30,9 +30,10 @@ class WEEDSHOPCORE_API AWeedShopGameState : public AGameStateBase
 public:
 	AWeedShopGameState();
 
-	// De gedeelde co-op-kas.
+	// Portemonnee: ieder z'n eigen (op de pawn). Dit geeft de LOKALE speler z'n portemonnee terug
+	// (voor HUD/UI/heat/save op de host). Valt terug op de GameState-kas vóór er een pawn is.
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
-	UEconomyComponent* GetEconomy() const { return Economy; }
+	UEconomyComponent* GetEconomy() const;
 
 	// De gedeelde dag/nacht-klok.
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
