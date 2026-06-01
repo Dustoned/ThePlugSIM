@@ -36,6 +36,33 @@ FString USaveGameSubsystem::SlotNameFor(int32 Slot) const
 	return FString::Printf(TEXT("%s_%d"), *SlotName, FMath::Clamp(Slot, 0, NumSlots - 1));
 }
 
+FString USaveGameSubsystem::AutoSlotNameFor(int32 Slot) const
+{
+	return FString::Printf(TEXT("%s_%d_auto"), *SlotName, FMath::Clamp(Slot, 0, NumSlots - 1));
+}
+
+FString USaveGameSubsystem::ResolveLoadName(bool bPreferNewest) const
+{
+	const FString Manual = SlotNameFor(CurrentSlot);
+	const FString Auto = AutoSlotNameFor(CurrentSlot);
+	const bool bHasManual = UGameplayStatics::DoesSaveGameExist(Manual, 0);
+	const bool bHasAuto = UGameplayStatics::DoesSaveGameExist(Auto, 0);
+
+	if (!bHasManual && !bHasAuto) { return FString(); }
+	if (!bHasManual) { return Auto; }   // nog nooit handmatig opgeslagen -> de autosave
+	if (!bHasAuto) { return Manual; }
+
+	// Beide bestaan. Voor "Continue" pakken we het nieuwste; voor een echte Load altijd de
+	// handmatige save (jouw echte save-punt), ook al is de autosave nieuwer.
+	if (!bPreferNewest) { return Manual; }
+
+	const UWeedShopSaveGame* M = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Manual, 0));
+	const UWeedShopSaveGame* A = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Auto, 0));
+	const FDateTime MT = M ? M->SavedAt : FDateTime(0);
+	const FDateTime AT = A ? A->SavedAt : FDateTime(0);
+	return (AT > MT) ? Auto : Manual;
+}
+
 void USaveGameSubsystem::SetSlot(int32 Slot)
 {
 	CurrentSlot = FMath::Clamp(Slot, 0, NumSlots - 1);
@@ -45,13 +72,16 @@ void USaveGameSubsystem::SetSlot(int32 Slot)
 
 bool USaveGameSubsystem::HasSaveInSlot(int32 Slot) const
 {
-	return UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0);
+	return UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)
+		|| UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0);
 }
 
 bool USaveGameSubsystem::GetSlotInfo(int32 Slot, FString& OutSummary) const
 {
 	if (!HasSaveInSlot(Slot)) { return false; }
-	if (const UWeedShopSaveGame* S = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotNameFor(Slot), 0)))
+	// Toon de handmatige save als die er is, anders de autosave.
+	const FString Name = UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0) ? SlotNameFor(Slot) : AutoSlotNameFor(Slot);
+	if (const UWeedShopSaveGame* S = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0)))
 	{
 		OutSummary = FString::Printf(TEXT("Day %d  -  earned EUR %lld  -  %d player(s)"),
 			S->DayNumber, (long long)(S->TotalEarnedCents / 100), S->Players.Num());
@@ -63,7 +93,9 @@ bool USaveGameSubsystem::GetSlotInfo(int32 Slot, FString& OutSummary) const
 void USaveGameSubsystem::NewGameInSlot(int32 Slot)
 {
 	SetSlot(Slot);
-	// Verse staat: niets herstellen. De oude save in dit slot blijft tot je opnieuw opslaat.
+	// Verse staat: wis dit slot (handmatig + autosave) zodat een Load straks niet de oude save pakt.
+	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
+	if (UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(AutoSlotNameFor(Slot), 0); }
 	Loaded = nullptr;
 	RestoredPlayers.Reset();
 }
@@ -71,13 +103,14 @@ void USaveGameSubsystem::NewGameInSlot(int32 Slot)
 bool USaveGameSubsystem::LoadSlot(int32 Slot)
 {
 	SetSlot(Slot);
-	return LoadGame();
+	return LoadGame(false); // echte Load: altijd jouw handmatige save-punt
 }
 
 bool USaveGameSubsystem::QuickContinue()
 {
-	if (HasSaveInSlot(CurrentSlot)) { return LoadGame(); }
-	for (int32 i = 0; i < NumSlots; ++i) { if (HasSaveInSlot(i)) { return LoadSlot(i); } }
+	// Continue: pak het nieuwste (handmatig of autosave) zodat je verdergaat waar je was.
+	if (HasSaveInSlot(CurrentSlot)) { return LoadGame(true); }
+	for (int32 i = 0; i < NumSlots; ++i) { if (HasSaveInSlot(i)) { SetSlot(i); return LoadGame(true); } }
 	return false;
 }
 
@@ -95,7 +128,7 @@ bool USaveGameSubsystem::HasAuthorityWorld() const
 
 bool USaveGameSubsystem::HasSave() const
 {
-	return UGameplayStatics::DoesSaveGameExist(SlotNameFor(CurrentSlot), 0);
+	return HasSaveInSlot(CurrentSlot);
 }
 
 void USaveGameSubsystem::PlayerKeys(const APawn* Pawn, FString& OutId, FString& OutName)
@@ -184,7 +217,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	}
 }
 
-bool USaveGameSubsystem::SaveGame()
+bool USaveGameSubsystem::SaveGame(bool bAutosave)
 {
 	if (!HasAuthorityWorld()) { return false; }
 	AWeedShopGameState* GS = GetWeedGameState();
@@ -194,11 +227,21 @@ bool USaveGameSubsystem::SaveGame()
 	UWeedShopSaveGame* Save = Cast<UWeedShopSaveGame>(UGameplayStatics::CreateSaveGameObject(UWeedShopSaveGame::StaticClass()));
 	if (!Save) { return false; }
 
+	// Handmatige save -> echte slot; autosave -> apart bestand (overschrijft je echte save NIET).
+	const FString TargetName = bAutosave ? AutoSlotNameFor(CurrentSlot) : SlotNameFor(CurrentSlot);
+
 	// Bestaande spelers behouden (zo blijft een co-op vriend die nu offline is bewaard).
-	if (UWeedShopSaveGame* Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotNameFor(CurrentSlot), 0)))
+	UWeedShopSaveGame* Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(TargetName, 0));
+	if (!Prev)
 	{
-		Save->Players = Prev->Players;
+		// Eerste schrijf naar dit bestand: erf de spelerslijst van het andere bestand in dit slot.
+		const FString OtherName = bAutosave ? SlotNameFor(CurrentSlot) : AutoSlotNameFor(CurrentSlot);
+		Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(OtherName, 0));
 	}
+	if (Prev) { Save->Players = Prev->Players; }
+
+	Save->SavedAt = FDateTime::UtcNow();
+	Save->bIsAutosave = bAutosave;
 
 	// Gedeelde wereld-staat.
 	if (const UDayCycleComponent* Day = GS->GetDayCycle()) { Save->TimeOfDaySeconds = Day->GetTimeOfDaySeconds(); Save->DayNumber = Day->GetDayNumber(); }
@@ -223,21 +266,23 @@ bool USaveGameSubsystem::SaveGame()
 		}
 	}
 
-	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotNameFor(CurrentSlot), 0);
+	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, TargetName, 0);
 	if (bOk) { Loaded = Save; GS->NotifySaved(); } // cache + save-indicator bij alle spelers
-	UE_LOG(LogWeedShop, Log, TEXT("SaveGame %s: %d speler(s), dag %d, fase %d"),
-		bOk ? TEXT("OK") : TEXT("MISLUKT"), NumPlayers, Save->DayNumber, Save->MilestonePhase);
+	UE_LOG(LogWeedShop, Log, TEXT("SaveGame %s (%s): %d speler(s), dag %d, fase %d"),
+		bOk ? TEXT("OK") : TEXT("MISLUKT"), bAutosave ? TEXT("auto") : TEXT("handmatig"), NumPlayers, Save->DayNumber, Save->MilestonePhase);
 	return bOk;
 }
 
-bool USaveGameSubsystem::LoadGame()
+bool USaveGameSubsystem::LoadGame(bool bPreferNewest)
 {
 	if (!HasAuthorityWorld()) { return false; }
 	AWeedShopGameState* GS = GetWeedGameState();
-	if (!GS || !HasSave()) { return false; }
+	if (!GS) { return false; }
 	UWorld* World = GS->GetWorld();
 
-	UWeedShopSaveGame* Save = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotNameFor(CurrentSlot), 0));
+	const FString LoadName = ResolveLoadName(bPreferNewest);
+	if (LoadName.IsEmpty()) { return false; }
+	UWeedShopSaveGame* Save = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(LoadName, 0));
 	if (!Save) { return false; }
 	Loaded = Save;
 	RestoredPlayers.Reset();

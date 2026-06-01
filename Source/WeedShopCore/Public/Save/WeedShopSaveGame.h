@@ -98,7 +98,15 @@ class WEEDSHOPCORE_API UWeedShopSaveGame : public USaveGame
 
 public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
-	int32 SaveVersion = 2;
+	int32 SaveVersion = 3;
+
+	// Wanneer deze save geschreven is (UTC). Voor "Continue" -> nieuwste van handmatig vs autosave.
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	FDateTime SavedAt = FDateTime(0);
+
+	// True als dit een autosave-bestand is (apart van de handmatige save).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	bool bIsAutosave = false;
 
 	// --- Gedeelde (host) wereld-staat ---
 	UPROPERTY(VisibleAnywhere, Category = "Save")

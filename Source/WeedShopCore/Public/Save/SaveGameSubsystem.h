@@ -51,12 +51,15 @@ public:
 
 	// Schrijft de huidige gedeelde state + ALLE verbonden spelers (op username) naar de slot.
 	// Alleen de host/server. False bij client of geen GameState.
+	// bAutosave = naar het aparte autosave-bestand schrijven (overschrijft je echte save NIET).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
-	bool SaveGame();
+	bool SaveGame(bool bAutosave = false);
 
 	// Laadt de slot, herstelt de gedeelde state + alle nu verbonden spelers (alleen server).
+	// bPreferNewest = neem het nieuwste van handmatig/autosave (voor Continue). Anders: altijd de
+	// echte (handmatige) save, en alleen de autosave als er nog geen handmatige save bestaat.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
-	bool LoadGame();
+	bool LoadGame(bool bPreferNewest = false);
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
 	bool HasSave() const;
@@ -69,6 +72,9 @@ protected:
 	AWeedShopGameState* GetWeedGameState() const;
 	bool HasAuthorityWorld() const;
 	FString SlotNameFor(int32 Slot) const;
+	FString AutoSlotNameFor(int32 Slot) const; // apart autosave-bestand naast de echte save
+	// Kies welk bestand geladen moet worden voor het huidige slot ("" = geen save aanwezig).
+	FString ResolveLoadName(bool bPreferNewest) const;
 
 	int32 CurrentSlot = 0;
 

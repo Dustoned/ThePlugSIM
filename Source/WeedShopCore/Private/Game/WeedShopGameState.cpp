@@ -54,7 +54,7 @@ void AWeedShopGameState::AutoSave()
 	{
 		if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
 		{
-			Sv->SaveGame();
+			Sv->SaveGame(true); // autosave -> apart bestand, overschrijft je echte save niet
 		}
 	}
 }
