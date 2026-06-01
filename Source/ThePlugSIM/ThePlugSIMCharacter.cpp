@@ -274,6 +274,9 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	Input->BindKey(EKeys::RightMouseButton, IE_Released, this, &AThePlugSIMCharacter::OnSecondaryReleased);
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Pressed,  this, &AThePlugSIMCharacter::OnPrimaryClick);
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Released, this, &AThePlugSIMCharacter::OnPrimaryReleased);
+
+	// ESC: pauze-/menu-scherm. (Werkt ook met UI open omdat de cursor-modus GameAndUI is.)
+	Input->BindKey(EKeys::Escape, IE_Pressed, this, &AThePlugSIMCharacter::OnPauseKey);
 }
 
 void AThePlugSIMCharacter::RefreshKeyBindings()
@@ -584,7 +587,7 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	// deze klik net heeft verwerkt (bv. een paneel sloot) negeren we 'm hier, zodat dezelfde klik
 	// niet alsnog de wereld-interactie (en daarmee bv. de deal opnieuw) opent.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->DidUiConsumeClickRecently()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen() || Phone->DidUiConsumeClickRecently()))
 	{
 		return;
 	}
@@ -638,12 +641,18 @@ void AThePlugSIMCharacter::OnPrimaryReleased()
 	if (Phone) { Phone->SetGiveHoldFrac(0.f); }
 }
 
+void AThePlugSIMCharacter::OnPauseKey()
+{
+	// ESC opent het pauze-menu (en sluit andere schermen); nogmaals ESC sluit het menu.
+	if (Phone) { Phone->TogglePause(); }
+}
+
 void AThePlugSIMCharacter::OnInteractKey()
 {
 	// E doet hetzelfde als links-klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen,
 	// maar gebruikt nooit het actieve hand-item.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen()))
 	{
 		return;
 	}

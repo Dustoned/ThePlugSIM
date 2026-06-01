@@ -33,6 +33,7 @@
 #include "UI/AtmWidget.h"
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
+#include "UI/PauseMenuWidget.h"
 #include "World/StorageShelf.h"
 #include "Blueprint/UserWidget.h"
 #include "Net/UnrealNetwork.h"
@@ -75,7 +76,7 @@ UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bPauseOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -140,6 +141,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
 	ShelfWidget = CreateWidget<UShelfWidget>(PC, UShelfWidget::StaticClass());
 	if (ShelfWidget) { ShelfWidget->SetPhone(this); ShelfWidget->AddToViewport(31); }
+	PauseWidget = CreateWidget<UPauseMenuWidget>(PC, UPauseMenuWidget::StaticClass());
+	if (PauseWidget) { PauseWidget->SetPhone(this); PauseWidget->AddToViewport(40); }
 }
 
 void UPhoneClientComponent::Toggle()
@@ -195,6 +198,52 @@ void UPhoneClientComponent::OpenPack(int32 Batch)
 void UPhoneClientComponent::ClosePack()
 {
 	bPackOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::TogglePause()
+{
+	if (bPauseOpen) { ClosePause(); }
+	else { OpenPause(); }
+}
+
+void UPhoneClientComponent::OpenPause()
+{
+	EnsureWidget();
+	bPauseOpen = true;
+	// Sluit alle andere schermen zodat het pauze-menu schoon bovenop ligt.
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
+	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
+	// In standalone (single-player) pauzeren we de wereld echt; in co-op blijft de wereld lopen.
+	if (APlayerController* PC = GetPC())
+	{
+		if (GetWorld() && GetWorld()->GetNetMode() == NM_Standalone)
+		{
+			PC->SetPause(true);
+		}
+	}
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ClosePause()
+{
+	bPauseOpen = false;
+	if (APlayerController* PC = GetPC())
+	{
+		PC->SetPause(false);
+	}
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::OpenToApp(int32 AppIndex)
+{
+	EnsureWidget();
+	ClosePause();
+	bOpen = true;
+	bHomeScreen = false;
+	Tab = FMath::Clamp(AppIndex, 0, AppCount - 1);
+	bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false;
+	bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
 	UpdateCursor();
 }
 

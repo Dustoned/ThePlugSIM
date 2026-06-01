@@ -139,6 +139,9 @@ protected:
 	/** Interact-toets (E): zelfde als klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen. */
 	void OnInteractKey();
 
+	/** ESC: open/sluit het pauze-/menu-scherm. */
+	void OnPauseKey();
+
 	/** Links-knop losgelaten: stopt de "joint overhandigen"-hold. */
 	void OnPrimaryReleased();
 

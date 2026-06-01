@@ -39,6 +39,19 @@ public:
 	// --- iPhone-achtige home/apps ---
 	static constexpr int32 AppCount = 10; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies 8 Packages 9 Bank
 
+	// --- Pauze-menu (ESC): overlay met Resume / Settings / Save / Load / Main Menu / Quit ---
+	// (Geen echte wereld-pauze in co-op; in standalone pauzeert de wereld wel.)
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pause")
+	void TogglePause();
+	void OpenPause();
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pause")
+	void ClosePause();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Pause")
+	bool IsPauseOpen() const { return bPauseOpen; }
+
+	// Open de telefoon direct op een bepaalde app (gebruikt door het pauze-menu voor Settings).
+	void OpenToApp(int32 AppIndex);
+
 	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
 	void OpenAtm();
@@ -490,6 +503,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UShelfWidget> ShelfWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UPauseMenuWidget> PauseWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
@@ -524,6 +540,8 @@ protected:
 
 	bool bShelfOpen = false;
 	TWeakObjectPtr<class AStorageShelf> ShelfActor; // het schap dat nu open is
+
+	bool bPauseOpen = false;
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;
