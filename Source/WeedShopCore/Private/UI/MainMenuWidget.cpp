@@ -118,6 +118,29 @@ namespace
 		return Tex;
 	}
 
+	// Radiale soft-glow textuur (wit, alpha valt zacht af vanuit het midden). Tintbaar -> neon-halo.
+	UTexture2D* MakeRadialGlow(int32 Size)
+	{
+		UTexture2D* T = UTexture2D::CreateTransient(Size, Size, PF_B8G8R8A8);
+		if (!T) { return nullptr; }
+		T->SRGB = true;
+		const float Cc = (Size - 1) * 0.5f;
+		void* Data = T->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
+		uint8* P = static_cast<uint8*>(Data);
+		for (int32 y = 0; y < Size; ++y) for (int32 x = 0; x < Size; ++x)
+		{
+			const float dx = (x - Cc) / Cc, dy = (y - Cc) / Cc;
+			float a = 1.f - FMath::Sqrt(dx * dx + dy * dy);
+			a = FMath::Clamp(a, 0.f, 1.f);
+			a = a * a * (3.f - 2.f * a); // smoothstep -> zachte halo
+			const int64 i = ((int64)y * Size + x) * 4;
+			P[i] = 255; P[i + 1] = 255; P[i + 2] = 255; P[i + 3] = (uint8)(a * 255.f);
+		}
+		T->GetPlatformData()->Mips[0].BulkData.Unlock();
+		T->UpdateResource();
+		return T;
+	}
+
 	// Maakt een Slate-brush van een texture met een tint (voor de knop-swatch).
 	FSlateBrush SwatchBrush(UTexture2D* Tex, const FLinearColor& Tint)
 	{
@@ -162,7 +185,20 @@ UBorder* UMainMenuWidget::AddGlow(UOverlay* Layers, const FLinearColor& Color, f
 UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq)
 {
 	UBorder* Glow = WidgetTree->ConstructWidget<UBorder>();
-	Glow->SetBrush(WeedUI::Rounded(Color, FMath::Min(W, H) * 0.5f)); // sterk afgerond = zachte halo
+	if (GlowTex)
+	{
+		FSlateBrush B;
+		B.SetResourceObject(GlowTex);
+		B.ImageSize = FVector2D(GlowTex->GetSizeX(), GlowTex->GetSizeY());
+		B.DrawAs = ESlateBrushDrawType::Image;
+		B.TintColor = FSlateColor(Color);
+		Glow->SetBrush(B);
+	}
+	else
+	{
+		Glow->SetBrush(WeedUI::Rounded(Color, FMath::Min(W, H) * 0.5f));
+	}
+	Glow->SetVisibility(ESlateVisibility::HitTestInvisible);
 	UCanvasPanelSlot* S = C->AddChildToCanvas(Glow);
 	S->SetAnchors(FAnchors(Fx, Fy, Fx, Fy));
 	S->SetAlignment(FVector2D(0.5f, 0.5f));
@@ -206,18 +242,19 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* IS = Layers->AddChildToOverlay(BgImg);
 		IS->SetHorizontalAlignment(HAlign_Fill); IS->SetVerticalAlignment(VAlign_Fill);
 
-		// Zacht flikkerende neon-gloeden bovenop de lampen in de foto (proportioneel, additief gevoel).
+		// Echte radiale neon-gloeden bovenop de lampen (proportioneel, levend flikkerend).
+		GlowTex = MakeRadialGlow(192);
 		UCanvasPanel* GlowCanvas = WidgetTree->ConstructWidget<UCanvasPanel>();
 		GlowCanvas->SetVisibility(ESlateVisibility::HitTestInvisible); // vangt geen klikken
 		UOverlaySlot* GC = Layers->AddChildToOverlay(GlowCanvas);
 		GC->SetHorizontalAlignment(HAlign_Fill); GC->SetVerticalAlignment(VAlign_Fill);
 
-		AddGlowAt(GlowCanvas, 0.46f, 0.17f, 380.f, 70.f,  FLinearColor(1.00f, 0.22f, 0.85f, 0.16f), 6.5f); // magenta plafond-buis
-		AddGlowAt(GlowCanvas, 0.575f, 0.36f, 220.f, 120.f, FLinearColor(1.00f, 0.28f, 0.80f, 0.15f), 9.0f); // "Good Vibes"-bordje
-		AddGlowAt(GlowCanvas, 0.875f, 0.30f, 230.f, 320.f, FLinearColor(0.25f, 0.55f, 1.00f, 0.15f), 3.5f); // blauw schap / prices
-		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 300.f, 320.f, FLinearColor(0.62f, 0.25f, 1.00f, 0.13f), 2.4f); // paarse grow-tent (links)
-		AddGlowAt(GlowCanvas, 0.50f, 0.74f, 760.f, 340.f, FLinearColor(0.55f, 0.20f, 0.95f, 0.12f), 1.8f); // paarse vloer-pool
-		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 280.f, 170.f, FLinearColor(0.22f, 0.45f, 1.00f, 0.12f), 4.2f); // blauw onder de toonbank
+		AddGlowAt(GlowCanvas, 0.46f, 0.17f, 560.f, 230.f, FLinearColor(1.00f, 0.20f, 0.85f, 0.55f), 6.5f); // magenta plafond-buis
+		AddGlowAt(GlowCanvas, 0.575f, 0.36f, 360.f, 300.f, FLinearColor(1.00f, 0.26f, 0.78f, 0.50f), 9.0f); // "Good Vibes"-bordje
+		AddGlowAt(GlowCanvas, 0.875f, 0.30f, 360.f, 540.f, FLinearColor(0.28f, 0.55f, 1.00f, 0.50f), 3.5f); // blauw schap / prices
+		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 460.f, 520.f, FLinearColor(0.62f, 0.25f, 1.00f, 0.42f), 2.4f); // paarse grow-tent (links)
+		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
+		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
 
 		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
 		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
@@ -398,15 +435,18 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!Glows[i]) { continue; }
 		const float Ph = GlowPhase.IsValidIndex(i) ? GlowPhase[i] : 0.f;
 		const float Fr = GlowFreq.IsValidIndex(i) ? GlowFreq[i] : 4.f;
-		// Heel zachte neon-puls: twee trage sinussen + minieme per-frame shimmer.
-		float Osc = 0.90f
-			+ 0.07f * FMath::Sin(T * Fr + Ph)
-			+ 0.035f * FMath::Sin(T * Fr * 2.3f + Ph * 1.6f)
-			+ FMath::FRandRange(-0.015f, 0.015f);
-		Osc = FMath::Clamp(Osc, 0.7f, 1.1f);
+		// Levende neon-puls: trage golf + snellere rimpel + af en toe een korte "stotter"-dip.
+		float Osc = 0.85f
+			+ 0.16f * FMath::Sin(T * Fr + Ph)
+			+ 0.09f * FMath::Sin(T * Fr * 2.6f + Ph * 1.7f)
+			+ FMath::FRandRange(-0.04f, 0.04f);
+		if (FMath::FRand() < 0.015f) { Osc *= FMath::FRandRange(0.35f, 0.7f); } // korte neon-flikker
+		Osc = FMath::Clamp(Osc, 0.25f, 1.35f);
 
 		const FLinearColor Base = GlowBase.IsValidIndex(i) ? GlowBase[i] : FLinearColor::White;
-		FLinearColor C(Base.R * Osc, Base.G * Osc, Base.B * Osc, FMath::Clamp(Base.A * Osc, 0.f, 1.f));
+		// Helderheid + alpha allebei mee laten pulseren -> de halo komt zichtbaar op en neer.
+		const float K = 0.6f + 0.4f * Osc;
+		FLinearColor C(Base.R * K, Base.G * K, Base.B * K, FMath::Clamp(Base.A * Osc, 0.f, 1.f));
 		Glows[i]->SetBrushColor(C);
 	}
 }
