@@ -141,6 +141,14 @@ void UShelfWidget::FillBody()
 		{
 			ShelfList->AddChild(WeedUI::Text(WidgetTree, TEXT("Empty."), 12, FLinearColor::Gray));
 		}
+		else
+		{
+			// "Take everything": van hoog naar laag index zodat verwijderen geen indices verschuift.
+			const int32 Num = Shelf->Contents.Num();
+			ShelfList->AddChild(ShelfBtn(WidgetTree, TEXT("Take everything"), FLinearColor(0.22f, 0.45f, 0.6f),
+				[Ph, Num]() { for (int32 i = Num - 1; i >= 0; --i) { Ph->RequestShelfTake(i, 100000); } }));
+			ShelfList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 4, FLinearColor::Transparent));
+		}
 		for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
 		{
 			const FShelfStack& S = Shelf->Contents[i];
@@ -169,6 +177,18 @@ void UShelfWidget::FillBody()
 			Totals.FindOrAdd(St.ItemId) += St.Quantity;
 		}
 		if (Order.Num() == 0) { InvList->AddChild(WeedUI::Text(WidgetTree, TEXT("Nothing to store."), 12, FLinearColor::Gray)); }
+		else
+		{
+			// "Store all packaged": alle verkoopbare Bag_-voorraad in één keer wegzetten.
+			TArray<FName> Bags; TMap<FName, int32> BagTot;
+			for (const FName& Id : Order) { if (Id.ToString().StartsWith(TEXT("Bag_"))) { Bags.Add(Id); BagTot.Add(Id, Totals[Id]); } }
+			if (Bags.Num() > 0)
+			{
+				InvList->AddChild(ShelfBtn(WidgetTree, TEXT("Store all packaged"), FLinearColor(0.22f, 0.5f, 0.3f),
+					[Ph, Bags, BagTot]() { for (const FName& B : Bags) { Ph->RequestShelfStore(B, BagTot[B]); } }));
+				InvList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 4, FLinearColor::Transparent));
+			}
+		}
 		for (const FName& Id : Order)
 		{
 			const int32 Have = Totals[Id];
