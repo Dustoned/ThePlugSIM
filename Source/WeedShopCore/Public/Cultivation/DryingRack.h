@@ -79,6 +79,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Dry")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
+	// Samengestelde look (frame + dwarsbalken), los van de root-schaal.
+	UPROPERTY() TObjectPtr<USceneComponent> Deco;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+
 	// Batches (repliceert zodat clients ook progress kunnen tonen).
 	UPROPERTY(Replicated)
 	TArray<FDryEntry> Entries;

@@ -48,4 +48,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Placeable")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	// Samengestelde look voor specifieke meubels (tafel/koelkast/matras). Voor de rest blijft de
+	// enkele mesh zichtbaar. Onder Root (ongeschaald), dus onderdelen in echte cm vanaf de vloer (z=0).
+	UPROPERTY() TObjectPtr<USceneComponent> Deco;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+	void HideParts();
 };

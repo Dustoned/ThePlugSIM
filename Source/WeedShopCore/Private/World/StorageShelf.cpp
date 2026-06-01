@@ -5,6 +5,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Placement/PlaceableTypes.h"
+#include "Placement/PropMeshKit.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
@@ -27,6 +28,9 @@ AStorageShelf::AStorageShelf()
 		DynMat = Mesh->CreateDynamicMaterialInstance(0, MatFinder.Object);
 		if (DynMat) { DynMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.45f, 0.30f, 0.18f)); } // warm hout
 	}
+
+	Deco = PropKit::MakeDeco(this, Mesh, TEXT("Deco"));
+	for (int32 i = 0; i < 9; ++i) { Parts.Add(PropKit::MakePart(this, Deco, *FString::Printf(TEXT("Part%d"), i))); }
 }
 
 int32 AStorageShelf::GetCapacity() const
@@ -51,16 +55,48 @@ void AStorageShelf::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 void AStorageShelf::SetupVisual()
 {
 	FPlaceableDef Def;
-	if (Mesh && GetPlaceableDef(ShelfTier, Def))
+	if (!Mesh || !GetPlaceableDef(ShelfTier, Def)) { return; }
+	Mesh->SetWorldScale3D(Def.MeshScale);
+
+	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
+	const FLinearColor Col = bChest ? FLinearColor(0.32f, 0.20f, 0.10f) : FLinearColor(0.45f, 0.30f, 0.18f);
+	if (DynMat) { DynMat->SetVectorParameterValue(TEXT("Color"), Col); }
+	if (Parts.Num() < 9) { return; }
+
+	const float W = Def.MeshScale.X * 100.f;
+	const float D = Def.MeshScale.Y * 100.f;
+	const float H = Def.MeshScale.Z * 100.f;
+	const float Floor = -H * 0.5f;
+	const FLinearColor Dark = Col * 0.7f;
+	const FLinearColor Light = Col * 1.25f;
+
+	Mesh->SetVisibility(false);
+
+	if (bChest)
 	{
-		Mesh->SetWorldScale3D(Def.MeshScale);
+		// Kist: romp + schuin deksel + 2 sloten/beslag.
+		const float BodyH = H * 0.62f;
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(W, D, BodyH), FVector(0, 0, Floor + BodyH * 0.5f), Col);
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(W * 1.02f, D * 1.02f, H * 0.30f), FVector(0, 0, Floor + BodyH + H * 0.13f), Light, FRotator(8.f, 0.f, 0.f));
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W * 0.10f, D * 1.04f, BodyH * 0.5f), FVector(-W * 0.30f, 0, Floor + BodyH * 0.5f), Dark);
+		PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W * 0.10f, D * 1.04f, BodyH * 0.5f), FVector( W * 0.30f, 0, Floor + BodyH * 0.5f), Dark);
+		PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(W * 0.14f, D * 0.10f, H * 0.10f), FVector(0, D * 0.5f, Floor + BodyH * 0.55f), FLinearColor(0.7f, 0.6f, 0.2f));
+		for (int32 i = 5; i < 9; ++i) { if (Parts[i]) { Parts[i]->SetVisibility(false); } }
 	}
-	// Kleur per type: kist iets donkerder bruin dan het schap.
-	if (DynMat)
+	else
 	{
-		const FLinearColor Col = (ShelfTier == FName(TEXT("Chest")))
-			? FLinearColor(0.32f, 0.20f, 0.10f) : FLinearColor(0.45f, 0.30f, 0.18f);
-		DynMat->SetVectorParameterValue(TEXT("Color"), Col);
+		// Schap: 2 zijpanelen + achterwand + 4 legborden.
+		const float PanelT = FMath::Min(5.f, W * 0.06f);
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(PanelT, D, H), FVector(-W * 0.5f + PanelT * 0.5f, 0, 0), Col);
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(PanelT, D, H), FVector( W * 0.5f - PanelT * 0.5f, 0, 0), Col);
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W, PanelT, H), FVector(0, D * 0.5f - PanelT * 0.5f, 0), Dark);
+		// 4 planken verdeeld over de hoogte.
+		for (int32 s = 0; s < 4; ++s)
+		{
+			const float Z = Floor + H * (0.10f + 0.27f * s);
+			PropKit::SetPart(Parts[3 + s], PropKit::Cube(), FVector(W - PanelT * 2.f, D * 0.92f, PanelT), FVector(0, 0, Z), Light);
+		}
+		for (int32 i = 7; i < 9; ++i) { if (Parts[i]) { Parts[i]->SetVisibility(false); } }
 	}
 }
 

@@ -6,6 +6,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Inventory/InventoryComponent.h"
 #include "Placement/PlaceableTypes.h"
+#include "Placement/PropMeshKit.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
@@ -44,14 +45,42 @@ ADryingRack::ADryingRack()
 			MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.55f, 0.42f, 0.28f)); // tan / hout
 		}
 	}
+
+	Deco = PropKit::MakeDeco(this, Mesh, TEXT("Deco"));
+	for (int32 i = 0; i < 10; ++i) { Parts.Add(PropKit::MakePart(this, Deco, *FString::Printf(TEXT("Part%d"), i))); }
 }
 
 void ADryingRack::SetupVisual()
 {
 	FPlaceableDef Def;
-	if (Mesh && GetPlaceableDef(RackTier, Def))
+	if (!Mesh || !GetPlaceableDef(RackTier, Def)) { return; }
+	Mesh->SetWorldScale3D(Def.MeshScale);
+	if (Parts.Num() < 10) { return; }
+
+	const float W = Def.MeshScale.X * 100.f; // breedte
+	const float D = Def.MeshScale.Y * 100.f; // diepte
+	const float H = Def.MeshScale.Z * 100.f; // hoogte
+	const float Floor = -H * 0.5f;
+	const FLinearColor Frame(0.40f, 0.30f, 0.20f);
+	const FLinearColor Bar(0.30f, 0.22f, 0.14f);
+	const FLinearColor Mesh2(0.62f, 0.58f, 0.48f);
+
+	Mesh->SetVisibility(false);
+
+	const float Post = FMath::Min(7.f, W * 0.06f);
+	const float PX = W * 0.5f - Post * 0.5f;
+	// 2 staanders + boven- en onderbalk + achtergaas.
+	PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(Post, D, H), FVector(-PX, 0, 0), Frame);
+	PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(Post, D, H), FVector( PX, 0, 0), Frame);
+	PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W, D, Post), FVector(0, 0, H * 0.5f - Post * 0.5f), Frame);
+	PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W, D, Post), FVector(0, 0, Floor + Post * 0.5f), Frame);
+	PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(W - Post * 2.f, FMath::Min(3.f, D * 0.2f), H - Post * 2.f), FVector(0, D * 0.45f, 0), Mesh2);
+	// 5 dwarsstangen (droogroosters) verdeeld over de hoogte.
+	const int32 NBars = 5;
+	for (int32 b = 0; b < NBars; ++b)
 	{
-		Mesh->SetWorldScale3D(Def.MeshScale);
+		const float Z = Floor + H * (0.16f + 0.16f * b);
+		PropKit::SetPart(Parts[5 + b], PropKit::Cube(), FVector(W - Post * 2.f, D * 0.8f, FMath::Min(3.f, H * 0.02f)), FVector(0, 0, Z), Bar);
 	}
 }
 

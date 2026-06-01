@@ -72,4 +72,8 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<class UMaterialInstanceDynamic> DynMat; // voor per-type kleur in SetupVisual
+
+	// Samengestelde look (zijpanelen + planken, of kist + deksel), los van de root-schaal.
+	UPROPERTY() TObjectPtr<USceneComponent> Deco;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 };

@@ -43,4 +43,8 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Pack")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	// Samengestelde look (blad + poten + accenten), los van de root-schaal.
+	UPROPERTY() TObjectPtr<USceneComponent> Deco;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 };
