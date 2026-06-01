@@ -104,68 +104,69 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 	if (BgTex)
 	{
-		// 1) Volledig-scherm achtergrond-foto.
+		// === Composite-modus: de hele mockup (achtergrond + logo + geschilderde knoppen) IS de
+		// achtergrond. We leggen er alleen ONZICHTBARE klik-knoppen overheen. ===
 		UImage* BgImg = WidgetTree->ConstructWidget<UImage>();
 		BgImg->SetBrushFromTexture(BgTex, false);
 		UOverlaySlot* IS = Layers->AddChildToOverlay(BgImg);
 		IS->SetHorizontalAlignment(HAlign_Fill); IS->SetVerticalAlignment(VAlign_Fill);
 
-		// 2) Subtiele flikker-gloeden over de lampen in de foto (plafond-buis, bordje, schap).
-		AddGlow(Layers, FLinearColor(0.95f, 0.20f, 0.85f, 0.16f), 480.f, 36.f, HAlign_Center, VAlign_Top, FMargin(120.f, 70.f, 0.f, 0.f), 6.5f);
-		AddGlow(Layers, FLinearColor(1.0f, 0.25f, 0.75f, 0.16f), 220.f, 120.f, HAlign_Center, VAlign_Center, FMargin(0.f, -40.f, 0.f, 0.f), 9.0f);
-		AddGlow(Layers, FLinearColor(0.20f, 0.45f, 1.0f, 0.16f), 170.f, 440.f, HAlign_Right, VAlign_Center, FMargin(0.f, 0.f, 90.f, 0.f), 3.5f);
+		// Subtiele flikker-gloeden over de lampen (plafond-buis, "Good Vibes", blauw schap).
+		AddGlow(Layers, FLinearColor(0.95f, 0.20f, 0.85f, 0.14f), 320.f, 28.f, HAlign_Center, VAlign_Top, FMargin(60.f, 95.f, 0.f, 0.f), 6.5f);
+		AddGlow(Layers, FLinearColor(1.0f, 0.25f, 0.75f, 0.14f), 180.f, 90.f, HAlign_Center, VAlign_Center, FMargin(-40.f, -120.f, 0.f, 0.f), 9.0f);
+		AddGlow(Layers, FLinearColor(0.20f, 0.45f, 1.0f, 0.14f), 150.f, 340.f, HAlign_Right, VAlign_Center, FMargin(0.f, -120.f, 110.f, 0.f), 3.5f);
 
-		// 3) Donkere "scrim" links zodat logo + menu goed leesbaar zijn op de foto.
-		USizeBox* ScrimBox = WidgetTree->ConstructWidget<USizeBox>();
-		ScrimBox->SetWidthOverride(560.f);
-		UBorder* Scrim = WidgetTree->ConstructWidget<UBorder>();
-		Scrim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.38f), 0.f));
-		ScrimBox->SetContent(Scrim);
-		UOverlaySlot* ScS = Layers->AddChildToOverlay(ScrimBox);
-		ScS->SetHorizontalAlignment(HAlign_Left); ScS->SetVerticalAlignment(VAlign_Fill);
+		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
+		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
+		UOverlaySlot* HS = Layers->AddChildToOverlay(Hit);
+		HS->SetHorizontalAlignment(HAlign_Fill); HS->SetVerticalAlignment(VAlign_Fill);
+
+		const float X0 = 0.085f, X1 = 0.255f, HalfH = 0.030f;
+		const float Centers[6] = { 0.470f, 0.533f, 0.596f, 0.683f, 0.726f, 0.789f };
+		TFunction<void()> Acts[6] = {
+			[this]() { OnStart(); },     // CONTINUE
+			[this]() { OnStart(); },     // NEW GAME
+			[this]() { OnContinue(); },  // LOAD GAME
+			[this]() { OnSettings(); },  // SETTINGS
+			[this]() { OnCredits(); },   // CREDITS
+			[this]() { OnQuit(); },      // EXIT GAME
+		};
+		for (int32 i = 0; i < 6; ++i)
+		{
+			UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
+			B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
+			TFunction<void()> Fn = Acts[i];
+			B->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
+			FButtonStyle St;
+			St.Normal  = WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 6.f);
+			St.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.18f), 6.f);
+			St.Pressed = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.30f), 6.f);
+			B->SetStyle(St);
+			UCanvasPanelSlot* CSl = Hit->AddChildToCanvas(B);
+			CSl->SetAnchors(FAnchors(X0, Centers[i] - HalfH, X1, Centers[i] + HalfH));
+			CSl->SetOffsets(FMargin(0.f)); CSl->SetAlignment(FVector2D(0.f, 0.f));
+		}
+
+		// Kleine status-tekst (laad-feedback), onderaan-midden.
+		StatusText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.85f, 0.8f, 1.f), true);
+		UOverlaySlot* StS = Layers->AddChildToOverlay(StatusText);
+		StS->SetHorizontalAlignment(HAlign_Center); StS->SetVerticalAlignment(VAlign_Bottom); StS->SetPadding(FMargin(0.f, 0.f, 0.f, 40.f));
+		return;
 	}
-	else
-	{
-		// Geen foto gevonden -> val terug op de vector-neon-scene.
-		AddGlow(Layers, FLinearColor(0.95f, 0.20f, 0.85f, 0.42f), 520.f, 40.f, HAlign_Center, VAlign_Top, FMargin(120.f, 70.f, 0.f, 0.f), 6.5f);
-		AddGlow(Layers, FLinearColor(1.0f, 0.25f, 0.75f, 0.40f), 240.f, 130.f, HAlign_Center, VAlign_Center, FMargin(0.f, -40.f, 0.f, 0.f), 9.0f);
-		AddGlow(Layers, FLinearColor(0.20f, 0.45f, 1.0f, 0.38f), 180.f, 460.f, HAlign_Right, VAlign_Center, FMargin(0.f, 0.f, 90.f, 0.f), 3.5f);
-		AddGlow(Layers, FLinearColor(0.55f, 0.18f, 0.95f, 0.30f), 820.f, 360.f, HAlign_Center, VAlign_Bottom, FMargin(0.f, 0.f, 0.f, 0.f), 1.8f);
-		AddGlow(Layers, FLinearColor(0.55f, 0.20f, 0.9f, 0.22f), 560.f, 360.f, HAlign_Left, VAlign_Center, FMargin(20.f, 0.f, 0.f, 0.f), 5.0f);
 
-		USizeBox* BandBox = WidgetTree->ConstructWidget<USizeBox>();
-		BandBox->SetHeightOverride(260.f);
-		UBorder* Band = WidgetTree->ConstructWidget<UBorder>();
-		Band->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.40f), 0.f));
-		BandBox->SetContent(Band);
-		UOverlaySlot* BSl = Layers->AddChildToOverlay(BandBox);
-		BSl->SetHorizontalAlignment(HAlign_Fill); BSl->SetVerticalAlignment(VAlign_Bottom); BSl->SetPadding(FMargin(0.f));
-	}
+	// === Fallback (geen foto gevonden): nette vector-versie met tekst-logo + gestylede knoppen. ===
+	AddGlow(Layers, FLinearColor(0.95f, 0.20f, 0.85f, 0.42f), 520.f, 40.f, HAlign_Center, VAlign_Top, FMargin(120.f, 70.f, 0.f, 0.f), 6.5f);
+	AddGlow(Layers, FLinearColor(0.20f, 0.45f, 1.0f, 0.38f), 180.f, 460.f, HAlign_Right, VAlign_Center, FMargin(0.f, 0.f, 90.f, 0.f), 3.5f);
+	AddGlow(Layers, FLinearColor(0.55f, 0.18f, 0.95f, 0.30f), 820.f, 360.f, HAlign_Center, VAlign_Bottom, FMargin(0.f, 0.f, 0.f, 0.f), 1.8f);
 
-	// --- Logo + menu, links-boven uitgelijnd (zoals de referentie). ---
 	UVerticalBox* Left = WidgetTree->ConstructWidget<UVerticalBox>();
 	{
 		UOverlaySlot* LS = Layers->AddChildToOverlay(Left);
 		LS->SetHorizontalAlignment(HAlign_Left); LS->SetVerticalAlignment(VAlign_Top); LS->SetPadding(FMargin(60.f, 55.f, 0.f, 0.f));
 	}
-
-	// Logo: de losse PNG indien aanwezig (groot links-boven via een vaste SizeBox), anders tekst.
-	if (LogoTex)
-	{
-		const float LW = 720.f, LH = LW * 724.f / 2172.f; // aspect 3:1 behouden
-		USizeBox* LogoBox = WidgetTree->ConstructWidget<USizeBox>();
-		LogoBox->SetWidthOverride(LW); LogoBox->SetHeightOverride(LH);
-		UImage* Logo = WidgetTree->ConstructWidget<UImage>();
-		Logo->SetBrushFromTexture(LogoTex, false);
-		LogoBox->SetContent(Logo);
-		Left->AddChildToVerticalBox(LogoBox)->SetPadding(FMargin(-8.f, 0.f, 0.f, 18.f));
-	}
-	else
-	{
-		Left->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("PLUG"), 72, FLinearColor(0.97f, 0.98f, 1.f), false, true));
-		Left->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("SIMULATOR"), 40, FLinearColor(0.72f, 0.35f, 1.f), false, true))
-			->SetPadding(FMargin(2.f, 0.f, 0.f, 26.f));
-	}
+	Left->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("PLUG"), 72, FLinearColor(0.97f, 0.98f, 1.f), false, true));
+	Left->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("SIMULATOR"), 40, FLinearColor(0.72f, 0.35f, 1.f), false, true))
+		->SetPadding(FMargin(2.f, 0.f, 0.f, 26.f));
 
 	auto AddBtn = [this, Left](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
 	{
@@ -176,26 +177,17 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		Left->AddChildToVerticalBox(Sz)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 		return B;
 	};
-
-	// Donkere, halftransparante balken; de bovenste (Continue) paars gehighlight zoals de mockup.
 	const FLinearColor Hi(0.42f, 0.16f, 0.72f, 0.96f);
 	const FLinearColor Dark(0.06f, 0.07f, 0.09f, 0.78f);
 	AddBtn(TEXT("Continue"),   Hi,   [this]() { OnStart(); });
 	AddBtn(TEXT("New game"),   Dark, [this]() { OnStart(); });
-	ContinueBtn = AddBtn(TEXT("Load game"), Dark, [this]() { OnContinue(); });
+	AddBtn(TEXT("Load game"),  Dark, [this]() { OnContinue(); });
 	AddBtn(TEXT("Settings"),   Dark, [this]() { OnSettings(); });
 	AddBtn(TEXT("Credits"),    Dark, [this]() { OnCredits(); });
 	AddBtn(TEXT("Exit game"),  Dark, [this]() { OnQuit(); });
 
 	StatusText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.8f, 0.7f, 1.f), false);
 	Left->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(2.f, 14.f, 0.f, 0.f));
-
-	// Versie linksonder.
-	{
-		UTextBlock* Ver = WeedUI::Text(WidgetTree, TEXT("v1.0.0"), 11, FLinearColor(0.5f, 0.5f, 0.6f), false);
-		UOverlaySlot* VS = Layers->AddChildToOverlay(Ver);
-		VS->SetHorizontalAlignment(HAlign_Left); VS->SetVerticalAlignment(VAlign_Bottom); VS->SetPadding(FMargin(22.f, 0.f, 0.f, 14.f));
-	}
 }
 
 void UMainMenuWidget::OnStart()
