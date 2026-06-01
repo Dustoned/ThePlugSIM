@@ -209,7 +209,7 @@ bool USaveGameSubsystem::SaveGame()
 	}
 
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotNameFor(CurrentSlot), 0);
-	if (bOk) { Loaded = Save; } // cache zodat late-joiners de nieuwste staat krijgen
+	if (bOk) { Loaded = Save; GS->NotifySaved(); } // cache + save-indicator bij alle spelers
 	UE_LOG(LogWeedShop, Log, TEXT("SaveGame %s: %d speler(s), dag %d, fase %d"),
 		bOk ? TEXT("OK") : TEXT("MISLUKT"), NumPlayers, Save->DayNumber, Save->MilestonePhase);
 	return bOk;

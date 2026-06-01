@@ -527,6 +527,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UMainMenuWidget> MainMenuWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class USaveIndicatorWidget> SaveIndicatorWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app

@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Save/SaveGameSubsystem.h"
+#include "Net/UnrealNetwork.h"
 #include "World/DayCycleComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
@@ -28,6 +29,12 @@ AWeedShopGameState::AWeedShopGameState()
 	NpcRegistry = CreateDefaultSubobject<UNpcRegistryComponent>(TEXT("NpcRegistry"));
 	Heat = CreateDefaultSubobject<UHeatComponent>(TEXT("Heat"));
 	Leveling = CreateDefaultSubobject<ULevelComponent>(TEXT("Leveling"));
+}
+
+void AWeedShopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AWeedShopGameState, SaveCounter);
 }
 
 void AWeedShopGameState::BeginPlay()

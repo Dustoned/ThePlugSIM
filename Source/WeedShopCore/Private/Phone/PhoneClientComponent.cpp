@@ -35,6 +35,7 @@
 #include "UI/ShelfWidget.h"
 #include "UI/PauseMenuWidget.h"
 #include "UI/MainMenuWidget.h"
+#include "UI/SaveIndicatorWidget.h"
 #include "World/StorageShelf.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
@@ -149,6 +150,9 @@ void UPhoneClientComponent::EnsureWidget()
 	if (PauseWidget) { PauseWidget->SetPhone(this); PauseWidget->AddToViewport(40); }
 	MainMenuWidget = CreateWidget<UMainMenuWidget>(PC, UMainMenuWidget::StaticClass());
 	if (MainMenuWidget) { MainMenuWidget->SetPhone(this); MainMenuWidget->AddToViewport(42); }
+	// Save-indicator bovenop alles (ook over pauze/menu heen) zodat je 'm altijd ziet.
+	SaveIndicatorWidget = CreateWidget<USaveIndicatorWidget>(PC, USaveIndicatorWidget::StaticClass());
+	if (SaveIndicatorWidget) { SaveIndicatorWidget->AddToViewport(50); }
 }
 
 void UPhoneClientComponent::Toggle()

@@ -70,8 +70,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Save")
 	float AutoSaveSeconds = 180.f;
 
+	// Telt op bij elke succesvolle save (repliceert) -> save-indicator bij alle spelers.
+	UPROPERTY(Replicated)
+	int32 SaveCounter = 0;
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
+	int32 GetSaveCounter() const { return SaveCounter; }
+
+	// Server: meld dat er net opgeslagen is (laat de save-indicator bij iedereen knipperen).
+	void NotifySaved() { if (HasAuthority()) { ++SaveCounter; } }
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION()
 	void AutoSave();

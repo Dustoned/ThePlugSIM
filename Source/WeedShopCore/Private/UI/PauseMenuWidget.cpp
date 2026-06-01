@@ -102,8 +102,9 @@ void UPauseMenuWidget::OnResume()
 void UPauseMenuWidget::OnSave()
 {
 	// Via de telefoon -> host doet de echte save (neemt alle spelers mee). Werkt voor host én client.
+	// De bevestiging ("Saving..." -> "Saved") toont de save-indicator rechtsboven (voor iedereen).
 	if (PhoneComp.IsValid()) { PhoneComp->RequestSaveGame(); }
-	if (StatusText) { StatusText->SetText(FText::FromString(TEXT("Saving... (host writes the save)"))); }
+	if (StatusText) { StatusText->SetText(FText::GetEmpty()); }
 }
 
 void UPauseMenuWidget::OnLoad()
