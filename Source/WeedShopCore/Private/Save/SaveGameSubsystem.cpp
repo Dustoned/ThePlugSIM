@@ -148,6 +148,11 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 			Out.Items.Add(It);
 		}
 	}
+
+	// Sla op waar de speler staat + kijkt (kijkrichting van de controller, niet de body).
+	Out.bHasTransform = true;
+	Out.Location = Pawn->GetActorLocation();
+	Out.Rotation = Pawn->GetController() ? Pawn->GetController()->GetControlRotation() : Pawn->GetActorRotation();
 }
 
 void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
@@ -166,6 +171,16 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	{
 		Inv->ClearAll();
 		for (const FInvSaveItem& It : Data.Items) { Inv->AddItem(It.ItemId, It.Quantity, It.Thc, It.QualityPct); }
+	}
+
+	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "ga naar het save-punt").
+	if (Data.bHasTransform)
+	{
+		Pawn->TeleportTo(Data.Location, Data.Rotation, false, true);
+		if (AController* C = Pawn->GetController())
+		{
+			C->SetControlRotation(Data.Rotation);
+		}
 	}
 }
 

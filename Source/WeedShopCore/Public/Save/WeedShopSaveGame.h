@@ -84,6 +84,11 @@ struct FPlayerSaveData
 	UPROPERTY() int64 BankCents = 0;
 	UPROPERTY() bool bBankAppUnlocked = false;
 	UPROPERTY() TArray<FInvSaveItem> Items;
+
+	// Waar de speler stond op het moment van opslaan (bij laden gaat 'ie hier weer staan).
+	UPROPERTY() bool bHasTransform = false;
+	UPROPERTY() FVector Location = FVector::ZeroVector;
+	UPROPERTY() FRotator Rotation = FRotator::ZeroRotator;
 };
 
 UCLASS()
