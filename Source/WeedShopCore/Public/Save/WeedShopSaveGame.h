@@ -23,7 +23,8 @@ USTRUCT()
 struct FPlayerSaveData
 {
 	GENERATED_BODY()
-	UPROPERTY() FString PlayerName;
+	UPROPERTY() FString PlayerId;    // stabiele platform-id (Steam/EOS net-id); leeg = offline
+	UPROPERTY() FString PlayerName;  // weergavenaam (kan wijzigen; alleen fallback-match)
 	UPROPERTY() int64 CashCents = 0;
 	UPROPERTY() int64 BankCents = 0;
 	UPROPERTY() bool bBankAppUnlocked = false;

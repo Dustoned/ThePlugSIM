@@ -41,8 +41,9 @@ protected:
 	AWeedShopGameState* GetWeedGameState() const;
 	bool HasAuthorityWorld() const;
 
-	// Helpers om per-speler data te verzamelen/toe te passen.
-	static FString PlayerNameOf(const APawn* Pawn);
+	// Helpers om per-speler data te verzamelen/toe te passen + identiteit.
+	static void PlayerKeys(const APawn* Pawn, FString& OutId, FString& OutName); // stabiele id + weergavenaam
+	static bool Matches(const struct FPlayerSaveData& Rec, const FString& Id, const FString& Name);
 	void GatherPlayer(APawn* Pawn, struct FPlayerSaveData& Out) const;
 	void ApplyPlayer(APawn* Pawn, const struct FPlayerSaveData& Data);
 

@@ -32,23 +32,36 @@ bool USaveGameSubsystem::HasSave() const
 	return UGameplayStatics::DoesSaveGameExist(SlotName, 0);
 }
 
-FString USaveGameSubsystem::PlayerNameOf(const APawn* Pawn)
+void USaveGameSubsystem::PlayerKeys(const APawn* Pawn, FString& OutId, FString& OutName)
 {
-	if (Pawn)
+	OutId.Empty();
+	OutName = TEXT("Player");
+	if (!Pawn) { return; }
+	if (const APlayerState* PS = Pawn->GetPlayerState())
 	{
-		if (const APlayerState* PS = Pawn->GetPlayerState())
+		const FString N = PS->GetPlayerName();
+		if (!N.IsEmpty()) { OutName = N; }
+		// Stabiele platform-id (Steam/EOS/...). Offline/PIE is dit meestal ongeldig -> leeg.
+		const FUniqueNetIdRepl& Repl = PS->GetUniqueId();
+		if (Repl.IsValid())
 		{
-			const FString N = PS->GetPlayerName();
-			if (!N.IsEmpty()) { return N; }
+			const FString IdStr = Repl->ToString();
+			if (!IdStr.IsEmpty() && IdStr != TEXT("INVALID")) { OutId = IdStr; }
 		}
 	}
-	return TEXT("Player");
+}
+
+bool USaveGameSubsystem::Matches(const FPlayerSaveData& Rec, const FString& Id, const FString& Name)
+{
+	// Heb je een stabiele id, match daarop (naam mag wijzigen). Anders (offline) op naam.
+	if (!Id.IsEmpty()) { return Rec.PlayerId == Id; }
+	return Rec.PlayerId.IsEmpty() && Rec.PlayerName == Name;
 }
 
 void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 {
 	Out = FPlayerSaveData();
-	Out.PlayerName = PlayerNameOf(Pawn);
+	PlayerKeys(Pawn, Out.PlayerId, Out.PlayerName);
 	if (!Pawn) { return; }
 
 	if (const UEconomyComponent* E = Pawn->FindComponentByClass<UEconomyComponent>())
@@ -120,7 +133,7 @@ bool USaveGameSubsystem::SaveGame()
 			APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
 			if (!P) { continue; }
 			FPlayerSaveData Data; GatherPlayer(P, Data);
-			const int32 Idx = Save->Players.IndexOfByPredicate([&](const FPlayerSaveData& E) { return E.PlayerName == Data.PlayerName; });
+			const int32 Idx = Save->Players.IndexOfByPredicate([&](const FPlayerSaveData& E) { return Matches(E, Data.PlayerId, Data.PlayerName); });
 			if (Idx != INDEX_NONE) { Save->Players[Idx] = Data; } else { Save->Players.Add(Data); }
 			++NumPlayers;
 		}
@@ -158,9 +171,9 @@ bool USaveGameSubsystem::LoadGame()
 		{
 			if (APawn* P = PC->GetPawn())
 			{
-				FPlayerSaveData D; D.PlayerName = PlayerNameOf(P);
-				D.CashCents = Save->BalanceCents; D.BankCents = Save->BankCents; D.bBankAppUnlocked = Save->bBankAppUnlocked;
-				ApplyPlayer(P, D); RestoredPlayers.Add(D.PlayerName);
+				FString Id, Name; PlayerKeys(P, Id, Name);
+				FPlayerSaveData D; D.CashCents = Save->BalanceCents; D.BankCents = Save->BankCents; D.bBankAppUnlocked = Save->bBankAppUnlocked;
+				ApplyPlayer(P, D); RestoredPlayers.Add(Id.IsEmpty() ? Name : Id);
 			}
 		}
 	}
@@ -182,11 +195,12 @@ bool USaveGameSubsystem::LoadGame()
 void USaveGameSubsystem::RestorePlayerByPawn(APawn* Pawn)
 {
 	if (!HasAuthorityWorld() || !Loaded || !Pawn) { return; }
-	const FString Name = PlayerNameOf(Pawn);
-	if (RestoredPlayers.Contains(Name)) { return; }
-	const FPlayerSaveData* Found = Loaded->Players.FindByPredicate([&](const FPlayerSaveData& E) { return E.PlayerName == Name; });
+	FString Id, Name; PlayerKeys(Pawn, Id, Name);
+	const FString Key = Id.IsEmpty() ? Name : Id;
+	if (RestoredPlayers.Contains(Key)) { return; }
+	const FPlayerSaveData* Found = Loaded->Players.FindByPredicate([&](const FPlayerSaveData& E) { return Matches(E, Id, Name); });
 	if (!Found) { return; }
 	ApplyPlayer(Pawn, *Found);
-	RestoredPlayers.Add(Name);
-	UE_LOG(LogWeedShop, Log, TEXT("Speler hersteld uit save: %s (cash %lld, %d items)"), *Name, (long long)Found->CashCents, Found->Items.Num());
+	RestoredPlayers.Add(Key);
+	UE_LOG(LogWeedShop, Log, TEXT("Speler hersteld uit save: id='%s' naam='%s' (cash %lld, %d items)"), *Id, *Name, (long long)Found->CashCents, Found->Items.Num());
 }
