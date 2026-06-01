@@ -141,21 +141,21 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		BSl->SetHorizontalAlignment(HAlign_Fill); BSl->SetVerticalAlignment(VAlign_Bottom); BSl->SetPadding(FMargin(0.f));
 	}
 
-	// --- Logo + menu, links uitgelijnd (zoals de referentie). ---
+	// --- Logo + menu, links-boven uitgelijnd (zoals de referentie). ---
 	UVerticalBox* Left = WidgetTree->ConstructWidget<UVerticalBox>();
 	{
 		UOverlaySlot* LS = Layers->AddChildToOverlay(Left);
-		LS->SetHorizontalAlignment(HAlign_Left); LS->SetVerticalAlignment(VAlign_Center); LS->SetPadding(FMargin(70.f, 0.f, 0.f, 0.f));
+		LS->SetHorizontalAlignment(HAlign_Left); LS->SetVerticalAlignment(VAlign_Top); LS->SetPadding(FMargin(60.f, 55.f, 0.f, 0.f));
 	}
 
-	// Logo: de losse PNG indien aanwezig (aspect behouden), anders tekst-fallback.
+	// Logo: de losse PNG indien aanwezig (aspect behouden, groot links-boven), anders tekst-fallback.
 	if (LogoTex)
 	{
 		UImage* Logo = WidgetTree->ConstructWidget<UImage>();
 		Logo->SetBrushFromTexture(LogoTex, false);
-		const float LW = 470.f, LH = LW * 724.f / 2172.f;
+		const float LW = 560.f, LH = LW * 724.f / 2172.f;
 		Logo->SetDesiredSizeOverride(FVector2D(LW, LH));
-		Left->AddChildToVerticalBox(Logo)->SetPadding(FMargin(0.f, 0.f, 0.f, 20.f));
+		Left->AddChildToVerticalBox(Logo)->SetPadding(FMargin(0.f, 0.f, 0.f, 26.f));
 	}
 	else
 	{
@@ -167,21 +167,22 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 	auto AddBtn = [this, Left](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(300.f);
+		Sz->SetWidthOverride(330.f); Sz->SetHeightOverride(46.f);
 		UWeedActionButton* B = MenuBtn(WidgetTree, Label, Col, Fn);
 		Sz->SetContent(B);
-		Left->AddChildToVerticalBox(Sz)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+		Left->AddChildToVerticalBox(Sz)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 		return B;
 	};
 
-	const FLinearColor Hi(0.42f, 0.18f, 0.70f);   // highlight (paars) zoals de geselecteerde knop
-	const FLinearColor Dark(0.11f, 0.12f, 0.15f); // gewone donkere knop
+	// Donkere, halftransparante balken; de bovenste (Continue) paars gehighlight zoals de mockup.
+	const FLinearColor Hi(0.42f, 0.16f, 0.72f, 0.96f);
+	const FLinearColor Dark(0.06f, 0.07f, 0.09f, 0.78f);
 	AddBtn(TEXT("Continue"),   Hi,   [this]() { OnStart(); });
 	AddBtn(TEXT("New game"),   Dark, [this]() { OnStart(); });
 	ContinueBtn = AddBtn(TEXT("Load game"), Dark, [this]() { OnContinue(); });
 	AddBtn(TEXT("Settings"),   Dark, [this]() { OnSettings(); });
 	AddBtn(TEXT("Credits"),    Dark, [this]() { OnCredits(); });
-	AddBtn(TEXT("Exit game"),  FLinearColor(0.30f, 0.13f, 0.14f), [this]() { OnQuit(); });
+	AddBtn(TEXT("Exit game"),  Dark, [this]() { OnQuit(); });
 
 	StatusText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.8f, 0.7f, 1.f), false);
 	Left->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(2.f, 14.f, 0.f, 0.f));
