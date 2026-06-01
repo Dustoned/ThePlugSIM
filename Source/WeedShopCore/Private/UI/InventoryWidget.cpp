@@ -3,6 +3,9 @@
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Inventory/InventoryComponent.h"
+#include "World/StorageShelf.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -176,7 +179,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(580.f, 460.f));
+	CS->SetSize(FVector2D(820.f, 470.f));
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -209,23 +212,118 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	CloseS->SetVerticalAlignment(VAlign_Center); CloseS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	VB->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	// Item-tegels (wrap) in een scrollbox zodat een vol rooster scrollt.
+	// Body: links het thuis-voorraad-lijstje, rechts de slots + hotbar.
+	UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UVerticalBoxSlot* BodyS = VB->AddChildToVerticalBox(Body);
+	BodyS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	// --- Links: HOME STASH (alle shelves/chests samengeteld) ---
+	USizeBox* StashSize = WidgetTree->ConstructWidget<USizeBox>();
+	StashSize->SetWidthOverride(232.f);
+	UBorder* StashPanel = WidgetTree->ConstructWidget<UBorder>();
+	StashPanel->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.08f, 0.96f), 10.f));
+	StashPanel->SetPadding(FMargin(10.f, 8.f, 10.f, 8.f));
+	StashSize->SetContent(StashPanel);
+	UVerticalBox* StashVB = WidgetTree->ConstructWidget<UVerticalBox>();
+	StashPanel->SetContent(StashVB);
+	StashVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("HOME STASH"), 13, FLinearColor(0.55f, 0.95f, 0.65f), false, true))
+		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	UScrollBox* StashScroll = WidgetTree->ConstructWidget<UScrollBox>();
+	StashList = StashScroll;
+	StashVB->AddChildToVerticalBox(StashScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UHorizontalBoxSlot* LS = Body->AddChildToHorizontalBox(StashSize);
+	LS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+
+	// --- Rechts: slots (wrap, scrollbaar) + hotbar ---
+	UVerticalBox* Right = WidgetTree->ConstructWidget<UVerticalBox>();
+	UHorizontalBoxSlot* RS = Body->AddChildToHorizontalBox(Right);
+	RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
-	UVerticalBoxSlot* GS = VB->AddChildToVerticalBox(Scroll);
+	UVerticalBoxSlot* GS = Right->AddChildToVerticalBox(Scroll);
 	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	Grid = WidgetTree->ConstructWidget<UWrapBox>();
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 	Scroll->AddChild(Grid);
 
 	// Hotbar-rij.
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Hotbar"), 12, FLinearColor(0.7f, 0.7f, 0.8f)))
+	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Hotbar"), 12, FLinearColor(0.7f, 0.7f, 0.8f)))
 		->SetPadding(FMargin(0.f, 8.f, 0.f, 4.f));
 	HotbarBox = WidgetTree->ConstructWidget<UHorizontalBox>();
-	VB->AddChildToVerticalBox(HotbarBox);
+	Right->AddChildToVerticalBox(HotbarBox);
+}
+
+void UInventoryWidget::RebuildStash()
+{
+	if (!StashList) { return; }
+	StashList->ClearChildren();
+
+	// Tel alles uit alle shelves/chests samen, per item-id (gram + gewogen THC%).
+	TArray<FName> Order;
+	TMap<FName, int32> Qty;
+	TMap<FName, float> ThcW; // som van thc*qty (voor gewogen gemiddelde)
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<AStorageShelf> It(W); It; ++It)
+		{
+			for (const FShelfStack& S : It->Contents)
+			{
+				if (S.ItemId.IsNone() || S.Quantity <= 0) { continue; }
+				if (!Qty.Contains(S.ItemId)) { Order.Add(S.ItemId); }
+				Qty.FindOrAdd(S.ItemId) += S.Quantity;
+				ThcW.FindOrAdd(S.ItemId) += S.Thc * S.Quantity;
+			}
+		}
+	}
+
+	if (Order.Num() == 0)
+	{
+		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT("Niets opgeslagen.\nStop wiet in een shelf/chest."), 11, FLinearColor(0.55f, 0.58f, 0.66f)));
+		return;
+	}
+
+	// Wiet eerst (Bud/Bag/Wet/Joint), daarna de rest; binnen groepen op naam.
+	auto IsWeed = [](FName Id) { const FString S = Id.ToString(); return S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Joint_")); };
+	Order.Sort([&](const FName& A, const FName& B)
+	{
+		const bool wa = IsWeed(A), wb = IsWeed(B);
+		if (wa != wb) { return wa; }
+		return WeedUI::PrettyItemName(A) < WeedUI::PrettyItemName(B);
+	});
+
+	for (const FName& Id : Order)
+	{
+		const int32 N = Qty[Id];
+		const FString IdStr = Id.ToString();
+		const bool bWeed = IsWeed(Id);
+		const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
+		const float Thc = (N > 0) ? (ThcW[Id] / N) : 0.f;
+
+		UBorder* Row = WidgetTree->ConstructWidget<UBorder>();
+		Row->SetBrush(WeedUI::Rounded(FLinearColor(0.09f, 0.10f, 0.14f, 0.9f), 6.f));
+		Row->SetPadding(FMargin(7.f, 4.f, 7.f, 4.f));
+		UVerticalBox* RVB = WidgetTree->ConstructWidget<UVerticalBox>();
+		Row->SetContent(RVB);
+
+		FString Nm = WeedUI::PrettyItemName(Id);
+		if (Nm.Len() > 24) { Nm = Nm.Left(23) + TEXT("."); }
+		const FLinearColor NameCol = bWet ? FLinearColor(0.55f, 0.8f, 1.f) : (bWeed ? FLinearColor(0.7f, 1.f, 0.75f) : FLinearColor(0.92f, 0.93f, 1.f));
+		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Nm, 12, NameCol));
+
+		FString Sub;
+		if (bWeed) { Sub = FString::Printf(TEXT("%dg   %.0f%% THC%s"), N, Thc, bWet ? TEXT("  (wet)") : TEXT("")); }
+		else { Sub = FString::Printf(TEXT("x%d"), N); }
+		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Sub, 10, FLinearColor(0.6f, 0.64f, 0.74f)));
+
+		StashList->AddChild(Row);
+		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
+	}
 }
 
 void UInventoryWidget::RebuildContent()
 {
+	RebuildStash();
+
 	UInventoryComponent* Inv = GetInv();
 	if (!Inv || !Grid || !HotbarBox) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();

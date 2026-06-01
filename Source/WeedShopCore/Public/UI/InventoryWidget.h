@@ -83,6 +83,10 @@ protected:
 	UPROPERTY() TObjectPtr<UWrapBox> Grid;
 	UPROPERTY() TObjectPtr<UHorizontalBox> HotbarBox;
 	UPROPERTY() TObjectPtr<UTextBlock> SortLabel;
+	UPROPERTY() TObjectPtr<class UScrollBox> StashList; // thuis-voorraad uit shelves/chests
+
+	// Vult het thuis-voorraad-lijstje (alle shelves/chests samengeteld per strain).
+	void RebuildStash();
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<UInventoryComponent> BoundInv;
