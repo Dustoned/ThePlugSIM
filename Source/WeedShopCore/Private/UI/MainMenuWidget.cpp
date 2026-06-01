@@ -37,9 +37,10 @@ namespace
 		S.Pressed = WeedUI::Rounded(Col * 0.8f, 6.f);
 		S.NormalPadding = FMargin(20.f, 12.f); S.PressedPadding = FMargin(20.f, 12.f);
 		B->SetStyle(S);
-		// Links uitgelijnde tekst (zoals de mockup-knoppen).
-		UTextBlock* T = WeedUI::Text(Tree, Label.ToUpper(), 16, FLinearColor(0.95f, 0.96f, 1.f), false, true);
+		// Links uitgelijnde tekst (zoals de mockup-knoppen): brede tekst-box + linkse justering.
+		UTextBlock* T = WeedUI::Text(Tree, Label.ToUpper(), 17, FLinearColor(0.96f, 0.97f, 1.f), false, true);
 		T->SetJustification(ETextJustify::Left);
+		T->SetMinDesiredWidth(286.f);
 		B->SetContent(T);
 		return B;
 	}
@@ -116,9 +117,9 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 		// 3) Donkere "scrim" links zodat logo + menu goed leesbaar zijn op de foto.
 		USizeBox* ScrimBox = WidgetTree->ConstructWidget<USizeBox>();
-		ScrimBox->SetWidthOverride(640.f);
+		ScrimBox->SetWidthOverride(560.f);
 		UBorder* Scrim = WidgetTree->ConstructWidget<UBorder>();
-		Scrim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.42f), 0.f));
+		Scrim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.38f), 0.f));
 		ScrimBox->SetContent(Scrim);
 		UOverlaySlot* ScS = Layers->AddChildToOverlay(ScrimBox);
 		ScS->SetHorizontalAlignment(HAlign_Left); ScS->SetVerticalAlignment(VAlign_Fill);
@@ -148,14 +149,16 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		LS->SetHorizontalAlignment(HAlign_Left); LS->SetVerticalAlignment(VAlign_Top); LS->SetPadding(FMargin(60.f, 55.f, 0.f, 0.f));
 	}
 
-	// Logo: de losse PNG indien aanwezig (aspect behouden, groot links-boven), anders tekst-fallback.
+	// Logo: de losse PNG indien aanwezig (groot links-boven via een vaste SizeBox), anders tekst.
 	if (LogoTex)
 	{
+		const float LW = 720.f, LH = LW * 724.f / 2172.f; // aspect 3:1 behouden
+		USizeBox* LogoBox = WidgetTree->ConstructWidget<USizeBox>();
+		LogoBox->SetWidthOverride(LW); LogoBox->SetHeightOverride(LH);
 		UImage* Logo = WidgetTree->ConstructWidget<UImage>();
 		Logo->SetBrushFromTexture(LogoTex, false);
-		const float LW = 560.f, LH = LW * 724.f / 2172.f;
-		Logo->SetDesiredSizeOverride(FVector2D(LW, LH));
-		Left->AddChildToVerticalBox(Logo)->SetPadding(FMargin(0.f, 0.f, 0.f, 26.f));
+		LogoBox->SetContent(Logo);
+		Left->AddChildToVerticalBox(LogoBox)->SetPadding(FMargin(-8.f, 0.f, 0.f, 18.f));
 	}
 	else
 	{
