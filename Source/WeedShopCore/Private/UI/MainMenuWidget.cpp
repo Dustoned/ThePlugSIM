@@ -435,17 +435,16 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!Glows[i]) { continue; }
 		const float Ph = GlowPhase.IsValidIndex(i) ? GlowPhase[i] : 0.f;
 		const float Fr = GlowFreq.IsValidIndex(i) ? GlowFreq[i] : 4.f;
-		// Levende neon-puls: trage golf + snellere rimpel + af en toe een korte "stotter"-dip.
-		float Osc = 0.85f
-			+ 0.16f * FMath::Sin(T * Fr + Ph)
-			+ 0.09f * FMath::Sin(T * Fr * 2.6f + Ph * 1.7f)
-			+ FMath::FRandRange(-0.04f, 0.04f);
-		if (FMath::FRand() < 0.015f) { Osc *= FMath::FRandRange(0.35f, 0.7f); } // korte neon-flikker
-		Osc = FMath::Clamp(Osc, 0.25f, 1.35f);
+		// Rustige, levende neon-puls: trage golf + lichte rimpel + zeldzame, ondiepe stotter.
+		float Osc = 0.92f
+			+ 0.07f * FMath::Sin(T * Fr + Ph)
+			+ 0.035f * FMath::Sin(T * Fr * 2.4f + Ph * 1.7f)
+			+ FMath::FRandRange(-0.015f, 0.015f);
+		if (FMath::FRand() < 0.005f) { Osc *= FMath::FRandRange(0.7f, 0.9f); } // af en toe een subtiele flikker
+		Osc = FMath::Clamp(Osc, 0.65f, 1.15f);
 
 		const FLinearColor Base = GlowBase.IsValidIndex(i) ? GlowBase[i] : FLinearColor::White;
-		// Helderheid + alpha allebei mee laten pulseren -> de halo komt zichtbaar op en neer.
-		const float K = 0.6f + 0.4f * Osc;
+		const float K = 0.8f + 0.2f * Osc;
 		FLinearColor C(Base.R * K, Base.G * K, Base.B * K, FMath::Clamp(Base.A * Osc, 0.f, 1.f));
 		Glows[i]->SetBrushColor(C);
 	}
