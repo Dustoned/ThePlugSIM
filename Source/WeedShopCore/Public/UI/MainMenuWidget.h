@@ -44,6 +44,10 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> StatusText;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> ContinueBtn;
 
+	// Vanaf schijf geladen achtergrond-foto + logo (losse PNG's in Content/_Project/UI).
+	UPROPERTY() TObjectPtr<class UTexture2D> BgTex;
+	UPROPERTY() TObjectPtr<class UTexture2D> LogoTex;
+
 	// Flikkerende neon-lampen.
 	UPROPERTY() TArray<TObjectPtr<UBorder>> Glows;
 	TArray<FLinearColor> GlowBase;
