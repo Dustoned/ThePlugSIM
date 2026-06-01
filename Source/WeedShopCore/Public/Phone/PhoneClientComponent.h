@@ -122,6 +122,24 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerShelfTake(class AStorageShelf* Shelf, int32 SlotIndex, int32 Count);
 
+	// --- Droogrek (in de wereld): natte wiet ophangen + gedroogde batches oogsten ---
+	void OpenDryRack(class ADryingRack* Rack);
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Dry")
+	void CloseDryRack();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Dry")
+	bool IsDryRackOpen() const { return bDryRackOpen; }
+	class ADryingRack* GetDryRack() const;
+
+	void RequestDryHang(FName WetId);
+	void RequestDryCollect(int32 Index);
+	void RequestDryCollectAll();
+	UFUNCTION(Server, Reliable)
+	void ServerDryHang(class ADryingRack* Rack, FName WetId);
+	UFUNCTION(Server, Reliable)
+	void ServerDryCollect(class ADryingRack* Rack, int32 Index);
+	UFUNCTION(Server, Reliable)
+	void ServerDryCollectAll(class ADryingRack* Rack);
+
 	// Open een app (zet 'm als actief scherm; verlaat het home-scherm).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void OpenApp(int32 AppIndex);
@@ -543,6 +561,9 @@ protected:
 	TObjectPtr<class UShelfWidget> ShelfWidget;
 
 	UPROPERTY(Transient)
+	TObjectPtr<class UDryingRackWidget> DryRackWidget;
+
+	UPROPERTY(Transient)
 	TObjectPtr<class UPauseMenuWidget> PauseWidget;
 
 	UPROPERTY(Transient)
@@ -588,6 +609,8 @@ protected:
 
 	bool bShelfOpen = false;
 	TWeakObjectPtr<class AStorageShelf> ShelfActor; // het schap dat nu open is
+	bool bDryRackOpen = false;
+	TWeakObjectPtr<class ADryingRack> DryRackActor; // het droogrek dat nu open is
 
 	bool bPauseOpen = false;
 	bool bMainMenuOpen = false;

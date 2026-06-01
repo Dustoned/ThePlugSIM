@@ -13,7 +13,7 @@
 class UStaticMeshComponent;
 
 // Eén drogende batch.
-USTRUCT()
+USTRUCT(BlueprintType)
 struct FDryEntry
 {
 	GENERATED_BODY()
@@ -54,9 +54,20 @@ public:
 	// Server: zit er nog (drogende of klare) wiet in? (voor het oppakken van het rek).
 	bool IsEmpty() const { return Entries.Num() == 0; }
 
-	// Save/load.
+	// Save/load + UI (Entries repliceert zodat ook clients de progress-bars zien).
 	const TArray<FDryEntry>& GetEntries() const { return Entries; }
 	void RestoreEntries(const TArray<FDryEntry>& In) { if (HasAuthority()) { Entries = In; UpdateRep(); } }
+
+	// Publieke info voor de UI.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Dry") int32 GetCapacityPublic() const { return Capacity(); }
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Dry") float GetDryTotalSeconds() const { return DrySeconds(); }
+	int32 NumReady() const { int32 R = 0; for (const FDryEntry& E : Entries) { if (E.bDone) { ++R; } } return R; }
+
+	// Server-acties vanuit het droogrek-scherm (afstand-check gebeurt in de PhoneClientComponent).
+	// Hangt een natte stapel op om te drogen. Geeft het aantal opgehangen gram terug (0 = vol/niet nat).
+	int32 ServerHangWet(FName WetId, int32 Qty, float Thc, float QualPct);
+	// Oogst één klare batch op index. Vult Out* en geeft true bij succes (incl. kwaliteitsverlies).
+	bool ServerCollectIndex(int32 Index, FName& OutId, int32& OutQty, float& OutThc, float& OutQual);
 
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
@@ -68,7 +79,8 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Dry")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
-	// Server-side batches.
+	// Batches (repliceert zodat clients ook progress kunnen tonen).
+	UPROPERTY(Replicated)
 	TArray<FDryEntry> Entries;
 
 	// Gerepliceerde samenvatting voor de prompt (clients zien de aantallen).

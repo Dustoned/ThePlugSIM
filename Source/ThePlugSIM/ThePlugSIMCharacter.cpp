@@ -32,6 +32,7 @@
 #include "World/Atm.h"
 #include "World/PackBench.h"
 #include "World/StorageShelf.h"
+#include "Cultivation/DryingRack.h"
 #include "SmokePuff.h"
 #include "ThePlugSIM.h"
 
@@ -649,6 +650,12 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 				if (Phone) { Phone->OpenShelf(Shelf); }
 				return;
 			}
+			// Droogrek -> open lokaal het droogrek-menu (ook met lege hand, net als de verpak-tafel).
+			if (ADryingRack* Rack = Cast<ADryingRack>(Focus))
+			{
+				if (Phone) { Phone->OpenDryRack(Rack); }
+				return;
+			}
 			IC->TryInteract();
 			return;
 		}
@@ -676,7 +683,7 @@ void AThePlugSIMCharacter::OnInteractKey()
 	// E doet hetzelfde als links-klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen,
 	// maar gebruikt nooit het actieve hand-item.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsDryRackOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen()))
 	{
 		return;
 	}
@@ -702,6 +709,11 @@ void AThePlugSIMCharacter::OnInteractKey()
 			if (AStorageShelf* Shelf = Cast<AStorageShelf>(Focus))
 			{
 				if (Phone) { Phone->OpenShelf(Shelf); }
+				return;
+			}
+			if (ADryingRack* Rack = Cast<ADryingRack>(Focus))
+			{
+				if (Phone) { Phone->OpenDryRack(Rack); }
 				return;
 			}
 			IC->TryInteract();

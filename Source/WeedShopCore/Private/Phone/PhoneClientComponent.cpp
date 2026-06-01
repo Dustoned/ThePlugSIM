@@ -33,6 +33,8 @@
 #include "UI/AtmWidget.h"
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
+#include "UI/DryingRackWidget.h"
+#include "Cultivation/DryingRack.h"
 #include "UI/PauseMenuWidget.h"
 #include "UI/MainMenuWidget.h"
 #include "UI/SaveIndicatorWidget.h"
@@ -133,7 +135,7 @@ UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -199,6 +201,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
 	ShelfWidget = CreateWidget<UShelfWidget>(PC, UShelfWidget::StaticClass());
 	if (ShelfWidget) { ShelfWidget->SetPhone(this); ShelfWidget->AddToViewport(31); }
+	DryRackWidget = CreateWidget<UDryingRackWidget>(PC, UDryingRackWidget::StaticClass());
+	if (DryRackWidget) { DryRackWidget->SetPhone(this); DryRackWidget->AddToViewport(32); }
 	PauseWidget = CreateWidget<UPauseMenuWidget>(PC, UPauseMenuWidget::StaticClass());
 	if (PauseWidget) { PauseWidget->SetPhone(this); PauseWidget->AddToViewport(40); }
 	MainMenuWidget = CreateWidget<UMainMenuWidget>(PC, UMainMenuWidget::StaticClass());
@@ -220,7 +224,7 @@ void UPhoneClientComponent::Toggle()
 		bDealOpen = false;
 		bInventoryOpen = false;
 		bPotUpgradeOpen = false;
-		bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
+		bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false;
 		bHomeScreen = true; // open altijd op het home-scherm met de apps
 	}
 	UpdateCursor();
@@ -241,7 +245,7 @@ void UPhoneClientComponent::OpenAtm()
 {
 	EnsureWidget();
 	bAtmOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bShelfOpen = false;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bShelfOpen = false; bDryRackOpen = false;
 	UpdateCursor();
 }
 
@@ -256,7 +260,7 @@ void UPhoneClientComponent::OpenPack(int32 Batch)
 	EnsureWidget();
 	PackBatchUI = FMath::Max(1, Batch);
 	bPackOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bShelfOpen = false;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bShelfOpen = false; bDryRackOpen = false;
 	UpdateCursor();
 }
 
@@ -278,7 +282,7 @@ void UPhoneClientComponent::OpenPause()
 	bPauseOpen = true;
 	// Sluit alle andere schermen zodat het pauze-menu schoon bovenop ligt.
 	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
-	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
+	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false;
 	// In standalone (single-player) pauzeren we de wereld echt; in co-op blijft de wereld lopen.
 	if (APlayerController* PC = GetPC())
 	{
@@ -306,7 +310,7 @@ void UPhoneClientComponent::ShowMainMenu()
 	bMainMenuOpen = true;
 	// Sluit alles anders zodat het titelscherm schoon bovenop ligt.
 	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
-	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bPauseOpen = false;
+	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false; bPauseOpen = false;
 	if (APlayerController* PC = GetPC())
 	{
 		if (GetWorld() && GetWorld()->GetNetMode() == NM_Standalone) { PC->SetPause(true); }
@@ -336,7 +340,7 @@ void UPhoneClientComponent::OpenToApp(int32 AppIndex)
 	bHomeScreen = false;
 	Tab = FMath::Clamp(AppIndex, 0, AppCount - 1);
 	bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false;
-	bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
+	bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false;
 	UpdateCursor();
 }
 
@@ -346,7 +350,7 @@ void UPhoneClientComponent::OpenShelf(AStorageShelf* Shelf)
 	EnsureWidget();
 	ShelfActor = Shelf;
 	bShelfOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bDryRackOpen = false;
 	UpdateCursor();
 }
 
@@ -355,6 +359,77 @@ void UPhoneClientComponent::CloseShelf()
 	bShelfOpen = false;
 	ShelfActor = nullptr;
 	UpdateCursor();
+}
+
+void UPhoneClientComponent::OpenDryRack(ADryingRack* Rack)
+{
+	if (!Rack) { return; }
+	EnsureWidget();
+	DryRackActor = Rack;
+	bDryRackOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseDryRack()
+{
+	bDryRackOpen = false;
+	DryRackActor = nullptr;
+	UpdateCursor();
+}
+
+ADryingRack* UPhoneClientComponent::GetDryRack() const
+{
+	return DryRackActor.Get();
+}
+
+void UPhoneClientComponent::RequestDryHang(FName WetId) { ServerDryHang(DryRackActor.Get(), WetId); }
+void UPhoneClientComponent::RequestDryCollect(int32 Index) { ServerDryCollect(DryRackActor.Get(), Index); }
+void UPhoneClientComponent::RequestDryCollectAll() { ServerDryCollectAll(DryRackActor.Get()); }
+
+void UPhoneClientComponent::ServerDryHang_Implementation(ADryingRack* Rack, FName WetId)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Rack || !Inv || WetId.IsNone()) { return; }
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Rack->GetActorLocation()) > 400.f) { return; }
+
+	const int32 Have = Inv->GetQuantity(WetId);
+	if (Have <= 0) { return; }
+	const float Thc = Inv->GetItemQuality(WetId);
+	const float Qual = Inv->GetItemQualityPct(WetId);
+	const int32 Hung = Rack->ServerHangWet(WetId, Have, Thc, Qual);
+	if (Hung > 0) { Inv->RemoveItem(WetId, Hung); }
+	else if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Drying rack is full.")); }
+}
+
+void UPhoneClientComponent::ServerDryCollect_Implementation(ADryingRack* Rack, int32 Index)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Rack || !Inv) { return; }
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Rack->GetActorLocation()) > 400.f) { return; }
+
+	FName OutId; int32 OutQty = 0; float OutThc = 0.f; float OutQual = 0.f;
+	if (Rack->ServerCollectIndex(Index, OutId, OutQty, OutThc, OutQual))
+	{
+		Inv->AddItem(OutId, OutQty, OutThc, OutQual);
+	}
+}
+
+void UPhoneClientComponent::ServerDryCollectAll_Implementation(ADryingRack* Rack)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Rack || !Inv) { return; }
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Rack->GetActorLocation()) > 400.f) { return; }
+
+	// Van achter naar voren zodat indices niet verschuiven.
+	for (int32 i = Rack->GetEntries().Num() - 1; i >= 0; --i)
+	{
+		FName OutId; int32 OutQty = 0; float OutThc = 0.f; float OutQual = 0.f;
+		if (Rack->ServerCollectIndex(i, OutId, OutQty, OutThc, OutQual))
+		{
+			Inv->AddItem(OutId, OutQty, OutThc, OutQual);
+		}
+	}
 }
 
 AStorageShelf* UPhoneClientComponent::GetShelf() const

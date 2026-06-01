@@ -53,7 +53,18 @@ public:
 	bool GetSlotInfo(int32 Slot, FString& OutSummary) const;
 
 	// Volledige info voor de menu-picker (day, saldo, level, speeltijd, spelers, tijdstip).
+	// GetSlotDetails toont de handmatige save (of de autosave als er geen handmatige is).
 	bool GetSlotDetails(int32 Slot, FSaveSlotInfo& Out) const;
+	// Idem maar voor een specifiek bestand (handmatig of autosave).
+	bool GetSlotDetailsEx(int32 Slot, bool bAutosave, FSaveSlotInfo& Out) const;
+
+	// Bestaat er specifiek een handmatige / autosave in dit slot?
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Save") bool HasManualSaveInSlot(int32 Slot) const;
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Save") bool HasAutoSaveInSlot(int32 Slot) const;
+
+	// Laad een specifiek bestand van een slot (handmatig of autosave).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	bool LoadSlotSpecific(int32 Slot, bool bAutosave);
 
 	// Het meest recente save-tijdstip over alle slots (handmatig + autosave). False = geen save.
 	bool GetMostRecentSaveTime(FDateTime& Out) const;
@@ -102,6 +113,10 @@ protected:
 	FString AutoSlotNameFor(int32 Slot) const; // apart autosave-bestand naast de echte save
 	// Kies welk bestand geladen moet worden voor het huidige slot ("" = geen save aanwezig).
 	FString ResolveLoadName(bool bPreferNewest) const;
+	// Laadt + herstelt een specifiek save-bestand (interne kern van LoadGame/LoadSlotSpecific).
+	bool LoadGameFromName(const FString& Name);
+	// Vult een FSaveSlotInfo uit een specifiek save-bestand.
+	bool FillSlotInfo(const FString& Name, FSaveSlotInfo& Out) const;
 
 	int32 CurrentSlot = 0;
 

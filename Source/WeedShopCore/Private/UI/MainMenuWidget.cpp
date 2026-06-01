@@ -415,25 +415,10 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			PickVB->AddChildToVerticalBox(HeadBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 		}
 
-		SlotButtons.Reset(); SlotLabels.Reset();
-		for (int32 s = 0; s < USaveGameSubsystem::NumSlots; ++s)
-		{
-			const int32 SlotIdx = s;
-			UWeedActionButton* SB = WidgetTree->ConstructWidget<UWeedActionButton>();
-			SB->OnClicked.AddDynamic(SB, &UWeedActionButton::Handle);
-			SB->OnAction.BindLambda([this, SlotIdx](int32, int32) { OnSlotChosen(SlotIdx); });
-			FButtonStyle SS;
-			SS.Normal  = WeedUI::Rounded(FLinearColor(0.12f, 0.13f, 0.17f, 0.96f), 8.f);
-			SS.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 8.f);
-			SS.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.f), 8.f);
-			SS.NormalPadding = FMargin(16.f, 12.f); SS.PressedPadding = FMargin(16.f, 12.f);
-			SB->SetStyle(SS);
-			UTextBlock* SL = WeedUI::Text(WidgetTree, TEXT(""), 14, FLinearColor::White, true);
-			SB->SetContent(SL);
-			PickVB->AddChildToVerticalBox(SB)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
-			SlotButtons.Add(SB);
-			SlotLabels.Add(SL);
-		}
+		// De slot-rijen worden per refresh dynamisch in deze box gezet (zodat we per slot ook
+		// een extra autosave-knop kunnen tonen).
+		SlotsBox = WidgetTree->ConstructWidget<UVerticalBox>();
+		PickVB->AddChildToVerticalBox(SlotsBox);
 
 		UWeedActionButton* BackBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
 		BackBtn->OnClicked.AddDynamic(BackBtn, &UWeedActionButton::Handle);
@@ -544,27 +529,69 @@ void UMainMenuWidget::RefreshSlots()
 		LastSaveText->SetText(FText::FromString(bAny ? FString::Printf(TEXT("Laatste save: %s"), *FmtAgo(Last)) : TEXT("Nog geen save")));
 	}
 
-	for (int32 s = 0; s < SlotButtons.Num(); ++s)
+	if (!SlotsBox) { return; }
+	SlotsBox->ClearChildren();
+
+	FButtonStyle MainStyle;
+	MainStyle.Normal  = WeedUI::Rounded(FLinearColor(0.12f, 0.13f, 0.17f, 0.96f), 8.f);
+	MainStyle.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 8.f);
+	MainStyle.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.f), 8.f);
+	MainStyle.NormalPadding = FMargin(16.f, 12.f); MainStyle.PressedPadding = FMargin(16.f, 12.f);
+
+	FButtonStyle AutoStyle;
+	AutoStyle.Normal  = WeedUI::Rounded(FLinearColor(0.10f, 0.14f, 0.18f, 0.96f), 7.f);
+	AutoStyle.Hovered = WeedUI::Rounded(FLinearColor(0.16f, 0.34f, 0.46f, 0.96f), 7.f);
+	AutoStyle.Pressed = WeedUI::Rounded(FLinearColor(0.20f, 0.42f, 0.56f, 1.f), 7.f);
+	AutoStyle.NormalPadding = FMargin(12.f, 7.f); AutoStyle.PressedPadding = FMargin(12.f, 7.f);
+
+	for (int32 s = 0; s < USaveGameSubsystem::NumSlots; ++s)
 	{
-		FSaveSlotInfo Inf;
-		const bool bHas = Save && Save->GetSlotDetails(s, Inf);
+		const int32 SlotIdx = s;
+		FSaveSlotInfo Manual; const bool bManual = Save && Save->GetSlotDetailsEx(s, false, Manual);
+		FSaveSlotInfo Auto;   const bool bAuto   = Save && Save->GetSlotDetailsEx(s, true, Auto);
+		const bool bHasAny = bManual || bAuto;
+
+		// Hoofd-knop: in Load laadt 'ie je handmatige save (of de autosave als er geen handmatige is);
+		// in New start 'ie een nieuw spel in dit slot.
+		UWeedActionButton* SB = WidgetTree->ConstructWidget<UWeedActionButton>();
+		SB->OnClicked.AddDynamic(SB, &UWeedActionButton::Handle);
+		SB->OnAction.BindLambda([this, SlotIdx](int32, int32) { OnSlotChosen(SlotIdx); });
+		SB->SetStyle(MainStyle);
+
+		const FSaveSlotInfo* Show = bManual ? &Manual : (bAuto ? &Auto : nullptr);
 		FString Line;
-		if (bHas)
+		if (Show)
 		{
-			const FString Who = Inf.NumPlayers >= 2 ? FString::Printf(TEXT("Co-op (%d)"), Inf.NumPlayers) : TEXT("Solo");
-			// Regel 1: slot + solo/co-op + autosave-tag. Regel 2: day/saldo/level. Regel 3: speeltijd + tijdstip.
-			Line = FString::Printf(TEXT("SLOT %d     %s%s\nDay %d      %s      Lvl %d\n%s gespeeld   -   %s"),
-				s + 1, *Who, Inf.bIsAutosave ? TEXT("   (autosave)") : TEXT(""),
-				Inf.DayNumber, *FmtEuro(Inf.TotalCents), Inf.CrewLevel,
-				*FmtPlaytime(Inf.PlaytimeSeconds), *FmtAgo(Inf.SavedAt));
+			// Geen "SLOT n" meer zodra er een save is. Regel 1: solo/co-op (+autosave-tag als alleen
+			// een autosave bestaat). Regel 2: day/saldo/level. Regel 3: speeltijd + tijdstip.
+			const FString Who = Show->NumPlayers >= 2 ? FString::Printf(TEXT("Co-op (%d)"), Show->NumPlayers) : TEXT("Solo");
+			const TCHAR* Tag = (!bManual && bAuto) ? TEXT("   -   autosave") : TEXT("");
+			Line = FString::Printf(TEXT("%s%s\nDay %d      %s      Lvl %d\n%s gespeeld   -   %s"),
+				*Who, Tag, Show->DayNumber, *FmtEuro(Show->TotalCents), Show->CrewLevel,
+				*FmtPlaytime(Show->PlaytimeSeconds), *FmtAgo(Show->SavedAt));
 		}
 		else
 		{
 			Line = FString::Printf(TEXT("SLOT %d\n(leeg)"), s + 1);
 		}
-		if (SlotLabels.IsValidIndex(s) && SlotLabels[s]) { SlotLabels[s]->SetText(FText::FromString(Line)); }
-		// In Load-modus zijn lege slots niet klikbaar; in New-modus alles.
-		if (SlotButtons[s]) { SlotButtons[s]->SetIsEnabled(MenuMode == 1 || bHas); }
+		SB->SetContent(WeedUI::Text(WidgetTree, Line, 14, FLinearColor::White, true));
+		SB->SetIsEnabled(MenuMode == 1 || bHasAny); // lege slots zijn alleen in New klikbaar
+		const float BottomPad = (MenuMode == 2 && bManual && bAuto) ? 2.f : 5.f;
+		SlotsBox->AddChildToVerticalBox(SB)->SetPadding(FMargin(0.f, 4.f, 0.f, BottomPad));
+
+		// In Load-modus en als er NAAST de handmatige save ook een autosave bestaat: een extra knop
+		// om de autosave te laden (vaak nieuwer / verder).
+		if (MenuMode == 2 && bManual && bAuto)
+		{
+			UWeedActionButton* AB = WidgetTree->ConstructWidget<UWeedActionButton>();
+			AB->OnClicked.AddDynamic(AB, &UWeedActionButton::Handle);
+			AB->OnAction.BindLambda([this, SlotIdx](int32, int32) { OnLoadAutosave(SlotIdx); });
+			AB->SetStyle(AutoStyle);
+			const FString ALine = FString::Printf(TEXT("autosave  -  Day %d   %s   Lvl %d   -   %s"),
+				Auto.DayNumber, *FmtEuro(Auto.TotalCents), Auto.CrewLevel, *FmtAgo(Auto.SavedAt));
+			AB->SetContent(WeedUI::Text(WidgetTree, ALine, 11, FLinearColor(0.75f, 0.86f, 1.f), true));
+			SlotsBox->AddChildToVerticalBox(AB)->SetPadding(FMargin(16.f, 0.f, 0.f, 8.f));
+		}
 	}
 }
 
@@ -587,13 +614,24 @@ void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
 		ClosePicker();
 		if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
 	}
-	else // Load
+	else // Load (handmatige save; valt terug op autosave als er geen handmatige is)
 	{
 		if (Save->HasSaveInSlot(SlotIdx) && Save->LoadSlot(SlotIdx))
 		{
 			ClosePicker();
 			if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
 		}
+	}
+}
+
+void UMainMenuWidget::OnLoadAutosave(int32 SlotIdx)
+{
+	USaveGameSubsystem* Save = GetSave(GetWorld());
+	if (!Save) { return; }
+	if (Save->HasAutoSaveInSlot(SlotIdx) && Save->LoadSlotSpecific(SlotIdx, true))
+	{
+		ClosePicker();
+		if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
 	}
 }
 

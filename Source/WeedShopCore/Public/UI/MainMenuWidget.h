@@ -41,7 +41,8 @@ protected:
 	void OpenPicker(int32 Mode);
 	void ClosePicker();
 	void RefreshSlots();
-	void OnSlotChosen(int32 SlotIdx);
+	void OnSlotChosen(int32 SlotIdx);                 // New Game / Load handmatige save
+	void OnLoadAutosave(int32 SlotIdx);               // Load de autosave van dit slot
 
 	// Maakt een flikkerende neon-"lamp": gekleurde, afgeronde glow die zacht pulseert.
 	UBorder* AddGlow(class UOverlay* Layers, const FLinearColor& Color, float W, float H,
@@ -64,8 +65,7 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> SlotPanel;          // de keuze-kaart (zichtbaar als MenuMode!=0)
 	UPROPERTY() TObjectPtr<UWidget> MenuCanvas;          // de 6 hoofdmenu-knoppen (verbergen tijdens picker)
 	UPROPERTY() TObjectPtr<UTextBlock> PickerTitle;
-	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> SlotButtons;
-	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotLabels;
+	UPROPERTY() TObjectPtr<class UVerticalBox> SlotsBox; // rijen worden per refresh dynamisch opgebouwd
 
 	// Vaste balk boven de slots: autosave aan/uit + wanneer de laatste save was.
 	UPROPERTY() TObjectPtr<class UWeedActionButton> AutosaveBtn;

@@ -1040,7 +1040,8 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	// Ronde zwarte home-knop onderaan (zoals een telefoon-home-knop).
 	UWeedActionButton* HomeBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
 	HomeBtn->OnClicked.AddDynamic(HomeBtn, &UWeedActionButton::Handle);
-	HomeBtn->OnAction.BindLambda([this](int32, int32) { if (Phone.IsValid()) { Phone->GoHome(); } });
+	// Home: vanuit een app -> terug naar het homescreen; al op het homescreen -> telefoon sluiten.
+	HomeBtn->OnAction.BindLambda([this](int32, int32) { if (Phone.IsValid()) { if (Phone->IsHomeScreen()) { Phone->Toggle(); } else { Phone->GoHome(); } } });
 	{
 		FButtonStyle HS;
 		HS.Normal = RoundedBrush(FLinearColor(0.02f, 0.02f, 0.03f, 1.f), 24.f);
@@ -1234,7 +1235,7 @@ void UPhoneWidget::HandlePhoneButton(int32 Action, int32 Param)
 	switch (Action)
 	{
 	case 0: Phone->OpenApp(Param); bCartView = false; if (Param == 3) { OpenChatContact = NAME_None; } break;
-	case 1: Phone->GoHome(); bCartView = false; OpenChatContact = NAME_None; break;
+	case 1: if (Phone->IsHomeScreen()) { Phone->Toggle(); } else { Phone->GoHome(); } bCartView = false; OpenChatContact = NAME_None; break;
 	case 2: Phone->Toggle(); break;
 	case 3: Phone->DoAction(Param); break;     // koop upgrade
 	case 5: Phone->DoAction(0); break;         // accept bericht

@@ -80,6 +80,7 @@ void ADryingRack::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(ADryingRack, RepDrying);
 	DOREPLIFETIME(ADryingRack, RepReady);
 	DOREPLIFETIME(ADryingRack, RepCapacity);
+	DOREPLIFETIME(ADryingRack, Entries);
 }
 
 bool ADryingRack::GetRackDef(FName Tier, int32& OutCapacity, float& OutDrySeconds)
@@ -124,64 +125,50 @@ void ADryingRack::Tick(float DeltaSeconds)
 	UpdateRep();
 }
 
+int32 ADryingRack::ServerHangWet(FName WetId, int32 Qty, float Thc, float QualPct)
+{
+	if (!HasAuthority() || Qty <= 0) { return 0; }
+	if (!WetId.ToString().StartsWith(TEXT("WetBud_"))) { return 0; }
+	if (Entries.Num() >= Capacity()) { return 0; }
+	FDryEntry E;
+	E.DryItemId = FName(*WetId.ToString().RightChop(3)); // "WetBud_X" -> "Bud_X"
+	E.Quantity = Qty;
+	E.Thc = Thc;
+	E.Quality = QualPct;
+	Entries.Add(E);
+	UpdateRep();
+	return Qty;
+}
+
+bool ADryingRack::ServerCollectIndex(int32 Index, FName& OutId, int32& OutQty, float& OutThc, float& OutQual)
+{
+	if (!HasAuthority() || !Entries.IsValidIndex(Index)) { return false; }
+	const FDryEntry& E = Entries[Index];
+	if (!E.bDone) { return false; }
+	const float LossFrac = FMath::Clamp((E.OverTime - DryGraceSeconds) / DryDecayWindow, 0.f, 1.f) * DryMaxLoss;
+	OutId = E.DryItemId;
+	OutQty = E.Quantity;
+	OutThc = E.Thc;
+	OutQual = FMath::Max(1.f, E.Quality * (1.f - LossFrac));
+	Entries.RemoveAt(Index);
+	UpdateRep();
+	return true;
+}
+
 void ADryingRack::Interact_Implementation(APawn* InstigatorPawn)
 {
-	if (!HasAuthority()) { return; }
-	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
-	if (!Inv) { return; }
-
-	// 1) Heb je natte wiet in de hand? -> ophangen om te drogen (1 batch per stapel).
-	const FName Active = Inv->GetActiveItemId();
-	if (Active.ToString().StartsWith(TEXT("WetBud_")))
-	{
-		if (Entries.Num() >= Capacity())
-		{
-			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Drying rack is full.")); }
-			return;
-		}
-		const int32 Qty = Inv->GetQuantity(Active);
-		if (Qty <= 0) { return; }
-		FDryEntry E;
-		E.DryItemId = FName(*Active.ToString().RightChop(3)); // "WetBud_X" -> "Bud_X"
-		E.Quantity = Qty;
-		E.Thc = Inv->GetItemQuality(Active);
-		E.Quality = Inv->GetItemQualityPct(Active);
-		Inv->RemoveItem(Active, Qty);
-		Entries.Add(E);
-		UpdateRep();
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor(120, 220, 160), FString::Printf(TEXT("Hung %dg to dry."), Qty)); }
-		return;
-	}
-
-	// 2) Anders: zijn er gedroogde batches? -> oogst ze (met eventueel kwaliteitsverlies bij te lang hangen).
-	int32 Collected = 0;
-	for (int32 i = Entries.Num() - 1; i >= 0; --i)
-	{
-		if (!Entries[i].bDone) { continue; }
-		const FDryEntry& E = Entries[i];
-		const float LossFrac = FMath::Clamp((E.OverTime - DryGraceSeconds) / DryDecayWindow, 0.f, 1.f) * DryMaxLoss;
-		const float FinalQ = FMath::Max(1.f, E.Quality * (1.f - LossFrac));
-		Inv->AddItem(E.DryItemId, E.Quantity, E.Thc, FinalQ);
-		Collected += E.Quantity;
-		Entries.RemoveAt(i);
-	}
-	UpdateRep();
-	if (GEngine)
-	{
-		if (Collected > 0) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, FString::Printf(TEXT("Collected %dg of dried weed."), Collected)); }
-		else { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Nothing dried yet - hang wet weed or wait.")); }
-	}
+	// Het droogrek-scherm openen gebeurt lokaal in de character (UI-actie); hier niets te doen.
 }
 
 FText ADryingRack::GetInteractionPrompt_Implementation() const
 {
 	if (RepReady > 0)
 	{
-		return FText::FromString(FString::Printf(TEXT("Collect %d dried batch(es)  (drying %d)"), RepReady, RepDrying));
+		return FText::FromString(FString::Printf(TEXT("Open drying rack  -  %d ready, %d drying"), RepReady, RepDrying));
 	}
 	if (RepDrying > 0)
 	{
-		return FText::FromString(FString::Printf(TEXT("Drying %d/%d batch(es)... hold wet weed to add more"), RepDrying, RepCapacity));
+		return FText::FromString(FString::Printf(TEXT("Open drying rack  -  drying %d/%d"), RepDrying, RepCapacity));
 	}
-	return FText::FromString(FString::Printf(TEXT("Drying rack (0/%d) - hold wet weed to hang it"), RepCapacity));
+	return FText::FromString(FString::Printf(TEXT("Open drying rack  (0/%d)"), RepCapacity));
 }

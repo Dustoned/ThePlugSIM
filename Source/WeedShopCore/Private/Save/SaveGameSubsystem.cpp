@@ -111,13 +111,20 @@ bool USaveGameSubsystem::GetSlotInfo(int32 Slot, FString& OutSummary) const
 	return false;
 }
 
-bool USaveGameSubsystem::GetSlotDetails(int32 Slot, FSaveSlotInfo& Out) const
+bool USaveGameSubsystem::HasManualSaveInSlot(int32 Slot) const
+{
+	return UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0);
+}
+
+bool USaveGameSubsystem::HasAutoSaveInSlot(int32 Slot) const
+{
+	return UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0);
+}
+
+bool USaveGameSubsystem::FillSlotInfo(const FString& Name, FSaveSlotInfo& Out) const
 {
 	Out = FSaveSlotInfo();
-	if (!HasSaveInSlot(Slot)) { return false; }
-	// Toon de handmatige save als die er is, anders de autosave.
-	const bool bHasManual = UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0);
-	const FString Name = bHasManual ? SlotNameFor(Slot) : AutoSlotNameFor(Slot);
+	if (!UGameplayStatics::DoesSaveGameExist(Name, 0)) { return false; }
 	const UWeedShopSaveGame* S = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0));
 	if (!S) { return false; }
 
@@ -136,6 +143,18 @@ bool USaveGameSubsystem::GetSlotDetails(int32 Slot, FSaveSlotInfo& Out) const
 	if (S->Players.Num() == 0) { Total += S->BalanceCents + S->BankCents; }
 	Out.TotalCents = Total;
 	return true;
+}
+
+bool USaveGameSubsystem::GetSlotDetails(int32 Slot, FSaveSlotInfo& Out) const
+{
+	// Toon de handmatige save als die er is, anders de autosave.
+	const FString Name = HasManualSaveInSlot(Slot) ? SlotNameFor(Slot) : AutoSlotNameFor(Slot);
+	return FillSlotInfo(Name, Out);
+}
+
+bool USaveGameSubsystem::GetSlotDetailsEx(int32 Slot, bool bAutosave, FSaveSlotInfo& Out) const
+{
+	return FillSlotInfo(bAutosave ? AutoSlotNameFor(Slot) : SlotNameFor(Slot), Out);
 }
 
 bool USaveGameSubsystem::GetMostRecentSaveTime(FDateTime& Out) const
@@ -346,13 +365,23 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 
 bool USaveGameSubsystem::LoadGame(bool bPreferNewest)
 {
+	return LoadGameFromName(ResolveLoadName(bPreferNewest));
+}
+
+bool USaveGameSubsystem::LoadSlotSpecific(int32 Slot, bool bAutosave)
+{
+	SetSlot(Slot);
+	return LoadGameFromName(bAutosave ? AutoSlotNameFor(Slot) : SlotNameFor(Slot));
+}
+
+bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
+{
 	if (!HasAuthorityWorld()) { return false; }
 	AWeedShopGameState* GS = GetWeedGameState();
 	if (!GS) { return false; }
 	UWorld* World = GS->GetWorld();
 
-	const FString LoadName = ResolveLoadName(bPreferNewest);
-	if (LoadName.IsEmpty()) { return false; }
+	if (LoadName.IsEmpty() || !UGameplayStatics::DoesSaveGameExist(LoadName, 0)) { return false; }
 	UWeedShopSaveGame* Save = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(LoadName, 0));
 	if (!Save) { return false; }
 	Loaded = Save;
