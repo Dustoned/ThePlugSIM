@@ -88,10 +88,11 @@ void UPhoneClientComponent::UpdateCursor()
 		if (bAnyUI)
 		{
 			// GameAndUI = standaard klik-/hover-routing van de HUD hit-boxes (dat werkte goed),
-			// muis vastgezet in het venster, en cursor blijft zichtbaar als je de knop indrukt
-			// (HideCursorDuringCapture(false)) zodat hij niet verdwijnt bij slepen.
+			// cursor blijft zichtbaar bij indrukken (HideCursorDuringCapture(false)). Muis NIET in het
+			// venster opsluiten (DoNotLock): je kunt 'm vrij naar buiten/naar een ander scherm bewegen
+			// en gewoon weer terugklikken op de game.
 			FInputModeGameAndUI Mode;
-			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 			Mode.SetHideCursorDuringCapture(false);
 			PC->SetInputMode(Mode);
 
