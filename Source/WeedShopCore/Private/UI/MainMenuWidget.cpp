@@ -252,7 +252,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 		AddGlowAt(GlowCanvas, 0.46f, 0.17f, 560.f, 230.f, FLinearColor(1.00f, 0.20f, 0.85f, 0.55f), 6.5f); // magenta plafond-buis
 		AddGlowAt(GlowCanvas, 0.575f, 0.36f, 360.f, 300.f, FLinearColor(1.00f, 0.26f, 0.78f, 0.50f), 11.0f, 3.0f); // "Good Vibes"-bordje (flikkert meer)
-		AddGlowAt(GlowCanvas, 0.875f, 0.30f, 360.f, 540.f, FLinearColor(0.28f, 0.55f, 1.00f, 0.50f), 3.5f); // blauw schap / prices
+		AddGlowAt(GlowCanvas, 0.875f, 0.30f, 410.f, 580.f, FLinearColor(0.28f, 0.56f, 1.00f, 0.64f), 4.0f, 1.8f); // blauw schap / prices (meer glow + wat flikker)
 		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 460.f, 520.f, FLinearColor(0.62f, 0.25f, 1.00f, 0.42f), 2.4f); // paarse grow-tent (links)
 		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
 		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
