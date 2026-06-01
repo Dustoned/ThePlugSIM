@@ -21,6 +21,11 @@
 #include "Engine/Texture2D.h"
 #include "ImageUtils.h"
 #include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "Modules/ModuleManager.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "TextureResource.h"
 
 void UMainMenuWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
 
@@ -49,6 +54,41 @@ namespace
 	{
 		UGameInstance* GI = W ? W->GetGameInstance() : nullptr;
 		return GI ? GI->GetSubsystem<USaveGameSubsystem>() : nullptr;
+	}
+
+	// Laadt een PNG-verf-streep en maakt er een WIT masker van (RGB->wit, alpha = vorm), zodat je
+	// 'm met een tint elke kleur kunt geven (donker = normaal, paars = hover/geselecteerd).
+	UTexture2D* LoadWhiteMask(const FString& Path)
+	{
+		TArray<uint8> FileData;
+		if (!FFileHelper::LoadFileToArray(FileData, *Path)) { return nullptr; }
+		IImageWrapperModule& Mod = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+		TSharedPtr<IImageWrapper> Wrapper = Mod.CreateImageWrapper(EImageFormat::PNG);
+		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num())) { return nullptr; }
+		TArray<uint8> Raw;
+		if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)) { return nullptr; }
+		const int32 W = Wrapper->GetWidth();
+		const int32 H = Wrapper->GetHeight();
+		for (int32 i = 0; i + 3 < Raw.Num(); i += 4) { Raw[i] = 255; Raw[i + 1] = 255; Raw[i + 2] = 255; } // RGB->wit, A blijft de vorm
+		UTexture2D* Tex = UTexture2D::CreateTransient(W, H, PF_B8G8R8A8);
+		if (!Tex) { return nullptr; }
+		Tex->SRGB = true;
+		void* Dest = Tex->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
+		FMemory::Memcpy(Dest, Raw.GetData(), Raw.Num());
+		Tex->GetPlatformData()->Mips[0].BulkData.Unlock();
+		Tex->UpdateResource();
+		return Tex;
+	}
+
+	// Maakt een Slate-brush van een texture met een tint (voor de knop-swatch).
+	FSlateBrush SwatchBrush(UTexture2D* Tex, const FLinearColor& Tint)
+	{
+		FSlateBrush B;
+		B.SetResourceObject(Tex);
+		B.ImageSize = FVector2D(Tex ? Tex->GetSizeX() : 256, Tex ? Tex->GetSizeY() : 64);
+		B.DrawAs = ESlateBrushDrawType::Image;
+		B.TintColor = FSlateColor(Tint);
+		return B;
 	}
 }
 
@@ -99,8 +139,9 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 	// Achtergrond-foto + logo vanaf schijf laden (losse PNG's in Content/_Project/UI).
 	const FString UIDir = FPaths::ProjectContentDir() / TEXT("_Project/UI/");
-	if (!BgTex)   { BgTex   = FImageUtils::ImportFileAsTexture2D(UIDir + TEXT("T_MainMenuBG.png")); }
-	if (!LogoTex) { LogoTex = FImageUtils::ImportFileAsTexture2D(UIDir + TEXT("T_MainMenuLogo.png")); }
+	if (!BgTex)     { BgTex     = FImageUtils::ImportFileAsTexture2D(UIDir + TEXT("T_MainMenuBG.png")); }
+	if (!LogoTex)   { LogoTex   = FImageUtils::ImportFileAsTexture2D(UIDir + TEXT("T_MainMenuLogo.png")); }
+	if (!SwatchTex) { SwatchTex = LoadWhiteMask(UIDir + TEXT("T_BtnSwatch.png")); }
 
 	if (BgTex)
 	{
@@ -138,9 +179,18 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			TFunction<void()> Fn = Acts[i];
 			B->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
 			FButtonStyle St;
-			St.Normal  = WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 6.f);
-			St.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.18f), 6.f);
-			St.Pressed = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.30f), 6.f);
+			St.Normal = WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 6.f); // onzichtbaar -> toont de geschilderde knop
+			if (SwatchTex)
+			{
+				// Hover/selectie: de verf-streep-swatch in paars over de knop (zelfde brush-vorm).
+				St.Hovered = SwatchBrush(SwatchTex, FLinearColor(0.62f, 0.26f, 0.95f, 0.85f));
+				St.Pressed = SwatchBrush(SwatchTex, FLinearColor(0.74f, 0.36f, 1.0f, 0.95f));
+			}
+			else
+			{
+				St.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.20f), 6.f);
+				St.Pressed = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.32f), 6.f);
+			}
 			B->SetStyle(St);
 			UCanvasPanelSlot* CSl = Hit->AddChildToCanvas(B);
 			CSl->SetAnchors(FAnchors(X0, Centers[i] - HalfH, X1, Centers[i] + HalfH));

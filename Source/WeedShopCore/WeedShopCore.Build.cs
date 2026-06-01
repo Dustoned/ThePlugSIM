@@ -24,7 +24,8 @@ public class WeedShopCore : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"AIModule",
-			"NavigationSystem"
+			"NavigationSystem",
+			"ImageWrapper"  // PNG-swatch -> wit masker (menu-knoppen kleurbaar maken)
 		});
 	}
 }
