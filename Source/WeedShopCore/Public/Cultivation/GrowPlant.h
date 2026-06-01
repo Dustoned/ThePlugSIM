@@ -28,6 +28,20 @@ enum class EGrowthPhase : uint8
 	Harvestable	UMETA(DisplayName = "Oogstklaar")
 };
 
+// Volledige pot/plant-staat voor save/load.
+struct FGrowPlantState
+{
+	int32 PotUpgradeMask = 0;
+	FName SoilId = NAME_None;
+	int32 SoilUsesLeft = 0;
+	float CareMultiplier = 0.6f;
+	float CareAvg = 0.6f;
+	float WaterLevel = 0.6f;
+	TArray<FName> SlotStrain;
+	TArray<float> SlotGrowth;
+	TArray<uint8> SlotPhase;
+};
+
 UCLASS()
 class WEEDSHOPCORE_API AGrowPlant : public AActor, public IInteractable
 {
@@ -35,6 +49,10 @@ class WEEDSHOPCORE_API AGrowPlant : public AActor, public IInteractable
 
 public:
 	AGrowPlant();
+
+	// Save/load: lees of zet de volledige pot/plant-staat (server-only voor Restore).
+	void CaptureState(FGrowPlantState& Out) const;
+	void RestoreState(const FGrowPlantState& In);
 
 	virtual void Tick(float DeltaSeconds) override;
 

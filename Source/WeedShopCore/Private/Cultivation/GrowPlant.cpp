@@ -86,6 +86,45 @@ void AGrowPlant::BeginPlay()
 	UpdatePlantVisual();
 }
 
+void AGrowPlant::CaptureState(FGrowPlantState& Out) const
+{
+	Out.PotUpgradeMask = PotUpgradeMask;
+	Out.SoilId = SoilId;
+	Out.SoilUsesLeft = SoilUsesLeft;
+	Out.CareMultiplier = CareMultiplier;
+	Out.CareAvg = CareAvg;
+	Out.WaterLevel = WaterLevel;
+	Out.SlotStrain = SlotStrain;
+	Out.SlotGrowth = SlotGrowth;
+	Out.SlotPhase.Reset();
+	for (EGrowthPhase P : SlotPhase) { Out.SlotPhase.Add((uint8)P); }
+}
+
+void AGrowPlant::RestoreState(const FGrowPlantState& In)
+{
+	if (!HasAuthority()) { return; }
+	EnsureSlots(); // arrays op tier-maat
+	PotUpgradeMask = In.PotUpgradeMask;
+	SoilId = In.SoilId;
+	SoilUsesLeft = In.SoilUsesLeft;
+	CareMultiplier = In.CareMultiplier;
+	CareAvg = In.CareAvg;
+	CareSum = In.CareAvg; CareTime = 1.f; // benadering zodat het gemiddelde stabiel doorloopt
+	WaterLevel = In.WaterLevel;
+
+	const int32 N = SlotStrain.Num();
+	for (int32 i = 0; i < N; ++i)
+	{
+		SlotStrain[i] = In.SlotStrain.IsValidIndex(i) ? In.SlotStrain[i] : NAME_None;
+		SlotGrowth[i] = In.SlotGrowth.IsValidIndex(i) ? In.SlotGrowth[i] : 0.f;
+		SlotPhase[i] = In.SlotPhase.IsValidIndex(i) ? (EGrowthPhase)In.SlotPhase[i] : EGrowthPhase::Seedling;
+	}
+	UpdatePotVisual();
+	UpdateSoilVisual();
+	UpdatePlantVisual();
+	UpdatePhases();
+}
+
 void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

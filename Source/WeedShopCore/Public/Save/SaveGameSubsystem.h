@@ -47,6 +47,10 @@ protected:
 	void GatherPlayer(APawn* Pawn, struct FPlayerSaveData& Out) const;
 	void ApplyPlayer(APawn* Pawn, const struct FPlayerSaveData& Data);
 
+	// Geplaatste wereld-objecten verzamelen / opnieuw spawnen.
+	void GatherPlaced(class UWorld* World, TArray<struct FPlacedObjectSave>& Out) const;
+	void RespawnPlaced(class UWorld* World, const TArray<struct FPlacedObjectSave>& In);
+
 	// In het geheugen gehouden geladen save (voor late-joiners die nog hersteld moeten worden).
 	UPROPERTY()
 	TObjectPtr<UWeedShopSaveGame> Loaded;

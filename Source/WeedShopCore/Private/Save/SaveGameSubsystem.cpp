@@ -9,6 +9,13 @@
 #include "Inventory/InventoryComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
+#include "Cultivation/GrowPlant.h"
+#include "Cultivation/DryingRack.h"
+#include "World/StorageShelf.h"
+#include "World/PackBench.h"
+#include "World/Atm.h"
+#include "Placement/PlaceableProp.h"
+#include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
@@ -124,6 +131,9 @@ bool USaveGameSubsystem::SaveGame()
 	if (const UMilestoneComponent* Ms = GS->GetMilestones()) { Save->TotalEarnedCents = Ms->GetTotalEarnedCents(); Save->MilestonePhase = (uint8)Ms->GetCurrentPhase(); }
 	if (const UUpgradeComponent* Up = GS->GetUpgrades()) { Save->PurchasedUpgrades = Up->GetPurchasedIds(); }
 
+	// Geplaatste wereld-objecten (potten/planten, shelves/chests, rekken, tafels, meubels, ATM).
+	GatherPlaced(World, Save->Placed);
+
 	// Alle nu verbonden spelers (op username) upserten.
 	int32 NumPlayers = 0;
 	if (World)
@@ -163,6 +173,9 @@ bool USaveGameSubsystem::LoadGame()
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }
 	if (UUpgradeComponent* Up = GS->GetUpgrades()) { Up->RestorePurchased(Save->PurchasedUpgrades); }
 
+	// Geplaatste wereld-objecten opnieuw opbouwen (vervangt de huidige set).
+	RespawnPlaced(World, Save->Placed);
+
 	// Legacy-save (v1: alleen host-cash/bank, geen Players-array) -> naar de host-speler.
 	const bool bLegacy = (Save->Players.Num() == 0) && (Save->BalanceCents != 0 || Save->BankCents != 0 || Save->bBankAppUnlocked);
 	if (bLegacy && World)
@@ -190,6 +203,127 @@ bool USaveGameSubsystem::LoadGame()
 
 	UE_LOG(LogWeedShop, Log, TEXT("LoadGame: %d speler(s) in save, dag %d hersteld."), Save->Players.Num(), Save->DayNumber);
 	return true;
+}
+
+void USaveGameSubsystem::GatherPlaced(UWorld* World, TArray<FPlacedObjectSave>& Out) const
+{
+	if (!World) { return; }
+
+	for (TActorIterator<AGrowPlant> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 1; O.ItemId = It->GetPotTier();
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation();
+		FGrowPlantState St; It->CaptureState(St);
+		O.PotUpgradeMask = St.PotUpgradeMask; O.SoilId = St.SoilId; O.SoilUsesLeft = St.SoilUsesLeft;
+		O.CareMultiplier = St.CareMultiplier; O.CareAvg = St.CareAvg; O.WaterLevel = St.WaterLevel;
+		for (int32 i = 0; i < St.SlotStrain.Num(); ++i)
+		{
+			FSavePlantSlot S; S.Strain = St.SlotStrain[i];
+			S.Growth = St.SlotGrowth.IsValidIndex(i) ? St.SlotGrowth[i] : 0.f;
+			S.Phase = St.SlotPhase.IsValidIndex(i) ? St.SlotPhase[i] : 0;
+			O.Slots.Add(S);
+		}
+		Out.Add(O);
+	}
+	for (TActorIterator<AStorageShelf> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 4; O.ItemId = It->ShelfTier;
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation();
+		for (const FShelfStack& S : It->Contents) { FSaveStack T; T.ItemId = S.ItemId; T.Quantity = S.Quantity; T.Thc = S.Thc; T.QualityPct = S.QualityPct; O.ShelfItems.Add(T); }
+		Out.Add(O);
+	}
+	for (TActorIterator<ADryingRack> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 2; O.ItemId = It->RackTier;
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation();
+		for (const FDryEntry& E : It->GetEntries()) { FSaveDry D; D.DryItemId = E.DryItemId; D.Quantity = E.Quantity; D.Thc = E.Thc; D.Quality = E.Quality; D.Elapsed = E.Elapsed; D.bDone = E.bDone; D.OverTime = E.OverTime; O.DryEntries.Add(D); }
+		Out.Add(O);
+	}
+	for (TActorIterator<APackBench> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 3; O.ItemId = It->BenchTier;
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
+	}
+	for (TActorIterator<AAtm> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 5; O.ItemId = FName(TEXT("Atm"));
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
+	}
+	for (TActorIterator<APlaceableProp> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 0; O.ItemId = It->ItemId;
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
+	}
+}
+
+void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObjectSave>& In)
+{
+	if (!World || In.Num() == 0) { return; }
+
+	// Bestaande placeables verwijderen (we vervangen ze door de opgeslagen set).
+	TArray<AActor*> ToKill;
+	for (TActorIterator<AGrowPlant> It(World); It; ++It) { ToKill.Add(*It); }
+	for (TActorIterator<AStorageShelf> It(World); It; ++It) { ToKill.Add(*It); }
+	for (TActorIterator<ADryingRack> It(World); It; ++It) { ToKill.Add(*It); }
+	for (TActorIterator<APackBench> It(World); It; ++It) { ToKill.Add(*It); }
+	for (TActorIterator<AAtm> It(World); It; ++It) { ToKill.Add(*It); }
+	for (TActorIterator<APlaceableProp> It(World); It; ++It) { ToKill.Add(*It); }
+	for (AActor* A : ToKill) { if (A) { A->Destroy(); } }
+
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	for (const FPlacedObjectSave& O : In)
+	{
+		const FTransform TM(O.Rotation, O.Location);
+		switch (O.Kind)
+		{
+		case 1: // pot/plant
+		{
+			AGrowPlant* P = World->SpawnActorDeferred<AGrowPlant>(AGrowPlant::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (P) { P->PotTier = O.ItemId; P->FinishSpawning(TM);
+				FGrowPlantState St; St.PotUpgradeMask = O.PotUpgradeMask; St.SoilId = O.SoilId; St.SoilUsesLeft = O.SoilUsesLeft;
+				St.CareMultiplier = O.CareMultiplier; St.CareAvg = O.CareAvg; St.WaterLevel = O.WaterLevel;
+				for (const FSavePlantSlot& S : O.Slots) { St.SlotStrain.Add(S.Strain); St.SlotGrowth.Add(S.Growth); St.SlotPhase.Add(S.Phase); }
+				P->RestoreState(St);
+			}
+			break;
+		}
+		case 4: // shelf/chest
+		{
+			AStorageShelf* S = World->SpawnActorDeferred<AStorageShelf>(AStorageShelf::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (S) { S->ShelfTier = O.ItemId; S->FinishSpawning(TM);
+				S->Contents.Reset();
+				for (const FSaveStack& T : O.ShelfItems) { FShelfStack St; St.ItemId = T.ItemId; St.Quantity = T.Quantity; St.Thc = T.Thc; St.QualityPct = T.QualityPct; S->Contents.Add(St); }
+			}
+			break;
+		}
+		case 2: // droogrek
+		{
+			ADryingRack* R = World->SpawnActorDeferred<ADryingRack>(ADryingRack::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (R) { R->RackTier = O.ItemId; R->FinishSpawning(TM);
+				TArray<FDryEntry> Es;
+				for (const FSaveDry& D : O.DryEntries) { FDryEntry E; E.DryItemId = D.DryItemId; E.Quantity = D.Quantity; E.Thc = D.Thc; E.Quality = D.Quality; E.Elapsed = D.Elapsed; E.bDone = D.bDone; E.OverTime = D.OverTime; Es.Add(E); }
+				R->RestoreEntries(Es);
+			}
+			break;
+		}
+		case 3: // verpak-tafel
+		{
+			APackBench* B = World->SpawnActorDeferred<APackBench>(APackBench::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (B) { B->BenchTier = O.ItemId; B->FinishSpawning(TM); }
+			break;
+		}
+		case 5: // ATM
+			World->SpawnActor<AAtm>(AAtm::StaticClass(), TM, SP);
+			break;
+		default: // generieke prop / meubel
+		{
+			APlaceableProp* Pr = World->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Pr) { Pr->ItemId = O.ItemId; Pr->FinishSpawning(TM); }
+			break;
+		}
+		}
+	}
+	UE_LOG(LogWeedShop, Log, TEXT("Wereld hersteld: %d objecten gespawned."), In.Num());
 }
 
 void USaveGameSubsystem::RestorePlayerByPawn(APawn* Pawn)
