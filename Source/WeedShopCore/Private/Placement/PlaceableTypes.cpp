@@ -22,6 +22,8 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Bench_Pack"),  TEXT("Packing bench"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.3f, 0.7f, 0.9f), FVector(65.f, 35.f, 45.f), false, 0, false, false, false, /*bIsPackBench*/ true },
 		{ TEXT("Bench_Pack2"), TEXT("Pro packing bench"),   TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.5f, 0.8f, 0.9f), FVector(75.f, 40.f, 45.f), false, 0, false, false, false, true },
 		{ TEXT("Bench_Pack3"), TEXT("Industrial packing table"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.7f, 0.9f, 0.95f), FVector(85.f, 45.f, 47.f), false, 0, false, false, false, true },
+		// Opslag-schap: voorraad-opslag in de shop (binnen). Spawnt een AStorageShelf.
+		{ TEXT("Shelf"), TEXT("Storage shelf"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.5f, 0.4f, 1.7f), FVector(75.f, 20.f, 85.f), false, 0, false, false, false, false, /*bIsShelf*/ true },
 	};
 	return Defs;
 }

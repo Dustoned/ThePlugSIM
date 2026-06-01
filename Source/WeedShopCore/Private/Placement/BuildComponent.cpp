@@ -6,6 +6,7 @@
 #include "Placement/PlaceableProp.h"
 #include "World/Atm.h"
 #include "World/PackBench.h"
+#include "World/StorageShelf.h"
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -583,6 +584,19 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		{
 			Bench->BenchTier = ItemId;
 			Bench->FinishSpawning(BenchTM);
+		}
+	}
+	else if (Def.bIsShelf)
+	{
+		// Opslag-schap: idem, mesh-pivot in het midden -> origin een halve hoogte omhoog.
+		const FTransform ShelfTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
+		AStorageShelf* Shelf = World->SpawnActorDeferred<AStorageShelf>(
+			AStorageShelf::StaticClass(), ShelfTM,
+			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Shelf)
+		{
+			Shelf->ShelfTier = ItemId;
+			Shelf->FinishSpawning(ShelfTM);
 		}
 	}
 	else if (Def.bIsPot)

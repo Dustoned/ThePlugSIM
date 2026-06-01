@@ -66,6 +66,21 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerPack(FName BudId, FName ContainerId, int32 Batch);
 
+	// --- Opslag-schap (in de wereld): stacks tussen je inventory en het schap verplaatsen ---
+	void OpenShelf(class AStorageShelf* Shelf);
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Shelf")
+	void CloseShelf();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Shelf")
+	bool IsShelfOpen() const { return bShelfOpen; }
+	class AStorageShelf* GetShelf() const;
+
+	void RequestShelfStore(FName ItemId, int32 Count);
+	void RequestShelfTake(int32 SlotIndex, int32 Count);
+	UFUNCTION(Server, Reliable)
+	void ServerShelfStore(class AStorageShelf* Shelf, FName ItemId, int32 Count);
+	UFUNCTION(Server, Reliable)
+	void ServerShelfTake(class AStorageShelf* Shelf, int32 SlotIndex, int32 Count);
+
 	// Open een app (zet 'm als actief scherm; verlaat het home-scherm).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void OpenApp(int32 AppIndex);
@@ -472,6 +487,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UPackWidget> PackWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UShelfWidget> ShelfWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
@@ -503,6 +521,9 @@ protected:
 	bool bAtmOpen = false;
 	bool bPackOpen = false;
 	int32 PackBatchUI = 1; // zakjes per verpak-actie (van de bench-tier)
+
+	bool bShelfOpen = false;
+	TWeakObjectPtr<class AStorageShelf> ShelfActor; // het schap dat nu open is
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;

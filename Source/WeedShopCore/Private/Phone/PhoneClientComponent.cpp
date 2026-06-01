@@ -32,6 +32,8 @@
 #include "UI/HotkeyHintWidget.h"
 #include "UI/AtmWidget.h"
 #include "UI/PackWidget.h"
+#include "UI/ShelfWidget.h"
+#include "World/StorageShelf.h"
 #include "Blueprint/UserWidget.h"
 #include "Net/UnrealNetwork.h"
 
@@ -73,7 +75,7 @@ UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -136,6 +138,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (AtmWidget) { AtmWidget->SetPhone(this); AtmWidget->AddToViewport(28); }
 	PackWidget = CreateWidget<UPackWidget>(PC, UPackWidget::StaticClass());
 	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
+	ShelfWidget = CreateWidget<UShelfWidget>(PC, UShelfWidget::StaticClass());
+	if (ShelfWidget) { ShelfWidget->SetPhone(this); ShelfWidget->AddToViewport(31); }
 }
 
 void UPhoneClientComponent::Toggle()
@@ -148,6 +152,7 @@ void UPhoneClientComponent::Toggle()
 		bDealOpen = false;
 		bInventoryOpen = false;
 		bPotUpgradeOpen = false;
+		bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
 		bHomeScreen = true; // open altijd op het home-scherm met de apps
 	}
 	UpdateCursor();
@@ -168,7 +173,7 @@ void UPhoneClientComponent::OpenAtm()
 {
 	EnsureWidget();
 	bAtmOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bShelfOpen = false;
 	UpdateCursor();
 }
 
@@ -183,7 +188,7 @@ void UPhoneClientComponent::OpenPack(int32 Batch)
 	EnsureWidget();
 	PackBatchUI = FMath::Max(1, Batch);
 	bPackOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bShelfOpen = false;
 	UpdateCursor();
 }
 
@@ -191,6 +196,72 @@ void UPhoneClientComponent::ClosePack()
 {
 	bPackOpen = false;
 	UpdateCursor();
+}
+
+void UPhoneClientComponent::OpenShelf(AStorageShelf* Shelf)
+{
+	if (!Shelf) { return; }
+	EnsureWidget();
+	ShelfActor = Shelf;
+	bShelfOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseShelf()
+{
+	bShelfOpen = false;
+	ShelfActor = nullptr;
+	UpdateCursor();
+}
+
+AStorageShelf* UPhoneClientComponent::GetShelf() const
+{
+	return ShelfActor.Get();
+}
+
+void UPhoneClientComponent::RequestShelfStore(FName ItemId, int32 Count)
+{
+	ServerShelfStore(ShelfActor.Get(), ItemId, Count);
+}
+
+void UPhoneClientComponent::RequestShelfTake(int32 SlotIndex, int32 Count)
+{
+	ServerShelfTake(ShelfActor.Get(), SlotIndex, Count);
+}
+
+void UPhoneClientComponent::ServerShelfStore_Implementation(AStorageShelf* Shelf, FName ItemId, int32 Count)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Shelf || !Inv || ItemId.IsNone() || Count <= 0) { return; }
+	// Afstand-check (anti-cheat/lag).
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Shelf->GetActorLocation()) > 400.f) { return; }
+
+	const int32 Have = Inv->GetQuantity(ItemId);
+	const int32 Want = FMath::Min(Count, Have);
+	if (Want <= 0) { return; }
+	const float Thc = Inv->GetItemQuality(ItemId);
+	const float Qual = Inv->GetItemQualityPct(ItemId);
+	const int32 Stored = Shelf->ServerStore(ItemId, Want, Thc, Qual);
+	if (Stored > 0) { Inv->RemoveItem(ItemId, Stored); }
+	else if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Shelf is full.")); }
+}
+
+void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf, int32 SlotIndex, int32 Count)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Shelf || !Inv || Count <= 0) { return; }
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Shelf->GetActorLocation()) > 400.f) { return; }
+
+	FName OutId; float OutThc = 0.f; float OutQual = 0.f;
+	const int32 Taken = Shelf->ServerTake(SlotIndex, Count, OutId, OutThc, OutQual);
+	if (Taken <= 0) { return; }
+	if (!Inv->AddItem(OutId, Taken, OutThc, OutQual))
+	{
+		// Geen ruimte in de inventory -> terug op het schap.
+		Shelf->ServerStore(OutId, Taken, OutThc, OutQual);
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No room in your inventory.")); }
+	}
 }
 
 int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)

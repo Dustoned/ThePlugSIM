@@ -135,6 +135,7 @@ namespace
 		{ TEXT("Table"),    TEXT("Table"),    TEXT("A sturdy table"),       12000, 1 },
 		{ TEXT("Mattress"), TEXT("Mattress"), TEXT("Somewhere to crash"),    8000, 1 },
 		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("Keeps things cold"),    30000, 1 },
+		{ TEXT("Shelf"),    TEXT("Storage shelf"), TEXT("Store stock in the shop - 24 slots"), 18000, 1 },
 	};
 }
 
@@ -324,7 +325,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 		case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
 		case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
 		case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
-		case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge")); break;
+		case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf")); break;
 		default: break;
 		}
 		if (bMatch) { Out.Add(Id); }

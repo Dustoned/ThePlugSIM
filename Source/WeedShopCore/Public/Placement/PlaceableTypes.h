@@ -21,6 +21,7 @@ struct FPlaceableDef
 	bool bAllowOutdoors = false;       // true -> mag ook buiten geplaatst (negeert de "alleen binnen"-regel)
 	bool bIsDryRack = false;           // true -> spawnt ADryingRack (RackTier = ItemId)
 	bool bIsPackBench = false;         // true -> spawnt APackBench (verpak-tafel)
+	bool bIsShelf = false;             // true -> spawnt AStorageShelf (voorraad-opslag in de shop)
 };
 
 // Alle gedefinieerde placeables.

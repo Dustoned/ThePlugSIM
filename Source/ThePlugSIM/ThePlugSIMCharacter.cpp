@@ -29,6 +29,7 @@
 #include "Input/ControlSettings.h"
 #include "World/Atm.h"
 #include "World/PackBench.h"
+#include "World/StorageShelf.h"
 #include "SmokePuff.h"
 #include "ThePlugSIM.h"
 
@@ -583,7 +584,7 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	// deze klik net heeft verwerkt (bv. een paneel sloot) negeren we 'm hier, zodat dezelfde klik
 	// niet alsnog de wereld-interactie (en daarmee bv. de deal opnieuw) opent.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->DidUiConsumeClickRecently()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->DidUiConsumeClickRecently()))
 	{
 		return;
 	}
@@ -616,6 +617,12 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 				if (Phone) { Phone->OpenPack(Bench->GetPackPerAction()); }
 				return;
 			}
+			// Opslag-schap -> open lokaal het schap-menu.
+			if (AStorageShelf* Shelf = Cast<AStorageShelf>(Focus))
+			{
+				if (Phone) { Phone->OpenShelf(Shelf); }
+				return;
+			}
 			IC->TryInteract();
 			return;
 		}
@@ -636,7 +643,7 @@ void AThePlugSIMCharacter::OnInteractKey()
 	// E doet hetzelfde als links-klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen,
 	// maar gebruikt nooit het actieve hand-item.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen()))
 	{
 		return;
 	}
@@ -652,6 +659,16 @@ void AThePlugSIMCharacter::OnInteractKey()
 			if (Cast<AAtm>(Focus))
 			{
 				if (Phone) { Phone->OpenAtm(); }
+				return;
+			}
+			if (APackBench* Bench = Cast<APackBench>(Focus))
+			{
+				if (Phone) { Phone->OpenPack(Bench->GetPackPerAction()); }
+				return;
+			}
+			if (AStorageShelf* Shelf = Cast<AStorageShelf>(Focus))
+			{
+				if (Phone) { Phone->OpenShelf(Shelf); }
 				return;
 			}
 			IC->TryInteract();
