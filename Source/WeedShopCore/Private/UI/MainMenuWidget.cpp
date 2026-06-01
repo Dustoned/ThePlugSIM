@@ -257,7 +257,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 540.f, 580.f, FLinearColor(0.64f, 0.26f, 1.00f, 0.60f), 2.8f, 1.3f); // paarse grow-tent (links, meer glow, lichte flikker)
 		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
 		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
-		AddGlowAt(GlowCanvas, 0.63f, 0.27f, 360.f, 320.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.66f), 3.0f, 1.0f, /*bCandle*/ true); // warme hanglamp (rustige kaars-gloed)
+		AddGlowAt(GlowCanvas, 0.735f, 0.195f, 300.f, 270.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.66f), 3.0f, 1.0f, /*bCandle*/ true); // warme hanglamp (rustige kaars-gloed)
 
 		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
 		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
