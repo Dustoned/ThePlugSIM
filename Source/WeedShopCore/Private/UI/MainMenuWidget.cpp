@@ -202,7 +202,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 		// Exact opgemeten uit T_MainMenuBG.png (1672x941): balk x=145..370, 6 knoppen,
 		// gelijke tussenruimte, centers y=440/498/556/613/673/735, hoogte ~47px.
-		const float X0 = 0.083f, X1 = 0.226f, HalfH = 0.029f;
+		const float X0 = 0.083f, X1 = 0.285f, HalfH = 0.029f; // langere balken
 		const float Centers[6] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f, 0.7811f };
 		TFunction<void()> Acts[6] = {
 			[this]() { OnStart(); },     // CONTINUE
@@ -224,13 +224,13 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			FButtonStyle St;
 			if (SwatchTex)
 			{
-				St.Normal  = SwatchBrush(SwatchTex, FLinearColor(0.10f, 0.10f, 0.13f, 0.95f));
+				St.Normal  = SwatchBrush(SwatchTex, FLinearColor(0.02f, 0.02f, 0.035f, 0.55f)); // donker + doorzichtig
 				St.Hovered = SwatchBrush(SwatchTex, FLinearColor(0.62f, 0.26f, 0.95f, 0.97f));
 				St.Pressed = SwatchBrush(SwatchTex, FLinearColor(0.74f, 0.36f, 1.00f, 1.00f));
 			}
 			else
 			{
-				St.Normal  = WeedUI::Rounded(FLinearColor(0.09f, 0.10f, 0.13f, 0.92f), 6.f);
+				St.Normal  = WeedUI::Rounded(FLinearColor(0.02f, 0.02f, 0.035f, 0.55f), 6.f);
 				St.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 6.f);
 				St.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.00f), 6.f);
 			}
