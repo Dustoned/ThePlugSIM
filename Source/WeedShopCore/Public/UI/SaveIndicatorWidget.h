@@ -27,6 +27,8 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> Label;
 
 	int32 LastCounter = -1;   // laatst geziene SaveCounter
-	float Timer = -1.f;       // < 0 = inactief; anders sec sinds de save begon
+	int32 LastLoad = -1;      // laatst geziene LoadCounter
+	float Timer = -1.f;       // < 0 = inactief; anders sec sinds de melding begon
 	bool bInit = false;
+	bool bLoadMode = false;   // huidige melding is een "Loaded"-melding i.p.v. een save
 };

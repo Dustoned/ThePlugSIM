@@ -67,11 +67,17 @@ void USaveIndicatorWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTi
 	if (!GS) { return; }
 
 	const int32 C = GS->GetSaveCounter();
-	if (!bInit) { bInit = true; LastCounter = C; } // bij start niet meteen flashen
+	const int32 L = GS->GetLoadCounter();
+	if (!bInit) { bInit = true; LastCounter = C; LastLoad = L; } // bij start niet meteen flashen
 	if (C != LastCounter)
 	{
 		LastCounter = C;
-		Timer = 0.f; // nieuwe save -> melding starten
+		Timer = 0.f; bLoadMode = false; // nieuwe save -> melding starten
+	}
+	if (L != LastLoad)
+	{
+		LastLoad = L;
+		Timer = 0.f; bLoadMode = true; // net geladen -> "Loaded"-melding
 	}
 
 	if (Timer < 0.f)
@@ -83,16 +89,30 @@ void USaveIndicatorWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTi
 	Timer += DeltaTime;
 	if (Box) { Box->SetVisibility(ESlateVisibility::HitTestInvisible); }
 
-	const bool bSaving = (Timer < 0.6f);
-	if (Label)
+	if (bLoadMode)
 	{
-		Label->SetText(FText::FromString(bSaving ? TEXT("Saving...") : TEXT("Saved")));
-		Label->SetColorAndOpacity(FSlateColor(bSaving ? FLinearColor(0.9f, 0.92f, 1.f) : FLinearColor(0.5f, 1.f, 0.6f)));
+		// "Loaded"-melding: kort draaien, dan stil staan op groen.
+		const bool bSpin = (Timer < 0.5f);
+		if (Label)
+		{
+			Label->SetText(FText::FromString(bSpin ? TEXT("Loading...") : TEXT("Loaded")));
+			Label->SetColorAndOpacity(FSlateColor(bSpin ? FLinearColor(0.7f, 0.85f, 1.f) : FLinearColor(0.5f, 1.f, 0.6f)));
+		}
+		if (Spinner) { Spinner->SetRenderTransformAngle(bSpin ? (-Timer * 540.f) : 0.f); }
 	}
-	// Spinner draait tijdens "Saving...", staat stil bij "Saved".
-	if (Spinner)
+	else
 	{
-		Spinner->SetRenderTransformAngle(bSaving ? (Timer * 540.f) : 0.f);
+		const bool bSaving = (Timer < 0.6f);
+		if (Label)
+		{
+			Label->SetText(FText::FromString(bSaving ? TEXT("Saving...") : TEXT("Saved")));
+			Label->SetColorAndOpacity(FSlateColor(bSaving ? FLinearColor(0.9f, 0.92f, 1.f) : FLinearColor(0.5f, 1.f, 0.6f)));
+		}
+		// Spinner draait tijdens "Saving...", staat stil bij "Saved".
+		if (Spinner)
+		{
+			Spinner->SetRenderTransformAngle(bSaving ? (Timer * 540.f) : 0.f);
+		}
 	}
 
 	// Na ~2.4s weer verbergen (Saving 0.6s + Saved ~1.8s).

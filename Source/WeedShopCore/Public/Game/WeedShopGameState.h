@@ -80,6 +80,13 @@ public:
 	// Server: meld dat er net opgeslagen is (laat de save-indicator bij iedereen knipperen).
 	void NotifySaved() { if (HasAuthority()) { ++SaveCounter; } }
 
+	// Idem voor laden -> toont "Loaded" bij iedereen.
+	UPROPERTY(Replicated)
+	int32 LoadCounter = 0;
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
+	int32 GetLoadCounter() const { return LoadCounter; }
+	void NotifyLoaded() { if (HasAuthority()) { ++LoadCounter; } }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

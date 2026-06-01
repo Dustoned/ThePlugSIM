@@ -260,6 +260,7 @@ bool USaveGameSubsystem::LoadGame()
 		}
 	}
 
+	GS->NotifyLoaded(); // "Loaded"-melding bij alle spelers
 	UE_LOG(LogWeedShop, Log, TEXT("LoadGame: %d speler(s) in save, dag %d hersteld."), Save->Players.Num(), Save->DayNumber);
 	return true;
 }
