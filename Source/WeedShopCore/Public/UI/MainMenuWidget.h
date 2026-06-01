@@ -49,7 +49,8 @@ protected:
 
 	// Idem maar proportioneel geplaatst op (Fx,Fy) van het scherm (volgt de foto bij elke resolutie).
 	// FlickAmount = hoe sterk deze lamp flikkert (1 = standaard rustig, hoger = nerveuzer).
-	UBorder* AddGlowAt(class UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq, float FlickAmount = 1.f);
+	// bCandle = onregelmatige kaars-/vlam-flikker i.p.v. de rustige neon-puls.
+	UBorder* AddGlowAt(class UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq, float FlickAmount = 1.f, bool bCandle = false);
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
@@ -82,6 +83,7 @@ protected:
 	TArray<float> GlowPhase;
 	TArray<float> GlowFreq;
 	TArray<float> GlowFlick; // per-lamp flikker-sterkte
+	TArray<uint8> GlowCandle; // 1 = kaars/vlam-flikker (onregelmatig)
 
 	bool bLastOpen = false;
 };

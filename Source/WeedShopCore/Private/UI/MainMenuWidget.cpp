@@ -182,7 +182,7 @@ UBorder* UMainMenuWidget::AddGlow(UOverlay* Layers, const FLinearColor& Color, f
 	return Glow;
 }
 
-UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq, float FlickAmount)
+UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W, float H, const FLinearColor& Color, float Freq, float FlickAmount, bool bCandle)
 {
 	UBorder* Glow = WidgetTree->ConstructWidget<UBorder>();
 	if (GlowTex)
@@ -209,6 +209,7 @@ UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W
 	GlowPhase.Add(Glows.Num() * 1.7f);
 	GlowFreq.Add(Freq);
 	GlowFlick.Add(FlickAmount);
+	GlowCandle.Add(bCandle ? 1 : 0);
 	return Glow;
 }
 
@@ -256,7 +257,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 540.f, 580.f, FLinearColor(0.64f, 0.26f, 1.00f, 0.60f), 2.8f, 1.3f); // paarse grow-tent (links, meer glow, lichte flikker)
 		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
 		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
-		AddGlowAt(GlowCanvas, 0.68f, 0.20f, 380.f, 340.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.70f), 10.0f, 2.6f); // warme hanglamp (vlam-flikker)
+		AddGlowAt(GlowCanvas, 0.68f, 0.20f, 380.f, 340.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.70f), 10.0f, 2.6f, /*bCandle*/ true); // warme hanglamp (kaars-flikker)
 
 		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
 		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
@@ -539,14 +540,30 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!Glows[i]) { continue; }
 		const float Ph = GlowPhase.IsValidIndex(i) ? GlowPhase[i] : 0.f;
 		const float Fr = GlowFreq.IsValidIndex(i) ? GlowFreq[i] : 4.f;
-		// Rustige, levende neon-puls (per lamp schaalbaar): trage golf + rimpel + zeldzame stotter.
 		const float Fl = GlowFlick.IsValidIndex(i) ? GlowFlick[i] : 1.f;
-		float Osc = 0.92f
-			+ 0.07f * Fl * FMath::Sin(T * Fr + Ph)
-			+ 0.035f * Fl * FMath::Sin(T * Fr * 2.4f + Ph * 1.7f)
-			+ FMath::FRandRange(-0.015f * Fl, 0.015f * Fl);
-		if (FMath::FRand() < 0.005f * Fl) { Osc *= FMath::FRandRange(0.55f, 0.88f); } // korte neon-flikker (vaker bij hoge Fl)
-		Osc = FMath::Clamp(Osc, 0.45f, 1.2f);
+		const bool bCandle = GlowCandle.IsValidIndex(i) && GlowCandle[i] != 0;
+		float Osc;
+		if (bCandle)
+		{
+			// Kaars/vlam: meerdere snelle, niet-harmonische golven + ruis + vaak een korte dip.
+			Osc = 0.80f
+				+ 0.10f * FMath::Sin(T * 9.0f + Ph)
+				+ 0.07f * FMath::Sin(T * 17.0f + Ph * 1.7f)
+				+ 0.06f * FMath::Sin(T * 27.0f + Ph * 2.6f)
+				+ FMath::FRandRange(-0.06f, 0.06f);
+			if (FMath::FRand() < 0.06f) { Osc *= FMath::FRandRange(0.55f, 0.85f); } // wegschietende vlam
+			Osc = FMath::Clamp(Osc, 0.35f, 1.25f);
+		}
+		else
+		{
+			// Rustige, levende neon-puls (per lamp schaalbaar): trage golf + rimpel + zeldzame stotter.
+			Osc = 0.92f
+				+ 0.07f * Fl * FMath::Sin(T * Fr + Ph)
+				+ 0.035f * Fl * FMath::Sin(T * Fr * 2.4f + Ph * 1.7f)
+				+ FMath::FRandRange(-0.015f * Fl, 0.015f * Fl);
+			if (FMath::FRand() < 0.005f * Fl) { Osc *= FMath::FRandRange(0.55f, 0.88f); }
+			Osc = FMath::Clamp(Osc, 0.45f, 1.2f);
+		}
 
 		const FLinearColor Base = GlowBase.IsValidIndex(i) ? GlowBase[i] : FLinearColor::White;
 		const float K = 0.8f + 0.2f * Osc;
