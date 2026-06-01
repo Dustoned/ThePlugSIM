@@ -220,29 +220,28 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
 			TFunction<void()> Fn = Acts[i];
 			B->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
+			// Zelf-getekende knop: de verf-streep-swatch is de balk. Donker normaal, paars bij hover.
 			FButtonStyle St;
-			St.Normal = WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 6.f); // onzichtbaar -> toont de geschilderde knop
 			if (SwatchTex)
 			{
-				// Hover/selectie: de verf-streep-swatch in paars over de knop (zelfde brush-vorm).
-				St.Hovered = SwatchBrush(SwatchTex, FLinearColor(0.62f, 0.26f, 0.95f, 0.85f));
-				St.Pressed = SwatchBrush(SwatchTex, FLinearColor(0.74f, 0.36f, 1.0f, 0.95f));
+				St.Normal  = SwatchBrush(SwatchTex, FLinearColor(0.10f, 0.10f, 0.13f, 0.95f));
+				St.Hovered = SwatchBrush(SwatchTex, FLinearColor(0.62f, 0.26f, 0.95f, 0.97f));
+				St.Pressed = SwatchBrush(SwatchTex, FLinearColor(0.74f, 0.36f, 1.00f, 1.00f));
 			}
 			else
 			{
-				St.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.20f), 6.f);
-				St.Pressed = WeedUI::Rounded(FLinearColor(0.65f, 0.32f, 0.95f, 0.32f), 6.f);
+				St.Normal  = WeedUI::Rounded(FLinearColor(0.09f, 0.10f, 0.13f, 0.92f), 6.f);
+				St.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 6.f);
+				St.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.00f), 6.f);
 			}
-			// Tekst links inspringen zodat 'ie over de geschilderde titel valt.
+			// Tekst links inspringen, netjes binnen de penseel-balk.
 			St.NormalPadding = FMargin(46.f, 0.f, 0.f, 0.f);
 			St.PressedPadding = FMargin(46.f, 0.f, 0.f, 0.f);
 			B->SetStyle(St);
 
-			// Scherpe witte titel als knop-inhoud; alleen zichtbaar bij hover (zie NativeTick),
-			// zodat 'ie helder bovenop het paars komt en de geschilderde tekst niet wazig oogt.
-			UTextBlock* Lbl = WeedUI::Text(WidgetTree, Labels[i], 17, FLinearColor::White, false, true);
+			// Scherpe witte titel als knop-inhoud (altijd zichtbaar; eigen menu, geen geschilderde tekst).
+			UTextBlock* Lbl = WeedUI::Text(WidgetTree, Labels[i], 18, FLinearColor(0.97f, 0.98f, 1.f), false, true);
 			Lbl->SetJustification(ETextJustify::Left);
-			Lbl->SetRenderOpacity(0.f);
 			B->SetContent(Lbl);
 
 			UCanvasPanelSlot* CSl = Hit->AddChildToCanvas(B);
@@ -384,13 +383,5 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const FLinearColor Base = GlowBase.IsValidIndex(i) ? GlowBase[i] : FLinearColor::White;
 		FLinearColor C(Base.R * Osc, Base.G * Osc, Base.B * Osc, FMath::Clamp(Base.A * Osc, 0.f, 1.f));
 		Glows[i]->SetBrushColor(C);
-	}
-
-	// Scherpe knop-titel alleen tonen op de knop die je hovert (pop bovenop het paars);
-	// anders verborgen zodat de geschilderde titel niet dubbel/wazig oogt.
-	for (int32 i = 0; i < MenuButtons.Num(); ++i)
-	{
-		if (!MenuButtons[i] || !MenuLabels.IsValidIndex(i) || !MenuLabels[i]) { continue; }
-		MenuLabels[i]->SetRenderOpacity(MenuButtons[i]->IsHovered() ? 1.f : 0.f);
 	}
 }
