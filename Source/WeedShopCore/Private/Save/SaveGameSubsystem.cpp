@@ -16,11 +16,70 @@
 #include "World/Atm.h"
 #include "Placement/PlaceableProp.h"
 #include "EngineUtils.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
+
+void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	int32 Last = 0;
+	GConfig->GetInt(TEXT("ThePlugSIM.Save"), TEXT("LastSlot"), Last, GGameIni);
+	CurrentSlot = FMath::Clamp(Last, 0, NumSlots - 1);
+}
+
+FString USaveGameSubsystem::SlotNameFor(int32 Slot) const
+{
+	return FString::Printf(TEXT("%s_%d"), *SlotName, FMath::Clamp(Slot, 0, NumSlots - 1));
+}
+
+void USaveGameSubsystem::SetSlot(int32 Slot)
+{
+	CurrentSlot = FMath::Clamp(Slot, 0, NumSlots - 1);
+	GConfig->SetInt(TEXT("ThePlugSIM.Save"), TEXT("LastSlot"), CurrentSlot, GGameIni);
+	GConfig->Flush(false, GGameIni);
+}
+
+bool USaveGameSubsystem::HasSaveInSlot(int32 Slot) const
+{
+	return UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0);
+}
+
+bool USaveGameSubsystem::GetSlotInfo(int32 Slot, FString& OutSummary) const
+{
+	if (!HasSaveInSlot(Slot)) { return false; }
+	if (const UWeedShopSaveGame* S = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotNameFor(Slot), 0)))
+	{
+		OutSummary = FString::Printf(TEXT("Day %d  -  earned EUR %lld  -  %d player(s)"),
+			S->DayNumber, (long long)(S->TotalEarnedCents / 100), S->Players.Num());
+		return true;
+	}
+	return false;
+}
+
+void USaveGameSubsystem::NewGameInSlot(int32 Slot)
+{
+	SetSlot(Slot);
+	// Verse staat: niets herstellen. De oude save in dit slot blijft tot je opnieuw opslaat.
+	Loaded = nullptr;
+	RestoredPlayers.Reset();
+}
+
+bool USaveGameSubsystem::LoadSlot(int32 Slot)
+{
+	SetSlot(Slot);
+	return LoadGame();
+}
+
+bool USaveGameSubsystem::QuickContinue()
+{
+	if (HasSaveInSlot(CurrentSlot)) { return LoadGame(); }
+	for (int32 i = 0; i < NumSlots; ++i) { if (HasSaveInSlot(i)) { return LoadSlot(i); } }
+	return false;
+}
 
 AWeedShopGameState* USaveGameSubsystem::GetWeedGameState() const
 {
@@ -36,7 +95,7 @@ bool USaveGameSubsystem::HasAuthorityWorld() const
 
 bool USaveGameSubsystem::HasSave() const
 {
-	return UGameplayStatics::DoesSaveGameExist(SlotName, 0);
+	return UGameplayStatics::DoesSaveGameExist(SlotNameFor(CurrentSlot), 0);
 }
 
 void USaveGameSubsystem::PlayerKeys(const APawn* Pawn, FString& OutId, FString& OutName)
@@ -121,7 +180,7 @@ bool USaveGameSubsystem::SaveGame()
 	if (!Save) { return false; }
 
 	// Bestaande spelers behouden (zo blijft een co-op vriend die nu offline is bewaard).
-	if (UWeedShopSaveGame* Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0)))
+	if (UWeedShopSaveGame* Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotNameFor(CurrentSlot), 0)))
 	{
 		Save->Players = Prev->Players;
 	}
@@ -149,7 +208,7 @@ bool USaveGameSubsystem::SaveGame()
 		}
 	}
 
-	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotName, 0);
+	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotNameFor(CurrentSlot), 0);
 	if (bOk) { Loaded = Save; } // cache zodat late-joiners de nieuwste staat krijgen
 	UE_LOG(LogWeedShop, Log, TEXT("SaveGame %s: %d speler(s), dag %d, fase %d"),
 		bOk ? TEXT("OK") : TEXT("MISLUKT"), NumPlayers, Save->DayNumber, Save->MilestonePhase);
@@ -163,7 +222,7 @@ bool USaveGameSubsystem::LoadGame()
 	if (!GS || !HasSave()) { return false; }
 	UWorld* World = GS->GetWorld();
 
-	UWeedShopSaveGame* Save = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
+	UWeedShopSaveGame* Save = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotNameFor(CurrentSlot), 0));
 	if (!Save) { return false; }
 	Loaded = Save;
 	RestoredPlayers.Reset();

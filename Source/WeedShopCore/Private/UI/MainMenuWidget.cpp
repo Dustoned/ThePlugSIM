@@ -259,6 +259,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
 		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
+		MenuCanvas = Hit;
 		UOverlaySlot* HS = Layers->AddChildToOverlay(Hit);
 		HS->SetHorizontalAlignment(HAlign_Fill); HS->SetVerticalAlignment(VAlign_Fill);
 
@@ -267,9 +268,9 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		const float X0 = 0.083f, X1 = 0.285f, HalfH = 0.029f; // langere balken
 		const float Centers[6] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f, 0.7811f };
 		TFunction<void()> Acts[6] = {
-			[this]() { OnStart(); },     // CONTINUE
-			[this]() { OnStart(); },     // NEW GAME
-			[this]() { OnContinue(); },  // LOAD GAME
+			[this]() { OnContinue(); },  // CONTINUE -> laatst gebruikte slot
+			[this]() { OpenPicker(1); }, // NEW GAME -> kies een slot
+			[this]() { OpenPicker(2); }, // LOAD GAME -> kies een slot
 			[this]() { OnSettings(); },  // SETTINGS
 			[this]() { OnCredits(); },   // CREDITS
 			[this]() { OnQuit(); },      // EXIT GAME
@@ -324,6 +325,56 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UTextBlock* Ver = WeedUI::Text(WidgetTree, TEXT("v0.1.0  -  pre-alpha"), 12, FLinearColor(0.70f, 0.66f, 0.80f), false);
 		UOverlaySlot* VS = Layers->AddChildToOverlay(Ver);
 		VS->SetHorizontalAlignment(HAlign_Left); VS->SetVerticalAlignment(VAlign_Bottom); VS->SetPadding(FMargin(24.f, 0.f, 0.f, 16.f));
+
+		// --- Slot-picker (3 saves) — gecentreerde kaart, verborgen tot New Game/Load ---
+		USizeBox* PickSize = WidgetTree->ConstructWidget<USizeBox>();
+		PickSize->SetWidthOverride(540.f);
+		UBorder* PickCard = WidgetTree->ConstructWidget<UBorder>();
+		PickCard->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.98f), 18.f));
+		PickCard->SetPadding(FMargin(26.f, 22.f, 26.f, 22.f));
+		PickSize->SetContent(PickCard);
+		SlotPanel = PickSize;
+		UOverlaySlot* PkS = Layers->AddChildToOverlay(PickSize);
+		PkS->SetHorizontalAlignment(HAlign_Center); PkS->SetVerticalAlignment(VAlign_Center);
+
+		UVerticalBox* PickVB = WidgetTree->ConstructWidget<UVerticalBox>();
+		PickCard->SetContent(PickVB);
+		PickerTitle = WeedUI::Text(WidgetTree, TEXT("CHOOSE A SLOT"), 20, FLinearColor(0.6f, 1.f, 0.6f), true, true);
+		PickVB->AddChildToVerticalBox(PickerTitle)->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+
+		SlotButtons.Reset(); SlotLabels.Reset();
+		for (int32 s = 0; s < USaveGameSubsystem::NumSlots; ++s)
+		{
+			const int32 SlotIdx = s;
+			UWeedActionButton* SB = WidgetTree->ConstructWidget<UWeedActionButton>();
+			SB->OnClicked.AddDynamic(SB, &UWeedActionButton::Handle);
+			SB->OnAction.BindLambda([this, SlotIdx](int32, int32) { OnSlotChosen(SlotIdx); });
+			FButtonStyle SS;
+			SS.Normal  = WeedUI::Rounded(FLinearColor(0.12f, 0.13f, 0.17f, 0.96f), 8.f);
+			SS.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 8.f);
+			SS.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.f), 8.f);
+			SS.NormalPadding = FMargin(16.f, 12.f); SS.PressedPadding = FMargin(16.f, 12.f);
+			SB->SetStyle(SS);
+			UTextBlock* SL = WeedUI::Text(WidgetTree, TEXT(""), 14, FLinearColor::White, true);
+			SB->SetContent(SL);
+			PickVB->AddChildToVerticalBox(SB)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+			SlotButtons.Add(SB);
+			SlotLabels.Add(SL);
+		}
+
+		UWeedActionButton* BackBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
+		BackBtn->OnClicked.AddDynamic(BackBtn, &UWeedActionButton::Handle);
+		BackBtn->OnAction.BindLambda([this](int32, int32) { ClosePicker(); });
+		FButtonStyle BS2;
+		BS2.Normal = WeedUI::Rounded(FLinearColor(0.30f, 0.13f, 0.14f, 0.96f), 8.f);
+		BS2.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.2f, 0.96f), 8.f);
+		BS2.Pressed = WeedUI::Rounded(FLinearColor(0.5f, 0.22f, 0.24f, 1.f), 8.f);
+		BS2.NormalPadding = FMargin(16.f, 10.f); BS2.PressedPadding = FMargin(16.f, 10.f);
+		BackBtn->SetStyle(BS2);
+		BackBtn->SetContent(WeedUI::Text(WidgetTree, TEXT("Back"), 13, FLinearColor::White, true));
+		PickVB->AddChildToVerticalBox(BackBtn)->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
+
+		SlotPanel->SetVisibility(ESlateVisibility::Collapsed); // start verborgen
 		return;
 	}
 
@@ -375,18 +426,66 @@ void UMainMenuWidget::OnStart()
 
 void UMainMenuWidget::OnContinue()
 {
-	bool bOk = false;
 	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
 	{
-		bOk = Save->HasSave() && Save->LoadGame();
+		if (Save->QuickContinue())
+		{
+			if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
+			return;
+		}
 	}
-	if (bOk)
+	if (StatusText) { StatusText->SetText(FText::FromString(TEXT("No save found - start a New game."))); }
+}
+
+void UMainMenuWidget::OpenPicker(int32 Mode)
+{
+	MenuMode = Mode;
+	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::Collapsed); }
+	if (SlotPanel) { SlotPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+	RefreshSlots();
+}
+
+void UMainMenuWidget::ClosePicker()
+{
+	MenuMode = 0;
+	if (SlotPanel) { SlotPanel->SetVisibility(ESlateVisibility::Collapsed); }
+	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+}
+
+void UMainMenuWidget::RefreshSlots()
+{
+	if (PickerTitle) { PickerTitle->SetText(FText::FromString(MenuMode == 1 ? TEXT("NEW GAME  -  choose a slot") : TEXT("LOAD GAME  -  choose a slot"))); }
+	USaveGameSubsystem* Save = GetSave(GetWorld());
+	for (int32 s = 0; s < SlotButtons.Num(); ++s)
 	{
+		FString Info;
+		const bool bHas = Save && Save->GetSlotInfo(s, Info);
+		const FString Line = bHas
+			? FString::Printf(TEXT("Slot %d\n%s"), s + 1, *Info)
+			: FString::Printf(TEXT("Slot %d\n(empty)"), s + 1);
+		if (SlotLabels.IsValidIndex(s) && SlotLabels[s]) { SlotLabels[s]->SetText(FText::FromString(Line)); }
+		// In Load-modus zijn lege slots niet klikbaar; in New-modus alles.
+		if (SlotButtons[s]) { SlotButtons[s]->SetIsEnabled(MenuMode == 1 || bHas); }
+	}
+}
+
+void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
+{
+	USaveGameSubsystem* Save = GetSave(GetWorld());
+	if (!Save) { return; }
+	if (MenuMode == 1) // New Game
+	{
+		Save->NewGameInSlot(SlotIdx);
+		ClosePicker();
 		if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
 	}
-	else if (StatusText)
+	else // Load
 	{
-		StatusText->SetText(FText::FromString(TEXT("No save found.")));
+		if (Save->HasSaveInSlot(SlotIdx) && Save->LoadSlot(SlotIdx))
+		{
+			ClosePicker();
+			if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
+		}
 	}
 }
 
@@ -418,6 +517,7 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		bLastOpen = bOpen;
 		if (bOpen)
 		{
+			ClosePicker(); // altijd op het hoofdmenu beginnen
 			if (StatusText) { StatusText->SetText(FText::GetEmpty()); }
 			// "Load game" dimmen als er geen save is.
 			if (ContinueBtn)

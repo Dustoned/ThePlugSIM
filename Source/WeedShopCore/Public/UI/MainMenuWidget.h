@@ -28,11 +28,17 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 
-	void OnStart();      // Continue / New Game: gewoon het spel in
-	void OnContinue();   // Load save
+	void OnStart();      // (ongebruikt sinds slot-picker; behouden voor compat)
+	void OnContinue();   // Continue: laatst gebruikte slot laden
 	void OnSettings();
 	void OnCredits();
 	void OnQuit();
+
+	// Slot-picker (3 saves): Mode 1 = New Game, 2 = Load.
+	void OpenPicker(int32 Mode);
+	void ClosePicker();
+	void RefreshSlots();
+	void OnSlotChosen(int32 SlotIdx);
 
 	// Maakt een flikkerende neon-"lamp": gekleurde, afgeronde glow die zacht pulseert.
 	UBorder* AddGlow(class UOverlay* Layers, const FLinearColor& Color, float W, float H,
@@ -47,6 +53,14 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> Backdrop;
 	UPROPERTY() TObjectPtr<UTextBlock> StatusText;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> ContinueBtn;
+
+	// Slot-picker.
+	int32 MenuMode = 0; // 0 = hoofdmenu, 1 = New Game-keuze, 2 = Load-keuze
+	UPROPERTY() TObjectPtr<UWidget> SlotPanel;          // de keuze-kaart (zichtbaar als MenuMode!=0)
+	UPROPERTY() TObjectPtr<UWidget> MenuCanvas;          // de 6 hoofdmenu-knoppen (verbergen tijdens picker)
+	UPROPERTY() TObjectPtr<UTextBlock> PickerTitle;
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> SlotButtons;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotLabels;
 
 	// Vanaf schijf geladen achtergrond-foto + logo + knop-swatch (losse PNG's in Content/_Project/UI).
 	UPROPERTY() TObjectPtr<class UTexture2D> BgTex;

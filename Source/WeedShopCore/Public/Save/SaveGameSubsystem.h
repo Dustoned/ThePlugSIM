@@ -18,8 +18,36 @@ class WEEDSHOPCORE_API USaveGameSubsystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 public:
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Save")
 	FString SlotName = TEXT("WeedShopSave");
+
+	// Aantal save-slots.
+	static constexpr int32 NumSlots = 3;
+
+	// Slot-keuze (welke slot Save/Load gebruiken).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	void SetSlot(int32 Slot);
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
+	int32 GetSlot() const { return CurrentSlot; }
+
+	// Bestaat er een save in dit slot? + korte samenvatting (false als leeg).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
+	bool HasSaveInSlot(int32 Slot) const;
+	bool GetSlotInfo(int32 Slot, FString& OutSummary) const;
+
+	// Nieuw spel in dit slot starten (verse staat; oude save blijft tot je opnieuw opslaat).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	void NewGameInSlot(int32 Slot);
+
+	// Laad een specifiek slot.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	bool LoadSlot(int32 Slot);
+
+	// Continue: laad het laatst gebruikte slot, anders het eerste bestaande. False als er geen is.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	bool QuickContinue();
 
 	// Schrijft de huidige gedeelde state + ALLE verbonden spelers (op username) naar de slot.
 	// Alleen de host/server. False bij client of geen GameState.
@@ -40,6 +68,9 @@ public:
 protected:
 	AWeedShopGameState* GetWeedGameState() const;
 	bool HasAuthorityWorld() const;
+	FString SlotNameFor(int32 Slot) const;
+
+	int32 CurrentSlot = 0;
 
 	// Helpers om per-speler data te verzamelen/toe te passen + identiteit.
 	static void PlayerKeys(const APawn* Pawn, FString& OutId, FString& OutName); // stabiele id + weergavenaam
