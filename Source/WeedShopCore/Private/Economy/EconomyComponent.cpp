@@ -86,6 +86,12 @@ void UEconomyComponent::SetBalanceCents(int64 NewCents)
 	SetBalance(FMath::Max<int64>(0, NewCents));
 }
 
+void UEconomyComponent::SetBankCents(int64 NewCents)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	SetBank(FMath::Max<int64>(0, NewCents));
+}
+
 void UEconomyComponent::SetBalance(int64 NewCents)
 {
 	BalanceCents = NewCents;

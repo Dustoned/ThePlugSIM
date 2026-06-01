@@ -69,6 +69,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
 	void SetBalanceCents(int64 NewCents);
 
+	// Server-only: zet het bankgeld direct (voor save/load-herstel).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
+	void SetBankCents(int64 NewCents);
+
 	// Saldo in hele euro's (voor UI-weergave). LET OP: dit is het CASH-saldo (zwart geld).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	float GetBalanceEuros() const { return static_cast<float>(BalanceCents) / 100.0f; }

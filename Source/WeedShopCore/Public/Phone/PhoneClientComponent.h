@@ -171,6 +171,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	bool IsBankAppUnlocked() const { return bBankAppUnlocked; }
 
+	// Server-only: zet de bank-app-unlock direct (voor save/load-herstel).
+	void SetBankAppUnlocked(bool bUnlocked) { if (GetOwnerRole() == ROLE_Authority) { bBankAppUnlocked = bUnlocked; } }
+
 	// Koop de telefoon-upgrade (bankgeld). Client -> server.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestBuyPhoneUpgrade();

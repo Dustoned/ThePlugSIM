@@ -17,7 +17,13 @@ public:
 	int32 SaveVersion = 1;
 
 	UPROPERTY(VisibleAnywhere, Category = "Save")
-	int64 BalanceCents = 0;
+	int64 BalanceCents = 0; // cash (zwart)
+
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int64 BankCents = 0;    // bank (wit)
+
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	bool bBankAppUnlocked = false; // telefoon-upgrade gekocht?
 
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	float TimeOfDaySeconds = 0.f;

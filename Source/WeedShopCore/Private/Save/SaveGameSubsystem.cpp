@@ -5,8 +5,28 @@
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
+#include "Phone/PhoneClientComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "Engine/World.h"
+
+namespace
+{
+	// De portemonnee + telefoon van de lokale/host-speler (waar de save naartoe gaat).
+	UEconomyComponent* HostEconomy(const UWorld* W)
+	{
+		const APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+		const APawn* P = PC ? PC->GetPawn() : nullptr;
+		return P ? P->FindComponentByClass<UEconomyComponent>() : nullptr;
+	}
+	UPhoneClientComponent* HostPhone(const UWorld* W)
+	{
+		const APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+		const APawn* P = PC ? PC->GetPawn() : nullptr;
+		return P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+	}
+}
 
 AWeedShopGameState* USaveGameSubsystem::GetWeedGameState() const
 {
@@ -47,9 +67,14 @@ bool USaveGameSubsystem::SaveGame()
 		return false;
 	}
 
-	if (const UEconomyComponent* Econ = GS->GetEconomy())
+	if (const UEconomyComponent* Econ = HostEconomy(GS->GetWorld()))
 	{
 		Save->BalanceCents = Econ->GetBalanceCents();
+		Save->BankCents = Econ->GetBankCents();
+	}
+	if (const UPhoneClientComponent* Phone = HostPhone(GS->GetWorld()))
+	{
+		Save->bBankAppUnlocked = Phone->IsBankAppUnlocked();
 	}
 	if (const UDayCycleComponent* Day = GS->GetDayCycle())
 	{
@@ -81,9 +106,14 @@ bool USaveGameSubsystem::LoadGame()
 		return false;
 	}
 
-	if (UEconomyComponent* Econ = GS->GetEconomy())
+	if (UEconomyComponent* Econ = HostEconomy(GS->GetWorld()))
 	{
 		Econ->SetBalanceCents(Save->BalanceCents);
+		Econ->SetBankCents(Save->BankCents);
+	}
+	if (UPhoneClientComponent* Phone = HostPhone(GS->GetWorld()))
+	{
+		Phone->SetBankAppUnlocked(Save->bBankAppUnlocked);
 	}
 	if (UDayCycleComponent* Day = GS->GetDayCycle())
 	{
