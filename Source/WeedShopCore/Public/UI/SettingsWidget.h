@@ -34,8 +34,13 @@ protected:
 
 	// Rij-helper: label links + een knop rechts met de huidige waarde (klik = OnClick).
 	void AddValueRow(const FString& Label, const FString& Value, TFunction<void()> OnClick);
-	// Rij-helper: label + [-] waarde [+].
-	void AddStepRow(const FString& Label, const FString& Value, TFunction<void()> OnMinus, TFunction<void()> OnPlus);
+	// Rij-helper: label + slider + waarde-tekst. Geeft de slider terug (waarde 0..1).
+	class USlider* AddSliderRow(const FString& Label, float Normalized, TObjectPtr<class UTextBlock>& OutValue);
+	// Rij-helper: label + resolutie-dropdown.
+	void AddResolutionRow();
+
+	UFUNCTION()
+	void OnResolutionChanged(FString Item, ESelectInfo::Type SelectType);
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
@@ -43,6 +48,15 @@ protected:
 	UPROPERTY() TObjectPtr<UVerticalBox> Body;     // rechter inhoud (per categorie)
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGraphics;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGame;
+
+	// Game-sliders (gepolld in NativeTick zodat slepen live toepast, met afronding tegen config-spam).
+	UPROPERTY() TObjectPtr<class USlider> FovSlider;
+	UPROPERTY() TObjectPtr<class USlider> SensSlider;
+	UPROPERTY() TObjectPtr<UTextBlock> FovVal;
+	UPROPERTY() TObjectPtr<UTextBlock> SensVal;
+	UPROPERTY() TObjectPtr<class UComboBoxString> ResCombo;
+	int32 LastFovApplied = -1;
+	int32 LastSensApplied = -1; // sensitivity * 10
 
 	int32 Category = 0; // 0 = Graphics, 1 = Game
 	bool bLastOpen = false;

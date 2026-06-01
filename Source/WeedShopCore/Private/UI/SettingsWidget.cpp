@@ -13,8 +13,11 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
+#include "Components/Slider.h"
+#include "Components/ComboBoxString.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/GameUserSettings.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Engine/Engine.h"
 
 namespace
@@ -117,18 +120,74 @@ void USettingsWidget::AddValueRow(const FString& Label, const FString& Value, TF
 	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 5.f));
 }
 
-void USettingsWidget::AddStepRow(const FString& Label, const FString& Value, TFunction<void()> OnMinus, TFunction<void()> OnPlus)
+USlider* USettingsWidget::AddSliderRow(const FString& Label, float Normalized, TObjectPtr<UTextBlock>& OutValue)
 {
-	if (!Body) { return; }
+	USlider* Slider = WidgetTree->ConstructWidget<USlider>();
+	if (!Body) { return Slider; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 14, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
-	Row->AddChildToHorizontalBox(SetBtn(WidgetTree, TEXT("-"), FLinearColor(0.18f, 0.2f, 0.27f), OnMinus, 13))->SetVerticalAlignment(VAlign_Center);
-	UTextBlock* Val = WeedUI::Text(WidgetTree, Value, 14, FLinearColor::White, true);
-	USizeBox* VSz = WidgetTree->ConstructWidget<USizeBox>(); VSz->SetWidthOverride(90.f); VSz->SetContent(Val);
+
+	Slider->SetMinValue(0.f); Slider->SetMaxValue(1.f);
+	Slider->SetValue(FMath::Clamp(Normalized, 0.f, 1.f));
+	Slider->SetSliderBarColor(FLinearColor(0.18f, 0.2f, 0.27f));
+	Slider->SetSliderHandleColor(FLinearColor(0.55f, 0.8f, 1.f));
+	USizeBox* SSz = WidgetTree->ConstructWidget<USizeBox>(); SSz->SetWidthOverride(220.f); SSz->SetHeightOverride(20.f); SSz->SetContent(Slider);
+	Row->AddChildToHorizontalBox(SSz)->SetVerticalAlignment(VAlign_Center);
+
+	OutValue = WeedUI::Text(WidgetTree, TEXT(""), 14, FLinearColor::White, true);
+	USizeBox* VSz = WidgetTree->ConstructWidget<USizeBox>(); VSz->SetWidthOverride(56.f); VSz->SetContent(OutValue);
 	Row->AddChildToHorizontalBox(VSz)->SetVerticalAlignment(VAlign_Center);
-	Row->AddChildToHorizontalBox(SetBtn(WidgetTree, TEXT("+"), FLinearColor(0.18f, 0.2f, 0.27f), OnPlus, 13))->SetVerticalAlignment(VAlign_Center);
+
+	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 6.f, 0.f, 6.f));
+	return Slider;
+}
+
+void USettingsWidget::AddResolutionRow()
+{
+	if (!Body) { return; }
+	UGameUserSettings* G = GUS();
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Resolution"), 14, FLinearColor(0.88f, 0.9f, 1.f)));
+	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
+
+	ResCombo = WidgetTree->ConstructWidget<UComboBoxString>();
+	// Ondersteunde resoluties van de monitor vullen.
+	TArray<FIntPoint> Modes;
+	UKismetSystemLibrary::GetSupportedFullscreenResolutions(Modes);
+	if (Modes.Num() == 0) { Modes = { FIntPoint(1280,720), FIntPoint(1600,900), FIntPoint(1920,1080), FIntPoint(2560,1440) }; }
+	const FIntPoint Cur = G ? G->GetScreenResolution() : FIntPoint(1920, 1080);
+	FString CurOpt;
+	for (const FIntPoint& M : Modes)
+	{
+		const FString Opt = FString::Printf(TEXT("%d x %d"), M.X, M.Y);
+		ResCombo->AddOption(Opt);
+		if (M.X == Cur.X && M.Y == Cur.Y) { CurOpt = Opt; }
+	}
+	if (CurOpt.IsEmpty()) { CurOpt = FString::Printf(TEXT("%d x %d"), Cur.X, Cur.Y); ResCombo->AddOption(CurOpt); }
+	ResCombo->SetSelectedOption(CurOpt);
+	ResCombo->OnSelectionChanged.AddDynamic(this, &USettingsWidget::OnResolutionChanged);
+
+	USizeBox* CSz = WidgetTree->ConstructWidget<USizeBox>(); CSz->SetWidthOverride(220.f); CSz->SetContent(ResCombo);
+	Row->AddChildToHorizontalBox(CSz)->SetVerticalAlignment(VAlign_Center);
 	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 5.f));
+}
+
+void USettingsWidget::OnResolutionChanged(FString Item, ESelectInfo::Type SelectType)
+{
+	if (SelectType == ESelectInfo::Direct) { return; } // alleen door de speler
+	int32 X = 0, Y = 0;
+	FString L, R;
+	if (Item.Split(TEXT(" x "), &L, &R)) { X = FCString::Atoi(*L); Y = FCString::Atoi(*R); }
+	if (X > 0 && Y > 0)
+	{
+		if (UGameUserSettings* G = GUS())
+		{
+			G->SetScreenResolution(FIntPoint(X, Y));
+			G->ApplyResolutionSettings(false);
+			G->SaveSettings();
+		}
+	}
 }
 
 void USettingsWidget::RefreshTabs()
@@ -149,11 +208,15 @@ void USettingsWidget::RefreshContent()
 {
 	if (!Body) { return; }
 	Body->ClearChildren();
+	FovSlider = nullptr; SensSlider = nullptr; FovVal = nullptr; SensVal = nullptr; ResCombo = nullptr;
 
 	if (Category == 0) // Graphics
 	{
 		UGameUserSettings* G = GUS();
 		if (!G) { Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Graphics unavailable."), 13, FLinearColor::Gray)); return; }
+
+		// Resolutie-dropdown.
+		AddResolutionRow();
 
 		// Window mode.
 		const EWindowMode::Type WM = G->GetFullscreenMode();
@@ -207,15 +270,16 @@ void USettingsWidget::RefreshContent()
 	else // Game
 	{
 		UPhoneClientComponent* Ph = GetPhone();
-		const float Fov = Ph ? Ph->GetFov() : 90.f;
-		AddStepRow(TEXT("Field of view"), FString::Printf(TEXT("%d"), (int32)Fov),
-			[this]() { if (UPhoneClientComponent* P = GetPhone()) { P->ApplyFov(P->GetFov() - 5.f); RefreshContent(); } },
-			[this]() { if (UPhoneClientComponent* P = GetPhone()) { P->ApplyFov(P->GetFov() + 5.f); RefreshContent(); } });
+		const float Fov = Ph ? Ph->GetFov() : 90.f;          // 60..120
+		const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f; // 0.1..3.0
 
-		const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f;
-		AddStepRow(TEXT("Mouse sensitivity"), FString::Printf(TEXT("%.1f"), Sens),
-			[this]() { if (UPhoneClientComponent* P = GetPhone()) { P->SetLookSensitivity(P->GetLookSensitivity() - 0.1f); RefreshContent(); } },
-			[this]() { if (UPhoneClientComponent* P = GetPhone()) { P->SetLookSensitivity(P->GetLookSensitivity() + 0.1f); RefreshContent(); } });
+		FovSlider = AddSliderRow(TEXT("Field of view"), (Fov - 60.f) / 60.f, FovVal);
+		if (FovVal) { FovVal->SetText(FText::FromString(FString::Printf(TEXT("%d"), (int32)Fov))); }
+		LastFovApplied = (int32)Fov;
+
+		SensSlider = AddSliderRow(TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, SensVal);
+		if (SensVal) { SensVal->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), Sens))); }
+		LastSensApplied = FMath::RoundToInt(Sens * 10.f);
 
 		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Tip: rebind keys in the phone Settings app (controls)."), 11, FLinearColor(0.55f, 0.6f, 0.7f)))
 			->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
@@ -234,5 +298,32 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		bLastOpen = bOpen;
 		if (bOpen) { RefreshTabs(); RefreshContent(); }
+	}
+	if (!bOpen) { return; }
+
+	// Game-sliders live toepassen (alleen als de waarde echt verandert -> geen config-spam).
+	if (UPhoneClientComponent* PhMut = GetPhone())
+	{
+		if (FovSlider)
+		{
+			const int32 Fov = FMath::RoundToInt(60.f + FovSlider->GetValue() * 60.f);
+			if (Fov != LastFovApplied)
+			{
+				LastFovApplied = Fov;
+				PhMut->ApplyFov((float)Fov);
+				if (FovVal) { FovVal->SetText(FText::FromString(FString::Printf(TEXT("%d"), Fov))); }
+			}
+		}
+		if (SensSlider)
+		{
+			const float SensRaw = 0.1f + SensSlider->GetValue() * 2.9f;
+			const int32 S10 = FMath::RoundToInt(SensRaw * 10.f);
+			if (S10 != LastSensApplied)
+			{
+				LastSensApplied = S10;
+				PhMut->SetLookSensitivity(S10 / 10.f);
+				if (SensVal) { SensVal->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), S10 / 10.f))); }
+			}
+		}
 	}
 }
