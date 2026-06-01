@@ -180,8 +180,10 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* HS = Layers->AddChildToOverlay(Hit);
 		HS->SetHorizontalAlignment(HAlign_Fill); HS->SetVerticalAlignment(VAlign_Fill);
 
-		const float X0 = 0.085f, X1 = 0.255f, HalfH = 0.030f;
-		const float Centers[6] = { 0.470f, 0.533f, 0.596f, 0.683f, 0.726f, 0.789f };
+		// Exact opgemeten uit T_MainMenuBG.png (1672x941): balk x=145..370, 6 knoppen,
+		// gelijke tussenruimte, centers y=440/498/556/613/673/735, hoogte ~47px.
+		const float X0 = 0.087f, X1 = 0.221f, HalfH = 0.0255f;
+		const float Centers[6] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f, 0.7811f };
 		TFunction<void()> Acts[6] = {
 			[this]() { OnStart(); },     // CONTINUE
 			[this]() { OnStart(); },     // NEW GAME
