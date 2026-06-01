@@ -115,8 +115,8 @@ void UPauseMenuWidget::OnLoad()
 
 void UPauseMenuWidget::OnSettings()
 {
-	// Hergebruik de telefoon-Settings-app (controls + status).
-	if (PhoneComp.IsValid()) { PhoneComp->OpenToApp(4); }
+	// Open het settings-scherm bovenop het pauze-menu.
+	if (PhoneComp.IsValid()) { PhoneComp->OpenSettings(); }
 }
 
 void UPauseMenuWidget::OnMainMenu()

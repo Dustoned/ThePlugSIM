@@ -491,8 +491,8 @@ void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
 
 void UMainMenuWidget::OnSettings()
 {
-	// Verberg het titelscherm en open de telefoon-Settings-app.
-	if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); PhoneComp->OpenToApp(4); }
+	// Open het settings-scherm bovenop het titelscherm.
+	if (PhoneComp.IsValid()) { PhoneComp->OpenSettings(); }
 }
 
 void UMainMenuWidget::OnCredits()

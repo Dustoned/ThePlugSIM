@@ -63,6 +63,23 @@ public:
 	// Toon het titelscherm en open meteen de Load-slot-picker (vanuit het pauze-menu).
 	void OpenMainMenuLoad();
 
+	// --- Settings-scherm (graphics + game). ---
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Settings")
+	void OpenSettings();
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Settings")
+	void CloseSettings();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
+	bool IsSettingsOpen() const { return bSettingsOpen; }
+
+	// Game-instellingen (lokaal toegepast + bewaard in config).
+	void ApplyFov(float NewFov);
+	void SetLookSensitivity(float S);
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
+	float GetFov() const { return FovValue; }
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
+	float GetLookSensitivity() const { return LookSensitivity; }
+	void LoadGameSettings(); // leest FOV/sensitivity uit config en past FOV toe
+
 	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
 	void OpenAtm();
@@ -409,6 +426,7 @@ public:
 	static constexpr int32 DealStepCount = 17; // 40,50,...,200 %
 
 protected:
+	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(Server, Reliable)
@@ -533,6 +551,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class USaveIndicatorWidget> SaveIndicatorWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class USettingsWidget> SettingsWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
@@ -570,6 +591,9 @@ protected:
 
 	bool bPauseOpen = false;
 	bool bMainMenuOpen = false;
+	bool bSettingsOpen = false;
+	float FovValue = 90.f;
+	float LookSensitivity = 1.f;
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;

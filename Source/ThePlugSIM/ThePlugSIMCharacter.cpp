@@ -313,18 +313,20 @@ void AThePlugSIMCharacter::LookInput(const FInputActionValue& Value)
 
 void AThePlugSIMCharacter::DoAim(float Yaw, float Pitch)
 {
-	// Geen camera-kijken terwijl er een UI open is (telefoon/roll/deal), anders draait de
-	// camera mee terwijl je de muis/slider gebruikt.
-	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen()))
+	// Geen camera-kijken terwijl er een UI open is (anders draait de camera mee tijdens muis-gebruik).
+	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen()
+		|| Phone->IsPauseOpen() || Phone->IsMainMenuOpen() || Phone->IsSettingsOpen()))
 	{
 		return;
 	}
 
 	if (GetController())
 	{
-		// pass the rotation inputs
-		AddControllerYawInput(Yaw);
-		AddControllerPitchInput(Pitch);
+		// Muisgevoeligheid uit de settings toepassen.
+		const float Sens = Phone ? Phone->GetLookSensitivity() : 1.f;
+		AddControllerYawInput(Yaw * Sens);
+		AddControllerPitchInput(Pitch * Sens);
 	}
 }
 

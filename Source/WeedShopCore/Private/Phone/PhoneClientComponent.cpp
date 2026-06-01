@@ -36,9 +36,12 @@
 #include "UI/PauseMenuWidget.h"
 #include "UI/MainMenuWidget.h"
 #include "UI/SaveIndicatorWidget.h"
+#include "UI/SettingsWidget.h"
 #include "World/StorageShelf.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Camera/CameraComponent.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Blueprint/UserWidget.h"
 #include "Net/UnrealNetwork.h"
 
@@ -52,6 +55,56 @@ void UPhoneClientComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UPhoneClientComponent, bBankAppUnlocked);
+}
+
+void UPhoneClientComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	// Game-instellingen (FOV/sensitivity) inladen + FOV toepassen voor de lokale speler.
+	LoadGameSettings();
+}
+
+void UPhoneClientComponent::LoadGameSettings()
+{
+	float Fov = 90.f, Sens = 1.f;
+	GConfig->GetFloat(TEXT("ThePlugSIM.Game"), TEXT("FOV"), Fov, GGameUserSettingsIni);
+	GConfig->GetFloat(TEXT("ThePlugSIM.Game"), TEXT("MouseSensitivity"), Sens, GGameUserSettingsIni);
+	LookSensitivity = FMath::Clamp(Sens, 0.1f, 4.f);
+	ApplyFov(Fov);
+}
+
+void UPhoneClientComponent::ApplyFov(float NewFov)
+{
+	FovValue = FMath::Clamp(NewFov, 60.f, 120.f);
+	if (GetOwner())
+	{
+		if (UCameraComponent* Cam = GetOwner()->FindComponentByClass<UCameraComponent>())
+		{
+			Cam->SetFieldOfView(FovValue);
+		}
+	}
+	GConfig->SetFloat(TEXT("ThePlugSIM.Game"), TEXT("FOV"), FovValue, GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
+}
+
+void UPhoneClientComponent::SetLookSensitivity(float S)
+{
+	LookSensitivity = FMath::Clamp(S, 0.1f, 4.f);
+	GConfig->SetFloat(TEXT("ThePlugSIM.Game"), TEXT("MouseSensitivity"), LookSensitivity, GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
+}
+
+void UPhoneClientComponent::OpenSettings()
+{
+	EnsureWidget();
+	bSettingsOpen = true;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseSettings()
+{
+	bSettingsOpen = false;
+	UpdateCursor();
 }
 
 AWeedShopGameState* UPhoneClientComponent::GetGS() const
@@ -80,7 +133,7 @@ UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bPauseOpen || bMainMenuOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -150,6 +203,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (PauseWidget) { PauseWidget->SetPhone(this); PauseWidget->AddToViewport(40); }
 	MainMenuWidget = CreateWidget<UMainMenuWidget>(PC, UMainMenuWidget::StaticClass());
 	if (MainMenuWidget) { MainMenuWidget->SetPhone(this); MainMenuWidget->AddToViewport(42); }
+	SettingsWidget = CreateWidget<USettingsWidget>(PC, USettingsWidget::StaticClass());
+	if (SettingsWidget) { SettingsWidget->SetPhone(this); SettingsWidget->AddToViewport(44); }
 	// Save-indicator bovenop alles (ook over pauze/menu heen) zodat je 'm altijd ziet.
 	SaveIndicatorWidget = CreateWidget<USaveIndicatorWidget>(PC, USaveIndicatorWidget::StaticClass());
 	if (SaveIndicatorWidget) { SaveIndicatorWidget->AddToViewport(50); }
