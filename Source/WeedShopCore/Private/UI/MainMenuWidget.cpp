@@ -486,11 +486,8 @@ void UMainMenuWidget::OnContinue()
 {
 	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
 	{
-		if (Save->QuickContinue())
-		{
-			if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
-			return;
-		}
+		// Herlaadt het level en laadt de nieuwste save (schone lei).
+		if (Save->RequestContinue()) { return; }
 	}
 	if (StatusText) { StatusText->SetText(FText::FromString(TEXT("No save found - start a New game."))); }
 }
@@ -608,30 +605,21 @@ void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
 {
 	USaveGameSubsystem* Save = GetSave(GetWorld());
 	if (!Save) { return; }
-	if (MenuMode == 1) // New Game
+	if (MenuMode == 1) // New Game -> verse start (level herlaadt, save gewist)
 	{
-		Save->NewGameInSlot(SlotIdx);
-		ClosePicker();
-		if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
+		Save->RequestNewGame(SlotIdx);
 	}
-	else // Load (handmatige save; valt terug op autosave als er geen handmatige is)
+	else // Load handmatige save (level herlaadt, daarna save toegepast)
 	{
-		if (Save->HasSaveInSlot(SlotIdx) && Save->LoadSlot(SlotIdx))
-		{
-			ClosePicker();
-			if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
-		}
+		Save->RequestLoad(SlotIdx, false);
 	}
 }
 
 void UMainMenuWidget::OnLoadAutosave(int32 SlotIdx)
 {
-	USaveGameSubsystem* Save = GetSave(GetWorld());
-	if (!Save) { return; }
-	if (Save->HasAutoSaveInSlot(SlotIdx) && Save->LoadSlotSpecific(SlotIdx, true))
+	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
 	{
-		ClosePicker();
-		if (PhoneComp.IsValid()) { PhoneComp->HideMainMenu(); }
+		Save->RequestLoad(SlotIdx, true);
 	}
 }
 

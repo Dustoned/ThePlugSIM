@@ -66,6 +66,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	bool LoadSlotSpecific(int32 Slot, bool bAutosave);
 
+	// --- Echte start/load: HERLAAD het level voor een gegarandeerd schone lei ---
+	// New Game: wis het slot, herlaad het level -> verse wereld (geen save toegepast).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	void RequestNewGame(int32 Slot);
+	// Load: herlaad het level en pas daarna de gekozen save toe (handmatig of autosave).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	bool RequestLoad(int32 Slot, bool bAutosave);
+	// Continue: herlaad + laad de nieuwste save (huidig slot, anders eerste slot met een save).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	bool RequestContinue();
+
+	// Door de (zojuist geladen) host-pawn aangeroepen zodra de wereld klaar is. Voert de geplande
+	// actie uit. Geeft true als de start afgehandeld is (caller hoeft het titelscherm NIET te tonen).
+	bool RunPendingOnWorldReady();
+
 	// Het meest recente save-tijdstip over alle slots (handmatig + autosave). False = geen save.
 	bool GetMostRecentSaveTime(FDateTime& Out) const;
 
@@ -143,4 +158,10 @@ protected:
 	double CurrentPlaytimeSeconds() const;
 
 	bool bAutosaveEnabled = true;
+
+	// Geplande actie die ná een level-herlaad wordt uitgevoerd.
+	enum class EPending : uint8 { None, Fresh, Load };
+	EPending Pending = EPending::None;
+	FString PendingLoadName;
+	void ReloadCurrentLevel();
 };

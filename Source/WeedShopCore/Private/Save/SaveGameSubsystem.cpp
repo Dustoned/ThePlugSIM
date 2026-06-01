@@ -194,6 +194,73 @@ bool USaveGameSubsystem::LoadSlot(int32 Slot)
 	return LoadGame(false); // echte Load: altijd jouw handmatige save-punt
 }
 
+void USaveGameSubsystem::ReloadCurrentLevel()
+{
+	UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	if (!W) { return; }
+	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); } // travel vanuit pauze
+	const FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
+	UE_LOG(LogWeedShop, Log, TEXT("Level herladen voor save-actie: %s"), *LevelName);
+	UGameplayStatics::OpenLevel(W, FName(*LevelName));
+}
+
+void USaveGameSubsystem::RequestNewGame(int32 Slot)
+{
+	SetSlot(Slot);
+	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
+	if (UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(AutoSlotNameFor(Slot), 0); }
+	Loaded = nullptr;
+	RestoredPlayers.Reset();
+	PlaytimeBaseSeconds = 0.0;
+	PlaytimeMark = FDateTime::UtcNow();
+	Pending = EPending::Fresh;
+	PendingLoadName.Reset();
+	ReloadCurrentLevel();
+}
+
+bool USaveGameSubsystem::RequestLoad(int32 Slot, bool bAutosave)
+{
+	const FString Name = bAutosave ? AutoSlotNameFor(Slot) : SlotNameFor(Slot);
+	if (!UGameplayStatics::DoesSaveGameExist(Name, 0)) { return false; }
+	SetSlot(Slot);
+	Pending = EPending::Load;
+	PendingLoadName = Name;
+	ReloadCurrentLevel();
+	return true;
+}
+
+bool USaveGameSubsystem::RequestContinue()
+{
+	int32 Target = HasSaveInSlot(CurrentSlot) ? CurrentSlot : INDEX_NONE;
+	if (Target == INDEX_NONE) { for (int32 i = 0; i < NumSlots; ++i) { if (HasSaveInSlot(i)) { Target = i; break; } } }
+	if (Target == INDEX_NONE) { return false; }
+	SetSlot(Target);
+	const FString Name = ResolveLoadName(true); // nieuwste van handmatig/autosave
+	if (Name.IsEmpty()) { return false; }
+	Pending = EPending::Load;
+	PendingLoadName = Name;
+	ReloadCurrentLevel();
+	return true;
+}
+
+bool USaveGameSubsystem::RunPendingOnWorldReady()
+{
+	if (Pending == EPending::Fresh)
+	{
+		Pending = EPending::None;
+		return true; // verse wereld = map-default; niets te laden
+	}
+	if (Pending == EPending::Load)
+	{
+		Pending = EPending::None;
+		const FString Name = PendingLoadName;
+		PendingLoadName.Reset();
+		LoadGameFromName(Name);
+		return true;
+	}
+	return false;
+}
+
 bool USaveGameSubsystem::QuickContinue()
 {
 	// Continue: pak het nieuwste (handmatig of autosave) zodat je verdergaat waar je was.

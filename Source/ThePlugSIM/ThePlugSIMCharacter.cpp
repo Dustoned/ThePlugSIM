@@ -543,8 +543,20 @@ void AThePlugSIMCharacter::BeginPlay()
 	if (IsLocallyControlled() && Phone)
 	{
 		Phone->EnsureWidget();
-		// Titelscherm tonen bij opstarten (host/standalone; niet voor joinende co-op clients).
-		if (GetNetMode() != NM_Client) { Phone->ShowMainMenu(); }
+		// Host/standalone: na een New Game/Load-herlaad voert de save-subsystem de actie uit
+		// (verse start of save toepassen) en tonen we GEEN titelscherm; anders (kale boot) wel.
+		if (GetNetMode() != NM_Client)
+		{
+			bool bHandled = false;
+			if (UGameInstance* GI = GetGameInstance())
+			{
+				if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
+				{
+					bHandled = Sv->RunPendingOnWorldReady();
+				}
+			}
+			if (!bHandled) { Phone->ShowMainMenu(); }
+		}
 	}
 }
 
