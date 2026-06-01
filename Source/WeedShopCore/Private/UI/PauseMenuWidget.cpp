@@ -139,11 +139,8 @@ void UPauseMenuWidget::OnSettings()
 
 void UPauseMenuWidget::OnMainMenu()
 {
-	if (PhoneComp.IsValid()) { PhoneComp->ClosePause(); }
-	if (!MainMenuLevel.IsNone())
-	{
-		UGameplayStatics::OpenLevel(this, MainMenuLevel);
-	}
+	// Toon het titelscherm-overlay (geen aparte map nodig).
+	if (PhoneComp.IsValid()) { PhoneComp->ShowMainMenu(); }
 }
 
 void UPauseMenuWidget::OnQuit()

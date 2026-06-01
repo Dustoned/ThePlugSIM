@@ -522,6 +522,13 @@ void AThePlugSIMCharacter::BeginPlay()
 			}
 		}
 	}
+
+	// Bij opstarten het titelscherm tonen voor de lokale speler (host/standalone; niet voor
+	// joinende co-op clients die in een lopende wereld vallen).
+	if (IsLocallyControlled() && Phone && GetNetMode() != NM_Client)
+	{
+		Phone->ShowMainMenu();
+	}
 }
 
 void AThePlugSIMCharacter::OnCashChanged(int64 NewCashCents)
@@ -587,7 +594,7 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	// deze klik net heeft verwerkt (bv. een paneel sloot) negeren we 'm hier, zodat dezelfde klik
 	// niet alsnog de wereld-interactie (en daarmee bv. de deal opnieuw) opent.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen() || Phone->DidUiConsumeClickRecently()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen() || Phone->DidUiConsumeClickRecently()))
 	{
 		return;
 	}
@@ -644,7 +651,8 @@ void AThePlugSIMCharacter::OnPrimaryReleased()
 void AThePlugSIMCharacter::OnPauseKey()
 {
 	// ESC opent het pauze-menu (en sluit andere schermen); nogmaals ESC sluit het menu.
-	if (Phone) { Phone->TogglePause(); }
+	// Op het titelscherm doet ESC niets (je kiest daar Start/Continue/Quit).
+	if (Phone && !Phone->IsMainMenuOpen()) { Phone->TogglePause(); }
 }
 
 void AThePlugSIMCharacter::OnInteractKey()
@@ -652,7 +660,7 @@ void AThePlugSIMCharacter::OnInteractKey()
 	// E doet hetzelfde als links-klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen,
 	// maar gebruikt nooit het actieve hand-item.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen()))
 	{
 		return;
 	}

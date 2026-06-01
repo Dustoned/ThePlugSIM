@@ -34,6 +34,7 @@
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
 #include "UI/PauseMenuWidget.h"
+#include "UI/MainMenuWidget.h"
 #include "World/StorageShelf.h"
 #include "Blueprint/UserWidget.h"
 #include "Net/UnrealNetwork.h"
@@ -76,7 +77,7 @@ UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bPauseOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bPauseOpen || bMainMenuOpen;
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);
@@ -143,6 +144,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (ShelfWidget) { ShelfWidget->SetPhone(this); ShelfWidget->AddToViewport(31); }
 	PauseWidget = CreateWidget<UPauseMenuWidget>(PC, UPauseMenuWidget::StaticClass());
 	if (PauseWidget) { PauseWidget->SetPhone(this); PauseWidget->AddToViewport(40); }
+	MainMenuWidget = CreateWidget<UMainMenuWidget>(PC, UMainMenuWidget::StaticClass());
+	if (MainMenuWidget) { MainMenuWidget->SetPhone(this); MainMenuWidget->AddToViewport(42); }
 }
 
 void UPhoneClientComponent::Toggle()
@@ -232,6 +235,27 @@ void UPhoneClientComponent::ClosePause()
 	{
 		PC->SetPause(false);
 	}
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ShowMainMenu()
+{
+	EnsureWidget();
+	bMainMenuOpen = true;
+	// Sluit alles anders zodat het titelscherm schoon bovenop ligt.
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
+	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bPauseOpen = false;
+	if (APlayerController* PC = GetPC())
+	{
+		if (GetWorld() && GetWorld()->GetNetMode() == NM_Standalone) { PC->SetPause(true); }
+	}
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::HideMainMenu()
+{
+	bMainMenuOpen = false;
+	if (APlayerController* PC = GetPC()) { PC->SetPause(false); }
 	UpdateCursor();
 }
 

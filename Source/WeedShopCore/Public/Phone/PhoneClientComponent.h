@@ -52,6 +52,14 @@ public:
 	// Open de telefoon direct op een bepaalde app (gebruikt door het pauze-menu voor Settings).
 	void OpenToApp(int32 AppIndex);
 
+	// --- Titelscherm (THE PLUG SIMULATOR): bij opstarten + via pauze "Main menu" ---
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Menu")
+	void ShowMainMenu();
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Menu")
+	void HideMainMenu();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Menu")
+	bool IsMainMenuOpen() const { return bMainMenuOpen; }
+
 	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|ATM")
 	void OpenAtm();
@@ -509,6 +517,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<class UPauseMenuWidget> PauseWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<class UMainMenuWidget> MainMenuWidget;
+
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
@@ -545,6 +556,7 @@ protected:
 	TWeakObjectPtr<class AStorageShelf> ShelfActor; // het schap dat nu open is
 
 	bool bPauseOpen = false;
+	bool bMainMenuOpen = false;
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;
