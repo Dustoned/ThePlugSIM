@@ -13,6 +13,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
+#include "Components/SizeBox.h"
 #include "GameFramework/Pawn.h"
 
 namespace
@@ -55,37 +56,44 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	// Kaart rechts-midden.
+	// Kaart LINKS-midden (zo valt 'ie nooit achter de telefoon, die rechts opent).
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HandCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.82f), 10.f));
+	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.84f), 12.f));
 	CardB->SetPadding(FMargin(0.f));
 	Card = CardB;
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(1.f, 0.5f, 1.f, 0.5f));
-	CS->SetAlignment(FVector2D(1.f, 0.5f));
+	CS->SetAnchors(FAnchors(0.f, 0.5f, 0.f, 0.5f));
+	CS->SetAlignment(FVector2D(0.f, 0.5f));
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(-22.f, 0.f));
+	CS->SetPosition(FVector2D(24.f, 0.f));
 
-	// Accent-balk links + tekstkolom.
+	// Accent-balk links + tekstkolom (vaste, smalle breedte -> kaart wordt verticaler dan breed).
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	CardB->SetContent(Row);
 
 	AccentBar = WidgetTree->ConstructWidget<UBorder>();
 	AccentBar->SetBrush(WeedUI::Rounded(FLinearColor(0.5f, 1.f, 0.6f, 1.f), 3.f));
-	AccentBar->SetPadding(FMargin(2.5f, 0.f, 2.5f, 0.f));
+	AccentBar->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
 	UHorizontalBoxSlot* AS = Row->AddChildToHorizontalBox(AccentBar);
 	AS->SetPadding(FMargin(0.f)); AS->SetVerticalAlignment(VAlign_Fill);
 
-	UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
-	UHorizontalBoxSlot* ColS = Row->AddChildToHorizontalBox(Col);
-	ColS->SetPadding(FMargin(12.f, 9.f, 16.f, 9.f)); ColS->SetVerticalAlignment(VAlign_Center);
+	USizeBox* ColSize = WidgetTree->ConstructWidget<USizeBox>();
+	ColSize->SetWidthOverride(180.f); // smal -> tekst wrapt, kaart wordt hoger
+	UHorizontalBoxSlot* SzS = Row->AddChildToHorizontalBox(ColSize);
+	SzS->SetVerticalAlignment(VAlign_Center);
 
-	TypeText = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
-	Col->AddChildToVerticalBox(TypeText);
-	NameText = WeedUI::Text(WidgetTree, TEXT(""), 17, FLinearColor(0.96f, 0.97f, 1.f), false, true);
-	Col->AddChildToVerticalBox(NameText)->SetPadding(FMargin(0.f, 1.f, 0.f, 0.f));
-	StatText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.75f, 0.8f, 0.9f));
-	Col->AddChildToVerticalBox(StatText)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+	UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
+	ColSize->SetContent(Col);
+
+	TypeText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
+	TypeText->SetAutoWrapText(true);
+	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 12.f, 14.f, 2.f));
+	NameText = WeedUI::Text(WidgetTree, TEXT(""), 21, FLinearColor(0.96f, 0.97f, 1.f), false, true);
+	NameText->SetAutoWrapText(true);
+	Col->AddChildToVerticalBox(NameText)->SetPadding(FMargin(14.f, 2.f, 14.f, 4.f));
+	StatText = WeedUI::Text(WidgetTree, TEXT(""), 14, FLinearColor(0.75f, 0.8f, 0.9f));
+	StatText->SetAutoWrapText(true);
+	Col->AddChildToVerticalBox(StatText)->SetPadding(FMargin(14.f, 2.f, 14.f, 12.f));
 
 	Card->SetRenderOpacity(0.f);
 }
