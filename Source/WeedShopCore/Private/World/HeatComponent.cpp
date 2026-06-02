@@ -50,8 +50,11 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	const float Decay = bNight ? NightDecayPerSecond : DayDecayPerSecond;
 	if (Heat > 0.f) { SetHeat(Heat - Decay * DeltaTime); }
 
-	// Risico-events: alleen 's nachts EN bij echt hoge heat (= je hebt veel gedeald). Zeldzaam.
-	if (bNight && Heat >= BustThreshold)
+	// Risico-events: alleen 's nachts, bij echt hoge heat, EN niet binnen de dagen-cooldown na een
+	// vorige bust/overval (zodat je een paar dagen rust hebt).
+	const int32 CurDay = Day ? Day->GetDayNumber() : 0;
+	const bool bOnCooldown = (CurDay < LastEventDay + EventCooldownDays);
+	if (bNight && Heat >= BustThreshold && !bOnCooldown)
 	{
 		EventTimer += DeltaTime;
 		if (EventTimer >= EventIntervalSeconds)
@@ -59,8 +62,8 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 			EventTimer = 0.f;
 			const float Chance = EventChance * (1.f - Resist);
 			const float Roll = FMath::FRand();
-			if (Roll < Chance * 0.4f)       { TriggerBust(); }
-			else if (Roll < Chance)         { TriggerRobbery(); }
+			if (Roll < Chance * 0.4f)       { TriggerBust();    LastEventDay = CurDay; }
+			else if (Roll < Chance)         { TriggerRobbery(); LastEventDay = CurDay; }
 		}
 	}
 	else

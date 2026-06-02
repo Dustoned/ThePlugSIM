@@ -39,6 +39,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
 	float EventChance = 0.12f;
 
+	// Na een bust/overval: zoveel in-game dagen GEEN nieuw event (rust).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	int32 EventCooldownDays = 3;
+
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Heat")
 	FOnHeatChanged OnHeatChanged;
 
@@ -70,4 +74,5 @@ protected:
 	void TriggerRobbery();
 
 	float EventTimer = 0.f;
+	int32 LastEventDay = -1000; // dag van de laatste bust/overval (voor de dagen-cooldown)
 };
