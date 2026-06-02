@@ -11,6 +11,7 @@
 #include "ImageUtils.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
+#include <initializer_list>
 
 namespace
 {
@@ -192,23 +193,81 @@ namespace WeedUI
 
 	FLinearColor ItemAccent(FName ItemId) { return CatFor(ItemId).Accent; }
 
+	namespace
+	{
+		// Mogelijke bestandsnamen (zonder pad/extensie, kleine letters) voor dit item, primair
+		// eerst. Zo werkt zowel "weed.png" als de pack-eigen naam (bv. "documents" voor vloei).
+		TArray<FString> IconCandidatesFor(FName ItemId)
+		{
+			const FString K = FString(CatFor(ItemId).Key);
+			TArray<FString> C; C.AddUnique(K);
+			auto Add = [&C](std::initializer_list<const TCHAR*> Xs) { for (const TCHAR* X : Xs) { C.AddUnique(FString(X)); } };
+			if      (K == TEXT("cash"))      Add({ TEXT("money"), TEXT("wallet") });
+			else if (K == TEXT("bank"))      Add({ TEXT("atm") });
+			else if (K == TEXT("weed"))      Add({ TEXT("bud"), TEXT("drugs"), TEXT("cannabis") });
+			else if (K == TEXT("weed_wet"))  Add({ TEXT("wetweed"), TEXT("weed"), TEXT("drugs") });
+			else if (K == TEXT("baggie"))    Add({ TEXT("bag"), TEXT("packaging"), TEXT("weed") });
+			else if (K == TEXT("joint"))     Add({ TEXT("blunt"), TEXT("drugs"), TEXT("weed") });
+			else if (K == TEXT("seed"))      Add({ TEXT("seeds"), TEXT("weed") });
+			else if (K == TEXT("packaging")) Add({ TEXT("package"), TEXT("box"), TEXT("supply") });
+			else if (K == TEXT("papers"))    Add({ TEXT("paper"), TEXT("documents"), TEXT("document") });
+			else if (K == TEXT("soil"))      Add({ TEXT("dirt"), TEXT("supply") });
+			else if (K == TEXT("water"))     Add({ TEXT("bottle") });
+			else if (K == TEXT("pot"))       Add({ TEXT("plantpot"), TEXT("supply"), TEXT("garden") });
+			else if (K == TEXT("rack"))      Add({ TEXT("dryrack"), TEXT("repairs"), TEXT("drying") });
+			else if (K == TEXT("lamp"))      Add({ TEXT("light"), TEXT("boost"), TEXT("energy") });
+			else if (K == TEXT("tent"))      Add({ TEXT("garage"), TEXT("stash") });
+			else if (K == TEXT("spray"))     Add({ TEXT("tuning"), TEXT("repairs"), TEXT("pesticide"), TEXT("fertilizer") });
+			else if (K == TEXT("furniture")) Add({ TEXT("stash"), TEXT("inventory"), TEXT("box") });
+			return C;
+		}
+
+		// Index van losgelaten PNG's: kleine-letter-stam -> volledig pad. Inclusief stammen zonder
+		// veelvoorkomende suffixen (_default, _256, ...), zodat hoofdletters/suffixen niet uitmaken.
+		const TMap<FString, FString>& IconFileIndex()
+		{
+			static TMap<FString, FString> Index;
+			static bool bBuilt = false;
+			if (bBuilt) { return Index; }
+			bBuilt = true;
+
+			const FString IconsDir = FPaths::ProjectContentDir() / TEXT("_Project/UI/Icons/");
+			TArray<FString> Files;
+			IFileManager::Get().FindFiles(Files, *(IconsDir + TEXT("*.png")), true, false);
+			static const TCHAR* Suffixes[] = { TEXT("_default"), TEXT("-default"), TEXT("_white"), TEXT("_256"), TEXT("_128"), TEXT("_icon"), TEXT("_normal") };
+			for (const FString& F : Files)
+			{
+				const FString Full = IconsDir + F;
+				FString Stem = FPaths::GetBaseFilename(F).ToLower();
+				Index.Add(Stem, Full);
+				for (const TCHAR* Suf : Suffixes)
+				{
+					if (Stem.EndsWith(Suf)) { Index.Add(Stem.LeftChop(FCString::Strlen(Suf)), Full); }
+				}
+			}
+			return Index;
+		}
+	}
+
 	UTexture2D* ItemIconTexture(FName ItemId)
 	{
 		const FString Key = IconKeyFor(ItemId);
 		if (Key.IsEmpty()) { return nullptr; }
 
-		// Cache (incl. negatieve treffers) zodat we niet elke rebuild de schijf raken. Geladen
+		// Cache (incl. negatieve treffers) zodat we niet elke rebuild de schijf/index raken. Geladen
 		// textures worden ge-root zodat ze niet door de GC worden opgeruimd.
 		static TMap<FString, UTexture2D*> Cache;
 		if (UTexture2D** Found = Cache.Find(Key)) { return *Found; }
 
-		const FString IconsDir = FPaths::ProjectContentDir() / TEXT("_Project/UI/Icons/");
-		const FString Path = IconsDir + Key + TEXT(".png");
+		const TMap<FString, FString>& Index = IconFileIndex();
 		UTexture2D* Tex = nullptr;
-		if (IFileManager::Get().FileExists(*Path))
+		for (const FString& Cand : IconCandidatesFor(ItemId))
 		{
-			Tex = FImageUtils::ImportFileAsTexture2D(Path);
-			if (Tex) { Tex->AddToRoot(); }
+			if (const FString* Path = Index.Find(Cand.ToLower()))
+			{
+				Tex = FImageUtils::ImportFileAsTexture2D(*Path);
+				if (Tex) { Tex->AddToRoot(); break; }
+			}
 		}
 		Cache.Add(Key, Tex);
 		return Tex;
