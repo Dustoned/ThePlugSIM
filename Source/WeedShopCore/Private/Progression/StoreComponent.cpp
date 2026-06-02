@@ -237,23 +237,65 @@ bool UStoreComponent::BuyAny(FName CatalogId, UInventoryComponent* Buyer)
 	return BuySeed(CatalogId, Buyer);
 }
 
-int32 UStoreComponent::RequiredLevelFor(FName CatalogId)
+int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 {
 	const FString S = CatalogId.ToString();
-	// Droogrekken
-	if (S == TEXT("DryRack_Std"))     { return 5; }
-	if (S == TEXT("DryRack_Pro"))     { return 12; }
-	// Verpak-tafels
-	if (S == TEXT("Bench_Pack2"))     { return 6; }
-	if (S == TEXT("Bench_Pack3"))     { return 15; }
-	// Containers
-	if (S == TEXT("Cont_Jar10") || S == TEXT("Cont_Jar15")) { return 3; }
-	if (S == TEXT("Cont_Block100"))   { return 8; }
-	if (S == TEXT("Cont_Garbage500")) { return 15; }
+
 	// Potten
-	if (S == TEXT("Pot_Plastic"))     { return 4; }
-	if (S == TEXT("Pot_Fabric"))      { return 10; }
-	return 0;
+	if (S == TEXT("Pot_Broken"))      { return 1; }
+	if (S == TEXT("Pot_Clay"))        { return 2; }
+	if (S == TEXT("Pot_Plastic"))     { return 5; }
+	if (S == TEXT("Pot_Fabric"))      { return 12; }
+	// Aarde
+	if (S == TEXT("Soil_Basic"))      { return 1; }
+	if (S == TEXT("Soil_Rich"))       { return 4; }
+	if (S == TEXT("Soil_Premium"))    { return 9; }
+	// Water
+	if (S == TEXT("WaterBottle_Plastic"))  { return 1; }
+	if (S == TEXT("WaterBottle_Steel"))    { return 4; }
+	if (S == TEXT("WaterBottle_Jerrycan")) { return 8; }
+	if (S == TEXT("WaterBottle_Tank"))     { return 14; }
+	// Vloei / papers
+	if (S == TEXT("Papers_Small"))    { return 1; }
+	if (S == TEXT("Papers_Big"))      { return 3; }
+	if (S == TEXT("Papers_Blunt"))    { return 6; }
+	if (S == TEXT("Papers_Backwoods")){ return 10; }
+	// Droogrekken
+	if (S == TEXT("DryRack_Cheap"))   { return 2; }
+	if (S == TEXT("DryRack_Std"))     { return 6; }
+	if (S == TEXT("DryRack_Pro"))     { return 13; }
+	// Verpak-tafels
+	if (S == TEXT("Bench_Pack"))      { return 1; }
+	if (S == TEXT("Bench_Pack2"))     { return 7; }
+	if (S == TEXT("Bench_Pack3"))     { return 15; }
+	// Containers (verpakkingsmateriaal)
+	if (S == TEXT("Cont_Bag2"))       { return 1; }
+	if (S == TEXT("Cont_Bag5"))       { return 2; }
+	if (S == TEXT("Cont_Jar10"))      { return 4; }
+	if (S == TEXT("Cont_Jar15"))      { return 5; }
+	if (S == TEXT("Cont_Block100"))   { return 9; }
+	if (S == TEXT("Cont_Garbage500")) { return 16; }
+	// Meubels / opslag
+	if (S == TEXT("Mattress"))        { return 1; }
+	if (S == TEXT("Table"))           { return 2; }
+	if (S == TEXT("Chest"))           { return 3; }
+	if (S == TEXT("Shelf"))           { return 5; }
+	if (S == TEXT("Fridge"))          { return 6; }
+
+	// Zaden: schaal met de potentie (THC%) van de strain.
+	if (StrainTable)
+	{
+		if (const FWeedStrainRow* Row = StrainTable->FindRow<FWeedStrainRow>(CatalogId, TEXT("RequiredLevelFor"), false))
+		{
+			const float Thc = Row->BaseThcPercent;
+			if (Thc < 14.f) { return 1; }
+			if (Thc < 17.f) { return 3; }
+			if (Thc < 20.f) { return 6; }
+			if (Thc < 23.f) { return 10; }
+			return 15;
+		}
+	}
+	return 1;
 }
 
 bool UStoreComponent::GrantAny(FName CatalogId, UInventoryComponent* Buyer)
@@ -309,28 +351,41 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 {
 	// Categorieën: 0=Seeds, 1=Pots, 2=Drying, 3=Packing, 4=Papers, 5=Soil, 6=Water, 7=Furniture.
 	// (De telefoon verdeelt deze over de Grow shop en de Supplies-app.)
+	TArray<FName> Out;
 	if (Cat == 0)
 	{
-		return GetSeedCatalog();
+		Out = GetSeedCatalog();
 	}
-	TArray<FName> Out;
-	for (const FName& Id : GetSupplyCatalog())
+	else
 	{
-		const FString S = Id.ToString();
-		bool bMatch = false;
-		switch (Cat)
+		for (const FName& Id : GetSupplyCatalog())
 		{
-		case 1: bMatch = S.StartsWith(TEXT("Pot")); break;
-		case 2: bMatch = S.StartsWith(TEXT("DryRack_")); break;
-		case 3: bMatch = S.StartsWith(TEXT("Bench_")) || S.StartsWith(TEXT("Cont_")); break;
-		case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
-		case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
-		case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
-		case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest")); break;
-		default: break;
+			const FString S = Id.ToString();
+			bool bMatch = false;
+			switch (Cat)
+			{
+			case 1: bMatch = S.StartsWith(TEXT("Pot")); break;
+			case 2: bMatch = S.StartsWith(TEXT("DryRack_")); break;
+			case 3: bMatch = S.StartsWith(TEXT("Bench_")) || S.StartsWith(TEXT("Cont_")); break;
+			case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
+			case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
+			case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
+			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest")); break;
+			default: break;
+			}
+			if (bMatch) { Out.Add(Id); }
 		}
-		if (bMatch) { Out.Add(Id); }
 	}
+
+	// Sorteer op vereist level (oplopend), dan prijs: lage/goedkope items bovenaan, en doordat het
+	// level oplopend is staan álle locked items (level > spelerlevel) altijd onderaan, nooit ertussen.
+	Out.Sort([this](const FName& A, const FName& B)
+	{
+		const int32 LA = RequiredLevelFor(A);
+		const int32 LB = RequiredLevelFor(B);
+		if (LA != LB) { return LA < LB; }
+		return GetCatalogPriceCents(A) < GetCatalogPriceCents(B);
+	});
 	return Out;
 }
 

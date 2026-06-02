@@ -1160,7 +1160,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	const int32 PlayerLvl = GS->GetLeveling() ? GS->GetLeveling()->GetLevel() : 1;
 	for (int32 i = 0; i < BuyIds.Num(); ++i)
 	{
-		const int32 Req = UStoreComponent::RequiredLevelFor(BuyIds[i]);
+		const int32 Req = Store->RequiredLevelFor(BuyIds[i]);
 		if (Req > PlayerLvl)
 		{
 			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor::Orange, FString::Printf(TEXT("%s unlocks at level %d."), *Store->GetCatalogName(BuyIds[i]).ToString(), Req)); }

@@ -910,7 +910,7 @@ void UPhoneWidget::FillStoreList()
 	{
 		const int32 Price = Store->GetCatalogPriceCents(Id);
 		const int32 Pend = Ph->GetPendingQty(Id);
-		const int32 ReqLvl = UStoreComponent::RequiredLevelFor(Id);
+		const int32 ReqLvl = Store->RequiredLevelFor(Id);
 		const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
 		const bool bLocked = ReqLvl > PlayerLvl;
 
@@ -1113,11 +1113,30 @@ void UPhoneWidget::RefreshContent()
 		UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr;
 		if (Upg)
 		{
-			int32 idx = 0;
-			for (const FName& Id : Upg->GetAllUpgradeIds())
+			// Verzamel + sorteer: koopbaar bovenaan, daarna 'owned', locked (verkeerde fase) onderaan.
+			// De originele index blijft bewaard zodat de Buy-knop de juiste upgrade koopt.
+			struct FUpgRow { int32 OrigIdx; FText Name; int32 Cost; bool bPurchased; bool bAvailable; };
+			TArray<FUpgRow> Rows;
 			{
-				FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
-				if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
+				int32 i = 0;
+				for (const FName& Id : Upg->GetAllUpgradeIds())
+				{
+					FUpgRow R; R.OrigIdx = i++;
+					if (Upg->GetUpgradeDisplay(Id, R.Name, R.Cost, R.bPurchased, R.bAvailable)) { Rows.Add(R); }
+				}
+			}
+			auto GroupOf = [](const FUpgRow& R) -> int32 { if (!R.bAvailable) { return 2; } return R.bPurchased ? 1 : 0; };
+			Rows.Sort([&GroupOf](const FUpgRow& A, const FUpgRow& B)
+			{
+				const int32 GA = GroupOf(A), GB = GroupOf(B);
+				if (GA != GB) { return GA < GB; }
+				return A.Cost < B.Cost;
+			});
+
+			int32 shown = 0;
+			for (const FUpgRow& R : Rows)
+			{
+				const FText Name = R.Name; const int32 Cost = R.Cost; const bool bPurchased = R.bPurchased; const bool bAvailable = R.bAvailable; const int32 idx = R.OrigIdx;
 				{
 					UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 					FString NameStr = Name.ToString();
@@ -1148,7 +1167,7 @@ void UPhoneWidget::RefreshContent()
 					UVerticalBoxSlot* RS = ContentBox->AddChildToVerticalBox(Row);
 					RS->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 				}
-				if (++idx >= 10) { break; }
+				if (++shown >= 12) { break; }
 			}
 		}
 	}
