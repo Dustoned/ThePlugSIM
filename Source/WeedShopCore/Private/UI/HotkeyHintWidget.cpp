@@ -42,12 +42,12 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	Card->SetPadding(FMargin(12.f, 10.f, 12.f, 10.f));
 	Card->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	// Rechtsonder verankerd.
+	// Linksonder verankerd (alle controls staan hier, op één plek).
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Card);
-	CS->SetAnchors(FAnchors(1.f, 1.f, 1.f, 1.f));
-	CS->SetAlignment(FVector2D(1.f, 1.f));
+	CS->SetAnchors(FAnchors(0.f, 1.f, 0.f, 1.f));
+	CS->SetAlignment(FVector2D(0.f, 1.f));
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(-18.f, -18.f));
+	CS->SetPosition(FVector2D(18.f, -18.f));
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Card->SetContent(VB);

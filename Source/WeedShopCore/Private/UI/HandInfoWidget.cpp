@@ -22,21 +22,25 @@ namespace
 	void ClassifyItem(const FString& Id, FString& OutType, FString& OutHint, FLinearColor& OutCol)
 	{
 		auto Starts = [&Id](const TCHAR* P) { return Id.StartsWith(P); };
-		if (Starts(TEXT("WetBud_")))      { OutType = TEXT("WET BUD"); OutHint = TEXT("Dry it on a rack first"); OutCol = FLinearColor(0.45f, 0.75f, 1.f); }
-		else if (Starts(TEXT("Bud_")))    { OutType = TEXT("DRIED BUD"); OutHint = TEXT("Pack into bags to sell"); OutCol = FLinearColor(0.55f, 1.f, 0.6f); }
-		else if (Starts(TEXT("Bag_")))    { OutType = TEXT("BAGGIE"); OutHint = TEXT("Ready to sell to customers"); OutCol = FLinearColor(0.4f, 0.95f, 0.55f); }
-		else if (Starts(TEXT("Joint_")))  { OutType = TEXT("JOINT"); OutHint = TEXT("Give to a customer or smoke"); OutCol = FLinearColor(0.8f, 0.95f, 0.55f); }
-		else if (Starts(TEXT("Seed_")))   { OutType = TEXT("SEED"); OutHint = TEXT("Plant in a pot with soil"); OutCol = FLinearColor(0.6f, 0.9f, 0.5f); }
-		else if (Starts(TEXT("Soil_")))   { OutType = TEXT("SOIL"); OutHint = TEXT("Fill a pot before planting"); OutCol = FLinearColor(0.7f, 0.55f, 0.35f); }
-		else if (Starts(TEXT("WaterBottle"))) { OutType = TEXT("WATER BOTTLE"); OutHint = TEXT("Water your plants"); OutCol = FLinearColor(0.4f, 0.7f, 1.f); }
-		else if (Starts(TEXT("Cont_")))   { OutType = TEXT("CONTAINER"); OutHint = TEXT("Use at the packing bench"); OutCol = FLinearColor(0.7f, 0.7f, 0.8f); }
-		else if (Starts(TEXT("Spray_")))  { OutType = TEXT("SPRAY"); OutHint = TEXT("Treat a sick plant"); OutCol = FLinearColor(0.5f, 0.85f, 0.9f); }
-		else if (Starts(TEXT("Fertilizer_"))) { OutType = TEXT("FERTILIZER"); OutHint = TEXT("Boost a pot's yield"); OutCol = FLinearColor(0.6f, 0.85f, 0.4f); }
-		else if (Starts(TEXT("Papers_"))) { OutType = TEXT("ROLLING PAPERS"); OutHint = TEXT("Roll joints (R)"); OutCol = FLinearColor(0.85f, 0.85f, 0.7f); }
-		else if (Starts(TEXT("Pot_")))    { OutType = TEXT("PLANT POT"); OutHint = TEXT("Place it, then add soil"); OutCol = FLinearColor(0.8f, 0.6f, 0.4f); }
-		else if (Starts(TEXT("DryRack_")) || Starts(TEXT("Bench_")) || Id == TEXT("Shelf") || Id == TEXT("Chest")
-			|| Id == TEXT("Table") || Id == TEXT("Mattress") || Id == TEXT("Fridge") || Id == TEXT("Atm"))
-			{ OutType = TEXT("PLACEABLE"); OutHint = TEXT("Place it in your spot"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
+		// Hints zijn PUUR beschrijvend (geen toetsen) - de controls staan altijd links-onder.
+		if (Starts(TEXT("WetBud_")))      { OutType = TEXT("WET BUD"); OutHint = TEXT("Hang on a drying rack before you can use it"); OutCol = FLinearColor(0.45f, 0.75f, 1.f); }
+		else if (Starts(TEXT("Bud_")))    { OutType = TEXT("DRIED BUD"); OutHint = TEXT("Pack into baggies or jars, or roll into joints"); OutCol = FLinearColor(0.55f, 1.f, 0.6f); }
+		else if (Starts(TEXT("Bag_")))    { OutType = TEXT("BAGGIE"); OutHint = TEXT("A packed deal - sell it to customers"); OutCol = FLinearColor(0.4f, 0.95f, 0.55f); }
+		else if (Starts(TEXT("Joint_")))  { OutType = TEXT("JOINT"); OutHint = TEXT("Hand one to a customer, or smoke it yourself"); OutCol = FLinearColor(0.8f, 0.95f, 0.55f); }
+		else if (Starts(TEXT("Seed_")))   { OutType = TEXT("SEED"); OutHint = TEXT("Plant it in a pot filled with soil"); OutCol = FLinearColor(0.6f, 0.9f, 0.5f); }
+		else if (Starts(TEXT("Soil_")))   { OutType = TEXT("SOIL"); OutHint = TEXT("Fill an empty pot before planting"); OutCol = FLinearColor(0.7f, 0.55f, 0.35f); }
+		else if (Starts(TEXT("WaterBottle"))) { OutType = TEXT("WATER BOTTLE"); OutHint = TEXT("Water your plants to keep them growing"); OutCol = FLinearColor(0.4f, 0.7f, 1.f); }
+		else if (Starts(TEXT("Cont_")))   { OutType = TEXT("CONTAINER"); OutHint = TEXT("Used at the packing bench to bag your weed"); OutCol = FLinearColor(0.7f, 0.7f, 0.8f); }
+		else if (Starts(TEXT("Spray_")))  { OutType = TEXT("SPRAY"); OutHint = TEXT("Cures mould or pests on a plant"); OutCol = FLinearColor(0.5f, 0.85f, 0.9f); }
+		else if (Starts(TEXT("Fertilizer_"))) { OutType = TEXT("FERTILIZER"); OutHint = TEXT("Boosts a plant's yield for this harvest"); OutCol = FLinearColor(0.6f, 0.85f, 0.4f); }
+		else if (Starts(TEXT("Papers_"))) { OutType = TEXT("ROLLING PAPERS"); OutHint = TEXT("Roll your dried buds into joints"); OutCol = FLinearColor(0.85f, 0.85f, 0.7f); }
+		else if (Starts(TEXT("Pot_")))    { OutType = TEXT("PLANT POT"); OutHint = TEXT("Place it, fill with soil, then plant a seed"); OutCol = FLinearColor(0.8f, 0.6f, 0.4f); }
+		else if (Starts(TEXT("DryRack_")))   { OutType = TEXT("DRYING RACK"); OutHint = TEXT("Place it, then hang wet buds to dry"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
+		else if (Starts(TEXT("Bench_")))     { OutType = TEXT("PACKING BENCH"); OutHint = TEXT("Place it to pack buds into containers"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
+		else if (Id == TEXT("Shelf") || Id == TEXT("Chest")) { OutType = TEXT("STORAGE"); OutHint = TEXT("Place it to stash extra stock"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
+		else if (Id == TEXT("Atm"))          { OutType = TEXT("ATM"); OutHint = TEXT("Place it to deposit or withdraw money"); OutCol = FLinearColor(0.5f, 0.8f, 1.f); }
+		else if (Id == TEXT("Table") || Id == TEXT("Mattress") || Id == TEXT("Fridge"))
+			{ OutType = TEXT("FURNITURE"); OutHint = TEXT("Place it down in your home"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
 		else { OutType = TEXT("ITEM"); OutHint = TEXT(""); OutCol = FLinearColor(0.8f, 0.82f, 0.9f); }
 	}
 
