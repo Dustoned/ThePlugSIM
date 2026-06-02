@@ -130,6 +130,8 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 			PS->SetVerticalAlignment(bHotbar ? VAlign_Bottom : VAlign_Top);
 		}
 	}
+	// Volledige naam + details bij hover (zodat lange namen die niet in de cel passen toch leesbaar zijn).
+	if (!Tooltip.IsEmpty()) { SetToolTipText(FText::FromString(Tooltip)); }
 	// Hit-test zichtbaar zodat de cel muis/drag-events ontvangt.
 	SetVisibility(ESlateVisibility::Visible);
 	return Super::RebuildWidget();
@@ -442,19 +444,26 @@ void UInventoryWidget::RebuildContent()
 			Cell->bDraggable = true; // ook briefgeld kun je verslepen (herschikken / naar de hotbar)
 			Cell->IconId = ItemId;
 			Cell->Accent = WeedUI::ItemAccent(ItemId);
-			Cell->Line1 = WeedUI::PrettyItemName(ItemId);
+
+			// Volledige naam in de tooltip; in de cel kappen we te lange namen af met een ellips
+			// (de tooltip + het icoon maken alsnog volledig duidelijk wat het is).
+			const FString FullName = WeedUI::PrettyItemName(ItemId);
+			Cell->Line1 = (FullName.Len() > 20) ? (FullName.Left(19) + TEXT("...")) : FullName;
+			Cell->Tooltip = FullName;
 
 			if (bCash)
 			{
 				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.09f, 0.97f);
 				Cell->Line2 = FString::Printf(TEXT("EUR %d"), S.Quantity);
 				Cell->Badge.Empty();
+				Cell->Tooltip += FString::Printf(TEXT("\nEUR %d contant"), S.Quantity);
 			}
 			else if (bWet)
 			{
 				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.21f, 0.97f);
 				Cell->Line2 = TEXT("WET - dry it first");
 				Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
+				Cell->Tooltip += FString::Printf(TEXT("\n%dg  -  NAT, eerst drogen  (THC %.0f%%)"), S.Quantity, S.Quality);
 			}
 			else
 			{
@@ -463,6 +472,9 @@ void UInventoryWidget::RebuildContent()
 					? FString::Printf(TEXT("THC %.0f%%  Q %.0f%%"), S.Quality, S.QualityPct)
 					: TEXT("");
 				Cell->Badge = bBud ? FString::Printf(TEXT("%dg"), S.Quantity) : FString::Printf(TEXT("x%d"), S.Quantity);
+				Cell->Tooltip += bWeed
+					? FString::Printf(TEXT("\n%dg  -  THC %.0f%%   Kwaliteit %.0f%%"), S.Quantity, S.Quality, S.QualityPct)
+					: FString::Printf(TEXT("\nAantal: %d"), S.Quantity);
 				if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
 				{
 					Cell->bShowMerge = true;
@@ -504,9 +516,15 @@ void UInventoryWidget::RebuildContent()
 			const bool bBud = IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("WetBud_"));
 			Cell->IconId = S.ItemId;
 			Cell->Accent = bActive ? FLinearColor(0.55f, 0.95f, 0.5f) : WeedUI::ItemAccent(S.ItemId);
-			if (S.ItemId != TEXT("Cash"))
+			const FString HbName = WeedUI::PrettyItemName(S.ItemId);
+			if (S.ItemId == TEXT("Cash"))
+			{
+				Cell->Tooltip = FString::Printf(TEXT("%s\nEUR %d contant"), *HbName, S.Quantity);
+			}
+			else
 			{
 				Cell->Badge = bBud ? FString::Printf(TEXT("%dg"), S.Quantity) : FString::Printf(TEXT("x%d"), S.Quantity);
+				Cell->Tooltip = FString::Printf(TEXT("%s  (%s)"), *HbName, *Cell->Badge);
 			}
 		}
 		Sz->SetContent(Cell);

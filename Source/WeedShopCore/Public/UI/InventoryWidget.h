@@ -48,6 +48,7 @@ public:
 	FName IconId = NAME_None;
 	float IconSize = 38.f;
 	FString Badge;                                   // bv. "x5" of "12g" — getoond als pill rechtsboven
+	FString Tooltip;                                 // volledige naam + details (hover)
 	FLinearColor Accent = FLinearColor(0.3f, 0.34f, 0.42f);
 	bool bSlotNumber = false;                        // hotbar: toon het slotnummer linksboven
 	int32 SlotNumber = 0;
