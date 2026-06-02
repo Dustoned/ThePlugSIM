@@ -10,6 +10,8 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Application/NavigationConfig.h"
 #include "GameFramework/PlayerController.h"
 #include "Inventory/InventoryComponent.h"
 #include "UI/WeedShopHUD.h"
@@ -172,6 +174,24 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	TickStuckRecovery(DeltaSeconds);
+
+	// Lange klik: houd de linkermuisknop ~0.7s ingedrukt terwijl de telefoon-app open is en hij
+	// sluit (naast Tab en de Home-knop). We lezen de ruwe toetsstatus via de PlayerController zodat
+	// het ook werkt als UMG de klik opvangt (klikken op de telefoon zelf).
+	if (Phone && Phone->IsOpen())
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			if (PC->IsInputKeyDown(EKeys::LeftMouseButton))
+			{
+				PhoneCloseHold += DeltaSeconds;
+				if (PhoneCloseHold >= 0.7f) { Phone->Toggle(); PhoneCloseHold = 0.f; }
+			}
+			else { PhoneCloseHold = 0.f; }
+		}
+	}
+	else { PhoneCloseHold = 0.f; }
+
 	if (StonedSeconds > 0.f)
 	{
 		StonedSeconds = FMath::Max(0.f, StonedSeconds - DeltaSeconds);
@@ -694,6 +714,17 @@ void AThePlugSIMCharacter::BeginPlay()
 	// co-op clients, zodat ze "Saving/Saved" altijd zien, waar ze ook zijn.
 	if (IsLocallyControlled() && Phone)
 	{
+		// Zet Slate's Tab-/pijl-focusnavigatie uit. Anders "eet" UMG de Tab-toets voor focus-
+		// navigatie zodra je een knop in de telefoon hebt aangeklikt, en bereikt Tab de
+		// toggle-binding niet meer (telefoon ging wel open maar niet meer dicht met Tab).
+		if (FSlateApplication::IsInitialized())
+		{
+			TSharedRef<FNavigationConfig> Nav = MakeShared<FNavigationConfig>();
+			Nav->bTabNavigation = false;
+			Nav->bKeyNavigation = false;
+			Nav->bAnalogNavigation = false;
+			FSlateApplication::Get().SetNavigationConfig(Nav);
+		}
 		Phone->EnsureWidget();
 		// Host/standalone: na een New Game/Load-herlaad voert de save-subsystem de actie uit
 		// (verse start of save toepassen) en tonen we GEEN titelscherm; anders (kale boot) wel.
