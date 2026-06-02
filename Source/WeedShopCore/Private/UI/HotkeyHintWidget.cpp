@@ -157,6 +157,8 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (Cast<ACustomerBase>(Focus) && bJointHand) { Hints.Emplace(TEXT("Hold LMB"), TEXT("Give them a hit")); }
 			else { Hints.Emplace(K(TEXT("Interact")), Prompt); }
 			if (Cast<AGrowPlant>(Focus)) { Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Upgrade pot")); }
+			// Plaatsbare objecten kun je oppakken (G inhouden).
+			if (Build && Build->IsPickable(Focus)) { Hints.Emplace(TEXT("Hold G"), TEXT("Pick up")); }
 		}
 
 		const FName Active = Inv ? Inv->GetActiveItemId() : NAME_None;
@@ -175,6 +177,8 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		Hints.Emplace(K(TEXT("Phone")), TEXT("Phone"));
 		Hints.Emplace(K(TEXT("Inventory")), TEXT("Inventory"));
 		Hints.Emplace(TEXT("1-8"), TEXT("Hotbar slot"));
+		Hints.Emplace(TEXT("Scroll"), TEXT("Switch slot"));
+		Hints.Emplace(TEXT("Esc"), TEXT("Pause / menu"));
 	}
 
 	// Signature -> alleen herbouwen bij wijziging (geen flicker).

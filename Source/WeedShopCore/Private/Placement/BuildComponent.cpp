@@ -178,8 +178,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			Focus = IC->GetFocusedActor();
 		}
 		const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
-		const bool bPickable = Focus && (Cast<AGrowPlant>(Focus) || Cast<APlaceableProp>(Focus)
-			|| Cast<ADryingRack>(Focus) || Cast<APackBench>(Focus) || Cast<AStorageShelf>(Focus) || Cast<AWaterSink>(Focus));
+		const bool bPickable = IsPickable(Focus);
 		if (PC && bPickable && PC->IsInputKeyDown(EKeys::G))
 		{
 			PickupHoldAccum += DeltaTime;
@@ -461,6 +460,12 @@ void UBuildComponent::UpdateRemoteGhost()
 				bRepValid ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
 		}
 	}
+}
+
+bool UBuildComponent::IsPickable(const AActor* A) const
+{
+	return A && (Cast<AGrowPlant>(A) || Cast<APlaceableProp>(A) || Cast<ADryingRack>(A)
+		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A));
 }
 
 bool UBuildComponent::IsIndoors(const FVector& FloorPoint) const
