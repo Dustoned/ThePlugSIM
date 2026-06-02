@@ -18,6 +18,9 @@ class UTextBlock;
 // (bind met BindLambda in C++). Voor knoppen in alle UMG-panelen.
 DECLARE_DELEGATE_TwoParams(FWeedButtonClicked, int32, int32);
 
+// Vooraf-declaratie zodat de knop hieronder een UI-geluid kan afspelen (definitie staat verderop).
+namespace WeedUI { WEEDSHOPCORE_API void PlayUiSound(const UObject* WorldContext, const FString& Key, float Volume); }
+
 UCLASS()
 class WEEDSHOPCORE_API UWeedActionButton : public UButton
 {
@@ -29,7 +32,7 @@ public:
 	FWeedButtonClicked OnAction;
 
 	UFUNCTION()
-	void Handle() { OnAction.ExecuteIfBound(Action, Param); }
+	void Handle() { WeedUI::PlayUiSound(this, TEXT("click"), 0.45f); OnAction.ExecuteIfBound(Action, Param); }
 };
 
 namespace WeedUI
@@ -73,4 +76,8 @@ namespace WeedUI
 
 	// Accentkleur per item-categorie (voor randjes/labels in de inventory).
 	WEEDSHOPCORE_API FLinearColor ItemAccent(FName ItemId);
+
+	// Speelt een UI-geluid (2D) op logische naam ("click", "levelup", "cash", "error", ...). Laadt de
+	// SoundCue uit de Game UI Sound Pack en cachet 'm. Stil als het geluid ontbreekt.
+	WEEDSHOPCORE_API void PlayUiSound(const UObject* WorldContext, const FString& Key, float Volume = 1.f);
 }

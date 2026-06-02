@@ -11,6 +11,8 @@
 #include "ImageUtils.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
+#include "Sound/SoundBase.h"
+#include "Kismet/GameplayStatics.h"
 #include <initializer_list>
 
 namespace
@@ -202,6 +204,40 @@ namespace WeedUI
 	FString IconKeyFor(FName ItemId) { return FString(CatFor(ItemId).Key); }
 
 	FLinearColor ItemAccent(FName ItemId) { return CatFor(ItemId).Accent; }
+
+	void PlayUiSound(const UObject* WorldContext, const FString& Key, float Volume)
+	{
+		if (!WorldContext) { return; }
+
+		// Logische naam -> SoundCue in de Game UI Sound Pack.
+		static const TMap<FString, FString> Paths = {
+			{ TEXT("click"),   TEXT("/Game/Game_UI_Sound_Pack/Cues/Menu_UI/Light_button-1_Cue.Light_button-1_Cue") },
+			{ TEXT("levelup"), TEXT("/Game/Game_UI_Sound_Pack/Cues/Game_Level/SpaceLevelUp-1_Cue.SpaceLevelUp-1_Cue") },
+			{ TEXT("cash"),    TEXT("/Game/Game_UI_Sound_Pack/Cues/Highlight/Cash_Out-1_Cue.Cash_Out-1_Cue") },
+			{ TEXT("coin"),    TEXT("/Game/Game_UI_Sound_Pack/Cues/Menu_UI/Classic_coin-1_Cue.Classic_coin-1_Cue") },
+			{ TEXT("error"),   TEXT("/Game/Game_UI_Sound_Pack/Cues/Highlight/Attempts_failed-1_Cue.Attempts_failed-1_Cue") },
+			{ TEXT("open"),    TEXT("/Game/Game_UI_Sound_Pack/Cues/Menu_UI/Dimensional_door-1_Cue.Dimensional_door-1_Cue") },
+		};
+
+		// Geladen cues cachen (incl. negatieve treffer) + ge-root zodat de GC ze niet opruimt.
+		static TMap<FString, USoundBase*> Cache;
+		USoundBase* Sound = nullptr;
+		if (USoundBase** Found = Cache.Find(Key))
+		{
+			Sound = *Found;
+		}
+		else
+		{
+			if (const FString* P = Paths.Find(Key))
+			{
+				Sound = LoadObject<USoundBase>(nullptr, **P);
+				if (Sound) { Sound->AddToRoot(); }
+			}
+			Cache.Add(Key, Sound);
+		}
+
+		if (Sound) { UGameplayStatics::PlaySound2D(WorldContext, Sound, Volume); }
+	}
 
 	namespace
 	{
