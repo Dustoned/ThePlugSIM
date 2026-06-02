@@ -34,13 +34,15 @@ TSharedRef<SWidget> UStatusHudWidget::RebuildWidget()
 	return Super::RebuildWidget();
 }
 
-UHorizontalBox* UStatusHudWidget::MakeRow(UVerticalBox* Parent, int32 IconType, const FLinearColor& IconCol)
+UHorizontalBox* UStatusHudWidget::MakeRow(UVerticalBox* Parent, int32 IconType, const FLinearColor& IconCol, const FString& IconKey)
 {
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 
 	USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
 	IcoSz->SetWidthOverride(24.f); IcoSz->SetHeightOverride(24.f);
-	IcoSz->SetContent(WeedUI::Icon(WidgetTree, (WeedUI::EIcon)IconType, 24.f, IconCol));
+	IcoSz->SetContent(IconKey.IsEmpty()
+		? WeedUI::Icon(WidgetTree, (WeedUI::EIcon)IconType, 24.f, IconCol)
+		: WeedUI::UiGlyph(WidgetTree, IconKey, 24.f, IconCol, (WeedUI::EIcon)IconType));
 	LastRowIcon = IcoSz;
 	UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(IcoSz);
 	IS->SetVerticalAlignment(VAlign_Center);
@@ -91,11 +93,17 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		return Col;
 	};
 
-	// 1) Geld.
+	// 1) Cash (money-stack icoon).
 	{
 		UHorizontalBox* Row = MakeRow(VB, (int32)WeedUI::EIcon::Coin, FLinearColor(1.f, 0.85f, 0.35f));
-		CashText = WeedUI::Text(WidgetTree, TEXT("EUR 0"), 15, FLinearColor(0.75f, 1.f, 0.75f), false, true);
+		CashText = WeedUI::Text(WidgetTree, TEXT("Cash EUR 0"), 15, FLinearColor(0.8f, 1.f, 0.8f), false, true);
 		RightText(Row, CashText);
+	}
+	// 1b) Bank (eigen bank-icoon).
+	{
+		UHorizontalBox* Row = MakeRow(VB, (int32)WeedUI::EIcon::Coin, FLinearColor(0.45f, 0.75f, 1.f), TEXT("bank"));
+		BankText = WeedUI::Text(WidgetTree, TEXT("Bank EUR 0"), 15, FLinearColor(0.7f, 0.88f, 1.f), false, true);
+		RightText(Row, BankText);
 	}
 	// 2) Tijd.
 	{
@@ -137,8 +145,8 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		// Compact (1.0M / 12k / 523) zodat de kaart smal blijft en niets overlapt.
 		auto Compact = [](double E) { const double A = FMath::Abs(E); if (A >= 1000000.0) { return FString::Printf(TEXT("%.1fM"), E / 1000000.0); } if (A >= 1000.0) { return FString::Printf(TEXT("%.1fk"), E / 1000.0); } return FString::Printf(TEXT("%.0f"), E); };
-		CashText->SetText(FText::FromString(FString::Printf(TEXT("Cash %s   Bank %s"),
-			*Compact(GS->GetEconomy()->GetBalanceEuros()), *Compact(GS->GetEconomy()->GetBankEuros()))));
+		CashText->SetText(FText::FromString(FString::Printf(TEXT("Cash  EUR %s"), *Compact(GS->GetEconomy()->GetBalanceEuros()))));
+		if (BankText) { BankText->SetText(FText::FromString(FString::Printf(TEXT("Bank  EUR %s"), *Compact(GS->GetEconomy()->GetBankEuros())))); }
 	}
 	if (TimeText && GS->GetDayCycle())
 	{

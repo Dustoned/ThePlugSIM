@@ -25,7 +25,8 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 	// Bouwt één rij (icoon + inhoud) en levert de inhoud-container terug om in te vullen.
-	class UHorizontalBox* MakeRow(UVerticalBox* Parent, int32 IconType, const FLinearColor& IconCol);
+	// IconKey (optioneel) = PNG-sleutel; leeg = gebruik het EIcon-vormicoon.
+	class UHorizontalBox* MakeRow(UVerticalBox* Parent, int32 IconType, const FLinearColor& IconCol, const FString& IconKey = FString());
 
 	// De icoon-container van de zojuist gebouwde rij (om naderhand te kunnen vervangen).
 	UPROPERTY() TObjectPtr<USizeBox> LastRowIcon;
@@ -34,6 +35,7 @@ protected:
 	int32 bTimeNightShown = -1; // -1 = nog niet gezet
 
 	UPROPERTY() TObjectPtr<UTextBlock> CashText;
+	UPROPERTY() TObjectPtr<UTextBlock> BankText;
 	UPROPERTY() TObjectPtr<UTextBlock> TimeText;
 	UPROPERTY() TObjectPtr<UProgressBar> HeatBar;
 	UPROPERTY() TObjectPtr<UTextBlock> HeatText;
