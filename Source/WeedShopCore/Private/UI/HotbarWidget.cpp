@@ -109,6 +109,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		SlotIconBoxes.Add(IcoBox);
 		SlotNames.Add(Name);
 		SlotBadges.Add(Badge);
+		SlotBadgePills.Add(BadgePill);
 		SlotLastIcon.Add(NAME_None);
 	}
 }
@@ -171,10 +172,13 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			SlotNames[i]->SetColorAndOpacity(FSlateColor(WeedUI::ItemAccent(S.ItemId)));
 
 			// Gram voor wiet; "x N" alleen als er meer dan 1 is (geen "x1"-ruis); niets voor cash.
-			if (bCash) { SlotBadges[i]->SetText(FText::GetEmpty()); }
-			else if (bBud) { SlotBadges[i]->SetText(FText::FromString(FString::Printf(TEXT("%dg"), S.Quantity))); }
-			else if (S.Quantity > 1) { SlotBadges[i]->SetText(FText::FromString(FString::Printf(TEXT("x%d"), S.Quantity))); }
-			else { SlotBadges[i]->SetText(FText::GetEmpty()); }
+			FString BadgeStr;
+			if (bCash) { BadgeStr.Empty(); }
+			else if (bBud) { BadgeStr = FString::Printf(TEXT("%dg"), S.Quantity); }
+			else if (S.Quantity > 1) { BadgeStr = FString::Printf(TEXT("x%d"), S.Quantity); }
+			SlotBadges[i]->SetText(BadgeStr.IsEmpty() ? FText::GetEmpty() : FText::FromString(BadgeStr));
+			// Pill-achtergrond alleen tonen als er ook echt een aantal staat (anders een leeg dot-je).
+			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(BadgeStr.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
 		}
 		else
 		{
@@ -185,6 +189,7 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			}
 			SlotNames[i]->SetText(FText::GetEmpty());
 			SlotBadges[i]->SetText(FText::GetEmpty());
+			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(ESlateVisibility::Collapsed); }
 		}
 	}
 }
