@@ -273,13 +273,23 @@ void UMainMenuWidget::LoadGlowFrac(int32 Index, float& Fx, float& Fy) const
 
 void UMainMenuWidget::SaveGlowPositions()
 {
-	if (!GConfig) { return; }
+	FString Dump;
+	if (GConfig)
+	{
+		for (int32 i = 0; i < GlowFrac.Num(); ++i)
+		{
+			GConfig->SetString(TEXT("ThePlugSIM.MenuGlows"), *FString::Printf(TEXT("Glow%d"), i),
+				*FString::Printf(TEXT("%.4f,%.4f"), GlowFrac[i].X, GlowFrac[i].Y), GGameIni);
+		}
+		GConfig->Flush(false, GGameIni);
+	}
+	// Ook naar een leesbaar tekstbestand schrijven (Saved/MenuGlows.txt) zodat de posities makkelijk
+	// in de code te bakken zijn, ongeacht waar de game-config landt.
 	for (int32 i = 0; i < GlowFrac.Num(); ++i)
 	{
-		GConfig->SetString(TEXT("ThePlugSIM.MenuGlows"), *FString::Printf(TEXT("Glow%d"), i),
-			*FString::Printf(TEXT("%.4f,%.4f"), GlowFrac[i].X, GlowFrac[i].Y), GGameIni);
+		Dump += FString::Printf(TEXT("Glow%d = %.4f , %.4f\n"), i, GlowFrac[i].X, GlowFrac[i].Y);
 	}
-	GConfig->Flush(false, GGameIni);
+	FFileHelper::SaveStringToFile(Dump, *(FPaths::ProjectSavedDir() / TEXT("MenuGlows.txt")));
 }
 
 void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
@@ -785,7 +795,6 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			GlowFrac[DragGlow] = Frac;
 			if (GlowSlots.IsValidIndex(DragGlow) && GlowSlots[DragGlow]) { GlowSlots[DragGlow]->SetAnchors(FAnchors(Frac.X, Frac.Y, Frac.X, Frac.Y)); }
-			if (EditHintText) { EditHintText->SetText(FText::FromString(FString::Printf(TEXT("Lamp %d  ->  %.3f , %.3f      (drag onto its lamp; auto-saved)"), DragGlow, Frac.X, Frac.Y))); }
 		}
 		if (!bLmb && bLmbPrev && DragGlow >= 0)
 		{
@@ -793,6 +802,17 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			DragGlow = -1;
 		}
 		bLmbPrev = bLmb;
+
+		// Toon altijd ALLE lamp-coördinaten (zodat je ze kunt aflezen/screenshotten).
+		if (EditHintText)
+		{
+			FString List = TEXT("LAMP EDITOR - drag a marker onto its lamp (auto-saved to Saved/MenuGlows.txt)\n");
+			for (int32 i = 0; i < GlowFrac.Num(); ++i)
+			{
+				List += FString::Printf(TEXT("Lamp %d:  %.3f , %.3f%s\n"), i, GlowFrac[i].X, GlowFrac[i].Y, (i == DragGlow) ? TEXT("  <-- dragging") : TEXT(""));
+			}
+			EditHintText->SetText(FText::FromString(List));
+		}
 
 		// Markers bijwerken (volgen de gloeden).
 		for (int32 i = 0; i < GlowHandles.Num(); ++i)
@@ -816,7 +836,7 @@ void UMainMenuWidget::ToggleGlowEdit()
 		EditHintText->SetVisibility(bEditGlows ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 		EditHintText->SetText(FText::FromString(TEXT("LAMP EDITOR  -  drag each numbered marker onto its lamp. Saved automatically. Click 'Edit lamps' again to finish.")));
 	}
-	if (bEditGlows) { RebuildGlowHandles(); }
+	if (bEditGlows) { RebuildGlowHandles(); SaveGlowPositions(); /* dump huidige posities meteen */ }
 }
 
 void UMainMenuWidget::RebuildGlowHandles()
