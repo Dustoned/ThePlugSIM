@@ -110,4 +110,9 @@ protected:
 	void LoadGlowFrac(int32 Index, float& Fx, float& Fy) const; // override defaults uit GConfig
 
 	bool bLastOpen = false;
+
+	// Achtergrondmuziek op het hoofdmenu (loopt; volume = Music-categorie).
+	UPROPERTY() TObjectPtr<class UAudioComponent> MusicComp;
+	void StartMenuMusic();
+	void StopMenuMusic();
 };

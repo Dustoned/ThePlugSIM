@@ -32,6 +32,9 @@
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "TextureResource.h"
+#include "Kismet/GameplayStatics.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundWave.h"
 
 void UMainMenuWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
 
@@ -749,6 +752,28 @@ void UMainMenuWidget::OnQuit()
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 
+void UMainMenuWidget::StartMenuMusic()
+{
+	if (!MusicComp)
+	{
+		USoundBase* S = LoadObject<USoundBase>(nullptr, TEXT("/Game/_Project/Audio/MainMenuMusic.MainMenuMusic"));
+		if (!S) { return; }
+		if (USoundWave* W = Cast<USoundWave>(S)) { W->bLooping = true; } // op het hoofdmenu blijven loopen
+		MusicComp = UGameplayStatics::CreateSound2D(this, S, WeedUI::SoundCategoryVolume(2), 1.f, 0.f, nullptr, false, false);
+		if (MusicComp) { MusicComp->bIsUISound = true; MusicComp->bAllowSpatialization = false; }
+	}
+	if (MusicComp && !MusicComp->IsPlaying())
+	{
+		MusicComp->SetVolumeMultiplier(WeedUI::SoundCategoryVolume(2));
+		MusicComp->Play();
+	}
+}
+
+void UMainMenuWidget::StopMenuMusic()
+{
+	if (MusicComp) { MusicComp->Stop(); }
+}
+
 void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
@@ -759,6 +784,7 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bOpen != bLastOpen)
 	{
 		bLastOpen = bOpen;
+		if (bOpen) { StartMenuMusic(); } else { StopMenuMusic(); }
 		if (bOpen)
 		{
 			// Standaard op het hoofdmenu; tenzij er een picker is aangevraagd (pauze -> Load).
@@ -774,6 +800,9 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 	if (!bOpen) { return; }
+
+	// Music-volume live volgen (slider in Settings -> Audio).
+	if (MusicComp) { MusicComp->SetVolumeMultiplier(WeedUI::SoundCategoryVolume(2)); }
 
 	// Neon-lampen zacht laten flikkeren (alsof ze echt aan staan).
 	const float T = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
