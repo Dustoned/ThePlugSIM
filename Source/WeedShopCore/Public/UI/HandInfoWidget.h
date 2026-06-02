@@ -24,11 +24,13 @@ protected:
 
 	void BuildShell(class UCanvasPanel* Root);
 
-	UPROPERTY() TObjectPtr<UWidget> Card;       // het hele kaartje (fade)
-	UPROPERTY() TObjectPtr<UBorder> AccentBar;  // gekleurde balk links (type-kleur)
+	UPROPERTY() TObjectPtr<UWidget> Card;        // het hele kaartje (fade)
+	UPROPERTY() TObjectPtr<UBorder> AccentBar;   // gekleurde balk links (type-kleur)
 	UPROPERTY() TObjectPtr<UTextBlock> TypeText; // type-tag (SEED / BAGGIE / ...)
 	UPROPERTY() TObjectPtr<UTextBlock> NameText; // item-naam
-	UPROPERTY() TObjectPtr<UTextBlock> StatText; // stats (gram/THC/kwaliteit/capaciteit)
+	UPROPERTY() TObjectPtr<UBorder> Divider;     // dun lijntje onder de naam
+	UPROPERTY() TObjectPtr<class UVerticalBox> StatBox; // nette label/waarde-rijen
+	UPROPERTY() TObjectPtr<UTextBlock> HintText; // korte hint onderaan (wat je ermee doet)
 
 	float Shown = 0.f;       // huidige fade (0..1)
 	FString LastKey;         // herbouw tekst alleen bij wijziging
