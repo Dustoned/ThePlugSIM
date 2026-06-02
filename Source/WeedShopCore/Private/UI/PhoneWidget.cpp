@@ -26,6 +26,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/WrapBox.h"
+#include "Components/WrapBoxSlot.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
 #include "Components/TextBlock.h"
@@ -68,8 +70,8 @@ namespace
 		case 5: return TEXT("Soil");
 		case 6: return TEXT("Water");
 		case 7: return TEXT("Furniture");
-		case 8: return TEXT("Pot Upgrades");
-		case 9: return TEXT("Plant care");
+		case 8: return TEXT("Upgrades");
+		case 9: return TEXT("Care");
 		default: return TEXT("?");
 		}
 	}
@@ -651,14 +653,14 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	// Koop-categorieën (alleen de tabs van deze winkel-app). De Sell-app heeft géén koop-tabs.
 	if (!bSellApp)
 	{
-		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
+		// Wrap-box: tabs krijgen hun eigen breedte en lopen netjes naar een tweede rij i.p.v. te overlappen.
+		UWrapBox* Tabs = WidgetTree->ConstructWidget<UWrapBox>();
+		Tabs->SetInnerSlotPadding(FVector2D(4.f, 4.f));
 		for (int32 Cat : AppCats)
 		{
 			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
 			UWeedActionButton* Pill = MakeActionBtn(CatName(Cat), Col, [this, Ph, Cat]() { Ph->SetSupplierCat(Cat); bCartView = false; RefreshStore(); }, 11);
-			UHorizontalBoxSlot* PS = Tabs->AddChildToHorizontalBox(Pill);
-			PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			PS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+			Tabs->AddChildToWrapBox(Pill);
 			StoreTabBtns.Add(Pill);
 		}
 		Into->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
@@ -1273,17 +1275,17 @@ void UPhoneWidget::RefreshContent()
 			}
 		}
 	}
-	else if (App == GGrowApp) // Grow shop -> wiet-gerelateerd (seeds, potten, drogen, verpakken)
+	else if (App == GGrowApp) // Grow shop -> ALLES om te kweken (zaad, pot, aarde, water, upgrades, verzorging)
 	{
 		bSellApp = false;
-		AppCats = { 0, 1, 2, 3, 9, 8 }; // + Plant care (9) + Pot Upgrades (8)
+		AppCats = { 0, 1, 5, 6, 8, 9 }; // Seeds, Pots, Soil, Water, Pot Upgrades, Plant care
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
-	else if (App == GSuppliesApp) // Supplies -> algemene benodigdheden (papers, soil, water)
+	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels)
 	{
 		bSellApp = false;
-		AppCats = { 4, 5, 6, 7 };
+		AppCats = { 4, 2, 3, 7 }; // Papers, Drying, Packing, Furniture
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
