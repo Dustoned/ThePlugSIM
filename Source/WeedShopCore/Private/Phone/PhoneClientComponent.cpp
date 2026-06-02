@@ -40,6 +40,7 @@
 #include "UI/PauseMenuWidget.h"
 #include "UI/MainMenuWidget.h"
 #include "UI/SaveIndicatorWidget.h"
+#include "UI/LevelUpWidget.h"
 #include "UI/SettingsWidget.h"
 #include "World/StorageShelf.h"
 #include "Save/SaveGameSubsystem.h"
@@ -233,6 +234,9 @@ void UPhoneClientComponent::EnsureWidget()
 	SaveIndicatorWidget = CreateWidget<USaveIndicatorWidget>(PC, USaveIndicatorWidget::StaticClass());
 	if (SaveIndicatorWidget) { SaveIndicatorWidget->AddToViewport(50); }
 	// Centrale toast-meldingen (vervangt de debug-tekst linksboven).
+	LevelUpWidget = CreateWidget<ULevelUpWidget>(PC, ULevelUpWidget::StaticClass());
+	if (LevelUpWidget) { LevelUpWidget->AddToViewport(46); }
+
 	ToastWidget = CreateWidget<UWeedToast>(PC, UWeedToast::StaticClass());
 	if (ToastWidget) { ToastWidget->AddToViewport(48); }
 }

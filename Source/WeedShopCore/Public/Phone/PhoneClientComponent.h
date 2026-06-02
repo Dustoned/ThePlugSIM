@@ -581,6 +581,9 @@ protected:
 	TObjectPtr<class UHandInfoWidget> HandInfoWidget;
 
 	UPROPERTY(Transient)
+	TObjectPtr<class ULevelUpWidget> LevelUpWidget;
+
+	UPROPERTY(Transient)
 	TObjectPtr<class UWeedToast> ToastWidget;
 
 	UPROPERTY(Transient)

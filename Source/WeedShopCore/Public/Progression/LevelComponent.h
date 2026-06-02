@@ -28,6 +28,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Level")
 	void AddXP(int32 Amount);
 
+	// Server: zet het level direct (bv. Testing-mode). Reset XP binnen het level; geen level-up-spam.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Level")
+	void GrantLevel(int32 NewLevel);
+
 	// XP-multiplier (1.0 = normaal). Stoned zijn verhoogt dit (door de speler-pawn gezet).
 	void SetXpMultiplier(float Mult) { XpMultiplier = FMath::Max(1.f, Mult); }
 	float GetXpMultiplier() const { return XpMultiplier; }

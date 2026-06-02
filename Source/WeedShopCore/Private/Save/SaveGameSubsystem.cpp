@@ -283,6 +283,12 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 		Econ->SetBankCents(bSandbox ? 100000000 : 500000);
 	}
 
+	// Level: Testing en Sandbox starten op max level (alles ontgrendeld om te testen).
+	if (ULevelComponent* Lv = GS->GetLeveling())
+	{
+		Lv->GrantLevel(ULevelComponent::MaxLevel);
+	}
+
 	// Starter-items.
 	if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 	{
