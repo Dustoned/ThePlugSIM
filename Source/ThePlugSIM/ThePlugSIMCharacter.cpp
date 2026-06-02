@@ -9,6 +9,7 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/WorldSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "Inventory/InventoryComponent.h"
 #include "UI/WeedShopHUD.h"
@@ -138,8 +139,8 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	{
 		const int32 MM = (int32)Move->MovementMode.GetValue();
 		const bool bCol = GetCapsuleComponent() && GetCapsuleComponent()->IsCollisionEnabled();
-		UWeedToast::Notify(7, 4.f, FColor::Cyan, FString::Printf(TEXT("stuck: mode=%d  vZ=%.0f  grav=%.2f  col=%d"),
-			MM, GetVelocity().Z, Move->GravityScale, bCol ? 1 : 0));
+		UWeedToast::Notify(7, 4.f, FColor::Cyan, FString::Printf(TEXT("stuck: mode=%d vZ=%.0f gScale=%.2f gZ=%.0f col=%d"),
+			MM, GetVelocity().Z, Move->GravityScale, Move->GetGravityZ(), bCol ? 1 : 0));
 	}
 
 	// Zoek een ECHTE vloer: eerst onder de laatste-grond-plek, anders onder de spawn, anders gewoon de spawn.
@@ -606,14 +607,24 @@ void AThePlugSIMCharacter::BeginPlay()
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
 
-	// Forceer de movement-instellingen at RUNTIME (een Blueprint-default kan de constructor overschrijven;
-	// als GravityScale daar per ongeluk 0 staat, schiet je bij een sprong omhoog en val je nooit terug).
+	// Forceer de movement-instellingen at RUNTIME (een Blueprint-default kan de constructor overschrijven).
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
 		Move->GravityScale = 1.0f;
 		Move->JumpZVelocity = 450.0f;
 		Move->AirControl = 0.5f;
 		if (Move->MovementMode == MOVE_None) { Move->SetMovementMode(MOVE_Walking); }
+	}
+
+	// BELANGRIJK: GravityScale vermenigvuldigt de WERELD-zwaartekracht. Als de map "Global Gravity Z"
+	// op 0 heeft (of de level-default), kom je na een sprong nooit terug. Forceer normale zwaartekracht.
+	if (AWorldSettings* WS = GetWorldSettings())
+	{
+		if (FMath::Abs(WS->GetGravityZ()) < 1.f)
+		{
+			WS->bGlobalGravitySet = true;
+			WS->GlobalGravityZ = -980.f;
+		}
 	}
 
 	// Herbind de gameplaytoetsen zodra de speler ze in de telefoon (Settings -> Controls) wijzigt.
