@@ -24,6 +24,8 @@ public:
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	void BuildShell(UCanvasPanel* Root);
@@ -61,4 +63,10 @@ protected:
 
 	int32 Category = 0; // 0 = Graphics, 1 = Game, 2 = Controls
 	bool bLastOpen = false;
+
+	// Key-rebinding (Controls-tab): klik een toets, druk de nieuwe in.
+	bool bRebinding = false;
+	bool bRebindAlt = false;
+	FName RebindAction;
+	FString RebindMsg;
 };

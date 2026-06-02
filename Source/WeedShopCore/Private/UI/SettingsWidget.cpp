@@ -3,6 +3,8 @@
 #include "UI/WeedUiStyle.h"
 #include "UI/HotkeyHintWidget.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Input/ControlSettings.h"
+#include "Components/ScrollBox.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -59,6 +61,46 @@ TSharedRef<SWidget> USettingsWidget::RebuildWidget()
 		BuildShell(Canvas);
 	}
 	return Super::RebuildWidget();
+}
+
+void USettingsWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	SetIsFocusable(true); // nodig om een toets-aanslag op te vangen bij rebind
+}
+
+FReply USettingsWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (bRebinding)
+	{
+		const FKey K = InKeyEvent.GetKey();
+		if (K == EKeys::Escape)
+		{
+			bRebinding = false; RebindMsg = TEXT("Cancelled."); RefreshContent();
+			return FReply::Handled();
+		}
+		if (K == EKeys::BackSpace || K == EKeys::Delete)
+		{
+			UControlSettings::Get()->ClearKey(RebindAction, bRebindAlt);
+			RebindMsg = FString::Printf(TEXT("Cleared %s key for '%s'"), bRebindAlt ? TEXT("alt") : TEXT("main"), *UControlSettings::DisplayName(RebindAction).ToString());
+			bRebinding = false; RefreshContent();
+			return FReply::Handled();
+		}
+		FName Conflict;
+		if (UControlSettings::Get()->SetKey(RebindAction, bRebindAlt, K, Conflict))
+		{
+			RebindMsg = FString::Printf(TEXT("'%s' %s -> %s"), *UControlSettings::DisplayName(RebindAction).ToString(),
+				bRebindAlt ? TEXT("(alt)") : TEXT("(main)"), *K.GetDisplayName().ToString());
+		}
+		else
+		{
+			RebindMsg = Conflict.IsNone() ? TEXT("That key can't be used.")
+				: FString::Printf(TEXT("Already used by: %s"), *UControlSettings::DisplayName(Conflict).ToString());
+		}
+		bRebinding = false; RefreshContent();
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void USettingsWidget::BuildShell(UCanvasPanel* Root)
@@ -291,8 +333,47 @@ void USettingsWidget::RefreshContent()
 		AddValueRow(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled() ? TEXT("On") : TEXT("Off"),
 			[this]() { UHotkeyHintWidget::SetHintsEnabled(!UHotkeyHintWidget::AreHintsEnabled()); RefreshContent(); });
 
-		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Tip: rebind keys in the phone Settings app."), 11, FLinearColor(0.55f, 0.6f, 0.7f)))
-			->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
+		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, then press the new key.  Esc = cancel, Backspace = clear."), 11, FLinearColor(0.6f, 0.65f, 0.76f)))
+			->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
+
+		// Scrollbare lijst met alle acties (Main + Alt toets).
+		UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
+		UVerticalBoxSlot* ScS = Body->AddChildToVerticalBox(Scroll);
+		ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+		UControlSettings* Cfg = UControlSettings::Get();
+		for (const FName& Action : UControlSettings::AllActions())
+		{
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+			UTextBlock* NameT = WeedUI::Text(WidgetTree, UControlSettings::DisplayName(Action).ToString(), 13, FLinearColor(0.9f, 0.92f, 1.f));
+			UHorizontalBoxSlot* NS = Row->AddChildToHorizontalBox(NameT);
+			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
+
+			for (int32 SlotIdx = 0; SlotIdx < 2; ++SlotIdx)
+			{
+				const bool bAlt = (SlotIdx == 1);
+				const bool bThis = bRebinding && (RebindAction == Action) && (bRebindAlt == bAlt);
+				const FKey K = Cfg->GetKey(Action, bAlt);
+				const FString Lbl = bThis ? TEXT("Press...") : (K.IsValid() ? K.GetDisplayName().ToString() : (bAlt ? TEXT("+ Alt") : TEXT("-")));
+				const FLinearColor BtnCol = bThis ? FLinearColor(0.5f, 0.4f, 0.12f) : FLinearColor(0.18f, 0.22f, 0.3f);
+				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+				Sz->SetWidthOverride(96.f);
+				Sz->SetContent(SetBtn(WidgetTree, Lbl, BtnCol,
+					[this, Action, bAlt]() { bRebinding = true; bRebindAlt = bAlt; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); RefreshContent(); }, 11));
+				Row->AddChildToHorizontalBox(Sz)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+			}
+			Scroll->AddChild(Row);
+			Scroll->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
+		}
+
+		if (!RebindMsg.IsEmpty())
+		{
+			Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, RebindMsg, 12, FLinearColor(1.f, 0.85f, 0.45f)))
+				->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+		}
+		Body->AddChildToVerticalBox(SetBtn(WidgetTree, TEXT("Reset to defaults"), FLinearColor(0.4f, 0.34f, 0.16f),
+			[this]() { UControlSettings::Get()->ResetToDefaults(); bRebinding = false; RebindMsg = TEXT("Controls reset to defaults."); RefreshContent(); }, 12))
+			->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	}
 }
 

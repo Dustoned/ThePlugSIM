@@ -217,50 +217,13 @@ void UPhoneWidget::FillSettingsBody()
 
 	auto BodyRow = [this](UWidget* W, const FMargin& Pad) { SettingsBody->AddChildToVerticalBox(W)->SetPadding(Pad); };
 
-	if (SettingsCat == 1) // Controls
+	if (SettingsCat == 1) // Controls -> verplaatst naar het normale instellingen-scherm.
 	{
-		BodyRow(MakeText(TEXT("Click a key, press the new key. Esc = cancel, Backspace = clear. No key twice."),
-			10, FLinearColor(0.62f, 0.66f, 0.76f)), FMargin(0.f, 0.f, 0.f, 6.f));
-
-		// Kop-rij.
-		{
-			UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UHorizontalBoxSlot* L = H->AddChildToHorizontalBox(MakeText(TEXT("Action"), 10, FLinearColor(0.6f, 0.65f, 0.75f)));
-			L->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			H->AddChildToHorizontalBox(MakeText(TEXT("Main      Alt"), 10, FLinearColor(0.6f, 0.65f, 0.75f)));
-			BodyRow(H, FMargin(0.f, 0.f, 0.f, 2.f));
-		}
-
-		UControlSettings* Cfg = UControlSettings::Get();
-		for (const FName& Action : UControlSettings::AllActions())
-		{
-			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UTextBlock* NameT = MakeText(UControlSettings::DisplayName(Action).ToString(), 12, FLinearColor(0.9f, 0.92f, 1.f));
-			NameT->SetClipping(EWidgetClipping::ClipToBounds);
-			UHorizontalBoxSlot* NS = Row->AddChildToHorizontalBox(NameT);
-			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
-
-			for (int32 SlotIdx = 0; SlotIdx < 2; ++SlotIdx)
-			{
-				const bool bAlt = (SlotIdx == 1);
-				const bool bThis = bRebinding && (RebindAction == Action) && (bRebindAlt == bAlt);
-				const FKey K = Cfg->GetKey(Action, bAlt);
-				FString Lbl = bThis ? TEXT("Press...") : (K.IsValid() ? K.GetDisplayName().ToString() : (bAlt ? TEXT("+ Alt") : TEXT("-")));
-				const FLinearColor BtnCol = bThis ? FLinearColor(0.5f, 0.4f, 0.12f) : FLinearColor(0.18f, 0.22f, 0.3f);
-				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-				Sz->SetMinDesiredWidth(70.f);
-				Sz->SetContent(MakeActionBtn(Lbl, BtnCol,
-					[this, Action, bAlt]() { bRebinding = true; bRebindAlt = bAlt; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); FillSettingsBody(); }, 11));
-				Row->AddChildToHorizontalBox(Sz)->SetPadding(FMargin(3.f, 0.f, 0.f, 0.f));
-			}
-			BodyRow(Row, FMargin(0.f, 3.f, 0.f, 3.f));
-		}
-
-		if (!RebindMsg.IsEmpty()) { BodyRow(MakeText(RebindMsg, 11, FLinearColor(1.f, 0.85f, 0.45f)), FMargin(0.f, 4.f, 0.f, 0.f)); }
-
-		BodyRow(MakeActionBtn(TEXT("Reset to defaults"), FLinearColor(0.4f, 0.34f, 0.16f),
-			[this]() { UControlSettings::Get()->ResetToDefaults(); bRebinding = false; RebindMsg = TEXT("Controls reset to defaults."); FillSettingsBody(); }, 12),
-			FMargin(0.f, 8.f, 0.f, 0.f));
+		UTextBlock* Note = MakeText(TEXT("Key bindings moved to Settings > Controls (open the menu with Esc)."), 12, FLinearColor(0.8f, 0.85f, 0.95f));
+		Note->SetAutoWrapText(true);
+		BodyRow(Note, FMargin(0.f, 4.f, 0.f, 8.f));
+		BodyRow(MakeActionBtn(TEXT("Open Settings"), FLinearColor(0.22f, 0.42f, 0.6f),
+			[this]() { if (Phone.IsValid()) { Phone->OpenSettings(); } }, 13), FMargin(0.f, 2.f, 0.f, 0.f));
 	}
 	else // Status
 	{
