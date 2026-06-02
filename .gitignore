@@ -18,3 +18,5 @@ UpgradeLog.htm
 
 # Editor-backups
 Backup/
+/_AssetStaging/
+*.rar
