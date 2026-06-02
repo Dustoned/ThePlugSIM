@@ -89,6 +89,23 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+bool AThePlugSIMCharacter::FindFloorAt(const FVector& Near, FVector& OutSafe) const
+{
+	UWorld* W = GetWorld();
+	if (!W) { return false; }
+	const FVector Start = Near + FVector(0.f, 0.f, 400.f);
+	const FVector End = Near - FVector(0.f, 0.f, 6000.f);
+	FHitResult Hit;
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(StuckFloor), false, this);
+	if (W->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Q))
+	{
+		const float HalfH = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 96.f;
+		OutSafe = Hit.ImpactPoint + FVector(0.f, 0.f, HalfH + 6.f);
+		return true;
+	}
+	return false;
+}
+
 void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 {
 	if (!IsLocallyControlled()) { return; }
@@ -109,17 +126,27 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 		if (FMath::Abs(GetVelocity().Z) < 35.f) { FloatTime += DeltaSeconds; } else { FloatTime = 0.f; }
 	}
 
-	const bool bTooLong = FallTime > 8.f;        // veel te lang in de lucht
+	const bool bTooLong = FallTime > 6.f;        // veel te lang in de lucht
 	const bool bFloating = FloatTime > 1.5f;     // hangt stil in de lucht = vast
 	const bool bBelowWorld = Loc.Z < -3000.f;    // door de vloer gezakt
-	if ((bTooLong || bFloating || bBelowWorld) && bHasGroundLoc)
+	if (!(bTooLong || bFloating || bBelowWorld)) { return; }
+
+	// Zoek een ECHTE vloer: eerst onder de laatste-grond-plek, anders onder de spawn, anders gewoon de spawn.
+	FVector Safe;
+	if (!FindFloorAt(LastGroundLoc, Safe))
 	{
-		Move->StopMovementImmediately();
-		Move->SetMovementMode(MOVE_Walking);
-		TeleportTo(LastGroundLoc + FVector(0.f, 0.f, 40.f), GetActorRotation(), false, true);
-		FallTime = 0.f; FloatTime = 0.f;
-		UWeedToast::Notify(-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
+		if (!FindFloorAt(InitialSpawnLoc, Safe)) { Safe = InitialSpawnLoc + FVector(0.f, 0.f, 100.f); }
 	}
+
+	// BELANGRIJK: eerst teleporteren, dan pas op lopen zetten + vloer-check forceren (anders checkt 'ie
+	// de grond op de oude vast-plek en blijft 'ie vallen).
+	Move->StopMovementImmediately();
+	Move->Velocity = FVector::ZeroVector;
+	TeleportTo(Safe, GetActorRotation(), false, true);
+	Move->SetMovementMode(MOVE_Walking);
+	Move->bForceNextFloorCheck = true;
+	FallTime = 0.f; FloatTime = 0.f;
+	UWeedToast::Notify(-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
 }
 
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
@@ -560,6 +587,10 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 void AThePlugSIMCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Spawn-plek onthouden als gegarandeerd-veilige terugval voor anti-stuck.
+	InitialSpawnLoc = GetActorLocation();
+	LastGroundLoc = InitialSpawnLoc;
 
 	// Herbind de gameplaytoetsen zodra de speler ze in de telefoon (Settings -> Controls) wijzigt.
 	if (IsLocallyControlled())

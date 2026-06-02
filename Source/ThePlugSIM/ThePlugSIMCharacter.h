@@ -189,10 +189,12 @@ protected:
 	// Anti-stuck: onthoud de laatste vaste grond en herstel als je te lang valt / onder de wereld zakt
 	// (vangt het "ik vlieg opeens en kan niks"-geval op, ongeacht de oorzaak).
 	FVector LastGroundLoc = FVector::ZeroVector;
+	FVector InitialSpawnLoc = FVector::ZeroVector; // veilige terugval als er nergens grond gevonden wordt
 	bool bHasGroundLoc = false;
 	float FallTime = 0.f;
 	float FloatTime = 0.f; // tijd dat je in de lucht hangt met bijna geen valsnelheid (= vast)
 	void TickStuckRecovery(float DeltaSeconds);
+	bool FindFloorAt(const FVector& Near, FVector& OutSafe) const; // omlaag-trace naar de echte vloer
 
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
 	bool bLmbDown = false;
