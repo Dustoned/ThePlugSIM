@@ -22,6 +22,7 @@ struct FPlaceableDef
 	bool bIsDryRack = false;           // true -> spawnt ADryingRack (RackTier = ItemId)
 	bool bIsPackBench = false;         // true -> spawnt APackBench (verpak-tafel)
 	bool bIsShelf = false;             // true -> spawnt AStorageShelf (voorraad-opslag in de shop)
+	bool bIsSink = false;              // true -> spawnt AWaterSink (waterfles vullen)
 };
 
 // Alle gedefinieerde placeables.

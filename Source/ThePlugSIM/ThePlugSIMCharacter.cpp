@@ -667,6 +667,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 2);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
+		Inventory->AddItem(FName(TEXT("Sink")), 1); // plaatsbare gootsteen (voor nu); zet 'm waar je wilt
 		Inventory->AddItem(FName(TEXT("Atm")), 1); // plaatsbare geldautomaat (voor nu); zet 'm waar je wilt
 
 		// Alle meubels die in de starter-home staan gaan in de inventory (niet de hotbar): we vegen

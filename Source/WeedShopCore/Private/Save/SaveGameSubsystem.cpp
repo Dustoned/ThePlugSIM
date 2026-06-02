@@ -295,6 +295,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 		Give(TEXT("Pot_Clay"),            bSandbox ? 3 : 1);
 		Give(TEXT("DryRack_Cheap"),       1);
 		Give(TEXT("Bench_Pack"),          1);
+		Give(TEXT("Sink"),                1);
 		// Zaden uit de catalogus.
 		if (GS->GetStore())
 		{

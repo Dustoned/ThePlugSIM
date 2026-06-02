@@ -170,9 +170,11 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			SlotNames[i]->SetText(FText::FromString(Nm));
 			SlotNames[i]->SetColorAndOpacity(FSlateColor(WeedUI::ItemAccent(S.ItemId)));
 
-			SlotBadges[i]->SetText(bCash
-				? FText::GetEmpty()
-				: FText::FromString(bBud ? FString::Printf(TEXT("%dg"), S.Quantity) : FString::Printf(TEXT("x%d"), S.Quantity)));
+			// Gram voor wiet; "x N" alleen als er meer dan 1 is (geen "x1"-ruis); niets voor cash.
+			if (bCash) { SlotBadges[i]->SetText(FText::GetEmpty()); }
+			else if (bBud) { SlotBadges[i]->SetText(FText::FromString(FString::Printf(TEXT("%dg"), S.Quantity))); }
+			else if (S.Quantity > 1) { SlotBadges[i]->SetText(FText::FromString(FString::Printf(TEXT("x%d"), S.Quantity))); }
+			else { SlotBadges[i]->SetText(FText::GetEmpty()); }
 		}
 		else
 		{

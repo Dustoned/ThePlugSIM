@@ -26,6 +26,8 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Shelf"), TEXT("Storage shelf"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.5f, 0.4f, 1.7f), FVector(75.f, 20.f, 85.f), false, 0, false, false, false, false, /*bIsShelf*/ true },
 		// Opslag-kist: laag/breed kistje, ook gewoon opslag (spawnt een AStorageShelf, tier "Chest").
 		{ TEXT("Chest"), TEXT("Storage chest"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.0f, 0.6f, 0.55f), FVector(50.f, 30.f, 27.f), false, 0, false, false, false, false, /*bIsShelf*/ true },
+		// Gootsteen: waterfles vullen. Spawnt een AWaterSink. Binnen plaatsen.
+		{ TEXT("Sink"), TEXT("Sink"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.8f, 0.55f, 0.9f), FVector(40.f, 27.f, 45.f), false, 0, false, false, false, false, false, /*bIsSink*/ true },
 	};
 	return Defs;
 }

@@ -8,6 +8,7 @@
 #include "World/Atm.h"
 #include "World/PackBench.h"
 #include "World/StorageShelf.h"
+#include "World/WaterSink.h"
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -178,7 +179,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		}
 		const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
 		const bool bPickable = Focus && (Cast<AGrowPlant>(Focus) || Cast<APlaceableProp>(Focus)
-			|| Cast<ADryingRack>(Focus) || Cast<APackBench>(Focus) || Cast<AStorageShelf>(Focus));
+			|| Cast<ADryingRack>(Focus) || Cast<APackBench>(Focus) || Cast<AStorageShelf>(Focus) || Cast<AWaterSink>(Focus));
 		if (PC && bPickable && PC->IsInputKeyDown(EKeys::G))
 		{
 			PickupHoldAccum += DeltaTime;
@@ -411,6 +412,10 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 		}
 		ReturnItem = Shelf->ShelfTier;
 	}
+	else if (Cast<AWaterSink>(Target))
+	{
+		ReturnItem = FName(TEXT("Sink"));
+	}
 	else
 	{
 		return; // niet oppakbaar
@@ -584,6 +589,12 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		// Geldautomaat: spawn een interactieve AAtm.
 		World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rotation, Location), SpawnParams);
+	}
+	else if (Def.bIsSink)
+	{
+		// Gootsteen: mesh-pivot in het midden -> origin een halve hoogte omhoog.
+		const FTransform SinkTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
+		World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), SinkTM, SpawnParams);
 	}
 	else if (Def.bIsDryRack)
 	{
