@@ -163,7 +163,18 @@ void UPhoneClientComponent::UpdateCursor()
 		}
 		else
 		{
-			PC->SetInputMode(FInputModeGameOnly());
+			// Gameplay: muis ECHT vastzetten + verbergen, en PERMANENT capturen zodat je rond kunt
+			// kijken zonder een knop in te houden. (De UI-modus zette HideCursorDuringCapture=false en
+			// liet de capture op "alleen tijdens muisklik"; dat moeten we hier terugzetten.)
+			if (UGameViewportClient* VP = PC->GetWorld() ? PC->GetWorld()->GetGameViewport() : nullptr)
+			{
+				VP->SetHideCursorDuringCapture(true);
+				VP->SetMouseCaptureMode(EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown);
+			}
+			FInputModeGameOnly Mode;
+			Mode.SetConsumeCaptureMouseDown(true);
+			PC->SetInputMode(Mode);
+			PC->SetShowMouseCursor(false);
 		}
 	}
 }
