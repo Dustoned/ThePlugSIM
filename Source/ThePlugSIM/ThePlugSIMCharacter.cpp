@@ -155,6 +155,10 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	// terug aan, voor het geval iets ze had uitgezet (dat verklaart 'eeuwig zweven').
 	if (GetCapsuleComponent()) { GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics); }
 	Move->GravityScale = 1.0f;
+	if (AWorldSettings* WS = GetWorldSettings())
+	{
+		if (FMath::Abs(WS->GetGravityZ()) < 1.f) { WS->bGlobalGravitySet = true; WS->GlobalGravityZ = -980.f; }
+	}
 	Move->StopMovementImmediately();
 	Move->Velocity = FVector::ZeroVector;
 	TeleportTo(Safe, GetActorRotation(), false, true);
