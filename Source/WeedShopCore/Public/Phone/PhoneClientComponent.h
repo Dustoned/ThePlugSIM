@@ -574,6 +574,9 @@ protected:
 	TObjectPtr<class UDryingRackWidget> DryRackWidget;
 
 	UPROPERTY(Transient)
+	TObjectPtr<class UHandInfoWidget> HandInfoWidget;
+
+	UPROPERTY(Transient)
 	TObjectPtr<class UPauseMenuWidget> PauseWidget;
 
 	UPROPERTY(Transient)

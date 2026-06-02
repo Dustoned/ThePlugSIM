@@ -34,6 +34,7 @@
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
 #include "UI/DryingRackWidget.h"
+#include "UI/HandInfoWidget.h"
 #include "Cultivation/DryingRack.h"
 #include "UI/PauseMenuWidget.h"
 #include "UI/MainMenuWidget.h"
@@ -187,6 +188,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (PlantWidget) { PlantWidget->AddToViewport(10); }
 	HotbarWidget = CreateWidget<UHotbarWidget>(PC, UHotbarWidget::StaticClass());
 	if (HotbarWidget) { HotbarWidget->AddToViewport(5); }
+	HandInfoWidget = CreateWidget<UHandInfoWidget>(PC, UHandInfoWidget::StaticClass());
+	if (HandInfoWidget) { HandInfoWidget->AddToViewport(6); }
 	InventoryWidget = CreateWidget<UInventoryWidget>(PC, UInventoryWidget::StaticClass());
 	if (InventoryWidget) { InventoryWidget->SetPhone(this); InventoryWidget->AddToViewport(25); }
 	RollWidget = CreateWidget<URollWidget>(PC, URollWidget::StaticClass());
