@@ -330,12 +330,12 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* GC = Layers->AddChildToOverlay(GlowCanvas);
 		GC->SetHorizontalAlignment(HAlign_Fill); GC->SetVerticalAlignment(VAlign_Fill);
 
-		AddGlowAt(GlowCanvas, 0.46f, 0.17f, 560.f, 230.f, FLinearColor(1.00f, 0.20f, 0.85f, 0.55f), 6.5f); // magenta plafond-buis
-		AddGlowAt(GlowCanvas, 0.575f, 0.36f, 360.f, 300.f, FLinearColor(1.00f, 0.26f, 0.78f, 0.50f), 11.0f, 3.0f); // "Good Vibes"-bordje (flikkert meer)
-		AddGlowAt(GlowCanvas, 0.875f, 0.30f, 410.f, 580.f, FLinearColor(0.28f, 0.56f, 1.00f, 0.64f), 4.0f, 1.25f); // blauw schap / prices (meer glow, lichte flikker)
-		AddGlowAt(GlowCanvas, 0.33f, 0.52f, 540.f, 580.f, FLinearColor(0.64f, 0.26f, 1.00f, 0.60f), 2.8f, 1.3f); // paarse grow-tent (links, meer glow, lichte flikker)
-		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
-		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
+		AddGlowAt(GlowCanvas, 0.432f, 0.163f, 560.f, 230.f, FLinearColor(1.00f, 0.20f, 0.85f, 0.55f), 6.5f); // magenta plafond-buis
+		AddGlowAt(GlowCanvas, 0.574f, 0.378f, 360.f, 300.f, FLinearColor(1.00f, 0.26f, 0.78f, 0.50f), 11.0f, 3.0f); // "Good Vibes"-bordje (flikkert meer)
+		AddGlowAt(GlowCanvas, 0.891f, 0.293f, 410.f, 580.f, FLinearColor(0.28f, 0.56f, 1.00f, 0.64f), 4.0f, 1.25f); // blauw schap / prices (meer glow, lichte flikker)
+		AddGlowAt(GlowCanvas, 0.344f, 0.520f, 540.f, 580.f, FLinearColor(0.64f, 0.26f, 1.00f, 0.60f), 2.8f, 1.3f); // paarse grow-tent (links, meer glow, lichte flikker)
+		AddGlowAt(GlowCanvas, 0.529f, 0.693f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
+		AddGlowAt(GlowCanvas, 0.721f, 0.554f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
 		AddGlowAt(GlowCanvas, 0.735f, 0.195f, 300.f, 270.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.66f), 3.0f, 1.0f, /*bCandle*/ true); // warme hanglamp (rustige kaars-gloed)
 
 		// Lamp-editor-laag: markers/labels die je kunt verslepen (alleen zichtbaar in edit-modus).
