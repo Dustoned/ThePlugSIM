@@ -44,6 +44,13 @@ public:
 	FString Line1, Line2;
 	FLinearColor Bg = FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
 	float Radius = 8.f;
+	// Icoon + accent + aantal-badge (rechtsboven). IconId None = geen icoon (bv. lege cel).
+	FName IconId = NAME_None;
+	float IconSize = 38.f;
+	FString Badge;                                   // bv. "x5" of "12g" — getoond als pill rechtsboven
+	FLinearColor Accent = FLinearColor(0.3f, 0.34f, 0.42f);
+	bool bSlotNumber = false;                        // hotbar: toon het slotnummer linksboven
+	int32 SlotNumber = 0;
 	TWeakObjectPtr<UInventoryComponent> Inv;
 	TWeakObjectPtr<UInventoryWidget> Owner;
 	// Optionele Merge-knop (voor weed met meerdere batches).

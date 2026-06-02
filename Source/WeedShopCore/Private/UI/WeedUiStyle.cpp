@@ -4,8 +4,13 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
+#include "Components/Border.h"
 #include "Components/TextBlock.h"
 #include "Styling/CoreStyle.h"
+#include "Engine/Texture2D.h"
+#include "ImageUtils.h"
+#include "Misc/Paths.h"
+#include "HAL/FileManager.h"
 
 namespace
 {
@@ -142,5 +147,97 @@ namespace WeedUI
 			break;
 		}
 		return Canvas;
+	}
+
+	// --- Item-iconen ---------------------------------------------------------
+
+	// Interne categorie-indeling: bepaalt sleutel (PNG-bestandsnaam), accentkleur en de
+	// fallback-glyph als er nog geen PNG is.
+	namespace
+	{
+		struct FItemCat { const TCHAR* Key; FLinearColor Accent; EIcon Glyph; };
+
+		FItemCat CatFor(FName ItemId)
+		{
+			const FString S = ItemId.ToString();
+			auto Has = [&S](const TCHAR* P) { return S.StartsWith(P); };
+
+			if (ItemId == TEXT("Cash"))                                  return { TEXT("cash"),      FLinearColor(0.35f, 0.85f, 0.45f), EIcon::Coin };
+			if (ItemId == TEXT("Atm") || Has(TEXT("Bank")))              return { TEXT("bank"),      FLinearColor(0.45f, 0.8f, 0.55f),  EIcon::Coin };
+
+			if (Has(TEXT("WetBud_")))                                    return { TEXT("weed_wet"),  FLinearColor(0.40f, 0.70f, 1.0f),  EIcon::Leaf };
+			if (Has(TEXT("Bud_")))                                       return { TEXT("weed"),      FLinearColor(0.45f, 0.95f, 0.55f), EIcon::Leaf };
+			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    FLinearColor(0.55f, 0.9f, 0.6f),   EIcon::Leaf };
+			if (Has(TEXT("Joint_")))                                     return { TEXT("joint"),     FLinearColor(0.7f, 0.85f, 0.5f),   EIcon::Leaf };
+			if (Has(TEXT("Seed_")))                                      return { TEXT("seed"),      FLinearColor(0.6f, 0.8f, 0.45f),   EIcon::Leaf };
+
+			if (Has(TEXT("Cont_")))                                      return { TEXT("packaging"), FLinearColor(0.45f, 0.6f, 0.95f),  EIcon::Shop };
+			if (Has(TEXT("Papers_")))                                    return { TEXT("papers"),    FLinearColor(0.7f, 0.7f, 0.85f),   EIcon::Message };
+			if (ItemId == TEXT("Bench_Pack"))                            return { TEXT("packaging"), FLinearColor(0.5f, 0.65f, 0.95f),  EIcon::Shop };
+
+			if (Has(TEXT("Soil_")))                                      return { TEXT("soil"),      FLinearColor(0.65f, 0.5f, 0.35f),  EIcon::Leaf };
+			if (Has(TEXT("WaterBottle_")) || Has(TEXT("Water")))         return { TEXT("water"),     FLinearColor(0.4f, 0.7f, 0.95f),   EIcon::Coin };
+			if (Has(TEXT("Pot_")))                                       return { TEXT("pot"),       FLinearColor(0.6f, 0.55f, 0.45f),  EIcon::Leaf };
+			if (Has(TEXT("DryRack_")))                                   return { TEXT("rack"),      FLinearColor(0.55f, 0.6f, 0.7f),   EIcon::Gear };
+			if (Has(TEXT("Lamp")) || Has(TEXT("Light")))                 return { TEXT("lamp"),      FLinearColor(0.95f, 0.85f, 0.45f), EIcon::Flame };
+			if (Has(TEXT("Tent")))                                       return { TEXT("tent"),      FLinearColor(0.55f, 0.6f, 0.7f),   EIcon::Home };
+			if (Has(TEXT("Spray")) || Has(TEXT("Fert")) || Has(TEXT("Pest"))) return { TEXT("spray"), FLinearColor(0.6f, 0.9f, 0.7f),   EIcon::Gear };
+
+			// Meubels en de rest.
+			return { TEXT("furniture"), FLinearColor(0.55f, 0.58f, 0.66f), EIcon::Home };
+		}
+	}
+
+	FString IconKeyFor(FName ItemId) { return FString(CatFor(ItemId).Key); }
+
+	FLinearColor ItemAccent(FName ItemId) { return CatFor(ItemId).Accent; }
+
+	UTexture2D* ItemIconTexture(FName ItemId)
+	{
+		const FString Key = IconKeyFor(ItemId);
+		if (Key.IsEmpty()) { return nullptr; }
+
+		// Cache (incl. negatieve treffers) zodat we niet elke rebuild de schijf raken. Geladen
+		// textures worden ge-root zodat ze niet door de GC worden opgeruimd.
+		static TMap<FString, UTexture2D*> Cache;
+		if (UTexture2D** Found = Cache.Find(Key)) { return *Found; }
+
+		const FString IconsDir = FPaths::ProjectContentDir() / TEXT("_Project/UI/Icons/");
+		const FString Path = IconsDir + Key + TEXT(".png");
+		UTexture2D* Tex = nullptr;
+		if (IFileManager::Get().FileExists(*Path))
+		{
+			Tex = FImageUtils::ImportFileAsTexture2D(Path);
+			if (Tex) { Tex->AddToRoot(); }
+		}
+		Cache.Add(Key, Tex);
+		return Tex;
+	}
+
+	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size)
+	{
+		// 1) Echt PNG-icoon als het in Content/_Project/UI/Icons/ staat.
+		if (UTexture2D* Tex = ItemIconTexture(ItemId))
+		{
+			UImage* Img = Tree->ConstructWidget<UImage>();
+			FSlateBrush B;
+			B.SetResourceObject(Tex);
+			B.ImageSize = FVector2D(Size, Size);
+			B.DrawAs = ESlateBrushDrawType::Image;
+			Img->SetBrush(B);
+			Img->SetVisibility(ESlateVisibility::HitTestInvisible);
+			return Img;
+		}
+
+		// 2) Nette procedurele tegel: gekleurde afgeronde achtergrond + flat glyph in dezelfde tint.
+		const FItemCat Cat = CatFor(ItemId);
+		const FLinearColor BgCol(Cat.Accent.R * 0.22f, Cat.Accent.G * 0.22f, Cat.Accent.B * 0.22f, 1.f);
+		UBorder* Tile = Tree->ConstructWidget<UBorder>();
+		Tile->SetBrush(Rounded(BgCol, Size * 0.24f));
+		Tile->SetHorizontalAlignment(HAlign_Center);
+		Tile->SetVerticalAlignment(VAlign_Center);
+		Tile->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Tile->SetContent(Icon(Tree, Cat.Glyph, Size * 0.6f, Cat.Accent));
+		return Tile;
 	}
 }

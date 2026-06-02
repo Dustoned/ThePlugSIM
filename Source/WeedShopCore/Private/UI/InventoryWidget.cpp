@@ -20,6 +20,9 @@
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Components/Image.h"
 #include "GameFramework/Pawn.h"
 #include "InputCoreTypes.h"
 #include "Input/Reply.h"
@@ -31,38 +34,100 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 {
 	if (WidgetTree && !WidgetTree->RootWidget)
 	{
+		const bool bHotbar = (SlotIndex >= 0);
+		const bool bHasIcon = !IconId.IsNone();
+
+		// Buitenkant: afgeronde kaart met een dunne accent-rand wanneer er een item in zit.
 		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CellRoot"));
-		Root->SetBrush(WeedUI::Rounded(Bg, Radius));
-		Root->SetPadding(FMargin(6.f, 4.f, 6.f, 4.f));
+		FSlateBrush RB = WeedUI::Rounded(Bg, Radius);
+		if (bHasIcon)
+		{
+			RB.OutlineSettings.Width = 1.5f;
+			RB.OutlineSettings.Color = FSlateColor(FLinearColor(Accent.R, Accent.G, Accent.B, 0.55f));
+		}
+		Root->SetBrush(RB);
+		Root->SetPadding(FMargin(bHotbar ? 4.f : 7.f));
 		WidgetTree->RootWidget = Root;
 
-		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-		Root->SetContent(VB);
+		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+		Root->SetContent(Ov);
 
-		if (!Line1.IsEmpty())
+		if (bHotbar)
 		{
-			UTextBlock* T1 = WeedUI::Text(WidgetTree, Line1, 11, FLinearColor(0.9f, 0.93f, 1.f));
-			T1->SetClipping(EWidgetClipping::ClipToBounds);
-			VB->AddChildToVerticalBox(T1);
+			// Compacte hotbar-cel: icoon gecentreerd; slotnummer linksboven; aantal rechtsonder.
+			UOverlaySlot* IconOS = Ov->AddChildToOverlay(
+				bHasIcon ? WeedUI::ItemIcon(WidgetTree, IconId, IconSize)
+				         : Cast<UWidget>(WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor::Transparent)));
+			IconOS->SetHorizontalAlignment(HAlign_Center);
+			IconOS->SetVerticalAlignment(VAlign_Center);
 		}
-		if (!Line2.IsEmpty())
+		else
 		{
-			VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Line2, 10, FLinearColor(0.75f, 0.8f, 0.7f)));
+			// Rooster-cel: icoon links, naam (mag afbreken) + sub-regel rechts.
+			UHorizontalBox* HB = WidgetTree->ConstructWidget<UHorizontalBox>();
+			Ov->AddChildToOverlay(HB);
+
+			if (bHasIcon)
+			{
+				USizeBox* IconSz = WidgetTree->ConstructWidget<USizeBox>();
+				IconSz->SetWidthOverride(IconSize); IconSz->SetHeightOverride(IconSize);
+				IconSz->SetContent(WeedUI::ItemIcon(WidgetTree, IconId, IconSize));
+				UHorizontalBoxSlot* IS = HB->AddChildToHorizontalBox(IconSz);
+				IS->SetVerticalAlignment(VAlign_Center);
+				IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+			}
+
+			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+			UHorizontalBoxSlot* VBS = HB->AddChildToHorizontalBox(VB);
+			VBS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			VBS->SetVerticalAlignment(VAlign_Center);
+
+			if (!Line1.IsEmpty())
+			{
+				UTextBlock* T1 = WeedUI::Text(WidgetTree, Line1, 12, FLinearColor(0.93f, 0.95f, 1.f), false, true);
+				T1->SetAutoWrapText(true);
+				VB->AddChildToVerticalBox(T1);
+			}
+			if (!Line2.IsEmpty())
+			{
+				VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Line2, 10, FLinearColor(0.68f, 0.72f, 0.82f)));
+			}
+			if (bShowMerge)
+			{
+				UWeedActionButton* M = WidgetTree->ConstructWidget<UWeedActionButton>();
+				M->OnClicked.AddDynamic(M, &UWeedActionButton::Handle);
+				TFunction<void()> Fn = MergeFn;
+				M->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
+				FButtonStyle S;
+				S.Normal = WeedUI::Rounded(FLinearColor(0.5f, 0.4f, 0.1f), 6.f);
+				S.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.52f, 0.13f), 6.f);
+				S.Pressed = WeedUI::Rounded(FLinearColor(0.4f, 0.32f, 0.08f), 6.f);
+				S.NormalPadding = FMargin(6.f, 2.f); S.PressedPadding = FMargin(6.f, 2.f);
+				M->SetStyle(S);
+				M->SetContent(WeedUI::Text(WidgetTree, TEXT("Merge"), 10, FLinearColor::White, true));
+				VB->AddChildToVerticalBox(M)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+			}
 		}
-		if (bShowMerge)
+
+		// Slotnummer (hotbar) linksboven.
+		if (bSlotNumber)
 		{
-			UWeedActionButton* M = WidgetTree->ConstructWidget<UWeedActionButton>();
-			M->OnClicked.AddDynamic(M, &UWeedActionButton::Handle);
-			TFunction<void()> Fn = MergeFn;
-			M->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
-			FButtonStyle S;
-			S.Normal = WeedUI::Rounded(FLinearColor(0.5f, 0.4f, 0.1f), 6.f);
-			S.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.52f, 0.13f), 6.f);
-			S.Pressed = WeedUI::Rounded(FLinearColor(0.4f, 0.32f, 0.08f), 6.f);
-			S.NormalPadding = FMargin(6.f, 3.f); S.PressedPadding = FMargin(6.f, 3.f);
-			M->SetStyle(S);
-			M->SetContent(WeedUI::Text(WidgetTree, TEXT("Merge"), 10, FLinearColor::White, true));
-			VB->AddChildToVerticalBox(M)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+			UOverlaySlot* NS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), SlotNumber), 9, FLinearColor(0.65f, 0.68f, 0.78f), false, true));
+			NS->SetHorizontalAlignment(HAlign_Left);
+			NS->SetVerticalAlignment(VAlign_Top);
+			NS->SetPadding(FMargin(1.f, 0.f, 0.f, 0.f));
+		}
+
+		// Aantal/gram-badge als een pill (rechtsboven in het rooster, rechtsonder in de hotbar).
+		if (!Badge.IsEmpty())
+		{
+			UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
+			Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
+			Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
+			Pill->SetContent(WeedUI::Text(WidgetTree, Badge, 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
+			UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
+			PS->SetHorizontalAlignment(HAlign_Right);
+			PS->SetVerticalAlignment(bHotbar ? VAlign_Bottom : VAlign_Top);
 		}
 	}
 	// Hit-test zichtbaar zodat de cel muis/drag-events ontvangt.
@@ -179,7 +244,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(820.f, 470.f));
+	CS->SetSize(FVector2D(900.f, 520.f));
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -301,12 +366,22 @@ void UInventoryWidget::RebuildStash()
 
 		UBorder* Row = WidgetTree->ConstructWidget<UBorder>();
 		Row->SetBrush(WeedUI::Rounded(FLinearColor(0.09f, 0.10f, 0.14f, 0.9f), 6.f));
-		Row->SetPadding(FMargin(7.f, 4.f, 7.f, 4.f));
+		Row->SetPadding(FMargin(6.f, 4.f, 6.f, 4.f));
+		UHorizontalBox* RHB = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Row->SetContent(RHB);
+
+		USizeBox* IconSz = WidgetTree->ConstructWidget<USizeBox>();
+		IconSz->SetWidthOverride(26.f); IconSz->SetHeightOverride(26.f);
+		IconSz->SetContent(WeedUI::ItemIcon(WidgetTree, Id, 26.f));
+		UHorizontalBoxSlot* ISlot = RHB->AddChildToHorizontalBox(IconSz);
+		ISlot->SetVerticalAlignment(VAlign_Center); ISlot->SetPadding(FMargin(0.f, 0.f, 7.f, 0.f));
+
 		UVerticalBox* RVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		Row->SetContent(RVB);
+		UHorizontalBoxSlot* TSlot = RHB->AddChildToHorizontalBox(RVB);
+		TSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TSlot->SetVerticalAlignment(VAlign_Center);
 
 		FString Nm = WeedUI::PrettyItemName(Id);
-		if (Nm.Len() > 24) { Nm = Nm.Left(23) + TEXT("."); }
+		if (Nm.Len() > 22) { Nm = Nm.Left(21) + TEXT("."); }
 		const FLinearColor NameCol = bWet ? FLinearColor(0.55f, 0.8f, 1.f) : (bWeed ? FLinearColor(0.7f, 1.f, 0.75f) : FLinearColor(0.92f, 0.93f, 1.f));
 		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Nm, 12, NameCol));
 
@@ -345,48 +420,49 @@ void UInventoryWidget::RebuildContent()
 		if (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId)) { continue; }
 
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(126.f); Sz->SetHeightOverride(54.f);
+		Sz->SetWidthOverride(176.f); Sz->SetHeightOverride(72.f);
 
 		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
 		Cell->SlotIndex = -1; Cell->GridCell = cell;
 		Cell->Inv = Inv; Cell->Owner = this;
+		Cell->IconSize = 40.f;
 
 		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx));
 		if (bShowItem)
 		{
 			const FInventoryStack& S = Stacks[Idx];
 			const FName ItemId = S.ItemId;
-			const bool bWet = ItemId.ToString().StartsWith(TEXT("WetBud_"));
-			const bool bWeed = ItemId.ToString().StartsWith(TEXT("Bud_")) || ItemId.ToString().StartsWith(TEXT("Joint_"));
+			const FString IdStr = ItemId.ToString();
+			const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
+			const bool bBud = IdStr.StartsWith(TEXT("Bud_")) || bWet;
+			const bool bWeed = bBud || IdStr.StartsWith(TEXT("Joint_"));
 			const bool bCash = (ItemId == TEXT("Cash"));
 
 			Cell->StackId = StackId;
 			Cell->bDraggable = true; // ook briefgeld kun je verslepen (herschikken / naar de hotbar)
+			Cell->IconId = ItemId;
+			Cell->Accent = WeedUI::ItemAccent(ItemId);
+			Cell->Line1 = WeedUI::PrettyItemName(ItemId);
+
 			if (bCash)
 			{
-				// Briefgeld: groen/goud, toon het bedrag i.p.v. een aantal.
-				Cell->Bg = FLinearColor(0.10f, 0.16f, 0.10f, 0.97f);
-				Cell->Line1 = TEXT("Cash");
+				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.09f, 0.97f);
 				Cell->Line2 = FString::Printf(TEXT("EUR %d"), S.Quantity);
+				Cell->Badge.Empty();
 			}
 			else if (bWet)
 			{
-				// Natte wiet: duidelijk blauwe "WET"-tint + label dat 'ie eerst moet drogen.
-				Cell->Bg = FLinearColor(0.10f, 0.16f, 0.24f, 0.97f);
-				FString Nm = WeedUI::PrettyItemName(ItemId);
-				if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
-				Cell->Line1 = Nm;
-				Cell->Line2 = FString::Printf(TEXT("x%d  WET - dry it first"), S.Quantity);
+				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.21f, 0.97f);
+				Cell->Line2 = TEXT("WET - dry it first");
+				Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
 			}
 			else
 			{
-				Cell->Bg = FLinearColor(0.11f, 0.12f, 0.16f, 0.95f);
-				FString Nm = WeedUI::PrettyItemName(ItemId);
-				if (Nm.Len() > 16) { Nm = Nm.Left(15) + TEXT("."); }
-				Cell->Line1 = Nm;
+				Cell->Bg = FLinearColor(0.10f, 0.11f, 0.15f, 0.96f);
 				Cell->Line2 = bWeed
-					? FString::Printf(TEXT("x%d  THC%.0f%% Q%.0f%%"), S.Quantity, S.Quality, S.QualityPct)
-					: FString::Printf(TEXT("x%d"), S.Quantity);
+					? FString::Printf(TEXT("THC %.0f%%  Q %.0f%%"), S.Quality, S.QualityPct)
+					: TEXT("");
+				Cell->Badge = bBud ? FString::Printf(TEXT("%dg"), S.Quantity) : FString::Printf(TEXT("x%d"), S.Quantity);
 				if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
 				{
 					Cell->bShowMerge = true;
@@ -398,7 +474,7 @@ void UInventoryWidget::RebuildContent()
 		{
 			// Lege cel (of plek van een item dat nu op de hotbar staat): drop-doel, niet sleepbaar.
 			Cell->StackId = 0; Cell->bDraggable = false;
-			Cell->Bg = FLinearColor(0.10f, 0.10f, 0.13f, 0.35f);
+			Cell->Bg = FLinearColor(0.09f, 0.09f, 0.12f, 0.30f);
 		}
 		Sz->SetContent(Cell);
 		Grid->AddChildToWrapBox(Sz);
@@ -410,24 +486,32 @@ void UInventoryWidget::RebuildContent()
 	{
 		const int32 SlotStackId = Inv->GetHotbarStackId(h);
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(64.f); Sz->SetHeightOverride(46.f);
+		Sz->SetWidthOverride(58.f); Sz->SetHeightOverride(54.f);
 
 		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
 		Cell->StackId = SlotStackId; Cell->SlotIndex = h; Cell->bDraggable = (SlotStackId != 0);
 		Cell->Inv = Inv; Cell->Owner = this;
-		Cell->Radius = 6.f;
-		Cell->Bg = (h == Inv->GetActiveSlot()) ? FLinearColor(0.2f, 0.3f, 0.16f) : FLinearColor(0.10f, 0.11f, 0.14f);
-		Cell->Line1 = FString::Printf(TEXT("%d"), h + 1);
+		Cell->Radius = 7.f;
+		Cell->IconSize = 30.f;
+		Cell->bSlotNumber = true; Cell->SlotNumber = h + 1;
+		const bool bActive = (h == Inv->GetActiveSlot());
+		Cell->Bg = bActive ? FLinearColor(0.18f, 0.30f, 0.15f, 0.98f) : FLinearColor(0.10f, 0.11f, 0.14f, 0.96f);
 		const int32 Idx = Inv->FindStackById(SlotStackId);
 		if (Stacks.IsValidIndex(Idx))
 		{
-			FString Nm = WeedUI::PrettyItemName(Stacks[Idx].ItemId);
-			if (Nm.Len() > 9) { Nm = Nm.Left(8) + TEXT("."); }
-			Cell->Line2 = Nm;
+			const FInventoryStack& S = Stacks[Idx];
+			const FString IdStr = S.ItemId.ToString();
+			const bool bBud = IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("WetBud_"));
+			Cell->IconId = S.ItemId;
+			Cell->Accent = bActive ? FLinearColor(0.55f, 0.95f, 0.5f) : WeedUI::ItemAccent(S.ItemId);
+			if (S.ItemId != TEXT("Cash"))
+			{
+				Cell->Badge = bBud ? FString::Printf(TEXT("%dg"), S.Quantity) : FString::Printf(TEXT("x%d"), S.Quantity);
+			}
 		}
 		Sz->SetContent(Cell);
 		UHorizontalBoxSlot* HS = HotbarBox->AddChildToHorizontalBox(Sz);
-		HS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+		HS->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
 	}
 }
 

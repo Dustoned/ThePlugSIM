@@ -53,4 +53,19 @@ namespace WeedUI
 
 	// Leesbare naam voor een item-id (Bud_X -> X, Seed_X -> X seed, etc.).
 	WEEDSHOPCORE_API FString PrettyItemName(FName ItemId);
+
+	// --- Item-iconen ---------------------------------------------------------
+	// Bestandsnaam-sleutel (zonder pad/extensie) voor het icoon van een item, bv. "weed", "cash",
+	// "packaging". Drop een PNG met die naam in Content/_Project/UI/Icons/ en hij wordt gebruikt.
+	WEEDSHOPCORE_API FString IconKeyFor(FName ItemId);
+
+	// Laadt (en cachet) het PNG-icoon voor dit item van schijf, of nullptr als het er (nog) niet is.
+	WEEDSHOPCORE_API class UTexture2D* ItemIconTexture(FName ItemId);
+
+	// Klaar-voor-gebruik icoon-widget (Size x Size): het PNG als dat bestaat, anders een nette
+	// procedurele tegel (gekleurde achtergrond per categorie + flat glyph). Altijd bruikbaar.
+	WEEDSHOPCORE_API UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size);
+
+	// Accentkleur per item-categorie (voor randjes/labels in de inventory).
+	WEEDSHOPCORE_API FLinearColor ItemAccent(FName ItemId);
 }
