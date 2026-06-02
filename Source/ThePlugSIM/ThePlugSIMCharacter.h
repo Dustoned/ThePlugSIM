@@ -186,6 +186,13 @@ protected:
 	float SmokeHoldTime = 0.f;
 	static constexpr float SmokeHoldRequired = 1.1f; // sec inhouden voor het oproken
 
+	// Anti-stuck: onthoud de laatste vaste grond en herstel als je te lang valt / onder de wereld zakt
+	// (vangt het "ik vlieg opeens en kan niks"-geval op, ongeacht de oorzaak).
+	FVector LastGroundLoc = FVector::ZeroVector;
+	bool bHasGroundLoc = false;
+	float FallTime = 0.f;
+	void TickStuckRecovery(float DeltaSeconds);
+
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
 	bool bLmbDown = false;
 	bool bGiveFired = false;

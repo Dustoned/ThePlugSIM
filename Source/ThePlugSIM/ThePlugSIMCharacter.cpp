@@ -89,9 +89,37 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
+{
+	if (!IsLocallyControlled()) { return; }
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (!Move) { return; }
+
+	const FVector Loc = GetActorLocation();
+	if (Move->IsMovingOnGround())
+	{
+		// Sta stevig op de grond -> onthoud deze plek als veilige terugval.
+		LastGroundLoc = Loc; bHasGroundLoc = true; FallTime = 0.f;
+		return;
+	}
+	if (Move->IsFalling()) { FallTime += DeltaSeconds; }
+
+	const bool bTooLong = FallTime > 8.f;        // veel te lang in de lucht = vast/gelanceerd
+	const bool bBelowWorld = Loc.Z < -3000.f;    // door de vloer gezakt
+	if ((bTooLong || bBelowWorld) && bHasGroundLoc)
+	{
+		Move->StopMovementImmediately();
+		Move->SetMovementMode(MOVE_Walking);
+		TeleportTo(LastGroundLoc + FVector(0.f, 0.f, 40.f), GetActorRotation(), false, true);
+		FallTime = 0.f;
+		UWeedToast::Notify(-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
+	}
+}
+
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	TickStuckRecovery(DeltaSeconds);
 	if (StonedSeconds > 0.f)
 	{
 		StonedSeconds = FMath::Max(0.f, StonedSeconds - DeltaSeconds);
