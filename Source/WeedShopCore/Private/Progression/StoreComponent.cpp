@@ -62,6 +62,17 @@ bool UStoreComponent::GetSeedDisplay(FName StrainId, FText& OutName, int32& OutP
 	return true;
 }
 
+bool UStoreComponent::GetStrainStats(FName StrainId, float& OutThcPct, float& OutYieldGrams, float& OutGrowMinutes) const
+{
+	if (!StrainTable) { return false; }
+	const FWeedStrainRow* Row = StrainTable->FindRow<FWeedStrainRow>(StrainId, TEXT("GetStrainStats"), false);
+	if (!Row) { return false; }
+	OutThcPct = Row->BaseThcPercent;
+	OutYieldGrams = Row->BaseYieldGrams;
+	OutGrowMinutes = Row->GrowMinutes;
+	return true;
+}
+
 bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 {
 	if (GetOwnerRole() != ROLE_Authority || !StrainTable || !Buyer)

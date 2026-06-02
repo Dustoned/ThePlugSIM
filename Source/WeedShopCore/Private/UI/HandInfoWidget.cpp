@@ -3,6 +3,11 @@
 #include "UI/WeedUiStyle.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Progression/StoreComponent.h"
+#include "Cultivation/PotTypes.h"
+#include "Cultivation/SoilTypes.h"
+#include "Game/WeedShopGameState.h"
+#include "Engine/World.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -178,6 +183,18 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	FString Type, Hint; FLinearColor Col;
 	ClassifyItem(IdStr, Type, Hint, Col);
 
+	// Winkel-omschrijving (heeft vaak concrete getallen, bv. "+15% yield this harvest") als hint,
+	// behalve voor wiet/joints (die komen niet uit de catalogus).
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	const bool bWeedProduct = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_"))
+		|| IdStr.StartsWith(TEXT("Bag_")) || IdStr.StartsWith(TEXT("Joint_"));
+	if (Store && !bWeedProduct)
+	{
+		const FString Desc = Store->GetCatalogDesc(Id).ToString();
+		if (!Desc.IsEmpty()) { Hint = Desc; }
+	}
+
 	if (AccentBar) { AccentBar->SetBrush(WeedUI::Rounded(Col, 3.f)); }
 	if (TypeText) { TypeText->SetText(FText::FromString(Type)); TypeText->SetColorAndOpacity(FSlateColor(Col)); }
 	if (NameText) { NameText->SetText(FText::FromString(PrettyName(WeedUI::PrettyItemName(Id)))); }
@@ -212,6 +229,40 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			AddStat(TEXT("In hand"), FString::Printf(TEXT("x%d"), Qty));
 			AddStat(TEXT("Per joint"), FString::Printf(TEXT("%d g"), G));
 			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
+		}
+		else if (IdStr.StartsWith(TEXT("Seed_")))
+		{
+			// Strain-stats: hoe sterk, hoeveel opbrengst en hoe snel hij groeit.
+			float SThc = 0.f, SYield = 0.f, SGrow = 0.f;
+			if (Store && Store->GetStrainStats(UStoreComponent::StrainFromSeedItem(Id), SThc, SYield, SGrow))
+			{
+				AddStat(TEXT("THC up to"), FString::Printf(TEXT("%.0f%%"), SThc));
+				AddStat(TEXT("Max yield"), FString::Printf(TEXT("~%.0f g"), SYield));
+				AddStat(TEXT("Grow time"), FString::Printf(TEXT("~%.0f min"), SGrow));
+			}
+			AddStat(TEXT("Seeds"), FString::Printf(TEXT("x%d"), Qty));
+		}
+		else if (IsPotItem(Id))
+		{
+			FPotDef Pd;
+			if (GetPotDef(Id, Pd))
+			{
+				AddStat(TEXT("Quality cap"), FString::Printf(TEXT("%.0f%%"), Pd.CareCap * 100.f));
+				AddStat(TEXT("Yield"), Pd.YieldMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Pd.YieldMult - 1.f) * 100.f) : TEXT("base"));
+				AddStat(TEXT("Plants"), FString::Printf(TEXT("%d"), Pd.PlantSlots));
+			}
+			AddStat(TEXT("In stock"), FString::Printf(TEXT("x%d"), Qty));
+		}
+		else if (IsSoilItem(Id))
+		{
+			FSoilDef Sd;
+			if (GetSoilDef(Id, Sd))
+			{
+				AddStat(TEXT("Yield"), Sd.YieldMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Sd.YieldMult - 1.f) * 100.f) : TEXT("base"));
+				AddStat(TEXT("Quality"), Sd.QualityMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Sd.QualityMult - 1.f) * 100.f) : TEXT("base"));
+				AddStat(TEXT("Lasts"), FString::Printf(TEXT("%d harvests"), Sd.Harvests));
+			}
+			AddStat(TEXT("In stock"), FString::Printf(TEXT("x%d"), Qty));
 		}
 		else if (IdStr.StartsWith(TEXT("Cont_")))
 		{

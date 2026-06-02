@@ -33,6 +33,9 @@ public:
 	// Weergave-info voor een zaad (voor de telefoon-UI).
 	bool GetSeedDisplay(FName StrainId, FText& OutName, int32& OutPriceCents) const;
 
+	// Ruwe strain-stats voor de UI: max THC%, max opbrengst (gram) en groeitijd (minuten).
+	bool GetStrainStats(FName StrainId, float& OutThcPct, float& OutYieldGrams, float& OutGrowMinutes) const;
+
 	// Server: koopt 1 zaadje van deze strain voor Buyer. False bij te weinig geld/onbekend.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
 	bool BuySeed(FName StrainId, UInventoryComponent* Buyer);
