@@ -191,8 +191,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Groei per plek.
-	const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus);
+	// Groei per plek (grow-lamp = +30% sneller).
+	const float LampMul = HasPotUpgrade(4) ? 1.3f : 1.f;
+	const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus) * LampMul;
 	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
 		if (SlotStrain[i].IsNone() || SlotPhase[i] == EGrowthPhase::Harvestable) { continue; }
@@ -201,9 +202,17 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	UpdatePhases();
 
 	// Waterpeil loopt langzaam leeg (isolatie-upgrade + pot-retentie vertragen dit).
+	// Auto-watering houdt de pot vanzelf vol -> geen handmatig water nodig.
 	const float MaxCare = GetMaxCare();
-	const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f;
-	WaterLevel = FMath::Clamp(WaterLevel - DeltaSeconds * 0.02f * (1.f - CareRetention * 0.5f) * LeakMul, 0.f, 1.f);
+	if (HasPotUpgrade(5))
+	{
+		WaterLevel = 1.f;
+	}
+	else
+	{
+		const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f;
+		WaterLevel = FMath::Clamp(WaterLevel - DeltaSeconds * 0.02f * (1.f - CareRetention * 0.5f) * LeakMul, 0.f, 1.f);
+	}
 
 	const bool bAnyReady = GetReadyCount() > 0;
 	if (!bAnyReady)
@@ -556,7 +565,8 @@ float AGrowPlant::GetMaxCare() const
 		}
 	}
 	const float Drainage = HasPotUpgrade(0) ? 0.10f : 0.f;
-	return FMath::Clamp(Cap + CareRetention * 0.3f + Drainage, 0.4f, 1.0f);
+	const float Tent = HasPotUpgrade(3) ? 0.15f : 0.f; // grow-tent: hoger kwaliteitsplafond
+	return FMath::Clamp(Cap + CareRetention * 0.3f + Drainage + Tent, 0.4f, 1.0f);
 }
 
 float AGrowPlant::GetSecondsRemaining() const

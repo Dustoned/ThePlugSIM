@@ -1483,6 +1483,12 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 	{
 		return;
 	}
+	// Sommige upgrades (auto-water) kunnen pas op latere potten.
+	if (!IsPotUpgradeAllowed(UpgIndex, Pot->GetPotTier()))
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("That upgrade needs a better pot.")); }
+		return;
+	}
 	const int32 Cost = GetPotUpgradeCost(UpgIndex, Pot->GetPotTier());
 	UEconomyComponent* Econ = GetOwnerEconomy();
 	if (Cost <= 0 || !Econ || !Econ->RemoveBank(Cost)) // via telefoon -> bankgeld (wit)

@@ -292,6 +292,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pot")
 	void BuyPotUpgrade(int32 UpgIndex);
 
+	// Koop een pot-upgrade voor een specifieke pot (vanuit de Grow shop "Pot Upgrades"-tab).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pot")
+	void RequestPotUpgradeFor(AGrowPlant* Pot, int32 UpgIndex) { if (Pot) { ServerBuyPotUpgrade(Pot, UpgIndex); } }
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Pot")
 	bool IsPotUpgradeOpen() const { return bPotUpgradeOpen; }
 

@@ -8,6 +8,9 @@
 #include "Progression/LevelComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Cultivation/GrowPlant.h"
+#include "Cultivation/PotTypes.h"
+#include "EngineUtils.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/ContactsComponent.h"
 #include "Input/ControlSettings.h"
@@ -65,6 +68,7 @@ namespace
 		case 5: return TEXT("Soil");
 		case 6: return TEXT("Water");
 		case 7: return TEXT("Furniture");
+		case 8: return TEXT("Pot Upgrades");
 		default: return TEXT("?");
 		}
 	}
@@ -736,6 +740,81 @@ void UPhoneWidget::UpdatePackagesLive()
 	}
 }
 
+void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
+{
+	if (!Scroll || !Phone.IsValid()) { return; }
+	UPhoneClientComponent* Ph = Phone.Get();
+	Scroll->ClearChildren();
+
+	Scroll->AddChild(MakeText(TEXT("Upgrade your placed pots. Upgrades stay with the pot (gone if you sell it)."), 11, FLinearColor(0.6f, 0.66f, 0.76f)));
+
+	int32 PotCount = 0;
+	if (UWorld* W = GetWorld())
+	{
+		const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+		int32 PotNum = 0;
+		for (TActorIterator<AGrowPlant> It(W); It; ++It)
+		{
+			AGrowPlant* Pot = *It;
+			if (!Pot) { continue; }
+			++PotNum; ++PotCount;
+			TWeakObjectPtr<AGrowPlant> WPot = Pot;
+			const FName Tier = Pot->GetPotTier();
+			FPotDef Pd; const FString PotName = GetPotDef(Tier, Pd) ? Pd.DisplayName : TEXT("Pot");
+
+			UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
+			Card->SetBrush(WeedUI::Rounded(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+			Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+			Card->SetContent(VB);
+			VB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Pot %d   -   %s"), PotNum, *PotName), 14, FLinearColor(0.7f, 1.f, 0.7f)));
+
+			for (int32 i = 0; i < Ups.Num(); ++i)
+			{
+				const int32 ui = i;
+				const bool bOwned = Pot->HasPotUpgrade(i);
+				const bool bAllowed = IsPotUpgradeAllowed(i, Tier);
+				const int32 Cost = GetPotUpgradeCost(i, Tier);
+
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				const FString Label = FString::Printf(TEXT("%s  -  %s"), *Ups[i].DisplayName, *Ups[i].Desc);
+				UTextBlock* T = MakeText(Label, 11, bOwned ? FLinearColor(0.5f, 1.f, 0.5f) : (bAllowed ? FLinearColor(0.9f, 0.92f, 1.f) : FLinearColor(0.72f, 0.6f, 0.6f)));
+				T->SetClipping(EWidgetClipping::ClipToBounds);
+				UHorizontalBoxSlot* L = Row->AddChildToHorizontalBox(T);
+				L->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); L->SetVerticalAlignment(VAlign_Center); L->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+				USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
+				RB->SetWidthOverride(124.f); RB->SetHeightOverride(26.f);
+				if (bOwned)
+				{
+					RB->SetContent(MakeText(TEXT("installed"), 11, FLinearColor(0.5f, 1.f, 0.5f), true));
+				}
+				else if (!bAllowed)
+				{
+					RB->SetContent(MakeText(TEXT("needs better pot"), 10, FLinearColor(1.f, 0.6f, 0.5f), true));
+				}
+				else
+				{
+					RB->SetContent(MakeActionBtn(FString::Printf(TEXT("Buy  EUR %.2f"), Cost / 100.f), FLinearColor(0.2f, 0.5f, 0.28f),
+						[Ph, WPot, ui]() { if (AGrowPlant* P = WPot.Get()) { Ph->RequestPotUpgradeFor(P, ui); } }, 10));
+				}
+				UHorizontalBoxSlot* RS2 = Row->AddChildToHorizontalBox(RB); RS2->SetVerticalAlignment(VAlign_Center);
+				VB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+			}
+
+			Scroll->AddChild(Card);
+			UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
+			Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+			Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+			Scroll->AddChild(Gap);
+		}
+	}
+	if (PotCount == 0)
+	{
+		Scroll->AddChild(MakeText(TEXT("No pots placed yet. Buy a pot (Pots tab) and place it first."), 12, FLinearColor::Gray));
+	}
+}
+
 void UPhoneWidget::FillStoreList()
 {
 	if (!StoreScroll || !Phone.IsValid()) { return; }
@@ -762,6 +841,13 @@ void UPhoneWidget::FillStoreList()
 	if (bPackagesView)
 	{
 		FillPackagesInto(StoreScroll);
+		return;
+	}
+
+	// --- Pot Upgrades-tab (Grow shop, cat 8): per geplaatste pot de upgrades kopen ---
+	if (Cat == 8 && !bCartView)
+	{
+		FillPotUpgradesInto(StoreScroll);
 		return;
 	}
 
@@ -1174,7 +1260,7 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GGrowApp) // Grow shop -> wiet-gerelateerd (seeds, potten, drogen, verpakken)
 	{
 		bSellApp = false;
-		AppCats = { 0, 1, 2, 3 };
+		AppCats = { 0, 1, 2, 3, 8 }; // + Pot Upgrades
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}

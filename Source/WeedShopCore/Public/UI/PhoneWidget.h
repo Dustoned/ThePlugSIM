@@ -136,6 +136,7 @@ protected:
 	void UpdatePackagesLive();         // werkt bars/ETA's live bij zonder herbouw
 	void BuildPackagesApp();           // bouwt de losse Packages-app in ContentBox
 	void FillPackagesInto(class UScrollBox* Scroll); // vult de bestellingen-kaarten in een scroll
+	void FillPotUpgradesInto(class UScrollBox* Scroll); // "Pot Upgrades"-tab: per geplaatste pot
 
 	// Bank-app (na de telefoon-upgrade): storten (witwassen) + geld sturen naar co-op vrienden.
 	void BuildBankApp();

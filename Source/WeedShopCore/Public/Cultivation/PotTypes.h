@@ -29,13 +29,21 @@ struct FPotUpgradeDef
 	FString DisplayName;
 	FString Desc;
 	int32 BaseCostCents = 3000;
+	int32 MinPotTierIndex = 0; // pas beschikbaar vanaf deze pot-tier (0=Broken ... 3=Fabric)
 };
 
-// De beschikbare pot-upgrades (index = bit in het pot-upgrade-masker). Nu 3: drainage, isolatie, bloom.
+// De beschikbare pot-upgrades (index = bit in het pot-upgrade-masker):
+// 0 drainage, 1 isolatie, 2 bloom, 3 grow-tent, 4 grow-lamp, 5 auto-water (latere potten).
 const TArray<FPotUpgradeDef>& GetPotUpgrades();
 
 // Kosten van upgrade UpgIndex voor een pot van deze tier (schaalt met de tier).
 int32 GetPotUpgradeCost(int32 UpgIndex, FName PotTier);
+
+// Tier-index (0=Broken ... 3=Fabric) van een pot-id; -1 als onbekend.
+int32 GetPotTierIndex(FName PotTier);
+
+// Mag upgrade UpgIndex op een pot van deze tier (sommige, zoals auto-water, pas op latere potten)?
+bool IsPotUpgradeAllowed(int32 UpgIndex, FName PotTier);
 
 // Of dit item-id een pot is (begint met "Pot").
 bool IsPotItem(FName ItemId);

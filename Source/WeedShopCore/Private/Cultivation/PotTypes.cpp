@@ -32,12 +32,35 @@ bool IsPotItem(FName ItemId)
 
 const TArray<FPotUpgradeDef>& GetPotUpgrades()
 {
+	// DisplayName, Desc, BaseCost, MinPotTierIndex (0=Broken,1=Clay,2=Plastic,3=Fabric)
 	static const TArray<FPotUpgradeDef> Defs = {
-		{ TEXT("Drainage"),       TEXT("+10% max quality (better water retention)"), 3000 },
-		{ TEXT("Insulation"),     TEXT("Dries out slower (less watering needed)"),    4000 },
-		{ TEXT("Bloom booster"),  TEXT("+20% harvest yield"),                          5000 },
+		{ TEXT("Drainage layer"), TEXT("+10% max quality (better water retention)"),  3000, 0 },
+		{ TEXT("Insulation"),     TEXT("Dries out slower (less watering needed)"),     4000, 0 },
+		{ TEXT("Bloom booster"),  TEXT("+20% harvest yield"),                          5000, 0 },
+		{ TEXT("Grow tent"),      TEXT("Sealed tent: +15% quality, holds care"),       7000, 1 },
+		{ TEXT("LED grow lamp"),  TEXT("+30% faster growth"),                          9000, 1 },
+		{ TEXT("Auto-watering"),  TEXT("Keeps itself watered - no manual watering"),  14000, 2 },
 	};
 	return Defs;
+}
+
+int32 GetPotTierIndex(FName PotTier)
+{
+	const TArray<FPotDef>& Pots = GetAllPots();
+	for (int32 i = 0; i < Pots.Num(); ++i)
+	{
+		if (Pots[i].ItemId == PotTier) { return i; }
+	}
+	return -1;
+}
+
+bool IsPotUpgradeAllowed(int32 UpgIndex, FName PotTier)
+{
+	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+	if (!Ups.IsValidIndex(UpgIndex)) { return false; }
+	const int32 Tier = GetPotTierIndex(PotTier);
+	if (Tier < 0) { return false; }
+	return Tier >= Ups[UpgIndex].MinPotTierIndex;
 }
 
 int32 GetPotUpgradeCost(int32 UpgIndex, FName PotTier)
@@ -48,11 +71,6 @@ int32 GetPotUpgradeCost(int32 UpgIndex, FName PotTier)
 		return 0;
 	}
 	// Schaal met de tier-index (Broken=0 ... Fabric=3): duurdere potten = duurdere upgrades.
-	int32 Tier = 0;
-	const TArray<FPotDef>& Pots = GetAllPots();
-	for (int32 i = 0; i < Pots.Num(); ++i)
-	{
-		if (Pots[i].ItemId == PotTier) { Tier = i; break; }
-	}
+	const int32 Tier = FMath::Max(0, GetPotTierIndex(PotTier));
 	return Ups[UpgIndex].BaseCostCents * (Tier + 1);
 }
