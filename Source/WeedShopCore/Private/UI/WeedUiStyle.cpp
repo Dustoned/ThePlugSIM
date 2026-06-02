@@ -183,7 +183,15 @@ namespace WeedUI
 			if (Has(TEXT("DryRack_")))                                   return { TEXT("rack"),      FLinearColor(0.55f, 0.6f, 0.7f),   EIcon::Gear };
 			if (Has(TEXT("Lamp")) || Has(TEXT("Light")))                 return { TEXT("lamp"),      FLinearColor(0.95f, 0.85f, 0.45f), EIcon::Flame };
 			if (Has(TEXT("Tent")))                                       return { TEXT("tent"),      FLinearColor(0.55f, 0.6f, 0.7f),   EIcon::Home };
-			if (Has(TEXT("Spray")) || Has(TEXT("Fert")) || Has(TEXT("Pest"))) return { TEXT("spray"), FLinearColor(0.6f, 0.9f, 0.7f),   EIcon::Gear };
+			if (Has(TEXT("Fert")))                                       return { TEXT("fertilizer"),FLinearColor(0.55f, 0.85f, 0.55f), EIcon::Leaf };
+			if (Has(TEXT("Spray")) || Has(TEXT("Pest")))                 return { TEXT("spray"),     FLinearColor(0.6f, 0.9f, 0.7f),   EIcon::Gear };
+
+			// Specifieke meubels (eigen icoon); anders de generieke catch-all.
+			if (ItemId == TEXT("Fridge"))                                return { TEXT("fridge"),    FLinearColor(0.6f, 0.7f, 0.8f),    EIcon::Home };
+			if (ItemId == TEXT("Mattress") || Has(TEXT("Bed")))          return { TEXT("bed"),       FLinearColor(0.7f, 0.6f, 0.75f),   EIcon::Home };
+			if (ItemId == TEXT("Table"))                                 return { TEXT("table"),     FLinearColor(0.6f, 0.5f, 0.4f),    EIcon::Home };
+			if (Has(TEXT("Shelf")))                                      return { TEXT("shelf"),     FLinearColor(0.6f, 0.55f, 0.45f),  EIcon::Home };
+			if (Has(TEXT("Chest")))                                      return { TEXT("chest"),     FLinearColor(0.6f, 0.5f, 0.35f),   EIcon::Home };
 
 			// Meubels en de rest.
 			return { TEXT("furniture"), FLinearColor(0.55f, 0.58f, 0.66f), EIcon::Home };
@@ -218,7 +226,13 @@ namespace WeedUI
 			else if (K == TEXT("rack"))      Add({ TEXT("dryrack"), TEXT("repairs"), TEXT("drying") });
 			else if (K == TEXT("lamp"))      Add({ TEXT("light"), TEXT("boost"), TEXT("energy") });
 			else if (K == TEXT("tent"))      Add({ TEXT("garage"), TEXT("stash") });
-			else if (K == TEXT("spray"))     Add({ TEXT("tuning"), TEXT("repairs"), TEXT("pesticide"), TEXT("fertilizer") });
+			else if (K == TEXT("spray"))     Add({ TEXT("pesticide"), TEXT("tuning"), TEXT("repairs") });
+			else if (K == TEXT("fertilizer"))Add({ TEXT("fertilizer-bag"), TEXT("spray"), TEXT("nutrients") });
+			else if (K == TEXT("fridge"))    Add({ TEXT("furniture") });
+			else if (K == TEXT("bed"))       Add({ TEXT("furniture") });
+			else if (K == TEXT("table"))     Add({ TEXT("furniture") });
+			else if (K == TEXT("shelf"))     Add({ TEXT("bookshelf"), TEXT("furniture") });
+			else if (K == TEXT("chest"))     Add({ TEXT("furniture") });
 			else if (K == TEXT("furniture")) Add({ TEXT("stash"), TEXT("inventory"), TEXT("box") });
 			return C;
 		}
