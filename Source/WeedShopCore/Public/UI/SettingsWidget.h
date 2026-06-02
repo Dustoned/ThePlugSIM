@@ -48,6 +48,7 @@ protected:
 	UPROPERTY() TObjectPtr<UVerticalBox> Body;     // rechter inhoud (per categorie)
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGraphics;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGame;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> TabControls;
 
 	// Game-sliders (gepolld in NativeTick zodat slepen live toepast, met afronding tegen config-spam).
 	UPROPERTY() TObjectPtr<class USlider> FovSlider;
@@ -58,6 +59,6 @@ protected:
 	int32 LastFovApplied = -1;
 	int32 LastSensApplied = -1; // sensitivity * 10
 
-	int32 Category = 0; // 0 = Graphics, 1 = Game
+	int32 Category = 0; // 0 = Graphics, 1 = Game, 2 = Controls
 	bool bLastOpen = false;
 };

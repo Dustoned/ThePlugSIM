@@ -91,8 +91,10 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 0; RefreshTabs(); RefreshContent(); }, 13);
 	TabGame = SetBtn(WidgetTree, TEXT("Game"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 1; RefreshTabs(); RefreshContent(); }, 13);
+	TabControls = SetBtn(WidgetTree, TEXT("Controls"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 2; RefreshTabs(); RefreshContent(); }, 13);
 	Tabs->AddChildToHorizontalBox(TabGraphics)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	Tabs->AddChildToHorizontalBox(TabGame)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+	Tabs->AddChildToHorizontalBox(TabControls)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	VB->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	// Inhoud.
@@ -203,6 +205,7 @@ void USettingsWidget::RefreshTabs()
 	};
 	Tint(TabGraphics, Category == 0);
 	Tint(TabGame, Category == 1);
+	Tint(TabControls, Category == 2);
 }
 
 void USettingsWidget::RefreshContent()
@@ -268,12 +271,8 @@ void USettingsWidget::RefreshContent()
 			}
 		});
 	}
-	else // Game
+	else if (Category == 1) // Game
 	{
-		// Controls-overlay (rechtsonder) aan/uit.
-		AddValueRow(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled() ? TEXT("On") : TEXT("Off"),
-			[this]() { UHotkeyHintWidget::SetHintsEnabled(!UHotkeyHintWidget::AreHintsEnabled()); RefreshContent(); });
-
 		UPhoneClientComponent* Ph = GetPhone();
 		const float Fov = Ph ? Ph->GetFov() : 90.f;          // 60..120
 		const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f; // 0.1..3.0
@@ -285,8 +284,14 @@ void USettingsWidget::RefreshContent()
 		SensSlider = AddSliderRow(TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, SensVal);
 		if (SensVal) { SensVal->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), Sens))); }
 		LastSensApplied = FMath::RoundToInt(Sens * 10.f);
+	}
+	else // Controls
+	{
+		// Controls-overlay (de toetsen-hint rechtsonder) aan/uit.
+		AddValueRow(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled() ? TEXT("On") : TEXT("Off"),
+			[this]() { UHotkeyHintWidget::SetHintsEnabled(!UHotkeyHintWidget::AreHintsEnabled()); RefreshContent(); });
 
-		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Tip: rebind keys in the phone Settings app (controls)."), 11, FLinearColor(0.55f, 0.6f, 0.7f)))
+		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Tip: rebind keys in the phone Settings app."), 11, FLinearColor(0.55f, 0.6f, 0.7f)))
 			->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
 	}
 }

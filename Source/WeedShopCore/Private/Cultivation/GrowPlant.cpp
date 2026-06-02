@@ -929,7 +929,7 @@ void AGrowPlant::UpdatePlantVisual()
 
 		// Toppen/colas: rechtopstaande kegels bovenin. Verschijnen vanaf pre-bloei; bij OOGSTKLAAR
 		// worden ze fors GROTER + DONKERPAARS zodat je in één oogopslag ziet dat 'ie klaar is.
-		const float BudScaleRipe = bRipe ? 2.5f : 0.7f;
+		const float BudScaleRipe = bRipe ? 1.2f : 0.7f;
 		const FLinearColor BudFlower(0.30f, 0.55f, 0.22f); // jong = groen
 		const FLinearColor BudRipe(0.26f, 0.08f, 0.34f);   // klaar = donkerpaars
 		for (int32 b = 0; b < BudsPerPlant; ++b)
@@ -939,9 +939,9 @@ void AGrowPlant::UpdatePlantVisual()
 			Bd->SetVisibility(bBuds);
 			if (!bBuds) { continue; }
 			const bool bMain = (b == 0);
-			const float BaseLen = FMath::Lerp(6.f, 16.f, F) * Ms;
-			const float BudLen = BaseLen * BudScaleRipe * (bMain ? 1.6f : 1.0f);
-			const float BudW = BudLen * (bRipe ? 0.5f : 0.5f);
+			const float BaseLen = FMath::Lerp(5.f, 11.f, F) * Ms;
+			const float BudLen = BaseLen * BudScaleRipe * (bMain ? 1.3f : 1.0f);
+			const float BudW = BudLen * 0.45f;
 			float BX = 0.f, BY = 0.f, BZ = StemH + BudLen * 0.4f; // hoofd-cola bovenop de steel
 			if (!bMain)
 			{

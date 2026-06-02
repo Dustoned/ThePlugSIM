@@ -30,6 +30,8 @@
 #include "Components/WrapBoxSlot.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
+#include "Components/UniformGridPanel.h"
+#include "Components/UniformGridSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/ButtonSlot.h"
@@ -654,14 +656,19 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 	// Koop-categorieën (alleen de tabs van deze winkel-app). De Sell-app heeft géén koop-tabs.
 	if (!bSellApp)
 	{
-		// Wrap-box: tabs krijgen hun eigen breedte en lopen netjes naar een tweede rij i.p.v. te overlappen.
-		UWrapBox* Tabs = WidgetTree->ConstructWidget<UWrapBox>();
-		Tabs->SetInnerSlotPadding(FVector2D(4.f, 4.f));
-		for (int32 Cat : AppCats)
+		// Uniform grid: alle tabs even breed en netjes uitgelijnd (3 kolommen, dus 6 cats = 2 nette
+		// rijen; 4 cats = 1 rij van 4). Geen "los hangende" tweede rij meer.
+		const int32 Cols = (AppCats.Num() <= 4) ? FMath::Max(1, AppCats.Num()) : 3;
+		UUniformGridPanel* Tabs = WidgetTree->ConstructWidget<UUniformGridPanel>();
+		Tabs->SetSlotPadding(FMargin(3.f));
+		for (int32 Idx = 0; Idx < AppCats.Num(); ++Idx)
 		{
+			const int32 Cat = AppCats[Idx];
 			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
 			UWeedActionButton* Pill = MakeActionBtn(CatName(Cat), Col, [this, Ph, Cat]() { Ph->SetSupplierCat(Cat); bCartView = false; RefreshStore(); }, 11);
-			Tabs->AddChildToWrapBox(Pill);
+			UUniformGridSlot* GSlot = Tabs->AddChildToUniformGrid(Pill, Idx / Cols, Idx % Cols);
+			GSlot->SetHorizontalAlignment(HAlign_Fill);
+			GSlot->SetVerticalAlignment(VAlign_Fill);
 			StoreTabBtns.Add(Pill);
 		}
 		Into->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
