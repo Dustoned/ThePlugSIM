@@ -121,7 +121,11 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	// Naam (groot).
 	NameText = WeedUI::Text(WidgetTree, TEXT(""), 20, FLinearColor(0.97f, 0.98f, 1.f), false, true);
 	NameText->SetAutoWrapText(true);
-	Col->AddChildToVerticalBox(NameText)->SetPadding(FMargin(14.f, 0.f, 14.f, 8.f));
+	Col->AddChildToVerticalBox(NameText)->SetPadding(FMargin(14.f, 0.f, 14.f, 2.f));
+
+	// Aantal/gram - groot en gekleurd, direct onder de titel.
+	QtyText = WeedUI::Text(WidgetTree, TEXT(""), 22, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
+	Col->AddChildToVerticalBox(QtyText)->SetPadding(FMargin(14.f, 0.f, 14.f, 8.f));
 
 	// Dun scheidingslijntje.
 	Divider = WidgetTree->ConstructWidget<UBorder>();
@@ -200,6 +204,14 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (NameText) { NameText->SetText(FText::FromString(PrettyName(WeedUI::PrettyItemName(Id)))); }
 	if (HintText) { HintText->SetText(FText::FromString(Hint)); }
 
+	// Aantal groot bij de titel: gram voor wiet/baggies, anders "x N".
+	if (QtyText)
+	{
+		const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("Bag_"));
+		QtyText->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%d g"), Qty) : FString::Printf(TEXT("x%d"), Qty)));
+		QtyText->SetColorAndOpacity(FSlateColor(Col));
+	}
+
 	// Nette label/waarde-rijen opbouwen.
 	if (StatBox)
 	{
@@ -217,16 +229,15 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			StatBox->AddChildToVerticalBox(RowH)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 		};
 
+		// Aantal staat al groot bij de titel - hier alleen de echte eigenschappen.
 		if (IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("Bag_")))
 		{
-			AddStat(TEXT("Amount"), FString::Printf(TEXT("%d g"), Qty));
 			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
 			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));
 		}
 		else if (IdStr.StartsWith(TEXT("Joint_")))
 		{
 			const int32 G = FCString::Atoi(*IdStr.Mid(6)); // Joint_3g -> 3
-			AddStat(TEXT("In hand"), FString::Printf(TEXT("x%d"), Qty));
 			AddStat(TEXT("Per joint"), FString::Printf(TEXT("%d g"), G));
 			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
 		}
@@ -240,7 +251,6 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				AddStat(TEXT("Max yield"), FString::Printf(TEXT("~%.0f g"), SYield));
 				AddStat(TEXT("Grow time"), FString::Printf(TEXT("~%.0f min"), SGrow));
 			}
-			AddStat(TEXT("Seeds"), FString::Printf(TEXT("x%d"), Qty));
 		}
 		else if (IsPotItem(Id))
 		{
@@ -251,7 +261,6 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				AddStat(TEXT("Yield"), Pd.YieldMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Pd.YieldMult - 1.f) * 100.f) : TEXT("base"));
 				AddStat(TEXT("Plants"), FString::Printf(TEXT("%d"), Pd.PlantSlots));
 			}
-			AddStat(TEXT("In stock"), FString::Printf(TEXT("x%d"), Qty));
 		}
 		else if (IsSoilItem(Id))
 		{
@@ -262,17 +271,11 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				AddStat(TEXT("Quality"), Sd.QualityMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Sd.QualityMult - 1.f) * 100.f) : TEXT("base"));
 				AddStat(TEXT("Lasts"), FString::Printf(TEXT("%d harvests"), Sd.Harvests));
 			}
-			AddStat(TEXT("In stock"), FString::Printf(TEXT("x%d"), Qty));
 		}
 		else if (IdStr.StartsWith(TEXT("Cont_")))
 		{
 			const int32 Cap = UPhoneClientComponent::ContainerCapacity(Id);
 			AddStat(TEXT("Capacity"), FString::Printf(TEXT("up to %d g"), Cap));
-			AddStat(TEXT("In stock"), FString::Printf(TEXT("x%d"), Qty));
-		}
-		else
-		{
-			AddStat(TEXT("In stock"), FString::Printf(TEXT("x%d"), Qty));
 		}
 	}
 }
