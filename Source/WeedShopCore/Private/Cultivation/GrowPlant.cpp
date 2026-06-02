@@ -17,9 +17,9 @@
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 
-// Aantal blad-clusters en toppen per plant (samengestelde plant-look).
-static constexpr int32 FoliagePerPlant = 3;
-static constexpr int32 BudsPerPlant = 3;
+// Aantal bladeren en toppen per plant (samengestelde plant-look).
+static constexpr int32 FoliagePerPlant = 6;
+static constexpr int32 BudsPerPlant = 4;
 
 AGrowPlant::AGrowPlant()
 {
@@ -54,7 +54,7 @@ AGrowPlant::AGrowPlant()
 	SoilMesh->SetVisibility(false);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylForPlant(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereForPlant(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeForPlant(TEXT("/Engine/BasicShapes/Cone.Cone"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantMatFinder(TEXT("/Game/_Project/Materials/M_Plant.M_Plant"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantReadyFinder(TEXT("/Game/_Project/Materials/M_PlantReady.M_PlantReady"));
 	if (PlantMatFinder.Succeeded()) { PlantMat = PlantMatFinder.Object; }
@@ -80,11 +80,11 @@ AGrowPlant::AGrowPlant()
 		PlantStems.Add(MakePlantPart(PR, *FString::Printf(TEXT("Stem%d"), i), CylForPlant.Succeeded() ? CylForPlant.Object : nullptr));
 		for (int32 k = 0; k < FoliagePerPlant; ++k)
 		{
-			PlantLeaves.Add(MakePlantPart(PR, *FString::Printf(TEXT("Leaf%d_%d"), i, k), SphereForPlant.Succeeded() ? SphereForPlant.Object : nullptr));
+			PlantLeaves.Add(MakePlantPart(PR, *FString::Printf(TEXT("Leaf%d_%d"), i, k), ConeForPlant.Succeeded() ? ConeForPlant.Object : nullptr));
 		}
 		for (int32 b = 0; b < BudsPerPlant; ++b)
 		{
-			PlantBuds.Add(MakePlantPart(PR, *FString::Printf(TEXT("Bud%d_%d"), i, b), SphereForPlant.Succeeded() ? SphereForPlant.Object : nullptr));
+			PlantBuds.Add(MakePlantPart(PR, *FString::Printf(TEXT("Bud%d_%d"), i, b), ConeForPlant.Succeeded() ? ConeForPlant.Object : nullptr));
 		}
 	}
 
@@ -882,8 +882,8 @@ void AGrowPlant::UpdatePlantVisual()
 		default:                       F = 1.00f; Leaves = 3; bBuds = true; bRipe = true; break; // Harvestable
 		}
 		const float Ms = MultiScale;
-		const float StemH = FMath::Lerp(9.f, 62.f, F) * Ms;   // steel-hoogte (cm)
-		const float StemR = (1.4f + 0.8f * F) * Ms;           // steel-straal (cm)
+		const float StemH = FMath::Lerp(10.f, 60.f, F) * Ms;  // steel-hoogte (cm)
+		const float StemR = (1.6f + 0.9f * F) * Ms;           // steel-straal (cm)
 
 		// Steel: dunne cilinder vanaf de grond omhoog (groen).
 		if (Stem)
@@ -891,44 +891,56 @@ void AGrowPlant::UpdatePlantVisual()
 			Stem->SetVisibility(true);
 			Stem->SetRelativeScale3D(FVector(StemR * 2.f / 100.f, StemR * 2.f / 100.f, StemH / 100.f));
 			Stem->SetRelativeLocation(FVector(0.f, 0.f, StemH * 0.5f));
+			Stem->SetRelativeRotation(FRotator::ZeroRotator);
 			if (PlantMat) { Stem->SetMaterial(0, PlantMat); }
 		}
 
-		// Bladeren: bossige groene clusters langs de bovenkant van de steel (meer naarmate 'ie groeit).
+		// Bladeren: spitse kegel-bladeren in kransen langs de steel, naar buiten/omhoog wijzend.
+		// Verdeeld over whorls; aantal zichtbaar schaalt met de fase.
+		const int32 ShowLeaves = FMath::Clamp(Leaves * 2, 2, FoliagePerPlant);
 		for (int32 k = 0; k < FoliagePerPlant; ++k)
 		{
 			UStaticMeshComponent* L = LeafAt(k);
 			if (!L) { continue; }
-			const bool bShowLeaf = (k < Leaves);
+			const bool bShowLeaf = (k < ShowLeaves);
 			L->SetVisibility(bShowLeaf);
 			if (!bShowLeaf) { continue; }
-			const float ClusterSize = FMath::Lerp(7.f, 20.f, F) * Ms;
-			// Clusters trapsgewijs hoger op de steel, licht naar buiten.
-			const float HZ = StemH * (0.55f + 0.20f * k);
-			const float Ang = (2.f * PI * k) / FMath::Max(1, FoliagePerPlant) + 0.6f;
-			const float Out = (4.f + 3.f * F) * Ms;
-			L->SetRelativeScale3D(FVector(ClusterSize / 100.f, ClusterSize / 100.f, (ClusterSize * 0.7f) / 100.f));
+			// Whorl-hoogte + hoek rond de steel (verspringend zodat het vol oogt).
+			const int32 Whorl = k / 2;             // 0,0,1,1,2,2
+			const float HZ = StemH * (0.30f + 0.22f * Whorl);
+			const float Ang = (2.f * PI * k) / 2.f + Whorl * 0.8f; // afwisselend links/rechts + offset
+			const float LeafLen = FMath::Lerp(10.f, 26.f, F) * Ms;
+			const float LeafW = LeafLen * 0.28f;
+			// Kegel wijst standaard +Z; kantel 'm naar buiten/omhoog (pitch ~ -55°) en draai rond de steel.
+			L->SetRelativeRotation(FRotator(-55.f, FMath::RadiansToDegrees(Ang), 0.f));
+			L->SetRelativeScale3D(FVector(LeafW / 100.f, LeafW / 100.f, LeafLen / 100.f));
+			// Iets uit het midden zodat de basis bij de steel zit.
+			const float Out = StemR + LeafLen * 0.15f;
 			L->SetRelativeLocation(FVector(FMath::Cos(Ang) * Out, FMath::Sin(Ang) * Out, HZ));
 			if (PlantMat) { L->SetMaterial(0, PlantMat); }
 		}
 
-		// Toppen/buds: langwerpige bolletjes bovenin; verschijnen vanaf pre-bloei, frosty als 'ie klaar is.
+		// Toppen/colas: rechtopstaande kegels bovenin. Verschijnen vanaf pre-bloei; bij OOGSTKLAAR
+		// worden ze duidelijk GROTER + frosty (ready-materiaal) zodat je meteen ziet dat 'ie klaar is.
+		const float BudScaleRipe = bRipe ? 1.9f : 0.7f;
 		for (int32 b = 0; b < BudsPerPlant; ++b)
 		{
 			UStaticMeshComponent* Bd = BudAt(b);
 			if (!Bd) { continue; }
 			Bd->SetVisibility(bBuds);
 			if (!bBuds) { continue; }
-			const float BudLen = FMath::Lerp(4.f, 13.f, F) * Ms * (bRipe ? 1.15f : 0.8f);
-			const float BudW = BudLen * 0.5f;
-			// Eén top in het midden bovenop, de rest iets lager eromheen.
-			float BX = 0.f, BY = 0.f, BZ = StemH * 1.02f;
-			if (b > 0)
+			const bool bMain = (b == 0);
+			const float BaseLen = FMath::Lerp(6.f, 16.f, F) * Ms;
+			const float BudLen = BaseLen * BudScaleRipe * (bMain ? 1.5f : 1.0f);
+			const float BudW = BudLen * (bRipe ? 0.42f : 0.5f);
+			float BX = 0.f, BY = 0.f, BZ = StemH + BudLen * 0.4f; // hoofd-cola bovenop de steel
+			if (!bMain)
 			{
-				const float Ang = (2.f * PI * b) / FMath::Max(1, BudsPerPlant);
-				const float Out = (5.f + 3.f * F) * Ms;
-				BX = FMath::Cos(Ang) * Out; BY = FMath::Sin(Ang) * Out; BZ = StemH * (0.78f + 0.05f * b);
+				const float Ang = (2.f * PI * b) / FMath::Max(1, BudsPerPlant - 1);
+				const float Out = (StemR + 6.f * Ms);
+				BX = FMath::Cos(Ang) * Out; BY = FMath::Sin(Ang) * Out; BZ = StemH * (0.7f + 0.06f * b);
 			}
+			Bd->SetRelativeRotation(FRotator::ZeroRotator); // rechtop (kegel wijst omhoog)
 			Bd->SetRelativeScale3D(FVector(BudW / 100.f, BudW / 100.f, BudLen / 100.f));
 			Bd->SetRelativeLocation(FVector(BX, BY, BZ));
 			UMaterialInterface* BudMat = (bRipe && PlantReadyMat) ? PlantReadyMat : PlantMat;
