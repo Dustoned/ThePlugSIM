@@ -42,34 +42,39 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 	for (int32 i = 0; i < N; ++i)
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(66.f);
-		Sz->SetHeightOverride(66.f);
+		Sz->SetWidthOverride(78.f);
+		Sz->SetHeightOverride(78.f);
 
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
 		Box->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.9f), 8.f));
-		Box->SetPadding(FMargin(4.f));
+		Box->SetPadding(FMargin(4.f, 3.f, 4.f, 3.f));
 		Sz->SetContent(Box);
 
 		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 		Box->SetContent(Ov);
 
-		// Icoon, gecentreerd (inhoud wordt in de tick gezet/gewisseld).
+		// Icoon, iets boven het midden (laat onderaan ruimte voor de naam).
 		USizeBox* IcoBox = WidgetTree->ConstructWidget<USizeBox>();
-		IcoBox->SetWidthOverride(34.f); IcoBox->SetHeightOverride(34.f);
+		IcoBox->SetWidthOverride(38.f); IcoBox->SetHeightOverride(38.f);
 		UOverlaySlot* IcoOS = Ov->AddChildToOverlay(IcoBox);
 		IcoOS->SetHorizontalAlignment(HAlign_Center);
-		IcoOS->SetVerticalAlignment(VAlign_Center);
+		IcoOS->SetVerticalAlignment(VAlign_Top);
+		IcoOS->SetPadding(FMargin(0.f, 9.f, 0.f, 0.f));
 
 		// Slotnummer linksboven.
 		UOverlaySlot* NumOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), i + 1), 9, FLinearColor(0.55f, 0.58f, 0.7f), false, true));
 		NumOS->SetHorizontalAlignment(HAlign_Left);
 		NumOS->SetVerticalAlignment(VAlign_Top);
 
-		// Aantal/gram-badge rechtsonder.
-		UTextBlock* Badge = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.92f, 0.95f, 1.f), false, true);
-		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(Badge);
+		// Aantal/gram-badge RECHTSBOVEN als pilletje (los van de naam onderaan, zodat niets overlapt).
+		UTextBlock* Badge = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.95f, 0.97f, 1.f), false, true);
+		UBorder* BadgePill = WidgetTree->ConstructWidget<UBorder>();
+		BadgePill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 6.f));
+		BadgePill->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
+		BadgePill->SetContent(Badge);
+		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(BadgePill);
 		BadgeOS->SetHorizontalAlignment(HAlign_Right);
-		BadgeOS->SetVerticalAlignment(VAlign_Bottom);
+		BadgeOS->SetVerticalAlignment(VAlign_Top);
 
 		// Naam onderaan, klein (gecentreerd, afgekapt).
 		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor(0.85f, 0.88f, 0.96f), true);

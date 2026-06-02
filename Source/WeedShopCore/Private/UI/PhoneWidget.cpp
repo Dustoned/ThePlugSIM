@@ -44,7 +44,9 @@ namespace
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
 	constexpr int32 GNumApps = 10;
 	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Home, WeedUI::EIcon::Coin };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Shop, WeedUI::EIcon::Coin };
+	// Eigen icoon per app (PNG-sleutel); valt terug op GAppIcon als het PNG ontbreekt.
+	const TCHAR* GAppKey[GNumApps] = { TEXT("ui_upgrade"), TEXT("ui_leaf"), TEXT("ui_person"), TEXT("ui_message"), TEXT("ui_gear"), TEXT("ui_map"), TEXT("ui_sell"), TEXT("ui_shop"), TEXT("ui_package"), TEXT("ui_bank") };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
@@ -1055,7 +1057,7 @@ void UPhoneWidget::FillStoreList()
 	}
 }
 
-UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, WeedUI::EIcon Icon, const FLinearColor& Col)
+UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FString& IconKey, WeedUI::EIcon IconFallback, const FLinearColor& Col)
 {
 	UVerticalBox* Cell = WidgetTree->ConstructWidget<UVerticalBox>();
 
@@ -1070,7 +1072,7 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, WeedUI::
 	// Flat icoon in plaats van een letter.
 	USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
 	IcoSz->SetWidthOverride(34.f); IcoSz->SetHeightOverride(34.f);
-	IcoSz->SetContent(WeedUI::Icon(WidgetTree, Icon, 34.f, FLinearColor::White));
+	IcoSz->SetContent(WeedUI::UiGlyph(WidgetTree, IconKey, 34.f, FLinearColor::White, IconFallback));
 	Btn->SetContent(IcoSz);
 
 	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
@@ -1186,7 +1188,7 @@ void UPhoneWidget::RefreshContent()
 		Grid->SetSlotPadding(FMargin(10.f));
 		for (int32 i = 0; i < GNumApps; ++i)
 		{
-			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppIcon[i], GAppCol[i]), i / 3, i % 3);
+			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppKey[i], GAppIcon[i], GAppCol[i]), i / 3, i % 3);
 			GSlot->SetHorizontalAlignment(HAlign_Center);
 		}
 		UVerticalBoxSlot* GridSlot = ContentBox->AddChildToVerticalBox(Grid);
