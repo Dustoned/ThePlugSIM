@@ -294,7 +294,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		constexpr int32 AfflictPestMinLevel = 18;    // ongedierte (pests) pas later in het spel
 		constexpr float AfflictGraceSeconds = 180.f; // 3 min curable (groei gehalt)
 		constexpr float AfflictDeathSeconds = 150.f; // daarna langzaam dood
-		constexpr float AfflictBaseRatePerSec = 0.0007f;
+		// Bewust ZELDZAAM: af en toe een dingetje, geen straf op lage kwaliteit. ~1 keer per
+		// ~20-30 min groei per plant. Lage care verhoogt het maar mild (max ~1.5x), niet eindeloos.
+		constexpr float AfflictBaseRatePerSec = 0.00018f;
 
 		bool bVisChanged = false;
 		for (int32 i = 0; i < SlotStrain.Num(); ++i)
@@ -316,7 +318,8 @@ void AGrowPlant::Tick(float DeltaSeconds)
 			}
 			else if (CrewLevel >= AfflictMoldMinLevel)
 			{
-				const float Risk = AfflictBaseRatePerSec * (1.f - FMath::Clamp(CareMultiplier, 0.f, 1.f));
+				// Milde kwaliteit-schaal: perfecte zorg ~1.0x, slechte zorg max ~1.5x (niet 4x).
+				const float Risk = AfflictBaseRatePerSec * (1.f + 0.5f * (1.f - FMath::Clamp(CareMultiplier, 0.f, 1.f)));
 				if (FMath::FRand() < Risk * DeltaSeconds)
 				{
 					// Mold eerst beschikbaar; pests pas vanaf een hoger level (dan 50/50).
