@@ -48,8 +48,13 @@ namespace WeedUI
 	// Tekstblok-helper.
 	WEEDSHOPCORE_API UTextBlock* Text(UWidgetTree* Tree, const FString& Txt, int32 Size, const FLinearColor& Col, bool bCenter = false, bool bBold = false);
 
-	// Flat icoon (size x size) opgebouwd uit vormen, in de gegeven tint (meestal wit op een gekleurde knop).
+	// Flat icoon (size x size): laadt eerst een PNG (ui_<naam>.png in Content/_Project/UI/Icons),
+	// anders het uit vormen opgebouwde icoon. De tint kleurt het (witte) PNG of de vormen.
 	WEEDSHOPCORE_API UWidget* Icon(UWidgetTree* Tree, EIcon Type, float Size, const FLinearColor& Tint);
+
+	// Algemeen UI-icoon op naam: laadt Icons/<Key>.png (getint), of valt terug op het Fallback-vormpje.
+	// Voor losse UI-iconen zoals zon/maan (dag-nacht) die geen EIcon hebben.
+	WEEDSHOPCORE_API UWidget* UiGlyph(UWidgetTree* Tree, const FString& Key, float Size, const FLinearColor& Tint, EIcon Fallback);
 
 	// Leesbare naam voor een item-id (Bud_X -> X, Seed_X -> X seed, etc.).
 	WEEDSHOPCORE_API FString PrettyItemName(FName ItemId);

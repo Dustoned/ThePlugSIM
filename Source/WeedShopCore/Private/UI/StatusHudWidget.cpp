@@ -41,6 +41,7 @@ UHorizontalBox* UStatusHudWidget::MakeRow(UVerticalBox* Parent, int32 IconType, 
 	USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
 	IcoSz->SetWidthOverride(24.f); IcoSz->SetHeightOverride(24.f);
 	IcoSz->SetContent(WeedUI::Icon(WidgetTree, (WeedUI::EIcon)IconType, 24.f, IconCol));
+	LastRowIcon = IcoSz;
 	UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(IcoSz);
 	IS->SetVerticalAlignment(VAlign_Center);
 	IS->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
@@ -99,6 +100,7 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 	// 2) Tijd.
 	{
 		UHorizontalBox* Row = MakeRow(VB, (int32)WeedUI::EIcon::Clock, FLinearColor(0.45f, 0.7f, 1.f));
+		TimeIcon = LastRowIcon; // dag/nacht-swap (zon/maan) gebeurt in de tick
 		TimeText = WeedUI::Text(WidgetTree, TEXT("Day 00:00"), 14, FLinearColor(0.85f, 0.9f, 1.f));
 		RightText(Row, TimeText);
 	}
@@ -143,9 +145,17 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const float Hour = GS->GetDayCycle()->GetClockHour();
 		const int32 H = FMath::Clamp((int32)Hour, 0, 23);
 		const int32 M = FMath::Clamp((int32)((Hour - H) * 60.f), 0, 59);
+		const bool bNight = GS->GetDayCycle()->IsNight();
 		TimeText->SetText(FText::FromString(FString::Printf(TEXT("Day %d   %02d:%02d %s"),
-			GS->GetDayCycle()->GetDayNumber(), H, M,
-			GS->GetDayCycle()->IsNight() ? TEXT("(night)") : TEXT(""))));
+			GS->GetDayCycle()->GetDayNumber(), H, M, bNight ? TEXT("(night)") : TEXT(""))));
+
+		// Icoon volgt dag/nacht: zon overdag, maan 's nachts (alleen wisselen bij een overgang).
+		if (TimeIcon && bTimeNightShown != (int32)bNight)
+		{
+			bTimeNightShown = (int32)bNight;
+			const FLinearColor Col = bNight ? FLinearColor(0.7f, 0.78f, 1.f) : FLinearColor(1.f, 0.82f, 0.3f);
+			TimeIcon->SetContent(WeedUI::UiGlyph(WidgetTree, bNight ? TEXT("ui_moon") : TEXT("ui_sun"), 24.f, Col, WeedUI::EIcon::Clock));
+		}
 	}
 	if (HeatBar && GS->GetHeat())
 	{

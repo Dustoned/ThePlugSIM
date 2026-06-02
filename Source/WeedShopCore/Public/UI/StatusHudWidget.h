@@ -12,6 +12,7 @@ class UProgressBar;
 class UWidget;
 class UCanvasPanel;
 class UVerticalBox;
+class USizeBox;
 
 UCLASS()
 class WEEDSHOPCORE_API UStatusHudWidget : public UUserWidget
@@ -25,6 +26,12 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 	// Bouwt één rij (icoon + inhoud) en levert de inhoud-container terug om in te vullen.
 	class UHorizontalBox* MakeRow(UVerticalBox* Parent, int32 IconType, const FLinearColor& IconCol);
+
+	// De icoon-container van de zojuist gebouwde rij (om naderhand te kunnen vervangen).
+	UPROPERTY() TObjectPtr<USizeBox> LastRowIcon;
+	// Tijd-rij-icoon: wisselt tussen zon (dag) en maan (nacht).
+	UPROPERTY() TObjectPtr<USizeBox> TimeIcon;
+	int32 bTimeNightShown = -1; // -1 = nog niet gezet
 
 	UPROPERTY() TObjectPtr<UTextBlock> CashText;
 	UPROPERTY() TObjectPtr<UTextBlock> TimeText;

@@ -84,7 +84,8 @@ namespace WeedUI
 		return S;
 	}
 
-	UWidget* Icon(UWidgetTree* Tree, EIcon Type, float Size, const FLinearColor& C)
+	// Het uit vormen opgebouwde icoon (fallback als er geen PNG is).
+	static UWidget* IconShape(UWidgetTree* Tree, EIcon Type, float Size, const FLinearColor& C)
 	{
 		UCanvasPanel* Canvas = Tree->ConstructWidget<UCanvasPanel>();
 		Canvas->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -247,30 +248,33 @@ namespace WeedUI
 			}
 			return Index;
 		}
+
+		// Laad (en cache) een icoon-texture op kleine-letter-stam; nullptr als die er niet is.
+		// Geladen textures worden ge-root zodat de GC ze niet opruimt.
+		UTexture2D* LoadByStem(const FString& Stem)
+		{
+			static TMap<FString, UTexture2D*> Cache;
+			const FString Key = Stem.ToLower();
+			if (UTexture2D** Found = Cache.Find(Key)) { return *Found; }
+			UTexture2D* Tex = nullptr;
+			if (const FString* Path = IconFileIndex().Find(Key))
+			{
+				Tex = FImageUtils::ImportFileAsTexture2D(*Path);
+				if (Tex) { Tex->AddToRoot(); }
+			}
+			Cache.Add(Key, Tex);
+			return Tex;
+		}
 	}
 
 	UTexture2D* ItemIconTexture(FName ItemId)
 	{
-		const FString Key = IconKeyFor(ItemId);
-		if (Key.IsEmpty()) { return nullptr; }
-
-		// Cache (incl. negatieve treffers) zodat we niet elke rebuild de schijf/index raken. Geladen
-		// textures worden ge-root zodat ze niet door de GC worden opgeruimd.
-		static TMap<FString, UTexture2D*> Cache;
-		if (UTexture2D** Found = Cache.Find(Key)) { return *Found; }
-
-		const TMap<FString, FString>& Index = IconFileIndex();
-		UTexture2D* Tex = nullptr;
+		if (IconKeyFor(ItemId).IsEmpty()) { return nullptr; }
 		for (const FString& Cand : IconCandidatesFor(ItemId))
 		{
-			if (const FString* Path = Index.Find(Cand.ToLower()))
-			{
-				Tex = FImageUtils::ImportFileAsTexture2D(*Path);
-				if (Tex) { Tex->AddToRoot(); break; }
-			}
+			if (UTexture2D* Tex = LoadByStem(Cand)) { return Tex; }
 		}
-		Cache.Add(Key, Tex);
-		return Tex;
+		return nullptr;
 	}
 
 	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size)
@@ -298,5 +302,51 @@ namespace WeedUI
 		Tile->SetVisibility(ESlateVisibility::HitTestInvisible);
 		Tile->SetContent(Icon(Tree, Cat.Glyph, Size * 0.6f, Cat.Accent));
 		return Tile;
+	}
+
+	// EIcon -> PNG-bestandsnaam (ui_<naam>.png). Drop zo'n PNG in Icons/ en alle plekken die dit
+	// EIcon gebruiken (telefoon-apps, HUD, kompas, save-indicator) pakken 'm automatisch op.
+	static const TCHAR* UiKeyFor(EIcon T)
+	{
+		switch (T)
+		{
+		case EIcon::Coin:    return TEXT("ui_coin");
+		case EIcon::Clock:   return TEXT("ui_clock");
+		case EIcon::Flame:   return TEXT("ui_flame");
+		case EIcon::Level:   return TEXT("ui_level");
+		case EIcon::Leaf:    return TEXT("ui_leaf");
+		case EIcon::Upgrade: return TEXT("ui_upgrade");
+		case EIcon::Shop:    return TEXT("ui_shop");
+		case EIcon::Person:  return TEXT("ui_person");
+		case EIcon::Message: return TEXT("ui_message");
+		case EIcon::Gear:    return TEXT("ui_gear");
+		case EIcon::Map:     return TEXT("ui_map");
+		case EIcon::Home:    return TEXT("ui_home");
+		}
+		return TEXT("");
+	}
+
+	UWidget* UiGlyph(UWidgetTree* Tree, const FString& Key, float Size, const FLinearColor& Tint, EIcon Fallback)
+	{
+		UTexture2D* Tex = Key.IsEmpty() ? nullptr : LoadByStem(Key);
+		if (!Tex && Key.StartsWith(TEXT("ui_"))) { Tex = LoadByStem(Key.RightChop(3)); } // ook zonder ui_-prefix
+		if (Tex)
+		{
+			UImage* Img = Tree->ConstructWidget<UImage>();
+			FSlateBrush B;
+			B.SetResourceObject(Tex);
+			B.ImageSize = FVector2D(Size, Size);
+			B.DrawAs = ESlateBrushDrawType::Image;
+			Img->SetBrush(B);
+			Img->SetColorAndOpacity(Tint); // wit PNG -> krijgt de gevraagde kleur
+			Img->SetVisibility(ESlateVisibility::HitTestInvisible);
+			return Img;
+		}
+		return IconShape(Tree, Fallback, Size, Tint);
+	}
+
+	UWidget* Icon(UWidgetTree* Tree, EIcon Type, float Size, const FLinearColor& Tint)
+	{
+		return UiGlyph(Tree, FString(UiKeyFor(Type)), Size, Tint, Type);
 	}
 }
