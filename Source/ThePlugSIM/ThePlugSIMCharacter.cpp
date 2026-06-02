@@ -379,8 +379,12 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Pressed,  this, &AThePlugSIMCharacter::OnPrimaryClick);
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Released, this, &AThePlugSIMCharacter::OnPrimaryReleased);
 
-	// ESC: pauze-/menu-scherm. (Werkt ook met UI open omdat de cursor-modus GameAndUI is.)
-	Input->BindKey(EKeys::Escape, IE_Pressed, this, &AThePlugSIMCharacter::OnPauseKey);
+	// ESC: pauze-/menu-scherm. bExecuteWhenPaused zodat je er ook UIT kunt met ESC terwijl de
+	// wereld gepauzeerd is (anders worden de pawn-bindings niet uitgevoerd tijdens pauze).
+	{
+		FInputKeyBinding& EscBind = Input->BindKey(EKeys::Escape, IE_Pressed, this, &AThePlugSIMCharacter::OnPauseKey);
+		EscBind.bExecuteWhenPaused = true;
+	}
 }
 
 void AThePlugSIMCharacter::RefreshKeyBindings()

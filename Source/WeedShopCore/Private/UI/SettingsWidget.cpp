@@ -1,6 +1,7 @@
 #include "UI/SettingsWidget.h"
 
 #include "UI/WeedUiStyle.h"
+#include "UI/HotkeyHintWidget.h"
 #include "Phone/PhoneClientComponent.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -269,6 +270,10 @@ void USettingsWidget::RefreshContent()
 	}
 	else // Game
 	{
+		// Controls-overlay (rechtsonder) aan/uit.
+		AddValueRow(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled() ? TEXT("On") : TEXT("Off"),
+			[this]() { UHotkeyHintWidget::SetHintsEnabled(!UHotkeyHintWidget::AreHintsEnabled()); RefreshContent(); });
+
 		UPhoneClientComponent* Ph = GetPhone();
 		const float Fov = Ph ? Ph->GetFov() : 90.f;          // 60..120
 		const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f; // 0.1..3.0

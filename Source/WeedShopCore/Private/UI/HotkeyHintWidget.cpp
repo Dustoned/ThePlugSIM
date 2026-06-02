@@ -21,6 +21,23 @@
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "GameFramework/Pawn.h"
+#include "Misc/ConfigCacheIni.h"
+
+bool UHotkeyHintWidget::AreHintsEnabled()
+{
+	bool bOn = true;
+	if (GConfig) { GConfig->GetBool(TEXT("ThePlugSIM.UI"), TEXT("ShowControlHints"), bOn, GGameUserSettingsIni); }
+	return bOn;
+}
+
+void UHotkeyHintWidget::SetHintsEnabled(bool bEnabled)
+{
+	if (GConfig)
+	{
+		GConfig->SetBool(TEXT("ThePlugSIM.UI"), TEXT("ShowControlHints"), bEnabled, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+}
 
 TSharedRef<SWidget> UHotkeyHintWidget::RebuildWidget()
 {
@@ -37,48 +54,40 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	UBorder* Card = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HintCard"));
-	Card->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.78f), 14.f));
-	Card->SetPadding(FMargin(12.f, 10.f, 12.f, 10.f));
-	Card->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HintCard"));
+	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.74f), 10.f));
+	CardB->SetPadding(FMargin(9.f, 6.f, 10.f, 6.f));
+	CardB->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Card = CardB;
 
-	// Rechtsonder verankerd (alle controls staan hier, op één plek).
-	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Card);
+	// Rechtsonder verankerd (alle controls staan hier, op één compacte plek).
+	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
 	CS->SetAnchors(FAnchors(1.f, 1.f, 1.f, 1.f));
 	CS->SetAlignment(FVector2D(1.f, 1.f));
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(-18.f, -18.f));
-
-	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-	Card->SetContent(VB);
-
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CONTROLS"), 11, FLinearColor(0.55f, 0.75f, 1.f), false, true))
-		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	CS->SetPosition(FVector2D(-14.f, -14.f));
 
 	List = WidgetTree->ConstructWidget<UVerticalBox>();
-	VB->AddChildToVerticalBox(List);
+	CardB->SetContent(List);
 }
 
 void UHotkeyHintWidget::AddRow(const FString& Key, const FString& Action)
 {
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 
-	// Toets-"chip": afgerond vakje met de toets erin, vaste breedte zodat de labels uitlijnen.
-	USizeBox* ChipSz = WidgetTree->ConstructWidget<USizeBox>();
-	ChipSz->SetMinDesiredWidth(64.f);
+	// Compacte toets-"chip" (auto-breedte) + omschrijving op dezelfde regel.
 	UBorder* Chip = WidgetTree->ConstructWidget<UBorder>();
-	Chip->SetBrush(WeedUI::Rounded(FLinearColor(0.16f, 0.18f, 0.24f, 0.95f), 6.f));
-	Chip->SetPadding(FMargin(7.f, 3.f, 7.f, 3.f));
-	Chip->SetContent(WeedUI::Text(WidgetTree, Key, 11, FLinearColor(1.f, 0.95f, 0.7f), true, true));
-	ChipSz->SetContent(Chip);
-	UHorizontalBoxSlot* CSlot = Row->AddChildToHorizontalBox(ChipSz);
+	Chip->SetBrush(WeedUI::Rounded(FLinearColor(0.16f, 0.18f, 0.24f, 0.95f), 5.f));
+	Chip->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
+	Chip->SetContent(WeedUI::Text(WidgetTree, Key, 10, FLinearColor(1.f, 0.95f, 0.7f), true, true));
+	UHorizontalBoxSlot* CSlot = Row->AddChildToHorizontalBox(Chip);
 	CSlot->SetVerticalAlignment(VAlign_Center);
-	CSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	CSlot->SetPadding(FMargin(0.f, 0.f, 7.f, 0.f));
 
-	UHorizontalBoxSlot* LSlot = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Action, 12, FLinearColor(0.88f, 0.9f, 0.95f)));
+	UHorizontalBoxSlot* LSlot = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Action, 11, FLinearColor(0.86f, 0.89f, 0.95f)));
 	LSlot->SetVerticalAlignment(VAlign_Center);
 
-	List->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+	List->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 1.f, 0.f, 1.f));
 }
 
 void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -86,6 +95,11 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	Super::NativeTick(MyGeometry, DeltaTime);
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (!List) { return; }
+
+	// In de instellingen uit te zetten.
+	const bool bEnabled = AreHintsEnabled();
+	if (Card) { Card->SetVisibility(bEnabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+	if (!bEnabled) { return; }
 
 	APawn* P = GetOwningPlayerPawn();
 	if (!P) { return; }

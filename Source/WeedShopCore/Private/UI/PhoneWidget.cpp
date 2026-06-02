@@ -584,61 +584,60 @@ void UPhoneWidget::BuildBankApp()
 	// Nog niet ontgrendeld -> alleen de koop-knop voor de telefoon-upgrade.
 	if (!Ph->IsBankAppUnlocked())
 	{
-		AddRow(MakeText(TEXT("Mobile banking is locked."), 15, FLinearColor(0.95f, 0.8f, 0.5f)));
-		UTextBlock* Desc = MakeText(TEXT("Upgrade your phone to bank on the go - deposit and send money without finding an ATM."), 12, FLinearColor(0.7f, 0.75f, 0.85f));
+		AddRow(MakeText(TEXT("Mobile banking"), 16, FLinearColor(0.95f, 0.8f, 0.5f), false));
+		UTextBlock* Desc = MakeText(TEXT("Upgrade your phone to bank anywhere - no ATM needed."), 12, FLinearColor(0.7f, 0.75f, 0.85f));
 		Desc->SetAutoWrapText(true);
 		AddRow(Desc);
-		AddRow(MakeText(TEXT(""), 6, FLinearColor::Transparent));
+		AddRow(MakeText(TEXT(""), 8, FLinearColor::Transparent));
 		const int64 Cost = UPhoneClientComponent::PhoneUpgradeCostCents;
-		AddRow(MakeActionBtn(FString::Printf(TEXT("Upgrade phone  -  EUR %.2f (bank)"), Cost / 100.f),
+		AddRow(MakeActionBtn(FString::Printf(TEXT("Unlock  -  EUR %.0f"), Cost / 100.f),
 			FLinearColor(0.16f, 0.5f, 0.85f), [this]() { if (Phone.IsValid()) { Phone->RequestBuyPhoneUpgrade(); } MarkDirty(); }, 14));
 		return;
 	}
 
 	if (!Econ) { AddRow(MakeText(TEXT("Out of service."), 14, FLinearColor::Gray)); return; }
 
-	// Saldo's.
-	AddRow(MakeText(FString::Printf(TEXT("Cash (black):  EUR %.2f"), Econ->GetBalanceEuros()), 14, FLinearColor(0.95f, 0.9f, 0.5f)));
-	AddRow(MakeText(FString::Printf(TEXT("Bank (white):  EUR %.2f"), Econ->GetBankEuros()), 14, FLinearColor(0.55f, 0.95f, 1.f)));
-	AddRow(MakeText(TEXT(""), 6, FLinearColor::Transparent));
+	// --- Balans-kaart (zoals een echte bank-app: groot saldo bovenaan) ---
+	AddRow(MakeText(TEXT("BANK BALANCE"), 11, FLinearColor(0.5f, 0.7f, 0.95f), false));
+	AddRow(MakeText(FString::Printf(TEXT("EUR %.2f"), Econ->GetBankEuros()), 26, FLinearColor(0.7f, 0.92f, 1.f), false));
+	AddRow(MakeText(FString::Printf(TEXT("Cash to deposit:  EUR %.2f"), Econ->GetBalanceEuros()), 12, FLinearColor(0.7f, 0.72f, 0.78f)));
+	AddRow(MakeText(TEXT(""), 10, FLinearColor::Transparent));
 
-	// --- Storten (witwassen) ---
-	AddRow(MakeText(FString::Printf(TEXT("Deposit cash -> bank   (tax %.0f%%, raises heat)"), Econ->DepositTaxPct * 100.f), 13, FLinearColor(0.7f, 1.f, 0.75f)));
-	AddRow(MakeText(FString::Printf(TEXT("Daily room left: EUR %.2f"), Econ->GetDailyDepositRemainingCents() / 100.f), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+	// --- Storten (cash -> bank), bescheiden presets + max ---
+	AddRow(MakeText(FString::Printf(TEXT("Deposit   (%.0f%% tax)"), Econ->DepositTaxPct * 100.f), 13, FLinearColor(0.7f, 1.f, 0.75f)));
 	{
-		const int64 Amts[3] = { 100000, 500000, 2000000 };
+		const int64 Amts[3] = { 10000, 50000, 100000 }; // EUR 100 / 500 / 1000
 		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 		for (int32 i = 0; i < 3; ++i)
 		{
 			const int64 A = Amts[i];
-			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("EUR %lld"), (long long)(A / 100)), FLinearColor(0.18f, 0.42f, 0.30f),
-				[this, A]() { if (Phone.IsValid()) { Phone->RequestDeposit(A); } }, 12);
+			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)), FLinearColor(0.18f, 0.42f, 0.30f),
+				[this, A]() { if (Phone.IsValid()) { Phone->RequestDeposit(A); } }, 13);
 			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 		}
+		UWeedActionButton* Mx = MakeActionBtn(TEXT("Max"), FLinearColor(0.2f, 0.5f, 0.34f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestDeposit(-1); } }, 13);
+		UHorizontalBoxSlot* MS = Btns->AddChildToHorizontalBox(Mx);
+		MS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); MS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 		AddRow(Btns);
-		AddRow(MakeActionBtn(TEXT("Deposit max (up to daily limit)"), FLinearColor(0.2f, 0.5f, 0.34f),
-			[this]() { if (Phone.IsValid()) { Phone->RequestDeposit(-1); } }, 12));
 	}
-	AddRow(MakeText(TEXT(""), 8, FLinearColor::Transparent));
+	AddRow(MakeText(TEXT(""), 10, FLinearColor::Transparent));
 
-	// --- Sturen naar co-op vriend ---
-	AddRow(MakeText(FString::Printf(TEXT("Send bank money to a co-op friend   (fee %.0f%%)"), Econ->TransferFeePct * 100.f), 13, FLinearColor(0.7f, 0.85f, 1.f)));
-	AddRow(MakeText(FString::Printf(TEXT("Transfers left today: %d / %d"), Econ->GetTransfersRemainingToday(), Econ->MaxTransfersPerDay), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+	// --- Sturen naar co-op vriend, bescheiden presets ---
+	AddRow(MakeText(FString::Printf(TEXT("Send to a friend   (%.0f%% fee)"), Econ->TransferFeePct * 100.f), 13, FLinearColor(0.7f, 0.85f, 1.f)));
 	{
-		const int64 Amts[3] = { 50000, 100000, 500000 };
+		const int64 Amts[3] = { 10000, 25000, 50000 }; // EUR 100 / 250 / 500
 		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 		for (int32 i = 0; i < 3; ++i)
 		{
 			const int64 A = Amts[i];
-			const int64 Fee = (int64)(A * Econ->TransferFeePct);
-			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("EUR %lld (fee %lld)"), (long long)(A / 100), (long long)(Fee / 100)),
-				FLinearColor(0.2f, 0.34f, 0.5f), [this, A]() { if (Phone.IsValid()) { Phone->RequestTransfer(A); } }, 11);
+			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)),
+				FLinearColor(0.2f, 0.34f, 0.5f), [this, A]() { if (Phone.IsValid()) { Phone->RequestTransfer(A); } }, 13);
 			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 		}
 		AddRow(Btns);
-		AddRow(MakeText(TEXT("The full amount lands in your friend's bank; the fee is on you."), 10, FLinearColor(0.55f, 0.6f, 0.62f)));
 	}
 }
 

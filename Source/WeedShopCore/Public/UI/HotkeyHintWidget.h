@@ -10,11 +10,17 @@
 
 class UCanvasPanel;
 class UVerticalBox;
+class UBorder;
 
 UCLASS()
 class WEEDSHOPCORE_API UHotkeyHintWidget : public UUserWidget
 {
 	GENERATED_BODY()
+
+public:
+	// Aan/uit-instelling (GConfig); standaard aan. Bestuurt of de controls-overlay zichtbaar is.
+	static bool AreHintsEnabled();
+	static void SetHintsEnabled(bool bEnabled);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -25,6 +31,7 @@ protected:
 	// Voegt een rij (toets-chip + omschrijving) toe aan de lijst.
 	void AddRow(const FString& Key, const FString& Action);
 
+	UPROPERTY() TObjectPtr<UBorder> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> List;
 
 	// Laatst getoonde set (om alleen te herbouwen als de context wijzigt -> geen flicker).
