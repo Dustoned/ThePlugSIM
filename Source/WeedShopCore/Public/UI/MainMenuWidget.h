@@ -43,6 +43,8 @@ protected:
 	void RefreshSlots();
 	void OnSlotChosen(int32 SlotIdx);                 // New Game / Load handmatige save
 	void OnLoadAutosave(int32 SlotIdx);               // Load de autosave van dit slot
+	void OnModeChosen(int32 Mode);                    // 0 Normal, 1 Sandbox, 2 Testing (na New Game-slot)
+	int32 PendingNewSlot = -1;                        // slot gekozen voor New Game, wacht op mode-keuze
 
 	// Maakt een flikkerende neon-"lamp": gekleurde, afgeronde glow die zacht pulseert.
 	UBorder* AddGlow(class UOverlay* Layers, const FLinearColor& Color, float W, float H,

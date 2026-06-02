@@ -12,6 +12,15 @@ class AWeedShopGameState;
 class UWeedShopSaveGame;
 class APawn;
 
+// Startmodus bij een New Game.
+UENUM(BlueprintType)
+enum class EGameStartMode : uint8
+{
+	Normal   UMETA(DisplayName = "Normal"),
+	Sandbox  UMETA(DisplayName = "Sandbox"),    // bergen geld + ruime spullen
+	Testing  UMETA(DisplayName = "Testing")     // starter-budget + starter-items
+};
+
 // Samenvatting van één save-slot voor de menu-picker.
 USTRUCT(BlueprintType)
 struct FSaveSlotInfo
@@ -67,9 +76,10 @@ public:
 	bool LoadSlotSpecific(int32 Slot, bool bAutosave);
 
 	// --- Echte start/load: HERLAAD het level voor een gegarandeerd schone lei ---
-	// New Game: wis het slot, herlaad het level -> verse wereld (geen save toegepast).
+	// New Game: wis het slot, herlaad het level -> verse wereld (geen save toegepast). Mode bepaalt
+	// de startstaat (Normal = kaal, Sandbox = veel geld + spullen, Testing = starter-budget + items).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
-	void RequestNewGame(int32 Slot);
+	void RequestNewGame(int32 Slot, EGameStartMode Mode = EGameStartMode::Normal);
 	// Load: herlaad het level en pas daarna de gekozen save toe (handmatig of autosave).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	bool RequestLoad(int32 Slot, bool bAutosave);
@@ -163,5 +173,8 @@ protected:
 	enum class EPending : uint8 { None, Fresh, Load };
 	EPending Pending = EPending::None;
 	FString PendingLoadName;
+	EGameStartMode PendingStartMode = EGameStartMode::Normal;
 	void ReloadCurrentLevel();
+	// Geef de host-speler de startstaat (geld + items) van de gekozen modus.
+	void ApplyStartMode(EGameStartMode Mode);
 };

@@ -10,6 +10,8 @@
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Progression/StoreComponent.h"
+#include "UI/WeedToast.h"
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/DryingRack.h"
 #include "World/StorageShelf.h"
@@ -204,7 +206,7 @@ void USaveGameSubsystem::ReloadCurrentLevel()
 	UGameplayStatics::OpenLevel(W, FName(*LevelName));
 }
 
-void USaveGameSubsystem::RequestNewGame(int32 Slot)
+void USaveGameSubsystem::RequestNewGame(int32 Slot, EGameStartMode Mode)
 {
 	SetSlot(Slot);
 	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
@@ -214,6 +216,7 @@ void USaveGameSubsystem::RequestNewGame(int32 Slot)
 	PlaytimeBaseSeconds = 0.0;
 	PlaytimeMark = FDateTime::UtcNow();
 	Pending = EPending::Fresh;
+	PendingStartMode = Mode;
 	PendingLoadName.Reset();
 	ReloadCurrentLevel();
 }
@@ -248,7 +251,9 @@ bool USaveGameSubsystem::RunPendingOnWorldReady()
 	if (Pending == EPending::Fresh)
 	{
 		Pending = EPending::None;
-		return true; // verse wereld = map-default; niets te laden
+		ApplyStartMode(PendingStartMode); // geld + items van de gekozen modus
+		PendingStartMode = EGameStartMode::Normal;
+		return true; // verder is een verse wereld = map-default
 	}
 	if (Pending == EPending::Load)
 	{
@@ -259,6 +264,52 @@ bool USaveGameSubsystem::RunPendingOnWorldReady()
 		return true;
 	}
 	return false;
+}
+
+void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
+{
+	if (Mode == EGameStartMode::Normal) { return; } // kale start
+	AWeedShopGameState* GS = GetWeedGameState();
+	UWorld* World = GS ? GS->GetWorld() : nullptr;
+	APawn* P = (World && World->GetFirstPlayerController()) ? World->GetFirstPlayerController()->GetPawn() : nullptr;
+	if (!P) { return; }
+
+	const bool bSandbox = (Mode == EGameStartMode::Sandbox);
+
+	// Geld.
+	if (UEconomyComponent* Econ = P->FindComponentByClass<UEconomyComponent>())
+	{
+		Econ->SetBalanceCents(bSandbox ? 100000000 : 500000); // Sandbox EUR 1.000.000 / Testing EUR 5.000
+		Econ->SetBankCents(bSandbox ? 100000000 : 500000);
+	}
+
+	// Starter-items.
+	if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+	{
+		auto Give = [Inv](const TCHAR* Id, int32 N) { Inv->AddItem(FName(Id), N); };
+		Give(TEXT("Soil_Basic"),          bSandbox ? 10 : 3);
+		Give(TEXT("WaterBottle_Plastic"), bSandbox ? 2 : 1);
+		Give(TEXT("Papers_Small"),        bSandbox ? 50 : 10);
+		Give(TEXT("Cont_Bag5"),           bSandbox ? 50 : 10);
+		Give(TEXT("Cont_Jar10"),          bSandbox ? 20 : 5);
+		Give(TEXT("Pot_Clay"),            bSandbox ? 3 : 1);
+		Give(TEXT("DryRack_Cheap"),       1);
+		Give(TEXT("Bench_Pack"),          1);
+		// Zaden uit de catalogus.
+		if (GS->GetStore())
+		{
+			const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
+			const int32 Count = bSandbox ? Seeds.Num() : FMath::Min(2, Seeds.Num());
+			for (int32 i = 0; i < Count; ++i)
+			{
+				Inv->AddItem(UStoreComponent::SeedItemId(Seeds[i]), bSandbox ? 10 : 3);
+			}
+		}
+	}
+
+	UWeedToast::Notify(-1, 5.f, FColor::Green, bSandbox
+		? TEXT("SANDBOX - loaded with cash + a full starter kit.")
+		: TEXT("TESTING - starter budget + starter items added."));
 }
 
 bool USaveGameSubsystem::QuickContinue()

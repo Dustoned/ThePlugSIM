@@ -577,7 +577,12 @@ void UMainMenuWidget::ClosePicker()
 
 void UMainMenuWidget::RefreshSlots()
 {
-	if (PickerTitle) { PickerTitle->SetText(FText::FromString(MenuMode == 1 ? TEXT("NIEUW SPEL  -  kies een slot") : TEXT("LADEN  -  kies een slot"))); }
+	if (PickerTitle)
+	{
+		const TCHAR* Title = (MenuMode == 3) ? TEXT("NIEUW SPEL  -  kies een modus")
+			: (MenuMode == 1) ? TEXT("NIEUW SPEL  -  kies een slot") : TEXT("LADEN  -  kies een slot");
+		PickerTitle->SetText(FText::FromString(Title));
+	}
 	USaveGameSubsystem* Save = GetSave(GetWorld());
 
 	// Vaste balk bijwerken: autosave-status + laatste save-tijdstip.
@@ -596,6 +601,33 @@ void UMainMenuWidget::RefreshSlots()
 
 	if (!SlotsBox) { return; }
 	SlotsBox->ClearChildren();
+
+	// Mode-keuze (na het kiezen van een New Game-slot).
+	if (MenuMode == 3)
+	{
+		struct FModeDef { const TCHAR* Name; const TCHAR* Desc; int32 Mode; FLinearColor Col; };
+		const FModeDef Modes[3] = {
+			{ TEXT("Normal"),  TEXT("Begin from scratch - earn everything"),        0, FLinearColor(0.12f, 0.13f, 0.17f, 0.96f) },
+			{ TEXT("Sandbox"), TEXT("Loads of cash + a full kit - free play"),       1, FLinearColor(0.18f, 0.22f, 0.40f, 0.96f) },
+			{ TEXT("Testing"), TEXT("Starter budget + starter items (quick test)"),  2, FLinearColor(0.16f, 0.34f, 0.22f, 0.96f) },
+		};
+		for (const FModeDef& M : Modes)
+		{
+			const int32 ModeVal = M.Mode;
+			UWeedActionButton* MB = WidgetTree->ConstructWidget<UWeedActionButton>();
+			MB->OnClicked.AddDynamic(MB, &UWeedActionButton::Handle);
+			MB->OnAction.BindLambda([this, ModeVal](int32, int32) { OnModeChosen(ModeVal); });
+			FButtonStyle MS;
+			MS.Normal = WeedUI::Rounded(M.Col, 8.f);
+			MS.Hovered = WeedUI::Rounded(M.Col * 1.4f, 8.f);
+			MS.Pressed = WeedUI::Rounded(M.Col * 0.8f, 8.f);
+			MS.NormalPadding = FMargin(16.f, 12.f); MS.PressedPadding = FMargin(16.f, 12.f);
+			MB->SetStyle(MS);
+			MB->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s\n%s"), M.Name, M.Desc), 14, FLinearColor::White, true));
+			SlotsBox->AddChildToVerticalBox(MB)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+		}
+		return;
+	}
 
 	FButtonStyle MainStyle;
 	MainStyle.Normal  = WeedUI::Rounded(FLinearColor(0.12f, 0.13f, 0.17f, 0.96f), 8.f);
@@ -673,13 +705,23 @@ void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
 {
 	USaveGameSubsystem* Save = GetSave(GetWorld());
 	if (!Save) { return; }
-	if (MenuMode == 1) // New Game -> verse start (level herlaadt, save gewist)
+	if (MenuMode == 1) // New Game -> eerst een game-mode kiezen
 	{
-		Save->RequestNewGame(SlotIdx);
+		PendingNewSlot = SlotIdx;
+		MenuMode = 3;     // mode-keuze
+		RefreshSlots();
 	}
 	else // Load handmatige save (level herlaadt, daarna save toegepast)
 	{
 		Save->RequestLoad(SlotIdx, false);
+	}
+}
+
+void UMainMenuWidget::OnModeChosen(int32 Mode)
+{
+	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
+	{
+		Save->RequestNewGame(PendingNewSlot, (EGameStartMode)Mode);
 	}
 }
 
