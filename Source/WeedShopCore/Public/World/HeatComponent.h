@@ -1,7 +1,7 @@
-// UHeatComponent — politie-"heat"/risico op de GameState (gedeeld, co-op). Stijgt 's nachts en
-// bij riskant gedrag (straat-samples/dealen), zakt overdag. Hoge heat 's nachts kan een lichte
-// **bust** (verlies cash) of **overval** (verlies cash) triggeren. Beveiliging-upgrade (HeatResist)
-// dempt opbouw en kans. Server-authoritative; heat repliceert naar de clients.
+// UHeatComponent — politie-"heat"/risico op de GameState (gedeeld, co-op). Stijgt ALLEEN bij riskant
+// gedrag (straat-samples/dealen) en zakt ALTIJD vanzelf (langzamer 's nachts). Alleen 's nachts en bij
+// ECHT hoge heat is er een kleine kans op een **bust** of **overval** (verlies cash). Rustig blijven =
+// heat zakt naar 0 = geen events. Beveiliging-upgrade (HeatResist) dempt opbouw en kans.
 
 #pragma once
 
@@ -21,15 +21,23 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	// Tunables.
+	// Tunables. Heat zakt ALTIJD (geen passieve opbouw meer); 's nachts iets langzamer.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
-	float NightHeatPerSecond = 0.4f;
+	float DayDecayPerSecond = 0.8f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
-	float DayDecayPerSecond = 0.6f;
+	float NightDecayPerSecond = 0.3f;
+
+	// Vanaf dit heat-niveau kan er 's nachts (zelden) een bust/overval gebeuren.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	float BustThreshold = 80.f;
+
+	// Hoe vaak (sec) en met welke basiskans een risico-event geprobeerd wordt.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	float EventIntervalSeconds = 12.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
-	float BustThreshold = 75.f;
+	float EventChance = 0.12f;
 
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Heat")
 	FOnHeatChanged OnHeatChanged;

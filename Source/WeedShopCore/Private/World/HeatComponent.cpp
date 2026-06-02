@@ -46,32 +46,21 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	const bool bNight = Day && Day->IsNight();
 	const float Resist = GetSecurityResist();
 
-	if (bNight)
-	{
-		SetHeat(Heat + NightHeatPerSecond * DeltaTime * (1.f - Resist));
-	}
-	else
-	{
-		SetHeat(Heat - DayDecayPerSecond * DeltaTime);
-	}
+	// Heat zakt ALTIJD vanzelf (geen passieve opbouw meer). 's Nachts iets langzamer.
+	const float Decay = bNight ? NightDecayPerSecond : DayDecayPerSecond;
+	if (Heat > 0.f) { SetHeat(Heat - Decay * DeltaTime); }
 
-	// Risico-events: alleen 's nachts bij hoge heat.
+	// Risico-events: alleen 's nachts EN bij echt hoge heat (= je hebt veel gedeald). Zeldzaam.
 	if (bNight && Heat >= BustThreshold)
 	{
 		EventTimer += DeltaTime;
-		if (EventTimer >= 5.f)
+		if (EventTimer >= EventIntervalSeconds)
 		{
 			EventTimer = 0.f;
-			const float Chance = 0.25f * (1.f - Resist); // per 5s
+			const float Chance = EventChance * (1.f - Resist);
 			const float Roll = FMath::FRand();
-			if (Roll < Chance * 0.5f)
-			{
-				TriggerBust();
-			}
-			else if (Roll < Chance)
-			{
-				TriggerRobbery();
-			}
+			if (Roll < Chance * 0.4f)       { TriggerBust(); }
+			else if (Roll < Chance)         { TriggerRobbery(); }
 		}
 	}
 	else
