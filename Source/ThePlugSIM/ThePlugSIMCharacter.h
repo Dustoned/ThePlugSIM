@@ -191,6 +191,7 @@ protected:
 	FVector LastGroundLoc = FVector::ZeroVector;
 	bool bHasGroundLoc = false;
 	float FallTime = 0.f;
+	float FloatTime = 0.f; // tijd dat je in de lucht hangt met bijna geen valsnelheid (= vast)
 	void TickStuckRecovery(float DeltaSeconds);
 
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.

@@ -135,6 +135,11 @@ UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 	return GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
 }
 
+void UPhoneClientComponent::RefreshInputMode()
+{
+	UpdateCursor();
+}
+
 void UPhoneClientComponent::UpdateCursor()
 {
 	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen;

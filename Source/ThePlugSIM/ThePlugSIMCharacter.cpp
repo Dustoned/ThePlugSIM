@@ -99,19 +99,25 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	if (Move->IsMovingOnGround())
 	{
 		// Sta stevig op de grond -> onthoud deze plek als veilige terugval.
-		LastGroundLoc = Loc; bHasGroundLoc = true; FallTime = 0.f;
+		LastGroundLoc = Loc; bHasGroundLoc = true; FallTime = 0.f; FloatTime = 0.f;
 		return;
 	}
-	if (Move->IsFalling()) { FallTime += DeltaSeconds; }
+	if (Move->IsFalling())
+	{
+		FallTime += DeltaSeconds;
+		// "Zweven": in de lucht maar bijna geen verticale snelheid (vast op iets / gelanceerd en blijft hangen).
+		if (FMath::Abs(GetVelocity().Z) < 35.f) { FloatTime += DeltaSeconds; } else { FloatTime = 0.f; }
+	}
 
-	const bool bTooLong = FallTime > 8.f;        // veel te lang in de lucht = vast/gelanceerd
+	const bool bTooLong = FallTime > 8.f;        // veel te lang in de lucht
+	const bool bFloating = FloatTime > 1.5f;     // hangt stil in de lucht = vast
 	const bool bBelowWorld = Loc.Z < -3000.f;    // door de vloer gezakt
-	if ((bTooLong || bBelowWorld) && bHasGroundLoc)
+	if ((bTooLong || bFloating || bBelowWorld) && bHasGroundLoc)
 	{
 		Move->StopMovementImmediately();
 		Move->SetMovementMode(MOVE_Walking);
 		TeleportTo(LastGroundLoc + FVector(0.f, 0.f, 40.f), GetActorRotation(), false, true);
-		FallTime = 0.f;
+		FallTime = 0.f; FloatTime = 0.f;
 		UWeedToast::Notify(-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
 	}
 }
@@ -621,6 +627,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		Phone->EnsureWidget();
 		// Host/standalone: na een New Game/Load-herlaad voert de save-subsystem de actie uit
 		// (verse start of save toepassen) en tonen we GEEN titelscherm; anders (kale boot) wel.
+		bool bShownMenu = false;
 		if (GetNetMode() != NM_Client)
 		{
 			bool bHandled = false;
@@ -631,8 +638,11 @@ void AThePlugSIMCharacter::BeginPlay()
 					bHandled = Sv->RunPendingOnWorldReady();
 				}
 			}
-			if (!bHandled) { Phone->ShowMainMenu(); }
+			if (!bHandled) { Phone->ShowMainMenu(); bShownMenu = true; }
 		}
+		// Geen menu getoond (verse start / load / co-op client) -> meteen de gameplay-input-modus
+		// zetten zodat de muis gelockt is (anders kon je alleen met LMB rondkijken).
+		if (!bShownMenu) { Phone->RefreshInputMode(); }
 	}
 }
 

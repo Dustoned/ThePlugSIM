@@ -157,6 +157,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	bool IsHomeScreen() const { return bHomeScreen; }
 
+	// Forceer de juiste input-modus (bv. na een verse start/level-reload waar geen menu werd gesloten).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RefreshInputMode();
+
 	// Supplier-subcategorie (0=Seeds,1=Papers,2=Pots,3=Soil,4=Water).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SetSupplierCat(int32 Cat);
