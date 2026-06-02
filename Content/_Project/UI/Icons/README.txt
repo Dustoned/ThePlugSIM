@@ -20,7 +20,7 @@ packaging  <- cardboard-box        ui_person  <- delapouite/person
 papers     <- john-redman/paper    ui_message <- delapouite/chat-bubble
 water      <- sbed/water-drop       ui_gear    <- lorc/cog
 soil       <- concrete-bag         ui_map     <- lorc/treasure-map
-pot        <- lorc/flower-pot      ui_home    <- delapouite/house
+pot        <- full-metal-bucket    ui_home    <- delapouite/house
 rack       <- caro/clothesline     ui_sun     <- lorc/sun
 lamp       <- ceiling-light        ui_moon    <- lorc/moon
 tent       <- camping-tent
