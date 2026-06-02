@@ -871,7 +871,9 @@ void AThePlugSIMCharacter::OpenPotUpgradeUI()
 	{
 		if (AGrowPlant* Pot = Cast<AGrowPlant>(IC->GetFocusedActor()))
 		{
-			Phone->OpenPotUpgrade(Pot);
+			// Open de Grow shop op de "Pot Upgrades"-tab (alle potten + tiers op één plek).
+			Phone->OpenToApp(1 /*Grow shop*/);
+			Phone->SetSupplierCat(8 /*Pot Upgrades*/);
 		}
 	}
 }

@@ -1483,11 +1483,28 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 	{
 		return;
 	}
-	// Sommige upgrades (auto-water) kunnen pas op latere potten.
+	// Sommige upgrades (auto-water/hogere tiers) kunnen pas op latere potten.
 	if (!IsPotUpgradeAllowed(UpgIndex, Pot->GetPotTier()))
 	{
 		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("That upgrade needs a better pot.")); }
 		return;
+	}
+	const TArray<FPotUpgradeDef>& UpgDefs = GetPotUpgrades();
+	if (UpgDefs.IsValidIndex(UpgIndex))
+	{
+		// Eerst de vorige tier nodig.
+		if (UpgDefs[UpgIndex].PrereqIndex >= 0 && !Pot->HasPotUpgrade(UpgDefs[UpgIndex].PrereqIndex))
+		{
+			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Install the previous tier first.")); }
+			return;
+		}
+		// Level-eis.
+		const int32 PlayerLvl = (GetGS() && GetGS()->GetLeveling()) ? GetGS()->GetLeveling()->GetLevel() : 1;
+		if (PlayerLvl < UpgDefs[UpgIndex].MinPlayerLevel)
+		{
+			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, FString::Printf(TEXT("That upgrade unlocks at level %d."), UpgDefs[UpgIndex].MinPlayerLevel)); }
+			return;
+		}
 	}
 	const int32 Cost = GetPotUpgradeCost(UpgIndex, Pot->GetPotTier());
 	UEconomyComponent* Econ = GetOwnerEconomy();

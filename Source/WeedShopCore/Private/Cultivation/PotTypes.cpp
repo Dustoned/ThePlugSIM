@@ -32,16 +32,34 @@ bool IsPotItem(FName ItemId)
 
 const TArray<FPotUpgradeDef>& GetPotUpgrades()
 {
-	// DisplayName, Desc, BaseCost, MinPotTierIndex (0=Broken,1=Clay,2=Plastic,3=Fabric)
+	// Name, Desc, BaseCost, MinPotTier(0=Broken..3=Fabric), MinLevel, PrereqIndex
 	static const TArray<FPotUpgradeDef> Defs = {
-		{ TEXT("Drainage layer"), TEXT("+10% max quality (better water retention)"),  3000, 0 },
-		{ TEXT("Insulation"),     TEXT("Dries out slower (less watering needed)"),     4000, 0 },
-		{ TEXT("Bloom booster"),  TEXT("+20% harvest yield"),                          5000, 0 },
-		{ TEXT("Grow tent"),      TEXT("Sealed tent: +15% quality, holds care"),       7000, 1 },
-		{ TEXT("LED grow lamp"),  TEXT("+30% faster growth"),                          9000, 1 },
-		{ TEXT("Auto-watering"),  TEXT("Keeps itself watered - no manual watering"),  14000, 2 },
+		/*0*/ { TEXT("Drainage layer"), TEXT("+10% max quality"),                     3000, 0, 1,  -1 },
+		/*1*/ { TEXT("Insulation"),     TEXT("Dries out 2x slower"),                  4000, 0, 1,  -1 },
+		/*2*/ { TEXT("Bloom booster"),  TEXT("+20% harvest yield"),                   5000, 0, 3,  -1 },
+		// Grow lamp I/II/III - sneller groeien
+		/*3*/ { TEXT("Grow lamp I"),    TEXT("+15% faster growth"),                   6000, 1, 2,  -1 },
+		/*4*/ { TEXT("Grow lamp II"),   TEXT("+30% faster growth"),                  12000, 1, 7,   3 },
+		/*5*/ { TEXT("Grow lamp III"),  TEXT("+50% faster growth"),                  22000, 2, 13,  4 },
+		// Grow tent I/II/III - hoger kwaliteitsplafond
+		/*6*/ { TEXT("Grow tent I"),    TEXT("+8% max quality"),                      7000, 1, 3,  -1 },
+		/*7*/ { TEXT("Grow tent II"),   TEXT("+15% max quality"),                    13000, 1, 8,   6 },
+		/*8*/ { TEXT("Grow tent III"),  TEXT("+22% max quality"),                    24000, 2, 15,  7 },
+		// Auto-watering I/II - geen handmatig water meer
+		/*9*/ { TEXT("Auto-water I"),   TEXT("Keeps itself watered"),                14000, 2, 6,  -1 },
+		/*10*/{ TEXT("Auto-water II"),  TEXT("Watered + nutrient dosing (+10% yield)"),26000, 3, 12,  9 },
 	};
 	return Defs;
+}
+
+int32 HighestOwnedTier(int32 Mask, const TArray<int32>& BitIndices)
+{
+	int32 Tier = 0;
+	for (int32 t = 0; t < BitIndices.Num(); ++t)
+	{
+		if ((Mask & (1 << BitIndices[t])) != 0) { Tier = t + 1; }
+	}
+	return Tier;
 }
 
 int32 GetPotTierIndex(FName PotTier)

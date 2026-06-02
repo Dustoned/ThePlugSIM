@@ -191,8 +191,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Groei per plek (grow-lamp = +30% sneller).
-	const float LampMul = HasPotUpgrade(4) ? 1.3f : 1.f;
+	// Groei per plek (grow-lamp I/II/III = +15/30/50% sneller).
+	const int32 LampTier = HighestOwnedTier(PotUpgradeMask, { 3, 4, 5 });
+	const float LampMul = 1.f + ((LampTier == 1) ? 0.15f : (LampTier == 2) ? 0.30f : (LampTier >= 3) ? 0.50f : 0.f);
 	const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus) * LampMul;
 	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
@@ -202,9 +203,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	UpdatePhases();
 
 	// Waterpeil loopt langzaam leeg (isolatie-upgrade + pot-retentie vertragen dit).
-	// Auto-watering houdt de pot vanzelf vol -> geen handmatig water nodig.
+	// Auto-watering I/II (bits 9/10) houdt de pot vanzelf vol -> geen handmatig water nodig.
 	const float MaxCare = GetMaxCare();
-	if (HasPotUpgrade(5))
+	if (HasPotUpgrade(9) || HasPotUpgrade(10))
 	{
 		WaterLevel = 1.f;
 	}
@@ -464,7 +465,8 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 	float PotYield = 1.f;
 	FPotDef PotDef;
 	if (GetPotDef(PotTier, PotDef)) { PotYield = PotDef.YieldMult; }
-	if (HasPotUpgrade(2)) { PotYield *= 1.2f; }
+	if (HasPotUpgrade(2)) { PotYield *= 1.2f; }   // bloom booster
+	if (HasPotUpgrade(10)) { PotYield *= 1.1f; }  // auto-water II nutrient dosing
 
 	int32 Harvested = 0, TotalGrams = 0;
 	for (int32 i = 0; i < SlotStrain.Num(); ++i)
@@ -565,7 +567,9 @@ float AGrowPlant::GetMaxCare() const
 		}
 	}
 	const float Drainage = HasPotUpgrade(0) ? 0.10f : 0.f;
-	const float Tent = HasPotUpgrade(3) ? 0.15f : 0.f; // grow-tent: hoger kwaliteitsplafond
+	// Grow-tent I/II/III (bits 6/7/8): hoger kwaliteitsplafond per tier.
+	const int32 TentTier = HighestOwnedTier(PotUpgradeMask, { 6, 7, 8 });
+	const float Tent = (TentTier == 1) ? 0.08f : (TentTier == 2) ? 0.15f : (TentTier >= 3) ? 0.22f : 0.f;
 	return FMath::Clamp(Cap + CareRetention * 0.3f + Drainage + Tent, 0.4f, 1.0f);
 }
 
@@ -587,6 +591,7 @@ float AGrowPlant::GetEstimatedTotalYield() const
 	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.YieldMult : 1.f;
 	FPotDef P; float PotMult = GetPotDef(PotTier, P) ? P.YieldMult : 1.f;
 	if (HasPotUpgrade(2)) { PotMult *= 1.2f; }
+	if (HasPotUpgrade(10)) { PotMult *= 1.1f; }
 	float Total = 0.f;
 	for (const FName& St : SlotStrain)
 	{

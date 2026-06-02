@@ -748,6 +748,9 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 
 	Scroll->AddChild(MakeText(TEXT("Upgrade your placed pots. Upgrades stay with the pot (gone if you sell it)."), 11, FLinearColor(0.6f, 0.66f, 0.76f)));
 
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
+
 	int32 PotCount = 0;
 	if (UWorld* W = GetWorld())
 	{
@@ -773,12 +776,16 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 			{
 				const int32 ui = i;
 				const bool bOwned = Pot->HasPotUpgrade(i);
-				const bool bAllowed = IsPotUpgradeAllowed(i, Tier);
+				const bool bTierOk = IsPotUpgradeAllowed(i, Tier);
+				const bool bPrereqOk = (Ups[i].PrereqIndex < 0) || Pot->HasPotUpgrade(Ups[i].PrereqIndex);
+				const bool bLevelOk = PlayerLvl >= Ups[i].MinPlayerLevel;
+				const bool bBuyable = bTierOk && bPrereqOk && bLevelOk && !bOwned;
 				const int32 Cost = GetPotUpgradeCost(i, Tier);
 
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				const FString Label = FString::Printf(TEXT("%s  -  %s"), *Ups[i].DisplayName, *Ups[i].Desc);
-				UTextBlock* T = MakeText(Label, 11, bOwned ? FLinearColor(0.5f, 1.f, 0.5f) : (bAllowed ? FLinearColor(0.9f, 0.92f, 1.f) : FLinearColor(0.72f, 0.6f, 0.6f)));
+				const FLinearColor TxtCol = bOwned ? FLinearColor(0.5f, 1.f, 0.5f) : (bBuyable ? FLinearColor(0.9f, 0.92f, 1.f) : FLinearColor(0.72f, 0.6f, 0.6f));
+				UTextBlock* T = MakeText(Label, 11, TxtCol);
 				T->SetClipping(EWidgetClipping::ClipToBounds);
 				UHorizontalBoxSlot* L = Row->AddChildToHorizontalBox(T);
 				L->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); L->SetVerticalAlignment(VAlign_Center); L->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
@@ -789,14 +796,22 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 				{
 					RB->SetContent(MakeText(TEXT("installed"), 11, FLinearColor(0.5f, 1.f, 0.5f), true));
 				}
-				else if (!bAllowed)
+				else if (!bTierOk)
 				{
 					RB->SetContent(MakeText(TEXT("needs better pot"), 10, FLinearColor(1.f, 0.6f, 0.5f), true));
+				}
+				else if (!bPrereqOk)
+				{
+					RB->SetContent(MakeText(TEXT("prev. tier first"), 10, FLinearColor(1.f, 0.7f, 0.5f), true));
+				}
+				else if (!bLevelOk)
+				{
+					RB->SetContent(MakeText(FString::Printf(TEXT("Lvl %d"), Ups[i].MinPlayerLevel), 10, FLinearColor(1.f, 0.6f, 0.5f), true));
 				}
 				else
 				{
 					RB->SetContent(MakeActionBtn(FString::Printf(TEXT("Buy  EUR %.2f"), Cost / 100.f), FLinearColor(0.2f, 0.5f, 0.28f),
-						[Ph, WPot, ui]() { if (AGrowPlant* P = WPot.Get()) { Ph->RequestPotUpgradeFor(P, ui); } }, 10));
+						[this, Ph, WPot, ui]() { if (AGrowPlant* P = WPot.Get()) { Ph->RequestPotUpgradeFor(P, ui); RefreshStore(); } }, 10));
 				}
 				UHorizontalBoxSlot* RS2 = Row->AddChildToHorizontalBox(RB); RS2->SetVerticalAlignment(VAlign_Center);
 				VB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
