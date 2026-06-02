@@ -98,6 +98,9 @@ void AGrowPlant::CaptureState(FGrowPlantState& Out) const
 	Out.SlotGrowth = SlotGrowth;
 	Out.SlotPhase.Reset();
 	for (EGrowthPhase P : SlotPhase) { Out.SlotPhase.Add((uint8)P); }
+	Out.SlotAfflict = SlotAfflict;
+	Out.SlotAfflictTime = SlotAfflictTime;
+	Out.FertYieldMult = FertYieldMult;
 }
 
 void AGrowPlant::RestoreState(const FGrowPlantState& In)
@@ -112,12 +115,15 @@ void AGrowPlant::RestoreState(const FGrowPlantState& In)
 	CareSum = In.CareAvg; CareTime = 1.f; // benadering zodat het gemiddelde stabiel doorloopt
 	WaterLevel = In.WaterLevel;
 
+	FertYieldMult = (In.FertYieldMult > 0.f) ? In.FertYieldMult : 1.f;
 	const int32 N = SlotStrain.Num();
 	for (int32 i = 0; i < N; ++i)
 	{
 		SlotStrain[i] = In.SlotStrain.IsValidIndex(i) ? In.SlotStrain[i] : NAME_None;
 		SlotGrowth[i] = In.SlotGrowth.IsValidIndex(i) ? In.SlotGrowth[i] : 0.f;
 		SlotPhase[i] = In.SlotPhase.IsValidIndex(i) ? (EGrowthPhase)In.SlotPhase[i] : EGrowthPhase::Seedling;
+		SlotAfflict[i] = In.SlotAfflict.IsValidIndex(i) ? In.SlotAfflict[i] : 0;
+		SlotAfflictTime[i] = In.SlotAfflictTime.IsValidIndex(i) ? In.SlotAfflictTime[i] : 0.f;
 	}
 	UpdatePotVisual();
 	UpdateSoilVisual();
@@ -138,6 +144,9 @@ void AGrowPlant::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(AGrowPlant, WaterLevel);
 	DOREPLIFETIME(AGrowPlant, SoilId);
 	DOREPLIFETIME(AGrowPlant, SoilUsesLeft);
+	DOREPLIFETIME(AGrowPlant, SlotAfflict);
+	DOREPLIFETIME(AGrowPlant, SlotAfflictTime);
+	DOREPLIFETIME(AGrowPlant, FertYieldMult);
 }
 
 int32 AGrowPlant::SlotCapacityForTier() const
@@ -155,7 +164,12 @@ void AGrowPlant::EnsureSlots()
 		SlotStrain.Init(NAME_None, N);
 		SlotGrowth.Init(0.f, N);
 		SlotPhase.Init(EGrowthPhase::Seedling, N);
+		SlotAfflict.Init(0, N);
+		SlotAfflictTime.Init(0.f, N);
 	}
+	// Zorg dat de mold-arrays altijd even lang zijn (oude saves).
+	if (SlotAfflict.Num() != SlotStrain.Num()) { SlotAfflict.Init(0, SlotStrain.Num()); }
+	if (SlotAfflictTime.Num() != SlotStrain.Num()) { SlotAfflictTime.Init(0.f, SlotStrain.Num()); }
 }
 
 float AGrowPlant::SlotMaxSeconds(int32 Slot) const
@@ -197,7 +211,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus) * LampMul;
 	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
+		// Besmette planten (mold/pest) stoppen met groeien tot je ze sprayt.
 		if (SlotStrain[i].IsNone() || SlotPhase[i] == EGrowthPhase::Harvestable) { continue; }
+		if (SlotAfflict.IsValidIndex(i) && SlotAfflict[i] != 0) { continue; }
 		SlotGrowth[i] = FMath::Min(SlotGrowth[i] + DeltaSeconds * Speed, SlotMaxSeconds(i));
 	}
 	UpdatePhases();
@@ -230,21 +246,13 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	}
 	else
 	{
-		// Over-rijp: niet geoogst -> de gezondheid (health) zakt. Het bulk-deel (tot 10%) gaat normaal,
-		// de laatste 10% (10% -> 0%) gaat extra langzaam. Op 0% kwaliteit sterft de plant en is het
-		// zaadje weg. Verval schaalt mee met de groeisnelheid zodat het in de demo niet té snel gaat.
-		float RefSecs = 240.f;
-		for (int32 i = 0; i < SlotStrain.Num(); ++i)
-		{
-			if (!SlotStrain[i].IsNone() && SlotPhase[i] == EGrowthPhase::Harvestable)
-			{
-				RefSecs = FMath::Max(RefSecs, SlotMaxSeconds(i));
-			}
-		}
-		const float BulkRate = 0.90f / FMath::Max(1.f, RefSecs * RotBulkFactor); // health per versnelde sec
-		const float SlowRate = 0.10f / FMath::Max(1.f, RefSecs * RotSlowFactor);
+		// Over-rijp: niet geoogst -> de gezondheid (health) zakt LANGZAAM in ECHTE tijd (niet x groeisnelheid,
+		// anders gaat 'ie veel te snel dood). Het bulk-deel (tot 10%) duurt ~4 min, de laatste 10% nog ~3 min;
+		// pas daarna sterft de plant. Zo heb je ruim tijd om een klare plant te oogsten.
+		const float BulkRate = 0.90f / (240.f * FMath::Max(0.25f, RotBulkFactor * 0.5f)); // ~90% over ~4 min
+		const float SlowRate = 0.10f / (180.f * FMath::Max(0.25f, RotSlowFactor * 0.33f)); // laatste 10% over ~3 min
 		const float Rate = (CareMultiplier > 0.10f) ? BulkRate : SlowRate;
-		CareMultiplier = FMath::Max(0.f, CareMultiplier - DeltaSeconds * Speed * Rate);
+		CareMultiplier = FMath::Max(0.f, CareMultiplier - DeltaSeconds * Rate);
 
 		// Kwaliteit volgt de zakkende gezondheid mee naar beneden (kan niet meer stijgen).
 		CareAvg = FMath::Min(CareAvg, CareMultiplier);
@@ -270,6 +278,53 @@ void AGrowPlant::Tick(float DeltaSeconds)
 				if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Red, TEXT("A plant rotted away - harvested too late. Seed lost.")); }
 			}
 		}
+	}
+
+	// --- Mold / pest ---
+	// Vanaf een bepaald crew-level kunnen planten schimmel (mold) of ongedierte (pest) krijgen. De kans
+	// schaalt met de zorg-kwaliteit (slechter verzorgd = grotere kans). Een besmette plant stopt met
+	// groeien; je hebt 3 min om 'm te sprayen, anders gaat 'ie daarna langzaam dood (zaad weg).
+	{
+		int32 CrewLevel = 1;
+		if (const AWeedShopGameState* GS2 = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (const ULevelComponent* Lv = GS2->GetLeveling()) { CrewLevel = Lv->GetLevel(); }
+		}
+		constexpr int32 AfflictMinLevel = 12;        // pas vanaf hier kan er besmetting optreden
+		constexpr float AfflictGraceSeconds = 180.f; // 3 min curable (groei gehalt)
+		constexpr float AfflictDeathSeconds = 150.f; // daarna langzaam dood
+		constexpr float AfflictBaseRatePerSec = 0.0007f;
+
+		bool bVisChanged = false;
+		for (int32 i = 0; i < SlotStrain.Num(); ++i)
+		{
+			if (SlotStrain[i].IsNone())
+			{
+				if (SlotAfflict[i] != 0) { SlotAfflict[i] = 0; SlotAfflictTime[i] = 0.f; }
+				continue;
+			}
+			if (SlotAfflict[i] != 0)
+			{
+				SlotAfflictTime[i] += DeltaSeconds; // echte tijd, niet x groeisnelheid
+				if (SlotAfflictTime[i] >= AfflictGraceSeconds + AfflictDeathSeconds)
+				{
+					SlotStrain[i] = NAME_None; SlotGrowth[i] = 0.f; SlotPhase[i] = EGrowthPhase::Seedling;
+					SlotAfflict[i] = 0; SlotAfflictTime[i] = 0.f; bVisChanged = true;
+					if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Red, TEXT("A plant died from mold/pests - you didn't spray it in time. Seed lost.")); }
+				}
+			}
+			else if (CrewLevel >= AfflictMinLevel)
+			{
+				const float Risk = AfflictBaseRatePerSec * (1.f - FMath::Clamp(CareMultiplier, 0.f, 1.f));
+				if (FMath::FRand() < Risk * DeltaSeconds)
+				{
+					SlotAfflict[i] = (FMath::FRand() < 0.5f) ? 1 : 2; // 1 mold, 2 pest
+					SlotAfflictTime[i] = 0.f; bVisChanged = true;
+					if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! Spray it within 3 min or it dies."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
+				}
+			}
+		}
+		if (bVisChanged) { UpdatePlantVisual(); }
 	}
 }
 
@@ -346,7 +401,20 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
 	const FName Hand = Inv ? Inv->GetActiveItemId() : NAME_None;
 
-	// 1) Oogstklare planten? Oogst alles tegelijk.
+	// 0) Spray in de hand -> behandel zieke planten (gaat vóór oogsten, zodat je klare zieke planten kunt redden).
+	if (Hand.ToString().StartsWith(TEXT("Spray_")))
+	{
+		TryApplySpray(InstigatorPawn, Hand);
+		return;
+	}
+	// 0b) Mest in de hand -> opbrengst-boost voor deze cyclus.
+	if (Hand.ToString().StartsWith(TEXT("Fertilizer_")))
+	{
+		TryApplyFertilizer(InstigatorPawn, Hand);
+		return;
+	}
+
+	// 1) Oogstklare planten? Oogst alles tegelijk (zieke planten worden overgeslagen -> eerst sprayen).
 	if (GetReadyCount() > 0)
 	{
 		HarvestReady(InstigatorPawn);
@@ -379,6 +447,76 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 			: TEXT("Pot is full. Hold your water bottle (1-8) to water.");
 		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, Msg);
 	}
+}
+
+int32 AGrowPlant::GetAfflictedCount() const
+{
+	int32 N = 0;
+	for (int32 i = 0; i < SlotAfflict.Num(); ++i) { if (SlotAfflict[i] != 0) { ++N; } }
+	return N;
+}
+
+float AGrowPlant::GetWorstAfflictSecondsLeft() const
+{
+	constexpr float Total = 180.f + 150.f;
+	float Worst = -1.f;
+	for (int32 i = 0; i < SlotAfflict.Num(); ++i)
+	{
+		if (SlotAfflict[i] == 0) { continue; }
+		const float Left = FMath::Max(0.f, Total - (SlotAfflictTime.IsValidIndex(i) ? SlotAfflictTime[i] : 0.f));
+		if (Worst < 0.f || Left < Worst) { Worst = Left; }
+	}
+	return Worst < 0.f ? 0.f : Worst;
+}
+
+bool AGrowPlant::TryApplySpray(APawn* InstigatorPawn, FName SprayItem)
+{
+	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return false; }
+	const FString S = SprayItem.ToString();
+	// Welke besmettingen behandelt deze spray? Fungicide=mold(1), Pesticide=pest(2), Broad=beide.
+	const bool bCureMold = S.Contains(TEXT("Fungicide")) || S.Contains(TEXT("Broad"));
+	const bool bCurePest = S.Contains(TEXT("Pesticide")) || S.Contains(TEXT("Pest")) || S.Contains(TEXT("Broad"));
+
+	int32 Cured = 0;
+	for (int32 i = 0; i < SlotAfflict.Num(); ++i)
+	{
+		if ((SlotAfflict[i] == 1 && bCureMold) || (SlotAfflict[i] == 2 && bCurePest))
+		{
+			SlotAfflict[i] = 0; SlotAfflictTime[i] = 0.f; ++Cured;
+		}
+	}
+	if (Cured == 0)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, GetAfflictedCount() > 0 ? TEXT("Wrong spray for this problem.") : TEXT("Nothing to treat here.")); }
+		return false;
+	}
+	Inv->RemoveItem(SprayItem, 1); // 1 spray per behandeling
+	UpdatePlantVisual();
+	if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, FString::Printf(TEXT("Treated %d plant(s). They'll resume growing."), Cured)); }
+	return true;
+}
+
+bool AGrowPlant::TryApplyFertilizer(APawn* InstigatorPawn, FName FertItem)
+{
+	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return false; }
+	if (GetPlantedCount() == 0)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Plant something first before fertilizing.")); }
+		return false;
+	}
+	const FString S = FertItem.ToString();
+	const float Bonus = S.Contains(TEXT("Bloom")) ? 1.30f : 1.15f; // bloom-mest sterker
+	if (FertYieldMult >= Bonus - 0.001f)
+	{
+		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("This pot is already fertilized.")); }
+		return false;
+	}
+	if (!Inv->RemoveItem(FertItem, 1)) { return false; }
+	FertYieldMult = Bonus;
+	if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, FString::Printf(TEXT("Fertilized: +%.0f%% yield this harvest."), (Bonus - 1.f) * 100.f)); }
+	return true;
 }
 
 bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn, FName SoilItem)
@@ -468,17 +606,19 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 	if (HasPotUpgrade(2)) { PotYield *= 1.2f; }   // bloom booster
 	if (HasPotUpgrade(10)) { PotYield *= 1.1f; }  // auto-water II nutrient dosing
 
-	int32 Harvested = 0, TotalGrams = 0;
+	int32 Harvested = 0, TotalGrams = 0, SkippedSick = 0;
 	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
 		if (SlotStrain[i].IsNone() || SlotPhase[i] != EGrowthPhase::Harvestable) { continue; }
+		// Zieke (mold/pest) planten kun je niet oogsten -> eerst sprayen.
+		if (SlotAfflict.IsValidIndex(i) && SlotAfflict[i] != 0) { ++SkippedSick; continue; }
 		const FWeedStrainRow* Row = GetStrainRow(SlotStrain[i]);
 		if (!Row || Row->HarvestProductId.IsNone()) { continue; }
 
 		// Kwaliteit (0..1) = verzorging x soil-kwaliteit. Bepaalt zowel opbrengst als THC%.
 		const float CareQ = FMath::Clamp(CareAvg, 0.f, 1.f);
 		const float QualityFrac = FMath::Clamp(CareQ * SoilQuality, 0.f, 1.f);
-		const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Row->BaseYieldGrams * CareQ * SoilYield * PotYield));
+		const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Row->BaseYieldGrams * CareQ * SoilYield * PotYield * FertYieldMult));
 
 		// THC% afgeleid van strain-potentie x kwaliteit. Wiet heeft ALTIJD THC% (floor), 0% kan niet:
 		// slecht verzorgd = gewoon zwakke wiet, geen "geen wiet". Op hele % afgerond zodat oogsten van
@@ -511,13 +651,14 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 			}
 		}
 
-		// Eén oogst-actie verbruikt één soil-lading.
+		// Eén oogst-actie verbruikt één soil-lading + de mest-boost.
 		if (SoilUsesLeft > 0) { SoilUsesLeft--; }
 		if (SoilUsesLeft <= 0)
 		{
 			SoilId = NAME_None;
 			UpdateSoilVisual();
 		}
+		FertYieldMult = 1.f; // mest is voor één oogst
 		UpdatePlantVisual();
 		if (GEngine)
 		{
@@ -529,10 +670,26 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 			}
 		}
 	}
+	if (SkippedSick > 0 && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("%d ready plant(s) are sick - spray them before harvest."), SkippedSick));
+	}
 }
 
 FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
+	// Zieke planten hebben voorrang in de prompt: spray ze, met de resterende tijd.
+	const int32 Sick = GetAfflictedCount();
+	if (Sick > 0)
+	{
+		// Welk type? (toon mold of pest op basis van de eerste zieke plek)
+		bool bMold = false, bPest = false;
+		for (int32 i = 0; i < SlotAfflict.Num(); ++i) { if (SlotAfflict[i] == 1) { bMold = true; } else if (SlotAfflict[i] == 2) { bPest = true; } }
+		const TCHAR* Kind = (bMold && bPest) ? TEXT("MOLD+PESTS") : (bMold ? TEXT("MOLD") : TEXT("PESTS"));
+		const int32 Left = FMath::CeilToInt(GetWorstAfflictSecondsLeft());
+		return FText::FromString(FString::Printf(TEXT("%s on %d plant(s)! Spray within %d:%02d or it dies"),
+			Kind, Sick, Left / 60, Left % 60));
+	}
 	if (GetReadyCount() > 0)
 	{
 		// Kwaliteit (gezondheid) zakt zolang je niet oogst -> waarschuwen.
@@ -592,6 +749,7 @@ float AGrowPlant::GetEstimatedTotalYield() const
 	FPotDef P; float PotMult = GetPotDef(PotTier, P) ? P.YieldMult : 1.f;
 	if (HasPotUpgrade(2)) { PotMult *= 1.2f; }
 	if (HasPotUpgrade(10)) { PotMult *= 1.1f; }
+	PotMult *= FMath::Max(1.f, FertYieldMult); // mest-bonus deze cyclus
 	float Total = 0.f;
 	for (const FName& St : SlotStrain)
 	{

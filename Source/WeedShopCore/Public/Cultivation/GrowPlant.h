@@ -40,6 +40,9 @@ struct FGrowPlantState
 	TArray<FName> SlotStrain;
 	TArray<float> SlotGrowth;
 	TArray<uint8> SlotPhase;
+	TArray<uint8> SlotAfflict;     // 0 gezond, 1 mold, 2 pest
+	TArray<float> SlotAfflictTime; // sec sinds besmetting
+	float FertYieldMult = 1.f;
 };
 
 UCLASS()
@@ -161,6 +164,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	bool IsSlotReady(int32 Slot) const { return SlotPhase.IsValidIndex(Slot) && SlotPhase[Slot] == EGrowthPhase::Harvestable; }
 
+	// --- Mold/pest ---
+	// Besmetting van een plek: 0 gezond, 1 mold (schimmel), 2 pest (ongedierte).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	uint8 GetSlotAfflict(int32 Slot) const { return SlotAfflict.IsValidIndex(Slot) ? SlotAfflict[Slot] : 0; }
+
+	// Aantal besmette plekken.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	int32 GetAfflictedCount() const;
+
+	// Minste resterende seconden voor de besmette plant die het dichtst bij doodgaan is (0 = geen).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetWorstAfflictSecondsLeft() const;
+
+	// Huidige-cyclus mest-bonus op de opbrengst (1 = geen).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	float GetFertYieldMult() const { return FertYieldMult; }
+
 
 protected:
 	virtual void BeginPlay() override;
@@ -215,11 +235,24 @@ protected:
 	UPROPERTY(Replicated)
 	int32 SoilUsesLeft = 0;
 
+	// --- Mold/pest per plek ---
+	UPROPERTY(ReplicatedUsing = OnRep_Slots)
+	TArray<uint8> SlotAfflict;        // 0 gezond, 1 mold, 2 pest
+
+	UPROPERTY(Replicated)
+	TArray<float> SlotAfflictTime;    // sec sinds besmetting (gratie -> daarna sterven)
+
+	// Huidige-cyclus mest-bonus op de opbrengst (1 = geen). Reset na de oogst.
+	UPROPERTY(Replicated)
+	float FertYieldMult = 1.f;
+
 	// --- Server-acties ---
 	bool TryAddSoil(APawn* InstigatorPawn, FName SoilItem);
 	bool TryPlantNextSlot(APawn* InstigatorPawn, FName SeedItem);
 	void WaterAll(APawn* InstigatorPawn);
 	void HarvestReady(APawn* InstigatorPawn);
+	bool TryApplySpray(APawn* InstigatorPawn, FName SprayItem);
+	bool TryApplyFertilizer(APawn* InstigatorPawn, FName FertItem);
 
 	float GetMaxCare() const;
 

@@ -137,6 +137,12 @@ namespace
 		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("Keeps things cold"),    30000, 1 },
 		{ TEXT("Shelf"),    TEXT("Storage shelf"), TEXT("Store stock in the shop - 24 slots"), 18000, 1 },
 		{ TEXT("Chest"),    TEXT("Storage chest"), TEXT("Stash items at home - 20 slots"),     9000, 1 },
+		// Plant-verzorging (later spel): mest = meer opbrengst; sprays = behandel mold/pest.
+		{ TEXT("Fertilizer_Basic"), TEXT("Fertilizer"),       TEXT("+15% yield this harvest"),          2000, 3 },
+		{ TEXT("Fertilizer_Bloom"), TEXT("Bloom fertilizer"), TEXT("+30% yield this harvest"),          4500, 3 },
+		{ TEXT("Spray_Fungicide"),  TEXT("Fungicide spray"),  TEXT("Cures MOLD on a plant"),            2500, 5 },
+		{ TEXT("Spray_Pesticide"),  TEXT("Pesticide spray"),  TEXT("Cures PESTS on a plant"),           2500, 5 },
+		{ TEXT("Spray_Broad"),      TEXT("Broad-spectrum spray"), TEXT("Cures both mold AND pests"),    6000, 5 },
 	};
 }
 
@@ -281,6 +287,12 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Chest"))           { return 3; }
 	if (S == TEXT("Shelf"))           { return 5; }
 	if (S == TEXT("Fridge"))          { return 6; }
+	// Plant-verzorging (bewust later: mold/pest komt pas vanaf level ~12).
+	if (S == TEXT("Fertilizer_Basic")) { return 10; }
+	if (S == TEXT("Fertilizer_Bloom")) { return 14; }
+	if (S == TEXT("Spray_Fungicide"))  { return 10; }
+	if (S == TEXT("Spray_Pesticide"))  { return 10; }
+	if (S == TEXT("Spray_Broad"))      { return 16; }
 
 	// Zaden: schaal met de potentie (THC%) van de strain.
 	if (StrainTable)
@@ -371,6 +383,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
 			case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
 			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest")); break;
+			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
 			default: break;
 			}
 			if (bMatch) { Out.Add(Id); }

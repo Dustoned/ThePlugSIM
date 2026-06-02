@@ -69,6 +69,7 @@ namespace
 		case 6: return TEXT("Water");
 		case 7: return TEXT("Furniture");
 		case 8: return TEXT("Pot Upgrades");
+		case 9: return TEXT("Plant care");
 		default: return TEXT("?");
 		}
 	}
@@ -1275,7 +1276,7 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GGrowApp) // Grow shop -> wiet-gerelateerd (seeds, potten, drogen, verpakken)
 	{
 		bSellApp = false;
-		AppCats = { 0, 1, 2, 3, 8 }; // + Pot Upgrades
+		AppCats = { 0, 1, 2, 3, 9, 8 }; // + Plant care (9) + Pot Upgrades (8)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
