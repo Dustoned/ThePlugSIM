@@ -196,9 +196,11 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<UStaticMeshComponent> SoilMesh;
 
-	// Eén plant-mesh per mogelijke plek.
-	UPROPERTY()
-	TArray<TObjectPtr<UStaticMeshComponent>> PlantMeshes;
+	// Samengestelde plant per plek: een steel + bossige blad-clusters + toppen (buds als 'ie klaar is).
+	UPROPERTY() TArray<TObjectPtr<USceneComponent>> PlantRoots;        // 1 per plek
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> PlantStems;   // 1 per plek
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> PlantLeaves;  // FoliagePerPlant per plek
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> PlantBuds;    // BudsPerPlant per plek
 
 	// Klein zwevend "ziek"-bolletje per plek (wit = mold, oranje = pest); zichtbaar bij besmetting.
 	UPROPERTY()

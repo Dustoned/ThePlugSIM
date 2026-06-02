@@ -17,6 +17,10 @@
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 
+// Aantal blad-clusters en toppen per plant (samengestelde plant-look).
+static constexpr int32 FoliagePerPlant = 3;
+static constexpr int32 BudsPerPlant = 3;
+
 AGrowPlant::AGrowPlant()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -49,22 +53,39 @@ AGrowPlant::AGrowPlant()
 	if (SoilMatFinder.Succeeded()) { SoilMesh->SetMaterial(0, SoilMatFinder.Object); }
 	SoilMesh->SetVisibility(false);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeFinder(TEXT("/Engine/BasicShapes/Cone.Cone"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylForPlant(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereForPlant(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantMatFinder(TEXT("/Game/_Project/Materials/M_Plant.M_Plant"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PlantReadyFinder(TEXT("/Game/_Project/Materials/M_PlantReady.M_PlantReady"));
 	if (PlantMatFinder.Succeeded()) { PlantMat = PlantMatFinder.Object; }
 	if (PlantReadyFinder.Succeeded()) { PlantReadyMat = PlantReadyFinder.Object; }
 
-	// Eén plant-mesh per mogelijke plek.
+	// Samengestelde plant per plek: steel (cilinder) + bossige blad-clusters + toppen (bollen).
+	auto MakePlantPart = [&](USceneComponent* Parent, const TCHAR* Name, UStaticMesh* M) -> UStaticMeshComponent*
+	{
+		UStaticMeshComponent* C = CreateDefaultSubobject<UStaticMeshComponent>(Name);
+		C->SetupAttachment(Parent);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (M) { C->SetStaticMesh(M); }
+		if (PlantMat) { C->SetMaterial(0, PlantMat); }
+		C->SetVisibility(false);
+		return C;
+	};
 	for (int32 i = 0; i < MaxSlots; ++i)
 	{
-		UStaticMeshComponent* PM = CreateDefaultSubobject<UStaticMeshComponent>(*FString::Printf(TEXT("Plant%d"), i));
-		PM->SetupAttachment(Root);
-		PM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		if (ConeFinder.Succeeded()) { PM->SetStaticMesh(ConeFinder.Object); }
-		if (PlantMat) { PM->SetMaterial(0, PlantMat); }
-		PM->SetVisibility(false);
-		PlantMeshes.Add(PM);
+		USceneComponent* PR = CreateDefaultSubobject<USceneComponent>(*FString::Printf(TEXT("PlantRoot%d"), i));
+		PR->SetupAttachment(Root);
+		PlantRoots.Add(PR);
+
+		PlantStems.Add(MakePlantPart(PR, *FString::Printf(TEXT("Stem%d"), i), CylForPlant.Succeeded() ? CylForPlant.Object : nullptr));
+		for (int32 k = 0; k < FoliagePerPlant; ++k)
+		{
+			PlantLeaves.Add(MakePlantPart(PR, *FString::Printf(TEXT("Leaf%d_%d"), i, k), SphereForPlant.Succeeded() ? SphereForPlant.Object : nullptr));
+		}
+		for (int32 b = 0; b < BudsPerPlant; ++b)
+		{
+			PlantBuds.Add(MakePlantPart(PR, *FString::Printf(TEXT("Bud%d_%d"), i, b), SphereForPlant.Succeeded() ? SphereForPlant.Object : nullptr));
+		}
 	}
 
 	// Ziek-markers (zwevend bolletje per plek): wit = mold, oranje = pest.
@@ -828,28 +849,91 @@ FVector AGrowPlant::SlotLocalOffset(int32 Slot) const
 void AGrowPlant::UpdatePlantVisual()
 {
 	const int32 N = SlotStrain.Num();
-	const float MultiScale = (N <= 1) ? 1.0f : (N <= 2 ? 0.8f : 0.55f);
-	for (int32 i = 0; i < PlantMeshes.Num(); ++i)
-	{
-		UStaticMeshComponent* PM = PlantMeshes[i];
-		if (!PM) { continue; }
-		const bool bShow = (i < N) && !SlotStrain[i].IsNone();
-		PM->SetVisibility(bShow);
-		if (!bShow) { continue; }
+	const float MultiScale = (N <= 1) ? 1.0f : (N <= 2 ? 0.85f : 0.6f);
 
-		FVector Scale;
-		switch (SlotPhase[i])
+	for (int32 i = 0; i < PlantRoots.Num(); ++i)
+	{
+		const bool bShow = (i < N) && SlotStrain.IsValidIndex(i) && !SlotStrain[i].IsNone();
+		USceneComponent* PR = PlantRoots[i];
+		UStaticMeshComponent* Stem = PlantStems.IsValidIndex(i) ? PlantStems[i] : nullptr;
+
+		auto LeafAt = [&](int32 k) -> UStaticMeshComponent* { const int32 Idx = i * FoliagePerPlant + k; return PlantLeaves.IsValidIndex(Idx) ? PlantLeaves[Idx] : nullptr; };
+		auto BudAt  = [&](int32 b) -> UStaticMeshComponent* { const int32 Idx = i * BudsPerPlant + b; return PlantBuds.IsValidIndex(Idx) ? PlantBuds[Idx] : nullptr; };
+
+		if (!bShow)
 		{
-		case EGrowthPhase::Seedling:   Scale = FVector(0.18f, 0.18f, 0.12f); break;
-		case EGrowthPhase::Vegetative: Scale = FVector(0.26f, 0.26f, 0.32f); break;
-		case EGrowthPhase::PreFlower:  Scale = FVector(0.34f, 0.34f, 0.50f); break;
-		case EGrowthPhase::Flower:     Scale = FVector(0.42f, 0.42f, 0.64f); break;
-		default:                       Scale = FVector(0.48f, 0.48f, 0.74f); break;
+			if (Stem) { Stem->SetVisibility(false); }
+			for (int32 k = 0; k < FoliagePerPlant; ++k) { if (UStaticMeshComponent* L = LeafAt(k)) { L->SetVisibility(false); } }
+			for (int32 b = 0; b < BudsPerPlant; ++b) { if (UStaticMeshComponent* Bd = BudAt(b)) { Bd->SetVisibility(false); } }
+			continue;
 		}
-		PM->SetRelativeScale3D(Scale * MultiScale);
-		PM->SetRelativeLocation(SlotLocalOffset(i));
-		UMaterialInterface* Mat = (SlotPhase[i] == EGrowthPhase::Harvestable && PlantReadyMat) ? PlantReadyMat : PlantMat;
-		if (Mat) { PM->SetMaterial(0, Mat); }
+
+		if (PR) { PR->SetRelativeLocation(SlotLocalOffset(i)); }
+
+		// Groeifase -> hoe ver de plant is (0..1) en welke onderdelen tonen.
+		const EGrowthPhase Ph = SlotPhase.IsValidIndex(i) ? SlotPhase[i] : EGrowthPhase::Seedling;
+		float F = 0.2f; int32 Leaves = 1; bool bBuds = false; bool bRipe = false;
+		switch (Ph)
+		{
+		case EGrowthPhase::Seedling:   F = 0.22f; Leaves = 1; break;
+		case EGrowthPhase::Vegetative: F = 0.50f; Leaves = 2; break;
+		case EGrowthPhase::PreFlower:  F = 0.72f; Leaves = 3; bBuds = true; break;
+		case EGrowthPhase::Flower:     F = 0.88f; Leaves = 3; bBuds = true; break;
+		default:                       F = 1.00f; Leaves = 3; bBuds = true; bRipe = true; break; // Harvestable
+		}
+		const float Ms = MultiScale;
+		const float StemH = FMath::Lerp(9.f, 62.f, F) * Ms;   // steel-hoogte (cm)
+		const float StemR = (1.4f + 0.8f * F) * Ms;           // steel-straal (cm)
+
+		// Steel: dunne cilinder vanaf de grond omhoog (groen).
+		if (Stem)
+		{
+			Stem->SetVisibility(true);
+			Stem->SetRelativeScale3D(FVector(StemR * 2.f / 100.f, StemR * 2.f / 100.f, StemH / 100.f));
+			Stem->SetRelativeLocation(FVector(0.f, 0.f, StemH * 0.5f));
+			if (PlantMat) { Stem->SetMaterial(0, PlantMat); }
+		}
+
+		// Bladeren: bossige groene clusters langs de bovenkant van de steel (meer naarmate 'ie groeit).
+		for (int32 k = 0; k < FoliagePerPlant; ++k)
+		{
+			UStaticMeshComponent* L = LeafAt(k);
+			if (!L) { continue; }
+			const bool bShowLeaf = (k < Leaves);
+			L->SetVisibility(bShowLeaf);
+			if (!bShowLeaf) { continue; }
+			const float ClusterSize = FMath::Lerp(7.f, 20.f, F) * Ms;
+			// Clusters trapsgewijs hoger op de steel, licht naar buiten.
+			const float HZ = StemH * (0.55f + 0.20f * k);
+			const float Ang = (2.f * PI * k) / FMath::Max(1, FoliagePerPlant) + 0.6f;
+			const float Out = (4.f + 3.f * F) * Ms;
+			L->SetRelativeScale3D(FVector(ClusterSize / 100.f, ClusterSize / 100.f, (ClusterSize * 0.7f) / 100.f));
+			L->SetRelativeLocation(FVector(FMath::Cos(Ang) * Out, FMath::Sin(Ang) * Out, HZ));
+			if (PlantMat) { L->SetMaterial(0, PlantMat); }
+		}
+
+		// Toppen/buds: langwerpige bolletjes bovenin; verschijnen vanaf pre-bloei, frosty als 'ie klaar is.
+		for (int32 b = 0; b < BudsPerPlant; ++b)
+		{
+			UStaticMeshComponent* Bd = BudAt(b);
+			if (!Bd) { continue; }
+			Bd->SetVisibility(bBuds);
+			if (!bBuds) { continue; }
+			const float BudLen = FMath::Lerp(4.f, 13.f, F) * Ms * (bRipe ? 1.15f : 0.8f);
+			const float BudW = BudLen * 0.5f;
+			// Eén top in het midden bovenop, de rest iets lager eromheen.
+			float BX = 0.f, BY = 0.f, BZ = StemH * 1.02f;
+			if (b > 0)
+			{
+				const float Ang = (2.f * PI * b) / FMath::Max(1, BudsPerPlant);
+				const float Out = (5.f + 3.f * F) * Ms;
+				BX = FMath::Cos(Ang) * Out; BY = FMath::Sin(Ang) * Out; BZ = StemH * (0.78f + 0.05f * b);
+			}
+			Bd->SetRelativeScale3D(FVector(BudW / 100.f, BudW / 100.f, BudLen / 100.f));
+			Bd->SetRelativeLocation(FVector(BX, BY, BZ));
+			UMaterialInterface* BudMat = (bRipe && PlantReadyMat) ? PlantReadyMat : PlantMat;
+			if (BudMat) { Bd->SetMaterial(0, BudMat); }
+		}
 	}
 
 	// Ziek-markers: zwevend bolletje boven een besmette plant (wit = mold, oranje = pest).
