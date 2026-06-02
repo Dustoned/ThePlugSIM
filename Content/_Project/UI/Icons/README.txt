@@ -19,7 +19,7 @@ baggie     <- delapouite/chips-bag ui_shop    <- delapouite/shop
 packaging  <- cardboard-box        ui_person  <- delapouite/person
 papers     <- john-redman/paper    ui_message <- delapouite/chat-bubble
 water      <- sbed/water-drop       ui_gear    <- lorc/cog
-soil       <- concrete-bag         ui_map     <- lorc/treasure-map
+soil       <- powder-bag           ui_map     <- lorc/treasure-map
 pot        <- full-metal-bucket    ui_home    <- delapouite/house
 rack       <- caro/clothesline     ui_sun     <- lorc/sun
 lamp       <- ceiling-light        ui_moon    <- lorc/moon
