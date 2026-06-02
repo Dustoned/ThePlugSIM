@@ -69,6 +69,9 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	// Configure character movement
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 	GetCharacterMovement()->AirControl = 0.5f;
+	GetCharacterMovement()->GravityScale = 1.0f;     // zwaartekracht gegarandeerd aan
+	GetCharacterMovement()->JumpZVelocity = 450.0f;  // normale sprong
+	GetCharacterMovement()->SetWalkableFloorAngle(50.0f);
 
 	// Voorraad-component (oogst in, verkoop uit).
 	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
@@ -131,6 +134,14 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	const bool bBelowWorld = Loc.Z < -3000.f;    // door de vloer gezakt
 	if (!(bTooLong || bFloating || bBelowWorld)) { return; }
 
+	// Diagnose (key 7 = update in plaats): laat zien WAAROM 'ie vast zit.
+	{
+		const int32 MM = (int32)Move->MovementMode.GetValue();
+		const bool bCol = GetCapsuleComponent() && GetCapsuleComponent()->IsCollisionEnabled();
+		UWeedToast::Notify(7, 4.f, FColor::Cyan, FString::Printf(TEXT("stuck: mode=%d  vZ=%.0f  grav=%.2f  col=%d"),
+			MM, GetVelocity().Z, Move->GravityScale, bCol ? 1 : 0));
+	}
+
 	// Zoek een ECHTE vloer: eerst onder de laatste-grond-plek, anders onder de spawn, anders gewoon de spawn.
 	FVector Safe;
 	if (!FindFloorAt(LastGroundLoc, Safe))
@@ -139,7 +150,10 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	}
 
 	// BELANGRIJK: eerst teleporteren, dan pas op lopen zetten + vloer-check forceren (anders checkt 'ie
-	// de grond op de oude vast-plek en blijft 'ie vallen).
+	// de grond op de oude vast-plek en blijft 'ie vallen). Forceer ook zwaartekracht + capsule-collision
+	// terug aan, voor het geval iets ze had uitgezet (dat verklaart 'eeuwig zweven').
+	if (GetCapsuleComponent()) { GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics); }
+	Move->GravityScale = 1.0f;
 	Move->StopMovementImmediately();
 	Move->Velocity = FVector::ZeroVector;
 	TeleportTo(Safe, GetActorRotation(), false, true);
