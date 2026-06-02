@@ -4,6 +4,7 @@
 #include "Data/NpcDef.h"
 #include "Game/WeedShopGameState.h"
 #include "Phone/ContactsComponent.h"
+#include "World/DayCycleComponent.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -69,6 +70,31 @@ const FNpcState* UNpcRegistryComponent::Find(FName NpcId) const
 	return States.FindByPredicate([NpcId](const FNpcState& S) { return S.NpcId == NpcId; });
 }
 
+float UNpcRegistryComponent::NowAbs() const
+{
+	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (const UDayCycleComponent* Day = GS->GetDayCycle())
+		{
+			return Day->GetDayNumber() * 1000000.f + Day->GetTimeOfDaySeconds();
+		}
+	}
+	return 0.f;
+}
+
+void UNpcRegistryComponent::MarkDealt(FName NpcId)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	if (FNpcState* S = Find(NpcId)) { S->LastDealAbs = NowAbs(); }
+}
+
+bool UNpcRegistryComponent::IsOnCooldown(FName NpcId) const
+{
+	const FNpcState* S = Find(NpcId);
+	if (!S || S->LastDealAbs < 0.f) { return false; }
+	return (NowAbs() - S->LastDealAbs) < DealCooldownSeconds;
+}
+
 FName UNpcRegistryComponent::AssignNpc()
 {
 	EnsureSeeded();
@@ -76,7 +102,18 @@ FName UNpcRegistryComponent::AssignNpc()
 	{
 		return NAME_None;
 	}
-	const FName Id = States[AssignCursor % States.Num()].NpcId;
+	// Sla NPC's over die net een deal deden (cooldown). Als iedereen op cooldown is, val terug op round-robin.
+	const int32 N = States.Num();
+	for (int32 k = 0; k < N; ++k)
+	{
+		const int32 Idx = (AssignCursor + k) % N;
+		if (!IsOnCooldown(States[Idx].NpcId))
+		{
+			AssignCursor = Idx + 1;
+			return States[Idx].NpcId;
+		}
+	}
+	const FName Id = States[AssignCursor % N].NpcId;
 	AssignCursor++;
 	return Id;
 }

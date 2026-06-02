@@ -103,7 +103,17 @@ void UContactsComponent::SendRandomAppointment()
 		return;
 	}
 
-	const FPhoneContact& C = Contacts[FMath::RandRange(0, Contacts.Num() - 1)];
+	// Sla contacten over die net een deal deden (per-NPC cooldown) -> ze vragen niet meteen opnieuw.
+	UNpcRegistryComponent* Reg = nullptr;
+	if (const AWeedShopGameState* GSc = Cast<AWeedShopGameState>(GetOwner())) { Reg = GSc->GetNpcRegistry(); }
+	TArray<int32> Eligible;
+	for (int32 i = 0; i < Contacts.Num(); ++i)
+	{
+		if (!Reg || !Reg->IsOnCooldown(Contacts[i].ContactId)) { Eligible.Add(i); }
+	}
+	if (Eligible.Num() == 0) { return; } // iedereen op cooldown -> nu even geen nieuw bericht
+
+	const FPhoneContact& C = Contacts[Eligible[FMath::RandRange(0, Eligible.Num() - 1)]];
 
 	float Now = 0.f, Length = 1800.f;
 	GetCycleTime(Now, Length);

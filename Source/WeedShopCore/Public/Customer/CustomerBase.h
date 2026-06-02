@@ -77,7 +77,7 @@ public:
 
 	// Na een aankoop moet de klant z'n spul eerst oproken: cooldown (sec) voordat hij weer wil.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
-	float OrderCooldownSeconds = 60.f;
+	float OrderCooldownSeconds = 240.f;
 
 	// Verslaving die nodig is voordat een prospect echt wil kopen (samples brengen dit omhoog).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
@@ -86,6 +86,9 @@ public:
 	// Server: kijk of een prospect genoeg "warm" is (verslaving >= drempel) en zo ja maak er een
 	// kopende klant van. Geeft true als hij deze keer overstapte (om een melding te tonen).
 	bool RefreshProspect();
+
+	// Server: maak er direct een kopende klant van (bv. na een goede gratis joint).
+	void BecomeBuyerNow();
 
 	// Appartement-/straat-klanten blijven (cooldown -> opnieuw bestellen). Afspraak-klanten despawnen.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")

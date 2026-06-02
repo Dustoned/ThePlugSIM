@@ -136,6 +136,18 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, NpcId);
 }
 
+void ACustomerBase::BecomeBuyerNow()
+{
+	if (!HasAuthority()) { return; }
+	// Een goede gratis joint zet 'm meteen aan het kopen (ook als 'ie nog geen prospect-drempel haalde).
+	if (State == ECustomerState::Prospect || State == ECustomerState::Served || State == ECustomerState::Leaving)
+	{
+		State = ECustomerState::WantsToOrder;
+		PatienceSeconds = BasePatienceSeconds;
+		LeaveTimer = 0.f;
+	}
+}
+
 bool ACustomerBase::RefreshProspect()
 {
 	if (!HasAuthority() || State != ECustomerState::Prospect)
@@ -386,6 +398,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 
 	State = ECustomerState::Served;
 	WriteStatsToRegistry();
+	// Cooldown starten: deze NPC (in persoon of via telefoon-afspraak) komt niet meteen terug.
+	if (AWeedShopGameState* GSc = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (GSc->GetNpcRegistry() && !NpcId.IsNone()) { GSc->GetNpcRegistry()->MarkDealt(NpcId); }
+	}
 
 	// XP: per verdiende euro + een vaste bonus per geslaagde deal.
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)

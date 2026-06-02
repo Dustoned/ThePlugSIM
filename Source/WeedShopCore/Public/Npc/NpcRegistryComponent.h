@@ -36,6 +36,11 @@ struct FNpcState
 	// Nummer ontgrendeld (genoeg loyaliteit) -> staat in de contactenlijst.
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	bool bUnlocked = false;
+
+	// Tijdstip (monotone "abs" = dag*1e6 + tijd-op-dag) van de LAATSTE deal — in persoon óf telefoon.
+	// -1 = nog nooit. Voor de per-NPC cooldown zodat dezelfde persoon niet meteen terugkomt.
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	float LastDealAbs = -1.f;
 };
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
@@ -50,9 +55,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
 	float UnlockLoyalty = 40.f;
 
-	// Server: geef een NpcId uit aan een nieuwe klant (round-robin over de roster).
+	// Cooldown (in dag-cyclus-seconden) waarin dezelfde NPC niet opnieuw deal/gevraagd wordt.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
+	float DealCooldownSeconds = 240.f;
+
+	// Server: geef een NpcId uit aan een nieuwe klant (round-robin, slaat NPC's op cooldown over).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
 	FName AssignNpc();
+
+	// Server: leg vast dat deze NPC zojuist een deal deed (in persoon of telefoon) -> start cooldown.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
+	void MarkDealt(FName NpcId);
+
+	// Heeft deze NPC recent (binnen DealCooldownSeconds) een deal gedaan?
+	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
+	bool IsOnCooldown(FName NpcId) const;
 
 	// Lees de stats van een NPC (false als onbekend).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
@@ -85,6 +102,9 @@ protected:
 
 	FNpcState* Find(FName NpcId);
 	const FNpcState* Find(FName NpcId) const;
+
+	// Monotone "nu"-tijd uit de dag-cyclus (dag*1e6 + tijd-op-dag); 0 als geen cyclus.
+	float NowAbs() const;
 
 	// Check loyaliteit-drempel; ontgrendel het contact bij de ContactsComponent.
 	void CheckUnlock(FNpcState& State);

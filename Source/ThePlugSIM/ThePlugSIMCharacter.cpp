@@ -451,18 +451,51 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		GS->GetHeat()->AddHeat(5.f);
 	}
 
-	// Prospect genoeg opgewarmd? Dan wordt het nu een echte klant ("vond het lekker, heb je meer?").
+	// Goede joint (niet te zwak)? Dan wil de klant METEEN kopen en vraagt 'ie grammen van een
+	// verkoopbare strain die je nú in voorraad hebt, zodat je direct kunt verkopen.
+	const bool bLikedIt = !(bPicky && Quality < 0.5f);
+	bool bWantsNow = false;
+	if (bLikedIt)
+	{
+		// Zoek verkoopbare wiet: verpakte Bag_ heeft voorrang (dat kopen klanten), anders gedroogde Bud_.
+		FName WantId = NAME_None;
+		for (const FInventoryStack& St : Inventory->GetStacks())
+		{
+			if (St.Quantity > 0 && St.ItemId.ToString().StartsWith(TEXT("Bag_"))) { WantId = St.ItemId; break; }
+		}
+		if (WantId.IsNone())
+		{
+			for (const FInventoryStack& St : Inventory->GetStacks())
+			{
+				if (St.Quantity > 0 && St.ItemId.ToString().StartsWith(TEXT("Bud_"))) { WantId = St.ItemId; break; }
+			}
+		}
+		if (!WantId.IsNone())
+		{
+			Customer->DesiredProductId = WantId;
+			Customer->DesiredQuantity = FMath::Clamp(Inventory->GetQuantity(WantId), 1, FMath::RandRange(2, 5));
+			Customer->BecomeBuyerNow();
+			bWantsNow = true;
+		}
+	}
+
+	// Prospect genoeg opgewarmd? Dan wordt het sowieso een echte klant.
 	const bool bConverted = Customer->RefreshProspect();
 
 	// XP voor het werven: klein per sample, bonus als je iemand omzet naar koper.
 	if (GS && GS->GetLeveling())
 	{
-		GS->GetLeveling()->AddXP(bConverted ? 25 : 3);
+		GS->GetLeveling()->AddXP((bConverted || bWantsNow) ? 25 : 3);
 	}
 
-	if (GEngine && !(bPicky && Quality < 0.5f))
+	if (GEngine && bLikedIt)
 	{
-		if (bConverted)
+		if (bWantsNow)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
+				FString::Printf(TEXT("\"Damn, that's good! Sell me %dg of that.\" - deal him now."), Customer->DesiredQuantity));
+		}
+		else if (bConverted)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
 				TEXT("\"Damn, that's good! Got any more to sell?\" - they'll buy now."));
