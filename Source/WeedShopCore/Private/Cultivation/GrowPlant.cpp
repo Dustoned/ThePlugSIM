@@ -320,7 +320,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 				{
 					SlotAfflict[i] = (FMath::FRand() < 0.5f) ? 1 : 2; // 1 mold, 2 pest
 					SlotAfflictTime[i] = 0.f; bVisChanged = true;
-					if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! Spray it within 3 min or it dies."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
+					if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! Spray it within 3 min or it starts dying."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
 				}
 			}
 		}
@@ -687,7 +687,7 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 		for (int32 i = 0; i < SlotAfflict.Num(); ++i) { if (SlotAfflict[i] == 1) { bMold = true; } else if (SlotAfflict[i] == 2) { bPest = true; } }
 		const TCHAR* Kind = (bMold && bPest) ? TEXT("MOLD+PESTS") : (bMold ? TEXT("MOLD") : TEXT("PESTS"));
 		const int32 Left = FMath::CeilToInt(GetWorstAfflictSecondsLeft());
-		return FText::FromString(FString::Printf(TEXT("%s on %d plant(s)! Spray within %d:%02d or it dies"),
+		return FText::FromString(FString::Printf(TEXT("%s on %d plant(s)! Spray within %d:%02d or it starts dying"),
 			Kind, Sick, Left / 60, Left % 60));
 	}
 	if (GetReadyCount() > 0)
