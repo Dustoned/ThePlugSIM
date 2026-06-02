@@ -1,4 +1,5 @@
 #include "Economy/EconomyComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
@@ -148,21 +149,21 @@ bool UEconomyComponent::TransferBank(int64 AmountCents)
 	RefreshDepositDay();
 	if (GetTransfersRemainingToday() <= 0)
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Daily transfer limit reached - try again tomorrow.")); }
+		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("Daily transfer limit reached - try again tomorrow.")); }
 		return false;
 	}
 	const int64 Fee = (int64)FMath::RoundToDouble(AmountCents * TransferFeePct);
 	// Per-speler geld: het bedrag + fee verlaat MIJN bank; de ontvanger wordt elders bijgeschreven.
 	if (BankCents < AmountCents + Fee)
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough bank money for that transfer.")); }
+		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("Not enough bank money for that transfer.")); }
 		return false;
 	}
 	RemoveBank(AmountCents + Fee);
 	++TransfersToday;
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
+		UWeedToast::Notify(-1, 3.f, FColor(120, 200, 255),
 			FString::Printf(TEXT("Sent EUR %.2f to a friend (fee EUR %.2f). Transfers left today: %d"),
 				AmountCents / 100.f, Fee / 100.f, GetTransfersRemainingToday()));
 	}
@@ -174,14 +175,14 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 	if (GetOwnerRole() != ROLE_Authority || CashAmount <= 0) { return 0; }
 	if (BalanceCents < CashAmount)
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("Not enough cash to deposit.")); }
+		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("Not enough cash to deposit.")); }
 		return 0;
 	}
 	RefreshDepositDay();
 	const int64 Remaining = GetDailyDepositRemainingCents();
 	if (Remaining <= 0)
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange, TEXT("Daily laundering limit reached - come back tomorrow.")); }
+		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("Daily laundering limit reached - come back tomorrow.")); }
 		return 0;
 	}
 	const int64 Amount = FMath::Min(CashAmount, Remaining);
@@ -202,7 +203,7 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 	}
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 200, 255),
+		UWeedToast::Notify(-1, 3.f, FColor(120, 200, 255),
 			FString::Printf(TEXT("Laundered EUR %.2f -> bank (tax EUR %.2f)"), ToBank / 100.f, Tax / 100.f));
 	}
 	return ToBank;

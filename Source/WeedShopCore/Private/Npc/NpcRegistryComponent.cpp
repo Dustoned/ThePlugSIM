@@ -1,4 +1,5 @@
 #include "Npc/NpcRegistryComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Data/NpcDef.h"
@@ -201,7 +202,7 @@ void UNpcRegistryComponent::CheckUnlock(FNpcState& State)
 	UE_LOG(LogWeedShop, Log, TEXT("Nummer ontgrendeld: %s"), *State.DisplayName.ToString());
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor(120, 200, 255),
+		UWeedToast::Notify(-1, 5.f, FColor(120, 200, 255),
 			FString::Printf(TEXT("You got %s's number!"), *State.DisplayName.ToString()));
 	}
 }

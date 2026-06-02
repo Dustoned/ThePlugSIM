@@ -1,4 +1,5 @@
 #include "Progression/StoreComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Data/WeedStrain.h"
@@ -78,7 +79,7 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
+			UWeedToast::Notify(-1, 3.f, FColor::Red,
 				FString::Printf(TEXT("Not enough money for seed %s"), *StrainId.ToString()));
 		}
 		return false;
@@ -87,7 +88,7 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 	Buyer->AddItem(SeedItemId(StrainId), 1);
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+		UWeedToast::Notify(-1, 3.f, FColor::Green,
 			FString::Printf(TEXT("Seed bought: %s"), *Row->DisplayName.ToString()));
 	}
 	return true;
@@ -223,7 +224,7 @@ bool UStoreComponent::SellItem(FName ItemId, UInventoryComponent* Seller)
 	}
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green, FString::Printf(TEXT("Sold %s (+EUR %.2f)"), *ItemId.ToString(), Price / 100.f));
+		UWeedToast::Notify(-1, 2.5f, FColor::Green, FString::Printf(TEXT("Sold %s (+EUR %.2f)"), *ItemId.ToString(), Price / 100.f));
 	}
 	return true;
 }
@@ -429,7 +430,7 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 		{
 			if (GEngine)
 			{
-				GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
+				UWeedToast::Notify(-1, 3.f, FColor::Orange,
 					FString::Printf(TEXT("%s unlocks at a later phase."), *Name.ToString()));
 			}
 			return false;
@@ -441,7 +442,7 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
+			UWeedToast::Notify(-1, 3.f, FColor::Red,
 				FString::Printf(TEXT("Not enough money for %s"), *Name.ToString()));
 		}
 		return false;
@@ -450,7 +451,7 @@ bool UStoreComponent::BuySupply(FName SupplyId, UInventoryComponent* Buyer)
 	Buyer->AddItem(SupplyId, Pack);
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+		UWeedToast::Notify(-1, 3.f, FColor::Green,
 			FString::Printf(TEXT("Bought: %s"), *Name.ToString()));
 	}
 	return true;

@@ -1,4 +1,5 @@
 #include "World/WaterSink.h"
+#include "UI/WeedToast.h"
 
 #include "Cultivation/WaterCanComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -41,14 +42,14 @@ void AWaterSink::Interact_Implementation(APawn* InstigatorPawn)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier)."));
+			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier)."));
 		}
 		return;
 	}
 	Can->Fill();
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Cyan,
+		UWeedToast::Notify(-1, 2.5f, FColor::Cyan,
 			FString::Printf(TEXT("Bottle filled (%d/%d)."), Can->GetCharges(), Can->GetMaxCharges()));
 	}
 }

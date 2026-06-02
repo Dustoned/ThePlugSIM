@@ -1,4 +1,5 @@
 #include "Phone/ContactsComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
@@ -72,7 +73,7 @@ void UContactsComponent::RegisterContact(FName ContactId, const FText& DisplayNa
 	UE_LOG(LogWeedShop, Log, TEXT("Nieuw contact: %s"), *DisplayName.ToString());
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan,
+		UWeedToast::Notify(-1, 3.f, FColor::Cyan,
 			FString::Printf(TEXT("New contact: %s"), *DisplayName.ToString()));
 	}
 }
@@ -172,7 +173,7 @@ void UContactsComponent::SendRandomAppointment()
 	OnRep_Messages(); // server lokaal broadcasten
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor(120, 180, 255),
+		UWeedToast::Notify(-1, 4.f, FColor(120, 180, 255),
 			FString::Printf(TEXT("Message from %s"), *C.DisplayName.ToString()));
 	}
 }
@@ -199,7 +200,7 @@ void UContactsComponent::CheckAppointments()
 			UE_LOG(LogWeedShop, Log, TEXT("Afspraak met %s is nu."), *Msg.SenderName.ToString());
 			if (GEngine)
 			{
-				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
+				UWeedToast::Notify(-1, 5.f, FColor::Magenta,
 					FString::Printf(TEXT("Appointment: %s is here!"), *Msg.SenderName.ToString()));
 			}
 			SpawnAppointmentCustomer(Msg);
@@ -357,7 +358,7 @@ void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
 
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
+		UWeedToast::Notify(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
 			FString::Printf(TEXT("%s: appointment %s"), *SenderName.ToString(),
 				bAccept ? TEXT("accepted") : TEXT("cancelled")));
 	}

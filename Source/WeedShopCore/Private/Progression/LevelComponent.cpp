@@ -1,4 +1,5 @@
 #include "Progression/LevelComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Engine/Engine.h"
@@ -58,7 +59,7 @@ void ULevelComponent::AddXP(int32 Amount)
 		OnLevelUp.Broadcast(Level);
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor(120, 220, 255),
+			UWeedToast::Notify(-1, 5.f, FColor(120, 220, 255),
 				FString::Printf(TEXT("LEVEL UP!  You reached level %d"), Level));
 		}
 	}

@@ -1,4 +1,5 @@
 #include "World/HeatComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
@@ -113,7 +114,7 @@ void UHeatComponent::TriggerBust()
 	UE_LOG(LogWeedShop, Log, TEXT("BUST! Politie pakte %lld cents."), (long long)Loss);
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 6.f, FColor::Red,
+		UWeedToast::Notify(-1, 6.f, FColor::Red,
 			FString::Printf(TEXT("BUST! Police took EUR %.2f"), Loss / 100.f));
 	}
 }
@@ -132,7 +133,7 @@ void UHeatComponent::TriggerRobbery()
 	UE_LOG(LogWeedShop, Log, TEXT("Overval! %lld cents gestolen."), (long long)Loss);
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 6.f, FColor(255, 140, 0),
+		UWeedToast::Notify(-1, 6.f, FColor(255, 140, 0),
 			FString::Printf(TEXT("Robbery! EUR %.2f stolen"), Loss / 100.f));
 	}
 }

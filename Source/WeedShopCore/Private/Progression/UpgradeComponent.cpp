@@ -1,4 +1,5 @@
 #include "Progression/UpgradeComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Data/UpgradeRow.h"
@@ -56,7 +57,7 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
+			UWeedToast::Notify(-1, 3.f, FColor::Orange,
 				FString::Printf(TEXT("Not available yet: %s"), *Row->DisplayName.ToString()));
 		}
 		return false;
@@ -68,7 +69,7 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red,
+			UWeedToast::Notify(-1, 3.f, FColor::Red,
 				FString::Printf(TEXT("Not enough BANK money for %s (launder cash first)"), *Row->DisplayName.ToString()));
 		}
 		return false;
@@ -79,7 +80,7 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 	UE_LOG(LogWeedShop, Log, TEXT("Upgrade gekocht: %s (%s)"), *UpgradeId.ToString(), *Row->DisplayName.ToString());
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
+		UWeedToast::Notify(-1, 4.f, FColor::Green,
 			FString::Printf(TEXT("Upgrade purchased: %s"), *Row->DisplayName.ToString()));
 	}
 	return true;

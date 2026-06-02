@@ -1,4 +1,5 @@
 #include "Inventory/InventoryComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Placement/PlaceableTypes.h"
@@ -114,7 +115,7 @@ bool UInventoryComponent::MergeItem(FName ItemId)
 	OnRep_Stacks();
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+		UWeedToast::Notify(-1, 3.f, FColor::Green,
 			FString::Printf(TEXT("Merged into %dx (THC %.0f%%, Quality %.0f%%)"), Qty, Stacks[FindStackIndex(ItemId)].Quality, Stacks[FindStackIndex(ItemId)].QualityPct));
 	}
 	return true;
@@ -141,7 +142,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 	// Gewicht-limiet.
 	if (MaxWeight > 0.f && GetTotalWeight() + GetUnitWeight(ItemId) * Count > MaxWeight + 0.001f)
 	{
-		if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy — sell or drop something.")); }
+		if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy — sell or drop something.")); }
 		return false;
 	}
 
@@ -154,7 +155,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 		const int32 NewStacks = bStackable ? (ExistingIdx != INDEX_NONE ? 0 : 1) : Count;
 		if (GetUsedSlots() + NewStacks > MaxStacks)
 		{
-			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
+			if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
 			return false;
 		}
 	}

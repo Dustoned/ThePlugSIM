@@ -1,4 +1,5 @@
 #include "Placement/BuildComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Cultivation/GrowPlant.h"
@@ -375,7 +376,7 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 		{
 			if (GEngine)
 			{
-				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Harvest the plant before picking up the pot."));
+				UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Harvest the plant before picking up the pot."));
 			}
 			return;
 		}
@@ -391,7 +392,7 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 		// Eerst leeg laten drogen/oogsten voor je het rek oppakt (anders verlies je de batches).
 		if (!Rack->IsEmpty())
 		{
-			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Empty the drying rack before picking it up.")); }
+			if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Empty the drying rack before picking it up.")); }
 			return;
 		}
 		ReturnItem = Rack->RackTier;
@@ -405,7 +406,7 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 		// Eerst leeghalen voor je het schap oppakt (anders verlies je de voorraad).
 		if (Shelf->Contents.Num() > 0)
 		{
-			if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("Empty the shelf before picking it up.")); }
+			if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Empty the shelf before picking it up.")); }
 			return;
 		}
 		ReturnItem = Shelf->ShelfTier;
@@ -422,7 +423,7 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	Target->Destroy();
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Picked up."));
+		UWeedToast::Notify(-1, 2.f, FColor::Green, TEXT("Picked up."));
 	}
 }
 
@@ -555,7 +556,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Can't place there (blocked)."));
+			UWeedToast::Notify(-1, 2.f, FColor::Red, TEXT("Can't place there (blocked)."));
 		}
 		return;
 	}
@@ -564,7 +565,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("You can only place things inside the house."));
+			UWeedToast::Notify(-1, 2.f, FColor::Orange, TEXT("You can only place things inside the house."));
 		}
 		return;
 	}
@@ -650,6 +651,6 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Placed."));
+		UWeedToast::Notify(-1, 2.f, FColor::Green, TEXT("Placed."));
 	}
 }

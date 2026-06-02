@@ -1,4 +1,5 @@
 #include "World/DeliveryPackage.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
@@ -73,7 +74,7 @@ void ADeliveryPackage::Interact_Implementation(APawn* InstigatorPawn)
 		if (Phone.IsValid()) { Phone->OnPackagePickedUp(OrderId); }
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			UWeedToast::Notify(-1, 3.f, FColor::Green,
 				FString::Printf(TEXT("Unpacked the delivery: %d item(s)."), Delivered));
 		}
 		Destroy();
@@ -84,7 +85,7 @@ void ADeliveryPackage::Interact_Implementation(APawn* InstigatorPawn)
 		Ids = RemIds; Qtys = RemQ;
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
+			UWeedToast::Notify(-1, 3.f, FColor::Orange,
 				FString::Printf(TEXT("Took %d item(s); %d left in the box (make room / cash)."), Delivered, TotalItems()));
 		}
 	}

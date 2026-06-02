@@ -1,4 +1,5 @@
 #include "Progression/MilestoneComponent.h"
+#include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
@@ -85,7 +86,7 @@ void UMilestoneComponent::CheckMilestones()
 		UE_LOG(LogWeedShop, Log, TEXT("Milestone bereikt: %s (%s)"), *RowName.ToString(), *Row->Description.ToString());
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
+			UWeedToast::Notify(-1, 5.f, FColor::Magenta,
 				FString::Printf(TEXT("Milestone: %s"), *Row->Description.ToString()));
 		}
 

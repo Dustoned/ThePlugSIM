@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ThePlugSIMCharacter.h"
+#include "UI/WeedToast.h"
 #include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -408,7 +409,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, TEXT("No joint to give — roll one first (R)."));
+			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("No joint to give — roll one first (R)."));
 		}
 		return;
 	}
@@ -427,7 +428,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		LoyGain = -3.f; RespGain = -2.f; AddGain = 1.f;
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Orange,
+			UWeedToast::Notify(-1, 3.f, FColor::Orange,
 				FString::Printf(TEXT("%s found the joint too weak."), *Customer->NpcId.ToString()));
 		}
 	}
@@ -495,12 +496,12 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	{
 		if (bWantsNow)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
+			UWeedToast::Notify(-1, 4.f, FColor::Green,
 				FString::Printf(TEXT("\"That's good! Sell me %dg of that.\""), Customer->DesiredQuantity));
 		}
 		else if (bConverted)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
+			UWeedToast::Notify(-1, 4.f, FColor::Green,
 				TEXT("\"Damn, that's good - I'm hooked. Got any to sell?\""));
 		}
 		else
@@ -516,7 +517,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 				bUnlocked = GS->GetNpcRegistry()->IsUnlocked(Customer->NpcId);
 			}
 			const FString NumHint = bUnlocked ? TEXT("") : FString::Printf(TEXT("  -  respect %.0f/%.0f for their number"), R, NeedRespect);
-			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
+			UWeedToast::Notify(-1, 3.f, FColor::Green,
 				FString::Printf(TEXT("Sample given (relationship+). Addiction %.0f/%.0f to start buying.%s"), A, Customer->AddictionToBuy, *NumHint));
 		}
 	}
@@ -817,7 +818,7 @@ void AThePlugSIMCharacter::OnLoadKey()
 	}
 	else if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Hold rolling papers (hotbar) to open the roll menu."));
+		UWeedToast::Notify(-1, 2.f, FColor::Orange, TEXT("Hold rolling papers (hotbar) to open the roll menu."));
 	}
 }
 
@@ -879,7 +880,7 @@ void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
 
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor(120, 220, 160),
+		UWeedToast::Notify(-1, 3.f, FColor(120, 220, 160),
 			FString::Printf(TEXT("You smoke the %dg joint... high %.0f%%  (XP boost active)"), Grams, Intensity * 100.f));
 	}
 }
