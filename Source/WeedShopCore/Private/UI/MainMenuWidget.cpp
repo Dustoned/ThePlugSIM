@@ -20,10 +20,14 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/GameInstance.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "InputCoreTypes.h"
 #include "Engine/Texture2D.h"
 #include "ImageUtils.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Modules/ModuleManager.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
@@ -238,18 +242,44 @@ UBorder* UMainMenuWidget::AddGlowAt(UCanvasPanel* C, float Fx, float Fy, float W
 		Glow->SetBrush(WeedUI::Rounded(Color, FMath::Min(W, H) * 0.5f));
 	}
 	Glow->SetVisibility(ESlateVisibility::HitTestInvisible);
+	// Opgeslagen positie (in-game lamp-editor) overschrijft de standaard-coördinaat.
+	float UseFx = Fx, UseFy = Fy;
+	LoadGlowFrac(Glows.Num(), UseFx, UseFy);
 	UCanvasPanelSlot* S = C->AddChildToCanvas(Glow);
-	S->SetAnchors(FAnchors(Fx, Fy, Fx, Fy));
+	S->SetAnchors(FAnchors(UseFx, UseFy, UseFx, UseFy));
 	S->SetAlignment(FVector2D(0.5f, 0.5f));
 	S->SetSize(FVector2D(W, H));
 
 	Glows.Add(Glow);
+	GlowSlots.Add(S);
+	GlowFrac.Add(FVector2D(UseFx, UseFy));
 	GlowBase.Add(Color);
 	GlowPhase.Add(Glows.Num() * 1.7f);
 	GlowFreq.Add(Freq);
 	GlowFlick.Add(FlickAmount);
 	GlowCandle.Add(bCandle ? 1 : 0);
 	return Glow;
+}
+
+void UMainMenuWidget::LoadGlowFrac(int32 Index, float& Fx, float& Fy) const
+{
+	FString Val;
+	if (GConfig && GConfig->GetString(TEXT("ThePlugSIM.MenuGlows"), *FString::Printf(TEXT("Glow%d"), Index), Val, GGameIni))
+	{
+		FString L, R;
+		if (Val.Split(TEXT(","), &L, &R)) { Fx = FCString::Atof(*L); Fy = FCString::Atof(*R); }
+	}
+}
+
+void UMainMenuWidget::SaveGlowPositions()
+{
+	if (!GConfig) { return; }
+	for (int32 i = 0; i < GlowFrac.Num(); ++i)
+	{
+		GConfig->SetString(TEXT("ThePlugSIM.MenuGlows"), *FString::Printf(TEXT("Glow%d"), i),
+			*FString::Printf(TEXT("%.4f,%.4f"), GlowFrac[i].X, GlowFrac[i].Y), GGameIni);
+	}
+	GConfig->Flush(false, GGameIni);
 }
 
 void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
@@ -297,6 +327,12 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		AddGlowAt(GlowCanvas, 0.50f, 0.78f, 1000.f, 520.f, FLinearColor(0.58f, 0.22f, 0.98f, 0.40f), 1.8f); // paarse vloer-pool
 		AddGlowAt(GlowCanvas, 0.80f, 0.62f, 460.f, 300.f, FLinearColor(0.24f, 0.46f, 1.00f, 0.40f), 4.2f); // blauw onder de toonbank
 		AddGlowAt(GlowCanvas, 0.735f, 0.195f, 300.f, 270.f, FLinearColor(1.00f, 0.52f, 0.16f, 0.66f), 3.0f, 1.0f, /*bCandle*/ true); // warme hanglamp (rustige kaars-gloed)
+
+		// Lamp-editor-laag: markers/labels die je kunt verslepen (alleen zichtbaar in edit-modus).
+		EditCanvas = WidgetTree->ConstructWidget<UCanvasPanel>();
+		EditCanvas->SetVisibility(ESlateVisibility::Collapsed);
+		UOverlaySlot* ECS = Layers->AddChildToOverlay(EditCanvas);
+		ECS->SetHorizontalAlignment(HAlign_Fill); ECS->SetVerticalAlignment(VAlign_Fill);
 
 		// Onzichtbare klik-knoppen, proportioneel over de geschilderde knoppen (paarse hover-hint).
 		UCanvasPanel* Hit = WidgetTree->ConstructWidget<UCanvasPanel>();
@@ -366,6 +402,28 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UTextBlock* Ver = WeedUI::Text(WidgetTree, TEXT("v0.1.0  -  pre-alpha"), 12, FLinearColor(0.70f, 0.66f, 0.80f), false);
 		UOverlaySlot* VS = Layers->AddChildToOverlay(Ver);
 		VS->SetHorizontalAlignment(HAlign_Left); VS->SetVerticalAlignment(VAlign_Bottom); VS->SetPadding(FMargin(24.f, 0.f, 0.f, 16.f));
+
+		// "Edit lamps"-knopje rechtsonder: zet de lamp-editor aan/uit.
+		{
+			UWeedActionButton* EB = WidgetTree->ConstructWidget<UWeedActionButton>();
+			EB->OnClicked.AddDynamic(EB, &UWeedActionButton::Handle);
+			EB->OnAction.BindLambda([this](int32, int32) { ToggleGlowEdit(); });
+			FButtonStyle ES;
+			ES.Normal = WeedUI::Rounded(FLinearColor(0.10f, 0.11f, 0.15f, 0.85f), 6.f);
+			ES.Hovered = WeedUI::Rounded(FLinearColor(0.30f, 0.16f, 0.50f, 0.95f), 6.f);
+			ES.Pressed = WeedUI::Rounded(FLinearColor(0.40f, 0.20f, 0.62f, 1.f), 6.f);
+			ES.NormalPadding = FMargin(10.f, 5.f); ES.PressedPadding = FMargin(10.f, 5.f);
+			EB->SetStyle(ES);
+			EB->SetContent(WeedUI::Text(WidgetTree, TEXT("Edit lamps"), 11, FLinearColor(0.8f, 0.82f, 0.92f), true));
+			UOverlaySlot* EBS = Layers->AddChildToOverlay(EB);
+			EBS->SetHorizontalAlignment(HAlign_Right); EBS->SetVerticalAlignment(VAlign_Bottom); EBS->SetPadding(FMargin(0.f, 0.f, 22.f, 16.f));
+		}
+
+		// Hint tijdens het editen (bovenaan).
+		EditHintText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.9f, 1.f, 0.7f), true, true);
+		UOverlaySlot* EHS = Layers->AddChildToOverlay(EditHintText);
+		EHS->SetHorizontalAlignment(HAlign_Center); EHS->SetVerticalAlignment(VAlign_Top); EHS->SetPadding(FMargin(0.f, 16.f, 0.f, 0.f));
+		EditHintText->SetVisibility(ESlateVisibility::Collapsed);
 
 		// --- Slot-picker (3 saves) — gecentreerde kaart, verborgen tot New Game/Load ---
 		USizeBox* PickSize = WidgetTree->ConstructWidget<USizeBox>();
@@ -700,5 +758,85 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const float K = 0.8f + 0.2f * Osc;
 		FLinearColor C(Base.R * K, Base.G * K, Base.B * K, FMath::Clamp(Base.A * Osc, 0.f, 1.f));
 		Glows[i]->SetBrushColor(C);
+	}
+
+	// --- Lamp-editor: sleep een gloed naar z'n lamp ---
+	if (bEditGlows)
+	{
+		APlayerController* PC = GetOwningPlayer();
+		FVector2D Vp(1.f, 1.f);
+		if (GEngine && GEngine->GameViewport) { GEngine->GameViewport->GetViewportSize(Vp); }
+		float MX = 0.f, MY = 0.f; bool bLmb = false;
+		if (PC) { PC->GetMousePosition(MX, MY); bLmb = PC->IsInputKeyDown(EKeys::LeftMouseButton); }
+		const FVector2D Frac(Vp.X > 1.f ? MX / Vp.X : 0.f, Vp.Y > 1.f ? MY / Vp.Y : 0.f);
+
+		if (bLmb && !bLmbPrev)
+		{
+			// Start slepen: pak de dichtstbijzijnde gloed binnen een drempel.
+			float Best = 0.07f; int32 Pick = -1;
+			for (int32 i = 0; i < GlowFrac.Num(); ++i)
+			{
+				const float D = (GlowFrac[i] - Frac).Size();
+				if (D < Best) { Best = D; Pick = i; }
+			}
+			DragGlow = Pick;
+		}
+		if (bLmb && GlowFrac.IsValidIndex(DragGlow))
+		{
+			GlowFrac[DragGlow] = Frac;
+			if (GlowSlots.IsValidIndex(DragGlow) && GlowSlots[DragGlow]) { GlowSlots[DragGlow]->SetAnchors(FAnchors(Frac.X, Frac.Y, Frac.X, Frac.Y)); }
+			if (EditHintText) { EditHintText->SetText(FText::FromString(FString::Printf(TEXT("Lamp %d  ->  %.3f , %.3f      (drag onto its lamp; auto-saved)"), DragGlow, Frac.X, Frac.Y))); }
+		}
+		if (!bLmb && bLmbPrev && DragGlow >= 0)
+		{
+			SaveGlowPositions();
+			DragGlow = -1;
+		}
+		bLmbPrev = bLmb;
+
+		// Markers bijwerken (volgen de gloeden).
+		for (int32 i = 0; i < GlowHandles.Num(); ++i)
+		{
+			if (!GlowHandles[i] || !GlowFrac.IsValidIndex(i)) { continue; }
+			if (UCanvasPanelSlot* HS = Cast<UCanvasPanelSlot>(GlowHandles[i]->Slot))
+			{
+				HS->SetAnchors(FAnchors(GlowFrac[i].X, GlowFrac[i].Y, GlowFrac[i].X, GlowFrac[i].Y));
+			}
+		}
+	}
+}
+
+void UMainMenuWidget::ToggleGlowEdit()
+{
+	bEditGlows = !bEditGlows;
+	DragGlow = -1; bLmbPrev = false;
+	if (EditCanvas) { EditCanvas->SetVisibility(bEditGlows ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+	if (EditHintText)
+	{
+		EditHintText->SetVisibility(bEditGlows ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		EditHintText->SetText(FText::FromString(TEXT("LAMP EDITOR  -  drag each numbered marker onto its lamp. Saved automatically. Click 'Edit lamps' again to finish.")));
+	}
+	if (bEditGlows) { RebuildGlowHandles(); }
+}
+
+void UMainMenuWidget::RebuildGlowHandles()
+{
+	if (!EditCanvas) { return; }
+	EditCanvas->ClearChildren();
+	GlowHandles.Reset();
+	GlowHandleLabels.Reset();
+	for (int32 i = 0; i < GlowFrac.Num(); ++i)
+	{
+		UBorder* H = WidgetTree->ConstructWidget<UBorder>();
+		H->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.22f), 4.f));
+		H->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UCanvasPanelSlot* S = EditCanvas->AddChildToCanvas(H);
+		S->SetAnchors(FAnchors(GlowFrac[i].X, GlowFrac[i].Y, GlowFrac[i].X, GlowFrac[i].Y));
+		S->SetAlignment(FVector2D(0.5f, 0.5f));
+		S->SetSize(FVector2D(28.f, 28.f));
+		UTextBlock* L = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), i), 12, FLinearColor::White, true, true);
+		H->SetContent(L);
+		GlowHandles.Add(H);
+		GlowHandleLabels.Add(L);
 	}
 }

@@ -91,5 +91,21 @@ protected:
 	TArray<float> GlowFlick; // per-lamp flikker-sterkte
 	TArray<uint8> GlowCandle; // 1 = kaars/vlam-flikker (onregelmatig)
 
+	// --- In-game lamp-editor: sleep de gloeden op hun plek; posities worden in GConfig bewaard ---
+	UPROPERTY() TArray<TObjectPtr<class UCanvasPanelSlot>> GlowSlots; // canvas-slot per gloed (om te verplaatsen)
+	TArray<FVector2D> GlowFrac;     // huidige (fx,fy) per gloed
+	UPROPERTY() TObjectPtr<class UCanvasPanel> EditCanvas;            // markers/labels tijdens editen
+	UPROPERTY() TArray<TObjectPtr<UBorder>> GlowHandles;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> GlowHandleLabels;
+	UPROPERTY() TObjectPtr<class UTextBlock> EditHintText;
+	bool bEditGlows = false;
+	int32 DragGlow = -1;
+	bool bLmbPrev = false;
+
+	void ToggleGlowEdit();
+	void RebuildGlowHandles();
+	void SaveGlowPositions();
+	void LoadGlowFrac(int32 Index, float& Fx, float& Fy) const; // override defaults uit GConfig
+
 	bool bLastOpen = false;
 };
