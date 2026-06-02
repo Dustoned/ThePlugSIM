@@ -416,8 +416,8 @@ void UInventoryWidget::RebuildContent()
 	{
 		const int32 StackId = Order[cell];
 		const int32 Idx = Inv->FindStackById(StackId);
-		// Alle items tonen we in het rooster (ook die op de hotbar staan - de hotbar onderaan is enkel
-		// een snelkoppeling naar dezelfde stapel).
+		// Items die op de hotbar staan tonen we NIET in het rooster (ze staan onderin de hotbar).
+		if (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId)) { continue; }
 
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(176.f); Sz->SetHeightOverride(72.f);

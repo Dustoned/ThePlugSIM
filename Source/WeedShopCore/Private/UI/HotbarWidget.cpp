@@ -31,7 +31,9 @@ TSharedRef<SWidget> UHotbarWidget::RebuildWidget()
 
 void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 {
-	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
+	// SelfHitTestInvisible (niet HitTestInvisible): de canvas vangt zelf niets, maar de drop-cellen
+	// (kinderen) MOGEN muis-events ontvangen wanneer de inventory open is.
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UHorizontalBox* Bar = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Bar);
@@ -118,10 +120,15 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	APawn* P = GetOwningPlayerPawn();
 	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
 
-	// Hit-testbaar (sleep/drop) zolang de inventory open is; anders louter weergave (geen input).
+	// De drop-cellen zijn alleen hit-testbaar (sleep/drop) zolang de inventory open is; daarbuiten
+	// puur weergave zodat ze geen muis-input opvangen tijdens het spelen.
 	UPhoneClientComponent* Phone = P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
 	const bool bInvOpen = Phone && Phone->IsInventoryOpen();
-	SetVisibility(bInvOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::HitTestInvisible);
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	for (UInvCell* DC : DropCells)
+	{
+		if (DC) { DC->SetVisibility(bInvOpen ? ESlateVisibility::Visible : ESlateVisibility::HitTestInvisible); }
+	}
 
 	if (!Inv) { return; }
 
