@@ -200,6 +200,10 @@ protected:
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> PlantMeshes;
 
+	// Klein zwevend "ziek"-bolletje per plek (wit = mold, oranje = pest); zichtbaar bij besmetting.
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> SickMarkers;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> PlantMat;
 

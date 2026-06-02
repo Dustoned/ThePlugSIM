@@ -3,6 +3,7 @@
 #include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Data/WeedStrain.h"
 #include "Cultivation/SoilTypes.h"
 #include "Cultivation/PotTypes.h"
@@ -64,6 +65,21 @@ AGrowPlant::AGrowPlant()
 		if (PlantMat) { PM->SetMaterial(0, PlantMat); }
 		PM->SetVisibility(false);
 		PlantMeshes.Add(PM);
+	}
+
+	// Ziek-markers (zwevend bolletje per plek): wit = mold, oranje = pest.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereFinder(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> BasicMatFinder(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	for (int32 i = 0; i < MaxSlots; ++i)
+	{
+		UStaticMeshComponent* MK = CreateDefaultSubobject<UStaticMeshComponent>(*FString::Printf(TEXT("Sick%d"), i));
+		MK->SetupAttachment(Root);
+		MK->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (SphereFinder.Succeeded()) { MK->SetStaticMesh(SphereFinder.Object); }
+		MK->SetRelativeScale3D(FVector(0.12f));
+		if (BasicMatFinder.Succeeded()) { MK->CreateDynamicMaterialInstance(0, BasicMatFinder.Object); }
+		MK->SetVisibility(false);
+		SickMarkers.Add(MK);
 	}
 
 	static ConstructorHelpers::FObjectFinder<UDataTable> StrainTableFinder(TEXT("/Game/_Project/Data/DT_Strains.DT_Strains"));
@@ -834,5 +850,24 @@ void AGrowPlant::UpdatePlantVisual()
 		PM->SetRelativeLocation(SlotLocalOffset(i));
 		UMaterialInterface* Mat = (SlotPhase[i] == EGrowthPhase::Harvestable && PlantReadyMat) ? PlantReadyMat : PlantMat;
 		if (Mat) { PM->SetMaterial(0, Mat); }
+	}
+
+	// Ziek-markers: zwevend bolletje boven een besmette plant (wit = mold, oranje = pest).
+	for (int32 i = 0; i < SickMarkers.Num(); ++i)
+	{
+		UStaticMeshComponent* MK = SickMarkers[i];
+		if (!MK) { continue; }
+		const bool bSick = (i < N) && SlotStrain.IsValidIndex(i) && !SlotStrain[i].IsNone()
+			&& SlotAfflict.IsValidIndex(i) && SlotAfflict[i] != 0;
+		MK->SetVisibility(bSick);
+		if (!bSick) { continue; }
+		MK->SetRelativeLocation(SlotLocalOffset(i) + FVector(0.f, 0.f, 58.f));
+		const FLinearColor C = (SlotAfflict[i] == 1)
+			? FLinearColor(0.92f, 0.92f, 0.86f)  // mold = vuilwit/grijs
+			: FLinearColor(0.95f, 0.45f, 0.12f); // pest = oranje
+		if (UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(MK->GetMaterial(0)))
+		{
+			MID->SetVectorParameterValue(TEXT("Color"), C);
+		}
 	}
 }
