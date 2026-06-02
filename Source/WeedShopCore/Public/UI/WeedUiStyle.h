@@ -32,7 +32,7 @@ public:
 	FWeedButtonClicked OnAction;
 
 	UFUNCTION()
-	void Handle() { WeedUI::PlayUiSound(this, TEXT("click"), 0.45f); OnAction.ExecuteIfBound(Action, Param); }
+	void Handle() { WeedUI::PlayUiSound(this, TEXT("click"), 0.3f); OnAction.ExecuteIfBound(Action, Param); }
 };
 
 namespace WeedUI
