@@ -6,26 +6,26 @@
 
 #include "CoreMinimal.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
-#include "UObject/ConstructorHelpers.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace PropKit
 {
+	// LET OP: deze helpers worden óók runtime aangeroepen (in SetupVisual), dus GEEN
+	// ConstructorHelpers::FObjectFinder (die mag alleen in constructors). LoadObject werkt overal.
 	inline UStaticMesh* Cube()
 	{
-		static ConstructorHelpers::FObjectFinder<UStaticMesh> F(TEXT("/Engine/BasicShapes/Cube.Cube"));
-		return F.Succeeded() ? F.Object : nullptr;
+		return LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	}
 	inline UStaticMesh* Cylinder()
 	{
-		static ConstructorHelpers::FObjectFinder<UStaticMesh> F(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-		return F.Succeeded() ? F.Object : nullptr;
+		return LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	}
 	inline UMaterialInterface* BaseMat()
 	{
-		static ConstructorHelpers::FObjectFinder<UMaterialInterface> F(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-		return F.Succeeded() ? F.Object : nullptr;
+		return LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 	}
 
 	// Maak een "deco-wortel": hangt aan de (vaak niet-uniform geschaalde) root maar negeert die schaal,
