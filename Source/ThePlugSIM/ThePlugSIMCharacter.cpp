@@ -606,6 +606,16 @@ void AThePlugSIMCharacter::BeginPlay()
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
 
+	// Forceer de movement-instellingen at RUNTIME (een Blueprint-default kan de constructor overschrijven;
+	// als GravityScale daar per ongeluk 0 staat, schiet je bij een sprong omhoog en val je nooit terug).
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->GravityScale = 1.0f;
+		Move->JumpZVelocity = 450.0f;
+		Move->AirControl = 0.5f;
+		if (Move->MovementMode == MOVE_None) { Move->SetMovementMode(MOVE_Walking); }
+	}
+
 	// Herbind de gameplaytoetsen zodra de speler ze in de telefoon (Settings -> Controls) wijzigt.
 	if (IsLocallyControlled())
 	{
