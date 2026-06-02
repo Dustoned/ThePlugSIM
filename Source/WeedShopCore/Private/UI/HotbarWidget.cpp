@@ -1,7 +1,9 @@
 #include "UI/HotbarWidget.h"
 
 #include "UI/WeedUiStyle.h"
+#include "UI/InventoryWidget.h" // UInvCell (sleep/drop)
 #include "Inventory/InventoryComponent.h"
+#include "Phone/PhoneClientComponent.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -45,10 +47,16 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		Sz->SetWidthOverride(78.f);
 		Sz->SetHeightOverride(78.f);
 
+		// Buitenste overlay: visuele cel (onder) + transparante sleep/drop-cel (boven).
+		UOverlay* SlotOv = WidgetTree->ConstructWidget<UOverlay>();
+		Sz->SetContent(SlotOv);
+
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
 		Box->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.9f), 8.f));
 		Box->SetPadding(FMargin(4.f, 3.f, 4.f, 3.f));
-		Sz->SetContent(Box);
+		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UOverlaySlot* BoxOS = SlotOv->AddChildToOverlay(Box);
+		BoxOS->SetHorizontalAlignment(HAlign_Fill); BoxOS->SetVerticalAlignment(VAlign_Fill);
 
 		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 		Box->SetContent(Ov);
@@ -83,6 +91,15 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		NameOS->SetHorizontalAlignment(HAlign_Center);
 		NameOS->SetVerticalAlignment(VAlign_Bottom);
 
+		// Transparante cel bovenop die drag (vanaf dit slot) en drop (toewijzen) afhandelt. Alleen
+		// actief als de inventory open is (dan zetten we de hele hotbar hit-testbaar).
+		UInvCell* Drop = WidgetTree->ConstructWidget<UInvCell>();
+		Drop->SlotIndex = i; Drop->GridCell = -1;
+		Drop->Bg = FLinearColor(0.f, 0.f, 0.f, 0.f); Drop->Radius = 8.f;
+		UOverlaySlot* DropOS = SlotOv->AddChildToOverlay(Drop);
+		DropOS->SetHorizontalAlignment(HAlign_Fill); DropOS->SetVerticalAlignment(VAlign_Fill);
+		DropCells.Add(Drop);
+
 		UHorizontalBoxSlot* BS = Bar->AddChildToHorizontalBox(Sz);
 		BS->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
 
@@ -97,10 +114,15 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
-	SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	APawn* P = GetOwningPlayerPawn();
-	const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+
+	// Hit-testbaar (sleep/drop) zolang de inventory open is; anders louter weergave (geen input).
+	UPhoneClientComponent* Phone = P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+	const bool bInvOpen = Phone && Phone->IsInventoryOpen();
+	SetVisibility(bInvOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::HitTestInvisible);
+
 	if (!Inv) { return; }
 
 	const int32 Active = Inv->GetActiveSlot();
@@ -111,7 +133,16 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const bool bActive = (i == Active);
 		SlotBoxes[i]->SetBrush(WeedUI::Rounded(bActive ? FLinearColor(0.20f, 0.30f, 0.16f, 0.96f) : FLinearColor(0.08f, 0.09f, 0.12f, 0.88f), 8.f));
 
-		const int32 Idx = Inv->FindStackById(Inv->GetHotbarStackId(i));
+		const int32 SlotSid = Inv->GetHotbarStackId(i);
+		// Sleep/drop-cel up-to-date houden (geen rebuild nodig: velden worden bij het event gelezen).
+		if (DropCells.IsValidIndex(i))
+		{
+			DropCells[i]->Inv = Inv;
+			DropCells[i]->StackId = SlotSid;
+			DropCells[i]->bDraggable = (SlotSid != 0);
+		}
+
+		const int32 Idx = Inv->FindStackById(SlotSid);
 		if (Stacks.IsValidIndex(Idx))
 		{
 			const FInventoryStack& S = Stacks[Idx];

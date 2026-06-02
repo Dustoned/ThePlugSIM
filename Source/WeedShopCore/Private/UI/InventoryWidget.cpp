@@ -246,8 +246,8 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(900.f, 520.f));
-	CS->SetPosition(FVector2D(0.f, 0.f));
+	CS->SetSize(FVector2D(1040.f, 600.f));
+	CS->SetPosition(FVector2D(0.f, -30.f)); // iets omhoog zodat de in-game hotbar eronder vrij blijft
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(VB);
@@ -301,7 +301,8 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBoxSlot* LS = Body->AddChildToHorizontalBox(StashSize);
 	LS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
 
-	// --- Rechts: slots (wrap, scrollbaar) + hotbar ---
+	// --- Rechts: slots (wrap, scrollbaar). De hotbar zit NIET meer hier: je gebruikt de
+	//     in-game hotbar onderaan (die is een sleep-doel zolang de inventory open is). ---
 	UVerticalBox* Right = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBoxSlot* RS = Body->AddChildToHorizontalBox(Right);
 	RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -313,11 +314,9 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 	Scroll->AddChild(Grid);
 
-	// Hotbar-rij.
-	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Hotbar"), 12, FLinearColor(0.7f, 0.7f, 0.8f)))
-		->SetPadding(FMargin(0.f, 8.f, 0.f, 4.f));
-	HotbarBox = WidgetTree->ConstructWidget<UHorizontalBox>();
-	Right->AddChildToVerticalBox(HotbarBox);
+	// Hint onderaan: sleep naar de hotbar onderin het scherm.
+	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep een item naar de hotbar onderaan het scherm"), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
+		->SetPadding(FMargin(2.f, 8.f, 0.f, 0.f));
 }
 
 void UInventoryWidget::RebuildStash()
@@ -402,7 +401,7 @@ void UInventoryWidget::RebuildContent()
 	RebuildStash();
 
 	UInventoryComponent* Inv = GetInv();
-	if (!Inv || !Grid || !HotbarBox) { return; }
+	if (!Inv || !Grid) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 
 	WeightText->SetText(FText::FromString(FString::Printf(TEXT("Slots %d/%d    Weight %.1f / %.0f kg"),
@@ -417,9 +416,8 @@ void UInventoryWidget::RebuildContent()
 	{
 		const int32 StackId = Order[cell];
 		const int32 Idx = Inv->FindStackById(StackId);
-		// Items die op de hotbar staan tonen we GEEN cel (ze staan in de hotbar-rij). Zo zijn de lege
-		// vakjes precies de echt vrije slots (en niet ook nog de plekken van hotbar-items).
-		if (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId)) { continue; }
+		// Alle items tonen we in het rooster (ook die op de hotbar staan - de hotbar onderaan is enkel
+		// een snelkoppeling naar dezelfde stapel).
 
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(176.f); Sz->SetHeightOverride(72.f);
@@ -490,46 +488,6 @@ void UInventoryWidget::RebuildContent()
 		}
 		Sz->SetContent(Cell);
 		Grid->AddChildToWrapBox(Sz);
-	}
-
-	// --- Hotbar-rij (elk slot = drop-doel; bezet slot is ook sleepbaar) ---
-	HotbarBox->ClearChildren();
-	for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h)
-	{
-		const int32 SlotStackId = Inv->GetHotbarStackId(h);
-		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(58.f); Sz->SetHeightOverride(54.f);
-
-		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
-		Cell->StackId = SlotStackId; Cell->SlotIndex = h; Cell->bDraggable = (SlotStackId != 0);
-		Cell->Inv = Inv; Cell->Owner = this;
-		Cell->Radius = 7.f;
-		Cell->IconSize = 30.f;
-		Cell->bSlotNumber = true; Cell->SlotNumber = h + 1;
-		const bool bActive = (h == Inv->GetActiveSlot());
-		Cell->Bg = bActive ? FLinearColor(0.18f, 0.30f, 0.15f, 0.98f) : FLinearColor(0.10f, 0.11f, 0.14f, 0.96f);
-		const int32 Idx = Inv->FindStackById(SlotStackId);
-		if (Stacks.IsValidIndex(Idx))
-		{
-			const FInventoryStack& S = Stacks[Idx];
-			const FString IdStr = S.ItemId.ToString();
-			const bool bBud = IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("WetBud_"));
-			Cell->IconId = S.ItemId;
-			Cell->Accent = bActive ? FLinearColor(0.55f, 0.95f, 0.5f) : WeedUI::ItemAccent(S.ItemId);
-			const FString HbName = WeedUI::PrettyItemName(S.ItemId);
-			if (S.ItemId == TEXT("Cash"))
-			{
-				Cell->Tooltip = FString::Printf(TEXT("%s\nEUR %d contant"), *HbName, S.Quantity);
-			}
-			else
-			{
-				Cell->Badge = bBud ? FString::Printf(TEXT("%dg"), S.Quantity) : FString::Printf(TEXT("x%d"), S.Quantity);
-				Cell->Tooltip = FString::Printf(TEXT("%s  (%s)"), *HbName, *Cell->Badge);
-			}
-		}
-		Sz->SetContent(Cell);
-		UHorizontalBoxSlot* HS = HotbarBox->AddChildToHorizontalBox(Sz);
-		HS->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
 	}
 }
 
