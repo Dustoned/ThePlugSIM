@@ -41,6 +41,12 @@ struct FNpcState
 	// -1 = nog nooit. Voor de per-NPC cooldown zodat dezelfde persoon niet meteen terugkomt.
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float LastDealAbs = -1.f;
+
+	// Telefoon-afspraken vandaag (cap ~1-2/dag). Reset bij een nieuwe dag.
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	int32 ApptDay = -1;
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	int32 ApptCountToday = 0;
 };
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
@@ -51,9 +57,17 @@ class WEEDSHOPCORE_API UNpcRegistryComponent : public UActorComponent
 public:
 	UNpcRegistryComponent();
 
-	// Loyaliteit-drempel waarop je het nummer (contact) krijgt.
+	// Respect-drempel waarop een NPC z'n nummer deelt (contact). Bewust respect-gedreven.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
+	float UnlockRespect = 45.f;
+
+	// (Legacy) loyaliteit-drempel — niet meer de primaire unlock, behouden voor compat.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
 	float UnlockLoyalty = 40.f;
+
+	// Max telefoon-afspraken per NPC per dag (1-2 voelt natuurlijk).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
+	int32 MaxApptsPerDay = 2;
 
 	// Cooldown (in dag-cyclus-seconden) waarin dezelfde NPC niet opnieuw deal/gevraagd wordt.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
@@ -70,6 +84,15 @@ public:
 	// Heeft deze NPC recent (binnen DealCooldownSeconds) een deal gedaan?
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	bool IsOnCooldown(FName NpcId) const;
+
+	// Heeft deze NPC z'n nummer al gedeeld (contact)?
+	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
+	bool IsUnlocked(FName NpcId) const;
+
+	// Mag deze NPC vandaag (nog) een telefoon-afspraak sturen (onder de dag-cap)?
+	bool CanAppointToday(FName NpcId) const;
+	// Leg vast dat er net een afspraak naar deze NPC is gestuurd (telt mee voor de dag-cap).
+	void NoteAppointment(FName NpcId);
 
 	// Lees de stats van een NPC (false als onbekend).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
@@ -105,6 +128,8 @@ protected:
 
 	// Monotone "nu"-tijd uit de dag-cyclus (dag*1e6 + tijd-op-dag); 0 als geen cyclus.
 	float NowAbs() const;
+	// Huidig dagnummer (0 als geen cyclus).
+	int32 CurrentDay() const;
 
 	// Check loyaliteit-drempel; ontgrendel het contact bij de ContactsComponent.
 	void CheckUnlock(FNpcState& State);

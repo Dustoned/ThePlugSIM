@@ -103,17 +103,43 @@ void UContactsComponent::SendRandomAppointment()
 		return;
 	}
 
-	// Sla contacten over die net een deal deden (per-NPC cooldown) -> ze vragen niet meteen opnieuw.
+	// Telefoon-orders schalen met progressie: alleen contacten (= NPC's die hun nummer al deelden),
+	// niet op cooldown, en onder de dag-cap. De KANS + selectie weegt mee met hoe "warm" de relatie is
+	// (verslaving/loyaliteit/respect): begin -> zelden een appje, naarmate ze warmer worden steeds vaker.
 	UNpcRegistryComponent* Reg = nullptr;
 	if (const AWeedShopGameState* GSc = Cast<AWeedShopGameState>(GetOwner())) { Reg = GSc->GetNpcRegistry(); }
-	TArray<int32> Eligible;
+
+	struct FCand { int32 Idx; float Warmth; };
+	TArray<FCand> Cands;
+	float TopWarmth = 0.f;
 	for (int32 i = 0; i < Contacts.Num(); ++i)
 	{
-		if (!Reg || !Reg->IsOnCooldown(Contacts[i].ContactId)) { Eligible.Add(i); }
+		const FName Id = Contacts[i].ContactId;
+		if (Reg && Reg->IsOnCooldown(Id)) { continue; }
+		if (Reg && !Reg->CanAppointToday(Id)) { continue; }
+		float Warmth = 0.5f;
+		if (Reg)
+		{
+			float R = 0.f, L = 0.f, A = 0.f; FText N;
+			Reg->GetStats(Id, R, L, A, N);
+			Warmth = FMath::Clamp((A + L + R) / 300.f, 0.f, 1.f); // 0..1 gemiddelde relatie
+		}
+		Cands.Add({ i, Warmth });
+		TopWarmth = FMath::Max(TopWarmth, Warmth);
 	}
-	if (Eligible.Num() == 0) { return; } // iedereen op cooldown -> nu even geen nieuw bericht
+	if (Cands.Num() == 0) { return; } // niemand beschikbaar (cooldown/dag-cap)
 
-	const FPhoneContact& C = Contacts[Eligible[FMath::RandRange(0, Eligible.Num() - 1)]];
+	// Globale kans dat er dit interval iemand appt, schaalt met de warmste relatie (begin laag).
+	const float SendChance = FMath::Clamp(0.12f + TopWarmth * 0.78f, 0.12f, 0.95f);
+	if (FMath::FRand() > SendChance) { return; }
+
+	// Gewogen keuze: warmere NPC's appen vaker (kleine basis zodat ook lauwe contacten soms appen).
+	float Sum = 0.f; for (const FCand& Cd : Cands) { Sum += Cd.Warmth + 0.15f; }
+	float Roll = FMath::FRandRange(0.f, Sum);
+	int32 Pick = Cands[0].Idx;
+	for (const FCand& Cd : Cands) { Roll -= (Cd.Warmth + 0.15f); if (Roll <= 0.f) { Pick = Cd.Idx; break; } }
+	const FPhoneContact& C = Contacts[Pick];
+	if (Reg) { Reg->NoteAppointment(C.ContactId); } // telt mee voor de 1-2/dag-cap
 
 	float Now = 0.f, Length = 1800.f;
 	GetCycleTime(Now, Length);

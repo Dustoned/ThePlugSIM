@@ -82,6 +82,39 @@ float UNpcRegistryComponent::NowAbs() const
 	return 0.f;
 }
 
+int32 UNpcRegistryComponent::CurrentDay() const
+{
+	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (const UDayCycleComponent* Day = GS->GetDayCycle()) { return Day->GetDayNumber(); }
+	}
+	return 0;
+}
+
+bool UNpcRegistryComponent::IsUnlocked(FName NpcId) const
+{
+	const FNpcState* S = Find(NpcId);
+	return S && S->bUnlocked;
+}
+
+bool UNpcRegistryComponent::CanAppointToday(FName NpcId) const
+{
+	const FNpcState* S = Find(NpcId);
+	if (!S) { return false; }
+	if (S->ApptDay != CurrentDay()) { return MaxApptsPerDay > 0; } // nieuwe dag -> teller reset straks
+	return S->ApptCountToday < MaxApptsPerDay;
+}
+
+void UNpcRegistryComponent::NoteAppointment(FName NpcId)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	FNpcState* S = Find(NpcId);
+	if (!S) { return; }
+	const int32 Day = CurrentDay();
+	if (S->ApptDay != Day) { S->ApptDay = Day; S->ApptCountToday = 0; }
+	++S->ApptCountToday;
+}
+
 void UNpcRegistryComponent::MarkDealt(FName NpcId)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
@@ -150,7 +183,8 @@ void UNpcRegistryComponent::ApplyStats(FName NpcId, float Respect, float Loyalty
 
 void UNpcRegistryComponent::CheckUnlock(FNpcState& State)
 {
-	if (State.bUnlocked || State.Loyalty < UnlockLoyalty)
+	// Nummer delen is RESPECT-gedreven: genoeg vertrouwen opgebouwd -> je krijgt z'n nummer.
+	if (State.bUnlocked || State.Respect < UnlockRespect)
 	{
 		return;
 	}

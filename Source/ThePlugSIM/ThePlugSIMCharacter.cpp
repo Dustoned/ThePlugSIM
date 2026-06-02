@@ -451,11 +451,17 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		GS->GetHeat()->AddHeat(5.f);
 	}
 
-	// Goede joint (niet te zwak)? Dan wil de klant METEEN kopen en vraagt 'ie grammen van een
-	// verkoopbare strain die je nú in voorraad hebt, zodat je direct kunt verkopen.
 	const bool bLikedIt = !(bPicky && Quality < 0.5f);
+
+	// Een joint bouwt vooral de RELATIE op. Of 'ie nú wil kopen wordt elke keer opnieuw bepaald door
+	// z'n stats: pas als 'ie genoeg verslaafd/loyaal is (prospect -> koper) en niet op cooldown staat,
+	// vraagt 'ie meteen grammen. Eén goede joint maakt van een vreemde dus géén vaste klant.
+	const bool bConverted = Customer->RefreshProspect(); // prospect -> koper als verslaving hoog genoeg
+	const bool bIsBuyer = (Customer->State == ECustomerState::WantsToOrder || Customer->State == ECustomerState::Negotiating);
+	const bool bOnCooldown = (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone()) ? GS->GetNpcRegistry()->IsOnCooldown(Customer->NpcId) : false;
+
 	bool bWantsNow = false;
-	if (bLikedIt)
+	if (bLikedIt && bIsBuyer && !bOnCooldown)
 	{
 		// Zoek verkoopbare wiet: verpakte Bag_ heeft voorrang (dat kopen klanten), anders gedroogde Bud_.
 		FName WantId = NAME_None;
@@ -479,13 +485,10 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		}
 	}
 
-	// Prospect genoeg opgewarmd? Dan wordt het sowieso een echte klant.
-	const bool bConverted = Customer->RefreshProspect();
-
-	// XP voor het werven: klein per sample, bonus als je iemand omzet naar koper.
+	// XP voor het werven: klein per sample, bonus als je iemand net omzette naar koper.
 	if (GS && GS->GetLeveling())
 	{
-		GS->GetLeveling()->AddXP((bConverted || bWantsNow) ? 25 : 3);
+		GS->GetLeveling()->AddXP(bConverted ? 25 : 3);
 	}
 
 	if (GEngine && bLikedIt)
@@ -493,17 +496,28 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		if (bWantsNow)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
-				FString::Printf(TEXT("\"Damn, that's good! Sell me %dg of that.\" - deal him now."), Customer->DesiredQuantity));
+				FString::Printf(TEXT("\"That's good! Sell me %dg of that.\""), Customer->DesiredQuantity));
 		}
 		else if (bConverted)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Green,
-				TEXT("\"Damn, that's good! Got any more to sell?\" - they'll buy now."));
+				TEXT("\"Damn, that's good - I'm hooked. Got any to sell?\""));
 		}
 		else
 		{
+			// Nog niet warm genoeg: laat de voortgang naar 'koper' + 'nummer' zien.
+			float R = 0.f, L = 0.f, A = 0.f; FText N;
+			float NeedRespect = 45.f;
+			bool bUnlocked = false;
+			if (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone())
+			{
+				GS->GetNpcRegistry()->GetStats(Customer->NpcId, R, L, A, N);
+				NeedRespect = GS->GetNpcRegistry()->UnlockRespect;
+				bUnlocked = GS->GetNpcRegistry()->IsUnlocked(Customer->NpcId);
+			}
+			const FString NumHint = bUnlocked ? TEXT("") : FString::Printf(TEXT("  -  respect %.0f/%.0f for their number"), R, NeedRespect);
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green,
-				FString::Printf(TEXT("Sample given (%dg joint, relationship +)."), BestGrams));
+				FString::Printf(TEXT("Sample given (relationship+). Addiction %.0f/%.0f to start buying.%s"), A, Customer->AddictionToBuy, *NumHint));
 		}
 	}
 }
