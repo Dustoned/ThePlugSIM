@@ -11,6 +11,8 @@
 #include "Components/VerticalBox.h"
 #include "Components/Border.h"
 #include "Components/SizeBox.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
 
@@ -40,31 +42,50 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 	for (int32 i = 0; i < N; ++i)
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(80.f);
-		Sz->SetHeightOverride(54.f);
+		Sz->SetWidthOverride(66.f);
+		Sz->SetHeightOverride(66.f);
 
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
 		Box->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.9f), 8.f));
-		Box->SetPadding(FMargin(6.f, 4.f, 6.f, 4.f));
+		Box->SetPadding(FMargin(4.f));
 		Sz->SetContent(Box);
 
-		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-		Box->SetContent(VB);
+		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+		Box->SetContent(Ov);
 
-		UTextBlock* Num = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), i + 1), 9, FLinearColor(0.5f, 0.5f, 0.6f));
-		VB->AddChildToVerticalBox(Num);
-		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.9f, 0.93f, 1.f));
+		// Icoon, gecentreerd (inhoud wordt in de tick gezet/gewisseld).
+		USizeBox* IcoBox = WidgetTree->ConstructWidget<USizeBox>();
+		IcoBox->SetWidthOverride(34.f); IcoBox->SetHeightOverride(34.f);
+		UOverlaySlot* IcoOS = Ov->AddChildToOverlay(IcoBox);
+		IcoOS->SetHorizontalAlignment(HAlign_Center);
+		IcoOS->SetVerticalAlignment(VAlign_Center);
+
+		// Slotnummer linksboven.
+		UOverlaySlot* NumOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), i + 1), 9, FLinearColor(0.55f, 0.58f, 0.7f), false, true));
+		NumOS->SetHorizontalAlignment(HAlign_Left);
+		NumOS->SetVerticalAlignment(VAlign_Top);
+
+		// Aantal/gram-badge rechtsonder.
+		UTextBlock* Badge = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.92f, 0.95f, 1.f), false, true);
+		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(Badge);
+		BadgeOS->SetHorizontalAlignment(HAlign_Right);
+		BadgeOS->SetVerticalAlignment(VAlign_Bottom);
+
+		// Naam onderaan, klein (gecentreerd, afgekapt).
+		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor(0.85f, 0.88f, 0.96f), true);
 		Name->SetClipping(EWidgetClipping::ClipToBounds);
-		VB->AddChildToVerticalBox(Name);
-		UTextBlock* Info = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.75f, 0.85f, 0.7f));
-		VB->AddChildToVerticalBox(Info);
+		UOverlaySlot* NameOS = Ov->AddChildToOverlay(Name);
+		NameOS->SetHorizontalAlignment(HAlign_Center);
+		NameOS->SetVerticalAlignment(VAlign_Bottom);
 
 		UHorizontalBoxSlot* BS = Bar->AddChildToHorizontalBox(Sz);
 		BS->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
 
 		SlotBoxes.Add(Box);
+		SlotIconBoxes.Add(IcoBox);
 		SlotNames.Add(Name);
-		SlotInfos.Add(Info);
+		SlotBadges.Add(Badge);
+		SlotLastIcon.Add(NAME_None);
 	}
 }
 
@@ -90,45 +111,35 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FInventoryStack& S = Stacks[Idx];
 			const FString IdStr = S.ItemId.ToString();
-			FString Nm = WeedUI::PrettyItemName(S.ItemId);
-			if (Nm.Len() > 12) { Nm = Nm.Left(11) + TEXT("."); }
-
 			const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
-			const bool bDryBud = IdStr.StartsWith(TEXT("Bud_"));
-			const bool bJoint = IdStr.StartsWith(TEXT("Joint_"));
+			const bool bBud = bWet || IdStr.StartsWith(TEXT("Bud_"));
+			const bool bCash = (S.ItemId == TEXT("Cash"));
 
+			// Icoon alleen (her)bouwen als het item in dit slot veranderd is.
+			if (SlotLastIcon[i] != S.ItemId)
+			{
+				SlotLastIcon[i] = S.ItemId;
+				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 34.f));
+			}
+
+			FString Nm = WeedUI::PrettyItemName(S.ItemId);
+			if (Nm.Len() > 10) { Nm = Nm.Left(9) + TEXT("."); }
 			SlotNames[i]->SetText(FText::FromString(Nm));
-			// Naam-kleur: nat = blauw, droge bud = groen, joint = lichtgroen, rest = wit.
-			SlotNames[i]->SetColorAndOpacity(FSlateColor(
-				bWet ? FLinearColor(0.45f, 0.75f, 1.f)
-				: (bDryBud ? FLinearColor(0.55f, 1.f, 0.6f)
-				: FLinearColor(0.9f, 0.93f, 1.f))));
+			SlotNames[i]->SetColorAndOpacity(FSlateColor(WeedUI::ItemAccent(S.ItemId)));
 
-			if (bWet)
-			{
-				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.45f, 0.75f, 1.f)));
-				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("%dg WET"), S.Quantity)));
-			}
-			else if (bDryBud)
-			{
-				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.95f, 0.65f)));
-				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("%dg DRY %.0f%%"), S.Quantity, S.Quality)));
-			}
-			else if (bJoint)
-			{
-				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.85f, 0.7f)));
-				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("x%d  %.0f%%"), S.Quantity, S.Quality)));
-			}
-			else
-			{
-				SlotInfos[i]->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.85f, 0.7f)));
-				SlotInfos[i]->SetText(FText::FromString(FString::Printf(TEXT("x%d"), S.Quantity)));
-			}
+			SlotBadges[i]->SetText(bCash
+				? FText::GetEmpty()
+				: FText::FromString(bBud ? FString::Printf(TEXT("%dg"), S.Quantity) : FString::Printf(TEXT("x%d"), S.Quantity)));
 		}
 		else
 		{
+			if (SlotLastIcon[i] != NAME_None)
+			{
+				SlotLastIcon[i] = NAME_None;
+				SlotIconBoxes[i]->SetContent(WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor::Transparent));
+			}
 			SlotNames[i]->SetText(FText::GetEmpty());
-			SlotInfos[i]->SetText(FText::GetEmpty());
+			SlotBadges[i]->SetText(FText::GetEmpty());
 		}
 	}
 }

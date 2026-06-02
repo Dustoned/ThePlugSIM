@@ -9,6 +9,7 @@
 class UBorder;
 class UTextBlock;
 class UCanvasPanel;
+class USizeBox;
 
 UCLASS()
 class WEEDSHOPCORE_API UHotbarWidget : public UUserWidget
@@ -22,6 +23,8 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 
 	UPROPERTY() TArray<TObjectPtr<UBorder>> SlotBoxes;
+	UPROPERTY() TArray<TObjectPtr<USizeBox>> SlotIconBoxes; // icoon-container per slot (inhoud wisselt)
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotNames;
-	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotInfos;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotBadges;  // aantal/gram-pill
+	TArray<FName> SlotLastIcon;                             // laatst getoonde item-id (om icoon niet elke tick te herbouwen)
 };
