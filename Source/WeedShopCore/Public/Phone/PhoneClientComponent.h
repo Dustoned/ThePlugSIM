@@ -107,6 +107,12 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerPack(FName BudId, FName ContainerId, int32 Batch);
 
+	// Nieuw: verpak een EXACT aantal gram (1..capaciteit) van BudId in 1 container (gram-slider-UI).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
+	void RequestPackGrams(FName BudId, FName ContainerId, int32 Grams);
+	UFUNCTION(Server, Reliable)
+	void ServerPackGrams(FName BudId, FName ContainerId, int32 Grams);
+
 	// --- Opslag-schap (in de wereld): stacks tussen je inventory en het schap verplaatsen ---
 	void OpenShelf(class AStorageShelf* Shelf);
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Shelf")

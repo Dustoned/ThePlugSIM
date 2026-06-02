@@ -32,7 +32,13 @@ protected:
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> Body;
+	UPROPERTY() TObjectPtr<class USlider> GramSlider;
+	UPROPERTY() TObjectPtr<class UTextBlock> GramLabel;
+	UPROPERTY() TObjectPtr<class UTextBlock> PackBtnLabel;
 
-	FName SelStrain;   // gekozen gedroogde Bud_<strain>
-	FString LastSig;   // herbouw alleen bij wijziging
+	FName SelStrain;       // gekozen gedroogde Bud_<strain>
+	FName SelContainer;    // gekozen container (Cont_*)
+	int32 SelGrams = 1;    // gekozen aantal gram (1..capaciteit)
+	int32 CurCap = 1;      // huidige max (container-cap geklemd op beschikbare wiet)
+	FString LastSig;       // herbouw alleen bij wijziging
 };

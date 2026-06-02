@@ -125,12 +125,12 @@ namespace
 		{ TEXT("Bench_Pack"),  TEXT("Packing bench"),            TEXT("1 bag at a time"),  12000, 1 },
 		{ TEXT("Bench_Pack2"), TEXT("Pro packing bench"),        TEXT("3 bags at a time"),  40000, 1 },
 		{ TEXT("Bench_Pack3"), TEXT("Industrial packing table"), TEXT("6 bags at a time"), 110000, 1 },
-		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Up to 2g each - 10 pcs"),   800, 10 },
-		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Up to 5g each - 10 pcs"),  1500, 10 },
-		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Up to 10g each - 5 pcs"),  2500,  5 },
-		{ TEXT("Cont_Jar15"), TEXT("Jars"),           TEXT("Up to 15g each - 5 pcs"),  4000,  5 },
-		{ TEXT("Cont_Block100"),  TEXT("Press blocks"), TEXT("100g each - 3 pcs (bulk)"),   9000, 3 },
-		{ TEXT("Cont_Garbage500"),TEXT("Garbage bags"), TEXT("500g each - 2 pcs (bulk)"),  30000, 2 },
+		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Bag up to 2g - 10 pcs"),    800, 10 },
+		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Bag up to 5g - 10 pcs"),   1500, 10 },
+		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Jar up to 14g - 5 pcs"),   2500,  5 },
+		{ TEXT("Cont_Jar15"), TEXT("Big jars"),       TEXT("Jar up to 50g - 5 pcs"),   6000,  5 },
+		{ TEXT("Cont_Block100"),  TEXT("Press blocks"), TEXT("Up to 100g - 3 pcs (bulk)"),   9000, 3 },
+		{ TEXT("Cont_Garbage500"),TEXT("Garbage bags"), TEXT("Up to 500g - 2 pcs (bulk)"),  30000, 2 },
 		// Meubels (placeables, binnen neerzetten). Puur inrichting voor nu.
 		{ TEXT("Table"),    TEXT("Table"),    TEXT("A sturdy table"),       12000, 1 },
 		{ TEXT("Mattress"), TEXT("Mattress"), TEXT("Somewhere to crash"),    8000, 1 },
@@ -274,12 +274,12 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Bench_Pack"))      { return 1; }
 	if (S == TEXT("Bench_Pack2"))     { return 7; }
 	if (S == TEXT("Bench_Pack3"))     { return 15; }
-	// Containers (verpakkingsmateriaal)
+	// Containers (verpakkingsmateriaal) — nettere progressie van klein naar bulk.
 	if (S == TEXT("Cont_Bag2"))       { return 1; }
 	if (S == TEXT("Cont_Bag5"))       { return 2; }
 	if (S == TEXT("Cont_Jar10"))      { return 4; }
-	if (S == TEXT("Cont_Jar15"))      { return 5; }
-	if (S == TEXT("Cont_Block100"))   { return 9; }
+	if (S == TEXT("Cont_Jar15"))      { return 7; }
+	if (S == TEXT("Cont_Block100"))   { return 11; }
 	if (S == TEXT("Cont_Garbage500")) { return 16; }
 	// Meubels / opslag
 	if (S == TEXT("Mattress"))        { return 1; }

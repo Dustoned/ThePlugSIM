@@ -483,11 +483,12 @@ void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf,
 
 int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
 {
+	// MAX gram per container (de gram-slider gaat van 1 tot dit). Realistischer: jars tot ~50g.
 	const FString S = ContainerId.ToString();
 	if (S == TEXT("Cont_Bag2"))     { return 2; }
 	if (S == TEXT("Cont_Bag5"))     { return 5; }
-	if (S == TEXT("Cont_Jar10"))    { return 10; }
-	if (S == TEXT("Cont_Jar15"))    { return 15; }
+	if (S == TEXT("Cont_Jar10"))    { return 14; }  // half ounce
+	if (S == TEXT("Cont_Jar15"))    { return 50; }  // grote pot
 	if (S == TEXT("Cont_Block100")) { return 100; }
 	if (S == TEXT("Cont_Garbage500")) { return 500; }
 	return 0;
@@ -496,6 +497,41 @@ int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
 void UPhoneClientComponent::RequestPack(FName BudId, FName ContainerId)
 {
 	ServerPack(BudId, ContainerId, PackBatchUI);
+}
+
+void UPhoneClientComponent::RequestPackGrams(FName BudId, FName ContainerId, int32 Grams)
+{
+	ServerPackGrams(BudId, ContainerId, Grams);
+}
+
+void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName ContainerId, int32 Grams)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv) { return; }
+	const FString BudStr = BudId.ToString();
+	if (!BudStr.StartsWith(TEXT("Bud_"))) { return; }            // alleen GEDROOGDE buds verpakken
+	const int32 Cap = ContainerCapacity(ContainerId);
+	if (Cap <= 0 || !Inv->HasItem(ContainerId, 1)) { return; }
+
+	const int32 Have = Inv->GetQuantity(BudId);
+	if (Have <= 0) { return; }
+	// Klamp de gevraagde grammen op de container-capaciteit én de beschikbare wiet (max = container).
+	const int32 PackGrams = FMath::Clamp(Grams, 1, FMath::Min(Cap, Have));
+	if (PackGrams <= 0) { return; }
+
+	const FName BagId(*FString::Printf(TEXT("Bag_%s"), *BudStr.RightChop(4))); // Bud_X -> Bag_X
+	const float Thc = Inv->GetItemQuality(BudId);
+	const float Q = Inv->GetItemQualityPct(BudId);
+
+	if (!Inv->RemoveItem(BudId, PackGrams)) { return; }
+	Inv->RemoveItem(ContainerId, 1);
+	Inv->AddItem(BagId, PackGrams, Thc, Q);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor(120, 220, 160),
+			FString::Printf(TEXT("Packed a %dg bag of %s."), PackGrams, *BudStr.RightChop(4)));
+	}
 }
 
 void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName ContainerId, int32 Batch)

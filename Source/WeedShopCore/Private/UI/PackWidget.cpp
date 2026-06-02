@@ -14,6 +14,8 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/ScrollBox.h"
+#include "Components/Slider.h"
+#include "Components/SizeBox.h"
 #include "GameFramework/Pawn.h"
 
 void UPackWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
@@ -86,14 +88,15 @@ void UPackWidget::FillBody()
 {
 	if (!Body || !PhoneComp.IsValid()) { return; }
 	Body->ClearChildren();
+	GramSlider = nullptr; GramLabel = nullptr; PackBtnLabel = nullptr;
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 	UInventoryComponent* Inv = GetInv(GetOwningPlayerPawn());
 	if (!Inv) { return; }
 
 	auto Row = [this](UWidget* W, const FMargin& P) { Body->AddChildToVerticalBox(W)->SetPadding(P); };
 
-	// 1) Kies een gedroogde strain (Bud_).
-	Row(WeedUI::Text(WidgetTree, TEXT("Dried weed (pick a strain):"), 12, FLinearColor(0.8f, 0.85f, 0.95f)), FMargin(0, 0, 0, 4));
+	// === 1) Kies een gedroogde strain (Bud_) ===
+	Row(WeedUI::Text(WidgetTree, TEXT("1.  Pick dried weed"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 0, 0, 4));
 	bool bAnyBud = false;
 	for (const FInventoryStack& S : Inv->GetStacks())
 	{
@@ -107,13 +110,13 @@ void UPackWidget::FillBody()
 			*WeedUI::PrettyItemName(Bud), S.Quantity, S.Quality, S.QualityPct), 12, FLinearColor::White, true));
 		Row(B, FMargin(0, 2, 0, 2));
 	}
-	if (!bAnyBud) { Row(WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry harvested buds on a drying rack first."), 11, FLinearColor::Gray), FMargin(0, 0, 0, 6)); return; }
+	if (!bAnyBud) { Row(WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry harvested buds on a drying rack first."), 11, FLinearColor::Gray), FMargin(0, 6, 0, 6)); return; }
 
-	if (SelStrain.IsNone() || Inv->GetQuantity(SelStrain) <= 0) { return; }
+	const int32 BudHave = SelStrain.IsNone() ? 0 : Inv->GetQuantity(SelStrain);
+	if (SelStrain.IsNone() || BudHave <= 0) { return; }
 
-	// 2) Kies een container die je hebt -> verpak.
-	const int32 Batch = Ph->GetPackBatch();
-	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Pack %s into:  (this bench bags %d at a time)"), *WeedUI::PrettyItemName(SelStrain), Batch), 12, FLinearColor(0.8f, 0.85f, 0.95f)), FMargin(0, 8, 0, 4));
+	// === 2) Kies een container ===
+	Row(WeedUI::Text(WidgetTree, TEXT("2.  Pick a bag/jar"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 4));
 	static const TCHAR* Conts[6] = { TEXT("Cont_Bag2"), TEXT("Cont_Bag5"), TEXT("Cont_Jar10"), TEXT("Cont_Jar15"), TEXT("Cont_Block100"), TEXT("Cont_Garbage500") };
 	bool bAnyCont = false;
 	for (int32 i = 0; i < 6; ++i)
@@ -123,12 +126,40 @@ void UPackWidget::FillBody()
 		if (Owned <= 0) { continue; }
 		bAnyCont = true;
 		const int32 Cap = UPhoneClientComponent::ContainerCapacity(ContId);
-		UWeedActionButton* B = PackBtn(WidgetTree, FLinearColor(0.2f, 0.45f, 0.3f),
-			[this, Ph, ContId]() { Ph->RequestPack(SelStrain, ContId); LastSig.Reset(); });
-		B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s  (%dg)  x%d"), *WeedUI::PrettyItemName(ContId), Cap, Owned), 12, FLinearColor::White, true));
+		const bool bSel = (ContId == SelContainer);
+		UWeedActionButton* B = PackBtn(WidgetTree, bSel ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f),
+			[this, ContId, Cap, BudHave]() { SelContainer = ContId; CurCap = FMath::Max(1, FMath::Min(Cap, BudHave)); SelGrams = CurCap; LastSig.Reset(); FillBody(); });
+		B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s   up to %dg   x%d"), *WeedUI::PrettyItemName(ContId), Cap, Owned), 12, FLinearColor::White, true));
 		Row(B, FMargin(0, 2, 0, 2));
 	}
-	if (!bAnyCont) { Row(WeedUI::Text(WidgetTree, TEXT("No containers. Buy baggies/jars from Suppliers (Pots tab)."), 11, FLinearColor(1.f, 0.7f, 0.5f)), FMargin(0, 4, 0, 0)); }
+	if (!bAnyCont) { Row(WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them from the Grow shop (Packing tab)."), 11, FLinearColor(1.f, 0.7f, 0.5f)), FMargin(0, 4, 0, 0)); return; }
+
+	// === 3) Gram-slider + Pack ===
+	if (SelContainer.IsNone() || !Inv->HasItem(SelContainer, 1)) { return; }
+	const int32 Cap = UPhoneClientComponent::ContainerCapacity(SelContainer);
+	CurCap = FMath::Max(1, FMath::Min(Cap, BudHave));
+	SelGrams = FMath::Clamp(SelGrams, 1, CurCap);
+
+	Row(WeedUI::Text(WidgetTree, TEXT("3.  How many grams?"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 2));
+	GramLabel = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d g   (max %d)"), SelGrams, CurCap), 16, FLinearColor::White, false, true);
+	Row(GramLabel, FMargin(0, 0, 0, 4));
+
+	GramSlider = WidgetTree->ConstructWidget<USlider>();
+	GramSlider->SetMinValue(0.f);
+	GramSlider->SetMaxValue(1.f);
+	GramSlider->SetValue(CurCap > 1 ? float(SelGrams - 1) / float(CurCap - 1) : 1.f);
+	GramSlider->SetSliderHandleColor(FLinearColor(0.5f, 1.f, 0.6f));
+	GramSlider->SetSliderBarColor(FLinearColor(0.25f, 0.4f, 0.3f));
+	USizeBox* SliderBox = WidgetTree->ConstructWidget<USizeBox>();
+	SliderBox->SetHeightOverride(24.f);
+	SliderBox->SetContent(GramSlider);
+	Row(SliderBox, FMargin(0, 0, 0, 8));
+
+	UWeedActionButton* PackB = PackBtn(WidgetTree, FLinearColor(0.2f, 0.5f, 0.3f),
+		[this, Ph]() { Ph->RequestPackGrams(SelStrain, SelContainer, SelGrams); LastSig.Reset(); });
+	PackBtnLabel = WeedUI::Text(WidgetTree, FString::Printf(TEXT("Pack %dg into %s"), SelGrams, *WeedUI::PrettyItemName(SelContainer)), 13, FLinearColor::White, true);
+	PackB->SetContent(PackBtnLabel);
+	Row(PackB, FMargin(0, 2, 0, 2));
 }
 
 void UPackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -140,9 +171,21 @@ void UPackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen) { LastSig.Reset(); return; }
 
-	// Herbouw als de relevante voorraad wijzigt.
+	// Live de gram-slider uitlezen (zonder herbouw, anders springt de slider).
+	if (GramSlider)
+	{
+		const int32 NewG = (CurCap <= 1) ? 1 : FMath::Clamp(1 + FMath::RoundToInt(GramSlider->GetValue() * float(CurCap - 1)), 1, CurCap);
+		if (NewG != SelGrams)
+		{
+			SelGrams = NewG;
+			if (GramLabel) { GramLabel->SetText(FText::FromString(FString::Printf(TEXT("%d g   (max %d)"), SelGrams, CurCap))); }
+			if (PackBtnLabel) { PackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Pack %dg into %s"), SelGrams, *WeedUI::PrettyItemName(SelContainer)))); }
+		}
+	}
+
+	// Herbouw als de relevante voorraad of de strain-keuze wijzigt (NIET bij slider-bewegen).
 	UInventoryComponent* Inv = GetInv(GetOwningPlayerPawn());
-	FString Sig = SelStrain.ToString();
+	FString Sig = SelStrain.ToString() + TEXT("/") + SelContainer.ToString();
 	if (Inv) { for (const FInventoryStack& S : Inv->GetStacks()) { const FString Id = S.ItemId.ToString(); if (Id.StartsWith(TEXT("Bud_")) || Id.StartsWith(TEXT("Cont_"))) { Sig += FString::Printf(TEXT("|%s:%d"), *Id, S.Quantity); } } }
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 }
