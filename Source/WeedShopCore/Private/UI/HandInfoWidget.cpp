@@ -204,12 +204,26 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (NameText) { NameText->SetText(FText::FromString(PrettyName(WeedUI::PrettyItemName(Id)))); }
 	if (HintText) { HintText->SetText(FText::FromString(Hint)); }
 
-	// Aantal groot bij de titel: gram voor wiet/baggies, anders "x N".
+	// Aantal groot bij de titel: gram voor wiet/baggies, anders "x N". Voor gereedschap/plaatsbare
+	// dingen (fles, pot, rek, bench, meubels) is een aantal zinloos -> verbergen.
 	if (QtyText)
 	{
-		const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("Bag_"));
-		QtyText->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%d g"), Qty) : FString::Printf(TEXT("x%d"), Qty)));
-		QtyText->SetColorAndOpacity(FSlateColor(Col));
+		const bool bEquip = IdStr.StartsWith(TEXT("WaterBottle")) || IsPotItem(Id)
+			|| IdStr.StartsWith(TEXT("DryRack_")) || IdStr.StartsWith(TEXT("Bench_"))
+			|| IdStr.StartsWith(TEXT("Lamp")) || IdStr.StartsWith(TEXT("Tent"))
+			|| Id == TEXT("Shelf") || Id == TEXT("Chest") || Id == TEXT("Table")
+			|| Id == TEXT("Mattress") || Id == TEXT("Fridge") || Id == TEXT("Atm");
+		if (bEquip)
+		{
+			QtyText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("Bag_"));
+			QtyText->SetVisibility(ESlateVisibility::HitTestInvisible);
+			QtyText->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%d g"), Qty) : FString::Printf(TEXT("x%d"), Qty)));
+			QtyText->SetColorAndOpacity(FSlateColor(Col));
+		}
 	}
 
 	// Nette label/waarde-rijen opbouwen.
