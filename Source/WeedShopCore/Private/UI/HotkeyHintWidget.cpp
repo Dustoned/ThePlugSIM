@@ -67,27 +67,34 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAutoSize(true);
 	CS->SetPosition(FVector2D(-14.f, -14.f));
 
+	// Vaste breedte zodat de tekst links netjes uitlijnt en de toets-tags rechts uitlijnen.
+	USizeBox* ListSz = WidgetTree->ConstructWidget<USizeBox>();
+	ListSz->SetWidthOverride(190.f);
 	List = WidgetTree->ConstructWidget<UVerticalBox>();
-	CardB->SetContent(List);
+	ListSz->SetContent(List);
+	CardB->SetContent(ListSz);
 }
 
 void UHotkeyHintWidget::AddRow(const FString& Key, const FString& Action)
 {
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 
-	// Compacte toets-"chip" (auto-breedte) + omschrijving op dezelfde regel.
+	// Omschrijving LINKS (vult de rij, dus alle tekst begint op één verticale lijn).
+	UHorizontalBoxSlot* LSlot = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Action, 11, FLinearColor(0.86f, 0.89f, 0.95f)));
+	LSlot->SetVerticalAlignment(VAlign_Center);
+	LSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	// Toets-"chip" RECHTS (auto-breedte, tegen de rechterrand uitgelijnd).
 	UBorder* Chip = WidgetTree->ConstructWidget<UBorder>();
 	Chip->SetBrush(WeedUI::Rounded(FLinearColor(0.16f, 0.18f, 0.24f, 0.95f), 5.f));
-	Chip->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
+	Chip->SetPadding(FMargin(6.f, 1.f, 6.f, 1.f));
 	Chip->SetContent(WeedUI::Text(WidgetTree, Key, 10, FLinearColor(1.f, 0.95f, 0.7f), true, true));
 	UHorizontalBoxSlot* CSlot = Row->AddChildToHorizontalBox(Chip);
 	CSlot->SetVerticalAlignment(VAlign_Center);
-	CSlot->SetPadding(FMargin(0.f, 0.f, 7.f, 0.f));
+	CSlot->SetHorizontalAlignment(HAlign_Right);
+	CSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
 
-	UHorizontalBoxSlot* LSlot = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Action, 11, FLinearColor(0.86f, 0.89f, 0.95f)));
-	LSlot->SetVerticalAlignment(VAlign_Center);
-
-	List->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 1.f, 0.f, 1.f));
+	List->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 1.5f, 0.f, 1.5f));
 }
 
 void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
