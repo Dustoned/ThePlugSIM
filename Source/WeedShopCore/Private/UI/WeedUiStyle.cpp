@@ -167,7 +167,8 @@ namespace WeedUI
 			if (ItemId == TEXT("Cash"))                                  return { TEXT("cash"),      FLinearColor(0.35f, 0.85f, 0.45f), EIcon::Coin };
 			if (ItemId == TEXT("Atm") || Has(TEXT("Bank")))              return { TEXT("bank"),      FLinearColor(0.45f, 0.8f, 0.55f),  EIcon::Coin };
 
-			if (Has(TEXT("WetBud_")))                                    return { TEXT("weed_wet"),  FLinearColor(0.40f, 0.70f, 1.0f),  EIcon::Leaf };
+			// Nat en droog = HETZELFDE hemp-icoon, alleen de kleur verschilt (nat = blauw, droog = groen).
+			if (Has(TEXT("WetBud_")))                                    return { TEXT("weed"),      FLinearColor(0.40f, 0.70f, 1.0f),  EIcon::Leaf };
 			if (Has(TEXT("Bud_")))                                       return { TEXT("weed"),      FLinearColor(0.45f, 0.95f, 0.55f), EIcon::Leaf };
 			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    FLinearColor(0.55f, 0.9f, 0.6f),   EIcon::Leaf };
 			if (Has(TEXT("Joint_")))                                     return { TEXT("joint"),     FLinearColor(0.7f, 0.85f, 0.5f),   EIcon::Leaf };
@@ -293,7 +294,9 @@ namespace WeedUI
 
 	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size)
 	{
-		// 1) Echt PNG-icoon als het in Content/_Project/UI/Icons/ staat.
+		// 1) Echt PNG-icoon als het in Content/_Project/UI/Icons/ staat. We tinten het (witte) icoon
+		//    met de categoriekleur zodat alles dezelfde kleurtaal als de rest van de game aanhoudt
+		//    (bv. nat = blauw, droog = groen op exact hetzelfde hemp-icoon).
 		if (UTexture2D* Tex = ItemIconTexture(ItemId))
 		{
 			UImage* Img = Tree->ConstructWidget<UImage>();
@@ -302,6 +305,7 @@ namespace WeedUI
 			B.ImageSize = FVector2D(Size, Size);
 			B.DrawAs = ESlateBrushDrawType::Image;
 			Img->SetBrush(B);
+			Img->SetColorAndOpacity(ItemAccent(ItemId));
 			Img->SetVisibility(ESlateVisibility::HitTestInvisible);
 			return Img;
 		}
