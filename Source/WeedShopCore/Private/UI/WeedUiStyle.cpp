@@ -14,6 +14,7 @@
 #include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
+#include "Misc/ConfigCacheIni.h"
 #include <initializer_list>
 
 namespace
@@ -206,9 +207,32 @@ namespace WeedUI
 
 	FLinearColor ItemAccent(FName ItemId) { return CatFor(ItemId).Accent; }
 
-	void PlayUiSound(const UObject* WorldContext, const FString& Key, float Volume)
+	static const TCHAR* SoundCatKey(int32 Category)
+	{
+		switch (Category) { case 1: return TEXT("VolGame"); case 2: return TEXT("VolMusic"); default: return TEXT("VolUI"); }
+	}
+
+	float SoundCategoryVolume(int32 Category)
+	{
+		float V = 1.f;
+		if (GConfig) { GConfig->GetFloat(TEXT("ThePlugSIM.Audio"), SoundCatKey(Category), V, GGameUserSettingsIni); }
+		return FMath::Clamp(V, 0.f, 1.f);
+	}
+
+	void SetSoundCategoryVolume(int32 Category, float Volume)
+	{
+		if (GConfig)
+		{
+			GConfig->SetFloat(TEXT("ThePlugSIM.Audio"), SoundCatKey(Category), FMath::Clamp(Volume, 0.f, 1.f), GGameUserSettingsIni);
+			GConfig->Flush(false, GGameUserSettingsIni);
+		}
+	}
+
+	void PlayUiSound(const UObject* WorldContext, const FString& Key, float Volume, int32 Category)
 	{
 		if (!WorldContext) { return; }
+		Volume *= SoundCategoryVolume(Category); // categorie-volume uit de instellingen
+		if (Volume <= 0.001f) { return; }
 
 		// Logische naam -> SoundCue in de Game UI Sound Pack.
 		static const TMap<FString, FString> Paths = {

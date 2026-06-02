@@ -51,6 +51,7 @@ protected:
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGraphics;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGame;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabControls;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> TabAudio;
 
 	// Game-sliders (gepolld in NativeTick zodat slepen live toepast, met afronding tegen config-spam).
 	UPROPERTY() TObjectPtr<class USlider> FovSlider;
@@ -61,7 +62,16 @@ protected:
 	int32 LastFovApplied = -1;
 	int32 LastSensApplied = -1; // sensitivity * 10
 
-	int32 Category = 0; // 0 = Graphics, 1 = Game, 2 = Controls
+	// Audio-sliders (0..1) per categorie; gepolld in NativeTick en opgeslagen in GConfig.
+	UPROPERTY() TObjectPtr<class USlider> VolUiSlider;
+	UPROPERTY() TObjectPtr<class USlider> VolGameSlider;
+	UPROPERTY() TObjectPtr<class USlider> VolMusicSlider;
+	UPROPERTY() TObjectPtr<UTextBlock> VolUiVal;
+	UPROPERTY() TObjectPtr<UTextBlock> VolGameVal;
+	UPROPERTY() TObjectPtr<UTextBlock> VolMusicVal;
+	int32 LastVolUi = -1, LastVolGame = -1, LastVolMusic = -1; // procenten
+
+	int32 Category = 0; // 0 = Graphics, 1 = Game, 2 = Controls, 3 = Audio
 	bool bLastOpen = false;
 
 	// Key-rebinding (Controls-tab): klik een toets, druk de nieuwe in.

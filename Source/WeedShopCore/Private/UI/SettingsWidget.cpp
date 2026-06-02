@@ -134,9 +134,11 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 0; RefreshTabs(); RefreshContent(); }, 13);
 	TabGame = SetBtn(WidgetTree, TEXT("Game"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 1; RefreshTabs(); RefreshContent(); }, 13);
 	TabControls = SetBtn(WidgetTree, TEXT("Controls"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 2; RefreshTabs(); RefreshContent(); }, 13);
+	TabAudio = SetBtn(WidgetTree, TEXT("Audio"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 3; RefreshTabs(); RefreshContent(); }, 13);
 	Tabs->AddChildToHorizontalBox(TabGraphics)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	Tabs->AddChildToHorizontalBox(TabGame)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	Tabs->AddChildToHorizontalBox(TabControls)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+	Tabs->AddChildToHorizontalBox(TabAudio)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	VB->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	// Inhoud.
@@ -248,6 +250,7 @@ void USettingsWidget::RefreshTabs()
 	Tint(TabGraphics, Category == 0);
 	Tint(TabGame, Category == 1);
 	Tint(TabControls, Category == 2);
+	Tint(TabAudio, Category == 3);
 }
 
 void USettingsWidget::RefreshContent()
@@ -255,6 +258,7 @@ void USettingsWidget::RefreshContent()
 	if (!Body) { return; }
 	Body->ClearChildren();
 	FovSlider = nullptr; SensSlider = nullptr; FovVal = nullptr; SensVal = nullptr; ResCombo = nullptr;
+	VolUiSlider = nullptr; VolGameSlider = nullptr; VolMusicSlider = nullptr; VolUiVal = nullptr; VolGameVal = nullptr; VolMusicVal = nullptr;
 
 	if (Category == 0) // Graphics
 	{
@@ -326,6 +330,23 @@ void USettingsWidget::RefreshContent()
 		SensSlider = AddSliderRow(TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, SensVal);
 		if (SensVal) { SensVal->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), Sens))); }
 		LastSensApplied = FMath::RoundToInt(Sens * 10.f);
+	}
+	else if (Category == 3) // Audio
+	{
+		VolUiSlider = AddSliderRow(TEXT("UI volume"), WeedUI::SoundCategoryVolume(0), VolUiVal);
+		if (VolUiVal) { VolUiVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(WeedUI::SoundCategoryVolume(0) * 100.f)))); }
+		LastVolUi = FMath::RoundToInt(WeedUI::SoundCategoryVolume(0) * 100.f);
+
+		VolGameSlider = AddSliderRow(TEXT("Game volume"), WeedUI::SoundCategoryVolume(1), VolGameVal);
+		if (VolGameVal) { VolGameVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(WeedUI::SoundCategoryVolume(1) * 100.f)))); }
+		LastVolGame = FMath::RoundToInt(WeedUI::SoundCategoryVolume(1) * 100.f);
+
+		VolMusicSlider = AddSliderRow(TEXT("Music volume"), WeedUI::SoundCategoryVolume(2), VolMusicVal);
+		if (VolMusicVal) { VolMusicVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(WeedUI::SoundCategoryVolume(2) * 100.f)))); }
+		LastVolMusic = FMath::RoundToInt(WeedUI::SoundCategoryVolume(2) * 100.f);
+
+		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 11, FLinearColor(0.55f, 0.6f, 0.7f)))
+			->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
 	}
 	else // Controls
 	{
@@ -417,4 +438,20 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			}
 		}
 	}
+
+	// Audio-sliders -> categorie-volume (alleen schrijven als de waarde echt verandert).
+	auto PollVol = [this](USlider* S, int32 Cat, int32& Last, UTextBlock* Val)
+	{
+		if (!S) { return; }
+		const int32 Pct = FMath::RoundToInt(S->GetValue() * 100.f);
+		if (Pct != Last)
+		{
+			Last = Pct;
+			WeedUI::SetSoundCategoryVolume(Cat, Pct / 100.f);
+			if (Val) { Val->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), Pct))); }
+		}
+	};
+	PollVol(VolUiSlider, 0, LastVolUi, VolUiVal);
+	PollVol(VolGameSlider, 1, LastVolGame, VolGameVal);
+	PollVol(VolMusicSlider, 2, LastVolMusic, VolMusicVal);
 }

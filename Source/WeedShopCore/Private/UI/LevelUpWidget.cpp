@@ -78,7 +78,7 @@ void ULevelUpWidget::ShowForLevel(int32 PrevLevel, int32 NewLevel)
 {
 	if (!UnlockBox || !LevelText) { return; }
 
-	WeedUI::PlayUiSound(this, TEXT("levelup"), 0.85f);
+	WeedUI::PlayUiSound(this, TEXT("levelup"), 0.85f, /*Game*/ 1);
 	LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level %d"), NewLevel)));
 
 	// Verzamel alle items die in (PrevLevel .. NewLevel] zijn vrijgespeeld.
