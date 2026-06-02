@@ -211,7 +211,7 @@ namespace WeedUI
 
 		// Logische naam -> SoundCue in de Game UI Sound Pack.
 		static const TMap<FString, FString> Paths = {
-			{ TEXT("click"),   TEXT("/Game/Game_UI_Sound_Pack/Cues/Menu_UI/Brick_button-1_Cue.Brick_button-1_Cue") },
+			{ TEXT("click"),   TEXT("/Game/Game_UI_Sound_Pack/Cues/Menu_UI/Bubble_Button-1_Cue.Bubble_Button-1_Cue") },
 			{ TEXT("levelup"), TEXT("/Game/Game_UI_Sound_Pack/Cues/Game_Level/SpaceLevelUp-1_Cue.SpaceLevelUp-1_Cue") },
 			{ TEXT("cash"),    TEXT("/Game/Game_UI_Sound_Pack/Cues/Highlight/Cash_Out-1_Cue.Cash_Out-1_Cue") },
 			{ TEXT("coin"),    TEXT("/Game/Game_UI_Sound_Pack/Cues/Menu_UI/Classic_coin-1_Cue.Classic_coin-1_Cue") },
