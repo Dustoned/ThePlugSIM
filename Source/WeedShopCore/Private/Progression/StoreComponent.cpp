@@ -290,9 +290,9 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	// Plant-verzorging (bewust later: mold/pest komt pas vanaf level ~12).
 	if (S == TEXT("Fertilizer_Basic")) { return 10; }
 	if (S == TEXT("Fertilizer_Bloom")) { return 14; }
-	if (S == TEXT("Spray_Fungicide"))  { return 10; }
-	if (S == TEXT("Spray_Pesticide"))  { return 10; }
-	if (S == TEXT("Spray_Broad"))      { return 16; }
+	if (S == TEXT("Spray_Fungicide"))  { return 10; } // mold komt rond lvl 12
+	if (S == TEXT("Spray_Pesticide"))  { return 16; } // pests komen pas rond lvl 18
+	if (S == TEXT("Spray_Broad"))      { return 18; }
 
 	// Zaden: schaal met de potentie (THC%) van de strain.
 	if (StrainTable)

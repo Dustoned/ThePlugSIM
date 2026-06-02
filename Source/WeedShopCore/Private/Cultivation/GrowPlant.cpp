@@ -290,7 +290,8 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		{
 			if (const ULevelComponent* Lv = GS2->GetLeveling()) { CrewLevel = Lv->GetLevel(); }
 		}
-		constexpr int32 AfflictMinLevel = 12;        // pas vanaf hier kan er besmetting optreden
+		constexpr int32 AfflictMoldMinLevel = 12;    // mold (schimmel) kan vanaf hier
+		constexpr int32 AfflictPestMinLevel = 18;    // ongedierte (pests) pas later in het spel
 		constexpr float AfflictGraceSeconds = 180.f; // 3 min curable (groei gehalt)
 		constexpr float AfflictDeathSeconds = 150.f; // daarna langzaam dood
 		constexpr float AfflictBaseRatePerSec = 0.0007f;
@@ -313,12 +314,14 @@ void AGrowPlant::Tick(float DeltaSeconds)
 					if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Red, TEXT("A plant died from mold/pests - you didn't spray it in time. Seed lost.")); }
 				}
 			}
-			else if (CrewLevel >= AfflictMinLevel)
+			else if (CrewLevel >= AfflictMoldMinLevel)
 			{
 				const float Risk = AfflictBaseRatePerSec * (1.f - FMath::Clamp(CareMultiplier, 0.f, 1.f));
 				if (FMath::FRand() < Risk * DeltaSeconds)
 				{
-					SlotAfflict[i] = (FMath::FRand() < 0.5f) ? 1 : 2; // 1 mold, 2 pest
+					// Mold eerst beschikbaar; pests pas vanaf een hoger level (dan 50/50).
+					const bool bPestUnlocked = CrewLevel >= AfflictPestMinLevel;
+					SlotAfflict[i] = (bPestUnlocked && FMath::FRand() < 0.5f) ? 2 : 1; // 1 mold, 2 pest
 					SlotAfflictTime[i] = 0.f; bVisChanged = true;
 					if (GEngine) { GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! Spray it within 3 min or it starts dying."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
 				}
