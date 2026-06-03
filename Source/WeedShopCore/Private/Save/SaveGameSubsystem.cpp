@@ -223,8 +223,15 @@ void USaveGameSubsystem::RequestNewGame(int32 Slot, EGameStartMode Mode)
 
 bool USaveGameSubsystem::RequestLoad(int32 Slot, bool bAutosave)
 {
-	const FString Name = bAutosave ? AutoSlotNameFor(Slot) : SlotNameFor(Slot);
-	if (!UGameplayStatics::DoesSaveGameExist(Name, 0)) { return false; }
+	FString Name = bAutosave ? AutoSlotNameFor(Slot) : SlotNameFor(Slot);
+	// Bestaat de gevraagde variant niet (bv. slot heeft alleen een autosave en geen handmatige
+	// save)? Val dan terug op de andere variant, zodat de hoofd-knop altijd laadt wat er is.
+	if (!UGameplayStatics::DoesSaveGameExist(Name, 0))
+	{
+		const FString Other = bAutosave ? SlotNameFor(Slot) : AutoSlotNameFor(Slot);
+		if (UGameplayStatics::DoesSaveGameExist(Other, 0)) { Name = Other; }
+		else { return false; }
+	}
 	SetSlot(Slot);
 	Pending = EPending::Load;
 	PendingLoadName = Name;
