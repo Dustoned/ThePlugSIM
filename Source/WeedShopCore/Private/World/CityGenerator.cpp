@@ -577,9 +577,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 
 		UPointLightComponent* NeonPL = NewObject<UPointLightComponent>(this);
 		NeonPL->SetupAttachment(Root); NeonPL->RegisterComponent();
-		NeonPL->SetWorldLocation(FVector(CX, CY, SignZ) + N * (Half + T + 35.f));
+		NeonPL->SetWorldLocation(FVector(CX, CY, SignZ - 20.f) + N * (Half + T + 170.f));
 		NeonPL->SetMobility(EComponentMobility::Movable);
-		NeonPL->SetAttenuationRadius(650.f); NeonPL->SetIntensity(9000.f);
+		NeonPL->SetAttenuationRadius(800.f); NeonPL->SetIntensity(3200.f);
 		NeonPL->SetLightColor(Sign); NeonPL->SetCastShadows(false);
 	}
 
@@ -696,14 +696,14 @@ void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ
 		const FVector TextPos = FVector(CX, CY, SignZ) + N * (Half + T + 10.f);
 		AddSignText(TextPos, DoorDirX, DoorDirY, Name, Neon, 65.f);
 
-		// Gekleurd neonlicht dat het bord + de gevel laat gloeien.
+		// Zacht gekleurd neonlicht dat NAAR BUITEN schijnt (uit de muur vandaan -> geen felle hotspot).
 		UPointLightComponent* NeonPL = NewObject<UPointLightComponent>(this);
 		NeonPL->SetupAttachment(Root);
 		NeonPL->RegisterComponent();
-		NeonPL->SetWorldLocation(FVector(CX, CY, SignZ) + N * (Half + T + 35.f));
+		NeonPL->SetWorldLocation(FVector(CX, CY, SignZ - 20.f) + N * (Half + T + 170.f));
 		NeonPL->SetMobility(EComponentMobility::Movable);
-		NeonPL->SetAttenuationRadius(650.f);
-		NeonPL->SetIntensity(9000.f);
+		NeonPL->SetAttenuationRadius(800.f);
+		NeonPL->SetIntensity(3200.f);
 		NeonPL->SetLightColor(Sign);
 		NeonPL->SetCastShadows(false);
 	}
@@ -748,6 +748,19 @@ void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ
 		const FLinearColor Metal(0.85f, 0.85f, 0.88f), Dark(0.15f, 0.15f, 0.17f);
 		// Luifel.
 		AddBox(Cube, FVector(CX + Fwd.X, CY + Fwd.Y, BaseZ + 330.f), FVector(620.f, 620.f, 30.f), Metal, true);
+		// Lichtbak op de voorrand van de luifel met een groot, goed leesbaar GAS-bord (niet geblokkeerd).
+		{
+			const FVector FasciaC = FVector(CX + Fwd.X, CY + Fwd.Y, BaseZ + 345.f) + N * 305.f;
+			const FVector FasciaSize = (DoorDirX != 0) ? FVector(12.f, 600.f, 90.f) : FVector(600.f, 12.f, 90.f);
+			AddBox(Cube, FasciaC, FasciaSize, FLinearColor(0.02f, 0.02f, 0.03f), false);
+			AddSignText(FVector(CX + Fwd.X, CY + Fwd.Y, BaseZ + 345.f) + N * 313.f, DoorDirX, DoorDirY, TEXT("GAS"), FLinearColor(1.f, 0.85f, 0.2f), 95.f);
+			UPointLightComponent* GasPL = NewObject<UPointLightComponent>(this);
+			GasPL->SetupAttachment(Root); GasPL->RegisterComponent();
+			GasPL->SetWorldLocation(FVector(CX + Fwd.X, CY + Fwd.Y, BaseZ + 320.f) + N * 360.f);
+			GasPL->SetMobility(EComponentMobility::Movable);
+			GasPL->SetAttenuationRadius(700.f); GasPL->SetIntensity(3500.f);
+			GasPL->SetLightColor(FLinearColor(1.f, 0.8f, 0.3f)); GasPL->SetCastShadows(false);
+		}
 		// 4 pilaren.
 		for (int32 px = -1; px <= 1; px += 2)
 		{

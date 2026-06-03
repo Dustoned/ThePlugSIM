@@ -5,13 +5,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interaction/Interactable.h"
 #include "CityDoor.generated.h"
 
 class UStaticMeshComponent;
 class USceneComponent;
 
 UCLASS()
-class WEEDSHOPCORE_API ACityDoor : public AActor
+class WEEDSHOPCORE_API ACityDoor : public AActor, public IInteractable
 {
 	GENERATED_BODY()
 
@@ -21,6 +22,10 @@ public:
 	// Stel de deur in (afmeting + kleur). Hinge zit aan de -X-kant; dicht = paneel langs +X.
 	void Setup(float Width, float Height, const FLinearColor& Color);
 
+	// Interact (F) opent/sluit de deur.
+	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
+	virtual FText GetInteractionPrompt_Implementation() const override;
+
 protected:
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -29,5 +34,5 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Panel;
 
 	float CurAngle = 0.f;   // huidige scharnierhoek
-	float OpenDist = 280.f; // binnen deze afstand gaat de deur open
+	bool bOpen = false;     // open/dicht (getoggled via interact)
 };

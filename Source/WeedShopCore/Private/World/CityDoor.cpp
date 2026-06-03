@@ -37,17 +37,20 @@ void ACityDoor::Setup(float Width, float Height, const FLinearColor& Color)
 	}
 }
 
+void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)
+{
+	bOpen = !bOpen; // F = open/dicht
+}
+
+FText ACityDoor::GetInteractionPrompt_Implementation() const
+{
+	return bOpen ? FText::FromString(TEXT("Close door")) : FText::FromString(TEXT("Open door"));
+}
+
 void ACityDoor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-
-	// Dichtstbijzijnde lokale speler bepaalt of de deur open moet.
-	float Target = 0.f;
-	if (const APawn* P = UGameplayStatics::GetPlayerPawn(this, 0))
-	{
-		const float D = FVector::Dist(GetActorLocation(), P->GetActorLocation());
-		if (D < OpenDist) { Target = -95.f; } // naar binnen open zwaaien
-	}
-	CurAngle = FMath::FInterpTo(CurAngle, Target, DeltaSeconds, 6.f);
+	const float Target = bOpen ? -95.f : 0.f;
+	CurAngle = FMath::FInterpTo(CurAngle, Target, DeltaSeconds, 7.f);
 	if (Hinge) { Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f)); }
 }
