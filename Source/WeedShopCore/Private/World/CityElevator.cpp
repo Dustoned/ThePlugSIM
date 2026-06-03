@@ -102,13 +102,16 @@ void ACityElevator::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Schuifdeur animeren (open = naar +X geschoven). Blokkeert de pawn alleen als 'ie dicht is.
+	// Schuifdeur: schuift een klein stukje en VERDWIJNT dan (de cabine is te klein om 'm zichtbaar opzij
+	// te schuiven zonder uit het gebouw te steken). Dicht = zichtbaar + blokkeert; open = onzichtbaar + door.
 	const float DoorTarget = bDoorOpen ? DoorSlide : 0.f;
-	CurDoor = FMath::FInterpTo(CurDoor, DoorTarget, DeltaSeconds, 6.f);
+	CurDoor = FMath::FInterpTo(CurDoor, DoorTarget, DeltaSeconds, 7.f);
 	if (DoorPanel)
 	{
-		DoorPanel->SetRelativeLocation(FVector(CurDoor, FootY * 0.5f, 6.f + 105.f));
-		DoorPanel->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < 5.f) ? ECR_Block : ECR_Ignore);
+		const float Slid = FMath::Min(CurDoor, 18.f); // niet ver wegschuiven -> blijft binnen de cabine
+		DoorPanel->SetRelativeLocation(FVector(Slid, FootY * 0.5f, 6.f + 105.f));
+		DoorPanel->SetVisibility(CurDoor < 12.f);                                  // verdwijnt zodra 'ie opent
+		DoorPanel->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < 6.f) ? ECR_Block : ECR_Ignore);
 	}
 
 	const FVector Loc = GetActorLocation();
