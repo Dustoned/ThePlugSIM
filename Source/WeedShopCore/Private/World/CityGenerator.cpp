@@ -69,16 +69,16 @@ void ACityGenerator::AddGableRoof(const FVector& TopCenter, float Width, float D
 		const float Half = Depth * 0.5f;
 		const float L = FMath::Sqrt(Half * Half + RidgeH * RidgeH) + 8.f;
 		const float Ang = FMath::RadiansToDegrees(FMath::Atan2(RidgeH, Half));
-		AddBox(Cube, FVector(TopCenter.X, TopCenter.Y - Depth * 0.25f, TopCenter.Z + RidgeH * 0.5f), FVector(Width, L, Thick), Color, true, FRotator(0.f, 0.f,  Ang));
-		AddBox(Cube, FVector(TopCenter.X, TopCenter.Y + Depth * 0.25f, TopCenter.Z + RidgeH * 0.5f), FVector(Width, L, Thick), Color, true, FRotator(0.f, 0.f, -Ang));
+		AddBox(Cube, FVector(TopCenter.X, TopCenter.Y - Depth * 0.25f, TopCenter.Z + RidgeH * 0.5f), FVector(Width, L, Thick), Color, true, FRotator(0.f, 0.f, -Ang));
+		AddBox(Cube, FVector(TopCenter.X, TopCenter.Y + Depth * 0.25f, TopCenter.Z + RidgeH * 0.5f), FVector(Width, L, Thick), Color, true, FRotator(0.f, 0.f,  Ang));
 	}
 	else
 	{
 		const float Half = Width * 0.5f;
 		const float L = FMath::Sqrt(Half * Half + RidgeH * RidgeH) + 8.f;
 		const float Ang = FMath::RadiansToDegrees(FMath::Atan2(RidgeH, Half));
-		AddBox(Cube, FVector(TopCenter.X - Width * 0.25f, TopCenter.Y, TopCenter.Z + RidgeH * 0.5f), FVector(L, Depth, Thick), Color, true, FRotator(-Ang, 0.f, 0.f));
-		AddBox(Cube, FVector(TopCenter.X + Width * 0.25f, TopCenter.Y, TopCenter.Z + RidgeH * 0.5f), FVector(L, Depth, Thick), Color, true, FRotator( Ang, 0.f, 0.f));
+		AddBox(Cube, FVector(TopCenter.X - Width * 0.25f, TopCenter.Y, TopCenter.Z + RidgeH * 0.5f), FVector(L, Depth, Thick), Color, true, FRotator( Ang, 0.f, 0.f));
+		AddBox(Cube, FVector(TopCenter.X + Width * 0.25f, TopCenter.Y, TopCenter.Z + RidgeH * 0.5f), FVector(L, Depth, Thick), Color, true, FRotator(-Ang, 0.f, 0.f));
 	}
 }
 
@@ -88,8 +88,8 @@ void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY
 	T->SetupAttachment(Root);
 	T->RegisterComponent();
 	T->SetWorldLocation(WorldLoc);
-	// TextRender leest vanaf de -X-kant; draai zodat de tekst naar buiten (de straat) kijkt.
-	const float Yaw = FMath::RadiansToDegrees(FMath::Atan2((float)DirY, (float)DirX)) + 180.f;
+	// Tekst-front naar de straat richten (de speler staat aan de N-kant en kijkt naar het gebouw).
+	const float Yaw = FMath::RadiansToDegrees(FMath::Atan2((float)DirY, (float)DirX));
 	T->SetWorldRotation(FRotator(0.f, Yaw, 0.f));
 	T->SetText(FText::FromString(Text));
 	T->SetHorizontalAlignment(EHTA_Center);
@@ -209,12 +209,12 @@ void ACityGenerator::BuildCity()
 			const FLinearColor Body = Facades[H % UE_ARRAY_COUNT(Facades)];
 			const FLinearColor Glass(0.30f, 0.45f, 0.55f);
 			const FLinearColor DoorC(0.12f, 0.10f, 0.09f);
-			const bool bHouse = (H % 3u) != 0u; // ~2/3 huizen, 1/3 flats
+			const bool bHouse = (H % 4u) != 0u; // ~3/4 lage huizen, 1/4 hoge flats
 
 			const float FootMax = BlockSize - 2.f * SidewalkWidth;
-			const int32 Floors = bHouse ? (2 + (int32)((H >> 2) % 2)) : (4 + (int32)((H >> 2) % 5)); // huis 2-3, flat 4-8
+			const int32 Floors = bHouse ? (1 + (int32)((H >> 2) % 2)) : (4 + (int32)((H >> 2) % 5)); // huis 1-2, flat 4-8
 			const float BH = Floors * FloorH;
-			const float Foot = bHouse ? FootMax * (0.55f + 0.08f * ((H >> 5) % 3)) : FootMax;
+			const float Foot = bHouse ? FootMax * (0.40f + 0.06f * ((H >> 5) % 3)) : FootMax; // huis kleiner -> open lot
 			const float HalfF = Foot * 0.5f;
 
 			// Romp + plint (begane grond).
@@ -243,11 +243,12 @@ void ACityGenerator::BuildCity()
 
 			if (bHouse)
 			{
-				// Schuin zadeldak (donkerrood pannendak) + een schoorsteen.
+				// Groot, dominant zadeldak (donkerrood pannendak) -> echte huis/cottage-vorm. Plus schoorsteen.
 				const FLinearColor Roof(0.35f, 0.18f, 0.14f);
 				const bool RidgeX = ((H >> 6) & 1u) != 0u;
-				AddGableRoof(FVector(CX, CY, TopZ + BH), Foot + 16.f, Foot + 16.f, 140.f + (float)(H % 60u), RidgeX, Roof);
-				AddBox(Cube, FVector(CX + Foot * 0.25f, CY + Foot * 0.2f, TopZ + BH + 75.f), FVector(28.f, 28.f, 95.f), Body * 0.55f, false);
+				const float RidgeH = FMath::Max(BH * 0.85f, 300.f) + (float)(H % 60u);
+				AddGableRoof(FVector(CX, CY, TopZ + BH), Foot + 24.f, Foot + 24.f, RidgeH, RidgeX, Roof);
+				AddBox(Cube, FVector(CX + Foot * 0.28f, CY + Foot * 0.22f, TopZ + BH + RidgeH * 0.45f), FVector(26.f, 26.f, RidgeH * 0.6f), Body * 0.5f, false);
 			}
 			else
 			{
