@@ -221,6 +221,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestDeposit(int64 CashAmount);
 
+	// Test-tool: zet de tijd op midden-dag (false) of midden-nacht (true). Client -> server.
+	void RequestSetDayNight(bool bNight);
+
 	// Boek bankgeld over naar een co-op vriend (fee + dag-limiet). Client -> server.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestTransfer(int64 AmountCents);
@@ -523,6 +526,9 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerDeposit(int64 CashAmount);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetDayNight(bool bNight);
 
 	UFUNCTION(Server, Reliable)
 	void ServerTransfer(int64 AmountCents);

@@ -2,6 +2,7 @@
 
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
+#include "World/DayCycleComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Progression/LevelComponent.h"
@@ -1413,6 +1414,18 @@ void UPhoneClientComponent::ServerDeposit_Implementation(int64 CashAmount)
 	int64 Amt = CashAmount;
 	if (Amt <= 0) { Amt = FMath::Min(Econ->GetCashCents(), Econ->GetDailyDepositRemainingCents()); } // max
 	if (Amt > 0) { Econ->Deposit(Amt); }
+}
+
+void UPhoneClientComponent::RequestSetDayNight(bool bNight) { ServerSetDayNight(bNight); }
+
+void UPhoneClientComponent::ServerSetDayNight_Implementation(bool bNight)
+{
+	AWeedShopGameState* GS = GetGS();
+	UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
+	if (!DC) { return; }
+	// Midden-dag = halverwege de lichtfase; midden-nacht = halverwege de donkerfase.
+	const float NewTime = bNight ? (DC->DayLengthSeconds + DC->NightLengthSeconds * 0.5f) : (DC->DayLengthSeconds * 0.5f);
+	DC->SetTimeOfDaySeconds(NewTime);
 }
 
 void UPhoneClientComponent::RequestTransfer(int64 AmountCents)

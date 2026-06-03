@@ -176,7 +176,7 @@ void UPhoneWidget::BuildSettingsApp()
 
 	// Categorie-knoppen (Status eerst + standaard, dan Controls) — blijven staan; alleen de body ververst.
 	SettingsTabBtns.Reset();
-	static const TCHAR* CatNames[2] = { TEXT("Status"), TEXT("Controls") };
+	static const TCHAR* CatNames[2] = { TEXT("Status"), TEXT("Test") };
 	UHorizontalBox* Cats = WidgetTree->ConstructWidget<UHorizontalBox>();
 	for (int32 i = 0; i < 2; ++i)
 	{
@@ -217,13 +217,23 @@ void UPhoneWidget::FillSettingsBody()
 
 	auto BodyRow = [this](UWidget* W, const FMargin& Pad) { SettingsBody->AddChildToVerticalBox(W)->SetPadding(Pad); };
 
-	if (SettingsCat == 1) // Controls -> verplaatst naar het normale instellingen-scherm.
+	if (SettingsCat == 1) // Test-tools (dag/nacht snel wisselen voor testing)
 	{
-		UTextBlock* Note = MakeText(TEXT("Key bindings moved to Settings > Controls (open the menu with Esc)."), 12, FLinearColor(0.8f, 0.85f, 0.95f));
-		Note->SetAutoWrapText(true);
-		BodyRow(Note, FMargin(0.f, 4.f, 0.f, 8.f));
-		BodyRow(MakeActionBtn(TEXT("Open Settings"), FLinearColor(0.22f, 0.42f, 0.6f),
-			[this]() { if (Phone.IsValid()) { Phone->OpenSettings(); } }, 13), FMargin(0.f, 2.f, 0.f, 0.f));
+		BodyRow(MakeText(TEXT("Testing"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+		if (GS && GS->GetDayCycle())
+		{
+			const float H = GS->GetDayCycle()->GetClockHour();
+			BodyRow(MakeText(FString::Printf(TEXT("Now: %02d:%02d  (%s)"), (int32)H, (int32)((H - (int32)H) * 60.f),
+				GS->GetDayCycle()->IsNight() ? TEXT("night") : TEXT("day")), 11, FLinearColor(0.65f, 0.7f, 0.8f)), FMargin(0.f, 0.f, 0.f, 8.f));
+		}
+		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		UWeedActionButton* DayB = MakeActionBtn(TEXT("Set Day"), FLinearColor(0.85f, 0.7f, 0.2f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(false); } }, 13);
+		UWeedActionButton* NightB = MakeActionBtn(TEXT("Set Night"), FLinearColor(0.25f, 0.3f, 0.55f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } }, 13);
+		Btns->AddChildToHorizontalBox(DayB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		Btns->AddChildToHorizontalBox(NightB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		BodyRow(Btns, FMargin(0.f, 0.f, 0.f, 0.f));
 	}
 	else // Status
 	{
