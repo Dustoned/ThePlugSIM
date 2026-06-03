@@ -10,6 +10,7 @@
 #include "Atm.generated.h"
 
 class UStaticMeshComponent;
+class USceneComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API AAtm : public AActor, public IInteractable
@@ -25,8 +26,13 @@ public:
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|ATM")
+	TObjectPtr<USceneComponent> Root;
+
+	// Verborgen collision-kast (draagt de footprint).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|ATM")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
+	// Deco-wortel (absolute schaal) waar de samengestelde onderdelen onder hangen.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|ATM")
-	TObjectPtr<UStaticMeshComponent> Screen;
+	TObjectPtr<USceneComponent> Deco;
 };

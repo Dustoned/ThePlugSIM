@@ -25,6 +25,11 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Sink")
 	TObjectPtr<USceneComponent> Root;
 
+	// Verborgen collision-doos (draagt de footprint).
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Sink")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	// Deco-wortel (absolute schaal) waar het samengestelde gootsteen-model onder hangt.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Sink")
+	TObjectPtr<USceneComponent> Deco;
 };
