@@ -245,6 +245,32 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				// Mik je (onder welke hoek dan ook) op een pot -> nooit geldig (geen stapelen).
 				bool bOnPlaceable = (Cast<AGrowPlant>(Hit.GetActor()) != nullptr) || (Cast<APlaceableProp>(Hit.GetActor()) != nullptr);
 
+					if (CurrentDef.bIsWallMount)
+					{
+						// Wand-mount (droogrek): rug tegen een VERTICALE muur, voorkant de kamer in.
+						const FVector N = Hit.ImpactNormal;
+						const bool bWall = FMath::Abs(N.Z) < 0.4f; // verticaal vlak
+						FVector D = FVector(N.X, N.Y, 0.f).GetSafeNormal(); // horizontale muur-normaal (de kamer in)
+						if (D.IsNearlyZero()) { D = FVector(1.f, 0.f, 0.f); }
+						// Lokale +Y wijst langs de normaal (de kamer in); de rug (-Y) ligt vlak tegen de muur.
+						PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X)) - 90.f, 0.f);
+						// Midden = trefpunt + normaal * halve diepte (rug strak tegen de muur). Hoogte = waar je mikt.
+						FVector Center = Hit.ImpactPoint + D * CurrentDef.BoxHalf.Y;
+						// Shift: snap langs de muur (horizontale tangent) en in hoogte op het raster.
+						const APlayerController* PCw = Cast<APlayerController>(OwnerPawn->GetController());
+						if (PCw && (PCw->IsInputKeyDown(EKeys::LeftShift) || PCw->IsInputKeyDown(EKeys::RightShift)) && GridSize > 1.f)
+						{
+							const FVector Tang(-D.Y, D.X, 0.f); // horizontale richting langs de muur
+							const float Along = FVector::DotProduct(Center, Tang);
+							Center += Tang * (FMath::GridSnap<float>(Along, GridSize) - Along);
+							Center.Z = FMath::GridSnap<float>(Center.Z, GridSize);
+						}
+						PreviewLocation = Center;
+						bValidSpot = bWall && !bOnPlaceable;
+					}
+					else
+					{
+
 				// Shift ingedrukt -> snap XY op het raster (en yaw op 90°-stappen) voor nette rijen.
 				const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
 				const bool bSnap = PC && (PC->IsInputKeyDown(EKeys::LeftShift) || PC->IsInputKeyDown(EKeys::RightShift));
@@ -343,6 +369,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							&& (CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation))
 							&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 				}
+				} // einde else: niet-wandmount (vloer/plafond)
 			}
 		}
 	}
@@ -354,8 +381,11 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		Ghost->SetVisibility(bShow);
 		if (bShow)
 		{
-			// Plafondlamp hangt ONDER het plafondpunt; al het andere staat ERBOVEN op de vloer.
-			const float GhostZOff = CurrentDef.bIsLamp ? -CurrentDef.BoxHalf.Z : CurrentDef.BoxHalf.Z;
+			// Plafondlamp hangt ONDER het plafondpunt; wand-mount = PreviewLocation is al het midden;
+			// al het andere staat ERBOVEN op de vloer.
+			float GhostZOff = CurrentDef.BoxHalf.Z;
+			if (CurrentDef.bIsLamp) { GhostZOff = -CurrentDef.BoxHalf.Z; }
+			else if (CurrentDef.bIsWallMount) { GhostZOff = 0.f; }
 			Ghost->SetWorldLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, GhostZOff), PreviewRotation);
 		}
 		if (GhostMID)
@@ -476,7 +506,7 @@ void UBuildComponent::UpdateRemoteGhost()
 		// Mesh/schaal van het item dat de andere speler plaatst.
 		FPlaceableDef Def;
 		float HalfZ = 20.f;
-		bool bLamp = false;
+		float ZOff = 20.f;
 		if (GetPlaceableDef(RepItemId, Def))
 		{
 			if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Def.MeshPath))
@@ -485,9 +515,9 @@ void UBuildComponent::UpdateRemoteGhost()
 			}
 			Ghost->SetWorldScale3D(Def.MeshScale);
 			HalfZ = Def.BoxHalf.Z;
-			bLamp = Def.bIsLamp;
+			ZOff = Def.bIsLamp ? -HalfZ : (Def.bIsWallMount ? 0.f : HalfZ);
 		}
-		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, bLamp ? -HalfZ : HalfZ), FRotator(0.f, RepYaw, 0.f));
+		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, ZOff), FRotator(0.f, RepYaw, 0.f));
 		if (GhostMID)
 		{
 			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
@@ -596,8 +626,8 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 
 	// Server-side her-validatie (anti-cheat / lag): niet in een muur of (voor potten) te dicht.
-	// Plafondlampen hangen aan het plafond -> de vloer-gebaseerde blokkade/binnen-checks slaan we over.
-	if (!Def.bIsLamp && IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
+	// Plafondlampen (plafond) en wand-mounts (muur) gebruiken geen vloer-gebaseerde checks -> overslaan.
+	if (!Def.bIsLamp && !Def.bIsWallMount && IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
 	{
 		if (GEngine)
 		{
@@ -606,7 +636,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 	// Alleen binnenshuis (tenzij dit placeable buiten mag, bv. de ATM).
-	if (!Def.bIsLamp && !Def.bAllowOutdoors && !IsIndoors(Location))
+	if (!Def.bIsLamp && !Def.bIsWallMount && !Def.bAllowOutdoors && !IsIndoors(Location))
 	{
 		if (GEngine)
 		{
@@ -644,9 +674,9 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	else if (Def.bIsDryRack)
 	{
-		// Droogrek: mesh-pivot zit in het midden -> origin een halve hoogte boven de vloer
-		// (net als de ghost) zodat 'ie niet half in de grond zakt. Deferred zodat de tier klopt.
-		const FTransform RackTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
+		// Droogrek hangt aan de muur: Location is al het MIDDEN (preview rekent de muur-offset al uit),
+		// dus spawn precies daar. (Mesh-pivot zit in het midden.) Deferred zodat de tier klopt.
+		const FTransform RackTM(Rotation, Def.bIsWallMount ? Location : Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
 		ADryingRack* Rack = World->SpawnActorDeferred<ADryingRack>(
 			ADryingRack::StaticClass(), RackTM,
 			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);

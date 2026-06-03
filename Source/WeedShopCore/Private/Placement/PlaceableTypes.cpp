@@ -15,9 +15,9 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		// ATM: spawnt een AAtm (interactief) en mag ook BUITEN geplaatst worden.
 		{ TEXT("Atm"), TEXT("ATM"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.5f, 0.35f, 1.4f), FVector(25.f, 18.f, 70.f), false, 0, /*bIsAtm*/ true, /*bAllowOutdoors*/ true },
 		// Droogrekken: spawnen een ADryingRack (RackTier = item-id). Binnen plaatsen.
-		{ TEXT("DryRack_Cheap"), TEXT("Cheap drying rack"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.2f, 0.3f, 1.5f), FVector(60.f, 15.f, 75.f), false, 0, false, false, /*bIsDryRack*/ true },
-		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.4f, 0.3f, 1.6f), FVector(70.f, 15.f, 80.f), false, 0, false, false, true },
-		{ TEXT("DryRack_Pro"),   TEXT("Pro drying cabinet"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.6f, 0.4f, 1.8f), FVector(80.f, 20.f, 90.f), false, 0, false, false, true },
+		{ TEXT("DryRack_Cheap"), TEXT("Cheap drying rack"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.2f, 0.3f, 1.5f), FVector(60.f, 15.f, 75.f), false, 0, false, false, /*bIsDryRack*/ true, false, false, false, false, /*bIsWallMount*/ true },
+		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.4f, 0.3f, 1.6f), FVector(70.f, 15.f, 80.f), false, 0, false, false, true, false, false, false, false, /*bIsWallMount*/ true },
+		{ TEXT("DryRack_Pro"),   TEXT("Pro drying cabinet"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.6f, 0.4f, 1.8f), FVector(80.f, 20.f, 90.f), false, 0, false, false, true, false, false, false, false, /*bIsWallMount*/ true },
 		// Verpak-tafels (tiers): spawnen een APackBench. Hogere tier = meer zakjes per keer. Binnen plaatsen.
 		{ TEXT("Bench_Pack"),  TEXT("Packing bench"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.3f, 0.7f, 0.9f), FVector(65.f, 35.f, 45.f), false, 0, false, false, false, /*bIsPackBench*/ true },
 		{ TEXT("Bench_Pack2"), TEXT("Pro packing bench"),   TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.5f, 0.8f, 0.9f), FVector(75.f, 40.f, 45.f), false, 0, false, false, false, true },
