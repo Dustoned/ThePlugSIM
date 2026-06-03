@@ -672,6 +672,31 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		}
 	}
 
+	// Legenda/bewonerslijst in de entree-hal: welke woningen op welke verdieping. Op de linkerwand (s=-HW)
+	// vlak bij de ingang, kijkend de gang in -> je ziet 'm meteen als je binnenkomt.
+	{
+		const int32 PF = 2 * NApt;                                   // woningen per verdieping
+		const float Avail = AptLen * 0.5f - DoorGap * 0.5f - 20.f;   // dichte wand vóór de eerste deur
+		const float BoardW = FMath::Clamp(Avail, 80.f, 160.f);
+		const float dBoard = BoardW * 0.5f + 14.f;
+		const float sFace = -HW + WallT * 0.5f;                      // gang-zijde van de linkerwand
+		const int32 NLines = NF + 1;
+		const float Lh = 18.f;
+		const float BoardH = NLines * Lh + 18.f;
+		const float Zc = TopZ + 160.f;
+		Box(dBoard, sFace + 2.5f, BoardW, 5.f, Zc, BoardH, FLinearColor(0.03f, 0.03f, 0.05f), false);
+		const int32 DX = -Ddy, DY = Ddx;                             // kijkt de gang in (+Side)
+		const FVector TextXY = LP(dBoard, sFace + 6.f);
+		auto LineZ = [&](int32 i) { return Zc + BoardH * 0.5f - 13.f - i * Lh; };
+		AddSignText(FVector(TextXY.X, TextXY.Y, LineZ(0)), DX, DY, FString::Printf(TEXT("Nr %d"), BaseNo), FLinearColor(0.6f, 0.85f, 1.f), 13.f);
+		for (int32 f = 0; f < NF; ++f)
+		{
+			const int32 lo = f * PF + 1, hi = f * PF + PF;
+			AddSignText(FVector(TextXY.X, TextXY.Y, LineZ(f + 1)), DX, DY,
+				FString::Printf(TEXT("%d: %d-%d t/m %d"), f + 1, BaseNo, lo, hi), FLinearColor(1.f, 0.95f, 0.7f), 11.f);
+		}
+	}
+
 	// Plat dak + parapet.
 	AddBox(Cube, FVector(CX, CY, TopZ + TotalH + 10.f), FVector(Foot + 16.f, Foot + 16.f, 20.f), Body * 0.6f, false);
 
