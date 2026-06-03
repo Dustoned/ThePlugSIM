@@ -449,7 +449,29 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	const bool RidgeAlongX = !bAlongX;
 	const float RoofW = bAlongX ? (Depth + 30.f) : (RowLen + 20.f);
 	const float RoofD = bAlongX ? (RowLen + 20.f) : (Depth + 30.f);
-	AddGableRoof(FVector(BCX, BCY, TopZ + WallH), RoofW, RoofD, Depth * 0.5f, RidgeAlongX, Roof);
+	const float RoofRidgeH = Depth * 0.5f;
+	AddGableRoof(FVector(BCX, BCY, TopZ + WallH), RoofW, RoofD, RoofRidgeH, RidgeAlongX, Roof);
+
+	// Sluit de twee dak-uiteinden (gable-driehoeken) met verticale plakjes, zodat het dak niet
+	// openstaat aan de zijkanten van de rij.
+	{
+		const int32 NSl = 7;
+		const float SliceW = Depth / NSl;
+		const FLinearColor GableC = CityFacade(Seed + 3);
+		for (int32 endi = 0; endi < 2; ++endi)
+		{
+			const float EndAlong = (endi == 0) ? (-RowLen * 0.5f) : (RowLen * 0.5f);
+			for (int32 k = 0; k < NSl; ++k)
+			{
+				const float n = -Depth * 0.5f + (k + 0.5f) * SliceW; // langs de diepte (N)
+				const float hh = RoofRidgeH * (1.f - FMath::Abs(n) / (Depth * 0.5f));
+				if (hh < 8.f) { continue; }
+				const FVector P = FVector(BCX, BCY, TopZ + WallH + hh * 0.5f) + Tt * EndAlong + N * n;
+				const FVector S = bAlongX ? FVector(SliceW + 1.f, 16.f, hh) : FVector(16.f, SliceW + 1.f, hh);
+				AddBox(Cube, P, S, GableC, true);
+			}
+		}
+	}
 }
 
 void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, int32 Floors, const FLinearColor& Body, const FLinearColor& Sign)
@@ -506,15 +528,17 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	};
 	for (int32 s = 0; s < 4; ++s) { BuildWall(s); }
 
-	// Ramen per verdieping op de 4 gevels.
+	// Ramen per verdieping op de 4 gevels. Op de begane grond NIET op de deurwand (anders een
+	// "blauw blok" in de deuropening).
 	for (int32 f = 0; f < NF; ++f)
 	{
 		const float z = TopZ + f * FloorH + FloorH * 0.55f;
 		const float WinW = Foot * 0.7f, WinH = FloorH * 0.4f;
-		AddBox(Cube, FVector(CX, CY + Half + 2.f, z), FVector(WinW, 4.f, WinH), Glass, false);
-		AddBox(Cube, FVector(CX, CY - Half - 2.f, z), FVector(WinW, 4.f, WinH), Glass, false);
-		AddBox(Cube, FVector(CX + Half + 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false);
-		AddBox(Cube, FVector(CX - Half - 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false);
+		const bool bGround = (f == 0);
+		if (!(bGround && DoorSide == 2)) { AddBox(Cube, FVector(CX, CY + Half + 2.f, z), FVector(WinW, 4.f, WinH), Glass, false); }
+		if (!(bGround && DoorSide == 3)) { AddBox(Cube, FVector(CX, CY - Half - 2.f, z), FVector(WinW, 4.f, WinH), Glass, false); }
+		if (!(bGround && DoorSide == 0)) { AddBox(Cube, FVector(CX + Half + 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false); }
+		if (!(bGround && DoorSide == 1)) { AddBox(Cube, FVector(CX - Half - 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false); }
 	}
 
 	// Kern (trappenhuis + liftschacht) in de achter-linker hoek.
@@ -527,8 +551,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const float HoleMinX = CX - Half + 25.f, HoleMinY = CY - Half + 25.f;
 	const float HoleMaxX = HoleMinX + CoreW, HoleMaxY = HoleMinY + CoreD;
 
-	// Verdiepingsvloeren f=1..NF met een L-gat over de kern; + binnenlicht per verdieping.
-	for (int32 f = 1; f <= NF; ++f)
+	// Verdiepingsvloeren f=1..NF-1 met een L-gat over de kern (trap loopt erdoor); + binnenlicht.
+	for (int32 f = 1; f < NF; ++f)
 	{
 		const float z = TopZ + f * FloorH;
 		const float frontYs = (CY + Half) - HoleMaxY;
@@ -537,6 +561,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		if (sideXs > 1.f) { AddBox(Cube, FVector((HoleMaxX + CX + Half) * 0.5f, (CY - Half + HoleMaxY) * 0.5f, z), FVector(sideXs, HoleMaxY - (CY - Half), 12.f), FloorC, true); }
 		AddInteriorLight(FVector(CX, CY, z - 55.f));
 	}
+	// Dichte dakvloer bovenop (plafond van de bovenste verdieping, GEEN gat -> de trap stopt op de top-etage).
+	AddBox(Cube, FVector(CX, CY, TopZ + NF * FloorH), FVector(Foot, Foot, 14.f), FloorC, true);
+	AddInteriorLight(FVector(CX, CY, TopZ + NF * FloorH - 55.f));
 
 	// Echt trappenhuis: switchback met SOLIDE treden + bordes. Begin en eind liggen allebei aan de
 	// voorkant (yFront), zodat je elke verdieping netjes op de vloer stapt (geen losse zwevende treden).
@@ -551,7 +578,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float xB = HoleMinX + LaneW * 1.5f;    // baan van bordes naar volgende verdieping
 		const FLinearColor StepC = Body * 0.7f;
 		const FLinearColor LandC = Body * 0.5f;
-		for (int32 f = 0; f < NF; ++f)
+		for (int32 f = 0; f < NF - 1; ++f) // alleen tussen de woon-etages, niet naar het dak
 		{
 			const float zf = TopZ + f * FloorH;
 			// Steek 1 (baan A): van de voorkant naar achter, omhoog naar halve hoogte. Solide vanaf de vloer.
