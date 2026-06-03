@@ -16,6 +16,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/PlayerStart.h"
 #include "Customer/CustomerBase.h"
+#include "Engine/PostProcessVolume.h"
+#include "Engine/Scene.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
@@ -55,6 +57,23 @@ void ADayNightController::BeginPlay()
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
 		Sky->GetLightComponent()->SetMobility(EComponentMobility::Movable);
+	}
+
+	// Vaste belichting (geen auto-exposure): anders wordt buiten donker zodra je in een lichte kamer
+	// kijkt en omgekeerd. Een onbegrensd Post Process Volume met Manual exposure houdt alles gelijk.
+	{
+		APostProcessVolume* PP = W->SpawnActor<APostProcessVolume>(APostProcessVolume::StaticClass(), FTransform::Identity);
+		if (PP)
+		{
+			PP->bUnbound = true;
+			PP->BlendWeight = 1.f;
+			PP->Priority = 1000.f;
+			FPostProcessSettings& S = PP->Settings;
+			S.bOverride_AutoExposureMethod = true;
+			S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+			S.bOverride_AutoExposureBias = true;
+			S.AutoExposureBias = 11.f; // vaste belichtingscompensatie (te tunen)
+		}
 	}
 
 	// Lantaarnpalen rond een referentiepunt (PlayerStart, anders deze actor).
