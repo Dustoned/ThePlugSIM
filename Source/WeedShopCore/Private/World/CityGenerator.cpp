@@ -234,10 +234,15 @@ void ACityGenerator::BuildCity()
 
 			const float TopZ = GroundZ + CurbHeight; // gebouw/winkel staat op de stoep
 
-			// Straatlantaarn op de stoephoek richting het midden (om de beurt -> niet te veel lichten).
+			// Straatlantaarns op de stoephoeken: op de checkerboard-blokken alle 4 de hoeken (de hoeken
+			// worden met de buren gedeeld -> vrijwel elke straathoek krijgt licht, zonder te veel lampen).
 			if (((i + j) & 1) == 0)
 			{
-				AddCityLamp(FVector(CX, CY, TopZ) + FVector((i >= 0 ? -1.f : 1.f) * (BlockSize * 0.5f - 45.f), (j >= 0 ? -1.f : 1.f) * (BlockSize * 0.5f - 45.f), 0.f));
+				const float Off = BlockSize * 0.5f - 45.f;
+				AddCityLamp(FVector(CX + Off, CY + Off, TopZ));
+				AddCityLamp(FVector(CX + Off, CY - Off, TopZ));
+				AddCityLamp(FVector(CX - Off, CY + Off, TopZ));
+				AddCityLamp(FVector(CX - Off, CY - Off, TopZ));
 			}
 
 			// Landmark-blokken: 4 winkels + gas station op de binnenring, appartementen op de hoeken.

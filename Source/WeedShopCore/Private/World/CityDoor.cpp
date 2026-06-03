@@ -53,4 +53,12 @@ void ACityDoor::Tick(float DeltaSeconds)
 	const float Target = bOpen ? -95.f : 0.f;
 	CurAngle = FMath::FInterpTo(CurAngle, Target, DeltaSeconds, 7.f);
 	if (Hinge) { Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f)); }
+
+	// Blokkeer de speler ALLEEN als de deur helemaal dicht is; zodra 'ie open(t) negeert het paneel
+	// de pawn zodat het zwaaiende paneel je niet wegduwt en je er vrij door kunt lopen.
+	if (Panel)
+	{
+		const bool bBlockPawn = (!bOpen && FMath::Abs(CurAngle) < 2.f);
+		Panel->SetCollisionResponseToChannel(ECC_Pawn, bBlockPawn ? ECR_Block : ECR_Ignore);
+	}
 }
