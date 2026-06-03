@@ -595,6 +595,9 @@ protected:
 	TObjectPtr<class ULevelUpWidget> LevelUpWidget;
 
 	UPROPERTY(Transient)
+	TObjectPtr<class UCrosshairWidget> CrosshairWidget;
+
+	UPROPERTY(Transient)
 	TObjectPtr<class UWeedToast> ToastWidget;
 
 	UPROPERTY(Transient)

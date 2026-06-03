@@ -42,6 +42,7 @@
 #include "UI/MainMenuWidget.h"
 #include "UI/SaveIndicatorWidget.h"
 #include "UI/LevelUpWidget.h"
+#include "UI/CrosshairWidget.h"
 #include "UI/SettingsWidget.h"
 #include "World/StorageShelf.h"
 #include "Save/SaveGameSubsystem.h"
@@ -207,6 +208,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (PlantWidget) { PlantWidget->AddToViewport(10); }
 	HotbarWidget = CreateWidget<UHotbarWidget>(PC, UHotbarWidget::StaticClass());
 	if (HotbarWidget) { HotbarWidget->AddToViewport(5); }
+	CrosshairWidget = CreateWidget<UCrosshairWidget>(PC, UCrosshairWidget::StaticClass());
+	if (CrosshairWidget) { CrosshairWidget->AddToViewport(1); }
 	HandInfoWidget = CreateWidget<UHandInfoWidget>(PC, UHandInfoWidget::StaticClass());
 	if (HandInfoWidget) { HandInfoWidget->AddToViewport(6); }
 	InventoryWidget = CreateWidget<UInventoryWidget>(PC, UInventoryWidget::StaticClass());
