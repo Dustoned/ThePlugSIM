@@ -9,6 +9,7 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerStart.h"
 #include "World/StoreCounter.h"
+#include "World/CityDoor.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/World.h"
@@ -551,6 +552,21 @@ void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ
 		NeonPL->SetIntensity(9000.f);
 		NeonPL->SetLightColor(Sign);
 		NeonPL->SetCastShadows(false);
+	}
+
+	// Werkende deur in de opening: scharniert open als je dichtbij komt.
+	if (W)
+	{
+		const FVector N(DoorDirX, DoorDirY, 0.f);
+		const FVector Tang(-N.Y, N.X, 0.f);
+		const FVector OpeningCenter = FVector(CX, CY, BaseZ) + N * (Half - 2.f);
+		const FVector HingePos = OpeningCenter - Tang * (DoorW * 0.5f);
+		const float DoorYaw = FMath::RadiansToDegrees(FMath::Atan2(Tang.Y, Tang.X));
+		FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (ACityDoor* Door = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, DoorYaw, 0.f), HingePos), DSP))
+		{
+			Door->Setup(DoorW - 6.f, DoorH - 6.f, FLinearColor(0.10f, 0.08f, 0.07f));
+		}
 	}
 
 	// Binnenlicht.
