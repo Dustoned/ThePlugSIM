@@ -52,6 +52,9 @@ void ACityElevatorButton::Setup(ACityElevator* InElevator, int32 InFloor, bool b
 		Label->SetVerticalAlignment(EVRTA_TextCenter);
 		Label->SetRelativeLocation(FVector(2.0f, 0.f, 0.f));
 		// Leesbare kant van een TextRender = local +X; de knop staat al met +X naar de speler.
+		// Unlit/emissive tekstmateriaal -> cijfer licht zelf op, ook in een donkere cabine.
+		static UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_NumGlow.M_NumGlow"));
+		if (GlowMat) { Label->SetTextMaterial(GlowMat); }
 	}
 }
 
