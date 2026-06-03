@@ -32,11 +32,19 @@ protected:
 
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Platform;
-	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> DoorPanel; // schuifdeur
+
+	// Cabinedeur: twee klap-bladen die naar de zijkanten openschuiven (bi-parting).
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> CabDoorL;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> CabDoorR;
+	// Schachtdeur per verdieping (blijft op zijn verdieping staan, opent alleen als de cabine er is).
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> LandDoorL;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> LandDoorR;
+	TArray<float> CurLand;  // schuif-offset per verdieping-schachtdeur
 
 	bool bDoorOpen = false;
-	float CurDoor = 0.f;   // huidige schuif-offset
-	float DoorSlide = 0.f; // hoever de deur opent (= ~paneelbreedte)
+	float CurDoor = 0.f;    // schuif-offset cabinedeur
+	float OpenW = 110.f;    // halve deur-opening (= max schuifafstand per blad)
+	float DoorZ = 111.f;    // hoogte-midden van de deur (lokaal)
 
 	float BaseZ = 0.f;
 	float FloorH = 330.f;

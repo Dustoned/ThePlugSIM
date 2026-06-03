@@ -20,11 +20,6 @@ ACityElevator::ACityElevator()
 	Platform->SetupAttachment(Root);
 	if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"))) { Platform->SetStaticMesh(Cube); }
 	Platform->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-
-	DoorPanel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DoorPanel"));
-	DoorPanel->SetupAttachment(Root);
-	if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"))) { DoorPanel->SetStaticMesh(Cube); }
-	DoorPanel->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 }
 
 void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, float InFootX, float InFootY, const FLinearColor& Color)
@@ -37,6 +32,7 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 
 	const float CabH = 240.f, T = 10.f;
 	const FLinearColor Cab = Color * 1.15f;
+	const FLinearColor DoorCol(0.16f, 0.17f, 0.19f);
 
 	if (Platform)
 	{
@@ -45,7 +41,6 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 		Tint(Platform, Color);
 	}
 
-	// Cabine: achterwand (-Y), 2 zijwanden (±X), plafond. Bewegen mee met de lift (kinderen van Root).
 	auto Wall = [&](const TCHAR* Name, const FVector& Loc, const FVector& SizeCm, const FLinearColor& Col)
 	{
 		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this, Name);
@@ -54,19 +49,42 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 		C->SetRelativeLocation(Loc); C->SetRelativeScale3D(SizeCm / 100.f);
 		C->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		Tint(C, Col);
+		return C;
 	};
+
+	// Cabine: achterwand (-Y), 2 zijwanden (±X), plafond.
 	Wall(TEXT("CabBack"),  FVector(0.f, -FootY * 0.5f, 6.f + CabH * 0.5f), FVector(FootX + T, T, CabH), Cab);
 	Wall(TEXT("CabLeft"),  FVector(-FootX * 0.5f, 0.f, 6.f + CabH * 0.5f), FVector(T, FootY, CabH), Cab);
 	Wall(TEXT("CabRight"), FVector( FootX * 0.5f, 0.f, 6.f + CabH * 0.5f), FVector(T, FootY, CabH), Cab);
 	Wall(TEXT("CabCeil"),  FVector(0.f, 0.f, 6.f + CabH), FVector(FootX + T, FootY + T, T), Cab * 0.8f);
 
-	// Schuifdeur op de voorkant (+Y), schuift langs +X open.
-	DoorSlide = FootX * 0.92f;
-	if (DoorPanel)
+	// --- Deur-opmaat: bi-parting bladen die naar de zijkanten in de "pockets" schuiven ---
+	const float DoorH = 210.f;
+	OpenW = FMath::Clamp((FootX - 80.f) * 0.5f, 40.f, FootX * 0.45f); // halve opening = max schuif per blad
+	DoorZ = 6.f + DoorH * 0.5f;
+	const float LeafW = OpenW;            // elk blad dekt de halve opening
+	const float FrontY = FootY * 0.5f;    // voorvlak van de cabine
+	const float PocketW = FootX * 0.5f - OpenW; // wand-stukje naast de opening (pocket/kozijn)
+
+	// Voor-kozijn: pilaartjes naast de opening + latei erboven, zodat de voorkant dicht is rond de deur.
+	if (PocketW > 2.f)
 	{
-		DoorPanel->SetRelativeScale3D(FVector(FootX * 0.92f, T, 210.f) / 100.f);
-		DoorPanel->SetRelativeLocation(FVector(0.f, FootY * 0.5f, 6.f + 105.f));
-		Tint(DoorPanel, FLinearColor(0.16f, 0.17f, 0.19f));
+		Wall(TEXT("CabFrontL"), FVector(-(OpenW + PocketW * 0.5f), FrontY, 6.f + DoorH * 0.5f), FVector(PocketW, T, DoorH), Cab);
+		Wall(TEXT("CabFrontR"), FVector( (OpenW + PocketW * 0.5f), FrontY, 6.f + DoorH * 0.5f), FVector(PocketW, T, DoorH), Cab);
+	}
+	Wall(TEXT("CabFrontTop"), FVector(0.f, FrontY, 6.f + DoorH + (CabH - DoorH) * 0.5f), FVector(FootX + T, T, CabH - DoorH), Cab);
+
+	// Cabinedeur-bladen (bewegen mee met de cabine, kinderen van Root).
+	CabDoorL = Wall(TEXT("CabDoorL"), FVector(-LeafW * 0.5f, FrontY, DoorZ), FVector(LeafW, T, DoorH), DoorCol);
+	CabDoorR = Wall(TEXT("CabDoorR"), FVector( LeafW * 0.5f, FrontY, DoorZ), FVector(LeafW, T, DoorH), DoorCol);
+
+	// Schachtdeuren per verdieping (staan op hun eigen vloer; wereld-Z wordt elke tick vastgehouden).
+	LandDoorL.Reset(); LandDoorR.Reset(); CurLand.Reset();
+	for (int32 f = 0; f < NumFloors; ++f)
+	{
+		UStaticMeshComponent* L = Wall(*FString::Printf(TEXT("LandL_%d"), f), FVector(-LeafW * 0.5f, FrontY + T + 2.f, DoorZ), FVector(LeafW, T, DoorH), DoorCol * 0.92f);
+		UStaticMeshComponent* R = Wall(*FString::Printf(TEXT("LandR_%d"), f), FVector( LeafW * 0.5f, FrontY + T + 2.f, DoorZ), FVector(LeafW, T, DoorH), DoorCol * 0.92f);
+		LandDoorL.Add(L); LandDoorR.Add(R); CurLand.Add(0.f);
 	}
 
 	SetActorLocation(FVector(GetActorLocation().X, GetActorLocation().Y, BaseZ));
@@ -102,20 +120,30 @@ void ACityElevator::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Schuifdeur: schuift een klein stukje en VERDWIJNT dan (de cabine is te klein om 'm zichtbaar opzij
-	// te schuiven zonder uit het gebouw te steken). Dicht = zichtbaar + blokkeert; open = onzichtbaar + door.
-	const float DoorTarget = bDoorOpen ? DoorSlide : 0.f;
-	CurDoor = FMath::FInterpTo(CurDoor, DoorTarget, DeltaSeconds, 7.f);
-	if (DoorPanel)
-	{
-		const float Slid = FMath::Min(CurDoor, 18.f); // niet ver wegschuiven -> blijft binnen de cabine
-		DoorPanel->SetRelativeLocation(FVector(Slid, FootY * 0.5f, 6.f + 105.f));
-		DoorPanel->SetVisibility(CurDoor < 12.f);                                  // verdwijnt zodra 'ie opent
-		DoorPanel->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < 6.f) ? ECR_Block : ECR_Ignore);
-	}
-
 	const FVector Loc = GetActorLocation();
 	const float TargetZ = BaseZ + CurFloor * FloorH;
+	const bool bAtFloor = FMath::IsNearlyEqual(Loc.Z, TargetZ, 4.f); // cabine staat stil op een verdieping
+
+	// Cabinedeur: bi-parting bladen schuiven naar de zijkanten (blijven binnen de cabine, nooit buiten zicht).
+	// Trager (4.0) zodat ze duidelijk bewegen i.p.v. meteen weg te klappen.
+	const float CabTarget = (bDoorOpen && bAtFloor) ? OpenW : 0.f;
+	CurDoor = FMath::FInterpTo(CurDoor, CabTarget, DeltaSeconds, 4.0f);
+	if (CabDoorL) { CabDoorL->SetRelativeLocation(FVector(-OpenW * 0.5f - CurDoor, FootY * 0.5f, DoorZ)); CabDoorL->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
+	if (CabDoorR) { CabDoorR->SetRelativeLocation(FVector( OpenW * 0.5f + CurDoor, FootY * 0.5f, DoorZ)); CabDoorR->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
+
+	// Schachtdeuren: blijven op hun verdieping (wereld-Z vastgehouden door relatieve Z te compenseren).
+	// Open alleen als de cabine OP die verdieping staat en de speler dichtbij is; anders dicht -> geen val in de schacht.
+	for (int32 f = 0; f < LandDoorL.Num(); ++f)
+	{
+		const float FloorZ = BaseZ + f * FloorH;
+		const bool bCabHere = FMath::IsNearlyEqual(Loc.Z, FloorZ, 6.f);
+		const float Target = (bDoorOpen && bCabHere) ? OpenW : 0.f;
+		CurLand[f] = FMath::FInterpTo(CurLand[f], Target, DeltaSeconds, 4.0f);
+		const float RelZ = (FloorZ - Loc.Z) + DoorZ; // compenseer de cabine-beweging -> wereld-Z blijft op de vloer
+		const bool bBlock = CurLand[f] < OpenW * 0.6f;
+		if (UStaticMeshComponent* L = LandDoorL[f]) { L->SetRelativeLocation(FVector(-OpenW * 0.5f - CurLand[f], FootY * 0.5f + 12.f, RelZ)); L->SetCollisionResponseToChannel(ECC_Pawn, bBlock ? ECR_Block : ECR_Ignore); }
+		if (UStaticMeshComponent* R = LandDoorR[f]) { R->SetRelativeLocation(FVector( OpenW * 0.5f + CurLand[f], FootY * 0.5f + 12.f, RelZ)); R->SetCollisionResponseToChannel(ECC_Pawn, bBlock ? ECR_Block : ECR_Ignore); }
+	}
 
 	// Beweeg naar de doel-verdieping.
 	const float NewZ = FMath::FInterpConstantTo(Loc.Z, TargetZ, DeltaSeconds, 220.f);
