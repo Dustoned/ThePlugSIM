@@ -184,13 +184,12 @@ void ADayNightController::AddLamp(const FVector& BaseOnGround)
 	{
 		UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
 		PL->SetupAttachment(Root);
-		PL->bUseInverseSquaredFalloff = false;
 		PL->RegisterComponent();
 		PL->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH - 10.f));
 		PL->SetMobility(EComponentMobility::Movable);
-		PL->SetAttenuationRadius(1850.f);
+		PL->SetAttenuationRadius(1600.f);
 		PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
-		PL->SetIntensity(0.f);
+		PL->SetIntensity(0.f); // physically-based (lumens) -> consistent met de vaste belichting
 		PL->SetCastShadows(false);
 		LampLights.Add(PL);
 	}
@@ -243,7 +242,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 	if (WantOn != bLampsOn)
 	{
 		bLampsOn = WantOn;
-		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 17.f : 0.f); } }
+		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 28000.f : 0.f); } }
 		for (UMaterialInstanceDynamic* M : LampHeadMats)
 		{
 			if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.85f, 0.45f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
