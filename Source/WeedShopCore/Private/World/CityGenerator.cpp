@@ -517,11 +517,14 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		AddBox(Cube, FVector(CX - Half - 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false);
 	}
 
-	// Kern (trapgat + liftschacht) in de achter-linker hoek.
-	const float StairRun = 360.f, StairW = 170.f, Gap = 50.f, ElevW = 230.f, ElevD = 230.f;
-	const float CoreW = StairRun + Gap + ElevW;
-	const float CoreD = FMath::Max(StairW, ElevD);
-	const float HoleMinX = CX - Half + 20.f, HoleMinY = CY - Half + 20.f;
+	// Kern (trappenhuis + liftschacht) in de achter-linker hoek.
+	const float LaneW = 125.f;              // breedte van één trap-baan
+	const float StairXW = 2.f * LaneW;      // twee banen naast elkaar (switchback)
+	const float Gap = 55.f, ElevW = 230.f, ElevD = 250.f;
+	const float StairRunY = 290.f;          // looplengte van een halve steek (langs Y)
+	const float CoreW = StairXW + Gap + ElevW;
+	const float CoreD = FMath::Max(StairRunY, ElevD);
+	const float HoleMinX = CX - Half + 25.f, HoleMinY = CY - Half + 25.f;
 	const float HoleMaxX = HoleMinX + CoreW, HoleMaxY = HoleMinY + CoreD;
 
 	// Verdiepingsvloeren f=1..NF met een L-gat over de kern; + binnenlicht per verdieping.
@@ -535,25 +538,44 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		AddInteriorLight(FVector(CX, CY, z - 55.f));
 	}
 
-	// Switchback-trap door de kern (om-en-om van richting per verdieping).
-	const int32 Steps = 14;
-	const float StepRise = FloorH / Steps, StepRun = StairRun / Steps;
-	const FLinearColor StepC = Body * 0.7f;
-	for (int32 f = 0; f < NF; ++f)
+	// Echt trappenhuis: switchback met SOLIDE treden + bordes. Begin en eind liggen allebei aan de
+	// voorkant (yFront), zodat je elke verdieping netjes op de vloer stapt (geen losse zwevende treden).
 	{
-		const float z0 = TopZ + f * FloorH;
-		const bool bEven = ((f & 1) == 0);
-		for (int32 s = 0; s < Steps; ++s)
+		const int32 SPF = 8;                         // treden per halve steek
+		const float HalfRise = FloorH * 0.5f;
+		const float Rise = HalfRise / SPF;           // ~20cm per trede
+		const float RunY = StairRunY / SPF;          // diepte per trede
+		const float yFront = HoleMinY + StairRunY;   // start/eind (richting de vloer)
+		const float yBack = HoleMinY;                // bordes-kant
+		const float xA = HoleMinX + LaneW * 0.5f;    // baan omhoog naar bordes
+		const float xB = HoleMinX + LaneW * 1.5f;    // baan van bordes naar volgende verdieping
+		const FLinearColor StepC = Body * 0.7f;
+		const FLinearColor LandC = Body * 0.5f;
+		for (int32 f = 0; f < NF; ++f)
 		{
-			const float sx = bEven ? (HoleMinX + (s + 0.5f) * StepRun) : (HoleMinX + StairRun - (s + 0.5f) * StepRun);
-			const float topz = z0 + (s + 1) * StepRise;
-			AddBox(Cube, FVector(sx, HoleMinY + StairW * 0.5f, topz - 8.f), FVector(StepRun + 2.f, StairW, 16.f), StepC, true);
+			const float zf = TopZ + f * FloorH;
+			// Steek 1 (baan A): van de voorkant naar achter, omhoog naar halve hoogte. Solide vanaf de vloer.
+			for (int32 s = 0; s < SPF; ++s)
+			{
+				const float h = (s + 1) * Rise;
+				const float y = yFront - (s + 0.5f) * RunY;
+				AddBox(Cube, FVector(xA, y, zf + h * 0.5f), FVector(LaneW, RunY + 2.f, h), StepC, true);
+			}
+			// Bordes achterin op halve hoogte (verbindt baan A en B).
+			AddBox(Cube, FVector(HoleMinX + StairXW * 0.5f, yBack + RunY * 0.6f, zf + HalfRise - 8.f), FVector(StairXW, RunY * 1.4f, 16.f), LandC, true);
+			// Steek 2 (baan B): van achter naar de voorkant, omhoog naar de volgende verdieping. Solide vanaf het bordes.
+			for (int32 s = 0; s < SPF; ++s)
+			{
+				const float h = (s + 1) * Rise;
+				const float y = yBack + (s + 0.5f) * RunY;
+				AddBox(Cube, FVector(xB, y, zf + HalfRise + h * 0.5f), FVector(LaneW, RunY + 2.f, h), StepC, true);
+			}
 		}
 	}
 
 	// Werkende lift in de kern, naast de trap.
 	{
-		const float ElevCX = HoleMinX + StairRun + Gap + ElevW * 0.5f;
+		const float ElevCX = HoleMinX + StairXW + Gap + ElevW * 0.5f;
 		const float ElevCY = HoleMinY + ElevD * 0.5f;
 		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		if (ACityElevator* Ele = W->SpawnActor<ACityElevator>(ACityElevator::StaticClass(), FTransform(FVector(ElevCX, ElevCY, TopZ + 4.f)), SP))
