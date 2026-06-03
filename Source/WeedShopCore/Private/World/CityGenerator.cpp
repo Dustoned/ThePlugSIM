@@ -3,6 +3,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/TextRenderComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
@@ -36,7 +37,7 @@ void ACityGenerator::BeginPlay()
 }
 
 UStaticMeshComponent* ACityGenerator::AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld,
-	const FVector& SizeCm, const FLinearColor& Color, bool bCollides)
+	const FVector& SizeCm, const FLinearColor& Color, bool bCollides, const FRotator& Rot)
 {
 	if (!MeshAsset) { return nullptr; }
 	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
@@ -44,6 +45,7 @@ UStaticMeshComponent* ACityGenerator::AddBox(UStaticMesh* MeshAsset, const FVect
 	C->RegisterComponent();
 	C->SetStaticMesh(MeshAsset);
 	C->SetWorldLocation(CenterWorld);
+	C->SetWorldRotation(Rot);
 	C->SetWorldScale3D(SizeCm / 100.f); // basis-kubus = 100cm
 	C->SetCollisionEnabled(bCollides ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
 	C->SetMobility(EComponentMobility::Movable);
@@ -55,6 +57,46 @@ UStaticMeshComponent* ACityGenerator::AddBox(UStaticMesh* MeshAsset, const FVect
 		}
 	}
 	return C;
+}
+
+void ACityGenerator::AddGableRoof(const FVector& TopCenter, float Width, float Depth, float RidgeH, bool bRidgeAlongX, const FLinearColor& Color)
+{
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!Cube) { return; }
+	const float Thick = 12.f;
+	if (bRidgeAlongX)
+	{
+		const float Half = Depth * 0.5f;
+		const float L = FMath::Sqrt(Half * Half + RidgeH * RidgeH) + 8.f;
+		const float Ang = FMath::RadiansToDegrees(FMath::Atan2(RidgeH, Half));
+		AddBox(Cube, FVector(TopCenter.X, TopCenter.Y - Depth * 0.25f, TopCenter.Z + RidgeH * 0.5f), FVector(Width, L, Thick), Color, true, FRotator(0.f, 0.f,  Ang));
+		AddBox(Cube, FVector(TopCenter.X, TopCenter.Y + Depth * 0.25f, TopCenter.Z + RidgeH * 0.5f), FVector(Width, L, Thick), Color, true, FRotator(0.f, 0.f, -Ang));
+	}
+	else
+	{
+		const float Half = Width * 0.5f;
+		const float L = FMath::Sqrt(Half * Half + RidgeH * RidgeH) + 8.f;
+		const float Ang = FMath::RadiansToDegrees(FMath::Atan2(RidgeH, Half));
+		AddBox(Cube, FVector(TopCenter.X - Width * 0.25f, TopCenter.Y, TopCenter.Z + RidgeH * 0.5f), FVector(L, Depth, Thick), Color, true, FRotator(-Ang, 0.f, 0.f));
+		AddBox(Cube, FVector(TopCenter.X + Width * 0.25f, TopCenter.Y, TopCenter.Z + RidgeH * 0.5f), FVector(L, Depth, Thick), Color, true, FRotator( Ang, 0.f, 0.f));
+	}
+}
+
+void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY, const FString& Text, const FLinearColor& Color, float Size)
+{
+	UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
+	T->SetupAttachment(Root);
+	T->RegisterComponent();
+	T->SetWorldLocation(WorldLoc);
+	// TextRender leest vanaf de -X-kant; draai zodat de tekst naar buiten (de straat) kijkt.
+	const float Yaw = FMath::RadiansToDegrees(FMath::Atan2((float)DirY, (float)DirX)) + 180.f;
+	T->SetWorldRotation(FRotator(0.f, Yaw, 0.f));
+	T->SetText(FText::FromString(Text));
+	T->SetHorizontalAlignment(EHTA_Center);
+	T->SetVerticalAlignment(EVRTA_TextCenter);
+	T->SetWorldSize(Size);
+	T->SetTextRenderColor(Color.ToFColor(true));
+	T->SetCastShadow(false);
 }
 
 void ACityGenerator::BuildCity()
@@ -161,33 +203,56 @@ void ACityGenerator::BuildCity()
 				continue;
 			}
 
-			// Generiek (gevuld) gebouw op het blok. Hoogte deterministisch uit de hash.
+			// Generiek gebouw: deterministische mix van LAGE huizen (schuin dak, deur) en HOGE flats.
 			const uint32 H = CityHash(i, j);
-			const int32 Floors = 2 + (int32)(H % 6);          // 2..7 verdiepingen
 			const float FloorH = 330.f;
-			const float BH = Floors * FloorH;
-			const float Foot = BlockSize - 2.f * SidewalkWidth; // gevel binnen de stoep
 			const FLinearColor Body = Facades[H % UE_ARRAY_COUNT(Facades)];
+			const FLinearColor Glass(0.30f, 0.45f, 0.55f);
+			const FLinearColor DoorC(0.12f, 0.10f, 0.09f);
+			const bool bHouse = (H % 3u) != 0u; // ~2/3 huizen, 1/3 flats
 
-			// Romp.
+			const float FootMax = BlockSize - 2.f * SidewalkWidth;
+			const int32 Floors = bHouse ? (2 + (int32)((H >> 2) % 2)) : (4 + (int32)((H >> 2) % 5)); // huis 2-3, flat 4-8
+			const float BH = Floors * FloorH;
+			const float Foot = bHouse ? FootMax * (0.55f + 0.08f * ((H >> 5) % 3)) : FootMax;
+			const float HalfF = Foot * 0.5f;
+
+			// Romp + plint (begane grond).
 			AddBox(Cube, FVector(CX, CY, TopZ + BH * 0.5f), FVector(Foot, Foot, BH), Body, true);
-			// Dakrand (iets breder, donker).
-			AddBox(Cube, FVector(CX, CY, TopZ + BH + 8.f), FVector(Foot + 14.f, Foot + 14.f, 16.f), Body * 0.6f, false);
-			// Begane grond (winkelpui) iets donkerder + breder zodat het leest als een plint.
 			AddBox(Cube, FVector(CX, CY, TopZ + FloorH * 0.5f), FVector(Foot + 8.f, Foot + 8.f, FloorH), Body * 0.5f, false);
 
-			// Raamstroken per verdieping op de 4 gevels (dun, glas-blauw), cosmetisch.
-			const FLinearColor Glass(0.30f, 0.45f, 0.55f);
-			const float HalfF = Foot * 0.5f;
-			for (int32 f = 1; f < Floors; ++f)
+			// Voordeur aan de straatkant (richting het midden).
+			{
+				const FVector Nd = (ddx != 0) ? FVector((float)ddx, 0.f, 0.f) : FVector(0.f, (float)ddy, 0.f);
+				const FVector DoorPos = FVector(CX, CY, TopZ + 105.f) + Nd * (HalfF + 5.f);
+				const FVector DoorSize = (ddx != 0) ? FVector(8.f, 95.f, 210.f) : FVector(95.f, 8.f, 210.f);
+				AddBox(Cube, DoorPos, DoorSize, DoorC, false);
+			}
+
+			// Ramen per verdieping.
+			for (int32 f = (bHouse ? 0 : 1); f < Floors; ++f)
 			{
 				const float Z = TopZ + f * FloorH + FloorH * 0.5f;
-				const float WinW = Foot * 0.8f;
-				const float WinH = FloorH * 0.5f;
+				const float WinW = Foot * (bHouse ? 0.6f : 0.8f);
+				const float WinH = FloorH * 0.45f;
 				AddBox(Cube, FVector(CX, CY + HalfF + 2.f, Z), FVector(WinW, 4.f, WinH), Glass, false);
 				AddBox(Cube, FVector(CX, CY - HalfF - 2.f, Z), FVector(WinW, 4.f, WinH), Glass, false);
 				AddBox(Cube, FVector(CX + HalfF + 2.f, CY, Z), FVector(4.f, WinW, WinH), Glass, false);
 				AddBox(Cube, FVector(CX - HalfF - 2.f, CY, Z), FVector(4.f, WinW, WinH), Glass, false);
+			}
+
+			if (bHouse)
+			{
+				// Schuin zadeldak (donkerrood pannendak) + een schoorsteen.
+				const FLinearColor Roof(0.35f, 0.18f, 0.14f);
+				const bool RidgeX = ((H >> 6) & 1u) != 0u;
+				AddGableRoof(FVector(CX, CY, TopZ + BH), Foot + 16.f, Foot + 16.f, 140.f + (float)(H % 60u), RidgeX, Roof);
+				AddBox(Cube, FVector(CX + Foot * 0.25f, CY + Foot * 0.2f, TopZ + BH + 75.f), FVector(28.f, 28.f, 95.f), Body * 0.55f, false);
+			}
+			else
+			{
+				// Platte dakrand (parapet).
+				AddBox(Cube, FVector(CX, CY, TopZ + BH + 9.f), FVector(Foot + 14.f, Foot + 14.f, 18.f), Body * 0.6f, false);
 			}
 		}
 	}
@@ -268,12 +333,26 @@ void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ
 	};
 	for (int32 s = 0; s < 4; ++s) { BuildWall(s); }
 
-	// Naambord boven de deur (buitenkant), in de accentkleur.
+	// Naambord boven de deur (buitenkant), in de accentkleur, met leesbare 3D-tekst.
 	{
 		const FVector N(DoorDirX, DoorDirY, 0.f);
-		const FVector SignPos = FVector(CX, CY, BaseZ + DoorH + 35.f) + N * (Half + T);
-		const FVector SignSize = (DoorSide <= 1) ? FVector(10.f, DoorW + 60.f, 70.f) : FVector(DoorW + 60.f, 10.f, 70.f);
+		const float SignZ = BaseZ + DoorH + 55.f;
+		const float SignW = Foot * 0.9f; // bord over bijna de hele gevel
+		const FVector SignPos = FVector(CX, CY, SignZ) + N * (Half + T);
+		const FVector SignSize = (DoorSide <= 1) ? FVector(10.f, SignW, 110.f) : FVector(SignW, 10.f, 110.f);
 		AddBox(Cube, SignPos, SignSize, Sign, false);
+
+		FString Name;
+		switch (Kind)
+		{
+		case EShopKind::Grow:       Name = TEXT("GROW SHOP"); break;
+		case EShopKind::Furniture:  Name = TEXT("FURNITURE STORE"); break;
+		case EShopKind::Supplies:   Name = TEXT("SUPPLIES"); break;
+		case EShopKind::GasStation: Name = TEXT("GAS STATION"); break;
+		default:                    Name = TEXT("APARTMENTS"); break;
+		}
+		const FVector TextPos = FVector(CX, CY, SignZ) + N * (Half + T + 10.f);
+		AddSignText(TextPos, DoorDirX, DoorDirY, Name, FLinearColor::White, 65.f);
 	}
 
 	// Binnenlicht.

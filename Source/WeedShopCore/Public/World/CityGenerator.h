@@ -32,7 +32,13 @@ protected:
 
 	// Eén blok-mesh toevoegen onder de root. SizeCm = volledige afmeting; CenterWorld = wereld-midden.
 	UStaticMeshComponent* AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld, const FVector& SizeCm,
-		const FLinearColor& Color, bool bCollides);
+		const FLinearColor& Color, bool bCollides, const FRotator& Rot = FRotator::ZeroRotator);
+
+	// Een schuin zadeldak (twee tegen elkaar leunende vlakken) bovenop een gebouw.
+	void AddGableRoof(const FVector& TopCenter, float Width, float Depth, float RidgeH, bool bRidgeAlongX, const FLinearColor& Color);
+
+	// Een 3D-tekstbord (winkelnaam) op wereldpositie, gericht langs (DirX,DirY).
+	void AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY, const FString& Text, const FLinearColor& Color, float Size);
 
 	// Een inloopbaar gebouw: holle ruimte met deur-opening in de wand richting (DoorDirX,DoorDirY),
 	// vloer, plafond, gekleurde gevel + bord, en (voor winkels) een AStoreCounter binnenin.
