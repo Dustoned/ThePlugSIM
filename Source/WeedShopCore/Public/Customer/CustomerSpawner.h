@@ -24,6 +24,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	int32 MaxCustomers = 3;
 
+	// TEST: spawn slechts ÉÉN klant, met hoge stat (koopklaar), netjes in het centrale park (PlayerStart).
+	// Zo zweven er geen random NPC's meer in het midden; alleen deze ene om mee te testen.
+	UPROPERTY(EditAnywhere, Category = "Spawn")
+	bool bTestSingleHighStat = true;
+
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpawnInterval = 10.f;
 

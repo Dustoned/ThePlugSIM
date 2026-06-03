@@ -988,6 +988,13 @@ void ACityGenerator::BuildPark(float CX, float CY, float Size, float GroundTopZ)
 	const float Bo = PW * 0.5f + 95.f;
 	Bench(CX, CY + Bo, true);  Bench(CX, CY - Bo, true);
 	Bench(CX + Bo, CY, false); Bench(CX - Bo, CY, false);
+
+	// Fatsoenlijke verlichting op elke hoek van het park (gaat 's avonds aan, regelbaar via de slider).
+	const float Lc = Half - 75.f;
+	AddCityLamp(FVector(CX - Lc, CY + Lc, Z));
+	AddCityLamp(FVector(CX + Lc, CY + Lc, Z));
+	AddCityLamp(FVector(CX - Lc, CY - Lc, Z));
+	AddCityLamp(FVector(CX + Lc, CY - Lc, Z));
 }
 
 void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ, float Foot, float Height,
