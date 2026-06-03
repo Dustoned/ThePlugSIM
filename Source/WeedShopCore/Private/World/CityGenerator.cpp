@@ -632,6 +632,65 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		}
 	}
 
+	// --- Interieur per verdieping: omsloten trap/lift-kern + gang + 3 appartementen ---
+	{
+		const float WallT = 16.f;
+		const float WallHt = FloorH - 10.f;
+		const FLinearColor IWall(0.60f, 0.58f, 0.54f);  // lichte binnenmuur
+		const FLinearColor ADoorC(0.30f, 0.20f, 0.12f); // appartementdeur (hout)
+		const float HallW = 230.f;
+		const float HallFrontY = HoleMaxY + HallW;       // voorkant van de gang
+		const float DoorGap = 105.f;
+		const float CoreDoorC = HoleMinX + StairXW * 0.5f; // kern-deur bij de trapuitgang
+
+		const float ApLeft = CX - Half + WallT, ApRight = CX + Half - WallT;
+		const float ApW = (ApRight - ApLeft) / 3.f;
+		const float Px1 = ApLeft + ApW, Px2 = ApLeft + 2.f * ApW;
+		const float Gc0 = ApLeft + ApW * 0.5f, Gc1 = ApLeft + ApW * 1.5f, Gc2 = ApLeft + ApW * 2.5f;
+
+		// Axis-aligned muursegment (met collision).
+		auto WallSeg = [&](float X0, float Y0, float X1, float Y1, float zS, const FLinearColor& Col)
+		{
+			const float Lx = FMath::Abs(X1 - X0), Ly = FMath::Abs(Y1 - Y0);
+			if (Lx + Ly < 6.f) { return; }
+			const FVector C((X0 + X1) * 0.5f, (Y0 + Y1) * 0.5f, zS + WallHt * 0.5f);
+			const FVector S = (Lx >= Ly) ? FVector(Lx, WallT, WallHt) : FVector(WallT, Ly, WallHt);
+			AddBox(Cube, C, S, Col, true);
+		};
+
+		for (int32 f = 0; f < NF; ++f)
+		{
+			const float zS = TopZ + f * FloorH;
+
+			// Kern-omhulling: +Y-wand (met deur naar de gang) + +X-wand. (-X/-Y vallen tegen de buitenmuren.)
+			WallSeg(HoleMinX, HoleMaxY, CoreDoorC - DoorGap * 0.5f, HoleMaxY, zS, IWall);
+			WallSeg(CoreDoorC + DoorGap * 0.5f, HoleMaxY, HoleMaxX, HoleMaxY, zS, IWall);
+			WallSeg(HoleMaxX, HoleMinY, HoleMaxX, HoleMaxY, zS, IWall);
+
+			// Gang-voorwand met 3 appartementdeuren (gaten), over de volle breedte.
+			WallSeg(ApLeft, HallFrontY, Gc0 - DoorGap * 0.5f, HallFrontY, zS, IWall);
+			WallSeg(Gc0 + DoorGap * 0.5f, HallFrontY, Gc1 - DoorGap * 0.5f, HallFrontY, zS, IWall);
+			WallSeg(Gc1 + DoorGap * 0.5f, HallFrontY, Gc2 - DoorGap * 0.5f, HallFrontY, zS, IWall);
+			WallSeg(Gc2 + DoorGap * 0.5f, HallFrontY, ApRight, HallFrontY, zS, IWall);
+
+			// Partities tussen de 3 appartementen (van gang-voorwand naar de voorgevel).
+			WallSeg(Px1, HallFrontY, Px1, CY + Half - WallT, zS, IWall);
+			WallSeg(Px2, HallFrontY, Px2, CY + Half - WallT, zS, IWall);
+
+			// Werkende appartementdeuren in de 3 gaten.
+			const float Gcs[3] = { Gc0, Gc1, Gc2 };
+			for (int32 d = 0; d < 3; ++d)
+			{
+				FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				const FVector Hinge(Gcs[d] - DoorGap * 0.5f, HallFrontY, zS);
+				if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, 0.f, 0.f), Hinge), DSP))
+				{
+					Dr->Setup(DoorGap - 4.f, WallHt - 8.f, ADoorC);
+				}
+			}
+		}
+	}
+
 	// Plat dak + parapet.
 	AddBox(Cube, FVector(CX, CY, TopZ + TotalH + 10.f), FVector(Foot + 16.f, Foot + 16.f, 20.f), Body * 0.6f, false);
 
