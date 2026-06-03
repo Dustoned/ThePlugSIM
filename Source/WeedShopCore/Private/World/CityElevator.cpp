@@ -86,6 +86,22 @@ void ACityElevator::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	// Lift-schuifdeur gaat AUTOMATISCH open als de speler dichtbij de cabine staat (zoals een echte lift),
+	// zodat je naar binnen kunt zonder te interacten.
+	{
+		const FVector Loc0 = GetActorLocation();
+		bDoorOpen = false;
+		if (const APawn* P = UGameplayStatics::GetPlayerPawn(this, 0))
+		{
+			const FVector PL = P->GetActorLocation();
+			const float Horiz = FVector::Dist2D(PL, Loc0);
+			if (Horiz < FMath::Max(FootX, FootY) * 0.5f + 200.f && PL.Z > Loc0.Z - 120.f && PL.Z < Loc0.Z + 320.f)
+			{
+				bDoorOpen = true;
+			}
+		}
+	}
+
 	// Schuifdeur animeren (open = naar +X geschoven). Blokkeert de pawn alleen als 'ie dicht is.
 	const float DoorTarget = bDoorOpen ? DoorSlide : 0.f;
 	CurDoor = FMath::FInterpTo(CurDoor, DoorTarget, DeltaSeconds, 6.f);

@@ -524,6 +524,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float HalfRise = FloorH * 0.5f, Rise = HalfRise / SPF, RunD = CoreDepth / SPF;
 		const float LaneW = SideW * 0.5f;
 		const float sA = -(HW + LaneW * 0.5f), sB = -(HW + LaneW * 1.5f);
+		// Solide bordes aan de gangkant op ELKE verdieping: hier stap je vanuit de gang de trap op (geen gat).
+		for (int32 f = 0; f < NF; ++f)
+		{
+			const float zf = TopZ + f * FloorH;
+			Box(HallLen + 70.f, -(HW + SideW * 0.5f), 150.f, SideW, zf - 6.f, 12.f, LandC, true);
+		}
 		for (int32 f = 0; f < NF - 1; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
