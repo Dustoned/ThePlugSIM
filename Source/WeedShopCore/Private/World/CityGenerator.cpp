@@ -770,19 +770,20 @@ void ACityGenerator::BuildWallWindows(float CenterX, float CenterY, bool bAlongX
 
 	const FLinearColor Glass(0.34f, 0.50f, 0.62f);
 	const FLinearColor Mull = Wall * 0.7f;
+	UMaterialInterface* GlassMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_Glass.M_Glass"));
 	const float SillH = 95.f, WinH = 130.f;
 	const float HalfL = Length * 0.5f;
 	const float A0 = (bAlongX ? CenterX : CenterY) - HalfL; // begin langs de muur-as
 	const float Perp = (bAlongX ? CenterY : CenterX);
 
 	// Eén stuk muur: aCenter (langs de as), aLen (lengte), zC (midden hoogte), zH (hoogte). glass=dun + see-through.
-	auto Seg = [&](float aCenter, float aLen, float zC, float zH, const FLinearColor& Col, bool bGlass)
+	auto Seg = [&](float aCenter, float aLen, float zC, float zH, const FLinearColor& Col, bool bGlass) -> UStaticMeshComponent*
 	{
-		if (aLen < 2.f || zH < 2.f) { return; }
+		if (aLen < 2.f || zH < 2.f) { return nullptr; }
 		const float Th = bGlass ? 6.f : T;
 		const FVector C = bAlongX ? FVector(aCenter, Perp, zC) : FVector(Perp, aCenter, zC);
 		const FVector S = bAlongX ? FVector(aLen, Th, zH) : FVector(Th, aLen, zH);
-		AddBox(Cube, C, S, Col, true);
+		return AddBox(Cube, C, S, Col, true);
 	};
 	// Borstwering + glasstrook + latei over een muur-stuk [s0..s1] op verdieping met basis fb.
 	auto Bands = [&](float s0, float s1, float fb)
@@ -792,7 +793,11 @@ void ACityGenerator::BuildWallWindows(float CenterX, float CenterY, bool bAlongX
 		Seg(c, L, fb + SillH * 0.5f, SillH, Wall, false);                          // borstwering onder
 		const float headZ0 = fb + SillH + WinH, headH = FloorH - (SillH + WinH);
 		Seg(c, L, headZ0 + headH * 0.5f, headH, Wall, false);                      // latei boven
-		Seg(c, L, fb + SillH + WinH * 0.5f, WinH, Glass, true);                    // glasstrook (echte opening)
+		// Glasstrook: DOORZICHTIG materiaal -> echt see-through raam.
+		if (UStaticMeshComponent* G = Seg(c, L, fb + SillH + WinH * 0.5f, WinH, Glass, true))
+		{
+			if (GlassMat) { G->SetMaterial(0, GlassMat); }
+		}
 		const int32 NM = FMath::Max(0, (int32)(L / 170.f));
 		for (int32 m = 1; m <= NM; ++m) { Seg(s0 + L * m / (NM + 1), 12.f, fb + SillH + WinH * 0.5f, WinH, Mull, false); }
 	};
