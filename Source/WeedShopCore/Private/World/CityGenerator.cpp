@@ -499,8 +499,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const float CoreDepth = 640.f;                   // achterste zone (trap links, lift rechts)
 	const float HallLen = Foot - CoreDepth;          // gang van de ingang tot de kern
 	const float SideW = Half - HW;                   // breedte van een appartement-zone per kant
-	const float StairLaneWd = FMath::Min(300.f, CoreDepth - 60.f); // trap-loopbreedte (langs diepte)
-	const float StairDoorC = HallLen + CoreDepth * 0.5f;           // midden van de trap-baan = deuropening
+	const float StairLaneWd = FMath::Min(240.f, CoreDepth * 0.42f); // trap-loopbreedte (langs diepte)
+	const float StairDoorC = HallLen + StairLaneWd * 0.5f + 20.f;   // instap bij de gang = deuropening
 	const float WallT = 16.f, WallHt = FloorH - 10.f, DoorTopH = 205.f, DoorGap = 110.f;
 	const FLinearColor IWall(0.60f, 0.58f, 0.54f), ADoorC(0.30f, 0.20f, 0.12f);
 	const FLinearColor StepC = Body * 0.7f, LandC = Body * 0.5f;
@@ -525,26 +525,26 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const int32 SPF = 14;
 		const float HalfRise = FloorH * 0.5f, Rise = HalfRise / SPF;
 		const float Margin = 25.f;
-		const float RunS = (SideW - 2.f * Margin) / SPF;  // trede-diepte langs de instaprichting (Side)
-		const float LaneWd = StairLaneWd;                 // loopbreedte langs de diepte
-		const float dLane = StairDoorC;                   // één baan, gecentreerd in de schacht (= bij de deur)
-		const float s0 = -HW - Margin;
-		// Drempel op vloerniveau bij de deur per verdieping.
+		const float RunS = (SideW - 2.f * Margin) / SPF;          // trede-diepte LANGS DE INSTAPRICHTING (Side)
+		const float LaneWd = StairLaneWd;                         // loopbreedte langs de diepte
+		const float dFront = StairDoorC;                          // baan dichtbij de gang (= instap/deuropening)
+		const float dBack = Foot - LaneWd * 0.5f - 20.f;          // baan achterin
+		const float s0 = -HW - Margin;                            // begint bij de gang-instap
+		// Drempel op vloerniveau aan de gangkant per verdieping.
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
-			Box(dLane, -HW - 30.f, LaneWd, 64.f, zf - 6.f, 12.f, LandC, true);
+			Box(HallLen + CoreDepth * 0.5f, -HW - 28.f, CoreDepth, 64.f, zf - 6.f, 12.f, LandC, true);
 		}
-		// Gestapelde switchback in ÉÉN baan -> begin én eind bij dezelfde deuropening (dLane).
 		for (int32 f = 0; f < NF - 1; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
-			// Steek 1 (onder): van de gang de schacht in, omhoog naar halve hoogte.
-			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + (k + 1) * Rise; Box(dLane, s0 - (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
-			// Bordes aan de achterwand.
-			Box(dLane, -Half + Margin, LaneWd, RunS * 1.8f, zf + HalfRise - 8.f, 16.f, LandC, true);
-			// Steek 2 (boven, gestapeld): terug naar de gang, omhoog naar de volgende verdieping.
-			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + HalfRise + (k + 1) * Rise; Box(dLane, -Half + Margin + (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
+			// Steek 1 (baan vooraan): van de gang (-HW) de schacht in (-Side), omhoog naar halve hoogte.
+			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + (k + 1) * Rise; Box(dFront, s0 - (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
+			// Bordes aan de achterwand, verbindt beide banen.
+			Box((dFront + dBack) * 0.5f, -Half + Margin, FMath::Abs(dBack - dFront) + LaneWd, RunS * 1.8f, zf + HalfRise - 8.f, 16.f, LandC, true);
+			// Steek 2 (baan achterin): terug naar de gang, omhoog naar de volgende verdieping.
+			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + HalfRise + (k + 1) * Rise; Box(dBack, -Half + Margin + (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
 		}
 	}
 
@@ -605,9 +605,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 				}
 				else
 				{
-					// Trap-kant: dichte wand met één brede deuropening bij de trap -> trappenhuis is een dichte ruimte.
+					// Trap-kant: deuropening bij de instap vooraan, daarachter dichte wand -> trappenhuis afgesloten.
 					const float SDW = StairLaneWd + 30.f;
-					SegD(HallLen, StairDoorC - SDW * 0.5f, sw, zS);
 					SegD(StairDoorC + SDW * 0.5f, Foot, sw, zS);
 				}
 				// Achterwand van de appartementen (sluit ze af van de schacht-zone).
