@@ -48,6 +48,9 @@ protected:
 	// Warm binnenlicht (anders is een afgesloten ruimte pikdonker).
 	void AddInteriorLight(const FVector& WorldLoc);
 
+	// Een rij van 3-4 verschillende huisjes (rijtjeshuizen) die het hele lot vult, met 1 doorlopend dak.
+	void BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed);
+
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 
 	// --- Tunables (cm) ---

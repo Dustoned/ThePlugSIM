@@ -21,6 +21,20 @@ namespace
 		x ^= x >> 13; x *= 0x85ebca6bu; x ^= x >> 16;
 		return x;
 	}
+
+	// Gevel-kleurenpalet (gedeeld door flats en rijtjeshuizen).
+	const FLinearColor& CityFacade(uint32 i)
+	{
+		static const FLinearColor Pal[] = {
+			FLinearColor(0.62f, 0.40f, 0.30f), // baksteen
+			FLinearColor(0.74f, 0.70f, 0.62f), // beige
+			FLinearColor(0.50f, 0.55f, 0.60f), // grijsblauw
+			FLinearColor(0.68f, 0.58f, 0.42f), // zandsteen
+			FLinearColor(0.55f, 0.42f, 0.40f), // oudroze baksteen
+			FLinearColor(0.45f, 0.50f, 0.46f), // groengrijs
+		};
+		return Pal[i % UE_ARRAY_COUNT(Pal)];
+	}
 }
 
 ACityGenerator::ACityGenerator()
@@ -131,14 +145,6 @@ void ACityGenerator::BuildCity()
 	const FLinearColor Sidewalk(0.42f, 0.42f, 0.45f);
 	const FLinearColor Curb(0.30f, 0.30f, 0.33f);
 	const FLinearColor Line(0.75f, 0.72f, 0.55f); // gele middenstreep
-	const FLinearColor Facades[] = {
-		FLinearColor(0.62f, 0.40f, 0.30f), // baksteen
-		FLinearColor(0.74f, 0.70f, 0.62f), // beige
-		FLinearColor(0.50f, 0.55f, 0.60f), // grijsblauw
-		FLinearColor(0.68f, 0.58f, 0.42f), // zandsteen
-		FLinearColor(0.55f, 0.42f, 0.40f), // oudroze baksteen
-		FLinearColor(0.45f, 0.50f, 0.46f), // groengrijs
-	};
 
 	// 1) Eén grote asfaltvloer onder de hele stad (net onder de grond zodat bestaande vloer wint waar die is).
 	AddBox(Cube, FVector(Center.X, Center.Y, GroundZ - 3.f), FVector(Span, Span, 6.f), Asphalt, true);
@@ -197,66 +203,131 @@ void ACityGenerator::BuildCity()
 				case EShopKind::Furniture:  Body = FLinearColor(0.45f, 0.35f, 0.55f); Sign = FLinearColor(0.65f, 0.45f, 0.85f); break; // paars
 				case EShopKind::Supplies:   Body = FLinearColor(0.30f, 0.42f, 0.58f); Sign = FLinearColor(0.30f, 0.65f, 0.95f); break; // blauw
 				case EShopKind::GasStation: Body = FLinearColor(0.55f, 0.18f, 0.16f); Sign = FLinearColor(0.95f, 0.25f, 0.20f); break; // rood
-				default:                    Body = Facades[HA % UE_ARRAY_COUNT(Facades)]; Sign = FLinearColor(0.85f, 0.80f, 0.55f); break; // appartement
+				default:                    Body = CityFacade(HA); Sign = FLinearColor(0.85f, 0.80f, 0.55f); break; // appartement
 				}
 				BuildEnterableBuilding(FVector(CX, CY, 0.f), TopZ, Foot, Height, ddx, ddy, Kind, Body, Sign);
 				continue;
 			}
 
-			// Generiek gebouw: deterministische mix van LAGE huizen (schuin dak, deur) en HOGE flats.
+			// Generiek blok: meestal een RIJ huisjes (rijtjeshuizen), soms een hoge flat.
 			const uint32 H = CityHash(i, j);
 			const float FloorH = 330.f;
-			const FLinearColor Body = Facades[H % UE_ARRAY_COUNT(Facades)];
 			const FLinearColor Glass(0.30f, 0.45f, 0.55f);
 			const FLinearColor DoorC(0.12f, 0.10f, 0.09f);
-			const bool bHouse = (H % 4u) != 0u; // ~3/4 lage huizen, 1/4 hoge flats
 
-			const float FootMax = BlockSize - 2.f * SidewalkWidth;
-			const int32 Floors = bHouse ? (1 + (int32)((H >> 2) % 2)) : (4 + (int32)((H >> 2) % 5)); // huis 1-2, flat 4-8
-			const float BH = Floors * FloorH;
-			const float Foot = bHouse ? FootMax * (0.40f + 0.06f * ((H >> 5) % 3)) : FootMax; // huis kleiner -> open lot
+			if ((H % 4u) != 0u) // ~3/4 -> rijtjeshuizen die het hele lot vullen
+			{
+				BuildRowHouses(CX, CY, TopZ, ddx, ddy, H);
+				continue;
+			}
+
+			// Hoge flat (1/4 van de blokken): volle voetafdruk, plat dak.
+			const FLinearColor Body = CityFacade(H);
+			const float Foot = BlockSize - 2.f * SidewalkWidth;
 			const float HalfF = Foot * 0.5f;
+			const int32 Floors = 4 + (int32)((H >> 2) % 5);
+			const float BH = Floors * FloorH;
 
-			// Romp + plint (begane grond).
 			AddBox(Cube, FVector(CX, CY, TopZ + BH * 0.5f), FVector(Foot, Foot, BH), Body, true);
 			AddBox(Cube, FVector(CX, CY, TopZ + FloorH * 0.5f), FVector(Foot + 8.f, Foot + 8.f, FloorH), Body * 0.5f, false);
-
-			// Voordeur aan de straatkant (richting het midden).
 			{
 				const FVector Nd = (ddx != 0) ? FVector((float)ddx, 0.f, 0.f) : FVector(0.f, (float)ddy, 0.f);
 				const FVector DoorPos = FVector(CX, CY, TopZ + 105.f) + Nd * (HalfF + 5.f);
 				const FVector DoorSize = (ddx != 0) ? FVector(8.f, 95.f, 210.f) : FVector(95.f, 8.f, 210.f);
 				AddBox(Cube, DoorPos, DoorSize, DoorC, false);
 			}
-
-			// Ramen per verdieping.
-			for (int32 f = (bHouse ? 0 : 1); f < Floors; ++f)
+			for (int32 f = 1; f < Floors; ++f)
 			{
 				const float Z = TopZ + f * FloorH + FloorH * 0.5f;
-				const float WinW = Foot * (bHouse ? 0.6f : 0.8f);
+				const float WinW = Foot * 0.8f;
 				const float WinH = FloorH * 0.45f;
 				AddBox(Cube, FVector(CX, CY + HalfF + 2.f, Z), FVector(WinW, 4.f, WinH), Glass, false);
 				AddBox(Cube, FVector(CX, CY - HalfF - 2.f, Z), FVector(WinW, 4.f, WinH), Glass, false);
 				AddBox(Cube, FVector(CX + HalfF + 2.f, CY, Z), FVector(4.f, WinW, WinH), Glass, false);
 				AddBox(Cube, FVector(CX - HalfF - 2.f, CY, Z), FVector(4.f, WinW, WinH), Glass, false);
 			}
+			AddBox(Cube, FVector(CX, CY, TopZ + BH + 9.f), FVector(Foot + 14.f, Foot + 14.f, 18.f), Body * 0.6f, false);
+		}
+	}
+}
 
-			if (bHouse)
+void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed)
+{
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!Cube) { return; }
+
+	const float FloorH = 330.f;
+	const float FootMax = BlockSize - 2.f * SidewalkWidth;
+	const bool bAlongX = (Ddx != 0);          // straat-normaal langs X -> rij loopt langs Y, en omgekeerd
+	const FVector N = bAlongX ? FVector((float)Ddx, 0.f, 0.f) : FVector(0.f, (float)Ddy, 0.f); // naar de straat
+	const FVector Tt = bAlongX ? FVector(0.f, 1.f, 0.f) : FVector(1.f, 0.f, 0.f);              // langs de rij
+
+	const float RowLen = FootMax;
+	const float Depth = FootMax * 0.5f;
+	const int32 Units = 3 + (int32)(Seed % 2u); // 3-4 huisjes
+	const float UnitLen = RowLen / Units;
+	const float WallH = 2.f * FloorH;           // gelijke goothoogte -> doorlopend dak
+	const float HalfD = Depth * 0.5f;
+
+	const FLinearColor Glass(0.30f, 0.45f, 0.55f);
+	const FLinearColor DoorC(0.12f, 0.10f, 0.09f);
+	const FLinearColor Roof(0.36f, 0.17f, 0.13f);
+	const FLinearColor Seam(0.10f, 0.09f, 0.08f);
+
+	for (int32 u = 0; u < Units; ++u)
+	{
+		const uint32 hu = CityHash((int32)Seed + u * 101 + 9, u * 53 + 17);
+		const float Along = -RowLen * 0.5f + (u + 0.5f) * UnitLen;
+		const float UX = CX + Tt.X * Along;
+		const float UY = CY + Tt.Y * Along;
+		const FLinearColor Body = CityFacade(hu);
+
+		// Romp van dit huisje (deelt de zijmuren met de buren).
+		const FVector BodySize = bAlongX ? FVector(Depth, UnitLen, WallH) : FVector(UnitLen, Depth, WallH);
+		AddBox(Cube, FVector(UX, UY, TopZ + WallH * 0.5f), BodySize, Body, true);
+		// Plint.
+		const FVector PlintSize = bAlongX ? FVector(Depth + 6.f, UnitLen, FloorH) : FVector(UnitLen, Depth + 6.f, FloorH);
+		AddBox(Cube, FVector(UX, UY, TopZ + FloorH * 0.5f), PlintSize, Body * 0.55f, false);
+
+		// Voordeur aan de straatkant (N).
+		const FVector DoorPos = FVector(UX, UY, TopZ + 105.f) + N * (HalfD + 5.f);
+		const FVector DoorSize = bAlongX ? FVector(8.f, 95.f, 205.f) : FVector(95.f, 8.f, 205.f);
+		AddBox(Cube, DoorPos, DoorSize, DoorC, false);
+
+		// Ramen op de straatgevel, per verdieping (naast de deur op de begane grond).
+		for (int32 f = 0; f < 2; ++f)
+		{
+			const float Z = TopZ + f * FloorH + FloorH * 0.6f;
+			const float WinW = UnitLen * 0.42f;
+			const float SideOff = UnitLen * 0.24f;
+			const FVector WinSize = bAlongX ? FVector(4.f, WinW, FloorH * 0.4f) : FVector(WinW, 4.f, FloorH * 0.4f);
+			if (f == 0)
 			{
-				// Groot, dominant zadeldak (donkerrood pannendak) -> echte huis/cottage-vorm. Plus schoorsteen.
-				const FLinearColor Roof(0.35f, 0.18f, 0.14f);
-				const bool RidgeX = ((H >> 6) & 1u) != 0u;
-				const float RidgeH = FMath::Max(BH * 0.85f, 300.f) + (float)(H % 60u);
-				AddGableRoof(FVector(CX, CY, TopZ + BH), Foot + 24.f, Foot + 24.f, RidgeH, RidgeX, Roof);
-				AddBox(Cube, FVector(CX + Foot * 0.28f, CY + Foot * 0.22f, TopZ + BH + RidgeH * 0.45f), FVector(26.f, 26.f, RidgeH * 0.6f), Body * 0.5f, false);
+				// begane grond: 1 raam naast de deur
+				AddBox(Cube, FVector(UX, UY, Z) + N * (HalfD + 2.f) + Tt * SideOff, WinSize, Glass, false);
 			}
 			else
 			{
-				// Platte dakrand (parapet).
-				AddBox(Cube, FVector(CX, CY, TopZ + BH + 9.f), FVector(Foot + 14.f, Foot + 14.f, 18.f), Body * 0.6f, false);
+				AddBox(Cube, FVector(UX, UY, Z) + N * (HalfD + 2.f) - Tt * SideOff, WinSize, Glass, false);
+				AddBox(Cube, FVector(UX, UY, Z) + N * (HalfD + 2.f) + Tt * SideOff, WinSize, Glass, false);
 			}
 		}
+
+		// Naad-richel tussen de huisjes (op de scheiding naar de volgende unit).
+		if (u < Units - 1)
+		{
+			const float Edge = Along + UnitLen * 0.5f;
+			const FVector SeamPos = FVector(CX + Tt.X * Edge, CY + Tt.Y * Edge, TopZ + WallH * 0.5f);
+			const FVector SeamSize = bAlongX ? FVector(Depth + 10.f, 6.f, WallH) : FVector(6.f, Depth + 10.f, WallH);
+			AddBox(Cube, SeamPos, SeamSize, Seam, false);
+		}
 	}
+
+	// Eén doorlopend zadeldak over de hele rij (nok langs de rij -> schuine kanten naar straat + achter).
+	const bool RidgeAlongX = !bAlongX; // rij loopt langs X als de straat-normaal langs Y is
+	const float RoofW = bAlongX ? (Depth + 30.f) : (RowLen + 20.f); // X-uitslag
+	const float RoofD = bAlongX ? (RowLen + 20.f) : (Depth + 30.f); // Y-uitslag
+	AddGableRoof(FVector(CX, CY, TopZ + WallH), RoofW, RoofD, Depth * 0.42f, RidgeAlongX, Roof);
 }
 
 void ACityGenerator::AddInteriorLight(const FVector& WorldLoc)
