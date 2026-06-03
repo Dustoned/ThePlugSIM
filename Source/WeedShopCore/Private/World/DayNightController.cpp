@@ -13,6 +13,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/PlayerStart.h"
+#include "Customer/CustomerBase.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
@@ -84,8 +85,29 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 		}
 	};
 
-	PlaceRing(1400.f, 6, 0.f);            // dichtbij
-	PlaceRing(2800.f, 8, PI / 8.f);       // ruimer + versprongen (overkant / verder weg)
+	PlaceRing(1400.f, 6, 0.f); // algemene verlichting rond de spawn/home-zone
+
+	// Een lantaarn naast elke NPC die BUITEN staat (een plafond boven de NPC = binnen -> overslaan).
+	for (TActorIterator<ACustomerBase> It(W); It; ++It)
+	{
+		ACustomerBase* Npc = *It;
+		if (!IsValid(Npc)) { continue; }
+		const FVector Loc = Npc->GetActorLocation();
+
+		FHitResult Ceiling;
+		FCollisionQueryParams Qc(FName(TEXT("LampCeiling")), false, this);
+		const bool bIndoors = W->LineTraceSingleByChannel(Ceiling, Loc + FVector(0.f, 0.f, 90.f), Loc + FVector(0.f, 0.f, 1300.f), ECC_WorldStatic, Qc);
+		if (bIndoors) { continue; } // NPC in het huis -> geen lantaarn
+
+		// Iets naast de NPC (niet er bovenop), naar de grond getraced.
+		const FVector Beside = Loc + FVector(200.f, 150.f, 0.f);
+		FHitResult Ground;
+		FCollisionQueryParams Qg(FName(TEXT("LampNpcGround")), false, this);
+		if (W->LineTraceSingleByChannel(Ground, Beside + FVector(0.f, 0.f, 2500.f), Beside - FVector(0.f, 0.f, 4000.f), ECC_WorldStatic, Qg))
+		{
+			AddLamp(Ground.Location);
+		}
+	}
 }
 
 void ADayNightController::AddLamp(const FVector& BaseOnGround)
