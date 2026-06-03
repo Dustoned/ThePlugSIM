@@ -270,30 +270,28 @@ void ADayNightController::Tick(float DeltaSeconds)
 	else                                                    { DayF = 1.f; }
 	DayF = FMath::Clamp(DayF, 0.f, 1.f);
 
-	// Zon: roteren met de klok (overhead om 12u, onder de horizon 's nachts) + dimmen/kleuren.
+	// Zon overdag een boog; 's nachts MAANLICHT van bovenaf (niet onder de horizon) zodat de hele
+	// stad navigeerbaar blijft i.p.v. pikzwart tussen de lampen.
 	if (Sun.IsValid() && Sun->GetLightComponent())
 	{
-		const float Pitch = 90.f - Hour * 15.f; // 6u=0 (horizon), 12u=-90 (overhead), 0u=+90 (onder)
+		const float Pitch = (DayF > 0.08f) ? (90.f - Hour * 15.f) : -52.f; // dag-boog of hoge maan
 		Sun->SetActorRotation(FRotator(Pitch, 35.f, 0.f));
 
 		UDirectionalLightComponent* DL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
 		if (DL)
 		{
-			// Overdag flink licht (buiten), 's nachts zacht maanlicht. Vaste belichting staat vast,
-			// dus we sturen de dag-helderheid via de zon-intensiteit zelf.
-			DL->SetIntensity(FMath::Lerp(0.3f, 6.5f, DayF));
+			// 's Nachts duidelijk maanlicht (navigeerbaar), overdag fel zonlicht.
+			DL->SetIntensity(FMath::Lerp(1.8f, 6.5f, DayF));
 			const FLinearColor Warm(1.f, 0.96f, 0.88f);
-			const FLinearColor NightBlue(0.4f, 0.48f, 0.78f);
+			const FLinearColor NightBlue(0.55f, 0.62f, 0.85f);
 			DL->SetLightColor(FMath::Lerp(NightBlue, Warm, DayF));
 		}
 	}
 
-	// SkyLight = realtime-capture ambient (volledige sterkte). De cubemap zelf wordt 's nachts
-	// donkerder door de lucht, dus buiten voelt nacht donker. Binnen blijft donker zonder lampen
-	// (realistisch) maar krijgt nu wel egale ambient op ALLE muren -> geen zwarte muur meer.
+	// SkyLight-ambient: 's nachts iets opgekrikt zodat tussen de lampen niet alles wegvalt in zwart.
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(1.0f);
+		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(1.6f, 1.0f, DayF));
 	}
 
 	// Straatlampen op kloktijd: 's avonds aan (vanaf 19u), 's ochtends uit rond 8u.
