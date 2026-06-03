@@ -167,7 +167,10 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	}
 	Move->StopMovementImmediately();
 	Move->Velocity = FVector::ZeroVector;
-	TeleportTo(Safe, GetActorRotation(), false, true);
+	// Altijd RECHTOP terugzetten (alleen yaw): zo geneest een scheve capsule zichzelf. Een gekantelde
+	// actor (bv. ooit met pitch geteleporteerd) detecteert geen vloer en blijft anders eeuwig vallen.
+	const FRotator UprightYaw(0.f, GetActorRotation().Yaw, 0.f);
+	TeleportTo(Safe, UprightYaw, false, true);
 	Move->SetMovementMode(MOVE_Walking);
 	Move->bForceNextFloorCheck = true;
 	FallTime = 0.f; FloatTime = 0.f;

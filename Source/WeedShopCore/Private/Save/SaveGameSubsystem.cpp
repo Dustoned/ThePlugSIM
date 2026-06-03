@@ -429,10 +429,15 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "ga naar het save-punt").
 	if (Data.bHasTransform)
 	{
-		Pawn->TeleportTo(Data.Location, Data.Rotation, false, true);
+		// BELANGRIJK: de ACTOR (capsule + body) mag alleen YAW krijgen. De opgeslagen rotatie is de
+		// kijkrichting van de controller en bevat PITCH. Zou je die pitch op de actor zetten, dan
+		// staat de capsule scheef: hij detecteert geen vloer meer (eeuwig vallen na een sprong) en de
+		// body wijst niet recht omlaag. De pitch hoort alleen op de camera (control rotation).
+		const FRotator YawOnly(0.f, Data.Rotation.Yaw, 0.f);
+		Pawn->TeleportTo(Data.Location, YawOnly, false, true);
 		if (AController* C = Pawn->GetController())
 		{
-			C->SetControlRotation(Data.Rotation);
+			C->SetControlRotation(Data.Rotation); // volledige kijkrichting (incl. pitch) op de camera
 		}
 	}
 }
