@@ -19,15 +19,19 @@ AWaterSink::AWaterSink()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(Root);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	Mesh->SetMobility(EComponentMobility::Static);
+	// Movable: deze actor wordt at-runtime geplaatst/opgepakt. Static zou de render-proxy op de
+	// wereld-origin laten staan terwijl de actor elders spawnt (de "in het midden + dubbel"-bug).
+	Mesh->SetMobility(EComponentMobility::Movable);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeFinder(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeFinder.Succeeded())
 	{
 		Mesh->SetStaticMesh(CubeFinder.Object);
-		// Gootsteen-kastje: ~60 breed, 45 diep, 85 hoog; onderkant op de vloer.
-		Mesh->SetRelativeScale3D(FVector(0.6f, 0.45f, 0.85f));
-		Mesh->SetRelativeLocation(FVector(0.f, 0.f, 42.5f));
+		// Mesh GECENTREERD op de root (relative 0): de plaatsing zet de root op vloer + halve hoogte,
+		// net als bij alle andere placeables, dus de gootsteen staat netjes met z'n onderkant op de vloer.
+		// Schaal = de ghost-schaal (def MeshScale) zodat het geplaatste model exact de preview matcht.
+		Mesh->SetRelativeScale3D(FVector(0.8f, 0.55f, 0.9f));
+		Mesh->SetRelativeLocation(FVector::ZeroVector);
 	}
 }
 
