@@ -890,9 +890,12 @@ void AThePlugSIMCharacter::OnPrimaryReleased()
 
 void AThePlugSIMCharacter::OnPauseKey()
 {
-	// ESC opent het pauze-menu (en sluit andere schermen); nogmaals ESC sluit het menu.
+	// ESC: staat er ÉÉN of meer UI open (pauze, settings, inventory, telefoon, panelen), dan gaat
+	// ALLES in één keer dicht. Staat er niets open, dan opent ESC het pauze-menu.
 	// Op het titelscherm doet ESC niets (je kiest daar Start/Continue/Quit).
-	if (Phone && !Phone->IsMainMenuOpen()) { Phone->TogglePause(); }
+	if (!Phone || Phone->IsMainMenuOpen()) { return; }
+	if (Phone->IsAnyGameUIOpen()) { Phone->CloseAllUI(); }
+	else { Phone->TogglePause(); }
 }
 
 void AThePlugSIMCharacter::OnInteractKey()

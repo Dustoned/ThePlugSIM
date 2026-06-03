@@ -331,6 +331,24 @@ void UPhoneClientComponent::ClosePause()
 	UpdateCursor();
 }
 
+bool UPhoneClientComponent::IsAnyGameUIOpen() const
+{
+	return bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen
+		|| bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bPauseOpen || bSettingsOpen;
+}
+
+void UPhoneClientComponent::CloseAllUI()
+{
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
+	bPotUpgradeOpen = false; bMergeOpen = false; bAtmOpen = false; bPackOpen = false;
+	bShelfOpen = false; bDryRackOpen = false; bPauseOpen = false; bSettingsOpen = false;
+	if (APlayerController* PC = GetPC())
+	{
+		if (GetWorld() && GetWorld()->GetNetMode() == NM_Standalone) { PC->SetPause(false); }
+	}
+	UpdateCursor();
+}
+
 void UPhoneClientComponent::ShowMainMenu()
 {
 	EnsureWidget();

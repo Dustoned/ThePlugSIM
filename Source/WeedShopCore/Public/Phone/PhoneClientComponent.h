@@ -49,6 +49,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Pause")
 	bool IsPauseOpen() const { return bPauseOpen; }
 
+	// Sluit ALLE in-game UI in één keer (pauze, settings, inventory, telefoon, panelen) - niet het
+	// titelscherm. Voor ESC: als er iets open is, gaat alles dicht.
+	void CloseAllUI();
+	bool IsAnyGameUIOpen() const;
+
 	// Open de telefoon direct op een bepaalde app (gebruikt door het pauze-menu voor Settings).
 	void OpenToApp(int32 AppIndex);
 
