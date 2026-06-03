@@ -190,7 +190,7 @@ void ACityGenerator::AddGableRoof(const FVector& TopCenter, float Width, float D
 	}
 }
 
-void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY, const FString& Text, const FLinearColor& Color, float Size)
+void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY, const FString& Text, const FLinearColor& Color, float Size, bool bGlow)
 {
 	UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
 	T->SetupAttachment(Root);
@@ -205,6 +205,12 @@ void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY
 	T->SetWorldSize(Size);
 	T->SetTextRenderColor(Color.ToFColor(true));
 	T->SetCastShadow(false);
+	if (bGlow)
+	{
+		// Zelf-oplichtend (unlit emissive) -> ook in het donker fel leesbaar + lichte bloom.
+		static UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_NumGlow.M_NumGlow"));
+		if (GlowMat) { T->SetTextMaterial(GlowMat); }
+	}
 }
 
 void ACityGenerator::AddDoorNumber(const FVector& PlateCenter, int32 DirX, int32 DirY, const FString& Text, float Size)
@@ -216,8 +222,8 @@ void ACityGenerator::AddDoorNumber(const FVector& PlateCenter, int32 DirX, int32
 	const float PlateH = Size * 1.6f;
 	const FVector PlateSize = OutX ? FVector(3.f, PlateW, PlateH) : FVector(PlateW, 3.f, PlateH);
 	if (Cube) { AddBox(Cube, PlateCenter + Out * 1.5f, PlateSize, FLinearColor(0.03f, 0.03f, 0.04f), false); }
-	// Oplichtend nummer (TextRender is unlit -> gloeit, ook 's nachts leesbaar).
-	AddSignText(PlateCenter + Out * 4.f, DirX, DirY, Text, FLinearColor(1.f, 0.95f, 0.7f), Size);
+	// Zelf-oplichtend nummer, ook 's nachts fel leesbaar.
+	AddSignText(PlateCenter + Out * 4.f, DirX, DirY, Text, FLinearColor(1.f, 0.95f, 0.7f), Size, true);
 }
 
 void ACityGenerator::BuildCity()
@@ -688,12 +694,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const int32 DX = -Ddy, DY = Ddx;                             // kijkt de gang in (+Side)
 		const FVector TextXY = LP(dBoard, sFace + 6.f);
 		auto LineZ = [&](int32 i) { return Zc + BoardH * 0.5f - 13.f - i * Lh; };
-		AddSignText(FVector(TextXY.X, TextXY.Y, LineZ(0)), DX, DY, FString::Printf(TEXT("Nr %d"), BaseNo), FLinearColor(0.6f, 0.85f, 1.f), 13.f);
+		AddSignText(FVector(TextXY.X, TextXY.Y, LineZ(0)), DX, DY, FString::Printf(TEXT("Nr %d"), BaseNo), FLinearColor(0.6f, 0.85f, 1.f), 13.f, true);
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const int32 lo = f * PF + 1, hi = f * PF + PF;
 			AddSignText(FVector(TextXY.X, TextXY.Y, LineZ(f + 1)), DX, DY,
-				FString::Printf(TEXT("%d: %d-%d t/m %d"), f + 1, BaseNo, lo, hi), FLinearColor(1.f, 0.95f, 0.7f), 11.f);
+				FString::Printf(TEXT("%d: %d-%d t/m %d"), f + 1, BaseNo, lo, hi), FLinearColor(1.f, 0.95f, 0.7f), 11.f, true);
 		}
 	}
 

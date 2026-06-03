@@ -49,8 +49,9 @@ protected:
 	// Een schuin zadeldak (twee tegen elkaar leunende vlakken) bovenop een gebouw.
 	void AddGableRoof(const FVector& TopCenter, float Width, float Depth, float RidgeH, bool bRidgeAlongX, const FLinearColor& Color);
 
-	// Een 3D-tekstbord (winkelnaam) op wereldpositie, gericht langs (DirX,DirY).
-	void AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY, const FString& Text, const FLinearColor& Color, float Size);
+	// Een 3D-tekstbord (winkelnaam) op wereldpositie, gericht langs (DirX,DirY). bGlow = zelf-oplichtend
+	// (emissive materiaal) zodat het 's nachts leesbaar is/licht geeft.
+	void AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY, const FString& Text, const FLinearColor& Color, float Size, bool bGlow = false);
 
 	// Een huisnummer-bordje (klein donker plaatje + oplichtend nummer) op wereldpositie, gericht langs
 	// (DirX,DirY). Zoals in NL: rechts naast de deur op ~ooghoogte.
