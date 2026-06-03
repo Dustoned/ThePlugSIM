@@ -494,8 +494,11 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const float CoreD = FMath::Max(StairRunY, ElevD);
 	const float HoleMinX = CX - Half + 25.f, HoleMinY = CY - Half + 25.f;
 	const float HoleMaxX = HoleMinX + CoreW, HoleMaxY = HoleMinY + CoreD;
+	const float DivX = HoleMinX + StairXW + Gap * 0.5f; // scheidingswand: trap (links) | lift (rechts)
+	const float LiftCX = (DivX + HoleMaxX) * 0.5f;      // midden van de liftschacht
+	const float CabFrontY = HoleMinY + ElevD;           // voorkant van de cabine = achterkant van het liftgangetje
 
-	// Verdiepingsvloeren f=1..NF-1 met een L-gat over de kern (trap loopt erdoor); + binnenlicht.
+	// Verdiepingsvloeren f=1..NF-1 met een gat over de schachten (trap + liftcabine); + binnenlicht.
 	for (int32 f = 1; f < NF; ++f)
 	{
 		const float z = TopZ + f * FloorH;
@@ -503,6 +506,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		if (frontYs > 1.f) { AddBox(Cube, FVector(CX, (HoleMaxY + CY + Half) * 0.5f, z), FVector(Foot, frontYs, 12.f), FloorC, true); }
 		const float sideXs = (CX + Half) - HoleMaxX;
 		if (sideXs > 1.f) { AddBox(Cube, FVector((HoleMaxX + CX + Half) * 0.5f, (CY - Half + HoleMaxY) * 0.5f, z), FVector(sideXs, HoleMaxY - (CY - Half), 12.f), FloorC, true); }
+		// Liftgangetje: solide vloer vóór de cabine (de cabine-zone zelf blijft een gat).
+		if (HoleMaxY - CabFrontY > 1.f) { AddBox(Cube, FVector(LiftCX, (CabFrontY + HoleMaxY) * 0.5f, z), FVector(HoleMaxX - DivX, HoleMaxY - CabFrontY, 12.f), FloorC, true); }
 		AddInteriorLight(FVector(CX, CY, z - 55.f));
 	}
 	// Dichte dakvloer bovenop (plafond van de bovenste verdieping, GEEN gat -> de trap stopt op de top-etage).
@@ -544,9 +549,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		}
 	}
 
-	// Werkende lift in de kern, naast de trap.
+	// Werkende lift in z'n eigen schacht (achterin), met de schuifdeur naar het gangetje toe.
 	{
-		const float ElevCX = HoleMinX + StairXW + Gap + ElevW * 0.5f;
+		const float ElevCX = LiftCX;
 		const float ElevCY = HoleMinY + ElevD * 0.5f;
 		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		if (ACityElevator* Ele = W->SpawnActor<ACityElevator>(ACityElevator::StaticClass(), FTransform(FVector(ElevCX, ElevCY, TopZ + 4.f)), SP))
@@ -555,7 +560,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		}
 	}
 
-	// --- Interieur per verdieping: omsloten trap/lift-kern + gang + 3 appartementen ---
+	// --- Interieur: GESCHEIDEN trap- en liftschacht (eigen, dichte schachten tot het dak) + gang + appartementen ---
 	{
 		const float WallT = 16.f;
 		const float WallHt = FloorH - 10.f;
@@ -563,15 +568,24 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const FLinearColor ADoorC(0.30f, 0.20f, 0.12f); // appartementdeur (hout)
 		const float HallW = 230.f;
 		const float HallFrontY = HoleMaxY + HallW;       // voorkant van de gang
-		const float DoorGap = 105.f;
-		const float CoreDoorC = HoleMinX + StairXW * 0.5f; // kern-deur bij de trapuitgang
+		const float DoorGap = 110.f;
+		const float StairDoorC = HoleMinX + StairXW * 0.5f; // opening trapschacht -> gang
+		const float CorrDoorC = LiftCX;                      // opening liftgangetje -> gang
 
 		const float ApLeft = CX - Half + WallT, ApRight = CX + Half - WallT;
 		const float ApW = (ApRight - ApLeft) / 3.f;
 		const float Px1 = ApLeft + ApW, Px2 = ApLeft + 2.f * ApW;
 		const float Gc0 = ApLeft + ApW * 0.5f, Gc1 = ApLeft + ApW * 1.5f, Gc2 = ApLeft + ApW * 2.5f;
+		const float DoorTopH = 205.f;
+		const float Gc3 = (HoleMaxX + ApRight) * 0.5f;
 
-		// Axis-aligned muursegment (met collision).
+		// VOLLE-HOOGTE schachtwanden (1x): trap|lift-scheiding (DivX) + lift-buitenwand (HoleMaxX). Dicht tot
+		// het dak, en je kunt NIET van de trap naar de lift -> elk een eigen schacht.
+		AddBox(Cube, FVector(DivX, (HoleMinY + HoleMaxY) * 0.5f, TopZ + TotalH * 0.5f), FVector(WallT, HoleMaxY - HoleMinY, TotalH), IWall, true);
+		AddBox(Cube, FVector(HoleMaxX, (HoleMinY + HoleMaxY) * 0.5f, TopZ + TotalH * 0.5f), FVector(WallT, HoleMaxY - HoleMinY, TotalH), IWall, true);
+		// Achterwand van het liftgangetje (scheidt het gangetje van de cabine-zone), volle hoogte.
+		AddBox(Cube, FVector(LiftCX, CabFrontY, TopZ + TotalH * 0.5f), FVector(HoleMaxX - DivX, WallT, TotalH), IWall, true);
+
 		auto WallSeg = [&](float X0, float Y0, float X1, float Y1, float zS, const FLinearColor& Col)
 		{
 			const float Lx = FMath::Abs(X1 - X0), Ly = FMath::Abs(Y1 - Y0);
@@ -580,22 +594,15 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			const FVector S = (Lx >= Ly) ? FVector(Lx, WallT, WallHt) : FVector(WallT, Ly, WallHt);
 			AddBox(Cube, C, S, Col, true);
 		};
-
-		const float DoorTopH = 205.f;                       // normale deurhoogte (niet tot het plafond)
-		const float Gc3 = (HoleMaxX + ApRight) * 0.5f;      // deur naar het 4e (grote) appartement
-		// Latei boven een deur-opening (X-gat op hoogte y).
 		auto Lintel = [&](float gx, float gy, float zS)
 		{
-			const float h = WallHt - DoorTopH;
-			if (h < 4.f) { return; }
+			const float h = WallHt - DoorTopH; if (h < 4.f) { return; }
 			AddBox(Cube, FVector(gx, gy, zS + DoorTopH + h * 0.5f), FVector(DoorGap, WallT, h), IWall, true);
 		};
-		// Werkende appartementdeur (scharnier links van het gat, hoogte = normale deur).
 		auto Apt = [&](float gx, float gy, float zS)
 		{
 			FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			const FVector Hinge(gx - DoorGap * 0.5f, gy, zS);
-			if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, 0.f, 0.f), Hinge), DSP))
+			if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, 0.f, 0.f), FVector(gx - DoorGap * 0.5f, gy, zS)), DSP))
 			{
 				Dr->Setup(DoorGap - 4.f, DoorTopH - 6.f, ADoorC);
 			}
@@ -605,30 +612,29 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		{
 			const float zS = TopZ + f * FloorH;
 
-			// Kern-omhulling: +Y-wand (deur naar de gang) + +X-wand.
-			WallSeg(HoleMinX, HoleMaxY, CoreDoorC - DoorGap * 0.5f, HoleMaxY, zS, IWall);
-			WallSeg(CoreDoorC + DoorGap * 0.5f, HoleMaxY, HoleMaxX, HoleMaxY, zS, IWall);
-			WallSeg(HoleMaxX, HoleMinY, HoleMaxX, HoleMaxY, zS, IWall);
-			Lintel(CoreDoorC, HoleMaxY, zS);
+			// Trapschacht +Y-wand met doorgang naar de gang.
+			WallSeg(HoleMinX, HoleMaxY, StairDoorC - DoorGap * 0.5f, HoleMaxY, zS, IWall);
+			WallSeg(StairDoorC + DoorGap * 0.5f, HoleMaxY, DivX, HoleMaxY, zS, IWall);
+			Lintel(StairDoorC, HoleMaxY, zS);
+			// Liftgangetje +Y-wand met doorgang naar de gang.
+			WallSeg(DivX, HoleMaxY, CorrDoorC - DoorGap * 0.5f, HoleMaxY, zS, IWall);
+			WallSeg(CorrDoorC + DoorGap * 0.5f, HoleMaxY, HoleMaxX, HoleMaxY, zS, IWall);
+			Lintel(CorrDoorC, HoleMaxY, zS);
 
-			// 4e (groot) appartement in de zijruimte naast de kern: scheidingswand + deur vanaf de gang.
+			// 4e (groot) appartement in de zijruimte naast de kern.
 			WallSeg(HoleMaxX, HoleMaxY, Gc3 - DoorGap * 0.5f, HoleMaxY, zS, IWall);
 			WallSeg(Gc3 + DoorGap * 0.5f, HoleMaxY, ApRight, HoleMaxY, zS, IWall);
 			Lintel(Gc3, HoleMaxY, zS);
 			Apt(Gc3, HoleMaxY, zS);
 
-			// Gang-voorwand met 3 appartementdeuren.
+			// Gang-voorwand met 3 appartementdeuren + partities.
 			WallSeg(ApLeft, HallFrontY, Gc0 - DoorGap * 0.5f, HallFrontY, zS, IWall);
 			WallSeg(Gc0 + DoorGap * 0.5f, HallFrontY, Gc1 - DoorGap * 0.5f, HallFrontY, zS, IWall);
 			WallSeg(Gc1 + DoorGap * 0.5f, HallFrontY, Gc2 - DoorGap * 0.5f, HallFrontY, zS, IWall);
 			WallSeg(Gc2 + DoorGap * 0.5f, HallFrontY, ApRight, HallFrontY, zS, IWall);
 			Lintel(Gc0, HallFrontY, zS); Lintel(Gc1, HallFrontY, zS); Lintel(Gc2, HallFrontY, zS);
-
-			// Partities tussen de 3 voor-appartementen.
 			WallSeg(Px1, HallFrontY, Px1, CY + Half - WallT, zS, IWall);
 			WallSeg(Px2, HallFrontY, Px2, CY + Half - WallT, zS, IWall);
-
-			// Deuren van de 3 voor-appartementen.
 			Apt(Gc0, HallFrontY, zS); Apt(Gc1, HallFrontY, zS); Apt(Gc2, HallFrontY, zS);
 		}
 	}
