@@ -27,6 +27,8 @@ protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Mount; // ophangplaat tegen het plafond
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Rod;   // steeltje tussen plaat en kapje
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Shade; // kapje (kegel)
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Bulb;  // lampje
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UPointLightComponent> Light; // warm omni-licht

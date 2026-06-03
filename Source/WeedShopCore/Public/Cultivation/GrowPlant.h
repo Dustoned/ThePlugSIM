@@ -193,6 +193,13 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<UStaticMeshComponent> Mesh; // pot
 
+	// Bredere rand-lip aan de bovenkant + voetje onderaan -> echte bloempot-vorm i.p.v. kale cilinder.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
+	TObjectPtr<UStaticMeshComponent> PotRim;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
+	TObjectPtr<UStaticMeshComponent> PotFoot;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<UStaticMeshComponent> SoilMesh;
 

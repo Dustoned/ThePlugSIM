@@ -16,7 +16,34 @@ ACeilingLamp::ACeilingLamp()
 
 	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
 	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+
+	// Ophangplaat tegen het plafond (plat schijfje bovenaan).
+	Mount = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mount"));
+	Mount->SetupAttachment(Root);
+	if (Cyl) { Mount->SetStaticMesh(Cyl); }
+	Mount->SetRelativeLocation(FVector(0.f, 0.f, 13.f));
+	Mount->SetRelativeScale3D(FVector(0.16f, 0.16f, 0.03f));
+	Mount->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (BaseMat)
+	{
+		UMaterialInstanceDynamic* M = Mount->CreateDynamicMaterialInstance(0, BaseMat);
+		if (M) { M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.05f, 0.05f, 0.07f)); }
+	}
+
+	// Steeltje tussen plaat en kapje.
+	Rod = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rod"));
+	Rod->SetupAttachment(Root);
+	if (Cyl) { Rod->SetStaticMesh(Cyl); }
+	Rod->SetRelativeLocation(FVector(0.f, 0.f, 8.f));
+	Rod->SetRelativeScale3D(FVector(0.03f, 0.03f, 0.12f));
+	Rod->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (BaseMat)
+	{
+		UMaterialInstanceDynamic* M = Rod->CreateDynamicMaterialInstance(0, BaseMat);
+		if (M) { M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.05f, 0.05f, 0.07f)); }
+	}
 
 	// Kapje: kegel met de punt omhoog (wijde kant omlaag), donker.
 	Shade = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Shade"));

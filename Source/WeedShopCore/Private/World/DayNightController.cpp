@@ -186,36 +186,45 @@ void ADayNightController::AddLamp(const FVector& BaseOnGround)
 {
 	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
 	UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 
 	const float PoleH = 420.f; // cm
+	const FLinearColor Metal(0.06f, 0.07f, 0.09f); // donker staal
 
-	// Paal (donker, dun).
-	if (Cyl)
+	auto AddMesh = [&](UStaticMesh* M, const FVector& Loc, const FVector& Scale, const FLinearColor& Col, const FRotator& Rot) -> UStaticMeshComponent*
 	{
-		UStaticMeshComponent* Pole = NewObject<UStaticMeshComponent>(this);
-		Pole->SetupAttachment(Root);
-		Pole->RegisterComponent();
-		Pole->SetStaticMesh(Cyl);
-		Pole->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH * 0.5f));
-		Pole->SetWorldScale3D(FVector(0.12f, 0.12f, PoleH / 100.f)); // cylinder = 100cm
-		Pole->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		if (BaseMat)
-		{
-			UMaterialInstanceDynamic* M = Pole->CreateDynamicMaterialInstance(0, BaseMat);
-			if (M) { M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.06f, 0.07f, 0.09f)); }
-		}
-	}
+		if (!M) { return nullptr; }
+		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+		C->SetupAttachment(Root);
+		C->RegisterComponent();
+		C->SetStaticMesh(M);
+		C->SetWorldLocation(Loc);
+		C->SetWorldRotation(Rot);
+		C->SetWorldScale3D(Scale);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (BaseMat) { if (UMaterialInstanceDynamic* MID = C->CreateDynamicMaterialInstance(0, BaseMat)) { MID->SetVectorParameterValue(TEXT("Color"), Col); } }
+		return C;
+	};
 
-	// Lampkop (bol bovenaan, kleurt geel als 'ie aan is).
+	// Voetstuk (breed, laag) onderaan de paal.
+	AddMesh(Cyl, BaseOnGround + FVector(0.f, 0.f, 7.f), FVector(0.35f, 0.35f, 0.14f), Metal, FRotator::ZeroRotator);
+	// Paal (donker, dun).
+	AddMesh(Cyl, BaseOnGround + FVector(0.f, 0.f, PoleH * 0.5f), FVector(0.1f, 0.1f, PoleH / 100.f), Metal, FRotator::ZeroRotator);
+	// Lantaarn-kapje (kegel, wijde kant omlaag) bovenaan.
+	AddMesh(Cone, BaseOnGround + FVector(0.f, 0.f, PoleH + 18.f), FVector(0.5f, 0.5f, 0.4f), Metal, FRotator(180.f, 0.f, 0.f));
+	// Klein dakje op de kegelpunt.
+	AddMesh(Sphere, BaseOnGround + FVector(0.f, 0.f, PoleH + 40.f), FVector(0.12f, 0.12f, 0.1f), Metal, FRotator::ZeroRotator);
+
+	// Lampbol in het kapje (kleurt warmgeel als 'ie aan is). Dit is de "kop" die we togglen.
 	if (Sphere)
 	{
 		UStaticMeshComponent* Head = NewObject<UStaticMeshComponent>(this);
 		Head->SetupAttachment(Root);
 		Head->RegisterComponent();
 		Head->SetStaticMesh(Sphere);
-		Head->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH + 8.f));
-		Head->SetWorldScale3D(FVector(0.28f, 0.28f, 0.28f));
+		Head->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH + 4.f));
+		Head->SetWorldScale3D(FVector(0.22f, 0.22f, 0.22f));
 		Head->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		if (BaseMat)
 		{

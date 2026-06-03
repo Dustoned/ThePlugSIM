@@ -41,6 +41,19 @@ AGrowPlant::AGrowPlant()
 		Mesh->SetRelativeLocation(FVector(0.f, 0.f, 20.f));
 	}
 
+	// Rand-lip (boven) + voetje (onder): geven de kale cilinder een echte bloempot-vorm.
+	PotRim = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PotRim"));
+	PotRim->SetupAttachment(Root);
+	PotRim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	PotFoot = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PotFoot"));
+	PotFoot->SetupAttachment(Root);
+	PotFoot->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (PotMeshFinder.Succeeded())
+	{
+		PotRim->SetStaticMesh(PotMeshFinder.Object);
+		PotFoot->SetStaticMesh(PotMeshFinder.Object);
+	}
+
 	SoilMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SoilMesh"));
 	SoilMesh->SetupAttachment(Root);
 	SoilMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -831,7 +844,46 @@ void AGrowPlant::OnRep_Pot()    { EnsureSlots(); UpdatePotVisual(); UpdatePlantV
 void AGrowPlant::UpdatePotVisual()
 {
 	FPotDef Pot;
-	if (Mesh && GetPotDef(PotTier, Pot)) { Mesh->SetRelativeScale3D(Pot.MeshScale); }
+	if (!Mesh || !GetPotDef(PotTier, Pot)) { return; }
+
+	const FVector S = Pot.MeshScale;
+	Mesh->SetRelativeScale3D(S);
+
+	// Top/onderkant van de pot (mesh-pivot staat vast op z=20; cilinder = 100cm hoog).
+	const float TopZ = 20.f + S.Z * 50.f;
+	const float BotZ = 20.f - S.Z * 50.f;
+
+	// Rand-lip: iets breder dan de pot, dun, net onder de bovenrand -> klassiek bloempot-silhouet.
+	if (PotRim)
+	{
+		PotRim->SetRelativeScale3D(FVector(S.X * 1.14f, S.Y * 1.14f, 0.05f));
+		PotRim->SetRelativeLocation(FVector(0.f, 0.f, TopZ - 2.5f));
+	}
+	// Voetje: smal randje onderaan zodat 'ie niet plat op de grond plakt.
+	if (PotFoot)
+	{
+		PotFoot->SetRelativeScale3D(FVector(S.X * 0.88f, S.Y * 0.88f, 0.06f));
+		PotFoot->SetRelativeLocation(FVector(0.f, 0.f, BotZ + 3.f));
+	}
+
+	// Kleur per tier (gedeeld over pot + rand + voet) zodat het materiaal niet meer kaal grijs is.
+	const FString Id = PotTier.ToString();
+	FLinearColor Col(0.62f, 0.34f, 0.20f); // terracotta (default)
+	if (Id == TEXT("Pot_Broken"))       { Col = FLinearColor(0.50f, 0.36f, 0.28f); } // verweerd
+	else if (Id == TEXT("Pot_Clay"))    { Col = FLinearColor(0.66f, 0.33f, 0.18f); } // klei/terracotta
+	else if (Id == TEXT("Pot_Plastic")) { Col = FLinearColor(0.16f, 0.17f, 0.19f); } // zwart plastic
+	else if (Id == TEXT("Pot_Fabric"))  { Col = FLinearColor(0.46f, 0.42f, 0.34f); } // stoffen kweekzak
+
+	auto Tint = [](UStaticMeshComponent* C, const FLinearColor& Color)
+	{
+		if (!C) { return; }
+		UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(C->GetMaterial(0));
+		if (!MID) { MID = C->CreateDynamicMaterialInstance(0); }
+		if (MID) { MID->SetVectorParameterValue(TEXT("Color"), Color); }
+	};
+	Tint(Mesh, Col);
+	Tint(PotRim, Col * 1.12f);  // rand iets lichter
+	Tint(PotFoot, Col * 0.85f); // voet iets donkerder
 }
 
 void AGrowPlant::UpdateSoilVisual()
