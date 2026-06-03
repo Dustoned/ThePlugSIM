@@ -11,6 +11,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
 #include "World/DayNightController.h"
+#include "World/CityGenerator.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
 #include "EnhancedInputSubsystems.h"
@@ -793,6 +794,14 @@ void AThePlugSIMCharacter::BeginPlay()
 		if (!bHasController)
 		{
 			GetWorld()->SpawnActor<ADayNightController>(ADayNightController::StaticClass(), FTransform::Identity);
+		}
+
+		// Procedurele stad rond het speelgebied (deterministisch, lokaal gebouwd -> elke speler dezelfde stad).
+		bool bHasCity = false;
+		for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { bHasCity = true; break; }
+		if (!bHasCity)
+		{
+			GetWorld()->SpawnActor<ACityGenerator>(ACityGenerator::StaticClass(), FTransform::Identity);
 		}
 	}
 }
