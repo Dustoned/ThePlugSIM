@@ -39,6 +39,8 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	void TrySpawn();
+	// Maakt van C de koopklare test-klant op de park-plek (idempotent).
+	void SetupTestCustomer(ACustomerBase* C, const FVector& Park);
 
 	FTimerHandle SpawnTimer;
 

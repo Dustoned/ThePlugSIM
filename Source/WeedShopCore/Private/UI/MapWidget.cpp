@@ -20,8 +20,8 @@
 
 namespace
 {
-	constexpr float DS = 760.f;  // ontwerp-grootte van het kaartvlak (px)
-	constexpr float Pad = 44.f;  // marge
+	constexpr float GMapDS = 760.f;  // ontwerp-grootte van het kaartvlak (px)
+	constexpr float GMapPad = 44.f;  // marge
 }
 
 FVector2D UMapWidget::WorldToCanvas(float Wx, float Wy) const
@@ -29,7 +29,7 @@ FVector2D UMapWidget::WorldToCanvas(float Wx, float Wy) const
 	const float rx = Wx - CenterXY.X;
 	const float ry = Wy - CenterXY.Y;
 	// scherm-rechts = wereld +Y, scherm-omhoog = wereld +X (noorden boven)
-	return FVector2D(DS * 0.5f + ry * Scale, DS * 0.5f - rx * Scale);
+	return FVector2D(GMapDS * 0.5f + ry * Scale, GMapDS * 0.5f - rx * Scale);
 }
 
 UTextBlock* UMapWidget::AddCanvasText(const FString& T, FVector2D Pos, float W, int32 Size, const FLinearColor& Col, int32 ZOrder)
@@ -81,16 +81,16 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 			OS->SetVerticalAlignment(VAlign_Center);
 		}
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(DS);
-		Box->SetHeightOverride(DS);
+		Box->SetWidthOverride(GMapDS);
+		Box->SetHeightOverride(GMapDS);
 		SB->AddChild(Box);
 
 		Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("MapCanvas"));
 		Box->SetContent(Canvas);
 
 		// Titel + kompas.
-		AddCanvasText(TEXT("STAD - KAART"), FVector2D(DS * 0.5f, 20.f), DS, 20, FLinearColor(0.7f, 0.85f, 1.f), 50);
-		AddCanvasText(TEXT("N"), FVector2D(DS * 0.5f, 44.f), 40.f, 14, FLinearColor(0.8f, 0.8f, 0.9f), 50);
+		AddCanvasText(TEXT("STAD - KAART"), FVector2D(GMapDS * 0.5f, 20.f), GMapDS, 20, FLinearColor(0.7f, 0.85f, 1.f), 50);
+		AddCanvasText(TEXT("N"), FVector2D(GMapDS * 0.5f, 44.f), 40.f, 14, FLinearColor(0.8f, 0.8f, 0.9f), 50);
 	}
 	return Super::RebuildWidget();
 }
@@ -104,7 +104,7 @@ void UMapWidget::BuildBlocks()
 	const FVector C = City->GetCityCenter();
 	CenterXY = FVector2D(C.X, C.Y);
 	const float EH = (R + 0.7f) * Pitch;             // halve wereld-omvang
-	Scale = (DS - 2.f * Pad) / (2.f * EH);
+	Scale = (GMapDS - 2.f * GMapPad) / (2.f * EH);
 
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
@@ -128,7 +128,7 @@ void UMapWidget::BuildBlocks()
 	// Speler-marker (boven alles).
 	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 20);
 	AddCanvasText(TEXT("Legenda: groen=grow  paars=meubels  blauw=supplies  rood=gas"),
-		FVector2D(DS * 0.5f, DS - 18.f), DS, 11, FLinearColor(0.7f, 0.72f, 0.8f), 50);
+		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 11, FLinearColor(0.7f, 0.72f, 0.8f), 50);
 
 	bBuiltBlocks = true;
 }
