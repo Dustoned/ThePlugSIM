@@ -469,20 +469,24 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	// Sluit de twee dak-uiteinden (gable-driehoeken) met verticale plakjes, zodat het dak niet
 	// openstaat aan de zijkanten van de rij.
 	{
-		const int32 NSl = 7;
+		const int32 NSl = 20;
 		const float SliceW = Depth / NSl;
+		const float HalfDepth = Depth * 0.5f;
 		const FLinearColor GableC = CityFacade(Seed + 3);
 		for (int32 endi = 0; endi < 2; ++endi)
 		{
 			const float EndAlong = (endi == 0) ? (-RowLen * 0.5f) : (RowLen * 0.5f);
 			for (int32 k = 0; k < NSl; ++k)
 			{
-				const float n = -Depth * 0.5f + (k + 0.5f) * SliceW; // langs de diepte (N)
-				const float hh = RoofRidgeH * (1.f - FMath::Abs(n) / (Depth * 0.5f));
-				if (hh < 8.f) { continue; }
+				const float n = -HalfDepth + (k + 0.5f) * SliceW;
+				// Hoogte gemeten aan de NOK-kant van het plakje -> reikt tot de daklijn (overlapt iets,
+				// geen zwarte happen). Veel fijne plakjes -> gladde driehoek.
+				const float InnerAbs = FMath::Max(0.f, FMath::Abs(n) - SliceW * 0.5f);
+				const float hh = RoofRidgeH * (1.f - InnerAbs / HalfDepth);
+				if (hh < 5.f) { continue; }
 				const FVector P = FVector(BCX, BCY, TopZ + WallH + hh * 0.5f) + Tt * EndAlong + N * n;
-				const FVector S = bAlongX ? FVector(SliceW + 1.f, 16.f, hh) : FVector(16.f, SliceW + 1.f, hh);
-				AddBox(Cube, P, S, GableC, true);
+				const FVector S = bAlongX ? FVector(SliceW + 2.f, 16.f, hh) : FVector(16.f, SliceW + 2.f, hh);
+				AddBox(Cube, P, S, GableC, false);
 			}
 		}
 	}
