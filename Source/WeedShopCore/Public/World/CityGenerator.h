@@ -55,6 +55,9 @@ protected:
 	// Een rij van 3-4 verschillende huisjes (rijtjeshuizen) die het hele lot vult, met 1 doorlopend dak.
 	void BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed);
 
+	// Een echte flat: meerdere verdiepingen met vloeren, een switchback-trap en een werkende lift.
+	void BuildApartmentBlock(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, int32 Floors, const FLinearColor& Body, const FLinearColor& Sign);
+
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 
 	// --- Tunables (cm) ---
