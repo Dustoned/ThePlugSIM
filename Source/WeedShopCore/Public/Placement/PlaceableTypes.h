@@ -23,6 +23,7 @@ struct FPlaceableDef
 	bool bIsPackBench = false;         // true -> spawnt APackBench (verpak-tafel)
 	bool bIsShelf = false;             // true -> spawnt AStorageShelf (voorraad-opslag in de shop)
 	bool bIsSink = false;              // true -> spawnt AWaterSink (waterfles vullen)
+	bool bIsLamp = false;              // true -> spawnt ACeilingLamp (warme spot-lamp)
 };
 
 // Alle gedefinieerde placeables.

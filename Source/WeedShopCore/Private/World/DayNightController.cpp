@@ -18,6 +18,7 @@
 #include "Customer/CustomerBase.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/Scene.h"
+#include "World/CeilingLamp.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
@@ -107,19 +108,16 @@ void ADayNightController::ReplaceIndoorLights()
 	for (TObjectIterator<UPointLightComponent> It; It; ++It) { Consider(*It); }
 	for (TObjectIterator<USpotLightComponent> It; It; ++It) { Consider(*It); }
 
-	// Vervang door een warm, rustig licht (zelfde kleur als de straatlamp, niet overdreven).
-	for (const FVector& P : Spots)
+	// Vervang door het echte plafondlamp-model (warme spot, oppakbaar). Alleen de server spawnt
+	// de gerepliceerde actor; clients krijgen 'm via replicatie.
+	if (W->GetNetMode() != NM_Client)
 	{
-		UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
-		PL->SetupAttachment(Root);
-		PL->RegisterComponent();
-		PL->SetWorldLocation(P);
-		PL->SetMobility(EComponentMobility::Movable);
-		PL->SetAttenuationRadius(750.f);
-		PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
-		PL->SetIntensity(5000.f); // warme kamerlamp, rustig
-		PL->SetCastShadows(false);
-		// Niet in LampLights -> binnenverlichting blijft altijd aan.
+		for (const FVector& P : Spots)
+		{
+			FActorSpawnParameters SP;
+			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			W->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), FTransform(P), SP);
+		}
 	}
 }
 

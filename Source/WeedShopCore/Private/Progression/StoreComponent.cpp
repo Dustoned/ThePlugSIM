@@ -149,6 +149,7 @@ namespace
 		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("Keeps things cold"),    30000, 1 },
 		{ TEXT("Shelf"),    TEXT("Storage shelf"), TEXT("Store stock in the shop - 24 slots"), 18000, 1 },
 		{ TEXT("Chest"),    TEXT("Storage chest"), TEXT("Stash items at home - 20 slots"),     9000, 1 },
+		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("Warm hanging spot light"),         3500, 1 },
 		// Plant-verzorging (later spel): mest = meer opbrengst; sprays = behandel mold/pest.
 		{ TEXT("Fertilizer_Basic"), TEXT("Fertilizer"),       TEXT("+15% yield this harvest"),          2000, 3 },
 		{ TEXT("Fertilizer_Bloom"), TEXT("Bloom fertilizer"), TEXT("+30% yield this harvest"),          4500, 3 },
@@ -294,6 +295,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Cont_Block100"))   { return 11; }
 	if (S == TEXT("Cont_Garbage500")) { return 16; }
 	// Meubels / opslag
+	if (S == TEXT("Lamp_Ceiling"))    { return 1; }
 	if (S == TEXT("Mattress"))        { return 1; }
 	if (S == TEXT("Table"))           { return 2; }
 	if (S == TEXT("Chest"))           { return 3; }
@@ -394,7 +396,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
 			case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
 			case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
-			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest")); break;
+			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")); break;
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
 			default: break;
 			}

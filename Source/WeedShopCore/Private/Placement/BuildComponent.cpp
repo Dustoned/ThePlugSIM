@@ -9,6 +9,7 @@
 #include "World/PackBench.h"
 #include "World/StorageShelf.h"
 #include "World/WaterSink.h"
+#include "World/CeilingLamp.h"
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -415,6 +416,10 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	{
 		ReturnItem = FName(TEXT("Sink"));
 	}
+	else if (Cast<ACeilingLamp>(Target))
+	{
+		ReturnItem = FName(TEXT("Lamp_Ceiling"));
+	}
 	else
 	{
 		return; // niet oppakbaar
@@ -465,7 +470,7 @@ void UBuildComponent::UpdateRemoteGhost()
 bool UBuildComponent::IsPickable(const AActor* A) const
 {
 	return A && (Cast<AGrowPlant>(A) || Cast<APlaceableProp>(A) || Cast<ADryingRack>(A)
-		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A));
+		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A) || Cast<ACeilingLamp>(A));
 }
 
 bool UBuildComponent::IsIndoors(const FVector& FloorPoint) const
@@ -594,6 +599,12 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		// Geldautomaat: spawn een interactieve AAtm.
 		World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rotation, Location), SpawnParams);
+	}
+	else if (Def.bIsLamp)
+	{
+		// Plafondlamp: warme spot. Iets boven het plaatspunt.
+		const FTransform LampTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
+		World->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), LampTM, SpawnParams);
 	}
 	else if (Def.bIsSink)
 	{
