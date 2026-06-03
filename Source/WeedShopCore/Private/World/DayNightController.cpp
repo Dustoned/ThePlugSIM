@@ -238,8 +238,8 @@ void ADayNightController::Tick(float DeltaSeconds)
 		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.5f, 1.1f, DayF));
 	}
 
-	// Lantaarnpalen aan zodra het echt begint te schemeren (eerder dan voorheen).
-	const int32 WantOn = (DayF < 0.55f) ? 1 : 0;
+	// Lantaarnpalen aan tot het echt licht is (overbrugt het donkere ochtend-/avond-gat).
+	const int32 WantOn = (DayF < 0.78f) ? 1 : 0;
 	if (WantOn != bLampsOn)
 	{
 		bLampsOn = WantOn;
