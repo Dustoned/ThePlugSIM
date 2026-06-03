@@ -224,7 +224,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 	if (WantOn != bLampsOn)
 	{
 		bLampsOn = WantOn;
-		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 24.f : 0.f); } }
+		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 17.f : 0.f); } }
 		for (UMaterialInstanceDynamic* M : LampHeadMats)
 		{
 			if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.85f, 0.45f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
