@@ -375,9 +375,11 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 		// 2e vloer, rechte trap en werkende deur.
 		BuildHouseUnitInterior(UX, UY, Depth, UnitLen - 4.f, WallH, bAlongX, bAlongX ? Ddx : Ddy, TopZ, Body);
 
-		// Looppad van de deur naar de stoep door de voortuin.
-		const float PathLen = YardDepth + SidewalkWidth + 20.f;
-		const FVector PathC = FVector(CX, CY, TopZ + 4.f) + N * (Depth * 0.5f + SidewalkWidth * 0.5f) + Tt * Along;
+		// Looppad van de deur door de voortuin tot MIDDEN op de stoep (niet door tot in de straat).
+		const float PathBack = Depth * 0.5f - YardDepth * 0.5f;          // bij de voordeur
+		const float PathFront = FootMax * 0.5f + SidewalkWidth * 0.5f;   // midden op de stoep, vóór de straat
+		const float PathLen = PathFront - PathBack;
+		const FVector PathC = FVector(CX, CY, TopZ + 4.f) + N * ((PathBack + PathFront) * 0.5f) + Tt * Along;
 		const FVector PathSize = bAlongX ? FVector(PathLen, 90.f, 8.f) : FVector(90.f, PathLen, 8.f);
 		AddBox(Cube, PathC, PathSize, Path, false);
 
@@ -750,6 +752,11 @@ void ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L
 	{
 		Dr->Setup(DoorW - 4.f, DoorH - 4.f, DoorC);
 	}
+
+	// Eén plafondlamp beneden en één boven (iets naar voren, weg van de trap achterin).
+	const FVector LampXY = Base + N * (HD * 0.35f);
+	AddInteriorLight(FVector(LampXY.X, LampXY.Y, TopZ + FloorH - 40.f)); // begane grond
+	AddInteriorLight(FVector(LampXY.X, LampXY.Y, TopZ + WallH - 20.f));  // bovenverdieping
 }
 
 void ACityGenerator::BuildWallWindows(float CenterX, float CenterY, bool bAlongX, float Length, float BaseZ,
