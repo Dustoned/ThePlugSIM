@@ -65,23 +65,27 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 
-	// Een paar posities in een ring rond het centrum; elke positie naar de grond tracen.
-	const int32 N = 6;
-	const float Radius = 1400.f;
-	for (int32 i = 0; i < N; ++i)
+	// Posities in twee ringen rond het centrum (binnen + ruimer, versprongen), elk naar de grond
+	// getraced. De ruimere ring dekt de overkant van de straat / verder naar de map-rand.
+	auto PlaceRing = [this, W, Center](float Radius, int32 Count, float AngOffset)
 	{
-		const float Ang = (2.f * PI * i) / N;
-		const FVector XY = Center + FVector(FMath::Cos(Ang) * Radius, FMath::Sin(Ang) * Radius, 0.f);
-
-		const FVector TraceStart = XY + FVector(0.f, 0.f, 2500.f);
-		const FVector TraceEnd = XY - FVector(0.f, 0.f, 4000.f);
-		FHitResult Hit;
-		FCollisionQueryParams Q(FName(TEXT("LampGround")), false, this);
-		if (W->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, Q))
+		for (int32 i = 0; i < Count; ++i)
 		{
-			AddLamp(Hit.Location);
+			const float Ang = (2.f * PI * i) / Count + AngOffset;
+			const FVector XY = Center + FVector(FMath::Cos(Ang) * Radius, FMath::Sin(Ang) * Radius, 0.f);
+			const FVector TraceStart = XY + FVector(0.f, 0.f, 2500.f);
+			const FVector TraceEnd = XY - FVector(0.f, 0.f, 4000.f);
+			FHitResult Hit;
+			FCollisionQueryParams Q(FName(TEXT("LampGround")), false, this);
+			if (W->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, Q))
+			{
+				AddLamp(Hit.Location);
+			}
 		}
-	}
+	};
+
+	PlaceRing(1400.f, 6, 0.f);            // dichtbij
+	PlaceRing(2800.f, 8, PI / 8.f);       // ruimer + versprongen (overkant / verder weg)
 }
 
 void ADayNightController::AddLamp(const FVector& BaseOnGround)
