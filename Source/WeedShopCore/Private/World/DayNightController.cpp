@@ -135,7 +135,7 @@ void ADayNightController::AddLamp(const FVector& BaseOnGround)
 		PL->RegisterComponent();
 		PL->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH - 6.f));
 		PL->SetMobility(EComponentMobility::Movable);
-		PL->SetAttenuationRadius(900.f);
+		PL->SetAttenuationRadius(1300.f);
 		PL->SetLightColor(FLinearColor(1.f, 0.78f, 0.45f));
 		PL->SetIntensity(0.f);
 		PL->SetCastShadows(false);
@@ -171,25 +171,26 @@ void ADayNightController::Tick(float DeltaSeconds)
 		UDirectionalLightComponent* DL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
 		if (DL)
 		{
-			DL->SetIntensity(FMath::Lerp(0.05f, 7.f, DayF));
+			// Nacht-ondergrens wat hoger zodat het buiten niet pikzwart is (maanlicht).
+			DL->SetIntensity(FMath::Lerp(0.18f, 7.f, DayF));
 			const FLinearColor Warm(1.f, 0.96f, 0.88f);
-			const FLinearColor NightBlue(0.35f, 0.42f, 0.7f);
+			const FLinearColor NightBlue(0.4f, 0.48f, 0.78f);
 			DL->SetLightColor(FMath::Lerp(NightBlue, Warm, DayF));
 		}
 	}
 
-	// SkyLight ambient mee dimmen.
+	// SkyLight ambient mee dimmen (nacht-vloer hoger, anders te donker buiten).
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.18f, 1.1f, DayF));
+		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.40f, 1.1f, DayF));
 	}
 
-	// Lantaarnpalen aan zodra het schemerig wordt.
-	const int32 WantOn = (DayF < 0.4f) ? 1 : 0;
+	// Lantaarnpalen aan zodra het echt begint te schemeren (eerder dan voorheen).
+	const int32 WantOn = (DayF < 0.55f) ? 1 : 0;
 	if (WantOn != bLampsOn)
 	{
 		bLampsOn = WantOn;
-		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 9000.f : 0.f); } }
+		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 16000.f : 0.f); } }
 		for (UMaterialInstanceDynamic* M : LampHeadMats)
 		{
 			if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.85f, 0.45f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
