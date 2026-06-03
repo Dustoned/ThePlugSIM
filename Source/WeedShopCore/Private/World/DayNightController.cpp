@@ -72,7 +72,7 @@ void ADayNightController::BeginPlay()
 			S.bOverride_AutoExposureMethod = true;
 			S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
 			S.bOverride_AutoExposureBias = true;
-			S.AutoExposureBias = 11.f; // vaste belichtingscompensatie (te tunen)
+			S.AutoExposureBias = 9.f; // vaste belichtingscompensatie (lager = donkerder)
 		}
 	}
 
