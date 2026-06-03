@@ -3,6 +3,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
+#include "Components/LightComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -76,17 +78,20 @@ void ACityGenerator::AddCityLamp(const FVector& BaseWorld)
 			if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Head->GetMaterial(0))) { LampHeadMats.Add(M); }
 		}
 	}
-	// Warm puntlicht net onder de kop (begint uit; tick zet 'm 's avonds aan).
-	UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
-	PL->SetupAttachment(Root);
-	PL->RegisterComponent();
-	PL->SetWorldLocation(BaseWorld + FVector(0.f, 0.f, PoleH - 8.f));
-	PL->SetMobility(EComponentMobility::Movable);
-	PL->SetAttenuationRadius(900.f);
-	PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
-	PL->SetIntensity(0.f);
-	PL->SetCastShadows(false);
-	LampLights.Add(PL);
+	// Warme SPOTLIGHT recht naar beneden (kegel) -> lichtpoel op de stoep/straat i.p.v. de muur ernaast.
+	USpotLightComponent* SL = NewObject<USpotLightComponent>(this);
+	SL->SetupAttachment(Root);
+	SL->RegisterComponent();
+	SL->SetWorldLocation(BaseWorld + FVector(0.f, 0.f, PoleH - 6.f));
+	SL->SetWorldRotation(FRotator(-90.f, 0.f, 0.f)); // recht omlaag
+	SL->SetMobility(EComponentMobility::Movable);
+	SL->SetAttenuationRadius(1200.f);
+	SL->SetInnerConeAngle(28.f);
+	SL->SetOuterConeAngle(52.f);
+	SL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
+	SL->SetIntensity(0.f); // tick zet 'm 's avonds aan
+	SL->SetCastShadows(false);
+	LampLights.Add(SL);
 }
 
 void ACityGenerator::Tick(float DeltaSeconds)
@@ -104,7 +109,7 @@ void ACityGenerator::Tick(float DeltaSeconds)
 	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
 	if (WantOn == bLampsOn) { return; }
 	bLampsOn = WantOn;
-	for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 11000.f : 0.f); } }
+	for (ULightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 22000.f : 0.f); } }
 	for (UMaterialInstanceDynamic* M : LampHeadMats)
 	{
 		if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.86f, 0.5f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
