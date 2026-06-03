@@ -205,8 +205,8 @@ void ADayNightController::Tick(float DeltaSeconds)
 		UDirectionalLightComponent* DL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
 		if (DL)
 		{
-			// Nacht-ondergrens wat hoger zodat het buiten niet pikzwart is (maanlicht).
-			DL->SetIntensity(FMath::Lerp(0.25f, 7.f, DayF));
+			// Normalere niveaus: overdag niet uitgeblazen, 's nachts niet pikzwart (maanlicht).
+			DL->SetIntensity(FMath::Lerp(0.3f, 3.2f, DayF));
 			const FLinearColor Warm(1.f, 0.96f, 0.88f);
 			const FLinearColor NightBlue(0.4f, 0.48f, 0.78f);
 			DL->SetLightColor(FMath::Lerp(NightBlue, Warm, DayF));
@@ -216,7 +216,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 	// SkyLight ambient mee dimmen (nacht-vloer hoger, anders te donker buiten).
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.55f, 1.1f, DayF));
+		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.5f, 0.85f, DayF));
 	}
 
 	// Lantaarnpalen aan zodra het echt begint te schemeren (eerder dan voorheen).
