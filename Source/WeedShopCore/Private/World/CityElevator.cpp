@@ -95,15 +95,21 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 	if (W)
 	{
 		const FTransform XF = GetActorTransform(); // basis op BaseZ + yaw van de cabine
-		const float ButZ = 130.f;                   // op handhoogte
-		const float Spread = FootY - 60.f;           // ruimte langs de zijwand
+		const float ButZ = 130.f;                   // midden van het paneel, op handhoogte
 		FActorSpawnParameters BSP; BSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-		// Cabine-keuzeknoppen: rij op de rechter-zijwand (lokaal +X), kijkend de cabine in (-X).
+		// Cabine-keuzeknoppen: COMPACT bedieningspaneel op de rechter-zijwand (lokaal +X), kijkend de
+		// cabine in (-X). Rooster van 3 kolommen met kleine spacing i.p.v. ver uit elkaar.
+		const int32 Cols = 3;
+		const float ColSp = 22.f, RowSp = 22.f;
+		const int32 NRows = (NumFloors + Cols - 1) / Cols;
 		for (int32 f = 0; f < NumFloors; ++f)
 		{
-			const float ly = (NumFloors > 1) ? (-Spread * 0.5f + Spread * f / (NumFloors - 1)) : 0.f;
-			const FVector RelLoc(FootX * 0.5f - 4.f, ly, ButZ);
+			const int32 col = f % Cols;
+			const int32 row = f / Cols;
+			const float ly = (col - (Cols - 1) * 0.5f) * ColSp;
+			const float lz = ButZ + ((NRows - 1) * 0.5f - row) * RowSp; // verdieping 1 onderaan
+			const FVector RelLoc(FootX * 0.5f - 4.f, ly, lz);
 			if (ACityElevatorButton* B = W->SpawnActor<ACityElevatorButton>(ACityElevatorButton::StaticClass(), FTransform(), BSP))
 			{
 				B->AttachToActor(this, FAttachmentTransformRules::KeepRelativeTransform);

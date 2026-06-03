@@ -29,24 +29,24 @@ void ACityElevatorButton::Setup(ACityElevator* InElevator, int32 InFloor, bool b
 {
 	Elevator = InElevator; Floor = InFloor; bCall = bInCall;
 
-	// Plaatje: dun langs de eigen +X (= de normaal die naar de speler wijst), 14x14cm vlak.
+	// Donker plaatje (dun langs +X = naar de speler), groot genoeg voor een duidelijk cijfer.
 	if (Panel)
 	{
-		Panel->SetRelativeScale3D(FVector(2.5f, 14.f, 14.f) / 100.f);
+		Panel->SetRelativeScale3D(FVector(2.5f, bCall ? 26.f : 17.f, 17.f) / 100.f);
 		Panel->SetRelativeLocation(FVector::ZeroVector);
 		if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
 		{
 			PanelMat = Panel->CreateDynamicMaterialInstance(0, Base);
-			if (PanelMat) { PanelMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.10f, 0.11f, 0.14f)); }
+			if (PanelMat) { PanelMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.04f, 0.04f, 0.05f)); }
 		}
 	}
 
-	// Echt nummer (of "CALL") net vóór het plaatje, leesbaar vanaf de +X-kant.
+	// Echt nummer (of "CALL") net vóór het plaatje. TextRender is unlit -> gloeit, dus ook 's nachts leesbaar.
 	if (Label)
 	{
 		Label->SetText(FText::FromString(bCall ? FString(TEXT("CALL")) : FString::FromInt(Floor + 1)));
-		Label->SetWorldSize(bCall ? 5.5f : 9.f);
-		Label->SetTextRenderColor(FColor(255, 214, 120));
+		Label->SetWorldSize(bCall ? 7.f : 13.f);
+		Label->SetTextRenderColor(FColor(255, 226, 150));
 		Label->SetHorizontalAlignment(EHTA_Center);
 		Label->SetVerticalAlignment(EVRTA_TextCenter);
 		Label->SetRelativeLocation(FVector(2.0f, 0.f, 0.f));

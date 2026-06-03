@@ -626,7 +626,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					const FVector DrXY = LP(aCenter, sw);
 					const FVector NumDir((float)(side * Ddy), (float)(-side * Ddx), 0.f);
 					const FVector NumLoc = FVector(DrXY.X, DrXY.Y, zS + DoorTopH + 16.f) + NumDir * (WallT * 0.5f + 3.f);
-					AddSignText(NumLoc, side * Ddy, -side * Ddx, FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq), FLinearColor(0.92f, 0.9f, 0.78f), 15.f);
+					AddSignText(NumLoc, side * Ddy, -side * Ddx, FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq), FLinearColor(1.f, 0.95f, 0.7f), 22.f);
 				}
 				SegD(cur, HallLen, sw, zS); // gang-zijwand tot de kern
 				if (side > 0)
