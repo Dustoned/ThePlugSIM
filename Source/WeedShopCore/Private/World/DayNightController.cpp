@@ -128,15 +128,17 @@ void ADayNightController::AddLamp(const FVector& BaseOnGround)
 		LampHeads.Add(Head);
 	}
 
-	// Warm puntlicht net onder de kop (begint uit).
+	// Warm puntlicht net onder de kop (begint uit). Inverse-squared UIT -> gelijkmatige poel zonder
+	// uitgeblazen plekken vlakbij; lage intensiteit volstaat dan.
 	{
 		UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
 		PL->SetupAttachment(Root);
+		PL->bUseInverseSquaredFalloff = false;
 		PL->RegisterComponent();
-		PL->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH - 6.f));
+		PL->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH - 10.f));
 		PL->SetMobility(EComponentMobility::Movable);
-		PL->SetAttenuationRadius(1300.f);
-		PL->SetLightColor(FLinearColor(1.f, 0.78f, 0.45f));
+		PL->SetAttenuationRadius(1500.f);
+		PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
 		PL->SetIntensity(0.f);
 		PL->SetCastShadows(false);
 		LampLights.Add(PL);
@@ -190,7 +192,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 	if (WantOn != bLampsOn)
 	{
 		bLampsOn = WantOn;
-		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 16000.f : 0.f); } }
+		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 14.f : 0.f); } }
 		for (UMaterialInstanceDynamic* M : LampHeadMats)
 		{
 			if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.85f, 0.45f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
