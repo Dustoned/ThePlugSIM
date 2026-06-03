@@ -87,6 +87,14 @@ public:
 	int32 GetLoadCounter() const { return LoadCounter; }
 	void NotifyLoaded() { if (HasAuthority()) { ++LoadCounter; } }
 
+	// Vrij bouwen (testing/sandbox): plaats overal, ook buiten, zonder "alleen binnen"-regel en zonder
+	// grondhoogte-beperking. De logische surface-regels blijven (lamp -> plafond, rek -> muur).
+	UPROPERTY(Replicated)
+	bool bFreeBuild = false;
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	bool IsFreeBuild() const { return bFreeBuild; }
+	void SetFreeBuild(bool b) { if (HasAuthority()) { bFreeBuild = b; } }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

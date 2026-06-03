@@ -125,6 +125,10 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	int32 CrewLevel = 1;
 
+	// Vrij bouwen (testing/sandbox) -> overal plaatsen toegestaan.
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	bool bFreeBuild = false;
+
 	// Totale real-life speeltijd in seconden (cumulatief over sessies).
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	double PlaytimeSeconds = 0.0;

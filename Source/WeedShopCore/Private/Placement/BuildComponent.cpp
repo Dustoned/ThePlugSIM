@@ -14,6 +14,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Interaction/InteractionComponent.h"
+#include "Game/WeedShopGameState.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
@@ -27,6 +28,16 @@
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
 #include "Net/UnrealNetwork.h"
+
+namespace
+{
+	// Testing/sandbox: overal plaatsen toegestaan (geen "alleen binnen"/grondhoogte-regel).
+	bool WorldFreeBuild(const UWorld* W)
+	{
+		const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+		return GS && GS->IsFreeBuild();
+	}
+}
 
 UBuildComponent::UBuildComponent()
 {
@@ -362,11 +373,13 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				}
 				else
 				{
+					const bool bFree = WorldFreeBuild(GetWorld());
 					const bool bFloor = FloorNormalZ > 0.7f;
 					const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
 					const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
-					bValidSpot = bFloor && bGroundLevel && !bOnPlaceable
-							&& (CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation))
+					// Vrij bouwen: laat grondhoogte- en "alleen binnen"-regel vallen (surface + anti-clip blijven).
+					bValidSpot = bFloor && (bFree || bGroundLevel) && !bOnPlaceable
+							&& (bFree || CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation))
 							&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 				}
 				} // einde else: niet-wandmount (vloer/plafond)
@@ -635,8 +648,8 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		}
 		return;
 	}
-	// Alleen binnenshuis (tenzij dit placeable buiten mag, bv. de ATM).
-	if (!Def.bIsLamp && !Def.bIsWallMount && !Def.bAllowOutdoors && !IsIndoors(Location))
+	// Alleen binnenshuis (tenzij dit placeable buiten mag, bv. de ATM) - in testing/sandbox vrij.
+	if (!Def.bIsLamp && !Def.bIsWallMount && !Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsIndoors(Location))
 	{
 		if (GEngine)
 		{

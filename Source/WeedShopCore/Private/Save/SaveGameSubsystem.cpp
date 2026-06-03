@@ -277,6 +277,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 {
 	if (Mode == EGameStartMode::Normal) { return; } // kale start
 	AWeedShopGameState* GS = GetWeedGameState();
+	if (GS) { GS->SetFreeBuild(true); } // testing/sandbox: overal bouwen toegestaan
 	UWorld* World = GS ? GS->GetWorld() : nullptr;
 	APawn* P = (World && World->GetFirstPlayerController()) ? World->GetFirstPlayerController()->GetPawn() : nullptr;
 	if (!P) { return; }
@@ -469,6 +470,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->bIsAutosave = bAutosave;
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
 	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); }
+	Save->bFreeBuild = GS->IsFreeBuild();
 
 	// Gedeelde wereld-staat.
 	if (const UDayCycleComponent* Day = GS->GetDayCycle()) { Save->TimeOfDaySeconds = Day->GetTimeOfDaySeconds(); Save->DayNumber = Day->GetDayNumber(); }
@@ -527,6 +529,7 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	PlaytimeMark = FDateTime::UtcNow();
 
 	// Gedeelde staat terugzetten.
+	GS->SetFreeBuild(Save->bFreeBuild);
 	if (UDayCycleComponent* Day = GS->GetDayCycle()) { Day->SetTimeOfDaySeconds(Save->TimeOfDaySeconds); }
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }
 	if (UUpgradeComponent* Up = GS->GetUpgrades()) { Up->RestorePurchased(Save->PurchasedUpgrades); }
