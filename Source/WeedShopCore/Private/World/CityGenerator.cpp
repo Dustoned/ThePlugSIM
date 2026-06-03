@@ -75,7 +75,9 @@ void ACityGenerator::BuildCity()
 		const FVector S = Center + FVector(0.f, 0.f, 500.f);
 		const FVector E = Center - FVector(0.f, 0.f, 4000.f);
 		FCollisionQueryParams Q(FName(TEXT("CityGround")), false, this);
-		GroundZ = W->LineTraceSingleByChannel(Hit, S, E, ECC_WorldStatic, Q) ? Hit.ImpactPoint.Z : (Center.Z - 90.f);
+		// Oude wereld is verwijderd -> meestal geen vloer-hit; val terug op het wereld-grondvlak (z=0)
+		// zodat de asfaltvloer altijd op een vaste hoogte ligt en je netjes landt.
+		GroundZ = W->LineTraceSingleByChannel(Hit, S, E, ECC_WorldStatic, Q) ? Hit.ImpactPoint.Z : 0.f;
 	}
 
 	const float Pitch = BlockSize + RoadWidth; // hart-op-hart afstand tussen blokken
