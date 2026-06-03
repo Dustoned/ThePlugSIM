@@ -309,6 +309,9 @@ void ACityGenerator::BuildCity()
 			BuildApartmentBlock(CX, CY, TopZ, ddx, ddy, Floors, Body, Body, /*bSign*/ false);
 		}
 	}
+
+	// Centraal parkje op het open middenblok.
+	BuildPark(Center.X, Center.Y, BlockSize, GroundZ);
 }
 
 void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed)
@@ -472,7 +475,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const float T = 20.f;
 	const float TotalH = NF * FloorH;
 	const float DoorW = 240.f;
-	const float DoorH = 250.f;
+	const float DoorH = 220.f;
 	const FLinearColor FloorC(0.30f, 0.29f, 0.27f);
 	const FLinearColor Glass(0.30f, 0.45f, 0.55f);
 
@@ -623,36 +626,55 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			AddBox(Cube, C, S, Col, true);
 		};
 
+		const float DoorTopH = 205.f;                       // normale deurhoogte (niet tot het plafond)
+		const float Gc3 = (HoleMaxX + ApRight) * 0.5f;      // deur naar het 4e (grote) appartement
+		// Latei boven een deur-opening (X-gat op hoogte y).
+		auto Lintel = [&](float gx, float gy, float zS)
+		{
+			const float h = WallHt - DoorTopH;
+			if (h < 4.f) { return; }
+			AddBox(Cube, FVector(gx, gy, zS + DoorTopH + h * 0.5f), FVector(DoorGap, WallT, h), IWall, true);
+		};
+		// Werkende appartementdeur (scharnier links van het gat, hoogte = normale deur).
+		auto Apt = [&](float gx, float gy, float zS)
+		{
+			FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			const FVector Hinge(gx - DoorGap * 0.5f, gy, zS);
+			if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, 0.f, 0.f), Hinge), DSP))
+			{
+				Dr->Setup(DoorGap - 4.f, DoorTopH - 6.f, ADoorC);
+			}
+		};
+
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zS = TopZ + f * FloorH;
 
-			// Kern-omhulling: +Y-wand (met deur naar de gang) + +X-wand. (-X/-Y vallen tegen de buitenmuren.)
+			// Kern-omhulling: +Y-wand (deur naar de gang) + +X-wand.
 			WallSeg(HoleMinX, HoleMaxY, CoreDoorC - DoorGap * 0.5f, HoleMaxY, zS, IWall);
 			WallSeg(CoreDoorC + DoorGap * 0.5f, HoleMaxY, HoleMaxX, HoleMaxY, zS, IWall);
 			WallSeg(HoleMaxX, HoleMinY, HoleMaxX, HoleMaxY, zS, IWall);
+			Lintel(CoreDoorC, HoleMaxY, zS);
 
-			// Gang-voorwand met 3 appartementdeuren (gaten), over de volle breedte.
+			// 4e (groot) appartement in de zijruimte naast de kern: scheidingswand + deur vanaf de gang.
+			WallSeg(HoleMaxX, HoleMaxY, Gc3 - DoorGap * 0.5f, HoleMaxY, zS, IWall);
+			WallSeg(Gc3 + DoorGap * 0.5f, HoleMaxY, ApRight, HoleMaxY, zS, IWall);
+			Lintel(Gc3, HoleMaxY, zS);
+			Apt(Gc3, HoleMaxY, zS);
+
+			// Gang-voorwand met 3 appartementdeuren.
 			WallSeg(ApLeft, HallFrontY, Gc0 - DoorGap * 0.5f, HallFrontY, zS, IWall);
 			WallSeg(Gc0 + DoorGap * 0.5f, HallFrontY, Gc1 - DoorGap * 0.5f, HallFrontY, zS, IWall);
 			WallSeg(Gc1 + DoorGap * 0.5f, HallFrontY, Gc2 - DoorGap * 0.5f, HallFrontY, zS, IWall);
 			WallSeg(Gc2 + DoorGap * 0.5f, HallFrontY, ApRight, HallFrontY, zS, IWall);
+			Lintel(Gc0, HallFrontY, zS); Lintel(Gc1, HallFrontY, zS); Lintel(Gc2, HallFrontY, zS);
 
-			// Partities tussen de 3 appartementen (van gang-voorwand naar de voorgevel).
+			// Partities tussen de 3 voor-appartementen.
 			WallSeg(Px1, HallFrontY, Px1, CY + Half - WallT, zS, IWall);
 			WallSeg(Px2, HallFrontY, Px2, CY + Half - WallT, zS, IWall);
 
-			// Werkende appartementdeuren in de 3 gaten.
-			const float Gcs[3] = { Gc0, Gc1, Gc2 };
-			for (int32 d = 0; d < 3; ++d)
-			{
-				FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-				const FVector Hinge(Gcs[d] - DoorGap * 0.5f, HallFrontY, zS);
-				if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, 0.f, 0.f), Hinge), DSP))
-				{
-					Dr->Setup(DoorGap - 4.f, WallHt - 8.f, ADoorC);
-				}
-			}
+			// Deuren van de 3 voor-appartementen.
+			Apt(Gc0, HallFrontY, zS); Apt(Gc1, HallFrontY, zS); Apt(Gc2, HallFrontY, zS);
 		}
 	}
 
@@ -770,6 +792,70 @@ void ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L
 	{
 		Dr->Setup(DoorW - 4.f, DoorH - 4.f, DoorC);
 	}
+}
+
+void ACityGenerator::BuildPark(float CX, float CY, float Size, float GroundTopZ)
+{
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (!Cube) { return; }
+
+	const float Half = Size * 0.5f;
+	const float Z = GroundTopZ;
+	const FLinearColor Grass(0.16f, 0.36f, 0.14f);
+	const FLinearColor PathC(0.58f, 0.55f, 0.50f);
+	const FLinearColor Fence(0.20f, 0.20f, 0.22f);
+	const FLinearColor Trunk(0.28f, 0.18f, 0.10f);
+	const FLinearColor Leaf1(0.16f, 0.38f, 0.15f), Leaf2(0.20f, 0.44f, 0.18f);
+	const FLinearColor Wood(0.40f, 0.28f, 0.16f);
+
+	// Gras + kruispad door het midden.
+	AddBox(Cube, FVector(CX, CY, Z + 3.f), FVector(Size, Size, 6.f), Grass, true);
+	const float PW = 260.f;
+	AddBox(Cube, FVector(CX, CY, Z + 7.f), FVector(Size, PW, 6.f), PathC, false);
+	AddBox(Cube, FVector(CX, CY, Z + 7.f), FVector(PW, Size, 6.f), PathC, false);
+
+	// Laag hekje rond de rand, met een opening waar elk pad uitkomt.
+	const float FH = 75.f, GapW = PW + 50.f;
+	auto FenceSeg = [&](float x0, float y0, float x1, float y1)
+	{
+		const float lx = FMath::Abs(x1 - x0), ly = FMath::Abs(y1 - y0);
+		if (lx + ly < 12.f) { return; }
+		AddBox(Cube, FVector((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, Z + FH * 0.5f), FVector(FMath::Max(lx, 10.f), FMath::Max(ly, 10.f), FH), Fence, true);
+	};
+	FenceSeg(CX - Half, CY + Half, CX - GapW * 0.5f, CY + Half); FenceSeg(CX + GapW * 0.5f, CY + Half, CX + Half, CY + Half);
+	FenceSeg(CX - Half, CY - Half, CX - GapW * 0.5f, CY - Half); FenceSeg(CX + GapW * 0.5f, CY - Half, CX + Half, CY - Half);
+	FenceSeg(CX + Half, CY - Half, CX + Half, CY - GapW * 0.5f); FenceSeg(CX + Half, CY + GapW * 0.5f, CX + Half, CY + Half);
+	FenceSeg(CX - Half, CY - Half, CX - Half, CY - GapW * 0.5f); FenceSeg(CX - Half, CY + GapW * 0.5f, CX - Half, CY + Half);
+
+	// Boompjes in de 4 kwadranten (buiten de paden).
+	if (Cyl && Sphere)
+	{
+		const float Q = Size * 0.27f;
+		const float DX[4] = { Q, Q, -Q, -Q }, DY[4] = { Q, -Q, Q, -Q };
+		for (int32 i = 0; i < 4; ++i)
+		{
+			const FVector B(CX + DX[i], CY + DY[i], Z);
+			AddBox(Cyl, B + FVector(0, 0, 95), FVector(28, 28, 190), Trunk, true);
+			AddBox(Sphere, B + FVector(0, 0, 250), FVector(200, 200, 180), Leaf1, false);
+			AddBox(Sphere, B + FVector(45, 25, 320), FVector(150, 150, 140), Leaf2, false);
+		}
+	}
+
+	// Bankjes langs het kruispad.
+	auto Bench = [&](float bx, float by, bool alongX)
+	{
+		const FLinearColor Legs(0.15f, 0.14f, 0.13f);
+		const float Wd = 120.f;
+		AddBox(Cube, FVector(bx, by, Z + 45.f), alongX ? FVector(Wd, 42.f, 8.f) : FVector(42.f, Wd, 8.f), Wood, true);
+		AddBox(Cube, FVector(bx, by, Z + 70.f) + (alongX ? FVector(0, -17.f, 0) : FVector(-17.f, 0, 0)), alongX ? FVector(Wd, 8.f, 40.f) : FVector(8.f, Wd, 40.f), Wood, true);
+		AddBox(Cube, FVector(bx, by, Z + 22.f) + (alongX ? FVector(-Wd * 0.4f, 0, 0) : FVector(0, -Wd * 0.4f, 0)), FVector(8, 38, 44), Legs, false);
+		AddBox(Cube, FVector(bx, by, Z + 22.f) + (alongX ? FVector(Wd * 0.4f, 0, 0) : FVector(0, Wd * 0.4f, 0)), FVector(8, 38, 44), Legs, false);
+	};
+	const float Bo = PW * 0.5f + 95.f;
+	Bench(CX, CY + Bo, true);  Bench(CX, CY - Bo, true);
+	Bench(CX + Bo, CY, false); Bench(CX - Bo, CY, false);
 }
 
 void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ, float Foot, float Height,

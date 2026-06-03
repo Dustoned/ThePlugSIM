@@ -34,6 +34,9 @@ protected:
 	// Straatlantaarn (paal + kop + warm puntlicht) die 's avonds aan gaat.
 	void AddCityLamp(const FVector& BaseWorld);
 
+	// Centraal parkje: gras, paden, boompjes, bankjes en een laag hekje.
+	void BuildPark(float CX, float CY, float Size, float GroundTopZ);
+
 	// Eén blok-mesh toevoegen onder de root. SizeCm = volledige afmeting; CenterWorld = wereld-midden.
 	UStaticMeshComponent* AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld, const FVector& SizeCm,
 		const FLinearColor& Color, bool bCollides, const FRotator& Rot = FRotator::ZeroRotator);
