@@ -51,6 +51,7 @@ void ADayNightController::BeginPlay()
 	if (Sun.IsValid() && Sun->GetLightComponent())
 	{
 		Sun->GetLightComponent()->SetMobility(EComponentMobility::Movable); // runtime draaibaar
+		Sun->GetLightComponent()->SetCastShadows(true); // dak houdt de zon tegen -> niet binnen
 	}
 
 	// SkyLight voor ambient (zoek bestaande).
@@ -271,10 +272,11 @@ void ADayNightController::Tick(float DeltaSeconds)
 		}
 	}
 
-	// SkyLight ambient mee dimmen (nacht-vloer hoger, anders te donker buiten).
+	// SkyLight ambient CONSTANT houden: zo blijft een (raamloze) kamer dag en nacht even licht.
+	// Het dag/nacht-verschil komt buiten van de zon (die het dak niet door komt -> binnen gelijk).
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.5f, 1.1f, DayF));
+		Sky->GetLightComponent()->SetIntensity(0.6f);
 	}
 
 	// Straatlampen op kloktijd: 's avonds aan (vanaf 19u), 's ochtends uit rond 8u.
