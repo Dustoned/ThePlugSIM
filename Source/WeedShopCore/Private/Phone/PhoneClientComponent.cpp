@@ -619,13 +619,11 @@ void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName Contain
 
 void UPhoneClientComponent::ToggleRollUI()
 {
+	// Maar 1 UI tegelijk: niet bovenop een ander scherm openen (sluit eerst het huidige).
+	if (!bRollOpen && (IsAnyGameUIOpen() || bMainMenuOpen)) { return; }
 	bRollOpen = !bRollOpen;
 	if (bRollOpen)
 	{
-		bOpen = false;
-		bDealOpen = false;
-		bInventoryOpen = false;
-		bPotUpgradeOpen = false;
 		RollGrams = FMath::Clamp(RollGrams, MinGrams, GetMaxJointGrams());
 	}
 	UpdateCursor();
@@ -633,14 +631,9 @@ void UPhoneClientComponent::ToggleRollUI()
 
 void UPhoneClientComponent::ToggleInventory()
 {
+	// Maar 1 UI tegelijk: niet bovenop een ander scherm openen (sluit eerst het huidige).
+	if (!bInventoryOpen && (IsAnyGameUIOpen() || bMainMenuOpen)) { return; }
 	bInventoryOpen = !bInventoryOpen;
-	if (bInventoryOpen)
-	{
-		bOpen = false;
-		bRollOpen = false;
-		bDealOpen = false;
-		bPotUpgradeOpen = false;
-	}
 	UpdateCursor();
 }
 
