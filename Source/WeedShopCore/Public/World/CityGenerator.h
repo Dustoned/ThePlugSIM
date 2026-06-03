@@ -16,6 +16,17 @@ class UStaticMesh;
 class UStaticMeshComponent;
 class USceneComponent;
 
+// Eén blok op de kaart: wereld-XY-midden + kleur + label (winkelnaam of huisnummer-reeks).
+USTRUCT()
+struct FCityMapBlock
+{
+	GENERATED_BODY()
+	UPROPERTY() FVector2D Center = FVector2D::ZeroVector;
+	UPROPERTY() FLinearColor Color = FLinearColor(0.5f, 0.5f, 0.5f);
+	UPROPERTY() FString Label;
+	UPROPERTY() bool bShop = false;
+};
+
 UCLASS()
 class WEEDSHOPCORE_API ACityGenerator : public AActor
 {
@@ -23,6 +34,13 @@ class WEEDSHOPCORE_API ACityGenerator : public AActor
 
 public:
 	ACityGenerator();
+
+	// --- Kaart-API: dezelfde deterministische layout, maar als data (geen geometrie) ---
+	FVector GetCityCenter() const { return CityCenter; }
+	int32 GetGridRadiusClamped() const { return FMath::Clamp(GridRadius, 1, 8); }
+	float GetPitch() const { return BlockSize + RoadWidth; }
+	float GetMapBlockSize() const { return BlockSize; }
+	void GetMapBlocks(TArray<FCityMapBlock>& Out) const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -87,6 +105,7 @@ protected:
 private:
 	bool bBuilt = false;
 	float GroundZ = 0.f;
+	FVector CityCenter = FVector::ZeroVector; // referentie-midden (PlayerStart) voor de kaart
 
 	// Straatlampen: spots (naar onder) + zachte gloed-puntlichten + gloeiende koppen, getoggeld op kloktijd.
 	UPROPERTY() TArray<TObjectPtr<class ULightComponent>> LampLights;

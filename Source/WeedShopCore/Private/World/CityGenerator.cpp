@@ -248,6 +248,7 @@ void ACityGenerator::BuildCity()
 		// zodat de asfaltvloer altijd op een vaste hoogte ligt en je netjes landt.
 		GroundZ = W->LineTraceSingleByChannel(Hit, S, E, ECC_WorldStatic, Q) ? Hit.ImpactPoint.Z : 0.f;
 	}
+	CityCenter = Center; // voor de kaart
 
 	const float Pitch = BlockSize + RoadWidth; // hart-op-hart afstand tussen blokken
 	const int32 R = FMath::Clamp(GridRadius, 1, 8);
@@ -368,6 +369,46 @@ void ACityGenerator::BuildCity()
 
 	// Centraal parkje op het open middenblok.
 	BuildPark(Center.X, Center.Y, BlockSize, GroundZ);
+}
+
+void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
+{
+	Out.Reset();
+	const float Pitch = BlockSize + RoadWidth;
+	const int32 R = FMath::Clamp(GridRadius, 1, 8);
+	const int32 Open = FMath::Max(0, OpenPlazaRadius);
+	const int32 S = FMath::Max(2, R - 1);
+
+	const FLinearColor CGas(0.92f, 0.32f, 0.26f), CGrow(0.36f, 0.85f, 0.40f), CFurn(0.72f, 0.52f, 0.92f),
+		CSupp(0.40f, 0.70f, 1.0f), CApt(0.82f, 0.80f, 0.62f), CRow(0.80f, 0.62f, 0.42f), CPark(0.28f, 0.62f, 0.30f);
+
+	for (int32 i = -R; i <= R; ++i)
+	{
+		for (int32 j = -R; j <= R; ++j)
+		{
+			FCityMapBlock B;
+			B.Center = FVector2D(CityCenter.X + i * Pitch, CityCenter.Y + j * Pitch);
+
+			if (FMath::Max(FMath::Abs(i), FMath::Abs(j)) <= Open)
+			{
+				B.Color = CPark; B.Label = TEXT("Park"); Out.Add(B); continue;
+			}
+
+			const uint32 H = CityHash(i, j);
+			const int32 BaseNo = 2 + (int32)(CityHash((int32)(B.Center.X / 100.f), (int32)(B.Center.Y / 100.f)) % 70u) * 2;
+			auto RowLabel = [&]() { const int32 Units = 3 + (int32)(H % 2u); const int32 RowBase = 2 + (int32)(H % 60u) * 2; return FString::Printf(TEXT("%d-%d"), RowBase, RowBase + 2 * (Units - 1)); };
+
+			if (i == 0 && j == -1)      { B.Color = CGas;  B.Label = TEXT("GAS");       B.bShop = true; }
+			else if (i == S && j == S)  { B.Color = CGrow; B.Label = TEXT("GROW");      B.bShop = true; }
+			else if (i == -S && j == S) { B.Color = CFurn; B.Label = TEXT("FURNITURE"); B.bShop = true; }
+			else if (i == S && j == -S) { B.Color = CSupp; B.Label = TEXT("SUPPLIES");  B.bShop = true; }
+			else if (FMath::Max(FMath::Abs(i), FMath::Abs(j)) == 1) { B.Color = CRow; B.Label = RowLabel(); }
+			else if ((H % 4u) != 0u)    { B.Color = CRow; B.Label = RowLabel(); }
+			else                        { B.Color = CApt; B.Label = FString::Printf(TEXT("Nr %d"), BaseNo); }
+
+			Out.Add(B);
+		}
+	}
 }
 
 void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed)

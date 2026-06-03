@@ -30,6 +30,9 @@ public:
 	// Maakt de UMG-widgets (status/telefoon/deal) aan op de lokale client (lui, idempotent).
 	void EnsureWidget();
 
+	// Fullscreen stadskaart aan/uit (M-toets of de Fullscreen-knop in de Map-app).
+	void ToggleMapOverlay();
+
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SetTab(int32 NewTab);
 
@@ -551,6 +554,9 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UPhoneWidget> PhoneWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UMapWidget> MapOverlay;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UStatusHudWidget> StatusWidget;

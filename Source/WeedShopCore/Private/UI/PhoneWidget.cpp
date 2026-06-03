@@ -39,6 +39,8 @@
 #include "Components/ProgressBar.h"
 #include "Components/Slider.h"
 #include "World/DayNightController.h"
+#include "UI/MapWidget.h"
+#include "Phone/PhoneClientComponent.h"
 #include "Styling/SlateTypes.h"
 #include "Styling/CoreStyle.h"
 #include "UI/WeedUiStyle.h"
@@ -1412,8 +1414,26 @@ void UPhoneWidget::RefreshContent()
 	}
 	else // Map
 	{
-		AddInfoRow(TEXT("Map"), FLinearColor(0.7f, 0.95f, 0.9f), 15);
-		AddInfoRow(TEXT("(mini-map coming to the phone)"), FLinearColor::Gray, 12);
+		BuildMapApp();
+	}
+}
+
+void UPhoneWidget::BuildMapApp()
+{
+	if (!ContentBox) { return; }
+
+	// Knop naar de fullscreen-kaart (zelfde als M).
+	UWeedActionButton* FB = MakeActionBtn(TEXT("Fullscreen (M)"), FLinearColor(0.20f, 0.45f, 0.62f),
+		[this]() { if (Phone.IsValid()) { Phone->ToggleMapOverlay(); } }, 13);
+	ContentBox->AddChildToVerticalBox(FB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+
+	// Ingebedde mini-kaart (toont winkels, huisnummers, jouw positie + de NPC's).
+	if (UMapWidget* MW = CreateWidget<UMapWidget>(GetOwningPlayer(), UMapWidget::StaticClass()))
+	{
+		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
+		Box->SetHeightOverride(300.f);
+		Box->SetContent(MW);
+		ContentBox->AddChildToVerticalBox(Box);
 	}
 }
 

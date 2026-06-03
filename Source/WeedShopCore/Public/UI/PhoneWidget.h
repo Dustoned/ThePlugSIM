@@ -117,6 +117,9 @@ protected:
 	// Verandert als er een bericht bijkomt of een status wijzigt (voor live verversen).
 	int32 MessagesSignature() const;
 
+	// Bouwt de Map-app: een mini stadskaart + knop naar de fullscreen-kaart (M).
+	void BuildMapApp();
+
 	// Bouwt de Suppliers-app (in-telefoon webshop) in de gegeven container.
 	void BuildStoreApp(class UVerticalBox* Into);
 	// Vult alleen de scrollbare lijst (catalogus/cart/sell) — geen volledige herbouw, dus geen flash.

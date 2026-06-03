@@ -393,6 +393,9 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Pressed,  this, &AThePlugSIMCharacter::OnPrimaryClick);
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Released, this, &AThePlugSIMCharacter::OnPrimaryReleased);
 
+	// M: fullscreen stadskaart aan/uit.
+	if (Ph) { Input->BindKey(EKeys::M, IE_Pressed, Ph, &UPhoneClientComponent::ToggleMapOverlay); }
+
 	// ESC: pauze-/menu-scherm. bExecuteWhenPaused zodat je er ook UIT kunt met ESC terwijl de
 	// wereld gepauzeerd is (anders worden de pawn-bindings niet uitgevoerd tijdens pauze).
 	{

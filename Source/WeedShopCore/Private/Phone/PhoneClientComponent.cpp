@@ -44,6 +44,7 @@
 #include "UI/LevelUpWidget.h"
 #include "UI/CrosshairWidget.h"
 #include "UI/SettingsWidget.h"
+#include "UI/MapWidget.h"
 #include "World/StorageShelf.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
@@ -126,6 +127,27 @@ APlayerController* UPhoneClientComponent::GetPC() const
 		return Cast<APlayerController>(Pawn->GetController());
 	}
 	return nullptr;
+}
+
+void UPhoneClientComponent::ToggleMapOverlay()
+{
+	// Al open -> sluiten.
+	if (MapOverlay)
+	{
+		MapOverlay->RemoveFromParent();
+		MapOverlay = nullptr;
+		return;
+	}
+	APlayerController* PC = GetPC();
+	if (!PC || !PC->IsLocalController()) { return; }
+	// Telefoon dicht als die open staat (anders zit de UI-input in de weg).
+	if (bOpen) { Toggle(); }
+	MapOverlay = CreateWidget<UMapWidget>(PC, UMapWidget::StaticClass());
+	if (MapOverlay)
+	{
+		MapOverlay->SetFullscreen(true);
+		MapOverlay->AddToViewport(50);
+	}
 }
 
 UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
