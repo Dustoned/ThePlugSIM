@@ -40,8 +40,8 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 
 	if (Platform)
 	{
-		Platform->SetRelativeScale3D(FVector(FootX, FootY, 12.f) / 100.f);
-		Platform->SetRelativeLocation(FVector(0.f, 0.f, 6.f));
+		Platform->SetRelativeScale3D(FVector(FootX, FootY, 7.f) / 100.f); // dunner platform
+		Platform->SetRelativeLocation(FVector(0.f, 0.f, 3.5f));            // bovenkant ~vloerniveau
 		Tint(Platform, Color);
 	}
 

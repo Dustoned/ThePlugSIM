@@ -520,22 +520,29 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 
 	// ---- Switchback-trap links-achter (banen langs de diepte, bordes achteraan). ----
 	{
-		const int32 SPF = 12;
-		const float HalfRise = FloorH * 0.5f, Rise = HalfRise / SPF, RunD = CoreDepth / SPF;
-		const float LaneW = SideW * 0.5f;
-		const float sA = -(HW + LaneW * 0.5f), sB = -(HW + LaneW * 1.5f);
-		// Solide bordes aan de gangkant op ELKE verdieping: hier stap je vanuit de gang de trap op (geen gat).
+		const int32 SPF = 14;
+		const float HalfRise = FloorH * 0.5f, Rise = HalfRise / SPF;
+		const float Margin = 25.f;
+		const float RunS = (SideW - 2.f * Margin) / SPF;          // trede-diepte LANGS DE INSTAPRICHTING (Side)
+		const float LaneWd = FMath::Min(240.f, CoreDepth * 0.42f); // loopbreedte langs de diepte
+		const float dFront = HallLen + LaneWd * 0.5f + 20.f;       // baan dichtbij de gang
+		const float dBack = Foot - LaneWd * 0.5f - 20.f;           // baan achterin
+		const float s0 = -HW - Margin;                            // begint bij de gang-instap
+		// Drempel op vloerniveau aan de gangkant per verdieping: hier stap je vanuit de gang het trappenhuis in.
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
-			Box(HallLen + 70.f, -(HW + SideW * 0.5f), 150.f, SideW, zf - 6.f, 12.f, LandC, true);
+			Box(HallLen + CoreDepth * 0.5f, -HW - 28.f, CoreDepth, 64.f, zf - 6.f, 12.f, LandC, true);
 		}
 		for (int32 f = 0; f < NF - 1; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
-			for (int32 s = 0; s < SPF; ++s) { const float tt = zf + (s + 1) * Rise; Box(HallLen + (s + 0.5f) * RunD, sA, RunD + 5.f, LaneW, tt - 6.f, 12.f, StepC, true); }
-			Box(Foot - RunD * 0.6f, -(HW + SideW * 0.5f), RunD * 1.4f, SideW, zf + HalfRise - 8.f, 16.f, LandC, true);
-			for (int32 s = 0; s < SPF; ++s) { const float tt = zf + HalfRise + (s + 1) * Rise; Box(Foot - (s + 0.5f) * RunD, sB, RunD + 5.f, LaneW, tt - 6.f, 12.f, StepC, true); }
+			// Steek 1 (baan vooraan): van de gang (-HW) de schacht in (-Side), omhoog naar halve hoogte.
+			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + (k + 1) * Rise; Box(dFront, s0 - (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
+			// Bordes aan de achterwand, verbindt beide banen.
+			Box((dFront + dBack) * 0.5f, -Half + Margin, FMath::Abs(dBack - dFront) + LaneWd, RunS * 1.8f, zf + HalfRise - 8.f, 16.f, LandC, true);
+			// Steek 2 (baan achterin): terug naar de gang, omhoog naar de volgende verdieping.
+			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + HalfRise + (k + 1) * Rise; Box(dBack, -Half + Margin + (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
 		}
 	}
 
@@ -545,9 +552,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const FVector P = LP(LiftCabD, HW + CabSize * 0.5f);
 		const float YawE = FMath::RadiansToDegrees(FMath::Atan2(-N.Y, -N.X)); // schuifdeur richting de gang (-Side)
 		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		if (ACityElevator* Ele = W->SpawnActor<ACityElevator>(ACityElevator::StaticClass(), FTransform(FRotator(0.f, YawE, 0.f), FVector(P.X, P.Y, TopZ + 4.f)), SP))
+		if (ACityElevator* Ele = W->SpawnActor<ACityElevator>(ACityElevator::StaticClass(), FTransform(FRotator(0.f, YawE, 0.f), FVector(P.X, P.Y, TopZ)), SP))
 		{
-			Ele->Setup(TopZ + 4.f, FloorH, NF, CabSize, CabSize, Body * 0.5f);
+			Ele->Setup(TopZ, FloorH, NF, CabSize, CabSize, Body * 0.5f);
 		}
 	}
 
@@ -583,12 +590,16 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					LintelD(aCenter, sw, zS);
 					DoorD(aCenter, sw, zS);
 				}
-				SegD(cur, HallLen, sw, zS);
-				// Achterste deel: één doorgang naar de schacht (links = trap bij de start, rechts = lift bij de cabine).
-				const float openD = (side < 0) ? (HallLen + DoorGap * 0.7f) : LiftCabD;
-				SegD(HallLen, openD - DoorGap * 0.5f, sw, zS);
-				SegD(openD + DoorGap * 0.5f, Foot, sw, zS);
-				LintelD(openD, sw, zS);
+				SegD(cur, HallLen, sw, zS); // gang-zijwand tot de kern
+				if (side > 0)
+				{
+					// Lift-kant: dichte wand met een CABINE-BREDE doorgang bij de lift (geen smal gat meer).
+					const float LiftOpen = FMath::Min(SideW - 20.f, 300.f) + 30.f;
+					SegD(HallLen, LiftCabD - LiftOpen * 0.5f, sw, zS);
+					SegD(LiftCabD + LiftOpen * 0.5f, Foot, sw, zS);
+				}
+				// Trap-kant (side<0): GEEN achterwand -> de gang is open naar het trappenhuis, dus de trap
+				// blokkeert de deur niet en je loopt er recht in.
 				// Achterwand van de appartementen (sluit ze af van de schacht-zone).
 				SegS(side * HW, side * Half, HallLen, zS);
 				// Partities tussen de appartementen.
