@@ -584,8 +584,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		// het dak, en je kunt NIET van de trap naar de lift -> elk een eigen schacht.
 		AddBox(Cube, FVector(DivX, (HoleMinY + HoleMaxY) * 0.5f, TopZ + TotalH * 0.5f), FVector(WallT, HoleMaxY - HoleMinY, TotalH), IWall, true);
 		AddBox(Cube, FVector(HoleMaxX, (HoleMinY + HoleMaxY) * 0.5f, TopZ + TotalH * 0.5f), FVector(WallT, HoleMaxY - HoleMinY, TotalH), IWall, true);
-		// Achterwand van het liftgangetje (scheidt het gangetje van de cabine-zone), volle hoogte.
-		AddBox(Cube, FVector(LiftCX, CabFrontY, TopZ + TotalH * 0.5f), FVector(HoleMaxX - DivX, WallT, TotalH), IWall, true);
+		// (Geen wand tussen gangetje en cabine: de schuifdeur van de cabine is de afsluiting, anders loop je dood.)
 
 		auto WallSeg = [&](float X0, float Y0, float X1, float Y1, float zS, const FLinearColor& Col)
 		{
