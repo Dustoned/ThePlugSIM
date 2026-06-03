@@ -45,17 +45,27 @@ ACeilingLamp::ACeilingLamp()
 		if (M) { M->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.f, 0.85f, 0.5f)); }
 	}
 
-	// Warm omni-licht (verlicht de kamer rondom, ongeacht of 'ie aan plafond of muur hangt).
+	// Warm omni-licht, een stuk ONDER het kapje zodat het de kamer in schijnt i.p.v. tegen het plafond.
 	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
 	Light->SetupAttachment(Root);
-	Light->SetRelativeLocation(FVector(0.f, 0.f, -10.f));
-	Light->SetIntensity(14000.f);
+	Light->SetRelativeLocation(FVector(0.f, 0.f, -45.f));
+	Light->SetIntensity(13000.f);
 	Light->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
-	Light->SetAttenuationRadius(1300.f);
+	Light->SetAttenuationRadius(1400.f);
 	Light->SetCastShadows(false);
 }
 
 void ACeilingLamp::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void ACeilingLamp::Interact_Implementation(APawn* InstigatorPawn)
+{
+	if (Light) { Light->SetVisibility(!Light->IsVisible()); } // licht aan/uit
+}
+
+FText ACeilingLamp::GetInteractionPrompt_Implementation() const
+{
+	return (Light && Light->IsVisible()) ? FText::FromString(TEXT("Turn light off")) : FText::FromString(TEXT("Turn light on"));
 }
