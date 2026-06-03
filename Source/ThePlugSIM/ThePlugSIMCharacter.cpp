@@ -10,6 +10,7 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
+#include "World/DayNightController.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Application/NavigationConfig.h"
 #include "GameFramework/PlayerController.h"
@@ -749,6 +750,18 @@ void AThePlugSIMCharacter::BeginPlay()
 		// Geen menu getoond (verse start / load / co-op client) -> meteen de gameplay-input-modus
 		// zetten zodat de muis gelockt is (anders kon je alleen met LMB rondkijken).
 		if (!bShownMenu) { Phone->RefreshInputMode(); }
+	}
+
+	// Dag/nacht-belichting + lantaarnpalen: één lokale controller per speler (cosmetisch, niet
+	// gerepliceerd - de klok zelf is al gerepliceerd). Niet dubbel spawnen.
+	if (IsLocallyControlled() && GetWorld())
+	{
+		bool bHasController = false;
+		for (TActorIterator<ADayNightController> It(GetWorld()); It; ++It) { bHasController = true; break; }
+		if (!bHasController)
+		{
+			GetWorld()->SpawnActor<ADayNightController>(ADayNightController::StaticClass(), FTransform::Identity);
+		}
 	}
 }
 
