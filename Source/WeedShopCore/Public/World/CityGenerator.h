@@ -26,9 +26,13 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	// Bouwt de hele stad (idempotent: bouwt maar 1x).
 	void BuildCity();
+
+	// Straatlantaarn (paal + kop + warm puntlicht) die 's avonds aan gaat.
+	void AddCityLamp(const FVector& BaseWorld);
 
 	// Eén blok-mesh toevoegen onder de root. SizeCm = volledige afmeting; CenterWorld = wereld-midden.
 	UStaticMeshComponent* AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld, const FVector& SizeCm,
@@ -64,4 +68,10 @@ protected:
 private:
 	bool bBuilt = false;
 	float GroundZ = 0.f;
+
+	// Straatlampen: lichten + gloeiende koppen, getoggeld op kloktijd.
+	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> LampLights;
+	UPROPERTY() TArray<TObjectPtr<class UMaterialInstanceDynamic>> LampHeadMats;
+	int32 bLampsOn = -1;
+	float LampTickAccum = 0.f;
 };

@@ -9,6 +9,8 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerStart.h"
 #include "World/StoreCounter.h"
+#include "Game/WeedShopGameState.h"
+#include "World/DayCycleComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
@@ -39,7 +41,7 @@ namespace
 
 ACityGenerator::ACityGenerator()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 }
@@ -48,6 +50,59 @@ void ACityGenerator::BeginPlay()
 {
 	Super::BeginPlay();
 	BuildCity();
+}
+
+void ACityGenerator::AddCityLamp(const FVector& BaseWorld)
+{
+	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (!Cyl) { return; }
+	const float PoleH = 470.f;
+	const FLinearColor Metal(0.07f, 0.08f, 0.10f);
+	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, 7.f), FVector(34.f, 34.f, 14.f), Metal, false); // voet
+	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, PoleH * 0.5f), FVector(11.f, 11.f, PoleH), Metal, false);                  // paal
+	// Lampkop (sphere) -> emissieve kleur als 'ie aan is.
+	if (Sphere)
+	{
+		UStaticMeshComponent* Head = AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 6.f), FVector(34.f, 34.f, 30.f), FLinearColor(0.2f, 0.2f, 0.22f), false);
+		if (Head)
+		{
+			if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Head->GetMaterial(0))) { LampHeadMats.Add(M); }
+		}
+	}
+	// Warm puntlicht net onder de kop (begint uit; tick zet 'm 's avonds aan).
+	UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
+	PL->SetupAttachment(Root);
+	PL->RegisterComponent();
+	PL->SetWorldLocation(BaseWorld + FVector(0.f, 0.f, PoleH - 8.f));
+	PL->SetMobility(EComponentMobility::Movable);
+	PL->SetAttenuationRadius(900.f);
+	PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
+	PL->SetIntensity(0.f);
+	PL->SetCastShadows(false);
+	LampLights.Add(PL);
+}
+
+void ACityGenerator::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (LampLights.Num() == 0) { return; }
+	LampTickAccum += DeltaSeconds;
+	if (LampTickAccum < 0.5f) { return; } // niet elke frame
+	LampTickAccum = 0.f;
+
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
+	if (!DC) { return; }
+	const float Hour = DC->GetClockHour();
+	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
+	if (WantOn == bLampsOn) { return; }
+	bLampsOn = WantOn;
+	for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 11000.f : 0.f); } }
+	for (UMaterialInstanceDynamic* M : LampHeadMats)
+	{
+		if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.86f, 0.5f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
+	}
 }
 
 UStaticMeshComponent* ACityGenerator::AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld,
@@ -177,6 +232,12 @@ void ACityGenerator::BuildCity()
 
 			const float TopZ = GroundZ + CurbHeight; // gebouw/winkel staat op de stoep
 
+			// Straatlantaarn op de stoephoek richting het midden (om de beurt -> niet te veel lichten).
+			if (((i + j) & 1) == 0)
+			{
+				AddCityLamp(FVector(CX, CY, TopZ) + FVector((i >= 0 ? -1.f : 1.f) * (BlockSize * 0.5f - 45.f), (j >= 0 ? -1.f : 1.f) * (BlockSize * 0.5f - 45.f), 0.f));
+			}
+
 			// Landmark-blokken: 4 winkels + gas station op de binnenring, appartementen op de hoeken.
 			// Deur wijst richting het midden (de straat). Voorkeur: X-as als beide assen meedoen.
 			int32 ddx = (i > 0) ? -1 : (i < 0 ? 1 : 0);
@@ -256,6 +317,9 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (!Cube) { return; }
 
+	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+
 	const float FloorH = 330.f;
 	const float FootMax = BlockSize - 2.f * SidewalkWidth;
 	const bool bAlongX = (Ddx != 0);          // straat-normaal langs X -> rij loopt langs Y, en omgekeerd
@@ -263,7 +327,11 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	const FVector Tt = bAlongX ? FVector(0.f, 1.f, 0.f) : FVector(1.f, 0.f, 0.f);              // langs de rij
 
 	const float RowLen = FootMax;
-	const float Depth = FootMax * 0.5f;
+	const float Depth = FootMax * 0.40f;        // ondieper -> ruimte voor een voortuin
+	const float YardDepth = FootMax - Depth;    // voortuin tussen gevel en stoep
+	// Schuif het bouwblok naar ACHTEREN (weg van de straat) zodat de voortuin vooraan ontstaat.
+	const FVector BC = FVector(CX, CY, 0.f) + N * (-(FootMax - Depth) * 0.5f);
+	const float BCX = BC.X, BCY = BC.Y;
 	const int32 Units = 3 + (int32)(Seed % 2u); // 3-4 huisjes
 	const float UnitLen = RowLen / Units;
 	const float WallH = 2.f * FloorH;           // gelijke goothoogte -> doorlopend dak
@@ -273,19 +341,26 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	const FLinearColor DoorC(0.12f, 0.10f, 0.09f);
 	const FLinearColor Roof(0.36f, 0.17f, 0.13f);
 	const FLinearColor Seam(0.10f, 0.09f, 0.08f);
+	const FLinearColor Grass(0.16f, 0.34f, 0.13f);
+	const FLinearColor Path(0.60f, 0.58f, 0.52f);
+	const FLinearColor Hedge(0.13f, 0.30f, 0.11f);
+
+	// Voortuin-gras over de hele lot-breedte, vóór de gevels.
+	const FVector YardC = FVector(CX, CY, TopZ + 3.f) + N * (Depth * 0.5f);
+	const FVector YardSize = bAlongX ? FVector(YardDepth, RowLen, 6.f) : FVector(RowLen, YardDepth, 6.f);
+	AddBox(Cube, YardC, YardSize, Grass, false);
 
 	for (int32 u = 0; u < Units; ++u)
 	{
 		const uint32 hu = CityHash((int32)Seed + u * 101 + 9, u * 53 + 17);
 		const float Along = -RowLen * 0.5f + (u + 0.5f) * UnitLen;
-		const float UX = CX + Tt.X * Along;
-		const float UY = CY + Tt.Y * Along;
+		const float UX = BCX + Tt.X * Along;
+		const float UY = BCY + Tt.Y * Along;
 		const FLinearColor Body = CityFacade(hu);
 
 		// Romp van dit huisje (deelt de zijmuren met de buren).
 		const FVector BodySize = bAlongX ? FVector(Depth, UnitLen, WallH) : FVector(UnitLen, Depth, WallH);
 		AddBox(Cube, FVector(UX, UY, TopZ + WallH * 0.5f), BodySize, Body, true);
-		// Plint.
 		const FVector PlintSize = bAlongX ? FVector(Depth + 6.f, UnitLen, FloorH) : FVector(UnitLen, Depth + 6.f, FloorH);
 		AddBox(Cube, FVector(UX, UY, TopZ + FloorH * 0.5f), PlintSize, Body * 0.55f, false);
 
@@ -294,7 +369,7 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 		const FVector DoorSize = bAlongX ? FVector(8.f, 95.f, 205.f) : FVector(95.f, 8.f, 205.f);
 		AddBox(Cube, DoorPos, DoorSize, DoorC, false);
 
-		// Ramen op de straatgevel, per verdieping (naast de deur op de begane grond).
+		// Ramen op de straatgevel.
 		for (int32 f = 0; f < 2; ++f)
 		{
 			const float Z = TopZ + f * FloorH + FloorH * 0.6f;
@@ -303,7 +378,6 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 			const FVector WinSize = bAlongX ? FVector(4.f, WinW, FloorH * 0.4f) : FVector(WinW, 4.f, FloorH * 0.4f);
 			if (f == 0)
 			{
-				// begane grond: 1 raam naast de deur
 				AddBox(Cube, FVector(UX, UY, Z) + N * (HalfD + 2.f) + Tt * SideOff, WinSize, Glass, false);
 			}
 			else
@@ -313,21 +387,60 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 			}
 		}
 
-		// Naad-richel tussen de huisjes (op de scheiding naar de volgende unit).
+		// Looppad van de deur naar de stoep door de voortuin.
+		const float PathLen = YardDepth + SidewalkWidth + 20.f;
+		const FVector PathC = FVector(CX, CY, TopZ + 4.f) + N * (Depth * 0.5f + SidewalkWidth * 0.5f) + Tt * Along;
+		const FVector PathSize = bAlongX ? FVector(PathLen, 90.f, 8.f) : FVector(90.f, PathLen, 8.f);
+		AddBox(Cube, PathC, PathSize, Path, false);
+
+		// Naad-richel tussen de huisjes.
 		if (u < Units - 1)
 		{
 			const float Edge = Along + UnitLen * 0.5f;
-			const FVector SeamPos = FVector(CX + Tt.X * Edge, CY + Tt.Y * Edge, TopZ + WallH * 0.5f);
+			const FVector SeamPos = FVector(BCX + Tt.X * Edge, BCY + Tt.Y * Edge, TopZ + WallH * 0.5f);
 			const FVector SeamSize = bAlongX ? FVector(Depth + 10.f, 6.f, WallH) : FVector(6.f, Depth + 10.f, WallH);
 			AddBox(Cube, SeamPos, SeamSize, Seam, false);
 		}
 	}
 
-	// Eén doorlopend zadeldak over de hele rij (nok langs de rij -> schuine kanten naar straat + achter).
-	const bool RidgeAlongX = !bAlongX; // rij loopt langs X als de straat-normaal langs Y is
-	const float RoofW = bAlongX ? (Depth + 30.f) : (RowLen + 20.f); // X-uitslag
-	const float RoofD = bAlongX ? (RowLen + 20.f) : (Depth + 30.f); // Y-uitslag
-	AddGableRoof(FVector(CX, CY, TopZ + WallH), RoofW, RoofD, Depth * 0.42f, RidgeAlongX, Roof);
+	// Lage heg langs de voortuin-rand, met een opening bij elk looppad.
+	{
+		const float HedgeH = 60.f;
+		const float FrontN = FootMax * 0.5f - 12.f; // net binnen de stoep
+		const float GapHalf = 60.f;
+		float Cursor = -RowLen * 0.5f;
+		auto AddHedge = [&](float A0, float A1)
+		{
+			if (A1 - A0 < 15.f) { return; }
+			const float Mid = (A0 + A1) * 0.5f;
+			const float Len = A1 - A0;
+			const FVector P = FVector(CX, CY, TopZ + HedgeH * 0.5f) + N * FrontN + Tt * Mid;
+			const FVector S = bAlongX ? FVector(22.f, Len, HedgeH) : FVector(Len, 22.f, HedgeH);
+			AddBox(Cube, P, S, Hedge, false);
+		};
+		for (int32 u = 0; u < Units; ++u)
+		{
+			const float G = -RowLen * 0.5f + (u + 0.5f) * UnitLen;
+			AddHedge(Cursor, G - GapHalf);
+			Cursor = G + GapHalf;
+		}
+		AddHedge(Cursor, RowLen * 0.5f);
+	}
+
+	// Een boompje in een hoek van de voortuin.
+	if (Cyl && Sphere)
+	{
+		const FVector TreeBase = FVector(CX, CY, TopZ) + N * (Depth * 0.5f + YardDepth * 0.45f) + Tt * (RowLen * 0.5f - 130.f);
+		AddBox(Cyl, TreeBase + FVector(0.f, 0.f, 95.f), FVector(26.f, 26.f, 190.f), FLinearColor(0.28f, 0.18f, 0.10f), false);
+		AddBox(Sphere, TreeBase + FVector(0.f, 0.f, 235.f), FVector(180.f, 180.f, 170.f), FLinearColor(0.16f, 0.36f, 0.14f), false);
+		AddBox(Sphere, TreeBase + FVector(40.f, 20.f, 300.f), FVector(130.f, 130.f, 120.f), FLinearColor(0.19f, 0.40f, 0.16f), false);
+	}
+
+	// Eén doorlopend zadeldak over de hele rij.
+	const bool RidgeAlongX = !bAlongX;
+	const float RoofW = bAlongX ? (Depth + 30.f) : (RowLen + 20.f);
+	const float RoofD = bAlongX ? (RowLen + 20.f) : (Depth + 30.f);
+	AddGableRoof(FVector(BCX, BCY, TopZ + WallH), RoofW, RoofD, Depth * 0.5f, RidgeAlongX, Roof);
 }
 
 void ACityGenerator::AddInteriorLight(const FVector& WorldLoc)
@@ -423,8 +536,21 @@ void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ
 		case EShopKind::GasStation: Name = TEXT("GAS STATION"); break;
 		default:                    Name = TEXT("APARTMENTS"); break;
 		}
+		// Neon: felle, oplichtende letters (TextRender is unlit -> gloeit) in de accentkleur.
+		const FLinearColor Neon = (Sign * 1.8f).GetClamped(0.f, 1.f);
 		const FVector TextPos = FVector(CX, CY, SignZ) + N * (Half + T + 10.f);
-		AddSignText(TextPos, DoorDirX, DoorDirY, Name, FLinearColor::White, 65.f);
+		AddSignText(TextPos, DoorDirX, DoorDirY, Name, Neon, 65.f);
+
+		// Gekleurd neonlicht dat het bord + de gevel laat gloeien.
+		UPointLightComponent* NeonPL = NewObject<UPointLightComponent>(this);
+		NeonPL->SetupAttachment(Root);
+		NeonPL->RegisterComponent();
+		NeonPL->SetWorldLocation(FVector(CX, CY, SignZ) + N * (Half + T + 35.f));
+		NeonPL->SetMobility(EComponentMobility::Movable);
+		NeonPL->SetAttenuationRadius(650.f);
+		NeonPL->SetIntensity(9000.f);
+		NeonPL->SetLightColor(Sign);
+		NeonPL->SetCastShadows(false);
 	}
 
 	// Binnenlicht.
