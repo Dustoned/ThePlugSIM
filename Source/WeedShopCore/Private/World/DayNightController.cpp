@@ -109,10 +109,8 @@ void ADayNightController::BeginPlay()
 		}
 	}
 
-	// Lantaarnpalen rond een referentiepunt (PlayerStart, anders deze actor).
-	FVector Center = GetActorLocation();
-	for (TActorIterator<APlayerStart> It(W); It; ++It) { Center = It->GetActorLocation(); break; }
-	BuildStreetLamps(Center);
+	// (Oude per-NPC lantaarnpalen verwijderd: de stad-straatlampen van de CityGenerator zijn nu de
+	// straatverlichting, en die worden door de phone-slider (LampIntensity) live geregeld.)
 
 	ReplaceIndoorLights();
 }

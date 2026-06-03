@@ -89,4 +89,5 @@ private:
 	UPROPERTY() TArray<TObjectPtr<class UMaterialInstanceDynamic>> LampHeadMats;
 	int32 bLampsOn = -1;
 	float LampTickAccum = 0.f;
+	float LastLampApplied = -1.f; // her-toepassen als de slider de intensiteit wijzigt
 };

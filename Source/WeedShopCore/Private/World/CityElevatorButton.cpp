@@ -50,7 +50,7 @@ void ACityElevatorButton::Setup(ACityElevator* InElevator, int32 InFloor, bool b
 		Label->SetHorizontalAlignment(EHTA_Center);
 		Label->SetVerticalAlignment(EVRTA_TextCenter);
 		Label->SetRelativeLocation(FVector(2.0f, 0.f, 0.f));
-		Label->SetRelativeRotation(FRotator(0.f, 90.f, 0.f)); // tekstvlak loodrecht op +X, leesbaar naar de speler
+		// Leesbare kant van een TextRender = local +X; de knop staat al met +X naar de speler.
 	}
 }
 

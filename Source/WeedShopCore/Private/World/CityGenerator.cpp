@@ -13,6 +13,7 @@
 #include "World/StoreCounter.h"
 #include "World/CityDoor.h"
 #include "World/CityElevator.h"
+#include "World/DayNightController.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/World.h"
@@ -112,7 +113,7 @@ void ACityGenerator::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	if (LampLights.Num() == 0) { return; }
 	LampTickAccum += DeltaSeconds;
-	if (LampTickAccum < 0.5f) { return; } // niet elke frame
+	if (LampTickAccum < 0.2f) { return; } // niet elke frame (maar wel vlot genoeg voor de live slider)
 	LampTickAccum = 0.f;
 
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
@@ -120,13 +121,26 @@ void ACityGenerator::Tick(float DeltaSeconds)
 	if (!DC) { return; }
 	const float Hour = DC->GetClockHour();
 	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
-	if (WantOn == bLampsOn) { return; }
+
+	// Intensiteit komt van de phone-slider (DayNightController.LampIntensity) -> live regelbaar.
+	float Intensity = 42000.f;
+	if (ADayNightController* DN = ADayNightController::GetLocal(GetWorld())) { Intensity = DN->LampIntensity; }
+	const float SpotI = (WantOn == 1) ? Intensity : 0.f;
+	const float GlowI = (WantOn == 1) ? Intensity * 0.062f : 0.f; // gloed schaalt mee met de spot
+
+	const bool bStateChanged = (WantOn != bLampsOn);
+	const bool bIntChanged = (WantOn == 1 && !FMath::IsNearlyEqual(SpotI, LastLampApplied, 1.f));
+	if (!bStateChanged && !bIntChanged) { return; }
 	bLampsOn = WantOn;
-	for (ULightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 42000.f : 0.f); } }
-	for (ULightComponent* PL : LampGlows)  { if (PL) { PL->SetIntensity(WantOn ? 2600.f : 0.f); } }
-	for (UMaterialInstanceDynamic* M : LampHeadMats)
+	LastLampApplied = SpotI;
+	for (ULightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(SpotI); } }
+	for (ULightComponent* PL : LampGlows)  { if (PL) { PL->SetIntensity(GlowI); } }
+	if (bStateChanged)
 	{
-		if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.86f, 0.5f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
+		for (UMaterialInstanceDynamic* M : LampHeadMats)
+		{
+			if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.86f, 0.5f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
+		}
 	}
 }
 
@@ -363,6 +377,8 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	const FVector YardSize = bAlongX ? FVector(YardDepth, RowLen, 6.f) : FVector(RowLen, YardDepth, 6.f);
 	AddBox(Cube, YardC, YardSize, Grass, false);
 
+	const int32 RowBase = 2 + (int32)(Seed % 60u) * 2; // even straatnummer; opvolgende huizen +2
+
 	for (int32 u = 0; u < Units; ++u)
 	{
 		const uint32 hu = CityHash((int32)Seed + u * 101 + 9, u * 53 + 17);
@@ -374,6 +390,12 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 		// Holle 2-verdiepingen-woning met echte ramen (voor/achtergevel), party-muren tot het dak,
 		// 2e vloer, rechte trap en werkende deur.
 		BuildHouseUnitInterior(UX, UY, Depth, UnitLen - 4.f, WallH, bAlongX, bAlongX ? Ddx : Ddy, TopZ, Body);
+
+		// Huisnummer boven de voordeur (Nederlandse stijl, opvolgende even nummers), kijkend naar de straat.
+		{
+			const FVector NumLoc = FVector(UX, UY, TopZ + 222.f) + N * (Depth * 0.5f + 8.f);
+			AddSignText(NumLoc, Ddx, Ddy, FString::FromInt(RowBase + 2 * u), FLinearColor(0.95f, 0.93f, 0.8f), 26.f);
+		}
 
 		// Looppad van de deur door de voortuin tot MIDDEN op de stoep (niet door tot in de straat).
 		const float PathBack = Depth * 0.5f - YardDepth * 0.5f;          // bij de voordeur
@@ -510,6 +532,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const int32 NApt = FMath::Max(2, (int32)(HallLen / 470.f));
 	const float AptLen = HallLen / NApt;
 	const float LiftCabD = HallLen + CoreDepth * 0.5f; // d-positie van de liftcabine + de doorgang ernaartoe
+	const int32 BaseNo = 2 + (int32)(CityHash((int32)(CX / 100.f), (int32)(CY / 100.f)) % 70u) * 2; // even gebouwnummer
+	int32 AptSeq = 0; // doorlopende appartement-nummering (BaseNo-1, BaseNo-2, ...)
 
 	// ---- Vloeren: middengang (volle diepte) + appartementen (zijkanten, tot de kern). Trap/lift achterin = gat. ----
 	for (int32 f = 1; f < NF; ++f)
@@ -597,6 +621,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					// Plafondlamp midden in elk appartement.
 					const FVector LAp = LP(aCenter, side * (HW + SideW * 0.5f));
 					AddInteriorLight(FVector(LAp.X, LAp.Y, zS + FloorH - 55.f));
+					// Huisnummer naast de appartementdeur (BaseNo-seq), kijkend de gang in.
+					++AptSeq;
+					const FVector DrXY = LP(aCenter, sw);
+					const FVector NumDir((float)(side * Ddy), (float)(-side * Ddx), 0.f);
+					const FVector NumLoc = FVector(DrXY.X, DrXY.Y, zS + DoorTopH + 16.f) + NumDir * (WallT * 0.5f + 3.f);
+					AddSignText(NumLoc, side * Ddy, -side * Ddx, FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq), FLinearColor(0.92f, 0.9f, 0.78f), 15.f);
 				}
 				SegD(cur, HallLen, sw, zS); // gang-zijwand tot de kern
 				if (side > 0)
@@ -650,17 +680,33 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		NeonPL->SetLightColor(Sign); NeonPL->SetCastShadows(false);
 	}
 
-	// Werkende voordeur.
+	// Werkende DUBBELE voordeur: twee losse helften die elk apart open/dicht gaan (apart interacten).
 	{
 		const FVector Tang(-N.Y, N.X, 0.f);
 		const FVector OpeningCenter = FVector(CX, CY, TopZ) + N * (Half - 2.f);
-		const FVector HingePos = OpeningCenter - Tang * (DoorW * 0.5f);
-		const float DoorYaw = FMath::RadiansToDegrees(FMath::Atan2(Tang.Y, Tang.X));
+		const float HalfW = DoorW * 0.5f;
+		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(Tang.Y, Tang.X));
+		const FLinearColor DoorCol(0.10f, 0.08f, 0.07f);
 		FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		if (ACityDoor* Door = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, DoorYaw, 0.f), HingePos), DSP))
+		// Linker helft: scharnier aan de linkerkant, paneel loopt naar het midden (+Tang).
+		const FVector HingeL = OpeningCenter - Tang * HalfW;
+		if (ACityDoor* DL = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), HingeL), DSP))
 		{
-			Door->Setup(DoorW - 6.f, DoorH - 6.f, FLinearColor(0.10f, 0.08f, 0.07f));
+			DL->Setup(HalfW - 4.f, DoorH - 6.f, DoorCol);
 		}
+		// Rechter helft: scharnier aan de rechterkant, 180 gedraaid zodat het paneel naar het midden (-Tang) loopt.
+		const FVector HingeR = OpeningCenter + Tang * HalfW;
+		if (ACityDoor* DR = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw + 180.f, 0.f), HingeR), DSP))
+		{
+			DR->Setup(HalfW - 4.f, DoorH - 6.f, DoorCol);
+		}
+	}
+
+	// Gebouwnummer naast de voordeur (Nederlandse stijl), kijkend naar de straat.
+	{
+		const FVector Tang(-N.Y, N.X, 0.f);
+		const FVector NumPos = FVector(CX, CY, TopZ + DoorH + 22.f) + N * (Half + T + 6.f) + Tang * (DoorW * 0.5f + 35.f);
+		AddSignText(NumPos, Ddx, Ddy, FString::FromInt(BaseNo), FLinearColor(0.95f, 0.93f, 0.8f), 34.f);
 	}
 }
 

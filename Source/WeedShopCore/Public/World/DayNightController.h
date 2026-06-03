@@ -36,7 +36,7 @@ public:
 	UPROPERTY() float SkyNight      = 0.85f;   // nacht: skylight-ambient
 	UPROPERTY() float SkyDay        = 1.0f;    // dag: skylight-ambient
 	UPROPERTY() float MoonPitch     = -52.f;   // nacht: hoek van de hoge maan (graden)
-	UPROPERTY() float LampIntensity = 28000.f; // straatlamp-intensiteit (lumens)
+	UPROPERTY() float LampIntensity = 42000.f; // straatlamp-intensiteit (lumens, stad-straatlampen)
 	UPROPERTY() float ExposureBias  = 9.f;     // vaste belichtingscompensatie (lager = donkerder)
 
 	// Schrijf de huidige waardes naar Saved/LightConfig.txt (+ log), zodat ze als defaults te bakken zijn.
