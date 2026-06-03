@@ -163,7 +163,7 @@ void ADayNightController::AddLamp(const FVector& BaseOnGround)
 		PL->RegisterComponent();
 		PL->SetWorldLocation(BaseOnGround + FVector(0.f, 0.f, PoleH - 10.f));
 		PL->SetMobility(EComponentMobility::Movable);
-		PL->SetAttenuationRadius(1500.f);
+		PL->SetAttenuationRadius(1850.f);
 		PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
 		PL->SetIntensity(0.f);
 		PL->SetCastShadows(false);
@@ -200,7 +200,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		if (DL)
 		{
 			// Nacht-ondergrens wat hoger zodat het buiten niet pikzwart is (maanlicht).
-			DL->SetIntensity(FMath::Lerp(0.18f, 7.f, DayF));
+			DL->SetIntensity(FMath::Lerp(0.25f, 7.f, DayF));
 			const FLinearColor Warm(1.f, 0.96f, 0.88f);
 			const FLinearColor NightBlue(0.4f, 0.48f, 0.78f);
 			DL->SetLightColor(FMath::Lerp(NightBlue, Warm, DayF));
@@ -210,7 +210,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 	// SkyLight ambient mee dimmen (nacht-vloer hoger, anders te donker buiten).
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.40f, 1.1f, DayF));
+		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.55f, 1.1f, DayF));
 	}
 
 	// Lantaarnpalen aan zodra het echt begint te schemeren (eerder dan voorheen).
@@ -218,7 +218,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 	if (WantOn != bLampsOn)
 	{
 		bLampsOn = WantOn;
-		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 14.f : 0.f); } }
+		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 24.f : 0.f); } }
 		for (UMaterialInstanceDynamic* M : LampHeadMats)
 		{
 			if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.85f, 0.45f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
