@@ -52,6 +52,10 @@ protected:
 	// Een 3D-tekstbord (winkelnaam) op wereldpositie, gericht langs (DirX,DirY).
 	void AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY, const FString& Text, const FLinearColor& Color, float Size);
 
+	// Een huisnummer-bordje (klein donker plaatje + oplichtend nummer) op wereldpositie, gericht langs
+	// (DirX,DirY). Zoals in NL: rechts naast de deur op ~ooghoogte.
+	void AddDoorNumber(const FVector& PlateCenter, int32 DirX, int32 DirY, const FString& Text, float Size);
+
 	// Een inloopbaar gebouw: holle ruimte met deur-opening in de wand richting (DoorDirX,DoorDirY),
 	// vloer, plafond, gekleurde gevel + bord, en (voor winkels) een AStoreCounter binnenin.
 	void BuildEnterableBuilding(const FVector& CenterXY, float BaseZ, float Foot, float Height,

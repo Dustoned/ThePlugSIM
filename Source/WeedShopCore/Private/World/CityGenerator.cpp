@@ -207,6 +207,19 @@ void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY
 	T->SetCastShadow(false);
 }
 
+void ACityGenerator::AddDoorNumber(const FVector& PlateCenter, int32 DirX, int32 DirY, const FString& Text, float Size)
+{
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	const FVector Out((float)DirX, (float)DirY, 0.f);
+	const bool OutX = (DirX != 0);
+	const float PlateW = Size * (Text.Len() <= 2 ? 1.7f : 2.6f);
+	const float PlateH = Size * 1.6f;
+	const FVector PlateSize = OutX ? FVector(3.f, PlateW, PlateH) : FVector(PlateW, 3.f, PlateH);
+	if (Cube) { AddBox(Cube, PlateCenter + Out * 1.5f, PlateSize, FLinearColor(0.03f, 0.03f, 0.04f), false); }
+	// Oplichtend nummer (TextRender is unlit -> gloeit, ook 's nachts leesbaar).
+	AddSignText(PlateCenter + Out * 4.f, DirX, DirY, Text, FLinearColor(1.f, 0.95f, 0.7f), Size);
+}
+
 void ACityGenerator::BuildCity()
 {
 	if (bBuilt) { return; }
@@ -391,10 +404,11 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 		// 2e vloer, rechte trap en werkende deur.
 		BuildHouseUnitInterior(UX, UY, Depth, UnitLen - 4.f, WallH, bAlongX, bAlongX ? Ddx : Ddy, TopZ, Body);
 
-		// Huisnummer boven de voordeur (Nederlandse stijl, opvolgende even nummers), kijkend naar de straat.
+		// Huisnummer op een bordje RECHTS naast de voordeur (NL-stijl), op ooghoogte, kijkend naar de straat.
 		{
-			const FVector NumLoc = FVector(UX, UY, TopZ + 222.f) + N * (Depth * 0.5f + 8.f);
-			AddSignText(NumLoc, Ddx, Ddy, FString::FromInt(RowBase + 2 * u), FLinearColor(0.95f, 0.93f, 0.8f), 26.f);
+			const FVector Door = FVector(UX, UY, TopZ) + N * (Depth * 0.5f);
+			const FVector Plate = FVector(Door.X, Door.Y, TopZ + 145.f) + N * 9.f + Tt * 62.f;
+			AddDoorNumber(Plate, Ddx, Ddy, FString::FromInt(RowBase + 2 * u), 18.f);
 		}
 
 		// Looppad van de deur door de voortuin tot MIDDEN op de stoep (niet door tot in de straat).
@@ -621,12 +635,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					// Plafondlamp midden in elk appartement.
 					const FVector LAp = LP(aCenter, side * (HW + SideW * 0.5f));
 					AddInteriorLight(FVector(LAp.X, LAp.Y, zS + FloorH - 55.f));
-					// Huisnummer naast de appartementdeur (BaseNo-seq), kijkend de gang in.
+					// Huisnummer-bordje RECHTS naast de appartementdeur (BaseNo-seq), op ooghoogte, kijkend de gang in.
 					++AptSeq;
-					const FVector DrXY = LP(aCenter, sw);
+					const FVector DrXY = LP(aCenter + DoorGap * 0.5f + 20.f, sw);
 					const FVector NumDir((float)(side * Ddy), (float)(-side * Ddx), 0.f);
-					const FVector NumLoc = FVector(DrXY.X, DrXY.Y, zS + DoorTopH + 16.f) + NumDir * (WallT * 0.5f + 3.f);
-					AddSignText(NumLoc, side * Ddy, -side * Ddx, FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq), FLinearColor(1.f, 0.95f, 0.7f), 22.f);
+					const FVector PlateLoc = FVector(DrXY.X, DrXY.Y, zS + 135.f) + NumDir * (WallT * 0.5f + 2.f);
+					AddDoorNumber(PlateLoc, side * Ddy, -side * Ddx, FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq), 15.f);
 				}
 				SegD(cur, HallLen, sw, zS); // gang-zijwand tot de kern
 				if (side > 0)
@@ -702,11 +716,11 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		}
 	}
 
-	// Gebouwnummer naast de voordeur (Nederlandse stijl), kijkend naar de straat.
+	// Gebouwnummer op een bordje RECHTS naast de voordeur (NL-stijl), op ooghoogte, kijkend naar de straat.
 	{
 		const FVector Tang(-N.Y, N.X, 0.f);
-		const FVector NumPos = FVector(CX, CY, TopZ + DoorH + 22.f) + N * (Half + T + 6.f) + Tang * (DoorW * 0.5f + 35.f);
-		AddSignText(NumPos, Ddx, Ddy, FString::FromInt(BaseNo), FLinearColor(0.95f, 0.93f, 0.8f), 34.f);
+		const FVector Plate = FVector(CX, CY, TopZ + 150.f) + N * (Half + T + 5.f) + Tang * (DoorW * 0.5f + 32.f);
+		AddDoorNumber(Plate, Ddx, Ddy, FString::FromInt(BaseNo), 26.f);
 	}
 }
 
