@@ -307,13 +307,15 @@ void ACityGenerator::BuildCity()
 			int32 ddy = (j > 0) ? -1 : (j < 0 ? 1 : 0);
 			if (ddx != 0) { ddy = 0; }
 
+			// Layout: gas in het midden (naast het plein); grow/furniture/supplies VERSPREID over de map
+			// (drie verschillende kwadranten, ver uit elkaar). De binnenring eromheen wordt woonbuurt.
+			const int32 S = FMath::Max(2, R - 1); // spreid-afstand voor de winkels
 			EShopKind Kind = EShopKind::Apartment;
 			bool bLandmark = false;
-			if (i == 1 && j == 0)       { Kind = EShopKind::Grow;       bLandmark = true; }
-			else if (i == -1 && j == 0) { Kind = EShopKind::Furniture;  bLandmark = true; }
-			else if (i == 0 && j == 1)  { Kind = EShopKind::Supplies;   bLandmark = true; }
-			else if (i == 0 && j == -1) { Kind = EShopKind::GasStation; bLandmark = true; }
-			else if (FMath::Abs(i) == 1 && FMath::Abs(j) == 1) { Kind = EShopKind::Apartment; bLandmark = true; }
+			if (i == 0 && j == -1)       { Kind = EShopKind::GasStation; bLandmark = true; } // midden
+			else if (i == S && j == S)   { Kind = EShopKind::Grow;       bLandmark = true; } // noordoost
+			else if (i == -S && j == S)  { Kind = EShopKind::Furniture;  bLandmark = true; } // noordwest
+			else if (i == S && j == -S)  { Kind = EShopKind::Supplies;   bLandmark = true; } // zuidoost
 
 			if (bLandmark)
 			{
@@ -342,6 +344,13 @@ void ACityGenerator::BuildCity()
 
 			// Generiek blok: meestal een RIJ huisjes (rijtjeshuizen), soms een hoge flat.
 			const uint32 H = CityHash(i, j);
+
+			// Het midden is een woonbuurt: de ring direct rond het plein is altijd rijtjeshuizen.
+			if (FMath::Max(FMath::Abs(i), FMath::Abs(j)) == 1)
+			{
+				BuildRowHouses(CX, CY, TopZ, ddx, ddy, H);
+				continue;
+			}
 
 			if ((H % 4u) != 0u) // ~3/4 -> rijtjeshuizen die het hele lot vullen
 			{
