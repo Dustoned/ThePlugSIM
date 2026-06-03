@@ -351,8 +351,13 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 			const FKey KInv = CS->GetKey(TEXT("Inventory"), bAlt);
 			if (KInv.IsValid()) { Input->BindKey(KInv, IE_Pressed, Ph, &UPhoneClientComponent::ToggleInventory); }
 		}
+		// Interact-toets = zelfde gedrag als de linkermuisknop (interact/gebruik/plaatsen/joint-geven).
 		const FKey KInteract = CS->GetKey(TEXT("Interact"), bAlt);
-		if (KInteract.IsValid()) { Input->BindKey(KInteract, IE_Pressed, this, &AThePlugSIMCharacter::OnInteractKey); }
+		if (KInteract.IsValid())
+		{
+			Input->BindKey(KInteract, IE_Pressed,  this, &AThePlugSIMCharacter::OnPrimaryClick);
+			Input->BindKey(KInteract, IE_Released, this, &AThePlugSIMCharacter::OnPrimaryReleased);
+		}
 		const FKey KLoad = CS->GetKey(TEXT("RollLoad"), bAlt);
 		if (KLoad.IsValid()) { Input->BindKey(KLoad, IE_Pressed, this, &AThePlugSIMCharacter::OnLoadKey); }
 		if (B)
