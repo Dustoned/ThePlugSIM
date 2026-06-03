@@ -15,6 +15,7 @@ class ASkyLight;
 class UPointLightComponent;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
+class APostProcessVolume;
 
 UCLASS()
 class WEEDSHOPCORE_API ADayNightController : public AActor
@@ -24,6 +25,22 @@ class WEEDSHOPCORE_API ADayNightController : public AActor
 public:
 	ADayNightController();
 	virtual void Tick(float DeltaSeconds) override;
+
+	// De lokale controller (lokaal/cosmetisch gespawnd) -> bereikbaar vanuit de phone-UI om de
+	// belichting live te tunen zonder restart.
+	static ADayNightController* GetLocal(UWorld* W);
+
+	// Live-instelbare belichting (sliders in de phone Settings/Test). Defaults = de "huidige" look.
+	UPROPERTY() float MoonIntensity = 0.65f;   // nacht: zon-/maanlicht-intensiteit
+	UPROPERTY() float SunIntensity  = 6.5f;    // dag: zonlicht-intensiteit
+	UPROPERTY() float SkyNight      = 0.85f;   // nacht: skylight-ambient
+	UPROPERTY() float SkyDay        = 1.0f;    // dag: skylight-ambient
+	UPROPERTY() float MoonPitch     = -52.f;   // nacht: hoek van de hoge maan (graden)
+	UPROPERTY() float LampIntensity = 28000.f; // straatlamp-intensiteit (lumens)
+	UPROPERTY() float ExposureBias  = 9.f;     // vaste belichtingscompensatie (lager = donkerder)
+
+	// Schrijf de huidige waardes naar Saved/LightConfig.txt (+ log), zodat ze als defaults te bakken zijn.
+	void SaveLightConfig() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -42,6 +59,10 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UPointLightComponent>> LampLights;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> LampHeads;
 	UPROPERTY() TArray<TObjectPtr<UMaterialInstanceDynamic>> LampHeadMats;
+	TWeakObjectPtr<APostProcessVolume> PPV; // voor live exposure-tuning
 
-	int32 bLampsOn = -1; // -1 = nog niet gezet
+	int32 bLampsOn = -1;        // -1 = nog niet gezet
+	float LastLampApplied = -1.f; // her-toepassen als de slider de intensiteit wijzigt
+
+	static TWeakObjectPtr<ADayNightController> LocalInstance;
 };

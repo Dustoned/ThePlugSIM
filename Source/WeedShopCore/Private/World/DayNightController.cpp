@@ -21,12 +21,33 @@
 #include "World/CeilingLamp.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+
+TWeakObjectPtr<ADayNightController> ADayNightController::LocalInstance;
 
 ADayNightController::ADayNightController()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
+}
+
+ADayNightController* ADayNightController::GetLocal(UWorld* W)
+{
+	if (LocalInstance.IsValid()) { return LocalInstance.Get(); }
+	if (W) { for (TActorIterator<ADayNightController> It(W); It; ++It) { LocalInstance = *It; return *It; } }
+	return nullptr;
+}
+
+void ADayNightController::SaveLightConfig() const
+{
+	const FString Cfg = FString::Printf(
+		TEXT("MoonIntensity=%.3f\nSunIntensity=%.3f\nSkyNight=%.3f\nSkyDay=%.3f\nMoonPitch=%.1f\nLampIntensity=%.0f\nExposureBias=%.2f\n"),
+		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias);
+	const FString Path = FPaths::ProjectSavedDir() / TEXT("LightConfig.txt");
+	FFileHelper::SaveStringToFile(Cfg, *Path);
+	UE_LOG(LogTemp, Warning, TEXT("[LightConfig] saved to %s\n%s"), *Path, *Cfg);
 }
 
 const UDayCycleComponent* ADayNightController::GetDayCycle() const
@@ -41,6 +62,8 @@ void ADayNightController::BeginPlay()
 
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+
+	LocalInstance = this; // bereikbaar voor de phone-UI (live tunen)
 
 	// Bestaande zon (directional light) zoeken; anders zelf een Movable aanmaken.
 	for (TActorIterator<ADirectionalLight> It(W); It; ++It) { Sun = *It; break; }
@@ -81,7 +104,8 @@ void ADayNightController::BeginPlay()
 			S.bOverride_AutoExposureMethod = true;
 			S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
 			S.bOverride_AutoExposureBias = true;
-			S.AutoExposureBias = 9.f; // vaste belichtingscompensatie (lager = donkerder)
+			S.AutoExposureBias = ExposureBias; // vaste belichtingscompensatie (lager = donkerder)
+			PPV = PP;
 		}
 	}
 
@@ -274,14 +298,14 @@ void ADayNightController::Tick(float DeltaSeconds)
 	// stad navigeerbaar blijft i.p.v. pikzwart tussen de lampen.
 	if (Sun.IsValid() && Sun->GetLightComponent())
 	{
-		const float Pitch = (DayF > 0.08f) ? (90.f - Hour * 15.f) : -52.f; // dag-boog of hoge maan
+		const float Pitch = (DayF > 0.08f) ? (90.f - Hour * 15.f) : MoonPitch; // dag-boog of hoge maan
 		Sun->SetActorRotation(FRotator(Pitch, 35.f, 0.f));
 
 		UDirectionalLightComponent* DL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
 		if (DL)
 		{
-			// 's Nachts duidelijk maanlicht (navigeerbaar), overdag fel zonlicht.
-			DL->SetIntensity(FMath::Lerp(0.65f, 6.5f, DayF));
+			// 's Nachts maanlicht (navigeerbaar), overdag fel zonlicht — beide live instelbaar.
+			DL->SetIntensity(FMath::Lerp(MoonIntensity, SunIntensity, DayF));
 			const FLinearColor Warm(1.f, 0.96f, 0.88f);
 			const FLinearColor NightBlue(0.55f, 0.62f, 0.85f);
 			DL->SetLightColor(FMath::Lerp(NightBlue, Warm, DayF));
@@ -291,18 +315,31 @@ void ADayNightController::Tick(float DeltaSeconds)
 	// SkyLight-ambient: 's nachts iets opgekrikt zodat tussen de lampen niet alles wegvalt in zwart.
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.85f, 1.0f, DayF));
+		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(SkyNight, SkyDay, DayF));
+	}
+
+	// Live exposure-tuning.
+	if (PPV.IsValid())
+	{
+		PPV->Settings.AutoExposureBias = ExposureBias;
 	}
 
 	// Straatlampen op kloktijd: 's avonds aan (vanaf 19u), 's ochtends uit rond 8u.
 	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
-	if (WantOn != bLampsOn)
+	const bool bStateChanged = (WantOn != bLampsOn);
+	const bool bIntChanged = (WantOn == 1 && !FMath::IsNearlyEqual(LampIntensity, LastLampApplied, 1.f));
+	if (bStateChanged || bIntChanged)
 	{
 		bLampsOn = WantOn;
-		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 28000.f : 0.f); } }
-		for (UMaterialInstanceDynamic* M : LampHeadMats)
+		const float I = (WantOn == 1) ? LampIntensity : 0.f;
+		for (UPointLightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(I); } }
+		LastLampApplied = LampIntensity;
+		if (bStateChanged)
 		{
-			if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.85f, 0.45f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
+			for (UMaterialInstanceDynamic* M : LampHeadMats)
+			{
+				if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.85f, 0.45f) : FLinearColor(0.2f, 0.2f, 0.22f)); }
+			}
 		}
 	}
 }

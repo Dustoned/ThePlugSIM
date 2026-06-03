@@ -37,6 +37,8 @@
 #include "Components/ButtonSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/ProgressBar.h"
+#include "Components/Slider.h"
+#include "World/DayNightController.h"
 #include "Styling/SlateTypes.h"
 #include "Styling/CoreStyle.h"
 #include "UI/WeedUiStyle.h"
@@ -233,7 +235,32 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } }, 13);
 		Btns->AddChildToHorizontalBox(DayB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		Btns->AddChildToHorizontalBox(NightB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		BodyRow(Btns, FMargin(0.f, 0.f, 0.f, 0.f));
+		BodyRow(Btns, FMargin(0.f, 0.f, 0.f, 8.f));
+
+		// --- Live light-tuning (stuurt de lokale DayNightController direct aan; geen restart nodig) ---
+		LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
+		BodyRow(MakeText(TEXT("Lighting (live)"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+		ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
+		const float Moon = DN ? DN->MoonIntensity : 0.65f;
+		const float Sun  = DN ? DN->SunIntensity  : 6.5f;
+		const float SkN  = DN ? DN->SkyNight       : 0.85f;
+		const float SkD  = DN ? DN->SkyDay         : 1.0f;
+		const float Pit  = DN ? DN->MoonPitch      : -52.f;
+		const float Lmp  = DN ? DN->LampIntensity  : 28000.f;
+		const float Exp  = DN ? DN->ExposureBias   : 9.f;
+		// Norm = (waarde - min) / (max - min) per regelaar.
+		AddLightSlider(TEXT("Moon (night)"),  Moon / 3.f,            LMoon,  LMoonV);
+		AddLightSlider(TEXT("Sun (day)"),     Sun / 12.f,            LSun,   LSunV);
+		AddLightSlider(TEXT("Sky night"),     SkN / 2.f,             LSkyN,  LSkyNV);
+		AddLightSlider(TEXT("Sky day"),       SkD / 2.f,             LSkyD,  LSkyDV);
+		AddLightSlider(TEXT("Moon angle"),    (Pit + 90.f) / 90.f,   LPitch, LPitchV);
+		AddLightSlider(TEXT("Street lamps"),  Lmp / 80000.f,         LLamp,  LLampV);
+		AddLightSlider(TEXT("Exposure"),      Exp / 16.f,            LExp,   LExpV);
+		ApplyLightSliders(); // labels meteen vullen met de echte waardes
+
+		UWeedActionButton* SaveB = MakeActionBtn(TEXT("Save light config"), FLinearColor(0.22f, 0.5f, 0.32f),
+			[this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SaveLightConfig(); } }, 12);
+		BodyRow(SaveB, FMargin(0.f, 8.f, 0.f, 0.f));
 	}
 	else // Status
 	{
@@ -257,6 +284,51 @@ void UPhoneWidget::FillSettingsBody()
 			BodyRow(HeatBar, FMargin(0.f, 0.f, 0.f, 0.f));
 		}
 	}
+}
+
+USlider* UPhoneWidget::AddLightSlider(const FString& Label, float Norm, TObjectPtr<USlider>& OutS, TObjectPtr<UTextBlock>& OutV)
+{
+	USlider* Slider = WidgetTree->ConstructWidget<USlider>();
+	Slider->SetMinValue(0.f); Slider->SetMaxValue(1.f);
+	Slider->SetValue(FMath::Clamp(Norm, 0.f, 1.f));
+	Slider->SetSliderBarColor(FLinearColor(0.18f, 0.2f, 0.27f));
+	Slider->SetSliderHandleColor(FLinearColor(0.55f, 0.8f, 1.f));
+	OutS = Slider;
+
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(MakeText(Label, 12, FLinearColor(0.82f, 0.86f, 0.95f)));
+	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	USizeBox* SSz = WidgetTree->ConstructWidget<USizeBox>();
+	SSz->SetWidthOverride(150.f); SSz->SetHeightOverride(18.f); SSz->SetContent(Slider);
+	Row->AddChildToHorizontalBox(SSz);
+	OutV = MakeText(TEXT(""), 12, FLinearColor::White, true);
+	USizeBox* VSz = WidgetTree->ConstructWidget<USizeBox>();
+	VSz->SetWidthOverride(56.f); VSz->SetContent(OutV);
+	Row->AddChildToHorizontalBox(VSz);
+
+	if (SettingsBody) { SettingsBody->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f)); }
+	return Slider;
+}
+
+void UPhoneWidget::ApplyLightSliders()
+{
+	ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
+	if (!DN || !LMoon) { return; }
+	DN->MoonIntensity = LMoon->GetValue()  * 3.f;
+	DN->SunIntensity  = LSun  ? LSun->GetValue()  * 12.f    : DN->SunIntensity;
+	DN->SkyNight      = LSkyN ? LSkyN->GetValue() * 2.f     : DN->SkyNight;
+	DN->SkyDay        = LSkyD ? LSkyD->GetValue() * 2.f     : DN->SkyDay;
+	DN->MoonPitch     = LPitch? LPitch->GetValue() * 90.f - 90.f : DN->MoonPitch;
+	DN->LampIntensity = LLamp ? LLamp->GetValue() * 80000.f : DN->LampIntensity;
+	DN->ExposureBias  = LExp  ? LExp->GetValue()  * 16.f    : DN->ExposureBias;
+
+	if (LMoonV)  { LMoonV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->MoonIntensity))); }
+	if (LSunV)   { LSunV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SunIntensity))); }
+	if (LSkyNV)  { LSkyNV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SkyNight))); }
+	if (LSkyDV)  { LSkyDV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SkyDay))); }
+	if (LPitchV) { LPitchV->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), DN->MoonPitch))); }
+	if (LLampV)  { LLampV->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), DN->LampIntensity))); }
+	if (LExpV)   { LExpV->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), DN->ExposureBias))); }
 }
 
 UTextBlock* UPhoneWidget::MakeText(const FString& Txt, int32 Size, const FLinearColor& Col, bool bCenter)
@@ -1405,6 +1477,12 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		bLastHome = bHome; bLastApp = App; bContentDirty = false;
 		RefreshContent();
+	}
+
+	// Settings/Test: light-sliders live toepassen terwijl je sleept (geen restart nodig).
+	if (!bHome && App == 4 && SettingsCat == 1 && LMoon)
+	{
+		ApplyLightSliders();
 	}
 
 	// Packages-app open: bij een nieuwe/gewijzigde bestelling de lijst herbouwen, anders

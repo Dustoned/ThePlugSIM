@@ -64,6 +64,24 @@ protected:
 	void FillSettingsBody();          // vult alleen de body (geen flash bij tab-wissel/rebind)
 	void RefreshSettingsTabs();       // herkleurt de categorie-knoppen
 
+	// --- Live light-tuning sliders (Settings/Test): sturen de lokale DayNightController direct aan ---
+	UPROPERTY() TObjectPtr<class USlider> LMoon;
+	UPROPERTY() TObjectPtr<class USlider> LSun;
+	UPROPERTY() TObjectPtr<class USlider> LSkyN;
+	UPROPERTY() TObjectPtr<class USlider> LSkyD;
+	UPROPERTY() TObjectPtr<class USlider> LPitch;
+	UPROPERTY() TObjectPtr<class USlider> LLamp;
+	UPROPERTY() TObjectPtr<class USlider> LExp;
+	UPROPERTY() TObjectPtr<UTextBlock> LMoonV;
+	UPROPERTY() TObjectPtr<UTextBlock> LSunV;
+	UPROPERTY() TObjectPtr<UTextBlock> LSkyNV;
+	UPROPERTY() TObjectPtr<UTextBlock> LSkyDV;
+	UPROPERTY() TObjectPtr<UTextBlock> LPitchV;
+	UPROPERTY() TObjectPtr<UTextBlock> LLampV;
+	UPROPERTY() TObjectPtr<UTextBlock> LExpV;
+	class USlider* AddLightSlider(const FString& Label, float Norm, TObjectPtr<class USlider>& OutS, TObjectPtr<UTextBlock>& OutV);
+	void ApplyLightSliders(); // leest de sliders en zet de DayNightController-waardes (live, elke tick)
+
 	TWeakObjectPtr<UPhoneClientComponent> Phone;
 
 	// Opgebouwde onderdelen.
