@@ -492,20 +492,21 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const float StairRunY = 640.f;          // looplengte van een halve steek (langs Y) -> ruime trap
 	const float CoreW = StairXW + Gap + ElevW;
 	const float CoreD = FMath::Max(StairRunY, ElevD);
-	const float HoleMinX = CX - Half + 25.f, HoleMinY = CY - Half + 25.f;
+	const float HoleMinX = CX - Half, HoleMinY = CY - Half; // schachten FLUSH tegen de buitenmuren (geen kier)
 	const float HoleMaxX = HoleMinX + CoreW, HoleMaxY = HoleMinY + CoreD;
 	const float DivX = HoleMinX + StairXW + Gap * 0.5f; // scheidingswand: trap (links) | lift (rechts)
 	const float LiftCX = (DivX + HoleMaxX) * 0.5f;      // midden van de liftschacht
 	const float CabFrontY = HoleMinY + ElevD;           // voorkant van de cabine = achterkant van het liftgangetje
+	const float OV = T;                                 // overlap zodat vloeren tegen de gevels aansluiten
 
 	// Verdiepingsvloeren f=1..NF-1 met een gat over de schachten (trap + liftcabine); + binnenlicht.
 	for (int32 f = 1; f < NF; ++f)
 	{
 		const float z = TopZ + f * FloorH;
 		const float frontYs = (CY + Half) - HoleMaxY;
-		if (frontYs > 1.f) { AddBox(Cube, FVector(CX, (HoleMaxY + CY + Half) * 0.5f, z), FVector(Foot, frontYs, 12.f), FloorC, true); }
+		if (frontYs > 1.f) { AddBox(Cube, FVector(CX, (HoleMaxY + CY + Half) * 0.5f, z), FVector(Foot + 2.f * OV, frontYs + OV, 12.f), FloorC, true); }
 		const float sideXs = (CX + Half) - HoleMaxX;
-		if (sideXs > 1.f) { AddBox(Cube, FVector((HoleMaxX + CX + Half) * 0.5f, (CY - Half + HoleMaxY) * 0.5f, z), FVector(sideXs, HoleMaxY - (CY - Half), 12.f), FloorC, true); }
+		if (sideXs > 1.f) { AddBox(Cube, FVector((HoleMaxX + CX + Half) * 0.5f + OV * 0.5f, CY, z), FVector(sideXs + OV, Foot + 2.f * OV, 12.f), FloorC, true); }
 		// Liftgangetje: solide vloer vóór de cabine (de cabine-zone zelf blijft een gat).
 		if (HoleMaxY - CabFrontY > 1.f) { AddBox(Cube, FVector(LiftCX, (CabFrontY + HoleMaxY) * 0.5f, z), FVector(HoleMaxX - DivX, HoleMaxY - CabFrontY, 12.f), FloorC, true); }
 		AddInteriorLight(FVector(CX, CY, z - 55.f));
@@ -572,7 +573,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float StairDoorC = HoleMinX + StairXW * 0.5f; // opening trapschacht -> gang
 		const float CorrDoorC = LiftCX;                      // opening liftgangetje -> gang
 
-		const float ApLeft = CX - Half + WallT, ApRight = CX + Half - WallT;
+		const float ApLeft = CX - Half, ApRight = CX + Half; // tot de gevel -> binnenmuren sluiten aan
 		const float ApW = (ApRight - ApLeft) / 3.f;
 		const float Px1 = ApLeft + ApW, Px2 = ApLeft + 2.f * ApW;
 		const float Gc0 = ApLeft + ApW * 0.5f, Gc1 = ApLeft + ApW * 1.5f, Gc2 = ApLeft + ApW * 2.5f;
@@ -677,13 +678,19 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 
 void ACityGenerator::AddInteriorLight(const FVector& WorldLoc)
 {
+	// Echt plafondlampje (kapje + gloeiende bol) i.p.v. een licht-uit-het-niets.
+	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (Cone) { AddBox(Cone, WorldLoc + FVector(0.f, 0.f, 10.f), FVector(34.f, 34.f, 26.f), FLinearColor(0.07f, 0.07f, 0.09f), false, FRotator(180.f, 0.f, 0.f)); }
+	if (Sphere) { AddBox(Sphere, WorldLoc + FVector(0.f, 0.f, -6.f), FVector(15.f, 15.f, 15.f), FLinearColor(1.f, 0.9f, 0.6f), false); }
+
 	UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
 	PL->SetupAttachment(Root);
 	PL->RegisterComponent();
-	PL->SetWorldLocation(WorldLoc);
+	PL->SetWorldLocation(WorldLoc + FVector(0.f, 0.f, -28.f));
 	PL->SetMobility(EComponentMobility::Movable);
 	PL->SetAttenuationRadius(900.f);
-	PL->SetIntensity(7000.f);
+	PL->SetIntensity(6000.f);
 	PL->SetLightColor(FLinearColor(1.f, 0.92f, 0.78f));
 	PL->SetCastShadows(false);
 }
