@@ -58,15 +58,19 @@ void ACityGenerator::AddCityLamp(const FVector& BaseWorld)
 {
 	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
 	if (!Cyl) { return; }
 	const float PoleH = 470.f;
 	const FLinearColor Metal(0.07f, 0.08f, 0.10f);
-	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, 7.f), FVector(34.f, 34.f, 14.f), Metal, false); // voet
-	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, PoleH * 0.5f), FVector(11.f, 11.f, PoleH), Metal, false);                  // paal
-	// Lampkop (sphere) -> emissieve kleur als 'ie aan is.
+	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, 7.f), FVector(36.f, 36.f, 14.f), Metal, false);             // voet
+	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, PoleH * 0.5f), FVector(11.f, 11.f, PoleH), Metal, false);   // paal
+	// Lantaarn-kapje (kegel, punt omhoog) + dakje.
+	if (Cone) { AddBox(Cone, BaseWorld + FVector(0.f, 0.f, PoleH + 18.f), FVector(52.f, 52.f, 42.f), Metal, false, FRotator(180.f, 0.f, 0.f)); }
+	if (Sphere) { AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 42.f), FVector(14.f, 14.f, 12.f), Metal, false); }
+	// Gloeiende lampbol in het kapje (kleurt warmgeel als 'ie aan is).
 	if (Sphere)
 	{
-		UStaticMeshComponent* Head = AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 6.f), FVector(34.f, 34.f, 30.f), FLinearColor(0.2f, 0.2f, 0.22f), false);
+		UStaticMeshComponent* Head = AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 4.f), FVector(26.f, 26.f, 24.f), FLinearColor(0.2f, 0.2f, 0.22f), false);
 		if (Head)
 		{
 			if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Head->GetMaterial(0))) { LampHeadMats.Add(M); }
@@ -590,18 +594,18 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			// Steek 1 (baan A): van de voorkant naar achter, omhoog naar halve hoogte. Solide vanaf de vloer.
 			for (int32 s = 0; s < SPF; ++s)
 			{
-				const float h = (s + 1) * Rise;
+				const float TreadTop = zf + (s + 1) * Rise;
 				const float y = yFront - (s + 0.5f) * RunY;
-				AddBox(Cube, FVector(xA, y, zf + h * 0.5f), FVector(LaneW, RunY + 2.f, h), StepC, true);
+				AddBox(Cube, FVector(xA, y, TreadTop - 6.f), FVector(LaneW, RunY + 5.f, 12.f), StepC, true); // dunne trede
 			}
 			// Bordes achterin op halve hoogte (verbindt baan A en B).
 			AddBox(Cube, FVector(HoleMinX + StairXW * 0.5f, yBack + RunY * 0.6f, zf + HalfRise - 8.f), FVector(StairXW, RunY * 1.4f, 16.f), LandC, true);
 			// Steek 2 (baan B): van achter naar de voorkant, omhoog naar de volgende verdieping. Solide vanaf het bordes.
 			for (int32 s = 0; s < SPF; ++s)
 			{
-				const float h = (s + 1) * Rise;
+				const float TreadTop = zf + HalfRise + (s + 1) * Rise;
 				const float y = yBack + (s + 0.5f) * RunY;
-				AddBox(Cube, FVector(xB, y, zf + HalfRise + h * 0.5f), FVector(LaneW, RunY + 2.f, h), StepC, true);
+				AddBox(Cube, FVector(xB, y, TreadTop - 6.f), FVector(LaneW, RunY + 5.f, 12.f), StepC, true); // dunne trede
 			}
 		}
 	}
