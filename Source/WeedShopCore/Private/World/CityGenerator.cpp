@@ -541,11 +541,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		if (!(bGround && DoorSide == 1)) { AddBox(Cube, FVector(CX - Half - 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false); }
 	}
 
-	// Kern (trappenhuis + liftschacht) in de achter-linker hoek.
-	const float LaneW = 125.f;              // breedte van één trap-baan
+	// Kern (trappenhuis + liftschacht) in de achter-linker hoek. Groot gat: de trap loopt over de
+	// volle lengte (lange, ruime steken) met de lift ernaast.
+	const float LaneW = 150.f;              // breedte van één trap-baan
 	const float StairXW = 2.f * LaneW;      // twee banen naast elkaar (switchback)
-	const float Gap = 55.f, ElevW = 230.f, ElevD = 250.f;
-	const float StairRunY = 290.f;          // looplengte van een halve steek (langs Y)
+	const float Gap = 70.f, ElevW = 240.f, ElevD = 300.f;
+	const float StairRunY = 640.f;          // looplengte van een halve steek (langs Y) -> ruime trap
 	const float CoreW = StairXW + Gap + ElevW;
 	const float CoreD = FMath::Max(StairRunY, ElevD);
 	const float HoleMinX = CX - Half + 25.f, HoleMinY = CY - Half + 25.f;
@@ -568,7 +569,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	// Echt trappenhuis: switchback met SOLIDE treden + bordes. Begin en eind liggen allebei aan de
 	// voorkant (yFront), zodat je elke verdieping netjes op de vloer stapt (geen losse zwevende treden).
 	{
-		const int32 SPF = 8;                         // treden per halve steek
+		const int32 SPF = 12;                        // treden per halve steek (ruime, gentle trap)
 		const float HalfRise = FloorH * 0.5f;
 		const float Rise = HalfRise / SPF;           // ~20cm per trede
 		const float RunY = StairRunY / SPF;          // diepte per trede
