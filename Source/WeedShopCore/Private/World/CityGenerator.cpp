@@ -591,6 +591,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					cur = aCenter + DoorGap * 0.5f;
 					LintelD(aCenter, sw, zS);
 					DoorD(aCenter, sw, zS);
+					// Plafondlamp midden in elk appartement.
+					const FVector LAp = LP(aCenter, side * (HW + SideW * 0.5f));
+					AddInteriorLight(FVector(LAp.X, LAp.Y, zS + FloorH - 55.f));
 				}
 				SegD(cur, HallLen, sw, zS); // gang-zijwand tot de kern
 				if (side > 0)
