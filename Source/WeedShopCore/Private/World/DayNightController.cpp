@@ -94,16 +94,35 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 		if (!IsValid(Npc)) { continue; }
 		const FVector Loc = Npc->GetActorLocation();
 
-		FHitResult Ceiling;
 		FCollisionQueryParams Qc(FName(TEXT("LampCeiling")), false, this);
-		const bool bIndoors = W->LineTraceSingleByChannel(Ceiling, Loc + FVector(0.f, 0.f, 90.f), Loc + FVector(0.f, 0.f, 1300.f), ECC_WorldStatic, Qc);
+		FHitResult Ceiling;
+		const FVector Eye = Loc + FVector(0.f, 0.f, 90.f);
+		const bool bIndoors = W->LineTraceSingleByChannel(Ceiling, Eye, Loc + FVector(0.f, 0.f, 1300.f), ECC_WorldStatic, Qc);
 		if (bIndoors) { continue; } // NPC in het huis -> geen lantaarn
 
-		// Iets naast de NPC (niet er bovenop), naar de grond getraced.
-		const FVector Beside = Loc + FVector(200.f, 150.f, 0.f);
+		// Zoek de dichtstbijzijnde muur (= stoeprand) door horizontaal rond te tracen, en zet de paal
+		// net vóór die muur (op de stoep, niet midden op de weg).
+		bool bFound = false; float BestDist = 1e9f; FVector BestPoint; FVector BestDir;
+		const int32 Dirs = 8;
+		for (int32 d = 0; d < Dirs; ++d)
+		{
+			const float A = (2.f * PI * d) / Dirs;
+			const FVector Dir(FMath::Cos(A), FMath::Sin(A), 0.f);
+			FHitResult Wall;
+			FCollisionQueryParams Qw(FName(TEXT("LampWall")), false, this);
+			Qw.AddIgnoredActor(Npc);
+			if (W->LineTraceSingleByChannel(Wall, Eye, Eye + Dir * 1800.f, ECC_WorldStatic, Qw))
+			{
+				const float Dist = FVector::Dist(Eye, Wall.ImpactPoint);
+				if (Dist > 120.f && Dist < BestDist) { BestDist = Dist; BestPoint = Wall.ImpactPoint; BestDir = Dir; bFound = true; }
+			}
+		}
+
+		// Lamp-plek: ~110cm vóór de muur (terug richting de NPC); anders gewoon iets naast de NPC.
+		const FVector LampXY = bFound ? (BestPoint - BestDir * 110.f) : (Loc + FVector(200.f, 150.f, 0.f));
 		FHitResult Ground;
 		FCollisionQueryParams Qg(FName(TEXT("LampNpcGround")), false, this);
-		if (W->LineTraceSingleByChannel(Ground, Beside + FVector(0.f, 0.f, 2500.f), Beside - FVector(0.f, 0.f, 4000.f), ECC_WorldStatic, Qg))
+		if (W->LineTraceSingleByChannel(Ground, LampXY + FVector(0.f, 0.f, 2500.f), LampXY - FVector(0.f, 0.f, 4000.f), ECC_WorldStatic, Qg))
 		{
 			AddLamp(Ground.Location);
 		}
