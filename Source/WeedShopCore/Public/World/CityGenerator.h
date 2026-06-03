@@ -83,8 +83,9 @@ private:
 	bool bBuilt = false;
 	float GroundZ = 0.f;
 
-	// Straatlampen: lichten (spotlights naar onder) + gloeiende koppen, getoggeld op kloktijd.
+	// Straatlampen: spots (naar onder) + zachte gloed-puntlichten + gloeiende koppen, getoggeld op kloktijd.
 	UPROPERTY() TArray<TObjectPtr<class ULightComponent>> LampLights;
+	UPROPERTY() TArray<TObjectPtr<class ULightComponent>> LampGlows;
 	UPROPERTY() TArray<TObjectPtr<class UMaterialInstanceDynamic>> LampHeadMats;
 	int32 bLampsOn = -1;
 	float LampTickAccum = 0.f;
