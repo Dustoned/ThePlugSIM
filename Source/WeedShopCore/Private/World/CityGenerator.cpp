@@ -295,9 +295,6 @@ void ACityGenerator::BuildCity()
 
 			// Generiek blok: meestal een RIJ huisjes (rijtjeshuizen), soms een hoge flat.
 			const uint32 H = CityHash(i, j);
-			const float FloorH = 330.f;
-			const FLinearColor Glass(0.30f, 0.45f, 0.55f);
-			const FLinearColor DoorC(0.12f, 0.10f, 0.09f);
 
 			if ((H % 4u) != 0u) // ~3/4 -> rijtjeshuizen die het hele lot vullen
 			{
@@ -305,32 +302,11 @@ void ACityGenerator::BuildCity()
 				continue;
 			}
 
-			// Hoge flat (1/4 van de blokken): volle voetafdruk, plat dak.
+			// Hoge flat (1/4 van de blokken): nu een echte flat MET interieur (trap, lift, units),
+			// zonder neonbord -> de buitenkant blijft een gewone flat (doos + ramen + dakrand).
 			const FLinearColor Body = CityFacade(H);
-			const float Foot = BlockSize - 2.f * SidewalkWidth;
-			const float HalfF = Foot * 0.5f;
-			const int32 Floors = 4 + (int32)((H >> 2) % 5);
-			const float BH = Floors * FloorH;
-
-			AddBox(Cube, FVector(CX, CY, TopZ + BH * 0.5f), FVector(Foot, Foot, BH), Body, true);
-			AddBox(Cube, FVector(CX, CY, TopZ + FloorH * 0.5f), FVector(Foot + 8.f, Foot + 8.f, FloorH), Body * 0.5f, false);
-			{
-				const FVector Nd = (ddx != 0) ? FVector((float)ddx, 0.f, 0.f) : FVector(0.f, (float)ddy, 0.f);
-				const FVector DoorPos = FVector(CX, CY, TopZ + 105.f) + Nd * (HalfF + 5.f);
-				const FVector DoorSize = (ddx != 0) ? FVector(8.f, 95.f, 210.f) : FVector(95.f, 8.f, 210.f);
-				AddBox(Cube, DoorPos, DoorSize, DoorC, false);
-			}
-			for (int32 f = 1; f < Floors; ++f)
-			{
-				const float Z = TopZ + f * FloorH + FloorH * 0.5f;
-				const float WinW = Foot * 0.8f;
-				const float WinH = FloorH * 0.45f;
-				AddBox(Cube, FVector(CX, CY + HalfF + 2.f, Z), FVector(WinW, 4.f, WinH), Glass, false);
-				AddBox(Cube, FVector(CX, CY - HalfF - 2.f, Z), FVector(WinW, 4.f, WinH), Glass, false);
-				AddBox(Cube, FVector(CX + HalfF + 2.f, CY, Z), FVector(4.f, WinW, WinH), Glass, false);
-				AddBox(Cube, FVector(CX - HalfF - 2.f, CY, Z), FVector(4.f, WinW, WinH), Glass, false);
-			}
-			AddBox(Cube, FVector(CX, CY, TopZ + BH + 9.f), FVector(Foot + 14.f, Foot + 14.f, 18.f), Body * 0.6f, false);
+			const int32 Floors = 4 + (int32)((H >> 2) % 4);
+			BuildApartmentBlock(CX, CY, TopZ, ddx, ddy, Floors, Body, Body, /*bSign*/ false);
 		}
 	}
 }
@@ -361,7 +337,6 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	const float HalfD = Depth * 0.5f;
 
 	const FLinearColor Glass(0.30f, 0.45f, 0.55f);
-	const FLinearColor DoorC(0.12f, 0.10f, 0.09f);
 	const FLinearColor Roof(0.36f, 0.17f, 0.13f);
 	const FLinearColor Seam(0.10f, 0.09f, 0.08f);
 	const FLinearColor Grass(0.16f, 0.34f, 0.13f);
@@ -381,18 +356,8 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 		const float UY = BCY + Tt.Y * Along;
 		const FLinearColor Body = CityFacade(hu);
 
-		// Plint = begane grond (donker); romp = verdiepingen ERBOVEN. Zelfde footprint, los gestapeld
-		// (geen overlappende coplanaire vlakken -> geen z-fight/geflikker meer).
-		const float UpperH = WallH - FloorH;
-		const FVector PlintSize = bAlongX ? FVector(Depth, UnitLen, FloorH) : FVector(UnitLen, Depth, FloorH);
-		AddBox(Cube, FVector(UX, UY, TopZ + FloorH * 0.5f), PlintSize, Body * 0.55f, true);
-		const FVector BodySize = bAlongX ? FVector(Depth, UnitLen, UpperH) : FVector(UnitLen, Depth, UpperH);
-		AddBox(Cube, FVector(UX, UY, TopZ + FloorH + UpperH * 0.5f), BodySize, Body, true);
-
-		// Voordeur aan de straatkant (N).
-		const FVector DoorPos = FVector(UX, UY, TopZ + 105.f) + N * (HalfD + 5.f);
-		const FVector DoorSize = bAlongX ? FVector(8.f, 95.f, 205.f) : FVector(95.f, 8.f, 205.f);
-		AddBox(Cube, DoorPos, DoorSize, DoorC, false);
+		// Holle 2-verdiepingen-woning (muren + deuropening + 2e vloer + rechte trap + werkende deur).
+		BuildHouseUnitInterior(UX, UY, Depth, UnitLen - 4.f, WallH, bAlongX, bAlongX ? Ddx : Ddy, TopZ, Body);
 
 		// Ramen op de straatgevel.
 		for (int32 f = 0; f < 2; ++f)
@@ -494,7 +459,7 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	}
 }
 
-void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, int32 Floors, const FLinearColor& Body, const FLinearColor& Sign)
+void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, int32 Floors, const FLinearColor& Body, const FLinearColor& Sign, bool bSign)
 {
 	UWorld* W = GetWorld();
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -694,7 +659,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	// Plat dak + parapet.
 	AddBox(Cube, FVector(CX, CY, TopZ + TotalH + 10.f), FVector(Foot + 16.f, Foot + 16.f, 20.f), Body * 0.6f, false);
 
-	// Donker naambord + gloeiende neon-tekst + neonlicht.
+	// Donker naambord + gloeiende neon-tekst + neonlicht (alleen voor echte appartement-landmarks).
+	if (bSign)
 	{
 		const float SignZ = TopZ + DoorH + 55.f;
 		const float SignW = Foot * 0.9f;
@@ -737,6 +703,73 @@ void ACityGenerator::AddInteriorLight(const FVector& WorldLoc)
 	PL->SetIntensity(7000.f);
 	PL->SetLightColor(FLinearColor(1.f, 0.92f, 0.78f));
 	PL->SetCastShadows(false);
+}
+
+void ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L, float WallH, bool bAlongX, int32 Ndir, float TopZ, const FLinearColor& Body)
+{
+	UWorld* W = GetWorld();
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!W || !Cube) { return; }
+
+	const float FloorH = WallH * 0.5f;
+	const float T = 14.f;
+	const float HD = D * 0.5f, HL = L * 0.5f;
+	const float DoorW = 95.f, DoorH = 205.f;
+	const FLinearColor FloorC(0.32f, 0.30f, 0.27f);
+	const FLinearColor StepC = Body * 0.7f;
+	const FLinearColor DoorC(0.30f, 0.20f, 0.12f);
+
+	const FVector N = bAlongX ? FVector((float)Ndir, 0.f, 0.f) : FVector(0.f, (float)Ndir, 0.f); // naar de straat
+	const FVector Tt = bAlongX ? FVector(0.f, 1.f, 0.f) : FVector(1.f, 0.f, 0.f);                // langs de rij
+	const FVector Base(UX, UY, 0.f);
+
+	// Volle muur (langs Tt of langs N).
+	auto WallTt = [&](const FVector& c, float lenTt) { const float sx = bAlongX ? T : lenTt, sy = bAlongX ? lenTt : T; AddBox(Cube, FVector(c.X, c.Y, TopZ + WallH * 0.5f), FVector(sx, sy, WallH), Body, true); };
+	auto WallN  = [&](const FVector& c, float lenN)  { const float sx = bAlongX ? lenN : T, sy = bAlongX ? T : lenN; AddBox(Cube, FVector(c.X, c.Y, TopZ + WallH * 0.5f), FVector(sx, sy, WallH), Body, true); };
+
+	// Achterwand + 2 zijwanden (vol).
+	WallTt(Base - N * HD, L);
+	WallN(Base + Tt * HL, D);
+	WallN(Base - Tt * HL, D);
+	// Voorwand met deuropening (2 segmenten + latei).
+	const float Seg = (L - DoorW) * 0.5f, Off = (DoorW + Seg) * 0.5f;
+	WallTt(Base + N * HD + Tt * Off, Seg);
+	WallTt(Base + N * HD - Tt * Off, Seg);
+	{
+		const FVector LC = Base + N * HD;
+		const float lsx = bAlongX ? T : DoorW, lsy = bAlongX ? DoorW : T;
+		AddBox(Cube, FVector(LC.X, LC.Y, TopZ + (DoorH + WallH) * 0.5f), FVector(lsx, lsy, WallH - DoorH), Body, true);
+	}
+
+	// Trap (rechte steek) achterin langs Tt + 2e vloer met trapgat.
+	const int32 NSt = 9;
+	const float Rise = FloorH / NSt;
+	const float Run = 320.f;
+	const float StairLaneN = -HD + 60.f;   // tegen de achterwand
+	const float RunFit = FMath::Min(Run, L - 40.f);
+	const float StepRun = RunFit / NSt;
+	auto Slab = [&](const FVector& c, float lenN, float lenTt) { const float sx = bAlongX ? lenN : lenTt, sy = bAlongX ? lenTt : lenN; AddBox(Cube, FVector(c.X, c.Y, TopZ + FloorH), FVector(sx, sy, 12.f), FloorC, true); };
+	// 2e vloer = unit minus trapgat (gat: N[-HD..-HD+120] x Tt[-HL..-HL+RunFit]).
+	const float HoleN = 120.f;
+	Slab(Base + N * ((-HD + HoleN + HD) * 0.5f), (D - HoleN), L);                                   // voorste strook (volle Tt)
+	Slab(Base + N * (-HD + HoleN * 0.5f) + Tt * ((-HL + RunFit + HL) * 0.5f), HoleN, (L - RunFit)); // strook naast het gat
+	for (int32 s = 0; s < NSt; ++s)
+	{
+		const float ttPos = -HL + (s + 0.5f) * StepRun;
+		const float treadTop = TopZ + (s + 1) * Rise;
+		const FVector c = Base + N * StairLaneN + Tt * ttPos;
+		const float sx = bAlongX ? 100.f : (StepRun + 4.f), sy = bAlongX ? (StepRun + 4.f) : 100.f;
+		AddBox(Cube, FVector(c.X, c.Y, treadTop - 6.f), FVector(sx, sy, 12.f), StepC, true);
+	}
+
+	// Werkende voordeur in de opening.
+	const FVector Hinge = Base + N * HD - Tt * (DoorW * 0.5f) + FVector(0.f, 0.f, TopZ);
+	const float DoorYaw = FMath::RadiansToDegrees(FMath::Atan2(Tt.Y, Tt.X));
+	FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, DoorYaw, 0.f), Hinge), DSP))
+	{
+		Dr->Setup(DoorW - 4.f, DoorH - 4.f, DoorC);
+	}
 }
 
 void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ, float Foot, float Height,
