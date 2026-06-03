@@ -205,12 +205,7 @@ void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY
 	T->SetWorldSize(Size);
 	T->SetTextRenderColor(Color.ToFColor(true));
 	T->SetCastShadow(false);
-	if (bGlow)
-	{
-		// Zelf-oplichtend (unlit emissive) -> ook in het donker fel leesbaar + lichte bloom.
-		static UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_NumGlow.M_NumGlow"));
-		if (GlowMat) { T->SetTextMaterial(GlowMat); }
-	}
+	(void)bGlow; // (emissive tekstmateriaal tijdelijk uit -> veroorzaakte een render-crash)
 }
 
 void ACityGenerator::AddDoorNumber(const FVector& PlateCenter, int32 DirX, int32 DirY, const FString& Text, float Size)
