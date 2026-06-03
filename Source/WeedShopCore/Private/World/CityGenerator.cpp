@@ -109,7 +109,7 @@ void ACityGenerator::Tick(float DeltaSeconds)
 	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
 	if (WantOn == bLampsOn) { return; }
 	bLampsOn = WantOn;
-	for (ULightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 22000.f : 0.f); } }
+	for (ULightComponent* PL : LampLights) { if (PL) { PL->SetIntensity(WantOn ? 30000.f : 0.f); } }
 	for (UMaterialInstanceDynamic* M : LampHeadMats)
 	{
 		if (M) { M->SetVectorParameterValue(TEXT("Color"), WantOn ? FLinearColor(1.f, 0.86f, 0.5f) : FLinearColor(0.2f, 0.2f, 0.22f)); }

@@ -281,7 +281,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		if (DL)
 		{
 			// 's Nachts duidelijk maanlicht (navigeerbaar), overdag fel zonlicht.
-			DL->SetIntensity(FMath::Lerp(1.8f, 6.5f, DayF));
+			DL->SetIntensity(FMath::Lerp(1.2f, 6.5f, DayF));
 			const FLinearColor Warm(1.f, 0.96f, 0.88f);
 			const FLinearColor NightBlue(0.55f, 0.62f, 0.85f);
 			DL->SetLightColor(FMath::Lerp(NightBlue, Warm, DayF));
@@ -291,7 +291,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 	// SkyLight-ambient: 's nachts iets opgekrikt zodat tussen de lampen niet alles wegvalt in zwart.
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(1.6f, 1.0f, DayF));
+		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(1.3f, 1.0f, DayF));
 	}
 
 	// Straatlampen op kloktijd: 's avonds aan (vanaf 19u), 's ochtends uit rond 8u.
