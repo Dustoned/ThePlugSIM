@@ -58,7 +58,14 @@ void ADayNightController::BeginPlay()
 	for (TActorIterator<ASkyLight> It(W); It; ++It) { Sky = *It; break; }
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetMobility(EComponentMobility::Movable);
+		USkyLightComponent* SkyComp = Sky->GetLightComponent();
+		SkyComp->SetMobility(EComponentMobility::Movable);
+		// BELANGRIJK: een Movable SkyLight zonder verse capture heeft een lege/oude cubemap.
+		// Gevolg: muren die de zon niet raken (de rechtermuur) krijgen GEEN ambient -> pikzwart.
+		// Realtime capture houdt de cubemap altijd geldig, zodat alle muren ambient krijgen en
+		// de ambient buiten netjes met de lucht mee donkerder wordt 's nachts (realistisch).
+		SkyComp->SetRealTimeCaptureEnabled(true);
+		SkyComp->RecaptureSky();
 	}
 
 	// Vaste belichting (geen auto-exposure): anders wordt buiten donker zodra je in een lichte kamer
@@ -272,11 +279,12 @@ void ADayNightController::Tick(float DeltaSeconds)
 		}
 	}
 
-	// SkyLight ambient CONSTANT houden: zo blijft een (raamloze) kamer dag en nacht even licht.
-	// Het dag/nacht-verschil komt buiten van de zon (die het dak niet door komt -> binnen gelijk).
+	// SkyLight = realtime-capture ambient (volledige sterkte). De cubemap zelf wordt 's nachts
+	// donkerder door de lucht, dus buiten voelt nacht donker. Binnen blijft donker zonder lampen
+	// (realistisch) maar krijgt nu wel egale ambient op ALLE muren -> geen zwarte muur meer.
 	if (Sky.IsValid() && Sky->GetLightComponent())
 	{
-		Sky->GetLightComponent()->SetIntensity(0.6f);
+		Sky->GetLightComponent()->SetIntensity(1.0f);
 	}
 
 	// Straatlampen op kloktijd: 's avonds aan (vanaf 19u), 's ochtends uit rond 8u.
