@@ -23,6 +23,9 @@ public:
 
 	void Setup(float InBaseZ, float InFloorH, int32 InNumFloors, float FootX, float FootY, const FLinearColor& Color);
 
+	// Stuur/roep de lift naar verdieping F (aangeroepen door de knoppen).
+	void GoToFloor(int32 F);
+
 	// Interact (F) = schuifdeur open/dicht.
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;

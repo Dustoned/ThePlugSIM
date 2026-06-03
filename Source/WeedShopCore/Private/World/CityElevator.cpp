@@ -1,5 +1,6 @@
 #include "World/CityElevator.h"
 
+#include "World/CityElevatorButton.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Materials/MaterialInterface.h"
@@ -88,6 +89,47 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 	}
 
 	SetActorLocation(FVector(GetActorLocation().X, GetActorLocation().Y, BaseZ));
+
+	// --- Knoppen: verdieping-keuze in de cabine + oproepknop op elke verdieping ---
+	UWorld* W = GetWorld();
+	if (W)
+	{
+		const FTransform XF = GetActorTransform(); // basis op BaseZ + yaw van de cabine
+		const float ButZ = 130.f;                   // op handhoogte
+		const float Spread = FootY - 60.f;           // ruimte langs de zijwand
+		FActorSpawnParameters BSP; BSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		// Cabine-keuzeknoppen: rij op de rechter-zijwand (lokaal +X), kijkend de cabine in (-X).
+		for (int32 f = 0; f < NumFloors; ++f)
+		{
+			const float ly = (NumFloors > 1) ? (-Spread * 0.5f + Spread * f / (NumFloors - 1)) : 0.f;
+			const FVector RelLoc(FootX * 0.5f - 4.f, ly, ButZ);
+			if (ACityElevatorButton* B = W->SpawnActor<ACityElevatorButton>(ACityElevatorButton::StaticClass(), FTransform(), BSP))
+			{
+				B->AttachToActor(this, FAttachmentTransformRules::KeepRelativeTransform);
+				B->SetActorRelativeLocation(RelLoc);
+				B->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f)); // +X -> cabine-binnenkant (-X)
+				B->Setup(this, f, false);
+			}
+		}
+
+		// Oproepknoppen: vast op elke verdieping, naast de lift-opening, kijkend de gang in (+Y).
+		const FVector LocalCall(OpenW + 34.f, FootY * 0.5f + 12.f, 0.f);
+		for (int32 f = 0; f < NumFloors; ++f)
+		{
+			const FVector WLoc = XF.TransformPosition(LocalCall + FVector(0.f, 0.f, f * FloorH + ButZ));
+			const FRotator WRot(0.f, XF.GetRotation().Rotator().Yaw + 90.f, 0.f); // +X -> +Y (de gang in)
+			if (ACityElevatorButton* B = W->SpawnActor<ACityElevatorButton>(ACityElevatorButton::StaticClass(), FTransform(WRot, WLoc), BSP))
+			{
+				B->Setup(this, f, true);
+			}
+		}
+	}
+}
+
+void ACityElevator::GoToFloor(int32 F)
+{
+	CurFloor = FMath::Clamp(F, 0, NumFloors - 1);
 }
 
 void ACityElevator::Interact_Implementation(APawn* InstigatorPawn)
@@ -145,39 +187,7 @@ void ACityElevator::Tick(float DeltaSeconds)
 		if (UStaticMeshComponent* R = LandDoorR[f]) { R->SetRelativeLocation(FVector( OpenW * 0.5f + CurLand[f], FootY * 0.5f + 12.f, RelZ)); R->SetCollisionResponseToChannel(ECC_Pawn, bBlock ? ECR_Block : ECR_Ignore); }
 	}
 
-	// Beweeg naar de doel-verdieping.
+	// Beweeg naar de gevraagde verdieping (gezet door de knoppen). Blijft daar tot je een andere kiest/roept.
 	const float NewZ = FMath::FInterpConstantTo(Loc.Z, TargetZ, DeltaSeconds, 220.f);
 	SetActorLocation(FVector(Loc.X, Loc.Y, NewZ));
-	const bool bArrived = FMath::IsNearlyEqual(NewZ, TargetZ, 2.f);
-
-	// Staat iemand op de lift?
-	bool bOccupied = false;
-	if (const APawn* P = UGameplayStatics::GetPlayerPawn(this, 0))
-	{
-		const FVector PL = P->GetActorLocation();
-		if (FMath::Abs(PL.X - Loc.X) < FootX * 0.5f + 10.f &&
-			FMath::Abs(PL.Y - Loc.Y) < FootY * 0.5f + 10.f &&
-			PL.Z > NewZ && PL.Z < NewZ + 260.f)
-		{
-			bOccupied = true;
-		}
-	}
-
-	if (!bArrived) { Dwell = 0.f; return; }
-
-	Dwell += DeltaSeconds;
-	if (bOccupied)
-	{
-		// Na een korte pauze een verdieping omhoog (bovenaan -> terug naar beneden), zodat je kunt uitstappen.
-		if (Dwell > 1.6f)
-		{
-			CurFloor = (CurFloor + 1) % NumFloors;
-			Dwell = 0.f;
-		}
-	}
-	else if (CurFloor != 0 && Dwell > 4.f)
-	{
-		CurFloor = 0; // leeg -> terug naar begane grond
-		Dwell = 0.f;
-	}
 }
