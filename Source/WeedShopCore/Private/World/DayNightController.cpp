@@ -8,7 +8,9 @@
 #include "Engine/SkyLight.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "UObject/UObjectIterator.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -99,6 +101,23 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 		const FVector Eye = Loc + FVector(0.f, 0.f, 90.f);
 		const bool bIndoors = W->LineTraceSingleByChannel(Ceiling, Eye, Loc + FVector(0.f, 0.f, 1300.f), ECC_WorldStatic, Qc);
 		if (bIndoors) { continue; } // NPC in het huis -> geen lantaarn
+
+		// Staat hier al een lamp/licht in de buurt (bv. de map-lantaarn)? Dan niet dubbel zetten.
+		// Onze eigen lamp-lichten (owner == this) tellen niet mee.
+		bool bAlreadyLit = false;
+		for (TObjectIterator<UPointLightComponent> LIt; LIt && !bAlreadyLit; ++LIt)
+		{
+			UPointLightComponent* L = *LIt;
+			if (!IsValid(L) || L->GetWorld() != W || L->GetOwner() == this) { continue; }
+			if (FVector::Dist(L->GetComponentLocation(), Loc) < 850.f) { bAlreadyLit = true; }
+		}
+		for (TObjectIterator<USpotLightComponent> LIt; LIt && !bAlreadyLit; ++LIt)
+		{
+			USpotLightComponent* L = *LIt;
+			if (!IsValid(L) || L->GetWorld() != W || L->GetOwner() == this) { continue; }
+			if (FVector::Dist(L->GetComponentLocation(), Loc) < 850.f) { bAlreadyLit = true; }
+		}
+		if (bAlreadyLit) { continue; } // er staat al een lantaarn -> overslaan
 
 		// Zoek de dichtstbijzijnde muur (= stoeprand) door horizontaal rond te tracen, en zet de paal
 		// net vóór die muur (op de stoep, niet midden op de weg).
