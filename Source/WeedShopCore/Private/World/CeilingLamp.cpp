@@ -1,7 +1,7 @@
 #include "World/CeilingLamp.h"
 
 #include "Components/StaticMeshComponent.h"
-#include "Components/SpotLightComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -45,17 +45,14 @@ ACeilingLamp::ACeilingLamp()
 		if (M) { M->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.f, 0.85f, 0.5f)); }
 	}
 
-	// Warme neerwaartse spot.
-	Spot = CreateDefaultSubobject<USpotLightComponent>(TEXT("Spot"));
-	Spot->SetupAttachment(Root);
-	Spot->SetRelativeLocation(FVector(0.f, 0.f, -10.f));
-	Spot->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f)); // naar beneden
-	Spot->SetIntensity(6000.f);
-	Spot->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
-	Spot->SetAttenuationRadius(1100.f);
-	Spot->SetInnerConeAngle(28.f);
-	Spot->SetOuterConeAngle(52.f);
-	Spot->SetCastShadows(false);
+	// Warm omni-licht (verlicht de kamer rondom, ongeacht of 'ie aan plafond of muur hangt).
+	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
+	Light->SetupAttachment(Root);
+	Light->SetRelativeLocation(FVector(0.f, 0.f, -10.f));
+	Light->SetIntensity(14000.f);
+	Light->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
+	Light->SetAttenuationRadius(1300.f);
+	Light->SetCastShadows(false);
 }
 
 void ACeilingLamp::BeginPlay()

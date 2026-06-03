@@ -8,7 +8,7 @@
 #include "CeilingLamp.generated.h"
 
 class UStaticMeshComponent;
-class USpotLightComponent;
+class UPointLightComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API ACeilingLamp : public AActor
@@ -24,5 +24,5 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Shade; // kapje (kegel)
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Bulb;  // lampje
-	UPROPERTY(VisibleAnywhere) TObjectPtr<USpotLightComponent> Spot;   // warme neerwaartse spot
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UPointLightComponent> Light; // warm omni-licht
 };
