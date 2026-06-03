@@ -12,6 +12,7 @@
 #include "GameFramework/WorldSettings.h"
 #include "World/DayNightController.h"
 #include "World/CityGenerator.h"
+#include "World/StoreCounter.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
 #include "EnhancedInputSubsystems.h"
@@ -896,6 +897,12 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 				if (Phone) { Phone->OpenAtm(); }
 				return;
 			}
+			// Winkelbalie in de stad -> open lokaal de juiste telefoon-shop.
+			if (AStoreCounter* Counter = Cast<AStoreCounter>(Focus))
+			{
+				if (Phone && Counter->HasShop()) { Phone->OpenToApp(Counter->GetShopApp()); Phone->SetSupplierCat(Counter->GetShopCat()); }
+				return;
+			}
 			// Verpak-tafel -> open lokaal het verpak-menu (met de batch-grootte van deze tafel).
 			if (APackBench* Bench = Cast<APackBench>(Focus))
 			{
@@ -960,6 +967,11 @@ void AThePlugSIMCharacter::OnInteractKey()
 			if (Cast<AAtm>(Focus))
 			{
 				if (Phone) { Phone->OpenAtm(); }
+				return;
+			}
+			if (AStoreCounter* Counter = Cast<AStoreCounter>(Focus))
+			{
+				if (Phone && Counter->HasShop()) { Phone->OpenToApp(Counter->GetShopApp()); Phone->SetSupplierCat(Counter->GetShopCat()); }
 				return;
 			}
 			if (APackBench* Bench = Cast<APackBench>(Focus))

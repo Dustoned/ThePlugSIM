@@ -9,6 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "World/StoreCounter.h" // EShopKind
 #include "CityGenerator.generated.h"
 
 class UStaticMesh;
@@ -32,6 +33,14 @@ protected:
 	// Eén blok-mesh toevoegen onder de root. SizeCm = volledige afmeting; CenterWorld = wereld-midden.
 	UStaticMeshComponent* AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld, const FVector& SizeCm,
 		const FLinearColor& Color, bool bCollides);
+
+	// Een inloopbaar gebouw: holle ruimte met deur-opening in de wand richting (DoorDirX,DoorDirY),
+	// vloer, plafond, gekleurde gevel + bord, en (voor winkels) een AStoreCounter binnenin.
+	void BuildEnterableBuilding(const FVector& CenterXY, float BaseZ, float Foot, float Height,
+		int32 DoorDirX, int32 DoorDirY, EShopKind Kind, const FLinearColor& Body, const FLinearColor& Sign);
+
+	// Warm binnenlicht (anders is een afgesloten ruimte pikdonker).
+	void AddInteriorLight(const FVector& WorldLoc);
 
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 
