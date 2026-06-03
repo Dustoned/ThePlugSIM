@@ -120,11 +120,20 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 
 		// Lamp-plek: ~110cm vóór de muur (terug richting de NPC); anders gewoon iets naast de NPC.
 		const FVector LampXY = bFound ? (BestPoint - BestDir * 110.f) : (Loc + FVector(200.f, 150.f, 0.f));
+		// Grond zoeken vanaf NPC-hoogte omlaag (niet van hoog boven, want dan vang je het dak/de luifel).
 		FHitResult Ground;
 		FCollisionQueryParams Qg(FName(TEXT("LampNpcGround")), false, this);
-		if (W->LineTraceSingleByChannel(Ground, LampXY + FVector(0.f, 0.f, 2500.f), LampXY - FVector(0.f, 0.f, 4000.f), ECC_WorldStatic, Qg))
+		Qg.AddIgnoredActor(Npc);
+		const FVector GStart(LampXY.X, LampXY.Y, Loc.Z + 150.f);
+		const FVector GEnd(LampXY.X, LampXY.Y, Loc.Z - 600.f);
+		if (W->LineTraceSingleByChannel(Ground, GStart, GEnd, ECC_WorldStatic, Qg))
 		{
 			AddLamp(Ground.Location);
+		}
+		else
+		{
+			// Geen vloer net vóór de muur -> zet 'm gewoon bij de voeten van de NPC.
+			AddLamp(Loc - FVector(0.f, 0.f, 88.f));
 		}
 	}
 }
