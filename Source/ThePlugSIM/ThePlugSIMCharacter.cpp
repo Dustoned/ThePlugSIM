@@ -11,6 +11,9 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
 #include "World/DayNightController.h"
+#include "InputMappingContext.h"
+#include "InputAction.h"
+#include "EnhancedInputSubsystems.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Application/NavigationConfig.h"
 #include "GameFramework/PlayerController.h"
@@ -755,6 +758,27 @@ void AThePlugSIMCharacter::BeginPlay()
 		// Geen menu getoond (verse start / load / co-op client) -> meteen de gameplay-input-modus
 		// zetten zodat de muis gelockt is (anders kon je alleen met LMB rondkijken).
 		if (!bShownMenu) { Phone->RefreshInputMode(); }
+	}
+
+	// Enhanced Input: de template-actie IA_Interact zit in IMC_Default op E en botst met onze
+	// Inventory=E. Interact gaat nu via F (= LMB), dus haal IA_Interact uit de mapping zodat E
+	// alleen nog de inventory opent. Runtime, elke sessie (geen asset-save nodig).
+	if (IsLocallyControlled())
+	{
+		if (UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Default.IMC_Default")))
+		{
+			if (UInputAction* IA = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Interact.IA_Interact")))
+			{
+				IMC->UnmapAllKeysFromAction(IA);
+			}
+		}
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* Subsys = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+			{
+				Subsys->RequestRebuildControlMappings();
+			}
+		}
 	}
 
 	// Dag/nacht-belichting + lantaarnpalen: één lokale controller per speler (cosmetisch, niet
