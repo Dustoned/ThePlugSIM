@@ -214,8 +214,7 @@ namespace WeedUI
 
 	float SoundCategoryVolume(int32 Category)
 	{
-		// Standaardwaarden als de speler nog niets heeft ingesteld: muziek wat zachter (40%).
-		float V = (Category == 2) ? 0.4f : 1.f;
+		float V = 1.f; // alle sliders standaard op 100%
 		if (GConfig) { GConfig->GetFloat(TEXT("ThePlugSIM.Audio"), SoundCatKey(Category), V, GGameUserSettingsIni); }
 		return FMath::Clamp(V, 0.f, 1.f);
 	}

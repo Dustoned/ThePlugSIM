@@ -752,6 +752,10 @@ void UMainMenuWidget::OnQuit()
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 
+// De track is van zichzelf vrij hard: een vaste basis-demping zodat de slider op 100% al rustig
+// klinkt en je vanaf daar nog zachter kunt.
+static constexpr float GMenuMusicBaseline = 0.5f;
+
 void UMainMenuWidget::StartMenuMusic()
 {
 	if (!MusicComp)
@@ -759,12 +763,12 @@ void UMainMenuWidget::StartMenuMusic()
 		USoundBase* S = LoadObject<USoundBase>(nullptr, TEXT("/Game/_Project/Audio/MainMenuMusic.MainMenuMusic"));
 		if (!S) { return; }
 		if (USoundWave* W = Cast<USoundWave>(S)) { W->bLooping = true; } // op het hoofdmenu blijven loopen
-		MusicComp = UGameplayStatics::CreateSound2D(this, S, WeedUI::SoundCategoryVolume(2), 1.f, 0.f, nullptr, false, false);
+		MusicComp = UGameplayStatics::CreateSound2D(this, S, WeedUI::SoundCategoryVolume(2) * GMenuMusicBaseline, 1.f, 0.f, nullptr, false, false);
 		if (MusicComp) { MusicComp->bIsUISound = true; MusicComp->bAllowSpatialization = false; }
 	}
 	if (MusicComp && !MusicComp->IsPlaying())
 	{
-		MusicComp->SetVolumeMultiplier(WeedUI::SoundCategoryVolume(2));
+		MusicComp->SetVolumeMultiplier(WeedUI::SoundCategoryVolume(2) * GMenuMusicBaseline);
 		MusicComp->Play();
 	}
 }
@@ -801,8 +805,8 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	if (!bOpen) { return; }
 
-	// Music-volume live volgen (slider in Settings -> Audio).
-	if (MusicComp) { MusicComp->SetVolumeMultiplier(WeedUI::SoundCategoryVolume(2)); }
+	// Music-volume live volgen (slider in Settings -> Audio) x vaste basis-demping.
+	if (MusicComp) { MusicComp->SetVolumeMultiplier(WeedUI::SoundCategoryVolume(2) * GMenuMusicBaseline); }
 
 	// Neon-lampen zacht laten flikkeren (alsof ze echt aan staan).
 	const float T = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
