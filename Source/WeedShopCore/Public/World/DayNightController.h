@@ -31,6 +31,8 @@ protected:
 	const UDayCycleComponent* GetDayCycle() const;
 	void BuildStreetLamps(const FVector& Center);
 	void AddLamp(const FVector& BaseOnGround);
+	// Bestaande (felle) binnen-lampen uitzetten en vervangen door een warm, rustig licht.
+	void ReplaceIndoorLights();
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 

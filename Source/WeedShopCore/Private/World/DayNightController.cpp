@@ -80,6 +80,47 @@ void ADayNightController::BeginPlay()
 	FVector Center = GetActorLocation();
 	for (TActorIterator<APlayerStart> It(W); It; ++It) { Center = It->GetActorLocation(); break; }
 	BuildStreetLamps(Center);
+
+	ReplaceIndoorLights();
+}
+
+void ADayNightController::ReplaceIndoorLights()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+
+	// Verzamel bestaande binnen-lampen (point/spot, niet van ons) en zet ze uit.
+	TArray<FVector> Spots;
+	auto Consider = [&](ULightComponent* L)
+	{
+		if (!IsValid(L) || L->GetWorld() != W || L->GetOwner() == this) { return; }
+		const FVector Pos = L->GetComponentLocation();
+		FHitResult Up;
+		FCollisionQueryParams Q(FName(TEXT("IndoorLight")), false, this);
+		const bool bIndoors = W->LineTraceSingleByChannel(Up, Pos, Pos + FVector(0.f, 0.f, 1300.f), ECC_WorldStatic, Q);
+		if (bIndoors)
+		{
+			L->SetVisibility(false); // felle map-lamp uit
+			Spots.Add(Pos);
+		}
+	};
+	for (TObjectIterator<UPointLightComponent> It; It; ++It) { Consider(*It); }
+	for (TObjectIterator<USpotLightComponent> It; It; ++It) { Consider(*It); }
+
+	// Vervang door een warm, rustig licht (zelfde kleur als de straatlamp, niet overdreven).
+	for (const FVector& P : Spots)
+	{
+		UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
+		PL->SetupAttachment(Root);
+		PL->RegisterComponent();
+		PL->SetWorldLocation(P);
+		PL->SetMobility(EComponentMobility::Movable);
+		PL->SetAttenuationRadius(750.f);
+		PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
+		PL->SetIntensity(5000.f); // warme kamerlamp, rustig
+		PL->SetCastShadows(false);
+		// Niet in LampLights -> binnenverlichting blijft altijd aan.
+	}
 }
 
 void ADayNightController::BuildStreetLamps(const FVector& Center)
@@ -238,8 +279,8 @@ void ADayNightController::Tick(float DeltaSeconds)
 		Sky->GetLightComponent()->SetIntensity(FMath::Lerp(0.5f, 1.1f, DayF));
 	}
 
-	// Lantaarnpalen aan tot het echt licht is (overbrugt het donkere ochtend-/avond-gat).
-	const int32 WantOn = (DayF < 0.78f) ? 1 : 0;
+	// Straatlampen op kloktijd: 's avonds aan (vanaf 19u), 's ochtends uit rond 8u.
+	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
 	if (WantOn != bLampsOn)
 	{
 		bLampsOn = WantOn;
