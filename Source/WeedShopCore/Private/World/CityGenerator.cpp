@@ -381,11 +381,13 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 		const float UY = BCY + Tt.Y * Along;
 		const FLinearColor Body = CityFacade(hu);
 
-		// Romp van dit huisje (deelt de zijmuren met de buren).
-		const FVector BodySize = bAlongX ? FVector(Depth, UnitLen, WallH) : FVector(UnitLen, Depth, WallH);
-		AddBox(Cube, FVector(UX, UY, TopZ + WallH * 0.5f), BodySize, Body, true);
-		const FVector PlintSize = bAlongX ? FVector(Depth + 6.f, UnitLen, FloorH) : FVector(UnitLen, Depth + 6.f, FloorH);
-		AddBox(Cube, FVector(UX, UY, TopZ + FloorH * 0.5f), PlintSize, Body * 0.55f, false);
+		// Plint = begane grond (donker); romp = verdiepingen ERBOVEN. Zelfde footprint, los gestapeld
+		// (geen overlappende coplanaire vlakken -> geen z-fight/geflikker meer).
+		const float UpperH = WallH - FloorH;
+		const FVector PlintSize = bAlongX ? FVector(Depth, UnitLen, FloorH) : FVector(UnitLen, Depth, FloorH);
+		AddBox(Cube, FVector(UX, UY, TopZ + FloorH * 0.5f), PlintSize, Body * 0.55f, true);
+		const FVector BodySize = bAlongX ? FVector(Depth, UnitLen, UpperH) : FVector(UnitLen, Depth, UpperH);
+		AddBox(Cube, FVector(UX, UY, TopZ + FloorH + UpperH * 0.5f), BodySize, Body, true);
 
 		// Voordeur aan de straatkant (N).
 		const FVector DoorPos = FVector(UX, UY, TopZ + 105.f) + N * (HalfD + 5.f);
