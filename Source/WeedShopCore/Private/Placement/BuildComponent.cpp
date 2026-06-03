@@ -278,7 +278,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							else
 							{
 								// Veranker het raster aan de dichtstbijzijnde muur per as (eerste cel = strak tegen de muur).
-								const FVector TS(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + 30.f);
+								// Lampen: trace net ONDER het plafond (anders zit je in het dak en mis je de muren).
+								const FVector TS(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + (CurrentDef.bIsLamp ? -30.f : 30.f));
 								FHitResult HX1, HX2, HY1, HY2;
 								const bool bX1 = GetWorld()->LineTraceSingleByChannel(HX1, TS, TS + FVector(1500.f, 0, 0), ECC_Visibility, Params);
 								const bool bX2 = GetWorld()->LineTraceSingleByChannel(HX2, TS, TS + FVector(-1500.f, 0, 0), ECC_Visibility, Params);
@@ -298,15 +299,30 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					if (bHasAnchor) PreviewLocation.Y = AnchorY + FMath::GridSnap<float>(PreviewLocation.Y - AnchorY, GridSize);
 					PreviewRotation.Yaw = FMath::GridSnap<float>(PreviewRotation.Yaw, 90.f);
 
-					// Vloer-hoogte op de gesnapte XY opnieuw bepalen (recht naar beneden tracen).
-					FHitResult DownHit;
-					const FVector DStart(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + 250.f);
-					const FVector DEnd(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z - 250.f);
-					if (GetWorld()->LineTraceSingleByChannel(DownHit, DStart, DEnd, ECC_Visibility, Params))
+					// Hoogte op de gesnapte XY opnieuw bepalen. Plafondlampen tracen OMHOOG naar het
+					// plafond (zodat de grid-snap ook aan het plafond werkt); al het andere OMLAAG naar de vloer.
+					if (CurrentDef.bIsLamp)
 					{
-						PreviewLocation.Z = DownHit.ImpactPoint.Z;
-						FloorNormalZ = DownHit.ImpactNormal.Z;
-						bOnPlaceable = (Cast<AGrowPlant>(DownHit.GetActor()) != nullptr) || (Cast<APlaceableProp>(DownHit.GetActor()) != nullptr);
+						FHitResult UpHit;
+						const FVector UStart(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z - 250.f);
+						const FVector UEnd(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + 600.f);
+						if (GetWorld()->LineTraceSingleByChannel(UpHit, UStart, UEnd, ECC_Visibility, Params))
+						{
+							PreviewLocation.Z = UpHit.ImpactPoint.Z;
+							FloorNormalZ = UpHit.ImpactNormal.Z; // plafond -> normaal wijst omlaag
+						}
+					}
+					else
+					{
+						FHitResult DownHit;
+						const FVector DStart(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + 250.f);
+						const FVector DEnd(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z - 250.f);
+						if (GetWorld()->LineTraceSingleByChannel(DownHit, DStart, DEnd, ECC_Visibility, Params))
+						{
+							PreviewLocation.Z = DownHit.ImpactPoint.Z;
+							FloorNormalZ = DownHit.ImpactNormal.Z;
+							bOnPlaceable = (Cast<AGrowPlant>(DownHit.GetActor()) != nullptr) || (Cast<APlaceableProp>(DownHit.GetActor()) != nullptr);
+						}
 					}
 				}
 
