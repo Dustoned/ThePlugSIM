@@ -337,9 +337,7 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 	const int32 Units = 3 + (int32)(Seed % 2u); // 3-4 huisjes
 	const float UnitLen = RowLen / Units;
 	const float WallH = 2.f * FloorH;           // gelijke goothoogte -> doorlopend dak
-	const float HalfD = Depth * 0.5f;
 
-	const FLinearColor Glass(0.30f, 0.45f, 0.55f);
 	const FLinearColor Roof(0.36f, 0.17f, 0.13f);
 	const FLinearColor Seam(0.10f, 0.09f, 0.08f);
 	const FLinearColor Grass(0.16f, 0.34f, 0.13f);
@@ -359,26 +357,9 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 		const float UY = BCY + Tt.Y * Along;
 		const FLinearColor Body = CityFacade(hu);
 
-		// Holle 2-verdiepingen-woning (muren + deuropening + 2e vloer + rechte trap + werkende deur).
+		// Holle 2-verdiepingen-woning met echte ramen (voor/achtergevel), party-muren tot het dak,
+		// 2e vloer, rechte trap en werkende deur.
 		BuildHouseUnitInterior(UX, UY, Depth, UnitLen - 4.f, WallH, bAlongX, bAlongX ? Ddx : Ddy, TopZ, Body);
-
-		// Ramen op de straatgevel.
-		for (int32 f = 0; f < 2; ++f)
-		{
-			const float Z = TopZ + f * FloorH + FloorH * 0.6f;
-			const float WinW = UnitLen * 0.42f;
-			const float SideOff = UnitLen * 0.24f;
-			const FVector WinSize = bAlongX ? FVector(4.f, WinW, FloorH * 0.4f) : FVector(WinW, 4.f, FloorH * 0.4f);
-			if (f == 0)
-			{
-				AddBox(Cube, FVector(UX, UY, Z) + N * (HalfD + 2.f) + Tt * SideOff, WinSize, Glass, false);
-			}
-			else
-			{
-				AddBox(Cube, FVector(UX, UY, Z) + N * (HalfD + 2.f) - Tt * SideOff, WinSize, Glass, false);
-				AddBox(Cube, FVector(UX, UY, Z) + N * (HalfD + 2.f) + Tt * SideOff, WinSize, Glass, false);
-			}
-		}
 
 		// Looppad van de deur naar de stoep door de voortuin.
 		const float PathLen = YardDepth + SidewalkWidth + 20.f;
@@ -477,57 +458,17 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const float DoorW = 240.f;
 	const float DoorH = 220.f;
 	const FLinearColor FloorC(0.30f, 0.29f, 0.27f);
-	const FLinearColor Glass(0.30f, 0.45f, 0.55f);
 
 	const int32 DoorSide = (Ddx > 0) ? 0 : (Ddx < 0) ? 1 : (Ddy > 0) ? 2 : 3;
 	const FVector N((float)Ddx, (float)Ddy, 0.f);
 
-	// Buitenmuren (volle hoogte); de straatgevel heeft op de begane grond een deur-opening.
-	const float WallZc = TopZ + TotalH * 0.5f;
-	auto BuildWall = [&](int32 side)
-	{
-		const bool bDoor = (side == DoorSide);
-		const bool bAlongY = (side == 0 || side == 1);
-		const float WallLen = Foot + 2.f * T;
-		FVector Pos(CX, CY, WallZc);
-		if (side == 0) { Pos.X = CX + Half + T * 0.5f; }
-		else if (side == 1) { Pos.X = CX - Half - T * 0.5f; }
-		else if (side == 2) { Pos.Y = CY + Half + T * 0.5f; }
-		else { Pos.Y = CY - Half - T * 0.5f; }
-		if (!bDoor)
-		{
-			AddBox(Cube, Pos, bAlongY ? FVector(T, WallLen, TotalH) : FVector(WallLen, T, TotalH), Body, true);
-			return;
-		}
-		const float SegLen = (WallLen - DoorW) * 0.5f;
-		const float Off = (DoorW + SegLen) * 0.5f;
-		if (bAlongY)
-		{
-			AddBox(Cube, Pos + FVector(0, Off, 0), FVector(T, SegLen, TotalH), Body, true);
-			AddBox(Cube, Pos + FVector(0, -Off, 0), FVector(T, SegLen, TotalH), Body, true);
-			AddBox(Cube, FVector(Pos.X, CY, TopZ + (DoorH + TotalH) * 0.5f), FVector(T, DoorW, TotalH - DoorH), Body, true);
-		}
-		else
-		{
-			AddBox(Cube, Pos + FVector(Off, 0, 0), FVector(SegLen, T, TotalH), Body, true);
-			AddBox(Cube, Pos + FVector(-Off, 0, 0), FVector(SegLen, T, TotalH), Body, true);
-			AddBox(Cube, FVector(CX, Pos.Y, TopZ + (DoorH + TotalH) * 0.5f), FVector(DoorW, T, TotalH - DoorH), Body, true);
-		}
-	};
-	for (int32 s = 0; s < 4; ++s) { BuildWall(s); }
-
-	// Ramen per verdieping op de 4 gevels. Op de begane grond NIET op de deurwand (anders een
-	// "blauw blok" in de deuropening).
-	for (int32 f = 0; f < NF; ++f)
-	{
-		const float z = TopZ + f * FloorH + FloorH * 0.55f;
-		const float WinW = Foot * 0.7f, WinH = FloorH * 0.4f;
-		const bool bGround = (f == 0);
-		if (!(bGround && DoorSide == 2)) { AddBox(Cube, FVector(CX, CY + Half + 2.f, z), FVector(WinW, 4.f, WinH), Glass, false); }
-		if (!(bGround && DoorSide == 3)) { AddBox(Cube, FVector(CX, CY - Half - 2.f, z), FVector(WinW, 4.f, WinH), Glass, false); }
-		if (!(bGround && DoorSide == 0)) { AddBox(Cube, FVector(CX + Half + 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false); }
-		if (!(bGround && DoorSide == 1)) { AddBox(Cube, FVector(CX - Half - 2.f, CY, z), FVector(4.f, WinW, WinH), Glass, false); }
-	}
+	// Buitenmuren met ECHTE ramen (glasstrook per verdieping); de straatgevel heeft op de begane grond
+	// een deur-opening. Length = volle gevel incl. hoeken.
+	const float WallLen = Foot + 2.f * T;
+	BuildWallWindows(CX + Half + T * 0.5f, CY, false, WallLen, TopZ, NF, FloorH, T, Body, CY, DoorSide == 0 ? DoorW : 0.f, DoorH); // +X
+	BuildWallWindows(CX - Half - T * 0.5f, CY, false, WallLen, TopZ, NF, FloorH, T, Body, CY, DoorSide == 1 ? DoorW : 0.f, DoorH); // -X
+	BuildWallWindows(CX, CY + Half + T * 0.5f, true,  WallLen, TopZ, NF, FloorH, T, Body, CX, DoorSide == 2 ? DoorW : 0.f, DoorH); // +Y
+	BuildWallWindows(CX, CY - Half - T * 0.5f, true,  WallLen, TopZ, NF, FloorH, T, Body, CX, DoorSide == 3 ? DoorW : 0.f, DoorH); // -Y
 
 	// Kern (trappenhuis + liftschacht) in de achter-linker hoek. Groot gat: de trap loopt over de
 	// volle lengte (lange, ruime steken) met de lift ernaast.
@@ -745,23 +686,36 @@ void ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L
 	const FVector Tt = bAlongX ? FVector(0.f, 1.f, 0.f) : FVector(1.f, 0.f, 0.f);                // langs de rij
 	const FVector Base(UX, UY, 0.f);
 
-	// Volle muur (langs Tt of langs N).
-	auto WallTt = [&](const FVector& c, float lenTt) { const float sx = bAlongX ? T : lenTt, sy = bAlongX ? lenTt : T; AddBox(Cube, FVector(c.X, c.Y, TopZ + WallH * 0.5f), FVector(sx, sy, WallH), Body, true); };
-	auto WallN  = [&](const FVector& c, float lenN)  { const float sx = bAlongX ? lenN : T, sy = bAlongX ? T : lenN; AddBox(Cube, FVector(c.X, c.Y, TopZ + WallH * 0.5f), FVector(sx, sy, WallH), Body, true); };
+	const float RidgeH = D * 0.5f;            // moet matchen met het rij-dak (Depth*0.5)
+	const bool WAlongX = (Tt.X != 0.f);       // voor/achtergevel loopt langs Tt
+	const float DoorCenterAxis = WAlongX ? UX : UY;
 
-	// Achterwand + 2 zijwanden (vol).
-	WallTt(Base - N * HD, L);
-	WallN(Base + Tt * HL, D);
-	WallN(Base - Tt * HL, D);
-	// Voorwand met deuropening (2 segmenten + latei).
-	const float Seg = (L - DoorW) * 0.5f, Off = (DoorW + Seg) * 0.5f;
-	WallTt(Base + N * HD + Tt * Off, Seg);
-	WallTt(Base + N * HD - Tt * Off, Seg);
+	// Voorgevel (straat, met deur) + achtergevel (tuin) met ECHTE ramen (glasstrook per verdieping).
+	const FVector FC = Base + N * HD;
+	BuildWallWindows(FC.X, FC.Y, WAlongX, L, TopZ, 2, FloorH, T, Body, DoorCenterAxis, DoorW, DoorH);
+	const FVector BkC = Base - N * HD;
+	BuildWallWindows(BkC.X, BkC.Y, WAlongX, L, TopZ, 2, FloorH, T, Body, 0.f, 0.f, DoorH);
+
+	// Zijwanden = party walls: VOL tot de goot + een gable-driehoek tot het DAK, zodat elke woning
+	// een eigen, tot het dak afgesloten ruimte is (niet langer 1 open zolder over de hele rij).
+	auto SideWallGable = [&](const FVector& sideC)
 	{
-		const FVector LC = Base + N * HD;
-		const float lsx = bAlongX ? T : DoorW, lsy = bAlongX ? DoorW : T;
-		AddBox(Cube, FVector(LC.X, LC.Y, TopZ + (DoorH + WallH) * 0.5f), FVector(lsx, lsy, WallH - DoorH), Body, true);
-	}
+		const float sx = bAlongX ? D : T, sy = bAlongX ? T : D;
+		AddBox(Cube, FVector(sideC.X, sideC.Y, TopZ + WallH * 0.5f), FVector(sx, sy, WallH), Body, true);
+		const int32 NSl = 12; const float SliceW = D / NSl; const float HalfDp = D * 0.5f;
+		for (int32 k = 0; k < NSl; ++k)
+		{
+			const float n = -HalfDp + (k + 0.5f) * SliceW;
+			const float inner = FMath::Max(0.f, FMath::Abs(n) - SliceW * 0.5f);
+			const float hh = RidgeH * (1.f - inner / HalfDp);
+			if (hh < 6.f) { continue; }
+			const FVector P = sideC + N * n;
+			const float gx = bAlongX ? (SliceW + 2.f) : T, gy = bAlongX ? T : (SliceW + 2.f);
+			AddBox(Cube, FVector(P.X, P.Y, TopZ + WallH + hh * 0.5f), FVector(gx, gy, hh), Body, true);
+		}
+	};
+	SideWallGable(Base + Tt * HL);
+	SideWallGable(Base - Tt * HL);
 
 	// Trap (rechte steek) achterin langs Tt + 2e vloer met trapgat.
 	const int32 NSt = 9;
@@ -791,6 +745,59 @@ void ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L
 	if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, DoorYaw, 0.f), Hinge), DSP))
 	{
 		Dr->Setup(DoorW - 4.f, DoorH - 4.f, DoorC);
+	}
+}
+
+void ACityGenerator::BuildWallWindows(float CenterX, float CenterY, bool bAlongX, float Length, float BaseZ,
+	int32 Floors, float FloorH, float T, const FLinearColor& Wall, float DoorCenter, float DoorW, float DoorTop)
+{
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!Cube) { return; }
+
+	const FLinearColor Glass(0.34f, 0.50f, 0.62f);
+	const FLinearColor Mull = Wall * 0.7f;
+	const float SillH = 95.f, WinH = 130.f;
+	const float HalfL = Length * 0.5f;
+	const float A0 = (bAlongX ? CenterX : CenterY) - HalfL; // begin langs de muur-as
+	const float Perp = (bAlongX ? CenterY : CenterX);
+
+	// Eén stuk muur: aCenter (langs de as), aLen (lengte), zC (midden hoogte), zH (hoogte). glass=dun + see-through.
+	auto Seg = [&](float aCenter, float aLen, float zC, float zH, const FLinearColor& Col, bool bGlass)
+	{
+		if (aLen < 2.f || zH < 2.f) { return; }
+		const float Th = bGlass ? 6.f : T;
+		const FVector C = bAlongX ? FVector(aCenter, Perp, zC) : FVector(Perp, aCenter, zC);
+		const FVector S = bAlongX ? FVector(aLen, Th, zH) : FVector(Th, aLen, zH);
+		AddBox(Cube, C, S, Col, true);
+	};
+	// Borstwering + glasstrook + latei over een muur-stuk [s0..s1] op verdieping met basis fb.
+	auto Bands = [&](float s0, float s1, float fb)
+	{
+		const float L = s1 - s0; if (L < 12.f) { return; }
+		const float c = (s0 + s1) * 0.5f;
+		Seg(c, L, fb + SillH * 0.5f, SillH, Wall, false);                          // borstwering onder
+		const float headZ0 = fb + SillH + WinH, headH = FloorH - (SillH + WinH);
+		Seg(c, L, headZ0 + headH * 0.5f, headH, Wall, false);                      // latei boven
+		Seg(c, L, fb + SillH + WinH * 0.5f, WinH, Glass, true);                    // glasstrook (echte opening)
+		const int32 NM = FMath::Max(0, (int32)(L / 170.f));
+		for (int32 m = 1; m <= NM; ++m) { Seg(s0 + L * m / (NM + 1), 12.f, fb + SillH + WinH * 0.5f, WinH, Mull, false); }
+	};
+
+	for (int32 f = 0; f < Floors; ++f)
+	{
+		const float fb = BaseZ + f * FloorH;
+		if (f == 0 && DoorW > 0.f)
+		{
+			const float dl = DoorCenter - DoorW * 0.5f, dr = DoorCenter + DoorW * 0.5f;
+			Bands(A0, dl, fb);
+			Bands(dr, A0 + Length, fb);
+			const float dH = FloorH - DoorTop;
+			Seg(DoorCenter, DoorW, fb + DoorTop + dH * 0.5f, dH, Wall, false); // latei boven de deur
+		}
+		else
+		{
+			Bands(A0, A0 + Length, fb);
+		}
 	}
 }
 

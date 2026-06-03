@@ -37,6 +37,11 @@ protected:
 	// Centraal parkje: gras, paden, boompjes, bankjes en een laag hekje.
 	void BuildPark(float CX, float CY, float Size, float GroundTopZ);
 
+	// Een buitenmuur met ECHTE ramen (glasstrook per verdieping + borstwering/latei) en optioneel een
+	// deurgat op de begane grond. Muur loopt langs X (bAlongX) of langs Y, gecentreerd op (CenterX,CenterY).
+	void BuildWallWindows(float CenterX, float CenterY, bool bAlongX, float Length, float BaseZ,
+		int32 Floors, float FloorH, float T, const FLinearColor& Wall, float DoorCenter, float DoorW, float DoorTop);
+
 	// Eén blok-mesh toevoegen onder de root. SizeCm = volledige afmeting; CenterWorld = wereld-midden.
 	UStaticMeshComponent* AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld, const FVector& SizeCm,
 		const FLinearColor& Color, bool bCollides, const FRotator& Rot = FRotator::ZeroRotator);
