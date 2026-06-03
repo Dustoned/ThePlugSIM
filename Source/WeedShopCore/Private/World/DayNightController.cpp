@@ -68,64 +68,25 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 
-	// Posities in twee ringen rond het centrum (binnen + ruimer, versprongen), elk naar de grond
-	// getraced. De ruimere ring dekt de overkant van de straat / verder naar de map-rand.
-	auto PlaceRing = [this, W, Center](float Radius, int32 Count, float AngOffset)
-	{
-		for (int32 i = 0; i < Count; ++i)
-		{
-			const float Ang = (2.f * PI * i) / Count + AngOffset;
-			const FVector XY = Center + FVector(FMath::Cos(Ang) * Radius, FMath::Sin(Ang) * Radius, 0.f);
-			const FVector TraceStart = XY + FVector(0.f, 0.f, 2500.f);
-			const FVector TraceEnd = XY - FVector(0.f, 0.f, 4000.f);
-			FHitResult Hit;
-			FCollisionQueryParams Q(FName(TEXT("LampGround")), false, this);
-			if (W->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, Q))
-			{
-				AddLamp(Hit.Location);
-			}
-		}
-	};
-
-	PlaceRing(1400.f, 6, 0.f); // algemene verlichting rond de spawn/home-zone
-
-	// Een lantaarn naast elke NPC die BUITEN staat (een plafond boven de NPC = binnen -> overslaan).
+	// Eén lantaarn naast ELKE NPC die BUITEN staat (NPC's binnen het huis krijgen er geen).
+	// Geen ring, geen skip-checks: precies één paal per buiten-NPC, op de stoep (naar de muur gesnapt).
 	for (TActorIterator<ACustomerBase> It(W); It; ++It)
 	{
 		ACustomerBase* Npc = *It;
 		if (!IsValid(Npc)) { continue; }
 		const FVector Loc = Npc->GetActorLocation();
-
-		FCollisionQueryParams Qc(FName(TEXT("LampCeiling")), false, this);
-		FHitResult Ceiling;
 		const FVector Eye = Loc + FVector(0.f, 0.f, 90.f);
-		const bool bIndoors = W->LineTraceSingleByChannel(Ceiling, Eye, Loc + FVector(0.f, 0.f, 1300.f), ECC_WorldStatic, Qc);
-		if (bIndoors) { continue; } // NPC in het huis -> geen lantaarn
 
-		// Staat hier al een lamp/licht in de buurt (bv. de map-lantaarn)? Dan niet dubbel zetten.
-		// Onze eigen lamp-lichten (owner == this) tellen niet mee.
-		bool bAlreadyLit = false;
-		for (TObjectIterator<UPointLightComponent> LIt; LIt && !bAlreadyLit; ++LIt)
-		{
-			UPointLightComponent* L = *LIt;
-			if (!IsValid(L) || L->GetWorld() != W || L->GetOwner() == this) { continue; }
-			if (FVector::Dist(L->GetComponentLocation(), Loc) < 850.f) { bAlreadyLit = true; }
-		}
-		for (TObjectIterator<USpotLightComponent> LIt; LIt && !bAlreadyLit; ++LIt)
-		{
-			USpotLightComponent* L = *LIt;
-			if (!IsValid(L) || L->GetWorld() != W || L->GetOwner() == this) { continue; }
-			if (FVector::Dist(L->GetComponentLocation(), Loc) < 850.f) { bAlreadyLit = true; }
-		}
-		if (bAlreadyLit) { continue; } // er staat al een lantaarn -> overslaan
+		// Plafond boven de NPC = binnen -> overslaan.
+		FHitResult Ceiling;
+		FCollisionQueryParams Qc(FName(TEXT("LampCeiling")), false, this);
+		if (W->LineTraceSingleByChannel(Ceiling, Eye, Loc + FVector(0.f, 0.f, 1300.f), ECC_WorldStatic, Qc)) { continue; }
 
-		// Zoek de dichtstbijzijnde muur (= stoeprand) door horizontaal rond te tracen, en zet de paal
-		// net vóór die muur (op de stoep, niet midden op de weg).
+		// Dichtstbijzijnde muur zoeken (8 richtingen) zodat de paal op de stoep tegen het gebouw komt.
 		bool bFound = false; float BestDist = 1e9f; FVector BestPoint; FVector BestDir;
-		const int32 Dirs = 8;
-		for (int32 d = 0; d < Dirs; ++d)
+		for (int32 d = 0; d < 8; ++d)
 		{
-			const float A = (2.f * PI * d) / Dirs;
+			const float A = (2.f * PI * d) / 8.f;
 			const FVector Dir(FMath::Cos(A), FMath::Sin(A), 0.f);
 			FHitResult Wall;
 			FCollisionQueryParams Qw(FName(TEXT("LampWall")), false, this);
@@ -137,22 +98,20 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 			}
 		}
 
-		// Lamp-plek: ~110cm vóór de muur (terug richting de NPC); anders gewoon iets naast de NPC.
-		const FVector LampXY = bFound ? (BestPoint - BestDir * 110.f) : (Loc + FVector(200.f, 150.f, 0.f));
-		// Grond zoeken vanaf NPC-hoogte omlaag (niet van hoog boven, want dan vang je het dak/de luifel).
+		// Plek: ~110cm vóór de muur (op de stoep); anders gewoon vlak naast de NPC.
+		const FVector LampXY = bFound ? (BestPoint - BestDir * 110.f) : (Loc + FVector(160.f, 120.f, 0.f));
+
+		// Grond zoeken vanaf NPC-hoogte omlaag (niet van hoog, anders vang je het dak/de luifel).
 		FHitResult Ground;
 		FCollisionQueryParams Qg(FName(TEXT("LampNpcGround")), false, this);
 		Qg.AddIgnoredActor(Npc);
-		const FVector GStart(LampXY.X, LampXY.Y, Loc.Z + 150.f);
-		const FVector GEnd(LampXY.X, LampXY.Y, Loc.Z - 600.f);
-		if (W->LineTraceSingleByChannel(Ground, GStart, GEnd, ECC_WorldStatic, Qg))
+		if (W->LineTraceSingleByChannel(Ground, FVector(LampXY.X, LampXY.Y, Loc.Z + 150.f), FVector(LampXY.X, LampXY.Y, Loc.Z - 600.f), ECC_WorldStatic, Qg))
 		{
 			AddLamp(Ground.Location);
 		}
 		else
 		{
-			// Geen vloer net vóór de muur -> zet 'm gewoon bij de voeten van de NPC.
-			AddLamp(Loc - FVector(0.f, 0.f, 88.f));
+			AddLamp(Loc - FVector(0.f, 0.f, 88.f)); // altijd één lamp, ook zonder vloer-hit
 		}
 	}
 }
