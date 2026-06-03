@@ -532,11 +532,13 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float dFront = StairDoorC;                          // baan dichtbij de gang (= instap/deuropening)
 		const float dBack = Foot - LaneWd * 0.5f - 20.f;          // baan achterin
 		const float s0 = -HW - Margin;                            // begint bij de gang-instap
-		// Drempel op vloerniveau aan de gangkant per verdieping.
+		// Breed bordes langs de gangmuur per verdieping (volle diepte): hier loop je comfortabel van de
+		// deuropening naar de trap en stap je van de trap af -> geen smal randje meer waar je moet springen.
+		const float LandWd = FMath::Min(SideW - 20.f, 230.f);
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
-			Box(HallLen + CoreDepth * 0.5f, -HW - 28.f, CoreDepth, 64.f, zf - 6.f, 12.f, LandC, true);
+			Box(HallLen + CoreDepth * 0.5f, -HW - LandWd * 0.5f, CoreDepth, LandWd, zf - 6.f, 12.f, LandC, true);
 		}
 		for (int32 f = 0; f < NF - 1; ++f)
 		{
@@ -607,6 +609,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					const float LiftOpen = 2.f * OpenW + 8.f;
 					SegD(HallLen, LiftCabD - LiftOpen * 0.5f, sw, zS);
 					SegD(LiftCabD + LiftOpen * 0.5f, Foot, sw, zS);
+					// Latei boven de lift-opening: schacht is niet meer open bóven de deuren.
+					const float LintH = WallHt - 210.f;
+					if (LintH > 4.f) { Box(LiftCabD, sw, LiftOpen, WallT, zS + 210.f + LintH * 0.5f, LintH, IWall, true); }
 				}
 				else
 				{
