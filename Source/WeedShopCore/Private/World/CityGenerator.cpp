@@ -526,7 +526,8 @@ void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ
 		const float SignW = Foot * 0.9f; // bord over bijna de hele gevel
 		const FVector SignPos = FVector(CX, CY, SignZ) + N * (Half + T);
 		const FVector SignSize = (DoorSide <= 1) ? FVector(10.f, SignW, 110.f) : FVector(SignW, 10.f, 110.f);
-		AddBox(Cube, SignPos, SignSize, Sign, false);
+		// DONKER achterbord -> de felle neon-letters lichten erop op en zijn leesbaar.
+		AddBox(Cube, SignPos, SignSize, FLinearColor(0.02f, 0.02f, 0.03f), false);
 
 		FString Name;
 		switch (Kind)
