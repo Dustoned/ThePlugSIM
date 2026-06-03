@@ -312,12 +312,21 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 				// Alleen op grondniveau plaatsen: niet bovenop een pot/tafel/ander object
 				// (dat ligt hoger dan je voeten). Plus vlakke vloer, niet op een pot, genoeg ruimte.
-				const bool bFloor = FloorNormalZ > 0.7f;
-				const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
-				const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
-				bValidSpot = bFloor && bGroundLevel && !bOnPlaceable
-						&& (CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation))
-						&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
+				if (CurrentDef.bIsLamp)
+				{
+					// Plafondlamp: geldig zodra je op een PLAFOND (omlaag-wijzend vlak) mikt.
+					// Een plafond raken bewijst al dat je binnen bent -> geen aparte binnen-trace.
+					bValidSpot = (FloorNormalZ < -0.4f) && !bOnPlaceable;
+				}
+				else
+				{
+					const bool bFloor = FloorNormalZ > 0.7f;
+					const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
+					const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
+					bValidSpot = bFloor && bGroundLevel && !bOnPlaceable
+							&& (CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation))
+							&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
+				}
 			}
 		}
 	}
@@ -329,7 +338,9 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		Ghost->SetVisibility(bShow);
 		if (bShow)
 		{
-			Ghost->SetWorldLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, CurrentDef.BoxHalf.Z), PreviewRotation);
+			// Plafondlamp hangt ONDER het plafondpunt; al het andere staat ERBOVEN op de vloer.
+			const float GhostZOff = CurrentDef.bIsLamp ? -CurrentDef.BoxHalf.Z : CurrentDef.BoxHalf.Z;
+			Ghost->SetWorldLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, GhostZOff), PreviewRotation);
 		}
 		if (GhostMID)
 		{
@@ -449,6 +460,7 @@ void UBuildComponent::UpdateRemoteGhost()
 		// Mesh/schaal van het item dat de andere speler plaatst.
 		FPlaceableDef Def;
 		float HalfZ = 20.f;
+		bool bLamp = false;
 		if (GetPlaceableDef(RepItemId, Def))
 		{
 			if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Def.MeshPath))
@@ -457,8 +469,9 @@ void UBuildComponent::UpdateRemoteGhost()
 			}
 			Ghost->SetWorldScale3D(Def.MeshScale);
 			HalfZ = Def.BoxHalf.Z;
+			bLamp = Def.bIsLamp;
 		}
-		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, HalfZ), FRotator(0.f, RepYaw, 0.f));
+		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, bLamp ? -HalfZ : HalfZ), FRotator(0.f, RepYaw, 0.f));
 		if (GhostMID)
 		{
 			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
@@ -567,7 +580,8 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 
 	// Server-side her-validatie (anti-cheat / lag): niet in een muur of (voor potten) te dicht.
-	if (IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
+	// Plafondlampen hangen aan het plafond -> de vloer-gebaseerde blokkade/binnen-checks slaan we over.
+	if (!Def.bIsLamp && IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
 	{
 		if (GEngine)
 		{
@@ -576,7 +590,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 	// Alleen binnenshuis (tenzij dit placeable buiten mag, bv. de ATM).
-	if (!Def.bAllowOutdoors && !IsIndoors(Location))
+	if (!Def.bIsLamp && !Def.bAllowOutdoors && !IsIndoors(Location))
 	{
 		if (GEngine)
 		{
@@ -602,8 +616,8 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	else if (Def.bIsLamp)
 	{
-		// Plafondlamp: warme spot. Iets boven het plaatspunt.
-		const FTransform LampTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
+		// Plafondlamp: hangt ONDER het plafondpunt (Location = plafond-trefpunt).
+		const FTransform LampTM(Rotation, Location - FVector(0.f, 0.f, Def.BoxHalf.Z));
 		World->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), LampTM, SpawnParams);
 	}
 	else if (Def.bIsSink)

@@ -2,20 +2,8 @@
 #include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
-#include "Placement/PlaceableTypes.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
-
-namespace
-{
-	// Meubels (placeables die geen pot zijn) horen NIET automatisch op de hotbar; die sleep je
-	// er zelf op als je ze wil verplaatsen. Bruikbare items (seeds/wiet/pots/flessen/...) wel.
-	bool IsFurnitureItem(FName ItemId)
-	{
-		FPlaceableDef Def;
-		return GetPlaceableDef(ItemId, Def) && !Def.bIsPot;
-	}
-}
 
 UInventoryComponent::UInventoryComponent()
 {
@@ -396,12 +384,13 @@ void UInventoryComponent::RefreshHotbarAuto()
 	}
 
 	// 2) Zet ALLEEN gloednieuwe stapels (nog nooit gezien) automatisch op een leeg slot. Een handmatige
-	//    unassign blijft zo gerespecteerd — we vullen 'm niet meteen weer terug. (meubels uitgezonderd)
+	//    unassign blijft zo gerespecteerd — we vullen 'm niet meteen weer terug. Alles vult eerst de
+	//    hotbar (ook meubels zoals lampen/gootsteen, zodat je ze meteen kunt plaatsen); pas als de
+	//    hotbar vol is gaat de rest naar de inventory. Alleen briefgeld hoort niet op de hotbar.
 	for (const FInventoryStack& Stack : Stacks)
 	{
 		if (KnownStacks.Contains(Stack.StackId)) { continue; }
 		KnownStacks.Add(Stack.StackId);
-		if (IsFurnitureItem(Stack.ItemId)) { continue; }
 		if (Stack.ItemId == TEXT("Cash")) { continue; } // briefgeld hoort niet op de hotbar
 		if (HotbarStacks.Contains(Stack.StackId)) { continue; }
 		const int32 Empty = HotbarStacks.IndexOfByKey(0);
