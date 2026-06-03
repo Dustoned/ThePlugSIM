@@ -992,8 +992,20 @@ void UPhoneWidget::FillStoreList()
 		UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
 		CardB->SetBrush(RoundedBrush(bLocked ? FLinearColor(0.10f, 0.09f, 0.09f, 0.95f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
 		CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+
+		// Icoon links + tekstkolom rechts (seeds: icoon van het zaad-item).
+		UHorizontalBox* CardHB = WidgetTree->ConstructWidget<UHorizontalBox>();
+		CardB->SetContent(CardHB);
+		const FName IconId = UStoreComponent::IsSeedCategory(Cat) ? UStoreComponent::SeedItemId(Id) : Id;
+		USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
+		IcoSz->SetWidthOverride(40.f); IcoSz->SetHeightOverride(40.f);
+		IcoSz->SetContent(WeedUI::ItemIcon(WidgetTree, IconId, 40.f));
+		UHorizontalBoxSlot* IcoSlot = CardHB->AddChildToHorizontalBox(IcoSz);
+		IcoSlot->SetVerticalAlignment(VAlign_Center); IcoSlot->SetPadding(FMargin(0.f, 0.f, 9.f, 0.f));
+
 		UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		CardB->SetContent(CardVB);
+		UHorizontalBoxSlot* VBSlot = CardHB->AddChildToHorizontalBox(CardVB);
+		VBSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); VBSlot->SetVerticalAlignment(VAlign_Center);
 		// Titel (kort) + beschrijving eronder.
 		CardVB->AddChildToVerticalBox(MakeText(Store->GetCatalogName(Id).ToString(), 14, bLocked ? FLinearColor(0.6f, 0.6f, 0.62f) : FLinearColor(0.95f, 0.97f, 1.f)));
 		const FString DescStr = Store->GetCatalogDesc(Id).ToString();
