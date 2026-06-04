@@ -106,3 +106,14 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
   -> repliceert, oppakbaar/verplaatsbaar, en gaat mee in de save. Bij LOAD niet opnieuw
   (SaveGameSubsystem::IsFreshGame guard; de save herstelt ze zelf).
 - ATM niet meer in de starter-inventory (staat nu in elke winkel).
+
+## 2026-06-04 — Big-list batch 2
+
+- **Pot visueel**: PotInner (donkere verzonken schijf, altijd zichtbaar) -> lege pot oogt hol; grotere/hogere SoilMesh bedekt 'm zodra soil is toegevoegd. SoilId repliceerde al.
+- **Lift cabine**: runtime-componenten (wanden/deuren) worden nu expliciet via AttachToComponent(Root, KeepRelativeTransform) NA RegisterComponent vastgemaakt; SetupAttachment alleen liet ze in de wereld staan terwijl alleen de platform-vloer meeging.
+- **NPC-afspraken** (ContactsComponent + CustomerBase): een afspraak stuurt de BESTAANDE bewoner met dat NpcId aan i.p.v. een dubbele NPC te spawnen.
+  - YouGoToThem ("kom bij mij"): NPC verschijnt op de afspraaktijd in z'n eigen unit (HomeInteriorPos, boven) en wacht; bericht vermeldt het huisnummer.
+  - TheyComeToYou ("ik kom langs"): NPC wacht bij de hoofddeur van z'n eigen gebouw (HomeFrontSpot, begane grond).
+  - Afspraak heeft voorrang op roam/nacht; eindigt na de deal of na 6 min timeout; BecomeBuyerNow bij start.
+- **Roamers/nacht**: MaxResidents=40, gespreid over alle huizen; 's nachts naar huis + binnen verdwijnen — al aanwezig.
+- **OPEN**: #3 NPC's alleen op de stoep (oversteken alleen naar de volgende stoep) — vereist nav-area kosten op de wegen; nog niet gedaan.
