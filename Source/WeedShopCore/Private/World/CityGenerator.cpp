@@ -255,15 +255,11 @@ void ACityGenerator::BuildCity()
 		}
 		if (Chosen) { Center = Chosen->GetActorLocation(); }
 	}
-	{
-		FHitResult Hit;
-		const FVector S = Center + FVector(0.f, 0.f, 500.f);
-		const FVector E = Center - FVector(0.f, 0.f, 4000.f);
-		FCollisionQueryParams Q(FName(TEXT("CityGround")), false, this);
-		// Oude wereld is verwijderd -> meestal geen vloer-hit; val terug op het wereld-grondvlak (z=0)
-		// zodat de asfaltvloer altijd op een vaste hoogte ligt en je netjes landt.
-		GroundZ = W->LineTraceSingleByChannel(Hit, S, E, ECC_WorldStatic, Q) ? Hit.ImpactPoint.Z : 0.f;
-	}
+	// Grond-hoogte DETERMINISTISCH uit de PlayerStart-hoogte (NIET via een trace): een trace kan op host
+	// vs. client een andere hit geven -> de hele stad op een andere Z -> gerepliceerde spelers zweven of
+	// vallen door de vloer. De PlayerStart is dezelfde actor op alle machines, dus dit is altijd gelijk.
+	// (Capsule half-height = 96: de speler spawnt met z'n voeten op de vloer als PlayerStart 96 hoog staat.)
+	GroundZ = Center.Z - 96.f;
 	CityCenter = Center; // voor de kaart
 
 	const float Pitch = BlockSize + RoadWidth; // hart-op-hart afstand tussen blokken
