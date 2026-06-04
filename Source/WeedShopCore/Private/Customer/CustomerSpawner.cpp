@@ -11,6 +11,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Placement/PlaceableProp.h"
 #include "World/Atm.h"
+#include "World/WaterSink.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "CollisionQueryParams.h"
@@ -194,6 +195,11 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 			SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f);
 			SpawnProp(FName(TEXT("Fridge")),   At( 0.45f,  0.45f), 180.f);
 			SpawnProp(FName(TEXT("Table")),    At( 0.0f,   0.40f), 0.f);
+			// Gootsteen = AWaterSink (eigen class); mesh-pivot in het midden -> ~halve hoogte omhoog.
+			{
+				FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
+				World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc));
+			}
 		}
 	}
 
