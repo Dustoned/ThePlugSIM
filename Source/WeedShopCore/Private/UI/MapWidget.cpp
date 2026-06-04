@@ -10,6 +10,10 @@
 #include "Components/SizeBox.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Components/Image.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
@@ -66,6 +70,8 @@ FReply UMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FP
 	}
 	// Links = waypoint op de aangeklikte plek (klik-pixel -> kaart-lokaal -> wereld).
 	const FVector2D Local = Canvas->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+	// Alleen binnen het kaartvlak: klikken op het zijpaneel zet geen waypoint.
+	if (Local.X < 0.f || Local.Y < 0.f || Local.X > GMapDS || Local.Y > GMapDS) { return FReply::Unhandled(); }
 	const FVector2D World = CanvasToWorld(Local);
 	float Z = 0.f;
 	if (APawn* P = GetOwningPlayerPawn()) { Z = P->GetActorLocation().Z; }
@@ -141,18 +147,31 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("MapRoot"));
 		WidgetTree->RootWidget = Root;
 
+		// Hele widget hit-testbaar -> een klik op de kaart bereikt NativeOnMouseButtonDown (waypoint zetten).
+		SetVisibility(ESlateVisibility::Visible);
+
 		// Donkere achtergrond (dekkend -> HUD erachter komt er niet doorheen).
 		UBorder* Bg = WidgetTree->ConstructWidget<UBorder>();
 		Bg->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 1.f));
 		Root->AddChildToOverlay(Bg);
 
-		// Vaste-grootte kaartvlak, geschaald naar de beschikbare ruimte.
+		// Hoofd-layout: kaart links/midden, info-zijpaneel rechts. Zo staat er NIETS over de kaart heen.
+		UHorizontalBox* Main = WidgetTree->ConstructWidget<UHorizontalBox>();
+		if (UOverlaySlot* MOS = Root->AddChildToOverlay(Main))
+		{
+			MOS->SetHorizontalAlignment(HAlign_Fill);
+			MOS->SetVerticalAlignment(VAlign_Fill);
+			MOS->SetPadding(FMargin(24.f, 18.f));
+		}
+
+		// Vaste-grootte kaartvlak, geschaald naar de beschikbare ruimte (vierkant).
 		UScaleBox* SB = WidgetTree->ConstructWidget<UScaleBox>();
 		SB->SetStretch(EStretch::ScaleToFit);
-		if (UOverlaySlot* OS = Root->AddChildToOverlay(SB))
+		if (UHorizontalBoxSlot* MapSlot = Main->AddChildToHorizontalBox(SB))
 		{
-			OS->SetHorizontalAlignment(HAlign_Center);
-			OS->SetVerticalAlignment(VAlign_Center);
+			MapSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			MapSlot->SetHorizontalAlignment(HAlign_Center);
+			MapSlot->SetVerticalAlignment(VAlign_Center);
 		}
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 		Box->SetWidthOverride(GMapDS);
@@ -160,7 +179,7 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		SB->AddChild(Box);
 
 		Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("MapCanvas"));
-		Canvas->SetClipping(EWidgetClipping::ClipToBounds); // niets steekt buiten het kaartvlak / in de UI
+		Canvas->SetClipping(EWidgetClipping::ClipToBounds); // nummers/markers blijven binnen het kaartvlak
 		Box->SetContent(Canvas);
 
 		// Echte top-down stad-render als achtergrond (gevuld door de SceneCapture); onderop.
@@ -175,24 +194,42 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		}
 		MapImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-		// Dekkende balk boven (titel/uitleg) en onder (legenda) -> tekst valt nooit meer op gebouwen.
-		auto AddBar = [&](float Y, float H)
+		// --- Info-zijpaneel rechts (naast de kaart, niet erover) ---
+		UBorder* Side = WidgetTree->ConstructWidget<UBorder>();
+		Side->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.08f, 0.11f, 0.97f), 12.f));
+		Side->SetPadding(FMargin(16.f, 14.f));
+		if (UHorizontalBoxSlot* SS = Main->AddChildToHorizontalBox(Side))
 		{
-			UBorder* Bar = WidgetTree->ConstructWidget<UBorder>();
-			Bar->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 0.94f));
-			if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Bar))
-			{
-				Cs->SetAutoSize(false); Cs->SetSize(FVector2D(GMapDS, H));
-				Cs->SetAlignment(FVector2D(0.f, 0.f)); Cs->SetPosition(FVector2D(0.f, Y)); Cs->SetZOrder(45);
-			}
-			Bar->SetVisibility(ESlateVisibility::HitTestInvisible);
-		};
-		AddBar(0.f, 78.f);
-		AddBar(GMapDS - 30.f, 30.f);
+			SS->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+			SS->SetVerticalAlignment(VAlign_Center);
+			SS->SetPadding(FMargin(18.f, 0.f, 0.f, 0.f));
+		}
+		USizeBox* SideW = WidgetTree->ConstructWidget<USizeBox>();
+		SideW->SetWidthOverride(240.f);
+		Side->SetContent(SideW);
+		UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+		SideW->SetContent(Info);
 
-		// Titel + kompas.
-		AddCanvasText(TEXT("STAD - KAART"), FVector2D(GMapDS * 0.5f, 20.f), GMapDS, 20, FLinearColor(0.7f, 0.85f, 1.f), 50);
-		AddCanvasText(TEXT("N"), FVector2D(GMapDS * 0.5f, 44.f), 40.f, 14, FLinearColor(0.8f, 0.8f, 0.9f), 50);
+		auto AddInfo = [&](const FString& T, int32 Size, const FLinearColor& Col, float TopPad)
+		{
+			UTextBlock* Tb = WidgetTree->ConstructWidget<UTextBlock>();
+			Tb->SetText(FText::FromString(T));
+			Tb->SetFont(FCoreStyle::GetDefaultFontStyle("Regular", Size));
+			Tb->SetColorAndOpacity(FSlateColor(Col));
+			Tb->SetAutoWrapText(true);
+			if (UVerticalBoxSlot* Vs = Info->AddChildToVerticalBox(Tb)) { Vs->SetPadding(FMargin(0.f, TopPad, 0.f, 0.f)); }
+		};
+		AddInfo(TEXT("STAD - KAART"), 22, FLinearColor(0.8f, 0.9f, 1.f), 0.f);
+		AddInfo(TEXT("Noord is boven"), 12, FLinearColor(0.6f, 0.65f, 0.75f), 6.f);
+		AddInfo(TEXT("Klik = waypoint zetten"), 13, FLinearColor(0.75f, 0.85f, 1.f), 22.f);
+		AddInfo(TEXT("Rechtsklik = waypoint wissen"), 13, FLinearColor(0.75f, 0.85f, 1.f), 3.f);
+		AddInfo(TEXT("M = kaart sluiten"), 12, FLinearColor(0.6f, 0.65f, 0.75f), 3.f);
+		AddInfo(TEXT("Legenda"), 14, FLinearColor(0.85f, 0.9f, 1.f), 24.f);
+		AddInfo(TEXT("cyaan stip = jij"), 12, FLinearColor(0.4f, 0.9f, 1.f), 6.f);
+		AddInfo(TEXT("geel = waypoint"), 12, FLinearColor(1.f, 0.85f, 0.3f), 3.f);
+		AddInfo(TEXT("blauw = NPC"), 12, FLinearColor(0.45f, 0.6f, 1.f), 3.f);
+		AddInfo(TEXT("groen poppetje = klant voor jou"), 12, FLinearColor(0.5f, 1.f, 0.6f), 3.f);
+		AddInfo(TEXT("goud huisje = jouw woning"), 12, FLinearColor(1.f, 0.82f, 0.3f), 3.f);
 	}
 	return Super::RebuildWidget();
 }
@@ -259,6 +296,7 @@ void UMapWidget::BuildBlocks()
 	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 26);
 	WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
+	// (Titel/uitleg/legenda staan in het zijpaneel rechts, niet meer over de kaart.)
 	// Goud huisje op JOUW woning (alleen zichtbaar als je er een bezit).
 	{
 		USizeBox* HB = WidgetTree->ConstructWidget<USizeBox>();
@@ -271,11 +309,6 @@ void UMapWidget::BuildBlocks()
 		HB->SetVisibility(ESlateVisibility::Collapsed);
 		HomeIcon = HB;
 	}
-	AddCanvasText(TEXT("Klik = waypoint zetten  /  rechtsklik = wissen"),
-		FVector2D(GMapDS * 0.5f, 64.f), GMapDS, 11, FLinearColor(0.7f, 0.85f, 1.f), 50);
-	AddCanvasText(TEXT("cyaan stip = jij    geel = waypoint    blauw = NPC    groen poppetje = klant voor jou"),
-		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 10, FLinearColor(0.7f, 0.72f, 0.8f), 50);
-
 	bBuiltBlocks = true;
 }
 
