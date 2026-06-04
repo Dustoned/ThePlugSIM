@@ -458,10 +458,6 @@ void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
 				return S;
 			};
 
-			if (i == 0 && j == -1)      { B.Color = CGas;  B.Label = TEXT("GAS");       B.bShop = true; }
-			else if (i == S && j == S)  { B.Color = CGrow; B.Label = TEXT("GROW");      B.bShop = true; }
-			else if (i == -S && j == S) { B.Color = CFurn; B.Label = TEXT("FURNITURE"); B.bShop = true; }
-			else if (i == S && j == -S) { B.Color = CSupp; B.Label = TEXT("SUPPLIES");  B.bShop = true; }
 			// Flat-label: gebouwnummer + de unit-reeks (bijv. "32  1-20"), zelfde nummering als de deuren binnen.
 			auto AptLabel = [&]() {
 				const float Foot = BlockSize - 2.f * SidewalkWidth;
@@ -472,7 +468,13 @@ void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
 				return FString::Printf(TEXT("%d  1-%d"), BaseNo, Total);
 			};
 
-			if (FMath::Max(FMath::Abs(i), FMath::Abs(j)) == 1) { B.Color = CRow; B.Label = RowLabel(); }
+			// LET OP: winkels eerst; de woon-toewijzing hieronder is 'else if' zodat de winkellabels
+			// (GAS/GROW/...) NIET door huisnummers overschreven worden (dat was de bug: shop mét nummer).
+			if (i == 0 && j == -1)      { B.Color = CGas;  B.Label = TEXT("GAS");       B.bShop = true; }
+			else if (i == S && j == S)  { B.Color = CGrow; B.Label = TEXT("GROW");      B.bShop = true; }
+			else if (i == -S && j == S) { B.Color = CFurn; B.Label = TEXT("FURNITURE"); B.bShop = true; }
+			else if (i == S && j == -S) { B.Color = CSupp; B.Label = TEXT("SUPPLIES");  B.bShop = true; }
+			else if (FMath::Max(FMath::Abs(i), FMath::Abs(j)) == 1) { B.Color = CRow; B.Label = RowLabel(); }
 			else if ((H % 4u) != 0u)    { B.Color = CRow; B.Label = RowLabel(); }
 			else                        { B.Color = CApt; B.Label = AptLabel(); }
 

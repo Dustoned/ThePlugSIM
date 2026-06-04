@@ -92,11 +92,11 @@ UTextBlock* UMapWidget::AddCanvasText(const FString& T, FVector2D Pos, float W, 
 UWidget* UMapWidget::AddPill(const FString& T, FVector2D Pos, int32 Size, const FLinearColor& TextCol, int32 ZOrder)
 {
 	UBorder* B = WidgetTree->ConstructWidget<UBorder>();
-	B->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.66f), 4.f));
-	B->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
+	B->SetBrush(WeedUI::Rounded(FLinearColor(0.01f, 0.02f, 0.03f, 0.8f), 4.f));
+	B->SetPadding(FMargin(5.f, 1.f, 5.f, 2.f));
 	UTextBlock* Tb = WidgetTree->ConstructWidget<UTextBlock>();
 	Tb->SetText(FText::FromString(T));
-	Tb->SetFont(FCoreStyle::GetDefaultFontStyle("Regular", Size));
+	Tb->SetFont(WeedUI::Font(Size, true));
 	Tb->SetColorAndOpacity(FSlateColor(TextCol));
 	Tb->SetJustification(ETextJustify::Center);
 	B->SetContent(Tb);
@@ -216,10 +216,32 @@ void UMapWidget::BuildBlocks()
 		const bool bRowBlock = !Bk.bShop && Bk.Label != TEXT("Park") && !Bk.Label.Contains(TEXT("-"));
 		if (bRowBlock) { continue; } // rijtjeshuizen -> per-huis nummers
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
-		FLinearColor Col = FLinearColor(1.f, 1.f, 0.96f);
-		if (Bk.bShop) { Col = FLinearColor(1.f, 0.86f, 0.35f); }
-		else if (Bk.Label == TEXT("Park")) { Col = FLinearColor(0.55f, 1.f, 0.6f); }
-		AddPill(Bk.Label, P, Bk.bShop ? 13 : 11, Col, 8);
+
+		if (Bk.bShop)
+		{
+			// Winkel = passend icoontje op het blok (GEEN nummer), met de naam eronder.
+			WeedUI::EIcon Ico = WeedUI::EIcon::Shop;
+			FLinearColor Tint(1.f, 0.86f, 0.35f);
+			if (Bk.Label == TEXT("GAS"))            { Ico = WeedUI::EIcon::Flame; Tint = FLinearColor(1.f, 0.45f, 0.35f); }
+			else if (Bk.Label == TEXT("GROW"))      { Ico = WeedUI::EIcon::Leaf;  Tint = FLinearColor(0.5f, 1.f, 0.5f); }
+			else if (Bk.Label == TEXT("FURNITURE")) { Ico = WeedUI::EIcon::Home;  Tint = FLinearColor(0.8f, 0.65f, 1.f); }
+			else if (Bk.Label == TEXT("SUPPLIES"))  { Ico = WeedUI::EIcon::Shop;  Tint = FLinearColor(0.5f, 0.78f, 1.f); }
+			if (UWidget* IcoW = WeedUI::Icon(WidgetTree, Ico, 34.f, Tint))
+			{
+				if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(IcoW))
+				{
+					Cs->SetAutoSize(false); Cs->SetSize(FVector2D(34.f, 34.f));
+					Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P + FVector2D(0.f, -10.f)); Cs->SetZOrder(9);
+				}
+				IcoW->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			AddPill(Bk.Label, P + FVector2D(0.f, 16.f), 11, Tint, 8);
+		}
+		else
+		{
+			const FLinearColor Col = (Bk.Label == TEXT("Park")) ? FLinearColor(0.55f, 1.f, 0.6f) : FLinearColor(1.f, 1.f, 0.96f);
+			AddPill(Bk.Label, P, 11, Col, 8);
+		}
 	}
 
 	// Eén nummer-chip per rijtjeshuis op zijn eigen deurpositie (nummer zonder "-" = rijtjeshuis;
