@@ -213,7 +213,8 @@ public:
 	// "gleden" voor elkaar. Draait op alle machines (proxies), zodat iedereen elkaar ziet lopen.
 	UPROPERTY() TObjectPtr<class UAnimSequence> TpIdleAnim;
 	UPROPERTY() TObjectPtr<class UAnimSequence> TpWalkAnim;
-	bool bTpMoving = false;
+	UPROPERTY() TObjectPtr<class UAnimSequence> TpJumpAnim; // lucht/spring-pose
+	int32 TpAnimState = -1; // -1 nog niet, 0 idle, 1 walk, 2 in de lucht
 	bool bTpStarted = false;
 	void UpdateBodyAnim();
 

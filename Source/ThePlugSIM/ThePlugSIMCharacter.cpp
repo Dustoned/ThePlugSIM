@@ -86,6 +86,8 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	if (TpIdleF.Succeeded()) { TpIdleAnim = TpIdleF.Object; }
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> TpWalkF(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Fwd.MF_Unarmed_Walk_Fwd"));
 	if (TpWalkF.Succeeded()) { TpWalkAnim = TpWalkF.Object; }
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> TpJumpF(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Fall_Loop.MM_Fall_Loop"));
+	if (TpJumpF.Succeeded()) { TpJumpAnim = TpJumpF.Object; }
 
 	GetCapsuleComponent()->SetCapsuleSize(34.0f, 96.0f);
 
@@ -198,10 +200,15 @@ void AThePlugSIMCharacter::UpdateBodyAnim()
 	if (!bTpStarted) { return; }
 	USkeletalMeshComponent* M = GetMesh();
 	if (!M) { return; }
-	const bool bMoving = GetVelocity().Size2D() > 12.f;
-	if (bMoving == bTpMoving) { return; } // alleen wisselen bij state-verandering
-	bTpMoving = bMoving;
-	if (UAnimSequence* Seq = bMoving ? TpWalkAnim : TpIdleAnim) { M->PlayAnimation(Seq, true); }
+	// State bepalen: in de lucht (springen/vallen) > lopen > idle.
+	int32 NewState = 0; // idle
+	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling()) { NewState = 2; }
+	else if (GetVelocity().Size2D() > 12.f) { NewState = 1; }
+	if (NewState == TpAnimState) { return; } // alleen wisselen bij verandering
+	TpAnimState = NewState;
+	UAnimSequence* Seq = (NewState == 2) ? TpJumpAnim : (NewState == 1) ? TpWalkAnim : TpIdleAnim;
+	if (!Seq) { Seq = TpIdleAnim; }
+	if (Seq) { M->PlayAnimation(Seq, true); } // loop (lucht-pose loopt tijdens het zweven)
 }
 
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
@@ -698,7 +705,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		{
 			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			if (TpIdleAnim) { M->PlayAnimation(TpIdleAnim, true); }
-			bTpMoving = false;
+			TpAnimState = 0; // idle
 			bTpStarted = true;
 		}
 	}
