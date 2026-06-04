@@ -107,15 +107,32 @@ void ACustomerSpawner::SpawnResidents()
 	// ELKE genummerde woning krijgt een bewoner (deur op slot met naam). Een gespreide subset loopt
 	// ook ECHT rond (MaxResidents; 0 = allemaal). De rest "woont er" via de op-slot-deur met naam.
 	const int32 Total = Homes.Num();
-	const bool bAll = (MaxResidents <= 0);
-	const int32 Want = bAll ? Total : FMath::Clamp(MaxResidents, 0, Total);
-	const int32 Step = (Want > 0) ? FMath::Max(1, Total / Want) : (Total + 1);
 
 	// De 3 koopbare panden (starter-flatje, rijtjeshuis, grote kamer) blijven ALTIJD vrij: geen bewoner,
 	// deur als "TE KOOP" totdat de speler 'm koopt (dan ontgrendelt de PhoneClientComponent 'm lokaal).
 	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
 	TSet<int32> ForSale;
 	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
+
+	// Fysieke roamers kiezen we per UNIEKE hoofdingang: alle units van één appartement-/flatgebouw delen
+	// dezelfde DoorPos, dus zonder dit zouden er tig bewoners op exact dezelfde stoephoek clusteren.
+	// Eén roamer per ingang, gespreid over de stad.
+	auto DoorKey = [](const FVector& P) { return FIntVector(FMath::RoundToInt(P.X / 50.f), FMath::RoundToInt(P.Y / 50.f), 0); };
+	TArray<int32> Entrances; // eerste home-index per unieke DoorPos (geen koopbare panden)
+	{
+		TSet<FIntVector> Seen;
+		for (int32 i = 0; i < Total; ++i)
+		{
+			if (ForSale.Contains(i)) { continue; }
+			const FIntVector Key = DoorKey(Homes[i].DoorPos);
+			if (!Seen.Contains(Key)) { Seen.Add(Key); Entrances.Add(i); }
+		}
+	}
+	const bool bAll = (MaxResidents <= 0);
+	const int32 UWant = bAll ? Entrances.Num() : FMath::Clamp(MaxResidents, 0, Entrances.Num());
+	const int32 UStep = (UWant > 0) ? FMath::Max(1, Entrances.Num() / UWant) : (Entrances.Num() + 1);
+	TSet<int32> PhysicalSet;
+	for (int32 k = 0, made = 0; k < Entrances.Num() && made < UWant; k += UStep) { PhysicalSet.Add(Entrances[k]); ++made; }
 
 	int32 Made = 0;
 	for (int32 i = 0; i < Total; ++i)
@@ -126,7 +143,7 @@ void ACustomerSpawner::SpawnResidents()
 			if (ACityDoor* Dr = H.Door.Get()) { Dr->SetForSale(); }
 			continue; // geen NPC in een koopbaar pand
 		}
-		const bool bPhysical = (Made < Want) && (Step <= 0 ? true : (i % Step == 0));
+		const bool bPhysical = PhysicalSet.Contains(i);
 
 		if (bPhysical)
 		{

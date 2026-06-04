@@ -429,6 +429,16 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			{
 				WalkTo(Out.Location);
 			}
+			else
+			{
+				// Niet (meer) op de navmesh -> bv. vastgelopen/geduwd bij een ingang. Projecteer op de
+				// dichtstbijzijnde navmesh en ga daar staan, zodat 'ie volgende tick weer kan roamen.
+				FNavLocation Proj;
+				if (Nav->ProjectPointToNavigation(GetActorLocation(), Proj, FVector(900.f, 900.f, 500.f)))
+				{
+					SetActorLocation(Proj.Location + FVector(0.f, 0.f, 2.f));
+				}
+			}
 		}
 	}
 }
