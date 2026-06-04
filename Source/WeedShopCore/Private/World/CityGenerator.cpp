@@ -462,9 +462,19 @@ void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
 			else if (i == S && j == S)  { B.Color = CGrow; B.Label = TEXT("GROW");      B.bShop = true; }
 			else if (i == -S && j == S) { B.Color = CFurn; B.Label = TEXT("FURNITURE"); B.bShop = true; }
 			else if (i == S && j == -S) { B.Color = CSupp; B.Label = TEXT("SUPPLIES");  B.bShop = true; }
-			else if (FMath::Max(FMath::Abs(i), FMath::Abs(j)) == 1) { B.Color = CRow; B.Label = RowLabel(); }
+			// Flat-label: gebouwnummer + de unit-reeks (bijv. "32  1-20"), zelfde nummering als de deuren binnen.
+			auto AptLabel = [&]() {
+				const float Foot = BlockSize - 2.f * SidewalkWidth;
+				const float HallLen = Foot - 640.f;                 // CoreDepth = 640
+				const int32 NApt = FMath::Max(2, (int32)(HallLen / 470.f));
+				const int32 NF = 4 + (int32)((H >> 2) % 4u);        // verdiepingen (generieke flat)
+				const int32 Total = NApt * 2 * NF;                  // units per zijde * 2 zijden * verdiepingen
+				return FString::Printf(TEXT("%d  1-%d"), BaseNo, Total);
+			};
+
+			if (FMath::Max(FMath::Abs(i), FMath::Abs(j)) == 1) { B.Color = CRow; B.Label = RowLabel(); }
 			else if ((H % 4u) != 0u)    { B.Color = CRow; B.Label = RowLabel(); }
-			else                        { B.Color = CApt; B.Label = FString::Printf(TEXT("Nr %d"), BaseNo); }
+			else                        { B.Color = CApt; B.Label = AptLabel(); }
 
 			Out.Add(B);
 		}
