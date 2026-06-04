@@ -761,19 +761,14 @@ void AThePlugSIMCharacter::BeginPlay()
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 1);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
-		// (Geen Sink/ATM in de inventory meer: er staat een gootsteen in elke woning en een ATM in elke winkel.)
+		// (Geen Sink/ATM/meubels in de inventory: gootsteen + tafel/koelkast/matras staan al in elke
+		// woning, en een ATM in elke winkel. NIET meer opvegen naar de inventory -> anders kreeg je ze
+		// dubbel in je tas en stond je huis leeg.)
 
-		// Alle meubels die in de starter-home staan gaan in de inventory (niet de hotbar): we vegen
-		// de geplaatste props op en geven het bijbehorende item. Zo begin je met een leeg huis en
-		// kun je zelf bepalen waar alles komt. (Solo/host: bij level-start bestaan alleen de
-		// map-meubels; speler-geplaatste props komen pas later.)
-		for (TActorIterator<APlaceableProp> It(GetWorld()); It; ++It)
-		{
-			APlaceableProp* Prop = *It;
-			if (!IsValid(Prop) || Prop->ItemId.IsNone()) { continue; }
-			Inventory->AddItem(Prop->ItemId, 1);
-			Prop->Destroy();
-		}
+		// Om te kunnen beginnen krijg je wél het droogrek en de inpaktafel in je inventory, zodat je ze
+		// zelf in je huis kunt neerzetten (drogen + verpakken hoort bij de basis-gameplay).
+		Inventory->AddItem(FName(TEXT("DryRack_Std")), 1);
+		Inventory->AddItem(FName(TEXT("Bench_Pack")), 1);
 	}
 
 	// (De ATM is nu een plaatsbaar item in je inventory: zet 'm zelf neer waar je wilt, binnen of buiten.)
