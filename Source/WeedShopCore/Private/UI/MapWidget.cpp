@@ -12,6 +12,8 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UI/WeedUiStyle.h"
 #include "Styling/CoreStyle.h"
 #include "World/CityGenerator.h"
@@ -163,48 +165,26 @@ void UMapWidget::BuildBlocks()
 {
 	if (!Canvas || !City.IsValid()) { return; }
 
-	const int32 R = City->GetGridRadiusClamped();
-	const float Pitch = City->GetPitch();
 	const FVector C = City->GetCityCenter();
 	CenterXY = FVector2D(C.X, C.Y);
-	const float Pad = 42.f;
-	const float EH = (R + 0.6f) * Pitch;               // halve wereld-omvang van het grid
-	Scale = (GMapDS - 2.f * Pad) / (2.f * EH);
+	// Schaal afgestemd op de top-down render: het 760px-vlak = de OrthoWidth-brede wereldzone.
+	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
+	Scale = GMapDS / Ortho;
 
-	if (MapImage) { MapImage->SetVisibility(ESlateVisibility::Collapsed); } // capture niet gebruiken
-
-	// DEKKENDE ondergrond = asfalt/wegen (vult het hele kaartvlak, dus nooit doorzichtig).
-	{
-		UBorder* Ground = WidgetTree->ConstructWidget<UBorder>();
-		Ground->SetBrushColor(FLinearColor(0.16f, 0.17f, 0.19f, 1.f));
-		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Ground))
-		{
-			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(GMapDS, GMapDS));
-			Cs->SetAlignment(FVector2D(0.f, 0.f)); Cs->SetPosition(FVector2D(0.f, 0.f)); Cs->SetZOrder(0);
-		}
-		Ground->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-
-	// Blokken als afgeronde tegels; de gaten ertussen (= de ondergrond) lezen als straten.
+	// Huisnummer-/winkellabels boven de ECHTE stad-render (zo zie je gebouwen ÉN welke nummers waar).
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
 	const float BlkPx = City->GetMapBlockSize() * Scale;
 	for (const FCityMapBlock& Bk : Blocks)
 	{
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
-		UBorder* Tile = WidgetTree->ConstructWidget<UBorder>();
-		Tile->SetBrush(WeedUI::Rounded(Bk.Color, 6.f));
-		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Tile))
-		{
-			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(BlkPx, BlkPx));
-			Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P); Cs->SetZOrder(1);
-		}
-		Tile->SetVisibility(ESlateVisibility::HitTestInvisible);
-		// ELK blok krijgt zijn label: winkelnaam, of de losse huisnummers (rijtjeshuizen) / reeks (flat).
-		// Donkere tekst op de lichte tegels -> goed leesbaar; bovenin zodat NPC-stipjes 'm niet bedekken.
 		const int32 FontSz = Bk.bShop ? 13 : 11;
-		AddCanvasText(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.30f), BlkPx + 12.f, FontSz, FLinearColor(0.06f, 0.06f, 0.08f), 6);
+		// Wit met donkere "schaduw" eronder -> leesbaar op zowel donkere wegen als gekleurde daken.
+		AddCanvasText(Bk.Label, P + FVector2D(1.f, -BlkPx * 0.30f + 1.f), BlkPx + 12.f, FontSz, FLinearColor(0.f, 0.f, 0.f, 0.85f), 5);
+		AddCanvasText(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.30f), BlkPx + 12.f, FontSz, FLinearColor(1.f, 1.f, 0.95f), 6);
 	}
+
+	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
 	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 20);
@@ -212,7 +192,7 @@ void UMapWidget::BuildBlocks()
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 	AddCanvasText(TEXT("Klik = waypoint zetten  /  rechtsklik = wissen"),
 		FVector2D(GMapDS * 0.5f, 64.f), GMapDS, 11, FLinearColor(0.7f, 0.85f, 1.f), 50);
-	AddCanvasText(TEXT("groen=grow  paars=meubels  blauw=supplies  rood=gas    cyaan=NPC  groen poppetje=klant voor jou"),
+	AddCanvasText(TEXT("cyaan stip = jij    geel = waypoint    blauw = NPC    groen poppetje = klant voor jou"),
 		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 10, FLinearColor(0.7f, 0.72f, 0.8f), 50);
 
 	bBuiltBlocks = true;
@@ -228,6 +208,25 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	if (!bBuiltBlocks && City.IsValid()) { BuildBlocks(); }
 	if (!bBuiltBlocks || !Canvas) { return; }
+
+	// Echte top-down render dekkend tonen: M_MapDisplay (UI/opaque) sampelt de SceneCapture-RT.
+	// De BaseColor-capture heeft alpha=0; dit materiaal negeert die alpha -> geen doorzichtige kaart.
+	if (!bImageSet && MapImage && City.IsValid())
+	{
+		if (UTextureRenderTarget2D* RT = City->GetMapRenderTarget())
+		{
+			if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_MapDisplay.M_MapDisplay")))
+			{
+				UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Base, this);
+				MID->SetTextureParameterValue(TEXT("Tex"), RT);
+				MapImage->SetBrushFromMaterial(MID);
+				if (UCanvasPanelSlot* Is = Cast<UCanvasPanelSlot>(MapImage->Slot)) { Is->SetSize(FVector2D(GMapDS, GMapDS)); }
+				MapImage->SetDesiredSizeOverride(FVector2D(GMapDS, GMapDS));
+				MapImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+				bImageSet = true;
+			}
+		}
+	}
 
 	// Speler.
 	if (PlayerDot)
@@ -289,7 +288,7 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		else
 		{
 			// Gewone roamer = klein cyaan puntje (geen label).
-			while (NpcDots.Num() <= NRoam) { NpcDots.Add(AddDot(FLinearColor(0.35f, 0.8f, 1.f), 8.f, 18)); }
+			while (NpcDots.Num() <= NRoam) { NpcDots.Add(AddDot(FLinearColor(0.25f, 0.45f, 1.f), 10.f, 18)); }
 			if (UBorder* Dot = NpcDots[NRoam])
 			{
 				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(Pos); }
