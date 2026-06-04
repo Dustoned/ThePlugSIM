@@ -104,7 +104,7 @@ void ACustomerSpawner::SpawnResidents()
 	// deur als "TE KOOP" totdat de speler 'm koopt (dan ontgrendelt de PhoneClientComponent 'm lokaal).
 	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
 	TSet<int32> ForSale;
-	for (const FCityPropertyOffer& O : Offers) { ForSale.Add(O.HomeIndex); }
+	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
 
 	int32 Made = 0;
 	for (int32 i = 0; i < Total; ++i)

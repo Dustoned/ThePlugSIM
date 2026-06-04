@@ -639,14 +639,20 @@ bool UBuildComponent::IsIndoors(const FVector& FloorPoint) const
 	const UWorld* World = GetWorld();
 	if (!World) { return true; }
 
-	// Trace recht omhoog vanaf net boven de vloer: raken we een plafond/dak -> binnen.
-	// Buiten (tuin/straat) is er open lucht boven, dus geen hit.
+	// Trace recht omhoog: raken we een plafond/dak -> binnen. Buiten is er open lucht boven.
+	// We checken NIET alleen het midden maar ook een paar punten eromheen: staat de plek net onder een
+	// deuropening of trapgat, dan vangt een naburig punt het plafond alsnog -> geen valse "buiten".
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopIndoorTrace), false);
 	if (GetOwner()) { Params.AddIgnoredActor(GetOwner()); }
-	const FVector Start = FloorPoint + FVector(0.f, 0.f, 25.f);
-	const FVector End = Start + FVector(0.f, 0.f, CeilingTraceHeight);
-	FHitResult Ceil;
-	return World->LineTraceSingleByChannel(Ceil, Start, End, ECC_Visibility, Params);
+	static const FVector2D Offs[] = { {0.f, 0.f}, {55.f, 0.f}, {-55.f, 0.f}, {0.f, 55.f}, {0.f, -55.f} };
+	for (const FVector2D& O : Offs)
+	{
+		const FVector Start = FloorPoint + FVector(O.X, O.Y, 25.f);
+		const FVector End = Start + FVector(0.f, 0.f, CeilingTraceHeight);
+		FHitResult Ceil;
+		if (World->LineTraceSingleByChannel(Ceil, Start, End, ECC_Visibility, Params)) { return true; }
+	}
+	return false;
 }
 
 bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint, const FVector& BoxHalf, float Yaw, bool bPotSpacing) const

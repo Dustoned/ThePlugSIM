@@ -296,9 +296,9 @@ void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
 			return;
 		}
 	}
-	OwnedHomes.AddUnique(HomeIndex);
-	ActiveHome = HomeIndex;
-	MoveOwnerToHome(HomeIndex);
+	for (int32 Idx : Off->Homes) { OwnedHomes.AddUnique(Idx); } // 1 woning, of 3 bij het rijtjesblok
+	ActiveHome = Off->HomeIndex;
+	MoveOwnerToHome(Off->HomeIndex);
 	ApplyLocalDoors();
 	if (GEngine) { UWeedToast::Notify(-1, 4.f, FColor::Green, FString::Printf(TEXT("Pand gekocht: %s"), *Off->Title)); }
 }

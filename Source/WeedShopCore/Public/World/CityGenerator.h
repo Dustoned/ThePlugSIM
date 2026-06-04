@@ -35,7 +35,8 @@ USTRUCT()
 struct FCityPropertyOffer
 {
 	GENERATED_BODY()
-	UPROPERTY() int32 HomeIndex = -1;   // index in ApartmentHomes
+	UPROPERTY() int32 HomeIndex = -1;   // primaire woning (spawn/active/marker)
+	UPROPERTY() TArray<int32> Homes;    // ALLE woningen die dit pand omvat (1, of 3 bij het rijtjesblok)
 	UPROPERTY() FString Title;          // "Klein flatje (bovenin)" enz.
 	UPROPERTY() FString Sub;            // "Nr 102-7  -  3e verdieping"
 	UPROPERTY() int64 PriceCents = 0;   // koopprijs (bank); 0 = starter (gratis, al van jou)

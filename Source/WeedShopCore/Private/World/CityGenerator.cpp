@@ -486,49 +486,59 @@ void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
 void ACityGenerator::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
 {
 	Out.Reset();
-	if (ApartmentHomes.Num() == 0) { return; }
+	const int32 N = ApartmentHomes.Num();
+	if (N == 0) { return; }
 
-	// Starter = flat-unit op de HOOGSTE verdieping (klein flatje bovenin). Grote kamer = flat-unit op
-	// de begane grond (ruim), in een ANDER pand. Rijtjeshuis = eerste rijtjeshuis-woning.
-	int32 StarterIdx = INDEX_NONE, BigIdx = INDEX_NONE, RowIdx = INDEX_NONE;
-	int32 BestTopFloor = -1, BestGroundFloor = INT32_MAX;
-	for (int32 i = 0; i < ApartmentHomes.Num(); ++i)
+	// Starter = flat-unit op de HOOGSTE verdieping (klein flatje bovenin).
+	int32 StarterIdx = INDEX_NONE; int32 BestTop = -1;
+	for (int32 i = 0; i < N; ++i)
 	{
 		const FApartmentHome& H = ApartmentHomes[i];
-		if (H.bApartment)
-		{
-			if (H.Floor > BestTopFloor) { BestTopFloor = H.Floor; StarterIdx = i; }
-		}
-		else if (RowIdx == INDEX_NONE) { RowIdx = i; }
-	}
-	// Grote kamer: laagste verdieping, niet hetzelfde als de starter.
-	for (int32 i = 0; i < ApartmentHomes.Num(); ++i)
-	{
-		const FApartmentHome& H = ApartmentHomes[i];
-		if (H.bApartment && i != StarterIdx && H.Floor <= BestGroundFloor)
-		{
-			BestGroundFloor = H.Floor; BigIdx = i;
-		}
+		if (H.bApartment && H.Floor > BestTop) { BestTop = H.Floor; StarterIdx = i; }
 	}
 
-	auto Add = [&](int32 Idx, const FString& Title, int64 Price, bool bStarter)
+	// Eerste rijtjeshuis (enkele woning) + einde van dat eerste aaneengesloten rijtjes-blok.
+	int32 RowIdx = INDEX_NONE;
+	for (int32 i = 0; i < N; ++i) { if (!ApartmentHomes[i].bApartment) { RowIdx = i; break; } }
+	int32 RowEnd = RowIdx;
+	while (RowEnd != INDEX_NONE && RowEnd + 1 < N && !ApartmentHomes[RowEnd + 1].bApartment) { ++RowEnd; }
+
+	// Duurste pand = 3 aaneengesloten rijtjeshuizen (grootste ruimte). Zoek ze in een ANDER blok dan de
+	// enkele rijtjeshuis-aanbieding; lukt dat niet, pak dan 3 units ná de enkele in hetzelfde blok.
+	TArray<int32> Triple;
+	for (int32 i = (RowEnd == INDEX_NONE ? 0 : RowEnd + 1); i + 2 < N; ++i)
 	{
-		if (!ApartmentHomes.IsValidIndex(Idx)) { return; }
-		const FApartmentHome& H = ApartmentHomes[Idx];
+		if (!ApartmentHomes[i].bApartment && !ApartmentHomes[i + 1].bApartment && !ApartmentHomes[i + 2].bApartment)
+		{
+			Triple = { i, i + 1, i + 2 }; break;
+		}
+	}
+	if (Triple.Num() == 0 && RowIdx != INDEX_NONE && (RowEnd - RowIdx) >= 3)
+	{
+		Triple = { RowIdx + 1, RowIdx + 2, RowIdx + 3 };
+	}
+
+	auto Add = [&](const TArray<int32>& Homes, int32 Primary, const FString& Title, int64 Price, bool bStarter)
+	{
+		if (Homes.Num() == 0 || !ApartmentHomes.IsValidIndex(Primary)) { return; }
+		const FApartmentHome& H = ApartmentHomes[Primary];
 		FCityPropertyOffer O;
-		O.HomeIndex = Idx;
+		O.Homes = Homes;
+		O.HomeIndex = Primary;
 		O.Title = Title;
 		O.Sub = H.bApartment
 			? FString::Printf(TEXT("Nr %s  -  %de verdieping"), *H.Number, H.Floor + 1)
-			: FString::Printf(TEXT("Nr %s  -  rijtjeshuis"), *H.Number);
+			: (Homes.Num() > 1
+				? FString::Printf(TEXT("Nr %s e.v.  -  %d huizen samen"), *H.Number, Homes.Num())
+				: FString::Printf(TEXT("Nr %s  -  rijtjeshuis"), *H.Number));
 		O.PriceCents = Price;
 		O.bStarter = bStarter;
 		Out.Add(O);
 	};
 
-	Add(StarterIdx, TEXT("Klein flatje (bovenin)"), 0, true);
-	Add(RowIdx,     TEXT("Rijtjeshuis"),            1500000, false);   // EUR 15.000
-	Add(BigIdx,     TEXT("Grote kamer (flat)"),     4000000, false);   // EUR 40.000
+	if (StarterIdx != INDEX_NONE) { Add({ StarterIdx }, StarterIdx, TEXT("Klein flatje (bovenin)"), 0, true); }
+	if (RowIdx != INDEX_NONE)     { Add({ RowIdx }, RowIdx, TEXT("Rijtjeshuis"), 1500000, false); }       // EUR 15.000
+	if (Triple.Num() == 3)        { Add(Triple, Triple[1], TEXT("Rijtjesblok (3 naast elkaar)"), 6000000, false); } // EUR 60.000
 }
 
 void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed)
