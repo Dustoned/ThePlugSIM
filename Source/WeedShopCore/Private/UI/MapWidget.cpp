@@ -176,7 +176,7 @@ void UMapWidget::BuildBlocks()
 	// DEKKENDE ondergrond = asfalt/wegen (vult het hele kaartvlak, dus nooit doorzichtig).
 	{
 		UBorder* Ground = WidgetTree->ConstructWidget<UBorder>();
-		Ground->SetBrushColor(FLinearColor(0.11f, 0.11f, 0.13f, 1.f));
+		Ground->SetBrushColor(FLinearColor(0.16f, 0.17f, 0.19f, 1.f));
 		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Ground))
 		{
 			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(GMapDS, GMapDS));
@@ -185,7 +185,7 @@ void UMapWidget::BuildBlocks()
 		Ground->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
-	// Blokken als gekleurde tegels; de gaten ertussen (= de ondergrond) lezen als straten.
+	// Blokken als afgeronde tegels; de gaten ertussen (= de ondergrond) lezen als straten.
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
 	const float BlkPx = City->GetMapBlockSize() * Scale;
@@ -193,14 +193,17 @@ void UMapWidget::BuildBlocks()
 	{
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
 		UBorder* Tile = WidgetTree->ConstructWidget<UBorder>();
-		Tile->SetBrushColor(Bk.Color);
+		Tile->SetBrush(WeedUI::Rounded(Bk.Color, 6.f));
 		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Tile))
 		{
 			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(BlkPx, BlkPx));
 			Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P); Cs->SetZOrder(1);
 		}
 		Tile->SetVisibility(ESlateVisibility::HitTestInvisible);
-		if (Bk.bShop) { AddCanvasText(Bk.Label, P, BlkPx, 12, FLinearColor(0.05f, 0.05f, 0.06f), 5); }
+		// ELK blok krijgt zijn label: winkelnaam, of het huisnummer(-bereik) van de woningen daar.
+		// Donkere tekst op de lichte tegels -> goed leesbaar; bovenin zodat NPC-stipjes 'm niet bedekken.
+		const int32 FontSz = Bk.bShop ? 13 : 12;
+		AddCanvasText(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.30f), BlkPx + 6.f, FontSz, FLinearColor(0.06f, 0.06f, 0.08f), 6);
 	}
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
@@ -286,7 +289,7 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		else
 		{
 			// Gewone roamer = klein cyaan puntje (geen label).
-			while (NpcDots.Num() <= NRoam) { NpcDots.Add(AddDot(FLinearColor(0.35f, 0.8f, 1.f), 11.f, 18)); }
+			while (NpcDots.Num() <= NRoam) { NpcDots.Add(AddDot(FLinearColor(0.35f, 0.8f, 1.f), 8.f, 18)); }
 			if (UBorder* Dot = NpcDots[NRoam])
 			{
 				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(Pos); }
