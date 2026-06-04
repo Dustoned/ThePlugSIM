@@ -317,6 +317,8 @@ public:
 	// Save/load van eigendom.
 	const TArray<int32>& GetOwnedHomes() const { return OwnedHomes; }
 	int32 GetActiveHome() const { return ActiveHome; }
+	// Wereldlocatie van je huidige woning (voordeur) — voor de compass-home-marker. False = geen woning.
+	bool GetActiveHomeLocation(FVector& OutWorld) const;
 	void RestoreProperty(const TArray<int32>& InOwned, int32 InActive);
 	// Wordt periodiek aangeroepen (door de pawn-tick): starter toekennen + eigen deuren ontgrendelen.
 	void PropertyTick();

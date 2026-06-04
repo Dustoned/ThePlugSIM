@@ -32,6 +32,7 @@ protected:
 	bool bImageSet = false;
 	UPROPERTY() TObjectPtr<UBorder> PlayerDot;
 	UPROPERTY() TObjectPtr<UBorder> WaypointDot;
+	UPROPERTY() TObjectPtr<class UWidget> HomeIcon; // goud huisje op JOUW woning
 	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;        // roamers (cyaan stipjes)
 	UPROPERTY() TArray<TObjectPtr<class UWidget>> NeedIcons; // klanten-voor-jou (groen poppetje)
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> NpcLabels;

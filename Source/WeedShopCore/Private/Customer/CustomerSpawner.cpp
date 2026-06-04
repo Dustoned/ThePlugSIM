@@ -44,12 +44,18 @@ namespace
 	FString ResidentNameForNumber(const FString& Num)
 	{
 		static const TCHAR* First[] = { TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"),
-			TEXT("Lotte"), TEXT("Bram"), TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"), TEXT("Joost"), TEXT("Mila") };
+			TEXT("Lotte"), TEXT("Bram"), TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"),
+			TEXT("Joost"), TEXT("Mila"), TEXT("Gerrit"), TEXT("Truus"), TEXT("Henk"), TEXT("Willem"), TEXT("Bep"), TEXT("Cor"),
+			TEXT("Sjaak"), TEXT("Ria"), TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"), TEXT("Loes"), TEXT("Ome Ton"), TEXT("Tante An") };
 		// Goofy achternamen — grappig als een bewoner "dom" heet.
 		static const TCHAR* Last[] = { TEXT("Pannenkoek"), TEXT("Stokvis"), TEXT("Bonk"), TEXT("Knol"), TEXT("Prummel"),
-			TEXT("Druif"), TEXT("Kwast"), TEXT("Worst"), TEXT("Toeter"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Frikandel") };
+			TEXT("Druif"), TEXT("Kwast"), TEXT("Worst"), TEXT("Toeter"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Frikandel"),
+			TEXT("Snoek"), TEXT("Klont"), TEXT("Hark"), TEXT("Sok"), TEXT("Krent"), TEXT("Pruim"), TEXT("Brok"), TEXT("Plof"),
+			TEXT("Kwakkel"), TEXT("Tuthola"), TEXT("Schroef"), TEXT("Knapzak") };
+		const uint32 NF = (uint32)UE_ARRAY_COUNT(First);
+		const uint32 NL = (uint32)UE_ARRAY_COUNT(Last);
 		const uint32 H = GetTypeHash(Num);
-		return FString::Printf(TEXT("%s %s"), First[H % 16u], Last[(H / 16u) % 12u]);
+		return FString::Printf(TEXT("%s %s"), First[H % NF], Last[(H / NF) % NL]);
 	}
 }
 
@@ -103,20 +109,13 @@ void ACustomerSpawner::SpawnResidents()
 		}
 		const bool bPhysical = (Made < Want) && (Step <= 0 ? true : (i % Step == 0));
 
-		FString Name;
 		if (bPhysical)
 		{
 			FActorSpawnParameters SP;
 			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 			if (ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, H.DoorPos, FRotator::ZeroRotator, SP))
 			{
-				if (Reg)
-				{
-					C->NpcId = Reg->AssignNpc();
-					float r = 0.f, l = 0.f, a = 0.f; FText N;
-					if (!C->NpcId.IsNone() && Reg->GetStats(C->NpcId, r, l, a, N) && !N.IsEmpty()) { Name = N.ToString(); }
-				}
-				if (Name.IsEmpty()) { Name = ResidentNameForNumber(H.Number); }
+				if (Reg) { C->NpcId = Reg->AssignNpc(); } // registry voor stats/contact; deurnaam komt per-nummer
 				C->SetupResident(H.DoorPos, H.InteriorPos, H.Number);
 				if (Made == 0) // eerste bewoner = gegarandeerde koopklare test-klant
 				{
@@ -128,10 +127,10 @@ void ACustomerSpawner::SpawnResidents()
 				++Made;
 			}
 		}
-		if (Name.IsEmpty()) { Name = ResidentNameForNumber(H.Number); }
-
-		// Elke woning is bewoond -> deur op slot met de bewonersnaam ("LOCKED - <naam> lives here").
-		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(Name); }
+		// Deur op slot met een UNIEKE per-huisnummer naam (de registry round-robin kon namen herhalen,
+		// waardoor meerdere huizen "dezelfde bewoner" leken te hebben). Elk huisnummer -> eigen naam.
+		const FString DoorName = ResidentNameForNumber(H.Number);
+		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(DoorName); }
 	}
 }
 

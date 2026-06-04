@@ -311,6 +311,17 @@ void UPhoneClientComponent::ServerSetActiveHome_Implementation(int32 HomeIndex)
 	ApplyLocalDoors();
 }
 
+bool UPhoneClientComponent::GetActiveHomeLocation(FVector& OutWorld) const
+{
+	if (ActiveHome < 0) { return false; }
+	ACityGenerator* City = FindCity();
+	if (!City) { return false; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (!Homes.IsValidIndex(ActiveHome)) { return false; }
+	OutWorld = Homes[ActiveHome].DoorPos; // plek vóór je voordeur (waar de home-marker heen wijst)
+	return true;
+}
+
 UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 {
 	return GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;

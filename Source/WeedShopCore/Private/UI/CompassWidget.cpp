@@ -3,6 +3,7 @@
 #include "UI/WeedUiStyle.h"
 #include "Customer/CustomerBase.h"
 #include "Customer/CustomerSpawner.h"
+#include "Phone/PhoneClientComponent.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -144,19 +145,18 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
 
-	// Home (je basis): zoek eenmalig de spawner als referentie.
-	if (!bHomeFound)
+	// Home = JOUW woning (gekocht/starter). Alleen tonen als je er een hebt — niet het park-centrum.
+	bool bHaveHome = false;
+	if (APawn* OwnerPawn = GetOwningPlayerPawn())
 	{
-		for (TActorIterator<ACustomerSpawner> It(GetWorld()); It; ++It)
+		if (UPhoneClientComponent* Ph = OwnerPawn->FindComponentByClass<UPhoneClientComponent>())
 		{
-			HomeWorld = It->GetActorLocation();
-			bHomeFound = true;
-			break;
+			bHaveHome = Ph->GetActiveHomeLocation(HomeWorld);
 		}
 	}
 	if (HomeMarker)
 	{
-		if (bHomeFound)
+		if (bHaveHome)
 		{
 			const FVector D = HomeWorld - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));

@@ -259,6 +259,18 @@ void UMapWidget::BuildBlocks()
 	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 20);
 	WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 22);
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
+	// Goud huisje op JOUW woning (alleen zichtbaar als je er een bezit).
+	{
+		USizeBox* HB = WidgetTree->ConstructWidget<USizeBox>();
+		HB->SetWidthOverride(22.f); HB->SetHeightOverride(22.f);
+		HB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 22.f, FLinearColor(1.f, 0.82f, 0.25f)));
+		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(HB))
+		{
+			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(22.f, 22.f)); Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetZOrder(23);
+		}
+		HB->SetVisibility(ESlateVisibility::Collapsed);
+		HomeIcon = HB;
+	}
 	AddCanvasText(TEXT("Klik = waypoint zetten  /  rechtsklik = wissen"),
 		FVector2D(GMapDS * 0.5f, 64.f), GMapDS, 11, FLinearColor(0.7f, 0.85f, 1.f), 50);
 	AddCanvasText(TEXT("cyaan stip = jij    geel = waypoint    blauw = NPC    groen poppetje = klant voor jou"),
@@ -319,6 +331,19 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			WaypointDot->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
 		else { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
+	}
+
+	// Home-icoon op je eigen woning (verborgen als je er geen hebt).
+	if (HomeIcon)
+	{
+		FVector HW;
+		UPhoneClientComponent* Ph = GetPhone();
+		if (Ph && Ph->GetActiveHomeLocation(HW))
+		{
+			if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(HomeIcon->Slot)) { Cs->SetPosition(WorldToCanvas(HW.X, HW.Y)); }
+			HomeIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else { HomeIcon->SetVisibility(ESlateVisibility::Collapsed); }
 	}
 
 	// Klanten/NPC's verzamelen.

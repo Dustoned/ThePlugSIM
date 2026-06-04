@@ -47,9 +47,10 @@ ACustomerBase::ACustomerBase()
 		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 		static ConstructorHelpers::FClassFinder<UAnimInstance> AnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
 		if (AnimFinder.Succeeded()) { MeshComp->SetAnimInstanceClass(AnimFinder.Class); }
-		// Optimalisatie voor veel NPC's: alleen animeren als 'ie in beeld is (off-screen = geen pose-tick).
-		// URO uit: dat kan zichtbare NPC's "bevriezen" (geen loop-animatie). Schaduw uit (40x is duur).
-		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		// Animatie ALTIJD laten doortikken (anim-graph evalueren), bones alleen ververst als 'ie in beeld is.
+		// OnlyTickPoseWhenRendered kon de pose "bevriezen" (geen loop-animatie) als de mesh-bounds de NPC
+		// per ongeluk als niet-zichtbaar markeerden. AlwaysTickPose voorkomt dat; bones-refresh blijft cull-baar.
+		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
 		MeshComp->bEnableUpdateRateOptimizations = false;
 		MeshComp->SetCastShadow(false);
 	}
