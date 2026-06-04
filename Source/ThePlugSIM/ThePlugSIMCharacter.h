@@ -208,6 +208,15 @@ public:
 	void TickStuckRecovery(float DeltaSeconds);
 	bool FindFloorAt(const FVector& Near, FVector& OutSafe) const; // omlaag-trace naar de echte vloer
 
+	// Third-person lichaam (wat ANDERE spelers van je zien): speel walk/idle zelf af op snelheid
+	// (single-node), want de meegeleverde locomotie-ABP geeft standalone geen loopcyclus -> spelers
+	// "gleden" voor elkaar. Draait op alle machines (proxies), zodat iedereen elkaar ziet lopen.
+	UPROPERTY() TObjectPtr<class UAnimSequence> TpIdleAnim;
+	UPROPERTY() TObjectPtr<class UAnimSequence> TpWalkAnim;
+	bool bTpMoving = false;
+	bool bTpStarted = false;
+	void UpdateBodyAnim();
+
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
 	bool bLmbDown = false;
 	bool bGiveFired = false;

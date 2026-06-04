@@ -3,6 +3,8 @@
 #include "ThePlugSIMCharacter.h"
 #include "UI/WeedToast.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -78,6 +80,12 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	// configure the character comps
 	GetMesh()->SetOwnerNoSee(true);
 	GetMesh()->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
+
+	// Walk/idle-sequences voor het third-person lichaam (zelf afgespeeld -> andere spelers zien je lopen).
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> TpIdleF(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
+	if (TpIdleF.Succeeded()) { TpIdleAnim = TpIdleF.Object; }
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> TpWalkF(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Fwd.MF_Unarmed_Walk_Fwd"));
+	if (TpWalkF.Succeeded()) { TpWalkAnim = TpWalkF.Object; }
 
 	GetCapsuleComponent()->SetCapsuleSize(34.0f, 96.0f);
 
@@ -185,9 +193,21 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	UWeedToast::Notify(-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
 }
 
+void AThePlugSIMCharacter::UpdateBodyAnim()
+{
+	if (!bTpStarted) { return; }
+	USkeletalMeshComponent* M = GetMesh();
+	if (!M) { return; }
+	const bool bMoving = GetVelocity().Size2D() > 12.f;
+	if (bMoving == bTpMoving) { return; } // alleen wisselen bij state-verandering
+	bTpMoving = bMoving;
+	if (UAnimSequence* Seq = bMoving ? TpWalkAnim : TpIdleAnim) { M->PlayAnimation(Seq, true); }
+}
+
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateBodyAnim(); // op alle machines (ook proxies) -> iedereen ziet elkaar lopen
 	TickStuckRecovery(DeltaSeconds);
 
 	// Lange klik: houd de linkermuisknop ~0.7s ingedrukt terwijl de telefoon-app open is en hij
@@ -670,6 +690,18 @@ void AThePlugSIMCharacter::BeginPlay()
 	// Spawn-plek onthouden als gegarandeerd-veilige terugval voor anti-stuck.
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
+
+	// Third-person lichaam zelf animeren (single-node walk/idle): zo zien andere spelers je echt lopen.
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		if (TpIdleAnim || TpWalkAnim)
+		{
+			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			if (TpIdleAnim) { M->PlayAnimation(TpIdleAnim, true); }
+			bTpMoving = false;
+			bTpStarted = true;
+		}
+	}
 
 	// Forceer de movement-instellingen at RUNTIME (een Blueprint-default kan de constructor overschrijven).
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
