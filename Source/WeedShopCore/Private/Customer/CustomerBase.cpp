@@ -331,10 +331,29 @@ FVector ACustomerBase::ProjectResidentPointToNav(const FVector& Desired, const F
 	return Desired + FVector(0.f, 0.f, 3.f);
 }
 
+FVector ACustomerBase::GetResidentHomeEntrySpot() const
+{
+	FVector ToHome = HomeInteriorPos - HomeFrontSpot;
+	ToHome.Z = 0.f;
+	if (!ToHome.Normalize())
+	{
+		return HomeInteriorPos + FVector(0.f, 0.f, 4.f);
+	}
+
+	// Als de unit boven zit, loop zichtbaar de lobby in en verdwijn pas daarna naar de echte woning.
+	if (FMath::Abs(HomeInteriorPos.Z - HomeFrontSpot.Z) > 260.f)
+	{
+		return HomeFrontSpot + ToHome * 520.f;
+	}
+
+	return HomeInteriorPos + FVector(0.f, 0.f, 4.f);
+}
+
 void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 {
 	bAtHomeInside = false;
 	bEmergingFromHome = true;
+	bEnteringHome = false;
 	HomeExitStage = (bFromInterior && bHasHomeHall) ? 0 : 1;
 	HomeExitStuckTimer = 0.f;
 	bHasRoamGoal = false;
@@ -441,10 +460,121 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 	return true;
 }
 
+void ACustomerBase::StartResidentHomeEntry()
+{
+	bEnteringHome = true;
+	bEmergingFromHome = false;
+	HomeEntryStage = 0;
+	HomeEntryStuckTimer = 0.f;
+	bHasRoamGoal = false;
+	bRoamGoalIsPark = false;
+	bPendingRoamGoalIsPark = false;
+	ParkPauseTimer = 0.f;
+	ResidentStuckTimer = 0.f;
+	bHasResidentPrevMoveLoc = false;
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	if (!GetController())
+	{
+		SpawnDefaultController();
+	}
+}
+
+bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
+{
+	if (!bEnteringHome)
+	{
+		return false;
+	}
+
+	const bool bFrontStage = (HomeEntryStage == 0);
+	const FVector Target = bFrontStage ? HomeFrontSpot : GetResidentHomeEntrySpot();
+	const FVector Cur = GetActorLocation();
+	const bool bArrived = FVector::Dist2D(Cur, Target) < (bFrontStage ? 160.f : 125.f)
+		&& FMath::Abs(Cur.Z - Target.Z) < (bFrontStage ? 230.f : 190.f);
+
+	if (bArrived)
+	{
+		if (bFrontStage)
+		{
+			HomeEntryStage = 1;
+			HomeEntryStuckTimer = 0.f;
+			bHasResidentPrevMoveLoc = false;
+			return true;
+		}
+
+		bEnteringHome = false;
+		bAtHomeInside = true;
+		SetActorHiddenInGame(true);
+		SetActorEnableCollision(false);
+		SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+		if (AAIController* AI = Cast<AAIController>(GetController()))
+		{
+			AI->StopMovement();
+		}
+		HomeEntryStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
+		return true;
+	}
+
+	const bool bMoveStarted = WalkTo(Target);
+	float MoveDelta = 9999.f;
+	if (bHasResidentPrevMoveLoc)
+	{
+		MoveDelta = FVector::Dist2D(Cur, ResidentPrevMoveLoc);
+	}
+	ResidentPrevMoveLoc = Cur;
+	bHasResidentPrevMoveLoc = true;
+
+	bool bPathMoving = bMoveStarted;
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		bPathMoving = bMoveStarted && (AI->GetMoveStatus() == EPathFollowingStatus::Moving);
+	}
+
+	if (!bPathMoving || MoveDelta < 4.f)
+	{
+		HomeEntryStuckTimer += DeltaSeconds;
+	}
+	else
+	{
+		HomeEntryStuckTimer = 0.f;
+	}
+
+	if (HomeEntryStuckTimer >= (bFrontStage ? 3.2f : 2.8f))
+	{
+		if (AAIController* AI = Cast<AAIController>(GetController()))
+		{
+			AI->StopMovement();
+		}
+
+		if (bFrontStage)
+		{
+			SetActorLocation(ProjectResidentPointToNav(HomeFrontSpot, FVector(1400.f, 1400.f, 700.f)));
+			HomeEntryStage = 1;
+		}
+		else
+		{
+			SetActorLocation(Target);
+			bEnteringHome = false;
+			bAtHomeInside = true;
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+		}
+		HomeEntryStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
+	}
+
+	return true;
+}
+
 void ACustomerBase::BeginAppointment(bool bComeToPlayer)
 {
 	if (!HasAuthority()) { return; }
 	bApptActive = true;
+	bEnteringHome = false;
+	bEmergingFromHome = false;
 	bApptComeToPlayer = bComeToPlayer;
 	bApptArrived = false;
 	ApptTimeout = 360.f;       // 6 min: daarna geeft de NPC de afspraak op
@@ -848,31 +978,19 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 
 	if (bNight)
 	{
-		if (bEmergingFromHome)
-		{
-			bEmergingFromHome = false;
-			bAtHomeInside = true;
-			SetActorHiddenInGame(true);
-			SetActorEnableCollision(false);
-			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
-			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
-			return;
-		}
-		// 's Nachts naar huis (plek vóór de voordeur) en daar 'naar binnen' verdwijnen.
 		if (bAtHomeInside) { return; }
-		bLeavingHomeRoute = false;
-		bHasRoamGoal = false;
-		bRoamGoalIsPark = false;
-		ParkPauseTimer = 0.f;
-		WalkTo(HomeFrontSpot);
-		if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 170.f && FMath::Abs(GetActorLocation().Z - HomeFrontSpot.Z) < 220.f)
+		if (!bEnteringHome)
 		{
-			bAtHomeInside = true;
-			SetActorHiddenInGame(true);
-			SetActorEnableCollision(false);
-			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			StartResidentHomeEntry();
 		}
+		TickResidentHomeEntry(DeltaSeconds);
 		return;
+	}
+	if (bEnteringHome)
+	{
+		bEnteringHome = false;
+		HomeEntryStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
 	}
 
 	// Dag: verschijn weer bij de voordeur als 'ie binnen was.
