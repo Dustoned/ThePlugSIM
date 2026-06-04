@@ -275,7 +275,21 @@ void UPhoneClientComponent::MoveOwnerToHome(int32 HomeIndex)
 	if (!City || !Pawn) { return; }
 	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
 	if (!Homes.IsValidIndex(HomeIndex)) { return; }
-	const FVector To = Homes[HomeIndex].InteriorPos + FVector(0.f, 0.f, 100.f);
+	const FVector Interior = Homes[HomeIndex].InteriorPos;
+	// Zet de speler STEVIG op de vloer van de woning: trace omlaag naar het vloerslab en plaats de capsule
+	// daar bovenop. Zo val/zweef je niet (wat de anti-stuck eerder liet slingeren tussen huis en park).
+	FVector To = Interior + FVector(0.f, 0.f, 60.f);
+	if (UWorld* W = GetWorld())
+	{
+		FHitResult Hit;
+		const FVector S = Interior + FVector(0.f, 0.f, 250.f);
+		const FVector E = Interior - FVector(0.f, 0.f, 600.f);
+		FCollisionQueryParams Q(SCENE_QUERY_STAT(HomeFloor), false, Pawn);
+		if (W->LineTraceSingleByChannel(Hit, S, E, ECC_WorldStatic, Q))
+		{
+			To = Hit.ImpactPoint + FVector(0.f, 0.f, Pawn->GetSimpleCollisionHalfHeight() + 8.f);
+		}
+	}
 	Pawn->TeleportTo(To, Pawn->GetActorRotation(), false, true);
 }
 
