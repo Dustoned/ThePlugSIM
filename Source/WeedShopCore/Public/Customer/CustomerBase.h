@@ -212,6 +212,9 @@ protected:
 	bool bRoamGoalIsPark = false;
 	bool bPendingRoamGoalIsPark = false;
 	float ParkPauseTimer = 0.f;
+	FVector ResidentPrevMoveLoc = FVector::ZeroVector;
+	bool bHasResidentPrevMoveLoc = false;
+	float ResidentStuckTimer = 0.f;
 	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
 	bool bHasPark = false;
 	TWeakObjectPtr<ACityGenerator> CachedCity;
@@ -225,6 +228,7 @@ protected:
 	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
 	float ComputeResidentRoamTimeout(const FVector& Goal) const;
 	int32 CountResidentParkVisitors(float Radius) const;
+	void RecoverResidentIfStuck(float DeltaSeconds);
 
 	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
 	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner

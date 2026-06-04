@@ -391,6 +391,78 @@ int32 ACustomerBase::CountResidentParkVisitors(float Radius) const
 	return Count;
 }
 
+void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
+{
+	if (ParkPauseTimer > 0.f || bAtHomeInside || bApptActive)
+	{
+		ResidentStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
+		return;
+	}
+
+	const FVector Cur = GetActorLocation();
+	const bool bCloseToGoal = bHasRoamGoal
+		&& FVector::Dist2D(Cur, RoamGoal) < 180.f
+		&& FMath::Abs(Cur.Z - RoamGoal.Z) < 220.f;
+	if (!bHasRoamGoal || bCloseToGoal)
+	{
+		ResidentStuckTimer = 0.f;
+		ResidentPrevMoveLoc = Cur;
+		bHasResidentPrevMoveLoc = true;
+		return;
+	}
+
+	float MoveDelta = 9999.f;
+	if (bHasResidentPrevMoveLoc)
+	{
+		MoveDelta = FVector::Dist2D(Cur, ResidentPrevMoveLoc);
+	}
+	ResidentPrevMoveLoc = Cur;
+	bHasResidentPrevMoveLoc = true;
+
+	bool bPathActuallyMoving = true;
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		bPathActuallyMoving = (AI->GetMoveStatus() == EPathFollowingStatus::Moving);
+	}
+
+	if (!bPathActuallyMoving || MoveDelta < 6.f)
+	{
+		ResidentStuckTimer += DeltaSeconds;
+	}
+	else
+	{
+		ResidentStuckTimer = 0.f;
+	}
+
+	if (ResidentStuckTimer < 1.8f)
+	{
+		return;
+	}
+
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		AI->StopMovement();
+	}
+
+	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
+	{
+		FNavLocation Proj;
+		if (Nav->ProjectPointToNavigation(Cur, Proj, FVector(900.f, 900.f, 600.f)))
+		{
+			SetActorLocation(Proj.Location + FVector(0.f, 0.f, 3.f));
+		}
+	}
+
+	bHasRoamGoal = false;
+	bRoamGoalIsPark = false;
+	bPendingRoamGoalIsPark = false;
+	ParkPauseTimer = 0.f;
+	RoamTimer = 0.f;
+	ResidentStuckTimer = 0.f;
+	bHasResidentPrevMoveLoc = false;
+}
+
 bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ)
 {
 	UWorld* W = GetWorld();
@@ -422,6 +494,9 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	bHasRoamGoal = true;
 	bRoamGoalIsPark = bGoalIsPark;
 	RoamTimer = ComputeResidentRoamTimeout(RoamGoal);
+	ResidentPrevMoveLoc = GetActorLocation();
+	bHasResidentPrevMoveLoc = true;
+	ResidentStuckTimer = 0.f;
 	return true;
 }
 
@@ -648,6 +723,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 
 	// Roam: vaste grote stadsronde, met periodieke park- en flat-hal-stops. Alleen een nieuw doel
 	// kiezen bij aankomst of timeout, zodat pathfinding tijd krijgt om een lange route af te maken.
+	RecoverResidentIfStuck(DeltaSeconds);
 	if (ParkPauseTimer > 0.f)
 	{
 		ParkPauseTimer -= DeltaSeconds;
