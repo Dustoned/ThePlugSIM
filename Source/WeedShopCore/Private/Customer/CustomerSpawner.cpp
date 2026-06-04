@@ -50,23 +50,40 @@ namespace
 	// zonder botsingen, tot First*Last combinaties. Grote pools voor veel variatie.
 	FString ResidentNameByIndex(int32 Index)
 	{
-		static const TCHAR* First[] = { TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"),
-			TEXT("Lotte"), TEXT("Bram"), TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"),
-			TEXT("Joost"), TEXT("Mila"), TEXT("Gerrit"), TEXT("Truus"), TEXT("Henk"), TEXT("Willem"), TEXT("Bep"), TEXT("Cor"),
-			TEXT("Sjaak"), TEXT("Ria"), TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"), TEXT("Loes"), TEXT("Ome Ton"), TEXT("Tante An"),
-			TEXT("Wout"), TEXT("Stijn"), TEXT("Femke"), TEXT("Jasper"), TEXT("Roos"), TEXT("Teun"), TEXT("Saar"), TEXT("Koen"),
-			TEXT("Hilda"), TEXT("Bennie"), TEXT("Manon"), TEXT("Ferry"), TEXT("Non"), TEXT("Appie"), TEXT("Chantal"), TEXT("Bertus"),
-			TEXT("Sandra"), TEXT("Ronnie"), TEXT("Yvonne"), TEXT("Gijs") };
-		static const TCHAR* Last[] = { TEXT("Pannenkoek"), TEXT("Stokvis"), TEXT("Bonk"), TEXT("Knol"), TEXT("Prummel"),
-			TEXT("Druif"), TEXT("Kwast"), TEXT("Worst"), TEXT("Toeter"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Frikandel"),
-			TEXT("Snoek"), TEXT("Klont"), TEXT("Hark"), TEXT("Sok"), TEXT("Krent"), TEXT("Pruim"), TEXT("Brok"), TEXT("Plof"),
-			TEXT("Kwakkel"), TEXT("Tuthola"), TEXT("Schroef"), TEXT("Knapzak"), TEXT("Bil"), TEXT("Drol"), TEXT("Snor"), TEXT("Krakeling"),
-			TEXT("Peul"), TEXT("Zeurpiet"), TEXT("Klaproos"), TEXT("Bonenstaak"), TEXT("Kaaskop"), TEXT("Mosterd"), TEXT("Slok"),
-			TEXT("Brombeer"), TEXT("Pareltje"), TEXT("Stronk"), TEXT("Knaak"), TEXT("Pielewaaier") };
+		static const TCHAR* First[] = {
+			TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"), TEXT("Lotte"), TEXT("Bram"),
+			TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"), TEXT("Joost"), TEXT("Mila"),
+			TEXT("Gerrit"), TEXT("Truus"), TEXT("Henk"), TEXT("Willem"), TEXT("Bep"), TEXT("Cor"), TEXT("Sjaak"), TEXT("Ria"),
+			TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"), TEXT("Loes"), TEXT("Wout"), TEXT("Stijn"), TEXT("Femke"), TEXT("Jasper"),
+			TEXT("Roos"), TEXT("Teun"), TEXT("Saar"), TEXT("Koen"), TEXT("Hilda"), TEXT("Bennie"), TEXT("Manon"), TEXT("Ferry"),
+			TEXT("Chantal"), TEXT("Bertus"), TEXT("Sandra"), TEXT("Ronnie"), TEXT("Yvonne"), TEXT("Gijs"), TEXT("Niels"), TEXT("Maud"),
+			TEXT("Tessa"), TEXT("Luuk"), TEXT("Bo"), TEXT("Sam"), TEXT("Nina"), TEXT("Mees"), TEXT("Lars"), TEXT("Kim"),
+			TEXT("Isa"), TEXT("Mats"), TEXT("Jill"), TEXT("Dex"), TEXT("Puck"), TEXT("Guus"), TEXT("Floor"), TEXT("Ravi"),
+			TEXT("Nova"), TEXT("Otis"), TEXT("Liva"), TEXT("Moos"), TEXT("Tijn"), TEXT("Sofie"), TEXT("Fien"), TEXT("Rens"),
+			TEXT("Jules"), TEXT("Lio"), TEXT("Morris"), TEXT("Evi"), TEXT("Tuur"), TEXT("Vera"), TEXT("Siem"), TEXT("Luna"),
+			TEXT("Mick"), TEXT("Cato"), TEXT("Boaz"), TEXT("Pippa"), TEXT("Ruben"), TEXT("Mara"), TEXT("Tobias"), TEXT("Lieke"),
+			TEXT("Jurre"), TEXT("Nora"), TEXT("Cas"), TEXT("Elin"), TEXT("Sil"), TEXT("Myrthe"), TEXT("Diede"), TEXT("Anne"),
+			TEXT("Ome Ton"), TEXT("Tante An"), TEXT("Appie"), TEXT("Non"), TEXT("Ouwe Joop"), TEXT("Dikke Leo"), TEXT("Tinus"),
+			TEXT("Sjonnie"), TEXT("Annie"), TEXT("Bennie Bob"), TEXT("Kleine Kees"), TEXT("Tante Sjaan") };
+		static const TCHAR* Last[] = {
+			TEXT("Pannenkoek"), TEXT("Stokvis"), TEXT("Bonk"), TEXT("Knol"), TEXT("Prummel"), TEXT("Druif"), TEXT("Kwast"),
+			TEXT("Worst"), TEXT("Toeter"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Frikandel"), TEXT("Klont"), TEXT("Hark"),
+			TEXT("Sok"), TEXT("Krent"), TEXT("Pruim"), TEXT("Brok"), TEXT("Plof"), TEXT("Kwakkel"), TEXT("Schroef"),
+			TEXT("Knapzak"), TEXT("Peul"), TEXT("Klaproos"), TEXT("Bonenstaak"), TEXT("Kaaskop"), TEXT("Mosterd"),
+			TEXT("Pareltje"), TEXT("Stronk"), TEXT("Knaak"), TEXT("Krentenbol"), TEXT("Pindakaas"), TEXT("Knetter"),
+			TEXT("Slinger"), TEXT("Fluitketel"), TEXT("Stoeptegel"), TEXT("Koffiemok"), TEXT("Dropveter"), TEXT("Bamischijf"),
+			TEXT("Kapsalon"), TEXT("Draaitafel"), TEXT("Plakband"), TEXT("Kruik"), TEXT("Waslijn"), TEXT("Kruimel"),
+			TEXT("Sjoelbak"), TEXT("Tosti"), TEXT("Klodder"), TEXT("Vlaai"), TEXT("Kiekeboe"), TEXT("Nattevinger"),
+			TEXT("Knalpot"), TEXT("Glitterjas"), TEXT("Poffertje"), TEXT("Klusbus"), TEXT("Zilveruitje"), TEXT("Limonade"),
+			TEXT("Trommel"), TEXT("Badmuts"), TEXT("Knipperlicht"), TEXT("Kaasplank"), TEXT("Hagelslag"), TEXT("Frietzak"),
+			TEXT("Spekkoek"), TEXT("Schuimkraag"), TEXT("Kluitje"), TEXT("Kratje"), TEXT("Wafelijzer"), TEXT("Smeerkaas"),
+			TEXT("Drol"), TEXT("Bil"), TEXT("Pielewaaier"), TEXT("Zeurpiet"), TEXT("Slok"), TEXT("Tuthola"),
+			TEXT("Snor"), TEXT("Krakeling"), TEXT("Prutser"), TEXT("Klodderkont"), TEXT("Natte Krant"), TEXT("Snotneus"),
+			TEXT("Kletsmajoor"), TEXT("Boterletter"), TEXT("Kruimeldief"), TEXT("Mallemolen") };
 		const int32 NF = (int32)UE_ARRAY_COUNT(First);
 		const int32 NL = (int32)UE_ARRAY_COUNT(Last);
 		const int32 I = FMath::Max(0, Index);
-		return FString::Printf(TEXT("%s %s"), First[I % NF], Last[(I / NF) % NL]);
+		return FString::Printf(TEXT("%s %s"), First[I % NF], Last[(I * 37 + I / NF) % NL]);
 	}
 }
 
@@ -168,14 +185,22 @@ void ACustomerSpawner::SpawnResidents()
 			continue; // geen NPC in een koopbaar pand
 		}
 		const bool bPhysical = PhysicalSet.Contains(i);
+		const FString DoorName = ResidentNameByIndex(i);
 
 		if (bPhysical)
 		{
-			FActorSpawnParameters SP;
-			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-			if (ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, H.DoorPos, FRotator::ZeroRotator, SP))
+			const FName ResidentNpcId(*FString::Printf(TEXT("Resident_%04d"), i));
+			if (Reg)
 			{
-				if (Reg) { C->NpcId = Reg->AssignNpc(); } // registry voor stats/contact; deurnaam komt per-nummer
+				Reg->EnsureNpc(ResidentNpcId, FText::FromString(DoorName));
+			}
+
+			const FTransform SpawnTM(FRotator::ZeroRotator, H.DoorPos);
+			if (ACustomerBase* C = World->SpawnActorDeferred<ACustomerBase>(
+				Cls, SpawnTM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn))
+			{
+				C->NpcId = Reg ? ResidentNpcId : NAME_None;
+				C->FinishSpawning(SpawnTM);
 				C->SetupResident(H.DoorPos, H.InteriorPos, H.Number, H.HallPos);
 				if (Made == 0) // eerste bewoner = gegarandeerde koopklare test-klant
 				{
@@ -189,7 +214,6 @@ void ACustomerSpawner::SpawnResidents()
 		}
 		// Deur op slot met een UNIEKE per-huisnummer naam (de registry round-robin kon namen herhalen,
 		// waardoor meerdere huizen "dezelfde bewoner" leken te hebben). Elk huisnummer -> eigen naam.
-		const FString DoorName = ResidentNameByIndex(i);
 		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(DoorName); }
 	}
 

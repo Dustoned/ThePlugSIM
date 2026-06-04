@@ -77,6 +77,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
 	FName AssignNpc();
 
+	// Server: zorg dat een specifieke NPC bestaat, bv. een vaste bewoner met huisnummer-naam.
+	FName EnsureNpc(FName NpcId, const FText& DisplayName, float BaseRespect = 15.f, float BaseLoyalty = 0.f, float BaseAddiction = 10.f);
+
 	// Server: leg vast dat deze NPC zojuist een deal deed (in persoon of telefoon) -> start cooldown.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
 	void MarkDealt(FName NpcId);
