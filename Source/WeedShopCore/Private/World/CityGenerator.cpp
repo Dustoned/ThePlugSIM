@@ -480,12 +480,14 @@ void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
 
 			const uint32 H = CityHash(i, j);
 			const int32 BaseNo = 2 + (int32)(CityHash((int32)(B.Center.X / 100.f), (int32)(B.Center.Y / 100.f)) % 70u) * 2;
-			// Rijtjeshuizen: compacte reeks "eerste-laatste" (bv. "10-16") i.p.v. alle losse nummers naast
-			// elkaar -> blijft leesbaar op kaartschaal.
+			// Rijtjeshuizen: de losse huisnummers netjes naast elkaar (één spatie ertussen). Geen "-" in
+			// dit label (anders ziet de kaart het als flat-reeks). De map toont dit als één nette chip.
 			auto RowLabel = [&]() {
 				const int32 Units = 3 + (int32)(H % 2u);
 				const int32 RowBase = 2 + (int32)(H % 60u) * 2;
-				return FString::Printf(TEXT("%d-%d"), RowBase, RowBase + 2 * (Units - 1));
+				FString S;
+				for (int32 u = 0; u < Units; ++u) { if (u > 0) { S += TEXT(" "); } S += FString::FromInt(RowBase + 2 * u); }
+				return S;
 			};
 
 			// Flat-label: gebouwnummer + de unit-reeks (bijv. "32  1-20"), zelfde nummering als de deuren binnen.

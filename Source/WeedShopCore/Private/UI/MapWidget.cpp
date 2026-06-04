@@ -244,14 +244,12 @@ void UMapWidget::BuildBlocks()
 	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
 	Scale = GMapDS / Ortho;
 
-	// Bloklabels: winkelnaam (geel), park (groen), of flat-reeks "32 1-20" (wit). Rijtjeshuizen NIET hier
-	// — die krijgen hieronder een eigen nummer-chip per huis, zodat er niks opgepropt staat.
+	// Bloklabels: winkelnaam (geel), park (groen), flat-reeks "32 1-20" of rijtjeshuis-nummers
+	// "10 12 14 16" (wit) — ALLES als één nette chip per blok, netjes langs elkaar.
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
 	for (const FCityMapBlock& Bk : Blocks)
 	{
-		const bool bRowBlock = !Bk.bShop && Bk.Label != TEXT("Park") && !Bk.Label.Contains(TEXT("-"));
-		if (bRowBlock) { continue; } // rijtjeshuizen -> per-huis nummers
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
 
 		if (Bk.bShop)
@@ -281,14 +279,8 @@ void UMapWidget::BuildBlocks()
 		}
 	}
 
-	// Eén nummer-chip per rijtjeshuis op zijn eigen deurpositie (nummer zonder "-" = rijtjeshuis;
-	// flat-units hebben "32-1" en blijven in de bloklabel hierboven om opstapeling te voorkomen).
-	for (const FApartmentHome& H : City->GetApartmentHomes())
-	{
-		if (H.Number.IsEmpty() || H.Number.Contains(TEXT("-"))) { continue; }
-		const FVector2D P = WorldToCanvas(H.DoorPos.X, H.DoorPos.Y);
-		AddPill(H.Number, P, 9, FLinearColor(1.f, 1.f, 0.96f), 24);
-	}
+	// (Geen losse nummer-chips per deur meer: die stonden te dicht op elkaar en liepen door elkaar.
+	//  Elk blok toont nu één nette chip met de huisnummers naast elkaar, zie hierboven.)
 
 	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 
