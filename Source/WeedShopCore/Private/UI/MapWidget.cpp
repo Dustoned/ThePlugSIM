@@ -231,16 +231,16 @@ void UMapWidget::BuildBlocks()
 				if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(IcoW))
 				{
 					Cs->SetAutoSize(false); Cs->SetSize(FVector2D(34.f, 34.f));
-					Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P + FVector2D(0.f, -10.f)); Cs->SetZOrder(9);
+					Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P + FVector2D(0.f, -10.f)); Cs->SetZOrder(24);
 				}
 				IcoW->SetVisibility(ESlateVisibility::HitTestInvisible);
 			}
-			AddPill(Bk.Label, P + FVector2D(0.f, 16.f), 11, Tint, 8);
+			AddPill(Bk.Label, P + FVector2D(0.f, 16.f), 11, Tint, 24);
 		}
 		else
 		{
 			const FLinearColor Col = (Bk.Label == TEXT("Park")) ? FLinearColor(0.55f, 1.f, 0.6f) : FLinearColor(1.f, 1.f, 0.96f);
-			AddPill(Bk.Label, P, 11, Col, 8);
+			AddPill(Bk.Label, P, 11, Col, 24);
 		}
 	}
 
@@ -250,14 +250,14 @@ void UMapWidget::BuildBlocks()
 	{
 		if (H.Number.IsEmpty() || H.Number.Contains(TEXT("-"))) { continue; }
 		const FVector2D P = WorldToCanvas(H.DoorPos.X, H.DoorPos.Y);
-		AddPill(H.Number, P, 9, FLinearColor(1.f, 1.f, 0.96f), 7);
+		AddPill(H.Number, P, 9, FLinearColor(1.f, 1.f, 0.96f), 24);
 	}
 
 	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
-	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 20);
-	WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 22);
+	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 26);
+	WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 	// Goud huisje op JOUW woning (alleen zichtbaar als je er een bezit).
 	{
@@ -266,7 +266,7 @@ void UMapWidget::BuildBlocks()
 		HB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 22.f, FLinearColor(1.f, 0.82f, 0.25f)));
 		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(HB))
 		{
-			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(22.f, 22.f)); Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetZOrder(23);
+			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(22.f, 22.f)); Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetZOrder(28);
 		}
 		HB->SetVisibility(ESlateVisibility::Collapsed);
 		HomeIcon = HB;
