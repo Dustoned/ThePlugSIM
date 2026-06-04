@@ -458,13 +458,24 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 
 		// Holle 2-verdiepingen-woning met echte ramen (voor/achtergevel), party-muren tot het dak,
 		// 2e vloer, rechte trap en werkende deur.
-		BuildHouseUnitInterior(UX, UY, Depth, UnitLen - 4.f, WallH, bAlongX, bAlongX ? Ddx : Ddy, TopZ, Body);
+		ACityDoor* UnitDoor = BuildHouseUnitInterior(UX, UY, Depth, UnitLen - 4.f, WallH, bAlongX, bAlongX ? Ddx : Ddy, TopZ, Body);
 
 		// Huisnummer op een bordje RECHTS naast de voordeur (NL-stijl), op ooghoogte, kijkend naar de straat.
 		{
 			const FVector Door = FVector(UX, UY, TopZ) + N * (Depth * 0.5f);
 			const FVector Plate = FVector(Door.X, Door.Y, TopZ + 145.f) + N * 9.f + Tt * 62.f;
 			AddDoorNumber(Plate, Ddx, Ddy, FString::FromInt(RowBase + 2 * u), 18.f);
+		}
+
+		// Registreer dit rijtjeshuis als woning (deur + plek vóór de deur + huisnummer).
+		{
+			const FVector Front = FVector(UX, UY, TopZ + 8.f) + N * (Depth * 0.5f + 130.f);
+			FApartmentHome H;
+			H.Door = UnitDoor;
+			H.InteriorPos = FVector(UX, UY, TopZ + 8.f);
+			H.DoorPos = Front;
+			H.Number = FString::FromInt(RowBase + 2 * u);
+			ApartmentHomes.Add(H);
 		}
 
 		// Looppad van de deur door de voortuin tot MIDDEN op de stoep (niet door tot in de straat).
@@ -839,11 +850,11 @@ void ACityGenerator::AddInteriorLight(const FVector& WorldLoc)
 	PL->SetCastShadows(false);
 }
 
-void ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L, float WallH, bool bAlongX, int32 Ndir, float TopZ, const FLinearColor& Body)
+ACityDoor* ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L, float WallH, bool bAlongX, int32 Ndir, float TopZ, const FLinearColor& Body)
 {
 	UWorld* W = GetWorld();
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (!W || !Cube) { return; }
+	if (!W || !Cube) { return nullptr; }
 
 	const float FloorH = WallH * 0.5f;
 	const float T = 14.f;
@@ -913,15 +924,14 @@ void ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, float L
 	const FVector Hinge = Base + N * HD - Tt * (DoorW * 0.5f) + FVector(0.f, 0.f, TopZ);
 	const float DoorYaw = FMath::RadiansToDegrees(FMath::Atan2(Tt.Y, Tt.X));
 	FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, DoorYaw, 0.f), Hinge), DSP))
-	{
-		Dr->Setup(DoorW - 4.f, DoorH - 4.f, DoorC);
-	}
+	ACityDoor* FrontDoor = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, DoorYaw, 0.f), Hinge), DSP);
+	if (FrontDoor) { FrontDoor->Setup(DoorW - 4.f, DoorH - 4.f, DoorC); }
 
 	// Eén plafondlamp beneden en één boven (iets naar voren, weg van de trap achterin).
 	const FVector LampXY = Base + N * (HD * 0.35f);
 	AddInteriorLight(FVector(LampXY.X, LampXY.Y, TopZ + FloorH - 40.f)); // begane grond
 	AddInteriorLight(FVector(LampXY.X, LampXY.Y, TopZ + WallH - 20.f));  // bovenverdieping
+	return FrontDoor;
 }
 
 void ACityGenerator::BuildWallWindows(float CenterX, float CenterY, bool bAlongX, float Length, float BaseZ,

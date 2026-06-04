@@ -105,7 +105,7 @@ protected:
 	void BuildApartmentBlock(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, int32 Floors, const FLinearColor& Body, const FLinearColor& Sign, bool bSign = true);
 
 	// Een rijtjeshuis-unit van binnen: holle 2-verdiepingen-woning met vloer, rechte trap en werkende deur.
-	void BuildHouseUnitInterior(float UX, float UY, float D, float L, float WallH, bool bAlongX, int32 Ndir, float TopZ, const FLinearColor& Body);
+	ACityDoor* BuildHouseUnitInterior(float UX, float UY, float D, float L, float WallH, bool bAlongX, int32 Ndir, float TopZ, const FLinearColor& Body);
 
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 

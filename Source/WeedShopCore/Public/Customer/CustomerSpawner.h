@@ -33,8 +33,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	bool bSpawnResidents = true;
 
+	// Hoeveel bewoners ECHT rondlopen (de rest "woont er" via een op-slot-deur met naam). 0 = allemaal.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
-	int32 MaxResidents = 8;
+	int32 MaxResidents = 16;
 
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpawnInterval = 10.f;

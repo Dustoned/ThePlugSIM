@@ -93,6 +93,20 @@ void ACustomerSpawner::TrySpawn()
 	Spawned.Add(C);
 }
 
+namespace
+{
+	// Stabiele NL-bewonersnaam afgeleid van het huisnummer (zodat elke woning een eigen bewoner heeft).
+	FString ResidentNameForNumber(const FString& Num)
+	{
+		static const TCHAR* First[] = { TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"),
+			TEXT("Lotte"), TEXT("Bram"), TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"), TEXT("Joost"), TEXT("Mila") };
+		static const TCHAR* Last[] = { TEXT("de Vries"), TEXT("Jansen"), TEXT("Bakker"), TEXT("Visser"), TEXT("Smit"),
+			TEXT("Meijer"), TEXT("Mulder"), TEXT("Bos"), TEXT("Vos"), TEXT("Peters"), TEXT("Hendriks"), TEXT("van Dijk") };
+		const uint32 H = GetTypeHash(Num);
+		return FString::Printf(TEXT("%s %s"), First[H % 16u], Last[(H / 16u) % 12u]);
+	}
+}
+
 void ACustomerSpawner::SpawnResidents()
 {
 	UWorld* World = GetWorld();
@@ -119,41 +133,48 @@ void ACustomerSpawner::SpawnResidents()
 	TSubclassOf<ACustomerBase> Cls = CustomerClass;
 	if (!Cls) { Cls = ACustomerBase::StaticClass(); }
 
-	// Gespreide subset van woningen kiezen (verschillende gebouwen/etages).
-	const int32 Count = FMath::Clamp(MaxResidents, 0, Homes.Num());
-	const int32 Step = FMath::Max(1, Homes.Num() / FMath::Max(1, Count));
+	// ELKE genummerde woning krijgt een bewoner (deur op slot met naam). Een gespreide subset loopt
+	// ook ECHT rond (MaxResidents; 0 = allemaal). De rest "woont er" via de op-slot-deur met naam.
+	const int32 Total = Homes.Num();
+	const bool bAll = (MaxResidents <= 0);
+	const int32 Want = bAll ? Total : FMath::Clamp(MaxResidents, 0, Total);
+	const int32 Step = (Want > 0) ? FMath::Max(1, Total / Want) : (Total + 1);
+
 	int32 Made = 0;
-	for (int32 i = 0; i < Homes.Num() && Made < Count; i += Step)
+	for (int32 i = 0; i < Total; ++i)
 	{
 		const FApartmentHome& H = Homes[i];
-		FActorSpawnParameters SP;
-		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-		ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, H.DoorPos, FRotator::ZeroRotator, SP);
-		if (!C) { continue; }
+		const bool bPhysical = (Made < Want) && (Step <= 0 ? true : (i % Step == 0));
 
-		// NPC-identiteit + naam (voor de slot-prompt).
-		FString Name = H.Number;
-		if (Reg)
+		FString Name;
+		if (bPhysical)
 		{
-			C->NpcId = Reg->AssignNpc();
-			float r = 0.f, l = 0.f, a = 0.f; FText N;
-			if (!C->NpcId.IsNone() && Reg->GetStats(C->NpcId, r, l, a, N) && !N.IsEmpty()) { Name = N.ToString(); }
+			FActorSpawnParameters SP;
+			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+			if (ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, H.DoorPos, FRotator::ZeroRotator, SP))
+			{
+				if (Reg)
+				{
+					C->NpcId = Reg->AssignNpc();
+					float r = 0.f, l = 0.f, a = 0.f; FText N;
+					if (!C->NpcId.IsNone() && Reg->GetStats(C->NpcId, r, l, a, N) && !N.IsEmpty()) { Name = N.ToString(); }
+				}
+				if (Name.IsEmpty()) { Name = ResidentNameForNumber(H.Number); }
+				C->SetupResident(H.DoorPos, H.InteriorPos, H.Number);
+				if (Made == 0) // eerste bewoner = gegarandeerde koopklare test-klant
+				{
+					C->Respect = 70.f; C->Loyalty = 40.f; C->Addiction = 80.f;
+					C->BecomeBuyerNow();
+				}
+				if (!C->GetController()) { C->SpawnDefaultController(); }
+				Spawned.Add(C);
+				++Made;
+			}
 		}
-		C->SetupResident(H.DoorPos, H.InteriorPos, H.Number);
+		if (Name.IsEmpty()) { Name = ResidentNameForNumber(H.Number); }
 
-		// Eerste bewoner = gegarandeerde koopklare test-klant.
-		if (Made == 0)
-		{
-			C->Respect = 70.f; C->Loyalty = 40.f; C->Addiction = 80.f;
-			C->BecomeBuyerNow();
-		}
-
-		// Appartementdeur op slot met de bewonersnaam ("LOCKED - <naam> lives here").
+		// Elke woning is bewoond -> deur op slot met de bewonersnaam ("LOCKED - <naam> lives here").
 		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(Name); }
-
-		if (!C->GetController()) { C->SpawnDefaultController(); }
-		Spawned.Add(C);
-		++Made;
 	}
 }
 
