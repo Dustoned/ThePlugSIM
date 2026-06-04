@@ -441,27 +441,45 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
 		{
 			FNavLocation Out;
-			// ~25% kans op een tripje naar het park (gedeelde hub); anders rondjes in de EIGEN buurt
-			// (rond de voordeur) zodat de bewoners verspreid over de stad blijven i.p.v. allemaal naar
-			// het midden te zuigen.
-			const bool bToPark = bHasPark && FMath::FRand() < 0.12f;
-			const FVector Origin = bToPark ? ParkCenter : HomeFrontSpot;
-			const float Radius = bToPark ? 800.f : 2200.f; // lokaler -> blijven in de eigen buurt verspreid
-			if (Nav->GetRandomReachablePointInRadius(Origin, Radius, Out))
+			const FVector Self = GetActorLocation();
+			const float FromHome = FVector::Dist2D(Self, HomeFrontSpot);
+			bool bGotGoal = false;
+
+			if (FromHome > 4500.f)
 			{
-				RoamGoal = Out.Location;
-				bHasRoamGoal = true;
-				WalkTo(RoamGoal);
-			}
-			else
-			{
-				// Niet (meer) op de navmesh -> bv. vastgelopen/geduwd bij een ingang. Projecteer op de
-				// dichtstbijzijnde navmesh en ga daar staan, zodat 'ie volgende tick weer kan roamen.
-				FNavLocation Proj;
-				if (Nav->ProjectPointToNavigation(GetActorLocation(), Proj, FVector(900.f, 900.f, 500.f)))
+				// Te ver van huis afgedwaald -> terug naar de eigen buurt (leash houdt ze verspreid).
+				if (Nav->ProjectPointToNavigation(HomeFrontSpot, Out, FVector(1500.f, 1500.f, 600.f)))
 				{
-					SetActorLocation(Proj.Location + FVector(0.f, 0.f, 2.f));
-					bHasRoamGoal = false;
+					RoamGoal = Out.Location; bHasRoamGoal = true; bGotGoal = true; WalkTo(RoamGoal);
+				}
+			}
+			else if (bHasPark && FMath::FRand() < 0.12f)
+			{
+				// Af en toe een tripje door het park (gedeelde hub), daarna weer de eigen buurt in.
+				if (Nav->GetRandomReachablePointInRadius(ParkCenter, 800.f, Out))
+				{
+					RoamGoal = Out.Location; bHasRoamGoal = true; bGotGoal = true; WalkTo(RoamGoal);
+				}
+			}
+
+			if (!bGotGoal)
+			{
+				// Rondje in de eigen buurt. Origin = EIGEN positie (staat altijd op de navmesh) i.p.v.
+				// HomeFrontSpot -- dat kan net naast de smalle stoep-navmesh liggen, waardoor de query
+				// faalde en de NPC nooit een doel kreeg = stil voor z'n deur bleef staan.
+				if (Nav->GetRandomReachablePointInRadius(Self, 2200.f, Out))
+				{
+					RoamGoal = Out.Location; bHasRoamGoal = true; WalkTo(RoamGoal);
+				}
+				else
+				{
+					// Echt niet op de navmesh -> projecteer en sta daar (volgende tick opnieuw proberen).
+					FNavLocation Proj;
+					if (Nav->ProjectPointToNavigation(Self, Proj, FVector(1200.f, 1200.f, 600.f)))
+					{
+						SetActorLocation(Proj.Location + FVector(0.f, 0.f, 2.f));
+						bHasRoamGoal = false;
+					}
 				}
 			}
 		}
