@@ -408,12 +408,9 @@ void ACityGenerator::BuildCity()
 		MapCapture->TextureTarget = MapRT;
 		MapCapture->bCaptureEveryFrame = false;
 		MapCapture->bCaptureOnMovement = false;
-		MapCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-		// Vaste, heldere belichting zodat de kaart ook 's nachts leesbaar is.
-		MapCapture->PostProcessSettings.bOverride_AutoExposureMethod = true;
-		MapCapture->PostProcessSettings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
-		MapCapture->PostProcessSettings.bOverride_AutoExposureBias = true;
-		MapCapture->PostProcessSettings.AutoExposureBias = 11.f;
+		// Platte basiskleuren (albedo) i.p.v. de belichte scène -> vlakke, heldere kaart (wegen grijs,
+		// gras groen, daken gekleurd) die altijd leesbaar is, ongeacht dag/nacht.
+		MapCapture->CaptureSource = ESceneCaptureSource::SCS_BaseColor;
 		// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met WorldToCanvas).
 		MapCapture->SetWorldLocationAndRotation(FVector(Center.X, Center.Y, GroundZ + 60000.f), FRotator(-90.f, 0.f, 0.f));
 
