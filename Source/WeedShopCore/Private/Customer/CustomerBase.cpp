@@ -340,18 +340,19 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 		else if (bApptComeToPlayer)
 		{
-			// "Ik kom langs": loop naar de speler en wacht daar.
-			if (W)
+			// "Ik kom langs": de bewoner komt naar beneden en wacht bij de hoofddeur van z'n gebouw
+			// (begane grond, op de kompas), zodat je 'm daar treft i.p.v. helemaal naar boven te moeten.
+			if (bAtHomeInside)
 			{
-				if (const APlayerController* PC = W->GetFirstPlayerController())
-				{
-					if (const APawn* P = PC->GetPawn())
-					{
-						const float D = FVector::Dist2D(P->GetActorLocation(), GetActorLocation());
-						if (D < 260.f) { if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); } }
-						else { WalkTo(P->GetActorLocation()); }
-					}
-				}
+				bAtHomeInside = false;
+				SetActorHiddenInGame(false);
+				SetActorEnableCollision(true);
+				SetActorLocation(HomeFrontSpot);
+			}
+			WalkTo(HomeFrontSpot);
+			if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 160.f)
+			{
+				if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
 			}
 			return;
 		}
