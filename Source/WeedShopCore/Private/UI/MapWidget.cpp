@@ -10,6 +10,7 @@
 #include "Components/SizeBox.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
+#include "UI/WeedUiStyle.h"
 #include "Styling/CoreStyle.h"
 #include "World/CityGenerator.h"
 #include "Customer/CustomerBase.h"
@@ -95,6 +96,19 @@ UBorder* UMapWidget::AddDot(const FLinearColor& Col, float Sz, int32 ZOrder)
 	Cs->SetAlignment(FVector2D(0.5f, 0.5f));
 	Cs->SetZOrder(ZOrder);
 	return B;
+}
+
+UWidget* UMapWidget::AddPersonIcon()
+{
+	USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
+	SB->SetWidthOverride(20.f); SB->SetHeightOverride(20.f);
+	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 20.f, FLinearColor(0.3f, 1.f, 0.4f)));
+	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(SB);
+	Cs->SetAutoSize(false);
+	Cs->SetSize(FVector2D(20.f, 20.f));
+	Cs->SetAlignment(FVector2D(0.5f, 0.5f));
+	Cs->SetZOrder(21);
+	return SB;
 }
 
 TSharedRef<SWidget> UMapWidget::RebuildWidget()
@@ -213,40 +227,49 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
 
-	int32 N = 0;
+	int32 NRoam = 0, NNeed = 0;
 	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
 	{
 		ACustomerBase* C = *It;
 		if (!IsValid(C)) { continue; }
 
-		while (NpcDots.Num() <= N) { NpcDots.Add(AddDot(FLinearColor(0.35f, 0.8f, 1.f), 11.f, 18)); }
-		while (NpcLabels.Num() <= N) { NpcLabels.Add(AddCanvasText(TEXT(""), FVector2D::ZeroVector, 120.f, 11, FLinearColor(0.6f, 1.f, 0.6f), 19)); }
-
 		const FVector L = C->GetActorLocation();
 		const FVector2D Pos = WorldToCanvas(L.X, L.Y);
-		const bool bNeeded = C->bNeedsPlayer;
-		// Roamer = klein cyaan puntje; klant-die-je-nodig-hebt = groter groen puntje + naam-label.
-		if (UBorder* Dot = NpcDots[N])
+
+		if (C->bNeedsPlayer)
 		{
-			Dot->SetBrushColor(bNeeded ? FLinearColor(0.3f, 1.f, 0.35f) : FLinearColor(0.35f, 0.8f, 1.f));
-			if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(Pos); Cs->SetSize(FVector2D(bNeeded ? 16.f : 11.f, bNeeded ? 16.f : 11.f)); }
-			Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
-		}
-		if (NpcLabels[N])
-		{
-			if (bNeeded)
+			// Klant-die-je-nodig-hebt = altijd het GROENE poppetje-icoon + naam (duidelijk onderscheid).
+			while (NeedIcons.Num() <= NNeed) { NeedIcons.Add(AddPersonIcon()); }
+			while (NpcLabels.Num() <= NNeed) { NpcLabels.Add(AddCanvasText(TEXT(""), FVector2D::ZeroVector, 130.f, 11, FLinearColor(0.6f, 1.f, 0.6f), 22)); }
+			if (UWidget* Ico = NeedIcons[NNeed])
+			{
+				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Ico->Slot)) { Cs->SetPosition(Pos); }
+				Ico->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			if (NpcLabels[NNeed])
 			{
 				FString Name = C->NpcId.IsNone() ? FString(TEXT("Klant")) : C->NpcId.ToString();
 				if (Reg && !C->NpcId.IsNone()) { float r, l, a; FText Nm; if (Reg->GetStats(C->NpcId, r, l, a, Nm)) { Name = Nm.ToString(); } }
-				NpcLabels[N]->SetText(FText::FromString(Name + TEXT(" !")));
-				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(NpcLabels[N]->Slot)) { Cs->SetPosition(Pos + FVector2D(0.f, -15.f)); }
-				NpcLabels[N]->SetVisibility(ESlateVisibility::HitTestInvisible);
+				NpcLabels[NNeed]->SetText(FText::FromString(Name));
+				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(NpcLabels[NNeed]->Slot)) { Cs->SetPosition(Pos + FVector2D(0.f, -16.f)); }
+				NpcLabels[NNeed]->SetVisibility(ESlateVisibility::HitTestInvisible);
 			}
-			else { NpcLabels[N]->SetVisibility(ESlateVisibility::Collapsed); }
+			++NNeed;
 		}
-		++N;
+		else
+		{
+			// Gewone roamer = klein cyaan puntje (geen label).
+			while (NpcDots.Num() <= NRoam) { NpcDots.Add(AddDot(FLinearColor(0.35f, 0.8f, 1.f), 11.f, 18)); }
+			if (UBorder* Dot = NpcDots[NRoam])
+			{
+				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(Pos); }
+				Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			++NRoam;
+		}
 	}
 	// Overtollige markers verbergen.
-	for (int32 k = N; k < NpcDots.Num(); ++k) { if (NpcDots[k]) { NpcDots[k]->SetVisibility(ESlateVisibility::Collapsed); } }
-	for (int32 k = N; k < NpcLabels.Num(); ++k) { if (NpcLabels[k]) { NpcLabels[k]->SetVisibility(ESlateVisibility::Collapsed); } }
+	for (int32 k = NRoam; k < NpcDots.Num(); ++k) { if (NpcDots[k]) { NpcDots[k]->SetVisibility(ESlateVisibility::Collapsed); } }
+	for (int32 k = NNeed; k < NeedIcons.Num(); ++k) { if (NeedIcons[k]) { NeedIcons[k]->SetVisibility(ESlateVisibility::Collapsed); } }
+	for (int32 k = NNeed; k < NpcLabels.Num(); ++k) { if (NpcLabels[k]) { NpcLabels[k]->SetVisibility(ESlateVisibility::Collapsed); } }
 }

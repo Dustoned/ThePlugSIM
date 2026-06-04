@@ -30,7 +30,8 @@ protected:
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
 	UPROPERTY() TObjectPtr<UBorder> PlayerDot;
 	UPROPERTY() TObjectPtr<UBorder> WaypointDot;
-	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;
+	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;        // roamers (cyaan stipjes)
+	UPROPERTY() TArray<TObjectPtr<class UWidget>> NeedIcons; // klanten-voor-jou (groen poppetje)
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> NpcLabels;
 
 	FVector2D CanvasToWorld(FVector2D Local) const; // inverse van WorldToCanvas
@@ -46,5 +47,6 @@ protected:
 	FVector2D WorldToCanvas(float Wx, float Wy) const;
 	void BuildBlocks();
 	UBorder* AddDot(const FLinearColor& Col, float Sz, int32 ZOrder);
+	class UWidget* AddPersonIcon(); // groen poppetje-icoon op het canvas
 	UTextBlock* AddCanvasText(const FString& T, FVector2D Pos, float W, int32 Size, const FLinearColor& Col, int32 ZOrder);
 };
