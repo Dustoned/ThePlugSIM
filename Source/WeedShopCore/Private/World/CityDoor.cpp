@@ -39,11 +39,18 @@ void ACityDoor::Setup(float Width, float Height, const FLinearColor& Color)
 
 void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)
 {
+	if (bLocked) { return; } // bewoner-deur: op slot voor de speler
 	bOpen = !bOpen; // F = open/dicht
 }
 
 FText ACityDoor::GetInteractionPrompt_Implementation() const
 {
+	if (bLocked)
+	{
+		return FText::FromString(ResidentName.IsEmpty()
+			? FString(TEXT("LOCKED"))
+			: FString::Printf(TEXT("LOCKED - %s lives here"), *ResidentName));
+	}
 	return bOpen ? FText::FromString(TEXT("Close door")) : FText::FromString(TEXT("Open door"));
 }
 

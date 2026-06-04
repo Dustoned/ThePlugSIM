@@ -150,6 +150,11 @@ public:
 	// "Thuis"/uitgang waar de klant heen loopt als hij vertrekt.
 	void SetHome(const FVector& InHome) { HomeLocation = InHome; bHasHome = true; }
 
+	// --- Bewoner: woont in een appartement. Roamt overdag (winkel/park), gaat 's nachts naar huis. ---
+	// FrontSpot = plek vóór de voordeur (waar 'ie verschijnt/verdwijnt); InteriorPos = referentie binnen.
+	void SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber);
+	bool IsResident() const { return bResident; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -167,6 +172,15 @@ protected:
 
 	void LeaveAngry();
 	static float ClampAttr(float V) { return FMath::Clamp(V, 0.f, 100.f); }
+
+	// Bewoner-schema (dag-roamen / 's nachts thuis).
+	void TickResident(float DeltaSeconds);
+	bool bResident = false;
+	FVector HomeFrontSpot = FVector::ZeroVector;
+	FVector HomeInteriorPos = FVector::ZeroVector;
+	FString HomeNumber;
+	float RoamTimer = 0.f;
+	bool bAtHomeInside = false;
 
 	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).
 	void WriteStatsToRegistry();

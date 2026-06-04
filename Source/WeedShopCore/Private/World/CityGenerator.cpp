@@ -665,12 +665,14 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		auto SegS = [&](float s0, float s1, float d, float zS) { if (FMath::Abs(s1 - s0) > 4.f) { Box(d, (s0 + s1) * 0.5f, WallT, FMath::Abs(s1 - s0), zS + WallHt * 0.5f, WallHt, IWall, true); } };
 		auto LintelD = [&](float dC, float s, float zS) { const float h = WallHt - DoorTopH; if (h > 4.f) { Box(dC, s, DoorGap, WallT, zS + DoorTopH + h * 0.5f, h, IWall, true); } };
 		// Werkende deur in een d-wand (paneel langs de diepte; scharnier aan de -Fwd-kant van het gat).
-		auto DoorD = [&](float dC, float s, float zS)
+		auto DoorD = [&](float dC, float s, float zS) -> ACityDoor*
 		{
 			const FVector hinge = LP(dC - DoorGap * 0.5f, s) + FVector(0.f, 0.f, zS);
 			const float yaw = FMath::RadiansToDegrees(FMath::Atan2(Fwd.Y, Fwd.X));
 			FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			if (ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, yaw, 0.f), hinge), DSP)) { Dr->Setup(DoorGap - 4.f, DoorTopH - 6.f, ADoorC); }
+			ACityDoor* Dr = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, yaw, 0.f), hinge), DSP);
+			if (Dr) { Dr->Setup(DoorGap - 4.f, DoorTopH - 6.f, ADoorC); }
+			return Dr;
 		};
 
 		for (int32 f = 0; f < NF; ++f)
@@ -687,7 +689,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					SegD(cur, aCenter - DoorGap * 0.5f, sw, zS);
 					cur = aCenter + DoorGap * 0.5f;
 					LintelD(aCenter, sw, zS);
-					DoorD(aCenter, sw, zS);
+					ACityDoor* AptDoor = DoorD(aCenter, sw, zS);
 					// Plafondlamp midden in elk appartement.
 					const FVector LAp = LP(aCenter, side * (HW + SideW * 0.5f));
 					AddInteriorLight(FVector(LAp.X, LAp.Y, zS + FloorH - 55.f));
@@ -697,6 +699,19 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					const FVector NumDir((float)(side * Ddy), (float)(-side * Ddx), 0.f);
 					const FVector PlateLoc = FVector(DrXY.X, DrXY.Y, zS + 135.f) + NumDir * (WallT * 0.5f + 2.f);
 					AddDoorNumber(PlateLoc, side * Ddy, -side * Ddx, FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq), 15.f);
+					// Registreer dit appartement als 'home'. De bewoner gaat 's nachts naar de plek VÓÓR de
+					// voordeur van het gebouw (en verdwijnt daar 'naar binnen'); z'n appartementdeur binnen
+					// gaat op slot met z'n naam. (AI kan niet door de voordeur, dus geen binnen-pathing nodig.)
+					{
+						const FVector Inside = LP(aCenter, side * (HW + SideW * 0.45f));
+						const FVector FrontSpot = FVector(CX, CY, TopZ + 8.f) + N * (Half + 120.f);
+						FApartmentHome H;
+						H.Door = AptDoor;
+						H.InteriorPos = FVector(Inside.X, Inside.Y, zS + 8.f);
+						H.DoorPos = FrontSpot;
+						H.Number = FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq);
+						ApartmentHomes.Add(H);
+					}
 				}
 				SegD(cur, HallLen, sw, zS); // gang-zijwand tot de kern
 				if (side > 0)

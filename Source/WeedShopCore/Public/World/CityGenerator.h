@@ -15,6 +15,18 @@
 class UStaticMesh;
 class UStaticMeshComponent;
 class USceneComponent;
+class ACityDoor;
+
+// Eén appartement-woning: de deur, een binnen-plek, een plek net buiten de deur, en het huisnummer.
+USTRUCT()
+struct FApartmentHome
+{
+	GENERATED_BODY()
+	UPROPERTY() TWeakObjectPtr<ACityDoor> Door;
+	UPROPERTY() FVector InteriorPos = FVector::ZeroVector;
+	UPROPERTY() FVector DoorPos = FVector::ZeroVector;
+	UPROPERTY() FString Number;
+};
 
 // Eén blok op de kaart: wereld-XY-midden + kleur + label (winkelnaam of huisnummer-reeks).
 USTRUCT()
@@ -41,6 +53,9 @@ public:
 	float GetPitch() const { return BlockSize + RoadWidth; }
 	float GetMapBlockSize() const { return BlockSize; }
 	void GetMapBlocks(TArray<FCityMapBlock>& Out) const;
+
+	// Alle geregistreerde appartement-woningen (deur + plekken + huisnummer) voor het bewoner-systeem.
+	const TArray<FApartmentHome>& GetApartmentHomes() const { return ApartmentHomes; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -106,6 +121,7 @@ private:
 	bool bBuilt = false;
 	float GroundZ = 0.f;
 	FVector CityCenter = FVector::ZeroVector; // referentie-midden (PlayerStart) voor de kaart
+	UPROPERTY() TArray<FApartmentHome> ApartmentHomes; // geregistreerde woningen (bewoner-systeem)
 
 	// Straatlampen: spots (naar onder) + zachte gloed-puntlichten + gloeiende koppen, getoggeld op kloktijd.
 	UPROPERTY() TArray<TObjectPtr<class ULightComponent>> LampLights;

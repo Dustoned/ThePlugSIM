@@ -1,6 +1,10 @@
 #include "Customer/CustomerSpawner.h"
 
 #include "Customer/CustomerBase.h"
+#include "World/CityGenerator.h"
+#include "World/CityDoor.h"
+#include "Game/WeedShopGameState.h"
+#include "Npc/NpcRegistryComponent.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "EngineUtils.h"
@@ -27,6 +31,13 @@ void ACustomerSpawner::TrySpawn()
 
 	// Verlopen klanten opruimen.
 	Spawned.RemoveAll([](const TObjectPtr<ACustomerBase>& C) { return !IsValid(C); });
+
+	// Bewoner-modus heeft voorrang: ken NPC's toe aan appartementen zodra de stad gebouwd is.
+	if (bSpawnResidents)
+	{
+		if (!bResidentsSpawned) { SpawnResidents(); }
+		return;
+	}
 
 	if (bTestSingleHighStat)
 	{
@@ -80,6 +91,70 @@ void ACustomerSpawner::TrySpawn()
 	C->WalkTo(Spot);
 
 	Spawned.Add(C);
+}
+
+void ACustomerSpawner::SpawnResidents()
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority()) { return; }
+
+	// Eén spawner regelt de bewoners: staan er al bewoners, dan niets doen (geen dubbele).
+	for (TActorIterator<ACustomerBase> It(World); It; ++It)
+	{
+		if (IsValid(*It) && It->IsResident()) { bResidentsSpawned = true; return; }
+	}
+
+	// Vind de (lokaal gebouwde) stad met geregistreerde woningen.
+	ACityGenerator* City = nullptr;
+	for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
+	if (!City) { return; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (Homes.Num() == 0) { return; } // stad nog niet klaar -> volgende tick
+
+	bResidentsSpawned = true;
+
+	AWeedShopGameState* GS = World->GetGameState<AWeedShopGameState>();
+	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
+
+	TSubclassOf<ACustomerBase> Cls = CustomerClass;
+	if (!Cls) { Cls = ACustomerBase::StaticClass(); }
+
+	// Gespreide subset van woningen kiezen (verschillende gebouwen/etages).
+	const int32 Count = FMath::Clamp(MaxResidents, 0, Homes.Num());
+	const int32 Step = FMath::Max(1, Homes.Num() / FMath::Max(1, Count));
+	int32 Made = 0;
+	for (int32 i = 0; i < Homes.Num() && Made < Count; i += Step)
+	{
+		const FApartmentHome& H = Homes[i];
+		FActorSpawnParameters SP;
+		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, H.DoorPos, FRotator::ZeroRotator, SP);
+		if (!C) { continue; }
+
+		// NPC-identiteit + naam (voor de slot-prompt).
+		FString Name = H.Number;
+		if (Reg)
+		{
+			C->NpcId = Reg->AssignNpc();
+			float r = 0.f, l = 0.f, a = 0.f; FText N;
+			if (!C->NpcId.IsNone() && Reg->GetStats(C->NpcId, r, l, a, N) && !N.IsEmpty()) { Name = N.ToString(); }
+		}
+		C->SetupResident(H.DoorPos, H.InteriorPos, H.Number);
+
+		// Eerste bewoner = gegarandeerde koopklare test-klant.
+		if (Made == 0)
+		{
+			C->Respect = 70.f; C->Loyalty = 40.f; C->Addiction = 80.f;
+			C->BecomeBuyerNow();
+		}
+
+		// Appartementdeur op slot met de bewonersnaam ("LOCKED - <naam> lives here").
+		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(Name); }
+
+		if (!C->GetController()) { C->SpawnDefaultController(); }
+		Spawned.Add(C);
+		++Made;
+	}
 }
 
 void ACustomerSpawner::SetupTestCustomer(ACustomerBase* C, const FVector& Park)

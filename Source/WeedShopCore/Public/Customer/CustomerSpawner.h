@@ -25,9 +25,16 @@ public:
 	int32 MaxCustomers = 3;
 
 	// TEST: spawn slechts ÉÉN klant, met hoge stat (koopklaar), netjes in het centrale park (PlayerStart).
-	// Zo zweven er geen random NPC's meer in het midden; alleen deze ene om mee te testen.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
-	bool bTestSingleHighStat = true;
+	bool bTestSingleHighStat = false;
+
+	// Bewoners: ken NPC's toe aan appartementen. Ze roamen overdag, gaan 's nachts naar huis, en hun
+	// appartementdeur gaat op slot met hun naam. (Heeft voorrang op bovenstaande test-modus.)
+	UPROPERTY(EditAnywhere, Category = "Spawn")
+	bool bSpawnResidents = true;
+
+	UPROPERTY(EditAnywhere, Category = "Spawn")
+	int32 MaxResidents = 8;
 
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpawnInterval = 10.f;
@@ -41,7 +48,10 @@ protected:
 	void TrySpawn();
 	// Maakt van C de koopklare test-klant op de park-plek (idempotent).
 	void SetupTestCustomer(ACustomerBase* C, const FVector& Park);
+	// Kent NPC-bewoners toe aan appartementen (één keer, zodra de stad gebouwd is).
+	void SpawnResidents();
 
+	bool bResidentsSpawned = false;
 	FTimerHandle SpawnTimer;
 
 	UPROPERTY(Transient)

@@ -22,6 +22,10 @@ public:
 	// Stel de deur in (afmeting + kleur). Hinge zit aan de -X-kant; dicht = paneel langs +X.
 	void Setup(float Width, float Height, const FLinearColor& Color);
 
+	// Maak dit een bewoner-deur: op slot voor de speler, met "LOCKED - <naam> lives here".
+	void SetResident(const FString& Name) { bLocked = true; ResidentName = Name; bOpen = false; }
+	bool IsLocked() const { return bLocked; }
+
 	// Interact (F) opent/sluit de deur.
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
@@ -35,4 +39,6 @@ protected:
 
 	float CurAngle = 0.f;   // huidige scharnierhoek
 	bool bOpen = false;     // open/dicht (getoggled via interact)
+	bool bLocked = false;   // bewoner-deur: kan niet door de speler geopend worden
+	FString ResidentName;   // naam voor de "LOCKED - ... lives here"-prompt
 };

@@ -6,8 +6,11 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "AIController.h"
 #include "NavigationInvokerComponent.h"
+#include "NavigationSystem.h"
+#include "World/DayCycleComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/DataTable.h"
 #include "Data/WeedShopProduct.h"
@@ -197,6 +200,13 @@ void ACustomerBase::Tick(float DeltaSeconds)
 		return;
 	}
 
+	// Bewoners gebruiken hun eigen dag/nacht-schema (roamen / naar huis) i.p.v. de geduld-/vertrek-logica.
+	if (bResident)
+	{
+		TickResident(DeltaSeconds);
+		return;
+	}
+
 	// Geduld loopt af zolang hij wacht (wil bestellen of onderhandelt).
 	if (State == ECustomerState::WantsToOrder || State == ECustomerState::Negotiating)
 	{
@@ -233,6 +243,82 @@ void ACustomerBase::Tick(float DeltaSeconds)
 			PatienceSeconds = BasePatienceSeconds;
 			LeaveTimer = 0.f;
 			if (bHasSpot) { WalkTo(SpotLocation); }
+		}
+	}
+}
+
+void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber)
+{
+	bResident = true;
+	HomeFrontSpot = FrontSpot;
+	HomeInteriorPos = InteriorPos;
+	HomeNumber = HouseNumber;
+	bDespawnAfterServed = false;
+	SetActorLocation(FrontSpot);
+	RoamTimer = FMath::FRandRange(0.5f, 6.f); // spreiding: niet allemaal tegelijk vertrekken
+}
+
+void ACustomerBase::TickResident(float DeltaSeconds)
+{
+	UWorld* W = GetWorld();
+	const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
+	const float Hour = DC ? DC->GetClockHour() : 12.f;
+	const bool bNight = (Hour >= 19.f || Hour < 7.f);
+
+	// Speler dichtbij -> blijf staan zodat je kunt praten/dealen (niet wegwandelen).
+	if (!bAtHomeInside && W)
+	{
+		if (const APlayerController* PC = W->GetFirstPlayerController())
+		{
+			if (const APawn* P = PC->GetPawn())
+			{
+				if (FVector::Dist2D(P->GetActorLocation(), GetActorLocation()) < 280.f)
+				{
+					if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+					return;
+				}
+			}
+		}
+	}
+
+	if (bNight)
+	{
+		// 's Nachts naar huis (plek vóór de voordeur) en daar 'naar binnen' verdwijnen.
+		if (bAtHomeInside) { return; }
+		WalkTo(HomeFrontSpot);
+		if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 170.f)
+		{
+			bAtHomeInside = true;
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+		}
+		return;
+	}
+
+	// Dag: verschijn weer bij de voordeur als 'ie binnen was.
+	if (bAtHomeInside)
+	{
+		bAtHomeInside = false;
+		SetActorHiddenInGame(false);
+		SetActorEnableCollision(true);
+		SetActorLocation(HomeFrontSpot);
+		RoamTimer = 0.f;
+	}
+
+	// Roam: af en toe een nieuw, bereikbaar doel ergens in de stad (gespreid via random nav-punten).
+	RoamTimer -= DeltaSeconds;
+	if (RoamTimer <= 0.f)
+	{
+		RoamTimer = FMath::FRandRange(8.f, 18.f);
+		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
+		{
+			FNavLocation Out;
+			if (Nav->GetRandomReachablePointInRadius(GetActorLocation(), 5500.f, Out))
+			{
+				WalkTo(Out.Location);
+			}
 		}
 	}
 }
