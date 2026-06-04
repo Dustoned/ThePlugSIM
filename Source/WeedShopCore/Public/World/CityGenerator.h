@@ -57,6 +57,11 @@ public:
 	// Alle geregistreerde appartement-woningen (deur + plekken + huisnummer) voor het bewoner-systeem.
 	const TArray<FApartmentHome>& GetApartmentHomes() const { return ApartmentHomes; }
 
+	// --- Echte top-down kaart-render (orthografische SceneCapture van de stad) ---
+	class UTextureRenderTarget2D* GetMapRenderTarget() const { return MapRT; }
+	float GetMapOrthoWidth() const { return MapOrthoWidth; } // wereld-breedte die het beeld dekt
+	void CaptureMapNow(); // (her)render de kaart
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -122,6 +127,12 @@ private:
 	float GroundZ = 0.f;
 	FVector CityCenter = FVector::ZeroVector; // referentie-midden (PlayerStart) voor de kaart
 	UPROPERTY() TArray<FApartmentHome> ApartmentHomes; // geregistreerde woningen (bewoner-systeem)
+
+	// Top-down kaart-capture.
+	UPROPERTY() TObjectPtr<class USceneCaptureComponent2D> MapCapture;
+	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> MapRT;
+	float MapOrthoWidth = 0.f;
+	FTimerHandle MapCaptureTimer;
 
 	// Straatlampen: spots (naar onder) + zachte gloed-puntlichten + gloeiende koppen, getoggeld op kloktijd.
 	UPROPERTY() TArray<TObjectPtr<class ULightComponent>> LampLights;

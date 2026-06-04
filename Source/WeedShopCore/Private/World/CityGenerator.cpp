@@ -17,6 +17,11 @@
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "NavigationInvokerComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Scene.h"
+#include "Camera/CameraTypes.h"
+#include "TimerManager.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
@@ -385,6 +390,41 @@ void ACityGenerator::BuildCity()
 
 	// Centraal parkje op het open middenblok.
 	BuildPark(Center.X, Center.Y, BlockSize, GroundZ);
+
+	// --- Echte top-down kaart: orthografische camera hoog boven het centrum, kijkt recht omlaag. ---
+	{
+		MapOrthoWidth = Span; // dekt de hele stad
+		MapRT = NewObject<UTextureRenderTarget2D>(this, TEXT("MapRT"));
+		MapRT->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
+		MapRT->ClearColor = FLinearColor(0.04f, 0.05f, 0.07f, 1.f);
+		MapRT->InitAutoFormat(1024, 1024);
+		MapRT->UpdateResourceImmediate(true);
+
+		MapCapture = NewObject<USceneCaptureComponent2D>(this, TEXT("MapCapture"));
+		MapCapture->SetupAttachment(Root);
+		MapCapture->RegisterComponent();
+		MapCapture->ProjectionType = ECameraProjectionMode::Orthographic;
+		MapCapture->OrthoWidth = MapOrthoWidth;
+		MapCapture->TextureTarget = MapRT;
+		MapCapture->bCaptureEveryFrame = false;
+		MapCapture->bCaptureOnMovement = false;
+		MapCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+		// Vaste, heldere belichting zodat de kaart ook 's nachts leesbaar is.
+		MapCapture->PostProcessSettings.bOverride_AutoExposureMethod = true;
+		MapCapture->PostProcessSettings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+		MapCapture->PostProcessSettings.bOverride_AutoExposureBias = true;
+		MapCapture->PostProcessSettings.AutoExposureBias = 11.f;
+		// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met WorldToCanvas).
+		MapCapture->SetWorldLocationAndRotation(FVector(Center.X, Center.Y, GroundZ + 60000.f), FRotator(-90.f, 0.f, 0.f));
+
+		// Even wachten tot de net-gebouwde geometrie gerenderd is, dan 1x capturen.
+		GetWorldTimerManager().SetTimer(MapCaptureTimer, this, &ACityGenerator::CaptureMapNow, 0.6f, false);
+	}
+}
+
+void ACityGenerator::CaptureMapNow()
+{
+	if (MapCapture) { MapCapture->CaptureScene(); }
 }
 
 void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const

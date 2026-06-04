@@ -10,6 +10,8 @@
 #include "Components/SizeBox.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "UI/WeedUiStyle.h"
 #include "Styling/CoreStyle.h"
 #include "World/CityGenerator.h"
@@ -24,7 +26,6 @@
 namespace
 {
 	constexpr float GMapDS = 760.f;  // ontwerp-grootte van het kaartvlak (px)
-	constexpr float GMapPad = 44.f;  // marge
 }
 
 FVector2D UMapWidget::WorldToCanvas(float Wx, float Wy) const
@@ -118,9 +119,9 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("MapRoot"));
 		WidgetTree->RootWidget = Root;
 
-		// Donkere achtergrond (dimt de game bij fullscreen).
+		// Donkere achtergrond (dekkend -> HUD erachter komt er niet doorheen).
 		UBorder* Bg = WidgetTree->ConstructWidget<UBorder>();
-		Bg->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, bFullscreen ? 0.92f : 1.f));
+		Bg->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 1.f));
 		Root->AddChildToOverlay(Bg);
 
 		// Vaste-grootte kaartvlak, geschaald naar de beschikbare ruimte.
@@ -139,6 +140,18 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("MapCanvas"));
 		Box->SetContent(Canvas);
 
+		// Echte top-down stad-render als achtergrond (gevuld door de SceneCapture); onderop.
+		MapImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("MapImage"));
+		if (UCanvasPanelSlot* Is = Canvas->AddChildToCanvas(MapImage))
+		{
+			Is->SetAutoSize(false);
+			Is->SetSize(FVector2D(GMapDS, GMapDS));
+			Is->SetAlignment(FVector2D(0.f, 0.f));
+			Is->SetPosition(FVector2D(0.f, 0.f));
+			Is->SetZOrder(0);
+		}
+		MapImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+
 		// Titel + kompas.
 		AddCanvasText(TEXT("STAD - KAART"), FVector2D(GMapDS * 0.5f, 20.f), GMapDS, 20, FLinearColor(0.7f, 0.85f, 1.f), 50);
 		AddCanvasText(TEXT("N"), FVector2D(GMapDS * 0.5f, 44.f), 40.f, 14, FLinearColor(0.8f, 0.8f, 0.9f), 50);
@@ -150,30 +163,20 @@ void UMapWidget::BuildBlocks()
 {
 	if (!Canvas || !City.IsValid()) { return; }
 
-	const int32 R = City->GetGridRadiusClamped();
-	const float Pitch = City->GetPitch();
 	const FVector C = City->GetCityCenter();
 	CenterXY = FVector2D(C.X, C.Y);
-	const float EH = (R + 0.7f) * Pitch;             // halve wereld-omvang
-	Scale = (GMapDS - 2.f * GMapPad) / (2.f * EH);
+	// Schaal afgestemd op de SceneCapture: het 760px-vlak = de OrthoWidth-brede wereldzone.
+	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
+	Scale = GMapDS / Ortho;
 
+	// Winkel-labels boven de echte kaart-render (zodat je ziet wélk gebouw welke winkel is).
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
-	const float BlkPx = City->GetMapBlockSize() * Scale;
-
 	for (const FCityMapBlock& Bk : Blocks)
 	{
+		if (!Bk.bShop) { continue; }
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
-		UBorder* Tile = WidgetTree->ConstructWidget<UBorder>();
-		Tile->SetBrushColor(Bk.Color);
-		UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Tile);
-		Cs->SetAutoSize(false);
-		Cs->SetSize(FVector2D(BlkPx, BlkPx));
-		Cs->SetAlignment(FVector2D(0.5f, 0.5f));
-		Cs->SetPosition(P);
-		Cs->SetZOrder(1);
-		// Label (winkelnaam of huisnummer-reeks), zwart op de gekleurde tegel.
-		AddCanvasText(Bk.Label, P, BlkPx, Bk.bShop ? 13 : 11, FLinearColor(0.05f, 0.05f, 0.06f), 2);
+		AddCanvasText(Bk.Label, P, 120.f, 12, FLinearColor(1.f, 0.95f, 0.6f), 5);
 	}
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
@@ -182,9 +185,10 @@ void UMapWidget::BuildBlocks()
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 	AddCanvasText(TEXT("Klik = waypoint zetten  /  rechtsklik = wissen"),
 		FVector2D(GMapDS * 0.5f, 64.f), GMapDS, 11, FLinearColor(0.7f, 0.85f, 1.f), 50);
-	AddCanvasText(TEXT("groen=grow  paars=meubels  blauw=supplies  rood=gas    cyaan=NPC  groen poppetje=klant voor jou"),
-		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 10, FLinearColor(0.7f, 0.72f, 0.8f), 50);
+	AddCanvasText(TEXT("blauw=jij   geel=waypoint   cyaan=NPC   groen poppetje=klant voor jou"),
+		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 11, FLinearColor(0.7f, 0.72f, 0.8f), 50);
 
+	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 	bBuiltBlocks = true;
 }
 
@@ -198,6 +202,19 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	if (!bBuiltBlocks && City.IsValid()) { BuildBlocks(); }
 	if (!bBuiltBlocks || !Canvas) { return; }
+
+	// Echte top-down render op de achtergrond zetten zodra de SceneCapture klaar is.
+	if (MapImage && !bImageSet && City.IsValid())
+	{
+		if (UTextureRenderTarget2D* RT = City->GetMapRenderTarget())
+		{
+			FSlateBrush Br;
+			Br.SetResourceObject(RT);
+			Br.ImageSize = FVector2D(GMapDS, GMapDS);
+			MapImage->SetBrush(Br);
+			bImageSet = true;
+		}
+	}
 
 	// Speler.
 	if (PlayerDot)

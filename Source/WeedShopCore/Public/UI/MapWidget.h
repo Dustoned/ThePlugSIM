@@ -28,6 +28,8 @@ protected:
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
+	UPROPERTY() TObjectPtr<class UImage> MapImage; // echte top-down render van de stad
+	bool bImageSet = false;
 	UPROPERTY() TObjectPtr<UBorder> PlayerDot;
 	UPROPERTY() TObjectPtr<UBorder> WaypointDot;
 	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;        // roamers (cyaan stipjes)
