@@ -444,7 +444,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			// ~25% kans op een tripje naar het park (gedeelde hub); anders rondjes in de EIGEN buurt
 			// (rond de voordeur) zodat de bewoners verspreid over de stad blijven i.p.v. allemaal naar
 			// het midden te zuigen.
-			const bool bToPark = bHasPark && FMath::FRand() < 0.25f;
+			const bool bToPark = bHasPark && FMath::FRand() < 0.12f;
 			const FVector Origin = bToPark ? ParkCenter : HomeFrontSpot;
 			const float Radius = bToPark ? 800.f : 3500.f;
 			if (Nav->GetRandomReachablePointInRadius(Origin, Radius, Out))
