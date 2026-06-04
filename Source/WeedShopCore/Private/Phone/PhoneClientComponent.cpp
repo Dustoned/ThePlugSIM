@@ -22,6 +22,8 @@
 #include "TimerManager.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/GameStateBase.h"
 #include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
 #include "UI/PhoneWidget.h"
@@ -289,6 +291,20 @@ void UPhoneClientComponent::MoveOwnerToHome(int32 HomeIndex)
 		{
 			To = Hit.ImpactPoint + FVector(0.f, 0.f, Pawn->GetSimpleCollisionHalfHeight() + 8.f);
 		}
+	}
+	// Co-op: geef elke speler een eigen offset binnen de woning, anders landen ze op EXACT dezelfde plek
+	// en duwen de capsules elkaar omhoog (zweven). Spreid ze op een klein rooster.
+	int32 PlayerIdx = 0;
+	if (const APlayerState* PS = Pawn->GetPlayerState())
+	{
+		if (const AGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState() : nullptr)
+		{
+			PlayerIdx = FMath::Max(0, GS->PlayerArray.IndexOfByKey(PS));
+		}
+	}
+	if (PlayerIdx > 0)
+	{
+		To += FVector((float)(PlayerIdx % 2) * 110.f, (float)(PlayerIdx / 2 + (PlayerIdx % 2 == 0 ? 1 : 0)) * 110.f, 0.f);
 	}
 	Pawn->TeleportTo(To, Pawn->GetActorRotation(), false, true);
 }
