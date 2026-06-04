@@ -27,7 +27,7 @@
 
 namespace
 {
-	constexpr float GMapDS = 760.f;  // ontwerp-grootte van het kaartvlak (px)
+	constexpr float GMapDS = 1000.f;  // ontwerp-grootte van het kaartvlak (px) — groot genoeg dat alle nummers passen
 }
 
 FVector2D UMapWidget::WorldToCanvas(float Wx, float Wy) const
@@ -140,6 +140,7 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		SB->AddChild(Box);
 
 		Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("MapCanvas"));
+		Canvas->SetClipping(EWidgetClipping::ClipToBounds); // niets steekt buiten het kaartvlak / in de UI
 		Box->SetContent(Canvas);
 
 		// Echte top-down stad-render als achtergrond (gevuld door de SceneCapture); onderop.
@@ -171,17 +172,34 @@ void UMapWidget::BuildBlocks()
 	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
 	Scale = GMapDS / Ortho;
 
-	// Huisnummer-/winkellabels boven de ECHTE stad-render (zo zie je gebouwen ÉN welke nummers waar).
+	// Klein wit nummer met donkere schaduw -> leesbaar op zowel donkere wegen als gekleurde daken.
+	auto Plaque = [&](const FString& Txt, FVector2D Pos, float W, int32 Sz)
+	{
+		AddCanvasText(Txt, Pos + FVector2D(1.f, 1.f), W, Sz, FLinearColor(0.f, 0.f, 0.f, 0.9f), 5);
+		AddCanvasText(Txt, Pos, W, Sz, FLinearColor(1.f, 1.f, 0.96f), 6);
+	};
+
+	// Bloklabels: winkelnaam, park, of flat-reeks ("32  1-20"). Rijtjeshuizen NIET hier — die krijgen
+	// hieronder een eigen nummertje per huis, zodat er niks meer opgepropt staat.
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
 	const float BlkPx = City->GetMapBlockSize() * Scale;
 	for (const FCityMapBlock& Bk : Blocks)
 	{
+		const bool bRowBlock = !Bk.bShop && Bk.Label != TEXT("Park") && !Bk.Label.Contains(TEXT("-"));
+		if (bRowBlock) { continue; } // rijtjeshuizen -> per-huis nummers
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
-		const int32 FontSz = Bk.bShop ? 13 : 11;
-		// Wit met donkere "schaduw" eronder -> leesbaar op zowel donkere wegen als gekleurde daken.
-		AddCanvasText(Bk.Label, P + FVector2D(1.f, -BlkPx * 0.30f + 1.f), BlkPx + 12.f, FontSz, FLinearColor(0.f, 0.f, 0.f, 0.85f), 5);
-		AddCanvasText(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.30f), BlkPx + 12.f, FontSz, FLinearColor(1.f, 1.f, 0.95f), 6);
+		const int32 FontSz = Bk.bShop ? 14 : 12;
+		Plaque(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.28f), BlkPx + 12.f, FontSz);
+	}
+
+	// Eén clean nummertje per rijtjeshuis op zijn eigen deurpositie (nummer zonder "-" = rijtjeshuis;
+	// flat-units hebben "32-1" en blijven in de bloklabel hierboven om opstapeling te voorkomen).
+	for (const FApartmentHome& H : City->GetApartmentHomes())
+	{
+		if (H.Number.IsEmpty() || H.Number.Contains(TEXT("-"))) { continue; }
+		const FVector2D P = WorldToCanvas(H.DoorPos.X, H.DoorPos.Y);
+		Plaque(H.Number, P, 30.f, 10);
 	}
 
 	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
