@@ -330,7 +330,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 				CareMultiplier = FMath::Min(0.3f, MaxCare);
 				CareSum = 0.f; CareTime = 0.f; CareAvg = CareMultiplier;
 				UpdatePlantVisual();
-				if (GEngine) { UWeedToast::Notify(-1, 4.f, FColor::Red, TEXT("A plant rotted away - harvested too late. Seed lost.")); }
+				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Red, TEXT("A plant rotted away - harvested too late. Seed lost.")); }
 			}
 		}
 	}
@@ -368,7 +368,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 				{
 					SlotStrain[i] = NAME_None; SlotGrowth[i] = 0.f; SlotPhase[i] = EGrowthPhase::Seedling;
 					SlotAfflict[i] = 0; SlotAfflictTime[i] = 0.f; bVisChanged = true;
-					if (GEngine) { UWeedToast::Notify(-1, 4.f, FColor::Red, TEXT("A plant died from mold/pests - you didn't spray it in time. Seed lost.")); }
+					if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Red, TEXT("A plant died from mold/pests - you didn't spray it in time. Seed lost.")); }
 				}
 			}
 			else if (CrewLevel >= AfflictMoldMinLevel)
@@ -381,7 +381,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 					const bool bPestUnlocked = CrewLevel >= AfflictPestMinLevel;
 					SlotAfflict[i] = (bPestUnlocked && FMath::FRand() < 0.5f) ? 2 : 1; // 1 mold, 2 pest
 					SlotAfflictTime[i] = 0.f; bVisChanged = true;
-					if (GEngine) { UWeedToast::Notify(-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! Spray it within 3 min or it starts dying."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
+					if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! Spray it within 3 min or it starts dying."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
 				}
 			}
 		}
@@ -485,7 +485,7 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 	if (!HasSoil())
 	{
 		if (IsSoilItem(Hand)) { TryAddSoil(InstigatorPawn, Hand); }
-		else if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Hold soil in your hand (1-8) to fill the pot.")); }
+		else if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Hold soil in your hand (1-8) to fill the pot.")); }
 		return;
 	}
 	// 3) Lege plek + zaadje in de hand -> planten.
@@ -506,7 +506,7 @@ void AGrowPlant::Interact_Implementation(APawn* InstigatorPawn)
 		const FString Msg = (GetPlantedCount() < GetNumSlots())
 			? TEXT("Hold a seed (1-8) to plant, or your water bottle to water.")
 			: TEXT("Pot is full. Hold your water bottle (1-8) to water.");
-		UWeedToast::Notify(-1, 2.5f, FColor::Orange, Msg);
+		UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, Msg);
 	}
 }
 
@@ -549,12 +549,12 @@ bool AGrowPlant::TryApplySpray(APawn* InstigatorPawn, FName SprayItem)
 	}
 	if (Cured == 0)
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, GetAfflictedCount() > 0 ? TEXT("Wrong spray for this problem.") : TEXT("Nothing to treat here.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, GetAfflictedCount() > 0 ? TEXT("Wrong spray for this problem.") : TEXT("Nothing to treat here.")); }
 		return false;
 	}
 	Inv->RemoveItem(SprayItem, 1); // 1 spray per behandeling
 	UpdatePlantVisual();
-	if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Green, FString::Printf(TEXT("Treated %d plant(s). They'll resume growing."), Cured)); }
+	if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 3.f, FColor::Green, FString::Printf(TEXT("Treated %d plant(s). They'll resume growing."), Cured)); }
 	return true;
 }
 
@@ -564,19 +564,19 @@ bool AGrowPlant::TryApplyFertilizer(APawn* InstigatorPawn, FName FertItem)
 	if (!Inv) { return false; }
 	if (GetPlantedCount() == 0)
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Plant something first before fertilizing.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Plant something first before fertilizing.")); }
 		return false;
 	}
 	const FString S = FertItem.ToString();
 	const float Bonus = S.Contains(TEXT("Bloom")) ? 1.30f : 1.15f; // bloom-mest sterker
 	if (FertYieldMult >= Bonus - 0.001f)
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("This pot is already fertilized.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("This pot is already fertilized.")); }
 		return false;
 	}
 	if (!Inv->RemoveItem(FertItem, 1)) { return false; }
 	FertYieldMult = Bonus;
-	if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Green, FString::Printf(TEXT("Fertilized: +%.0f%% yield this harvest."), (Bonus - 1.f) * 100.f)); }
+	if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 3.f, FColor::Green, FString::Printf(TEXT("Fertilized: +%.0f%% yield this harvest."), (Bonus - 1.f) * 100.f)); }
 	return true;
 }
 
@@ -591,7 +591,7 @@ bool AGrowPlant::TryAddSoil(APawn* InstigatorPawn, FName SoilItem)
 	UpdateSoilVisual();
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 3.f, FColor::Green,
+		UWeedToast::NotifyPawn(InstigatorPawn,-1, 3.f, FColor::Green,
 			FString::Printf(TEXT("Soil added: %s (%d harvests). Now plant seeds."), *Def.DisplayName, SoilUsesLeft));
 	}
 	return true;
@@ -621,7 +621,7 @@ bool AGrowPlant::TryPlantNextSlot(APawn* InstigatorPawn, FName SeedItem)
 	UpdatePlantVisual();
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 3.f, FColor::Green,
+		UWeedToast::NotifyPawn(InstigatorPawn,-1, 3.f, FColor::Green,
 			FString::Printf(TEXT("Planted: %s  (%d/%d)"), *StrainToPlant.ToString(), GetPlantedCount(), GetNumSlots()));
 	}
 	return true;
@@ -631,24 +631,24 @@ void AGrowPlant::WaterAll(APawn* InstigatorPawn)
 {
 	if (GetPlantedCount() == 0)
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 2.f, FColor::Orange, TEXT("Nothing planted to water yet.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.f, FColor::Orange, TEXT("Nothing planted to water yet.")); }
 		return;
 	}
 	UWaterCanComponent* Can = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UWaterCanComponent>() : nullptr;
 	if (!Can || !Can->HasBottle())
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier).")); }
+		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier).")); }
 		return;
 	}
 	if (!Can->TryUseCharge())
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Water bottle is empty - fill it at the sink.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Water bottle is empty - fill it at the sink.")); }
 		return;
 	}
 	WaterLevel = FMath::Clamp(WaterLevel + 0.6f, 0.f, 1.f);
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 2.f, FColor::Cyan,
+		UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.f, FColor::Cyan,
 			FString::Printf(TEXT("Pot watered (water %.0f%%, bottle %d/%d)"), WaterLevel * 100.f, Can->GetCharges(), Can->GetMaxCharges()));
 	}
 }
@@ -723,17 +723,17 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		UpdatePlantVisual();
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 4.f, FColor::Green,
+			UWeedToast::NotifyPawn(InstigatorPawn,-1, 4.f, FColor::Green,
 				FString::Printf(TEXT("Harvested %d plant(s): %dg total"), Harvested, TotalGrams));
 			if (SoilId.IsNone())
 			{
-				UWeedToast::Notify(-1, 4.f, FColor::Orange, TEXT("The soil is used up - add fresh soil before replanting."));
+				UWeedToast::NotifyPawn(InstigatorPawn,-1, 4.f, FColor::Orange, TEXT("The soil is used up - add fresh soil before replanting."));
 			}
 		}
 	}
 	if (SkippedSick > 0 && GEngine)
 	{
-		UWeedToast::Notify(-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("%d ready plant(s) are sick - spray them before harvest."), SkippedSick));
+		UWeedToast::NotifyPawn(InstigatorPawn,-1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("%d ready plant(s) are sick - spray them before harvest."), SkippedSick));
 	}
 }
 

@@ -62,14 +62,14 @@ void AWaterSink::Interact_Implementation(APawn* InstigatorPawn)
 	{
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier)."));
+			UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier)."));
 		}
 		return;
 	}
 	Can->Fill();
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 2.5f, FColor::Cyan,
+		UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Cyan,
 			FString::Printf(TEXT("Bottle filled (%d/%d)."), Can->GetCharges(), Can->GetMaxCharges()));
 	}
 }

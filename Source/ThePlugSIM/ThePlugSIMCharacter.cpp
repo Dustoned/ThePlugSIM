@@ -153,7 +153,7 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	{
 		const int32 MM = (int32)Move->MovementMode.GetValue();
 		const bool bCol = GetCapsuleComponent() && GetCapsuleComponent()->IsCollisionEnabled();
-		UWeedToast::Notify(7, 4.f, FColor::Cyan, FString::Printf(TEXT("stuck: mode=%d vZ=%.0f gScale=%.2f gZ=%.0f col=%d"),
+		UWeedToast::NotifyPawn(this,7, 4.f, FColor::Cyan, FString::Printf(TEXT("stuck: mode=%d vZ=%.0f gScale=%.2f gZ=%.0f col=%d"),
 			MM, GetVelocity().Z, Move->GravityScale, Move->GetGravityZ(), bCol ? 1 : 0));
 	}
 
@@ -182,7 +182,7 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	Move->SetMovementMode(MOVE_Walking);
 	Move->bForceNextFloorCheck = true;
 	FallTime = 0.f; FloatTime = 0.f;
-	UWeedToast::Notify(-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
+	UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
 }
 
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
@@ -542,7 +542,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	{
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("No joint to give — roll one first (R)."));
+			UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Orange, TEXT("No joint to give — roll one first (R)."));
 		}
 		return;
 	}
@@ -561,7 +561,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		LoyGain = -3.f; RespGain = -2.f; AddGain = 1.f;
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 3.f, FColor::Orange,
+			UWeedToast::NotifyPawn(this,-1, 3.f, FColor::Orange,
 				FString::Printf(TEXT("%s found the joint too weak."), *Customer->NpcId.ToString()));
 		}
 	}
@@ -636,12 +636,12 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	{
 		if (bWantsNow)
 		{
-			UWeedToast::Notify(-1, 4.f, FColor::Green,
+			UWeedToast::NotifyPawn(this,-1, 4.f, FColor::Green,
 				FString::Printf(TEXT("\"That's good! Sell me %dg of that.\""), Customer->DesiredQuantity));
 		}
 		else if (bConverted)
 		{
-			UWeedToast::Notify(-1, 4.f, FColor::Green,
+			UWeedToast::NotifyPawn(this,-1, 4.f, FColor::Green,
 				TEXT("\"Damn, that's good - I'm hooked. Got any to sell?\""));
 		}
 		else
@@ -657,7 +657,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 				bUnlocked = GS->GetNpcRegistry()->IsUnlocked(Customer->NpcId);
 			}
 			const FString NumHint = bUnlocked ? TEXT("") : FString::Printf(TEXT("  -  respect %.0f/%.0f for their number"), R, NeedRespect);
-			UWeedToast::Notify(-1, 3.f, FColor::Green,
+			UWeedToast::NotifyPawn(this,-1, 3.f, FColor::Green,
 				FString::Printf(TEXT("Sample given (relationship+). Addiction %.0f/%.0f to start buying.%s"), A, Customer->AddictionToBuy, *NumHint));
 		}
 	}
@@ -1060,7 +1060,7 @@ void AThePlugSIMCharacter::OnLoadKey()
 	}
 	else if (GEngine)
 	{
-		UWeedToast::Notify(-1, 2.f, FColor::Orange, TEXT("Hold rolling papers (hotbar) to open the roll menu."));
+		UWeedToast::NotifyPawn(this,-1, 2.f, FColor::Orange, TEXT("Hold rolling papers (hotbar) to open the roll menu."));
 	}
 }
 
@@ -1122,7 +1122,7 @@ void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
 
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 3.f, FColor(120, 220, 160),
+		UWeedToast::NotifyPawn(this,-1, 3.f, FColor(120, 220, 160),
 			FString::Printf(TEXT("You smoke the %dg joint... high %.0f%%  (XP boost active)"), Grams, Intensity * 100.f));
 	}
 }

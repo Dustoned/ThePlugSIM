@@ -154,6 +154,20 @@ void UPhoneClientComponent::ClearWaypoint()
 	if (CompassWidget) { CompassWidget->SetWaypoint(WaypointWorld, false); }
 }
 
+void UPhoneClientComponent::Toast(const FString& Msg, FColor Color, float Time)
+{
+	APawn* P = Cast<APawn>(GetOwner());
+	// Lokaal getoond als dit al de juiste client/host is; anders (server met remote eigenaar) via RPC.
+	if (P && P->IsLocallyControlled()) { UWeedToast::Notify(-1, Time, Color, Msg); }
+	else if (GetOwnerRole() == ROLE_Authority) { ClientToast(Msg, Color, Time); }
+	else { UWeedToast::Notify(-1, Time, Color, Msg); }
+}
+
+void UPhoneClientComponent::ClientToast_Implementation(const FString& Msg, FColor Color, float Time)
+{
+	UWeedToast::Notify(-1, Time, Color, Msg);
+}
+
 void UPhoneClientComponent::CloseMapOverlay()
 {
 	if (!MapOverlay) { return; }
@@ -342,7 +356,7 @@ void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
 		UEconomyComponent* Econ = GetOwnerEconomy();
 		if (!Econ || !Econ->RemoveBank(Off->PriceCents))
 		{
-			if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("Niet genoeg banksaldo voor dit pand.")); }
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("Niet genoeg banksaldo voor dit pand.")); }
 			return;
 		}
 	}
@@ -350,7 +364,7 @@ void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
 	ActiveHome = Off->HomeIndex;
 	MoveOwnerToHome(Off->HomeIndex);
 	ApplyLocalDoors();
-	if (GEngine) { UWeedToast::Notify(-1, 4.f, FColor::Green, FString::Printf(TEXT("Pand gekocht: %s"), *Off->Title)); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 4.f, FColor::Green, FString::Printf(TEXT("Pand gekocht: %s"), *Off->Title)); }
 }
 
 void UPhoneClientComponent::ServerSetActiveHome_Implementation(int32 HomeIndex)
@@ -695,7 +709,7 @@ void UPhoneClientComponent::ServerDryHang_Implementation(ADryingRack* Rack, FNam
 	const float Qual = Inv->GetItemQualityPct(WetId);
 	const int32 Hung = Rack->ServerHangWet(WetId, Have, Thc, Qual);
 	if (Hung > 0) { Inv->RemoveItem(WetId, Hung); }
-	else if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Drying rack is full.")); }
+	else if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Drying rack is full.")); }
 }
 
 void UPhoneClientComponent::ServerDryCollect_Implementation(ADryingRack* Rack, int32 Index)
@@ -757,7 +771,7 @@ void UPhoneClientComponent::ServerShelfStore_Implementation(AStorageShelf* Shelf
 	const float Qual = Inv->GetItemQualityPct(ItemId);
 	const int32 Stored = Shelf->ServerStore(ItemId, Want, Thc, Qual);
 	if (Stored > 0) { Inv->RemoveItem(ItemId, Stored); }
-	else if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Shelf is full.")); }
+	else if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Shelf is full.")); }
 }
 
 void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf, int32 SlotIndex, int32 Count)
@@ -773,7 +787,7 @@ void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf,
 	{
 		// Geen ruimte in de inventory -> terug op het schap.
 		Shelf->ServerStore(OutId, Taken, OutThc, OutQual);
-		if (GEngine) { UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("No room in your inventory.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No room in your inventory.")); }
 	}
 }
 
@@ -825,7 +839,7 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 2.5f, FColor(120, 220, 160),
+		UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor(120, 220, 160),
 			FString::Printf(TEXT("Packed a %dg bag of %s."), PackGrams, *BudStr.RightChop(4)));
 	}
 }
@@ -859,7 +873,7 @@ void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName Contain
 	}
 	if (GEngine && BagsMade > 0)
 	{
-		UWeedToast::Notify(-1, 2.5f, FColor(120, 220, 160),
+		UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor(120, 220, 160),
 			FString::Printf(TEXT("Packed %d bag(s) (%dg total)."), BagsMade, TotalGrams));
 	}
 }
@@ -1030,7 +1044,7 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	{
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("No papers — buy some from the supplier (phone)."));
+			UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No papers — buy some from the supplier (phone)."));
 		}
 		return;
 	}
@@ -1065,7 +1079,7 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	{
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 2.5f, FColor::Orange,
+			UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange,
 				FString::Printf(TEXT("Not enough weed (%d g needed)."), Grams));
 		}
 		return;
@@ -1085,7 +1099,7 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	{
 		const FString StrainName = BudItem.ToString().StartsWith(TEXT("Bud_"))
 			? BudItem.ToString().RightChop(4) : BudItem.ToString();
-		UWeedToast::Notify(-1, 3.f, FColor::Green,
+		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Green,
 			FString::Printf(TEXT("Joint rolled: %dg weed (%s) + 1 paper"), Grams, *StrainName));
 	}
 }
@@ -1233,7 +1247,7 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 		default:
 			Col = FColor::Red;    Msg = TEXT("Customer refused the offer."); break;
 		}
-		UWeedToast::Notify(-1, 3.f, Col, Msg);
+		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, Col, Msg);
 	}
 }
 
@@ -1478,7 +1492,7 @@ void UPhoneClientComponent::DeliverCart(int32 OrderId, const TArray<FName>& Item
 	}
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 3.f, Failed > 0 ? FColor::Orange : FColor::Green,
+		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, Failed > 0 ? FColor::Orange : FColor::Green,
 			FString::Printf(TEXT("Delivery arrived: %d item(s)%s"), Bought, Failed > 0 ? TEXT(" (some failed - low cash/phase)") : TEXT("")));
 	}
 }
@@ -1499,7 +1513,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 		const int32 Req = Store->RequiredLevelFor(BuyIds[i]);
 		if (Req > PlayerLvl)
 		{
-			if (GEngine) { UWeedToast::Notify(-1, 3.5f, FColor::Orange, FString::Printf(TEXT("%s unlocks at level %d."), *Store->GetCatalogName(BuyIds[i]).ToString(), Req)); }
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.5f, FColor::Orange, FString::Printf(TEXT("%s unlocks at level %d."), *Store->GetCatalogName(BuyIds[i]).ToString(), Req)); }
 			return;
 		}
 	}
@@ -1528,7 +1542,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	const int64 Cost = BuySub + Fee;
 	if (Cost > 0 && !Econ->CanAffordBank(Cost))
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 3.5f, FColor::Red, TEXT("Not enough BANK money - launder some cash first (Bank app).")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.5f, FColor::Red, TEXT("Not enough BANK money - launder some cash first (Bank app).")); }
 		return;
 	}
 
@@ -1547,7 +1561,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	{
 		if (GEngine && SellProceeds > 0)
 		{
-			UWeedToast::Notify(-1, 3.f, FColor::Green, FString::Printf(TEXT("Sold for EUR %.2f"), SellProceeds / 100.f));
+			UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Green, FString::Printf(TEXT("Sold for EUR %.2f"), SellProceeds / 100.f));
 		}
 		return;
 	}
@@ -1589,7 +1603,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 3.f, FColor(120, 200, 255),
+		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor(120, 200, 255),
 			FString::Printf(TEXT("Order placed - %s delivery. A drone is bringing it to your door."), *DeliveryName(DeliveryOption)));
 	}
 }
@@ -1704,7 +1718,7 @@ void UPhoneClientComponent::ServerTransfer_Implementation(int64 AmountCents)
 	}
 	if (!Friend)
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("No co-op friend online to send money to.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("No co-op friend online to send money to.")); }
 		return;
 	}
 
@@ -1742,11 +1756,11 @@ void UPhoneClientComponent::ServerBuyPhoneUpgrade_Implementation()
 	UEconomyComponent* Econ = GetOwnerEconomy();
 	if (!Econ || !Econ->RemoveBank(PhoneUpgradeCostCents))
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("Not enough BANK money for the phone upgrade (launder cash first).")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Red, TEXT("Not enough BANK money for the phone upgrade (launder cash first).")); }
 		return;
 	}
 	bBankAppUnlocked = true;
-	if (GEngine) { UWeedToast::Notify(-1, 4.f, FColor::Green, TEXT("Phone upgraded - Bank app unlocked!")); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 4.f, FColor::Green, TEXT("Phone upgraded - Bank app unlocked!")); }
 }
 
 float UPhoneClientComponent::GetDeliveryProgress(const FPendingDelivery& D) const
@@ -1776,7 +1790,7 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 	// Ligt het pakket al bij de deur? Dan niet annuleren - gewoon oppakken.
 	if (PendingDeliveries[Idx].bArrived)
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("Already delivered - pick it up at the door.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("Already delivered - pick it up at the door.")); }
 		return;
 	}
 	// Drone nog onderweg -> laat 'm verdwijnen.
@@ -1792,7 +1806,7 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 	}
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 3.f, FColor::Yellow,
+		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Yellow,
 			FString::Printf(TEXT("Order cancelled - EUR %.2f refunded"), Refund / 100.f));
 	}
 	PendingDeliveries.RemoveAt(Idx);
@@ -1834,7 +1848,7 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 	// Sommige upgrades (auto-water/hogere tiers) kunnen pas op latere potten.
 	if (!IsPotUpgradeAllowed(UpgIndex, Pot->GetPotTier()))
 	{
-		if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("That upgrade needs a better pot.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("That upgrade needs a better pot.")); }
 		return;
 	}
 	const TArray<FPotUpgradeDef>& UpgDefs = GetPotUpgrades();
@@ -1843,14 +1857,14 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 		// Eerst de vorige tier nodig.
 		if (UpgDefs[UpgIndex].PrereqIndex >= 0 && !Pot->HasPotUpgrade(UpgDefs[UpgIndex].PrereqIndex))
 		{
-			if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("Install the previous tier first.")); }
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("Install the previous tier first.")); }
 			return;
 		}
 		// Level-eis.
 		const int32 PlayerLvl = (GetGS() && GetGS()->GetLeveling()) ? GetGS()->GetLeveling()->GetLevel() : 1;
 		if (PlayerLvl < UpgDefs[UpgIndex].MinPlayerLevel)
 		{
-			if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, FString::Printf(TEXT("That upgrade unlocks at level %d."), UpgDefs[UpgIndex].MinPlayerLevel)); }
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, FString::Printf(TEXT("That upgrade unlocks at level %d."), UpgDefs[UpgIndex].MinPlayerLevel)); }
 			return;
 		}
 	}
@@ -1860,7 +1874,7 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 	{
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 2.5f, FColor::Red, TEXT("Not enough BANK money for that pot upgrade (launder cash first)."));
+			UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Red, TEXT("Not enough BANK money for that pot upgrade (launder cash first)."));
 		}
 		return;
 	}
@@ -1869,7 +1883,7 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 	{
 		const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
 		const FString Name = Ups.IsValidIndex(UpgIndex) ? Ups[UpgIndex].DisplayName : TEXT("upgrade");
-		UWeedToast::Notify(-1, 3.f, FColor::Green, FString::Printf(TEXT("Pot upgrade installed: %s"), *Name));
+		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Green, FString::Printf(TEXT("Pot upgrade installed: %s"), *Name));
 	}
 }
 

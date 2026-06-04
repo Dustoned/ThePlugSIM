@@ -30,6 +30,11 @@ public:
 	// Maakt de UMG-widgets (status/telefoon/deal) aan op de lokale client (lui, idempotent).
 	void EnsureWidget();
 
+	// Toon een toast-melding bij DEZE speler (de eigenaar). Werkt vanuit server-code: routeert via een
+	// Client-RPC naar de juiste client, zodat co-op-spelers hun eigen meldingen zien (niet alleen de host).
+	void Toast(const FString& Msg, FColor Color = FColor::White, float Time = 2.5f);
+	UFUNCTION(Client, Reliable) void ClientToast(const FString& Msg, FColor Color, float Time);
+
 	// Fullscreen stadskaart aan/uit (M-toets of de Fullscreen-knop in de Map-app).
 	void ToggleMapOverlay();
 	bool IsMapOpen() const { return MapOverlay != nullptr; }

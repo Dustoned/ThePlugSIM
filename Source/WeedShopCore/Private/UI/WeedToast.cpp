@@ -10,8 +10,23 @@
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "Phone/PhoneClientComponent.h"
 
 TWeakObjectPtr<UWeedToast> UWeedToast::Active;
+
+void UWeedToast::NotifyPawn(AActor* ForActor, int32 Key, float Time, const FColor& Color, const FString& Msg)
+{
+	if (ForActor)
+	{
+		if (UPhoneClientComponent* Ph = ForActor->FindComponentByClass<UPhoneClientComponent>())
+		{
+			Ph->Toast(Msg, Color, Time); // routeert naar de juiste client (co-op)
+			return;
+		}
+	}
+	Notify(Key, Time, Color, Msg); // geen speler-component -> lokaal (host)
+}
 
 void UWeedToast::Notify(int32 Key, float Time, const FColor& Color, const FString& Msg)
 {

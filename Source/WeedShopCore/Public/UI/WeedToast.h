@@ -17,8 +17,13 @@ class WEEDSHOPCORE_API UWeedToast : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// Drop-in vervanging voor GEngine->AddOnScreenDebugMessage(Key, Time, Color, Msg).
+	// Drop-in vervanging voor GEngine->AddOnScreenDebugMessage(Key, Time, Color, Msg). Toont LOKAAL.
 	static void Notify(int32 Key, float Time, const FColor& Color, const FString& Msg);
+
+	// Co-op: toon de melding bij de SPELER die de actie deed (ForActor = de pawn of een component/actor
+	// waarvan de eigenaar de speler is). Routeert via de PhoneClientComponent naar de juiste client.
+	// Valt terug op lokaal tonen als er geen speler-component gevonden wordt.
+	static void NotifyPawn(class AActor* ForActor, int32 Key, float Time, const FColor& Color, const FString& Msg);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
