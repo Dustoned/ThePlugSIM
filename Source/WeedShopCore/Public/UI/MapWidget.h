@@ -51,4 +51,6 @@ protected:
 	UBorder* AddDot(const FLinearColor& Col, float Sz, int32 ZOrder);
 	class UWidget* AddPersonIcon(); // groen poppetje-icoon op het canvas
 	UTextBlock* AddCanvasText(const FString& T, FVector2D Pos, float W, int32 Size, const FLinearColor& Col, int32 ZOrder);
+	// Nummer/label op een klein donker afgerond chip-vlak (altijd leesbaar, ongeacht het dak eronder).
+	class UWidget* AddPill(const FString& T, FVector2D Pos, int32 Size, const FLinearColor& TextCol, int32 ZOrder);
 };

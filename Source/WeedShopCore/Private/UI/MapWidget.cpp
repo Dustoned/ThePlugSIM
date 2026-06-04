@@ -89,6 +89,26 @@ UTextBlock* UMapWidget::AddCanvasText(const FString& T, FVector2D Pos, float W, 
 	return Tb;
 }
 
+UWidget* UMapWidget::AddPill(const FString& T, FVector2D Pos, int32 Size, const FLinearColor& TextCol, int32 ZOrder)
+{
+	UBorder* B = WidgetTree->ConstructWidget<UBorder>();
+	B->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.66f), 4.f));
+	B->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
+	UTextBlock* Tb = WidgetTree->ConstructWidget<UTextBlock>();
+	Tb->SetText(FText::FromString(T));
+	Tb->SetFont(FCoreStyle::GetDefaultFontStyle("Regular", Size));
+	Tb->SetColorAndOpacity(FSlateColor(TextCol));
+	Tb->SetJustification(ETextJustify::Center);
+	B->SetContent(Tb);
+	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(B);
+	Cs->SetAutoSize(true);
+	Cs->SetAlignment(FVector2D(0.5f, 0.5f));
+	Cs->SetPosition(Pos);
+	Cs->SetZOrder(ZOrder);
+	B->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return B;
+}
+
 UBorder* UMapWidget::AddDot(const FLinearColor& Col, float Sz, int32 ZOrder)
 {
 	UBorder* B = WidgetTree->ConstructWidget<UBorder>();
@@ -155,6 +175,21 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		}
 		MapImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 
+		// Dekkende balk boven (titel/uitleg) en onder (legenda) -> tekst valt nooit meer op gebouwen.
+		auto AddBar = [&](float Y, float H)
+		{
+			UBorder* Bar = WidgetTree->ConstructWidget<UBorder>();
+			Bar->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 0.94f));
+			if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Bar))
+			{
+				Cs->SetAutoSize(false); Cs->SetSize(FVector2D(GMapDS, H));
+				Cs->SetAlignment(FVector2D(0.f, 0.f)); Cs->SetPosition(FVector2D(0.f, Y)); Cs->SetZOrder(45);
+			}
+			Bar->SetVisibility(ESlateVisibility::HitTestInvisible);
+		};
+		AddBar(0.f, 78.f);
+		AddBar(GMapDS - 30.f, 30.f);
+
 		// Titel + kompas.
 		AddCanvasText(TEXT("STAD - KAART"), FVector2D(GMapDS * 0.5f, 20.f), GMapDS, 20, FLinearColor(0.7f, 0.85f, 1.f), 50);
 		AddCanvasText(TEXT("N"), FVector2D(GMapDS * 0.5f, 44.f), 40.f, 14, FLinearColor(0.8f, 0.8f, 0.9f), 50);
@@ -172,34 +207,28 @@ void UMapWidget::BuildBlocks()
 	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
 	Scale = GMapDS / Ortho;
 
-	// Klein wit nummer met donkere schaduw -> leesbaar op zowel donkere wegen als gekleurde daken.
-	auto Plaque = [&](const FString& Txt, FVector2D Pos, float W, int32 Sz)
-	{
-		AddCanvasText(Txt, Pos + FVector2D(1.f, 1.f), W, Sz, FLinearColor(0.f, 0.f, 0.f, 0.9f), 5);
-		AddCanvasText(Txt, Pos, W, Sz, FLinearColor(1.f, 1.f, 0.96f), 6);
-	};
-
-	// Bloklabels: winkelnaam, park, of flat-reeks ("32  1-20"). Rijtjeshuizen NIET hier — die krijgen
-	// hieronder een eigen nummertje per huis, zodat er niks meer opgepropt staat.
+	// Bloklabels: winkelnaam (geel), park (groen), of flat-reeks "32 1-20" (wit). Rijtjeshuizen NIET hier
+	// — die krijgen hieronder een eigen nummer-chip per huis, zodat er niks opgepropt staat.
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
-	const float BlkPx = City->GetMapBlockSize() * Scale;
 	for (const FCityMapBlock& Bk : Blocks)
 	{
 		const bool bRowBlock = !Bk.bShop && Bk.Label != TEXT("Park") && !Bk.Label.Contains(TEXT("-"));
 		if (bRowBlock) { continue; } // rijtjeshuizen -> per-huis nummers
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
-		const int32 FontSz = Bk.bShop ? 14 : 12;
-		Plaque(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.28f), BlkPx + 12.f, FontSz);
+		FLinearColor Col = FLinearColor(1.f, 1.f, 0.96f);
+		if (Bk.bShop) { Col = FLinearColor(1.f, 0.86f, 0.35f); }
+		else if (Bk.Label == TEXT("Park")) { Col = FLinearColor(0.55f, 1.f, 0.6f); }
+		AddPill(Bk.Label, P, Bk.bShop ? 13 : 11, Col, 8);
 	}
 
-	// Eén clean nummertje per rijtjeshuis op zijn eigen deurpositie (nummer zonder "-" = rijtjeshuis;
+	// Eén nummer-chip per rijtjeshuis op zijn eigen deurpositie (nummer zonder "-" = rijtjeshuis;
 	// flat-units hebben "32-1" en blijven in de bloklabel hierboven om opstapeling te voorkomen).
 	for (const FApartmentHome& H : City->GetApartmentHomes())
 	{
 		if (H.Number.IsEmpty() || H.Number.Contains(TEXT("-"))) { continue; }
 		const FVector2D P = WorldToCanvas(H.DoorPos.X, H.DoorPos.Y);
-		Plaque(H.Number, P, 30.f, 10);
+		AddPill(H.Number, P, 9, FLinearColor(1.f, 1.f, 0.96f), 7);
 	}
 
 	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
