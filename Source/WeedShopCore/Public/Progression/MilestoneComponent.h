@@ -67,5 +67,7 @@ protected:
 	UFUNCTION()
 	void OnRep_Phase();
 
-	void CheckMilestones();
+	// bSilent = markeer bereikte milestones zonder toast/broadcast (voor save/load-herstel, anders
+	// poppen alle al-gehaalde milestones opnieuw op bij elke Continue/Load).
+	void CheckMilestones(bool bSilent = false);
 };

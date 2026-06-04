@@ -47,7 +47,7 @@ void UMilestoneComponent::RestoreState(int64 InTotalEarnedCents, uint8 InPhase)
 	if (GetOwnerRole() != ROLE_Authority) { return; }
 	TotalEarnedCents = FMath::Max<int64>(0, InTotalEarnedCents);
 	CurrentPhase = static_cast<EShopPhase>(InPhase);
-	CheckMilestones(); // her-evalueer ontgrendelingen op basis van het herstelde totaal
+	CheckMilestones(/*bSilent*/ true); // markeer al-gehaalde milestones zonder ze opnieuw aan te kondigen
 	OnShopPhaseChanged.Broadcast(CurrentPhase);
 }
 
@@ -61,7 +61,7 @@ void UMilestoneComponent::HandleMoneyEarned(int64 AmountCents)
 	CheckMilestones();
 }
 
-void UMilestoneComponent::CheckMilestones()
+void UMilestoneComponent::CheckMilestones(bool bSilent)
 {
 	if (!MilestoneTable)
 	{
@@ -82,18 +82,21 @@ void UMilestoneComponent::CheckMilestones()
 		}
 
 		ReachedMilestones.Add(RowName);
-		OnMilestoneReached.Broadcast(RowName, Row->Description);
-		UE_LOG(LogWeedShop, Log, TEXT("Milestone bereikt: %s (%s)"), *RowName.ToString(), *Row->Description.ToString());
-		if (GEngine)
+		if (!bSilent)
 		{
-			UWeedToast::Notify(-1, 5.f, FColor::Magenta,
-				FString::Printf(TEXT("Milestone: %s"), *Row->Description.ToString()));
+			OnMilestoneReached.Broadcast(RowName, Row->Description);
+			UE_LOG(LogWeedShop, Log, TEXT("Milestone bereikt: %s (%s)"), *RowName.ToString(), *Row->Description.ToString());
+			if (GEngine)
+			{
+				UWeedToast::Notify(-1, 5.f, FColor::Magenta,
+					FString::Printf(TEXT("Milestone: %s"), *Row->Description.ToString()));
+			}
 		}
 
 		if (Row->UnlockPhase > CurrentPhase)
 		{
 			CurrentPhase = Row->UnlockPhase;
-			OnShopPhaseChanged.Broadcast(CurrentPhase);
+			if (!bSilent) { OnShopPhaseChanged.Broadcast(CurrentPhase); }
 		}
 	}
 }
