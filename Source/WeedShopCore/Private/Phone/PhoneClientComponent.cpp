@@ -24,6 +24,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
 #include "UI/PhoneWidget.h"
@@ -307,6 +309,24 @@ void UPhoneClientComponent::MoveOwnerToHome(int32 HomeIndex)
 		To += FVector((float)(PlayerIdx % 2) * 110.f, (float)(PlayerIdx / 2 + (PlayerIdx % 2 == 0 ? 1 : 0)) * 110.f, 0.f);
 	}
 	Pawn->TeleportTo(To, Pawn->GetActorRotation(), false, true);
+	// Laat de eigenaar-client zichzelf ook meteen daar neerzetten (server-teleport van een client-pawn
+	// komt anders pas aan na een beweging-update -> client bleef in het park tot 'ie sprong).
+	ClientLandAtHome(To);
+}
+
+void UPhoneClientComponent::ClientLandAtHome_Implementation(FVector To)
+{
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	if (!Pawn) { return; }
+	Pawn->TeleportTo(To, Pawn->GetActorRotation(), false, true);
+	if (ACharacter* C = Cast<ACharacter>(Pawn))
+	{
+		if (UCharacterMovementComponent* Move = C->GetCharacterMovement())
+		{
+			Move->StopMovementImmediately();
+			Move->bForceNextFloorCheck = true;
+		}
+	}
 }
 
 void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)

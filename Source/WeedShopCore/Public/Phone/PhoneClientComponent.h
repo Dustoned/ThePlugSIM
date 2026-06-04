@@ -540,6 +540,9 @@ protected:
 	UFUNCTION(Server, Reliable) void ServerBuyProperty(int32 HomeIndex);
 	UFUNCTION(Server, Reliable) void ServerSetActiveHome(int32 HomeIndex);
 	void MoveOwnerToHome(int32 HomeIndex); // server: zet de speler in de woning
+	// Client-RPC: laat de eigenaar-client zichzelf METEEN op de woning-plek zetten (anders komt de
+	// server-teleport pas aan na een beweging-update -> "moet springen om in de woning te komen").
+	UFUNCTION(Client, Reliable) void ClientLandAtHome(FVector To);
 
 	// Server: maak 1 joint van Grams gram bud (item-id Joint_<G>g; meer gram = betere kwaliteit).
 	UFUNCTION(Server, Reliable)
