@@ -762,7 +762,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
 		Inventory->AddItem(FName(TEXT("Sink")), 1); // plaatsbare gootsteen (vul je waterfles)
-		Inventory->AddItem(FName(TEXT("Atm")), 1); // plaatsbare geldautomaat (bankieren)
+		// (Geen ATM in de inventory meer: er staat er nu eentje in elke winkel.)
 
 		// Alle meubels die in de starter-home staan gaan in de inventory (niet de hotbar): we vegen
 		// de geplaatste props op en geven het bijbehorende item. Zo begin je met een leeg huis en

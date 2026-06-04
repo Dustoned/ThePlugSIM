@@ -9,6 +9,11 @@
 #include "TimerManager.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
+#include "Placement/PlaceableProp.h"
+#include "World/Atm.h"
+#include "Save/SaveGameSubsystem.h"
+#include "Engine/GameInstance.h"
+#include "CollisionQueryParams.h"
 
 ACustomerSpawner::ACustomerSpawner()
 {
@@ -139,6 +144,68 @@ void ACustomerSpawner::SpawnResidents()
 		// waardoor meerdere huizen "dezelfde bewoner" leken te hebben). Elk huisnummer -> eigen naam.
 		const FString DoorName = ResidentNameForNumber(H.Number);
 		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(DoorName); }
+	}
+
+	// Bij een verse game: meubels in de koopbare woningen + ATM in elke winkel (server-side, repliceert).
+	SpawnHomeAndShopFixtures(City);
+}
+
+void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
+{
+	UWorld* World = GetWorld();
+	if (!World || !City || !HasAuthority()) { return; }
+	// Alleen op een VERSE game; bij load herstelt de save-subsystem de geplaatste objecten zelf.
+	if (UGameInstance* GI = World->GetGameInstance())
+	{
+		if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
+		{
+			if (!Sv->IsFreshGame()) { return; }
+		}
+	}
+
+	auto FloorZ = [&](const FVector& At, float Fallback) -> float
+	{
+		FHitResult Hit;
+		const FVector S(At.X, At.Y, At.Z + 300.f);
+		const FVector E = S - FVector(0.f, 0.f, 1500.f);
+		FCollisionQueryParams Q(FName(TEXT("FixtureFloor")), false);
+		return World->LineTraceSingleByChannel(Hit, S, E, ECC_WorldStatic, Q) ? Hit.ImpactPoint.Z : Fallback;
+	};
+	auto SpawnProp = [&](FName ItemId, const FVector& Loc, float Yaw)
+	{
+		const FTransform TM(FRotator(0.f, Yaw, 0.f), Loc);
+		APlaceableProp* P = World->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (P) { P->ItemId = ItemId; P->FinishSpawning(TM); }
+	};
+
+	// --- Meubels in elke koopbare/starter-woning ---
+	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	TSet<int32> Done;
+	for (const FCityPropertyOffer& O : Offers)
+	{
+		for (int32 Idx : O.Homes)
+		{
+			if (Done.Contains(Idx) || !Homes.IsValidIndex(Idx)) { continue; }
+			Done.Add(Idx);
+			const FApartmentHome& H = Homes[Idx];
+			const FVector C = H.InteriorPos; const FVector R = H.RoomHalf;
+			auto At = [&](float fx, float fy) { FVector L = C + FVector(R.X * fx, R.Y * fy, 0.f); L.Z = FloorZ(L, C.Z) + 2.f; return L; };
+			SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f);
+			SpawnProp(FName(TEXT("Fridge")),   At( 0.45f,  0.45f), 180.f);
+			SpawnProp(FName(TEXT("Table")),    At( 0.0f,   0.40f), 0.f);
+		}
+	}
+
+	// --- ATM in elke winkel (binnen) ---
+	TArray<FCityMapBlock> Blocks; City->GetMapBlocks(Blocks);
+	const FVector Center = City->GetCityCenter();
+	for (const FCityMapBlock& B : Blocks)
+	{
+		if (!B.bShop) { continue; }
+		FVector L(B.Center.X + 160.f, B.Center.Y + 160.f, Center.Z); // iets uit het midden (niet in de balie)
+		L.Z = FloorZ(L, Center.Z - 90.f) + 2.f;
+		World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator::ZeroRotator, L));
 	}
 }
 

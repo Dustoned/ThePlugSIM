@@ -135,6 +135,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Save")
 	bool HasSave() const;
 
+	// True als er (nog) geen save geladen is = verse game. Bij een geladen game herstelt de save zelf de
+	// geplaatste objecten, dus dan moeten wereld-fixtures (meubels/ATM) NIET opnieuw gespawnd worden.
+	bool IsFreshGame() const { return Loaded == nullptr; }
+
 	// Server: herstel één speler (op username) uit de geladen save, indien aanwezig en nog niet
 	// hersteld deze sessie. Aangeroepen wanneer een (co-op) speler de wereld in komt.
 	void RestorePlayerByPawn(APawn* Pawn);

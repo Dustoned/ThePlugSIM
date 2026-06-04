@@ -52,6 +52,11 @@ protected:
 	// Kent NPC-bewoners toe aan appartementen (één keer, zodra de stad gebouwd is).
 	void SpawnResidents();
 
+	// Plaatst wereld-fixtures bij een VERSE game: meubels (tafel/koelkast/matras) in elke koopbare/
+	// starter-woning, en een ATM in elke winkel. Server-side (repliceert), zodat ze oppakbaar/verplaatsbaar
+	// zijn en in de save belanden.
+	void SpawnHomeAndShopFixtures(class ACityGenerator* City);
+
 	bool bResidentsSpawned = false;
 	FTimerHandle SpawnTimer;
 

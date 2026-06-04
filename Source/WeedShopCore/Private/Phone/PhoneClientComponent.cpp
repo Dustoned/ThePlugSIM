@@ -1614,7 +1614,14 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 	FVector Point = FVector::ZeroVector;
 	bool bFound = false;
 
-	if (World)
+	// 0) Bij voorkeur: voor de voordeur van JOUW woning, op de grond (DoorPos). Voor flats is dit de
+	//    gebouw-ingang op de begane grond -> de drone hoeft niet door muren of omhoog.
+	{
+		FVector HomeDoor;
+		if (GetActiveHomeLocation(HomeDoor)) { Point = HomeDoor; bFound = true; }
+	}
+
+	if (World && !bFound)
 	{
 		// 1) Een door de level-designer getagde actor "DeliveryPoint".
 		for (TActorIterator<AActor> It(const_cast<UWorld*>(World)); It; ++It)

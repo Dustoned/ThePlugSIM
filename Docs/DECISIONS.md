@@ -97,3 +97,12 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
 - Join: SaveGameSubsystem::JoinLan -> PlayerController::ClientTravel(IP[:7777], absolute).
 - Clients (NM_Client) slaan het hoofdmenu over; host herstelt/repliceert speler-state.
 - Firewall: sta de exe toe (UDP 7777). Vriend heeft een packaged build nodig.
+
+## Bezorging + wereld-fixtures
+- Pakket-deliveries landen nu voor de voordeur van JE WONING (FApartmentHome.DoorPos =
+  begane-grond ingang; voor flats de gebouw-ingang) i.p.v. de shop-spawner.
+- Verse game: server (CustomerSpawner) plaatst meubels (Table/Fridge/Mattress) in elke
+  koopbare/starter-woning + een ATM in elke winkel. Server-spawned APlaceableProp/AAtm
+  -> repliceert, oppakbaar/verplaatsbaar, en gaat mee in de save. Bij LOAD niet opnieuw
+  (SaveGameSubsystem::IsFreshGame guard; de save herstelt ze zelf).
+- ATM niet meer in de starter-inventory (staat nu in elke winkel).
