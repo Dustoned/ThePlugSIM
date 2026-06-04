@@ -242,9 +242,19 @@ void ACityGenerator::BuildCity()
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (!Cube) { return; }
 
-	// Referentie-midden: de PlayerStart (anders deze actor). Grond-hoogte eronder zoeken.
+	// Referentie-midden: de PlayerStart. BELANGRIJK voor co-op: de stad wordt LOKAAL per machine
+	// gebouwd, dus host en client MOETEN exact dezelfde oorsprong kiezen. Bij meerdere PlayerStarts
+	// is de iterator-volgorde niet gegarandeerd gelijk -> kies er deterministisch één (laagste naam).
 	FVector Center = GetActorLocation();
-	for (TActorIterator<APlayerStart> It(W); It; ++It) { Center = It->GetActorLocation(); break; }
+	{
+		APlayerStart* Chosen = nullptr;
+		for (TActorIterator<APlayerStart> It(W); It; ++It)
+		{
+			APlayerStart* PS = *It;
+			if (!Chosen || PS->GetName() < Chosen->GetName()) { Chosen = PS; }
+		}
+		if (Chosen) { Center = Chosen->GetActorLocation(); }
+	}
 	{
 		FHitResult Hit;
 		const FVector S = Center + FVector(0.f, 0.f, 500.f);
