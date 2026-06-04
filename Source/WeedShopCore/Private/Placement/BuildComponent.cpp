@@ -117,6 +117,8 @@ void UBuildComponent::StartPlacing(FName ItemId)
 		Ghost->SetWorldScale3D(Def.MeshScale);
 		Ghost->SetVisibility(true);
 	}
+	// Echt model als preview (ghost-gekleurd) -> de preview ziet er hetzelfde uit als het geplaatste object.
+	SpawnPreview(Def, ItemId);
 }
 
 void UBuildComponent::EnsureGhost()
@@ -154,6 +156,62 @@ void UBuildComponent::EnsureGhost()
 	Ghost->SetVisibility(false);
 }
 
+void UBuildComponent::DestroyPreview()
+{
+	if (AActor* A = PreviewActor.Get()) { A->Destroy(); }
+	PreviewActor = nullptr;
+}
+
+void UBuildComponent::SpawnPreview(const FPlaceableDef& Def, FName ItemId)
+{
+	DestroyPreview();
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+
+	// Ver weg spawnen; de tick zet de echte preview-positie. Transient + AlwaysSpawn.
+	const FTransform TM(FRotator::ZeroRotator, FVector(0.f, 0.f, -100000.f));
+	auto Deferred = [&](UClass* Cls) -> AActor*
+	{
+		return W->SpawnActorDeferred<AActor>(Cls, TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	};
+
+	AActor* A = nullptr;
+	if (Def.bIsPot)             { if (AGrowPlant* P = Cast<AGrowPlant>(Deferred(AGrowPlant::StaticClass())))      { P->PotTier = ItemId;  P->FinishSpawning(TM); A = P; } }
+	else if (Def.bIsDryRack)    { if (ADryingRack* R = Cast<ADryingRack>(Deferred(ADryingRack::StaticClass())))    { R->RackTier = ItemId;  R->FinishSpawning(TM); A = R; } }
+	else if (Def.bIsPackBench)  { if (APackBench* B = Cast<APackBench>(Deferred(APackBench::StaticClass())))       { B->BenchTier = ItemId; B->FinishSpawning(TM); A = B; } }
+	else if (Def.bIsShelf)      { if (AStorageShelf* S = Cast<AStorageShelf>(Deferred(AStorageShelf::StaticClass()))) { S->ShelfTier = ItemId; S->FinishSpawning(TM); A = S; } }
+	else if (Def.bIsSink)       { A = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM); }
+	else if (Def.bIsLamp)       { A = W->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM); }
+	else if (Def.bIsAtm)        { A = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM); }
+	else                        { if (APlaceableProp* P = Cast<APlaceableProp>(Deferred(APlaceableProp::StaticClass()))) { P->ItemId = ItemId; P->FinishSpawning(TM); A = P; } }
+
+	if (!A) { return; }
+
+	// Geen botsing/schaduw; ghost-materiaal op alle (zichtbare) mesh-onderdelen -> ziet eruit als wat je plaatst.
+	if (!PreviewMID)
+	{
+		if (UMaterialInterface* GM = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost")))
+		{
+			PreviewMID = UMaterialInstanceDynamic::Create(GM, this);
+		}
+	}
+	A->SetActorEnableCollision(false);
+	TArray<UStaticMeshComponent*> Comps;
+	A->GetComponents<UStaticMeshComponent>(Comps);
+	for (UStaticMeshComponent* C : Comps)
+	{
+		if (!C) { continue; }
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		C->SetCastShadow(false);
+		if (PreviewMID)
+		{
+			const int32 N = C->GetNumMaterials();
+			for (int32 m = 0; m < N; ++m) { C->SetMaterial(m, PreviewMID); }
+		}
+	}
+	PreviewActor = A;
+}
+
 void UBuildComponent::CancelPlacing()
 {
 	bPlacing = false;
@@ -162,6 +220,7 @@ void UBuildComponent::CancelPlacing()
 	{
 		Ghost->SetVisibility(false);
 	}
+	DestroyPreview();
 }
 
 void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -277,7 +336,10 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							Center.Z = FMath::GridSnap<float>(Center.Z, GridSize);
 						}
 						PreviewLocation = Center;
-						bValidSpot = bWall && !bOnPlaceable;
+						const bool bFreeW = WorldFreeBuild(GetWorld());
+						// Wand-mount (rek) hoort BINNEN (tenzij vrij-bouwen of expliciet outdoors toegestaan).
+						bValidSpot = bWall && !bOnPlaceable
+							&& (bFreeW || CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation));
 					}
 					else
 					{
@@ -389,13 +451,20 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 	// Eigen ghost bijwerken (lokaal).
 	const bool bShow = bPlacing && bAimHit;
+	// Plaatsing-offset (root t.o.v. het trefpunt) — gelijk aan hoe het object straks gespawnd wordt.
+	float ZOff = 0.f;
+	if (CurrentDef.bIsLamp) { ZOff = -CurrentDef.BoxHalf.Z; }
+	else if (CurrentDef.bIsDryRack) { ZOff = CurrentDef.bIsWallMount ? 0.f : CurrentDef.BoxHalf.Z; }
+	else if (CurrentDef.bIsSink || CurrentDef.bIsPackBench || CurrentDef.bIsShelf) { ZOff = CurrentDef.BoxHalf.Z; }
+	// pot / atm / generieke prop: root op de vloer (offset 0)
+
+	const bool bUsePreviewActor = PreviewActor.IsValid();
 	if (Ghost)
 	{
-		Ghost->SetVisibility(bShow);
-		if (bShow)
+		// Met een echt preview-model verbergen we de primitieve ghost; anders valt 'ie terug op de oude ghost.
+		Ghost->SetVisibility(bShow && !bUsePreviewActor);
+		if (bShow && !bUsePreviewActor)
 		{
-			// Plafondlamp hangt ONDER het plafondpunt; wand-mount = PreviewLocation is al het midden;
-			// al het andere staat ERBOVEN op de vloer.
 			float GhostZOff = CurrentDef.BoxHalf.Z;
 			if (CurrentDef.bIsLamp) { GhostZOff = -CurrentDef.BoxHalf.Z; }
 			else if (CurrentDef.bIsWallMount) { GhostZOff = 0.f; }
@@ -405,6 +474,20 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		{
 			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
 				bValidSpot ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
+		}
+	}
+	if (bUsePreviewActor)
+	{
+		AActor* P = PreviewActor.Get();
+		P->SetActorHiddenInGame(!bShow);
+		if (bShow)
+		{
+			P->SetActorLocationAndRotation(PreviewLocation + FVector(0.f, 0.f, ZOff), PreviewRotation);
+			if (PreviewMID)
+			{
+				PreviewMID->SetVectorParameterValue(TEXT("GhostColor"),
+					bValidSpot ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
+			}
 		}
 	}
 
@@ -490,6 +573,10 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	{
 		ReturnItem = FName(TEXT("Lamp_Ceiling"));
 	}
+	else if (Cast<AAtm>(Target))
+	{
+		ReturnItem = FName(TEXT("Atm"));
+	}
 	else
 	{
 		return; // niet oppakbaar
@@ -542,7 +629,8 @@ void UBuildComponent::UpdateRemoteGhost()
 bool UBuildComponent::IsPickable(const AActor* A) const
 {
 	return A && (Cast<AGrowPlant>(A) || Cast<APlaceableProp>(A) || Cast<ADryingRack>(A)
-		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A) || Cast<ACeilingLamp>(A));
+		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A) || Cast<ACeilingLamp>(A)
+		|| Cast<AAtm>(A));
 }
 
 bool UBuildComponent::IsIndoors(const FVector& FloorPoint) const
@@ -649,7 +737,8 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 	// Alleen binnenshuis (tenzij dit placeable buiten mag, bv. de ATM) - in testing/sandbox vrij.
-	if (!Def.bIsLamp && !Def.bIsWallMount && !Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsIndoors(Location))
+	// Lampen bewijzen "binnen" door een plafond te raken; wand-mounts (rekken) NIET -> die checken we ook.
+	if (!Def.bIsLamp && !Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsIndoors(Location))
 	{
 		if (GEngine)
 		{

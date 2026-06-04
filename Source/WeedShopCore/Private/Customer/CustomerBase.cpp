@@ -458,11 +458,9 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 	{
 	case ECustomerState::WantsToOrder:
 	case ECustomerState::Negotiating:
-		return FText::FromString(FString::Printf(TEXT("Deal: %dx %s  (market ~EUR %.2f)"),
-			DesiredQuantity, *DesiredProductId.ToString(), (GetMarketPriceCents() * DesiredQuantity) / 100.f));
+		return FText::FromString(TEXT("Deal"));
 	case ECustomerState::Prospect:
-		return FText::FromString(FString::Printf(TEXT("Not buying yet - hold a joint and give them a hit  (addiction %.0f/%.0f)"),
-			Addiction, AddictionToBuy));
+		return FText::FromString(TEXT("Give a hit"));
 	case ECustomerState::Served:
 		return FText::FromString(TEXT("Satisfied customer"));
 	default:

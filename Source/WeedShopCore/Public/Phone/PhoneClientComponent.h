@@ -238,6 +238,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	bool IsBankAppUnlocked() const { return bBankAppUnlocked; }
 
+	// True wanneer de Bank-app via een fysieke ATM open staat (dan geen telefoon-upgrade nodig).
+	bool IsBankViaAtm() const { return bBankViaAtm; }
+
 	// Server-only: zet de bank-app-unlock direct (voor save/load-herstel).
 	void SetBankAppUnlocked(bool bUnlocked) { if (GetOwnerRole() == ROLE_Authority) { bBankAppUnlocked = bUnlocked; } }
 
@@ -647,6 +650,7 @@ protected:
 
 	bool bInventoryOpen = false;
 	bool bAtmOpen = false;
+	bool bBankViaAtm = false; // Bank-app geopend via fysieke ATM (geen upgrade vereist)
 	bool bPackOpen = false;
 	int32 PackBatchUI = 1; // zakjes per verpak-actie (van de bench-tier)
 

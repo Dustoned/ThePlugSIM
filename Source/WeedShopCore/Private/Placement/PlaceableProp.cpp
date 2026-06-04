@@ -5,6 +5,12 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Net/UnrealNetwork.h"
+#include "Game/WeedShopGameState.h"
+#include "World/DayCycleComponent.h"
+#include "Save/SaveGameSubsystem.h"
+#include "UI/WeedToast.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
 
 APlaceableProp::APlaceableProp()
 {
@@ -127,6 +133,40 @@ void APlaceableProp::SetupVisual()
 FText APlaceableProp::GetInteractionPrompt_Implementation() const
 {
 	FPlaceableDef Def;
-	const FString Name = GetPlaceableDef(ItemId, Def) ? Def.DisplayName : ItemId.ToString();
-	return FText::FromString(FString::Printf(TEXT("%s — hold G to pick up"), *Name));
+	const bool bHas = GetPlaceableDef(ItemId, Def);
+	if (bHas && Def.bIsBed)
+	{
+		return FText::FromString(TEXT("Sleep (skip to morning)  -  hold G to pick up"));
+	}
+	const FString Name = bHas ? Def.DisplayName : ItemId.ToString();
+	return FText::FromString(FString::Printf(TEXT("%s - hold G to pick up"), *Name));
+}
+
+void APlaceableProp::Interact_Implementation(APawn* InstigatorPawn)
+{
+	// Alleen bedden doen iets: nacht overslaan tot 07:00 + hier opslaan (= je laad-/spawnpunt).
+	FPlaceableDef Def;
+	if (!GetPlaceableDef(ItemId, Def) || !Def.bIsBed || !HasAuthority()) { return; }
+
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr)
+	{
+		if (DC->IsNight())
+		{
+			// 07:00 op de dag-klok -> bijbehorende seconden in de lichtfase.
+			const float DayHours = FMath::Max(1.f, DC->SunsetHour - DC->SunriseHour);
+			const float Morning = ((7.f - DC->SunriseHour) / DayHours) * DC->DayLengthSeconds;
+			DC->SetTimeOfDaySeconds(Morning);
+		}
+	}
+
+	// Sla het spel hier op zodat je bij het laden weer bij dit bed begint.
+	if (UWorld* W = GetWorld())
+	{
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (USaveGameSubsystem* Save = GI->GetSubsystem<USaveGameSubsystem>()) { Save->SaveGame(true); }
+		}
+	}
+	UWeedToast::Notify(-1, 2.f, FColor::Cyan, TEXT("Slept - saved here."));
 }

@@ -16,32 +16,35 @@ AAtm::AAtm()
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
-	// Verborgen collision-kast: draagt footprint/collision. ~50 x 35 x 140 cm, onderkant op de vloer.
+	// Verborgen collision-kast: draagt footprint/collision. ~78 x 60 x 162 cm, onderkant op de vloer.
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
 	Mesh->SetupAttachment(Root);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeFinder(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeFinder.Succeeded()) { Mesh->SetStaticMesh(CubeFinder.Object); }
-	Mesh->SetWorldScale3D(FVector(0.5f, 0.35f, 1.4f));
-	Mesh->SetRelativeLocation(FVector(0.f, 0.f, 70.f)); // midden op halve hoogte -> onderkant op vloer
+	Mesh->SetWorldScale3D(FVector(0.78f, 0.60f, 1.62f));
+	Mesh->SetRelativeLocation(FVector(0.f, 0.f, 81.f)); // midden op halve hoogte -> onderkant op vloer
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Mesh->SetVisibility(false);
 
-	// Samengestelde geldautomaat (front = +X). Maten in cm, vloer = z=0.
+	// Samengestelde geldautomaat (front = +X). Maten in cm, vloer = z=0. Een echte vrijstaande pinkast:
+	// brede romp + overstekende kap met logo, groot scherm, uitstekende toetsenplank, pas-sleuf en geld-uitgifte.
 	Deco = PropKit::MakeDeco(this, Root, TEXT("Deco"));
-	const FLinearColor BodyC(0.17f, 0.19f, 0.23f);    // donker staal
-	const FLinearColor Trim(0.09f, 0.10f, 0.12f);
-	const FLinearColor ScreenC(0.20f, 0.55f, 0.95f);  // blauw scherm
-	const FLinearColor Money(0.18f, 0.62f, 0.34f);    // groene logo-strip
-	const FLinearColor Key(0.30f, 0.31f, 0.34f);
-	const float FX = 24.f; // voorvlak op +X (halve diepte)
+	const FLinearColor BodyC(0.20f, 0.22f, 0.26f);    // staal
+	const FLinearColor Dark(0.08f, 0.09f, 0.11f);     // trim/sleuven/kap
+	const FLinearColor ScreenC(0.22f, 0.58f, 0.98f);  // blauw scherm
+	const FLinearColor Money(0.18f, 0.66f, 0.36f);    // groen logo
+	const FLinearColor Key(0.34f, 0.35f, 0.38f);      // toetsen
+	const float FX = 27.f; // voorvlak romp op +X (halve diepte 54)
 
-	PropKit::AddPart(this, Deco, TEXT("Cabinet"), PropKit::Cube(), FVector(48.f, 33.f, 132.f), FVector(0.f, 0.f, 70.f),  BodyC);
-	PropKit::AddPart(this, Deco, TEXT("Plinth"),  PropKit::Cube(), FVector(50.f, 35.f, 8.f),   FVector(0.f, 0.f, 4.f),   Trim);
-	PropKit::AddPart(this, Deco, TEXT("Top"),     PropKit::Cube(), FVector(50.f, 35.f, 10.f),  FVector(0.f, 0.f, 137.f), Trim);
-	PropKit::AddPart(this, Deco, TEXT("Logo"),    PropKit::Cube(), FVector(4.f, 30.f, 9.f),    FVector(FX - 1.f, 0.f, 120.f), Money);
-	PropKit::AddPart(this, Deco, TEXT("Screen"),  PropKit::Cube(), FVector(4.f, 26.f, 22.f),   FVector(FX - 1.f, 0.f, 98.f),  ScreenC);
-	PropKit::AddPart(this, Deco, TEXT("Keypad"),  PropKit::Cube(), FVector(5.f, 20.f, 12.f),   FVector(FX - 1.f, 0.f, 80.f),  Key);
-	PropKit::AddPart(this, Deco, TEXT("CashSlot"),PropKit::Cube(), FVector(4.f, 22.f, 3.f),    FVector(FX - 1.f, 0.f, 64.f),  Trim);
+	PropKit::AddPart(this, Deco, TEXT("Plinth"),   PropKit::Cube(), FVector(76.f, 58.f, 14.f),  FVector(0.f, 0.f, 7.f),    Dark);
+	PropKit::AddPart(this, Deco, TEXT("Cabinet"),  PropKit::Cube(), FVector(72.f, 54.f, 132.f), FVector(0.f, 0.f, 80.f),   BodyC);
+	PropKit::AddPart(this, Deco, TEXT("Header"),   PropKit::Cube(), FVector(78.f, 60.f, 16.f),  FVector(0.f, 0.f, 154.f),  Dark);   // overstekende kap
+	PropKit::AddPart(this, Deco, TEXT("Logo"),     PropKit::Cube(), FVector(3.f, 54.f, 10.f),   FVector(30.5f, 0.f, 154.f), Money);  // logo-strip op de kap
+	PropKit::AddPart(this, Deco, TEXT("Screen"),   PropKit::Cube(), FVector(3.f, 52.f, 36.f),   FVector(FX + 0.5f, 0.f, 120.f), ScreenC); // groot scherm
+	PropKit::AddPart(this, Deco, TEXT("CardSlot"), PropKit::Cube(), FVector(4.f, 18.f, 3.f),    FVector(FX + 1.f, 0.f, 110.f), Dark);  // pas-sleuf
+	PropKit::AddPart(this, Deco, TEXT("Shelf"),    PropKit::Cube(), FVector(18.f, 46.f, 6.f),   FVector(FX + 8.f, 0.f, 98.f),  BodyC * 0.85f); // uitstekende toetsenplank
+	PropKit::AddPart(this, Deco, TEXT("Keypad"),   PropKit::Cube(), FVector(8.f, 32.f, 9.f),    FVector(FX + 10.f, 0.f, 103.f), Key);  // toetsen op de plank
+	PropKit::AddPart(this, Deco, TEXT("CashSlot"), PropKit::Cube(), FVector(4.f, 44.f, 7.f),    FVector(FX + 1.f, 0.f, 74.f),  Dark);  // geld-uitgifte
 }
 
 void AAtm::Interact_Implementation(APawn* InstigatorPawn)

@@ -25,6 +25,7 @@ struct FPlaceableDef
 	bool bIsSink = false;              // true -> spawnt AWaterSink (waterfles vullen)
 	bool bIsLamp = false;              // true -> spawnt ACeilingLamp (warme spot-lamp)
 	bool bIsWallMount = false;         // true -> hangt aan een VERTICALE muur (rug tegen de muur) i.p.v. op de vloer
+	bool bIsBed = false;               // true -> slapen (nacht overslaan tot 07:00) + spawn-/laadpunt hier
 };
 
 // Alle gedefinieerde placeables.

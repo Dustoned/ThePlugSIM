@@ -26,8 +26,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_ItemId, Category = "WeedShop|Placeable")
 	FName ItemId = NAME_None;
 
-	// IInteractable: prompt; interact zelf doet niets (oppakken gaat via hold G).
-	virtual void Interact_Implementation(APawn* InstigatorPawn) override {}
+	// IInteractable: prompt; interact = slapen (alleen voor bedden), anders niets (oppakken via hold G).
+	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
 protected:

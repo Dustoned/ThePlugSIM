@@ -865,6 +865,13 @@ void AGrowPlant::UpdatePotVisual()
 		PotFoot->SetRelativeScale3D(FVector(S.X * 0.88f, S.Y * 0.88f, 0.06f));
 		PotFoot->SetRelativeLocation(FVector(0.f, 0.f, BotZ + 3.f));
 	}
+	// Aarde VULT de pot (binnen de rand, bovenkant net onder de rand) i.p.v. een dun schijfje erbovenop.
+	if (SoilMesh)
+	{
+		const float SoilZ = S.Z * 0.6f; // hoogte-schaal van de aarde-cilinder
+		SoilMesh->SetRelativeScale3D(FVector(S.X * 0.86f, S.Y * 0.86f, SoilZ));
+		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, TopZ - SoilZ * 50.f - 1.f)); // top ~ net onder de rand
+	}
 
 	// Kleur per tier (gedeeld over pot + rand + voet) zodat het materiaal niet meer kaal grijs is.
 	const FString Id = PotTier.ToString();

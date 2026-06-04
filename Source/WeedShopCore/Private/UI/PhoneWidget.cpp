@@ -630,8 +630,9 @@ void UPhoneWidget::BuildBankApp()
 
 	auto AddRow = [this, Scroll](UWidget* W) { Scroll->AddChild(W); };
 
-	// Nog niet ontgrendeld -> alleen de koop-knop voor de telefoon-upgrade.
-	if (!Ph->IsBankAppUnlocked())
+	// Nog niet ontgrendeld -> alleen de koop-knop voor de telefoon-upgrade. (Bij een fysieke ATM
+	// mag je altijd bankieren, ook zonder upgrade.)
+	if (!Ph->IsBankAppUnlocked() && !Ph->IsBankViaAtm())
 	{
 		AddRow(MakeText(TEXT("Mobile banking"), 16, FLinearColor(0.95f, 0.8f, 0.5f), false));
 		UTextBlock* Desc = MakeText(TEXT("Upgrade your phone to bank anywhere - no ATM needed."), 12, FLinearColor(0.7f, 0.75f, 0.85f));

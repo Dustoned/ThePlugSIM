@@ -104,6 +104,11 @@ protected:
 	// Maakt de ghost-mesh + dynamisch materiaal aan indien nodig.
 	void EnsureGhost();
 
+	// Preview = een echt (transient, cosmetisch) exemplaar van het te plaatsen model, in ghost-kleur,
+	// zodat de preview er exact zo uitziet als wat je plaatst. Lokaal.
+	void SpawnPreview(const struct FPlaceableDef& Def, FName ItemId);
+	void DestroyPreview();
+
 	// Tekent/positioneert de ghost van een NIET-lokale speler op basis van de gerepliceerde staat.
 	void UpdateRemoteGhost();
 
@@ -125,6 +130,10 @@ protected:
 	// Dynamisch materiaal van de ghost; kleur = blauw (ok) / rood (kan niet plaatsen).
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> GhostMID;
+
+	// Echt model als preview (transient) + gedeeld ghost-materiaal voor al z'n onderdelen.
+	UPROPERTY(Transient) TWeakObjectPtr<AActor> PreviewActor;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> PreviewMID;
 
 	// Of de huidige aim ergens op raakt (anders ghost verbergen).
 	bool bAimHit = false;

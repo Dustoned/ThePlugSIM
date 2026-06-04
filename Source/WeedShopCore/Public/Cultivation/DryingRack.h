@@ -47,6 +47,8 @@ public:
 
 	// Zet mesh-schaal volgens de tier-definitie (zodat de plaatsing op de vloer klopt).
 	void SetupVisual();
+	// Toon/verberg de wiet-stapels op de roosters o.b.v. RepDrying/RepReady (zichtbare droog-indicatie).
+	void UpdateDryVisual();
 
 	// Tier-definitie: capaciteit (aantal batches) + droogtijd (sec).
 	static bool GetRackDef(FName Tier, int32& OutCapacity, float& OutDrySeconds);

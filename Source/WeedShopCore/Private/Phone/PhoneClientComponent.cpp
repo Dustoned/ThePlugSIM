@@ -271,6 +271,7 @@ void UPhoneClientComponent::Toggle()
 {
 	EnsureWidget();
 	bOpen = !bOpen;
+	bBankViaAtm = false; // ATM-bank-bypass eindigt zodra je de telefoon zelf opent/sluit
 	if (bOpen)
 	{
 		bRollOpen = false; // niet allebei tegelijk
@@ -296,10 +297,10 @@ void UPhoneClientComponent::GoHome()
 
 void UPhoneClientComponent::OpenAtm()
 {
-	EnsureWidget();
-	bAtmOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bShelfOpen = false; bDryRackOpen = false;
-	UpdateCursor();
+	// Open exact dezelfde Bank-app als op de telefoon (één consistente UI). Een fysieke ATM
+	// heeft geen telefoon-upgrade nodig -> bypass de lock met bBankViaAtm.
+	OpenToApp(9 /*Bank*/);
+	bBankViaAtm = true;
 }
 
 void UPhoneClientComponent::CloseAtm()
@@ -412,6 +413,7 @@ void UPhoneClientComponent::OpenToApp(int32 AppIndex)
 	Tab = FMath::Clamp(AppIndex, 0, AppCount - 1);
 	bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false;
 	bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false;
+	bBankViaAtm = false; // standaard geen ATM-bypass (OpenAtm zet 'm daarna weer aan)
 	UpdateCursor();
 }
 

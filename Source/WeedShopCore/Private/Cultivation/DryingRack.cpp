@@ -47,7 +47,8 @@ ADryingRack::ADryingRack()
 	}
 
 	Deco = PropKit::MakeDeco(this, Mesh, TEXT("Deco"));
-	for (int32 i = 0; i < 10; ++i) { Parts.Add(PropKit::MakePart(this, Deco, *FString::Printf(TEXT("Part%d"), i))); }
+	// 0-3 frame, 4 achtergaas, 5-9 droogroosters, 10-14 wiet-stapels (zichtbaar als er gedroogd wordt).
+	for (int32 i = 0; i < 15; ++i) { Parts.Add(PropKit::MakePart(this, Deco, *FString::Printf(TEXT("Part%d"), i))); }
 }
 
 void ADryingRack::SetupVisual()
@@ -69,18 +70,45 @@ void ADryingRack::SetupVisual()
 
 	const float Post = FMath::Min(7.f, W * 0.06f);
 	const float PX = W * 0.5f - Post * 0.5f;
-	// 2 staanders + boven- en onderbalk + achtergaas.
+	// 2 staanders + boven- en onderbalk + achtergaas (achterkant = -Y, tegen de muur).
 	PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(Post, D, H), FVector(-PX, 0, 0), Frame);
 	PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(Post, D, H), FVector( PX, 0, 0), Frame);
 	PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W, D, Post), FVector(0, 0, H * 0.5f - Post * 0.5f), Frame);
 	PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W, D, Post), FVector(0, 0, Floor + Post * 0.5f), Frame);
-	PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(W - Post * 2.f, FMath::Min(3.f, D * 0.2f), H - Post * 2.f), FVector(0, D * 0.45f, 0), Mesh2);
-	// 5 dwarsstangen (droogroosters) verdeeld over de hoogte.
+	PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(W - Post * 2.f, FMath::Min(3.f, D * 0.2f), H - Post * 2.f), FVector(0, -D * 0.45f, 0), Mesh2);
+	// 5 droogroosters (dienbladen) verdeeld over de hoogte + per rooster een (verborgen) wiet-stapel.
 	const int32 NBars = 5;
+	const FLinearColor Weed(0.20f, 0.45f, 0.16f);
 	for (int32 b = 0; b < NBars; ++b)
 	{
 		const float Z = Floor + H * (0.16f + 0.16f * b);
 		PropKit::SetPart(Parts[5 + b], PropKit::Cube(), FVector(W - Post * 2.f, D * 0.8f, FMath::Min(3.f, H * 0.02f)), FVector(0, 0, Z), Bar);
+		// Wiet-hoopje bovenop het rooster (zichtbaarheid via UpdateDryVisual).
+		PropKit::SetPart(Parts[10 + b], PropKit::Cube(), FVector((W - Post * 2.f) * 0.7f, D * 0.55f, FMath::Max(4.f, H * 0.03f)), FVector(0, 0, Z + FMath::Max(4.f, H * 0.03f)), Weed);
+		if (Parts[10 + b]) { Parts[10 + b]->SetVisibility(false); }
+	}
+	UpdateDryVisual();
+}
+
+void ADryingRack::UpdateDryVisual()
+{
+	if (Parts.Num() < 15) { return; }
+	const int32 Filled = FMath::Clamp(RepDrying + RepReady, 0, 5);
+	const FLinearColor Drying(0.20f, 0.45f, 0.16f);  // groen (hangt te drogen)
+	const FLinearColor Ready(0.55f, 0.42f, 0.14f);   // amber/bruin (klaar)
+	for (int32 b = 0; b < 5; ++b)
+	{
+		UStaticMeshComponent* P = Parts[10 + b];
+		if (!P) { continue; }
+		const bool bShow = (b < Filled);
+		P->SetVisibility(bShow);
+		if (bShow)
+		{
+			if (UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(P->GetMaterial(0)))
+			{
+				MID->SetVectorParameterValue(TEXT("Color"), (b < RepReady) ? Ready : Drying);
+			}
+		}
 	}
 }
 
@@ -136,6 +164,7 @@ void ADryingRack::UpdateRep()
 void ADryingRack::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateDryVisual(); // ook op clients (RepDrying/RepReady repliceren)
 	if (!HasAuthority() || Entries.Num() == 0) { return; }
 
 	const float DT = DrySeconds();
