@@ -392,6 +392,8 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 	if (const UPhoneClientComponent* Ph = Pawn->FindComponentByClass<UPhoneClientComponent>())
 	{
 		Out.bBankAppUnlocked = Ph->IsBankAppUnlocked();
+		Out.OwnedHomes = Ph->GetOwnedHomes();
+		Out.ActiveHome = Ph->GetActiveHome();
 	}
 	if (const UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
@@ -420,6 +422,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	if (UPhoneClientComponent* Ph = Pawn->FindComponentByClass<UPhoneClientComponent>())
 	{
 		Ph->SetBankAppUnlocked(Data.bBankAppUnlocked);
+		Ph->RestoreProperty(Data.OwnedHomes, Data.ActiveHome);
 	}
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{

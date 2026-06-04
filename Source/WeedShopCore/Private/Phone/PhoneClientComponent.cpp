@@ -12,6 +12,8 @@
 #include "Customer/CustomerBase.h"
 #include "Customer/CustomerSpawner.h"
 #include "World/DeliveryDrone.h"
+#include "World/CityGenerator.h"
+#include "World/CityDoor.h"
 #include "EngineUtils.h"
 #include "Cultivation/PotTypes.h"
 #include "Cultivation/GrowPlant.h"
@@ -65,6 +67,8 @@ void UPhoneClientComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UPhoneClientComponent, bBankAppUnlocked);
+	DOREPLIFETIME(UPhoneClientComponent, OwnedHomes);
+	DOREPLIFETIME(UPhoneClientComponent, ActiveHome);
 }
 
 void UPhoneClientComponent::BeginPlay()
@@ -72,6 +76,8 @@ void UPhoneClientComponent::BeginPlay()
 	Super::BeginPlay();
 	// Game-instellingen (FOV/sensitivity) inladen + FOV toepassen voor de lokale speler.
 	LoadGameSettings();
+	// Woning-systeem: periodiek de starter toekennen (server) + mijn eigen deuren ontgrendelen (lokaal).
+	GetWorld()->GetTimerManager().SetTimer(PropertyTimer, this, &UPhoneClientComponent::PropertyTick, 1.0f, true, 1.0f);
 }
 
 void UPhoneClientComponent::LoadGameSettings()
@@ -185,6 +191,124 @@ void UPhoneClientComponent::ToggleMapOverlay()
 UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 {
 	return GetOwner() ? GetOwner()->FindComponentByClass<UInventoryComponent>() : nullptr;
+}
+
+// --- Woningen (3 koopbare panden) ---
+
+ACityGenerator* UPhoneClientComponent::FindCity() const
+{
+	if (!GetWorld()) { return nullptr; }
+	for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { return *It; }
+	return nullptr;
+}
+
+void UPhoneClientComponent::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
+{
+	Out.Reset();
+	if (ACityGenerator* City = FindCity()) { City->GetPropertyOffers(Out); }
+}
+
+void UPhoneClientComponent::ApplyLocalDoors()
+{
+	// Alleen de eigen woningen van DEZE (lokale) speler ontgrendelen — deuren zijn lokaal/cosmetisch.
+	APawn* P = Cast<APawn>(GetOwner());
+	if (!P || !P->IsLocallyControlled()) { return; }
+	ACityGenerator* City = FindCity();
+	if (!City) { return; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	for (int32 Idx : OwnedHomes)
+	{
+		if (Homes.IsValidIndex(Idx))
+		{
+			if (ACityDoor* Dr = Homes[Idx].Door.Get()) { Dr->SetPlayerHome(); }
+		}
+	}
+}
+
+void UPhoneClientComponent::OnRep_Property()
+{
+	ApplyLocalDoors();
+}
+
+void UPhoneClientComponent::PropertyTick()
+{
+	ACityGenerator* City = FindCity();
+	if (!City) { return; } // stad nog niet gebouwd
+	// Server: ken eenmalig het starter-flatje toe bij een VERSE start (load zet de staat zelf).
+	if (GetOwnerRole() == ROLE_Authority && !bPropertyInit)
+	{
+		TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+		if (Offers.Num() > 0)
+		{
+			bPropertyInit = true;
+			if (OwnedHomes.Num() == 0 && ActiveHome < 0)
+			{
+				for (const FCityPropertyOffer& O : Offers)
+				{
+					if (O.bStarter)
+					{
+						OwnedHomes.AddUnique(O.HomeIndex);
+						ActiveHome = O.HomeIndex;
+						MoveOwnerToHome(O.HomeIndex);
+						break;
+					}
+				}
+			}
+		}
+	}
+	ApplyLocalDoors();
+}
+
+void UPhoneClientComponent::RestoreProperty(const TArray<int32>& InOwned, int32 InActive)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	OwnedHomes = InOwned;
+	ActiveHome = InActive;
+	bPropertyInit = true; // de save bepaalt de staat; niet alsnog de starter forceren
+	ApplyLocalDoors();
+}
+
+void UPhoneClientComponent::MoveOwnerToHome(int32 HomeIndex)
+{
+	ACityGenerator* City = FindCity();
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	if (!City || !Pawn) { return; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (!Homes.IsValidIndex(HomeIndex)) { return; }
+	const FVector To = Homes[HomeIndex].InteriorPos + FVector(0.f, 0.f, 100.f);
+	Pawn->TeleportTo(To, Pawn->GetActorRotation(), false, true);
+}
+
+void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
+{
+	ACityGenerator* City = FindCity();
+	if (!City) { return; }
+	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	const FCityPropertyOffer* Off = Offers.FindByPredicate([HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex; });
+	if (!Off) { return; }                       // alleen de 3 aangeboden panden
+	if (OwnedHomes.Contains(HomeIndex)) { return; }
+	if (Off->PriceCents > 0)
+	{
+		UEconomyComponent* Econ = GetOwnerEconomy();
+		if (!Econ || !Econ->RemoveBank(Off->PriceCents))
+		{
+			if (GEngine) { UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("Niet genoeg banksaldo voor dit pand.")); }
+			return;
+		}
+	}
+	OwnedHomes.AddUnique(HomeIndex);
+	ActiveHome = HomeIndex;
+	MoveOwnerToHome(HomeIndex);
+	ApplyLocalDoors();
+	if (GEngine) { UWeedToast::Notify(-1, 4.f, FColor::Green, FString::Printf(TEXT("Pand gekocht: %s"), *Off->Title)); }
+}
+
+void UPhoneClientComponent::ServerSetActiveHome_Implementation(int32 HomeIndex)
+{
+	if (!OwnedHomes.Contains(HomeIndex)) { return; }
+	ActiveHome = HomeIndex;
+	MoveOwnerToHome(HomeIndex);
+	ApplyLocalDoors();
 }
 
 UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const

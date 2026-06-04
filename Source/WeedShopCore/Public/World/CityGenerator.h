@@ -26,6 +26,20 @@ struct FApartmentHome
 	UPROPERTY() FVector InteriorPos = FVector::ZeroVector;
 	UPROPERTY() FVector DoorPos = FVector::ZeroVector;
 	UPROPERTY() FString Number;
+	UPROPERTY() bool bApartment = false; // true = flat-unit, false = rijtjeshuis
+	UPROPERTY() int32 Floor = 0;         // verdieping (0 = begane grond / rijtjeshuis)
+};
+
+// Eén koopbaar pand voor de speler (3 stuks: starter-flatje, rijtjeshuis, grote flat-kamer).
+USTRUCT()
+struct FCityPropertyOffer
+{
+	GENERATED_BODY()
+	UPROPERTY() int32 HomeIndex = -1;   // index in ApartmentHomes
+	UPROPERTY() FString Title;          // "Klein flatje (bovenin)" enz.
+	UPROPERTY() FString Sub;            // "Nr 102-7  -  3e verdieping"
+	UPROPERTY() int64 PriceCents = 0;   // koopprijs (bank); 0 = starter (gratis, al van jou)
+	UPROPERTY() bool bStarter = false;  // het flatje waarin je begint
 };
 
 // Eén blok op de kaart: wereld-XY-midden + kleur + label (winkelnaam of huisnummer-reeks).
@@ -56,6 +70,9 @@ public:
 
 	// Alle geregistreerde appartement-woningen (deur + plekken + huisnummer) voor het bewoner-systeem.
 	const TArray<FApartmentHome>& GetApartmentHomes() const { return ApartmentHomes; }
+
+	// De 3 panden die de speler kan kopen (deterministisch: starter-flatje, rijtjeshuis, grote flat-kamer).
+	void GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const;
 
 	// --- Echte top-down kaart-render (orthografische SceneCapture van de stad) ---
 	class UTextureRenderTarget2D* GetMapRenderTarget() const { return MapRT; }

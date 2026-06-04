@@ -39,6 +39,7 @@
 #include "Components/ProgressBar.h"
 #include "Components/Slider.h"
 #include "World/DayNightController.h"
+#include "World/CityGenerator.h"
 #include "UI/MapWidget.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Styling/SlateTypes.h"
@@ -1282,6 +1283,45 @@ void UPhoneWidget::RefreshContent()
 
 	if (App == 0) // Upgrades
 	{
+		// --- Woning: 3 koopbare panden (het starter-flatje is al van jou) ---
+		{
+			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Woning"), 14, FLinearColor(0.7f, 0.9f, 1.f)))
+				->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+			TArray<FCityPropertyOffer> Offers;
+			Phone->GetPropertyOffers(Offers);
+			if (Offers.Num() == 0)
+			{
+				ContentBox->AddChildToVerticalBox(MakeText(TEXT("(stad laadt nog...)"), 11, FLinearColor::Gray));
+			}
+			for (const FCityPropertyOffer& O : Offers)
+			{
+				const bool bOwned = Phone->IsPropertyOwned(O.HomeIndex);
+				const bool bActive = Phone->IsActiveHome(O.HomeIndex);
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+				Info->AddChildToVerticalBox(MakeText(O.Title, 12, bOwned ? FLinearColor(0.7f, 1.f, 0.7f) : FLinearColor::White));
+				const FString PriceStr = (O.PriceCents > 0)
+					? FString::Printf(TEXT("%s   EUR %.0f"), *O.Sub, O.PriceCents / 100.f)
+					: FString::Printf(TEXT("%s   (starter)"), *O.Sub);
+				Info->AddChildToVerticalBox(MakeText(PriceStr, 10, FLinearColor(0.65f, 0.7f, 0.8f)));
+				UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
+				IL->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				IL->SetVerticalAlignment(VAlign_Center);
+				IL->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+				USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
+				RB->SetWidthOverride(82.f); RB->SetHeightOverride(28.f);
+				if (!bOwned)        { RB->SetContent(MakeButton(TEXT("Koop"), 7, O.HomeIndex, FLinearColor(0.2f, 0.5f, 0.28f))); }
+				else if (bActive)   { RB->SetContent(MakeText(TEXT("thuis"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
+				else                { RB->SetContent(MakeButton(TEXT("Woon hier"), 8, O.HomeIndex, FLinearColor(0.25f, 0.4f, 0.55f))); }
+				UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
+				RS->SetVerticalAlignment(VAlign_Center);
+				ContentBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
+			}
+			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Upgrades"), 14, FLinearColor(0.7f, 0.9f, 1.f)))
+				->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
+		}
+
 		UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr;
 		if (Upg)
 		{
@@ -1449,6 +1489,8 @@ void UPhoneWidget::HandlePhoneButton(int32 Action, int32 Param)
 	case 3: Phone->DoAction(Param); break;     // koop upgrade
 	case 5: Phone->DoAction(0); break;         // accept bericht
 	case 6: Phone->DoAction(1); break;         // decline bericht
+	case 7: Phone->BuyProperty(Param); break;  // koop woning
+	case 8: Phone->SetActiveHome(Param); break;// ga in deze woning wonen
 	default: break;
 	}
 	// Geen volledige herbouw hier: dat gaf een flash. App-wissel/home herbouwt vanzelf via de

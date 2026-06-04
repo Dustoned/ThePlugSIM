@@ -483,6 +483,54 @@ void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
 	}
 }
 
+void ACityGenerator::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
+{
+	Out.Reset();
+	if (ApartmentHomes.Num() == 0) { return; }
+
+	// Starter = flat-unit op de HOOGSTE verdieping (klein flatje bovenin). Grote kamer = flat-unit op
+	// de begane grond (ruim), in een ANDER pand. Rijtjeshuis = eerste rijtjeshuis-woning.
+	int32 StarterIdx = INDEX_NONE, BigIdx = INDEX_NONE, RowIdx = INDEX_NONE;
+	int32 BestTopFloor = -1, BestGroundFloor = INT32_MAX;
+	for (int32 i = 0; i < ApartmentHomes.Num(); ++i)
+	{
+		const FApartmentHome& H = ApartmentHomes[i];
+		if (H.bApartment)
+		{
+			if (H.Floor > BestTopFloor) { BestTopFloor = H.Floor; StarterIdx = i; }
+		}
+		else if (RowIdx == INDEX_NONE) { RowIdx = i; }
+	}
+	// Grote kamer: laagste verdieping, niet hetzelfde als de starter.
+	for (int32 i = 0; i < ApartmentHomes.Num(); ++i)
+	{
+		const FApartmentHome& H = ApartmentHomes[i];
+		if (H.bApartment && i != StarterIdx && H.Floor <= BestGroundFloor)
+		{
+			BestGroundFloor = H.Floor; BigIdx = i;
+		}
+	}
+
+	auto Add = [&](int32 Idx, const FString& Title, int64 Price, bool bStarter)
+	{
+		if (!ApartmentHomes.IsValidIndex(Idx)) { return; }
+		const FApartmentHome& H = ApartmentHomes[Idx];
+		FCityPropertyOffer O;
+		O.HomeIndex = Idx;
+		O.Title = Title;
+		O.Sub = H.bApartment
+			? FString::Printf(TEXT("Nr %s  -  %de verdieping"), *H.Number, H.Floor + 1)
+			: FString::Printf(TEXT("Nr %s  -  rijtjeshuis"), *H.Number);
+		O.PriceCents = Price;
+		O.bStarter = bStarter;
+		Out.Add(O);
+	};
+
+	Add(StarterIdx, TEXT("Klein flatje (bovenin)"), 0, true);
+	Add(RowIdx,     TEXT("Rijtjeshuis"),            1500000, false);   // EUR 15.000
+	Add(BigIdx,     TEXT("Grote kamer (flat)"),     4000000, false);   // EUR 40.000
+}
+
 void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed)
 {
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -547,6 +595,7 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 			H.InteriorPos = FVector(UX, UY, TopZ + 8.f);
 			H.DoorPos = Front;
 			H.Number = FString::FromInt(RowBase + 2 * u);
+			H.bApartment = false; H.Floor = 0;
 			ApartmentHomes.Add(H);
 		}
 
@@ -793,6 +842,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 						H.InteriorPos = FVector(Inside.X, Inside.Y, zS + 8.f);
 						H.DoorPos = FrontSpot;
 						H.Number = FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq);
+						H.bApartment = true; H.Floor = f;
 						ApartmentHomes.Add(H);
 					}
 				}

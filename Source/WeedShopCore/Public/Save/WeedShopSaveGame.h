@@ -89,6 +89,10 @@ struct FPlayerSaveData
 	UPROPERTY() bool bHasTransform = false;
 	UPROPERTY() FVector Location = FVector::ZeroVector;
 	UPROPERTY() FRotator Rotation = FRotator::ZeroRotator;
+
+	// Gekochte woningen (indices in CityGenerator::ApartmentHomes) + de actieve woon-/spawn-plek.
+	UPROPERTY() TArray<int32> OwnedHomes;
+	UPROPERTY() int32 ActiveHome = -1;
 };
 
 UCLASS()

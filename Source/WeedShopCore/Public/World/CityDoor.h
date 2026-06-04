@@ -23,8 +23,13 @@ public:
 	void Setup(float Width, float Height, const FLinearColor& Color);
 
 	// Maak dit een bewoner-deur: op slot voor de speler, met "LOCKED - <naam> lives here".
-	void SetResident(const FString& Name) { bLocked = true; ResidentName = Name; bOpen = false; }
+	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
 	bool IsLocked() const { return bLocked; }
+
+	// Jouw eigen woning: open/dicht zoals normaal, prompt "Your home".
+	void SetPlayerHome() { bLocked = false; bPlayerHome = true; bForSale = false; ResidentName.Empty(); }
+	// Koopbaar pand (nog niet van jou): op slot met "TE KOOP - koop via telefoon".
+	void SetForSale() { bLocked = true; bPlayerHome = false; bForSale = true; bOpen = false; ResidentName.Empty(); }
 
 	// Interact (F) opent/sluit de deur.
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
@@ -40,5 +45,7 @@ protected:
 	float CurAngle = 0.f;   // huidige scharnierhoek
 	bool bOpen = false;     // open/dicht (getoggled via interact)
 	bool bLocked = false;   // bewoner-deur: kan niet door de speler geopend worden
+	bool bPlayerHome = false; // jouw eigen woning (open/dicht, prompt "Your home")
+	bool bForSale = false;    // koopbaar pand, nog niet van jou
 	FString ResidentName;   // naam voor de "LOCKED - ... lives here"-prompt
 };

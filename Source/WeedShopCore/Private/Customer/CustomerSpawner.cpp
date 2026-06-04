@@ -86,10 +86,21 @@ void ACustomerSpawner::SpawnResidents()
 	const int32 Want = bAll ? Total : FMath::Clamp(MaxResidents, 0, Total);
 	const int32 Step = (Want > 0) ? FMath::Max(1, Total / Want) : (Total + 1);
 
+	// De 3 koopbare panden (starter-flatje, rijtjeshuis, grote kamer) blijven ALTIJD vrij: geen bewoner,
+	// deur als "TE KOOP" totdat de speler 'm koopt (dan ontgrendelt de PhoneClientComponent 'm lokaal).
+	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	TSet<int32> ForSale;
+	for (const FCityPropertyOffer& O : Offers) { ForSale.Add(O.HomeIndex); }
+
 	int32 Made = 0;
 	for (int32 i = 0; i < Total; ++i)
 	{
 		const FApartmentHome& H = Homes[i];
+		if (ForSale.Contains(i))
+		{
+			if (ACityDoor* Dr = H.Door.Get()) { Dr->SetForSale(); }
+			continue; // geen NPC in een koopbaar pand
+		}
 		const bool bPhysical = (Made < Want) && (Step <= 0 ? true : (i % Step == 0));
 
 		FString Name;

@@ -78,3 +78,13 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
 - Specifieke klant-archetypes.
 - Of edibles van eigen oogst gemaakt worden (crafting) + accessoires als merch.
 - Alle balans-getallen (tunen tijdens spelen).
+
+## Woning-koopsysteem (Upgrades-app)
+- 3 koopbare panden, deterministisch gekozen door CityGenerator::GetPropertyOffers:
+  starter klein flatje (hoogste verdieping, gratis/al van jou), rijtjeshuis (EUR 15.000),
+  grote flat-kamer (begane grond, EUR 40.000). Betaald uit BANK-saldo.
+- Eigendom per speler op PhoneClientComponent (Replicated OwnedHomes + ActiveHome),
+  opgeslagen in FPlayerSaveData. Verse start kent automatisch het starter-flatje toe
+  + zet de speler erin; load herstelt de staat.
+- De 3 panden blijven altijd vrij (CustomerSpawner slaat ze over; deur = "TE KOOP").
+  Gekochte woning ontgrendelt lokaal als "Your home" (CityDoor::SetPlayerHome).

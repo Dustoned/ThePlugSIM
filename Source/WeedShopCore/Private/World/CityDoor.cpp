@@ -47,10 +47,12 @@ FText ACityDoor::GetInteractionPrompt_Implementation() const
 {
 	if (bLocked)
 	{
+		if (bForSale) { return FText::FromString(TEXT("TE KOOP - koop via telefoon (Upgrades)")); }
 		return FText::FromString(ResidentName.IsEmpty()
 			? FString(TEXT("LOCKED"))
 			: FString::Printf(TEXT("LOCKED - %s lives here"), *ResidentName));
 	}
+	if (bPlayerHome) { return bOpen ? FText::FromString(TEXT("Your home - close")) : FText::FromString(TEXT("Your home - open")); }
 	return bOpen ? FText::FromString(TEXT("Close door")) : FText::FromString(TEXT("Open door"));
 }
 

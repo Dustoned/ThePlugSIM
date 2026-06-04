@@ -307,6 +307,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	bool IsOpen() const { return bOpen; }
 
+	// --- Woningen (3 koopbare panden in de Upgrades-app) ---
+	class ACityGenerator* FindCity() const;
+	void GetPropertyOffers(TArray<struct FCityPropertyOffer>& Out) const;
+	bool IsPropertyOwned(int32 HomeIndex) const { return OwnedHomes.Contains(HomeIndex); }
+	bool IsActiveHome(int32 HomeIndex) const { return ActiveHome == HomeIndex; }
+	void BuyProperty(int32 HomeIndex) { ServerBuyProperty(HomeIndex); }
+	void SetActiveHome(int32 HomeIndex) { ServerSetActiveHome(HomeIndex); }
+	// Save/load van eigendom.
+	const TArray<int32>& GetOwnedHomes() const { return OwnedHomes; }
+	int32 GetActiveHome() const { return ActiveHome; }
+	void RestoreProperty(const TArray<int32>& InOwned, int32 InActive);
+	// Wordt periodiek aangeroepen (door de pawn-tick): starter toekennen + eigen deuren ontgrendelen.
+	void PropertyTick();
+
 	// --- Inventory-scherm (drag-n-drop naar hotbar) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void ToggleInventory();
@@ -510,6 +524,20 @@ protected:
 	// Ontgrendelt de Bank-app op de mobiel (per speler, na de telefoon-upgrade).
 	UPROPERTY(Replicated)
 	bool bBankAppUnlocked = false;
+
+	// --- Woning-eigendom (per speler, gerepliceerd) ---
+	UPROPERTY(ReplicatedUsing = OnRep_Property)
+	TArray<int32> OwnedHomes;            // indices in CityGenerator::ApartmentHomes
+	UPROPERTY(ReplicatedUsing = OnRep_Property)
+	int32 ActiveHome = -1;               // huidige woon-/spawn-plek
+	bool bPropertyInit = false;          // server: starter al toegekend?
+	FTimerHandle PropertyTimer;
+
+	UFUNCTION() void OnRep_Property();
+	void ApplyLocalDoors();              // ontgrendel lokaal mijn eigen deuren ("Your home")
+	UFUNCTION(Server, Reliable) void ServerBuyProperty(int32 HomeIndex);
+	UFUNCTION(Server, Reliable) void ServerSetActiveHome(int32 HomeIndex);
+	void MoveOwnerToHome(int32 HomeIndex); // server: zet de speler in de woning
 
 	// Server: maak 1 joint van Grams gram bud (item-id Joint_<G>g; meer gram = betere kwaliteit).
 	UFUNCTION(Server, Reliable)
