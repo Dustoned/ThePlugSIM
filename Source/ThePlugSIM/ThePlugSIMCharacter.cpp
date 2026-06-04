@@ -185,38 +185,9 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
 }
 
-void AThePlugSIMCharacter::FeedProxyVelocity(float DeltaSeconds)
-{
-	// Alleen op simulated proxies (remote spelers op deze machine). De capsule "springt" alleen op
-	// net-updates (positie-delta is meestal 0), dus we HOUDEN de laatste snelheid kort vast tussen
-	// updates en clampen de sprongen. Zo speelt de standaard-AnimBP een vloeiende loop i.p.v. glijden.
-	if (GetLocalRole() != ROLE_SimulatedProxy) { return; }
-	UCharacterMovementComponent* Move = GetCharacterMovement();
-	if (!Move || DeltaSeconds <= KINDA_SMALL_NUMBER) { return; }
-	const FVector Cur = GetActorLocation();
-	if (bHasPrevProxyLoc)
-	{
-		FVector Delta = Cur - PrevProxyLoc; Delta.Z = 0.f;
-		if (Delta.SizeSquared() > 1.f) // deze frame echt verplaatst (een net-update kwam binnen)
-		{
-			FVector V = Delta / DeltaSeconds;
-			const float Sp = V.Size();
-			if (Sp > 700.f) { V *= 700.f / Sp; } // clamp de grote OnRep-sprong
-			ProxyVel = V;
-			ProxyVelHold = 0.25f; // vasthouden tot de volgende update
-		}
-		else if (ProxyVelHold > 0.f) { ProxyVelHold -= DeltaSeconds; }
-		else { ProxyVel = FVector::ZeroVector; } // echt gestopt -> idle
-		Move->Velocity = FVector(ProxyVel.X, ProxyVel.Y, Move->Velocity.Z);
-	}
-	PrevProxyLoc = Cur;
-	bHasPrevProxyLoc = true;
-}
-
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	FeedProxyVelocity(DeltaSeconds); // remote spelers: snelheid voeden zodat de loop-animatie speelt
 	TickStuckRecovery(DeltaSeconds);
 
 	// Lange klik: houd de linkermuisknop ~0.7s ingedrukt terwijl de telefoon-app open is en hij
@@ -699,6 +670,15 @@ void AThePlugSIMCharacter::BeginPlay()
 	// Spawn-plek onthouden als gegarandeerd-veilige terugval voor anti-stuck.
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
+
+	// Co-op-animatie: Update Rate Optimization op het third-person lichaam UIT, en altijd de pose tikken.
+	// URO skipt anim-updates op remote spelers (simulated proxies) -> die "glijden" tot een sprong de
+	// update forceert. Uitzetten houdt de standaard-template-AnimBP vloeiend voor andere spelers.
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		M->bEnableUpdateRateOptimizations = false;
+		M->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	}
 
 	// Forceer de movement-instellingen at RUNTIME (een Blueprint-default kan de constructor overschrijven).
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
