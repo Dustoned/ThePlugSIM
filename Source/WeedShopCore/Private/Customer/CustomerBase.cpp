@@ -5,6 +5,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimSequence.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
@@ -45,12 +46,12 @@ ACustomerBase::ACustomerBase()
 		if (MannyFinder.Succeeded()) { MeshComp->SetSkeletalMesh(MannyFinder.Object); }
 		MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
 		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
-		static ConstructorHelpers::FClassFinder<UAnimInstance> AnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
-		if (AnimFinder.Succeeded())
-		{
-			MeshComp->SetAnimationMode(EAnimationMode::AnimationBlueprint); // forceer ABP-modus (anders geen locomotie)
-			MeshComp->SetAnimInstanceClass(AnimFinder.Class);
-		}
+		// We sturen de animatie ZELF aan (single-node walk/idle op snelheid). De ABP_Unarmed-graph gaf
+		// standalone geen loopcyclus -> NPC's gleden. Sequences hier laden; afspelen gebeurt in BeginPlay/Tick.
+		static ConstructorHelpers::FObjectFinder<UAnimSequence> IdleF(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
+		if (IdleF.Succeeded()) { IdleAnim = IdleF.Object; }
+		static ConstructorHelpers::FObjectFinder<UAnimSequence> WalkF(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Fwd.MF_Unarmed_Walk_Fwd"));
+		if (WalkF.Succeeded()) { WalkAnim = WalkF.Object; }
 		// Animatie ALTIJD laten doortikken (anim-graph evalueren), bones alleen ververst als 'ie in beeld is.
 		// OnlyTickPoseWhenRendered kon de pose "bevriezen" (geen loop-animatie) als de mesh-bounds de NPC
 		// per ongeluk als niet-zichtbaar markeerden. AlwaysTickPose voorkomt dat; bones-refresh blijft cull-baar.
@@ -83,6 +84,18 @@ ACustomerBase::ACustomerBase()
 	if (ProdFinder.Succeeded()) { ProductTable = ProdFinder.Object; }
 }
 
+void ACustomerBase::UpdateLocomotionAnim()
+{
+	if (!bAnimStarted) { return; }
+	USkeletalMeshComponent* M = GetMesh();
+	if (!M) { return; }
+	// Wissel alleen bij een verandering (anders herstart de loop elke tick).
+	const bool bMoving = GetVelocity().Size2D() > 12.f;
+	if (bMoving == bAnimMoving) { return; }
+	bAnimMoving = bMoving;
+	if (UAnimSequence* Seq = bMoving ? WalkAnim : IdleAnim) { M->PlayAnimation(Seq, true); }
+}
+
 void ACustomerBase::WalkTo(const FVector& Dest)
 {
 	if (AAIController* AI = Cast<AAIController>(GetController()))
@@ -95,16 +108,15 @@ void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Vangnet: zorg dat de mesh een lopende Anim-BP heeft (anders glijdt de NPC zonder loopanimatie).
+	// Locomotie: speel zelf idle/walk af (single-node) op basis van snelheid -> echte loopanimatie.
 	if (USkeletalMeshComponent* M = GetMesh())
 	{
-		if (!M->GetAnimInstance())
+		if (IdleAnim || WalkAnim)
 		{
-			if (UClass* ABP = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C")))
-			{
-				M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-				M->SetAnimInstanceClass(ABP);
-			}
+			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			if (IdleAnim) { M->PlayAnimation(IdleAnim, true); }
+			bAnimMoving = false;
+			bAnimStarted = true;
 		}
 	}
 
@@ -217,6 +229,9 @@ void ACustomerBase::WriteStatsToRegistry()
 void ACustomerBase::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// Loop/idle-animatie moet op ELKE machine draaien (ook clients renderen de NPC's).
+	UpdateLocomotionAnim();
 
 	if (!HasAuthority())
 	{

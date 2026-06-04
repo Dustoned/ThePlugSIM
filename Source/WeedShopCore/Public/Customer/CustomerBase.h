@@ -175,6 +175,14 @@ protected:
 	void LeaveAngry();
 	static float ClampAttr(float V) { return FMath::Clamp(V, 0.f, 100.f); }
 
+	// Directe locomotie-animatie (single-node), zodat de NPC ECHT loopt i.p.v. glijdt. De meegeleverde
+	// ABP_Unarmed-graph bleek standalone geen loopcyclus te geven; we spelen walk/idle zelf af op snelheid.
+	UPROPERTY() TObjectPtr<class UAnimSequence> IdleAnim;
+	UPROPERTY() TObjectPtr<class UAnimSequence> WalkAnim;
+	bool bAnimMoving = false;
+	bool bAnimStarted = false;
+	void UpdateLocomotionAnim();
+
 	// Bewoner-schema (dag-roamen / 's nachts thuis).
 	void TickResident(float DeltaSeconds);
 	bool bResident = false;
