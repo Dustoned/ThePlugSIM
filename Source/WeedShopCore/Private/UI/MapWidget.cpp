@@ -286,6 +286,8 @@ void UMapWidget::BuildBlocks()
 	// zodat het aansluit op hoe de huisjes op de kaart staan.
 	{
 		const float Pitch = FMath::Max(1.f, City->GetPitch());
+		// Posities meteen naar CANVAS-ruimte (de kaart-render draait de assen), zodat de oriëntatie klopt
+		// met wat je op het scherm ziet i.p.v. met de wereld-assen.
 		struct FRowGrp { TArray<TPair<FVector2D, FString>> Items; };
 		TMap<FIntPoint, FRowGrp> Groups;
 		for (const FApartmentHome& H : City->GetApartmentHomes())
@@ -293,7 +295,8 @@ void UMapWidget::BuildBlocks()
 			if (H.bApartment || H.Number.IsEmpty() || H.Number.Contains(TEXT("-"))) { continue; }
 			const FIntPoint Key(FMath::RoundToInt((H.InteriorPos.X - C.X) / Pitch),
 								FMath::RoundToInt((H.InteriorPos.Y - C.Y) / Pitch));
-			Groups.FindOrAdd(Key).Items.Add(TPair<FVector2D, FString>(FVector2D(H.InteriorPos.X, H.InteriorPos.Y), H.Number));
+			const FVector2D Cv = WorldToCanvas(H.InteriorPos.X, H.InteriorPos.Y);
+			Groups.FindOrAdd(Key).Items.Add(TPair<FVector2D, FString>(Cv, H.Number));
 		}
 		for (TPair<FIntPoint, FRowGrp>& GP : Groups)
 		{
@@ -306,13 +309,13 @@ void UMapWidget::BuildBlocks()
 				Hi.X = FMath::Max(Hi.X, E.Key.X); Hi.Y = FMath::Max(Hi.Y, E.Key.Y);
 				Sum += E.Key;
 			}
-			const bool bVertical = (Hi.Y - Lo.Y) > (Hi.X - Lo.X); // rij loopt langs Y -> nummers onder elkaar
+			// Spreiding in SCHERM-Y groter dan in scherm-X -> huisjes staan onder elkaar -> nummers stacken.
+			const bool bVertical = (Hi.Y - Lo.Y) > (Hi.X - Lo.X);
 			It.Sort([bVertical](const TPair<FVector2D, FString>& A, const TPair<FVector2D, FString>& B)
 				{ return bVertical ? (A.Key.Y < B.Key.Y) : (A.Key.X < B.Key.X); });
 			FString Lbl;
 			for (int32 i = 0; i < It.Num(); ++i) { if (i > 0) { Lbl += bVertical ? TEXT("\n") : TEXT(" "); } Lbl += It[i].Value; }
-			const FVector2D Pc = WorldToCanvas(Sum.X / It.Num(), Sum.Y / It.Num());
-			AddPill(Lbl, Pc, 9, FLinearColor(1.f, 1.f, 0.96f), 24);
+			AddPill(Lbl, Sum / It.Num(), 9, FLinearColor(1.f, 1.f, 0.96f), 24);
 		}
 	}
 
