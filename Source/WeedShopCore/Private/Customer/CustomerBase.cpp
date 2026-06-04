@@ -446,7 +446,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			// het midden te zuigen.
 			const bool bToPark = bHasPark && FMath::FRand() < 0.12f;
 			const FVector Origin = bToPark ? ParkCenter : HomeFrontSpot;
-			const float Radius = bToPark ? 800.f : 3500.f;
+			const float Radius = bToPark ? 800.f : 2200.f; // lokaler -> blijven in de eigen buurt verspreid
 			if (Nav->GetRandomReachablePointInRadius(Origin, Radius, Out))
 			{
 				RoamGoal = Out.Location;

@@ -277,7 +277,9 @@ void ACityGenerator::BuildCity()
 			NavAnchor->SetRootComponent(AnchorRoot);
 			AnchorRoot->RegisterComponent();
 			UNavigationInvokerComponent* Inv = NewObject<UNavigationInvokerComponent>(NavAnchor, TEXT("CityNavInvoker"));
-			Inv->SetGenerationRadii(Span * 0.55f, Span * 0.7f);
+			// Dek de HELE stad incl. hoeken: een hoekblok ligt op ~sqrt(2)*R*Pitch van het midden, wat
+			// ruim buiten de oude 0.55*Span viel -> daar was geen navmesh en stonden NPC's vast. Royaal.
+			Inv->SetGenerationRadii(Span * 0.9f, Span * 1.05f);
 			Inv->RegisterComponent();
 		}
 	}
