@@ -449,7 +449,14 @@ void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
 
 			const uint32 H = CityHash(i, j);
 			const int32 BaseNo = 2 + (int32)(CityHash((int32)(B.Center.X / 100.f), (int32)(B.Center.Y / 100.f)) % 70u) * 2;
-			auto RowLabel = [&]() { const int32 Units = 3 + (int32)(H % 2u); const int32 RowBase = 2 + (int32)(H % 60u) * 2; return FString::Printf(TEXT("%d-%d"), RowBase, RowBase + 2 * (Units - 1)); };
+			// Rijtjeshuizen: toon de LOSSE huisnummers naast elkaar (3-4 passen prima); flats houden een reeks.
+			auto RowLabel = [&]() {
+				const int32 Units = 3 + (int32)(H % 2u);
+				const int32 RowBase = 2 + (int32)(H % 60u) * 2;
+				FString S;
+				for (int32 u = 0; u < Units; ++u) { if (u > 0) { S += TEXT("  "); } S += FString::FromInt(RowBase + 2 * u); }
+				return S;
+			};
 
 			if (i == 0 && j == -1)      { B.Color = CGas;  B.Label = TEXT("GAS");       B.bShop = true; }
 			else if (i == S && j == S)  { B.Color = CGrow; B.Label = TEXT("GROW");      B.bShop = true; }

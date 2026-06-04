@@ -200,10 +200,10 @@ void UMapWidget::BuildBlocks()
 			Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P); Cs->SetZOrder(1);
 		}
 		Tile->SetVisibility(ESlateVisibility::HitTestInvisible);
-		// ELK blok krijgt zijn label: winkelnaam, of het huisnummer(-bereik) van de woningen daar.
+		// ELK blok krijgt zijn label: winkelnaam, of de losse huisnummers (rijtjeshuizen) / reeks (flat).
 		// Donkere tekst op de lichte tegels -> goed leesbaar; bovenin zodat NPC-stipjes 'm niet bedekken.
-		const int32 FontSz = Bk.bShop ? 13 : 12;
-		AddCanvasText(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.30f), BlkPx + 6.f, FontSz, FLinearColor(0.06f, 0.06f, 0.08f), 6);
+		const int32 FontSz = Bk.bShop ? 13 : 11;
+		AddCanvasText(Bk.Label, P + FVector2D(0.f, -BlkPx * 0.30f), BlkPx + 12.f, FontSz, FLinearColor(0.06f, 0.06f, 0.08f), 6);
 	}
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
