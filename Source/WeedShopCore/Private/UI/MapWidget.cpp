@@ -244,12 +244,14 @@ void UMapWidget::BuildBlocks()
 	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
 	Scale = GMapDS / Ortho;
 
-	// Bloklabels: winkelnaam (geel), park (groen), flat-reeks "32 1-20" of rijtjeshuis-nummers
-	// "10 12 14 16" (wit) — ALLES als één nette chip per blok, netjes langs elkaar.
+	// Bloklabels: winkelnaam (geel), park (groen) of flat-reeks "32 1-20" (wit). Rijtjeshuizen worden
+	// hieronder apart getekend (oriëntatie-bewust: nummers naast OF onder elkaar).
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
 	for (const FCityMapBlock& Bk : Blocks)
 	{
+		const bool bRowBlock = !Bk.bShop && Bk.Label != TEXT("Park") && !Bk.Label.Contains(TEXT("-"));
+		if (bRowBlock) { continue; } // rijtjeshuizen -> oriëntatie-bewuste chip hieronder
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
 
 		if (Bk.bShop)
@@ -279,8 +281,40 @@ void UMapWidget::BuildBlocks()
 		}
 	}
 
-	// (Geen losse nummer-chips per deur meer: die stonden te dicht op elkaar en liepen door elkaar.
-	//  Elk blok toont nu één nette chip met de huisnummers naast elkaar, zie hierboven.)
+	// Rijtjeshuizen: groepeer de ECHTE huizen per blok, bepaal de rij-oriëntatie uit hun posities en
+	// toon één nette chip met de nummers NAAST elkaar (rij langs X) of ONDER elkaar (rij langs Y),
+	// zodat het aansluit op hoe de huisjes op de kaart staan.
+	{
+		const float Pitch = FMath::Max(1.f, City->GetPitch());
+		struct FRowGrp { TArray<TPair<FVector2D, FString>> Items; };
+		TMap<FIntPoint, FRowGrp> Groups;
+		for (const FApartmentHome& H : City->GetApartmentHomes())
+		{
+			if (H.bApartment || H.Number.IsEmpty() || H.Number.Contains(TEXT("-"))) { continue; }
+			const FIntPoint Key(FMath::RoundToInt((H.InteriorPos.X - C.X) / Pitch),
+								FMath::RoundToInt((H.InteriorPos.Y - C.Y) / Pitch));
+			Groups.FindOrAdd(Key).Items.Add(TPair<FVector2D, FString>(FVector2D(H.InteriorPos.X, H.InteriorPos.Y), H.Number));
+		}
+		for (TPair<FIntPoint, FRowGrp>& GP : Groups)
+		{
+			TArray<TPair<FVector2D, FString>>& It = GP.Value.Items;
+			if (It.Num() == 0) { continue; }
+			FVector2D Lo = It[0].Key, Hi = It[0].Key, Sum(0.f, 0.f);
+			for (const TPair<FVector2D, FString>& E : It)
+			{
+				Lo.X = FMath::Min(Lo.X, E.Key.X); Lo.Y = FMath::Min(Lo.Y, E.Key.Y);
+				Hi.X = FMath::Max(Hi.X, E.Key.X); Hi.Y = FMath::Max(Hi.Y, E.Key.Y);
+				Sum += E.Key;
+			}
+			const bool bVertical = (Hi.Y - Lo.Y) > (Hi.X - Lo.X); // rij loopt langs Y -> nummers onder elkaar
+			It.Sort([bVertical](const TPair<FVector2D, FString>& A, const TPair<FVector2D, FString>& B)
+				{ return bVertical ? (A.Key.Y < B.Key.Y) : (A.Key.X < B.Key.X); });
+			FString Lbl;
+			for (int32 i = 0; i < It.Num(); ++i) { if (i > 0) { Lbl += bVertical ? TEXT("\n") : TEXT(" "); } Lbl += It[i].Value; }
+			const FVector2D Pc = WorldToCanvas(Sum.X / It.Num(), Sum.Y / It.Num());
+			AddPill(Lbl, Pc, 9, FLinearColor(1.f, 1.f, 0.96f), 24);
+		}
+	}
 
 	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 
