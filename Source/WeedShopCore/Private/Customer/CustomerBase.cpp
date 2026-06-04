@@ -46,7 +46,11 @@ ACustomerBase::ACustomerBase()
 		MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
 		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 		static ConstructorHelpers::FClassFinder<UAnimInstance> AnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
-		if (AnimFinder.Succeeded()) { MeshComp->SetAnimInstanceClass(AnimFinder.Class); }
+		if (AnimFinder.Succeeded())
+		{
+			MeshComp->SetAnimationMode(EAnimationMode::AnimationBlueprint); // forceer ABP-modus (anders geen locomotie)
+			MeshComp->SetAnimInstanceClass(AnimFinder.Class);
+		}
 		// Animatie ALTIJD laten doortikken (anim-graph evalueren), bones alleen ververst als 'ie in beeld is.
 		// OnlyTickPoseWhenRendered kon de pose "bevriezen" (geen loop-animatie) als de mesh-bounds de NPC
 		// per ongeluk als niet-zichtbaar markeerden. AlwaysTickPose voorkomt dat; bones-refresh blijft cull-baar.
@@ -90,6 +94,19 @@ void ACustomerBase::WalkTo(const FVector& Dest)
 void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Vangnet: zorg dat de mesh een lopende Anim-BP heeft (anders glijdt de NPC zonder loopanimatie).
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		if (!M->GetAnimInstance())
+		{
+			if (UClass* ABP = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C")))
+			{
+				M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+				M->SetAnimInstanceClass(ABP);
+			}
+		}
+	}
 
 	if (HasAuthority())
 	{
