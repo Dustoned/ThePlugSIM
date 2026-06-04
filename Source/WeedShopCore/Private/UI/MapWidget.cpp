@@ -163,20 +163,44 @@ void UMapWidget::BuildBlocks()
 {
 	if (!Canvas || !City.IsValid()) { return; }
 
+	const int32 R = City->GetGridRadiusClamped();
+	const float Pitch = City->GetPitch();
 	const FVector C = City->GetCityCenter();
 	CenterXY = FVector2D(C.X, C.Y);
-	// Schaal afgestemd op de SceneCapture: het 760px-vlak = de OrthoWidth-brede wereldzone.
-	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
-	Scale = GMapDS / Ortho;
+	const float Pad = 42.f;
+	const float EH = (R + 0.6f) * Pitch;               // halve wereld-omvang van het grid
+	Scale = (GMapDS - 2.f * Pad) / (2.f * EH);
 
-	// Winkel-labels boven de echte kaart-render (zodat je ziet wélk gebouw welke winkel is).
+	if (MapImage) { MapImage->SetVisibility(ESlateVisibility::Collapsed); } // capture niet gebruiken
+
+	// DEKKENDE ondergrond = asfalt/wegen (vult het hele kaartvlak, dus nooit doorzichtig).
+	{
+		UBorder* Ground = WidgetTree->ConstructWidget<UBorder>();
+		Ground->SetBrushColor(FLinearColor(0.11f, 0.11f, 0.13f, 1.f));
+		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Ground))
+		{
+			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(GMapDS, GMapDS));
+			Cs->SetAlignment(FVector2D(0.f, 0.f)); Cs->SetPosition(FVector2D(0.f, 0.f)); Cs->SetZOrder(0);
+		}
+		Ground->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+
+	// Blokken als gekleurde tegels; de gaten ertussen (= de ondergrond) lezen als straten.
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
+	const float BlkPx = City->GetMapBlockSize() * Scale;
 	for (const FCityMapBlock& Bk : Blocks)
 	{
-		if (!Bk.bShop) { continue; }
 		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
-		AddCanvasText(Bk.Label, P, 120.f, 12, FLinearColor(1.f, 0.95f, 0.6f), 5);
+		UBorder* Tile = WidgetTree->ConstructWidget<UBorder>();
+		Tile->SetBrushColor(Bk.Color);
+		if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Tile))
+		{
+			Cs->SetAutoSize(false); Cs->SetSize(FVector2D(BlkPx, BlkPx));
+			Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P); Cs->SetZOrder(1);
+		}
+		Tile->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (Bk.bShop) { AddCanvasText(Bk.Label, P, BlkPx, 12, FLinearColor(0.05f, 0.05f, 0.06f), 5); }
 	}
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
@@ -185,10 +209,9 @@ void UMapWidget::BuildBlocks()
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 	AddCanvasText(TEXT("Klik = waypoint zetten  /  rechtsklik = wissen"),
 		FVector2D(GMapDS * 0.5f, 64.f), GMapDS, 11, FLinearColor(0.7f, 0.85f, 1.f), 50);
-	AddCanvasText(TEXT("blauw=jij   geel=waypoint   cyaan=NPC   groen poppetje=klant voor jou"),
-		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 11, FLinearColor(0.7f, 0.72f, 0.8f), 50);
+	AddCanvasText(TEXT("groen=grow  paars=meubels  blauw=supplies  rood=gas    cyaan=NPC  groen poppetje=klant voor jou"),
+		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 10, FLinearColor(0.7f, 0.72f, 0.8f), 50);
 
-	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 	bBuiltBlocks = true;
 }
 
@@ -202,19 +225,6 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	if (!bBuiltBlocks && City.IsValid()) { BuildBlocks(); }
 	if (!bBuiltBlocks || !Canvas) { return; }
-
-	// Echte top-down render op de achtergrond zetten zodra de SceneCapture klaar is.
-	if (MapImage && !bImageSet && City.IsValid())
-	{
-		if (UTextureRenderTarget2D* RT = City->GetMapRenderTarget())
-		{
-			FSlateBrush Br;
-			Br.SetResourceObject(RT);
-			Br.ImageSize = FVector2D(GMapDS, GMapDS);
-			MapImage->SetBrush(Br);
-			bImageSet = true;
-		}
-	}
 
 	// Speler.
 	if (PlayerDot)

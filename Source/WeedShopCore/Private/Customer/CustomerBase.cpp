@@ -47,11 +47,11 @@ ACustomerBase::ACustomerBase()
 		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 		static ConstructorHelpers::FClassFinder<UAnimInstance> AnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
 		if (AnimFinder.Succeeded()) { MeshComp->SetAnimInstanceClass(AnimFinder.Class); }
-		// Optimalisatie voor veel NPC's: alleen animeren als 'ie in beeld is + update-rate-optimization
-		// (verre/zichtbare-maar-kleine NPC's animeren op lagere frequentie).
+		// Optimalisatie voor veel NPC's: alleen animeren als 'ie in beeld is (off-screen = geen pose-tick).
+		// URO uit: dat kan zichtbare NPC's "bevriezen" (geen loop-animatie). Schaduw uit (40x is duur).
 		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
-		MeshComp->bEnableUpdateRateOptimizations = true;
-		MeshComp->SetCastShadow(false); // 40 schaduw-casters is duur; uit voor NPC's
+		MeshComp->bEnableUpdateRateOptimizations = false;
+		MeshComp->SetCastShadow(false);
 	}
 
 	// AI: laat een AIController de klant besturen zodat hij kan pathfinden.
