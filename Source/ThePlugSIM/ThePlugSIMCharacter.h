@@ -214,6 +214,8 @@ public:
 	// gewoon werken (geen vervanging van de ABP).
 	FVector PrevProxyLoc = FVector::ZeroVector;
 	bool bHasPrevProxyLoc = false;
+	FVector ProxyVel = FVector::ZeroVector; // vastgehouden horizontale snelheid tussen net-updates
+	float ProxyVelHold = 0.f;               // resterende tijd dat we de laatste snelheid vasthouden
 	void FeedProxyVelocity(float DeltaSeconds);
 
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.

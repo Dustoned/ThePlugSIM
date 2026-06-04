@@ -187,16 +187,27 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 
 void AThePlugSIMCharacter::FeedProxyVelocity(float DeltaSeconds)
 {
-	// Alleen op simulated proxies (de O', remote spelers op deze machine).
+	// Alleen op simulated proxies (remote spelers op deze machine). De capsule "springt" alleen op
+	// net-updates (positie-delta is meestal 0), dus we HOUDEN de laatste snelheid kort vast tussen
+	// updates en clampen de sprongen. Zo speelt de standaard-AnimBP een vloeiende loop i.p.v. glijden.
 	if (GetLocalRole() != ROLE_SimulatedProxy) { return; }
 	UCharacterMovementComponent* Move = GetCharacterMovement();
 	if (!Move || DeltaSeconds <= KINDA_SMALL_NUMBER) { return; }
 	const FVector Cur = GetActorLocation();
 	if (bHasPrevProxyLoc)
 	{
-		FVector V = (Cur - PrevProxyLoc) / DeltaSeconds;
-		V.Z = Move->Velocity.Z; // verticale snelheid (spring/val) van de movement-component laten staan
-		Move->Velocity = V;     // horizontale snelheid -> AnimBP ziet 'lopen'
+		FVector Delta = Cur - PrevProxyLoc; Delta.Z = 0.f;
+		if (Delta.SizeSquared() > 1.f) // deze frame echt verplaatst (een net-update kwam binnen)
+		{
+			FVector V = Delta / DeltaSeconds;
+			const float Sp = V.Size();
+			if (Sp > 700.f) { V *= 700.f / Sp; } // clamp de grote OnRep-sprong
+			ProxyVel = V;
+			ProxyVelHold = 0.25f; // vasthouden tot de volgende update
+		}
+		else if (ProxyVelHold > 0.f) { ProxyVelHold -= DeltaSeconds; }
+		else { ProxyVel = FVector::ZeroVector; } // echt gestopt -> idle
+		Move->Velocity = FVector(ProxyVel.X, ProxyVel.Y, Move->Velocity.Z);
 	}
 	PrevProxyLoc = Cur;
 	bHasPrevProxyLoc = true;
