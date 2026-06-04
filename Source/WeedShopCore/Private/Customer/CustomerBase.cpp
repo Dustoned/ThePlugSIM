@@ -9,6 +9,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
+#include "NavigationPath.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
 #include "World/DayCycleComponent.h"
@@ -598,11 +599,45 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 		return false;
 	}
 
+	FVector Start = GetActorLocation();
+	FNavLocation ProjectedStart;
+	if (Nav->ProjectPointToNavigation(Start, ProjectedStart, FVector(900.f, 900.f, 700.f)))
+	{
+		Start = ProjectedStart.Location + FVector(0.f, 0.f, 3.f);
+		if (FVector::Dist2D(Start, GetActorLocation()) > 140.f || FMath::Abs(Start.Z - GetActorLocation().Z) > 220.f)
+		{
+			SetActorLocation(Start);
+		}
+	}
+
 	FNavLocation Projected;
 	const FVector Extent(FMath::Max(80.f, SearchXY), FMath::Max(80.f, SearchXY), FMath::Max(80.f, SearchZ));
-	if (!Nav->ProjectPointToNavigation(DesiredGoal, Projected, Extent))
+	auto HasFullPathTo = [&](const FVector& Goal) -> bool
 	{
-		if (!Nav->GetRandomReachablePointInRadius(DesiredGoal, FMath::Max(250.f, SearchXY), Projected))
+		if (FVector::Dist2D(Start, Goal) < 520.f)
+		{
+			return false;
+		}
+		UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(W, Start, Goal, this);
+		return Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() > 1;
+	};
+
+	if (!Nav->ProjectPointToNavigation(DesiredGoal, Projected, Extent) || !HasFullPathTo(Projected.Location))
+	{
+		const float FallbackRadius = FMath::Max(2600.f, SearchXY * 2.5f);
+		bool bFoundFallback = false;
+		for (int32 Try = 0; Try < 18; ++Try)
+		{
+			FNavLocation Candidate;
+			if (Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate)
+				&& HasFullPathTo(Candidate.Location))
+			{
+				Projected = Candidate;
+				bFoundFallback = true;
+				break;
+			}
+		}
+		if (!bFoundFallback)
 		{
 			return false;
 		}
@@ -895,32 +930,18 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			return;
 		}
 
-		// Fallback: als een hall/ver blok nog geen navmesh heeft, blijf niet hangen maar pak een lokaal pad.
-		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
+		// Fallback: kies een verre, echt bereikbare roam-bestemming. Nooit "doel" vlak naast de NPC.
+		const FVector Self = GetActorLocation();
+		const float Angle = FMath::DegreesToRadians(static_cast<float>(FMath::Abs(RoamRouteSeed + RoamLegIndex * 37) % 360));
+		const FVector SeedGoal = Self + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * 2600.f;
+		if (SetResidentRoamGoal(SeedGoal, 2200.f, 700.f))
 		{
-			FNavLocation Out;
-			const FVector Self = GetActorLocation();
-			if (Nav->GetRandomReachablePointInRadius(Self, 1800.f, Out) && WalkTo(Out.Location))
-			{
-				RoamGoal = Out.Location;
-				bHasRoamGoal = true;
-				bRoamGoalIsPark = false;
-				RoamTimer = ComputeResidentRoamTimeout(RoamGoal);
-			}
-			else if (Nav->ProjectPointToNavigation(HomeFrontSpot, Out, FVector(1400.f, 1400.f, 600.f)) && WalkTo(Out.Location))
-			{
-				RoamGoal = Out.Location;
-				bHasRoamGoal = true;
-				bRoamGoalIsPark = false;
-				RoamTimer = ComputeResidentRoamTimeout(RoamGoal);
-			}
-			else
-			{
-				bHasRoamGoal = false;
-				bRoamGoalIsPark = false;
-				RoamTimer = 3.f;
-			}
+			++RoamLegIndex;
+			return;
 		}
+		bHasRoamGoal = false;
+		bRoamGoalIsPark = false;
+		RoamTimer = 2.f;
 	}
 }
 
