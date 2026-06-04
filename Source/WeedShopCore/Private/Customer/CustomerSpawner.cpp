@@ -79,6 +79,14 @@ void ACustomerSpawner::SpawnResidents()
 
 	bResidentsSpawned = true;
 
+	// Ruim eerst alle vooraf-geplaatste/los rondslingerende klant-NPC's op (bv. test-NPC's die in de
+	// level-map midden in de stad staan). Op dit punt bestaan er nog geen bewoners, dus dit raakt alleen
+	// die ongewenste losse NPC's. Daarna spawnen we de echte bewoners op de woningen.
+	for (TActorIterator<ACustomerBase> It(World); It; ++It)
+	{
+		if (IsValid(*It)) { It->Destroy(); }
+	}
+
 	AWeedShopGameState* GS = World->GetGameState<AWeedShopGameState>();
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
 
