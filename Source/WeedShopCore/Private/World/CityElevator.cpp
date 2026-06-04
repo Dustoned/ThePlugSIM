@@ -45,7 +45,10 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 	auto Wall = [&](const TCHAR* Name, const FVector& Loc, const FVector& SizeCm, const FLinearColor& Col)
 	{
 		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this, Name);
-		C->SetupAttachment(Root); C->RegisterComponent();
+		C->RegisterComponent();
+		// Expliciet aan Root vasthaken NA registratie. SetupAttachment alleen is voor runtime-componenten
+		// niet betrouwbaar -> de cabinewanden bleven in de wereld staan i.p.v. mee te bewegen met de lift.
+		C->AttachToComponent(Root, FAttachmentTransformRules::KeepRelativeTransform);
 		if (Cube) { C->SetStaticMesh(Cube); }
 		C->SetRelativeLocation(Loc); C->SetRelativeScale3D(SizeCm / 100.f);
 		C->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
