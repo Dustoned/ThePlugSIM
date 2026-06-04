@@ -7,6 +7,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "AIController.h"
+#include "NavigationInvokerComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/DataTable.h"
 #include "Data/WeedShopProduct.h"
@@ -48,15 +49,22 @@ ACustomerBase::ACustomerBase()
 	AIControllerClass = AAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 
-	// Beweging: draai naar de looprichting, rustige loopsnelheid.
+	// Beweging: draai naar de looprichting, rustige loopsnelheid + RVO-avoidance (niet in elkaar lopen).
 	bUseControllerRotationYaw = false;
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
 		Move->bUseControllerDesiredRotation = false;
 		Move->bOrientRotationToMovement = true;
 		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
-		Move->MaxWalkSpeed = 220.f;
+		Move->MaxWalkSpeed = 200.f;
+		Move->bUseRVOAvoidance = true;             // ontwijk elkaar/de speler -> niet vastlopen
+		Move->AvoidanceConsiderationRadius = 120.f;
+		Move->AvoidanceWeight = 0.5f;
 	}
+
+	// Navigation-invoker: genereert ook navmesh rond de NPC zelf (zodat 'ie ver van de speler kan lopen).
+	NavInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavInvoker"));
+	NavInvoker->SetGenerationRadii(4000.f, 6000.f);
 
 	// Productenlijst (voor marktprijs + willekeurig gewenst product).
 	static ConstructorHelpers::FObjectFinder<UDataTable> ProdFinder(TEXT("/Game/_Project/Data/DT_Products.DT_Products"));

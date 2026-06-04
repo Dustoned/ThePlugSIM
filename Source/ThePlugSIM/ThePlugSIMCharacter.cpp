@@ -10,6 +10,7 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
+#include "NavigationInvokerComponent.h"
 #include "World/DayNightController.h"
 #include "World/CityGenerator.h"
 #include "World/StoreCounter.h"
@@ -50,6 +51,11 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
+
+	// Navigation-invoker: genereert runtime-navmesh rond de speler (de stad is procedureel, dus geen
+	// vooraf gebakken navmesh). Ruime straal zodat NPC's over de stoepen kunnen lopen rond jou.
+	NavInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavInvoker"));
+	NavInvoker->SetGenerationRadii(9000.f, 11000.f);
 	
 	// Create the first person mesh that will be viewed only by this character's owner
 	FirstPersonMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("First Person Mesh"));
