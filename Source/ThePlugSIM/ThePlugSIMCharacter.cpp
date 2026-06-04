@@ -3,6 +3,8 @@
 #include "ThePlugSIMCharacter.h"
 #include "UI/WeedToast.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -78,6 +80,14 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	// configure the character comps
 	GetMesh()->SetOwnerNoSee(true);
 	GetMesh()->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
+
+	// Walk/idle/jump-sequences voor de client-kant fallback (zie UpdateProxyAnim).
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> PIdle(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
+	if (PIdle.Succeeded()) { ProxyIdle = PIdle.Object; }
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> PWalk(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Fwd.MF_Unarmed_Walk_Fwd"));
+	if (PWalk.Succeeded()) { ProxyWalk = PWalk.Object; }
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> PJump(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Fall_Loop.MM_Fall_Loop"));
+	if (PJump.Succeeded()) { ProxyJump = PJump.Object; }
 
 	GetCapsuleComponent()->SetCapsuleSize(34.0f, 96.0f);
 
@@ -185,9 +195,35 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
 }
 
+void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
+{
+	if (!bProxyAnim) { return; }
+	USkeletalMeshComponent* M = GetMesh();
+	if (!M) { return; }
+	// 'Beweegt' bepalen uit de positie (de capsule springt op net-updates) en kort vasthouden.
+	const FVector Cur = GetActorLocation();
+	if (bHasProxyPrev)
+	{
+		FVector D = Cur - ProxyPrevLoc; D.Z = 0.f;
+		if (D.SizeSquared() > 4.f) { ProxyMoveHold = 0.2f; }
+		else if (ProxyMoveHold > 0.f) { ProxyMoveHold -= DeltaSeconds; }
+	}
+	ProxyPrevLoc = Cur; bHasProxyPrev = true;
+
+	int32 NewState = 0; // idle
+	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling()) { NewState = 2; } // lucht (mode repliceert)
+	else if (ProxyMoveHold > 0.f) { NewState = 1; } // lopen
+	if (NewState == ProxyAnimState) { return; }
+	ProxyAnimState = NewState;
+	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 1) ? ProxyWalk : ProxyIdle;
+	if (!Seq) { Seq = ProxyIdle; }
+	if (Seq) { M->PlayAnimation(Seq, true); }
+}
+
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateProxyAnim(DeltaSeconds); // client-kant: remote speler walk/idle/jump (host gebruikt de ABP)
 	TickStuckRecovery(DeltaSeconds);
 
 	// Lange klik: houd de linkermuisknop ~0.7s ingedrukt terwijl de telefoon-app open is en hij
@@ -678,6 +714,16 @@ void AThePlugSIMCharacter::BeginPlay()
 	{
 		M->bEnableUpdateRateOptimizations = false;
 		M->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+		// Alleen op een client die een ANDERE speler ziet (simulated proxy): de template-ABP speelt daar
+		// geen loop -> wij sturen zelf walk/idle/jump aan. De host houdt de template-ABP (werkt daar wel).
+		if (GetLocalRole() == ROLE_SimulatedProxy && GetNetMode() == NM_Client && (ProxyIdle || ProxyWalk))
+		{
+			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			if (ProxyIdle) { M->PlayAnimation(ProxyIdle, true); }
+			ProxyAnimState = 0;
+			bProxyAnim = true;
+		}
 	}
 
 	// Forceer de movement-instellingen at RUNTIME (een Blueprint-default kan de constructor overschrijven).

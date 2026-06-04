@@ -208,6 +208,20 @@ public:
 	void TickStuckRecovery(float DeltaSeconds);
 	bool FindFloorAt(const FVector& Near, FVector& OutSafe) const; // omlaag-trace naar de echte vloer
 
+	// Co-op-animatie ALLEEN op een client die een ANDERE speler ziet (simulated proxy op NM_Client):
+	// daar speelt de template-ABP geen loop (glijden). We kiezen walk/idle/jump uit positie-beweging +
+	// (gerepliceerde) val-status, zonder de movement-velocity aan te raken (geen getril). De host houdt
+	// gewoon de template-ABP (die werkt daar perfect).
+	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyIdle;
+	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyWalk;
+	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyJump;
+	bool bProxyAnim = false;
+	int32 ProxyAnimState = -1;        // -1 nog niet, 0 idle, 1 walk, 2 lucht
+	FVector ProxyPrevLoc = FVector::ZeroVector;
+	bool bHasProxyPrev = false;
+	float ProxyMoveHold = 0.f;        // resterende tijd dat we 'beweegt' aanhouden tussen net-updates
+	void UpdateProxyAnim(float DeltaSeconds);
+
 
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
 	bool bLmbDown = false;
