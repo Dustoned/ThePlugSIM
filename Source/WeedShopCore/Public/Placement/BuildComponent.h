@@ -137,6 +137,7 @@ protected:
 	// Echt model als preview (transient) + gedeeld ghost-materiaal voor al z'n onderdelen.
 	UPROPERTY(Transient) TWeakObjectPtr<AActor> PreviewActor;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> PreviewMID;
+	FName RemotePreviewItem = NAME_None; // welk item de remote-ghost (co-op) nu toont (om respawn te beperken)
 
 	// Of de huidige aim ergens op raakt (anders ghost verbergen).
 	bool bAimHit = false;

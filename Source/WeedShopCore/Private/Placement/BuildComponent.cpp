@@ -596,32 +596,43 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 
 void UBuildComponent::UpdateRemoteGhost()
 {
-	EnsureGhost();
-	if (!Ghost)
+	// Niet aan het plaatsen -> alle preview-objecten verbergen/opruimen.
+	if (!bRepPlacing)
+	{
+		if (Ghost) { Ghost->SetVisibility(false); }
+		if (PreviewActor.IsValid()) { DestroyPreview(); }
+		RemotePreviewItem = NAME_None;
+		return;
+	}
+
+	FPlaceableDef Def;
+	if (!GetPlaceableDef(RepItemId, Def))
 	{
 		return;
 	}
-	Ghost->SetVisibility(bRepPlacing);
-	if (bRepPlacing)
+
+	// Toon het ECHTE model (zoals de lokale preview) i.p.v. een primitief blok. (Re)spawn als het
+	// gekozen item wijzigt; daarna alleen verplaatsen.
+	if (RemotePreviewItem != RepItemId || !PreviewActor.IsValid())
 	{
-		// Mesh/schaal van het item dat de andere speler plaatst.
-		FPlaceableDef Def;
-		float HalfZ = 20.f;
-		float ZOff = 20.f;
-		if (GetPlaceableDef(RepItemId, Def))
+		SpawnPreview(Def, RepItemId);
+		RemotePreviewItem = RepItemId;
+		if (Ghost) { Ghost->SetVisibility(false); }
+	}
+
+	// Zelfde Z-offset per type als de lokale preview (root op de vloer / lamp onder plafond / mid-pivot).
+	float ZOff = 0.f;
+	if (Def.bIsLamp) { ZOff = -Def.BoxHalf.Z; }
+	else if (Def.bIsDryRack) { ZOff = Def.bIsWallMount ? 0.f : Def.BoxHalf.Z; }
+	else if (Def.bIsSink || Def.bIsPackBench || Def.bIsShelf) { ZOff = Def.BoxHalf.Z; }
+
+	if (AActor* P = PreviewActor.Get())
+	{
+		P->SetActorHiddenInGame(false);
+		P->SetActorLocationAndRotation(RepLocation + FVector(0.f, 0.f, ZOff), FRotator(0.f, RepYaw, 0.f));
+		if (PreviewMID)
 		{
-			if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Def.MeshPath))
-			{
-				Ghost->SetStaticMesh(M);
-			}
-			Ghost->SetWorldScale3D(Def.MeshScale);
-			HalfZ = Def.BoxHalf.Z;
-			ZOff = Def.bIsLamp ? -HalfZ : (Def.bIsWallMount ? 0.f : HalfZ);
-		}
-		Ghost->SetWorldLocationAndRotation(RepLocation + FVector(0.f, 0.f, ZOff), FRotator(0.f, RepYaw, 0.f));
-		if (GhostMID)
-		{
-			GhostMID->SetVectorParameterValue(TEXT("GhostColor"),
+			PreviewMID->SetVectorParameterValue(TEXT("GhostColor"),
 				bRepValid ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
 		}
 	}
