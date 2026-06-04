@@ -203,6 +203,7 @@ void USaveGameSubsystem::ReloadCurrentLevel()
 	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); } // travel vanuit pauze
 	const FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
 	UE_LOG(LogWeedShop, Log, TEXT("Level herladen voor save-actie: %s"), *LevelName);
+	WeedShop_RequestGameLoadingScreen(); // toon het laadscherm voor deze in-game transitie
 	UGameplayStatics::OpenLevel(W, FName(*LevelName));
 }
 

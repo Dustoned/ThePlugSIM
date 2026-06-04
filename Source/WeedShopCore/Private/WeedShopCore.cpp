@@ -18,6 +18,10 @@
 
 DEFINE_LOG_CATEGORY(LogWeedShop);
 
+// Alleen tonen bij de eerstvolgende IN-GAME level-reload (gezet door New Game/Load/Continue).
+static bool GShowGameLoadingScreen = false;
+void WeedShop_RequestGameLoadingScreen() { GShowGameLoadingScreen = true; }
+
 // --- Slate loading screen (geen UObjects/UMG: draait veilig tijdens het laden) ---
 class SWeedLoadingScreen : public SCompoundWidget
 {
@@ -95,6 +99,9 @@ private:
 	void OnPreLoadMap(const FString& MapName)
 	{
 		if (IsRunningDedicatedServer() || GetMoviePlayer() == nullptr) { return; }
+		// Alleen bij in-game gaan (New Game/Load/Continue). De boot naar het hoofdmenu krijgt geen laadscherm.
+		if (!GShowGameLoadingScreen) { return; }
+		GShowGameLoadingScreen = false;
 
 		FLoadingScreenAttributes Attr;
 		Attr.bAutoCompleteWhenLoadingCompletes = true;   // verdwijnt vanzelf zodra de map klaar is

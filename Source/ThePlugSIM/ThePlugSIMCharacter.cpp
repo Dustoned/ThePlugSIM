@@ -826,6 +826,10 @@ void AThePlugSIMCharacter::BeginPlay()
 		{
 			GetWorld()->SpawnActor<ACityGenerator>(ACityGenerator::StaticClass(), FTransform::Identity);
 		}
+
+		// Stad staat er nu (BeginPlay bouwt 'm synchroon) -> ken meteen het starter-flatje toe en zet de
+		// speler er DIRECT in, vóór het eerste frame. Zo zie je geen seconde het park meer (geen overzet).
+		if (Phone) { Phone->PropertyTick(); }
 	}
 }
 

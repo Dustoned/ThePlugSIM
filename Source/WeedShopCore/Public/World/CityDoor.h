@@ -10,6 +10,8 @@
 
 class UStaticMeshComponent;
 class USceneComponent;
+class USphereComponent;
+class UPrimitiveComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API ACityDoor : public AActor, public IInteractable
@@ -36,12 +38,20 @@ public:
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
 protected:
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+
+	// Auto-open: deur zwaait open als iemand ervoor staat (speler of NPC die naar buiten komt).
+	UFUNCTION() void OnTriggerBegin(UPrimitiveComponent* Comp, AActor* Other, UPrimitiveComponent* OtherComp, int32 BodyIdx, bool bFromSweep, const FHitResult& Sweep);
+	UFUNCTION() void OnTriggerEnd(UPrimitiveComponent* Comp, AActor* Other, UPrimitiveComponent* OtherComp, int32 BodyIdx);
 
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Hinge;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Panel;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<USphereComponent> Trigger; // nabijheid-zone
 
+	int32 NpcNear = 0;      // aantal NPC's in de zone
+	int32 OtherNear = 0;    // aantal andere pawns (speler) in de zone
 	float CurAngle = 0.f;   // huidige scharnierhoek
 	bool bOpen = false;     // open/dicht (getoggled via interact)
 	bool bLocked = false;   // bewoner-deur: kan niet door de speler geopend worden
