@@ -489,6 +489,12 @@ void AThePlugSIMCharacter::GiveSample()
 	}
 }
 
+void AThePlugSIMCharacter::GiveJointToCustomer(ACustomerBase* Customer)
+{
+	// Vanuit het praat-venster: geef precies deze klant een joint (zelfde server-flow als de hold).
+	if (Customer) { ServerGiveSample(Customer); }
+}
+
 void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 {
 	ACustomerBase* Customer = Cast<ACustomerBase>(Target);
@@ -574,6 +580,13 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	}
 
 	const bool bLikedIt = !(bPicky && Quality < 0.5f);
+
+	// NPC praat terug in het venster.
+	{
+		static const TCHAR* Good[] = { TEXT("Ahh, that's the good stuff. Respect."), TEXT("Damn, that hits nice!"), TEXT("Yesss, exactly what I needed."), TEXT("That's fire, my man.") };
+		static const TCHAR* Bad[] = { TEXT("Pfff, that's weak, bro."), TEXT("Meh... barely felt that."), TEXT("Come on, I've had better."), TEXT("That ain't it, man.") };
+		Customer->Say(bLikedIt ? Good[FMath::RandRange(0, 3)] : Bad[FMath::RandRange(0, 3)]);
+	}
 
 	// Een joint bouwt vooral de RELATIE op. Of 'ie nú wil kopen wordt elke keer opnieuw bepaald door
 	// z'n stats: pas als 'ie genoeg verslaafd/loyaal is (prospect -> koper) en niet op cooldown staat,

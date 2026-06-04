@@ -97,6 +97,13 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
 	ECustomerState State = ECustomerState::WantsToOrder;
 
+	// Laatste regel die deze NPC "zei" (reactie op een joint/deal), getoond in het praat-venster.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
+	FString SpeechLine;
+
+	// Server: zet de gesproken regel (verschijnt in het praat-venster bij alle spelers).
+	void Say(const FString& Line) { if (HasAuthority()) { SpeechLine = Line; } }
+
 	// Marktprijs per eenheid van het gewenste product (cents). 0 als onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	int32 GetMarketPriceCents() const;

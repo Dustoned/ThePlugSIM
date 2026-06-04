@@ -4,6 +4,8 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Inventory/InventoryComponent.h"
+#include "Game/WeedShopGameState.h"
+#include "Npc/NpcRegistryComponent.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -67,13 +69,31 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(440.f, 470.f));
+	CS->SetSize(FVector2D(460.f, 560.f));
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(VB);
 
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("DEAL"), 20, FLinearColor(0.6f, 1.f, 0.6f), false, true));
+	// --- Kop: naam + status + stats (altijd zichtbaar voor ELKE NPC) ---
+	NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 22, FLinearColor(0.85f, 0.95f, 1.f), false, true);
+	VB->AddChildToVerticalBox(NameText);
+	StateText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.65f, 0.7f, 0.8f), false, true);
+	VB->AddChildToVerticalBox(StateText)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+	RelationText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.75f, 0.82f, 1.f), false, true);
+	VB->AddChildToVerticalBox(RelationText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+
+	// --- Dialoog-kader: wat de NPC zegt ---
+	{
+		UBorder* DB = WidgetTree->ConstructWidget<UBorder>();
+		DB->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.12f, 0.16f, 1.f), 10.f));
+		DB->SetPadding(FMargin(12.f, 10.f));
+		DialogueText = WeedUI::Text(WidgetTree, TEXT("..."), 14, FLinearColor(0.95f, 0.95f, 0.85f), false, false);
+		DialogueText->SetAutoWrapText(true);
+		DB->SetContent(DialogueText);
+		DialogueBox = DB;
+		VB->AddChildToVerticalBox(DB)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	}
 
 	WantsText = WeedUI::Text(WidgetTree, TEXT(""), 14, FLinearColor::White);
 	VB->AddChildToVerticalBox(WantsText)->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
@@ -99,8 +119,6 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	ChanceBar->SetFillColorAndOpacity(FLinearColor::Green);
 	VB->AddChildToVerticalBox(ChanceBar)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
-	RelationText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.7f, 0.7f, 0.8f));
-	VB->AddChildToVerticalBox(RelationText);
 	PreviewText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.55f, 0.95f, 0.6f));
 	VB->AddChildToVerticalBox(PreviewText)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
@@ -113,7 +131,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	StrainBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(StrainBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
-	// Offer / Cancel.
+	// Knoppen: Give joint (altijd) / Offer deal (alleen kopers) / Leave.
 	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 	auto MakeBtn = [this](const FString& Label, const FLinearColor& Col, int32 Act) -> UWeedActionButton*
 	{
@@ -122,23 +140,30 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
 		B->OnAction.BindLambda([this](int32 A, int32 /*P*/)
 		{
-			if (UPhoneClientComponent* Ph = GetPhone())
-			{
-				if (A == 1) { Ph->ConfirmDeal(); } else { Ph->CloseDeal(); }
-			}
+			UPhoneClientComponent* Ph = GetPhone();
+			if (!Ph) { return; }
+			if (A == 1) { Ph->ConfirmDeal(); }
+			else if (A == 2) { Ph->RequestGiveJoint(Ph->GetDealCustomer()); }
+			else { Ph->CloseDeal(); }
 		});
 		FButtonStyle St;
 		St.Normal = WeedUI::Rounded(Col, 10.f);
 		St.Hovered = WeedUI::Rounded(Col * 1.3f, 10.f);
 		St.Pressed = WeedUI::Rounded(Col * 0.8f, 10.f);
-		St.NormalPadding = FMargin(14.f, 8.f); St.PressedPadding = FMargin(14.f, 8.f);
+		St.NormalPadding = FMargin(12.f, 8.f); St.PressedPadding = FMargin(12.f, 8.f);
 		B->SetStyle(St);
 		B->SetContent(WeedUI::Text(WidgetTree, Label, 14, FLinearColor::White, true, true));
 		return B;
 	};
-	UHorizontalBoxSlot* OS = Btns->AddChildToHorizontalBox(MakeBtn(TEXT("Offer deal"), FLinearColor(0.2f, 0.5f, 0.28f), 1));
+	UWeedActionButton* GB = MakeBtn(TEXT("Give joint"), FLinearColor(0.45f, 0.35f, 0.15f), 2);
+	UHorizontalBoxSlot* GS = Btns->AddChildToHorizontalBox(GB);
+	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); GS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	GiveBtn = GB;
+	UWeedActionButton* OB = MakeBtn(TEXT("Offer deal"), FLinearColor(0.2f, 0.5f, 0.28f), 1);
+	UHorizontalBoxSlot* OS = Btns->AddChildToHorizontalBox(OB);
 	OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-	UHorizontalBoxSlot* CcS = Btns->AddChildToHorizontalBox(MakeBtn(TEXT("Cancel"), FLinearColor(0.45f, 0.3f, 0.2f), 0));
+	OfferBtn = OB;
+	UHorizontalBoxSlot* CcS = Btns->AddChildToHorizontalBox(MakeBtn(TEXT("Leave"), FLinearColor(0.4f, 0.28f, 0.22f), 0));
 	CcS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	VB->AddChildToVerticalBox(Btns);
 }
@@ -209,6 +234,56 @@ void UDealWidget::UpdateLive()
 	ACustomerBase* C = Ph ? Ph->GetDealCustomer() : nullptr;
 	if (!Ph || !C) { return; }
 
+	// --- Kop (altijd, voor ELKE NPC): naam, status, stats, dialoog ---
+	FString NpcName = C->NpcId.IsNone() ? FString(TEXT("Customer")) : C->NpcId.ToString();
+	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+		{
+			float r = 0.f, l = 0.f, a = 0.f; FText N;
+			if (Reg->GetStats(C->NpcId, r, l, a, N) && !N.IsEmpty()) { NpcName = N.ToString(); }
+		}
+	}
+	if (NameText) { NameText->SetText(FText::FromString(NpcName)); }
+
+	const bool bBuyer = (C->State == ECustomerState::WantsToOrder || C->State == ECustomerState::Negotiating);
+	FString StateStr;
+	switch (C->State)
+	{
+	case ECustomerState::WantsToOrder: StateStr = TEXT("Wants to buy"); break;
+	case ECustomerState::Negotiating:  StateStr = TEXT("Negotiating"); break;
+	case ECustomerState::Prospect:     StateStr = FString::Printf(TEXT("Not hooked yet  (addiction %.0f/%.0f)"), C->Addiction, C->AddictionToBuy); break;
+	case ECustomerState::Served:       StateStr = TEXT("Satisfied"); break;
+	default:                           StateStr = TEXT("Leaving"); break;
+	}
+	if (StateText) { StateText->SetText(FText::FromString(StateStr)); }
+	if (RelationText) { RelationText->SetText(FText::FromString(FString::Printf(TEXT("Respect %.0f     Loyalty %.0f     Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction))); }
+
+	// Dialoog: de server-regel (reactie op joint/deal), anders een begroeting per status.
+	FString Line = C->SpeechLine;
+	if (Line.IsEmpty())
+	{
+		switch (C->State)
+		{
+		case ECustomerState::Prospect: Line = TEXT("Yo... you holding? Hook me up with a taste."); break;
+		case ECustomerState::WantsToOrder:
+		case ECustomerState::Negotiating: Line = FString::Printf(TEXT("What's up. I need %dx %s - you got it?"), C->DesiredQuantity, *PrettyName(C->DesiredProductId)); break;
+		case ECustomerState::Served: Line = TEXT("Appreciate it, man. I'm good for now."); break;
+		default: Line = TEXT("..."); break;
+		}
+	}
+	if (DialogueText) { DialogueText->SetText(FText::FromString(Line)); }
+	if (OfferBtn) { OfferBtn->SetVisibility(bBuyer ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
+
+	if (!bBuyer)
+	{
+		// Geen koper: verberg de deal-sectie; alleen kop + dialoog + Give joint + Leave.
+		auto Hide = [](UWidget* W) { if (W) { W->SetVisibility(ESlateVisibility::Collapsed); } };
+		Hide(WantsText); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(StockText);
+		Hide(ChanceText); Hide(ChanceBar); Hide(PreviewText); Hide(NoWeedText); Hide(OfferLabel); Hide(StrainBox);
+		return;
+	}
+
 	const int32 Qty = C->DesiredQuantity;
 	const FName Offered = Ph->GetOfferedProduct();
 	const bool bSub = Ph->IsOfferingSubstitute();
@@ -236,7 +311,6 @@ void UDealWidget::UpdateLive()
 	if (StockText)    { StockText->SetVisibility(DealVis); }
 	if (ChanceText)   { ChanceText->SetVisibility(DealVis); }
 	if (ChanceBar)    { ChanceBar->SetVisibility(DealVis); }
-	if (RelationText) { RelationText->SetVisibility(DealVis); }
 	if (PreviewText)  { PreviewText->SetVisibility(DealVis); }
 	if (OfferLabel)   { OfferLabel->SetVisibility(DealVis); }
 	if (StrainBox)    { StrainBox->SetVisibility(bHasWeed ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
@@ -290,7 +364,6 @@ void UDealWidget::UpdateLive()
 	ChanceBar->SetPercent(Chance / 100.f);
 	ChanceBar->SetFillColorAndOpacity(CCol);
 
-	RelationText->SetText(FText::FromString(FString::Printf(TEXT("Respect %.0f   Loyalty %.0f   Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction)));
 	float pR = 0.f, pL = 0.f, pA = 0.f;
 	C->PreviewDealOutcome(Ask, Q01, (Stock > 0 ? Thc : -1.f), pR, pL, pA, bSub);
 	PreviewText->SetText(FText::FromString(FString::Printf(TEXT("If accepted:  R %.0f->%.0f   L %.0f->%.0f   A %.0f->%.0f"),

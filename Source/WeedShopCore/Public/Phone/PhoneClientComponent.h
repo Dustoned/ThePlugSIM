@@ -388,6 +388,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
 	void CloseDeal();
 
+	// Geef de huidige praat-klant een joint (knop in het praat-venster). Routeert naar de speler-pawn.
+	void RequestGiveJoint(ACustomerBase* Customer);
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
 	bool IsDealOpen() const { return bDealOpen; }
 

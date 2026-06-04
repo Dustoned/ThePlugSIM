@@ -5,12 +5,14 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "Interaction/PlayerNpcActions.h"
 #include "ThePlugSIMCharacter.generated.h"
 
 class UInputComponent;
 class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
+class ACustomerBase;
 struct FInputActionValue;
 struct FKey;
 
@@ -20,7 +22,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
  *  A basic first person character
  */
 UCLASS(abstract)
-class AThePlugSIMCharacter : public ACharacter
+class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 {
 	GENERATED_BODY()
 
@@ -122,6 +124,10 @@ protected:
 	/** Server-RPC: voert het sample-geven authoritative uit op het aangekeken doel. */
 	UFUNCTION(Server, Reliable)
 	void ServerGiveSample(AActor* Target);
+
+public:
+	/** IPlayerNpcActions: geef een specifieke klant een joint (vanuit het praat-venster). */
+	virtual void GiveJointToCustomer(ACustomerBase* Customer) override;
 
 	/** Open/sluit het roll-paneel (toets R) — daar kies je het aantal gram. */
 	void ToggleRollUI();

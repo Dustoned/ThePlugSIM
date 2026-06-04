@@ -45,6 +45,8 @@
 #include "UI/CrosshairWidget.h"
 #include "UI/SettingsWidget.h"
 #include "UI/MapWidget.h"
+#include "Interaction/PlayerNpcActions.h"
+#include "Customer/CustomerBase.h"
 #include "World/StorageShelf.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
@@ -875,18 +877,8 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	{
 		return;
 	}
-	// Alleen onderhandelen met iemand die ook echt wil kopen.
-	if (Customer->State != ECustomerState::WantsToOrder && Customer->State != ECustomerState::Negotiating)
-	{
-		if (GEngine)
-		{
-			const bool bProspect = (Customer->State == ECustomerState::Prospect);
-			UWeedToast::Notify(-1, 2.5f, FColor::Silver, bProspect
-				? TEXT("They're not hooked yet - give them a free sample first (F).")
-				: TEXT("This customer isn't looking to buy right now."));
-		}
-		return;
-	}
+	// Praat-venster opent voor IEDEREEN (naam, stats, dialoog, joint geven). De deal-sectie zelf
+	// (prijs/aanbod) tonen we in de UI alleen als 'ie ook echt wil kopen.
 	DealCustomer = Customer;
 	bDealOpen = true;
 	bOpen = false;
@@ -973,6 +965,16 @@ void UPhoneClientComponent::ConfirmDeal()
 	UpdateCursor();
 }
 
+void UPhoneClientComponent::RequestGiveJoint(ACustomerBase* Customer)
+{
+	if (!Customer) { return; }
+	// Routeer naar de speler-pawn (game-module implementeert de sample-flow via de interface).
+	if (IPlayerNpcActions* Actions = Cast<IPlayerNpcActions>(GetOwner()))
+	{
+		Actions->GiveJointToCustomer(Customer);
+	}
+}
+
 void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, FName ProductId, int32 AskCents)
 {
 	if (!Customer)
@@ -983,6 +985,15 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 	UInventoryComponent* Stock = GetOwnerInventory();
 
 	const EDealResult Result = Customer->SubmitOfferProduct(ProductId, AskCents, Econ, Stock);
+
+	// NPC reageert in het praat-venster.
+	switch (Result)
+	{
+	case EDealResult::Accepted: Customer->Say(TEXT("Pleasure doing business. Catch you later!")); break;
+	case EDealResult::Haggle:   Customer->Say(TEXT("Whoa, too pricey. Cut me a better deal?")); break;
+	case EDealResult::NoStock:  Customer->Say(TEXT("You don't even have it? Come on...")); break;
+	default:                    Customer->Say(TEXT("Nah, not for that. Forget it.")); break;
+	}
 
 	if (GEngine)
 	{

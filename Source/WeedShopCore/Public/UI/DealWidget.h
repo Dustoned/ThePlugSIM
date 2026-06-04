@@ -38,6 +38,12 @@ protected:
 	UPhoneClientComponent* GetPhone() const;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
+	UPROPERTY() TObjectPtr<UTextBlock> NameText;     // NPC-naam (groot, bovenaan)
+	UPROPERTY() TObjectPtr<UTextBlock> StateText;    // status (wil kopen / prospect / tevreden)
+	UPROPERTY() TObjectPtr<UTextBlock> DialogueText; // wat de NPC zegt
+	UPROPERTY() TObjectPtr<UWidget>    DialogueBox;  // kader rond de dialoog
+	UPROPERTY() TObjectPtr<UWidget>    GiveBtn;      // "Give joint"-knop
+	UPROPERTY() TObjectPtr<UWidget>    OfferBtn;     // "Offer deal"-knop (alleen kopers)
 	UPROPERTY() TObjectPtr<UTextBlock> WantsText;
 	UPROPERTY() TObjectPtr<UTextBlock> SubText;
 	UPROPERTY() TObjectPtr<UTextBlock> PriceText;
