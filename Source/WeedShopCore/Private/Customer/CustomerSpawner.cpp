@@ -130,9 +130,33 @@ void ACustomerSpawner::SpawnResidents()
 	}
 	const bool bAll = (MaxResidents <= 0);
 	const int32 UWant = bAll ? Entrances.Num() : FMath::Clamp(MaxResidents, 0, Entrances.Num());
-	const int32 UStep = (UWant > 0) ? FMath::Max(1, Entrances.Num() / UWant) : (Entrances.Num() + 1);
+
+	// GEOGRAFISCH spreiden: groepeer ingangen per bouwblok en kies round-robin 1 roamer per blok (dan
+	// een 2e ronde, enz.). Anders komen de roamers vooral uit de centrale blokken en blijven ze in het
+	// midden hangen.
+	const float Cell = FMath::Max(100.f, City->GetPitch());
+	TMap<FIntPoint, TArray<int32>> Cells;
+	TArray<FIntPoint> CellOrder;
+	for (int32 idx : Entrances)
+	{
+		const FVector& P = Homes[idx].DoorPos;
+		const FIntPoint Key(FMath::RoundToInt(P.X / Cell), FMath::RoundToInt(P.Y / Cell));
+		TArray<int32>& Arr = Cells.FindOrAdd(Key);
+		if (Arr.Num() == 0) { CellOrder.Add(Key); }
+		Arr.Add(idx);
+	}
 	TSet<int32> PhysicalSet;
-	for (int32 k = 0, made = 0; k < Entrances.Num() && made < UWant; k += UStep) { PhysicalSet.Add(Entrances[k]); ++made; }
+	for (int32 round = 0, made = 0; made < UWant; ++round)
+	{
+		bool bAdded = false;
+		for (const FIntPoint& Key : CellOrder)
+		{
+			if (made >= UWant) { break; }
+			const TArray<int32>& Arr = Cells[Key];
+			if (round < Arr.Num()) { PhysicalSet.Add(Arr[round]); ++made; bAdded = true; }
+		}
+		if (!bAdded) { break; } // alle cellen leeg -> klaar
+	}
 
 	int32 Made = 0;
 	for (int32 i = 0; i < Total; ++i)
