@@ -28,6 +28,9 @@ struct FApartmentHome
 	UPROPERTY() FString Number;
 	UPROPERTY() bool bApartment = false; // true = flat-unit, false = rijtjeshuis
 	UPROPERTY() int32 Floor = 0;         // verdieping (0 = begane grond / rijtjeshuis)
+	// Kamer-grenzen rond InteriorPos: X/Y = horizontale halve-afmeting, Z = kamerhoogte omhoog.
+	// Gebruikt om te checken of een plaatsing BINNEN deze (gekochte) woning valt.
+	UPROPERTY() FVector RoomHalf = FVector(200.f, 200.f, 320.f);
 };
 
 // Eén koopbaar pand voor de speler (3 stuks: starter-flatje, rijtjeshuis, grote flat-kamer).

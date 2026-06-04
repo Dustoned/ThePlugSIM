@@ -79,6 +79,9 @@ public:
 	// True als er binnen CeilingTraceHeight een plafond/dak boven dit vloerpunt zit (= binnenshuis).
 	bool IsIndoors(const FVector& FloorPoint) const;
 
+	// True als het punt BINNEN een woning valt die de speler heeft gekocht (niet in winkels/hal/ongekocht).
+	bool IsInOwnedHome(const FVector& P) const;
+
 	// Of dit aangekeken object opgepakt kan worden (pot/prop/rek/bench/schap/gootsteen). Voor de UI-hint.
 	bool IsPickable(const AActor* A) const;
 

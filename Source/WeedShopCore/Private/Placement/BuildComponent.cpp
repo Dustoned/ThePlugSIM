@@ -13,6 +13,7 @@
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
+#include "World/CityGenerator.h"
 #include "Interaction/InteractionComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Components/StaticMeshComponent.h"
@@ -337,9 +338,9 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 						}
 						PreviewLocation = Center;
 						const bool bFreeW = WorldFreeBuild(GetWorld());
-						// Wand-mount (rek) hoort BINNEN (tenzij vrij-bouwen of expliciet outdoors toegestaan).
+						// Wand-mount (rek) mag alleen in je EIGEN woning (tenzij vrij-bouwen / outdoors toegestaan).
 						bValidSpot = bWall && !bOnPlaceable
-							&& (bFreeW || CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation));
+							&& (bFreeW || CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
 					}
 					else
 					{
@@ -429,9 +430,9 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				// (dat ligt hoger dan je voeten). Plus vlakke vloer, niet op een pot, genoeg ruimte.
 				if (CurrentDef.bIsLamp)
 				{
-					// Plafondlamp: geldig zodra je op een PLAFOND (omlaag-wijzend vlak) mikt.
-					// Een plafond raken bewijst al dat je binnen bent -> geen aparte binnen-trace.
-					bValidSpot = (FloorNormalZ < -0.4f) && !bOnPlaceable;
+					// Plafondlamp: geldig op een PLAFOND (omlaag-wijzend vlak), maar alleen in je EIGEN woning.
+					bValidSpot = (FloorNormalZ < -0.4f) && !bOnPlaceable
+						&& (WorldFreeBuild(GetWorld()) || CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
 				}
 				else
 				{
@@ -441,7 +442,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
 					// Vrij bouwen: laat grondhoogte- en "alleen binnen"-regel vallen (surface + anti-clip blijven).
 					bValidSpot = bFloor && (bFree || bGroundLevel) && !bOnPlaceable
-							&& (bFree || CurrentDef.bAllowOutdoors || IsIndoors(PreviewLocation))
+							&& (bFree || CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation))
 							&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 				}
 				} // einde else: niet-wandmount (vloer/plafond)
@@ -633,6 +634,36 @@ bool UBuildComponent::IsPickable(const AActor* A) const
 		|| Cast<AAtm>(A));
 }
 
+bool UBuildComponent::IsInOwnedHome(const FVector& P) const
+{
+	const UWorld* World = GetWorld();
+	if (WorldFreeBuild(World)) { return true; } // sandbox: overal bouwen
+	AActor* Owner = GetOwner();
+	if (!Owner || !World) { return false; }
+	UPhoneClientComponent* Ph = Owner->FindComponentByClass<UPhoneClientComponent>();
+	if (!Ph) { return false; }
+	const TArray<int32>& Owned = Ph->GetOwnedHomes();
+	if (Owned.Num() == 0) { return false; }
+	ACityGenerator* City = nullptr;
+	for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
+	if (!City) { return false; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	for (int32 Idx : Owned)
+	{
+		if (!Homes.IsValidIndex(Idx)) { continue; }
+		const FApartmentHome& H = Homes[Idx];
+		const FVector& I = H.InteriorPos;
+		const FVector& R = H.RoomHalf;
+		if (FMath::Abs(P.X - I.X) <= R.X + 25.f &&
+			FMath::Abs(P.Y - I.Y) <= R.Y + 25.f &&
+			P.Z >= I.Z - 90.f && P.Z <= I.Z + R.Z + 60.f)
+		{
+			return true; // binnen een woning die je bezit
+		}
+	}
+	return false;
+}
+
 bool UBuildComponent::IsIndoors(const FVector& FloorPoint) const
 {
 	if (!bIndoorsOnly) { return true; }
@@ -742,13 +773,12 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		}
 		return;
 	}
-	// Alleen binnenshuis (tenzij dit placeable buiten mag, bv. de ATM) - in testing/sandbox vrij.
-	// Lampen bewijzen "binnen" door een plafond te raken; wand-mounts (rekken) NIET -> die checken we ook.
-	if (!Def.bIsLamp && !Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsIndoors(Location))
+	// Alleen in je EIGEN gekochte woning (niet in winkels/hal/ongekocht); tenzij outdoors-toegestaan of sandbox.
+	if (!Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsInOwnedHome(Location))
 	{
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 2.f, FColor::Orange, TEXT("You can only place things inside the house."));
+			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("You can only build inside your own home."));
 		}
 		return;
 	}

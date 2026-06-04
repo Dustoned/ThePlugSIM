@@ -151,7 +151,7 @@ void AWeedShopHUD::DrawHUD()
 				const float CY = Canvas ? Canvas->ClipY : 720.f;
 				const bool bValid = BC->IsPlacementValid();
 				DrawText(bValid ? TEXT("Ready to place")
-								: TEXT("Only inside the house - aim at the floor"),
+								: TEXT("Only inside your own home - aim at the floor"),
 					bValid ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(1.f, 0.8f, 0.4f),
 					CX - 110.f, CY - 140.f, Font);
 			}
