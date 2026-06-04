@@ -5,6 +5,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimSequence.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
@@ -45,9 +46,11 @@ ACustomerBase::ACustomerBase()
 		if (MannyFinder.Succeeded()) { MeshComp->SetSkeletalMesh(MannyFinder.Object); }
 		MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
 		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
-		// Standaard UE-template locomotie-AnimBP (idle/lopen op snelheid).
-		static ConstructorHelpers::FClassFinder<UAnimInstance> AnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
-		if (AnimFinder.Succeeded()) { MeshComp->SetAnimInstanceClass(AnimFinder.Class); }
+		// Walk/idle zelf afspelen (single-node); ABP_Unarmed animeert deze NPC's niet. Afspelen in Tick.
+		static ConstructorHelpers::FObjectFinder<UAnimSequence> NIdle(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
+		if (NIdle.Succeeded()) { NpcIdle = NIdle.Object; }
+		static ConstructorHelpers::FObjectFinder<UAnimSequence> NWalk(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Fwd.MF_Unarmed_Walk_Fwd"));
+		if (NWalk.Succeeded()) { NpcWalk = NWalk.Object; }
 		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
 		MeshComp->bEnableUpdateRateOptimizations = false;
 		MeshComp->SetCastShadow(false);
@@ -77,6 +80,27 @@ ACustomerBase::ACustomerBase()
 	if (ProdFinder.Succeeded()) { ProductTable = ProdFinder.Object; }
 }
 
+void ACustomerBase::UpdateNpcAnim(float DeltaSeconds)
+{
+	if (!bNpcAnimStarted) { return; }
+	USkeletalMeshComponent* M = GetMesh();
+	if (!M) { return; }
+	// 'Beweegt' uit de positie (werkt op host én client-proxy), kort vasthouden tussen net-updates.
+	const FVector Cur = GetActorLocation();
+	if (bHasNpcPrev)
+	{
+		FVector D = Cur - NpcPrevLoc; D.Z = 0.f;
+		if (D.SizeSquared() > 4.f) { NpcMoveHold = 0.5f; } // NPC tickt op ~5Hz -> ruimer vasthouden
+		else if (NpcMoveHold > 0.f) { NpcMoveHold -= DeltaSeconds; }
+	}
+	NpcPrevLoc = Cur; bHasNpcPrev = true;
+
+	const int32 NewState = (NpcMoveHold > 0.f) ? 1 : 0;
+	if (NewState == NpcAnimState) { return; }
+	NpcAnimState = NewState;
+	if (UAnimSequence* Seq = (NewState == 1) ? NpcWalk : NpcIdle) { M->PlayAnimation(Seq, true); }
+}
+
 void ACustomerBase::WalkTo(const FVector& Dest)
 {
 	if (AAIController* AI = Cast<AAIController>(GetController()))
@@ -88,6 +112,18 @@ void ACustomerBase::WalkTo(const FVector& Dest)
 void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Loop/idle zelf aansturen (single-node) -> NPC's animeren echt i.p.v. glijden.
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		if (NpcIdle || NpcWalk)
+		{
+			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			if (NpcIdle) { M->PlayAnimation(NpcIdle, true); }
+			NpcAnimState = 0;
+			bNpcAnimStarted = true;
+		}
+	}
 
 	if (HasAuthority())
 	{
@@ -198,6 +234,8 @@ void ACustomerBase::WriteStatsToRegistry()
 void ACustomerBase::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	UpdateNpcAnim(DeltaSeconds); // op alle machines (host + client-proxy) -> iedereen ziet de NPC lopen
 
 	if (!HasAuthority())
 	{

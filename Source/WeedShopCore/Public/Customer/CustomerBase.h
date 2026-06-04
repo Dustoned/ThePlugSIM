@@ -175,6 +175,17 @@ protected:
 	void LeaveAngry();
 	static float ClampAttr(float V) { return FMath::Clamp(V, 0.f, 100.f); }
 
+	// Loop/idle zelf afspelen (single-node): de meegeleverde ABP_Unarmed animeert de NPC's niet. We
+	// bepalen 'beweegt' uit de positie (werkt op host én client-proxy) en spelen walk/idle af.
+	UPROPERTY() TObjectPtr<class UAnimSequence> NpcIdle;
+	UPROPERTY() TObjectPtr<class UAnimSequence> NpcWalk;
+	bool bNpcAnimStarted = false;
+	int32 NpcAnimState = -1;        // -1 nog niet, 0 idle, 1 walk
+	FVector NpcPrevLoc = FVector::ZeroVector;
+	bool bHasNpcPrev = false;
+	float NpcMoveHold = 0.f;
+	void UpdateNpcAnim(float DeltaSeconds);
+
 	// Bewoner-schema (dag-roamen / 's nachts thuis).
 	void TickResident(float DeltaSeconds);
 	bool bResident = false;
