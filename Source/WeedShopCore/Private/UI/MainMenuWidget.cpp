@@ -636,6 +636,7 @@ void UMainMenuWidget::OpenPicker(int32 Mode)
 {
 	MenuMode = Mode;
 	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::Collapsed); }
+	if (CoopPanel) { CoopPanel->SetVisibility(ESlateVisibility::Collapsed); } // niet achter de slot-keuze laten staan
 	if (SlotPanel) { SlotPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
 	RefreshSlots();
 }
@@ -643,6 +644,7 @@ void UMainMenuWidget::OpenPicker(int32 Mode)
 void UMainMenuWidget::ClosePicker()
 {
 	MenuMode = 0;
+	bHostMode = false; // terug naar het hoofdmenu -> volgende New Game is weer gewoon solo
 	if (SlotPanel) { SlotPanel->SetVisibility(ESlateVisibility::Collapsed); }
 	if (CoopPanel) { CoopPanel->SetVisibility(ESlateVisibility::Collapsed); }
 	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
