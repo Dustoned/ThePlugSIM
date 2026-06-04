@@ -208,6 +208,14 @@ public:
 	void TickStuckRecovery(float DeltaSeconds);
 	bool FindFloorAt(const FVector& Near, FVector& OutSafe) const; // omlaag-trace naar de echte vloer
 
+	// Co-op: op simulated proxies (andere spelers) krijgt de movement-component soms geen snelheid door,
+	// waardoor de template-AnimBP geen loop-animatie speelt (de speler "glijdt"). We leiden de snelheid
+	// daarom af uit de positie-delta en voeden die aan de movement-component, zodat de standaard-animaties
+	// gewoon werken (geen vervanging van de ABP).
+	FVector PrevProxyLoc = FVector::ZeroVector;
+	bool bHasPrevProxyLoc = false;
+	void FeedProxyVelocity(float DeltaSeconds);
+
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
 	bool bLmbDown = false;
 	bool bGiveFired = false;

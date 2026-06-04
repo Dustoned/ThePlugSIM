@@ -185,9 +185,27 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
 }
 
+void AThePlugSIMCharacter::FeedProxyVelocity(float DeltaSeconds)
+{
+	// Alleen op simulated proxies (de O', remote spelers op deze machine).
+	if (GetLocalRole() != ROLE_SimulatedProxy) { return; }
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (!Move || DeltaSeconds <= KINDA_SMALL_NUMBER) { return; }
+	const FVector Cur = GetActorLocation();
+	if (bHasPrevProxyLoc)
+	{
+		FVector V = (Cur - PrevProxyLoc) / DeltaSeconds;
+		V.Z = Move->Velocity.Z; // verticale snelheid (spring/val) van de movement-component laten staan
+		Move->Velocity = V;     // horizontale snelheid -> AnimBP ziet 'lopen'
+	}
+	PrevProxyLoc = Cur;
+	bHasPrevProxyLoc = true;
+}
+
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	FeedProxyVelocity(DeltaSeconds); // remote spelers: snelheid voeden zodat de loop-animatie speelt
 	TickStuckRecovery(DeltaSeconds);
 
 	// Lange klik: houd de linkermuisknop ~0.7s ingedrukt terwijl de telefoon-app open is en hij

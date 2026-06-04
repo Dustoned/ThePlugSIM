@@ -191,6 +191,13 @@ protected:
 
 	int32 ActiveSlot = 0;
 
+	// Co-op: de hotbar (HotbarStacks) is lokaal, dus de SERVER weet niet wat een client vasthoudt.
+	// De eigenaar-client pusht daarom de actieve StackId naar de server, zodat server-interacties
+	// (soil/seed/spray/water gebruiken) het juiste hand-item zien. GetActiveItemId leest deze waarde.
+	int32 ActiveStackId = 0;
+	void RefreshActiveStack();
+	UFUNCTION(Server, Reliable) void ServerReportActiveStack(int32 StackId);
+
 	// StackId per hotbar-slot (0 = leeg). Lokaal, niet gerepliceerd.
 	UPROPERTY(Transient)
 	TArray<int32> HotbarStacks;

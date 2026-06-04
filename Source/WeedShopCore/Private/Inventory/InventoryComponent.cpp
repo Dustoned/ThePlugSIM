@@ -4,6 +4,7 @@
 #include "WeedShopCore.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/Pawn.h"
 
 UInventoryComponent::UInventoryComponent()
 {
@@ -334,12 +335,30 @@ int32 UInventoryComponent::GetQuantity(FName ItemId) const
 void UInventoryComponent::SetActiveSlot(int32 Slot)
 {
 	ActiveSlot = FMath::Clamp(Slot, 0, HotbarSize - 1);
+	RefreshActiveStack();
 }
 
 void UInventoryComponent::CycleActiveSlot(int32 Dir)
 {
 	if (Dir == 0) { return; }
 	ActiveSlot = ((ActiveSlot + (Dir > 0 ? 1 : -1)) % HotbarSize + HotbarSize) % HotbarSize;
+	RefreshActiveStack();
+}
+
+void UInventoryComponent::RefreshActiveStack()
+{
+	// Alleen de lokaal-bestuurde eigenaar bepaalt het actieve hand-item uit z'n (lokale) hotbar; de server
+	// voor een REMOTE client houdt de via RPC gepushte waarde (anders zou de lege server-hotbar 'm wissen).
+	const APawn* P = Cast<APawn>(GetOwner());
+	if (!P || !P->IsLocallyControlled()) { return; }
+	const int32 Sid = GetHotbarStackId(ActiveSlot);
+	ActiveStackId = Sid;
+	if (GetOwnerRole() != ROLE_Authority) { ServerReportActiveStack(Sid); } // client -> server syncen
+}
+
+void UInventoryComponent::ServerReportActiveStack_Implementation(int32 StackId)
+{
+	ActiveStackId = StackId;
 }
 
 int32 UInventoryComponent::GetHotbarStackId(int32 Slot) const
@@ -349,7 +368,8 @@ int32 UInventoryComponent::GetHotbarStackId(int32 Slot) const
 
 FName UInventoryComponent::GetActiveItemId() const
 {
-	const int32 Idx = FindStackById(GetHotbarStackId(ActiveSlot));
+	// ActiveStackId is op de eigenaar lokaal gezet en op de server via RPC gesynct -> werkt in co-op.
+	const int32 Idx = FindStackById(ActiveStackId);
 	return Stacks.IsValidIndex(Idx) ? Stacks[Idx].ItemId : NAME_None;
 }
 
@@ -365,6 +385,7 @@ void UInventoryComponent::AssignHotbarStack(int32 Slot, int32 StackId)
 	}
 	HotbarStacks[Slot] = StackId;
 	KnownStacks.Add(StackId); // handmatig geplaatst telt als "gezien"
+	RefreshActiveStack(); // hand-item kan gewisseld zijn -> server syncen
 	OnInventoryChanged.Broadcast();
 }
 
@@ -396,6 +417,8 @@ void UInventoryComponent::RefreshHotbarAuto()
 		const int32 Empty = HotbarStacks.IndexOfByKey(0);
 		if (Empty != INDEX_NONE) { HotbarStacks[Empty] = Stack.StackId; }
 	}
+
+	RefreshActiveStack(); // hand-item kan veranderd zijn (auto-toewijzing) -> server opnieuw syncen
 }
 
 void UInventoryComponent::RefreshGridAuto()
