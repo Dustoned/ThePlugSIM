@@ -24,11 +24,17 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
+	// Klik op de kaart = waypoint zetten (links) / wissen (rechts).
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
 	UPROPERTY() TObjectPtr<UBorder> PlayerDot;
+	UPROPERTY() TObjectPtr<UBorder> WaypointDot;
 	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> NpcLabels;
+
+	FVector2D CanvasToWorld(FVector2D Local) const; // inverse van WorldToCanvas
+	class UPhoneClientComponent* GetPhone() const;
 
 	bool bFullscreen = false;
 	bool bBuiltBlocks = false;

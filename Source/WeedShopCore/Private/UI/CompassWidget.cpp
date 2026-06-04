@@ -129,10 +129,12 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		PlaceOnBand(CardinalLabels[i], Rel, 11.f);
 	}
 
-	// Mensen buiten (klanten) als stipjes.
+	// Alléén een poppetje voor klanten die je NU nodig hebt (afspraak / staat te wachten). Gewone
+	// roamende NPC's staan niet op de kompas (wel als gekleurde puntjes op de kaart).
 	int32 m = 0;
 	for (TActorIterator<ACustomerBase> It(GetWorld()); It && m < Markers.Num(); ++It)
 	{
+		if (!IsValid(*It) || !It->bNeedsPlayer) { continue; }
 		const FVector D = It->GetActorLocation() - PL;
 		if (D.SizeSquared2D() < 100.f) { continue; }
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));

@@ -131,16 +131,34 @@ APlayerController* UPhoneClientComponent::GetPC() const
 	return nullptr;
 }
 
+void UPhoneClientComponent::SetWaypoint(const FVector& World)
+{
+	WaypointWorld = World;
+	bHasWaypoint = true;
+	if (CompassWidget) { CompassWidget->SetWaypoint(World, true); }
+}
+
+void UPhoneClientComponent::ClearWaypoint()
+{
+	bHasWaypoint = false;
+	if (CompassWidget) { CompassWidget->SetWaypoint(WaypointWorld, false); }
+}
+
 void UPhoneClientComponent::ToggleMapOverlay()
 {
-	// Al open -> sluiten.
+	APlayerController* PC = GetPC();
+	// Al open -> sluiten + game-input terug.
 	if (MapOverlay)
 	{
 		MapOverlay->RemoveFromParent();
 		MapOverlay = nullptr;
+		if (PC && !IsAnyGameUIOpen())
+		{
+			PC->SetInputMode(FInputModeGameOnly());
+			PC->bShowMouseCursor = false;
+		}
 		return;
 	}
-	APlayerController* PC = GetPC();
 	if (!PC || !PC->IsLocalController()) { return; }
 	// Telefoon dicht als die open staat (anders zit de UI-input in de weg).
 	if (bOpen) { Toggle(); }
@@ -149,6 +167,12 @@ void UPhoneClientComponent::ToggleMapOverlay()
 	{
 		MapOverlay->SetFullscreen(true);
 		MapOverlay->AddToViewport(50);
+		// GameAndUI: muis-klikken op de kaart werken (waypoint), maar M (game-input) sluit 'm nog steeds.
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Mode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
 	}
 }
 

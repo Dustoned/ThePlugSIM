@@ -246,6 +246,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	Cust->DesiredQuantity = 2;
 	Cust->BudgetCentsPerUnit = 1500;
 	Cust->bDespawnAfterServed = true; // afspraak-klant vertrekt na de deal
+	Cust->bNeedsPlayer = true;        // afspraak: poppetje op de kompas (je moet bij deze zijn)
 
 	Cust->FinishSpawning(SpawnTM);
 

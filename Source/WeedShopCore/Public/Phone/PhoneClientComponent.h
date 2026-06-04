@@ -33,6 +33,12 @@ public:
 	// Fullscreen stadskaart aan/uit (M-toets of de Fullscreen-knop in de Map-app).
 	void ToggleMapOverlay();
 
+	// --- Waypoint (gezet op de kaart; getoond op kaart + kompas) ---
+	void SetWaypoint(const FVector& World);
+	void ClearWaypoint();
+	bool HasWaypoint() const { return bHasWaypoint; }
+	FVector GetWaypoint() const { return WaypointWorld; }
+
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SetTab(int32 NewTab);
 
@@ -563,6 +569,10 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UMapWidget> MapOverlay;
+
+	// Waypoint (wereld-positie) die de speler op de kaart zette.
+	FVector WaypointWorld = FVector::ZeroVector;
+	bool bHasWaypoint = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UStatusHudWidget> StatusWidget;

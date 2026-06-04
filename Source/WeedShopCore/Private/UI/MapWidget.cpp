@@ -15,7 +15,9 @@
 #include "Customer/CustomerBase.h"
 #include "Game/WeedShopGameState.h"
 #include "Npc/NpcRegistryComponent.h"
+#include "Phone/PhoneClientComponent.h"
 #include "GameFramework/Pawn.h"
+#include "InputCoreTypes.h"
 #include "EngineUtils.h"
 
 namespace
@@ -30,6 +32,41 @@ FVector2D UMapWidget::WorldToCanvas(float Wx, float Wy) const
 	const float ry = Wy - CenterXY.Y;
 	// scherm-rechts = wereld +Y, scherm-omhoog = wereld +X (noorden boven)
 	return FVector2D(GMapDS * 0.5f + ry * Scale, GMapDS * 0.5f - rx * Scale);
+}
+
+FVector2D UMapWidget::CanvasToWorld(FVector2D Local) const
+{
+	if (Scale <= 0.f) { return CenterXY; }
+	const float ry = (Local.X - GMapDS * 0.5f) / Scale;
+	const float rx = -(Local.Y - GMapDS * 0.5f) / Scale;
+	return FVector2D(CenterXY.X + rx, CenterXY.Y + ry);
+}
+
+UPhoneClientComponent* UMapWidget::GetPhone() const
+{
+	APawn* P = GetOwningPlayerPawn();
+	return P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+}
+
+FReply UMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (!Canvas || !bBuiltBlocks) { return FReply::Unhandled(); }
+	UPhoneClientComponent* Ph = GetPhone();
+	if (!Ph) { return FReply::Unhandled(); }
+
+	// Rechtermuisknop = waypoint wissen.
+	if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
+	{
+		Ph->ClearWaypoint();
+		return FReply::Handled();
+	}
+	// Links = waypoint op de aangeklikte plek (klik-pixel -> kaart-lokaal -> wereld).
+	const FVector2D Local = Canvas->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+	const FVector2D World = CanvasToWorld(Local);
+	float Z = 0.f;
+	if (APawn* P = GetOwningPlayerPawn()) { Z = P->GetActorLocation().Z; }
+	Ph->SetWaypoint(FVector(World.X, World.Y, Z));
+	return FReply::Handled();
 }
 
 UTextBlock* UMapWidget::AddCanvasText(const FString& T, FVector2D Pos, float W, int32 Size, const FLinearColor& Col, int32 ZOrder)
@@ -125,10 +162,14 @@ void UMapWidget::BuildBlocks()
 		AddCanvasText(Bk.Label, P, BlkPx, Bk.bShop ? 13 : 11, FLinearColor(0.05f, 0.05f, 0.06f), 2);
 	}
 
-	// Speler-marker (boven alles).
+	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
 	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 20);
-	AddCanvasText(TEXT("Legenda: groen=grow  paars=meubels  blauw=supplies  rood=gas"),
-		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 11, FLinearColor(0.7f, 0.72f, 0.8f), 50);
+	WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 22);
+	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
+	AddCanvasText(TEXT("Klik = waypoint zetten  /  rechtsklik = wissen"),
+		FVector2D(GMapDS * 0.5f, 64.f), GMapDS, 11, FLinearColor(0.7f, 0.85f, 1.f), 50);
+	AddCanvasText(TEXT("groen=grow  paars=meubels  blauw=supplies  rood=gas    cyaan=NPC  groen poppetje=klant voor jou"),
+		FVector2D(GMapDS * 0.5f, GMapDS - 18.f), GMapDS, 10, FLinearColor(0.7f, 0.72f, 0.8f), 50);
 
 	bBuiltBlocks = true;
 }
@@ -155,6 +196,19 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
+	// Waypoint-marker.
+	if (WaypointDot)
+	{
+		UPhoneClientComponent* Ph = GetPhone();
+		if (Ph && Ph->HasWaypoint())
+		{
+			const FVector W = Ph->GetWaypoint();
+			if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(WaypointDot->Slot)) { Cs->SetPosition(WorldToCanvas(W.X, W.Y)); }
+			WaypointDot->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
+	}
+
 	// Klanten/NPC's verzamelen.
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
@@ -165,22 +219,30 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		ACustomerBase* C = *It;
 		if (!IsValid(C)) { continue; }
 
-		while (NpcDots.Num() <= N) { NpcDots.Add(AddDot(FLinearColor(1.f, 0.6f, 0.15f), 14.f, 18)); }
-		while (NpcLabels.Num() <= N) { NpcLabels.Add(AddCanvasText(TEXT(""), FVector2D::ZeroVector, 120.f, 11, FLinearColor(1.f, 0.85f, 0.5f), 19)); }
+		while (NpcDots.Num() <= N) { NpcDots.Add(AddDot(FLinearColor(0.35f, 0.8f, 1.f), 11.f, 18)); }
+		while (NpcLabels.Num() <= N) { NpcLabels.Add(AddCanvasText(TEXT(""), FVector2D::ZeroVector, 120.f, 11, FLinearColor(0.6f, 1.f, 0.6f), 19)); }
 
 		const FVector L = C->GetActorLocation();
 		const FVector2D Pos = WorldToCanvas(L.X, L.Y);
-		if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(NpcDots[N]->Slot)) { Cs->SetPosition(Pos); }
-		NpcDots[N]->SetVisibility(ESlateVisibility::HitTestInvisible);
-
-		FString Name = C->NpcId.IsNone() ? FString(TEXT("Klant")) : C->NpcId.ToString();
-		if (Reg && !C->NpcId.IsNone()) { float r, l, a; FText Nm; if (Reg->GetStats(C->NpcId, r, l, a, Nm)) { Name = Nm.ToString(); } }
-		const bool bWants = (C->State == ECustomerState::WantsToOrder || C->State == ECustomerState::Negotiating);
+		const bool bNeeded = C->bNeedsPlayer;
+		// Roamer = klein cyaan puntje; klant-die-je-nodig-hebt = groter groen puntje + naam-label.
+		if (UBorder* Dot = NpcDots[N])
+		{
+			Dot->SetBrushColor(bNeeded ? FLinearColor(0.3f, 1.f, 0.35f) : FLinearColor(0.35f, 0.8f, 1.f));
+			if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(Pos); Cs->SetSize(FVector2D(bNeeded ? 16.f : 11.f, bNeeded ? 16.f : 11.f)); }
+			Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
 		if (NpcLabels[N])
 		{
-			NpcLabels[N]->SetText(FText::FromString(bWants ? (Name + TEXT(" !")) : Name));
-			if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(NpcLabels[N]->Slot)) { Cs->SetPosition(Pos + FVector2D(0.f, -14.f)); }
-			NpcLabels[N]->SetVisibility(ESlateVisibility::HitTestInvisible);
+			if (bNeeded)
+			{
+				FString Name = C->NpcId.IsNone() ? FString(TEXT("Klant")) : C->NpcId.ToString();
+				if (Reg && !C->NpcId.IsNone()) { float r, l, a; FText Nm; if (Reg->GetStats(C->NpcId, r, l, a, Nm)) { Name = Nm.ToString(); } }
+				NpcLabels[N]->SetText(FText::FromString(Name + TEXT(" !")));
+				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(NpcLabels[N]->Slot)) { Cs->SetPosition(Pos + FVector2D(0.f, -15.f)); }
+				NpcLabels[N]->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			else { NpcLabels[N]->SetVisibility(ESlateVisibility::Collapsed); }
 		}
 		++N;
 	}

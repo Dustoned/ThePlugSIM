@@ -104,6 +104,12 @@ public:
 	// Server: zet de gesproken regel (verschijnt in het praat-venster bij alle spelers).
 	void Say(const FString& Line) { if (HasAuthority()) { SpeechLine = Line; } }
 
+	// True = de speler moet bij DEZE klant zijn nu (afspraak / staat buiten te wachten). Alleen deze
+	// krijgen een poppetje-icoon op de kompas; gewone roamers niet.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
+	bool bNeedsPlayer = false;
+	void SetNeedsPlayer(bool b) { if (HasAuthority()) { bNeedsPlayer = b; } }
+
 	// Marktprijs per eenheid van het gewenste product (cents). 0 als onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	int32 GetMarketPriceCents() const;

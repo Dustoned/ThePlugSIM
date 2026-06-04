@@ -150,6 +150,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, Addiction);
 	DOREPLIFETIME(ACustomerBase, State);
 	DOREPLIFETIME(ACustomerBase, SpeechLine);
+	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
 	DOREPLIFETIME(ACustomerBase, NpcId);
 }
 
