@@ -300,6 +300,27 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	RoamTimer = FMath::FRandRange(0.5f, 6.f); // spreiding: niet allemaal tegelijk vertrekken
 }
 
+void ACustomerBase::BeginAppointment(bool bComeToPlayer)
+{
+	if (!HasAuthority()) { return; }
+	bApptActive = true;
+	bApptComeToPlayer = bComeToPlayer;
+	bApptArrived = false;
+	ApptTimeout = 360.f;       // 6 min: daarna geeft de NPC de afspraak op
+	SetNeedsPlayer(true);      // poppetje op de kompas zodat de speler weet waar te zijn
+	BecomeBuyerNow();          // afspraak = wil kopen (geen prospect-sampling meer)
+}
+
+void ACustomerBase::EndAppointment()
+{
+	if (!HasAuthority()) { return; }
+	bApptActive = false;
+	bApptComeToPlayer = false;
+	bApptArrived = false;
+	SetNeedsPlayer(false);
+	RoamTimer = 0.f;           // pak meteen een nieuw roam-doel
+}
+
 void ACustomerBase::TickResident(float DeltaSeconds)
 {
 	UWorld* W = GetWorld();
@@ -307,6 +328,49 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const float Hour = DC ? DC->GetClockHour() : 12.f;
 	const bool bNight = (Hour >= 19.f || Hour < 7.f);
+
+	// --- Afspraak heeft voorrang op roamen/nacht ---
+	if (bApptActive)
+	{
+		// Afgehandeld (deal gesloten) of veiligheids-timeout -> afspraak loslaten, normaal leven hervatten.
+		ApptTimeout -= DeltaSeconds;
+		if (State == ECustomerState::Served || State == ECustomerState::Leaving || ApptTimeout <= 0.f)
+		{
+			EndAppointment();
+		}
+		else if (bApptComeToPlayer)
+		{
+			// "Ik kom langs": loop naar de speler en wacht daar.
+			if (W)
+			{
+				if (const APlayerController* PC = W->GetFirstPlayerController())
+				{
+					if (const APawn* P = PC->GetPawn())
+					{
+						const float D = FVector::Dist2D(P->GetActorLocation(), GetActorLocation());
+						if (D < 260.f) { if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); } }
+						else { WalkTo(P->GetActorLocation()); }
+					}
+				}
+			}
+			return;
+		}
+		else
+		{
+			// "Kom bij mij": verschijn in de eigen unit (navmesh kan niet naar boven, dus verplaats erheen)
+			// en wacht daar tot de speler komt.
+			if (!bApptArrived)
+			{
+				bApptArrived = true;
+				bAtHomeInside = false;
+				SetActorHiddenInGame(false);
+				SetActorEnableCollision(true);
+				SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+				if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			}
+			return;
+		}
+	}
 
 	// Blijf alleen staan voor de speler als 'ie JOU nodig heeft (afspraak / staat te wachten). Gewone
 	// roamers blijven gewoon doorlopen, ook als je vlak langs ze loopt (ze stopten anders te vaak).

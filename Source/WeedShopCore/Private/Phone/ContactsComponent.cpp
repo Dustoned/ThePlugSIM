@@ -160,9 +160,19 @@ void UContactsComponent::SendRandomAppointment()
 	Msg.SenderName = C.DisplayName;
 	Msg.AppointmentTimeOfDay = ApptTime;
 	Msg.Kind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
+
+	// Adres opzoeken bij de bewoner met dit NpcId, zodat "kom bij mij langs" vertelt WAAR je heen moet.
+	FString AddrStr;
+	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	{
+		if (It->NpcId == C.ContactId && It->IsResident()) { AddrStr = It->GetHomeNumber(); break; }
+	}
+
 	Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
 		? FText::FromString(FString::Printf(TEXT("Yo, I'll come by at %02d:%02d."), HH, MM))
-		: FText::FromString(FString::Printf(TEXT("Can you come by mine at %02d:%02d?"), HH, MM));
+		: (AddrStr.IsEmpty()
+			? FText::FromString(FString::Printf(TEXT("Can you come by mine at %02d:%02d?"), HH, MM))
+			: FText::FromString(FString::Printf(TEXT("Come by my place (no. %s) at %02d:%02d?"), *AddrStr, HH, MM)));
 
 	Messages.Insert(Msg, 0); // nieuwste bovenaan
 	if (Messages.Num() > 40)
@@ -200,8 +210,10 @@ void UContactsComponent::CheckAppointments()
 			UE_LOG(LogWeedShop, Log, TEXT("Afspraak met %s is nu."), *Msg.SenderName.ToString());
 			if (GEngine)
 			{
-				UWeedToast::Notify(-1, 5.f, FColor::Magenta,
-					FString::Printf(TEXT("Appointment: %s is here!"), *Msg.SenderName.ToString()));
+				const FString Where = (Msg.Kind == EAppointmentKind::TheyComeToYou)
+					? FString::Printf(TEXT("%s is on the way!"), *Msg.SenderName.ToString())
+					: FString::Printf(TEXT("%s is waiting at their place"), *Msg.SenderName.ToString());
+				UWeedToast::Notify(-1, 5.f, FColor::Magenta, FString::Printf(TEXT("Appointment: %s"), *Where));
 			}
 			SpawnAppointmentCustomer(Msg);
 		}
@@ -216,7 +228,18 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		return;
 	}
 
-	// Spawn-plek: vlak vóór de eerste speler (zodat de klant 'bij je' arriveert).
+	// Voorkeur: stuur de BESTAANDE bewoner met dit NpcId aan (geen dubbele NPC). YouGoToThem -> die
+	// verschijnt in z'n eigen unit en wacht; TheyComeToYou -> die loopt naar de speler.
+	for (TActorIterator<ACustomerBase> It(World); It; ++It)
+	{
+		if (It->NpcId == Msg.FromContactId && It->IsResident())
+		{
+			It->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
+			return;
+		}
+	}
+
+	// Fallback (bewoner niet (meer) gevonden): verse klant vlak vóór de eerste speler.
 	FVector SpawnLoc(0.f, 0.f, 150.f);
 	FRotator SpawnRot = FRotator::ZeroRotator;
 	if (const APlayerController* PC = World->GetFirstPlayerController())

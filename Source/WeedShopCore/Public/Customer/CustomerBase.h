@@ -161,6 +161,16 @@ public:
 	void SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber);
 	bool IsResident() const { return bResident; }
 
+	// Huisnummer/adres van deze bewoner (voor afspraak-berichten "kom langs op nr X").
+	const FString& GetHomeNumber() const { return HomeNumber; }
+	const FVector& GetHomeInteriorPos() const { return HomeInteriorPos; }
+
+	// Start een afspraak voor deze bewoner. bComeToPlayer = de NPC loopt naar de speler (TheyComeToYou);
+	// anders verschijnt 'ie in z'n eigen unit en wacht daar tot de speler langskomt (YouGoToThem).
+	void BeginAppointment(bool bComeToPlayer);
+	void EndAppointment();
+	bool HasActiveAppointment() const { return bApptActive; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -194,6 +204,12 @@ protected:
 	FString HomeNumber;
 	float RoamTimer = 0.f;
 	bool bAtHomeInside = false;
+
+	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
+	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner
+	bool bApptComeToPlayer = false; // true = NPC loopt naar de speler; false = NPC wacht in eigen unit
+	bool bApptArrived = false;      // (YouGoToThem) al naar de unit verplaatst
+	float ApptTimeout = 0.f;        // veiligheids-timer: na X sec geeft de NPC de afspraak op
 
 	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).
 	void WriteStatsToRegistry();
