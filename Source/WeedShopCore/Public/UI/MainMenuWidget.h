@@ -46,6 +46,15 @@ protected:
 	void OnModeChosen(int32 Mode);                    // 0 Normal, 1 Sandbox, 2 Testing (na New Game-slot)
 	int32 PendingNewSlot = -1;                        // slot gekozen voor New Game, wacht op mode-keuze
 
+	// --- LAN co-op ---
+	void OpenCoop();
+	void CloseCoop();
+	void OnHostCoop();   // host: vers spel als listen-server (via de mode-keuze)
+	void OnJoinCoop();   // join: verbind met het ingevoerde host-IP
+	bool bHostMode = false;                           // true = de New Game-flow host een listen-server
+	UPROPERTY() TObjectPtr<UWidget> CoopPanel;        // co-op kaart (host / join)
+	UPROPERTY() TObjectPtr<class UEditableTextBox> CoopIpBox; // host-IP invoerveld
+
 	// Maakt een flikkerende neon-"lamp": gekleurde, afgeronde glow die zacht pulseert.
 	UBorder* AddGlow(class UOverlay* Layers, const FLinearColor& Color, float W, float H,
 		EHorizontalAlignment HA, EVerticalAlignment VA, const FMargin& Pad, float Freq);

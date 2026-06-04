@@ -16,6 +16,7 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
+#include "Components/EditableTextBox.h"
 #include "Components/Image.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -504,6 +505,74 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		PickVB->AddChildToVerticalBox(BackBtn)->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
 
 		SlotPanel->SetVisibility(ESlateVisibility::Collapsed); // start verborgen
+
+		// --- CO-OP (LAN)-knop rechtsboven (op het hoofdmenu-canvas, verbergt mee met de knoppen) ---
+		{
+			UWeedActionButton* CB = WidgetTree->ConstructWidget<UWeedActionButton>();
+			CB->OnClicked.AddDynamic(CB, &UWeedActionButton::Handle);
+			CB->OnAction.BindLambda([this](int32, int32) { OpenCoop(); });
+			FButtonStyle CS;
+			CS.Normal  = WeedUI::Rounded(FLinearColor(0.10f, 0.11f, 0.16f, 0.92f), 6.f);
+			CS.Hovered = WeedUI::Rounded(FLinearColor(0.30f, 0.16f, 0.50f, 0.96f), 6.f);
+			CS.Pressed = WeedUI::Rounded(FLinearColor(0.40f, 0.20f, 0.62f, 1.f), 6.f);
+			CS.NormalPadding = FMargin(10.f, 6.f); CS.PressedPadding = FMargin(10.f, 6.f);
+			CB->SetStyle(CS);
+			CB->SetContent(WeedUI::Text(WidgetTree, TEXT("CO-OP (LAN)"), 13, FLinearColor(0.86f, 0.82f, 1.f), true, true));
+			UCanvasPanelSlot* CBs = Hit->AddChildToCanvas(CB);
+			CBs->SetAnchors(FAnchors(0.775f, 0.05f, 0.96f, 0.095f));
+			CBs->SetOffsets(FMargin(0.f)); CBs->SetAlignment(FVector2D(0.f, 0.f));
+		}
+
+		// --- CO-OP-kaart (host / join via IP) — gecentreerd, verborgen tot je op CO-OP klikt ---
+		{
+			USizeBox* CoopSize = WidgetTree->ConstructWidget<USizeBox>();
+			CoopSize->SetWidthOverride(520.f);
+			UBorder* CoopCard = WidgetTree->ConstructWidget<UBorder>();
+			CoopCard->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.98f), 18.f));
+			CoopCard->SetPadding(FMargin(26.f, 22.f));
+			CoopSize->SetContent(CoopCard);
+			CoopPanel = CoopSize;
+			UOverlaySlot* CpS = Layers->AddChildToOverlay(CoopSize);
+			CpS->SetHorizontalAlignment(HAlign_Center); CpS->SetVerticalAlignment(VAlign_Center);
+
+			UVerticalBox* CoopVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			CoopCard->SetContent(CoopVB);
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CO-OP (LAN)"), 20, FLinearColor(0.6f, 1.f, 0.6f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Host een vers spel, of vul het IP van de host in (zelfde netwerk)."), 12, FLinearColor(0.78f, 0.8f, 0.92f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+
+			auto BigBtn = [&](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
+			{
+				UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
+				B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
+				B->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
+				FButtonStyle St;
+				St.Normal = WeedUI::Rounded(Col, 8.f);
+				St.Hovered = WeedUI::Rounded(Col * 1.4f, 8.f);
+				St.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
+				St.NormalPadding = FMargin(16.f, 12.f); St.PressedPadding = FMargin(16.f, 12.f);
+				B->SetStyle(St);
+				B->SetContent(WeedUI::Text(WidgetTree, Label, 15, FLinearColor::White, true, true));
+				return B;
+			};
+
+			// Host
+			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Host nieuw co-op spel"), FLinearColor(0.16f, 0.34f, 0.22f, 0.96f), [this]() { OnHostCoop(); }))
+				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+
+			// Join: label + IP-veld + knop.
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Verbinden met host (IP):"), 13, FLinearColor(0.82f, 0.86f, 1.f), false))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+			CoopIpBox = WidgetTree->ConstructWidget<UEditableTextBox>();
+			CoopIpBox->SetHintText(FText::FromString(TEXT("192.168.x.x")));
+			CoopIpBox->SetText(FText::FromString(TEXT("127.0.0.1")));
+			CoopVB->AddChildToVerticalBox(CoopIpBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Join"), FLinearColor(0.18f, 0.22f, 0.40f, 0.96f), [this]() { OnJoinCoop(); }))
+				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+
+			// Back
+			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Back"), FLinearColor(0.30f, 0.13f, 0.14f, 0.96f), [this]() { CloseCoop(); }));
+
+			CoopPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
 		return;
 	}
 
@@ -575,7 +644,41 @@ void UMainMenuWidget::ClosePicker()
 {
 	MenuMode = 0;
 	if (SlotPanel) { SlotPanel->SetVisibility(ESlateVisibility::Collapsed); }
+	if (CoopPanel) { CoopPanel->SetVisibility(ESlateVisibility::Collapsed); }
 	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+}
+
+void UMainMenuWidget::OpenCoop()
+{
+	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::Collapsed); }
+	if (SlotPanel) { SlotPanel->SetVisibility(ESlateVisibility::Collapsed); }
+	if (CoopPanel) { CoopPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+}
+
+void UMainMenuWidget::CloseCoop()
+{
+	if (CoopPanel) { CoopPanel->SetVisibility(ESlateVisibility::Collapsed); }
+	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+}
+
+void UMainMenuWidget::OnHostCoop()
+{
+	// Host = vers spel als listen-server. Hergebruik de mode-keuze (Normal/Sandbox/Testing).
+	bHostMode = true;
+	OpenPicker(1); // toont eerst de slot-keuze, daarna de mode-keuze (-> OnModeChosen)
+}
+
+void UMainMenuWidget::OnJoinCoop()
+{
+	USaveGameSubsystem* Save = GetSave(GetWorld());
+	const FString Ip = CoopIpBox ? CoopIpBox->GetText().ToString() : FString();
+	if (!Save || Ip.TrimStartAndEnd().IsEmpty())
+	{
+		if (StatusText) { StatusText->SetText(FText::FromString(TEXT("Vul het host-IP in (bv. 192.168.1.50)."))); }
+		return;
+	}
+	if (StatusText) { StatusText->SetText(FText::FromString(FString::Printf(TEXT("Verbinden met %s..."), *Ip))); }
+	Save->JoinLan(Ip);
 }
 
 void UMainMenuWidget::RefreshSlots()
@@ -724,7 +827,8 @@ void UMainMenuWidget::OnModeChosen(int32 Mode)
 {
 	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
 	{
-		Save->RequestNewGame(PendingNewSlot, (EGameStartMode)Mode);
+		if (bHostMode) { bHostMode = false; Save->HostNewGameLan(PendingNewSlot, (EGameStartMode)Mode); } // co-op host (listen)
+		else { Save->RequestNewGame(PendingNewSlot, (EGameStartMode)Mode); }
 	}
 }
 

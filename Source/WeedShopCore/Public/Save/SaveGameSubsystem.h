@@ -87,6 +87,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	bool RequestContinue();
 
+	// --- LAN co-op ---
+	// Host: start een verse co-op-game als listen-server (het level herlaadt mét ?listen).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	void HostNewGameLan(int32 Slot, EGameStartMode Mode = EGameStartMode::Normal);
+	// Join: verbind direct met een host op IP[:poort] (LAN). Bijv. "192.168.1.50" of "192.168.1.50:7777".
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	void JoinLan(const FString& IpPort);
+
 	// Door de (zojuist geladen) host-pawn aangeroepen zodra de wereld klaar is. Voert de geplande
 	// actie uit. Geeft true als de start afgehandeld is (caller hoeft het titelscherm NIET te tonen).
 	bool RunPendingOnWorldReady();
@@ -174,7 +182,7 @@ protected:
 	EPending Pending = EPending::None;
 	FString PendingLoadName;
 	EGameStartMode PendingStartMode = EGameStartMode::Normal;
-	void ReloadCurrentLevel();
+	void ReloadCurrentLevel(const FString& Options = TEXT(""));
 	// Geef de host-speler de startstaat (geld + items) van de gekozen modus.
 	void ApplyStartMode(EGameStartMode Mode);
 };

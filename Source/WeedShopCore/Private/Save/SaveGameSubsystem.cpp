@@ -196,15 +196,48 @@ bool USaveGameSubsystem::LoadSlot(int32 Slot)
 	return LoadGame(false); // echte Load: altijd jouw handmatige save-punt
 }
 
-void USaveGameSubsystem::ReloadCurrentLevel()
+void USaveGameSubsystem::ReloadCurrentLevel(const FString& Options)
 {
 	UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (!W) { return; }
 	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); } // travel vanuit pauze
 	const FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
-	UE_LOG(LogWeedShop, Log, TEXT("Level herladen voor save-actie: %s"), *LevelName);
+	UE_LOG(LogWeedShop, Log, TEXT("Level herladen voor save-actie: %s (opts='%s')"), *LevelName, *Options);
 	WeedShop_RequestGameLoadingScreen(); // toon het laadscherm voor deze in-game transitie
-	UGameplayStatics::OpenLevel(W, FName(*LevelName));
+	UGameplayStatics::OpenLevel(W, FName(*LevelName), true, Options);
+}
+
+void USaveGameSubsystem::HostNewGameLan(int32 Slot, EGameStartMode Mode)
+{
+	// Zelfde verse start als New Game, maar herlaad het level ALS LISTEN-SERVER (?listen). Zo kan een
+	// vriend met JoinLan() direct binnenkomen. De Pending-staat overleeft de reload (GameInstance-subsystem).
+	SetSlot(Slot);
+	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
+	if (UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(AutoSlotNameFor(Slot), 0); }
+	Loaded = nullptr;
+	RestoredPlayers.Reset();
+	PlaytimeBaseSeconds = 0.0;
+	PlaytimeMark = FDateTime::UtcNow();
+	Pending = EPending::Fresh;
+	PendingStartMode = Mode;
+	PendingLoadName.Reset();
+	ReloadCurrentLevel(TEXT("listen"));
+}
+
+void USaveGameSubsystem::JoinLan(const FString& IpPort)
+{
+	UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	if (!W) { return; }
+	FString Addr = IpPort.TrimStartAndEnd();
+	if (Addr.IsEmpty()) { return; }
+	if (!Addr.Contains(TEXT(":"))) { Addr += TEXT(":7777"); } // standaard UE-poort
+	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); }
+	WeedShop_RequestGameLoadingScreen(); // laadscherm tijdens het verbinden
+	UE_LOG(LogWeedShop, Log, TEXT("LAN join -> %s"), *Addr);
+	if (APlayerController* PC = W->GetFirstPlayerController())
+	{
+		PC->ClientTravel(Addr, ETravelType::TRAVEL_Absolute);
+	}
 }
 
 void USaveGameSubsystem::RequestNewGame(int32 Slot, EGameStartMode Mode)

@@ -88,3 +88,12 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
   + zet de speler erin; load herstelt de staat.
 - De 3 panden blijven altijd vrij (CustomerSpawner slaat ze over; deur = "TE KOOP").
   Gekochte woning ontgrendelt lokaal als "Your home" (CityDoor::SetPlayerHome).
+
+## LAN co-op (host/join via hoofdmenu)
+- Hoofdmenu krijgt een CO-OP (LAN)-knop -> kaart met "Host nieuw co-op spel" + een
+  IP-veld met "Join". Geen Steam/EOS nodig; gebruikt de standaard IP-netdriver (poort 7777).
+- Host: SaveGameSubsystem::HostNewGameLan -> verse start + ReloadCurrentLevel("listen")
+  zodat het level als listen-server herlaadt (RunPendingOnWorldReady draait op de host).
+- Join: SaveGameSubsystem::JoinLan -> PlayerController::ClientTravel(IP[:7777], absolute).
+- Clients (NM_Client) slaan het hoofdmenu over; host herstelt/repliceert speler-state.
+- Firewall: sta de exe toe (UDP 7777). Vriend heeft een packaged build nodig.
