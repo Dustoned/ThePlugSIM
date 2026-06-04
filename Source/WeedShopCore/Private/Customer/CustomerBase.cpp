@@ -297,24 +297,147 @@ void ACustomerBase::Tick(float DeltaSeconds)
 void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber, const FVector& HallPos)
 {
 	bResident = true;
-	HomeFrontSpot = FrontSpot;
+	HomeFrontSpot = ProjectResidentPointToNav(FrontSpot, FVector(1400.f, 1400.f, 700.f));
 	HomeInteriorPos = InteriorPos;
 	HomeHallPos = HallPos;
 	bHasHomeHall = !HallPos.IsNearlyZero();
 	HomeNumber = HouseNumber;
 	bDespawnAfterServed = false;
-	SetActorLocation(FrontSpot);
+	StartResidentHomeExit(true);
 	RoamRouteSeed = static_cast<int32>(GetTypeHash(HomeNumber));
 	ParkLegCountdown = 2 + FMath::Abs(RoamRouteSeed % 3);
 	HallLegCountdown = 3 + FMath::Abs((RoamRouteSeed / 7) % 4);
 	RoamLegIndex = FMath::Abs(RoamRouteSeed % 97);
-	RoamTimer = FMath::FRandRange(0.5f, 4.f); // spreiding: niet allemaal tegelijk vertrekken
+	RoamTimer = FMath::FRandRange(0.5f, 4.f); // spreiding: niet allemaal tegelijk vertrekken na het naar buiten komen
 
 	// Rustige wandeltred: bewoners slenteren over straat i.p.v. te sprinten.
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
 		Move->MaxWalkSpeed = 135.f;
 	}
+}
+
+FVector ACustomerBase::ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const
+{
+	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
+	{
+		FNavLocation Out;
+		if (Nav->ProjectPointToNavigation(Desired, Out, Extent))
+		{
+			return Out.Location + FVector(0.f, 0.f, 3.f);
+		}
+	}
+	return Desired + FVector(0.f, 0.f, 3.f);
+}
+
+void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
+{
+	bAtHomeInside = false;
+	bEmergingFromHome = true;
+	HomeExitStage = (bFromInterior && bHasHomeHall) ? 0 : 1;
+	HomeExitStuckTimer = 0.f;
+	bHasRoamGoal = false;
+	bRoamGoalIsPark = false;
+	bPendingRoamGoalIsPark = false;
+	ParkPauseTimer = 0.f;
+	ResidentStuckTimer = 0.f;
+	bHasResidentPrevMoveLoc = false;
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	if (!GetController())
+	{
+		SpawnDefaultController();
+	}
+
+	const FVector Spawn = bFromInterior ? HomeInteriorPos : (bHasHomeHall ? HomeHallPos : HomeInteriorPos);
+	SetActorLocation(Spawn + FVector(0.f, 0.f, 4.f));
+}
+
+bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
+{
+	if (!bEmergingFromHome)
+	{
+		return false;
+	}
+
+	const bool bHallStage = (HomeExitStage == 0 && bHasHomeHall);
+	const FVector Target = bHallStage ? (HomeHallPos + FVector(0.f, 0.f, 4.f)) : HomeFrontSpot;
+	const FVector Cur = GetActorLocation();
+	const bool bArrived = FVector::Dist2D(Cur, Target) < (bHallStage ? 120.f : 155.f)
+		&& FMath::Abs(Cur.Z - Target.Z) < (bHallStage ? 170.f : 230.f);
+
+	if (bArrived)
+	{
+		if (bHallStage)
+		{
+			HomeExitStage = 1;
+			HomeExitStuckTimer = 0.f;
+			bHasResidentPrevMoveLoc = false;
+			return true;
+		}
+
+		bEmergingFromHome = false;
+		bLeavingHomeRoute = false;
+		bHasRoamGoal = false;
+		bRoamGoalIsPark = false;
+		bPendingRoamGoalIsPark = false;
+		RoamTimer = 0.f;
+		HomeExitStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
+		return false;
+	}
+
+	const bool bMoveStarted = WalkTo(Target);
+	float MoveDelta = 9999.f;
+	if (bHasResidentPrevMoveLoc)
+	{
+		MoveDelta = FVector::Dist2D(Cur, ResidentPrevMoveLoc);
+	}
+	ResidentPrevMoveLoc = Cur;
+	bHasResidentPrevMoveLoc = true;
+
+	bool bPathMoving = bMoveStarted;
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		bPathMoving = bMoveStarted && (AI->GetMoveStatus() == EPathFollowingStatus::Moving);
+	}
+
+	if (!bPathMoving || MoveDelta < 4.f)
+	{
+		HomeExitStuckTimer += DeltaSeconds;
+	}
+	else
+	{
+		HomeExitStuckTimer = 0.f;
+	}
+
+	if (HomeExitStuckTimer >= (bHallStage ? 2.2f : 3.0f))
+	{
+		if (AAIController* AI = Cast<AAIController>(GetController()))
+		{
+			AI->StopMovement();
+		}
+
+		if (bHallStage)
+		{
+			SetActorLocation(HomeHallPos + FVector(0.f, 0.f, 4.f));
+			HomeExitStage = 1;
+		}
+		else
+		{
+			SetActorLocation(ProjectResidentPointToNav(HomeFrontSpot, FVector(1400.f, 1400.f, 700.f)));
+			bEmergingFromHome = false;
+			bLeavingHomeRoute = false;
+			bHasRoamGoal = false;
+			bRoamGoalIsPark = false;
+			bPendingRoamGoalIsPark = false;
+			RoamTimer = 0.f;
+		}
+		HomeExitStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
+	}
+
+	return true;
 }
 
 void ACustomerBase::BeginAppointment(bool bComeToPlayer)
@@ -690,6 +813,16 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 
 	if (bNight)
 	{
+		if (bEmergingFromHome)
+		{
+			bEmergingFromHome = false;
+			bAtHomeInside = true;
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			return;
+		}
 		// 's Nachts naar huis (plek vóór de voordeur) en daar 'naar binnen' verdwijnen.
 		if (bAtHomeInside) { return; }
 		bLeavingHomeRoute = false;
@@ -710,15 +843,11 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	// Dag: verschijn weer bij de voordeur als 'ie binnen was.
 	if (bAtHomeInside)
 	{
-		bAtHomeInside = false;
-		SetActorHiddenInGame(false);
-		SetActorEnableCollision(true);
-		SetActorLocation((bHasHomeHall ? HomeHallPos : HomeFrontSpot) + FVector(0.f, 0.f, 4.f));
-		bLeavingHomeRoute = bHasHomeHall;
-		bHasRoamGoal = false;
-		bRoamGoalIsPark = false;
-		ParkPauseTimer = 0.f;
-		RoamTimer = 0.f;
+		StartResidentHomeExit(true);
+	}
+	if (TickResidentHomeExit(DeltaSeconds))
+	{
+		return;
 	}
 
 	// Roam: vaste grote stadsronde, met periodieke park- en flat-hal-stops. Alleen een nieuw doel

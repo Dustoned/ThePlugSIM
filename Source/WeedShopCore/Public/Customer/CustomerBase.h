@@ -226,9 +226,15 @@ protected:
 	ACityGenerator* GetResidentCity(UWorld* W);
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);
 	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
+	FVector ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const;
+	void StartResidentHomeExit(bool bFromInterior);
+	bool TickResidentHomeExit(float DeltaSeconds);
 	float ComputeResidentRoamTimeout(const FVector& Goal) const;
 	int32 CountResidentParkVisitors(float Radius) const;
 	void RecoverResidentIfStuck(float DeltaSeconds);
+	bool bEmergingFromHome = false;
+	int32 HomeExitStage = 0;
+	float HomeExitStuckTimer = 0.f;
 
 	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
 	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner

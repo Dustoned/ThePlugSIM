@@ -637,7 +637,8 @@ void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, i
 
 		// Registreer dit rijtjeshuis als woning (deur + plek vóór de deur + huisnummer).
 		{
-			const FVector Front = FVector(UX, UY, TopZ + 8.f) + N * (Depth * 0.5f + 130.f);
+			const float FrontD = FootMax * 0.5f + SidewalkWidth * 0.5f; // midden op de stoep
+			const FVector Front = FVector(CX, CY, TopZ + 8.f) + N * FrontD + Tt * Along;
 			FApartmentHome H;
 			H.Door = UnitDoor;
 			H.InteriorPos = FVector(UX, UY, TopZ + 8.f);
@@ -888,7 +889,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					{
 						const FVector Inside = LP(aCenter, side * (HW + SideW * 0.5f)); // echt het midden van de unit (kamer-box centreren)
 						const FVector Hall = LP(aCenter, side * (HW - 70.f));
-						const FVector FrontSpot = FVector(CX, CY, TopZ + 8.f) + N * (Half + 120.f);
+						const FVector FrontSpot = FVector(CX, CY, TopZ + 8.f) + N * (Half + SidewalkWidth * 0.5f);
 						FApartmentHome H;
 						H.Door = AptDoor;
 						H.InteriorPos = FVector(Inside.X, Inside.Y, zS + 8.f);

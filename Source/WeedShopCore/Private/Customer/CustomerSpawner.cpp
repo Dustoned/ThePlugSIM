@@ -195,7 +195,7 @@ void ACustomerSpawner::SpawnResidents()
 				Reg->EnsureNpc(ResidentNpcId, FText::FromString(DoorName));
 			}
 
-			const FTransform SpawnTM(FRotator::ZeroRotator, H.DoorPos);
+			const FTransform SpawnTM(FRotator::ZeroRotator, H.InteriorPos + FVector(0.f, 0.f, 4.f));
 			if (ACustomerBase* C = World->SpawnActorDeferred<ACustomerBase>(
 				Cls, SpawnTM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn))
 			{
