@@ -46,22 +46,27 @@ void ACustomerSpawner::TrySpawn()
 
 namespace
 {
-	// Stabiele NL-bewonersnaam afgeleid van het huisnummer (zodat elke woning een eigen bewoner heeft).
-	FString ResidentNameForNumber(const FString& Num)
+	// Unieke NL-bewonersnaam per woning. Op INDEX (niet hash) -> elke woning een eigen voor+achternaam
+	// zonder botsingen, tot First*Last combinaties. Grote pools voor veel variatie.
+	FString ResidentNameByIndex(int32 Index)
 	{
 		static const TCHAR* First[] = { TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"),
 			TEXT("Lotte"), TEXT("Bram"), TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"),
 			TEXT("Joost"), TEXT("Mila"), TEXT("Gerrit"), TEXT("Truus"), TEXT("Henk"), TEXT("Willem"), TEXT("Bep"), TEXT("Cor"),
-			TEXT("Sjaak"), TEXT("Ria"), TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"), TEXT("Loes"), TEXT("Ome Ton"), TEXT("Tante An") };
-		// Goofy achternamen — grappig als een bewoner "dom" heet.
+			TEXT("Sjaak"), TEXT("Ria"), TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"), TEXT("Loes"), TEXT("Ome Ton"), TEXT("Tante An"),
+			TEXT("Wout"), TEXT("Stijn"), TEXT("Femke"), TEXT("Jasper"), TEXT("Roos"), TEXT("Teun"), TEXT("Saar"), TEXT("Koen"),
+			TEXT("Hilda"), TEXT("Bennie"), TEXT("Manon"), TEXT("Ferry"), TEXT("Non"), TEXT("Appie"), TEXT("Chantal"), TEXT("Bertus"),
+			TEXT("Sandra"), TEXT("Ronnie"), TEXT("Yvonne"), TEXT("Gijs") };
 		static const TCHAR* Last[] = { TEXT("Pannenkoek"), TEXT("Stokvis"), TEXT("Bonk"), TEXT("Knol"), TEXT("Prummel"),
 			TEXT("Druif"), TEXT("Kwast"), TEXT("Worst"), TEXT("Toeter"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Frikandel"),
 			TEXT("Snoek"), TEXT("Klont"), TEXT("Hark"), TEXT("Sok"), TEXT("Krent"), TEXT("Pruim"), TEXT("Brok"), TEXT("Plof"),
-			TEXT("Kwakkel"), TEXT("Tuthola"), TEXT("Schroef"), TEXT("Knapzak") };
-		const uint32 NF = (uint32)UE_ARRAY_COUNT(First);
-		const uint32 NL = (uint32)UE_ARRAY_COUNT(Last);
-		const uint32 H = GetTypeHash(Num);
-		return FString::Printf(TEXT("%s %s"), First[H % NF], Last[(H / NF) % NL]);
+			TEXT("Kwakkel"), TEXT("Tuthola"), TEXT("Schroef"), TEXT("Knapzak"), TEXT("Bil"), TEXT("Drol"), TEXT("Snor"), TEXT("Krakeling"),
+			TEXT("Peul"), TEXT("Zeurpiet"), TEXT("Klaproos"), TEXT("Bonenstaak"), TEXT("Kaaskop"), TEXT("Mosterd"), TEXT("Slok"),
+			TEXT("Brombeer"), TEXT("Pareltje"), TEXT("Stronk"), TEXT("Knaak"), TEXT("Pielewaaier") };
+		const int32 NF = (int32)UE_ARRAY_COUNT(First);
+		const int32 NL = (int32)UE_ARRAY_COUNT(Last);
+		const int32 I = FMath::Max(0, Index);
+		return FString::Printf(TEXT("%s %s"), First[I % NF], Last[(I / NF) % NL]);
 	}
 }
 
@@ -143,7 +148,7 @@ void ACustomerSpawner::SpawnResidents()
 		}
 		// Deur op slot met een UNIEKE per-huisnummer naam (de registry round-robin kon namen herhalen,
 		// waardoor meerdere huizen "dezelfde bewoner" leken te hebben). Elk huisnummer -> eigen naam.
-		const FString DoorName = ResidentNameForNumber(H.Number);
+		const FString DoorName = ResidentNameByIndex(i);
 		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(DoorName); }
 	}
 

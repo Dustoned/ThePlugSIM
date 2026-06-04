@@ -308,8 +308,9 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	const float Hour = DC ? DC->GetClockHour() : 12.f;
 	const bool bNight = (Hour >= 19.f || Hour < 7.f);
 
-	// Speler dichtbij -> blijf staan zodat je kunt praten/dealen (niet wegwandelen).
-	if (!bAtHomeInside && W)
+	// Blijf alleen staan voor de speler als 'ie JOU nodig heeft (afspraak / staat te wachten). Gewone
+	// roamers blijven gewoon doorlopen, ook als je vlak langs ze loopt (ze stopten anders te vaak).
+	if (!bAtHomeInside && bNeedsPlayer && W)
 	{
 		if (const APlayerController* PC = W->GetFirstPlayerController())
 		{
@@ -349,15 +350,17 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		RoamTimer = 0.f;
 	}
 
-	// Roam: af en toe een nieuw, bereikbaar doel ergens in de stad (gespreid via random nav-punten).
+	// Roam: blijf gewoon doorlopen over de stad. Kies een nieuw doel als de timer afloopt OF zodra 'ie
+	// (bijna) stilstaat = z'n vorige pad af is. Zo blijven ze bewegen i.p.v. vaak stil te staan.
 	RoamTimer -= DeltaSeconds;
-	if (RoamTimer <= 0.f)
+	const bool bIdle = GetVelocity().Size2D() < 20.f;
+	if (RoamTimer <= 0.f || bIdle)
 	{
-		RoamTimer = FMath::FRandRange(8.f, 18.f);
+		RoamTimer = FMath::FRandRange(2.f, 5.f);
 		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
 		{
 			FNavLocation Out;
-			if (Nav->GetRandomReachablePointInRadius(GetActorLocation(), 5500.f, Out))
+			if (Nav->GetRandomReachablePointInRadius(GetActorLocation(), 6000.f, Out))
 			{
 				WalkTo(Out.Location);
 			}

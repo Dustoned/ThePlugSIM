@@ -34,6 +34,10 @@ protected:
 	UPROPERTY() TObjectPtr<UBorder> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> List;
 
+	// Gecentreerde interactie-popup (onder het crosshair) i.p.v. de lange prompt in de hoek-kaart.
+	UPROPERTY() TObjectPtr<UBorder> CenterPromptCard;
+	UPROPERTY() TObjectPtr<class UTextBlock> CenterPromptText;
+
 	// Laatst getoonde set (om alleen te herbouwen als de context wijzigt -> geen flicker).
 	FString LastSig;
 };

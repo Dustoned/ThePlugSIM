@@ -73,6 +73,20 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	List = WidgetTree->ConstructWidget<UVerticalBox>();
 	ListSz->SetContent(List);
 	CardB->SetContent(ListSz);
+
+	// Gecentreerde interactie-popup (net onder het midden / crosshair): toont wat je aankijkt
+	// ("LOCKED - X lives here", "Open door", ...) als nette popup i.p.v. in de hoek.
+	CenterPromptCard = WidgetTree->ConstructWidget<UBorder>();
+	CenterPromptCard->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.08f, 0.82f), 8.f));
+	CenterPromptCard->SetPadding(FMargin(14.f, 7.f));
+	CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed);
+	CenterPromptText = WeedUI::Text(WidgetTree, TEXT(""), 15, FLinearColor(0.95f, 0.97f, 1.f), true, true);
+	CenterPromptCard->SetContent(CenterPromptText);
+	UCanvasPanelSlot* PS = Root->AddChildToCanvas(CenterPromptCard);
+	PS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+	PS->SetAlignment(FVector2D(0.5f, 0.f));
+	PS->SetAutoSize(true);
+	PS->SetPosition(FVector2D(0.f, 70.f)); // net onder het crosshair
 }
 
 void UHotkeyHintWidget::AddRow(const FString& Key, const FString& Action)
@@ -106,10 +120,12 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// In de instellingen uit te zetten.
 	const bool bEnabled = AreHintsEnabled();
 	if (Card) { Card->SetVisibility(bEnabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bEnabled) { return; }
+	if (!bEnabled) { if (CenterPromptCard) { CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed); } return; }
 
 	APawn* P = GetOwningPlayerPawn();
 	if (!P) { return; }
+
+	FString FocusPrompt; // wat je aankijkt -> gecentreerde popup (niet in de hoek-kaart)
 
 	UPhoneClientComponent* Phone = P->FindComponentByClass<UPhoneClientComponent>();
 	UBuildComponent* Build = P->FindComponentByClass<UBuildComponent>();
@@ -172,11 +188,12 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				const FText T = IInteractable::Execute_GetInteractionPrompt(Focus);
 				if (!T.IsEmpty()) { Prompt = T.ToString(); }
 			}
+			// De prompt-tekst (LOCKED / Open door / ...) komt als GECENTREERDE popup, niet in de hoek.
+			FocusPrompt = Prompt;
 			const FName ActiveF = Inv ? Inv->GetActiveItemId() : NAME_None;
 			const bool bJointHand = ActiveF.ToString().StartsWith(TEXT("Joint_"));
-			// Klant + joint in de hand -> korte hold om 'm een hit te geven; anders normaal interacten.
+			// Klant + joint in de hand -> korte hold om 'm een hit te geven.
 			if (Cast<ACustomerBase>(Focus) && bJointHand) { Hints.Emplace(TEXT("Hold LMB"), TEXT("Give them a hit")); }
-			else { Hints.Emplace(K(TEXT("Interact")), Prompt); }
 			if (Cast<AGrowPlant>(Focus)) { Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Upgrade pot")); }
 			// Plaatsbare objecten kun je oppakken (G inhouden).
 			if (Build && Build->IsPickable(Focus)) { Hints.Emplace(TEXT("Hold G"), TEXT("Pick up")); }
@@ -200,6 +217,17 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		Hints.Emplace(TEXT("1-8"), TEXT("Hotbar slot"));
 		Hints.Emplace(TEXT("Scroll"), TEXT("Switch slot"));
 		Hints.Emplace(TEXT("Esc"), TEXT("Pause / menu"));
+	}
+
+	// Gecentreerde interactie-popup bijwerken (onafhankelijk van de hoek-kaart).
+	if (CenterPromptCard && CenterPromptText)
+	{
+		if (!FocusPrompt.IsEmpty())
+		{
+			CenterPromptText->SetText(FText::FromString(FocusPrompt));
+			CenterPromptCard->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else { CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed); }
 	}
 
 	// Signature -> alleen herbouwen bij wijziging (geen flicker).

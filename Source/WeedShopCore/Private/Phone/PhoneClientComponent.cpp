@@ -844,6 +844,31 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 	}
 }
 
+void UPhoneClientComponent::RequestUnpack(FName BagId) { ServerUnpack(BagId); }
+
+void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv) { return; }
+	const FString BagStr = BagId.ToString();
+	if (!BagStr.StartsWith(TEXT("Bag_"))) { return; } // alleen verpakte zakjes uitpakken
+	const int32 Have = Inv->GetQuantity(BagId);       // aantal gram in de stapel
+	if (Have <= 0) { return; }
+
+	const FName BudId(*FString::Printf(TEXT("Bud_%s"), *BagStr.RightChop(4))); // Bag_X -> Bud_X
+	const float Thc = Inv->GetItemQuality(BagId);
+	const float Q = Inv->GetItemQualityPct(BagId);
+
+	if (!Inv->RemoveItem(BagId, Have)) { return; } // hele zakje-stapel openen
+	Inv->AddItem(BudId, Have, Thc, Q);             // wiet weer los terug
+
+	if (GEngine)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160),
+			FString::Printf(TEXT("Unpacked %dg %s (loose - repackage or roll)."), Have, *BagStr.RightChop(4)));
+	}
+}
+
 void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName ContainerId, int32 Batch)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();

@@ -95,6 +95,23 @@ void UPackWidget::FillBody()
 
 	auto Row = [this](UWidget* W, const FMargin& P) { Body->AddChildToVerticalBox(W)->SetPadding(P); };
 
+	// === Uitpakken: haal wiet weer LOS uit een zakje (om te herverpakken of rollen) ===
+	{
+		bool bAnyBag = false;
+		for (const FInventoryStack& S : Inv->GetStacks())
+		{
+			if (!S.ItemId.ToString().StartsWith(TEXT("Bag_"))) { continue; }
+			if (!bAnyBag) { Row(WeedUI::Text(WidgetTree, TEXT("Unpack a bag (back to loose weed)"), 13, FLinearColor(1.f, 0.85f, 0.6f), false, true), FMargin(0, 0, 0, 4)); }
+			bAnyBag = true;
+			const FName Bag = S.ItemId; const int32 Qty = S.Quantity;
+			UWeedActionButton* B = PackBtn(WidgetTree, FLinearColor(0.42f, 0.30f, 0.18f),
+				[this, Ph, Bag]() { Ph->RequestUnpack(Bag); LastSig.Reset(); });
+			B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Unpack %s  -  %dg -> loose"), *WeedUI::PrettyItemName(Bag), Qty), 12, FLinearColor::White, true));
+			Row(B, FMargin(0, 2, 0, 2));
+		}
+		if (bAnyBag) { Row(WeedUI::Text(WidgetTree, TEXT("- or pack new -"), 11, FLinearColor::Gray, true), FMargin(0, 8, 0, 8)); }
+	}
+
 	// === 1) Kies een gedroogde strain (Bud_) ===
 	Row(WeedUI::Text(WidgetTree, TEXT("1.  Pick dried weed"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 0, 0, 4));
 	bool bAnyBud = false;
@@ -186,6 +203,6 @@ void UPackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Herbouw als de relevante voorraad of de strain-keuze wijzigt (NIET bij slider-bewegen).
 	UInventoryComponent* Inv = GetInv(GetOwningPlayerPawn());
 	FString Sig = SelStrain.ToString() + TEXT("/") + SelContainer.ToString();
-	if (Inv) { for (const FInventoryStack& S : Inv->GetStacks()) { const FString Id = S.ItemId.ToString(); if (Id.StartsWith(TEXT("Bud_")) || Id.StartsWith(TEXT("Cont_"))) { Sig += FString::Printf(TEXT("|%s:%d"), *Id, S.Quantity); } } }
+	if (Inv) { for (const FInventoryStack& S : Inv->GetStacks()) { const FString Id = S.ItemId.ToString(); if (Id.StartsWith(TEXT("Bud_")) || Id.StartsWith(TEXT("Cont_")) || Id.StartsWith(TEXT("Bag_"))) { Sig += FString::Printf(TEXT("|%s:%d"), *Id, S.Quantity); } } }
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 }
