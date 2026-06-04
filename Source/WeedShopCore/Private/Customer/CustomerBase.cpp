@@ -8,7 +8,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
-#include "NavigationInvokerComponent.h"
 #include "NavigationSystem.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/SkeletalMesh.h"
@@ -27,6 +26,8 @@
 ACustomerBase::ACustomerBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.TickInterval = 0.2f; // 5 Hz i.p.v. elke frame -> veel goedkoper bij veel NPC's
+	// (Beweging zelf loopt via de AIController/path-following, dus 5 Hz schaadt het lopen niet.)
 
 	// Zorg dat de interactie-trace (ECC_Visibility) de klant raakt.
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
@@ -46,6 +47,11 @@ ACustomerBase::ACustomerBase()
 		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 		static ConstructorHelpers::FClassFinder<UAnimInstance> AnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
 		if (AnimFinder.Succeeded()) { MeshComp->SetAnimInstanceClass(AnimFinder.Class); }
+		// Optimalisatie voor veel NPC's: alleen animeren als 'ie in beeld is + update-rate-optimization
+		// (verre/zichtbare-maar-kleine NPC's animeren op lagere frequentie).
+		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		MeshComp->bEnableUpdateRateOptimizations = true;
+		MeshComp->SetCastShadow(false); // 40 schaduw-casters is duur; uit voor NPC's
 	}
 
 	// AI: laat een AIController de klant besturen zodat hij kan pathfinden.
@@ -64,10 +70,8 @@ ACustomerBase::ACustomerBase()
 		Move->AvoidanceConsiderationRadius = 120.f;
 		Move->AvoidanceWeight = 0.5f;
 	}
-
-	// Navigation-invoker: genereert ook navmesh rond de NPC zelf (zodat 'ie ver van de speler kan lopen).
-	NavInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavInvoker"));
-	NavInvoker->SetGenerationRadii(4000.f, 6000.f);
+	// (Geen per-NPC navmesh-invoker meer: één centrale invoker (CityGenerator) dekt de hele stad,
+	//  dat schaalt veel beter naar 40+ NPC's dan 40 losse invokers.)
 
 	// Productenlijst (voor marktprijs + willekeurig gewenst product).
 	static ConstructorHelpers::FObjectFinder<UDataTable> ProdFinder(TEXT("/Game/_Project/Data/DT_Products.DT_Products"));

@@ -163,10 +163,6 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Customer")
 	TObjectPtr<UStaticMeshComponent> Body;
 
-	// Genereert runtime-navmesh rond de NPC (procedurele stad).
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Customer")
-	TObjectPtr<class UNavigationInvokerComponent> NavInvoker;
-
 	UFUNCTION()
 	void OnRep_Order();
 

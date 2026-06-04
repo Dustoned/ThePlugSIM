@@ -16,6 +16,7 @@
 #include "World/DayNightController.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
+#include "NavigationInvokerComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
@@ -253,6 +254,21 @@ void ACityGenerator::BuildCity()
 	const float Pitch = BlockSize + RoadWidth; // hart-op-hart afstand tussen blokken
 	const int32 R = FMath::Clamp(GridRadius, 1, 8);
 	const float Span = (2 * R + 1) * Pitch;
+
+	// Eén centrale navigation-invoker die de HELE stad dekt -> runtime-navmesh overal, zonder dat elke
+	// NPC z'n eigen invoker nodig heeft (schaalt veel beter naar 40+ NPC's).
+	{
+		AActor* NavAnchor = W->SpawnActor<AActor>(AActor::StaticClass(), FTransform(FVector(Center.X, Center.Y, GroundZ)));
+		if (NavAnchor)
+		{
+			USceneComponent* AnchorRoot = NewObject<USceneComponent>(NavAnchor, TEXT("AnchorRoot"));
+			NavAnchor->SetRootComponent(AnchorRoot);
+			AnchorRoot->RegisterComponent();
+			UNavigationInvokerComponent* Inv = NewObject<UNavigationInvokerComponent>(NavAnchor, TEXT("CityNavInvoker"));
+			Inv->SetGenerationRadii(Span * 0.55f, Span * 0.7f);
+			Inv->RegisterComponent();
+		}
+	}
 
 	// Kleurenpaletten.
 	const FLinearColor Asphalt(0.06f, 0.06f, 0.07f);
