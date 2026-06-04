@@ -852,7 +852,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					// voordeur van het gebouw (en verdwijnt daar 'naar binnen'); z'n appartementdeur binnen
 					// gaat op slot met z'n naam. (AI kan niet door de voordeur, dus geen binnen-pathing nodig.)
 					{
-						const FVector Inside = LP(aCenter, side * (HW + SideW * 0.45f));
+						const FVector Inside = LP(aCenter, side * (HW + SideW * 0.5f)); // echt het midden van de unit (kamer-box centreren)
 						const FVector FrontSpot = FVector(CX, CY, TopZ + 8.f) + N * (Half + 120.f);
 						FApartmentHome H;
 						H.Door = AptDoor;

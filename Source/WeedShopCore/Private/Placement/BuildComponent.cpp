@@ -654,8 +654,8 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 		const FApartmentHome& H = Homes[Idx];
 		const FVector& I = H.InteriorPos;
 		const FVector& R = H.RoomHalf;
-		if (FMath::Abs(P.X - I.X) <= R.X + 25.f &&
-			FMath::Abs(P.Y - I.Y) <= R.Y + 25.f &&
+		if (FMath::Abs(P.X - I.X) <= R.X + 40.f &&
+			FMath::Abs(P.Y - I.Y) <= R.Y + 40.f &&
 			P.Z >= I.Z - 90.f && P.Z <= I.Z + R.Z + 60.f)
 		{
 			return true; // binnen een woning die je bezit
