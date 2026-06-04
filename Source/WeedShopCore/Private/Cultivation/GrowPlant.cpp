@@ -54,14 +54,26 @@ AGrowPlant::AGrowPlant()
 		PotFoot->SetStaticMesh(PotMeshFinder.Object);
 	}
 
+	// Donkere binnenkant (altijd zichtbaar): een verzonken schijf die de pot 'leeg/hol' laat ogen.
+	PotInner = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PotInner"));
+	PotInner->SetupAttachment(Root);
+	PotInner->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (PotMeshFinder.Succeeded())
+	{
+		PotInner->SetStaticMesh(PotMeshFinder.Object);
+		PotInner->SetRelativeScale3D(FVector(0.43f, 0.43f, 0.06f)); // dunne verzonken bodem
+		PotInner->SetRelativeLocation(FVector(0.f, 0.f, 33.f));     // net onder de rand
+	}
+
 	SoilMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SoilMesh"));
 	SoilMesh->SetupAttachment(Root);
 	SoilMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (PotMeshFinder.Succeeded())
 	{
 		SoilMesh->SetStaticMesh(PotMeshFinder.Object);
-		SoilMesh->SetRelativeScale3D(FVector(0.46f, 0.46f, 0.10f));
-		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, 42.f));
+		// Duidelijke bruine vulling die de donkere bodem bedekt en tot net onder de rand komt.
+		SoilMesh->SetRelativeScale3D(FVector(0.43f, 0.43f, 0.20f));
+		SoilMesh->SetRelativeLocation(FVector(0.f, 0.f, 40.f));
 	}
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> SoilMatFinder(TEXT("/Game/_Project/Materials/M_Soil.M_Soil"));
 	if (SoilMatFinder.Succeeded()) { SoilMesh->SetMaterial(0, SoilMatFinder.Object); }
@@ -134,6 +146,16 @@ void AGrowPlant::BeginPlay()
 		EnsureSlots();
 		CareMultiplier = FMath::Min(0.6f, GetMaxCare());
 		CareAvg = CareMultiplier;
+	}
+
+	// Donkere binnenkant -> de lege pot oogt hol; soil (bruin) bedekt 'm zodra je 'm toevoegt.
+	if (PotInner && !InnerMID)
+	{
+		if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
+		{
+			InnerMID = PotInner->CreateDynamicMaterialInstance(0, Base);
+			if (InnerMID) { InnerMID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.04f, 0.04f, 0.05f)); }
+		}
 	}
 
 	UpdatePotVisual();

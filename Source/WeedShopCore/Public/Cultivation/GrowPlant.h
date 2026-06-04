@@ -203,6 +203,11 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
 	TObjectPtr<UStaticMeshComponent> SoilMesh;
 
+	// Donkere "binnenkant" van de pot (altijd zichtbaar) -> de pot oogt leeg/hol tot je soil toevoegt.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Plant")
+	TObjectPtr<UStaticMeshComponent> PotInner;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> InnerMID;
+
 	// Samengestelde plant per plek: een steel + bossige blad-clusters + toppen (buds als 'ie klaar is).
 	UPROPERTY() TArray<TObjectPtr<USceneComponent>> PlantRoots;        // 1 per plek
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> PlantStems;   // 1 per plek
