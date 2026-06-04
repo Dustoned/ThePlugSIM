@@ -204,6 +204,8 @@ protected:
 	FString HomeNumber;
 	float RoamTimer = 0.f;
 	bool bAtHomeInside = false;
+	FVector RoamGoal = FVector::ZeroVector; // huidig loopdoel
+	bool bHasRoamGoal = false;
 
 	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
 	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner

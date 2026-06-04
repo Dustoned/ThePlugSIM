@@ -415,19 +415,23 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		RoamTimer = 0.f;
 	}
 
-	// Roam: blijf gewoon doorlopen over de stad. Kies een nieuw doel als de timer afloopt OF zodra 'ie
-	// (bijna) stilstaat = z'n vorige pad af is. Zo blijven ze bewegen i.p.v. vaak stil te staan.
+	// Roam: doorlopen over de stad. BELANGRIJK: kies alleen een NIEUW doel als 'ie er is aangekomen of
+	// de timer afloopt -- NIET elke frame dat de snelheid laag is. Anders gooit 'ie vlak na een
+	// loopopdracht (pad nog async aan het berekenen + nog aan het versnellen) elke tick een nieuw doel
+	// en komt 'ie nooit op gang = blijft bij z'n deur "chillen".
 	RoamTimer -= DeltaSeconds;
-	const bool bIdle = GetVelocity().Size2D() < 20.f;
-	if (RoamTimer <= 0.f || bIdle)
+	const bool bArrived = bHasRoamGoal && FVector::Dist2D(GetActorLocation(), RoamGoal) < 130.f;
+	if (!bHasRoamGoal || bArrived || RoamTimer <= 0.f)
 	{
-		RoamTimer = FMath::FRandRange(2.f, 5.f);
+		RoamTimer = FMath::FRandRange(4.f, 8.f); // genoeg tijd om er ook echt te komen
 		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
 		{
 			FNavLocation Out;
 			if (Nav->GetRandomReachablePointInRadius(GetActorLocation(), 6000.f, Out))
 			{
-				WalkTo(Out.Location);
+				RoamGoal = Out.Location;
+				bHasRoamGoal = true;
+				WalkTo(RoamGoal);
 			}
 			else
 			{
@@ -437,6 +441,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 				if (Nav->ProjectPointToNavigation(GetActorLocation(), Proj, FVector(900.f, 900.f, 500.f)))
 				{
 					SetActorLocation(Proj.Location + FVector(0.f, 0.f, 2.f));
+					bHasRoamGoal = false;
 				}
 			}
 		}
