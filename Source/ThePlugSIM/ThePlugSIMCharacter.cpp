@@ -769,6 +769,8 @@ void AThePlugSIMCharacter::BeginPlay()
 		// zelf in je huis kunt neerzetten (drogen + verpakken hoort bij de basis-gameplay).
 		Inventory->AddItem(FName(TEXT("DryRack_Std")), 1);
 		Inventory->AddItem(FName(TEXT("Bench_Pack")), 1);
+		// 10 kleine zakjes (5g) om je eerste oogst te verpakken en te verkopen.
+		Inventory->AddItem(FName(TEXT("Cont_Bag5")), 10);
 	}
 
 	// (De ATM is nu een plaatsbaar item in je inventory: zet 'm zelf neer waar je wilt, binnen of buiten.)
