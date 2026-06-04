@@ -25,7 +25,8 @@ public class WeedShopCore : ModuleRules
 		{
 			"AIModule",
 			"NavigationSystem",
-			"ImageWrapper"  // PNG-swatch -> wit masker (menu-knoppen kleurbaar maken)
+			"ImageWrapper",  // PNG-swatch -> wit masker (menu-knoppen kleurbaar maken)
+			"MoviePlayer"    // loading screen tijdens level-reload (New Game/Load) i.p.v. zwart beeld
 		});
 	}
 }
