@@ -30,13 +30,14 @@ class WEEDSHOPCORE_API UEconomyComponent : public UActorComponent
 public:
 	UEconomyComponent();
 
-	// Start-cash in cents. Demo: €1.000.000 = 100000000. Door de server gezet bij BeginPlay.
+	// Start-cash in cents. Lean begin (€100); je verdient de rest door te kweken/dealen. Sandbox/Testing
+	// overschrijven dit via ApplyStartMode. Door de server gezet bij BeginPlay.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
-	int64 StartingBalanceCents = 100000000;
+	int64 StartingBalanceCents = 10000;
 
-	// Start-bankgeld (wit). Demo: ook €1.000.000 zodat de online winkel meteen bruikbaar is.
+	// Start-bankgeld (wit). Lean begin: €0 op de bank.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
-	int64 StartingBankCents = 100000000;
+	int64 StartingBankCents = 0;
 
 	// UI/HUD bindt hierop om het saldo te tonen.
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Economy")

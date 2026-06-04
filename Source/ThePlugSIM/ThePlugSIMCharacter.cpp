@@ -755,15 +755,14 @@ void AThePlugSIMCharacter::BeginPlay()
 	// Startvoorraad (concept): wat vloei, een paar gram wiet en een zaadje.
 	if (HasAuthority() && Inventory)
 	{
-		Inventory->AddItem(FName(TEXT("Papers_Small")), 10);
-		// Startwiet heeft een nette THC% + Kwaliteit% (geen 0%-wiet).
-		Inventory->AddItem(FName(TEXT("Bud_SilverHaze")), 5, /*THC%*/ 17.f, /*Quality%*/ 70.f);
+		// Lean begin: net genoeg om je eerste plant te kweken en je eerste joint te draaien.
+		Inventory->AddItem(FName(TEXT("Papers_Small")), 3);
 		Inventory->AddItem(FName(TEXT("Seed_SilverHaze")), 1);
-		Inventory->AddItem(FName(TEXT("Soil_Basic")), 2);
+		Inventory->AddItem(FName(TEXT("Soil_Basic")), 1);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
-		Inventory->AddItem(FName(TEXT("Sink")), 1); // plaatsbare gootsteen (voor nu); zet 'm waar je wilt
-		Inventory->AddItem(FName(TEXT("Atm")), 1); // plaatsbare geldautomaat (voor nu); zet 'm waar je wilt
+		Inventory->AddItem(FName(TEXT("Sink")), 1); // plaatsbare gootsteen (vul je waterfles)
+		Inventory->AddItem(FName(TEXT("Atm")), 1); // plaatsbare geldautomaat (bankieren)
 
 		// Alle meubels die in de starter-home staan gaan in de inventory (niet de hotbar): we vegen
 		// de geplaatste props op en geven het bijbehorende item. Zo begin je met een leeg huis en
