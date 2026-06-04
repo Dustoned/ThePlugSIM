@@ -20,6 +20,7 @@ class UDataTable;
 class UEconomyComponent;
 class UInventoryComponent;
 class UStaticMeshComponent;
+class ACityGenerator;
 
 UENUM(BlueprintType)
 enum class ECustomerState : uint8
@@ -148,7 +149,7 @@ public:
 
 	// --- Navigatie (spawnt op één punt, loopt naar z'n plek; loopt naar huis bij vertrek) ---
 	// Laat de AI naar een wereldlocatie lopen (via de navmesh).
-	void WalkTo(const FVector& Dest);
+	bool WalkTo(const FVector& Dest);
 
 	// Plek waar de klant gaat staan (door de spawner gezet).
 	void SetSpot(const FVector& InSpot) { SpotLocation = InSpot; bHasSpot = true; }
@@ -158,7 +159,7 @@ public:
 
 	// --- Bewoner: woont in een appartement. Roamt overdag (winkel/park), gaat 's nachts naar huis. ---
 	// FrontSpot = plek vóór de voordeur (waar 'ie verschijnt/verdwijnt); InteriorPos = referentie binnen.
-	void SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber);
+	void SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber, const FVector& HallPos = FVector::ZeroVector);
 	bool IsResident() const { return bResident; }
 
 	// Huisnummer/adres van deze bewoner (voor afspraak-berichten "kom langs op nr X").
@@ -201,13 +202,29 @@ protected:
 	bool bResident = false;
 	FVector HomeFrontSpot = FVector::ZeroVector;
 	FVector HomeInteriorPos = FVector::ZeroVector;
+	FVector HomeHallPos = FVector::ZeroVector;
+	bool bHasHomeHall = false;
 	FString HomeNumber;
 	float RoamTimer = 0.f;
 	bool bAtHomeInside = false;
 	FVector RoamGoal = FVector::ZeroVector; // huidig loopdoel
 	bool bHasRoamGoal = false;
+	bool bRoamGoalIsPark = false;
+	bool bPendingRoamGoalIsPark = false;
+	float ParkPauseTimer = 0.f;
 	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
 	bool bHasPark = false;
+	TWeakObjectPtr<ACityGenerator> CachedCity;
+	int32 RoamRouteSeed = 0;
+	int32 RoamLegIndex = 0;
+	int32 ParkLegCountdown = 0;
+	int32 HallLegCountdown = 0;
+	bool bLeavingHomeRoute = false;
+	ACityGenerator* GetResidentCity(UWorld* W);
+	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);
+	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
+	float ComputeResidentRoamTimeout(const FVector& Goal) const;
+	int32 CountResidentParkVisitors(float Radius) const;
 
 	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
 	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner

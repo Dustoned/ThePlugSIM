@@ -176,7 +176,7 @@ void ACustomerSpawner::SpawnResidents()
 			if (ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, H.DoorPos, FRotator::ZeroRotator, SP))
 			{
 				if (Reg) { C->NpcId = Reg->AssignNpc(); } // registry voor stats/contact; deurnaam komt per-nummer
-				C->SetupResident(H.DoorPos, H.InteriorPos, H.Number);
+				C->SetupResident(H.DoorPos, H.InteriorPos, H.Number, H.HallPos);
 				if (Made == 0) // eerste bewoner = gegarandeerde koopklare test-klant
 				{
 					C->Respect = 70.f; C->Loyalty = 40.f; C->Addiction = 80.f;

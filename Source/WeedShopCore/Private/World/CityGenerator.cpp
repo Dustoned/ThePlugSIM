@@ -887,10 +887,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					// gaat op slot met z'n naam. (AI kan niet door de voordeur, dus geen binnen-pathing nodig.)
 					{
 						const FVector Inside = LP(aCenter, side * (HW + SideW * 0.5f)); // echt het midden van de unit (kamer-box centreren)
+						const FVector Hall = LP(aCenter, side * (HW - 70.f));
 						const FVector FrontSpot = FVector(CX, CY, TopZ + 8.f) + N * (Half + 120.f);
 						FApartmentHome H;
 						H.Door = AptDoor;
 						H.InteriorPos = FVector(Inside.X, Inside.Y, zS + 8.f);
+						H.HallPos = FVector(Hall.X, Hall.Y, zS + 8.f);
 						H.DoorPos = FrontSpot;
 						H.Number = FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq);
 						H.bApartment = true; H.Floor = f;

@@ -9,6 +9,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
 #include "World/DayCycleComponent.h"
 #include "World/CityGenerator.h"
@@ -103,12 +104,14 @@ void ACustomerBase::UpdateNpcAnim(float DeltaSeconds)
 	if (UAnimSequence* Seq = (NewState == 1) ? NpcWalk : NpcIdle) { M->PlayAnimation(Seq, true); }
 }
 
-void ACustomerBase::WalkTo(const FVector& Dest)
+bool ACustomerBase::WalkTo(const FVector& Dest)
 {
 	if (AAIController* AI = Cast<AAIController>(GetController()))
 	{
-		AI->MoveToLocation(Dest, 60.f, true);
+		const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(Dest, 70.f, true, true, true, false, nullptr, true);
+		return Result != EPathFollowingRequestResult::Failed;
 	}
+	return false;
 }
 
 void ACustomerBase::BeginPlay()
@@ -291,15 +294,21 @@ void ACustomerBase::Tick(float DeltaSeconds)
 	}
 }
 
-void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber)
+void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber, const FVector& HallPos)
 {
 	bResident = true;
 	HomeFrontSpot = FrontSpot;
 	HomeInteriorPos = InteriorPos;
+	HomeHallPos = HallPos;
+	bHasHomeHall = !HallPos.IsNearlyZero();
 	HomeNumber = HouseNumber;
 	bDespawnAfterServed = false;
 	SetActorLocation(FrontSpot);
-	RoamTimer = FMath::FRandRange(0.5f, 6.f); // spreiding: niet allemaal tegelijk vertrekken
+	RoamRouteSeed = static_cast<int32>(GetTypeHash(HomeNumber));
+	ParkLegCountdown = 2 + FMath::Abs(RoamRouteSeed % 3);
+	HallLegCountdown = 3 + FMath::Abs((RoamRouteSeed / 7) % 4);
+	RoamLegIndex = FMath::Abs(RoamRouteSeed % 97);
+	RoamTimer = FMath::FRandRange(0.5f, 4.f); // spreiding: niet allemaal tegelijk vertrekken
 
 	// Rustige wandeltred: bewoners slenteren over straat i.p.v. te sprinten.
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
@@ -329,6 +338,210 @@ void ACustomerBase::EndAppointment()
 	RoamTimer = 0.f;           // pak meteen een nieuw roam-doel
 }
 
+ACityGenerator* ACustomerBase::GetResidentCity(UWorld* W)
+{
+	if (CachedCity.IsValid())
+	{
+		return CachedCity.Get();
+	}
+	if (!W)
+	{
+		return nullptr;
+	}
+	for (TActorIterator<ACityGenerator> It(W); It; ++It)
+	{
+		CachedCity = *It;
+		return *It;
+	}
+	return nullptr;
+}
+
+float ACustomerBase::ComputeResidentRoamTimeout(const FVector& Goal) const
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	const float Speed = Move ? FMath::Max(80.f, Move->MaxWalkSpeed) : 135.f;
+	const float TravelSeconds = FVector::Dist(GetActorLocation(), Goal) / Speed;
+	return FMath::Clamp(TravelSeconds * 1.55f + FMath::FRandRange(8.f, 18.f), 18.f, 140.f);
+}
+
+int32 ACustomerBase::CountResidentParkVisitors(float Radius) const
+{
+	UWorld* W = GetWorld();
+	if (!W || !bHasPark)
+	{
+		return 0;
+	}
+
+	const float RadiusSq = FMath::Square(Radius);
+	int32 Count = 0;
+	for (TActorIterator<ACustomerBase> It(W); It; ++It)
+	{
+		const ACustomerBase* C = *It;
+		if (!IsValid(C) || C == this || !C->bResident || C->bAtHomeInside)
+		{
+			continue;
+		}
+
+		const bool bNearPark = FVector::DistSquared2D(C->GetActorLocation(), ParkCenter) <= RadiusSq;
+		if (bNearPark || C->bRoamGoalIsPark || C->ParkPauseTimer > 0.f)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ)
+{
+	UWorld* W = GetWorld();
+	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
+	const bool bGoalIsPark = bPendingRoamGoalIsPark;
+	bPendingRoamGoalIsPark = false;
+	bRoamGoalIsPark = false;
+	if (!Nav)
+	{
+		return false;
+	}
+
+	FNavLocation Projected;
+	const FVector Extent(FMath::Max(80.f, SearchXY), FMath::Max(80.f, SearchXY), FMath::Max(80.f, SearchZ));
+	if (!Nav->ProjectPointToNavigation(DesiredGoal, Projected, Extent))
+	{
+		if (!Nav->GetRandomReachablePointInRadius(DesiredGoal, FMath::Max(250.f, SearchXY), Projected))
+		{
+			return false;
+		}
+	}
+
+	if (!WalkTo(Projected.Location))
+	{
+		return false;
+	}
+
+	RoamGoal = Projected.Location;
+	bHasRoamGoal = true;
+	bRoamGoalIsPark = bGoalIsPark;
+	RoamTimer = ComputeResidentRoamTimeout(RoamGoal);
+	return true;
+}
+
+bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ)
+{
+	OutGoal = FVector::ZeroVector;
+	OutSearchXY = 700.f;
+	OutSearchZ = 500.f;
+	bPendingRoamGoalIsPark = false;
+
+	ACityGenerator* City = GetResidentCity(GetWorld());
+	if (!City)
+	{
+		return false;
+	}
+
+	ParkCenter = City->GetCityCenter();
+	bHasPark = true;
+
+	if (bLeavingHomeRoute)
+	{
+		bLeavingHomeRoute = false;
+		OutGoal = HomeFrontSpot;
+		OutSearchXY = 500.f;
+		OutSearchZ = 300.f;
+		return true;
+	}
+
+	--ParkLegCountdown;
+	--HallLegCountdown;
+
+	if (ParkLegCountdown <= 0)
+	{
+		ParkLegCountdown = 4 + FMath::Abs((RoamRouteSeed + RoamLegIndex) % 4);
+		if (CountResidentParkVisitors(City->GetMapBlockSize() * 0.58f) < 10)
+		{
+			const float D = City->GetMapBlockSize() * 0.30f;
+			const FVector ParkStops[] = {
+				FVector(0.f, 0.f, 0.f),
+				FVector(D, 0.f, 0.f),
+				FVector(-D, 0.f, 0.f),
+				FVector(0.f, D, 0.f),
+				FVector(0.f, -D, 0.f)
+			};
+			const int32 Pick = FMath::Abs(RoamRouteSeed + RoamLegIndex * 3) % UE_ARRAY_COUNT(ParkStops);
+			OutGoal = FVector(ParkCenter.X, ParkCenter.Y, HomeFrontSpot.Z) + ParkStops[Pick];
+			OutSearchXY = 650.f;
+			OutSearchZ = 400.f;
+			bPendingRoamGoalIsPark = true;
+			++RoamLegIndex;
+			return true;
+		}
+	}
+
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (HallLegCountdown <= 0 && Homes.Num() > 0)
+	{
+		TArray<FVector> HallStops;
+		HallStops.Reserve(Homes.Num());
+		for (const FApartmentHome& H : Homes)
+		{
+			if (H.bApartment && !H.HallPos.IsNearlyZero())
+			{
+				HallStops.Add(H.HallPos);
+			}
+		}
+		if (HallStops.Num() > 0)
+		{
+			HallLegCountdown = 5 + FMath::Abs((RoamRouteSeed + RoamLegIndex) % 5);
+			const int32 Pick = FMath::Abs(RoamRouteSeed * 5 + RoamLegIndex * 7) % HallStops.Num();
+			OutGoal = HallStops[Pick];
+			OutSearchXY = 360.f;
+			OutSearchZ = 190.f;
+			++RoamLegIndex;
+			return true;
+		}
+		HallLegCountdown = 4;
+	}
+
+	TArray<FCityMapBlock> Blocks;
+	City->GetMapBlocks(Blocks);
+	TArray<FVector> StreetStops;
+	StreetStops.Reserve(Blocks.Num());
+
+	const FVector Center = City->GetCityCenter();
+	const float Pitch = City->GetPitch();
+	const float SideOffset = City->GetMapBlockSize() * 0.5f - 130.f;
+	for (const FCityMapBlock& B : Blocks)
+	{
+		if (B.Label.Equals(TEXT("Park"), ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+		const int32 GX = FMath::RoundToInt((B.Center.X - Center.X) / Pitch);
+		const int32 GY = FMath::RoundToInt((B.Center.Y - Center.Y) / Pitch);
+		FVector Dir((GX > 0) ? -1.f : (GX < 0) ? 1.f : 0.f, (GY > 0) ? -1.f : (GY < 0) ? 1.f : 0.f, 0.f);
+		if (!FMath::IsNearlyZero(Dir.X))
+		{
+			Dir.Y = 0.f;
+		}
+		if (Dir.IsNearlyZero())
+		{
+			continue;
+		}
+		StreetStops.Add(FVector(B.Center.X, B.Center.Y, HomeFrontSpot.Z) + Dir * SideOffset);
+	}
+
+	if (StreetStops.Num() == 0)
+	{
+		return false;
+	}
+
+	const int32 Pick = FMath::Abs(RoamRouteSeed + RoamLegIndex * 11) % StreetStops.Num();
+	OutGoal = StreetStops[Pick];
+	OutSearchXY = 260.f;
+	OutSearchZ = 500.f;
+	++RoamLegIndex;
+	return true;
+}
+
 void ACustomerBase::TickResident(float DeltaSeconds)
 {
 	UWorld* W = GetWorld();
@@ -340,6 +553,8 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	// --- Afspraak heeft voorrang op roamen/nacht ---
 	if (bApptActive)
 	{
+		ParkPauseTimer = 0.f;
+		bRoamGoalIsPark = false;
 		// Afgehandeld (deal gesloten) of veiligheids-timeout -> afspraak loslaten, normaal leven hervatten.
 		ApptTimeout -= DeltaSeconds;
 		if (State == ECustomerState::Served || State == ECustomerState::Leaving || ApptTimeout <= 0.f)
@@ -402,8 +617,12 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	{
 		// 's Nachts naar huis (plek vóór de voordeur) en daar 'naar binnen' verdwijnen.
 		if (bAtHomeInside) { return; }
+		bLeavingHomeRoute = false;
+		bHasRoamGoal = false;
+		bRoamGoalIsPark = false;
+		ParkPauseTimer = 0.f;
 		WalkTo(HomeFrontSpot);
-		if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 170.f)
+		if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 170.f && FMath::Abs(GetActorLocation().Z - HomeFrontSpot.Z) < 220.f)
 		{
 			bAtHomeInside = true;
 			SetActorHiddenInGame(true);
@@ -419,68 +638,82 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		bAtHomeInside = false;
 		SetActorHiddenInGame(false);
 		SetActorEnableCollision(true);
-		SetActorLocation(HomeFrontSpot);
+		SetActorLocation((bHasHomeHall ? HomeHallPos : HomeFrontSpot) + FVector(0.f, 0.f, 4.f));
+		bLeavingHomeRoute = bHasHomeHall;
+		bHasRoamGoal = false;
+		bRoamGoalIsPark = false;
+		ParkPauseTimer = 0.f;
 		RoamTimer = 0.f;
 	}
 
-	// Roam: doorlopen over de stad. BELANGRIJK: kies alleen een NIEUW doel als 'ie er is aangekomen of
-	// de timer afloopt -- NIET elke frame dat de snelheid laag is. Anders gooit 'ie vlak na een
-	// loopopdracht (pad nog async aan het berekenen + nog aan het versnellen) elke tick een nieuw doel
-	// en komt 'ie nooit op gang = blijft bij z'n deur "chillen".
-	// Park/stadscentrum eenmalig opzoeken (gedeelde hub).
-	if (!bHasPark)
+	// Roam: vaste grote stadsronde, met periodieke park- en flat-hal-stops. Alleen een nieuw doel
+	// kiezen bij aankomst of timeout, zodat pathfinding tijd krijgt om een lange route af te maken.
+	if (ParkPauseTimer > 0.f)
 	{
-		for (TActorIterator<ACityGenerator> It(W); It; ++It) { ParkCenter = It->GetCityCenter(); bHasPark = true; break; }
+		ParkPauseTimer -= DeltaSeconds;
+		if (ParkPauseTimer <= 0.f)
+		{
+			ParkPauseTimer = 0.f;
+			bHasRoamGoal = false;
+			RoamTimer = 0.f;
+		}
+		return;
 	}
 
 	RoamTimer -= DeltaSeconds;
-	const bool bArrived = bHasRoamGoal && FVector::Dist2D(GetActorLocation(), RoamGoal) < 130.f;
-	if (!bHasRoamGoal || bArrived || RoamTimer <= 0.f)
+	const bool bArrived = bHasRoamGoal
+		&& FVector::Dist2D(GetActorLocation(), RoamGoal) < 145.f
+		&& FMath::Abs(GetActorLocation().Z - RoamGoal.Z) < 180.f;
+	if (bArrived)
 	{
-		RoamTimer = FMath::FRandRange(5.f, 10.f); // genoeg tijd om er ook echt te komen (rustige wandeltred)
+		if (bRoamGoalIsPark)
+		{
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			bHasRoamGoal = false;
+			bRoamGoalIsPark = false;
+			ParkPauseTimer = FMath::FRandRange(4.f, 9.f);
+			return;
+		}
+
+		bHasRoamGoal = false;
+		bRoamGoalIsPark = false;
+		RoamTimer = 0.f;
+	}
+
+	if (!bHasRoamGoal || RoamTimer <= 0.f)
+	{
+		FVector DesiredGoal;
+		float SearchXY = 700.f;
+		float SearchZ = 500.f;
+		if (PickResidentRoamGoal(DesiredGoal, SearchXY, SearchZ) && SetResidentRoamGoal(DesiredGoal, SearchXY, SearchZ))
+		{
+			return;
+		}
+
+		// Fallback: als een hall/ver blok nog geen navmesh heeft, blijf niet hangen maar pak een lokaal pad.
 		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
 		{
 			FNavLocation Out;
 			const FVector Self = GetActorLocation();
-			const float FromHome = FVector::Dist2D(Self, HomeFrontSpot);
-			bool bGotGoal = false;
-
-			if (FromHome > 4500.f)
+			if (Nav->GetRandomReachablePointInRadius(Self, 1800.f, Out) && WalkTo(Out.Location))
 			{
-				// Te ver van huis afgedwaald -> terug naar de eigen buurt (leash houdt ze verspreid).
-				if (Nav->ProjectPointToNavigation(HomeFrontSpot, Out, FVector(1500.f, 1500.f, 600.f)))
-				{
-					RoamGoal = Out.Location; bHasRoamGoal = true; bGotGoal = true; WalkTo(RoamGoal);
-				}
+				RoamGoal = Out.Location;
+				bHasRoamGoal = true;
+				bRoamGoalIsPark = false;
+				RoamTimer = ComputeResidentRoamTimeout(RoamGoal);
 			}
-			else if (bHasPark && FMath::FRand() < 0.12f)
+			else if (Nav->ProjectPointToNavigation(HomeFrontSpot, Out, FVector(1400.f, 1400.f, 600.f)) && WalkTo(Out.Location))
 			{
-				// Af en toe een tripje door het park (gedeelde hub), daarna weer de eigen buurt in.
-				if (Nav->GetRandomReachablePointInRadius(ParkCenter, 800.f, Out))
-				{
-					RoamGoal = Out.Location; bHasRoamGoal = true; bGotGoal = true; WalkTo(RoamGoal);
-				}
+				RoamGoal = Out.Location;
+				bHasRoamGoal = true;
+				bRoamGoalIsPark = false;
+				RoamTimer = ComputeResidentRoamTimeout(RoamGoal);
 			}
-
-			if (!bGotGoal)
+			else
 			{
-				// Rondje in de eigen buurt. Origin = EIGEN positie (staat altijd op de navmesh) i.p.v.
-				// HomeFrontSpot -- dat kan net naast de smalle stoep-navmesh liggen, waardoor de query
-				// faalde en de NPC nooit een doel kreeg = stil voor z'n deur bleef staan.
-				if (Nav->GetRandomReachablePointInRadius(Self, 2200.f, Out))
-				{
-					RoamGoal = Out.Location; bHasRoamGoal = true; WalkTo(RoamGoal);
-				}
-				else
-				{
-					// Echt niet op de navmesh -> projecteer en sta daar (volgende tick opnieuw proberen).
-					FNavLocation Proj;
-					if (Nav->ProjectPointToNavigation(Self, Proj, FVector(1200.f, 1200.f, 600.f)))
-					{
-						SetActorLocation(Proj.Location + FVector(0.f, 0.f, 2.f));
-						bHasRoamGoal = false;
-					}
-				}
+				bHasRoamGoal = false;
+				bRoamGoalIsPark = false;
+				RoamTimer = 3.f;
 			}
 		}
 	}

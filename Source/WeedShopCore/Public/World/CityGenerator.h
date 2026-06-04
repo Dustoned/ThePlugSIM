@@ -24,6 +24,7 @@ struct FApartmentHome
 	GENERATED_BODY()
 	UPROPERTY() TWeakObjectPtr<ACityDoor> Door;
 	UPROPERTY() FVector InteriorPos = FVector::ZeroVector;
+	UPROPERTY() FVector HallPos = FVector::ZeroVector;
 	UPROPERTY() FVector DoorPos = FVector::ZeroVector;
 	UPROPERTY() FString Number;
 	UPROPERTY() bool bApartment = false; // true = flat-unit, false = rijtjeshuis
