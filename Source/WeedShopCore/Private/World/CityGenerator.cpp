@@ -13,6 +13,7 @@
 #include "World/StoreCounter.h"
 #include "World/CityDoor.h"
 #include "World/CityElevator.h"
+#include "World/RoadNavZone.h"
 #include "World/DayNightController.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
@@ -278,6 +279,30 @@ void ACityGenerator::BuildCity()
 			UNavigationInvokerComponent* Inv = NewObject<UNavigationInvokerComponent>(NavAnchor, TEXT("CityNavInvoker"));
 			Inv->SetGenerationRadii(Span * 0.55f, Span * 0.7f);
 			Inv->RegisterComponent();
+		}
+	}
+
+	// Rijweg-nav-areas: markeer elke straat (asfaltbaan tussen de blokken) als hoge-kosten "rijweg".
+	// De stoepen (blok-plateaus) blijven default; de router verkiest dus de stoep en steekt alleen over
+	// naar de volgende stoep i.p.v. midden over de weg te dwalen. XY-banen (geen Z-afhankelijkheid van
+	// de lage stoeprand), dus stoep en straat raken elkaar niet.
+	{
+		const float ZHalf = 300.f;
+		const float ZCenter = GroundZ + 50.f;
+		const float HalfSpan = Span * 0.5f;
+		const float HalfRoad = RoadWidth * 0.5f;
+		auto SpawnRoad = [&](const FVector& Loc, const FVector& HalfExt)
+		{
+			if (ARoadNavZone* Z = W->SpawnActor<ARoadNavZone>(ARoadNavZone::StaticClass(), FTransform(Loc)))
+			{
+				Z->SetupZone(HalfExt);
+			}
+		};
+		for (int32 k = -R; k < R; ++k) // straat tussen blok k en k+1
+		{
+			const float P = k * Pitch + Pitch * 0.5f;
+			SpawnRoad(FVector(Center.X + P, Center.Y, ZCenter), FVector(HalfRoad, HalfSpan, ZHalf)); // verticale straat
+			SpawnRoad(FVector(Center.X, Center.Y + P, ZCenter), FVector(HalfSpan, HalfRoad, ZHalf)); // horizontale straat
 		}
 	}
 
