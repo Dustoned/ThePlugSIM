@@ -11,6 +11,8 @@
 #include "AIController.h"
 #include "NavigationSystem.h"
 #include "World/DayCycleComponent.h"
+#include "World/CityGenerator.h"
+#include "EngineUtils.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/DataTable.h"
 #include "Data/WeedShopProduct.h"
@@ -90,7 +92,7 @@ void ACustomerBase::UpdateNpcAnim(float DeltaSeconds)
 	if (bHasNpcPrev)
 	{
 		FVector D = Cur - NpcPrevLoc; D.Z = 0.f;
-		if (D.SizeSquared() > 4.f) { NpcMoveHold = 0.5f; } // NPC tickt op ~5Hz -> ruimer vasthouden
+		if (D.SizeSquared() > 0.25f) { NpcMoveHold = 0.5f; } // lage drempel: walk-anim ook bij rustige tred/hoge FPS
 		else if (NpcMoveHold > 0.f) { NpcMoveHold -= DeltaSeconds; }
 	}
 	NpcPrevLoc = Cur; bHasNpcPrev = true;
@@ -298,6 +300,12 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	bDespawnAfterServed = false;
 	SetActorLocation(FrontSpot);
 	RoamTimer = FMath::FRandRange(0.5f, 6.f); // spreiding: niet allemaal tegelijk vertrekken
+
+	// Rustige wandeltred: bewoners slenteren over straat i.p.v. te sprinten.
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->MaxWalkSpeed = 135.f;
+	}
 }
 
 void ACustomerBase::BeginAppointment(bool bComeToPlayer)
@@ -419,15 +427,27 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	// de timer afloopt -- NIET elke frame dat de snelheid laag is. Anders gooit 'ie vlak na een
 	// loopopdracht (pad nog async aan het berekenen + nog aan het versnellen) elke tick een nieuw doel
 	// en komt 'ie nooit op gang = blijft bij z'n deur "chillen".
+	// Park/stadscentrum eenmalig opzoeken (gedeelde hub).
+	if (!bHasPark)
+	{
+		for (TActorIterator<ACityGenerator> It(W); It; ++It) { ParkCenter = It->GetCityCenter(); bHasPark = true; break; }
+	}
+
 	RoamTimer -= DeltaSeconds;
 	const bool bArrived = bHasRoamGoal && FVector::Dist2D(GetActorLocation(), RoamGoal) < 130.f;
 	if (!bHasRoamGoal || bArrived || RoamTimer <= 0.f)
 	{
-		RoamTimer = FMath::FRandRange(4.f, 8.f); // genoeg tijd om er ook echt te komen
+		RoamTimer = FMath::FRandRange(5.f, 10.f); // genoeg tijd om er ook echt te komen (rustige wandeltred)
 		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
 		{
 			FNavLocation Out;
-			if (Nav->GetRandomReachablePointInRadius(GetActorLocation(), 6000.f, Out))
+			// ~25% kans op een tripje naar het park (gedeelde hub); anders rondjes in de EIGEN buurt
+			// (rond de voordeur) zodat de bewoners verspreid over de stad blijven i.p.v. allemaal naar
+			// het midden te zuigen.
+			const bool bToPark = bHasPark && FMath::FRand() < 0.25f;
+			const FVector Origin = bToPark ? ParkCenter : HomeFrontSpot;
+			const float Radius = bToPark ? 800.f : 3500.f;
+			if (Nav->GetRandomReachablePointInRadius(Origin, Radius, Out))
 			{
 				RoamGoal = Out.Location;
 				bHasRoamGoal = true;

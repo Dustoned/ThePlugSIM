@@ -206,6 +206,8 @@ protected:
 	bool bAtHomeInside = false;
 	FVector RoamGoal = FVector::ZeroVector; // huidig loopdoel
 	bool bHasRoamGoal = false;
+	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
+	bool bHasPark = false;
 
 	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
 	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner
