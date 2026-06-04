@@ -37,6 +37,22 @@ void UNpcRegistryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME(UNpcRegistryComponent, States);
 }
 
+namespace
+{
+	// Goofy achternaam, stabiel afgeleid van een hash. Geeft elke NPC een lach-naam ("Tim Pannenkoek").
+	FString GoofySurname(uint32 H)
+	{
+		static const TCHAR* Last[] = {
+			TEXT("Pannenkoek"), TEXT("Stokvis"), TEXT("Bonk"), TEXT("Knol"), TEXT("Prummel"), TEXT("Druif"),
+			TEXT("Brak"), TEXT("Kwast"), TEXT("Plof"), TEXT("Worst"), TEXT("Pruim"), TEXT("Klep"),
+			TEXT("Toeter"), TEXT("Krent"), TEXT("Schroef"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Sok"),
+			TEXT("Brok"), TEXT("Hark"), TEXT("Snuiter"), TEXT("Klont"), TEXT("Knapzak"), TEXT("Snoek"),
+			TEXT("Kwakkel"), TEXT("Prut"), TEXT("Blok"), TEXT("Tuthola"), TEXT("Pluis"), TEXT("Frikandel") };
+		const int32 N = UE_ARRAY_COUNT(Last);
+		return Last[H % (uint32)N];
+	}
+}
+
 void UNpcRegistryComponent::EnsureSeeded()
 {
 	if (States.Num() > 0 || !NpcTable)
@@ -53,6 +69,15 @@ void UNpcRegistryComponent::EnsureSeeded()
 		FNpcState S;
 		S.NpcId = RowName;
 		S.DisplayName = Def->DisplayName;
+		// Heeft de datatable-naam nog geen achternaam (1 woord)? Plak er een goofy achternaam achter.
+		{
+			const FString Nm = S.DisplayName.ToString().TrimStartAndEnd();
+			if (!Nm.IsEmpty() && !Nm.Contains(TEXT(" ")))
+			{
+				const uint32 H = GetTypeHash(RowName);
+				S.DisplayName = FText::FromString(FString::Printf(TEXT("%s %s"), *Nm, *GoofySurname(H)));
+			}
+		}
 		S.Respect = Def->BaseRespect;
 		S.Loyalty = Def->BaseLoyalty;
 		S.Addiction = Def->BaseAddiction;

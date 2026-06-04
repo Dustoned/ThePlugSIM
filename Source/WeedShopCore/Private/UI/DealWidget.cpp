@@ -68,12 +68,17 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
-	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(460.f, 560.f));
+	// AutoSize: de kaart krimpt naar zijn inhoud -> geen groot leeg grijs vlak bij niet-kopers.
+	CS->SetAutoSize(true);
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
+	// Vaste breedte (zodat de Fill-knoppen netjes uitlijnen), hoogte volgt de inhoud.
+	USizeBox* Width = WidgetTree->ConstructWidget<USizeBox>();
+	Width->SetWidthOverride(440.f);
+	CardB->SetContent(Width);
+
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-	CardB->SetContent(VB);
+	Width->SetContent(VB);
 
 	// --- Kop: naam + status + stats (altijd zichtbaar voor ELKE NPC) ---
 	NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 22, FLinearColor(0.85f, 0.95f, 1.f), false, true);

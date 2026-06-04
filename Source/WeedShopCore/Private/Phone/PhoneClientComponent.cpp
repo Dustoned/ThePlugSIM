@@ -144,23 +144,29 @@ void UPhoneClientComponent::ClearWaypoint()
 	if (CompassWidget) { CompassWidget->SetWaypoint(WaypointWorld, false); }
 }
 
-void UPhoneClientComponent::ToggleMapOverlay()
+void UPhoneClientComponent::CloseMapOverlay()
 {
-	APlayerController* PC = GetPC();
-	// Al open -> sluiten + game-input terug.
-	if (MapOverlay)
+	if (!MapOverlay) { return; }
+	MapOverlay->RemoveFromParent();
+	MapOverlay = nullptr;
+	if (APlayerController* PC = GetPC())
 	{
-		MapOverlay->RemoveFromParent();
-		MapOverlay = nullptr;
-		if (PC && !IsAnyGameUIOpen())
+		if (!IsAnyGameUIOpen() && !bMainMenuOpen)
 		{
 			PC->SetInputMode(FInputModeGameOnly());
 			PC->bShowMouseCursor = false;
 		}
-		return;
 	}
+}
+
+void UPhoneClientComponent::ToggleMapOverlay()
+{
+	APlayerController* PC = GetPC();
+	// Al open -> sluiten + game-input terug.
+	if (MapOverlay) { CloseMapOverlay(); return; }
 	if (!PC || !PC->IsLocalController()) { return; }
-	// Telefoon dicht als die open staat (anders zit de UI-input in de weg).
+	// Maar 1 UI tegelijk: sluit alles anders voordat de kaart opent.
+	if (IsAnyGameUIOpen()) { CloseAllUI(); }
 	if (bOpen) { Toggle(); }
 	MapOverlay = CreateWidget<UMapWidget>(PC, UMapWidget::StaticClass());
 	if (MapOverlay)
@@ -194,6 +200,12 @@ void UPhoneClientComponent::RefreshInputMode()
 void UPhoneClientComponent::UpdateCursor()
 {
 	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen;
+	// Maar 1 UI tegelijk: opent er een ander scherm, dan gaat de fullscreen-kaart dicht.
+	if (bAnyUI && MapOverlay)
+	{
+		MapOverlay->RemoveFromParent();
+		MapOverlay = nullptr;
+	}
 	if (APlayerController* PC = GetPC())
 	{
 		PC->SetShowMouseCursor(bAnyUI);

@@ -32,6 +32,8 @@ public:
 
 	// Fullscreen stadskaart aan/uit (M-toets of de Fullscreen-knop in de Map-app).
 	void ToggleMapOverlay();
+	bool IsMapOpen() const { return MapOverlay != nullptr; }
+	void CloseMapOverlay();
 
 	// --- Waypoint (gezet op de kaart; getoond op kaart + kompas) ---
 	void SetWaypoint(const FVector& World);

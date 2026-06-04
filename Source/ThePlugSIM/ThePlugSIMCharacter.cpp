@@ -445,7 +445,7 @@ void AThePlugSIMCharacter::DoAim(float Yaw, float Pitch)
 	// Geen camera-kijken terwijl er een UI open is (anders draait de camera mee tijdens muis-gebruik).
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
 		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen()
-		|| Phone->IsPauseOpen() || Phone->IsMainMenuOpen() || Phone->IsSettingsOpen()))
+		|| Phone->IsPauseOpen() || Phone->IsMainMenuOpen() || Phone->IsSettingsOpen() || Phone->IsMapOpen()))
 	{
 		return;
 	}
@@ -847,6 +847,8 @@ void AThePlugSIMCharacter::ToggleRollUI()
 
 void AThePlugSIMCharacter::HotbarOrPhoneKey(FKey Key)
 {
+	// Kaart open -> cijfertoetsen doen niets (maar 1 UI tegelijk).
+	if (Phone && Phone->IsMapOpen()) { return; }
 	// Telefoon open -> catalogus-keuze; anders hotbar-slot selecteren.
 	if (Phone && Phone->IsOpen())
 	{
@@ -870,7 +872,7 @@ void AThePlugSIMCharacter::HotbarOrPhoneKey(FKey Key)
 
 void AThePlugSIMCharacter::HotbarPrev()
 {
-	if (Inventory && Phone && !Phone->IsOpen())
+	if (Inventory && Phone && !Phone->IsOpen() && !Phone->IsMapOpen())
 	{
 		Inventory->CycleActiveSlot(-1);
 	}
@@ -878,7 +880,7 @@ void AThePlugSIMCharacter::HotbarPrev()
 
 void AThePlugSIMCharacter::HotbarNext()
 {
-	if (Inventory && Phone && !Phone->IsOpen())
+	if (Inventory && Phone && !Phone->IsOpen() && !Phone->IsMapOpen())
 	{
 		Inventory->CycleActiveSlot(+1);
 	}
@@ -892,7 +894,7 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	// deze klik net heeft verwerkt (bv. een paneel sloot) negeren we 'm hier, zodat dezelfde klik
 	// niet alsnog de wereld-interactie (en daarmee bv. de deal opnieuw) opent.
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen() || Phone->DidUiConsumeClickRecently()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen() || Phone->IsMapOpen() || Phone->DidUiConsumeClickRecently()))
 	{
 		return;
 	}
@@ -964,6 +966,7 @@ void AThePlugSIMCharacter::OnPauseKey()
 	// ALLES in één keer dicht. Staat er niets open, dan opent ESC het pauze-menu.
 	// Op het titelscherm doet ESC niets (je kiest daar Start/Continue/Quit).
 	if (!Phone || Phone->IsMainMenuOpen()) { return; }
+	if (Phone->IsMapOpen()) { Phone->CloseMapOverlay(); return; }
 	if (Phone->IsAnyGameUIOpen()) { Phone->CloseAllUI(); }
 	else { Phone->TogglePause(); }
 }

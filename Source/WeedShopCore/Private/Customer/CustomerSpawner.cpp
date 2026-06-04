@@ -45,8 +45,9 @@ namespace
 	{
 		static const TCHAR* First[] = { TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"),
 			TEXT("Lotte"), TEXT("Bram"), TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"), TEXT("Joost"), TEXT("Mila") };
-		static const TCHAR* Last[] = { TEXT("de Vries"), TEXT("Jansen"), TEXT("Bakker"), TEXT("Visser"), TEXT("Smit"),
-			TEXT("Meijer"), TEXT("Mulder"), TEXT("Bos"), TEXT("Vos"), TEXT("Peters"), TEXT("Hendriks"), TEXT("van Dijk") };
+		// Goofy achternamen — grappig als een bewoner "dom" heet.
+		static const TCHAR* Last[] = { TEXT("Pannenkoek"), TEXT("Stokvis"), TEXT("Bonk"), TEXT("Knol"), TEXT("Prummel"),
+			TEXT("Druif"), TEXT("Kwast"), TEXT("Worst"), TEXT("Toeter"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Frikandel") };
 		const uint32 H = GetTypeHash(Num);
 		return FString::Printf(TEXT("%s %s"), First[H % 16u], Last[(H / 16u) % 12u]);
 	}
