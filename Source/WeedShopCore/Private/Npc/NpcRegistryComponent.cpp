@@ -44,15 +44,14 @@ namespace
 		static const TCHAR* First[] = {
 			TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"), TEXT("Lotte"), TEXT("Bram"),
 			TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"), TEXT("Joost"), TEXT("Mila"),
-			TEXT("Gerrit"), TEXT("Truus"), TEXT("Henk"), TEXT("Willem"), TEXT("Bep"), TEXT("Cor"), TEXT("Sjaak"), TEXT("Ria"),
-			TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"), TEXT("Loes"), TEXT("Wout"), TEXT("Stijn"), TEXT("Femke"), TEXT("Jasper"),
-			TEXT("Roos"), TEXT("Teun"), TEXT("Saar"), TEXT("Koen"), TEXT("Hilda"), TEXT("Bennie"), TEXT("Manon"), TEXT("Ferry"),
-			TEXT("Chantal"), TEXT("Bertus"), TEXT("Sandra"), TEXT("Ronnie"), TEXT("Yvonne"), TEXT("Gijs"), TEXT("Niels"), TEXT("Maud"),
-			TEXT("Tessa"), TEXT("Luuk"), TEXT("Bo"), TEXT("Sam"), TEXT("Nina"), TEXT("Mees"), TEXT("Lars"), TEXT("Kim"),
-			TEXT("Isa"), TEXT("Mats"), TEXT("Jill"), TEXT("Dex"), TEXT("Puck"), TEXT("Guus"), TEXT("Floor"), TEXT("Ravi"),
-			TEXT("Nova"), TEXT("Otis"), TEXT("Liva"), TEXT("Moos"), TEXT("Tijn"), TEXT("Sofie"), TEXT("Fien"), TEXT("Rens"),
-			TEXT("Ome Ton"), TEXT("Tante An"), TEXT("Appie"), TEXT("Non"), TEXT("Ouwe Joop"), TEXT("Dikke Leo"), TEXT("Tinus"),
-			TEXT("Sjonnie"), TEXT("Annie"), TEXT("Bennie Bob"), TEXT("Kleine Kees"), TEXT("Tante Sjaan") };
+			TEXT("Henk"), TEXT("Willem"), TEXT("Bep"), TEXT("Cor"), TEXT("Ria"), TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"),
+			TEXT("Loes"), TEXT("Wout"), TEXT("Stijn"), TEXT("Femke"), TEXT("Jasper"), TEXT("Roos"), TEXT("Teun"), TEXT("Saar"),
+			TEXT("Koen"), TEXT("Manon"), TEXT("Gijs"), TEXT("Niels"), TEXT("Maud"), TEXT("Tessa"), TEXT("Luuk"), TEXT("Bo"),
+			TEXT("Sam"), TEXT("Nina"), TEXT("Mees"), TEXT("Lars"), TEXT("Kim"), TEXT("Isa"), TEXT("Mats"), TEXT("Jill"),
+			TEXT("Dex"), TEXT("Puck"), TEXT("Guus"), TEXT("Floor"), TEXT("Ravi"), TEXT("Nova"), TEXT("Otis"), TEXT("Liva"),
+			TEXT("Moos"), TEXT("Tijn"), TEXT("Sofie"), TEXT("Fien"), TEXT("Rens"), TEXT("Jules"), TEXT("Lio"), TEXT("Evi"),
+			TEXT("Vera"), TEXT("Siem"), TEXT("Luna"), TEXT("Mick"), TEXT("Cato"), TEXT("Boaz"), TEXT("Ruben"), TEXT("Mara"),
+			TEXT("Lieke"), TEXT("Nora"), TEXT("Cas"), TEXT("Elin"), TEXT("Sil"), TEXT("Anne"), TEXT("Tess"), TEXT("Britt") };
 
 		FString FirstName = Raw.TrimStartAndEnd();
 		if (FirstName.Contains(TEXT(" ")))
@@ -62,23 +61,14 @@ namespace
 		return FirstName.IsEmpty() ? First[Index % UE_ARRAY_COUNT(First)] : FirstName;
 	}
 
-	FString GoofyFullName(const FString& PreferredName, int32 Index)
+	FString ShortFullName(const FString& PreferredName, int32 Index)
 	{
 		static const TCHAR* Last[] = {
-			TEXT("Pannenkoek"), TEXT("Stokvis"), TEXT("Bonk"), TEXT("Knol"), TEXT("Prummel"), TEXT("Druif"),
-			TEXT("Kwast"), TEXT("Plof"), TEXT("Worst"), TEXT("Pruim"), TEXT("Klep"), TEXT("Toeter"),
-			TEXT("Krent"), TEXT("Schroef"), TEXT("Boterham"), TEXT("Stamppot"), TEXT("Sok"), TEXT("Brok"),
-			TEXT("Hark"), TEXT("Snuiter"), TEXT("Klont"), TEXT("Knapzak"), TEXT("Kwakkel"), TEXT("Prut"),
-			TEXT("Blok"), TEXT("Pluis"), TEXT("Frikandel"), TEXT("Kroket"), TEXT("Kaaskop"), TEXT("Mosterd"),
-			TEXT("Klaproos"), TEXT("Peul"), TEXT("Knaak"), TEXT("Krentenbol"), TEXT("Pindakaas"), TEXT("Knetter"),
-			TEXT("Slinger"), TEXT("Fluitketel"), TEXT("Stoeptegel"), TEXT("Koffiemok"), TEXT("Dropveter"), TEXT("Bamischijf"),
-			TEXT("Kapsalon"), TEXT("Draaitafel"), TEXT("Plakband"), TEXT("Kruik"), TEXT("Waslijn"), TEXT("Kruimel"),
-			TEXT("Sjoelbak"), TEXT("Tosti"), TEXT("Klodder"), TEXT("Vlaai"), TEXT("Kiekeboe"), TEXT("Nattevinger"),
-			TEXT("Knalpot"), TEXT("Glitterjas"), TEXT("Poffertje"), TEXT("Klusbus"), TEXT("Zilveruitje"), TEXT("Limonade"),
-			TEXT("Trommel"), TEXT("Badmuts"), TEXT("Knipperlicht"), TEXT("Kaasplank"), TEXT("Hagelslag"), TEXT("Frietzak"),
-			TEXT("Drol"), TEXT("Bil"), TEXT("Pielewaaier"), TEXT("Zeurpiet"), TEXT("Slok"), TEXT("Tuthola"),
-			TEXT("Snor"), TEXT("Krakeling"), TEXT("Prutser"), TEXT("Klodderkont"), TEXT("Natte Krant"), TEXT("Snotneus"),
-			TEXT("Kletsmajoor"), TEXT("Boterletter"), TEXT("Kruimeldief"), TEXT("Mallemolen") };
+			TEXT("Bakker"), TEXT("Bos"), TEXT("Vos"), TEXT("Smit"), TEXT("Meijer"), TEXT("Visser"), TEXT("Jansen"), TEXT("Dekker"),
+			TEXT("Mulder"), TEXT("Kok"), TEXT("Boer"), TEXT("Dijkstra"), TEXT("Post"), TEXT("Klein"), TEXT("Prins"), TEXT("Kuiper"),
+			TEXT("Brand"), TEXT("Vink"), TEXT("Blom"), TEXT("Molen"), TEXT("Linden"), TEXT("Vries"), TEXT("Wit"), TEXT("Zwaan"),
+			TEXT("Koster"), TEXT("Verhoef"), TEXT("Maas"), TEXT("Wolff"), TEXT("Hof"), TEXT("Kroon"), TEXT("Timmer"), TEXT("Groen"),
+			TEXT("Hoek"), TEXT("Mars"), TEXT("Berg"), TEXT("Roos"), TEXT("Kramer"), TEXT("Peters"), TEXT("Hendriks"), TEXT("Schol") };
 
 		const int32 LastIdx = FMath::Abs(Index * 37 + Index / 7) % UE_ARRAY_COUNT(Last);
 		return FString::Printf(TEXT("%s %s"), *CleanFirstName(PreferredName, Index), Last[LastIdx]);
@@ -102,10 +92,10 @@ void UNpcRegistryComponent::EnsureSeeded()
 		}
 		FNpcState S;
 		S.NpcId = RowName;
-		FString UniqueName = GoofyFullName(Def->DisplayName.ToString(), RowIndex);
+		FString UniqueName = ShortFullName(Def->DisplayName.ToString(), RowIndex);
 		for (int32 Try = 1; UsedNames.Contains(UniqueName); ++Try)
 		{
-			UniqueName = GoofyFullName(Def->DisplayName.ToString(), RowIndex + Try * 97);
+			UniqueName = ShortFullName(Def->DisplayName.ToString(), RowIndex + Try * 97);
 		}
 		UsedNames.Add(UniqueName);
 		S.DisplayName = FText::FromString(UniqueName);
