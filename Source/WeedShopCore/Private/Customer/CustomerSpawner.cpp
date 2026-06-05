@@ -20,17 +20,41 @@
 
 ACustomerSpawner::ACustomerSpawner()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
 }
 
 void ACustomerSpawner::BeginPlay()
 {
 	Super::BeginPlay();
+	if (UWorld* World = GetWorld())
+	{
+		NextResidentSpawnTryRealTime = World->GetRealTimeSeconds() + 0.5f;
+	}
 	if (HasAuthority())
 	{
 		// Snel retry-interval zodat de bewoners verschijnen zodra de stad gebouwd is.
 		GetWorldTimerManager().SetTimer(SpawnTimer, this, &ACustomerSpawner::TrySpawn, 2.0f, true, 1.0f);
 	}
+}
+
+void ACustomerSpawner::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority() || bResidentsSpawned)
+	{
+		return;
+	}
+
+	const float Now = World->GetRealTimeSeconds();
+	if (Now < NextResidentSpawnTryRealTime)
+	{
+		return;
+	}
+
+	NextResidentSpawnTryRealTime = Now + 2.f;
+	TrySpawn();
 }
 
 void ACustomerSpawner::TrySpawn()

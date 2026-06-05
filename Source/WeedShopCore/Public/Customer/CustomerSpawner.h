@@ -46,6 +46,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	void TrySpawn();
 	// Maakt van C de koopklare test-klant op de park-plek (idempotent).
 	void SetupTestCustomer(ACustomerBase* C, const FVector& Park);
@@ -59,6 +60,7 @@ protected:
 
 	bool bResidentsSpawned = false;
 	FTimerHandle SpawnTimer;
+	float NextResidentSpawnTryRealTime = 0.f;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ACustomerBase>> Spawned;
