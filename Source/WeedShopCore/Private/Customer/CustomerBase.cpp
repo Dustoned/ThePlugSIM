@@ -1002,6 +1002,7 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 
 	bool bFound = false;
 	FVector BestGoal = FVector::ZeroVector;
+	bool bBestGoalIsPark = false;
 	float BestScore = TNumericLimits<float>::Max();
 	for (float Radius : Radii)
 	{
@@ -1014,16 +1015,22 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 				continue;
 			}
 			FVector CandidateGoal = Candidate.Location;
-			if (!bFinalIsPark && City)
+			bool bCandidateIsPark = false;
+			if (City)
 			{
-				CandidateGoal = SnapResidentPointToSidewalk(City, CandidateGoal, false);
-				FNavLocation SidewalkProjection;
-				if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, Extent)
-					|| !IsResidentOutdoorSidewalkPoint(City, SidewalkProjection.Location, false))
+				bCandidateIsPark = bFinalIsPark && IsResidentParkPoint(City, CandidateGoal);
+				if (!bCandidateIsPark)
 				{
-					continue;
+					CandidateGoal = SnapResidentPointToSidewalk(City, CandidateGoal, false);
+					FNavLocation SidewalkProjection;
+					if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, Extent)
+						|| !IsResidentOutdoorSidewalkPoint(City, SidewalkProjection.Location, false))
+					{
+						continue;
+					}
+					CandidateGoal = SidewalkProjection.Location;
+					bCandidateIsPark = bFinalIsPark && IsResidentParkPoint(City, CandidateGoal);
 				}
-				CandidateGoal = SidewalkProjection.Location;
 			}
 			if (!HasResidentPath(Start, CandidateGoal, 260.f))
 			{
@@ -1040,6 +1047,7 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 			{
 				BestScore = Score;
 				BestGoal = CandidateGoal;
+				bBestGoalIsPark = bCandidateIsPark;
 				bFound = true;
 			}
 		}
@@ -1052,7 +1060,7 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 
 	RoamGoal = BestGoal;
 	bHasRoamGoal = true;
-	bRoamGoalIsPark = false;
+	bRoamGoalIsPark = bBestGoalIsPark;
 	bPendingRoamGoalIsPark = false;
 	RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 12.f, 70.f);
 	ResidentPrevMoveLoc = GetActorLocation();
@@ -1566,6 +1574,7 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
 	{
 		ACityGenerator* City = GetResidentCity(GetWorld());
+		const bool bRecoveringParkGoal = bRoamGoalIsPark;
 		for (int32 Try = 0; Try < 10; ++Try)
 		{
 			FNavLocation Candidate;
@@ -1573,25 +1582,33 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 			{
 				continue;
 			}
-			FVector CandidateGoal = (City && !bRoamGoalIsPark) ? SnapResidentPointToSidewalk(City, Candidate.Location, false) : Candidate.Location;
-			FNavLocation SidewalkProjection;
-			if (City && !bRoamGoalIsPark)
+			FVector CandidateGoal = Candidate.Location;
+			bool bCandidateIsPark = false;
+			if (City)
 			{
-				if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, FVector(650.f, 650.f, 650.f)))
+				bCandidateIsPark = bRecoveringParkGoal && IsResidentParkPoint(City, CandidateGoal);
+				if (!bCandidateIsPark)
 				{
-					continue;
+					CandidateGoal = SnapResidentPointToSidewalk(City, CandidateGoal, false);
+					FNavLocation SidewalkProjection;
+					if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, FVector(650.f, 650.f, 650.f))
+						|| !IsResidentOutdoorSidewalkPoint(City, SidewalkProjection.Location, false))
+					{
+						continue;
+					}
+					CandidateGoal = SidewalkProjection.Location;
+					bCandidateIsPark = bRecoveringParkGoal && IsResidentParkPoint(City, CandidateGoal);
 				}
-				CandidateGoal = SidewalkProjection.Location;
 			}
 			if (HasResidentPath(Cur, CandidateGoal, 320.f)
-				&& (bRoamGoalIsPark || IsResidentOutdoorSidewalkPoint(City, CandidateGoal, false))
+				&& (bCandidateIsPark || IsResidentOutdoorSidewalkPoint(City, CandidateGoal, false))
 				&& CountResidentCrowdNear(CandidateGoal, 300.f) < 3)
 			{
 				if (WalkTo(CandidateGoal, 90.f, false, true))
 				{
 					RoamGoal = CandidateGoal;
 					bHasRoamGoal = true;
-					bRoamGoalIsPark = false;
+					bRoamGoalIsPark = bCandidateIsPark;
 					bPendingRoamGoalIsPark = false;
 					RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 12.f, 70.f);
 					ResidentPrevMoveLoc = GetActorLocation();
