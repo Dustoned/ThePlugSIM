@@ -1413,6 +1413,16 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 				continue;
 			}
 
+			const int32 Crowd = CountResidentCrowdNear(Candidate, 420.f);
+			if (Crowd >= (bAllowShortTrip ? 7 : 5))
+			{
+				continue;
+			}
+			if (!HasResidentPath(Current, Candidate, bAllowShortTrip ? 520.f : MinTrip * 0.65f))
+			{
+				continue;
+			}
+
 			const float CenterDist = FVector::Dist2D(Candidate, Center);
 			FVector FromCenter = Candidate - Center;
 			FromCenter.Z = 0.f;
@@ -1422,7 +1432,6 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 				Alignment = FVector::DotProduct(FromCenter, TargetDir);
 			}
 
-			const int32 Crowd = CountResidentCrowdNear(Candidate, 420.f);
 			const int32 NoiseSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 131 + static_cast<int64>(Index) * 977) % 1000));
 			const float CenterPenalty = CenterDist < Pitch * 1.15f ? Pitch * 2.5f : 0.f;
 			const float Score = TravelDist * 0.55f
