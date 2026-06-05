@@ -242,22 +242,20 @@ namespace
 	FString ResidentNameByIndex(int32 Index)
 	{
 		static const TCHAR* First[] = {
-			TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Sanne"), TEXT("Emma"), TEXT("Daan"), TEXT("Lotte"), TEXT("Bram"),
-			TEXT("Sven"), TEXT("Fleur"), TEXT("Tim"), TEXT("Noa"), TEXT("Rick"), TEXT("Iris"), TEXT("Joost"), TEXT("Mila"),
-			TEXT("Henk"), TEXT("Willem"), TEXT("Bep"), TEXT("Cor"), TEXT("Ria"), TEXT("Dirk"), TEXT("Mieke"), TEXT("Bart"),
-			TEXT("Loes"), TEXT("Wout"), TEXT("Stijn"), TEXT("Femke"), TEXT("Jasper"), TEXT("Roos"), TEXT("Teun"), TEXT("Saar"),
-			TEXT("Koen"), TEXT("Manon"), TEXT("Gijs"), TEXT("Niels"), TEXT("Maud"), TEXT("Tessa"), TEXT("Luuk"), TEXT("Bo"),
-			TEXT("Sam"), TEXT("Nina"), TEXT("Mees"), TEXT("Lars"), TEXT("Kim"), TEXT("Isa"), TEXT("Mats"), TEXT("Jill"),
-			TEXT("Dex"), TEXT("Puck"), TEXT("Guus"), TEXT("Floor"), TEXT("Ravi"), TEXT("Nova"), TEXT("Otis"), TEXT("Liva"),
-			TEXT("Moos"), TEXT("Tijn"), TEXT("Sofie"), TEXT("Fien"), TEXT("Rens"), TEXT("Jules"), TEXT("Lio"), TEXT("Evi"),
-			TEXT("Vera"), TEXT("Siem"), TEXT("Luna"), TEXT("Mick"), TEXT("Cato"), TEXT("Boaz"), TEXT("Ruben"), TEXT("Mara"),
-			TEXT("Lieke"), TEXT("Nora"), TEXT("Cas"), TEXT("Elin"), TEXT("Sil"), TEXT("Anne"), TEXT("Tess"), TEXT("Britt") };
+			TEXT("Blaze"), TEXT("Spliff"), TEXT("Toke"), TEXT("Hash"), TEXT("Dank"), TEXT("Kush"), TEXT("Bongo"), TEXT("Smokey"),
+			TEXT("Doobie"), TEXT("Ziggy"), TEXT("Cheech"), TEXT("Chong"), TEXT("Reefer"), TEXT("Ganja"), TEXT("Puff"), TEXT("Haze"),
+			TEXT("Skunk"), TEXT("Nugget"), TEXT("Buddha"), TEXT("Chill"), TEXT("Dope"), TEXT("Trippy"), TEXT("Spacey"), TEXT("Mello"),
+			TEXT("Gonzo"), TEXT("Wappie"), TEXT("Sjonnie"), TEXT("Henkie"), TEXT("Pluk"), TEXT("Wokkel"), TEXT("Knor"), TEXT("Floep"),
+			TEXT("Dunder"), TEXT("Bizzy"), TEXT("Doof"), TEXT("Snoop"), TEXT("Stoney"), TEXT("Buddy"), TEXT("Fonzie"), TEXT("Sjakie"),
+			TEXT("Appie"), TEXT("Dikkie"), TEXT("Joppie"), TEXT("Bertus"), TEXT("Corrie"), TEXT("Sjon"), TEXT("Klaas"), TEXT("Mees"),
+			TEXT("Wiebe"), TEXT("Tukker"), TEXT("Snor"), TEXT("Plof"), TEXT("Goof"), TEXT("Snuf"), TEXT("Wibo"), TEXT("Bonk"),
+			TEXT("Toko"), TEXT("Blef"), TEXT("Patat"), TEXT("Loempia"), TEXT("Knak"), TEXT("Frik"), TEXT("Brammetje"), TEXT("Guus") };
 		static const TCHAR* Last[] = {
-			TEXT("Bakker"), TEXT("Bos"), TEXT("Vos"), TEXT("Smit"), TEXT("Meijer"), TEXT("Visser"), TEXT("Jansen"), TEXT("Dekker"),
-			TEXT("Mulder"), TEXT("Kok"), TEXT("Boer"), TEXT("Dijkstra"), TEXT("Post"), TEXT("Klein"), TEXT("Prins"), TEXT("Kuiper"),
-			TEXT("Brand"), TEXT("Vink"), TEXT("Blom"), TEXT("Molen"), TEXT("Linden"), TEXT("Vries"), TEXT("Wit"), TEXT("Zwaan"),
-			TEXT("Koster"), TEXT("Verhoef"), TEXT("Maas"), TEXT("Wolff"), TEXT("Hof"), TEXT("Kroon"), TEXT("Timmer"), TEXT("Groen"),
-			TEXT("Hoek"), TEXT("Mars"), TEXT("Berg"), TEXT("Roos"), TEXT("Kramer"), TEXT("Peters"), TEXT("Hendriks"), TEXT("Schol") };
+			TEXT("Vapehoven"), TEXT("Kushman"), TEXT("Hashberg"), TEXT("Bongers"), TEXT("Highsma"), TEXT("Wietveld"), TEXT("Blunt"), TEXT("Stoner"),
+			TEXT("Greenwood"), TEXT("Hazelaar"), TEXT("Spliffstra"), TEXT("Dankzaad"), TEXT("Nugteren"), TEXT("Pofadder"), TEXT("Knaller"), TEXT("Patatje"),
+			TEXT("Frikandel"), TEXT("Stamppot"), TEXT("Bitterbal"), TEXT("Kroketberg"), TEXT("Pindakaas"), TEXT("Hagelslag"), TEXT("Stroopwafel"), TEXT("Kaaskop"),
+			TEXT("Klompenburg"), TEXT("Tulpman"), TEXT("Windmolen"), TEXT("Fietsbel"), TEXT("Gouda"), TEXT("Poffertje"), TEXT("Bamischijf"), TEXT("Kapsalon"),
+			TEXT("Snackbar"), TEXT("Wietstra"), TEXT("Blowman"), TEXT("Puffinga"), TEXT("Dampkring"), TEXT("Rookwolk"), TEXT("Jointsma"), TEXT("Dabberhof") };
 		const int32 NF = (int32)UE_ARRAY_COUNT(First);
 		const int32 NL = (int32)UE_ARRAY_COUNT(Last);
 		const int32 I = FMath::Max(0, Index);
