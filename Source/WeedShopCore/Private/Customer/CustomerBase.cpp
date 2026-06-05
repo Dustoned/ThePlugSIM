@@ -9,6 +9,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
+#include "CollisionQueryParams.h"
 #include "NavigationPath.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
@@ -73,8 +74,8 @@ ACustomerBase::ACustomerBase()
 		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
 		Move->MaxWalkSpeed = 200.f;
 		Move->bUseRVOAvoidance = true;             // ontwijk elkaar/de speler -> niet vastlopen
-		Move->AvoidanceConsiderationRadius = 120.f;
-		Move->AvoidanceWeight = 0.5f;
+		Move->AvoidanceConsiderationRadius = 260.f;
+		Move->AvoidanceWeight = 0.85f;
 	}
 	// (Geen per-NPC navmesh-invoker meer: één centrale invoker (CityGenerator) dekt de hele stad,
 	//  dat schaalt veel beter naar 40+ NPC's dan 40 losse invokers.)
@@ -105,11 +106,39 @@ void ACustomerBase::UpdateNpcAnim(float DeltaSeconds)
 	if (UAnimSequence* Seq = (NewState == 1) ? NpcWalk : NpcIdle) { M->PlayAnimation(Seq, true); }
 }
 
-bool ACustomerBase::WalkTo(const FVector& Dest)
+bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAllowPartialPath, bool bForceRepath)
 {
+	if (!GetController())
+	{
+		SpawnDefaultController();
+	}
 	if (AAIController* AI = Cast<AAIController>(GetController()))
 	{
-		const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(Dest, 70.f, true, true, true, false, nullptr, true);
+		const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+		const bool bSameGoal = bHasLastMoveRequestGoal
+			&& FVector::DistSquared2D(LastMoveRequestGoal, Dest) < FMath::Square(85.f)
+			&& FMath::Abs(LastMoveRequestGoal.Z - Dest.Z) < 180.f;
+		if (!bForceRepath && bSameGoal && (Now - LastMoveRequestTime) < 1.1f
+			&& AI->GetMoveStatus() == EPathFollowingStatus::Moving)
+		{
+			return true;
+		}
+
+		const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(
+			Dest,
+			FMath::Max(35.f, AcceptanceRadius),
+			true,
+			true,
+			true,
+			false,
+			nullptr,
+			bAllowPartialPath);
+		if (Result != EPathFollowingRequestResult::Failed)
+		{
+			LastMoveRequestGoal = Dest;
+			bHasLastMoveRequestGoal = true;
+			LastMoveRequestTime = Now;
+		}
 		return Result != EPathFollowingRequestResult::Failed;
 	}
 	return false;
@@ -331,6 +360,13 @@ FVector ACustomerBase::ProjectResidentPointToNav(const FVector& Desired, const F
 	return Desired + FVector(0.f, 0.f, 3.f);
 }
 
+FVector ACustomerBase::MakeResidentStandingLocation(const FVector& FloorLocation) const
+{
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	const float HalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 88.f;
+	return FVector(FloorLocation.X, FloorLocation.Y, FloorLocation.Z + HalfHeight + 2.f);
+}
+
 FVector ACustomerBase::GetResidentHomeEntrySpot() const
 {
 	FVector ToHome = HomeInteriorPos - HomeFrontSpot;
@@ -361,7 +397,11 @@ void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 	bPendingRoamGoalIsPark = false;
 	ParkPauseTimer = 0.f;
 	ResidentStuckTimer = 0.f;
+	ResidentRecoveryCooldown = 0.f;
 	bHasResidentPrevMoveLoc = false;
+	bHasResidentBestDistToGoal = false;
+	ResidentRecoveryAttempts = 0;
+	bHasLastMoveRequestGoal = false;
 	SetActorHiddenInGame(false);
 	SetActorEnableCollision(true);
 	if (!GetController())
@@ -370,7 +410,7 @@ void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 	}
 
 	const FVector Spawn = bFromInterior ? HomeInteriorPos : (bHasHomeHall ? HomeHallPos : HomeInteriorPos);
-	SetActorLocation(Spawn + FVector(0.f, 0.f, 4.f));
+	SetActorLocation(MakeResidentStandingLocation(Spawn));
 }
 
 bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
@@ -378,6 +418,24 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 	if (!bEmergingFromHome)
 	{
 		return false;
+	}
+
+	if (bHasHomeHall && HomeExitStage == 1)
+	{
+		if (AAIController* AI = Cast<AAIController>(GetController()))
+		{
+			AI->StopMovement();
+		}
+		SetActorHiddenInGame(true);
+		SetActorEnableCollision(false);
+		SetActorLocation(MakeResidentStandingLocation(GetResidentHomeEntrySpot()));
+		SetActorEnableCollision(true);
+		SetActorHiddenInGame(false);
+		HomeExitStage = 2;
+		HomeExitStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
+		bHasLastMoveRequestGoal = false;
+		return true;
 	}
 
 	const bool bHallStage = (HomeExitStage == 0 && bHasHomeHall);
@@ -440,12 +498,12 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 
 		if (bHallStage)
 		{
-			SetActorLocation(HomeHallPos + FVector(0.f, 0.f, 4.f));
+			SetActorLocation(MakeResidentStandingLocation(HomeHallPos));
 			HomeExitStage = 1;
 		}
 		else
 		{
-			SetActorLocation(ProjectResidentPointToNav(HomeFrontSpot, FVector(1400.f, 1400.f, 700.f)));
+			SetActorLocation(MakeResidentStandingLocation(ProjectResidentPointToNav(HomeFrontSpot, FVector(1400.f, 1400.f, 700.f))));
 			bEmergingFromHome = false;
 			bLeavingHomeRoute = false;
 			bHasRoamGoal = false;
@@ -471,7 +529,11 @@ void ACustomerBase::StartResidentHomeEntry()
 	bPendingRoamGoalIsPark = false;
 	ParkPauseTimer = 0.f;
 	ResidentStuckTimer = 0.f;
+	ResidentRecoveryCooldown = 0.f;
 	bHasResidentPrevMoveLoc = false;
+	bHasResidentBestDistToGoal = false;
+	ResidentRecoveryAttempts = 0;
+	bHasLastMoveRequestGoal = false;
 	SetActorHiddenInGame(false);
 	SetActorEnableCollision(true);
 	if (!GetController())
@@ -488,10 +550,11 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 	}
 
 	const bool bFrontStage = (HomeEntryStage == 0);
-	const FVector Target = bFrontStage ? HomeFrontSpot : GetResidentHomeEntrySpot();
+	const bool bApartmentUnitStage = bHasHomeHall && HomeEntryStage >= 2;
+	const FVector Target = bFrontStage ? HomeFrontSpot : (bApartmentUnitStage ? (HomeInteriorPos + FVector(0.f, 0.f, 4.f)) : GetResidentHomeEntrySpot());
 	const FVector Cur = GetActorLocation();
 	const bool bArrived = FVector::Dist2D(Cur, Target) < (bFrontStage ? 160.f : 125.f)
-		&& FMath::Abs(Cur.Z - Target.Z) < (bFrontStage ? 230.f : 190.f);
+		&& FMath::Abs(Cur.Z - Target.Z) < (bFrontStage ? 230.f : (bApartmentUnitStage ? 220.f : 190.f));
 
 	if (bArrived)
 	{
@@ -500,6 +563,23 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 			HomeEntryStage = 1;
 			HomeEntryStuckTimer = 0.f;
 			bHasResidentPrevMoveLoc = false;
+			return true;
+		}
+		if (bHasHomeHall && HomeEntryStage == 1)
+		{
+			if (AAIController* AI = Cast<AAIController>(GetController()))
+			{
+				AI->StopMovement();
+			}
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			SetActorLocation(MakeResidentStandingLocation(HomeHallPos));
+			SetActorEnableCollision(true);
+			SetActorHiddenInGame(false);
+			HomeEntryStage = 2;
+			HomeEntryStuckTimer = 0.f;
+			bHasResidentPrevMoveLoc = false;
+			bHasLastMoveRequestGoal = false;
 			return true;
 		}
 
@@ -541,7 +621,7 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 		HomeEntryStuckTimer = 0.f;
 	}
 
-	if (HomeEntryStuckTimer >= (bFrontStage ? 3.2f : 2.8f))
+	if (HomeEntryStuckTimer >= (bFrontStage ? 3.2f : (bApartmentUnitStage ? 2.4f : 2.8f)))
 	{
 		if (AAIController* AI = Cast<AAIController>(GetController()))
 		{
@@ -550,12 +630,21 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 
 		if (bFrontStage)
 		{
-			SetActorLocation(ProjectResidentPointToNav(HomeFrontSpot, FVector(1400.f, 1400.f, 700.f)));
+			SetActorLocation(MakeResidentStandingLocation(ProjectResidentPointToNav(HomeFrontSpot, FVector(1400.f, 1400.f, 700.f))));
 			HomeEntryStage = 1;
+		}
+		else if (bHasHomeHall && HomeEntryStage == 1)
+		{
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			SetActorLocation(MakeResidentStandingLocation(HomeHallPos));
+			SetActorEnableCollision(true);
+			SetActorHiddenInGame(false);
+			HomeEntryStage = 2;
 		}
 		else
 		{
-			SetActorLocation(Target);
+			SetActorLocation(MakeResidentStandingLocation(Target));
 			bEnteringHome = false;
 			bAtHomeInside = true;
 			SetActorHiddenInGame(true);
@@ -590,6 +679,14 @@ void ACustomerBase::EndAppointment()
 	bApptArrived = false;
 	SetNeedsPlayer(false);
 	RoamTimer = 0.f;           // pak meteen een nieuw roam-doel
+	bHasRoamGoal = false;
+	bRoamGoalIsPark = false;
+	bPendingRoamGoalIsPark = false;
+	ResidentStuckTimer = 0.f;
+	ResidentRecoveryCooldown = 0.f;
+	bHasResidentPrevMoveLoc = false;
+	bHasResidentBestDistToGoal = false;
+	ResidentRecoveryAttempts = 0;
 }
 
 ACityGenerator* ACustomerBase::GetResidentCity(UWorld* W)
@@ -645,12 +742,179 @@ int32 ACustomerBase::CountResidentParkVisitors(float Radius) const
 	return Count;
 }
 
+int32 ACustomerBase::CountResidentCrowdNear(const FVector& Point, float Radius) const
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return 0;
+	}
+
+	const float RadiusSq = FMath::Square(Radius);
+	int32 Count = 0;
+	for (TActorIterator<ACustomerBase> It(W); It; ++It)
+	{
+		const ACustomerBase* C = *It;
+		if (!IsValid(C) || C == this || !C->bResident || C->bAtHomeInside)
+		{
+			continue;
+		}
+		if (FVector::DistSquared2D(C->GetActorLocation(), Point) <= RadiusSq)
+		{
+			++Count;
+		}
+	}
+
+	if (const APlayerController* PC = W->GetFirstPlayerController())
+	{
+		if (const APawn* P = PC->GetPawn())
+		{
+			if (FVector::DistSquared2D(P->GetActorLocation(), Point) <= RadiusSq)
+			{
+				Count += 2;
+			}
+		}
+	}
+	return Count;
+}
+
+bool ACustomerBase::HasResidentPath(const FVector& From, const FVector& To, float MinDistance2D) const
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return false;
+	}
+	if (MinDistance2D > 0.f && FVector::Dist2D(From, To) < MinDistance2D)
+	{
+		return false;
+	}
+	UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(W, From, To, const_cast<ACustomerBase*>(this));
+	return Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() > 1;
+}
+
+bool ACustomerBase::HasResidentObstacleAhead(const FVector& Goal) const
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return false;
+	}
+
+	FVector Dir = Goal - GetActorLocation();
+	Dir.Z = 0.f;
+	if (!Dir.Normalize())
+	{
+		return false;
+	}
+
+	const FVector Start = GetActorLocation();
+	const FVector End = Start + Dir * 260.f;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(CustomerResidentAvoidance), false, this);
+	Params.AddIgnoredActor(this);
+	const FCollisionShape Shape = FCollisionShape::MakeSphere(46.f);
+	FHitResult Hit;
+	if (W->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_WorldStatic, Shape, Params))
+	{
+		return true;
+	}
+	return W->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_WorldDynamic, Shape, Params);
+}
+
+bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
+{
+	UWorld* W = GetWorld();
+	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
+	if (!W || !Nav)
+	{
+		return false;
+	}
+
+	FVector Start = GetActorLocation();
+	FNavLocation ProjectedStart;
+	if (Nav->ProjectPointToNavigation(Start, ProjectedStart, FVector(900.f, 900.f, 700.f)))
+	{
+		Start = ProjectedStart.Location;
+	}
+
+	FVector ToGoal = FinalGoal - Start;
+	ToGoal.Z = 0.f;
+	if (!ToGoal.Normalize())
+	{
+		ToGoal = GetActorForwardVector();
+		ToGoal.Z = 0.f;
+		if (!ToGoal.Normalize())
+		{
+			ToGoal = FVector::ForwardVector;
+		}
+	}
+
+	static const float Angles[] = { 85.f, -85.f, 125.f, -125.f, 45.f, -45.f, 170.f };
+	static const float Radii[] = { 520.f, 820.f, 1180.f, 1550.f };
+	const FVector Extent(420.f, 420.f, 520.f);
+
+	bool bFound = false;
+	FVector BestGoal = FVector::ZeroVector;
+	float BestScore = TNumericLimits<float>::Max();
+	for (float Radius : Radii)
+	{
+		for (float Angle : Angles)
+		{
+			const FVector Raw = Start + ToGoal.RotateAngleAxis(Angle, FVector::UpVector) * Radius;
+			FNavLocation Candidate;
+			if (!Nav->ProjectPointToNavigation(Raw, Candidate, Extent))
+			{
+				continue;
+			}
+			if (!HasResidentPath(Start, Candidate.Location, 260.f))
+			{
+				continue;
+			}
+			if (!HasResidentPath(Candidate.Location, FinalGoal, 320.f))
+			{
+				continue;
+			}
+
+			const int32 Crowd = CountResidentCrowdNear(Candidate.Location, 320.f);
+			const float Score = FVector::Dist2D(Candidate.Location, FinalGoal) + Crowd * 1200.f + FMath::Abs(Angle) * 3.f;
+			if (Score < BestScore)
+			{
+				BestScore = Score;
+				BestGoal = Candidate.Location;
+				bFound = true;
+			}
+		}
+	}
+
+	if (!bFound || !WalkTo(BestGoal, 90.f, false, true))
+	{
+		return false;
+	}
+
+	RoamGoal = BestGoal;
+	bHasRoamGoal = true;
+	bRoamGoalIsPark = false;
+	bPendingRoamGoalIsPark = false;
+	RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 12.f, 70.f);
+	ResidentPrevMoveLoc = GetActorLocation();
+	bHasResidentPrevMoveLoc = true;
+	ResidentStuckTimer = 0.f;
+	ResidentRecoveryCooldown = 0.8f;
+	ResidentRecoveryAttempts = 0;
+	ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
+	bHasResidentBestDistToGoal = true;
+	return true;
+}
+
 void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 {
 	if (ParkPauseTimer > 0.f || bAtHomeInside || bApptActive)
 	{
 		ResidentStuckTimer = 0.f;
+		ResidentRecoveryCooldown = 0.f;
 		bHasResidentPrevMoveLoc = false;
+		bHasResidentBestDistToGoal = false;
+		ResidentRecoveryAttempts = 0;
 		return;
 	}
 
@@ -661,8 +925,17 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 	if (!bHasRoamGoal || bCloseToGoal)
 	{
 		ResidentStuckTimer = 0.f;
+		ResidentRecoveryCooldown = 0.f;
 		ResidentPrevMoveLoc = Cur;
 		bHasResidentPrevMoveLoc = true;
+		bHasResidentBestDistToGoal = false;
+		ResidentRecoveryAttempts = 0;
+		return;
+	}
+
+	if (ResidentRecoveryCooldown > 0.f)
+	{
+		ResidentRecoveryCooldown = FMath::Max(0.f, ResidentRecoveryCooldown - DeltaSeconds);
 		return;
 	}
 
@@ -680,7 +953,21 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 		bPathActuallyMoving = (AI->GetMoveStatus() == EPathFollowingStatus::Moving);
 	}
 
-	if (!bPathActuallyMoving || MoveDelta < 6.f)
+	const float DistToGoal = FVector::Dist2D(Cur, RoamGoal);
+	if (!bHasResidentBestDistToGoal || DistToGoal < ResidentBestDistToGoal - 35.f)
+	{
+		ResidentBestDistToGoal = DistToGoal;
+		bHasResidentBestDistToGoal = true;
+		ResidentStuckTimer = 0.f;
+		ResidentRecoveryAttempts = 0;
+		return;
+	}
+
+	const float Speed2D = GetVelocity().Size2D();
+	const bool bObstacleAhead = HasResidentObstacleAhead(RoamGoal);
+	const bool bBarelyMoved = MoveDelta < 7.f && Speed2D < 18.f;
+	const bool bNoGoalProgress = DistToGoal > ResidentBestDistToGoal - 12.f && MoveDelta < 15.f;
+	if (!bPathActuallyMoving || bBarelyMoved || bNoGoalProgress || (bObstacleAhead && MoveDelta < 24.f))
 	{
 		ResidentStuckTimer += DeltaSeconds;
 	}
@@ -689,22 +976,62 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 		ResidentStuckTimer = 0.f;
 	}
 
-	if (ResidentStuckTimer < 1.8f)
+	const float StuckThreshold = bObstacleAhead ? 1.0f : 2.2f;
+	if (ResidentStuckTimer < StuckThreshold)
 	{
 		return;
 	}
 
+	++ResidentRecoveryAttempts;
 	if (AAIController* AI = Cast<AAIController>(GetController()))
 	{
 		AI->StopMovement();
 	}
 
+	if (ResidentRecoveryAttempts == 1 && WalkTo(RoamGoal, 90.f, false, true))
+	{
+		ResidentStuckTimer = 0.f;
+		ResidentRecoveryCooldown = 0.7f;
+		bHasResidentPrevMoveLoc = false;
+		return;
+	}
+
+	if (TrySetResidentDetourGoal(RoamGoal))
+	{
+		return;
+	}
+
 	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
 	{
+		for (int32 Try = 0; Try < 10; ++Try)
+		{
+			FNavLocation Candidate;
+			if (Nav->GetRandomReachablePointInRadius(Cur, 1350.f, Candidate)
+				&& HasResidentPath(Cur, Candidate.Location, 320.f)
+				&& CountResidentCrowdNear(Candidate.Location, 300.f) < 3)
+			{
+				if (WalkTo(Candidate.Location, 90.f, false, true))
+				{
+					RoamGoal = Candidate.Location;
+					bHasRoamGoal = true;
+					bRoamGoalIsPark = false;
+					bPendingRoamGoalIsPark = false;
+					RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 12.f, 70.f);
+					ResidentPrevMoveLoc = GetActorLocation();
+					bHasResidentPrevMoveLoc = true;
+					ResidentStuckTimer = 0.f;
+					ResidentRecoveryCooldown = 0.8f;
+					ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
+					bHasResidentBestDistToGoal = true;
+					return;
+				}
+			}
+		}
+
 		FNavLocation Proj;
 		if (Nav->ProjectPointToNavigation(Cur, Proj, FVector(900.f, 900.f, 600.f)))
 		{
-			SetActorLocation(Proj.Location + FVector(0.f, 0.f, 3.f));
+			SetActorLocation(MakeResidentStandingLocation(Proj.Location));
 		}
 	}
 
@@ -714,7 +1041,10 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 	ParkPauseTimer = 0.f;
 	RoamTimer = 0.f;
 	ResidentStuckTimer = 0.f;
+	ResidentRecoveryCooldown = 0.f;
 	bHasResidentPrevMoveLoc = false;
+	bHasResidentBestDistToGoal = false;
+	ResidentRecoveryAttempts = 0;
 }
 
 bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ)
@@ -734,9 +1064,10 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	if (Nav->ProjectPointToNavigation(Start, ProjectedStart, FVector(900.f, 900.f, 700.f)))
 	{
 		Start = ProjectedStart.Location + FVector(0.f, 0.f, 3.f);
-		if (FVector::Dist2D(Start, GetActorLocation()) > 140.f || FMath::Abs(Start.Z - GetActorLocation().Z) > 220.f)
+		const FVector StandingStart = MakeResidentStandingLocation(Start);
+		if (FVector::Dist2D(StandingStart, GetActorLocation()) > 140.f || FMath::Abs(StandingStart.Z - GetActorLocation().Z) > 70.f)
 		{
-			SetActorLocation(Start);
+			SetActorLocation(StandingStart);
 		}
 	}
 
@@ -752,25 +1083,36 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 		return Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() > 1;
 	};
 
-	if (!Nav->ProjectPointToNavigation(DesiredGoal, Projected, Extent) || !HasFullPathTo(Projected.Location))
+	const bool bProjectedUsable = Nav->ProjectPointToNavigation(DesiredGoal, Projected, Extent)
+		&& HasFullPathTo(Projected.Location)
+		&& (bGoalIsPark || CountResidentCrowdNear(Projected.Location, 280.f) < 4);
+	if (!bProjectedUsable)
 	{
 		const float FallbackRadius = FMath::Max(2600.f, SearchXY * 2.5f);
 		bool bFoundFallback = false;
+		FNavLocation BestCandidate;
+		float BestScore = TNumericLimits<float>::Max();
 		for (int32 Try = 0; Try < 18; ++Try)
 		{
 			FNavLocation Candidate;
 			if (Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate)
 				&& HasFullPathTo(Candidate.Location))
 			{
-				Projected = Candidate;
+				const int32 Crowd = CountResidentCrowdNear(Candidate.Location, 320.f);
+				const float Score = FVector::Dist2D(Candidate.Location, DesiredGoal) + Crowd * 1400.f;
+				if (Score < BestScore)
+				{
+					BestScore = Score;
+					BestCandidate = Candidate;
+				}
 				bFoundFallback = true;
-				break;
 			}
 		}
 		if (!bFoundFallback)
 		{
 			return false;
 		}
+		Projected = BestCandidate;
 	}
 
 	if (!WalkTo(Projected.Location))
@@ -785,6 +1127,10 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	ResidentPrevMoveLoc = GetActorLocation();
 	bHasResidentPrevMoveLoc = true;
 	ResidentStuckTimer = 0.f;
+	ResidentRecoveryCooldown = 0.f;
+	ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
+	bHasResidentBestDistToGoal = true;
+	ResidentRecoveryAttempts = 0;
 	return true;
 }
 
@@ -933,7 +1279,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 				bAtHomeInside = false;
 				SetActorHiddenInGame(false);
 				SetActorEnableCollision(true);
-				SetActorLocation(HomeFrontSpot);
+				SetActorLocation(MakeResidentStandingLocation(HomeFrontSpot));
 			}
 			WalkTo(HomeFrontSpot);
 			if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 160.f)
@@ -952,7 +1298,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 				bAtHomeInside = false;
 				SetActorHiddenInGame(false);
 				SetActorEnableCollision(true);
-				SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+				SetActorLocation(MakeResidentStandingLocation(HomeInteriorPos));
 				if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
 			}
 			return;
@@ -1014,6 +1360,10 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			ParkPauseTimer = 0.f;
 			bHasRoamGoal = false;
 			RoamTimer = 0.f;
+			ResidentStuckTimer = 0.f;
+			ResidentRecoveryCooldown = 0.f;
+			bHasResidentBestDistToGoal = false;
+			ResidentRecoveryAttempts = 0;
 		}
 		return;
 	}
@@ -1030,12 +1380,20 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
 			ParkPauseTimer = FMath::FRandRange(4.f, 9.f);
+			ResidentStuckTimer = 0.f;
+			ResidentRecoveryCooldown = 0.f;
+			bHasResidentBestDistToGoal = false;
+			ResidentRecoveryAttempts = 0;
 			return;
 		}
 
 		bHasRoamGoal = false;
 		bRoamGoalIsPark = false;
 		RoamTimer = 0.f;
+		ResidentStuckTimer = 0.f;
+		ResidentRecoveryCooldown = 0.f;
+		bHasResidentBestDistToGoal = false;
+		ResidentRecoveryAttempts = 0;
 	}
 
 	if (!bHasRoamGoal || RoamTimer <= 0.f)
@@ -1060,6 +1418,10 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		bHasRoamGoal = false;
 		bRoamGoalIsPark = false;
 		RoamTimer = 2.f;
+		ResidentStuckTimer = 0.f;
+		ResidentRecoveryCooldown = 0.f;
+		bHasResidentBestDistToGoal = false;
+		ResidentRecoveryAttempts = 0;
 	}
 }
 

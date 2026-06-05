@@ -53,3 +53,9 @@ Wat de editor moet kunnen instellen/aanroepen:
 ## Werkwijze
 Eén systeem per commit. Elke beslissing in `DECISIONS.md`. Code wordt lokaal gecompileerd
 (`E:\UE\UE_5.7` Build.bat) vóór commit, zodat alles groen is.
+ 
+### Unreal test-loop
+- Laat Unreal Editor open terwijl Codex code maakt, zodat jij de huidige live-versie kunt blijven testen.
+- Als de code klaar is: sluit Unreal Editor eerst, draai daarna de Unreal build.
+- Commit pas nadat de build groen is.
+- Start Unreal Editor daarna opnieuw, zodat jij de nieuwe update direct in de editor kunt testen.

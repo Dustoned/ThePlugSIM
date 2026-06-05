@@ -148,8 +148,9 @@ public:
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
 	// --- Navigatie (spawnt op één punt, loopt naar z'n plek; loopt naar huis bij vertrek) ---
-	// Laat de AI naar een wereldlocatie lopen (via de navmesh).
-	bool WalkTo(const FVector& Dest);
+	// Laat de AI naar een wereldlocatie lopen (via de navmesh). Re-requests worden gedempt zodat
+	// path-following niet elke tick opnieuw begint, maar stuck-recovery kan geforceerd herpathen.
+	bool WalkTo(const FVector& Dest, float AcceptanceRadius = 80.f, bool bAllowPartialPath = false, bool bForceRepath = false);
 
 	// Plek waar de klant gaat staan (door de spawner gezet).
 	void SetSpot(const FVector& InSpot) { SpotLocation = InSpot; bHasSpot = true; }
@@ -215,6 +216,10 @@ protected:
 	FVector ResidentPrevMoveLoc = FVector::ZeroVector;
 	bool bHasResidentPrevMoveLoc = false;
 	float ResidentStuckTimer = 0.f;
+	float ResidentRecoveryCooldown = 0.f;
+	float ResidentBestDistToGoal = 0.f;
+	bool bHasResidentBestDistToGoal = false;
+	int32 ResidentRecoveryAttempts = 0;
 	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
 	bool bHasPark = false;
 	TWeakObjectPtr<ACityGenerator> CachedCity;
@@ -234,7 +239,12 @@ protected:
 	bool TickResidentHomeEntry(float DeltaSeconds);
 	float ComputeResidentRoamTimeout(const FVector& Goal) const;
 	int32 CountResidentParkVisitors(float Radius) const;
+	int32 CountResidentCrowdNear(const FVector& Point, float Radius) const;
 	void RecoverResidentIfStuck(float DeltaSeconds);
+	bool TrySetResidentDetourGoal(const FVector& FinalGoal);
+	bool HasResidentPath(const FVector& From, const FVector& To, float MinDistance2D = 0.f) const;
+	bool HasResidentObstacleAhead(const FVector& Goal) const;
+	FVector MakeResidentStandingLocation(const FVector& FloorLocation) const;
 	bool bEmergingFromHome = false;
 	int32 HomeExitStage = 0;
 	float HomeExitStuckTimer = 0.f;
@@ -263,4 +273,7 @@ protected:
 	bool bHasSpot = false;
 	bool bHasHome = false;
 	bool bWalkingHome = false;
+	FVector LastMoveRequestGoal = FVector::ZeroVector;
+	bool bHasLastMoveRequestGoal = false;
+	float LastMoveRequestTime = -1000.f;
 };
