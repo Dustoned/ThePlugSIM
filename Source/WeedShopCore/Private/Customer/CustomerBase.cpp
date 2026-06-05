@@ -338,6 +338,9 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	ParkLegCountdown = 2 + FMath::Abs(RoamRouteSeed % 3);
 	HallLegCountdown = 3 + FMath::Abs((RoamRouteSeed / 7) % 4);
 	RoamLegIndex = FMath::Abs(RoamRouteSeed % 97);
+	ResidentRouteDay = -1;
+	ResidentStreetLegsToday = 0;
+	LastParkVisitDay = -1;
 	RoamTimer = FMath::FRandRange(0.5f, 4.f); // spreiding: niet allemaal tegelijk vertrekken na het naar buiten komen
 
 	// Rustige wandeltred: bewoners slenteren over straat i.p.v. te sprinten.
@@ -912,6 +915,136 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 	return true;
 }
 
+void ACustomerBase::BuildResidentStreetStops(ACityGenerator* City, TArray<FVector>& OutStops) const
+{
+	OutStops.Reset();
+	if (!City)
+	{
+		return;
+	}
+
+	TArray<FCityMapBlock> Blocks;
+	City->GetMapBlocks(Blocks);
+	const float BlockSize = FMath::Max(500.f, City->GetMapBlockSize());
+	const float SideOffset = FMath::Max(260.f, BlockSize * 0.5f - 130.f);
+	const float AlongWide = FMath::Clamp(BlockSize * 0.24f, 260.f, 950.f);
+	const float AlongSmall = FMath::Clamp(BlockSize * 0.10f, 120.f, 420.f);
+	OutStops.Reserve(Blocks.Num() * 12);
+
+	int32 BlockIndex = 0;
+	for (const FCityMapBlock& B : Blocks)
+	{
+		++BlockIndex;
+		if (B.Label.Equals(TEXT("Park"), ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+
+		const FVector Base(B.Center.X, B.Center.Y, HomeFrontSpot.Z);
+		const int32 ZigStep = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(BlockIndex) * 41) % 5)) - 2;
+		const float Zig = static_cast<float>(ZigStep) * AlongSmall;
+		const FVector Stops[] = {
+			Base + FVector( SideOffset,  Zig,        0.f),
+			Base + FVector(-SideOffset, -Zig,        0.f),
+			Base + FVector( Zig,         SideOffset, 0.f),
+			Base + FVector(-Zig,        -SideOffset, 0.f),
+			Base + FVector( SideOffset,  AlongWide,  0.f),
+			Base + FVector( SideOffset, -AlongWide,  0.f),
+			Base + FVector(-SideOffset,  AlongWide,  0.f),
+			Base + FVector(-SideOffset, -AlongWide,  0.f),
+			Base + FVector( AlongWide,   SideOffset, 0.f),
+			Base + FVector(-AlongWide,   SideOffset, 0.f),
+			Base + FVector( AlongWide,  -SideOffset, 0.f),
+			Base + FVector(-AlongWide,  -SideOffset, 0.f)
+		};
+
+		for (const FVector& Stop : Stops)
+		{
+			OutStops.Add(Stop);
+		}
+	}
+}
+
+bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const
+{
+	OutGoal = FVector::ZeroVector;
+	OutSearchXY = 520.f;
+	OutSearchZ = 650.f;
+
+	TArray<FVector> StreetStops;
+	BuildResidentStreetStops(City, StreetStops);
+	if (StreetStops.Num() == 0 || !City)
+	{
+		return false;
+	}
+
+	const FVector Current = GetActorLocation();
+	const FVector Center = City->GetCityCenter();
+	const float Pitch = FMath::Max(100.f, City->GetPitch());
+	const float MinTrip = FMath::Clamp(Pitch * 0.85f, 1100.f, 3200.f);
+	const int32 StartIndex = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 31) % StreetStops.Num()));
+	const int32 AngleSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 13 + static_cast<int64>(RouteLeg) * 71 + static_cast<int64>(ResidentStreetLegsToday) * 29) % 360));
+	const float TargetAngle = FMath::DegreesToRadians(static_cast<float>(AngleSeed));
+	const FVector TargetDir(FMath::Cos(TargetAngle), FMath::Sin(TargetAngle), 0.f);
+
+	bool bFound = false;
+	FVector BestGoal = FVector::ZeroVector;
+	float BestScore = -TNumericLimits<float>::Max();
+	for (int32 Pass = 0; Pass < 2; ++Pass)
+	{
+		const bool bAllowShortTrip = Pass > 0;
+		for (int32 Offset = 0; Offset < StreetStops.Num(); ++Offset)
+		{
+			const int32 Index = (StartIndex + Offset) % StreetStops.Num();
+			const FVector Candidate = StreetStops[Index];
+			const float TravelDist = FVector::Dist2D(Current, Candidate);
+			if (!bAllowShortTrip && TravelDist < MinTrip)
+			{
+				continue;
+			}
+
+			const float CenterDist = FVector::Dist2D(Candidate, Center);
+			FVector FromCenter = Candidate - Center;
+			FromCenter.Z = 0.f;
+			float Alignment = 0.f;
+			if (FromCenter.Normalize())
+			{
+				Alignment = FVector::DotProduct(FromCenter, TargetDir);
+			}
+
+			const int32 Crowd = CountResidentCrowdNear(Candidate, 420.f);
+			const int32 NoiseSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 131 + static_cast<int64>(Index) * 977) % 1000));
+			const float CenterPenalty = CenterDist < Pitch * 1.15f ? Pitch * 2.5f : 0.f;
+			const float Score = TravelDist * 0.55f
+				+ CenterDist * 0.85f
+				+ Alignment * Pitch * 0.85f
+				- static_cast<float>(Crowd) * 2100.f
+				- CenterPenalty
+				+ static_cast<float>(NoiseSeed) * 0.25f;
+
+			if (Score > BestScore)
+			{
+				BestScore = Score;
+				BestGoal = Candidate;
+				bFound = true;
+			}
+		}
+
+		if (bFound)
+		{
+			break;
+		}
+	}
+
+	if (!bFound)
+	{
+		return false;
+	}
+
+	OutGoal = BestGoal;
+	return true;
+}
+
 bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 {
 	ACityGenerator* City = GetResidentCity(GetWorld());
@@ -922,32 +1055,18 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 		return false;
 	}
 
-	TArray<FCityMapBlock> Blocks;
-	City->GetMapBlocks(Blocks);
-	const FVector Center = City->GetCityCenter();
-	const float SideOffset = City->GetMapBlockSize() * 0.5f - 130.f;
 	TArray<FVector> StreetStops;
-	StreetStops.Reserve(Blocks.Num());
-	for (const FCityMapBlock& B : Blocks)
+	BuildResidentStreetStops(City, StreetStops);
+	for (int32 Try = 0; Try < 24; ++Try)
 	{
-		if (B.Label.Equals(TEXT("Park"), ESearchCase::IgnoreCase))
-		{
-			continue;
-		}
-		FVector FromCenter(B.Center.X - Center.X, B.Center.Y - Center.Y, 0.f);
-		if (!FromCenter.Normalize())
-		{
-			continue;
-		}
-		StreetStops.Add(FVector(B.Center.X, B.Center.Y, HomeFrontSpot.Z) - FromCenter * SideOffset);
-	}
-
-	for (int32 Try = 0; Try < StreetStops.Num() && Try < 16; ++Try)
-	{
-		const int32 Pick = FMath::Abs(RoamRouteSeed + (RoamLegIndex + Try) * 17) % StreetStops.Num();
-		if (SetResidentRoamGoal(StreetStops[Pick], 420.f, 650.f))
+		FVector StreetGoal;
+		float SearchXY = 520.f;
+		float SearchZ = 650.f;
+		if (PickResidentStreetRoamGoal(City, RoamLegIndex + Try, StreetGoal, SearchXY, SearchZ)
+			&& SetResidentRoamGoal(StreetGoal, SearchXY, SearchZ))
 		{
 			RoamLegIndex += Try + 1;
+			++ResidentStreetLegsToday;
 			return true;
 		}
 	}
@@ -975,6 +1094,8 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 			ResidentRecoveryAttempts = 0;
 			ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
 			bHasResidentBestDistToGoal = true;
+			++RoamLegIndex;
+			++ResidentStreetLegsToday;
 			return true;
 		}
 	}
@@ -984,8 +1105,14 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 		return false;
 	}
 
-	const int32 Pick = FMath::Abs(RoamRouteSeed + RoamLegIndex * 23) % StreetStops.Num();
-	const FVector SafeStreet = ProjectResidentPointToNav(StreetStops[Pick], FVector(900.f, 900.f, 700.f));
+	FVector SnapGoal;
+	float SnapSearchXY = 520.f;
+	float SnapSearchZ = 650.f;
+	if (!PickResidentStreetRoamGoal(City, RoamLegIndex + 29, SnapGoal, SnapSearchXY, SnapSearchZ))
+	{
+		return false;
+	}
+	const FVector SafeStreet = ProjectResidentPointToNav(SnapGoal, FVector(900.f, 900.f, 700.f));
 	if (AAIController* AI = Cast<AAIController>(GetController()))
 	{
 		AI->StopMovement();
@@ -999,6 +1126,7 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 	ResidentNoGoalTimer = 0.f;
 	ResidentGoalFailCount = 0;
 	++RoamLegIndex;
+	++ResidentStreetLegsToday;
 	return ForceResidentOutdoorRoamGoal(false);
 }
 
@@ -1188,18 +1316,21 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 		&& (bGoalIsPark || CountResidentCrowdNear(Projected.Location, 280.f) < 4);
 	if (!bProjectedUsable)
 	{
-		const float FallbackRadius = FMath::Max(2600.f, SearchXY * 2.5f);
+		const float DesiredDistance = FVector::Dist2D(Start, DesiredGoal);
+		const float FallbackRadius = FMath::Clamp(DesiredDistance + 900.f, FMath::Max(3200.f, SearchXY * 3.f), 12000.f);
 		bool bFoundFallback = false;
 		FNavLocation BestCandidate;
 		float BestScore = TNumericLimits<float>::Max();
-		for (int32 Try = 0; Try < 18; ++Try)
+		for (int32 Try = 0; Try < 32; ++Try)
 		{
 			FNavLocation Candidate;
 			if (Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate)
-				&& HasFullPathTo(Candidate.Location))
+				&& HasFullPathTo(Candidate.Location)
+				&& (bGoalIsPark || CountResidentCrowdNear(Candidate.Location, 340.f) < 6))
 			{
 				const int32 Crowd = CountResidentCrowdNear(Candidate.Location, 320.f);
-				const float Score = FVector::Dist2D(Candidate.Location, DesiredGoal) + Crowd * 1400.f;
+				const float ShortHopPenalty = FVector::Dist2D(Start, Candidate.Location) < 1200.f ? 16000.f : 0.f;
+				const float Score = FVector::Dist2D(Candidate.Location, DesiredGoal) + Crowd * 1400.f + ShortHopPenalty;
 				if (Score < BestScore)
 				{
 					BestScore = Score;
@@ -1261,70 +1392,55 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 		return true;
 	}
 
-	--ParkLegCountdown;
-
-	if (ParkLegCountdown <= 0)
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
+	const int32 Today = DC ? DC->GetDayNumber() : 1;
+	const float Hour = DC ? DC->GetClockHour() : 12.f;
+	if (ResidentRouteDay != Today)
 	{
-		ParkLegCountdown = 4 + FMath::Abs((RoamRouteSeed + RoamLegIndex) % 4);
-		if (CountResidentParkVisitors(City->GetMapBlockSize() * 0.58f) < 10)
-		{
-			const float D = City->GetMapBlockSize() * 0.30f;
-			const FVector ParkStops[] = {
-				FVector(0.f, 0.f, 0.f),
-				FVector(D, 0.f, 0.f),
-				FVector(-D, 0.f, 0.f),
-				FVector(0.f, D, 0.f),
-				FVector(0.f, -D, 0.f)
-			};
-			const int32 Pick = FMath::Abs(RoamRouteSeed + RoamLegIndex * 3) % UE_ARRAY_COUNT(ParkStops);
-			OutGoal = FVector(ParkCenter.X, ParkCenter.Y, HomeFrontSpot.Z) + ParkStops[Pick];
-			OutSearchXY = 650.f;
-			OutSearchZ = 400.f;
-			bPendingRoamGoalIsPark = true;
-			++RoamLegIndex;
-			return true;
-		}
+		ResidentRouteDay = Today;
+		ResidentStreetLegsToday = 0;
+		ParkLegCountdown = 1 + FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 17) % 4));
 	}
 
-	TArray<FCityMapBlock> Blocks;
-	City->GetMapBlocks(Blocks);
-	TArray<FVector> StreetStops;
-	StreetStops.Reserve(Blocks.Num());
-
-	const FVector Center = City->GetCityCenter();
-	const float Pitch = City->GetPitch();
-	const float SideOffset = City->GetMapBlockSize() * 0.5f - 130.f;
-	for (const FCityMapBlock& B : Blocks)
+	const int32 ParkHourSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 23) % 8));
+	const float ParkVisitHour = 8.f + static_cast<float>(ParkHourSeed);
+	const bool bNeedsParkVisit = LastParkVisitDay != Today;
+	const bool bParkWindowOpen = Hour >= ParkVisitHour && ResidentStreetLegsToday >= ParkLegCountdown;
+	const bool bParkOverdue = Hour >= 16.5f;
+	if (bNeedsParkVisit && (bParkWindowOpen || bParkOverdue))
 	{
-		if (B.Label.Equals(TEXT("Park"), ESearchCase::IgnoreCase))
-		{
-			continue;
-		}
-		const int32 GX = FMath::RoundToInt((B.Center.X - Center.X) / Pitch);
-		const int32 GY = FMath::RoundToInt((B.Center.Y - Center.Y) / Pitch);
-		FVector Dir((GX > 0) ? -1.f : (GX < 0) ? 1.f : 0.f, (GY > 0) ? -1.f : (GY < 0) ? 1.f : 0.f, 0.f);
-		if (!FMath::IsNearlyZero(Dir.X))
-		{
-			Dir.Y = 0.f;
-		}
-		if (Dir.IsNearlyZero())
-		{
-			continue;
-		}
-		StreetStops.Add(FVector(B.Center.X, B.Center.Y, HomeFrontSpot.Z) + Dir * SideOffset);
+		const float D = City->GetMapBlockSize() * 0.32f;
+		const float Inner = City->GetMapBlockSize() * 0.15f;
+		const FVector ParkStops[] = {
+			FVector(0.f, 0.f, 0.f),
+			FVector( D, 0.f, 0.f),
+			FVector(-D, 0.f, 0.f),
+			FVector(0.f,  D, 0.f),
+			FVector(0.f, -D, 0.f),
+			FVector( Inner,  Inner, 0.f),
+			FVector(-Inner,  Inner, 0.f),
+			FVector( Inner, -Inner, 0.f),
+			FVector(-Inner, -Inner, 0.f)
+		};
+		const int32 ParkStopCount = UE_ARRAY_COUNT(ParkStops);
+		const int32 Pick = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 53 + static_cast<int64>(RoamLegIndex) * 3) % ParkStopCount));
+		OutGoal = FVector(ParkCenter.X, ParkCenter.Y, HomeFrontSpot.Z) + ParkStops[Pick];
+		OutSearchXY = 760.f;
+		OutSearchZ = 500.f;
+		bPendingRoamGoalIsPark = true;
+		++RoamLegIndex;
+		return true;
 	}
 
-	if (StreetStops.Num() == 0)
+	if (PickResidentStreetRoamGoal(City, RoamLegIndex, OutGoal, OutSearchXY, OutSearchZ))
 	{
-		return false;
+		++RoamLegIndex;
+		++ResidentStreetLegsToday;
+		return true;
 	}
 
-	const int32 Pick = FMath::Abs(RoamRouteSeed + RoamLegIndex * 11) % StreetStops.Num();
-	OutGoal = StreetStops[Pick];
-	OutSearchXY = 260.f;
-	OutSearchZ = 500.f;
-	++RoamLegIndex;
-	return true;
+	return false;
 }
 
 void ACustomerBase::TickResident(float DeltaSeconds)
@@ -1452,6 +1568,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	{
 		if (bRoamGoalIsPark)
 		{
+			LastParkVisitDay = DC ? DC->GetDayNumber() : ResidentRouteDay;
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
 			ParkPauseTimer = 0.f;
@@ -1499,6 +1616,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		if (SetResidentRoamGoal(SeedGoal, 2200.f, 700.f))
 		{
 			++RoamLegIndex;
+			++ResidentStreetLegsToday;
 			return;
 		}
 		++ResidentGoalFailCount;

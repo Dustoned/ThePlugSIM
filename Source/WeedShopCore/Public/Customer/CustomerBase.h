@@ -229,8 +229,13 @@ protected:
 	int32 RoamLegIndex = 0;
 	int32 ParkLegCountdown = 0;
 	int32 HallLegCountdown = 0;
+	int32 ResidentRouteDay = -1;
+	int32 ResidentStreetLegsToday = 0;
+	int32 LastParkVisitDay = -1;
 	bool bLeavingHomeRoute = false;
 	ACityGenerator* GetResidentCity(UWorld* W);
+	void BuildResidentStreetStops(ACityGenerator* City, TArray<FVector>& OutStops) const;
+	bool PickResidentStreetRoamGoal(ACityGenerator* City, int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const;
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);
 	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
 	FVector ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const;
