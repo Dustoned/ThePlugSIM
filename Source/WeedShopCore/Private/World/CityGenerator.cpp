@@ -30,6 +30,7 @@
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/Character.h"
 
 namespace
 {
@@ -551,7 +552,21 @@ void ACityGenerator::BuildCity()
 
 void ACityGenerator::CaptureMapNow()
 {
-	if (MapCapture) { MapCapture->CaptureScene(); }
+	if (!MapCapture) { return; }
+
+	// Karakters (NPC's + spelers) UIT de kaart-render houden: dit is een one-shot capture, dus anders
+	// worden ze ingebakken op hun positie van dat moment en blijven ze als ghost-puntjes op de kaart
+	// staan terwijl ze in het echt verder lopen. Live posities tekent de MapWidget zelf met losse dots.
+	MapCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
+	MapCapture->HiddenActors.Reset();
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<ACharacter> It(W); It; ++It)
+		{
+			if (IsValid(*It)) { MapCapture->HiddenActors.Add(*It); }
+		}
+	}
+	MapCapture->CaptureScene();
 }
 
 void ACityGenerator::VerifyCityNavigationCoverage()
