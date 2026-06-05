@@ -335,23 +335,52 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 	if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 	{
 		auto Give = [Inv](const TCHAR* Id, int32 N) { Inv->AddItem(FName(Id), N); };
-		Give(TEXT("Soil_Basic"),          bSandbox ? 10 : 3);
-		Give(TEXT("WaterBottle_Plastic"), bSandbox ? 2 : 1);
-		Give(TEXT("Papers_Small"),        bSandbox ? 50 : 10);
-		Give(TEXT("Cont_Bag5"),           bSandbox ? 50 : 10);
-		Give(TEXT("Cont_Jar10"),          bSandbox ? 20 : 5);
-		Give(TEXT("Pot_Clay"),            bSandbox ? 3 : 1);
-		Give(TEXT("DryRack_Cheap"),       1);
-		Give(TEXT("Bench_Pack"),          1);
-		Give(TEXT("Sink"),                1);
-		// Zaden uit de catalogus.
-		if (GS->GetStore())
+		if (bSandbox)
 		{
-			const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
-			const int32 Count = bSandbox ? Seeds.Num() : FMath::Min(2, Seeds.Num());
-			for (int32 i = 0; i < Count; ++i)
+			// Sandbox = NETTE set i.p.v. een volgepropte inventory. Eerst leeg (anders stapelt 'ie op de
+			// gewone starter), dan een standaard starter + precies de plaatsbare meubels die je nodig hebt
+			// om de furniture-templates in te richten (free-build = overal plaatsen).
+			Inv->ClearAll();
+			Give(TEXT("Papers_Small"), 5);
+			Give(TEXT("Soil_Basic"), 5);
+			Give(TEXT("WaterBottle_Plastic"), 2);
+			Give(TEXT("Pot_Clay"), 2);
+			Give(TEXT("Cont_Bag5"), 10);
+			// Plaatsbare meubels (authoring):
+			Give(TEXT("Table"), 5);
+			Give(TEXT("Fridge"), 5);
+			Give(TEXT("Mattress"), 5);
+			Give(TEXT("Sink"), 5);
+			Give(TEXT("DryRack_Std"), 3);
+			Give(TEXT("Bench_Pack"), 3);
+			Give(TEXT("Shelf"), 3);
+			Give(TEXT("Chest"), 3);
+			Give(TEXT("Lamp_Ceiling"), 3);
+			Give(TEXT("Atm"), 2);
+			// Eén soort zaad om mee te testen.
+			if (GS->GetStore())
 			{
-				Inv->AddItem(UStoreComponent::SeedItemId(Seeds[i]), bSandbox ? 10 : 3);
+				const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
+				if (Seeds.Num() > 0) { Inv->AddItem(UStoreComponent::SeedItemId(Seeds[0]), 3); }
+			}
+		}
+		else
+		{
+			// Testing: starter-budget + handige items (zoals voorheen).
+			Give(TEXT("Soil_Basic"),          3);
+			Give(TEXT("WaterBottle_Plastic"), 1);
+			Give(TEXT("Papers_Small"),        10);
+			Give(TEXT("Cont_Bag5"),           10);
+			Give(TEXT("Cont_Jar10"),          5);
+			Give(TEXT("Pot_Clay"),            1);
+			Give(TEXT("DryRack_Cheap"),       1);
+			Give(TEXT("Bench_Pack"),          1);
+			Give(TEXT("Sink"),                1);
+			if (GS->GetStore())
+			{
+				const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
+				const int32 Count = FMath::Min(2, Seeds.Num());
+				for (int32 i = 0; i < Count; ++i) { Inv->AddItem(UStoreComponent::SeedItemId(Seeds[i]), 3); }
 			}
 		}
 	}
