@@ -13,22 +13,35 @@
 
 namespace
 {
-	// Welke woning bevat dit punt? Kies de dichtstbijzijnde wiens kamer-AABB het punt omvat.
+	// Welke woning hoort bij dit punt? Royale tolerantie zodat meubels TEGEN de muur (sinks, wandrekken)
+	// nog meegenomen worden; valt anders terug op de dichtstbijzijnde woning binnen redelijk bereik.
 	int32 FindHomeForPoint(const TArray<FApartmentHome>& Homes, const FVector& L)
 	{
 		int32 Best = INDEX_NONE;
 		float BestD = TNumericLimits<float>::Max();
+		// 1) Woning wiens kamer-AABB het punt (ruim) omvat -> dichtstbijzijnde centrum.
 		for (int32 i = 0; i < Homes.Num(); ++i)
 		{
 			const FApartmentHome& H = Homes[i];
 			const FVector D = L - H.InteriorPos;
-			const float Tol = 70.f;
+			const float Tol = 160.f; // tegen de muur mag ruim buiten de binnenmaat vallen
 			if (FMath::Abs(D.X) <= H.RoomHalf.X + Tol && FMath::Abs(D.Y) <= H.RoomHalf.Y + Tol &&
-				D.Z > -70.f && D.Z < H.RoomHalf.Z + 90.f)
+				D.Z > -110.f && D.Z < H.RoomHalf.Z + 140.f)
 			{
-				const float DD = D.SizeSquared();
+				const float DD = FVector(D.X, D.Y, 0.f).SizeSquared();
 				if (DD < BestD) { BestD = DD; Best = i; }
 			}
+		}
+		if (Best != INDEX_NONE) { return Best; }
+
+		// 2) Fallback: dichtstbijzijnde woning-centrum in XY, mits binnen kamergrootte + marge.
+		float BestF = TNumericLimits<float>::Max();
+		for (int32 i = 0; i < Homes.Num(); ++i)
+		{
+			const FApartmentHome& H = Homes[i];
+			const float DD = FVector::DistSquared2D(L, H.InteriorPos);
+			const float Cap = FMath::Max(H.RoomHalf.X, H.RoomHalf.Y) + 300.f;
+			if (DD < Cap * Cap && DD < BestF) { BestF = DD; Best = i; }
 		}
 		return Best;
 	}
