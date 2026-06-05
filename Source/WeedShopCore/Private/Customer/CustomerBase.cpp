@@ -807,13 +807,31 @@ void ACustomerBase::BeginAppointment(bool bComeToPlayer)
 {
 	if (!HasAuthority()) { return; }
 	bApptActive = true;
-	bEnteringHome = false;
-	bEmergingFromHome = false;
 	bApptComeToPlayer = bComeToPlayer;
 	bApptArrived = false;
 	ApptTimeout = 360.f;       // 6 min: daarna geeft de NPC de afspraak op
 	SetNeedsPlayer(true);      // poppetje op de kompas zodat de speler weet waar te zijn
 	BecomeBuyerNow();          // afspraak = wil kopen (geen prospect-sampling meer)
+
+	if (bComeToPlayer)
+	{
+		if (bEnteringHome)
+		{
+			if (AAIController* AI = Cast<AAIController>(GetController()))
+			{
+				AI->StopMovement();
+			}
+			bEnteringHome = false;
+			bAtHomeInside = true;
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+		}
+		return;
+	}
+
+	bEnteringHome = false;
+	bEmergingFromHome = false;
 }
 
 void ACustomerBase::EndAppointment()
