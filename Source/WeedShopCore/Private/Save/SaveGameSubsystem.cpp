@@ -350,7 +350,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 			Give(TEXT("Table"), 5);
 			Give(TEXT("Fridge"), 5);
 			Give(TEXT("Mattress"), 5);
-			Give(TEXT("Sink"), 5);
+			// (Geen Sink: gootsteen is een vaste fixture, niet plaatsbaar/oppakbaar.)
 			Give(TEXT("DryRack_Std"), 3);
 			Give(TEXT("Bench_Pack"), 3);
 			Give(TEXT("Shelf"), 3);
@@ -375,7 +375,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 			Give(TEXT("Pot_Clay"),            1);
 			Give(TEXT("DryRack_Cheap"),       1);
 			Give(TEXT("Bench_Pack"),          1);
-			Give(TEXT("Sink"),                1);
+			// (Geen Sink: vaste fixture.)
 			if (GS->GetStore())
 			{
 				const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();

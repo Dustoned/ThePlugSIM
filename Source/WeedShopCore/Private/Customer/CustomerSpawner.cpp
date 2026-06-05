@@ -593,7 +593,7 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 			FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
 			FActorSpawnParameters SkSP; SkSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc), SkSP);
-			if (Sink && bCosmetic) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); }
+			if (Sink) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); } // sink = altijd vaste fixture
 		}
 	}
 

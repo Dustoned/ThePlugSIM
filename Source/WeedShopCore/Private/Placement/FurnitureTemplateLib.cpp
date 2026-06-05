@@ -160,7 +160,28 @@ bool FurnitureTemplates::LoadTemplates(TMap<FString, TArray<FFurnitureEntry>>& O
 {
 	Out.Reset();
 	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *FilePath())) { return false; }
+	if (!FFileHelper::LoadFileToString(Text, *FilePath()))
+	{
+		// INGEBAKKEN default-layout: werkt altijd, ook zonder Saved-bestand. (Een Saved-bestand van F8
+		// overschrijft dit volledig.)
+		Text = FString(
+			TEXT("Row_6x7|Mattress|-153.0|-127.5|-6.0|0.0\n")
+			TEXT("Row_6x7|Fridge|153.0|127.5|-6.0|180.0\n")
+			TEXT("Row_6x7|Table|0.0|113.3|-6.0|0.0\n")
+			TEXT("Row_6x7|Sink|153.0|-127.5|39.0|90.0\n")
+			TEXT("Row_4x7|Mattress|-153.0|-95.6|-6.0|0.0\n")
+			TEXT("Row_4x7|Fridge|153.0|95.6|-6.0|180.0\n")
+			TEXT("Row_4x7|Table|0.0|85.0|-6.0|0.0\n")
+			TEXT("Row_4x7|Sink|153.0|-95.6|39.0|90.0\n")
+			TEXT("Apt_7x11|Mattress|145.8|-159.8|-6.0|0.0\n")
+			TEXT("Apt_7x11|Fridge|384.2|159.8|-6.0|180.0\n")
+			TEXT("Apt_7x11|Table|265.0|142.0|-6.0|0.0\n")
+			TEXT("Apt_7x11|Sink|384.2|-159.8|39.0|90.0\n")
+			TEXT("Apt_5x7|Mattress|-304.7|-155.7|-6.0|-89.4\n")
+			TEXT("Apt_5x7|Fridge|-318.4|235.5|-6.0|0.7\n")
+			TEXT("Apt_5x7|Table|-64.6|221.7|-6.0|0.7\n")
+			TEXT("Apt_5x7|Sink|-241.3|232.9|39.0|1.2\n"));
+	}
 
 	TArray<FString> Lines;
 	Text.ParseIntoArrayLines(Lines);
@@ -222,8 +243,10 @@ AActor* FurnitureTemplates::SpawnEntry(UWorld* W, const FFurnitureEntry& E, cons
 		Spawned = P;
 	}
 
-	// NPC-woning -> markeer als cosmetisch (niet oppakbaar). Jouw eigen woning-meubels blijven onbetagd.
-	if (Spawned && bCosmetic) { Spawned->Tags.Add(FName(TEXT("Cosmetic"))); }
+	// Cosmetisch (niet oppakbaar) als: NPC-woning, OF het is een gootsteen. Sinks zijn ALTIJD vaste
+	// fixtures -> ook in je eigen woning kun je ze niet oppakken.
+	const bool bSinkLocked = (S == TEXT("Sink"));
+	if (Spawned && (bCosmetic || bSinkLocked)) { Spawned->Tags.Add(FName(TEXT("Cosmetic"))); }
 	return Spawned;
 }
 

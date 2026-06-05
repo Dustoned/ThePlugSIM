@@ -775,6 +775,13 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 
+	// Gootsteen = vaste fixture: nooit plaatsbaar door spelers (staat al vast in elke woning).
+	if (ItemId == FName(TEXT("Sink")))
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Sinks zijn vaste fixtures.")); }
+		return;
+	}
+
 	// Server-side her-validatie (anti-cheat / lag): niet in een muur of (voor potten) te dicht.
 	// Plafondlampen (plafond) en wand-mounts (muur) gebruiken geen vloer-gebaseerde checks -> overslaan.
 	if (!Def.bIsLamp && !Def.bIsWallMount && IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
