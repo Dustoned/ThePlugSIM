@@ -2206,7 +2206,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const float Hour = DC ? DC->GetClockHour() : 12.f;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
-	const bool bNight = (Hour >= 19.f || Hour < 7.f);
+	const bool bNight = DC ? DC->IsNight() : (Hour >= 20.f || Hour < 6.f);
 
 	// --- Afspraak heeft voorrang op roamen/nacht ---
 	if (bApptActive)
