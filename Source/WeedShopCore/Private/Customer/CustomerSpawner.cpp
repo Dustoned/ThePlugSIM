@@ -372,6 +372,21 @@ void ACustomerSpawner::SpawnResidents()
 		if (IsValid(*It)) { It->Destroy(); }
 	}
 
+	// Op een VERSE game ook de editor-geplaatste meubel-props uit de level-map opruimen (bv. een test
+	// tafel/koelkast/matras/gootsteen-set midden in de stad/park). Op dit punt bestaan er nog geen
+	// procedurele fixtures of speler-geplaatste props, dus dit raakt alleen die level-rommel. Bij een
+	// GELADEN game niet: dan herstelt de save de speler-props.
+	bool bFreshForCleanup = true;
+	if (UGameInstance* GI = World->GetGameInstance())
+	{
+		if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>()) { bFreshForCleanup = Sv->IsFreshGame(); }
+	}
+	if (bFreshForCleanup)
+	{
+		for (TActorIterator<APlaceableProp> It(World); It; ++It) { if (IsValid(*It)) { It->Destroy(); } }
+		for (TActorIterator<AWaterSink> It(World); It; ++It) { if (IsValid(*It)) { It->Destroy(); } }
+	}
+
 	AWeedShopGameState* GS = World->GetGameState<AWeedShopGameState>();
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
 
