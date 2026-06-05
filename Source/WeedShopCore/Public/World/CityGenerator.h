@@ -91,6 +91,7 @@ protected:
 
 	// Bouwt de hele stad (idempotent: bouwt maar 1x).
 	void BuildCity();
+	void VerifyCityNavigationCoverage();
 
 	// Straatlantaarn (paal + kop + warm puntlicht) die 's avonds aan gaat.
 	void AddCityLamp(const FVector& BaseWorld);
@@ -156,6 +157,7 @@ private:
 	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> MapRT;
 	float MapOrthoWidth = 0.f;
 	FTimerHandle MapCaptureTimer;
+	FTimerHandle NavCoverageTimer;
 
 	// Straatlampen: spots (naar onder) + zachte gloed-puntlichten + gloeiende koppen, getoggeld op kloktijd.
 	UPROPERTY() TArray<TObjectPtr<class ULightComponent>> LampLights;

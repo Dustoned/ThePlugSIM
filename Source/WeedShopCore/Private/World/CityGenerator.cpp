@@ -20,6 +20,7 @@
 #include "World/DayCycleComponent.h"
 #include "NavigationInvokerComponent.h"
 #include "NavigationSystem.h"
+#include "NavigationPath.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "Components/BrushComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
@@ -506,11 +507,155 @@ void ACityGenerator::BuildCity()
 		// Even wachten tot de net-gebouwde geometrie gerenderd is, dan 1x capturen.
 		GetWorldTimerManager().SetTimer(MapCaptureTimer, this, &ACityGenerator::CaptureMapNow, 0.6f, false);
 	}
+
+	GetWorldTimerManager().SetTimer(NavCoverageTimer, this, &ACityGenerator::VerifyCityNavigationCoverage, 4.0f, false);
 }
 
 void ACityGenerator::CaptureMapNow()
 {
 	if (MapCapture) { MapCapture->CaptureScene(); }
+}
+
+void ACityGenerator::VerifyCityNavigationCoverage()
+{
+	UWorld* W = GetWorld();
+	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
+	if (!W || !Nav)
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage skipped: navigation system unavailable"));
+		return;
+	}
+
+	const float Pitch = BlockSize + RoadWidth;
+	const int32 R = FMath::Clamp(GridRadius, 1, 8);
+	const int32 Open = FMath::Max(0, OpenPlazaRadius);
+	const float Half = BlockSize * 0.5f;
+	const float Lane = Half - SidewalkWidth * 0.5f;
+	const float Along = FMath::Clamp(BlockSize * 0.28f, 320.f, 820.f);
+	const float SampleZ = GroundZ + CurbHeight + 70.f;
+	const FVector ProjectionExtent(420.f, 420.f, 900.f);
+
+	TArray<FVector> Samples;
+	TArray<bool> EdgeSample;
+	auto AddSide = [&](int32 GX, int32 GY, int32 SideX, int32 SideY)
+	{
+		if (FMath::Max(FMath::Abs(GX), FMath::Abs(GY)) <= Open)
+		{
+			return;
+		}
+		const int32 NX = GX + SideX;
+		const int32 NY = GY + SideY;
+		if (NX < -R || NX > R || NY < -R || NY > R)
+		{
+			return;
+		}
+
+		const bool bEdge = FMath::Max(FMath::Abs(GX), FMath::Abs(GY)) == R;
+		const FVector Base(CityCenter.X + GX * Pitch, CityCenter.Y + GY * Pitch, SampleZ);
+		const FVector Normal = SideX != 0 ? FVector(static_cast<float>(SideX), 0.f, 0.f) : FVector(0.f, static_cast<float>(SideY), 0.f);
+		const FVector Tangent = SideX != 0 ? FVector(0.f, 1.f, 0.f) : FVector(1.f, 0.f, 0.f);
+		const float Offsets[] = { 0.f, Along, -Along };
+		for (float Offset : Offsets)
+		{
+			Samples.Add(Base + Normal * Lane + Tangent * Offset);
+			EdgeSample.Add(bEdge);
+		}
+	};
+
+	for (int32 GX = -R; GX <= R; ++GX)
+	{
+		for (int32 GY = -R; GY <= R; ++GY)
+		{
+			AddSide(GX, GY, 1, 0);
+			AddSide(GX, GY, -1, 0);
+			AddSide(GX, GY, 0, 1);
+			AddSide(GX, GY, 0, -1);
+		}
+	}
+
+	TArray<FVector> Projected;
+	TArray<bool> ProjectedIsEdge;
+	Projected.Reserve(Samples.Num());
+	ProjectedIsEdge.Reserve(Samples.Num());
+	int32 EdgeTotal = 0;
+	int32 EdgeProjected = 0;
+	for (int32 i = 0; i < Samples.Num(); ++i)
+	{
+		if (EdgeSample[i])
+		{
+			++EdgeTotal;
+		}
+		FNavLocation NavLoc;
+		if (Nav->ProjectPointToNavigation(Samples[i], NavLoc, ProjectionExtent))
+		{
+			Projected.Add(NavLoc.Location);
+			ProjectedIsEdge.Add(EdgeSample[i]);
+			if (EdgeSample[i])
+			{
+				++EdgeProjected;
+			}
+		}
+	}
+
+	if (Projected.Num() == 0)
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage failed: projected=0/%d edgeProjected=0/%d"), Samples.Num(), EdgeTotal);
+		return;
+	}
+
+	int32 StartIndex = 0;
+	float BestCenterDist = TNumericLimits<float>::Max();
+	for (int32 i = 0; i < Projected.Num(); ++i)
+	{
+		const float Dist = FVector::DistSquared2D(Projected[i], CityCenter);
+		if (Dist < BestCenterDist)
+		{
+			BestCenterDist = Dist;
+			StartIndex = i;
+		}
+	}
+
+	const FVector Start = Projected[StartIndex];
+	int32 Reachable = 0;
+	int32 EdgeReachable = 0;
+	for (int32 i = 0; i < Projected.Num(); ++i)
+	{
+		if (i == StartIndex)
+		{
+			++Reachable;
+			if (ProjectedIsEdge[i])
+			{
+				++EdgeReachable;
+			}
+			continue;
+		}
+
+		UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(W, Start, Projected[i], this);
+		const bool bReachable = Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() > 1;
+		if (bReachable)
+		{
+			++Reachable;
+			if (ProjectedIsEdge[i])
+			{
+				++EdgeReachable;
+			}
+		}
+	}
+
+	const bool bWeakCoverage = Projected.Num() < Samples.Num() * 8 / 10 || Reachable < Projected.Num() * 8 / 10
+		|| (EdgeTotal > 0 && (EdgeProjected < EdgeTotal * 8 / 10 || EdgeReachable < EdgeProjected * 8 / 10));
+	if (bWeakCoverage)
+	{
+		UE_LOG(LogWeedShop, Warning,
+			TEXT("City nav coverage: projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
+			Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
+	}
+	else
+	{
+		UE_LOG(LogWeedShop, Log,
+			TEXT("City nav coverage: projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
+			Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
+	}
 }
 
 void ACityGenerator::GetMapBlocks(TArray<FCityMapBlock>& Out) const
