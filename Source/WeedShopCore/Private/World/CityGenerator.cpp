@@ -512,6 +512,15 @@ void ACityGenerator::BuildCity()
 
 	UE_LOG(LogWeedShop, Log, TEXT("City build complete: homes=%d blocks=%d lamps=%d"),
 		ApartmentHomes.Num(), (2 * R + 1) * (2 * R + 1), LampLights.Num());
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+	{
+		const float NavSpan = Span + BlockSize + RoadWidth;
+		const FVector DirtyCenter(Center.X, Center.Y, GroundZ + 1200.f);
+		const FVector DirtyExtent(NavSpan * 0.5f, NavSpan * 0.5f, 2600.f);
+		NavSys->AddDirtyArea(FBox(DirtyCenter - DirtyExtent, DirtyCenter + DirtyExtent), ENavigationDirtyFlag::All, TEXT("GeneratedCityComplete"));
+		NavSys->Build();
+		UE_LOG(LogWeedShop, Log, TEXT("City nav build requested after generated geometry"));
+	}
 	NavCoverageAttempts = 0;
 	VerifyCityNavigationCoverage();
 }

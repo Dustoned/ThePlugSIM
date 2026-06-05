@@ -16,6 +16,7 @@
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "CollisionQueryParams.h"
+#include "NavigationSystem.h"
 
 ACustomerSpawner::ACustomerSpawner()
 {
@@ -73,6 +74,63 @@ namespace
 		const int32 I = FMath::Max(0, Index);
 		return FString::Printf(TEXT("%s %s"), First[I % NF], Last[(I * 37 + I / NF) % NL]);
 	}
+
+	bool AreResidentEdgeHomesNavigationReady(UWorld* World, const TArray<FApartmentHome>& Homes, const TSet<int32>& ForSale)
+	{
+		UNavigationSystemV1* Nav = World ? UNavigationSystemV1::GetCurrent(World) : nullptr;
+		if (!Nav || Homes.Num() == 0)
+		{
+			return false;
+		}
+
+		const FVector2D Dirs[] = {
+			FVector2D(1.f, 0.f), FVector2D(-1.f, 0.f), FVector2D(0.f, 1.f), FVector2D(0.f, -1.f),
+			FVector2D(1.f, 1.f), FVector2D(1.f, -1.f), FVector2D(-1.f, 1.f), FVector2D(-1.f, -1.f)
+		};
+
+		TArray<int32> SampleHomes;
+		for (const FVector2D& RawDir : Dirs)
+		{
+			const FVector2D Dir = RawDir.GetSafeNormal();
+			int32 BestIndex = INDEX_NONE;
+			float BestScore = -TNumericLimits<float>::Max();
+			for (int32 i = 0; i < Homes.Num(); ++i)
+			{
+				if (ForSale.Contains(i))
+				{
+					continue;
+				}
+
+				const FVector& Door = Homes[i].DoorPos;
+				const float Score = Door.X * Dir.X + Door.Y * Dir.Y;
+				if (Score > BestScore)
+				{
+					BestScore = Score;
+					BestIndex = i;
+				}
+			}
+			if (BestIndex != INDEX_NONE)
+			{
+				SampleHomes.AddUnique(BestIndex);
+			}
+		}
+
+		if (SampleHomes.Num() == 0)
+		{
+			return false;
+		}
+
+		const FVector Extent(800.f, 800.f, 1200.f);
+		for (int32 HomeIndex : SampleHomes)
+		{
+			FNavLocation Projected;
+			if (!Nav->ProjectPointToNavigation(Homes[HomeIndex].DoorPos, Projected, Extent))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 }
 
 void ACustomerSpawner::SpawnResidents()
@@ -93,6 +151,21 @@ void ACustomerSpawner::SpawnResidents()
 	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
 	if (Homes.Num() == 0) { return; } // stad nog niet klaar -> volgende tick
 
+	// ELKE genummerde woning krijgt een bewoner (deur op slot met naam). Een gespreide subset loopt
+	// ook ECHT rond (MaxResidents; 0 = allemaal). De rest "woont er" via de op-slot-deur met naam.
+	const int32 Total = Homes.Num();
+
+	// De 3 koopbare panden (starter-flatje, rijtjeshuis, grote kamer) blijven ALTIJD vrij: geen bewoner,
+	// deur als "TE KOOP" totdat de speler 'm koopt (dan ontgrendelt de PhoneClientComponent 'm lokaal).
+	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	TSet<int32> ForSale;
+	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
+
+	if (!AreResidentEdgeHomesNavigationReady(World, Homes, ForSale))
+	{
+		return;
+	}
+
 	bResidentsSpawned = true;
 
 	// Ruim eerst alle vooraf-geplaatste/los rondslingerende klant-NPC's op (bv. test-NPC's die in de
@@ -108,16 +181,6 @@ void ACustomerSpawner::SpawnResidents()
 
 	TSubclassOf<ACustomerBase> Cls = CustomerClass;
 	if (!Cls) { Cls = ACustomerBase::StaticClass(); }
-
-	// ELKE genummerde woning krijgt een bewoner (deur op slot met naam). Een gespreide subset loopt
-	// ook ECHT rond (MaxResidents; 0 = allemaal). De rest "woont er" via de op-slot-deur met naam.
-	const int32 Total = Homes.Num();
-
-	// De 3 koopbare panden (starter-flatje, rijtjeshuis, grote kamer) blijven ALTIJD vrij: geen bewoner,
-	// deur als "TE KOOP" totdat de speler 'm koopt (dan ontgrendelt de PhoneClientComponent 'm lokaal).
-	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
-	TSet<int32> ForSale;
-	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
 
 	// Fysieke roamers kiezen we per UNIEKE hoofdingang: alle units van één appartement-/flatgebouw delen
 	// dezelfde DoorPos, dus zonder dit zouden er tig bewoners op exact dezelfde stoephoek clusteren.
