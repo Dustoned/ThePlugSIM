@@ -260,6 +260,7 @@ protected:
 	bool HasResidentPath(const FVector& From, const FVector& To, float MinDistance2D = 0.f) const;
 	bool HasResidentObstacleAhead(const FVector& Goal) const;
 	FVector MakeResidentStandingLocation(const FVector& FloorLocation) const;
+	float ComputeResidentGoalThinkDelay(float MinDelay, float MaxDelay) const;
 	bool bEmergingFromHome = false;
 	int32 HomeExitStage = 0;
 	float HomeExitStuckTimer = 0.f;

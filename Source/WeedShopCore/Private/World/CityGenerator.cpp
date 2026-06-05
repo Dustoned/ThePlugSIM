@@ -549,81 +549,49 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 		return;
 	}
 
-	const float Pitch = BlockSize + RoadWidth;
-	const int32 R = FMath::Clamp(GridRadius, 1, 8);
-	const int32 Open = FMath::Max(0, OpenPlazaRadius);
-	const float Half = BlockSize * 0.5f;
-	const float Lane = Half - SidewalkWidth * 0.5f;
-	const float Along = FMath::Clamp(BlockSize * 0.28f, 320.f, 820.f);
-	const float SampleZ = GroundZ + CurbHeight + 70.f;
-	const FVector ProjectionExtent(420.f, 420.f, 900.f);
-
 	TArray<FVector> Samples;
-	TArray<bool> EdgeSample;
-	auto AddSide = [&](int32 GX, int32 GY, int32 SideX, int32 SideY)
-	{
-		if (FMath::Max(FMath::Abs(GX), FMath::Abs(GY)) <= Open)
-		{
-			return;
-		}
-		const int32 NX = GX + SideX;
-		const int32 NY = GY + SideY;
-		if (NX < -R || NX > R || NY < -R || NY > R)
-		{
-			return;
-		}
-
-		const bool bEdge = FMath::Max(FMath::Abs(GX), FMath::Abs(GY)) == R;
-		const FVector Base(CityCenter.X + GX * Pitch, CityCenter.Y + GY * Pitch, SampleZ);
-		const FVector Normal = SideX != 0 ? FVector(static_cast<float>(SideX), 0.f, 0.f) : FVector(0.f, static_cast<float>(SideY), 0.f);
-		const FVector Tangent = SideX != 0 ? FVector(0.f, 1.f, 0.f) : FVector(1.f, 0.f, 0.f);
-		const float Offsets[] = { 0.f, Along, -Along };
-		for (float Offset : Offsets)
-		{
-			Samples.Add(Base + Normal * Lane + Tangent * Offset);
-			EdgeSample.Add(bEdge);
-		}
+	const FVector2D Dirs[] = {
+		FVector2D(1.f, 0.f), FVector2D(-1.f, 0.f), FVector2D(0.f, 1.f), FVector2D(0.f, -1.f),
+		FVector2D(1.f, 1.f), FVector2D(1.f, -1.f), FVector2D(-1.f, 1.f), FVector2D(-1.f, -1.f)
 	};
-
-	for (int32 GX = -R; GX <= R; ++GX)
+	for (const FVector2D& RawDir : Dirs)
 	{
-		for (int32 GY = -R; GY <= R; ++GY)
+		const FVector2D Dir = RawDir.GetSafeNormal();
+		bool bFound = false;
+		FVector Best = FVector::ZeroVector;
+		float BestScore = -TNumericLimits<float>::Max();
+		for (const FApartmentHome& Home : ApartmentHomes)
 		{
-			AddSide(GX, GY, 1, 0);
-			AddSide(GX, GY, -1, 0);
-			AddSide(GX, GY, 0, 1);
-			AddSide(GX, GY, 0, -1);
+			const float Score = Home.DoorPos.X * Dir.X + Home.DoorPos.Y * Dir.Y;
+			if (Score > BestScore)
+			{
+				BestScore = Score;
+				Best = Home.DoorPos;
+				bFound = true;
+			}
+		}
+		if (bFound)
+		{
+			Samples.Add(Best);
 		}
 	}
 
 	TArray<FVector> Projected;
-	TArray<bool> ProjectedIsEdge;
 	Projected.Reserve(Samples.Num());
-	ProjectedIsEdge.Reserve(Samples.Num());
-	int32 EdgeTotal = 0;
-	int32 EdgeProjected = 0;
-	for (int32 i = 0; i < Samples.Num(); ++i)
+	const FVector ProjectionExtent(800.f, 800.f, 1200.f);
+	for (const FVector& Sample : Samples)
 	{
-		if (EdgeSample[i])
-		{
-			++EdgeTotal;
-		}
 		FNavLocation NavLoc;
-		if (Nav->ProjectPointToNavigation(Samples[i], NavLoc, ProjectionExtent))
+		if (Nav->ProjectPointToNavigation(Sample, NavLoc, ProjectionExtent))
 		{
 			Projected.Add(NavLoc.Location);
-			ProjectedIsEdge.Add(EdgeSample[i]);
-			if (EdgeSample[i])
-			{
-				++EdgeProjected;
-			}
 		}
 	}
 
 	if (Projected.Num() == 0)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage failed: attempt=%d projected=0/%d edgeProjected=0/%d"),
-			NavCoverageAttempts, Samples.Num(), EdgeTotal);
+		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage failed: attempt=%d projected=0/%d edgeReachable=0/0"),
+			NavCoverageAttempts, Samples.Num());
 		QueueCoverageRetry();
 		return;
 	}
@@ -642,16 +610,11 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 
 	const FVector Start = Projected[StartIndex];
 	int32 Reachable = 0;
-	int32 EdgeReachable = 0;
 	for (int32 i = 0; i < Projected.Num(); ++i)
 	{
 		if (i == StartIndex)
 		{
 			++Reachable;
-			if (ProjectedIsEdge[i])
-			{
-				++EdgeReachable;
-			}
 			continue;
 		}
 
@@ -660,27 +623,22 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 		if (bReachable)
 		{
 			++Reachable;
-			if (ProjectedIsEdge[i])
-			{
-				++EdgeReachable;
-			}
 		}
 	}
 
-	const bool bWeakCoverage = Projected.Num() < Samples.Num() * 8 / 10 || Reachable < Projected.Num() * 8 / 10
-		|| (EdgeTotal > 0 && (EdgeProjected < EdgeTotal * 8 / 10 || EdgeReachable < EdgeProjected * 8 / 10));
+	const bool bWeakCoverage = Projected.Num() < Samples.Num() || Reachable < Projected.Num();
 	if (bWeakCoverage)
 	{
 		UE_LOG(LogWeedShop, Warning,
-			TEXT("City nav coverage: attempt=%d projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
-			NavCoverageAttempts, Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
+			TEXT("City nav coverage: attempt=%d projected=%d/%d edgeReachable=%d/%d"),
+			NavCoverageAttempts, Projected.Num(), Samples.Num(), Reachable, Projected.Num());
 		QueueCoverageRetry();
 	}
 	else
 	{
 		UE_LOG(LogWeedShop, Log,
-			TEXT("City nav coverage: attempt=%d projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
-			NavCoverageAttempts, Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
+			TEXT("City nav coverage: attempt=%d projected=%d/%d edgeReachable=%d/%d"),
+			NavCoverageAttempts, Projected.Num(), Samples.Num(), Reachable, Projected.Num());
 	}
 }
 

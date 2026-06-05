@@ -354,7 +354,6 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	HomeFrontSpot = ResolveResidentHomeFrontSpot(FrontSpot);
 	HomeExitSidewalkSpot = ResolveResidentHomeExitSidewalkSpot(GetResidentCity(GetWorld()), HomeFrontSpot);
 	bDespawnAfterServed = false;
-	StartResidentHomeExit(true);
 	RoamRouteSeed = static_cast<int32>(GetTypeHash(HomeNumber));
 	ParkLegCountdown = 2 + FMath::Abs(RoamRouteSeed % 3);
 	HallLegCountdown = 3 + FMath::Abs((RoamRouteSeed / 7) % 4);
@@ -362,7 +361,8 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	ResidentRouteDay = -1;
 	ResidentStreetLegsToday = 0;
 	LastParkVisitDay = -1;
-	RoamTimer = FMath::FRandRange(0.5f, 4.f); // spreiding: niet allemaal tegelijk vertrekken na het naar buiten komen
+	RoamTimer = ComputeResidentGoalThinkDelay(0.6f, 4.8f);
+	StartResidentHomeExit(true);
 
 	// Rustige wandeltred: bewoners slenteren over straat i.p.v. te sprinten.
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
@@ -532,6 +532,16 @@ FVector ACustomerBase::MakeResidentStandingLocation(const FVector& FloorLocation
 	return FVector(FloorLocation.X, FloorLocation.Y, FloorLocation.Z + HalfHeight + 2.f);
 }
 
+float ACustomerBase::ComputeResidentGoalThinkDelay(float MinDelay, float MaxDelay) const
+{
+	const int32 Noise = FMath::Abs(static_cast<int32>(
+		(static_cast<int64>(RoamRouteSeed) * 37
+			+ static_cast<int64>(RoamLegIndex) * 113
+			+ static_cast<int64>(ResidentStreetLegsToday) * 53) % 1000));
+	const float Alpha = static_cast<float>(Noise) / 999.f;
+	return FMath::Lerp(MinDelay, MaxDelay, Alpha);
+}
+
 FVector ACustomerBase::GetResidentHomeEntrySpot() const
 {
 	FVector ToHome = HomeInteriorPos - HomeFrontSpot;
@@ -627,7 +637,7 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 		bHasRoamGoal = false;
 		bRoamGoalIsPark = false;
 		bPendingRoamGoalIsPark = false;
-		RoamTimer = 0.f;
+		RoamTimer = ComputeResidentGoalThinkDelay(0.4f, 4.2f);
 		HomeExitStuckTimer = 0.f;
 		bHasResidentPrevMoveLoc = false;
 		return false;
@@ -677,7 +687,7 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
 			bPendingRoamGoalIsPark = false;
-			RoamTimer = 0.f;
+			RoamTimer = ComputeResidentGoalThinkDelay(0.4f, 4.2f);
 		}
 		HomeExitStuckTimer = 0.f;
 		bHasResidentPrevMoveLoc = false;
@@ -1400,9 +1410,9 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 	for (int32 Pass = 0; Pass < 2; ++Pass)
 	{
 		const bool bAllowShortTrip = Pass > 0;
-		const int32 CandidateCount = FMath::Min(StreetStops.Num(), 96);
+		const int32 CandidateCount = FMath::Min(StreetStops.Num(), 72);
 		const int32 Step = (CandidateCount < StreetStops.Num()) ? FMath::Max(1, StreetStops.Num() / CandidateCount + 1) : 1;
-		const int32 MaxPathChecksPerPass = 16;
+		const int32 MaxPathChecksPerPass = 10;
 		TArray<FVector> TopGoals;
 		TArray<float> TopScores;
 		TopGoals.Reserve(MaxPathChecksPerPass);
@@ -1816,7 +1826,7 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 			bool bFoundFallback = false;
 			FNavLocation BestCandidate;
 			float BestScore = TNumericLimits<float>::Max();
-			for (int32 Try = 0; Try < 32; ++Try)
+			for (int32 Try = 0; Try < 18; ++Try)
 			{
 				FNavLocation Candidate;
 				if (!Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate))
@@ -2097,7 +2107,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			}
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
-			ParkPauseTimer = 0.f;
+			ParkPauseTimer = ComputeResidentGoalThinkDelay(6.f, 16.f);
 			RoamTimer = 0.f;
 			ResidentStuckTimer = 0.f;
 			ResidentRecoveryCooldown = 0.f;
@@ -2108,7 +2118,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		{
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
-			RoamTimer = 0.f;
+			RoamTimer = ComputeResidentGoalThinkDelay(0.5f, 2.8f);
 			ResidentStuckTimer = 0.f;
 			ResidentRecoveryCooldown = 0.f;
 			bHasResidentBestDistToGoal = false;
@@ -2150,7 +2160,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			}
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
-			RoamTimer = FMath::FRandRange(0.8f, 1.6f);
+			RoamTimer = ComputeResidentGoalThinkDelay(1.2f, 3.2f);
 			ResidentStuckTimer = 0.f;
 			ResidentRecoveryCooldown = 0.f;
 			bHasResidentBestDistToGoal = false;
@@ -2188,7 +2198,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 		bHasRoamGoal = false;
 		bRoamGoalIsPark = false;
-		RoamTimer = FMath::FRandRange(1.8f, 3.8f);
+		RoamTimer = ComputeResidentGoalThinkDelay(2.4f, 6.0f);
 		ResidentStuckTimer = 0.f;
 		ResidentRecoveryCooldown = 0.f;
 		bHasResidentBestDistToGoal = false;
