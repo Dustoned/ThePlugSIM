@@ -572,14 +572,14 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 	const float Lane = BlockSize * 0.5f - SidewalkWidth * 0.5f;
 	const float SampleZ = GroundZ + CurbHeight + 70.f;
 	const FVector EdgeStops[] = {
-		FVector(CityCenter.X + R * Pitch + Lane, CityCenter.Y, SampleZ),
-		FVector(CityCenter.X - R * Pitch - Lane, CityCenter.Y, SampleZ),
-		FVector(CityCenter.X, CityCenter.Y + R * Pitch + Lane, SampleZ),
-		FVector(CityCenter.X, CityCenter.Y - R * Pitch - Lane, SampleZ),
-		FVector(CityCenter.X + R * Pitch + Lane, CityCenter.Y + R * Pitch + Lane, SampleZ),
-		FVector(CityCenter.X + R * Pitch + Lane, CityCenter.Y - R * Pitch - Lane, SampleZ),
-		FVector(CityCenter.X - R * Pitch - Lane, CityCenter.Y + R * Pitch + Lane, SampleZ),
-		FVector(CityCenter.X - R * Pitch - Lane, CityCenter.Y - R * Pitch - Lane, SampleZ)
+		FVector(CityCenter.X + R * Pitch - Lane, CityCenter.Y, SampleZ),
+		FVector(CityCenter.X - R * Pitch + Lane, CityCenter.Y, SampleZ),
+		FVector(CityCenter.X, CityCenter.Y + R * Pitch - Lane, SampleZ),
+		FVector(CityCenter.X, CityCenter.Y - R * Pitch + Lane, SampleZ),
+		FVector(CityCenter.X + R * Pitch - Lane, CityCenter.Y + R * Pitch - Lane, SampleZ),
+		FVector(CityCenter.X + R * Pitch - Lane, CityCenter.Y - R * Pitch + Lane, SampleZ),
+		FVector(CityCenter.X - R * Pitch + Lane, CityCenter.Y + R * Pitch - Lane, SampleZ),
+		FVector(CityCenter.X - R * Pitch + Lane, CityCenter.Y - R * Pitch + Lane, SampleZ)
 	};
 	Samples.Append(EdgeStops, UE_ARRAY_COUNT(EdgeStops));
 
