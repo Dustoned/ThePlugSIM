@@ -836,6 +836,8 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 	{
 		return false;
 	}
+	ACityGenerator* City = GetResidentCity(W);
+	const bool bFinalIsPark = bRoamGoalIsPark;
 
 	FVector Start = GetActorLocation();
 	FNavLocation ProjectedStart;
@@ -873,21 +875,33 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 			{
 				continue;
 			}
-			if (!HasResidentPath(Start, Candidate.Location, 260.f))
+			FVector CandidateGoal = Candidate.Location;
+			if (!bFinalIsPark && City)
+			{
+				CandidateGoal = SnapResidentPointToSidewalk(City, CandidateGoal, false);
+				FNavLocation SidewalkProjection;
+				if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, Extent)
+					|| !IsResidentOutdoorSidewalkPoint(City, SidewalkProjection.Location, false))
+				{
+					continue;
+				}
+				CandidateGoal = SidewalkProjection.Location;
+			}
+			if (!HasResidentPath(Start, CandidateGoal, 260.f))
 			{
 				continue;
 			}
-			if (!HasResidentPath(Candidate.Location, FinalGoal, 320.f))
+			if (!HasResidentPath(CandidateGoal, FinalGoal, 320.f))
 			{
 				continue;
 			}
 
-			const int32 Crowd = CountResidentCrowdNear(Candidate.Location, 320.f);
-			const float Score = FVector::Dist2D(Candidate.Location, FinalGoal) + Crowd * 1200.f + FMath::Abs(Angle) * 3.f;
+			const int32 Crowd = CountResidentCrowdNear(CandidateGoal, 320.f);
+			const float Score = FVector::Dist2D(CandidateGoal, FinalGoal) + Crowd * 1200.f + FMath::Abs(Angle) * 3.f;
 			if (Score < BestScore)
 			{
 				BestScore = Score;
-				BestGoal = Candidate.Location;
+				BestGoal = CandidateGoal;
 				bFound = true;
 			}
 		}
@@ -915,6 +929,138 @@ bool ACustomerBase::TrySetResidentDetourGoal(const FVector& FinalGoal)
 	return true;
 }
 
+FVector ACustomerBase::SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const
+{
+	if (!City)
+	{
+		return Desired;
+	}
+
+	TArray<FCityMapBlock> Blocks;
+	City->GetMapBlocks(Blocks);
+	const float BlockSize = FMath::Max(500.f, City->GetMapBlockSize());
+	const float Half = BlockSize * 0.5f;
+	const float SidewalkWidth = FMath::Clamp(City->GetSidewalkWidth(), 120.f, Half * 0.45f);
+	const float Lane = Half - SidewalkWidth * 0.5f;
+	const float EdgeClamp = Half - FMath::Max(45.f, SidewalkWidth * 0.22f);
+	const FVector CityCenter = City->GetCityCenter();
+
+	bool bFound = false;
+	FVector Best = Desired;
+	float BestScore = TNumericLimits<float>::Max();
+	for (const FCityMapBlock& B : Blocks)
+	{
+		const bool bParkBlock = B.Label.Equals(TEXT("Park"), ESearchCase::IgnoreCase);
+		if (bParkBlock && !bAllowPark)
+		{
+			continue;
+		}
+
+		const FVector BlockCenter(B.Center.X, B.Center.Y, Desired.Z);
+		FVector Local = Desired - BlockCenter;
+		Local.Z = 0.f;
+		if (bParkBlock)
+		{
+			const float Ax = FMath::Abs(Local.X);
+			const float Ay = FMath::Abs(Local.Y);
+			if (Ax <= Half && Ay <= Half)
+			{
+				return Desired;
+			}
+			const FVector ClampedPark(
+				BlockCenter.X + FMath::Clamp(Local.X, -Half + 120.f, Half - 120.f),
+				BlockCenter.Y + FMath::Clamp(Local.Y, -Half + 120.f, Half - 120.f),
+				Desired.Z);
+			const float ParkScore = FVector::DistSquared2D(Desired, ClampedPark);
+			if (ParkScore < BestScore)
+			{
+				BestScore = ParkScore;
+				Best = ClampedPark;
+				bFound = true;
+			}
+			continue;
+		}
+
+		if (Local.IsNearlyZero())
+		{
+			Local = BlockCenter - CityCenter;
+			Local.Z = 0.f;
+			if (Local.IsNearlyZero())
+			{
+				Local = HomeFrontSpot - BlockCenter;
+				Local.Z = 0.f;
+			}
+		}
+
+		const bool bUseXSide = FMath::Abs(Local.X) >= FMath::Abs(Local.Y);
+		const float SignX = Local.X >= 0.f ? 1.f : -1.f;
+		const float SignY = Local.Y >= 0.f ? 1.f : -1.f;
+		FVector Candidate = BlockCenter;
+		if (bUseXSide)
+		{
+			Candidate.X += SignX * Lane;
+			Candidate.Y += FMath::Clamp(Local.Y, -EdgeClamp, EdgeClamp);
+		}
+		else
+		{
+			Candidate.X += FMath::Clamp(Local.X, -EdgeClamp, EdgeClamp);
+			Candidate.Y += SignY * Lane;
+		}
+
+		const float Score = FVector::DistSquared2D(Desired, Candidate);
+		if (Score < BestScore)
+		{
+			BestScore = Score;
+			Best = Candidate;
+			bFound = true;
+		}
+	}
+
+	return bFound ? Best : Desired;
+}
+
+bool ACustomerBase::IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const FVector& Point, bool bAllowPark) const
+{
+	if (!City)
+	{
+		return true;
+	}
+
+	TArray<FCityMapBlock> Blocks;
+	City->GetMapBlocks(Blocks);
+	const float BlockSize = FMath::Max(500.f, City->GetMapBlockSize());
+	const float Half = BlockSize * 0.5f;
+	const float SidewalkWidth = FMath::Clamp(City->GetSidewalkWidth(), 120.f, Half * 0.45f);
+	const float Tolerance = 80.f;
+	for (const FCityMapBlock& B : Blocks)
+	{
+		const bool bParkBlock = B.Label.Equals(TEXT("Park"), ESearchCase::IgnoreCase);
+		if (bParkBlock && !bAllowPark)
+		{
+			continue;
+		}
+
+		const float LocalX = Point.X - B.Center.X;
+		const float LocalY = Point.Y - B.Center.Y;
+		const float Ax = FMath::Abs(LocalX);
+		const float Ay = FMath::Abs(LocalY);
+		if (Ax > Half + Tolerance || Ay > Half + Tolerance)
+		{
+			continue;
+		}
+		if (bParkBlock)
+		{
+			return true;
+		}
+		if (Ax >= Half - SidewalkWidth - Tolerance || Ay >= Half - SidewalkWidth - Tolerance)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void ACustomerBase::BuildResidentStreetStops(ACityGenerator* City, TArray<FVector>& OutStops) const
 {
 	OutStops.Reset();
@@ -926,7 +1072,8 @@ void ACustomerBase::BuildResidentStreetStops(ACityGenerator* City, TArray<FVecto
 	TArray<FCityMapBlock> Blocks;
 	City->GetMapBlocks(Blocks);
 	const float BlockSize = FMath::Max(500.f, City->GetMapBlockSize());
-	const float SideOffset = FMath::Max(260.f, BlockSize * 0.5f - 130.f);
+	const float SidewalkWidth = FMath::Clamp(City->GetSidewalkWidth(), 120.f, BlockSize * 0.225f);
+	const float SideOffset = BlockSize * 0.5f - SidewalkWidth * 0.5f;
 	const float AlongWide = FMath::Clamp(BlockSize * 0.24f, 260.f, 950.f);
 	const float AlongSmall = FMath::Clamp(BlockSize * 0.10f, 120.f, 420.f);
 	OutStops.Reserve(Blocks.Num() * 12);
@@ -960,7 +1107,7 @@ void ACustomerBase::BuildResidentStreetStops(ACityGenerator* City, TArray<FVecto
 
 		for (const FVector& Stop : Stops)
 		{
-			OutStops.Add(Stop);
+			OutStops.Add(SnapResidentPointToSidewalk(City, Stop, false));
 		}
 	}
 }
@@ -1075,12 +1222,23 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 	for (int32 Try = 0; Try < 16; ++Try)
 	{
 		FNavLocation Candidate;
-		if (Nav->GetRandomReachablePointInRadius(Cur, 3600.f, Candidate)
-			&& HasResidentPath(Cur, Candidate.Location, 700.f)
-			&& CountResidentCrowdNear(Candidate.Location, 360.f) < 4
-			&& WalkTo(Candidate.Location, 90.f, false, true))
+		if (!Nav->GetRandomReachablePointInRadius(Cur, 3600.f, Candidate))
 		{
-			RoamGoal = Candidate.Location;
+			continue;
+		}
+		FVector CandidateGoal = SnapResidentPointToSidewalk(City, Candidate.Location, false);
+		FNavLocation SidewalkProjection;
+		if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, FVector(650.f, 650.f, 650.f)))
+		{
+			continue;
+		}
+		CandidateGoal = SidewalkProjection.Location;
+		if (IsResidentOutdoorSidewalkPoint(City, CandidateGoal, false)
+			&& HasResidentPath(Cur, CandidateGoal, 700.f)
+			&& CountResidentCrowdNear(CandidateGoal, 360.f) < 4
+			&& WalkTo(CandidateGoal, 90.f, false, true))
+		{
+			RoamGoal = CandidateGoal;
 			bHasRoamGoal = true;
 			bRoamGoalIsPark = false;
 			bPendingRoamGoalIsPark = false;
@@ -1230,16 +1388,31 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 
 	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
 	{
+		ACityGenerator* City = GetResidentCity(GetWorld());
 		for (int32 Try = 0; Try < 10; ++Try)
 		{
 			FNavLocation Candidate;
-			if (Nav->GetRandomReachablePointInRadius(Cur, 1350.f, Candidate)
-				&& HasResidentPath(Cur, Candidate.Location, 320.f)
-				&& CountResidentCrowdNear(Candidate.Location, 300.f) < 3)
+			if (!Nav->GetRandomReachablePointInRadius(Cur, 1350.f, Candidate))
 			{
-				if (WalkTo(Candidate.Location, 90.f, false, true))
+				continue;
+			}
+			FVector CandidateGoal = (City && !bRoamGoalIsPark) ? SnapResidentPointToSidewalk(City, Candidate.Location, false) : Candidate.Location;
+			FNavLocation SidewalkProjection;
+			if (City && !bRoamGoalIsPark)
+			{
+				if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, FVector(650.f, 650.f, 650.f)))
 				{
-					RoamGoal = Candidate.Location;
+					continue;
+				}
+				CandidateGoal = SidewalkProjection.Location;
+			}
+			if (HasResidentPath(Cur, CandidateGoal, 320.f)
+				&& (bRoamGoalIsPark || IsResidentOutdoorSidewalkPoint(City, CandidateGoal, false))
+				&& CountResidentCrowdNear(CandidateGoal, 300.f) < 3)
+			{
+				if (WalkTo(CandidateGoal, 90.f, false, true))
+				{
+					RoamGoal = CandidateGoal;
 					bHasRoamGoal = true;
 					bRoamGoalIsPark = false;
 					bPendingRoamGoalIsPark = false;
@@ -1280,6 +1453,8 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	UWorld* W = GetWorld();
 	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
 	const bool bGoalIsPark = bPendingRoamGoalIsPark;
+	ACityGenerator* City = GetResidentCity(W);
+	const FVector TargetGoal = (!bGoalIsPark && City) ? SnapResidentPointToSidewalk(City, DesiredGoal, false) : DesiredGoal;
 	bPendingRoamGoalIsPark = false;
 	bRoamGoalIsPark = false;
 	if (!Nav)
@@ -1311,12 +1486,13 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 		return Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() > 1;
 	};
 
-	const bool bProjectedUsable = Nav->ProjectPointToNavigation(DesiredGoal, Projected, Extent)
+	const bool bProjectedUsable = Nav->ProjectPointToNavigation(TargetGoal, Projected, Extent)
 		&& HasFullPathTo(Projected.Location)
+		&& (bGoalIsPark || IsResidentOutdoorSidewalkPoint(City, Projected.Location, false))
 		&& (bGoalIsPark || CountResidentCrowdNear(Projected.Location, 280.f) < 4);
 	if (!bProjectedUsable)
 	{
-		const float DesiredDistance = FVector::Dist2D(Start, DesiredGoal);
+		const float DesiredDistance = FVector::Dist2D(Start, TargetGoal);
 		const float FallbackRadius = FMath::Clamp(DesiredDistance + 900.f, FMath::Max(3200.f, SearchXY * 3.f), 12000.f);
 		bool bFoundFallback = false;
 		FNavLocation BestCandidate;
@@ -1324,17 +1500,34 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 		for (int32 Try = 0; Try < 32; ++Try)
 		{
 			FNavLocation Candidate;
-			if (Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate)
-				&& HasFullPathTo(Candidate.Location)
-				&& (bGoalIsPark || CountResidentCrowdNear(Candidate.Location, 340.f) < 6))
+			if (!Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate))
 			{
-				const int32 Crowd = CountResidentCrowdNear(Candidate.Location, 320.f);
-				const float ShortHopPenalty = FVector::Dist2D(Start, Candidate.Location) < 1200.f ? 16000.f : 0.f;
-				const float Score = FVector::Dist2D(Candidate.Location, DesiredGoal) + Crowd * 1400.f + ShortHopPenalty;
+				continue;
+			}
+
+			FVector CandidateGoal = Candidate.Location;
+			if (!bGoalIsPark && City)
+			{
+				CandidateGoal = SnapResidentPointToSidewalk(City, CandidateGoal, false);
+				FNavLocation SidewalkProjection;
+				if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, Extent))
+				{
+					continue;
+				}
+				CandidateGoal = SidewalkProjection.Location;
+			}
+
+			if (HasFullPathTo(CandidateGoal)
+				&& (bGoalIsPark || IsResidentOutdoorSidewalkPoint(City, CandidateGoal, false))
+				&& (bGoalIsPark || CountResidentCrowdNear(CandidateGoal, 340.f) < 6))
+			{
+				const int32 Crowd = CountResidentCrowdNear(CandidateGoal, 320.f);
+				const float ShortHopPenalty = FVector::Dist2D(Start, CandidateGoal) < 1200.f ? 16000.f : 0.f;
+				const float Score = FVector::Dist2D(CandidateGoal, TargetGoal) + Crowd * 1400.f + ShortHopPenalty;
 				if (Score < BestScore)
 				{
 					BestScore = Score;
-					BestCandidate = Candidate;
+					BestCandidate.Location = CandidateGoal;
 				}
 				bFoundFallback = true;
 			}
@@ -1542,6 +1735,47 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	}
 
 	// Roam: vaste grote stadsronde buiten. Binnenroutes zijn alleen voor echt naar huis/naar buiten gaan.
+	ACityGenerator* ResidentCity = GetResidentCity(W);
+	if (ResidentCity && !bRoamGoalIsPark && !IsResidentOutdoorSidewalkPoint(ResidentCity, GetActorLocation(), false))
+	{
+		ResidentOffSidewalkTimer += DeltaSeconds;
+		if (ResidentOffSidewalkTimer >= 1.25f)
+		{
+			FVector SidewalkGoal = SnapResidentPointToSidewalk(ResidentCity, GetActorLocation(), false);
+			if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
+			{
+				FNavLocation ProjectedSidewalk;
+				if (Nav->ProjectPointToNavigation(SidewalkGoal, ProjectedSidewalk, FVector(700.f, 700.f, 650.f)))
+				{
+					SidewalkGoal = ProjectedSidewalk.Location;
+				}
+			}
+			if (FVector::Dist2D(GetActorLocation(), SidewalkGoal) > 90.f
+				&& IsResidentOutdoorSidewalkPoint(ResidentCity, SidewalkGoal, false)
+				&& WalkTo(SidewalkGoal, 70.f, false, true))
+			{
+				RoamGoal = SidewalkGoal;
+				bHasRoamGoal = true;
+				bRoamGoalIsPark = false;
+				bPendingRoamGoalIsPark = false;
+				RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 6.f, 18.f);
+				ResidentPrevMoveLoc = GetActorLocation();
+				bHasResidentPrevMoveLoc = true;
+				ResidentStuckTimer = 0.f;
+				ResidentRecoveryCooldown = 0.4f;
+				ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
+				bHasResidentBestDistToGoal = true;
+				ResidentRecoveryAttempts = 0;
+				ResidentOffSidewalkTimer = 0.f;
+				return;
+			}
+		}
+	}
+	else
+	{
+		ResidentOffSidewalkTimer = 0.f;
+	}
+
 	RecoverResidentIfStuck(DeltaSeconds);
 	if (ParkPauseTimer > 0.f)
 	{

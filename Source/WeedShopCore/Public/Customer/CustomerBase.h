@@ -221,6 +221,7 @@ protected:
 	bool bHasResidentBestDistToGoal = false;
 	int32 ResidentRecoveryAttempts = 0;
 	float ResidentNoGoalTimer = 0.f;
+	float ResidentOffSidewalkTimer = 0.f;
 	int32 ResidentGoalFailCount = 0;
 	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
 	bool bHasPark = false;
@@ -234,6 +235,8 @@ protected:
 	int32 LastParkVisitDay = -1;
 	bool bLeavingHomeRoute = false;
 	ACityGenerator* GetResidentCity(UWorld* W);
+	FVector SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const;
+	bool IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const FVector& Point, bool bAllowPark) const;
 	void BuildResidentStreetStops(ACityGenerator* City, TArray<FVector>& OutStops) const;
 	bool PickResidentStreetRoamGoal(ACityGenerator* City, int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const;
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);

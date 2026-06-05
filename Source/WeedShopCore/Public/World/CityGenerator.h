@@ -71,6 +71,7 @@ public:
 	int32 GetGridRadiusClamped() const { return FMath::Clamp(GridRadius, 1, 8); }
 	float GetPitch() const { return BlockSize + RoadWidth; }
 	float GetMapBlockSize() const { return BlockSize; }
+	float GetSidewalkWidth() const { return SidewalkWidth; }
 	void GetMapBlocks(TArray<FCityMapBlock>& Out) const;
 
 	// Alle geregistreerde appartement-woningen (deur + plekken + huisnummer) voor het bewoner-systeem.

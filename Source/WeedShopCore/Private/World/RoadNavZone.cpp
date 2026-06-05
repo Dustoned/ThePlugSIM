@@ -5,10 +5,11 @@
 
 UNavArea_Road::UNavArea_Road()
 {
-	// Veel duurder dan normale grond: de stoep (default area, kosten 1) krijgt duidelijk voorrang.
-	// Een straat oversteken kan nog steeds, maar midden over de rijweg wandelen wordt onaantrekkelijk.
-	DefaultCost = 30.f;
-	FixedAreaEnteringCost = 80.f;
+	// Extreem duurder dan normale grond: de stoep (default area, kosten 1) wint vrijwel altijd.
+	// Een straat oversteken kan nog steeds, maar de router heeft een harde prikkel om asfalt-tijd
+	// zo kort mogelijk te houden.
+	DefaultCost = 650.f;
+	FixedAreaEnteringCost = 1200.f;
 	DrawColor = FColor(50, 50, 60);
 }
 
