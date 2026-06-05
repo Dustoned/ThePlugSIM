@@ -1159,14 +1159,18 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zS = TopZ + f * FloorH;
+			// Begane grond: één unit minder per zijde -> bredere "grote kamer"-units, zodat de Grote-kamer-
+			// offer (begane-grond unit) ook echt ruimer is dan een gewone appartement-unit hierboven.
+			const int32 NAptF = (f == 0) ? FMath::Max(1, NApt - 1) : NApt;
+			const float AptLenF = HallLen / NAptF;
 			for (int32 side = -1; side <= 1; side += 2)
 			{
 				const float sw = side * HW;
 				// Voorste deel: appartementdeur per unit.
 				float cur = 0.f;
-				for (int32 a = 0; a < NApt; ++a)
+				for (int32 a = 0; a < NAptF; ++a)
 				{
-					const float aCenter = (a + 0.5f) * AptLen;
+					const float aCenter = (a + 0.5f) * AptLenF;
 					SegD(cur, aCenter - DoorGap * 0.5f, sw, zS);
 					cur = aCenter + DoorGap * 0.5f;
 					LintelD(aCenter, sw, zS);
@@ -1194,9 +1198,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 						H.DoorPos = FrontSpot;
 						H.Number = FString::Printf(TEXT("%d-%d"), BaseNo, AptSeq);
 						H.bApartment = true; H.Floor = f;
-						// Kamer-grenzen: langs de gang = AptLen, in de diepte = SideW; hoogte = 1 verdieping.
-						H.RoomHalf = NX ? FVector(AptLen * 0.5f, SideW * 0.5f, FloorH)
-										: FVector(SideW * 0.5f, AptLen * 0.5f, FloorH);
+						// Kamer-grenzen: langs de gang = AptLenF (begane grond = breder), in de diepte = SideW.
+						H.RoomHalf = NX ? FVector(AptLenF * 0.5f, SideW * 0.5f, FloorH)
+										: FVector(SideW * 0.5f, AptLenF * 0.5f, FloorH);
 						ApartmentHomes.Add(H);
 					}
 				}
