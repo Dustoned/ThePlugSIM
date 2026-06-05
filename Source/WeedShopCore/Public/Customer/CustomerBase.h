@@ -202,6 +202,7 @@ protected:
 	void TickResident(float DeltaSeconds);
 	bool bResident = false;
 	FVector HomeFrontSpot = FVector::ZeroVector;
+	FVector HomeExitSidewalkSpot = FVector::ZeroVector;
 	FVector HomeInteriorPos = FVector::ZeroVector;
 	FVector HomeHallPos = FVector::ZeroVector;
 	bool bHasHomeHall = false;
@@ -241,6 +242,8 @@ protected:
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);
 	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
 	FVector ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const;
+	FVector ResolveResidentHomeFrontSpot(const FVector& FrontSpot);
+	FVector ResolveResidentHomeExitSidewalkSpot(ACityGenerator* City, const FVector& SafeFrontSpot) const;
 	FVector GetResidentHomeEntrySpot() const;
 	void StartResidentHomeExit(bool bFromInterior);
 	bool TickResidentHomeExit(float DeltaSeconds);
