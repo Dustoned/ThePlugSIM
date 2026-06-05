@@ -27,6 +27,8 @@ struct FResidentMovementSnapshot
 	bool bValid = false;
 	bool bVisibleOnMap = false;
 	bool bAtHomeInside = false;
+	bool bEmergingFromHome = false;
+	bool bEnteringHome = false;
 	bool bHasGoal = false;
 	bool bGoalIsPark = false;
 	bool bParkPause = false;

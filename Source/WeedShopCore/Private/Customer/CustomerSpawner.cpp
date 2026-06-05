@@ -103,6 +103,12 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 		bResidentMonitorDone = true;
 		return;
 	}
+	if (World->IsPaused())
+	{
+		UE_LOG(LogWeedShop, Log, TEXT("Resident movement monitor: paused=1 waiting for unpaused gameplay"));
+		NextResidentMonitorRealTime = Now + 6.f;
+		return;
+	}
 
 	ACityGenerator* City = nullptr;
 	for (TActorIterator<ACityGenerator> It(World); It; ++It)
@@ -116,6 +122,8 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 	int32 Total = 0;
 	int32 Visible = 0;
 	int32 Outdoor = 0;
+	int32 Emerging = 0;
+	int32 Entering = 0;
 	int32 Moving = 0;
 	int32 WithGoal = 0;
 	int32 ParkActive = 0;
@@ -143,6 +151,8 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 		++Total;
 		if (Snapshot.bVisibleOnMap) { ++Visible; }
 		if (!Snapshot.bAtHomeInside) { ++Outdoor; }
+		if (Snapshot.bEmergingFromHome) { ++Emerging; }
+		if (Snapshot.bEnteringHome) { ++Entering; }
 		if (Snapshot.Speed2D > 12.f) { ++Moving; }
 		if (Snapshot.bHasGoal) { ++WithGoal; }
 		if (Snapshot.bGoalIsPark || Snapshot.bParkPause) { ++ParkActive; }
@@ -160,8 +170,8 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 
 	const int32 SampleIndex = 13 - ResidentMonitorSamplesRemaining;
 	UE_LOG(LogWeedShop, Log,
-		TEXT("Resident movement monitor: sample=%d total=%d visible=%d outdoor=%d moving=%d goals=%d parkActive=%d parkDoneToday=%d parkNeedsToday=%d offSidewalk=%d stuck=%d nearEdge=%d cells=%d"),
-		SampleIndex, Total, Visible, Outdoor, Moving, WithGoal, ParkActive, ParkDoneToday, ParkNeedsToday,
+		TEXT("Resident movement monitor: sample=%d total=%d visible=%d outdoor=%d emerging=%d entering=%d moving=%d goals=%d parkActive=%d parkDoneToday=%d parkNeedsToday=%d offSidewalk=%d stuck=%d nearEdge=%d cells=%d"),
+		SampleIndex, Total, Visible, Outdoor, Emerging, Entering, Moving, WithGoal, ParkActive, ParkDoneToday, ParkNeedsToday,
 		OffSidewalk, StuckSuspect, NearEdge, OccupiedCells.Num());
 
 	--ResidentMonitorSamplesRemaining;

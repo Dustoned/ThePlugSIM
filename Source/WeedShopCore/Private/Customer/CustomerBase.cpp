@@ -407,6 +407,8 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	OutSnapshot.bValid = true;
 	OutSnapshot.bVisibleOnMap = ShouldShowOnCityMap();
 	OutSnapshot.bAtHomeInside = bAtHomeInside;
+	OutSnapshot.bEmergingFromHome = bEmergingFromHome;
+	OutSnapshot.bEnteringHome = bEnteringHome;
 	OutSnapshot.bHasGoal = bHasRoamGoal;
 	OutSnapshot.bGoalIsPark = bRoamGoalIsPark;
 	OutSnapshot.bParkPause = ParkPauseTimer > 0.f;
