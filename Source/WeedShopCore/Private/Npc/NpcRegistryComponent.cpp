@@ -42,14 +42,14 @@ namespace
 	FString CleanFirstName(const FString& Raw, int32 Index)
 	{
 		static const TCHAR* First[] = {
-			TEXT("Blaze"), TEXT("Spliff"), TEXT("Toke"), TEXT("Hash"), TEXT("Dank"), TEXT("Kush"), TEXT("Bongo"), TEXT("Smokey"),
-			TEXT("Doobie"), TEXT("Ziggy"), TEXT("Cheech"), TEXT("Chong"), TEXT("Reefer"), TEXT("Ganja"), TEXT("Puff"), TEXT("Haze"),
-			TEXT("Skunk"), TEXT("Nugget"), TEXT("Buddha"), TEXT("Chill"), TEXT("Dope"), TEXT("Trippy"), TEXT("Spacey"), TEXT("Mello"),
-			TEXT("Gonzo"), TEXT("Wappie"), TEXT("Sjonnie"), TEXT("Henkie"), TEXT("Pluk"), TEXT("Wokkel"), TEXT("Knor"), TEXT("Floep"),
-			TEXT("Dunder"), TEXT("Bizzy"), TEXT("Doof"), TEXT("Snoop"), TEXT("Stoney"), TEXT("Buddy"), TEXT("Fonzie"), TEXT("Sjakie"),
-			TEXT("Appie"), TEXT("Dikkie"), TEXT("Joppie"), TEXT("Bertus"), TEXT("Corrie"), TEXT("Sjon"), TEXT("Klaas"), TEXT("Mees"),
-			TEXT("Wiebe"), TEXT("Tukker"), TEXT("Snor"), TEXT("Plof"), TEXT("Goof"), TEXT("Snuf"), TEXT("Wibo"), TEXT("Bonk"),
-			TEXT("Toko"), TEXT("Blef"), TEXT("Patat"), TEXT("Loempia"), TEXT("Knak"), TEXT("Frik"), TEXT("Brammetje"), TEXT("Guus") };
+			TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Henk"), TEXT("Cor"), TEXT("Sjonnie"), TEXT("Henkie"), TEXT("Appie"),
+			TEXT("Bertus"), TEXT("Guus"), TEXT("Klaas"), TEXT("Mees"), TEXT("Sjakie"), TEXT("Dirk"), TEXT("Wim"), TEXT("Bram"),
+			TEXT("Joost"), TEXT("Sven"), TEXT("Tim"), TEXT("Rick"), TEXT("Bas"), TEXT("Daan"), TEXT("Niels"), TEXT("Koen"),
+			TEXT("Gijs"), TEXT("Teun"), TEXT("Luuk"), TEXT("Stijn"), TEXT("Jasper"), TEXT("Ruben"), TEXT("Lars"), TEXT("Mats"),
+			TEXT("Cas"), TEXT("Sander"), TEXT("Bart"), TEXT("Wout"), TEXT("Tijn"), TEXT("Siem"), TEXT("Boaz"), TEXT("Jules"),
+			TEXT("Sam"), TEXT("Mick"), TEXT("Thijs"), TEXT("Ravi"), TEXT("Roel"), TEXT("Maarten"), TEXT("Freek"), TEXT("Jelle"),
+			TEXT("Sanne"), TEXT("Emma"), TEXT("Lotte"), TEXT("Fleur"), TEXT("Iris"), TEXT("Roos"), TEXT("Femke"), TEXT("Tessa"),
+			TEXT("Maud"), TEXT("Nina"), TEXT("Lieke"), TEXT("Nora"), TEXT("Anne"), TEXT("Britt"), TEXT("Sofie"), TEXT("Manon") };
 
 		// Altijd een funny voornaam uit de pool (negeer de tabel-naam): elke NPC een funny voor+achternaam.
 		(void)Raw;
