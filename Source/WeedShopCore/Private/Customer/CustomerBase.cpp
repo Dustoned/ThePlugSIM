@@ -1196,6 +1196,7 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 
 bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 {
+	(void)bAllowSnapToStreet;
 	ACityGenerator* City = GetResidentCity(GetWorld());
 	UWorld* W = GetWorld();
 	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
@@ -1204,9 +1205,7 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 		return false;
 	}
 
-	TArray<FVector> StreetStops;
-	BuildResidentStreetStops(City, StreetStops);
-	for (int32 Try = 0; Try < 24; ++Try)
+	for (int32 Try = 0; Try < 6; ++Try)
 	{
 		FVector StreetGoal;
 		float SearchXY = 520.f;
@@ -1260,34 +1259,7 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 		}
 	}
 
-	if (!bAllowSnapToStreet || StreetStops.Num() == 0)
-	{
-		return false;
-	}
-
-	FVector SnapGoal;
-	float SnapSearchXY = 520.f;
-	float SnapSearchZ = 650.f;
-	if (!PickResidentStreetRoamGoal(City, RoamLegIndex + 29, SnapGoal, SnapSearchXY, SnapSearchZ))
-	{
-		return false;
-	}
-	const FVector SafeStreet = ProjectResidentPointToNav(SnapGoal, FVector(900.f, 900.f, 700.f));
-	if (AAIController* AI = Cast<AAIController>(GetController()))
-	{
-		AI->StopMovement();
-	}
-	SetActorLocation(MakeResidentStandingLocation(SafeStreet));
-	bHasLastMoveRequestGoal = false;
-	bHasResidentPrevMoveLoc = false;
-	bHasResidentBestDistToGoal = false;
-	ResidentStuckTimer = 0.f;
-	ResidentRecoveryCooldown = 0.f;
-	ResidentNoGoalTimer = 0.f;
-	ResidentGoalFailCount = 0;
-	++RoamLegIndex;
-	++ResidentStreetLegsToday;
-	return ForceResidentOutdoorRoamGoal(false);
+	return false;
 }
 
 void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
@@ -1430,11 +1402,6 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 			}
 		}
 
-		FNavLocation Proj;
-		if (Nav->ProjectPointToNavigation(Cur, Proj, FVector(900.f, 900.f, 600.f)))
-		{
-			SetActorLocation(MakeResidentStandingLocation(Proj.Location));
-		}
 	}
 
 	bHasRoamGoal = false;
@@ -1469,11 +1436,6 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	if (Nav->ProjectPointToNavigation(Start, ProjectedStart, FVector(900.f, 900.f, 700.f)))
 	{
 		Start = ProjectedStart.Location + FVector(0.f, 0.f, 3.f);
-		const FVector StandingStart = MakeResidentStandingLocation(Start);
-		if (FVector::Dist2D(StandingStart, GetActorLocation()) > 140.f || FMath::Abs(StandingStart.Z - GetActorLocation().Z) > 70.f)
-		{
-			SetActorLocation(StandingStart);
-		}
 	}
 
 	FNavLocation Projected;
@@ -1785,15 +1747,16 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 	}
 
+	if (!bHasRoamGoal && RoamTimer > 0.f)
+	{
+		return;
+	}
+
 	if (!bHasRoamGoal || RoamTimer <= 0.f)
 	{
 		if (!bHasRoamGoal)
 		{
 			ResidentNoGoalTimer += DeltaSeconds;
-			if (ResidentNoGoalTimer >= 1.0f && ForceResidentOutdoorRoamGoal(ResidentGoalFailCount >= 2))
-			{
-				return;
-			}
 		}
 
 		FVector DesiredGoal;
@@ -1821,11 +1784,12 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 		bHasRoamGoal = false;
 		bRoamGoalIsPark = false;
-		RoamTimer = 0.6f;
+		RoamTimer = FMath::FRandRange(1.8f, 3.8f);
 		ResidentStuckTimer = 0.f;
 		ResidentRecoveryCooldown = 0.f;
 		bHasResidentBestDistToGoal = false;
 		ResidentRecoveryAttempts = 0;
+		ResidentNoGoalTimer = 0.f;
 	}
 }
 
