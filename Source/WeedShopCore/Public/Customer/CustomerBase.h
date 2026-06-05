@@ -237,6 +237,7 @@ protected:
 	ACityGenerator* GetResidentCity(UWorld* W);
 	FVector SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const;
 	bool IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const FVector& Point, bool bAllowPark) const;
+	bool IsResidentParkPoint(ACityGenerator* City, const FVector& Point) const;
 	void BuildResidentStreetStops(ACityGenerator* City, TArray<FVector>& OutStops) const;
 	bool PickResidentStreetRoamGoal(ACityGenerator* City, int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const;
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);

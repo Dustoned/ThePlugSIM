@@ -1222,6 +1222,31 @@ bool ACustomerBase::IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const F
 	return false;
 }
 
+bool ACustomerBase::IsResidentParkPoint(ACityGenerator* City, const FVector& Point) const
+{
+	if (!City)
+	{
+		return false;
+	}
+
+	TArray<FCityMapBlock> Blocks;
+	City->GetMapBlocks(Blocks);
+	const float Half = FMath::Max(500.f, City->GetMapBlockSize()) * 0.5f;
+	const float Tolerance = 90.f;
+	for (const FCityMapBlock& B : Blocks)
+	{
+		if (!B.Label.Equals(TEXT("Park"), ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+
+		const float LocalX = Point.X - B.Center.X;
+		const float LocalY = Point.Y - B.Center.Y;
+		return FMath::Abs(LocalX) <= Half + Tolerance && FMath::Abs(LocalY) <= Half + Tolerance;
+	}
+	return false;
+}
+
 void ACustomerBase::BuildResidentStreetStops(ACityGenerator* City, TArray<FVector>& OutStops) const
 {
 	OutStops.Reset();
@@ -1630,55 +1655,105 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 
 	const bool bProjectedUsable = Nav->ProjectPointToNavigation(TargetGoal, Projected, Extent)
 		&& HasFullPathTo(Projected.Location)
-		&& (bGoalIsPark || IsResidentOutdoorSidewalkPoint(City, Projected.Location, false))
+		&& (bGoalIsPark ? IsResidentParkPoint(City, Projected.Location) : IsResidentOutdoorSidewalkPoint(City, Projected.Location, false))
 		&& (bGoalIsPark || CountResidentCrowdNear(Projected.Location, 280.f) < 4);
 	if (!bProjectedUsable)
 	{
-		const float DesiredDistance = FVector::Dist2D(Start, TargetGoal);
-		const float FallbackRadius = FMath::Clamp(DesiredDistance + 900.f, FMath::Max(3200.f, SearchXY * 3.f), 12000.f);
-		bool bFoundFallback = false;
-		FNavLocation BestCandidate;
-		float BestScore = TNumericLimits<float>::Max();
-		for (int32 Try = 0; Try < 32; ++Try)
+		if (bGoalIsPark)
 		{
-			FNavLocation Candidate;
-			if (!Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate))
-			{
-				continue;
-			}
+			const FVector ParkBase = bHasPark ? ParkCenter : (City ? City->GetCityCenter() : TargetGoal);
+			const float ParkWide = City ? City->GetMapBlockSize() * 0.32f : 700.f;
+			const float ParkInner = City ? City->GetMapBlockSize() * 0.15f : 320.f;
+			const FVector ParkCandidates[] = {
+				TargetGoal,
+				FVector(ParkBase.X, ParkBase.Y, TargetGoal.Z),
+				FVector(ParkBase.X + ParkWide, ParkBase.Y, TargetGoal.Z),
+				FVector(ParkBase.X - ParkWide, ParkBase.Y, TargetGoal.Z),
+				FVector(ParkBase.X, ParkBase.Y + ParkWide, TargetGoal.Z),
+				FVector(ParkBase.X, ParkBase.Y - ParkWide, TargetGoal.Z),
+				FVector(ParkBase.X + ParkInner, ParkBase.Y + ParkInner, TargetGoal.Z),
+				FVector(ParkBase.X - ParkInner, ParkBase.Y + ParkInner, TargetGoal.Z),
+				FVector(ParkBase.X + ParkInner, ParkBase.Y - ParkInner, TargetGoal.Z),
+				FVector(ParkBase.X - ParkInner, ParkBase.Y - ParkInner, TargetGoal.Z)
+			};
 
-			FVector CandidateGoal = Candidate.Location;
-			if (!bGoalIsPark && City)
+			bool bFoundPark = false;
+			FNavLocation BestPark;
+			float BestParkScore = TNumericLimits<float>::Max();
+			for (const FVector& RawParkGoal : ParkCandidates)
 			{
-				CandidateGoal = SnapResidentPointToSidewalk(City, CandidateGoal, false);
-				FNavLocation SidewalkProjection;
-				if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, Extent))
+				FNavLocation Candidate;
+				if (!Nav->ProjectPointToNavigation(RawParkGoal, Candidate, Extent)
+					|| !IsResidentParkPoint(City, Candidate.Location)
+					|| !HasFullPathTo(Candidate.Location))
 				{
 					continue;
 				}
-				CandidateGoal = SidewalkProjection.Location;
+
+				const float Score = FVector::Dist2D(Candidate.Location, TargetGoal)
+					+ static_cast<float>(CountResidentCrowdNear(Candidate.Location, 360.f)) * 850.f;
+				if (Score < BestParkScore)
+				{
+					BestParkScore = Score;
+					BestPark = Candidate;
+					bFoundPark = true;
+				}
 			}
 
-			if (HasFullPathTo(CandidateGoal)
-				&& (bGoalIsPark || IsResidentOutdoorSidewalkPoint(City, CandidateGoal, false))
-				&& (bGoalIsPark || CountResidentCrowdNear(CandidateGoal, 340.f) < 6))
+			if (!bFoundPark)
 			{
-				const int32 Crowd = CountResidentCrowdNear(CandidateGoal, 320.f);
-				const float ShortHopPenalty = FVector::Dist2D(Start, CandidateGoal) < 1200.f ? 16000.f : 0.f;
-				const float Score = FVector::Dist2D(CandidateGoal, TargetGoal) + Crowd * 1400.f + ShortHopPenalty;
-				if (Score < BestScore)
-				{
-					BestScore = Score;
-					BestCandidate.Location = CandidateGoal;
-				}
-				bFoundFallback = true;
+				return false;
 			}
+			Projected = BestPark;
 		}
-		if (!bFoundFallback)
+		else
 		{
-			return false;
+			const float DesiredDistance = FVector::Dist2D(Start, TargetGoal);
+			const float FallbackRadius = FMath::Clamp(DesiredDistance + 900.f, FMath::Max(3200.f, SearchXY * 3.f), 12000.f);
+			bool bFoundFallback = false;
+			FNavLocation BestCandidate;
+			float BestScore = TNumericLimits<float>::Max();
+			for (int32 Try = 0; Try < 32; ++Try)
+			{
+				FNavLocation Candidate;
+				if (!Nav->GetRandomReachablePointInRadius(Start, FallbackRadius, Candidate))
+				{
+					continue;
+				}
+
+				FVector CandidateGoal = Candidate.Location;
+				if (!bGoalIsPark && City)
+				{
+					CandidateGoal = SnapResidentPointToSidewalk(City, CandidateGoal, false);
+					FNavLocation SidewalkProjection;
+					if (!Nav->ProjectPointToNavigation(CandidateGoal, SidewalkProjection, Extent))
+					{
+						continue;
+					}
+					CandidateGoal = SidewalkProjection.Location;
+				}
+
+				if (HasFullPathTo(CandidateGoal)
+					&& (bGoalIsPark || IsResidentOutdoorSidewalkPoint(City, CandidateGoal, false))
+					&& (bGoalIsPark || CountResidentCrowdNear(CandidateGoal, 340.f) < 6))
+				{
+					const int32 Crowd = CountResidentCrowdNear(CandidateGoal, 320.f);
+					const float ShortHopPenalty = FVector::Dist2D(Start, CandidateGoal) < 1200.f ? 16000.f : 0.f;
+					const float Score = FVector::Dist2D(CandidateGoal, TargetGoal) + Crowd * 1400.f + ShortHopPenalty;
+					if (Score < BestScore)
+					{
+						BestScore = Score;
+						BestCandidate.Location = CandidateGoal;
+					}
+					bFoundFallback = true;
+				}
+			}
+			if (!bFoundFallback)
+			{
+				return false;
+			}
+			Projected = BestCandidate;
 		}
-		Projected = BestCandidate;
 	}
 
 	if (!WalkTo(Projected.Location))
@@ -1906,7 +1981,11 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	{
 		if (bRoamGoalIsPark)
 		{
-			LastParkVisitDay = DC ? DC->GetDayNumber() : ResidentRouteDay;
+			if (IsResidentParkPoint(GetResidentCity(W), GetActorLocation())
+				|| IsResidentParkPoint(GetResidentCity(W), RoamGoal))
+			{
+				LastParkVisitDay = DC ? DC->GetDayNumber() : ResidentRouteDay;
+			}
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
 			ParkPauseTimer = 0.f;
