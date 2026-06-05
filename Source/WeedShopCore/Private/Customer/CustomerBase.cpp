@@ -379,6 +379,10 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	ResidentRouteDay = -1;
 	ResidentStreetLegsToday = 0;
 	LastParkVisitDay = -1;
+	LastMorningParkVisitDay = -1;
+	LastLaterParkVisitDay = -1;
+	PendingParkVisitSlot = 0;
+	ActiveParkVisitSlot = 0;
 	ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 16.f);
 	RoamTimer = ComputeResidentGoalThinkDelay(0.6f, 4.8f);
 	bAtHomeInside = true;
@@ -470,10 +474,11 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
-	OutSnapshot.bNeedsParkVisitToday = Today >= 0 && LastParkVisitDay != Today;
+	OutSnapshot.bNeedsParkVisitToday = Today >= 0 && GetResidentParkVisitsToday(Today) < 2;
 	if (City && DC && OutSnapshot.bNeedsParkVisitToday && !bAtHomeInside && !bEmergingFromHome && !bEnteringHome)
 	{
-		OutSnapshot.bParkUrgentToday = DC->GetClockHour() >= ComputeResidentParkUrgencyHour(City, DC, Today);
+		const int32 NextSlot = PickResidentParkVisitSlot(City, DC, Today, DC->GetClockHour());
+		OutSnapshot.bParkUrgentToday = NextSlot > 0 && DC->GetClockHour() >= ComputeResidentParkUrgencyHour(City, DC, Today, NextSlot);
 	}
 	const bool bOutdoorGoalBlocked = !bAtHomeInside && !bEmergingFromHome && !bEnteringHome && bHasRoamGoal;
 	OutSnapshot.bStuckSuspect = bOutdoorGoalBlocked && (ResidentStuckTimer > 1.4f || ResidentNoGoalTimer > 10.f);
@@ -634,13 +639,8 @@ FVector ACustomerBase::GetResidentHomeEntrySpot() const
 		return HomeInteriorPos + FVector(0.f, 0.f, 4.f);
 	}
 
-	// Als de unit boven zit, loop zichtbaar de lobby in en verdwijn pas daarna naar de echte woning.
-	if (FMath::Abs(HomeInteriorPos.Z - HomeFrontSpot.Z) > 260.f)
-	{
-		return HomeFrontSpot + ToHome * 520.f;
-	}
-
-	return HomeInteriorPos + FVector(0.f, 0.f, 4.f);
+	const float EntryDepth = FMath::Min(520.f, FMath::Max(260.f, FVector::Dist2D(HomeInteriorPos, HomeFrontSpot) * 0.65f));
+	return HomeFrontSpot + ToHome * EntryDepth;
 }
 
 void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
@@ -653,6 +653,8 @@ void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 	bHasRoamGoal = false;
 	bRoamGoalIsPark = false;
 	bPendingRoamGoalIsPark = false;
+	PendingParkVisitSlot = 0;
+	ActiveParkVisitSlot = 0;
 	bLeavingHomeRoute = false;
 	ResidentWakeDelay = -1.f;
 	ParkPauseTimer = 0.f;
@@ -722,6 +724,8 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 		bHasRoamGoal = false;
 		bRoamGoalIsPark = false;
 		bPendingRoamGoalIsPark = false;
+		PendingParkVisitSlot = 0;
+		ActiveParkVisitSlot = 0;
 		RoamTimer = ComputeResidentGoalThinkDelay(0.4f, 4.2f);
 		HomeExitStuckTimer = 0.f;
 		bHasResidentPrevMoveLoc = false;
@@ -772,6 +776,8 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
 			bPendingRoamGoalIsPark = false;
+			PendingParkVisitSlot = 0;
+			ActiveParkVisitSlot = 0;
 			RoamTimer = ComputeResidentGoalThinkDelay(0.4f, 4.2f);
 		}
 		HomeExitStuckTimer = 0.f;
@@ -790,6 +796,8 @@ void ACustomerBase::StartResidentHomeEntry()
 	bHasRoamGoal = false;
 	bRoamGoalIsPark = false;
 	bPendingRoamGoalIsPark = false;
+	PendingParkVisitSlot = 0;
+	ActiveParkVisitSlot = 0;
 	ParkPauseTimer = 0.f;
 	ResidentStuckTimer = 0.f;
 	ResidentRecoveryCooldown = 0.f;
@@ -857,6 +865,28 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 		if (AAIController* AI = Cast<AAIController>(GetController()))
 		{
 			AI->StopMovement();
+		}
+		HomeEntryStuckTimer = 0.f;
+		bHasResidentPrevMoveLoc = false;
+		return true;
+	}
+
+	if (!bFrontStage)
+	{
+		const FVector DesiredActorLocation = MakeResidentStandingLocation(Target);
+		FVector ToTarget = DesiredActorLocation - Cur;
+		const float Dist = ToTarget.Size();
+		if (Dist > 2.f)
+		{
+			const UCharacterMovementComponent* Move = GetCharacterMovement();
+			const float Step = (Move ? FMath::Max(90.f, Move->MaxWalkSpeed) : 135.f) * DeltaSeconds;
+			const FVector Next = Cur + ToTarget.GetSafeNormal() * FMath::Min(Dist, Step);
+			SetActorLocation(Next, false);
+			ToTarget.Z = 0.f;
+			if (!ToTarget.IsNearlyZero())
+			{
+				SetActorRotation(ToTarget.Rotation());
+			}
 		}
 		HomeEntryStuckTimer = 0.f;
 		bHasResidentPrevMoveLoc = false;
@@ -1539,6 +1569,8 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 	};
 	const FVector DistrictTarget = BuildDistrictTarget();
 	const float MapRadius = FMath::Max(Pitch, static_cast<float>(GridR) * Pitch * 1.45f);
+	const float CenterSoftRadius = FMath::Max(900.f, City->GetMapBlockSize() * 0.9f);
+	const int32 CenterCrowd = CountResidentCrowdNear(Center, CenterSoftRadius);
 
 	bool bFound = false;
 	FVector BestGoal = FVector::ZeroVector;
@@ -1569,6 +1601,12 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 			}
 
 			const float CenterDist = FVector::Dist2D(Candidate, Center);
+			const bool bCenterCandidate = CenterDist < CenterSoftRadius;
+			if (bCenterCandidate && CenterCrowd >= (bAllowShortTrip ? 8 : 6))
+			{
+				continue;
+			}
+
 			const float DistrictDist = FVector::Dist2D(Candidate, DistrictTarget);
 			FVector FromCenter = Candidate - Center;
 			FromCenter.Z = 0.f;
@@ -1579,7 +1617,7 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 			}
 
 			const int32 NoiseSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 131 + static_cast<int64>(Index) * 977) % 1000));
-			const float CenterPenalty = CenterDist < Pitch * 1.15f ? Pitch * 2.5f : 0.f;
+			const float CenterPenalty = bCenterCandidate ? Pitch * (3.0f + static_cast<float>(CenterCrowd) * 0.55f) : 0.f;
 			const float Score = TravelDist * 0.55f
 				+ CenterDist * 0.85f
 				+ FMath::Max(0.f, MapRadius - DistrictDist) * 1.45f
@@ -1687,6 +1725,8 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 			bHasRoamGoal = true;
 			bRoamGoalIsPark = false;
 			bPendingRoamGoalIsPark = false;
+			PendingParkVisitSlot = 0;
+			ActiveParkVisitSlot = 0;
 			RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 16.f, 95.f);
 			ResidentPrevMoveLoc = GetActorLocation();
 			bHasResidentPrevMoveLoc = true;
@@ -1765,6 +1805,8 @@ bool ACustomerBase::RecoverResidentSidewalkDrift(float DeltaSeconds)
 	bHasRoamGoal = true;
 	bRoamGoalIsPark = false;
 	bPendingRoamGoalIsPark = false;
+	PendingParkVisitSlot = 0;
+	ActiveParkVisitSlot = 0;
 	RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 8.f, 28.f);
 	ResidentStuckTimer = 0.f;
 	ResidentRecoveryCooldown = 0.5f;
@@ -1915,6 +1957,8 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 					bHasRoamGoal = true;
 					bRoamGoalIsPark = bCandidateIsPark;
 					bPendingRoamGoalIsPark = false;
+					PendingParkVisitSlot = 0;
+					ActiveParkVisitSlot = bCandidateIsPark ? ActiveParkVisitSlot : 0;
 					RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 12.f, 70.f);
 					ResidentPrevMoveLoc = GetActorLocation();
 					bHasResidentPrevMoveLoc = true;
@@ -1932,6 +1976,8 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 	bHasRoamGoal = false;
 	bRoamGoalIsPark = false;
 	bPendingRoamGoalIsPark = false;
+	PendingParkVisitSlot = 0;
+	ActiveParkVisitSlot = 0;
 	ParkPauseTimer = 0.f;
 	RoamTimer = 0.f;
 	ResidentStuckTimer = 0.f;
@@ -1947,9 +1993,11 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	UWorld* W = GetWorld();
 	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
 	const bool bGoalIsPark = bPendingRoamGoalIsPark;
+	const int32 ParkVisitSlot = PendingParkVisitSlot;
 	ACityGenerator* City = GetResidentCity(W);
 	const FVector TargetGoal = (!bGoalIsPark && City) ? SnapResidentPointToSidewalk(City, DesiredGoal, false) : DesiredGoal;
 	bPendingRoamGoalIsPark = false;
+	PendingParkVisitSlot = 0;
 	bRoamGoalIsPark = false;
 	if (!Nav)
 	{
@@ -2086,6 +2134,7 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	RoamGoal = Projected.Location;
 	bHasRoamGoal = true;
 	bRoamGoalIsPark = bGoalIsPark;
+	ActiveParkVisitSlot = bGoalIsPark ? FMath::Clamp(ParkVisitSlot, 1, 2) : 0;
 	RoamTimer = ComputeResidentRoamTimeout(RoamGoal);
 	ResidentPrevMoveLoc = GetActorLocation();
 	bHasResidentPrevMoveLoc = true;
@@ -2100,14 +2149,28 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	return true;
 }
 
-float ACustomerBase::ComputeResidentParkVisitHour(int32 Today) const
+int32 ACustomerBase::GetResidentParkVisitsToday(int32 Today) const
 {
-	const int32 ParkHourSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 23) % 8));
-	const int32 ParkMinuteSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 7 + static_cast<int64>(Today) * 41) % 100));
-	return 8.f + static_cast<float>(ParkHourSeed) + static_cast<float>(ParkMinuteSeed) * 0.008f;
+	int32 Visits = 0;
+	if (LastMorningParkVisitDay == Today) { ++Visits; }
+	if (LastLaterParkVisitDay == Today) { ++Visits; }
+	return Visits;
 }
 
-float ACustomerBase::ComputeResidentParkUrgencyHour(ACityGenerator* City, const UDayCycleComponent* DayCycle, int32 Today) const
+float ACustomerBase::ComputeResidentParkVisitHour(int32 Today, int32 VisitSlot) const
+{
+	const int32 ParkMinuteSeed = FMath::Abs(static_cast<int32>(
+		(static_cast<int64>(RoamRouteSeed) * 7
+			+ static_cast<int64>(Today) * 41
+			+ static_cast<int64>(VisitSlot) * 173) % 100));
+	if (VisitSlot <= 1)
+	{
+		return 8.0f + static_cast<float>(ParkMinuteSeed) * 0.026f; // 08:00 - 10:35
+	}
+	return 14.0f + static_cast<float>(ParkMinuteSeed) * 0.030f; // 14:00 - 16:58
+}
+
+float ACustomerBase::ComputeResidentParkUrgencyHour(ACityGenerator* City, const UDayCycleComponent* DayCycle, int32 Today, int32 VisitSlot) const
 {
 	const UCharacterMovementComponent* Move = GetCharacterMovement();
 	const float Speed = Move ? FMath::Max(80.f, Move->MaxWalkSpeed) : 135.f;
@@ -2116,9 +2179,53 @@ float ACustomerBase::ComputeResidentParkUrgencyHour(ACityGenerator* City, const 
 	const float DayHours = DayCycle ? FMath::Max(1.f, DayCycle->SunsetHour - DayCycle->SunriseHour) : 14.f;
 	const float DaySeconds = DayCycle ? FMath::Max(1.f, DayCycle->DayLengthSeconds) : 1200.f;
 	const float TravelClockHours = (DistanceToPark / Speed) * (DayHours / DaySeconds);
-	const int32 SpreadSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 11 + static_cast<int64>(Today) * 31) % 12));
+	const int32 SpreadSeed = FMath::Abs(static_cast<int32>(
+		(static_cast<int64>(RoamRouteSeed) * 11
+			+ static_cast<int64>(Today) * 31
+			+ static_cast<int64>(VisitSlot) * 97) % 12));
 	const float SpreadHours = static_cast<float>(SpreadSeed) * 0.055f;
-	return FMath::Clamp(18.45f - TravelClockHours - SpreadHours, 13.25f, 16.9f);
+	if (VisitSlot <= 1)
+	{
+		return FMath::Clamp(12.45f - TravelClockHours - SpreadHours, 9.75f, 13.15f);
+	}
+	return FMath::Clamp(18.45f - TravelClockHours - SpreadHours, 15.25f, 18.6f);
+}
+
+int32 ACustomerBase::PickResidentParkVisitSlot(ACityGenerator* City, const UDayCycleComponent* DayCycle, int32 Today, float Hour) const
+{
+	if (Today < 0)
+	{
+		return 0;
+	}
+
+	const bool bNeedsMorning = LastMorningParkVisitDay != Today;
+	const bool bNeedsLater = LastLaterParkVisitDay != Today;
+	if (!bNeedsMorning && !bNeedsLater)
+	{
+		return 0;
+	}
+
+	if (bNeedsMorning)
+	{
+		const float MorningHour = ComputeResidentParkVisitHour(Today, 1);
+		const float MorningUrgency = ComputeResidentParkUrgencyHour(City, DayCycle, Today, 1);
+		if (Hour >= MorningHour || Hour >= MorningUrgency)
+		{
+			return 1;
+		}
+	}
+
+	if (bNeedsLater)
+	{
+		const float LaterHour = ComputeResidentParkVisitHour(Today, 2);
+		const float LaterUrgency = ComputeResidentParkUrgencyHour(City, DayCycle, Today, 2);
+		if (Hour >= LaterHour || Hour >= LaterUrgency)
+		{
+			return 2;
+		}
+	}
+
+	return 0;
 }
 
 bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ)
@@ -2127,6 +2234,7 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 	OutSearchXY = 700.f;
 	OutSearchZ = 500.f;
 	bPendingRoamGoalIsPark = false;
+	PendingParkVisitSlot = 0;
 
 	ACityGenerator* City = GetResidentCity(GetWorld());
 	if (!City)
@@ -2160,33 +2268,42 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 		ParkLegCountdown = 1 + FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 17) % 4));
 	}
 
-	const float ParkVisitHour = ComputeResidentParkVisitHour(Today);
-	const bool bNeedsParkVisit = LastParkVisitDay != Today;
-	const bool bParkWindowOpen = Hour >= ParkVisitHour && ResidentStreetLegsToday >= ParkLegCountdown;
-	const bool bParkOverdue = Hour >= ComputeResidentParkUrgencyHour(City, DC, Today);
-	if (bNeedsParkVisit && (bParkWindowOpen || bParkOverdue))
+	const int32 ParkVisitSlot = PickResidentParkVisitSlot(City, DC, Today, Hour);
+	const bool bParkWindowOpen = ParkVisitSlot > 0 && ResidentStreetLegsToday >= ParkLegCountdown;
+	const bool bParkOverdue = ParkVisitSlot > 0 && Hour >= ComputeResidentParkUrgencyHour(City, DC, Today, ParkVisitSlot);
+	if (ParkVisitSlot > 0 && (bParkWindowOpen || bParkOverdue))
 	{
-		const float D = City->GetMapBlockSize() * 0.32f;
-		const float Inner = City->GetMapBlockSize() * 0.15f;
-		const FVector ParkStops[] = {
-			FVector(0.f, 0.f, 0.f),
-			FVector( D, 0.f, 0.f),
-			FVector(-D, 0.f, 0.f),
-			FVector(0.f,  D, 0.f),
-			FVector(0.f, -D, 0.f),
-			FVector( Inner,  Inner, 0.f),
-			FVector(-Inner,  Inner, 0.f),
-			FVector( Inner, -Inner, 0.f),
-			FVector(-Inner, -Inner, 0.f)
-		};
-		const int32 ParkStopCount = UE_ARRAY_COUNT(ParkStops);
-		const int32 Pick = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 53 + static_cast<int64>(RoamLegIndex) * 3) % ParkStopCount));
-		OutGoal = FVector(ParkCenter.X, ParkCenter.Y, HomeFrontSpot.Z) + ParkStops[Pick];
-		OutSearchXY = 760.f;
-		OutSearchZ = 500.f;
-		bPendingRoamGoalIsPark = true;
-		++RoamLegIndex;
-		return true;
+		const float ParkCrowdRadius = FMath::Max(800.f, City->GetMapBlockSize() * 0.82f);
+		const int32 ParkCrowd = CountResidentParkVisitors(ParkCrowdRadius);
+		const int32 CenterCrowd = CountResidentCrowdNear(ParkCenter, ParkCrowdRadius);
+		const int32 ParkSoftLimit = 5;
+		const int32 CenterSoftLimit = 7;
+		const bool bParkCrowded = !bParkOverdue && (ParkCrowd >= ParkSoftLimit || CenterCrowd >= CenterSoftLimit);
+		if (!bParkCrowded)
+		{
+			const float D = City->GetMapBlockSize() * 0.32f;
+			const float Inner = City->GetMapBlockSize() * 0.15f;
+			const FVector ParkStops[] = {
+				FVector(0.f, 0.f, 0.f),
+				FVector( D, 0.f, 0.f),
+				FVector(-D, 0.f, 0.f),
+				FVector(0.f,  D, 0.f),
+				FVector(0.f, -D, 0.f),
+				FVector( Inner,  Inner, 0.f),
+				FVector(-Inner,  Inner, 0.f),
+				FVector( Inner, -Inner, 0.f),
+				FVector(-Inner, -Inner, 0.f)
+			};
+			const int32 ParkStopCount = UE_ARRAY_COUNT(ParkStops);
+			const int32 Pick = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 53 + static_cast<int64>(RoamLegIndex) * 3) % ParkStopCount));
+			OutGoal = FVector(ParkCenter.X, ParkCenter.Y, HomeFrontSpot.Z) + ParkStops[Pick];
+			OutSearchXY = 760.f;
+			OutSearchZ = 500.f;
+			bPendingRoamGoalIsPark = true;
+			PendingParkVisitSlot = ParkVisitSlot;
+			++RoamLegIndex;
+			return true;
+		}
 	}
 
 	if (PickResidentStreetRoamGoal(City, RoamLegIndex, OutGoal, OutSearchXY, OutSearchZ))
@@ -2312,11 +2429,12 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		return;
 	}
 
-	if (Today >= 0 && bHasRoamGoal && !bRoamGoalIsPark && LastParkVisitDay != Today)
+	if (Today >= 0 && bHasRoamGoal && !bRoamGoalIsPark && GetResidentParkVisitsToday(Today) < 2)
 	{
 		if (ACityGenerator* City = GetResidentCity(W))
 		{
-			if (Hour >= ComputeResidentParkUrgencyHour(City, DC, Today))
+			const int32 ParkVisitSlot = PickResidentParkVisitSlot(City, DC, Today, Hour);
+			if (ParkVisitSlot > 0 && Hour >= ComputeResidentParkUrgencyHour(City, DC, Today, ParkVisitSlot))
 			{
 				if (AAIController* AI = Cast<AAIController>(GetController()))
 				{
@@ -2324,6 +2442,8 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 				}
 				bHasRoamGoal = false;
 				bPendingRoamGoalIsPark = false;
+				PendingParkVisitSlot = 0;
+				ActiveParkVisitSlot = 0;
 				RoamTimer = 0.f;
 				ResidentStuckTimer = 0.f;
 				ResidentRecoveryCooldown = 0.f;
@@ -2372,10 +2492,20 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			if (IsResidentParkPoint(GetResidentCity(W), GetActorLocation())
 				|| IsResidentParkPoint(GetResidentCity(W), RoamGoal))
 			{
-				LastParkVisitDay = DC ? DC->GetDayNumber() : ResidentRouteDay;
+				const int32 VisitDay = DC ? DC->GetDayNumber() : ResidentRouteDay;
+				LastParkVisitDay = VisitDay;
+				if (ActiveParkVisitSlot <= 1)
+				{
+					LastMorningParkVisitDay = VisitDay;
+				}
+				else
+				{
+					LastLaterParkVisitDay = VisitDay;
+				}
 			}
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
+			ActiveParkVisitSlot = 0;
 			ParkPauseTimer = ComputeResidentGoalThinkDelay(6.f, 16.f);
 			RoamTimer = 0.f;
 			ResidentStuckTimer = 0.f;
@@ -2387,6 +2517,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		{
 			bHasRoamGoal = false;
 			bRoamGoalIsPark = false;
+			ActiveParkVisitSlot = 0;
 			RoamTimer = ComputeResidentGoalThinkDelay(0.5f, 2.8f);
 			ResidentStuckTimer = 0.f;
 			ResidentRecoveryCooldown = 0.f;

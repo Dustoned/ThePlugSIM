@@ -262,6 +262,10 @@ protected:
 	int32 ResidentRouteDay = -1;
 	int32 ResidentStreetLegsToday = 0;
 	int32 LastParkVisitDay = -1;
+	int32 LastMorningParkVisitDay = -1;
+	int32 LastLaterParkVisitDay = -1;
+	int32 PendingParkVisitSlot = 0;
+	int32 ActiveParkVisitSlot = 0;
 	float ResidentWakeDelay = -1.f;
 	bool bLeavingHomeRoute = false;
 	ACityGenerator* GetResidentCity(UWorld* W);
@@ -272,8 +276,10 @@ protected:
 	bool PickResidentStreetRoamGoal(ACityGenerator* City, int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const;
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);
 	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
-	float ComputeResidentParkVisitHour(int32 Today) const;
-	float ComputeResidentParkUrgencyHour(ACityGenerator* City, const class UDayCycleComponent* DayCycle, int32 Today) const;
+	int32 GetResidentParkVisitsToday(int32 Today) const;
+	float ComputeResidentParkVisitHour(int32 Today, int32 VisitSlot) const;
+	float ComputeResidentParkUrgencyHour(ACityGenerator* City, const class UDayCycleComponent* DayCycle, int32 Today, int32 VisitSlot) const;
+	int32 PickResidentParkVisitSlot(ACityGenerator* City, const class UDayCycleComponent* DayCycle, int32 Today, float Hour) const;
 	FVector ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const;
 	FVector ResolveResidentHomeFrontSpot(const FVector& FrontSpot);
 	FVector ResolveResidentHomeExitSidewalkSpot(ACityGenerator* City, const FVector& SafeFrontSpot) const;
