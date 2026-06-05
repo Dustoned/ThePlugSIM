@@ -347,14 +347,23 @@ void ACityGenerator::BuildCity()
 		AActor* NavAnchor = W->SpawnActor<AActor>(AActor::StaticClass(), FTransform(FVector(Center.X, Center.Y, GroundZ)));
 		if (NavAnchor)
 		{
+			const float GenerationRadius = Span * 0.9f;
+			const float RemovalRadius = Span * 1.05f;
 			USceneComponent* AnchorRoot = NewObject<USceneComponent>(NavAnchor, TEXT("AnchorRoot"));
 			NavAnchor->SetRootComponent(AnchorRoot);
 			AnchorRoot->RegisterComponent();
+			NavAnchor->SetActorLocation(FVector(Center.X, Center.Y, GroundZ));
 			UNavigationInvokerComponent* Inv = NewObject<UNavigationInvokerComponent>(NavAnchor, TEXT("CityNavInvoker"));
 			// Dek de HELE stad incl. hoeken: een hoekblok ligt op ~sqrt(2)*R*Pitch van het midden, wat
 			// ruim buiten de oude 0.55*Span viel -> daar was geen navmesh en stonden NPC's vast. Royaal.
-			Inv->SetGenerationRadii(Span * 0.9f, Span * 1.05f);
+			Inv->SetGenerationRadii(GenerationRadius, RemovalRadius);
 			Inv->RegisterComponent();
+			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+			{
+				NavSys->RegisterNavigationInvoker(NavAnchor, GenerationRadius, RemovalRadius);
+				UE_LOG(LogWeedShop, Log, TEXT("City nav invoker registered: radius=(%.0f, %.0f) loc=(%.0f, %.0f, %.0f)"),
+					GenerationRadius, RemovalRadius, Center.X, Center.Y, GroundZ);
+			}
 		}
 	}
 
