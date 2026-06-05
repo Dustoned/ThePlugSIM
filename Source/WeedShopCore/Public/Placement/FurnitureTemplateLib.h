@@ -36,8 +36,10 @@ namespace FurnitureTemplates
 	// Lees de templates (type -> entries). False als er geen bestand is.
 	WEEDSHOPCORE_API bool LoadTemplates(TMap<FString, TArray<FFurnitureEntry>>& Out);
 
-	// Spawn één entry (server) in een woning. RoomHalf wordt gebruikt om binnen de kamer te clampen.
-	WEEDSHOPCORE_API AActor* SpawnEntry(UWorld* W, const FFurnitureEntry& E, const FVector& HomeInterior, const FVector& RoomHalf);
+	// Spawn één entry (server) in een woning. RoomHalf clampt binnen de kamer; de oriëntatie draait mee.
+	// bCosmetic = krijgt de tag "Cosmetic" -> niet oppakbaar (voor NPC-woningen; alleen jouw eigen
+	// woning-meubels blijven interactief).
+	WEEDSHOPCORE_API AActor* SpawnEntry(UWorld* W, const FFurnitureEntry& E, const FVector& HomeInterior, const FVector& RoomHalf, bool bCosmetic);
 
 	// Verwijder alle geplaatste meubel-actors (om opnieuw in te richten). Geeft aantal verwijderd terug.
 	WEEDSHOPCORE_API int32 ClearPlaced(UWorld* W);

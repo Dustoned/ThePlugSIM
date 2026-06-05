@@ -64,9 +64,11 @@ FString FurnitureTemplates::FilePath()
 
 FString FurnitureTemplates::TypeKey(bool bApartment, const FVector& RoomHalf)
 {
-	const int32 SX = FMath::RoundToInt(RoomHalf.X / 50.f);
-	const int32 SY = FMath::RoundToInt(RoomHalf.Y / 50.f);
-	return FString::Printf(TEXT("%s_%dx%d"), bApartment ? TEXT("Apt") : TEXT("Row"), SX, SY);
+	// Maten gesorteerd (klein x groot) zodat dezelfde kamer in beide oriëntaties dezelfde sleutel krijgt
+	// -> je hoeft maar één kamer per maat in te richten; de oriëntatie draait bij het plaatsen mee.
+	const int32 A = FMath::RoundToInt(RoomHalf.X / 50.f);
+	const int32 B = FMath::RoundToInt(RoomHalf.Y / 50.f);
+	return FString::Printf(TEXT("%s_%dx%d"), bApartment ? TEXT("Apt") : TEXT("Row"), FMath::Min(A, B), FMath::Max(A, B));
 }
 
 void FurnitureTemplates::CountHomeTypes(ACityGenerator* City, TMap<FString, int32>& Out)
@@ -122,11 +124,17 @@ int32 FurnitureTemplates::SaveFromWorld(UWorld* W, ACityGenerator* City)
 		const FString& Type = KV.Key;
 		const int32 Hi = KV.Value;
 		const FApartmentHome& H = Homes[Hi];
+		// Canoniek frame: lokale X = de LANGE muur-as van de kamer, lokale Y = de korte. Zo is de layout
+		// oriëntatie-onafhankelijk en draait 'ie bij het plaatsen mee naar elk huis.
+		const bool bLongX = H.RoomHalf.X >= H.RoomHalf.Y;
 		for (const FPlaced& P : PerHome[Hi])
 		{
-			const FVector Local = P.Loc - H.InteriorPos;
+			const FVector D = P.Loc - H.InteriorPos;
+			const float LLong = bLongX ? D.X : D.Y;
+			const float LShort = bLongX ? D.Y : D.X;
+			const float LYaw = P.Yaw - (bLongX ? 0.f : 90.f);
 			Text += FString::Printf(TEXT("%s|%s|%.1f|%.1f|%.1f|%.1f\n"),
-				*Type, *P.ItemId.ToString(), Local.X, Local.Y, Local.Z, P.Yaw);
+				*Type, *P.ItemId.ToString(), LLong, LShort, D.Z, LYaw);
 		}
 		++Types;
 	}
@@ -157,40 +165,52 @@ bool FurnitureTemplates::LoadTemplates(TMap<FString, TArray<FFurnitureEntry>>& O
 	return Out.Num() > 0;
 }
 
-AActor* FurnitureTemplates::SpawnEntry(UWorld* W, const FFurnitureEntry& E, const FVector& HomeInterior, const FVector& RoomHalf)
+AActor* FurnitureTemplates::SpawnEntry(UWorld* W, const FFurnitureEntry& E, const FVector& HomeInterior, const FVector& RoomHalf, bool bCosmetic)
 {
 	if (!W || E.ItemId.IsNone()) { return nullptr; }
 
-	// Clamp binnen de kamer (zodat het in kleinere kamers niet door de muur steekt).
+	// Canoniek (lang/kort) -> wereld, gedraaid naar de oriëntatie van DIT huis. E.Local.X = langs de
+	// lange muur, E.Local.Y = langs de korte. Als de lange as van dit huis langs wereld-Y ligt, draaien
+	// we de layout 90 graden mee.
+	const bool bLongX = RoomHalf.X >= RoomHalf.Y;
+	const float WX = bLongX ? E.Local.X : E.Local.Y;
+	const float WY = bLongX ? E.Local.Y : E.Local.X;
+	const float WYaw = E.Yaw + (bLongX ? 0.f : 90.f);
+
 	const float MX = FMath::Max(0.f, RoomHalf.X - 35.f);
 	const float MY = FMath::Max(0.f, RoomHalf.Y - 35.f);
-	FVector L = HomeInterior + FVector(
-		FMath::Clamp(E.Local.X, -MX, MX),
-		FMath::Clamp(E.Local.Y, -MY, MY),
-		E.Local.Z);
-	const FTransform TM(FRotator(0.f, E.Yaw, 0.f), L);
+	FVector L = HomeInterior + FVector(FMath::Clamp(WX, -MX, MX), FMath::Clamp(WY, -MY, MY), E.Local.Z);
+	const FTransform TM(FRotator(0.f, WYaw, 0.f), L);
 
 	const FString S = E.ItemId.ToString();
+	AActor* Spawned = nullptr;
 	if (S == TEXT("Sink"))
 	{
-		return W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM);
+		Spawned = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM);
 	}
-	if (S.StartsWith(TEXT("DryRack")))
+	else if (S.StartsWith(TEXT("DryRack")))
 	{
 		ADryingRack* R = W->SpawnActorDeferred<ADryingRack>(ADryingRack::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 		if (R) { R->RackTier = E.ItemId; R->FinishSpawning(TM); }
-		return R;
+		Spawned = R;
 	}
-	if (S.StartsWith(TEXT("Bench")))
+	else if (S.StartsWith(TEXT("Bench")))
 	{
 		APackBench* B = W->SpawnActorDeferred<APackBench>(APackBench::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 		if (B) { B->BenchTier = E.ItemId; B->FinishSpawning(TM); }
-		return B;
+		Spawned = B;
 	}
-	// Standaard meubel (Table/Fridge/Mattress/...): APlaceableProp met ItemId.
-	APlaceableProp* P = W->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-	if (P) { P->ItemId = E.ItemId; P->FinishSpawning(TM); }
-	return P;
+	else
+	{
+		// Standaard meubel (Table/Fridge/Mattress/...): APlaceableProp met ItemId.
+		APlaceableProp* P = W->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (P) { P->ItemId = E.ItemId; P->FinishSpawning(TM); }
+		Spawned = P;
+	}
+
+	// NPC-woning -> markeer als cosmetisch (niet oppakbaar). Jouw eigen woning-meubels blijven onbetagd.
+	if (Spawned && bCosmetic) { Spawned->Tags.Add(FName(TEXT("Cosmetic"))); }
+	return Spawned;
 }
 
 int32 FurnitureTemplates::ClearPlaced(UWorld* W)

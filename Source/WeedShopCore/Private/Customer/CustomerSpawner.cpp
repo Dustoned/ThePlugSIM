@@ -543,21 +543,22 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		FCollisionQueryParams Q(FName(TEXT("FixtureFloor")), false);
 		return World->LineTraceSingleByChannel(Hit, S, E, ECC_WorldStatic, Q) ? Hit.ImpactPoint.Z : Fallback;
 	};
-	auto SpawnProp = [&](FName ItemId, const FVector& Loc, float Yaw)
+	auto SpawnProp = [&](FName ItemId, const FVector& Loc, float Yaw, bool bCosmetic)
 	{
 		const FTransform TM(FRotator(0.f, Yaw, 0.f), Loc);
 		APlaceableProp* P = World->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		if (P) { P->ItemId = ItemId; P->FinishSpawning(TM); }
+		if (P) { P->ItemId = ItemId; P->FinishSpawning(TM); if (bCosmetic) { P->Tags.Add(FName(TEXT("Cosmetic"))); } }
 	};
 
 	// --- Meubels in de woningen ---
 	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
 	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
 
-	// Te meubileren woningen = koopbare/starter-offers + alle fysieke bewoner-woningen (NPC's wonen
-	// dan niet in lege kamers).
-	TSet<int32> Furnish;
-	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { Furnish.Add(Idx); } }
+	// Koopbare/starter-offers = JOUW woningen -> interactief (oppakbaar). Alle bewoner-woningen ->
+	// cosmetisch (niet oppakbaar), zodat alleen je eigen meubels te verplaatsen zijn.
+	TSet<int32> OfferSet;
+	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { OfferSet.Add(Idx); } }
+	TSet<int32> Furnish = OfferSet;
 	for (int32 Idx : ResidentHomeIndices) { Furnish.Add(Idx); }
 
 	// Als de speler een eigen layout heeft opgeslagen (sandbox authoring), gebruik die PER TYPE; anders
@@ -570,26 +571,28 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		if (!Homes.IsValidIndex(Idx)) { continue; }
 		const FApartmentHome& H = Homes[Idx];
 		const FVector C = H.InteriorPos; const FVector R = H.RoomHalf;
+		const bool bCosmetic = !OfferSet.Contains(Idx); // NPC-woning -> cosmetisch; jouw woning -> interactief
 
 		if (bHaveTemplates)
 		{
 			const FString Type = FurnitureTemplates::TypeKey(H.bApartment, H.RoomHalf);
 			if (const TArray<FFurnitureEntry>* Entries = Templates.Find(Type))
 			{
-				for (const FFurnitureEntry& E : *Entries) { FurnitureTemplates::SpawnEntry(World, E, C, R); }
+				for (const FFurnitureEntry& E : *Entries) { FurnitureTemplates::SpawnEntry(World, E, C, R, bCosmetic); }
 				continue;
 			}
 			// Geen template voor dit type -> val terug op de standaard-set hieronder.
 		}
 
 		auto At = [&](float fx, float fy) { FVector L = C + FVector(R.X * fx, R.Y * fy, 0.f); L.Z = FloorZ(L, C.Z) + 2.f; return L; };
-		SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f);
-		SpawnProp(FName(TEXT("Fridge")),   At( 0.45f,  0.45f), 180.f);
-		SpawnProp(FName(TEXT("Table")),    At( 0.0f,   0.40f), 0.f);
+		SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f, bCosmetic);
+		SpawnProp(FName(TEXT("Fridge")),   At( 0.45f,  0.45f), 180.f, bCosmetic);
+		SpawnProp(FName(TEXT("Table")),    At( 0.0f,   0.40f), 0.f, bCosmetic);
 		// Gootsteen = AWaterSink (eigen class); mesh-pivot in het midden -> ~halve hoogte omhoog.
 		{
 			FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
-			World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc));
+			AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc));
+			if (Sink && bCosmetic) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); }
 		}
 	}
 

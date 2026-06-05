@@ -640,7 +640,8 @@ void UBuildComponent::UpdateRemoteGhost()
 
 bool UBuildComponent::IsPickable(const AActor* A) const
 {
-	return A && (Cast<AGrowPlant>(A) || Cast<APlaceableProp>(A) || Cast<ADryingRack>(A)
+	if (!A || A->ActorHasTag(FName(TEXT("Cosmetic")))) { return false; } // NPC-woning-meubels: niet oppakbaar
+	return (Cast<AGrowPlant>(A) || Cast<APlaceableProp>(A) || Cast<ADryingRack>(A)
 		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A) || Cast<ACeilingLamp>(A)
 		|| Cast<AAtm>(A));
 }
