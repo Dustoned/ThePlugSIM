@@ -2016,6 +2016,27 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	return true;
 }
 
+float ACustomerBase::ComputeResidentParkVisitHour(int32 Today) const
+{
+	const int32 ParkHourSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 23) % 8));
+	const int32 ParkMinuteSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 7 + static_cast<int64>(Today) * 41) % 100));
+	return 8.f + static_cast<float>(ParkHourSeed) + static_cast<float>(ParkMinuteSeed) * 0.008f;
+}
+
+float ACustomerBase::ComputeResidentParkUrgencyHour(ACityGenerator* City, const UDayCycleComponent* DayCycle, int32 Today) const
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	const float Speed = Move ? FMath::Max(80.f, Move->MaxWalkSpeed) : 135.f;
+	const FVector Park = City ? City->GetCityCenter() : ParkCenter;
+	const float DistanceToPark = FVector::Dist2D(GetActorLocation(), Park);
+	const float DayHours = DayCycle ? FMath::Max(1.f, DayCycle->SunsetHour - DayCycle->SunriseHour) : 14.f;
+	const float DaySeconds = DayCycle ? FMath::Max(1.f, DayCycle->DayLengthSeconds) : 1200.f;
+	const float TravelClockHours = (DistanceToPark / Speed) * (DayHours / DaySeconds);
+	const int32 SpreadSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 11 + static_cast<int64>(Today) * 31) % 12));
+	const float SpreadHours = static_cast<float>(SpreadSeed) * 0.055f;
+	return FMath::Clamp(18.45f - TravelClockHours - SpreadHours, 13.25f, 16.9f);
+}
+
 bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ)
 {
 	OutGoal = FVector::ZeroVector;
@@ -2055,13 +2076,10 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 		ParkLegCountdown = 1 + FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 17) % 4));
 	}
 
-	const int32 ParkHourSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 23) % 8));
-	const int32 ParkMinuteSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 7 + static_cast<int64>(Today) * 41) % 100));
-	const float ParkVisitHour = 8.f + static_cast<float>(ParkHourSeed) + static_cast<float>(ParkMinuteSeed) * 0.008f;
+	const float ParkVisitHour = ComputeResidentParkVisitHour(Today);
 	const bool bNeedsParkVisit = LastParkVisitDay != Today;
 	const bool bParkWindowOpen = Hour >= ParkVisitHour && ResidentStreetLegsToday >= ParkLegCountdown;
-	const int32 ParkOverdueSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 11 + static_cast<int64>(Today) * 31) % 12));
-	const bool bParkOverdue = Hour >= 16.5f + static_cast<float>(ParkOverdueSeed) * 0.12f;
+	const bool bParkOverdue = Hour >= ComputeResidentParkUrgencyHour(City, DC, Today);
 	if (bNeedsParkVisit && (bParkWindowOpen || bParkOverdue))
 	{
 		const float D = City->GetMapBlockSize() * 0.32f;
@@ -2103,6 +2121,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const float Hour = DC ? DC->GetClockHour() : 12.f;
+	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
 	const bool bNight = (Hour >= 19.f || Hour < 7.f);
 
 	// --- Afspraak heeft voorrang op roamen/nacht ---
@@ -2207,6 +2226,27 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	if (TickResidentHomeExit(DeltaSeconds))
 	{
 		return;
+	}
+
+	if (Today >= 0 && bHasRoamGoal && !bRoamGoalIsPark && LastParkVisitDay != Today)
+	{
+		if (ACityGenerator* City = GetResidentCity(W))
+		{
+			if (Hour >= ComputeResidentParkUrgencyHour(City, DC, Today))
+			{
+				if (AAIController* AI = Cast<AAIController>(GetController()))
+				{
+					AI->StopMovement();
+				}
+				bHasRoamGoal = false;
+				bPendingRoamGoalIsPark = false;
+				RoamTimer = 0.f;
+				ResidentStuckTimer = 0.f;
+				ResidentRecoveryCooldown = 0.f;
+				bHasResidentBestDistToGoal = false;
+				ResidentRecoveryAttempts = 0;
+			}
+		}
 	}
 
 	// Roam: vaste grote stadsronde buiten. Binnenroutes zijn alleen voor echt naar huis/naar buiten gaan.

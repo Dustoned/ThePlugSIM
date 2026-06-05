@@ -267,6 +267,8 @@ protected:
 	bool PickResidentStreetRoamGoal(ACityGenerator* City, int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const;
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);
 	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
+	float ComputeResidentParkVisitHour(int32 Today) const;
+	float ComputeResidentParkUrgencyHour(ACityGenerator* City, const class UDayCycleComponent* DayCycle, int32 Today) const;
 	FVector ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const;
 	FVector ResolveResidentHomeFrontSpot(const FVector& FrontSpot);
 	FVector ResolveResidentHomeExitSidewalkSpot(ACityGenerator* City, const FVector& SafeFrontSpot) const;
