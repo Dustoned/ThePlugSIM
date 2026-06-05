@@ -257,6 +257,7 @@ protected:
 	int32 ResidentRouteDay = -1;
 	int32 ResidentStreetLegsToday = 0;
 	int32 LastParkVisitDay = -1;
+	float ResidentWakeDelay = -1.f;
 	bool bLeavingHomeRoute = false;
 	ACityGenerator* GetResidentCity(UWorld* W);
 	FVector SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const;

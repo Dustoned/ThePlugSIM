@@ -379,6 +379,7 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	ResidentRouteDay = -1;
 	ResidentStreetLegsToday = 0;
 	LastParkVisitDay = -1;
+	ResidentWakeDelay = -1.f;
 	RoamTimer = ComputeResidentGoalThinkDelay(0.6f, 4.8f);
 	StartResidentHomeExit(true);
 
@@ -634,6 +635,7 @@ void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 	bRoamGoalIsPark = false;
 	bPendingRoamGoalIsPark = false;
 	bLeavingHomeRoute = false;
+	ResidentWakeDelay = -1.f;
 	ParkPauseTimer = 0.f;
 	ResidentStuckTimer = 0.f;
 	ResidentRecoveryCooldown = 0.f;
@@ -2158,7 +2160,11 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 
 	if (bNight)
 	{
-		if (bAtHomeInside) { return; }
+		if (bAtHomeInside)
+		{
+			ResidentWakeDelay = -1.f;
+			return;
+		}
 		if (!bEnteringHome)
 		{
 			StartResidentHomeEntry();
@@ -2176,6 +2182,15 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	// Dag: verschijn weer bij de voordeur als 'ie binnen was.
 	if (bAtHomeInside)
 	{
+		if (ResidentWakeDelay < 0.f)
+		{
+			ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 18.f);
+		}
+		ResidentWakeDelay = FMath::Max(0.f, ResidentWakeDelay - DeltaSeconds);
+		if (ResidentWakeDelay > 0.f)
+		{
+			return;
+		}
 		StartResidentHomeExit(true);
 	}
 	if (TickResidentHomeExit(DeltaSeconds))
