@@ -21,6 +21,7 @@
 #include "NavigationInvokerComponent.h"
 #include "NavigationSystem.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
+#include "Components/BrushComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/Scene.h"
@@ -290,6 +291,11 @@ void ACityGenerator::BuildCity()
 			if (CurrentSize.X <= KINDA_SMALL_NUMBER || CurrentSize.Y <= KINDA_SMALL_NUMBER || CurrentSize.Z <= KINDA_SMALL_NUMBER)
 			{
 				continue;
+			}
+
+			if (UBrushComponent* Brush = Bounds->GetBrushComponent())
+			{
+				Brush->SetMobility(EComponentMobility::Movable);
 			}
 
 			Bounds->SetActorLocation(DesiredCenter);
