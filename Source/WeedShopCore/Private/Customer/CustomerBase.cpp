@@ -1402,7 +1402,7 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 		const bool bAllowShortTrip = Pass > 0;
 		const int32 CandidateCount = FMath::Min(StreetStops.Num(), 96);
 		const int32 Step = (CandidateCount < StreetStops.Num()) ? FMath::Max(1, StreetStops.Num() / CandidateCount + 1) : 1;
-		const int32 MaxPathChecksPerPass = 8;
+		const int32 MaxPathChecksPerPass = 16;
 		TArray<FVector> TopGoals;
 		TArray<float> TopScores;
 		TopGoals.Reserve(MaxPathChecksPerPass);
