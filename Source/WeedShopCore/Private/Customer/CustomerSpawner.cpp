@@ -42,8 +42,14 @@ void ACustomerSpawner::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UWorld* World = GetWorld();
-	if (!World || !HasAuthority() || bResidentsSpawned)
+	if (!World || !HasAuthority())
 	{
+		return;
+	}
+	if (bResidentsSpawned)
+	{
+		GetWorldTimerManager().ClearTimer(SpawnTimer);
+		SetActorTickEnabled(false);
 		return;
 	}
 
@@ -68,6 +74,11 @@ void ACustomerSpawner::TrySpawn()
 	// De stad-bevolking = bewoners (dealbaar). Eén keer toewijzen zodra de stad gebouwd is.
 	// (Geen test/random-modus meer: die ruimde alle klanten op behalve één.)
 	if (!bResidentsSpawned) { SpawnResidents(); }
+	if (bResidentsSpawned)
+	{
+		GetWorldTimerManager().ClearTimer(SpawnTimer);
+		SetActorTickEnabled(false);
+	}
 }
 
 namespace
