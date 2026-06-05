@@ -567,31 +567,21 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 	}
 
 	TArray<FVector> Samples;
-	const FVector2D Dirs[] = {
-		FVector2D(1.f, 0.f), FVector2D(-1.f, 0.f), FVector2D(0.f, 1.f), FVector2D(0.f, -1.f),
-		FVector2D(1.f, 1.f), FVector2D(1.f, -1.f), FVector2D(-1.f, 1.f), FVector2D(-1.f, -1.f)
+	const float Pitch = BlockSize + RoadWidth;
+	const int32 R = FMath::Clamp(GridRadius, 1, 8);
+	const float Lane = BlockSize * 0.5f - SidewalkWidth * 0.5f;
+	const float SampleZ = GroundZ + CurbHeight + 70.f;
+	const FVector EdgeStops[] = {
+		FVector(CityCenter.X + R * Pitch + Lane, CityCenter.Y, SampleZ),
+		FVector(CityCenter.X - R * Pitch - Lane, CityCenter.Y, SampleZ),
+		FVector(CityCenter.X, CityCenter.Y + R * Pitch + Lane, SampleZ),
+		FVector(CityCenter.X, CityCenter.Y - R * Pitch - Lane, SampleZ),
+		FVector(CityCenter.X + R * Pitch + Lane, CityCenter.Y + R * Pitch + Lane, SampleZ),
+		FVector(CityCenter.X + R * Pitch + Lane, CityCenter.Y - R * Pitch - Lane, SampleZ),
+		FVector(CityCenter.X - R * Pitch - Lane, CityCenter.Y + R * Pitch + Lane, SampleZ),
+		FVector(CityCenter.X - R * Pitch - Lane, CityCenter.Y - R * Pitch - Lane, SampleZ)
 	};
-	for (const FVector2D& RawDir : Dirs)
-	{
-		const FVector2D Dir = RawDir.GetSafeNormal();
-		bool bFound = false;
-		FVector Best = FVector::ZeroVector;
-		float BestScore = -TNumericLimits<float>::Max();
-		for (const FApartmentHome& Home : ApartmentHomes)
-		{
-			const float Score = Home.DoorPos.X * Dir.X + Home.DoorPos.Y * Dir.Y;
-			if (Score > BestScore)
-			{
-				BestScore = Score;
-				Best = Home.DoorPos;
-				bFound = true;
-			}
-		}
-		if (bFound)
-		{
-			Samples.Add(Best);
-		}
-	}
+	Samples.Append(EdgeStops, UE_ARRAY_COUNT(EdgeStops));
 
 	TArray<FVector> Projected;
 	Projected.Reserve(Samples.Num());
