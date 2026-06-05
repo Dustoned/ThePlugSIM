@@ -566,6 +566,9 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 	TMap<FString, TArray<FFurnitureEntry>> Templates;
 	const bool bHaveTemplates = FurnitureTemplates::LoadTemplates(Templates);
 
+	// Diagnostiek: welke woning-sleutels komen voor en matchen ze de templates?
+	TMap<FString, int32> KeyCount; TSet<FString> KeyMatched; int32 NTpl = 0, NFb = 0;
+
 	for (int32 Idx : Furnish)
 	{
 		if (!Homes.IsValidIndex(Idx)) { continue; }
@@ -573,16 +576,19 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		const FVector C = H.InteriorPos; const FVector R = H.RoomHalf;
 		const bool bCosmetic = !OfferSet.Contains(Idx); // NPC-woning -> cosmetisch; jouw woning -> interactief
 
+		const FString Type = FurnitureTemplates::TypeKey(H.bApartment, H.RoomHalf);
+		KeyCount.FindOrAdd(Type)++;
 		if (bHaveTemplates)
 		{
-			const FString Type = FurnitureTemplates::TypeKey(H.bApartment, H.RoomHalf);
 			if (const TArray<FFurnitureEntry>* Entries = Templates.Find(Type))
 			{
 				for (const FFurnitureEntry& E : *Entries) { FurnitureTemplates::SpawnEntry(World, E, C, R, bCosmetic); }
+				KeyMatched.Add(Type); ++NTpl;
 				continue;
 			}
 			// Geen template voor dit type -> val terug op de standaard-set hieronder.
 		}
+		++NFb;
 
 		auto At = [&](float fx, float fy) { FVector L = C + FVector(R.X * fx, R.Y * fy, 0.f); L.Z = FloorZ(L, C.Z) + 2.f; return L; };
 		SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f, bCosmetic);
@@ -594,6 +600,19 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 			FActorSpawnParameters SkSP; SkSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc), SkSP);
 			if (Sink) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); } // sink = altijd vaste fixture
+		}
+	}
+
+	// Diagnostiek-log: vergelijk de echte woning-sleutels met de beschikbare template-sleutels.
+	{
+		FString Avail;
+		for (const TPair<FString, TArray<FFurnitureEntry>>& KV : Templates) { Avail += KV.Key + TEXT(" "); }
+		UE_LOG(LogWeedShop, Warning, TEXT("FurnishDiag: %d woningen | %d via TEMPLATE, %d via fallback | template-keys=[%s]"),
+			NTpl + NFb, NTpl, NFb, *Avail);
+		for (const TPair<FString, int32>& KV : KeyCount)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("FurnishDiag:   woning-type %-12s x%-3d %s"),
+				*KV.Key, KV.Value, KeyMatched.Contains(KV.Key) ? TEXT("[TEMPLATE]") : TEXT("[fallback->random]"));
 		}
 	}
 

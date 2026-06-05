@@ -28,7 +28,10 @@ namespace
 			if (FMath::Abs(D.X) <= H.RoomHalf.X + Tol && FMath::Abs(D.Y) <= H.RoomHalf.Y + Tol &&
 				D.Z > -110.f && D.Z < H.RoomHalf.Z + 140.f)
 			{
-				const float DD = FVector(D.X, D.Y, 0.f).SizeSquared();
+				// 3D-afstand: bij GESTAPELDE appartementen (zelfde XY, andere verdieping) wint zo de
+				// JUISTE verdieping i.p.v. een willekeurige (anders kreeg je een hele-etage Z-offset +
+				// soms de verkeerde kamergrootte/sleutel).
+				const float DD = D.SizeSquared();
 				if (DD < BestD) { BestD = DD; Best = i; }
 			}
 		}
