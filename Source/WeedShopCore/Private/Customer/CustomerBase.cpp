@@ -379,9 +379,18 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	ResidentRouteDay = -1;
 	ResidentStreetLegsToday = 0;
 	LastParkVisitDay = -1;
-	ResidentWakeDelay = -1.f;
+	ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 16.f);
 	RoamTimer = ComputeResidentGoalThinkDelay(0.6f, 4.8f);
-	StartResidentHomeExit(true);
+	bAtHomeInside = true;
+	bEmergingFromHome = false;
+	bEnteringHome = false;
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+	SetActorLocation(MakeResidentStandingLocation(HomeInteriorPos));
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		AI->StopMovement();
+	}
 
 	// Rustige wandeltred: bewoners slenteren over straat i.p.v. te sprinten.
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
@@ -2047,10 +2056,12 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 	}
 
 	const int32 ParkHourSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(Today) * 23) % 8));
-	const float ParkVisitHour = 8.f + static_cast<float>(ParkHourSeed);
+	const int32 ParkMinuteSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 7 + static_cast<int64>(Today) * 41) % 100));
+	const float ParkVisitHour = 8.f + static_cast<float>(ParkHourSeed) + static_cast<float>(ParkMinuteSeed) * 0.008f;
 	const bool bNeedsParkVisit = LastParkVisitDay != Today;
 	const bool bParkWindowOpen = Hour >= ParkVisitHour && ResidentStreetLegsToday >= ParkLegCountdown;
-	const bool bParkOverdue = Hour >= 16.5f;
+	const int32 ParkOverdueSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 11 + static_cast<int64>(Today) * 31) % 12));
+	const bool bParkOverdue = Hour >= 16.5f + static_cast<float>(ParkOverdueSeed) * 0.12f;
 	if (bNeedsParkVisit && (bParkWindowOpen || bParkOverdue))
 	{
 		const float D = City->GetMapBlockSize() * 0.32f;
