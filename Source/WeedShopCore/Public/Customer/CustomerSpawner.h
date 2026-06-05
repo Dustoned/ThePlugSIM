@@ -60,6 +60,9 @@ protected:
 	// zijn en in de save belanden.
 	void SpawnHomeAndShopFixtures(class ACityGenerator* City);
 
+	// Woning-indexen die een fysieke bewoner kregen (voor het meubileren van NPC-woningen).
+	TSet<int32> ResidentHomeIndices;
+
 	bool bResidentsSpawned = false;
 	FTimerHandle SpawnTimer;
 	float NextResidentSpawnTryRealTime = 0.f;

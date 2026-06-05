@@ -67,6 +67,13 @@ protected:
 public:
 	AThePlugSIMCharacter();
 
+	// --- Authoring (sandbox console-commando's): meubel-layout per woning-type opslaan/wissen ---
+	// `WeedSaveFurniture` slaat de huidige geplaatste meubels op als default-sjabloon per woning-type;
+	// verse games spawnen die layout dan in elke woning van dat type (incl. NPC-woningen).
+	UFUNCTION(Exec) void WeedSaveFurniture();
+	// `WeedClearFurniture` wist alle geplaatste meubels, zodat je opnieuw kunt inrichten.
+	UFUNCTION(Exec) void WeedClearFurniture();
+
 protected:
 
 	/** Called from Input Actions for movement input */

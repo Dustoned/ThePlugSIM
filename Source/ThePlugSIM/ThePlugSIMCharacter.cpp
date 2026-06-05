@@ -29,6 +29,7 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Placement/BuildComponent.h"
 #include "Placement/PlaceableProp.h"
+#include "Placement/FurnitureTemplateLib.h"
 #include "Cultivation/WaterCanComponent.h"
 #include "EngineUtils.h"
 #include "Cultivation/GrowPlant.h"
@@ -889,6 +890,38 @@ void AThePlugSIMCharacter::OnCashChanged(int64 NewCashCents)
 	{
 		Inventory->SetCashDisplayEuros(NewCashCents / 100);
 	}
+}
+
+void AThePlugSIMCharacter::WeedSaveFurniture()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	if (!HasAuthority())
+	{
+		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedSaveFurniture: draai dit op de host."));
+		return;
+	}
+	ACityGenerator* City = nullptr;
+	for (TActorIterator<ACityGenerator> It(W); It; ++It) { City = *It; break; }
+	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("Geen stad gevonden.")); return; }
+
+	const int32 Types = FurnitureTemplates::SaveFromWorld(W, City);
+	UWeedToast::Notify(-1, 5.f, Types > 0 ? FColor::Green : FColor::Orange,
+		Types > 0 ? FString::Printf(TEXT("Meubel-templates opgeslagen (%d type(s))."), Types)
+				  : TEXT("Niks om op te slaan: zet eerst meubels binnen een woning neer."));
+}
+
+void AThePlugSIMCharacter::WeedClearFurniture()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	if (!HasAuthority())
+	{
+		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedClearFurniture: draai dit op de host."));
+		return;
+	}
+	const int32 N = FurnitureTemplates::ClearPlaced(W);
+	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d geplaatste meubels gewist."), N));
 }
 
 void AThePlugSIMCharacter::ToggleRollUI()

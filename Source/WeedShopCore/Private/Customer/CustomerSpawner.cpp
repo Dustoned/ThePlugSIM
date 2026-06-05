@@ -11,6 +11,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Placement/PlaceableProp.h"
+#include "Placement/FurnitureTemplateLib.h"
 #include "World/Atm.h"
 #include "World/WaterSink.h"
 #include "Save/SaveGameSubsystem.h"
@@ -516,7 +517,8 @@ void ACustomerSpawner::SpawnResidents()
 			Made, UWant, Total, Entrances.Num(), PhysicalSet.Num(), ForSale.Num());
 	}
 
-	// Bij een verse game: meubels in de koopbare woningen + ATM in elke winkel (server-side, repliceert).
+	// Bij een verse game: meubels in de woningen + ATM in elke winkel (server-side, repliceert).
+	ResidentHomeIndices = PhysicalSet; // bewoner-woningen meubileren we ook
 	SpawnHomeAndShopFixtures(City);
 }
 
@@ -548,27 +550,46 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		if (P) { P->ItemId = ItemId; P->FinishSpawning(TM); }
 	};
 
-	// --- Meubels in elke koopbare/starter-woning ---
+	// --- Meubels in de woningen ---
 	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
 	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
-	TSet<int32> Done;
-	for (const FCityPropertyOffer& O : Offers)
+
+	// Te meubileren woningen = koopbare/starter-offers + alle fysieke bewoner-woningen (NPC's wonen
+	// dan niet in lege kamers).
+	TSet<int32> Furnish;
+	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { Furnish.Add(Idx); } }
+	for (int32 Idx : ResidentHomeIndices) { Furnish.Add(Idx); }
+
+	// Als de speler een eigen layout heeft opgeslagen (sandbox authoring), gebruik die PER TYPE; anders
+	// de hardcoded standaard-set.
+	TMap<FString, TArray<FFurnitureEntry>> Templates;
+	const bool bHaveTemplates = FurnitureTemplates::LoadTemplates(Templates);
+
+	for (int32 Idx : Furnish)
 	{
-		for (int32 Idx : O.Homes)
+		if (!Homes.IsValidIndex(Idx)) { continue; }
+		const FApartmentHome& H = Homes[Idx];
+		const FVector C = H.InteriorPos; const FVector R = H.RoomHalf;
+
+		if (bHaveTemplates)
 		{
-			if (Done.Contains(Idx) || !Homes.IsValidIndex(Idx)) { continue; }
-			Done.Add(Idx);
-			const FApartmentHome& H = Homes[Idx];
-			const FVector C = H.InteriorPos; const FVector R = H.RoomHalf;
-			auto At = [&](float fx, float fy) { FVector L = C + FVector(R.X * fx, R.Y * fy, 0.f); L.Z = FloorZ(L, C.Z) + 2.f; return L; };
-			SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f);
-			SpawnProp(FName(TEXT("Fridge")),   At( 0.45f,  0.45f), 180.f);
-			SpawnProp(FName(TEXT("Table")),    At( 0.0f,   0.40f), 0.f);
-			// Gootsteen = AWaterSink (eigen class); mesh-pivot in het midden -> ~halve hoogte omhoog.
+			const FString Type = FurnitureTemplates::TypeKey(H.bApartment);
+			if (const TArray<FFurnitureEntry>* Entries = Templates.Find(Type))
 			{
-				FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
-				World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc));
+				for (const FFurnitureEntry& E : *Entries) { FurnitureTemplates::SpawnEntry(World, E, C, R); }
+				continue;
 			}
+			// Geen template voor dit type -> val terug op de standaard-set hieronder.
+		}
+
+		auto At = [&](float fx, float fy) { FVector L = C + FVector(R.X * fx, R.Y * fy, 0.f); L.Z = FloorZ(L, C.Z) + 2.f; return L; };
+		SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f);
+		SpawnProp(FName(TEXT("Fridge")),   At( 0.45f,  0.45f), 180.f);
+		SpawnProp(FName(TEXT("Table")),    At( 0.0f,   0.40f), 0.f);
+		// Gootsteen = AWaterSink (eigen class); mesh-pivot in het midden -> ~halve hoogte omhoog.
+		{
+			FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
+			World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc));
 		}
 	}
 
