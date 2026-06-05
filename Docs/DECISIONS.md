@@ -117,3 +117,14 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
   - Afspraak heeft voorrang op roam/nacht; eindigt na de deal of na 6 min timeout; BecomeBuyerNow bij start.
 - **Roamers/nacht**: MaxResidents=40, gespreid over alle huizen; 's nachts naar huis + binnen verdwijnen — al aanwezig.
 - **OPEN**: #3 NPC's alleen op de stoep (oversteken alleen naar de volgende stoep) — vereist nav-area kosten op de wegen; nog niet gedaan.
+
+## 2026-06-06 — Furniture-templates + sandbox authoring
+
+- **FurnitureTemplateLib**: meubel-layout per woning-type (sleutel = soort + gequantiseerde kamermaat, gesorteerd zodat oriëntatie samenvalt). Opslag in een canoniek frame (lange muur = lokale X); bij plaatsen draait de layout mee naar de oriëntatie van elk huis + clamp binnen RoomHalf.
+- **Authoring**: sandbox (free-build = overal plaatsen) + hotkeys F8 (opslaan), F9 (wissen), F10 (types-overzicht). Capture neemt per type de woning met de meeste meubels; ruime woning-detectie (160cm + nearest-fallback) zodat alles meegaat.
+- **Default**: layout is INGEBAKKEN in code (4 types, elk met 1 sink) -> werkt altijd; Saved/FurnitureTemplates.txt (F8) overschrijft.
+- **Toepassing**: offer-woningen = interactieve meubels; NPC-woningen = cosmetisch (tag "Cosmetic", niet oppakbaar). 
+- **Sink = vaste fixture**: ALTIJD cosmetisch/locked (ook eigen woning), uit grants gehaald, plaatsing geblokkeerd in ServerPlace. AWaterSink spawnt met AlwaysSpawn (anders geweigerd bij botsing).
+- **Grote kamer**: begane-grond appartement-units NApt-1 per zijde = breder (eigen groter type Apt_7x11). Scheidingswanden (SegS) ook op NAptF/AptLenF i.p.v. NApt/AptLen (anders muur dwars door de kamer).
+- **Sandbox-inventory**: ClearAll + nette set (standaard starter + plaatsbare meubels), geen bulk/alle-zaden meer.
+- **Bekende capture-bug (open)**: FindHomeForPoint kan bij gestapelde appartementen de verkeerde verdieping kiezen (Z-offset ~1 etage). Fix = 3D-afstand i.p.v. XY-only; nog niet doorgevoerd.
