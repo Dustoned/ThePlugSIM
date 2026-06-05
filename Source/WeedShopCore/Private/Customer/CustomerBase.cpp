@@ -1397,12 +1397,16 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 
 	bool bFound = false;
 	FVector BestGoal = FVector::ZeroVector;
-	float BestScore = -TNumericLimits<float>::Max();
 	for (int32 Pass = 0; Pass < 2; ++Pass)
 	{
 		const bool bAllowShortTrip = Pass > 0;
 		const int32 CandidateCount = FMath::Min(StreetStops.Num(), 96);
 		const int32 Step = (CandidateCount < StreetStops.Num()) ? FMath::Max(1, StreetStops.Num() / CandidateCount + 1) : 1;
+		const int32 MaxPathChecksPerPass = 8;
+		TArray<FVector> TopGoals;
+		TArray<float> TopScores;
+		TopGoals.Reserve(MaxPathChecksPerPass);
+		TopScores.Reserve(MaxPathChecksPerPass);
 		for (int32 Offset = 0; Offset < CandidateCount; ++Offset)
 		{
 			const int32 Index = (StartIndex + Offset * Step) % StreetStops.Num();
@@ -1415,10 +1419,6 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 
 			const int32 Crowd = CountResidentCrowdNear(Candidate, 420.f);
 			if (Crowd >= (bAllowShortTrip ? 7 : 5))
-			{
-				continue;
-			}
-			if (!HasResidentPath(Current, Candidate, bAllowShortTrip ? 520.f : MinTrip * 0.65f))
 			{
 				continue;
 			}
@@ -1441,11 +1441,31 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 				- CenterPenalty
 				+ static_cast<float>(NoiseSeed) * 0.25f;
 
-			if (Score > BestScore)
+			int32 InsertAt = 0;
+			while (InsertAt < TopScores.Num() && Score <= TopScores[InsertAt])
 			{
-				BestScore = Score;
-				BestGoal = Candidate;
+				++InsertAt;
+			}
+			if (InsertAt < MaxPathChecksPerPass)
+			{
+				TopScores.Insert(Score, InsertAt);
+				TopGoals.Insert(Candidate, InsertAt);
+				if (TopGoals.Num() > MaxPathChecksPerPass)
+				{
+					TopGoals.RemoveAt(MaxPathChecksPerPass);
+					TopScores.RemoveAt(MaxPathChecksPerPass);
+				}
+			}
+		}
+
+		const float MinPathDistance = bAllowShortTrip ? 520.f : MinTrip * 0.65f;
+		for (const FVector& CandidateGoal : TopGoals)
+		{
+			if (HasResidentPath(Current, CandidateGoal, MinPathDistance))
+			{
+				BestGoal = CandidateGoal;
 				bFound = true;
+				break;
 			}
 		}
 
