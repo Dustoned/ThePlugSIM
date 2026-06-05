@@ -162,13 +162,14 @@ UStaticMeshComponent* ACityGenerator::AddBox(UStaticMesh* MeshAsset, const FVect
 	if (!MeshAsset) { return nullptr; }
 	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
 	C->SetupAttachment(Root);
-	C->RegisterComponent();
 	C->SetStaticMesh(MeshAsset);
+	C->SetMobility(EComponentMobility::Static);
 	C->SetWorldLocation(CenterWorld);
 	C->SetWorldRotation(Rot);
 	C->SetWorldScale3D(SizeCm / 100.f); // basis-kubus = 100cm
 	C->SetCollisionEnabled(bCollides ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
-	C->SetMobility(EComponentMobility::Movable);
+	C->SetCanEverAffectNavigation(bCollides);
+	C->RegisterComponent();
 	if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
 	{
 		if (UMaterialInstanceDynamic* MID = C->CreateDynamicMaterialInstance(0, Base))
@@ -509,6 +510,8 @@ void ACityGenerator::BuildCity()
 	}
 
 	GetWorldTimerManager().SetTimer(NavCoverageTimer, this, &ACityGenerator::VerifyCityNavigationCoverage, 4.0f, false);
+	UE_LOG(LogWeedShop, Log, TEXT("City build complete: homes=%d blocks=%d lamps=%d"),
+		ApartmentHomes.Num(), (2 * R + 1) * (2 * R + 1), LampLights.Num());
 }
 
 void ACityGenerator::CaptureMapNow()
