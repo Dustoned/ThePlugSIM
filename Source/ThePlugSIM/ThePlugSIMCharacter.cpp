@@ -439,6 +439,12 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	// M: fullscreen stadskaart aan/uit.
 	if (Ph) { Input->BindKey(EKeys::M, IE_Pressed, Ph, &UPhoneClientComponent::ToggleMapOverlay); }
 
+	// Furniture-authoring hotkeys (sandbox): F8 = templates opslaan, F9 = geplaatste meubels wissen,
+	// F10 = woning-types-overzicht. Werkt zonder console.
+	Input->BindKey(EKeys::F8,  IE_Pressed, this, &AThePlugSIMCharacter::WeedSaveFurniture);
+	Input->BindKey(EKeys::F9,  IE_Pressed, this, &AThePlugSIMCharacter::WeedClearFurniture);
+	Input->BindKey(EKeys::F10, IE_Pressed, this, &AThePlugSIMCharacter::WeedFurnitureTypes);
+
 	// ESC: pauze-/menu-scherm. bExecuteWhenPaused zodat je er ook UIT kunt met ESC terwijl de
 	// wereld gepauzeerd is (anders worden de pawn-bindings niet uitgevoerd tijdens pauze).
 	{
