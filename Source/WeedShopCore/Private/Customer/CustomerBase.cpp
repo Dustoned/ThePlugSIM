@@ -457,6 +457,10 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 		OutSnapshot.bOnSidewalkOrPark = bAtHomeInside || bEmergingFromHome || bEnteringHome
 			|| IsResidentOutdoorSidewalkPoint(City, OutSnapshot.Location, true)
 			|| IsResidentParkPoint(City, OutSnapshot.Location);
+		OutSnapshot.bLikelyStreetCrossing = !OutSnapshot.bOnSidewalkOrPark
+			&& bHasRoamGoal
+			&& OutSnapshot.Speed2D > 55.f
+			&& OutSnapshot.DistanceToGoal > 260.f;
 	}
 	else
 	{

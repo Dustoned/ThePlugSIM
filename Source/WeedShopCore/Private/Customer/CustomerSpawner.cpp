@@ -130,6 +130,7 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 	int32 ParkDoneToday = 0;
 	int32 ParkNeedsToday = 0;
 	int32 OffSidewalk = 0;
+	int32 CrossingStreet = 0;
 	int32 StuckSuspect = 0;
 	int32 NearEdge = 0;
 	int32 IssueCount = 0;
@@ -161,18 +162,19 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 		if (Snapshot.bGoalIsPark || Snapshot.bParkPause) { ++ParkActive; }
 		if (Snapshot.bNeedsParkVisitToday) { ++ParkNeedsToday; } else { ++ParkDoneToday; }
 		if (!Snapshot.bOnSidewalkOrPark) { ++OffSidewalk; }
+		if (Snapshot.bLikelyStreetCrossing) { ++CrossingStreet; }
 		if (Snapshot.bStuckSuspect) { ++StuckSuspect; }
 		if (Snapshot.bNearMapEdge) { ++NearEdge; }
 		const bool bNoOutdoorGoal = !Snapshot.bAtHomeInside && !Snapshot.bEmergingFromHome && !Snapshot.bEnteringHome
 			&& !Snapshot.bHasGoal && Snapshot.NoGoalSeconds > 6.f;
 		const bool bParkUrgentWithoutParkGoal = Snapshot.bParkUrgentToday && !Snapshot.bGoalIsPark && !Snapshot.bParkPause;
-		if (!Snapshot.bOnSidewalkOrPark || Snapshot.bStuckSuspect || bNoOutdoorGoal || bParkUrgentWithoutParkGoal)
+		if ((!Snapshot.bOnSidewalkOrPark && !Snapshot.bLikelyStreetCrossing) || Snapshot.bStuckSuspect || bNoOutdoorGoal || bParkUrgentWithoutParkGoal)
 		{
 			++IssueCount;
 			if (IssueDetails.Num() < 6)
 			{
 				FString Flags;
-				if (!Snapshot.bOnSidewalkOrPark) { Flags += TEXT("offSidewalk,"); }
+				if (!Snapshot.bOnSidewalkOrPark && !Snapshot.bLikelyStreetCrossing) { Flags += TEXT("offSidewalk,"); }
 				if (Snapshot.bStuckSuspect) { Flags += TEXT("stuck,"); }
 				if (bNoOutdoorGoal) { Flags += TEXT("noGoal,"); }
 				if (bParkUrgentWithoutParkGoal) { Flags += TEXT("parkUrgent,"); }
@@ -196,9 +198,9 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 
 	const int32 SampleIndex = 13 - ResidentMonitorSamplesRemaining;
 	UE_LOG(LogWeedShop, Log,
-		TEXT("Resident movement monitor: sample=%d total=%d visible=%d outdoor=%d emerging=%d entering=%d moving=%d goals=%d parkActive=%d parkDoneToday=%d parkNeedsToday=%d offSidewalk=%d stuck=%d nearEdge=%d cells=%d"),
+		TEXT("Resident movement monitor: sample=%d total=%d visible=%d outdoor=%d emerging=%d entering=%d moving=%d goals=%d parkActive=%d parkDoneToday=%d parkNeedsToday=%d offSidewalk=%d crossing=%d stuck=%d nearEdge=%d cells=%d"),
 		SampleIndex, Total, Visible, Outdoor, Emerging, Entering, Moving, WithGoal, ParkActive, ParkDoneToday, ParkNeedsToday,
-		OffSidewalk, StuckSuspect, NearEdge, OccupiedCells.Num());
+		OffSidewalk, CrossingStreet, StuckSuspect, NearEdge, OccupiedCells.Num());
 	if (IssueCount > 0)
 	{
 		UE_LOG(LogWeedShop, Warning,

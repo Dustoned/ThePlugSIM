@@ -34,6 +34,7 @@ struct FResidentMovementSnapshot
 	bool bGoalIsPark = false;
 	bool bParkPause = false;
 	bool bParkUrgentToday = false;
+	bool bLikelyStreetCrossing = false;
 	bool bOnSidewalkOrPark = false;
 	bool bNeedsParkVisitToday = false;
 	bool bStuckSuspect = false;
