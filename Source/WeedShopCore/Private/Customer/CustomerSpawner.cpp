@@ -132,6 +132,9 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 	int32 OffSidewalk = 0;
 	int32 StuckSuspect = 0;
 	int32 NearEdge = 0;
+	int32 IssueCount = 0;
+	TArray<FString> IssueDetails;
+	IssueDetails.Reserve(6);
 	TSet<FIntPoint> OccupiedCells;
 
 	for (TActorIterator<ACustomerBase> It(World); It; ++It)
@@ -160,6 +163,29 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 		if (!Snapshot.bOnSidewalkOrPark) { ++OffSidewalk; }
 		if (Snapshot.bStuckSuspect) { ++StuckSuspect; }
 		if (Snapshot.bNearMapEdge) { ++NearEdge; }
+		const bool bNoOutdoorGoal = !Snapshot.bAtHomeInside && !Snapshot.bEmergingFromHome && !Snapshot.bEnteringHome
+			&& !Snapshot.bHasGoal && Snapshot.NoGoalSeconds > 6.f;
+		const bool bParkUrgentWithoutParkGoal = Snapshot.bParkUrgentToday && !Snapshot.bGoalIsPark && !Snapshot.bParkPause;
+		if (!Snapshot.bOnSidewalkOrPark || Snapshot.bStuckSuspect || bNoOutdoorGoal || bParkUrgentWithoutParkGoal)
+		{
+			++IssueCount;
+			if (IssueDetails.Num() < 6)
+			{
+				FString Flags;
+				if (!Snapshot.bOnSidewalkOrPark) { Flags += TEXT("offSidewalk,"); }
+				if (Snapshot.bStuckSuspect) { Flags += TEXT("stuck,"); }
+				if (bNoOutdoorGoal) { Flags += TEXT("noGoal,"); }
+				if (bParkUrgentWithoutParkGoal) { Flags += TEXT("parkUrgent,"); }
+				if (Flags.EndsWith(TEXT(","))) { Flags.LeftChopInline(1); }
+				IssueDetails.Add(FString::Printf(
+					TEXT("%s[%s] loc=(%.0f,%.0f) goal=(%.0f,%.0f) dist=%.0f speed=%.0f stuck=%.1f noGoal=%.1f"),
+					*Snapshot.ResidentLabel, *Flags,
+					Snapshot.Location.X, Snapshot.Location.Y,
+					Snapshot.Goal.X, Snapshot.Goal.Y,
+					Snapshot.DistanceToGoal, Snapshot.Speed2D,
+					Snapshot.StuckSeconds, Snapshot.NoGoalSeconds));
+			}
+		}
 		if (Snapshot.bVisibleOnMap)
 		{
 			OccupiedCells.Add(FIntPoint(
@@ -173,6 +199,12 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 		TEXT("Resident movement monitor: sample=%d total=%d visible=%d outdoor=%d emerging=%d entering=%d moving=%d goals=%d parkActive=%d parkDoneToday=%d parkNeedsToday=%d offSidewalk=%d stuck=%d nearEdge=%d cells=%d"),
 		SampleIndex, Total, Visible, Outdoor, Emerging, Entering, Moving, WithGoal, ParkActive, ParkDoneToday, ParkNeedsToday,
 		OffSidewalk, StuckSuspect, NearEdge, OccupiedCells.Num());
+	if (IssueCount > 0)
+	{
+		UE_LOG(LogWeedShop, Warning,
+			TEXT("Resident movement monitor issues: sample=%d count=%d details=%s"),
+			SampleIndex, IssueCount, *FString::Join(IssueDetails, TEXT(" | ")));
+	}
 
 	--ResidentMonitorSamplesRemaining;
 	NextResidentMonitorRealTime = Now + 12.f;

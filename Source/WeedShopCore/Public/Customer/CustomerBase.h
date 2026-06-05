@@ -25,6 +25,7 @@ class ACityGenerator;
 struct FResidentMovementSnapshot
 {
 	bool bValid = false;
+	FString ResidentLabel;
 	bool bVisibleOnMap = false;
 	bool bAtHomeInside = false;
 	bool bEmergingFromHome = false;
@@ -32,6 +33,7 @@ struct FResidentMovementSnapshot
 	bool bHasGoal = false;
 	bool bGoalIsPark = false;
 	bool bParkPause = false;
+	bool bParkUrgentToday = false;
 	bool bOnSidewalkOrPark = false;
 	bool bNeedsParkVisitToday = false;
 	bool bStuckSuspect = false;
@@ -40,6 +42,7 @@ struct FResidentMovementSnapshot
 	float NoGoalSeconds = 0.f;
 	float StuckSeconds = 0.f;
 	float DistanceFromCenter = 0.f;
+	float DistanceToGoal = 0.f;
 	FVector Location = FVector::ZeroVector;
 	FVector Goal = FVector::ZeroVector;
 };

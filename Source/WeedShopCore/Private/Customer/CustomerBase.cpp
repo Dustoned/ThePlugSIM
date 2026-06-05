@@ -433,6 +433,7 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	}
 
 	OutSnapshot.bValid = true;
+	OutSnapshot.ResidentLabel = !HomeNumber.IsEmpty() ? HomeNumber : NpcId.ToString();
 	OutSnapshot.bVisibleOnMap = ShouldShowOnCityMap();
 	OutSnapshot.bAtHomeInside = bAtHomeInside;
 	OutSnapshot.bEmergingFromHome = bEmergingFromHome;
@@ -445,6 +446,7 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	OutSnapshot.StuckSeconds = ResidentStuckTimer;
 	OutSnapshot.Location = GetActorLocation();
 	OutSnapshot.Goal = RoamGoal;
+	OutSnapshot.DistanceToGoal = bHasRoamGoal ? FVector::Dist2D(OutSnapshot.Location, RoamGoal) : 0.f;
 
 	ACityGenerator* City = GetResidentCity(GetWorld());
 	if (City)
@@ -465,6 +467,10 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
 	OutSnapshot.bNeedsParkVisitToday = Today >= 0 && LastParkVisitDay != Today;
+	if (City && DC && OutSnapshot.bNeedsParkVisitToday && !bAtHomeInside && !bEmergingFromHome && !bEnteringHome)
+	{
+		OutSnapshot.bParkUrgentToday = DC->GetClockHour() >= ComputeResidentParkUrgencyHour(City, DC, Today);
+	}
 	const bool bOutdoorGoalBlocked = !bAtHomeInside && !bEmergingFromHome && !bEnteringHome && bHasRoamGoal;
 	OutSnapshot.bStuckSuspect = bOutdoorGoalBlocked && (ResidentStuckTimer > 1.4f || ResidentNoGoalTimer > 10.f);
 	return true;
