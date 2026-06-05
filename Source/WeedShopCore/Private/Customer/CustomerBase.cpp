@@ -1725,8 +1725,12 @@ bool ACustomerBase::RecoverResidentSidewalkDrift(float DeltaSeconds)
 		return false;
 	}
 
+	const float Speed2D = GetVelocity().Size2D();
+	const float DistToGoal = bHasRoamGoal ? FVector::Dist2D(Cur, RoamGoal) : 0.f;
+	const bool bLikelyCrossingStreet = bHasRoamGoal && Speed2D > 55.f && DistToGoal > 260.f;
 	ResidentOffSidewalkTimer += DeltaSeconds;
-	if (ResidentOffSidewalkTimer < 1.0f)
+	const float DriftGraceSeconds = bLikelyCrossingStreet ? 7.5f : 1.0f;
+	if (ResidentOffSidewalkTimer < DriftGraceSeconds)
 	{
 		return false;
 	}

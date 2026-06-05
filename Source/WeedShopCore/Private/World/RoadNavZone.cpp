@@ -5,10 +5,10 @@
 
 UNavArea_Road::UNavArea_Road()
 {
-	// Duurder dan normale grond: de stoep (default area, kosten 1) krijgt duidelijke voorrang.
-	// Een straat oversteken kan nog steeds zonder de pathfinder zwaar te maken bij 40 bewoners.
-	DefaultCost = 650.f;
-	FixedAreaEnteringCost = 1800.f;
+	// Duurder dan normale grond: de stoep (default area, kosten 1) krijgt duidelijke voorrang,
+	// maar oversteken moet wel aantrekkelijk blijven wanneer dat de normale route is.
+	DefaultCost = 240.f;
+	FixedAreaEnteringCost = 650.f;
 	DrawColor = FColor(50, 50, 60);
 }
 
