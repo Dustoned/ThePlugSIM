@@ -94,8 +94,8 @@ ACustomerBase::ACustomerBase()
 		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
 		Move->MaxWalkSpeed = 200.f;
 		Move->bUseRVOAvoidance = true;             // ontwijk elkaar/de speler -> niet vastlopen
-		Move->AvoidanceConsiderationRadius = 260.f;
-		Move->AvoidanceWeight = 0.85f;
+		Move->AvoidanceConsiderationRadius = 135.f;
+		Move->AvoidanceWeight = 0.62f;
 	}
 	// (Geen per-NPC navmesh-invoker meer: één centrale invoker (CityGenerator) dekt de hele stad,
 	//  dat schaalt veel beter naar 40+ NPC's dan 40 losse invokers.)
