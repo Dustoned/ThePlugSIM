@@ -58,4 +58,4 @@ Eén systeem per commit. Elke beslissing in `DECISIONS.md`. Code wordt lokaal ge
 - Laat Unreal Editor open terwijl Codex code maakt, zodat jij de huidige live-versie kunt blijven testen.
 - Als de code klaar is: sluit Unreal Editor eerst, draai daarna de Unreal build.
 - Commit pas nadat de build groen is.
-- Start Unreal Editor daarna opnieuw, zodat jij de nieuwe update direct in de editor kunt testen.
+- Start Unreal daarna opnieuw met `UnrealEditor.exe <project>.uproject -Game`, zodat jij de nieuwe update direct in game-mode kunt testen.
