@@ -924,6 +924,32 @@ void AThePlugSIMCharacter::WeedClearFurniture()
 	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d geplaatste meubels gewist."), N));
 }
 
+void AThePlugSIMCharacter::WeedFurnitureTypes()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	ACityGenerator* City = nullptr;
+	for (TActorIterator<ACityGenerator> It(W); It; ++It) { City = *It; break; }
+	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("Geen stad gevonden.")); return; }
+
+	TMap<FString, int32> Counts;
+	FurnitureTemplates::CountHomeTypes(City, Counts);
+	TMap<FString, TArray<FFurnitureEntry>> Templates;
+	FurnitureTemplates::LoadTemplates(Templates);
+
+	TArray<FString> Keys; Counts.GetKeys(Keys); Keys.Sort();
+	int32 Done = 0;
+	for (const FString& K : Keys)
+	{
+		const bool bHas = Templates.Contains(K) && Templates[K].Num() > 0;
+		if (bHas) { ++Done; }
+		UE_LOG(LogTemp, Display, TEXT("WeedFurnitureType: %-12s %3d woningen   %s"),
+			*K, Counts[K], bHas ? TEXT("[OK sjabloon]") : TEXT("[NOG DOEN]"));
+	}
+	UWeedToast::Notify(-1, 7.f, FColor::Cyan,
+		FString::Printf(TEXT("%d/%d woning-types gemeubileerd (lijst in de log: WeedFurnitureType)."), Done, Keys.Num()));
+}
+
 void AThePlugSIMCharacter::ToggleRollUI()
 {
 	if (Phone)

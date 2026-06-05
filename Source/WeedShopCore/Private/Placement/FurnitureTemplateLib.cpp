@@ -62,9 +62,27 @@ FString FurnitureTemplates::FilePath()
 	return FPaths::ProjectSavedDir() / TEXT("FurnitureTemplates.txt");
 }
 
-FString FurnitureTemplates::TypeKey(bool bApartment)
+FString FurnitureTemplates::TypeKey(bool bApartment, const FVector& RoomHalf)
 {
-	return bApartment ? TEXT("Apartment") : TEXT("RowHouse");
+	const int32 SX = FMath::RoundToInt(RoomHalf.X / 50.f);
+	const int32 SY = FMath::RoundToInt(RoomHalf.Y / 50.f);
+	return FString::Printf(TEXT("%s_%dx%d"), bApartment ? TEXT("Apt") : TEXT("Row"), SX, SY);
+}
+
+void FurnitureTemplates::CountHomeTypes(ACityGenerator* City, TMap<FString, int32>& Out)
+{
+	Out.Reset();
+	if (!City) { return; }
+	// Koopbare panden niet meetellen (die vullen we sowieso). De rest = de woon-typen.
+	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	TSet<int32> ForSale;
+	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	for (int32 i = 0; i < Homes.Num(); ++i)
+	{
+		if (ForSale.Contains(i)) { continue; }
+		Out.FindOrAdd(TypeKey(Homes[i].bApartment, Homes[i].RoomHalf))++;
+	}
 }
 
 int32 FurnitureTemplates::SaveFromWorld(UWorld* W, ACityGenerator* City)
@@ -91,7 +109,7 @@ int32 FurnitureTemplates::SaveFromWorld(UWorld* W, ACityGenerator* City)
 	TMap<FString, int32> BestCountPerType;
 	for (const TPair<int32, TArray<FPlaced>>& KV : PerHome)
 	{
-		const FString Type = TypeKey(Homes[KV.Key].bApartment);
+		const FString Type = TypeKey(Homes[KV.Key].bApartment, Homes[KV.Key].RoomHalf);
 		const int32 Count = KV.Value.Num();
 		if (Count > BestCountPerType.FindRef(Type)) { BestCountPerType.Add(Type, Count); BestHomePerType.Add(Type, KV.Key); }
 	}

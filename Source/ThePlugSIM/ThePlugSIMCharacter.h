@@ -73,6 +73,8 @@ public:
 	UFUNCTION(Exec) void WeedSaveFurniture();
 	// `WeedClearFurniture` wist alle geplaatste meubels, zodat je opnieuw kunt inrichten.
 	UFUNCTION(Exec) void WeedClearFurniture();
+	// `WeedFurnitureTypes` toont hoeveel woning-types er zijn en welke al een opgeslagen sjabloon hebben.
+	UFUNCTION(Exec) void WeedFurnitureTypes();
 
 protected:
 

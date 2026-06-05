@@ -573,7 +573,7 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 
 		if (bHaveTemplates)
 		{
-			const FString Type = FurnitureTemplates::TypeKey(H.bApartment);
+			const FString Type = FurnitureTemplates::TypeKey(H.bApartment, H.RoomHalf);
 			if (const TArray<FFurnitureEntry>* Entries = Templates.Find(Type))
 			{
 				for (const FFurnitureEntry& E : *Entries) { FurnitureTemplates::SpawnEntry(World, E, C, R); }
