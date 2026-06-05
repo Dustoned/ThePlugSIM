@@ -2004,6 +2004,11 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		return;
 	}
 
+	if (!bHasRoamGoal)
+	{
+		ResidentNoGoalTimer += DeltaSeconds;
+	}
+
 	RoamTimer -= DeltaSeconds;
 	const bool bArrived = bHasRoamGoal
 		&& FVector::Dist2D(GetActorLocation(), RoamGoal) < 145.f
@@ -2045,11 +2050,6 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 
 	if (!bHasRoamGoal || RoamTimer <= 0.f)
 	{
-		if (!bHasRoamGoal)
-		{
-			ResidentNoGoalTimer += DeltaSeconds;
-		}
-
 		FVector DesiredGoal;
 		float SearchXY = 700.f;
 		float SearchZ = 500.f;
@@ -2073,6 +2073,19 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		{
 			return;
 		}
+		if (ResidentNoGoalTimer >= 14.f || ResidentGoalFailCount >= 5)
+		{
+			if (AAIController* AI = Cast<AAIController>(GetController()))
+			{
+				AI->StopMovement();
+			}
+			bAtHomeInside = true;
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+			StartResidentHomeExit(true);
+			return;
+		}
 		bHasRoamGoal = false;
 		bRoamGoalIsPark = false;
 		RoamTimer = FMath::FRandRange(1.8f, 3.8f);
@@ -2080,7 +2093,6 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		ResidentRecoveryCooldown = 0.f;
 		bHasResidentBestDistToGoal = false;
 		ResidentRecoveryAttempts = 0;
-		ResidentNoGoalTimer = 0.f;
 	}
 }
 
