@@ -957,6 +957,20 @@ bool ACustomerBase::HasResidentObstacleAhead(const FVector& Goal) const
 	const FVector End = Start + Dir * 260.f;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(CustomerResidentAvoidance), false, this);
 	Params.AddIgnoredActor(this);
+	for (TActorIterator<ACustomerBase> It(W); It; ++It)
+	{
+		if (ACustomerBase* Other = *It)
+		{
+			Params.AddIgnoredActor(Other);
+		}
+	}
+	if (const APlayerController* PC = W->GetFirstPlayerController())
+	{
+		if (APawn* P = PC->GetPawn())
+		{
+			Params.AddIgnoredActor(P);
+		}
+	}
 	const FCollisionShape Shape = FCollisionShape::MakeSphere(46.f);
 	FHitResult Hit;
 	if (W->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_WorldStatic, Shape, Params))
