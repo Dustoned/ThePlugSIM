@@ -591,7 +591,8 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		// Gootsteen = AWaterSink (eigen class); mesh-pivot in het midden -> ~halve hoogte omhoog.
 		{
 			FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
-			AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc));
+			FActorSpawnParameters SkSP; SkSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc), SkSP);
 			if (Sink && bCosmetic) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); }
 		}
 	}

@@ -199,7 +199,8 @@ AActor* FurnitureTemplates::SpawnEntry(UWorld* W, const FFurnitureEntry& E, cons
 	AActor* Spawned = nullptr;
 	if (S == TEXT("Sink"))
 	{
-		Spawned = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM);
+		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Spawned = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM, SP);
 	}
 	else if (S.StartsWith(TEXT("DryRack")))
 	{

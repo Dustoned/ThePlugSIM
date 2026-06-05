@@ -1229,7 +1229,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 				// Achterwand van de appartementen (sluit ze af van de schacht-zone).
 				SegS(side * HW, side * Half, HallLen, zS);
 				// Partities tussen de appartementen.
-				for (int32 a = 1; a < NApt; ++a) { SegS(side * HW, side * Half, a * AptLen, zS); }
+				for (int32 a = 1; a < NAptF; ++a) { SegS(side * HW, side * Half, a * AptLenF, zS); }
 			}
 		}
 	}
