@@ -152,14 +152,40 @@ void ACustomerSpawner::SpawnResidents()
 	TSet<int32> PhysicalSet;
 	for (int32 round = 0, made = 0; made < UWant; ++round)
 	{
-		bool bAdded = false;
+		TArray<FIntPoint> RoundKeys;
+		RoundKeys.Reserve(CellOrder.Num());
 		for (const FIntPoint& Key : CellOrder)
 		{
-			if (made >= UWant) { break; }
 			const TArray<int32>& Arr = Cells[Key];
-			if (round < Arr.Num()) { PhysicalSet.Add(Arr[round]); ++made; bAdded = true; }
+			if (round < Arr.Num()) { RoundKeys.Add(Key); }
 		}
-		if (!bAdded) { break; } // alle cellen leeg -> klaar
+
+		if (RoundKeys.Num() == 0) { break; } // alle cellen leeg -> klaar
+
+		const int32 Remaining = UWant - made;
+		if (Remaining >= RoundKeys.Num())
+		{
+			for (const FIntPoint& Key : RoundKeys)
+			{
+				const TArray<int32>& Arr = Cells[Key];
+				PhysicalSet.Add(Arr[round]);
+				++made;
+			}
+			continue;
+		}
+
+		// Minder fysieke bewoners dan bouwblokken: pak een gelijkmatig verdeelde subset over de HELE stad
+		// i.p.v. de eerste N generator-cellen, anders blijven late randblokken zonder echte roamer.
+		for (int32 Pick = 0; Pick < Remaining; ++Pick)
+		{
+			const int32 KeyIndex = FMath::Clamp(
+				FMath::FloorToInt((static_cast<float>(Pick) + 0.5f) * static_cast<float>(RoundKeys.Num()) / static_cast<float>(Remaining)),
+				0,
+				RoundKeys.Num() - 1);
+			const TArray<int32>& Arr = Cells[RoundKeys[KeyIndex]];
+			PhysicalSet.Add(Arr[round]);
+			++made;
+		}
 	}
 
 	int32 Made = 0;
