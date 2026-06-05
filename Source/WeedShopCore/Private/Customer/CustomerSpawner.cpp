@@ -1,5 +1,6 @@
 #include "Customer/CustomerSpawner.h"
 
+#include "WeedShopCore.h"
 #include "Customer/CustomerBase.h"
 #include "World/CityGenerator.h"
 #include "World/CityDoor.h"
@@ -228,6 +229,17 @@ void ACustomerSpawner::SpawnResidents()
 		// Deur op slot met een UNIEKE per-huisnummer naam (de registry round-robin kon namen herhalen,
 		// waardoor meerdere huizen "dezelfde bewoner" leken te hebben). Elk huisnummer -> eigen naam.
 		if (ACityDoor* Dr = H.Door.Get()) { Dr->SetResident(DoorName); }
+	}
+
+	if (Made < UWant)
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("Resident physical spawn shortfall: made=%d desired=%d homes=%d entrances=%d selected=%d forSale=%d"),
+			Made, UWant, Total, Entrances.Num(), PhysicalSet.Num(), ForSale.Num());
+	}
+	else
+	{
+		UE_LOG(LogWeedShop, Log, TEXT("Resident physical spawn complete: made=%d desired=%d homes=%d entrances=%d selected=%d forSale=%d"),
+			Made, UWant, Total, Entrances.Num(), PhysicalSet.Num(), ForSale.Num());
 	}
 
 	// Bij een verse game: meubels in de koopbare woningen + ATM in elke winkel (server-side, repliceert).

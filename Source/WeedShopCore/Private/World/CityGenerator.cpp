@@ -1,5 +1,6 @@
 #include "World/CityGenerator.h"
 
+#include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/PointLightComponent.h"
@@ -18,6 +19,8 @@
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "NavigationInvokerComponent.h"
+#include "NavigationSystem.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/Scene.h"
@@ -266,6 +269,53 @@ void ACityGenerator::BuildCity()
 	const float Pitch = BlockSize + RoadWidth; // hart-op-hart afstand tussen blokken
 	const int32 R = FMath::Clamp(GridRadius, 1, 8);
 	const float Span = (2 * R + 1) * Pitch;
+
+	// The nav invoker controls tile generation, but the bounds volume decides where navmesh is allowed.
+	// Keep the bounds larger than the full generated city so edge blocks get real paths too.
+	{
+		const float NavSpan = Span + BlockSize + RoadWidth;
+		const FVector DesiredSize(NavSpan, NavSpan, 6200.f);
+		const FVector DesiredCenter(Center.X, Center.Y, GroundZ + 2600.f);
+		int32 UpdatedBounds = 0;
+		for (TActorIterator<ANavMeshBoundsVolume> It(W); It; ++It)
+		{
+			ANavMeshBoundsVolume* Bounds = *It;
+			if (!IsValid(Bounds))
+			{
+				continue;
+			}
+
+			const FBox CurrentBox = Bounds->GetComponentsBoundingBox(true);
+			const FVector CurrentSize = CurrentBox.IsValid ? CurrentBox.GetSize() : FVector::ZeroVector;
+			if (CurrentSize.X <= KINDA_SMALL_NUMBER || CurrentSize.Y <= KINDA_SMALL_NUMBER || CurrentSize.Z <= KINDA_SMALL_NUMBER)
+			{
+				continue;
+			}
+
+			Bounds->SetActorLocation(DesiredCenter);
+			const FVector CurrentScale = Bounds->GetActorScale3D();
+			Bounds->SetActorScale3D(FVector(
+				CurrentScale.X * DesiredSize.X / CurrentSize.X,
+				CurrentScale.Y * DesiredSize.Y / CurrentSize.Y,
+				CurrentScale.Z * DesiredSize.Z / CurrentSize.Z));
+			Bounds->ReregisterAllComponents();
+			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+			{
+				NavSys->OnNavigationBoundsUpdated(Bounds);
+			}
+			++UpdatedBounds;
+		}
+
+		if (UpdatedBounds > 0)
+		{
+			UE_LOG(LogWeedShop, Log, TEXT("City nav bounds resized: count=%d center=(%.0f, %.0f, %.0f) size=(%.0f, %.0f, %.0f)"),
+				UpdatedBounds, DesiredCenter.X, DesiredCenter.Y, DesiredCenter.Z, DesiredSize.X, DesiredSize.Y, DesiredSize.Z);
+		}
+		else
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("City nav bounds resize skipped: no valid NavMeshBoundsVolume found for generated city"));
+		}
+	}
 
 	// Eén centrale navigation-invoker die de HELE stad dekt -> runtime-navmesh overal, zonder dat elke
 	// NPC z'n eigen invoker nodig heeft (schaalt veel beter naar 40+ NPC's).
