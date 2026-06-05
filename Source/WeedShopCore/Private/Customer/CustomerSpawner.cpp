@@ -49,7 +49,15 @@ void ACustomerSpawner::Tick(float DeltaSeconds)
 	if (bResidentsSpawned)
 	{
 		GetWorldTimerManager().ClearTimer(SpawnTimer);
-		SetActorTickEnabled(false);
+		if (!bResidentMonitorActive && !bResidentMonitorDone)
+		{
+			StartResidentMovementMonitor();
+		}
+		TickResidentMovementMonitor(World->GetRealTimeSeconds());
+		if (!bResidentMonitorActive)
+		{
+			SetActorTickEnabled(false);
+		}
 		return;
 	}
 
@@ -61,6 +69,108 @@ void ACustomerSpawner::Tick(float DeltaSeconds)
 
 	NextResidentSpawnTryRealTime = Now + 2.f;
 	TrySpawn();
+}
+
+void ACustomerSpawner::StartResidentMovementMonitor()
+{
+	if (bResidentMonitorActive || bResidentMonitorDone)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	bResidentMonitorActive = true;
+	ResidentMonitorSamplesRemaining = 12;
+	NextResidentMonitorRealTime = World->GetRealTimeSeconds() + 6.f;
+	SetActorTickEnabled(true);
+}
+
+void ACustomerSpawner::TickResidentMovementMonitor(float Now)
+{
+	if (!bResidentMonitorActive || Now < NextResidentMonitorRealTime)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		bResidentMonitorActive = false;
+		bResidentMonitorDone = true;
+		return;
+	}
+
+	ACityGenerator* City = nullptr;
+	for (TActorIterator<ACityGenerator> It(World); It; ++It)
+	{
+		City = *It;
+		break;
+	}
+	const FVector CityCenter = City ? City->GetCityCenter() : FVector::ZeroVector;
+	const float CellSize = City ? FMath::Max(100.f, City->GetPitch()) : 3000.f;
+
+	int32 Total = 0;
+	int32 Visible = 0;
+	int32 Outdoor = 0;
+	int32 Moving = 0;
+	int32 WithGoal = 0;
+	int32 ParkActive = 0;
+	int32 ParkDoneToday = 0;
+	int32 ParkNeedsToday = 0;
+	int32 OffSidewalk = 0;
+	int32 StuckSuspect = 0;
+	int32 NearEdge = 0;
+	TSet<FIntPoint> OccupiedCells;
+
+	for (TActorIterator<ACustomerBase> It(World); It; ++It)
+	{
+		ACustomerBase* Resident = *It;
+		if (!IsValid(Resident) || !Resident->IsResident())
+		{
+			continue;
+		}
+
+		FResidentMovementSnapshot Snapshot;
+		if (!Resident->GetResidentMovementSnapshot(Snapshot))
+		{
+			continue;
+		}
+
+		++Total;
+		if (Snapshot.bVisibleOnMap) { ++Visible; }
+		if (!Snapshot.bAtHomeInside) { ++Outdoor; }
+		if (Snapshot.Speed2D > 12.f) { ++Moving; }
+		if (Snapshot.bHasGoal) { ++WithGoal; }
+		if (Snapshot.bGoalIsPark || Snapshot.bParkPause) { ++ParkActive; }
+		if (Snapshot.bNeedsParkVisitToday) { ++ParkNeedsToday; } else { ++ParkDoneToday; }
+		if (!Snapshot.bOnSidewalkOrPark) { ++OffSidewalk; }
+		if (Snapshot.bStuckSuspect) { ++StuckSuspect; }
+		if (Snapshot.bNearMapEdge) { ++NearEdge; }
+		if (Snapshot.bVisibleOnMap)
+		{
+			OccupiedCells.Add(FIntPoint(
+				FMath::FloorToInt((Snapshot.Location.X - CityCenter.X) / CellSize),
+				FMath::FloorToInt((Snapshot.Location.Y - CityCenter.Y) / CellSize)));
+		}
+	}
+
+	const int32 SampleIndex = 13 - ResidentMonitorSamplesRemaining;
+	UE_LOG(LogWeedShop, Log,
+		TEXT("Resident movement monitor: sample=%d total=%d visible=%d outdoor=%d moving=%d goals=%d parkActive=%d parkDoneToday=%d parkNeedsToday=%d offSidewalk=%d stuck=%d nearEdge=%d cells=%d"),
+		SampleIndex, Total, Visible, Outdoor, Moving, WithGoal, ParkActive, ParkDoneToday, ParkNeedsToday,
+		OffSidewalk, StuckSuspect, NearEdge, OccupiedCells.Num());
+
+	--ResidentMonitorSamplesRemaining;
+	NextResidentMonitorRealTime = Now + 12.f;
+	if (ResidentMonitorSamplesRemaining <= 0)
+	{
+		bResidentMonitorActive = false;
+		bResidentMonitorDone = true;
+	}
 }
 
 void ACustomerSpawner::TrySpawn()
@@ -77,7 +187,7 @@ void ACustomerSpawner::TrySpawn()
 	if (bResidentsSpawned)
 	{
 		GetWorldTimerManager().ClearTimer(SpawnTimer);
-		SetActorTickEnabled(false);
+		StartResidentMovementMonitor();
 	}
 }
 

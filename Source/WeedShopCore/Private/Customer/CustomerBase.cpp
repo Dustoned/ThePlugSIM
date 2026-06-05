@@ -396,6 +396,50 @@ bool ACustomerBase::ShouldShowOnCityMap() const
 	return true;
 }
 
+bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSnapshot)
+{
+	OutSnapshot = FResidentMovementSnapshot();
+	if (!bResident)
+	{
+		return false;
+	}
+
+	OutSnapshot.bValid = true;
+	OutSnapshot.bVisibleOnMap = ShouldShowOnCityMap();
+	OutSnapshot.bAtHomeInside = bAtHomeInside;
+	OutSnapshot.bHasGoal = bHasRoamGoal;
+	OutSnapshot.bGoalIsPark = bRoamGoalIsPark;
+	OutSnapshot.bParkPause = ParkPauseTimer > 0.f;
+	OutSnapshot.Speed2D = GetVelocity().Size2D();
+	OutSnapshot.NoGoalSeconds = ResidentNoGoalTimer;
+	OutSnapshot.StuckSeconds = ResidentStuckTimer;
+	OutSnapshot.Location = GetActorLocation();
+	OutSnapshot.Goal = RoamGoal;
+
+	ACityGenerator* City = GetResidentCity(GetWorld());
+	if (City)
+	{
+		OutSnapshot.DistanceFromCenter = FVector::Dist2D(OutSnapshot.Location, City->GetCityCenter());
+		const float EdgeDistance = City->GetPitch() * (static_cast<float>(City->GetGridRadiusClamped()) - 0.35f);
+		OutSnapshot.bNearMapEdge = OutSnapshot.DistanceFromCenter >= EdgeDistance;
+		OutSnapshot.bOnSidewalkOrPark = bAtHomeInside || bEmergingFromHome || bEnteringHome
+			|| IsResidentOutdoorSidewalkPoint(City, OutSnapshot.Location, true)
+			|| IsResidentParkPoint(City, OutSnapshot.Location);
+	}
+	else
+	{
+		OutSnapshot.bOnSidewalkOrPark = true;
+	}
+
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
+	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
+	OutSnapshot.bNeedsParkVisitToday = Today >= 0 && LastParkVisitDay != Today;
+	const bool bOutdoorGoalBlocked = !bAtHomeInside && !bEmergingFromHome && !bEnteringHome && bHasRoamGoal;
+	OutSnapshot.bStuckSuspect = bOutdoorGoalBlocked && (ResidentStuckTimer > 1.4f || ResidentNoGoalTimer > 10.f);
+	return true;
+}
+
 FVector ACustomerBase::ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const
 {
 	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))

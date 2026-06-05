@@ -22,6 +22,26 @@ class UInventoryComponent;
 class UStaticMeshComponent;
 class ACityGenerator;
 
+struct FResidentMovementSnapshot
+{
+	bool bValid = false;
+	bool bVisibleOnMap = false;
+	bool bAtHomeInside = false;
+	bool bHasGoal = false;
+	bool bGoalIsPark = false;
+	bool bParkPause = false;
+	bool bOnSidewalkOrPark = false;
+	bool bNeedsParkVisitToday = false;
+	bool bStuckSuspect = false;
+	bool bNearMapEdge = false;
+	float Speed2D = 0.f;
+	float NoGoalSeconds = 0.f;
+	float StuckSeconds = 0.f;
+	float DistanceFromCenter = 0.f;
+	FVector Location = FVector::ZeroVector;
+	FVector Goal = FVector::ZeroVector;
+};
+
 UENUM(BlueprintType)
 enum class ECustomerState : uint8
 {
@@ -167,6 +187,7 @@ public:
 	// Huisnummer/adres van deze bewoner (voor afspraak-berichten "kom langs op nr X").
 	const FString& GetHomeNumber() const { return HomeNumber; }
 	const FVector& GetHomeInteriorPos() const { return HomeInteriorPos; }
+	bool GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSnapshot);
 
 	// Start een afspraak voor deze bewoner. bComeToPlayer = de NPC loopt naar de speler (TheyComeToYou);
 	// anders verschijnt 'ie in z'n eigen unit en wacht daar tot de speler langskomt (YouGoToThem).

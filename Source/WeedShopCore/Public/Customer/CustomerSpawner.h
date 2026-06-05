@@ -48,6 +48,8 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	void TrySpawn();
+	void StartResidentMovementMonitor();
+	void TickResidentMovementMonitor(float Now);
 	// Maakt van C de koopklare test-klant op de park-plek (idempotent).
 	void SetupTestCustomer(ACustomerBase* C, const FVector& Park);
 	// Kent NPC-bewoners toe aan appartementen (één keer, zodra de stad gebouwd is).
@@ -61,6 +63,10 @@ protected:
 	bool bResidentsSpawned = false;
 	FTimerHandle SpawnTimer;
 	float NextResidentSpawnTryRealTime = 0.f;
+	bool bResidentMonitorActive = false;
+	bool bResidentMonitorDone = false;
+	float NextResidentMonitorRealTime = 0.f;
+	int32 ResidentMonitorSamplesRemaining = 0;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ACustomerBase>> Spawned;
