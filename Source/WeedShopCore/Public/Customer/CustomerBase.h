@@ -221,7 +221,6 @@ protected:
 	bool bHasResidentBestDistToGoal = false;
 	int32 ResidentRecoveryAttempts = 0;
 	float ResidentNoGoalTimer = 0.f;
-	float ResidentOffSidewalkTimer = 0.f;
 	int32 ResidentGoalFailCount = 0;
 	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
 	bool bHasPark = false;

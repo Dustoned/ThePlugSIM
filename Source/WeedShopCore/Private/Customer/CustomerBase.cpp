@@ -1107,7 +1107,7 @@ void ACustomerBase::BuildResidentStreetStops(ACityGenerator* City, TArray<FVecto
 
 		for (const FVector& Stop : Stops)
 		{
-			OutStops.Add(SnapResidentPointToSidewalk(City, Stop, false));
+			OutStops.Add(Stop);
 		}
 	}
 }
@@ -1140,9 +1140,11 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 	for (int32 Pass = 0; Pass < 2; ++Pass)
 	{
 		const bool bAllowShortTrip = Pass > 0;
-		for (int32 Offset = 0; Offset < StreetStops.Num(); ++Offset)
+		const int32 CandidateCount = FMath::Min(StreetStops.Num(), 96);
+		const int32 Step = (CandidateCount < StreetStops.Num()) ? FMath::Max(1, StreetStops.Num() / CandidateCount + 1) : 1;
+		for (int32 Offset = 0; Offset < CandidateCount; ++Offset)
 		{
-			const int32 Index = (StartIndex + Offset) % StreetStops.Num();
+			const int32 Index = (StartIndex + Offset * Step) % StreetStops.Num();
 			const FVector Candidate = StreetStops[Index];
 			const float TravelDist = FVector::Dist2D(Current, Candidate);
 			if (!bAllowShortTrip && TravelDist < MinTrip)
@@ -1735,47 +1737,6 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	}
 
 	// Roam: vaste grote stadsronde buiten. Binnenroutes zijn alleen voor echt naar huis/naar buiten gaan.
-	ACityGenerator* ResidentCity = GetResidentCity(W);
-	if (ResidentCity && !bRoamGoalIsPark && !IsResidentOutdoorSidewalkPoint(ResidentCity, GetActorLocation(), false))
-	{
-		ResidentOffSidewalkTimer += DeltaSeconds;
-		if (ResidentOffSidewalkTimer >= 1.25f)
-		{
-			FVector SidewalkGoal = SnapResidentPointToSidewalk(ResidentCity, GetActorLocation(), false);
-			if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
-			{
-				FNavLocation ProjectedSidewalk;
-				if (Nav->ProjectPointToNavigation(SidewalkGoal, ProjectedSidewalk, FVector(700.f, 700.f, 650.f)))
-				{
-					SidewalkGoal = ProjectedSidewalk.Location;
-				}
-			}
-			if (FVector::Dist2D(GetActorLocation(), SidewalkGoal) > 90.f
-				&& IsResidentOutdoorSidewalkPoint(ResidentCity, SidewalkGoal, false)
-				&& WalkTo(SidewalkGoal, 70.f, false, true))
-			{
-				RoamGoal = SidewalkGoal;
-				bHasRoamGoal = true;
-				bRoamGoalIsPark = false;
-				bPendingRoamGoalIsPark = false;
-				RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 6.f, 18.f);
-				ResidentPrevMoveLoc = GetActorLocation();
-				bHasResidentPrevMoveLoc = true;
-				ResidentStuckTimer = 0.f;
-				ResidentRecoveryCooldown = 0.4f;
-				ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
-				bHasResidentBestDistToGoal = true;
-				ResidentRecoveryAttempts = 0;
-				ResidentOffSidewalkTimer = 0.f;
-				return;
-			}
-		}
-	}
-	else
-	{
-		ResidentOffSidewalkTimer = 0.f;
-	}
-
 	RecoverResidentIfStuck(DeltaSeconds);
 	if (ParkPauseTimer > 0.f)
 	{
