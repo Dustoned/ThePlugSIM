@@ -220,6 +220,8 @@ protected:
 	float ResidentBestDistToGoal = 0.f;
 	bool bHasResidentBestDistToGoal = false;
 	int32 ResidentRecoveryAttempts = 0;
+	float ResidentNoGoalTimer = 0.f;
+	int32 ResidentGoalFailCount = 0;
 	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
 	bool bHasPark = false;
 	TWeakObjectPtr<ACityGenerator> CachedCity;
@@ -242,6 +244,7 @@ protected:
 	int32 CountResidentCrowdNear(const FVector& Point, float Radius) const;
 	void RecoverResidentIfStuck(float DeltaSeconds);
 	bool TrySetResidentDetourGoal(const FVector& FinalGoal);
+	bool ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet);
 	bool HasResidentPath(const FVector& From, const FVector& To, float MinDistance2D = 0.f) const;
 	bool HasResidentObstacleAhead(const FVector& Goal) const;
 	FVector MakeResidentStandingLocation(const FVector& FloorLocation) const;
