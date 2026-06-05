@@ -1912,10 +1912,11 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			// (begane grond, op de kompas), zodat je 'm daar treft i.p.v. helemaal naar boven te moeten.
 			if (bAtHomeInside)
 			{
-				bAtHomeInside = false;
-				SetActorHiddenInGame(false);
-				SetActorEnableCollision(true);
-				SetActorLocation(MakeResidentStandingLocation(HomeFrontSpot));
+				StartResidentHomeExit(true);
+			}
+			if (TickResidentHomeExit(DeltaSeconds))
+			{
+				return;
 			}
 			WalkTo(HomeFrontSpot);
 			if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 160.f)
