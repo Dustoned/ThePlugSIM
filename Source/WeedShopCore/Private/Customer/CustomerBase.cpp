@@ -29,6 +29,26 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 
+namespace
+{
+	bool ResidentSideHasStreetNeighbor(ACityGenerator* City, const FCityMapBlock& Block, int32 SideX, int32 SideY)
+	{
+		if (!City || (SideX == 0 && SideY == 0))
+		{
+			return false;
+		}
+
+		const FVector Center = City->GetCityCenter();
+		const float Pitch = FMath::Max(1.f, City->GetPitch());
+		const int32 R = City->GetGridRadiusClamped();
+		const int32 GX = FMath::RoundToInt((Block.Center.X - Center.X) / Pitch);
+		const int32 GY = FMath::RoundToInt((Block.Center.Y - Center.Y) / Pitch);
+		const int32 NX = GX + FMath::Clamp(SideX, -1, 1);
+		const int32 NY = GY + FMath::Clamp(SideY, -1, 1);
+		return NX >= -R && NX <= R && NY >= -R && NY <= R;
+	}
+}
+
 ACustomerBase::ACustomerBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -992,28 +1012,38 @@ FVector ACustomerBase::SnapResidentPointToSidewalk(ACityGenerator* City, const F
 			}
 		}
 
-		const bool bUseXSide = FMath::Abs(Local.X) >= FMath::Abs(Local.Y);
-		const float SignX = Local.X >= 0.f ? 1.f : -1.f;
-		const float SignY = Local.Y >= 0.f ? 1.f : -1.f;
-		FVector Candidate = BlockCenter;
-		if (bUseXSide)
+		auto TrySide = [&](int32 SideX, int32 SideY)
 		{
-			Candidate.X += SignX * Lane;
-			Candidate.Y += FMath::Clamp(Local.Y, -EdgeClamp, EdgeClamp);
-		}
-		else
-		{
-			Candidate.X += FMath::Clamp(Local.X, -EdgeClamp, EdgeClamp);
-			Candidate.Y += SignY * Lane;
-		}
+			if (!ResidentSideHasStreetNeighbor(City, B, SideX, SideY))
+			{
+				return;
+			}
 
-		const float Score = FVector::DistSquared2D(Desired, Candidate);
-		if (Score < BestScore)
-		{
-			BestScore = Score;
-			Best = Candidate;
-			bFound = true;
-		}
+			FVector Candidate = BlockCenter;
+			if (SideX != 0)
+			{
+				Candidate.X += static_cast<float>(SideX) * Lane;
+				Candidate.Y += FMath::Clamp(Local.Y, -EdgeClamp, EdgeClamp);
+			}
+			else
+			{
+				Candidate.X += FMath::Clamp(Local.X, -EdgeClamp, EdgeClamp);
+				Candidate.Y += static_cast<float>(SideY) * Lane;
+			}
+
+			const float Score = FVector::DistSquared2D(Desired, Candidate);
+			if (Score < BestScore)
+			{
+				BestScore = Score;
+				Best = Candidate;
+				bFound = true;
+			}
+		};
+
+		TrySide(1, 0);
+		TrySide(-1, 0);
+		TrySide(0, 1);
+		TrySide(0, -1);
 	}
 
 	return bFound ? Best : Desired;
@@ -1052,9 +1082,22 @@ bool ACustomerBase::IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const F
 		{
 			return true;
 		}
-		if (Ax >= Half - SidewalkWidth - Tolerance || Ay >= Half - SidewalkWidth - Tolerance)
+		const float BandStart = Half - SidewalkWidth - Tolerance;
+		if (Ax >= BandStart)
 		{
-			return true;
+			const int32 SideX = LocalX >= 0.f ? 1 : -1;
+			if (ResidentSideHasStreetNeighbor(City, B, SideX, 0))
+			{
+				return true;
+			}
+		}
+		if (Ay >= BandStart)
+		{
+			const int32 SideY = LocalY >= 0.f ? 1 : -1;
+			if (ResidentSideHasStreetNeighbor(City, B, 0, SideY))
+			{
+				return true;
+			}
 		}
 	}
 
@@ -1090,25 +1133,35 @@ void ACustomerBase::BuildResidentStreetStops(ACityGenerator* City, TArray<FVecto
 		const FVector Base(B.Center.X, B.Center.Y, HomeFrontSpot.Z);
 		const int32 ZigStep = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(BlockIndex) * 41) % 5)) - 2;
 		const float Zig = static_cast<float>(ZigStep) * AlongSmall;
-		const FVector Stops[] = {
-			Base + FVector( SideOffset,  Zig,        0.f),
-			Base + FVector(-SideOffset, -Zig,        0.f),
-			Base + FVector( Zig,         SideOffset, 0.f),
-			Base + FVector(-Zig,        -SideOffset, 0.f),
-			Base + FVector( SideOffset,  AlongWide,  0.f),
-			Base + FVector( SideOffset, -AlongWide,  0.f),
-			Base + FVector(-SideOffset,  AlongWide,  0.f),
-			Base + FVector(-SideOffset, -AlongWide,  0.f),
-			Base + FVector( AlongWide,   SideOffset, 0.f),
-			Base + FVector(-AlongWide,   SideOffset, 0.f),
-			Base + FVector( AlongWide,  -SideOffset, 0.f),
-			Base + FVector(-AlongWide,  -SideOffset, 0.f)
+
+		auto AddXSide = [&](int32 SideX, float SideZig)
+		{
+			if (!ResidentSideHasStreetNeighbor(City, B, SideX, 0))
+			{
+				return;
+			}
+			const float SX = static_cast<float>(SideX);
+			OutStops.Add(Base + FVector(SX * SideOffset, SideZig, 0.f));
+			OutStops.Add(Base + FVector(SX * SideOffset, AlongWide, 0.f));
+			OutStops.Add(Base + FVector(SX * SideOffset, -AlongWide, 0.f));
 		};
 
-		for (const FVector& Stop : Stops)
+		auto AddYSide = [&](int32 SideY, float SideZig)
 		{
-			OutStops.Add(Stop);
-		}
+			if (!ResidentSideHasStreetNeighbor(City, B, 0, SideY))
+			{
+				return;
+			}
+			const float SY = static_cast<float>(SideY);
+			OutStops.Add(Base + FVector(SideZig, SY * SideOffset, 0.f));
+			OutStops.Add(Base + FVector(AlongWide, SY * SideOffset, 0.f));
+			OutStops.Add(Base + FVector(-AlongWide, SY * SideOffset, 0.f));
+		};
+
+		AddXSide(1, Zig);
+		AddXSide(-1, -Zig);
+		AddYSide(1, Zig);
+		AddYSide(-1, -Zig);
 	}
 }
 
