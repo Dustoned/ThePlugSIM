@@ -162,6 +162,7 @@ public:
 	// FrontSpot = plek vóór de voordeur (waar 'ie verschijnt/verdwijnt); InteriorPos = referentie binnen.
 	void SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber, const FVector& HallPos = FVector::ZeroVector);
 	bool IsResident() const { return bResident; }
+	bool ShouldShowOnCityMap() const;
 
 	// Huisnummer/adres van deze bewoner (voor afspraak-berichten "kom langs op nr X").
 	const FString& GetHomeNumber() const { return HomeNumber; }

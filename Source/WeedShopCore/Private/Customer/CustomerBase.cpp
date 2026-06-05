@@ -371,6 +371,31 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	}
 }
 
+bool ACustomerBase::ShouldShowOnCityMap() const
+{
+	if (IsHidden())
+	{
+		return false;
+	}
+	if (!bResident)
+	{
+		return true;
+	}
+	if (bApptActive && !bApptComeToPlayer && bApptArrived)
+	{
+		return true;
+	}
+	if (bAtHomeInside || bEmergingFromHome)
+	{
+		return false;
+	}
+	if (bEnteringHome && HomeEntryStage > 0)
+	{
+		return false;
+	}
+	return true;
+}
+
 FVector ACustomerBase::ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const
 {
 	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))

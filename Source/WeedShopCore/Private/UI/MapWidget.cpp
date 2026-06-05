@@ -417,9 +417,8 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		ACustomerBase* C = *It;
 		if (!IsValid(C)) { continue; }
-		// Verborgen bewoners (naar binnen gegaan / 's nachts thuis) NIET op de kaart tonen: anders staat
-		// er een puntje terwijl er in de wereld niemand is.
-		if (C->IsHidden()) { continue; }
+		// Bewoners in binnen-/home-transitie niet als straat-NPC tonen: anders lijken ze vast te staan op woonblokken.
+		if (!C->ShouldShowOnCityMap()) { continue; }
 
 		const FVector L = C->GetActorLocation();
 		const FVector2D Pos = WorldToCanvas(L.X, L.Y);
