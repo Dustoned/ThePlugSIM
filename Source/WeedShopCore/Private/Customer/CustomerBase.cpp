@@ -47,6 +47,24 @@ namespace
 		const int32 NY = GY + FMath::Clamp(SideY, -1, 1);
 		return NX >= -R && NX <= R && NY >= -R && NY <= R;
 	}
+
+	const TArray<FCityMapBlock>& GetResidentMapBlocksCached(ACityGenerator* City)
+	{
+		static TWeakObjectPtr<ACityGenerator> CachedCity;
+		static TArray<FCityMapBlock> CachedBlocks;
+		static const TArray<FCityMapBlock> EmptyBlocks;
+
+		if (!City)
+		{
+			return EmptyBlocks;
+		}
+		if (CachedCity.Get() != City || CachedBlocks.Num() == 0)
+		{
+			CachedCity = City;
+			City->GetMapBlocks(CachedBlocks);
+		}
+		return CachedBlocks;
+	}
 }
 
 ACustomerBase::ACustomerBase()
@@ -491,8 +509,7 @@ FVector ACustomerBase::ResolveResidentHomeExitSidewalkSpot(ACityGenerator* City,
 		-FirstSign * BaseOffset * 1.35f
 	};
 
-	TArray<FCityMapBlock> Blocks;
-	City->GetMapBlocks(Blocks);
+	const TArray<FCityMapBlock>& Blocks = GetResidentMapBlocksCached(City);
 	const float BlockSize = FMath::Max(500.f, City->GetMapBlockSize());
 	const float Half = BlockSize * 0.5f;
 	const float Tolerance = 220.f;
@@ -1195,8 +1212,7 @@ FVector ACustomerBase::SnapResidentPointToSidewalk(ACityGenerator* City, const F
 		return Desired;
 	}
 
-	TArray<FCityMapBlock> Blocks;
-	City->GetMapBlocks(Blocks);
+	const TArray<FCityMapBlock>& Blocks = GetResidentMapBlocksCached(City);
 	const float BlockSize = FMath::Max(500.f, City->GetMapBlockSize());
 	const float Half = BlockSize * 0.5f;
 	const float SidewalkWidth = FMath::Clamp(City->GetSidewalkWidth(), 120.f, Half * 0.45f);
@@ -1295,8 +1311,7 @@ bool ACustomerBase::IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const F
 		return true;
 	}
 
-	TArray<FCityMapBlock> Blocks;
-	City->GetMapBlocks(Blocks);
+	const TArray<FCityMapBlock>& Blocks = GetResidentMapBlocksCached(City);
 	const float BlockSize = FMath::Max(500.f, City->GetMapBlockSize());
 	const float Half = BlockSize * 0.5f;
 	const float SidewalkWidth = FMath::Clamp(City->GetSidewalkWidth(), 120.f, Half * 0.45f);
@@ -1350,8 +1365,7 @@ bool ACustomerBase::IsResidentParkPoint(ACityGenerator* City, const FVector& Poi
 		return false;
 	}
 
-	TArray<FCityMapBlock> Blocks;
-	City->GetMapBlocks(Blocks);
+	const TArray<FCityMapBlock>& Blocks = GetResidentMapBlocksCached(City);
 	const float Half = FMath::Max(500.f, City->GetMapBlockSize()) * 0.5f;
 	const float Tolerance = 90.f;
 	for (const FCityMapBlock& B : Blocks)
@@ -1730,9 +1744,10 @@ void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 	}
 
 	const float Speed2D = GetVelocity().Size2D();
-	const bool bObstacleAhead = HasResidentObstacleAhead(RoamGoal);
 	const bool bBarelyMoved = MoveDelta < 7.f && Speed2D < 18.f;
 	const bool bNoGoalProgress = DistToGoal > ResidentBestDistToGoal - 12.f && MoveDelta < 15.f;
+	const bool bMayNeedObstacleSweep = !bPathActuallyMoving || bBarelyMoved || bNoGoalProgress || MoveDelta < 24.f;
+	const bool bObstacleAhead = bMayNeedObstacleSweep && HasResidentObstacleAhead(RoamGoal);
 	if (!bPathActuallyMoving || bBarelyMoved || bNoGoalProgress || (bObstacleAhead && MoveDelta < 24.f))
 	{
 		ResidentStuckTimer += DeltaSeconds;
