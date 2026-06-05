@@ -510,9 +510,10 @@ void ACityGenerator::BuildCity()
 		GetWorldTimerManager().SetTimer(MapCaptureTimer, this, &ACityGenerator::CaptureMapNow, 0.6f, false);
 	}
 
-	GetWorldTimerManager().SetTimer(NavCoverageTimer, this, &ACityGenerator::VerifyCityNavigationCoverage, 4.0f, false);
 	UE_LOG(LogWeedShop, Log, TEXT("City build complete: homes=%d blocks=%d lamps=%d"),
 		ApartmentHomes.Num(), (2 * R + 1) * (2 * R + 1), LampLights.Num());
+	NavCoverageAttempts = 0;
+	VerifyCityNavigationCoverage();
 }
 
 void ACityGenerator::CaptureMapNow()
@@ -524,9 +525,18 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 {
 	UWorld* W = GetWorld();
 	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
+	++NavCoverageAttempts;
+	auto QueueCoverageRetry = [&]()
+	{
+		if (W && NavCoverageAttempts < 4)
+		{
+			GetWorldTimerManager().SetTimer(NavCoverageTimer, this, &ACityGenerator::VerifyCityNavigationCoverage, 3.0f, false);
+		}
+	};
 	if (!W || !Nav)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage skipped: navigation system unavailable"));
+		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage skipped: attempt=%d navigation system unavailable"), NavCoverageAttempts);
+		QueueCoverageRetry();
 		return;
 	}
 
@@ -603,7 +613,9 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 
 	if (Projected.Num() == 0)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage failed: projected=0/%d edgeProjected=0/%d"), Samples.Num(), EdgeTotal);
+		UE_LOG(LogWeedShop, Warning, TEXT("City nav coverage failed: attempt=%d projected=0/%d edgeProjected=0/%d"),
+			NavCoverageAttempts, Samples.Num(), EdgeTotal);
+		QueueCoverageRetry();
 		return;
 	}
 
@@ -651,14 +663,15 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 	if (bWeakCoverage)
 	{
 		UE_LOG(LogWeedShop, Warning,
-			TEXT("City nav coverage: projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
-			Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
+			TEXT("City nav coverage: attempt=%d projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
+			NavCoverageAttempts, Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
+		QueueCoverageRetry();
 	}
 	else
 	{
 		UE_LOG(LogWeedShop, Log,
-			TEXT("City nav coverage: projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
-			Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
+			TEXT("City nav coverage: attempt=%d projected=%d/%d reachable=%d/%d edgeProjected=%d/%d edgeReachable=%d/%d"),
+			NavCoverageAttempts, Projected.Num(), Samples.Num(), Reachable, Projected.Num(), EdgeProjected, EdgeTotal, EdgeReachable, EdgeProjected);
 	}
 }
 

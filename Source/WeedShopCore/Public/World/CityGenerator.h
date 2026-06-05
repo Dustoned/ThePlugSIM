@@ -158,6 +158,7 @@ private:
 	float MapOrthoWidth = 0.f;
 	FTimerHandle MapCaptureTimer;
 	FTimerHandle NavCoverageTimer;
+	int32 NavCoverageAttempts = 0;
 
 	// Straatlampen: spots (naar onder) + zachte gloed-puntlichten + gloeiende koppen, getoggeld op kloktijd.
 	UPROPERTY() TArray<TObjectPtr<class ULightComponent>> LampLights;
