@@ -2053,8 +2053,35 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		FVector DesiredGoal;
 		float SearchXY = 700.f;
 		float SearchZ = 500.f;
-		if (PickResidentRoamGoal(DesiredGoal, SearchXY, SearchZ) && SetResidentRoamGoal(DesiredGoal, SearchXY, SearchZ))
+		const bool bPickedGoal = PickResidentRoamGoal(DesiredGoal, SearchXY, SearchZ);
+		const bool bPickedParkGoal = bPendingRoamGoalIsPark;
+		if (bPickedGoal && SetResidentRoamGoal(DesiredGoal, SearchXY, SearchZ))
 		{
+			return;
+		}
+		if (bPickedParkGoal)
+		{
+			++ResidentGoalFailCount;
+			if (ResidentNoGoalTimer >= 14.f || ResidentGoalFailCount >= 5)
+			{
+				if (AAIController* AI = Cast<AAIController>(GetController()))
+				{
+					AI->StopMovement();
+				}
+				bAtHomeInside = true;
+				SetActorHiddenInGame(true);
+				SetActorEnableCollision(false);
+				SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+				StartResidentHomeExit(true);
+				return;
+			}
+			bHasRoamGoal = false;
+			bRoamGoalIsPark = false;
+			RoamTimer = FMath::FRandRange(0.8f, 1.6f);
+			ResidentStuckTimer = 0.f;
+			ResidentRecoveryCooldown = 0.f;
+			bHasResidentBestDistToGoal = false;
+			ResidentRecoveryAttempts = 0;
 			return;
 		}
 
