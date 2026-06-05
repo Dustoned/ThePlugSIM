@@ -245,6 +245,7 @@ protected:
 	bool bHasResidentPrevMoveLoc = false;
 	float ResidentStuckTimer = 0.f;
 	float ResidentRecoveryCooldown = 0.f;
+	float ResidentOffSidewalkTimer = 0.f;
 	float ResidentBestDistToGoal = 0.f;
 	bool bHasResidentBestDistToGoal = false;
 	int32 ResidentRecoveryAttempts = 0;
@@ -283,6 +284,7 @@ protected:
 	float ComputeResidentRoamTimeout(const FVector& Goal) const;
 	int32 CountResidentParkVisitors(float Radius) const;
 	int32 CountResidentCrowdNear(const FVector& Point, float Radius) const;
+	bool RecoverResidentSidewalkDrift(float DeltaSeconds);
 	void RecoverResidentIfStuck(float DeltaSeconds);
 	bool TrySetResidentDetourGoal(const FVector& FinalGoal);
 	bool ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet);

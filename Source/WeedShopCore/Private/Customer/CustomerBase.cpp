@@ -654,6 +654,7 @@ void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 	ParkPauseTimer = 0.f;
 	ResidentStuckTimer = 0.f;
 	ResidentRecoveryCooldown = 0.f;
+	ResidentOffSidewalkTimer = 0.f;
 	bHasResidentPrevMoveLoc = false;
 	bHasResidentBestDistToGoal = false;
 	ResidentRecoveryAttempts = 0;
@@ -788,6 +789,7 @@ void ACustomerBase::StartResidentHomeEntry()
 	ParkPauseTimer = 0.f;
 	ResidentStuckTimer = 0.f;
 	ResidentRecoveryCooldown = 0.f;
+	ResidentOffSidewalkTimer = 0.f;
 	bHasResidentPrevMoveLoc = false;
 	bHasResidentBestDistToGoal = false;
 	ResidentRecoveryAttempts = 0;
@@ -1700,6 +1702,73 @@ bool ACustomerBase::ForceResidentOutdoorRoamGoal(bool bAllowSnapToStreet)
 	return false;
 }
 
+bool ACustomerBase::RecoverResidentSidewalkDrift(float DeltaSeconds)
+{
+	if (ParkPauseTimer > 0.f || bAtHomeInside || bEmergingFromHome || bEnteringHome || bApptActive)
+	{
+		ResidentOffSidewalkTimer = 0.f;
+		return false;
+	}
+
+	UWorld* W = GetWorld();
+	ACityGenerator* City = GetResidentCity(W);
+	if (!W || !City)
+	{
+		ResidentOffSidewalkTimer = 0.f;
+		return false;
+	}
+
+	const FVector Cur = GetActorLocation();
+	if (IsResidentOutdoorSidewalkPoint(City, Cur, true) || IsResidentParkPoint(City, Cur))
+	{
+		ResidentOffSidewalkTimer = 0.f;
+		return false;
+	}
+
+	ResidentOffSidewalkTimer += DeltaSeconds;
+	if (ResidentOffSidewalkTimer < 1.0f)
+	{
+		return false;
+	}
+
+	UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W);
+	if (!Nav)
+	{
+		ResidentOffSidewalkTimer = 0.f;
+		return false;
+	}
+
+	FVector SidewalkGoal = SnapResidentPointToSidewalk(City, Cur, false);
+	FNavLocation Projected;
+	if (!Nav->ProjectPointToNavigation(SidewalkGoal, Projected, FVector(650.f, 650.f, 650.f))
+		|| !IsResidentOutdoorSidewalkPoint(City, Projected.Location, false))
+	{
+		ResidentOffSidewalkTimer = 0.f;
+		return false;
+	}
+
+	if (!WalkTo(Projected.Location, 80.f, false, true))
+	{
+		ResidentOffSidewalkTimer = 0.f;
+		return false;
+	}
+
+	RoamGoal = Projected.Location;
+	bHasRoamGoal = true;
+	bRoamGoalIsPark = false;
+	bPendingRoamGoalIsPark = false;
+	RoamTimer = FMath::Clamp(ComputeResidentRoamTimeout(RoamGoal), 8.f, 28.f);
+	ResidentStuckTimer = 0.f;
+	ResidentRecoveryCooldown = 0.5f;
+	ResidentRecoveryAttempts = 0;
+	ResidentNoGoalTimer = 0.f;
+	ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
+	bHasResidentBestDistToGoal = true;
+	bHasResidentPrevMoveLoc = false;
+	ResidentOffSidewalkTimer = 0.f;
+	return true;
+}
+
 void ACustomerBase::RecoverResidentIfStuck(float DeltaSeconds)
 {
 	if (ParkPauseTimer > 0.f || bAtHomeInside || bApptActive)
@@ -2014,6 +2083,7 @@ bool ACustomerBase::SetResidentRoamGoal(const FVector& DesiredGoal, float Search
 	bHasResidentPrevMoveLoc = true;
 	ResidentStuckTimer = 0.f;
 	ResidentRecoveryCooldown = 0.f;
+	ResidentOffSidewalkTimer = 0.f;
 	ResidentBestDistToGoal = FVector::Dist2D(GetActorLocation(), RoamGoal);
 	bHasResidentBestDistToGoal = true;
 	ResidentRecoveryAttempts = 0;
@@ -2256,6 +2326,10 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	}
 
 	// Roam: vaste grote stadsronde buiten. Binnenroutes zijn alleen voor echt naar huis/naar buiten gaan.
+	if (RecoverResidentSidewalkDrift(DeltaSeconds))
+	{
+		return;
+	}
 	RecoverResidentIfStuck(DeltaSeconds);
 	if (ParkPauseTimer > 0.f)
 	{
