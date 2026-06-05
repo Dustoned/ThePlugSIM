@@ -1446,10 +1446,62 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 	const FVector Center = City->GetCityCenter();
 	const float Pitch = FMath::Max(100.f, City->GetPitch());
 	const float MinTrip = FMath::Clamp(Pitch * 0.85f, 1100.f, 3200.f);
+	const int32 GridR = FMath::Max(1, City->GetGridRadiusClamped());
 	const int32 StartIndex = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 31) % StreetStops.Num()));
 	const int32 AngleSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 13 + static_cast<int64>(RouteLeg) * 71 + static_cast<int64>(ResidentStreetLegsToday) * 29) % 360));
 	const float TargetAngle = FMath::DegreesToRadians(static_cast<float>(AngleSeed));
 	const FVector TargetDir(FMath::Cos(TargetAngle), FMath::Sin(TargetAngle), 0.f);
+	auto BuildDistrictTarget = [&]() -> FVector
+	{
+		const bool bPreferOuterRing = (RouteLeg % 3) != 1;
+		const int32 Salt = FMath::Abs(static_cast<int32>(
+			(static_cast<int64>(RoamRouteSeed) * 19
+				+ static_cast<int64>(RouteLeg) * 43
+				+ static_cast<int64>(ResidentStreetLegsToday) * 17) % 4096));
+		int32 GX = 0;
+		int32 GY = 0;
+		if (bPreferOuterRing)
+		{
+			const int32 PerSide = GridR * 2 + 1;
+			const int32 Perimeter = FMath::Max(1, PerSide * 4 - 4);
+			int32 EdgeIndex = Salt % Perimeter;
+			if (EdgeIndex < PerSide)
+			{
+				GX = -GridR + EdgeIndex;
+				GY = -GridR;
+			}
+			else if (EdgeIndex < PerSide * 2 - 1)
+			{
+				GX = GridR;
+				GY = -GridR + (EdgeIndex - PerSide + 1);
+			}
+			else if (EdgeIndex < PerSide * 3 - 2)
+			{
+				GX = GridR - (EdgeIndex - (PerSide * 2 - 1) + 1);
+				GY = GridR;
+			}
+			else
+			{
+				GX = -GridR;
+				GY = GridR - (EdgeIndex - (PerSide * 3 - 2) + 1);
+			}
+		}
+		else
+		{
+			const int32 Width = GridR * 2 + 1;
+			int32 Index = Salt % FMath::Max(1, Width * Width - 1);
+			GX = -GridR + (Index % Width);
+			GY = -GridR + (Index / Width);
+			if (GX == 0 && GY == 0)
+			{
+				GX = (RoamRouteSeed & 1) ? GridR : -GridR;
+			}
+		}
+
+		return FVector(Center.X + static_cast<float>(GX) * Pitch, Center.Y + static_cast<float>(GY) * Pitch, Current.Z);
+	};
+	const FVector DistrictTarget = BuildDistrictTarget();
+	const float MapRadius = FMath::Max(Pitch, static_cast<float>(GridR) * Pitch * 1.45f);
 
 	bool bFound = false;
 	FVector BestGoal = FVector::ZeroVector;
@@ -1480,6 +1532,7 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 			}
 
 			const float CenterDist = FVector::Dist2D(Candidate, Center);
+			const float DistrictDist = FVector::Dist2D(Candidate, DistrictTarget);
 			FVector FromCenter = Candidate - Center;
 			FromCenter.Z = 0.f;
 			float Alignment = 0.f;
@@ -1492,6 +1545,7 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 			const float CenterPenalty = CenterDist < Pitch * 1.15f ? Pitch * 2.5f : 0.f;
 			const float Score = TravelDist * 0.55f
 				+ CenterDist * 0.85f
+				+ FMath::Max(0.f, MapRadius - DistrictDist) * 1.45f
 				+ Alignment * Pitch * 0.85f
 				- static_cast<float>(Crowd) * 2100.f
 				- CenterPenalty
