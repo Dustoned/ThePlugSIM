@@ -59,6 +59,7 @@ namespace
 ACityGenerator::ACityGenerator()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	Root->SetMobility(EComponentMobility::Static);
 	SetRootComponent(Root);
@@ -124,6 +125,20 @@ void ACityGenerator::AddCityLamp(const FVector& BaseWorld)
 void ACityGenerator::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bNavCoverageRetryQueued)
+	{
+		const UWorld* W = GetWorld();
+		if (!W || NavCoverageAttempts >= 4)
+		{
+			bNavCoverageRetryQueued = false;
+		}
+		else if (W->GetRealTimeSeconds() >= NextNavCoverageRetryRealTime)
+		{
+			bNavCoverageRetryQueued = false;
+			VerifyCityNavigationCoverage();
+		}
+	}
+
 	if (LampLights.Num() == 0) { return; }
 	LampTickAccum += DeltaSeconds;
 	if (LampTickAccum < 0.2f) { return; } // niet elke frame (maar wel vlot genoeg voor de live slider)
@@ -535,11 +550,13 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 	UWorld* W = GetWorld();
 	UNavigationSystemV1* Nav = W ? UNavigationSystemV1::GetCurrent(W) : nullptr;
 	++NavCoverageAttempts;
+	bNavCoverageRetryQueued = false;
 	auto QueueCoverageRetry = [&]()
 	{
 		if (W && NavCoverageAttempts < 4)
 		{
-			GetWorldTimerManager().SetTimer(NavCoverageTimer, this, &ACityGenerator::VerifyCityNavigationCoverage, 3.0f, false);
+			bNavCoverageRetryQueued = true;
+			NextNavCoverageRetryRealTime = W->GetRealTimeSeconds() + 3.f;
 		}
 	};
 	if (!W || !Nav)
