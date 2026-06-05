@@ -60,6 +60,7 @@ ACityGenerator::ACityGenerator()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	Root->SetMobility(EComponentMobility::Static);
 	SetRootComponent(Root);
 }
 
