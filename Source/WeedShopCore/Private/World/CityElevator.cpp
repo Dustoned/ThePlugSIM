@@ -213,7 +213,13 @@ void ACityElevator::Tick(float DeltaSeconds)
 		if (UStaticMeshComponent* R = LandDoorR[f]) { R->SetRelativeLocation(FVector( OpenW * 0.5f + CurLand[f], FootY * 0.5f + 12.f, RelZ)); R->SetCollisionResponseToChannel(ECC_Pawn, bBlock ? ECR_Block : ECR_Ignore); }
 	}
 
-	// Beweeg naar de gevraagde verdieping (gezet door de knoppen). Blijft daar tot je een andere kiest/roept.
-	const float NewZ = FMath::FInterpConstantTo(Loc.Z, TargetZ, DeltaSeconds, 220.f);
-	SetActorLocation(FVector(Loc.X, Loc.Y, NewZ));
+	// Beweeg naar de gevraagde verdieping (gezet door de knoppen) — maar ALLEEN als de cabinedeuren dicht
+	// zijn. Zo zit je in een afgesloten cabine en zie je de schacht niet langskomen tijdens het rijden
+	// (echte lift: deuren dicht -> rijden -> deuren open). Bij een nieuwe verdieping wordt bAtFloor false,
+	// gaan de deuren dicht, en daarna pas beweegt 'ie.
+	if (CurDoor <= 6.f)
+	{
+		const float NewZ = FMath::FInterpConstantTo(Loc.Z, TargetZ, DeltaSeconds, 220.f);
+		SetActorLocation(FVector(Loc.X, Loc.Y, NewZ));
+	}
 }
