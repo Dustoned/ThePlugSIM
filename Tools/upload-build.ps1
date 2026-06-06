@@ -25,8 +25,8 @@ Get-Process UnrealEditor -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3
 
 Write-Host "== Packagen ($Config) - dit duurt even... =="
-& $UAT BuildCookRun -project="$UProj" -noP4 -platform=Win64 -clientconfig=$Config `
-    -cook -build -stage -pak -archive -archivedirectory="$Archive" -nocompileeditor -utf8output
+& $UAT BuildCookRun "-project=$UProj" -noP4 -platform=Win64 "-clientconfig=$Config" `
+    -cook -build -stage -pak -archive "-archivedirectory=$Archive" -nocompileeditor -utf8output
 if ($LASTEXITCODE -ne 0) { Write-Error "Packagen mislukt (UAT exit $LASTEXITCODE)"; exit 1 }
 
 # Gestagede build vinden (de map met ThePlugSIM.exe).
