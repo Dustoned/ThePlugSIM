@@ -558,24 +558,20 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		return;
 	}
 
-	// Een sample is een gedraaide joint. Pak de beste joint (hoogste gram) die je hebt.
+	// Een sample is een gedraaide joint. Je geeft de joint die je NU in je hand hebt (geselecteerd op
+	// de hotbar) — niet automatisch de beste uit je voorraad.
 	if (!Inventory)
 	{
 		return;
 	}
 	FName BestJoint = NAME_None;
 	int32 BestGrams = 0;
-	for (const FInventoryStack& Stack : Inventory->GetStacks())
 	{
-		const FString Id = Stack.ItemId.ToString();
-		if (Id.StartsWith(TEXT("Joint_")) && Id.EndsWith(TEXT("g")))
+		const FString Hand = Inventory->GetActiveItemId().ToString();
+		if (Hand.StartsWith(TEXT("Joint_")) && Hand.EndsWith(TEXT("g")))
 		{
-			const int32 G = FCString::Atoi(*Id.Mid(6)); // "Joint_3g" -> 3
-			if (G > BestGrams)
-			{
-				BestGrams = G;
-				BestJoint = Stack.ItemId;
-			}
+			BestJoint = Inventory->GetActiveItemId();
+			BestGrams = FCString::Atoi(*Hand.Mid(6)); // "Joint_3g" -> 3
 		}
 	}
 	// Wiet-kwaliteit van de joint (0..1) vóór we 'm weghalen — slechte wiet verslaaft/bindt minder.
@@ -585,7 +581,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	{
 		if (GEngine)
 		{
-			UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Orange, TEXT("No joint to give — roll one first (R)."));
+			UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Orange, TEXT("Hold a joint in your hand (select it on the hotbar) — roll one first (R)."));
 		}
 		return;
 	}
