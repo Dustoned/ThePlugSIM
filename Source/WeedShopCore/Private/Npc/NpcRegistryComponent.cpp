@@ -77,6 +77,19 @@ namespace
 		const int32 LastIdx = FMath::Abs(Index * 37 + Index / 7) % UE_ARRAY_COUNT(Last);
 		return FString::Printf(TEXT("%s %s"), *CleanFirstName(PreferredName, Index), Last[LastIdx]);
 	}
+
+	// Gerandomiseerde persoonlijkheid (DETERMINISTISCH op Seed). Addiction is naar boven verdeeld zodat
+	// een flink deel van de bevolking al (wil) kopen vanaf het begin (koop-drempel addiction = 30).
+	void RollPersonality(int32 Seed, float& OutRespect, float& OutLoyalty, float& OutAddiction)
+	{
+		FRandomStream Rng(Seed);
+		OutRespect = static_cast<float>(Rng.RandRange(5, 55));
+		OutLoyalty = static_cast<float>(Rng.RandRange(0, 40));
+		const float Roll = Rng.FRand();
+		if (Roll < 0.20f)       { OutAddiction = static_cast<float>(Rng.RandRange(60, 95)); } // ~20% stevig verslaafd
+		else if (Roll < 0.45f)  { OutAddiction = static_cast<float>(Rng.RandRange(32, 60)); } // ~25% boven de koop-drempel
+		else                    { OutAddiction = static_cast<float>(Rng.RandRange(5, 28));  } // rest nog te overtuigen
+	}
 }
 
 void UNpcRegistryComponent::EnsureSeeded()
@@ -103,9 +116,8 @@ void UNpcRegistryComponent::EnsureSeeded()
 		}
 		UsedNames.Add(UniqueName);
 		S.DisplayName = FText::FromString(UniqueName);
-		S.Respect = Def->BaseRespect;
-		S.Loyalty = Def->BaseLoyalty;
-		S.Addiction = Def->BaseAddiction;
+		// Elke (tabel-)NPC krijgt een gerandomiseerde persoonlijkheid (i.p.v. de vaste tabel-waardes).
+		RollPersonality(static_cast<int32>(GetTypeHash(RowName)), S.Respect, S.Loyalty, S.Addiction);
 		States.Add(S);
 		++RowIndex;
 	}
@@ -133,18 +145,8 @@ FName UNpcRegistryComponent::EnsureNpc(FName NpcId, const FText& DisplayName, fl
 	S.DisplayName = DisplayName.IsEmpty() ? FText::FromName(NpcId) : DisplayName;
 
 	// Gerandomiseerde persoonlijkheid per NPC, DETERMINISTISCH op de NpcId (zelfde NPC = zelfde stats,
-	// stabiel over save/load en op host+client). Addiction is bewust naar boven verdeeld zodat je vanaf
-	// het begin genoeg klanten hebt die al (willen) kopen (koop-drempel addiction = 30).
-	FRandomStream Rng(static_cast<int32>(GetTypeHash(NpcId)));
-	S.Respect = static_cast<float>(Rng.RandRange(5, 55));
-	S.Loyalty = static_cast<float>(Rng.RandRange(0, 40));
-	const float Roll = Rng.FRand();
-	if (Roll < 0.20f)       { S.Addiction = static_cast<float>(Rng.RandRange(60, 95)); } // ~20% stevig verslaafd (vaste klant)
-	else if (Roll < 0.45f)  { S.Addiction = static_cast<float>(Rng.RandRange(32, 60)); } // ~25% al boven de koop-drempel
-	else                    { S.Addiction = static_cast<float>(Rng.RandRange(5, 28));  } // rest nog te overtuigen
-	S.Respect = FMath::Clamp(S.Respect, 0.f, 100.f);
-	S.Loyalty = FMath::Clamp(S.Loyalty, 0.f, 100.f);
-	S.Addiction = FMath::Clamp(S.Addiction, 0.f, 100.f);
+	// stabiel over save/load en op host+client).
+	RollPersonality(static_cast<int32>(GetTypeHash(NpcId)), S.Respect, S.Loyalty, S.Addiction);
 	States.Add(S);
 	return NpcId;
 }
