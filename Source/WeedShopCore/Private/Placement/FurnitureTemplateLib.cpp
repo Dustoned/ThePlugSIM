@@ -52,23 +52,27 @@ namespace
 	struct FPlaced { FName ItemId; FVector Loc; float Yaw; };
 
 	// Verzamel alle geplaatste meubel-actors met hun item-id.
+	// Auto-geplaatste fixtures (default-layout) worden bij capture GENEGEERD; alleen wat de speler zelf
+	// neerzette telt mee.
+	bool IsAuto(const AActor* A) { return A && A->ActorHasTag(FName(TEXT("AutoFixture"))); }
+
 	void GatherPlaced(UWorld* W, TArray<FPlaced>& Out)
 	{
 		for (TActorIterator<APlaceableProp> It(W); It; ++It)
 		{
-			if (IsValid(*It) && !It->ItemId.IsNone()) { Out.Add({ It->ItemId, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+			if (IsValid(*It) && !It->ItemId.IsNone() && !IsAuto(*It)) { Out.Add({ It->ItemId, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 		for (TActorIterator<AWaterSink> It(W); It; ++It)
 		{
-			if (IsValid(*It)) { Out.Add({ FName(TEXT("Sink")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+			if (IsValid(*It) && !IsAuto(*It)) { Out.Add({ FName(TEXT("Sink")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 		for (TActorIterator<ADryingRack> It(W); It; ++It)
 		{
-			if (IsValid(*It)) { const FName Id = It->RackTier.IsNone() ? FName(TEXT("DryRack_Std")) : It->RackTier; Out.Add({ Id, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+			if (IsValid(*It) && !IsAuto(*It)) { const FName Id = It->RackTier.IsNone() ? FName(TEXT("DryRack_Std")) : It->RackTier; Out.Add({ Id, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 		for (TActorIterator<APackBench> It(W); It; ++It)
 		{
-			if (IsValid(*It)) { const FName Id = It->BenchTier.IsNone() ? FName(TEXT("Bench_Pack")) : It->BenchTier; Out.Add({ Id, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+			if (IsValid(*It) && !IsAuto(*It)) { const FName Id = It->BenchTier.IsNone() ? FName(TEXT("Bench_Pack")) : It->BenchTier; Out.Add({ Id, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 	}
 }
@@ -132,8 +136,12 @@ int32 FurnitureTemplates::SaveFromWorld(UWorld* W, ACityGenerator* City)
 		if (Count > BestCountPerType.FindRef(Type)) { BestCountPerType.Add(Type, Count); BestHomePerType.Add(Type, KV.Key); }
 	}
 
-	// Schrijf: per type de entries als lokale offset t.o.v. de sjabloon-woning.
-	FString Text;
+	// MERGE: begin vanaf de bestaande templates (file of ingebakken default) en overschrijf ALLEEN de
+	// types die je deze keer opnieuw hebt ingericht. Zo blijven types die je niet aanraakt behouden
+	// (bv. je goede starter), terwijl de rest netjes vervangen wordt.
+	TMap<FString, TArray<FFurnitureEntry>> Merged;
+	LoadTemplates(Merged);
+
 	int32 Types = 0;
 	for (const TPair<FString, int32>& KV : BestHomePerType)
 	{
@@ -143,18 +151,30 @@ int32 FurnitureTemplates::SaveFromWorld(UWorld* W, ACityGenerator* City)
 		// Canoniek frame: lokale X = de LANGE muur-as van de kamer, lokale Y = de korte. Zo is de layout
 		// oriëntatie-onafhankelijk en draait 'ie bij het plaatsen mee naar elk huis.
 		const bool bLongX = H.RoomHalf.X >= H.RoomHalf.Y;
+		TArray<FFurnitureEntry> Entries;
 		for (const FPlaced& P : PerHome[Hi])
 		{
 			const FVector D = P.Loc - H.InteriorPos;
-			const float LLong = bLongX ? D.X : D.Y;
-			const float LShort = bLongX ? D.Y : D.X;
-			const float LYaw = P.Yaw - (bLongX ? 0.f : 90.f);
-			Text += FString::Printf(TEXT("%s|%s|%.1f|%.1f|%.1f|%.1f\n"),
-				*Type, *P.ItemId.ToString(), LLong, LShort, D.Z, LYaw);
+			FFurnitureEntry E;
+			E.ItemId = P.ItemId;
+			E.Local = FVector(bLongX ? D.X : D.Y, bLongX ? D.Y : D.X, D.Z);
+			E.Yaw = P.Yaw - (bLongX ? 0.f : 90.f);
+			Entries.Add(E);
 		}
+		Merged.Add(Type, Entries); // overschrijf dit type
 		++Types;
 	}
 
+	// Serialiseer de volledige merged-map.
+	FString Text;
+	for (const TPair<FString, TArray<FFurnitureEntry>>& KV : Merged)
+	{
+		for (const FFurnitureEntry& E : KV.Value)
+		{
+			Text += FString::Printf(TEXT("%s|%s|%.1f|%.1f|%.1f|%.1f\n"),
+				*KV.Key, *E.ItemId.ToString(), E.Local.X, E.Local.Y, E.Local.Z, E.Yaw);
+		}
+	}
 	FFileHelper::SaveStringToFile(Text, *FilePath());
 	return Types;
 }

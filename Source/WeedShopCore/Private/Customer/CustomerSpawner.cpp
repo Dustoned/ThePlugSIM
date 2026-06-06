@@ -547,7 +547,7 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 	{
 		const FTransform TM(FRotator(0.f, Yaw, 0.f), Loc);
 		APlaceableProp* P = World->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		if (P) { P->ItemId = ItemId; P->FinishSpawning(TM); if (bCosmetic) { P->Tags.Add(FName(TEXT("Cosmetic"))); } }
+		if (P) { P->ItemId = ItemId; P->FinishSpawning(TM); P->Tags.Add(FName(TEXT("AutoFixture"))); if (bCosmetic) { P->Tags.Add(FName(TEXT("Cosmetic"))); } }
 	};
 
 	// --- Meubels in de woningen ---
@@ -582,7 +582,10 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		{
 			if (const TArray<FFurnitureEntry>* Entries = Templates.Find(Type))
 			{
-				for (const FFurnitureEntry& E : *Entries) { FurnitureTemplates::SpawnEntry(World, E, C, R, bCosmetic); }
+				for (const FFurnitureEntry& E : *Entries)
+				{
+					if (AActor* A = FurnitureTemplates::SpawnEntry(World, E, C, R, bCosmetic)) { A->Tags.Add(FName(TEXT("AutoFixture"))); }
+				}
 				KeyMatched.Add(Type); ++NTpl;
 				continue;
 			}
@@ -599,7 +602,7 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 			FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
 			FActorSpawnParameters SkSP; SkSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc), SkSP);
-			if (Sink) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); } // sink = altijd vaste fixture
+			if (Sink) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); Sink->Tags.Add(FName(TEXT("AutoFixture"))); } // vaste fixture + niet in capture
 		}
 	}
 
