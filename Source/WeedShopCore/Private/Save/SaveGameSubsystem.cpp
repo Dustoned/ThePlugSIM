@@ -319,7 +319,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 		if (!P) { return; }
 		if (UEconomyComponent* Econ = P->FindComponentByClass<UEconomyComponent>())
 		{
-			Econ->SetBalanceCents(42000); // EUR 420 cash
+			Econ->SetBalanceCents(15000); // EUR 150 cash
 		}
 		if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
