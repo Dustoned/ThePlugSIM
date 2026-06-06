@@ -52,61 +52,32 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 		Root->SetContent(Ov);
 
-		if (bHotbar)
+		// Icoon ALTIJD gecentreerd -> rooster-cellen zien er hetzelfde uit als de hotbar-icon-slots.
+		// (Naam/details staan in de hover-tooltip; aantal staat als badge in de hoek.)
 		{
-			// Compacte hotbar-cel: icoon gecentreerd; slotnummer linksboven; aantal rechtsonder.
 			UOverlaySlot* IconOS = Ov->AddChildToOverlay(
 				bHasIcon ? WeedUI::ItemIcon(WidgetTree, IconId, IconSize)
 				         : Cast<UWidget>(WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor::Transparent)));
 			IconOS->SetHorizontalAlignment(HAlign_Center);
 			IconOS->SetVerticalAlignment(VAlign_Center);
 		}
-		else
+		// Merge-knopje onderaan (alleen rooster) als er meerdere stapels van dit item zijn.
+		if (bShowMerge && !bHotbar)
 		{
-			// Rooster-cel: icoon links, naam (mag afbreken) + sub-regel rechts.
-			UHorizontalBox* HB = WidgetTree->ConstructWidget<UHorizontalBox>();
-			Ov->AddChildToOverlay(HB);
-
-			if (bHasIcon)
-			{
-				USizeBox* IconSz = WidgetTree->ConstructWidget<USizeBox>();
-				IconSz->SetWidthOverride(IconSize); IconSz->SetHeightOverride(IconSize);
-				IconSz->SetContent(WeedUI::ItemIcon(WidgetTree, IconId, IconSize));
-				UHorizontalBoxSlot* IS = HB->AddChildToHorizontalBox(IconSz);
-				IS->SetVerticalAlignment(VAlign_Center);
-				IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-			}
-
-			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-			UHorizontalBoxSlot* VBS = HB->AddChildToHorizontalBox(VB);
-			VBS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			VBS->SetVerticalAlignment(VAlign_Center);
-
-			if (!Line1.IsEmpty())
-			{
-				UTextBlock* T1 = WeedUI::Text(WidgetTree, Line1, 12, FLinearColor(0.93f, 0.95f, 1.f), false, true);
-				T1->SetAutoWrapText(true);
-				VB->AddChildToVerticalBox(T1);
-			}
-			if (!Line2.IsEmpty())
-			{
-				VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Line2, 10, FLinearColor(0.68f, 0.72f, 0.82f)));
-			}
-			if (bShowMerge)
-			{
-				UWeedActionButton* M = WidgetTree->ConstructWidget<UWeedActionButton>();
-				M->OnClicked.AddDynamic(M, &UWeedActionButton::Handle);
-				TFunction<void()> Fn = MergeFn;
-				M->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
-				FButtonStyle S;
-				S.Normal = WeedUI::Rounded(FLinearColor(0.5f, 0.4f, 0.1f), 6.f);
-				S.Hovered = WeedUI::Rounded(FLinearColor(0.65f, 0.52f, 0.13f), 6.f);
-				S.Pressed = WeedUI::Rounded(FLinearColor(0.4f, 0.32f, 0.08f), 6.f);
-				S.NormalPadding = FMargin(6.f, 2.f); S.PressedPadding = FMargin(6.f, 2.f);
-				M->SetStyle(S);
-				M->SetContent(WeedUI::Text(WidgetTree, TEXT("Merge"), 10, FLinearColor::White, true));
-				VB->AddChildToVerticalBox(M)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-			}
+			UWeedActionButton* M = WidgetTree->ConstructWidget<UWeedActionButton>();
+			M->OnClicked.AddDynamic(M, &UWeedActionButton::Handle);
+			TFunction<void()> Fn = MergeFn;
+			M->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
+			FButtonStyle S;
+			S.Normal = WeedUI::Rounded(FLinearColor(0.45f, 0.36f, 0.10f, 0.92f), 5.f);
+			S.Hovered = WeedUI::Rounded(FLinearColor(0.62f, 0.50f, 0.13f), 5.f);
+			S.Pressed = WeedUI::Rounded(FLinearColor(0.38f, 0.30f, 0.08f), 5.f);
+			S.NormalPadding = FMargin(5.f, 1.f); S.PressedPadding = FMargin(5.f, 1.f);
+			M->SetStyle(S);
+			M->SetContent(WeedUI::Text(WidgetTree, TEXT("merge"), 8, FLinearColor::White, true));
+			UOverlaySlot* MS = Ov->AddChildToOverlay(M);
+			MS->SetHorizontalAlignment(HAlign_Center);
+			MS->SetVerticalAlignment(VAlign_Bottom);
 		}
 
 		// Slotnummer (hotbar) linksboven.
@@ -153,13 +124,20 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	Op->StackId = StackId;
 	Op->FromSlot = SlotIndex;
 	Op->FromCell = GridCell;
-	Op->Pivot = EDragPivot::MouseDown;
+	Op->Pivot = EDragPivot::CenterCenter; // visual zit precies ONDER de cursor
 
-	// Klein sleep-visueel: het label in een afgeronde kaart.
-	UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-	Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.18f, 0.4f, 0.55f, 0.95f), 8.f));
-	Vis->SetPadding(FMargin(8.f, 5.f, 8.f, 5.f));
-	Vis->SetContent(WeedUI::Text(WidgetTree, Line1.IsEmpty() ? TEXT("item") : Line1, 11, FLinearColor::White, true));
+	// Sleep-visual = het ECHTE item-icoon, gecentreerd op de muis (geen losse tag ernaast meer).
+	const float DragSize = 54.f;
+	USizeBox* Vis = WidgetTree->ConstructWidget<USizeBox>();
+	Vis->SetWidthOverride(DragSize); Vis->SetHeightOverride(DragSize);
+	if (!IconId.IsNone())
+	{
+		Vis->SetContent(WeedUI::ItemIcon(WidgetTree, IconId, DragSize));
+	}
+	else
+	{
+		Vis->SetContent(WeedUI::Text(WidgetTree, Line1.IsEmpty() ? TEXT("item") : Line1, 11, FLinearColor::White, true));
+	}
 	Op->DefaultDragVisual = Vis;
 
 	OutOperation = Op;
@@ -420,12 +398,12 @@ void UInventoryWidget::RebuildContent()
 		if (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId)) { continue; }
 
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(176.f); Sz->SetHeightOverride(72.f);
+		Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); // vierkante icon-slot zoals de hotbar
 
 		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
 		Cell->SlotIndex = -1; Cell->GridCell = cell;
 		Cell->Inv = Inv; Cell->Owner = this;
-		Cell->IconSize = 40.f;
+		Cell->IconSize = 50.f;
 
 		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx));
 		if (bShowItem)
@@ -453,7 +431,7 @@ void UInventoryWidget::RebuildContent()
 			{
 				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.09f, 0.97f);
 				Cell->Line2 = FString::Printf(TEXT("EUR %d"), S.Quantity);
-				Cell->Badge.Empty();
+				Cell->Badge = (S.Quantity >= 1000) ? FString::Printf(TEXT("%.0fk"), S.Quantity / 1000.f) : FString::Printf(TEXT("%d"), S.Quantity);
 				Cell->Tooltip += FString::Printf(TEXT("\nEUR %d contant"), S.Quantity);
 			}
 			else if (bWet)
