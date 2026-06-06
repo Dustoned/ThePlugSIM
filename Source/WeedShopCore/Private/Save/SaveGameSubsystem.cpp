@@ -464,6 +464,7 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 		{
 			if (S.ItemId == FName(TEXT("Cash")) || S.Quantity <= 0) { continue; } // cash = afgeleid van economy
 			FInvSaveItem It; It.ItemId = S.ItemId; It.Quantity = S.Quantity; It.Thc = S.Quality; It.QualityPct = S.QualityPct;
+			It.GridCell = Inv->GetStackCell(S.StackId); // bewaar de exacte slot-positie
 			Out.Items.Add(It);
 		}
 	}
@@ -489,8 +490,15 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	}
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
-		Inv->ClearAll();
-		for (const FInvSaveItem& It : Data.Items) { Inv->AddItem(It.ItemId, It.Quantity, It.Thc, It.QualityPct); }
+		// Zet de stacks EXACT terug op hun opgeslagen slot (geen merge/sortering -> slots wisselen niet).
+		TArray<FInventoryStack> RestoredStacks; TArray<int32> Cells;
+		RestoredStacks.Reserve(Data.Items.Num()); Cells.Reserve(Data.Items.Num());
+		for (const FInvSaveItem& It : Data.Items)
+		{
+			FInventoryStack S; S.ItemId = It.ItemId; S.Quantity = It.Quantity; S.Quality = It.Thc; S.QualityPct = It.QualityPct;
+			RestoredStacks.Add(S); Cells.Add(It.GridCell);
+		}
+		Inv->RestoreStacksAndGrid(RestoredStacks, Cells);
 	}
 
 	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "ga naar het save-punt").

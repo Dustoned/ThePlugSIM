@@ -76,6 +76,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void ClearAll();
 
+	// Server. Zet de inventory EXACT terug zoals opgeslagen: elke stack op z'n opgeslagen grid-cel,
+	// geen merge/sortering. InCells[i] = grid-cel van InStacks[i] (-1 = eerste vrije). De cash-stack
+	// (afgeleid van economy) blijft op cel 0. Voor save/load zodat slots niet meer wisselen.
+	void RestoreStacksAndGrid(const TArray<FInventoryStack>& InStacks, const TArray<int32>& InCells);
+
 	// Totaal aantal van dit item over alle stapels.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetQuantity(FName ItemId) const;

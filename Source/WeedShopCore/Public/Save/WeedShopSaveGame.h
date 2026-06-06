@@ -16,6 +16,7 @@ struct FInvSaveItem
 	UPROPERTY() int32 Quantity = 0;
 	UPROPERTY() float Thc = 0.f;
 	UPROPERTY() float QualityPct = 0.f;
+	UPROPERTY() int32 GridCell = -1; // slot-positie in de inventory-grid (-1 = onbekend/oude save)
 };
 
 // --- Geplaatste wereld-objecten ---

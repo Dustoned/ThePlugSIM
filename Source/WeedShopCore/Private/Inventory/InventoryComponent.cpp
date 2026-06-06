@@ -322,6 +322,52 @@ void UInventoryComponent::ClearAll()
 	OnRep_Stacks();
 }
 
+void UInventoryComponent::RestoreStacksAndGrid(const TArray<FInventoryStack>& InStacks, const TArray<int32>& InCells)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+
+	// Bewaar de huidige cash-stack (afgeleid van economy, niet in de save) -> komt op cel 0.
+	FInventoryStack CashStack; bool bHadCash = false;
+	for (const FInventoryStack& S : Stacks) { if (S.ItemId == FName(TEXT("Cash"))) { CashStack = S; bHadCash = true; break; } }
+
+	Stacks.Reset();
+	KnownStacks.Reset();
+	GridOrder.Reset();
+	const int32 Cells = (MaxStacks > 0) ? MaxStacks : (InStacks.Num() + 1);
+	GridOrder.SetNumZeroed(Cells);
+
+	if (bHadCash)
+	{
+		CashStack.StackId = NextStackId++;
+		Stacks.Add(CashStack);
+		KnownStacks.Add(CashStack.StackId);
+		if (GridOrder.Num() > 0) { GridOrder[0] = CashStack.StackId; }
+	}
+
+	for (int32 i = 0; i < InStacks.Num(); ++i)
+	{
+		const FInventoryStack& Src = InStacks[i];
+		if (Src.ItemId.IsNone() || Src.Quantity <= 0 || Src.ItemId == FName(TEXT("Cash"))) { continue; }
+		FInventoryStack NewS = Src;
+		NewS.StackId = NextStackId++;
+		Stacks.Add(NewS);
+		KnownStacks.Add(NewS.StackId);
+
+		const int32 Cell = InCells.IsValidIndex(i) ? InCells[i] : INDEX_NONE;
+		if (GridOrder.IsValidIndex(Cell) && GridOrder[Cell] == 0)
+		{
+			GridOrder[Cell] = NewS.StackId; // exact terug op z'n opgeslagen plek
+		}
+		else
+		{
+			const int32 Empty = GridOrder.IndexOfByKey(0);
+			if (Empty != INDEX_NONE) { GridOrder[Empty] = NewS.StackId; } else { GridOrder.Add(NewS.StackId); }
+		}
+	}
+
+	OnRep_Stacks(); // RefreshGridAuto behoudt bovenstaande plaatsing + vult eventuele rest
+}
+
 int32 UInventoryComponent::GetQuantity(FName ItemId) const
 {
 	int32 Total = 0;
