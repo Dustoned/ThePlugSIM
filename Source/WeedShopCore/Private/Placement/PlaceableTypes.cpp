@@ -30,6 +30,19 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Sink"), TEXT("Sink"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.8f, 0.55f, 0.9f), FVector(40.f, 27.f, 45.f), false, 0, false, false, false, false, false, /*bIsSink*/ true },
 		// Plafondlamp: warme spot. Spawnt een ACeilingLamp. Binnen plaatsen.
 		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("/Engine/BasicShapes/Cone.Cone"), FVector(0.28f, 0.28f, 0.22f), FVector(20.f, 20.f, 14.f), false, 0, false, false, false, false, false, false, /*bIsLamp*/ true },
+		// --- Pot-gear: fysieke accessoires die je NAAST/op je pot zet; de pot leest welke vlakbij staan en
+		//     past die bonus toe zolang 't accessoire er staat. Generieke props (oppakken = terug in inv).
+		{ TEXT("Gear_Drainage"),  TEXT("Drainage layer"),  TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.26f, 0.26f, 0.18f), FVector(13.f, 13.f, 9.f),  false, 1200 },
+		{ TEXT("Gear_Insulation"),TEXT("Insulation wrap"),  TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 1600 },
+		{ TEXT("Gear_Bloom"),     TEXT("Bloom booster"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.24f, 0.24f, 0.30f), FVector(12.f, 12.f, 15.f), false, 2000 },
+		{ TEXT("Gear_Lamp1"),     TEXT("Grow lamp I"),      TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.55f), FVector(15.f, 15.f, 28.f), false, 2400 },
+		{ TEXT("Gear_Lamp2"),     TEXT("Grow lamp II"),     TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.34f, 0.34f, 0.60f), FVector(17.f, 17.f, 30.f), false, 4800 },
+		{ TEXT("Gear_Lamp3"),     TEXT("Grow lamp III"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.38f, 0.38f, 0.66f), FVector(19.f, 19.f, 33.f), false, 8800 },
+		{ TEXT("Gear_Tent1"),     TEXT("Grow tent I"),      TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.55f, 0.55f, 0.80f), FVector(27.f, 27.f, 40.f), false, 2800 },
+		{ TEXT("Gear_Tent2"),     TEXT("Grow tent II"),     TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.62f, 0.62f, 0.88f), FVector(31.f, 31.f, 44.f), false, 5200 },
+		{ TEXT("Gear_Tent3"),     TEXT("Grow tent III"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.70f, 0.70f, 0.96f), FVector(35.f, 35.f, 48.f), false, 9600 },
+		{ TEXT("Gear_Water1"),    TEXT("Auto-water I"),     TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.30f, 0.30f, 0.55f), FVector(15.f, 15.f, 28.f), false, 5600 },
+		{ TEXT("Gear_Water2"),    TEXT("Auto-water II"),    TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.34f, 0.34f, 0.62f), FVector(17.f, 17.f, 31.f), false, 10400 },
 	};
 	return Defs;
 }

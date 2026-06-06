@@ -55,3 +55,9 @@ int32 HighestOwnedTier(int32 Mask, const TArray<int32>& BitIndices);
 
 // Of dit item-id een pot is (begint met "Pot").
 bool IsPotItem(FName ItemId);
+
+// --- Pot-gear: fysieke accessoires die je naast de pot zet (i.p.v. abstracte upgrades) ---
+// Upgrade-index (0..10, zie GetPotUpgrades) van een gear-item-id; -1 als het geen gear is.
+int32 GearUpgradeIndex(FName ItemId);
+// Het gear-item-id voor een upgrade-index (NAME_None als ongeldig).
+FName GearItemForUpgrade(int32 UpgIndex);

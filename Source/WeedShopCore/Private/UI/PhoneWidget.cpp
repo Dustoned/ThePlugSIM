@@ -79,7 +79,7 @@ namespace
 		case 5: return TEXT("Soil");
 		case 6: return TEXT("Water");
 		case 7: return TEXT("Furniture");
-		case 8: return TEXT("Upgrades");
+		case 8: return TEXT("Pot gear");
 		case 9: return TEXT("Care");
 		default: return TEXT("?");
 		}
@@ -919,13 +919,7 @@ void UPhoneWidget::FillStoreList()
 		return;
 	}
 
-	// --- Pot Upgrades-tab (Grow shop, cat 8): per geplaatste pot de upgrades kopen ---
-	if (Cat == 8 && !bCartView)
-	{
-		FillPotUpgradesInto(StoreScroll);
-		return;
-	}
-
+	// Pot-gear (cat 8) wordt nu een NORMALE koop-categorie: fysieke accessoires die je naast je pot zet.
 	if (bCartView)
 	{
 		const int32 Lines = Ph->GetCartNumLines();

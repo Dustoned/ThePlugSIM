@@ -72,7 +72,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	FName GetPotTier() const { return PotTier; }
 
-	// Per-pot upgrades als bit-masker (bit i = upgrade i). Verdwijnt met de pot.
+	// Per-pot upgrades als bit-masker (bit i = upgrade i). Wordt nu AFGELEID van fysieke gear-accessoires
+	// die vlakbij de pot staan (zie RecomputeGearUpgradeMask), niet meer apart gekocht.
 	UPROPERTY(Replicated)
 	int32 PotUpgradeMask = 0;
 
@@ -80,6 +81,10 @@ public:
 	bool HasPotUpgrade(int32 UpgIndex) const { return (PotUpgradeMask & (1 << UpgIndex)) != 0; }
 
 	void ApplyPotUpgrade(int32 UpgIndex) { PotUpgradeMask |= (1 << UpgIndex); }
+
+	// Server: herbereken het upgrade-masker uit gear-accessoires (Gear_*) die binnen bereik staan.
+	void RecomputeGearUpgradeMask(float DeltaSeconds);
+	float GearScanTimer = 0.f; // throttle voor de gear-scan
 
 	// Versnelt de groei (1 = realistisch; hoger = sneller voor demo/testen).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")

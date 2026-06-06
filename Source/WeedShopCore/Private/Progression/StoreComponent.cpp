@@ -156,6 +156,18 @@ namespace
 		{ TEXT("Spray_Fungicide"),  TEXT("Fungicide spray"),  TEXT("Cures MOLD on a plant"),            2500, 5 },
 		{ TEXT("Spray_Pesticide"),  TEXT("Pesticide spray"),  TEXT("Cures PESTS on a plant"),           2500, 5 },
 		{ TEXT("Spray_Broad"),      TEXT("Broad-spectrum spray"), TEXT("Cures both mold AND pests"),    6000, 5 },
+		// Pot-gear: fysieke accessoires. Koop -> plaats naast je pot -> bonus zolang 't er staat.
+		{ TEXT("Gear_Drainage"),  TEXT("Drainage layer"), TEXT("+10% max quality (place by a pot)"),   3000, 1 },
+		{ TEXT("Gear_Insulation"),TEXT("Insulation wrap"),TEXT("Dries out 2x slower"),                  4000, 1 },
+		{ TEXT("Gear_Bloom"),     TEXT("Bloom booster"),  TEXT("+20% harvest yield"),                   5000, 1 },
+		{ TEXT("Gear_Lamp1"),     TEXT("Grow lamp I"),    TEXT("+15% faster growth"),                   6000, 1 },
+		{ TEXT("Gear_Lamp2"),     TEXT("Grow lamp II"),   TEXT("+30% faster growth"),                  12000, 1 },
+		{ TEXT("Gear_Lamp3"),     TEXT("Grow lamp III"),  TEXT("+50% faster growth"),                  22000, 1 },
+		{ TEXT("Gear_Tent1"),     TEXT("Grow tent I"),    TEXT("+8% max quality"),                      7000, 1 },
+		{ TEXT("Gear_Tent2"),     TEXT("Grow tent II"),   TEXT("+15% max quality"),                    13000, 1 },
+		{ TEXT("Gear_Tent3"),     TEXT("Grow tent III"),  TEXT("+22% max quality"),                    24000, 1 },
+		{ TEXT("Gear_Water1"),    TEXT("Auto-water I"),   TEXT("Keeps the pot watered"),               14000, 1 },
+		{ TEXT("Gear_Water2"),    TEXT("Auto-water II"),  TEXT("Watered + nutrients (+10% yield)"),     26000, 1 },
 	};
 }
 
@@ -397,6 +409,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
 			case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
 			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")); break;
+			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
 			default: break;
 			}

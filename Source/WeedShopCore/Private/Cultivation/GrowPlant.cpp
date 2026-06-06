@@ -17,6 +17,8 @@
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
+#include "EngineUtils.h"
+#include "Placement/PlaceableProp.h"
 
 // Aantal bladeren en toppen per plant (samengestelde plant-look).
 static constexpr int32 FoliagePerPlant = 6;
@@ -264,9 +266,38 @@ const FWeedStrainRow* AGrowPlant::GetStrainRow(FName StrainId) const
 	return StrainTable->FindRow<FWeedStrainRow>(StrainId, TEXT("AGrowPlant::GetStrainRow"), false);
 }
 
+void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
+{
+	GearScanTimer -= DeltaSeconds;
+	if (GearScanTimer > 0.f) { return; }
+	GearScanTimer = 0.5f; // niet elke tick scannen
+
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FVector C = GetActorLocation();
+	int32 Mask = 0;
+	for (TActorIterator<APlaceableProp> It(W); It; ++It)
+	{
+		APlaceableProp* P = *It;
+		if (!IsValid(P)) { continue; }
+		const int32 Ui = GearUpgradeIndex(P->ItemId);
+		if (Ui < 0) { continue; }
+		const FVector L = P->GetActorLocation();
+		if (FVector::Dist2D(L, C) <= 175.f && FMath::Abs(L.Z - C.Z) <= 280.f)
+		{
+			Mask |= (1 << Ui); // gear staat vlakbij -> bonus actief
+		}
+	}
+	PotUpgradeMask = Mask; // afgeleid van de fysieke gear; vervangt het oude koop-upgrade-systeem
+}
+
 void AGrowPlant::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (HasAuthority())
+	{
+		RecomputeGearUpgradeMask(DeltaSeconds); // pot-gear bepaalt nu de bonussen (geen abstracte upgrades meer)
+	}
 	if (!HasAuthority() || GetPlantedCount() == 0)
 	{
 		return;

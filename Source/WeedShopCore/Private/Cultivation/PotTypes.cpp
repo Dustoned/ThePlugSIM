@@ -30,6 +30,36 @@ bool IsPotItem(FName ItemId)
 	return ItemId.ToString().StartsWith(TEXT("Pot"));
 }
 
+// Gear-item-ids, op volgorde van upgrade-index (0..10, gelijk aan GetPotUpgrades()).
+static const TCHAR* const GGearItems[] = {
+	TEXT("Gear_Drainage"),  // 0 drainage
+	TEXT("Gear_Insulation"),// 1 isolatie
+	TEXT("Gear_Bloom"),     // 2 bloom booster
+	TEXT("Gear_Lamp1"),     // 3 grow lamp I
+	TEXT("Gear_Lamp2"),     // 4 grow lamp II
+	TEXT("Gear_Lamp3"),     // 5 grow lamp III
+	TEXT("Gear_Tent1"),     // 6 grow tent I
+	TEXT("Gear_Tent2"),     // 7 grow tent II
+	TEXT("Gear_Tent3"),     // 8 grow tent III
+	TEXT("Gear_Water1"),    // 9 auto-water I
+	TEXT("Gear_Water2"),    // 10 auto-water II
+};
+
+int32 GearUpgradeIndex(FName ItemId)
+{
+	for (int32 i = 0; i < UE_ARRAY_COUNT(GGearItems); ++i)
+	{
+		if (ItemId == FName(GGearItems[i])) { return i; }
+	}
+	return -1;
+}
+
+FName GearItemForUpgrade(int32 UpgIndex)
+{
+	if (UpgIndex < 0 || UpgIndex >= UE_ARRAY_COUNT(GGearItems)) { return NAME_None; }
+	return FName(GGearItems[UpgIndex]);
+}
+
 const TArray<FPotUpgradeDef>& GetPotUpgrades()
 {
 	// Name, Desc, BaseCost, MinPotTier(0=Broken..3=Fabric), MinLevel, PrereqIndex
