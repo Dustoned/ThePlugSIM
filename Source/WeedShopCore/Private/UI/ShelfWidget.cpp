@@ -14,9 +14,93 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/WrapBox.h"
+#include "Components/SizeBox.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
+#include "InputCoreTypes.h"
+#include "Input/Reply.h"
 
+// ---------------------------------------------------------------------------
+//  UShelfCell — sleepbare/droppbare cel
+// ---------------------------------------------------------------------------
+TSharedRef<SWidget> UShelfCell::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		const bool bHasItem = !ItemId.IsNone();
+		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ShelfCellRoot"));
+		Root->SetBrush(WeedUI::Rounded(bHasItem ? FLinearColor(0.11f, 0.13f, 0.17f, 0.96f) : FLinearColor(0.08f, 0.09f, 0.12f, 0.45f), 8.f));
+		Root->SetPadding(FMargin(5.f));
+		WidgetTree->RootWidget = Root;
+
+		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+		Root->SetContent(Ov);
+
+		if (bHasItem)
+		{
+			UOverlaySlot* IconOS = Ov->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, ItemId, IconSize));
+			IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
+			if (!Badge.IsEmpty())
+			{
+				UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
+				Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
+				Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
+				Pill->SetContent(WeedUI::Text(WidgetTree, Badge, 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
+				UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
+				PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Bottom);
+			}
+		}
+		else
+		{
+			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("+"), 20, FLinearColor(0.4f, 0.45f, 0.55f), true));
+			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
+		}
+	}
+	if (!Tooltip.IsEmpty()) { SetToolTipText(FText::FromString(Tooltip)); }
+	SetVisibility(ESlateVisibility::Visible);
+	return Super::RebuildWidget();
+}
+
+FReply UShelfCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (!ItemId.IsNone() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+	}
+	return FReply::Unhandled();
+}
+
+void UShelfCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
+{
+	if (ItemId.IsNone()) { return; }
+	UShelfDragOp* Op = NewObject<UShelfDragOp>(this);
+	Op->bFromShelf = bShelfSide;
+	Op->ShelfIndex = ShelfIndex;
+	Op->ItemId = ItemId;
+	Op->Qty = Qty;
+	Op->Pivot = EDragPivot::CenterCenter;
+
+	USizeBox* Vis = WidgetTree->ConstructWidget<USizeBox>();
+	Vis->SetWidthOverride(52.f); Vis->SetHeightOverride(52.f);
+	Vis->SetContent(WeedUI::ItemIcon(WidgetTree, ItemId, 52.f));
+	Op->DefaultDragVisual = Vis;
+	OutOperation = Op;
+}
+
+bool UShelfCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	UShelfDragOp* Op = Cast<UShelfDragOp>(InOperation);
+	if (!Op || !Owner.IsValid()) { return false; }
+	Owner->HandleShelfDrop(bShelfSide, Op); // bShelfSide = de kolom waar je losliet
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+//  UShelfWidget
+// ---------------------------------------------------------------------------
 void UShelfWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
 
 namespace
@@ -61,22 +145,23 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(640.f, 460.f));
+	CS->SetSize(FVector2D(680.f, 470.f));
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
 	UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(Outer);
 
-	// Kop-balk.
 	UHorizontalBox* HeadRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-	TitleText = WeedUI::Text(WidgetTree, TEXT("STORAGE SHELF"), 18, FLinearColor(0.6f, 0.85f, 1.f), false, true);
+	TitleText = WeedUI::Text(WidgetTree, TEXT("STORAGE"), 18, FLinearColor(0.6f, 0.85f, 1.f), false, true);
 	UHorizontalBoxSlot* TS = HeadRow->AddChildToHorizontalBox(TitleText);
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
 	HeadRow->AddChildToHorizontalBox(ShelfBtn(WidgetTree, TEXT("Exit"), FLinearColor(0.4f, 0.2f, 0.2f),
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseShelf(); } }));
-	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	// Twee kolommen.
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep items tussen het schap en je inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))
+		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+
 	UHorizontalBox* Cols = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UVerticalBoxSlot* ColsSlot = Outer->AddChildToVerticalBox(Cols);
 	ColsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -94,10 +179,27 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 		return B;
 	};
 
-	UWidget* ShelfCol = MakeColumn(TEXT("On the shelf  (take)"), FLinearColor(0.6f, 0.85f, 1.f), ShelfList);
-	UWidget* InvCol = MakeColumn(TEXT("Your inventory  (store)"), FLinearColor(0.7f, 1.f, 0.75f), InvList);
+	UWidget* ShelfCol = MakeColumn(TEXT("In het schap"), FLinearColor(0.6f, 0.85f, 1.f), ShelfList);
+	UWidget* InvCol = MakeColumn(TEXT("Jouw inventory"), FLinearColor(0.7f, 1.f, 0.75f), InvList);
 	UHorizontalBoxSlot* L = Cols->AddChildToHorizontalBox(ShelfCol); L->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); L->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
 	UHorizontalBoxSlot* R = Cols->AddChildToHorizontalBox(InvCol);  R->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); R->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+}
+
+void UShelfWidget::HandleShelfDrop(bool bDroppedOnShelfSide, UShelfDragOp* Op)
+{
+	if (!Op || !PhoneComp.IsValid()) { return; }
+	UPhoneClientComponent* Ph = PhoneComp.Get();
+	if (bDroppedOnShelfSide && !Op->bFromShelf)
+	{
+		// Inventory -> schap: opslaan.
+		if (!Op->ItemId.IsNone() && Op->Qty > 0) { Ph->RequestShelfStore(Op->ItemId, Op->Qty); }
+	}
+	else if (!bDroppedOnShelfSide && Op->bFromShelf)
+	{
+		// Schap -> inventory: eruit halen.
+		if (Op->ShelfIndex >= 0 && Op->Qty > 0) { Ph->RequestShelfTake(Op->ShelfIndex, Op->Qty); }
+	}
+	LastSig.Reset(); // forceer een refresh
 }
 
 void UShelfWidget::FillBody()
@@ -113,94 +215,75 @@ void UShelfWidget::FillBody()
 		TitleText->SetText(FText::FromString(FString::Printf(TEXT("%s   (%d/%d)"), *Shelf->GetTitle(), Shelf->Contents.Num(), Shelf->GetCapacity())));
 	}
 
-	auto MakeRow = [this](UScrollBox* Into, const FString& Name, const FString& Sub, TFunction<void()> OneFn, const FString& OneLbl,
-		TFunction<void()> AllFn, const FString& AllLbl, const FLinearColor& BtnCol)
+	auto MakeCell = [this](bool bShelfSide, int32 ShelfIdx, FName Id, int32 Q, float Thc) -> UShelfCell*
 	{
-		UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
-		Card->SetBrush(WeedUI::Rounded(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 7.f));
-		Card->SetPadding(FMargin(7.f, 5.f, 7.f, 5.f));
-		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-		Card->SetContent(VB);
-		UTextBlock* NameT = WeedUI::Text(WidgetTree, Name, 12, FLinearColor(0.95f, 0.97f, 1.f));
-		NameT->SetClipping(EWidgetClipping::ClipToBounds);
-		VB->AddChildToVerticalBox(NameT);
-		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UHorizontalBoxSlot* SubS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Sub, 10, FLinearColor(0.62f, 0.66f, 0.76f)));
-		SubS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SubS->SetVerticalAlignment(VAlign_Center);
-		Row->AddChildToHorizontalBox(ShelfBtn(WidgetTree, OneLbl, BtnCol, OneFn))->SetPadding(FMargin(2.f, 0.f, 0.f, 0.f));
-		Row->AddChildToHorizontalBox(ShelfBtn(WidgetTree, AllLbl, BtnCol, AllFn))->SetPadding(FMargin(3.f, 0.f, 0.f, 0.f));
-		VB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
-		Into->AddChild(Card);
-		Into->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
+		UShelfCell* C = WidgetTree->ConstructWidget<UShelfCell>();
+		C->bShelfSide = bShelfSide; C->ShelfIndex = ShelfIdx; C->ItemId = Id; C->Qty = Q; C->Thc = Thc; C->Owner = this;
+		if (!Id.IsNone())
+		{
+			const FString S = Id.ToString();
+			const bool bWeed = S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Joint_")) || S.StartsWith(TEXT("WetBud_"));
+			C->Badge = bWeed ? FString::Printf(TEXT("%dg"), Q) : FString::Printf(TEXT("x%d"), Q);
+			C->Tooltip = bWeed ? FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, Thc)
+			                   : FString::Printf(TEXT("%s\nAantal: %d"), *WeedUI::PrettyItemName(Id), Q);
+		}
+		return C;
+	};
+	auto AddGrid = [this](UScrollBox* Into) -> UWrapBox*
+	{
+		UWrapBox* W = WidgetTree->ConstructWidget<UWrapBox>();
+		W->SetInnerSlotPadding(FVector2D(5.f, 5.f));
+		Into->AddChild(W);
+		return W;
 	};
 
-	// --- Schap-inhoud (take) ---
-	if (Shelf)
+	// --- Schap-kolom ---
 	{
-		if (Shelf->Contents.Num() == 0)
+		UWrapBox* Grid = AddGrid(ShelfList);
+		if (Shelf)
 		{
-			ShelfList->AddChild(WeedUI::Text(WidgetTree, TEXT("Empty."), 12, FLinearColor::Gray));
-		}
-		else
-		{
-			// "Take everything": van hoog naar laag index zodat verwijderen geen indices verschuift.
-			const int32 Num = Shelf->Contents.Num();
-			ShelfList->AddChild(ShelfBtn(WidgetTree, TEXT("Take everything"), FLinearColor(0.22f, 0.45f, 0.6f),
-				[Ph, Num]() { for (int32 i = Num - 1; i >= 0; --i) { Ph->RequestShelfTake(i, 100000); } }));
-			ShelfList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 4, FLinearColor::Transparent));
-		}
-		for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
-		{
-			const FShelfStack& S = Shelf->Contents[i];
-			const FString Name = WeedUI::PrettyItemName(S.ItemId);
-			const bool bWeed = S.ItemId.ToString().StartsWith(TEXT("Bag_")) || S.ItemId.ToString().StartsWith(TEXT("Bud_")) || S.ItemId.ToString().StartsWith(TEXT("Joint_"));
-			const FString Sub = bWeed ? FString::Printf(TEXT("x%d   %.0f%% THC"), S.Quantity, S.Thc) : FString::Printf(TEXT("x%d"), S.Quantity);
-			const int32 Idx = i; const int32 Qty = S.Quantity;
-			MakeRow(ShelfList, Name, Sub,
-				[Ph, Idx]() { Ph->RequestShelfTake(Idx, 1); }, TEXT("Take 1"),
-				[Ph, Idx, Qty]() { Ph->RequestShelfTake(Idx, Qty); }, TEXT("All"),
-				FLinearColor(0.2f, 0.4f, 0.55f));
-		}
-	}
-
-	// --- Eigen voorraad (store) ---
-	APawn* P = GetOwningPlayerPawn();
-	const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
-	if (Inv)
-	{
-		// Per item-id samenvoegen (totaal aantal).
-		TArray<FName> Order; TMap<FName, int32> Totals;
-		for (const FInventoryStack& St : Inv->GetStacks())
-		{
-			if (St.ItemId == FName(TEXT("Cash")) || St.Quantity <= 0) { continue; }
-			if (!Totals.Contains(St.ItemId)) { Order.Add(St.ItemId); }
-			Totals.FindOrAdd(St.ItemId) += St.Quantity;
-		}
-		if (Order.Num() == 0) { InvList->AddChild(WeedUI::Text(WidgetTree, TEXT("Nothing to store."), 12, FLinearColor::Gray)); }
-		else
-		{
-			// "Store all packaged": alle verkoopbare Bag_-voorraad in één keer wegzetten.
-			TArray<FName> Bags; TMap<FName, int32> BagTot;
-			for (const FName& Id : Order) { if (Id.ToString().StartsWith(TEXT("Bag_"))) { Bags.Add(Id); BagTot.Add(Id, Totals[Id]); } }
-			if (Bags.Num() > 0)
+			for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
 			{
-				InvList->AddChild(ShelfBtn(WidgetTree, TEXT("Store all packaged"), FLinearColor(0.22f, 0.5f, 0.3f),
-					[Ph, Bags, BagTot]() { for (const FName& B : Bags) { Ph->RequestShelfStore(B, BagTot[B]); } }));
-				InvList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 4, FLinearColor::Transparent));
+				const FShelfStack& S = Shelf->Contents[i];
+				UShelfCell* C = MakeCell(true, i, S.ItemId, S.Quantity, S.Thc);
+				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+				Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f); Sz->SetContent(C);
+				Grid->AddChildToWrapBox(Sz);
 			}
 		}
-		for (const FName& Id : Order)
+		// Lege "sleep hierheen"-cel (drop-doel, ook als het schap leeg is).
+		UShelfCell* Empty = MakeCell(true, -1, NAME_None, 0, 0.f);
+		USizeBox* ESz = WidgetTree->ConstructWidget<USizeBox>();
+		ESz->SetWidthOverride(78.f); ESz->SetHeightOverride(78.f); ESz->SetContent(Empty);
+		Grid->AddChildToWrapBox(ESz);
+	}
+
+	// --- Inventory-kolom (per item samengevoegd) ---
+	{
+		UWrapBox* Grid = AddGrid(InvList);
+		APawn* P = GetOwningPlayerPawn();
+		const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+		if (Inv)
 		{
-			const int32 Have = Totals[Id];
-			const FString Name = WeedUI::PrettyItemName(Id);
-			const bool bWeed = Id.ToString().StartsWith(TEXT("Bag_")) || Id.ToString().StartsWith(TEXT("Bud_")) || Id.ToString().StartsWith(TEXT("Joint_")) || Id.ToString().StartsWith(TEXT("WetBud_"));
-			const FString Sub = bWeed ? FString::Printf(TEXT("x%d   %.0f%% THC"), Have, Inv->GetItemQuality(Id)) : FString::Printf(TEXT("x%d"), Have);
-			const FName PickId = Id; const int32 Qty = Have;
-			MakeRow(InvList, Name, Sub,
-				[Ph, PickId]() { Ph->RequestShelfStore(PickId, 1); }, TEXT("Store 1"),
-				[Ph, PickId, Qty]() { Ph->RequestShelfStore(PickId, Qty); }, TEXT("All"),
-				FLinearColor(0.2f, 0.45f, 0.28f));
+			TArray<FName> Order; TMap<FName, int32> Totals;
+			for (const FInventoryStack& St : Inv->GetStacks())
+			{
+				if (St.ItemId == FName(TEXT("Cash")) || St.Quantity <= 0) { continue; }
+				if (!Totals.Contains(St.ItemId)) { Order.Add(St.ItemId); }
+				Totals.FindOrAdd(St.ItemId) += St.Quantity;
+			}
+			for (const FName& Id : Order)
+			{
+				UShelfCell* C = MakeCell(false, -1, Id, Totals[Id], Inv->GetItemQuality(Id));
+				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+				Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f); Sz->SetContent(C);
+				Grid->AddChildToWrapBox(Sz);
+			}
 		}
+		UShelfCell* Empty = MakeCell(false, -1, NAME_None, 0, 0.f);
+		USizeBox* ESz = WidgetTree->ConstructWidget<USizeBox>();
+		ESz->SetWidthOverride(78.f); ESz->SetHeightOverride(78.f); ESz->SetContent(Empty);
+		Grid->AddChildToWrapBox(ESz);
 	}
 }
 
@@ -213,7 +296,6 @@ void UShelfWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen) { LastSig.Reset(); return; }
 
-	// Signature uit schap-inhoud + eigen voorraad; alleen herbouwen bij wijziging (geen flicker).
 	FString Sig;
 	if (AStorageShelf* Shelf = PhoneComp->GetShelf())
 	{
