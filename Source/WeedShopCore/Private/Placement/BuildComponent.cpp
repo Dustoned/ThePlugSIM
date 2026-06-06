@@ -27,6 +27,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/CameraComponent.h"
 #include "InputCoreTypes.h"
 #include "Net/UnrealNetwork.h"
 
@@ -72,6 +73,18 @@ bool UBuildComponent::GetViewPoint(FVector& OutLocation, FRotator& OutRotation) 
 	if (!OwnerPawn)
 	{
 		return false;
+	}
+	// Lokale speler: gebruik de FP-camera RECHTSTREEKS. Deterministisch op host EN client; voorkomt dat
+	// de client (waar GetPlayerViewPoint/Controller anders kan zijn) een verkeerd zichtpunt krijgt
+	// waardoor de ghost/plaatsing op de hand-positie i.p.v. waar je mikt belandt.
+	if (OwnerPawn->IsLocallyControlled())
+	{
+		if (const UCameraComponent* Cam = OwnerPawn->FindComponentByClass<UCameraComponent>())
+		{
+			OutLocation = Cam->GetComponentLocation();
+			OutRotation = Cam->GetComponentRotation();
+			return true;
+		}
 	}
 	if (const AController* C = OwnerPawn->GetController())
 	{
@@ -305,6 +318,13 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 			FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopPlaceTrace), false);
 			Params.AddIgnoredActor(GetOwner());
+			// Negeer ook alles wat aan de speler vastzit (vastgehouden item-visual e.d.), zodat de trace
+			// niet op de handpositie blijft hangen.
+			{
+				TArray<AActor*> Attached;
+				GetOwner()->GetAttachedActors(Attached);
+				Params.AddIgnoredActors(Attached);
+			}
 
 			FHitResult Hit;
 			bAimHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
