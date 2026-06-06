@@ -322,8 +322,8 @@ void ADayNightController::Tick(float DeltaSeconds)
 		PPV->Settings.AutoExposureBias = ExposureBias;
 	}
 
-	// Straatlampen op kloktijd: 's avonds aan (vanaf 19u), 's ochtends uit rond 8u.
-	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
+	// Straatlampen op kloktijd: 's avonds aan (vanaf 17u), 's ochtends uit rond 8u.
+	const int32 WantOn = (Hour < 8.f || Hour >= 17.f) ? 1 : 0;
 	const bool bStateChanged = (WantOn != bLampsOn);
 	const bool bIntChanged = (WantOn == 1 && !FMath::IsNearlyEqual(LampIntensity, LastLampApplied, 1.f));
 	if (bStateChanged || bIntChanged)

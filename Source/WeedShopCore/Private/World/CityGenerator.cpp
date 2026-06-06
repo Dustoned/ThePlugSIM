@@ -150,7 +150,7 @@ void ACityGenerator::Tick(float DeltaSeconds)
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	if (!DC) { return; }
 	const float Hour = DC->GetClockHour();
-	const int32 WantOn = (Hour < 8.f || Hour >= 19.f) ? 1 : 0;
+	const int32 WantOn = (Hour < 8.f || Hour >= 17.f) ? 1 : 0;
 
 	// Intensiteit komt van de phone-slider (DayNightController.LampIntensity) -> live regelbaar.
 	float Intensity = 42000.f;
