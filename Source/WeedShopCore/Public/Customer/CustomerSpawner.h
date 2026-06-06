@@ -35,7 +35,12 @@ public:
 
 	// Hoeveel bewoners ECHT rondlopen (de rest "woont er" via een op-slot-deur met naam). 0 = allemaal.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
-	int32 MaxResidents = 40;
+	int32 MaxResidents = 50;
+
+	// Dagelijkse rotatie: hoeveel fysieke roamers per nieuwe dag wisselen met de virtuele pool, zodat
+	// je over een paar dagen iedereen ziet (en het straatbeeld verandert ook als je stilstaat).
+	UPROPERTY(EditAnywhere, Category = "Spawn")
+	int32 RotatePerDay = 25;
 
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpawnInterval = 10.f;
@@ -62,6 +67,22 @@ protected:
 
 	// Woning-indexen die een fysieke bewoner kregen (voor het meubileren van NPC-woningen).
 	TSet<int32> ResidentHomeIndices;
+
+	// --- Dagelijkse rotatie van fysieke bewoners ---
+	// Spawn/despawn één bewoner op een woning-index (herbruikbaar voor de initiële spawn én rotatie).
+	ACustomerBase* SpawnOneResident(class ACityGenerator* City, int32 HomeIndex, bool bGuaranteedBuyer);
+	void DespawnResidentByHome(int32 HomeIndex);
+	ACustomerBase* FindResidentByHome(int32 HomeIndex) const;
+	// Wissel RotatePerDay fysieke bewoners voor virtuele (voorrang aan nog-niet-getoonde woningen).
+	void RotateResidents();
+	// Periodieke check (timer): nieuwe dag -> roteren.
+	void CheckResidentRotation();
+
+	TArray<int32> EligibleHomes;   // alle niet-koopbare ingang-woningen (de volledige pool)
+	TSet<int32> PhysicalHomes;     // woning-indexen die NU een fysieke bewoner hebben
+	TSet<int32> ActivatedEverHomes;// ooit fysiek geweest (voor "nieuwe gezichten eerst")
+	int32 LastRotationDay = -1;
+	FTimerHandle RotationTimer;
 
 	bool bResidentsSpawned = false;
 	FTimerHandle SpawnTimer;

@@ -3,6 +3,7 @@
 #include "WeedShopCore.h"
 #include "Customer/CustomerBase.h"
 #include "World/CityGenerator.h"
+#include "World/DayCycleComponent.h"
 #include "World/CityDoor.h"
 #include "Game/WeedShopGameState.h"
 #include "Npc/NpcRegistryComponent.h"
@@ -520,6 +521,127 @@ void ACustomerSpawner::SpawnResidents()
 	// Bij een verse game: meubels in de woningen + ATM in elke winkel (server-side, repliceert).
 	ResidentHomeIndices = PhysicalSet; // bewoner-woningen meubileren we ook
 	SpawnHomeAndShopFixtures(City);
+
+	// --- Dagelijkse rotatie opzetten ---
+	EligibleHomes = Entrances;            // volledige pool (alle niet-koopbare ingangen)
+	PhysicalHomes = PhysicalSet;          // wie nu fysiek is
+	ActivatedEverHomes = PhysicalSet;     // al getoond
+	if (const AWeedShopGameState* GSr = World->GetGameState<AWeedShopGameState>())
+	{
+		if (const UDayCycleComponent* DC = GSr->GetDayCycle()) { LastRotationDay = DC->GetDayNumber(); }
+	}
+	GetWorldTimerManager().SetTimer(RotationTimer, this, &ACustomerSpawner::CheckResidentRotation, 8.f, true);
+}
+
+void ACustomerSpawner::CheckResidentRotation()
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority() || RotatePerDay <= 0) { return; }
+	const AWeedShopGameState* GS = World->GetGameState<AWeedShopGameState>();
+	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
+	if (!DC) { return; }
+	const int32 Day = DC->GetDayNumber();
+	if (Day == LastRotationDay) { return; }
+	LastRotationDay = Day;
+	RotateResidents();
+}
+
+ACustomerBase* ACustomerSpawner::FindResidentByHome(int32 HomeIndex) const
+{
+	const FName Id(*FString::Printf(TEXT("Resident_%04d"), HomeIndex));
+	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It) && It->NpcId == Id) { return *It; }
+	}
+	return nullptr;
+}
+
+void ACustomerSpawner::DespawnResidentByHome(int32 HomeIndex)
+{
+	if (ACustomerBase* C = FindResidentByHome(HomeIndex)) { C->Destroy(); }
+	PhysicalHomes.Remove(HomeIndex);
+}
+
+ACustomerBase* ACustomerSpawner::SpawnOneResident(ACityGenerator* City, int32 HomeIndex, bool bGuaranteedBuyer)
+{
+	UWorld* World = GetWorld();
+	if (!World || !City) { return nullptr; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (!Homes.IsValidIndex(HomeIndex)) { return nullptr; }
+	const FApartmentHome& H = Homes[HomeIndex];
+
+	AWeedShopGameState* GS = World->GetGameState<AWeedShopGameState>();
+	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
+	TSubclassOf<ACustomerBase> Cls = CustomerClass;
+	if (!Cls) { Cls = ACustomerBase::StaticClass(); }
+
+	const FString DoorName = ResidentNameByIndex(HomeIndex);
+	const FName ResidentNpcId(*FString::Printf(TEXT("Resident_%04d"), HomeIndex));
+	if (Reg) { Reg->EnsureNpc(ResidentNpcId, FText::FromString(DoorName)); }
+
+	const FTransform SpawnTM(FRotator::ZeroRotator, H.InteriorPos + FVector(0.f, 0.f, 4.f));
+	ACustomerBase* C = World->SpawnActorDeferred<ACustomerBase>(
+		Cls, SpawnTM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+	if (!C) { return nullptr; }
+	C->NpcId = Reg ? ResidentNpcId : NAME_None;
+	C->FinishSpawning(SpawnTM);
+	C->SetupResident(H.DoorPos, H.InteriorPos, H.Number, H.HallPos);
+	if (bGuaranteedBuyer) { C->Respect = 70.f; C->Loyalty = 40.f; C->Addiction = 80.f; C->BecomeBuyerNow(); }
+	if (!C->GetController()) { C->SpawnDefaultController(); }
+	PhysicalHomes.Add(HomeIndex);
+	ActivatedEverHomes.Add(HomeIndex);
+	return C;
+}
+
+void ACustomerSpawner::RotateResidents()
+{
+	UWorld* World = GetWorld();
+	if (!World) { return; }
+	ACityGenerator* City = nullptr;
+	for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
+	if (!City) { return; }
+
+	// 1) Retire-kandidaten: huidige fysieke bewoners ZONDER lopende afspraak (anders blijven ze).
+	TArray<int32> Retire;
+	for (int32 HomeIdx : PhysicalHomes)
+	{
+		const ACustomerBase* C = FindResidentByHome(HomeIdx);
+		if (C && C->HasActiveAppointment()) { continue; } // beschermd
+		Retire.Add(HomeIdx);
+	}
+	// 2) Activeer-kandidaten: virtuele woningen, nog-niet-getoonde EERST.
+	TArray<int32> ActNew, ActOld;
+	for (int32 HomeIdx : EligibleHomes)
+	{
+		if (PhysicalHomes.Contains(HomeIdx)) { continue; }
+		if (ActivatedEverHomes.Contains(HomeIdx)) { ActOld.Add(HomeIdx); } else { ActNew.Add(HomeIdx); }
+	}
+	if (Retire.Num() == 0 || (ActNew.Num() + ActOld.Num()) == 0) { return; }
+
+	const int32 N = FMath::Min3(RotatePerDay, Retire.Num(), ActNew.Num() + ActOld.Num());
+
+	// Willekeurige selectie (variatie per dag).
+	auto PickRandom = [](TArray<int32>& Pool) -> int32
+	{
+		const int32 Idx = FMath::RandRange(0, Pool.Num() - 1);
+		const int32 V = Pool[Idx];
+		Pool.RemoveAtSwap(Idx);
+		return V;
+	};
+
+	for (int32 i = 0; i < N; ++i)
+	{
+		// Despawn een willekeurige niet-beschermde fysieke bewoner.
+		const int32 OutHome = PickRandom(Retire);
+		DespawnResidentByHome(OutHome);
+
+		// Activeer een virtuele woning: nieuwe gezichten eerst.
+		const int32 InHome = (ActNew.Num() > 0) ? PickRandom(ActNew) : PickRandom(ActOld);
+		SpawnOneResident(City, InHome, false);
+	}
+	ResidentHomeIndices = PhysicalHomes;
+	UE_LOG(LogWeedShop, Log, TEXT("Resident rotatie: %d gewisseld (fysiek=%d, getoond-ooit=%d/%d)"),
+		N, PhysicalHomes.Num(), ActivatedEverHomes.Num(), EligibleHomes.Num());
 }
 
 void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
