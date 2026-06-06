@@ -344,10 +344,18 @@ void UDryingRackWidget::FillBody()
 		int32 Shown = 0;
 		if (Inv)
 		{
+			// Stapels die op de hotbar staan NIET in de inventory-tab tonen (die zie je al in de hotbar).
+			TSet<int32> OnHotbar;
+			for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h)
+			{
+				const int32 Sid = Inv->GetHotbarStackId(h);
+				if (Sid != 0) { OnHotbar.Add(Sid); }
+			}
 			TArray<FName> Order; TMap<FName, int32> Totals;
 			for (const FInventoryStack& St : Inv->GetStacks())
 			{
 				if (St.ItemId == FName(TEXT("Cash")) || St.Quantity <= 0) { continue; }
+				if (OnHotbar.Contains(St.StackId)) { continue; } // staat op de hotbar
 				if (!Totals.Contains(St.ItemId)) { Order.Add(St.ItemId); }
 				Totals.FindOrAdd(St.ItemId) += St.Quantity;
 			}
@@ -454,11 +462,13 @@ void UDryingRackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			Sig += TEXT("W:");
+			Sig += TEXT("I:"); // hele inventory (de rechter tab toont alles, behalve hotbar-stapels)
 			for (const FInventoryStack& St : Inv->GetStacks())
 			{
-				if (St.ItemId.ToString().StartsWith(TEXT("WetBud_"))) { Sig += FString::Printf(TEXT("%s%d|"), *St.ItemId.ToString(), St.Quantity); }
+				Sig += FString::Printf(TEXT("%s%d|"), *St.ItemId.ToString(), St.Quantity);
 			}
+			Sig += TEXT("H:"); // hotbar-toewijzing (zodat de tab ververst als je iets op/van de hotbar zet)
+			for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h) { Sig += FString::Printf(TEXT("%d|"), Inv->GetHotbarStackId(h)); }
 		}
 	}
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
