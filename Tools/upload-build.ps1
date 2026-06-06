@@ -34,6 +34,17 @@ $WinDir = Join-Path $Archive "Windows"
 if (-not (Test-Path $WinDir)) { $WinDir = Join-Path $Archive "WindowsNoEditor" }
 if (-not (Test-Path $WinDir)) { Write-Error "Geen gestagede build gevonden in $Archive"; exit 1 }
 
+# Losse runtime-bestanden mee-kopieren: de game laadt iconen + menu-art rechtstreeks van schijf
+# (Content/_Project/UI), maar die zitten niet in de gecookte .pak. Zonder dit valt de build terug
+# op procedurele iconen en mist 't menu z'n achtergrond/logo.
+$SrcUI = Join-Path $Proj "Content\_Project\UI"
+$DstUI = Join-Path $WinDir "ThePlugSIM\Content\_Project\UI"
+if (Test-Path $SrcUI) {
+    New-Item -ItemType Directory -Force $DstUI | Out-Null
+    Copy-Item -Recurse -Force (Join-Path $SrcUI "*") $DstUI
+    Write-Host "== Losse UI-bestanden (iconen + menu-art) meegekopieerd naar de build =="
+}
+
 # Versie/tag op datum-tijd.
 $Stamp = Get-Date -Format "yyyyMMdd-HHmm"
 $Tag   = "build-$Stamp"
