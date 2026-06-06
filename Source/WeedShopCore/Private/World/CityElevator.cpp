@@ -84,7 +84,11 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 	OpenW = FMath::Clamp((FootX - 80.f) * 0.5f, 40.f, FootX * 0.24f); // halve opening; bladen passen in de pocket (geen muur-glitch)
 	DoorZ = 6.f + DoorH * 0.5f;
 	const float LeafW = OpenW;            // elk blad dekt de halve opening
-	const float FrontY = FootY * 0.5f;    // voorvlak van de cabine
+	// Cabine-voorkant NAAR BINNEN t.o.v. het cabinevlak, zodat 'ie niet coplanair is met de gebouw-
+	// schachtwand (anders clipt die wand door de cabinevoorkant zodra de lift beweegt). De ingezette
+	// voorkant dekt de schachtwand af vanuit het zicht binnenin.
+	const float FrontInset = 16.f;
+	const float FrontY = FootY * 0.5f - FrontInset; // voorvlak van de cabine (ingezet)
 	const float PocketW = FootX * 0.5f - OpenW; // wand-stukje naast de opening (pocket/kozijn)
 
 	// Voor-kozijn: pilaartjes naast de opening + latei erboven, zodat de voorkant dicht is rond de deur.
@@ -103,8 +107,10 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 	LandDoorL.Reset(); LandDoorR.Reset(); CurLand.Reset();
 	for (int32 f = 0; f < NumFloors; ++f)
 	{
-		UStaticMeshComponent* L = Wall(*FString::Printf(TEXT("LandL_%d"), f), FVector(-LeafW * 0.5f, FrontY + T + 2.f, DoorZ), FVector(LeafW, T, DoorH), DoorCol * 0.92f);
-		UStaticMeshComponent* R = Wall(*FString::Printf(TEXT("LandR_%d"), f), FVector( LeafW * 0.5f, FrontY + T + 2.f, DoorZ), FVector(LeafW, T, DoorH), DoorCol * 0.92f);
+		// Etage-deuren blijven op de gebouw-schachtwand (buitenste vlak), NIET ingezet zoals de cabine.
+		const float LandY = FootY * 0.5f + T + 2.f;
+		UStaticMeshComponent* L = Wall(*FString::Printf(TEXT("LandL_%d"), f), FVector(-LeafW * 0.5f, LandY, DoorZ), FVector(LeafW, T, DoorH), DoorCol * 0.92f);
+		UStaticMeshComponent* R = Wall(*FString::Printf(TEXT("LandR_%d"), f), FVector( LeafW * 0.5f, LandY, DoorZ), FVector(LeafW, T, DoorH), DoorCol * 0.92f);
 		LandDoorL.Add(L); LandDoorR.Add(R); CurLand.Add(0.f);
 	}
 
@@ -196,8 +202,9 @@ void ACityElevator::Tick(float DeltaSeconds)
 	// Trager (4.0) zodat ze duidelijk bewegen i.p.v. meteen weg te klappen.
 	const float CabTarget = (bDoorOpen && bAtFloor) ? OpenW : 0.f;
 	CurDoor = FMath::FInterpTo(CurDoor, CabTarget, DeltaSeconds, 4.0f);
-	if (CabDoorL) { CabDoorL->SetRelativeLocation(FVector(-OpenW * 0.5f - CurDoor, FootY * 0.5f, DoorZ)); CabDoorL->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
-	if (CabDoorR) { CabDoorR->SetRelativeLocation(FVector( OpenW * 0.5f + CurDoor, FootY * 0.5f, DoorZ)); CabDoorR->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
+	const float CabDoorY = FootY * 0.5f - 16.f; // ingezet, gelijk aan het cabine-voorframe (FrontInset)
+	if (CabDoorL) { CabDoorL->SetRelativeLocation(FVector(-OpenW * 0.5f - CurDoor, CabDoorY, DoorZ)); CabDoorL->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
+	if (CabDoorR) { CabDoorR->SetRelativeLocation(FVector( OpenW * 0.5f + CurDoor, CabDoorY, DoorZ)); CabDoorR->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
 
 	// Schachtdeuren: blijven op hun verdieping (wereld-Z vastgehouden door relatieve Z te compenseren).
 	// Open alleen als de cabine OP die verdieping staat en de speler dichtbij is; anders dicht -> geen val in de schacht.
