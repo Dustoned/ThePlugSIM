@@ -64,7 +64,7 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 
 	// --- Deur-opmaat: bi-parting bladen die naar de zijkanten in de "pockets" schuiven ---
 	const float DoorH = 210.f;
-	OpenW = FMath::Clamp((FootX - 80.f) * 0.5f, 40.f, FootX * 0.45f); // halve opening = max schuif per blad
+	OpenW = FMath::Clamp((FootX - 80.f) * 0.5f, 40.f, FootX * 0.24f); // halve opening; bladen passen in de pocket (geen muur-glitch)
 	DoorZ = 6.f + DoorH * 0.5f;
 	const float LeafW = OpenW;            // elk blad dekt de halve opening
 	const float FrontY = FootY * 0.5f;    // voorvlak van de cabine

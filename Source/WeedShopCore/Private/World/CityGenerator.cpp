@@ -1210,7 +1210,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					// Lift-kant: dichte wand met een doorgang precies zo breed als de lift-deuropening
 					// (de schachtdeuren vullen dit gat; de bredere cabine zit erachter verstopt).
 					const float Cab = FMath::Min(SideW - 20.f, 300.f);
-					const float OpenW = FMath::Clamp((Cab - 80.f) * 0.5f, 40.f, Cab * 0.45f);
+					const float OpenW = FMath::Clamp((Cab - 80.f) * 0.5f, 40.f, Cab * 0.24f); // bladen passen in de pocket (geen muur-glitch)
 					const float LiftOpen = 2.f * OpenW + 8.f;
 					SegD(HallLen, LiftCabD - LiftOpen * 0.5f, sw, zS);
 					SegD(LiftCabD + LiftOpen * 0.5f, Foot, sw, zS);
