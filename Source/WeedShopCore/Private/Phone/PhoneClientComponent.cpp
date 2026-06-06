@@ -375,6 +375,46 @@ void UPhoneClientComponent::ServerSetActiveHome_Implementation(int32 HomeIndex)
 	ApplyLocalDoors();
 }
 
+int32 UPhoneClientComponent::GetHomeSellValueCents(int32 HomeIndex) const
+{
+	ACityGenerator* City = FindCity();
+	if (!City) { return 0; }
+	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	const FCityPropertyOffer* Off = Offers.FindByPredicate(
+		[HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex || O.Homes.Contains(HomeIndex); });
+	if (!Off || Off->PriceCents <= 0) { return 0; }  // starter (gratis) is niet verkoopbaar
+	return (int32)((int64)Off->PriceCents * 65 / 100); // 65% terug
+}
+
+void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
+{
+	if (!OwnedHomes.Contains(HomeIndex)) { return; }
+	ACityGenerator* City = FindCity();
+	if (!City) { return; }
+	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	const FCityPropertyOffer* Off = Offers.FindByPredicate(
+		[HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex || O.Homes.Contains(HomeIndex); });
+	if (!Off) { return; }
+	if (Off->PriceCents <= 0)
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Je starter-woning kun je niet verkopen.")); }
+		return;
+	}
+
+	const int64 Refund = (int64)Off->PriceCents * 65 / 100;
+	if (UEconomyComponent* Econ = GetOwnerEconomy()) { Econ->AddBank(Refund, false); }
+
+	for (int32 Idx : Off->Homes) { OwnedHomes.Remove(Idx); }                       // hele aanbieding (1 of 3 panden)
+	if (Off->Homes.Contains(ActiveHome) || ActiveHome == HomeIndex)
+	{
+		ActiveHome = OwnedHomes.Num() > 0 ? OwnedHomes[0] : -1;
+		if (ActiveHome >= 0) { MoveOwnerToHome(ActiveHome); }
+	}
+	if (SelectedDeliveryHome == HomeIndex || Off->Homes.Contains(SelectedDeliveryHome)) { SelectedDeliveryHome = -1; }
+	ApplyLocalDoors();
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Pand verkocht: +EUR %.0f"), Refund / 100.f)); }
+}
+
 bool UPhoneClientComponent::GetActiveHomeLocation(FVector& OutWorld) const
 {
 	if (ActiveHome < 0) { return false; }

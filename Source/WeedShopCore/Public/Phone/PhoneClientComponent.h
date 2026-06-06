@@ -326,6 +326,9 @@ public:
 	bool IsActiveHome(int32 HomeIndex) const { return ActiveHome == HomeIndex; }
 	void BuyProperty(int32 HomeIndex) { ServerBuyProperty(HomeIndex); }
 	void SetActiveHome(int32 HomeIndex) { ServerSetActiveHome(HomeIndex); }
+	// Verkoop een gekocht pand terug (~65% van de koopprijs). Starter-woning is niet verkoopbaar.
+	void SellProperty(int32 HomeIndex) { ServerSellProperty(HomeIndex); }
+	int32 GetHomeSellValueCents(int32 HomeIndex) const; // 0 = niet verkoopbaar (starter/onbekend)
 	// Save/load van eigendom.
 	const TArray<int32>& GetOwnedHomes() const { return OwnedHomes; }
 	int32 GetActiveHome() const { return ActiveHome; }
@@ -565,6 +568,7 @@ protected:
 	void ApplyLocalDoors();              // ontgrendel lokaal mijn eigen deuren ("Your home")
 	UFUNCTION(Server, Reliable) void ServerBuyProperty(int32 HomeIndex);
 	UFUNCTION(Server, Reliable) void ServerSetActiveHome(int32 HomeIndex);
+	UFUNCTION(Server, Reliable) void ServerSellProperty(int32 HomeIndex);
 	void MoveOwnerToHome(int32 HomeIndex); // server: zet de speler in de woning
 	// Client-RPC: laat de eigenaar-client zichzelf METEEN op de woning-plek zetten (anders komt de
 	// server-teleport pas aan na een beweging-update -> "moet springen om in de woning te komen").

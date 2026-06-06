@@ -1335,78 +1335,33 @@ void UPhoneWidget::RefreshContent()
 				IL->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 
 				USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
-				RB->SetWidthOverride(104.f); RB->SetHeightOverride(28.f);
-				if (!bOwned)        { RB->SetContent(MakeButton(TEXT("Koop"), 7, O.HomeIndex, FLinearColor(0.2f, 0.5f, 0.28f))); }
-				else if (bHereNow)  { RB->SetContent(MakeText(TEXT("je bent hier"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
-				else                { RB->SetContent(MakeButton(TEXT("Ga hierheen"), 8, O.HomeIndex, FLinearColor(0.25f, 0.45f, 0.6f))); } // teleport tussen je woningen
+				RB->SetWidthOverride(124.f);
+				if (!bOwned)
+				{
+					RB->SetHeightOverride(28.f);
+					RB->SetContent(MakeButton(TEXT("Koop"), 7, O.HomeIndex, FLinearColor(0.2f, 0.5f, 0.28f)));
+				}
+				else
+				{
+					// Eigen woning: teleport-knop (of "je bent hier") + verkoop-knop (~65%).
+					const int32 SellVal = Phone->GetHomeSellValueCents(O.HomeIndex);
+					UVerticalBox* OwnBox = WidgetTree->ConstructWidget<UVerticalBox>();
+					if (bHereNow) { OwnBox->AddChildToVerticalBox(MakeText(TEXT("je bent hier"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
+					else          { OwnBox->AddChildToVerticalBox(MakeButton(TEXT("Ga hierheen"), 8, O.HomeIndex, FLinearColor(0.25f, 0.45f, 0.6f))); }
+					if (SellVal > 0)
+					{
+						OwnBox->AddChildToVerticalBox(MakeButton(*FString::Printf(TEXT("Verkoop EUR %.0f"), SellVal / 100.f), 9, O.HomeIndex, FLinearColor(0.5f, 0.32f, 0.2f)))
+							->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+					}
+					RB->SetHeightOverride(SellVal > 0 ? 58.f : 28.f);
+					RB->SetContent(OwnBox);
+				}
 				UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
 				RS->SetVerticalAlignment(VAlign_Center);
 				ContentBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 			}
-			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Upgrades"), 14, FLinearColor(0.7f, 0.9f, 1.f)))
-				->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
 		}
 
-		UUpgradeComponent* Upg = GS ? GS->GetUpgrades() : nullptr;
-		if (Upg)
-		{
-			// Verzamel + sorteer: koopbaar bovenaan, daarna 'owned', locked (verkeerde fase) onderaan.
-			// De originele index blijft bewaard zodat de Buy-knop de juiste upgrade koopt.
-			struct FUpgRow { int32 OrigIdx; FText Name; int32 Cost; bool bPurchased; bool bAvailable; };
-			TArray<FUpgRow> Rows;
-			{
-				int32 i = 0;
-				for (const FName& Id : Upg->GetAllUpgradeIds())
-				{
-					FUpgRow R; R.OrigIdx = i++;
-					if (Upg->GetUpgradeDisplay(Id, R.Name, R.Cost, R.bPurchased, R.bAvailable)) { Rows.Add(R); }
-				}
-			}
-			auto GroupOf = [](const FUpgRow& R) -> int32 { if (!R.bAvailable) { return 2; } return R.bPurchased ? 1 : 0; };
-			Rows.Sort([&GroupOf](const FUpgRow& A, const FUpgRow& B)
-			{
-				const int32 GA = GroupOf(A), GB = GroupOf(B);
-				if (GA != GB) { return GA < GB; }
-				return A.Cost < B.Cost;
-			});
-
-			int32 shown = 0;
-			for (const FUpgRow& R : Rows)
-			{
-				const FText Name = R.Name; const int32 Cost = R.Cost; const bool bPurchased = R.bPurchased; const bool bAvailable = R.bAvailable; const int32 idx = R.OrigIdx;
-				{
-					UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-					FString NameStr = Name.ToString();
-					if (NameStr.Len() > 22) { NameStr = NameStr.Left(21) + TEXT("."); }
-					UTextBlock* T = MakeText(FString::Printf(TEXT("%s   EUR %.2f"), *NameStr, Cost / 100.f), 12,
-						bPurchased ? FLinearColor::Gray : (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f)));
-					T->SetClipping(EWidgetClipping::ClipToBounds);
-					UHorizontalBoxSlot* L = Row->AddChildToHorizontalBox(T);
-					L->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-					L->SetVerticalAlignment(VAlign_Center);
-					L->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-
-					// Vaste-breedte rechtervak: Buy-knop of een status-label (overlapt nooit).
-					USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
-					RB->SetWidthOverride(64.f);
-					RB->SetHeightOverride(28.f);
-					if (!bPurchased && bAvailable)
-					{
-						RB->SetContent(MakeButton(TEXT("Buy"), 3, idx, FLinearColor(0.2f, 0.5f, 0.28f)));
-					}
-					else
-					{
-						RB->SetContent(MakeText(bPurchased ? TEXT("owned") : TEXT("locked"), 11, FLinearColor::Gray, true));
-					}
-					UHorizontalBoxSlot* RS2 = Row->AddChildToHorizontalBox(RB);
-					RS2->SetVerticalAlignment(VAlign_Center);
-
-					UVerticalBoxSlot* RS = ContentBox->AddChildToVerticalBox(Row);
-					RS->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
-				}
-				if (++shown >= 12) { break; }
-			}
-		}
 	}
 	else if (App == GGrowApp) // Grow shop -> ALLES om te kweken (zaad, pot, aarde, water, upgrades, verzorging)
 	{
@@ -1515,7 +1470,8 @@ void UPhoneWidget::HandlePhoneButton(int32 Action, int32 Param)
 	case 5: Phone->DoAction(0); break;         // accept bericht
 	case 6: Phone->DoAction(1); break;         // decline bericht
 	case 7: Phone->BuyProperty(Param); break;  // koop woning
-	case 8: Phone->SetActiveHome(Param); break;// ga in deze woning wonen
+	case 8: Phone->SetActiveHome(Param); break;// teleport naar deze woning
+	case 9: Phone->SellProperty(Param); break; // verkoop woning (~65%)
 	default: break;
 	}
 	// Geen volledige herbouw hier: dat gaf een flash. App-wissel/home herbouwt vanzelf via de
