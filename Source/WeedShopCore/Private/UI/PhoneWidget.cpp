@@ -1319,9 +1319,15 @@ void UPhoneWidget::RefreshContent()
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
 				Info->AddChildToVerticalBox(MakeText(O.Title, 12, bOwned ? FLinearColor(0.7f, 1.f, 0.7f) : FLinearColor::White));
+				// Woning-info: type + huisnummer + verdieping.
+				const FString InfoLine = Phone->GetHomeInfoLine(O.HomeIndex);
+				if (!InfoLine.IsEmpty())
+				{
+					Info->AddChildToVerticalBox(MakeText(InfoLine, 10, FLinearColor(0.62f, 0.78f, 0.92f)));
+				}
 				const FString PriceStr = (O.PriceCents > 0)
 					? FString::Printf(TEXT("%s   EUR %.0f"), *O.Sub, O.PriceCents / 100.f)
-					: FString::Printf(TEXT("%s   (starter)"), *O.Sub);
+					: (bOwned ? FString::Printf(TEXT("%s   (in bezit)"), *O.Sub) : FString::Printf(TEXT("%s   (starter)"), *O.Sub));
 				Info->AddChildToVerticalBox(MakeText(PriceStr, 10, FLinearColor(0.65f, 0.7f, 0.8f)));
 				UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
 				IL->SetSize(FSlateChildSize(ESlateSizeRule::Fill));

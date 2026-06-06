@@ -423,6 +423,19 @@ FString UPhoneClientComponent::GetHomeLabel(int32 HomeIndex) const
 	return FString::Printf(TEXT("Huis %d"), HomeIndex);
 }
 
+FString UPhoneClientComponent::GetHomeInfoLine(int32 HomeIndex) const
+{
+	ACityGenerator* City = FindCity();
+	if (!City) { return FString(); }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (!Homes.IsValidIndex(HomeIndex)) { return FString(); }
+	const FApartmentHome& H = Homes[HomeIndex];
+	FString Line = H.bApartment ? TEXT("Appartement") : TEXT("Rijtjeshuis");
+	if (!H.Number.IsEmpty()) { Line += FString::Printf(TEXT("  -  nr %s"), *H.Number); }
+	if (H.bApartment && H.Floor > 0) { Line += FString::Printf(TEXT("  -  verd. %d"), H.Floor); }
+	return Line;
+}
+
 int32 UPhoneClientComponent::ResolveDeliveryHome() const
 {
 	// Handmatige keuze wint; anders het huis waar je NU binnen bent; anders de actieve woning.

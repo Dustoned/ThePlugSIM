@@ -343,6 +343,8 @@ public:
 	int32 GetSelectedDeliveryHome() const { return SelectedDeliveryHome; }
 	// Korte naam van een woning (huisnummer) voor de UI.
 	FString GetHomeLabel(int32 HomeIndex) const;
+	// Info-regel: type (flat/rijtjeshuis), huisnummer en verdieping. Voor het woning-scherm.
+	FString GetHomeInfoLine(int32 HomeIndex) const;
 	// Wordt periodiek aangeroepen (door de pawn-tick): starter toekennen + eigen deuren ontgrendelen.
 	void PropertyTick();
 
