@@ -81,6 +81,10 @@ public:
 	void RequestSplit(int32 StackId, int32 Amount, int32 ToCell);
 	UFUNCTION(Server, Reliable) void ServerSplitStack(int32 StackId, int32 Amount);
 
+	// Voeg PRECIES twee stapels samen (sleep From op Into). Alleen zelfde, stapelbaar item.
+	void RequestMergeTwo(int32 IntoStackId, int32 FromStackId) { ServerMergeTwo(IntoStackId, FromStackId); }
+	UFUNCTION(Server, Reliable) void ServerMergeTwo(int32 IntoStackId, int32 FromStackId);
+
 	// Of dit item stapelbaar is (bv. flessen niet). Bepaalt of merge/split mag.
 	static bool IsStackable(FName ItemId);
 

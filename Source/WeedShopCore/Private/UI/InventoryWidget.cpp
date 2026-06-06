@@ -165,7 +165,8 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 			&& St[ThisIdx].ItemId == St[DragIdx].ItemId && St[ThisIdx].ItemId != FName(TEXT("Cash"))
 			&& UInventoryComponent::IsStackable(St[ThisIdx].ItemId)) // geen flessen e.d. samenvoegen
 		{
-			if (Owner.IsValid()) { Owner->MergeItemNow(St[ThisIdx].ItemId); Owner->MarkDirty(); }
+			Inv->RequestMergeTwo(StackId, Op->StackId); // alleen DEZE twee samenvoegen
+			if (Owner.IsValid()) { Owner->MarkDirty(); }
 			return true;
 		}
 	}

@@ -503,6 +503,26 @@ void UInventoryComponent::RequestSplit(int32 StackId, int32 Amount, int32 ToCell
 	ServerSplitStack(StackId, Amount);
 }
 
+void UInventoryComponent::ServerMergeTwo_Implementation(int32 IntoStackId, int32 FromStackId)
+{
+	if (GetOwnerRole() != ROLE_Authority || IntoStackId == FromStackId) { return; }
+	const int32 Ai = FindStackById(IntoStackId);
+	const int32 Bi = FindStackById(FromStackId);
+	if (!Stacks.IsValidIndex(Ai) || !Stacks.IsValidIndex(Bi)) { return; }
+	if (Stacks[Ai].ItemId != Stacks[Bi].ItemId) { return; }
+	if (!IsStackable(Stacks[Ai].ItemId) || Stacks[Ai].ItemId == TEXT("Cash")) { return; }
+
+	const int32 Total = Stacks[Ai].Quantity + Stacks[Bi].Quantity;
+	if (Total <= 0) { return; }
+	// Gewogen gemiddelde voor THC% + kwaliteit% (zoals bij het samenvoegen van wiet).
+	Stacks[Ai].Quality    = (Stacks[Ai].Quality    * Stacks[Ai].Quantity + Stacks[Bi].Quality    * Stacks[Bi].Quantity) / Total;
+	Stacks[Ai].QualityPct = (Stacks[Ai].QualityPct * Stacks[Ai].Quantity + Stacks[Bi].QualityPct * Stacks[Bi].Quantity) / Total;
+	Stacks[Ai].Quantity   = Total;
+	UnassignHotbarStack(Stacks[Bi].StackId);
+	Stacks.RemoveAt(Bi);
+	OnRep_Stacks();
+}
+
 void UInventoryComponent::ServerSplitStack_Implementation(int32 StackId, int32 Amount)
 {
 	if (GetOwnerRole() != ROLE_Authority || Amount <= 0) { return; }
