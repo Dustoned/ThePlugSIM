@@ -41,6 +41,7 @@ public:
 	FName ItemId = NAME_None;
 	int32 Qty = 0;
 	bool bReady = false;        // drogende cel: klaar om te oogsten (alleen dan sleepbaar)
+	bool bDraggableAlways = false; // inventory-cel: altijd sleepbaar (ook niet-natte items)
 	TWeakObjectPtr<UDryingRackWidget> Owner;
 	UPROPERTY() TObjectPtr<UWidget> Inner;
 protected:
@@ -73,6 +74,8 @@ public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 	// bDroppedOnDryingSide = de kolom waar je losliet (true=rek -> ophangen, false=inventory -> oogsten).
 	void HandleDryDrop(bool bDroppedOnDryingSide, class UDryDragOp* Op);
+	// Drop vanuit de inventory/hotbar (UInvDragOp) op het rek: alleen natte wiet wordt opgehangen.
+	void HandleInvDrop(bool bDroppedOnDryingSide, class UInvDragOp* Op);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

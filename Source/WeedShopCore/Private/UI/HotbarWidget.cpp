@@ -125,7 +125,8 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// De drop-cellen zijn alleen hit-testbaar (sleep/drop) zolang de inventory open is; daarbuiten
 	// puur weergave zodat ze geen muis-input opvangen tijdens het spelen.
 	UPhoneClientComponent* Phone = P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
-	const bool bInvOpen = Phone && Phone->IsInventoryOpen();
+	// Sleepbaar als de inventory OF het droogrek open is (vanuit de hotbar het rek in slepen).
+	const bool bInvOpen = Phone && (Phone->IsInventoryOpen() || Phone->IsDryRackOpen());
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	for (UInvCell* DC : DropCells)
 	{
