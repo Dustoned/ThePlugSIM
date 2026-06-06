@@ -275,6 +275,8 @@ void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	const FVector C = GetActorLocation();
+	const int32 PotTierIdx = GetPotTierIndex(PotTier); // -1 = onbekend
+	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
 	int32 Mask = 0;
 	for (TActorIterator<APlaceableProp> It(W); It; ++It)
 	{
@@ -282,10 +284,12 @@ void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
 		if (!IsValid(P)) { continue; }
 		const int32 Ui = GearUpgradeIndex(P->ItemId);
 		if (Ui < 0) { continue; }
+		// Tier-gating: gear werkt alleen op een pot van de vereiste tier of hoger (zoals vroeger).
+		if (Ups.IsValidIndex(Ui) && PotTierIdx < Ups[Ui].MinPotTierIndex) { continue; }
 		const FVector L = P->GetActorLocation();
 		if (FVector::Dist2D(L, C) <= 175.f && FMath::Abs(L.Z - C.Z) <= 280.f)
 		{
-			Mask |= (1 << Ui); // gear staat vlakbij -> bonus actief
+			Mask |= (1 << Ui); // gear staat vlakbij + pot is goed genoeg -> bonus actief
 		}
 	}
 	PotUpgradeMask = Mask; // afgeleid van de fysieke gear; vervangt het oude koop-upgrade-systeem

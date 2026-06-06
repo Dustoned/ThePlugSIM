@@ -320,6 +320,16 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Spray_Pesticide"))  { return 16; } // pests komen pas rond lvl 18
 	if (S == TEXT("Spray_Broad"))      { return 18; }
 
+	// Pot-gear: zelfde level-progressie als de oude pot-upgrades (MinPlayerLevel).
+	{
+		const int32 Gi = GearUpgradeIndex(CatalogId);
+		if (Gi >= 0)
+		{
+			const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+			if (Ups.IsValidIndex(Gi)) { return Ups[Gi].MinPlayerLevel; }
+		}
+	}
+
 	// Zaden: schaal met de potentie (THC%) van de strain.
 	if (StrainTable)
 	{
