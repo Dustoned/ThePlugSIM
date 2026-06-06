@@ -88,6 +88,18 @@ public:
 	// Of dit item stapelbaar is (bv. flessen niet). Bepaalt of merge/split mag.
 	static bool IsStackable(FName ItemId);
 
+	// --- Zakjes (bags): discrete eenheden Bag_<strain>_<gram>, max BagStackMax per slot ---
+	static constexpr int32 BagStackMax = 10;          // max aantal zakjes per slot
+	static bool IsBag(FName ItemId);
+	static int32 BagGrams(FName ItemId);              // gram per zakje (0 = oude/maatloze bag)
+	static FName BagStrain(FName ItemId);             // strain-deel, bv. "SilverHaze"
+	static FName MakeBagId(FName Strain, int32 Grams);
+	// Totaal aantal grammen in alle zakjes van een strain (som van aantal * grootte).
+	int32 BagGramsAvailable(FName Strain) const;
+	// Verwijder HELE zakjes van een strain tot ~DesiredGrams (>= indien mogelijk, minimale overschot);
+	// geeft de werkelijk verkochte grammen + gewogen THC/kwaliteit terug. Server-only.
+	int32 RemoveBagsForGrams(FName Strain, int32 DesiredGrams, float& OutThc, float& OutQualPct);
+
 	// Server. Zet de inventory EXACT terug zoals opgeslagen: elke stack op z'n opgeslagen grid-cel,
 	// geen merge/sortering. InCells[i] = grid-cel van InStacks[i] (-1 = eerste vrije). De cash-stack
 	// (afgeleid van economy) blijft op cel 0. Voor save/load zodat slots niet meer wisselen.

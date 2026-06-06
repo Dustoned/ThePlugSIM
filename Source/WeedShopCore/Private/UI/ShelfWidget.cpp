@@ -250,10 +250,12 @@ void UShelfWidget::FillBody()
 		if (!Id.IsNone())
 		{
 			const FString S = Id.ToString();
-			const bool bWeed = S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Joint_")) || S.StartsWith(TEXT("WetBud_"));
-			C->Badge = bWeed ? FString::Printf(TEXT("%dg"), Q) : FString::Printf(TEXT("x%d"), Q);
-			C->Tooltip = bWeed ? FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, Thc)
-			                   : FString::Printf(TEXT("%s\nAantal: %d"), *WeedUI::PrettyItemName(Id), Q);
+			const bool bBag = UInventoryComponent::IsBag(Id);
+			const bool bWeed = bBag || S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Joint_")) || S.StartsWith(TEXT("WetBud_"));
+			C->Badge = WeedUI::ItemQtyBadge(Id, Q);
+			C->Tooltip = bBag ? FString::Printf(TEXT("%s\n%dx %dg zakje  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, UInventoryComponent::BagGrams(Id), Thc)
+			           : (bWeed ? FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, Thc)
+			                    : FString::Printf(TEXT("%s\nAantal: %d"), *WeedUI::PrettyItemName(Id), Q));
 		}
 		return C;
 	};

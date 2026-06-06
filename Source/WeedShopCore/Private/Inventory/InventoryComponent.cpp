@@ -24,6 +24,90 @@ bool UInventoryComponent::IsStackable(FName ItemId)
 	return !ItemId.ToString().StartsWith(TEXT("WaterBottle"));
 }
 
+bool UInventoryComponent::IsBag(FName ItemId)
+{
+	return ItemId.ToString().StartsWith(TEXT("Bag_"));
+}
+
+int32 UInventoryComponent::BagGrams(FName ItemId)
+{
+	const FString S = ItemId.ToString();
+	int32 U;
+	if (!S.FindLastChar('_', U)) { return 0; }
+	const FString Tail = S.RightChop(U + 1);
+	return Tail.IsNumeric() ? FCString::Atoi(*Tail) : 0;
+}
+
+FName UInventoryComponent::BagStrain(FName ItemId)
+{
+	FString S = ItemId.ToString();
+	if (S.StartsWith(TEXT("Bag_"))) { S = S.RightChop(4); }
+	int32 U;
+	if (S.FindLastChar('_', U))
+	{
+		const FString Tail = S.RightChop(U + 1);
+		if (Tail.IsNumeric()) { S = S.Left(U); } // strip de maat-suffix
+	}
+	return FName(*S);
+}
+
+FName UInventoryComponent::MakeBagId(FName Strain, int32 Grams)
+{
+	return FName(*FString::Printf(TEXT("Bag_%s_%d"), *Strain.ToString(), FMath::Max(1, Grams)));
+}
+
+int32 UInventoryComponent::BagGramsAvailable(FName Strain) const
+{
+	int32 Total = 0;
+	for (const FInventoryStack& S : Stacks)
+	{
+		if (IsBag(S.ItemId) && BagStrain(S.ItemId) == Strain) { Total += S.Quantity * BagGrams(S.ItemId); }
+	}
+	return Total;
+}
+
+int32 UInventoryComponent::RemoveBagsForGrams(FName Strain, int32 DesiredGrams, float& OutThc, float& OutQualPct)
+{
+	OutThc = 0.f; OutQualPct = 0.f;
+	if (GetOwnerRole() != ROLE_Authority || DesiredGrams <= 0) { return 0; }
+	// Vul met HELE zakjes tot >= DesiredGrams met minimale overschot: pak telkens het grootste zakje
+	// dat <= rest is; past niets meer maar is er nog rest, pak het kleinste zakje (overschot) en stop.
+	int32 SoldGrams = 0;
+	double ThcAcc = 0.0, QualAcc = 0.0; // gewogen op grammen
+	int32 Remaining = DesiredGrams;
+	int32 Guard = 0;
+	while (Remaining > 0 && Guard++ < 10000)
+	{
+		int32 BestFitIdx = INDEX_NONE, BestFitGrams = -1;
+		int32 SmallestIdx = INDEX_NONE, SmallestGrams = MAX_int32;
+		for (int32 i = 0; i < Stacks.Num(); ++i)
+		{
+			if (Stacks[i].Quantity <= 0 || !IsBag(Stacks[i].ItemId) || BagStrain(Stacks[i].ItemId) != Strain) { continue; }
+			const int32 G = BagGrams(Stacks[i].ItemId);
+			if (G <= 0) { continue; }
+			if (G <= Remaining && G > BestFitGrams) { BestFitGrams = G; BestFitIdx = i; }
+			if (G < SmallestGrams) { SmallestGrams = G; SmallestIdx = i; }
+		}
+		const int32 PickIdx = (BestFitIdx != INDEX_NONE) ? BestFitIdx : SmallestIdx;
+		if (PickIdx == INDEX_NONE) { break; } // geen zakjes meer
+		const int32 G = BagGrams(Stacks[PickIdx].ItemId);
+		ThcAcc += static_cast<double>(Stacks[PickIdx].Quality) * G;
+		QualAcc += static_cast<double>(Stacks[PickIdx].QualityPct) * G;
+		SoldGrams += G;
+		Remaining -= G;
+		Stacks[PickIdx].Quantity -= 1;
+		if (Stacks[PickIdx].Quantity <= 0) { UnassignHotbarStack(Stacks[PickIdx].StackId); Stacks.RemoveAt(PickIdx); }
+		if (BestFitIdx == INDEX_NONE) { break; } // overschot-zakje gepakt -> klaar
+	}
+	if (SoldGrams > 0)
+	{
+		OutThc = static_cast<float>(ThcAcc / SoldGrams);
+		OutQualPct = static_cast<float>(QualAcc / SoldGrams);
+		OnRep_Stacks();
+	}
+	return SoldGrams;
+}
+
 int32 UInventoryComponent::FindStackIndex(FName ItemId) const
 {
 	return Stacks.IndexOfByPredicate([ItemId](const FInventoryStack& S) { return S.ItemId == ItemId; });
@@ -133,6 +217,41 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy — sell or drop something.")); }
 		return false;
+	}
+
+	// Zakjes: discrete eenheden, max BagStackMax per slot; overloop -> nieuw slot.
+	if (IsBag(ItemId))
+	{
+		int32 Remaining = Count;
+		for (FInventoryStack& S : Stacks) // vul bestaande zakje-stapels van hetzelfde id tot het maximum
+		{
+			if (Remaining <= 0) { break; }
+			if (S.ItemId != ItemId || S.Quantity >= BagStackMax) { continue; }
+			const int32 Add = FMath::Min(BagStackMax - S.Quantity, Remaining);
+			const int32 OldQty = S.Quantity; const int32 NewQty = OldQty + Add;
+			if (ThcPercent >= 0.f) { S.Quality = (S.Quality * OldQty + ThcPercent * Add) / NewQty; }
+			if (QualityPct >= 0.f) { S.QualityPct = (S.QualityPct * OldQty + QualityPct * Add) / NewQty; }
+			S.Quantity = NewQty;
+			Remaining -= Add;
+		}
+		while (Remaining > 0) // nieuwe stapels (elk tot het maximum)
+		{
+			if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks)
+			{
+				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
+				break;
+			}
+			FInventoryStack NewStack;
+			NewStack.ItemId = ItemId;
+			NewStack.Quantity = FMath::Min(BagStackMax, Remaining);
+			NewStack.Quality = FMath::Max(0.f, ThcPercent);
+			NewStack.QualityPct = FMath::Max(0.f, QualityPct);
+			NewStack.StackId = NextStackId++;
+			Stacks.Add(NewStack);
+			Remaining -= NewStack.Quantity;
+		}
+		OnRep_Stacks();
+		return Remaining < Count;
 	}
 
 	const bool bStackable = IsStackable(ItemId);

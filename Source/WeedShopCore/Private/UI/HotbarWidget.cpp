@@ -167,9 +167,6 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FInventoryStack& S = Stacks[Idx];
 			const FString IdStr = S.ItemId.ToString();
-			const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
-			const bool bBud = bWet || IdStr.StartsWith(TEXT("Bud_"));
-			const bool bCash = (S.ItemId == TEXT("Cash"));
 
 			// Icoon (her)bouwen als het item veranderde, of als 't een fles is en de vol/leeg-staat flipte.
 			const bool bIsWater = IdStr.StartsWith(TEXT("WaterBottle"));
@@ -184,11 +181,8 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			SlotNames[i]->SetText(FText::FromString(Nm));
 			SlotNames[i]->SetColorAndOpacity(FSlateColor(WeedUI::ItemAccent(S.ItemId)));
 
-			// Gram voor wiet; "x N" alleen als er meer dan 1 is (geen "x1"-ruis); niets voor cash.
-			FString BadgeStr;
-			if (bCash) { BadgeStr.Empty(); }
-			else if (bBud) { BadgeStr = FString::Printf(TEXT("%dg"), S.Quantity); }
-			else if (S.Quantity > 1) { BadgeStr = FString::Printf(TEXT("x%d"), S.Quantity); }
+			// Aantal-badge: zakjes "Nx Xg", wiet "Xg", overig stapelbaar "xN", niets voor cash.
+			const FString BadgeStr = WeedUI::ItemQtyBadge(S.ItemId, S.Quantity);
 			SlotBadges[i]->SetText(BadgeStr.IsEmpty() ? FText::GetEmpty() : FText::FromString(BadgeStr));
 			// Pill-achtergrond alleen tonen als er ook echt een aantal staat (anders een leeg dot-je).
 			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(BadgeStr.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }

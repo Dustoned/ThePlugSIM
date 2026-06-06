@@ -364,7 +364,6 @@ void UDryingRackWidget::FillBody()
 				const int32 Have = Totals[Id];
 				const FString S = Id.ToString();
 				const bool bWet = S.StartsWith(TEXT("WetBud_"));
-				const bool bGram = bWet || S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("Joint_"));
 				UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
 				Vis->SetBrush(WeedUI::Rounded(bWet ? FLinearColor(0.10f, 0.16f, 0.20f, 0.96f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.96f), 8.f));
 				Vis->SetPadding(FMargin(4.f));
@@ -372,7 +371,7 @@ void UDryingRackWidget::FillBody()
 				Vis->SetContent(Ov);
 				UOverlaySlot* IconOS = Ov->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, Id, 42.f));
 				IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
-				UOverlaySlot* BS = Ov->AddChildToOverlay(BadgePill(bGram ? FString::Printf(TEXT("%dg"), Have) : FString::Printf(TEXT("x%d"), Have)));
+				UOverlaySlot* BS = Ov->AddChildToOverlay(BadgePill(WeedUI::ItemQtyBadge(Id, Have)));
 				BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Bottom);
 
 				UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();

@@ -950,18 +950,19 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 	const int32 PackGrams = FMath::Clamp(Grams, 1, FMath::Min(Cap, Have));
 	if (PackGrams <= 0) { return; }
 
-	const FName BagId(*FString::Printf(TEXT("Bag_%s"), *BudStr.RightChop(4))); // Bud_X -> Bag_X
+	const FName Strain(*BudStr.RightChop(4));                            // Bud_X -> X
+	const FName BagId = UInventoryComponent::MakeBagId(Strain, PackGrams); // -> Bag_X_<gram>
 	const float Thc = Inv->GetItemQuality(BudId);
 	const float Q = Inv->GetItemQualityPct(BudId);
 
 	if (!Inv->RemoveItem(BudId, PackGrams)) { return; }
 	Inv->RemoveItem(ContainerId, 1);
-	Inv->AddItem(BagId, PackGrams, Thc, Q);
+	Inv->AddItem(BagId, 1, Thc, Q); // één zakje van PackGrams gram
 
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Packed a %dg bag of %s."), PackGrams, *BudStr.RightChop(4)));
+			FString::Printf(TEXT("Packed a %dg bag of %s."), PackGrams, *Strain.ToString()));
 	}
 }
 
@@ -973,20 +974,23 @@ void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId)
 	if (!Inv) { return; }
 	const FString BagStr = BagId.ToString();
 	if (!BagStr.StartsWith(TEXT("Bag_"))) { return; } // alleen verpakte zakjes uitpakken
-	const int32 Have = Inv->GetQuantity(BagId);       // aantal gram in de stapel
-	if (Have <= 0) { return; }
+	const int32 Count = Inv->GetQuantity(BagId);      // aantal zakjes in de stapel
+	if (Count <= 0) { return; }
 
-	const FName BudId(*FString::Printf(TEXT("Bud_%s"), *BagStr.RightChop(4))); // Bag_X -> Bud_X
+	const FName Strain = UInventoryComponent::BagStrain(BagId);
+	const int32 PerBag = FMath::Max(1, UInventoryComponent::BagGrams(BagId));
+	const int32 TotalGrams = Count * PerBag;
+	const FName BudId(*FString::Printf(TEXT("Bud_%s"), *Strain.ToString())); // Bag_X_g -> Bud_X
 	const float Thc = Inv->GetItemQuality(BagId);
 	const float Q = Inv->GetItemQualityPct(BagId);
 
-	if (!Inv->RemoveItem(BagId, Have)) { return; } // hele zakje-stapel openen
-	Inv->AddItem(BudId, Have, Thc, Q);             // wiet weer los terug
+	if (!Inv->RemoveItem(BagId, Count)) { return; } // alle zakjes in deze stapel openen
+	Inv->AddItem(BudId, TotalGrams, Thc, Q);        // wiet weer los terug
 
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Unpacked %dg %s (loose - repackage or roll)."), Have, *BagStr.RightChop(4)));
+			FString::Printf(TEXT("Unpacked %dg %s (loose - repackage or roll)."), TotalGrams, *Strain.ToString()));
 	}
 }
 
@@ -999,7 +1003,7 @@ void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName Contain
 	const int32 Cap = ContainerCapacity(ContainerId);
 	if (Cap <= 0) { return; }
 
-	const FName BagId(*FString::Printf(TEXT("Bag_%s"), *BudStr.RightChop(4))); // Bud_X -> Bag_X
+	const FName Strain(*BudStr.RightChop(4)); // Bud_X -> X
 	const float Thc = Inv->GetItemQuality(BudId);
 	const float Q = Inv->GetItemQualityPct(BudId);
 
@@ -1014,7 +1018,7 @@ void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName Contain
 		const int32 Grams = FMath::Min(Cap, Have);
 		if (!Inv->RemoveItem(BudId, Grams)) { break; }
 		Inv->RemoveItem(ContainerId, 1);
-		Inv->AddItem(BagId, Grams, Thc, Q);
+		Inv->AddItem(UInventoryComponent::MakeBagId(Strain, Grams), 1, Thc, Q); // één gemaatd zakje
 		++BagsMade; TotalGrams += Grams;
 	}
 	if (GEngine && BagsMade > 0)

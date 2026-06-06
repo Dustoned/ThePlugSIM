@@ -194,11 +194,13 @@ void UDealWidget::RebuildStrains()
 	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
 	if (!Ph || !C || !Inv) { return; }
 
-	// Klanten kopen alleen VERPAKTE wiet (Bag_<strain>); bied dus je verpakte voorraad aan.
+	// Klanten kopen verpakte wiet; bied PER STRAIN aan (basis-id Bag_<strain>), ongeacht de zakje-maten.
 	TArray<FName> Buds;
 	for (const FInventoryStack& St : Inv->GetStacks())
 	{
-		if (St.ItemId.ToString().StartsWith(TEXT("Bag_")) && !Buds.Contains(St.ItemId)) { Buds.Add(St.ItemId); }
+		if (!UInventoryComponent::IsBag(St.ItemId)) { continue; }
+		const FName Base = FName(*FString::Printf(TEXT("Bag_%s"), *UInventoryComponent::BagStrain(St.ItemId).ToString()));
+		if (!Buds.Contains(Base)) { Buds.Add(Base); }
 	}
 	const FName Offered = Ph->GetOfferedProduct();
 
@@ -221,7 +223,11 @@ void UDealWidget::RebuildStrains()
 		St.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
 		St.NormalPadding = FMargin(8.f, 5.f); St.PressedPadding = FMargin(8.f, 5.f);
 		B->SetStyle(St);
-		B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s%s T%.0f%%"), *PrettyName(Buds[i]), bWanted ? TEXT(" *") : TEXT(""), Inv->GetItemQuality(Buds[i])), 12, FLinearColor::White, true));
+		const FName StrainNm = UInventoryComponent::BagStrain(Buds[i]);
+		const int32 Avail = Inv->BagGramsAvailable(StrainNm);
+		float QThc = 0.f;
+		for (const FInventoryStack& St2 : Inv->GetStacks()) { if (UInventoryComponent::IsBag(St2.ItemId) && UInventoryComponent::BagStrain(St2.ItemId) == StrainNm) { QThc = St2.Quality; break; } }
+		B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s%s  %dg  T%.0f%%"), *PrettyName(Buds[i]), bWanted ? TEXT(" *") : TEXT(""), Avail, QThc), 12, FLinearColor::White, true));
 		UHorizontalBoxSlot* S = RowBox->AddChildToHorizontalBox(B);
 		S->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		S->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));

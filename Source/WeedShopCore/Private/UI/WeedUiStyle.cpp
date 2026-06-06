@@ -1,5 +1,6 @@
 #include "UI/WeedUiStyle.h"
 
+#include "Inventory/InventoryComponent.h" // bag-helpers (IsBag/BagGrams/BagStrain) voor naam + badge
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -68,11 +69,24 @@ namespace WeedUI
 		return T;
 	}
 
+	FString ItemQtyBadge(FName ItemId, int32 Qty)
+	{
+		if (UInventoryComponent::IsBag(ItemId))
+		{
+			const int32 G = UInventoryComponent::BagGrams(ItemId);
+			return (Qty > 1) ? FString::Printf(TEXT("%dx %dg"), Qty, G) : FString::Printf(TEXT("%dg"), G);
+		}
+		const FString S = ItemId.ToString();
+		if (S == TEXT("Cash")) { return FString(); }
+		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_"))) { return FString::Printf(TEXT("%dg"), Qty); }
+		return (Qty > 1) ? FString::Printf(TEXT("x%d"), Qty) : FString();
+	}
+
 	FString PrettyItemName(FName ItemId)
 	{
 		FString S = ItemId.ToString();
 		if (S.StartsWith(TEXT("WetBud_")))    { return S.RightChop(7) + TEXT(" (wet)"); }
-		if (S.StartsWith(TEXT("Bag_")))       { return S.RightChop(4) + TEXT(" bag"); }
+		if (S.StartsWith(TEXT("Bag_")))       { return UInventoryComponent::BagStrain(ItemId).ToString() + TEXT(" bag"); }
 		if (S.StartsWith(TEXT("DryRack_")))   { return S.RightChop(8) + TEXT(" rack"); }
 		if (S == TEXT("Bench_Pack"))          { return TEXT("Packing bench"); }
 		if (S == TEXT("Cont_Bag2"))           { return TEXT("Small baggies"); }

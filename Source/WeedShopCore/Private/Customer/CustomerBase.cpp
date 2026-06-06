@@ -2628,7 +2628,7 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	FName LookupId = ProductId;
 	if (S.StartsWith(TEXT("Bag_")))
 	{
-		LookupId = FName(*FString::Printf(TEXT("Bud_%s"), *S.RightChop(4)));
+		LookupId = FName(*FString::Printf(TEXT("Bud_%s"), *UInventoryComponent::BagStrain(ProductId).ToString()));
 	}
 	else if (!S.StartsWith(TEXT("Bud_")))
 	{
@@ -2726,16 +2726,25 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		return EDealResult::Refused;
 	}
 
-	// Voorraad-check (op het aangeboden product).
-	if (!StockFrom || !StockFrom->HasItem(ProductId, DesiredQuantity))
+	// Voorraad-check: genoeg HELE zakjes van deze strain om de gevraagde grammen te dekken?
+	const FName Strain = UInventoryComponent::BagStrain(ProductId);
+	if (!StockFrom || StockFrom->BagGramsAvailable(Strain) < DesiredQuantity)
 	{
-		UE_LOG(LogWeedShop, Log, TEXT("Klant: geen voorraad van %s (x%d)."), *ProductId.ToString(), DesiredQuantity);
+		UE_LOG(LogWeedShop, Log, TEXT("Klant: geen voorraad van %s (%dg)."), *Strain.ToString(), DesiredQuantity);
 		return EDealResult::NoStock;
 	}
 
-	// Kwaliteit (0..1) + potentie (THC%) van de wiet die je verkoopt.
-	const float Quality01 = FMath::Clamp(StockFrom->GetItemQualityPct(ProductId) / 100.f, 0.f, 1.f);
-	const float ThcStock = StockFrom->GetItemQuality(ProductId);
+	// Kwaliteit (0..1) + potentie (THC%) van een representatief zakje van deze strain.
+	float Quality01 = 0.6f, ThcStock = 15.f;
+	for (const FInventoryStack& BS : StockFrom->GetStacks())
+	{
+		if (UInventoryComponent::IsBag(BS.ItemId) && UInventoryComponent::BagStrain(BS.ItemId) == Strain)
+		{
+			Quality01 = FMath::Clamp(BS.QualityPct / 100.f, 0.f, 1.f);
+			ThcStock = BS.Quality;
+			break;
+		}
+	}
 
 	// Boven budget -> dingt af.
 	if (AskPriceCentsPerUnit > BudgetCentsPerUnit)
@@ -2763,9 +2772,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		return EDealResult::Refused;
 	}
 
-	// Deal rond: betalen, voorraad af, attributen bijwerken.
-	const int32 Total = AskPriceCentsPerUnit * DesiredQuantity;
-	StockFrom->RemoveItem(ProductId, DesiredQuantity);
+	// Deal rond: vul de gevraagde grammen met HELE zakjes en reken de ECHTE grammen af.
+	float SoldThc = 0.f, SoldQual = 0.f;
+	const int32 SoldGrams = StockFrom->RemoveBagsForGrams(Strain, DesiredQuantity, SoldThc, SoldQual);
+	if (SoldGrams <= 0) { return EDealResult::NoStock; }
+	const int32 Total = AskPriceCentsPerUnit * SoldGrams;
 	if (PayTo)
 	{
 		PayTo->AddMoney(Total);

@@ -63,6 +63,9 @@ namespace WeedUI
 	// Leesbare naam voor een item-id (Bud_X -> X, Seed_X -> X seed, etc.).
 	WEEDSHOPCORE_API FString PrettyItemName(FName ItemId);
 
+	// Aantal-badge voor een slot: zakjes -> "Nx Xg", wiet -> "Xg", overig stapelbaar -> "xN", anders "".
+	WEEDSHOPCORE_API FString ItemQtyBadge(FName ItemId, int32 Qty);
+
 	// --- Item-iconen ---------------------------------------------------------
 	// Bestandsnaam-sleutel (zonder pad/extensie) voor het icoon van een item, bv. "weed", "cash",
 	// "packaging". Drop een PNG met die naam in Content/_Project/UI/Icons/ en hij wordt gebruikt.
