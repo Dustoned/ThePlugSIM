@@ -2,6 +2,7 @@
 #include "UI/WeedToast.h"
 
 #include "Cultivation/WaterCanComponent.h"
+#include "Inventory/InventoryComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/StaticMesh.h"
@@ -57,12 +58,16 @@ void AWaterSink::Interact_Implementation(APawn* InstigatorPawn)
 	{
 		return;
 	}
+	// Je moet een waterfles ECHT in je hand hebben (geselecteerd op de hotbar) om te vullen — niet
+	// alleen ergens in je inventory.
+	UInventoryComponent* Inv = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	const bool bHoldingBottle = Inv && Inv->GetActiveItemId().ToString().StartsWith(TEXT("WaterBottle"));
 	UWaterCanComponent* Can = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UWaterCanComponent>() : nullptr;
-	if (!Can || !Can->HasBottle())
+	if (!bHoldingBottle || !Can || !Can->HasBottle())
 	{
 		if (GEngine)
 		{
-			UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("You need a water bottle (buy one from the supplier)."));
+			UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Hold a water bottle in your hand (select it on the hotbar) to fill it."));
 		}
 		return;
 	}
