@@ -5,6 +5,7 @@
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Customer/CustomerBase.h"
+#include "World/CityGenerator.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/DataTable.h"
@@ -239,17 +240,46 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		}
 	}
 
-	// Fallback (bewoner niet (meer) gevonden): verse klant vlak vóór de eerste speler.
+	// Fallback: het contact loopt niet fysiek rond (uitgeroteerd). Contacten blijven tóch bereikbaar:
+	//  - "Kom bij mij" (YouGoToThem): spawn 'm bij z'n EIGEN woning (het adres staat in het bericht).
+	//  - "Ik kom langs" (TheyComeToYou): spawn 'm vlak vóór de speler.
+	const bool bComeToYou = (Msg.Kind == EAppointmentKind::TheyComeToYou);
 	FVector SpawnLoc(0.f, 0.f, 150.f);
 	FRotator SpawnRot = FRotator::ZeroRotator;
-	if (const APlayerController* PC = World->GetFirstPlayerController())
+	bool bPlacedAtHome = false;
+
+	if (!bComeToYou)
 	{
-		if (const APawn* Player = PC->GetPawn())
+		// Huis-index uit het NpcId "Resident_####" halen.
+		const FString IdStr = Msg.FromContactId.ToString();
+		if (IdStr.StartsWith(TEXT("Resident_")))
 		{
-			SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
-			SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
-			SpawnRot.Pitch = 0.f;
-			SpawnRot.Roll = 0.f;
+			const int32 HomeIdx = FCString::Atoi(*IdStr.RightChop(9));
+			ACityGenerator* City = nullptr;
+			for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
+			if (City)
+			{
+				const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+				if (Homes.IsValidIndex(HomeIdx))
+				{
+					SpawnLoc = Homes[HomeIdx].InteriorPos + FVector(0.f, 0.f, 4.f);
+					bPlacedAtHome = true;
+				}
+			}
+		}
+	}
+
+	if (!bPlacedAtHome)
+	{
+		if (const APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (const APawn* Player = PC->GetPawn())
+			{
+				SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
+				SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
+				SpawnRot.Pitch = 0.f;
+				SpawnRot.Roll = 0.f;
+			}
 		}
 	}
 
