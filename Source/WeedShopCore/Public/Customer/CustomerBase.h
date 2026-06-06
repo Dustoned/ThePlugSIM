@@ -142,6 +142,11 @@ public:
 	bool bTalkingToPlayer = false;
 	void SetTalkingToPlayer(bool b);
 
+	// Verkoper achter de winkel-balie: staat altijd stil en is GEEN deal-klant (de balie opent de winkel).
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
+	bool bShopkeeper = false;
+	bool IsShopkeeper() const { return bShopkeeper; }
+
 	// Marktprijs per eenheid van het gewenste product (cents). 0 als onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	int32 GetMarketPriceCents() const;

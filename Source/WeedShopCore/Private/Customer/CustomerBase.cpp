@@ -261,6 +261,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, SpeechLine);
 	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
 	DOREPLIFETIME(ACustomerBase, bTalkingToPlayer);
+	DOREPLIFETIME(ACustomerBase, bShopkeeper);
 	DOREPLIFETIME(ACustomerBase, NpcId);
 }
 
@@ -324,6 +325,13 @@ void ACustomerBase::Tick(float DeltaSeconds)
 
 	if (!HasAuthority())
 	{
+		return;
+	}
+
+	// Verkoper achter de balie: altijd stil blijven staan.
+	if (bShopkeeper)
+	{
+		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
 		return;
 	}
 

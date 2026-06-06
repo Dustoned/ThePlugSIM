@@ -1050,7 +1050,7 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 			// Winkelbalie in de stad -> open lokaal de juiste telefoon-shop.
 			if (AStoreCounter* Counter = Cast<AStoreCounter>(Focus))
 			{
-				if (Phone && Counter->HasShop()) { Phone->OpenToApp(Counter->GetShopApp()); Phone->SetSupplierCat(Counter->GetShopCat()); }
+				if (Phone && Counter->HasShop()) { Phone->OpenStore(Counter); } // fullscreen winkel-menu (geen telefoon)
 				return;
 			}
 			// Verpak-tafel -> open lokaal het verpak-menu (met de batch-grootte van deze tafel).
@@ -1122,7 +1122,7 @@ void AThePlugSIMCharacter::OnInteractKey()
 			}
 			if (AStoreCounter* Counter = Cast<AStoreCounter>(Focus))
 			{
-				if (Phone && Counter->HasShop()) { Phone->OpenToApp(Counter->GetShopApp()); Phone->SetSupplierCat(Counter->GetShopCat()); }
+				if (Phone && Counter->HasShop()) { Phone->OpenStore(Counter); } // fullscreen winkel-menu (geen telefoon)
 				return;
 			}
 			if (APackBench* Bench = Cast<APackBench>(Focus))

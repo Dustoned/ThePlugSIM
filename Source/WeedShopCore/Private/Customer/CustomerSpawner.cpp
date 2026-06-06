@@ -4,6 +4,7 @@
 #include "Customer/CustomerBase.h"
 #include "World/CityGenerator.h"
 #include "World/DayCycleComponent.h"
+#include "World/StoreCounter.h"
 #include "World/CityDoor.h"
 #include "Game/WeedShopGameState.h"
 #include "Npc/NpcRegistryComponent.h"
@@ -550,6 +551,26 @@ void ACustomerSpawner::SpawnResidents()
 	// Bij een verse game: meubels in de woningen + ATM in elke winkel (server-side, repliceert).
 	ResidentHomeIndices = PhysicalSet; // bewoner-woningen meubileren we ook
 	SpawnHomeAndShopFixtures(City);
+
+	// Verkoper-NPC achter elke winkel-balie (server-side -> repliceert, geen duplicaten op clients).
+	{
+		TSubclassOf<ACustomerBase> KCls = CustomerClass; if (!KCls) { KCls = ACustomerBase::StaticClass(); }
+		for (TActorIterator<AStoreCounter> It(World); It; ++It)
+		{
+			AStoreCounter* Counter = *It;
+			if (!Counter || !Counter->HasShop()) { continue; }
+			const FVector Fwd = Counter->GetActorForwardVector();
+			FVector Pos = Counter->GetActorLocation() - Fwd * 60.f; // achter de balie
+			Pos.Z -= 10.f;                                          // van balie-midden naar de vloer
+			const FTransform KTM(Counter->GetActorRotation(), Pos);
+			if (ACustomerBase* Keeper = World->SpawnActorDeferred<ACustomerBase>(KCls, KTM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn))
+			{
+				Keeper->bShopkeeper = true;
+				Keeper->FinishSpawning(KTM);
+				if (!Keeper->GetController()) { Keeper->SpawnDefaultController(); }
+			}
+		}
+	}
 
 	// --- Dagelijkse rotatie opzetten ---
 	EligibleHomes = Entrances;            // volledige pool (alle niet-koopbare ingangen)

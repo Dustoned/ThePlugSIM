@@ -143,11 +143,12 @@ void UInteractionComponent::TryInteract()
 
 	// Klant -> open lokaal het deal-paneel (prijs-slider) i.p.v. direct verkopen. De bevestiging
 	// gaat daarna via een Server-RPC. Dit draait op de lokaal bestuurde speler.
-	if (Cast<ACustomerBase>(Target))
+	if (ACustomerBase* Cust = Cast<ACustomerBase>(Target))
 	{
+		if (Cust->IsShopkeeper()) { return; } // verkoper achter de balie: niet dealen (spreek de balie aan)
 		if (UPhoneClientComponent* Phone = GetOwner() ? GetOwner()->FindComponentByClass<UPhoneClientComponent>() : nullptr)
 		{
-			Phone->OpenDeal(Cast<ACustomerBase>(Target));
+			Phone->OpenDeal(Cust);
 			return;
 		}
 	}

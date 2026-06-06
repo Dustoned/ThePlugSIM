@@ -41,6 +41,8 @@
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
 #include "UI/DryingRackWidget.h"
+#include "UI/StoreWidget.h"
+#include "World/StoreCounter.h"
 #include "UI/HandInfoWidget.h"
 #include "UI/WeedToast.h"
 #include "Cultivation/DryingRack.h"
@@ -519,7 +521,7 @@ void UPhoneClientComponent::RefreshInputMode()
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen;
 	// Maar 1 UI tegelijk: opent er een ander scherm, dan gaat de fullscreen-kaart dicht.
 	if (bAnyUI && MapOverlay)
 	{
@@ -608,6 +610,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (ShelfWidget) { ShelfWidget->SetPhone(this); ShelfWidget->AddToViewport(31); }
 	DryRackWidget = CreateWidget<UDryingRackWidget>(PC, UDryingRackWidget::StaticClass());
 	if (DryRackWidget) { DryRackWidget->SetPhone(this); DryRackWidget->AddToViewport(32); }
+	StoreWidget = CreateWidget<UStoreWidget>(PC, UStoreWidget::StaticClass());
+	if (StoreWidget) { StoreWidget->SetPhone(this); StoreWidget->AddToViewport(33); }
 	PauseWidget = CreateWidget<UPauseMenuWidget>(PC, UPauseMenuWidget::StaticClass());
 	if (PauseWidget) { PauseWidget->SetPhone(this); PauseWidget->AddToViewport(40); }
 	MainMenuWidget = CreateWidget<UMainMenuWidget>(PC, UMainMenuWidget::StaticClass());
@@ -636,7 +640,7 @@ void UPhoneClientComponent::Toggle()
 		bDealOpen = false;
 		bInventoryOpen = false;
 		bPotUpgradeOpen = false;
-		bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false;
+		bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false; bStoreOpen = false;
 		bHomeScreen = true; // open altijd op het home-scherm met de apps
 	}
 	UpdateCursor();
@@ -719,7 +723,7 @@ void UPhoneClientComponent::ClosePause()
 bool UPhoneClientComponent::IsAnyGameUIOpen() const
 {
 	return bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen
-		|| bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bPauseOpen || bSettingsOpen;
+		|| bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bSettingsOpen;
 }
 
 void UPhoneClientComponent::CloseAllUI()
@@ -1418,6 +1422,53 @@ void UPhoneClientComponent::ServerBuySupply_Implementation(FName SupplyId)
 			GS->GetStore()->BuySupply(SupplyId, GetOwnerInventory());
 		}
 	}
+}
+
+void UPhoneClientComponent::OpenStore(AStoreCounter* Counter)
+{
+	if (!Counter || !Counter->HasShop()) { return; }
+	StoreCounterRef = Counter;
+	bStoreOpen = true;
+	// Sluit andere UI's.
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
+	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseStore()
+{
+	bStoreOpen = false;
+	StoreCounterRef = nullptr;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ServerStoreBuy_Implementation(FName ItemId, bool bBank)
+{
+	AWeedShopGameState* GS = GetGS();
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	UInventoryComponent* Inv = GetOwnerInventory();
+	UEconomyComponent* Econ = GetOwnerEconomy();
+	if (!Store || !Inv || !Econ) { return; }
+
+	// Prijs + soort bepalen (seed vs supply).
+	FText Name; int32 Price = 0; int32 Pack = 1;
+	const bool bSeed = Store->GetSeedDisplay(ItemId, Name, Price);
+	if (!bSeed && !Store->GetSupplyDisplay(ItemId, Name, Price, Pack)) { return; }
+	if (Price <= 0) { return; }
+
+	// Betalen met bank of cash; geen bezorgkosten.
+	const bool bPaid = bBank ? Econ->RemoveBank(Price) : Econ->RemoveMoney(Price);
+	if (!bPaid)
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Red, bBank ? TEXT("Niet genoeg op de bank.") : TEXT("Niet genoeg cash.")); }
+		return;
+	}
+
+	// Direct leveren in je inventory.
+	if (bSeed) { Inv->AddItem(Store->SeedItemId(ItemId), 1); }
+	else       { Inv->AddItem(ItemId, FMath::Max(1, Pack)); }
+
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor(120, 220, 160), FString::Printf(TEXT("Gekocht: %s"), *Name.ToString())); }
 }
 
 void UPhoneClientComponent::SetTab(int32 NewTab)

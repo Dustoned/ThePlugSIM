@@ -156,6 +156,19 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerShelfTake(class AStorageShelf* Shelf, int32 SlotIndex, int32 Count);
 
+	// --- Fysieke winkel (balie): fullscreen winkel-menu, betaal cash/bank, instant, geen shipping ---
+	void OpenStore(class AStoreCounter* Counter);
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")
+	void CloseStore();
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Store")
+	bool IsStoreOpen() const { return bStoreOpen; }
+	class AStoreCounter* GetStoreCounter() const { return StoreCounterRef.Get(); }
+	void SetStorePayBank(bool b) { bStorePayBank = b; }
+	bool IsStorePayBank() const { return bStorePayBank; }
+	void StoreBuy(FName ItemId) { ServerStoreBuy(ItemId, bStorePayBank); }
+	UFUNCTION(Server, Reliable)
+	void ServerStoreBuy(FName ItemId, bool bBank);
+
 	// --- Droogrek (in de wereld): natte wiet ophangen + gedroogde batches oogsten ---
 	void OpenDryRack(class ADryingRack* Rack);
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Dry")
@@ -675,6 +688,8 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UShelfWidget> ShelfWidget;
+	UPROPERTY()
+	TObjectPtr<class UStoreWidget> StoreWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UDryingRackWidget> DryRackWidget;
@@ -738,6 +753,10 @@ protected:
 
 	bool bShelfOpen = false;
 	TWeakObjectPtr<class AStorageShelf> ShelfActor; // het schap dat nu open is
+
+	bool bStoreOpen = false;
+	bool bStorePayBank = false;                      // false = cash, true = bank
+	TWeakObjectPtr<class AStoreCounter> StoreCounterRef; // de balie/winkel die nu open is
 	bool bDryRackOpen = false;
 	TWeakObjectPtr<class ADryingRack> DryRackActor; // het droogrek dat nu open is
 
