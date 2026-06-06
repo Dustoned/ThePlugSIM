@@ -332,6 +332,17 @@ public:
 	// Wereldlocatie van je huidige woning (voordeur) — voor de compass-home-marker. False = geen woning.
 	bool GetActiveHomeLocation(FVector& OutWorld) const;
 	void RestoreProperty(const TArray<int32>& InOwned, int32 InActive);
+
+	// --- Bezorg-doel: welk eigen huis krijgt de levering ---
+	// Welke eigen woning bevat de speler NU (binnen de kamer-bounds)? -1 = geen.
+	int32 GetHomePlayerIsInside() const;
+	// Het te gebruiken bezorg-huis: handmatige keuze > huis waar je nu binnen bent > actieve woning.
+	int32 ResolveDeliveryHome() const;
+	// UI: kies expliciet een bezorg-huis (-1 = automatisch).
+	void SetDeliveryHome(int32 HomeIndex) { SelectedDeliveryHome = HomeIndex; }
+	int32 GetSelectedDeliveryHome() const { return SelectedDeliveryHome; }
+	// Korte naam van een woning (huisnummer) voor de UI.
+	FString GetHomeLabel(int32 HomeIndex) const;
 	// Wordt periodiek aangeroepen (door de pawn-tick): starter toekennen + eigen deuren ontgrendelen.
 	void PropertyTick();
 
@@ -544,6 +555,7 @@ protected:
 	TArray<int32> OwnedHomes;            // indices in CityGenerator::ApartmentHomes
 	UPROPERTY(ReplicatedUsing = OnRep_Property)
 	int32 ActiveHome = -1;               // huidige woon-/spawn-plek
+	int32 SelectedDeliveryHome = -1;     // UI-keuze bezorg-huis (-1 = automatisch: huidige/binnen-huis)
 	bool bPropertyInit = false;          // server: starter al toegekend?
 	FTimerHandle PropertyTimer;
 
@@ -576,7 +588,7 @@ protected:
 	// een netto-afrekening (verkoop trekt van de kosten af) en bezorgkosten op het koopdeel.
 	UFUNCTION(Server, Reliable)
 	void ServerBuyCart(const TArray<FName>& BuyIds, const TArray<int32>& BuyQtys,
-		const TArray<FName>& SellIds, const TArray<int32>& SellQtys, int32 DeliveryOption);
+		const TArray<FName>& SellIds, const TArray<int32>& SellQtys, int32 DeliveryOption, int32 DeliveryHome);
 
 	// Server: levert de bestelling (voegt items toe / schrijft itemprijs af). Direct of na de levertijd.
 	// OrderId>0 = ruim de bijbehorende pending-regel op na levering (0 = directe levering, geen regel).

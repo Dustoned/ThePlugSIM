@@ -386,6 +386,52 @@ bool UPhoneClientComponent::GetActiveHomeLocation(FVector& OutWorld) const
 	return true;
 }
 
+int32 UPhoneClientComponent::GetHomePlayerIsInside() const
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	ACityGenerator* City = FindCity();
+	if (!Pawn || !City) { return -1; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	const FVector P = Pawn->GetActorLocation();
+	for (int32 Idx : OwnedHomes)
+	{
+		if (!Homes.IsValidIndex(Idx)) { continue; }
+		const FApartmentHome& H = Homes[Idx];
+		const FVector C = H.InteriorPos;
+		const FVector R = H.RoomHalf;
+		if (FMath::Abs(P.X - C.X) <= R.X + 40.f
+			&& FMath::Abs(P.Y - C.Y) <= R.Y + 40.f
+			&& P.Z >= C.Z - 150.f && P.Z <= C.Z + FMath::Max(220.f, R.Z) + 150.f)
+		{
+			return Idx;
+		}
+	}
+	return -1;
+}
+
+FString UPhoneClientComponent::GetHomeLabel(int32 HomeIndex) const
+{
+	ACityGenerator* City = FindCity();
+	if (City)
+	{
+		const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+		if (Homes.IsValidIndex(HomeIndex) && !Homes[HomeIndex].Number.IsEmpty())
+		{
+			return FString::Printf(TEXT("Nr %s"), *Homes[HomeIndex].Number);
+		}
+	}
+	return FString::Printf(TEXT("Huis %d"), HomeIndex);
+}
+
+int32 UPhoneClientComponent::ResolveDeliveryHome() const
+{
+	// Handmatige keuze wint; anders het huis waar je NU binnen bent; anders de actieve woning.
+	if (SelectedDeliveryHome >= 0 && OwnedHomes.Contains(SelectedDeliveryHome)) { return SelectedDeliveryHome; }
+	const int32 Inside = GetHomePlayerIsInside();
+	if (Inside >= 0) { return Inside; }
+	return ActiveHome;
+}
+
 UEconomyComponent* UPhoneClientComponent::GetOwnerEconomy() const
 {
 	return GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
@@ -1487,7 +1533,7 @@ void UPhoneClientComponent::Checkout(int32 DeliveryOption)
 		if (L.bSell) { SellIds.Add(L.ItemId); SellQ.Add(L.Qty); }
 		else { BuyIds.Add(L.ItemId); BuyQ.Add(L.Qty); }
 	}
-	ServerBuyCart(BuyIds, BuyQ, SellIds, SellQ, DeliveryOption);
+	ServerBuyCart(BuyIds, BuyQ, SellIds, SellQ, DeliveryOption, ResolveDeliveryHome());
 	Cart.Reset();
 }
 
@@ -1523,8 +1569,11 @@ void UPhoneClientComponent::DeliverCart(int32 OrderId, const TArray<FName>& Item
 }
 
 void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& BuyIds, const TArray<int32>& BuyQtys,
-	const TArray<FName>& SellIds, const TArray<int32>& SellQtys, int32 DeliveryOption)
+	const TArray<FName>& SellIds, const TArray<int32>& SellQtys, int32 DeliveryOption, int32 DeliveryHome)
 {
+	// Door de client gekozen/afgeleid bezorg-huis vastleggen (server-authoritative check zit in ResolveDeliveryHome).
+	if (DeliveryHome >= 0 && OwnedHomes.Contains(DeliveryHome)) { SelectedDeliveryHome = DeliveryHome; }
+
 	AWeedShopGameState* GS = GetGS();
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	UInventoryComponent* Inv = GetOwnerInventory();
@@ -1639,11 +1688,16 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 	FVector Point = FVector::ZeroVector;
 	bool bFound = false;
 
-	// 0) Bij voorkeur: voor de voordeur van JOUW woning, op de grond (DoorPos). Voor flats is dit de
-	//    gebouw-ingang op de begane grond -> de drone hoeft niet door muren of omhoog.
+	// 0) Bij voorkeur: voor de voordeur van het GEKOZEN bezorg-huis (handmatig, of het huis waar je nu
+	//    binnen bent, of je actieve woning). Op de grond (DoorPos) -> de drone hoeft niet door muren/omhoog.
 	{
-		FVector HomeDoor;
-		if (GetActiveHomeLocation(HomeDoor)) { Point = HomeDoor; bFound = true; }
+		const int32 DH = ResolveDeliveryHome();
+		ACityGenerator* City = FindCity();
+		if (City && DH >= 0)
+		{
+			const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+			if (Homes.IsValidIndex(DH)) { Point = Homes[DH].DoorPos; bFound = true; }
+		}
 	}
 
 	if (World && !bFound)

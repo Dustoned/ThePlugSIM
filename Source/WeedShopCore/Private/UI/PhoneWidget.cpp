@@ -994,6 +994,25 @@ void UPhoneWidget::FillStoreList()
 					OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
 				}
 				StoreFooter->AddChildToVerticalBox(Opts)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+				// Bezorg-adres: bij meerdere woningen kies je waar 't heen gaat. Standaard het huis waar je
+				// nu binnen bent (groen). Anders je huidige/actieve woning.
+				const TArray<int32>& OwnedH = Ph->GetOwnedHomes();
+				if (OwnedH.Num() > 1)
+				{
+					const int32 CurTarget = Ph->ResolveDeliveryHome();
+					StoreFooter->AddChildToVerticalBox(MakeText(TEXT("Bezorgen bij"), 11, FLinearColor(0.75f, 0.8f, 0.95f)))->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+					UHorizontalBox* HomesRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+					for (int32 HIdx : OwnedH)
+					{
+						const FLinearColor Col = (HIdx == CurTarget) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+						UWeedActionButton* HB = MakeActionBtn(Ph->GetHomeLabel(HIdx), Col,
+							[this, HIdx]() { if (Phone.IsValid()) { Phone->SetDeliveryHome(HIdx); } RefreshStore(); }, 9);
+						UHorizontalBoxSlot* HS = HomesRow->AddChildToHorizontalBox(HB);
+						HS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+					}
+					StoreFooter->AddChildToVerticalBox(HomesRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+				}
 			}
 
 			// Opbouw-regel: koop - verkoop - bezorging.
@@ -1296,7 +1315,7 @@ void UPhoneWidget::RefreshContent()
 			for (const FCityPropertyOffer& O : Offers)
 			{
 				const bool bOwned = Phone->IsPropertyOwned(O.HomeIndex);
-				const bool bActive = Phone->IsActiveHome(O.HomeIndex);
+				const bool bHereNow = bOwned && (Phone->GetHomePlayerIsInside() == O.HomeIndex);
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
 				Info->AddChildToVerticalBox(MakeText(O.Title, 12, bOwned ? FLinearColor(0.7f, 1.f, 0.7f) : FLinearColor::White));
@@ -1310,10 +1329,10 @@ void UPhoneWidget::RefreshContent()
 				IL->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 
 				USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
-				RB->SetWidthOverride(82.f); RB->SetHeightOverride(28.f);
+				RB->SetWidthOverride(104.f); RB->SetHeightOverride(28.f);
 				if (!bOwned)        { RB->SetContent(MakeButton(TEXT("Koop"), 7, O.HomeIndex, FLinearColor(0.2f, 0.5f, 0.28f))); }
-				else if (bActive)   { RB->SetContent(MakeText(TEXT("thuis"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
-				else                { RB->SetContent(MakeButton(TEXT("Woon hier"), 8, O.HomeIndex, FLinearColor(0.25f, 0.4f, 0.55f))); }
+				else if (bHereNow)  { RB->SetContent(MakeText(TEXT("je bent hier"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
+				else                { RB->SetContent(MakeButton(TEXT("Ga hierheen"), 8, O.HomeIndex, FLinearColor(0.25f, 0.45f, 0.6f))); } // teleport tussen je woningen
 				UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
 				RS->SetVerticalAlignment(VAlign_Center);
 				ContentBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
