@@ -183,7 +183,7 @@ namespace WeedUI
 
 			if (Has(TEXT("Cont_")))                                      return { TEXT("packaging"), FLinearColor(0.45f, 0.6f, 0.95f),  EIcon::Shop };
 			if (Has(TEXT("Papers_")))                                    return { TEXT("papers"),    FLinearColor(0.7f, 0.7f, 0.85f),   EIcon::Message };
-			if (ItemId == TEXT("Bench_Pack"))                            return { TEXT("packaging"), FLinearColor(0.5f, 0.65f, 0.95f),  EIcon::Shop };
+			if (Has(TEXT("Bench_")))                                     return { TEXT("bench"),     FLinearColor(0.62f, 0.5f, 0.38f),  EIcon::Home };
 
 			if (Has(TEXT("Soil_")))                                      return { TEXT("soil"),      FLinearColor(0.65f, 0.5f, 0.35f),  EIcon::Leaf };
 			if (Has(TEXT("WaterBottle_")) || Has(TEXT("Water")))         return { TEXT("water"),     FLinearColor(0.4f, 0.7f, 0.95f),   EIcon::Coin };
@@ -354,9 +354,29 @@ namespace WeedUI
 		}
 	}
 
+	// Per-ITEM icoon (heeft voorrang op de categorie) zodat tiers niet hetzelfde icoon delen:
+	// elke container apart, en de packing-bench een eigen icoon i.p.v. het packaging-icoon.
+	static FString ExactIconStem(FName ItemId)
+	{
+		const FString S = ItemId.ToString();
+		if (S.StartsWith(TEXT("Bench_")))  { return TEXT("bench"); }
+		if (S == TEXT("Cont_Bag2"))        { return TEXT("bag_small"); }
+		if (S == TEXT("Cont_Bag5"))        { return TEXT("bag_big"); }
+		if (S == TEXT("Cont_Jar10"))       { return TEXT("jar_small"); }
+		if (S == TEXT("Cont_Jar15"))       { return TEXT("jar_big"); }
+		if (S == TEXT("Cont_Block100"))    { return TEXT("block"); }
+		if (S == TEXT("Cont_Garbage500"))  { return TEXT("garbage"); }
+		return FString();
+	}
+
 	UTexture2D* ItemIconTexture(FName ItemId)
 	{
 		if (IconKeyFor(ItemId).IsEmpty()) { return nullptr; }
+		// Per-item override eerst (tiers met een eigen icoon).
+		{
+			const FString Exact = ExactIconStem(ItemId);
+			if (!Exact.IsEmpty()) { if (UTexture2D* T = LoadByStem(Exact)) { return T; } }
+		}
 		// Waterfles: toon VOL of LEEG afhankelijk van de waterlading van de speler.
 		if (FString(CatFor(ItemId).Key) == TEXT("water"))
 		{
