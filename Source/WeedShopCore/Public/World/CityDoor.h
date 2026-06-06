@@ -24,6 +24,10 @@ public:
 	// Stel de deur in (afmeting + kleur). Hinge zit aan de -X-kant; dicht = paneel langs +X.
 	void Setup(float Width, float Height, const FLinearColor& Color);
 
+	// Deterministische bewoner-naam per huis-index (gelijk op server EN client, zodat de client zelf
+	// de juiste "LOCKED - <naam>"-popup kan tonen zonder replicatie).
+	static FString ResidentNameForIndex(int32 Index);
+
 	// Maak dit een bewoner-deur: op slot voor de speler, met "LOCKED - <naam> lives here".
 	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
 	bool IsLocked() const { return bLocked; }

@@ -228,18 +228,40 @@ void UPhoneClientComponent::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) c
 
 void UPhoneClientComponent::ApplyLocalDoors()
 {
-	// Alleen de eigen woningen van DEZE (lokale) speler ontgrendelen — deuren zijn lokaal/cosmetisch.
+	// Deuren zijn lokaal/niet-gerepliceerd: ELKE client zet z'n eigen deuren in de juiste staat.
+	// (Voorheen alleen de eigen owned-homes -> bij de 2e speler bleven bewoner/te-koop-deuren leeg,
+	//  geen "LOCKED - <naam>"-popup, en door speler 1 gekochte woningen bleven op slot.)
 	APawn* P = Cast<APawn>(GetOwner());
 	if (!P || !P->IsLocallyControlled()) { return; }
 	ACityGenerator* City = FindCity();
 	if (!City) { return; }
+	UWorld* W = GetWorld();
+	if (!W) { return; }
 	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
-	for (int32 Idx : OwnedHomes)
+
+	// Gedeeld co-op: een woning die door EENDER WELKE speler bezeten wordt, telt als "ons".
+	TSet<int32> OwnedAny;
+	for (TActorIterator<APawn> It(W); It; ++It)
 	{
-		if (Homes.IsValidIndex(Idx))
+		if (const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>())
 		{
-			if (ACityDoor* Dr = Homes[Idx].Door.Get()) { Dr->SetPlayerHome(); }
+			for (int32 Idx : Ph->OwnedHomes) { OwnedAny.Add(Idx); }
 		}
+	}
+	// Te-koop-panden (zelfde bron als de server-deursetup in CustomerSpawner).
+	TSet<int32> ForSale;
+	{
+		TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+		for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
+	}
+
+	for (int32 i = 0; i < Homes.Num(); ++i)
+	{
+		ACityDoor* Dr = Homes[i].Door.Get();
+		if (!Dr) { continue; }
+		if (OwnedAny.Contains(i))     { Dr->SetPlayerHome(); }                              // van een speler -> open
+		else if (ForSale.Contains(i)) { Dr->SetForSale(); }                                // te koop
+		else                          { Dr->SetResident(ACityDoor::ResidentNameForIndex(i)); } // bewoner -> LOCKED - naam
 	}
 }
 
