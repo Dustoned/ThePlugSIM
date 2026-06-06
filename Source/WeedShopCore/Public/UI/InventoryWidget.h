@@ -74,6 +74,10 @@ class WEEDSHOPCORE_API UInventoryWidget : public UUserWidget
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 	void MarkDirty() { bDirty = true; }
+	// Shift+klik op een stapel -> open de split-popup (slider: hoeveel afsplitsen).
+	void OpenSplitPopup(int32 StackId);
+	// Voeg alle stapels van dit item samen (sleep een stapel op een gelijke -> mergen).
+	void MergeItemNow(FName ItemId);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -96,6 +100,17 @@ protected:
 
 	// Vult het thuis-voorraad-lijstje (alle shelves/chests samengeteld per strain).
 	void RebuildStash();
+
+	// --- Split-popup (slider) ---
+	void BuildSplitPopup(UCanvasPanel* Root);
+	UFUNCTION() void OnSplitSliderChanged(float V);
+	void ConfirmSplit();
+	void CancelSplit();
+	UPROPERTY() TObjectPtr<UWidget> SplitRoot;          // hele overlay (Collapsed als dicht)
+	UPROPERTY() TObjectPtr<class USlider> SplitSlider;
+	UPROPERTY() TObjectPtr<UTextBlock> SplitLabel;
+	int32 SplitStackId = 0;
+	int32 SplitTotal = 0;
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<UInventoryComponent> BoundInv;

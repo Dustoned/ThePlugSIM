@@ -20,6 +20,7 @@
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
+#include "Components/Slider.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/Image.h"
@@ -112,6 +113,12 @@ FReply UInvCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPoi
 {
 	if (bDraggable && StackId != 0 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		// Shift+klik = split-popup openen (geen drag starten).
+		if (InMouseEvent.IsShiftDown() && Owner.IsValid())
+		{
+			Owner->OpenSplitPopup(StackId);
+			return FReply::Handled();
+		}
 		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 	}
 	return FReply::Unhandled();
@@ -124,7 +131,6 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	Op->StackId = StackId;
 	Op->FromSlot = SlotIndex;
 	Op->FromCell = GridCell;
-	Op->bSplit = InMouseEvent.IsShiftDown(); // Shift+slepen = de helft afsplitsen
 	Op->Pivot = EDragPivot::CenterCenter; // visual zit precies ONDER de cursor
 
 	// Sleep-visual = het ECHTE item-icoon, gecentreerd op de muis (geen losse tag ernaast meer).
@@ -149,17 +155,17 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 	UInvDragOp* Op = Cast<UInvDragOp>(InOperation);
 	if (!Op || !Inv.IsValid() || Op->StackId == 0) { return false; }
 
-	// Shift+slepen op een rooster-cel = de helft van de stapel afsplitsen.
-	if (Op->bSplit && SlotIndex < 0)
+	// Sleep een stapel op een ANDERE stapel van HETZELFDE item -> samenvoegen (mergen).
+	if (SlotIndex < 0 && StackId != 0 && StackId != Op->StackId)
 	{
-		const int32 SrcIdx = Inv->FindStackById(Op->StackId);
+		const int32 ThisIdx = Inv->FindStackById(StackId);
+		const int32 DragIdx = Inv->FindStackById(Op->StackId);
 		const TArray<FInventoryStack>& St = Inv->GetStacks();
-		if (St.IsValidIndex(SrcIdx) && St[SrcIdx].Quantity > 1)
+		if (St.IsValidIndex(ThisIdx) && St.IsValidIndex(DragIdx)
+			&& St[ThisIdx].ItemId == St[DragIdx].ItemId && St[ThisIdx].ItemId != FName(TEXT("Cash"))
+			&& UInventoryComponent::IsStackable(St[ThisIdx].ItemId)) // geen flessen e.d. samenvoegen
 		{
-			const int32 Half = St[SrcIdx].Quantity / 2;
-			const int32 ToCell = (GridCell >= 0 && StackId == 0) ? GridCell : -1; // lege doel-cel, anders eerste vrije
-			Inv->RequestSplit(Op->StackId, Half, ToCell);
-			if (Owner.IsValid()) { Owner->MarkDirty(); }
+			if (Owner.IsValid()) { Owner->MergeItemNow(St[ThisIdx].ItemId); Owner->MarkDirty(); }
 			return true;
 		}
 	}
@@ -309,8 +315,96 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	Scroll->AddChild(Grid);
 
 	// Hint onderaan: sleep naar de hotbar onderin het scherm.
-	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep een item naar de hotbar onderaan het scherm"), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
+	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep een item naar de hotbar.  Shift+klik = splitsen.  Sleep op een gelijke stapel = samenvoegen."), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
 		->SetPadding(FMargin(2.f, 8.f, 0.f, 0.f));
+
+	BuildSplitPopup(Root);
+}
+
+void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
+{
+	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
+	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 14.f));
+	Panel->SetPadding(FMargin(18.f));
+
+	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+	Panel->SetContent(VB);
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapel splitsen"), 15, FLinearColor(0.7f, 1.f, 0.7f), true, true))
+		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	SplitLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor::White, true);
+	VB->AddChildToVerticalBox(SplitLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+
+	SplitSlider = WidgetTree->ConstructWidget<USlider>();
+	SplitSlider->SetMinValue(0.f); SplitSlider->SetMaxValue(1.f); SplitSlider->SetValue(0.5f);
+	SplitSlider->OnValueChanged.AddDynamic(this, &UInventoryWidget::OnSplitSliderChanged);
+	VB->AddChildToVerticalBox(SplitSlider)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+
+	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UWeedActionButton* Conf = TileButton(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 8.f, [this]() { ConfirmSplit(); });
+	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Splitsen"), 12, FLinearColor::White, true));
+	UWeedActionButton* Canc = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f, [this]() { CancelSplit(); });
+	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Annuleer"), 12, FLinearColor::White, true));
+	Btns->AddChildToHorizontalBox(Conf)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UHorizontalBoxSlot* CS2 = Btns->AddChildToHorizontalBox(Canc);
+	CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+	VB->AddChildToVerticalBox(Btns);
+
+	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+	Sz->SetWidthOverride(300.f);
+	Sz->SetContent(Panel);
+	SplitRoot = Sz;
+
+	UCanvasPanelSlot* PS = Root->AddChildToCanvas(Sz);
+	PS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+	PS->SetAlignment(FVector2D(0.5f, 0.5f));
+	PS->SetAutoSize(true);
+	PS->SetPosition(FVector2D(0.f, -30.f));
+	Sz->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UInventoryWidget::OpenSplitPopup(int32 StackId)
+{
+	UInventoryComponent* I = GetInv();
+	if (!I || !SplitRoot || !SplitSlider) { return; }
+	const int32 Idx = I->FindStackById(StackId);
+	const TArray<FInventoryStack>& St = I->GetStacks();
+	if (!St.IsValidIndex(Idx)) { return; }
+	if (!UInventoryComponent::IsStackable(St[Idx].ItemId) || St[Idx].Quantity < 2) { return; } // niks te splitsen
+	SplitStackId = StackId;
+	SplitTotal = St[Idx].Quantity;
+	SplitSlider->SetValue(0.5f);
+	OnSplitSliderChanged(0.5f);
+	SplitRoot->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UInventoryWidget::OnSplitSliderChanged(float V)
+{
+	if (!SplitLabel) { return; }
+	const int32 Amount = FMath::Clamp(FMath::RoundToInt(V * SplitTotal), 1, FMath::Max(1, SplitTotal - 1));
+	SplitLabel->SetText(FText::FromString(FString::Printf(TEXT("Afsplitsen: %d   (van %d)"), Amount, SplitTotal)));
+}
+
+void UInventoryWidget::ConfirmSplit()
+{
+	UInventoryComponent* I = GetInv();
+	if (I && SplitStackId != 0 && SplitSlider && SplitTotal > 1)
+	{
+		const int32 Amount = FMath::Clamp(FMath::RoundToInt(SplitSlider->GetValue() * SplitTotal), 1, SplitTotal - 1);
+		I->RequestSplit(SplitStackId, Amount, -1);
+		MarkDirty();
+	}
+	CancelSplit();
+}
+
+void UInventoryWidget::CancelSplit()
+{
+	SplitStackId = 0;
+	if (SplitRoot) { SplitRoot->SetVisibility(ESlateVisibility::Collapsed); }
+}
+
+void UInventoryWidget::MergeItemNow(FName ItemId)
+{
+	if (PhoneComp.IsValid()) { PhoneComp->MergeNow(ItemId); }
 }
 
 void UInventoryWidget::RebuildStash()

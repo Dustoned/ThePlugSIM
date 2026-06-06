@@ -81,6 +81,9 @@ public:
 	void RequestSplit(int32 StackId, int32 Amount, int32 ToCell);
 	UFUNCTION(Server, Reliable) void ServerSplitStack(int32 StackId, int32 Amount);
 
+	// Of dit item stapelbaar is (bv. flessen niet). Bepaalt of merge/split mag.
+	static bool IsStackable(FName ItemId);
+
 	// Server. Zet de inventory EXACT terug zoals opgeslagen: elke stack op z'n opgeslagen grid-cel,
 	// geen merge/sortering. InCells[i] = grid-cel van InStacks[i] (-1 = eerste vrije). De cash-stack
 	// (afgeleid van economy) blijft op cel 0. Voor save/load zodat slots niet meer wisselen.
@@ -179,8 +182,6 @@ protected:
 
 	UFUNCTION()
 	void OnRep_Stacks();
-
-	static bool IsStackable(FName ItemId);
 
 	// Eerste stapel-index met dit item-id, of INDEX_NONE.
 	int32 FindStackIndex(FName ItemId) const;
