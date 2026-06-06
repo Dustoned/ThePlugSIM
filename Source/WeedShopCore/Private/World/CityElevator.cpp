@@ -3,6 +3,7 @@
 #include "World/CityElevatorButton.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
@@ -61,6 +62,22 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 	Wall(TEXT("CabLeft"),  FVector(-FootX * 0.5f, 0.f, 6.f + CabH * 0.5f), FVector(T, FootY, CabH), Cab);
 	Wall(TEXT("CabRight"), FVector( FootX * 0.5f, 0.f, 6.f + CabH * 0.5f), FVector(T, FootY, CabH), Cab);
 	Wall(TEXT("CabCeil"),  FVector(0.f, 0.f, 6.f + CabH), FVector(FootX + T, FootY + T, T), Cab * 0.8f);
+
+	// Plafondlamp in de cabine: kleine bulb + warm punt-licht. Hangt aan Root, dus beweegt mee met de lift,
+	// en verlicht het interieur + de deuren (die anders pikdonker/onzichtbaar zijn).
+	{
+		UStaticMeshComponent* Bulb = Wall(TEXT("CabBulb"), FVector(0.f, 0.f, 6.f + CabH - 14.f), FVector(26.f, 26.f, 8.f), FLinearColor(1.f, 0.96f, 0.82f));
+		if (Bulb) { Bulb->SetCollisionEnabled(ECollisionEnabled::NoCollision); }
+
+		UPointLightComponent* Lamp = NewObject<UPointLightComponent>(this, TEXT("CabLight"));
+		Lamp->RegisterComponent();
+		Lamp->AttachToComponent(Root, FAttachmentTransformRules::KeepRelativeTransform);
+		Lamp->SetRelativeLocation(FVector(0.f, 0.f, 6.f + CabH - 32.f));
+		Lamp->SetIntensity(9000.f);
+		Lamp->SetLightColor(FLinearColor(1.f, 0.85f, 0.55f));
+		Lamp->SetAttenuationRadius(FMath::Max(FootX, FootY) + 380.f);
+		Lamp->SetCastShadows(false); // perf: cabine-licht hoeft geen schaduwen
+	}
 
 	// --- Deur-opmaat: bi-parting bladen die naar de zijkanten in de "pockets" schuiven ---
 	const float DoorH = 210.f;
