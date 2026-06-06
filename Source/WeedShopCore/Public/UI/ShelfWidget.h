@@ -49,6 +49,20 @@ protected:
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 };
 
+// Hele kolom als drop-zone: droppen ergens in het vak telt (niet alleen precies op een cel).
+UCLASS()
+class WEEDSHOPCORE_API UShelfDropZone : public UUserWidget
+{
+	GENERATED_BODY()
+public:
+	bool bShelfSide = false;
+	TWeakObjectPtr<UShelfWidget> Owner;
+	UPROPERTY() TObjectPtr<UWidget> Inner; // de kolom-inhoud (zet vóór toevoegen aan de tree)
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+};
+
 UCLASS()
 class WEEDSHOPCORE_API UShelfWidget : public UUserWidget
 {

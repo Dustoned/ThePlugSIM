@@ -99,6 +99,31 @@ bool UShelfCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent&
 }
 
 // ---------------------------------------------------------------------------
+//  UShelfDropZone — hele kolom als drop-doel
+// ---------------------------------------------------------------------------
+TSharedRef<SWidget> UShelfDropZone::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DropRoot"));
+		FSlateBrush Empty; Empty.TintColor = FSlateColor(FLinearColor(0.f, 0.f, 0.f, 0.f)); // transparant, maar wel hit-testbaar
+		Root->SetBrush(Empty);
+		Root->SetPadding(FMargin(0.f));
+		if (Inner) { Root->SetContent(Inner); }
+		WidgetTree->RootWidget = Root;
+	}
+	SetVisibility(ESlateVisibility::Visible); // moet hit-testbaar zijn om drops op de lege ruimte te vangen
+	return Super::RebuildWidget();
+}
+
+bool UShelfDropZone::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	UShelfDragOp* Op = Cast<UShelfDragOp>(InOperation);
+	if (Op && Owner.IsValid()) { Owner->HandleShelfDrop(bShelfSide, Op); return true; }
+	return false;
+}
+
+// ---------------------------------------------------------------------------
 //  UShelfWidget
 // ---------------------------------------------------------------------------
 void UShelfWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
@@ -166,7 +191,7 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBoxSlot* ColsSlot = Outer->AddChildToVerticalBox(Cols);
 	ColsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	auto MakeColumn = [this](const FString& Title, const FLinearColor& Col, TObjectPtr<UScrollBox>& OutScroll) -> UWidget*
+	auto MakeColumn = [this](const FString& Title, const FLinearColor& Col, TObjectPtr<UScrollBox>& OutScroll, bool bShelfSide) -> UWidget*
 	{
 		UBorder* B = WidgetTree->ConstructWidget<UBorder>();
 		B->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
@@ -176,11 +201,14 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Title, 13, Col, false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 		OutScroll = WidgetTree->ConstructWidget<UScrollBox>();
 		VB->AddChildToVerticalBox(OutScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		return B;
+		// Hele kolom als drop-doel (droppen ergens in het vak telt, niet alleen op een cel).
+		UShelfDropZone* DZ = WidgetTree->ConstructWidget<UShelfDropZone>();
+		DZ->bShelfSide = bShelfSide; DZ->Owner = this; DZ->Inner = B;
+		return DZ;
 	};
 
-	UWidget* ShelfCol = MakeColumn(TEXT("In het schap"), FLinearColor(0.6f, 0.85f, 1.f), ShelfList);
-	UWidget* InvCol = MakeColumn(TEXT("Jouw inventory"), FLinearColor(0.7f, 1.f, 0.75f), InvList);
+	UWidget* ShelfCol = MakeColumn(TEXT("In het schap"), FLinearColor(0.6f, 0.85f, 1.f), ShelfList, true);
+	UWidget* InvCol = MakeColumn(TEXT("Jouw inventory"), FLinearColor(0.7f, 1.f, 0.75f), InvList, false);
 	UHorizontalBoxSlot* L = Cols->AddChildToHorizontalBox(ShelfCol); L->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); L->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
 	UHorizontalBoxSlot* R = Cols->AddChildToHorizontalBox(InvCol);  R->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); R->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
 }
