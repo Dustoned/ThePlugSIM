@@ -927,7 +927,18 @@ void AThePlugSIMCharacter::WeedClearFurniture()
 		return;
 	}
 	const int32 N = FurnitureTemplates::ClearPlaced(W);
-	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d geplaatste meubels gewist."), N));
+
+	// Authoring-reset: geef de volledige meubelset terug in de inventory (incl. de sink), zodat je
+	// meteen schoon opnieuw kunt inrichten zonder iets te hoeven oppakken.
+	if (Inventory)
+	{
+		auto Give = [this](const TCHAR* Id, int32 Num) { Inventory->AddItem(FName(Id), Num); };
+		Give(TEXT("Table"), 5);   Give(TEXT("Fridge"), 5);    Give(TEXT("Mattress"), 5); Give(TEXT("Sink"), 5);
+		Give(TEXT("DryRack_Std"), 3); Give(TEXT("Bench_Pack"), 3); Give(TEXT("Shelf"), 3); Give(TEXT("Chest"), 3);
+		Give(TEXT("Lamp_Ceiling"), 3); Give(TEXT("Atm"), 2);
+	}
+
+	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d meubels gewist + meubelset (incl. sink) terug in inventory."), N));
 }
 
 void AThePlugSIMCharacter::WeedFurnitureTypes()
