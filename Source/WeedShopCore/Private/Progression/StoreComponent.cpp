@@ -272,53 +272,55 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 {
 	const FString S = CatalogId.ToString();
 
+	// Progressie uitgesmeerd tot ~level 32 (items) / ~38 (zaden), zodat er tot de shop-licentie
+	// (rond 40/50) steeds iets nieuws te ontgrendelen valt.
 	// Potten
 	if (S == TEXT("Pot_Broken"))      { return 1; }
-	if (S == TEXT("Pot_Clay"))        { return 2; }
-	if (S == TEXT("Pot_Plastic"))     { return 5; }
-	if (S == TEXT("Pot_Fabric"))      { return 12; }
+	if (S == TEXT("Pot_Clay"))        { return 3; }
+	if (S == TEXT("Pot_Plastic"))     { return 11; }
+	if (S == TEXT("Pot_Fabric"))      { return 24; }
 	// Aarde
 	if (S == TEXT("Soil_Basic"))      { return 1; }
-	if (S == TEXT("Soil_Rich"))       { return 4; }
-	if (S == TEXT("Soil_Premium"))    { return 9; }
+	if (S == TEXT("Soil_Rich"))       { return 7; }
+	if (S == TEXT("Soil_Premium"))    { return 18; }
 	// Water
 	if (S == TEXT("WaterBottle_Plastic"))  { return 1; }
-	if (S == TEXT("WaterBottle_Steel"))    { return 4; }
-	if (S == TEXT("WaterBottle_Jerrycan")) { return 8; }
-	if (S == TEXT("WaterBottle_Tank"))     { return 14; }
+	if (S == TEXT("WaterBottle_Steel"))    { return 6; }
+	if (S == TEXT("WaterBottle_Jerrycan")) { return 15; }
+	if (S == TEXT("WaterBottle_Tank"))     { return 28; }
 	// Vloei / papers
 	if (S == TEXT("Papers_Small"))    { return 1; }
-	if (S == TEXT("Papers_Big"))      { return 3; }
-	if (S == TEXT("Papers_Blunt"))    { return 6; }
-	if (S == TEXT("Papers_Backwoods")){ return 10; }
+	if (S == TEXT("Papers_Big"))      { return 4; }
+	if (S == TEXT("Papers_Blunt"))    { return 11; }
+	if (S == TEXT("Papers_Backwoods")){ return 22; }
 	// Droogrekken
-	if (S == TEXT("DryRack_Cheap"))   { return 2; }
-	if (S == TEXT("DryRack_Std"))     { return 6; }
-	if (S == TEXT("DryRack_Pro"))     { return 13; }
+	if (S == TEXT("DryRack_Cheap"))   { return 3; }
+	if (S == TEXT("DryRack_Std"))     { return 12; }
+	if (S == TEXT("DryRack_Pro"))     { return 26; }
 	// Verpak-tafels
 	if (S == TEXT("Bench_Pack"))      { return 1; }
-	if (S == TEXT("Bench_Pack2"))     { return 7; }
-	if (S == TEXT("Bench_Pack3"))     { return 15; }
-	// Containers (verpakkingsmateriaal) — nettere progressie van klein naar bulk.
+	if (S == TEXT("Bench_Pack2"))     { return 14; }
+	if (S == TEXT("Bench_Pack3"))     { return 30; }
+	// Containers (verpakkingsmateriaal) — van klein naar bulk.
 	if (S == TEXT("Cont_Bag2"))       { return 1; }
 	if (S == TEXT("Cont_Bag5"))       { return 2; }
-	if (S == TEXT("Cont_Jar10"))      { return 4; }
-	if (S == TEXT("Cont_Jar15"))      { return 7; }
-	if (S == TEXT("Cont_Block100"))   { return 11; }
-	if (S == TEXT("Cont_Garbage500")) { return 16; }
+	if (S == TEXT("Cont_Jar10"))      { return 6; }
+	if (S == TEXT("Cont_Jar15"))      { return 12; }
+	if (S == TEXT("Cont_Block100"))   { return 20; }
+	if (S == TEXT("Cont_Garbage500")) { return 32; }
 	// Meubels / opslag
 	if (S == TEXT("Lamp_Ceiling"))    { return 1; }
 	if (S == TEXT("Mattress"))        { return 1; }
 	if (S == TEXT("Table"))           { return 2; }
-	if (S == TEXT("Chest"))           { return 3; }
-	if (S == TEXT("Shelf"))           { return 5; }
-	if (S == TEXT("Fridge"))          { return 6; }
-	// Plant-verzorging (bewust later: mold/pest komt pas vanaf level ~12).
-	if (S == TEXT("Fertilizer_Basic")) { return 10; }
-	if (S == TEXT("Fertilizer_Bloom")) { return 14; }
-	if (S == TEXT("Spray_Fungicide"))  { return 10; } // mold komt rond lvl 12
-	if (S == TEXT("Spray_Pesticide"))  { return 16; } // pests komen pas rond lvl 18
-	if (S == TEXT("Spray_Broad"))      { return 18; }
+	if (S == TEXT("Chest"))           { return 5; }
+	if (S == TEXT("Shelf"))           { return 9; }
+	if (S == TEXT("Fridge"))          { return 13; }
+	// Plant-verzorging (mold/pest komt later in het spel).
+	if (S == TEXT("Fertilizer_Basic")) { return 14; }
+	if (S == TEXT("Fertilizer_Bloom")) { return 26; }
+	if (S == TEXT("Spray_Fungicide"))  { return 14; }
+	if (S == TEXT("Spray_Pesticide"))  { return 22; }
+	if (S == TEXT("Spray_Broad"))      { return 32; }
 
 	// Pot-gear: zelfde level-progressie als de oude pot-upgrades (MinPlayerLevel).
 	{
@@ -337,10 +339,13 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 		{
 			const float Thc = Row->BaseThcPercent;
 			if (Thc < 14.f) { return 1; }
-			if (Thc < 17.f) { return 3; }
-			if (Thc < 20.f) { return 6; }
-			if (Thc < 23.f) { return 10; }
-			return 15;
+			if (Thc < 17.f) { return 4; }
+			if (Thc < 20.f) { return 9; }
+			if (Thc < 23.f) { return 15; }
+			if (Thc < 26.f) { return 21; }
+			if (Thc < 29.f) { return 27; }
+			if (Thc < 32.f) { return 33; }
+			return 38; // top-strains pas eind-progressie
 		}
 	}
 	return 1;
