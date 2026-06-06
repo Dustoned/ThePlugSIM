@@ -946,11 +946,14 @@ void AGrowPlant::UpdatePotVisual()
 	else if (Id == TEXT("Pot_Plastic")) { Col = FLinearColor(0.16f, 0.17f, 0.19f); } // zwart plastic
 	else if (Id == TEXT("Pot_Fabric"))  { Col = FLinearColor(0.46f, 0.42f, 0.34f); } // stoffen kweekzak
 
-	auto Tint = [](UStaticMeshComponent* C, const FLinearColor& Color)
+	// Basis-materiaal MET een "Color"-parameter. De BasicShapes-cilinder heeft standaard GEEN materiaal
+	// (default grid -> "no texture"), dus we maken de dynamic material expliciet van BasicShapeMaterial.
+	UMaterialInterface* TintBase = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	auto Tint = [TintBase](UStaticMeshComponent* C, const FLinearColor& Color)
 	{
 		if (!C) { return; }
 		UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(C->GetMaterial(0));
-		if (!MID) { MID = C->CreateDynamicMaterialInstance(0); }
+		if (!MID) { MID = C->CreateDynamicMaterialInstance(0, TintBase); }
 		if (MID) { MID->SetVectorParameterValue(TEXT("Color"), Color); }
 	};
 	Tint(Mesh, Col);
