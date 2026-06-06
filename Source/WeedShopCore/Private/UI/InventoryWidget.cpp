@@ -240,7 +240,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(900.f, 500.f)); // compacter: past op de 24 vierkante slots zonder veel leegte
+	CS->SetSize(FVector2D(840.f, 452.f)); // strak om de 24 vierkante slots (4 rijen) heen, weinig leegte
 	CS->SetPosition(FVector2D(0.f, -30.f)); // iets omhoog zodat de in-game hotbar eronder vrij blijft
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -303,7 +303,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
 	UVerticalBoxSlot* GS = Right->AddChildToVerticalBox(Scroll);
-	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	GS->SetSize(FSlateChildSize(ESlateSizeRule::Auto)); // grid hugt z'n inhoud -> hint komt er direct onder
 	Grid = WidgetTree->ConstructWidget<UWrapBox>();
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 	Scroll->AddChild(Grid);
