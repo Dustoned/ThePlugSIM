@@ -5,6 +5,9 @@
 #include "World/WaterSink.h"
 #include "Cultivation/DryingRack.h"
 #include "World/PackBench.h"
+#include "World/StorageShelf.h"
+#include "World/CeilingLamp.h"
+#include "World/Atm.h"
 
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -73,6 +76,18 @@ namespace
 		for (TActorIterator<APackBench> It(W); It; ++It)
 		{
 			if (IsValid(*It) && !IsAuto(*It)) { const FName Id = It->BenchTier.IsNone() ? FName(TEXT("Bench_Pack")) : It->BenchTier; Out.Add({ Id, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+		}
+		for (TActorIterator<AStorageShelf> It(W); It; ++It)
+		{
+			if (IsValid(*It) && !IsAuto(*It)) { const FName Id = It->ShelfTier.IsNone() ? FName(TEXT("Shelf")) : It->ShelfTier; Out.Add({ Id, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+		}
+		for (TActorIterator<ACeilingLamp> It(W); It; ++It)
+		{
+			if (IsValid(*It) && !IsAuto(*It)) { Out.Add({ FName(TEXT("Lamp_Ceiling")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+		}
+		for (TActorIterator<AAtm> It(W); It; ++It)
+		{
+			if (IsValid(*It) && !IsAuto(*It)) { Out.Add({ FName(TEXT("Atm")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 	}
 }
@@ -268,6 +283,22 @@ AActor* FurnitureTemplates::SpawnEntry(UWorld* W, const FFurnitureEntry& E, cons
 		if (B) { B->BenchTier = E.ItemId; B->FinishSpawning(TM); }
 		Spawned = B;
 	}
+	else if (S == TEXT("Shelf") || S == TEXT("Chest"))
+	{
+		AStorageShelf* Sh = W->SpawnActorDeferred<AStorageShelf>(AStorageShelf::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Sh) { Sh->ShelfTier = E.ItemId; Sh->FinishSpawning(TM); }
+		Spawned = Sh;
+	}
+	else if (S == TEXT("Lamp_Ceiling"))
+	{
+		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Spawned = W->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM, SP);
+	}
+	else if (S == TEXT("Atm"))
+	{
+		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Spawned = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM, SP);
+	}
 	else
 	{
 		// Standaard meubel (Table/Fridge/Mattress/...): APlaceableProp met ItemId.
@@ -291,5 +322,8 @@ int32 FurnitureTemplates::ClearPlaced(UWorld* W)
 	for (TActorIterator<AWaterSink> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
 	for (TActorIterator<ADryingRack> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
 	for (TActorIterator<APackBench> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
+	for (TActorIterator<AStorageShelf> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
+	for (TActorIterator<ACeilingLamp> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
+	for (TActorIterator<AAtm> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
 	return N;
 }
