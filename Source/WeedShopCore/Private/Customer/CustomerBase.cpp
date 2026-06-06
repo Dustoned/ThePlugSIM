@@ -2276,8 +2276,8 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 		const float ParkCrowdRadius = FMath::Max(800.f, City->GetMapBlockSize() * 0.82f);
 		const int32 ParkCrowd = CountResidentParkVisitors(ParkCrowdRadius);
 		const int32 CenterCrowd = CountResidentCrowdNear(ParkCenter, ParkCrowdRadius);
-		const int32 ParkSoftLimit = 5;
-		const int32 CenterSoftLimit = 7;
+		const int32 ParkSoftLimit = 3;   // strakker: hou het park/centrum dun, NPC's blijven verspreid
+		const int32 CenterSoftLimit = 4;
 		const bool bParkCrowded = !bParkOverdue && (ParkCrowd >= ParkSoftLimit || CenterCrowd >= CenterSoftLimit);
 		if (!bParkCrowded)
 		{
