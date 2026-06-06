@@ -459,7 +459,7 @@ void UInventoryComponent::RefreshHotbarAuto()
 		if (KnownStacks.Contains(Stack.StackId)) { continue; }
 		KnownStacks.Add(Stack.StackId);
 		if (Stack.ItemId == TEXT("Cash")) { continue; } // briefgeld hoort niet op de hotbar
-		if (PendingSplitCell >= 0) { continue; }         // een split-helft hoort in de grid-cel, niet op de hotbar
+		if (bPendingSplit) { continue; }                 // een split-helft hoort in het rooster, niet op de hotbar
 		if (HotbarStacks.Contains(Stack.StackId)) { continue; }
 		const int32 Empty = HotbarStacks.IndexOfByKey(0);
 		if (Empty != INDEX_NONE) { HotbarStacks[Empty] = Stack.StackId; }
@@ -484,21 +484,22 @@ void UInventoryComponent::RefreshGridAuto()
 	{
 		if (GridOrder.Contains(St.StackId)) { continue; }
 		int32 Target = INDEX_NONE;
-		if (PendingSplitCell >= 0 && GridOrder.IsValidIndex(PendingSplitCell) && GridOrder[PendingSplitCell] == 0)
+		if (bPendingSplit && PendingSplitCell >= 0 && GridOrder.IsValidIndex(PendingSplitCell) && GridOrder[PendingSplitCell] == 0)
 		{
-			Target = PendingSplitCell;
-			PendingSplitCell = -1;
+			Target = PendingSplitCell; // split-helft naar de gevraagde cel
 		}
 		if (Target == INDEX_NONE) { Target = GridOrder.IndexOfByKey(0); }
 		if (Target != INDEX_NONE) { GridOrder[Target] = St.StackId; }
 		else { GridOrder.Add(St.StackId); }
+		if (bPendingSplit) { bPendingSplit = false; PendingSplitCell = -1; } // split-helft is geplaatst
 	}
 }
 
 void UInventoryComponent::RequestSplit(int32 StackId, int32 Amount, int32 ToCell)
 {
 	if (Amount <= 0) { return; }
-	PendingSplitCell = ToCell; // lokale doel-cel voor de nieuwe helft (zie RefreshGridAuto)
+	bPendingSplit = true;       // de nieuwe helft hoort in het rooster, niet auto op de hotbar
+	PendingSplitCell = ToCell;  // gewenste cel (-1 = eerste vrije)
 	ServerSplitStack(StackId, Amount);
 }
 

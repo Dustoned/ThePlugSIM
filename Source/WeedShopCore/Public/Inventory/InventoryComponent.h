@@ -221,7 +221,9 @@ protected:
 	UPROPERTY(Transient)
 	TArray<int32> GridOrder;
 
-	// Doel-cel voor de eerstvolgende nieuwe stapel uit een split (-1 = geen). Lokale UI-staat.
+	// Split in behandeling: de eerstvolgende nieuwe stapel hoort in het ROOSTER (niet auto op de hotbar).
+	// PendingSplitCell = gewenste cel (-1 = eerste vrije rooster-cel). Lokale UI-staat.
+	bool bPendingSplit = false;
 	int32 PendingSplitCell = -1;
 
 	// Server-teller voor unieke StackId's.
