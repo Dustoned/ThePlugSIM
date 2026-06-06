@@ -124,6 +124,7 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	Op->StackId = StackId;
 	Op->FromSlot = SlotIndex;
 	Op->FromCell = GridCell;
+	Op->bSplit = InMouseEvent.IsShiftDown(); // Shift+slepen = de helft afsplitsen
 	Op->Pivot = EDragPivot::CenterCenter; // visual zit precies ONDER de cursor
 
 	// Sleep-visual = het ECHTE item-icoon, gecentreerd op de muis (geen losse tag ernaast meer).
@@ -147,6 +148,21 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 {
 	UInvDragOp* Op = Cast<UInvDragOp>(InOperation);
 	if (!Op || !Inv.IsValid() || Op->StackId == 0) { return false; }
+
+	// Shift+slepen op een rooster-cel = de helft van de stapel afsplitsen.
+	if (Op->bSplit && SlotIndex < 0)
+	{
+		const int32 SrcIdx = Inv->FindStackById(Op->StackId);
+		const TArray<FInventoryStack>& St = Inv->GetStacks();
+		if (St.IsValidIndex(SrcIdx) && St[SrcIdx].Quantity > 1)
+		{
+			const int32 Half = St[SrcIdx].Quantity / 2;
+			const int32 ToCell = (GridCell >= 0 && StackId == 0) ? GridCell : -1; // lege doel-cel, anders eerste vrije
+			Inv->RequestSplit(Op->StackId, Half, ToCell);
+			if (Owner.IsValid()) { Owner->MarkDirty(); }
+			return true;
+		}
+	}
 
 	if (SlotIndex >= 0)
 	{

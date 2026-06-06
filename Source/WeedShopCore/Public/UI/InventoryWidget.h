@@ -27,6 +27,7 @@ public:
 	UPROPERTY() int32 StackId = 0;
 	UPROPERTY() int32 FromSlot = -1; // >=0 = vanaf hotbar-slot
 	UPROPERTY() int32 FromCell = -1; // >=0 = vanuit een rooster-cel
+	UPROPERTY() bool bSplit = false; // true = Shift ingedrukt -> de helft afsplitsen bij drop
 };
 
 // Eén sleepbare/droppbare cel. Bouwt zijn eigen visuele inhoud uit de meegegeven velden, zodat hij als

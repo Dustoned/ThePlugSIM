@@ -459,6 +459,7 @@ void UInventoryComponent::RefreshHotbarAuto()
 		if (KnownStacks.Contains(Stack.StackId)) { continue; }
 		KnownStacks.Add(Stack.StackId);
 		if (Stack.ItemId == TEXT("Cash")) { continue; } // briefgeld hoort niet op de hotbar
+		if (PendingSplitCell >= 0) { continue; }         // een split-helft hoort in de grid-cel, niet op de hotbar
 		if (HotbarStacks.Contains(Stack.StackId)) { continue; }
 		const int32 Empty = HotbarStacks.IndexOfByKey(0);
 		if (Empty != INDEX_NONE) { HotbarStacks[Empty] = Stack.StackId; }
@@ -477,14 +478,48 @@ void UInventoryComponent::RefreshGridAuto()
 	{
 		if (S != 0 && FindStackById(S) == INDEX_NONE) { S = 0; }
 	}
-	// Nieuwe stapels in de eerste vrije cel zetten (en daarna blijven ze daar).
+	// Nieuwe stapels in de eerste vrije cel zetten (en daarna blijven ze daar). Een split-helft gaat
+	// naar de specifiek gevraagde cel (PendingSplitCell), als die nog leeg is.
 	for (const FInventoryStack& St : Stacks)
 	{
 		if (GridOrder.Contains(St.StackId)) { continue; }
-		const int32 Empty = GridOrder.IndexOfByKey(0);
-		if (Empty != INDEX_NONE) { GridOrder[Empty] = St.StackId; }
+		int32 Target = INDEX_NONE;
+		if (PendingSplitCell >= 0 && GridOrder.IsValidIndex(PendingSplitCell) && GridOrder[PendingSplitCell] == 0)
+		{
+			Target = PendingSplitCell;
+			PendingSplitCell = -1;
+		}
+		if (Target == INDEX_NONE) { Target = GridOrder.IndexOfByKey(0); }
+		if (Target != INDEX_NONE) { GridOrder[Target] = St.StackId; }
 		else { GridOrder.Add(St.StackId); }
 	}
+}
+
+void UInventoryComponent::RequestSplit(int32 StackId, int32 Amount, int32 ToCell)
+{
+	if (Amount <= 0) { return; }
+	PendingSplitCell = ToCell; // lokale doel-cel voor de nieuwe helft (zie RefreshGridAuto)
+	ServerSplitStack(StackId, Amount);
+}
+
+void UInventoryComponent::ServerSplitStack_Implementation(int32 StackId, int32 Amount)
+{
+	if (GetOwnerRole() != ROLE_Authority || Amount <= 0) { return; }
+	const int32 Idx = FindStackById(StackId);
+	if (!Stacks.IsValidIndex(Idx)) { return; }
+	if (Stacks[Idx].ItemId == TEXT("Cash")) { return; }     // briefgeld niet splitsen
+	if (Stacks[Idx].Quantity <= Amount) { return; }          // niks te splitsen (zou alles zijn)
+	if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks) { return; } // geen ruimte voor een extra stapel
+
+	Stacks[Idx].Quantity -= Amount;
+	FInventoryStack New;
+	New.ItemId = Stacks[Idx].ItemId;
+	New.Quality = Stacks[Idx].Quality;
+	New.QualityPct = Stacks[Idx].QualityPct;
+	New.Quantity = Amount;
+	New.StackId = NextStackId++;
+	Stacks.Add(New);
+	OnRep_Stacks();
 }
 
 int32 UInventoryComponent::CategoryRank(FName ItemId)

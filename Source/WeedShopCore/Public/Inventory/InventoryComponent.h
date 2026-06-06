@@ -76,6 +76,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void ClearAll();
 
+	// Splits Amount van een stapel af naar een NIEUWE stapel (shift+slepen). ToCell = grid-cel waar de
+	// nieuwe helft heen moet (-1 = eerste vrije). Client-helper: onthoudt de doel-cel + roept de server.
+	void RequestSplit(int32 StackId, int32 Amount, int32 ToCell);
+	UFUNCTION(Server, Reliable) void ServerSplitStack(int32 StackId, int32 Amount);
+
 	// Server. Zet de inventory EXACT terug zoals opgeslagen: elke stack op z'n opgeslagen grid-cel,
 	// geen merge/sortering. InCells[i] = grid-cel van InStacks[i] (-1 = eerste vrije). De cash-stack
 	// (afgeleid van economy) blijft op cel 0. Voor save/load zodat slots niet meer wisselen.
@@ -214,6 +219,9 @@ protected:
 	// Vaste rooster-indeling: StackId per cel (0 = leeg). Lokale UI-staat, niet gerepliceerd.
 	UPROPERTY(Transient)
 	TArray<int32> GridOrder;
+
+	// Doel-cel voor de eerstvolgende nieuwe stapel uit een split (-1 = geen). Lokale UI-staat.
+	int32 PendingSplitCell = -1;
 
 	// Server-teller voor unieke StackId's.
 	int32 NextStackId = 1;
