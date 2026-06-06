@@ -1569,7 +1569,7 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 	};
 	const FVector DistrictTarget = BuildDistrictTarget();
 	const float MapRadius = FMath::Max(Pitch, static_cast<float>(GridR) * Pitch * 1.45f);
-	const float CenterSoftRadius = FMath::Max(900.f, City->GetMapBlockSize() * 0.9f);
+	const float CenterSoftRadius = FMath::Max(1300.f, City->GetMapBlockSize() * 1.6f); // dekt de centrale blokken
 	const int32 CenterCrowd = CountResidentCrowdNear(Center, CenterSoftRadius);
 
 	bool bFound = false;
@@ -1602,9 +1602,9 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 
 			const float CenterDist = FVector::Dist2D(Candidate, Center);
 			const bool bCenterCandidate = CenterDist < CenterSoftRadius;
-			if (bCenterCandidate && CenterCrowd >= (bAllowShortTrip ? 8 : 6))
+			if (bCenterCandidate && CenterCrowd >= (bAllowShortTrip ? 4 : 3))
 			{
-				continue;
+				continue; // centrum vol -> mijd centrale doelen, blijf in de wijken
 			}
 
 			const float DistrictDist = FVector::Dist2D(Candidate, DistrictTarget);
@@ -1617,9 +1617,9 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 			}
 
 			const int32 NoiseSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 131 + static_cast<int64>(Index) * 977) % 1000));
-			const float CenterPenalty = bCenterCandidate ? Pitch * (3.0f + static_cast<float>(CenterCrowd) * 0.55f) : 0.f;
+			const float CenterPenalty = bCenterCandidate ? Pitch * (5.0f + static_cast<float>(CenterCrowd) * 0.9f) : 0.f;
 			const float Score = TravelDist * 0.55f
-				+ CenterDist * 0.85f
+				+ CenterDist * 1.25f
 				+ FMath::Max(0.f, MapRadius - DistrictDist) * 1.45f
 				+ Alignment * Pitch * 0.85f
 				- static_cast<float>(Crowd) * 2100.f
