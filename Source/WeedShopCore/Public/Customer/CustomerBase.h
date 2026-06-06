@@ -137,6 +137,11 @@ public:
 	bool bNeedsPlayer = false;
 	void SetNeedsPlayer(bool b) { if (HasAuthority()) { bNeedsPlayer = b; } }
 
+	// In gesprek met een speler -> de NPC stopt met lopen tot het gesprek sluit (server-authoritative).
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
+	bool bTalkingToPlayer = false;
+	void SetTalkingToPlayer(bool b);
+
 	// Marktprijs per eenheid van het gewenste product (cents). 0 als onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	int32 GetMarketPriceCents() const;

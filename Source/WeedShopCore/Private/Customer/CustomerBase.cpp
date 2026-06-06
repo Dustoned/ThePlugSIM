@@ -260,7 +260,18 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, State);
 	DOREPLIFETIME(ACustomerBase, SpeechLine);
 	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
+	DOREPLIFETIME(ACustomerBase, bTalkingToPlayer);
 	DOREPLIFETIME(ACustomerBase, NpcId);
+}
+
+void ACustomerBase::SetTalkingToPlayer(bool b)
+{
+	if (!HasAuthority()) { return; }
+	bTalkingToPlayer = b;
+	if (b)
+	{
+		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+	}
 }
 
 void ACustomerBase::BecomeBuyerNow()
@@ -313,6 +324,13 @@ void ACustomerBase::Tick(float DeltaSeconds)
 
 	if (!HasAuthority())
 	{
+		return;
+	}
+
+	// In gesprek met een speler -> stilstaan (niet doorlopen) tot het gesprek sluit.
+	if (bTalkingToPlayer)
+	{
+		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
 		return;
 	}
 

@@ -582,6 +582,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerSubmitOffer(ACustomerBase* Customer, FName ProductId, int32 AskCents);
 
+	// Server: zet de "in gesprek"-vlag op een klant (stopt z'n lopen zolang je 'm aanspreekt).
+	UFUNCTION(Server, Reliable)
+	void ServerSetCustomerTalking(ACustomerBase* Customer, bool bTalking);
+
 	// Server: verkoop 1 van dit item uit de eigen inventory aan de supplier.
 	UFUNCTION(Server, Reliable)
 	void ServerSell(FName ItemId);

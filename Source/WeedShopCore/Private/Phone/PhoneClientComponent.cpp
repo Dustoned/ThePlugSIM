@@ -1256,6 +1256,11 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 
 // --- Deal ---
 
+void UPhoneClientComponent::ServerSetCustomerTalking_Implementation(ACustomerBase* Customer, bool bTalking)
+{
+	if (Customer) { Customer->SetTalkingToPlayer(bTalking); }
+}
+
 void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 {
 	if (!Customer)
@@ -1265,6 +1270,7 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	// Praat-venster opent voor IEDEREEN (naam, stats, dialoog, joint geven). De deal-sectie zelf
 	// (prijs/aanbod) tonen we in de UI alleen als 'ie ook echt wil kopen.
 	DealCustomer = Customer;
+	ServerSetCustomerTalking(Customer, true); // NPC stopt met lopen zolang je 'm aanspreekt
 	bDealOpen = true;
 	bOpen = false;
 	bRollOpen = false;
@@ -1333,6 +1339,7 @@ bool UPhoneClientComponent::DidUiConsumeClickRecently() const
 
 void UPhoneClientComponent::CloseDeal()
 {
+	if (ACustomerBase* C = DealCustomer.Get()) { ServerSetCustomerTalking(C, false); } // NPC mag weer lopen
 	bDealOpen = false;
 	DealCustomer = nullptr;
 	UpdateCursor();
@@ -1343,6 +1350,7 @@ void UPhoneClientComponent::ConfirmDeal()
 	if (ACustomerBase* C = DealCustomer.Get())
 	{
 		ServerSubmitOffer(C, GetOfferedProduct(), DealAskCents);
+		ServerSetCustomerTalking(C, false); // klaar -> NPC mag weer lopen/vertrekken
 	}
 	bDealOpen = false;
 	DealCustomer = nullptr;
