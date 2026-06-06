@@ -25,6 +25,7 @@
 #include "Phone/ContactsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Progression/LevelComponent.h"
+#include "World/HeatComponent.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -2802,6 +2803,12 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		if (ULevelComponent* Lv = GS->GetLeveling())
 		{
 			Lv->AddXP(5 + Total / 100);
+		}
+		// Heat: op straat dealen trekt aandacht. 's Nachts fors riskanter dan overdag (BustThreshold = 80).
+		if (UHeatComponent* Heat = GS->GetHeat())
+		{
+			const UDayCycleComponent* DCh = GS->GetDayCycle();
+			Heat->AddHeat((DCh && DCh->IsNight()) ? 3.0f : 0.5f);
 		}
 	}
 

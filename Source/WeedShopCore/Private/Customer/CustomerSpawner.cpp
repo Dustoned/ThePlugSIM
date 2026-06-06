@@ -475,7 +475,7 @@ void ACustomerSpawner::SpawnResidents()
 			UNpcRegistryComponent::PredictPersonality(FName(*FString::Printf(TEXT("Resident_%04d"), HomeIdx)), R, L, A);
 			return A;
 		};
-		const int32 BuyTarget = FMath::Min(UWant, FMath::Max(6, (UWant * 35) / 100));
+		const int32 BuyTarget = FMath::Min(UWant, FMath::Max(3, (UWant * 15) / 100)); // overdag bescheiden; de nacht regelt de verslaafden-surge
 		int32 BuyersIn = 0;
 		for (int32 Idx : PhysicalSet) { if (HomeAddiction(Idx) >= 30.f) { ++BuyersIn; } }
 		if (BuyersIn < BuyTarget)
@@ -565,14 +565,95 @@ void ACustomerSpawner::SpawnResidents()
 void ACustomerSpawner::CheckResidentRotation()
 {
 	UWorld* World = GetWorld();
-	if (!World || !HasAuthority() || RotatePerDay <= 0) { return; }
+	if (!World || !HasAuthority()) { return; }
 	const AWeedShopGameState* GS = World->GetGameState<AWeedShopGameState>();
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	if (!DC) { return; }
-	const int32 Day = DC->GetDayNumber();
-	if (Day == LastRotationDay) { return; }
-	LastRotationDay = Day;
-	RotateResidents();
+
+	// Dag<->nacht-overgang: pas de straat-populatie aan (nacht = kleine, (bijna) volledig verslaafde crowd).
+	const int8 NightNow = DC->IsNight() ? 1 : 0;
+	if (NightNow != LastNightState)
+	{
+		LastNightState = NightNow;
+		ApplyDayNightPopulation(NightNow == 1);
+	}
+
+	// Dagelijkse rotatie (nieuwe gezichten).
+	if (RotatePerDay > 0)
+	{
+		const int32 Day = DC->GetDayNumber();
+		if (Day != LastRotationDay) { LastRotationDay = Day; RotateResidents(); }
+	}
+}
+
+void ACustomerSpawner::ApplyDayNightPopulation(bool bNight)
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority()) { return; }
+	ACityGenerator* City = nullptr;
+	for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
+	if (!City) { return; }
+
+	auto Addiction = [](int32 Home) -> float
+	{
+		float R = 0.f, L = 0.f, A = 0.f;
+		UNpcRegistryComponent::PredictPersonality(FName(*FString::Printf(TEXT("Resident_%04d"), Home)), R, L, A);
+		return A;
+	};
+	auto HasAppt = [this](int32 Home) -> bool
+	{
+		const ACustomerBase* C = FindResidentByHome(Home);
+		return C && C->HasActiveAppointment();
+	};
+
+	if (bNight)
+	{
+		// 1) Niet-verslaafde roamers (zonder afspraak) van straat halen.
+		for (int32 Home : PhysicalHomes.Array())
+		{
+			if (Addiction(Home) < NightAddictThreshold && !HasAppt(Home)) { DespawnResidentByHome(Home); }
+		}
+		// 2) Verslaafde bewoners naar buiten tot ~NightRoamers.
+		TArray<int32> AddictPool;
+		for (int32 Home : EligibleHomes)
+		{
+			if (!PhysicalHomes.Contains(Home) && Addiction(Home) >= NightAddictThreshold) { AddictPool.Add(Home); }
+		}
+		while (PhysicalHomes.Num() < NightRoamers && AddictPool.Num() > 0)
+		{
+			const int32 Idx = FMath::RandRange(0, AddictPool.Num() - 1);
+			const int32 Home = AddictPool[Idx]; AddictPool.RemoveAtSwap(Idx);
+			SpawnOneResident(City, Home, false);
+		}
+		// 3) Te veel? Schaaf terug tot NightRoamers (alleen zonder afspraak).
+		if (PhysicalHomes.Num() > NightRoamers)
+		{
+			for (int32 Home : PhysicalHomes.Array())
+			{
+				if (PhysicalHomes.Num() <= NightRoamers) { break; }
+				if (!HasAppt(Home)) { DespawnResidentByHome(Home); }
+			}
+		}
+	}
+	else
+	{
+		// Dag: crowd weer aanvullen tot MaxResidents (nieuwe gezichten eerst), normale mix.
+		const int32 DayTarget = (MaxResidents > 0) ? MaxResidents : EligibleHomes.Num();
+		TArray<int32> ActNew, ActOld;
+		for (int32 Home : EligibleHomes)
+		{
+			if (PhysicalHomes.Contains(Home)) { continue; }
+			if (ActivatedEverHomes.Contains(Home)) { ActOld.Add(Home); } else { ActNew.Add(Home); }
+		}
+		while (PhysicalHomes.Num() < DayTarget && (ActNew.Num() + ActOld.Num()) > 0)
+		{
+			TArray<int32>& Pool = (ActNew.Num() > 0) ? ActNew : ActOld;
+			const int32 Idx = FMath::RandRange(0, Pool.Num() - 1);
+			const int32 Home = Pool[Idx]; Pool.RemoveAtSwap(Idx);
+			SpawnOneResident(City, Home, false);
+		}
+	}
+	ResidentHomeIndices = PhysicalHomes;
 }
 
 ACustomerBase* ACustomerSpawner::FindResidentByHome(int32 HomeIndex) const

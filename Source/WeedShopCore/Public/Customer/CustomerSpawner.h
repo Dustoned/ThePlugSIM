@@ -42,6 +42,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	int32 RotatePerDay = 25;
 
+	// 's Nachts loopt er een KLEINERE, (bijna) volledig verslaafde crowd buiten: veel deals mogelijk,
+	// maar je heat loopt 's nachts op. Overdag een grotere crowd met minder verslaafden.
+	UPROPERTY(EditAnywhere, Category = "Spawn")
+	int32 NightRoamers = 25;
+	// Addiction-drempel om 's nachts als "verslaafd / op het randje" mee te tellen (= koop-drempel).
+	UPROPERTY(EditAnywhere, Category = "Spawn")
+	float NightAddictThreshold = 30.f;
+
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpawnInterval = 10.f;
 
@@ -75,8 +83,12 @@ protected:
 	ACustomerBase* FindResidentByHome(int32 HomeIndex) const;
 	// Wissel RotatePerDay fysieke bewoners voor virtuele (voorrang aan nog-niet-getoonde woningen).
 	void RotateResidents();
-	// Periodieke check (timer): nieuwe dag -> roteren.
+	// Periodieke check (timer): nieuwe dag -> roteren; dag<->nacht-overgang -> populatie aanpassen.
 	void CheckResidentRotation();
+	// Past de straat-populatie aan op dag/nacht: nacht = ~NightRoamers (bijna) verslaafden buiten,
+	// dag = aanvullen tot MaxResidents met de normale mix.
+	void ApplyDayNightPopulation(bool bNight);
+	int8 LastNightState = -1; // -1 onbekend, 0 dag, 1 nacht
 
 	TArray<int32> EligibleHomes;   // alle niet-koopbare ingang-woningen (de volledige pool)
 	TSet<int32> PhysicalHomes;     // woning-indexen die NU een fysieke bewoner hebben
