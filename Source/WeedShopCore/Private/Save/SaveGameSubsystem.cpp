@@ -350,7 +350,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 			Give(TEXT("Table"), 5);
 			Give(TEXT("Fridge"), 5);
 			Give(TEXT("Mattress"), 5);
-			// (Geen Sink: gootsteen is een vaste fixture, niet plaatsbaar/oppakbaar.)
+			Give(TEXT("Sink"), 5); // sandbox-only: om de sink-positie voor de template in te richten
 			Give(TEXT("DryRack_Std"), 3);
 			Give(TEXT("Bench_Pack"), 3);
 			Give(TEXT("Shelf"), 3);

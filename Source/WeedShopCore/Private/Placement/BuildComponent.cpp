@@ -775,8 +775,9 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 
-	// Gootsteen = vaste fixture: nooit plaatsbaar door spelers (staat al vast in elke woning).
-	if (ItemId == FName(TEXT("Sink")))
+	// Gootsteen = vaste fixture in een normaal spel (niet plaatsbaar). In SANDBOX/free-build mag 't wél,
+	// zodat je de sink-positie voor de template kunt inrichten.
+	if (ItemId == FName(TEXT("Sink")) && !WorldFreeBuild(World))
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Sinks zijn vaste fixtures.")); }
 		return;

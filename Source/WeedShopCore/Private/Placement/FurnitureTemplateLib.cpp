@@ -161,11 +161,15 @@ int32 FurnitureTemplates::SaveFromWorld(UWorld* W, ACityGenerator* City)
 			E.Yaw = P.Yaw - (bLongX ? 0.f : 90.f);
 			Entries.Add(E);
 		}
-		// Behoud de bestaande sink(s) van dit type: sinks zijn vaste fixtures (niet plaatsbaar), dus die
-		// kun je niet opnieuw vangen -> anders zou her-inrichten de sink van dat type wissen.
-		if (const TArray<FFurnitureEntry>* Old = Merged.Find(Type))
+		// Heb je in sandbox zelf een sink geplaatst? Dan gebruik die. Zo niet, behoud de bestaande sink
+		// van dit type (sinks zijn in een normaal spel vast/niet plaatsbaar), zodat 'ie niet verdwijnt.
+		const bool bUserSink = Entries.ContainsByPredicate([](const FFurnitureEntry& E) { return E.ItemId == FName(TEXT("Sink")); });
+		if (!bUserSink)
 		{
-			for (const FFurnitureEntry& OE : *Old) { if (OE.ItemId == FName(TEXT("Sink"))) { Entries.Add(OE); } }
+			if (const TArray<FFurnitureEntry>* Old = Merged.Find(Type))
+			{
+				for (const FFurnitureEntry& OE : *Old) { if (OE.ItemId == FName(TEXT("Sink"))) { Entries.Add(OE); } }
+			}
 		}
 		Merged.Add(Type, Entries); // overschrijf dit type (met behoud van de sink)
 		++Types;
