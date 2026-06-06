@@ -3,6 +3,7 @@
 #include "UI/WeedUiStyle.h"
 #include "UI/InventoryWidget.h" // UInvCell (sleep/drop)
 #include "Inventory/InventoryComponent.h"
+#include "Cultivation/WaterCanComponent.h"
 #include "Phone/PhoneClientComponent.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -136,6 +137,14 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const int32 Active = Inv->GetActiveSlot();
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 
+	// Waterfles vol/leeg: bepaalt of het fles-icoon ververst moet worden als de lading flipt.
+	bool bWaterEmpty = true;
+	if (const UWaterCanComponent* Can = P->FindComponentByClass<UWaterCanComponent>())
+	{
+		bWaterEmpty = (Can->GetCharges() <= 0);
+	}
+	const bool bWaterFlipped = (bWaterEmpty != bPrevWaterEmpty);
+
 	for (int32 i = 0; i < SlotBoxes.Num(); ++i)
 	{
 		const bool bActive = (i == Active);
@@ -159,8 +168,9 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const bool bBud = bWet || IdStr.StartsWith(TEXT("Bud_"));
 			const bool bCash = (S.ItemId == TEXT("Cash"));
 
-			// Icoon alleen (her)bouwen als het item in dit slot veranderd is.
-			if (SlotLastIcon[i] != S.ItemId)
+			// Icoon (her)bouwen als het item veranderde, of als 't een fles is en de vol/leeg-staat flipte.
+			const bool bIsWater = IdStr.StartsWith(TEXT("WaterBottle"));
+			if (SlotLastIcon[i] != S.ItemId || (bIsWater && bWaterFlipped))
 			{
 				SlotLastIcon[i] = S.ItemId;
 				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 34.f));
@@ -192,4 +202,5 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(ESlateVisibility::Collapsed); }
 		}
 	}
+	bPrevWaterEmpty = bWaterEmpty;
 }

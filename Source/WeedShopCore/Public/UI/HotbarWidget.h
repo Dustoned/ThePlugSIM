@@ -30,4 +30,5 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UBorder>> SlotBadgePills; // pill-achtergrond (verbergen als leeg)
 	UPROPERTY() TArray<TObjectPtr<UInvCell>> DropCells;     // transparante sleep/drop-cel per slot
 	TArray<FName> SlotLastIcon;                             // laatst getoonde item-id (om icoon niet elke tick te herbouwen)
+	bool bPrevWaterEmpty = false;                           // vorige vol/leeg-staat fles -> forceert icoon-refresh bij flip
 };

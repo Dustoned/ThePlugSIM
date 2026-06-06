@@ -14,6 +14,9 @@
 #include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
+#include "Engine/Engine.h"
+#include "GameFramework/Pawn.h"
+#include "Cultivation/WaterCanComponent.h"
 #include "Misc/ConfigCacheIni.h"
 #include <initializer_list>
 
@@ -354,6 +357,22 @@ namespace WeedUI
 	UTexture2D* ItemIconTexture(FName ItemId)
 	{
 		if (IconKeyFor(ItemId).IsEmpty()) { return nullptr; }
+		// Waterfles: toon VOL of LEEG afhankelijk van de waterlading van de speler.
+		if (FString(CatFor(ItemId).Key) == TEXT("water"))
+		{
+			bool bEmpty = true;
+			if (UWorld* W = GWorld)
+			{
+				if (APawn* P = UGameplayStatics::GetPlayerPawn(W, 0))
+				{
+					if (const UWaterCanComponent* Can = P->FindComponentByClass<UWaterCanComponent>())
+					{
+						bEmpty = (Can->GetCharges() <= 0);
+					}
+				}
+			}
+			if (UTexture2D* T = LoadByStem(bEmpty ? TEXT("bottle_empty") : TEXT("bottle"))) { return T; }
+		}
 		for (const FString& Cand : IconCandidatesFor(ItemId))
 		{
 			if (UTexture2D* Tex = LoadByStem(Cand)) { return Tex; }
