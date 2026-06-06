@@ -213,22 +213,27 @@ bool FurnitureTemplates::LoadTemplates(TMap<FString, TArray<FFurnitureEntry>>& O
 		// INGEBAKKEN default-layout: werkt altijd, ook zonder Saved-bestand. (Een Saved-bestand van F8
 		// overschrijft dit volledig.)
 		Text = FString(
-			TEXT("Row_6x7|Mattress|-153.0|-127.5|-6.0|0.0\n")
-			TEXT("Row_6x7|Fridge|153.0|127.5|-6.0|180.0\n")
-			TEXT("Row_6x7|Table|0.0|113.3|-6.0|0.0\n")
-			TEXT("Row_6x7|Sink|153.0|-127.5|39.0|90.0\n")
-			TEXT("Row_4x7|Mattress|-153.0|-95.6|-6.0|0.0\n")
-			TEXT("Row_4x7|Fridge|153.0|95.6|-6.0|180.0\n")
-			TEXT("Row_4x7|Table|0.0|85.0|-6.0|0.0\n")
-			TEXT("Row_4x7|Sink|153.0|-95.6|39.0|90.0\n")
-			TEXT("Apt_7x11|Mattress|145.8|-159.8|-6.0|0.0\n")
-			TEXT("Apt_7x11|Fridge|384.2|159.8|-6.0|180.0\n")
-			TEXT("Apt_7x11|Table|265.0|142.0|-6.0|0.0\n")
-			TEXT("Apt_7x11|Sink|384.2|-159.8|39.0|90.0\n")
-			TEXT("Apt_5x7|Mattress|-304.7|-155.7|-6.0|-89.4\n")
-			TEXT("Apt_5x7|Fridge|-318.4|235.5|-6.0|0.7\n")
-			TEXT("Apt_5x7|Table|-64.6|221.7|-6.0|0.7\n")
-			TEXT("Apt_5x7|Sink|-241.3|232.9|39.0|1.2\n"));
+			TEXT("Row_6x7|Fridge|297.4|-242.0|-8.0|-0.5\n")
+			TEXT("Row_6x7|Table|62.9|-231.8|-8.0|-0.3\n")
+			TEXT("Row_6x7|Mattress|282.6|5.5|328.0|90.2\n")
+			TEXT("Row_6x7|Chest|283.4|137.2|355.0|0.3\n")
+			TEXT("Row_6x7|Shelf|37.8|-253.8|413.0|179.8\n")
+			TEXT("Row_6x7|Sink|223.7|-240.3|37.0|-0.3\n")
+			TEXT("Row_4x7|Fridge|303.1|174.2|-8.0|-179.0\n")
+			TEXT("Row_4x7|Table|28.2|161.4|-8.0|-178.7\n")
+			TEXT("Row_4x7|Mattress|280.3|-6.1|328.0|90.3\n")
+			TEXT("Row_4x7|Chest|280.2|123.4|355.0|0.7\n")
+			TEXT("Row_4x7|Sink|227.2|169.4|37.0|-178.7\n")
+			TEXT("Apt_7x11|Fridge|488.2|313.5|-8.0|90.2\n")
+			TEXT("Apt_7x11|Table|482.7|11.0|-8.0|89.1\n")
+			TEXT("Apt_7x11|Mattress|-427.6|-303.5|-8.0|1.4\n")
+			TEXT("Apt_7x11|Shelf|-363.8|321.0|77.0|0.8\n")
+			TEXT("Apt_7x11|Chest|-296.1|-302.8|19.0|-90.1\n")
+			TEXT("Apt_7x11|Sink|487.1|237.5|37.0|89.8\n")
+			TEXT("Apt_5x7|Fridge|315.1|-227.8|-2.0|-180.8\n")
+			TEXT("Apt_5x7|Table|5.5|-217.7|-2.0|-180.4\n")
+			TEXT("Apt_5x7|Mattress|-252.7|214.7|-2.0|-0.5\n")
+			TEXT("Apt_5x7|Sink|235.5|-225.9|43.0|-180.8\n"));
 	}
 
 	TArray<FString> Lines;
