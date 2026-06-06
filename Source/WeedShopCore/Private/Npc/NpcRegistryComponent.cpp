@@ -82,9 +82,12 @@ namespace
 
 void UNpcRegistryComponent::PredictPersonality(FName NpcId, float& OutRespect, float& OutLoyalty, float& OutAddiction)
 {
+	// Respect + loyaliteit blijven LAAG voor iedereen: die bouw je per persoon zelf op via deals
+	// (anders valt er weinig te levelen). Alleen ADDICTION verschilt, naar boven verdeeld zodat er
+	// vanaf het begin genoeg kopers zijn.
+	OutRespect = 10.f;
+	OutLoyalty = 0.f;
 	FRandomStream Rng(static_cast<int32>(GetTypeHash(NpcId)));
-	OutRespect = static_cast<float>(Rng.RandRange(5, 55));
-	OutLoyalty = static_cast<float>(Rng.RandRange(0, 40));
 	const float Roll = Rng.FRand();
 	if (Roll < 0.20f)       { OutAddiction = static_cast<float>(Rng.RandRange(60, 95)); } // ~20% stevig verslaafd
 	else if (Roll < 0.45f)  { OutAddiction = static_cast<float>(Rng.RandRange(32, 60)); } // ~25% boven de koop-drempel
