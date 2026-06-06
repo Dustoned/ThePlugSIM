@@ -95,6 +95,15 @@ void UDryCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	OutOperation = Op;
 }
 
+bool UDryCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	UDryDragOp* Op = Cast<UDryDragOp>(InOperation);
+	if (!Op || !Owner.IsValid()) { return false; }
+	// Een natte-cel staat in de inventory-kolom (drying side = false); een drogende-cel in het rek (true).
+	Owner->HandleDryDrop(!bWet, Op);
+	return true;
+}
+
 // ---------------------------------------------------------------------------
 //  UDryDropZone
 // ---------------------------------------------------------------------------
@@ -279,9 +288,20 @@ void UDryingRackWidget::FillBody()
 
 			RowBars.Add(Bar); RowStatus.Add(Status); RowEntryIndex.Add(i);
 		}
-		if (Used == 0)
+		// "+"-vangnetcel: drop natte wiet hier om op te hangen (ook als het rek leeg is).
 		{
-			DryList->AddChild(WeedUI::Text(WidgetTree, TEXT("Niets aan het drogen. Sleep natte wiet hierheen."), 11, FLinearColor::Gray));
+			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
+			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.45f), 8.f));
+			Vis->SetPadding(FMargin(4.f));
+			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+			Vis->SetContent(Ov);
+			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, Used == 0 ? TEXT("hang hier") : TEXT("+"), Used == 0 ? 9 : 18, FLinearColor(0.45f, 0.5f, 0.45f), true));
+			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
+			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
+			C->bWet = false; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
+			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+			Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
+			Grid->AddChildToWrapBox(Sz);
 		}
 	}
 
@@ -323,9 +343,20 @@ void UDryingRackWidget::FillBody()
 				++Shown;
 			}
 		}
-		if (Shown == 0)
+		// "+"-vangnetcel: drop een klare batch hier om te oogsten (ook als je geen natte wiet hebt).
 		{
-			WetList->AddChild(WeedUI::Text(WidgetTree, TEXT("Geen natte wiet. Oogst eerst een plant."), 11, FLinearColor::Gray));
+			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
+			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.45f), 8.f));
+			Vis->SetPadding(FMargin(4.f));
+			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+			Vis->SetContent(Ov);
+			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, Shown == 0 ? TEXT("oogst hier") : TEXT("+"), Shown == 0 ? 9 : 18, FLinearColor(0.45f, 0.5f, 0.55f), true));
+			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
+			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
+			C->bWet = true; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
+			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+			Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
+			Grid->AddChildToWrapBox(Sz);
 		}
 	}
 
