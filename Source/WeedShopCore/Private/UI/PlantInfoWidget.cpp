@@ -90,9 +90,9 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	UProgressBar* HB = nullptr; UTextBlock* HT = nullptr;
 	HealthRow = MakeBarRow(VB, HB, HT, FLinearColor(0.4f, 0.9f, 0.4f)); HealthBar = HB; HealthText = HT;
 
-	YieldText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.9f, 0.9f, 0.7f));
-	VB->AddChildToVerticalBox(YieldText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
-	SoilText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.6f, 0.9f, 0.6f));
+	YieldText = WeedUI::Text(WidgetTree, TEXT(""), 15, FLinearColor(1.f, 0.92f, 0.5f), false, true);
+	VB->AddChildToVerticalBox(YieldText)->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
+	SoilText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.6f, 0.85f, 0.6f));
 	VB->AddChildToVerticalBox(SoilText);
 	HintText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(1.f, 0.95f, 0.5f));
 	VB->AddChildToVerticalBox(HintText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
@@ -131,7 +131,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		// Titel = naam van de plant + basis-THC%, met aantal plekken als die >1 is.
 		const FString StrainName = Plant->GetPrimaryStrainName().ToString();
-		FString Title = FString::Printf(TEXT("%s   %.0f%% THC"), *StrainName, Plant->GetPrimaryBaseThc());
+		FString Title = StrainName; // THC staat duidelijk bij de opbrengst (geen dubbele weergave)
 		if (NumSlots > 1) { Title += FString::Printf(TEXT("   (%d/%d)"), Plant->GetPlantedCount(), NumSlots); }
 		TitleText->SetText(FText::FromString(Title));
 		if (GrowthHeader) { GrowthHeader->SetVisibility(ESlateVisibility::HitTestInvisible); }
@@ -162,9 +162,9 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const float Care = Plant->GetCareMultiplier();
 		HealthBar->SetPercent(Care);
 		HealthBar->SetFillColorAndOpacity(Care >= 0.8f ? FLinearColor(0.4f, 0.9f, 0.4f) : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)));
-		HealthText->SetText(FText::FromString(FString::Printf(TEXT("Health  %.0f%%"), Care * 100.f)));
+		HealthText->SetText(FText::FromString(FString::Printf(TEXT("Quality  %.0f%%"), Care * 100.f)));
 		YieldText->SetVisibility(ESlateVisibility::HitTestInvisible);
-		YieldText->SetText(FText::FromString(FString::Printf(TEXT("Expected: %.0fg @ %.0f%% THC"), Plant->GetEstimatedTotalYield(), Plant->GetEstimatedThcPercent())));
+		YieldText->SetText(FText::FromString(FString::Printf(TEXT("Harvest:  ~%.0f g   -   %.0f%% THC"), Plant->GetEstimatedTotalYield(), Plant->GetEstimatedThcPercent())));
 	}
 	else
 	{

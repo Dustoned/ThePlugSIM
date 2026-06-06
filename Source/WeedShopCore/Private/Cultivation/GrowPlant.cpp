@@ -810,11 +810,13 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 	}
 	if (GetReadyCount() > 0)
 	{
-		// Kwaliteit (gezondheid) zakt zolang je niet oogst -> waarschuwen.
+		// Quality staat op de plant-kaart; hier kort. Wel waarschuwen als 'ie zakt.
 		const float Q = FMath::Clamp(CareAvg, 0.f, 1.f) * 100.f;
-		const FString Warn = (Q < 60.f) ? TEXT("  - harvest now, quality dropping!") : TEXT("");
-		return FText::FromString(FString::Printf(TEXT("Harvest %d ready plant(s)  (quality %.0f%%)%s"),
-			GetReadyCount(), Q, *Warn));
+		const FString Warn = (Q < 60.f) ? TEXT("  - quality dropping!") : TEXT("");
+		const int32 Ready = GetReadyCount();
+		return FText::FromString(Ready > 1
+			? FString::Printf(TEXT("Harvest  (%d ready)%s"), Ready, *Warn)
+			: FString::Printf(TEXT("Harvest%s"), *Warn));
 	}
 	if (!HasSoil())
 	{
