@@ -465,6 +465,35 @@ void ACustomerSpawner::SpawnResidents()
 		}
 	}
 
+	// Garandeer dat er onder de roamers die naar buiten komen genoeg KOPERS zitten (addiction >= 30),
+	// zodat je nooit toevallig alleen lage-addiction-mensen op straat hebt. Vervang zo nodig een paar
+	// niet-kopers door koper-bewoners uit de rest van de stad (stats blijven 1x-deterministisch).
+	{
+		auto HomeAddiction = [](int32 HomeIdx) -> float
+		{
+			float R = 0.f, L = 0.f, A = 0.f;
+			UNpcRegistryComponent::PredictPersonality(FName(*FString::Printf(TEXT("Resident_%04d"), HomeIdx)), R, L, A);
+			return A;
+		};
+		const int32 BuyTarget = FMath::Min(UWant, FMath::Max(6, (UWant * 35) / 100));
+		int32 BuyersIn = 0;
+		for (int32 Idx : PhysicalSet) { if (HomeAddiction(Idx) >= 30.f) { ++BuyersIn; } }
+		if (BuyersIn < BuyTarget)
+		{
+			TArray<int32> BuyerPool;  // koper-ingangen die nog NIET gekozen zijn
+			for (int32 Idx : Entrances) { if (!PhysicalSet.Contains(Idx) && HomeAddiction(Idx) >= 30.f) { BuyerPool.Add(Idx); } }
+			TArray<int32> NonBuyersIn; // gekozen niet-kopers die we mogen vervangen
+			for (int32 Idx : PhysicalSet) { if (HomeAddiction(Idx) < 30.f) { NonBuyersIn.Add(Idx); } }
+			int32 bi = 0;
+			while (BuyersIn < BuyTarget && bi < BuyerPool.Num() && NonBuyersIn.Num() > 0)
+			{
+				PhysicalSet.Remove(NonBuyersIn.Pop());
+				PhysicalSet.Add(BuyerPool[bi++]);
+				++BuyersIn;
+			}
+		}
+	}
+
 	int32 Made = 0;
 	for (int32 i = 0; i < Total; ++i)
 	{

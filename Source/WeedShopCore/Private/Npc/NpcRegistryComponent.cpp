@@ -78,18 +78,17 @@ namespace
 		return FString::Printf(TEXT("%s %s"), *CleanFirstName(PreferredName, Index), Last[LastIdx]);
 	}
 
-	// Gerandomiseerde persoonlijkheid (DETERMINISTISCH op Seed). Addiction is naar boven verdeeld zodat
-	// een flink deel van de bevolking al (wil) kopen vanaf het begin (koop-drempel addiction = 30).
-	void RollPersonality(int32 Seed, float& OutRespect, float& OutLoyalty, float& OutAddiction)
-	{
-		FRandomStream Rng(Seed);
-		OutRespect = static_cast<float>(Rng.RandRange(5, 55));
-		OutLoyalty = static_cast<float>(Rng.RandRange(0, 40));
-		const float Roll = Rng.FRand();
-		if (Roll < 0.20f)       { OutAddiction = static_cast<float>(Rng.RandRange(60, 95)); } // ~20% stevig verslaafd
-		else if (Roll < 0.45f)  { OutAddiction = static_cast<float>(Rng.RandRange(32, 60)); } // ~25% boven de koop-drempel
-		else                    { OutAddiction = static_cast<float>(Rng.RandRange(5, 28));  } // rest nog te overtuigen
-	}
+}
+
+void UNpcRegistryComponent::PredictPersonality(FName NpcId, float& OutRespect, float& OutLoyalty, float& OutAddiction)
+{
+	FRandomStream Rng(static_cast<int32>(GetTypeHash(NpcId)));
+	OutRespect = static_cast<float>(Rng.RandRange(5, 55));
+	OutLoyalty = static_cast<float>(Rng.RandRange(0, 40));
+	const float Roll = Rng.FRand();
+	if (Roll < 0.20f)       { OutAddiction = static_cast<float>(Rng.RandRange(60, 95)); } // ~20% stevig verslaafd
+	else if (Roll < 0.45f)  { OutAddiction = static_cast<float>(Rng.RandRange(32, 60)); } // ~25% boven de koop-drempel
+	else                    { OutAddiction = static_cast<float>(Rng.RandRange(5, 28));  } // rest nog te overtuigen
 }
 
 void UNpcRegistryComponent::EnsureSeeded()
@@ -117,7 +116,7 @@ void UNpcRegistryComponent::EnsureSeeded()
 		UsedNames.Add(UniqueName);
 		S.DisplayName = FText::FromString(UniqueName);
 		// Elke (tabel-)NPC krijgt een gerandomiseerde persoonlijkheid (i.p.v. de vaste tabel-waardes).
-		RollPersonality(static_cast<int32>(GetTypeHash(RowName)), S.Respect, S.Loyalty, S.Addiction);
+		PredictPersonality(RowName, S.Respect, S.Loyalty, S.Addiction);
 		States.Add(S);
 		++RowIndex;
 	}
@@ -146,7 +145,7 @@ FName UNpcRegistryComponent::EnsureNpc(FName NpcId, const FText& DisplayName, fl
 
 	// Gerandomiseerde persoonlijkheid per NPC, DETERMINISTISCH op de NpcId (zelfde NPC = zelfde stats,
 	// stabiel over save/load en op host+client).
-	RollPersonality(static_cast<int32>(GetTypeHash(NpcId)), S.Respect, S.Loyalty, S.Addiction);
+	PredictPersonality(NpcId, S.Respect, S.Loyalty, S.Addiction);
 	States.Add(S);
 	return NpcId;
 }
