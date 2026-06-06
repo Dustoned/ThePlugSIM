@@ -2357,15 +2357,17 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 		else
 		{
-			// "Kom bij mij": verschijn in de eigen unit (navmesh kan niet naar boven, dus verplaats erheen)
-			// en wacht daar tot de speler komt.
+			// "Kom bij mij": wacht ECHT bij de eigen deur (bereikbaar), niet midden in de kamer:
+			//  - appartement -> in de gang vóór de unitdeur (HomeHallPos),
+			//  - rijtjeshuis -> vóór de voordeur (HomeFrontSpot).
 			if (!bApptArrived)
 			{
 				bApptArrived = true;
 				bAtHomeInside = false;
 				SetActorHiddenInGame(false);
 				SetActorEnableCollision(true);
-				SetActorLocation(MakeResidentStandingLocation(HomeInteriorPos));
+				const FVector DoorSpot = bHasHomeHall ? HomeHallPos : HomeFrontSpot;
+				SetActorLocation(MakeResidentStandingLocation(DoorSpot));
 				if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
 			}
 			return;

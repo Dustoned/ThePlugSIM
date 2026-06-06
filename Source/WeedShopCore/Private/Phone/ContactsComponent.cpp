@@ -262,7 +262,11 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 				const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
 				if (Homes.IsValidIndex(HomeIdx))
 				{
-					SpawnLoc = Homes[HomeIdx].InteriorPos + FVector(0.f, 0.f, 4.f);
+					const FApartmentHome& H = Homes[HomeIdx];
+					// Bij de DEUR: appartement -> in de gang vóór de unitdeur (HallPos); rijtjeshuis -> vóór
+					// de voordeur (DoorPos). Beide bereikbaar voor de speler.
+					const FVector DoorSpot = !H.HallPos.IsNearlyZero() ? H.HallPos : H.DoorPos;
+					SpawnLoc = DoorSpot + FVector(0.f, 0.f, 4.f);
 					bPlacedAtHome = true;
 				}
 			}
