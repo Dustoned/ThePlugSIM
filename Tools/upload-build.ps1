@@ -1,4 +1,4 @@
-# upload-build.ps1 — package ThePlugSIM (Win64 Shipping), zip it, en upload als GitHub Release.
+# upload-build.ps1 - package ThePlugSIM (Win64), zip it, en upload als GitHub Release.
 # Gebruik:  powershell -ExecutionPolicy Bypass -File Tools\upload-build.ps1 -Notes "wat is er nieuw"
 param(
     [string]$Notes = "Nieuwe test-build.",
@@ -24,7 +24,7 @@ Write-Host "== Editor sluiten (DLL-lock voorkomen) =="
 Get-Process UnrealEditor -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3
 
-Write-Host "== Packagen ($Config) — dit duurt even... =="
+Write-Host "== Packagen ($Config) - dit duurt even... =="
 & $UAT BuildCookRun -project="$UProj" -noP4 -platform=Win64 -clientconfig=$Config `
     -cook -build -stage -pak -archive -archivedirectory="$Archive" -nocompileeditor -utf8output
 if ($LASTEXITCODE -ne 0) { Write-Error "Packagen mislukt (UAT exit $LASTEXITCODE)"; exit 1 }
@@ -48,7 +48,7 @@ Write-Host "== Zip klaar: $SizeMB MB =="
 
 Write-Host "== Uploaden naar GitHub Release ($Tag) =="
 $Title = "ThePlugSIM test-build $Stamp"
-$Body  = "$Notes`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows ($Config). Download de zip, pak 'm uit, en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; meespelers verbinden via het IP van de host (zelfde netwerk, of via port-forward 7777 / een VPN zoals Radmin/ZeroTier)."
+$Body  = "$Notes`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download de zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
 gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes "$Body" --latest
 if ($LASTEXITCODE -ne 0) { Write-Error "GitHub release upload mislukt"; exit 1 }
 
