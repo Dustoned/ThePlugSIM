@@ -303,7 +303,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
 	UVerticalBoxSlot* GS = Right->AddChildToVerticalBox(Scroll);
-	GS->SetSize(FSlateChildSize(ESlateSizeRule::Auto)); // grid hugt z'n inhoud -> hint komt er direct onder
+	GS->SetSize(FSlateChildSize(ESlateSizeRule::Automatic)); // grid hugt z'n inhoud -> hint komt er direct onder
 	Grid = WidgetTree->ConstructWidget<UWrapBox>();
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 	Scroll->AddChild(Grid);
