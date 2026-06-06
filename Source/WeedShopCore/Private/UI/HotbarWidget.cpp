@@ -157,6 +157,8 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			DropCells[i]->Inv = Inv;
 			DropCells[i]->StackId = SlotSid;
 			DropCells[i]->bDraggable = (SlotSid != 0);
+			const int32 DIdx = Inv->FindStackById(SlotSid);
+			DropCells[i]->IconId = Stacks.IsValidIndex(DIdx) ? Stacks[DIdx].ItemId : NAME_None;
 		}
 
 		const int32 Idx = Inv->FindStackById(SlotSid);
