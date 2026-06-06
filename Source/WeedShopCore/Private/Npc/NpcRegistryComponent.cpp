@@ -131,9 +131,20 @@ FName UNpcRegistryComponent::EnsureNpc(FName NpcId, const FText& DisplayName, fl
 	FNpcState S;
 	S.NpcId = NpcId;
 	S.DisplayName = DisplayName.IsEmpty() ? FText::FromName(NpcId) : DisplayName;
-	S.Respect = FMath::Clamp(BaseRespect, 0.f, 100.f);
-	S.Loyalty = FMath::Clamp(BaseLoyalty, 0.f, 100.f);
-	S.Addiction = FMath::Clamp(BaseAddiction, 0.f, 100.f);
+
+	// Gerandomiseerde persoonlijkheid per NPC, DETERMINISTISCH op de NpcId (zelfde NPC = zelfde stats,
+	// stabiel over save/load en op host+client). Addiction is bewust naar boven verdeeld zodat je vanaf
+	// het begin genoeg klanten hebt die al (willen) kopen (koop-drempel addiction = 30).
+	FRandomStream Rng(static_cast<int32>(GetTypeHash(NpcId)));
+	S.Respect = static_cast<float>(Rng.RandRange(5, 55));
+	S.Loyalty = static_cast<float>(Rng.RandRange(0, 40));
+	const float Roll = Rng.FRand();
+	if (Roll < 0.20f)       { S.Addiction = static_cast<float>(Rng.RandRange(60, 95)); } // ~20% stevig verslaafd (vaste klant)
+	else if (Roll < 0.45f)  { S.Addiction = static_cast<float>(Rng.RandRange(32, 60)); } // ~25% al boven de koop-drempel
+	else                    { S.Addiction = static_cast<float>(Rng.RandRange(5, 28));  } // rest nog te overtuigen
+	S.Respect = FMath::Clamp(S.Respect, 0.f, 100.f);
+	S.Loyalty = FMath::Clamp(S.Loyalty, 0.f, 100.f);
+	S.Addiction = FMath::Clamp(S.Addiction, 0.f, 100.f);
 	States.Add(S);
 	return NpcId;
 }
