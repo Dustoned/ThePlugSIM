@@ -309,11 +309,27 @@ bool USaveGameSubsystem::RunPendingOnWorldReady()
 
 void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 {
-	if (Mode == EGameStartMode::Normal) { return; } // kale start
 	AWeedShopGameState* GS = GetWeedGameState();
-	if (GS) { GS->SetFreeBuild(true); } // testing/sandbox: overal bouwen toegestaan
 	UWorld* World = GS ? GS->GetWorld() : nullptr;
 	APawn* P = (World && World->GetFirstPlayerController()) ? World->GetFirstPlayerController()->GetPawn() : nullptr;
+
+	// Normale start: een kleine startkit + EUR 420 (geen free-build, geen max level).
+	if (Mode == EGameStartMode::Normal)
+	{
+		if (!P) { return; }
+		if (UEconomyComponent* Econ = P->FindComponentByClass<UEconomyComponent>())
+		{
+			Econ->SetBalanceCents(42000); // EUR 420 cash
+		}
+		if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			Inv->AddItem(FName(TEXT("Papers_Small")), 10);
+			Inv->AddItem(FName(TEXT("Bud_SilverHaze")), 20, 13.f, 70.f); // 20g gedroogde Silver Haze
+		}
+		return;
+	}
+
+	if (GS) { GS->SetFreeBuild(true); } // testing/sandbox: overal bouwen toegestaan
 	if (!P) { return; }
 
 	const bool bSandbox = (Mode == EGameStartMode::Sandbox);
