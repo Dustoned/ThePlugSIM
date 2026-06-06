@@ -741,16 +741,8 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		}
 	}
 
-	// --- ATM in elke winkel (binnen) ---
-	TArray<FCityMapBlock> Blocks; City->GetMapBlocks(Blocks);
-	const FVector Center = City->GetCityCenter();
-	for (const FCityMapBlock& B : Blocks)
-	{
-		if (!B.bShop) { continue; }
-		FVector L(B.Center.X + 160.f, B.Center.Y + 160.f, Center.Z); // iets uit het midden (niet in de balie)
-		L.Z = FloorZ(L, Center.Z - 90.f) + 2.f;
-		World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator::ZeroRotator, L));
-	}
+	// (ATM's worden nu door CityGenerator naast de balie in elke winkel geplaatst - betrouwbaarder
+	//  dan de oude gok-positie op het blok-midden, die in een muur/buiten kon belanden.)
 }
 
 void ACustomerSpawner::SetupTestCustomer(ACustomerBase* C, const FVector& Park)

@@ -12,6 +12,7 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerStart.h"
 #include "World/StoreCounter.h"
+#include "World/Atm.h"
 #include "World/CityDoor.h"
 #include "World/CityElevator.h"
 #include "World/RoadNavZone.h"
@@ -1670,6 +1671,14 @@ void ACityGenerator::BuildEnterableBuilding(const FVector& CenterXY, float BaseZ
 		{
 			Counter->Kind = Kind;
 			Counter->SetupVisual(Sign);
+		}
+
+		// ATM naast de balie in elke winkel (gericht naar de deur, zodat je er vóór kunt staan).
+		{
+			const FVector Tang(-N.Y, N.X, 0.f);
+			FVector AtmPos = CounterPos + Tang * 210.f;
+			AtmPos.Z = BaseZ + 2.f;
+			W->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), AtmPos), SP);
 		}
 	}
 
