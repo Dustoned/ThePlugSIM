@@ -119,35 +119,29 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 	// --- Telefoon-icoon rechts van de hotbar met notificatie-bubble (aantal gemiste berichten) ---
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f);
+		Sz->SetWidthOverride(52.f); Sz->SetHeightOverride(52.f);
 		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 		Sz->SetContent(Ov);
 
-		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
-		Box->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.9f), 8.f));
-		Box->SetPadding(FMargin(6.f));
-		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
-		UOverlaySlot* BoxOS = Ov->AddChildToOverlay(Box);
-		BoxOS->SetHorizontalAlignment(HAlign_Fill); BoxOS->SetVerticalAlignment(VAlign_Fill);
-
+		// Alleen het telefoon-icoon (geen doos/achtergrond), gecentreerd + iets kleiner.
 		PhoneIconBox = WidgetTree->ConstructWidget<USizeBox>();
-		PhoneIconBox->SetWidthOverride(40.f); PhoneIconBox->SetHeightOverride(40.f);
-		// Inhoud wordt in NativeTick gezet (normaal 'phone' / trillend 'phone_vibrate'), val terug op de message-glyph.
-		PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("phone"), 40.f, FLinearColor(0.8f, 0.9f, 1.f), WeedUI::EIcon::Message));
-		Box->SetContent(PhoneIconBox);
+		PhoneIconBox->SetWidthOverride(34.f); PhoneIconBox->SetHeightOverride(34.f);
+		PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("phone"), 34.f, FLinearColor(0.85f, 0.92f, 1.f), WeedUI::EIcon::Message));
 		PhoneIconBox->SetRenderTransformPivot(FVector2D(0.5f, 0.5f)); // midden-pivot voor de tril-animatie
+		UOverlaySlot* IconOS = Ov->AddChildToOverlay(PhoneIconBox);
+		IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
 
-		MsgBadge = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor::White, true, true);
+		MsgBadge = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor::White, true, true);
 		MsgBadgePill = WidgetTree->ConstructWidget<UBorder>();
-		MsgBadgePill->SetBrush(WeedUI::Rounded(FLinearColor(0.88f, 0.16f, 0.16f, 0.96f), 9.f));
-		MsgBadgePill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
+		MsgBadgePill->SetBrush(WeedUI::Rounded(FLinearColor(0.90f, 0.16f, 0.16f, 0.98f), 8.f));
+		MsgBadgePill->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
 		MsgBadgePill->SetContent(MsgBadge);
 		MsgBadgePill->SetVisibility(ESlateVisibility::Collapsed);
 		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(MsgBadgePill);
 		BadgeOS->SetHorizontalAlignment(HAlign_Right); BadgeOS->SetVerticalAlignment(VAlign_Top);
 
 		UHorizontalBoxSlot* PS = Bar->AddChildToHorizontalBox(Sz);
-		PS->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f)); // ruimte tussen de hotbar en het telefoon-icoon
+		PS->SetPadding(FMargin(14.f, 0.f, 0.f, 0.f)); // ruimte tussen de hotbar en het telefoon-icoon
 	}
 }
 
@@ -249,8 +243,8 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (PhoneIconBox && Vibe != PhoneVibeState)
 		{
 			PhoneVibeState = Vibe;
-			PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, Vibe ? TEXT("phone_vibrate") : TEXT("phone"), 40.f,
-				Vibe ? FLinearColor(1.f, 0.85f, 0.4f) : FLinearColor(0.8f, 0.9f, 1.f), WeedUI::EIcon::Message));
+			PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, Vibe ? TEXT("phone_vibrate") : TEXT("phone"), 34.f,
+				Vibe ? FLinearColor(1.f, 0.85f, 0.4f) : FLinearColor(0.85f, 0.92f, 1.f), WeedUI::EIcon::Message));
 		}
 		// Tril-animatie zolang er ongelezen berichten zijn.
 		if (PhoneIconBox)
