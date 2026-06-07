@@ -2751,10 +2751,34 @@ float ACustomerBase::ThcWillingnessBonus(float ThcPercent)
 	return FMath::Clamp((ThcPercent - 15.f) * 2.5f, 0.f, 45.f); // sterker dan ~15% -> veel bereidwilliger
 }
 
+float ACustomerBase::TierPriceTolerance(int32 Tier)
+{
+	switch (Tier)
+	{
+	case 5: return 0.30f; // Whale
+	case 4: return 0.20f; // VIP
+	case 3: return 0.12f; // Heavy User
+	case 2: return 0.06f; // Regular
+	default: return 0.f;  // Casual
+	}
+}
+
+int32 ACustomerBase::GetMyCustomerTier() const
+{
+	if (NpcId.IsNone()) { return 1; }
+	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { return Reg->GetCustomerTier(NpcId); }
+	}
+	return 1;
+}
+
 float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent) const
 {
+	// Prijs-tolerantie: hogere tier ervaart de prijs als lager (alleen prijs; kwaliteit/THC blijven tellen).
+	const float EffAsk = static_cast<float>(AskPriceCentsPerUnit) * (1.f - TierPriceTolerance(GetMyCustomerTier()));
 	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
-		static_cast<float>(GetMarketPriceCents()), static_cast<float>(AskPriceCentsPerUnit),
+		static_cast<float>(GetMarketPriceCents()), EffAsk,
 		Respect, Loyalty, Addiction, Quality01);
 	return FMath::Min(100.f, Base + ThcWillingnessBonus(ThcPercent));
 }
@@ -2763,8 +2787,9 @@ float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceC
 {
 	const int32 Market = GetMarketPriceForProduct(AltProductId);
 	if (Market <= 0) { return 0.f; }
+	const float EffAsk = static_cast<float>(AskPriceCentsPerUnit) * (1.f - TierPriceTolerance(GetMyCustomerTier()));
 	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
-		static_cast<float>(Market), static_cast<float>(AskPriceCentsPerUnit),
+		static_cast<float>(Market), EffAsk,
 		Respect, Loyalty, Addiction, Quality01) + ThcWillingnessBonus(ThcPercent);
 	// Bereidheid om iets anders te nemen: ~50% basis, hoger bij loyaliteit/verslaving, EN een scherpe
 	// prijs compenseert het substituut (goedkoper -> hij neemt het toch). Kan oplopen tot ~100%.

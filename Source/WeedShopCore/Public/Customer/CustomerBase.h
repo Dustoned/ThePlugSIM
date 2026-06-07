@@ -163,6 +163,11 @@ public:
 	// Extra acceptatie-% door sterke wiet: boven ~15% THC ~+2.5%/% tot +45%. -1 = neutraal (geen bonus).
 	static float ThcWillingnessBonus(float ThcPercent);
 
+	// Prijs-tolerantie per klant-tier (0 Casual .. 0.30 Whale): hogere tiers ervaren de vraagprijs als lager,
+	// dus je kunt meer per gram vragen. Raakt ALLEEN de prijs - kwaliteit/THC blijven gewoon meetellen.
+	static float TierPriceTolerance(int32 Tier);
+	int32 GetMyCustomerTier() const; // tier van DEZE klant via de NPC-registry (1 als onbekend)
+
 	// Acceptatie-% als je een ANDERE strain aanbiedt dan gevraagd (substituut). ~50% basis, geschaald
 	// met loyaliteit/verslaving (een trouwe/verslaafde klant neemt eerder iets anders).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
