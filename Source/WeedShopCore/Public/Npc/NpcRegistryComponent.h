@@ -124,6 +124,9 @@ public:
 	static FString TierName(int32 Tier);
 	void GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax) const;
 	static int32 TierFromXP(int32 XP);
+	// Voortgang 0..1 binnen de huidige tier (1.0 = al Whale). Voor de XP-balk in de telefoon.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
+	float GetTierProgress01(FName NpcId) const;
 
 	// Lees de stats van een NPC (false als onbekend).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")

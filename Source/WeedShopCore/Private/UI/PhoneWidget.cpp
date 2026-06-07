@@ -40,6 +40,7 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
+#include "Npc/NpcRegistryComponent.h"
 #include "Components/Slider.h"
 #include "World/DayNightController.h"
 #include "World/CityGenerator.h"
@@ -455,6 +456,12 @@ void UPhoneWidget::BuildChatApp()
 			Card->SetContent(Row);
 			UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
 			Info->AddChildToVerticalBox(MakeText(Name.ToString(), 14, FLinearColor(0.95f, 0.97f, 1.f)));
+			if (GS && GS->GetNpcRegistry())
+			{
+				const int32 Tr = GS->GetNpcRegistry()->GetCustomerTier(Cid);
+				const FLinearColor TCol = (Tr >= 5) ? FLinearColor(1.f, 0.8f, 0.3f) : (Tr >= 4 ? FLinearColor(0.8f, 0.7f, 1.f) : FLinearColor(0.55f, 0.7f, 0.6f));
+				Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s customer"), *UNpcRegistryComponent::TierName(Tr)), 9, TCol));
+			}
 			UTextBlock* Prev = MakeText(LastBody, 10, FLinearColor(0.62f, 0.66f, 0.76f));
 			Prev->SetClipping(EWidgetClipping::ClipToBounds);
 			Info->AddChildToVerticalBox(Prev);
@@ -481,6 +488,28 @@ void UPhoneWidget::BuildChatApp()
 	UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(MakeText(ContactName.ToString(), 15, FLinearColor(0.92f, 0.95f, 1.f)));
 	NS->SetVerticalAlignment(VAlign_Center); NS->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
 	ContentBox->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+
+	// Klant-tier + XP-balk naar de volgende tier.
+	if (GS && GS->GetNpcRegistry())
+	{
+		UNpcRegistryComponent* Reg = GS->GetNpcRegistry();
+		const int32 Tier = Reg->GetCustomerTier(OpenChatContact);
+		const float Frac = Reg->GetTierProgress01(OpenChatContact);
+		UBorder* TB = WidgetTree->ConstructWidget<UBorder>();
+		TB->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.12f, 0.16f, 0.95f), 8.f));
+		TB->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+		UVerticalBox* TV = WidgetTree->ConstructWidget<UVerticalBox>();
+		TB->SetContent(TV);
+		const FString TLbl = (Tier >= 5)
+			? FString::Printf(TEXT("Tier: %s  (max)"), *UNpcRegistryComponent::TierName(Tier))
+			: FString::Printf(TEXT("Tier: %s  ->  %s"), *UNpcRegistryComponent::TierName(Tier), *UNpcRegistryComponent::TierName(Tier + 1));
+		TV->AddChildToVerticalBox(MakeText(TLbl, 11, FLinearColor(0.85f, 0.9f, 1.f)));
+		UProgressBar* TPB = WidgetTree->ConstructWidget<UProgressBar>();
+		TPB->SetPercent(Frac);
+		TPB->SetFillColorAndOpacity(FLinearColor(0.45f, 0.75f, 1.f));
+		TV->AddChildToVerticalBox(TPB)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		ContentBox->AddChildToVerticalBox(TB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	}
 
 	// Loopt er een afspraak met deze persoon? Toon een aftellende balk (loopt naar 0 tot 'ie opgeeft).
 	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)

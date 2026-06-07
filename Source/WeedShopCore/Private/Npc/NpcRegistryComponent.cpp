@@ -292,6 +292,17 @@ void UNpcRegistryComponent::AddCustomerValue(FName NpcId, int32 GramsSold)
 	S->CustomerXP += Gain;
 }
 
+float UNpcRegistryComponent::GetTierProgress01(FName NpcId) const
+{
+	const int32 XP = GetCustomerXP(NpcId);
+	const int32 Tier = TierFromXP(XP);
+	if (Tier >= 5) { return 1.f; }
+	static const int32 Floors[6] = { 0, 0, 80, 220, 500, 1000 };
+	static const int32 Nexts[6]  = { 0, 80, 220, 500, 1000, 1000 };
+	const int32 Lo = Floors[Tier]; const int32 Hi = Nexts[Tier];
+	return (Hi > Lo) ? FMath::Clamp((float)(XP - Lo) / (float)(Hi - Lo), 0.f, 1.f) : 1.f;
+}
+
 void UNpcRegistryComponent::GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax) const
 {
 	const FNpcState* S = Find(NpcId);
