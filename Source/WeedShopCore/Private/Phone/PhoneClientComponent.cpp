@@ -1633,9 +1633,9 @@ void UPhoneClientComponent::CycleTab()
 
 void UPhoneClientComponent::SetSupplierCat(int32 Cat)
 {
-	// Categorie-id's lopen tot 9 (8 = Pot Upgrades, 9 = Plant care). NIET op SupplierCatCount klemmen,
-	// anders vielen 8/9 terug op 7 (Furniture) -> furniture in de grow shop + tabs die niet wisselen.
-	SupplierCat = FMath::Clamp(Cat, 0, 9);
+	// Categorie-id's lopen tot 10 (8 = Grow Upgrades, 9 = Plant care, 10 = Hash). NIET op SupplierCatCount
+	// klemmen, anders vielen 8/9/10 terug op 7 (Furniture) -> verkeerde tab/categorie.
+	SupplierCat = FMath::Clamp(Cat, 0, 10);
 }
 
 void UPhoneClientComponent::SellInventoryIndex(int32 StackIndex)
