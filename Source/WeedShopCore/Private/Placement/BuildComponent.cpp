@@ -577,9 +577,9 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			const bool bTent = PlacingItemId.ToString().StartsWith(TEXT("Gear_Tent"));
 			if (bTent)
 			{
-				// Tent gaat OVER de pot: gecentreerd, op de vloer.
+				// Tent gaat OVER de pot: gecentreerd, op de vloer. Vrij draaien met R.
 				PreviewLocation = FVector(TL.X, TL.Y, FeetZ);
-				PreviewRotation = FRotator::ZeroRotator;
+				PreviewRotation = FRotator(0.f, PlaceYawOffset, 0.f);
 			}
 			else
 			{
@@ -588,7 +588,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				if (Dir.IsNearlyZero()) { Dir = FVector(1.f, 0.f, 0.f); }
 				const float Edge = TargetRad + FMath::Max(CurrentDef.BoxHalf.X, CurrentDef.BoxHalf.Y) + 4.f;
 				PreviewLocation = FVector(TL.X, TL.Y, FeetZ) + Dir * Edge;
-				PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(-Dir.Y, -Dir.X)), 0.f); // kijkt naar het object
+				// Kijkt standaard naar het object, plus je eigen R-draai (90-graden stappen).
+				PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(-Dir.Y, -Dir.X)) + PlaceYawOffset, 0.f);
 			}
 			bValidSpot = true;
 			SnapTarget = Target;
