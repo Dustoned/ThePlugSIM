@@ -391,7 +391,7 @@ namespace WeedUI
 		return FString();
 	}
 
-	UTexture2D* ItemIconTexture(FName ItemId)
+	UTexture2D* ItemIconTexture(FName ItemId, int32 WaterChargesOverride)
 	{
 		if (IconKeyFor(ItemId).IsEmpty()) { return nullptr; }
 		// Per-item override eerst (tiers met een eigen icoon).
@@ -399,11 +399,16 @@ namespace WeedUI
 			const FString Exact = ExactIconStem(ItemId);
 			if (!Exact.IsEmpty()) { if (UTexture2D* T = LoadByStem(Exact)) { return T; } }
 		}
-		// Waterfles: toon VOL of LEEG afhankelijk van de waterlading van de speler.
+		// Waterfles: toon VOL of LEEG. Override (>=0) = het water van DEZE specifieke fles (per slot);
+		// anders val terug op de actieve fles van de speler.
 		if (FString(CatFor(ItemId).Key) == TEXT("water"))
 		{
 			bool bEmpty = true;
-			if (UWorld* W = GWorld)
+			if (WaterChargesOverride >= 0)
+			{
+				bEmpty = (WaterChargesOverride <= 0);
+			}
+			else if (UWorld* W = GWorld)
 			{
 				if (APawn* P = UGameplayStatics::GetPlayerPawn(W, 0))
 				{
@@ -422,12 +427,12 @@ namespace WeedUI
 		return nullptr;
 	}
 
-	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size)
+	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride)
 	{
 		// 1) Echt PNG-icoon als het in Content/_Project/UI/Icons/ staat. We tinten het (witte) icoon
 		//    met de categoriekleur zodat alles dezelfde kleurtaal als de rest van de game aanhoudt
 		//    (bv. nat = blauw, droog = groen op exact hetzelfde hemp-icoon).
-		if (UTexture2D* Tex = ItemIconTexture(ItemId))
+		if (UTexture2D* Tex = ItemIconTexture(ItemId, WaterChargesOverride))
 		{
 			UImage* Img = Tree->ConstructWidget<UImage>();
 			FSlateBrush B;

@@ -30,6 +30,7 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UBorder>> SlotBadgePills; // pill-achtergrond (verbergen als leeg)
 	UPROPERTY() TArray<TObjectPtr<UInvCell>> DropCells;     // transparante sleep/drop-cel per slot
 	TArray<FName> SlotLastIcon;                             // laatst getoonde item-id (om icoon niet elke tick te herbouwen)
+	TArray<int32> SlotLastWaterState;                      // per slot: -1 onbekend, 0 vol, 1 leeg (fles-icoon per fles)
 	bool bPrevWaterEmpty = false;                           // vorige vol/leeg-staat fles -> forceert icoon-refresh bij flip
 
 	// Telefoon-notificatie rechts van de hotbar: telefoon-icoon (trilt bij nieuw bericht) + bubble met aantal.

@@ -114,6 +114,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		SlotBadges.Add(Badge);
 		SlotBadgePills.Add(BadgePill);
 		SlotLastIcon.Add(NAME_None);
+		SlotLastWaterState.Add(-1);
 	}
 
 	// --- Telefoon-icoon rechts van de hotbar met notificatie-bubble (aantal gemiste berichten) ---
@@ -169,14 +170,7 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const int32 Active = Inv->GetActiveSlot();
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 
-	// Waterfles vol/leeg: bepaalt of het fles-icoon ververst moet worden als de lading flipt.
-	bool bWaterEmpty = true;
-	if (const UWaterCanComponent* Can = P->FindComponentByClass<UWaterCanComponent>())
-	{
-		bWaterEmpty = (Can->GetCharges() <= 0);
-	}
-	const bool bWaterFlipped = (bWaterEmpty != bPrevWaterEmpty);
-
+	// (Fles vol/leeg wordt nu PER SLOT bepaald uit de stack-Quality, niet meer globaal van de actieve fles.)
 	for (int32 i = 0; i < SlotBoxes.Num(); ++i)
 	{
 		const bool bActive = (i == Active);
@@ -199,12 +193,15 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const FInventoryStack& S = Stacks[Idx];
 			const FString IdStr = S.ItemId.ToString();
 
-			// Icoon (her)bouwen als het item veranderde, of als 't een fles is en de vol/leeg-staat flipte.
+			// Icoon (her)bouwen als het item veranderde, of als 't een fles is en DEZE fles z'n vol/leeg-staat flipte.
 			const bool bIsWater = IdStr.StartsWith(TEXT("WaterBottle"));
-			if (SlotLastIcon[i] != S.ItemId || (bIsWater && bWaterFlipped))
+			const int32 SlotWaterState = bIsWater ? (S.Quality <= 0.f ? 1 : 0) : -1; // water zit in de stack-Quality
+			if (SlotLastIcon[i] != S.ItemId || (bIsWater && SlotWaterState != SlotLastWaterState[i]))
 			{
 				SlotLastIcon[i] = S.ItemId;
-				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 34.f));
+				SlotLastWaterState[i] = SlotWaterState;
+				// Geef per fles z'n eigen water mee (FMath::RoundToInt(S.Quality)) zodat vol/leeg per slot klopt.
+				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 34.f, bIsWater ? FMath::RoundToInt(S.Quality) : -1));
 			}
 
 			FString Nm = WeedUI::PrettyItemName(S.ItemId);
@@ -230,7 +227,6 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(ESlateVisibility::Collapsed); }
 		}
 	}
-	bPrevWaterEmpty = bWaterEmpty;
 
 	// Telefoon-notificatie: ongelezen inkomende berichten. De bubble gaat pas weg als je de CHAT van die
 	// persoon echt opent (MarkChatSeen), niet zomaar bij het openen van de telefoon.

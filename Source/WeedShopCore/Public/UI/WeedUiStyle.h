@@ -72,11 +72,12 @@ namespace WeedUI
 	WEEDSHOPCORE_API FString IconKeyFor(FName ItemId);
 
 	// Laadt (en cachet) het PNG-icoon voor dit item van schijf, of nullptr als het er (nog) niet is.
-	WEEDSHOPCORE_API class UTexture2D* ItemIconTexture(FName ItemId);
+	// WaterChargesOverride >= 0 = water van DEZE specifieke fles (per slot) voor vol/leeg; -1 = actieve fles.
+	WEEDSHOPCORE_API class UTexture2D* ItemIconTexture(FName ItemId, int32 WaterChargesOverride = -1);
 
 	// Klaar-voor-gebruik icoon-widget (Size x Size): het PNG als dat bestaat, anders een nette
 	// procedurele tegel (gekleurde achtergrond per categorie + flat glyph). Altijd bruikbaar.
-	WEEDSHOPCORE_API UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size);
+	WEEDSHOPCORE_API UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride = -1);
 
 	// Accentkleur per item-categorie (voor randjes/labels in de inventory).
 	WEEDSHOPCORE_API FLinearColor ItemAccent(FName ItemId);
