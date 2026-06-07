@@ -86,11 +86,7 @@ void UMilestoneComponent::CheckMilestones(bool bSilent)
 		{
 			OnMilestoneReached.Broadcast(RowName, Row->Description);
 			UE_LOG(LogWeedShop, Log, TEXT("Milestone bereikt: %s (%s)"), *RowName.ToString(), *Row->Description.ToString());
-			if (GEngine)
-			{
-				UWeedToast::Notify(-1, 5.f, FColor::Magenta,
-					FString::Printf(TEXT("Milestone: %s"), *Row->Description.ToString()));
-			}
+			// (Geen on-screen milestone-toast meer bij verkopen - die hoort daar niet.)
 		}
 
 		if (Row->UnlockPhase > CurrentPhase)
