@@ -111,6 +111,7 @@ protected:
 	// --- Berichten-app (echte chat) ---
 	// NAME_None = gesprekkenlijst; anders is de chat-thread van dat contact open.
 	FName OpenChatContact = NAME_None;
+	bool bOfferStrainView = false; // toont de "Offer instead"-strain-lijst in de open chat
 	int32 LastMsgSig = -2;
 	int32 ProposeMins = -1; // gekozen kloktijd (min van de dag) voor een eigen-tijd-voorstel; -1 = nog niet gezet
 	int32 LastChatMin = -1; // klok-minuut bij de laatste chat-rebuild (om de tijd-kiezer-ondergrens live mee te laten lopen)

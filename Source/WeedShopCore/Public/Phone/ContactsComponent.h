@@ -127,6 +127,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void ProposeTimeToContact(FName ContactId, int32 MinutesOfDay);
 
+	// Server: bied een ANDERE strain aan dan gevraagd (substituut) via de chat. Kans op akkoord o.b.v.
+	// loyaliteit/verslaving + of de aangeboden THC de verwachte haalt/overtreft. Bij akkoord wil de afspraak
+	// voortaan deze strain (de arriverende klant leest WantStrain).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void ProposeAlternativeStrain(FName ContactId, FName NewStrain, float OfferedThc, float OfferedQualPct);
+
+	// Kans (0..1) dat een contact een substituut-strain accepteert — voor de chat-preview.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
+	float SubstituteAcceptChance(FName ContactId, FName ReqStrain, FName NewStrain, float OfferedThc) const;
+
+	// De strain die het open afspraak-bericht van dit contact vraagt (NAME_None als geen open afspraak).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
+	FName GetRequestedStrain(FName ContactId) const;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

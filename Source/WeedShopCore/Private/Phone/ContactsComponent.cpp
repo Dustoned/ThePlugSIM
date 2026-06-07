@@ -539,6 +539,82 @@ void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDa
 	OnRep_Messages();
 }
 
+FName UContactsComponent::GetRequestedStrain(FName ContactId) const
+{
+	for (const FPhoneMessage& M : Messages)
+	{
+		if (M.FromContactId == ContactId && (M.Status == 0 || M.Status == 1) && !M.bFromMe && !M.WantStrain.IsNone())
+		{
+			return M.WantStrain;
+		}
+	}
+	return NAME_None;
+}
+
+float UContactsComponent::SubstituteAcceptChance(FName ContactId, FName ReqStrain, FName NewStrain, float OfferedThc) const
+{
+	float R = 0.f, L = 0.f, A = 0.f; FText N;
+	float ExpThc = 15.f;
+	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->GetStats(ContactId, R, L, A, N); }
+		if (UStoreComponent* St = GS->GetStore()) { float t = 0.f, y = 0.f, g = 0.f; if (St->GetStrainStats(ReqStrain, t, y, g) && t > 0.f) { ExpThc = t; } }
+	}
+	const float Off = (OfferedThc > 0.f) ? OfferedThc : ExpThc;
+	const float ThcDelta = Off - ExpThc;
+	float Chance = 0.45f + (L - 30.f) * 0.004f + (A - 30.f) * 0.005f + ThcDelta * 0.02f;
+	if (NewStrain == ReqStrain) { Chance += 0.30f; } // dezelfde strain, alleen sterker -> bijna zeker
+	return FMath::Clamp(Chance, 0.05f, 0.97f);
+}
+
+void UContactsComponent::ProposeAlternativeStrain(FName ContactId, FName NewStrain, float OfferedThc, float OfferedQualPct)
+{
+	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone() || NewStrain.IsNone()) { return; }
+	int32 Found = INDEX_NONE;
+	for (int32 i = 0; i < Messages.Num(); ++i)
+	{
+		if (Messages[i].FromContactId == ContactId && (Messages[i].Status == 0 || Messages[i].Status == 1) && !Messages[i].bFromMe) { Found = i; break; }
+	}
+	if (Found == INDEX_NONE) { return; }
+
+	const FName ReqStrain = Messages[Found].WantStrain;
+	const FText SenderName = Messages[Found].SenderName;
+	const float Chance = SubstituteAcceptChance(ContactId, ReqStrain, NewStrain, OfferedThc);
+	const bool bAccept = FMath::FRand() <= Chance;
+
+	// Mijn aanbod (rechts).
+	FPhoneMessage Mine;
+	Mine.FromContactId = ContactId; Mine.SenderName = SenderName; Mine.bFromMe = true; Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f;
+	Mine.Body = FText::FromString(FString::Printf(TEXT("No %s right now - got %s at %.0f%% THC. Want that instead?"), *ReqStrain.ToString(), *NewStrain.ToString(), OfferedThc));
+	Messages.Insert(Mine, 0);
+
+	FPhoneMessage Rep;
+	Rep.FromContactId = ContactId; Rep.SenderName = SenderName; Rep.bFromMe = false; Rep.Status = 3; Rep.AppointmentTimeOfDay = -1.f;
+	if (bAccept)
+	{
+		// De afspraak wil voortaan deze strain (her-vinden, want de index is verschoven door de insert).
+		for (FPhoneMessage& M : Messages)
+		{
+			if (M.FromContactId == ContactId && (M.Status == 0 || M.Status == 1) && !M.bFromMe) { M.WantStrain = NewStrain; break; }
+		}
+		Rep.Body = FText::FromString(FString::Printf(TEXT("Yeah, %s works - bring that."), *NewStrain.ToString()));
+		ApplyRelationshipDelta(ContactId, 1.f);
+	}
+	else
+	{
+		Rep.Body = FText::FromString(FString::Printf(TEXT("Nah, I really want the %s."), *ReqStrain.ToString()));
+	}
+	Messages.Insert(Rep, 0);
+	if (Messages.Num() > 40) { Messages.SetNum(40); }
+
+	if (GEngine)
+	{
+		UWeedToast::Notify(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
+			FString::Printf(TEXT("%s: %s"), *SenderName.ToString(), bAccept ? TEXT("took the alternative") : TEXT("declined the swap")));
+	}
+	OnRep_Messages();
+}
+
 void UContactsComponent::RestoreContacts(const TArray<FPhoneContact>& InContacts, const TArray<FPhoneMessage>& InMessages)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }

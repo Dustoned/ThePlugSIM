@@ -470,7 +470,7 @@ void UPhoneWidget::BuildChatApp()
 			if (bOpen) { Row->AddChildToHorizontalBox(MakeText(TEXT("NEW"), 11, FLinearColor(0.5f, 1.f, 0.6f)))->SetVerticalAlignment(VAlign_Center); }
 			const FName Pick = Cid;
 			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), FLinearColor(0.2f, 0.4f, 0.55f),
-				[this, Pick]() { OpenChatContact = Pick; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+				[this, Pick]() { OpenChatContact = Pick; bOfferStrainView = false; ProposeMins = -1; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
 			List->AddChild(Card);
 			List->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
 		}
@@ -484,7 +484,7 @@ void UPhoneWidget::BuildChatApp()
 
 	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
 	Head->AddChildToHorizontalBox(MakeActionBtn(TEXT("< Chats"), FLinearColor(0.2f, 0.3f, 0.45f),
-		[this]() { OpenChatContact = NAME_None; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+		[this]() { OpenChatContact = NAME_None; bOfferStrainView = false; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
 	UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(MakeText(ContactName.ToString(), 15, FLinearColor(0.92f, 0.95f, 1.f)));
 	NS->SetVerticalAlignment(VAlign_Center); NS->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
 	ContentBox->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
@@ -587,6 +587,42 @@ void UPhoneWidget::BuildChatApp()
 			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, false); } MarkDirty(); }, 13));
 		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+
+		// --- "Offer instead..." : een ANDERE strain aanbieden (substituut) met stats + verschil + kans ---
+		ContentBox->AddChildToVerticalBox(MakeActionBtn(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."),
+			FLinearColor(0.25f, 0.35f, 0.5f), [this]() { bOfferStrainView = !bOfferStrainView; MarkDirty(); }, 12))
+			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
+		if (bOfferStrainView)
+		{
+			const FName ReqStrain = Con->GetRequestedStrain(OpenChatContact);
+			float ExpThc = 15.f;
+			if (GS && GS->GetStore()) { float t = 0.f, y = 0.f, g = 0.f; if (GS->GetStore()->GetStrainStats(ReqStrain, t, y, g) && t > 0.f) { ExpThc = t; } }
+			ContentBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock:"), *ReqStrain.ToString(), ExpThc), 10, FLinearColor(0.7f, 0.75f, 0.85f)))
+				->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+
+			UInventoryComponent* Inv = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr;
+			int32 Shown = 0;
+			if (Inv)
+			{
+				for (const FInventoryStack& St : Inv->GetStacks())
+				{
+					if (!UInventoryComponent::IsBag(St.ItemId)) { continue; }
+					const FName Strain = UInventoryComponent::BagStrain(St.ItemId);
+					if (Strain.IsNone()) { continue; }
+					const float Thc = St.Quality; const float Qual = St.QualityPct; const int32 Qty = St.Quantity;
+					const float Delta = Thc - ExpThc;
+					const float Chance = Con->SubstituteAcceptChance(OpenChatContact, ReqStrain, Strain, Thc) * 100.f;
+					const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  x%d\n%+.0f%% THC vs ask   ~%.0f%% yes"),
+						*Strain.ToString(), Thc, Qual, Qty, Delta, Chance);
+					const FName SPick = Strain;
+					ContentBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? FLinearColor(0.18f, 0.4f, 0.28f) : FLinearColor(0.36f, 0.3f, 0.2f)),
+						[this, SPick]() { if (Phone.IsValid()) { Phone->ProposeChatStrain(OpenChatContact, SPick); } bOfferStrainView = false; MarkDirty(); }, 11))
+						->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+					++Shown;
+				}
+			}
+			if (Shown == 0) { ContentBox->AddChildToVerticalBox(MakeText(TEXT("(no bagged weed in your inventory)"), 10, FLinearColor::Gray)); }
+		}
 
 		// Of kies zelf een tijd (per kwartier). Ze gaan altijd akkoord, geen nadeel.
 		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))

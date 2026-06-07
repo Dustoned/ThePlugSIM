@@ -2402,3 +2402,21 @@ void UPhoneClientComponent::ServerProposeContactTime_Implementation(FName Contac
 		}
 	}
 }
+
+void UPhoneClientComponent::ServerProposeContactStrain_Implementation(FName ContactId, FName Strain)
+{
+	AWeedShopGameState* GS = GetGS();
+	if (!GS || !GS->GetContacts() || Strain.IsNone()) { return; }
+	// THC/kwaliteit van het zakje van die strain dat je in je voorraad hebt (server-zijde).
+	float OffThc = -1.f, OffQual = -1.f;
+	if (APawn* P = Cast<APawn>(GetOwner()))
+	{
+		if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			const FName BagId(*FString::Printf(TEXT("Bag_%s"), *Strain.ToString()));
+			OffThc = Inv->GetItemQuality(BagId);
+			OffQual = Inv->GetItemQualityPct(BagId);
+		}
+	}
+	GS->GetContacts()->ProposeAlternativeStrain(ContactId, Strain, OffThc, OffQual);
+}

@@ -227,6 +227,12 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerProposeContactTime(FName ContactId, int32 MinutesOfDay);
 
+	// Bied een ANDERE strain aan dan gevraagd (substituut) via de chat. Kans op akkoord (loyaliteit/THC).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void ProposeChatStrain(FName ContactId, FName Strain) { ServerProposeContactStrain(ContactId, Strain); }
+	UFUNCTION(Server, Reliable)
+	void ServerProposeContactStrain(FName ContactId, FName Strain);
+
 	// Berichten-notificatie (client-lokaal, per speler). De bubble op het telefoon-icoon telt ongelezen
 	// inkomende berichten en gaat pas weg als je de CHAT van die persoon echt opent (MarkChatSeen).
 	void MarkChatSeen(FName ContactId);
