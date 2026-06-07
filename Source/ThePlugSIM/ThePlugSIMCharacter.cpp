@@ -282,25 +282,11 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	}
 	else { PhoneCloseHold = 0.f; }
 
-	// AnimBP-vlag: houd je een item vast? (gerepliceerd via het actieve item -> werkt ook voor co-op-spelers
-	// die jouw hold-pose zien). De AnimBP blendt hierop een arm-vooruit-pose.
-	bHoldingItem = Inventory && !Inventory->GetActiveItemId().IsNone();
+	// (Held-item hold-pose staat voor nu UIT: geen AnimBP-push/debug. De AnimBP-bool blijft dus false ->
+	//  geen arm-pose. Het item tonen we als viewmodel vóór de camera.)
+	bHoldingItem = false;
 
-	// Push de vlag rechtstreeks in de FP-mesh-AnimBP (variabele "bHoldingItem"), zodat je in de AnimBP
-	// GEEN event-graph nodig hebt - alleen die bool-variabele + 'm gebruiken in de AnimGraph.
-	if (FirstPersonMesh)
-	{
-		if (UAnimInstance* AI = FirstPersonMesh->GetAnimInstance())
-		{
-			static const FName HoldProp(TEXT("bHoldingItem"));
-			if (FBoolProperty* BP = FindFProperty<FBoolProperty>(AI->GetClass(), HoldProp))
-			{
-				BP->SetPropertyValue_InContainer(AI, bHoldingItem);
-			}
-		}
-	}
-
-	// --- Held item 3D-model in de hand + drop (alleen lokale speler) ---
+	// --- Held item 3D-model (viewmodel vóór de camera) + drop (alleen lokale speler) ---
 	if (IsLocallyControlled() && Inventory && HeldItemMesh)
 	{
 		const FName Active = Inventory->GetActiveItemId();
@@ -815,21 +801,8 @@ void AThePlugSIMCharacter::BeginPlay()
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
 
-	// Held item ECHT in de hand: koppel aan de hand-bone van de FP-armen. De hold-pose (AnimBP) zet die hand
-	// vooruit in beeld zodra je iets vasthoudt, dus het item zit dan zichtbaar in je uitgestoken hand.
-	if (HeldItemMesh && FirstPersonMesh)
-	{
-		FName HandSocket = NAME_None;
-		if (FirstPersonMesh->DoesSocketExist(FName("hand_r")))      { HandSocket = FName("hand_r"); }
-		else if (FirstPersonMesh->DoesSocketExist(FName("hand_l"))) { HandSocket = FName("hand_l"); }
-		if (!HandSocket.IsNone())
-		{
-			HeldItemMesh->AttachToComponent(FirstPersonMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HandSocket);
-			HeldItemMesh->SetRelativeLocation(FVector(10.f, 0.f, 0.f));
-			HeldItemMesh->SetRelativeRotation(FRotator::ZeroRotator);
-			bHeldOnHandBone = true;
-		}
-	}
+	// Held item als viewmodel VÓÓR de camera (de in-de-hand-pose is voor nu uitgezet).
+	bHeldOnHandBone = false;
 
 	// Co-op-animatie: Update Rate Optimization op het third-person lichaam UIT, en altijd de pose tikken.
 	// URO skipt anim-updates op remote spelers (simulated proxies) -> die "glijden" tot een sprong de
