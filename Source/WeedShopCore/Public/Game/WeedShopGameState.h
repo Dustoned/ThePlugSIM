@@ -43,6 +43,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UMilestoneComponent* GetMilestones() const { return Milestones; }
 
+	// Gedeelde doelen/goals (joints, oogst, deals, geld) met rewards.
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	class UGoalsComponent* GetGoals() const { return Goals; }
+
 	// Gedeelde, gekochte upgrades.
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UUpgradeComponent* GetUpgrades() const { return Upgrades; }
@@ -109,6 +113,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UDayCycleComponent> DayCycle;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
+	TObjectPtr<class UGoalsComponent> Goals;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UMilestoneComponent> Milestones;

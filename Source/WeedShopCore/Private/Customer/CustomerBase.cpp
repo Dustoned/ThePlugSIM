@@ -25,6 +25,7 @@
 #include "Phone/ContactsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Progression/GoalsComponent.h"
 #include "Progression/StoreComponent.h"
 #include "World/HeatComponent.h"
 #include "World/CityDoor.h" // FriendlyNpcName fallback
@@ -2987,6 +2988,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			GSc->GetNpcRegistry()->MarkDealt(NpcId);
 			GSc->GetNpcRegistry()->AddCustomerValue(NpcId, SoldGrams); // klant-tier groeit met verkochte grammen
 		}
+		if (UGoalsComponent* Gl = GSc->GetGoals()) { Gl->NoteDeal(); } // goal-teller: deal gedaan
 	}
 
 	// XP: per verdiende euro + een vaste bonus per geslaagde deal.

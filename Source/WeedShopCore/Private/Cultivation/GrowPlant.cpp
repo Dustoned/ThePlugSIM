@@ -14,6 +14,7 @@
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Progression/GoalsComponent.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
@@ -797,6 +798,7 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 			{
 				Lv->AddXP(Harvested * 10 + TotalGrams);
 			}
+			if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->NoteHarvest(Harvested); } // goal-teller: geoogste planten
 		}
 
 		// Eén oogst-actie verbruikt één soil-lading + de mest-boost.

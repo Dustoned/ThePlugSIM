@@ -93,6 +93,9 @@ protected:
 	// Ongelezen-badge op de Messages-app in het home-rooster (live bijgewerkt, geen rebuild -> geen flash).
 	UPROPERTY() TObjectPtr<UBorder> MsgAppBadgePill;
 	UPROPERTY() TObjectPtr<UTextBlock> MsgAppBadgeText;
+	UPROPERTY() TObjectPtr<UBorder> GoalsAppBadgePill;
+	UPROPERTY() TObjectPtr<UTextBlock> GoalsAppBadgeText;
+	int32 GetClaimableGoals() const;  // aantal behaalde-maar-niet-geclaimde doelen (voor de badge)
 
 	// Staat-tracking voor het verversen van de inhoud.
 	bool bLastHome = true;
@@ -129,6 +132,7 @@ protected:
 
 	// Bouwt de Map-app: een mini stadskaart + knop naar de fullscreen-kaart (M).
 	void BuildMapApp();
+	void BuildGoalsApp();             // milestone-doelen met rewards
 
 	// Bouwt de Suppliers-app (in-telefoon webshop) in de gegeven container.
 	void BuildStoreApp(class UVerticalBox* Into);

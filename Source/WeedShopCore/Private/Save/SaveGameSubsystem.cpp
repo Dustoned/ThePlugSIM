@@ -8,6 +8,7 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Progression/MilestoneComponent.h"
+#include "Progression/GoalsComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/LevelComponent.h"
 #include "Npc/NpcRegistryComponent.h"   // NPC-relaties opslaan/herstellen
@@ -607,6 +608,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	// Gedeelde wereld-staat.
 	if (const UDayCycleComponent* Day = GS->GetDayCycle()) { Save->TimeOfDaySeconds = Day->GetTimeOfDaySeconds(); Save->DayNumber = Day->GetDayNumber(); }
 	if (const UMilestoneComponent* Ms = GS->GetMilestones()) { Save->TotalEarnedCents = Ms->GetTotalEarnedCents(); Save->MilestonePhase = (uint8)Ms->GetCurrentPhase(); }
+	if (const UGoalsComponent* Gl = GS->GetGoals()) { Save->GoalJointsRolled = Gl->JointsRolled; Save->GoalPlantsHarvested = Gl->PlantsHarvested; Save->GoalDealsDone = Gl->DealsDone; Save->GoalClaimed = Gl->ClaimedIdx; }
 	if (const UUpgradeComponent* Up = GS->GetUpgrades()) { Save->PurchasedUpgrades = Up->GetPurchasedIds(); }
 	// NPC-relaties + telefoon-contacten/berichten (waren voorheen niet opgeslagen).
 	if (const UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Save->Npcs = Reg->GetStatesForSave(); }
@@ -668,6 +670,7 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	GS->SetFreeBuild(Save->bFreeBuild);
 	if (UDayCycleComponent* Day = GS->GetDayCycle()) { Day->SetTimeOfDaySeconds(Save->TimeOfDaySeconds); }
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }
+	if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->RestoreState(Save->GoalJointsRolled, Save->GoalPlantsHarvested, Save->GoalDealsDone, Save->GoalClaimed); }
 	if (UUpgradeComponent* Up = GS->GetUpgrades()) { Up->RestorePurchased(Save->PurchasedUpgrades); }
 	// Level + XP, NPC-relaties en telefoon-contacten/berichten terugzetten (waren kwijt na reload).
 	if (ULevelComponent* Lv = GS->GetLeveling()) { Lv->RestoreLevel(Save->CrewLevel, Save->CrewXP); }

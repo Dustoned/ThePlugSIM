@@ -41,6 +41,7 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
+#include "Progression/GoalsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Components/Slider.h"
 #include "World/DayNightController.h"
@@ -54,18 +55,19 @@
 namespace
 {
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
-	constexpr int32 GNumApps = 11;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank"), TEXT("Lab") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Shop, WeedUI::EIcon::Coin, WeedUI::EIcon::Flame };
+	constexpr int32 GNumApps = 12;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank"), TEXT("Lab"), TEXT("Goals") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Shop, WeedUI::EIcon::Coin, WeedUI::EIcon::Flame, WeedUI::EIcon::Level };
 	// Eigen icoon per app (PNG-sleutel); valt terug op GAppIcon als het PNG ontbreekt.
-	const TCHAR* GAppKey[GNumApps] = { TEXT("ui_upgrade"), TEXT("ui_leaf"), TEXT("ui_person"), TEXT("ui_message"), TEXT("ui_gear"), TEXT("ui_map"), TEXT("ui_sell"), TEXT("ui_shop"), TEXT("ui_package"), TEXT("ui_bank"), TEXT("ui_hash") };
+	const TCHAR* GAppKey[GNumApps] = { TEXT("ui_upgrade"), TEXT("ui_leaf"), TEXT("ui_person"), TEXT("ui_message"), TEXT("ui_gear"), TEXT("ui_map"), TEXT("ui_sell"), TEXT("ui_shop"), TEXT("ui_package"), TEXT("ui_bank"), TEXT("ui_hash"), TEXT("ui_goals") };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
 		FLinearColor(0.85f, 0.65f, 0.20f), FLinearColor(0.30f, 0.50f, 0.70f), FLinearColor(0.55f, 0.40f, 0.80f),
-		FLinearColor(0.16f, 0.55f, 0.95f), FLinearColor(0.80f, 0.45f, 0.20f),
+		FLinearColor(0.16f, 0.55f, 0.95f), FLinearColor(0.80f, 0.45f, 0.20f), FLinearColor(0.90f, 0.75f, 0.25f),
 	};
 	constexpr int32 GGrowApp = 1;
+	constexpr int32 GGoalsApp = 11;
 	constexpr int32 GSellApp = 6;
 	constexpr int32 GSuppliesApp = 7;
 	constexpr int32 GPackagesApp = 8;
@@ -1398,6 +1400,19 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 		PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Top);
 		PS->SetPadding(FMargin(0.f, 2.f, 6.f, 0.f));
 	}
+	else if (AppIndex == 11) // Goals-app: gele badge met aantal claimbare doelen (live, geen rebuild)
+	{
+		const int32 Claim = GetClaimableGoals();
+		GoalsAppBadgeText = MakeText(Claim > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), FMath::Max(0, Claim)), 11, FLinearColor(0.08f, 0.08f, 0.08f), true);
+		GoalsAppBadgePill = WidgetTree->ConstructWidget<UBorder>();
+		GoalsAppBadgePill->SetBrush(RoundedBrush(FLinearColor(0.95f, 0.78f, 0.20f, 0.98f), 9.f));
+		GoalsAppBadgePill->SetPadding(FMargin(5.f, 0.f, 5.f, 0.f));
+		GoalsAppBadgePill->SetContent(GoalsAppBadgeText);
+		GoalsAppBadgePill->SetVisibility(Claim > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		UOverlaySlot* PS = Ov->AddChildToOverlay(GoalsAppBadgePill);
+		PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Top);
+		PS->SetPadding(FMargin(0.f, 2.f, 6.f, 0.f));
+	}
 
 	UVerticalBoxSlot* S1 = Cell->AddChildToVerticalBox(Ov);
 	S1->SetHorizontalAlignment(HAlign_Center);
@@ -1499,6 +1514,7 @@ void UPhoneWidget::RefreshContent()
 	ContentBox->ClearChildren();
 	PickerClockText = nullptr; PickerProposeBtn = nullptr; PickerContact = NAME_None; // oude tijd-kiezer-refs vrijgeven
 	MsgAppBadgePill = nullptr; MsgAppBadgeText = nullptr; // oude Messages-badge-refs vrijgeven (worden opnieuw gezet als 't home-rooster bouwt)
+	GoalsAppBadgePill = nullptr; GoalsAppBadgeText = nullptr;
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
@@ -1675,9 +1691,91 @@ void UPhoneWidget::RefreshContent()
 		bSellApp = true;
 		BuildStoreApp(ContentBox);
 	}
+	else if (App == GGoalsApp) // Goals -> milestone-doelen met rewards
+	{
+		BuildGoalsApp();
+	}
 	else // Map
 	{
 		BuildMapApp();
+	}
+}
+
+int32 UPhoneWidget::GetClaimableGoals() const
+{
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
+	return GoalsC ? GoalsC->GetClaimableCount() : 0;
+}
+
+void UPhoneWidget::BuildGoalsApp()
+{
+	if (!ContentBox) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
+	if (!GoalsC) { AddInfoRow(TEXT("Goals unavailable."), FLinearColor::Gray); return; }
+
+	UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
+	UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
+	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	const TArray<FGoalDef>& G = UGoalsComponent::Goals();
+	for (int32 i = 0; i < G.Num(); ++i)
+	{
+		const FGoalDef& Gd = G[i];
+		const int64 Prog = GoalsC->GetGoalProgress(i);
+		const int64 Tgt = Gd.Target;
+		const bool bDone = GoalsC->IsComplete(i);
+		const bool bClaimed = GoalsC->IsClaimed(i);
+		const float Frac = (Tgt > 0) ? FMath::Clamp((float)Prog / (float)Tgt, 0.f, 1.f) : 0.f;
+
+		UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
+		Card->SetBrush(RoundedBrush(bClaimed ? FLinearColor(0.10f, 0.13f, 0.10f, 0.95f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+		Card->SetPadding(FMargin(9.f, 7.f, 9.f, 7.f));
+		UVerticalBox* CV = WidgetTree->ConstructWidget<UVerticalBox>();
+		Card->SetContent(CV);
+
+		CV->AddChildToVerticalBox(MakeText(Gd.Title, 13, bClaimed ? FLinearColor(0.6f, 0.8f, 0.6f) : FLinearColor(0.95f, 0.97f, 1.f)));
+
+		const FString ProgStr = (Gd.Metric == 0)
+			? FString::Printf(TEXT("EUR %lld / %lld"), (long long)(Prog / 100), (long long)(Tgt / 100))
+			: FString::Printf(TEXT("%lld / %lld"), (long long)Prog, (long long)Tgt);
+		CV->AddChildToVerticalBox(MakeText(ProgStr, 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+
+		UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
+		Bar->SetPercent(Frac);
+		Bar->SetFillColorAndOpacity(bDone ? FLinearColor(0.4f, 0.95f, 0.5f) : FLinearColor(0.85f, 0.7f, 0.25f));
+		USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
+		BarSz->SetHeightOverride(12.f); BarSz->SetContent(Bar);
+		CV->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		FString RewardStr = TEXT("Reward:  ");
+		if (Gd.RewardMoneyCents > 0) { RewardStr += FString::Printf(TEXT("EUR %lld"), (long long)(Gd.RewardMoneyCents / 100)); }
+		if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0)
+		{
+			RewardStr += FString::Printf(TEXT("%s%dx %s"), Gd.RewardMoneyCents > 0 ? TEXT("  +  ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem));
+		}
+		UHorizontalBoxSlot* RWS = Row->AddChildToHorizontalBox(MakeText(RewardStr, 10, FLinearColor(0.85f, 0.8f, 0.5f)));
+		RWS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); RWS->SetVerticalAlignment(VAlign_Center);
+		if (bClaimed)
+		{
+			Row->AddChildToHorizontalBox(MakeText(TEXT("Claimed"), 11, FLinearColor(0.5f, 0.8f, 0.5f)))->SetVerticalAlignment(VAlign_Center);
+		}
+		else if (bDone)
+		{
+			const int32 Idx = i;
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Claim"), FLinearColor(0.2f, 0.55f, 0.27f),
+				[this, Idx]() { if (Phone.IsValid()) { Phone->ClaimGoal(Idx); } MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+		}
+		else
+		{
+			Row->AddChildToHorizontalBox(MakeText(TEXT("In progress"), 10, FLinearColor(0.5f, 0.52f, 0.58f)))->SetVerticalAlignment(VAlign_Center);
+		}
+		CV->AddChildToVerticalBox(Row);
+
+		List->AddChild(Card);
+		List->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
 	}
 }
 
@@ -1776,6 +1874,13 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			MsgAppBadgeText->SetText(FText::FromString(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Unread)));
 		}
+	}
+	// Goals-app badge op het home-rooster LIVE bijwerken (aantal claimbare doelen) - geen rebuild/flash.
+	if (bHome && GoalsAppBadgePill && GoalsAppBadgeText)
+	{
+		const int32 Claim = GetClaimableGoals();
+		GoalsAppBadgePill->SetVisibility(Claim > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		if (Claim > 0) { GoalsAppBadgeText->SetText(FText::FromString(Claim > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Claim))); }
 	}
 
 	// Settings/Test: light-sliders live toepassen terwijl je sleept (geen restart nodig).

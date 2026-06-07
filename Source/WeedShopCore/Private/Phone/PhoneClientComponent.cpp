@@ -6,6 +6,7 @@
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Progression/GoalsComponent.h"
 #include "Phone/ContactsComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Economy/EconomyComponent.h"
@@ -1034,6 +1035,38 @@ void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf,
 	}
 }
 
+void UPhoneClientComponent::ClaimGoal(int32 Idx) { ServerClaimGoal(Idx); }
+
+void UPhoneClientComponent::ServerClaimGoal_Implementation(int32 Idx)
+{
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UGoalsComponent* Goals = GS ? GS->GetGoals() : nullptr;
+	if (!Goals || !Goals->MarkClaimed(Idx)) { return; }     // niet klaar of al geclaimd
+	const FGoalDef& Gd = UGoalsComponent::Goals()[Idx];
+
+	// Geld-reward (cash) + item-reward naar deze speler.
+	if (Gd.RewardMoneyCents > 0)
+	{
+		if (UEconomyComponent* Ec = GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr)
+		{
+			Ec->AddMoney((int32)Gd.RewardMoneyCents);
+		}
+	}
+	if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0)
+	{
+		if (UInventoryComponent* Inv = GetOwnerInventory()) { Inv->AddItem(Gd.RewardItem, Gd.RewardQty); }
+	}
+
+	// Nette popup (goud) bij het behalen.
+	if (GEngine)
+	{
+		FString Reward;
+		if (Gd.RewardMoneyCents > 0) { Reward += FString::Printf(TEXT("EUR %lld"), (long long)(Gd.RewardMoneyCents / 100)); }
+		if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0) { Reward += FString::Printf(TEXT("%s%dx %s"), Gd.RewardMoneyCents > 0 ? TEXT(" + ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem)); }
+		UWeedToast::NotifyPawn(GetOwner(), -1, 4.5f, FColor(255, 210, 70), FString::Printf(TEXT("GOAL COMPLETE: %s  ->  %s"), *Gd.Title, *Reward));
+	}
+}
+
 int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
 {
 	// MAX gram per container (de gram-slider gaat van 1 tot dit). Realistischer: jars tot ~50g.
@@ -1378,6 +1411,11 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	// Joint-gram zit in de id (Joint_<G>g); THC% + Kwaliteit% bewaren we op de stapel.
 	const FName JointId(*FString::Printf(TEXT("Joint_%dg"), Grams));
 	Inv->AddItem(JointId, 1, BudThc, BudQ);
+	// Goal-teller: joints gerold.
+	if (AWeedShopGameState* GSg = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UGoalsComponent* Gl = GSg->GetGoals()) { Gl->NoteJointsRolled(1); }
+	}
 	if (GEngine)
 	{
 		const FString StrainName = BudItem.ToString().StartsWith(TEXT("Bud_"))

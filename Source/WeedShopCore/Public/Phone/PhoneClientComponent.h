@@ -156,6 +156,11 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerShelfTake(class AStorageShelf* Shelf, int32 SlotIndex, int32 Count);
 
+	// --- Goals/milestones: een behaald doel claimen (reward naar deze speler) ---
+	void ClaimGoal(int32 Idx);
+	UFUNCTION(Server, Reliable)
+	void ServerClaimGoal(int32 Idx);
+
 	// --- Fysieke winkel (balie): fullscreen winkel-menu, betaal cash/bank, instant, geen shipping ---
 	void OpenStore(class AStoreCounter* Counter);
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Store")

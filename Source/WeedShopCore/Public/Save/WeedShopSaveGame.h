@@ -149,6 +149,16 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	uint8 MilestonePhase = 0;
 
+	// Goals/milestone-doelen: tellers + geclaimde doelen.
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 GoalJointsRolled = 0;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 GoalPlantsHarvested = 0;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 GoalDealsDone = 0;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	TArray<int32> GoalClaimed;
+
 	// Gedeeld crew-level (voor de save-info).
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	int32 CrewLevel = 1;
