@@ -169,6 +169,10 @@ public:
 	float GetStackQualityById(int32 StackId) const;
 	void SetStackQualityById(int32 StackId, float Q);
 
+	// Verwijder Count stuks uit één SPECIFIEKE stack (server). Voor per-stack acties zoals het droogrek,
+	// zodat alleen die exacte stapel (THC%/kwaliteit) wordt gepakt en niet alle stapels van die strain.
+	void RemoveFromStackById(int32 StackId, int32 Count);
+
 	// StackId in hotbar-slot Slot (0 = leeg).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetHotbarStackId(int32 Slot) const;

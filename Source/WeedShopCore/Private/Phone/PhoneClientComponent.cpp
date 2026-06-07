@@ -930,22 +930,28 @@ ADryingRack* UPhoneClientComponent::GetDryRack() const
 	return DryRackActor.Get();
 }
 
-void UPhoneClientComponent::RequestDryHang(FName WetId) { ServerDryHang(DryRackActor.Get(), WetId); }
+void UPhoneClientComponent::RequestDryHang(int32 StackId) { ServerDryHang(DryRackActor.Get(), StackId); }
 void UPhoneClientComponent::RequestDryCollect(int32 Index) { ServerDryCollect(DryRackActor.Get(), Index); }
 void UPhoneClientComponent::RequestDryCollectAll() { ServerDryCollectAll(DryRackActor.Get()); }
 
-void UPhoneClientComponent::ServerDryHang_Implementation(ADryingRack* Rack, FName WetId)
+void UPhoneClientComponent::ServerDryHang_Implementation(ADryingRack* Rack, int32 StackId)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
-	if (!Rack || !Inv || WetId.IsNone()) { return; }
+	if (!Rack || !Inv || StackId == 0) { return; }
 	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Rack->GetActorLocation()) > 400.f) { return; }
 
-	const int32 Have = Inv->GetQuantity(WetId);
+	// Hang precies DEZE stapel op met z'n eigen THC%/kwaliteit — niet alle wiet van die strain samen.
+	const int32 Idx = Inv->FindStackById(StackId);
+	const TArray<FInventoryStack>& St = Inv->GetStacks();
+	if (!St.IsValidIndex(Idx)) { return; }
+	const FName WetId = St[Idx].ItemId;
+	if (!WetId.ToString().StartsWith(TEXT("WetBud_"))) { return; }
+	const int32 Have = St[Idx].Quantity;
+	const float Thc = St[Idx].Quality;
+	const float Qual = St[Idx].QualityPct;
 	if (Have <= 0) { return; }
-	const float Thc = Inv->GetItemQuality(WetId);
-	const float Qual = Inv->GetItemQualityPct(WetId);
 	const int32 Hung = Rack->ServerHangWet(WetId, Have, Thc, Qual);
-	if (Hung > 0) { Inv->RemoveItem(WetId, Hung); }
+	if (Hung > 0) { Inv->RemoveFromStackById(StackId, Hung); }
 	else if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Drying rack is full.")); }
 }
 

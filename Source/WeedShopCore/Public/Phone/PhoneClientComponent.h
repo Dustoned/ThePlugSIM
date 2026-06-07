@@ -181,11 +181,11 @@ public:
 	bool IsDryRackOpen() const { return bDryRackOpen; }
 	class ADryingRack* GetDryRack() const;
 
-	void RequestDryHang(FName WetId);
+	void RequestDryHang(int32 StackId); // hang precies DEZE stapel op (eigen THC%/kwaliteit)
 	void RequestDryCollect(int32 Index);
 	void RequestDryCollectAll();
 	UFUNCTION(Server, Reliable)
-	void ServerDryHang(class ADryingRack* Rack, FName WetId);
+	void ServerDryHang(class ADryingRack* Rack, int32 StackId);
 	UFUNCTION(Server, Reliable)
 	void ServerDryCollect(class ADryingRack* Rack, int32 Index);
 	UFUNCTION(Server, Reliable)

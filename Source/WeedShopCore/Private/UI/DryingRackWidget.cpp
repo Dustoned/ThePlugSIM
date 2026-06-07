@@ -199,8 +199,19 @@ void UDryingRackWidget::HandleDryDrop(bool bDroppedOnDryingSide, UDryDragOp* Op)
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 	if (bDroppedOnDryingSide && Op->bWet)
 	{
-		// Natte wiet -> rek: ophangen.
-		if (!Op->ItemId.IsNone()) { Ph->RequestDryHang(Op->ItemId); }
+		// Natte wiet -> rek: ophangen (zoek de stapel van dit item op en hang precies die op).
+		if (!Op->ItemId.IsNone())
+		{
+			APawn* P = GetOwningPlayerPawn();
+			const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+			if (Inv)
+			{
+				for (const FInventoryStack& S : Inv->GetStacks())
+				{
+					if (S.ItemId == Op->ItemId) { Ph->RequestDryHang(S.StackId); break; }
+				}
+			}
+		}
 	}
 	else if (!bDroppedOnDryingSide && !Op->bWet)
 	{
@@ -237,7 +248,7 @@ void UDryingRackWidget::HandleInvDrop(bool bDroppedOnDryingSide, UInvDragOp* Op)
 	const FName ItemId = St[Idx].ItemId;
 	if (ItemId.ToString().StartsWith(TEXT("WetBud_")))
 	{
-		PhoneComp->RequestDryHang(ItemId);
+		PhoneComp->RequestDryHang(Op->StackId); // precies deze stapel (eigen THC%/kwaliteit)
 		LastSig.Reset();
 	}
 	else

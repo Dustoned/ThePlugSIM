@@ -217,6 +217,20 @@ void UInventoryComponent::SetStackQualityById(int32 StackId, float Q)
 	}
 }
 
+void UInventoryComponent::RemoveFromStackById(int32 StackId, int32 Count)
+{
+	if (GetOwnerRole() != ROLE_Authority || Count <= 0) { return; }
+	const int32 Idx = FindStackById(StackId);
+	if (!Stacks.IsValidIndex(Idx)) { return; }
+	Stacks[Idx].Quantity -= Count;
+	if (Stacks[Idx].Quantity <= 0)
+	{
+		UnassignHotbarStack(Stacks[Idx].StackId);
+		Stacks.RemoveAt(Idx);
+	}
+	OnRep_Stacks();
+}
+
 bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, float QualityPct)
 {
 	if (GetOwnerRole() != ROLE_Authority)
