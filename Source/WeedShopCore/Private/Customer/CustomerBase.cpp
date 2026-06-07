@@ -2745,10 +2745,29 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	return Row ? Row->MarketPriceCents : 0;
 }
 
-float ACustomerBase::ThcWillingnessBonus(float ThcPercent)
+float ACustomerBase::ThcWillingnessBonus(float OfferedThc, float ExpectedThc)
 {
-	if (ThcPercent < 0.f) { return 0.f; }                      // onbekend -> geen bonus
-	return FMath::Clamp((ThcPercent - 15.f) * 2.5f, 0.f, 45.f); // sterker dan ~15% -> veel bereidwilliger
+	if (OfferedThc < 0.f) { return 0.f; }                       // onbekend -> geen bonus
+	const float Baseline = (ExpectedThc > 0.f) ? ExpectedThc : 15.f; // wat de klant verwacht van z'n strain
+	return FMath::Clamp((OfferedThc - Baseline) * 2.5f, 0.f, 45.f);  // sterker dan verwacht -> bereidwilliger
+}
+
+float ACustomerBase::GetExpectedThc() const
+{
+	// Strain uit DesiredProductId halen (Bag_<strain> of Bud_<strain>).
+	FString S = DesiredProductId.ToString();
+	S.RemoveFromStart(TEXT("Bag_"));
+	S.RemoveFromStart(TEXT("Bud_"));
+	if (S.IsEmpty()) { return 15.f; }
+	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UStoreComponent* Store = GS->GetStore())
+		{
+			float Thc = 0.f, Y = 0.f, G = 0.f;
+			if (Store->GetStrainStats(FName(*S), Thc, Y, G) && Thc > 0.f) { return Thc; }
+		}
+	}
+	return 15.f;
 }
 
 float ACustomerBase::TierPriceTolerance(int32 Tier)
@@ -2780,7 +2799,7 @@ float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quali
 	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
 		static_cast<float>(GetMarketPriceCents()), EffAsk,
 		Respect, Loyalty, Addiction, Quality01);
-	return FMath::Min(100.f, Base + ThcWillingnessBonus(ThcPercent));
+	return FMath::Min(100.f, Base + ThcWillingnessBonus(ThcPercent, GetExpectedThc()));
 }
 
 float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent) const
@@ -2790,7 +2809,7 @@ float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceC
 	const float EffAsk = static_cast<float>(AskPriceCentsPerUnit) * (1.f - TierPriceTolerance(GetMyCustomerTier()));
 	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
 		static_cast<float>(Market), EffAsk,
-		Respect, Loyalty, Addiction, Quality01) + ThcWillingnessBonus(ThcPercent);
+		Respect, Loyalty, Addiction, Quality01) + ThcWillingnessBonus(ThcPercent, GetExpectedThc());
 	// Bereidheid om iets anders te nemen: ~50% basis, hoger bij loyaliteit/verslaving, EN een scherpe
 	// prijs compenseert het substituut (goedkoper -> hij neemt het toch). Kan oplopen tot ~100%.
 	const float Ratio = FMath::Clamp(static_cast<float>(AskPriceCentsPerUnit) / static_cast<float>(Market), 0.30f, 2.20f);

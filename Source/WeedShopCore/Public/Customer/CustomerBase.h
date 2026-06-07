@@ -160,8 +160,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	float GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01 = -1.f, float ThcPercent = -1.f) const;
 
-	// Extra acceptatie-% door sterke wiet: boven ~15% THC ~+2.5%/% tot +45%. -1 = neutraal (geen bonus).
-	static float ThcWillingnessBonus(float ThcPercent);
+	// Extra acceptatie-% als je STERKERE wiet aanbiedt dan de klant verwacht: per % boven de verwachte THC
+	// ~+2.5%, tot +45%. OfferedThc < 0 = onbekend (geen bonus). ExpectedThc <= 0 -> val terug op ~15%.
+	static float ThcWillingnessBonus(float OfferedThc, float ExpectedThc);
+	// Verwachte THC% = basis-THC van de strain die de klant vroeg (DesiredProductId). 15 als onbekend.
+	float GetExpectedThc() const;
 
 	// Prijs-tolerantie per klant-tier (0 Casual .. 0.30 Whale): hogere tiers ervaren de vraagprijs als lager,
 	// dus je kunt meer per gram vragen. Raakt ALLEEN de prijs - kwaliteit/THC blijven gewoon meetellen.
