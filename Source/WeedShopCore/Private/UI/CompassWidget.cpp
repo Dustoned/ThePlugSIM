@@ -13,6 +13,8 @@
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
 #include "EngineUtils.h"
 
 TSharedRef<SWidget> UCompassWidget::RebuildWidget()
@@ -74,6 +76,18 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 		UCanvasPanelSlot* MS = Band->AddChildToCanvas(MS2);
 		MS->SetAutoSize(false); MS->SetSize(FVector2D(16.f, 16.f)); MS->SetAlignment(FVector2D(0.5f, 0.5f));
 		Markers.Add(MS2);
+	}
+
+	// Marker-pool voor mede-spelers (blauw poppetje).
+	for (int32 i = 0; i < 4; ++i)
+	{
+		USizeBox* CB = WidgetTree->ConstructWidget<USizeBox>();
+		CB->SetWidthOverride(18.f); CB->SetHeightOverride(18.f);
+		CB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 18.f, FLinearColor(0.3f, 0.6f, 1.f)));
+		CB->SetVisibility(ESlateVisibility::Collapsed);
+		UCanvasPanelSlot* CS = Band->AddChildToCanvas(CB);
+		CS->SetAutoSize(false); CS->SetSize(FVector2D(18.f, 18.f)); CS->SetAlignment(FVector2D(0.5f, 0.5f));
+		CoopMarkers.Add(CB);
 	}
 
 	// Home-marker: goud huisje dat naar je basis wijst.
@@ -144,6 +158,24 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		++m;
 	}
 	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
+
+	// Mede-spelers (blauw poppetje) -> zie waar je co-op maatje is.
+	int32 cm = 0;
+	if (const AGameStateBase* GSb = GetWorld() ? GetWorld()->GetGameState() : nullptr)
+	{
+		for (APlayerState* PS : GSb->PlayerArray)
+		{
+			if (cm >= CoopMarkers.Num()) { break; }
+			const APawn* Pw = PS ? PS->GetPawn() : nullptr;
+			if (!Pw || Pw == P) { continue; }
+			const FVector D = Pw->GetActorLocation() - PL;
+			if (D.SizeSquared2D() < 100.f) { continue; }
+			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
+			PlaceOnBand(CoopMarkers[cm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+			++cm;
+		}
+	}
+	for (; cm < CoopMarkers.Num(); ++cm) { CoopMarkers[cm]->SetVisibility(ESlateVisibility::Collapsed); }
 
 	// Home = JOUW woning (gekocht/starter). Alleen tonen als je er een hebt — niet het park-centrum.
 	bool bHaveHome = false;

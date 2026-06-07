@@ -23,6 +23,8 @@
 #include "Styling/CoreStyle.h"
 #include "World/CityGenerator.h"
 #include "Customer/CustomerBase.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
 #include "Game/WeedShopGameState.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -373,14 +375,37 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 
 	// Speler.
+	const APawn* LocalPawn = GetOwningPlayerPawn();
 	if (PlayerDot)
 	{
-		if (APawn* P = GetOwningPlayerPawn())
+		if (LocalPawn)
 		{
-			const FVector L = P->GetActorLocation();
+			const FVector L = LocalPawn->GetActorLocation();
 			if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(PlayerDot->Slot)) { Cs->SetPosition(WorldToCanvas(L.X, L.Y)); }
 			PlayerDot->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
+	}
+
+	// Mede-spelers (blauw) -> zie waar je co-op maatje is.
+	{
+		int32 Used = 0;
+		if (const AGameStateBase* GSb = GetWorld() ? GetWorld()->GetGameState() : nullptr)
+		{
+			for (APlayerState* PS : GSb->PlayerArray)
+			{
+				const APawn* Pw = PS ? PS->GetPawn() : nullptr;
+				if (!Pw || Pw == LocalPawn) { continue; }
+				while (CoopDots.Num() <= Used) { CoopDots.Add(AddDot(FLinearColor(0.3f, 0.55f, 1.f), 16.f, 26)); }
+				if (UBorder* Dot = CoopDots[Used])
+				{
+					const FVector L = Pw->GetActorLocation();
+					if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(WorldToCanvas(L.X, L.Y)); }
+					Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
+				}
+				++Used;
+			}
+		}
+		for (int32 k = Used; k < CoopDots.Num(); ++k) { if (CoopDots[k]) { CoopDots[k]->SetVisibility(ESlateVisibility::Collapsed); } }
 	}
 
 	// Waypoint-marker.

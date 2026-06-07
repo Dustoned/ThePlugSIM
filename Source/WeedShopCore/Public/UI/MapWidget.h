@@ -31,6 +31,7 @@ protected:
 	UPROPERTY() TObjectPtr<class UImage> MapImage; // echte top-down render van de stad
 	bool bImageSet = false;
 	UPROPERTY() TObjectPtr<UBorder> PlayerDot;
+	UPROPERTY() TArray<TObjectPtr<UBorder>> CoopDots; // mede-spelers (blauw)
 	UPROPERTY() TObjectPtr<UBorder> WaypointDot;
 	UPROPERTY() TObjectPtr<class UWidget> HomeIcon; // goud huisje op JOUW woning
 	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;        // roamers (cyaan stipjes)
