@@ -1124,6 +1124,17 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			Box((dFront + dBack) * 0.5f, -Half + Margin, FMath::Abs(dBack - dFront) + LaneWd, RunS * 1.8f, zf + HalfRise - 8.f, 16.f, LandC, true);
 			// Steek 2 (baan achterin): terug naar de gang, omhoog naar de volgende verdieping.
 			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + HalfRise + (k + 1) * Rise; Box(dBack, -Half + Margin + (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
+			// Vul de open schacht tussen de twee banen met een schot op volle verdieping-hoogte, zodat je niet
+			// door het midden naar beneden kunt springen. Het bordes achteraan blijft vrij (doorloop blijft werken).
+			const float GapD = FMath::Abs(dBack - dFront) - LaneWd; // breedte van het open gat tussen de banen
+			if (GapD > 8.f)
+			{
+				const float dMid = (dFront + dBack) * 0.5f;
+				const float sLandFront = -Half + Margin + RunS * 1.2f;     // stop net voor het bordes
+				const float sDivC = (s0 + sLandFront) * 0.5f;
+				const float sDivLen = FMath::Abs(s0 - sLandFront);
+				Box(dMid, sDivC, GapD + 16.f, sDivLen, zf + FloorH * 0.5f, FloorH, FLinearColor(0.17f, 0.17f, 0.20f), true);
+			}
 		}
 	}
 
