@@ -12,6 +12,13 @@ $Archive = Join-Path $Proj "Build\Archive"
 $Repo   = "Dustoned/ThePlugSIM"
 New-Item -ItemType Directory -Force (Join-Path $Proj "Build") | Out-Null
 
+# Geen -Notes meegegeven? Lees dan automatisch de patch notes uit Docs\PATCHNOTES.md (UTF-8).
+$NotesPath = Join-Path $Proj "Docs\PATCHNOTES.md"
+if ($Notes -eq "Nieuwe test-build." -and (Test-Path $NotesPath)) {
+    $Notes = [System.IO.File]::ReadAllText($NotesPath, [System.Text.Encoding]::UTF8)
+    Write-Host "== Patch notes geladen uit Docs\PATCHNOTES.md =="
+}
+
 # Automatische changelog uit git-commits sinds de vorige build.
 $ShaFile = Join-Path $Proj "Build\last-build-sha.txt"
 $LastSha = ""
