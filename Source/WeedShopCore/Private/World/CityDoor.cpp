@@ -108,6 +108,16 @@ FString ACityDoor::ResidentNameForIndex(int32 Index)
 	return FString::Printf(TEXT("%s %s"), First[I % NF], Last[(I * 37 + I / NF) % NL]);
 }
 
+FString ACityDoor::FriendlyNpcName(FName NpcId)
+{
+	const FString S = NpcId.ToString();
+	if (S.StartsWith(TEXT("Resident_")))
+	{
+		return ResidentNameForIndex(FCString::Atoi(*S.RightChop(9)));
+	}
+	return S.IsEmpty() ? FString(TEXT("Customer")) : S;
+}
+
 void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)
 {
 	if (bLocked) { return; } // bewoner-deur: op slot voor de speler

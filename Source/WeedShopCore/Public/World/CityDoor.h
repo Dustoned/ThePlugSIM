@@ -28,6 +28,10 @@ public:
 	// de juiste "LOCKED - <naam>"-popup kan tonen zonder replicatie).
 	static FString ResidentNameForIndex(int32 Index);
 
+	// Nette weergavenaam voor een NpcId, ook als de registry (nog) geen naam heeft: "Resident_0121"
+	// -> de bijbehorende funny naam; lege id -> "Customer". Gebruikt door deal/map-popups als fallback.
+	static FString FriendlyNpcName(FName NpcId);
+
 	// Maak dit een bewoner-deur: op slot voor de speler, met "LOCKED - <naam> lives here".
 	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
 	bool IsLocked() const { return bLocked; }

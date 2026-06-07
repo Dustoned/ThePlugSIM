@@ -1,4 +1,5 @@
 #include "UI/DealWidget.h"
+#include "World/CityDoor.h" // FriendlyNpcName fallback
 
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
@@ -246,7 +247,7 @@ void UDealWidget::UpdateLive()
 	if (!Ph || !C) { return; }
 
 	// --- Kop (altijd, voor ELKE NPC): naam, status, stats, dialoog ---
-	FString NpcName = C->NpcId.IsNone() ? FString(TEXT("Customer")) : C->NpcId.ToString();
+	FString NpcName = ACityDoor::FriendlyNpcName(C->NpcId); // nette fallback i.p.v. ruwe "Resident_0121"
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())

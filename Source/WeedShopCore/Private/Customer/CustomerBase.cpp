@@ -27,6 +27,7 @@
 #include "Progression/LevelComponent.h"
 #include "Progression/StoreComponent.h"
 #include "World/HeatComponent.h"
+#include "World/CityDoor.h" // FriendlyNpcName fallback
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -477,7 +478,7 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	}
 
 	OutSnapshot.bValid = true;
-	OutSnapshot.ResidentLabel = !HomeNumber.IsEmpty() ? HomeNumber : NpcId.ToString();
+	OutSnapshot.ResidentLabel = !HomeNumber.IsEmpty() ? HomeNumber : ACityDoor::FriendlyNpcName(NpcId);
 	OutSnapshot.bVisibleOnMap = ShouldShowOnCityMap();
 	OutSnapshot.bAtHomeInside = bAtHomeInside;
 	OutSnapshot.bEmergingFromHome = bEmergingFromHome;

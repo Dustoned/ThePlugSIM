@@ -1,4 +1,5 @@
 #include "UI/MapWidget.h"
+#include "World/CityDoor.h" // FriendlyNpcName fallback
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -435,8 +436,8 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			}
 			if (NpcLabels[NNeed])
 			{
-				FString Name = C->NpcId.IsNone() ? FString(TEXT("Klant")) : C->NpcId.ToString();
-				if (Reg && !C->NpcId.IsNone()) { float r, l, a; FText Nm; if (Reg->GetStats(C->NpcId, r, l, a, Nm)) { Name = Nm.ToString(); } }
+				FString Name = ACityDoor::FriendlyNpcName(C->NpcId);
+				if (Reg && !C->NpcId.IsNone()) { float r, l, a; FText Nm; if (Reg->GetStats(C->NpcId, r, l, a, Nm) && !Nm.IsEmpty()) { Name = Nm.ToString(); } }
 				NpcLabels[NNeed]->SetText(FText::FromString(Name));
 				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(NpcLabels[NNeed]->Slot)) { Cs->SetPosition(Pos + FVector2D(0.f, -16.f)); }
 				NpcLabels[NNeed]->SetVisibility(ESlateVisibility::HitTestInvisible);
