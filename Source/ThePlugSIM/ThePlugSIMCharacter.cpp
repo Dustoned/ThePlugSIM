@@ -3,6 +3,7 @@
 #include "ThePlugSIMCharacter.h"
 #include "UI/WeedToast.h"
 #include "Animation/AnimInstance.h"
+#include "UObject/UnrealType.h"
 #include "Animation/AnimSequence.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Camera/CameraComponent.h"
@@ -284,6 +285,20 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	// AnimBP-vlag: houd je een item vast? (gerepliceerd via het actieve item -> werkt ook voor co-op-spelers
 	// die jouw hold-pose zien). De AnimBP blendt hierop een arm-vooruit-pose.
 	bHoldingItem = Inventory && !Inventory->GetActiveItemId().IsNone();
+
+	// Push de vlag rechtstreeks in de FP-mesh-AnimBP (variabele "bHoldingItem"), zodat je in de AnimBP
+	// GEEN event-graph nodig hebt - alleen die bool-variabele + 'm gebruiken in de AnimGraph.
+	if (FirstPersonMesh)
+	{
+		if (UAnimInstance* AI = FirstPersonMesh->GetAnimInstance())
+		{
+			static const FName HoldProp(TEXT("bHoldingItem"));
+			if (FBoolProperty* BP = FindFProperty<FBoolProperty>(AI->GetClass(), HoldProp))
+			{
+				BP->SetPropertyValue_InContainer(AI, bHoldingItem);
+			}
+		}
+	}
 
 	// --- Held item 3D-model in de hand + drop (alleen lokale speler) ---
 	if (IsLocallyControlled() && Inventory && HeldItemMesh)
