@@ -176,7 +176,7 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseDryRack(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep natte wiet vanuit je inventory hierheen om op te hangen; sleep een KLARE (groene) batch naar je inventory om te oogsten."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep wiet hierheen om te drogen. Klaar? Sleep terug naar je inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Eén rek-kolom als drop-zone (natte wiet hierheen slepen = ophangen).
@@ -184,7 +184,7 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	RackBg->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
 	RackBg->SetPadding(FMargin(8.f));
 	UScrollBox* RackScroll = WidgetTree->ConstructWidget<UScrollBox>();
-	RackScroll->SetOrientation(Orient_Horizontal);
+	RackScroll->SetOrientation(Orient_Vertical); // verticaal scrollen -> de slots wrappen in rijen (zoals de inventory)
 	RackBg->SetContent(RackScroll);
 	DryList = RackScroll;
 	UDryDropZone* DZ = WidgetTree->ConstructWidget<UDryDropZone>();
@@ -274,7 +274,7 @@ void UDryingRackWidget::FillBody()
 	auto AddGrid = [this](UScrollBox* Into) -> UWrapBox*
 	{
 		UWrapBox* W = WidgetTree->ConstructWidget<UWrapBox>();
-		W->SetInnerSlotPadding(FVector2D(5.f, 5.f));
+		W->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 		Into->AddChild(W);
 		return W;
 	};
@@ -322,10 +322,10 @@ void UDryingRackWidget::FillBody()
 
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = i; C->ItemId = E.DryItemId; C->Qty = E.Quantity; C->bReady = E.bDone; C->Owner = this; C->Inner = Vis;
-			C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.bDone ? TEXT("\nKlaar - klik om te oogsten") : TEXT("\nNog aan het drogen"))));
+			C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.bDone ? TEXT("\nKlaar - sleep naar je inventory") : TEXT("\nNog aan het drogen"))));
 
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-			Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
+			Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); Sz->SetContent(C);
 			Grid->AddChildToWrapBox(Sz);
 
 			RowBars.Add(Bar); RowStatus.Add(Status); RowEntryIndex.Add(i);
@@ -335,18 +335,13 @@ void UDryingRackWidget::FillBody()
 		const int32 MaxCap = Rack->GetCapacityPublic();
 		for (int32 e = Rack->GetEntries().Num(); e < MaxCap; ++e)
 		{
-			const bool bFirstEmpty = (e == Rack->GetEntries().Num());
+			// Lege slot: zelfde flauwe vierkante stijl als een leeg inventory-vak (geen "+"), drop-zone voor wiet.
 			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.45f), 8.f));
-			Vis->SetPadding(FMargin(4.f));
-			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
-			Vis->SetContent(Ov);
-			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, bFirstEmpty ? TEXT("hang hier") : TEXT("+"), bFirstEmpty ? 9 : 18, FLinearColor(0.4f, 0.45f, 0.42f), true));
-			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
+			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.09f, 0.09f, 0.12f, 0.30f), 5.f));
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-			Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
+			Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); Sz->SetContent(C);
 			Grid->AddChildToWrapBox(Sz);
 		}
 	}
