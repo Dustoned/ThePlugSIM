@@ -179,10 +179,11 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep wiet hierheen om te drogen. Klaar? Sleep terug naar je inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	// Eén rek-kolom als drop-zone (natte wiet hierheen slepen = ophangen).
+	// Drop-zone: transparante achtergrond zodat de (flauwe) lege slots zichtbaar zijn tegen de card,
+	// net als bij de inventory (geen donkere vlak meer dat de slots opslokt).
 	UBorder* RackBg = WidgetTree->ConstructWidget<UBorder>();
-	RackBg->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
-	RackBg->SetPadding(FMargin(8.f));
+	RackBg->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 10.f));
+	RackBg->SetPadding(FMargin(2.f));
 	UScrollBox* RackScroll = WidgetTree->ConstructWidget<UScrollBox>();
 	RackScroll->SetOrientation(Orient_Vertical); // verticaal scrollen -> de slots wrappen in rijen (zoals de inventory)
 	RackBg->SetContent(RackScroll);
@@ -337,7 +338,7 @@ void UDryingRackWidget::FillBody()
 		{
 			// Lege slot: zelfde flauwe vierkante stijl als een leeg inventory-vak (geen "+"), drop-zone voor wiet.
 			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.09f, 0.09f, 0.12f, 0.30f), 5.f));
+			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.13f, 0.14f, 0.18f, 0.55f), 5.f));
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();

@@ -1674,7 +1674,7 @@ void UPhoneWidget::BuildMapApp()
 	if (!ContentBox) { return; }
 
 	// Knop naar de fullscreen-kaart (zelfde als M).
-	UWeedActionButton* FB = MakeActionBtn(TEXT("Fullscreen (M)"), FLinearColor(0.20f, 0.45f, 0.62f),
+	UWeedActionButton* FB = MakeActionBtn(TEXT("Fullscreen"), FLinearColor(0.20f, 0.45f, 0.62f),
 		[this]() { if (Phone.IsValid()) { Phone->ToggleMapOverlay(); } }, 13);
 	ContentBox->AddChildToVerticalBox(FB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 

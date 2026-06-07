@@ -311,7 +311,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	Head->AddChildToHorizontalBox(SortBtn)->SetVerticalAlignment(VAlign_Center);
 	UWeedActionButton* CloseBtn = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f,
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->ToggleInventory(); } });
-	CloseBtn->SetContent(WeedUI::Text(WidgetTree, TEXT("Close (I)"), 12, FLinearColor::White, true));
+	CloseBtn->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 12, FLinearColor::White, true));
 	UHorizontalBoxSlot* CloseS = Head->AddChildToHorizontalBox(CloseBtn);
 	CloseS->SetVerticalAlignment(VAlign_Center); CloseS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	VB->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));

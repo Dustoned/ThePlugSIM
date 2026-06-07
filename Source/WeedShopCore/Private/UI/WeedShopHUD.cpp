@@ -481,7 +481,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 
 	// Home-indicator-balk onderaan + sluit-knop.
 	DrawRect(FLinearColor(0.5f, 0.5f, 0.55f, 0.9f), PX + PhoneW * 0.5f - 50.f, PY + PhoneH - 12.f, 100.f, 4.f);
-	if (DrawButton(FName(TEXT("close")), TEXT("Close (Tab)"), SX, PY + PhoneH - 32.f, 120.f, FLinearColor::Yellow))
+	if (DrawButton(FName(TEXT("close")), TEXT("Close"), SX, PY + PhoneH - 32.f, 120.f, FLinearColor::Yellow))
 	{
 		HoverTooltip = TEXT("Close the phone");
 	}
@@ -1196,7 +1196,7 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.97f), PX, PY, W, H);
 	float y = PY + 14.f;
 	DrawText(TEXT("INVENTORY"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font);
-	DrawButton(FName(TEXT("invclose")), TEXT("Close (I)"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
+	DrawButton(FName(TEXT("invclose")), TEXT("Close"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
 	y += 28.f;
 
 	// Slots + gewicht.
