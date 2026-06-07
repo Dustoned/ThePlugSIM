@@ -379,6 +379,15 @@ public:
 	// Wordt periodiek aangeroepen (door de pawn-tick): starter toekennen + eigen deuren ontgrendelen.
 	void PropertyTick();
 
+	// --- Huur (per 30 dagen, van de bank; bank mag in de min = schuld -> heat) ---
+	// Totale huur per termijn = som over je appartementen (basis + waarde-schaal).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Rent")
+	int32 GetRentDueCents() const;
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Rent")
+	int32 GetRentDueDay() const { return RentDueDay; }
+	// Server: door de dag-cyclus aangeroepen bij een nieuwe dag -> int de huur + intro-melding.
+	void ProcessRentForDay(int32 Day);
+
 	// --- Inventory-scherm (drag-n-drop naar hotbar) ---
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void ToggleInventory();
@@ -590,6 +599,10 @@ protected:
 	int32 ActiveHome = -1;               // huidige woon-/spawn-plek
 	int32 SelectedDeliveryHome = -1;     // UI-keuze bezorg-huis (-1 = automatisch: huidige/binnen-huis)
 	bool bPropertyInit = false;          // server: starter al toegekend?
+
+	UPROPERTY(Replicated)
+	int32 RentDueDay = 31;               // dag waarop de volgende huur van de bank gaat (eerste = dag 31)
+	bool bShownRentIntro = false;        // server: de "betaal je eerste huur"-melding al getoond?
 	FTimerHandle PropertyTimer;
 
 	UFUNCTION() void OnRep_Property();

@@ -1,6 +1,10 @@
 #include "World/DayCycleComponent.h"
 
 #include "Net/UnrealNetwork.h"
+#include "Phone/PhoneClientComponent.h" // huur per dag verwerken
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 
 UDayCycleComponent::UDayCycleComponent()
 {
@@ -36,6 +40,7 @@ void UDayCycleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	{
 		TimeOfDaySeconds -= CycleLength();
 		++DayNumber; // nieuwe dag
+		OnNewDay(DayNumber);
 	}
 
 	CheckTransition();
@@ -44,6 +49,22 @@ void UDayCycleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 float UDayCycleComponent::GetCycleFraction() const
 {
 	return TimeOfDaySeconds / CycleLength();
+}
+
+void UDayCycleComponent::OnNewDay(int32 NewDay)
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		APawn* Pw = PC ? PC->GetPawn() : nullptr;
+		if (!Pw) { continue; }
+		if (UPhoneClientComponent* Ph = Pw->FindComponentByClass<UPhoneClientComponent>())
+		{
+			Ph->ProcessRentForDay(NewDay);
+		}
+	}
 }
 
 void UDayCycleComponent::SetTimeOfDaySeconds(float NewTime)

@@ -79,6 +79,9 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	// Server: bij een nieuwe dag elke speler z'n huur laten verwerken.
+	void OnNewDay(int32 NewDay);
+
 	UPROPERTY(ReplicatedUsing = OnRep_Time)
 	float TimeOfDaySeconds = 0.f;
 

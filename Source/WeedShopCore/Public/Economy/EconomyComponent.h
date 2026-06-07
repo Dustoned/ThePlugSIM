@@ -94,6 +94,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	bool CanAffordBank(int64 AmountCents) const { return BankCents >= AmountCents; }
 
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	bool IsBankInDebt() const { return BankCents < 0; }
+
+	// Server: haal geld van de bank dat WEL in de min mag (huur/schuld). Negatief saldo = schuld.
+	void ChargeBank(int64 AmountCents);
+
 	// Server: bankgeld erbij (wit inkomen). bTaxed = trek de inkomstenbelasting eraf bij binnenkomst.
 	void AddBank(int64 AmountCents, bool bTaxed);
 

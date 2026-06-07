@@ -44,6 +44,7 @@
 #include "UI/StoreWidget.h"
 #include "World/StoreCounter.h"
 #include "Progression/LevelComponent.h"
+#include "World/HeatComponent.h" // huur-schuld -> heat
 #include "UI/HandInfoWidget.h"
 #include "UI/WeedToast.h"
 #include "Cultivation/DryingRack.h"
@@ -76,6 +77,59 @@ void UPhoneClientComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME(UPhoneClientComponent, bBankAppUnlocked);
 	DOREPLIFETIME(UPhoneClientComponent, OwnedHomes);
 	DOREPLIFETIME(UPhoneClientComponent, ActiveHome);
+	DOREPLIFETIME(UPhoneClientComponent, RentDueDay);
+}
+
+int32 UPhoneClientComponent::GetRentDueCents() const
+{
+	int64 Total = 0;
+	for (int32 H : OwnedHomes)
+	{
+		Total += 40000;                                  // basis-huur per appartement (EUR 400)
+		Total += (int64)GetHomeSellValueCents(H) * 12 / 100; // duurder pand -> meer huur
+	}
+	return static_cast<int32>(Total);
+}
+
+void UPhoneClientComponent::ProcessRentForDay(int32 Day)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+
+	// Intro-melding (1x): vertel het huur-doel zodra de eerste dag voorbij is.
+	if (!bShownRentIntro)
+	{
+		bShownRentIntro = true;
+		const int32 Rent0 = GetRentDueCents();
+		if (Rent0 > 0 && GEngine)
+		{
+			UWeedToast::NotifyPawn(GetOwner(), -1, 7.f, FColor(255, 210, 120),
+				FString::Printf(TEXT("Make money for rent! EUR %.2f due by day %d (in 30 days) - it comes off your bank."), Rent0 / 100.f, RentDueDay));
+		}
+	}
+
+	if (Day < RentDueDay || OwnedHomes.Num() == 0) { return; }
+
+	const int32 Rent = GetRentDueCents();
+	UEconomyComponent* Econ = GetOwnerEconomy();
+	if (Rent > 0 && Econ)
+	{
+		Econ->ChargeBank(Rent); // mag in de min (schuld)
+		const bool bDebt = Econ->IsBankInDebt();
+		if (bDebt)
+		{
+			if (AWeedShopGameState* GS = GetGS())
+			{
+				if (UHeatComponent* Heat = GS->GetHeat()) { Heat->AddHeat(20.f); } // schuld trekt aandacht (gematigd)
+			}
+		}
+		if (GEngine)
+		{
+			UWeedToast::NotifyPawn(GetOwner(), -1, 6.f, bDebt ? FColor::Red : FColor(150, 220, 160), bDebt
+				? FString::Printf(TEXT("Rent EUR %.2f charged - bank is in the RED (EUR %.2f). Pay it off, heat rising!"), Rent / 100.f, Econ->GetBankCents() / 100.f)
+				: FString::Printf(TEXT("Rent paid: EUR %.2f. Bank: EUR %.2f"), Rent / 100.f, Econ->GetBankCents() / 100.f));
+		}
+	}
+	RentDueDay = Day + 30; // volgende termijn over 30 dagen
 }
 
 void UPhoneClientComponent::BeginPlay()
@@ -332,6 +386,18 @@ void UPhoneClientComponent::PropertyTick()
 		}
 	}
 	ApplyLocalDoors();
+
+	// Intro-melding (1x, vroeg): zodra je je starter-flat hebt, vertel het huur-doel.
+	if (GetOwnerRole() == ROLE_Authority && !bShownRentIntro && OwnedHomes.Num() > 0)
+	{
+		bShownRentIntro = true;
+		const int32 Rent0 = GetRentDueCents();
+		if (Rent0 > 0 && GEngine)
+		{
+			UWeedToast::NotifyPawn(GetOwner(), -1, 8.f, FColor(255, 210, 120),
+				FString::Printf(TEXT("Make money for rent! EUR %.2f due by day %d (in 30 days) - it comes off your bank."), Rent0 / 100.f, RentDueDay));
+		}
+	}
 }
 
 void UPhoneClientComponent::RestoreProperty(const TArray<int32>& InOwned, int32 InActive)

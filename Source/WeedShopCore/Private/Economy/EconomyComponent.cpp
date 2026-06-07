@@ -107,6 +107,13 @@ void UEconomyComponent::SetBank(int64 NewCents)
 	OnBalanceChanged.Broadcast(BalanceCents);
 }
 
+void UEconomyComponent::ChargeBank(int64 AmountCents)
+{
+	if (GetOwnerRole() != ROLE_Authority || AmountCents == 0) { return; }
+	BankCents -= AmountCents; // mag in de min: huur/schuld
+	OnBalanceChanged.Broadcast(BalanceCents);
+}
+
 void UEconomyComponent::OnRep_Balance()
 {
 	OnBalanceChanged.Broadcast(BalanceCents);
