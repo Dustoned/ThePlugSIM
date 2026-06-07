@@ -43,6 +43,29 @@ void UNpcRegistryComponent::RestoreStates(const TArray<FNpcState>& In)
 	States = In; // niet-leeg -> EnsureInit overschrijft 't niet meer
 }
 
+void UNpcRegistryComponent::WarmAllForTesting(UContactsComponent* Con)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	EnsureSeeded(); // vul States uit DT als dat nog niet gebeurd is
+	for (FNpcState& S : States)
+	{
+		S.Respect = 80.f;
+		S.Loyalty = 70.f;
+		S.Addiction = 70.f; // boven de koop-drempel -> wil meteen kopen
+		S.bUnlocked = true;  // nummer al bekend
+	}
+	if (Con)
+	{
+		int32 N = 0;
+		for (const FNpcState& S : States)
+		{
+			if (N >= 10) { break; }
+			Con->RegisterContact(S.NpcId, S.DisplayName, 70.f);
+			++N;
+		}
+	}
+}
+
 namespace
 {
 	FString CleanFirstName(const FString& Raw, int32 Index)

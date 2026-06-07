@@ -407,9 +407,16 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 		}
 	}
 
+	// Dev-modes: warm alle NPC's op (goede stats + ontgrendeld) + zet wat contacten in de telefoon,
+	// zodat je meteen overal kunt dealen/appen voor grondig testen.
+	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+	{
+		Reg->WarmAllForTesting(GS->GetContacts());
+	}
+
 	UWeedToast::Notify(-1, 5.f, FColor::Green, bSandbox
 		? TEXT("SANDBOX - loaded with cash + a full starter kit.")
-		: TEXT("TESTING - starter budget + starter items added."));
+		: TEXT("TESTING - good NPC stats, contacts + starter items added."));
 }
 
 bool USaveGameSubsystem::QuickContinue()

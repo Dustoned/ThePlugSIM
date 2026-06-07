@@ -120,6 +120,10 @@ public:
 	const TArray<FNpcState>& GetStatesForSave() const { return States; }
 	void RestoreStates(const TArray<FNpcState>& In);
 
+	// Testing/dev: zet IEDEREEN op goede stats (respect/loyaliteit/verslaving) + ontgrendeld, en zet een
+	// paar contacten in de telefoon, zodat je meteen overal kunt dealen/appen voor grondig testen.
+	void WarmAllForTesting(class UContactsComponent* Con);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

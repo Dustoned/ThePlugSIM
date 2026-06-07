@@ -182,11 +182,15 @@ void UPhoneWidget::BuildSettingsApp()
 {
 	if (!ContentBox) { return; }
 
-	// Categorie-knoppen (Status eerst + standaard, dan Controls) — blijven staan; alleen de body ververst.
+	// Categorie-knoppen. De 'Test'-tab (dag/nacht-switch e.d.) alleen in dev-modes (Sandbox/Testing), niet in een normaal spel.
 	SettingsTabBtns.Reset();
+	const AWeedShopGameState* GSt = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const bool bDevMode = GSt && GSt->IsFreeBuild();
+	if (!bDevMode && SettingsCat != 0) { SettingsCat = 0; }
 	static const TCHAR* CatNames[2] = { TEXT("Status"), TEXT("Test") };
+	const int32 NumTabs = bDevMode ? 2 : 1;
 	UHorizontalBox* Cats = WidgetTree->ConstructWidget<UHorizontalBox>();
-	for (int32 i = 0; i < 2; ++i)
+	for (int32 i = 0; i < NumTabs; ++i)
 	{
 		const FLinearColor Col = (i == SettingsCat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
 		UWeedActionButton* B = MakeActionBtn(CatNames[i], Col,
