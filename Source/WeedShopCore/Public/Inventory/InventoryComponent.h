@@ -160,6 +160,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	FName GetActiveItemId() const;
 
+	// StackId van het geselecteerde hotbar-slot (0 = leeg). Voor per-fles water e.d.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	int32 GetActiveStackId() const { return ActiveStackId; }
+
+	// Quality-veld van een specifieke stack lezen/zetten (bv. water in een fles). SetQuality = server-only.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	float GetStackQualityById(int32 StackId) const;
+	void SetStackQualityById(int32 StackId, float Q);
+
 	// StackId in hotbar-slot Slot (0 = leeg).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetHotbarStackId(int32 Slot) const;

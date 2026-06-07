@@ -2,18 +2,10 @@
 
 #include "Cultivation/BottleTypes.h"
 #include "Inventory/InventoryComponent.h"
-#include "Net/UnrealNetwork.h"
 
 UWaterCanComponent::UWaterCanComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	SetIsReplicatedByDefault(true);
-}
-
-void UWaterCanComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(UWaterCanComponent, Waters);
 }
 
 UInventoryComponent* UWaterCanComponent::GetInv() const
@@ -29,12 +21,11 @@ FName UWaterCanComponent::ActiveBottleId() const
 	return Act.ToString().StartsWith(TEXT("WaterBottle")) ? Act : NAME_None;
 }
 
-int32& UWaterCanComponent::WaterRef(FName BottleId)
+int32 UWaterCanComponent::ActiveBottleStackId() const
 {
-	for (FBottleWater& W : Waters) { if (W.BottleId == BottleId) { return W.Charges; } }
-	FBottleWater New; New.BottleId = BottleId; New.Charges = 0;
-	const int32 Idx = Waters.Add(New);
-	return Waters[Idx].Charges;
+	const UInventoryComponent* Inv = GetInv();
+	if (!Inv || ActiveBottleId().IsNone()) { return 0; }
+	return Inv->GetActiveStackId();
 }
 
 int32 UWaterCanComponent::GetMaxCharges() const
@@ -50,30 +41,31 @@ int32 UWaterCanComponent::GetMaxCharges() const
 
 int32 UWaterCanComponent::GetCharges() const
 {
-	const FName Id = ActiveBottleId();
-	if (Id.IsNone()) { return 0; }
-	for (const FBottleWater& W : Waters) { if (W.BottleId == Id) { return W.Charges; } }
-	return 0;
+	const UInventoryComponent* Inv = GetInv();
+	const int32 StackId = ActiveBottleStackId();
+	if (!Inv || StackId == 0) { return 0; }
+	// Water zit in het Quality-veld van DEZE fles-stack (per fles).
+	return FMath::Max(0, FMath::RoundToInt(Inv->GetStackQualityById(StackId)));
 }
 
 void UWaterCanComponent::Fill()
 {
-	const FName Id = ActiveBottleId();
+	UInventoryComponent* Inv = GetInv();
+	const int32 StackId = ActiveBottleStackId();
 	const int32 Max = GetMaxCharges();
-	if (Id.IsNone() || Max <= 0) { return; }   // geen fles in de hand
-	int32& C = WaterRef(Id);
-	if (C > Max) { C = Max; }
-	C = FMath::Min(Max, C + FillPerClick);      // alleen DEZE fles vult (per klik een beetje)
+	if (!Inv || StackId == 0 || Max <= 0) { return; } // geen fles in de hand
+	const int32 Cur = FMath::Min(GetCharges(), Max);   // klem (kleinere fles)
+	Inv->SetStackQualityById(StackId, static_cast<float>(FMath::Min(Max, Cur + FillPerClick)));
 }
 
 bool UWaterCanComponent::TryUseCharge()
 {
-	const FName Id = ActiveBottleId();
+	UInventoryComponent* Inv = GetInv();
+	const int32 StackId = ActiveBottleStackId();
 	const int32 Max = GetMaxCharges();
-	if (Id.IsNone() || Max <= 0) { return false; }
-	int32& C = WaterRef(Id);
-	if (C > Max) { C = Max; }
-	if (C <= 0) { return false; }
-	--C;
+	if (!Inv || StackId == 0 || Max <= 0) { return false; }
+	const int32 Cur = FMath::Min(GetCharges(), Max);
+	if (Cur <= 0) { return false; }
+	Inv->SetStackQualityById(StackId, static_cast<float>(Cur - 1));
 	return true;
 }

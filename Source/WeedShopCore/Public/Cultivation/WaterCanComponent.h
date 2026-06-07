@@ -1,7 +1,8 @@
-// UWaterCanComponent — zit op de speler-pawn. Houdt bij hoeveel water er in je fles zit.
-// Je hebt een fles (gekocht item) nodig om te kunnen water geven; vullen doe je bij de gootsteen.
+// UWaterCanComponent — zit op de speler-pawn. Logica rond het water in de fles die je VASTHOUDT.
+// Het waterniveau zit in het Quality-veld van die fles-stack zelf (per fles, gaat mee in de save), dus
+// twee aparte flessen hebben echt apart water. Je vult bij de gootsteen, gebruikt bij het water geven.
 //
-// CO-OP: server-authoritative (charges muteren op de server), gerepliceerd voor de HUD.
+// CO-OP: server-authoritative (muteert de stack via de inventory), die repliceert naar de clients.
 
 #pragma once
 
@@ -10,15 +11,6 @@
 #include "WaterCanComponent.generated.h"
 
 class UInventoryComponent;
-
-// Waterniveau PER fles-type (zodat een steel-fles los staat van een plastic-fles e.d.).
-USTRUCT()
-struct FBottleWater
-{
-	GENERATED_BODY()
-	UPROPERTY() FName BottleId = NAME_None;
-	UPROPERTY() int32 Charges = 0;
-};
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
 class WEEDSHOPCORE_API UWaterCanComponent : public UActorComponent
@@ -32,7 +24,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Water")
 	int32 GetMaxCharges() const;
 
-	// Water in de fles die je NU vasthoudt.
+	// Water in de fles die je NU vasthoudt (zit in het Quality-veld van die stack).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Water")
 	int32 GetCharges() const;
 
@@ -45,22 +37,12 @@ public:
 	// Server: gebruik 1 slok water uit de vastgehouden fles. False als leeg of geen fles.
 	bool TryUseCharge();
 
-	// Save/load van het waterniveau per fles-type.
-	const TArray<FBottleWater>& GetWatersForSave() const { return Waters; }
-	void RestoreWaters(const TArray<FBottleWater>& In) { Waters = In; }
-
 protected:
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	UInventoryComponent* GetInv() const;
 
-	// Item-id van de fles die je NU vasthoudt (WaterBottle_*), of NAME_None.
+	// Item-id (WaterBottle_*) en StackId van de fles die je NU vasthoudt; None/0 als je er geen vasthoudt.
 	FName ActiveBottleId() const;
-	// Verwijzing naar (of nieuw) waterniveau van een fles-type.
-	int32& WaterRef(FName BottleId);
-
-	// Waterniveau per fles-type.
-	UPROPERTY(Replicated)
-	TArray<FBottleWater> Waters;
+	int32 ActiveBottleStackId() const;
 
 	// Hoeveel slokken er per klik (per gootsteen-interact) bijkomen. 1 = elke fles vult per klik 1 slok,
 	// dus grotere fles = altijd meer klikken (plastic 3, steel 6, jerry 12, tank 25 klikken).

@@ -200,6 +200,23 @@ int32 UInventoryComponent::FindStackById(int32 StackId) const
 	return Stacks.IndexOfByPredicate([StackId](const FInventoryStack& S) { return S.StackId == StackId; });
 }
 
+float UInventoryComponent::GetStackQualityById(int32 StackId) const
+{
+	const int32 Idx = FindStackById(StackId);
+	return Stacks.IsValidIndex(Idx) ? Stacks[Idx].Quality : 0.f;
+}
+
+void UInventoryComponent::SetStackQualityById(int32 StackId, float Q)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	const int32 Idx = FindStackById(StackId);
+	if (Stacks.IsValidIndex(Idx))
+	{
+		Stacks[Idx].Quality = Q;
+		OnRep_Stacks(); // host-UI direct bijwerken (clients via replicatie van Stacks)
+	}
+}
+
 bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, float QualityPct)
 {
 	if (GetOwnerRole() != ROLE_Authority)

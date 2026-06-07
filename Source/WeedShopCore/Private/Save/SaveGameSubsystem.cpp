@@ -513,10 +513,7 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 		}
 		Out.ActiveSlot = Inv->GetActiveSlot();
 	}
-	if (const UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
-	{
-		Out.Waters = Can->GetWatersForSave(); // water per fles-type
-	}
+	// (Water zit nu in het Quality-veld van elke fles-stack en gaat dus mee via Out.Items — geen aparte opslag.)
 
 	// Sla op waar de speler staat + kijkt (kijkrichting van de controller, niet de body).
 	Out.bHasTransform = true;
@@ -561,10 +558,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 		}
 		Inv->SetActiveSlot(Data.ActiveSlot);
 	}
-	if (UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
-	{
-		Can->RestoreWaters(Data.Waters);
-	}
+	// (Water zit in de fles-stack Quality en is al hersteld via de inventory-items hierboven.)
 
 	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "ga naar het save-punt").
 	if (Data.bHasTransform)
