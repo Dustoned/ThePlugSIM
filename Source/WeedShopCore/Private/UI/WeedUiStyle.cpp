@@ -69,6 +69,46 @@ namespace WeedUI
 		return T;
 	}
 
+	FString ItemTooltip(FName ItemId, int32 Qty, float Thc, float QualPct)
+	{
+		const FString S = ItemId.ToString();
+		FString Out = PrettyItemName(ItemId);
+		auto Add = [&Out](const FString& L) { Out += TEXT("\n") + L; };
+
+		const bool bWet = S.StartsWith(TEXT("WetBud_"));
+		const bool bBud = S.StartsWith(TEXT("Bud_"));
+		const bool bBag = UInventoryComponent::IsBag(ItemId);
+		const bool bJoint = S.StartsWith(TEXT("Joint_"));
+		const bool bCrystal = S.StartsWith(TEXT("Crystal_"));
+		const bool bHash = S.StartsWith(TEXT("Hash_"));
+
+		FString Type;
+		if (bWet)            { Type = TEXT("Natte wiet - eerst drogen"); }
+		else if (bBud)       { Type = TEXT("Gedroogde wiet"); }
+		else if (bBag)       { Type = TEXT("Verpakte wiet (zakje)"); }
+		else if (bJoint)     { Type = TEXT("Joint"); }
+		else if (bCrystal)   { Type = TEXT("THC-crystals"); }
+		else if (bHash)      { Type = TEXT("Hasj"); }
+		else if (S.StartsWith(TEXT("Seed_")))        { Type = TEXT("Zaad"); }
+		else if (S.StartsWith(TEXT("WaterBottle")))  { Type = TEXT("Waterfles"); }
+		else if (S.StartsWith(TEXT("Soil_")))        { Type = TEXT("Aarde"); }
+		else if (S.StartsWith(TEXT("Papers_")))      { Type = TEXT("Vloeitjes"); }
+		else if (S.StartsWith(TEXT("Cont_")))        { Type = TEXT("Verpakking"); }
+		if (!Type.IsEmpty()) { Add(Type); }
+
+		const bool bWeed = bWet || bBud || bBag || bJoint || bCrystal || bHash;
+		if (bWeed && Thc > 0.f) { Add(FString::Printf(TEXT("THC %.0f%%   Kwaliteit %.0f%%"), Thc, QualPct)); }
+
+		if (bBag)
+		{
+			const int32 G = FMath::Max(1, UInventoryComponent::BagGrams(ItemId));
+			Add(FString::Printf(TEXT("%d zakje(s) x %dg  =  %dg"), Qty, G, Qty * G));
+		}
+		else if (bWet || bBud || bCrystal || bHash) { Add(FString::Printf(TEXT("%dg"), Qty)); }
+		else if (Qty > 1) { Add(FString::Printf(TEXT("Aantal: %d"), Qty)); }
+		return Out;
+	}
+
 	FString ItemQtyBadge(FName ItemId, int32 Qty)
 	{
 		if (UInventoryComponent::IsBag(ItemId))

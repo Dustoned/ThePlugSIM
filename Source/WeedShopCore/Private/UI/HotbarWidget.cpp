@@ -185,6 +185,13 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			DropCells[i]->bDraggable = (SlotSid != 0);
 			const int32 DIdx = Inv->FindStackById(SlotSid);
 			DropCells[i]->IconId = Stacks.IsValidIndex(DIdx) ? Stacks[DIdx].ItemId : NAME_None;
+			// Rijke hover-tooltip (ook als de inventory open is): naam + soort + THC/kwaliteit + gram.
+			if (Stacks.IsValidIndex(DIdx))
+			{
+				const FInventoryStack& DS = Stacks[DIdx];
+				DropCells[i]->SetToolTipText(FText::FromString(WeedUI::ItemTooltip(DS.ItemId, DS.Quantity, DS.Quality, DS.QualityPct)));
+			}
+			else { DropCells[i]->SetToolTipText(FText::GetEmpty()); }
 		}
 
 		const int32 Idx = Inv->FindStackById(SlotSid);

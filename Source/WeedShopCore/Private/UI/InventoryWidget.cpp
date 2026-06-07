@@ -597,7 +597,7 @@ void UInventoryWidget::RebuildContent()
 				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.21f, 0.97f);
 				Cell->Line2 = TEXT("WET - dry it first");
 				Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
-				Cell->Tooltip += FString::Printf(TEXT("\n%dg  -  NAT, eerst drogen  (THC %.0f%%)"), S.Quantity, S.Quality);
+				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
 			}
 			else
 			{
@@ -606,12 +606,7 @@ void UInventoryWidget::RebuildContent()
 					? FString::Printf(TEXT("THC %.0f%%  Q %.0f%%"), S.Quality, S.QualityPct)
 					: TEXT("");
 				Cell->Badge = WeedUI::ItemQtyBadge(ItemId, S.Quantity);
-				const bool bBagCell = UInventoryComponent::IsBag(ItemId);
-				Cell->Tooltip += bBagCell
-					? FString::Printf(TEXT("\n%dx %dg zakje  -  THC %.0f%%   Kwaliteit %.0f%%"), S.Quantity, UInventoryComponent::BagGrams(ItemId), S.Quality, S.QualityPct)
-					: (bWeed
-						? FString::Printf(TEXT("\n%dg  -  THC %.0f%%   Kwaliteit %.0f%%"), S.Quantity, S.Quality, S.QualityPct)
-						: FString::Printf(TEXT("\nAantal: %d"), S.Quantity));
+				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
 				if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
 				{
 					Cell->bShowMerge = true;
