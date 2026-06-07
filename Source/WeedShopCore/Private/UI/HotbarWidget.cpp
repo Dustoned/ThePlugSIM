@@ -139,7 +139,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		MsgBadgePill->SetVisibility(ESlateVisibility::Collapsed);
 		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(MsgBadgePill);
 		BadgeOS->SetHorizontalAlignment(HAlign_Right); BadgeOS->SetVerticalAlignment(VAlign_Top);
-		BadgeOS->SetPadding(FMargin(0.f, 2.f, 9.f, 0.f)); // naar binnen: op de rechterbovenhoek van de TELEFOON zelf (glyph zit met marge in het icoon)
+		BadgeOS->SetPadding(FMargin(0.f, 1.f, 4.f, 0.f)); // rechterbovenhoek van de telefoon (iets meer naar rechts)
 
 		UHorizontalBoxSlot* PS = Bar->AddChildToHorizontalBox(Sz);
 		PS->SetPadding(FMargin(14.f, 0.f, 0.f, 0.f)); // ruimte tussen de hotbar en het telefoon-icoon
