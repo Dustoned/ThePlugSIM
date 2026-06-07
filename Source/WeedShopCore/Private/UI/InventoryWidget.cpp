@@ -504,7 +504,12 @@ void UInventoryWidget::RebuildStash()
 		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Nm, 12, NameCol));
 
 		FString Sub;
-		if (bWeed) { Sub = FString::Printf(TEXT("%dg   %.0f%% THC%s"), N, Thc, bWet ? TEXT("  (wet)") : TEXT("")); }
+		if (bWeed)
+		{
+			// Zakjes tellen in GRAMMEN (aantal x gram-per-zakje), los gedroogd/nat = 1g per stuk.
+			const int32 Grams = UInventoryComponent::IsBag(Id) ? N * FMath::Max(1, UInventoryComponent::BagGrams(Id)) : N;
+			Sub = FString::Printf(TEXT("%dg   %.0f%% THC%s"), Grams, Thc, bWet ? TEXT("  (wet)") : TEXT(""));
+		}
 		else { Sub = FString::Printf(TEXT("x%d"), N); }
 		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Sub, 10, FLinearColor(0.6f, 0.64f, 0.74f)));
 
