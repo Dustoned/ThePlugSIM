@@ -2373,9 +2373,19 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		bRoamGoalIsPark = false;
 		// Afgehandeld (deal gesloten) of veiligheids-timeout -> afspraak loslaten, normaal leven hervatten.
 		ApptTimeout -= DeltaSeconds;
-		if (State == ECustomerState::Served || State == ECustomerState::Leaving || ApptTimeout <= 0.f)
+		if (State == ECustomerState::Served || State == ECustomerState::Leaving)
 		{
 			EndAppointment();
+		}
+		else if (ApptTimeout <= 0.f)
+		{
+			// Te lang laten wachten -> de NPC geeft de afspraak op: respect + loyaliteit omlaag en vertrekt.
+			Respect = ClampAttr(Respect - 5.f);
+			Loyalty = ClampAttr(Loyalty - 8.f);
+			WriteStatsToRegistry();
+			Say(TEXT("You took too long. I'm out."));
+			EndAppointment();
+			LeaveAngry();
 		}
 		else if (bApptComeToPlayer)
 		{

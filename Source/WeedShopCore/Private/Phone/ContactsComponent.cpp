@@ -5,6 +5,7 @@
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Customer/CustomerBase.h"
+#include "Phone/PhoneClientComponent.h"
 #include "World/CityGenerator.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Engine/Engine.h"
@@ -279,10 +280,21 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		{
 			if (const APawn* Player = PC->GetPawn())
 			{
-				SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
-				SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
-				SpawnRot.Pitch = 0.f;
-				SpawnRot.Roll = 0.f;
+				// "Ik kom langs": wacht BUITEN bij je hoofdingang (de plek vóór je voordeur, waar ook de
+				// pakketjes komen) - nooit binnen in de kamer.
+				FVector HomeDoor;
+				const UPhoneClientComponent* Ph = Player->FindComponentByClass<UPhoneClientComponent>();
+				if (bComeToYou && Ph && Ph->GetActiveHomeLocation(HomeDoor))
+				{
+					SpawnLoc = HomeDoor + FVector(0.f, 0.f, 4.f);
+				}
+				else
+				{
+					SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
+					SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
+					SpawnRot.Pitch = 0.f;
+					SpawnRot.Roll = 0.f;
+				}
 			}
 		}
 	}
