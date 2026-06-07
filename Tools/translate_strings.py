@@ -106,6 +106,19 @@ PAIRS = [
     ('Swatch: file niet gevonden: %s', 'Swatch: file not found: %s'),
     ('UInteractionComponent hoort op een Pawn te zitten, niet op %s.', 'UInteractionComponent must be on a Pawn, not on %s.'),
     ('Wereld hersteld: %d objecten gespawned.', 'World restored: %d objects spawned.'),
+    ('KLAAR', 'READY'),
+    ('Klaar', 'Ready'),
+    ('klaar', 'ready'),
+    ('Leeg', 'Empty'),
+    ('Mand leeg', 'Cart empty'),
+    ('Meubel-templates opgeslagen (%d type(s)).', 'Furniture templates saved (%d type(s)).'),
+    ('NPC-register geladen: %d personen.', 'NPC registry loaded: %d people.'),
+    ('Nummer ontgrendeld: %s', 'Number unlocked: %s'),
+    ('SLOT %d\\n(leeg)', 'SLOT %d\\n(empty)'),
+    ('Swatch geladen+bijgesneden: %dx%d -> %dx%d (echte alpha: %d)', 'Swatch loaded+cropped: %dx%d -> %dx%d (real alpha: %d)'),
+    ('Swatch: GetRaw mislukt', 'Swatch: GetRaw failed'),
+    ('Swatch: PNG decode mislukt', 'Swatch: PNG decode failed'),
+    ('slider vastgehouden', 'slider held'),
 ]
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

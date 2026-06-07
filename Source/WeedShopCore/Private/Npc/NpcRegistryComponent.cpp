@@ -157,7 +157,7 @@ void UNpcRegistryComponent::EnsureSeeded()
 		States.Add(S);
 		++RowIndex;
 	}
-	UE_LOG(LogWeedShop, Log, TEXT("NPC-register geladen: %d personen."), States.Num());
+	UE_LOG(LogWeedShop, Log, TEXT("NPC registry loaded: %d people."), States.Num());
 }
 
 FName UNpcRegistryComponent::EnsureNpc(FName NpcId, const FText& DisplayName, float BaseRespect, float BaseLoyalty, float BaseAddiction)
@@ -402,7 +402,7 @@ void UNpcRegistryComponent::CheckUnlock(FNpcState& State)
 		}
 	}
 
-	UE_LOG(LogWeedShop, Log, TEXT("Nummer ontgrendeld: %s"), *State.DisplayName.ToString());
+	UE_LOG(LogWeedShop, Log, TEXT("Number unlocked: %s"), *State.DisplayName.ToString());
 	if (GEngine)
 	{
 		UWeedToast::Notify(-1, 5.f, FColor(120, 200, 255),

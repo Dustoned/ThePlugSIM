@@ -111,9 +111,9 @@ namespace
 		if (!FFileHelper::LoadFileToArray(FileData, *Path)) { UE_LOG(LogTemp, Warning, TEXT("Swatch: file not found: %s"), *Path); return nullptr; }
 		IImageWrapperModule& Mod = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
 		TSharedPtr<IImageWrapper> Wrapper = Mod.CreateImageWrapper(EImageFormat::PNG);
-		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num())) { UE_LOG(LogTemp, Warning, TEXT("Swatch: PNG decode mislukt")); return nullptr; }
+		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num())) { UE_LOG(LogTemp, Warning, TEXT("Swatch: PNG decode failed")); return nullptr; }
 		TArray64<uint8> Raw;
-		if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)) { UE_LOG(LogTemp, Warning, TEXT("Swatch: GetRaw mislukt")); return nullptr; }
+		if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)) { UE_LOG(LogTemp, Warning, TEXT("Swatch: GetRaw failed")); return nullptr; }
 		const int32 W = Wrapper->GetWidth();
 		const int32 H = Wrapper->GetHeight();
 
@@ -161,7 +161,7 @@ namespace
 		FMemory::Memcpy(Dest, Out.GetData(), Out.Num());
 		Tex->GetPlatformData()->Mips[0].BulkData.Unlock();
 		Tex->UpdateResource();
-		UE_LOG(LogTemp, Log, TEXT("Swatch geladen+bijgesneden: %dx%d -> %dx%d (echte alpha: %d)"), W, H, CW, CH, bHasAlpha ? 1 : 0);
+		UE_LOG(LogTemp, Log, TEXT("Swatch loaded+cropped: %dx%d -> %dx%d (real alpha: %d)"), W, H, CW, CH, bHasAlpha ? 1 : 0);
 		return Tex;
 	}
 
@@ -417,21 +417,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* VS = Layers->AddChildToOverlay(Ver);
 		VS->SetHorizontalAlignment(HAlign_Left); VS->SetVerticalAlignment(VAlign_Bottom); VS->SetPadding(FMargin(24.f, 0.f, 0.f, 16.f));
 
-		// "Edit lamps"-knopje rechtsonder: zet de lamp-editor aan/uit.
-		{
-			UWeedActionButton* EB = WidgetTree->ConstructWidget<UWeedActionButton>();
-			EB->OnClicked.AddDynamic(EB, &UWeedActionButton::Handle);
-			EB->OnAction.BindLambda([this](int32, int32) { ToggleGlowEdit(); });
-			FButtonStyle ES;
-			ES.Normal = WeedUI::Rounded(FLinearColor(0.10f, 0.11f, 0.15f, 0.85f), 6.f);
-			ES.Hovered = WeedUI::Rounded(FLinearColor(0.30f, 0.16f, 0.50f, 0.95f), 6.f);
-			ES.Pressed = WeedUI::Rounded(FLinearColor(0.40f, 0.20f, 0.62f, 1.f), 6.f);
-			ES.NormalPadding = FMargin(10.f, 5.f); ES.PressedPadding = FMargin(10.f, 5.f);
-			EB->SetStyle(ES);
-			EB->SetContent(WeedUI::Text(WidgetTree, TEXT("Edit lamps"), 11, FLinearColor(0.8f, 0.82f, 0.92f), true));
-			UOverlaySlot* EBS = Layers->AddChildToOverlay(EB);
-			EBS->SetHorizontalAlignment(HAlign_Right); EBS->SetVerticalAlignment(VAlign_Bottom); EBS->SetPadding(FMargin(0.f, 0.f, 22.f, 16.f));
-		}
+		// (De "Edit lamps"-editorknop is verwijderd uit het main menu.)
 
 		// Hint tijdens het editen (bovenaan).
 		EditHintText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.9f, 1.f, 0.7f), true, true);
@@ -777,7 +763,7 @@ void UMainMenuWidget::RefreshSlots()
 		}
 		else
 		{
-			Line = FString::Printf(TEXT("SLOT %d\n(leeg)"), s + 1);
+			Line = FString::Printf(TEXT("SLOT %d\n(empty)"), s + 1);
 		}
 		SB->SetContent(WeedUI::Text(WidgetTree, Line, 14, FLinearColor::White, true));
 		SB->SetIsEnabled(MenuMode == 1 || bHasAny); // lege slots zijn alleen in New klikbaar

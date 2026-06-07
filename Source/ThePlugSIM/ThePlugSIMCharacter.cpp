@@ -922,7 +922,7 @@ void AThePlugSIMCharacter::WeedSaveFurniture()
 
 	const int32 Types = FurnitureTemplates::SaveFromWorld(W, City);
 	UWeedToast::Notify(-1, 5.f, Types > 0 ? FColor::Green : FColor::Orange,
-		Types > 0 ? FString::Printf(TEXT("Meubel-templates opgeslagen (%d type(s))."), Types)
+		Types > 0 ? FString::Printf(TEXT("Furniture templates saved (%d type(s))."), Types)
 				  : TEXT("Nothing to save: place furniture inside a home first."));
 }
 

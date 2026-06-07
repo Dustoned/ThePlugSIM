@@ -464,7 +464,7 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	UpdateLive();
 
-	// Reset de "slider vastgehouden"-vlag als de muisknop los is (zodat 'ie het bod weer kan volgen).
+	// Reset de "slider held"-vlag als de muisknop los is (zodat 'ie het bod weer kan volgen).
 	if (APlayerController* PC = GetOwningPlayer())
 	{
 		if (!PC->IsInputKeyDown(EKeys::LeftMouseButton)) { bSliderHeld = false; }

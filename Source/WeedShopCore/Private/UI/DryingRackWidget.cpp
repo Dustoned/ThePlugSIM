@@ -315,10 +315,10 @@ void UDryingRackWidget::FillBody()
 			UOverlaySlot* BS = Ov->AddChildToOverlay(BadgePill(FString::Printf(TEXT("%dg"), E.Quantity)));
 			BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Top);
 
-			// Klein "klaar"-vinkje onderaan de slot (de volledige progress staat onder de slots).
+			// Klein "ready"-vinkje onderaan de slot (de volledige progress staat onder de slots).
 			if (E.bDone)
 			{
-				UOverlaySlot* DnOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("KLAAR"), 8, FLinearColor(0.5f, 1.f, 0.6f), true, true));
+				UOverlaySlot* DnOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("READY"), 8, FLinearColor(0.5f, 1.f, 0.6f), true, true));
 				DnOS->SetHorizontalAlignment(HAlign_Center); DnOS->SetVerticalAlignment(VAlign_Bottom);
 				DnOS->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 			}
@@ -411,7 +411,7 @@ void UDryingRackWidget::UpdateProgress()
 			if (E.bDone)
 			{
 				if (E.OverTime > 60.f) { Txt = TEXT("Oogst nu!"); Col = FLinearColor(1.f, 0.6f, 0.4f); }
-				else { Txt = TEXT("Klaar"); Col = FLinearColor(0.5f, 1.f, 0.6f); }
+				else { Txt = TEXT("Ready"); Col = FLinearColor(0.5f, 1.f, 0.6f); }
 			}
 			else
 			{

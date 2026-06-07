@@ -182,10 +182,10 @@ void UStoreWidget::BuildShell(UCanvasPanel* Root)
 
 	// Mand-balk: totaal + Checkout + leegmaken.
 	UHorizontalBox* CartBar = WidgetTree->ConstructWidget<UHorizontalBox>();
-	CartText = WeedUI::Text(WidgetTree, TEXT("Mand leeg"), 14, FLinearColor(1.f, 0.95f, 0.6f), false, true);
+	CartText = WeedUI::Text(WidgetTree, TEXT("Cart empty"), 14, FLinearColor(1.f, 0.95f, 0.6f), false, true);
 	UHorizontalBoxSlot* CTS = CartBar->AddChildToHorizontalBox(CartText);
 	CTS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CTS->SetVerticalAlignment(VAlign_Center);
-	CartBar->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("Leeg"), FLinearColor(0.35f, 0.2f, 0.2f), 12,
+	CartBar->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("Empty"), FLinearColor(0.35f, 0.2f, 0.2f), 12,
 		[this]() { Cart.Empty(); bConfirmPending = false; LastSig.Reset(); }))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	CheckoutBtn = StoreBtn(WidgetTree, TEXT("Checkout"), FLinearColor(0.2f, 0.55f, 0.3f), 14,
 		[this]()
@@ -312,7 +312,7 @@ void UStoreWidget::FillBody()
 	if (CartText)
 	{
 		CartText->SetText(FText::FromString(Lines == 0
-			? FString(TEXT("Mand leeg"))
+			? FString(TEXT("Cart empty"))
 			: FString::Printf(TEXT("Mand: %d artikel(en)   EUR %.2f"), Lines, CartTotalCents() / 100.f)));
 	}
 	if (CheckoutBtn)
