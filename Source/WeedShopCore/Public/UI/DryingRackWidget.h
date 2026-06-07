@@ -76,6 +76,8 @@ public:
 	void HandleDryDrop(bool bDroppedOnDryingSide, class UDryDragOp* Op);
 	// Drop vanuit de inventory/hotbar (UInvDragOp) op het rek: alleen natte wiet wordt opgehangen.
 	void HandleInvDrop(bool bDroppedOnDryingSide, class UInvDragOp* Op);
+	// Klik op een klare batch -> oogsten naar je inventory.
+	void CollectReady(int32 EntryIndex);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

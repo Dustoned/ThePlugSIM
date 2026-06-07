@@ -802,13 +802,16 @@ void UPhoneClientComponent::OpenDryRack(ADryingRack* Rack)
 	EnsureWidget();
 	DryRackActor = Rack;
 	bDryRackOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false;
+	// Open OOK je echte inventory eronder: zo hang je rechtstreeks vanuit je inventory/hotbar op.
+	bInventoryOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bStoreOpen = false;
 	UpdateCursor();
 }
 
 void UPhoneClientComponent::CloseDryRack()
 {
 	bDryRackOpen = false;
+	bInventoryOpen = false; // sluit de echte inventory die met het rek mee openging
 	DryRackActor = nullptr;
 	UpdateCursor();
 }

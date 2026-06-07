@@ -72,10 +72,11 @@ TSharedRef<SWidget> UDryCell::RebuildWidget()
 
 FReply UDryCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	const bool bCanDrag = (bWet || bReady || bDraggableAlways) && !ItemId.IsNone();
-	if (bCanDrag && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	// Klare (groene) batch in het rek -> klik = oogsten naar je inventory.
+	if (bReady && EntryIndex >= 0 && Owner.IsValid() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+		Owner->CollectReady(EntryIndex);
+		return FReply::Handled();
 	}
 	return FReply::Unhandled();
 }
@@ -155,12 +156,13 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	CardB->SetPadding(FMargin(16.f));
 	Card = CardB;
 
+	// Compact paneel BOVENIN het scherm; je echte inventory opent eronder.
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-	CS->SetAlignment(FVector2D(0.5f, 0.5f));
+	CS->SetAnchors(FAnchors(0.5f, 0.f, 0.5f, 0.f));
+	CS->SetAlignment(FVector2D(0.5f, 0.f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(680.f, 480.f));
-	CS->SetPosition(FVector2D(0.f, 0.f));
+	CS->SetSize(FVector2D(700.f, 240.f));
+	CS->SetPosition(FVector2D(0.f, 22.f));
 
 	UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(Outer);
@@ -171,34 +173,24 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
 	HeadRow->AddChildToHorizontalBox(DryBtn(WidgetTree, TEXT("Exit"), FLinearColor(0.4f, 0.2f, 0.2f),
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseDryRack(); } }));
-	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep natte wiet naar het rek om op te hangen; sleep een klare batch naar je inventory om te oogsten."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
-		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep natte wiet uit je inventory hierheen om op te hangen; klik een KLARE (groene) batch om te oogsten."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
+		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	UHorizontalBox* Cols = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UVerticalBoxSlot* ColsSlot = Outer->AddChildToVerticalBox(Cols);
-	ColsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	// Eén rek-kolom als drop-zone (natte wiet hierheen slepen = ophangen).
+	UBorder* RackBg = WidgetTree->ConstructWidget<UBorder>();
+	RackBg->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
+	RackBg->SetPadding(FMargin(8.f));
+	UScrollBox* RackScroll = WidgetTree->ConstructWidget<UScrollBox>();
+	RackScroll->SetOrientation(Orient_Horizontal);
+	RackBg->SetContent(RackScroll);
+	DryList = RackScroll;
+	UDryDropZone* DZ = WidgetTree->ConstructWidget<UDryDropZone>();
+	DZ->bDryingSide = true; DZ->Owner = this; DZ->Inner = RackBg;
+	Outer->AddChildToVerticalBox(DZ)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	auto MakeColumn = [this](const FString& Title, const FLinearColor& Col, TObjectPtr<UScrollBox>& OutScroll, bool bDryingSide) -> UWidget*
-	{
-		UBorder* B = WidgetTree->ConstructWidget<UBorder>();
-		B->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
-		B->SetPadding(FMargin(8.f));
-		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-		B->SetContent(VB);
-		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Title, 13, Col, false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-		OutScroll = WidgetTree->ConstructWidget<UScrollBox>();
-		VB->AddChildToVerticalBox(OutScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		UDryDropZone* DZ = WidgetTree->ConstructWidget<UDryDropZone>();
-		DZ->bDryingSide = bDryingSide; DZ->Owner = this; DZ->Inner = B;
-		return DZ;
-	};
-
-	UWidget* DryCol = MakeColumn(TEXT("In het rek  (drogen)"), FLinearColor(0.75f, 0.9f, 0.6f), DryList, true);
-	UWidget* WetCol = MakeColumn(TEXT("Jouw inventory"), FLinearColor(0.6f, 0.85f, 1.f), WetList, false);
-	UHorizontalBoxSlot* L = Cols->AddChildToHorizontalBox(DryCol); L->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); L->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
-	UHorizontalBoxSlot* R = Cols->AddChildToHorizontalBox(WetCol); R->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); R->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+	WetList = nullptr; // geen eigen inventory-kolom meer; we gebruiken de echte inventory
 }
 
 void UDryingRackWidget::HandleDryDrop(bool bDroppedOnDryingSide, UDryDragOp* Op)
@@ -221,6 +213,15 @@ void UDryingRackWidget::HandleDryDrop(bool bDroppedOnDryingSide, UDryDragOp* Op)
 		UWeedToast::NotifyPawn(GetOwningPlayerPawn(), -1, 2.f, FColor::Orange, TEXT("Alleen natte wiet kan drogen."));
 	}
 	LastSig.Reset();
+}
+
+void UDryingRackWidget::CollectReady(int32 EntryIndex)
+{
+	if (PhoneComp.IsValid() && EntryIndex >= 0)
+	{
+		PhoneComp->RequestDryCollect(EntryIndex);
+		LastSig.Reset();
+	}
 }
 
 void UDryingRackWidget::HandleInvDrop(bool bDroppedOnDryingSide, UInvDragOp* Op)
@@ -247,11 +248,10 @@ void UDryingRackWidget::HandleInvDrop(bool bDroppedOnDryingSide, UInvDragOp* Op)
 
 void UDryingRackWidget::FillBody()
 {
-	if (!DryList || !WetList || !PhoneComp.IsValid()) { return; }
+	if (!DryList || !PhoneComp.IsValid()) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 	ADryingRack* Rack = Ph->GetDryRack();
 	DryList->ClearChildren();
-	WetList->ClearChildren();
 	RowBars.Reset(); RowStatus.Reset(); RowEntryIndex.Reset();
 	if (!Rack) { return; }
 
@@ -310,7 +310,7 @@ void UDryingRackWidget::FillBody()
 
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = i; C->ItemId = E.DryItemId; C->Qty = E.Quantity; C->bReady = E.bDone; C->Owner = this; C->Inner = Vis;
-			C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.bDone ? TEXT("\nKlaar - sleep naar je inventory") : TEXT("\nNog aan het drogen"))));
+			C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.bDone ? TEXT("\nKlaar - klik om te oogsten") : TEXT("\nNog aan het drogen"))));
 
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 			Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
@@ -329,74 +329,6 @@ void UDryingRackWidget::FillBody()
 			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
-			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-			Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
-			Grid->AddChildToWrapBox(Sz);
-		}
-	}
-
-	// --- Rechterkolom: je VOLLEDIGE inventory. Sleep een item hiervandaan naar het rek om te hangen
-	//     (alleen natte wiet hangt echt); slepen vanuit de hotbar kan ook. ---
-	{
-		UWrapBox* Grid = AddGrid(WetList);
-		APawn* P = GetOwningPlayerPawn();
-		const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
-		int32 Shown = 0;
-		if (Inv)
-		{
-			// Stapels die op de hotbar staan NIET in de inventory-tab tonen (die zie je al in de hotbar).
-			TSet<int32> OnHotbar;
-			for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h)
-			{
-				const int32 Sid = Inv->GetHotbarStackId(h);
-				if (Sid != 0) { OnHotbar.Add(Sid); }
-			}
-			TArray<FName> Order; TMap<FName, int32> Totals;
-			for (const FInventoryStack& St : Inv->GetStacks())
-			{
-				if (St.ItemId == FName(TEXT("Cash")) || St.Quantity <= 0) { continue; }
-				if (OnHotbar.Contains(St.StackId)) { continue; } // staat op de hotbar
-				if (!Totals.Contains(St.ItemId)) { Order.Add(St.ItemId); }
-				Totals.FindOrAdd(St.ItemId) += St.Quantity;
-			}
-			for (const FName& Id : Order)
-			{
-				const int32 Have = Totals[Id];
-				const FString S = Id.ToString();
-				const bool bWet = S.StartsWith(TEXT("WetBud_"));
-				UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-				Vis->SetBrush(WeedUI::Rounded(bWet ? FLinearColor(0.10f, 0.16f, 0.20f, 0.96f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.96f), 8.f));
-				Vis->SetPadding(FMargin(4.f));
-				UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
-				Vis->SetContent(Ov);
-				UOverlaySlot* IconOS = Ov->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, Id, 42.f));
-				IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
-				UOverlaySlot* BS = Ov->AddChildToOverlay(BadgePill(WeedUI::ItemQtyBadge(Id, Have)));
-				BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Bottom);
-
-				UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
-				C->bWet = bWet; C->bDraggableAlways = true; C->EntryIndex = -1; C->ItemId = Id; C->Qty = Have; C->bReady = false; C->Owner = this; C->Inner = Vis;
-				C->SetToolTipText(FText::FromString(bWet
-					? FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC\nSleep naar het rek om op te hangen"), *WeedUI::PrettyItemName(Id), Have, Inv->GetItemQuality(Id))
-					: FString::Printf(TEXT("%s\nAantal: %d"), *WeedUI::PrettyItemName(Id), Have)));
-
-				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-				Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
-				Grid->AddChildToWrapBox(Sz);
-				++Shown;
-			}
-		}
-		// "+"-vangnetcel: drop een klare batch hier om te oogsten (ook als je geen natte wiet hebt).
-		{
-			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.45f), 8.f));
-			Vis->SetPadding(FMargin(4.f));
-			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
-			Vis->SetContent(Ov);
-			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, Shown == 0 ? TEXT("oogst hier") : TEXT("+"), Shown == 0 ? 9 : 18, FLinearColor(0.45f, 0.5f, 0.55f), true));
-			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
-			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
-			C->bWet = true; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 			Sz->SetWidthOverride(80.f); Sz->SetHeightOverride(80.f); Sz->SetContent(C);
 			Grid->AddChildToWrapBox(Sz);
