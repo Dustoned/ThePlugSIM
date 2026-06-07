@@ -397,6 +397,7 @@ void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
 	PS->SetAlignment(FVector2D(0.5f, 0.5f));
 	PS->SetAutoSize(true);
 	PS->SetPosition(FVector2D(0.f, -30.f));
+	PS->SetZOrder(50); // boven de slots/grid (was er soms achter)
 	Sz->SetVisibility(ESlateVisibility::Collapsed);
 }
 
