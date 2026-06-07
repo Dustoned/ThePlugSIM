@@ -291,12 +291,12 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			if (Active.IsNone()) { HeldItemMesh->SetVisibility(false); }
 			else { PropKit::ApplyItemModel(HeldItemMesh, Active, 1.0f); HeldItemMesh->SetVisibility(true); }
 		}
-		// Geen hand-bone? Val terug op een vaste positie rechts-onder in beeld (op kijkrichting).
+		// Viewmodel vóór de camera (centraal-onder, iets rechts) zodat 't item altijd in beeld is.
 		if (!bHeldOnHandBone && !Active.IsNone() && FirstPersonCameraComponent)
 		{
 			const FRotator ViewRot = GetControlRotation();
-			const FVector Pos = FirstPersonCameraComponent->GetComponentLocation() + ViewRot.RotateVector(FVector(30.f, 14.f, -18.f));
-			HeldItemMesh->SetWorldLocationAndRotation(Pos, ViewRot);
+			const FVector Pos = FirstPersonCameraComponent->GetComponentLocation() + ViewRot.RotateVector(FVector(45.f, 9.f, -13.f));
+			HeldItemMesh->SetWorldLocationAndRotation(Pos, ViewRot + FRotator(-12.f, 22.f, 0.f)); // lichte kanteling
 		}
 
 		// Drop-toets (Q): HOUD ingedrukt (~0.5s) om het actieve item te droppen, zodat je niet per ongeluk
@@ -793,25 +793,9 @@ void AThePlugSIMCharacter::BeginPlay()
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
 
-	// Held item ECHT in de hand: koppel aan de FP-armen. De UE5 First-Person-template heeft hiervoor een
-	// "GripPoint"-socket op de rechterhand (daar hangt de template ook het wapen aan). Anders de hand-bone.
-	if (HeldItemMesh && FirstPersonMesh)
-	{
-		FName HandSocket = NAME_None;
-		FVector RelLoc(0.f, 0.f, 0.f);
-		if (FirstPersonMesh->DoesSocketExist(FName("GripPoint")))      { HandSocket = FName("GripPoint"); RelLoc = FVector(2.f, 0.f, 0.f); }
-		else if (FirstPersonMesh->DoesSocketExist(FName("hand_rSocket"))) { HandSocket = FName("hand_rSocket"); }
-		else if (FirstPersonMesh->DoesSocketExist(FName("hand_r")))    { HandSocket = FName("hand_r"); RelLoc = FVector(11.f, 3.f, -2.f); }
-		if (!HandSocket.IsNone())
-		{
-			HeldItemMesh->AttachToComponent(FirstPersonMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HandSocket);
-			HeldItemMesh->SetRelativeLocation(RelLoc);
-			HeldItemMesh->SetRelativeRotation(FRotator::ZeroRotator);
-			bHeldOnHandBone = true;
-			UE_LOG(LogTemp, Log, TEXT("HeldItem attached to FP socket '%s'."), *HandSocket.ToString());
-		}
-		else { UE_LOG(LogTemp, Warning, TEXT("HeldItem: no GripPoint/hand_r socket on FP mesh -> camera-offset fallback.")); }
-	}
+	// Held item als viewmodel VÓÓR de camera (zoals een FPS-wapen), zodat je 't altijd in beeld ziet zonder
+	// naar beneden te kijken. (De FP-armen hebben geen hold-animatie; een echte hand-hold vergt arm-anim-assets.)
+	bHeldOnHandBone = false;
 
 	// Co-op-animatie: Update Rate Optimization op het third-person lichaam UIT, en altijd de pose tikken.
 	// URO skipt anim-updates op remote spelers (simulated proxies) -> die "glijden" tot een sprong de
