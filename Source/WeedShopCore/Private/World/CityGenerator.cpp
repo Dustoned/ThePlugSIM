@@ -1146,7 +1146,11 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float dFrontS = StairDoorC;
 		const float dBackS = Foot - StairLaneWd * 0.5f - 20.f;
 		const float dMidS = (dFrontS + dBackS) * 0.5f;                 // midden van de trap-pilaar (= het schot)
-		const int32 SDirX = FMath::RoundToInt(N.X), SDirY = FMath::RoundToInt(N.Y); // bordje naar de gang/entree gericht
+		const float PillarS = -HW - 130.f;                            // s-positie van de pilaar
+		const int32 LDirX = FMath::RoundToInt(Side.X), LDirY = FMath::RoundToInt(Side.Y); // bordje naar de LIFTDEUR (+Side) gericht
+		const float SignSize = 28.f;
+		const float PlateW = SignSize * 4.6f;                         // breed genoeg voor "LEVEL N"
+		const float sFace = PillarS + 23.f + 3.f;                     // net buiten de +Side-kant van de pilaar (richting lift)
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
@@ -1154,11 +1158,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			const FVector LiftLamp = LP(HallLen - 30.f, HW * 0.6f);
 			AddInteriorLight(FVector(LiftLamp.X, LiftLamp.Y, zf + FloorH - 60.f));
 			// Pilaar voor het bordje: van vloer tot plafond (loopt nu helemaal door tot het dak, geen gat bovenaan).
-			Box(dMidS, -HW - 130.f, 46.f, 46.f, zf + FloorH * 0.5f, FloorH + 16.f, IWall, true);
-			// "LEVEL N"-bordje op de pilaar (oplichtend) -> zie meteen op welke verdieping je bent.
-			const FVector SignPos = LP(dMidS - 25.f, -HW - 130.f);
-			AddSignText(FVector(SignPos.X, SignPos.Y, zf + 175.f), SDirX, SDirY,
-				FString::Printf(TEXT("LEVEL %d"), f + 1), FLinearColor(0.55f, 0.85f, 1.f), 34.f, true);
+			Box(dMidS, PillarS, 46.f, 46.f, zf + FloorH * 0.5f, FloorH + 16.f, IWall, true);
+			// Echt bordje (donkere plaat) op de pilaar, naar de liftdeur gericht, met oplichtende "LEVEL N"-tekst erop.
+			Box(dMidS, sFace, PlateW, 4.f, zf + 178.f, SignSize * 1.7f, FLinearColor(0.03f, 0.03f, 0.05f), false);
+			const FVector SignPos = LP(dMidS, sFace + 6.f);           // tekst net vóór de plaat (lift-kant)
+			AddSignText(FVector(SignPos.X, SignPos.Y, zf + 178.f), LDirX, LDirY,
+				FString::Printf(TEXT("LEVEL %d"), f + 1), FLinearColor(0.6f, 0.9f, 1.f), SignSize, true);
 		}
 	}
 
