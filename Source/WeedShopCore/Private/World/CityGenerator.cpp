@@ -1143,6 +1143,25 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		}
 	}
 
+	// ---- Per verdieping: lamp bij de lift/hal (donker als de lift weg is) + "LEVEL N"-bordje op de trap-pilaar. ----
+	{
+		const float dFrontS = StairDoorC;
+		const float dBackS = Foot - StairLaneWd * 0.5f - 20.f;
+		const float dMidS = (dFrontS + dBackS) * 0.5f;                 // midden van de trap-pilaar (= het schot)
+		const int32 SDirX = FMath::RoundToInt(N.X), SDirY = FMath::RoundToInt(N.Y); // bordje naar de gang/entree gericht
+		for (int32 f = 0; f < NF; ++f)
+		{
+			const float zf = TopZ + f * FloorH;
+			// Lamp aan de gang-kant bij de lift (elke verdieping), zodat het er niet donker is als de lift weg is.
+			const FVector LiftLamp = LP(HallLen - 30.f, HW * 0.6f);
+			AddInteriorLight(FVector(LiftLamp.X, LiftLamp.Y, zf + FloorH - 60.f));
+			// "LEVEL N"-bordje op de trap-pilaar (oplichtend) -> zie meteen op welke verdieping je bent.
+			const FVector SignPos = LP(dMidS, -HW - 130.f);
+			AddSignText(FVector(SignPos.X, SignPos.Y, zf + 175.f), SDirX, SDirY,
+				FString::Printf(TEXT("LEVEL %d"), f + 1), FLinearColor(0.55f, 0.85f, 1.f), 34.f, true);
+		}
+	}
+
 	// ---- Lift rechts-achter: cabine docked aan de gangkant, schuifdeur naar de gang gericht. ----
 	{
 		const float CabSize = FMath::Min(SideW - 20.f, 300.f);
