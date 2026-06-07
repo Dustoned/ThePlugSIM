@@ -25,6 +25,7 @@
 #include "Phone/ContactsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Progression/StoreComponent.h"
 #include "World/HeatComponent.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
@@ -227,16 +228,28 @@ void ACustomerBase::BeginPlay()
 			State = ECustomerState::Prospect;
 		}
 
-		// Geen gewenst product ingesteld (bv. gespawnd)? Kies er willekeurig één uit de productenlijst.
+		// Geen gewenst product ingesteld? Kies een strain die binnen je SPELERLEVEL valt: vroeg in het
+		// spel vragen klanten lage-level (lage-%) wiet, niet meteen level-38 top-strains. Kwaliteit blijft
+		// belangrijk (zie de deal-acceptatie); dit gaat puur over WELKE strain ze willen.
 		if (DesiredProductId.IsNone() && ProductTable)
 		{
-			const TArray<FName> Rows = ProductTable->GetRowNames();
-			if (Rows.Num() > 0)
+			const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
+			UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+			TArray<FName> Eligible;            // strains binnen (net boven) je level
+			FName LowestStrain; int32 LowestLvl = MAX_int32;
+			for (const FName& Row : ProductTable->GetRowNames())
 			{
-				// Klanten willen VERPAKTE wiet (Bag_<strain>); losse/natte buds kopen ze niet.
-				const FName Row = Rows[FMath::RandRange(0, Rows.Num() - 1)];
 				const FString RS = Row.ToString();
-				DesiredProductId = RS.StartsWith(TEXT("Bud_")) ? FName(*FString::Printf(TEXT("Bag_%s"), *RS.RightChop(4))) : Row;
+				if (!RS.StartsWith(TEXT("Bud_"))) { continue; } // alleen wiet-strains
+				const FName Strain(*RS.RightChop(4));
+				const int32 Lvl = Store ? Store->RequiredLevelFor(Strain) : 1;
+				if (Lvl < LowestLvl) { LowestLvl = Lvl; LowestStrain = Strain; }
+				if (Lvl <= PlayerLvl + 2) { Eligible.Add(Strain); } // kleine buffer boven je level
+			}
+			FName PickStrain = (Eligible.Num() > 0) ? Eligible[FMath::RandRange(0, Eligible.Num() - 1)] : LowestStrain;
+			if (!PickStrain.IsNone())
+			{
+				DesiredProductId = FName(*FString::Printf(TEXT("Bag_%s"), *PickStrain.ToString()));
 				DesiredQuantity = FMath::RandRange(1, 3);
 			}
 		}

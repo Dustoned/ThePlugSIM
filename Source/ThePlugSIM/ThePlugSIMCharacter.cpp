@@ -1101,8 +1101,17 @@ void AThePlugSIMCharacter::OnInteractKey()
 {
 	// E doet hetzelfde als links-klikken op wat je aankijkt (pot/klant/ATM) + plaatsen bevestigen,
 	// maar gebruikt nooit het actieve hand-item.
+	// E sluit OOK een open wereld-paneel (zelfde toets als waarmee je 't opende: droogrek/winkel/schap/verpak/ATM).
+	if (Phone)
+	{
+		if (Phone->IsDryRackOpen()) { Phone->CloseDryRack(); return; }
+		if (Phone->IsStoreOpen())   { Phone->CloseStore();   return; }
+		if (Phone->IsShelfOpen())   { Phone->CloseShelf();   return; }
+		if (Phone->IsPackOpen())    { Phone->ClosePack();    return; }
+		if (Phone->IsAtmOpen())     { Phone->CloseAtm();     return; }
+	}
 	if (Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen() || Phone->IsInventoryOpen()
-		|| Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen() || Phone->IsShelfOpen() || Phone->IsDryRackOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen()))
+		|| Phone->IsPotUpgradeOpen() || Phone->IsPauseOpen() || Phone->IsMainMenuOpen()))
 	{
 		return;
 	}
