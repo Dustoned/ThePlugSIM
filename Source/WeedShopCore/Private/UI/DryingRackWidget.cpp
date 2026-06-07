@@ -308,9 +308,9 @@ void UDryingRackWidget::FillBody()
 			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 			Vis->SetContent(Ov);
 
-			UOverlaySlot* IconOS = Ov->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, E.DryItemId, 38.f));
-			IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Top);
-			IconOS->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+			// Groot, gecentreerd icoon (zoals de inventory) - de progressbar zit niet meer in de slot.
+			UOverlaySlot* IconOS = Ov->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, E.DryItemId, 50.f));
+			IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
 
 			UOverlaySlot* BS = Ov->AddChildToOverlay(BadgePill(FString::Printf(TEXT("%dg"), E.Quantity)));
 			BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Top);
