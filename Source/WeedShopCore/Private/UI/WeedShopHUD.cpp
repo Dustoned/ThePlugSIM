@@ -1005,7 +1005,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	const bool bSub = Phone->IsOfferingSubstitute();
 	const int32 Market = FMath::Max(1, Phone->GetOfferMarketCents());
 
-	DrawText(FString::Printf(TEXT("Wants: %dx %s   (market EUR %.2f)"), Qty, *WantProduct, WantMarket / 100.f),
+	DrawText(FString::Printf(TEXT("Wants: %dg %s   (market EUR %.2f)"), Qty, *WantProduct, WantMarket / 100.f),
 		FLinearColor::White, InnerX, y, Font);
 	y += 22.f;
 	if (bSub)
@@ -1093,11 +1093,10 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 		PInv = P->FindComponentByClass<UInventoryComponent>();
 		if (PInv)
 		{
-			StockQty = PInv->GetQuantity(OfferedId);
+			// Voorraad in GRAMMEN (zakjes van die strain) + gewogen THC/kwaliteit, zodat het klopt met de gevraagde grammen.
+			StockQty = PInv->BagStockGrams(UInventoryComponent::BagStrain(OfferedId), ThcShow, QShow);
 			if (StockQty > 0)
 			{
-				QShow = PInv->GetItemQualityPct(OfferedId);
-				ThcShow = PInv->GetItemQuality(OfferedId);
 				Quality01 = FMath::Clamp(QShow / 100.f, 0.f, 1.f);
 			}
 		}

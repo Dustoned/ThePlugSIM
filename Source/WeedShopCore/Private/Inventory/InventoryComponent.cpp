@@ -66,6 +66,20 @@ int32 UInventoryComponent::BagGramsAvailable(FName Strain) const
 	return Total;
 }
 
+int32 UInventoryComponent::BagStockGrams(FName Strain, float& OutThc, float& OutQualPct) const
+{
+	OutThc = 0.f; OutQualPct = 0.f;
+	int32 Grams = 0; double ThcAcc = 0.0, QualAcc = 0.0;
+	for (const FInventoryStack& S : Stacks)
+	{
+		if (S.Quantity <= 0 || !IsBag(S.ItemId) || BagStrain(S.ItemId) != Strain) { continue; }
+		const int32 G = S.Quantity * FMath::Max(1, BagGrams(S.ItemId));
+		Grams += G; ThcAcc += static_cast<double>(S.Quality) * G; QualAcc += static_cast<double>(S.QualityPct) * G;
+	}
+	if (Grams > 0) { OutThc = static_cast<float>(ThcAcc / Grams); OutQualPct = static_cast<float>(QualAcc / Grams); }
+	return Grams;
+}
+
 int32 UInventoryComponent::RemoveBagsForGrams(FName Strain, int32 DesiredGrams, float& OutThc, float& OutQualPct)
 {
 	OutThc = 0.f; OutQualPct = 0.f;

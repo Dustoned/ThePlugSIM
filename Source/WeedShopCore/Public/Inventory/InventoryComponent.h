@@ -96,6 +96,8 @@ public:
 	static FName MakeBagId(FName Strain, int32 Grams);
 	// Totaal aantal grammen in alle zakjes van een strain (som van aantal * grootte).
 	int32 BagGramsAvailable(FName Strain) const;
+	// Totaal aantal GRAMMEN in zakjes van deze strain + de (op gram gewogen) THC%/kwaliteit. Voor de deal-stock.
+	int32 BagStockGrams(FName Strain, float& OutThc, float& OutQualPct) const;
 	// Verwijder HELE zakjes van een strain tot ~DesiredGrams (>= indien mogelijk, minimale overschot);
 	// geeft de werkelijk verkochte grammen + gewogen THC/kwaliteit terug. Server-only.
 	int32 RemoveBagsForGrams(FName Strain, int32 DesiredGrams, float& OutThc, float& OutQualPct);

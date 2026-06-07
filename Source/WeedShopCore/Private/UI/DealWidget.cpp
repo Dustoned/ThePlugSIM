@@ -375,7 +375,7 @@ void UDealWidget::UpdateLive()
 	if (!bHasWeed)
 	{
 		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.
-		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dx %s  (market EUR %.2f)"),
+		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dg %s  (market EUR %.2f)"),
 			Qty, *PrettyName(C->DesiredProductId), C->GetMarketPriceCents() / 100.f)));
 		return;
 	}
@@ -394,13 +394,15 @@ void UDealWidget::UpdateLive()
 	}
 
 	// Voorraad + kwaliteit van het aangeboden product.
+	// Voorraad in GRAMMEN (zakjes van die strain), gewogen THC/kwaliteit. Zo klopt het met wat de klant in
+	// grammen vraagt en met de echte deal-afwikkeling (RemoveBagsForGrams) - geen "niet genoeg" meer terwijl je het wel hebt.
 	float Q01 = -1.f, Thc = 0.f, QPct = 0.f; int32 Stock = 0;
 	if (APawn* P = GetOwningPlayerPawn())
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			Stock = Inv->GetQuantity(Offered);
-			if (Stock > 0) { QPct = Inv->GetItemQualityPct(Offered); Thc = Inv->GetItemQuality(Offered); Q01 = FMath::Clamp(QPct / 100.f, 0.f, 1.f); }
+			Stock = Inv->BagStockGrams(UInventoryComponent::BagStrain(Offered), Thc, QPct);
+			if (Stock > 0) { Q01 = FMath::Clamp(QPct / 100.f, 0.f, 1.f); }
 		}
 	}
 	if (Stock >= Qty)
