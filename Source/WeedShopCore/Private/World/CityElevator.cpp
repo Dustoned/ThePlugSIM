@@ -99,9 +99,10 @@ void ACityElevator::Setup(float InBaseZ, float InFloorH, int32 InNumFloors, floa
 	}
 	Wall(TEXT("CabFrontTop"), FVector(0.f, FrontY, 6.f + DoorH + (CabH - DoorH) * 0.5f), FVector(FootX + T, T, CabH - DoorH), Cab);
 
-	// Cabinedeur-bladen (bewegen mee met de cabine, kinderen van Root).
-	CabDoorL = Wall(TEXT("CabDoorL"), FVector(-LeafW * 0.5f, FrontY, DoorZ), FVector(LeafW, T, DoorH), DoorCol);
-	CabDoorR = Wall(TEXT("CabDoorR"), FVector( LeafW * 0.5f, FrontY, DoorZ), FVector(LeafW, T, DoorH), DoorCol);
+	// Cabinedeur-bladen: één wand-dikte VÓÓR het kozijn (FrontY + T) zodat ze er bij het openen netjes
+	// langs schuiven i.p.v. in het voor-kozijn/de muur te clippen.
+	CabDoorL = Wall(TEXT("CabDoorL"), FVector(-LeafW * 0.5f, FrontY + T, DoorZ), FVector(LeafW, T, DoorH), DoorCol);
+	CabDoorR = Wall(TEXT("CabDoorR"), FVector( LeafW * 0.5f, FrontY + T, DoorZ), FVector(LeafW, T, DoorH), DoorCol);
 
 	// Schachtdeuren per verdieping (staan op hun eigen vloer; wereld-Z wordt elke tick vastgehouden).
 	LandDoorL.Reset(); LandDoorR.Reset(); CurLand.Reset();
@@ -202,7 +203,7 @@ void ACityElevator::Tick(float DeltaSeconds)
 	// Trager (4.0) zodat ze duidelijk bewegen i.p.v. meteen weg te klappen.
 	const float CabTarget = (bDoorOpen && bAtFloor) ? OpenW : 0.f;
 	CurDoor = FMath::FInterpTo(CurDoor, CabTarget, DeltaSeconds, 4.0f);
-	const float CabDoorY = FootY * 0.5f - 16.f; // ingezet, gelijk aan het cabine-voorframe (FrontInset)
+	const float CabDoorY = FootY * 0.5f - 16.f + 10.f; // FrontY + T: nét vóór het voor-kozijn (geen clip in de muur)
 	if (CabDoorL) { CabDoorL->SetRelativeLocation(FVector(-OpenW * 0.5f - CurDoor, CabDoorY, DoorZ)); CabDoorL->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
 	if (CabDoorR) { CabDoorR->SetRelativeLocation(FVector( OpenW * 0.5f + CurDoor, CabDoorY, DoorZ)); CabDoorR->SetCollisionResponseToChannel(ECC_Pawn, (CurDoor < OpenW * 0.6f) ? ECR_Block : ECR_Ignore); }
 
