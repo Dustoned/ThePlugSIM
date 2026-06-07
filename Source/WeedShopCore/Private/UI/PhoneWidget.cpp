@@ -549,6 +549,22 @@ void UPhoneWidget::BuildChatApp()
 			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, false); } MarkDirty(); }, 13));
 		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+
+		// Of stel je EIGEN tijd voor (uren vanaf nu). Ze gaan altijd akkoord, geen nadeel.
+		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Propose your own time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))
+			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
+		UHorizontalBox* TimeBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		const float Hrs[] = { 1.f, 2.f, 4.f, 8.f };
+		const TCHAR* Lbls[] = { TEXT("+1h"), TEXT("+2h"), TEXT("+4h"), TEXT("+8h") };
+		for (int32 i = 0; i < 4; ++i)
+		{
+			const float H = Hrs[i];
+			UHorizontalBoxSlot* TBS = TimeBtns->AddChildToHorizontalBox(MakeActionBtn(Lbls[i], FLinearColor(0.2f, 0.35f, 0.5f),
+				[this, Pick, H]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, H); } MarkDirty(); }, 12));
+			TBS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			if (i > 0) { TBS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f)); }
+		}
+		ContentBox->AddChildToVerticalBox(TimeBtns)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 	}
 }
 

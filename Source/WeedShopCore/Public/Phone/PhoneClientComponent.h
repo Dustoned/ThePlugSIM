@@ -221,6 +221,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RespondChat(FName ContactId, bool bAccept) { ServerRespondContact(ContactId, bAccept); }
 
+	// Stel je eigen afspraaktijd voor (uren vanaf nu). Het contact gaat altijd akkoord.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void ProposeChatTime(FName ContactId, float HoursFromNow) { ServerProposeContactTime(ContactId, HoursFromNow); }
+	UFUNCTION(Server, Reliable)
+	void ServerProposeContactTime(FName ContactId, float HoursFromNow);
+
 	// Berichten-notificatie (client-lokaal, per speler). De bubble op het telefoon-icoon telt ongelezen
 	// inkomende berichten en gaat pas weg als je de CHAT van die persoon echt opent (MarkChatSeen).
 	void MarkChatSeen(FName ContactId);

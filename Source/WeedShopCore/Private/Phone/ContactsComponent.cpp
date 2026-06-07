@@ -441,6 +441,48 @@ void UContactsComponent::OnRep_Messages()
 	OnMessagesChanged.Broadcast();
 }
 
+void UContactsComponent::ProposeTimeToContact(FName ContactId, float HoursFromNow)
+{
+	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
+
+	int32 Found = INDEX_NONE;
+	for (int32 i = 0; i < Messages.Num(); ++i)
+	{
+		if (Messages[i].FromContactId == ContactId && Messages[i].Status == 0 && !Messages[i].bFromMe) { Found = i; break; }
+	}
+	if (Found == INDEX_NONE) { return; }
+
+	float Now = 0.f, Length = 1800.f;
+	GetCycleTime(Now, Length);
+	if (Length <= 0.f) { Length = 1800.f; }
+	const float NewTime = FMath::Fmod(Now + HoursFromNow * (Length / 24.f) + Length, Length);
+
+	const FText SenderName = Messages[Found].SenderName;
+	Messages[Found].Status = 1;                      // geaccepteerd op JOUW tijd
+	Messages[Found].AppointmentTimeOfDay = NewTime;
+	ApplyRelationshipDelta(ContactId, 5.f);          // zelfde als gewoon accepteren; geen nadeel
+
+	// Mijn voorstel (rechts).
+	FPhoneMessage Mine;
+	Mine.FromContactId = ContactId; Mine.SenderName = SenderName; Mine.bFromMe = true;
+	Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f;
+	Mine.Body = FText::FromString(FString::Printf(TEXT("Can we do %s instead?"), *FormatApptClock(NewTime)));
+	Messages.Insert(Mine, 0);
+	// Hun antwoord: altijd akkoord (links).
+	FPhoneMessage Theirs;
+	Theirs.FromContactId = ContactId; Theirs.SenderName = SenderName; Theirs.bFromMe = false;
+	Theirs.Status = 3; Theirs.AppointmentTimeOfDay = -1.f;
+	Theirs.Body = FText::FromString(FString::Printf(TEXT("Works for me, see you at %s."), *FormatApptClock(NewTime)));
+	Messages.Insert(Theirs, 0);
+	if (Messages.Num() > 40) { Messages.SetNum(40); }
+
+	if (GEngine)
+	{
+		UWeedToast::Notify(-1, 3.f, FColor::Green, FString::Printf(TEXT("%s: agreed on %s"), *SenderName.ToString(), *FormatApptClock(NewTime)));
+	}
+	OnRep_Messages();
+}
+
 void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
