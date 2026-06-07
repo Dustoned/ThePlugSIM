@@ -92,6 +92,7 @@ protected:
 	UInventoryComponent* GetInv() const;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
+	UPROPERTY() TObjectPtr<class UCanvasPanelSlot> CardSlot; // om de inventory naast een paneel (droogrek) te schuiven
 	UPROPERTY() TObjectPtr<UTextBlock> WeightText;
 	UPROPERTY() TObjectPtr<UWrapBox> Grid;
 	UPROPERTY() TObjectPtr<UHorizontalBox> HotbarBox;

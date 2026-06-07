@@ -157,12 +157,13 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	Card = CardB;
 
 	// Compact paneel BOVENIN het scherm; je echte inventory opent eronder.
+	// Links-gecentreerd, naast de inventory (die schuift naar rechts) -> horizontaal naast elkaar i.p.v. onder.
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(0.5f, 0.f, 0.5f, 0.f));
-	CS->SetAlignment(FVector2D(0.5f, 0.f));
+	CS->SetAnchors(FAnchors(0.f, 0.5f, 0.f, 0.5f));
+	CS->SetAlignment(FVector2D(0.f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(700.f, 240.f));
-	CS->SetPosition(FVector2D(0.f, 22.f));
+	CS->SetSize(FVector2D(640.f, 452.f));
+	CS->SetPosition(FVector2D(30.f, -30.f));
 
 	UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(Outer);

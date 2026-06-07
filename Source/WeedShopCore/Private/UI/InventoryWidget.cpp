@@ -265,6 +265,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAutoSize(false);
 	CS->SetSize(FVector2D(840.f, 452.f)); // strak om de 24 vierkante slots (4 rijen) heen, weinig leegte
 	CS->SetPosition(FVector2D(0.f, -30.f)); // iets omhoog zodat de in-game hotbar eronder vrij blijft
+	CardSlot = CS; // bewaard om de inventory naast een paneel (droogrek) te schuiven
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(VB);
@@ -622,6 +623,25 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const bool bOpen = PhoneComp.IsValid() && PhoneComp->IsInventoryOpen();
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen) { return; }
+
+	// Naast een gekoppeld paneel (droogrek) staat de inventory RECHTS, het paneel links -> naast elkaar.
+	// Anders gewoon gecentreerd.
+	if (CardSlot)
+	{
+		const bool bSideBySide = PhoneComp.IsValid() && PhoneComp->IsDryRackOpen();
+		if (bSideBySide)
+		{
+			CardSlot->SetAnchors(FAnchors(1.f, 0.5f, 1.f, 0.5f));
+			CardSlot->SetAlignment(FVector2D(1.f, 0.5f));
+			CardSlot->SetPosition(FVector2D(-30.f, -30.f));
+		}
+		else
+		{
+			CardSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+			CardSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			CardSlot->SetPosition(FVector2D(0.f, -30.f));
+		}
+	}
 
 	if (bDirty)
 	{
