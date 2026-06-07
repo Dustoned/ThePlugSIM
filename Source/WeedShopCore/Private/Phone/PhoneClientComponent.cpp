@@ -2309,13 +2309,13 @@ void UPhoneClientComponent::ServerRespondContact_Implementation(FName ContactId,
 	}
 }
 
-void UPhoneClientComponent::ServerProposeContactTime_Implementation(FName ContactId, float HoursFromNow)
+void UPhoneClientComponent::ServerProposeContactTime_Implementation(FName ContactId, int32 MinutesOfDay)
 {
 	if (AWeedShopGameState* GS = GetGS())
 	{
 		if (GS->GetContacts())
 		{
-			GS->GetContacts()->ProposeTimeToContact(ContactId, HoursFromNow);
+			GS->GetContacts()->ProposeTimeToContact(ContactId, MinutesOfDay);
 		}
 	}
 }

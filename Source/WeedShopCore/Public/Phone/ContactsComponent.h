@@ -111,9 +111,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RespondToContact(FName ContactId, bool bAccept);
 
-	// Server: stel je EIGEN tijd voor (HoursFromNow vanaf nu). Het contact gaat altijd akkoord, geen nadeel.
+	// Server: stel je EIGEN kloktijd voor (MinutesOfDay 0..1439). Het contact gaat altijd akkoord, geen nadeel.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void ProposeTimeToContact(FName ContactId, float HoursFromNow);
+	void ProposeTimeToContact(FName ContactId, int32 MinutesOfDay);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

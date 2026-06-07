@@ -550,21 +550,18 @@ void UPhoneWidget::BuildChatApp()
 		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 
-		// Of stel je EIGEN tijd voor (uren vanaf nu). Ze gaan altijd akkoord, geen nadeel.
-		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Propose your own time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))
+		// Of kies zelf een kloktijd (ze gaan altijd akkoord, geen nadeel).
+		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
-		UHorizontalBox* TimeBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		const float Hrs[] = { 1.f, 2.f, 4.f, 8.f };
-		const TCHAR* Lbls[] = { TEXT("+1h"), TEXT("+2h"), TEXT("+4h"), TEXT("+8h") };
-		for (int32 i = 0; i < 4; ++i)
+		UWrapBox* TimeGrid = WidgetTree->ConstructWidget<UWrapBox>();
+		TimeGrid->SetInnerSlotPadding(FVector2D(4.f, 4.f));
+		for (int32 H = 0; H < 24; H += 2) // elke 2 uur: 00:00 .. 22:00
 		{
-			const float H = Hrs[i];
-			UHorizontalBoxSlot* TBS = TimeBtns->AddChildToHorizontalBox(MakeActionBtn(Lbls[i], FLinearColor(0.2f, 0.35f, 0.5f),
-				[this, Pick, H]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, H); } MarkDirty(); }, 12));
-			TBS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			if (i > 0) { TBS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f)); }
+			const int32 Mins = H * 60;
+			TimeGrid->AddChildToWrapBox(MakeActionBtn(FString::Printf(TEXT("%02d:00"), H), FLinearColor(0.2f, 0.35f, 0.5f),
+				[this, Pick, Mins]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, Mins); } MarkDirty(); }, 12));
 		}
-		ContentBox->AddChildToVerticalBox(TimeBtns)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+		ContentBox->AddChildToVerticalBox(TimeGrid)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 	}
 }
 

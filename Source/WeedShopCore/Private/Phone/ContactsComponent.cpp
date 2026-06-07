@@ -441,7 +441,7 @@ void UContactsComponent::OnRep_Messages()
 	OnMessagesChanged.Broadcast();
 }
 
-void UContactsComponent::ProposeTimeToContact(FName ContactId, float HoursFromNow)
+void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDay)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
 
@@ -455,7 +455,8 @@ void UContactsComponent::ProposeTimeToContact(FName ContactId, float HoursFromNo
 	float Now = 0.f, Length = 1800.f;
 	GetCycleTime(Now, Length);
 	if (Length <= 0.f) { Length = 1800.f; }
-	const float NewTime = FMath::Fmod(Now + HoursFromNow * (Length / 24.f) + Length, Length);
+	const float Frac = FMath::Clamp(static_cast<float>(MinutesOfDay), 0.f, 1439.f) / 1440.f; // klok -> fractie van de dag
+	const float NewTime = Frac * Length;
 
 	const FText SenderName = Messages[Found].SenderName;
 	Messages[Found].Status = 1;                      // geaccepteerd op JOUW tijd
