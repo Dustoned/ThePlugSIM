@@ -309,12 +309,15 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		{
 			const bool bUiOpen = Phone && (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsRollOpen() || Phone->IsDealOpen());
 			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen && !Active.IsNone();
+			constexpr float DropHoldReq = 0.5f;
 			if (bDown)
 			{
 				DropHoldAccum += DeltaSeconds;
-				if (DropHoldAccum >= 0.5f && !bDroppedThisHold) { ServerDropActiveItem(); bDroppedThisHold = true; }
+				if (DropHoldAccum >= DropHoldReq && !bDroppedThisHold) { ServerDropActiveItem(); bDroppedThisHold = true; }
 			}
 			else { DropHoldAccum = 0.f; bDroppedThisHold = false; }
+			// Voortgangsbalk in de HUD (zoals roken/rollen/oppakken).
+			if (Phone) { Phone->SetDropHoldFrac((bDown && !bDroppedThisHold) ? FMath::Clamp(DropHoldAccum / DropHoldReq, 0.f, 1.f) : 0.f); }
 		}
 	}
 

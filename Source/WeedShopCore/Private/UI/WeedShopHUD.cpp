@@ -138,6 +138,19 @@ void AWeedShopHUD::DrawHUD()
 			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
 			DrawRect(FLinearColor(0.5f, 0.85f, 1.f, 0.95f), BX, BY, BW * GFrac, BH);
 		}
+
+		// Drop-inhouden indicator (midden-onder): hou Q ingedrukt om te droppen.
+		const float DFrac = Ph2->GetDropHoldFrac();
+		if (DFrac > 0.f)
+		{
+			const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
+			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
+			const float BW = 220.f, BH = 16.f;
+			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
+			DrawText(TEXT("Dropping item...  (hold Q)"), FLinearColor(1.f, 0.85f, 0.6f), BX, BY - 22.f, Font);
+			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawRect(FLinearColor(0.95f, 0.65f, 0.25f, 0.95f), BX, BY, BW * DFrac, BH);
+		}
 	}
 
 	// Plaats-modus hint (midden-onder).

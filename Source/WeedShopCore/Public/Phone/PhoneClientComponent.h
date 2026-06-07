@@ -540,6 +540,9 @@ public:
 	float GetGiveHoldFrac() const { return GiveHoldFrac; }
 
 	// Voortgang van het rollen (rechtermuis inhouden met geladen vloei).
+	void SetDropHoldFrac(float Frac) { DropHoldFrac = FMath::Clamp(Frac, 0.f, 1.f); }
+	float GetDropHoldFrac() const { return DropHoldFrac; }
+
 	void SetRollHoldFrac(float Frac) { RollHoldFrac = FMath::Clamp(Frac, 0.f, 1.f); }
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	float GetRollHoldFrac() const { return RollHoldFrac; }
@@ -777,6 +780,7 @@ protected:
 	float SmokeHoldFrac = 0.f; // 0..1 voortgang van rook-inhouden (lokale UI-staat)
 	float GiveHoldFrac = 0.f;  // 0..1 voortgang van joint-overhandigen
 	float RollHoldFrac = 0.f;  // 0..1 voortgang van joint-rollen
+	float DropHoldFrac = 0.f;  // 0..1 voortgang van item-droppen (hold Q)
 	bool bRollLoadedUI = false;
 	int32 RollLoadGramsUI = 0;
 	FString RollLoadDesc; // omschrijving van de geladen wiet (voor de hint)
