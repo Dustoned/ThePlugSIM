@@ -37,6 +37,8 @@
 #include "Components/Button.h"
 #include "Components/ButtonSlot.h"
 #include "Components/SizeBox.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/Slider.h"
 #include "World/DayNightController.h"
@@ -1254,7 +1256,25 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 	Sz->SetHeightOverride(64.f);
 	Sz->SetContent(Btn);
 
-	UVerticalBoxSlot* S1 = Cell->AddChildToVerticalBox(Sz);
+	// Messages-app (index 3): rode ongelezen-badge rechtsboven op het app-icoon.
+	UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+	Ov->AddChildToOverlay(Sz);
+	if (AppIndex == 3 && Phone.IsValid())
+	{
+		const int32 Unread = Phone->GetUnreadMessageCount();
+		if (Unread > 0)
+		{
+			UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
+			Pill->SetBrush(RoundedBrush(FLinearColor(0.90f, 0.16f, 0.16f, 0.98f), 9.f));
+			Pill->SetPadding(FMargin(5.f, 0.f, 5.f, 0.f));
+			Pill->SetContent(MakeText(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Unread), 11, FLinearColor::White, true));
+			UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
+			PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Top);
+			PS->SetPadding(FMargin(0.f, 2.f, 6.f, 0.f));
+		}
+	}
+
+	UVerticalBoxSlot* S1 = Cell->AddChildToVerticalBox(Ov);
 	S1->SetHorizontalAlignment(HAlign_Center);
 
 	UVerticalBoxSlot* S2 = Cell->AddChildToVerticalBox(MakeText(Name, 11, FLinearColor(0.85f, 0.88f, 0.95f), true));
@@ -1612,6 +1632,12 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bHome = Phone->IsHomeScreen();
 	const int32 App = Phone->GetTab();
+	// Op het home-rooster: bij een nieuw/gelezen bericht het rooster herbouwen zodat de Messages-badge meeloopt.
+	if (bHome)
+	{
+		const int32 MSig = MessagesSignature();
+		if (MSig != LastMsgSig) { LastMsgSig = MSig; bContentDirty = true; }
+	}
 	if (bContentDirty || bHome != bLastHome || App != bLastApp)
 	{
 		bLastHome = bHome; bLastApp = App; bContentDirty = false;
