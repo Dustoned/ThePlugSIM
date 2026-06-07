@@ -1368,22 +1368,21 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 	Sz->SetHeightOverride(64.f);
 	Sz->SetContent(Btn);
 
-	// Messages-app (index 3): rode ongelezen-badge rechtsboven op het app-icoon.
+	// Messages-app (index 3): rode ongelezen-badge rechtsboven op het app-icoon (refs bewaard -> live update).
 	UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 	Ov->AddChildToOverlay(Sz);
-	if (AppIndex == 3 && Phone.IsValid())
+	if (AppIndex == 3)
 	{
-		const int32 Unread = Phone->GetUnreadMessageCount();
-		if (Unread > 0)
-		{
-			UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-			Pill->SetBrush(RoundedBrush(FLinearColor(0.90f, 0.16f, 0.16f, 0.98f), 9.f));
-			Pill->SetPadding(FMargin(5.f, 0.f, 5.f, 0.f));
-			Pill->SetContent(MakeText(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Unread), 11, FLinearColor::White, true));
-			UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
-			PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Top);
-			PS->SetPadding(FMargin(0.f, 2.f, 6.f, 0.f));
-		}
+		const int32 Unread = Phone.IsValid() ? Phone->GetUnreadMessageCount() : 0;
+		MsgAppBadgeText = MakeText(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), FMath::Max(0, Unread)), 11, FLinearColor::White, true);
+		MsgAppBadgePill = WidgetTree->ConstructWidget<UBorder>();
+		MsgAppBadgePill->SetBrush(RoundedBrush(FLinearColor(0.90f, 0.16f, 0.16f, 0.98f), 9.f));
+		MsgAppBadgePill->SetPadding(FMargin(5.f, 0.f, 5.f, 0.f));
+		MsgAppBadgePill->SetContent(MsgAppBadgeText);
+		MsgAppBadgePill->SetVisibility(Unread > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		UOverlaySlot* PS = Ov->AddChildToOverlay(MsgAppBadgePill);
+		PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Top);
+		PS->SetPadding(FMargin(0.f, 2.f, 6.f, 0.f));
 	}
 
 	UVerticalBoxSlot* S1 = Cell->AddChildToVerticalBox(Ov);
@@ -1485,6 +1484,7 @@ void UPhoneWidget::RefreshContent()
 	if (!ContentBox || !Phone.IsValid()) { return; }
 	ContentBox->ClearChildren();
 	PickerClockText = nullptr; PickerProposeBtn = nullptr; PickerContact = NAME_None; // oude tijd-kiezer-refs vrijgeven
+	MsgAppBadgePill = nullptr; MsgAppBadgeText = nullptr; // oude Messages-badge-refs vrijgeven (worden opnieuw gezet als 't home-rooster bouwt)
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
@@ -1751,6 +1751,17 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		bLastHome = bHome; bLastApp = App; bContentDirty = false;
 		RefreshContent();
+	}
+
+	// Messages-app badge op het home-rooster LIVE bijwerken (zonder rebuild -> geen flash).
+	if (bHome && MsgAppBadgePill && MsgAppBadgeText)
+	{
+		const int32 Unread = Phone->GetUnreadMessageCount();
+		MsgAppBadgePill->SetVisibility(Unread > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		if (Unread > 0)
+		{
+			MsgAppBadgeText->SetText(FText::FromString(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Unread)));
+		}
 	}
 
 	// Settings/Test: light-sliders live toepassen terwijl je sleept (geen restart nodig).

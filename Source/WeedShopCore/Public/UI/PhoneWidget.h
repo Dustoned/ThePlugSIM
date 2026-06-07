@@ -90,6 +90,9 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> LevelText;
 	UPROPERTY() TObjectPtr<UTextBlock> CashText;
 	UPROPERTY() TObjectPtr<UVerticalBox> ContentBox;
+	// Ongelezen-badge op de Messages-app in het home-rooster (live bijgewerkt, geen rebuild -> geen flash).
+	UPROPERTY() TObjectPtr<UBorder> MsgAppBadgePill;
+	UPROPERTY() TObjectPtr<UTextBlock> MsgAppBadgeText;
 
 	// Staat-tracking voor het verversen van de inhoud.
 	bool bLastHome = true;
