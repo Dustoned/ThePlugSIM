@@ -288,6 +288,21 @@ void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
 	const FVector C = GetActorLocation();
 	const int32 PotTierIdx = GetPotTierIndex(PotTier); // -1 = onbekend
 	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+
+	// Nieuwste regel: PER-POT. Een gear telt alleen voor de pot waar 'ie het DICHTST bij staat,
+	// niet voor alle potten in de buurt. Helper: de dichtstbijzijnde pot bij een gear-positie.
+	auto NearestPot = [W](const FVector& At) -> AGrowPlant*
+	{
+		AGrowPlant* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
+		for (TActorIterator<AGrowPlant> P(W); P; ++P)
+		{
+			if (!IsValid(*P)) { continue; }
+			const float dSq = FVector::DistSquared2D(P->GetActorLocation(), At);
+			if (dSq < BestSq) { BestSq = dSq; Best = *P; }
+		}
+		return Best;
+	};
+
 	int32 Mask = 0;
 	for (TActorIterator<APlaceableProp> It(W); It; ++It)
 	{
@@ -295,15 +310,16 @@ void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
 		if (!IsValid(P)) { continue; }
 		const int32 Ui = GearUpgradeIndex(P->ItemId);
 		if (Ui < 0) { continue; }
-		// Tier-gating: gear werkt alleen op een pot van de vereiste tier of hoger (zoals vroeger).
-		if (Ups.IsValidIndex(Ui) && PotTierIdx < Ups[Ui].MinPotTierIndex) { continue; }
 		const FVector L = P->GetActorLocation();
-		if (FVector::Dist2D(L, C) <= 175.f && FMath::Abs(L.Z - C.Z) <= 280.f)
-		{
-			Mask |= (1 << Ui); // gear staat vlakbij + pot is goed genoeg -> bonus actief
-		}
+		// Moet binnen bereik van DEZE pot staan...
+		if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
+		// ...en deze pot moet de dichtstbijzijnde pot bij de gear zijn (anders hoort 'ie bij de buur-pot).
+		if (NearestPot(L) != this) { continue; }
+		// Tier-gating: gear werkt alleen op een pot van de vereiste tier of hoger.
+		if (Ups.IsValidIndex(Ui) && PotTierIdx < Ups[Ui].MinPotTierIndex) { continue; }
+		Mask |= (1 << Ui);
 	}
-	PotUpgradeMask = Mask; // afgeleid van de fysieke gear; vervangt het oude koop-upgrade-systeem
+	PotUpgradeMask = Mask; // afgeleid van de fysieke gear; per-pot gekoppeld
 }
 
 void AGrowPlant::Tick(float DeltaSeconds)
