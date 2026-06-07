@@ -53,7 +53,7 @@ public:
 	void CycleTab();
 
 	// --- iPhone-achtige home/apps ---
-	static constexpr int32 AppCount = 10; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies 8 Packages 9 Bank
+	static constexpr int32 AppCount = 11; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies 8 Packages 9 Bank 10 Hash Lab
 
 	// --- Pauze-menu (ESC): overlay met Resume / Settings / Save / Load / Main Menu / Quit ---
 	// (Geen echte wereld-pauze in co-op; in standalone pauzeert de wereld wel.)

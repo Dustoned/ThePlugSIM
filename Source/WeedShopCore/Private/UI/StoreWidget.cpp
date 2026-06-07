@@ -55,7 +55,7 @@ namespace
 	{
 		switch (Kind)
 		{
-		case EShopKind::Grow:       Out = { 0, 1, 5, 6, 9, 8, 2, 10 }; break; // + drogen + hasj-machines
+		case EShopKind::Grow:       Out = { 0, 1, 5, 6, 9, 8 }; break;
 		case EShopKind::Supplies:   Out = { 4, 3, 2, 10 }; break;
 		case EShopKind::Furniture:  Out = { 7 }; break;
 		case EShopKind::GasStation: Out = { 4 }; break;

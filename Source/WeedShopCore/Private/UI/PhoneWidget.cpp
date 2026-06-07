@@ -50,21 +50,22 @@
 namespace
 {
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
-	constexpr int32 GNumApps = 10;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Shop, WeedUI::EIcon::Coin };
+	constexpr int32 GNumApps = 11;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank"), TEXT("Hash Lab") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Shop, WeedUI::EIcon::Coin, WeedUI::EIcon::Flame };
 	// Eigen icoon per app (PNG-sleutel); valt terug op GAppIcon als het PNG ontbreekt.
-	const TCHAR* GAppKey[GNumApps] = { TEXT("ui_upgrade"), TEXT("ui_leaf"), TEXT("ui_person"), TEXT("ui_message"), TEXT("ui_gear"), TEXT("ui_map"), TEXT("ui_sell"), TEXT("ui_shop"), TEXT("ui_package"), TEXT("ui_bank") };
+	const TCHAR* GAppKey[GNumApps] = { TEXT("ui_upgrade"), TEXT("ui_leaf"), TEXT("ui_person"), TEXT("ui_message"), TEXT("ui_gear"), TEXT("ui_map"), TEXT("ui_sell"), TEXT("ui_shop"), TEXT("ui_package"), TEXT("ui_bank"), TEXT("ui_hash") };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
 		FLinearColor(0.85f, 0.65f, 0.20f), FLinearColor(0.30f, 0.50f, 0.70f), FLinearColor(0.55f, 0.40f, 0.80f),
-		FLinearColor(0.16f, 0.55f, 0.95f),
+		FLinearColor(0.16f, 0.55f, 0.95f), FLinearColor(0.80f, 0.45f, 0.20f),
 	};
 	constexpr int32 GGrowApp = 1;
 	constexpr int32 GSellApp = 6;
 	constexpr int32 GSuppliesApp = 7;
 	constexpr int32 GPackagesApp = 8;
+	constexpr int32 GHashApp = 10;
 	constexpr int32 GBankApp = 9;
 
 	// Korte naam per categorie (0..6).
@@ -1441,14 +1442,21 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GGrowApp) // Grow shop -> ALLES om te kweken (zaad, pot, aarde, water, upgrades, verzorging)
 	{
 		bSellApp = false;
-		AppCats = { 0, 1, 5, 6, 8, 9, 2, 10 }; // Seeds, Pots, Soil, Water, Grow Upg., Care, Drying, Hash
+		AppCats = { 0, 1, 5, 6, 8, 9 }; // Seeds, Pots, Soil, Water, Grow Upg., Care
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
 	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels)
 	{
 		bSellApp = false;
-		AppCats = { 4, 2, 3, 7, 10 }; // Papers, Drying, Packing, Furniture, Hash
+		AppCats = { 4, 2, 3, 7 }; // Papers, Drying, Packing, Furniture
+		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
+		BuildStoreApp(ContentBox);
+	}
+	else if (App == GHashApp) // Hash Lab -> de hasj-keten: machines (mesh/press) + machine-upgrades
+	{
+		bSellApp = false;
+		AppCats = { 10 }; // Hash (Mesh/Press + ProcUp-upgrades)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
