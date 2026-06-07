@@ -23,6 +23,9 @@
 #include "Framework/Application/NavigationConfig.h"
 #include "GameFramework/PlayerController.h"
 #include "Inventory/InventoryComponent.h"
+#include "Placement/PropMeshKit.h"
+#include "World/WorldItemPickup.h"
+#include "Components/StaticMeshComponent.h"
 #include "UI/WeedShopHUD.h"
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
@@ -77,6 +80,16 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	FirstPersonCameraComponent->bEnableFirstPersonScale = true;
 	FirstPersonCameraComponent->FirstPersonFieldOfView = 70.0f;
 	FirstPersonCameraComponent->FirstPersonScale = 0.6f;
+
+	// Held item: 3D-model van wat je vasthoudt, in de FP-view (alleen voor jezelf). Positie wordt elke tick
+	// vanuit de kijkrichting gezet (zie Tick), dus de relatieve offset hier maakt niet veel uit.
+	HeldItemMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Held Item Mesh"));
+	HeldItemMesh->SetupAttachment(FirstPersonCameraComponent);
+	HeldItemMesh->SetOnlyOwnerSee(true);
+	HeldItemMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+	HeldItemMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HeldItemMesh->SetCastShadow(false);
+	HeldItemMesh->SetVisibility(false);
 
 	// configure the character comps
 	GetMesh()->SetOwnerNoSee(true);
@@ -221,6 +234,30 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	if (Seq) { M->PlayAnimation(Seq, true); }
 }
 
+void AThePlugSIMCharacter::ServerDropActiveItem_Implementation()
+{
+	if (!Inventory) { return; }
+	const int32 Sid = Inventory->GetActiveStackId();
+	const int32 Idx = Inventory->FindStackById(Sid);
+	if (!Inventory->GetStacks().IsValidIndex(Idx)) { return; }
+	const FInventoryStack St = Inventory->GetStacks()[Idx];
+	if (St.ItemId.IsNone() || St.Quantity <= 0 || St.ItemId == FName(TEXT("Cash"))) { return; }
+
+	Inventory->RemoveFromStackById(Sid, St.Quantity); // de hele actieve stapel droppen
+
+	FVector Fwd = GetActorForwardVector(); Fwd.Z = 0.f; Fwd = Fwd.GetSafeNormal();
+	FVector Loc = GetActorLocation() + Fwd * 90.f;
+	Loc.Z -= (GetSimpleCollisionHalfHeight() - 12.f); // bij de voeten neerleggen
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (GetWorld())
+	{
+		if (AWorldItemPickup* P = GetWorld()->SpawnActor<AWorldItemPickup>(AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP))
+		{
+			P->Setup(St.ItemId, St.Quantity, St.Quality, St.QualityPct);
+		}
+	}
+}
+
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -243,6 +280,34 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		}
 	}
 	else { PhoneCloseHold = 0.f; }
+
+	// --- Held item 3D-model in de hand + drop (alleen lokale speler) ---
+	if (IsLocallyControlled() && Inventory && HeldItemMesh)
+	{
+		const FName Active = Inventory->GetActiveItemId();
+		if (Active != LastHeldItemId)
+		{
+			LastHeldItemId = Active;
+			if (Active.IsNone()) { HeldItemMesh->SetVisibility(false); }
+			else { PropKit::ApplyItemModel(HeldItemMesh, Active, 0.5f); HeldItemMesh->SetVisibility(true); }
+		}
+		if (!Active.IsNone() && FirstPersonCameraComponent)
+		{
+			// Plaats het model rechts-onder in beeld, op kijkrichting (werkt ongeacht de camera-bone-rotatie).
+			const FRotator ViewRot = GetControlRotation();
+			const FVector Pos = FirstPersonCameraComponent->GetComponentLocation() + ViewRot.RotateVector(FVector(32.f, 12.f, -12.f));
+			HeldItemMesh->SetWorldLocationAndRotation(Pos, ViewRot);
+		}
+
+		// Drop-toets (Q): drop het actieve item in de wereld (co-op: iedereen kan 't oppakken).
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			const bool bUiOpen = Phone && (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsRollOpen() || Phone->IsDealOpen());
+			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen;
+			if (bDown && !bDropKeyWasDown && !Active.IsNone()) { ServerDropActiveItem(); }
+			bDropKeyWasDown = bDown;
+		}
+	}
 
 	if (StonedSeconds > 0.f)
 	{

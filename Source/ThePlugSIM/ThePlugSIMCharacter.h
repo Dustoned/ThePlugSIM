@@ -38,6 +38,15 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
 
+	/** 3D-model van het item dat je vasthoudt (alleen voor jezelf zichtbaar). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UStaticMeshComponent> HeldItemMesh;
+	FName LastHeldItemId = NAME_None;   // om het hand-model alleen bij wissel te updaten
+	bool bDropKeyWasDown = false;       // edge-detectie voor de drop-toets (Q)
+
+	UFUNCTION(Server, Reliable)
+	void ServerDropActiveItem();
+
 	/** Voorraad: gevuld door oogst, gebruikt bij verkoop (server-authoritative, replicated). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UInventoryComponent> Inventory;
