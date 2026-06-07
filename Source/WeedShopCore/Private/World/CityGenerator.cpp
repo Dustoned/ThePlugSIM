@@ -1109,15 +1109,11 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float dFront = StairDoorC;                          // baan dichtbij de gang (= instap/deuropening)
 		const float dBack = Foot - LaneWd * 0.5f - 20.f;          // baan achterin
 		const float s0 = -HW - Margin;                            // begint bij de gang-instap
-		// Brede loop-/afstap-strook op vloerniveau aan de gangkant per verdieping (volle diepte) zodat je
-		// ruim van de trap af kunt stappen (was te smal). Verbindt met de gangvloer.
-		const float StepOffWd = 150.f;                 // breedte van de afstap-strook (langs Side)
-		const float StepOffC  = -HW - StepOffWd * 0.5f + 20.f; // overlapt net de gangvloer
-		const float StepOffFar = StepOffC - StepOffWd * 0.5f;  // verste rand (richting de schacht)
+		// Smalle drempel op vloerniveau aan de gangkant per verdieping (volle diepte) om af te stappen.
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
-			Box(HallLen + CoreDepth * 0.5f, StepOffC, CoreDepth, StepOffWd, zf - 6.f, 12.f, LandC, true);
+			Box(HallLen + CoreDepth * 0.5f, -HW - 28.f, CoreDepth, 64.f, zf - 6.f, 12.f, LandC, true);
 		}
 		for (int32 f = 0; f < NF - 1; ++f)
 		{
@@ -1128,17 +1124,19 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			Box((dFront + dBack) * 0.5f, -Half + Margin, FMath::Abs(dBack - dFront) + LaneWd, RunS * 1.8f, zf + HalfRise - 8.f, 16.f, LandC, true);
 			// Steek 2 (baan achterin): terug naar de gang, omhoog naar de volgende verdieping.
 			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + HalfRise + (k + 1) * Rise; Box(dBack, -Half + Margin + (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
-			// Vul de open schacht tussen de twee banen met een schot op volle verdieping-hoogte, zodat je niet
-			// door het midden naar beneden kunt springen. Het bordes achteraan blijft vrij (doorloop blijft werken).
-			const float GapD = FMath::Abs(dBack - dFront) - LaneWd; // breedte van het open gat tussen de banen
-			if (GapD > 8.f)
+			// Vul de open ruimtes TUSSEN en ROND de twee trapdelen met VLOER (geen muur), zodat je nergens door
+			// de vloer kunt vallen/springen en overal kunt lopen. Alleen de trap-kolommen zelf (dFront/dBack)
+			// blijven open zodat de trap naar de verdieping eronder kan doorlopen.
 			{
+				const float sStairC = (-HW - Half) * 0.5f;        // midden van de trap-zone (s)
+				const float sStairLen = FMath::Abs(Half - HW);    // van de gangrand tot de buitenmuur
 				const float dMid = (dFront + dBack) * 0.5f;
-				const float sLandFront = -Half + Margin + RunS * 1.2f;     // stop net voor het bordes
-				const float sNear = StepOffFar;                            // begin pas voorbij de afstap-strook (gangkant blijft vrij)
-				const float sDivC = (sNear + sLandFront) * 0.5f;
-				const float sDivLen = FMath::Abs(sNear - sLandFront);
-				Box(dMid, sDivC, GapD + 16.f, sDivLen, zf + FloorH * 0.5f, FloorH, FLinearColor(0.17f, 0.17f, 0.20f), true);
+				const float GapD = FMath::Abs(dBack - dFront) - LaneWd;     // gat tussen de twee banen
+				const float frontEdge = dFront - LaneWd * 0.5f;            // gangkant van baan 1
+				const float backEdge = dBack + LaneWd * 0.5f;             // achterkant van baan 2
+				if (GapD > 8.f) { Box(dMid, sStairC, GapD, sStairLen, zf - 6.f, 12.f, LandC, true); }                                   // tussen de banen
+				if (frontEdge > HallLen + 4.f) { Box((HallLen + frontEdge) * 0.5f, sStairC, frontEdge - HallLen, sStairLen, zf - 6.f, 12.f, LandC, true); } // voor baan 1
+				if (Foot > backEdge + 4.f) { Box((backEdge + Foot) * 0.5f, sStairC, Foot - backEdge, sStairLen, zf - 6.f, 12.f, LandC, true); }             // achter baan 2
 			}
 		}
 	}
@@ -1155,8 +1153,10 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			// Lamp aan de gang-kant bij de lift (elke verdieping), zodat het er niet donker is als de lift weg is.
 			const FVector LiftLamp = LP(HallLen - 30.f, HW * 0.6f);
 			AddInteriorLight(FVector(LiftLamp.X, LiftLamp.Y, zf + FloorH - 60.f));
-			// "LEVEL N"-bordje op de trap-pilaar (oplichtend) -> zie meteen op welke verdieping je bent.
-			const FVector SignPos = LP(dMidS, -HW - 130.f);
+			// Pilaar voor het bordje: van vloer tot plafond (loopt nu helemaal door tot het dak, geen gat bovenaan).
+			Box(dMidS, -HW - 130.f, 46.f, 46.f, zf + FloorH * 0.5f, FloorH + 16.f, IWall, true);
+			// "LEVEL N"-bordje op de pilaar (oplichtend) -> zie meteen op welke verdieping je bent.
+			const FVector SignPos = LP(dMidS - 25.f, -HW - 130.f);
 			AddSignText(FVector(SignPos.X, SignPos.Y, zf + 175.f), SDirX, SDirY,
 				FString::Printf(TEXT("LEVEL %d"), f + 1), FLinearColor(0.55f, 0.85f, 1.f), 34.f, true);
 		}
