@@ -78,15 +78,18 @@ void ADryingRack::SetupVisual()
 	PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W, D, Post), FVector(0, 0, H * 0.5f - Post * 0.5f), Frame);
 	PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W, D, Post), FVector(0, 0, Floor + Post * 0.5f), Frame);
 	PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(W - Post * 2.f, FMath::Min(3.f, D * 0.2f), H - Post * 2.f), FVector(0, -D * 0.45f, 0), Mesh2);
-	// 5 droogroosters (dienbladen) verdeeld over de hoogte + per rooster een (verborgen) wiet-stapel.
+	// Hang-roedes: dunne horizontale stangen waar de wiet ONDER hangt (echt droogrek, geen schap).
 	const int32 NBars = 5;
 	const FLinearColor Weed(0.20f, 0.45f, 0.16f);
+	const float RodY = D * 0.10f;            // roedes net naar voren (van de muur af)
+	const float RodThk = FMath::Max(2.5f, H * 0.018f);
+	const float HangLen = H * 0.16f;          // hoe ver de bos naar beneden hangt
 	for (int32 b = 0; b < NBars; ++b)
 	{
-		const float Z = Floor + H * (0.16f + 0.16f * b);
-		PropKit::SetPart(Parts[5 + b], PropKit::Cube(), FVector(W - Post * 2.f, D * 0.8f, FMath::Min(3.f, H * 0.02f)), FVector(0, 0, Z), Bar);
-		// Wiet-hoopje bovenop het rooster (zichtbaarheid via UpdateDryVisual).
-		PropKit::SetPart(Parts[10 + b], PropKit::Cube(), FVector((W - Post * 2.f) * 0.7f, D * 0.55f, FMath::Max(4.f, H * 0.03f)), FVector(0, 0, Z + FMath::Max(4.f, H * 0.03f)), Weed);
+		const float Z = Floor + H * (0.30f + 0.155f * b); // roedes in de bovenste helft
+		PropKit::SetPart(Parts[5 + b], PropKit::Cube(), FVector(W - Post * 2.f, FMath::Min(4.f, D * 0.25f), RodThk), FVector(0, RodY, Z), Bar);
+		// Wiet HANGT onder de roede: een smalle, naar beneden hangende bos (zichtbaarheid via UpdateDryVisual).
+		PropKit::SetPart(Parts[10 + b], PropKit::Cube(), FVector((W - Post * 2.f) * 0.58f, D * 0.42f, HangLen), FVector(0, RodY, Z - HangLen * 0.5f - RodThk), Weed);
 		if (Parts[10 + b]) { Parts[10 + b]->SetVisibility(false); }
 	}
 	UpdateDryVisual();
