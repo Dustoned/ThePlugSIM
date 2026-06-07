@@ -1191,11 +1191,18 @@ void UPhoneWidget::FillStoreList()
 				for (int32 d = 0; d < 3; ++d)
 				{
 					const int32 OptFee = FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(d));
-					const FLinearColor Col = (d == DeliveryOpt) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
-					const FString Lbl = FString::Printf(TEXT("%s\n%s\nEUR %.2f"), *UPhoneClientComponent::DeliveryName(d), *UPhoneClientComponent::DeliveryTimeText(d), OptFee / 100.f);
-					UWeedActionButton* OB = MakeActionBtn(Lbl, Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
+					const bool bSel = (d == DeliveryOpt);
+					const FLinearColor Col = bSel ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+					UWeedActionButton* OB = MakeActionBtn(TEXT(""), Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
+					// Inhoud: PRIJS groot + leidend bovenaan, dan de naam, dan de tijd klein.
+					UVerticalBox* OVB = WidgetTree->ConstructWidget<UVerticalBox>();
+					const FString PriceStr = (OptFee > 0) ? FString::Printf(TEXT("EUR %.2f"), OptFee / 100.f) : TEXT("FREE");
+					OVB->AddChildToVerticalBox(MakeText(PriceStr, 16, FLinearColor(1.f, 0.95f, 0.55f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryName(d), 11, FLinearColor(0.95f, 0.97f, 1.f), true));
+					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryTimeText(d), 9, FLinearColor(0.65f, 0.7f, 0.8f), true));
+					OB->SetContent(OVB);
 					UHorizontalBoxSlot* OS = Opts->AddChildToHorizontalBox(OB);
-					OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+					OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 				}
 				StoreFooter->AddChildToVerticalBox(Opts)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 
