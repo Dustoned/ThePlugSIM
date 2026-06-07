@@ -1196,8 +1196,10 @@ void UPhoneWidget::FillStoreList()
 					UWeedActionButton* OB = MakeActionBtn(TEXT(""), Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
 					// Inhoud: PRIJS groot + leidend bovenaan, dan de naam, dan de tijd klein.
 					UVerticalBox* OVB = WidgetTree->ConstructWidget<UVerticalBox>();
-					const FString PriceStr = (OptFee > 0) ? FString::Printf(TEXT("EUR %.2f"), OptFee / 100.f) : TEXT("FREE");
-					OVB->AddChildToVerticalBox(MakeText(PriceStr, 16, FLinearColor(1.f, 0.95f, 0.55f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+					FString PriceStr;
+					if (OptFee <= 0) { PriceStr = TEXT("FREE"); }
+					else { const float E = OptFee / 100.f; PriceStr = (E >= 100.f) ? FString::Printf(TEXT("€%.0f"), E) : FString::Printf(TEXT("€%.2f"), E); }
+					OVB->AddChildToVerticalBox(MakeText(PriceStr, 15, FLinearColor(1.f, 0.95f, 0.55f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
 					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryName(d), 11, FLinearColor(0.95f, 0.97f, 1.f), true));
 					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryTimeText(d), 9, FLinearColor(0.65f, 0.7f, 0.8f), true));
 					OB->SetContent(OVB);
