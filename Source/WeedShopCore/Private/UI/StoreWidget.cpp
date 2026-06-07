@@ -252,7 +252,7 @@ void UStoreWidget::FillBody()
 			float Thc = 0.f, Yield = 0.f, GrowMin = 0.f;
 			if (Store->GetStrainStats(Id, Thc, Yield, GrowMin))
 			{
-				Desc = FString::Printf(TEXT("THC ~%.0f%%   -   ~%.0f g/plant   -   groeit ~%.0f min"), Thc, Yield, GrowMin);
+				Desc = FString::Printf(TEXT("THC ~%.0f%%   -   ~%.0fg yield   -   grow ~%.0f min"), Thc, Yield, GrowMin);
 			}
 		}
 		const int32 InCart = Cart.Contains(Id) ? Cart[Id] : 0;
@@ -313,12 +313,12 @@ void UStoreWidget::FillBody()
 	{
 		CartText->SetText(FText::FromString(Lines == 0
 			? FString(TEXT("Cart empty"))
-			: FString::Printf(TEXT("Mand: %d artikel(en)   EUR %.2f"), Lines, CartTotalCents() / 100.f)));
+			: FString::Printf(TEXT("Cart: %d item(s)   EUR %.2f"), Lines, CartTotalCents() / 100.f)));
 	}
 	if (CheckoutBtn)
 	{
 		CheckoutBtn->SetContent(WeedUI::Text(WidgetTree,
-			bConfirmPending ? FString::Printf(TEXT("Bevestig kopen - EUR %.2f"), CartTotalCents() / 100.f) : FString(TEXT("Checkout")),
+			bConfirmPending ? FString::Printf(TEXT("Confirm purchase - EUR %.2f"), CartTotalCents() / 100.f) : FString(TEXT("Checkout")),
 			14, FLinearColor::White, true, true));
 	}
 }
