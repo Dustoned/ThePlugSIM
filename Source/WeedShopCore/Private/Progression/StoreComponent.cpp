@@ -421,7 +421,9 @@ FText UStoreComponent::GetCatalogDesc(FName CatalogId) const
 	{
 		if (const FWeedStrainRow* Row = StrainTable->FindRow<FWeedStrainRow>(CatalogId, TEXT("GetCatalogDesc"), false))
 		{
-			return FText::FromString(FString::Printf(TEXT("Seed - up to %.0f%% THC"), Row->BaseThcPercent));
+			// Volledige seed-info zoals de hand-preview: potentie + opbrengst + groeitijd.
+			return FText::FromString(FString::Printf(TEXT("Seed  -  up to %.0f%% THC  -  ~%.0fg yield  -  grow %.0f min"),
+				Row->BaseThcPercent, Row->BaseYieldGrams, Row->GrowMinutes));
 		}
 	}
 	return FText::GetEmpty();
