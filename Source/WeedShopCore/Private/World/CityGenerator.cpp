@@ -1078,7 +1078,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	const float StairLaneWd = FMath::Min(240.f, CoreDepth * 0.42f); // trap-loopbreedte (langs diepte)
 	const float StairDoorC = HallLen + StairLaneWd * 0.5f + 20.f;   // instap (voorste trap) = deuropening 1
 	const float StairBackC = Foot - StairLaneWd * 0.5f - 20.f;      // uitstap (achterste trap) = deuropening 2
-	const float WallT = 16.f, WallHt = FloorH - 10.f, DoorTopH = 205.f, DoorGap = 110.f;
+	const float WallT = 16.f, WallHt = FloorH, DoorTopH = 205.f, DoorGap = 110.f; // muren helemaal tot het plafond (geen gat)
 	const FLinearColor IWall(0.60f, 0.58f, 0.54f), ADoorC(0.30f, 0.20f, 0.12f);
 	const FLinearColor StepC = Body * 0.7f, LandC = Body * 0.5f;
 	const int32 NApt = FMath::Max(2, (int32)(HallLen / 470.f));
@@ -1134,7 +1134,21 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 				const float sHall = -HW + 8.f;                         // loopt door tot de gang-tussenmuur (geen gat meer)
 				const float sDivC = (sHall + sLandFront) * 0.5f;
 				const float sDivLen = FMath::Abs(sHall - sLandFront);
-				Box(dMid, sDivC, GapD + 16.f, sDivLen, zf + FloorH * 0.5f, FloorH, FLinearColor(0.17f, 0.17f, 0.20f), true);
+				Box(dMid, sDivC, GapD + 16.f, sDivLen, zf + FloorH * 0.5f, FloorH + 24.f, FLinearColor(0.17f, 0.17f, 0.20f), true);
+			}
+		}
+		// Bovenste verdieping heeft geen trap omhoog -> toch de dikke blok in het midden, helemaal tot het plafond.
+		{
+			const float zTop = TopZ + (NF - 1) * FloorH;
+			const float dMid = (dFront + dBack) * 0.5f;
+			const float GapD = FMath::Abs(dBack - dFront) - LaneWd;
+			const float sLandFront = -Half + Margin + RunS * 3.0f;
+			const float sHall = -HW + 8.f;
+			if (GapD > 8.f)
+			{
+				const float sDivC = (sHall + sLandFront) * 0.5f;
+				const float sDivLen = FMath::Abs(sHall - sLandFront);
+				Box(dMid, sDivC, GapD + 16.f, sDivLen, zTop + FloorH * 0.5f, FloorH + 24.f, FLinearColor(0.17f, 0.17f, 0.20f), true);
 			}
 		}
 	}
