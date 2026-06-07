@@ -1148,6 +1148,13 @@ void UPhoneClientComponent::ToggleRollUI()
 
 void UPhoneClientComponent::ToggleInventory()
 {
+	// Een open wereld-paneel (rek/winkel/schap/verpak/ATM) sluit met deze toets het HELE paneel
+	// (sommige openden de inventory mee). Zo sluit je 't droogrek ook gewoon met E.
+	if (bDryRackOpen) { CloseDryRack(); return; }
+	if (bStoreOpen)   { CloseStore();   return; }
+	if (bShelfOpen)   { CloseShelf();   return; }
+	if (bPackOpen)    { ClosePack();    return; }
+	if (bAtmOpen)     { CloseAtm();     return; }
 	// Maar 1 UI tegelijk: niet bovenop een ander scherm openen (sluit eerst het huidige).
 	if (!bInventoryOpen && (IsAnyGameUIOpen() || bMainMenuOpen)) { return; }
 	bInventoryOpen = !bInventoryOpen;
