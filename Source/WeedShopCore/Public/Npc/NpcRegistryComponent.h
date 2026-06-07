@@ -50,6 +50,14 @@ struct FNpcState
 	// Wanneer deze NPC voor het laatst een afspraak VROEG (voor de cooldown tegen blijven-vragen).
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float LastApptAbs = -1.f;
+
+	// --- Klant-tier/level (los van respect/loyaliteit) ---
+	// Klantwaarde-XP: loopt op door deals (verkochte grammen x loyaliteit x persoonlijke honger). Bepaalt de tier.
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	int32 CustomerXP = 0;
+	// Persoonlijke variatie zodat niet iedereen gelijk is: hoe snel ze klimmen + hoe gulzig ze bestellen (~0.6..1.6).
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	float ValueMult = 1.f;
 };
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
@@ -104,6 +112,18 @@ public:
 	bool CanAppointToday(FName NpcId) const;
 	// Leg vast dat er net een afspraak naar deze NPC is gestuurd (telt mee voor de dag-cap).
 	void NoteAppointment(FName NpcId);
+
+	// --- Klant-tier (1=Casual .. 5=Whale), afgeleid van CustomerXP. Iedereen kan klimmen. ---
+	// Server: tel klantwaarde op na een deal (grammen). Loyaliteit + persoonlijke honger schalen mee.
+	void AddCustomerValue(FName NpcId, int32 GramsSold);
+	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
+	int32 GetCustomerTier(FName NpcId) const;          // 1..5
+	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
+	int32 GetCustomerXP(FName NpcId) const;
+	// Naam van een tier (1..5) + de bestel-range (grammen) van een tier (met persoonlijke variatie via NpcId).
+	static FString TierName(int32 Tier);
+	void GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax) const;
+	static int32 TierFromXP(int32 XP);
 
 	// Lees de stats van een NPC (false als onbekend).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")

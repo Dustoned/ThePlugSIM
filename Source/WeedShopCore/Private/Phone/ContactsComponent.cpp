@@ -158,8 +158,9 @@ void UContactsComponent::SendRandomAppointment()
 	const int32 HH = (TotalMin / 60) % 24;
 	const int32 MM = TotalMin % 60;
 
-	// Kies alvast WAT (strain binnen ~je level) en HOEVEEL (zakjes) de klant wil, zodat je je kunt voorbereiden.
+	// Kies alvast WAT (strain binnen ~je level) en HOEVEEL (grammen, per klant-tier) de klant wil.
 	FName WantStrain; int32 WantQty = FMath::RandRange(1, 3);
+	if (Reg) { int32 Mn = 1, Mx = 3; Reg->GetTierOrderGrams(C.ContactId, Mn, Mx); WantQty = FMath::RandRange(Mn, Mx); }
 	{
 		const AWeedShopGameState* GSp = Cast<AWeedShopGameState>(GetOwner());
 		const int32 PlayerLvl = (GSp && GSp->GetLeveling()) ? GSp->GetLeveling()->GetLevel() : 1;
@@ -197,10 +198,10 @@ void UContactsComponent::SendRandomAppointment()
 	}
 
 	Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
-		? FText::FromString(FString::Printf(TEXT("Yo, got any %s? Need %dx. I'll come by at %02d:%02d."), *WantStr, WantQty, HH, MM))
+		? FText::FromString(FString::Printf(TEXT("Yo, got any %s? Need %dg. I'll come by at %02d:%02d."), *WantStr, WantQty, HH, MM))
 		: (AddrStr.IsEmpty()
-			? FText::FromString(FString::Printf(TEXT("Got any %s? Need %dx - can you come by mine at %02d:%02d?"), *WantStr, WantQty, HH, MM))
-			: FText::FromString(FString::Printf(TEXT("Got any %s? Need %dx - come by my place (no. %s) at %02d:%02d?"), *WantStr, WantQty, *AddrStr, HH, MM)));
+			? FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - can you come by mine at %02d:%02d?"), *WantStr, WantQty, HH, MM))
+			: FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - come by my place (no. %s) at %02d:%02d?"), *WantStr, WantQty, *AddrStr, HH, MM)));
 
 	Messages.Insert(Msg, 0); // nieuwste bovenaan
 	if (Messages.Num() > 40)

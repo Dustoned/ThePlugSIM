@@ -254,7 +254,14 @@ void ACustomerBase::BeginPlay()
 			if (!PickStrain.IsNone())
 			{
 				DesiredProductId = FName(*FString::Printf(TEXT("Bag_%s"), *PickStrain.ToString()));
-				DesiredQuantity = (bApptActive && ApptWantQty > 0) ? ApptWantQty : FMath::RandRange(1, 3);
+				if (bApptActive && ApptWantQty > 0) { DesiredQuantity = ApptWantQty; }
+				else
+				{
+					// Bestelgrootte schaalt met de klant-tier (Casual 1-3g .. Whale 20-50g), met persoonlijke variatie.
+					int32 Mn = 1, Mx = 3;
+					if (GS) { if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->GetTierOrderGrams(NpcId, Mn, Mx); } }
+					DesiredQuantity = FMath::RandRange(Mn, Mx);
+				}
 			}
 		}
 
@@ -2915,7 +2922,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	// Cooldown starten: deze NPC (in persoon of via telefoon-afspraak) komt niet meteen terug.
 	if (AWeedShopGameState* GSc = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
-		if (GSc->GetNpcRegistry() && !NpcId.IsNone()) { GSc->GetNpcRegistry()->MarkDealt(NpcId); }
+		if (GSc->GetNpcRegistry() && !NpcId.IsNone())
+		{
+			GSc->GetNpcRegistry()->MarkDealt(NpcId);
+			GSc->GetNpcRegistry()->AddCustomerValue(NpcId, SoldGrams); // klant-tier groeit met verkochte grammen
+		}
 	}
 
 	// XP: per verdiende euro + een vaste bonus per geslaagde deal.
@@ -2978,14 +2989,22 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 	case ECustomerState::WantsToOrder:
 	case ECustomerState::Negotiating:
 	{
-		// Toon WAT + HOEVEEL ze willen, en (op afspraak) hoelang ze nog wachten.
-		FString S(TEXT("Deal"));
+		// Toon de klant-tier + WAT/HOEVEEL ze willen, en (op afspraak) hoelang ze nog wachten.
+		FString Tier;
+		if (const AWeedShopGameState* GSt = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (UNpcRegistryComponent* Reg = GSt->GetNpcRegistry())
+			{
+				if (!NpcId.IsNone()) { Tier = UNpcRegistryComponent::TierName(Reg->GetCustomerTier(NpcId)); }
+			}
+		}
+		FString S = Tier.IsEmpty() ? TEXT("Deal") : FString::Printf(TEXT("[%s] Deal"), *Tier);
 		if (!DesiredProductId.IsNone())
 		{
 			FString Item = DesiredProductId.ToString();
 			Item.RemoveFromStart(TEXT("Bag_"));
 			Item.RemoveFromStart(TEXT("Bud_"));
-			S = FString::Printf(TEXT("Deal - wants %dx %s"), FMath::Max(1, DesiredQuantity), *Item);
+			S += FString::Printf(TEXT(" - wants %dg %s"), FMath::Max(1, DesiredQuantity), *Item);
 		}
 		if (bApptActive)
 		{

@@ -149,6 +149,11 @@ void UNpcRegistryComponent::EnsureSeeded()
 		S.DisplayName = FText::FromString(UniqueName);
 		// Elke (tabel-)NPC krijgt een gerandomiseerde persoonlijkheid (i.p.v. de vaste tabel-waardes).
 		PredictPersonality(RowName, S.Respect, S.Loyalty, S.Addiction);
+		// Persoonlijke klant-honger (variatie): sommigen klimmen sneller + bestellen gretiger dan anderen.
+		{
+			FRandomStream Rng(static_cast<int32>(GetTypeHash(RowName)) ^ 0x5bd1e995);
+			S.ValueMult = 0.6f + Rng.FRand() * 1.0f; // ~0.6 .. 1.6
+		}
 		States.Add(S);
 		++RowIndex;
 	}
@@ -242,6 +247,67 @@ void UNpcRegistryComponent::MarkDealt(FName NpcId)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
 	if (FNpcState* S = Find(NpcId)) { S->LastDealAbs = NowAbs(); }
+}
+
+// --- Klant-tier (1 Casual .. 5 Whale) ---
+int32 UNpcRegistryComponent::TierFromXP(int32 XP)
+{
+	if (XP >= 1000) { return 5; }
+	if (XP >= 500)  { return 4; }
+	if (XP >= 220)  { return 3; }
+	if (XP >= 80)   { return 2; }
+	return 1;
+}
+
+FString UNpcRegistryComponent::TierName(int32 Tier)
+{
+	switch (Tier)
+	{
+	case 5: return TEXT("Whale");
+	case 4: return TEXT("VIP");
+	case 3: return TEXT("Heavy User");
+	case 2: return TEXT("Regular");
+	default: return TEXT("Casual");
+	}
+}
+
+int32 UNpcRegistryComponent::GetCustomerXP(FName NpcId) const
+{
+	const FNpcState* S = Find(NpcId);
+	return S ? S->CustomerXP : 0;
+}
+
+int32 UNpcRegistryComponent::GetCustomerTier(FName NpcId) const
+{
+	return TierFromXP(GetCustomerXP(NpcId));
+}
+
+void UNpcRegistryComponent::AddCustomerValue(FName NpcId, int32 GramsSold)
+{
+	if (GetOwnerRole() != ROLE_Authority || GramsSold <= 0) { return; }
+	FNpcState* S = Find(NpcId);
+	if (!S) { return; }
+	// Verkochte grammen x loyaliteit-factor x persoonlijke honger. Grotere klanten klimmen vanzelf sneller.
+	const int32 Gain = FMath::Max(1, FMath::RoundToInt(GramsSold * (2.f + S->Loyalty / 50.f) * S->ValueMult));
+	S->CustomerXP += Gain;
+}
+
+void UNpcRegistryComponent::GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax) const
+{
+	const FNpcState* S = Find(NpcId);
+	const int32 Tier = TierFromXP(S ? S->CustomerXP : 0);
+	int32 Mn, Mx;
+	switch (Tier)
+	{
+	case 5: Mn = 20; Mx = 50; break;
+	case 4: Mn = 10; Mx = 20; break;
+	case 3: Mn = 6;  Mx = 12; break;
+	case 2: Mn = 3;  Mx = 6;  break;
+	default: Mn = 1; Mx = 3;  break;
+	}
+	const float VM = S ? FMath::Clamp(S->ValueMult, 0.7f, 1.5f) : 1.f; // persoonlijke gulzigheid
+	OutMin = FMath::Max(1, FMath::RoundToInt(Mn * VM));
+	OutMax = FMath::Max(OutMin, FMath::RoundToInt(Mx * VM));
 }
 
 bool UNpcRegistryComponent::IsOnCooldown(FName NpcId) const
