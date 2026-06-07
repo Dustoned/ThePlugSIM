@@ -164,7 +164,12 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const float Care = Plant->GetCareMultiplier();
 		HealthBar->SetPercent(Care);
 		HealthBar->SetFillColorAndOpacity(Care >= 0.8f ? FLinearColor(0.4f, 0.9f, 0.4f) : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)));
-		HealthText->SetText(FText::FromString(FString::Printf(TEXT("Quality  %.0f%%"), Care * 100.f)));
+		// Ziekte-status netjes in de HUD (de prompt blijft kort): toon hoeveel plekken ziek zijn.
+		const int32 SickN = Plant->GetAfflictedCount();
+		HealthText->SetText(FText::FromString(SickN > 0
+			? FString::Printf(TEXT("Quality  %.0f%%    SICK (%d) - spray!"), Care * 100.f, SickN)
+			: FString::Printf(TEXT("Quality  %.0f%%"), Care * 100.f)));
+		HealthText->SetColorAndOpacity(FSlateColor(SickN > 0 ? FLinearColor(1.f, 0.5f, 0.4f) : FLinearColor(0.85f, 0.88f, 0.95f)));
 		YieldText->SetVisibility(ESlateVisibility::HitTestInvisible);
 		YieldText->SetText(FText::FromString(FString::Printf(TEXT("Harvest:  ~%.0f g   -   %.0f%% THC"), Plant->GetEstimatedTotalYield(), Plant->GetEstimatedThcPercent())));
 	}

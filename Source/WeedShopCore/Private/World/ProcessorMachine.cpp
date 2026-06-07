@@ -279,7 +279,7 @@ FText AProcessorMachine::GetInteractionPrompt_Implementation() const
 {
 	const bool bPress = IsPressTier(MachineTier);
 	// Klaar?
-	for (const FProcEntry& E : Entries) { if (E.bDone) { return FText::FromString(bPress ? TEXT("Collect hash (E)") : TEXT("Collect crystals (E)")); } }
+	for (const FProcEntry& E : Entries) { if (E.bDone) { return FText::FromString(bPress ? TEXT("Collect hash") : TEXT("Collect crystals")); } }
 	// Bezig? -> resterende tijd van de bijna-klare batch.
 	float BestLeft = -1.f;
 	const float Total = ProcSeconds();
@@ -289,7 +289,7 @@ FText AProcessorMachine::GetInteractionPrompt_Implementation() const
 		const int32 S = FMath::CeilToInt(BestLeft);
 		return FText::FromString(FString::Printf(TEXT("Processing... %d:%02d  (%d/%d)"), S / 60, S % 60, Entries.Num(), Capacity()));
 	}
-	return FText::FromString(bPress ? TEXT("Heatpress - hold crystals + E") : TEXT("Mesh extractor - hold dried weed + E"));
+	return FText::FromString(bPress ? TEXT("Heatpress  (hold crystals)") : TEXT("Mesh extractor  (hold dried weed)"));
 }
 
 void AProcessorMachine::UpdateRep()

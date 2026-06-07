@@ -116,5 +116,6 @@ void APackBench::Interact_Implementation(APawn* InstigatorPawn)
 
 FText APackBench::GetInteractionPrompt_Implementation() const
 {
-	return FText::FromString(FString::Printf(TEXT("Use packing bench - bags %d at a time"), GetPackPerAction()));
+	// Clean prompt; het "X zakjes per keer" + alle stats staan in de verpak-HUD zelf.
+	return NSLOCTEXT("WeedShop", "UsePackBench", "Packing bench");
 }

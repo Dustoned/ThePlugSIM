@@ -832,8 +832,8 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 		for (int32 i = 0; i < SlotAfflict.Num(); ++i) { if (SlotAfflict[i] == 1) { bMold = true; } else if (SlotAfflict[i] == 2) { bPest = true; } }
 		const TCHAR* Kind = (bMold && bPest) ? TEXT("MOLD+PESTS") : (bMold ? TEXT("MOLD") : TEXT("PESTS"));
 		const int32 Left = FMath::CeilToInt(GetWorstAfflictSecondsLeft());
-		return FText::FromString(FString::Printf(TEXT("%s on %d plant(s)! Spray within %d:%02d or it starts dying"),
-			Kind, Sick, Left / 60, Left % 60));
+		// Clean prompt: type + tijd. Het aantal zieke plekken + uitleg staat op de plant-kaart (HUD).
+		return FText::FromString(FString::Printf(TEXT("%s! Spray now  (%d:%02d)"), Kind, Left / 60, Left % 60));
 	}
 	if (GetReadyCount() > 0)
 	{
