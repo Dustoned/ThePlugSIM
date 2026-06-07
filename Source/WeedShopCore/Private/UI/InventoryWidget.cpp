@@ -621,8 +621,9 @@ void UInventoryWidget::RebuildContent()
 		else
 		{
 			// Lege cel (of plek van een item dat nu op de hotbar staat): drop-doel, niet sleepbaar.
+			// Zelfde duidelijke contrast als het droogrek.
 			Cell->StackId = 0; Cell->bDraggable = false;
-			Cell->Bg = FLinearColor(0.09f, 0.09f, 0.12f, 0.30f);
+			Cell->Bg = FLinearColor(0.13f, 0.14f, 0.18f, 0.55f);
 		}
 		Sz->SetContent(Cell);
 		Grid->AddChildToWrapBox(Sz);

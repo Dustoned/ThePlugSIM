@@ -32,7 +32,7 @@ TSharedRef<SWidget> UShelfCell::RebuildWidget()
 	{
 		const bool bHasItem = !ItemId.IsNone();
 		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ShelfCellRoot"));
-		Root->SetBrush(WeedUI::Rounded(bHasItem ? FLinearColor(0.11f, 0.13f, 0.17f, 0.96f) : FLinearColor(0.08f, 0.09f, 0.12f, 0.45f), 8.f));
+		Root->SetBrush(WeedUI::Rounded(bHasItem ? FLinearColor(0.11f, 0.13f, 0.17f, 0.96f) : FLinearColor(0.13f, 0.14f, 0.18f, 0.55f), 8.f));
 		Root->SetPadding(FMargin(5.f));
 		WidgetTree->RootWidget = Root;
 
