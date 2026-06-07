@@ -815,9 +815,21 @@ void AThePlugSIMCharacter::BeginPlay()
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
 
-	// Held item als viewmodel VÓÓR de camera (zoals een FPS-wapen), zodat je 't altijd in beeld ziet zonder
-	// naar beneden te kijken. (De FP-armen hebben geen hold-animatie; een echte hand-hold vergt arm-anim-assets.)
-	bHeldOnHandBone = false;
+	// Held item ECHT in de hand: koppel aan de hand-bone van de FP-armen. De hold-pose (AnimBP) zet die hand
+	// vooruit in beeld zodra je iets vasthoudt, dus het item zit dan zichtbaar in je uitgestoken hand.
+	if (HeldItemMesh && FirstPersonMesh)
+	{
+		FName HandSocket = NAME_None;
+		if (FirstPersonMesh->DoesSocketExist(FName("hand_r")))      { HandSocket = FName("hand_r"); }
+		else if (FirstPersonMesh->DoesSocketExist(FName("hand_l"))) { HandSocket = FName("hand_l"); }
+		if (!HandSocket.IsNone())
+		{
+			HeldItemMesh->AttachToComponent(FirstPersonMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HandSocket);
+			HeldItemMesh->SetRelativeLocation(FVector(10.f, 0.f, 0.f));
+			HeldItemMesh->SetRelativeRotation(FRotator::ZeroRotator);
+			bHeldOnHandBone = true;
+		}
+	}
 
 	// Co-op-animatie: Update Rate Optimization op het third-person lichaam UIT, en altijd de pose tikken.
 	// URO skipt anim-updates op remote spelers (simulated proxies) -> die "glijden" tot een sprong de
