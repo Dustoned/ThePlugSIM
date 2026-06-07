@@ -157,13 +157,13 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	Card = CardB;
 
 	// Compact paneel BOVENIN het scherm; je echte inventory opent eronder.
-	// Links-gecentreerd, naast de inventory (die schuift naar rechts) -> horizontaal naast elkaar i.p.v. onder.
+	// Rechts-van-midden, vlak naast de inventory (die links-van-midden staat) -> dicht naast elkaar.
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(0.f, 0.5f, 0.f, 0.5f));
-	CS->SetAlignment(FVector2D(0.f, 0.5f));
+	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+	CS->SetAlignment(FVector2D(1.f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(640.f, 452.f));
-	CS->SetPosition(FVector2D(30.f, -30.f));
+	CS->SetSize(FVector2D(560.f, 452.f));
+	CS->SetPosition(FVector2D(-12.f, -30.f));
 
 	UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(Outer);
@@ -330,14 +330,18 @@ void UDryingRackWidget::FillBody()
 
 			RowBars.Add(Bar); RowStatus.Add(Status); RowEntryIndex.Add(i);
 		}
-		// "+"-vangnetcel: drop natte wiet hier om op te hangen (ook als het rek leeg is).
+		// Lege capaciteit-slots tot het maximum (zoals de inventory laat zien hoeveel erin kan). Elk leeg
+		// vakje is een drop-zone voor natte wiet.
+		const int32 MaxCap = Rack->GetCapacityPublic();
+		for (int32 e = Rack->GetEntries().Num(); e < MaxCap; ++e)
 		{
+			const bool bFirstEmpty = (e == Rack->GetEntries().Num());
 			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
 			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.45f), 8.f));
 			Vis->SetPadding(FMargin(4.f));
 			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 			Vis->SetContent(Ov);
-			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, Used == 0 ? TEXT("hang hier") : TEXT("+"), Used == 0 ? 9 : 18, FLinearColor(0.45f, 0.5f, 0.45f), true));
+			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, bFirstEmpty ? TEXT("hang hier") : TEXT("+"), bFirstEmpty ? 9 : 18, FLinearColor(0.4f, 0.45f, 0.42f), true));
 			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;

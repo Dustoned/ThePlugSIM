@@ -95,6 +95,7 @@ protected:
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<class UCanvasPanelSlot> CardSlot; // om de inventory naast een paneel (droogrek) te schuiven
+	UPROPERTY() TObjectPtr<class USizeBox> StashBox;         // HOME STASH-kolom (verbergen in een machine)
 	UPROPERTY() TObjectPtr<UTextBlock> WeightText;
 	UPROPERTY() TObjectPtr<UWrapBox> Grid;
 	UPROPERTY() TObjectPtr<UHorizontalBox> HotbarBox;

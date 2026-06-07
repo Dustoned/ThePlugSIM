@@ -154,12 +154,20 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 
 bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	// Een KLARE droogrek-batch (UDryDragOp, niet-nat) op de inventory droppen = oogsten naar je voorraad.
+	// Een KLARE droogrek-batch (UDryDragOp, niet-nat) op de inventory OF de hotbar droppen = oogsten naar je
+	// voorraad. Werkt overal: we halen de PhoneClientComponent uit de pawn (eigenaar van de inventory).
 	if (UDryDragOp* DryOp = Cast<UDryDragOp>(InOperation))
 	{
-		if (!DryOp->bWet && DryOp->EntryIndex >= 0 && Owner.IsValid())
+		if (!DryOp->bWet && DryOp->EntryIndex >= 0 && Inv.IsValid())
 		{
-			return Owner->AcceptDryBatchDrop(DryOp->EntryIndex);
+			if (AActor* PawnOwner = Inv->GetOwner())
+			{
+				if (UPhoneClientComponent* Ph = PawnOwner->FindComponentByClass<UPhoneClientComponent>())
+				{
+					Ph->RequestDryCollect(DryOp->EntryIndex);
+					return true;
+				}
+			}
 		}
 		return false;
 	}
@@ -316,6 +324,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	// --- Links: HOME STASH (alle shelves/chests samengeteld) ---
 	USizeBox* StashSize = WidgetTree->ConstructWidget<USizeBox>();
 	StashSize->SetWidthOverride(232.f);
+	StashBox = StashSize; // verbergen als je in een machine zit (puur preview, niet om te slepen)
 	UBorder* StashPanel = WidgetTree->ConstructWidget<UBorder>();
 	StashPanel->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.08f, 0.96f), 10.f));
 	StashPanel->SetPadding(FMargin(10.f, 8.f, 10.f, 8.f));
@@ -648,19 +657,22 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen) { return; }
 
-	// Naast een gekoppeld paneel (droogrek) staat de inventory RECHTS, het paneel links -> naast elkaar.
-	// Anders gewoon gecentreerd.
+	// Naast een gekoppeld paneel (droogrek): HOME STASH verbergen (puur preview), card smaller, en het paar
+	// dicht bij elkaar in het midden (rek rechts-van-midden, inventory links-van-midden). Anders: normaal gecentreerd.
+	const bool bSideBySide = PhoneComp.IsValid() && PhoneComp->IsDryRackOpen();
+	if (StashBox) { StashBox->SetVisibility(bSideBySide ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
 	if (CardSlot)
 	{
-		const bool bSideBySide = PhoneComp.IsValid() && PhoneComp->IsDryRackOpen();
 		if (bSideBySide)
 		{
-			CardSlot->SetAnchors(FAnchors(1.f, 0.5f, 1.f, 0.5f));
-			CardSlot->SetAlignment(FVector2D(1.f, 0.5f));
-			CardSlot->SetPosition(FVector2D(-30.f, -30.f));
+			CardSlot->SetSize(FVector2D(584.f, 452.f));
+			CardSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+			CardSlot->SetAlignment(FVector2D(0.f, 0.5f));
+			CardSlot->SetPosition(FVector2D(12.f, -30.f));
 		}
 		else
 		{
+			CardSlot->SetSize(FVector2D(840.f, 452.f));
 			CardSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 			CardSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 			CardSlot->SetPosition(FVector2D(0.f, -30.f));
