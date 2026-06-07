@@ -569,11 +569,27 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		if (Target)
 		{
 			const FVector TL = Target->GetActorLocation();
-			FVector Dir = OwnerPawn->GetActorLocation() - TL; Dir.Z = 0.f; Dir = Dir.GetSafeNormal();
-			if (Dir.IsNearlyZero()) { Dir = FVector(1.f, 0.f, 0.f); }
-			const float Edge = FMath::Max(CurrentDef.BoxHalf.X, CurrentDef.BoxHalf.Y) + 16.f;
-			PreviewLocation = FVector(TL.X, TL.Y, PreviewLocation.Z) + Dir * Edge;
-			PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(-Dir.Y, -Dir.X)), 0.f); // kijkt naar het object
+			// Op de VLOER (niet op het aim-punt -> niet meer zweven). Voet-hoogte van de speler = de vloer.
+			const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
+			// Footprint van het doel (horizontaal) om de upgrade buiten de rand te zetten (geen clip).
+			FVector TOrigin, TExt; Target->GetActorBounds(true, TOrigin, TExt);
+			const float TargetRad = FMath::Max(TExt.X, TExt.Y);
+			const bool bTent = PlacingItemId.ToString().StartsWith(TEXT("Gear_Tent"));
+			if (bTent)
+			{
+				// Tent gaat OVER de pot: gecentreerd, op de vloer.
+				PreviewLocation = FVector(TL.X, TL.Y, FeetZ);
+				PreviewRotation = FRotator::ZeroRotator;
+			}
+			else
+			{
+				// Andere upgrades: net buiten de rand van het object, aan de speler-kant, op de vloer.
+				FVector Dir = OwnerPawn->GetActorLocation() - TL; Dir.Z = 0.f; Dir = Dir.GetSafeNormal();
+				if (Dir.IsNearlyZero()) { Dir = FVector(1.f, 0.f, 0.f); }
+				const float Edge = TargetRad + FMath::Max(CurrentDef.BoxHalf.X, CurrentDef.BoxHalf.Y) + 4.f;
+				PreviewLocation = FVector(TL.X, TL.Y, FeetZ) + Dir * Edge;
+				PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(-Dir.Y, -Dir.X)), 0.f); // kijkt naar het object
+			}
 			bValidSpot = true;
 			SnapTarget = Target;
 		}
