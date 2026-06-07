@@ -353,7 +353,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	Scroll->AddChild(Grid);
 
 	// Hint onderaan: sleep naar de hotbar onderin het scherm.
-	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep naar de hotbar  ·  Shift+klik = splitsen"), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
+	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag to the hotbar  ·  Shift+click = split"), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
 		->SetPadding(FMargin(2.f, 8.f, 0.f, 0.f));
 
 	BuildSplitPopup(Root);
@@ -381,7 +381,7 @@ void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
 	UWeedActionButton* Conf = TileButton(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 8.f, [this]() { ConfirmSplit(); });
 	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Splitsen"), 12, FLinearColor::White, true));
 	UWeedActionButton* Canc = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f, [this]() { CancelSplit(); });
-	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Annuleer"), 12, FLinearColor::White, true));
+	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, FLinearColor::White, true));
 	Btns->AddChildToHorizontalBox(Conf)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	UHorizontalBoxSlot* CS2 = Btns->AddChildToHorizontalBox(Canc);
 	CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
@@ -420,7 +420,7 @@ void UInventoryWidget::OnSplitSliderChanged(float V)
 {
 	if (!SplitLabel) { return; }
 	const int32 Amount = FMath::Clamp(FMath::RoundToInt(V * SplitTotal), 1, FMath::Max(1, SplitTotal - 1));
-	SplitLabel->SetText(FText::FromString(FString::Printf(TEXT("Afsplitsen: %d   (van %d)"), Amount, SplitTotal)));
+	SplitLabel->SetText(FText::FromString(FString::Printf(TEXT("Split off: %d   (of %d)"), Amount, SplitTotal)));
 }
 
 void UInventoryWidget::ConfirmSplit()
@@ -471,7 +471,7 @@ void UInventoryWidget::RebuildStash()
 
 	if (Order.Num() == 0)
 	{
-		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT("Niets opgeslagen.\nStop wiet in een shelf/chest."), 11, FLinearColor(0.55f, 0.58f, 0.66f)));
+		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT("Nothing stored.\nPut weed in a shelf/chest."), 11, FLinearColor(0.55f, 0.58f, 0.66f)));
 		return;
 	}
 

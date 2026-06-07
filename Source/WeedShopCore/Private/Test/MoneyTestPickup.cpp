@@ -35,12 +35,12 @@ void AMoneyTestPickup::Interact_Implementation(APawn* InstigatorPawn)
 	if (!GS || !GS->GetEconomy())
 	{
 		UE_LOG(LogWeedShop, Warning,
-			TEXT("MoneyTestPickup: geen AWeedShopGameState/Economy. Zet de Game State Class op AWeedShopGameState."));
+			TEXT("MoneyTestPickup: no AWeedShopGameState/Economy. Set the Game State Class to AWeedShopGameState."));
 		return;
 	}
 
 	GS->GetEconomy()->AddMoneyUntracked(AmountCents);
-	UE_LOG(LogWeedShop, Log, TEXT("MoneyTestPickup: +%d cents -> saldo nu %lld cents"),
+	UE_LOG(LogWeedShop, Log, TEXT("MoneyTestPickup: +%d cents -> balance now %lld cents"),
 		AmountCents, (long long)GS->GetEconomy()->GetBalanceCents());
 }
 

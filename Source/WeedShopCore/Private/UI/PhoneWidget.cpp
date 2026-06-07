@@ -765,7 +765,7 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 		CVB->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
 		if (!bArrived) { PkgBars.Add(OrderId, Bar); }
 
-		// Status-regel: ETA + Cancel (onderweg), of "bij de deur" (aangekomen).
+		// Status-regel: ETA + Cancel (onderweg), of "at the door" (aangekomen).
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 		if (bArrived)
 		{
@@ -1214,7 +1214,7 @@ void UPhoneWidget::FillStoreList()
 				if (OwnedH.Num() > 1)
 				{
 					const int32 CurTarget = Ph->ResolveDeliveryHome();
-					StoreFooter->AddChildToVerticalBox(MakeText(TEXT("Bezorgen bij"), 11, FLinearColor(0.75f, 0.8f, 0.95f)))->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+					StoreFooter->AddChildToVerticalBox(MakeText(TEXT("Deliver to"), 11, FLinearColor(0.75f, 0.8f, 0.95f)))->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 					UHorizontalBox* HomesRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 					for (int32 HIdx : OwnedH)
 					{
@@ -1539,13 +1539,13 @@ void UPhoneWidget::RefreshContent()
 	{
 		// --- Woning: 3 koopbare panden (het starter-flatje is al van jou) ---
 		{
-			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Woning"), 14, FLinearColor(0.7f, 0.9f, 1.f)))
+			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Home"), 14, FLinearColor(0.7f, 0.9f, 1.f)))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 			TArray<FCityPropertyOffer> Offers;
 			Phone->GetPropertyOffers(Offers);
 			if (Offers.Num() == 0)
 			{
-				ContentBox->AddChildToVerticalBox(MakeText(TEXT("(stad laadt nog...)"), 11, FLinearColor::Gray));
+				ContentBox->AddChildToVerticalBox(MakeText(TEXT("(city still loading...)"), 11, FLinearColor::Gray));
 			}
 			for (const FCityPropertyOffer& O : Offers)
 			{
@@ -1574,18 +1574,18 @@ void UPhoneWidget::RefreshContent()
 				if (!bOwned)
 				{
 					RB->SetHeightOverride(28.f);
-					RB->SetContent(MakeButton(TEXT("Koop"), 7, O.HomeIndex, FLinearColor(0.2f, 0.5f, 0.28f)));
+					RB->SetContent(MakeButton(TEXT("Buy"), 7, O.HomeIndex, FLinearColor(0.2f, 0.5f, 0.28f)));
 				}
 				else
 				{
-					// Eigen woning: teleport-knop (of "je bent hier") + verkoop-knop (~65%).
+					// Eigen woning: teleport-knop (of "you are here") + verkoop-knop (~65%).
 					const int32 SellVal = Phone->GetHomeSellValueCents(O.HomeIndex);
 					UVerticalBox* OwnBox = WidgetTree->ConstructWidget<UVerticalBox>();
-					if (bHereNow) { OwnBox->AddChildToVerticalBox(MakeText(TEXT("je bent hier"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
+					if (bHereNow) { OwnBox->AddChildToVerticalBox(MakeText(TEXT("you are here"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
 					else          { OwnBox->AddChildToVerticalBox(MakeButton(TEXT("Ga hierheen"), 8, O.HomeIndex, FLinearColor(0.25f, 0.45f, 0.6f))); }
 					if (SellVal > 0)
 					{
-						OwnBox->AddChildToVerticalBox(MakeButton(*FString::Printf(TEXT("Verkoop EUR %.0f"), SellVal / 100.f), 9, O.HomeIndex, FLinearColor(0.5f, 0.32f, 0.2f)))
+						OwnBox->AddChildToVerticalBox(MakeButton(*FString::Printf(TEXT("Sell EUR %.0f"), SellVal / 100.f), 9, O.HomeIndex, FLinearColor(0.5f, 0.32f, 0.2f)))
 							->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
 					}
 					RB->SetHeightOverride(SellVal > 0 ? 58.f : 28.f);

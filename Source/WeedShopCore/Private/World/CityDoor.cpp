@@ -128,7 +128,7 @@ FText ACityDoor::GetInteractionPrompt_Implementation() const
 {
 	if (bLocked)
 	{
-		if (bForSale) { return FText::FromString(TEXT("TE KOOP - koop via telefoon (Upgrades)")); }
+		if (bForSale) { return FText::FromString(TEXT("FOR SALE - buy via phone (Upgrades)")); }
 		return FText::FromString(ResidentName.IsEmpty()
 			? FString(TEXT("LOCKED"))
 			: FString::Printf(TEXT("LOCKED - %s lives here"), *ResidentName));

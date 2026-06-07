@@ -489,7 +489,7 @@ void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
 		UEconomyComponent* Econ = GetOwnerEconomy();
 		if (!Econ || !Econ->RemoveBank(Off->PriceCents))
 		{
-			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("Niet genoeg banksaldo voor dit pand.")); }
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("Not enough bank balance for this property.")); }
 			return;
 		}
 	}
@@ -497,7 +497,7 @@ void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
 	ActiveHome = Off->HomeIndex;
 	MoveOwnerToHome(Off->HomeIndex);
 	ApplyLocalDoors();
-	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 4.f, FColor::Green, FString::Printf(TEXT("Pand gekocht: %s"), *Off->Title)); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 4.f, FColor::Green, FString::Printf(TEXT("Property bought: %s"), *Off->Title)); }
 }
 
 void UPhoneClientComponent::ServerSetActiveHome_Implementation(int32 HomeIndex)
@@ -530,7 +530,7 @@ void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
 	if (!Off) { return; }
 	if (Off->PriceCents <= 0)
 	{
-		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Je starter-woning kun je niet verkopen.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("You can't sell your starter home.")); }
 		return;
 	}
 
@@ -545,7 +545,7 @@ void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
 	}
 	if (SelectedDeliveryHome == HomeIndex || Off->Homes.Contains(SelectedDeliveryHome)) { SelectedDeliveryHome = -1; }
 	ApplyLocalDoors();
-	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Pand verkocht: +EUR %.0f"), Refund / 100.f)); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Property sold: +EUR %.0f"), Refund / 100.f)); }
 }
 
 bool UPhoneClientComponent::GetActiveHomeLocation(FVector& OutWorld) const
@@ -593,7 +593,7 @@ FString UPhoneClientComponent::GetHomeLabel(int32 HomeIndex) const
 			return FString::Printf(TEXT("Nr %s"), *Homes[HomeIndex].Number);
 		}
 	}
-	return FString::Printf(TEXT("Huis %d"), HomeIndex);
+	return FString::Printf(TEXT("Home %d"), HomeIndex);
 }
 
 FString UPhoneClientComponent::GetHomeInfoLine(int32 HomeIndex) const
@@ -664,7 +664,7 @@ void UPhoneClientComponent::UpdateCursor()
 		{
 			// Gameplay: muis ECHT vastzetten + verbergen, en PERMANENT capturen zodat je rond kunt
 			// kijken zonder een knop in te houden. (De UI-modus zette HideCursorDuringCapture=false en
-			// liet de capture op "alleen tijdens muisklik"; dat moeten we hier terugzetten.)
+			// liet de capture op "only during mouse click"; dat moeten we hier terugzetten.)
 			if (UGameViewportClient* VP = PC->GetWorld() ? PC->GetWorld()->GetGameViewport() : nullptr)
 			{
 				VP->SetHideCursorDuringCapture(true);
@@ -1589,7 +1589,7 @@ void UPhoneClientComponent::ServerStoreBuy_Implementation(FName ItemId, bool bBa
 	const bool bPaid = bBank ? Econ->RemoveBank(Price) : Econ->RemoveMoney(Price);
 	if (!bPaid)
 	{
-		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Red, bBank ? TEXT("Niet genoeg op de bank.") : TEXT("Niet genoeg cash.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Red, bBank ? TEXT("Not enough in the bank.") : TEXT("Not enough cash.")); }
 		return;
 	}
 
@@ -1597,7 +1597,7 @@ void UPhoneClientComponent::ServerStoreBuy_Implementation(FName ItemId, bool bBa
 	if (bSeed) { Inv->AddItem(Store->SeedItemId(ItemId), 1); }
 	else       { Inv->AddItem(ItemId, FMath::Max(1, Pack)); }
 
-	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor(120, 220, 160), FString::Printf(TEXT("Gekocht: %s"), *Name.ToString())); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor(120, 220, 160), FString::Printf(TEXT("Bought: %s"), *Name.ToString())); }
 }
 
 void UPhoneClientComponent::ServerStoreCheckout_Implementation(const TArray<FName>& Ids, const TArray<int32>& Qtys, bool bBank)
@@ -1630,7 +1630,7 @@ void UPhoneClientComponent::ServerStoreCheckout_Implementation(const TArray<FNam
 	const bool bPaid = bBank ? Econ->RemoveBank(static_cast<int32>(Total)) : Econ->RemoveMoney(static_cast<int32>(Total));
 	if (!bPaid)
 	{
-		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Red, bBank ? TEXT("Niet genoeg op de bank.") : TEXT("Niet genoeg cash.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Red, bBank ? TEXT("Not enough in the bank.") : TEXT("Not enough cash.")); }
 		return;
 	}
 
@@ -1640,7 +1640,7 @@ void UPhoneClientComponent::ServerStoreCheckout_Implementation(const TArray<FNam
 		if (L.bSeed) { Inv->AddItem(Store->SeedItemId(L.Id), L.Qty); }
 		else         { Inv->AddItem(L.Id, FMath::Max(1, L.Pack) * L.Qty); }
 	}
-	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160), FString::Printf(TEXT("Gekocht voor EUR %.2f"), Total / 100.f)); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160), FString::Printf(TEXT("Bought for EUR %.2f"), Total / 100.f)); }
 }
 
 void UPhoneClientComponent::SetTab(int32 NewTab)

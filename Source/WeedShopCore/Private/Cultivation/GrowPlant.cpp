@@ -768,7 +768,7 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		const int32 YieldGrams = FMath::Max(1, FMath::RoundToInt(Row->BaseYieldGrams * CareQ * SoilYield * PotYield * FertYieldMult));
 
 		// THC% afgeleid van strain-potentie x kwaliteit. Wiet heeft ALTIJD THC% (floor), 0% kan niet:
-		// slecht verzorgd = gewoon zwakke wiet, geen "geen wiet". Op hele % afgerond zodat oogsten van
+		// slecht verzorgd = gewoon zwakke wiet, geen "no weed". Op hele % afgerond zodat oogsten van
 		// dezelfde kwaliteit netjes samen stapelen (en alleen echt andere batches apart blijven).
 		const float ThcRaw = Row->BaseThcPercent * QualityFrac * FMath::FRandRange(0.97f, 1.03f);
 		const float ThcPercent = FMath::RoundToFloat(FMath::Max(Row->BaseThcPercent * 0.15f, FMath::Max(1.0f, ThcRaw)));

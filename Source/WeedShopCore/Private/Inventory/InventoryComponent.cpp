@@ -249,7 +249,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("AddItem genegeerd: alleen de server mag de voorraad muteren."));
+		UE_LOG(LogWeedShop, Warning, TEXT("AddItem ignored: only the server may mutate the inventory."));
 		return false;
 	}
 	if (ItemId.IsNone() || Count <= 0)
@@ -450,7 +450,7 @@ bool UInventoryComponent::RemoveItem(FName ItemId, int32 Count)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("RemoveItem genegeerd: alleen de server mag de voorraad muteren."));
+		UE_LOG(LogWeedShop, Warning, TEXT("RemoveItem ignored: only the server may mutate the inventory."));
 		return false;
 	}
 	if (ItemId.IsNone() || Count <= 0 || GetQuantity(ItemId) < Count)

@@ -39,7 +39,7 @@ void UEconomyComponent::AddMoney(int64 AmountCents)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("AddMoney genegeerd: alleen de server mag het saldo muteren."));
+		UE_LOG(LogWeedShop, Warning, TEXT("AddMoney ignored: only the server may mutate the balance."));
 		return;
 	}
 	if (AmountCents <= 0)
@@ -67,7 +67,7 @@ bool UEconomyComponent::RemoveMoney(int64 AmountCents)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("RemoveMoney genegeerd: alleen de server mag het saldo muteren."));
+		UE_LOG(LogWeedShop, Warning, TEXT("RemoveMoney ignored: only the server may mutate the balance."));
 		return false;
 	}
 	if (AmountCents <= 0 || BalanceCents < AmountCents)

@@ -35,7 +35,7 @@
 
 namespace
 {
-	// Testing/sandbox: overal plaatsen toegestaan (geen "alleen binnen"/grondhoogte-regel).
+	// Testing/sandbox: overal plaatsen toegestaan (geen "indoors only"/grondhoogte-regel).
 	bool WorldFreeBuild(const UWorld* W)
 	{
 		const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
@@ -550,7 +550,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					const bool bFloor = FloorNormalZ > 0.7f;
 					const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
 					const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
-					// Vrij bouwen: laat grondhoogte- en "alleen binnen"-regel vallen (surface + anti-clip blijven).
+					// Vrij bouwen: laat grondhoogte- en "indoors only"-regel vallen (surface + anti-clip blijven).
 					bValidSpot = bFloor && (bFree || bGroundLevel) && !bOnPlaceable
 							&& (bFree || CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation))
 							&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
@@ -841,7 +841,7 @@ bool UBuildComponent::IsIndoors(const FVector& FloorPoint) const
 
 	// Trace recht omhoog: raken we een plafond/dak -> binnen. Buiten is er open lucht boven.
 	// We checken NIET alleen het midden maar ook een paar punten eromheen: staat de plek net onder een
-	// deuropening of trapgat, dan vangt een naburig punt het plafond alsnog -> geen valse "buiten".
+	// deuropening of trapgat, dan vangt een naburig punt het plafond alsnog -> geen valse "outside".
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopIndoorTrace), false);
 	if (GetOwner()) { Params.AddIgnoredActor(GetOwner()); }
 	static const FVector2D Offs[] = { {0.f, 0.f}, {55.f, 0.f}, {-55.f, 0.f}, {0.f, 55.f}, {0.f, -55.f} };
@@ -947,7 +947,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	// zodat je de sink-positie voor de template kunt inrichten.
 	if (ItemId == FName(TEXT("Sink")) && !WorldFreeBuild(World))
 	{
-		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Sinks zijn vaste fixtures.")); }
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Sinks are fixed fixtures.")); }
 		return;
 	}
 

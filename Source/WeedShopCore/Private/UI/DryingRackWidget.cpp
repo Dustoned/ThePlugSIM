@@ -176,7 +176,7 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseDryRack(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep wiet hierheen om te drogen. Klaar? Sleep terug naar je inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag weed here to dry it. Done? Drag it back to your inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Drop-zone: transparante achtergrond zodat de (flauwe) lege slots zichtbaar zijn tegen de card,
@@ -229,7 +229,7 @@ void UDryingRackWidget::HandleDryDrop(bool bDroppedOnDryingSide, UDryDragOp* Op)
 	else if (bDroppedOnDryingSide && !Op->bWet)
 	{
 		// Een niet-natte item op het rek gesleept.
-		UWeedToast::NotifyPawn(GetOwningPlayerPawn(), -1, 2.f, FColor::Orange, TEXT("Alleen natte wiet kan drogen."));
+		UWeedToast::NotifyPawn(GetOwningPlayerPawn(), -1, 2.f, FColor::Orange, TEXT("Only wet weed can be dried."));
 	}
 	LastSig.Reset();
 }
@@ -261,7 +261,7 @@ void UDryingRackWidget::HandleInvDrop(bool bDroppedOnDryingSide, UInvDragOp* Op)
 	}
 	else
 	{
-		UWeedToast::NotifyPawn(P, -1, 2.f, FColor::Orange, TEXT("Alleen natte wiet kan drogen."));
+		UWeedToast::NotifyPawn(P, -1, 2.f, FColor::Orange, TEXT("Only wet weed can be dried."));
 	}
 }
 
@@ -325,7 +325,7 @@ void UDryingRackWidget::FillBody()
 
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = i; C->ItemId = E.DryItemId; C->Qty = E.Quantity; C->bReady = E.bDone; C->Owner = this; C->Inner = Vis;
-			C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.bDone ? TEXT("\nKlaar - sleep naar je inventory") : TEXT("\nNog aan het drogen"))));
+			C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.bDone ? TEXT("\nReady - drag to your inventory") : TEXT("\nStill drying"))));
 
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 			Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); Sz->SetContent(C);
@@ -380,7 +380,7 @@ void UDryingRackWidget::FillBody()
 			}
 			if (Rack->GetEntries().Num() == 0)
 			{
-				DetailBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Niks aan het drogen. Sleep natte wiet in een slot."), 11, FLinearColor(0.55f, 0.6f, 0.7f)));
+				DetailBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Nothing drying. Drag wet weed into a slot."), 11, FLinearColor(0.55f, 0.6f, 0.7f)));
 			}
 		}
 	}

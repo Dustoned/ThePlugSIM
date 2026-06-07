@@ -108,7 +108,7 @@ namespace
 	UTexture2D* LoadWhiteMask(const FString& Path)
 	{
 		TArray<uint8> FileData;
-		if (!FFileHelper::LoadFileToArray(FileData, *Path)) { UE_LOG(LogTemp, Warning, TEXT("Swatch: file niet gevonden: %s"), *Path); return nullptr; }
+		if (!FFileHelper::LoadFileToArray(FileData, *Path)) { UE_LOG(LogTemp, Warning, TEXT("Swatch: file not found: %s"), *Path); return nullptr; }
 		IImageWrapperModule& Mod = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
 		TSharedPtr<IImageWrapper> Wrapper = Mod.CreateImageWrapper(EImageFormat::PNG);
 		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num())) { UE_LOG(LogTemp, Warning, TEXT("Swatch: PNG decode mislukt")); return nullptr; }
@@ -538,7 +538,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			UVerticalBox* CoopVB = WidgetTree->ConstructWidget<UVerticalBox>();
 			CoopCard->SetContent(CoopVB);
 			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CO-OP (LAN)"), 20, FLinearColor(0.6f, 1.f, 0.6f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Host een spel of vul het host-IP in."), 12, FLinearColor(0.78f, 0.8f, 0.92f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Host a game or enter the host IP."), 12, FLinearColor(0.78f, 0.8f, 0.92f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 
 			auto BigBtn = [&](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
 			{
@@ -556,11 +556,11 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			};
 
 			// Host
-			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Host nieuw co-op spel"), FLinearColor(0.16f, 0.34f, 0.22f, 0.96f), [this]() { OnHostCoop(); }))
+			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Host new co-op game"), FLinearColor(0.16f, 0.34f, 0.22f, 0.96f), [this]() { OnHostCoop(); }))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
 
 			// Join: label + IP-veld + knop.
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Verbinden met host (IP):"), 13, FLinearColor(0.82f, 0.86f, 1.f), false))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Connect to host (IP):"), 13, FLinearColor(0.82f, 0.86f, 1.f), false))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 			CoopIpBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 			CoopIpBox->SetHintText(FText::FromString(TEXT("192.168.x.x")));
 			CoopIpBox->SetText(FText::FromString(TEXT("127.0.0.1")));
@@ -676,10 +676,10 @@ void UMainMenuWidget::OnJoinCoop()
 	const FString Ip = CoopIpBox ? CoopIpBox->GetText().ToString() : FString();
 	if (!Save || Ip.TrimStartAndEnd().IsEmpty())
 	{
-		if (StatusText) { StatusText->SetText(FText::FromString(TEXT("Vul het host-IP in (bv. 192.168.1.50)."))); }
+		if (StatusText) { StatusText->SetText(FText::FromString(TEXT("Enter the host IP (e.g. 192.168.1.50)."))); }
 		return;
 	}
-	if (StatusText) { StatusText->SetText(FText::FromString(FString::Printf(TEXT("Verbinden met %s..."), *Ip))); }
+	if (StatusText) { StatusText->SetText(FText::FromString(FString::Printf(TEXT("Connecting to %s..."), *Ip))); }
 	Save->JoinLan(Ip);
 }
 
@@ -687,8 +687,8 @@ void UMainMenuWidget::RefreshSlots()
 {
 	if (PickerTitle)
 	{
-		const TCHAR* Title = (MenuMode == 3) ? TEXT("NIEUW SPEL  -  kies een modus")
-			: (MenuMode == 1) ? TEXT("NIEUW SPEL  -  kies een slot") : TEXT("LADEN  -  kies een slot");
+		const TCHAR* Title = (MenuMode == 3) ? TEXT("NEW GAME  -  pick a mode")
+			: (MenuMode == 1) ? TEXT("NEW GAME  -  pick a slot") : TEXT("LOAD  -  pick a slot");
 		PickerTitle->SetText(FText::FromString(Title));
 	}
 	USaveGameSubsystem* Save = GetSave(GetWorld());
@@ -704,7 +704,7 @@ void UMainMenuWidget::RefreshSlots()
 	{
 		FDateTime Last;
 		const bool bAny = Save && Save->GetMostRecentSaveTime(Last);
-		LastSaveText->SetText(FText::FromString(bAny ? FString::Printf(TEXT("Laatste save: %s"), *FmtAgo(Last)) : TEXT("Nog geen save")));
+		LastSaveText->SetText(FText::FromString(bAny ? FString::Printf(TEXT("Laatste save: %s"), *FmtAgo(Last)) : TEXT("No save yet")));
 	}
 
 	if (!SlotsBox) { return; }

@@ -36,7 +36,7 @@ namespace
 	constexpr float PhoneH = 660.f;
 	constexpr float RowH = 26.f;
 
-	// Leesbare naam voor een item-id, zodat de speler "Wiet" vs "Zaadje" duidelijk ziet
+	// Leesbare naam voor een item-id, zodat de speler "Weed" vs "Zaadje" duidelijk ziet
 	// (zodat de speler wiet en zaadjes duidelijk uit elkaar houdt).
 	FString PrettyItemName(const FName ItemId)
 	{

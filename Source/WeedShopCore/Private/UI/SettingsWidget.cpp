@@ -354,7 +354,7 @@ void USettingsWidget::RefreshContent()
 		AddValueRow(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled() ? TEXT("On") : TEXT("Off"),
 			[this]() { UHotkeyHintWidget::SetHintsEnabled(!UHotkeyHintWidget::AreHintsEnabled()); RefreshContent(); });
 
-		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Klik een toets, druk de nieuwe.  Esc = annuleer."), 11, FLinearColor(0.6f, 0.65f, 0.76f)))
+		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 11, FLinearColor(0.6f, 0.65f, 0.76f)))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
 
 		// Scrollbare lijst met alle acties (Main + Alt toets).

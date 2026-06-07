@@ -180,7 +180,7 @@ void UContactsComponent::SendRandomAppointment()
 			WantStrain = (Eligible.Num() > 0) ? Eligible[FMath::RandRange(0, Eligible.Num() - 1)] : Lowest;
 		}
 	}
-	const FString WantStr = WantStrain.IsNone() ? TEXT("wiet") : WantStrain.ToString();
+	const FString WantStr = WantStrain.IsNone() ? TEXT("weed") : WantStrain.ToString();
 
 	FPhoneMessage Msg;
 	Msg.FromContactId = C.ContactId;
@@ -236,7 +236,7 @@ void UContactsComponent::CheckAppointments()
 		if (FMath::Abs(Now - Msg.AppointmentTimeOfDay) <= 2.f)
 		{
 			Msg.bAnnounced = true;
-			UE_LOG(LogWeedShop, Log, TEXT("Afspraak met %s is nu."), *Msg.SenderName.ToString());
+			UE_LOG(LogWeedShop, Log, TEXT("Appointment with %s is now."), *Msg.SenderName.ToString());
 			if (GEngine)
 			{
 				const FString Where = (Msg.Kind == EAppointmentKind::TheyComeToYou)
@@ -356,7 +356,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 
 	Cust->FinishSpawning(SpawnTM);
 
-	UE_LOG(LogWeedShop, Log, TEXT("Afspraak-klant gespawned voor %s."), *Msg.SenderName.ToString());
+	UE_LOG(LogWeedShop, Log, TEXT("Appointment customer spawned for %s."), *Msg.SenderName.ToString());
 }
 
 FString UContactsComponent::FormatApptClock(float TimeOfDay) const

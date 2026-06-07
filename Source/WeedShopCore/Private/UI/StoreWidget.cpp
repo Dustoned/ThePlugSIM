@@ -156,12 +156,12 @@ void UStoreWidget::BuildShell(UCanvasPanel* Root)
 
 	// Betaal-toggle + instant-melding.
 	UHorizontalBox* PayRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-	PayRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Betaal met:"), 13, FLinearColor(0.8f, 0.85f, 0.95f), false))->SetVerticalAlignment(VAlign_Center);
+	PayRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Pay with:"), 13, FLinearColor(0.8f, 0.85f, 0.95f), false))->SetVerticalAlignment(VAlign_Center);
 	PayCashBtn = StoreBtn(WidgetTree, TEXT("Cash"), FLinearColor(0.2f, 0.45f, 0.28f), 12, [this]() { if (PhoneComp.IsValid()) { PhoneComp->SetStorePayBank(false); LastSig.Reset(); } });
 	PayBankBtn = StoreBtn(WidgetTree, TEXT("Bank"), FLinearColor(0.2f, 0.32f, 0.5f), 12, [this]() { if (PhoneComp.IsValid()) { PhoneComp->SetStorePayBank(true); LastSig.Reset(); } });
 	PayRow->AddChildToHorizontalBox(PayCashBtn)->SetPadding(FMargin(10.f, 0.f, 6.f, 0.f));
 	PayRow->AddChildToHorizontalBox(PayBankBtn);
-	PayRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("   instant, geen bezorgkosten"), 11, FLinearColor(0.6f, 0.65f, 0.78f)))->SetVerticalAlignment(VAlign_Center);
+	PayRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("   instant, no delivery fee"), 11, FLinearColor(0.6f, 0.65f, 0.78f)))->SetVerticalAlignment(VAlign_Center);
 	BalanceText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.85f, 0.95f, 0.85f), false, true);
 	BalanceText->SetJustification(ETextJustify::Right);
 	UHorizontalBoxSlot* BalS = PayRow->AddChildToHorizontalBox(BalanceText);

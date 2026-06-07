@@ -2418,7 +2418,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		bRoamGoalIsPark = false;
 		// Afgehandeld (deal gesloten) of veiligheids-timeout -> afspraak loslaten, normaal leven hervatten.
 		ApptTimeout -= DeltaSeconds;
-		// "Het duurt te lang"-appje als de tijd bijna op is (1x).
+		// "Taking too long"-appje als de tijd bijna op is (1x).
 		if (ApptTimeout > 0.f && ApptTimeout < 75.f && !bApptSaidWaiting && State != ECustomerState::Served)
 		{
 			PushApptMessage(TEXT("Yo, where you at? I can't wait much longer..."));
@@ -2887,7 +2887,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	const FName Strain = UInventoryComponent::BagStrain(ProductId);
 	if (!StockFrom || StockFrom->BagGramsAvailable(Strain) < DesiredQuantity)
 	{
-		UE_LOG(LogWeedShop, Log, TEXT("Klant: geen voorraad van %s (%dg)."), *Strain.ToString(), DesiredQuantity);
+		UE_LOG(LogWeedShop, Log, TEXT("Customer: no stock of %s (%dg)."), *Strain.ToString(), DesiredQuantity);
 		return EDealResult::NoStock;
 	}
 
@@ -2990,7 +2990,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		}
 	}
 
-	UE_LOG(LogWeedShop, Log, TEXT("Deal: %dx %s%s voor %d cents (resp %.0f loy %.0f ver %.0f)."),
+	UE_LOG(LogWeedShop, Log, TEXT("Deal: %dx %s%s for %d cents (resp %.0f loy %.0f rep %.0f)."),
 		DesiredQuantity, *ProductId.ToString(), bSubstitute ? TEXT(" [substitute]") : TEXT(""), Total, Respect, Loyalty, Addiction);
 	return EDealResult::Accepted;
 }
@@ -3011,7 +3011,7 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 	// (Contact/'nummer' krijg je via het NPC-register zodra de loyaliteit hoog genoeg is.)
 
 	const EDealResult Result = SubmitOffer(GetMarketPriceCents(), Econ, Stock);
-	UE_LOG(LogWeedShop, Log, TEXT("Klant-interactie resultaat: %d"), static_cast<int32>(Result));
+	UE_LOG(LogWeedShop, Log, TEXT("Customer interaction result: %d"), static_cast<int32>(Result));
 
 	if (GEngine)
 	{
@@ -3077,5 +3077,5 @@ void ACustomerBase::LeaveAngry()
 {
 	Respect = ClampAttr(Respect - 10.f);
 	State = ECustomerState::Leaving;
-	UE_LOG(LogWeedShop, Log, TEXT("Klant vertrekt boos (geduld op). Respect nu %.0f."), Respect);
+	UE_LOG(LogWeedShop, Log, TEXT("Customer leaves angry (out of patience). Respect now %.0f."), Respect);
 }

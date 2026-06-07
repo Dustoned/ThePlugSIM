@@ -21,7 +21,7 @@ void UInteractionComponent::BeginPlay()
 
 	if (!GetOwner() || !GetOwner()->IsA(APawn::StaticClass()))
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("UInteractionComponent hoort op een Pawn te zitten, niet op %s."),
+		UE_LOG(LogWeedShop, Warning, TEXT("UInteractionComponent must be on a Pawn, not on %s."),
 			*GetNameSafe(GetOwner()));
 	}
 }

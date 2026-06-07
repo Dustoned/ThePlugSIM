@@ -355,7 +355,7 @@ void ACustomerSpawner::SpawnResidents()
 	const int32 Total = Homes.Num();
 
 	// De 3 koopbare panden (starter-flatje, rijtjeshuis, grote kamer) blijven ALTIJD vrij: geen bewoner,
-	// deur als "TE KOOP" totdat de speler 'm koopt (dan ontgrendelt de PhoneClientComponent 'm lokaal).
+	// deur als "FOR SALE" totdat de speler 'm koopt (dan ontgrendelt de PhoneClientComponent 'm lokaal).
 	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
 	TSet<int32> ForSale;
 	for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
@@ -867,7 +867,7 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 			NTpl + NFb, NTpl, NFb, *Avail);
 		for (const TPair<FString, int32>& KV : KeyCount)
 		{
-			UE_LOG(LogWeedShop, Warning, TEXT("FurnishDiag:   woning-type %-12s x%-3d %s"),
+			UE_LOG(LogWeedShop, Warning, TEXT("FurnishDiag:   home-type %-12s x%-3d %s"),
 				*KV.Key, KV.Value, KeyMatched.Contains(KV.Key) ? TEXT("[TEMPLATE]") : TEXT("[fallback->random]"));
 		}
 	}

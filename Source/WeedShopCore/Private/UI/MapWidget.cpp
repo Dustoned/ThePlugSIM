@@ -222,17 +222,17 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 			Tb->SetAutoWrapText(true);
 			if (UVerticalBoxSlot* Vs = Info->AddChildToVerticalBox(Tb)) { Vs->SetPadding(FMargin(0.f, TopPad, 0.f, 0.f)); }
 		};
-		AddInfo(TEXT("STAD - KAART"), 22, FLinearColor(0.8f, 0.9f, 1.f), 0.f);
+		AddInfo(TEXT("CITY - MAP"), 22, FLinearColor(0.8f, 0.9f, 1.f), 0.f);
 		AddInfo(TEXT("Noord is boven"), 12, FLinearColor(0.6f, 0.65f, 0.75f), 6.f);
 		AddInfo(TEXT("Klik = waypoint zetten"), 13, FLinearColor(0.75f, 0.85f, 1.f), 22.f);
 		AddInfo(TEXT("Rechtsklik = waypoint wissen"), 13, FLinearColor(0.75f, 0.85f, 1.f), 3.f);
 		AddInfo(TEXT("M = kaart sluiten"), 12, FLinearColor(0.6f, 0.65f, 0.75f), 3.f);
 		AddInfo(TEXT("Legenda"), 14, FLinearColor(0.85f, 0.9f, 1.f), 24.f);
-		AddInfo(TEXT("cyaan stip = jij"), 12, FLinearColor(0.4f, 0.9f, 1.f), 6.f);
+		AddInfo(TEXT("cyan dot = you"), 12, FLinearColor(0.4f, 0.9f, 1.f), 6.f);
 		AddInfo(TEXT("geel = waypoint"), 12, FLinearColor(1.f, 0.85f, 0.3f), 3.f);
 		AddInfo(TEXT("blauw = NPC"), 12, FLinearColor(0.45f, 0.6f, 1.f), 3.f);
-		AddInfo(TEXT("groen poppetje = klant voor jou"), 12, FLinearColor(0.5f, 1.f, 0.6f), 3.f);
-		AddInfo(TEXT("goud huisje = jouw woning"), 12, FLinearColor(1.f, 0.82f, 0.3f), 3.f);
+		AddInfo(TEXT("green figure = customer for you"), 12, FLinearColor(0.5f, 1.f, 0.6f), 3.f);
+		AddInfo(TEXT("gold house = your home"), 12, FLinearColor(1.f, 0.82f, 0.3f), 3.f);
 	}
 	return Super::RebuildWidget();
 }

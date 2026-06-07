@@ -208,7 +208,7 @@ void USaveGameSubsystem::ReloadCurrentLevel(const FString& Options)
 	if (!W) { return; }
 	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); } // travel vanuit pauze
 	const FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
-	UE_LOG(LogWeedShop, Log, TEXT("Level herladen voor save-actie: %s (opts='%s')"), *LevelName, *Options);
+	UE_LOG(LogWeedShop, Log, TEXT("Level reloaded for save action: %s (opts='%s')"), *LevelName, *Options);
 	WeedShop_RequestGameLoadingScreen(); // toon het laadscherm voor deze in-game transitie
 	UGameplayStatics::OpenLevel(W, FName(*LevelName), true, Options);
 }
@@ -559,7 +559,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	}
 	// (Water zit in de fles-stack Quality en is al hersteld via de inventory-items hierboven.)
 
-	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "ga naar het save-punt").
+	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "go to the save point").
 	if (Data.bHasTransform)
 	{
 		// BELANGRIJK: de ACTOR (capsule + body) mag alleen YAW krijgen. De opgeslagen rotatie is de
@@ -579,7 +579,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 {
 	if (!HasAuthorityWorld()) { return false; }
 	AWeedShopGameState* GS = GetWeedGameState();
-	if (!GS) { UE_LOG(LogWeedShop, Warning, TEXT("SaveGame: geen GameState.")); return false; }
+	if (!GS) { UE_LOG(LogWeedShop, Warning, TEXT("SaveGame: no GameState.")); return false; }
 	UWorld* World = GS->GetWorld();
 
 	UWeedShopSaveGame* Save = Cast<UWeedShopSaveGame>(UGameplayStatics::CreateSaveGameObject(UWeedShopSaveGame::StaticClass()));
@@ -633,7 +633,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, TargetName, 0);
 	if (bOk) { Loaded = Save; GS->NotifySaved(); } // cache + save-indicator bij alle spelers
-	UE_LOG(LogWeedShop, Log, TEXT("SaveGame %s (%s): %d speler(s), dag %d, fase %d"),
+	UE_LOG(LogWeedShop, Log, TEXT("SaveGame %s (%s): %d player(s), day %d, phase %d"),
 		bOk ? TEXT("OK") : TEXT("MISLUKT"), bAutosave ? TEXT("auto") : TEXT("handmatig"), NumPlayers, Save->DayNumber, Save->MilestonePhase);
 	return bOk;
 }
@@ -704,7 +704,7 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	}
 
 	GS->NotifyLoaded(); // "Loaded"-melding bij alle spelers
-	UE_LOG(LogWeedShop, Log, TEXT("LoadGame: %d speler(s) in save, dag %d hersteld."), Save->Players.Num(), Save->DayNumber);
+	UE_LOG(LogWeedShop, Log, TEXT("LoadGame: %d player(s) in save, day %d restored."), Save->Players.Num(), Save->DayNumber);
 	return true;
 }
 
@@ -859,7 +859,7 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 		}
 		}
 	}
-	UE_LOG(LogWeedShop, Log, TEXT("Wereld hersteld: %d objecten gespawned."), In.Num());
+	UE_LOG(LogWeedShop, Log, TEXT("World restored: %d objects spawned."), In.Num());
 }
 
 void USaveGameSubsystem::RestorePlayerByPawn(APawn* Pawn)
@@ -872,5 +872,5 @@ void USaveGameSubsystem::RestorePlayerByPawn(APawn* Pawn)
 	if (!Found) { return; }
 	ApplyPlayer(Pawn, *Found);
 	RestoredPlayers.Add(Key);
-	UE_LOG(LogWeedShop, Log, TEXT("Speler hersteld uit save: id='%s' naam='%s' (cash %lld, %d items)"), *Id, *Name, (long long)Found->CashCents, Found->Items.Num());
+	UE_LOG(LogWeedShop, Log, TEXT("Player restored from save: id='%s' name='%s' (cash %lld, %d items)"), *Id, *Name, (long long)Found->CashCents, Found->Items.Num());
 }

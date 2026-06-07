@@ -274,7 +274,7 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		// Aantal staat al groot bij de titel - hier alleen de echte eigenschappen.
 		if (UInventoryComponent::IsBag(Id))
 		{
-			AddStat(TEXT("Per zakje"), FString::Printf(TEXT("%d g"), UInventoryComponent::BagGrams(Id)));
+			AddStat(TEXT("Per bag"), FString::Printf(TEXT("%d g"), UInventoryComponent::BagGrams(Id)));
 			AddStat(TEXT("Aantal zakjes"), FString::Printf(TEXT("%d"), Qty));
 			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
 			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));

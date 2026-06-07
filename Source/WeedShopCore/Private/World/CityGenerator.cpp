@@ -864,7 +864,7 @@ void ACityGenerator::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
 		O.HomeIndex = Idx;
 		O.Title = Title;
 		O.Sub = H.bApartment
-			? FString::Printf(TEXT("Nr %s  -  %de verdieping"), *H.Number, H.Floor + 1)
+			? FString::Printf(TEXT("No. %s  -  floor %d"), *H.Number, H.Floor + 1)
 			: FString::Printf(TEXT("Nr %s  -  rijtjeshuis"), *H.Number);
 		O.PriceCents = Price;
 		O.bStarter = bStarter;
@@ -872,9 +872,9 @@ void ACityGenerator::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
 	};
 
 	if (StarterIdx != INDEX_NONE) { Add(StarterIdx, TEXT("Klein flatje (bovenin)"), 0, true); }
-	if (RowIdx != INDEX_NONE)     { Add(RowIdx, TEXT("Rijtjeshuis (rij van 4)"), 1500000, false); }   // EUR 15.000
+	if (RowIdx != INDEX_NONE)     { Add(RowIdx, TEXT("Terraced house (row of 4)"), 1500000, false); }   // EUR 15.000
 	if (BigIdx != INDEX_NONE)     { Add(BigIdx, TEXT("Grote kamer (flat)"),      4000000, false); }   // EUR 40.000
-	if (BigRowIdx != INDEX_NONE && BigRowIdx != RowIdx) { Add(BigRowIdx, TEXT("Rijtjeshuis (rij van 3)"), 6000000, false); } // EUR 60.000
+	if (BigRowIdx != INDEX_NONE && BigRowIdx != RowIdx) { Add(BigRowIdx, TEXT("Terraced house (row of 3)"), 6000000, false); } // EUR 60.000
 }
 
 void ACityGenerator::BuildRowHouses(float CX, float CY, float TopZ, int32 Ddx, int32 Ddy, uint32 Seed)

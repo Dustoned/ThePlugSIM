@@ -77,7 +77,7 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 
 	Purchased.Add(UpgradeId);
 	OnUpgradePurchased.Broadcast(UpgradeId);
-	UE_LOG(LogWeedShop, Log, TEXT("Upgrade gekocht: %s (%s)"), *UpgradeId.ToString(), *Row->DisplayName.ToString());
+	UE_LOG(LogWeedShop, Log, TEXT("Upgrade bought: %s (%s)"), *UpgradeId.ToString(), *Row->DisplayName.ToString());
 	if (GEngine)
 	{
 		UWeedToast::Notify(-1, 4.f, FColor::Green,

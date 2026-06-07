@@ -913,17 +913,17 @@ void AThePlugSIMCharacter::WeedSaveFurniture()
 	if (!W) { return; }
 	if (!HasAuthority())
 	{
-		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedSaveFurniture: draai dit op de host."));
+		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedSaveFurniture: run this on the host."));
 		return;
 	}
 	ACityGenerator* City = nullptr;
 	for (TActorIterator<ACityGenerator> It(W); It; ++It) { City = *It; break; }
-	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("Geen stad gevonden.")); return; }
+	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("No city found.")); return; }
 
 	const int32 Types = FurnitureTemplates::SaveFromWorld(W, City);
 	UWeedToast::Notify(-1, 5.f, Types > 0 ? FColor::Green : FColor::Orange,
 		Types > 0 ? FString::Printf(TEXT("Meubel-templates opgeslagen (%d type(s))."), Types)
-				  : TEXT("Niks om op te slaan: zet eerst meubels binnen een woning neer."));
+				  : TEXT("Nothing to save: place furniture inside a home first."));
 }
 
 void AThePlugSIMCharacter::WeedClearFurniture()
@@ -932,7 +932,7 @@ void AThePlugSIMCharacter::WeedClearFurniture()
 	if (!W) { return; }
 	if (!HasAuthority())
 	{
-		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedClearFurniture: draai dit op de host."));
+		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedClearFurniture: run this on the host."));
 		return;
 	}
 	const int32 N = FurnitureTemplates::ClearPlaced(W);
@@ -947,7 +947,7 @@ void AThePlugSIMCharacter::WeedClearFurniture()
 		Give(TEXT("Lamp_Ceiling"), 3); Give(TEXT("Atm"), 2);
 	}
 
-	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d meubels gewist + meubelset (incl. sink) terug in inventory."), N));
+	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d furniture cleared + furniture set (incl. sink) back in inventory."), N));
 }
 
 void AThePlugSIMCharacter::WeedFurnitureTypes()
@@ -956,7 +956,7 @@ void AThePlugSIMCharacter::WeedFurnitureTypes()
 	if (!W) { return; }
 	ACityGenerator* City = nullptr;
 	for (TActorIterator<ACityGenerator> It(W); It; ++It) { City = *It; break; }
-	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("Geen stad gevonden.")); return; }
+	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("No city found.")); return; }
 
 	TMap<FString, int32> Counts;
 	FurnitureTemplates::CountHomeTypes(City, Counts);
@@ -970,10 +970,10 @@ void AThePlugSIMCharacter::WeedFurnitureTypes()
 		const bool bHas = Templates.Contains(K) && Templates[K].Num() > 0;
 		if (bHas) { ++Done; }
 		UE_LOG(LogTemp, Display, TEXT("WeedFurnitureType: %-12s %3d woningen   %s"),
-			*K, Counts[K], bHas ? TEXT("[OK sjabloon]") : TEXT("[NOG DOEN]"));
+			*K, Counts[K], bHas ? TEXT("[OK sjabloon]") : TEXT("[TODO]"));
 	}
 	UWeedToast::Notify(-1, 7.f, FColor::Cyan,
-		FString::Printf(TEXT("%d/%d woning-types gemeubileerd (lijst in de log: WeedFurnitureType)."), Done, Keys.Num()));
+		FString::Printf(TEXT("%d/%d home types furnished (list in log: WeedFurnitureType)."), Done, Keys.Num()));
 }
 
 void AThePlugSIMCharacter::ToggleRollUI()

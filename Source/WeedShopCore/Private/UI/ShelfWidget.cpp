@@ -184,7 +184,7 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseShelf(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep items tussen het schap en je inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag items between the shelf and your inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
 	UHorizontalBox* Cols = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -207,8 +207,8 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 		return DZ;
 	};
 
-	UWidget* ShelfCol = MakeColumn(TEXT("In het schap"), FLinearColor(0.6f, 0.85f, 1.f), ShelfList, true);
-	UWidget* InvCol = MakeColumn(TEXT("Jouw inventory"), FLinearColor(0.7f, 1.f, 0.75f), InvList, false);
+	UWidget* ShelfCol = MakeColumn(TEXT("On the shelf"), FLinearColor(0.6f, 0.85f, 1.f), ShelfList, true);
+	UWidget* InvCol = MakeColumn(TEXT("Your inventory"), FLinearColor(0.7f, 1.f, 0.75f), InvList, false);
 	UHorizontalBoxSlot* L = Cols->AddChildToHorizontalBox(ShelfCol); L->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); L->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
 	UHorizontalBoxSlot* R = Cols->AddChildToHorizontalBox(InvCol);  R->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); R->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
 }
@@ -253,7 +253,7 @@ void UShelfWidget::FillBody()
 			const bool bBag = UInventoryComponent::IsBag(Id);
 			const bool bWeed = bBag || S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Joint_")) || S.StartsWith(TEXT("WetBud_"));
 			C->Badge = WeedUI::ItemQtyBadge(Id, Q);
-			C->Tooltip = bBag ? FString::Printf(TEXT("%s\n%dx %dg zakje  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, UInventoryComponent::BagGrams(Id), Thc)
+			C->Tooltip = bBag ? FString::Printf(TEXT("%s\n%dx %dg bag  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, UInventoryComponent::BagGrams(Id), Thc)
 			           : (bWeed ? FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, Thc)
 			                    : FString::Printf(TEXT("%s\nAantal: %d"), *WeedUI::PrettyItemName(Id), Q));
 		}
@@ -281,7 +281,7 @@ void UShelfWidget::FillBody()
 				Grid->AddChildToWrapBox(Sz);
 			}
 		}
-		// Lege "sleep hierheen"-cel (drop-doel, ook als het schap leeg is).
+		// Lege "drag here"-cel (drop-doel, ook als het schap leeg is).
 		UShelfCell* Empty = MakeCell(true, -1, NAME_None, 0, 0.f);
 		USizeBox* ESz = WidgetTree->ConstructWidget<USizeBox>();
 		ESz->SetWidthOverride(78.f); ESz->SetHeightOverride(78.f); ESz->SetContent(Empty);

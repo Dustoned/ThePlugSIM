@@ -395,7 +395,7 @@ void UDealWidget::UpdateLive()
 
 	// Voorraad + kwaliteit van het aangeboden product.
 	// Voorraad in GRAMMEN (zakjes van die strain), gewogen THC/kwaliteit. Zo klopt het met wat de klant in
-	// grammen vraagt en met de echte deal-afwikkeling (RemoveBagsForGrams) - geen "niet genoeg" meer terwijl je het wel hebt.
+	// grammen vraagt en met de echte deal-afwikkeling (RemoveBagsForGrams) - geen "not enough" meer terwijl je het wel hebt.
 	float Q01 = -1.f, Thc = 0.f, QPct = 0.f; int32 Stock = 0;
 	if (APawn* P = GetOwningPlayerPawn())
 	{

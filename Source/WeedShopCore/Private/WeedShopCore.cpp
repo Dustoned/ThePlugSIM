@@ -70,7 +70,7 @@ public:
 				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0.f, 28.f, 0.f, 0.f)
 				[
 					SNew(STextBlock)
-					.Text(FText::FromString(TEXT("De stad wordt opgebouwd...")))
+					.Text(FText::FromString(TEXT("Building the city...")))
 					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 14))
 					.ColorAndOpacity(FLinearColor(0.5f, 0.55f, 0.5f))
 				]
