@@ -60,7 +60,10 @@ Write-Host "== Zip klaar: $SizeMB MB =="
 Write-Host "== Uploaden naar GitHub Release ($Tag) =="
 $Title = "ThePlugSIM test-build $Stamp"
 $Body  = "$Notes`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download de zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
-gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes "$Body" --latest
+# Notes via een UTF-8 bestand (--notes-file) zodat symbolen (pijlen/vinkjes/lijnen in de patch notes) correct renderen.
+$NotesFile = Join-Path $Proj "Build\release-notes.md"
+[System.IO.File]::WriteAllText($NotesFile, $Body, (New-Object System.Text.UTF8Encoding($false)))
+gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" --latest
 if ($LASTEXITCODE -ne 0) { Write-Error "GitHub release upload mislukt"; exit 1 }
 
 # Onthoud welke commit deze build was, voor de changelog van de volgende keer.
