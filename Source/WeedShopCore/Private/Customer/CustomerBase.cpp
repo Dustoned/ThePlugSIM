@@ -249,10 +249,12 @@ void ACustomerBase::BeginPlay()
 				if (Lvl <= PlayerLvl + 2) { Eligible.Add(Strain); } // kleine buffer boven je level
 			}
 			FName PickStrain = (Eligible.Num() > 0) ? Eligible[FMath::RandRange(0, Eligible.Num() - 1)] : LowestStrain;
+			// Op afspraak: gebruik exact wat in het telefoonbericht stond (strain + aantal).
+			if (bApptActive && !ApptWantStrain.IsNone()) { PickStrain = ApptWantStrain; }
 			if (!PickStrain.IsNone())
 			{
 				DesiredProductId = FName(*FString::Printf(TEXT("Bag_%s"), *PickStrain.ToString()));
-				DesiredQuantity = FMath::RandRange(1, 3);
+				DesiredQuantity = (bApptActive && ApptWantQty > 0) ? ApptWantQty : FMath::RandRange(1, 3);
 			}
 		}
 
@@ -2967,7 +2969,23 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 	{
 	case ECustomerState::WantsToOrder:
 	case ECustomerState::Negotiating:
-		return FText::FromString(TEXT("Deal"));
+	{
+		// Toon WAT + HOEVEEL ze willen, en (op afspraak) hoelang ze nog wachten.
+		FString S(TEXT("Deal"));
+		if (!DesiredProductId.IsNone())
+		{
+			FString Item = DesiredProductId.ToString();
+			Item.RemoveFromStart(TEXT("Bag_"));
+			Item.RemoveFromStart(TEXT("Bud_"));
+			S = FString::Printf(TEXT("Deal - wants %dx %s"), FMath::Max(1, DesiredQuantity), *Item);
+		}
+		if (bApptActive)
+		{
+			const int32 Left = FMath::CeilToInt(GetApptTimeLeft());
+			S += FString::Printf(TEXT("  (leaves in %d:%02d)"), Left / 60, Left % 60);
+		}
+		return FText::FromString(S);
+	}
 	case ECustomerState::Prospect:
 		return FText::FromString(TEXT("Give a hit"));
 	case ECustomerState::Served:

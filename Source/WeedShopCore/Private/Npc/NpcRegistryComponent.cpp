@@ -235,6 +235,7 @@ void UNpcRegistryComponent::NoteAppointment(FName NpcId)
 	const int32 Day = CurrentDay();
 	if (S->ApptDay != Day) { S->ApptDay = Day; S->ApptCountToday = 0; }
 	++S->ApptCountToday;
+	S->LastApptAbs = NowAbs(); // start de cooldown zodat dezelfde persoon niet blijft vragen
 }
 
 void UNpcRegistryComponent::MarkDealt(FName NpcId)
@@ -246,8 +247,12 @@ void UNpcRegistryComponent::MarkDealt(FName NpcId)
 bool UNpcRegistryComponent::IsOnCooldown(FName NpcId) const
 {
 	const FNpcState* S = Find(NpcId);
-	if (!S || S->LastDealAbs < 0.f) { return false; }
-	return (NowAbs() - S->LastDealAbs) < DealCooldownSeconds;
+	if (!S) { return false; }
+	const float Now = NowAbs();
+	// Cooldown na een echte deal OF na een afspraak-vraag (tegen blijven-vragen).
+	if (S->LastDealAbs >= 0.f && (Now - S->LastDealAbs) < DealCooldownSeconds) { return true; }
+	if (S->LastApptAbs >= 0.f && (Now - S->LastApptAbs) < DealCooldownSeconds) { return true; }
+	return false;
 }
 
 FName UNpcRegistryComponent::AssignNpc()

@@ -211,6 +211,9 @@ public:
 	void EndAppointment();
 	bool HasActiveAppointment() const { return bApptActive; }
 
+	// Door de afspraak vooraf bepaald wat de klant wil (matcht met het telefoonbericht). NAME_None = vrij kiezen.
+	void SetApptWant(FName Strain, int32 Qty) { ApptWantStrain = Strain; ApptWantQty = Qty; }
+
 	// Voor de chat-progressbar (client leest gerepliceerde ApptTimeout). Loopt van 1 -> 0 tot de NPC opgeeft.
 	static constexpr float ApptTimeoutMax = 360.f; // moet matchen met de timer in BeginAppointment
 	float GetApptTimeLeft() const { return FMath::Max(0.f, ApptTimeout); }
@@ -333,6 +336,8 @@ protected:
 	bool bApptSaidOnWay = false;
 	bool bApptSaidHere = false;
 	bool bApptSaidWaiting = false;
+	FName ApptWantStrain = NAME_None; // vooraf bepaalde wens (uit het afspraak-bericht)
+	int32 ApptWantQty = 0;
 	void PushApptMessage(const FString& InBody); // stuurt een chat-bericht namens deze NPC
 
 	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).

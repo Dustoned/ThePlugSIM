@@ -8,6 +8,8 @@
 #include "Phone/PhoneClientComponent.h"
 #include "World/CityGenerator.h"
 #include "Npc/NpcRegistryComponent.h"
+#include "Progression/StoreComponent.h"
+#include "Progression/LevelComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
@@ -156,10 +158,35 @@ void UContactsComponent::SendRandomAppointment()
 	const int32 HH = (TotalMin / 60) % 24;
 	const int32 MM = TotalMin % 60;
 
+	// Kies alvast WAT (strain binnen ~je level) en HOEVEEL (zakjes) de klant wil, zodat je je kunt voorbereiden.
+	FName WantStrain; int32 WantQty = FMath::RandRange(1, 3);
+	{
+		const AWeedShopGameState* GSp = Cast<AWeedShopGameState>(GetOwner());
+		const int32 PlayerLvl = (GSp && GSp->GetLeveling()) ? GSp->GetLeveling()->GetLevel() : 1;
+		UStoreComponent* Store = GSp ? GSp->GetStore() : nullptr;
+		if (ProductTable)
+		{
+			TArray<FName> Eligible; FName Lowest; int32 LowestLvl = MAX_int32;
+			for (const FName& Row : ProductTable->GetRowNames())
+			{
+				const FString RS = Row.ToString();
+				if (!RS.StartsWith(TEXT("Bud_"))) { continue; }
+				const FName Strain(*RS.RightChop(4));
+				const int32 Lvl = Store ? Store->RequiredLevelFor(Strain) : 1;
+				if (Lvl < LowestLvl) { LowestLvl = Lvl; Lowest = Strain; }
+				if (Lvl <= PlayerLvl + 2) { Eligible.Add(Strain); }
+			}
+			WantStrain = (Eligible.Num() > 0) ? Eligible[FMath::RandRange(0, Eligible.Num() - 1)] : Lowest;
+		}
+	}
+	const FString WantStr = WantStrain.IsNone() ? TEXT("wiet") : WantStrain.ToString();
+
 	FPhoneMessage Msg;
 	Msg.FromContactId = C.ContactId;
 	Msg.SenderName = C.DisplayName;
 	Msg.AppointmentTimeOfDay = ApptTime;
+	Msg.WantStrain = WantStrain;
+	Msg.WantQty = WantQty;
 	Msg.Kind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
 
 	// Adres opzoeken bij de bewoner met dit NpcId, zodat "kom bij mij langs" vertelt WAAR je heen moet.
@@ -170,10 +197,10 @@ void UContactsComponent::SendRandomAppointment()
 	}
 
 	Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
-		? FText::FromString(FString::Printf(TEXT("Yo, I'll come by at %02d:%02d."), HH, MM))
+		? FText::FromString(FString::Printf(TEXT("Yo, got any %s? Need %dx. I'll come by at %02d:%02d."), *WantStr, WantQty, HH, MM))
 		: (AddrStr.IsEmpty()
-			? FText::FromString(FString::Printf(TEXT("Can you come by mine at %02d:%02d?"), HH, MM))
-			: FText::FromString(FString::Printf(TEXT("Come by my place (no. %s) at %02d:%02d?"), *AddrStr, HH, MM)));
+			? FText::FromString(FString::Printf(TEXT("Got any %s? Need %dx - can you come by mine at %02d:%02d?"), *WantStr, WantQty, HH, MM))
+			: FText::FromString(FString::Printf(TEXT("Got any %s? Need %dx - come by my place (no. %s) at %02d:%02d?"), *WantStr, WantQty, *AddrStr, HH, MM)));
 
 	Messages.Insert(Msg, 0); // nieuwste bovenaan
 	if (Messages.Num() > 40)
@@ -235,6 +262,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	{
 		if (It->NpcId == Msg.FromContactId && It->IsResident())
 		{
+			It->SetApptWant(Msg.WantStrain, Msg.WantQty);
 			It->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
 			return;
 		}
@@ -310,8 +338,17 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 
 	Cust->NpcId = Msg.FromContactId; // dit is dezelfde persoon als het contact
 	Cust->ProductTable = ProductTable;
-	Cust->DesiredProductId = FName(TEXT("Bud_NorthernLights"));
-	Cust->DesiredQuantity = 2;
+	Cust->SetApptWant(Msg.WantStrain, Msg.WantQty);
+	if (!Msg.WantStrain.IsNone())
+	{
+		Cust->DesiredProductId = FName(*FString::Printf(TEXT("Bag_%s"), *Msg.WantStrain.ToString()));
+		Cust->DesiredQuantity = FMath::Max(1, Msg.WantQty);
+	}
+	else
+	{
+		Cust->DesiredProductId = FName(TEXT("Bag_NorthernLights"));
+		Cust->DesiredQuantity = 2;
+	}
 	Cust->BudgetCentsPerUnit = 1500;
 	Cust->bDespawnAfterServed = true; // afspraak-klant vertrekt na de deal
 	Cust->bNeedsPlayer = true;        // afspraak: poppetje op de kompas (je moet bij deze zijn)

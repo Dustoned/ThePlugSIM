@@ -64,6 +64,12 @@ struct FPhoneMessage
 	// True = dit is mijn eigen antwoord in de chat (rechts uitgelijnd), niet van de klant.
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	bool bFromMe = false;
+
+	// Wat de klant wil (zodat je je kunt voorbereiden): strain + aantal zakjes. NAME_None/0 = onbekend.
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	FName WantStrain = NAME_None;
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	int32 WantQty = 0;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPhoneMessagesChanged);

@@ -47,6 +47,9 @@ struct FNpcState
 	int32 ApptDay = -1;
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	int32 ApptCountToday = 0;
+	// Wanneer deze NPC voor het laatst een afspraak VROEG (voor de cooldown tegen blijven-vragen).
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	float LastApptAbs = -1.f;
 };
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
