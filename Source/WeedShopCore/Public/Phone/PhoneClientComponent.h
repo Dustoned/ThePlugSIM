@@ -385,6 +385,9 @@ public:
 	int32 GetRentDueCents() const;
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Rent")
 	int32 GetRentDueDay() const { return RentDueDay; }
+	// Save/load van de huur-staat.
+	bool WasRentIntroShown() const { return bShownRentIntro; }
+	void RestoreRent(int32 DueDay, bool bIntroShown) { RentDueDay = FMath::Max(1, DueDay); bShownRentIntro = bIntroShown; }
 	// Server: door de dag-cyclus aangeroepen bij een nieuwe dag -> int de huur + intro-melding.
 	void ProcessRentForDay(int32 Day);
 

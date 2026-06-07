@@ -26,6 +26,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Water")
 	int32 GetCharges() const { return WaterCharges; }
 
+	// Save/load: zet het waterniveau terug.
+	void RestoreCharges(int32 C) { WaterCharges = FMath::Max(0, C); }
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Water")
 	bool HasBottle() const { return GetMaxCharges() > 0; }
 

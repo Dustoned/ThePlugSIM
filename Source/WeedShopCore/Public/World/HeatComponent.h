@@ -53,6 +53,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Heat")
 	float GetHeat() const { return Heat; }
 
+	// Save/load: zet de heat-waarde terug.
+	void RestoreHeat(float V) { SetHeat(V); }
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

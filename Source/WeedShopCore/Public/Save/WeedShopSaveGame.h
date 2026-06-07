@@ -52,6 +52,8 @@ struct FSavePlantSlot // één plant-plek in een pot
 	UPROPERTY() FName Strain = NAME_None;
 	UPROPERTY() float Growth = 0.f;
 	UPROPERTY() uint8 Phase = 0;
+	UPROPERTY() uint8 Afflict = 0;      // 0 gezond, 1 mold, 2 pest
+	UPROPERTY() float AfflictTime = 0.f;
 };
 
 USTRUCT()
@@ -73,6 +75,7 @@ struct FPlacedObjectSave
 	UPROPERTY() float CareMultiplier = 0.6f;
 	UPROPERTY() float CareAvg = 0.6f;
 	UPROPERTY() float WaterLevel = 0.6f;
+	UPROPERTY() float FertYieldMult = 1.f; // mest-bonus (geldt voor 1 oogst)
 	UPROPERTY() TArray<FSavePlantSlot> Slots;
 };
 
@@ -87,6 +90,10 @@ struct FPlayerSaveData
 	UPROPERTY() int64 BankCents = 0;
 	UPROPERTY() bool bBankAppUnlocked = false;
 	UPROPERTY() TArray<FInvSaveItem> Items;
+	UPROPERTY() TArray<int32> HotbarCells; // per hotbar-slot: grid-cel van de toegewezen stapel (-1 = leeg)
+	UPROPERTY() int32 RentDueDay = 31;     // dag waarop de volgende huur gaat
+	UPROPERTY() bool bRentIntroShown = false;
+	UPROPERTY() int32 WaterCharges = 0;    // water in je fles
 
 	// Waar de speler stond op het moment van opslaan (bij laden gaat 'ie hier weer staan).
 	UPROPERTY() bool bHasTransform = false;
@@ -135,6 +142,10 @@ public:
 	// Vrij bouwen (testing/sandbox) -> overal plaatsen toegestaan.
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	bool bFreeBuild = false;
+
+	// Huidige politie-heat (gedeeld). Resette anders naar 0 bij elke reload.
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	float Heat = 0.f;
 
 	// Totale real-life speeltijd in seconden (cumulatief over sessies).
 	UPROPERTY(VisibleAnywhere, Category = "Save")

@@ -181,6 +181,8 @@ public:
 
 	// Rooster-cel van een stapel (INDEX_NONE als niet geplaatst).
 	int32 GetStackCell(int32 StackId) const { return GridOrder.IndexOfByKey(StackId); }
+	// Stapel-id op een rooster-cel (0 = leeg). Voor hotbar-herstel na load (cel -> nieuwe stapel-id).
+	int32 GetStackIdAtCell(int32 Cell) const { return GridOrder.IsValidIndex(Cell) ? GridOrder[Cell] : 0; }
 
 	// Verplaats een stapel naar een rooster-cel (wisselt met wat daar stond). Voor drag-and-drop.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")

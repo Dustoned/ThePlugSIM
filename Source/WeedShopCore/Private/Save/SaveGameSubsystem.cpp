@@ -20,6 +20,9 @@
 #include "World/PackBench.h"
 #include "World/Atm.h"
 #include "Placement/PlaceableProp.h"
+#include "World/CeilingLamp.h"             // plafondlampen opslaan/herstellen
+#include "Cultivation/WaterCanComponent.h" // water in je fles
+#include "World/HeatComponent.h"           // politie-heat
 #include "EngineUtils.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Kismet/GameplayStatics.h"
@@ -475,6 +478,8 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 		Out.bBankAppUnlocked = Ph->IsBankAppUnlocked();
 		Out.OwnedHomes = Ph->GetOwnedHomes();
 		Out.ActiveHome = Ph->GetActiveHome();
+		Out.RentDueDay = Ph->GetRentDueDay();
+		Out.bRentIntroShown = Ph->WasRentIntroShown();
 	}
 	if (const UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
@@ -485,6 +490,16 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 			It.GridCell = Inv->GetStackCell(S.StackId); // bewaar de exacte slot-positie
 			Out.Items.Add(It);
 		}
+		// Hotbar: per slot de grid-cel van de toegewezen stapel (stabiel over reload; -1 = leeg).
+		for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h)
+		{
+			const int32 Sid = Inv->GetHotbarStackId(h);
+			Out.HotbarCells.Add(Sid != 0 ? Inv->GetStackCell(Sid) : -1);
+		}
+	}
+	if (const UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
+	{
+		Out.WaterCharges = Can->GetCharges();
 	}
 
 	// Sla op waar de speler staat + kijkt (kijkrichting van de controller, niet de body).
@@ -505,6 +520,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	{
 		Ph->SetBankAppUnlocked(Data.bBankAppUnlocked);
 		Ph->RestoreProperty(Data.OwnedHomes, Data.ActiveHome);
+		Ph->RestoreRent(Data.RentDueDay, Data.bRentIntroShown);
 	}
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
@@ -517,6 +533,18 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 			RestoredStacks.Add(S); Cells.Add(It.GridCell);
 		}
 		Inv->RestoreStacksAndGrid(RestoredStacks, Cells);
+		// Hotbar terugzetten: zoek per opgeslagen cel de (nieuwe) stapel-id en wijs 'm aan het slot toe.
+		for (int32 h = 0; h < Data.HotbarCells.Num() && h < UInventoryComponent::HotbarSize; ++h)
+		{
+			const int32 Cell = Data.HotbarCells[h];
+			if (Cell < 0) { continue; }
+			const int32 Sid = Inv->GetStackIdAtCell(Cell);
+			if (Sid != 0) { Inv->AssignHotbarStack(h, Sid); }
+		}
+	}
+	if (UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
+	{
+		Can->RestoreCharges(Data.WaterCharges);
 	}
 
 	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "ga naar het save-punt").
@@ -571,6 +599,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	// NPC-relaties + telefoon-contacten/berichten (waren voorheen niet opgeslagen).
 	if (const UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Save->Npcs = Reg->GetStatesForSave(); }
 	if (const UContactsComponent* Con = GS->GetContacts()) { Save->Contacts = Con->GetContacts(); Save->Messages = Con->GetMessages(); }
+	if (const UHeatComponent* Ht = GS->GetHeat()) { Save->Heat = Ht->GetHeat(); }
 
 	// Geplaatste wereld-objecten (potten/planten, shelves/chests, rekken, tafels, meubels, ATM).
 	GatherPlaced(World, Save->Placed);
@@ -632,6 +661,7 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	if (ULevelComponent* Lv = GS->GetLeveling()) { Lv->RestoreLevel(Save->CrewLevel, Save->CrewXP); }
 	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->RestoreStates(Save->Npcs); }
 	if (UContactsComponent* Con = GS->GetContacts()) { Con->RestoreContacts(Save->Contacts, Save->Messages); }
+	if (UHeatComponent* Ht = GS->GetHeat()) { Ht->RestoreHeat(Save->Heat); }
 
 	// Geplaatste wereld-objecten opnieuw opbouwen (vervangt de huidige set).
 	RespawnPlaced(World, Save->Placed);
@@ -677,11 +707,14 @@ void USaveGameSubsystem::GatherPlaced(UWorld* World, TArray<FPlacedObjectSave>& 
 		FGrowPlantState St; It->CaptureState(St);
 		O.PotUpgradeMask = St.PotUpgradeMask; O.SoilId = St.SoilId; O.SoilUsesLeft = St.SoilUsesLeft;
 		O.CareMultiplier = St.CareMultiplier; O.CareAvg = St.CareAvg; O.WaterLevel = St.WaterLevel;
+		O.FertYieldMult = St.FertYieldMult;
 		for (int32 i = 0; i < St.SlotStrain.Num(); ++i)
 		{
 			FSavePlantSlot S; S.Strain = St.SlotStrain[i];
 			S.Growth = St.SlotGrowth.IsValidIndex(i) ? St.SlotGrowth[i] : 0.f;
 			S.Phase = St.SlotPhase.IsValidIndex(i) ? St.SlotPhase[i] : 0;
+			S.Afflict = St.SlotAfflict.IsValidIndex(i) ? St.SlotAfflict[i] : 0;
+			S.AfflictTime = St.SlotAfflictTime.IsValidIndex(i) ? St.SlotAfflictTime[i] : 0.f;
 			O.Slots.Add(S);
 		}
 		Out.Add(O);
@@ -715,6 +748,12 @@ void USaveGameSubsystem::GatherPlaced(UWorld* World, TArray<FPlacedObjectSave>& 
 		FPlacedObjectSave O; O.Kind = 0; O.ItemId = It->ItemId;
 		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
 	}
+	// Plafondlampen zijn een eigen actor (ACeilingLamp), geen APlaceableProp -> apart opslaan (kind 6).
+	for (TActorIterator<ACeilingLamp> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 6; O.ItemId = FName(TEXT("Lamp_Ceiling"));
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
+	}
 }
 
 void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObjectSave>& In)
@@ -729,6 +768,7 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 	for (TActorIterator<APackBench> It(World); It; ++It) { ToKill.Add(*It); }
 	for (TActorIterator<AAtm> It(World); It; ++It) { ToKill.Add(*It); }
 	for (TActorIterator<APlaceableProp> It(World); It; ++It) { ToKill.Add(*It); }
+	for (TActorIterator<ACeilingLamp> It(World); It; ++It) { ToKill.Add(*It); }
 	for (AActor* A : ToKill) { if (A) { A->Destroy(); } }
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -743,7 +783,8 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 			if (P) { P->PotTier = O.ItemId; P->FinishSpawning(TM);
 				FGrowPlantState St; St.PotUpgradeMask = O.PotUpgradeMask; St.SoilId = O.SoilId; St.SoilUsesLeft = O.SoilUsesLeft;
 				St.CareMultiplier = O.CareMultiplier; St.CareAvg = O.CareAvg; St.WaterLevel = O.WaterLevel;
-				for (const FSavePlantSlot& S : O.Slots) { St.SlotStrain.Add(S.Strain); St.SlotGrowth.Add(S.Growth); St.SlotPhase.Add(S.Phase); }
+				St.FertYieldMult = O.FertYieldMult;
+				for (const FSavePlantSlot& S : O.Slots) { St.SlotStrain.Add(S.Strain); St.SlotGrowth.Add(S.Growth); St.SlotPhase.Add(S.Phase); St.SlotAfflict.Add(S.Afflict); St.SlotAfflictTime.Add(S.AfflictTime); }
 				P->RestoreState(St);
 			}
 			break;
@@ -775,6 +816,9 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 		}
 		case 5: // ATM
 			World->SpawnActor<AAtm>(AAtm::StaticClass(), TM, SP);
+			break;
+		case 6: // plafondlamp (eigen actor)
+			World->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM, SP);
 			break;
 		default: // generieke prop / meubel
 		{
