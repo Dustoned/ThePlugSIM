@@ -56,7 +56,7 @@ namespace
 		switch (Kind)
 		{
 		case EShopKind::Grow:       Out = { 0, 1, 5, 6, 9, 8 }; break;
-		case EShopKind::Supplies:   Out = { 4, 3, 2 }; break;
+		case EShopKind::Supplies:   Out = { 4, 3, 2, 10 }; break;
 		case EShopKind::Furniture:  Out = { 7 }; break;
 		case EShopKind::GasStation: Out = { 4 }; break;
 		default:                    Out = { 4 }; break;
@@ -77,6 +77,7 @@ namespace
 		case 7: return TEXT("Furniture");
 		case 8: return TEXT("Gear");
 		case 9: return TEXT("Care");
+		case 10: return TEXT("Hash");
 		default: return TEXT("Items");
 		}
 	}

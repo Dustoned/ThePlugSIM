@@ -43,6 +43,13 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Gear_Tent3"),     TEXT("Grow tent III"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.70f, 0.70f, 0.96f), FVector(35.f, 35.f, 48.f), false, 9600 },
 		{ TEXT("Gear_Water1"),    TEXT("Auto-water I"),     TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.30f, 0.30f, 0.55f), FVector(15.f, 15.f, 28.f), false, 5600 },
 		{ TEXT("Gear_Water2"),    TEXT("Auto-water II"),    TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.34f, 0.34f, 0.62f), FVector(17.f, 17.f, 31.f), false, 10400 },
+		// --- Hasj-keten: Mesh-extractor (Bud -> Crystal) + Heatpress (Crystal -> Hash). Spawnen AProcessorMachine. Binnen.
+		{ TEXT("Mesh_Cheap"),  TEXT("Mesh extractor"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 3000,  false, false, false, false, false, false, false, false, /*bIsProcessor*/ true },
+		{ TEXT("Mesh_Std"),    TEXT("Pro mesh extractor"),   TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 6000,  false, false, false, false, false, false, false, false, true },
+		{ TEXT("Mesh_Pro"),    TEXT("Industrial extractor"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 11000, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Press_Cheap"), TEXT("Heatpress"),            TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 5000,  false, false, false, false, false, false, false, false, true },
+		{ TEXT("Press_Std"),   TEXT("Pro heatpress"),        TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 9000,  false, false, false, false, false, false, false, false, true },
+		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 16000, false, false, false, false, false, false, false, false, true },
 	};
 	return Defs;
 }

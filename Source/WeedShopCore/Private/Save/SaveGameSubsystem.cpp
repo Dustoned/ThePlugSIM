@@ -21,6 +21,7 @@
 #include "World/Atm.h"
 #include "Placement/PlaceableProp.h"
 #include "World/CeilingLamp.h"             // plafondlampen opslaan/herstellen
+#include "World/ProcessorMachine.h"        // hasj-machines opslaan/herstellen
 #include "Cultivation/WaterCanComponent.h" // water in je fles
 #include "World/HeatComponent.h"           // politie-heat
 #include "EngineUtils.h"
@@ -765,6 +766,14 @@ void USaveGameSubsystem::GatherPlaced(UWorld* World, TArray<FPlacedObjectSave>& 
 		FPlacedObjectSave O; O.Kind = 6; O.ItemId = FName(TEXT("Lamp_Ceiling"));
 		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
 	}
+	// Hasj-machines (mesh/press): tier + lopende batches (hergebruik de DryEntries-velden, kind 7).
+	for (TActorIterator<AProcessorMachine> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 7; O.ItemId = It->MachineTier;
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation();
+		for (const FProcEntry& E : It->GetEntries()) { FSaveDry D; D.DryItemId = E.OutItemId; D.Quantity = E.Quantity; D.Thc = E.Thc; D.Quality = E.Quality; D.Elapsed = E.Elapsed; D.bDone = E.bDone; O.DryEntries.Add(D); }
+		Out.Add(O);
+	}
 }
 
 void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObjectSave>& In)
@@ -780,6 +789,7 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 	for (TActorIterator<AAtm> It(World); It; ++It) { ToKill.Add(*It); }
 	for (TActorIterator<APlaceableProp> It(World); It; ++It) { ToKill.Add(*It); }
 	for (TActorIterator<ACeilingLamp> It(World); It; ++It) { ToKill.Add(*It); }
+	for (TActorIterator<AProcessorMachine> It(World); It; ++It) { ToKill.Add(*It); }
 	for (AActor* A : ToKill) { if (A) { A->Destroy(); } }
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -831,6 +841,16 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 		case 6: // plafondlamp (eigen actor)
 			World->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM, SP);
 			break;
+		case 7: // hasj-machine (mesh/press)
+		{
+			AProcessorMachine* Proc = World->SpawnActorDeferred<AProcessorMachine>(AProcessorMachine::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Proc) { Proc->MachineTier = O.ItemId; Proc->FinishSpawning(TM);
+				TArray<FProcEntry> Es;
+				for (const FSaveDry& D : O.DryEntries) { FProcEntry E; E.OutItemId = D.DryItemId; E.Quantity = D.Quantity; E.Thc = D.Thc; E.Quality = D.Quality; E.Elapsed = D.Elapsed; E.bDone = D.bDone; Es.Add(E); }
+				Proc->RestoreEntries(Es);
+			}
+			break;
+		}
 		default: // generieke prop / meubel
 		{
 			APlaceableProp* Pr = World->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);

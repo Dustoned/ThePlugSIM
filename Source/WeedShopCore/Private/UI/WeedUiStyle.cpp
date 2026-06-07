@@ -78,7 +78,7 @@ namespace WeedUI
 		}
 		const FString S = ItemId.ToString();
 		if (S == TEXT("Cash")) { return FString(); }
-		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_"))) { return FString::Printf(TEXT("%dg"), Qty); }
+		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_"))) { return FString::Printf(TEXT("%dg"), Qty); }
 		return (Qty > 1) ? FString::Printf(TEXT("x%d"), Qty) : FString();
 	}
 
@@ -95,6 +95,8 @@ namespace WeedUI
 		if (S == TEXT("Cont_Jar15"))          { return TEXT("Jars"); }
 		if (S == TEXT("Cont_Block100"))       { return TEXT("Press blocks"); }
 		if (S == TEXT("Cont_Garbage500"))     { return TEXT("Garbage bags"); }
+		if (S.StartsWith(TEXT("Crystal_")))   { return S.RightChop(8) + TEXT(" crystals"); }
+		if (S.StartsWith(TEXT("Hash_")))      { return S.RightChop(5) + TEXT(" hash"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return S.RightChop(4); }
 		if (S.StartsWith(TEXT("Seed_")))      { return S.RightChop(5) + TEXT(" seed"); }
 		if (S.StartsWith(TEXT("Joint_")))     { return S.RightChop(6) + TEXT(" joint"); }
@@ -190,6 +192,8 @@ namespace WeedUI
 
 			// Nat en droog = HETZELFDE hemp-icoon, alleen de kleur verschilt (nat = blauw, droog = groen).
 			if (Has(TEXT("WetBud_")))                                    return { TEXT("weed"),      FLinearColor(0.40f, 0.70f, 1.0f),  EIcon::Leaf };
+			if (Has(TEXT("Crystal_")))                                   return { TEXT("crystals"),  FLinearColor(0.7f, 0.92f, 1.0f),   EIcon::Leaf };
+			if (Has(TEXT("Hash_")))                                      return { TEXT("hash"),      FLinearColor(0.75f, 0.55f, 0.3f),  EIcon::Leaf };
 			if (Has(TEXT("Bud_")))                                       return { TEXT("weed"),      FLinearColor(0.45f, 0.95f, 0.55f), EIcon::Leaf };
 			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    FLinearColor(0.55f, 0.9f, 0.6f),   EIcon::Leaf };
 			if (Has(TEXT("Joint_")))                                     return { TEXT("joint"),     FLinearColor(0.7f, 0.85f, 0.5f),   EIcon::Leaf };

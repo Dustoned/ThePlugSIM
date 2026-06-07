@@ -11,6 +11,7 @@
 #include "World/StorageShelf.h"
 #include "World/WaterSink.h"
 #include "World/CeilingLamp.h"
+#include "World/ProcessorMachine.h"
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -249,6 +250,7 @@ void UBuildComponent::SpawnPreview(const FPlaceableDef& Def, FName ItemId)
 	else if (Def.bIsDryRack)    { if (ADryingRack* R = Cast<ADryingRack>(Deferred(ADryingRack::StaticClass())))    { R->RackTier = ItemId;  R->FinishSpawning(TM); A = R; } }
 	else if (Def.bIsPackBench)  { if (APackBench* B = Cast<APackBench>(Deferred(APackBench::StaticClass())))       { B->BenchTier = ItemId; B->FinishSpawning(TM); A = B; } }
 	else if (Def.bIsShelf)      { if (AStorageShelf* S = Cast<AStorageShelf>(Deferred(AStorageShelf::StaticClass()))) { S->ShelfTier = ItemId; S->FinishSpawning(TM); A = S; } }
+	else if (Def.bIsProcessor)  { if (AProcessorMachine* M = Cast<AProcessorMachine>(Deferred(AProcessorMachine::StaticClass()))) { M->MachineTier = ItemId; M->FinishSpawning(TM); A = M; } }
 	else if (Def.bIsSink)       { A = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM); }
 	else if (Def.bIsLamp)       { A = W->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM); }
 	else if (Def.bIsAtm)        { A = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM); }
@@ -540,7 +542,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	float ZOff = 0.f;
 	if (CurrentDef.bIsLamp) { ZOff = -CurrentDef.BoxHalf.Z; }
 	else if (CurrentDef.bIsDryRack) { ZOff = CurrentDef.bIsWallMount ? 0.f : CurrentDef.BoxHalf.Z; }
-	else if (CurrentDef.bIsSink || CurrentDef.bIsPackBench || CurrentDef.bIsShelf) { ZOff = CurrentDef.BoxHalf.Z; }
+	else if (CurrentDef.bIsSink || CurrentDef.bIsPackBench || CurrentDef.bIsShelf || CurrentDef.bIsProcessor) { ZOff = CurrentDef.BoxHalf.Z; }
 	// pot / atm / generieke prop: root op de vloer (offset 0)
 
 	const bool bUsePreviewActor = PreviewActor.IsValid();
@@ -735,7 +737,7 @@ void UBuildComponent::UpdateRemoteGhost()
 	float ZOff = 0.f;
 	if (Def.bIsLamp) { ZOff = -Def.BoxHalf.Z; }
 	else if (Def.bIsDryRack) { ZOff = Def.bIsWallMount ? 0.f : Def.BoxHalf.Z; }
-	else if (Def.bIsSink || Def.bIsPackBench || Def.bIsShelf) { ZOff = Def.BoxHalf.Z; }
+	else if (Def.bIsSink || Def.bIsPackBench || Def.bIsShelf || Def.bIsProcessor) { ZOff = Def.BoxHalf.Z; }
 
 	if (AActor* P = PreviewActor.Get())
 	{
@@ -979,6 +981,19 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		{
 			Shelf->ShelfTier = ItemId;
 			Shelf->FinishSpawning(ShelfTM);
+		}
+	}
+	else if (Def.bIsProcessor)
+	{
+		// Hasj-machine (mesh/press): mesh-pivot in het midden -> origin een halve hoogte omhoog.
+		const FTransform ProcTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
+		AProcessorMachine* Proc = World->SpawnActorDeferred<AProcessorMachine>(
+			AProcessorMachine::StaticClass(), ProcTM,
+			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Proc)
+		{
+			Proc->MachineTier = ItemId;
+			Proc->FinishSpawning(ProcTM);
 		}
 	}
 	else if (Def.bIsPot)

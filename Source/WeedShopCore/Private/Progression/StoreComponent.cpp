@@ -137,6 +137,13 @@ namespace
 		{ TEXT("Bench_Pack"),  TEXT("Packing bench"),            TEXT("1 bag at a time"),  12000, 1 },
 		{ TEXT("Bench_Pack2"), TEXT("Pro packing bench"),        TEXT("3 bags at a time"),  40000, 1 },
 		{ TEXT("Bench_Pack3"), TEXT("Industrial packing table"), TEXT("6 bags at a time"), 110000, 1 },
+		// Hasj-keten: Mesh-extractor (wiet -> crystals) + Heatpress (crystals -> hasj, hogere THC%).
+		{ TEXT("Mesh_Cheap"),  TEXT("Mesh extractor"),       TEXT("Dried weed -> THC crystals (15%, ~60s)"),     9000, 1 },
+		{ TEXT("Mesh_Std"),    TEXT("Pro mesh extractor"),   TEXT("More yield + faster (20%, ~45s, 2 batches)"), 28000, 1 },
+		{ TEXT("Mesh_Pro"),    TEXT("Industrial extractor"), TEXT("Top yield (28%, ~30s, 3 batches)"),           75000, 1 },
+		{ TEXT("Press_Cheap"), TEXT("Heatpress"),            TEXT("Crystals -> hash, higher THC (~90s)"),        18000, 1 },
+		{ TEXT("Press_Std"),   TEXT("Pro heatpress"),        TEXT("Less loss + faster (~70s, 2 batches)"),       45000, 1 },
+		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("Best yield + THC (~50s, 3 batches)"),        120000, 1 },
 		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Bag up to 2g - 10 pcs"),    800, 10 },
 		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Bag up to 5g - 10 pcs"),   1500, 10 },
 		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Jar up to 14g - 5 pcs"),   2500,  5 },
@@ -204,6 +211,9 @@ int32 UStoreComponent::GetSellValueCents(FName ItemId) const
 	{
 		return 0;
 	}
+	// Hasj-keten: crystals + hasj verkoop je (per gram) aan de supplier. Hasj is veel waard.
+	if (S.StartsWith(TEXT("Crystal_"))) { return 400; }  // EUR 4 / g
+	if (S.StartsWith(TEXT("Hash_")))    { return 900; }  // EUR 9 / g
 
 	// 70% terug van de koopprijs (seeds + supplies, incl. pots/soil/papers/water).
 	FText Name; int32 Buy = 0; int32 Pack = 1;
@@ -297,6 +307,13 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("DryRack_Cheap"))   { return 3; }
 	if (S == TEXT("DryRack_Std"))     { return 12; }
 	if (S == TEXT("DryRack_Pro"))     { return 26; }
+	// Hasj-keten (mesh + press)
+	if (S == TEXT("Mesh_Cheap"))      { return 10; }
+	if (S == TEXT("Mesh_Std"))        { return 20; }
+	if (S == TEXT("Mesh_Pro"))        { return 30; }
+	if (S == TEXT("Press_Cheap"))     { return 16; }
+	if (S == TEXT("Press_Std"))       { return 26; }
+	if (S == TEXT("Press_Pro"))       { return 34; }
 	// Verpak-tafels
 	if (S == TEXT("Bench_Pack"))      { return 1; }
 	if (S == TEXT("Bench_Pack2"))     { return 14; }
@@ -426,6 +443,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")); break;
 			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
+			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")); break;    // Hasj-keten
 			default: break;
 			}
 			if (bMatch) { Out.Add(Id); }
