@@ -353,7 +353,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	Scroll->AddChild(Grid);
 
 	// Hint onderaan: sleep naar de hotbar onderin het scherm.
-	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep een item naar de hotbar.  Shift+klik = splitsen.  Sleep op een gelijke stapel = samenvoegen."), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
+	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep naar de hotbar  ·  Shift+klik = splitsen"), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
 		->SetPadding(FMargin(2.f, 8.f, 0.f, 0.f));
 
 	BuildSplitPopup(Root);

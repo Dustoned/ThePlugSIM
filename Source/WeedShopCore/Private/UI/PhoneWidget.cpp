@@ -728,7 +728,7 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 	const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Ph->GetPendingDeliveries();
 	if (Pend.Num() == 0)
 	{
-		Scroll->AddChild(MakeText(TEXT("No packages on the way. Order from the Grow shop or Supplies and pick a delivery speed."), 12, FLinearColor::Gray));
+		Scroll->AddChild(MakeText(TEXT("No packages on the way."), 12, FLinearColor::Gray));
 		return;
 	}
 	for (const UPhoneClientComponent::FPendingDelivery& D : Pend)
@@ -816,7 +816,7 @@ void UPhoneWidget::BuildBankApp()
 	if (!Ph->IsBankAppUnlocked() && !Ph->IsBankViaAtm())
 	{
 		AddRow(MakeText(TEXT("Mobile banking"), 16, FLinearColor(0.95f, 0.8f, 0.5f), false));
-		UTextBlock* Desc = MakeText(TEXT("Upgrade your phone to bank anywhere - no ATM needed."), 12, FLinearColor(0.7f, 0.75f, 0.85f));
+		UTextBlock* Desc = MakeText(TEXT("Upgrade to bank anywhere (no ATM)."), 12, FLinearColor(0.7f, 0.75f, 0.85f));
 		Desc->SetAutoWrapText(true);
 		AddRow(Desc);
 		AddRow(MakeText(TEXT(""), 8, FLinearColor::Transparent));
@@ -1016,7 +1016,7 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 	UPhoneClientComponent* Ph = Phone.Get();
 	Scroll->ClearChildren();
 
-	Scroll->AddChild(MakeText(TEXT("Upgrade your placed pots. Upgrades stay with the pot (gone if you sell it)."), 11, FLinearColor(0.6f, 0.66f, 0.76f)));
+	Scroll->AddChild(MakeText(TEXT("Pot upgrades stay with the pot."), 11, FLinearColor(0.6f, 0.66f, 0.76f)));
 
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
@@ -1096,7 +1096,7 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 	}
 	if (PotCount == 0)
 	{
-		Scroll->AddChild(MakeText(TEXT("No pots placed yet. Buy a pot (Pots tab) and place it first."), 12, FLinearColor::Gray));
+		Scroll->AddChild(MakeText(TEXT("No pots placed yet."), 12, FLinearColor::Gray));
 	}
 }
 

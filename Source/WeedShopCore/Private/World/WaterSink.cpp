@@ -67,7 +67,7 @@ void AWaterSink::Interact_Implementation(APawn* InstigatorPawn)
 	{
 		if (GEngine)
 		{
-			UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Hold a water bottle in your hand (select it on the hotbar) to fill it."));
+			UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Hold a water bottle (hotbar) to fill it."));
 		}
 		return;
 	}

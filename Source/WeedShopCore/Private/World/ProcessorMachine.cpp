@@ -270,8 +270,8 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 	else if (GEngine)
 	{
 		UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, FColor::Orange, IsPressTier(MachineTier)
-			? TEXT("Hold THC crystals in your hand (E) to press into hash.")
-			: TEXT("Hold dried weed in your hand (E) to extract crystals."));
+			? TEXT("Hold crystals (E) to press into hash.")
+			: TEXT("Hold dried weed (E) to extract crystals."));
 	}
 }
 

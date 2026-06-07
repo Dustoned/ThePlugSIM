@@ -538,7 +538,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			UVerticalBox* CoopVB = WidgetTree->ConstructWidget<UVerticalBox>();
 			CoopCard->SetContent(CoopVB);
 			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CO-OP (LAN)"), 20, FLinearColor(0.6f, 1.f, 0.6f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Host een vers spel, of vul het IP van de host in (zelfde netwerk)."), 12, FLinearColor(0.78f, 0.8f, 0.92f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Host een spel of vul het host-IP in."), 12, FLinearColor(0.78f, 0.8f, 0.92f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 
 			auto BigBtn = [&](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
 			{

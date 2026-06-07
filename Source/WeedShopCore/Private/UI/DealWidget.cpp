@@ -136,7 +136,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	VB->AddChildToVerticalBox(PreviewText)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
 	// Grote, duidelijke melding als je niets te verkopen hebt (verbergt de hele prijs-flow).
-	NoWeedText = WeedUI::Text(WidgetTree, TEXT("You have no packaged weed to sell.\nGrow it, dry it, then bag it first."), 14, FLinearColor(1.f, 0.6f, 0.45f), false, true);
+	NoWeedText = WeedUI::Text(WidgetTree, TEXT("No bagged weed.\nGrow -> dry -> bag first."), 14, FLinearColor(1.f, 0.6f, 0.45f), false, true);
 	VB->AddChildToVerticalBox(NoWeedText)->SetPadding(FMargin(0.f, 14.f, 0.f, 14.f));
 
 	OfferLabel = WeedUI::Text(WidgetTree, TEXT("Offer another strain:"), 12, FLinearColor(0.75f, 0.8f, 0.95f));

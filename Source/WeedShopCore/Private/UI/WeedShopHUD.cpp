@@ -847,7 +847,7 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	const int32 MaxG = Phone->GetMaxJointGrams();
 	if (MaxG <= 0)
 	{
-		DrawText(TEXT("No papers! Buy a pack from Suppliers (phone, Tab)."),
+		DrawText(TEXT("No papers! Buy some in Suppliers."),
 			FLinearColor(1.f, 0.5f, 0.5f), InnerX, y, Font);
 		y += 30.f;
 		DrawButton(FName(TEXT("rollclose")), TEXT("Close (right-click)"), InnerX, y, 150.f, FLinearColor::Yellow);
@@ -1447,7 +1447,7 @@ void AWeedShopHUD::DrawPotUpgradeUI(UPhoneClientComponent* Phone)
 	DrawText(FString::Printf(TEXT("POT UPGRADES  —  %s"), *PotName), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font);
 	DrawButton(FName(TEXT("potupgclose")), TEXT("Close (U)"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
 	y += 28.f;
-	DrawText(TEXT("Upgrades horen bij deze pot; verkoop je 'm, dan zijn ze weg."),
+	DrawText(TEXT("Upgrades horen bij deze pot."),
 		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
 	y += 26.f;
 

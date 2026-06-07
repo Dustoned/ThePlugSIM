@@ -127,7 +127,7 @@ void UPackWidget::FillBody()
 			*WeedUI::PrettyItemName(Bud), S.Quantity, S.Quality, S.QualityPct), 12, FLinearColor::White, true));
 		Row(B, FMargin(0, 2, 0, 2));
 	}
-	if (!bAnyBud) { Row(WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry harvested buds on a drying rack first."), 11, FLinearColor::Gray), FMargin(0, 6, 0, 6)); return; }
+	if (!bAnyBud) { Row(WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry it on a rack first."), 11, FLinearColor::Gray), FMargin(0, 6, 0, 6)); return; }
 
 	const int32 BudHave = SelStrain.IsNone() ? 0 : Inv->GetQuantity(SelStrain);
 	if (SelStrain.IsNone() || BudHave <= 0) { return; }
@@ -149,7 +149,7 @@ void UPackWidget::FillBody()
 		B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s   up to %dg   x%d"), *WeedUI::PrettyItemName(ContId), Cap, Owned), 12, FLinearColor::White, true));
 		Row(B, FMargin(0, 2, 0, 2));
 	}
-	if (!bAnyCont) { Row(WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them from the Grow shop (Packing tab)."), 11, FLinearColor(1.f, 0.7f, 0.5f)), FMargin(0, 4, 0, 0)); return; }
+	if (!bAnyCont) { Row(WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them in the Grow shop."), 11, FLinearColor(1.f, 0.7f, 0.5f)), FMargin(0, 4, 0, 0)); return; }
 
 	// === 3) Gram-slider + Pack ===
 	if (SelContainer.IsNone() || !Inv->HasItem(SelContainer, 1)) { return; }

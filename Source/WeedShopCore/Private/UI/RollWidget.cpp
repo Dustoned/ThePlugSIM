@@ -119,7 +119,7 @@ void URollWidget::RebuildContent()
 			FString::Printf(TEXT("Joint strength: %.0f%%   (%dg of %.0f%% quality weed - %.0f%% THC)"), Intensity * 100.f, G, Qpct, Thc),
 			13, LblCol, false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
-			TEXT("More grams = stronger joint. Thin/weak joints don't impress experienced or sober customers."),
+			TEXT("More grams = stronger joint."),
 			10, FLinearColor(0.6f, 0.64f, 0.74f)))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 	}
 	else
