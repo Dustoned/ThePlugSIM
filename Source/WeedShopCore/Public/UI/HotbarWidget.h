@@ -38,4 +38,6 @@ protected:
 	UPROPERTY() TObjectPtr<USizeBox> PhoneIconBox; // het telefoon-icoon zelf (inhoud wisselt: normaal/trillend)
 	int32 PhoneVibeState = -1;                     // -1 onbekend, 0 normaal, 1 trillend (om alleen bij flip te herbouwen)
 	float PhoneShakeT = 0.f;                        // tijd-accumulator voor de tril-animatie
+	int32 PhoneLastUnread = 0;                     // vorige ongelezen-stand (detecteert NIEUW bericht)
+	float PhoneVibeTimer = 0.f;                     // resterende tril-tijd na een nieuw bericht (sec)
 };

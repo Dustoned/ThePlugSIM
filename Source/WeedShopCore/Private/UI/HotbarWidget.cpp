@@ -236,9 +236,13 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (MsgBadge && MsgBadgePill)
 	{
 		const int32 Unread = Phone ? Phone->GetUnreadMessageCount() : 0;
-		const int32 Vibe = (Unread > 0) ? 1 : 0;
+		// Nieuw bericht (ongelezen steeg) -> korte tril-burst van 2 sec; daarna stil (badge blijft tot gelezen).
+		if (Unread > PhoneLastUnread) { PhoneVibeTimer = 2.0f; }
+		PhoneLastUnread = Unread;
+		PhoneVibeTimer = FMath::Max(0.f, PhoneVibeTimer - DeltaTime);
+		const int32 Vibe = (PhoneVibeTimer > 0.f) ? 1 : 0;
 
-		// Telefoon-icoon wisselen bij flip: trillend (phone_vibrate, warm getint) als er ongelezen is,
+		// Telefoon-icoon wisselen bij flip: trillend (phone_vibrate, warm getint) tijdens de burst,
 		// anders het normale (phone). Beide vallen terug op de message-glyph als de PNG ontbreekt.
 		if (PhoneIconBox && Vibe != PhoneVibeState)
 		{
