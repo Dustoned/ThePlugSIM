@@ -5,6 +5,8 @@
 #include "Inventory/InventoryComponent.h"
 #include "Cultivation/WaterCanComponent.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Phone/ContactsComponent.h"
+#include "Game/WeedShopGameState.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -113,6 +115,38 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		SlotBadgePills.Add(BadgePill);
 		SlotLastIcon.Add(NAME_None);
 	}
+
+	// --- Telefoon-icoon rechts van de hotbar met notificatie-bubble (aantal gemiste berichten) ---
+	{
+		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+		Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f);
+		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+		Sz->SetContent(Ov);
+
+		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
+		Box->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.9f), 8.f));
+		Box->SetPadding(FMargin(6.f));
+		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UOverlaySlot* BoxOS = Ov->AddChildToOverlay(Box);
+		BoxOS->SetHorizontalAlignment(HAlign_Fill); BoxOS->SetVerticalAlignment(VAlign_Fill);
+
+		USizeBox* Ico = WidgetTree->ConstructWidget<USizeBox>();
+		Ico->SetWidthOverride(40.f); Ico->SetHeightOverride(40.f);
+		Ico->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("phone"), 40.f, FLinearColor(0.8f, 0.9f, 1.f), WeedUI::EIcon::Message));
+		Box->SetContent(Ico);
+
+		MsgBadge = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor::White, true, true);
+		MsgBadgePill = WidgetTree->ConstructWidget<UBorder>();
+		MsgBadgePill->SetBrush(WeedUI::Rounded(FLinearColor(0.88f, 0.16f, 0.16f, 0.96f), 9.f));
+		MsgBadgePill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
+		MsgBadgePill->SetContent(MsgBadge);
+		MsgBadgePill->SetVisibility(ESlateVisibility::Collapsed);
+		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(MsgBadgePill);
+		BadgeOS->SetHorizontalAlignment(HAlign_Right); BadgeOS->SetVerticalAlignment(VAlign_Top);
+
+		UHorizontalBoxSlot* PS = Bar->AddChildToHorizontalBox(Sz);
+		PS->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f)); // ruimte tussen de hotbar en het telefoon-icoon
+	}
 }
 
 void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -200,4 +234,29 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 	bPrevWaterEmpty = bWaterEmpty;
+
+	// Telefoon-notificatie: aantal inkomende berichten sinds je de telefoon voor het laatst opende.
+	if (MsgBadge && MsgBadgePill)
+	{
+		int32 Incoming = 0;
+		if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (const UContactsComponent* Con = GS->GetContacts())
+			{
+				for (const FPhoneMessage& M : Con->GetMessages()) { if (!M.bFromMe) { ++Incoming; } }
+			}
+		}
+		if (Phone && Phone->IsOpen()) { LastSeenIncoming = Incoming; } // telefoon open -> alles gezien
+		if (LastSeenIncoming > Incoming) { LastSeenIncoming = Incoming; } // berichten opgeschoond -> klem
+		const int32 Unread = FMath::Max(0, Incoming - LastSeenIncoming);
+		if (Unread > 0)
+		{
+			MsgBadge->SetText(FText::FromString(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Unread)));
+			MsgBadgePill->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			MsgBadgePill->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 }
