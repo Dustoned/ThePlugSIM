@@ -152,7 +152,7 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DryCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.06f, 0.08f, 0.99f), 18.f));
+	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), 24.f)); // gelijk aan de inventory-card
 	CardB->SetPadding(FMargin(16.f));
 	Card = CardB;
 
@@ -338,7 +338,7 @@ void UDryingRackWidget::FillBody()
 		{
 			// Lege slot: zelfde flauwe vierkante stijl als een leeg inventory-vak (geen "+"), drop-zone voor wiet.
 			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.13f, 0.14f, 0.18f, 0.55f), 5.f));
+			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.13f, 0.14f, 0.18f, 0.55f), 8.f));
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
