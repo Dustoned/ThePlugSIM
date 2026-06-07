@@ -139,6 +139,10 @@ protected:
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> RangeRingMID;
 	bool bPlacingGear = false; // huidige plaatsing is een gear-upgrade -> ring tonen
 
+	// Heldere ring op de pot die DEZE gear gaat krijgen (de dichtstbijzijnde pot in bereik).
+	UPROPERTY(Transient) TObjectPtr<UStaticMeshComponent> TargetRing;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> TargetRingMID;
+
 	// Echt model als preview (transient) + gedeeld ghost-materiaal voor al z'n onderdelen.
 	UPROPERTY(Transient) TWeakObjectPtr<AActor> PreviewActor;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> PreviewMID;

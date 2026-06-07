@@ -197,6 +197,32 @@ void UBuildComponent::EnsureGhost()
 		RangeRing->SetWorldScale3D(FVector(3.5f, 3.5f, 0.03f));
 		RangeRing->SetVisibility(false);
 	}
+
+	// Heldere ring op de doel-pot (de pot die deze gear daadwerkelijk krijgt).
+	TargetRing = NewObject<UStaticMeshComponent>(GetOwner());
+	if (TargetRing)
+	{
+		TargetRing->SetupAttachment(GetOwner()->GetRootComponent());
+		TargetRing->RegisterComponent();
+		TargetRing->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		TargetRing->SetCastShadow(false);
+		TargetRing->SetAbsolute(true, true, true);
+		if (UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+		{
+			TargetRing->SetStaticMesh(Cyl);
+		}
+		if (UMaterialInterface* GhostMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost")))
+		{
+			TargetRingMID = UMaterialInstanceDynamic::Create(GhostMat, this);
+			if (TargetRingMID)
+			{
+				TargetRingMID->SetVectorParameterValue(TEXT("GhostColor"), FLinearColor(0.4f, 1.f, 0.3f, 1.f));
+				TargetRing->SetMaterial(0, TargetRingMID);
+			}
+		}
+		TargetRing->SetWorldScale3D(FVector(1.4f, 1.4f, 0.05f)); // ~140cm rond de doel-pot
+		TargetRing->SetVisibility(false);
+	}
 }
 
 void UBuildComponent::DestroyPreview()
@@ -267,6 +293,10 @@ void UBuildComponent::CancelPlacing()
 	if (RangeRing)
 	{
 		RangeRing->SetVisibility(false);
+	}
+	if (TargetRing)
+	{
+		TargetRing->SetVisibility(false);
 	}
 	DestroyPreview();
 }
@@ -552,6 +582,25 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		const bool bRing = bShow && bPlacingGear;
 		RangeRing->SetVisibility(bRing);
 		if (bRing) { RangeRing->SetWorldLocation(PreviewLocation + FVector(0.f, 0.f, 3.f)); }
+	}
+	// Doel-pot highlighten: de dichtstbijzijnde pot binnen bereik die deze gear gaat krijgen.
+	if (TargetRing)
+	{
+		AGrowPlant* TargetPot = nullptr;
+		if (bShow && bPlacingGear)
+		{
+			float BestSq = FMath::Square(175.f);
+			for (TActorIterator<AGrowPlant> It(GetWorld()); It; ++It)
+			{
+				if (!IsValid(*It)) { continue; }
+				const FVector PL = It->GetActorLocation();
+				if (FMath::Abs(PL.Z - PreviewLocation.Z) > 280.f) { continue; }
+				const float dSq = FVector::DistSquared2D(PL, PreviewLocation);
+				if (dSq <= BestSq) { BestSq = dSq; TargetPot = *It; }
+			}
+		}
+		TargetRing->SetVisibility(TargetPot != nullptr);
+		if (TargetPot) { TargetRing->SetWorldLocation(TargetPot->GetActorLocation() + FVector(0.f, 0.f, 5.f)); }
 	}
 
 	// Preview-staat naar de server sturen (getemporiseerd) zodat co-op-spelers de ghost zien.
