@@ -43,6 +43,7 @@
 #include "UI/DryingRackWidget.h"
 #include "UI/StoreWidget.h"
 #include "World/StoreCounter.h"
+#include "Progression/LevelComponent.h"
 #include "UI/HandInfoWidget.h"
 #include "UI/WeedToast.h"
 #include "Cultivation/DryingRack.h"
@@ -1472,6 +1473,49 @@ void UPhoneClientComponent::ServerStoreBuy_Implementation(FName ItemId, bool bBa
 	else       { Inv->AddItem(ItemId, FMath::Max(1, Pack)); }
 
 	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor(120, 220, 160), FString::Printf(TEXT("Gekocht: %s"), *Name.ToString())); }
+}
+
+void UPhoneClientComponent::ServerStoreCheckout_Implementation(const TArray<FName>& Ids, const TArray<int32>& Qtys, bool bBank)
+{
+	AWeedShopGameState* GS = GetGS();
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	UInventoryComponent* Inv = GetOwnerInventory();
+	UEconomyComponent* Econ = GetOwnerEconomy();
+	if (!Store || !Inv || !Econ) { return; }
+	const int32 PlayerLvl = (GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 999;
+
+	// 1) Totaal + geldige regels (level-cap + bestaande catalog-artikelen).
+	struct FBuyLine { FName Id; int32 Qty; bool bSeed; int32 Pack; };
+	TArray<FBuyLine> Lines; int64 Total = 0;
+	for (int32 i = 0; i < Ids.Num(); ++i)
+	{
+		const int32 Qty = Qtys.IsValidIndex(i) ? Qtys[i] : 0;
+		if (Qty <= 0) { continue; }
+		if (Store->RequiredLevelFor(Ids[i]) > PlayerLvl) { continue; } // gelockt -> overslaan
+		FText N; int32 Price = 0; int32 Pack = 1;
+		const bool bSeed = Store->GetSeedDisplay(Ids[i], N, Price);
+		if (!bSeed && !Store->GetSupplyDisplay(Ids[i], N, Price, Pack)) { continue; }
+		if (Price <= 0) { continue; }
+		Lines.Add({ Ids[i], Qty, bSeed, Pack });
+		Total += static_cast<int64>(Price) * Qty;
+	}
+	if (Lines.Num() == 0 || Total <= 0) { return; }
+
+	// 2) Betalen (cash of bank), geen bezorgkosten.
+	const bool bPaid = bBank ? Econ->RemoveBank(static_cast<int32>(Total)) : Econ->RemoveMoney(static_cast<int32>(Total));
+	if (!bPaid)
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Red, bBank ? TEXT("Niet genoeg op de bank.") : TEXT("Niet genoeg cash.")); }
+		return;
+	}
+
+	// 3) Alles direct leveren.
+	for (const FBuyLine& L : Lines)
+	{
+		if (L.bSeed) { Inv->AddItem(Store->SeedItemId(L.Id), L.Qty); }
+		else         { Inv->AddItem(L.Id, FMath::Max(1, L.Pack) * L.Qty); }
+	}
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160), FString::Printf(TEXT("Gekocht voor EUR %.2f"), Total / 100.f)); }
 }
 
 void UPhoneClientComponent::SetTab(int32 NewTab)

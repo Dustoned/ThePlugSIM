@@ -34,8 +34,16 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<UTextBlock> TitleText;
 	UPROPERTY() TObjectPtr<UScrollBox> ItemList;
+	UPROPERTY() TObjectPtr<class UHorizontalBox> TabRow;
+	UPROPERTY() TObjectPtr<UTextBlock> CartText;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> PayCashBtn;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> PayBankBtn;
 
-	FString LastSig; // alleen herbouwen bij wijziging (winkel, geld, betaalmodus)
+	int32 ActiveCat = -1;       // -1 = nog niet gekozen (eerste tab)
+	TMap<FName, int32> Cart;    // winkelmand: catalog-id -> aantal
+
+	int32 CartTotalCents() const;
+	void CartAdd(FName Id, int32 Delta);
+
+	FString LastSig; // alleen herbouwen bij wijziging (winkel, tab, mand, betaalmodus)
 };

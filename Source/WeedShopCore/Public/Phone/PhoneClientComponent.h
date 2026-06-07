@@ -168,6 +168,10 @@ public:
 	void StoreBuy(FName ItemId) { ServerStoreBuy(ItemId, bStorePayBank); }
 	UFUNCTION(Server, Reliable)
 	void ServerStoreBuy(FName ItemId, bool bBank);
+	// Checkout van een hele winkelmand in één keer (cash/bank, instant, geen bezorgkosten).
+	void StoreCheckout(const TArray<FName>& Ids, const TArray<int32>& Qtys) { ServerStoreCheckout(Ids, Qtys, bStorePayBank); }
+	UFUNCTION(Server, Reliable)
+	void ServerStoreCheckout(const TArray<FName>& Ids, const TArray<int32>& Qtys, bool bBank);
 
 	// --- Droogrek (in de wereld): natte wiet ophangen + gedroogde batches oogsten ---
 	void OpenDryRack(class ADryingRack* Rack);
