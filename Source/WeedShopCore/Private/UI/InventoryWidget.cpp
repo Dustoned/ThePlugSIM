@@ -59,7 +59,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		// (Naam/details staan in de hover-tooltip; aantal staat als badge in de hoek.)
 		{
 			UOverlaySlot* IconOS = Ov->AddChildToOverlay(
-				bHasIcon ? WeedUI::ItemIcon(WidgetTree, IconId, IconSize)
+				bHasIcon ? WeedUI::ItemIcon(WidgetTree, IconId, IconSize, WaterOverride)
 				         : Cast<UWidget>(WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor::Transparent)));
 			IconOS->SetHorizontalAlignment(HAlign_Center);
 			IconOS->SetVerticalAlignment(VAlign_Center);
@@ -141,7 +141,7 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	Vis->SetWidthOverride(DragSize); Vis->SetHeightOverride(DragSize);
 	if (!IconId.IsNone())
 	{
-		Vis->SetContent(WeedUI::ItemIcon(WidgetTree, IconId, DragSize));
+		Vis->SetContent(WeedUI::ItemIcon(WidgetTree, IconId, DragSize, WaterOverride));
 	}
 	else
 	{
@@ -573,6 +573,8 @@ void UInventoryWidget::RebuildContent()
 			Cell->StackId = StackId;
 			Cell->bDraggable = true; // ook briefgeld kun je verslepen (herschikken / naar de hotbar)
 			Cell->IconId = ItemId;
+			// Waterfles: toon het vol/leeg-niveau van DEZE fles (uit z'n eigen stack-Quality), niet van de actieve fles.
+			Cell->WaterOverride = ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(S.Quality) : -1;
 			Cell->Accent = WeedUI::ItemAccent(ItemId);
 
 			// Volledige naam in de tooltip; in de cel kappen we te lange namen af met een ellips

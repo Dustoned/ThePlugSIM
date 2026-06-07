@@ -48,6 +48,7 @@ public:
 	// Icoon + accent + aantal-badge (rechtsboven). IconId None = geen icoon (bv. lege cel).
 	FName IconId = NAME_None;
 	float IconSize = 38.f;
+	int32 WaterOverride = -1;                         // >=0 = water van DEZE fles (per-slot vol/leeg); -1 = n.v.t.
 	FString Badge;                                   // bv. "x5" of "12g" — getoond als pill rechtsboven
 	FString Tooltip;                                 // volledige naam + details (hover)
 	FLinearColor Accent = FLinearColor(0.3f, 0.34f, 0.42f);
