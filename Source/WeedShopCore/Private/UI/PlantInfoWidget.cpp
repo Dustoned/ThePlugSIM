@@ -170,7 +170,9 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	else
 	{
-		TitleText->SetText(FText::FromString(TEXT("Empty pot")));
+		// Toon WELKE pot het is (bv. "Clay pot"), niet alleen "Empty pot".
+		const FString PotName = WeedUI::PrettyItemName(Plant->GetPotTier());
+		TitleText->SetText(FText::FromString(PotName.IsEmpty() ? TEXT("Empty pot") : (PotName + TEXT("  (empty)"))));
 		if (GrowthHeader) { GrowthHeader->SetVisibility(ESlateVisibility::Collapsed); }
 		GrowthBox->SetVisibility(ESlateVisibility::Collapsed);
 		if (WaterRow) { WaterRow->SetVisibility(ESlateVisibility::Collapsed); }
