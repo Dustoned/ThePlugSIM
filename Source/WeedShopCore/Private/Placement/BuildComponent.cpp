@@ -622,13 +622,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		}
 	}
 
-	// Effect-bereik-ring tonen op de plaatsplek (alleen bij gear-upgrades).
-	if (RangeRing)
-	{
-		const bool bRing = bShow && bPlacingGear;
-		RangeRing->SetVisibility(bRing);
-		if (bRing) { RangeRing->SetWorldLocation(PreviewLocation + FVector(0.f, 0.f, 3.f)); }
-	}
+	// Plaatsing-cirkel niet meer nodig bij upgrades (ze snappen op het object + de doel-ring highlight 't al).
+	if (RangeRing) { RangeRing->SetVisibility(false); }
 	// Doel-object highlighten: het object (pot/rek/machine) waar deze upgrade op gaat snappen.
 	if (TargetRing)
 	{
@@ -920,6 +915,17 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 
+	// Upgrade? Dan moet 'ie bij een geldig object (pot/rek/machine) staan (mirror van de snap). De vloer-/
+	// blokkade-/woning-checks slaan we over (de upgrade snapt bewust tegen het object aan).
+	const FString IdS = ItemId.ToString();
+	const int32 UpKind = (GearUpgradeIndex(ItemId) >= 0) ? 1 : (IdS.StartsWith(TEXT("DryUp_")) ? 2 : (IdS.StartsWith(TEXT("ProcUp_")) ? 3 : 0));
+	const bool bUpgrade = (UpKind != 0);
+	if (bUpgrade && !FindUpgradeTarget(UpKind, Location))
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Place this on a pot/rack/machine.")); }
+		return;
+	}
+
 	// Gootsteen = vaste fixture in een normaal spel (niet plaatsbaar). In SANDBOX/free-build mag 't wél,
 	// zodat je de sink-positie voor de template kunt inrichten.
 	if (ItemId == FName(TEXT("Sink")) && !WorldFreeBuild(World))
@@ -930,7 +936,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 
 	// Server-side her-validatie (anti-cheat / lag): niet in een muur of (voor potten) te dicht.
 	// Plafondlampen (plafond) en wand-mounts (muur) gebruiken geen vloer-gebaseerde checks -> overslaan.
-	if (!Def.bIsLamp && !Def.bIsWallMount && IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
+	if (!bUpgrade && !Def.bIsLamp && !Def.bIsWallMount && IsSpotBlocked(Location, Def.BoxHalf, Rotation.Yaw, Def.bIsPot))
 	{
 		if (GEngine)
 		{
@@ -939,7 +945,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		return;
 	}
 	// Alleen in je EIGEN gekochte woning (niet in winkels/hal/ongekocht); tenzij outdoors-toegestaan of sandbox.
-	if (!Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsInOwnedHome(Location))
+	if (!bUpgrade && !Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsInOwnedHome(Location))
 	{
 		if (GEngine)
 		{
