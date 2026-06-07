@@ -563,8 +563,11 @@ void UPhoneWidget::BuildChatApp()
 		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
 
+		// Huidige kloktijd (minuten) — de ondergrens loopt hiermee mee.
+		const int32 NowMins = (GS && GS->GetDayCycle()) ? (((int32)(GS->GetDayCycle()->GetClockHour() * 60.f)) % 1440) : 0;
+
 		// Startwaarde: de tijd die de KLANT voorstelde (dan klik je vandaaruit +kwartier/+uur). Geen
-		// afspraaktijd bekend -> de huidige kloktijd. Afgerond op een kwartier.
+		// afspraaktijd bekend -> 1 uur vanaf nu. Afgerond op een kwartier.
 		if (ProposeMins < 0)
 		{
 			float ApptTod = -1.f;
@@ -573,12 +576,23 @@ void UPhoneWidget::BuildChatApp()
 				if (M.FromContactId == OpenChatContact && M.Status == 0 && !M.bFromMe && M.AppointmentTimeOfDay >= 0.f)
 				{ ApptTod = M.AppointmentTimeOfDay; break; }
 			}
-			int32 Mins;
-			if (ApptTod >= 0.f) { Mins = Con->ClockMinutesOf(ApptTod); }
-			else { const float Frac = (GS && GS->GetDayCycle()) ? GS->GetDayCycle()->GetCycleFraction() : 0.5f; Mins = FMath::RoundToInt(Frac * 1440.f); }
+			const int32 Mins = (ApptTod >= 0.f) ? Con->ClockMinutesOf(ApptTod) : ((NowMins + 60) % 1440);
 			ProposeMins = ((FMath::RoundToInt(Mins / 15.f) * 15) % 1440 + 1440) % 1440;
 		}
-		auto Step = [this](int32 Delta) { ProposeMins = ((ProposeMins + Delta) % 1440 + 1440) % 1440; MarkDirty(); };
+		// Klem in "minuten-vooruit"-ruimte: minstens 30 min, hoogstens 23,5u vooruit (nooit de vorige dag).
+		// Doordat NowMins meeloopt met de klok, schuift de ondergrens live mee.
+		{
+			int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
+			Gap = FMath::Clamp(Gap, 30, 1410);
+			ProposeMins = (NowMins + Gap) % 1440;
+		}
+		auto Step = [this, NowMins](int32 Delta)
+		{
+			int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
+			Gap = FMath::Clamp(Gap + Delta, 30, 1410); // niet onder 30 min vooruit, niet naar gisteren
+			ProposeMins = (NowMins + Gap) % 1440;
+			MarkDirty();
+		};
 
 		UHorizontalBox* Stepper = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-1h"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(-60); }, 13))->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
@@ -1665,6 +1679,12 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const int32 Sig = MessagesSignature();
 		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
 		else { UpdateApptBarLive(); } // aftellende afspraak-balk live bijwerken (zonder herbouw)
+		// Tijd-kiezer-ondergrens live laten meelopen: herbouw de chat bij elke nieuwe klok-minuut.
+		if (App == 3 && !OpenChatContact.IsNone() && GS && GS->GetDayCycle())
+		{
+			const int32 CM = static_cast<int32>(GS->GetDayCycle()->GetClockHour() * 60.f);
+			if (CM != LastChatMin) { LastChatMin = CM; bContentDirty = true; }
+		}
 	}
 
 	// Bank-app open: bij saldo-/limiet-/unlock-wijziging de inhoud herbouwen.
