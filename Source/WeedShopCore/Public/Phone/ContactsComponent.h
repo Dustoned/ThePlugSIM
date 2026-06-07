@@ -70,6 +70,13 @@ struct FPhoneMessage
 	FName WantStrain = NAME_None;
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	int32 WantQty = 0;
+
+	// Realtime-seconden toen dit verzoek binnenkwam (voor follow-up/opgeven + reactiesnelheid). < 0 = n.v.t.
+	UPROPERTY()
+	float SentRealTime = -1.f;
+	// Heeft de klant al een "you there?"-herinnering gestuurd?
+	UPROPERTY()
+	bool bNudged = false;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPhoneMessagesChanged);

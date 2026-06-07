@@ -114,6 +114,14 @@ void UContactsComponent::SendRandomAppointment()
 	UNpcRegistryComponent* Reg = nullptr;
 	if (const AWeedShopGameState* GSc = Cast<AWeedShopGameState>(GetOwner())) { Reg = GSc->GetNpcRegistry(); }
 
+	// 's Nachts bijna geen berichten: alleen echt verslaafde klanten appen 's nachts, en veel zeldzamer.
+	bool bNight = false;
+	if (const AWeedShopGameState* GSn = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (const UDayCycleComponent* D = GSn->GetDayCycle()) { bNight = D->IsNight(); }
+	}
+	constexpr float NightAddictMin = 55.f; // alleen flink verslaafden appen 's nachts
+
 	struct FCand { int32 Idx; float Warmth; };
 	TArray<FCand> Cands;
 	float TopWarmth = 0.f;
@@ -122,20 +130,28 @@ void UContactsComponent::SendRandomAppointment()
 		const FName Id = Contacts[i].ContactId;
 		if (Reg && Reg->IsOnCooldown(Id)) { continue; }
 		if (Reg && !Reg->CanAppointToday(Id)) { continue; }
-		float Warmth = 0.5f;
+		// Niet spammen: heeft deze klant al een open (onbeantwoord) verzoek, dan niet nóg een sturen.
+		bool bHasOpen = false;
+		for (const FPhoneMessage& M : Messages) { if (M.FromContactId == Id && !M.bFromMe && M.Status == 0 && M.WantQty > 0) { bHasOpen = true; break; } }
+		if (bHasOpen) { continue; }
+		float Warmth = 0.5f, Addict = 30.f;
 		if (Reg)
 		{
 			float R = 0.f, L = 0.f, A = 0.f; FText N;
 			Reg->GetStats(Id, R, L, A, N);
 			Warmth = FMath::Clamp((A + L + R) / 300.f, 0.f, 1.f); // 0..1 gemiddelde relatie
+			Addict = A;
 		}
+		if (bNight && Addict < NightAddictMin) { continue; } // 's nachts alleen verslaafden
 		Cands.Add({ i, Warmth });
 		TopWarmth = FMath::Max(TopWarmth, Warmth);
 	}
-	if (Cands.Num() == 0) { return; } // niemand beschikbaar (cooldown/dag-cap)
+	if (Cands.Num() == 0) { return; } // niemand beschikbaar (cooldown/dag-cap/nacht)
 
 	// Globale kans dat er dit interval iemand appt, schaalt met de warmste relatie (begin laag).
-	const float SendChance = FMath::Clamp(0.12f + TopWarmth * 0.78f, 0.12f, 0.95f);
+	// 's Nachts veel lager zodat je tijd hebt om te kweken/andere dingen te doen.
+	float SendChance = FMath::Clamp(0.12f + TopWarmth * 0.78f, 0.12f, 0.95f);
+	if (bNight) { SendChance *= 0.15f; }
 	if (FMath::FRand() > SendChance) { return; }
 
 	// Gewogen keuze: warmere NPC's appen vaker (kleine basis zodat ook lauwe contacten soms appen).
@@ -188,6 +204,7 @@ void UContactsComponent::SendRandomAppointment()
 	Msg.AppointmentTimeOfDay = ApptTime;
 	Msg.WantStrain = WantStrain;
 	Msg.WantQty = WantQty;
+	Msg.SentRealTime = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.f; // voor follow-up/opgeven + reactiesnelheid
 	Msg.Kind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
 
 	// Adres opzoeken bij de bewoner met dit NpcId, zodat "kom bij mij langs" vertelt WAAR je heen moet.
@@ -223,6 +240,46 @@ void UContactsComponent::CheckAppointments()
 	if (!GetCycleTime(Now, Length))
 	{
 		return;
+	}
+
+	// --- Onbeantwoorde verzoeken: na een tijdje "you there?", daarna opgeven (met respect/loyaliteit-straf). ---
+	{
+		const float RealNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+		constexpr float NudgeDelay = 60.f;     // herinnering na 1 min geen antwoord
+		constexpr float GiveUpDelay = 150.f;   // geeft op na 2,5 min geen antwoord
+		UNpcRegistryComponent* Reg = nullptr;
+		if (const AWeedShopGameState* GSc = Cast<AWeedShopGameState>(GetOwner())) { Reg = GSc->GetNpcRegistry(); }
+
+		struct FAct { FName Id; FText Name; int32 Type; }; // 1 = nudge, 2 = opgeven
+		TArray<FAct> Acts;
+		for (FPhoneMessage& Msg : Messages)
+		{
+			if (Msg.Status != 0 || Msg.bFromMe || Msg.WantQty <= 0 || Msg.SentRealTime < 0.f) { continue; }
+			const float Elapsed = RealNow - Msg.SentRealTime;
+			if (!Msg.bNudged && Elapsed >= NudgeDelay) { Msg.bNudged = true; Acts.Add({ Msg.FromContactId, Msg.SenderName, 1 }); }
+			else if (Elapsed >= GiveUpDelay) { Msg.Status = 2; Acts.Add({ Msg.FromContactId, Msg.SenderName, 2 }); }
+		}
+		for (const FAct& Ac : Acts)
+		{
+			if (Ac.Type == 1)
+			{
+				PushInfoMessage(Ac.Id, Ac.Name, FText::FromString(TEXT("You there? Still need it, or should I look elsewhere?")));
+			}
+			else
+			{
+				PushInfoMessage(Ac.Id, Ac.Name, FText::FromString(TEXT("Nvm, took too long. I'll get it somewhere else.")));
+				if (Reg)
+				{
+					float R = 0.f, L = 0.f, A = 0.f; FText N;
+					if (Reg->GetStats(Ac.Id, R, L, A, N))
+					{
+						Reg->ApplyStats(Ac.Id, FMath::Max(0.f, R - 4.f), FMath::Max(0.f, L - 8.f), A); // wat respect, meer loyaliteit kwijt
+					}
+					Reg->SetApptCooldownMult(Ac.Id, 2.5f); // laat je daarna langer met rust
+					Reg->NoteAppointment(Ac.Id);           // start de (langere) cooldown
+				}
+			}
+		}
 	}
 
 	for (FPhoneMessage& Msg : Messages)
@@ -463,6 +520,21 @@ void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
 	Messages[Found].Status = bAccept ? 1 : 2;
 	const float Delta = bAccept ? 5.f : -12.f;
 	ApplyRelationshipDelta(ContactId, Delta);
+
+	// Reactiesnelheid bepaalt de volgende cooldown: snel antwoord = eerder weer een appje, traag = langer rust.
+	if (AWeedShopGameState* GSr = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (UNpcRegistryComponent* Reg = GSr->GetNpcRegistry())
+		{
+			const float Sent = Messages[Found].SentRealTime;
+			const float RealNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+			const float ReplySec = (Sent >= 0.f) ? (RealNow - Sent) : 30.f;
+			float Mult = 1.f;
+			if (bAccept) { Mult = (ReplySec < 20.f) ? 0.7f : (ReplySec > 60.f ? 1.5f : 1.f); }
+			else { Mult = 1.8f; }
+			Reg->SetApptCooldownMult(ContactId, Mult);
+		}
+	}
 
 	// Mijn antwoord als chat-regel (rechts) toevoegen.
 	FPhoneMessage Reply;

@@ -328,8 +328,14 @@ bool UNpcRegistryComponent::IsOnCooldown(FName NpcId) const
 	const float Now = NowAbs();
 	// Cooldown na een echte deal OF na een afspraak-vraag (tegen blijven-vragen).
 	if (S->LastDealAbs >= 0.f && (Now - S->LastDealAbs) < DealCooldownSeconds) { return true; }
-	if (S->LastApptAbs >= 0.f && (Now - S->LastApptAbs) < DealCooldownSeconds) { return true; }
+	if (S->LastApptAbs >= 0.f && (Now - S->LastApptAbs) < DealCooldownSeconds * FMath::Max(0.1f, S->ApptCooldownMult)) { return true; }
 	return false;
+}
+
+void UNpcRegistryComponent::SetApptCooldownMult(FName NpcId, float Mult)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	if (FNpcState* S = Find(NpcId)) { S->ApptCooldownMult = FMath::Clamp(Mult, 0.25f, 6.f); }
 }
 
 FName UNpcRegistryComponent::AssignNpc()

@@ -51,6 +51,10 @@ struct FNpcState
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float LastApptAbs = -1.f;
 
+	// Cooldown-vermenigvuldiger op de afspraak-cooldown (snel antwoord = korter, traag/opgegeven = langer).
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	float ApptCooldownMult = 1.f;
+
 	// --- Klant-tier/level (los van respect/loyaliteit) ---
 	// Klantwaarde-XP: loopt op door deals (verkochte grammen x loyaliteit x persoonlijke honger). Bepaalt de tier.
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
@@ -112,6 +116,9 @@ public:
 	bool CanAppointToday(FName NpcId) const;
 	// Leg vast dat er net een afspraak naar deze NPC is gestuurd (telt mee voor de dag-cap).
 	void NoteAppointment(FName NpcId);
+
+	// Zet de cooldown-multiplier voor de volgende afspraak-cooldown (snel antwoord < 1, traag/opgegeven > 1).
+	void SetApptCooldownMult(FName NpcId, float Mult);
 
 	// --- Klant-tier (1=Casual .. 5=Whale), afgeleid van CustomerXP. Iedereen kan klimmen. ---
 	// Server: tel klantwaarde op na een deal (grammen). Loyaliteit + persoonlijke honger schalen mee.
