@@ -2495,7 +2495,9 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 	}
 
-	if (bNight)
+	// 's Nachts gaan alleen de NIET-verslaafde bewoners slapen (naar binnen). Verslaafden (>= ~30) blijven
+	// 's nachts buiten rondhangen -> er lopen ook 's nachts NPC's op straat (de nacht-crowd).
+	if (bNight && Addiction < 30.f)
 	{
 		if (bAtHomeInside)
 		{
