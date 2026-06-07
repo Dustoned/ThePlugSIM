@@ -90,8 +90,9 @@ protected:
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
-	UPROPERTY() TObjectPtr<UScrollBox> DryList; // links: drogende + klare batches
-	UPROPERTY() TObjectPtr<UScrollBox> WetList; // rechts: natte wiet uit inventory
+	UPROPERTY() TObjectPtr<UScrollBox> DryList; // slots-grid (drogende + klare batches)
+	UPROPERTY() TObjectPtr<UScrollBox> WetList; // (ongebruikt)
+	UPROPERTY() TObjectPtr<class UVerticalBox> DetailBox; // progress + plant-info onder de slots
 	UPROPERTY() TObjectPtr<UTextBlock> TitleText;
 
 	// Per drogende-batch-cel: progress-bar + statuslabel + de batch-index in de rack-Entries.

@@ -190,7 +190,13 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	DryList = RackScroll;
 	UDryDropZone* DZ = WidgetTree->ConstructWidget<UDryDropZone>();
 	DZ->bDryingSide = true; DZ->Owner = this; DZ->Inner = RackBg;
-	Outer->AddChildToVerticalBox(DZ)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	Outer->AddChildToVerticalBox(DZ)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic)); // slots compact bovenaan
+
+	// Progress + plant-info onder de slots (vult de rest van het paneel netjes op).
+	UScrollBox* DetailScroll = WidgetTree->ConstructWidget<UScrollBox>();
+	DetailBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	DetailScroll->AddChild(DetailBox);
+	Outer->AddChildToVerticalBox(DetailScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
 	WetList = nullptr; // geen eigen inventory-kolom meer; we gebruiken de echte inventory
 }
@@ -295,7 +301,6 @@ void UDryingRackWidget::FillBody()
 		for (int32 i = 0; i < Rack->GetEntries().Num(); ++i)
 		{
 			const FDryEntry& E = Rack->GetEntries()[i];
-			const float Frac = E.bDone ? 1.f : FMath::Clamp(E.Elapsed / Total, 0.f, 1.f);
 
 			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
 			Vis->SetBrush(WeedUI::Rounded(E.bDone ? FLinearColor(0.12f, 0.20f, 0.13f, 0.96f) : FLinearColor(0.16f, 0.14f, 0.09f, 0.96f), 8.f));
@@ -310,16 +315,13 @@ void UDryingRackWidget::FillBody()
 			UOverlaySlot* BS = Ov->AddChildToOverlay(BadgePill(FString::Printf(TEXT("%dg"), E.Quantity)));
 			BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Top);
 
-			UTextBlock* Status = WeedUI::Text(WidgetTree, TEXT(""), 9, FLinearColor(0.7f, 0.8f, 0.7f), true);
-			UOverlaySlot* StOS = Ov->AddChildToOverlay(Status);
-			StOS->SetHorizontalAlignment(HAlign_Center); StOS->SetVerticalAlignment(VAlign_Bottom);
-			StOS->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-
-			UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
-			Bar->SetPercent(Frac);
-			Bar->SetFillColorAndOpacity(E.bDone ? FLinearColor(0.4f, 0.95f, 0.5f) : FLinearColor(0.85f, 0.7f, 0.25f));
-			UOverlaySlot* BarOS = Ov->AddChildToOverlay(Bar);
-			BarOS->SetHorizontalAlignment(HAlign_Fill); BarOS->SetVerticalAlignment(VAlign_Bottom);
+			// Klein "klaar"-vinkje onderaan de slot (de volledige progress staat onder de slots).
+			if (E.bDone)
+			{
+				UOverlaySlot* DnOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("KLAAR"), 8, FLinearColor(0.5f, 1.f, 0.6f), true, true));
+				DnOS->SetHorizontalAlignment(HAlign_Center); DnOS->SetVerticalAlignment(VAlign_Bottom);
+				DnOS->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+			}
 
 			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
 			C->bWet = false; C->EntryIndex = i; C->ItemId = E.DryItemId; C->Qty = E.Quantity; C->bReady = E.bDone; C->Owner = this; C->Inner = Vis;
@@ -328,8 +330,6 @@ void UDryingRackWidget::FillBody()
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 			Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); Sz->SetContent(C);
 			Grid->AddChildToWrapBox(Sz);
-
-			RowBars.Add(Bar); RowStatus.Add(Status); RowEntryIndex.Add(i);
 		}
 		// Lege capaciteit-slots tot het maximum (zoals de inventory laat zien hoeveel erin kan). Elk leeg
 		// vakje is een drop-zone voor natte wiet.
@@ -344,6 +344,44 @@ void UDryingRackWidget::FillBody()
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 			Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); Sz->SetContent(C);
 			Grid->AddChildToWrapBox(Sz);
+		}
+
+		// --- Progress + plant-info onder de slots (vult het paneel netjes) ---
+		if (DetailBox)
+		{
+			DetailBox->ClearChildren();
+			for (int32 i = 0; i < Rack->GetEntries().Num(); ++i)
+			{
+				const FDryEntry& E = Rack->GetEntries()[i];
+				UBorder* RowB = WidgetTree->ConstructWidget<UBorder>();
+				RowB->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.11f, 0.15f, 0.85f), 8.f));
+				RowB->SetPadding(FMargin(10.f, 7.f, 10.f, 8.f));
+				UVerticalBox* RV = WidgetTree->ConstructWidget<UVerticalBox>();
+				RowB->SetContent(RV);
+
+				UHorizontalBox* Top = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UTextBlock* NameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s    %dg  -  THC %.0f%%   Q %.0f%%"),
+					*WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.Quality), 12, FLinearColor(0.9f, 0.95f, 1.f), false, true);
+				UHorizontalBoxSlot* NS = Top->AddChildToHorizontalBox(NameT);
+				NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
+				UTextBlock* TimeT = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.85f, 0.88f, 0.8f), false, true);
+				Top->AddChildToHorizontalBox(TimeT)->SetVerticalAlignment(VAlign_Center);
+				RV->AddChildToVerticalBox(Top);
+
+				UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
+				Bar->SetPercent(E.bDone ? 1.f : FMath::Clamp(E.Elapsed / Total, 0.f, 1.f));
+				Bar->SetFillColorAndOpacity(E.bDone ? FLinearColor(0.4f, 0.95f, 0.5f) : FLinearColor(0.85f, 0.7f, 0.25f));
+				USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
+				BarSz->SetHeightOverride(16.f); BarSz->SetContent(Bar);
+				RV->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
+
+				DetailBox->AddChildToVerticalBox(RowB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+				RowBars.Add(Bar); RowStatus.Add(TimeT); RowEntryIndex.Add(i);
+			}
+			if (Rack->GetEntries().Num() == 0)
+			{
+				DetailBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Niks aan het drogen. Sleep natte wiet in een slot."), 11, FLinearColor(0.55f, 0.6f, 0.7f)));
+			}
 		}
 	}
 
