@@ -258,11 +258,11 @@ FText ADryingRack::GetInteractionPrompt_Implementation() const
 {
 	if (RepReady > 0)
 	{
-		return FText::FromString(FString::Printf(TEXT("Open drying rack  -  %d ready, %d drying"), RepReady, RepDrying));
+		return FText::FromString(FString::Printf(TEXT("Drying rack  -  %d ready, %d drying"), RepReady, RepDrying));
 	}
 	if (RepDrying > 0)
 	{
-		return FText::FromString(FString::Printf(TEXT("Open drying rack  -  drying %d/%d"), RepDrying, RepCapacity));
+		return FText::FromString(FString::Printf(TEXT("Drying rack  -  drying %d/%d"), RepDrying, RepCapacity));
 	}
-	return FText::FromString(FString::Printf(TEXT("Open drying rack  (0/%d)"), RepCapacity));
+	return FText::FromString(FString::Printf(TEXT("Drying rack  (0/%d)"), RepCapacity));
 }

@@ -82,11 +82,11 @@ FText AStoreCounter::GetInteractionPrompt_Implementation() const
 {
 	switch (Kind)
 	{
-	case EShopKind::Grow:       return FText::FromString(TEXT("Browse grow shop"));
-	case EShopKind::Furniture:  return FText::FromString(TEXT("Browse furniture store"));
-	case EShopKind::Supplies:   return FText::FromString(TEXT("Browse supplies store"));
-	case EShopKind::GasStation: return FText::FromString(TEXT("Browse gas station shop"));
+	case EShopKind::Grow:       return FText::FromString(TEXT("Grow shop"));
+	case EShopKind::Furniture:  return FText::FromString(TEXT("Furniture store"));
+	case EShopKind::Supplies:   return FText::FromString(TEXT("Supplies store"));
+	case EShopKind::GasStation: return FText::FromString(TEXT("Gas station shop"));
 	case EShopKind::Apartment:  return FText::FromString(TEXT("Apartment (buying coming soon)"));
-	default: return FText::FromString(TEXT("Browse shop"));
+	default: return FText::FromString(TEXT("Shop"));
 	}
 }
