@@ -94,6 +94,8 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	VB->AddChildToVerticalBox(YieldText)->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
 	SoilText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.6f, 0.85f, 0.6f));
 	VB->AddChildToVerticalBox(SoilText);
+	UpgradesText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.7f, 0.85f, 1.f));
+	VB->AddChildToVerticalBox(UpgradesText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 	HintText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(1.f, 0.95f, 0.5f));
 	VB->AddChildToVerticalBox(HintText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 }
@@ -186,6 +188,14 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		SoilText->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 0.7f, 0.3f)));
 		SoilText->SetText(FText::FromString(TEXT("No soil")));
+	}
+
+	// Actieve gear-upgrades op deze pot (altijd tonen, met of zonder soil/plant).
+	if (UpgradesText)
+	{
+		const FString Ups = Plant->GetActiveUpgradesLabel();
+		UpgradesText->SetText(FText::FromString(Ups.IsEmpty() ? TEXT("Upgrades: none") : FString::Printf(TEXT("Upgrades: %s"), *Ups)));
+		UpgradesText->SetColorAndOpacity(FSlateColor(Ups.IsEmpty() ? FLinearColor(0.55f, 0.57f, 0.62f) : FLinearColor(0.7f, 0.85f, 1.f)));
 	}
 
 	// (De interactie-tekst staat nu rechtsonder bij Controls; geen hint-regel meer op de plantkaart.)

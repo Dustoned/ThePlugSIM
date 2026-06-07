@@ -40,5 +40,6 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> HealthText;
 	UPROPERTY() TObjectPtr<UTextBlock> YieldText;
 	UPROPERTY() TObjectPtr<UTextBlock> SoilText;
+	UPROPERTY() TObjectPtr<UTextBlock> UpgradesText; // actieve gear-upgrades op deze pot (altijd zichtbaar)
 	UPROPERTY() TObjectPtr<UTextBlock> HintText;
 };

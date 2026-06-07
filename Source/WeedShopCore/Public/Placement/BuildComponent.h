@@ -134,6 +134,11 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> GhostMID;
 
+	// Platte ring die het effect-bereik van een gear-upgrade toont tijdens plaatsen (alleen voor gear).
+	UPROPERTY(Transient) TObjectPtr<UStaticMeshComponent> RangeRing;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> RangeRingMID;
+	bool bPlacingGear = false; // huidige plaatsing is een gear-upgrade -> ring tonen
+
 	// Echt model als preview (transient) + gedeeld ghost-materiaal voor al z'n onderdelen.
 	UPROPERTY(Transient) TWeakObjectPtr<AActor> PreviewActor;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> PreviewMID;

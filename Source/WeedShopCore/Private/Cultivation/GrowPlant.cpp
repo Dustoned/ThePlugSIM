@@ -266,6 +266,17 @@ const FWeedStrainRow* AGrowPlant::GetStrainRow(FName StrainId) const
 	return StrainTable->FindRow<FWeedStrainRow>(StrainId, TEXT("AGrowPlant::GetStrainRow"), false);
 }
 
+FString AGrowPlant::GetActiveUpgradesLabel() const
+{
+	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+	TArray<FString> Names;
+	for (int32 i = 0; i < Ups.Num(); ++i)
+	{
+		if (HasPotUpgrade(i) && Ups.IsValidIndex(i)) { Names.Add(Ups[i].DisplayName); }
+	}
+	return FString::Join(Names, TEXT(", "));
+}
+
 void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
 {
 	GearScanTimer -= DeltaSeconds;

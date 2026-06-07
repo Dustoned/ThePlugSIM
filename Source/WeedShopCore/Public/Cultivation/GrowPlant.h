@@ -82,6 +82,9 @@ public:
 
 	void ApplyPotUpgrade(int32 UpgIndex) { PotUpgradeMask |= (1 << UpgIndex); }
 
+	// Komma-gescheiden namen van de actieve gear-upgrades (uit het masker). Leeg = geen upgrades.
+	FString GetActiveUpgradesLabel() const;
+
 	// Server: herbereken het upgrade-masker uit gear-accessoires (Gear_*) die binnen bereik staan.
 	void RecomputeGearUpgradeMask(float DeltaSeconds);
 	float GearScanTimer = 0.f; // throttle voor de gear-scan

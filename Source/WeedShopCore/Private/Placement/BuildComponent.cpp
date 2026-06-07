@@ -3,6 +3,7 @@
 
 #include "WeedShopCore.h"
 #include "Cultivation/GrowPlant.h"
+#include "Cultivation/PotTypes.h" // GearUpgradeIndex -> ring tonen bij gear-upgrades
 #include "Placement/PlaceableTypes.h"
 #include "Placement/PlaceableProp.h"
 #include "World/Atm.h"
@@ -115,6 +116,7 @@ void UBuildComponent::StartPlacing(FName ItemId)
 	}
 
 	PlacingItemId = ItemId;
+	bPlacingGear = (GearUpgradeIndex(ItemId) >= 0); // gear -> toon de effect-bereik-ring
 	CurrentDef = Def;
 	bPlacing = true;
 	bValidSpot = false;
@@ -168,6 +170,33 @@ void UBuildComponent::EnsureGhost()
 	}
 	Ghost->SetWorldScale3D(FVector(0.5f, 0.5f, 0.4f));
 	Ghost->SetVisibility(false);
+
+	// Platte effect-bereik-ring (alleen voor gear-upgrades): toont welke pots binnen bereik vallen.
+	RangeRing = NewObject<UStaticMeshComponent>(GetOwner());
+	if (RangeRing)
+	{
+		RangeRing->SetupAttachment(GetOwner()->GetRootComponent());
+		RangeRing->RegisterComponent();
+		RangeRing->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		RangeRing->SetCastShadow(false);
+		RangeRing->SetAbsolute(true, true, true);
+		if (UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+		{
+			RangeRing->SetStaticMesh(Cyl);
+		}
+		if (UMaterialInterface* GhostMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost")))
+		{
+			RangeRingMID = UMaterialInstanceDynamic::Create(GhostMat, this);
+			if (RangeRingMID)
+			{
+				RangeRingMID->SetVectorParameterValue(TEXT("GhostColor"), FLinearColor(0.2f, 0.9f, 0.4f, 1.f));
+				RangeRing->SetMaterial(0, RangeRingMID);
+			}
+		}
+		// Cylinder = 100cm diameter / 100cm hoog, gecentreerd. Straal 175cm -> diameter 350 -> schaal 3.5; plat.
+		RangeRing->SetWorldScale3D(FVector(3.5f, 3.5f, 0.03f));
+		RangeRing->SetVisibility(false);
+	}
 }
 
 void UBuildComponent::DestroyPreview()
@@ -230,9 +259,14 @@ void UBuildComponent::CancelPlacing()
 {
 	bPlacing = false;
 	bValidSpot = false;
+	bPlacingGear = false;
 	if (Ghost)
 	{
 		Ghost->SetVisibility(false);
+	}
+	if (RangeRing)
+	{
+		RangeRing->SetVisibility(false);
 	}
 	DestroyPreview();
 }
@@ -510,6 +544,14 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					bValidSpot ? FLinearColor(0.15f, 0.5f, 1.f, 1.f) : FLinearColor(1.f, 0.15f, 0.15f, 1.f));
 			}
 		}
+	}
+
+	// Effect-bereik-ring tonen op de plaatsplek (alleen bij gear-upgrades).
+	if (RangeRing)
+	{
+		const bool bRing = bShow && bPlacingGear;
+		RangeRing->SetVisibility(bRing);
+		if (bRing) { RangeRing->SetWorldLocation(PreviewLocation + FVector(0.f, 0.f, 3.f)); }
 	}
 
 	// Preview-staat naar de server sturen (getemporiseerd) zodat co-op-spelers de ghost zien.
