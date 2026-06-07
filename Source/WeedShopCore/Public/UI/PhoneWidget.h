@@ -112,6 +112,7 @@ protected:
 	// NAME_None = gesprekkenlijst; anders is de chat-thread van dat contact open.
 	FName OpenChatContact = NAME_None;
 	int32 LastMsgSig = -2;
+	int32 ProposeMins = -1; // gekozen kloktijd (min van de dag) voor een eigen-tijd-voorstel; -1 = nog niet gezet
 	// Bouwt de Berichten-app: gesprekkenlijst of de open chat-thread.
 	void BuildChatApp();
 	// Verandert als er een bericht bijkomt of een status wijzigt (voor live verversen).

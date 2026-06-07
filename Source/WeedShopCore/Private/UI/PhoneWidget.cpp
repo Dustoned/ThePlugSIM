@@ -419,6 +419,7 @@ void UPhoneWidget::BuildChatApp()
 	// ---- Gesprekkenlijst (geen chat open) ----
 	if (OpenChatContact.IsNone())
 	{
+		ProposeMins = -1; // tijd-keuze reset zodra je de thread verlaat
 		// Unieke contacten in volgorde van nieuwste bericht.
 		TArray<FName> Order;
 		for (const FPhoneMessage& M : Msgs) { Order.AddUnique(M.FromContactId); }
@@ -550,18 +551,32 @@ void UPhoneWidget::BuildChatApp()
 		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 
-		// Of kies zelf een kloktijd (ze gaan altijd akkoord, geen nadeel).
+		// Of kies zelf een tijd (per kwartier). Ze gaan altijd akkoord, geen nadeel.
 		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
-		UWrapBox* TimeGrid = WidgetTree->ConstructWidget<UWrapBox>();
-		TimeGrid->SetInnerSlotPadding(FVector2D(4.f, 4.f));
-		for (int32 H = 0; H < 24; H += 2) // elke 2 uur: 00:00 .. 22:00
+
+		// Startwaarde: de huidige kloktijd, afgerond op een kwartier.
+		if (ProposeMins < 0)
 		{
-			const int32 Mins = H * 60;
-			TimeGrid->AddChildToWrapBox(MakeActionBtn(FString::Printf(TEXT("%02d:00"), H), FLinearColor(0.2f, 0.35f, 0.5f),
-				[this, Pick, Mins]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, Mins); } MarkDirty(); }, 12));
+			float Frac = 0.5f;
+			if (GS && GS->GetDayCycle()) { Frac = GS->GetDayCycle()->GetCycleFraction(); }
+			ProposeMins = (FMath::RoundToInt(Frac * 1440.f / 15.f) * 15) % 1440;
 		}
-		ContentBox->AddChildToVerticalBox(TimeGrid)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+		auto Step = [this](int32 Delta) { ProposeMins = ((ProposeMins + Delta) % 1440 + 1440) % 1440; MarkDirty(); };
+
+		UHorizontalBox* Stepper = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-1h"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(-60); }, 13))->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-15m"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(-15); }, 13))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+		UTextBlock* Clock = MakeText(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60), 18, FLinearColor(0.95f, 0.97f, 1.f));
+		UHorizontalBoxSlot* CS2 = Stepper->AddChildToHorizontalBox(Clock);
+		CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetHorizontalAlignment(HAlign_Center); CS2->SetVerticalAlignment(VAlign_Center);
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+15m"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(15); }, 13))->SetPadding(FMargin(6.f, 0.f, 3.f, 0.f));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+1h"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(60); }, 13));
+		ContentBox->AddChildToVerticalBox(Stepper)->SetPadding(FMargin(0.f, 2.f, 0.f, 4.f));
+
+		const int32 Mins = ProposeMins;
+		ContentBox->AddChildToVerticalBox(MakeActionBtn(FString::Printf(TEXT("Propose %02d:%02d"), Mins / 60, Mins % 60), FLinearColor(0.2f, 0.45f, 0.55f),
+			[this, Pick, Mins]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, Mins); } ProposeMins = -1; MarkDirty(); }, 13));
 	}
 }
 
