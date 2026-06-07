@@ -37,6 +37,12 @@ void UNpcRegistryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME(UNpcRegistryComponent, States);
 }
 
+void UNpcRegistryComponent::RestoreStates(const TArray<FNpcState>& In)
+{
+	if (GetOwnerRole() != ROLE_Authority || In.Num() == 0) { return; }
+	States = In; // niet-leeg -> EnsureInit overschrijft 't niet meer
+}
+
 namespace
 {
 	FString CleanFirstName(const FString& Raw, int32 Index)

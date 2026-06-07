@@ -116,6 +116,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	int32 GetTotalCount() const { return States.Num(); }
 
+	// Save/load van alle NPC-relaties (respect/loyaliteit/verslaving + ontgrendeld).
+	const TArray<FNpcState>& GetStatesForSave() const { return States; }
+	void RestoreStates(const TArray<FNpcState>& In);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

@@ -102,6 +102,9 @@ public:
 	// Verschijnt als ongelezen inkomend bericht (telt mee voor de notificatie-bubble), geen openstaande afspraak.
 	void PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body);
 
+	// Save/load: zet de hele contacten- + berichten-lijst terug.
+	void RestoreContacts(const TArray<FPhoneContact>& InContacts, const TArray<FPhoneMessage>& InMessages);
+
 	// Server: beantwoord het eerste open afspraak-bericht. Accept = loyaliteit +, weiger = loyaliteit -.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RespondTopPending(bool bAccept);

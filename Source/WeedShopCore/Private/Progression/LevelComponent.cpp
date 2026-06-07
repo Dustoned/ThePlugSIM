@@ -73,6 +73,14 @@ void ULevelComponent::GrantLevel(int32 NewLevel)
 	OnRep_Level();
 }
 
+void ULevelComponent::RestoreLevel(int32 InLevel, int32 InXP)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	Level = FMath::Clamp(InLevel, 1, MaxLevel);
+	CurrentXP = FMath::Max(0, InXP);
+	OnRep_Level();
+}
+
 void ULevelComponent::OnRep_Level()
 {
 	// Hook voor clients (UI werkt al via de pure getters elke frame).

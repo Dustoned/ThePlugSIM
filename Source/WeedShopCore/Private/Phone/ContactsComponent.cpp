@@ -484,6 +484,14 @@ void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDa
 	OnRep_Messages();
 }
 
+void UContactsComponent::RestoreContacts(const TArray<FPhoneContact>& InContacts, const TArray<FPhoneMessage>& InMessages)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	Contacts = InContacts;
+	Messages = InMessages;
+	OnRep_Messages(); // UI bijwerken (server)
+}
+
 void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }

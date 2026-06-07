@@ -32,6 +32,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Level")
 	void GrantLevel(int32 NewLevel);
 
+	// Server: herstel level + XP exact uit een save (geen level-up-events).
+	void RestoreLevel(int32 InLevel, int32 InXP);
+
 	// XP-multiplier (1.0 = normaal). Stoned zijn verhoogt dit (door de speler-pawn gezet).
 	void SetXpMultiplier(float Mult) { XpMultiplier = FMath::Max(1.f, Mult); }
 	float GetXpMultiplier() const { return XpMultiplier; }

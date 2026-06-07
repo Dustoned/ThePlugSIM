@@ -10,6 +10,8 @@
 #include "Progression/MilestoneComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Npc/NpcRegistryComponent.h"   // NPC-relaties opslaan/herstellen
+#include "Phone/ContactsComponent.h"    // contacten + berichten opslaan/herstellen
 #include "Progression/StoreComponent.h"
 #include "UI/WeedToast.h"
 #include "Cultivation/GrowPlant.h"
@@ -559,13 +561,16 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->SavedAt = FDateTime::UtcNow();
 	Save->bIsAutosave = bAutosave;
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
-	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); }
+	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); }
 	Save->bFreeBuild = GS->IsFreeBuild();
 
 	// Gedeelde wereld-staat.
 	if (const UDayCycleComponent* Day = GS->GetDayCycle()) { Save->TimeOfDaySeconds = Day->GetTimeOfDaySeconds(); Save->DayNumber = Day->GetDayNumber(); }
 	if (const UMilestoneComponent* Ms = GS->GetMilestones()) { Save->TotalEarnedCents = Ms->GetTotalEarnedCents(); Save->MilestonePhase = (uint8)Ms->GetCurrentPhase(); }
 	if (const UUpgradeComponent* Up = GS->GetUpgrades()) { Save->PurchasedUpgrades = Up->GetPurchasedIds(); }
+	// NPC-relaties + telefoon-contacten/berichten (waren voorheen niet opgeslagen).
+	if (const UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Save->Npcs = Reg->GetStatesForSave(); }
+	if (const UContactsComponent* Con = GS->GetContacts()) { Save->Contacts = Con->GetContacts(); Save->Messages = Con->GetMessages(); }
 
 	// Geplaatste wereld-objecten (potten/planten, shelves/chests, rekken, tafels, meubels, ATM).
 	GatherPlaced(World, Save->Placed);
@@ -623,6 +628,10 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	if (UDayCycleComponent* Day = GS->GetDayCycle()) { Day->SetTimeOfDaySeconds(Save->TimeOfDaySeconds); }
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }
 	if (UUpgradeComponent* Up = GS->GetUpgrades()) { Up->RestorePurchased(Save->PurchasedUpgrades); }
+	// Level + XP, NPC-relaties en telefoon-contacten/berichten terugzetten (waren kwijt na reload).
+	if (ULevelComponent* Lv = GS->GetLeveling()) { Lv->RestoreLevel(Save->CrewLevel, Save->CrewXP); }
+	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->RestoreStates(Save->Npcs); }
+	if (UContactsComponent* Con = GS->GetContacts()) { Con->RestoreContacts(Save->Contacts, Save->Messages); }
 
 	// Geplaatste wereld-objecten opnieuw opbouwen (vervangt de huidige set).
 	RespawnPlaced(World, Save->Placed);

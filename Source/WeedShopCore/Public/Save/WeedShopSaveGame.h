@@ -5,6 +5,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "Npc/NpcRegistryComponent.h"   // FNpcState (NPC-relaties)
+#include "Phone/ContactsComponent.h"    // FPhoneContact / FPhoneMessage
 #include "WeedShopSaveGame.generated.h"
 
 // Eén inventory-item in de save (met THC%/kwaliteit behouden).
@@ -140,6 +142,20 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	TArray<FName> PurchasedUpgrades;
+
+	// Crew-XP binnen het huidige level (samen met CrewLevel voor exact herstel).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 CrewXP = 0;
+
+	// NPC-relaties: respect/loyaliteit/verslaving + ontgrendeld nummer, per persoon.
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	TArray<FNpcState> Npcs;
+
+	// Telefoon: contacten + chat-berichten.
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	TArray<FPhoneContact> Contacts;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	TArray<FPhoneMessage> Messages;
 
 	// --- Per-speler (op username) ---
 	UPROPERTY(VisibleAnywhere, Category = "Save")
