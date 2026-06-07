@@ -385,7 +385,8 @@ void UDealWidget::UpdateLive()
 		StockText->SetText(FText::FromString(FString::Printf(TEXT("Your stock: %dg of %d needed - not enough %s!"), Stock, Qty, *PrettyName(Offered))));
 	}
 
-	const float Chance = bSub ? C->GetSubstituteAcceptance(Offered, Ask, Q01) : C->GetAcceptanceChance(Ask, Q01);
+	const float OffThc = (Stock > 0) ? Thc : -1.f;
+	const float Chance = bSub ? C->GetSubstituteAcceptance(Offered, Ask, Q01, OffThc) : C->GetAcceptanceChance(Ask, Q01, OffThc);
 	const FLinearColor CCol = Chance >= 66.f ? FLinearColor::Green : (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f));
 	ChanceText->SetColorAndOpacity(FSlateColor(CCol));
 	ChanceText->SetText(FText::FromString(FString::Printf(TEXT("Chance they accept: %.0f%%%s"), Chance, bSub ? TEXT("  (substitute)") : TEXT(""))));

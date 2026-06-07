@@ -2738,20 +2738,27 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	return Row ? Row->MarketPriceCents : 0;
 }
 
-float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01) const
+float ACustomerBase::ThcWillingnessBonus(float ThcPercent)
 {
-	return UWeedDealLibrary::CalculateAcceptanceChance(
-		static_cast<float>(GetMarketPriceCents()), static_cast<float>(AskPriceCentsPerUnit),
-		Respect, Loyalty, Addiction, Quality01);
+	if (ThcPercent < 0.f) { return 0.f; }                      // onbekend -> geen bonus
+	return FMath::Clamp((ThcPercent - 15.f) * 2.5f, 0.f, 45.f); // sterker dan ~15% -> veel bereidwilliger
 }
 
-float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01) const
+float ACustomerBase::GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent) const
+{
+	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
+		static_cast<float>(GetMarketPriceCents()), static_cast<float>(AskPriceCentsPerUnit),
+		Respect, Loyalty, Addiction, Quality01);
+	return FMath::Min(100.f, Base + ThcWillingnessBonus(ThcPercent));
+}
+
+float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent) const
 {
 	const int32 Market = GetMarketPriceForProduct(AltProductId);
 	if (Market <= 0) { return 0.f; }
 	const float Base = UWeedDealLibrary::CalculateAcceptanceChance(
 		static_cast<float>(Market), static_cast<float>(AskPriceCentsPerUnit),
-		Respect, Loyalty, Addiction, Quality01);
+		Respect, Loyalty, Addiction, Quality01) + ThcWillingnessBonus(ThcPercent);
 	// Bereidheid om iets anders te nemen: ~50% basis, hoger bij loyaliteit/verslaving, EN een scherpe
 	// prijs compenseert het substituut (goedkoper -> hij neemt het toch). Kan oplopen tot ~100%.
 	const float Ratio = FMath::Clamp(static_cast<float>(AskPriceCentsPerUnit) / static_cast<float>(Market), 0.30f, 2.20f);
@@ -2850,10 +2857,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		return EDealResult::Haggle;
 	}
 
-	// Substituut = ~50% basis (stats-afhankelijk); anders de normale kans.
+	// Substituut = ~50% basis (stats-afhankelijk); anders de normale kans. Sterkere wiet (THC) maakt ze
+	// veel bereidwilliger (zit nu in beide functies via ThcWillingnessBonus).
 	const float Chance = bSubstitute
-		? GetSubstituteAcceptance(ProductId, AskPriceCentsPerUnit, Quality01)
-		: GetAcceptanceChance(AskPriceCentsPerUnit, Quality01);
+		? GetSubstituteAcceptance(ProductId, AskPriceCentsPerUnit, Quality01, ThcStock)
+		: GetAcceptanceChance(AskPriceCentsPerUnit, Quality01, ThcStock);
 	const bool bAccepts = FMath::FRandRange(0.f, 100.f) <= Chance;
 
 	if (!bAccepts)

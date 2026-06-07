@@ -1118,8 +1118,9 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	y += 20.f;
 
 	// --- Live acceptatie-% (substituut = ~50% basis, geschaald met loyaliteit/verslaving) ---
-	const float Chance = bSub ? C->GetSubstituteAcceptance(OfferedId, EffAsk, Quality01)
-							  : C->GetAcceptanceChance(EffAsk, Quality01);
+	const float OffThc = (StockQty > 0) ? ThcShow : -1.f;
+	const float Chance = bSub ? C->GetSubstituteAcceptance(OfferedId, EffAsk, Quality01, OffThc)
+							  : C->GetAcceptanceChance(EffAsk, Quality01, OffThc);
 	const FLinearColor ChanceCol = Chance >= 66.f ? FLinearColor::Green
 		: (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f));
 	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%%s"), Chance, bSub ? TEXT("   (substitute)") : TEXT("")),

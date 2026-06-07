@@ -158,12 +158,15 @@ public:
 	// Live acceptatie-% bij een bod (per eenheid) — voor de prijs-slider-UI. Quality01 (0..1) is de
 	// kwaliteit van de wiet die je wil verkopen; negatief = neutraal/onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
-	float GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01 = -1.f) const;
+	float GetAcceptanceChance(int32 AskPriceCentsPerUnit, float Quality01 = -1.f, float ThcPercent = -1.f) const;
+
+	// Extra acceptatie-% door sterke wiet: boven ~15% THC ~+2.5%/% tot +45%. -1 = neutraal (geen bonus).
+	static float ThcWillingnessBonus(float ThcPercent);
 
 	// Acceptatie-% als je een ANDERE strain aanbiedt dan gevraagd (substituut). ~50% basis, geschaald
 	// met loyaliteit/verslaving (een trouwe/verslaafde klant neemt eerder iets anders).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
-	float GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01 = -1.f) const;
+	float GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01 = -1.f, float ThcPercent = -1.f) const;
 
 	// Server-authoritative bod op het gewenste product. Betaalt naar PayTo, haalt voorraad uit StockFrom.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Customer")
