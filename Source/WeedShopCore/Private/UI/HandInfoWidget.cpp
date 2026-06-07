@@ -219,9 +219,17 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		else
 		{
-			const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("Bag_"));
 			QtyText->SetVisibility(ESlateVisibility::HitTestInvisible);
-			QtyText->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%d g"), Qty) : FString::Printf(TEXT("x%d"), Qty)));
+			if (UInventoryComponent::IsBag(Id))
+			{
+				// Zakjes: "Nx Xg" (aantal x grootte), bv. 2x 2g.
+				QtyText->SetText(FText::FromString(WeedUI::ItemQtyBadge(Id, Qty)));
+			}
+			else
+			{
+				const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_"));
+				QtyText->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%d g"), Qty) : FString::Printf(TEXT("x%d"), Qty)));
+			}
 			QtyText->SetColorAndOpacity(FSlateColor(Col));
 		}
 	}
@@ -244,7 +252,14 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		};
 
 		// Aantal staat al groot bij de titel - hier alleen de echte eigenschappen.
-		if (IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")) || IdStr.StartsWith(TEXT("Bag_")))
+		if (UInventoryComponent::IsBag(Id))
+		{
+			AddStat(TEXT("Per zakje"), FString::Printf(TEXT("%d g"), UInventoryComponent::BagGrams(Id)));
+			AddStat(TEXT("Aantal zakjes"), FString::Printf(TEXT("%d"), Qty));
+			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
+			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));
+		}
+		else if (IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")))
 		{
 			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
 			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));
