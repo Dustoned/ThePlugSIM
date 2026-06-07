@@ -1131,8 +1131,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			{
 				const float dMid = (dFront + dBack) * 0.5f;
 				const float sLandFront = -Half + Margin + RunS * 1.2f;
-				const float sDivC = (s0 + sLandFront) * 0.5f;
-				const float sDivLen = FMath::Abs(s0 - sLandFront);
+				const float sHall = -HW + 8.f;                         // loopt door tot de gang-tussenmuur (geen gat meer)
+				const float sDivC = (sHall + sLandFront) * 0.5f;
+				const float sDivLen = FMath::Abs(sHall - sLandFront);
 				Box(dMid, sDivC, GapD + 16.f, sDivLen, zf + FloorH * 0.5f, FloorH, FLinearColor(0.17f, 0.17f, 0.20f), true);
 			}
 		}
@@ -1142,11 +1143,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 	{
 		const float dFrontS = StairDoorC;
 		const float dBackS = Foot - StairLaneWd * 0.5f - 20.f;
-		const float dMidS = (dFrontS + dBackS) * 0.5f;                 // midden van de dikke blok
-		const float GapD2 = FMath::Abs(dBackS - dFrontS) - StairLaneWd;
-		const float dFaceN = dMidS - GapD2 * 0.5f - 16.f;             // net vóór de gang/entree-kant van de dikke blok
-		const float sSign = -HW - 100.f;                              // hal-kant van de blok, goed zichtbaar
-		const int32 NDirX = FMath::RoundToInt(N.X), NDirY = FMath::RoundToInt(N.Y); // bordje naar de gang/entree gericht
+		const float dMidS = (dFrontS + dBackS) * 0.5f;                 // midden van de dikke blok / gang-tussenmuur
+		const float sPlate = -HW + 12.f;                              // hal-kant van de WITTE gang-tussenmuur (s = -HW)
+		const int32 WDirX = FMath::RoundToInt(Side.X), WDirY = FMath::RoundToInt(Side.Y); // bordje de gang in gericht
 		const float SignSize = 26.f;
 		const float PlateW = SignSize * 4.6f;                         // breed genoeg voor "LEVEL N"
 		for (int32 f = 0; f < NF; ++f)
@@ -1155,10 +1154,10 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			// Lamp aan de gang-kant bij de lift (elke verdieping), zodat het er niet donker is als de lift weg is.
 			const FVector LiftLamp = LP(HallLen - 30.f, HW * 0.6f);
 			AddInteriorLight(FVector(LiftLamp.X, LiftLamp.Y, zf + FloorH - 60.f));
-			// Bordje (donkere plaat + oplichtende "LEVEL N") OP de muur ervoor (de dikke blok), naar de gang gericht.
-			Box(dFaceN, sSign, 6.f, PlateW, zf + 178.f, SignSize * 1.7f, FLinearColor(0.03f, 0.03f, 0.05f), false);
-			const FVector SignPos = LP(dFaceN - 6.f, sSign);
-			AddSignText(FVector(SignPos.X, SignPos.Y, zf + 178.f), NDirX, NDirY,
+			// Bordje (donkere plaat + oplichtende "LEVEL N") OP de witte gang-tussenmuur (hal-kant), de gang in gericht.
+			Box(dMidS, sPlate, PlateW, 6.f, zf + 178.f, SignSize * 1.7f, FLinearColor(0.03f, 0.03f, 0.05f), false);
+			const FVector SignPos = LP(dMidS, sPlate + 5.f);
+			AddSignText(FVector(SignPos.X, SignPos.Y, zf + 178.f), WDirX, WDirY,
 				FString::Printf(TEXT("LEVEL %d"), f + 1), FLinearColor(0.6f, 0.9f, 1.f), SignSize, true);
 		}
 	}
