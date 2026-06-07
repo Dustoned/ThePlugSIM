@@ -1109,11 +1109,15 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float dFront = StairDoorC;                          // baan dichtbij de gang (= instap/deuropening)
 		const float dBack = Foot - LaneWd * 0.5f - 20.f;          // baan achterin
 		const float s0 = -HW - Margin;                            // begint bij de gang-instap
-		// Smalle drempel op vloerniveau aan de gangkant per verdieping (volle diepte) om af te stappen.
+		// Brede loop-/afstap-strook op vloerniveau aan de gangkant per verdieping (volle diepte) zodat je
+		// ruim van de trap af kunt stappen (was te smal). Verbindt met de gangvloer.
+		const float StepOffWd = 150.f;                 // breedte van de afstap-strook (langs Side)
+		const float StepOffC  = -HW - StepOffWd * 0.5f + 20.f; // overlapt net de gangvloer
+		const float StepOffFar = StepOffC - StepOffWd * 0.5f;  // verste rand (richting de schacht)
 		for (int32 f = 0; f < NF; ++f)
 		{
 			const float zf = TopZ + f * FloorH;
-			Box(HallLen + CoreDepth * 0.5f, -HW - 28.f, CoreDepth, 64.f, zf - 6.f, 12.f, LandC, true);
+			Box(HallLen + CoreDepth * 0.5f, StepOffC, CoreDepth, StepOffWd, zf - 6.f, 12.f, LandC, true);
 		}
 		for (int32 f = 0; f < NF - 1; ++f)
 		{
@@ -1131,8 +1135,9 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			{
 				const float dMid = (dFront + dBack) * 0.5f;
 				const float sLandFront = -Half + Margin + RunS * 1.2f;     // stop net voor het bordes
-				const float sDivC = (s0 + sLandFront) * 0.5f;
-				const float sDivLen = FMath::Abs(s0 - sLandFront);
+				const float sNear = StepOffFar;                            // begin pas voorbij de afstap-strook (gangkant blijft vrij)
+				const float sDivC = (sNear + sLandFront) * 0.5f;
+				const float sDivLen = FMath::Abs(sNear - sLandFront);
 				Box(dMid, sDivC, GapD + 16.f, sDivLen, zf + FloorH * 0.5f, FloorH, FLinearColor(0.17f, 0.17f, 0.20f), true);
 			}
 		}
