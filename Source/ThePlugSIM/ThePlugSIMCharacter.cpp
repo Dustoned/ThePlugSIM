@@ -793,14 +793,24 @@ void AThePlugSIMCharacter::BeginPlay()
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
 
-	// Held item ECHT in de hand: koppel aan de rechterhand-bone van de FP-armen (volgt zo de hand/animatie).
-	// Lukt dat niet (geen bone), dan valt 't terug op de camera-offset (zie Tick).
-	if (HeldItemMesh && FirstPersonMesh && FirstPersonMesh->DoesSocketExist(FName("hand_r")))
+	// Held item ECHT in de hand: koppel aan de FP-armen. De UE5 First-Person-template heeft hiervoor een
+	// "GripPoint"-socket op de rechterhand (daar hangt de template ook het wapen aan). Anders de hand-bone.
+	if (HeldItemMesh && FirstPersonMesh)
 	{
-		HeldItemMesh->AttachToComponent(FirstPersonMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, FName("hand_r"));
-		HeldItemMesh->SetRelativeLocation(FVector(11.f, 3.f, -2.f));
-		HeldItemMesh->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
-		bHeldOnHandBone = true;
+		FName HandSocket = NAME_None;
+		FVector RelLoc(0.f, 0.f, 0.f);
+		if (FirstPersonMesh->DoesSocketExist(FName("GripPoint")))      { HandSocket = FName("GripPoint"); RelLoc = FVector(2.f, 0.f, 0.f); }
+		else if (FirstPersonMesh->DoesSocketExist(FName("hand_rSocket"))) { HandSocket = FName("hand_rSocket"); }
+		else if (FirstPersonMesh->DoesSocketExist(FName("hand_r")))    { HandSocket = FName("hand_r"); RelLoc = FVector(11.f, 3.f, -2.f); }
+		if (!HandSocket.IsNone())
+		{
+			HeldItemMesh->AttachToComponent(FirstPersonMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HandSocket);
+			HeldItemMesh->SetRelativeLocation(RelLoc);
+			HeldItemMesh->SetRelativeRotation(FRotator::ZeroRotator);
+			bHeldOnHandBone = true;
+			UE_LOG(LogTemp, Log, TEXT("HeldItem attached to FP socket '%s'."), *HandSocket.ToString());
+		}
+		else { UE_LOG(LogTemp, Warning, TEXT("HeldItem: no GripPoint/hand_r socket on FP mesh -> camera-offset fallback.")); }
 	}
 
 	// Co-op-animatie: Update Rate Optimization op het third-person lichaam UIT, en altijd de pose tikken.
