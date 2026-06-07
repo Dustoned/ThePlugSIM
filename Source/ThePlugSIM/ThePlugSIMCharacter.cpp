@@ -281,6 +281,10 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	}
 	else { PhoneCloseHold = 0.f; }
 
+	// AnimBP-vlag: houd je een item vast? (gerepliceerd via het actieve item -> werkt ook voor co-op-spelers
+	// die jouw hold-pose zien). De AnimBP blendt hierop een arm-vooruit-pose.
+	bHoldingItem = Inventory && !Inventory->GetActiveItemId().IsNone();
+
 	// --- Held item 3D-model in de hand + drop (alleen lokale speler) ---
 	if (IsLocallyControlled() && Inventory && HeldItemMesh)
 	{

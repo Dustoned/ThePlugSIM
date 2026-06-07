@@ -41,6 +41,10 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	/** 3D-model van het item dat je vasthoudt (alleen voor jezelf zichtbaar). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UStaticMeshComponent> HeldItemMesh;
+	/** True zodra je een item vasthoudt -> de AnimBP blendt hierop een "item vasthouden"-pose (arm vooruit). */
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop", meta = (AllowPrivateAccess = "true"))
+	bool bHoldingItem = false;
+
 	FName LastHeldItemId = NAME_None;   // om het hand-model alleen bij wissel te updaten
 	float DropHoldAccum = 0.f;          // hoe lang de drop-toets (Q) wordt ingehouden
 	bool bDroppedThisHold = false;      // al gedropt deze keer ingehouden? (1 drop per hold)
