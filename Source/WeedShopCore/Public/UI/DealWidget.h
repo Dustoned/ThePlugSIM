@@ -52,6 +52,8 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
 	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;
 	UPROPERTY() TObjectPtr<UTextBlock> RelationText;
+	UPROPERTY() TObjectPtr<UTextBlock> TierText;     // klant-tier (Casual -> Whale)
+	UPROPERTY() TObjectPtr<UProgressBar> TierBar;    // XP-voortgang naar de volgende tier
 	UPROPERTY() TObjectPtr<UTextBlock> PreviewText;
 	UPROPERTY() TObjectPtr<UTextBlock> OfferLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> StrainBox;

@@ -87,7 +87,14 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	StateText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.65f, 0.7f, 0.8f), false, true);
 	VB->AddChildToVerticalBox(StateText)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 	RelationText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.75f, 0.82f, 1.f), false, true);
-	VB->AddChildToVerticalBox(RelationText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	VB->AddChildToVerticalBox(RelationText)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+	// Klant-tier + XP-balk naar de volgende tier.
+	TierText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.85f, 0.9f, 1.f), false, true);
+	VB->AddChildToVerticalBox(TierText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+	TierBar = WidgetTree->ConstructWidget<UProgressBar>();
+	TierBar->SetFillColorAndOpacity(FLinearColor(0.45f, 0.75f, 1.f));
+	VB->AddChildToVerticalBox(TierBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// --- Dialoog-kader: wat de NPC zegt ---
 	{
@@ -285,6 +292,28 @@ void UDealWidget::UpdateLive()
 			}
 		}
 		RelationText->SetText(FText::FromString(Rel));
+	}
+
+	// Klant-tier + XP-balk naar de volgende tier (Casual -> Whale; bij Whale "(max)").
+	if (TierText && TierBar)
+	{
+		float Frac = 0.f; FString TLbl = TEXT("Tier: Casual");
+		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+			{
+				if (!C->NpcId.IsNone())
+				{
+					const int32 Tier = Reg->GetCustomerTier(C->NpcId);
+					Frac = Reg->GetTierProgress01(C->NpcId);
+					TLbl = (Tier >= 5)
+						? FString::Printf(TEXT("Tier: %s  (max)"), *UNpcRegistryComponent::TierName(Tier))
+						: FString::Printf(TEXT("Tier: %s  ->  %s"), *UNpcRegistryComponent::TierName(Tier), *UNpcRegistryComponent::TierName(Tier + 1));
+				}
+			}
+		}
+		TierText->SetText(FText::FromString(TLbl));
+		TierBar->SetPercent(Frac);
 	}
 
 	// Dialoog: de server-regel (reactie op joint/deal), anders een begroeting per status.
