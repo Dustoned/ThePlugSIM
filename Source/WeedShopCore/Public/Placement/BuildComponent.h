@@ -138,6 +138,11 @@ protected:
 	UPROPERTY(Transient) TObjectPtr<UStaticMeshComponent> RangeRing;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> RangeRingMID;
 	bool bPlacingGear = false; // huidige plaatsing is een gear-upgrade -> ring tonen
+	// Upgrade die op een object MOET snappen: 0 geen, 1 pot (Gear_), 2 droogrek (DryUp_), 3 hasj-machine (ProcUp_).
+	int32 CurUpgradeKind = 0;
+	TWeakObjectPtr<AActor> SnapTarget; // het object waar de upgrade op snapt (voor de ring)
+	// Dichtstbijzijnde geldige doel-actor (pot/rek/machine) bij Near, of nullptr.
+	AActor* FindUpgradeTarget(int32 Kind, const FVector& Near) const;
 
 	// Heldere ring op de pot die DEZE gear gaat krijgen (de dichtstbijzijnde pot in bereik).
 	UPROPERTY(Transient) TObjectPtr<UStaticMeshComponent> TargetRing;

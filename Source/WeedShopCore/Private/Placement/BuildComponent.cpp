@@ -117,7 +117,11 @@ void UBuildComponent::StartPlacing(FName ItemId)
 	}
 
 	PlacingItemId = ItemId;
-	bPlacingGear = (GearUpgradeIndex(ItemId) >= 0); // gear -> toon de effect-bereik-ring
+	{
+		const FString IdS = ItemId.ToString();
+		CurUpgradeKind = (GearUpgradeIndex(ItemId) >= 0) ? 1 : (IdS.StartsWith(TEXT("DryUp_")) ? 2 : (IdS.StartsWith(TEXT("ProcUp_")) ? 3 : 0));
+	}
+	bPlacingGear = (CurUpgradeKind != 0); // upgrade -> toon de bereik-/doel-ring
 	CurrentDef = Def;
 	bPlacing = true;
 	bValidSpot = false;
@@ -288,6 +292,8 @@ void UBuildComponent::CancelPlacing()
 	bPlacing = false;
 	bValidSpot = false;
 	bPlacingGear = false;
+	CurUpgradeKind = 0;
+	SnapTarget = nullptr;
 	if (Ghost)
 	{
 		Ghost->SetVisibility(false);
@@ -301,6 +307,24 @@ void UBuildComponent::CancelPlacing()
 		TargetRing->SetVisibility(false);
 	}
 	DestroyPreview();
+}
+
+AActor* UBuildComponent::FindUpgradeTarget(int32 Kind, const FVector& Near) const
+{
+	if (!GetWorld()) { return nullptr; }
+	AActor* Best = nullptr; float BestSq = FMath::Square(220.f); // mik binnen ~2,2m van een geldig object
+	auto Consider = [&](AActor* A)
+	{
+		if (!IsValid(A)) { return; }
+		const FVector L = A->GetActorLocation();
+		if (FMath::Abs(L.Z - Near.Z) > 300.f) { return; }
+		const float D = FVector::DistSquared2D(L, Near);
+		if (D <= BestSq) { BestSq = D; Best = A; }
+	};
+	if (Kind == 1)      { for (TActorIterator<AGrowPlant> It(GetWorld()); It; ++It)        { Consider(*It); } }
+	else if (Kind == 2) { for (TActorIterator<ADryingRack> It(GetWorld()); It; ++It)       { Consider(*It); } }
+	else if (Kind == 3) { for (TActorIterator<AProcessorMachine> It(GetWorld()); It; ++It) { Consider(*It); } }
+	return Best;
 }
 
 void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -536,6 +560,26 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		}
 	}
 
+	// Upgrades MOETEN op hun object snappen (pot/rek/machine). Geen geldig doel onder de cursor -> rood,
+	// niet plaatsbaar. Wel een doel -> de upgrade kleeft aan de speler-kant van dat object.
+	SnapTarget = nullptr;
+	if (bPlacing && CurUpgradeKind != 0)
+	{
+		AActor* Target = bAimHit ? FindUpgradeTarget(CurUpgradeKind, PreviewLocation) : nullptr;
+		if (Target)
+		{
+			const FVector TL = Target->GetActorLocation();
+			FVector Dir = OwnerPawn->GetActorLocation() - TL; Dir.Z = 0.f; Dir = Dir.GetSafeNormal();
+			if (Dir.IsNearlyZero()) { Dir = FVector(1.f, 0.f, 0.f); }
+			const float Edge = FMath::Max(CurrentDef.BoxHalf.X, CurrentDef.BoxHalf.Y) + 16.f;
+			PreviewLocation = FVector(TL.X, TL.Y, PreviewLocation.Z) + Dir * Edge;
+			PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(-Dir.Y, -Dir.X)), 0.f); // kijkt naar het object
+			bValidSpot = true;
+			SnapTarget = Target;
+		}
+		else { bValidSpot = false; }
+	}
+
 	// Eigen ghost bijwerken (lokaal).
 	const bool bShow = bPlacing && bAimHit;
 	// Plaatsing-offset (root t.o.v. het trefpunt) — gelijk aan hoe het object straks gespawnd wordt.
@@ -585,24 +629,12 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		RangeRing->SetVisibility(bRing);
 		if (bRing) { RangeRing->SetWorldLocation(PreviewLocation + FVector(0.f, 0.f, 3.f)); }
 	}
-	// Doel-pot highlighten: de dichtstbijzijnde pot binnen bereik die deze gear gaat krijgen.
+	// Doel-object highlighten: het object (pot/rek/machine) waar deze upgrade op gaat snappen.
 	if (TargetRing)
 	{
-		AGrowPlant* TargetPot = nullptr;
-		if (bShow && bPlacingGear)
-		{
-			float BestSq = FMath::Square(175.f);
-			for (TActorIterator<AGrowPlant> It(GetWorld()); It; ++It)
-			{
-				if (!IsValid(*It)) { continue; }
-				const FVector PL = It->GetActorLocation();
-				if (FMath::Abs(PL.Z - PreviewLocation.Z) > 280.f) { continue; }
-				const float dSq = FVector::DistSquared2D(PL, PreviewLocation);
-				if (dSq <= BestSq) { BestSq = dSq; TargetPot = *It; }
-			}
-		}
-		TargetRing->SetVisibility(TargetPot != nullptr);
-		if (TargetPot) { TargetRing->SetWorldLocation(TargetPot->GetActorLocation() + FVector(0.f, 0.f, 5.f)); }
+		AActor* T = (bShow && CurUpgradeKind != 0) ? SnapTarget.Get() : nullptr;
+		TargetRing->SetVisibility(T != nullptr);
+		if (T) { TargetRing->SetWorldLocation(T->GetActorLocation() + FVector(0.f, 0.f, 5.f)); }
 	}
 
 	// Preview-staat naar de server sturen (getemporiseerd) zodat co-op-spelers de ghost zien.
