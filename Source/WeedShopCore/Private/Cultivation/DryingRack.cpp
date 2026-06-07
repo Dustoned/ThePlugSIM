@@ -22,8 +22,10 @@ namespace
 	};
 
 	constexpr float DryGraceSeconds = 60.f;   // 1 min na klaar mag je 'm laten hangen zonder verlies
-	constexpr float DryDecayWindow  = 120.f;  // daarna lineair tot het max-verlies
-	constexpr float DryMaxLoss      = 0.10f;  // max 10% kwaliteitsverlies
+	// Daarna zakt de kwaliteit (net als een te lang rijpe plant), maar langzamer dan groeien: over ~10 min
+	// tot een fors verlies. Een plant verrot ~7 min tot ~0; gedroogde wiet degradeert dus trager + minder hard.
+	constexpr float DryDecayWindow  = 600.f;  // 10 min van grace-einde tot max-verlies
+	constexpr float DryMaxLoss      = 0.70f;  // tot 70% kwaliteitsverlies als je 'm veel te lang laat hangen
 }
 
 ADryingRack::ADryingRack()

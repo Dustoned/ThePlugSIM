@@ -410,7 +410,7 @@ void UDryingRackWidget::UpdateProgress()
 			FString Txt; FLinearColor Col;
 			if (E.bDone)
 			{
-				if (E.OverTime > 60.f) { Txt = TEXT("Oogst nu!"); Col = FLinearColor(1.f, 0.6f, 0.4f); }
+				if (E.OverTime > 60.f) { Txt = TEXT("Collect - quality dropping!"); Col = FLinearColor(1.f, 0.55f, 0.4f); }
 				else { Txt = TEXT("Ready"); Col = FLinearColor(0.5f, 1.f, 0.6f); }
 			}
 			else
