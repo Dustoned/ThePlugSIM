@@ -151,9 +151,8 @@ void UContactsComponent::SendRandomAppointment()
 	const float Offset = FMath::FRandRange(60.f, 240.f);
 	const float ApptTime = FMath::Fmod(Now + Offset, Length);
 
-	// Formatteer als HH:MM op een 24-uurs klok.
-	const float Frac = ApptTime / Length;
-	const int32 TotalMin = FMath::RoundToInt(Frac * 24.f * 60.f);
+	// Formatteer als HH:MM met DEZELFDE klok als de HUD (dag/nacht-split).
+	const int32 TotalMin = ClockMinutesOf(ApptTime);
 	const int32 HH = (TotalMin / 60) % 24;
 	const int32 MM = TotalMin % 60;
 
@@ -327,16 +326,21 @@ FString UContactsComponent::FormatApptClock(float TimeOfDay) const
 	float Now = 0.f, Length = 1800.f;
 	GetCycleTime(Now, Length);
 	if (Length <= 0.f) { Length = 1800.f; }
-	const float Frac = FMath::Fmod(FMath::Max(0.f, TimeOfDay), Length) / Length;
-	const int32 TotalMin = FMath::RoundToInt(Frac * 24.f * 60.f);
+	const int32 TotalMin = ClockMinutesOf(TimeOfDay);
 	return FString::Printf(TEXT("%02d:%02d"), (TotalMin / 60) % 24, TotalMin % 60);
 }
 
 int32 UContactsComponent::ClockMinutesOf(float TimeOfDay) const
 {
-	float Now = 0.f, Length = 1800.f;
-	GetCycleTime(Now, Length);
-	if (Length <= 0.f) { Length = 1800.f; }
+	// Gebruik DEZELFDE klok-mapping als de HUD (dag/nacht-split), zodat de getoonde tijd klopt met "07:51".
+	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (const UDayCycleComponent* Day = GS->GetDayCycle())
+		{
+			return ((FMath::RoundToInt(Day->ClockHourOf(FMath::Max(0.f, TimeOfDay)) * 60.f) % 1440) + 1440) % 1440;
+		}
+	}
+	float Now = 0.f, Length = 1800.f; GetCycleTime(Now, Length); if (Length <= 0.f) { Length = 1800.f; }
 	const float Frac = FMath::Fmod(FMath::Max(0.f, TimeOfDay), Length) / Length;
 	return ((FMath::RoundToInt(Frac * 1440.f) % 1440) + 1440) % 1440;
 }
@@ -461,11 +465,15 @@ void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDa
 	}
 	if (Found == INDEX_NONE) { return; }
 
-	float Now = 0.f, Length = 1800.f;
-	GetCycleTime(Now, Length);
-	if (Length <= 0.f) { Length = 1800.f; }
-	const float Frac = FMath::Clamp(static_cast<float>(MinutesOfDay), 0.f, 1439.f) / 1440.f; // klok -> fractie van de dag
-	const float NewTime = Frac * Length;
+	// Kloktijd (minuten) -> TimeOfDay via DEZELFDE dag/nacht-mapping als de HUD.
+	float Now = 0.f, Length = 1800.f; GetCycleTime(Now, Length); if (Length <= 0.f) { Length = 1800.f; }
+	float NewTime;
+	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		const UDayCycleComponent* Day = GS->GetDayCycle();
+		NewTime = Day ? Day->TimeOfDayFromClockMinutes(MinutesOfDay) : (FMath::Clamp((float)MinutesOfDay, 0.f, 1439.f) / 1440.f) * Length;
+	}
+	else { NewTime = (FMath::Clamp((float)MinutesOfDay, 0.f, 1439.f) / 1440.f) * Length; }
 
 	const FText SenderName = Messages[Found].SenderName;
 	Messages[Found].Status = 1;                      // geaccepteerd op JOUW tijd

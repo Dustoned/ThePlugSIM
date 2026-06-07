@@ -438,14 +438,14 @@ void UPhoneWidget::BuildChatApp()
 		LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		for (const FName& Cid : Order)
 		{
-			// Laatste bericht + of er een open afspraak is.
-			FString LastBody; FText Name; bool bOpen = false;
+			// Laatste bericht + of er ONGELEZEN berichten van dit contact zijn (wist bij het openen van de chat).
+			FString LastBody; FText Name;
 			for (const FPhoneMessage& M : Msgs)
 			{
 				if (M.FromContactId != Cid) { continue; }
-				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; }
-				if (M.Status == 0 && !M.bFromMe) { bOpen = true; }
+				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; break; }
 			}
+			const bool bOpen = Phone.IsValid() && Phone->HasUnreadFrom(Cid);
 			if (LastBody.Len() > 30) { LastBody = LastBody.Left(29) + TEXT("."); }
 
 			UBorder* Card = WidgetTree->ConstructWidget<UBorder>();

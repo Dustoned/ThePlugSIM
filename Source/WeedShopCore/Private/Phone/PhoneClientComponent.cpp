@@ -203,6 +203,16 @@ void UPhoneClientComponent::MarkChatSeen(FName ContactId)
 	MsgSeen.Add(ContactId, Cnt);
 }
 
+bool UPhoneClientComponent::HasUnreadFrom(FName ContactId) const
+{
+	const AWeedShopGameState* GS = GetGS();
+	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return false; }
+	int32 Cnt = 0;
+	for (const FPhoneMessage& M : Con->GetMessages()) { if (!M.bFromMe && M.FromContactId == ContactId) { ++Cnt; } }
+	return Cnt > MsgSeen.FindRef(ContactId);
+}
+
 int32 UPhoneClientComponent::GetUnreadMessageCount() const
 {
 	const AWeedShopGameState* GS = GetGS();

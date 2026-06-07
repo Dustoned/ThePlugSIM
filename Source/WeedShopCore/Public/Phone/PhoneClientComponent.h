@@ -231,6 +231,7 @@ public:
 	// inkomende berichten en gaat pas weg als je de CHAT van die persoon echt opent (MarkChatSeen).
 	void MarkChatSeen(FName ContactId);
 	int32 GetUnreadMessageCount() const;
+	bool HasUnreadFrom(FName ContactId) const; // ongelezen inkomende berichten van dit contact?
 
 	// Verkoop het item op voorraad-stapel StackIndex aan de supplier (70% terug).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")

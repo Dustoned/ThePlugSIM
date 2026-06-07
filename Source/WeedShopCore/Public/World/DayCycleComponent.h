@@ -71,6 +71,26 @@ public:
 		return FMath::Fmod(SunsetHour + f * NightHours, 24.f);      // sunset -> sunrise
 	}
 
+	// Klok-uur (0..24) voor een WILLEKEURIGE TimeOfDay (zelfde dag/nacht-mapping als GetClockHour).
+	float ClockHourOf(float Tod) const
+	{
+		const float DayHours = SunsetHour - SunriseHour;
+		const float NightHours = 24.f - DayHours;
+		if (Tod < DayLengthSeconds) { const float f = Tod / FMath::Max(1.f, DayLengthSeconds); return SunriseHour + f * DayHours; }
+		const float f = (Tod - DayLengthSeconds) / FMath::Max(1.f, NightLengthSeconds);
+		return FMath::Fmod(SunsetHour + f * NightHours, 24.f);
+	}
+	// Inverse: TimeOfDay (cycle-seconds) voor een kloktijd in minuten (0..1439).
+	float TimeOfDayFromClockMinutes(int32 Mins) const
+	{
+		const float H = FMath::Fmod(Mins / 60.f, 24.f);
+		const float DayHours = FMath::Max(0.01f, SunsetHour - SunriseHour);
+		const float NightHours = FMath::Max(0.01f, 24.f - (SunsetHour - SunriseHour));
+		if (H >= SunriseHour && H < SunsetHour) { const float f = (H - SunriseHour) / DayHours; return f * DayLengthSeconds; }
+		float nh = H - SunsetHour; if (nh < 0.f) { nh += 24.f; }
+		const float f = nh / NightHours; return DayLengthSeconds + f * NightLengthSeconds;
+	}
+
 	// Server-only: zet de tijd direct (voor save/load-herstel).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|DayNight")
 	void SetTimeOfDaySeconds(float NewTime);
