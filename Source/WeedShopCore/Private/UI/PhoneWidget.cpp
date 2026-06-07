@@ -624,8 +624,10 @@ void UPhoneWidget::BuildChatApp()
 			{
 				const FName Strain = StrainOf(Id);
 				if (Strain.IsNone() || Q <= 0) { return; }
+				// Tel in GRAMMEN: los gedroogd (Bud_) = 1g per stuk; zakjes (Bag_) = aantal x gram-per-zakje.
+				const int32 Grams = UInventoryComponent::IsBag(Id) ? Q * FMath::Max(1, UInventoryComponent::BagGrams(Id)) : Q;
 				FOfferAgg& O = ByStrain.FindOrAdd(Strain);
-				O.Qty += Q;
+				O.Qty += Grams;
 				if (Thc > O.Thc) { O.Thc = Thc; O.Qual = Ql; }
 			};
 			if (UInventoryComponent* Inv = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr)
@@ -643,7 +645,7 @@ void UPhoneWidget::BuildChatApp()
 				const FName Strain = P.Key; const FOfferAgg& O = P.Value;
 				const float Delta = O.Thc - ExpThc;
 				const float Chance = Con->SubstituteAcceptChance(OpenChatContact, ReqStrain, Strain, O.Thc) * 100.f;
-				const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  x%d\n%+.0f%% THC vs ask   ~%.0f%% yes"),
+				const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  %dg\n%+.0f%% THC vs ask   ~%.0f%% yes"),
 					*Strain.ToString(), O.Thc, O.Qual, O.Qty, Delta, Chance);
 				const FName SPick = Strain;
 				ContentBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? FLinearColor(0.18f, 0.4f, 0.28f) : FLinearColor(0.36f, 0.3f, 0.2f)),
