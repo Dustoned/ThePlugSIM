@@ -1219,10 +1219,13 @@ void UPhoneWidget::FillStoreList()
 				}
 			}
 
-			// Opbouw-regel: koop - verkoop - bezorging.
+			// Opbouw-regel (kort): koop - verkoop - bezorging. Geen decimalen + alleen tonen wat van toepassing is.
 			const int32 Fee = FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(DeliveryOpt));
-			UTextBlock* Breakdown = MakeText(FString::Printf(TEXT("Buy EUR %.2f   -   Sell EUR %.2f   +   Delivery EUR %.2f"),
-				BuySub / 100.f, SellSub / 100.f, Fee / 100.f), 10, FLinearColor(0.68f, 0.72f, 0.82f));
+			FString BD = FString::Printf(TEXT("Buy EUR %.0f"), BuySub / 100.f);
+			if (SellSub > 0) { BD += FString::Printf(TEXT("  -  Sell EUR %.0f"), SellSub / 100.f); }
+			if (Fee > 0)     { BD += FString::Printf(TEXT("  +  Deliv EUR %.0f"), Fee / 100.f); }
+			UTextBlock* Breakdown = MakeText(BD, 10, FLinearColor(0.68f, 0.72f, 0.82f));
+			Breakdown->SetAutoWrapText(true);
 			Breakdown->SetJustification(ETextJustify::Right);
 			StoreFooter->AddChildToVerticalBox(Breakdown)->SetPadding(FMargin(0.f, 2.f, 4.f, 0.f));
 
