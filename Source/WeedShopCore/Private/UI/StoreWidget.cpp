@@ -75,7 +75,7 @@ namespace
 		case 5: return TEXT("Soil");
 		case 6: return TEXT("Water");
 		case 7: return TEXT("Furniture");
-		case 8: return TEXT("Gear");
+		case 8: return TEXT("Grow Upg.");
 		case 9: return TEXT("Care");
 		case 10: return TEXT("Hash");
 		default: return TEXT("Items");

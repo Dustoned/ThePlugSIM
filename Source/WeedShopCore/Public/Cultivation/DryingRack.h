@@ -97,4 +97,10 @@ protected:
 	int32 Capacity() const;
 	float DrySeconds() const;
 	void UpdateRep();
+
+	// Losse upgrade-gear (DryUp_*) vlakbij: sneller drogen (fan) + kwaliteit beschermen (sealer).
+	float UpSpeedMult = 1.f;
+	bool bUpSeal = false;
+	float UpScanTimer = 0.f;
+	void RecomputeUpgrades(float DeltaSeconds);
 };

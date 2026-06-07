@@ -6,8 +6,10 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Inventory/InventoryComponent.h"
 #include "Placement/PlaceableTypes.h"
+#include "Placement/PlaceableProp.h"
 #include "Placement/PropMeshKit.h"
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 
 namespace
@@ -151,7 +153,36 @@ bool ADryingRack::GetRackDef(FName Tier, int32& OutCapacity, float& OutDrySecond
 }
 
 int32 ADryingRack::Capacity() const { int32 C; float D; GetRackDef(RackTier, C, D); return C; }
-float ADryingRack::DrySeconds() const { int32 C; float D; GetRackDef(RackTier, C, D); return D; }
+float ADryingRack::DrySeconds() const { int32 C; float D; GetRackDef(RackTier, C, D); return D * UpSpeedMult; }
+
+void ADryingRack::RecomputeUpgrades(float DeltaSeconds)
+{
+	UpScanTimer -= DeltaSeconds;
+	if (UpScanTimer > 0.f) { return; }
+	UpScanTimer = 0.5f;
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FVector C = GetActorLocation();
+	auto NearestRack = [W](const FVector& At) -> ADryingRack*
+	{
+		ADryingRack* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
+		for (TActorIterator<ADryingRack> R(W); R; ++R) { if (!IsValid(*R)) { continue; } const float d = FVector::DistSquared2D(R->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = *R; } }
+		return Best;
+	};
+	float Speed = 1.f; bool bSeal = false;
+	for (TActorIterator<APlaceableProp> It(W); It; ++It)
+	{
+		APlaceableProp* P = *It; if (!IsValid(P)) { continue; }
+		const FString S = P->ItemId.ToString();
+		if (!S.StartsWith(TEXT("DryUp_"))) { continue; }
+		const FVector L = P->GetActorLocation();
+		if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
+		if (NearestRack(L) != this) { continue; }
+		if (S == TEXT("DryUp_Fan")) { Speed *= 0.7f; }
+		else if (S == TEXT("DryUp_Seal")) { bSeal = true; }
+	}
+	UpSpeedMult = Speed; bUpSeal = bSeal;
+}
 
 void ADryingRack::UpdateRep()
 {
@@ -165,6 +196,7 @@ void ADryingRack::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateDryVisual(); // ook op clients (RepDrying/RepReady repliceren)
+	if (HasAuthority()) { RecomputeUpgrades(DeltaSeconds); } // upgrade-gear in de buurt
 	if (!HasAuthority() || Entries.Num() == 0) { return; }
 
 	const float DT = DrySeconds();
@@ -203,7 +235,8 @@ bool ADryingRack::ServerCollectIndex(int32 Index, FName& OutId, int32& OutQty, f
 	if (!HasAuthority() || !Entries.IsValidIndex(Index)) { return false; }
 	const FDryEntry& E = Entries[Index];
 	if (!E.bDone) { return false; }
-	const float LossFrac = FMath::Clamp((E.OverTime - DryGraceSeconds) / DryDecayWindow, 0.f, 1.f) * DryMaxLoss;
+	// Humidity-sealer-upgrade vlakbij -> geen kwaliteitsverlies door te lang hangen.
+	const float LossFrac = bUpSeal ? 0.f : FMath::Clamp((E.OverTime - DryGraceSeconds) / DryDecayWindow, 0.f, 1.f) * DryMaxLoss;
 	OutId = E.DryItemId;
 	OutQty = E.Quantity;
 	OutThc = E.Thc;

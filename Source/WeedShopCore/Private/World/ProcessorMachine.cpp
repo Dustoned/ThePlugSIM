@@ -6,8 +6,10 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Inventory/InventoryComponent.h"
+#include "Placement/PlaceableProp.h"
 #include "UI/WeedToast.h"
 #include "GameFramework/Pawn.h"
+#include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 
 AProcessorMachine::AProcessorMachine()
@@ -58,7 +60,37 @@ bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSec
 }
 
 int32 AProcessorMachine::Capacity() const { int32 C=1; float S,Cv,M; bool P; GetProcDef(MachineTier, C, S, Cv, M, P); return C; }
-float AProcessorMachine::ProcSeconds() const { int32 C; float S=60.f,Cv,M; bool P; GetProcDef(MachineTier, C, S, Cv, M, P); return S; }
+float AProcessorMachine::ProcSeconds() const { int32 C; float S=60.f,Cv,M; bool P; GetProcDef(MachineTier, C, S, Cv, M, P); return S * UpSpeedMult; }
+
+void AProcessorMachine::RecomputeUpgrades(float DeltaSeconds)
+{
+	UpScanTimer -= DeltaSeconds;
+	if (UpScanTimer > 0.f) { return; }
+	UpScanTimer = 0.5f;
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FVector C = GetActorLocation();
+	// Een upgrade hoort bij de DICHTSTBIJZIJNDE machine (zoals pot-gear).
+	auto NearestProc = [W](const FVector& At) -> AProcessorMachine*
+	{
+		AProcessorMachine* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
+		for (TActorIterator<AProcessorMachine> P(W); P; ++P) { if (!IsValid(*P)) { continue; } const float d = FVector::DistSquared2D(P->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = *P; } }
+		return Best;
+	};
+	float Speed = 1.f, Yield = 1.f;
+	for (TActorIterator<APlaceableProp> It(W); It; ++It)
+	{
+		APlaceableProp* P = *It; if (!IsValid(P)) { continue; }
+		const FString S = P->ItemId.ToString();
+		if (!S.StartsWith(TEXT("ProcUp_"))) { continue; }
+		const FVector L = P->GetActorLocation();
+		if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
+		if (NearestProc(L) != this) { continue; }
+		if (S == TEXT("ProcUp_Motor")) { Speed *= 0.7f; }
+		else if (S == TEXT("ProcUp_Yield")) { Yield *= 1.3f; }
+	}
+	UpSpeedMult = Speed; UpYieldMult = Yield;
+}
 
 void AProcessorMachine::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -139,6 +171,7 @@ void AProcessorMachine::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (!HasAuthority()) { return; }
+	RecomputeUpgrades(DeltaSeconds); // upgrade-gear in de buurt -> snelheid/opbrengst
 	const float Total = FMath::Max(1.f, ProcSeconds());
 	bool bChanged = false;
 	for (FProcEntry& E : Entries)
@@ -165,7 +198,7 @@ int32 AProcessorMachine::ServerLoad(FName InId, int32 Qty, float Thc, float Qual
 
 	FProcEntry E;
 	E.OutItemId = FName(*(OutputPrefixFor(MachineTier) + Strain));
-	E.Quantity = FMath::Max(1, FMath::RoundToInt(Qty * Conv));
+	E.Quantity = FMath::Max(1, FMath::RoundToInt(Qty * Conv * UpYieldMult)); // upgrade-gear verhoogt de opbrengst
 	E.Thc = FMath::Min(90.f, (Thc > 0.f ? Thc : 15.f) * ThcMult);
 	E.Quality = QualPct > 0.f ? QualPct : 60.f;
 	E.Elapsed = 0.f; E.bDone = false;

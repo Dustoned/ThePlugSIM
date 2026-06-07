@@ -95,6 +95,10 @@ namespace WeedUI
 		if (S == TEXT("Cont_Jar15"))          { return TEXT("Jars"); }
 		if (S == TEXT("Cont_Block100"))       { return TEXT("Press blocks"); }
 		if (S == TEXT("Cont_Garbage500"))     { return TEXT("Garbage bags"); }
+		if (S == TEXT("DryUp_Fan"))           { return TEXT("Drying fan"); }
+		if (S == TEXT("DryUp_Seal"))          { return TEXT("Humidity sealer"); }
+		if (S == TEXT("ProcUp_Motor"))        { return TEXT("Power motor"); }
+		if (S == TEXT("ProcUp_Yield"))        { return TEXT("Fine filter"); }
 		if (S.StartsWith(TEXT("Crystal_")))   { return S.RightChop(8) + TEXT(" crystals"); }
 		if (S.StartsWith(TEXT("Hash_")))      { return S.RightChop(5) + TEXT(" hash"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return S.RightChop(4); }

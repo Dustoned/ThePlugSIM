@@ -50,6 +50,11 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Press_Cheap"), TEXT("Heatpress"),            TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 5000,  false, false, false, false, false, false, false, false, true },
 		{ TEXT("Press_Std"),   TEXT("Pro heatpress"),        TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 9000,  false, false, false, false, false, false, false, false, true },
 		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 16000, false, false, false, false, false, false, false, false, true },
+		// --- Losse upgrade-gear: zet vlakbij een DROOGREK of HASJ-MACHINE om 'm sneller/beter te maken.
+		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 3000 },
+		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.24f), FVector(15.f, 15.f, 12.f), false, 4500 },
+		{ TEXT("ProcUp_Motor"), TEXT("Power motor"),     TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 5000 },
+		{ TEXT("ProcUp_Yield"), TEXT("Fine filter"),     TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.28f, 0.28f, 0.34f), FVector(14.f, 14.f, 17.f), false, 7000 },
 	};
 	return Defs;
 }

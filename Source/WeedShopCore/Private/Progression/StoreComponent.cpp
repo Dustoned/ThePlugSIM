@@ -144,6 +144,11 @@ namespace
 		{ TEXT("Press_Cheap"), TEXT("Heatpress"),            TEXT("Crystals -> hash, higher THC (~90s)"),        18000, 1 },
 		{ TEXT("Press_Std"),   TEXT("Pro heatpress"),        TEXT("Less loss + faster (~70s, 2 batches)"),       45000, 1 },
 		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("Best yield + THC (~50s, 3 batches)"),        120000, 1 },
+		// Losse upgrade-gear voor droogrek / hasj-machines (zet 'm vlakbij de machine).
+		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("Nearby drying rack: ~30% faster"),        9000,  1 },
+		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("Nearby drying rack: keeps quality higher"), 14000, 1 },
+		{ TEXT("ProcUp_Motor"), TEXT("Power motor"),     TEXT("Nearby hash machine: ~30% faster"),       16000, 1 },
+		{ TEXT("ProcUp_Yield"), TEXT("Fine filter"),     TEXT("Nearby hash machine: +30% yield"),        22000, 1 },
 		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Bag up to 2g - 10 pcs"),    800, 10 },
 		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Bag up to 5g - 10 pcs"),   1500, 10 },
 		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Jar up to 14g - 5 pcs"),   2500,  5 },
@@ -314,6 +319,11 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Press_Cheap"))     { return 16; }
 	if (S == TEXT("Press_Std"))       { return 26; }
 	if (S == TEXT("Press_Pro"))       { return 34; }
+	// Losse upgrade-gear
+	if (S == TEXT("DryUp_Fan"))       { return 12; }
+	if (S == TEXT("DryUp_Seal"))      { return 18; }
+	if (S == TEXT("ProcUp_Motor"))    { return 22; }
+	if (S == TEXT("ProcUp_Yield"))    { return 28; }
 	// Verpak-tafels
 	if (S == TEXT("Bench_Pack"))      { return 1; }
 	if (S == TEXT("Bench_Pack2"))     { return 14; }
@@ -435,7 +445,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			switch (Cat)
 			{
 			case 1: bMatch = S.StartsWith(TEXT("Pot")); break;
-			case 2: bMatch = S.StartsWith(TEXT("DryRack_")); break;
+			case 2: bMatch = S.StartsWith(TEXT("DryRack_")) || S.StartsWith(TEXT("DryUp_")); break;
 			case 3: bMatch = S.StartsWith(TEXT("Bench_")) || S.StartsWith(TEXT("Cont_")); break;
 			case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
 			case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
@@ -443,7 +453,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")); break;
 			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
-			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")); break;    // Hasj-keten
+			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_")); break; // Hasj-keten + upgrades
 			default: break;
 			}
 			if (bMatch) { Out.Add(Id); }
