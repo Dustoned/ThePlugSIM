@@ -108,7 +108,7 @@ namespace WeedUI
 			Add(FString::Printf(TEXT("%d bag(s) x %dg  =  %dg"), Qty, G, Qty * G));
 		}
 		else if (bWet || bBud || bCrystal || bHash) { Add(FString::Printf(TEXT("%dg"), Qty)); }
-		else if (Qty > 1) { Add(FString::Printf(TEXT("Aantal: %d"), Qty)); }
+		else if (Qty > 1) { Add(FString::Printf(TEXT("Amount: %d"), Qty)); }
 		return Out;
 	}
 

@@ -969,7 +969,7 @@ void AThePlugSIMCharacter::WeedFurnitureTypes()
 	{
 		const bool bHas = Templates.Contains(K) && Templates[K].Num() > 0;
 		if (bHas) { ++Done; }
-		UE_LOG(LogTemp, Display, TEXT("WeedFurnitureType: %-12s %3d woningen   %s"),
+		UE_LOG(LogTemp, Display, TEXT("WeedFurnitureType: %-12s %3d homes   %s"),
 			*K, Counts[K], bHas ? TEXT("[OK sjabloon]") : TEXT("[TODO]"));
 	}
 	UWeedToast::Notify(-1, 7.f, FColor::Cyan,

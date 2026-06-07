@@ -634,7 +634,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, TargetName, 0);
 	if (bOk) { Loaded = Save; GS->NotifySaved(); } // cache + save-indicator bij alle spelers
 	UE_LOG(LogWeedShop, Log, TEXT("SaveGame %s (%s): %d player(s), day %d, phase %d"),
-		bOk ? TEXT("OK") : TEXT("MISLUKT"), bAutosave ? TEXT("auto") : TEXT("handmatig"), NumPlayers, Save->DayNumber, Save->MilestonePhase);
+		bOk ? TEXT("OK") : TEXT("FAILED"), bAutosave ? TEXT("auto") : TEXT("manual"), NumPlayers, Save->DayNumber, Save->MilestonePhase);
 	return bOk;
 }
 

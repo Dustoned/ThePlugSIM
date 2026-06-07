@@ -74,7 +74,7 @@ void UContactsComponent::RegisterContact(FName ContactId, const FText& DisplayNa
 	C.Relationship = Relationship;
 	Contacts.Add(C);
 
-	UE_LOG(LogWeedShop, Log, TEXT("Nieuw contact: %s"), *DisplayName.ToString());
+	UE_LOG(LogWeedShop, Log, TEXT("New contact: %s"), *DisplayName.ToString());
 	if (GEngine)
 	{
 		UWeedToast::Notify(-1, 3.f, FColor::Cyan,

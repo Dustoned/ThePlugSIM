@@ -1447,7 +1447,7 @@ void AWeedShopHUD::DrawPotUpgradeUI(UPhoneClientComponent* Phone)
 	DrawText(FString::Printf(TEXT("POT UPGRADES  —  %s"), *PotName), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font);
 	DrawButton(FName(TEXT("potupgclose")), TEXT("Close (U)"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
 	y += 28.f;
-	DrawText(TEXT("Upgrades horen bij deze pot."),
+	DrawText(TEXT("Upgrades belong to this pot."),
 		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
 	y += 26.f;
 

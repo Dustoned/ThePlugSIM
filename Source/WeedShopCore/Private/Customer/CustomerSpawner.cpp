@@ -863,7 +863,7 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 	{
 		FString Avail;
 		for (const TPair<FString, TArray<FFurnitureEntry>>& KV : Templates) { Avail += KV.Key + TEXT(" "); }
-		UE_LOG(LogWeedShop, Warning, TEXT("FurnishDiag: %d woningen | %d via TEMPLATE, %d via fallback | template-keys=[%s]"),
+		UE_LOG(LogWeedShop, Warning, TEXT("FurnishDiag: %d homes | %d via TEMPLATE, %d via fallback | template-keys=[%s]"),
 			NTpl + NFb, NTpl, NFb, *Avail);
 		for (const TPair<FString, int32>& KV : KeyCount)
 		{

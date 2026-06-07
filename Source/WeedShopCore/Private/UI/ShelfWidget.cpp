@@ -255,7 +255,7 @@ void UShelfWidget::FillBody()
 			C->Badge = WeedUI::ItemQtyBadge(Id, Q);
 			C->Tooltip = bBag ? FString::Printf(TEXT("%s\n%dx %dg bag  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, UInventoryComponent::BagGrams(Id), Thc)
 			           : (bWeed ? FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, Thc)
-			                    : FString::Printf(TEXT("%s\nAantal: %d"), *WeedUI::PrettyItemName(Id), Q));
+			                    : FString::Printf(TEXT("%s\nAmount: %d"), *WeedUI::PrettyItemName(Id), Q));
 		}
 		return C;
 	};
