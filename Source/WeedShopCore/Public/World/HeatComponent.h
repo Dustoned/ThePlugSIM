@@ -53,8 +53,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Heat")
 	float GetHeat() const { return Heat; }
 
-	// Save/load: zet de heat-waarde terug.
+	// Save/load: heat-waarde + event-cooldown-staat (bust/overval-timer + laatste-event-dag).
 	void RestoreHeat(float V) { SetHeat(V); }
+	float GetEventTimer() const { return EventTimer; }
+	int32 GetLastEventDay() const { return LastEventDay; }
+	void RestoreEventState(float Timer, int32 LastDay) { EventTimer = Timer; LastEventDay = LastDay; }
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

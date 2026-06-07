@@ -141,6 +141,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	int32 GetTransfersToday() const { return TransfersToday; }
 
+	// Save/load van de dag-limiet-tellers (zodat reload de limieten niet reset).
+	int32 GetDepositDay() const { return DepositDay; }
+	void RestoreDailyLimits(int64 Deposited, int32 InDepositDay, int32 Transfers)
+	{
+		DepositedTodayCents = FMath::Max<int64>(0, Deposited);
+		DepositDay = InDepositDay;
+		TransfersToday = FMath::Max(0, Transfers);
+	}
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	int32 GetTransfersRemainingToday() const { return FMath::Max(0, MaxTransfersPerDay - TransfersToday); }
 

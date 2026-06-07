@@ -323,6 +323,8 @@ public:
 		TArray<int32> Qtys;
 	};
 	const TArray<FPendingDelivery>& GetPendingDeliveries() const { return PendingDeliveries; }
+	// Save/load: een opgeslagen (nog onderweg) bestelling meteen leveren (speler had al betaald).
+	void RestoreDeliverInstant(const TArray<FName>& Ids, const TArray<int32>& Qtys) { DeliverCart(0, Ids, Qtys); }
 	int32 GetPendingCount() const { return PendingDeliveries.Num(); }
 	// 0..1 voortgang van een bestelling (op aankomsttijd).
 	float GetDeliveryProgress(const FPendingDelivery& D) const;

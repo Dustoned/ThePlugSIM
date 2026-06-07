@@ -472,6 +472,9 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 	{
 		Out.CashCents = E->GetBalanceCents();
 		Out.BankCents = E->GetBankCents();
+		Out.DepositedTodayCents = E->GetDepositedTodayCents();
+		Out.DepositDay = E->GetDepositDay();
+		Out.TransfersToday = E->GetTransfersToday();
 	}
 	if (const UPhoneClientComponent* Ph = Pawn->FindComponentByClass<UPhoneClientComponent>())
 	{
@@ -480,6 +483,10 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 		Out.ActiveHome = Ph->GetActiveHome();
 		Out.RentDueDay = Ph->GetRentDueDay();
 		Out.bRentIntroShown = Ph->WasRentIntroShown();
+		for (const UPhoneClientComponent::FPendingDelivery& D : Ph->GetPendingDeliveries())
+		{
+			FSavePendingDelivery P; P.Ids = D.Ids; P.Qtys = D.Qtys; Out.Pending.Add(P);
+		}
 	}
 	if (const UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
@@ -496,6 +503,7 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 			const int32 Sid = Inv->GetHotbarStackId(h);
 			Out.HotbarCells.Add(Sid != 0 ? Inv->GetStackCell(Sid) : -1);
 		}
+		Out.ActiveSlot = Inv->GetActiveSlot();
 	}
 	if (const UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
 	{
@@ -515,12 +523,14 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	{
 		E->SetBalanceCents(Data.CashCents);
 		E->SetBankCents(Data.BankCents);
+		E->RestoreDailyLimits(Data.DepositedTodayCents, Data.DepositDay, Data.TransfersToday);
 	}
 	if (UPhoneClientComponent* Ph = Pawn->FindComponentByClass<UPhoneClientComponent>())
 	{
 		Ph->SetBankAppUnlocked(Data.bBankAppUnlocked);
 		Ph->RestoreProperty(Data.OwnedHomes, Data.ActiveHome);
 		Ph->RestoreRent(Data.RentDueDay, Data.bRentIntroShown);
+		for (const FSavePendingDelivery& P : Data.Pending) { Ph->RestoreDeliverInstant(P.Ids, P.Qtys); }
 	}
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
@@ -541,6 +551,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 			const int32 Sid = Inv->GetStackIdAtCell(Cell);
 			if (Sid != 0) { Inv->AssignHotbarStack(h, Sid); }
 		}
+		Inv->SetActiveSlot(Data.ActiveSlot);
 	}
 	if (UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
 	{
@@ -599,7 +610,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	// NPC-relaties + telefoon-contacten/berichten (waren voorheen niet opgeslagen).
 	if (const UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Save->Npcs = Reg->GetStatesForSave(); }
 	if (const UContactsComponent* Con = GS->GetContacts()) { Save->Contacts = Con->GetContacts(); Save->Messages = Con->GetMessages(); }
-	if (const UHeatComponent* Ht = GS->GetHeat()) { Save->Heat = Ht->GetHeat(); }
+	if (const UHeatComponent* Ht = GS->GetHeat()) { Save->Heat = Ht->GetHeat(); Save->HeatEventTimer = Ht->GetEventTimer(); Save->HeatLastEventDay = Ht->GetLastEventDay(); }
 
 	// Geplaatste wereld-objecten (potten/planten, shelves/chests, rekken, tafels, meubels, ATM).
 	GatherPlaced(World, Save->Placed);
@@ -661,7 +672,7 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	if (ULevelComponent* Lv = GS->GetLeveling()) { Lv->RestoreLevel(Save->CrewLevel, Save->CrewXP); }
 	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->RestoreStates(Save->Npcs); }
 	if (UContactsComponent* Con = GS->GetContacts()) { Con->RestoreContacts(Save->Contacts, Save->Messages); }
-	if (UHeatComponent* Ht = GS->GetHeat()) { Ht->RestoreHeat(Save->Heat); }
+	if (UHeatComponent* Ht = GS->GetHeat()) { Ht->RestoreHeat(Save->Heat); Ht->RestoreEventState(Save->HeatEventTimer, Save->HeatLastEventDay); }
 
 	// Geplaatste wereld-objecten opnieuw opbouwen (vervangt de huidige set).
 	RespawnPlaced(World, Save->Placed);

@@ -79,6 +79,15 @@ struct FPlacedObjectSave
 	UPROPERTY() TArray<FSavePlantSlot> Slots;
 };
 
+// Een nog-onderweg telefoon-bestelling (items + aantallen). Bij laden meteen geleverd (je had al betaald).
+USTRUCT()
+struct FSavePendingDelivery
+{
+	GENERATED_BODY()
+	UPROPERTY() TArray<FName> Ids;
+	UPROPERTY() TArray<int32> Qtys;
+};
+
 // Per-speler opgeslagen staat, op username gekoppeld (co-op: ieder z'n eigen).
 USTRUCT()
 struct FPlayerSaveData
@@ -91,9 +100,14 @@ struct FPlayerSaveData
 	UPROPERTY() bool bBankAppUnlocked = false;
 	UPROPERTY() TArray<FInvSaveItem> Items;
 	UPROPERTY() TArray<int32> HotbarCells; // per hotbar-slot: grid-cel van de toegewezen stapel (-1 = leeg)
+	UPROPERTY() int32 ActiveSlot = 0;      // geselecteerd hotbar-slot
 	UPROPERTY() int32 RentDueDay = 31;     // dag waarop de volgende huur gaat
 	UPROPERTY() bool bRentIntroShown = false;
 	UPROPERTY() int32 WaterCharges = 0;    // water in je fles
+	UPROPERTY() TArray<FSavePendingDelivery> Pending; // nog onderweg zijnde bestellingen
+	UPROPERTY() int64 DepositedTodayCents = 0; // dag-limiet stort (anti-exploit bij reload)
+	UPROPERTY() int32 DepositDay = 0;
+	UPROPERTY() int32 TransfersToday = 0;      // dag-limiet overboekingen
 
 	// Waar de speler stond op het moment van opslaan (bij laden gaat 'ie hier weer staan).
 	UPROPERTY() bool bHasTransform = false;
@@ -143,9 +157,13 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	bool bFreeBuild = false;
 
-	// Huidige politie-heat (gedeeld). Resette anders naar 0 bij elke reload.
+	// Huidige politie-heat (gedeeld) + de event-cooldown-staat (bust/overval timer + laatste-event-dag).
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	float Heat = 0.f;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	float HeatEventTimer = 0.f;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 HeatLastEventDay = -1000;
 
 	// Totale real-life speeltijd in seconden (cumulatief over sessies).
 	UPROPERTY(VisibleAnywhere, Category = "Save")
