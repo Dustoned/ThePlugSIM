@@ -176,7 +176,7 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseDryRack(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep natte wiet uit je inventory hierheen om op te hangen; klik een KLARE (groene) batch om te oogsten."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Sleep natte wiet vanuit je inventory hierheen om op te hangen; sleep een KLARE (groene) batch naar je inventory om te oogsten."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Eén rek-kolom als drop-zone (natte wiet hierheen slepen = ophangen).

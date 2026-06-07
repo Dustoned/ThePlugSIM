@@ -2,6 +2,7 @@
 
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
+#include "UI/DryingRackWidget.h" // UDryDragOp: een klare batch in de inventory droppen = oogsten
 #include "Inventory/InventoryComponent.h"
 #include "Economy/EconomyComponent.h" // cash met centen tonen
 #include "World/StorageShelf.h"
@@ -153,6 +154,16 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 
 bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+	// Een KLARE droogrek-batch (UDryDragOp, niet-nat) op de inventory droppen = oogsten naar je voorraad.
+	if (UDryDragOp* DryOp = Cast<UDryDragOp>(InOperation))
+	{
+		if (!DryOp->bWet && DryOp->EntryIndex >= 0 && Owner.IsValid())
+		{
+			return Owner->AcceptDryBatchDrop(DryOp->EntryIndex);
+		}
+		return false;
+	}
+
 	UInvDragOp* Op = Cast<UInvDragOp>(InOperation);
 	if (!Op || !Inv.IsValid() || Op->StackId == 0) { return false; }
 
@@ -602,6 +613,14 @@ void UInventoryWidget::RebuildContent()
 		Sz->SetContent(Cell);
 		Grid->AddChildToWrapBox(Sz);
 	}
+}
+
+bool UInventoryWidget::AcceptDryBatchDrop(int32 EntryIndex)
+{
+	if (!PhoneComp.IsValid() || EntryIndex < 0) { return false; }
+	PhoneComp->RequestDryCollect(EntryIndex); // oogst de batch naar je voorraad
+	bDirty = true;
+	return true;
 }
 
 void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)

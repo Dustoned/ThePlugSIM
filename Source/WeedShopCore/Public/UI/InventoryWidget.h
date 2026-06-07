@@ -74,6 +74,8 @@ class WEEDSHOPCORE_API UInventoryWidget : public UUserWidget
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 	void MarkDirty() { bDirty = true; }
+	// Een KLARE droogrek-batch in de inventory laten droppen = oogsten (drag i.p.v. klik).
+	bool AcceptDryBatchDrop(int32 EntryIndex);
 	// Shift+klik op een stapel -> open de split-popup (slider: hoeveel afsplitsen).
 	void OpenSplitPopup(int32 StackId);
 	// Voeg alle stapels van dit item samen (sleep een stapel op een gelijke -> mergen).
