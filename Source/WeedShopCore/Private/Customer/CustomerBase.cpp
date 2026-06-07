@@ -2361,10 +2361,22 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 	{
 		const float ParkCrowdRadius = FMath::Max(800.f, City->GetMapBlockSize() * 0.82f);
 		const int32 ParkCrowd = CountResidentParkVisitors(ParkCrowdRadius);
-		const int32 CenterCrowd = CountResidentCrowdNear(ParkCenter, ParkCrowdRadius);
-		const int32 ParkSoftLimit = 2;   // strakker: hou het park/centrum dun, NPC's blijven verspreid
-		const int32 CenterSoftLimit = 3;
-		const int32 ParkHardLimit = 4; const int32 CenterHardLimit = 5; // hard plafond, geldt ZELFS bij overdue
+		// Center-drukte = iedereen in het HELE centrale 3x3-grid (9 blokken), niet alleen rond het park.
+		int32 CenterCrowd = 0;
+		{
+			const FVector CityCtr = City->GetCityCenter();
+			const float CenterHalf = City->GetMapBlockSize() * 1.5f; // 3 blokken breed/diep
+			for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+			{
+				const ACustomerBase* C = *It;
+				if (!IsValid(C) || C == this || !C->bResident || C->bAtHomeInside) { continue; }
+				const FVector L = C->GetActorLocation();
+				if (FMath::Abs(L.X - CityCtr.X) <= CenterHalf && FMath::Abs(L.Y - CityCtr.Y) <= CenterHalf) { ++CenterCrowd; }
+			}
+		}
+		const int32 ParkSoftLimit = 2;   // strakker: hou het park dun, NPC's blijven verspreid
+		const int32 CenterSoftLimit = 5; // hele 3x3-grid (9 blokken) blijft dun
+		const int32 ParkHardLimit = 4; const int32 CenterHardLimit = 8; // hard plafond, geldt ZELFS bij overdue
 			const bool bParkCrowded = (ParkCrowd >= ParkHardLimit || CenterCrowd >= CenterHardLimit)
 				|| (!bParkOverdue && (ParkCrowd >= ParkSoftLimit || CenterCrowd >= CenterSoftLimit));
 		if (!bParkCrowded)
