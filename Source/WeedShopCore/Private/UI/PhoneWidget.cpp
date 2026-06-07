@@ -412,9 +412,16 @@ int32 UPhoneWidget::MessagesSignature() const
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 	if (!Con) { return 0; }
 	const TArray<FPhoneMessage>& Msgs = Con->GetMessages();
-	int32 Sig = Msgs.Num() * 1000003;
-	for (const FPhoneMessage& M : Msgs) { Sig = Sig * 31 + (int32)M.Status + (M.bFromMe ? 5 : 0); }
-	return Sig;
+	// In een open chat-thread tellen alleen de berichten van DAT contact mee, zodat een appje van een
+	// ander contact je open thread niet herbouwt (geen flash). In de gesprekkenlijst telt alles.
+	int32 Sig = 0, Cnt = 0;
+	for (const FPhoneMessage& M : Msgs)
+	{
+		if (!OpenChatContact.IsNone() && M.FromContactId != OpenChatContact) { continue; }
+		++Cnt;
+		Sig = Sig * 31 + (int32)M.Status + (M.bFromMe ? 5 : 0);
+	}
+	return Sig * 1000003 + Cnt;
 }
 
 void UPhoneWidget::BuildChatApp()
