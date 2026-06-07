@@ -1120,8 +1120,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			const float zf = TopZ + f * FloorH;
 			// Steek 1 (baan vooraan): van de gang (-HW) de schacht in (-Side), omhoog naar halve hoogte.
 			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + (k + 1) * Rise; Box(dFront, s0 - (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
-			// Bordes aan de achterwand, verbindt beide banen.
-			Box((dFront + dBack) * 0.5f, -Half + Margin, FMath::Abs(dBack - dFront) + LaneWd, RunS * 1.8f, zf + HalfRise - 8.f, 16.f, LandC, true);
+			// Bordes aan de muur/raam-kant, verbindt beide banen. Dieper gemaakt zodat de overloop ruim is.
+			Box((dFront + dBack) * 0.5f, -Half + Margin + RunS * 0.4f, FMath::Abs(dBack - dFront) + LaneWd, RunS * 2.8f, zf + HalfRise - 8.f, 16.f, LandC, true);
 			// Steek 2 (baan achterin): terug naar de gang, omhoog naar de volgende verdieping.
 			for (int32 k = 0; k < SPF; ++k) { const float tt = zf + HalfRise + (k + 1) * Rise; Box(dBack, -Half + Margin + (k + 0.5f) * RunS, LaneWd, RunS + 5.f, tt - 6.f, 12.f, StepC, true); }
 			// Dikke blok in het midden tussen de twee trapdelen (vol, op verdieping-hoogte) zodat je niet door het
@@ -1130,7 +1130,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			if (GapD > 8.f)
 			{
 				const float dMid = (dFront + dBack) * 0.5f;
-				const float sLandFront = -Half + Margin + RunS * 1.2f;
+				const float sLandFront = -Half + Margin + RunS * 3.0f; // balk dunner aan de muur/raam-kant -> ruimere overloop
 				const float sHall = -HW + 8.f;                         // loopt door tot de gang-tussenmuur (geen gat meer)
 				const float sDivC = (sHall + sLandFront) * 0.5f;
 				const float sDivLen = FMath::Abs(sHall - sLandFront);
