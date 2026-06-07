@@ -1,13 +1,16 @@
 Name,DisplayName,BaseThcPercent,BaseYieldGrams,GrowMinutes,SeedPriceCents,HarvestProductId
-Streetweed,"Streetweed",8,18,4,300,Bud_Streetweed
-SilverHaze,"Silver Haze",12,13,5,1500,Bud_SilverHaze
-NorthernLights,"Northern Lights",16,15,6,3000,Bud_NorthernLights
-WhiteWidow,"White Widow",19,12,7,6000,Bud_WhiteWidow
-AmnesiaHaze,"Amnesia Haze",22,11,8,12000,Bud_AmnesiaHaze
-OGKush,"OG Kush",24,16,10,18000,Bud_OGKush
-GorillaGlue,"Gorilla Glue",26,13,10,28000,Bud_GorillaGlue
-GirlScoutCookies,"Girl Scout Cookies",28,10,11,45000,Bud_GirlScoutCookies
-WeddingCake,"Wedding Cake",30,9,12,80000,Bud_WeddingCake
-Gelato,"Gelato (Cali)",32,11,14,150000,Bud_Gelato
-Runtz,"Runtz (Cali)",34,9,15,250000,Bud_Runtz
-Zkittlez,"Zkittlez (Cali)",36,8,16,400000,Bud_Zkittlez
+Streetweed,"Streetweed",9,16,4,300,Bud_Streetweed
+CriticalMass,"Critical Mass",12,28,16,2500,Bud_CriticalMass
+SilverHaze,"Silver Haze",14,12,6,1500,Bud_SilverHaze
+NorthernLights,"Northern Lights",17,13,7,3500,Bud_NorthernLights
+BigBud,"Big Bud",18,38,30,40000,Bud_BigBud
+WhiteWidow,"White Widow",19,12,8,6000,Bud_WhiteWidow
+SourDiesel,"Sour Diesel",21,8,9,7500,Bud_SourDiesel
+AmnesiaHaze,"Amnesia Haze",23,9,10,12000,Bud_AmnesiaHaze
+OGKush,"OG Kush",24,15,11,18000,Bud_OGKush
+GorillaGlue,"Gorilla Glue",27,11,12,28000,Bud_GorillaGlue
+GirlScoutCookies,"Girl Scout Cookies",29,8,13,45000,Bud_GirlScoutCookies
+WeddingCake,"Wedding Cake",31,9,14,80000,Bud_WeddingCake
+Gelato,"Gelato (Cali)",33,10,15,150000,Bud_Gelato
+Runtz,"Runtz (Cali)",35,8,16,250000,Bud_Runtz
+Zkittlez,"Zkittlez (Cali)",37,7,17,400000,Bud_Zkittlez
