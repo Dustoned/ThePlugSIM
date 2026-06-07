@@ -72,11 +72,11 @@ TSharedRef<SWidget> UDryCell::RebuildWidget()
 
 FReply UDryCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	// Klare (groene) batch in het rek -> klik = oogsten naar je inventory.
-	if (bReady && EntryIndex >= 0 && Owner.IsValid() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	// Item in deze cel (klaar of nat) -> start drag, net als de inventory: sleep 'm naar je inventory/hotbar
+	// (eruit halen) of naar het rek (drogen). Geen klik-to-collect meer; het werkt nu volledig met slepen.
+	if (!ItemId.IsNone() && (bReady || bWet || bDraggableAlways) && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		Owner->CollectReady(EntryIndex);
-		return FReply::Handled();
+		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 	}
 	return FReply::Unhandled();
 }
