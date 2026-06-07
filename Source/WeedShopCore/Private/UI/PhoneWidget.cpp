@@ -561,11 +561,19 @@ void UPhoneWidget::BuildChatApp()
 		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
 
-		// Startwaarde: de huidige kloktijd, afgerond op een kwartier.
+		// Startwaarde: de tijd die de KLANT voorstelde (dan klik je vandaaruit +kwartier/+uur). Geen
+		// afspraaktijd bekend -> de huidige kloktijd. Afgerond op een kwartier.
 		if (ProposeMins < 0)
 		{
-			float Frac = 0.5f;
-			if (GS && GS->GetDayCycle()) { Frac = GS->GetDayCycle()->GetCycleFraction(); }
+			float ApptTod = -1.f;
+			for (const FPhoneMessage& M : Msgs)
+			{
+				if (M.FromContactId == OpenChatContact && M.Status == 0 && !M.bFromMe && M.AppointmentTimeOfDay >= 0.f)
+				{ ApptTod = M.AppointmentTimeOfDay; break; }
+			}
+			float Now = 0.f, Length = 1800.f; Con->GetCycleTime(Now, Length); if (Length <= 0.f) { Length = 1800.f; }
+			const float Src = (ApptTod >= 0.f) ? ApptTod : Now;
+			const float Frac = FMath::Fmod(FMath::Max(0.f, Src), Length) / Length;
 			ProposeMins = (FMath::RoundToInt(Frac * 1440.f / 15.f) * 15) % 1440;
 		}
 		auto Step = [this](int32 Delta) { ProposeMins = ((ProposeMins + Delta) % 1440 + 1440) % 1440; MarkDirty(); };
