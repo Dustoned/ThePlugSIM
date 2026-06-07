@@ -1040,7 +1040,7 @@ int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
 	const FString S = ContainerId.ToString();
 	if (S == TEXT("Cont_Bag2"))     { return 2; }
 	if (S == TEXT("Cont_Bag5"))     { return 5; }
-	if (S == TEXT("Cont_Jar10"))    { return 14; }  // half ounce
+	if (S == TEXT("Cont_Jar10"))    { return 25; }  // small jar
 	if (S == TEXT("Cont_Jar15"))    { return 50; }  // grote pot
 	if (S == TEXT("Cont_Block100")) { return 100; }
 	if (S == TEXT("Cont_Garbage500")) { return 500; }

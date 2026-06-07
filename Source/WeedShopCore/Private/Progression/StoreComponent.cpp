@@ -151,7 +151,7 @@ namespace
 		{ TEXT("ProcUp_Yield"), TEXT("Fine filter"),     TEXT("Nearby hash machine: +30% yield"),        22000, 1 },
 		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Bag up to 2g - 10 pcs"),    800, 10 },
 		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Bag up to 5g - 10 pcs"),   1500, 10 },
-		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Jar up to 14g - 5 pcs"),   2500,  5 },
+		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Jar up to 25g - 5 pcs"),   2500,  5 },
 		{ TEXT("Cont_Jar15"), TEXT("Big jars"),       TEXT("Jar up to 50g - 5 pcs"),   6000,  5 },
 		{ TEXT("Cont_Block100"),  TEXT("Press blocks"), TEXT("Up to 100g - 3 pcs (bulk)"),   9000, 3 },
 		{ TEXT("Cont_Garbage500"),TEXT("Garbage bags"), TEXT("Up to 500g - 2 pcs (bulk)"),  30000, 2 },
