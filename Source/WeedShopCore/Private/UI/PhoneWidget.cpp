@@ -591,22 +591,25 @@ void UPhoneWidget::BuildChatApp()
 			int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
 			Gap = FMath::Clamp(Gap + Delta, 30, 1410); // niet onder 30 min vooruit, niet naar gisteren
 			ProposeMins = (NowMins + Gap) % 1440;
-			MarkDirty();
+			// Alleen het klok-label bijwerken (geen rebuild -> geen flash).
+			if (PickerClockText) { PickerClockText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60))); }
 		};
 
 		UHorizontalBox* Stepper = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-1h"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(-60); }, 13))->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
 		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-15m"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(-15); }, 13))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 		UTextBlock* Clock = MakeText(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60), 18, FLinearColor(0.95f, 0.97f, 1.f));
+		PickerClockText = Clock;            // live bijwerken in NativeTick (geen rebuild -> geen flash)
+		PickerContact = OpenChatContact;
 		UHorizontalBoxSlot* CS2 = Stepper->AddChildToHorizontalBox(Clock);
 		CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetHorizontalAlignment(HAlign_Center); CS2->SetVerticalAlignment(VAlign_Center);
 		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+15m"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(15); }, 13))->SetPadding(FMargin(6.f, 0.f, 3.f, 0.f));
 		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+1h"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(60); }, 13));
 		ContentBox->AddChildToVerticalBox(Stepper)->SetPadding(FMargin(0.f, 2.f, 0.f, 4.f));
 
-		const int32 Mins = ProposeMins;
-		ContentBox->AddChildToVerticalBox(MakeActionBtn(FString::Printf(TEXT("Propose %02d:%02d"), Mins / 60, Mins % 60), FLinearColor(0.2f, 0.45f, 0.55f),
-			[this, Pick, Mins]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, Mins); } ProposeMins = -1; MarkDirty(); }, 13));
+		// Knop leest de ACTUELE ProposeMins (member) bij klik, zodat live-bijwerken klopt.
+		ContentBox->AddChildToVerticalBox(MakeActionBtn(TEXT("Propose this time"), FLinearColor(0.2f, 0.45f, 0.55f),
+			[this, Pick]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, ProposeMins); } ProposeMins = -1; MarkDirty(); }, 13));
 	}
 }
 
@@ -1386,6 +1389,7 @@ void UPhoneWidget::RefreshContent()
 {
 	if (!ContentBox || !Phone.IsValid()) { return; }
 	ContentBox->ClearChildren();
+	PickerClockText = nullptr; PickerProposeBtn = nullptr; PickerContact = NAME_None; // oude tijd-kiezer-refs vrijgeven
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
@@ -1646,12 +1650,8 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bHome = Phone->IsHomeScreen();
 	const int32 App = Phone->GetTab();
-	// Op het home-rooster: bij een nieuw/gelezen bericht het rooster herbouwen zodat de Messages-badge meeloopt.
-	if (bHome)
-	{
-		const int32 MSig = MessagesSignature();
-		if (MSig != LastMsgSig) { LastMsgSig = MSig; bContentDirty = true; }
-	}
+	// (Geen per-bericht home-herbouw meer: dat gaf geflits. De Messages-badge ververst bij openen/navigeren;
+	//  de live notificatie zie je sowieso op het hotbar-telefoon-icoon.)
 	if (bContentDirty || bHome != bLastHome || App != bLastApp)
 	{
 		bLastHome = bHome; bLastApp = App; bContentDirty = false;
@@ -1679,11 +1679,18 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const int32 Sig = MessagesSignature();
 		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
 		else { UpdateApptBarLive(); } // aftellende afspraak-balk live bijwerken (zonder herbouw)
-		// Tijd-kiezer-ondergrens live laten meelopen: herbouw de chat bij elke nieuwe klok-minuut.
-		if (App == 3 && !OpenChatContact.IsNone() && GS && GS->GetDayCycle())
+		// Tijd-kiezer-ondergrens LIVE laten meelopen zonder rebuild (geen flash): klem ProposeMins op
+		// 30 min..23,5u vooruit met de huidige klok en werk alleen het klok-label bij.
+		if (App == 3 && PickerClockText && !PickerContact.IsNone() && GS && GS->GetDayCycle())
 		{
-			const int32 CM = static_cast<int32>(GS->GetDayCycle()->GetClockHour() * 60.f);
-			if (CM != LastChatMin) { LastChatMin = CM; bContentDirty = true; }
+			const int32 NowMins = (static_cast<int32>(GS->GetDayCycle()->GetClockHour() * 60.f)) % 1440;
+			int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
+			const int32 Clamped = FMath::Clamp(Gap, 30, 1410);
+			if (Clamped != Gap)
+			{
+				ProposeMins = (NowMins + Clamped) % 1440;
+				PickerClockText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60)));
+			}
 		}
 	}
 

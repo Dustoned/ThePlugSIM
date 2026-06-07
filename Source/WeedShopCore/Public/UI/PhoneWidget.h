@@ -114,6 +114,10 @@ protected:
 	int32 LastMsgSig = -2;
 	int32 ProposeMins = -1; // gekozen kloktijd (min van de dag) voor een eigen-tijd-voorstel; -1 = nog niet gezet
 	int32 LastChatMin = -1; // klok-minuut bij de laatste chat-rebuild (om de tijd-kiezer-ondergrens live mee te laten lopen)
+	// Live-refs van de tijd-kiezer (bijwerken zonder rebuild -> geen flash).
+	UPROPERTY() TObjectPtr<UTextBlock> PickerClockText;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> PickerProposeBtn;
+	FName PickerContact = NAME_None;
 	// Bouwt de Berichten-app: gesprekkenlijst of de open chat-thread.
 	void BuildChatApp();
 	// Verandert als er een bericht bijkomt of een status wijzigt (voor live verversen).
