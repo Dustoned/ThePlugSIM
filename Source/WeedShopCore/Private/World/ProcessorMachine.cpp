@@ -248,20 +248,22 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 			if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor::Orange, TEXT("Machine is full - collect a batch first.")); }
 			return;
 		}
-		const int32 Qty = Inv->GetQuantity(Act);
+		// Laad precies de VASTGEHOUDEN stapel met z'n eigen THC%/kwaliteit (niet alle stapels van die strain).
+		const int32 Sid = Inv->GetActiveStackId();
+		const int32 Idx = Inv->FindStackById(Sid);
+		const TArray<FInventoryStack>& St = Inv->GetStacks();
+		if (!St.IsValidIndex(Idx)) { return; }
+		const int32 Qty = St[Idx].Quantity;
 		if (Qty <= 0) { return; }
-		const float Thc = Inv->GetItemQuality(Act);     // 'Quality'-veld = THC%
-		const float Qual = Inv->GetItemQualityPct(Act); // kwaliteit%
-		if (Inv->RemoveItem(Act, Qty))
+		const float Thc = St[Idx].Quality;       // 'Quality'-veld = THC%
+		const float Qual = St[Idx].QualityPct;   // kwaliteit%
+		const int32 Used = ServerLoad(Act, Qty, Thc, Qual);
+		if (Used > 0)
 		{
-			const int32 Used = ServerLoad(Act, Qty, Thc, Qual);
-			if (Used <= 0)
+			Inv->RemoveFromStackById(Sid, Used);
+			if (GEngine)
 			{
-				Inv->AddItem(Act, Qty, Thc, Qual); // mislukt -> terug in de inventory
-			}
-			else if (GEngine)
-			{
-				UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 200, 255), FString::Printf(TEXT("Loaded %dg - processing..."), Qty));
+				UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 200, 255), FString::Printf(TEXT("Loaded %dg - processing..."), Used));
 			}
 		}
 	}

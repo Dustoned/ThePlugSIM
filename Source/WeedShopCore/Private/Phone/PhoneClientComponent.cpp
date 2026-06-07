@@ -1066,20 +1066,24 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 	const int32 Cap = ContainerCapacity(ContainerId);
 	if (Cap <= 0 || !Inv->HasItem(ContainerId, 1)) { return; }
 
-	const int32 Have = Inv->GetQuantity(BudId);
-	if (Have <= 0) { return; }
-	// Klamp de gevraagde grammen op de container-capaciteit én de beschikbare wiet (max = container).
-	const int32 PackGrams = FMath::Clamp(Grams, 1, FMath::Min(Cap, Have));
+	// Verpak uit ÉÉN specifieke stapel van deze strain (de grootste), met z'n EIGEN THC%/kwaliteit, zodat
+	// het zakje exact de wiet bevat die je gebruikt (geen mix van verschillende kwaliteiten).
+	int32 BestSid = 0, BestQty = 0; float Thc = 0.f, Q = 0.f;
+	for (const FInventoryStack& S : Inv->GetStacks())
+	{
+		if (S.ItemId == BudId && S.Quantity > BestQty) { BestSid = S.StackId; BestQty = S.Quantity; Thc = S.Quality; Q = S.QualityPct; }
+	}
+	if (BestSid == 0 || BestQty <= 0) { return; }
+	// Klamp de gevraagde grammen op de container-capaciteit én de beschikbare wiet in DIE stapel.
+	const int32 PackGrams = FMath::Clamp(Grams, 1, FMath::Min(Cap, BestQty));
 	if (PackGrams <= 0) { return; }
 
 	const FName Strain(*BudStr.RightChop(4));                            // Bud_X -> X
 	const FName BagId = UInventoryComponent::MakeBagId(Strain, PackGrams); // -> Bag_X_<gram>
-	const float Thc = Inv->GetItemQuality(BudId);
-	const float Q = Inv->GetItemQualityPct(BudId);
 
-	if (!Inv->RemoveItem(BudId, PackGrams)) { return; }
+	Inv->RemoveFromStackById(BestSid, PackGrams);
 	Inv->RemoveItem(ContainerId, 1);
-	Inv->AddItem(BagId, 1, Thc, Q); // één zakje van PackGrams gram
+	Inv->AddItem(BagId, 1, Thc, Q); // één zakje van PackGrams gram met de THC/kwaliteit van die stapel
 
 	if (GEngine)
 	{
