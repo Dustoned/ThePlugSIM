@@ -571,10 +571,10 @@ void UPhoneWidget::BuildChatApp()
 				if (M.FromContactId == OpenChatContact && M.Status == 0 && !M.bFromMe && M.AppointmentTimeOfDay >= 0.f)
 				{ ApptTod = M.AppointmentTimeOfDay; break; }
 			}
-			float Now = 0.f, Length = 1800.f; Con->GetCycleTime(Now, Length); if (Length <= 0.f) { Length = 1800.f; }
-			const float Src = (ApptTod >= 0.f) ? ApptTod : Now;
-			const float Frac = FMath::Fmod(FMath::Max(0.f, Src), Length) / Length;
-			ProposeMins = (FMath::RoundToInt(Frac * 1440.f / 15.f) * 15) % 1440;
+			int32 Mins;
+			if (ApptTod >= 0.f) { Mins = Con->ClockMinutesOf(ApptTod); }
+			else { const float Frac = (GS && GS->GetDayCycle()) ? GS->GetDayCycle()->GetCycleFraction() : 0.5f; Mins = FMath::RoundToInt(Frac * 1440.f); }
+			ProposeMins = ((FMath::RoundToInt(Mins / 15.f) * 15) % 1440 + 1440) % 1440;
 		}
 		auto Step = [this](int32 Delta) { ProposeMins = ((ProposeMins + Delta) % 1440 + 1440) % 1440; MarkDirty(); };
 

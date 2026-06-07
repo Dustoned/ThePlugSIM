@@ -105,6 +105,9 @@ public:
 	// Save/load: zet de hele contacten- + berichten-lijst terug.
 	void RestoreContacts(const TArray<FPhoneContact>& InContacts, const TArray<FPhoneMessage>& InMessages);
 
+	// Kloktijd (minuten van de dag, 0..1439) van een afspraak-TimeOfDay. Voor de tijd-kiezer in de chat.
+	int32 ClockMinutesOf(float TimeOfDay) const;
+
 	// Server: beantwoord het eerste open afspraak-bericht. Accept = loyaliteit +, weiger = loyaliteit -.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RespondTopPending(bool bAccept);

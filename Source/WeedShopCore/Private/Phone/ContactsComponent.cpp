@@ -332,6 +332,15 @@ FString UContactsComponent::FormatApptClock(float TimeOfDay) const
 	return FString::Printf(TEXT("%02d:%02d"), (TotalMin / 60) % 24, TotalMin % 60);
 }
 
+int32 UContactsComponent::ClockMinutesOf(float TimeOfDay) const
+{
+	float Now = 0.f, Length = 1800.f;
+	GetCycleTime(Now, Length);
+	if (Length <= 0.f) { Length = 1800.f; }
+	const float Frac = FMath::Fmod(FMath::Max(0.f, TimeOfDay), Length) / Length;
+	return ((FMath::RoundToInt(Frac * 1440.f) % 1440) + 1440) % 1440;
+}
+
 void UContactsComponent::ApplyRelationshipDelta(FName ContactId, float Delta)
 {
 	// Relatie in de contactenlijst bijwerken.
