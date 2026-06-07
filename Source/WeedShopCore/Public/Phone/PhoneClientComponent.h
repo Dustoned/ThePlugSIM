@@ -221,6 +221,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RespondChat(FName ContactId, bool bAccept) { ServerRespondContact(ContactId, bAccept); }
 
+	// Berichten-notificatie (client-lokaal, per speler). De bubble op het telefoon-icoon telt ongelezen
+	// inkomende berichten en gaat pas weg als je de CHAT van die persoon echt opent (MarkChatSeen).
+	void MarkChatSeen(FName ContactId);
+	int32 GetUnreadMessageCount() const;
+
 	// Verkoop het item op voorraad-stapel StackIndex aan de supplier (70% terug).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void SellInventoryIndex(int32 StackIndex);
@@ -725,6 +730,9 @@ protected:
 	bool bOpen = false;
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
+
+	// Per-contact aantal inkomende berichten dat je al GELEZEN hebt (chat geopend). Client-lokaal.
+	TMap<FName, int32> MsgSeen;
 	int32 SupplierCat = 0;
 
 	bool bRollOpen = false;

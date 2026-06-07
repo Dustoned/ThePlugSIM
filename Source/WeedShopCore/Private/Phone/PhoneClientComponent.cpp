@@ -135,6 +135,38 @@ AWeedShopGameState* UPhoneClientComponent::GetGS() const
 	return GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 }
 
+void UPhoneClientComponent::MarkChatSeen(FName ContactId)
+{
+	if (ContactId.IsNone()) { return; }
+	const AWeedShopGameState* GS = GetGS();
+	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return; }
+	int32 Cnt = 0;
+	for (const FPhoneMessage& M : Con->GetMessages())
+	{
+		if (!M.bFromMe && M.FromContactId == ContactId) { ++Cnt; }
+	}
+	MsgSeen.Add(ContactId, Cnt);
+}
+
+int32 UPhoneClientComponent::GetUnreadMessageCount() const
+{
+	const AWeedShopGameState* GS = GetGS();
+	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return 0; }
+	TMap<FName, int32> Cnt;
+	for (const FPhoneMessage& M : Con->GetMessages())
+	{
+		if (!M.bFromMe) { Cnt.FindOrAdd(M.FromContactId)++; }
+	}
+	int32 Unread = 0;
+	for (const TPair<FName, int32>& KV : Cnt)
+	{
+		Unread += FMath::Max(0, KV.Value - MsgSeen.FindRef(KV.Key));
+	}
+	return Unread;
+}
+
 APlayerController* UPhoneClientComponent::GetPC() const
 {
 	if (const APawn* Pawn = Cast<APawn>(GetOwner()))

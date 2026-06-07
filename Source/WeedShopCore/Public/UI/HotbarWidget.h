@@ -35,5 +35,4 @@ protected:
 	// Telefoon-notificatie rechts van de hotbar: bubble met aantal gemiste/ongelezen berichten.
 	UPROPERTY() TObjectPtr<UTextBlock> MsgBadge;
 	UPROPERTY() TObjectPtr<UBorder> MsgBadgePill;
-	int32 LastSeenIncoming = 0;                             // aantal inkomende berichten toen je de telefoon opende
 };

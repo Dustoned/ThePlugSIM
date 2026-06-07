@@ -235,20 +235,11 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	bPrevWaterEmpty = bWaterEmpty;
 
-	// Telefoon-notificatie: aantal inkomende berichten sinds je de telefoon voor het laatst opende.
+	// Telefoon-notificatie: ongelezen inkomende berichten. De bubble gaat pas weg als je de CHAT van die
+	// persoon echt opent (MarkChatSeen), niet zomaar bij het openen van de telefoon.
 	if (MsgBadge && MsgBadgePill)
 	{
-		int32 Incoming = 0;
-		if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
-		{
-			if (const UContactsComponent* Con = GS->GetContacts())
-			{
-				for (const FPhoneMessage& M : Con->GetMessages()) { if (!M.bFromMe) { ++Incoming; } }
-			}
-		}
-		if (Phone && Phone->IsOpen()) { LastSeenIncoming = Incoming; } // telefoon open -> alles gezien
-		if (LastSeenIncoming > Incoming) { LastSeenIncoming = Incoming; } // berichten opgeschoond -> klem
-		const int32 Unread = FMath::Max(0, Incoming - LastSeenIncoming);
+		const int32 Unread = Phone ? Phone->GetUnreadMessageCount() : 0;
 		if (Unread > 0)
 		{
 			MsgBadge->SetText(FText::FromString(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Unread)));

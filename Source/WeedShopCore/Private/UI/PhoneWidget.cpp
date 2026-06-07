@@ -460,6 +460,7 @@ void UPhoneWidget::BuildChatApp()
 	}
 
 	// ---- Open chat-thread ----
+	Phone->MarkChatSeen(OpenChatContact); // berichten van deze persoon zijn nu gelezen -> notificatie-bubble weg
 	FText ContactName = FText::FromName(OpenChatContact);
 	for (const FPhoneContact& C : Con->GetContacts()) { if (C.ContactId == OpenChatContact) { ContactName = C.DisplayName; break; } }
 
