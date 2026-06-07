@@ -5,6 +5,7 @@
 #include "World/StoreCounter.h"
 #include "Progression/StoreComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Economy/EconomyComponent.h"
 #include "Game/WeedShopGameState.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -109,6 +110,7 @@ void UStoreWidget::CartAdd(FName Id, int32 Delta)
 	int32& Q = Cart.FindOrAdd(Id);
 	Q = FMath::Clamp(Q + Delta, 0, 999);
 	if (Q == 0) { Cart.Remove(Id); }
+	bConfirmPending = false; // mand gewijzigd -> bevestiging vervalt
 	LastSig.Reset(); // herbouw
 }
 
@@ -159,6 +161,10 @@ void UStoreWidget::BuildShell(UCanvasPanel* Root)
 	PayRow->AddChildToHorizontalBox(PayCashBtn)->SetPadding(FMargin(10.f, 0.f, 6.f, 0.f));
 	PayRow->AddChildToHorizontalBox(PayBankBtn);
 	PayRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("   instant, geen bezorgkosten"), 11, FLinearColor(0.6f, 0.65f, 0.78f)))->SetVerticalAlignment(VAlign_Center);
+	BalanceText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.85f, 0.95f, 0.85f), false, true);
+	BalanceText->SetJustification(ETextJustify::Right);
+	UHorizontalBoxSlot* BalS = PayRow->AddChildToHorizontalBox(BalanceText);
+	BalS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BalS->SetVerticalAlignment(VAlign_Center);
 	Outer->AddChildToVerticalBox(PayRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Categorie-tabs (gevuld in FillBody).
@@ -179,16 +185,18 @@ void UStoreWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBoxSlot* CTS = CartBar->AddChildToHorizontalBox(CartText);
 	CTS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CTS->SetVerticalAlignment(VAlign_Center);
 	CartBar->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("Leeg"), FLinearColor(0.35f, 0.2f, 0.2f), 12,
-		[this]() { Cart.Empty(); LastSig.Reset(); }))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
-	CartBar->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("Checkout"), FLinearColor(0.2f, 0.55f, 0.3f), 14,
+		[this]() { Cart.Empty(); bConfirmPending = false; LastSig.Reset(); }))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+	CheckoutBtn = StoreBtn(WidgetTree, TEXT("Checkout"), FLinearColor(0.2f, 0.55f, 0.3f), 14,
 		[this]()
 		{
 			if (!PhoneComp.IsValid() || Cart.Num() == 0) { return; }
+			if (!bConfirmPending) { bConfirmPending = true; LastSig.Reset(); return; } // 1e klik: vraag bevestiging
 			TArray<FName> Ids; TArray<int32> Qtys;
 			for (const TPair<FName, int32>& KV : Cart) { Ids.Add(KV.Key); Qtys.Add(KV.Value); }
 			PhoneComp->StoreCheckout(Ids, Qtys);
-			Cart.Empty(); LastSig.Reset();
-		}));
+			Cart.Empty(); bConfirmPending = false; LastSig.Reset();
+		});
+	CartBar->AddChildToHorizontalBox(CheckoutBtn);
 	Outer->AddChildToVerticalBox(CartBar)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 }
 
@@ -279,13 +287,29 @@ void UStoreWidget::FillBody()
 		ItemList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
 	}
 
-	// Mand-balk.
+	// Saldo bovenin (cash + bank).
+	if (BalanceText)
+	{
+		APawn* Pw = GetOwningPlayerPawn();
+		const UEconomyComponent* Econ = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
+		BalanceText->SetText(Econ
+			? FText::FromString(FString::Printf(TEXT("Cash EUR %.2f     Bank EUR %.2f"), Econ->GetCashCents() / 100.f, Econ->GetBankCents() / 100.f))
+			: FText::GetEmpty());
+	}
+
+	// Mand-balk + checkout-label (2e klik = bevestigen).
+	int32 Lines = 0; for (const TPair<FName, int32>& KV : Cart) { Lines += KV.Value; }
 	if (CartText)
 	{
-		int32 Lines = 0; for (const TPair<FName, int32>& KV : Cart) { Lines += KV.Value; }
 		CartText->SetText(FText::FromString(Lines == 0
 			? FString(TEXT("Mand leeg"))
 			: FString::Printf(TEXT("Mand: %d artikel(en)   EUR %.2f"), Lines, CartTotalCents() / 100.f)));
+	}
+	if (CheckoutBtn)
+	{
+		CheckoutBtn->SetContent(WeedUI::Text(WidgetTree,
+			bConfirmPending ? FString::Printf(TEXT("Bevestig kopen - EUR %.2f"), CartTotalCents() / 100.f) : FString(TEXT("Checkout")),
+			14, FLinearColor::White, true, true));
 	}
 }
 
@@ -300,7 +324,7 @@ void UStoreWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	FString Sig;
 	if (AStoreCounter* C = PhoneComp->GetStoreCounter()) { Sig += FString::Printf(TEXT("K%d|"), (int32)C->Kind); }
-	Sig += FString::Printf(TEXT("T%d|%s|"), ActiveCat, PhoneComp->IsStorePayBank() ? TEXT("bank") : TEXT("cash"));
+	Sig += FString::Printf(TEXT("T%d|%s|C%d|"), ActiveCat, PhoneComp->IsStorePayBank() ? TEXT("bank") : TEXT("cash"), bConfirmPending ? 1 : 0);
 	for (const TPair<FName, int32>& KV : Cart) { Sig += FString::Printf(TEXT("%s%d,"), *KV.Key.ToString(), KV.Value); }
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 }

@@ -36,10 +36,13 @@ protected:
 	UPROPERTY() TObjectPtr<UScrollBox> ItemList;
 	UPROPERTY() TObjectPtr<class UHorizontalBox> TabRow;
 	UPROPERTY() TObjectPtr<UTextBlock> CartText;
+	UPROPERTY() TObjectPtr<UTextBlock> BalanceText;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> PayCashBtn;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> PayBankBtn;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> CheckoutBtn;
 
 	int32 ActiveCat = -1;       // -1 = nog niet gekozen (eerste tab)
+	bool bConfirmPending = false; // checkout: tweede klik bevestigt
 	TMap<FName, int32> Cart;    // winkelmand: catalog-id -> aantal
 
 	int32 CartTotalCents() const;
