@@ -330,7 +330,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Bench_Pack3"))     { return 30; }
 	// Containers (verpakkingsmateriaal) — van klein naar bulk.
 	if (S == TEXT("Cont_Bag2"))       { return 1; }
-	if (S == TEXT("Cont_Bag5"))       { return 2; }
+	if (S == TEXT("Cont_Bag5"))       { return 5; }  // grote zakjes pas vanaf level 5 (eerst kleine)
 	if (S == TEXT("Cont_Jar10"))      { return 6; }
 	if (S == TEXT("Cont_Jar15"))      { return 12; }
 	if (S == TEXT("Cont_Block100"))   { return 20; }

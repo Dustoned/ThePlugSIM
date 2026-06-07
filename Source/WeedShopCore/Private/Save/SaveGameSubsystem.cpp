@@ -367,7 +367,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 			Give(TEXT("Soil_Basic"), 5);
 			Give(TEXT("WaterBottle_Plastic"), 2);
 			Give(TEXT("Pot_Clay"), 2);
-			Give(TEXT("Cont_Bag5"), 10);
+			Give(TEXT("Cont_Bag2"), 10);
 			// Plaatsbare meubels (authoring):
 			Give(TEXT("Table"), 5);
 			Give(TEXT("Fridge"), 5);
@@ -392,8 +392,7 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 			Give(TEXT("Soil_Basic"),          3);
 			Give(TEXT("WaterBottle_Plastic"), 1);
 			Give(TEXT("Papers_Small"),        10);
-			Give(TEXT("Cont_Bag5"),           10);
-			Give(TEXT("Cont_Jar10"),          5);
+			Give(TEXT("Cont_Bag2"),           10);
 			Give(TEXT("Pot_Clay"),            1);
 			Give(TEXT("DryRack_Cheap"),       1);
 			Give(TEXT("Bench_Pack"),          1);
