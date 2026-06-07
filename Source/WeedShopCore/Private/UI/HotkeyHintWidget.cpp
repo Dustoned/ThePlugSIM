@@ -212,6 +212,8 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		else if (AS.StartsWith(TEXT("Joint_"))) { Hints.Emplace(TEXT("Hold RMB"), TEXT("Smoke joint")); }
 
+		if (!AS.IsEmpty()) { Hints.Emplace(TEXT("Hold Q"), TEXT("Drop item")); }
+
 		Hints.Emplace(K(TEXT("Phone")), TEXT("Phone"));
 		Hints.Emplace(K(TEXT("Inventory")), TEXT("Inventory"));
 		Hints.Emplace(TEXT("1-8"), TEXT("Hotbar slot"));

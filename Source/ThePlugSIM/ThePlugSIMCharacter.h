@@ -42,7 +42,9 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UStaticMeshComponent> HeldItemMesh;
 	FName LastHeldItemId = NAME_None;   // om het hand-model alleen bij wissel te updaten
-	bool bDropKeyWasDown = false;       // edge-detectie voor de drop-toets (Q)
+	float DropHoldAccum = 0.f;          // hoe lang de drop-toets (Q) wordt ingehouden
+	bool bDroppedThisHold = false;      // al gedropt deze keer ingehouden? (1 drop per hold)
+	bool bHeldOnHandBone = false;       // hand-model aan de hand-bone gekoppeld (anders camera-offset)
 
 	UFUNCTION(Server, Reliable)
 	void ServerDropActiveItem();

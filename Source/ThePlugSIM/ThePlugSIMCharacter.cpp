@@ -291,21 +291,26 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			if (Active.IsNone()) { HeldItemMesh->SetVisibility(false); }
 			else { PropKit::ApplyItemModel(HeldItemMesh, Active, 0.5f); HeldItemMesh->SetVisibility(true); }
 		}
-		if (!Active.IsNone() && FirstPersonCameraComponent)
+		// Geen hand-bone? Val terug op een vaste positie rechts-onder in beeld (op kijkrichting).
+		if (!bHeldOnHandBone && !Active.IsNone() && FirstPersonCameraComponent)
 		{
-			// Plaats het model rechts-onder in beeld, op kijkrichting (werkt ongeacht de camera-bone-rotatie).
 			const FRotator ViewRot = GetControlRotation();
-			const FVector Pos = FirstPersonCameraComponent->GetComponentLocation() + ViewRot.RotateVector(FVector(32.f, 12.f, -12.f));
+			const FVector Pos = FirstPersonCameraComponent->GetComponentLocation() + ViewRot.RotateVector(FVector(30.f, 14.f, -18.f));
 			HeldItemMesh->SetWorldLocationAndRotation(Pos, ViewRot);
 		}
 
-		// Drop-toets (Q): drop het actieve item in de wereld (co-op: iedereen kan 't oppakken).
+		// Drop-toets (Q): HOUD ingedrukt (~0.5s) om het actieve item te droppen, zodat je niet per ongeluk
+		// spullen op de grond legt (co-op: iedereen kan 't oppakken).
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
 			const bool bUiOpen = Phone && (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsRollOpen() || Phone->IsDealOpen());
-			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen;
-			if (bDown && !bDropKeyWasDown && !Active.IsNone()) { ServerDropActiveItem(); }
-			bDropKeyWasDown = bDown;
+			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen && !Active.IsNone();
+			if (bDown)
+			{
+				DropHoldAccum += DeltaSeconds;
+				if (DropHoldAccum >= 0.5f && !bDroppedThisHold) { ServerDropActiveItem(); bDroppedThisHold = true; }
+			}
+			else { DropHoldAccum = 0.f; bDroppedThisHold = false; }
 		}
 	}
 
@@ -787,6 +792,16 @@ void AThePlugSIMCharacter::BeginPlay()
 	// Spawn-plek onthouden als gegarandeerd-veilige terugval voor anti-stuck.
 	InitialSpawnLoc = GetActorLocation();
 	LastGroundLoc = InitialSpawnLoc;
+
+	// Held item ECHT in de hand: koppel aan de rechterhand-bone van de FP-armen (volgt zo de hand/animatie).
+	// Lukt dat niet (geen bone), dan valt 't terug op de camera-offset (zie Tick).
+	if (HeldItemMesh && FirstPersonMesh && FirstPersonMesh->DoesSocketExist(FName("hand_r")))
+	{
+		HeldItemMesh->AttachToComponent(FirstPersonMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, FName("hand_r"));
+		HeldItemMesh->SetRelativeLocation(FVector(11.f, 3.f, -2.f));
+		HeldItemMesh->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
+		bHeldOnHandBone = true;
+	}
 
 	// Co-op-animatie: Update Rate Optimization op het third-person lichaam UIT, en altijd de pose tikken.
 	// URO skipt anim-updates op remote spelers (simulated proxies) -> die "glijden" tot een sprong de
