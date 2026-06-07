@@ -18,6 +18,9 @@
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "Cultivation/WaterCanComponent.h"
+#include "Game/WeedShopGameState.h"
+#include "Progression/StoreComponent.h"
+#include "Engine/World.h"
 #include "Misc/ConfigCacheIni.h"
 #include <initializer_list>
 
@@ -122,11 +125,24 @@ namespace WeedUI
 		return (Qty > 1) ? FString::Printf(TEXT("x%d"), Qty) : FString();
 	}
 
+	// Splits camelCase strain-namen netjes: "SilverHaze" -> "Silver Haze", "WeddingCake" -> "Wedding Cake".
+	static FString NiceName(const FString& In)
+	{
+		FString Out;
+		for (int32 i = 0; i < In.Len(); ++i)
+		{
+			const TCHAR C = In[i];
+			if (i > 0 && FChar::IsUpper(C) && !FChar::IsUpper(In[i - 1]) && In[i - 1] != TEXT(' ')) { Out.AppendChar(TEXT(' ')); }
+			Out.AppendChar(C);
+		}
+		return Out;
+	}
+
 	FString PrettyItemName(FName ItemId)
 	{
 		FString S = ItemId.ToString();
-		if (S.StartsWith(TEXT("WetBud_")))    { return S.RightChop(7) + TEXT(" (wet)"); }
-		if (S.StartsWith(TEXT("Bag_")))       { return UInventoryComponent::BagStrain(ItemId).ToString() + TEXT(" bag"); }
+		if (S.StartsWith(TEXT("WetBud_")))    { return NiceName(S.RightChop(7)) + TEXT(" (wet)"); }
+		if (S.StartsWith(TEXT("Bag_")))       { return NiceName(UInventoryComponent::BagStrain(ItemId).ToString()) + TEXT(" bag"); }
 		if (S.StartsWith(TEXT("DryRack_")))   { return S.RightChop(8) + TEXT(" rack"); }
 		if (S == TEXT("Bench_Pack"))          { return TEXT("Packing bench"); }
 		if (S == TEXT("Cont_Bag2"))           { return TEXT("Small baggies"); }
@@ -139,16 +155,29 @@ namespace WeedUI
 		if (S == TEXT("DryUp_Seal"))          { return TEXT("Humidity sealer"); }
 		if (S == TEXT("ProcUp_Motor"))        { return TEXT("Power motor"); }
 		if (S == TEXT("ProcUp_Yield"))        { return TEXT("Fine filter"); }
-		if (S.StartsWith(TEXT("Crystal_")))   { return S.RightChop(8) + TEXT(" crystals"); }
-		if (S.StartsWith(TEXT("Hash_")))      { return S.RightChop(5) + TEXT(" hash"); }
-		if (S.StartsWith(TEXT("Bud_")))       { return S.RightChop(4); }
-		if (S.StartsWith(TEXT("Seed_")))      { return S.RightChop(5) + TEXT(" seed"); }
-		if (S.StartsWith(TEXT("Joint_")))     { return S.RightChop(6) + TEXT(" joint"); }
+		if (S.StartsWith(TEXT("Crystal_")))   { return NiceName(S.RightChop(8)) + TEXT(" crystals"); }
+		if (S.StartsWith(TEXT("Hash_")))      { return NiceName(S.RightChop(5)) + TEXT(" hash"); }
+		if (S.StartsWith(TEXT("Bud_")))       { return NiceName(S.RightChop(4)); }
+		if (S.StartsWith(TEXT("Seed_")))      { return NiceName(S.RightChop(5)) + TEXT(" seed"); }
+		if (S.StartsWith(TEXT("Joint_")))     { return NiceName(S.RightChop(6)) + TEXT(" joint"); }
 		if (S.StartsWith(TEXT("Papers_")))    { return S.RightChop(7) + TEXT(" papers"); }
 		if (S.StartsWith(TEXT("Soil_")))      { return S.RightChop(5) + TEXT(" soil"); }
 		if (S.StartsWith(TEXT("WaterBottle_"))) { return S.RightChop(12) + TEXT(" bottle"); }
 		if (S.StartsWith(TEXT("Pot_")))       { return S.RightChop(4) + TEXT(" pot"); }
-		return S;
+
+		// Onbekende id (Gear_/Mesh_/Press_ e.d.) -> pak de nette naam uit de winkel-catalogus.
+		if (GWorld)
+		{
+			if (const AWeedShopGameState* GS = GWorld->GetGameState<AWeedShopGameState>())
+			{
+				if (UStoreComponent* St = GS->GetStore())
+				{
+					const FString Nm = St->GetCatalogName(ItemId).ToString();
+					if (!Nm.IsEmpty()) { return Nm; }
+				}
+			}
+		}
+		return NiceName(S);
 	}
 
 	// Het uit vormen opgebouwde icoon (fallback als er geen PNG is).
