@@ -161,7 +161,9 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const float Wtr = Plant->GetWaterLevel();
 		WaterBar->SetPercent(Wtr);
 		WaterText->SetText(FText::FromString(FString::Printf(TEXT("Water  %.0f%%"), Wtr * 100.f)));
-		const float Care = Plant->GetCareMultiplier();
+		// Toon de ECHTE oogst-kwaliteit = het tijd-gewogen gemiddelde (CareAvg), niet de instant waarde.
+		// Zo zie je dat last-minute water de kwaliteit niet meer omhoog schiet; je moet er water in houden.
+		const float Care = Plant->GetCareAvg();
 		HealthBar->SetPercent(Care);
 		HealthBar->SetFillColorAndOpacity(Care >= 0.8f ? FLinearColor(0.4f, 0.9f, 0.4f) : (Care >= 0.5f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)));
 		// Ziekte-status netjes in de HUD (de prompt blijft kort): toon hoeveel plekken ziek zijn.

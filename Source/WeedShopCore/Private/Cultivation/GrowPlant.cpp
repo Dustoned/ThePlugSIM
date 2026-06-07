@@ -375,8 +375,10 @@ void AGrowPlant::Tick(float DeltaSeconds)
 	{
 		// Normaal: gezondheid/care volgt het waterpeil. Genoeg water -> stijgt richting het pot-plafond;
 		// te droog -> zakt. Last-minute water geven herstelt de gemiddelde kwaliteit dus niet.
-		const float Target = (WaterLevel >= 0.25f) ? MaxCare : 0.3f;
-		CareMultiplier = FMath::Clamp(FMath::FInterpTo(CareMultiplier, Target, DeltaSeconds, 0.2f), 0.3f, MaxCare);
+		// Droog -> zakt verder weg (0.12) en herstelt LANGZAAM (interp 0.12), zodat last-minute water het
+		// tijd-gemiddelde nauwelijks meer optrekt: je moet er gedurende de hele groei water in houden.
+		const float Target = (WaterLevel >= 0.25f) ? MaxCare : 0.12f;
+		CareMultiplier = FMath::Clamp(FMath::FInterpTo(CareMultiplier, Target, DeltaSeconds, 0.12f), 0.05f, MaxCare);
 
 		// Kwaliteit = tijd-gewogen gemiddelde gezondheid.
 		CareSum += CareMultiplier * DeltaSeconds;
