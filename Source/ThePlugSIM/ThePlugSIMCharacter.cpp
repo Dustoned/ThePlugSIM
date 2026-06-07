@@ -289,7 +289,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		{
 			LastHeldItemId = Active;
 			if (Active.IsNone()) { HeldItemMesh->SetVisibility(false); }
-			else { PropKit::ApplyItemModel(HeldItemMesh, Active, 0.5f); HeldItemMesh->SetVisibility(true); }
+			else { PropKit::ApplyItemModel(HeldItemMesh, Active, 1.0f); HeldItemMesh->SetVisibility(true); }
 		}
 		// Geen hand-bone? Val terug op een vaste positie rechts-onder in beeld (op kijkrichting).
 		if (!bHeldOnHandBone && !Active.IsNone() && FirstPersonCameraComponent)
