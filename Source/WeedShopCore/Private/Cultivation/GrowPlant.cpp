@@ -826,7 +826,7 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 	{
 		return FText::FromString(FString::Printf(TEXT("Plant a seed (hold seed)  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
 	}
-	return FText::FromString(FString::Printf(TEXT("Water the plant (hold bottle)  (water %.0f%%)"), WaterLevel * 100.f));
+	return NSLOCTEXT("WeedShop", "WaterPlant", "Water the plant (hold bottle)"); // water-% staat al op de plant-kaart
 }
 
 float AGrowPlant::GetMaxCare() const
