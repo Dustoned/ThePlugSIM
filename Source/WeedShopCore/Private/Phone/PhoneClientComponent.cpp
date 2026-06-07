@@ -2417,15 +2417,32 @@ void UPhoneClientComponent::ServerProposeContactStrain_Implementation(FName Cont
 {
 	AWeedShopGameState* GS = GetGS();
 	if (!GS || !GS->GetContacts() || Strain.IsNone()) { return; }
-	// THC/kwaliteit van het zakje van die strain dat je in je voorraad hebt (server-zijde).
+
+	// Beste THC/kwaliteit van DEZE strain over je inventory + ALLE chests/shelves (Bud_ of Bag_, niet nat).
 	float OffThc = -1.f, OffQual = -1.f;
+	auto Consider = [&](FName Id, float Thc, float Ql)
+	{
+		const FString S = Id.ToString();
+		if (S.StartsWith(TEXT("WetBud_"))) { return; }
+		FName St;
+		if (UInventoryComponent::IsBag(Id)) { St = UInventoryComponent::BagStrain(Id); }
+		else if (S.StartsWith(TEXT("Bud_"))) { St = FName(*S.RightChop(4)); }
+		else { return; }
+		if (St != Strain) { return; }
+		if (Thc > OffThc) { OffThc = Thc; OffQual = Ql; }
+	};
 	if (APawn* P = Cast<APawn>(GetOwner()))
 	{
 		if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			const FName BagId(*FString::Printf(TEXT("Bag_%s"), *Strain.ToString()));
-			OffThc = Inv->GetItemQuality(BagId);
-			OffQual = Inv->GetItemQualityPct(BagId);
+			for (const FInventoryStack& St : Inv->GetStacks()) { Consider(St.ItemId, St.Quality, St.QualityPct); }
+		}
+	}
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<AStorageShelf> It(W); It; ++It)
+		{
+			for (const FShelfStack& C : It->Contents) { Consider(C.ItemId, C.Thc, C.QualityPct); }
 		}
 	}
 	GS->GetContacts()->ProposeAlternativeStrain(ContactId, Strain, OffThc, OffQual);

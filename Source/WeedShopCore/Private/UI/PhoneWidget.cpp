@@ -13,6 +13,7 @@
 #include "EngineUtils.h"
 #include "Customer/CustomerBase.h" // afspraak-balk in de chat
 #include "Inventory/InventoryComponent.h"
+#include "World/StorageShelf.h"
 #include "Phone/ContactsComponent.h"
 #include "Input/ControlSettings.h"
 #include "GameFramework/Pawn.h"
@@ -597,31 +598,53 @@ void UPhoneWidget::BuildChatApp()
 			const FName ReqStrain = Con->GetRequestedStrain(OpenChatContact);
 			float ExpThc = 15.f;
 			if (GS && GS->GetStore()) { float t = 0.f, y = 0.f, g = 0.f; if (GS->GetStore()->GetStrainStats(ReqStrain, t, y, g) && t > 0.f) { ExpThc = t; } }
-			ContentBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock:"), *ReqStrain.ToString(), ExpThc), 10, FLinearColor(0.7f, 0.75f, 0.85f)))
+			ContentBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock (incl. chests/shelves):"), *ReqStrain.ToString(), ExpThc), 10, FLinearColor(0.7f, 0.75f, 0.85f)))
 				->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 
-			UInventoryComponent* Inv = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr;
-			int32 Shown = 0;
-			if (Inv)
+			// Strain uit een wiet-item halen (Bag_X_<g> of Bud_X); nat (WetBud_) telt NIET mee.
+			auto StrainOf = [](FName Id) -> FName
 			{
-				for (const FInventoryStack& St : Inv->GetStacks())
-				{
-					if (!UInventoryComponent::IsBag(St.ItemId)) { continue; }
-					const FName Strain = UInventoryComponent::BagStrain(St.ItemId);
-					if (Strain.IsNone()) { continue; }
-					const float Thc = St.Quality; const float Qual = St.QualityPct; const int32 Qty = St.Quantity;
-					const float Delta = Thc - ExpThc;
-					const float Chance = Con->SubstituteAcceptChance(OpenChatContact, ReqStrain, Strain, Thc) * 100.f;
-					const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  x%d\n%+.0f%% THC vs ask   ~%.0f%% yes"),
-						*Strain.ToString(), Thc, Qual, Qty, Delta, Chance);
-					const FName SPick = Strain;
-					ContentBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? FLinearColor(0.18f, 0.4f, 0.28f) : FLinearColor(0.36f, 0.3f, 0.2f)),
-						[this, SPick]() { if (Phone.IsValid()) { Phone->ProposeChatStrain(OpenChatContact, SPick); } bOfferStrainView = false; MarkDirty(); }, 11))
-						->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
-					++Shown;
-				}
+				const FString S = Id.ToString();
+				if (S.StartsWith(TEXT("WetBud_"))) { return NAME_None; }
+				if (UInventoryComponent::IsBag(Id)) { return UInventoryComponent::BagStrain(Id); }
+				if (S.StartsWith(TEXT("Bud_"))) { return FName(*S.RightChop(4)); }
+				return NAME_None;
+			};
+			// Aggregeer per strain over inventory + ALLE chests/shelves (beste THC representatief).
+			struct FOfferAgg { float Thc = 0.f; float Qual = 0.f; int32 Qty = 0; };
+			TMap<FName, FOfferAgg> ByStrain;
+			auto Consider = [&](FName Id, int32 Q, float Thc, float Ql)
+			{
+				const FName Strain = StrainOf(Id);
+				if (Strain.IsNone() || Q <= 0) { return; }
+				FOfferAgg& O = ByStrain.FindOrAdd(Strain);
+				O.Qty += Q;
+				if (Thc > O.Thc) { O.Thc = Thc; O.Qual = Ql; }
+			};
+			if (UInventoryComponent* Inv = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr)
+			{
+				for (const FInventoryStack& St : Inv->GetStacks()) { Consider(St.ItemId, St.Quantity, St.Quality, St.QualityPct); }
 			}
-			if (Shown == 0) { ContentBox->AddChildToVerticalBox(MakeText(TEXT("(no bagged weed in your inventory)"), 10, FLinearColor::Gray)); }
+			for (TActorIterator<AStorageShelf> It(GetWorld()); It; ++It)
+			{
+				for (const FShelfStack& C : It->Contents) { Consider(C.ItemId, C.Quantity, C.Thc, C.QualityPct); }
+			}
+
+			int32 Shown = 0;
+			for (const TPair<FName, FOfferAgg>& P : ByStrain)
+			{
+				const FName Strain = P.Key; const FOfferAgg& O = P.Value;
+				const float Delta = O.Thc - ExpThc;
+				const float Chance = Con->SubstituteAcceptChance(OpenChatContact, ReqStrain, Strain, O.Thc) * 100.f;
+				const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  x%d\n%+.0f%% THC vs ask   ~%.0f%% yes"),
+					*Strain.ToString(), O.Thc, O.Qual, O.Qty, Delta, Chance);
+				const FName SPick = Strain;
+				ContentBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? FLinearColor(0.18f, 0.4f, 0.28f) : FLinearColor(0.36f, 0.3f, 0.2f)),
+					[this, SPick]() { if (Phone.IsValid()) { Phone->ProposeChatStrain(OpenChatContact, SPick); } bOfferStrainView = false; MarkDirty(); }, 11))
+					->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+				++Shown;
+			}
+			if (Shown == 0) { ContentBox->AddChildToVerticalBox(MakeText(TEXT("(no dried/bagged weed in your inventory or storages)"), 10, FLinearColor::Gray)); }
 		}
 
 		// Of kies zelf een tijd (per kwartier). Ze gaan altijd akkoord, geen nadeel.
