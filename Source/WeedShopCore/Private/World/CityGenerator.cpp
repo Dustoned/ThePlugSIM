@@ -1150,6 +1150,16 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 				const float sDivLen = FMath::Abs(sHall - sLandFront);
 				Box(dMid, sDivC, GapD + 16.f, sDivLen, zTop + FloorH * 0.5f, FloorH + 24.f, FLinearColor(0.17f, 0.17f, 0.20f), true);
 			}
+			// Dicht de open trapschacht-vloer op de bovenste verdieping zodat je hier niet 1 verdieping naar
+			// beneden kunt springen. Alleen de afdaal-kolom (dBack) blijft open om de trap af te lopen.
+			{
+				const float sZoneC = (-HW - Half) * 0.5f;
+				const float sZoneLen = FMath::Abs(Half - HW);
+				const float backOpen0 = dBack - LaneWd * 0.5f;
+				const float backOpen1 = dBack + LaneWd * 0.5f;
+				if (backOpen0 > HallLen + 4.f) { Box((HallLen + backOpen0) * 0.5f, sZoneC, backOpen0 - HallLen, sZoneLen, zTop - 6.f, 12.f, LandC, true); }
+				if (Foot > backOpen1 + 4.f) { Box((backOpen1 + Foot) * 0.5f, sZoneC, Foot - backOpen1, sZoneLen, zTop - 6.f, 12.f, LandC, true); }
+			}
 		}
 	}
 
