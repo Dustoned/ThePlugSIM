@@ -46,7 +46,8 @@ protected:
 	UPROPERTY(Replicated)
 	int32 WaterCharges = 0;
 
-	// Hoeveel slokken er per klik (per gootsteen-interact) bijkomen. Grotere fles -> vaker klikken.
+	// Hoeveel slokken er per klik (per gootsteen-interact) bijkomen. 1 = elke fles vult per klik 1 slok,
+	// dus grotere fles = altijd meer klikken (plastic 3, steel 6, jerry 12, tank 25 klikken).
 	UPROPERTY(EditAnywhere, Category = "WeedShop|Water")
-	int32 FillPerClick = 3;
+	int32 FillPerClick = 1;
 };
