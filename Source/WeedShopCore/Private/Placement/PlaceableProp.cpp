@@ -122,6 +122,70 @@ void APlaceableProp::SetupVisual()
 		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W * 0.34f, D * 0.5f, H * 0.30f), FVector(-W * 0.28f, 0, H * 1.05f), Pillow);
 		for (int32 i = 3; i < 8; ++i) { Parts[i]->SetVisibility(false); }
 	}
+	else if (Id.StartsWith(TEXT("Gear_Lamp")))
+	{
+		// Kweeklamp: voet + steel + lampkop met gloei-paneel.
+		Mesh->SetVisibility(false); HideParts();
+		const FLinearColor Pole(0.25f, 0.26f, 0.30f), Head(0.18f, 0.19f, 0.22f), Glow(1.f, 0.95f, 0.6f);
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(W * 0.55f, D * 0.55f, H * 0.06f), FVector(0, 0, H * 0.03f), Pole);          // voet
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(W * 0.16f, D * 0.16f, H * 0.78f), FVector(0, 0, H * 0.42f), Pole);          // steel
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W, D * 0.7f, H * 0.14f),          FVector(0, 0, H * 0.88f), Head);          // lampkop
+		PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W * 0.86f, D * 0.55f, H * 0.05f), FVector(0, 0, H * 0.79f), Glow);          // gloei-paneel
+		for (int32 i = 4; i < 8; ++i) { Parts[i]->SetVisibility(false); }
+	}
+	else if (Id.StartsWith(TEXT("Gear_Tent")))
+	{
+		// Kweektent: 4 stijlen + bovenframe + achterdoek.
+		Mesh->SetVisibility(false); HideParts();
+		const FLinearColor Frame(0.16f, 0.16f, 0.18f), Fabric(0.10f, 0.12f, 0.16f);
+		const float PT = FMath::Max(2.5f, W * 0.07f);
+		const float PX = W * 0.5f - PT * 0.5f, PY = D * 0.5f - PT * 0.5f;
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(PT, PT, H), FVector( PX,  PY, H * 0.5f), Frame);
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(PT, PT, H), FVector( PX, -PY, H * 0.5f), Frame);
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(PT, PT, H), FVector(-PX,  PY, H * 0.5f), Frame);
+		PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(PT, PT, H), FVector(-PX, -PY, H * 0.5f), Frame);
+		PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(W, D, PT),  FVector(0, 0, H - PT * 0.5f), Frame);                 // top
+		PropKit::SetPart(Parts[5], PropKit::Cube(), FVector(W * 0.96f, PT, H * 0.92f), FVector(0, -PY, H * 0.5f), Fabric);    // achterdoek
+		for (int32 i = 6; i < 8; ++i) { Parts[i]->SetVisibility(false); }
+	}
+	else if (Id.StartsWith(TEXT("Gear_Water")))
+	{
+		// Watertank: ronde tank + dop + slangetje.
+		Mesh->SetVisibility(false); HideParts();
+		const FLinearColor Tank(0.28f, 0.45f, 0.66f), Cap(0.18f, 0.20f, 0.24f), Tube(0.55f, 0.6f, 0.66f);
+		PropKit::SetPart(Parts[0], PropKit::Cylinder(), FVector(W * 0.85f, D * 0.85f, H * 0.82f), FVector(0, 0, H * 0.41f), Tank);
+		PropKit::SetPart(Parts[1], PropKit::Cylinder(), FVector(W * 0.42f, D * 0.42f, H * 0.12f), FVector(0, 0, H * 0.88f), Cap);
+		PropKit::SetPart(Parts[2], PropKit::Cylinder(), FVector(2.5f, 2.5f, H * 0.5f), FVector(W * 0.45f, 0, H * 0.22f), Tube, FRotator(0.f, 0.f, 90.f));
+		for (int32 i = 3; i < 8; ++i) { Parts[i]->SetVisibility(false); }
+	}
+	else if (Id == TEXT("Gear_Drainage"))
+	{
+		// Drainage: lage bak met grind.
+		Mesh->SetVisibility(false); HideParts();
+		const FLinearColor Tray(0.22f, 0.20f, 0.18f), Gravel(0.46f, 0.43f, 0.38f);
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(W, D, H * 0.5f), FVector(0, 0, H * 0.25f), Tray);
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(W * 0.82f, D * 0.82f, H * 0.45f), FVector(0, 0, H * 0.62f), Gravel);
+		for (int32 i = 2; i < 8; ++i) { Parts[i]->SetVisibility(false); }
+	}
+	else if (Id == TEXT("Gear_Insulation"))
+	{
+		// Isolatie: ingepakt blok met een band.
+		Mesh->SetVisibility(false); HideParts();
+		const FLinearColor Wrap(0.75f, 0.72f, 0.55f), Band(0.55f, 0.40f, 0.20f);
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(W, D, H), FVector(0, 0, H * 0.5f), Wrap);
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(W * 1.03f, D * 0.26f, H * 0.20f), FVector(0, 0, H * 0.5f), Band);
+		for (int32 i = 2; i < 8; ++i) { Parts[i]->SetVisibility(false); }
+	}
+	else if (Id == TEXT("Gear_Bloom"))
+	{
+		// Bloom booster: voedings-fles + dop + label.
+		Mesh->SetVisibility(false); HideParts();
+		const FLinearColor Bottle(0.28f, 0.55f, 0.30f), Cap(0.85f, 0.80f, 0.20f), Label(0.95f, 0.95f, 0.92f);
+		PropKit::SetPart(Parts[0], PropKit::Cylinder(), FVector(W * 0.8f, D * 0.8f, H * 0.76f), FVector(0, 0, H * 0.38f), Bottle);
+		PropKit::SetPart(Parts[1], PropKit::Cylinder(), FVector(W * 0.4f, D * 0.4f, H * 0.18f), FVector(0, 0, H * 0.87f), Cap);
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W * 0.7f, D * 0.06f, H * 0.32f), FVector(0, D * 0.4f, H * 0.4f), Label);
+		for (int32 i = 3; i < 8; ++i) { Parts[i]->SetVisibility(false); }
+	}
 	else
 	{
 		// Geen mockup voor dit item -> de enkele mesh blijft zichtbaar.
