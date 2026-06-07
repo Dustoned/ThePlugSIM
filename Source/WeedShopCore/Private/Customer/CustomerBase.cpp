@@ -364,8 +364,27 @@ void ACustomerBase::Tick(float DeltaSeconds)
 	// In gesprek met een speler -> stilstaan (niet doorlopen) tot het gesprek sluit.
 	if (bTalkingToPlayer)
 	{
-		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
-		return;
+		// Veiligheid tegen vastvriezen: staat er geen speler meer in de buurt, dan is het "gesprek"
+		// voorbij (UI raar gesloten / speler weggelopen) -> laat 'm weer gewoon doorlopen.
+		bool bPlayerNear = false;
+		if (UWorld* Wd = GetWorld())
+		{
+			for (FConstPlayerControllerIterator It = Wd->GetPlayerControllerIterator(); It; ++It)
+			{
+				const APlayerController* PC = It->Get();
+				const APawn* P = PC ? PC->GetPawn() : nullptr;
+				if (P && FVector::Dist2D(P->GetActorLocation(), GetActorLocation()) < 500.f) { bPlayerNear = true; break; }
+			}
+		}
+		if (!bPlayerNear)
+		{
+			bTalkingToPlayer = false; // anti-vastvriezen: gesprek is duidelijk voorbij
+		}
+		else
+		{
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			return;
+		}
 	}
 
 	// Bewoners gebruiken hun eigen dag/nacht-schema (roamen / naar huis) i.p.v. de geduld-/vertrek-logica.
