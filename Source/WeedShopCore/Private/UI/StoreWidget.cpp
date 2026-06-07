@@ -244,7 +244,16 @@ void UStoreWidget::FillBody()
 		if (!bOk || Price <= 0) { continue; }
 		const int32 ReqLvl = Store->RequiredLevelFor(Id);
 		const bool bLocked = (ReqLvl > PlayerLvl);
-		const FString Desc = Store->GetCatalogDesc(Id).ToString();
+		FString Desc = Store->GetCatalogDesc(Id).ToString();
+		// Seeds: toon de echte teelt-stats (THC, opbrengst/plant, groeitijd) i.p.v. alleen tekst.
+		if (bSeedsCat)
+		{
+			float Thc = 0.f, Yield = 0.f, GrowMin = 0.f;
+			if (Store->GetStrainStats(Id, Thc, Yield, GrowMin))
+			{
+				Desc = FString::Printf(TEXT("THC ~%.0f%%   -   ~%.0f g/plant   -   groeit ~%.0f min"), Thc, Yield, GrowMin);
+			}
+		}
 		const int32 InCart = Cart.Contains(Id) ? Cart[Id] : 0;
 
 		UBorder* RowBg = WidgetTree->ConstructWidget<UBorder>();

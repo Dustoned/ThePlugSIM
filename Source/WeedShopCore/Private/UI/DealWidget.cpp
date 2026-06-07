@@ -269,7 +269,23 @@ void UDealWidget::UpdateLive()
 	default:                           StateStr = TEXT("Leaving"); break;
 	}
 	if (StateText) { StateText->SetText(FText::FromString(StateStr)); }
-	if (RelationText) { RelationText->SetText(FText::FromString(FString::Printf(TEXT("Respect %.0f     Loyalty %.0f     Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction))); }
+	if (RelationText)
+	{
+		FString Rel = FString::Printf(TEXT("Respect %.0f     Loyalty %.0f     Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction);
+		// Duidelijk: hoeveel respect nog nodig voor hun telefoonnummer (zodat je ze kunt appen).
+		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+			{
+				if (!C->NpcId.IsNone())
+				{
+					if (Reg->IsUnlocked(C->NpcId)) { Rel += TEXT("\nNumber saved - you can text them"); }
+					else { Rel += FString::Printf(TEXT("\nNumber: respect %.0f / %.0f to get it"), C->Respect, Reg->UnlockRespect); }
+				}
+			}
+		}
+		RelationText->SetText(FText::FromString(Rel));
+	}
 
 	// Dialoog: de server-regel (reactie op joint/deal), anders een begroeting per status.
 	FString Line = C->SpeechLine;
