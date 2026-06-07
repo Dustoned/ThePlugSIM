@@ -28,6 +28,7 @@
 #include "Progression/StoreComponent.h"
 #include "World/HeatComponent.h"
 #include "World/CityDoor.h" // FriendlyNpcName fallback
+#include "Phone/ContactsComponent.h" // afspraak-statusberichten
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -276,7 +277,18 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
 	DOREPLIFETIME(ACustomerBase, bTalkingToPlayer);
 	DOREPLIFETIME(ACustomerBase, bShopkeeper);
+	DOREPLIFETIME(ACustomerBase, bApptActive);
+	DOREPLIFETIME(ACustomerBase, ApptTimeout);
 	DOREPLIFETIME(ACustomerBase, NpcId);
+}
+
+void ACustomerBase::PushApptMessage(const FString& InBody)
+{
+	if (!HasAuthority() || NpcId.IsNone()) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return; }
+	Con->PushInfoMessage(NpcId, FText::FromString(ACityDoor::FriendlyNpcName(NpcId)), FText::FromString(InBody));
 }
 
 void ACustomerBase::SetTalkingToPlayer(bool b)
@@ -1001,9 +1013,14 @@ void ACustomerBase::BeginAppointment(bool bComeToPlayer)
 	bApptActive = true;
 	bApptComeToPlayer = bComeToPlayer;
 	bApptArrived = false;
-	ApptTimeout = 360.f;       // 6 min: daarna geeft de NPC de afspraak op
+	ApptTimeout = ApptTimeoutMax; // daarna geeft de NPC de afspraak op
+	bApptSaidOnWay = bApptSaidHere = bApptSaidWaiting = false;
 	SetNeedsPlayer(true);      // poppetje op de kompas zodat de speler weet waar te zijn
 	BecomeBuyerNow();          // afspraak = wil kopen (geen prospect-sampling meer)
+
+	// "Ik ben onderweg"-appje.
+	PushApptMessage(bComeToPlayer ? TEXT("On my way - I'll wait at your main entrance.") : TEXT("Come by mine whenever, I'm home."));
+	bApptSaidOnWay = true;
 
 	if (bComeToPlayer)
 	{
@@ -2373,6 +2390,12 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		bRoamGoalIsPark = false;
 		// Afgehandeld (deal gesloten) of veiligheids-timeout -> afspraak loslaten, normaal leven hervatten.
 		ApptTimeout -= DeltaSeconds;
+		// "Het duurt te lang"-appje als de tijd bijna op is (1x).
+		if (ApptTimeout > 0.f && ApptTimeout < 75.f && !bApptSaidWaiting && State != ECustomerState::Served)
+		{
+			PushApptMessage(TEXT("Yo, where you at? I can't wait much longer..."));
+			bApptSaidWaiting = true;
+		}
 		if (State == ECustomerState::Served || State == ECustomerState::Leaving)
 		{
 			EndAppointment();
@@ -2403,6 +2426,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			if (FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 160.f)
 			{
 				if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+				if (!bApptSaidHere) { PushApptMessage(TEXT("I'm here at the entrance, come outside.")); bApptSaidHere = true; }
 			}
 			return;
 		}
@@ -2420,6 +2444,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 				const FVector DoorSpot = bHasHomeHall ? HomeHallPos : HomeFrontSpot;
 				SetActorLocation(MakeResidentStandingLocation(DoorSpot));
 				if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+				if (!bApptSaidHere) { PushApptMessage(TEXT("I'm home, come through whenever.")); bApptSaidHere = true; }
 			}
 			return;
 		}

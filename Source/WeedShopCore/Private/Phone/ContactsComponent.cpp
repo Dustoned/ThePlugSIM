@@ -440,3 +440,18 @@ void UContactsComponent::OnRep_Messages()
 {
 	OnMessagesChanged.Broadcast();
 }
+
+void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body)
+{
+	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
+	FPhoneMessage M;
+	M.FromContactId = ContactId;
+	M.SenderName = SenderName;
+	M.Body = Body;
+	M.AppointmentTimeOfDay = -1.f;
+	M.Status = 3;        // los info-bericht, geen openstaande afspraak (geen ja/nee nodig)
+	M.bFromMe = false;   // inkomend -> telt mee voor de ongelezen-bubble
+	Messages.Insert(M, 0);
+	if (Messages.Num() > 40) { Messages.SetNum(40); }
+	OnRep_Messages();    // server: meteen lokaal de UI bijwerken
+}

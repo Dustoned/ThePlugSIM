@@ -155,6 +155,12 @@ protected:
 	int32 LastPkgSig = -1;
 	int32 PackagesSignature() const;   // verandert als de set bestellingen wijzigt
 	void UpdatePackagesLive();         // werkt bars/ETA's live bij zonder herbouw
+
+	// Chat: live aftellende afspraak-balk (loopt naar 0 tot de NPC opgeeft).
+	UPROPERTY() TObjectPtr<class UProgressBar> ApptBar;
+	UPROPERTY() TObjectPtr<UTextBlock> ApptBarLabel;
+	FName ApptBarContact = NAME_None;
+	void UpdateApptBarLive();          // werkt de afspraak-balk live bij
 	void BuildPackagesApp();           // bouwt de losse Packages-app in ContentBox
 	void FillPackagesInto(class UScrollBox* Scroll); // vult de bestellingen-kaarten in een scroll
 	void FillPotUpgradesInto(class UScrollBox* Scroll); // "Pot Upgrades"-tab: per geplaatste pot

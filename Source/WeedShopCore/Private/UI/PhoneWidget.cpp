@@ -11,6 +11,7 @@
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/PotTypes.h"
 #include "EngineUtils.h"
+#include "Customer/CustomerBase.h" // afspraak-balk in de chat
 #include "Inventory/InventoryComponent.h"
 #include "Phone/ContactsComponent.h"
 #include "Input/ControlSettings.h"
@@ -408,6 +409,7 @@ int32 UPhoneWidget::MessagesSignature() const
 
 void UPhoneWidget::BuildChatApp()
 {
+	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None; // alleen geldig in een actieve-afspraak-thread
 	if (!Phone.IsValid()) { return; }
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
@@ -470,6 +472,25 @@ void UPhoneWidget::BuildChatApp()
 	UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(MakeText(ContactName.ToString(), 15, FLinearColor(0.92f, 0.95f, 1.f)));
 	NS->SetVerticalAlignment(VAlign_Center); NS->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
 	ContentBox->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+
+	// Loopt er een afspraak met deze persoon? Toon een aftellende balk (loopt naar 0 tot 'ie opgeeft).
+	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	{
+		if (It->NpcId != OpenChatContact || !It->HasActiveAppointment()) { continue; }
+		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
+		Box->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.13f, 0.10f, 0.95f), 8.f));
+		Box->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+		Box->SetContent(VB);
+		ApptBarLabel = MakeText(TEXT("Waiting..."), 11, FLinearColor(0.8f, 0.9f, 0.8f));
+		VB->AddChildToVerticalBox(ApptBarLabel);
+		ApptBar = WidgetTree->ConstructWidget<UProgressBar>();
+		ApptBar->SetPercent(It->GetApptFraction());
+		VB->AddChildToVerticalBox(ApptBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		ApptBarContact = OpenChatContact;
+		ContentBox->AddChildToVerticalBox(Box)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+		break;
+	}
 
 	// Berichten chronologisch (oudste boven). Msgs is nieuwste-eerst -> achterstevoren itereren.
 	UScrollBox* Thread = WidgetTree->ConstructWidget<UScrollBox>();
@@ -799,6 +820,36 @@ void UPhoneWidget::UpdatePackagesLive()
 			}
 		}
 	}
+}
+
+void UPhoneWidget::UpdateApptBarLive()
+{
+	if (!ApptBar || ApptBarContact.IsNone() || !GetWorld()) { return; }
+	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	{
+		if (It->NpcId != ApptBarContact) { continue; }
+		if (It->HasActiveAppointment())
+		{
+			const float Frac = It->GetApptFraction();
+			ApptBar->SetPercent(Frac);
+			ApptBar->SetFillColorAndOpacity(Frac < 0.2f ? FLinearColor(0.9f, 0.3f, 0.25f) : (Frac < 0.45f ? FLinearColor(0.9f, 0.7f, 0.25f) : FLinearColor(0.35f, 0.8f, 0.45f)));
+			if (ApptBarLabel)
+			{
+				const int32 Left = FMath::CeilToInt(It->GetApptTimeLeft());
+				ApptBarLabel->SetText(FText::FromString(FString::Printf(TEXT("Waiting at the door - leaves in %d:%02d"), Left / 60, Left % 60)));
+			}
+		}
+		else
+		{
+			// Afspraak voorbij (deal of vertrokken) -> balk weghalen.
+			ApptBar->SetPercent(0.f);
+			if (ApptBarLabel) { ApptBarLabel->SetText(FText::FromString(TEXT("Gone."))); }
+			ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
+		}
+		return;
+	}
+	// NPC niet meer gevonden -> balk loslaten.
+	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
 }
 
 void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
@@ -1538,6 +1589,7 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		const int32 Sig = MessagesSignature();
 		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
+		else { UpdateApptBarLive(); } // aftellende afspraak-balk live bijwerken (zonder herbouw)
 	}
 
 	// Bank-app open: bij saldo-/limiet-/unlock-wijziging de inhoud herbouwen.

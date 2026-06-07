@@ -211,6 +211,11 @@ public:
 	void EndAppointment();
 	bool HasActiveAppointment() const { return bApptActive; }
 
+	// Voor de chat-progressbar (client leest gerepliceerde ApptTimeout). Loopt van 1 -> 0 tot de NPC opgeeft.
+	static constexpr float ApptTimeoutMax = 360.f; // moet matchen met de timer in BeginAppointment
+	float GetApptTimeLeft() const { return FMath::Max(0.f, ApptTimeout); }
+	float GetApptFraction() const { return FMath::Clamp(ApptTimeout / ApptTimeoutMax, 0.f, 1.f); }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -317,10 +322,18 @@ protected:
 	float HomeEntryStuckTimer = 0.f;
 
 	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
+	UPROPERTY(Replicated)
 	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner
 	bool bApptComeToPlayer = false; // true = NPC loopt naar de speler; false = NPC wacht in eigen unit
 	bool bApptArrived = false;      // (YouGoToThem) al naar de unit verplaatst
-	float ApptTimeout = 0.f;        // veiligheids-timer: na X sec geeft de NPC de afspraak op
+	UPROPERTY(Replicated)
+	float ApptTimeout = 0.f;        // veiligheids-timer: na X sec geeft de NPC de afspraak op (gerepliceerd voor de chat-balk)
+
+	// Afspraak-statusberichten: elk hoogstens 1x sturen.
+	bool bApptSaidOnWay = false;
+	bool bApptSaidHere = false;
+	bool bApptSaidWaiting = false;
+	void PushApptMessage(const FString& InBody); // stuurt een chat-bericht namens deze NPC
 
 	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).
 	void WriteStatsToRegistry();

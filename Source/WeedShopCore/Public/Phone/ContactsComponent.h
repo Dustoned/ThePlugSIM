@@ -98,6 +98,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	const TArray<FPhoneMessage>& GetMessages() const { return Messages; }
 
+	// Server: voeg een los info-bericht van een contact toe (afspraak-status: onderweg / ben er / te laat).
+	// Verschijnt als ongelezen inkomend bericht (telt mee voor de notificatie-bubble), geen openstaande afspraak.
+	void PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body);
+
 	// Server: beantwoord het eerste open afspraak-bericht. Accept = loyaliteit +, weiger = loyaliteit -.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RespondTopPending(bool bAccept);
