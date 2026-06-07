@@ -32,7 +32,10 @@ protected:
 	TArray<FName> SlotLastIcon;                             // laatst getoonde item-id (om icoon niet elke tick te herbouwen)
 	bool bPrevWaterEmpty = false;                           // vorige vol/leeg-staat fles -> forceert icoon-refresh bij flip
 
-	// Telefoon-notificatie rechts van de hotbar: bubble met aantal gemiste/ongelezen berichten.
+	// Telefoon-notificatie rechts van de hotbar: telefoon-icoon (trilt bij nieuw bericht) + bubble met aantal.
 	UPROPERTY() TObjectPtr<UTextBlock> MsgBadge;
 	UPROPERTY() TObjectPtr<UBorder> MsgBadgePill;
+	UPROPERTY() TObjectPtr<USizeBox> PhoneIconBox; // het telefoon-icoon zelf (inhoud wisselt: normaal/trillend)
+	int32 PhoneVibeState = -1;                     // -1 onbekend, 0 normaal, 1 trillend (om alleen bij flip te herbouwen)
+	float PhoneShakeT = 0.f;                        // tijd-accumulator voor de tril-animatie
 };

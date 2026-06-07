@@ -130,10 +130,12 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* BoxOS = Ov->AddChildToOverlay(Box);
 		BoxOS->SetHorizontalAlignment(HAlign_Fill); BoxOS->SetVerticalAlignment(VAlign_Fill);
 
-		USizeBox* Ico = WidgetTree->ConstructWidget<USizeBox>();
-		Ico->SetWidthOverride(40.f); Ico->SetHeightOverride(40.f);
-		Ico->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("phone"), 40.f, FLinearColor(0.8f, 0.9f, 1.f), WeedUI::EIcon::Message));
-		Box->SetContent(Ico);
+		PhoneIconBox = WidgetTree->ConstructWidget<USizeBox>();
+		PhoneIconBox->SetWidthOverride(40.f); PhoneIconBox->SetHeightOverride(40.f);
+		// Inhoud wordt in NativeTick gezet (normaal 'phone' / trillend 'phone_vibrate'), val terug op de message-glyph.
+		PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("phone"), 40.f, FLinearColor(0.8f, 0.9f, 1.f), WeedUI::EIcon::Message));
+		Box->SetContent(PhoneIconBox);
+		PhoneIconBox->SetRenderTransformPivot(FVector2D(0.5f, 0.5f)); // midden-pivot voor de tril-animatie
 
 		MsgBadge = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor::White, true, true);
 		MsgBadgePill = WidgetTree->ConstructWidget<UBorder>();
@@ -240,6 +242,30 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (MsgBadge && MsgBadgePill)
 	{
 		const int32 Unread = Phone ? Phone->GetUnreadMessageCount() : 0;
+		const int32 Vibe = (Unread > 0) ? 1 : 0;
+
+		// Telefoon-icoon wisselen bij flip: trillend (phone_vibrate, warm getint) als er ongelezen is,
+		// anders het normale (phone). Beide vallen terug op de message-glyph als de PNG ontbreekt.
+		if (PhoneIconBox && Vibe != PhoneVibeState)
+		{
+			PhoneVibeState = Vibe;
+			PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, Vibe ? TEXT("phone_vibrate") : TEXT("phone"), 40.f,
+				Vibe ? FLinearColor(1.f, 0.85f, 0.4f) : FLinearColor(0.8f, 0.9f, 1.f), WeedUI::EIcon::Message));
+		}
+		// Tril-animatie zolang er ongelezen berichten zijn.
+		if (PhoneIconBox)
+		{
+			if (Vibe)
+			{
+				PhoneShakeT += DeltaTime * 28.f;
+				PhoneIconBox->SetRenderTransformAngle(FMath::Sin(PhoneShakeT) * 8.f); // +-8 graden wiebel
+			}
+			else
+			{
+				PhoneIconBox->SetRenderTransformAngle(0.f);
+			}
+		}
+
 		if (Unread > 0)
 		{
 			MsgBadge->SetText(FText::FromString(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), Unread)));
