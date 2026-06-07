@@ -80,8 +80,9 @@ namespace
 		case 5: return TEXT("Soil");
 		case 6: return TEXT("Water");
 		case 7: return TEXT("Furniture");
-		case 8: return TEXT("Pot gear");
+		case 8: return TEXT("Grow Upg.");
 		case 9: return TEXT("Care");
+		case 10: return TEXT("Hash");
 		default: return TEXT("?");
 		}
 	}
@@ -1440,14 +1441,14 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GGrowApp) // Grow shop -> ALLES om te kweken (zaad, pot, aarde, water, upgrades, verzorging)
 	{
 		bSellApp = false;
-		AppCats = { 0, 1, 5, 6, 8, 9 }; // Seeds, Pots, Soil, Water, Pot Upgrades, Plant care
+		AppCats = { 0, 1, 5, 6, 8, 9, 2, 10 }; // Seeds, Pots, Soil, Water, Grow Upg., Care, Drying, Hash
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
 	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels)
 	{
 		bSellApp = false;
-		AppCats = { 4, 2, 3, 7 }; // Papers, Drying, Packing, Furniture
+		AppCats = { 4, 2, 3, 7, 10 }; // Papers, Drying, Packing, Furniture, Hash
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
