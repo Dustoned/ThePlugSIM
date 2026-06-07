@@ -177,11 +177,14 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	if (!bHasItem) { return; }
 
-	// Bouw een sleutel zodat we de tekst alleen bij wijziging updaten.
+	// Bouw een sleutel zodat we de tekst alleen bij wijziging updaten. Neem de ACTIEVE stack-id + diens
+	// Quality mee, zodat wisselen tussen 2 gelijke items (bv. 2 flessen) én het water-niveau live verversen.
 	const int32 Qty = Inv->GetQuantity(Id);
 	const float Thc = Inv->GetItemQuality(Id);
 	const float Qpct = Inv->GetItemQualityPct(Id);
-	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f"), *IdStr, Qty, Thc, Qpct);
+	const int32 ActiveSid = Inv->GetActiveStackId();
+	const float ActiveQ = Inv->GetStackQualityById(ActiveSid);
+	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%.0f"), *IdStr, Qty, Thc, Qpct, ActiveSid, ActiveQ);
 	if (Key == LastKey) { return; }
 	LastKey = Key;
 
