@@ -2829,6 +2829,23 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	Loyalty = ClampAttr(Loyalty + dL);
 	Addiction = ClampAttr(Addiction + dA);
 
+	// Over-levering: kreeg de klant MEER grammen dan gevraagd (door hele zakjes)? Kleine bonus respect +
+	// loyaliteit en een nette reactie zodat de speler 't merkt. HARD gecapt zodat je niet door extra te
+	// dumpen iemand instant maxt.
+	const int32 Surplus = SoldGrams - DesiredQuantity;
+	if (Surplus > 0)
+	{
+		const float Eff = static_cast<float>(FMath::Min(Surplus, 4)); // alleen de eerste paar extra grammen tellen
+		Respect = ClampAttr(Respect + FMath::Min(Eff * 0.4f, 1.6f));
+		Loyalty = ClampAttr(Loyalty + FMath::Min(Eff * 0.6f, 2.5f));
+		static const TCHAR* Nice[] = {
+			TEXT("Yo, extra? You're a real one!"),
+			TEXT("Damn, you hooked me up - respect!"),
+			TEXT("More than I asked, good lookin' out!"),
+			TEXT("Aight, that's love right there.") };
+		Say(Nice[FMath::RandRange(0, 3)]);
+	}
+
 	State = ECustomerState::Served;
 	WriteStatsToRegistry();
 	// Cooldown starten: deze NPC (in persoon of via telefoon-afspraak) komt niet meteen terug.

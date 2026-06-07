@@ -633,9 +633,22 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		Customer->Say(bLikedIt ? Good[FMath::RandRange(0, 3)] : Bad[FMath::RandRange(0, 3)]);
 	}
 
-	// Een joint bouwt vooral de RELATIE op. Of 'ie nú wil kopen wordt elke keer opnieuw bepaald door
-	// z'n stats: pas als 'ie genoeg verslaafd/loyaal is (prospect -> koper) en niet op cooldown staat,
-	// vraagt 'ie meteen grammen. Eén goede joint maakt van een vreemde dus géén vaste klant.
+	// Een GOEDE joint die ze lekker vinden maakt 'm meteen koop-bereid: hij vraagt dan om meer (grammen).
+	if (bLikedIt && Quality >= 0.45f && Customer->Addiction < Customer->AddictionToBuy)
+	{
+		Customer->Addiction = Customer->AddictionToBuy;
+		if (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone())
+		{
+			float R2 = 0.f, L2 = 0.f, A2 = 0.f; FText N2;
+			if (GS->GetNpcRegistry()->GetStats(Customer->NpcId, R2, L2, A2, N2))
+			{
+				GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R2, L2, FMath::Max(A2, Customer->AddictionToBuy));
+			}
+		}
+	}
+
+	// Of 'ie nú wil kopen wordt bepaald door z'n stats: genoeg verslaafd (prospect -> koper) en niet op
+	// cooldown -> vraagt meteen grammen.
 	const bool bConverted = Customer->RefreshProspect(); // prospect -> koper als verslaving hoog genoeg
 	const bool bIsBuyer = (Customer->State == ECustomerState::WantsToOrder || Customer->State == ECustomerState::Negotiating);
 	const bool bOnCooldown = (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone()) ? GS->GetNpcRegistry()->IsOnCooldown(Customer->NpcId) : false;
