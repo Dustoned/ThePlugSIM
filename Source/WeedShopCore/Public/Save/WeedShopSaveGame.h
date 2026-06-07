@@ -7,6 +7,7 @@
 #include "GameFramework/SaveGame.h"
 #include "Npc/NpcRegistryComponent.h"   // FNpcState (NPC-relaties)
 #include "Phone/ContactsComponent.h"    // FPhoneContact / FPhoneMessage
+#include "Cultivation/WaterCanComponent.h" // FBottleWater (water per fles)
 #include "WeedShopSaveGame.generated.h"
 
 // Eén inventory-item in de save (met THC%/kwaliteit behouden).
@@ -103,7 +104,8 @@ struct FPlayerSaveData
 	UPROPERTY() int32 ActiveSlot = 0;      // geselecteerd hotbar-slot
 	UPROPERTY() int32 RentDueDay = 31;     // dag waarop de volgende huur gaat
 	UPROPERTY() bool bRentIntroShown = false;
-	UPROPERTY() int32 WaterCharges = 0;    // water in je fles
+	UPROPERTY() int32 WaterCharges = 0;    // (legacy) water in je fles
+	UPROPERTY() TArray<FBottleWater> Waters; // water per fles-type
 	UPROPERTY() TArray<FSavePendingDelivery> Pending; // nog onderweg zijnde bestellingen
 	UPROPERTY() int64 DepositedTodayCents = 0; // dag-limiet stort (anti-exploit bij reload)
 	UPROPERTY() int32 DepositDay = 0;

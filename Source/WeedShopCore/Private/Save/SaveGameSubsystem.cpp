@@ -515,7 +515,7 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 	}
 	if (const UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
 	{
-		Out.WaterCharges = Can->GetCharges();
+		Out.Waters = Can->GetWatersForSave(); // water per fles-type
 	}
 
 	// Sla op waar de speler staat + kijkt (kijkrichting van de controller, niet de body).
@@ -563,7 +563,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	}
 	if (UWaterCanComponent* Can = Pawn->FindComponentByClass<UWaterCanComponent>())
 	{
-		Can->RestoreCharges(Data.WaterCharges);
+		Can->RestoreWaters(Data.Waters);
 	}
 
 	// Zet de speler terug op de opgeslagen plek + kijkrichting (echte "ga naar het save-punt").

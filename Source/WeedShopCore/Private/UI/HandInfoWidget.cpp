@@ -2,6 +2,7 @@
 
 #include "UI/WeedUiStyle.h"
 #include "Inventory/InventoryComponent.h"
+#include "Cultivation/WaterCanComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Cultivation/PotTypes.h"
@@ -208,12 +209,28 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// dingen (fles, pot, rek, bench, meubels) is een aantal zinloos -> verbergen.
 	if (QtyText)
 	{
-		const bool bEquip = IdStr.StartsWith(TEXT("WaterBottle")) || IsPotItem(Id)
+		const bool bBottle = IdStr.StartsWith(TEXT("WaterBottle"));
+		const bool bEquip = IsPotItem(Id)
 			|| IdStr.StartsWith(TEXT("DryRack_")) || IdStr.StartsWith(TEXT("Bench_"))
 			|| IdStr.StartsWith(TEXT("Lamp")) || IdStr.StartsWith(TEXT("Tent"))
 			|| Id == TEXT("Shelf") || Id == TEXT("Chest") || Id == TEXT("Table")
 			|| Id == TEXT("Mattress") || Id == TEXT("Fridge") || Id == TEXT("Atm");
-		if (bEquip)
+		if (bBottle)
+		{
+			// Fles: toon GROOT hoe vol 'ie is (water / capaciteit), live tijdens vullen.
+			int32 Cur = 0, Max = 0;
+			if (const APawn* Pw = GetOwningPlayerPawn())
+			{
+				if (const UWaterCanComponent* Can = Pw->FindComponentByClass<UWaterCanComponent>())
+				{
+					Cur = Can->GetCharges(); Max = Can->GetMaxCharges();
+				}
+			}
+			QtyText->SetVisibility(ESlateVisibility::HitTestInvisible);
+			QtyText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Cur, FMath::Max(1, Max))));
+			QtyText->SetColorAndOpacity(FSlateColor((Cur <= 0) ? FLinearColor(1.f, 0.5f, 0.4f) : FLinearColor(0.4f, 0.75f, 1.f)));
+		}
+		else if (bEquip)
 		{
 			QtyText->SetVisibility(ESlateVisibility::Collapsed);
 		}

@@ -13,7 +13,7 @@ UWaterCanComponent::UWaterCanComponent()
 void UWaterCanComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(UWaterCanComponent, WaterCharges);
+	DOREPLIFETIME(UWaterCanComponent, Waters);
 }
 
 UInventoryComponent* UWaterCanComponent::GetInv() const
@@ -21,33 +21,59 @@ UInventoryComponent* UWaterCanComponent::GetInv() const
 	return GetOwner() ? GetOwner()->FindComponentByClass<UInventoryComponent>() : nullptr;
 }
 
-int32 UWaterCanComponent::GetMaxCharges() const
+FName UWaterCanComponent::ActiveBottleId() const
 {
 	const UInventoryComponent* Inv = GetInv();
-	if (!Inv) { return 0; }
-	// Alleen de fles die je NU in je hand hebt telt (niet alle flessen samen).
-	const FName Active = Inv->GetActiveItemId();
+	if (!Inv) { return NAME_None; }
+	const FName Act = Inv->GetActiveItemId();
+	return Act.ToString().StartsWith(TEXT("WaterBottle")) ? Act : NAME_None;
+}
+
+int32& UWaterCanComponent::WaterRef(FName BottleId)
+{
+	for (FBottleWater& W : Waters) { if (W.BottleId == BottleId) { return W.Charges; } }
+	FBottleWater New; New.BottleId = BottleId; New.Charges = 0;
+	const int32 Idx = Waters.Add(New);
+	return Waters[Idx].Charges;
+}
+
+int32 UWaterCanComponent::GetMaxCharges() const
+{
+	const FName Id = ActiveBottleId();
+	if (Id.IsNone()) { return 0; }
 	for (const FBottleDef& B : GetAllBottles())
 	{
-		if (B.ItemId == Active) { return B.Charges; }
+		if (B.ItemId == Id) { return B.Charges; }
 	}
+	return 0;
+}
+
+int32 UWaterCanComponent::GetCharges() const
+{
+	const FName Id = ActiveBottleId();
+	if (Id.IsNone()) { return 0; }
+	for (const FBottleWater& W : Waters) { if (W.BottleId == Id) { return W.Charges; } }
 	return 0;
 }
 
 void UWaterCanComponent::Fill()
 {
+	const FName Id = ActiveBottleId();
 	const int32 Max = GetMaxCharges();
-	if (Max <= 0) { return; }                                  // geen fles in de hand
-	if (WaterCharges > Max) { WaterCharges = Max; }            // kleinere fles vastgehouden -> klem
-	WaterCharges = FMath::Min(Max, WaterCharges + FillPerClick); // per klik een beetje (grotere fles = vaker klikken)
+	if (Id.IsNone() || Max <= 0) { return; }   // geen fles in de hand
+	int32& C = WaterRef(Id);
+	if (C > Max) { C = Max; }
+	C = FMath::Min(Max, C + FillPerClick);      // alleen DEZE fles vult (per klik een beetje)
 }
 
 bool UWaterCanComponent::TryUseCharge()
 {
+	const FName Id = ActiveBottleId();
 	const int32 Max = GetMaxCharges();
-	if (Max <= 0) { return false; }                 // alleen waterbottle-in-de-hand kan water geven
-	if (WaterCharges > Max) { WaterCharges = Max; }
-	if (WaterCharges <= 0) { return false; }
-	--WaterCharges;
+	if (Id.IsNone() || Max <= 0) { return false; }
+	int32& C = WaterRef(Id);
+	if (C > Max) { C = Max; }
+	if (C <= 0) { return false; }
+	--C;
 	return true;
 }
