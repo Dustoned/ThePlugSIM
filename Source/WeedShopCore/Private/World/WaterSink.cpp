@@ -74,8 +74,10 @@ void AWaterSink::Interact_Implementation(APawn* InstigatorPawn)
 	Can->Fill();
 	if (GEngine)
 	{
-		UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Cyan,
-			FString::Printf(TEXT("Bottle filled (%d/%d)."), Can->GetCharges(), Can->GetMaxCharges()));
+		const int32 Cur = Can->GetCharges(); const int32 Max = Can->GetMaxCharges();
+		UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.f, FColor::Cyan, (Cur >= Max)
+			? FString::Printf(TEXT("Bottle full (%d/%d)."), Cur, Max)
+			: FString::Printf(TEXT("Filling... (%d/%d) - keep clicking"), Cur, Max));
 	}
 }
 

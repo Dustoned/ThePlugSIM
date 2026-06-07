@@ -42,4 +42,8 @@ protected:
 	// Hoeveel water er nu in de fles zit.
 	UPROPERTY(Replicated)
 	int32 WaterCharges = 0;
+
+	// Hoeveel slokken er per klik (per gootsteen-interact) bijkomen. Grotere fles -> vaker klikken.
+	UPROPERTY(EditAnywhere, Category = "WeedShop|Water")
+	int32 FillPerClick = 3;
 };

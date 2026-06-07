@@ -24,30 +24,30 @@ UInventoryComponent* UWaterCanComponent::GetInv() const
 int32 UWaterCanComponent::GetMaxCharges() const
 {
 	const UInventoryComponent* Inv = GetInv();
-	if (!Inv)
-	{
-		return 0;
-	}
-	// Capaciteit = som over alle flessen die je draagt (betere fles = meer slokken).
-	int32 Total = 0;
+	if (!Inv) { return 0; }
+	// Alleen de fles die je NU in je hand hebt telt (niet alle flessen samen).
+	const FName Active = Inv->GetActiveItemId();
 	for (const FBottleDef& B : GetAllBottles())
 	{
-		Total += B.Charges * Inv->GetQuantity(B.ItemId);
+		if (B.ItemId == Active) { return B.Charges; }
 	}
-	return Total;
+	return 0;
 }
 
 void UWaterCanComponent::Fill()
 {
-	WaterCharges = GetMaxCharges();
+	const int32 Max = GetMaxCharges();
+	if (Max <= 0) { return; }                                  // geen fles in de hand
+	if (WaterCharges > Max) { WaterCharges = Max; }            // kleinere fles vastgehouden -> klem
+	WaterCharges = FMath::Min(Max, WaterCharges + FillPerClick); // per klik een beetje (grotere fles = vaker klikken)
 }
 
 bool UWaterCanComponent::TryUseCharge()
 {
-	if (GetMaxCharges() <= 0 || WaterCharges <= 0)
-	{
-		return false;
-	}
+	const int32 Max = GetMaxCharges();
+	if (Max <= 0) { return false; }                 // alleen waterbottle-in-de-hand kan water geven
+	if (WaterCharges > Max) { WaterCharges = Max; }
+	if (WaterCharges <= 0) { return false; }
 	--WaterCharges;
 	return true;
 }

@@ -173,7 +173,22 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 
 	if (SlotIndex >= 0)
 	{
-		// Drop op een hotbar-slot -> toewijzen (Assign wisselt netjes als 'ie al ergens stond).
+		// Drop op een hotbar-slot met HETZELFDE stapelbare item -> samenvoegen (blijft op de hotbar).
+		if (StackId != 0 && StackId != Op->StackId)
+		{
+			const int32 ThisIdx = Inv->FindStackById(StackId);
+			const int32 DragIdx = Inv->FindStackById(Op->StackId);
+			const TArray<FInventoryStack>& St = Inv->GetStacks();
+			if (St.IsValidIndex(ThisIdx) && St.IsValidIndex(DragIdx)
+				&& St[ThisIdx].ItemId == St[DragIdx].ItemId && St[ThisIdx].ItemId != FName(TEXT("Cash"))
+				&& UInventoryComponent::IsStackable(St[ThisIdx].ItemId))
+			{
+				Inv->RequestMergeTwo(StackId, Op->StackId); // in de hotbar-stapel samenvoegen
+				if (Owner.IsValid()) { Owner->MarkDirty(); }
+				return true;
+			}
+		}
+		// Anders: toewijzen (Assign wisselt netjes als 'ie al ergens stond).
 		Inv->AssignHotbarStack(SlotIndex, Op->StackId);
 	}
 	else if (GridCell >= 0)
