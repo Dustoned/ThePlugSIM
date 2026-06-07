@@ -316,9 +316,9 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Mesh_Cheap"))      { return 10; }
 	if (S == TEXT("Mesh_Std"))        { return 20; }
 	if (S == TEXT("Mesh_Pro"))        { return 30; }
-	if (S == TEXT("Press_Cheap"))     { return 16; }
-	if (S == TEXT("Press_Std"))       { return 26; }
-	if (S == TEXT("Press_Pro"))       { return 34; }
+	if (S == TEXT("Press_Cheap"))     { return 10; }
+	if (S == TEXT("Press_Std"))       { return 20; }
+	if (S == TEXT("Press_Pro"))       { return 30; }
 	// Losse upgrade-gear
 	if (S == TEXT("DryUp_Fan"))       { return 12; }
 	if (S == TEXT("DryUp_Seal"))      { return 18; }
