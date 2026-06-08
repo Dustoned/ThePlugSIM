@@ -1222,7 +1222,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			const float JambW = 9.f, Proud = WallT + 6.f, zc = zS + topH * 0.5f;
 			Box(dC - openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, true);                 // linker stijl
 			Box(dC + openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, true);                 // rechter stijl
-			Box(dC, s, openW + 2.f * JambW, Proud, zS + topH + 6.f, 12.f, ADoorC, true);     // bovendorpel
+			// Bovendorpel: vult het gat boven de deur (deur is iets lager dan de opening) -> geen doorkijk meer.
+			Box(dC, s, openW + 2.f * JambW, Proud, zS + topH - 5.f, 18.f, ADoorC, true);
 		};
 
 		for (int32 f = 0; f < NF; ++f)
