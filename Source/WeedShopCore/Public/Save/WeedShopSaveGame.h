@@ -119,6 +119,9 @@ struct FPlayerSaveData
 	// Gekochte woningen (indices in CityGenerator::ApartmentHomes) + de actieve woon-/spawn-plek.
 	UPROPERTY() TArray<int32> OwnedHomes;
 	UPROPERTY() int32 ActiveHome = -1;
+
+	// Speler-skin (0 = man, 1 = vrouw).
+	UPROPERTY() uint8 Skin = 0;
 };
 
 UCLASS()

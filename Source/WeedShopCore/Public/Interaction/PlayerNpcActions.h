@@ -23,4 +23,8 @@ class IPlayerNpcActions
 public:
 	// Geef de aangewezen klant een joint (zelfde effect als de hold-LMB sample-flow).
 	virtual void GiveJointToCustomer(ACustomerBase* Customer) {}
+
+	// Speler-skin (0 = man, 1 = vrouw, uitbreidbaar). Voor de settings-UI + save (cross-module via deze interface).
+	virtual uint8 GetPlayerSkinIndex() const { return 0; }
+	virtual void SetPlayerSkinIndex(uint8 SkinIndex) {}
 };

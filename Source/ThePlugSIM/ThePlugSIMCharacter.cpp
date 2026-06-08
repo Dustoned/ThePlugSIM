@@ -9,6 +9,8 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
+#include "Net/UnrealNetwork.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -257,6 +259,40 @@ void AThePlugSIMCharacter::ServerDropActiveItem_Implementation()
 			P->Setup(St.ItemId, St.Quantity, St.Quality, St.QualityPct);
 		}
 	}
+}
+
+void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AThePlugSIMCharacter, PlayerSkin);
+}
+
+void AThePlugSIMCharacter::ApplySkinMesh()
+{
+	USkeletalMeshComponent* M = GetMesh();
+	if (!M) { return; }
+	// Man = Manny, Vrouw = Quinn. Beide delen het mannequin-skelet, dus de AnimBP blijft werken (geen retarget).
+	const TCHAR* Path = (PlayerSkin == 1)
+		? TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple")
+		: TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple");
+	if (USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path))
+	{
+		M->SetSkeletalMeshAsset(Skin);
+	}
+}
+
+void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
+
+void AThePlugSIMCharacter::ServerSetSkin_Implementation(uint8 NewSkin)
+{
+	PlayerSkin = (NewSkin >= 1) ? 1 : 0;
+	ApplySkinMesh(); // server lokaal toepassen; repliceert naar clients -> OnRep_Skin
+}
+
+void AThePlugSIMCharacter::RestoreSkin(uint8 S)
+{
+	PlayerSkin = (S >= 1) ? 1 : 0;
+	ApplySkinMesh();
 }
 
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
@@ -791,6 +827,8 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 void AThePlugSIMCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	ApplySkinMesh(); // skin toepassen (default man; save-restore/keuze overschrijft via RestoreSkin/OnRep)
 
 	// Spawn-plek onthouden als gegarandeerd-veilige terugval voor anti-stuck.
 	InitialSpawnLoc = GetActorLocation();

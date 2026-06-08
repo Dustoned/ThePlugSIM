@@ -7,6 +7,7 @@
 #include "World/DayCycleComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Inventory/InventoryComponent.h"
+#include "Interaction/PlayerNpcActions.h"
 #include "Progression/MilestoneComponent.h"
 #include "Progression/GoalsComponent.h"
 #include "Progression/UpgradeComponent.h"
@@ -524,6 +525,8 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 	}
 	// (Water zit nu in het Quality-veld van elke fles-stack en gaat dus mee via Out.Items — geen aparte opslag.)
 
+	if (const IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(Pawn)) { Out.Skin = Skn->GetPlayerSkinIndex(); }
+
 	// Sla op waar de speler staat + kijkt (kijkrichting van de controller, niet de body).
 	Out.bHasTransform = true;
 	Out.Location = Pawn->GetActorLocation();
@@ -547,6 +550,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 		Ph->RestoreRent(Data.RentDueDay, Data.bRentIntroShown);
 		for (const FSavePendingDelivery& P : Data.Pending) { Ph->RestoreDeliverInstant(P.Ids, P.Qtys); }
 	}
+	if (IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(Pawn)) { Skn->SetPlayerSkinIndex(Data.Skin); }
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
 		// Zet de stacks EXACT terug op hun opgeslagen slot (geen merge/sortering -> slots wisselen niet).

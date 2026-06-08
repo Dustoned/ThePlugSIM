@@ -4,6 +4,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Save/SaveGameSubsystem.h"
 #include "GameFramework/PlayerState.h"
+#include "Interaction/PlayerNpcActions.h"
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
 #include "World/HeatComponent.h"
@@ -294,6 +295,22 @@ void UPhoneWidget::FillSettingsBody()
 	}
 	else // Status
 	{
+		// --- Character skin: kies man of vrouw (gerepliceerd zodat je co-op maat je skin ziet) ---
+		{
+			IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
+			const uint8 Cur = Skn ? Skn->GetPlayerSkinIndex() : 0;
+			BodyRow(MakeText(TEXT("Character"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+			UHorizontalBox* GBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
+			UWeedActionButton* MaleB = MakeActionBtn(TEXT("Male"),
+				(Cur == 0) ? FLinearColor(0.20f, 0.55f, 0.85f) : FLinearColor(0.15f, 0.16f, 0.21f),
+				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(0); } FillSettingsBody(); }, 13);
+			UWeedActionButton* FemB = MakeActionBtn(TEXT("Female"),
+				(Cur == 1) ? FLinearColor(0.78f, 0.32f, 0.55f) : FLinearColor(0.15f, 0.16f, 0.21f),
+				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(1); } FillSettingsBody(); }, 13);
+			GBtns->AddChildToHorizontalBox(MaleB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			GBtns->AddChildToHorizontalBox(FemB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			BodyRow(GBtns, FMargin(0.f, 0.f, 0.f, 10.f));
+		}
 		if (GS && GS->GetLeveling())
 		{
 			ULevelComponent* Lv = GS->GetLeveling();

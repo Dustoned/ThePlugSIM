@@ -53,6 +53,20 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UFUNCTION(Server, Reliable)
 	void ServerDropActiveItem();
 
+	// --- Speler-skin (man/vrouw, uitbreidbaar). Gerepliceerd zodat co-op je skin ziet. ---
+	UPROPERTY(ReplicatedUsing = OnRep_Skin)
+	uint8 PlayerSkin = 0; // 0 = man (Manny), 1 = vrouw (Quinn)
+	UFUNCTION()
+	void OnRep_Skin();
+	void ApplySkinMesh();
+public:
+	// Server: zet de skin-keuze van deze speler (client roept aan -> server -> repliceert).
+	UFUNCTION(Server, Reliable)
+	void ServerSetSkin(uint8 NewSkin);
+	uint8 GetPlayerSkin() const { return PlayerSkin; }
+	void RestoreSkin(uint8 S); // save-herstel (server)
+private:
+
 	/** Voorraad: gevuld door oogst, gebruikt bij verkoop (server-authoritative, replicated). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UInventoryComponent> Inventory;
@@ -133,6 +147,7 @@ protected:
 
 	/** Geeft de speler een startvoorraad (vloei, wat wiet, een zaadje). */
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Telefoon-logica (openen, tabs, kopen, afspraken) — aangestuurd door input + HUD-klikken. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
@@ -156,6 +171,8 @@ protected:
 public:
 	/** IPlayerNpcActions: geef een specifieke klant een joint (vanuit het praat-venster). */
 	virtual void GiveJointToCustomer(ACustomerBase* Customer) override;
+	virtual uint8 GetPlayerSkinIndex() const override { return PlayerSkin; }
+	virtual void SetPlayerSkinIndex(uint8 SkinIndex) override { ServerSetSkin(SkinIndex); }
 
 	/** Open/sluit het roll-paneel (toets R) — daar kies je het aantal gram. */
 	void ToggleRollUI();
