@@ -1553,6 +1553,7 @@ void UPhoneWidget::RefreshContent()
 		{
 			const int32 i = GHomeOrder[oi]; // logische volgorde i.p.v. ruwe app-index
 			if (i == GStatsApp && !(GS && GS->IsCompetitive())) { continue; } // Leaderboard alleen in competitive
+			if (i == GHashApp) { continue; } // Lab-app weg: alle processing zit nu in Supplies -> Kitchen
 			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppKey[i], GAppIcon[i], GAppCol[i]), Cell / 3, Cell % 3);
 			GSlot->SetHorizontalAlignment(HAlign_Center);
 			++Cell;

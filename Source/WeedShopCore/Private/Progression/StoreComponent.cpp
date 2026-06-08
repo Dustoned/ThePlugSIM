@@ -483,9 +483,11 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 				|| S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Fridge_"))); break;
 			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
-			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_")); break; // Hasj-keten + upgrades
-			// Kitchen: kook-spullen voor de edibles (pan + boter) - hier komen later koekjes/bloem e.d. ook bij.
-			case 11: bMatch = S.StartsWith(TEXT("Pan_")) || S == TEXT("Butter"); break;
+			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_")); break; // (legacy) hasj-keten - nu via Kitchen
+			// Kitchen: alle bench-processing bij elkaar -> hasj (mesh/press) + edibles (pan/boter) + machine-upgrades.
+			// Hier komen later koekjes/bloem e.d. ook bij. (Oven & koelkast staan als appliances bij Furniture.)
+			case 11: bMatch = S.StartsWith(TEXT("Pan_")) || S == TEXT("Butter")
+				|| S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_")); break;
 			default: break;
 			}
 			if (bMatch) { Out.Add(Id); }
