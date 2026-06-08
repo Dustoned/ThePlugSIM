@@ -70,6 +70,14 @@ namespace
 		FLinearColor(0.95f, 0.78f, 0.25f),
 	};
 	constexpr int32 GStatsApp = 12;
+	// Logische home-volgorde (groepjes per rij van 3): produceren -> dealen -> geld/uitbreiden -> voortgang -> systeem.
+	const int32 GHomeOrder[GNumApps] = {
+		1, 7, 10,   // Grow shop, Supplies, Lab        (produceren)
+		6, 2, 3,    // Sell, Contacts, Messages        (dealen)
+		9, 0, 8,    // Bank, Upgrades, Packages        (geld / uitbreiden)
+		11, 12, 5,  // Goals, Leaderboard, Map         (voortgang / navigatie)
+		4           // Settings                        (systeem)
+	};
 	constexpr int32 GGrowApp = 1;
 	constexpr int32 GGoalsApp = 11;
 	constexpr int32 GSellApp = 6;
@@ -1540,8 +1548,9 @@ void UPhoneWidget::RefreshContent()
 		UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>();
 		Grid->SetSlotPadding(FMargin(10.f));
 		int32 Cell = 0;
-		for (int32 i = 0; i < GNumApps; ++i)
+		for (int32 oi = 0; oi < GNumApps; ++oi)
 		{
+			const int32 i = GHomeOrder[oi]; // logische volgorde i.p.v. ruwe app-index
 			if (i == GStatsApp && !(GS && GS->IsCompetitive())) { continue; } // Leaderboard alleen in competitive
 			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppKey[i], GAppIcon[i], GAppCol[i]), Cell / 3, Cell % 3);
 			GSlot->SetHorizontalAlignment(HAlign_Center);
