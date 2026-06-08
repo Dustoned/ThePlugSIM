@@ -103,6 +103,7 @@ namespace
 		case 9: return TEXT("Care");
 		case 10: return TEXT("Hash");
 		case 11: return TEXT("Kitchen");
+		case 12: return TEXT("Ingredients");
 		default: return TEXT("?");
 		}
 	}
@@ -1654,7 +1655,7 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels, keuken)
 	{
 		bSellApp = false;
-		AppCats = { 4, 2, 3, 7, 11 }; // Papers, Drying, Packing, Furniture, Kitchen (pan + boter / edibles-ingredienten)
+		AppCats = { 4, 2, 3, 7, 11, 12 }; // Papers, Drying, Packing, Furniture, Kitchen (machines), Ingredients (boter etc.)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
