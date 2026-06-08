@@ -773,7 +773,8 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		// slecht verzorgd = gewoon zwakke wiet, geen "no weed". Op hele % afgerond zodat oogsten van
 		// dezelfde kwaliteit netjes samen stapelen (en alleen echt andere batches apart blijven).
 		const float ThcRaw = Row->BaseThcPercent * QualityFrac * FMath::FRandRange(0.97f, 1.03f);
-		const float ThcPercent = FMath::RoundToFloat(FMath::Max(Row->BaseThcPercent * 0.15f, FMath::Max(1.0f, ThcRaw)));
+		// Harde realistische cap: gedroogde bud gaat NOOIT boven 40% (zelfs top-strain + perfecte setup = 40).
+		const float ThcPercent = FMath::RoundToFloat(FMath::Min(40.f, FMath::Max(Row->BaseThcPercent * 0.15f, FMath::Max(1.0f, ThcRaw))));
 		const float QualityPct = FMath::RoundToFloat(FMath::Max(5.f, QualityFrac * 100.f));
 
 		// Vers geoogst = NAT: je krijgt "WetBud_<strain>", die moet eerst drogen op een droogrek
