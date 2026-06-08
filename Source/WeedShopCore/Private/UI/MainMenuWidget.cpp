@@ -357,18 +357,18 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		// Exact opgemeten uit T_MainMenuBG.png (1672x941): balk x=145..370, 6 knoppen,
 		// gelijke tussenruimte, centers y=440/498/556/613/673/735, hoogte ~47px.
 		const float X0 = 0.083f, X1 = 0.285f, HalfH = 0.029f; // langere balken
-		const float Centers[6] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f, 0.7811f };
-		TFunction<void()> Acts[6] = {
+		// Credits er voor nu uit -> 5 knoppen (de knoppen tekenen hun eigen swatch-balk, dus geen lege plek).
+		const float Centers[5] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f };
+		TFunction<void()> Acts[5] = {
 			[this]() { OnContinue(); },  // CONTINUE -> laatst gebruikte slot
 			[this]() { OpenPicker(1); }, // NEW GAME -> kies een slot
 			[this]() { OpenPicker(2); }, // LOAD GAME -> kies een slot
 			[this]() { OnSettings(); },  // SETTINGS
-			[this]() { OnCredits(); },   // CREDITS
 			[this]() { OnQuit(); },      // EXIT GAME
 		};
-		const TCHAR* Labels[6] = { TEXT("CONTINUE"), TEXT("NEW GAME"), TEXT("LOAD GAME"), TEXT("SETTINGS"), TEXT("CREDITS"), TEXT("EXIT GAME") };
+		const TCHAR* Labels[5] = { TEXT("CONTINUE"), TEXT("NEW GAME"), TEXT("LOAD GAME"), TEXT("SETTINGS"), TEXT("EXIT GAME") };
 		MenuButtons.Reset(); MenuLabels.Reset();
-		for (int32 i = 0; i < 6; ++i)
+		for (int32 i = 0; i < 5; ++i)
 		{
 			UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
 			B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
@@ -612,7 +612,6 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 	AddBtn(TEXT("New game"),   Dark, [this]() { OnStart(); });
 	AddBtn(TEXT("Load game"),  Dark, [this]() { OnContinue(); });
 	AddBtn(TEXT("Settings"),   Dark, [this]() { OnSettings(); });
-	AddBtn(TEXT("Credits"),    Dark, [this]() { OnCredits(); });
 	AddBtn(TEXT("Exit game"),  Dark, [this]() { OnQuit(); });
 
 	StatusText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.8f, 0.7f, 1.f), false);
