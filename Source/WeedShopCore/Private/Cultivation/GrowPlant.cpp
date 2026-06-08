@@ -777,7 +777,10 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		const FString SoilS = SoilId.ToString();
 		const float SoilQ = SoilS.Contains(TEXT("Premium")) ? 1.0f : SoilS.Contains(TEXT("Rich")) ? 0.75f : 0.5f;
 		const FString PotS = PotTier.ToString();
-		const float PotQ = PotS.Contains(TEXT("Fabric")) ? 1.0f : PotS.Contains(TEXT("Plastic")) ? 0.8f : PotS.Contains(TEXT("Clay")) ? 0.6f : 0.4f;
+		float PotQ = PotS.Contains(TEXT("Fabric")) ? 0.85f : PotS.Contains(TEXT("Plastic")) ? 0.70f : PotS.Contains(TEXT("Clay")) ? 0.55f : 0.40f;
+		if (HasPotUpgrade(0)) { PotQ += 0.04f; }                                                              // drainage: +max quality
+		PotQ += HasPotUpgrade(8) ? 0.11f : HasPotUpgrade(7) ? 0.07f : HasPotUpgrade(6) ? 0.04f : 0.f;          // grow tent I/II/III
+		PotQ = FMath::Clamp(PotQ, 0.40f, 1.0f);
 		const float FertQ = FMath::Clamp(0.6f + (FertYieldMult - 1.0f), 0.6f, 1.0f);
 		const float GearQ = FMath::Clamp(0.35f * CareQ + 0.25f * SoilQ + 0.22f * PotQ + 0.18f * FertQ, 0.f, 1.f);
 		const float ThcRaw = Row->BaseThcPercent * GearQ * FMath::FRandRange(0.97f, 1.03f);
@@ -929,7 +932,10 @@ float AGrowPlant::GetEstimatedThcPercent() const
 	const FString SoilS = SoilId.ToString();
 	const float SoilQ = SoilS.Contains(TEXT("Premium")) ? 1.0f : SoilS.Contains(TEXT("Rich")) ? 0.75f : 0.5f;
 	const FString PotS = PotTier.ToString();
-	const float PotQ = PotS.Contains(TEXT("Fabric")) ? 1.0f : PotS.Contains(TEXT("Plastic")) ? 0.8f : PotS.Contains(TEXT("Clay")) ? 0.6f : 0.4f;
+	float PotQ = PotS.Contains(TEXT("Fabric")) ? 0.85f : PotS.Contains(TEXT("Plastic")) ? 0.70f : PotS.Contains(TEXT("Clay")) ? 0.55f : 0.40f;
+	if (HasPotUpgrade(0)) { PotQ += 0.04f; }
+	PotQ += HasPotUpgrade(8) ? 0.11f : HasPotUpgrade(7) ? 0.07f : HasPotUpgrade(6) ? 0.04f : 0.f;
+	PotQ = FMath::Clamp(PotQ, 0.40f, 1.0f);
 	const float FertQ = FMath::Clamp(0.6f + (FertYieldMult - 1.0f), 0.6f, 1.0f);
 	const float GearQ = FMath::Clamp(0.35f * CareQ + 0.25f * SoilQ + 0.22f * PotQ + 0.18f * FertQ, 0.f, 1.f);
 	float Sum = 0.f; int32 N = 0;
