@@ -159,6 +159,9 @@ namespace WeedUI
 		if (S == TEXT("Oven_Std"))            { return TEXT("Oven / stove"); }
 		if (S == TEXT("Pan_Std"))             { return TEXT("Cooking pan"); }
 		if (S == TEXT("Fridge_Std"))          { return TEXT("Fridge conversion"); }
+		if (S == TEXT("Oven_Pro"))            { return TEXT("Pro range cooker"); }
+		if (S == TEXT("Pan_Pro"))             { return TEXT("Pro cooktop"); }
+		if (S == TEXT("Fridge_Pro"))          { return TEXT("Walk-in fridge"); }
 		if (S == TEXT("Butter"))              { return TEXT("Butter"); }
 		if (S.StartsWith(TEXT("Crystal_")))   { return NiceName(S.RightChop(8)) + TEXT(" crystals"); }
 		if (S.StartsWith(TEXT("Hash_")))      { return NiceName(S.RightChop(5)) + TEXT(" hash"); }

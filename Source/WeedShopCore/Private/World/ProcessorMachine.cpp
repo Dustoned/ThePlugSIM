@@ -77,6 +77,10 @@ bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSec
 	if (T == TEXT("Oven_Std"))    { OutCapacity = 2; OutSeconds = 40.f;  OutConv = 0.92f; OutThcMult = 1.15f; return true; }
 	if (T == TEXT("Pan_Std"))     { OutCapacity = 2; OutSeconds = 55.f;  OutConv = 0.88f; OutThcMult = 1.25f; return true; }
 	if (T == TEXT("Fridge_Std"))  { OutCapacity = 4; OutSeconds = 180.f; OutConv = 1.00f; OutThcMult = 1.55f; return true; }
+	// Pro-edibles: sneller + grotere capaciteit + iets minder verlies (zelfde THC -> hasj blijft de 90%-top).
+	if (T == TEXT("Oven_Pro"))    { OutCapacity = 4; OutSeconds = 25.f;  OutConv = 0.96f; OutThcMult = 1.15f; return true; }
+	if (T == TEXT("Pan_Pro"))     { OutCapacity = 4; OutSeconds = 35.f;  OutConv = 0.94f; OutThcMult = 1.25f; return true; }
+	if (T == TEXT("Fridge_Pro"))  { OutCapacity = 8; OutSeconds = 110.f; OutConv = 1.00f; OutThcMult = 1.55f; return true; }
 	OutCapacity = 1; OutSeconds = 60.f; OutConv = 0.15f; OutThcMult = 2.0f; return false;
 }
 

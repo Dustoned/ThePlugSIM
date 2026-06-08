@@ -149,6 +149,10 @@ namespace
 		{ TEXT("Pan_Std"),     TEXT("Cooking pan"),          TEXT("Baked weed + butter -> cannabutter mix (~55s)"),     14000, 1 },
 		{ TEXT("Fridge_Std"),  TEXT("Fridge conversion"),    TEXT("Turn a fridge into a setting unit: butter mix -> edibles, big THC (~3 min)"), 7000, 1 },
 		{ TEXT("Butter"),      TEXT("Butter"),               TEXT("Cooking ingredient for the pan (cannabutter)"),        300, 1 },
+		// Pro-edibles: sneller + grotere capaciteit (zelfde THC). Voor massa-productie.
+		{ TEXT("Oven_Pro"),    TEXT("Pro range cooker"),     TEXT("Faster bake + 4 batches (~25s)"),                    30000, 1 },
+		{ TEXT("Pan_Pro"),     TEXT("Pro cooktop"),          TEXT("Faster cook + 4 batches, less loss (~35s)"),         36000, 1 },
+		{ TEXT("Fridge_Pro"),  TEXT("Walk-in fridge"),       TEXT("Sets 8 batches, faster (~110s)"),                    42000, 1 },
 		// Losse upgrade-gear voor droogrek / hasj-machines (zet 'm vlakbij de machine).
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("Nearby drying rack: ~30% faster"),        9000,  1 },
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("Nearby drying rack: keeps quality higher"), 14000, 1 },
@@ -334,6 +338,10 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Oven_Std"))        { return 9; }
 	if (S == TEXT("Pan_Std"))         { return 9; }
 	if (S == TEXT("Fridge_Std"))      { return 9; }
+	// Pro-edibles unlocken samen later (massa-productie).
+	if (S == TEXT("Oven_Pro"))        { return 21; }
+	if (S == TEXT("Pan_Pro"))         { return 21; }
+	if (S == TEXT("Fridge_Pro"))      { return 21; }
 	// Losse upgrade-gear
 	if (S == TEXT("DryUp_Fan"))       { return 12; }
 	if (S == TEXT("DryUp_Seal"))      { return 18; }
