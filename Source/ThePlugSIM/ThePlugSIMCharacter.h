@@ -59,6 +59,15 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UFUNCTION()
 	void OnRep_Skin();
 	void ApplySkinMesh();
+
+	// --- 3rd-person toggle (toets B): bekijk jezelf / je skin ---
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<class USpringArmComponent> ThirdPersonBoom;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<class UCameraComponent> ThirdPersonCamera;
+	bool bThirdPerson = false;
+	bool bTpKeyWasDown = false; // edge-detect voor de toggle-toets
+	void ToggleThirdPerson();
 public:
 	// Server: zet de skin-keuze van deze speler (client roept aan -> server -> repliceert).
 	UFUNCTION(Server, Reliable)

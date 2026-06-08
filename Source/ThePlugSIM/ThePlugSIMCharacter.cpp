@@ -7,6 +7,7 @@
 #include "Animation/AnimSequence.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
@@ -83,6 +84,18 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	FirstPersonCameraComponent->bEnableFirstPersonScale = true;
 	FirstPersonCameraComponent->FirstPersonFieldOfView = 70.0f;
 	FirstPersonCameraComponent->FirstPersonScale = 0.6f;
+
+	// Third-person camera op een spring-arm achter de speler — uit by default (we starten first-person).
+	// Toets B togglet 'm zodat je jezelf / je gekozen skin kunt bekijken zonder FP-camera-gedoe.
+	ThirdPersonBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("Third Person Boom"));
+	ThirdPersonBoom->SetupAttachment(GetCapsuleComponent());
+	ThirdPersonBoom->TargetArmLength = 260.f;
+	ThirdPersonBoom->SocketOffset = FVector(0.f, 40.f, 70.f);
+	ThirdPersonBoom->bUsePawnControlRotation = true;
+	ThirdPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Third Person Camera"));
+	ThirdPersonCamera->SetupAttachment(ThirdPersonBoom);
+	ThirdPersonCamera->bUsePawnControlRotation = false;
+	ThirdPersonCamera->SetActive(false);
 
 	// Held item: 3D-model van wat je vasthoudt, in de FP-view (alleen voor jezelf). Positie wordt elke tick
 	// vanuit de kijkrichting gezet (zie Tick), dus de relatieve offset hier maakt niet veel uit.
@@ -280,9 +293,18 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
 	if (!Skin) { return; }
-	// Skin alleen op de THIRD-PERSON body (zien je co-op maten). De first-person mesh (jouw armen) laten we
-	// met rust: die toont nooit een hoofd, dus je FP-view blijft clean ongeacht welke skin je kiest.
+	// Skin op de THIRD-PERSON body (zien je co-op maten + jij zelf in de 3rd-person toggle). De first-person
+	// mesh (je armen) laten we met rust: de camera hangt aan z'n "head"-bone, dus die niet aanraken = clean FP.
 	if (USkeletalMeshComponent* M = GetMesh()) { M->SetSkeletalMeshAsset(Skin); }
+}
+
+void AThePlugSIMCharacter::ToggleThirdPerson()
+{
+	bThirdPerson = !bThirdPerson;
+	if (FirstPersonCameraComponent) { FirstPersonCameraComponent->SetActive(!bThirdPerson); }
+	if (ThirdPersonCamera)          { ThirdPersonCamera->SetActive(bThirdPerson); }
+	if (FirstPersonMesh)            { FirstPersonMesh->SetVisibility(!bThirdPerson, true); } // armen weg in 3rd-person
+	if (USkeletalMeshComponent* M = GetMesh()) { M->SetOwnerNoSee(!bThirdPerson); }          // jouw body zichtbaar in 3rd-person
 }
 
 void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
@@ -551,6 +573,9 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 
 	// M: fullscreen stadskaart aan/uit.
 	if (Ph) { Input->BindKey(EKeys::M, IE_Pressed, Ph, &UPhoneClientComponent::ToggleMapOverlay); }
+
+	// B: wissel tussen first-person en third-person (om jezelf / je skin te bekijken).
+	Input->BindKey(EKeys::B, IE_Pressed, this, &AThePlugSIMCharacter::ToggleThirdPerson);
 
 	// Furniture-authoring hotkeys (sandbox): F8 = templates opslaan, F9 = geplaatste meubels wissen,
 	// F10 = woning-types-overzicht. Werkt zonder console.
