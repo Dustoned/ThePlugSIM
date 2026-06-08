@@ -147,76 +147,105 @@ namespace PropKit
 
 		if (S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Bud_")))
 		{
-			const FLinearColor G = S.StartsWith(TEXT("WetBud_")) ? FLinearColor(0.17f, 0.34f, 0.15f) : FLinearColor(0.26f, 0.52f, 0.22f);
-			P(Sp, FVector(6, 6, 6), FVector(0, 0, 0), G);
-			P(Sp, FVector(4.2f, 4.2f, 4.2f), FVector(2.6f, 1.0f, 1.8f), G * 1.12f);
-			P(Sp, FVector(4.0f, 4.0f, 4.0f), FVector(-2.2f, 1.8f, 1.4f), G * 0.9f);
-			P(Sp, FVector(3.6f, 3.6f, 3.6f), FVector(0.4f, -2.4f, 2.4f), G);
-			P(Co, FVector(1.0f, 1.0f, 3.0f), FVector(0.5f, 0, 4.2f), FLinearColor(0.72f, 0.4f, 0.15f)); // oranje haartje
+			const bool bWet = S.StartsWith(TEXT("WetBud_"));
+			const FLinearColor G = bWet ? FLinearColor(0.16f, 0.33f, 0.14f) : FLinearColor(0.27f, 0.54f, 0.23f);
+			const FLinearColor Gl = G * 1.22f; // frosty topjes
+			P(Sp, FVector(6.4f, 6.4f, 7.4f), FVector(0, 0, 0), G);                       // kern
+			P(Sp, FVector(4.6f, 4.6f, 4.6f), FVector(2.7f, 1.0f, 2.0f), Gl);
+			P(Sp, FVector(4.4f, 4.4f, 4.4f), FVector(-2.5f, 1.6f, 1.5f), G);
+			P(Sp, FVector(4.0f, 4.0f, 4.0f), FVector(0.6f, -2.6f, 2.7f), Gl);
+			P(Sp, FVector(3.6f, 3.6f, 3.6f), FVector(1.6f, 2.2f, -1.8f), G);
+			P(Sp, FVector(3.4f, 3.4f, 3.4f), FVector(-1.9f, -1.6f, -1.9f), Gl);
+			P(Co, FVector(0.9f, 0.9f, 3.2f), FVector(0.8f, 0.2f, 4.7f), FLinearColor(0.80f, 0.42f, 0.14f));            // oranje haartje
+			P(Co, FVector(0.8f, 0.8f, 2.6f), FVector(-1.6f, 0.7f, 3.9f), FLinearColor(0.72f, 0.36f, 0.12f), FRotator(20, 0, 30));
+			P(Cy, FVector(0.9f, 0.9f, 2.6f), FVector(0, 0, -4.4f), FLinearColor(0.30f, 0.40f, 0.20f));                 // stengeltje
 		}
 		else if (S.StartsWith(TEXT("Bag_")))
 		{
-			P(Cu, FVector(7, 2.6f, 8), FVector(0, 0, 0), FLinearColor(0.74f, 0.71f, 0.55f)); // zakje (plat)
-			P(Sp, FVector(4, 2.0f, 4), FVector(0, 0, -1.0f), FLinearColor(0.25f, 0.5f, 0.22f)); // groene inhoud
-			P(Cu, FVector(7.6f, 3.0f, 1.6f), FVector(0, 0, 4.4f), FLinearColor(0.5f, 0.5f, 0.46f)); // zip-sluiting
+			P(Cu, FVector(7.0f, 2.6f, 7.4f), FVector(0, 0, -0.3f), FLinearColor(0.80f, 0.78f, 0.62f)); // zakje
+			P(Sp, FVector(6.8f, 2.6f, 3.4f), FVector(0, 0, -4.0f), FLinearColor(0.80f, 0.78f, 0.62f)); // ronde bodem
+			P(Sp, FVector(3.2f, 1.9f, 3.2f), FVector(1.1f, 0, -1.4f), FLinearColor(0.26f, 0.50f, 0.22f)); // bud inhoud
+			P(Sp, FVector(2.6f, 1.7f, 2.6f), FVector(-1.5f, 0, -3.0f), FLinearColor(0.22f, 0.45f, 0.20f));
+			P(Cu, FVector(7.6f, 3.0f, 1.2f), FVector(0, 0, 3.9f), FLinearColor(0.55f, 0.55f, 0.50f)); // zip-strook
+			P(Cu, FVector(7.7f, 3.2f, 0.4f), FVector(0, 0, 3.2f), FLinearColor(0.42f, 0.42f, 0.40f)); // zip-lijn
 		}
 		else if (S.StartsWith(TEXT("Joint_")))
 		{
-			P(Cy, FVector(1.7f, 1.7f, 11), FVector(0, 0, 0), FLinearColor(0.95f, 0.94f, 0.88f)); // vloei
-			P(Cy, FVector(1.8f, 1.8f, 2.4f), FVector(0, 0, -5.3f), FLinearColor(0.78f, 0.6f, 0.35f)); // filter
-			P(Sp, FVector(1.5f, 1.5f, 1.5f), FVector(0, 0, 5.8f), FLinearColor(1.0f, 0.45f, 0.12f)); // gloed
+			P(Cy, FVector(1.8f, 1.8f, 10.2f), FVector(0, 0, 0), FLinearColor(0.96f, 0.95f, 0.90f));  // vloei
+			P(Co, FVector(1.8f, 1.8f, 2.6f), FVector(0, 0, 6.2f), FLinearColor(0.90f, 0.88f, 0.80f)); // gedraaide top
+			P(Cy, FVector(1.9f, 1.9f, 2.6f), FVector(0, 0, -5.0f), FLinearColor(0.76f, 0.58f, 0.34f)); // filter
+			P(Cy, FVector(1.92f, 1.92f, 0.4f), FVector(0, 0, -3.7f), FLinearColor(0.60f, 0.45f, 0.25f)); // filter-lijn
+			P(Sp, FVector(1.7f, 1.7f, 1.7f), FVector(0, 0, 7.4f), FLinearColor(1.0f, 0.5f, 0.12f));    // gloed
+			P(Sp, FVector(0.9f, 0.9f, 0.9f), FVector(0, 0, 7.9f), FLinearColor(1.0f, 0.85f, 0.30f));   // hete kern
 		}
 		else if (S.StartsWith(TEXT("WaterBottle")))
 		{
-			P(Cy, FVector(6, 6, 13), FVector(0, 0, 0), FLinearColor(0.30f, 0.5f, 0.7f)); // fles
-			P(Cy, FVector(3, 3, 3), FVector(0, 0, 7.6f), FLinearColor(0.30f, 0.5f, 0.7f)); // hals
-			P(Cy, FVector(3.4f, 3.4f, 2), FVector(0, 0, 9.4f), FLinearColor(0.15f, 0.4f, 0.2f)); // dop
+			P(Cy, FVector(6.2f, 6.2f, 11.0f), FVector(0, 0, -0.5f), FLinearColor(0.32f, 0.52f, 0.72f)); // fles
+			P(Cy, FVector(6.5f, 6.5f, 0.9f), FVector(0, 0, 2.6f), FLinearColor(0.28f, 0.46f, 0.66f));   // ribbel
+			P(Cy, FVector(6.5f, 6.5f, 0.9f), FVector(0, 0, -1.6f), FLinearColor(0.28f, 0.46f, 0.66f));  // ribbel
+			P(Cy, FVector(6.45f, 6.45f, 3.4f), FVector(0, 0, -1.5f), FLinearColor(0.95f, 0.95f, 0.97f)); // label
+			P(Cy, FVector(3.2f, 3.2f, 3.0f), FVector(0, 0, 6.0f), FLinearColor(0.32f, 0.52f, 0.72f));   // hals
+			P(Cy, FVector(3.7f, 3.7f, 2.2f), FVector(0, 0, 7.8f), FLinearColor(0.15f, 0.40f, 0.20f));   // dop
 		}
 		else if (S.StartsWith(TEXT("Seed_")))
 		{
-			P(Sp, FVector(2.6f, 2.6f, 3.4f), FVector(0, 0, 0), FLinearColor(0.5f, 0.4f, 0.25f)); // zaadje
-			P(Cu, FVector(0.5f, 2.7f, 3.4f), FVector(0, 0, 0), FLinearColor(0.3f, 0.24f, 0.14f)); // streep
+			P(Sp, FVector(2.7f, 2.9f, 3.6f), FVector(0, 0, 0), FLinearColor(0.52f, 0.42f, 0.27f));   // ovaal zaadje
+			P(Co, FVector(1.7f, 1.8f, 1.9f), FVector(0, 0, 2.1f), FLinearColor(0.50f, 0.40f, 0.25f)); // puntje
+			P(Cu, FVector(0.4f, 3.0f, 3.6f), FVector(0, 0, 0), FLinearColor(0.28f, 0.22f, 0.13f));    // naad
+			P(Cu, FVector(3.0f, 0.4f, 1.8f), FVector(0, 0, 0.5f), FLinearColor(0.60f, 0.50f, 0.32f), FRotator(0, 0, 30)); // tijger-streep
 		}
 		else if (S.StartsWith(TEXT("Crystal_")))
 		{
-			const FLinearColor K(0.82f, 0.86f, 0.95f);
-			P(Cu, FVector(3, 3, 3), FVector(0, 0, 0), K, FRotator(20, 30, 15));
-			P(Cu, FVector(2.4f, 2.4f, 2.4f), FVector(2.6f, 1, 1), K, FRotator(40, 10, 25));
-			P(Cu, FVector(2.0f, 2.0f, 2.0f), FVector(-2.1f, 1.4f, 1.4f), K, FRotator(10, 50, 5));
+			const FLinearColor K(0.84f, 0.88f, 0.97f), K2(0.70f, 0.78f, 0.92f);
+			P(Cu, FVector(3.2f, 3.2f, 3.6f), FVector(0, 0, 0), K, FRotator(20, 30, 15));
+			P(Cu, FVector(2.6f, 2.6f, 3.0f), FVector(2.6f, 1.0f, 0.5f), K2, FRotator(40, 10, 25));
+			P(Cu, FVector(2.2f, 2.2f, 2.6f), FVector(-2.2f, 1.4f, 1.0f), K, FRotator(10, 50, 5));
+			P(Cu, FVector(1.8f, 1.8f, 2.2f), FVector(0.5f, -2.2f, 1.2f), K2, FRotator(35, 20, 40));
+			P(Sp, FVector(0.8f, 0.8f, 0.8f), FVector(1.2f, 0.5f, 2.6f), FLinearColor(1, 1, 1)); // glinster
 		}
 		else if (S.StartsWith(TEXT("Hash_")))
 		{
-			P(Cu, FVector(6, 6, 3.6f), FVector(0, 0, 0), FLinearColor(0.32f, 0.2f, 0.11f)); // blok
-			P(Cu, FVector(6.2f, 2, 3.8f), FVector(0, 0, 0), FLinearColor(0.42f, 0.28f, 0.16f)); // lichtere streep
+			P(Cu, FVector(5.6f, 5.6f, 3.6f), FVector(0, 0, 0), FLinearColor(0.30f, 0.19f, 0.10f));   // blok
+			P(Sp, FVector(3.0f, 3.0f, 2.6f), FVector(1.5f, 1.5f, 1.6f), FLinearColor(0.36f, 0.24f, 0.14f)); // ronde brok
+			P(Cu, FVector(5.8f, 1.6f, 3.8f), FVector(0, -0.5f, 0), FLinearColor(0.42f, 0.28f, 0.16f), FRotator(0, 0, 8)); // swirl
+			P(Cu, FVector(2.4f, 2.4f, 2.4f), FVector(-2.5f, -2.0f, 1.7f), FLinearColor(0.24f, 0.15f, 0.08f), FRotator(15, 20, 10)); // afgebroken hoek
 		}
 		else if (S.StartsWith(TEXT("Papers_")))
 		{
-			P(Cu, FVector(5, 1.3f, 8), FVector(0, 0, 0), FLinearColor(0.9f, 0.88f, 0.8f)); // boekje
-			P(Cu, FVector(5.2f, 1.5f, 2.6f), FVector(0, 0.2f, 5.2f), FLinearColor(0.75f, 0.6f, 0.35f)); // kaft-flap
+			P(Cu, FVector(5.0f, 1.5f, 8.0f), FVector(0, 0, 0), FLinearColor(0.90f, 0.88f, 0.82f));    // boekje
+			P(Cu, FVector(5.2f, 0.5f, 8.2f), FVector(0, 0.55f, 0), FLinearColor(0.85f, 0.45f, 0.25f)); // gekleurde kaft
+			P(Cu, FVector(4.4f, 0.4f, 2.2f), FVector(0, -0.2f, 5.0f), FLinearColor(0.97f, 0.96f, 0.92f), FRotator(12, 0, 0)); // velletje eruit
+			P(Cu, FVector(2.6f, 0.6f, 1.2f), FVector(0, 0.62f, 0), FLinearColor(0.20f, 0.20f, 0.20f)); // merk-label
 		}
 		else if (S.StartsWith(TEXT("Soil_")))
 		{
-			P(Cu, FVector(8, 6, 10), FVector(0, 0, 0), FLinearColor(0.32f, 0.23f, 0.16f)); // zak
-			P(Cu, FVector(8.4f, 6.4f, 2.6f), FVector(0, 0, 5.5f), FLinearColor(0.26f, 0.18f, 0.12f)); // gevouwen top
-			P(Cu, FVector(5, 0.3f, 4), FVector(0, 3.1f, 0), FLinearColor(0.55f, 0.45f, 0.3f)); // label
+			P(Cu, FVector(7.5f, 5.8f, 9.0f), FVector(0, 0, -0.5f), FLinearColor(0.33f, 0.24f, 0.17f)); // zak
+			P(Cu, FVector(7.9f, 6.2f, 2.4f), FVector(0, 0, 5.0f), FLinearColor(0.26f, 0.18f, 0.12f));  // gevouwen top
+			P(Cu, FVector(2.0f, 6.3f, 2.0f), FVector(0, 0, 5.8f), FLinearColor(0.24f, 0.16f, 0.10f), FRotator(0, 0, 90)); // vouw
+			P(Cu, FVector(5.0f, 0.3f, 4.5f), FVector(0, 2.95f, -0.5f), FLinearColor(0.60f, 0.85f, 0.45f)); // groen label
+			P(Sp, FVector(1.4f, 1.4f, 1.0f), FVector(1.5f, 0, 5.8f), FLinearColor(0.20f, 0.14f, 0.08f)); // gemorste aarde
 		}
 		else if (S.StartsWith(TEXT("Pot_")))
 		{
-			P(Co, FVector(11, 11, 11), FVector(0, 0, 0), FLinearColor(0.62f, 0.34f, 0.2f), FRotator(180, 0, 0)); // pot (omgekeerde kegel)
-			P(Cy, FVector(12, 12, 2), FVector(0, 0, 5.2f), FLinearColor(0.55f, 0.3f, 0.18f)); // rand
-			P(Cy, FVector(10, 10, 1.5f), FVector(0, 0, 4.3f), FLinearColor(0.2f, 0.15f, 0.1f)); // aarde
+			P(Co, FVector(10.5f, 10.5f, 10.0f), FVector(0, 0, -0.5f), FLinearColor(0.64f, 0.36f, 0.22f), FRotator(180, 0, 0)); // taps pot
+			P(Cy, FVector(11.5f, 11.5f, 2.2f), FVector(0, 0, 4.8f), FLinearColor(0.58f, 0.32f, 0.19f)); // rand
+			P(Cy, FVector(9.6f, 9.6f, 1.6f), FVector(0, 0, 4.1f), FLinearColor(0.18f, 0.13f, 0.09f));   // aarde
+			P(Cy, FVector(6.6f, 6.6f, 1.2f), FVector(0, 0, -5.0f), FLinearColor(0.50f, 0.28f, 0.16f));  // voet/schotel
 		}
 		else if (S == TEXT("Cash"))
 		{
-			const FLinearColor Money(0.25f, 0.55f, 0.32f);
-			P(Cu, FVector(8, 5, 1.2f), FVector(0, 0, 0), Money);
-			P(Cu, FVector(8, 5, 1.2f), FVector(0.4f, 0.3f, 1.3f), Money * 1.12f);
-			P(Cu, FVector(8, 5, 1.2f), FVector(-0.3f, -0.2f, 2.6f), Money * 0.92f);
-			P(Cu, FVector(2, 5.4f, 4), FVector(0, 0, 1.3f), FLinearColor(0.85f, 0.3f, 0.3f)); // bandje
+			const FLinearColor Money(0.26f, 0.56f, 0.33f);
+			P(Cu, FVector(8, 5, 1.0f), FVector(0, 0, 0), Money);
+			P(Cu, FVector(8, 5, 1.0f), FVector(0.3f, 0.2f, 1.0f), Money * 1.08f);
+			P(Cu, FVector(8, 5, 1.0f), FVector(-0.2f, 0.4f, 2.0f), Money * 0.95f);
+			P(Cu, FVector(8, 5, 1.0f), FVector(0.4f, -0.2f, 3.0f), Money * 1.05f);
+			P(Cu, FVector(2.2f, 5.4f, 4.4f), FVector(0, 0, 1.5f), FLinearColor(0.88f, 0.32f, 0.32f)); // bandje
+			P(Cu, FVector(1.8f, 1.8f, 0.3f), FVector(0, 0, 3.6f), FLinearColor(0.90f, 0.85f, 0.40f)); // stempel
 		}
 		else
 		{
-			P(Cu, FVector(7, 7, 7), FVector(0, 0, 0), FLinearColor(0.6f, 0.6f, 0.65f));
+			P(Cu, FVector(6.5f, 6.5f, 6.5f), FVector(0, 0, 0), FLinearColor(0.60f, 0.60f, 0.65f));
+			P(Cu, FVector(7.0f, 1.0f, 7.0f), FVector(0, 0, 0), FLinearColor(0.50f, 0.50f, 0.55f), FRotator(0, 0, 45)); // "?"-markering
 		}
 	}
 
