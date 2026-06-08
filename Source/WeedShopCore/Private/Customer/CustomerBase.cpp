@@ -238,7 +238,8 @@ void ACustomerBase::BeginPlay()
 		{
 			const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
 			UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
-			TArray<FName> Eligible;            // strains binnen (net boven) je level
+			// In-aanmerking-komende strains (ontgrendeld + kleine buffer) MET hun unlock-level (proxy voor THC/prijs).
+			TArray<TPair<int32, FName>> Eligible;
 			FName LowestStrain; int32 LowestLvl = MAX_int32;
 			for (const FName& Row : ProductTable->GetRowNames())
 			{
@@ -247,9 +248,20 @@ void ACustomerBase::BeginPlay()
 				const FName Strain(*RS.RightChop(4));
 				const int32 Lvl = Store ? Store->RequiredLevelFor(Strain) : 1;
 				if (Lvl < LowestLvl) { LowestLvl = Lvl; LowestStrain = Strain; }
-				if (Lvl <= PlayerLvl + 2) { Eligible.Add(Strain); } // kleine buffer boven je level
+				if (Lvl <= PlayerLvl + 2) { Eligible.Add(TPair<int32, FName>(Lvl, Strain)); } // kleine buffer boven je level
 			}
-			FName PickStrain = (Eligible.Num() > 0) ? Eligible[FMath::RandRange(0, Eligible.Num() - 1)] : LowestStrain;
+			Eligible.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; }); // zwak -> sterk
+			// Klant-tier (1 Casual .. 5 Whale) bepaalt hoe goed: hogere tiers vragen om de STERKERE strains
+			// (bovenste deel van de lijst). Met spreiding zodat het natuurlijk blijft. Klimt mee als je levelt.
+			const int32 CTier = FMath::Clamp(GetMyCustomerTier(), 1, 5);
+			FName PickStrain = LowestStrain;
+			if (Eligible.Num() > 0)
+			{
+				const float TierFrac = (CTier - 1) / 4.f;                                  // 0 (Casual) .. 1 (Whale)
+				const float Pos = FMath::Clamp(TierFrac + FMath::FRandRange(-0.30f, 0.30f), 0.f, 1.f);
+				const int32 Idx = FMath::Clamp(FMath::RoundToInt(Pos * (Eligible.Num() - 1)), 0, Eligible.Num() - 1);
+				PickStrain = Eligible[Idx].Value;
+			}
 			// Op afspraak: gebruik exact wat in het telefoonbericht stond (strain + aantal).
 			if (bApptActive && !ApptWantStrain.IsNone()) { PickStrain = ApptWantStrain; }
 			if (!PickStrain.IsNone())
