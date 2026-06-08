@@ -132,13 +132,6 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		StonedRow = Row;
 		StonedRow->SetVisibility(ESlateVisibility::Collapsed);
 	}
-	// 6) Competitive scorebord (net worth per speler) — alleen zichtbaar in de Competitive-modus.
-	{
-		ScoreboardText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(1.f, 0.92f, 0.55f), false, true);
-		UVerticalBoxSlot* SS = VB->AddChildToVerticalBox(ScoreboardText);
-		SS->SetPadding(FMargin(0.f, 7.f, 0.f, 0.f));
-		ScoreboardText->SetVisibility(ESlateVisibility::Collapsed);
-	}
 }
 
 void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -212,20 +205,4 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// Competitive scorebord (net worth per speler, hoog->laag). Verborgen in co-op.
-	if (ScoreboardText && GS)
-	{
-		if (GS->IsCompetitive())
-		{
-			FString Txt = TEXT("- VERSUS -");
-			int32 Rank = 1;
-			for (const FCompetitorScore& C : GS->GetStandings())
-			{
-				Txt += FString::Printf(TEXT("\n%d. %s   EUR %lld"), Rank++, *C.Name, (long long)(C.NetWorthCents / 100));
-			}
-			ScoreboardText->SetText(FText::FromString(Txt));
-			ScoreboardText->SetVisibility(ESlateVisibility::HitTestInvisible);
-		}
-		else { ScoreboardText->SetVisibility(ESlateVisibility::Collapsed); }
-	}
 }
