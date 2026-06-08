@@ -445,6 +445,12 @@ bool USaveGameSubsystem::HasSave() const
 	return HasSaveInSlot(CurrentSlot);
 }
 
+FString USaveGameSubsystem::StablePlayerId(const APawn* Pawn)
+{
+	FString Id, Name; PlayerKeys(Pawn, Id, Name);
+	return Id.IsEmpty() ? Name : Id;
+}
+
 void USaveGameSubsystem::PlayerKeys(const APawn* Pawn, FString& OutId, FString& OutName)
 {
 	OutId.Empty();

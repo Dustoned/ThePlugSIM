@@ -24,6 +24,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Phone/ContactsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
+#include "Save/SaveGameSubsystem.h"
 #include "Progression/LevelComponent.h"
 #include "Progression/GoalsComponent.h"
 #include "Progression/StoreComponent.h"
@@ -326,14 +327,16 @@ bool ACustomerBase::RefreshProspect()
 
 void ACustomerBase::WriteStatsToRegistry()
 {
-	if (NpcId.IsNone())
+	// In competitive schrijven we naar de per-speler-sleutel (ActiveRelKey); in co-op naar de gedeelde NpcId.
+	const FName Key = ActiveRelKey.IsNone() ? NpcId : ActiveRelKey;
+	if (Key.IsNone())
 	{
 		return;
 	}
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetNpcRegistry())
 	{
-		GS->GetNpcRegistry()->ApplyStats(NpcId, Respect, Loyalty, Addiction);
+		GS->GetNpcRegistry()->ApplyStats(Key, Respect, Loyalty, Addiction);
 	}
 }
 
@@ -2937,6 +2940,30 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	}
 	if (ProductId.IsNone()) { ProductId = DesiredProductId; }
 	const bool bSubstitute = (ProductId != DesiredProductId);
+
+	// COMPETITIVE: respect/loyaliteit/verslaving staan PER SPELER los. Laad de relatie van de DEALENDE speler
+	// (sleutel "NpcId#spelerId") zodat elke speler z'n eigen band met deze klant opbouwt. Co-op = gedeeld.
+	if (PayTo && !NpcId.IsNone())
+	{
+		AWeedShopGameState* GScomp = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+		if (GScomp && GScomp->IsCompetitive())
+		{
+			FString Pid;
+			if (APawn* Buyer = Cast<APawn>(PayTo->GetOwner())) { Pid = USaveGameSubsystem::StablePlayerId(Buyer); }
+			if (!Pid.IsEmpty())
+			{
+				const FName Key(*FString::Printf(TEXT("%s#%s"), *NpcId.ToString(), *Pid));
+				if (UNpcRegistryComponent* Reg = GScomp->GetNpcRegistry())
+				{
+					Reg->EnsurePlayerNpc(Key, NpcId, FText());
+					float R = Respect, L = Loyalty, A = Addiction; FText Nm;
+					Reg->GetStats(Key, R, L, A, Nm);
+					Respect = R; Loyalty = L; Addiction = A;
+					ActiveRelKey = Key;
+				}
+			}
+		}
+	}
 
 	const int32 Market = GetMarketPriceForProduct(ProductId);
 	if (Market <= 0)

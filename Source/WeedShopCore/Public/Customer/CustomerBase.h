@@ -355,6 +355,9 @@ protected:
 	FName ApptWantStrain = NAME_None; // vooraf bepaalde wens (uit het afspraak-bericht)
 	int32 ApptWantQty = 0;
 	FName ApptWantProduct = NAME_None; // volledig product-id uit de afspraak (Bag_/Hash_/Edible_<strain>)
+	// COMPETITIVE: actieve relatie-sleutel ("NpcId#spelerId") van de speler die nu met deze klant dealt.
+	// NAME_None in co-op (dan geldt de gedeelde NpcId-relatie).
+	FName ActiveRelKey = NAME_None;
 	void PushApptMessage(const FString& InBody); // stuurt een chat-bericht namens deze NPC
 
 	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).

@@ -95,6 +95,10 @@ public:
 	// Server: zorg dat een specifieke NPC bestaat, bv. een vaste bewoner met huisnummer-naam.
 	FName EnsureNpc(FName NpcId, const FText& DisplayName, float BaseRespect = 15.f, float BaseLoyalty = 0.f, float BaseAddiction = 10.f);
 
+	// Competitive: per-speler relatie-entry (sleutel "NpcId#spelerId"). Beide spelers starten met DEZELFDE
+	// basis-personality (van de basis-NPC) zodat de competitie eerlijk begint; daarna bouwen ze los op.
+	FName EnsurePlayerNpc(FName Key, FName BaseNpc, const FText& DisplayName);
+
 	// Deterministische (1x) gerandomiseerde persoonlijkheid voor een NpcId. Zelfde id -> zelfde stats,
 	// zonder dat de NPC al geregistreerd hoeft te zijn (zodat de spawner vooraf kan zien wie koper is).
 	// Addiction is naar boven verdeeld: ~20% stevig verslaafd, ~25% boven de koop-drempel (30), rest lager.

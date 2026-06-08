@@ -94,6 +94,9 @@ public:
 	// Co-op speelmodus voor de volgende verse host-game: false = Co-op (samen), true = Competitive (versus).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	void SetPendingCoopCompetitive(bool bCompetitive) { bPendingCompetitive = bCompetitive; }
+
+	// Stabiele speler-id (platform net-id; valt terug op naam) — voor per-speler keys (bv. competitive relaties).
+	static FString StablePlayerId(const APawn* Pawn);
 	// Join: verbind direct met een host op IP[:poort] (LAN). Bijv. "192.168.1.50" of "192.168.1.50:7777".
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	void JoinLan(const FString& IpPort);

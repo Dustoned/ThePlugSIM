@@ -187,6 +187,19 @@ FName UNpcRegistryComponent::EnsureNpc(FName NpcId, const FText& DisplayName, fl
 	return NpcId;
 }
 
+FName UNpcRegistryComponent::EnsurePlayerNpc(FName Key, FName BaseNpc, const FText& DisplayName)
+{
+	if (GetOwnerRole() != ROLE_Authority || Key.IsNone()) { return Key; }
+	if (Find(Key)) { return Key; } // bestaat al -> die speler heeft al een relatie met deze NPC
+	FNpcState S;
+	S.NpcId = Key;
+	S.DisplayName = DisplayName.IsEmpty() ? FText::FromName(BaseNpc) : DisplayName;
+	// Seed vanuit de BASIS-NPC, niet de speler-sleutel: beide spelers starten identiek bij dezelfde persoon.
+	PredictPersonality(BaseNpc, S.Respect, S.Loyalty, S.Addiction);
+	States.Add(S);
+	return Key;
+}
+
 FNpcState* UNpcRegistryComponent::Find(FName NpcId)
 {
 	return States.FindByPredicate([NpcId](const FNpcState& S) { return S.NpcId == NpcId; });
