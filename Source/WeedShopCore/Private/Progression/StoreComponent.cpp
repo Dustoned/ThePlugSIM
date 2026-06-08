@@ -360,8 +360,8 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	// Plant-verzorging (mold/pest komt later in het spel).
 	if (S == TEXT("Fertilizer_Basic")) { return 17; }
 	if (S == TEXT("Fertilizer_Bloom")) { return 27; }
-	if (S == TEXT("Spray_Fungicide"))  { return 18; }
-	if (S == TEXT("Spray_Pesticide"))  { return 22; }
+	if (S == TEXT("Spray_Fungicide"))  { return 12; }
+	if (S == TEXT("Spray_Pesticide"))  { return 18; }
 	if (S == TEXT("Spray_Broad"))      { return 33; }
 
 	// Pot-gear: zelfde level-progressie als de oude pot-upgrades (MinPlayerLevel).
