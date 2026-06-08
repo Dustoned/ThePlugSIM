@@ -110,6 +110,9 @@ public:
 	// deze speler de klant zojuist AFPAKTE van een andere speler (die al een stevige band had). OutPrev = die rivaal.
 	bool NotePlayerLoyalty(FName BaseNpc, const FString& PlayerId, float Loyalty, FString& OutPrevOwnerId);
 
+	// Competitive: welke speler deze klant het meest mag (TopPlayerId). Leeg = nog niemand.
+	FString GetTopOwner(FName BaseNpc) const;
+
 	// Deterministische (1x) gerandomiseerde persoonlijkheid voor een NpcId. Zelfde id -> zelfde stats,
 	// zonder dat de NPC al geregistreerd hoeft te zijn (zodat de spawner vooraf kan zien wie koper is).
 	// Addiction is naar boven verdeeld: ~20% stevig verslaafd, ~25% boven de koop-drempel (30), rest lager.

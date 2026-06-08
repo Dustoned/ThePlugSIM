@@ -129,6 +129,8 @@ protected:
 	void BuildChatApp();
 	// Verandert als er een bericht bijkomt of een status wijzigt (voor live verversen).
 	int32 MessagesSignature() const;
+	// True als dit bericht voor de LOKALE speler is (competitive = eigen telefoon; co-op = altijd).
+	bool IsMsgForLocal(const struct FPhoneMessage& M) const;
 
 	// Bouwt de Map-app: een mini stadskaart + knop naar de fullscreen-kaart (M).
 	void BuildMapApp();

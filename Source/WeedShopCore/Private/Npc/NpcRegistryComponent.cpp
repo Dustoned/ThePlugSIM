@@ -221,6 +221,12 @@ bool UNpcRegistryComponent::NotePlayerLoyalty(FName BaseNpc, const FString& Play
 	return false;
 }
 
+FString UNpcRegistryComponent::GetTopOwner(FName BaseNpc) const
+{
+	const FNpcState* S = Find(BaseNpc);
+	return S ? S->TopPlayerId : FString();
+}
+
 FNpcState* UNpcRegistryComponent::Find(FName NpcId)
 {
 	return States.FindByPredicate([NpcId](const FNpcState& S) { return S.NpcId == NpcId; });

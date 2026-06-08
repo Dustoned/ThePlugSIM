@@ -219,9 +219,14 @@ int32 UPhoneClientComponent::GetUnreadMessageCount() const
 	const AWeedShopGameState* GS = GetGS();
 	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 	if (!Con) { return 0; }
+	// Competitive: tel alleen JOUW berichten (eigen telefoon); co-op telt alles.
+	const APawn* Me = Cast<APawn>(GetOwner());
+	const bool bComp = GS->IsCompetitive();
+	const FString MyId = (bComp && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
 	TMap<FName, int32> Cnt;
 	for (const FPhoneMessage& M : Con->GetMessages())
 	{
+		if (bComp && !M.ForPlayerId.IsEmpty() && M.ForPlayerId != MyId) { continue; }
 		if (!M.bFromMe) { Cnt.FindOrAdd(M.FromContactId)++; }
 	}
 	int32 Unread = 0;

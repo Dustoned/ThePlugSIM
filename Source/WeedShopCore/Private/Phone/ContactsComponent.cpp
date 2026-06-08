@@ -10,6 +10,7 @@
 #include "World/CityGenerator.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Progression/StoreComponent.h"
+#include "Save/SaveGameSubsystem.h"
 #include "Progression/LevelComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/DataTable.h"
@@ -206,6 +207,29 @@ void UContactsComponent::SendRandomAppointment()
 			? FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - can you come by mine at %02d:%02d?"), *WantStr, WantQty, HH, MM))
 			: FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - come by my place (no. %s) at %02d:%02d?"), *WantStr, WantQty, *AddrStr, HH, MM)));
 
+	// COMPETITIVE: dit bericht is voor ÉÉN speler (eigen telefoon). Doel = de favoriete speler van dit contact
+	// (TopOwner), anders een willekeurige verbonden speler. Co-op laat ForPlayerId leeg (iedereen ziet het).
+	APawn* TargetPawn = nullptr;
+	if (const AWeedShopGameState* GScm = Cast<AWeedShopGameState>(GetOwner()))
+	{
+		if (GScm->IsCompetitive() && GetWorld())
+		{
+			TArray<APawn*> Pawns;
+			for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+			{
+				if (APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr) { Pawns.Add(P); }
+			}
+			if (Pawns.Num() > 0)
+			{
+				FString Owner;
+				if (UNpcRegistryComponent* Rg = GScm->GetNpcRegistry()) { Owner = Rg->GetTopOwner(C.ContactId); }
+				for (APawn* P : Pawns) { if (USaveGameSubsystem::StablePlayerId(P) == Owner) { TargetPawn = P; break; } }
+				if (!TargetPawn) { TargetPawn = Pawns[FMath::RandRange(0, Pawns.Num() - 1)]; }
+				Msg.ForPlayerId = USaveGameSubsystem::StablePlayerId(TargetPawn);
+			}
+		}
+	}
+
 	Messages.Insert(Msg, 0); // nieuwste bovenaan
 	if (Messages.Num() > 40)
 	{
@@ -215,8 +239,9 @@ void UContactsComponent::SendRandomAppointment()
 	OnRep_Messages(); // server lokaal broadcasten
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 4.f, FColor(120, 180, 255),
-			FString::Printf(TEXT("Message from %s"), *C.DisplayName.ToString()));
+		const FString NoteTxt = FString::Printf(TEXT("Message from %s"), *C.DisplayName.ToString());
+		if (TargetPawn) { UWeedToast::NotifyPawn(TargetPawn, -1, 4.f, FColor(120, 180, 255), NoteTxt); } // alleen de doelspeler
+		else { UWeedToast::Notify(-1, 4.f, FColor(120, 180, 255), NoteTxt); }
 	}
 }
 

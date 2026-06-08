@@ -74,6 +74,10 @@ struct FPhoneMessage
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	FName WantProduct = NAME_None;
 
+	// COMPETITIVE: voor welke speler dit bericht is (stabiele speler-id). Leeg = voor iedereen (co-op).
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	FString ForPlayerId;
+
 	// Realtime-seconden toen dit verzoek binnenkwam (voor follow-up/opgeven + reactiesnelheid). < 0 = n.v.t.
 	UPROPERTY()
 	float SentRealTime = -1.f;

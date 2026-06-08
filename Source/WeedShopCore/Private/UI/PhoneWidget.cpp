@@ -2,6 +2,7 @@
 
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "Save/SaveGameSubsystem.h"
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
 #include "World/HeatComponent.h"
@@ -408,6 +409,14 @@ void UPhoneWidget::UpdateStoreCartText()
 	}
 }
 
+bool UPhoneWidget::IsMsgForLocal(const FPhoneMessage& M) const
+{
+	// Leeg ForPlayerId = voor iedereen (co-op). In competitive zie je alleen je EIGEN afspraken.
+	if (M.ForPlayerId.IsEmpty()) { return true; }
+	const APawn* P = GetOwningPlayerPawn();
+	return P && USaveGameSubsystem::StablePlayerId(P) == M.ForPlayerId;
+}
+
 int32 UPhoneWidget::MessagesSignature() const
 {
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
@@ -419,6 +428,7 @@ int32 UPhoneWidget::MessagesSignature() const
 	int32 Sig = 0, Cnt = 0;
 	for (const FPhoneMessage& M : Msgs)
 	{
+		if (!IsMsgForLocal(M)) { continue; }
 		if (!OpenChatContact.IsNone() && M.FromContactId != OpenChatContact) { continue; }
 		++Cnt;
 		Sig = Sig * 31 + (int32)M.Status + (M.bFromMe ? 5 : 0);
@@ -441,7 +451,7 @@ void UPhoneWidget::BuildChatApp()
 		ProposeMins = -1; // tijd-keuze reset zodra je de thread verlaat
 		// Unieke contacten in volgorde van nieuwste bericht.
 		TArray<FName> Order;
-		for (const FPhoneMessage& M : Msgs) { Order.AddUnique(M.FromContactId); }
+		for (const FPhoneMessage& M : Msgs) { if (!IsMsgForLocal(M)) { continue; } Order.AddUnique(M.FromContactId); }
 		if (Order.Num() == 0) { AddInfoRow(TEXT("No messages yet."), FLinearColor::Gray, 13); return; }
 
 		UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
@@ -453,6 +463,7 @@ void UPhoneWidget::BuildChatApp()
 			FString LastBody; FText Name;
 			for (const FPhoneMessage& M : Msgs)
 			{
+				if (!IsMsgForLocal(M)) { continue; }
 				if (M.FromContactId != Cid) { continue; }
 				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; break; }
 			}
@@ -548,6 +559,7 @@ void UPhoneWidget::BuildChatApp()
 	for (int32 i = Msgs.Num() - 1; i >= 0; --i)
 	{
 		const FPhoneMessage& M = Msgs[i];
+		if (!IsMsgForLocal(M)) { continue; }
 		if (M.FromContactId != OpenChatContact) { continue; }
 		bAny = true;
 		if (M.Status == 0 && !M.bFromMe) { bHasOpen = true; }
@@ -672,6 +684,7 @@ void UPhoneWidget::BuildChatApp()
 			float ApptTod = -1.f;
 			for (const FPhoneMessage& M : Msgs)
 			{
+				if (!IsMsgForLocal(M)) { continue; }
 				if (M.FromContactId == OpenChatContact && M.Status == 0 && !M.bFromMe && M.AppointmentTimeOfDay >= 0.f)
 				{ ApptTod = M.AppointmentTimeOfDay; break; }
 			}
