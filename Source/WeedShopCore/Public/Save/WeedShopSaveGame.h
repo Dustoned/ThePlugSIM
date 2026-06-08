@@ -159,6 +159,10 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	int32 GoalDealsDone = 0;
 	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 GoalGramsSold = 0;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	int32 GoalGramsCrafted = 0;
+	UPROPERTY(VisibleAnywhere, Category = "Save")
 	TArray<int32> GoalClaimed;
 
 	// Gedeeld crew-level (voor de save-info).

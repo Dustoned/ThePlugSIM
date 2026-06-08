@@ -2989,7 +2989,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			GSc->GetNpcRegistry()->MarkDealt(NpcId);
 			GSc->GetNpcRegistry()->AddCustomerValue(NpcId, SoldGrams); // klant-tier groeit met verkochte grammen
 		}
-		if (UGoalsComponent* Gl = GSc->GetGoals()) { Gl->NoteDeal(); } // goal-teller: deal gedaan
+		if (UGoalsComponent* Gl = GSc->GetGoals()) { Gl->NoteDeal(); Gl->NoteGramsSold(SoldGrams); } // goal-tellers: deal + gram verkocht
 	}
 
 	// XP: per verdiende euro + een vaste bonus per geslaagde deal.

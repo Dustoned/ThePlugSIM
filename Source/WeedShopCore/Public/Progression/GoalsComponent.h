@@ -41,6 +41,8 @@ public:
 	void NoteJointsRolled(int32 N);
 	void NoteHarvest(int32 N);
 	void NoteDeal();
+	void NoteGramsSold(int32 Grams);   // metric 4
+	void NoteCrafted(int32 Grams);     // metric 5 (crystals/hash/edibles uit de machines)
 
 	// Markeer een doel als geclaimd (alleen server). True = nu pas geclaimd (caller geeft de reward).
 	bool MarkClaimed(int32 Idx);
@@ -48,8 +50,11 @@ public:
 	UPROPERTY(Replicated) int32 JointsRolled = 0;
 	UPROPERTY(Replicated) int32 PlantsHarvested = 0;
 	UPROPERTY(Replicated) int32 DealsDone = 0;
+	UPROPERTY(Replicated) int32 GramsSold = 0;
+	UPROPERTY(Replicated) int32 GramsCrafted = 0;
 	UPROPERTY(Replicated) TArray<int32> ClaimedIdx;
 
 	// Save/load.
 	void RestoreState(int32 Joints, int32 Harvests, int32 Deals, const TArray<int32>& Claimed);
+	void RestoreExtra(int32 Sold, int32 Crafted) { GramsSold = FMath::Max(0, Sold); GramsCrafted = FMath::Max(0, Crafted); }
 };

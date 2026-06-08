@@ -301,7 +301,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	// Potten
 	if (S == TEXT("Pot_Broken"))      { return 1; }
 	if (S == TEXT("Pot_Clay"))        { return 3; }
-	if (S == TEXT("Pot_Plastic"))     { return 11; }
+	if (S == TEXT("Pot_Plastic"))     { return 10; }
 	if (S == TEXT("Pot_Fabric"))      { return 24; }
 	// Aarde
 	if (S == TEXT("Soil_Basic"))      { return 1; }
@@ -322,12 +322,13 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("DryRack_Std"))     { return 12; }
 	if (S == TEXT("DryRack_Pro"))     { return 26; }
 	// Hasj-keten (mesh + press)
-	if (S == TEXT("Mesh_Cheap"))      { return 10; }
-	if (S == TEXT("Mesh_Std"))        { return 20; }
-	if (S == TEXT("Mesh_Pro"))        { return 30; }
-	if (S == TEXT("Press_Cheap"))     { return 10; }
-	if (S == TEXT("Press_Std"))       { return 20; }
-	if (S == TEXT("Press_Pro"))       { return 30; }
+	// Hasj-keten unlockt LATER dan edibles, mooi gespreid over de late levels.
+	if (S == TEXT("Mesh_Cheap"))      { return 14; }
+	if (S == TEXT("Mesh_Std"))        { return 23; }
+	if (S == TEXT("Mesh_Pro"))        { return 29; }
+	if (S == TEXT("Press_Cheap"))     { return 16; }
+	if (S == TEXT("Press_Std"))       { return 25; }
+	if (S == TEXT("Press_Pro"))       { return 31; }
 	// Edibles-keten unlockt in ÉÉN keer (oven + pan + koelkast samen) zodat baked weed meteen bruikbaar is.
 	if (S == TEXT("Butter"))          { return 9; }
 	if (S == TEXT("Oven_Std"))        { return 9; }
@@ -340,7 +341,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("ProcUp_Yield"))    { return 28; }
 	// Verpak-tafels
 	if (S == TEXT("Bench_Pack"))      { return 1; }
-	if (S == TEXT("Bench_Pack2"))     { return 14; }
+	if (S == TEXT("Bench_Pack2"))     { return 19; }
 	if (S == TEXT("Bench_Pack3"))     { return 30; }
 	// Containers (verpakkingsmateriaal) — van klein naar bulk.
 	if (S == TEXT("Cont_Bag2"))       { return 1; }
@@ -354,14 +355,14 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Mattress"))        { return 1; }
 	if (S == TEXT("Table"))           { return 2; }
 	if (S == TEXT("Chest"))           { return 5; }
-	if (S == TEXT("Shelf"))           { return 9; }
+	if (S == TEXT("Shelf"))           { return 8; }
 	if (S == TEXT("Fridge"))          { return 13; }
 	// Plant-verzorging (mold/pest komt later in het spel).
-	if (S == TEXT("Fertilizer_Basic")) { return 14; }
-	if (S == TEXT("Fertilizer_Bloom")) { return 26; }
-	if (S == TEXT("Spray_Fungicide"))  { return 14; }
+	if (S == TEXT("Fertilizer_Basic")) { return 17; }
+	if (S == TEXT("Fertilizer_Bloom")) { return 27; }
+	if (S == TEXT("Spray_Fungicide"))  { return 18; }
 	if (S == TEXT("Spray_Pesticide"))  { return 22; }
-	if (S == TEXT("Spray_Broad"))      { return 32; }
+	if (S == TEXT("Spray_Broad"))      { return 33; }
 
 	// Pot-gear: zelfde level-progressie als de oude pot-upgrades (MinPlayerLevel).
 	{

@@ -6,6 +6,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Inventory/InventoryComponent.h"
+#include "Game/WeedShopGameState.h"
+#include "Progression/GoalsComponent.h"
 #include "Placement/PlaceableProp.h"
 #include "UI/WeedToast.h"
 #include "GameFramework/Pawn.h"
@@ -289,6 +291,8 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 			if (ServerCollectIndex(i, OutId, OQ, OT, OQual))
 			{
 				Inv->AddItem(OutId, OQ, OT, OQual);
+				if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+				{ if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->NoteCrafted(OQ); } } // goal-teller: gram gecraft in de lab/keuken
 				if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(150, 220, 160), FString::Printf(TEXT("Collected %dg (%.0f%% THC)"), OQ, OT)); }
 			}
 			return;
