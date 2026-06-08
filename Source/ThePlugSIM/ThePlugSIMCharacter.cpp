@@ -75,10 +75,12 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	FirstPersonMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
 	FirstPersonMesh->SetCollisionProfileName(FName("NoCollision"));
 
-	// Create the Camera Component	
+	// Create the Camera Component
+	// Camera op VASTE ooghoogte aan de capsule (NIET aan de head-bone). Zo blijft de camera stabiel ongeacht
+	// welke skin je FP-mesh is, en kan ik het hoofd van je FP-mesh veilig verbergen zonder de camera te bewegen.
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("First Person Camera"));
-	FirstPersonCameraComponent->SetupAttachment(FirstPersonMesh, FName("head"));
-	FirstPersonCameraComponent->SetRelativeLocationAndRotation(FVector(-2.8f, 5.89f, 0.0f), FRotator(0.0f, 90.0f, -90.0f));
+	FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
+	FirstPersonCameraComponent->SetRelativeLocation(FVector(8.f, 0.f, 70.f));
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 	FirstPersonCameraComponent->bEnableFirstPersonFieldOfView = true;
 	FirstPersonCameraComponent->bEnableFirstPersonScale = true;
@@ -92,6 +94,7 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	ThirdPersonBoom->TargetArmLength = 260.f;
 	ThirdPersonBoom->SocketOffset = FVector(0.f, 40.f, 70.f);
 	ThirdPersonBoom->bUsePawnControlRotation = true;
+	ThirdPersonBoom->bDoCollisionTest = false; // niet inklappen tegen muren -> camera blijft achter je
 	ThirdPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Third Person Camera"));
 	ThirdPersonCamera->SetupAttachment(ThirdPersonBoom);
 	ThirdPersonCamera->bUsePawnControlRotation = false;
@@ -293,9 +296,22 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
 	if (!Skin) { return; }
-	// Skin op de THIRD-PERSON body (zien je co-op maten + jij zelf in de 3rd-person toggle). De first-person
-	// mesh (je armen) laten we met rust: de camera hangt aan z'n "head"-bone, dus die niet aanraken = clean FP.
+	// Skin op de THIRD-PERSON body (zien je co-op maten + jij zelf in de 3rd-person toggle)
+	// EN op de first-person mesh (zie jij zelf je echte skin, met verborgen hoofd zodat 't niet voor de cam clipt).
 	if (USkeletalMeshComponent* M = GetMesh()) { M->SetSkeletalMeshAsset(Skin); }
+	if (FirstPersonMesh)
+	{
+		FirstPersonMesh->SetSkeletalMeshAsset(Skin);
+		// Hoofd verbergen kan nu veilig: de camera zit op de capsule, niet meer op deze head-bone.
+		static const TCHAR* HeadBones[] = { TEXT("head"), TEXT("Head") };
+		for (const TCHAR* B : HeadBones)
+		{
+			if (FirstPersonMesh->GetBoneIndex(FName(B)) != INDEX_NONE)
+			{
+				FirstPersonMesh->HideBoneByName(FName(B), EPhysBodyOp::PBO_None);
+			}
+		}
+	}
 }
 
 void AThePlugSIMCharacter::ToggleThirdPerson()
@@ -304,7 +320,15 @@ void AThePlugSIMCharacter::ToggleThirdPerson()
 	if (FirstPersonCameraComponent) { FirstPersonCameraComponent->SetActive(!bThirdPerson); }
 	if (ThirdPersonCamera)          { ThirdPersonCamera->SetActive(bThirdPerson); }
 	if (FirstPersonMesh)            { FirstPersonMesh->SetVisibility(!bThirdPerson, true); } // armen weg in 3rd-person
-	if (USkeletalMeshComponent* M = GetMesh()) { M->SetOwnerNoSee(!bThirdPerson); }          // jouw body zichtbaar in 3rd-person
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		M->SetOwnerNoSee(!bThirdPerson); // jouw body zichtbaar voor jezelf in 3rd-person
+		// In 3rd-person de body als NORMALE primitive renderen; in FP weer als world-space-representation
+		// (anders verbergt het FP-render-systeem 'm voor de owner -> je zou niemand zien).
+		M->FirstPersonPrimitiveType = bThirdPerson ? EFirstPersonPrimitiveType::None
+		                                            : EFirstPersonPrimitiveType::WorldSpaceRepresentation;
+		M->MarkRenderStateDirty();
+	}
 }
 
 void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
