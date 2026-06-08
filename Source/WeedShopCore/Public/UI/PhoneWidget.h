@@ -101,6 +101,7 @@ protected:
 	bool bLastHome = true;
 	int32 bLastApp = -1;
 	bool bContentDirty = true;
+	float LastStatsRefresh = 0.f; // throttle voor de live leaderboard-refresh
 
 	void BuildShell(UCanvasPanel* Root);
 	void RefreshContent();
@@ -135,6 +136,7 @@ protected:
 	// Bouwt de Map-app: een mini stadskaart + knop naar de fullscreen-kaart (M).
 	void BuildMapApp();
 	void BuildGoalsApp();             // milestone-doelen met rewards
+	void BuildStatsApp();             // competitive leaderboard (stats per speler)
 
 	// Bouwt de Suppliers-app (in-telefoon webshop) in de gegeven container.
 	void BuildStoreApp(class UVerticalBox* Into);

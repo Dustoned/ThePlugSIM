@@ -227,6 +227,18 @@ FString UNpcRegistryComponent::GetTopOwner(FName BaseNpc) const
 	return S ? S->TopPlayerId : FString();
 }
 
+int32 UNpcRegistryComponent::CountPlayerCustomers(const FString& PlayerId) const
+{
+	if (PlayerId.IsEmpty()) { return 0; }
+	const FString Suffix = TEXT("#") + PlayerId;
+	int32 N = 0;
+	for (const FNpcState& S : States)
+	{
+		if (S.NpcId.ToString().EndsWith(Suffix) && (S.bUnlocked || S.Loyalty >= 20.f)) { ++N; }
+	}
+	return N;
+}
+
 FNpcState* UNpcRegistryComponent::Find(FName NpcId)
 {
 	return States.FindByPredicate([NpcId](const FNpcState& S) { return S.NpcId == NpcId; });

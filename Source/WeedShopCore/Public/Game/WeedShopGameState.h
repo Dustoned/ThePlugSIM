@@ -27,6 +27,10 @@ struct FCompetitorScore
 	GENERATED_BODY()
 	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") FString Name;
 	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") int64 NetWorthCents = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") int64 CashCents = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") int64 BankCents = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") int64 EarnedCents = 0; // totaal verdiend (verkoop-omzet)
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") int32 Customers = 0;   // aantal vaste klanten
 };
 
 class UEconomyComponent;

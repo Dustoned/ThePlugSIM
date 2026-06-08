@@ -75,7 +75,11 @@ void AWeedShopGameState::UpdateStandings()
 		FCompetitorScore S;
 		S.Name = (PC->PlayerState && !PC->PlayerState->GetPlayerName().IsEmpty())
 			? PC->PlayerState->GetPlayerName() : FString::Printf(TEXT("Player %d"), New.Num() + 1);
-		S.NetWorthCents = E->GetCashCents() + E->GetBankCents();
+		S.CashCents = E->GetCashCents();
+		S.BankCents = E->GetBankCents();
+		S.NetWorthCents = S.CashCents + S.BankCents;
+		S.EarnedCents = E->GetLegitIncomeCents();
+		if (NpcRegistry) { S.Customers = NpcRegistry->CountPlayerCustomers(USaveGameSubsystem::StablePlayerId(P)); }
 		New.Add(S);
 	}
 	New.Sort([](const FCompetitorScore& A, const FCompetitorScore& B) { return A.NetWorthCents > B.NetWorthCents; });

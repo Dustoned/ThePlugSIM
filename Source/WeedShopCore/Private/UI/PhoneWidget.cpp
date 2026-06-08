@@ -3,6 +3,7 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Save/SaveGameSubsystem.h"
+#include "GameFramework/PlayerState.h"
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
 #include "World/HeatComponent.h"
@@ -56,17 +57,19 @@
 namespace
 {
 	// (Bank-app op de telefoon komt pas terug na een telefoon-upgrade; bankieren gaat nu via de ATM.)
-	constexpr int32 GNumApps = 12;
-	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank"), TEXT("Lab"), TEXT("Goals") };
-	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Shop, WeedUI::EIcon::Coin, WeedUI::EIcon::Flame, WeedUI::EIcon::Level };
+	constexpr int32 GNumApps = 13;
+	const TCHAR* GAppName[GNumApps] = { TEXT("Upgrades"), TEXT("Grow shop"), TEXT("Contacts"), TEXT("Messages"), TEXT("Settings"), TEXT("Map"), TEXT("Sell"), TEXT("Supplies"), TEXT("Packages"), TEXT("Bank"), TEXT("Lab"), TEXT("Goals"), TEXT("Leaderboard") };
+	const WeedUI::EIcon GAppIcon[GNumApps] = { WeedUI::EIcon::Upgrade, WeedUI::EIcon::Leaf, WeedUI::EIcon::Person, WeedUI::EIcon::Message, WeedUI::EIcon::Gear, WeedUI::EIcon::Map, WeedUI::EIcon::Coin, WeedUI::EIcon::Shop, WeedUI::EIcon::Shop, WeedUI::EIcon::Coin, WeedUI::EIcon::Flame, WeedUI::EIcon::Level, WeedUI::EIcon::Level };
 	// Eigen icoon per app (PNG-sleutel); valt terug op GAppIcon als het PNG ontbreekt.
-	const TCHAR* GAppKey[GNumApps] = { TEXT("ui_upgrade"), TEXT("ui_leaf"), TEXT("ui_person"), TEXT("ui_message"), TEXT("ui_gear"), TEXT("ui_map"), TEXT("ui_sell"), TEXT("ui_shop"), TEXT("ui_package"), TEXT("ui_bank"), TEXT("ui_hash"), TEXT("ui_goals") };
+	const TCHAR* GAppKey[GNumApps] = { TEXT("ui_upgrade"), TEXT("ui_leaf"), TEXT("ui_person"), TEXT("ui_message"), TEXT("ui_gear"), TEXT("ui_map"), TEXT("ui_sell"), TEXT("ui_shop"), TEXT("ui_package"), TEXT("ui_bank"), TEXT("ui_hash"), TEXT("ui_goals"), TEXT("ui_goals") };
 	const FLinearColor GAppCol[GNumApps] = {
 		FLinearColor(0.45f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.30f), FLinearColor(0.20f, 0.50f, 0.80f),
 		FLinearColor(0.90f, 0.55f, 0.20f), FLinearColor(0.40f, 0.42f, 0.48f), FLinearColor(0.18f, 0.62f, 0.58f),
 		FLinearColor(0.85f, 0.65f, 0.20f), FLinearColor(0.30f, 0.50f, 0.70f), FLinearColor(0.55f, 0.40f, 0.80f),
 		FLinearColor(0.16f, 0.55f, 0.95f), FLinearColor(0.80f, 0.45f, 0.20f), FLinearColor(0.90f, 0.75f, 0.25f),
+		FLinearColor(0.95f, 0.78f, 0.25f),
 	};
+	constexpr int32 GStatsApp = 12;
 	constexpr int32 GGrowApp = 1;
 	constexpr int32 GGoalsApp = 11;
 	constexpr int32 GSellApp = 6;
@@ -1536,10 +1539,13 @@ void UPhoneWidget::RefreshContent()
 		AddInfoRow(TEXT("Apps"), FLinearColor(0.6f, 1.f, 0.6f), 16);
 		UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>();
 		Grid->SetSlotPadding(FMargin(10.f));
+		int32 Cell = 0;
 		for (int32 i = 0; i < GNumApps; ++i)
 		{
-			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppKey[i], GAppIcon[i], GAppCol[i]), i / 3, i % 3);
+			if (i == GStatsApp && !(GS && GS->IsCompetitive())) { continue; } // Leaderboard alleen in competitive
+			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppKey[i], GAppIcon[i], GAppCol[i]), Cell / 3, Cell % 3);
 			GSlot->SetHorizontalAlignment(HAlign_Center);
+			++Cell;
 		}
 		UVerticalBoxSlot* GridSlot = ContentBox->AddChildToVerticalBox(Grid);
 		GridSlot->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
@@ -1708,9 +1714,56 @@ void UPhoneWidget::RefreshContent()
 	{
 		BuildGoalsApp();
 	}
+	else if (App == GStatsApp) // Leaderboard (competitive stats)
+	{
+		BuildStatsApp();
+	}
 	else // Map
 	{
 		BuildMapApp();
+	}
+}
+
+void UPhoneWidget::BuildStatsApp()
+{
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!GS || !GS->IsCompetitive()) { AddInfoRow(TEXT("Leaderboard is only for Competitive mode."), FLinearColor::Gray, 13); return; }
+
+	AddInfoRow(TEXT("LEADERBOARD"), FLinearColor(1.f, 0.85f, 0.35f), 17);
+	const TArray<FCompetitorScore>& St = GS->GetStandings();
+	if (St.Num() == 0) { AddInfoRow(TEXT("No players yet."), FLinearColor::Gray, 13); return; }
+
+	const APawn* Me = GetOwningPlayerPawn();
+	const FString MyName = (Me && Me->GetPlayerState()) ? Me->GetPlayerState()->GetPlayerName() : FString();
+
+	int32 Rank = 1;
+	for (const FCompetitorScore& C : St)
+	{
+		const bool bMe = (!MyName.IsEmpty() && C.Name == MyName);
+		const FLinearColor Col = (Rank == 1) ? FLinearColor(0.16f, 0.55f, 0.95f) : FLinearColor(0.10f, 0.11f, 0.16f);
+		UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
+		Card->SetBrush(WeedUI::Rounded(FLinearColor(Col.R, Col.G, Col.B, bMe ? 0.95f : 0.55f), 10.f));
+		Card->SetPadding(FMargin(12.f, 9.f));
+		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+		Card->SetContent(VB);
+
+		const TCHAR* Medal = (Rank == 1) ? TEXT("1st") : (Rank == 2) ? TEXT("2nd") : (Rank == 3) ? TEXT("3rd") : TEXT("");
+		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
+			FString::Printf(TEXT("#%d  %s%s"), Rank, *C.Name, bMe ? TEXT("  (you)") : TEXT("")), 15,
+			FLinearColor(1.f, 1.f, 1.f), true, true));
+		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
+			FString::Printf(TEXT("Net worth:  EUR %lld    %s"), (long long)(C.NetWorthCents / 100), Medal), 12,
+			FLinearColor(0.85f, 1.f, 0.85f), false));
+		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
+			FString::Printf(TEXT("Cash EUR %lld   Bank EUR %lld"), (long long)(C.CashCents / 100), (long long)(C.BankCents / 100)), 11,
+			FLinearColor(0.75f, 0.82f, 0.95f), false));
+		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
+			FString::Printf(TEXT("Earned EUR %lld   Customers %d"), (long long)(C.EarnedCents / 100), C.Customers), 11,
+			FLinearColor(0.95f, 0.85f, 0.6f), false));
+
+		UVerticalBoxSlot* CS = ContentBox->AddChildToVerticalBox(Card);
+		CS->SetPadding(FMargin(0.f, 0.f, 0.f, 7.f));
+		++Rank;
 	}
 }
 
@@ -1870,6 +1923,12 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bHome = Phone->IsHomeScreen();
 	const int32 App = Phone->GetTab();
+	// Leaderboard live houden: forceer ~elke 2s een rebuild zolang de stats-app open is (standen verversen).
+	if (!bHome && App == GStatsApp && GetWorld())
+	{
+		const float NowT = GetWorld()->GetTimeSeconds();
+		if (NowT - LastStatsRefresh >= 2.f) { LastStatsRefresh = NowT; bContentDirty = true; }
+	}
 	// (Geen per-bericht home-herbouw meer: dat gaf geflits. De Messages-badge ververst bij openen/navigeren;
 	//  de live notificatie zie je sowieso op het hotbar-telefoon-icoon.)
 	if (bContentDirty || bHome != bLastHome || App != bLastApp)
