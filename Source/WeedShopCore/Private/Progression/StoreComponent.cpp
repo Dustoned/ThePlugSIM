@@ -158,7 +158,9 @@ namespace
 		{ TEXT("Rosin_Pro"),   TEXT("Hydraulic rosin press"),TEXT("More yield + faster (~55s, 2 batches)"),                 70000,  1 },
 		{ TEXT("Iso_Std"),     TEXT("Ice extractor"),        TEXT("Dried weed -> bubble/ice hash (top THC, ~95s)"),         35000,  1 },
 		{ TEXT("Iso_Pro"),     TEXT("Pro isolator"),         TEXT("More yield + faster (~70s, 2 batches)"),                 90000,  1 },
-		{ TEXT("Moon_Std"),    TEXT("Moonrock station"),     TEXT("Dried weed -> moonrocks (coated bud, big yield, ~60s)"), 45000,  1 },
+		{ TEXT("Oil_Std"),     TEXT("Oil press"),            TEXT("Dried weed -> cannabis oil (coating for moonrocks, ~80s)"), 30000, 1 },
+		{ TEXT("Oil_Pro"),     TEXT("Pro oil press"),        TEXT("More oil + faster (~60s, 2 batches)"),                      75000, 1 },
+		{ TEXT("Moon_Std"),    TEXT("Moonrock station"),     TEXT("Dried weed + oil -> moonrocks (coated bud, big yield, ~60s)"), 45000,  1 },
 		{ TEXT("Moon_Pro"),    TEXT("Pro moonrock station"), TEXT("More yield + faster (~45s, 4 batches)"),                110000,  1 },
 		// Losse upgrade-gear voor droogrek / hasj-machines (zet 'm vlakbij de machine).
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("Nearby drying rack: ~30% faster"),        9000,  1 },
@@ -232,7 +234,7 @@ int32 UStoreComponent::GetSellValueCents(FName ItemId) const
 	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("Joint_"))
 		|| S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_")) || S.StartsWith(TEXT("Baked_"))
 		|| S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_"))
-		|| S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Bubble_")) || S.StartsWith(TEXT("Moonrock_")))
+		|| S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Bubble_")) || S.StartsWith(TEXT("Moonrock_")) || S.StartsWith(TEXT("Oil_")))
 	{
 		return 0;
 	}
@@ -349,6 +351,8 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	// Concentraat-ketens (high-end content richting de level-50-licentie).
 	if (S == TEXT("Rosin_Std"))       { return 40; }
 	if (S == TEXT("Moon_Pro"))        { return 38; }
+	if (S == TEXT("Oil_Std"))         { return 30; }
+	if (S == TEXT("Oil_Pro"))         { return 36; }
 	if (S == TEXT("Moon_Std"))        { return 34; }
 	if (S == TEXT("Rosin_Pro"))       { return 44; }
 	if (S == TEXT("Iso_Std"))         { return 46; }
@@ -503,7 +507,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			// (Oven & koelkast staan als appliances bij Furniture; consumables staan bij Ingredients.)
 			case 11: bMatch = S.StartsWith(TEXT("Pan_"))
 				|| S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_"))
-				|| S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Iso_")) || S.StartsWith(TEXT("Moon_")); break;
+				|| S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Iso_")) || S.StartsWith(TEXT("Moon_")) || S.StartsWith(TEXT("Oil_")); break;
 			// Ingredients: kook-consumables (boter; later bloem/suiker/eieren e.d. voor koekjes/brownies).
 			case 12: bMatch = S == TEXT("Butter"); break;
 			default: break;

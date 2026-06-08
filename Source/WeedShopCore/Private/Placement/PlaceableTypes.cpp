@@ -63,6 +63,8 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Rosin_Pro"),   TEXT("Hydraulic rosin press"),TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f),  FVector(35.f, 35.f, 27.5f), false, 20000, false, false, false, false, false, false, false, false, true },
 		{ TEXT("Iso_Std"),     TEXT("Ice extractor"),        TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.8f),   FVector(35.f, 35.f, 40.f),  false, 9000,  false, false, false, false, false, false, false, false, true },
 		{ TEXT("Iso_Pro"),     TEXT("Pro isolator"),         TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.8f),   FVector(35.f, 35.f, 40.f),  false, 24000, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Oil_Std"),     TEXT("Oil press"),            TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.65f, 0.65f, 0.5f), FVector(32.5f, 32.5f, 25.f), false, 8000,  false, false, false, false, false, false, false, false, true },
+		{ TEXT("Oil_Pro"),     TEXT("Pro oil press"),        TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.65f, 0.65f, 0.5f), FVector(32.5f, 32.5f, 25.f), false, 22000, false, false, false, false, false, false, false, false, true },
 		{ TEXT("Moon_Std"),    TEXT("Moonrock station"),     TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f),false, 12000, false, false, false, false, false, false, false, false, true },
 		{ TEXT("Moon_Pro"),    TEXT("Pro moonrock station"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f),false, 28000, false, false, false, false, false, false, false, false, true },
 		// --- Losse upgrade-gear: zet vlakbij een DROOGREK of HASJ-MACHINE om 'm sneller/beter te maken.

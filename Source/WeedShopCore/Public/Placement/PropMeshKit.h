@@ -93,6 +93,7 @@ namespace PropKit
 		else if (S.StartsWith(TEXT("Rosin_")))      { Size = FVector(5.f, 5.f, 3.f);  Col = FLinearColor(0.88f, 0.62f, 0.16f); } // amber rosin
 		else if (S.StartsWith(TEXT("Bubble_")))     { Size = FVector(6.f, 6.f, 4.f);  Col = FLinearColor(0.74f, 0.62f, 0.40f); } // blonde bubble hash
 		else if (S.StartsWith(TEXT("Moonrock_")))   { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.18f, 0.28f, 0.16f); } // dark coated bud
+		else if (S.StartsWith(TEXT("Oil_")))        { M = Cylinder(); Size = FVector(3.f, 3.f, 7.f); Col = FLinearColor(0.86f, 0.54f, 0.10f); } // amber oil vial
 		else if (S.StartsWith(TEXT("Seed_")))       { Size = FVector(2.5f, 2.5f, 2.5f); Col = FLinearColor(0.45f, 0.36f, 0.22f); }
 		else if (S.StartsWith(TEXT("WaterBottle"))) { M = Cylinder(); Size = FVector(6.f, 6.f, 16.f); Col = FLinearColor(0.30f, 0.45f, 0.65f); }
 		else if (S.StartsWith(TEXT("Papers_")))     { Size = FVector(6.f, 1.5f, 9.f); Col = FLinearColor(0.90f, 0.88f, 0.80f); }

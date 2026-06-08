@@ -55,6 +55,7 @@ FString AProcessorMachine::OutputPrefixFor(FName Tier)
 	if (T.StartsWith(TEXT("Fridge_"))) { return TEXT("Edible_"); }    // eindproduct: cannabutter/edible, hoge THC
 	if (T.StartsWith(TEXT("Rosin_")))  { return TEXT("Rosin_"); }     // solventless rosin
 	if (T.StartsWith(TEXT("Iso_")))    { return TEXT("Bubble_"); }    // bubble/ice hash (isolator)
+	if (T.StartsWith(TEXT("Oil_")))    { return TEXT("Oil_"); }       // cannabis-olie (coating voor moonrocks)
 	if (T.StartsWith(TEXT("Moon_")))   { return TEXT("Moonrock_"); }  // moonrocks (gecoate bud)
 	return TEXT("Crystal_"); // Mesh_
 }
@@ -87,6 +88,10 @@ bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSec
 	// Concentraat-ketens (gedroogde wiet -> concentraat), realistisch oplopend en ALLE onder de 90%-hasj-top.
 	// Volgorde Moon -> Rosin -> Isolator (met top-Cali bud ~40%): Moonrock ~52-56% (bud + kief/olie, hoge
 	// gram-opbrengst), Rosin ~74-78% (solventless pers), Bubble/Ice "Isolator" ~82-88% (water-extractie, top).
+	// Olie-pers: gedroogde wiet -> cannabis-olie (potent concentraat). Tussenproduct: de olie coat de bud in de
+	// moonrock-station (zoals boter voor de pan). Niet los aan klanten verkocht.
+	if (T == TEXT("Oil_Std"))   { OutCapacity = 1; OutSeconds = 80.f; OutConv = 0.16f; OutThcMult = 1.90f; bOutIsPress = true; return true; }
+	if (T == TEXT("Oil_Pro"))   { OutCapacity = 2; OutSeconds = 60.f; OutConv = 0.22f; OutThcMult = 2.00f; bOutIsPress = true; return true; }
 	if (T == TEXT("Moon_Std"))  { OutCapacity = 2; OutSeconds = 60.f; OutConv = 0.70f; OutThcMult = 1.30f; bOutIsPress = true; return true; }
 	if (T == TEXT("Moon_Pro"))  { OutCapacity = 4; OutSeconds = 45.f; OutConv = 0.80f; OutThcMult = 1.40f; bOutIsPress = true; return true; }
 	if (T == TEXT("Rosin_Std")) { OutCapacity = 1; OutSeconds = 75.f; OutConv = 0.18f; OutThcMult = 1.85f; bOutIsPress = true; return true; }
@@ -345,11 +350,27 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 			if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, FColor::Orange, TEXT("Need butter to cook (buy it in the Lab).")); }
 			return;
 		}
+		// Het moonrock-station coat de bud met cannabis-olie: minimaal 1 olie (van de olie-pers) nodig, wordt verbruikt.
+		const bool bNeedsOil = MachineTier.ToString().StartsWith(TEXT("Moon_"));
+		FName OilId = NAME_None;
+		if (bNeedsOil)
+		{
+			for (const FInventoryStack& OS : Inv->GetStacks())
+			{
+				if (OS.Quantity > 0 && OS.ItemId.ToString().StartsWith(TEXT("Oil_"))) { OilId = OS.ItemId; break; }
+			}
+			if (OilId.IsNone())
+			{
+				if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, FColor::Orange, TEXT("Need cannabis oil to coat (make it with an oil press).")); }
+				return;
+			}
+		}
 		const int32 Used = ServerLoad(Act, Qty, Thc, Qual);
 		if (Used > 0)
 		{
 			Inv->RemoveFromStackById(Sid, Used);
 			if (bNeedsButter) { Inv->RemoveItem(FName(TEXT("Butter")), 1); }
+			if (bNeedsOil && !OilId.IsNone()) { Inv->RemoveItem(OilId, 1); }
 			if (GEngine)
 			{
 				UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 200, 255), FString::Printf(TEXT("Loaded %dg - processing..."), Used));
@@ -363,6 +384,10 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 		if      (T.StartsWith(TEXT("Oven_")))   { Msg = TEXT("Hold dried weed (E) to bake/decarb it."); }
 		else if (T.StartsWith(TEXT("Pan_")))    { Msg = TEXT("Hold baked weed (E) to cook with butter."); }
 		else if (T.StartsWith(TEXT("Fridge_"))) { Msg = TEXT("Hold cooked butter (E) to set it in the fridge."); }
+		else if (T.StartsWith(TEXT("Oil_")))    { Msg = TEXT("Hold dried weed (E) to press into cannabis oil."); }
+		else if (T.StartsWith(TEXT("Moon_")))   { Msg = TEXT("Hold dried weed (E) to coat with oil into moonrocks."); }
+		else if (T.StartsWith(TEXT("Rosin_")))  { Msg = TEXT("Hold dried weed (E) to press into rosin."); }
+		else if (T.StartsWith(TEXT("Iso_")))    { Msg = TEXT("Hold dried weed (E) to wash into bubble hash."); }
 		else if (IsPressTier(MachineTier))      { Msg = TEXT("Hold crystals (E) to press into hash."); }
 		UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, FColor::Orange, Msg);
 	}

@@ -2748,7 +2748,7 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	const FWeedShopProductRow* Row =
 		ProductTable->FindRow<FWeedShopProductRow>(LookupId, TEXT("ACustomerBase::GetMarketPriceForProduct"), false);
 	// Losse Bud_ (niet verpakt) + tussenstappen zijn NIET verkoopbaar aan klanten.
-	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_"))) { return 0; }
+	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Oil_"))) { return 0; }
 	return Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult) : 0;
 }
 
