@@ -254,14 +254,27 @@ void ACustomerBase::BeginPlay()
 			if (bApptActive && !ApptWantStrain.IsNone()) { PickStrain = ApptWantStrain; }
 			if (!PickStrain.IsNone())
 			{
-				// Producttype: standaard verpakte wiet. Veeleisende (verslaafde) klanten vragen soms om
-				// premium-producten: hasj of een edible (per losse gram). Op afspraak blijft het wiet.
+				// Producttype: standaard verpakte wiet. Premium-vraag (hasj/edibles) schaalt met de klant-TIER
+				// (1 Casual .. 5 Whale) en kan pas zodra de speler die keten heeft ontgrendeld (hasj lvl 14,
+				// edibles lvl 9). Tier 1-2 willen vrijwel altijd wiet; hogere tiers vragen vaker (en meer) premium.
 				FString ProdType = TEXT("Bag_");
-				if (!bApptActive && Addiction > 45.f)
+				if (!bApptActive)
 				{
+					const int32 Tier = FMath::Clamp(GetMyCustomerTier(), 1, 5);
+					float HashChance = 0.f, EdibleChance = 0.f;
+					switch (Tier)
+					{
+						case 1:  HashChance = 0.00f; EdibleChance = 0.00f; break; // altijd wiet
+						case 2:  HashChance = 0.08f; EdibleChance = 0.00f; break; // vooral wiet, soms hasj
+						case 3:  HashChance = 0.20f; EdibleChance = 0.08f; break;
+						case 4:  HashChance = 0.30f; EdibleChance = 0.18f; break;
+						default: HashChance = 0.38f; EdibleChance = 0.28f; break; // Whale: vaak premium
+					}
+					if (PlayerLvl < 14) { HashChance = 0.f; }   // hasj nog niet te maken -> niet vragen
+					if (PlayerLvl < 9)  { EdibleChance = 0.f; } // edibles nog niet te maken
 					const float Roll = FMath::FRand();
-					if (Roll < 0.12f)      { ProdType = TEXT("Edible_"); }
-					else if (Roll < 0.30f) { ProdType = TEXT("Hash_"); }
+					if (Roll < EdibleChance)                     { ProdType = TEXT("Edible_"); }
+					else if (Roll < EdibleChance + HashChance)   { ProdType = TEXT("Hash_"); }
 				}
 				DesiredProductId = FName(*(ProdType + PickStrain.ToString()));
 				if (bApptActive && ApptWantQty > 0) { DesiredQuantity = ApptWantQty; }
