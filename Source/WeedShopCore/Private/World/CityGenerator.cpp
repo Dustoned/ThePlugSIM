@@ -1288,7 +1288,17 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					// Trap-kant: TWEE deuropeningen -> één bij de instap (voorste trap) en één bij de uitstap
 					// (achterste trap), zodat je na het omhoog lopen recht de gang in stapt i.p.v. tegen de muur.
 					const float SDW = StairLaneWd + 30.f;
-					SegD(StairDoorC + SDW * 0.5f, StairBackC - SDW * 0.5f, sw, zS); // muur tussen de twee openingen
+					if (f == NF - 1)
+					{
+						// Bovenste verdieping: GEEN trap omhoog -> de INSTAP-opening (voorste trap) is een doodlopend
+						// gat waar je naar beneden op de trap zou springen. Dicht 'm met een VOLLE MUUR (tot het
+						// plafond, geen vloer). De uitstap (achterste trap) blijft open om de trap af te lopen.
+						SegD(HallLen, StairBackC - SDW * 0.5f, sw, zS); // instap + tussenmuur in één dichte wand
+					}
+					else
+					{
+						SegD(StairDoorC + SDW * 0.5f, StairBackC - SDW * 0.5f, sw, zS); // muur tussen de twee openingen
+					}
 					SegD(StairBackC + SDW * 0.5f, Foot, sw, zS);                    // muurtje na de tweede opening
 				}
 				// Achterwand van de appartementen (sluit ze af van de schacht-zone).
