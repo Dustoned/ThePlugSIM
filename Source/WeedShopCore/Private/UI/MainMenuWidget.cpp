@@ -357,18 +357,19 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		// Exact opgemeten uit T_MainMenuBG.png (1672x941): balk x=145..370, 6 knoppen,
 		// gelijke tussenruimte, centers y=440/498/556/613/673/735, hoogte ~47px.
 		const float X0 = 0.083f, X1 = 0.285f, HalfH = 0.029f; // langere balken
-		// Credits er voor nu uit -> 5 knoppen (de knoppen tekenen hun eigen swatch-balk, dus geen lege plek).
-		const float Centers[5] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f };
-		TFunction<void()> Acts[5] = {
+		// Credits eruit, CO-OP er als gewone menu-knop bij -> 6 knoppen (eigen swatch-balk, geen lege plek).
+		const float Centers[6] = { 0.4676f, 0.5292f, 0.5908f, 0.6514f, 0.7152f, 0.7811f };
+		TFunction<void()> Acts[6] = {
 			[this]() { OnContinue(); },  // CONTINUE -> laatst gebruikte slot
 			[this]() { OpenPicker(1); }, // NEW GAME -> kies een slot
 			[this]() { OpenPicker(2); }, // LOAD GAME -> kies een slot
+			[this]() { OpenCoop(); },    // CO-OP -> host/join via IP
 			[this]() { OnSettings(); },  // SETTINGS
 			[this]() { OnQuit(); },      // EXIT GAME
 		};
-		const TCHAR* Labels[5] = { TEXT("CONTINUE"), TEXT("NEW GAME"), TEXT("LOAD GAME"), TEXT("SETTINGS"), TEXT("EXIT GAME") };
+		const TCHAR* Labels[6] = { TEXT("CONTINUE"), TEXT("NEW GAME"), TEXT("LOAD GAME"), TEXT("CO-OP"), TEXT("SETTINGS"), TEXT("EXIT GAME") };
 		MenuButtons.Reset(); MenuLabels.Reset();
-		for (int32 i = 0; i < 5; ++i)
+		for (int32 i = 0; i < 6; ++i)
 		{
 			UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
 			B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
@@ -492,37 +493,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 		SlotPanel->SetVisibility(ESlateVisibility::Collapsed); // start verborgen
 
-		// --- CO-OP-knop rechtsboven: kleine knop in DEZELFDE swatch-stijl als de hoofdknoppen (verf-streep
-		//     textuur, donker normaal + paarse hover), zodat 'ie netjes bij de rest past. ---
-		{
-			UWeedActionButton* CB = WidgetTree->ConstructWidget<UWeedActionButton>();
-			CB->OnClicked.AddDynamic(CB, &UWeedActionButton::Handle);
-			CB->OnAction.BindLambda([this](int32, int32) { OpenCoop(); });
-			FButtonStyle CS;
-			if (SwatchTex)
-			{
-				CS.Normal  = SwatchBrush(SwatchTex, FLinearColor(0.02f, 0.02f, 0.035f, 0.55f));
-				CS.Hovered = SwatchBrush(SwatchTex, FLinearColor(0.62f, 0.26f, 0.95f, 0.97f));
-				CS.Pressed = SwatchBrush(SwatchTex, FLinearColor(0.74f, 0.36f, 1.00f, 1.00f));
-			}
-			else
-			{
-				CS.Normal  = WeedUI::Rounded(FLinearColor(0.02f, 0.02f, 0.035f, 0.55f), 6.f);
-				CS.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 6.f);
-				CS.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.00f), 6.f);
-			}
-			CS.NormalPadding = FMargin(10.f, 5.f); CS.PressedPadding = FMargin(10.f, 5.f);
-			CB->SetStyle(CS);
-			UCanvasPanelSlot* CBs = Hit->AddChildToCanvas(CB);
-			CBs->SetAnchors(FAnchors(0.80f, 0.045f, 0.965f, 0.09f));
-			CBs->SetOffsets(FMargin(0.f)); CBs->SetAlignment(FVector2D(0.f, 0.f));
-			// Scherpe witte titel als LOSSE tekst, gecentreerd op de knop (net als de hoofdknoppen-labels).
-			UTextBlock* CLbl = WeedUI::Text(WidgetTree, TEXT("CO-OP"), 14, FLinearColor(0.97f, 0.98f, 1.f), true, true);
-			CLbl->SetVisibility(ESlateVisibility::HitTestInvisible);
-			UCanvasPanelSlot* CLs = Hit->AddChildToCanvas(CLbl);
-			CLs->SetAnchors(FAnchors(0.8825f, 0.0675f, 0.8825f, 0.0675f));
-			CLs->SetAlignment(FVector2D(0.5f, 0.5f)); CLs->SetAutoSize(true); CLs->SetPosition(FVector2D(0.f, 0.f));
-		}
+		// (CO-OP staat nu gewoon als knop in de menu-lijst hierboven, niet meer los rechtsboven.)
 
 		// --- CO-OP-kaart (host / join via IP) — gecentreerd, verborgen tot je op CO-OP klikt ---
 		{
@@ -611,6 +582,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 	AddBtn(TEXT("Continue"),   Hi,   [this]() { OnStart(); });
 	AddBtn(TEXT("New game"),   Dark, [this]() { OnStart(); });
 	AddBtn(TEXT("Load game"),  Dark, [this]() { OnContinue(); });
+	AddBtn(TEXT("Co-op"),      Dark, [this]() { OpenCoop(); });
 	AddBtn(TEXT("Settings"),   Dark, [this]() { OnSettings(); });
 	AddBtn(TEXT("Exit game"),  Dark, [this]() { OnQuit(); });
 
