@@ -240,6 +240,7 @@ void ACustomerBase::BeginPlay()
 			UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 			// In-aanmerking-komende strains (ontgrendeld + kleine buffer) MET hun unlock-level (proxy voor THC/prijs).
 			TArray<TPair<int32, FName>> Eligible;
+			TArray<TPair<int32, FName>> JustAbove; // strains NET boven je bereik (voor veeleisende whales)
 			FName LowestStrain; int32 LowestLvl = MAX_int32;
 			for (const FName& Row : ProductTable->GetRowNames())
 			{
@@ -249,6 +250,7 @@ void ACustomerBase::BeginPlay()
 				const int32 Lvl = Store ? Store->RequiredLevelFor(Strain) : 1;
 				if (Lvl < LowestLvl) { LowestLvl = Lvl; LowestStrain = Strain; }
 				if (Lvl <= PlayerLvl + 2) { Eligible.Add(TPair<int32, FName>(Lvl, Strain)); } // kleine buffer boven je level
+				else if (Lvl <= PlayerLvl + 12) { JustAbove.Add(TPair<int32, FName>(Lvl, Strain)); } // net buiten bereik
 			}
 			Eligible.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; }); // zwak -> sterk
 			// Klant-tier (1 Casual .. 5 Whale) bepaalt hoe goed: hogere tiers vragen om de STERKERE strains
@@ -261,6 +263,18 @@ void ACustomerBase::BeginPlay()
 				const float Pos = FMath::Clamp(TierFrac + FMath::FRandRange(-0.30f, 0.30f), 0.f, 1.f);
 				const int32 Idx = FMath::Clamp(FMath::RoundToInt(Pos * (Eligible.Num() - 1)), 0, Eligible.Num() - 1);
 				PickStrain = Eligible[Idx].Value;
+			}
+			// High (tier 4) / Whale (tier 5) vragen SOMS om wiet die je nog niet kunt maken (net boven je bereik).
+			// Dan kun je niet de exacte strain leveren -> je substitueert + moet flink compenseren (prijs/kwaliteit).
+			if (!bApptActive && CTier >= 4 && JustAbove.Num() > 0)
+			{
+				const float AspChance = (CTier >= 5) ? 0.18f : 0.10f;
+				if (FMath::FRand() < AspChance)
+				{
+					JustAbove.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; });
+					const int32 Idx = FMath::RandRange(0, FMath::Min(2, JustAbove.Num() - 1)); // de dichtstbijzijnde paar
+					PickStrain = JustAbove[Idx].Value;
+				}
 			}
 			// Op afspraak: gebruik exact wat in het telefoonbericht stond (strain + aantal).
 			if (bApptActive && !ApptWantStrain.IsNone()) { PickStrain = ApptWantStrain; }
