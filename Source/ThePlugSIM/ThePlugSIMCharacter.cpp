@@ -312,6 +312,41 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 			}
 		}
 	}
+
+	// Lola heeft physics-assets voor haar/rok/cloth -> die bones laten nawapperen. Deferred zodat de physics-state
+	// klaar is na de mesh-swap. (Andere skins: de mesh-swap reset de physics, dus niks te doen.)
+	if (PlayerSkin == 2)
+	{
+		FTimerHandle Th;
+		GetWorldTimerManager().SetTimer(Th, this, &AThePlugSIMCharacter::ApplySoftPhysics, 0.2f, false);
+	}
+}
+
+void AThePlugSIMCharacter::ApplySoftPhysics()
+{
+	USkeletalMeshComponent* M = GetMesh();
+	if (!M || PlayerSkin != 2) { return; }
+	UE_LOG(LogTemp, Warning, TEXT("SOFTPHYS physasset=%s"), M->GetPhysicsAsset() ? TEXT("YES") : TEXT("NULL"));
+	M->SetEnableGravity(true);
+	int32 Enabled = 0, WithBody = 0;
+	const int32 NumBones = M->GetNumBones();
+	for (int32 i = 0; i < NumBones; ++i)
+	{
+		const FName Bn = M->GetBoneName(i);
+		const FString S = Bn.ToString().ToLower();
+		// Cloth/hair-extremiteiten die mogen nawapperen (geen torso/ledematen -> die blijven door de animatie aangestuurd).
+		if (S.Contains(TEXT("hair")) || S.Contains(TEXT("skirt")) || S.Contains(TEXT("skrt")) || S.Contains(TEXT("dress"))
+			|| S.Contains(TEXT("cloth")) || S.Contains(TEXT("ribbon")) || S.Contains(TEXT("tail")) || S.Contains(TEXT("strand"))
+			|| S.Contains(TEXT("ponytail")) || S.Contains(TEXT("bang")) || S.Contains(TEXT("scarf")) || S.Contains(TEXT("strap"))
+			|| S.Contains(TEXT("rok")) || S.Contains(TEXT("haar")))
+		{
+			if (M->GetBodyInstance(Bn)) { ++WithBody; }
+			M->SetAllBodiesBelowSimulatePhysics(Bn, true, true);
+			M->SetAllBodiesBelowPhysicsBlendWeight(Bn, 1.0f);
+			++Enabled;
+		}
+	}
+	UE_LOG(LogTemp, Warning, TEXT("SOFTPHYS done: %d soft-bones, %d met physics-body, van %d totaal"), Enabled, WithBody, NumBones);
 }
 
 void AThePlugSIMCharacter::ToggleThirdPerson()

@@ -68,6 +68,8 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	bool bThirdPerson = false;
 	bool bTpKeyWasDown = false; // edge-detect voor de toggle-toets
 	void ToggleThirdPerson();
+	UFUNCTION()
+	void ApplySoftPhysics(); // Lola: haar/rok/cloth-bones laten nawapperen (physics-blend)
 public:
 	// Server: zet de skin-keuze van deze speler (client roept aan -> server -> repliceert).
 	UFUNCTION(Server, Reliable)
