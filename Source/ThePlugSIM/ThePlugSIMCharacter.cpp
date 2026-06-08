@@ -290,18 +290,13 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	if (IsLocallyControlled() && Inventory && HeldItemMesh)
 	{
 		const FName Active = Inventory->GetActiveItemId();
-		if (Active != LastHeldItemId)
+		// Viewmodel UIT: geen item-3D-model meer vóór de camera (zag er niet nice uit). Het echte item-model
+		// zie je nog wel zodra je het DROPT (de oppakbare drop-pickup). Hou de held-mesh dus altijd verborgen.
+		if (HeldItemMesh->IsVisible() || !LastHeldItemId.IsNone())
 		{
-			LastHeldItemId = Active;
-			if (Active.IsNone()) { PropKit::ClearItemModel(HeldItemMesh); HeldItemMesh->SetVisibility(false); }
-			else { PropKit::BuildItemModel(this, HeldItemMesh, Active, 0.7f, /*bFirstPerson*/ true, /*bCollision*/ false); HeldItemMesh->SetVisibility(true, true); }
-		}
-		// Viewmodel vóór de camera (centraal-onder, iets rechts) zodat 't item altijd in beeld is.
-		if (!bHeldOnHandBone && !Active.IsNone() && FirstPersonCameraComponent)
-		{
-			const FRotator ViewRot = GetControlRotation();
-			const FVector Pos = FirstPersonCameraComponent->GetComponentLocation() + ViewRot.RotateVector(FVector(45.f, 9.f, -13.f));
-			HeldItemMesh->SetWorldLocationAndRotation(Pos, ViewRot + FRotator(-12.f, 22.f, 0.f)); // lichte kanteling
+			LastHeldItemId = NAME_None;
+			PropKit::ClearItemModel(HeldItemMesh);
+			HeldItemMesh->SetVisibility(false);
 		}
 
 		// Drop-toets (Q): HOUD ingedrukt (~0.5s) om het actieve item te droppen, zodat je niet per ongeluk
