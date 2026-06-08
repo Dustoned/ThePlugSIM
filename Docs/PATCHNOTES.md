@@ -1,102 +1,90 @@
 PATCH NOTES
-Version 1.3.0 — 7 juni 2026
+Version 1.4.0 — 8 juni 2026
 
 Korte intro:
-Een grote gameplay- en polish-ronde. Een volwaardig klant-tier & deal-systeem, upgrades
-die echt op je objecten vastklikken (met eigen 3D-modellen), een echt droogrek, een
-eerlijkere kwaliteit-mechanic, en de hele game staat nu in het Engels.
+De grootste update tot nu toe. Twee volwaardige co-op speelmodi (samen of tegen elkaar),
+speler-skins die je zelf kiest, een hele nieuwe concentraten-tak (moonrocks, rosin, isolator),
+content uitgesmeerd tot level 50, en jij bent voortaan de énige dealer — drugs gaan alleen
+nog naar echte klanten.
 
 ━━━━━━━━━━━━━━━━━━━━
 
 NEW FEATURES
 
-+ Klant-tier systeem  (Casual → Regular → Heavy User → VIP → Whale)
-  Elke klant heeft nu een eigen klantwaarde-level met een XP-balk. Hoe meer (en betere)
-  deals je met iemand doet, hoe hoger z'n tier. Hogere tiers bestellen meer grammen tegelijk
-  én accepteren hogere prijzen (prijs-tolerantie loopt op tot ~30% bij een Whale). Je ziet de
-  tier + XP-balk in de contacten-app, in de chat-header én op het deal-scherm.
-  → Zo bouw je vaste klanten op die steeds waardevoller worden.
++ Co-op speelmodi  (de hoofdfeature)
+  Bij het hosten kies je nu tussen twee modi:
+   • Co-op (samen) — je begint samen in één wereld/appartement, alles is gedeeld. Ieder z'n
+     eigen cash op zak, maar de bank is gedeeld zodat je samen kunt sparen en geld kunt sturen.
+   • Competitive (tegen elkaar) — alles dubbel en apart: eigen geld, eigen bank, eigen huur,
+     en eigen NPC-relaties (respect/loyaliteit per speler). Je probeert elkaars klanten af te
+     pakken: bedien je een klant van je rivaal, dan "poach" je 'm (beide spelers krijgen een
+     melding). Een Leaderboard-app + live scorebord laat zien wie sneller rijk wordt.
+  → In competitive krijgt iedere speler z'n eigen afspraken-stroom op de telefoon.
 
-+ Volledig vernieuwd deal-systeem
-  Klanten zeggen nu altijd duidelijk WAT en HOEVEEL ze willen ("Got any Silver Haze? Need
-  5g…"), dus je kunt je voorbereiden. Op de deal-prompt staat een wachttijd-timer (hoelang
-  de klant nog blijft) en zeurders krijgen een cooldown. Sterkere wiet aanbieden dan ze
-  verwachten (hogere THC% dan de basis van hun gevraagde strain) maakt ze veel
-  bereidwilliger — maar slechte kwaliteit blijft slechte kwaliteit.
++ Speler-skins  (Male / Female / Lola)
+  Kies in de telefoon → Settings → Status je character. De keuze is gerepliceerd (je co-op
+  maat ziet je skin) en wordt per speler opgeslagen.
+  → Nieuw: druk op B om naar third-person te wisselen en jezelf/je skin te bekijken; in
+    first-person zie je je eigen skin met verborgen hoofd zodat de camera clean blijft.
 
-+ Alternatieve strain aanbieden via de chat
-  Heb je niet wat de klant vraagt? Bied via "Offer instead…" een andere strain aan
-  (kans-gebaseerd of ze 'm pakken). De lijst toont alle stats + het verschil, telt in grammen,
-  en kijkt ook in je chests/shelves — niet alleen je inventory.
++ Concentraten-tak  (na de Cali-strains)
+  Drie nieuwe high-end producten met realistische THC%:
+   • Moonrocks — wiet gedoopt in olie (heeft olie nodig uit de nieuwe oliepers-keten)
+   • Rosin — geperst, hoge zuiverheid
+   • Isolator (bubble hash) — het sterkste van het stel
+  Elk met eigen machines (Standaard + Pro), netjes ontgrendeld over de hogere levels.
 
-+ Upgrades klikken nu op hun object — met echte modellen
-  Grow-upgrades (kweeklamp, kweektent, watertank, drainage, isolatie, bloom-fles) snappen op
-  een POT, droogrek-upgrades op het DROOGREK en hasj-upgrades op de MACHINE. Je raakt ze niet
-  meer kwijt op de grond: mik een geldig object aan en de upgrade kleeft eraan (de tent gaat
-  zelfs over de pot heen), draaibaar met R. Elke upgrade heeft nu een eigen 3D-model i.p.v.
-  een kaal blokje.
-  → Bonus: interactie met een geplaatste upgrade stuurt door naar het object zelf, dus je hoeft
-    niet meer tussen lamp en pot te micro-klikken.
++ Jij bent de énige dealer
+  Drugs (wiet/hasj/edibles/concentraten) verkoop je nu uitsluitend aan NPC-klanten — geen
+  vaste supplier-prijs meer. De Sell-app van de supplier koopt alleen nog meubels, upgrades,
+  zaden en supplies terug.
 
-+ De telefoon als echte hub
-  Een echt telefoon-icoon op de hotbar dat kort trilt + een teller toont bij nieuwe berichten.
-  De "Lab"-app (de hele hasj-keten: mesh → crystals → press → hash) met een nieuw
-  erlenmeyer-icoon. En rijke hover-tooltips op élk item — ook op de hotbar terwijl je inventory
-  open is — met naam, soort, THC%, kwaliteit en gram.
++ Klanten vragen om hasj & edibles  (tier-gebaseerd)
+  De laagste twee tiers willen vooral wiet; hogere tiers vragen steeds vaker (en meer) om hasj
+  en brownies. Whales/VIP's vragen soms zelfs om sterkere strains die je nog niet ontgrendeld
+  hebt — dan moet je slim compenseren met een alternatief.
 
-+ Een echt droogrek
-  Het droogrek is nu een hang-rek: sleep natte wiet erin en ze hangt aan roedes te drogen.
-  Onder de slots staat een nette voortgangs-sectie per batch (strain, gram, THC, kwaliteit +
-  een grote balk en de resterende tijd). Volledig met slepen: een klare batch sleep je terug
-  naar je inventory of hotbar.
-
-+ Nachtleven op straat
-  's Nachts blijven de verslaafde bewoners buiten rondhangen i.p.v. dat de stad leeg is — er
-  zijn dus ook 's nachts klanten te vinden.
-
-+ Water per fles
-  Elke waterfles houdt nu z'n eigen waterhoeveelheid bij. Grotere flessen kosten meer klikken
-  om te vullen, en de hand-preview laat per fles zien hoe vol 'ie is.
++ Cash droppen & splitten
+  Shift-klik op je geld-stapel → schuif een bedrag → drop fysiek cash dat een ander kan
+  oppakken. Plus geld overmaken via de bank. Handig om je co-op maat op weg te helpen
+  (of in competitive: juist niet).
 
 IMPROVEMENTS
 
-~ Inventory, droogrek en schappen delen nu dezelfde stijl (slot-kleuren, contrast, tiling) en
-  werken volledig met slepen — beide kanten op.
-~ Nette item-namen overal (upgrades tonen hun winkelnaam; "SilverHaze" → "Silver Haze").
-~ Alle hulp- en uitlegteksten ingekort en versimpeld; ze steken niet meer uit de UI.
-~ Interactie-prompts opgeschoond en consistent; details staan nu in de HUD i.p.v. in de prompt.
-~ Delivery-knoppen veel leesbaarder met de prijs groot en leidend; de winkelwagen-regel past
-  nu netjes in het telefoon-paneel.
-~ De pot-info toont nu welk type pot het is ("Clay pot"), en de plant-HUD toont ziekte-status.
-~ Telefoon-flash-fixes: badges werken live, geen geflikker meer bij berichten van andere contacten.
-~ De hele game staat nu in het Engels (namen blijven).
+~ Content tot level 50: alle strains netjes uitgesmeerd over de progression-boom, plus 10
+  nieuwe exotische strains. Level 50 is de echte mijlpaal richting het weedshop-gedeelte.
+~ Telefoon opnieuw ingericht: apps staan logischer gerangschikt. Nieuwe tabs onder supplies —
+  Kitchen (machines) en Ingredients (boter e.d.) — en oven/koelkast staan nu netjes bij
+  Furniture.
+~ Klant-progressie loopt nu echt mee: hoe hoger je een klant levelt, hoe sterkere wiet en hoe
+  meer grammen die vraagt.
+~ Je spawnt nu met een goedkoop droogrek (cheap drying rack zit op level 1).
+~ Multiplayer-knop netjes in het hoofdmenu verwerkt (zelfde swatch-stijl als de rest), als
+  gewone knop in de lijst i.p.v. los rechtsboven.
 
 BALANCE CHANGES
 
-↑ Sterkere wiet (hogere THC% dan verwacht) maakt klanten flink bereidwilliger.
-↑ Hogere klant-tiers accepteren hogere prijzen (prijs-tolerantie tot ~30%).
-↑ De hele hasj-keten (mesh + press) ontgrendelt nu tegelijk, zodat je 'm meteen kunt draaien.
-~ Baggie-progressie: je start met kleine zakjes; grote zakjes ontgrendel je vanaf level 5.
-~ Small jars gaan nu tot 25g.
-↓ Plant-kwaliteit is nu een tijd-gewogen gemiddelde over de héle groei: water op het laatste
-  moment redt je oogst niet meer — je moet er consequent water in houden (en de HUD toont dat
-  nu eerlijk).
+~ Realistischere THC%: de allerbeste wiet met álle upgrades (beste pot + pot-upgrades +
+  fertilizer + goede verzorging) zit op max ~40%. Pot, grond, mest én verzorging tellen nu
+  allemaal mee. De 40% is een zachte limiet — een geluksbatch kan er nét overheen, mooi om
+  mee op te scheppen tegen je co-op maat.
+~ Meer variatie: hoge-THC strains hebben minder yield, lagere-THC meer — met passende prijs/tijd.
+↓ Held-item viewmodel uitgezet (zag er niet nice uit); de drop-modellen blijven.
 
 BUG FIXES
 
-✓ Fixed: droogrek/verpak-tafel/hasj-machine pakken nu exact de gesleepte stapel met z'n eigen
-  THC%/kwaliteit (niet meer alle wiet van die strain).
-✓ Fixed: zakjes werden op de achtergrond verkeerd in grammen geteld — deals, home-stash en de
-  offer-lijst tellen nu correct (een 3g-zakje telt als 3g).
-✓ Fixed: klanten zeiden soms dat je iets niet had terwijl het in je inventory zat.
-✓ Fixed: de split- en notificatie-popups vielen achter andere UI.
-✓ Fixed: lift-cabinedeuren clipten niet meer in de muur bij openen.
-✓ Fixed: de inventory-toets (E) sluit nu ook het droogrek/winkel/schap/verpak/ATM.
-✓ Fixed: een upgrade plaatsen zei soms "can't place" terwijl de highlight blauw (geldig) was.
-✓ Fixed: één klik op een fles vulde niet meer per ongeluk alle flessen tegelijk.
+✓ Fixed: de Kitchen-tab toonde de verkeerde items en lichtte niet op (een clamp-bug die de
+  categorie terugviel op de oude hasj-tab).
+✓ Fixed: de nieuwe edibles/keuken-items waren nergens te koop (matchten geen app-categorie).
+✓ Fixed: bij de trappenhal van elke flat was de bovenste etage dicht-gevloerd — je kunt de
+  trap nu weer gebruiken; alleen de open kant is met een muur afgesloten (geen vloer meer).
+✓ Fixed: liften hadden onnodige deur-kozijnen; en de kozijnen bij gewone deuren hebben nu geen
+  collision meer, dus je past er weer doorheen (het uiterlijk blijft).
+✓ Fixed: vrij-bouwen (sandbox) is nu binnen-only — je kunt geen objecten meer buiten plaatsen.
 
 KNOWN ISSUES
 
+! Cloth/haar-physics (zachte rok/haar op Lola) is nog niet actief — komt later.
 ! Controller-support is nog niet volledig af.
 ! Op ultrawide-schermen kunnen sommige iconen klein lijken.
 
