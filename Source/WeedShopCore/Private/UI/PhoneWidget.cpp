@@ -920,7 +920,7 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 		for (int32 Idx = 0; Idx < AppCats.Num(); ++Idx)
 		{
 			const int32 Cat = AppCats[Idx];
-			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? FLinearColor(0.20f, 0.78f, 0.45f) : FLinearColor(0.13f, 0.14f, 0.18f);
 			UWeedActionButton* Pill = MakeActionBtn(CatName(Cat), Col, [this, Ph, Cat]() { Ph->SetSupplierCat(Cat); bCartView = false; RefreshStore(); }, 11);
 			UUniformGridSlot* GSlot = Tabs->AddChildToUniformGrid(Pill, Idx / Cols, Idx % Cols);
 			GSlot->SetHorizontalAlignment(HAlign_Fill);
@@ -962,7 +962,7 @@ void UPhoneWidget::RefreshStore()
 	{
 		if (!StoreTabBtns[i]) { continue; }
 		const int32 TabCat = AppCats.IsValidIndex(i) ? AppCats[i] : i;
-		const FLinearColor Col = (TabCat == Cat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		const FLinearColor Col = (TabCat == Cat) ? FLinearColor(0.20f, 0.78f, 0.45f) : FLinearColor(0.13f, 0.14f, 0.18f);
 		FButtonStyle St;
 		St.Normal = RoundedBrush(Col, 8.f);
 		St.Hovered = RoundedBrush(Col * 1.3f, 8.f);
