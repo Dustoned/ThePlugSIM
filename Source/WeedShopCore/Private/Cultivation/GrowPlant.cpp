@@ -772,7 +772,15 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		// THC% afgeleid van strain-potentie x kwaliteit. Wiet heeft ALTIJD THC% (floor), 0% kan niet:
 		// slecht verzorgd = gewoon zwakke wiet, geen "no weed". Op hele % afgerond zodat oogsten van
 		// dezelfde kwaliteit netjes samen stapelen (en alleen echt andere batches apart blijven).
-		const float ThcRaw = Row->BaseThcPercent * QualityFrac * FMath::FRandRange(0.97f, 1.03f);
+		// THC-kwaliteit: verzorging + SOIL + POT + FERTILIZER dragen ALLE bij (gewogen). Alles op z'n best +
+		// perfecte zorg => je haalt de strain-max (base). Elke upgrade tilt je THC zichtbaar omhoog richting die max.
+		const FString SoilS = SoilId.ToString();
+		const float SoilQ = SoilS.Contains(TEXT("Premium")) ? 1.0f : SoilS.Contains(TEXT("Rich")) ? 0.75f : 0.5f;
+		const FString PotS = PotTier.ToString();
+		const float PotQ = PotS.Contains(TEXT("Fabric")) ? 1.0f : PotS.Contains(TEXT("Plastic")) ? 0.8f : PotS.Contains(TEXT("Clay")) ? 0.6f : 0.4f;
+		const float FertQ = FMath::Clamp(0.6f + (FertYieldMult - 1.0f), 0.6f, 1.0f);
+		const float GearQ = FMath::Clamp(0.35f * CareQ + 0.25f * SoilQ + 0.22f * PotQ + 0.18f * FertQ, 0.f, 1.f);
+		const float ThcRaw = Row->BaseThcPercent * GearQ * FMath::FRandRange(0.97f, 1.03f);
 		// Harde realistische cap: gedroogde bud gaat NOOIT boven 40% (zelfs top-strain + perfecte setup = 40).
 		const float ThcPercent = FMath::RoundToFloat(FMath::Min(40.f, FMath::Max(Row->BaseThcPercent * 0.15f, FMath::Max(1.0f, ThcRaw))));
 		const float QualityPct = FMath::RoundToFloat(FMath::Max(5.f, QualityFrac * 100.f));
@@ -916,13 +924,20 @@ float AGrowPlant::GetEstimatedTotalYield() const
 
 float AGrowPlant::GetEstimatedThcPercent() const
 {
-	FSoilDef S; const float SoilMult = GetSoilDef(SoilId, S) ? S.QualityMult : 1.f;
+	// Zelfde weging als bij de oogst: verzorging + soil + pot + fertilizer bepalen hoe dicht je bij de strain-max komt.
+	const float CareQ = FMath::Clamp(CareAvg, 0.f, 1.f);
+	const FString SoilS = SoilId.ToString();
+	const float SoilQ = SoilS.Contains(TEXT("Premium")) ? 1.0f : SoilS.Contains(TEXT("Rich")) ? 0.75f : 0.5f;
+	const FString PotS = PotTier.ToString();
+	const float PotQ = PotS.Contains(TEXT("Fabric")) ? 1.0f : PotS.Contains(TEXT("Plastic")) ? 0.8f : PotS.Contains(TEXT("Clay")) ? 0.6f : 0.4f;
+	const float FertQ = FMath::Clamp(0.6f + (FertYieldMult - 1.0f), 0.6f, 1.0f);
+	const float GearQ = FMath::Clamp(0.35f * CareQ + 0.25f * SoilQ + 0.22f * PotQ + 0.18f * FertQ, 0.f, 1.f);
 	float Sum = 0.f; int32 N = 0;
 	for (const FName& St : SlotStrain)
 	{
 		if (const FWeedStrainRow* Row = GetStrainRow(St))
 		{
-			Sum += Row->BaseThcPercent * CareAvg * SoilMult;
+			Sum += FMath::Min(40.f, Row->BaseThcPercent * GearQ);
 			++N;
 		}
 	}
