@@ -85,17 +85,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	int64 GetCashCents() const { return BalanceCents; }
 
+	// Bank-saldo. In co-op routeert dit naar de GEDEELDE crew-bank (GameState); in competitive lokaal.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
-	int64 GetBankCents() const { return BankCents; }
+	int64 GetBankCents() const;
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
-	float GetBankEuros() const { return static_cast<float>(BankCents) / 100.0f; }
+	float GetBankEuros() const { return static_cast<float>(GetBankCents()) / 100.0f; }
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
-	bool CanAffordBank(int64 AmountCents) const { return BankCents >= AmountCents; }
+	bool CanAffordBank(int64 AmountCents) const { return GetBankCents() >= AmountCents; }
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
-	bool IsBankInDebt() const { return BankCents < 0; }
+	bool IsBankInDebt() const { return GetBankCents() < 0; }
 
 	// Server: haal geld van de bank dat WEL in de min mag (huur/schuld). Negatief saldo = schuld.
 	void ChargeBank(int64 AmountCents);
@@ -216,6 +217,9 @@ protected:
 	// Zet het cash-saldo (alleen server) en vuurt de delegate ook lokaal op de server (host).
 	void SetBalance(int64 NewCents);
 	void SetBank(int64 NewCents);
+
+	// Welke economy bezit het BANK-saldo: in co-op de gedeelde crew-bank (GameState), anders deze.
+	UEconomyComponent* BankOwner() const;
 
 	// Reset de dag-teller voor storten als er een nieuwe dag is.
 	void RefreshDepositDay();

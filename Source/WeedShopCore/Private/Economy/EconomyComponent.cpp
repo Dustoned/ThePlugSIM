@@ -103,17 +103,40 @@ void UEconomyComponent::SetBalance(int64 NewCents)
 	OnBalanceChanged.Broadcast(BalanceCents);
 }
 
+UEconomyComponent* UEconomyComponent::BankOwner() const
+{
+	// Co-op: alle spelers delen één crew-bank (de GameState-economy). Competitive: ieder z'n eigen bank.
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && !GS->IsCompetitive())
+	{
+		if (UEconomyComponent* Shared = GS->GetSharedEconomy())
+		{
+			if (Shared != this) { return Shared; }
+		}
+	}
+	return const_cast<UEconomyComponent*>(this);
+}
+
+int64 UEconomyComponent::GetBankCents() const
+{
+	return BankOwner()->BankCents;
+}
+
 void UEconomyComponent::SetBank(int64 NewCents)
 {
-	BankCents = FMath::Max<int64>(0, NewCents);
-	OnBalanceChanged.Broadcast(BalanceCents);
+	UEconomyComponent* Owner = BankOwner();
+	Owner->BankCents = FMath::Max<int64>(0, NewCents);
+	Owner->OnBalanceChanged.Broadcast(Owner->BalanceCents); // owner (gedeelde bank) prikkelen
+	if (Owner != this) { OnBalanceChanged.Broadcast(BalanceCents); } // + lokale UI van deze speler
 }
 
 void UEconomyComponent::ChargeBank(int64 AmountCents)
 {
 	if (GetOwnerRole() != ROLE_Authority || AmountCents == 0) { return; }
-	BankCents -= AmountCents; // mag in de min: huur/schuld
-	OnBalanceChanged.Broadcast(BalanceCents);
+	UEconomyComponent* Owner = BankOwner();
+	Owner->BankCents -= AmountCents; // mag in de min: huur/schuld
+	Owner->OnBalanceChanged.Broadcast(Owner->BalanceCents);
+	if (Owner != this) { OnBalanceChanged.Broadcast(BalanceCents); }
 }
 
 void UEconomyComponent::OnRep_Balance()
@@ -127,15 +150,15 @@ void UEconomyComponent::AddBank(int64 AmountCents, bool bTaxed)
 {
 	if (GetOwnerRole() != ROLE_Authority || AmountCents <= 0) { return; }
 	const int64 Tax = bTaxed ? (int64)FMath::RoundToDouble(AmountCents * DepositTaxPct) : 0;
-	SetBank(BankCents + (AmountCents - Tax));
+	SetBank(GetBankCents() + (AmountCents - Tax));
 	OnMoneyEarned.Broadcast(AmountCents - Tax);
 }
 
 bool UEconomyComponent::RemoveBank(int64 AmountCents)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return false; }
-	if (AmountCents <= 0 || BankCents < AmountCents) { return false; }
-	SetBank(BankCents - AmountCents);
+	if (AmountCents <= 0 || GetBankCents() < AmountCents) { return false; }
+	SetBank(GetBankCents() - AmountCents);
 	return true;
 }
 
@@ -169,7 +192,7 @@ bool UEconomyComponent::TransferBank(int64 AmountCents)
 	}
 	const int64 Fee = (int64)FMath::RoundToDouble(AmountCents * TransferFeePct);
 	// Per-speler geld: het bedrag + fee verlaat MIJN bank; de ontvanger wordt elders bijgeschreven.
-	if (BankCents < AmountCents + Fee)
+	if (GetBankCents() < AmountCents + Fee)
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Red, TEXT("Not enough bank money for that transfer.")); }
 		return false;
@@ -204,8 +227,8 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 	const int64 Tax = (int64)FMath::RoundToDouble(Amount * DepositTaxPct);
 	const int64 ToBank = Amount - Tax;
 
-	SetBalance(BalanceCents - Amount);  // cash eraf
-	SetBank(BankCents + ToBank);        // bank erbij (na belasting)
+	SetBalance(BalanceCents - Amount);  // cash eraf (lokaal/per speler)
+	SetBank(GetBankCents() + ToBank);   // bank erbij (na belasting) - in co-op naar de gedeelde crew-bank
 	DepositedTodayCents += Amount;
 
 	// Heat: het deel dat je MET verkoop kunt verklaren is "schoon" (weinig heat); de rest is verdacht

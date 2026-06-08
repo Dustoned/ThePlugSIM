@@ -43,6 +43,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UEconomyComponent* GetEconomy() const;
 
+	// De GameState-eigen economy = de GEDEELDE crew-bank in co-op (bank-saldo van alle spelers samen).
+	// In competitive niet gebruikt (daar heeft ieder z'n eigen bank op de pawn).
+	UEconomyComponent* GetSharedEconomy() const { return Economy; }
+
 	// De gedeelde dag/nacht-klok.
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UDayCycleComponent* GetDayCycle() const { return DayCycle; }
