@@ -481,7 +481,9 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")); break;
 			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
-			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_")); break; // Hasj-keten + upgrades
+			// Lab: hasj-keten (mesh/press) + edibles-keten (oven/pan/fridge + boter) + machine-upgrades.
+			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_"))
+				|| S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Pan_")) || S.StartsWith(TEXT("Fridge_")) || S == TEXT("Butter"); break;
 			default: break;
 			}
 			if (bMatch) { Out.Add(Id); }

@@ -1656,10 +1656,10 @@ void UPhoneWidget::RefreshContent()
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
-	else if (App == GHashApp) // Hash Lab -> de hasj-keten: machines (mesh/press) + machine-upgrades
+	else if (App == GHashApp) // Lab -> hasj-keten (mesh/press) + edibles-keten (oven/pan/fridge + boter) + upgrades
 	{
 		bSellApp = false;
-		AppCats = { 10 }; // Hash (Mesh/Press + ProcUp-upgrades)
+		AppCats = { 10 }; // Lab (Mesh/Press + Oven/Pan/Fridge/Butter + ProcUp-upgrades)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
