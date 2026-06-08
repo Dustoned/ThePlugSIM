@@ -286,7 +286,7 @@ void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 void AThePlugSIMCharacter::ApplySkinMesh()
 {
 	// 0 = Manny (man), 1 = Quinn (vrouw): zelfde mannequin-skelet, AnimBP werkt direct.
-	// 2 = Lola (K-POP pack): eigen skelet -> animeert pas na een retarget (test of ze laadt + beweegt).
+	// 2 = Lola (K-POP pack): eigen skelet (compatible gemaakt met de mannequin).
 	const TCHAR* Path;
 	switch (PlayerSkin)
 	{
@@ -296,13 +296,13 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
 	if (!Skin) { return; }
-	// Skin op de THIRD-PERSON body (zien je co-op maten + jij zelf in de 3rd-person toggle)
-	// EN op de first-person mesh (zie jij zelf je echte skin, met verborgen hoofd zodat 't niet voor de cam clipt).
+
+	// Third-person body (co-op + jij in 3rd-person) EN first-person mesh (jouw eigen view, hoofd verborgen).
 	if (USkeletalMeshComponent* M = GetMesh()) { M->SetSkeletalMeshAsset(Skin); }
 	if (FirstPersonMesh)
 	{
 		FirstPersonMesh->SetSkeletalMeshAsset(Skin);
-		// Hoofd verbergen kan nu veilig: de camera zit op de capsule, niet meer op deze head-bone.
+		// Hoofd verbergen kan veilig: de camera zit op de capsule, niet meer op deze head-bone.
 		static const TCHAR* HeadBones[] = { TEXT("head"), TEXT("Head") };
 		for (const TCHAR* B : HeadBones)
 		{
