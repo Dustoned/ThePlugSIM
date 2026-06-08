@@ -1,16 +1,26 @@
-Name,DisplayName,BaseThcPercent,BaseYieldGrams,GrowMinutes,SeedPriceCents,HarvestProductId
-Streetweed,"Streetweed",9,16,4,300,Bud_Streetweed
-CriticalMass,"Critical Mass",12,28,16,2500,Bud_CriticalMass
-SilverHaze,"Silver Haze",14,12,6,1500,Bud_SilverHaze
-NorthernLights,"Northern Lights",17,13,7,3500,Bud_NorthernLights
-BigBud,"Big Bud",18,38,30,40000,Bud_BigBud
-WhiteWidow,"White Widow",19,12,8,6000,Bud_WhiteWidow
-SourDiesel,"Sour Diesel",21,8,9,7500,Bud_SourDiesel
-AmnesiaHaze,"Amnesia Haze",23,9,10,12000,Bud_AmnesiaHaze
-OGKush,"OG Kush",24,15,11,18000,Bud_OGKush
-GorillaGlue,"Gorilla Glue",27,11,12,28000,Bud_GorillaGlue
-GirlScoutCookies,"Girl Scout Cookies",29,8,13,45000,Bud_GirlScoutCookies
-WeddingCake,"Wedding Cake",31,9,14,80000,Bud_WeddingCake
-Gelato,"Gelato (Cali)",33,10,15,150000,Bud_Gelato
-Runtz,"Runtz (Cali)",35,8,16,250000,Bud_Runtz
-Zkittlez,"Zkittlez (Cali)",37,7,17,400000,Bud_Zkittlez
+Name,DisplayName,BaseThcPercent,BaseYieldGrams,GrowMinutes,SeedPriceCents,HarvestProductId,UnlockLevel
+Streetweed,"Streetweed",9,16,4,300,Bud_Streetweed,1
+CriticalMass,"Critical Mass",12,28,16,2500,Bud_CriticalMass,2
+SilverHaze,"Silver Haze",14,12,6,1500,Bud_SilverHaze,4
+BlueDream,"Blue Dream",16,20,7,4500,Bud_BlueDream,5
+NorthernLights,"Northern Lights",17,13,7,3500,Bud_NorthernLights,7
+BigBud,"Big Bud",18,38,30,40000,Bud_BigBud,9
+JackHerer,"Jack Herer",20,14,9,8000,Bud_JackHerer,11
+WhiteWidow,"White Widow",19,12,8,6000,Bud_WhiteWidow,13
+SourDiesel,"Sour Diesel",21,8,9,7500,Bud_SourDiesel,16
+PineappleExpress,"Pineapple Express",22,12,10,11000,Bud_PineappleExpress,18
+AmnesiaHaze,"Amnesia Haze",23,9,10,12000,Bud_AmnesiaHaze,20
+OGKush,"OG Kush",24,15,11,18000,Bud_OGKush,23
+BubbaKush,"Bubba Kush",25,13,11,16000,Bud_BubbaKush,25
+GorillaGlue,"Gorilla Glue",27,11,12,28000,Bud_GorillaGlue,27
+DurbanPoison,"Durban Poison",26,10,11,20000,Bud_DurbanPoison,29
+GirlScoutCookies,"Girl Scout Cookies",29,8,13,45000,Bud_GirlScoutCookies,31
+PurpleHaze,"Purple Haze",28,9,12,26000,Bud_PurpleHaze,33
+WeddingCake,"Wedding Cake",31,9,14,80000,Bud_WeddingCake,35
+CookiesCream,"Cookies & Cream",30,9,13,38000,Bud_CookiesCream,37
+Gelato,"Gelato (Cali)",33,10,15,150000,Bud_Gelato,39
+Mimosa,"Mimosa (Cali)",34,9,15,120000,Bud_Mimosa,41
+Runtz,"Runtz (Cali)",35,8,16,250000,Bud_Runtz,43
+AppleFritter,"Apple Fritter (Cali)",36,8,16,220000,Bud_AppleFritter,45
+Zkittlez,"Zkittlez (Cali)",37,7,17,400000,Bud_Zkittlez,47
+GaryPayton,"Gary Payton (Cali)",38,8,17,380000,Bud_GaryPayton,49

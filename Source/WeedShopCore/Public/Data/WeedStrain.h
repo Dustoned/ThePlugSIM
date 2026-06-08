@@ -36,4 +36,8 @@ struct FWeedStrainRow : public FTableRowBase
 	// Inventory item-id dat de oogst oplevert (gedroogde bud van deze strain).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Strain")
 	FName HarvestProductId = NAME_None;
+
+	// Speler-level waarop dit zaadje in de winkel verschijnt. 0 = automatisch afleiden uit THC%.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Strain")
+	int32 UnlockLevel = 0;
 };

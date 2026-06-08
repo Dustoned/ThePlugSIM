@@ -387,6 +387,8 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	{
 		if (const FWeedStrainRow* Row = StrainTable->FindRow<FWeedStrainRow>(CatalogId, TEXT("RequiredLevelFor"), false))
 		{
+			// Expliciet unlock-level per strain (uit de tabel) heeft voorrang; anders afleiden uit THC%.
+			if (Row->UnlockLevel > 0) { return Row->UnlockLevel; }
 			// Strains gespreid over de hele tree tot ~48 (zodat er tot de level-50-licentie nieuwe strains komen).
 			const float Thc = Row->BaseThcPercent;
 			if (Thc < 14.f) { return 1; }   // Streetweed, Critical Mass
