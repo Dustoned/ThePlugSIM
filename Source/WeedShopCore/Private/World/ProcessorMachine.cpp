@@ -72,8 +72,10 @@ bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSec
 	if (T == TEXT("Press_Pro"))   { OutCapacity = 3; OutSeconds = 50.f; OutConv = 0.85f; OutThcMult = 1.30f; return true; }
 	// Edibles-keten: oven (decarb, klein verlies, lichte THC-activatie) -> pan (boter koken) -> koelkast
 	// (laten zetten, grootste THC-boost + cap = "koelkast-voorraad").
+	// Edibles schalen multiplicatief mee met de bud-THC die je erin stopt (oven x1.15 -> pan x1.25 -> koelkast
+	// x1.55 = x2.23 totaal). Betere weed = duidelijk betere edible; toppt rond ~82% (Cali), nét onder hasj (90%).
 	if (T == TEXT("Oven_Std"))    { OutCapacity = 2; OutSeconds = 40.f;  OutConv = 0.92f; OutThcMult = 1.15f; return true; }
-	if (T == TEXT("Pan_Std"))     { OutCapacity = 2; OutSeconds = 55.f;  OutConv = 0.88f; OutThcMult = 1.20f; return true; }
+	if (T == TEXT("Pan_Std"))     { OutCapacity = 2; OutSeconds = 55.f;  OutConv = 0.88f; OutThcMult = 1.25f; return true; }
 	if (T == TEXT("Fridge_Std"))  { OutCapacity = 4; OutSeconds = 180.f; OutConv = 1.00f; OutThcMult = 1.55f; return true; }
 	OutCapacity = 1; OutSeconds = 60.f; OutConv = 0.15f; OutThcMult = 2.0f; return false;
 }
