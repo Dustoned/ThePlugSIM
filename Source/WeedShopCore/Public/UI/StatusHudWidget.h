@@ -44,4 +44,5 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> StonedRow;
 	UPROPERTY() TObjectPtr<UProgressBar> StonedBar;
 	UPROPERTY() TObjectPtr<UTextBlock> StonedText;
+	UPROPERTY() TObjectPtr<UTextBlock> ScoreboardText; // competitive net-worth standen
 };

@@ -20,6 +20,15 @@ enum class ECoopMode : uint8
 	Competitive  UMETA(DisplayName = "Competitive (versus)")  // ieder voor zich: eigen geld + relaties, klanten afpakken
 };
 
+// Eén regel op het competitive-scorebord (per speler: net worth = cash + bank).
+USTRUCT(BlueprintType)
+struct FCompetitorScore
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") FString Name;
+	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") int64 NetWorthCents = 0;
+};
+
 class UEconomyComponent;
 class UDayCycleComponent;
 class UMilestoneComponent;
@@ -120,6 +129,12 @@ public:
 	bool IsCompetitive() const { return CoopMode == ECoopMode::Competitive; }
 	void SetCoopMode(ECoopMode M) { if (HasAuthority()) { CoopMode = M; } }
 
+	// Competitive scorebord (net worth per speler, gesorteerd hoog->laag). Leeg in co-op.
+	UPROPERTY(Replicated)
+	TArray<FCompetitorScore> Standings;
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	const TArray<FCompetitorScore>& GetStandings() const { return Standings; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -127,7 +142,12 @@ protected:
 	UFUNCTION()
 	void AutoSave();
 
+	// Server: herbereken het competitive-scorebord (net worth per speler) en repliceer het.
+	UFUNCTION()
+	void UpdateStandings();
+
 	FTimerHandle AutoSaveTimer;
+	FTimerHandle StandingsTimer;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;

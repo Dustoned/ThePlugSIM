@@ -5,6 +5,7 @@
 #include "Engine/GameInstance.h"
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "GameFramework/Pawn.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Net/UnrealNetwork.h"
@@ -40,6 +41,7 @@ void AWeedShopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(AWeedShopGameState, LoadCounter);
 	DOREPLIFETIME(AWeedShopGameState, bFreeBuild);
 	DOREPLIFETIME(AWeedShopGameState, CoopMode);
+	DOREPLIFETIME(AWeedShopGameState, Standings);
 }
 
 void AWeedShopGameState::BeginPlay()
@@ -50,6 +52,34 @@ void AWeedShopGameState::BeginPlay()
 	{
 		GetWorldTimerManager().SetTimer(AutoSaveTimer, this, &AWeedShopGameState::AutoSave, AutoSaveSeconds, true);
 	}
+	// Competitive scorebord: herbereken elke 3s op de server (repliceert de standen naar alle spelers).
+	if (HasAuthority() && GetWorld())
+	{
+		GetWorldTimerManager().SetTimer(StandingsTimer, this, &AWeedShopGameState::UpdateStandings, 3.f, true);
+	}
+}
+
+void AWeedShopGameState::UpdateStandings()
+{
+	if (!HasAuthority() || !GetWorld()) { return; }
+	if (CoopMode != ECoopMode::Competitive) { if (Standings.Num() > 0) { Standings.Reset(); } return; }
+
+	TArray<FCompetitorScore> New;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		APawn* P = PC ? PC->GetPawn() : nullptr;
+		if (!P) { continue; }
+		UEconomyComponent* E = P->FindComponentByClass<UEconomyComponent>();
+		if (!E) { continue; }
+		FCompetitorScore S;
+		S.Name = (PC->PlayerState && !PC->PlayerState->GetPlayerName().IsEmpty())
+			? PC->PlayerState->GetPlayerName() : FString::Printf(TEXT("Player %d"), New.Num() + 1);
+		S.NetWorthCents = E->GetCashCents() + E->GetBankCents();
+		New.Add(S);
+	}
+	New.Sort([](const FCompetitorScore& A, const FCompetitorScore& B) { return A.NetWorthCents > B.NetWorthCents; });
+	Standings = New;
 }
 
 void AWeedShopGameState::AutoSave()
