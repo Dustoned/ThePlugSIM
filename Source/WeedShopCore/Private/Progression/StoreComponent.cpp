@@ -478,12 +478,14 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 4: bMatch = S.StartsWith(TEXT("Papers_")); break;
 			case 5: bMatch = S.StartsWith(TEXT("Soil_")); break;
 			case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
-			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")); break;
+			// Furniture/meubels + de grote edibles-appliances (oven & koelkast horen bij het meubilair).
+			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")
+				|| S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Fridge_"))); break;
 			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
-			// Lab: hasj-keten (mesh/press) + edibles-keten (oven/pan/fridge + boter) + machine-upgrades.
-			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_"))
-				|| S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Pan_")) || S.StartsWith(TEXT("Fridge_")) || S == TEXT("Butter"); break;
+			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_")); break; // Hasj-keten + upgrades
+			// Kitchen: kook-spullen voor de edibles (pan + boter) - hier komen later koekjes/bloem e.d. ook bij.
+			case 11: bMatch = S.StartsWith(TEXT("Pan_")) || S == TEXT("Butter"); break;
 			default: break;
 			}
 			if (bMatch) { Out.Add(Id); }

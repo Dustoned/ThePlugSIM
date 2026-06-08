@@ -102,6 +102,7 @@ namespace
 		case 8: return TEXT("Grow Upg.");
 		case 9: return TEXT("Care");
 		case 10: return TEXT("Hash");
+		case 11: return TEXT("Kitchen");
 		default: return TEXT("?");
 		}
 	}
@@ -1649,17 +1650,17 @@ void UPhoneWidget::RefreshContent()
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
-	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels)
+	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels, keuken)
 	{
 		bSellApp = false;
-		AppCats = { 4, 2, 3, 7 }; // Papers, Drying, Packing, Furniture
+		AppCats = { 4, 2, 3, 7, 11 }; // Papers, Drying, Packing, Furniture, Kitchen (pan + boter / edibles-ingredienten)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
-	else if (App == GHashApp) // Lab -> hasj-keten (mesh/press) + edibles-keten (oven/pan/fridge + boter) + upgrades
+	else if (App == GHashApp) // Lab -> de hasj-keten: machines (mesh/press) + machine-upgrades
 	{
 		bSellApp = false;
-		AppCats = { 10 }; // Lab (Mesh/Press + Oven/Pan/Fridge/Butter + ProcUp-upgrades)
+		AppCats = { 10 }; // Hash (Mesh/Press + ProcUp-upgrades)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
