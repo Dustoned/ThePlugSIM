@@ -783,9 +783,10 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		PotQ = FMath::Clamp(PotQ, 0.40f, 1.0f);
 		const float FertQ = FMath::Clamp(0.6f + (FertYieldMult - 1.0f), 0.6f, 1.0f);
 		const float GearQ = FMath::Clamp(0.35f * CareQ + 0.25f * SoilQ + 0.22f * PotQ + 0.18f * FertQ, 0.f, 1.f);
-		const float ThcRaw = Row->BaseThcPercent * GearQ * FMath::FRandRange(0.97f, 1.03f);
-		// Harde realistische cap: gedroogde bud gaat NOOIT boven 40% (zelfs top-strain + perfecte setup = 40).
-		const float ThcPercent = FMath::RoundToFloat(FMath::Min(40.f, FMath::Max(Row->BaseThcPercent * 0.15f, FMath::Max(1.0f, ThcRaw))));
+		const float ThcRaw = Row->BaseThcPercent * GearQ * FMath::FRandRange(0.94f, 1.06f);
+		// 40% is een ZACHTE grens: met top-setup haal je gemiddeld ~40, maar een gelukkige batch kan er een paar %
+		// boven duiken (opscheppen dat je betere wiet maakte dan je co-op vriend). Alleen een ruime veiligheidscap.
+		const float ThcPercent = FMath::RoundToFloat(FMath::Min(46.f, FMath::Max(Row->BaseThcPercent * 0.15f, FMath::Max(1.0f, ThcRaw))));
 		const float QualityPct = FMath::RoundToFloat(FMath::Max(5.f, QualityFrac * 100.f));
 
 		// Vers geoogst = NAT: je krijgt "WetBud_<strain>", die moet eerst drogen op een droogrek
