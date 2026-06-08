@@ -39,6 +39,7 @@ void AWeedShopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(AWeedShopGameState, SaveCounter);
 	DOREPLIFETIME(AWeedShopGameState, LoadCounter);
 	DOREPLIFETIME(AWeedShopGameState, bFreeBuild);
+	DOREPLIFETIME(AWeedShopGameState, CoopMode);
 }
 
 void AWeedShopGameState::BeginPlay()

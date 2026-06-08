@@ -300,6 +300,7 @@ bool USaveGameSubsystem::RunPendingOnWorldReady()
 	{
 		Pending = EPending::None;
 		ApplyStartMode(PendingStartMode); // geld + items van de gekozen modus
+		if (AWeedShopGameState* GS = GetWeedGameState()) { GS->SetCoopMode(bPendingCompetitive ? ECoopMode::Competitive : ECoopMode::Coop); }
 		PendingStartMode = EGameStartMode::Normal;
 		return true; // verder is een verse wereld = map-default
 	}
@@ -607,6 +608,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
 	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); Save->bShopLicensed = Lv->IsShopLicensed(); }
 	Save->bFreeBuild = GS->IsFreeBuild();
+	Save->CoopMode = (uint8)GS->GetCoopMode();
 
 	// Gedeelde wereld-staat.
 	if (const UDayCycleComponent* Day = GS->GetDayCycle()) { Save->TimeOfDaySeconds = Day->GetTimeOfDaySeconds(); Save->DayNumber = Day->GetDayNumber(); }
@@ -671,6 +673,7 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 
 	// Gedeelde staat terugzetten.
 	GS->SetFreeBuild(Save->bFreeBuild);
+	GS->SetCoopMode((ECoopMode)Save->CoopMode);
 	if (UDayCycleComponent* Day = GS->GetDayCycle()) { Day->SetTimeOfDaySeconds(Save->TimeOfDaySeconds); }
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }
 	if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->RestoreState(Save->GoalJointsRolled, Save->GoalPlantsHarvested, Save->GoalDealsDone, Save->GoalClaimed); Gl->RestoreExtra(Save->GoalGramsSold, Save->GoalGramsCrafted); }

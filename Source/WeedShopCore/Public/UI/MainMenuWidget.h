@@ -52,8 +52,11 @@ protected:
 	void OnHostCoop();   // host: vers spel als listen-server (via de mode-keuze)
 	void OnJoinCoop();   // join: verbind met het ingevoerde host-IP
 	bool bHostMode = false;                           // true = de New Game-flow host een listen-server
+	bool bHostCompetitive = false;                    // gekozen co-op modus (false = co-op samen, true = competitive)
+	void OnToggleCoopMode();                          // wissel host-modus + werk de knop bij
 	UPROPERTY() TObjectPtr<UWidget> CoopPanel;        // co-op kaart (host / join)
 	UPROPERTY() TObjectPtr<class UEditableTextBox> CoopIpBox; // host-IP invoerveld
+	UPROPERTY() TObjectPtr<class UWeedActionButton> CoopModeBtn; // Co-op<->Competitive toggle
 
 	// Maakt een flikkerende neon-"lamp": gekleurde, afgeronde glow die zacht pulseert.
 	UBorder* AddGlow(class UOverlay* Layers, const FLinearColor& Color, float W, float H,

@@ -91,6 +91,9 @@ public:
 	// Host: start een verse co-op-game als listen-server (het level herlaadt mét ?listen).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	void HostNewGameLan(int32 Slot, EGameStartMode Mode = EGameStartMode::Normal);
+	// Co-op speelmodus voor de volgende verse host-game: false = Co-op (samen), true = Competitive (versus).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
+	void SetPendingCoopCompetitive(bool bCompetitive) { bPendingCompetitive = bCompetitive; }
 	// Join: verbind direct met een host op IP[:poort] (LAN). Bijv. "192.168.1.50" of "192.168.1.50:7777".
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	void JoinLan(const FString& IpPort);
@@ -186,6 +189,7 @@ protected:
 	EPending Pending = EPending::None;
 	FString PendingLoadName;
 	EGameStartMode PendingStartMode = EGameStartMode::Normal;
+	bool bPendingCompetitive = false; // co-op modus voor de volgende verse host-game
 	void ReloadCurrentLevel(const FString& Options = TEXT(""));
 	// Geef de host-speler de startstaat (geld + items) van de gekozen modus.
 	void ApplyStartMode(EGameStartMode Mode);

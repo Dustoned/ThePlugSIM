@@ -12,6 +12,14 @@
 #include "GameFramework/GameStateBase.h"
 #include "WeedShopGameState.generated.h"
 
+// Co-op speelmodus (gekozen bij het hosten, gedeeld + gerepliceerd voor de hele sessie).
+UENUM(BlueprintType)
+enum class ECoopMode : uint8
+{
+	Coop         UMETA(DisplayName = "Co-op (samen)"),       // alles gedeeld: 1 crew, samen opbouwen
+	Competitive  UMETA(DisplayName = "Competitive (versus)")  // ieder voor zich: eigen geld + relaties, klanten afpakken
+};
+
 class UEconomyComponent;
 class UDayCycleComponent;
 class UMilestoneComponent;
@@ -98,6 +106,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	bool IsFreeBuild() const { return bFreeBuild; }
 	void SetFreeBuild(bool b) { if (HasAuthority()) { bFreeBuild = b; } }
+
+	// Co-op speelmodus (gedeeld, gekozen bij hosten). Coop = alles samen; Competitive = ieder voor zich.
+	UPROPERTY(Replicated)
+	ECoopMode CoopMode = ECoopMode::Coop;
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	ECoopMode GetCoopMode() const { return CoopMode; }
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	bool IsCompetitive() const { return CoopMode == ECoopMode::Competitive; }
+	void SetCoopMode(ECoopMode M) { if (HasAuthority()) { CoopMode = M; } }
 
 protected:
 	virtual void BeginPlay() override;

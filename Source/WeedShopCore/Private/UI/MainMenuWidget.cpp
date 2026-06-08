@@ -541,6 +541,12 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 				return B;
 			};
 
+			// Modus-keuze (host): Co-op (samen) <-> Competitive (versus). Klik om te wisselen.
+			bHostCompetitive = false;
+			CoopModeBtn = BigBtn(TEXT("Mode: CO-OP  (build together)"), FLinearColor(0.14f, 0.30f, 0.20f, 0.96f), [this]() { OnToggleCoopMode(); });
+			CoopVB->AddChildToVerticalBox(CoopModeBtn)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Co-op = everything shared.  Competitive = own money + steal each other's customers."), 10, FLinearColor(0.7f, 0.72f, 0.85f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+
 			// Host
 			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Host new co-op game"), FLinearColor(0.16f, 0.34f, 0.22f, 0.96f), [this]() { OnHostCoop(); }))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
@@ -811,11 +817,28 @@ void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
 	}
 }
 
+void UMainMenuWidget::OnToggleCoopMode()
+{
+	bHostCompetitive = !bHostCompetitive;
+	if (CoopModeBtn)
+	{
+		const FString L = bHostCompetitive ? TEXT("Mode: COMPETITIVE  (versus)") : TEXT("Mode: CO-OP  (build together)");
+		const FLinearColor Col = bHostCompetitive ? FLinearColor(0.42f, 0.16f, 0.16f, 0.96f) : FLinearColor(0.14f, 0.30f, 0.20f, 0.96f);
+		FButtonStyle St;
+		St.Normal = WeedUI::Rounded(Col, 8.f);
+		St.Hovered = WeedUI::Rounded(Col * 1.4f, 8.f);
+		St.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
+		St.NormalPadding = FMargin(16.f, 12.f); St.PressedPadding = FMargin(16.f, 12.f);
+		CoopModeBtn->SetStyle(St);
+		CoopModeBtn->SetContent(WeedUI::Text(WidgetTree, L, 15, FLinearColor::White, true, true));
+	}
+}
+
 void UMainMenuWidget::OnModeChosen(int32 Mode)
 {
 	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
 	{
-		if (bHostMode) { bHostMode = false; Save->HostNewGameLan(PendingNewSlot, (EGameStartMode)Mode); } // co-op host (listen)
+		if (bHostMode) { bHostMode = false; Save->SetPendingCoopCompetitive(bHostCompetitive); Save->HostNewGameLan(PendingNewSlot, (EGameStartMode)Mode); } // co-op host (listen)
 		else { Save->RequestNewGame(PendingNewSlot, (EGameStartMode)Mode); }
 	}
 }

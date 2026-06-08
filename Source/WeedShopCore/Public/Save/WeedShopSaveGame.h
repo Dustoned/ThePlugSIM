@@ -177,6 +177,10 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	bool bFreeBuild = false;
 
+	// Co-op speelmodus: 0 = Co-op (samen), 1 = Competitive (versus).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	uint8 CoopMode = 0;
+
 	// Huidige politie-heat (gedeeld) + de event-cooldown-staat (bust/overval timer + laatste-event-dag).
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	float Heat = 0.f;
