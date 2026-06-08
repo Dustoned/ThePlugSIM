@@ -1215,6 +1215,15 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 			if (Dr) { Dr->Setup(DoorGap - 4.f, DoorTopH - 6.f, ADoorC); }
 			return Dr;
 		};
+		// Deurkozijn rond een opening in een d-wand: stijlen (jambs) + bovendorpel, iets dikker dan de muur
+		// zodat de blote muur-dikte-rand niet meer zichtbaar is en de opening netjes "aansluit".
+		auto DoorFrameD = [&](float dC, float s, float zS, float openW, float topH)
+		{
+			const float JambW = 9.f, Proud = WallT + 6.f, zc = zS + topH * 0.5f;
+			Box(dC - openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, true);                 // linker stijl
+			Box(dC + openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, true);                 // rechter stijl
+			Box(dC, s, openW + 2.f * JambW, Proud, zS + topH + 6.f, 12.f, ADoorC, true);     // bovendorpel
+		};
 
 		for (int32 f = 0; f < NF; ++f)
 		{
@@ -1235,6 +1244,8 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					cur = aCenter + DoorGap * 0.5f;
 					LintelD(aCenter, sw, zS);
 					ACityDoor* AptDoor = DoorD(aCenter, sw, zS);
+					DoorFrameD(aCenter, sw, zS, DoorGap, DoorTopH); // net kozijn -> geen blote muur-rand
+
 					// Plafondlamp midden in elk appartement.
 					const FVector LAp = LP(aCenter, side * (HW + SideW * 0.5f));
 					AddInteriorLight(FVector(LAp.X, LAp.Y, zS + FloorH - 55.f));
@@ -1277,6 +1288,7 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					// Latei boven de lift-opening: schacht is niet meer open bóven de deuren.
 					const float LintH = WallHt - 210.f;
 					if (LintH > 4.f) { Box(LiftCabD, sw, LiftOpen, WallT, zS + 210.f + LintH * 0.5f, LintH, IWall, true); }
+					DoorFrameD(LiftCabD, sw, zS, LiftOpen, 210.f); // lift-kozijn -> nette opening, geen blote rand
 				}
 				else
 				{
