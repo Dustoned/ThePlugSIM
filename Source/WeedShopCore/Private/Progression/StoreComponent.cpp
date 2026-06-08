@@ -146,8 +146,8 @@ namespace
 		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("Best yield + THC (~50s, 3 batches)"),        120000, 1 },
 		// Edibles-keten: Oven (decarb) -> Pan (boter koken) -> Koelkast (zetten, hoge THC%). + boter als ingredient.
 		{ TEXT("Oven_Std"),    TEXT("Oven / stove"),         TEXT("Dried weed -> baked weed (decarb, ~40s)"),           12000, 1 },
-		{ TEXT("Pan_Std"),     TEXT("Cooking pan"),          TEXT("Baked weed + butter -> cannabutter mix (~55s)"),     18000, 1 },
-		{ TEXT("Fridge_Std"),  TEXT("Fridge"),               TEXT("Sets butter mix -> edibles, big THC boost (~3 min)"), 26000, 1 },
+		{ TEXT("Pan_Std"),     TEXT("Cooking pan"),          TEXT("Baked weed + butter -> cannabutter mix (~55s)"),     14000, 1 },
+		{ TEXT("Fridge_Std"),  TEXT("Fridge conversion"),    TEXT("Turn a fridge into a setting unit: butter mix -> edibles, big THC (~3 min)"), 7000, 1 },
 		{ TEXT("Butter"),      TEXT("Butter"),               TEXT("Cooking ingredient for the pan (cannabutter)"),        300, 1 },
 		// Losse upgrade-gear voor droogrek / hasj-machines (zet 'm vlakbij de machine).
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("Nearby drying rack: ~30% faster"),        9000,  1 },
@@ -328,11 +328,11 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Press_Cheap"))     { return 10; }
 	if (S == TEXT("Press_Std"))       { return 20; }
 	if (S == TEXT("Press_Pro"))       { return 30; }
-	// Edibles-keten: netjes verdeeld op de tree (oven vroeg, pan midden, koelkast later). Boter goedkoop/vroeg.
-	if (S == TEXT("Butter"))          { return 8; }
+	// Edibles-keten unlockt in ÉÉN keer (oven + pan + koelkast samen) zodat baked weed meteen bruikbaar is.
+	if (S == TEXT("Butter"))          { return 9; }
 	if (S == TEXT("Oven_Std"))        { return 9; }
-	if (S == TEXT("Pan_Std"))         { return 14; }
-	if (S == TEXT("Fridge_Std"))      { return 19; }
+	if (S == TEXT("Pan_Std"))         { return 9; }
+	if (S == TEXT("Fridge_Std"))      { return 9; }
 	// Losse upgrade-gear
 	if (S == TEXT("DryUp_Fan"))       { return 12; }
 	if (S == TEXT("DryUp_Seal"))      { return 18; }

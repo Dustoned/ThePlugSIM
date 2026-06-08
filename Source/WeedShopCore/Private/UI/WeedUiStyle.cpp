@@ -158,7 +158,7 @@ namespace WeedUI
 		if (S == TEXT("ProcUp_Yield"))        { return TEXT("Fine filter"); }
 		if (S == TEXT("Oven_Std"))            { return TEXT("Oven / stove"); }
 		if (S == TEXT("Pan_Std"))             { return TEXT("Cooking pan"); }
-		if (S == TEXT("Fridge_Std"))          { return TEXT("Fridge"); }
+		if (S == TEXT("Fridge_Std"))          { return TEXT("Fridge conversion"); }
 		if (S == TEXT("Butter"))              { return TEXT("Butter"); }
 		if (S.StartsWith(TEXT("Crystal_")))   { return NiceName(S.RightChop(8)) + TEXT(" crystals"); }
 		if (S.StartsWith(TEXT("Hash_")))      { return NiceName(S.RightChop(5)) + TEXT(" hash"); }
