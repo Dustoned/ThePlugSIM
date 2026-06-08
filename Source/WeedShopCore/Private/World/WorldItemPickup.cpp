@@ -15,10 +15,11 @@ AWorldItemPickup::AWorldItemPickup()
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
-	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	// Mesh dient nu alleen als ANKER; het echte model wordt er runtime als losse onderdelen onder gebouwd
+	// (PropKit::BuildItemModel), zodat elk item een herkenbaar 3D-model heeft. De onderdelen dragen collision.
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Anchor"));
 	Mesh->SetupAttachment(Root);
-	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	Mesh->SetCollisionResponseToAllChannels(ECR_Block);
+	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AWorldItemPickup::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -40,7 +41,8 @@ void AWorldItemPickup::OnRep_Item() { RefreshVisual(); }
 
 void AWorldItemPickup::RefreshVisual()
 {
-	if (Mesh && !ItemId.IsNone()) { PropKit::ApplyItemModel(Mesh, ItemId, 1.6f); } // iets groter zodat 't goed zichtbaar/raakbaar is
+	// Bouw een echt herkenbaar model uit losse onderdelen onder het anker (met collision -> aankijkbaar/oppakbaar).
+	if (Mesh && !ItemId.IsNone()) { PropKit::BuildItemModel(this, Mesh, ItemId, 1.6f, /*bFirstPerson*/ false, /*bCollision*/ true); }
 }
 
 void AWorldItemPickup::Interact_Implementation(APawn* InstigatorPawn)

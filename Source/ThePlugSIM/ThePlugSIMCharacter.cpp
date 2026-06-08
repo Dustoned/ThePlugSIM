@@ -293,8 +293,8 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		if (Active != LastHeldItemId)
 		{
 			LastHeldItemId = Active;
-			if (Active.IsNone()) { HeldItemMesh->SetVisibility(false); }
-			else { PropKit::ApplyItemModel(HeldItemMesh, Active, 1.0f); HeldItemMesh->SetVisibility(true); }
+			if (Active.IsNone()) { PropKit::ClearItemModel(HeldItemMesh); HeldItemMesh->SetVisibility(false); }
+			else { PropKit::BuildItemModel(this, HeldItemMesh, Active, 0.7f, /*bFirstPerson*/ true, /*bCollision*/ false); HeldItemMesh->SetVisibility(true, true); }
 		}
 		// Viewmodel vóór de camera (centraal-onder, iets rechts) zodat 't item altijd in beeld is.
 		if (!bHeldOnHandBone && !Active.IsNone() && FirstPersonCameraComponent)
