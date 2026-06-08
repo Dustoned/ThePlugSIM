@@ -492,21 +492,36 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 		SlotPanel->SetVisibility(ESlateVisibility::Collapsed); // start verborgen
 
-		// --- CO-OP (LAN)-knop rechtsboven (op het hoofdmenu-canvas, verbergt mee met de knoppen) ---
+		// --- CO-OP-knop rechtsboven: kleine knop in DEZELFDE swatch-stijl als de hoofdknoppen (verf-streep
+		//     textuur, donker normaal + paarse hover), zodat 'ie netjes bij de rest past. ---
 		{
 			UWeedActionButton* CB = WidgetTree->ConstructWidget<UWeedActionButton>();
 			CB->OnClicked.AddDynamic(CB, &UWeedActionButton::Handle);
 			CB->OnAction.BindLambda([this](int32, int32) { OpenCoop(); });
 			FButtonStyle CS;
-			CS.Normal  = WeedUI::Rounded(FLinearColor(0.10f, 0.11f, 0.16f, 0.92f), 6.f);
-			CS.Hovered = WeedUI::Rounded(FLinearColor(0.30f, 0.16f, 0.50f, 0.96f), 6.f);
-			CS.Pressed = WeedUI::Rounded(FLinearColor(0.40f, 0.20f, 0.62f, 1.f), 6.f);
-			CS.NormalPadding = FMargin(10.f, 6.f); CS.PressedPadding = FMargin(10.f, 6.f);
+			if (SwatchTex)
+			{
+				CS.Normal  = SwatchBrush(SwatchTex, FLinearColor(0.02f, 0.02f, 0.035f, 0.55f));
+				CS.Hovered = SwatchBrush(SwatchTex, FLinearColor(0.62f, 0.26f, 0.95f, 0.97f));
+				CS.Pressed = SwatchBrush(SwatchTex, FLinearColor(0.74f, 0.36f, 1.00f, 1.00f));
+			}
+			else
+			{
+				CS.Normal  = WeedUI::Rounded(FLinearColor(0.02f, 0.02f, 0.035f, 0.55f), 6.f);
+				CS.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 6.f);
+				CS.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.00f), 6.f);
+			}
+			CS.NormalPadding = FMargin(10.f, 5.f); CS.PressedPadding = FMargin(10.f, 5.f);
 			CB->SetStyle(CS);
-			CB->SetContent(WeedUI::Text(WidgetTree, TEXT("CO-OP (LAN)"), 13, FLinearColor(0.86f, 0.82f, 1.f), true, true));
 			UCanvasPanelSlot* CBs = Hit->AddChildToCanvas(CB);
-			CBs->SetAnchors(FAnchors(0.775f, 0.05f, 0.96f, 0.095f));
+			CBs->SetAnchors(FAnchors(0.80f, 0.045f, 0.965f, 0.09f));
 			CBs->SetOffsets(FMargin(0.f)); CBs->SetAlignment(FVector2D(0.f, 0.f));
+			// Scherpe witte titel als LOSSE tekst, gecentreerd op de knop (net als de hoofdknoppen-labels).
+			UTextBlock* CLbl = WeedUI::Text(WidgetTree, TEXT("CO-OP"), 14, FLinearColor(0.97f, 0.98f, 1.f), true, true);
+			CLbl->SetVisibility(ESlateVisibility::HitTestInvisible);
+			UCanvasPanelSlot* CLs = Hit->AddChildToCanvas(CLbl);
+			CLs->SetAnchors(FAnchors(0.8825f, 0.0675f, 0.8825f, 0.0675f));
+			CLs->SetAlignment(FVector2D(0.5f, 0.5f)); CLs->SetAutoSize(true); CLs->SetPosition(FVector2D(0.f, 0.f));
 		}
 
 		// --- CO-OP-kaart (host / join via IP) — gecentreerd, verborgen tot je op CO-OP klikt ---
