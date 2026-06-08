@@ -2953,6 +2953,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	if (PayTo)
 	{
 		PayTo->AddMoney(Total);
+		PayTo->NoteLegitIncome(Total); // verkoop-omzet -> "schone ruimte" om wit te wassen (anti-witwas-heat)
 	}
 
 	float dR = 0.f, dL = 0.f, dA = 0.f;

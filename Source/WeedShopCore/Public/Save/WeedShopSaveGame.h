@@ -108,6 +108,8 @@ struct FPlayerSaveData
 	UPROPERTY() int64 DepositedTodayCents = 0; // dag-limiet stort (anti-exploit bij reload)
 	UPROPERTY() int32 DepositDay = 0;
 	UPROPERTY() int32 TransfersToday = 0;      // dag-limiet overboekingen
+	UPROPERTY() int64 LegitIncomeCents = 0;    // totale verkoop-omzet (witwas-"schone ruimte")
+	UPROPERTY() int64 LaunderedCents = 0;      // totaal gestort (voor de witwas-heat)
 
 	// Waar de speler stond op het moment van opslaan (bij laden gaat 'ie hier weer staan).
 	UPROPERTY() bool bHasTransform = false;

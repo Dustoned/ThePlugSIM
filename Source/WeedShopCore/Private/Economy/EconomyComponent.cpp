@@ -32,6 +32,8 @@ void UEconomyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(UEconomyComponent, BalanceCents);
 	DOREPLIFETIME(UEconomyComponent, BankCents);
 	DOREPLIFETIME(UEconomyComponent, DepositedTodayCents);
+	DOREPLIFETIME(UEconomyComponent, LegitIncomeCents);
+	DOREPLIFETIME(UEconomyComponent, LaunderedCents);
 	DOREPLIFETIME(UEconomyComponent, TransfersToday);
 }
 
@@ -150,6 +152,12 @@ void UEconomyComponent::RefreshDepositDay()
 	}
 }
 
+void UEconomyComponent::NoteLegitIncome(int64 Cents)
+{
+	if (GetOwnerRole() != ROLE_Authority || Cents <= 0) { return; }
+	LegitIncomeCents += Cents; // verkoop-omzet = "schone ruimte" om wit te wassen zonder heat
+}
+
 bool UEconomyComponent::TransferBank(int64 AmountCents)
 {
 	if (GetOwnerRole() != ROLE_Authority || AmountCents <= 0) { return false; }
@@ -200,12 +208,23 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 	SetBank(BankCents + ToBank);        // bank erbij (na belasting)
 	DepositedTodayCents += Amount;
 
-	// Heat: grote stortingen zijn verdacht (heat is gedeeld, op de GameState).
+	// Heat: het deel dat je MET verkoop kunt verklaren is "schoon" (weinig heat); de rest is verdacht
+	// (gehamsterd/rewards/transfers zonder shop-omzet) en geeft VEEL heat. Zo loont alleen-maar-storten niet.
+	const int64 Headroom = FMath::Max<int64>(0, LegitIncomeCents - LaunderedCents);
+	const int64 Clean = FMath::Min(Amount, Headroom);
+	const int64 Dirty = Amount - Clean;
+	LaunderedCents += Amount;
+
+	float HeatAdd = (float)Clean / 100000.f * CleanDepositHeatPer1000
+		+ (float)Dirty / 100000.f * DirtyDepositHeatPer1000;
+	// Grote dag-dumps compounden: hoe meer je vandaag al stortte, hoe verdachter elke euro erbovenop.
+	HeatAdd *= 1.f + (float)DepositedTodayCents / 100000.f * DailyDumpHeatRamp;
+
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (UHeatComponent* Heat = GS->GetHeat())
 		{
-			Heat->AddHeat((float)Amount / 100000.f * DepositHeatPer1000);
+			Heat->AddHeat(HeatAdd);
 		}
 	}
 	if (GEngine)

@@ -483,6 +483,8 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 		Out.DepositedTodayCents = E->GetDepositedTodayCents();
 		Out.DepositDay = E->GetDepositDay();
 		Out.TransfersToday = E->GetTransfersToday();
+		Out.LegitIncomeCents = E->GetLegitIncomeCents();
+		Out.LaunderedCents = E->GetLaunderedCents();
 	}
 	if (const UPhoneClientComponent* Ph = Pawn->FindComponentByClass<UPhoneClientComponent>())
 	{
@@ -529,6 +531,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 		E->SetBalanceCents(Data.CashCents);
 		E->SetBankCents(Data.BankCents);
 		E->RestoreDailyLimits(Data.DepositedTodayCents, Data.DepositDay, Data.TransfersToday);
+		E->RestoreLaunderState(Data.LegitIncomeCents, Data.LaunderedCents);
 	}
 	if (UPhoneClientComponent* Ph = Pawn->FindComponentByClass<UPhoneClientComponent>())
 	{

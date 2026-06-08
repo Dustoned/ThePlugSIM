@@ -119,9 +119,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
 	int64 DailyDepositLimitCents = 5000000; // EUR 50.000 / dag
 
-	// Heat per EUR 1.000 gestort (grote stortingen trekken aandacht).
+	// Heat per EUR 1.000 gestort dat je MET verkoop kunt verklaren (laag - dit is "schoon" geld).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
-	float DepositHeatPer1000 = 1.0f;
+	float CleanDepositHeatPer1000 = 0.3f;
+
+	// Heat per EUR 1.000 gestort dat je NIET met verkoop kunt verklaren (gehamsterd/rewards/transfers
+	// zonder shop-omzet). DIT is veruit de heftigste heat-bron: zo loont witwassen zonder te verkopen niet.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	float DirtyDepositHeatPer1000 = 22.0f;
+
+	// Extra: hoe meer je op DEZELFDE dag al stortte, hoe verdachter (heat-vermenigvuldiger per EUR 1.000 vandaag).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
+	float DailyDumpHeatRamp = 0.025f;
+
+	// Server: registreer LEGITIEME omzet (een echte product-verkoop). Bepaalt hoeveel je "schoon" kunt storten.
+	void NoteLegitIncome(int64 Cents);
+
+	// Hoeveel je nog "schoon" (verklaard door verkoop) kunt storten voordat het verdacht wordt.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int64 GetLaunderHeadroomCents() const { return FMath::Max<int64>(0, LegitIncomeCents - LaunderedCents); }
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	int64 GetDepositedTodayCents() const { return DepositedTodayCents; }
@@ -148,6 +164,15 @@ public:
 		DepositedTodayCents = FMath::Max<int64>(0, Deposited);
 		DepositDay = InDepositDay;
 		TransfersToday = FMath::Max(0, Transfers);
+	}
+
+	// Save/load van de witwas-boekhouding (legitieme omzet + totaal gestort).
+	int64 GetLegitIncomeCents() const { return LegitIncomeCents; }
+	int64 GetLaunderedCents() const { return LaunderedCents; }
+	void RestoreLaunderState(int64 LegitIncome, int64 Laundered)
+	{
+		LegitIncomeCents = FMath::Max<int64>(0, LegitIncome);
+		LaunderedCents = FMath::Max<int64>(0, Laundered);
 	}
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
@@ -177,6 +202,13 @@ protected:
 	// Vandaag al overgeboekt (aantal) — voor de transactielimiet.
 	UPROPERTY(Replicated)
 	int32 TransfersToday = 0;
+
+	// Witwas-boekhouding: totale legitieme omzet (verkopen) vs totaal gestort. Het verschil bepaalt of
+	// een storting "schoon" (verklaard door verkoop) of "vuil" (verdacht) is -> heat.
+	UPROPERTY(Replicated)
+	int64 LegitIncomeCents = 0;
+	UPROPERTY(Replicated)
+	int64 LaunderedCents = 0;
 
 	UFUNCTION()
 	void OnRep_Balance();
