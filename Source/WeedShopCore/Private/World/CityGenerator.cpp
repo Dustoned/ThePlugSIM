@@ -1219,11 +1219,12 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		// zodat de blote muur-dikte-rand niet meer zichtbaar is en de opening netjes "aansluit".
 		auto DoorFrameD = [&](float dC, float s, float zS, float openW, float topH)
 		{
+			// Kozijn is puur VISUEEL (geen collision) zodat de opening loopbaar blijft - je past er gewoon doorheen.
 			const float JambW = 9.f, Proud = WallT + 6.f, zc = zS + topH * 0.5f;
-			Box(dC - openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, true);                 // linker stijl
-			Box(dC + openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, true);                 // rechter stijl
+			Box(dC - openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, false);                // linker stijl
+			Box(dC + openW * 0.5f, s, JambW, Proud, zc, topH, ADoorC, false);                // rechter stijl
 			// Bovendorpel: vult het gat boven de deur (deur is iets lager dan de opening) -> geen doorkijk meer.
-			Box(dC, s, openW + 2.f * JambW, Proud, zS + topH - 5.f, 18.f, ADoorC, true);
+			Box(dC, s, openW + 2.f * JambW, Proud, zS + topH - 5.f, 18.f, ADoorC, false);
 		};
 
 		for (int32 f = 0; f < NF; ++f)
@@ -1286,10 +1287,10 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 					const float LiftOpen = 2.f * OpenW + 8.f;
 					SegD(HallLen, LiftCabD - LiftOpen * 0.5f, sw, zS);
 					SegD(LiftCabD + LiftOpen * 0.5f, Foot, sw, zS);
-					// Latei boven de lift-opening: schacht is niet meer open bóven de deuren.
+					// Latei boven de lift-opening: schacht is niet meer open bóven de deuren (vlak met de muur).
 					const float LintH = WallHt - 210.f;
 					if (LintH > 4.f) { Box(LiftCabD, sw, LiftOpen, WallT, zS + 210.f + LintH * 0.5f, LintH, IWall, true); }
-					DoorFrameD(LiftCabD, sw, zS, LiftOpen, 210.f); // lift-kozijn -> nette opening, geen blote rand
+					// (Geen kozijn op de lift: een lift hoort vlakke deuren te hebben, geen uitstekende deurstijlen.)
 				}
 				else
 				{
