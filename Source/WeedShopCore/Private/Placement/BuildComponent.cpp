@@ -447,10 +447,9 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							Center.Z = FMath::GridSnap<float>(Center.Z, GridSize);
 						}
 						PreviewLocation = Center;
-						const bool bFreeW = WorldFreeBuild(GetWorld());
-						// Wand-mount (rek) mag alleen in je EIGEN woning (tenzij vrij-bouwen / outdoors toegestaan).
+						// Wand-mount (rek) mag alleen BINNEN (eigen woning, of overal binnen in free-build) - niet buiten.
 						bValidSpot = bWall && !bOnPlaceable
-							&& (bFreeW || CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
+							&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
 					}
 					else
 					{
@@ -542,7 +541,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				{
 					// Plafondlamp: geldig op een PLAFOND (omlaag-wijzend vlak), maar alleen in je EIGEN woning.
 					bValidSpot = (FloorNormalZ < -0.4f) && !bOnPlaceable
-						&& (WorldFreeBuild(GetWorld()) || CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
+						&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
 				}
 				else
 				{
@@ -552,7 +551,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
 					// Vrij bouwen: laat grondhoogte- en "indoors only"-regel vallen (surface + anti-clip blijven).
 					bValidSpot = bFloor && (bFree || bGroundLevel) && !bOnPlaceable
-							&& (bFree || CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation))
+							&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation))
 							&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 				}
 				} // einde else: niet-wandmount (vloer/plafond)
@@ -806,7 +805,8 @@ bool UBuildComponent::IsPickable(const AActor* A) const
 bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 {
 	const UWorld* World = GetWorld();
-	if (WorldFreeBuild(World)) { return true; } // sandbox: overal bouwen
+	// Free-build (sandbox): je mag overal BINNEN bouwen (niet alleen in je eigen woning), maar NIET buiten.
+	if (WorldFreeBuild(World)) { return IsIndoors(P); }
 	AActor* Owner = GetOwner();
 	if (!Owner || !World) { return false; }
 	UPhoneClientComponent* Ph = Owner->FindComponentByClass<UPhoneClientComponent>();
@@ -961,12 +961,13 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		}
 		return;
 	}
-	// Alleen in je EIGEN gekochte woning (niet in winkels/hal/ongekocht); tenzij outdoors-toegestaan of sandbox.
-	if (!bUpgrade && !Def.bAllowOutdoors && !WorldFreeBuild(World) && !IsInOwnedHome(Location))
+	// Alleen BINNEN (je eigen woning; in free-build overal binnen) - NOOIT buiten, tenzij outdoors-toegestaan.
+	// (IsInOwnedHome regelt zelf de free-build-uitzondering via een binnen-check.)
+	if (!bUpgrade && !Def.bAllowOutdoors && !IsInOwnedHome(Location))
 	{
 		if (GEngine)
 		{
-			UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("You can only build inside your own home."));
+			UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("You can only build inside (not outdoors)."));
 		}
 		return;
 	}
