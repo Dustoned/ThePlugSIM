@@ -84,6 +84,10 @@ namespace WeedUI
 		const bool bJoint = S.StartsWith(TEXT("Joint_"));
 		const bool bCrystal = S.StartsWith(TEXT("Crystal_"));
 		const bool bHash = S.StartsWith(TEXT("Hash_"));
+		const bool bMoon = S.StartsWith(TEXT("Moonrock_"));
+		const bool bRosin = S.StartsWith(TEXT("Rosin_"));
+		const bool bBubble = S.StartsWith(TEXT("Bubble_"));
+		const bool bConc = bMoon || bRosin || bBubble;
 
 		FString Type;
 		if (bWet)            { Type = TEXT("Wet weed - dry it first"); }
@@ -92,6 +96,9 @@ namespace WeedUI
 		else if (bJoint)     { Type = TEXT("Joint"); }
 		else if (bCrystal)   { Type = TEXT("THC-crystals"); }
 		else if (bHash)      { Type = TEXT("Hasj"); }
+		else if (bMoon)      { Type = TEXT("Moonrocks"); }
+		else if (bRosin)     { Type = TEXT("Rosin"); }
+		else if (bBubble)    { Type = TEXT("Bubble hash"); }
 		else if (S.StartsWith(TEXT("Seed_")))        { Type = TEXT("Seed"); }
 		else if (S.StartsWith(TEXT("WaterBottle")))  { Type = TEXT("Water bottle"); }
 		else if (S.StartsWith(TEXT("Soil_")))        { Type = TEXT("Soil"); }
@@ -99,7 +106,7 @@ namespace WeedUI
 		else if (S.StartsWith(TEXT("Cont_")))        { Type = TEXT("Packaging"); }
 		if (!Type.IsEmpty()) { Add(Type); }
 
-		const bool bWeed = bWet || bBud || bBag || bJoint || bCrystal || bHash;
+		const bool bWeed = bWet || bBud || bBag || bJoint || bCrystal || bHash || bConc;
 		if (bWeed && Thc > 0.f) { Add(FString::Printf(TEXT("THC %.0f%%   Quality %.0f%%"), Thc, QualPct)); }
 
 		if (bBag)
@@ -107,7 +114,7 @@ namespace WeedUI
 			const int32 G = FMath::Max(1, UInventoryComponent::BagGrams(ItemId));
 			Add(FString::Printf(TEXT("%d bag(s) x %dg  =  %dg"), Qty, G, Qty * G));
 		}
-		else if (bWet || bBud || bCrystal || bHash) { Add(FString::Printf(TEXT("%dg"), Qty)); }
+		else if (bWet || bBud || bCrystal || bHash || bConc) { Add(FString::Printf(TEXT("%dg"), Qty)); }
 		else if (Qty > 1) { Add(FString::Printf(TEXT("Amount: %d"), Qty)); }
 		return Out;
 	}
@@ -122,7 +129,8 @@ namespace WeedUI
 		const FString S = ItemId.ToString();
 		if (S == TEXT("Cash")) { return FString(); }
 		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_"))
-			|| S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_"))) { return FString::Printf(TEXT("%dg"), Qty); }
+			|| S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_"))
+			|| S.StartsWith(TEXT("Moonrock_")) || S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Bubble_"))) { return FString::Printf(TEXT("%dg"), Qty); }
 		return (Qty > 1) ? FString::Printf(TEXT("x%d"), Qty) : FString();
 	}
 
@@ -168,6 +176,10 @@ namespace WeedUI
 		if (S.StartsWith(TEXT("Baked_")))     { return TEXT("Baked ") + NiceName(S.RightChop(6)); }
 		if (S.StartsWith(TEXT("ButterMix_"))) { return NiceName(S.RightChop(10)) + TEXT(" butter mix"); }
 		if (S.StartsWith(TEXT("Edible_")))    { return NiceName(S.RightChop(7)) + TEXT(" cannabutter"); }
+		if (S.StartsWith(TEXT("Moonrock_")))  { return NiceName(S.RightChop(9)) + TEXT(" moonrocks"); }
+		if (S.StartsWith(TEXT("Rosin_")))     { return NiceName(S.RightChop(6)) + TEXT(" rosin"); }
+		if (S.StartsWith(TEXT("Bubble_")))    { return NiceName(S.RightChop(7)) + TEXT(" bubble hash"); }
+		if (S.StartsWith(TEXT("Oil_")))       { return NiceName(S.RightChop(4)) + TEXT(" oil"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return NiceName(S.RightChop(4)); }
 		if (S.StartsWith(TEXT("Seed_")))      { return NiceName(S.RightChop(5)) + TEXT(" seed"); }
 		if (S.StartsWith(TEXT("Joint_")))     { return NiceName(S.RightChop(6)) + TEXT(" joint"); }

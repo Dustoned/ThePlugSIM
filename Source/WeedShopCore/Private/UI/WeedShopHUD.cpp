@@ -16,6 +16,7 @@
 #include "Phone/ContactsComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Inventory/InventoryComponent.h"
+#include "UI/WeedUiStyle.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
@@ -40,15 +41,9 @@ namespace
 	// (zodat de speler wiet en zaadjes duidelijk uit elkaar houdt).
 	FString PrettyItemName(const FName ItemId)
 	{
-		const FString S = ItemId.ToString();
-		if (S.StartsWith(TEXT("Bud_")))    { return FString::Printf(TEXT("Weed: %s"), *S.RightChop(4)); }
-		if (S.StartsWith(TEXT("Seed_")))   { return FString::Printf(TEXT("Seed: %s"), *S.RightChop(5)); }
-		if (S.StartsWith(TEXT("Soil_")))   { return FString::Printf(TEXT("Soil: %s"), *S.RightChop(5)); }
-		if (S.StartsWith(TEXT("WaterBottle_"))) { return FString::Printf(TEXT("Bottle: %s"), *S.RightChop(12)); }
-		if (S.StartsWith(TEXT("Joint_")))  { return FString::Printf(TEXT("Joint %s"), *S.RightChop(6)); }
-		if (S.StartsWith(TEXT("Papers_")))  { return FString::Printf(TEXT("Papers: %s"), *S.RightChop(7)); }
-		if (S.StartsWith(TEXT("Pot_")))     { return FString::Printf(TEXT("Pot: %s"), *S.RightChop(4)); }
-		return S;
+		// Gebruik de centrale nette-naam-functie (kent Bag_/Hash_/Edible_/Crystal_/Moonrock_/Rosin_/Bubble_ enz.),
+		// zodat klant-aanvragen op het deal-scherm ook voor de nieuwe concentraten netjes lezen.
+		return WeedUI::PrettyItemName(ItemId);
 	}
 }
 

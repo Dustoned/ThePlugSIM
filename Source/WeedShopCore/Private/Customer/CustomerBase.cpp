@@ -2795,22 +2795,36 @@ FName ACustomerBase::PickDesiredProduct(AWeedShopGameState* GS, UDataTable* InPr
 	}
 	if (PickStrain.IsNone()) { return NAME_None; }
 
-	// Producttype per tier (gegate op unlock): tier 1-2 vooral wiet, hoger steeds vaker hasj/edibles.
-	FString ProdType = TEXT("Bag_");
-	float HashChance = 0.f, EdibleChance = 0.f;
+	// Producttype per tier (gegate op unlock-level): tier 1-2 vooral wiet, hoger steeds vaker premium
+	// (hasj -> edibles -> moonrocks -> rosin -> isolator). Gewogen keuze; het weed-gewicht houdt lage tiers
+	// vooral op wiet. Level-gates zorgen dat klanten pas iets vragen zodra jij het kunt maken.
+	float WWeed, WHash, WEdible, WMoon, WRosin, WBubble;
 	switch (CTier)
 	{
-		case 1:  HashChance = 0.00f; EdibleChance = 0.00f; break;
-		case 2:  HashChance = 0.08f; EdibleChance = 0.00f; break;
-		case 3:  HashChance = 0.20f; EdibleChance = 0.08f; break;
-		case 4:  HashChance = 0.30f; EdibleChance = 0.18f; break;
-		default: HashChance = 0.38f; EdibleChance = 0.28f; break;
+		case 1:  WWeed = 1.00f; WHash = 0.00f; WEdible = 0.00f; WMoon = 0.00f; WRosin = 0.00f; WBubble = 0.00f; break;
+		case 2:  WWeed = 1.00f; WHash = 0.12f; WEdible = 0.04f; WMoon = 0.00f; WRosin = 0.00f; WBubble = 0.00f; break;
+		case 3:  WWeed = 0.65f; WHash = 0.28f; WEdible = 0.14f; WMoon = 0.12f; WRosin = 0.00f; WBubble = 0.00f; break;
+		case 4:  WWeed = 0.45f; WHash = 0.32f; WEdible = 0.22f; WMoon = 0.18f; WRosin = 0.16f; WBubble = 0.12f; break;
+		default: WWeed = 0.35f; WHash = 0.38f; WEdible = 0.28f; WMoon = 0.22f; WRosin = 0.20f; WBubble = 0.16f; break;
 	}
-	if (PlayerLvl < 14) { HashChance = 0.f; }
-	if (PlayerLvl < 9)  { EdibleChance = 0.f; }
-	const float Roll = FMath::FRand();
-	if (Roll < EdibleChance)                   { ProdType = TEXT("Edible_"); }
-	else if (Roll < EdibleChance + HashChance) { ProdType = TEXT("Hash_"); }
+	// Level-gates (ongeveer wanneer de bijbehorende machine ontgrendelt).
+	if (PlayerLvl < 14) { WHash   = 0.f; }
+	if (PlayerLvl < 9)  { WEdible = 0.f; }
+	if (PlayerLvl < 34) { WMoon   = 0.f; } // Moonrock-machine ~lvl 34
+	if (PlayerLvl < 40) { WRosin  = 0.f; } // Rosin ~lvl 40
+	if (PlayerLvl < 46) { WBubble = 0.f; } // Isolator (bubble hash) ~lvl 46
+
+	struct FPick { const TCHAR* Px; float W; };
+	const FPick Picks[] = {
+		{ TEXT("Bag_"), WWeed }, { TEXT("Hash_"), WHash }, { TEXT("Edible_"), WEdible },
+		{ TEXT("Moonrock_"), WMoon }, { TEXT("Rosin_"), WRosin }, { TEXT("Bubble_"), WBubble } };
+	float Total = 0.f; for (const FPick& P : Picks) { Total += P.W; }
+	FString ProdType = TEXT("Bag_");
+	if (Total > 0.f)
+	{
+		float R = FMath::FRand() * Total;
+		for (const FPick& P : Picks) { if (P.W <= 0.f) { continue; } if (R < P.W) { ProdType = P.Px; break; } R -= P.W; }
+	}
 	return FName(*(ProdType + PickStrain.ToString()));
 }
 
@@ -2823,10 +2837,11 @@ float ACustomerBase::ThcWillingnessBonus(float OfferedThc, float ExpectedThc)
 
 float ACustomerBase::GetExpectedThc() const
 {
-	// Strain uit DesiredProductId halen (Bag_<strain> of Bud_<strain>).
+	// Strain uit DesiredProductId halen (werkt voor alle producttypes: Bag_/Bud_ + verwerkte drugs/concentraten).
 	FString S = DesiredProductId.ToString();
-	S.RemoveFromStart(TEXT("Bag_"));
-	S.RemoveFromStart(TEXT("Bud_"));
+	S.RemoveFromStart(TEXT("Bag_"));      S.RemoveFromStart(TEXT("Bud_"));
+	S.RemoveFromStart(TEXT("Hash_"));     S.RemoveFromStart(TEXT("Edible_"));   S.RemoveFromStart(TEXT("Crystal_"));
+	S.RemoveFromStart(TEXT("Moonrock_")); S.RemoveFromStart(TEXT("Rosin_"));    S.RemoveFromStart(TEXT("Bubble_"));
 	if (S.IsEmpty()) { return 15.f; }
 	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
