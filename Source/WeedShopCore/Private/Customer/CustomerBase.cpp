@@ -2739,9 +2739,12 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	// via de strain-rij (Bud_<strain>) maal een premium-factor. Tussenstappen (Baked_/ButterMix_) niet.
 	auto StrainOf = [&](int32 PreLen) { return FName(*FString::Printf(TEXT("Bud_%s"), *S.RightChop(PreLen))); };
 	if      (S.StartsWith(TEXT("Bag_")))     { LookupId = FName(*FString::Printf(TEXT("Bud_%s"), *UInventoryComponent::BagStrain(ProductId).ToString())); }
-	else if (S.StartsWith(TEXT("Crystal_"))) { LookupId = StrainOf(8); Mult = 2.2f; }
-	else if (S.StartsWith(TEXT("Hash_")))    { LookupId = StrainOf(5); Mult = 3.2f; }
-	else if (S.StartsWith(TEXT("Edible_")))  { LookupId = StrainOf(7); Mult = 4.0f; }
+	else if (S.StartsWith(TEXT("Crystal_")))  { LookupId = StrainOf(8); Mult = 2.2f; }
+	else if (S.StartsWith(TEXT("Hash_")))     { LookupId = StrainOf(5); Mult = 3.2f; }
+	else if (S.StartsWith(TEXT("Edible_")))   { LookupId = StrainOf(7); Mult = 4.0f; }
+	else if (S.StartsWith(TEXT("Rosin_")))    { LookupId = StrainOf(6); Mult = 4.2f; }  // solventless premium
+	else if (S.StartsWith(TEXT("Bubble_")))   { LookupId = StrainOf(7); Mult = 3.8f; }  // ice/bubble hash
+	else if (S.StartsWith(TEXT("Moonrock_"))) { LookupId = StrainOf(9); Mult = 3.4f; }  // moonrocks
 	const FWeedShopProductRow* Row =
 		ProductTable->FindRow<FWeedShopProductRow>(LookupId, TEXT("ACustomerBase::GetMarketPriceForProduct"), false);
 	// Losse Bud_ (niet verpakt) + tussenstappen zijn NIET verkoopbaar aan klanten.

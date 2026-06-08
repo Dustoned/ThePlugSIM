@@ -58,6 +58,13 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Oven_Pro"),    TEXT("Pro range cooker"),     TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f), false, 16000, false, false, false, false, false, false, false, false, true },
 		{ TEXT("Pan_Pro"),     TEXT("Pro cooktop"),          TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f),  FVector(35.f, 35.f, 27.5f), false, 18000, false, false, false, false, false, false, false, false, true },
 		{ TEXT("Fridge_Pro"),  TEXT("Walk-in fridge"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.8f, 0.8f, 0.95f),  FVector(40.f, 40.f, 47.5f), false, 11000, false, false, false, false, false, false, false, false, true },
+		// Concentraat-machines: Rosin-pers, Ice/Bubble extractor (Isolator), Moonrock-station (allemaal bud -> concentraat).
+		{ TEXT("Rosin_Std"),   TEXT("Rosin press"),          TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f),  FVector(35.f, 35.f, 27.5f), false, 7000,  false, false, false, false, false, false, false, false, true },
+		{ TEXT("Rosin_Pro"),   TEXT("Hydraulic rosin press"),TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f),  FVector(35.f, 35.f, 27.5f), false, 20000, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Iso_Std"),     TEXT("Ice extractor"),        TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.8f),   FVector(35.f, 35.f, 40.f),  false, 9000,  false, false, false, false, false, false, false, false, true },
+		{ TEXT("Iso_Pro"),     TEXT("Pro isolator"),         TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.8f),   FVector(35.f, 35.f, 40.f),  false, 24000, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Moon_Std"),    TEXT("Moonrock station"),     TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f),false, 12000, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Moon_Pro"),    TEXT("Pro moonrock station"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f),false, 28000, false, false, false, false, false, false, false, false, true },
 		// --- Losse upgrade-gear: zet vlakbij een DROOGREK of HASJ-MACHINE om 'm sneller/beter te maken.
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 3000 },
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.24f), FVector(15.f, 15.f, 12.f), false, 4500 },

@@ -53,6 +53,9 @@ FString AProcessorMachine::OutputPrefixFor(FName Tier)
 	if (T.StartsWith(TEXT("Oven_")))   { return TEXT("Baked_"); }
 	if (T.StartsWith(TEXT("Pan_")))    { return TEXT("ButterMix_"); }
 	if (T.StartsWith(TEXT("Fridge_"))) { return TEXT("Edible_"); }    // eindproduct: cannabutter/edible, hoge THC
+	if (T.StartsWith(TEXT("Rosin_")))  { return TEXT("Rosin_"); }     // solventless rosin
+	if (T.StartsWith(TEXT("Iso_")))    { return TEXT("Bubble_"); }    // bubble/ice hash (isolator)
+	if (T.StartsWith(TEXT("Moon_")))   { return TEXT("Moonrock_"); }  // moonrocks (gecoate bud)
 	return TEXT("Crystal_"); // Mesh_
 }
 
@@ -81,6 +84,15 @@ bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSec
 	if (T == TEXT("Oven_Pro"))    { OutCapacity = 4; OutSeconds = 25.f;  OutConv = 0.96f; OutThcMult = 1.15f; return true; }
 	if (T == TEXT("Pan_Pro"))     { OutCapacity = 4; OutSeconds = 35.f;  OutConv = 0.94f; OutThcMult = 1.25f; return true; }
 	if (T == TEXT("Fridge_Pro"))  { OutCapacity = 8; OutSeconds = 110.f; OutConv = 1.00f; OutThcMult = 1.55f; return true; }
+	// Concentraat-ketens (eigen machines, gedroogde wiet -> concentraat). Sterk maar onder de 90%-hasj-top:
+	// Rosin = solventless pers (hoog), Bubble/Ice "Isolator" = water-extractie (iets hoger), Moonrock = bud
+	// gecoat met kief/olie (matige boost, maar hoge gram-opbrengst). bOutIsPress=true geeft de pers-animatie.
+	if (T == TEXT("Rosin_Std")) { OutCapacity = 1; OutSeconds = 75.f; OutConv = 0.18f; OutThcMult = 2.00f; bOutIsPress = true; return true; }
+	if (T == TEXT("Rosin_Pro")) { OutCapacity = 2; OutSeconds = 55.f; OutConv = 0.24f; OutThcMult = 2.15f; bOutIsPress = true; return true; }
+	if (T == TEXT("Iso_Std"))   { OutCapacity = 1; OutSeconds = 95.f; OutConv = 0.14f; OutThcMult = 2.10f; return true; }
+	if (T == TEXT("Iso_Pro"))   { OutCapacity = 2; OutSeconds = 70.f; OutConv = 0.20f; OutThcMult = 2.25f; return true; }
+	if (T == TEXT("Moon_Std"))  { OutCapacity = 2; OutSeconds = 60.f; OutConv = 0.70f; OutThcMult = 1.60f; bOutIsPress = true; return true; }
+	if (T == TEXT("Moon_Pro"))  { OutCapacity = 4; OutSeconds = 45.f; OutConv = 0.80f; OutThcMult = 1.70f; bOutIsPress = true; return true; }
 	OutCapacity = 1; OutSeconds = 60.f; OutConv = 0.15f; OutThcMult = 2.0f; return false;
 }
 
