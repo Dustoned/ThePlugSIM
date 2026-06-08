@@ -16,6 +16,7 @@ void ULevelComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ULevelComponent, Level);
 	DOREPLIFETIME(ULevelComponent, CurrentXP);
+	DOREPLIFETIME(ULevelComponent, bShopLicensed);
 }
 
 int32 ULevelComponent::XPForLevel(int32 Lvl)
@@ -61,6 +62,16 @@ void ULevelComponent::AddXP(int32 Amount)
 		{
 			UWeedToast::Notify(-1, 5.f, FColor(120, 220, 255),
 				FString::Printf(TEXT("LEVEL UP!  You reached level %d"), Level));
+		}
+		// Eind-mijlpaal: op level 50 verdien je de SHOP-LICENTIE (gate naar het weedshop-deel).
+		if (!bShopLicensed && Level >= ShopLicenseLevel)
+		{
+			bShopLicensed = true;
+			if (GEngine)
+			{
+				UWeedToast::Notify(-1, 9.f, FColor(255, 215, 0),
+					TEXT("SHOP LICENSE EARNED!  Level 50 reached - you can now run a legit weed shop."));
+			}
 		}
 	}
 }

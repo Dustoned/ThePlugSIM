@@ -19,9 +19,15 @@ public:
 	ULevelComponent();
 
 	static constexpr int32 MaxLevel = 100;
+	static constexpr int32 ShopLicenseLevel = 50; // eind-mijlpaal: hier verdien je de shop-licentie
 
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Level")
 	FOnLevelUp OnLevelUp;
+
+	// Heb je de shop-licentie (op level 50) verdiend? Gate voor het weedshop-deel.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Level")
+	bool IsShopLicensed() const { return bShopLicensed; }
+	void RestoreShopLicensed(bool b) { bShopLicensed = b; }
 
 	// Server: ken XP toe (verkopen/oogsten/werven). Verwerkt level-ups (kan meerdere tegelijk).
 	// De XP wordt vermenigvuldigd met de huidige XP-multiplier (bv. stoned-bonus).
@@ -66,6 +72,9 @@ protected:
 
 	UPROPERTY(Replicated)
 	int32 CurrentXP = 0;
+
+	UPROPERTY(Replicated)
+	bool bShopLicensed = false;
 
 	float XpMultiplier = 1.f; // lokaal/server; stoned-bonus
 

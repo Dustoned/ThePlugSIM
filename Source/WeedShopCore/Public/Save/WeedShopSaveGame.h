@@ -169,6 +169,10 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	int32 CrewLevel = 1;
 
+	// Shop-licentie verdiend (level 50-mijlpaal).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	bool bShopLicensed = false;
+
 	// Vrij bouwen (testing/sandbox) -> overal plaatsen toegestaan.
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	bool bFreeBuild = false;

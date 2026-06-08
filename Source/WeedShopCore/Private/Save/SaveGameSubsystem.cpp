@@ -605,7 +605,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->SavedAt = FDateTime::UtcNow();
 	Save->bIsAutosave = bAutosave;
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
-	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); }
+	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); Save->bShopLicensed = Lv->IsShopLicensed(); }
 	Save->bFreeBuild = GS->IsFreeBuild();
 
 	// Gedeelde wereld-staat.
@@ -676,7 +676,7 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->RestoreState(Save->GoalJointsRolled, Save->GoalPlantsHarvested, Save->GoalDealsDone, Save->GoalClaimed); Gl->RestoreExtra(Save->GoalGramsSold, Save->GoalGramsCrafted); }
 	if (UUpgradeComponent* Up = GS->GetUpgrades()) { Up->RestorePurchased(Save->PurchasedUpgrades); }
 	// Level + XP, NPC-relaties en telefoon-contacten/berichten terugzetten (waren kwijt na reload).
-	if (ULevelComponent* Lv = GS->GetLeveling()) { Lv->RestoreLevel(Save->CrewLevel, Save->CrewXP); }
+	if (ULevelComponent* Lv = GS->GetLeveling()) { Lv->RestoreLevel(Save->CrewLevel, Save->CrewXP); Lv->RestoreShopLicensed(Save->bShopLicensed); }
 	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->RestoreStates(Save->Npcs); }
 	if (UContactsComponent* Con = GS->GetContacts()) { Con->RestoreContacts(Save->Contacts, Save->Messages); }
 	if (UHeatComponent* Ht = GS->GetHeat()) { Ht->RestoreHeat(Save->Heat); Ht->RestoreEventState(Save->HeatEventTimer, Save->HeatLastEventDay); }

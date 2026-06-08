@@ -387,15 +387,20 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	{
 		if (const FWeedStrainRow* Row = StrainTable->FindRow<FWeedStrainRow>(CatalogId, TEXT("RequiredLevelFor"), false))
 		{
+			// Strains gespreid over de hele tree tot ~48 (zodat er tot de level-50-licentie nieuwe strains komen).
 			const float Thc = Row->BaseThcPercent;
-			if (Thc < 14.f) { return 1; }
-			if (Thc < 17.f) { return 4; }
-			if (Thc < 20.f) { return 9; }
-			if (Thc < 23.f) { return 15; }
-			if (Thc < 26.f) { return 21; }
-			if (Thc < 29.f) { return 27; }
-			if (Thc < 32.f) { return 33; }
-			return 38; // top-strains pas eind-progressie
+			if (Thc < 14.f) { return 1; }   // Streetweed, Critical Mass
+			if (Thc < 17.f) { return 4; }   // Silver Haze
+			if (Thc < 19.f) { return 9; }   // Northern Lights, Big Bud
+			if (Thc < 21.f) { return 13; }  // White Widow
+			if (Thc < 23.f) { return 17; }  // Sour Diesel
+			if (Thc < 25.f) { return 21; }  // Amnesia Haze, OG Kush
+			if (Thc < 28.f) { return 26; }  // Gorilla Glue
+			if (Thc < 30.f) { return 31; }  // Girl Scout Cookies
+			if (Thc < 32.f) { return 36; }  // Wedding Cake
+			if (Thc < 34.f) { return 40; }  // Gelato (Cali)
+			if (Thc < 36.f) { return 44; }  // Runtz (Cali)
+			return 48;                      // Zkittlez (Cali) - net voor de licentie
 		}
 	}
 	return 1;
