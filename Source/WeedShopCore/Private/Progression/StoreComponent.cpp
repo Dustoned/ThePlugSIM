@@ -347,12 +347,12 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Pan_Pro"))         { return 21; }
 	if (S == TEXT("Fridge_Pro"))      { return 21; }
 	// Concentraat-ketens (high-end content richting de level-50-licentie).
-	if (S == TEXT("Rosin_Std"))       { return 26; }
-	if (S == TEXT("Iso_Std"))         { return 30; }
+	if (S == TEXT("Rosin_Std"))       { return 40; }
+	if (S == TEXT("Moon_Pro"))        { return 38; }
 	if (S == TEXT("Moon_Std"))        { return 34; }
-	if (S == TEXT("Rosin_Pro"))       { return 38; }
-	if (S == TEXT("Iso_Pro"))         { return 42; }
-	if (S == TEXT("Moon_Pro"))        { return 46; }
+	if (S == TEXT("Rosin_Pro"))       { return 44; }
+	if (S == TEXT("Iso_Std"))         { return 46; }
+	if (S == TEXT("Iso_Pro"))         { return 48; }
 	// Losse upgrade-gear
 	if (S == TEXT("DryUp_Fan"))       { return 12; }
 	if (S == TEXT("DryUp_Seal"))      { return 18; }
