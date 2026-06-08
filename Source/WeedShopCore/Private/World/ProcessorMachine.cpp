@@ -61,13 +61,15 @@ bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSec
 	const FString T = Tier.ToString();
 	bOutIsPress = T.StartsWith(TEXT("Press_"));
 	// Mesh: gedroogde wiet -> crystals (lage opbrengst in gram, sterke THC-boost).
-	if (T == TEXT("Mesh_Cheap")) { OutCapacity = 1; OutSeconds = 60.f; OutConv = 0.15f; OutThcMult = 2.2f; return true; }
-	if (T == TEXT("Mesh_Std"))   { OutCapacity = 2; OutSeconds = 45.f; OutConv = 0.20f; OutThcMult = 2.4f; return true; }
-	if (T == TEXT("Mesh_Pro"))   { OutCapacity = 3; OutSeconds = 30.f; OutConv = 0.28f; OutThcMult = 2.6f; return true; }
+	// THC-boost bewust laag gehouden: 90% hasj is de HARDSTE mijlpaal -> alleen met pro-mesh + pro-press (x2.86)
+	// EN een Cali-strain (33%+, perfecte zorg). Lagere strains/keten halen de 90%-cap NIET.
+	if (T == TEXT("Mesh_Cheap")) { OutCapacity = 1; OutSeconds = 60.f; OutConv = 0.15f; OutThcMult = 1.80f; return true; }
+	if (T == TEXT("Mesh_Std"))   { OutCapacity = 2; OutSeconds = 45.f; OutConv = 0.20f; OutThcMult = 2.00f; return true; }
+	if (T == TEXT("Mesh_Pro"))   { OutCapacity = 3; OutSeconds = 30.f; OutConv = 0.28f; OutThcMult = 2.20f; return true; }
 	// Press: crystals -> hasj (weinig verlies, extra THC-boost).
-	if (T == TEXT("Press_Cheap")) { OutCapacity = 1; OutSeconds = 90.f; OutConv = 0.60f; OutThcMult = 1.25f; return true; }
-	if (T == TEXT("Press_Std"))   { OutCapacity = 2; OutSeconds = 70.f; OutConv = 0.70f; OutThcMult = 1.30f; return true; }
-	if (T == TEXT("Press_Pro"))   { OutCapacity = 3; OutSeconds = 50.f; OutConv = 0.85f; OutThcMult = 1.40f; return true; }
+	if (T == TEXT("Press_Cheap")) { OutCapacity = 1; OutSeconds = 90.f; OutConv = 0.60f; OutThcMult = 1.10f; return true; }
+	if (T == TEXT("Press_Std"))   { OutCapacity = 2; OutSeconds = 70.f; OutConv = 0.70f; OutThcMult = 1.20f; return true; }
+	if (T == TEXT("Press_Pro"))   { OutCapacity = 3; OutSeconds = 50.f; OutConv = 0.85f; OutThcMult = 1.30f; return true; }
 	// Edibles-keten: oven (decarb, klein verlies, lichte THC-activatie) -> pan (boter koken) -> koelkast
 	// (laten zetten, grootste THC-boost + cap = "koelkast-voorraad").
 	if (T == TEXT("Oven_Std"))    { OutCapacity = 2; OutSeconds = 40.f;  OutConv = 0.92f; OutThcMult = 1.15f; return true; }
