@@ -283,6 +283,41 @@ namespace PropKit
 			P(Cu, FVector(2.2f, 5.4f, 4.4f), FVector(0, 0, 1.5f), FLinearColor(0.88f, 0.32f, 0.32f)); // bandje
 			P(Cu, FVector(1.8f, 1.8f, 0.3f), FVector(0, 0, 3.6f), FLinearColor(0.90f, 0.85f, 0.40f)); // stempel
 		}
+		else if (S.StartsWith(TEXT("Baked_")))
+		{
+			// Gebakken/gedecarbte wiet: bruinige geroosterde nug-cluster.
+			const FLinearColor B = FMath::Lerp(FLinearColor(0.42f, 0.30f, 0.14f), Accent, 0.25f);
+			P(Sp, FVector(6.0f, 6.0f, 5.2f), FVector(0, 0, 0), B);
+			P(Sp, FVector(4.2f, 4.2f, 4.0f), FVector(2.4f, 1.0f, 1.2f), B * 1.15f);
+			P(Sp, FVector(4.0f, 4.0f, 3.8f), FVector(-2.2f, 1.4f, 1.0f), B * 0.85f);
+			P(Sp, FVector(3.6f, 3.6f, 3.4f), FVector(0.4f, -2.2f, 1.6f), B);
+			P(Cu, FVector(8.0f, 8.0f, 0.6f), FVector(0, 0, -2.6f), FLinearColor(0.20f, 0.20f, 0.22f)); // bakplaat-bodempje
+		}
+		else if (S.StartsWith(TEXT("ButterMix_")))
+		{
+			// Gekookte boter-wiet-mix: geel-groenige klont.
+			const FLinearColor MixC = FMath::Lerp(FLinearColor(0.86f, 0.72f, 0.28f), Accent, 0.3f);
+			P(Sp, FVector(6.4f, 6.4f, 4.6f), FVector(0, 0, 0), MixC);
+			P(Sp, FVector(3.4f, 3.4f, 2.6f), FVector(1.6f, 0.8f, 1.0f), MixC * 0.85f);
+			P(Sp, FVector(2.2f, 2.2f, 1.8f), FVector(-1.4f, -0.6f, 1.2f), FLinearColor(0.30f, 0.45f, 0.20f)); // wiet-vlokje
+			P(Sp, FVector(1.8f, 1.8f, 1.5f), FVector(0.8f, -1.6f, 1.0f), FLinearColor(0.28f, 0.42f, 0.18f));
+		}
+		else if (S.StartsWith(TEXT("Edible_")))
+		{
+			// Eind-cannabutter/edible: bruin blok (boterblok/brownie) met lichtere top.
+			const FLinearColor E = FMath::Lerp(FLinearColor(0.45f, 0.30f, 0.15f), Accent, 0.22f);
+			P(Cu, FVector(7.0f, 5.0f, 3.6f), FVector(0, 0, 0), E);
+			P(Cu, FVector(7.2f, 5.2f, 0.9f), FVector(0, 0, 1.9f), E * 1.25f); // glanzende top
+			P(Cu, FVector(1.0f, 5.2f, 3.7f), FVector(-1.8f, 0, 0), E * 0.85f); // snij-lijn
+			P(Sp, FVector(0.8f, 0.8f, 0.8f), FVector(1.6f, 1.0f, 2.0f), FLinearColor(0.25f, 0.4f, 0.18f)); // wiet-spikkel
+		}
+		else if (S == TEXT("Butter"))
+		{
+			// Pakje boter: geel blok met wit/folie-randje.
+			P(Cu, FVector(8.0f, 4.4f, 3.2f), FVector(0, 0, 0), FLinearColor(0.95f, 0.85f, 0.35f));
+			P(Cu, FVector(8.2f, 4.6f, 0.8f), FVector(0, 0, 1.7f), FLinearColor(0.98f, 0.92f, 0.55f)); // top
+			P(Cu, FVector(8.3f, 4.7f, 1.0f), FVector(0, 0, -1.3f), FLinearColor(0.85f, 0.84f, 0.80f)); // folie-wikkel
+		}
 		else
 		{
 			P(Cu, FVector(6.5f, 6.5f, 6.5f), FVector(0, 0, 0), FLinearColor(0.60f, 0.60f, 0.65f));

@@ -50,6 +50,10 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Press_Cheap"), TEXT("Heatpress"),            TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 5000,  false, false, false, false, false, false, false, false, true },
 		{ TEXT("Press_Std"),   TEXT("Pro heatpress"),        TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 9000,  false, false, false, false, false, false, false, false, true },
 		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f), FVector(35.f, 35.f, 27.5f), false, 16000, false, false, false, false, false, false, false, false, true },
+		// --- Edibles-keten: Oven (Bud->Baked), Pan (Baked+boter->ButterMix), Koelkast (ButterMix->Edible). Spawnen AProcessorMachine. Binnen.
+		{ TEXT("Oven_Std"),    TEXT("Oven / stove"),         TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f), false, 7000,  false, false, false, false, false, false, false, false, true },
+		{ TEXT("Pan_Std"),     TEXT("Cooking pan"),          TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.55f),  FVector(35.f, 35.f, 27.5f), false, 11000, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Fridge_Std"),  TEXT("Fridge"),               TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.7f, 0.7f, 0.85f),  FVector(35.f, 35.f, 42.5f), false, 16000, false, false, false, false, false, false, false, false, true },
 		// --- Losse upgrade-gear: zet vlakbij een DROOGREK of HASJ-MACHINE om 'm sneller/beter te maken.
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 3000 },
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.24f), FVector(15.f, 15.f, 12.f), false, 4500 },

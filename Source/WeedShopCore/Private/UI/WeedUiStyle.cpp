@@ -121,7 +121,8 @@ namespace WeedUI
 		}
 		const FString S = ItemId.ToString();
 		if (S == TEXT("Cash")) { return FString(); }
-		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_"))) { return FString::Printf(TEXT("%dg"), Qty); }
+		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_"))
+			|| S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_"))) { return FString::Printf(TEXT("%dg"), Qty); }
 		return (Qty > 1) ? FString::Printf(TEXT("x%d"), Qty) : FString();
 	}
 
@@ -155,8 +156,15 @@ namespace WeedUI
 		if (S == TEXT("DryUp_Seal"))          { return TEXT("Humidity sealer"); }
 		if (S == TEXT("ProcUp_Motor"))        { return TEXT("Power motor"); }
 		if (S == TEXT("ProcUp_Yield"))        { return TEXT("Fine filter"); }
+		if (S == TEXT("Oven_Std"))            { return TEXT("Oven / stove"); }
+		if (S == TEXT("Pan_Std"))             { return TEXT("Cooking pan"); }
+		if (S == TEXT("Fridge_Std"))          { return TEXT("Fridge"); }
+		if (S == TEXT("Butter"))              { return TEXT("Butter"); }
 		if (S.StartsWith(TEXT("Crystal_")))   { return NiceName(S.RightChop(8)) + TEXT(" crystals"); }
 		if (S.StartsWith(TEXT("Hash_")))      { return NiceName(S.RightChop(5)) + TEXT(" hash"); }
+		if (S.StartsWith(TEXT("Baked_")))     { return TEXT("Baked ") + NiceName(S.RightChop(6)); }
+		if (S.StartsWith(TEXT("ButterMix_"))) { return NiceName(S.RightChop(10)) + TEXT(" butter mix"); }
+		if (S.StartsWith(TEXT("Edible_")))    { return NiceName(S.RightChop(7)) + TEXT(" cannabutter"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return NiceName(S.RightChop(4)); }
 		if (S.StartsWith(TEXT("Seed_")))      { return NiceName(S.RightChop(5)) + TEXT(" seed"); }
 		if (S.StartsWith(TEXT("Joint_")))     { return NiceName(S.RightChop(6)) + TEXT(" joint"); }
@@ -271,6 +279,12 @@ namespace WeedUI
 			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    FLinearColor(0.55f, 0.9f, 0.6f),   EIcon::Leaf };
 			if (Has(TEXT("Joint_")))                                     return { TEXT("joint"),     FLinearColor(0.7f, 0.85f, 0.5f),   EIcon::Leaf };
 			if (Has(TEXT("Seed_")))                                      return { TEXT("seed"),      FLinearColor(0.6f, 0.8f, 0.45f),   EIcon::Leaf };
+
+			// Edibles-keten.
+			if (Has(TEXT("Baked_")))                                     return { TEXT("baked"),     FLinearColor(0.55f, 0.42f, 0.20f), EIcon::Leaf };
+			if (Has(TEXT("ButterMix_")))                                 return { TEXT("mix"),       FLinearColor(0.85f, 0.72f, 0.30f), EIcon::Leaf };
+			if (Has(TEXT("Edible_")))                                    return { TEXT("edible"),    FLinearColor(0.80f, 0.62f, 0.25f), EIcon::Leaf };
+			if (ItemId == TEXT("Butter"))                                return { TEXT("butter"),    FLinearColor(0.95f, 0.85f, 0.35f), EIcon::Shop };
 
 			if (Has(TEXT("Cont_")))                                      return { TEXT("packaging"), FLinearColor(0.45f, 0.6f, 0.95f),  EIcon::Shop };
 			if (Has(TEXT("Papers_")))                                    return { TEXT("papers"),    FLinearColor(0.7f, 0.7f, 0.85f),   EIcon::Message };

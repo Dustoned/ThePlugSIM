@@ -144,6 +144,11 @@ namespace
 		{ TEXT("Press_Cheap"), TEXT("Heatpress"),            TEXT("Crystals -> hash, higher THC (~90s)"),        18000, 1 },
 		{ TEXT("Press_Std"),   TEXT("Pro heatpress"),        TEXT("Less loss + faster (~70s, 2 batches)"),       45000, 1 },
 		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("Best yield + THC (~50s, 3 batches)"),        120000, 1 },
+		// Edibles-keten: Oven (decarb) -> Pan (boter koken) -> Koelkast (zetten, hoge THC%). + boter als ingredient.
+		{ TEXT("Oven_Std"),    TEXT("Oven / stove"),         TEXT("Dried weed -> baked weed (decarb, ~40s)"),           12000, 1 },
+		{ TEXT("Pan_Std"),     TEXT("Cooking pan"),          TEXT("Baked weed + butter -> cannabutter mix (~55s)"),     18000, 1 },
+		{ TEXT("Fridge_Std"),  TEXT("Fridge"),               TEXT("Sets butter mix -> edibles, big THC boost (~3 min)"), 26000, 1 },
+		{ TEXT("Butter"),      TEXT("Butter"),               TEXT("Cooking ingredient for the pan (cannabutter)"),        300, 1 },
 		// Losse upgrade-gear voor droogrek / hasj-machines (zet 'm vlakbij de machine).
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("Nearby drying rack: ~30% faster"),        9000,  1 },
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("Nearby drying rack: keeps quality higher"), 14000, 1 },
@@ -219,6 +224,10 @@ int32 UStoreComponent::GetSellValueCents(FName ItemId) const
 	// Hasj-keten: crystals + hasj verkoop je (per gram) aan de supplier. Hasj is veel waard.
 	if (S.StartsWith(TEXT("Crystal_"))) { return 400; }  // EUR 4 / g
 	if (S.StartsWith(TEXT("Hash_")))    { return 900; }  // EUR 9 / g
+	// Edibles-keten: tussenproducten weinig waard, eind-edible (hoge THC) het meest.
+	if (S.StartsWith(TEXT("Baked_")))     { return 120; }  // EUR 1,20 / g (tussenstap)
+	if (S.StartsWith(TEXT("ButterMix_"))) { return 250; }  // EUR 2,50 / g (tussenstap)
+	if (S.StartsWith(TEXT("Edible_")))    { return 1600; } // EUR 16 / g (eindproduct, hoge THC)
 
 	// 70% terug van de koopprijs (seeds + supplies, incl. pots/soil/papers/water).
 	FText Name; int32 Buy = 0; int32 Pack = 1;
@@ -319,6 +328,11 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Press_Cheap"))     { return 10; }
 	if (S == TEXT("Press_Std"))       { return 20; }
 	if (S == TEXT("Press_Pro"))       { return 30; }
+	// Edibles-keten: netjes verdeeld op de tree (oven vroeg, pan midden, koelkast later). Boter goedkoop/vroeg.
+	if (S == TEXT("Butter"))          { return 8; }
+	if (S == TEXT("Oven_Std"))        { return 9; }
+	if (S == TEXT("Pan_Std"))         { return 14; }
+	if (S == TEXT("Fridge_Std"))      { return 19; }
 	// Losse upgrade-gear
 	if (S == TEXT("DryUp_Fan"))       { return 12; }
 	if (S == TEXT("DryUp_Seal"))      { return 18; }

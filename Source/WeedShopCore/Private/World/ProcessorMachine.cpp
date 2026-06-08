@@ -36,12 +36,22 @@ bool AProcessorMachine::IsPressTier(FName Tier)
 
 FString AProcessorMachine::InputPrefixFor(FName Tier)
 {
-	return IsPressTier(Tier) ? TEXT("Crystal_") : TEXT("Bud_");
+	const FString T = Tier.ToString();
+	if (T.StartsWith(TEXT("Press_")))  { return TEXT("Crystal_"); }
+	if (T.StartsWith(TEXT("Oven_")))   { return TEXT("Bud_"); }       // gedroogde wiet -> bakken (decarb)
+	if (T.StartsWith(TEXT("Pan_")))    { return TEXT("Baked_"); }     // gebakken wiet -> boter koken
+	if (T.StartsWith(TEXT("Fridge_"))) { return TEXT("ButterMix_"); } // gekookte boter -> laten zetten
+	return TEXT("Bud_"); // Mesh_
 }
 
 FString AProcessorMachine::OutputPrefixFor(FName Tier)
 {
-	return IsPressTier(Tier) ? TEXT("Hash_") : TEXT("Crystal_");
+	const FString T = Tier.ToString();
+	if (T.StartsWith(TEXT("Press_")))  { return TEXT("Hash_"); }
+	if (T.StartsWith(TEXT("Oven_")))   { return TEXT("Baked_"); }
+	if (T.StartsWith(TEXT("Pan_")))    { return TEXT("ButterMix_"); }
+	if (T.StartsWith(TEXT("Fridge_"))) { return TEXT("Edible_"); }    // eindproduct: cannabutter/edible, hoge THC
+	return TEXT("Crystal_"); // Mesh_
 }
 
 bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSeconds, float& OutConv, float& OutThcMult, bool& bOutIsPress)
@@ -56,6 +66,11 @@ bool AProcessorMachine::GetProcDef(FName Tier, int32& OutCapacity, float& OutSec
 	if (T == TEXT("Press_Cheap")) { OutCapacity = 1; OutSeconds = 90.f; OutConv = 0.60f; OutThcMult = 1.25f; return true; }
 	if (T == TEXT("Press_Std"))   { OutCapacity = 2; OutSeconds = 70.f; OutConv = 0.70f; OutThcMult = 1.30f; return true; }
 	if (T == TEXT("Press_Pro"))   { OutCapacity = 3; OutSeconds = 50.f; OutConv = 0.85f; OutThcMult = 1.40f; return true; }
+	// Edibles-keten: oven (decarb, klein verlies, lichte THC-activatie) -> pan (boter koken) -> koelkast
+	// (laten zetten, grootste THC-boost + cap = "koelkast-voorraad").
+	if (T == TEXT("Oven_Std"))    { OutCapacity = 2; OutSeconds = 40.f;  OutConv = 0.92f; OutThcMult = 1.15f; return true; }
+	if (T == TEXT("Pan_Std"))     { OutCapacity = 2; OutSeconds = 55.f;  OutConv = 0.88f; OutThcMult = 1.20f; return true; }
+	if (T == TEXT("Fridge_Std"))  { OutCapacity = 4; OutSeconds = 180.f; OutConv = 1.00f; OutThcMult = 1.55f; return true; }
 	OutCapacity = 1; OutSeconds = 60.f; OutConv = 0.15f; OutThcMult = 2.0f; return false;
 }
 
@@ -153,8 +168,50 @@ void AProcessorMachine::SetupVisual()
 	};
 
 	// Body-top zit op LocalCm.Z = +27.5 (halve hoogte). Accenten daarboven.
+	const FString TS = MachineTier.ToString();
+	const bool bOven = TS.StartsWith(TEXT("Oven_"));
+	const bool bPan = TS.StartsWith(TEXT("Pan_"));
+	const bool bFridge = TS.StartsWith(TEXT("Fridge_"));
 	const FLinearColor Accent = bPress ? FLinearColor(0.95f, 0.5f, 0.15f) : FLinearColor(0.25f, 0.7f, 1.f);
-	if (bPress)
+	if (bOven)
+	{
+		// Oven/fornuis: kookplaat met gloeiende ring + ovendeur-raampje + knoppen.
+		Mesh->SetRelativeScale3D(FVector(0.75f, 0.7f, 0.55f));
+		AddPart(FVector(0.f, 0.f, 30.f), FVector(72.f, 70.f, 6.f), FLinearColor(0.14f, 0.14f, 0.16f)); // kookplaat
+		AddPart(FVector(-16.f, -14.f, 34.f), FVector(20.f, 20.f, 2.f), FLinearColor(0.9f, 0.35f, 0.1f)); // gloeiring
+		AddPart(FVector(16.f, 14.f, 34.f), FVector(20.f, 20.f, 2.f), FLinearColor(0.35f, 0.18f, 0.12f));  // 2e pit
+		AddPart(FVector(0.f, -34.f, 0.f), FVector(50.f, 3.f, 34.f), FLinearColor(0.5f, 0.55f, 0.6f));  // ovendeur (glanzend)
+		AddPart(FVector(0.f, -35.f, 0.f), FVector(34.f, 2.f, 18.f), FLinearColor(0.8f, 0.4f, 0.12f));     // oven-raampje (gloed)
+		AddPart(FVector(-26.f, -35.f, 22.f), FVector(5.f, 4.f, 5.f), FLinearColor(0.2f, 0.2f, 0.22f));    // knop
+		AddPart(FVector(26.f, -35.f, 22.f), FVector(5.f, 4.f, 5.f), FLinearColor(0.2f, 0.2f, 0.22f));     // knop
+	}
+	else if (bPan)
+	{
+		// Kookplaat met een pan (cilinder) + steel.
+		AddPart(FVector(0.f, 0.f, 30.f), FVector(70.f, 70.f, 6.f), FLinearColor(0.14f, 0.14f, 0.16f));     // werkblad
+		AddPart(FVector(0.f, 0.f, 33.f), FVector(20.f, 20.f, 2.f), FLinearColor(0.85f, 0.35f, 0.12f));     // pit (gloed)
+		if (UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+		{
+			UStaticMeshComponent* Pan = NewObject<UStaticMeshComponent>(this); Pan->SetupAttachment(Mesh); Pan->RegisterComponent();
+			Pan->SetStaticMesh(Cyl); Pan->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Pan->SetRelativeScale3D(FVector(44.f / 70.f, 44.f / 70.f, 9.f / 55.f));
+			Pan->SetRelativeLocation(FVector(0.f, 0.f, 38.f / 0.55f));
+			if (BaseMat) { if (UMaterialInstanceDynamic* M = Pan->CreateDynamicMaterialInstance(0, BaseMat)) { M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.05f, 0.05f, 0.06f)); } }
+			Parts.Add(Pan);
+		}
+		AddPart(FVector(0.f, 0.f, 40.f), FVector(34.f, 34.f, 4.f), FLinearColor(0.85f, 0.78f, 0.45f)); // boter/wiet-mix in de pan
+		AddPart(FVector(40.f, 0.f, 38.f), FVector(26.f, 5.f, 4.f), FLinearColor(0.1f, 0.1f, 0.11f));   // steel
+	}
+	else if (bFridge)
+	{
+		// Koelkast: hoge witte kast met deur-naad, verticale handgreep + vriesvak-lijn.
+		if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
+		{ if (UMaterialInstanceDynamic* M = Mesh->CreateDynamicMaterialInstance(0, Base)) { M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.82f, 0.83f, 0.85f)); } } // wit
+		AddPart(FVector(34.f, -24.f, 0.f), FVector(3.f, 4.f, 70.f), FLinearColor(0.3f, 0.32f, 0.35f));   // handgreep
+		AddPart(FVector(35.f, 0.f, 18.f), FVector(2.f, 68.f, 3.f), FLinearColor(0.55f, 0.56f, 0.58f));   // vriesvak-naad
+		AddPart(FVector(35.f, 0.f, 0.f), FVector(2.f, 68.f, 2.f), FLinearColor(0.6f, 0.85f, 0.9f));   // koel-display-streepje
+	}
+	else if (bPress)
 	{
 		AddPart(FVector(0.f, 0.f, 36.f), FVector(70.f, 70.f, 10.f), FLinearColor(0.18f, 0.18f, 0.2f)); // bovenplaat
 		AddPart(FVector(0.f, 0.f, 30.f), FVector(58.f, 58.f, 6.f), Accent);                            // hete plaat (gloed)
@@ -257,10 +314,18 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 		if (Qty <= 0) { return; }
 		const float Thc = St[Idx].Quality;       // 'Quality'-veld = THC%
 		const float Qual = St[Idx].QualityPct;   // kwaliteit%
+		// De pan kookt met boter: je hebt minimaal 1 boter nodig (water is gratis), die wordt verbruikt.
+		const bool bNeedsButter = MachineTier.ToString().StartsWith(TEXT("Pan_"));
+		if (bNeedsButter && !Inv->HasItem(FName(TEXT("Butter")), 1))
+		{
+			if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, FColor::Orange, TEXT("Need butter to cook (buy it in the Lab).")); }
+			return;
+		}
 		const int32 Used = ServerLoad(Act, Qty, Thc, Qual);
 		if (Used > 0)
 		{
 			Inv->RemoveFromStackById(Sid, Used);
+			if (bNeedsButter) { Inv->RemoveItem(FName(TEXT("Butter")), 1); }
 			if (GEngine)
 			{
 				UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 200, 255), FString::Printf(TEXT("Loaded %dg - processing..."), Used));
@@ -269,17 +334,24 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 	}
 	else if (GEngine)
 	{
-		UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, FColor::Orange, IsPressTier(MachineTier)
-			? TEXT("Hold crystals (E) to press into hash.")
-			: TEXT("Hold dried weed (E) to extract crystals."));
+		const FString T = MachineTier.ToString();
+		FString Msg = TEXT("Hold dried weed (E) to extract crystals.");
+		if      (T.StartsWith(TEXT("Oven_")))   { Msg = TEXT("Hold dried weed (E) to bake/decarb it."); }
+		else if (T.StartsWith(TEXT("Pan_")))    { Msg = TEXT("Hold baked weed (E) to cook with butter."); }
+		else if (T.StartsWith(TEXT("Fridge_"))) { Msg = TEXT("Hold cooked butter (E) to set it in the fridge."); }
+		else if (IsPressTier(MachineTier))      { Msg = TEXT("Hold crystals (E) to press into hash."); }
+		UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, FColor::Orange, Msg);
 	}
 }
 
 FText AProcessorMachine::GetInteractionPrompt_Implementation() const
 {
-	const bool bPress = IsPressTier(MachineTier);
+	const FString T = MachineTier.ToString();
+	const bool bOven = T.StartsWith(TEXT("Oven_")), bPan = T.StartsWith(TEXT("Pan_")), bFridge = T.StartsWith(TEXT("Fridge_")), bPress = IsPressTier(MachineTier);
+	auto CollectLbl = [&]() { return bFridge ? TEXT("Collect edibles") : bPan ? TEXT("Collect cooked butter") : bOven ? TEXT("Collect baked weed") : bPress ? TEXT("Collect hash") : TEXT("Collect crystals"); };
+	auto IdleLbl = [&]() { return bFridge ? TEXT("Fridge  (set cooked butter)") : bPan ? TEXT("Pan  (cook baked weed + butter)") : bOven ? TEXT("Oven  (bake dried weed)") : bPress ? TEXT("Heatpress  (hold crystals)") : TEXT("Mesh extractor  (hold dried weed)"); };
 	// Klaar?
-	for (const FProcEntry& E : Entries) { if (E.bDone) { return FText::FromString(bPress ? TEXT("Collect hash") : TEXT("Collect crystals")); } }
+	for (const FProcEntry& E : Entries) { if (E.bDone) { return FText::FromString(CollectLbl()); } }
 	// Bezig? -> resterende tijd van de bijna-klare batch.
 	float BestLeft = -1.f;
 	const float Total = ProcSeconds();
@@ -287,9 +359,10 @@ FText AProcessorMachine::GetInteractionPrompt_Implementation() const
 	if (BestLeft >= 0.f)
 	{
 		const int32 S = FMath::CeilToInt(BestLeft);
-		return FText::FromString(FString::Printf(TEXT("Processing... %d:%02d  (%d/%d)"), S / 60, S % 60, Entries.Num(), Capacity()));
+		const TCHAR* Verb = bFridge ? TEXT("Setting") : (bOven || bPan) ? TEXT("Cooking") : TEXT("Processing");
+		return FText::FromString(FString::Printf(TEXT("%s... %d:%02d  (%d/%d)"), Verb, S / 60, S % 60, Entries.Num(), Capacity()));
 	}
-	return FText::FromString(bPress ? TEXT("Heatpress  (hold crystals)") : TEXT("Mesh extractor  (hold dried weed)"));
+	return FText::FromString(IdleLbl());
 }
 
 void AProcessorMachine::UpdateRep()
