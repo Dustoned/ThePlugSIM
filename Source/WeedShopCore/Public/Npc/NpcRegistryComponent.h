@@ -62,6 +62,13 @@ struct FNpcState
 	// Persoonlijke variatie zodat niet iedereen gelijk is: hoe snel ze klimmen + hoe gulzig ze bestellen (~0.6..1.6).
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float ValueMult = 1.f;
+
+	// COMPETITIVE: welke speler deze klant momenteel het meest mag (hoogste loyaliteit) + die loyaliteit.
+	// Op de BASIS-NPC-entry bijgehouden om "klant afgepakt" te detecteren. Leeg = nog niemand.
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	FString TopPlayerId;
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	float TopLoyalty = 0.f;
 };
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
@@ -98,6 +105,10 @@ public:
 	// Competitive: per-speler relatie-entry (sleutel "NpcId#spelerId"). Beide spelers starten met DEZELFDE
 	// basis-personality (van de basis-NPC) zodat de competitie eerlijk begint; daarna bouwen ze los op.
 	FName EnsurePlayerNpc(FName Key, FName BaseNpc, const FText& DisplayName);
+
+	// Competitive: registreer de loyaliteit van een speler bij een klant (basis-NPC). Geeft true terug als
+	// deze speler de klant zojuist AFPAKTE van een andere speler (die al een stevige band had). OutPrev = die rivaal.
+	bool NotePlayerLoyalty(FName BaseNpc, const FString& PlayerId, float Loyalty, FString& OutPrevOwnerId);
 
 	// Deterministische (1x) gerandomiseerde persoonlijkheid voor een NpcId. Zelfde id -> zelfde stats,
 	// zonder dat de NPC al geregistreerd hoeft te zijn (zodat de spawner vooraf kan zien wie koper is).

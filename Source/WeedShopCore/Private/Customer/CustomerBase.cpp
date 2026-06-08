@@ -3075,6 +3075,38 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 
 	State = ECustomerState::Served;
 	WriteStatsToRegistry();
+	// COMPETITIVE: ben je nu de favoriet van deze klant en pakte je 'm van een rivaal af? -> "afgepakt"-melding.
+	if (!ActiveRelKey.IsNone() && PayTo)
+	{
+		FString MyId, Lhs; ActiveRelKey.ToString().Split(TEXT("#"), &Lhs, &MyId);
+		AWeedShopGameState* GSp = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+		if (GSp && GSp->GetNpcRegistry() && !MyId.IsEmpty())
+		{
+			FString PrevOwner;
+			if (GSp->GetNpcRegistry()->NotePlayerLoyalty(NpcId, MyId, Loyalty, PrevOwner))
+			{
+				float r = 0.f, l = 0.f, a = 0.f; FText Nm;
+				GSp->GetNpcRegistry()->GetStats(NpcId, r, l, a, Nm);
+				const FString Who = Nm.IsEmpty() ? TEXT("a regular") : Nm.ToString();
+				UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 5.f, FColor(120, 255, 140),
+					FString::Printf(TEXT("You poached %s from your rival!"), *Who));
+				// De rivaal voelt het ook: zoek z'n pawn op (per stabiele speler-id) en meld het verlies.
+				if (UWorld* W = GetWorld())
+				{
+					for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+					{
+						APawn* RP = It->Get() ? It->Get()->GetPawn() : nullptr;
+						if (RP && USaveGameSubsystem::StablePlayerId(RP) == PrevOwner)
+						{
+							UWeedToast::NotifyPawn(RP, -1, 5.f, FColor(255, 140, 120),
+								FString::Printf(TEXT("%s started buying from your rival!"), *Who));
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
 	// Cooldown starten: deze NPC (in persoon of via telefoon-afspraak) komt niet meteen terug.
 	if (AWeedShopGameState* GSc = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{

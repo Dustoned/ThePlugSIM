@@ -200,6 +200,27 @@ FName UNpcRegistryComponent::EnsurePlayerNpc(FName Key, FName BaseNpc, const FTe
 	return Key;
 }
 
+bool UNpcRegistryComponent::NotePlayerLoyalty(FName BaseNpc, const FString& PlayerId, float Loyalty, FString& OutPrevOwnerId)
+{
+	OutPrevOwnerId.Reset();
+	if (GetOwnerRole() != ROLE_Authority || BaseNpc.IsNone() || PlayerId.IsEmpty()) { return false; }
+	FNpcState* S = Find(BaseNpc);
+	if (!S) { return false; }
+	// Word je de nieuwe favoriet van deze klant?
+	if (Loyalty <= S->TopLoyalty + 0.01f) { return false; } // (nog) niet de hoogste -> geen overname
+	const FString Prev = S->TopPlayerId;
+	const float PrevLoy = S->TopLoyalty;
+	S->TopPlayerId = PlayerId;
+	S->TopLoyalty = Loyalty;
+	// Afpakken telt alleen als er al een ANDERE speler met een stevige band (>=30) zat.
+	if (!Prev.IsEmpty() && Prev != PlayerId && PrevLoy >= 30.f)
+	{
+		OutPrevOwnerId = Prev;
+		return true;
+	}
+	return false;
+}
+
 FNpcState* UNpcRegistryComponent::Find(FName NpcId)
 {
 	return States.FindByPredicate([NpcId](const FNpcState& S) { return S.NpcId == NpcId; });
