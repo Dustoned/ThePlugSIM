@@ -269,28 +269,33 @@ void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
 void AThePlugSIMCharacter::ApplySkinMesh()
 {
-	// Man = Manny, Vrouw = Quinn. Beide delen het mannequin-skelet, dus de AnimBP blijft werken (geen retarget).
-	const TCHAR* Path = (PlayerSkin == 1)
-		? TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple")
-		: TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple");
+	// 0 = Manny (man), 1 = Quinn (vrouw): zelfde mannequin-skelet, AnimBP werkt direct.
+	// 2 = Lola (K-POP pack): eigen skelet -> animeert pas na een retarget (test of ze laadt + beweegt).
+	const TCHAR* Path;
+	switch (PlayerSkin)
+	{
+		case 1:  Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"); break;
+		case 2:  Path = TEXT("/Game/KPOP_Lola/Mesh/SK_LOLA_CASUAL.SK_LOLA_CASUAL"); break;
+		default: Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"); break;
+	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
 	if (!Skin) { return; }
-	// Body (zien je co-op maten) EN de first-person mesh (zie jij zelf, als je naar beneden kijkt).
+	// Skin alleen op de THIRD-PERSON body (zien je co-op maten). De first-person mesh (jouw armen) laten we
+	// met rust: die toont nooit een hoofd, dus je FP-view blijft clean ongeacht welke skin je kiest.
 	if (USkeletalMeshComponent* M = GetMesh()) { M->SetSkeletalMeshAsset(Skin); }
-	if (FirstPersonMesh) { FirstPersonMesh->SetSkeletalMeshAsset(Skin); }
 }
 
 void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
 
 void AThePlugSIMCharacter::ServerSetSkin_Implementation(uint8 NewSkin)
 {
-	PlayerSkin = (NewSkin >= 1) ? 1 : 0;
+	PlayerSkin = (NewSkin > 2) ? 2 : NewSkin;
 	ApplySkinMesh(); // server lokaal toepassen; repliceert naar clients -> OnRep_Skin
 }
 
 void AThePlugSIMCharacter::RestoreSkin(uint8 S)
 {
-	PlayerSkin = (S >= 1) ? 1 : 0;
+	PlayerSkin = (S > 2) ? 2 : S;
 	ApplySkinMesh();
 }
 

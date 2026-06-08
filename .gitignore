@@ -21,3 +21,7 @@ Backup/
 /_AssetStaging/
 *.rar
 /Content/_Project/1x1/
+
+# Grote character-asset-packs + RARs (niet naar git -> te groot voor GitHub)
+/Content/KPOP_Lola/
+/Content/*.rar

@@ -307,8 +307,12 @@ void UPhoneWidget::FillSettingsBody()
 			UWeedActionButton* FemB = MakeActionBtn(TEXT("Female"),
 				(Cur == 1) ? FLinearColor(0.78f, 0.32f, 0.55f) : FLinearColor(0.15f, 0.16f, 0.21f),
 				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(1); } FillSettingsBody(); }, 13);
+			UWeedActionButton* LolaB = MakeActionBtn(TEXT("Lola"),
+				(Cur == 2) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.16f, 0.21f),
+				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(2); } FillSettingsBody(); }, 13);
 			GBtns->AddChildToHorizontalBox(MaleB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			GBtns->AddChildToHorizontalBox(FemB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			GBtns->AddChildToHorizontalBox(LolaB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			BodyRow(GBtns, FMargin(0.f, 0.f, 0.f, 10.f));
 		}
 		if (GS && GS->GetLeveling())
