@@ -116,6 +116,7 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> SplitLabel;
 	int32 SplitStackId = 0;
 	int32 SplitTotal = 0;
+	bool bSplitIsCash = false; // split-popup staat in "drop cash"-modus (Cash-stapel)
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<UInventoryComponent> BoundInv;

@@ -113,15 +113,15 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 
 FReply UInvCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	if (bDraggable && StackId != 0 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	if (StackId != 0 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		// Shift+klik = split-popup openen (geen drag starten).
+		// Shift+klik = split/drop-popup openen (werkt ook voor niet-sleepbare stapels zoals Cash).
 		if (InMouseEvent.IsShiftDown() && Owner.IsValid())
 		{
 			Owner->OpenSplitPopup(StackId);
 			return FReply::Handled();
 		}
-		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+		if (bDraggable) { return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton); }
 	}
 	return FReply::Unhandled();
 }
@@ -408,7 +408,9 @@ void UInventoryWidget::OpenSplitPopup(int32 StackId)
 	const int32 Idx = I->FindStackById(StackId);
 	const TArray<FInventoryStack>& St = I->GetStacks();
 	if (!St.IsValidIndex(Idx)) { return; }
-	if (!UInventoryComponent::IsStackable(St[Idx].ItemId) || St[Idx].Quantity < 2) { return; } // niks te splitsen
+	bSplitIsCash = (St[Idx].ItemId == FName(TEXT("Cash")));
+	if (!bSplitIsCash && (!UInventoryComponent::IsStackable(St[Idx].ItemId) || St[Idx].Quantity < 2)) { return; } // niks te splitsen
+	if (bSplitIsCash && St[Idx].Quantity < 1) { return; }
 	SplitStackId = StackId;
 	SplitTotal = St[Idx].Quantity;
 	SplitSlider->SetValue(0.5f);
@@ -419,6 +421,12 @@ void UInventoryWidget::OpenSplitPopup(int32 StackId)
 void UInventoryWidget::OnSplitSliderChanged(float V)
 {
 	if (!SplitLabel) { return; }
+	if (bSplitIsCash)
+	{
+		const int32 Amount = FMath::Clamp(FMath::RoundToInt(V * SplitTotal), 1, FMath::Max(1, SplitTotal));
+		SplitLabel->SetText(FText::FromString(FString::Printf(TEXT("Drop: EUR %d   (of EUR %d)"), Amount, SplitTotal)));
+		return;
+	}
 	const int32 Amount = FMath::Clamp(FMath::RoundToInt(V * SplitTotal), 1, FMath::Max(1, SplitTotal - 1));
 	SplitLabel->SetText(FText::FromString(FString::Printf(TEXT("Split off: %d   (of %d)"), Amount, SplitTotal)));
 }
@@ -426,11 +434,24 @@ void UInventoryWidget::OnSplitSliderChanged(float V)
 void UInventoryWidget::ConfirmSplit()
 {
 	UInventoryComponent* I = GetInv();
-	if (I && SplitStackId != 0 && SplitSlider && SplitTotal > 1)
+	if (I && SplitStackId != 0 && SplitSlider && SplitTotal >= 1)
 	{
-		const int32 Amount = FMath::Clamp(FMath::RoundToInt(SplitSlider->GetValue() * SplitTotal), 1, SplitTotal - 1);
-		I->RequestSplit(SplitStackId, Amount, -1);
-		MarkDirty();
+		if (bSplitIsCash)
+		{
+			// Cash droppen: trek het bedrag van je cash + spawn een oppakbaar geldstapeltje (server).
+			const int32 Euros = FMath::Clamp(FMath::RoundToInt(SplitSlider->GetValue() * SplitTotal), 1, SplitTotal);
+			if (AActor* Own = I->GetOwner())
+			{
+				if (UEconomyComponent* Eco = Own->FindComponentByClass<UEconomyComponent>()) { Eco->ServerDropCash(Euros); }
+			}
+			MarkDirty();
+		}
+		else if (SplitTotal > 1)
+		{
+			const int32 Amount = FMath::Clamp(FMath::RoundToInt(SplitSlider->GetValue() * SplitTotal), 1, SplitTotal - 1);
+			I->RequestSplit(SplitStackId, Amount, -1);
+			MarkDirty();
+		}
 	}
 	CancelSplit();
 }

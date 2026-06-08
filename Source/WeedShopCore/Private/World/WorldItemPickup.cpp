@@ -2,6 +2,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Inventory/InventoryComponent.h"
+#include "Economy/EconomyComponent.h"
 #include "Placement/PropMeshKit.h"
 #include "UI/WeedToast.h"
 #include "UI/WeedUiStyle.h"
@@ -48,6 +49,17 @@ void AWorldItemPickup::RefreshVisual()
 void AWorldItemPickup::Interact_Implementation(APawn* InstigatorPawn)
 {
 	if (!HasAuthority() || !InstigatorPawn) { return; }
+	// Cash gaat naar de ECONOMY van de oppakker (niet de inventory-mirror): zo werkt geld droppen tussen spelers.
+	if (ItemId == FName(TEXT("Cash")))
+	{
+		if (UEconomyComponent* Eco = InstigatorPawn->FindComponentByClass<UEconomyComponent>())
+		{
+			Eco->AddMoneyUntracked((int64)Qty * 100); // Qty = euro's -> cents (untracked: telt niet als witwas-omzet)
+			if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 255, 140), FString::Printf(TEXT("Picked up EUR %d cash"), Qty)); }
+			Destroy();
+		}
+		return;
+	}
 	UInventoryComponent* Inv = InstigatorPawn->FindComponentByClass<UInventoryComponent>();
 	if (!Inv) { return; }
 	if (Inv->AddItem(ItemId, Qty, Thc, Qual))

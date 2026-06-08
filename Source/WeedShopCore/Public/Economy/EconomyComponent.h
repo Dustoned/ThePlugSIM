@@ -112,6 +112,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
 	int64 Deposit(int64 CashAmount);
 
+	// Fysiek cash droppen (split): trekt EUR <Euros> van je cash en legt een oppakbaar geldstapeltje vóór je
+	// neer dat een andere speler kan grijpen (gaat naar diens cash). Client roept aan -> server voert uit.
+	UFUNCTION(Server, Reliable)
+	void ServerDropCash(int32 Euros);
+
 	// Belastingpercentage op bankgeld (bij binnenkomst). 0..1.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Economy")
 	float DepositTaxPct = 0.25f;
