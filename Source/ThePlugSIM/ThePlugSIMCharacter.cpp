@@ -269,16 +269,15 @@ void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
 void AThePlugSIMCharacter::ApplySkinMesh()
 {
-	USkeletalMeshComponent* M = GetMesh();
-	if (!M) { return; }
 	// Man = Manny, Vrouw = Quinn. Beide delen het mannequin-skelet, dus de AnimBP blijft werken (geen retarget).
 	const TCHAR* Path = (PlayerSkin == 1)
 		? TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple")
 		: TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple");
-	if (USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path))
-	{
-		M->SetSkeletalMeshAsset(Skin);
-	}
+	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
+	if (!Skin) { return; }
+	// Body (zien je co-op maten) EN de first-person mesh (zie jij zelf, als je naar beneden kijkt).
+	if (USkeletalMeshComponent* M = GetMesh()) { M->SetSkeletalMeshAsset(Skin); }
+	if (FirstPersonMesh) { FirstPersonMesh->SetSkeletalMeshAsset(Skin); }
 }
 
 void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
