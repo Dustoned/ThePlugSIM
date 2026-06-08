@@ -328,7 +328,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Papers_Blunt"))    { return 11; }
 	if (S == TEXT("Papers_Backwoods")){ return 22; }
 	// Droogrekken
-	if (S == TEXT("DryRack_Cheap"))   { return 3; }
+	if (S == TEXT("DryRack_Cheap"))   { return 1; } // je start met 1 + je moet je eerste oogst meteen kunnen drogen
 	if (S == TEXT("DryRack_Std"))     { return 12; }
 	if (S == TEXT("DryRack_Pro"))     { return 26; }
 	// Hasj-keten (mesh + press)
