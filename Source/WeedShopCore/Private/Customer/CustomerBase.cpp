@@ -254,7 +254,16 @@ void ACustomerBase::BeginPlay()
 			if (bApptActive && !ApptWantStrain.IsNone()) { PickStrain = ApptWantStrain; }
 			if (!PickStrain.IsNone())
 			{
-				DesiredProductId = FName(*FString::Printf(TEXT("Bag_%s"), *PickStrain.ToString()));
+				// Producttype: standaard verpakte wiet. Veeleisende (verslaafde) klanten vragen soms om
+				// premium-producten: hasj of een edible (per losse gram). Op afspraak blijft het wiet.
+				FString ProdType = TEXT("Bag_");
+				if (!bApptActive && Addiction > 45.f)
+				{
+					const float Roll = FMath::FRand();
+					if (Roll < 0.12f)      { ProdType = TEXT("Edible_"); }
+					else if (Roll < 0.30f) { ProdType = TEXT("Hash_"); }
+				}
+				DesiredProductId = FName(*(ProdType + PickStrain.ToString()));
 				if (bApptActive && ApptWantQty > 0) { DesiredQuantity = ApptWantQty; }
 				else
 				{
@@ -2747,19 +2756,19 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	// product-rij van de strain (Bud_<strain>). Losse/natte buds -> 0 (niet verkoopbaar).
 	const FString S = ProductId.ToString();
 	FName LookupId = ProductId;
-	if (S.StartsWith(TEXT("Bag_")))
-	{
-		LookupId = FName(*FString::Printf(TEXT("Bud_%s"), *UInventoryComponent::BagStrain(ProductId).ToString()));
-	}
-	else if (!S.StartsWith(TEXT("Bud_")))
-	{
-		// Geen verpakt product en geen tabel-rij -> niet verkoopbaar.
-	}
+	float Mult = 1.f;
+	// Verkoopbaar aan klanten: verpakte wiet (Bag_) + de verwerkte drugs (Crystal_/Hash_/Edible_), geprijsd
+	// via de strain-rij (Bud_<strain>) maal een premium-factor. Tussenstappen (Baked_/ButterMix_) niet.
+	auto StrainOf = [&](int32 PreLen) { return FName(*FString::Printf(TEXT("Bud_%s"), *S.RightChop(PreLen))); };
+	if      (S.StartsWith(TEXT("Bag_")))     { LookupId = FName(*FString::Printf(TEXT("Bud_%s"), *UInventoryComponent::BagStrain(ProductId).ToString())); }
+	else if (S.StartsWith(TEXT("Crystal_"))) { LookupId = StrainOf(8); Mult = 2.2f; }
+	else if (S.StartsWith(TEXT("Hash_")))    { LookupId = StrainOf(5); Mult = 3.2f; }
+	else if (S.StartsWith(TEXT("Edible_")))  { LookupId = StrainOf(7); Mult = 4.0f; }
 	const FWeedShopProductRow* Row =
 		ProductTable->FindRow<FWeedShopProductRow>(LookupId, TEXT("ACustomerBase::GetMarketPriceForProduct"), false);
-	// Losse Bud_ (niet verpakt) is bewust NIET verkoopbaar aan klanten.
-	if (S.StartsWith(TEXT("Bud_"))) { return 0; }
-	return Row ? Row->MarketPriceCents : 0;
+	// Losse Bud_ (niet verpakt) + tussenstappen zijn NIET verkoopbaar aan klanten.
+	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_"))) { return 0; }
+	return Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult) : 0;
 }
 
 float ACustomerBase::ThcWillingnessBonus(float OfferedThc, float ExpectedThc)
@@ -2898,24 +2907,35 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		return EDealResult::Refused;
 	}
 
-	// Voorraad-check: genoeg HELE zakjes van deze strain om de gevraagde grammen te dekken?
-	const FName Strain = UInventoryComponent::BagStrain(ProductId);
-	if (!StockFrom || StockFrom->BagGramsAvailable(Strain) < DesiredQuantity)
-	{
-		UE_LOG(LogWeedShop, Log, TEXT("Customer: no stock of %s (%dg)."), *Strain.ToString(), DesiredQuantity);
-		return EDealResult::NoStock;
-	}
-
-	// Kwaliteit (0..1) + potentie (THC%) van een representatief zakje van deze strain.
+	// Producttype: verpakte wiet (Bag_) gaat per HELE zakjes; verwerkte drugs (Hash_/Edible_/Crystal_) per
+	// losse gram. Bepaal voorraad + kwaliteit/THC van het juiste product.
+	const FString PS = ProductId.ToString();
+	const bool bBag = PS.StartsWith(TEXT("Bag_"));
+	const FName Strain = bBag ? UInventoryComponent::BagStrain(ProductId) : NAME_None;
+	int32 Available = 0;
 	float Quality01 = 0.6f, ThcStock = 15.f;
-	for (const FInventoryStack& BS : StockFrom->GetStacks())
+	if (bBag)
 	{
-		if (UInventoryComponent::IsBag(BS.ItemId) && UInventoryComponent::BagStrain(BS.ItemId) == Strain)
+		Available = StockFrom ? StockFrom->BagGramsAvailable(Strain) : 0;
+		for (const FInventoryStack& BS : StockFrom->GetStacks())
 		{
-			Quality01 = FMath::Clamp(BS.QualityPct / 100.f, 0.f, 1.f);
-			ThcStock = BS.Quality;
-			break;
+			if (UInventoryComponent::IsBag(BS.ItemId) && UInventoryComponent::BagStrain(BS.ItemId) == Strain)
+			{ Quality01 = FMath::Clamp(BS.QualityPct / 100.f, 0.f, 1.f); ThcStock = BS.Quality; break; }
 		}
+	}
+	else
+	{
+		// Hasj/edibles/crystals: losse gram-voorraad van precies dit product.
+		Available = StockFrom ? StockFrom->GetQuantity(ProductId) : 0;
+		for (const FInventoryStack& BS : StockFrom->GetStacks())
+		{
+			if (BS.ItemId == ProductId) { Quality01 = FMath::Clamp(BS.QualityPct / 100.f, 0.f, 1.f); ThcStock = BS.Quality; break; }
+		}
+	}
+	if (Available < DesiredQuantity)
+	{
+		UE_LOG(LogWeedShop, Log, TEXT("Customer: no stock of %s (%dg)."), *ProductId.ToString(), DesiredQuantity);
+		return EDealResult::NoStock;
 	}
 
 	// Boven budget -> dingt af.
@@ -2945,9 +2965,19 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		return EDealResult::Refused;
 	}
 
-	// Deal rond: vul de gevraagde grammen met HELE zakjes en reken de ECHTE grammen af.
+	// Deal rond: verpakte wiet -> hele zakjes; hasj/edibles -> losse gram. Reken de ECHTE grammen af.
 	float SoldThc = 0.f, SoldQual = 0.f;
-	const int32 SoldGrams = StockFrom->RemoveBagsForGrams(Strain, DesiredQuantity, SoldThc, SoldQual);
+	int32 SoldGrams = 0;
+	if (bBag)
+	{
+		SoldGrams = StockFrom->RemoveBagsForGrams(Strain, DesiredQuantity, SoldThc, SoldQual);
+	}
+	else
+	{
+		SoldGrams = FMath::Min(DesiredQuantity, Available);
+		SoldThc = ThcStock; SoldQual = Quality01 * 100.f;
+		StockFrom->RemoveItem(ProductId, SoldGrams);
+	}
 	if (SoldGrams <= 0) { return EDealResult::NoStock; }
 	const int32 Total = AskPriceCentsPerUnit * SoldGrams;
 	if (PayTo)

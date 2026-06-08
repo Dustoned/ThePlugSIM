@@ -219,19 +219,15 @@ bool UStoreComponent::GetSupplyDisplay(FName SupplyId, FText& OutName, int32& Ou
 
 int32 UStoreComponent::GetSellValueCents(FName ItemId) const
 {
-	// Wiet/joints verkoop je aan klanten, niet aan de supplier.
+	// DRUGS verkoop je NOOIT aan de supplier - alleen aan NPC-klanten (de speler is de enige supplier).
+	// Wiet, joints, crystals, hasj én edibles gaan dus allemaal naar klanten, niet voor een vaste prijs hier.
 	const FString S = ItemId.ToString();
-	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Joint_")))
+	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("Joint_"))
+		|| S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_")) || S.StartsWith(TEXT("Baked_"))
+		|| S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_")))
 	{
 		return 0;
 	}
-	// Hasj-keten: crystals + hasj verkoop je (per gram) aan de supplier. Hasj is veel waard.
-	if (S.StartsWith(TEXT("Crystal_"))) { return 400; }  // EUR 4 / g
-	if (S.StartsWith(TEXT("Hash_")))    { return 900; }  // EUR 9 / g
-	// Edibles-keten: tussenproducten weinig waard, eind-edible (hoge THC) het meest.
-	if (S.StartsWith(TEXT("Baked_")))     { return 120; }  // EUR 1,20 / g (tussenstap)
-	if (S.StartsWith(TEXT("ButterMix_"))) { return 250; }  // EUR 2,50 / g (tussenstap)
-	if (S.StartsWith(TEXT("Edible_")))    { return 1600; } // EUR 16 / g (eindproduct, hoge THC)
 
 	// 70% terug van de koopprijs (seeds + supplies, incl. pots/soil/papers/water).
 	FText Name; int32 Buy = 0; int32 Pack = 1;
