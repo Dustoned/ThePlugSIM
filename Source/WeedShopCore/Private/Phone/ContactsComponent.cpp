@@ -1,5 +1,6 @@
 #include "Phone/ContactsComponent.h"
 #include "UI/WeedToast.h"
+#include "UI/WeedUiStyle.h"
 
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
@@ -174,29 +175,13 @@ void UContactsComponent::SendRandomAppointment()
 	const int32 HH = (TotalMin / 60) % 24;
 	const int32 MM = TotalMin % 60;
 
-	// Kies alvast WAT (strain binnen ~je level) en HOEVEEL (grammen, per klant-tier) de klant wil.
-	FName WantStrain; int32 WantQty = FMath::RandRange(1, 3);
-	if (Reg) { int32 Mn = 1, Mx = 3; Reg->GetTierOrderGrams(C.ContactId, Mn, Mx); WantQty = FMath::RandRange(Mn, Mx); }
-	{
-		const AWeedShopGameState* GSp = Cast<AWeedShopGameState>(GetOwner());
-		const int32 PlayerLvl = (GSp && GSp->GetLeveling()) ? GSp->GetLeveling()->GetLevel() : 1;
-		UStoreComponent* Store = GSp ? GSp->GetStore() : nullptr;
-		if (ProductTable)
-		{
-			TArray<FName> Eligible; FName Lowest; int32 LowestLvl = MAX_int32;
-			for (const FName& Row : ProductTable->GetRowNames())
-			{
-				const FString RS = Row.ToString();
-				if (!RS.StartsWith(TEXT("Bud_"))) { continue; }
-				const FName Strain(*RS.RightChop(4));
-				const int32 Lvl = Store ? Store->RequiredLevelFor(Strain) : 1;
-				if (Lvl < LowestLvl) { LowestLvl = Lvl; Lowest = Strain; }
-				if (Lvl <= PlayerLvl + 2) { Eligible.Add(Strain); }
-			}
-			WantStrain = (Eligible.Num() > 0) ? Eligible[FMath::RandRange(0, Eligible.Num() - 1)] : Lowest;
-		}
-	}
-	const FString WantStr = WantStrain.IsNone() ? TEXT("weed") : WantStrain.ToString();
+	// Wat + hoeveel wil de klant: DEZELFDE keuze-logica als walk-ins (tier-weging + premium hasj/edibles +
+	// soms wiet net boven je bereik). Geeft een volledig product-id (Bag_/Hash_/Edible_<strain>).
+	int32 WantQty = 1;
+	const FName WantProduct = ACustomerBase::PickDesiredProduct(Cast<AWeedShopGameState>(GetOwner()), ProductTable, C.ContactId, WantQty);
+	FName WantStrain = NAME_None;
+	{ FString L, R; if (WantProduct.ToString().Split(TEXT("_"), &L, &R)) { WantStrain = FName(*R); } }
+	const FString WantStr = WantProduct.IsNone() ? TEXT("weed") : WeedUI::PrettyItemName(WantProduct);
 
 	FPhoneMessage Msg;
 	Msg.FromContactId = C.ContactId;
@@ -204,6 +189,7 @@ void UContactsComponent::SendRandomAppointment()
 	Msg.AppointmentTimeOfDay = ApptTime;
 	Msg.WantStrain = WantStrain;
 	Msg.WantQty = WantQty;
+	Msg.WantProduct = WantProduct; // volledig product (Bag_/Hash_/Edible_<strain>)
 	Msg.SentRealTime = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.f; // voor follow-up/opgeven + reactiesnelheid
 	Msg.Kind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
 
@@ -320,7 +306,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	{
 		if (It->NpcId == Msg.FromContactId && It->IsResident())
 		{
-			It->SetApptWant(Msg.WantStrain, Msg.WantQty);
+			It->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
 			It->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
 			return;
 		}
@@ -396,8 +382,13 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 
 	Cust->NpcId = Msg.FromContactId; // dit is dezelfde persoon als het contact
 	Cust->ProductTable = ProductTable;
-	Cust->SetApptWant(Msg.WantStrain, Msg.WantQty);
-	if (!Msg.WantStrain.IsNone())
+	Cust->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
+	if (!Msg.WantProduct.IsNone())
+	{
+		Cust->DesiredProductId = Msg.WantProduct; // volledig product (kan hasj/edible zijn)
+		Cust->DesiredQuantity = FMath::Max(1, Msg.WantQty);
+	}
+	else if (!Msg.WantStrain.IsNone())
 	{
 		Cust->DesiredProductId = FName(*FString::Printf(TEXT("Bag_%s"), *Msg.WantStrain.ToString()));
 		Cust->DesiredQuantity = FMath::Max(1, Msg.WantQty);

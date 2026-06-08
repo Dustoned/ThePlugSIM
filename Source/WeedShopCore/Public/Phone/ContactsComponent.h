@@ -70,6 +70,9 @@ struct FPhoneMessage
 	FName WantStrain = NAME_None;
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	int32 WantQty = 0;
+	// Volledig product dat de klant wil (Bag_/Hash_/Edible_<strain>). Leeg = wiet (Bag_<WantStrain>).
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	FName WantProduct = NAME_None;
 
 	// Realtime-seconden toen dit verzoek binnenkwam (voor follow-up/opgeven + reactiesnelheid). < 0 = n.v.t.
 	UPROPERTY()

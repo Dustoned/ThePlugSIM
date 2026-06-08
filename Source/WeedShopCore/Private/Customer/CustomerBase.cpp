@@ -236,81 +236,17 @@ void ACustomerBase::BeginPlay()
 		// belangrijk (zie de deal-acceptatie); dit gaat puur over WELKE strain ze willen.
 		if (DesiredProductId.IsNone() && ProductTable)
 		{
-			const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
-			UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
-			// In-aanmerking-komende strains (ontgrendeld + kleine buffer) MET hun unlock-level (proxy voor THC/prijs).
-			TArray<TPair<int32, FName>> Eligible;
-			TArray<TPair<int32, FName>> JustAbove; // strains NET boven je bereik (voor veeleisende whales)
-			FName LowestStrain; int32 LowestLvl = MAX_int32;
-			for (const FName& Row : ProductTable->GetRowNames())
+			if (bApptActive)
 			{
-				const FString RS = Row.ToString();
-				if (!RS.StartsWith(TEXT("Bud_"))) { continue; } // alleen wiet-strains
-				const FName Strain(*RS.RightChop(4));
-				const int32 Lvl = Store ? Store->RequiredLevelFor(Strain) : 1;
-				if (Lvl < LowestLvl) { LowestLvl = Lvl; LowestStrain = Strain; }
-				if (Lvl <= PlayerLvl + 2) { Eligible.Add(TPair<int32, FName>(Lvl, Strain)); } // kleine buffer boven je level
-				else if (Lvl <= PlayerLvl + 12) { JustAbove.Add(TPair<int32, FName>(Lvl, Strain)); } // net buiten bereik
+				// Afspraak: exact wat in het telefoonbericht stond (volledig product + aantal).
+				if (!ApptWantProduct.IsNone())     { DesiredProductId = ApptWantProduct; }
+				else if (!ApptWantStrain.IsNone()) { DesiredProductId = FName(*FString::Printf(TEXT("Bag_%s"), *ApptWantStrain.ToString())); }
+				if (ApptWantQty > 0) { DesiredQuantity = ApptWantQty; }
 			}
-			Eligible.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; }); // zwak -> sterk
-			// Klant-tier (1 Casual .. 5 Whale) bepaalt hoe goed: hogere tiers vragen om de STERKERE strains
-			// (bovenste deel van de lijst). Met spreiding zodat het natuurlijk blijft. Klimt mee als je levelt.
-			const int32 CTier = FMath::Clamp(GetMyCustomerTier(), 1, 5);
-			FName PickStrain = LowestStrain;
-			if (Eligible.Num() > 0)
+			else
 			{
-				const float TierFrac = (CTier - 1) / 4.f;                                  // 0 (Casual) .. 1 (Whale)
-				const float Pos = FMath::Clamp(TierFrac + FMath::FRandRange(-0.30f, 0.30f), 0.f, 1.f);
-				const int32 Idx = FMath::Clamp(FMath::RoundToInt(Pos * (Eligible.Num() - 1)), 0, Eligible.Num() - 1);
-				PickStrain = Eligible[Idx].Value;
-			}
-			// High (tier 4) / Whale (tier 5) vragen SOMS om wiet die je nog niet kunt maken (net boven je bereik).
-			// Dan kun je niet de exacte strain leveren -> je substitueert + moet flink compenseren (prijs/kwaliteit).
-			if (!bApptActive && CTier >= 4 && JustAbove.Num() > 0)
-			{
-				const float AspChance = (CTier >= 5) ? 0.18f : 0.10f;
-				if (FMath::FRand() < AspChance)
-				{
-					JustAbove.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; });
-					const int32 Idx = FMath::RandRange(0, FMath::Min(2, JustAbove.Num() - 1)); // de dichtstbijzijnde paar
-					PickStrain = JustAbove[Idx].Value;
-				}
-			}
-			// Op afspraak: gebruik exact wat in het telefoonbericht stond (strain + aantal).
-			if (bApptActive && !ApptWantStrain.IsNone()) { PickStrain = ApptWantStrain; }
-			if (!PickStrain.IsNone())
-			{
-				// Producttype: standaard verpakte wiet. Premium-vraag (hasj/edibles) schaalt met de klant-TIER
-				// (1 Casual .. 5 Whale) en kan pas zodra de speler die keten heeft ontgrendeld (hasj lvl 14,
-				// edibles lvl 9). Tier 1-2 willen vrijwel altijd wiet; hogere tiers vragen vaker (en meer) premium.
-				FString ProdType = TEXT("Bag_");
-				if (!bApptActive)
-				{
-					const int32 Tier = FMath::Clamp(GetMyCustomerTier(), 1, 5);
-					float HashChance = 0.f, EdibleChance = 0.f;
-					switch (Tier)
-					{
-						case 1:  HashChance = 0.00f; EdibleChance = 0.00f; break; // altijd wiet
-						case 2:  HashChance = 0.08f; EdibleChance = 0.00f; break; // vooral wiet, soms hasj
-						case 3:  HashChance = 0.20f; EdibleChance = 0.08f; break;
-						case 4:  HashChance = 0.30f; EdibleChance = 0.18f; break;
-						default: HashChance = 0.38f; EdibleChance = 0.28f; break; // Whale: vaak premium
-					}
-					if (PlayerLvl < 14) { HashChance = 0.f; }   // hasj nog niet te maken -> niet vragen
-					if (PlayerLvl < 9)  { EdibleChance = 0.f; } // edibles nog niet te maken
-					const float Roll = FMath::FRand();
-					if (Roll < EdibleChance)                     { ProdType = TEXT("Edible_"); }
-					else if (Roll < EdibleChance + HashChance)   { ProdType = TEXT("Hash_"); }
-				}
-				DesiredProductId = FName(*(ProdType + PickStrain.ToString()));
-				if (bApptActive && ApptWantQty > 0) { DesiredQuantity = ApptWantQty; }
-				else
-				{
-					// Bestelgrootte schaalt met de klant-tier (Casual 1-3g .. Whale 20-50g), met persoonlijke variatie.
-					int32 Mn = 1, Mx = 3;
-					if (GS) { if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->GetTierOrderGrams(NpcId, Mn, Mx); } }
-					DesiredQuantity = FMath::RandRange(Mn, Mx);
-				}
+				// Walk-in: gedeelde keuze-logica (tier-weging + premium hasj/edibles + soms net boven je bereik).
+				DesiredProductId = ACustomerBase::PickDesiredProduct(GS, ProductTable, NpcId, DesiredQuantity);
 			}
 		}
 
@@ -2808,6 +2744,68 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	// Losse Bud_ (niet verpakt) + tussenstappen zijn NIET verkoopbaar aan klanten.
 	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_"))) { return 0; }
 	return Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult) : 0;
+}
+
+FName ACustomerBase::PickDesiredProduct(AWeedShopGameState* GS, UDataTable* InProductTable, FName InNpcId, int32& OutQty)
+{
+	OutQty = FMath::RandRange(1, 3);
+	if (!InProductTable) { return NAME_None; }
+	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
+	const int32 CTier = FMath::Clamp((Reg && !InNpcId.IsNone()) ? Reg->GetCustomerTier(InNpcId) : 1, 1, 5);
+	if (Reg && !InNpcId.IsNone()) { int32 Mn = 1, Mx = 3; Reg->GetTierOrderGrams(InNpcId, Mn, Mx); OutQty = FMath::RandRange(Mn, Mx); }
+
+	// Strains: ontgrendeld (Eligible) + net buiten bereik (JustAbove, voor veeleisende whales), met unlock-level.
+	TArray<TPair<int32, FName>> Eligible, JustAbove;
+	FName LowestStrain; int32 LowestLvl = MAX_int32;
+	for (const FName& Row : InProductTable->GetRowNames())
+	{
+		const FString RS = Row.ToString();
+		if (!RS.StartsWith(TEXT("Bud_"))) { continue; }
+		const FName Strain(*RS.RightChop(4));
+		const int32 Lvl = Store ? Store->RequiredLevelFor(Strain) : 1;
+		if (Lvl < LowestLvl) { LowestLvl = Lvl; LowestStrain = Strain; }
+		if (Lvl <= PlayerLvl + 2) { Eligible.Add(TPair<int32, FName>(Lvl, Strain)); }
+		else if (Lvl <= PlayerLvl + 12) { JustAbove.Add(TPair<int32, FName>(Lvl, Strain)); }
+	}
+	Eligible.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; });
+	FName PickStrain = LowestStrain;
+	if (Eligible.Num() > 0)
+	{
+		const float TierFrac = (CTier - 1) / 4.f;                                   // 0 Casual .. 1 Whale
+		const float Pos = FMath::Clamp(TierFrac + FMath::FRandRange(-0.30f, 0.30f), 0.f, 1.f);
+		PickStrain = Eligible[FMath::Clamp(FMath::RoundToInt(Pos * (Eligible.Num() - 1)), 0, Eligible.Num() - 1)].Value;
+	}
+	// High/Whale vragen soms om wiet net boven je bereik -> substitueren + flink compenseren.
+	if (CTier >= 4 && JustAbove.Num() > 0)
+	{
+		const float AspChance = (CTier >= 5) ? 0.18f : 0.10f;
+		if (FMath::FRand() < AspChance)
+		{
+			JustAbove.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B) { return A.Key < B.Key; });
+			PickStrain = JustAbove[FMath::RandRange(0, FMath::Min(2, JustAbove.Num() - 1))].Value;
+		}
+	}
+	if (PickStrain.IsNone()) { return NAME_None; }
+
+	// Producttype per tier (gegate op unlock): tier 1-2 vooral wiet, hoger steeds vaker hasj/edibles.
+	FString ProdType = TEXT("Bag_");
+	float HashChance = 0.f, EdibleChance = 0.f;
+	switch (CTier)
+	{
+		case 1:  HashChance = 0.00f; EdibleChance = 0.00f; break;
+		case 2:  HashChance = 0.08f; EdibleChance = 0.00f; break;
+		case 3:  HashChance = 0.20f; EdibleChance = 0.08f; break;
+		case 4:  HashChance = 0.30f; EdibleChance = 0.18f; break;
+		default: HashChance = 0.38f; EdibleChance = 0.28f; break;
+	}
+	if (PlayerLvl < 14) { HashChance = 0.f; }
+	if (PlayerLvl < 9)  { EdibleChance = 0.f; }
+	const float Roll = FMath::FRand();
+	if (Roll < EdibleChance)                   { ProdType = TEXT("Edible_"); }
+	else if (Roll < EdibleChance + HashChance) { ProdType = TEXT("Hash_"); }
+	return FName(*(ProdType + PickStrain.ToString()));
 }
 
 float ACustomerBase::ThcWillingnessBonus(float OfferedThc, float ExpectedThc)

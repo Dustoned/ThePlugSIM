@@ -223,7 +223,12 @@ public:
 	bool HasActiveAppointment() const { return bApptActive; }
 
 	// Door de afspraak vooraf bepaald wat de klant wil (matcht met het telefoonbericht). NAME_None = vrij kiezen.
-	void SetApptWant(FName Strain, int32 Qty) { ApptWantStrain = Strain; ApptWantQty = Qty; }
+	// Product = volledig item-id (Bag_/Hash_/Edible_<strain>); leeg => bouw uit Strain (Bag_).
+	void SetApptWant(FName Strain, int32 Qty, FName Product = NAME_None) { ApptWantStrain = Strain; ApptWantQty = Qty; ApptWantProduct = Product; }
+
+	// Gedeelde keuze-logica: WAT wil een klant van deze tier (volledig product-id Bag_/Hash_/Edible_<strain>) +
+	// HOEVEEL (OutQty). Gebruikt door zowel walk-ins als telefoon-afspraken zodat ze identiek schalen.
+	static FName PickDesiredProduct(class AWeedShopGameState* GS, class UDataTable* ProductTable, FName NpcId, int32& OutQty);
 
 	// Voor de chat-progressbar (client leest gerepliceerde ApptTimeout). Loopt van 1 -> 0 tot de NPC opgeeft.
 	static constexpr float ApptTimeoutMax = 360.f; // moet matchen met de timer in BeginAppointment
@@ -349,6 +354,7 @@ protected:
 	bool bApptSaidWaiting = false;
 	FName ApptWantStrain = NAME_None; // vooraf bepaalde wens (uit het afspraak-bericht)
 	int32 ApptWantQty = 0;
+	FName ApptWantProduct = NAME_None; // volledig product-id uit de afspraak (Bag_/Hash_/Edible_<strain>)
 	void PushApptMessage(const FString& InBody); // stuurt een chat-bericht namens deze NPC
 
 	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).
