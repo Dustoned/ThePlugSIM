@@ -896,10 +896,10 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 		return false;
 	}
 
-	// Rijtjeshuis (geen hal): loop ECHT via de navmesh naar binnen - de deur bridge't de navmesh nu, dus
-	// geen stages/slide meer. Alleen bij echte pathing-stuck teleporteren we naar binnen (verborgen), nooit
-	// zichtbaar in de voortuin/op straat.
-	if (!bHasHomeHall)
+	// Loop ECHT via de navmesh naar binnen (zowel rijtjeshuis als apartment) - de deuren bridge'n de navmesh
+	// nu en de trappen verbinden de verdiepingen, dus geen stages/slide meer. Alleen bij echte pathing-stuck
+	// teleporteren we naar binnen (verborgen), nooit zichtbaar in de voortuin/op straat/op de trap.
+	if (bResident)
 	{
 		const FVector Dest = HomeInteriorPos + FVector(0.f, 0.f, 4.f);
 		const FVector Cur = GetActorLocation();
