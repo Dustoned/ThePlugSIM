@@ -474,16 +474,26 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 
 bool ACustomerBase::ShouldShowOnCityMap() const
 {
-	// Niet-bewoners: tonen tenzij echt verborgen.
-	if (!bResident) { return !IsHidden(); }
-	// Thuis: toon op hun eigen huis (ook al zijn ze in 3D verborgen binnen).
-	if (bAtHomeInside) { return true; }
-	// 's Morgens uit huis lopen: tonen (gebeurt vlak bij hun huis) -> je ziet ze van huis naar de straat gaan.
-	if (bEmergingFromHome) { return true; }
-	// Naar huis lopen: alleen tonen als 'ie al DICHT bij z'n eigen huis is (de nette eindaanloop). De verre
-	// transit door het centrum verbergen we, anders lijkt iedereen-naar-huis op een cluster.
-	if (bEnteringHome) { return FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 800.f; }
-	// Verder gewoon roamend: tonen op straat.
+	if (IsHidden())
+	{
+		return false;
+	}
+	if (!bResident)
+	{
+		return true;
+	}
+	if (bApptActive && !bApptComeToPlayer && bApptArrived)
+	{
+		return true;
+	}
+	if (bAtHomeInside || bEmergingFromHome)
+	{
+		return false;
+	}
+	if (bEnteringHome && HomeEntryStage > 0)
+	{
+		return false;
+	}
 	return true;
 }
 
@@ -829,7 +839,7 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 		}
 		else
 		{
-			SetActorLocation(MakeResidentStandingLocation(GetResidentHomeEntrySpot())); // verschijn bij eigen voordeur/voortuin, niet op de stoep
+			SetActorLocation(MakeResidentStandingLocation(HomeFrontSpot));
 			bEmergingFromHome = false;
 			bLeavingHomeRoute = FVector::Dist2D(HomeFrontSpot, HomeExitSidewalkSpot) >= 520.f;
 			bHasRoamGoal = false;
@@ -844,14 +854,6 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 	}
 
 	return true;
-}
-
-void ACustomerBase::SendHomeAndDespawn()
-{
-	if (!bResident || bAtHomeInside) { Destroy(); return; } // niet-bewoner of al binnen -> meteen weg
-	bDespawnWhenInside = true;
-	bApptActive = false;                       // afspraak afbreken; we gaan nu naar binnen
-	if (!bEnteringHome) { StartResidentHomeEntry(); } // loop via de normale routing naar binnen (zet bEnteringHome -> blokkeert roamen)
 }
 
 void ACustomerBase::StartResidentHomeEntry()
@@ -2404,24 +2406,6 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 
 void ACustomerBase::TickResident(float DeltaSeconds)
 {
-	// "Ga naar huis en verdwijn": pas despawnen zodra we ECHT binnen zijn (niet op straat/in de voortuin).
-	if (bDespawnWhenInside)
-	{
-		if (bAtHomeInside) { Destroy(); return; }
-		DespawnSafetyTimer += DeltaSeconds;
-		if (DespawnSafetyTimer >= 20.f)
-		{
-			// Lukt het naar-binnen-lopen niet snel genoeg (pathing)? Teleporteer dan naar BINNEN en verdwijn
-			// daar - NOOIT zichtbaar in de voortuin/op straat.
-			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
-			SetActorHiddenInGame(true);
-			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
-			Destroy();
-			return;
-		}
-		if (!bEnteringHome) { StartResidentHomeEntry(); }
-	}
-
 	UWorld* W = GetWorld();
 	const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;

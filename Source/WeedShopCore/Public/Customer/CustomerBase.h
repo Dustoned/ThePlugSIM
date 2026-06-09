@@ -209,10 +209,6 @@ public:
 	// FrontSpot = plek vóór de voordeur (waar 'ie verschijnt/verdwijnt); InteriorPos = referentie binnen.
 	void SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber, const FVector& HallPos = FVector::ZeroVector);
 	bool IsResident() const { return bResident; }
-
-	// Stuur de bewoner naar BINNEN (via de normale routing) en despawn pas zodra 'ie binnen is. Zo verdwijnt
-	// niemand op straat/in de voortuin. Niet-bewoners (of al-binnen) verdwijnen meteen.
-	void SendHomeAndDespawn();
 	bool ShouldShowOnCityMap() const;
 
 	// Huisnummer/adres van deze bewoner (voor afspraak-berichten "kom langs op nr X").
@@ -267,8 +263,6 @@ protected:
 	// Bewoner-schema (dag-roamen / 's nachts thuis).
 	void TickResident(float DeltaSeconds);
 	bool bResident = false;
-	bool bDespawnWhenInside = false; // gezet door SendHomeAndDespawn: verdwijn pas zodra je binnen bent
-	float DespawnSafetyTimer = 0.f;  // veiligheids-timeout als 'ie binnen-komen niet lukt (pathing kapot)
 	FVector HomeFrontSpot = FVector::ZeroVector;
 	FVector HomeExitSidewalkSpot = FVector::ZeroVector;
 	FVector HomeInteriorPos = FVector::ZeroVector;
@@ -307,7 +301,6 @@ protected:
 	int32 PendingParkVisitSlot = 0;
 	int32 ActiveParkVisitSlot = 0;
 	float ResidentWakeDelay = -1.f;
-	float RoamSessionTimer = 0.f; // hoelang nog buiten roamen voor 'ie even naar huis gaat rusten (thuis<->buiten-cyclus)
 	bool bLeavingHomeRoute = false;
 	ACityGenerator* GetResidentCity(UWorld* W);
 	FVector SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const;
