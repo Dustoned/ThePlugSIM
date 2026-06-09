@@ -25,6 +25,10 @@ ACityDoor::ACityDoor()
 	Panel->SetupAttachment(Hinge);
 	if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"))) { Panel->SetStaticMesh(Cube); }
 	Panel->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	// BELANGRIJK: de deur mag de navmesh NIET blokkeren. Anders dicht het paneel het navmesh-gat in de muur
+	// en is er geen pad naar binnen (NPC's moesten daarom teleporteren). De collision die de SPELER blokkeert
+	// als de deur dicht is, staat hier los van - die regelen we via de ECC_Pawn-response in Tick.
+	Panel->SetCanEverAffectNavigation(false);
 
 	// Nabijheid-zone: detecteert pawns die voor de deur staan (auto-open).
 	Trigger = CreateDefaultSubobject<USphereComponent>(TEXT("Trigger"));
