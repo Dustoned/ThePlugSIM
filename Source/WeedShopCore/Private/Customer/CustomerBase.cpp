@@ -2409,7 +2409,16 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	{
 		if (bAtHomeInside) { Destroy(); return; }
 		DespawnSafetyTimer += DeltaSeconds;
-		if (DespawnSafetyTimer >= 60.f) { Destroy(); return; } // pathing kapot -> alsnog weg na 60s
+		if (DespawnSafetyTimer >= 20.f)
+		{
+			// Lukt het naar-binnen-lopen niet snel genoeg (pathing)? Teleporteer dan naar BINNEN en verdwijn
+			// daar - NOOIT zichtbaar in de voortuin/op straat.
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			SetActorHiddenInGame(true);
+			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+			Destroy();
+			return;
+		}
 		if (!bEnteringHome) { StartResidentHomeEntry(); }
 	}
 
