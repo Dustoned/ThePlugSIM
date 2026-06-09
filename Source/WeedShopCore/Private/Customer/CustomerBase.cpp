@@ -856,6 +856,14 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 	return true;
 }
 
+void ACustomerBase::SendHomeAndDespawn()
+{
+	if (!bResident || bAtHomeInside) { Destroy(); return; } // niet-bewoner of al binnen -> meteen weg
+	bDespawnWhenInside = true;
+	bApptActive = false;                       // afspraak afbreken; we gaan nu naar binnen
+	if (!bEnteringHome) { StartResidentHomeEntry(); } // loop via de normale routing naar binnen (zet bEnteringHome -> blokkeert roamen)
+}
+
 void ACustomerBase::StartResidentHomeEntry()
 {
 	bEnteringHome = true;
@@ -2406,6 +2414,15 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 
 void ACustomerBase::TickResident(float DeltaSeconds)
 {
+	// "Ga naar huis en verdwijn": pas despawnen zodra we ECHT binnen zijn (niet op straat/in de voortuin).
+	if (bDespawnWhenInside)
+	{
+		if (bAtHomeInside) { Destroy(); return; }
+		DespawnSafetyTimer += DeltaSeconds;
+		if (DespawnSafetyTimer >= 60.f) { Destroy(); return; } // pathing kapot -> alsnog weg na 60s
+		if (!bEnteringHome) { StartResidentHomeEntry(); }
+	}
+
 	UWorld* W = GetWorld();
 	const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
