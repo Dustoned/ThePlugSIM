@@ -400,16 +400,15 @@ void ACustomerSpawner::SpawnResidents()
 	// dezelfde DoorPos, dus zonder dit zouden er tig bewoners op exact dezelfde stoephoek clusteren.
 	// Eén roamer per ingang, gespreid over de stad.
 	auto DoorKey = [](const FVector& P) { return FIntVector(FMath::RoundToInt(P.X / 50.f), FMath::RoundToInt(P.Y / 50.f), 0); };
-	TArray<int32> Entrances; // één unit per unieke DoorPos (geen koopbare panden), op een gevarieerde verdieping
+	TArray<int32> AllUnits;  // ALLE niet-koopbare units = rotatie-pool: zo komt over de dagen iedereen met een deur buiten
+	TArray<int32> Entrances; // initiele actieve pool: rijtjeshuis = 1, flatgebouw = paar units VERSPREID over de verdiepingen
 	{
-		// Groepeer alle units per unieke hoofdingang en kies PER gebouw één bewoner op een per-gebouw gevarieerde
-		// verdieping (hash van de ingang). Nu bewoners ECHT naar binnen lopen i.p.v. bij de ingang te clusteren,
-		// hoeft het niet meer altijd de begane grond te zijn -> je ziet ook bewoners van boven naar beneden komen.
 		TMap<FIntVector, TArray<int32>> ByEntrance;
 		TArray<FIntVector> Order;
 		for (int32 i = 0; i < Total; ++i)
 		{
 			if (ForSale.Contains(i)) { continue; }
+			AllUnits.Add(i);
 			const FIntVector Key = DoorKey(Homes[i].DoorPos);
 			TArray<int32>& Arr = ByEntrance.FindOrAdd(Key);
 			if (Arr.Num() == 0) { Order.Add(Key); }
@@ -417,9 +416,18 @@ void ACustomerSpawner::SpawnResidents()
 		}
 		for (const FIntVector& Key : Order)
 		{
-			const TArray<int32>& Units = ByEntrance[Key];
-			const uint32 Hash = static_cast<uint32>((Key.X * 73856093) ^ (Key.Y * 19349663));
-			Entrances.Add(Units[Hash % static_cast<uint32>(Units.Num())]);
+			TArray<int32> Units = ByEntrance[Key];
+			if (Units.Num() <= 1) { Entrances.Add(Units[0]); continue; } // rijtjeshuis: 1 unit
+			// Flatgebouw: pak ~3 units VERSPREID over de verdiepingen (begane grond, midden, boven) in die volgorde,
+			// zodat de geografische round-robin per ronde een andere verdieping activeert -> je ziet ook bewoners
+			// van bovenverdiepingen naar beneden komen. De rest komt via de dagelijkse rotatie over de tijd buiten.
+			Units.Sort([&Homes](int32 A, int32 B) { return Homes[A].Floor < Homes[B].Floor; });
+			const int32 Take = FMath::Min(3, Units.Num());
+			for (int32 t = 0; t < Take; ++t)
+			{
+				const int32 Sel = (Take <= 1) ? 0 : (t * (Units.Num() - 1)) / (Take - 1);
+				Entrances.AddUnique(Units[Sel]);
+			}
 		}
 	}
 	const bool bAll = (MaxResidents <= 0);
@@ -585,7 +593,7 @@ void ACustomerSpawner::SpawnResidents()
 	}
 
 	// --- Dagelijkse rotatie opzetten ---
-	EligibleHomes = Entrances;            // volledige pool (alle niet-koopbare ingangen)
+	EligibleHomes = AllUnits;             // rotatie-pool = ALLE niet-koopbare units (elke deur komt over de dagen buiten)
 	PhysicalHomes = PhysicalSet;          // wie nu fysiek is
 	ActivatedEverHomes = PhysicalSet;     // al getoond
 	if (const AWeedShopGameState* GSr = World->GetGameState<AWeedShopGameState>())
