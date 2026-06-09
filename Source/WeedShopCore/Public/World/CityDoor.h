@@ -41,6 +41,10 @@ public:
 	// Koopbaar pand (nog niet van jou): op slot met "TE KOOP - koop via telefoon".
 	void SetForSale() { bLocked = true; bPlayerHome = false; bForSale = true; bOpen = false; ResidentName.Empty(); }
 
+	// Welke kant de deur opendraait (graden). Standaard -95. Voor de RECHTER helft van een dubbele deur
+	// zet je +95 zodat beide bladen DEZELFDE kant op draaien i.p.v. tegengesteld.
+	void SetOpenSwing(float Deg) { OpenSwingDeg = Deg; }
+
 	// Interact (F) opent/sluit de deur.
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
@@ -61,6 +65,7 @@ protected:
 	int32 NpcNear = 0;      // aantal NPC's in de zone
 	int32 OtherNear = 0;    // aantal andere pawns (speler) in de zone
 	float CurAngle = 0.f;   // huidige scharnierhoek
+	float OpenSwingDeg = -95.f; // doelhoek bij open (per deur instelbaar; dubbele-deur rechter helft = +95)
 	bool bOpen = false;     // open/dicht (getoggled via interact)
 	bool bLocked = false;   // bewoner-deur: kan niet door de speler geopend worden
 	bool bPlayerHome = false; // jouw eigen woning (open/dicht, prompt "Your home")

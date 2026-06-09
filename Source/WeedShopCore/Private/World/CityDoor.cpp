@@ -147,7 +147,7 @@ void ACityDoor::Tick(float DeltaSeconds)
 	// Speler: geen auto-open (open/sluit zelf met F = bOpen). NPC's: openen elke deur die ze tegenkomen ZODAT
 	// ze niet vastlopen bij gebouw-ingangen/gangen - behalve JOUW eigen huis (dat opent niet vanzelf voor NPC's).
 	const bool bEffectiveOpen = bOpen || (NpcNear > 0 && !bPlayerHome);
-	const float Target = bEffectiveOpen ? -95.f : 0.f;
+	const float Target = bEffectiveOpen ? OpenSwingDeg : 0.f;
 	CurAngle = FMath::FInterpTo(CurAngle, Target, DeltaSeconds, 7.f);
 	if (Hinge) { Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f)); }
 

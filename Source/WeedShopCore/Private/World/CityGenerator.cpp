@@ -1364,19 +1364,19 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(Tang.Y, Tang.X));
 		const FLinearColor DoorCol(0.10f, 0.08f, 0.07f);
 		FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		// Beide bladen openen DEZELFDE kant op (zelfde Yaw) en sluiten FLUSH aan in het midden (geen gat meer).
-		// Linker blad: scharnier helemaal links, paneel (volle helft-breedte) loopt naar het midden.
+		// Beide bladen: scharnier op de BUITENRAND, volle helft-breedte -> sluiten FLUSH aan in het midden (geen
+		// gat) en vullen de opening volledig in de hoogte (geen gat bovenaan). Ze openen DEZELFDE kant op: links
+		// draait -95, rechts +95 (gespiegeld) zodat beide samen NAAR BINNEN draaien i.p.v. tegengesteld.
 		const FVector HingeL = OpeningCenter - Tang * HalfW;
 		if (ACityDoor* DL = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), HingeL), DSP))
 		{
-			DL->Setup(HalfW, DoorH - 6.f, DoorCol);
+			DL->Setup(HalfW, DoorH, DoorCol);
 		}
-		// Rechter blad: scharnier in het MIDDEN (sluit naadloos aan tegen het linker blad), ZELFDE Yaw -> beide
-		// draaien dezelfde richting open i.p.v. tegengesteld.
-		const FVector HingeR = OpeningCenter;
-		if (ACityDoor* DR = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), HingeR), DSP))
+		const FVector HingeR = OpeningCenter + Tang * HalfW;
+		if (ACityDoor* DR = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw + 180.f, 0.f), HingeR), DSP))
 		{
-			DR->Setup(HalfW, DoorH - 6.f, DoorCol);
+			DR->Setup(HalfW, DoorH, DoorCol);
+			DR->SetOpenSwing(95.f); // gespiegeld -> draait dezelfde kant op als het linker blad
 		}
 	}
 
@@ -1482,7 +1482,7 @@ ACityDoor* ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, f
 	const float DoorYaw = FMath::RadiansToDegrees(FMath::Atan2(Tt.Y, Tt.X));
 	FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	ACityDoor* FrontDoor = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, DoorYaw, 0.f), Hinge), DSP);
-	if (FrontDoor) { FrontDoor->Setup(DoorW - 4.f, DoorH - 4.f, DoorC); }
+	if (FrontDoor) { FrontDoor->Setup(DoorW - 4.f, DoorH, DoorC); } // volle hoogte -> geen gat bovenaan
 
 	// Eén plafondlamp beneden en één boven (iets naar voren, weg van de trap achterin).
 	const FVector LampXY = Base + N * (HD * 0.35f);
