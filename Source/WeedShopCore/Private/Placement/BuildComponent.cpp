@@ -41,6 +41,17 @@ namespace
 		const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
 		return GS && GS->IsFreeBuild();
 	}
+
+	// True als de actor een geplaatst object is waarop je NIET mag stapelen (alle placeable-types).
+	// Wand-mounts (rekken) + plafondlampen worden apart afgehandeld; mikken op zo'n object telt ook als bezet.
+	bool IsPlaceableActor(const AActor* A)
+	{
+		return A && (A->IsA(AGrowPlant::StaticClass()) || A->IsA(APlaceableProp::StaticClass())
+			|| A->IsA(ADryingRack::StaticClass()) || A->IsA(AProcessorMachine::StaticClass())
+			|| A->IsA(AStorageShelf::StaticClass()) || A->IsA(AAtm::StaticClass())
+			|| A->IsA(APackBench::StaticClass()) || A->IsA(AWaterSink::StaticClass())
+			|| A->IsA(ACeilingLamp::StaticClass()));
+	}
 }
 
 UBuildComponent::UBuildComponent()
@@ -424,8 +435,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				PreviewLocation = Hit.ImpactPoint;
 				PreviewRotation = FRotator(0.f, ViewRot.Yaw + PlaceYawOffset, 0.f); // kijkrichting + handmatige R-draai
 				float FloorNormalZ = Hit.ImpactNormal.Z;
-				// Mik je (onder welke hoek dan ook) op een pot -> nooit geldig (geen stapelen).
-				bool bOnPlaceable = (Cast<AGrowPlant>(Hit.GetActor()) != nullptr) || (Cast<APlaceableProp>(Hit.GetActor()) != nullptr);
+				// Mik je (onder welke hoek dan ook) op een geplaatst object -> nooit geldig (geen stapelen).
+				bool bOnPlaceable = IsPlaceableActor(Hit.GetActor());
 
 					if (CurrentDef.bIsWallMount)
 					{
@@ -531,7 +542,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 						{
 							PreviewLocation.Z = DownHit.ImpactPoint.Z;
 							FloorNormalZ = DownHit.ImpactNormal.Z;
-							bOnPlaceable = (Cast<AGrowPlant>(DownHit.GetActor()) != nullptr) || (Cast<APlaceableProp>(DownHit.GetActor()) != nullptr);
+							bOnPlaceable = IsPlaceableActor(DownHit.GetActor());
 						}
 					}
 				}
@@ -806,31 +817,36 @@ bool UBuildComponent::IsPickable(const AActor* A) const
 bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 {
 	const UWorld* World = GetWorld();
-	// Free-build (sandbox): je mag overal BINNEN bouwen (niet alleen in je eigen woning), maar NIET buiten.
-	if (WorldFreeBuild(World)) { return IsIndoors(P); }
 	AActor* Owner = GetOwner();
 	if (!Owner || !World) { return false; }
 	UPhoneClientComponent* Ph = Owner->FindComponentByClass<UPhoneClientComponent>();
-	if (!Ph) { return false; }
-	const TArray<int32>& Owned = Ph->GetOwnedHomes();
-	if (Owned.Num() == 0) { return false; }
+	const TArray<int32> EmptyHomes;
+	const TArray<int32>& Owned = Ph ? Ph->GetOwnedHomes() : EmptyHomes;
 	ACityGenerator* City = nullptr;
 	for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
-	if (!City) { return false; }
-	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
-	for (int32 Idx : Owned)
+
+	// Bezit je woning(en)? Dan mag je ALLEEN binnen je eigen home(s) bouwen — ook in free-build (geen gang/hal).
+	if (City && Owned.Num() > 0)
 	{
-		if (!Homes.IsValidIndex(Idx)) { continue; }
-		const FApartmentHome& H = Homes[Idx];
-		const FVector& I = H.InteriorPos;
-		const FVector& R = H.RoomHalf;
-		if (FMath::Abs(P.X - I.X) <= R.X + 40.f &&
-			FMath::Abs(P.Y - I.Y) <= R.Y + 40.f &&
-			P.Z >= I.Z - 90.f && P.Z <= I.Z + R.Z + 60.f)
+		const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+		for (int32 Idx : Owned)
 		{
-			return true; // binnen een woning die je bezit
+			if (!Homes.IsValidIndex(Idx)) { continue; }
+			const FApartmentHome& H = Homes[Idx];
+			const FVector& I = H.InteriorPos;
+			const FVector& R = H.RoomHalf;
+			if (FMath::Abs(P.X - I.X) <= R.X + 40.f &&
+				FMath::Abs(P.Y - I.Y) <= R.Y + 40.f &&
+				P.Z >= I.Z - 90.f && P.Z <= I.Z + R.Z + 60.f)
+			{
+				return true; // binnen een woning die je bezit
+			}
 		}
+		return false; // je hebt woningen -> buiten je home(s) (incl. de gang) mag niet
 	}
+
+	// Sandbox/free-build zonder eigen woning: val terug op "overal binnen toegestaan, niet buiten".
+	if (WorldFreeBuild(World)) { return IsIndoors(P); }
 	return false;
 }
 
@@ -962,6 +978,21 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		}
 		return;
 	}
+	// Niet bovenop een ander geplaatst object (stapelen): korte omlaag-trace; raakt 'ie een placeable i.p.v.
+	// de vloer, dan weigeren. Wand-mounts (muur) en plafondlampen (plafond) slaan dit over.
+	if (!bUpgrade && !Def.bIsLamp && !Def.bIsWallMount)
+	{
+		FHitResult Down;
+		FCollisionQueryParams DQP(SCENE_QUERY_STAT(WeedShopStackCheck), false);
+		DQP.AddIgnoredActor(GetOwner());
+		if (World->LineTraceSingleByChannel(Down, Location + FVector(0.f, 0.f, 20.f), Location - FVector(0.f, 0.f, 20.f), ECC_Visibility, DQP)
+			&& IsPlaceableActor(Down.GetActor()))
+		{
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Can't stack on another object.")); }
+			return;
+		}
+	}
+
 	// Alleen BINNEN (je eigen woning; in free-build overal binnen) - NOOIT buiten, tenzij outdoors-toegestaan.
 	// (IsInOwnedHome regelt zelf de free-build-uitzondering via een binnen-check.)
 	if (!bUpgrade && !Def.bAllowOutdoors && !IsInOwnedHome(Location))
