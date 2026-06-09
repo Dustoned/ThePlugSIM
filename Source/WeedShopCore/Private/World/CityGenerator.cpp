@@ -1364,17 +1364,19 @@ void ACityGenerator::BuildApartmentBlock(float CX, float CY, float TopZ, int32 D
 		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(Tang.Y, Tang.X));
 		const FLinearColor DoorCol(0.10f, 0.08f, 0.07f);
 		FActorSpawnParameters DSP; DSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		// Linker helft: scharnier aan de linkerkant, paneel loopt naar het midden (+Tang).
+		// Beide bladen openen DEZELFDE kant op (zelfde Yaw) en sluiten FLUSH aan in het midden (geen gat meer).
+		// Linker blad: scharnier helemaal links, paneel (volle helft-breedte) loopt naar het midden.
 		const FVector HingeL = OpeningCenter - Tang * HalfW;
 		if (ACityDoor* DL = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), HingeL), DSP))
 		{
-			DL->Setup(HalfW - 4.f, DoorH - 6.f, DoorCol);
+			DL->Setup(HalfW, DoorH - 6.f, DoorCol);
 		}
-		// Rechter helft: scharnier aan de rechterkant, 180 gedraaid zodat het paneel naar het midden (-Tang) loopt.
-		const FVector HingeR = OpeningCenter + Tang * HalfW;
-		if (ACityDoor* DR = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw + 180.f, 0.f), HingeR), DSP))
+		// Rechter blad: scharnier in het MIDDEN (sluit naadloos aan tegen het linker blad), ZELFDE Yaw -> beide
+		// draaien dezelfde richting open i.p.v. tegengesteld.
+		const FVector HingeR = OpeningCenter;
+		if (ACityDoor* DR = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), HingeR), DSP))
 		{
-			DR->Setup(HalfW - 4.f, DoorH - 6.f, DoorCol);
+			DR->Setup(HalfW, DoorH - 6.f, DoorCol);
 		}
 	}
 
