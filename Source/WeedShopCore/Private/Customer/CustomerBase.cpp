@@ -758,6 +758,53 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 		return false;
 	}
 
+	// Nav-walk exit (rijtjeshuis + apartment): loop via de navmesh van de EIGEN unit naar de voordeur/straat
+	// (de trap af voor apartments). Geen staged-teleport meer die upper-floor bewoners een verdieping lager uit
+	// een verkeerde kamer liet ploppen. Alleen bij echte pathing-stuck: teleporteer naar de voordeur als fallback.
+	if (bResident)
+	{
+		const FVector Dest = HomeFrontSpot;
+		const FVector Cur = GetActorLocation();
+		auto FinishOutside = [&]()
+		{
+			bEmergingFromHome = false;
+			bLeavingHomeRoute = FVector::Dist2D(HomeFrontSpot, HomeExitSidewalkSpot) >= 520.f;
+			bHasRoamGoal = false;
+			bRoamGoalIsPark = false;
+			bPendingRoamGoalIsPark = false;
+			PendingParkVisitSlot = 0;
+			ActiveParkVisitSlot = 0;
+			RoamTimer = ComputeResidentGoalThinkDelay(0.4f, 4.2f);
+			HomeExitStuckTimer = 0.f;
+			bHasResidentPrevMoveLoc = false;
+		};
+		if (FVector::Dist2D(Cur, Dest) < 155.f && FMath::Abs(Cur.Z - Dest.Z) < 230.f)
+		{
+			FinishOutside();
+			return false;
+		}
+		const bool bMoveStarted = WalkTo(Dest);
+		float MoveDelta = 9999.f;
+		if (bHasResidentPrevMoveLoc) { MoveDelta = FVector::Dist2D(Cur, ResidentPrevMoveLoc); }
+		ResidentPrevMoveLoc = Cur;
+		bHasResidentPrevMoveLoc = true;
+		bool bPathMoving = bMoveStarted;
+		if (AAIController* AI = Cast<AAIController>(GetController()))
+		{
+			bPathMoving = bMoveStarted && (AI->GetMoveStatus() == EPathFollowingStatus::Moving);
+		}
+		if (!bPathMoving || MoveDelta < 4.f) { HomeExitStuckTimer += DeltaSeconds; }
+		else { HomeExitStuckTimer = 0.f; }
+		if (HomeExitStuckTimer >= 5.f)
+		{
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			SetActorLocation(MakeResidentStandingLocation(HomeFrontSpot));
+			FinishOutside();
+			return false;
+		}
+		return true;
+	}
+
 	if (bHasHomeHall && HomeExitStage == 1)
 	{
 		if (AAIController* AI = Cast<AAIController>(GetController()))
