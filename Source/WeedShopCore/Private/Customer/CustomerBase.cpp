@@ -115,11 +115,14 @@ ACustomerBase::ACustomerBase()
 	{
 		Move->bUseControllerDesiredRotation = false;
 		Move->bOrientRotationToMovement = true;
-		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
+		// Zachtere rotatie: draai niet razendsnel mee met de (oscillerende) RVO-velocity -> geen tollen op de plek.
+		Move->RotationRate = FRotator(0.f, 280.f, 0.f);
 		Move->MaxWalkSpeed = 200.f;
 		Move->bUseRVOAvoidance = true;             // ontwijk elkaar/de speler -> niet vastlopen
-		Move->AvoidanceConsiderationRadius = 135.f;
-		Move->AvoidanceWeight = 0.62f;
+		// Kleinere consideration-radius: ze ontwijken elkaar pas als ze ECHT dichtbij zijn i.p.v. al van ver om
+		// elkaar heen te dansen (dat veroorzaakte het van-plek-wisselen + samen rondjes draaien).
+		Move->AvoidanceConsiderationRadius = 90.f;
+		Move->AvoidanceWeight = 0.5f;
 	}
 	// (Geen per-NPC navmesh-invoker meer: één centrale invoker (CityGenerator) dekt de hele stad,
 	//  dat schaalt veel beter naar 40+ NPC's dan 40 losse invokers.)

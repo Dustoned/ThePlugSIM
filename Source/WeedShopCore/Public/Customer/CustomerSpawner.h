@@ -35,7 +35,7 @@ public:
 
 	// Hoeveel bewoners ECHT rondlopen (de rest "woont er" via een op-slot-deur met naam). 0 = allemaal.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
-	int32 MaxResidents = 50;
+	int32 MaxResidents = 65;
 
 	// Dagelijkse rotatie: hoeveel fysieke roamers per nieuwe dag wisselen met de virtuele pool, zodat
 	// je over een paar dagen iedereen ziet (en het straatbeeld verandert ook als je stilstaat).
