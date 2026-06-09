@@ -12,6 +12,16 @@ UNavArea_Road::UNavArea_Road()
 	DrawColor = FColor(50, 50, 60);
 }
 
+UNavArea_CityCenter::UNavArea_CityCenter()
+{
+	// Matig-hoge kosten + flinke instap-toll: doorgaand verkeer kiest een route ERLANGS i.p.v. dwars door
+	// het centrum (geen prop bij het park meer). Niet zo duur als een rijweg, zodat park-bezoekers er nog
+	// gewoon heen kunnen (het is hun bestemming, niet doorgaand).
+	DefaultCost = 28.f;
+	FixedAreaEnteringCost = 900.f;
+	DrawColor = FColor(70, 40, 70);
+}
+
 ARoadNavZone::ARoadNavZone()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -24,14 +34,18 @@ ARoadNavZone::ARoadNavZone()
 	Modifier->SetAreaClass(UNavArea_Road::StaticClass());
 }
 
-void ARoadNavZone::SetupZone(const FVector& HalfExtent)
+void ARoadNavZone::SetupZone(const FVector& HalfExtent, TSubclassOf<UNavArea> AreaOverride)
 {
 	if (!Modifier)
 	{
 		return;
 	}
+	if (AreaOverride)
+	{
+		Modifier->SetAreaClass(AreaOverride);
+	}
 	// Geen collision-component op deze actor -> de modifier valt terug op FailsafeExtent en past de
-	// rijweg-area toe over een box (actor-locatie ± HalfExtent).
+	// area toe over een box (actor-locatie ± HalfExtent).
 	Modifier->FailsafeExtent = HalfExtent;
 	Modifier->RefreshNavigationModifiers();
 }

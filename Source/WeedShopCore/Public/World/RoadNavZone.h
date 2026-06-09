@@ -19,6 +19,17 @@ public:
 	UNavArea_Road();
 };
 
+// Centrum-zone rond het park: matig-hoge kosten zodat DOORGAAND verkeer niet dwars door het centrum
+// routeert (dat gaf een prop/RVO-gridlock bij het park). Park-bezoekers gaan er nog heen (bestemming),
+// maar wie er alleen langs zou komen loopt nu eromheen.
+UCLASS()
+class WEEDSHOPCORE_API UNavArea_CityCenter : public UNavArea
+{
+	GENERATED_BODY()
+public:
+	UNavArea_CityCenter();
+};
+
 UCLASS()
 class WEEDSHOPCORE_API ARoadNavZone : public AActor
 {
@@ -26,8 +37,9 @@ class WEEDSHOPCORE_API ARoadNavZone : public AActor
 public:
 	ARoadNavZone();
 
-	// HalfExtent = halve XYZ-omvang van het straatvak (rond de actor-locatie).
-	void SetupZone(const FVector& HalfExtent);
+	// HalfExtent = halve XYZ-omvang van het straatvak (rond de actor-locatie). AreaOverride != null ->
+	// gebruik die nav-area i.p.v. de standaard rijweg-area (bv. de centrum-zone).
+	void SetupZone(const FVector& HalfExtent, TSubclassOf<UNavArea> AreaOverride = nullptr);
 
 protected:
 	UPROPERTY() TObjectPtr<class UNavModifierComponent> Modifier;

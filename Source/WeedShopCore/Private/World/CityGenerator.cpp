@@ -385,6 +385,13 @@ void ACityGenerator::BuildCity()
 				Z->SetupZone(HalfExt);
 			}
 		};
+
+		// Centrum-zone: hoge-kosten box rond het park zodat DOORGAAND verkeer eromheen routeert i.p.v.
+		// dwars door het centrum (dat gaf de prop/RVO-gridlock bij het park). Park-bezoekers gaan er nog heen.
+		if (ARoadNavZone* CZ = W->SpawnActor<ARoadNavZone>(ARoadNavZone::StaticClass(), FTransform(FVector(Center.X, Center.Y, ZCenter))))
+		{
+			CZ->SetupZone(FVector(Pitch * 0.7f, Pitch * 0.7f, ZHalf), UNavArea_CityCenter::StaticClass());
+		}
 		for (int32 k = -R; k < R; ++k) // straat tussen blok k en k+1
 		{
 			const float P = k * Pitch + Pitch * 0.5f;
