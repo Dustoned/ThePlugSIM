@@ -2121,6 +2121,24 @@ void UPhoneClientComponent::ServerDeposit_Implementation(int64 CashAmount)
 	if (Amt > 0) { Econ->Deposit(Amt); }
 }
 
+void UPhoneClientComponent::RequestSafeMove(int64 Cents, bool bToSafe) { ServerSafeMove(Cents, bToSafe); }
+
+void UPhoneClientComponent::ServerSafeMove_Implementation(int64 Cents, bool bToSafe)
+{
+	UEconomyComponent* Econ = GetOwnerEconomy();
+	if (!Econ) { return; }
+	if (bToSafe)
+	{
+		int64 Amt = (Cents <= 0) ? Econ->GetCashCents() : Cents; // max = al je on-hand cash
+		if (Amt > 0) { Econ->DepositToSafe(Amt); }
+	}
+	else
+	{
+		int64 Amt = (Cents <= 0) ? Econ->GetSafeCents() : Cents; // max = hele kluis
+		if (Amt > 0) { Econ->WithdrawFromSafe(Amt); }
+	}
+}
+
 void UPhoneClientComponent::RequestSetDayNight(bool bNight) { ServerSetDayNight(bNight); }
 
 void UPhoneClientComponent::ServerSetDayNight_Implementation(bool bNight)

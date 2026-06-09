@@ -284,6 +284,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestDeposit(int64 CashAmount);
 
+	// Kluis: verplaats cash <-> kluis. bToSafe=true: cash -> kluis; false: kluis -> cash. Cents<=0 = maximaal.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void RequestSafeMove(int64 Cents, bool bToSafe);
+
 	// Test-tool: zet de tijd op midden-dag (false) of midden-nacht (true). Client -> server.
 	void RequestSetDayNight(bool bNight);
 
@@ -671,6 +675,9 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerDeposit(int64 CashAmount);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSafeMove(int64 Cents, bool bToSafe);
 
 	UFUNCTION(Server, Reliable)
 	void ServerSetDayNight(bool bNight);

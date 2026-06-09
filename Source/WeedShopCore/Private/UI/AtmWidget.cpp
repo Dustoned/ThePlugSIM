@@ -110,12 +110,13 @@ void UAtmWidget::FillBody()
 
 	// Saldo-regels (altijd zichtbaar).
 	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Cash (black):  EUR %.2f"), Econ->GetBalanceEuros()), 15, FLinearColor(0.95f, 0.9f, 0.5f)), FMargin(0, 0, 0, 2));
-	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Bank (white):  EUR %.2f"), Econ->GetBankEuros()), 15, FLinearColor(0.55f, 0.95f, 1.f)), FMargin(0, 0, 0, 8));
+	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Bank (white):  EUR %.2f"), Econ->GetBankEuros()), 15, FLinearColor(0.55f, 0.95f, 1.f)), FMargin(0, 0, 0, 2));
+	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Safe (secure): EUR %.2f"), Econ->GetSafeEuros()), 15, FLinearColor(0.6f, 1.f, 0.7f)), FMargin(0, 0, 0, 8));
 
 	// Tabs.
-	static const TCHAR* TabNames[2] = { TEXT("Deposit"), TEXT("Send to friend") };
+	static const TCHAR* TabNames[3] = { TEXT("Deposit"), TEXT("Send to friend"), TEXT("Safe") };
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
-	for (int32 i = 0; i < 2; ++i)
+	for (int32 i = 0; i < 3; ++i)
 	{
 		const FLinearColor Col = (i == AtmTab) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.14f, 0.18f, 0.20f);
 		UWeedActionButton* B = AtmBtn(WidgetTree, Col, 8.f, [this, i]() { AtmTab = i; LastSig.Reset(); FillBody(); });
@@ -147,7 +148,7 @@ void UAtmWidget::FillBody()
 		MaxB->SetContent(WeedUI::Text(WidgetTree, TEXT("Deposit max (up to daily limit)"), 13, FLinearColor::White, true));
 		Row(MaxB, FMargin(0, 0, 0, 0));
 	}
-	else // Send to friend
+	else if (AtmTab == 1) // Send to friend
 	{
 		Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Send bank money to a co-op friend.  Fee %.0f%%."), Econ->TransferFeePct * 100.f),
 			11, FLinearColor(0.7f, 0.78f, 0.74f)), FMargin(0, 0, 0, 2));
@@ -169,6 +170,44 @@ void UAtmWidget::FillBody()
 		Row(WeedUI::Text(WidgetTree, TEXT("(Full amount to their bank; fee is on you.)"),
 			10, FLinearColor(0.55f, 0.6f, 0.62f)), FMargin(0, 4, 0, 0));
 	}
+	else // Safe (kluis): cash veilig stashen, geen belasting/heat, veilig bij een overval
+	{
+		Row(WeedUI::Text(WidgetTree, TEXT("Stash cash in your safe. No tax, no heat - and a robbery can't touch it."),
+			11, FLinearColor(0.7f, 0.85f, 0.74f)), FMargin(0, 0, 0, 8));
+
+		// Cash -> kluis
+		Row(WeedUI::Text(WidgetTree, TEXT("Deposit cash -> safe"), 12, FLinearColor(0.85f, 0.95f, 0.85f)), FMargin(0, 0, 0, 2));
+		const int64 InAmts[3] = { 100000, 500000, 2000000 };
+		UHorizontalBox* InBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		for (int32 i = 0; i < 3; ++i)
+		{
+			const int64 A = InAmts[i];
+			UWeedActionButton* B = AtmBtn(WidgetTree, FLinearColor(0.18f, 0.45f, 0.30f), 8.f, [Ph, A]() { if (Ph) { Ph->RequestSafeMove(A, true); } });
+			B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %lld"), (long long)(A / 100)), 13, FLinearColor::White, true));
+			UHorizontalBoxSlot* BS = InBtns->AddChildToHorizontalBox(B);
+			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+		}
+		Row(InBtns, FMargin(0, 0, 0, 4));
+		UWeedActionButton* AllInB = AtmBtn(WidgetTree, FLinearColor(0.2f, 0.5f, 0.34f), 8.f, [Ph]() { if (Ph) { Ph->RequestSafeMove(-1, true); } });
+		AllInB->SetContent(WeedUI::Text(WidgetTree, TEXT("Stash all cash"), 13, FLinearColor::White, true));
+		Row(AllInB, FMargin(0, 0, 0, 10));
+
+		// Kluis -> cash
+		Row(WeedUI::Text(WidgetTree, TEXT("Withdraw safe -> cash"), 12, FLinearColor(0.85f, 0.95f, 0.85f)), FMargin(0, 0, 0, 2));
+		UHorizontalBox* OutBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		for (int32 i = 0; i < 3; ++i)
+		{
+			const int64 A = InAmts[i];
+			UWeedActionButton* B = AtmBtn(WidgetTree, FLinearColor(0.40f, 0.34f, 0.18f), 8.f, [Ph, A]() { if (Ph) { Ph->RequestSafeMove(A, false); } });
+			B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %lld"), (long long)(A / 100)), 13, FLinearColor::White, true));
+			UHorizontalBoxSlot* BS = OutBtns->AddChildToHorizontalBox(B);
+			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+		}
+		Row(OutBtns, FMargin(0, 0, 0, 4));
+		UWeedActionButton* AllOutB = AtmBtn(WidgetTree, FLinearColor(0.5f, 0.42f, 0.2f), 8.f, [Ph]() { if (Ph) { Ph->RequestSafeMove(-1, false); } });
+		AllOutB->SetContent(WeedUI::Text(WidgetTree, TEXT("Withdraw all"), 13, FLinearColor::White, true));
+		Row(AllOutB, FMargin(0, 0, 0, 0));
+	}
 }
 
 void UAtmWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -183,8 +222,8 @@ void UAtmWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Alleen herbouwen als er iets wijzigt (tab of saldo's) -> geen flicker.
 	UEconomyComponent* Econ = GetEcon(GetWorld());
 	const FString Sig = Econ
-		? FString::Printf(TEXT("%d|%lld|%lld|%lld|%d"), AtmTab, (long long)Econ->GetCashCents(), (long long)Econ->GetBankCents(),
-			(long long)Econ->GetDepositedTodayCents(), Econ->GetTransfersToday())
+		? FString::Printf(TEXT("%d|%lld|%lld|%lld|%lld|%d"), AtmTab, (long long)Econ->GetCashCents(), (long long)Econ->GetBankCents(),
+			(long long)Econ->GetSafeCents(), (long long)Econ->GetDepositedTodayCents(), Econ->GetTransfersToday())
 		: FString::Printf(TEXT("%d|na"), AtmTab);
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 }
