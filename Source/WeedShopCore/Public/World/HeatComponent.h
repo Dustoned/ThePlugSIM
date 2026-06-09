@@ -53,6 +53,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Heat")
 	float GetHeat() const { return Heat; }
 
+	// Dev/test: forceer direct een overval of bust (negeert nacht + heat-cooldown). Server.
+	void DevTriggerRobbery() { if (GetOwnerRole() == ROLE_Authority) { TriggerRobbery(); } }
+	void DevTriggerBust()    { if (GetOwnerRole() == ROLE_Authority) { TriggerBust(); } }
+
 	// Save/load: heat-waarde + event-cooldown-staat (bust/overval-timer + laatste-event-dag).
 	void RestoreHeat(float V) { SetHeat(V); }
 	float GetEventTimer() const { return EventTimer; }

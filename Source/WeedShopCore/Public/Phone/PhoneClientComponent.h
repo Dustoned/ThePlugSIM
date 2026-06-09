@@ -288,6 +288,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestSafeMove(int64 Cents, bool bToSafe);
 
+	// Dev/test: forceer direct een overval (bBust=false) of bust (bBust=true). Client -> server.
+	void RequestDevHeatEvent(bool bBust);
+
 	// Test-tool: zet de tijd op midden-dag (false) of midden-nacht (true). Client -> server.
 	void RequestSetDayNight(bool bNight);
 
@@ -681,6 +684,9 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerSafeMove(int64 Cents, bool bToSafe);
+
+	UFUNCTION(Server, Reliable)
+	void ServerDevHeatEvent(bool bBust);
 
 	UFUNCTION(Server, Reliable)
 	void ServerSetDayNight(bool bNight);

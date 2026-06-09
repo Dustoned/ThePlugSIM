@@ -268,6 +268,16 @@ void UPhoneWidget::FillSettingsBody()
 		Btns->AddChildToHorizontalBox(NightB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		BodyRow(Btns, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// Dev: forceer een overval / bust (om de kluis + apartment-leeghaal te testen zonder op nacht+heat te wachten).
+		UHorizontalBox* EvtBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
+		UWeedActionButton* RobB = MakeActionBtn(TEXT("Trigger Robbery"), FLinearColor(0.7f, 0.4f, 0.15f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(false); } }, 13);
+		UWeedActionButton* BustB = MakeActionBtn(TEXT("Trigger Bust"), FLinearColor(0.6f, 0.2f, 0.2f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(true); } }, 13);
+		EvtBtns->AddChildToHorizontalBox(RobB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		EvtBtns->AddChildToHorizontalBox(BustB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		BodyRow(EvtBtns, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// --- Live light-tuning (stuurt de lokale DayNightController direct aan; geen restart nodig) ---
 		LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
 		BodyRow(MakeText(TEXT("Lighting (live)"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));

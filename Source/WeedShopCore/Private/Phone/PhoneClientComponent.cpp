@@ -2164,6 +2164,16 @@ void UPhoneClientComponent::ServerSafeMove_Implementation(int64 Cents, bool bToS
 	}
 }
 
+void UPhoneClientComponent::RequestDevHeatEvent(bool bBust) { ServerDevHeatEvent(bBust); }
+
+void UPhoneClientComponent::ServerDevHeatEvent_Implementation(bool bBust)
+{
+	AWeedShopGameState* GS = GetGS();
+	UHeatComponent* Heat = GS ? GS->GetHeat() : nullptr;
+	if (!Heat) { return; }
+	if (bBust) { Heat->DevTriggerBust(); } else { Heat->DevTriggerRobbery(); }
+}
+
 void UPhoneClientComponent::RequestSetDayNight(bool bNight) { ServerSetDayNight(bNight); }
 
 void UPhoneClientComponent::ServerSetDayNight_Implementation(bool bNight)
