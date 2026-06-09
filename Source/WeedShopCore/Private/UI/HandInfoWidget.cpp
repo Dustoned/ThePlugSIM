@@ -167,7 +167,7 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	FName Id = Inv ? Inv->GetActiveItemId() : NAME_None;
 	const FString IdStr = Id.ToString();
-	const bool bHasItem = Inv && !Id.IsNone() && Id != FName(TEXT("Cash")) && !bUiBlocking;
+	const bool bHasItem = Inv && !Id.IsNone() && !bUiBlocking; // Cash mag nu wél (toont het bedrag)
 
 	// Fade in/uit.
 	const float Target = bHasItem ? 1.f : 0.f;

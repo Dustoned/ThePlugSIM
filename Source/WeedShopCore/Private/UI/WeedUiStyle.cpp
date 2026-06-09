@@ -104,6 +104,7 @@ namespace WeedUI
 		else if (S.StartsWith(TEXT("Soil_")))        { Type = TEXT("Soil"); }
 		else if (S.StartsWith(TEXT("Papers_")))      { Type = TEXT("Rolling papers"); }
 		else if (S.StartsWith(TEXT("Cont_")))        { Type = TEXT("Packaging"); }
+		else if (S == TEXT("Cash"))                  { Type = TEXT("Cash"); }
 		if (!Type.IsEmpty()) { Add(Type); }
 
 		const bool bWeed = bWet || bBud || bBag || bJoint || bCrystal || bHash || bConc;
@@ -115,6 +116,7 @@ namespace WeedUI
 			Add(FString::Printf(TEXT("%d bag(s) x %dg  =  %dg"), Qty, G, Qty * G));
 		}
 		else if (bWet || bBud || bCrystal || bHash || bConc) { Add(FString::Printf(TEXT("%dg"), Qty)); }
+		else if (S == TEXT("Cash")) { Add(FString::Printf(TEXT("€%d"), Qty)); }
 		else if (Qty > 1) { Add(FString::Printf(TEXT("Amount: %d"), Qty)); }
 		return Out;
 	}
@@ -127,7 +129,7 @@ namespace WeedUI
 			return (Qty > 1) ? FString::Printf(TEXT("%dx %dg"), Qty, G) : FString::Printf(TEXT("%dg"), G);
 		}
 		const FString S = ItemId.ToString();
-		if (S == TEXT("Cash")) { return FString(); }
+		if (S == TEXT("Cash")) { return FString::Printf(TEXT("€%d"), Qty); } // briefgeld: toon het bedrag (Qty = euro's)
 		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_"))
 			|| S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_"))
 			|| S.StartsWith(TEXT("Moonrock_")) || S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Bubble_"))) { return FString::Printf(TEXT("%dg"), Qty); }
@@ -150,6 +152,7 @@ namespace WeedUI
 	FString PrettyItemName(FName ItemId)
 	{
 		FString S = ItemId.ToString();
+		if (S == TEXT("Cash"))                { return TEXT("Cash"); }
 		if (S.StartsWith(TEXT("WetBud_")))    { return NiceName(S.RightChop(7)) + TEXT(" (wet)"); }
 		if (S.StartsWith(TEXT("Bag_")))       { return NiceName(UInventoryComponent::BagStrain(ItemId).ToString()) + TEXT(" bag"); }
 		if (S.StartsWith(TEXT("DryRack_")))   { return S.RightChop(8) + TEXT(" rack"); }
