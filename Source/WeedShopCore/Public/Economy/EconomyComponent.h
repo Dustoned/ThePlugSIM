@@ -112,6 +112,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Economy")
 	int64 Deposit(int64 CashAmount);
 
+	// === Kluis: cash veilig stashen (los van de bank, geen witwas-heat, veilig bij overval) ===
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	int64 GetSafeCents() const { return SafeCents; }
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
+	float GetSafeEuros() const { return static_cast<float>(SafeCents) / 100.0f; }
+	int64 DepositToSafe(int64 CashCents);          // cash -> kluis (server), geeft verplaatst bedrag
+	int64 WithdrawFromSafe(int64 SafeAmountCents); // kluis -> cash (server), geeft verplaatst bedrag
+	void SetSafeCents(int64 NewCents);             // save-restore
+
 	// Fysiek cash droppen (split): trekt EUR <Euros> van je cash en legt een oppakbaar geldstapeltje vóór je
 	// neer dat een andere speler kan grijpen (gaat naar diens cash). Client roept aan -> server voert uit.
 	UFUNCTION(Server, Reliable)
@@ -199,6 +208,11 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_Balance)
 	int64 BankCents = 0;
+
+	// Kluis: fysiek cash veilig opgeborgen. Wordt NIET geraakt door een overval (TriggerRobbery pakt alleen
+	// je on-hand cash). Geen witwas-heat zoals de bank -> puur veilig stashen. Per speler, opgeslagen.
+	UPROPERTY(ReplicatedUsing = OnRep_Balance)
+	int64 SafeCents = 0;
 
 	// Vandaag al gestort (voor de dag-limiet) + de dag waarop dat geldt.
 	UPROPERTY(Replicated)

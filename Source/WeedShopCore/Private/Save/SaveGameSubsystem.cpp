@@ -488,6 +488,7 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 	{
 		Out.CashCents = E->GetBalanceCents();
 		Out.BankCents = E->GetBankCents();
+		Out.SafeCents = E->GetSafeCents();
 		Out.DepositedTodayCents = E->GetDepositedTodayCents();
 		Out.DepositDay = E->GetDepositDay();
 		Out.TransfersToday = E->GetTransfersToday();
@@ -540,6 +541,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	{
 		E->SetBalanceCents(Data.CashCents);
 		E->SetBankCents(Data.BankCents);
+		E->SetSafeCents(Data.SafeCents);
 		E->RestoreDailyLimits(Data.DepositedTodayCents, Data.DepositDay, Data.TransfersToday);
 		E->RestoreLaunderState(Data.LegitIncomeCents, Data.LaunderedCents);
 	}

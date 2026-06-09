@@ -6,6 +6,12 @@
 #include "World/DayCycleComponent.h"
 #include "Economy/EconomyComponent.h"
 #include "Progression/UpgradeComponent.h"
+#include "Phone/PhoneClientComponent.h"
+#include "Cultivation/GrowPlant.h"
+#include "Cultivation/DryingRack.h"
+#include "World/ProcessorMachine.h"
+#include "GameFramework/PlayerController.h"
+#include "EngineUtils.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 
@@ -120,12 +126,42 @@ void UHeatComponent::TriggerRobbery()
 		return;
 	}
 	const int64 Loss = FMath::Max<int64>(300, (int64)(Econ->GetBalanceCents() * 0.15));
-	Econ->RemoveMoney(Loss);
+	Econ->RemoveMoney(Loss);   // alleen on-hand cash: de kluis (SafeCents) en de bank blijven veilig
 	SetHeat(Heat - 15.f);
-	UE_LOG(LogWeedShop, Log, TEXT("Overval! %lld cents gestolen."), (long long)Loss);
+
+	// Overvallers halen ook je ACTIEVE apartment leeg: alle groeiende planten, droogrekken en machines.
+	int32 Plants = 0, Racks = 0, Machines = 0;
+	if (UWorld* World = GetWorld())
+	{
+		FVector HomePos = FVector::ZeroVector; bool bHasHome = false;
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (APawn* Pw = PC->GetPawn())
+			{
+				if (UPhoneClientComponent* Ph = Pw->FindComponentByClass<UPhoneClientComponent>())
+				{
+					bHasHome = Ph->GetActiveHomeLocation(HomePos);
+				}
+			}
+		}
+		if (bHasHome)
+		{
+			const float R2 = 1600.f * 1600.f; // radius rond het apartment-interieur (~16m, dekt een kamer)
+			for (TActorIterator<AGrowPlant> It(World); It; ++It)
+			{ if (FVector::DistSquared(It->GetActorLocation(), HomePos) < R2) { It->RobClear(); ++Plants; } }
+			for (TActorIterator<ADryingRack> It(World); It; ++It)
+			{ if (FVector::DistSquared(It->GetActorLocation(), HomePos) < R2) { It->RestoreEntries(TArray<FDryEntry>()); ++Racks; } }
+			for (TActorIterator<AProcessorMachine> It(World); It; ++It)
+			{ if (FVector::DistSquared(It->GetActorLocation(), HomePos) < R2) { It->RestoreEntries(TArray<FProcEntry>()); ++Machines; } }
+		}
+	}
+
+	UE_LOG(LogWeedShop, Log, TEXT("Overval! %lld cents + apartment leeggehaald (%d planten, %d rekken, %d machines)."),
+		(long long)Loss, Plants, Racks, Machines);
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 6.f, FColor(255, 140, 0),
-			FString::Printf(TEXT("Robbery! EUR %.2f stolen"), Loss / 100.f));
+		UWeedToast::Notify(-1, 8.f, FColor(255, 140, 0),
+			FString::Printf(TEXT("Robbery! EUR %.2f stolen + your apartment got cleaned out (%d plants, %d racks, %d machines). Use a safe!"),
+				Loss / 100.f, Plants, Racks, Machines));
 	}
 }

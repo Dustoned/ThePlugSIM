@@ -97,6 +97,7 @@ struct FPlayerSaveData
 	UPROPERTY() FString PlayerName;  // weergavenaam (kan wijzigen; alleen fallback-match)
 	UPROPERTY() int64 CashCents = 0;
 	UPROPERTY() int64 BankCents = 0;
+	UPROPERTY() int64 SafeCents = 0; // kluis (veilig gestasht cash)
 	UPROPERTY() bool bBankAppUnlocked = false;
 	UPROPERTY() TArray<FInvSaveItem> Items;
 	UPROPERTY() TArray<int32> HotbarCells; // per hotbar-slot: grid-cel van de toegewezen stapel (-1 = leeg)

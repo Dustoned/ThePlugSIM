@@ -106,6 +106,8 @@ public:
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
+	void RobClear(); // overval (server): alle groeiende planten weg (slots leeg)
+
 	// --- Pot-/plek-info voor de UI ---
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	int32 GetNumSlots() const { return SlotStrain.Num(); }

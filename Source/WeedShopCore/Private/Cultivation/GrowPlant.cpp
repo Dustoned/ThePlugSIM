@@ -951,6 +951,22 @@ float AGrowPlant::GetEstimatedThcPercent() const
 	return N > 0 ? Sum / N : 0.f;
 }
 
+void AGrowPlant::RobClear()
+{
+	if (!HasAuthority()) { return; }
+	bool bAny = false;
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
+	{
+		if (!SlotStrain[i].IsNone()) { bAny = true; }
+		SlotStrain[i] = NAME_None;
+		if (SlotGrowth.IsValidIndex(i))      { SlotGrowth[i] = 0.f; }
+		if (SlotPhase.IsValidIndex(i))       { SlotPhase[i] = static_cast<EGrowthPhase>(0); }
+		if (SlotAfflict.IsValidIndex(i))     { SlotAfflict[i] = 0; }
+		if (SlotAfflictTime.IsValidIndex(i)) { SlotAfflictTime[i] = 0.f; }
+	}
+	if (bAny) { UpdatePlantVisual(); } // server: visual bijwerken (clients via OnRep_Slots)
+}
+
 void AGrowPlant::OnRep_Slots()  { UpdatePlantVisual(); }
 void AGrowPlant::OnRep_Soil()   { UpdateSoilVisual(); }
 void AGrowPlant::OnRep_Pot()    { EnsureSlots(); UpdatePotVisual(); UpdatePlantVisual(); }

@@ -34,6 +34,7 @@ void UEconomyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UEconomyComponent, BalanceCents);
 	DOREPLIFETIME(UEconomyComponent, BankCents);
+	DOREPLIFETIME(UEconomyComponent, SafeCents);
 	DOREPLIFETIME(UEconomyComponent, DepositedTodayCents);
 	DOREPLIFETIME(UEconomyComponent, LegitIncomeCents);
 	DOREPLIFETIME(UEconomyComponent, LaunderedCents);
@@ -259,6 +260,33 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 			FString::Printf(TEXT("Laundered EUR %.2f -> bank (tax EUR %.2f)"), ToBank / 100.f, Tax / 100.f));
 	}
 	return ToBank;
+}
+
+int64 UEconomyComponent::DepositToSafe(int64 CashCents)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return 0; }
+	const int64 Amt = FMath::Clamp<int64>(CashCents, 0, BalanceCents);
+	if (Amt <= 0 || !RemoveMoney(Amt)) { return 0; } // cash eraf (untracked richting kluis)
+	SafeCents += Amt;
+	OnRep_Balance();
+	return Amt;
+}
+
+int64 UEconomyComponent::WithdrawFromSafe(int64 SafeAmountCents)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return 0; }
+	const int64 Amt = FMath::Clamp<int64>(SafeAmountCents, 0, SafeCents);
+	if (Amt <= 0) { return 0; }
+	SafeCents -= Amt;
+	AddMoneyUntracked(Amt); // terug naar cash (eigen geld, geen witwas-omzet)
+	OnRep_Balance();
+	return Amt;
+}
+
+void UEconomyComponent::SetSafeCents(int64 NewCents)
+{
+	SafeCents = FMath::Max<int64>(0, NewCents);
+	OnRep_Balance();
 }
 
 void UEconomyComponent::ServerDropCash_Implementation(int32 Euros)
