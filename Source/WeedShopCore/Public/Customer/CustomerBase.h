@@ -307,6 +307,7 @@ protected:
 	int32 PendingParkVisitSlot = 0;
 	int32 ActiveParkVisitSlot = 0;
 	float ResidentWakeDelay = -1.f;
+	float RoamSessionTimer = 0.f; // hoelang nog buiten roamen voor 'ie even naar huis gaat rusten (thuis<->buiten-cyclus)
 	bool bLeavingHomeRoute = false;
 	ACityGenerator* GetResidentCity(UWorld* W);
 	FVector SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const;

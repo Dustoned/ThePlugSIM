@@ -452,7 +452,7 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	LastLaterParkVisitDay = -1;
 	PendingParkVisitSlot = 0;
 	ActiveParkVisitSlot = 0;
-	ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 16.f);
+	ResidentWakeDelay = ComputeResidentGoalThinkDelay(20.f, 70.f); // gespreide eerste emerge (niet allemaal tegelijk)
 	RoamTimer = ComputeResidentGoalThinkDelay(0.6f, 4.8f);
 	bAtHomeInside = true;
 	bEmergingFromHome = false;
@@ -714,6 +714,7 @@ void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 	ActiveParkVisitSlot = 0;
 	bLeavingHomeRoute = false;
 	ResidentWakeDelay = -1.f;
+	RoamSessionTimer = ComputeResidentGoalThinkDelay(45.f, 110.f); // roam dit lang buiten, dan even naar huis
 	ParkPauseTimer = 0.f;
 	ResidentStuckTimer = 0.f;
 	ResidentRecoveryCooldown = 0.f;
@@ -2530,7 +2531,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	{
 		if (ResidentWakeDelay < 0.f)
 		{
-			ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 18.f);
+			ResidentWakeDelay = ComputeResidentGoalThinkDelay(25.f, 75.f); // thuis-rust tussen roam-sessies
 		}
 		ResidentWakeDelay = FMath::Max(0.f, ResidentWakeDelay - DeltaSeconds);
 		if (ResidentWakeDelay > 0.f)
@@ -2565,6 +2566,18 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 				bHasResidentBestDistToGoal = false;
 				ResidentRecoveryAttempts = 0;
 			}
+		}
+	}
+
+	// Thuis<->buiten-cyclus: na een roam-sessie gaat de bewoner even naar huis (rusten), dan weer naar buiten.
+	// Zo zie je ze ook ín hun huis op de map i.p.v. de hele dag op straat. Niet 's nachts/bij afspraak/al onderweg.
+	if (!bNight && !bApptActive && !bEnteringHome && !bEmergingFromHome && !bAtHomeInside && RoamSessionTimer > 0.f)
+	{
+		RoamSessionTimer -= DeltaSeconds;
+		if (RoamSessionTimer <= 0.f)
+		{
+			StartResidentHomeEntry();
+			return;
 		}
 	}
 
