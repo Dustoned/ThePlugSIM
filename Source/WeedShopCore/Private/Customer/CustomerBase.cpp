@@ -550,7 +550,10 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
-	OutSnapshot.bNeedsParkVisitToday = Today >= 0 && GetResidentParkVisitsToday(Today) < 2;
+	// Niet ELKE bewoner gaat naar het park - alleen ~1/3 (per-bewoner vast via de seed). Anders trekt het hele
+	// dorp naar het kleine centrale park en loopt het vast. Zo blijft het park levend maar rustig.
+	const bool bParkVisitor = (FMath::Abs(RoamRouteSeed % 3) == 0);
+	OutSnapshot.bNeedsParkVisitToday = bParkVisitor && Today >= 0 && GetResidentParkVisitsToday(Today) < 2;
 	if (City && DC && OutSnapshot.bNeedsParkVisitToday && !bAtHomeInside && !bEmergingFromHome && !bEnteringHome)
 	{
 		const int32 NextSlot = PickResidentParkVisitSlot(City, DC, Today, DC->GetClockHour());
@@ -2368,7 +2371,7 @@ int32 ACustomerBase::PickResidentParkVisitSlot(ACityGenerator* City, const UDayC
 	// Park-crowd-cap: ga NIET naar het park als het al druk is. Anders proppen te veel bewoners zich in het
 	// kleine centrale park -> RVO-gridlock -> ze staan allemaal vast/tollen. Te druk -> roam gewoon door en
 	// probeer later (als er weer ruimte is). Zo blijft het park een rustige doorstroom i.p.v. een prop.
-	if (City && CountResidentCrowdNear(City->GetCityCenter(), 700.f) >= 8)
+	if (City && CountResidentCrowdNear(City->GetCityCenter(), 700.f) >= 5)
 	{
 		return 0;
 	}
