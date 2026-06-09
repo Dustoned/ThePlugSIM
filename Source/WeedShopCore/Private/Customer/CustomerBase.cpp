@@ -550,9 +550,9 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
-	// Niet ELKE bewoner gaat naar het park - alleen ~1/3 (per-bewoner vast via de seed). Anders trekt het hele
-	// dorp naar het kleine centrale park en loopt het vast. Zo blijft het park levend maar rustig.
-	const bool bParkVisitor = (FMath::Abs(RoamRouteSeed % 3) == 0);
+	// TEST: park-bezoeken tijdelijk UIT, om te zien of de centrum-prop de park-bezoekers zijn of de
+	// deal-zoekers bij de speler. Blijft de prop weg -> was het park (dan re-enable ik een zachte versie).
+	const bool bParkVisitor = false;
 	OutSnapshot.bNeedsParkVisitToday = bParkVisitor && Today >= 0 && GetResidentParkVisitsToday(Today) < 2;
 	if (City && DC && OutSnapshot.bNeedsParkVisitToday && !bAtHomeInside && !bEmergingFromHome && !bEnteringHome)
 	{
