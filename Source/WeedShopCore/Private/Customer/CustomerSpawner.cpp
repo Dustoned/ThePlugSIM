@@ -400,14 +400,26 @@ void ACustomerSpawner::SpawnResidents()
 	// dezelfde DoorPos, dus zonder dit zouden er tig bewoners op exact dezelfde stoephoek clusteren.
 	// Eén roamer per ingang, gespreid over de stad.
 	auto DoorKey = [](const FVector& P) { return FIntVector(FMath::RoundToInt(P.X / 50.f), FMath::RoundToInt(P.Y / 50.f), 0); };
-	TArray<int32> Entrances; // eerste home-index per unieke DoorPos (geen koopbare panden)
+	TArray<int32> Entrances; // één unit per unieke DoorPos (geen koopbare panden), op een gevarieerde verdieping
 	{
-		TSet<FIntVector> Seen;
+		// Groepeer alle units per unieke hoofdingang en kies PER gebouw één bewoner op een per-gebouw gevarieerde
+		// verdieping (hash van de ingang). Nu bewoners ECHT naar binnen lopen i.p.v. bij de ingang te clusteren,
+		// hoeft het niet meer altijd de begane grond te zijn -> je ziet ook bewoners van boven naar beneden komen.
+		TMap<FIntVector, TArray<int32>> ByEntrance;
+		TArray<FIntVector> Order;
 		for (int32 i = 0; i < Total; ++i)
 		{
 			if (ForSale.Contains(i)) { continue; }
 			const FIntVector Key = DoorKey(Homes[i].DoorPos);
-			if (!Seen.Contains(Key)) { Seen.Add(Key); Entrances.Add(i); }
+			TArray<int32>& Arr = ByEntrance.FindOrAdd(Key);
+			if (Arr.Num() == 0) { Order.Add(Key); }
+			Arr.Add(i);
+		}
+		for (const FIntVector& Key : Order)
+		{
+			const TArray<int32>& Units = ByEntrance[Key];
+			const uint32 Hash = static_cast<uint32>((Key.X * 73856093) ^ (Key.Y * 19349663));
+			Entrances.Add(Units[Hash % static_cast<uint32>(Units.Num())]);
 		}
 	}
 	const bool bAll = (MaxResidents <= 0);
