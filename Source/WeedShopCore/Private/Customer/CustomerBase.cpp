@@ -452,7 +452,7 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	LastLaterParkVisitDay = -1;
 	PendingParkVisitSlot = 0;
 	ActiveParkVisitSlot = 0;
-	ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 16.f);
+	ResidentWakeDelay = ComputeResidentGoalThinkDelay(30.f, 240.f); // bij spawn ook gespreid thuis blijven
 	RoamTimer = ComputeResidentGoalThinkDelay(0.6f, 4.8f);
 	bAtHomeInside = true;
 	bEmergingFromHome = false;
@@ -2542,7 +2542,9 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	{
 		if (ResidentWakeDelay < 0.f)
 		{
-			ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 18.f);
+			// Veel langere, per-bewoner gespreide wake-delay: 's morgens blijven ze eerst thuis en komen ze
+			// geleidelijk naar buiten (niet allemaal binnen ~18s op de stoep).
+			ResidentWakeDelay = ComputeResidentGoalThinkDelay(30.f, 240.f);
 		}
 		ResidentWakeDelay = FMath::Max(0.f, ResidentWakeDelay - DeltaSeconds);
 		if (ResidentWakeDelay > 0.f)
