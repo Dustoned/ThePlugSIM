@@ -63,7 +63,7 @@ namespace
 		}
 	}
 
-	FString CatName(int32 Cat)
+	FString StoreCatName(int32 Cat)
 	{
 		switch (Cat)
 		{
@@ -231,7 +231,7 @@ void UStoreWidget::FillBody()
 		const bool bActive = (Cat == ActiveCat);
 		const FLinearColor Col = bActive ? FLinearColor(0.22f, 0.5f, 0.3f) : FLinearColor(0.14f, 0.16f, 0.22f);
 		const int32 C = Cat;
-		TabRow->AddChildToHorizontalBox(StoreBtn(WidgetTree, CatName(Cat), Col, 12,
+		TabRow->AddChildToHorizontalBox(StoreBtn(WidgetTree, StoreCatName(Cat), Col, 12,
 			[this, C]() { ActiveCat = C; LastSig.Reset(); }))->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
 	}
 
