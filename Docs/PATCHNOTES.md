@@ -1,4 +1,56 @@
 PATCH NOTES
+Version 1.5.0 — 10 juni 2026
+
+Korte intro:
+De stad leeft nu écht. Bewoners lopen voortaan hun huis in en uit — rijtjeshuizen door de
+voordeur, flatbewoners de trap op en af naar hun eigen verdieping (geen teleport-trucs meer).
+Daarbij een echte kluis met progressie, hardere overvallen, en een hoop kleine verbeteringen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+NEW FEATURES
+
++ Levende stad — bewoners lopen écht naar binnen/buiten  (de hoofdfeature)
+   • 's Morgens komen ze hun eigen voordeur uit de straat op; 's avonds lopen ze weer netjes
+     naar binnen.
+   • Flatgebouwen: bewoners wonen op verschillende verdiepingen en lopen de trap op/af naar hun
+     eigen unit. Over de dagen komt iedereen met een deur een keer naar buiten (rotatie).
+   • Alles via de navmesh i.p.v. teleporteren — netjes door de deuropening, geen ploppen meer.
+
++ Echte kluis (safe) met progressie
+  Stash een deel van je cash zodat je 't niet kwijt bent bij een overval. Vier tiers
+  (Small → Vault) met oplopende capaciteit, verspreid over de progressie. Koop 'm in de
+  Furniture-categorie; bedienen via de nieuwe Safe-tab (cash ↔ kluis).
+
++ Hardere overval
+  Bij een overval pakken ze niet alleen cash, maar halen ze ook je actieve appartement leeg:
+  alle groeiende planten, droogrekken en machines. Je kluis + bank blijven veilig — dus stash!
+
++ Klanten vragen de nieuwe concentraten
+  Moonrocks, rosin en isolator worden nu ook door klanten gevraagd (telefoon + in-person deal),
+  met dezelfde nette tier-schaling en level-gating als de rest.
+
++ Bed = waar je woont
+  Slaap je in een bed in een ander gekocht appartement, dan wordt dat automatisch je woonplek
+  (waar je spawnt + waar een overval toeslaat) — zonder teleport.
+
+QUALITY OF LIFE & FIXES
+
+• Dubbele entree-deuren sluiten nu flush, op volle hoogte (geen gaten meer), en beide bladen
+  openen dezelfde kant op.
+• Cash zie je nu in de hotbar én in de hand-preview (hoeveel je vasthebt).
+• Droogrek toont duidelijke kwaliteit-info: tijd over, voortgang, en live kwaliteitsverlies als
+  'ie te lang blijft hangen.
+• Plaatsen kan alleen nog binnen in je eigen home (niet in de gang), en je kunt spullen niet
+  meer op elkaar stapelen (behalve wat echt mount-baar is, zoals rekken/plafondlampen).
+• Deuren gaan niet meer vanzelf open voor jou (open zelf met F); NPC's openen alleen wat ze
+  nodig hebben — niet jouw huis.
+• De CO-OP-knop staat nu netjes in het hoofdmenu i.p.v. los rechtsboven.
+• NPC-beweging een stuk vloeiender: minder rondjes-draaien/opbundelen, en het centrum loopt
+  niet meer vol (doorgaand verkeer routeert er netjes omheen).
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.4.0 — 8 juni 2026
 
 Korte intro:
