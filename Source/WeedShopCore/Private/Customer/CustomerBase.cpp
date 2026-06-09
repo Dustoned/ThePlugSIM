@@ -452,7 +452,7 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 	LastLaterParkVisitDay = -1;
 	PendingParkVisitSlot = 0;
 	ActiveParkVisitSlot = 0;
-	ResidentWakeDelay = ComputeResidentGoalThinkDelay(30.f, 240.f); // bij spawn ook gespreid thuis blijven
+	ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 16.f);
 	RoamTimer = ComputeResidentGoalThinkDelay(0.6f, 4.8f);
 	bAtHomeInside = true;
 	bEmergingFromHome = false;
@@ -474,26 +474,10 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 
 bool ACustomerBase::ShouldShowOnCityMap() const
 {
-	if (IsHidden())
-	{
-		return false;
-	}
-	if (!bResident)
-	{
-		return true;
-	}
-	if (bApptActive && !bApptComeToPlayer && bApptArrived)
-	{
-		return true;
-	}
-	if (bAtHomeInside || bEmergingFromHome)
-	{
-		return false;
-	}
-	if (bEnteringHome && HomeEntryStage > 0)
-	{
-		return false;
-	}
+	// Niet-bewoners: tonen tenzij echt verborgen.
+	if (!bResident) { return !IsHidden(); }
+	// Bewoners: ALTIJD op de map - thuis op hun huis-positie (ook al zijn ze in 3D verborgen binnen),
+	// buiten op straat. Zo zie je waar iedereen woont/loopt i.p.v. dat ze pas op de stoep "verschijnen".
 	return true;
 }
 
@@ -2542,9 +2526,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	{
 		if (ResidentWakeDelay < 0.f)
 		{
-			// Veel langere, per-bewoner gespreide wake-delay: 's morgens blijven ze eerst thuis en komen ze
-			// geleidelijk naar buiten (niet allemaal binnen ~18s op de stoep).
-			ResidentWakeDelay = ComputeResidentGoalThinkDelay(30.f, 240.f);
+			ResidentWakeDelay = ComputeResidentGoalThinkDelay(0.3f, 18.f);
 		}
 		ResidentWakeDelay = FMath::Max(0.f, ResidentWakeDelay - DeltaSeconds);
 		if (ResidentWakeDelay > 0.f)
