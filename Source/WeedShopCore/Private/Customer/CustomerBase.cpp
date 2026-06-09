@@ -2365,6 +2365,14 @@ int32 ACustomerBase::PickResidentParkVisitSlot(ACityGenerator* City, const UDayC
 		return 0;
 	}
 
+	// Park-crowd-cap: ga NIET naar het park als het al druk is. Anders proppen te veel bewoners zich in het
+	// kleine centrale park -> RVO-gridlock -> ze staan allemaal vast/tollen. Te druk -> roam gewoon door en
+	// probeer later (als er weer ruimte is). Zo blijft het park een rustige doorstroom i.p.v. een prop.
+	if (City && CountResidentCrowdNear(City->GetCityCenter(), 700.f) >= 8)
+	{
+		return 0;
+	}
+
 	const bool bNeedsMorning = LastMorningParkVisitDay != Today;
 	const bool bNeedsLater = LastLaterParkVisitDay != Today;
 	if (!bNeedsMorning && !bNeedsLater)
