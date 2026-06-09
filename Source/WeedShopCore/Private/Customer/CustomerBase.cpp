@@ -474,25 +474,29 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 
 bool ACustomerBase::ShouldShowOnCityMap() const
 {
-	if (IsHidden())
-	{
-		return false;
-	}
 	if (!bResident)
 	{
-		return true;
+		return !IsHidden();
+	}
+	// Binnen: niet op de map (ze staan niet 'op straat').
+	if (bAtHomeInside)
+	{
+		return false;
 	}
 	if (bApptActive && !bApptComeToPlayer && bApptArrived)
 	{
 		return true;
 	}
-	if (bAtHomeInside || bEmergingFromHome)
+	// 's Morgens uit huis lopen: tonen, zodat de marker ze al vanaf hun huis volgt (niet pas op de stoep).
+	if (bEmergingFromHome)
 	{
-		return false;
+		return true;
 	}
-	if (bEnteringHome && HomeEntryStage > 0)
+	// Naar huis lopen: tonen zolang 'ie in de buurt van z'n eigen huis is (de nette aanloop); de verre
+	// transit door het centrum verbergen we, anders lijkt iedereen-naar-huis op een cluster.
+	if (bEnteringHome)
 	{
-		return false;
+		return FVector::Dist2D(GetActorLocation(), HomeFrontSpot) < 1800.f;
 	}
 	return true;
 }
@@ -890,6 +894,45 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 	if (!bEnteringHome)
 	{
 		return false;
+	}
+
+	// Rijtjeshuis (geen hal): loop ECHT via de navmesh naar binnen - de deur bridge't de navmesh nu, dus
+	// geen stages/slide meer. Alleen bij echte pathing-stuck teleporteren we naar binnen (verborgen), nooit
+	// zichtbaar in de voortuin/op straat.
+	if (!bHasHomeHall)
+	{
+		const FVector Dest = HomeInteriorPos + FVector(0.f, 0.f, 4.f);
+		const FVector Cur = GetActorLocation();
+		auto FinishInside = [&]()
+		{
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			bEnteringHome = false;
+			bAtHomeInside = true;
+			SetActorHiddenInGame(true);
+			SetActorEnableCollision(false);
+			SetActorLocation(Dest);
+			HomeEntryStuckTimer = 0.f;
+			bHasResidentPrevMoveLoc = false;
+		};
+		if (FVector::Dist2D(Cur, Dest) < 130.f && FMath::Abs(Cur.Z - Dest.Z) < 220.f)
+		{
+			FinishInside();
+			return true;
+		}
+		const bool bMoveStarted = WalkTo(Dest);
+		float MoveDelta = 9999.f;
+		if (bHasResidentPrevMoveLoc) { MoveDelta = FVector::Dist2D(Cur, ResidentPrevMoveLoc); }
+		ResidentPrevMoveLoc = Cur;
+		bHasResidentPrevMoveLoc = true;
+		bool bPathMoving = bMoveStarted;
+		if (AAIController* AI = Cast<AAIController>(GetController()))
+		{
+			bPathMoving = bMoveStarted && (AI->GetMoveStatus() == EPathFollowingStatus::Moving);
+		}
+		if (!bPathMoving || MoveDelta < 4.f) { HomeEntryStuckTimer += DeltaSeconds; }
+		else { HomeEntryStuckTimer = 0.f; }
+		if (HomeEntryStuckTimer >= 4.f) { FinishInside(); }
+		return true;
 	}
 
 	const bool bFrontStage = (HomeEntryStage == 0);

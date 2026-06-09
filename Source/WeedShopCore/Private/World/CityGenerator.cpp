@@ -591,6 +591,31 @@ void ACityGenerator::VerifyCityNavigationCoverage()
 		return;
 	}
 
+	// NAVDIAG (tijdelijk): kan een bewoner van BINNEN naar z'n voordeur lopen? Log voor de eerste paar rijtjeshuizen.
+	if (NavCoverageAttempts >= 1)
+	{
+		int32 Logged = 0;
+		for (const FApartmentHome& H : ApartmentHomes)
+		{
+			if (H.bApartment) { continue; }
+			FNavLocation In, Fr;
+			const FVector Ext(220.f, 220.f, 500.f);
+			const bool bInNav = Nav->ProjectPointToNavigation(H.InteriorPos, In, Ext);
+			const bool bFrNav = Nav->ProjectPointToNavigation(H.DoorPos, Fr, Ext);
+			FString PathInfo = TEXT("NO-PATH");
+			if (bInNav && bFrNav)
+			{
+				if (UNavigationPath* P = UNavigationSystemV1::FindPathToLocationSynchronously(W, In.Location, Fr.Location))
+				{
+					PathInfo = FString::Printf(TEXT("valid=%d partial=%d len=%.0f"), P->IsValid() ? 1 : 0, P->IsPartial() ? 1 : 0, P->GetPathLength());
+				}
+			}
+			UE_LOG(LogWeedShop, Warning, TEXT("NAVDIAG house#%s interiorOnNav=%d (snapDist=%.0f) frontOnNav=%d path[in->front]=%s"),
+				*H.Number, bInNav ? 1 : 0, bInNav ? FVector::Dist(In.Location, H.InteriorPos) : -1.f, bFrNav ? 1 : 0, *PathInfo);
+			if (++Logged >= 6) { break; }
+		}
+	}
+
 	TArray<FVector> Samples;
 	TArray<bool> EdgeSample;
 	const float Pitch = BlockSize + RoadWidth;
@@ -1414,7 +1439,7 @@ ACityDoor* ACityGenerator::BuildHouseUnitInterior(float UX, float UY, float D, f
 	const float FloorH = WallH * 0.5f;
 	const float T = 14.f;
 	const float HD = D * 0.5f, HL = L * 0.5f;
-	const float DoorW = 95.f, DoorH = 205.f;
+	const float DoorW = 130.f, DoorH = 205.f; // breder: na navmesh-erosie (agent r~34) blijft genoeg over om binnen<->buiten te verbinden
 	const FLinearColor FloorC(0.32f, 0.30f, 0.27f);
 	const FLinearColor StepC = Body * 0.7f;
 	const FLinearColor DoorC(0.30f, 0.20f, 0.12f);
