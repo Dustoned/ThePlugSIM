@@ -140,9 +140,10 @@ FText ACityDoor::GetInteractionPrompt_Implementation() const
 void ACityDoor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	// Open als: handmatig geopend, OF een NPC staat ervoor (bewoner komt naar buiten), OF (bij een
-	// niet-vergrendelde deur) een speler staat ervoor. Een vergrendelde deur opent niet voor de speler.
-	const bool bEffectiveOpen = bOpen || (NpcNear > 0) || (!bLocked && OtherNear > 0);
+	// Geen auto-open meer: de speler opent/sluit zelf met F (bOpen). De ENIGE auto-open is een NPC bij z'n
+	// EIGEN bewoner-deur (de thuiskomende/vertrekkende bewoner) - andere deuren gaan niet vanzelf open.
+	const bool bResidentDoor = bLocked && !bForSale; // bewoner-deur (huis van een NPC)
+	const bool bEffectiveOpen = bOpen || (bResidentDoor && NpcNear > 0);
 	const float Target = bEffectiveOpen ? -95.f : 0.f;
 	CurAngle = FMath::FInterpTo(CurAngle, Target, DeltaSeconds, 7.f);
 	if (Hinge) { Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f)); }
