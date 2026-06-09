@@ -401,23 +401,45 @@ void UDryingRackWidget::UpdateProgress()
 		const int32 Idx = RowEntryIndex[r];
 		if (!Entries.IsValidIndex(Idx)) { continue; }
 		const FDryEntry& E = Entries[Idx];
-		if (RowBars.IsValidIndex(r) && RowBars[r])
+		// Bepaal status + kleur. Voor klaar-batches: grace-aftelling, daarna het live kwaliteitsverlies.
+		FString Txt; FLinearColor Col; float BarPct; FLinearColor BarCol;
+		if (E.bDone)
 		{
-			RowBars[r]->SetPercent(E.bDone ? 1.f : FMath::Clamp(E.Elapsed / Total, 0.f, 1.f));
-		}
-		if (RowStatus.IsValidIndex(r) && RowStatus[r])
-		{
-			FString Txt; FLinearColor Col;
-			if (E.bDone)
+			BarPct = 1.f;
+			if (Rack->IsSealed())
 			{
-				if (E.OverTime > 60.f) { Txt = TEXT("Collect - quality dropping!"); Col = FLinearColor(1.f, 0.55f, 0.4f); }
-				else { Txt = TEXT("Ready"); Col = FLinearColor(0.5f, 1.f, 0.6f); }
+				Txt = TEXT("Ready - sealed (no loss)"); Col = FLinearColor(0.5f, 1.f, 0.6f); BarCol = FLinearColor(0.4f, 0.95f, 0.5f);
 			}
 			else
 			{
-				Txt = FmtClock(Total - E.Elapsed);
-				Col = FLinearColor(0.85f, 0.88f, 0.8f);
+				const float Until = Rack->SecondsUntilDecay(E.OverTime);
+				if (Until > 0.f)
+				{
+					Txt = FString::Printf(TEXT("Ready - quality safe for %s"), *FmtClock(Until));
+					Col = FLinearColor(0.6f, 1.f, 0.7f); BarCol = FLinearColor(0.4f, 0.95f, 0.5f);
+				}
+				else
+				{
+					const float Loss = Rack->OverdryLossFrac(E.OverTime);
+					const float EffQ = E.Quality * (1.f - Loss);
+					Txt = FString::Printf(TEXT("Drying out!  -%.0f%% quality  (now %.0f%%)"), Loss * 100.f, EffQ);
+					Col = FLinearColor(1.f, 0.5f, 0.38f); BarCol = FLinearColor(0.95f, 0.45f, 0.3f);
+				}
 			}
+		}
+		else
+		{
+			BarPct = FMath::Clamp(E.Elapsed / Total, 0.f, 1.f);
+			Txt = FString::Printf(TEXT("%s left  (%.0f%%)"), *FmtClock(Total - E.Elapsed), BarPct * 100.f);
+			Col = FLinearColor(0.85f, 0.88f, 0.8f); BarCol = FLinearColor(0.85f, 0.7f, 0.25f);
+		}
+		if (RowBars.IsValidIndex(r) && RowBars[r])
+		{
+			RowBars[r]->SetPercent(BarPct);
+			RowBars[r]->SetFillColorAndOpacity(BarCol);
+		}
+		if (RowStatus.IsValidIndex(r) && RowStatus[r])
+		{
 			RowStatus[r]->SetText(FText::FromString(Txt));
 			RowStatus[r]->SetColorAndOpacity(FSlateColor(Col));
 		}

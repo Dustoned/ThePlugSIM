@@ -65,6 +65,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Dry") float GetDryTotalSeconds() const { return DrySeconds(); }
 	int32 NumReady() const { int32 R = 0; for (const FDryEntry& E : Entries) { if (E.bDone) { ++R; } } return R; }
 
+	// Live over-dry-info voor de UI (gespiegeld aan de collect-formule).
+	float OverdryLossFrac(float OverTime) const;     // 0..max kwaliteitsverlies-fractie (0 als verzegeld)
+	float SecondsUntilDecay(float OverTime) const;   // sec tot de kwaliteit begint te zakken (0 = al bezig)
+	bool IsSealed() const { return bUpSeal; }
+
 	// Server-acties vanuit het droogrek-scherm (afstand-check gebeurt in de PhoneClientComponent).
 	// Hangt een natte stapel op om te drogen. Geeft het aantal opgehangen gram terug (0 = vol/niet nat).
 	int32 ServerHangWet(FName WetId, int32 Qty, float Thc, float QualPct);

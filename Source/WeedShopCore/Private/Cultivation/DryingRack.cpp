@@ -160,6 +160,18 @@ bool ADryingRack::GetRackDef(FName Tier, int32& OutCapacity, float& OutDrySecond
 int32 ADryingRack::Capacity() const { int32 C; float D; GetRackDef(RackTier, C, D); return C; }
 float ADryingRack::DrySeconds() const { int32 C; float D; GetRackDef(RackTier, C, D); return D * UpSpeedMult; }
 
+float ADryingRack::OverdryLossFrac(float OverTime) const
+{
+	if (bUpSeal) { return 0.f; }
+	return FMath::Clamp((OverTime - DryGraceSeconds) / DryDecayWindow, 0.f, 1.f) * DryMaxLoss;
+}
+
+float ADryingRack::SecondsUntilDecay(float OverTime) const
+{
+	if (bUpSeal) { return 1.0e9f; } // verzegeld -> nooit
+	return FMath::Max(0.f, DryGraceSeconds - OverTime);
+}
+
 void ADryingRack::RecomputeUpgrades(float DeltaSeconds)
 {
 	UpScanTimer -= DeltaSeconds;
