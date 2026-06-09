@@ -476,8 +476,12 @@ bool ACustomerBase::ShouldShowOnCityMap() const
 {
 	// Niet-bewoners: tonen tenzij echt verborgen.
 	if (!bResident) { return !IsHidden(); }
-	// Bewoners: ALTIJD op de map - thuis op hun huis-positie (ook al zijn ze in 3D verborgen binnen),
-	// buiten op straat. Zo zie je waar iedereen woont/loopt i.p.v. dat ze pas op de stoep "verschijnen".
+	// Thuis: toon op de map op hun eigen huis (ook al zijn ze in 3D verborgen binnen).
+	if (bAtHomeInside) { return true; }
+	// In OVERGANG (huis in-/uitlopen, of naar huis om te despawnen): NIET tonen. Anders zie je iedereen
+	// tegelijk door het centrum naar huis transiteren -> lijkt op een cluster. Pas tonen als ze echt roamen.
+	if (bEmergingFromHome || bEnteringHome) { return false; }
+	// Verder gewoon roamend: tonen op straat.
 	return true;
 }
 
