@@ -829,7 +829,7 @@ bool ACustomerBase::TickResidentHomeExit(float DeltaSeconds)
 		}
 		else
 		{
-			SetActorLocation(MakeResidentStandingLocation(HomeFrontSpot));
+			SetActorLocation(MakeResidentStandingLocation(GetResidentHomeEntrySpot())); // verschijn bij eigen voordeur/voortuin, niet op de stoep
 			bEmergingFromHome = false;
 			bLeavingHomeRoute = FVector::Dist2D(HomeFrontSpot, HomeExitSidewalkSpot) >= 520.f;
 			bHasRoamGoal = false;
