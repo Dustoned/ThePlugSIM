@@ -619,6 +619,39 @@ void ACustomerSpawner::CheckResidentRotation()
 		ApplyDayNightPopulation(NightNow == 1);
 	}
 
+	// Geleidelijke dag-bijvulling: spawn de resterende bewoners NIET in één frame (dat gaf een burst -> ze
+	// emergen tegelijk en gaan samen tollen), maar een paar per ~0.5s tot MaxResidents. Zo verschijnen ze
+	// gespreid na de dag/nacht-switch.
+	if (NightNow == 0)
+	{
+		const int32 DayTarget = (MaxResidents > 0) ? MaxResidents : EligibleHomes.Num();
+		if (PhysicalHomes.Num() < DayTarget && World->GetTimeSeconds() >= NextDayRefillTime)
+		{
+			ACityGenerator* City = nullptr;
+			for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
+			if (City)
+			{
+				TArray<int32> ActNew, ActOld;
+				for (int32 Home : EligibleHomes)
+				{
+					if (PhysicalHomes.Contains(Home)) { continue; }
+					if (ActivatedEverHomes.Contains(Home)) { ActOld.Add(Home); } else { ActNew.Add(Home); }
+				}
+				int32 Batch = 0;
+				while (PhysicalHomes.Num() < DayTarget && Batch < 3 && (ActNew.Num() + ActOld.Num()) > 0)
+				{
+					TArray<int32>& Pool = (ActNew.Num() > 0) ? ActNew : ActOld;
+					const int32 Idx = FMath::RandRange(0, Pool.Num() - 1);
+					const int32 Home = Pool[Idx]; Pool.RemoveAtSwap(Idx);
+					SpawnOneResident(City, Home, false);
+					++Batch;
+				}
+				ResidentHomeIndices = PhysicalHomes;
+				NextDayRefillTime = World->GetTimeSeconds() + 0.5f;
+			}
+		}
+	}
+
 	// Dagelijkse rotatie (nieuwe gezichten).
 	if (RotatePerDay > 0)
 	{
@@ -678,7 +711,9 @@ void ACustomerSpawner::ApplyDayNightPopulation(bool bNight)
 	}
 	else
 	{
-		// Dag: crowd weer aanvullen tot MaxResidents (nieuwe gezichten eerst), normale mix.
+		// Dag: crowd weer aanvullen tot MaxResidents (nieuwe gezichten eerst). NIET alles in één frame: alleen
+		// een klein begin-batchje hier; de rest vult CheckResidentRotation geleidelijk bij (geen spawn-burst ->
+		// geen samen-tollen na de dag/nacht-switch).
 		const int32 DayTarget = (MaxResidents > 0) ? MaxResidents : EligibleHomes.Num();
 		TArray<int32> ActNew, ActOld;
 		for (int32 Home : EligibleHomes)
@@ -686,13 +721,16 @@ void ACustomerSpawner::ApplyDayNightPopulation(bool bNight)
 			if (PhysicalHomes.Contains(Home)) { continue; }
 			if (ActivatedEverHomes.Contains(Home)) { ActOld.Add(Home); } else { ActNew.Add(Home); }
 		}
-		while (PhysicalHomes.Num() < DayTarget && (ActNew.Num() + ActOld.Num()) > 0)
+		int32 Batch = 0;
+		while (PhysicalHomes.Num() < DayTarget && Batch < 6 && (ActNew.Num() + ActOld.Num()) > 0)
 		{
 			TArray<int32>& Pool = (ActNew.Num() > 0) ? ActNew : ActOld;
 			const int32 Idx = FMath::RandRange(0, Pool.Num() - 1);
 			const int32 Home = Pool[Idx]; Pool.RemoveAtSwap(Idx);
 			SpawnOneResident(City, Home, false);
+			++Batch;
 		}
+		NextDayRefillTime = World->GetTimeSeconds() + 0.5f;
 	}
 	ResidentHomeIndices = PhysicalHomes;
 }
