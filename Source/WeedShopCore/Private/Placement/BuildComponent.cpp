@@ -258,6 +258,7 @@ void UBuildComponent::SpawnPreview(const FPlaceableDef& Def, FName ItemId)
 	else if (Def.bIsSink)       { A = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM); }
 	else if (Def.bIsLamp)       { A = W->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM); }
 	else if (Def.bIsAtm)        { A = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM); }
+	else if (Def.bIsSafe)       { AAtm* S = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM); if (S) { S->InitAsSafe(AAtm::SafeCapacityForItem(ItemId)); } A = S; }
 	else                        { if (APlaceableProp* P = Cast<APlaceableProp>(Deferred(APlaceableProp::StaticClass()))) { P->ItemId = ItemId; P->FinishSpawning(TM); A = P; } }
 
 	if (!A) { return; }
@@ -986,6 +987,14 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		// Geldautomaat: spawn een interactieve AAtm.
 		World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rotation, Location), SpawnParams);
+	}
+	else if (Def.bIsSafe)
+	{
+		// Kluis: AAtm in safe-modus (zelfde UI, eigen capaciteit). Veilig bij een overval.
+		if (AAtm* S = World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rotation, Location), SpawnParams))
+		{
+			S->InitAsSafe(AAtm::SafeCapacityForItem(Def.ItemId));
+		}
 	}
 	else if (Def.bIsLamp)
 	{

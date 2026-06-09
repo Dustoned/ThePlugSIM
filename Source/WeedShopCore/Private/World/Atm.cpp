@@ -7,6 +7,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Placement/PropMeshKit.h"
 #include "Engine/StaticMesh.h"
+#include "Net/UnrealNetwork.h"
 
 AAtm::AAtm()
 {
@@ -54,5 +55,23 @@ void AAtm::Interact_Implementation(APawn* InstigatorPawn)
 
 FText AAtm::GetInteractionPrompt_Implementation() const
 {
+	if (bSafeMode) { return NSLOCTEXT("WeedShop", "SafePrompt", "Open safe - stash cash (robbery-proof)"); }
 	return NSLOCTEXT("WeedShop", "AtmPrompt", "Use ATM - deposit cash (bank)");
+}
+
+void AAtm::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AAtm, bSafeMode);
+	DOREPLIFETIME(AAtm, SafeCapacityCents);
+}
+
+int64 AAtm::SafeCapacityForItem(FName ItemId)
+{
+	const FString S = ItemId.ToString();
+	if (S == TEXT("Safe_Small"))  { return 1000000;   } // EUR 10.000
+	if (S == TEXT("Safe_Medium")) { return 5000000;   } // EUR 50.000
+	if (S == TEXT("Safe_Large"))  { return 25000000;  } // EUR 250.000
+	if (S == TEXT("Safe_Vault"))  { return 100000000; } // EUR 1.000.000
+	return 0;
 }

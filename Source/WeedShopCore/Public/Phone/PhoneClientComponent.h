@@ -386,6 +386,9 @@ public:
 	int32 GetActiveHome() const { return ActiveHome; }
 	// Wereldlocatie van je huidige woning (voordeur) — voor de compass-home-marker. False = geen woning.
 	bool GetActiveHomeLocation(FVector& OutWorld) const;
+
+	// Max kluis-capaciteit (cents) over alle geplaatste safes — bepaalt hoeveel cash je veilig kunt stashen.
+	int64 GetSafeCapCents() const;
 	void RestoreProperty(const TArray<int32>& InOwned, int32 InActive);
 
 	// --- Bezorg-doel: welk eigen huis krijgt de levering ---

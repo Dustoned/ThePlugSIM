@@ -46,6 +46,7 @@
 #include "World/StoreCounter.h"
 #include "Progression/LevelComponent.h"
 #include "World/HeatComponent.h" // huur-schuld -> heat
+#include "World/Atm.h"           // kluis-capaciteit scannen
 #include "UI/HandInfoWidget.h"
 #include "UI/WeedToast.h"
 #include "Cultivation/DryingRack.h"
@@ -2146,6 +2147,19 @@ void UPhoneClientComponent::ServerDeposit_Implementation(int64 CashAmount)
 	if (Amt > 0) { Econ->Deposit(Amt); }
 }
 
+int64 UPhoneClientComponent::GetSafeCapCents() const
+{
+	int64 MaxCap = 0;
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<AAtm> It(W); It; ++It)
+		{
+			if (It->IsSafe()) { MaxCap = FMath::Max(MaxCap, It->GetSafeCapacityCents()); }
+		}
+	}
+	return MaxCap;
+}
+
 void UPhoneClientComponent::RequestSafeMove(int64 Cents, bool bToSafe) { ServerSafeMove(Cents, bToSafe); }
 
 void UPhoneClientComponent::ServerSafeMove_Implementation(int64 Cents, bool bToSafe)
@@ -2154,7 +2168,10 @@ void UPhoneClientComponent::ServerSafeMove_Implementation(int64 Cents, bool bToS
 	if (!Econ) { return; }
 	if (bToSafe)
 	{
-		int64 Amt = (Cents <= 0) ? Econ->GetCashCents() : Cents; // max = al je on-hand cash
+		// Klamp op de vrije kluis-ruimte: cap (grootste geplaatste safe) min wat er al in zit.
+		const int64 Room = FMath::Max<int64>(0, GetSafeCapCents() - Econ->GetSafeCents());
+		int64 Amt = (Cents <= 0) ? Econ->GetCashCents() : Cents;
+		Amt = FMath::Min(Amt, Room);
 		if (Amt > 0) { Econ->DepositToSafe(Amt); }
 	}
 	else

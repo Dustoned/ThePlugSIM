@@ -14,6 +14,11 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Table"),    TEXT("Table"),    TEXT("/Engine/BasicShapes/Cube.Cube"),         FVector(1.2f, 0.8f, 0.8f),  FVector(60.f, 40.f, 40.f), false, 6000 },
 		// ATM: spawnt een AAtm (interactief) en mag ook BUITEN geplaatst worden.
 		{ TEXT("Atm"), TEXT("ATM"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.78f, 0.60f, 1.62f), FVector(39.f, 30.f, 81.f), false, 0, /*bIsAtm*/ true, /*bAllowOutdoors*/ true },
+		// Kluizen: spawnen AAtm in safe-modus. Progressie: grotere kluis = meer cash veilig (cap in Atm::SafeCapacityForItem).
+		{ TEXT("Safe_Small"),  TEXT("Small safe"),  TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.78f, 0.60f, 1.62f), FVector(39.f, 30.f, 81.f), false, 40000,   false, false, false, false, false, false, false, false, false, false, /*bIsSafe*/ true },
+		{ TEXT("Safe_Medium"), TEXT("Medium safe"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.78f, 0.60f, 1.62f), FVector(39.f, 30.f, 81.f), false, 200000,  false, false, false, false, false, false, false, false, false, false, /*bIsSafe*/ true },
+		{ TEXT("Safe_Large"),  TEXT("Large safe"),  TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.78f, 0.60f, 1.62f), FVector(39.f, 30.f, 81.f), false, 1000000, false, false, false, false, false, false, false, false, false, false, /*bIsSafe*/ true },
+		{ TEXT("Safe_Vault"),  TEXT("Vault"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.78f, 0.60f, 1.62f), FVector(39.f, 30.f, 81.f), false, 4000000, false, false, false, false, false, false, false, false, false, false, /*bIsSafe*/ true },
 		// Droogrekken: spawnen een ADryingRack (RackTier = item-id). Binnen plaatsen.
 		{ TEXT("DryRack_Cheap"), TEXT("Cheap drying rack"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.2f, 0.3f, 1.5f), FVector(60.f, 15.f, 75.f), false, 0, false, false, /*bIsDryRack*/ true, false, false, false, false, /*bIsWallMount*/ true },
 		{ TEXT("DryRack_Std"),   TEXT("Drying rack"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.4f, 0.3f, 1.6f), FVector(70.f, 15.f, 80.f), false, 0, false, false, true, false, false, false, false, /*bIsWallMount*/ true },

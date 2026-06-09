@@ -111,7 +111,8 @@ void UAtmWidget::FillBody()
 	// Saldo-regels (altijd zichtbaar).
 	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Cash (black):  EUR %.2f"), Econ->GetBalanceEuros()), 15, FLinearColor(0.95f, 0.9f, 0.5f)), FMargin(0, 0, 0, 2));
 	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Bank (white):  EUR %.2f"), Econ->GetBankEuros()), 15, FLinearColor(0.55f, 0.95f, 1.f)), FMargin(0, 0, 0, 2));
-	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Safe (secure): EUR %.2f"), Econ->GetSafeEuros()), 15, FLinearColor(0.6f, 1.f, 0.7f)), FMargin(0, 0, 0, 8));
+	const int64 SafeCap = Ph ? Ph->GetSafeCapCents() : 0;
+	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Safe (secure): EUR %.2f / %.0f"), Econ->GetSafeEuros(), SafeCap / 100.f), 15, FLinearColor(0.6f, 1.f, 0.7f)), FMargin(0, 0, 0, 8));
 
 	// Tabs.
 	static const TCHAR* TabNames[3] = { TEXT("Deposit"), TEXT("Send to friend"), TEXT("Safe") };
