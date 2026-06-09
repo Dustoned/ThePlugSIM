@@ -1680,11 +1680,6 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 	const FVector Center = City->GetCityCenter();
 	const float Pitch = FMath::Max(100.f, City->GetPitch());
 	const float MinTrip = FMath::Clamp(Pitch * 0.95f, 1400.f, 3200.f); // langere trips voor ze stoppen/omdraaien
-	// Huidige loop-richting: het volgende doel ligt het liefst VOOR de bewoner (doorlopen) i.p.v. erachter
-	// (teruglopen). Zo maken ze echte rondes over de map i.p.v. stukje-lopen-omdraaien.
-	FVector RoamForward2D = GetActorForwardVector();
-	RoamForward2D.Z = 0.f;
-	const bool bHasForward = RoamForward2D.Normalize();
 	const int32 GridR = FMath::Max(1, City->GetGridRadiusClamped());
 	const int32 StartIndex = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 31) % StreetStops.Num()));
 	const int32 AngleSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) * 13 + static_cast<int64>(RouteLeg) * 71 + static_cast<int64>(ResidentStreetLegsToday) * 29) % 360));
@@ -1790,20 +1785,10 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 
 			const int32 NoiseSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 131 + static_cast<int64>(Index) * 977) % 1000));
 			const float CenterPenalty = bCenterCandidate ? Pitch * (5.0f + static_cast<float>(CenterCrowd) * 0.9f) : 0.f;
-			// Voorwaartse-continuatie: doelen VOOR de bewoner krijgen een bonus, doelen erachter een straf ->
-			// ze lopen door i.p.v. terug.
-			float ForwardAlign = 0.f;
-			if (bHasForward)
-			{
-				FVector ToCand = Candidate - Current;
-				ToCand.Z = 0.f;
-				if (ToCand.Normalize()) { ForwardAlign = FVector::DotProduct(ToCand, RoamForward2D); }
-			}
 			const float Score = TravelDist * 0.55f
 				+ CenterDist * 1.25f
 				+ FMath::Max(0.f, MapRadius - DistrictDist) * 1.45f
 				+ Alignment * Pitch * 0.85f
-				+ ForwardAlign * Pitch * 1.35f
 				- static_cast<float>(Crowd) * 2100.f
 				- CenterPenalty
 				+ static_cast<float>(NoiseSeed) * 0.25f;
