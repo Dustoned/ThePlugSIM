@@ -372,6 +372,9 @@ public:
 	bool IsActiveHome(int32 HomeIndex) const { return ActiveHome == HomeIndex; }
 	void BuyProperty(int32 HomeIndex) { ServerBuyProperty(HomeIndex); }
 	void SetActiveHome(int32 HomeIndex) { ServerSetActiveHome(HomeIndex); }
+	// Zet je woon-plek naar de GEKOCHTE woning waarin deze locatie (bv. een bed) valt — zónder teleport.
+	// Server-side; aangeroepen als je in een bed slaapt zodat "ik woon hier" automatisch meeschuift.
+	void SetActiveHomeFromLocation(const FVector& WorldLoc);
 	// Verkoop een gekocht pand terug (~65% van de koopprijs). Starter-woning is niet verkoopbaar.
 	void SellProperty(int32 HomeIndex) { ServerSellProperty(HomeIndex); }
 	int32 GetHomeSellValueCents(int32 HomeIndex) const; // 0 = niet verkoopbaar (starter/onbekend)

@@ -514,6 +514,31 @@ void UPhoneClientComponent::ServerSetActiveHome_Implementation(int32 HomeIndex)
 	ApplyLocalDoors();
 }
 
+void UPhoneClientComponent::SetActiveHomeFromLocation(const FVector& WorldLoc)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	ACityGenerator* City = FindCity();
+	if (!City) { return; }
+	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	// Zoek een GEKOCHTE woning waarvan de kamer-bounds deze locatie bevatten (bv. het bed staat erin).
+	for (int32 Idx : OwnedHomes)
+	{
+		if (!Homes.IsValidIndex(Idx)) { continue; }
+		const FApartmentHome& H = Homes[Idx];
+		const FVector D = WorldLoc - H.InteriorPos;
+		if (FMath::Abs(D.X) <= H.RoomHalf.X + 120.f && FMath::Abs(D.Y) <= H.RoomHalf.Y + 120.f)
+		{
+			if (ActiveHome != Idx)
+			{
+				ActiveHome = Idx; // GEEN teleport: je bent hier al. Alleen je woon-/spawn-plek verschuift.
+				ApplyLocalDoors();
+				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Green, TEXT("You now live here.")); }
+			}
+			return;
+		}
+	}
+}
+
 int32 UPhoneClientComponent::GetHomeSellValueCents(int32 HomeIndex) const
 {
 	ACityGenerator* City = FindCity();

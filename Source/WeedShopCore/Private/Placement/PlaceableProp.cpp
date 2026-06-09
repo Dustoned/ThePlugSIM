@@ -8,6 +8,7 @@
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Save/SaveGameSubsystem.h"
+#include "Phone/PhoneClientComponent.h"
 #include "UI/WeedToast.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -257,6 +258,16 @@ void APlaceableProp::Interact_Implementation(APawn* InstigatorPawn)
 			const float DayHours = FMath::Max(1.f, DC->SunsetHour - DC->SunriseHour);
 			const float Morning = ((7.f - DC->SunriseHour) / DayHours) * DC->DayLengthSeconds;
 			DC->SetTimeOfDaySeconds(Morning);
+		}
+	}
+
+	// "Ik woon hier": slaap je in een bed in een ander (gekocht) apartment, dan verschuift je woon-/spawn-plek
+	// automatisch hierheen (en dus ook waar een overval toeslaat). Vóór de save zodat 't meteen meegaat.
+	if (InstigatorPawn)
+	{
+		if (UPhoneClientComponent* Ph = InstigatorPawn->FindComponentByClass<UPhoneClientComponent>())
+		{
+			Ph->SetActiveHomeFromLocation(GetActorLocation());
 		}
 	}
 
