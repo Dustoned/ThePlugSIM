@@ -18,6 +18,11 @@ namespace
 		{ TEXT("SM_Base_Door_01_R"),  100.f },
 		{ TEXT("SM_Base_Door_08_L"), -100.f },
 		{ TEXT("SM_Base_Door_08_R"),  100.f },
+		{ TEXT("SM_Door_Apartment01"), -100.f },                 // appartement-deur
+		{ TEXT("SM_Door_Apartment02"), -100.f },                 // appartement-deur (variant)
+		{ TEXT("SM_DoorCommerical_01"), -100.f },                // winkeldeur
+		{ TEXT("SM_Upper_BalconyDoor_01_3m_Door"), -100.f },     // balkondeur (glas via _Glass)
+		{ TEXT("SM_Upper_BalconyDoor_01_3m_Door_b"), -100.f },   // balkondeur variant
 	};
 
 	const FLeafDef* MatchLeaf(const UStaticMesh* Mesh)
