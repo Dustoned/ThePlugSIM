@@ -82,6 +82,10 @@ protected:
 	class USlider* AddLightSlider(const FString& Label, float Norm, TObjectPtr<class USlider>& OutS, TObjectPtr<UTextBlock>& OutV);
 	void ApplyLightSliders(); // leest de sliders en zet de DayNightController-waardes (live, elke tick)
 
+	// Test-tools: tijd-versnelling (global time dilation 1x-8x) zodat je niet hoeft te wachten bij het testen.
+	UPROPERTY() TObjectPtr<class USlider> TimeSpeedSlider;
+	UPROPERTY() TObjectPtr<UTextBlock> TimeSpeedV;
+
 	TWeakObjectPtr<UPhoneClientComponent> Phone;
 
 	// Opgebouwde onderdelen.

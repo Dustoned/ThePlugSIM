@@ -24,6 +24,7 @@
 #include "InputCoreTypes.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Border.h"
@@ -268,6 +269,14 @@ void UPhoneWidget::FillSettingsBody()
 		Btns->AddChildToHorizontalBox(NightB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		BodyRow(Btns, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// Tijd-versnelling: global time dilation 1x-8x (alles sneller: klok, NPC's, drogen, timers) zodat
+		// je bij het testen niet hoeft te wachten. Sleepbaar; live toegepast via ApplyLightSliders (tick).
+		TimeSpeedSlider = nullptr; TimeSpeedV = nullptr;
+		{
+			const float CurDilation = GetWorld() ? UGameplayStatics::GetGlobalTimeDilation(GetWorld()) : 1.f;
+			AddLightSlider(TEXT("Time speed"), (FMath::Clamp(CurDilation, 1.f, 8.f) - 1.f) / 7.f, TimeSpeedSlider, TimeSpeedV);
+		}
+
 		// Dev: forceer een overval / bust (om de kluis + apartment-leeghaal te testen zonder op nacht+heat te wachten).
 		UHorizontalBox* EvtBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
 		UWeedActionButton* RobB = MakeActionBtn(TEXT("Trigger Robbery"), FLinearColor(0.7f, 0.4f, 0.15f),
@@ -373,6 +382,17 @@ USlider* UPhoneWidget::AddLightSlider(const FString& Label, float Norm, TObjectP
 
 void UPhoneWidget::ApplyLightSliders()
 {
+	// Tijd-versnelling (1x-8x) live toepassen terwijl je sleept.
+	if (TimeSpeedSlider && GetWorld())
+	{
+		const float Speed = 1.f + TimeSpeedSlider->GetValue() * 7.f;
+		if (FMath::Abs(Speed - UGameplayStatics::GetGlobalTimeDilation(GetWorld())) > 0.01f)
+		{
+			UGameplayStatics::SetGlobalTimeDilation(GetWorld(), Speed);
+		}
+		if (TimeSpeedV) { TimeSpeedV->SetText(FText::FromString(FString::Printf(TEXT("%.1fx"), Speed))); }
+	}
+
 	ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
 	if (!DN || !LMoon) { return; }
 	DN->MoonIntensity = LMoon->GetValue()  * 3.f;
