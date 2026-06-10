@@ -1787,9 +1787,17 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 
 			const int32 NoiseSeed = FMath::Abs(static_cast<int32>((static_cast<int64>(RoamRouteSeed) + static_cast<int64>(RouteLeg) * 131 + static_cast<int64>(Index) * 977) % 1000));
 			const float CenterPenalty = bCenterCandidate ? Pitch * (5.0f + static_cast<float>(CenterCrowd) * 0.9f) : 0.f;
-			const float Score = TravelDist * 0.55f
+			// MIDDELLANGE trips (~2 blokken) i.p.v. zo-ver-mogelijk. TravelDist*0.55 beloonde maximale afstand:
+			// iedereen koos doelen aan de overkant (CENTERDIAG: goalDist 8-15k) -> alle routes door de centrum-
+			// ring (de bottleneck van de grid-stad) -> de permanente ophoping daar. Nu blijven ze in hun regio.
+			const float PreferredTrip = Pitch * 2.1f;
+			const float TripScore = -FMath::Abs(TravelDist - PreferredTrip) * 0.7f;
+			// District-bonus alleen LOKAAL (binnen ~2,5 blok van het district-doel). De oude MapRadius-variant
+			// trok ook naar districten aan de overkant -> alsnog dwars-door-de-stad-trips. Ligt het district-doel
+			// ver weg, dan telt 'ie gewoon niet mee en blijven ze in hun regio (en migreren ze over dagen vanzelf).
+			const float Score = TripScore
 				+ CenterDist * 1.25f
-				+ FMath::Max(0.f, MapRadius - DistrictDist) * 1.45f
+				+ FMath::Max(0.f, Pitch * 2.5f - DistrictDist) * 1.0f
 				+ Alignment * Pitch * 0.85f
 				- static_cast<float>(Crowd) * 2100.f
 				- CenterPenalty
