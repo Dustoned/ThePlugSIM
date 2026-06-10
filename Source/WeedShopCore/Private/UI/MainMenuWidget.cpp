@@ -705,8 +705,7 @@ void UMainMenuWidget::RefreshSlots()
 			MpS.Pressed = WeedUI::Rounded(MapCol * 0.8f, 8.f);
 			MpS.NormalPadding = FMargin(16.f, 12.f); MpS.PressedPadding = FMargin(16.f, 12.f);
 			MapB->SetStyle(MpS);
-			MapB->SetContent(WeedUI::Text(WidgetTree, MapLbl + TEXT("
-Click to switch map"), 14, FLinearColor::White, true));
+			MapB->SetContent(WeedUI::Text(WidgetTree, MapLbl + TEXT("\nClick to switch map"), 14, FLinearColor::White, true));
 			SlotsBox->AddChildToVerticalBox(MapB)->SetPadding(FMargin(0.f, 4.f, 0.f, 10.f));
 		}
 
