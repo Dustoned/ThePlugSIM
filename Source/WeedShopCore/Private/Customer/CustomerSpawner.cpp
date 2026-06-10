@@ -748,7 +748,8 @@ ACustomerBase* ACustomerSpawner::FindResidentByHome(int32 HomeIndex) const
 
 void ACustomerSpawner::DespawnResidentByHome(int32 HomeIndex)
 {
-	if (ACustomerBase* C = FindResidentByHome(HomeIndex)) { C->Destroy(); }
+	// Niet hard verwijderen: loop eerst rustig naar je eigen huis en despawn pas binnen (geen plop op straat).
+	if (ACustomerBase* C = FindResidentByHome(HomeIndex)) { C->SendHomeAndDespawn(); }
 	PhysicalHomes.Remove(HomeIndex);
 }
 

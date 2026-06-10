@@ -238,6 +238,10 @@ public:
 	// Park-wachtrij (spawner): is deze bewoner bezig met z'n park-trip (er naartoe lopen of er even staan)?
 	bool IsParkTripActive() const { return bRoamGoalIsPark || bPendingRoamGoalIsPark || ParkPauseTimer > 0.f; }
 
+	// Loop eerst rustig naar je eigen huis (normale entry-routing) en despawn pas zodra je binnen bent.
+	// Gebruikt door de nacht-populatie/dagelijkse rotatie i.p.v. een directe Destroy (geen plop op straat).
+	void SendHomeAndDespawn();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -305,6 +309,8 @@ protected:
 	int32 ActiveParkVisitSlot = 0;
 	float ResidentWakeDelay = -1.f;
 	bool bLeavingHomeRoute = false;
+	bool bDespawnWhenInside = false;  // naar huis lopen en pas binnen despawnen (nacht/rotatie)
+	float DespawnSafetyTimer = 0.f;   // vangnet: na 90s alsnog (verborgen, binnen) despawnen
 	ACityGenerator* GetResidentCity(UWorld* W);
 	FVector SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const;
 	bool IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const FVector& Point, bool bAllowPark) const;

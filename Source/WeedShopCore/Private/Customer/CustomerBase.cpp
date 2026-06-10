@@ -945,6 +945,15 @@ void ACustomerBase::StartResidentHomeEntry()
 	}
 }
 
+void ACustomerBase::SendHomeAndDespawn()
+{
+	if (!bResident || bAtHomeInside) { Destroy(); return; } // niet-bewoner of al binnen -> meteen weg
+	bDespawnWhenInside = true;
+	DespawnSafetyTimer = 0.f;
+	bApptActive = false; // afspraak is upstream al uitgesloten; voor de zekerheid
+	if (!bEnteringHome) { StartResidentHomeEntry(); }
+}
+
 bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 {
 	if (!bEnteringHome)
@@ -2516,6 +2525,26 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 	const float Hour = DC ? DC->GetClockHour() : 12.f;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
 	const bool bNight = DC ? DC->IsNight() : (Hour >= 20.f || Hour < 6.f);
+
+	// "Ga naar huis en verdwijn" (nacht-populatie/rotatie): loop eerst rustig naar je EIGEN huis (de
+	// normale entry-routing door je deur) en despawn pas zodra je ECHT binnen bent - geen plop op straat.
+	if (bDespawnWhenInside)
+	{
+		if (bAtHomeInside) { Destroy(); return; }
+		DespawnSafetyTimer += DeltaSeconds;
+		if (DespawnSafetyTimer >= 90.f)
+		{
+			// Pathing faalt? Verdwijn dan verborgen BINNEN, nooit zichtbaar op straat/in de voortuin.
+			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			SetActorHiddenInGame(true);
+			SetActorLocation(HomeInteriorPos + FVector(0.f, 0.f, 4.f));
+			Destroy();
+			return;
+		}
+		if (!bEnteringHome) { StartResidentHomeEntry(); }
+		TickResidentHomeEntry(DeltaSeconds);
+		return;
+	}
 
 	// --- Afspraak heeft voorrang op roamen/nacht ---
 	if (bApptActive)
