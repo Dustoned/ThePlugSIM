@@ -131,30 +131,33 @@ void ADoorRetrofitter::ScanAndConvert()
 		Best->AddLeafExtra(Comp->GetStaticMesh(), GlassTM);
 	}
 
-	// Raam-fixup: in de map staan glas-/raam-actors met uitgeschakelde (of pawn-negerende) collision,
-	// waardoor je dwars door ramen heen loopt. Forceer blokkeren voor de speler. (Door-glas dat we aan
-	// scharnieren hingen zijn componenten van onze deuren, geen SMA's - die raakt dit niet.)
+	// Raam-fixup: glas-/raam-COMPONENTEN (van elk actor-type: losse actors, level instances, ISM/HISM)
+	// staan in de map op no-collision/pawn-ignore, waardoor je dwars door ramen heen loopt. Forceer
+	// blokkeren voor de speler. (Door-glas aan onze scharnieren is van ACityDoor - die slaan we over.)
 	int32 GlassFixed = 0;
-	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
+	for (TActorIterator<AActor> It(W); It; ++It)
 	{
-		AStaticMeshActor* SMA = *It;
-		if (!IsValid(SMA) || Converted.Contains(SMA)) { continue; }
-		UStaticMeshComponent* Comp = SMA->GetStaticMeshComponent();
-		if (!Comp || !Comp->GetStaticMesh()) { continue; }
-		const FString MeshName = Comp->GetStaticMesh()->GetName().ToLower();
-		if (!MeshName.Contains(TEXT("glass")) && !MeshName.Contains(TEXT("window"))) { continue; }
-		const bool bNoCollision = Comp->GetCollisionEnabled() == ECollisionEnabled::NoCollision
-			|| Comp->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Block;
-		if (!bNoCollision) { continue; }
-		Converted.Add(SMA); // niet nogmaals checken
-		SMA->SetActorEnableCollision(true);
-		Comp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		Comp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-		++GlassFixed;
+		AActor* A = *It;
+		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass())) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh() || GlassFixedComps.Contains(Comp)) { continue; }
+			const FString MeshName = Comp->GetStaticMesh()->GetName().ToLower();
+			if (!MeshName.Contains(TEXT("glass")) && !MeshName.Contains(TEXT("window"))) { continue; }
+			GlassFixedComps.Add(Comp); // niet nogmaals checken
+			const bool bNoCollision = Comp->GetCollisionEnabled() == ECollisionEnabled::NoCollision
+				|| Comp->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Block;
+			if (!bNoCollision) { continue; }
+			A->SetActorEnableCollision(true);
+			Comp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			Comp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+			++GlassFixed;
+		}
 	}
 	if (GlassFixed > 0)
 	{
-		UE_LOG(LogWeedShop, Log, TEXT("DoorRetrofitter: %d glas/raam-actors blokkeren nu de speler"), GlassFixed);
+		UE_LOG(LogWeedShop, Log, TEXT("DoorRetrofitter: %d glas/raam-componenten blokkeren nu de speler"), GlassFixed);
 	}
 
 	if (NewThisPass > 0)
