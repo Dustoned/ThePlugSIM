@@ -286,12 +286,14 @@ void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 void AThePlugSIMCharacter::ApplySkinMesh()
 {
 	// 0 = Manny (man), 1 = Quinn (vrouw): zelfde mannequin-skelet, AnimBP werkt direct.
-	// 2 = Lola (K-POP pack): eigen skelet (compatible gemaakt met de mannequin).
+	// 2/3/4 = Casual-meisjes (Streetwear-pack, vervangt Lola): UE4-mannequin-skelet, compatible gemaakt.
 	const TCHAR* Path;
 	switch (PlayerSkin)
 	{
 		case 1:  Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"); break;
-		case 2:  Path = TEXT("/Game/KPOP_Lola/Mesh/SK_LOLA_CASUAL.SK_LOLA_CASUAL"); break;
+		case 2:  Path = TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_1/SK_Casual_1.SK_Casual_1"); break;
+		case 3:  Path = TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_2/SK_Casual_2.SK_Casual_2"); break;
+		case 4:  Path = TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_3/SK_Casual_3.SK_Casual_3"); break;
 		default: Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"); break;
 	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
@@ -313,9 +315,9 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 		}
 	}
 
-	// Lola heeft physics-assets voor haar/rok/cloth -> die bones laten nawapperen. Deferred zodat de physics-state
-	// klaar is na de mesh-swap. (Andere skins: de mesh-swap reset de physics, dus niks te doen.)
-	if (PlayerSkin == 2)
+	// Skins met eigen physics-asset (haar/cloth) -> die bones laten nawapperen. Deferred zodat de physics-state
+	// klaar is na de mesh-swap. (Manny/Quinn: de mesh-swap reset de physics, dus niks te doen.)
+	if (PlayerSkin >= 2)
 	{
 		FTimerHandle Th;
 		GetWorldTimerManager().SetTimer(Th, this, &AThePlugSIMCharacter::ApplySoftPhysics, 0.2f, false);
@@ -325,7 +327,7 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 void AThePlugSIMCharacter::ApplySoftPhysics()
 {
 	USkeletalMeshComponent* M = GetMesh();
-	if (!M || PlayerSkin != 2) { return; }
+	if (!M || PlayerSkin < 2) { return; }
 	UE_LOG(LogTemp, Warning, TEXT("SOFTPHYS physasset=%s"), M->GetPhysicsAsset() ? TEXT("YES") : TEXT("NULL"));
 	M->SetEnableGravity(true);
 	int32 Enabled = 0, WithBody = 0;
@@ -370,13 +372,13 @@ void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
 
 void AThePlugSIMCharacter::ServerSetSkin_Implementation(uint8 NewSkin)
 {
-	PlayerSkin = (NewSkin > 2) ? 2 : NewSkin;
+	PlayerSkin = (NewSkin > 4) ? 4 : NewSkin;
 	ApplySkinMesh(); // server lokaal toepassen; repliceert naar clients -> OnRep_Skin
 }
 
 void AThePlugSIMCharacter::RestoreSkin(uint8 S)
 {
-	PlayerSkin = (S > 2) ? 2 : S;
+	PlayerSkin = (S > 4) ? 4 : S;
 	ApplySkinMesh();
 }
 

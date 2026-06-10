@@ -24,5 +24,6 @@ Backup/
 
 # Grote character-asset-packs + RARs (niet naar git -> te groot voor GitHub)
 /Content/KPOP_Lola/
+/Content/Casual_Wear_Pack1/
 /Content/*.rar
 
