@@ -138,7 +138,10 @@ void ADoorRetrofitter::ScanAndConvert()
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
 		AActor* A = *It;
-		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass())) { continue; }
+		// Sla onze deuren, al-geconverteerde originelen (verborgen bladen/glas) en alles wat
+		// onzichtbaar is over - anders zet je collision terug op het verborgen deur-glas en
+		// staat er een onzichtbare blokkade in de deuropening.
+		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass()) || Converted.Contains(A) || A->IsHidden()) { continue; }
 		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
 		for (UStaticMeshComponent* Comp : Comps)
 		{
