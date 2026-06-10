@@ -177,6 +177,12 @@ void UWardrobeWidget::EnsurePreview()
 			if (PreviewActor.IsValid()) { C->ShowOnlyActors.Add(PreviewActor.Get()); }
 			C->FOVAngle = 30.f;
 			C->bCaptureEveryFrame = true; // live: animatie + outfit-wissels direct zichtbaar
+			// Vaste belichting, dag en nacht: pin de auto-exposure vast (min == max) zodat de preview
+			// niet meedimt met de zon; de eigen studio-lampen doen het werk.
+			C->PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
+			C->PostProcessSettings.AutoExposureMinBrightness = 1.0f;
+			C->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
+			C->PostProcessSettings.AutoExposureMaxBrightness = 1.0f;
 		}
 		// Lampen aan de CAMERA: de voorkant is altijd verlicht, hoe je ook draait.
 		if (UPointLightComponent* Key = NewObject<UPointLightComponent>(Cap))
@@ -184,7 +190,7 @@ void UWardrobeWidget::EnsurePreview()
 			Key->SetupAttachment(Cap->GetRootComponent());
 			Key->RegisterComponent();
 			Key->SetRelativeLocation(FVector(-40.f, -60.f, 60.f));
-			Key->SetIntensity(4200.f); Key->SetAttenuationRadius(900.f);
+			Key->SetIntensity(9500.f); Key->SetAttenuationRadius(900.f);
 			Key->SetLightColor(FLinearColor(1.f, 0.96f, 0.9f)); Key->SetCastShadows(false);
 		}
 		if (UPointLightComponent* Fill = NewObject<UPointLightComponent>(Cap))
@@ -192,7 +198,7 @@ void UWardrobeWidget::EnsurePreview()
 			Fill->SetupAttachment(Cap->GetRootComponent());
 			Fill->RegisterComponent();
 			Fill->SetRelativeLocation(FVector(-30.f, 80.f, -20.f));
-			Fill->SetIntensity(1600.f); Fill->SetAttenuationRadius(800.f);
+			Fill->SetIntensity(4000.f); Fill->SetAttenuationRadius(800.f);
 			Fill->SetLightColor(FLinearColor(0.85f, 0.9f, 1.f)); Fill->SetCastShadows(false);
 		}
 		PreviewCapture = Cap;
