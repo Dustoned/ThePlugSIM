@@ -30,6 +30,18 @@ namespace
 		}
 		return nullptr;
 	}
+
+	// Hoort deze mesh als GLAS bij een van de bekende bladen? (naam == "<blad>_Glass")
+	bool IsLeafGlass(const UStaticMesh* Mesh)
+	{
+		if (!Mesh) { return false; }
+		const FString Name = Mesh->GetName();
+		for (const FLeafDef& D : LeafDefs)
+		{
+			if (Name == FString(D.MeshName) + TEXT("_Glass")) { return true; }
+		}
+		return false;
+	}
 }
 
 ADoorRetrofitter::ADoorRetrofitter()
@@ -71,9 +83,37 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			Door->SetActorScale3D(LeafTM.GetScale3D());
 			Door->SetupLeaf(Comp->GetStaticMesh(), Leaf->OpenDeg);
+			SpawnedDoors.Add(Door);
 			++NewThisPass;
 			++TotalConverted;
 		}
+	}
+
+	// Glas-pass: losse glas-meshes van de bladen aan de dichtstbijzijnde geconverteerde deur hangen,
+	// zodat het raam met de deur mee draait i.p.v. in de lucht te blijven hangen.
+	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
+	{
+		AStaticMeshActor* SMA = *It;
+		if (!IsValid(SMA) || Converted.Contains(SMA)) { continue; }
+		UStaticMeshComponent* Comp = SMA->GetStaticMeshComponent();
+		if (!Comp || !IsLeafGlass(Comp->GetStaticMesh())) { continue; }
+
+		const FVector GlassLoc = Comp->GetComponentLocation();
+		ACityDoor* Best = nullptr; float BestD = 60.f;
+		for (const TWeakObjectPtr<ACityDoor>& Dw : SpawnedDoors)
+		{
+			ACityDoor* D = Dw.Get();
+			if (!D) { continue; }
+			const float Dist = FVector::Dist(D->GetActorLocation(), GlassLoc);
+			if (Dist < BestD) { BestD = Dist; Best = D; }
+		}
+		if (!Best) { continue; } // blad nog niet geconverteerd (gestreamd?) -> volgende pass opnieuw
+
+		const FTransform GlassTM = Comp->GetComponentTransform();
+		SMA->SetActorHiddenInGame(true);
+		SMA->SetActorEnableCollision(false);
+		Converted.Add(SMA);
+		Best->AddLeafExtra(Comp->GetStaticMesh(), GlassTM);
 	}
 
 	if (NewThisPass > 0)

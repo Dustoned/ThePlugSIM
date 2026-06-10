@@ -28,6 +28,10 @@ public:
 	// (geen cube/schaal) en draai open naar OpenDeg. Voor de DoorRetrofitter in externe maps.
 	void SetupLeaf(class UStaticMesh* LeafMesh, float OpenDeg, float TriggerRadius = 150.f);
 
+	// Extra mee-draaiend onderdeel (bv. het losse GLAS van een pack-deurblad): hangt aan het scharnier
+	// op de gegeven wereld-transform, zodat het met de deur mee opent.
+	void AddLeafExtra(class UStaticMesh* Mesh, const FTransform& WorldTM);
+
 	// Deterministische bewoner-naam per huis-index (gelijk op server EN client, zodat de client zelf
 	// de juiste "LOCKED - <naam>"-popup kan tonen zonder replicatie).
 	static FString ResidentNameForIndex(int32 Index);

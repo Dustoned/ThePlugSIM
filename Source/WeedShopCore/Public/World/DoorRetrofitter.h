@@ -24,4 +24,5 @@ protected:
 	FTimerHandle ScanTimer;
 	TSet<TWeakObjectPtr<AActor>> Converted; // originele actors die al een werkende deur kregen
 	int32 TotalConverted = 0;
+	TArray<TWeakObjectPtr<class ACityDoor>> SpawnedDoors; // om los GLAS aan de juiste deur te hangen
 };

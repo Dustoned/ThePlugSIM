@@ -94,6 +94,18 @@ void ACityDoor::SetupLeaf(UStaticMesh* LeafMesh, float OpenDeg, float TriggerRad
 	}
 }
 
+void ACityDoor::AddLeafExtra(UStaticMesh* Mesh, const FTransform& WorldTM)
+{
+	if (!Mesh || !Hinge) { return; }
+	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+	C->SetupAttachment(Hinge);
+	C->RegisterComponent();
+	C->SetStaticMesh(Mesh);
+	C->SetWorldTransform(WorldTM);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->SetCanEverAffectNavigation(false);
+}
+
 FString ACityDoor::ResidentNameForIndex(int32 Index)
 {
 	static const TCHAR* First[] = {
