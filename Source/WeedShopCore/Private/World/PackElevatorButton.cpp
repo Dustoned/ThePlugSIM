@@ -26,6 +26,32 @@ void APackElevatorButton::Setup(APackElevator* InElevator, int32 InFloorIdx)
 	FloorIdx = InFloorIdx;
 }
 
+void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator& SignRot)
+{
+	if (!DigitMesh)
+	{
+		DigitMesh = NewObject<UStaticMeshComponent>(this);
+		DigitMesh->SetupAttachment(GetRootComponent());
+		DigitMesh->RegisterComponent();
+		DigitMesh->SetMobility(EComponentMobility::Movable);
+		DigitMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		DigitMesh->SetCanEverAffectNavigation(false);
+	}
+	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
+}
+
+void APackElevatorButton::SetDigit(int32 Digit)
+{
+	if (!DigitMesh || Digit == CurDigit) { return; }
+	CurDigit = Digit;
+	const FString Path = FString::Printf(TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorNumber_%d.SM_ElevatorNumber_%d"),
+		FMath::Clamp(Digit, 0, 9), FMath::Clamp(Digit, 0, 9));
+	if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path))
+	{
+		DigitMesh->SetStaticMesh(M);
+	}
+}
+
 void APackElevatorButton::Interact_Implementation(APawn* InstigatorPawn)
 {
 	if (APackElevator* E = Elevator.Get()) { E->CallToFloor(FloorIdx); }

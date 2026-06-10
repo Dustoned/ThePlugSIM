@@ -1,6 +1,7 @@
 #include "World/PackElevator.h"
 
 #include "WeedShopCore.h"
+#include "World/PackElevatorButton.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/StaticMesh.h"
@@ -100,6 +101,23 @@ void APackElevator::CallToFloor(int32 FloorIdx)
 	TargetFloor = FloorIdx;
 }
 
+void APackElevator::RegisterButton(APackElevatorButton* Btn)
+{
+	if (Btn)
+	{
+		Buttons.Add(Btn);
+		Btn->SetDigit(CurFloor);
+	}
+}
+
+void APackElevator::UpdateSigns()
+{
+	for (const TWeakObjectPtr<APackElevatorButton>& B : Buttons)
+	{
+		if (APackElevatorButton* Btn = B.Get()) { Btn->SetDigit(CurFloor); }
+	}
+}
+
 bool APackElevator::IsPawnAboard() const
 {
 	UWorld* W = GetWorld();
@@ -150,6 +168,7 @@ void APackElevator::Tick(float DeltaSeconds)
 			CurFloor = TargetFloor;
 			DwellTimer = DwellSeconds;
 			BoardedTimer = 0.f;
+			UpdateSigns(); // bordjes boven de deuren: cabine is nu op deze verdieping
 		}
 		return;
 	}

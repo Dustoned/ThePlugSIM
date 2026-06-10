@@ -28,6 +28,9 @@ public:
 	// Roep de lift naar deze verdieping (call-knoppen).
 	void CallToFloor(int32 FloorIdx);
 
+	// Call-knop koppelen (zodat de digit-bordjes live de cabine-verdieping tonen).
+	void RegisterButton(class APackElevatorButton* Btn);
+
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
@@ -59,4 +62,6 @@ protected:
 	float DwellTimer = 0.f;    // wachttijd met open deuren
 	float BoardedTimer = 0.f;  // hoe lang er iemand in de cabine staat
 	bool bMoving = false;
+	TArray<TWeakObjectPtr<class APackElevatorButton>> Buttons;
+	void UpdateSigns();
 };

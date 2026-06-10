@@ -17,6 +17,8 @@
 #include "Misc/Paths.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "CollisionQueryParams.h"
+#include "Engine/HitResult.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
@@ -415,41 +417,41 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (GroundPanelPos.Num() >= 2)
 			{
 				SlideDir = (GroundPanelPos[1] - GroundPanelPos[0]).GetSafeNormal2D();
-				OpeningCenter = (GroundPanelPos[0] + GroundPanelPos[1]) * 0.5f;
+				// Paneel-pivots zitten aan de schuif-kant van hun blad (68 breed): het echte midden van de
+				// opening ligt daarom 34 terug langs de schuifrichting.
+				OpeningCenter = (GroundPanelPos[0] + GroundPanelPos[1]) * 0.5f - SlideDir * 34.f;
 			}
-			// Schacht-kant kiezen: loodrecht op de deur; de kant met de MINSTE vloer-meshes op verdieping 1
-			// is de schacht (daar hoort geen vloer te zijn).
+			// Schacht-kant FYSIEK bepalen: trace vanaf verdieping 1 omlaag aan beide kanten van de deur.
+			// De kant ZONDER vloer eronder (gat dat doorloopt) is de schacht.
 			const FVector Perp = FVector::CrossProduct(SlideDir, FVector::UpVector).GetSafeNormal2D();
-			int32 CntPos = 0, CntNeg = 0;
-			const float ProbeZ = Floors.Num() > 1 ? Floors[1] : Floors[0];
-			for (TActorIterator<AActor> It2(W); It2; ++It2)
+			const float ProbeZ = (Floors.Num() > 1 ? Floors[1] : Floors[0]) + 120.f;
+			auto HasFloorBelow = [&](const FVector& Side) -> bool
 			{
-				TInlineComponentArray<UStaticMeshComponent*> Comps2(*It2);
-				for (UStaticMeshComponent* C2 : Comps2)
-				{
-					if (!C2 || !C2->GetStaticMesh()) { continue; }
-					if (!C2->GetStaticMesh()->GetName().StartsWith(TEXT("SM_Floor"))) { continue; }
-					const FVector L2 = C2->GetComponentLocation();
-					if (FMath::Abs(L2.Z - ProbeZ) > 60.f) { continue; }
-					if (FVector::Dist2D(L2, OpeningCenter + Perp * 140.f) < 220.f) { ++CntPos; }
-					if (FVector::Dist2D(L2, OpeningCenter - Perp * 140.f) < 220.f) { ++CntNeg; }
-				}
-			}
-			const FVector ShaftSide = (CntPos <= CntNeg) ? Perp : -Perp;
-			const FVector CabCenter = OpeningCenter + ShaftSide * 95.f;
+				FHitResult Hit;
+				FCollisionQueryParams QP(SCENE_QUERY_STAT(ElevShaftProbe), false);
+				const FVector Start = FVector(OpeningCenter.X, OpeningCenter.Y, ProbeZ) + Side * 110.f;
+				return W->LineTraceSingleByChannel(Hit, Start, Start - FVector(0.f, 0.f, 320.f), ECC_Visibility, QP);
+			};
+			const bool bFloorPos = HasFloorBelow(Perp);
+			const bool bFloorNeg = HasFloorBelow(-Perp);
+			const FVector ShaftSide = (!bFloorPos && bFloorNeg) ? Perp : ((!bFloorNeg && bFloorPos) ? -Perp : Perp);
+			const FVector CabCenter = OpeningCenter + ShaftSide * 105.f;
 
 			FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			if (APackElevator* Elev = W->SpawnActor<APackElevator>(APackElevator::StaticClass(), FTransform(FVector(CabCenter.X, CabCenter.Y, Floors[0])), SP))
 			{
 				Elev->Setup(Floors, SlideDir, Panels, CabCenter, -ShaftSide);
-				// Call-knop per verdieping: naast de deuropening, tegen de muur aan de gang-kant.
+				// Per verdieping: call-knop naast de deur + digit-bordje boven de deur (gang-kant).
 				for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
 				{
-					const FVector BtnLoc = OpeningCenter + SlideDir * 95.f - ShaftSide * 6.f + FVector(0.f, 0.f, Floors[Fi] + 110.f - OpeningCenter.Z);
+					const FVector BtnLoc = FVector(OpeningCenter.X, OpeningCenter.Y, Floors[Fi] + 110.f) + SlideDir * 100.f - ShaftSide * 8.f;
 					const FRotator BtnRot = (-ShaftSide).Rotation();
-					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, FVector(BtnLoc.X, BtnLoc.Y, Floors[Fi] + 110.f)), SP))
+					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, BtnLoc), SP))
 					{
 						Btn->Setup(Elev, Fi);
+						const FVector SignLoc = FVector(OpeningCenter.X, OpeningCenter.Y, Floors[Fi] + 235.f) - ShaftSide * 10.f;
+						Btn->SetupSign(SignLoc, BtnRot);
+						Elev->RegisterButton(Btn);
 					}
 				}
 				UE_LOG(LogWeedShop, Warning, TEXT("PackElevator gebouwd: %d verdiepingen @ (%.0f, %.0f)"), Floors.Num(), CabCenter.X, CabCenter.Y);
