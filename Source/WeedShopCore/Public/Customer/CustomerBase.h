@@ -235,6 +235,9 @@ public:
 	float GetApptTimeLeft() const { return FMath::Max(0.f, ApptTimeout); }
 	float GetApptFraction() const { return FMath::Clamp(ApptTimeout / ApptTimeoutMax, 0.f, 1.f); }
 
+	// Park-wachtrij (spawner): is deze bewoner bezig met z'n park-trip (er naartoe lopen of er even staan)?
+	bool IsParkTripActive() const { return bRoamGoalIsPark || bPendingRoamGoalIsPark || ParkPauseTimer > 0.f; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

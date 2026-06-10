@@ -15,6 +15,7 @@
 #include "NavigationSystem.h"
 #include "World/DayCycleComponent.h"
 #include "World/CityGenerator.h"
+#include "Customer/CustomerSpawner.h"
 #include "EngineUtils.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/DataTable.h"
@@ -550,9 +551,7 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
-	// Zelfde gate als in PickResidentParkVisitSlot: alleen ~1/3 van de bewoners bezoekt het park.
-	const bool bParkVisitor = (FMath::Abs(RoamRouteSeed % 3) == 0);
-	OutSnapshot.bNeedsParkVisitToday = bParkVisitor && Today >= 0 && GetResidentParkVisitsToday(Today) < 2;
+	OutSnapshot.bNeedsParkVisitToday = Today >= 0 && GetResidentParkVisitsToday(Today) < 2;
 	if (City && DC && OutSnapshot.bNeedsParkVisitToday && !bAtHomeInside && !bEmergingFromHome && !bEnteringHome)
 	{
 		const int32 NextSlot = PickResidentParkVisitSlot(City, DC, Today, DC->GetClockHour());
@@ -2375,22 +2374,8 @@ int32 ACustomerBase::PickResidentParkVisitSlot(ACityGenerator* City, const UDayC
 		return 0;
 	}
 
-	// Maar ~1/3 van de bewoners is een park-bezoeker (stabiel per bewoner). Dit is de ECHTE beslissing
-	// (niet de snapshot): zonder deze gate willen alle 65 bewoners 2x per dag naar het park = 130 trips/dag
-	// door het kleine centrum -> de permanente ring/prop rond het park. Nu ~40 trips/dag, prima doorstroom.
-	if (FMath::Abs(RoamRouteSeed % 3) != 0)
-	{
-		return 0;
-	}
-
-	// Park-crowd-cap: ga NIET naar het park als het al druk is. Anders proppen te veel bewoners zich in het
-	// kleine centrale park -> RVO-gridlock -> ze staan allemaal vast/tollen. Te druk -> roam gewoon door en
-	// probeer later (als er weer ruimte is). Zo blijft het park een rustige doorstroom i.p.v. een prop.
-	if (City && CountResidentCrowdNear(City->GetCityCenter(), 700.f) >= 5)
-	{
-		return 0;
-	}
-
+	// Iedereen komt 1-2x per dag bij het park - de PARK-WACHTRIJ op de spawner regelt dat dat netjes om de
+	// beurt gebeurt (max een paar tegelijk op trip), dus hier geen gate/crowd-cap meer nodig.
 	const bool bNeedsMorning = LastMorningParkVisitDay != Today;
 	const bool bNeedsLater = LastLaterParkVisitDay != Today;
 	if (!bNeedsMorning && !bNeedsLater)
@@ -2466,27 +2451,13 @@ bool ACustomerBase::PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, f
 	const bool bParkOverdue = ParkVisitSlot > 0 && Hour >= ComputeResidentParkUrgencyHour(City, DC, Today, ParkVisitSlot);
 	if (ParkVisitSlot > 0 && (bParkWindowOpen || bParkOverdue))
 	{
-		const float ParkCrowdRadius = FMath::Max(800.f, City->GetMapBlockSize() * 0.82f);
-		const int32 ParkCrowd = CountResidentParkVisitors(ParkCrowdRadius);
-		// Center-drukte = iedereen in het HELE centrale 3x3-grid (9 blokken), niet alleen rond het park.
-		int32 CenterCrowd = 0;
-		{
-			const FVector CityCtr = City->GetCityCenter();
-			const float CenterHalf = City->GetMapBlockSize() * 1.5f; // 3 blokken breed/diep
-			for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
-			{
-				const ACustomerBase* C = *It;
-				if (!IsValid(C) || C == this || !C->bResident || C->bAtHomeInside) { continue; }
-				const FVector L = C->GetActorLocation();
-				if (FMath::Abs(L.X - CityCtr.X) <= CenterHalf && FMath::Abs(L.Y - CityCtr.Y) <= CenterHalf) { ++CenterCrowd; }
-			}
-		}
-		const int32 ParkSoftLimit = 2;   // strakker: hou het park dun, NPC's blijven verspreid
-		const int32 CenterSoftLimit = 5; // hele 3x3-grid (9 blokken) blijft dun
-		const int32 ParkHardLimit = 4; const int32 CenterHardLimit = 8; // hard plafond, geldt ZELFS bij overdue
-			const bool bParkCrowded = (ParkCrowd >= ParkHardLimit || CenterCrowd >= CenterHardLimit)
-				|| (!bParkOverdue && (ParkCrowd >= ParkSoftLimit || CenterCrowd >= CenterSoftLimit));
-		if (!bParkCrowded)
+		// PARK-WACHTRIJ: vraag je beurt aan bij de spawner. Geen beurt? Dan sta je in de FIFO-rij - roam
+		// gewoon door en probeer 't bij de volgende leg opnieuw. Zo gaat iedereen netjes om de beurt (max
+		// een paar tegelijk op trip) en hoopt het centrum nooit op.
+		ACustomerSpawner* ParkQueueOwner = nullptr;
+		for (TActorIterator<ACustomerSpawner> SpIt(GetWorld()); SpIt; ++SpIt) { ParkQueueOwner = *SpIt; break; }
+		const bool bMyTurn = ParkQueueOwner && ParkQueueOwner->RequestParkVisit(this);
+		if (bMyTurn)
 		{
 			const float D = City->GetMapBlockSize() * 0.32f;
 			const float Inner = City->GetMapBlockSize() * 0.15f;
@@ -2701,6 +2672,8 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			bHasResidentBestDistToGoal = false;
 			ResidentRecoveryAttempts = 0;
 			ResidentNoGoalTimer = 0.f;
+			// Park-trip klaar -> beurt vrijgeven zodat de volgende in de rij kan gaan.
+			for (TActorIterator<ACustomerSpawner> SpIt(GetWorld()); SpIt; ++SpIt) { SpIt->FinishParkVisit(this); break; }
 		}
 		return;
 	}

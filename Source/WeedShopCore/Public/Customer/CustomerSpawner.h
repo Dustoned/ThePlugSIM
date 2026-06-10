@@ -90,7 +90,22 @@ protected:
 	void ApplyDayNightPopulation(bool bNight);
 	int8 LastNightState = -1; // -1 onbekend, 0 dag, 1 nacht
 	float NextDayRefillTime = 0.f; // real-time gate: dag-bijvulling gespreid (niet alle bewoners in één frame -> geen burst/tollen)
-	float NextCenterDiagTime = 0.f; // CENTERDIAG (tijdelijk): periodiek loggen wie er in het centrum staat en waarom
+	float NextCenterDiagTime = 0.f; // (vrij voor hergebruik)
+
+	// --- Park-wachtrij: iedereen komt 1-2x per dag even bij het park, maar netjes OM DE BEURT. ---
+	// Max een paar bewoners tegelijk "op park-trip" (lopen + even blijven); de rest staat in de FIFO-rij en
+	// roamt gewoon door tot het hun beurt is. Voorkomt ophoping in het centrum.
+	struct FParkTicket { TWeakObjectPtr<ACustomerBase> Holder; float GrantTime = 0.f; };
+	TArray<FParkTicket> ParkTickets;                 // actieve trips
+	TArray<TWeakObjectPtr<ACustomerBase>> ParkQueue; // wie wacht op z'n beurt (FIFO)
+
+public:
+	// True = jouw beurt (ga maar); false = in de rij gezet, roam door en vraag later opnieuw.
+	bool RequestParkVisit(ACustomerBase* C);
+	// Trip klaar/afgebroken -> beurt vrijgeven voor de volgende.
+	void FinishParkVisit(ACustomerBase* C);
+
+protected:
 
 	TArray<int32> EligibleHomes;   // alle niet-koopbare ingang-woningen (de volledige pool)
 	TSet<int32> PhysicalHomes;     // woning-indexen die NU een fysieke bewoner hebben

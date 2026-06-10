@@ -783,6 +783,42 @@ ACustomerBase* ACustomerSpawner::SpawnOneResident(ACityGenerator* City, int32 Ho
 	return C;
 }
 
+bool ACustomerSpawner::RequestParkVisit(ACustomerBase* C)
+{
+	if (!C) { return false; }
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	// Tickets opruimen: houder weg, trip niet (meer) actief (na een start-gratie van 5s), of veiligheids-
+	// verloop na 240s (vastgelopen trip mag de rij niet eeuwig blokkeren).
+	ParkTickets.RemoveAll([&](const FParkTicket& T)
+	{
+		if (!T.Holder.IsValid()) { return true; }
+		const float Held = Now - T.GrantTime;
+		if (Held > 240.f) { return true; }
+		if (Held > 5.f && !T.Holder->IsParkTripActive()) { return true; }
+		return false;
+	});
+	ParkQueue.RemoveAll([](const TWeakObjectPtr<ACustomerBase>& Q) { return !Q.IsValid(); });
+
+	for (const FParkTicket& T : ParkTickets) { if (T.Holder.Get() == C) { return true; } } // al jouw beurt
+	if (!ParkQueue.Contains(C)) { ParkQueue.Add(C); } // achteraan aansluiten
+
+	const int32 MaxTickets = 4; // max tegelijk op park-trip (lopen + blijven) - genoeg doorstroom, geen prop
+	while (ParkTickets.Num() < MaxTickets && ParkQueue.Num() > 0)
+	{
+		TWeakObjectPtr<ACustomerBase> Next = ParkQueue[0];
+		ParkQueue.RemoveAt(0);
+		if (Next.IsValid()) { ParkTickets.Add({ Next, Now }); }
+	}
+	for (const FParkTicket& T : ParkTickets) { if (T.Holder.Get() == C) { return true; } }
+	return false;
+}
+
+void ACustomerSpawner::FinishParkVisit(ACustomerBase* C)
+{
+	ParkTickets.RemoveAll([&](const FParkTicket& T) { return !T.Holder.IsValid() || T.Holder.Get() == C; });
+	ParkQueue.RemoveAll([&](const TWeakObjectPtr<ACustomerBase>& Q) { return !Q.IsValid() || Q.Get() == C; });
+}
+
 void ACustomerSpawner::RotateResidents()
 {
 	UWorld* World = GetWorld();
