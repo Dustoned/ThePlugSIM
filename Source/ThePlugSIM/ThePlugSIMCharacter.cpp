@@ -19,6 +19,7 @@
 #include "NavigationInvokerComponent.h"
 #include "World/DayNightController.h"
 #include "World/CityGenerator.h"
+#include "World/DoorRetrofitter.h"
 #include "World/StoreCounter.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
@@ -1182,6 +1183,16 @@ void AThePlugSIMCharacter::BeginPlay()
 		if (!bHasCity && !bExternalMap)
 		{
 			GetWorld()->SpawnActor<ACityGenerator>(ACityGenerator::StaticClass(), FTransform::Identity);
+		}
+		// Externe pack-map: maak de statische deur-bladen werkend (open/dicht + NPC-auto-open).
+		if (bExternalMap)
+		{
+			bool bHasRetro = false;
+			for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { bHasRetro = true; break; }
+			if (!bHasRetro)
+			{
+				GetWorld()->SpawnActor<ADoorRetrofitter>(ADoorRetrofitter::StaticClass(), FTransform::Identity);
+			}
 		}
 
 		// Stad staat er nu (BeginPlay bouwt 'm synchroon) -> ken meteen het starter-flatje toe en zet de

@@ -80,6 +80,20 @@ void ACityDoor::Setup(float Width, float Height, const FLinearColor& Color)
 	}
 }
 
+void ACityDoor::SetupLeaf(UStaticMesh* LeafMesh, float OpenDeg, float TriggerRadius)
+{
+	if (!Panel || !LeafMesh) { return; }
+	Panel->SetStaticMesh(LeafMesh);
+	Panel->SetRelativeScale3D(FVector(1.f));
+	Panel->SetRelativeLocation(FVector::ZeroVector); // pivot van het blad = het scharnier
+	OpenSwingDeg = OpenDeg;
+	if (Trigger)
+	{
+		Trigger->SetRelativeLocation(FVector::ZeroVector);
+		Trigger->SetSphereRadius(TriggerRadius);
+	}
+}
+
 FString ACityDoor::ResidentNameForIndex(int32 Index)
 {
 	static const TCHAR* First[] = {

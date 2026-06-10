@@ -24,6 +24,10 @@ public:
 	// Stel de deur in (afmeting + kleur). Hinge zit aan de -X-kant; dicht = paneel langs +X.
 	void Setup(float Width, float Height, const FLinearColor& Color);
 
+	// Variant voor asset-pack deur-BLADEN (mesh met pivot op het scharnier): gebruik die mesh als paneel
+	// (geen cube/schaal) en draai open naar OpenDeg. Voor de DoorRetrofitter in externe maps.
+	void SetupLeaf(class UStaticMesh* LeafMesh, float OpenDeg, float TriggerRadius = 150.f);
+
 	// Deterministische bewoner-naam per huis-index (gelijk op server EN client, zodat de client zelf
 	// de juiste "LOCKED - <naam>"-popup kan tonen zonder replicatie).
 	static FString ResidentNameForIndex(int32 Index);
