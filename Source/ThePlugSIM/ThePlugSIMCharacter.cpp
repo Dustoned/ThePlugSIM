@@ -1200,6 +1200,12 @@ void AThePlugSIMCharacter::BeginPlay()
 		// Externe pack-map: maak de statische deur-bladen werkend (open/dicht + NPC-auto-open).
 		if (bExternalMap)
 		{
+			// Verkennen = testing-modus: Test-tools in de telefoon (dag/nacht-switch, tijd-versnelling,
+			// events) + vrij bouwen, zodat je de map volledig kunt testen.
+			if (AWeedShopGameState* GSx = GetWorld()->GetGameState<AWeedShopGameState>())
+			{
+				GSx->SetFreeBuild(true);
+			}
 			bool bHasRetro = false;
 			for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { bHasRetro = true; break; }
 			if (!bHasRetro)
