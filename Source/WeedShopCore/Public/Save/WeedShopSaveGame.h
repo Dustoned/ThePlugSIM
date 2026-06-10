@@ -127,6 +127,9 @@ struct FPlayerSaveData
 	UPROPERTY() uint8 OutfitLegs = 0;
 	UPROPERTY() uint8 OutfitShoes = 0;
 	UPROPERTY() uint8 OutfitHair = 0;
+	UPROPERTY() uint8 OutfitAcc = 0;
+	UPROPERTY() uint8 OutfitNeck = 0;
+	UPROPERTY() uint8 OutfitSocks = 0;
 };
 
 UCLASS()

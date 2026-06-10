@@ -531,6 +531,7 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 	{
 		Out.OutfitTop = Of->GetOutfitPart(0); Out.OutfitLegs = Of->GetOutfitPart(1);
 		Out.OutfitShoes = Of->GetOutfitPart(2); Out.OutfitHair = Of->GetOutfitPart(3);
+		Out.OutfitAcc = Of->GetOutfitPart(4); Out.OutfitNeck = Of->GetOutfitPart(5); Out.OutfitSocks = Of->GetOutfitPart(6);
 	}
 
 	// Sla op waar de speler staat + kijkt (kijkrichting van de controller, niet de body).
@@ -562,6 +563,7 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	{
 		Of->SetOutfitPart(0, Data.OutfitTop); Of->SetOutfitPart(1, Data.OutfitLegs);
 		Of->SetOutfitPart(2, Data.OutfitShoes); Of->SetOutfitPart(3, Data.OutfitHair);
+		Of->SetOutfitPart(4, Data.OutfitAcc); Of->SetOutfitPart(5, Data.OutfitNeck); Of->SetOutfitPart(6, Data.OutfitSocks);
 	}
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{

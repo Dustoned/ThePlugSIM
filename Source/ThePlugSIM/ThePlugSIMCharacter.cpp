@@ -287,6 +287,9 @@ void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(AThePlugSIMCharacter, OutfitLegs);
 	DOREPLIFETIME(AThePlugSIMCharacter, OutfitShoes);
 	DOREPLIFETIME(AThePlugSIMCharacter, OutfitHair);
+	DOREPLIFETIME(AThePlugSIMCharacter, OutfitAcc);
+	DOREPLIFETIME(AThePlugSIMCharacter, OutfitNeck);
+	DOREPLIFETIME(AThePlugSIMCharacter, OutfitSocks);
 }
 
 void AThePlugSIMCharacter::ApplySkinMesh()
@@ -405,6 +408,7 @@ void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, b
 	if (!BodyComp) { return; }
 	auto Attach = [&](const TCHAR* MeshPath)
 	{
+		if (!MeshPath) { return; } // "None"-keuze
 		USkeletalMesh* PartMesh = LoadObject<USkeletalMesh>(nullptr, MeshPath);
 		if (!PartMesh) { return; }
 		USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(this);
@@ -416,10 +420,10 @@ void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, b
 		OutfitComps.Add(C);
 	};
 	Attach(WeedOutfit::UnderwearPath);
-	Attach(WeedOutfit::PartAt(0, OutfitTop).Path);
-	Attach(WeedOutfit::PartAt(1, OutfitLegs).Path);
-	Attach(WeedOutfit::PartAt(2, OutfitShoes).Path);
-	Attach(WeedOutfit::PartAt(3, OutfitHair).Path);
+	for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx)
+	{
+		Attach(WeedOutfit::PartAt(SlotIdx, GetOutfitPart(SlotIdx)).Path);
+	}
 }
 
 void AThePlugSIMCharacter::SyncOutfitViewFlags()
@@ -447,6 +451,9 @@ void AThePlugSIMCharacter::ServerSetOutfit_Implementation(uint8 Slot, uint8 Inde
 	case 1:  OutfitLegs = Clamped; break;
 	case 2:  OutfitShoes = Clamped; break;
 	case 3:  OutfitHair = Clamped; break;
+	case 4:  OutfitAcc = Clamped; break;
+	case 5:  OutfitNeck = Clamped; break;
+	case 6:  OutfitSocks = Clamped; break;
 	default: OutfitTop = Clamped; break;
 	}
 	ApplySkinMesh(); // server lokaal; repliceert naar clients -> OnRep_Skin

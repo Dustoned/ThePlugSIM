@@ -42,6 +42,33 @@ namespace WeedOutfit
 		{ TEXT("Medium + panama"), TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Hairs/SK_Hair_Medium_1_Panama.SK_Hair_Medium_1_Panama") },
 	};
 
+	// Optionele accessoire-slots ("None" = niks dragen; Path == nullptr wordt overgeslagen).
+	inline const FPart Headwear[] = {
+		{ TEXT("None"),         nullptr },
+		{ TEXT("Headphones"),   TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Head_Accessories/SK_Headphones.SK_Headphones") },
+		{ TEXT("Hairpin"),      TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Head_Accessories/SK_Hairpin.SK_Hairpin") },
+		{ TEXT("Cat ears"),     TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Head_Accessories/SK_Cat_Ears.SK_Cat_Ears") },
+		{ TEXT("Bunny ears"),   TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Head_Accessories/SK_Bunny_Ears_1.SK_Bunny_Ears_1") },
+		{ TEXT("Devil horns"),  TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Head_Accessories/SK_Devil_Horns.SK_Devil_Horns") },
+		{ TEXT("Horns"),        TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Head_Accessories/SK_Horns_1.SK_Horns_1") },
+		{ TEXT("Elf ears"),     TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Head_Accessories/SK_Ears.SK_Ears") },
+	};
+	inline const FPart Necklaces[] = {
+		{ TEXT("None"),           nullptr },
+		{ TEXT("Chain"),          TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Charms/SK_Chain_1.SK_Chain_1") },
+		{ TEXT("Chain + cat"),    TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Charms/SK_Chain_2_Cat.SK_Chain_2_Cat") },
+		{ TEXT("Chain + moon"),   TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Charms/SK_Chain_2_Moon.SK_Chain_2_Moon") },
+		{ TEXT("Chain + triangle"), TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Charms/SK_Chain_2_Tris.SK_Chain_2_Tris") },
+		{ TEXT("Chain heavy"),    TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Charms/SK_Chain_3.SK_Chain_3") },
+	};
+	inline const FPart SocksList[] = {
+		{ TEXT("None"),        nullptr },
+		{ TEXT("Socks"),       TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Socks/SK_Socks_1.SK_Socks_1") },
+		{ TEXT("Socks 2"),     TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Socks/SK_Socks_2.SK_Socks_2") },
+		{ TEXT("Long socks"),  TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Socks/SK_Socks_Long_1.SK_Socks_Long_1") },
+		{ TEXT("Long socks 2"),TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Socks/SK_Socks_Long_2.SK_Socks_Long_2") },
+	};
+
 	// Altijd onder de kleding aanwezig (geen keuze-slot).
 	inline const TCHAR* UnderwearPath = TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Cloth/Accessories/Underwear/SK_Underwear.SK_Underwear");
 
@@ -52,10 +79,14 @@ namespace WeedOutfit
 		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_3.SK_FullBody_Casual_3"),
 	};
 
-	inline int32 SlotCount() { return 4; }
+	inline int32 SlotCount() { return 7; }
 	inline const TCHAR* SlotName(int32 Slot)
 	{
-		switch (Slot) { case 0: return TEXT("Top"); case 1: return TEXT("Pants"); case 2: return TEXT("Shoes"); case 3: return TEXT("Hair"); }
+		switch (Slot)
+		{
+		case 0: return TEXT("Top"); case 1: return TEXT("Pants"); case 2: return TEXT("Shoes"); case 3: return TEXT("Hair");
+		case 4: return TEXT("Headwear"); case 5: return TEXT("Necklace"); case 6: return TEXT("Socks");
+		}
 		return TEXT("?");
 	}
 	inline int32 PartCount(int32 Slot)
@@ -66,6 +97,9 @@ namespace WeedOutfit
 		case 1: return UE_ARRAY_COUNT(Legs);
 		case 2: return UE_ARRAY_COUNT(Shoes);
 		case 3: return UE_ARRAY_COUNT(Hairs);
+		case 4: return UE_ARRAY_COUNT(Headwear);
+		case 5: return UE_ARRAY_COUNT(Necklaces);
+		case 6: return UE_ARRAY_COUNT(SocksList);
 		}
 		return 0;
 	}
@@ -77,6 +111,9 @@ namespace WeedOutfit
 		case 1: return Legs[I];
 		case 2: return Shoes[I];
 		case 3: return Hairs[I];
+		case 4: return Headwear[I];
+		case 5: return Necklaces[I];
+		case 6: return SocksList[I];
 		default: return Tops[I];
 		}
 	}

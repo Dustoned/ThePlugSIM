@@ -155,8 +155,8 @@ void UWardrobeWidget::EnsurePreview()
 	FString Sig;
 	if (const IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(Pawn))
 	{
-		Sig = FString::Printf(TEXT("%d|%d|%d|%d|%d"), Pl->GetPlayerSkinIndex(),
-			Pl->GetOutfitPart(0), Pl->GetOutfitPart(1), Pl->GetOutfitPart(2), Pl->GetOutfitPart(3));
+		Sig = FString::Printf(TEXT("%d"), Pl->GetPlayerSkinIndex());
+		for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx) { Sig += FString::Printf(TEXT("|%d"), Pl->GetOutfitPart(SlotIdx)); }
 	}
 	if (Sig != PreviewOutfitSig || !PreviewActor.IsValid())
 	{
@@ -251,6 +251,7 @@ void UWardrobeWidget::RebuildPreviewActor()
 	{
 		auto Attach = [&](const TCHAR* MeshPath)
 		{
+			if (!MeshPath) { return; } // "None"-keuze
 			USkeletalMesh* PartMesh = LoadObject<USkeletalMesh>(nullptr, MeshPath);
 			if (!PartMesh) { return; }
 			USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(Actor);
@@ -261,10 +262,10 @@ void UWardrobeWidget::RebuildPreviewActor()
 			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		};
 		Attach(WeedOutfit::UnderwearPath);
-		Attach(WeedOutfit::PartAt(0, Pl->GetOutfitPart(0)).Path);
-		Attach(WeedOutfit::PartAt(1, Pl->GetOutfitPart(1)).Path);
-		Attach(WeedOutfit::PartAt(2, Pl->GetOutfitPart(2)).Path);
-		Attach(WeedOutfit::PartAt(3, Pl->GetOutfitPart(3)).Path);
+		for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx)
+		{
+			Attach(WeedOutfit::PartAt(SlotIdx, Pl->GetOutfitPart(SlotIdx)).Path);
+		}
 	}
 
 	PreviewActor = Actor;
@@ -449,8 +450,8 @@ void UWardrobeWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	FString Sig;
 	if (const IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 	{
-		Sig = FString::Printf(TEXT("%d|%d|%d|%d|%d"), Pl->GetPlayerSkinIndex(),
-			Pl->GetOutfitPart(0), Pl->GetOutfitPart(1), Pl->GetOutfitPart(2), Pl->GetOutfitPart(3));
+		Sig = FString::Printf(TEXT("%d"), Pl->GetPlayerSkinIndex());
+		for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx) { Sig += FString::Printf(TEXT("|%d"), Pl->GetOutfitPart(SlotIdx)); }
 	}
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 }

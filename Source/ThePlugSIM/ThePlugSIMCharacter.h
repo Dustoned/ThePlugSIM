@@ -65,6 +65,9 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitLegs = 0;
 	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitShoes = 0;
 	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitHair = 0;
+	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitAcc = 0;   // Headwear (0 = None)
+	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitNeck = 0;  // Necklace (0 = None)
+	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitSocks = 0; // Socks (0 = None)
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> OutfitComps; // aangehangen part-meshes (TP + FP)
 	void AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson);
 	void SyncOutfitViewFlags(); // owner-see/FP-type van de parts gelijktrekken met hun body (na view-toggle)
@@ -200,7 +203,7 @@ public:
 	virtual void SetPlayerSkinIndex(uint8 SkinIndex) override { ServerSetSkin(SkinIndex); }
 	virtual uint8 GetOutfitPart(int32 Slot) const override
 	{
-		switch (Slot) { case 1: return OutfitLegs; case 2: return OutfitShoes; case 3: return OutfitHair; default: return OutfitTop; }
+		switch (Slot) { case 1: return OutfitLegs; case 2: return OutfitShoes; case 3: return OutfitHair; case 4: return OutfitAcc; case 5: return OutfitNeck; case 6: return OutfitSocks; default: return OutfitTop; }
 	}
 	virtual void SetOutfitPart(int32 Slot, uint8 Index) override { ServerSetOutfit((uint8)Slot, Index); }
 
