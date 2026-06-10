@@ -4,6 +4,9 @@
 #include "World/CityDoor.h"
 #include "World/DayNightController.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/SkyLight.h"
+#include "Components/LightComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "GameFramework/Character.h"
@@ -226,16 +229,36 @@ void ADoorRetrofitter::ScanAndConvert()
 		UE_LOG(LogWeedShop, Log, TEXT("DoorRetrofitter: %d glas/raam-componenten blokkeren nu de speler"), GlassFixed);
 	}
 
-	// Extra zonnen opruimen: pack-lighting-scenario's streamen soms meerdere directional lights in.
-	// Onze DayNightController adopteert er een; de rest geeft dubbele schaduwen + de paarse
-	// ForwardShadingPriority-warning -> weg ermee (ook als ze later in-streamen).
+	// Vreemde zonnen/skylights uitschakelen: de pack streamt lighting-scenario's in (meerdere
+	// directional lights + skylights). Destroy is onbetrouwbaar op gestreamde actors -> component
+	// onzichtbaar + intensiteit 0 werkt altijd. Onze controller adopteert daarna sky/atmosfeer.
 	if (ADayNightController* DN = ADayNightController::GetLocal(W))
 	{
-		if (ADirectionalLight* Adopted = DN->GetSun())
+		DN->TryAdoptSky();
+		ADirectionalLight* AdoptedSun = DN->GetSun();
+		for (TActorIterator<ADirectionalLight> It(W); It; ++It)
 		{
-			for (TActorIterator<ADirectionalLight> It(W); It; ++It)
+			if (*It == AdoptedSun) { continue; }
+			if (ULightComponent* LC = It->GetLightComponent())
 			{
-				if (*It != Adopted) { It->Destroy(); }
+				if (LC->IsVisible())
+				{
+					LC->SetVisibility(false);
+					LC->SetIntensity(0.f);
+				}
+			}
+		}
+		ASkyLight* AdoptedSky = DN->GetSky();
+		for (TActorIterator<ASkyLight> It(W); It; ++It)
+		{
+			if (*It == AdoptedSky) { continue; }
+			if (USkyLightComponent* SC = It->GetLightComponent())
+			{
+				if (SC->IsVisible())
+				{
+					SC->SetVisibility(false);
+					SC->SetIntensity(0.f);
+				}
 			}
 		}
 	}

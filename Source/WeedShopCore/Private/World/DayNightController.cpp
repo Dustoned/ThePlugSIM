@@ -56,6 +56,22 @@ const UDayCycleComponent* ADayNightController::GetDayCycle() const
 	return GS ? GS->GetDayCycle() : nullptr;
 }
 
+void ADayNightController::TryAdoptSky()
+{
+	UWorld* W = GetWorld();
+	if (!W || Sky.IsValid()) { return; }
+	for (TActorIterator<ASkyLight> It(W); It; ++It) { Sky = *It; break; }
+	if (Sky.IsValid() && Sky->GetLightComponent())
+	{
+		USkyLightComponent* SkyComp = Sky->GetLightComponent();
+		SkyComp->SetMobility(EComponentMobility::Movable);
+		// BELANGRIJK: een Movable SkyLight zonder verse capture heeft een lege/oude cubemap.
+		// Realtime capture houdt de cubemap geldig -> ambient dimt netjes mee met de nacht.
+		SkyComp->SetRealTimeCaptureEnabled(true);
+		SkyComp->RecaptureSky();
+	}
+}
+
 void ADayNightController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -75,21 +91,16 @@ void ADayNightController::BeginPlay()
 	{
 		Sun->GetLightComponent()->SetMobility(EComponentMobility::Movable); // runtime draaibaar
 		Sun->GetLightComponent()->SetCastShadows(true); // dak houdt de zon tegen -> niet binnen
+		// ONZE zon is de atmosfeer-zon: de zon-schijf/hemel volgt onze rotatie (pack-maps hebben
+		// eigen zonnen in gestreamde lighting-scenario's - die schakelt de DoorRetrofitter uit).
+		if (UDirectionalLightComponent* SunDL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent()))
+		{
+			SunDL->SetAtmosphereSunLight(true);
+		}
 	}
 
-	// SkyLight voor ambient (zoek bestaande).
-	for (TActorIterator<ASkyLight> It(W); It; ++It) { Sky = *It; break; }
-	if (Sky.IsValid() && Sky->GetLightComponent())
-	{
-		USkyLightComponent* SkyComp = Sky->GetLightComponent();
-		SkyComp->SetMobility(EComponentMobility::Movable);
-		// BELANGRIJK: een Movable SkyLight zonder verse capture heeft een lege/oude cubemap.
-		// Gevolg: muren die de zon niet raken (de rechtermuur) krijgen GEEN ambient -> pikzwart.
-		// Realtime capture houdt de cubemap altijd geldig, zodat alle muren ambient krijgen en
-		// de ambient buiten netjes met de lucht mee donkerder wordt 's nachts (realistisch).
-		SkyComp->SetRealTimeCaptureEnabled(true);
-		SkyComp->RecaptureSky();
-	}
+	// SkyLight voor ambient (zoek bestaande; in pack-maps streamt 'ie later in -> TryAdoptSky).
+	TryAdoptSky();
 
 	// Vaste belichting (geen auto-exposure): anders wordt buiten donker zodra je in een lichte kamer
 	// kijkt en omgekeerd. Een onbegrensd Post Process Volume met Manual exposure houdt alles gelijk.

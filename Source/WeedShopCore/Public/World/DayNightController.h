@@ -44,6 +44,9 @@ public:
 
 	// De geadopteerde zon (voor opruimen van extra directional lights in pack-maps).
 	class ADirectionalLight* GetSun() const { return Sun.Get(); }
+	class ASkyLight* GetSky() const { return Sky.Get(); }
+	// Pack-maps: sky (her-)adopteren zodra een gestreamde skylight binnenkomt.
+	void TryAdoptSky();
 
 protected:
 	virtual void BeginPlay() override;
