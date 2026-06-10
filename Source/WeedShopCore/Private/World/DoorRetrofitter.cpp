@@ -87,19 +87,31 @@ void ADoorRetrofitter::BeginPlay()
 	ScanAndConvert();
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);
 
-	// Dev: -ElevScanAt=X,Y,Z -> teleporteer de speler daarheen (streamt het gebouw in) en dump daarna
-	// alle elevator-meshes in de buurt naar Saved/ElevScan.txt (voor het bouwen van een werkende lift).
-	FString ScanArg;
-	if (FParse::Value(FCommandLine::Get(), TEXT("ElevScanAt="), ScanArg))
+	// Dev: -ElevScan -> pak de LAATSTE gemarkeerde spot (MarkedSpots.txt) op deze map, teleporteer de
+	// speler erheen (streamt het gebouw in) en dump de elevator-meshes naar Saved/ElevScan.txt.
+	if (FParse::Param(FCommandLine::Get(), TEXT("ElevScan")))
 	{
-		TArray<FString> Parts;
-		ScanArg.ParseIntoArray(Parts, TEXT(","));
-		if (Parts.Num() >= 3)
+		const FString MapPath = GetWorld() ? GetWorld()->GetOutermost()->GetName() : FString();
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+		for (int32 i = Lines.Num() - 1; i >= 0; --i)
 		{
+			if (!Lines[i].Contains(MapPath)) { continue; }
+			const int32 PIdx = Lines[i].Find(TEXT("pos=("));
+			if (PIdx == INDEX_NONE) { continue; }
+			FString PosStr = Lines[i].Mid(PIdx + 5);
+			int32 Close = INDEX_NONE;
+			if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+			TArray<FString> Parts;
+			PosStr.ParseIntoArray(Parts, TEXT(","));
+			if (Parts.Num() < 3) { continue; }
 			ElevScanPos = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
 			bElevScan = true;
+			UE_LOG(LogWeedShop, Warning, TEXT("ELEVSCAN gestart: spot (%.0f, %.0f, %.0f)"), ElevScanPos.X, ElevScanPos.Y, ElevScanPos.Z);
 			GetWorldTimerManager().SetTimer(ElevScanTimer, this, &ADoorRetrofitter::ElevTeleport, 5.f, false);
+			break;
 		}
+		if (!bElevScan) { UE_LOG(LogWeedShop, Warning, TEXT("ELEVSCAN: geen marked spot voor deze map gevonden")); }
 	}
 }
 
