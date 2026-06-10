@@ -274,7 +274,7 @@ void UWardrobeWidget::UpdatePreviewCamera()
 {
 	if (!PreviewCapture.IsValid() || !PreviewActor.IsValid()) { return; }
 	const FVector Stage = PreviewActor->GetActorLocation();
-	const FVector Focus = Stage + FVector(0.f, 0.f, FMath::Clamp(PreviewFocusZ, 25.f, 170.f)); // verticaal slepen schuift dit
+	const FVector Focus = Stage + FVector(0.f, 0.f, FMath::Clamp(PreviewFocusZ, 50.f, 140.f)); // verticaal slepen schuift dit
 	const float Rad = FMath::DegreesToRadians(PreviewYaw);
 	// Start recht voor het poppetje (mannequin kijkt naar +X), orbit met PreviewYaw.
 	const FVector Dir(FMath::Cos(Rad), FMath::Sin(Rad), 0.f);
@@ -332,7 +332,7 @@ FReply UWardrobeWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPo
 		}
 		const FVector2D Delta = InMouseEvent.GetCursorDelta();
 		PreviewYaw = FMath::Fmod(PreviewYaw + Delta.X * 0.7f, 360.f);              // horizontaal = draaien
-		PreviewFocusZ = FMath::Clamp(PreviewFocusZ + Delta.Y * 0.45f, 25.f, 170.f); // verticaal = hoofd <-> schoenen
+		PreviewFocusZ = FMath::Clamp(PreviewFocusZ + Delta.Y * 0.15f, 50.f, 140.f); // verticaal = hoofd <-> schoenen (rustig + begrensd)
 		UpdatePreviewCamera();
 		return FReply::Handled();
 	}
