@@ -45,6 +45,7 @@ protected:
 	void OnLoadAutosave(int32 SlotIdx);               // Load de autosave van dit slot
 	void OnModeChosen(int32 Mode);                    // 0 Normal, 1 Sandbox, 2 Testing (na New Game-slot)
 	int32 PendingNewSlot = -1;                        // slot gekozen voor New Game, wacht op mode-keuze
+	int32 PendingNewMap = 0;                          // 0 = City (main), 1 = Beach City (test-map)
 
 	// --- LAN co-op ---
 	void OpenCoop();

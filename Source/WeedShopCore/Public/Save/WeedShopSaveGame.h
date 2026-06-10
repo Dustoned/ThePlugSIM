@@ -144,6 +144,7 @@ public:
 	// Wanneer deze save geschreven is (UTC). Voor "Continue" -> nieuwste van handmatig vs autosave.
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	FDateTime SavedAt = FDateTime(0);
+	UPROPERTY() FString MapPath; // map waarop de save gemaakt is (leeg = standaard)
 
 	// True als dit een autosave-bestand is (apart van de handmatige save).
 	UPROPERTY(VisibleAnywhere, Category = "Save")

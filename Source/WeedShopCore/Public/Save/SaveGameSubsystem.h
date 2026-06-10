@@ -118,6 +118,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	void NewGameInSlot(int32 Slot);
 
+	// Map-selectie voor nieuwe games (menu): leeg = de huidige/standaard map. Loads/continues
+	// reizen automatisch naar de map waarop de save gemaakt is (MapPath in de save).
+	void SetPendingMap(const FString& MapPath) { PendingMapPath = MapPath; }
+	FString PendingMapPath;
+
 	// Laad een specifiek slot.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	bool LoadSlot(int32 Slot);

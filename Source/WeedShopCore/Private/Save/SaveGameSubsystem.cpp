@@ -209,7 +209,8 @@ void USaveGameSubsystem::ReloadCurrentLevel(const FString& Options)
 	UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (!W) { return; }
 	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); } // travel vanuit pauze
-	const FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
+	FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
+	if (!PendingMapPath.IsEmpty()) { LevelName = PendingMapPath; } // map-selectie (menu) of save-map
 	UE_LOG(LogWeedShop, Log, TEXT("Level reloaded for save action: %s (opts='%s')"), *LevelName, *Options);
 	WeedShop_RequestGameLoadingScreen(); // toon het laadscherm voor deze in-game transitie
 	UGameplayStatics::OpenLevel(W, FName(*LevelName), true, Options);
@@ -277,6 +278,11 @@ bool USaveGameSubsystem::RequestLoad(int32 Slot, bool bAutosave)
 	SetSlot(Slot);
 	Pending = EPending::Load;
 	PendingLoadName = Name;
+	// Reis naar de map waarop deze save gemaakt is (leeg veld = oude save -> huidige map).
+	if (const UWeedShopSaveGame* Peek = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0)))
+	{
+		PendingMapPath = Peek->MapPath;
+	}
 	ReloadCurrentLevel();
 	return true;
 }
@@ -291,6 +297,10 @@ bool USaveGameSubsystem::RequestContinue()
 	if (Name.IsEmpty()) { return false; }
 	Pending = EPending::Load;
 	PendingLoadName = Name;
+	if (const UWeedShopSaveGame* Peek = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0)))
+	{
+		PendingMapPath = Peek->MapPath;
+	}
 	ReloadCurrentLevel();
 	return true;
 }
@@ -632,6 +642,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
 	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); Save->bShopLicensed = Lv->IsShopLicensed(); }
 	Save->bFreeBuild = GS->IsFreeBuild();
+	if (UWorld* Wm = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr) { Save->MapPath = Wm->GetOutermost()->GetName(); }
 	Save->CoopMode = (uint8)GS->GetCoopMode();
 
 	// Gedeelde wereld-staat.
