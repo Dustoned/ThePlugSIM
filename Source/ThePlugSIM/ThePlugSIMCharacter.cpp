@@ -734,10 +734,10 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	// B: wissel tussen first-person en third-person (om jezelf / je skin te bekijken).
 	Input->BindKey(EKeys::B, IE_Pressed, this, &AThePlugSIMCharacter::ToggleThirdPerson);
 
-	// Furniture-authoring hotkeys (sandbox): F8 = templates opslaan, F9 = geplaatste meubels wissen,
+	// Furniture-authoring hotkeys (sandbox): F8 = templates opslaan (F9 = nu de spot-info-overlay;
+	// meubels wissen kan nog via het console-commando WeedClearFurniture),
 	// F10 = woning-types-overzicht. Werkt zonder console.
 	Input->BindKey(EKeys::F8,  IE_Pressed, this, &AThePlugSIMCharacter::WeedSaveFurniture);
-	Input->BindKey(EKeys::F9,  IE_Pressed, this, &AThePlugSIMCharacter::WeedClearFurniture);
 	Input->BindKey(EKeys::F10, IE_Pressed, this, &AThePlugSIMCharacter::WeedFurnitureTypes);
 
 	// ESC: pauze-/menu-scherm. bExecuteWhenPaused zodat je er ook UIT kunt met ESC terwijl de
