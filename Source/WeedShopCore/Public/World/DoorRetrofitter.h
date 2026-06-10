@@ -39,6 +39,10 @@ protected:
 	TArray<TWeakObjectPtr<class ACityDoor>> SpawnedDoors; // om los GLAS aan de juiste deur te hangen
 	TSet<TWeakObjectPtr<class UPrimitiveComponent>> GlassFixedComps; // raam-componenten die al geforceerd blokkeren
 
+	// Lift-schachten (per XY-cluster van deurframes): stabiliteits-check + gebouwde schachten.
+	TMap<FIntPoint, int32> ElevPrevCount;
+	TSet<FIntPoint> ElevBuilt;
+
 	// Kaart-capture (lazy aangemaakt bij de eerste CaptureMapNow).
 	void EnsureMapCapture();
 	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> MapRT;

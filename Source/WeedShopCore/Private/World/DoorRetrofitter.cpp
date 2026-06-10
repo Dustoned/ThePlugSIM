@@ -3,6 +3,7 @@
 #include "WeedShopCore.h"
 #include "World/CityDoor.h"
 #include "World/DayNightController.h"
+#include "World/PackElevator.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
 #include "Components/LightComponent.h"
@@ -349,6 +350,98 @@ void ADoorRetrofitter::ScanAndConvert()
 					SC->SetVisibility(false);
 					SC->SetIntensity(0.f);
 				}
+			}
+		}
+	}
+
+	// Lift-schachten: groepeer SM_ElevatorDoorFrame01-frames per XY-cluster; zodra een cluster 2 scans
+	// stabiel is (alle verdiepingen ingestreamd) spawnen we een werkende APackElevator met de bestaande
+	// schuif-panelen + de pack-cabine.
+	{
+		struct FShaft { FVector Ref = FVector::ZeroVector; TArray<float> FloorZ; };
+		TMap<FIntPoint, FShaft> Shafts;
+		TArray<TPair<FVector, UStaticMeshComponent*>> AllPanels; // (positie, paneel)
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			AActor* A = *It;
+			if (!IsValid(A) || A->IsA(APackElevator::StaticClass())) { continue; }
+			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+			for (UStaticMeshComponent* Comp : Comps)
+			{
+				if (!Comp || !Comp->GetStaticMesh()) { continue; }
+				const FString MeshName = Comp->GetStaticMesh()->GetName();
+				const FVector L = Comp->GetComponentLocation();
+				if (MeshName == TEXT("SM_ElevatorDoorFrame01"))
+				{
+					const FIntPoint Key(FMath::RoundToInt(L.X / 100.f), FMath::RoundToInt(L.Y / 100.f));
+					FShaft& Sh = Shafts.FindOrAdd(Key);
+					Sh.Ref = L;
+					Sh.FloorZ.AddUnique(L.Z);
+				}
+				else if (MeshName == TEXT("SM_ElevatorDoor"))
+				{
+					AllPanels.Add(TPair<FVector, UStaticMeshComponent*>(L, Comp));
+				}
+			}
+		}
+		for (TPair<FIntPoint, FShaft>& KV : Shafts)
+		{
+			if (ElevBuilt.Contains(KV.Key)) { continue; }
+			int32& Prev = ElevPrevCount.FindOrAdd(KV.Key);
+			const int32 Count = KV.Value.FloorZ.Num();
+			if (Count < 2 || Count != Prev) { Prev = Count; continue; } // wacht tot 2 scans stabiel
+			ElevBuilt.Add(KV.Key);
+
+			TArray<float> Floors = KV.Value.FloorZ;
+			Floors.Sort();
+			// Panelen koppelen aan verdieping-index (zelfde Z, binnen 250 XY van de schacht).
+			TArray<TPair<int32, UStaticMeshComponent*>> Panels;
+			TArray<FVector> GroundPanelPos;
+			for (const TPair<FVector, UStaticMeshComponent*>& P : AllPanels)
+			{
+				if (FVector::Dist2D(P.Key, KV.Value.Ref) > 250.f) { continue; }
+				int32 FloorIdx = INDEX_NONE;
+				for (int32 i = 0; i < Floors.Num(); ++i) { if (FMath::Abs(P.Key.Z - Floors[i]) < 60.f) { FloorIdx = i; break; } }
+				if (FloorIdx == INDEX_NONE) { continue; }
+				Panels.Add(TPair<int32, UStaticMeshComponent*>(FloorIdx, P.Value));
+				if (FloorIdx == 0) { GroundPanelPos.Add(P.Key); }
+			}
+			if (Panels.Num() == 0) { continue; }
+
+			// Schuifrichting + cabine-positie data-gedreven uit de 2 begane-grond-panelen.
+			FVector SlideDir = FVector::XAxisVector;
+			FVector OpeningCenter = KV.Value.Ref;
+			if (GroundPanelPos.Num() >= 2)
+			{
+				SlideDir = (GroundPanelPos[1] - GroundPanelPos[0]).GetSafeNormal2D();
+				OpeningCenter = (GroundPanelPos[0] + GroundPanelPos[1]) * 0.5f;
+			}
+			// Schacht-kant kiezen: loodrecht op de deur; de kant met de MINSTE vloer-meshes op verdieping 1
+			// is de schacht (daar hoort geen vloer te zijn).
+			const FVector Perp = FVector::CrossProduct(SlideDir, FVector::UpVector).GetSafeNormal2D();
+			int32 CntPos = 0, CntNeg = 0;
+			const float ProbeZ = Floors.Num() > 1 ? Floors[1] : Floors[0];
+			for (TActorIterator<AActor> It2(W); It2; ++It2)
+			{
+				TInlineComponentArray<UStaticMeshComponent*> Comps2(*It2);
+				for (UStaticMeshComponent* C2 : Comps2)
+				{
+					if (!C2 || !C2->GetStaticMesh()) { continue; }
+					if (!C2->GetStaticMesh()->GetName().StartsWith(TEXT("SM_Floor"))) { continue; }
+					const FVector L2 = C2->GetComponentLocation();
+					if (FMath::Abs(L2.Z - ProbeZ) > 60.f) { continue; }
+					if (FVector::Dist2D(L2, OpeningCenter + Perp * 140.f) < 220.f) { ++CntPos; }
+					if (FVector::Dist2D(L2, OpeningCenter - Perp * 140.f) < 220.f) { ++CntNeg; }
+				}
+			}
+			const FVector ShaftSide = (CntPos <= CntNeg) ? Perp : -Perp;
+			const FVector CabCenter = OpeningCenter + ShaftSide * 95.f;
+
+			FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			if (APackElevator* Elev = W->SpawnActor<APackElevator>(APackElevator::StaticClass(), FTransform(FVector(CabCenter.X, CabCenter.Y, Floors[0])), SP))
+			{
+				Elev->Setup(Floors, SlideDir, Panels, CabCenter);
+				UE_LOG(LogWeedShop, Warning, TEXT("PackElevator gebouwd: %d verdiepingen @ (%.0f, %.0f)"), Floors.Num(), CabCenter.X, CabCenter.Y);
 			}
 		}
 	}
