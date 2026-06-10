@@ -274,11 +274,11 @@ void UWardrobeWidget::UpdatePreviewCamera()
 {
 	if (!PreviewCapture.IsValid() || !PreviewActor.IsValid()) { return; }
 	const FVector Stage = PreviewActor->GetActorLocation();
-	const FVector Focus = Stage + FVector(0.f, 0.f, 92.f); // borsthoogte
+	const FVector Focus = Stage + FVector(0.f, 0.f, FMath::Clamp(PreviewFocusZ, 25.f, 170.f)); // verticaal slepen schuift dit
 	const float Rad = FMath::DegreesToRadians(PreviewYaw);
 	// Start recht voor het poppetje (mannequin kijkt naar +X), orbit met PreviewYaw.
 	const FVector Dir(FMath::Cos(Rad), FMath::Sin(Rad), 0.f);
-	const FVector CamLoc = Focus + Dir * FMath::Clamp(PreviewDist, 140.f, 460.f);
+	const FVector CamLoc = Focus + Dir * FMath::Clamp(PreviewDist, 150.f, 330.f);
 	PreviewCapture->SetActorLocationAndRotation(CamLoc, (Focus - CamLoc).Rotation());
 }
 
@@ -299,11 +299,13 @@ bool UWardrobeWidget::IsOverPreview(const FPointerEvent& Ev) const
 
 FReply UWardrobeWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
+	// GEEN mouse-capture: die kon blijven hangen waardoor de muis 'locked' en je nergens meer op kon
+	// klikken. Drag werkt prima zonder: we volgen de cursor zolang de linker knop ingedrukt is.
 	if (PhoneComp.IsValid() && PhoneComp->IsWardrobeOpen() && IsOverPreview(InMouseEvent)
 		&& InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		bPreviewDrag = true;
-		return FReply::Handled().CaptureMouse(TakeWidget());
+		return FReply::Handled();
 	}
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
@@ -313,7 +315,7 @@ FReply UWardrobeWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const
 	if (bPreviewDrag)
 	{
 		bPreviewDrag = false;
-		return FReply::Handled().ReleaseMouseCapture();
+		return FReply::Handled();
 	}
 	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
 }
@@ -322,7 +324,15 @@ FReply UWardrobeWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPo
 {
 	if (bPreviewDrag)
 	{
-		PreviewYaw = FMath::Fmod(PreviewYaw + InMouseEvent.GetCursorDelta().X * 0.7f, 360.f);
+		// Veiligheid: knop al los (up gemist)? Stop de drag.
+		if (!InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton))
+		{
+			bPreviewDrag = false;
+			return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
+		}
+		const FVector2D Delta = InMouseEvent.GetCursorDelta();
+		PreviewYaw = FMath::Fmod(PreviewYaw + Delta.X * 0.7f, 360.f);              // horizontaal = draaien
+		PreviewFocusZ = FMath::Clamp(PreviewFocusZ + Delta.Y * 0.45f, 25.f, 170.f); // verticaal = hoofd <-> schoenen
 		UpdatePreviewCamera();
 		return FReply::Handled();
 	}
@@ -333,7 +343,7 @@ FReply UWardrobeWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FP
 {
 	if (PhoneComp.IsValid() && PhoneComp->IsWardrobeOpen() && IsOverPreview(InMouseEvent))
 	{
-		PreviewDist = FMath::Clamp(PreviewDist - InMouseEvent.GetWheelDelta() * 28.f, 140.f, 460.f);
+		PreviewDist = FMath::Clamp(PreviewDist - InMouseEvent.GetWheelDelta() * 20.f, 150.f, 330.f);
 		UpdatePreviewCamera();
 		return FReply::Handled();
 	}

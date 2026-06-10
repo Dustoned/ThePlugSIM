@@ -43,8 +43,9 @@ protected:
 	TWeakObjectPtr<class ASkeletalMeshActor> PreviewActor;   // de kloon (body + outfit-parts)
 	TWeakObjectPtr<class ASceneCapture2D> PreviewCapture;    // camera + lampen (orbit rond de kloon)
 	FString PreviewOutfitSig;  // kloon herbouwen zodra skin/outfit wijzigt
-	float PreviewYaw = 0.f;    // orbit-hoek (slepen)
-	float PreviewDist = 300.f; // camera-afstand (zoomen)
+	float PreviewYaw = 0.f;    // orbit-hoek (horizontaal slepen)
+	float PreviewDist = 280.f; // camera-afstand (zoomen)
+	float PreviewFocusZ = 92.f; // kijk-hoogte (verticaal slepen: hoofd <-> schoenen)
 	bool bPreviewDrag = false;
 	void EnsurePreview();          // capture + kloon up-to-date houden (elke tick zolang open)
 	void RebuildPreviewActor();    // kloon (body + parts) opnieuw opbouwen
