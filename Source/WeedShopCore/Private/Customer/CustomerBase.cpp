@@ -1794,11 +1794,14 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 			// District-bonus alleen LOKAAL (binnen ~2,5 blok van het district-doel). De oude MapRadius-variant
 			// trok ook naar districten aan de overkant -> alsnog dwars-door-de-stad-trips. Ligt het district-doel
 			// ver weg, dan telt 'ie gewoon niet mee en blijven ze in hun regio (en migreren ze over dagen vanzelf).
+			// Centrum-mijding BEGRENSD: alleen straf BINNEN ~1,6 blok van het centrum, geen beloning verder weg.
+			// (De oude onbegrensde +CenterDist werd na de trip-band de dominante term -> iedereen koos doelen op
+			// de buitenrand en kluitte daar samen rond de buiten-blokken/winkels.)
 			const float Score = TripScore
-				+ CenterDist * 1.25f
+				- FMath::Max(0.f, Pitch * 1.6f - CenterDist) * 1.2f
 				+ FMath::Max(0.f, Pitch * 2.5f - DistrictDist) * 1.0f
 				+ Alignment * Pitch * 0.85f
-				- static_cast<float>(Crowd) * 2100.f
+				- static_cast<float>(Crowd) * 2400.f
 				- CenterPenalty
 				+ static_cast<float>(NoiseSeed) * 0.25f;
 

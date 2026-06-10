@@ -659,6 +659,36 @@ void ACustomerSpawner::CheckResidentRotation()
 		if (Day != LastRotationDay) { LastRotationDay = Day; RotateResidents(); }
 	}
 
+	// SPREADDIAG (tijdelijk): elke 60s spreiding loggen - bezette cellen, max kluit per cel, rand-aandeel.
+	if (World->GetTimeSeconds() >= NextCenterDiagTime)
+	{
+		NextCenterDiagTime = World->GetTimeSeconds() + 60.f;
+		ACityGenerator* DiagCity = nullptr;
+		for (TActorIterator<ACityGenerator> It(World); It; ++It) { DiagCity = *It; break; }
+		if (DiagCity)
+		{
+			const FVector Ctr = DiagCity->GetCityCenter();
+			const float Cell = FMath::Max(100.f, DiagCity->GetPitch());
+			TMap<FIntPoint, int32> Cells;
+			int32 Outdoor = 0, NearEdge = 0, Still = 0;
+			const float EdgeR = DiagCity->GetGridRadiusClamped() * Cell;
+			for (TActorIterator<ACustomerBase> It(World); It; ++It)
+			{
+				if (!IsValid(*It) || !It->IsResident()) { continue; }
+				FResidentMovementSnapshot S;
+				if (!It->GetResidentMovementSnapshot(S) || S.bAtHomeInside) { continue; }
+				++Outdoor;
+				if (S.Speed2D < 12.f) { ++Still; }
+				const FVector L = S.Location;
+				if (FMath::Max(FMath::Abs(L.X - Ctr.X), FMath::Abs(L.Y - Ctr.Y)) > EdgeR - Cell * 0.5f) { ++NearEdge; }
+				++Cells.FindOrAdd(FIntPoint(FMath::RoundToInt((L.X - Ctr.X) / Cell), FMath::RoundToInt((L.Y - Ctr.Y) / Cell)));
+			}
+			int32 MaxCell = 0;
+			for (const auto& KV : Cells) { MaxCell = FMath::Max(MaxCell, KV.Value); }
+			UE_LOG(LogWeedShop, Warning, TEXT("SPREADDIAG clock=%.1f outdoor=%d cells=%d maxPerCell=%d nearEdge=%d still=%d"),
+				DC->GetClockHour(), Outdoor, Cells.Num(), MaxCell, NearEdge, Still);
+		}
+	}
 }
 
 void ACustomerSpawner::ApplyDayNightPopulation(bool bNight)
