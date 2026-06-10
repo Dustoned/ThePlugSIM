@@ -550,9 +550,8 @@ bool ACustomerBase::GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSn
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	const int32 Today = DC ? DC->GetDayNumber() : ResidentRouteDay;
-	// TEST: park-bezoeken tijdelijk UIT, om te zien of de centrum-prop de park-bezoekers zijn of de
-	// deal-zoekers bij de speler. Blijft de prop weg -> was het park (dan re-enable ik een zachte versie).
-	const bool bParkVisitor = false;
+	// Zelfde gate als in PickResidentParkVisitSlot: alleen ~1/3 van de bewoners bezoekt het park.
+	const bool bParkVisitor = (FMath::Abs(RoamRouteSeed % 3) == 0);
 	OutSnapshot.bNeedsParkVisitToday = bParkVisitor && Today >= 0 && GetResidentParkVisitsToday(Today) < 2;
 	if (City && DC && OutSnapshot.bNeedsParkVisitToday && !bAtHomeInside && !bEmergingFromHome && !bEnteringHome)
 	{
@@ -2364,6 +2363,14 @@ float ACustomerBase::ComputeResidentParkUrgencyHour(ACityGenerator* City, const 
 int32 ACustomerBase::PickResidentParkVisitSlot(ACityGenerator* City, const UDayCycleComponent* DayCycle, int32 Today, float Hour) const
 {
 	if (Today < 0)
+	{
+		return 0;
+	}
+
+	// Maar ~1/3 van de bewoners is een park-bezoeker (stabiel per bewoner). Dit is de ECHTE beslissing
+	// (niet de snapshot): zonder deze gate willen alle 65 bewoners 2x per dag naar het park = 130 trips/dag
+	// door het kleine centrum -> de permanente ring/prop rond het park. Nu ~40 trips/dag, prima doorstroom.
+	if (FMath::Abs(RoamRouteSeed % 3) != 0)
 	{
 		return 0;
 	}
