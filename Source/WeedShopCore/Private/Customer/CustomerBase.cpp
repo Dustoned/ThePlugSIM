@@ -478,6 +478,11 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 
 bool ACustomerBase::ShouldShowOnCityMap() const
 {
+	// Winkeliers staan vast achter hun balie - geen map-stip (oogt anders als een vastzittende NPC).
+	if (bShopkeeper)
+	{
+		return false;
+	}
 	if (!bResident)
 	{
 		return !IsHidden();
