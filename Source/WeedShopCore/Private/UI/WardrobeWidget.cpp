@@ -16,6 +16,11 @@
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "GameFramework/Pawn.h"
+#include "Components/Image.h"
+#include "Engine/SceneCapture2D.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Engine/World.h"
 
 void UWardrobeWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
 
@@ -60,7 +65,7 @@ void UWardrobeWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(520.f, 480.f));
+	CS->SetSize(FVector2D(800.f, 520.f));
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
 	UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -86,8 +91,76 @@ void UWardrobeWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBoxSlot* ScS = Outer->AddChildToVerticalBox(ScreenB);
 	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
+	// Links: live preview van je poppetje (vooraanzicht). Rechts: de outfit-keuzes.
+	UHorizontalBox* Split = WidgetTree->ConstructWidget<UHorizontalBox>();
+	ScreenB->SetContent(Split);
+
+	UBorder* PrevB = WidgetTree->ConstructWidget<UBorder>();
+	PrevB->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.03f, 0.06f, 1.f), 10.f));
+	PrevB->SetPadding(FMargin(4.f));
+	PreviewImage = WidgetTree->ConstructWidget<UImage>();
+	PrevB->SetContent(PreviewImage);
+	USizeBox* PrevSz = WidgetTree->ConstructWidget<USizeBox>();
+	PrevSz->SetWidthOverride(280.f);
+	PrevSz->SetContent(PrevB);
+	UHorizontalBoxSlot* PS = Split->AddChildToHorizontalBox(PrevSz);
+	PS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+
 	Body = WidgetTree->ConstructWidget<UVerticalBox>();
-	ScreenB->SetContent(Body);
+	UHorizontalBoxSlot* BSl = Split->AddChildToHorizontalBox(Body);
+	BSl->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+}
+
+void UWardrobeWidget::EnsurePreview()
+{
+	APawn* Pawn = GetOwningPlayerPawn();
+	UWorld* W = GetWorld();
+	if (!Pawn || !W) { return; }
+
+	if (!PreviewRT)
+	{
+		PreviewRT = NewObject<UTextureRenderTarget2D>(this);
+		PreviewRT->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
+		PreviewRT->InitAutoFormat(360, 540);
+		PreviewRT->UpdateResourceImmediate(true);
+		if (PreviewImage)
+		{
+			FSlateBrush Brush;
+			Brush.SetResourceObject(PreviewRT);
+			Brush.ImageSize = FVector2D(272.f, 408.f);
+			PreviewImage->SetBrush(Brush);
+		}
+	}
+	if (!PreviewCapture.IsValid())
+	{
+		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ASceneCapture2D* Cap = W->SpawnActor<ASceneCapture2D>(ASceneCapture2D::StaticClass(), FTransform::Identity, SP);
+		if (!Cap) { return; }
+		if (USceneCaptureComponent2D* C = Cap->GetCaptureComponent2D())
+		{
+			C->TextureTarget = PreviewRT;
+			C->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+			C->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+			C->ShowOnlyActors.Add(Pawn);
+			C->FOVAngle = 32.f;
+			C->bCaptureEveryFrame = true; // live: outfit-wissels + animatie direct zichtbaar
+			C->PostProcessSettings.bOverride_AutoExposureBias = true;
+			C->PostProcessSettings.AutoExposureBias = 1.2f; // binnen niet te donker
+		}
+		PreviewCapture = Cap;
+	}
+
+	// Vooraanzicht: camera recht voor de pawn, kijkend terug (volgt mee als je draait/loopt).
+	const FVector Base = Pawn->GetActorLocation();
+	const FVector Fwd = Pawn->GetActorForwardVector();
+	const FVector CamLoc = Base + Fwd * 260.f + FVector(0.f, 0.f, 10.f);
+	PreviewCapture->SetActorLocationAndRotation(CamLoc, (Base + FVector(0.f, 0.f, 10.f) - CamLoc).Rotation());
+}
+
+void UWardrobeWidget::ReleasePreview()
+{
+	if (PreviewCapture.IsValid()) { PreviewCapture->Destroy(); }
+	PreviewCapture = nullptr;
 }
 
 void UWardrobeWidget::FillBody()
@@ -175,7 +248,8 @@ void UWardrobeWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bOpen = PhoneComp.IsValid() && PhoneComp->IsWardrobeOpen();
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bOpen) { LastSig.Reset(); return; }
+	if (!bOpen) { LastSig.Reset(); ReleasePreview(); return; }
+	EnsurePreview();
 
 	// Alleen herbouwen bij wijziging (skin of outfit) -> geen flicker.
 	FString Sig;

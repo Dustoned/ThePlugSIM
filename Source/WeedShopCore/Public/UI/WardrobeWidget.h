@@ -30,6 +30,13 @@ protected:
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
+	// Live preview: SceneCapture die ALLEEN jouw character rendert (vooraanzicht) naar een render target.
+	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> PreviewRT;
+	UPROPERTY() TObjectPtr<class UImage> PreviewImage;
+	TWeakObjectPtr<class ASceneCapture2D> PreviewCapture;
+	void EnsurePreview();   // capture spawnen/positioneren (elke tick zolang open)
+	void ReleasePreview();  // capture opruimen bij sluiten
+
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> Body;
 
