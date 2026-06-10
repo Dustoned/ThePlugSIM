@@ -48,6 +48,8 @@ QUALITY OF LIFE & FIXES
 • De CO-OP-knop staat nu netjes in het hoofdmenu i.p.v. los rechtsboven.
 • NPC-beweging een stuk vloeiender: minder rondjes-draaien/opbundelen, en het centrum loopt
   niet meer vol (doorgaand verkeer routeert er netjes omheen).
+• Bewoners bezoeken het park 1-2x per dag via een nette wachtrij: maximaal een paar tegelijk,
+  even blijven hangen, en weer door — levendig park zonder ophoping.
 
 ━━━━━━━━━━━━━━━━━━━━
 
