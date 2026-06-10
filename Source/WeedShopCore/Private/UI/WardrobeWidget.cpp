@@ -83,7 +83,7 @@ void UWardrobeWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(1000.f, 640.f));
+	CS->SetSize(FVector2D(1000.f, 730.f));
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
 	UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -376,7 +376,7 @@ void UWardrobeWidget::FillBody()
 		BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		BS->SetPadding(FMargin(bi == 0 ? 0.f : 4.f, 0.f, 0.f, 0.f));
 	}
-	Row(BodyRowBox, FMargin(0, 0, 0, 14));
+	Row(BodyRowBox, FMargin(0, 0, 0, 10));
 
 	if (Skin < 2)
 	{
@@ -386,13 +386,15 @@ void UWardrobeWidget::FillBody()
 	}
 
 	// --- Outfit-slots: < naam > per categorie ---
-	for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx)
+	// Volgorde van boven naar onder: Headwear, Hair, Necklace, Top, Pants, Socks, Shoes.
+	static const int32 DisplayOrder[] = { 4, 3, 5, 0, 1, 6, 2 };
+	for (const int32 SlotIdx : DisplayOrder)
 	{
 		const int32 Count = WeedOutfit::PartCount(SlotIdx);
 		const uint8 Cur = Pl->GetOutfitPart(SlotIdx);
 		const WeedOutfit::FPart& Part = WeedOutfit::PartAt(SlotIdx, Cur);
 
-		Row(WeedUI::Text(WidgetTree, WeedOutfit::SlotName(SlotIdx), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 6, 0, 3));
+		Row(WeedUI::Text(WidgetTree, WeedOutfit::SlotName(SlotIdx), 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
 		UHorizontalBox* R = WidgetTree->ConstructWidget<UHorizontalBox>();
 
 		UWeedActionButton* PrevB = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
@@ -424,7 +426,7 @@ void UWardrobeWidget::FillBody()
 		NextB->SetContent(WeedUI::Text(WidgetTree, TEXT(">"), 14, FLinearColor::White, true));
 		R->AddChildToHorizontalBox(NextB);
 
-		Row(R, FMargin(0, 0, 0, 6));
+		Row(R, FMargin(0, 0, 0, 4));
 	}
 
 	Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom. Press B in-game for third person."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 12, 0, 0));
