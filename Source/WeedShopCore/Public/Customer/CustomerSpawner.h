@@ -90,6 +90,7 @@ protected:
 	void ApplyDayNightPopulation(bool bNight);
 	int8 LastNightState = -1; // -1 onbekend, 0 dag, 1 nacht
 	float NextDayRefillTime = 0.f; // real-time gate: dag-bijvulling gespreid (niet alle bewoners in één frame -> geen burst/tollen)
+	float NextCenterDiagTime = 0.f; // CENTERDIAG (tijdelijk): periodiek loggen wie er in het centrum staat en waarom
 
 	TArray<int32> EligibleHomes;   // alle niet-koopbare ingang-woningen (de volledige pool)
 	TSet<int32> PhysicalHomes;     // woning-indexen die NU een fysieke bewoner hebben

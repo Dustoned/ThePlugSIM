@@ -658,6 +658,36 @@ void ACustomerSpawner::CheckResidentRotation()
 		const int32 Day = DC->GetDayNumber();
 		if (Day != LastRotationDay) { LastRotationDay = Day; RotateResidents(); }
 	}
+
+	// CENTERDIAG (tijdelijk): elke 30s loggen wie er in het centrale 3x3-grid staat en WAAROM (park-doel,
+	// roam-doel in/naar het centrum, afspraak, vast, ...) zodat we de centrum-ophoping datagedreven vangen.
+	if (World->GetTimeSeconds() >= NextCenterDiagTime)
+	{
+		NextCenterDiagTime = World->GetTimeSeconds() + 30.f;
+		ACityGenerator* DiagCity = nullptr;
+		for (TActorIterator<ACityGenerator> It(World); It; ++It) { DiagCity = *It; break; }
+		if (DiagCity)
+		{
+			const FVector Ctr = DiagCity->GetCityCenter();
+			const float Half = DiagCity->GetMapBlockSize() * 1.5f;
+			int32 N = 0;
+			for (TActorIterator<ACustomerBase> It(World); It; ++It)
+			{
+				ACustomerBase* C = *It;
+				if (!IsValid(C) || !C->IsResident()) { continue; }
+				FResidentMovementSnapshot S;
+				if (!C->GetResidentMovementSnapshot(S) || S.bAtHomeInside) { continue; }
+				if (FMath::Abs(S.Location.X - Ctr.X) > Half || FMath::Abs(S.Location.Y - Ctr.Y) > Half) { continue; }
+				++N;
+				const bool bGoalInCenter = S.bHasGoal && FMath::Abs(S.Goal.X - Ctr.X) <= Half && FMath::Abs(S.Goal.Y - Ctr.Y) <= Half;
+				UE_LOG(LogWeedShop, Warning, TEXT("CENTERDIAG %s park=%d pause=%d goal=%d goalInCtr=%d appt=%d enter=%d emerge=%d spd=%.0f stuck=%.1f noGoal=%.1f goalDist=%.0f"),
+					*S.ResidentLabel, S.bGoalIsPark ? 1 : 0, S.bParkPause ? 1 : 0, S.bHasGoal ? 1 : 0, bGoalInCenter ? 1 : 0,
+					C->HasActiveAppointment() ? 1 : 0, S.bEnteringHome ? 1 : 0, S.bEmergingFromHome ? 1 : 0,
+					S.Speed2D, S.StuckSeconds, S.NoGoalSeconds, S.DistanceToGoal);
+			}
+			if (N > 0) { UE_LOG(LogWeedShop, Warning, TEXT("CENTERDIAG total=%d in center grid"), N); }
+		}
+	}
 }
 
 void ACustomerSpawner::ApplyDayNightPopulation(bool bNight)

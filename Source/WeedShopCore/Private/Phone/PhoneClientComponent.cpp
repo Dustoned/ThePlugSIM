@@ -881,6 +881,15 @@ void UPhoneClientComponent::CloseAllUI()
 
 void UPhoneClientComponent::ShowMainMenu()
 {
+	// Dev: met -AutoSoak slaan we het titelscherm over en tickt de wereld direct (geen pauze, geen save
+	// aangeraakt) - voor headless NPC-soak-tests (bv. CENTERDIAG-runs zonder dat iemand hoeft te klikken).
+	if (FParse::Param(FCommandLine::Get(), TEXT("AutoSoak")))
+	{
+		bMainMenuOpen = false;
+		if (APlayerController* PC = GetPC()) { PC->SetPause(false); }
+		UpdateCursor();
+		return;
+	}
 	EnsureWidget();
 	bMainMenuOpen = true;
 	// Sluit alles anders zodat het titelscherm schoon bovenop ligt.
