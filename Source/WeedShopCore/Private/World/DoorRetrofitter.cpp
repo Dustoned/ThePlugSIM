@@ -7,6 +7,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
+#include "Engine/Engine.h"
 
 namespace
 {
@@ -51,7 +52,16 @@ namespace
 
 ADoorRetrofitter::ADoorRetrofitter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true; // per frame de on-screen debug-spam legen
+}
+
+void ADoorRetrofitter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	// Pack-maps hebben een watermerk-print-loop in hun level-script (tekst is al geblankt) en de engine
+	// klaagt over hun lighting-setup. Leeg de on-screen berichten elke frame -> scherm blijft schoon.
+	// (Onze eigen toasts zijn UMG-widgets, geen debug-messages - die blijven gewoon zichtbaar.)
+	if (GEngine) { GEngine->ClearOnScreenDebugMessages(); }
 }
 
 void ADoorRetrofitter::BeginPlay()

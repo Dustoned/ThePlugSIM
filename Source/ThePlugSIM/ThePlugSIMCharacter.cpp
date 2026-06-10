@@ -1166,9 +1166,12 @@ void AThePlugSIMCharacter::BeginPlay()
 	// gerepliceerd - de klok zelf is al gerepliceerd). Niet dubbel spawnen.
 	if (IsLocallyControlled() && GetWorld())
 	{
+		const FString MapPath = GetWorld()->GetOutermost()->GetName();
+		const bool bExternalMap = MapPath.StartsWith(TEXT("/Game/CityBeachStrip"));
+
 		bool bHasController = false;
 		for (TActorIterator<ADayNightController> It(GetWorld()); It; ++It) { bHasController = true; break; }
-		if (!bHasController)
+		if (!bHasController && !bExternalMap) // pack-map heeft eigen lighting -> geen tweede zon (paarse warning)
 		{
 			GetWorld()->SpawnActor<ADayNightController>(ADayNightController::StaticClass(), FTransform::Identity);
 		}
@@ -1176,8 +1179,6 @@ void AThePlugSIMCharacter::BeginPlay()
 		// Procedurele stad rond het speelgebied (deterministisch, lokaal gebouwd -> elke speler dezelfde stad).
 		// NIET in externe/asset-pack-maps (bv. /Game/CityBeachStrip/...) - daar willen we de map zelf zien,
 		// niet onze blokken-stad er dwars doorheen.
-		const FString MapPath = GetWorld()->GetOutermost()->GetName();
-		const bool bExternalMap = MapPath.StartsWith(TEXT("/Game/CityBeachStrip"));
 		bool bHasCity = false;
 		for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { bHasCity = true; break; }
 		if (!bHasCity && !bExternalMap)
