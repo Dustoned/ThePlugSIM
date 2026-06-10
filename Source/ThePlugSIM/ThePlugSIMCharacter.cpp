@@ -36,7 +36,9 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Placement/BuildComponent.h"
 #include "Placement/PlaceableProp.h"
+#include "Placement/PlaceableTypes.h"
 #include "Placement/FurnitureTemplateLib.h"
+#include "Customization/OutfitCatalog.h"
 #include "Cultivation/WaterCanComponent.h"
 #include "EngineUtils.h"
 #include "Cultivation/GrowPlant.h"
@@ -281,6 +283,10 @@ void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AThePlugSIMCharacter, PlayerSkin);
+	DOREPLIFETIME(AThePlugSIMCharacter, OutfitTop);
+	DOREPLIFETIME(AThePlugSIMCharacter, OutfitLegs);
+	DOREPLIFETIME(AThePlugSIMCharacter, OutfitShoes);
+	DOREPLIFETIME(AThePlugSIMCharacter, OutfitHair);
 }
 
 void AThePlugSIMCharacter::ApplySkinMesh()
@@ -291,9 +297,9 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	switch (PlayerSkin)
 	{
 		case 1:  Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"); break;
-		case 2:  Path = TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_1/SK_Casual_1.SK_Casual_1"); break;
-		case 3:  Path = TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_2/SK_Casual_2.SK_Casual_2"); break;
-		case 4:  Path = TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_3/SK_Casual_3.SK_Casual_3"); break;
+		case 2:  Path = WeedOutfit::FullBodyPaths[0]; break;
+		case 3:  Path = WeedOutfit::FullBodyPaths[1]; break;
+		case 4:  Path = WeedOutfit::FullBodyPaths[2]; break;
 		default: Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"); break;
 	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
@@ -313,6 +319,17 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 				FirstPersonMesh->HideBoneByName(FName(B), EPhysBodyOp::PBO_None);
 			}
 		}
+	}
+
+	// Outfit-parts (Wardrobe): oude parts opruimen en de gekozen kleding/haar aanhangen (leader-pose volgt
+	// de body). Geldt alleen voor de Casual-skins (2-4); Manny/Quinn hebben (nog) geen losse outfits.
+	for (USkeletalMeshComponent* C : OutfitComps) { if (C) { C->DestroyComponent(); } }
+	OutfitComps.Reset();
+	if (PlayerSkin >= 2)
+	{
+		AttachOutfitParts(GetMesh(), false);
+		AttachOutfitParts(FirstPersonMesh, true);
+		SyncOutfitViewFlags();
 	}
 
 	// Skins met eigen physics-asset (haar/cloth) -> die bones laten nawapperen. Deferred zodat de physics-state
@@ -366,6 +383,7 @@ void AThePlugSIMCharacter::ToggleThirdPerson()
 		                                            : EFirstPersonPrimitiveType::WorldSpaceRepresentation;
 		M->MarkRenderStateDirty();
 	}
+	SyncOutfitViewFlags(); // outfit-parts dezelfde view-instellingen geven
 }
 
 void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
@@ -379,6 +397,64 @@ void AThePlugSIMCharacter::ServerSetSkin_Implementation(uint8 NewSkin)
 void AThePlugSIMCharacter::RestoreSkin(uint8 S)
 {
 	PlayerSkin = (S > 4) ? 4 : S;
+	ApplySkinMesh();
+}
+
+void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson)
+{
+	if (!BodyComp) { return; }
+	auto Attach = [&](const TCHAR* MeshPath)
+	{
+		USkeletalMesh* PartMesh = LoadObject<USkeletalMesh>(nullptr, MeshPath);
+		if (!PartMesh) { return; }
+		USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(this);
+		C->SetupAttachment(BodyComp);
+		C->RegisterComponent();
+		C->SetSkeletalMeshAsset(PartMesh);
+		C->SetLeaderPoseComponent(BodyComp); // volgt de body-animatie bone-voor-bone
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		OutfitComps.Add(C);
+	};
+	Attach(WeedOutfit::UnderwearPath);
+	Attach(WeedOutfit::PartAt(0, OutfitTop).Path);
+	Attach(WeedOutfit::PartAt(1, OutfitLegs).Path);
+	Attach(WeedOutfit::PartAt(2, OutfitShoes).Path);
+	Attach(WeedOutfit::PartAt(3, OutfitHair).Path);
+}
+
+void AThePlugSIMCharacter::SyncOutfitViewFlags()
+{
+	// Parts nemen de zichtbaarheids-instellingen van hun body over (FP/TP, owner-see, schaduw).
+	for (USkeletalMeshComponent* C : OutfitComps)
+	{
+		if (!C) { continue; }
+		USkeletalMeshComponent* Parent = Cast<USkeletalMeshComponent>(C->GetAttachParent());
+		if (!Parent) { continue; }
+		C->SetOnlyOwnerSee(Parent->bOnlyOwnerSee);
+		C->SetOwnerNoSee(Parent->bOwnerNoSee);
+		C->SetCastShadow(Parent->CastShadow);
+		C->FirstPersonPrimitiveType = Parent->FirstPersonPrimitiveType;
+		C->SetVisibility(Parent->IsVisible(), false);
+		C->MarkRenderStateDirty();
+	}
+}
+
+void AThePlugSIMCharacter::ServerSetOutfit_Implementation(uint8 Slot, uint8 Index)
+{
+	const uint8 Clamped = (uint8)FMath::Clamp<int32>(Index, 0, WeedOutfit::PartCount(Slot) - 1);
+	switch (Slot)
+	{
+	case 1:  OutfitLegs = Clamped; break;
+	case 2:  OutfitShoes = Clamped; break;
+	case 3:  OutfitHair = Clamped; break;
+	default: OutfitTop = Clamped; break;
+	}
+	ApplySkinMesh(); // server lokaal; repliceert naar clients -> OnRep_Skin
+}
+
+void AThePlugSIMCharacter::RestoreOutfit(uint8 Top, uint8 LegsIdx, uint8 ShoesIdx, uint8 HairIdx)
+{
+	OutfitTop = Top; OutfitLegs = LegsIdx; OutfitShoes = ShoesIdx; OutfitHair = HairIdx;
 	ApplySkinMesh();
 }
 
@@ -1270,6 +1346,16 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 				if (Phone && Counter->HasShop()) { Phone->OpenStore(Counter); } // fullscreen winkel-menu (geen telefoon)
 				return;
 			}
+			// Kledingkast -> open lokaal het outfit-menu.
+			if (APlaceableProp* WProp = Cast<APlaceableProp>(Focus))
+			{
+				FPlaceableDef WDef;
+				if (GetPlaceableDef(WProp->ItemId, WDef) && WDef.bIsWardrobe)
+				{
+					if (Phone) { Phone->OpenWardrobe(); }
+					return;
+				}
+			}
 			// Winkelier (verkoper-NPC) -> zelfde als z'n balie: open de shop van DEZE winkel (dichtstbijzijnde balie).
 			if (ACustomerBase* Keeper = Cast<ACustomerBase>(Focus))
 			{
@@ -1366,6 +1452,16 @@ void AThePlugSIMCharacter::OnInteractKey()
 			{
 				if (Phone && Counter->HasShop()) { Phone->OpenStore(Counter); } // fullscreen winkel-menu (geen telefoon)
 				return;
+			}
+			// Kledingkast -> open lokaal het outfit-menu.
+			if (APlaceableProp* WProp = Cast<APlaceableProp>(Focus))
+			{
+				FPlaceableDef WDef;
+				if (GetPlaceableDef(WProp->ItemId, WDef) && WDef.bIsWardrobe)
+				{
+					if (Phone) { Phone->OpenWardrobe(); }
+					return;
+				}
 			}
 			// Winkelier (verkoper-NPC) -> zelfde als z'n balie: open de shop van DEZE winkel.
 			if (ACustomerBase* Keeper = Cast<ACustomerBase>(Focus))

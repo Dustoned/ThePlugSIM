@@ -527,6 +527,11 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 	// (Water zit nu in het Quality-veld van elke fles-stack en gaat dus mee via Out.Items — geen aparte opslag.)
 
 	if (const IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(Pawn)) { Out.Skin = Skn->GetPlayerSkinIndex(); }
+	if (const IPlayerNpcActions* Of = Cast<IPlayerNpcActions>(Pawn))
+	{
+		Out.OutfitTop = Of->GetOutfitPart(0); Out.OutfitLegs = Of->GetOutfitPart(1);
+		Out.OutfitShoes = Of->GetOutfitPart(2); Out.OutfitHair = Of->GetOutfitPart(3);
+	}
 
 	// Sla op waar de speler staat + kijkt (kijkrichting van de controller, niet de body).
 	Out.bHasTransform = true;
@@ -553,6 +558,11 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 		for (const FSavePendingDelivery& P : Data.Pending) { Ph->RestoreDeliverInstant(P.Ids, P.Qtys); }
 	}
 	if (IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(Pawn)) { Skn->SetPlayerSkinIndex(Data.Skin); }
+	if (IPlayerNpcActions* Of = Cast<IPlayerNpcActions>(Pawn))
+	{
+		Of->SetOutfitPart(0, Data.OutfitTop); Of->SetOutfitPart(1, Data.OutfitLegs);
+		Of->SetOutfitPart(2, Data.OutfitShoes); Of->SetOutfitPart(3, Data.OutfitHair);
+	}
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
 		// Zet de stacks EXACT terug op hun opgeslagen slot (geen merge/sortering -> slots wisselen niet).

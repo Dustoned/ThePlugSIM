@@ -39,6 +39,7 @@
 #include "UI/CompassWidget.h"
 #include "UI/HotkeyHintWidget.h"
 #include "UI/AtmWidget.h"
+#include "UI/WardrobeWidget.h"
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
 #include "UI/DryingRackWidget.h"
@@ -745,6 +746,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (HotkeyWidget) { HotkeyWidget->AddToViewport(2); }
 	AtmWidget = CreateWidget<UAtmWidget>(PC, UAtmWidget::StaticClass());
 	if (AtmWidget) { AtmWidget->SetPhone(this); AtmWidget->AddToViewport(28); }
+	WardrobeWidget = CreateWidget<UWardrobeWidget>(PC, UWardrobeWidget::StaticClass());
+	if (WardrobeWidget) { WardrobeWidget->SetPhone(this); WardrobeWidget->AddToViewport(34); }
 	PackWidget = CreateWidget<UPackWidget>(PC, UPackWidget::StaticClass());
 	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
 	ShelfWidget = CreateWidget<UShelfWidget>(PC, UShelfWidget::StaticClass());
@@ -812,6 +815,20 @@ void UPhoneClientComponent::CloseAtm()
 	UpdateCursor();
 }
 
+void UPhoneClientComponent::OpenWardrobe()
+{
+	EnsureWidget();
+	bWardrobeOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseWardrobe()
+{
+	bWardrobeOpen = false;
+	UpdateCursor();
+}
+
 void UPhoneClientComponent::OpenPack(int32 Batch)
 {
 	EnsureWidget();
@@ -864,14 +881,14 @@ void UPhoneClientComponent::ClosePause()
 bool UPhoneClientComponent::IsAnyGameUIOpen() const
 {
 	return bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen
-		|| bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bSettingsOpen;
+		|| bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bSettingsOpen || bWardrobeOpen;
 }
 
 void UPhoneClientComponent::CloseAllUI()
 {
 	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
 	bPotUpgradeOpen = false; bMergeOpen = false; bAtmOpen = false; bPackOpen = false;
-	bShelfOpen = false; bDryRackOpen = false; bPauseOpen = false; bSettingsOpen = false;
+	bShelfOpen = false; bDryRackOpen = false; bPauseOpen = false; bSettingsOpen = false; bWardrobeOpen = false;
 	if (APlayerController* PC = GetPC())
 	{
 		if (GetWorld() && GetWorld()->GetNetMode() == NM_Standalone) { PC->SetPause(false); }

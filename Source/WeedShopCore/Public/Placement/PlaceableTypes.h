@@ -28,10 +28,11 @@ struct FPlaceableDef
 	bool bIsBed = false;               // true -> slapen (nacht overslaan tot 07:00) + spawn-/laadpunt hier
 	bool bIsProcessor = false;         // true -> spawnt AProcessorMachine (Mesh_/Press_: hasj-keten)
 	bool bIsSafe = false;              // true -> spawnt AAtm in safe-modus (kluis: cash veilig stashen)
+	bool bIsWardrobe = false;          // true -> kledingkast: interact opent het outfit-menu (speler-customization)
 };
 
 // Alle gedefinieerde placeables.
 const TArray<FPlaceableDef>& GetAllPlaceables();
 
 // Zoek de definitie voor een item-id. Geeft false als het item niet plaatsbaar is.
-bool GetPlaceableDef(FName ItemId, FPlaceableDef& Out);
+WEEDSHOPCORE_API bool GetPlaceableDef(FName ItemId, FPlaceableDef& Out);

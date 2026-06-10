@@ -108,6 +108,9 @@ public:
 	void CloseAtm();
 	UFUNCTION(BlueprintPure, Category = "WeedShop|ATM")
 	bool IsAtmOpen() const { return bAtmOpen; }
+	bool IsWardrobeOpen() const { return bWardrobeOpen; }
+	void OpenWardrobe();
+	void CloseWardrobe();
 
 	// --- Verpak-bench (in de wereld): verdeel gedroogde wiet in bakjes/jars (verkoopbare voorraad) ---
 	// Batch = hoeveel zakjes deze tafel per keer verwerkt (tier).
@@ -749,6 +752,8 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UAtmWidget> AtmWidget;
+	UPROPERTY()
+	TObjectPtr<class UWardrobeWidget> WardrobeWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UPackWidget> PackWidget;
@@ -818,6 +823,7 @@ protected:
 
 	bool bInventoryOpen = false;
 	bool bAtmOpen = false;
+	bool bWardrobeOpen = false; // kledingkast: outfit-menu open
 	bool bBankViaAtm = false; // Bank-app geopend via fysieke ATM (geen upgrade vereist)
 	bool bPackOpen = false;
 	int32 PackBatchUI = 1; // zakjes per verpak-actie (van de bench-tier)

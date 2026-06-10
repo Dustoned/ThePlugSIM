@@ -123,6 +123,10 @@ struct FPlayerSaveData
 
 	// Speler-skin (0 = man, 1 = vrouw).
 	UPROPERTY() uint8 Skin = 0;
+	UPROPERTY() uint8 OutfitTop = 0;
+	UPROPERTY() uint8 OutfitLegs = 0;
+	UPROPERTY() uint8 OutfitShoes = 0;
+	UPROPERTY() uint8 OutfitHair = 0;
 };
 
 UCLASS()

@@ -27,4 +27,9 @@ public:
 	// Speler-skin (0 = man, 1 = vrouw, uitbreidbaar). Voor de settings-UI + save (cross-module via deze interface).
 	virtual uint8 GetPlayerSkinIndex() const { return 0; }
 	virtual void SetPlayerSkinIndex(uint8 SkinIndex) {}
+
+	// Outfit-customization (Wardrobe): per slot (0=Top, 1=Pants, 2=Shoes, 3=Hair) de gekozen part-index
+	// uit WeedOutfit (OutfitCatalog.h). Geldt voor de Casual-skins (2-4); cross-module via deze interface.
+	virtual uint8 GetOutfitPart(int32 Slot) const { return 0; }
+	virtual void SetOutfitPart(int32 Slot, uint8 Index) {}
 };

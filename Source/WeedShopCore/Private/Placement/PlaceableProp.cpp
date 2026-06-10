@@ -236,6 +236,10 @@ FText APlaceableProp::GetInteractionPrompt_Implementation() const
 	{
 		return FText::FromString(TEXT("Sleep (skip to morning)  -  hold G to pick up"));
 	}
+	if (bHas && Def.bIsWardrobe)
+	{
+		return FText::FromString(TEXT("Wardrobe - change your outfit  -  hold G to pick up"));
+	}
 	const FString Name = bHas ? Def.DisplayName : ItemId.ToString();
 	return FText::FromString(FString::Printf(TEXT("%s - hold G to pick up"), *Name));
 }

@@ -60,6 +60,15 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	void OnRep_Skin();
 	void ApplySkinMesh();
 
+	// --- Outfit (Wardrobe, Casual-skins 2-4): part-indices in de WeedOutfit-catalogus per slot. ---
+	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitTop = 0;
+	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitLegs = 0;
+	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitShoes = 0;
+	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitHair = 0;
+	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> OutfitComps; // aangehangen part-meshes (TP + FP)
+	void AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson);
+	void SyncOutfitViewFlags(); // owner-see/FP-type van de parts gelijktrekken met hun body (na view-toggle)
+
 	// --- 3rd-person toggle (toets B): bekijk jezelf / je skin ---
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta=(AllowPrivateAccess="true"))
 	TObjectPtr<class USpringArmComponent> ThirdPersonBoom;
@@ -76,6 +85,11 @@ public:
 	void ServerSetSkin(uint8 NewSkin);
 	uint8 GetPlayerSkin() const { return PlayerSkin; }
 	void RestoreSkin(uint8 S); // save-herstel (server)
+
+	// Server: zet een outfit-part (Wardrobe). Slot 0=Top, 1=Pants, 2=Shoes, 3=Hair.
+	UFUNCTION(Server, Reliable)
+	void ServerSetOutfit(uint8 Slot, uint8 Index);
+	void RestoreOutfit(uint8 Top, uint8 LegsIdx, uint8 ShoesIdx, uint8 HairIdx); // save-herstel (server)
 private:
 
 	/** Voorraad: gevuld door oogst, gebruikt bij verkoop (server-authoritative, replicated). */
@@ -184,6 +198,11 @@ public:
 	virtual void GiveJointToCustomer(ACustomerBase* Customer) override;
 	virtual uint8 GetPlayerSkinIndex() const override { return PlayerSkin; }
 	virtual void SetPlayerSkinIndex(uint8 SkinIndex) override { ServerSetSkin(SkinIndex); }
+	virtual uint8 GetOutfitPart(int32 Slot) const override
+	{
+		switch (Slot) { case 1: return OutfitLegs; case 2: return OutfitShoes; case 3: return OutfitHair; default: return OutfitTop; }
+	}
+	virtual void SetOutfitPart(int32 Slot, uint8 Index) override { ServerSetOutfit((uint8)Slot, Index); }
 
 	/** Open/sluit het roll-paneel (toets R) — daar kies je het aantal gram. */
 	void ToggleRollUI();
