@@ -184,7 +184,7 @@ namespace
 		{ TEXT("Safe_Medium"), TEXT("Medium safe"), TEXT("Stash up to EUR 50k - robbery-proof"),    1800000,  1 },
 		{ TEXT("Safe_Large"),  TEXT("Large safe"),  TEXT("Stash up to EUR 250k - robbery-proof"),   8000000,  1 },
 		{ TEXT("Safe_Vault"),  TEXT("Vault"),       TEXT("Stash up to EUR 1M - robbery-proof"),     30000000, 1 },
-		{ TEXT("Wardrobe"), TEXT("Wardrobe"), TEXT("Change your outfit at home"), 40000, 1 },
+		{ TEXT("Wardrobe"), TEXT("Wardrobe"), TEXT("Change your outfit at home"), 15000, 1 },
 		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("Warm hanging spot light"),         3500, 1 },
 		// Plant-verzorging (later spel): mest = meer opbrengst; sprays = behandel mold/pest.
 		{ TEXT("Fertilizer_Basic"), TEXT("Fertilizer"),       TEXT("+15% yield this harvest"),          2000, 3 },
@@ -386,7 +386,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Safe_Medium"))     { return 18; }
 	if (S == TEXT("Safe_Large"))      { return 30; }
 	if (S == TEXT("Safe_Vault"))      { return 42; }
-	if (S == TEXT("Wardrobe"))        { return 2; }
+	if (S == TEXT("Wardrobe"))        { return 1; }
 	if (S == TEXT("Table"))           { return 2; }
 	if (S == TEXT("Chest"))           { return 5; }
 	if (S == TEXT("Shelf"))           { return 8; }
