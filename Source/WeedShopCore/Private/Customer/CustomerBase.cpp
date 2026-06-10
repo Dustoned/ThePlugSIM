@@ -2645,19 +2645,27 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 			const int32 ParkVisitSlot = PickResidentParkVisitSlot(City, DC, Today, Hour);
 			if (ParkVisitSlot > 0 && Hour >= ComputeResidentParkUrgencyHour(City, DC, Today, ParkVisitSlot))
 			{
-				if (AAIController* AI = Cast<AAIController>(GetController()))
+				// Urgent naar het park - maar ALLEEN als het ook echt onze beurt is (park-wachtrij). Anders
+				// cancelden we hier elke leg de roam-goal terwijl de goal-keuze 'm weigerde (geen beurt) ->
+				// tientallen bewoners die rond het urgency-uur stokstijf stonden te wachten (livelock).
+				ACustomerSpawner* QueueOwner = nullptr;
+				for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt) { QueueOwner = *SpIt; break; }
+				if (QueueOwner && QueueOwner->RequestParkVisit(this))
 				{
-					AI->StopMovement();
+					if (AAIController* AI = Cast<AAIController>(GetController()))
+					{
+						AI->StopMovement();
+					}
+					bHasRoamGoal = false;
+					bPendingRoamGoalIsPark = false;
+					PendingParkVisitSlot = 0;
+					ActiveParkVisitSlot = 0;
+					RoamTimer = 0.f;
+					ResidentStuckTimer = 0.f;
+					ResidentRecoveryCooldown = 0.f;
+					bHasResidentBestDistToGoal = false;
+					ResidentRecoveryAttempts = 0;
 				}
-				bHasRoamGoal = false;
-				bPendingRoamGoalIsPark = false;
-				PendingParkVisitSlot = 0;
-				ActiveParkVisitSlot = 0;
-				RoamTimer = 0.f;
-				ResidentStuckTimer = 0.f;
-				ResidentRecoveryCooldown = 0.f;
-				bHasResidentBestDistToGoal = false;
-				ResidentRecoveryAttempts = 0;
 			}
 		}
 	}
