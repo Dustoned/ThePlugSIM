@@ -19,6 +19,7 @@
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "CollisionQueryParams.h"
+#include "Components/CapsuleComponent.h"
 #include "NavigationSystem.h"
 
 ACustomerSpawner::ACustomerSpawner()
@@ -580,10 +581,18 @@ void ACustomerSpawner::SpawnResidents()
 			AStoreCounter* Counter = *It;
 			if (!Counter || !Counter->HasShop()) { continue; }
 			const FVector Fwd = Counter->GetActorForwardVector();
-			FVector Pos = Counter->GetActorLocation() - Fwd * 60.f; // achter de balie
-			Pos.Z -= 10.f;                                          // van balie-midden naar de vloer
+			// Character spawnt op CAPSULE-CENTRUM-hoogte (voeten op de vloer), niet op vloer-niveau - anders
+			// zit de capsule half in de vloer en duwt de collision-adjust 'm naar een willekeurige plek
+			// (winkelier stond daardoor nergens/ergens vast i.p.v. achter de balie).
+			float HalfH = 88.f;
+			if (const ACustomerBase* CDO = KCls->GetDefaultObject<ACustomerBase>())
+			{
+				if (const UCapsuleComponent* Cap = CDO->GetCapsuleComponent()) { HalfH = Cap->GetScaledCapsuleHalfHeight(); }
+			}
+			FVector Pos = Counter->GetActorLocation() - Fwd * 80.f;            // achter de balie
+			Pos.Z = Counter->GetActorLocation().Z - 10.f + HalfH + 2.f;        // vloer + halve capsule
 			const FTransform KTM(Counter->GetActorRotation(), Pos);
-			if (ACustomerBase* Keeper = World->SpawnActorDeferred<ACustomerBase>(KCls, KTM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn))
+			if (ACustomerBase* Keeper = World->SpawnActorDeferred<ACustomerBase>(KCls, KTM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
 			{
 				Keeper->bShopkeeper = true;
 				Keeper->FinishSpawning(KTM);
