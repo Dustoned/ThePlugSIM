@@ -1952,10 +1952,13 @@ bool ACustomerBase::RecoverResidentSidewalkDrift(float DeltaSeconds)
 	}
 
 	const float Speed2D = GetVelocity().Size2D();
-	const float DistToGoal = bHasRoamGoal ? FVector::Dist2D(Cur, RoamGoal) : 0.f;
-	const bool bLikelyCrossingStreet = bHasRoamGoal && Speed2D > 55.f && DistToGoal > 260.f;
+	// Oversteken RUIMHARTIG herkennen: een doel hebben + (een beetje) bewegen. De oude eis "doel > 260 ver"
+	// sloot juist het LAATSTE stuk van een oversteek uit (doel net aan de overkant), en de snelheids-eis
+	// (>55) viel weg zodra RVO even afremde -> bewoners werden halverwege de rijweg teruggetrokken naar de
+	// stoep en leken niet te 'durven' oversteken.
+	const bool bLikelyCrossingStreet = bHasRoamGoal && Speed2D > 25.f;
 	ResidentOffSidewalkTimer += DeltaSeconds;
-	const float DriftGraceSeconds = bLikelyCrossingStreet ? 7.5f : 1.0f;
+	const float DriftGraceSeconds = bLikelyCrossingStreet ? 10.f : 2.0f;
 	if (ResidentOffSidewalkTimer < DriftGraceSeconds)
 	{
 		return false;
