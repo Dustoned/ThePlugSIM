@@ -152,11 +152,13 @@ void ACityDoor::Tick(float DeltaSeconds)
 	if (Hinge) { Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f)); }
 
 	// Paneel is SOLIDE zodra de deur stilstaat (helemaal dicht OF helemaal open tegen de muur), maar negeert
-	// pawns TIJDENS het zwaaien - zo duwt het bewegende paneel je niet weg en loop je er vrij doorheen,
-	// terwijl een openstaande deur wel gewoon een vast object is.
+	// pawns TIJDENS het zwaaien - zo duwt het bewegende paneel je niet weg en loop je er vrij doorheen.
+	// BELANGRIJK: zodra er NPC's bij de deur zijn (NpcNear) is het paneel ook niet solide - anders blokkeert
+	// een opengezwaaide winkel-/bewonersdeur de stoep en lopen passerende NPC's zich er massaal op vast.
 	if (Panel)
 	{
 		const bool bSettled = FMath::Abs(CurAngle - Target) < 2.f;
-		Panel->SetCollisionResponseToChannel(ECC_Pawn, bSettled ? ECR_Block : ECR_Ignore);
+		const bool bBlockPawn = bSettled && NpcNear == 0;
+		Panel->SetCollisionResponseToChannel(ECC_Pawn, bBlockPawn ? ECR_Block : ECR_Ignore);
 	}
 }
