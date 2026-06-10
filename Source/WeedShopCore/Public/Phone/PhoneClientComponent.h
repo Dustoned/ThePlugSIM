@@ -109,6 +109,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|ATM")
 	bool IsAtmOpen() const { return bAtmOpen; }
 	bool IsWardrobeOpen() const { return bWardrobeOpen; }
+	void ToggleSpotInfo(); // F9 dev-overlay: positie + waar je naar kijkt (mesh-id)
 	void OpenWardrobe();
 	void CloseWardrobe();
 
@@ -754,6 +755,8 @@ protected:
 	TObjectPtr<class UAtmWidget> AtmWidget;
 	UPROPERTY()
 	TObjectPtr<class UWardrobeWidget> WardrobeWidget;
+	UPROPERTY()
+	TObjectPtr<class USpotInfoWidget> SpotInfoWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UPackWidget> PackWidget;

@@ -470,6 +470,17 @@ void AThePlugSIMCharacter::RestoreOutfit(uint8 Top, uint8 LegsIdx, uint8 ShoesId
 void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// F9: dev-overlay met positie + mesh-onder-crosshair (en logt de plek naar MarkedSpots.txt).
+	if (IsLocallyControlled())
+	{
+		if (const APlayerController* PCk = Cast<APlayerController>(GetController()))
+		{
+			const bool bF9 = PCk->IsInputKeyDown(EKeys::F9);
+			if (bF9 && !bSpotKeyWasDown) { if (Phone) { Phone->ToggleSpotInfo(); } }
+			bSpotKeyWasDown = bF9;
+		}
+	}
 	UpdateProxyAnim(DeltaSeconds); // client-kant: remote speler walk/idle/jump (host gebruikt de ABP)
 	TickStuckRecovery(DeltaSeconds);
 

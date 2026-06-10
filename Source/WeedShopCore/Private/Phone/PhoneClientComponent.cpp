@@ -40,6 +40,7 @@
 #include "UI/HotkeyHintWidget.h"
 #include "UI/AtmWidget.h"
 #include "UI/WardrobeWidget.h"
+#include "UI/SpotInfoWidget.h"
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
 #include "UI/DryingRackWidget.h"
@@ -748,6 +749,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (AtmWidget) { AtmWidget->SetPhone(this); AtmWidget->AddToViewport(28); }
 	WardrobeWidget = CreateWidget<UWardrobeWidget>(PC, UWardrobeWidget::StaticClass());
 	if (WardrobeWidget) { WardrobeWidget->SetPhone(this); WardrobeWidget->AddToViewport(34); }
+	SpotInfoWidget = CreateWidget<USpotInfoWidget>(PC, USpotInfoWidget::StaticClass());
+	if (SpotInfoWidget) { SpotInfoWidget->AddToViewport(8); }
 	PackWidget = CreateWidget<UPackWidget>(PC, UPackWidget::StaticClass());
 	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
 	ShelfWidget = CreateWidget<UShelfWidget>(PC, UShelfWidget::StaticClass());
@@ -813,6 +816,12 @@ void UPhoneClientComponent::CloseAtm()
 {
 	bAtmOpen = false;
 	UpdateCursor();
+}
+
+void UPhoneClientComponent::ToggleSpotInfo()
+{
+	EnsureWidget();
+	if (SpotInfoWidget) { SpotInfoWidget->ToggleInfo(); }
 }
 
 void UPhoneClientComponent::OpenWardrobe()

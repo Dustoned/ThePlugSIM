@@ -79,6 +79,7 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	TObjectPtr<class UCameraComponent> ThirdPersonCamera;
 	bool bThirdPerson = false;
 	bool bTpKeyWasDown = false; // edge-detect voor de toggle-toets
+	bool bSpotKeyWasDown = false; // edge-detect F9 (dev spot-info)
 	void ToggleThirdPerson();
 	UFUNCTION()
 	void ApplySoftPhysics(); // Lola: haar/rok/cloth-bones laten nawapperen (physics-blend)
