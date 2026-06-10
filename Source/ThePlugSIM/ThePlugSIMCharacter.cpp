@@ -1173,9 +1173,13 @@ void AThePlugSIMCharacter::BeginPlay()
 		}
 
 		// Procedurele stad rond het speelgebied (deterministisch, lokaal gebouwd -> elke speler dezelfde stad).
+		// NIET in externe/asset-pack-maps (bv. /Game/CityBeachStrip/...) - daar willen we de map zelf zien,
+		// niet onze blokken-stad er dwars doorheen.
+		const FString MapPath = GetWorld()->GetOutermost()->GetName();
+		const bool bExternalMap = MapPath.StartsWith(TEXT("/Game/CityBeachStrip"));
 		bool bHasCity = false;
 		for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { bHasCity = true; break; }
-		if (!bHasCity)
+		if (!bHasCity && !bExternalMap)
 		{
 			GetWorld()->SpawnActor<ACityGenerator>(ACityGenerator::StaticClass(), FTransform::Identity);
 		}
