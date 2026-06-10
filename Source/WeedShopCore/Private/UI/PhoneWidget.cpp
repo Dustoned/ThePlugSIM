@@ -25,6 +25,8 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Border.h"
@@ -307,6 +309,77 @@ void UPhoneWidget::FillSettingsBody()
 		AddLightSlider(TEXT("Street lamps"),  Lmp / 80000.f,         LLamp,  LLampV);
 		AddLightSlider(TEXT("Exposure"),      Exp / 16.f,            LExp,   LExpV);
 		ApplyLightSliders(); // labels meteen vullen met de echte waardes
+
+		// --- Marked spots (F9/WeedMarkSpot): bekijken, ernaartoe teleporteren, verwijderen ---
+		{
+			BodyRow(MakeText(TEXT("Marked spots"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 10.f, 0.f, 2.f));
+			const FString SpotFile = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
+			TArray<FString> SpotLines;
+			FFileHelper::LoadFileToStringArray(SpotLines, *SpotFile);
+			SpotLines.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
+			if (SpotLines.Num() == 0)
+			{
+				BodyRow(MakeText(TEXT("No spots yet - press F9 in-game to mark one."), 11, FLinearColor(0.6f, 0.64f, 0.74f)), FMargin(0.f, 0.f, 0.f, 4.f));
+			}
+			const int32 MaxShow = 8;
+			for (int32 SpotIdx = FMath::Max(0, SpotLines.Num() - MaxShow); SpotIdx < SpotLines.Num(); ++SpotIdx)
+			{
+				const FString& Line = SpotLines[SpotIdx];
+				// "label | map=/Game/... | pos=(x, y, z) | yaw=NN"
+				FString Label = Line; FString PosStr;
+				int32 Bar = INDEX_NONE;
+				if (Label.FindChar(TEXT('|'), Bar)) { Label = Label.Left(Bar).TrimStartAndEnd(); }
+				FVector SpotPos = FVector::ZeroVector; bool bHasPos = false;
+				{
+					const int32 PIdx = Line.Find(TEXT("pos=("));
+					if (PIdx != INDEX_NONE)
+					{
+						PosStr = Line.Mid(PIdx + 5);
+						int32 Close = INDEX_NONE;
+						if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+						TArray<FString> Parts;
+						PosStr.ParseIntoArray(Parts, TEXT(","));
+						if (Parts.Num() >= 3)
+						{
+							SpotPos = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
+							bHasPos = true;
+						}
+					}
+				}
+				const FString CurMap = GetWorld() ? GetWorld()->GetOutermost()->GetName() : FString();
+				const bool bSameMap = !Line.Contains(TEXT("map=")) || Line.Contains(CurMap);
+
+				UHorizontalBox* RowB = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UHorizontalBoxSlot* LS2 = RowB->AddChildToHorizontalBox(MakeText(
+					FString::Printf(TEXT("%s  (%.0f, %.0f)"), *Label, SpotPos.X, SpotPos.Y), 11,
+					bSameMap ? FLinearColor(0.85f, 0.9f, 1.f) : FLinearColor(0.5f, 0.52f, 0.6f)));
+				LS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS2->SetVerticalAlignment(VAlign_Center);
+				if (bHasPos && bSameMap)
+				{
+					RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
+						[this, SpotPos]()
+						{
+							if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(SpotPos + FVector(0.f, 0.f, 60.f)); }
+						}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+				}
+				RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+					[this, SpotIdx]()
+					{
+						const FString F = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
+						TArray<FString> Ls;
+						FFileHelper::LoadFileToStringArray(Ls, *F);
+						Ls.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
+						if (Ls.IsValidIndex(SpotIdx)) { Ls.RemoveAt(SpotIdx); }
+						FFileHelper::SaveStringToFile(FString::Join(Ls, TEXT("\n")) + (Ls.Num() ? TEXT("\n") : TEXT("")), *F);
+						FillSettingsBody();
+					}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+				BodyRow(RowB, FMargin(0.f, 1.f, 0.f, 1.f));
+			}
+			if (SpotLines.Num() > MaxShow)
+			{
+				BodyRow(MakeText(FString::Printf(TEXT("(showing last %d of %d)"), MaxShow, SpotLines.Num()), 9, FLinearColor(0.55f, 0.58f, 0.68f)), FMargin(0.f, 2.f, 0.f, 0.f));
+			}
+		}
 
 		UWeedActionButton* SaveB = MakeActionBtn(TEXT("Save light config"), FLinearColor(0.22f, 0.5f, 0.32f),
 			[this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SaveLightConfig(); } }, 12);
