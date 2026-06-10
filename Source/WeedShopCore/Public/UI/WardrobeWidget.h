@@ -1,6 +1,6 @@
 // UWardrobeWidget - outfit-menu van de kledingkast (Wardrobe-placeable). Kies je body (Male/Female/
 // Girl 1-3) en voor de Casual-meisjes per slot (Top/Pants/Shoes/Hair) een kledingstuk uit de
-// OutfitCatalog. Wijzigingen worden direct toegepast (gerepliceerd) en opgeslagen in de save.
+// OutfitCatalog. Met live studio-preview van je poppetje: slepen = draaien, scrollen = zoomen.
 
 #pragma once
 
@@ -12,6 +12,7 @@ class UPhoneClientComponent;
 class UCanvasPanel;
 class UWidget;
 class UVerticalBox;
+class USkeletalMeshComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API UWardrobeWidget : public UUserWidget
@@ -25,17 +26,31 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
+	// Muis op de preview: slepen = draaien, scrollen = zoomen.
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
 	void BuildShell(UCanvasPanel* Root);
 	void FillBody();
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
-	// Live preview: SceneCapture die ALLEEN jouw character rendert (vooraanzicht) naar een render target.
+	// --- Live studio-preview: kloon van je poppetje (eigen verlichting, los van het FP-rendersysteem) ---
 	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> PreviewRT;
 	UPROPERTY() TObjectPtr<class UImage> PreviewImage;
-	TWeakObjectPtr<class ASceneCapture2D> PreviewCapture;
-	void EnsurePreview();   // capture spawnen/positioneren (elke tick zolang open)
-	void ReleasePreview();  // capture opruimen bij sluiten
+	TWeakObjectPtr<class ASkeletalMeshActor> PreviewActor;   // de kloon (body + outfit-parts)
+	TWeakObjectPtr<class ASceneCapture2D> PreviewCapture;    // camera + lampen (orbit rond de kloon)
+	FString PreviewOutfitSig;  // kloon herbouwen zodra skin/outfit wijzigt
+	float PreviewYaw = 0.f;    // orbit-hoek (slepen)
+	float PreviewDist = 300.f; // camera-afstand (zoomen)
+	bool bPreviewDrag = false;
+	void EnsurePreview();          // capture + kloon up-to-date houden (elke tick zolang open)
+	void RebuildPreviewActor();    // kloon (body + parts) opnieuw opbouwen
+	void UpdatePreviewCamera();    // orbit-camera positioneren
+	void ReleasePreview();         // alles opruimen bij sluiten
+	bool IsOverPreview(const FPointerEvent& Ev) const;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> Body;

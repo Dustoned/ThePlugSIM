@@ -120,6 +120,19 @@ void APlaceableProp::SetupVisual()
 		PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(4.f, 5.f, H * 0.34f), FVector(W * 0.32f, D * 0.52f, H * 0.40f), Handle);
 		Parts[4]->SetVisibility(false);
 	}
+	else if (Id == TEXT("Wardrobe"))
+	{
+		Mesh->SetVisibility(false); HideParts();
+		const FLinearColor Wood(0.40f, 0.28f, 0.16f), DoorC(0.50f, 0.36f, 0.22f), Trim(0.20f, 0.13f, 0.08f), Handle(0.88f, 0.82f, 0.55f);
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(W, D, H), FVector(0, 0, H * 0.5f), Wood);                                    // romp
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(W * 0.47f, D * 0.06f, H * 0.88f), FVector(-W * 0.25f, D * 0.50f, H * 0.52f), DoorC); // linkerdeur
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W * 0.47f, D * 0.06f, H * 0.88f), FVector( W * 0.25f, D * 0.50f, H * 0.52f), DoorC); // rechterdeur
+		PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W * 0.02f, D * 0.07f, H * 0.88f), FVector(0, D * 0.50f, H * 0.52f), Trim);   // middennaad
+		PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(3.f, 4.f, H * 0.16f), FVector(-W * 0.06f, D * 0.55f, H * 0.55f), Handle);    // greep links
+		PropKit::SetPart(Parts[5], PropKit::Cube(), FVector(3.f, 4.f, H * 0.16f), FVector( W * 0.06f, D * 0.55f, H * 0.55f), Handle);    // greep rechts
+		PropKit::SetPart(Parts[6], PropKit::Cube(), FVector(W * 1.05f, D * 1.05f, H * 0.04f), FVector(0, 0, H * 0.02f), Trim);           // plint
+		PropKit::SetPart(Parts[7], PropKit::Cube(), FVector(W * 1.06f, D * 1.06f, H * 0.03f), FVector(0, 0, H * 0.985f), Trim);          // kroonlijst
+	}
 	else if (Id == TEXT("Mattress"))
 	{
 		Mesh->SetVisibility(false); HideParts();
