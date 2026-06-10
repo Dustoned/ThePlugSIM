@@ -483,6 +483,7 @@ int32 UPhoneWidget::MessagesSignature() const
 void UPhoneWidget::BuildChatApp()
 {
 	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None; // alleen geldig in een actieve-afspraak-thread
+	WaitBar = nullptr; WaitBarLabel = nullptr; WaitBarSentTime = -1.f;     // wacht-balk voor een open deal-bericht
 	if (!Phone.IsValid()) { return; }
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
@@ -599,14 +600,14 @@ void UPhoneWidget::BuildChatApp()
 	UScrollBox* Thread = WidgetTree->ConstructWidget<UScrollBox>();
 	UVerticalBoxSlot* TS = ContentBox->AddChildToVerticalBox(Thread);
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-	bool bAny = false; bool bHasOpen = false;
+	bool bAny = false; bool bHasOpen = false; float OpenSentTime = -1.f;
 	for (int32 i = Msgs.Num() - 1; i >= 0; --i)
 	{
 		const FPhoneMessage& M = Msgs[i];
 		if (!IsMsgForLocal(M)) { continue; }
 		if (M.FromContactId != OpenChatContact) { continue; }
 		bAny = true;
-		if (M.Status == 0 && !M.bFromMe) { bHasOpen = true; }
+		if (M.Status == 0 && !M.bFromMe) { bHasOpen = true; OpenSentTime = M.SentRealTime; }
 
 		FString Body = M.Body.ToString();
 		if (!M.bFromMe && M.Status == 1) { Body += TEXT("  (accepted)"); }
@@ -617,7 +618,19 @@ void UPhoneWidget::BuildChatApp()
 		Bub->SetPadding(FMargin(9.f, 6.f, 9.f, 6.f));
 		UTextBlock* BodyT = MakeText(Body, 12, FLinearColor(0.95f, 0.97f, 1.f));
 		BodyT->SetAutoWrapText(true);
-		Bub->SetContent(BodyT);
+		// Tijdstempel (HH:MM, in-game klok) onder het bericht - zoals een normale berichten-app.
+		UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
+		BubVB->AddChildToVerticalBox(BodyT);
+		if (M.SentClockHour >= 0.f)
+		{
+			const int32 Hh = (int32)M.SentClockHour;
+			const int32 Mm = (int32)((M.SentClockHour - Hh) * 60.f);
+			UTextBlock* TimeT = MakeText(FString::Printf(TEXT("%02d:%02d"), Hh, Mm), 8, FLinearColor(0.55f, 0.6f, 0.72f));
+			UVerticalBoxSlot* TSl = BubVB->AddChildToVerticalBox(TimeT);
+			TSl->SetHorizontalAlignment(M.bFromMe ? HAlign_Right : HAlign_Left);
+			TSl->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+		}
+		Bub->SetContent(BubVB);
 
 		USizeBox* Cap = WidgetTree->ConstructWidget<USizeBox>();
 		Cap->SetMaxDesiredWidth(210.f);
@@ -644,6 +657,22 @@ void UPhoneWidget::BuildChatApp()
 	// Open afspraak? -> Accept/Decline onderaan.
 	if (bHasOpen)
 	{
+		// Live wacht-balk: hoelang blijft de klant nog wachten op je antwoord voor 'ie opgeeft (150s).
+		if (OpenSentTime >= 0.f)
+		{
+			UBorder* WBox = WidgetTree->ConstructWidget<UBorder>();
+			WBox->SetBrush(RoundedBrush(FLinearColor(0.14f, 0.12f, 0.10f, 0.95f), 8.f));
+			WBox->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+			UVerticalBox* WVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			WBox->SetContent(WVB);
+			WaitBarLabel = MakeText(TEXT("Waiting for your reply..."), 11, FLinearColor(0.88f, 0.82f, 0.72f));
+			WVB->AddChildToVerticalBox(WaitBarLabel);
+			WaitBar = WidgetTree->ConstructWidget<UProgressBar>();
+			WaitBar->SetPercent(1.f);
+			WVB->AddChildToVerticalBox(WaitBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+			WaitBarSentTime = OpenSentTime;
+			ContentBox->AddChildToVerticalBox(WBox)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+		}
 		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 		const FName Pick = OpenChatContact;
 		UHorizontalBoxSlot* AS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Accept"), FLinearColor(0.2f, 0.5f, 0.28f),
@@ -1067,6 +1096,23 @@ void UPhoneWidget::UpdateApptBarLive()
 	}
 	// NPC niet meer gevonden -> balk loslaten.
 	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
+}
+
+void UPhoneWidget::UpdateWaitBarLive()
+{
+	if (!WaitBar || WaitBarSentTime < 0.f || !GetWorld()) { return; }
+	const float Total = 150.f; // GiveUpDelay in ContactsComponent: na 150s zonder antwoord geeft de klant op
+	const float Elapsed = GetWorld()->GetTimeSeconds() - WaitBarSentTime;
+	const float Frac = FMath::Clamp(1.f - Elapsed / Total, 0.f, 1.f);
+	WaitBar->SetPercent(Frac);
+	WaitBar->SetFillColorAndOpacity(Frac < 0.2f ? FLinearColor(0.9f, 0.3f, 0.25f) : (Frac < 0.45f ? FLinearColor(0.9f, 0.7f, 0.25f) : FLinearColor(0.4f, 0.7f, 0.95f)));
+	if (WaitBarLabel)
+	{
+		const int32 Left = FMath::CeilToInt(FMath::Max(0.f, Total - Elapsed));
+		WaitBarLabel->SetText(FText::FromString(Left > 0
+			? FString::Printf(TEXT("Waiting for your reply - gives up in %d:%02d"), Left / 60, Left % 60)
+			: FString(TEXT("They gave up waiting..."))));
+	}
 }
 
 void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
@@ -2018,7 +2064,7 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		const int32 Sig = MessagesSignature();
 		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
-		else { UpdateApptBarLive(); } // aftellende afspraak-balk live bijwerken (zonder herbouw)
+		else { UpdateApptBarLive(); UpdateWaitBarLive(); } // afspraak- + wacht-balk live bijwerken (zonder herbouw)
 		// Tijd-kiezer-ondergrens LIVE laten meelopen zonder rebuild (geen flash): klem ProposeMins op
 		// 30 min..23,5u vooruit met de huidige klok en werk alleen het klok-label bij.
 		if (App == 3 && PickerClockText && !PickerContact.IsNone() && GS && GS->GetDayCycle())

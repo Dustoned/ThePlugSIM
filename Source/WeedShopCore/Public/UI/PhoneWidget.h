@@ -179,6 +179,12 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> ApptBarLabel;
 	FName ApptBarContact = NAME_None;
 	void UpdateApptBarLive();          // werkt de afspraak-balk live bij
+
+	// Wacht-balk onder een open deal-bericht: telt af tot de klant opgeeft (150s) -> je ziet hoelang je hebt.
+	UPROPERTY() TObjectPtr<class UProgressBar> WaitBar;
+	UPROPERTY() TObjectPtr<UTextBlock> WaitBarLabel;
+	float WaitBarSentTime = -1.f;      // SentRealTime van het open bericht (basis voor de aftelbalk)
+	void UpdateWaitBarLive();          // werkt de wacht-balk live bij
 	void BuildPackagesApp();           // bouwt de losse Packages-app in ContentBox
 	void FillPackagesInto(class UScrollBox* Scroll); // vult de bestellingen-kaarten in een scroll
 	void FillPotUpgradesInto(class UScrollBox* Scroll); // "Pot Upgrades"-tab: per geplaatste pot

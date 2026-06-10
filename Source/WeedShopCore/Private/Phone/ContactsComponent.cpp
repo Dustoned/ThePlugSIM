@@ -230,7 +230,7 @@ void UContactsComponent::SendRandomAppointment()
 		}
 	}
 
-	Messages.Insert(Msg, 0); // nieuwste bovenaan
+	StampAndInsert(Msg); // nieuwste bovenaan
 	if (Messages.Num() > 40)
 	{
 		Messages.SetNum(40);
@@ -562,7 +562,7 @@ void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
 	Reply.Body = bAccept
 		? FText::FromString(FString::Printf(TEXT("Sure, see you at %s."), *FormatApptClock(ApptTime)))
 		: FText::FromString(TEXT("Sorry, can't make it."));
-	Messages.Insert(Reply, 0);
+	StampAndInsert(Reply);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 
 	if (GEngine)
@@ -611,13 +611,13 @@ void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDa
 	Mine.FromContactId = ContactId; Mine.SenderName = SenderName; Mine.bFromMe = true;
 	Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f;
 	Mine.Body = FText::FromString(FString::Printf(TEXT("Can we do %s instead?"), *FormatApptClock(NewTime)));
-	Messages.Insert(Mine, 0);
+	StampAndInsert(Mine);
 	// Hun antwoord: altijd akkoord (links).
 	FPhoneMessage Theirs;
 	Theirs.FromContactId = ContactId; Theirs.SenderName = SenderName; Theirs.bFromMe = false;
 	Theirs.Status = 3; Theirs.AppointmentTimeOfDay = -1.f;
 	Theirs.Body = FText::FromString(FString::Printf(TEXT("Works for me, see you at %s."), *FormatApptClock(NewTime)));
-	Messages.Insert(Theirs, 0);
+	StampAndInsert(Theirs);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 
 	if (GEngine)
@@ -674,7 +674,7 @@ void UContactsComponent::ProposeAlternativeStrain(FName ContactId, FName NewStra
 	FPhoneMessage Mine;
 	Mine.FromContactId = ContactId; Mine.SenderName = SenderName; Mine.bFromMe = true; Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f;
 	Mine.Body = FText::FromString(FString::Printf(TEXT("No %s right now - got %s at %.0f%% THC. Want that instead?"), *ReqStrain.ToString(), *NewStrain.ToString(), OfferedThc));
-	Messages.Insert(Mine, 0);
+	StampAndInsert(Mine);
 
 	FPhoneMessage Rep;
 	Rep.FromContactId = ContactId; Rep.SenderName = SenderName; Rep.bFromMe = false; Rep.Status = 3; Rep.AppointmentTimeOfDay = -1.f;
@@ -692,7 +692,7 @@ void UContactsComponent::ProposeAlternativeStrain(FName ContactId, FName NewStra
 	{
 		Rep.Body = FText::FromString(FString::Printf(TEXT("Nah, I really want the %s."), *ReqStrain.ToString()));
 	}
-	Messages.Insert(Rep, 0);
+	StampAndInsert(Rep);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 
 	if (GEngine)
@@ -711,6 +711,20 @@ void UContactsComponent::RestoreContacts(const TArray<FPhoneContact>& InContacts
 	OnRep_Messages(); // UI bijwerken (server)
 }
 
+void UContactsComponent::StampAndInsert(FPhoneMessage& M)
+{
+	// In-game klok-uur stempelen voor de "HH:MM"-tijdstempel in de chat (als nog niet gezet).
+	if (M.SentClockHour < 0.f)
+	{
+		if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+		{
+			if (const UDayCycleComponent* DC = GS->GetDayCycle()) { M.SentClockHour = DC->GetClockHour(); }
+		}
+	}
+	if (M.SentRealTime < 0.f && GetWorld()) { M.SentRealTime = GetWorld()->GetTimeSeconds(); }
+	Messages.Insert(M, 0); // nieuwste bovenaan
+}
+
 void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
@@ -721,7 +735,7 @@ void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderNam
 	M.AppointmentTimeOfDay = -1.f;
 	M.Status = 3;        // los info-bericht, geen openstaande afspraak (geen ja/nee nodig)
 	M.bFromMe = false;   // inkomend -> telt mee voor de ongelezen-bubble
-	Messages.Insert(M, 0);
+	StampAndInsert(M);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 	OnRep_Messages();    // server: meteen lokaal de UI bijwerken
 }

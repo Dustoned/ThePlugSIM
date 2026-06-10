@@ -81,6 +81,9 @@ struct FPhoneMessage
 	// Realtime-seconden toen dit verzoek binnenkwam (voor follow-up/opgeven + reactiesnelheid). < 0 = n.v.t.
 	UPROPERTY()
 	float SentRealTime = -1.f;
+	// In-game klok-uur (0..24) toen het bericht verstuurd werd, voor de "HH:MM"-tijdstempel in de chat. < 0 = onbekend.
+	UPROPERTY()
+	float SentClockHour = -1.f;
 	// Heeft de klant al een "you there?"-herinnering gestuurd?
 	UPROPERTY()
 	bool bNudged = false;
@@ -181,6 +184,9 @@ protected:
 
 	// Server: laat een klant verschijnen bij de speler voor deze (geaccepteerde) afspraak.
 	void SpawnAppointmentCustomer(const FPhoneMessage& Msg);
+
+	// Stempelt het bericht met de huidige tijd (in-game klok-uur + realtime) en zet 't bovenaan (nieuwste eerst).
+	void StampAndInsert(FPhoneMessage& M);
 
 	// Huidige tijd in de dag-cyclus (seconden) + cyclusduur, via de GameState.
 	bool GetCycleTime(float& OutNow, float& OutLength) const;
