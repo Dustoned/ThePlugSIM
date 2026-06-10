@@ -52,6 +52,28 @@ namespace
 			|| A->IsA(APackBench::StaticClass()) || A->IsA(AWaterSink::StaticClass())
 			|| A->IsA(ACeilingLamp::StaticClass()));
 	}
+
+	// Overlapt de (geroteerde) box rond Center met een ANDER geplaatst object? Muren/vloeren tellen niet mee,
+	// dus strak tegen de muur blijft prima - dit vangt alleen het door-elkaar-clippen van furniture (vooral
+	// wand-mounts/lampen, die geen vloer-gebaseerde IsSpotBlocked-check hebben).
+	bool OverlapsOtherPlaceable(const UWorld* World, const AActor* Ignore, const FVector& Center, const FVector& BoxHalf, const FQuat& Rot)
+	{
+		if (!World) { return false; }
+		FCollisionObjectQueryParams ObjParams;
+		ObjParams.AddObjectTypesToQuery(ECC_WorldStatic);
+		ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+		FCollisionQueryParams QP(SCENE_QUERY_STAT(WeedShopPlaceableOverlap), false);
+		if (Ignore) { QP.AddIgnoredActor(Ignore); }
+		const FCollisionShape Box = FCollisionShape::MakeBox(FVector(
+			FMath::Max(2.f, BoxHalf.X - 2.f), FMath::Max(2.f, BoxHalf.Y - 2.f), FMath::Max(2.f, BoxHalf.Z - 2.f)));
+		TArray<FOverlapResult> Overlaps;
+		World->OverlapMultiByObjectType(Overlaps, Center, Rot, ObjParams, Box, QP);
+		for (const FOverlapResult& R : Overlaps)
+		{
+			if (IsPlaceableActor(R.GetActor())) { return true; }
+		}
+		return false;
+	}
 }
 
 UBuildComponent::UBuildComponent()
@@ -459,8 +481,10 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							Center.Z = FMath::GridSnap<float>(Center.Z, GridSize);
 						}
 						PreviewLocation = Center;
-						// Wand-mount (rek) mag alleen BINNEN (eigen woning, of overal binnen in free-build) - niet buiten.
+						// Wand-mount (rek) mag alleen BINNEN (eigen woning, of overal binnen in free-build) - niet buiten,
+						// en niet DOOR een ander geplaatst object heen (zijdelings clippen).
 						bValidSpot = bWall && !bOnPlaceable
+							&& !OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion())
 							&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
 					}
 					else
@@ -551,8 +575,10 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				// (dat ligt hoger dan je voeten). Plus vlakke vloer, niet op een pot, genoeg ruimte.
 				if (CurrentDef.bIsLamp)
 				{
-					// Plafondlamp: geldig op een PLAFOND (omlaag-wijzend vlak), maar alleen in je EIGEN woning.
+					// Plafondlamp: geldig op een PLAFOND (omlaag-wijzend vlak), alleen in je EIGEN woning, en
+					// niet DOOR een andere lamp/object heen.
 					bValidSpot = (FloorNormalZ < -0.4f) && !bOnPlaceable
+						&& !OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion())
 						&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
 				}
 				else
@@ -991,6 +1017,13 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Can't stack on another object.")); }
 			return;
 		}
+	}
+	// Wand-mounts/plafondlampen: niet DOOR een ander geplaatst object heen (zijdelingse overlap/clippen).
+	if (!bUpgrade && (Def.bIsLamp || Def.bIsWallMount)
+		&& OverlapsOtherPlaceable(World, GetOwner(), Location, Def.BoxHalf, Rotation.Quaternion()))
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Can't place inside another object.")); }
+		return;
 	}
 
 	// Alleen BINNEN (je eigen woning; in free-build overal binnen) - NOOIT buiten, tenzij outdoors-toegestaan.
