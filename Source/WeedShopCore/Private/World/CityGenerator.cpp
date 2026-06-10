@@ -73,26 +73,52 @@ void ACityGenerator::BeginPlay()
 	BuildCity();
 }
 
+UStaticMeshComponent* ACityGenerator::AddCityProp(const TCHAR* MeshPath, const FVector& Loc, float Yaw)
+{
+	UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, MeshPath);
+	if (!M) { return nullptr; }
+	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+	C->SetupAttachment(Root);
+	C->SetStaticMesh(M);
+	C->SetMobility(EComponentMobility::Static);
+	C->SetWorldLocationAndRotation(Loc, FRotator(0.f, Yaw, 0.f));
+	C->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	C->SetCanEverAffectNavigation(true);
+	C->RegisterComponent();
+	return C;
+}
+
 void ACityGenerator::AddCityLamp(const FVector& BaseWorld)
 {
-	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
-	if (!Cyl) { return; }
-	const float PoleH = 470.f;
-	const FLinearColor Metal(0.07f, 0.08f, 0.10f);
-	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, 7.f), FVector(36.f, 36.f, 14.f), Metal, false);             // voet
-	AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, PoleH * 0.5f), FVector(11.f, 11.f, PoleH), Metal, false);   // paal
-	// Lantaarn-kapje (kegel, punt omhoog) + dakje.
-	if (Cone) { AddBox(Cone, BaseWorld + FVector(0.f, 0.f, PoleH + 18.f), FVector(52.f, 52.f, 42.f), Metal, false, FRotator(180.f, 0.f, 0.f)); }
-	if (Sphere) { AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 42.f), FVector(14.f, 14.f, 12.f), Metal, false); }
-	// Gloeiende lampbol in het kapje (kleurt warmgeel als 'ie aan is).
-	if (Sphere)
+	// Echte lantaarn uit de CityBeachStrip-pack; lichten op de gemeten paal-hoogte. Fallback = oude mockup.
+	float PoleH = 470.f;
+	if (UStaticMeshComponent* Lamp = AddCityProp(TEXT("/Game/CityBeachStrip/Meshes/LampPost/SM_LampPostBeach_01.SM_LampPostBeach_01"), BaseWorld, 0.f))
 	{
-		UStaticMeshComponent* Head = AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 4.f), FVector(26.f, 26.f, 24.f), FLinearColor(0.2f, 0.2f, 0.22f), false);
-		if (Head)
+		if (const UStaticMesh* LM = Lamp->GetStaticMesh())
 		{
-			if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Head->GetMaterial(0))) { LampHeadMats.Add(M); }
+			PoleH = FMath::Clamp((float)LM->GetBoundingBox().Max.Z - 35.f, 250.f, 900.f);
+		}
+	}
+	else
+	{
+		UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+		UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+		UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
+		if (!Cyl) { return; }
+		const FLinearColor Metal(0.07f, 0.08f, 0.10f);
+		AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, 7.f), FVector(36.f, 36.f, 14.f), Metal, false);             // voet
+		AddBox(Cyl, BaseWorld + FVector(0.f, 0.f, PoleH * 0.5f), FVector(11.f, 11.f, PoleH), Metal, false);   // paal
+		// Lantaarn-kapje (kegel, punt omhoog) + dakje.
+		if (Cone) { AddBox(Cone, BaseWorld + FVector(0.f, 0.f, PoleH + 18.f), FVector(52.f, 52.f, 42.f), Metal, false, FRotator(180.f, 0.f, 0.f)); }
+		if (Sphere) { AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 42.f), FVector(14.f, 14.f, 12.f), Metal, false); }
+		// Gloeiende lampbol in het kapje (kleurt warmgeel als 'ie aan is).
+		if (Sphere)
+		{
+			UStaticMeshComponent* Head = AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 4.f), FVector(26.f, 26.f, 24.f), FLinearColor(0.2f, 0.2f, 0.22f), false);
+			if (Head)
+			{
+				if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Head->GetMaterial(0))) { LampHeadMats.Add(M); }
+			}
 		}
 	}
 	// Warme SPOTLIGHT recht naar beneden, BREDE kegel met ZACHTE randen (grote falloff tussen binnen/
@@ -446,6 +472,29 @@ void ACityGenerator::BuildCity()
 				AddCityLamp(FVector(CX + Off, CY - Off, TopZ));
 				AddCityLamp(FVector(CX - Off, CY + Off, TopZ));
 				AddCityLamp(FVector(CX - Off, CY - Off, TopZ));
+			}
+
+			// Straat-meubilair (CityBeachStrip-props) op de stoeprand, per blok gevarieerd via de hash:
+			// bankje + vuilnisbak op een willekeurige zijde, hydrant op een andere hoek. Kijkt de straat op.
+			{
+				const uint32 Hp = CityHash(i * 73 + 11, j * 57 + 5);
+				const float EdgeOff = BlockSize * 0.5f - 42.f;
+				const int32 Side = (int32)(Hp % 4u); // 0..3 = +X/-X/+Y/-Y zijde
+				const FVector N = (Side == 0) ? FVector(1, 0, 0) : (Side == 1) ? FVector(-1, 0, 0) : (Side == 2) ? FVector(0, 1, 0) : FVector(0, -1, 0);
+				const FVector Tt(-N.Y, N.X, 0.f);
+				const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(N.Y, N.X)); // de straat op kijken
+				const float Along = ((float)((Hp / 7u) % 100u) / 100.f - 0.5f) * BlockSize * 0.5f;
+				const FVector EdgeBase = FVector(CX, CY, TopZ) + N * EdgeOff + Tt * Along;
+				if ((Hp & 3u) != 3u) // ~3/4 van de blokken: bankje + bak
+				{
+					AddCityProp(TEXT("/Game/CityBeachStrip/Meshes/Bench/SM_Bench.SM_Bench"), EdgeBase, Yaw);
+					AddCityProp(TEXT("/Game/CityBeachStrip/Meshes/StreetBin/SM_StreetTrashBin.SM_StreetTrashBin"), EdgeBase + Tt * 130.f, Yaw);
+				}
+				if ((Hp & 4u) != 0u) // ~helft: hydrant op een vaste hoek-positie
+				{
+					AddCityProp(TEXT("/Game/CityBeachStrip/Meshes/Hydrant/SM_Hydrant.SM_Hydrant"),
+						FVector(CX, CY, TopZ) - N * EdgeOff + Tt * (BlockSize * 0.18f), Yaw + 180.f);
+				}
 			}
 
 			// Landmark-blokken: 4 winkels + gas station op de binnenring, appartementen op de hoeken.

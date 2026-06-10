@@ -95,6 +95,8 @@ protected:
 
 	// Straatlantaarn (paal + kop + warm puntlicht) die 's avonds aan gaat.
 	void AddCityLamp(const FVector& BaseWorld);
+	// Statisch straat-prop uit een asset-pack (bankje/vuilnisbak/hydrant/...); nullptr-safe fallback.
+	class UStaticMeshComponent* AddCityProp(const TCHAR* MeshPath, const FVector& Loc, float Yaw);
 
 	// Centraal parkje: gras, paden, boompjes, bankjes en een laag hekje.
 	void BuildPark(float CX, float CY, float Size, float GroundTopZ);
