@@ -1797,8 +1797,11 @@ bool ACustomerBase::PickResidentStreetRoamGoal(ACityGenerator* City, int32 Route
 			// Centrum-mijding BEGRENSD: alleen straf BINNEN ~1,6 blok van het centrum, geen beloning verder weg.
 			// (De oude onbegrensde +CenterDist werd na de trip-band de dominante term -> iedereen koos doelen op
 			// de buitenrand en kluitte daar samen rond de buiten-blokken/winkels.)
+			// Naar-buiten-druk AFGETOPT op ~2,8 blok: mild naar buiten (anders zakt de random-walk naar het
+			// midden-3x3), maar daarbuiten vlak zodat de rand geen magneet wordt (dat was de vorige kluit).
 			const float Score = TripScore
 				- FMath::Max(0.f, Pitch * 1.6f - CenterDist) * 1.2f
+				+ FMath::Min(CenterDist, Pitch * 2.8f) * 0.5f
 				+ FMath::Max(0.f, Pitch * 2.5f - DistrictDist) * 1.0f
 				+ Alignment * Pitch * 0.85f
 				- static_cast<float>(Crowd) * 2400.f
