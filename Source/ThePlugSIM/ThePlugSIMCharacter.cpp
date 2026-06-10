@@ -1216,7 +1216,7 @@ void AThePlugSIMCharacter::WeedMarkSpot(const FString& Label)
 	const FVector L = GetActorLocation();
 	const FRotator R = GetControlRotation();
 	const FString MapPath = GetWorld() ? GetWorld()->GetOutermost()->GetName() : TEXT("?");
-	const FString Line = FString::Printf(TEXT("%s | map=%s | pos=(%.0f, %.0f, %.0f) | yaw=%.0f
+	const FString Line = FString::Printf(TEXT("%s | map=%s | pos=(%.0f, %.0f, %.0f) | yaw=%.0f") TEXT("
 "),
 		Label.IsEmpty() ? TEXT("spot") : *Label, *MapPath, L.X, L.Y, L.Z, R.Yaw);
 	const FString File = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
