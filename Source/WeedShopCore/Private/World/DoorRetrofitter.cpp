@@ -118,7 +118,15 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->TextureTarget = MapRT;
 	MapCapture->bCaptureEveryFrame = false;
 	MapCapture->bCaptureOnMovement = false;
-	MapCapture->CaptureSource = ESceneCaptureSource::SCS_BaseColor; // vlakke leesbare kaart, dag en nacht
+	// FinalColor ipv BaseColor: de pack-materialen (layered/nanite) renderen zwart in een BaseColor-
+	// capture. FinalColor = een echte luchtfoto; exposure vastgepind zodat 'ie dag en nacht leesbaar is.
+	MapCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+	MapCapture->PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
+	MapCapture->PostProcessSettings.AutoExposureMinBrightness = 0.45f;
+	MapCapture->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
+	MapCapture->PostProcessSettings.AutoExposureMaxBrightness = 0.45f;
+	MapCapture->ShowFlags.SetFog(false);          // hoogte-fog wast de luchtfoto anders uit
+	MapCapture->ShowFlags.SetAtmosphere(false);   // atmosfeer tussen camera en grond idem
 	// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met MapWidget::WorldToCanvas).
 	MapCapture->SetWorldLocationAndRotation(FVector(MapCenter.X, MapCenter.Y, TopZ), FRotator(-90.f, 0.f, 0.f));
 }
