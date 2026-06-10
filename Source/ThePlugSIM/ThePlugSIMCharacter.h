@@ -132,6 +132,9 @@ public:
 	UFUNCTION(Exec) void WeedClearFurniture();
 	// `WeedFurnitureTypes` toont hoeveel woning-types er zijn en welke al een opgeslagen sjabloon hebben.
 	UFUNCTION(Exec) void WeedFurnitureTypes();
+	// `WeedMarkSpot <label>` schrijft je huidige positie+kijkrichting naar Saved/MarkedSpots.txt -
+	// zo wijs je plekken aan (bv. een hotel-lobby) waar Claude daarna in code iets kan bouwen.
+	UFUNCTION(Exec) void WeedMarkSpot(const FString& Label);
 
 protected:
 

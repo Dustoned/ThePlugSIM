@@ -20,6 +20,7 @@
 #include "World/DayNightController.h"
 #include "World/CityGenerator.h"
 #include "World/DoorRetrofitter.h"
+#include "Misc/FileHelper.h"
 #include "World/StoreCounter.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
@@ -1208,6 +1209,21 @@ void AThePlugSIMCharacter::OnCashChanged(int64 NewCashCents)
 	{
 		Inventory->SetCashDisplayEuros(NewCashCents / 100);
 	}
+}
+
+void AThePlugSIMCharacter::WeedMarkSpot(const FString& Label)
+{
+	const FVector L = GetActorLocation();
+	const FRotator R = GetControlRotation();
+	const FString MapPath = GetWorld() ? GetWorld()->GetOutermost()->GetName() : TEXT("?");
+	const FString Line = FString::Printf(TEXT("%s | map=%s | pos=(%.0f, %.0f, %.0f) | yaw=%.0f
+"),
+		Label.IsEmpty() ? TEXT("spot") : *Label, *MapPath, L.X, L.Y, L.Z, R.Yaw);
+	const FString File = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
+	FFileHelper::SaveStringToFile(Line, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,
+		&IFileManager::Get(), FILEWRITE_Append);
+	UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Cyan,
+		FString::Printf(TEXT("Spot marked: %s (%.0f, %.0f, %.0f)"), Label.IsEmpty() ? TEXT("spot") : *Label, L.X, L.Y, L.Z));
 }
 
 void AThePlugSIMCharacter::WeedSaveFurniture()
