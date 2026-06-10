@@ -96,6 +96,7 @@ void ADayNightController::BeginPlay()
 		if (UDirectionalLightComponent* SunDL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent()))
 		{
 			SunDL->SetAtmosphereSunLight(true);
+			SunDL->LightSourceAngle = 0.4f; // realistische (kleine) zonneschijf i.p.v. een enorme bal
 		}
 	}
 
@@ -313,7 +314,8 @@ void ADayNightController::Tick(float DeltaSeconds)
 	if (Sun.IsValid() && Sun->GetLightComponent())
 	{
 		const float Pitch = (DayF > 0.08f) ? (90.f - Hour * 15.f) : MoonPitch; // dag-boog of hoge maan
-		Sun->SetActorRotation(FRotator(Pitch, 35.f, 0.f));
+		// Yaw 337.5 -> de zon gaat 's avonds onder tussen NW en N (kompas ~337) en komt op rond ZZO.
+		Sun->SetActorRotation(FRotator(Pitch, 337.5f, 0.f));
 
 		UDirectionalLightComponent* DL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
 		if (DL)
