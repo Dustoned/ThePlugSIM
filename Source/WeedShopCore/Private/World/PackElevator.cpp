@@ -35,7 +35,7 @@ APackElevator::APackElevator()
 	}
 }
 
-void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<TPair<int32, UStaticMeshComponent*>>& InPanels, const FVector& CabCenterXY)
+void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<TPair<int32, UStaticMeshComponent*>>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir)
 {
 	Floors = InFloors;
 	Floors.Sort();
@@ -48,6 +48,9 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 	for (const TPair<int32, UStaticMeshComponent*>& P : InPanels)
 	{
 		if (!P.Value) { continue; }
+		// BELANGRIJK: de map-panelen zijn Static - zonder Movable doet SetWorldLocation stilletjes NIETS
+		// (daarom bewogen de deuren eerst niet).
+		P.Value->SetMobility(EComponentMobility::Movable);
 		FPanelRef R;
 		R.Comp = P.Value;
 		R.ClosedPos = P.Value->GetComponentLocation();
@@ -84,7 +87,17 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 	DoorOpen = 1.f; // begane grond: deuren open, klaar om in te stappen
 	DwellTimer = DwellSeconds;
 	SetActorLocation(FVector(CabXY.X, CabXY.Y, CabZ));
+	// Cabine met de OPENING naar de liftdeur draaien (aanname: opening = lokale +X; klopt 'ie niet,
+	// dan is dit de plek om 90/180 graden bij te draaien).
+	FVector Open2D = OpeningDir; Open2D.Z = 0.f;
+	if (Open2D.Normalize()) { SetActorRotation(Open2D.Rotation()); }
 	if (Cab) { Cab->SetRelativeLocation(FVector::ZeroVector); }
+}
+
+void APackElevator::CallToFloor(int32 FloorIdx)
+{
+	if (!Floors.IsValidIndex(FloorIdx)) { return; }
+	TargetFloor = FloorIdx;
 }
 
 bool APackElevator::IsPawnAboard() const

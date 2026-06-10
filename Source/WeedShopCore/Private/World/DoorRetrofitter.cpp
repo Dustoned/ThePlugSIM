@@ -4,6 +4,7 @@
 #include "World/CityDoor.h"
 #include "World/DayNightController.h"
 #include "World/PackElevator.h"
+#include "World/PackElevatorButton.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
 #include "Components/LightComponent.h"
@@ -440,7 +441,17 @@ void ADoorRetrofitter::ScanAndConvert()
 			FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			if (APackElevator* Elev = W->SpawnActor<APackElevator>(APackElevator::StaticClass(), FTransform(FVector(CabCenter.X, CabCenter.Y, Floors[0])), SP))
 			{
-				Elev->Setup(Floors, SlideDir, Panels, CabCenter);
+				Elev->Setup(Floors, SlideDir, Panels, CabCenter, -ShaftSide);
+				// Call-knop per verdieping: naast de deuropening, tegen de muur aan de gang-kant.
+				for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
+				{
+					const FVector BtnLoc = OpeningCenter + SlideDir * 95.f - ShaftSide * 6.f + FVector(0.f, 0.f, Floors[Fi] + 110.f - OpeningCenter.Z);
+					const FRotator BtnRot = (-ShaftSide).Rotation();
+					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, FVector(BtnLoc.X, BtnLoc.Y, Floors[Fi] + 110.f)), SP))
+					{
+						Btn->Setup(Elev, Fi);
+					}
+				}
 				UE_LOG(LogWeedShop, Warning, TEXT("PackElevator gebouwd: %d verdiepingen @ (%.0f, %.0f)"), Floors.Num(), CabCenter.X, CabCenter.Y);
 			}
 		}

@@ -23,7 +23,10 @@ public:
 
 	// Floors = gesorteerde verdieping-Z's (vloerniveau). InSlideDir = schuifrichting van de panelen
 	// (wereld, pocket-kant). Panels = per verdieping (index in Floors) de bestaande schuif-panelen.
-	void Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<TPair<int32, UStaticMeshComponent*>>& InPanels, const FVector& CabCenterXY);
+	void Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<TPair<int32, UStaticMeshComponent*>>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir);
+
+	// Roep de lift naar deze verdieping (call-knoppen).
+	void CallToFloor(int32 FloorIdx);
 
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
