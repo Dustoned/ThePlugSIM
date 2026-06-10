@@ -22,6 +22,7 @@
 #include "UI/WeedUiStyle.h"
 #include "Styling/CoreStyle.h"
 #include "World/CityGenerator.h"
+#include "World/DoorRetrofitter.h"
 #include "Customer/CustomerBase.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
@@ -239,7 +240,22 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 
 void UMapWidget::BuildBlocks()
 {
-	if (!Canvas || !City.IsValid()) { return; }
+	if (!Canvas) { return; }
+
+	// Pack-map (geen CityGenerator): kale top-down kaart via de DoorRetrofitter-capture - geen
+	// blok-labels/huisnummers, wel speler/waypoint/NPC-dots + klik-voor-waypoint.
+	if (!City.IsValid() && PackMap.IsValid())
+	{
+		CenterXY = PackMap->GetMapCenter();
+		Scale = GMapDS / FMath::Max(1.f, PackMap->GetMapOrthoWidth());
+		PackMap->CaptureMapNow();
+		PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 26);
+		WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
+		if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
+		bBuiltBlocks = true;
+		return;
+	}
+	if (!City.IsValid()) { return; }
 
 	const FVector C = City->GetCityCenter();
 	CenterXY = FVector2D(C.X, C.Y);
@@ -352,14 +368,20 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { City = *It; break; }
 	}
-	if (!bBuiltBlocks && City.IsValid()) { BuildBlocks(); }
+	if (!City.IsValid() && !PackMap.IsValid())
+	{
+		for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { PackMap = *It; break; }
+	}
+	if (!bBuiltBlocks && (City.IsValid() || PackMap.IsValid())) { BuildBlocks(); }
 	if (!bBuiltBlocks || !Canvas) { return; }
 
 	// Echte top-down render dekkend tonen: M_MapDisplay (UI/opaque) sampelt de SceneCapture-RT.
 	// De BaseColor-capture heeft alpha=0; dit materiaal negeert die alpha -> geen doorzichtige kaart.
-	if (!bImageSet && MapImage && City.IsValid())
+	if (!bImageSet && MapImage && (City.IsValid() || PackMap.IsValid()))
 	{
-		if (UTextureRenderTarget2D* RT = City->GetMapRenderTarget())
+		UTextureRenderTarget2D* RT = City.IsValid() ? City->GetMapRenderTarget()
+			: (PackMap.IsValid() ? PackMap->GetMapRenderTarget() : nullptr);
+		if (RT)
 		{
 			if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_MapDisplay.M_MapDisplay")))
 			{

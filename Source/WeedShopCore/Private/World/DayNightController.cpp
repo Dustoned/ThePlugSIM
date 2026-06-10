@@ -112,7 +112,12 @@ void ADayNightController::BeginPlay()
 	// (Oude per-NPC lantaarnpalen verwijderd: de stad-straatlampen van de CityGenerator zijn nu de
 	// straatverlichting, en die worden door de phone-slider (LampIntensity) live geregeld.)
 
-	ReplaceIndoorLights();
+	// Alleen in onze eigen (gegenereerde) stad: pack-maps hebben hun eigen interieur-verlichting.
+	const FString MapPath = W->GetOutermost()->GetName();
+	if (!MapPath.StartsWith(TEXT("/Game/CityBeachStrip")))
+	{
+		ReplaceIndoorLights();
+	}
 }
 
 void ADayNightController::ReplaceIndoorLights()

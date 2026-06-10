@@ -42,6 +42,9 @@ public:
 	// Schrijf de huidige waardes naar Saved/LightConfig.txt (+ log), zodat ze als defaults te bakken zijn.
 	void SaveLightConfig() const;
 
+	// De geadopteerde zon (voor opruimen van extra directional lights in pack-maps).
+	class ADirectionalLight* GetSun() const { return Sun.Get(); }
+
 protected:
 	virtual void BeginPlay() override;
 

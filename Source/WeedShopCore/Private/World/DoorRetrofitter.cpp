@@ -2,9 +2,15 @@
 
 #include "WeedShopCore.h"
 #include "World/CityDoor.h"
+#include "World/DayNightController.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "GameFramework/Character.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
 #include "Engine/Engine.h"
@@ -53,6 +59,7 @@ namespace
 ADoorRetrofitter::ADoorRetrofitter()
 {
 	PrimaryActorTick.bCanEverTick = true; // per frame de on-screen debug-spam legen
+	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
 void ADoorRetrofitter::Tick(float DeltaSeconds)
@@ -71,6 +78,62 @@ void ADoorRetrofitter::BeginPlay()
 	// streamen gebouwen later in; die deuren pakken we dan alsnog).
 	ScanAndConvert();
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);
+}
+
+void ADoorRetrofitter::EnsureMapCapture()
+{
+	UWorld* W = GetWorld();
+	if (!W || MapCapture) { return; }
+
+	// Wereld-omvang bepalen uit de static-mesh-actors (1x): centrum + ortho-breedte van de kaart.
+	FBox B(ForceInit);
+	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
+	{
+		if (IsValid(*It)) { B += It->GetActorLocation(); }
+	}
+	float TopZ = 10000.f;
+	if (B.IsValid)
+	{
+		const FVector C = B.GetCenter();
+		MapCenter = FVector2D(C.X, C.Y);
+		const FVector E = B.GetExtent();
+		MapOrtho = FMath::Clamp(FMath::Max(E.X, E.Y) * 2.3f, 20000.f, 300000.f);
+		TopZ = B.Max.Z + 20000.f;
+	}
+
+	MapRT = NewObject<UTextureRenderTarget2D>(this, TEXT("PackMapRT"));
+	MapRT->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
+	MapRT->ClearColor = FLinearColor(0.04f, 0.05f, 0.07f, 1.f);
+	MapRT->InitAutoFormat(1024, 1024);
+	MapRT->UpdateResourceImmediate(true);
+
+	MapCapture = NewObject<USceneCaptureComponent2D>(this, TEXT("PackMapCapture"));
+	MapCapture->SetupAttachment(GetRootComponent());
+	MapCapture->RegisterComponent();
+	MapCapture->ProjectionType = ECameraProjectionMode::Orthographic;
+	MapCapture->OrthoWidth = MapOrtho;
+	MapCapture->TextureTarget = MapRT;
+	MapCapture->bCaptureEveryFrame = false;
+	MapCapture->bCaptureOnMovement = false;
+	MapCapture->CaptureSource = ESceneCaptureSource::SCS_BaseColor; // vlakke leesbare kaart, dag en nacht
+	// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met MapWidget::WorldToCanvas).
+	MapCapture->SetWorldLocationAndRotation(FVector(MapCenter.X, MapCenter.Y, TopZ), FRotator(-90.f, 0.f, 0.f));
+}
+
+void ADoorRetrofitter::CaptureMapNow()
+{
+	EnsureMapCapture();
+	if (!MapCapture) { return; }
+	// Characters niet inbakken (live dots tekent de MapWidget zelf).
+	MapCapture->HiddenActors.Reset();
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<ACharacter> It(W); It; ++It)
+		{
+			if (IsValid(*It)) { MapCapture->HiddenActors.Add(*It); }
+		}
+	}
+	MapCapture->CaptureScene();
 }
 
 void ADoorRetrofitter::ScanAndConvert()
@@ -161,6 +224,20 @@ void ADoorRetrofitter::ScanAndConvert()
 	if (GlassFixed > 0)
 	{
 		UE_LOG(LogWeedShop, Log, TEXT("DoorRetrofitter: %d glas/raam-componenten blokkeren nu de speler"), GlassFixed);
+	}
+
+	// Extra zonnen opruimen: pack-lighting-scenario's streamen soms meerdere directional lights in.
+	// Onze DayNightController adopteert er een; de rest geeft dubbele schaduwen + de paarse
+	// ForwardShadingPriority-warning -> weg ermee (ook als ze later in-streamen).
+	if (ADayNightController* DN = ADayNightController::GetLocal(W))
+	{
+		if (ADirectionalLight* Adopted = DN->GetSun())
+		{
+			for (TActorIterator<ADirectionalLight> It(W); It; ++It)
+			{
+				if (*It != Adopted) { It->Destroy(); }
+			}
+		}
 	}
 
 	if (NewThisPass > 0)

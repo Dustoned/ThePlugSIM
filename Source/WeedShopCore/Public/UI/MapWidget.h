@@ -47,6 +47,7 @@ protected:
 	float Scale = 0.05f;
 
 	TWeakObjectPtr<ACityGenerator> City;
+	TWeakObjectPtr<class ADoorRetrofitter> PackMap; // pack-map-adapter (kaart zonder CityGenerator)
 
 	FVector2D WorldToCanvas(float Wx, float Wy) const;
 	void BuildBlocks();
