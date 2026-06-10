@@ -1,4 +1,35 @@
 PATCH NOTES
+Version 1.5.1 — 10 juni 2026
+
+Korte intro:
+De stad voelt nu echt geleefd: bewoners verspreiden zich netjes over de hele map (de hardnekkige
+ophoping in het centrum is bij de wortel opgelost), iedereen doet z'n dagelijkse park-bezoekje via
+een nette wachtrij, en de telefoon-chat kreeg tijdstempels + live wacht-balken.
+
+━━━━━━━━━━━━━━━━━━━━
+
+NEW FEATURES
+
++ Park-bezoek met wachtrij
+  Elke bewoner gaat 1-2x per dag even naar het centrale park: er naartoe, even blijven hangen,
+  en weer door. Een wachtrij zorgt dat dat netjes om de beurt gebeurt (max een paar tegelijk) —
+  een levendig park zonder ophoping.
+
++ Telefoon-chat: tijdstempels + wacht-balken
+   • Elk bericht toont nu de verzendtijd (HH:MM, in-game klok), zoals een echte berichten-app.
+   • Stuurt een klant een verzoek, dan zie je een live aftellende balk: hoelang wacht 'ie nog op
+     je antwoord voor 'ie opgeeft (kleurt oranje/rood als de tijd opraakt).
+   • Bij een lopende afspraak zie je in de chat hoelang ze nog bij je deur / bij hun huis wachten.
+
+FIXES
+
+• De terugkerende NPC-ophoping rond het centrum is bij de wortel opgelost: bewoners kozen
+  structureel doelen aan de overkant van de stad, waardoor al hun routes door het centrum
+  liepen. Ze blijven nu in hun eigen buurt rondlopen en verkennen de map geleidelijk —
+  iedereen netjes verspreid, de hele dag door.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.5.0 — 10 juni 2026
 
 Korte intro:
@@ -48,8 +79,6 @@ QUALITY OF LIFE & FIXES
 • De CO-OP-knop staat nu netjes in het hoofdmenu i.p.v. los rechtsboven.
 • NPC-beweging een stuk vloeiender: minder rondjes-draaien/opbundelen, en het centrum loopt
   niet meer vol (doorgaand verkeer routeert er netjes omheen).
-• Bewoners bezoeken het park 1-2x per dag via een nette wachtrij: maximaal een paar tegelijk,
-  even blijven hangen, en weer door — levendig park zonder ophoping.
 
 ━━━━━━━━━━━━━━━━━━━━
 
