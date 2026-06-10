@@ -1268,6 +1268,22 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 				if (Phone && Counter->HasShop()) { Phone->OpenStore(Counter); } // fullscreen winkel-menu (geen telefoon)
 				return;
 			}
+			// Winkelier (verkoper-NPC) -> zelfde als z'n balie: open de shop van DEZE winkel (dichtstbijzijnde balie).
+			if (ACustomerBase* Keeper = Cast<ACustomerBase>(Focus))
+			{
+				if (Keeper->IsShopkeeper())
+				{
+					AStoreCounter* Best = nullptr; float BestD = 700.f;
+					for (TActorIterator<AStoreCounter> It(GetWorld()); It; ++It)
+					{
+						if (!It->HasShop()) { continue; }
+						const float D = FVector::Dist2D(It->GetActorLocation(), Keeper->GetActorLocation());
+						if (D < BestD) { BestD = D; Best = *It; }
+					}
+					if (Phone && Best) { Phone->OpenStore(Best); }
+					return;
+				}
+			}
 			// Verpak-tafel -> open lokaal het verpak-menu (met de batch-grootte van deze tafel).
 			if (APackBench* Bench = Cast<APackBench>(Focus))
 			{
@@ -1348,6 +1364,22 @@ void AThePlugSIMCharacter::OnInteractKey()
 			{
 				if (Phone && Counter->HasShop()) { Phone->OpenStore(Counter); } // fullscreen winkel-menu (geen telefoon)
 				return;
+			}
+			// Winkelier (verkoper-NPC) -> zelfde als z'n balie: open de shop van DEZE winkel.
+			if (ACustomerBase* Keeper = Cast<ACustomerBase>(Focus))
+			{
+				if (Keeper->IsShopkeeper())
+				{
+					AStoreCounter* Best = nullptr; float BestD = 700.f;
+					for (TActorIterator<AStoreCounter> It(GetWorld()); It; ++It)
+					{
+						if (!It->HasShop()) { continue; }
+						const float D = FVector::Dist2D(It->GetActorLocation(), Keeper->GetActorLocation());
+						if (D < BestD) { BestD = D; Best = *It; }
+					}
+					if (Phone && Best) { Phone->OpenStore(Best); }
+					return;
+				}
 			}
 			if (APackBench* Bench = Cast<APackBench>(Focus))
 			{

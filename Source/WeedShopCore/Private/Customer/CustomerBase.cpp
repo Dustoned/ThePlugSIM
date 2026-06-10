@@ -15,6 +15,7 @@
 #include "NavigationSystem.h"
 #include "World/DayCycleComponent.h"
 #include "World/CityGenerator.h"
+#include "World/StoreCounter.h"
 #include "Customer/CustomerSpawner.h"
 #include "EngineUtils.h"
 #include "Engine/SkeletalMesh.h"
@@ -3334,6 +3335,28 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 
 FText ACustomerBase::GetInteractionPrompt_Implementation() const
 {
+	// Winkelier: prompt hoort bij ZIJN winkel (geen deal). Winkelsoort via de dichtstbijzijnde balie.
+	if (bShopkeeper)
+	{
+		const TCHAR* Shop = TEXT("Shop");
+		float BestD = 700.f;
+		for (TActorIterator<AStoreCounter> It(GetWorld()); It; ++It)
+		{
+			const float D = FVector::Dist2D(It->GetActorLocation(), GetActorLocation());
+			if (D >= BestD) { continue; }
+			BestD = D;
+			switch (It->Kind)
+			{
+			case EShopKind::Grow:       Shop = TEXT("Grow shop"); break;
+			case EShopKind::Supplies:   Shop = TEXT("Supplies store"); break;
+			case EShopKind::Furniture:  Shop = TEXT("Furniture store"); break;
+			case EShopKind::GasStation: Shop = TEXT("Gas station"); break;
+			default:                    Shop = TEXT("Shop"); break;
+			}
+		}
+		return FText::FromString(FString::Printf(TEXT("%s - talk to the clerk"), Shop));
+	}
+
 	switch (State)
 	{
 	case ECustomerState::WantsToOrder:
