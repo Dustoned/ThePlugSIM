@@ -40,6 +40,12 @@ TSharedRef<SWidget> USpotInfoWidget::RebuildWidget()
 	return Super::RebuildWidget();
 }
 
+void USpotInfoWidget::SetInfoVisibleSilent(bool bVisible)
+{
+	bInfoVisible = bVisible;
+	if (Card) { Card->SetVisibility(bInfoVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+}
+
 void USpotInfoWidget::ToggleInfo()
 {
 	bInfoVisible = !bInfoVisible;

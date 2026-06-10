@@ -750,7 +750,7 @@ void UPhoneClientComponent::EnsureWidget()
 	WardrobeWidget = CreateWidget<UWardrobeWidget>(PC, UWardrobeWidget::StaticClass());
 	if (WardrobeWidget) { WardrobeWidget->SetPhone(this); WardrobeWidget->AddToViewport(34); }
 	SpotInfoWidget = CreateWidget<USpotInfoWidget>(PC, USpotInfoWidget::StaticClass());
-	if (SpotInfoWidget) { SpotInfoWidget->AddToViewport(8); }
+	if (SpotInfoWidget) { SpotInfoWidget->AddToViewport(8); SpotInfoWidget->SetInfoVisibleSilent(true); } // default AAN (troubleshoot-fase)
 	PackWidget = CreateWidget<UPackWidget>(PC, UPackWidget::StaticClass());
 	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
 	ShelfWidget = CreateWidget<UShelfWidget>(PC, UShelfWidget::StaticClass());

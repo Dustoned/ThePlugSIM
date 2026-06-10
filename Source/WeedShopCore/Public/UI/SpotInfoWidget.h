@@ -18,6 +18,7 @@ class WEEDSHOPCORE_API USpotInfoWidget : public UUserWidget
 
 public:
 	void ToggleInfo();
+	void SetInfoVisibleSilent(bool bVisible); // zonder spot-log (voor default-aan)
 	bool IsInfoVisible() const { return bInfoVisible; }
 
 protected:

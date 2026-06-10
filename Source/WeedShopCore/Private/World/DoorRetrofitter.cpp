@@ -10,6 +10,11 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
@@ -81,6 +86,62 @@ void ADoorRetrofitter::BeginPlay()
 	// streamen gebouwen later in; die deuren pakken we dan alsnog).
 	ScanAndConvert();
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);
+
+	// Dev: -ElevScanAt=X,Y,Z -> teleporteer de speler daarheen (streamt het gebouw in) en dump daarna
+	// alle elevator-meshes in de buurt naar Saved/ElevScan.txt (voor het bouwen van een werkende lift).
+	FString ScanArg;
+	if (FParse::Value(FCommandLine::Get(), TEXT("ElevScanAt="), ScanArg))
+	{
+		TArray<FString> Parts;
+		ScanArg.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3)
+		{
+			ElevScanPos = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
+			bElevScan = true;
+			GetWorldTimerManager().SetTimer(ElevScanTimer, this, &ADoorRetrofitter::ElevTeleport, 5.f, false);
+		}
+	}
+}
+
+void ADoorRetrofitter::ElevTeleport()
+{
+	if (UWorld* W = GetWorld())
+	{
+		if (APlayerController* PC = W->GetFirstPlayerController())
+		{
+			if (APawn* Pn = PC->GetPawn()) { Pn->SetActorLocation(ElevScanPos + FVector(0.f, 0.f, 80.f)); }
+		}
+	}
+	GetWorldTimerManager().SetTimer(ElevScanTimer, this, &ADoorRetrofitter::ElevDump, 8.f, false);
+}
+
+void ADoorRetrofitter::ElevDump()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	FString Out;
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A)) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MeshName = Comp->GetStaticMesh()->GetName();
+			const FVector L = Comp->GetComponentLocation();
+			if (FVector::Dist2D(L, ElevScanPos) > 2000.f) { continue; }
+			const bool bElevMesh = MeshName.Contains(TEXT("Elevator"));
+			const bool bNear = FVector::Dist2D(L, ElevScanPos) < 500.f;
+			if (!bElevMesh && !bNear) { continue; }
+			Out += FString::Printf(TEXT("%s | pos=(%.0f, %.0f, %.0f) | yaw=%.0f | scale=(%.2f, %.2f, %.2f)"),
+				*MeshName, L.X, L.Y, L.Z, Comp->GetComponentRotation().Yaw,
+				Comp->GetComponentScale().X, Comp->GetComponentScale().Y, Comp->GetComponentScale().Z);
+			Out += LINE_TERMINATOR;
+		}
+	}
+	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("ElevScan.txt")));
+	UE_LOG(LogWeedShop, Warning, TEXT("ELEVSCAN dump klaar (%d tekens) -> Saved/ElevScan.txt"), Out.Len());
 }
 
 void ADoorRetrofitter::EnsureMapCapture()

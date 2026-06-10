@@ -29,6 +29,11 @@ protected:
 	void ScanAndConvert();
 
 	FTimerHandle ScanTimer;
+	FTimerHandle ElevScanTimer;
+	FVector ElevScanPos = FVector::ZeroVector;
+	bool bElevScan = false;
+	void ElevTeleport();
+	void ElevDump();
 	TSet<TWeakObjectPtr<AActor>> Converted; // originele actors die al een werkende deur kregen
 	int32 TotalConverted = 0;
 	TArray<TWeakObjectPtr<class ACityDoor>> SpawnedDoors; // om los GLAS aan de juiste deur te hangen
