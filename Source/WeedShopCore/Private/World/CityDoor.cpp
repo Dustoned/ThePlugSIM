@@ -151,11 +151,12 @@ void ACityDoor::Tick(float DeltaSeconds)
 	CurAngle = FMath::FInterpTo(CurAngle, Target, DeltaSeconds, 7.f);
 	if (Hinge) { Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f)); }
 
-	// Blokkeer de speler ALLEEN als de deur helemaal dicht is; zodra 'ie open(t) negeert het paneel
-	// de pawn zodat het zwaaiende paneel je niet wegduwt en je er vrij door kunt lopen.
+	// Paneel is SOLIDE zodra de deur stilstaat (helemaal dicht OF helemaal open tegen de muur), maar negeert
+	// pawns TIJDENS het zwaaien - zo duwt het bewegende paneel je niet weg en loop je er vrij doorheen,
+	// terwijl een openstaande deur wel gewoon een vast object is.
 	if (Panel)
 	{
-		const bool bBlockPawn = (!bEffectiveOpen && FMath::Abs(CurAngle) < 2.f);
-		Panel->SetCollisionResponseToChannel(ECC_Pawn, bBlockPawn ? ECR_Block : ECR_Ignore);
+		const bool bSettled = FMath::Abs(CurAngle - Target) < 2.f;
+		Panel->SetCollisionResponseToChannel(ECC_Pawn, bSettled ? ECR_Block : ECR_Ignore);
 	}
 }
