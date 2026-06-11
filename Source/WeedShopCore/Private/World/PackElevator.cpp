@@ -226,7 +226,7 @@ void APackElevator::Tick(float DeltaSeconds)
 	}
 	// Cabine-deuren schuiven synchroon mee (lokaal langs de opening).
 	if (CabDoorFront) { CabDoorFront->SetRelativeLocation(CabDoorFrontBase + FVector(0.f, CabSlideSignY * 146.f * DoorOpen, 0.f)); }
-	if (CabDoorBack)  { CabDoorBack->SetRelativeLocation(CabDoorBackBase + FVector(0.f, CabSlideSignY * 73.f * DoorOpen, 0.f)); }
+	if (CabDoorBack)  { CabDoorBack->SetRelativeLocation(CabDoorBackBase + FVector(0.f, CabSlideSignY * 78.f * DoorOpen, 0.f)); }
 
 	if (bMoving)
 	{

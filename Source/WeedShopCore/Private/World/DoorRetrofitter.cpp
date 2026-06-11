@@ -412,49 +412,53 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (RawPanels.Num() == 0) { continue; }
 
-			// FRAME-gebaseerde geometrie (gemeten): frame-pivot = exacte opening-centrum (lokale Y +-77),
-			// lokale X = door de muur heen (16cm diep). De POCKET-kant = waar de map de panelen
-			// (half-open als decor!) geparkeerd heeft t.o.v. het centrum.
-			const FRotator FrameRot(0.f, KV.Value.FrameYaw, 0.f);
-			FVector SlideDir = FrameRot.RotateVector(FVector::YAxisVector).GetSafeNormal2D();
+			// FRAME-gebaseerde geometrie (gemeten): frame-pivot = exacte opening-centrum (lokale Y +-77).
+			// De paneel-mesh strekt zich lokaal -Y uit vanaf z'n pivot -> de WERELD-spanrichting volgt
+			// uit de paneel-rotatie (niet uit parkeer-posities raden: de map parkeert ze vrijwel dicht).
 			const FVector OpeningCenter = KV.Value.Ref;
-			if (GroundPanelPos.Num() >= 2)
+			FVector SpanDir = FVector::XAxisVector;
+			if (RawPanels.Num() > 0 && RawPanels[0].Value)
 			{
-				const FVector ParkedAvg = (GroundPanelPos[0] + GroundPanelPos[1]) * 0.5f;
-				if (FVector::DotProduct(ParkedAvg - OpeningCenter, SlideDir) < 0.f) { SlideDir = -SlideDir; }
+				SpanDir = -RawPanels[0].Value->GetComponentRotation().RotateVector(FVector::YAxisVector).GetSafeNormal2D();
 			}
+			// Schuiven doen we TERUG langs de span (panelen verdwijnen achter de muur aan de pivot-kant).
+			FVector SlideDir = -SpanDir;
 
-			// ECHTE dicht-posities berekenen: paneel-mesh dekt [pivot-68, pivot] langs de pocket-richting.
-			// BACK (pocket-helft) dicht op het centrum, FRONT (verre helft) op centrum-68 -> samen 136
-			// gecentreerd over de opening. Open: front schuift 146 (hele opening over), back 73.
+			// Dicht: FRONT-pivot op het centrum (dekt centrum..centrum+68), BACK op centrum-68 (dekt de
+			// andere helft) -> samen 136 gecentreerd. Open: front 146 langs SlideDir (steekt de hele
+			// opening over), back 78 - beide eindigen buiten de opening.
 			TArray<FElevPanelInit> Panels;
 			for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
 			{
-				TArray<TPair<int32, UStaticMeshComponent*>*> FloorPanels;
+				TArray<UStaticMeshComponent*> FloorPanels;
 				for (TPair<int32, UStaticMeshComponent*>& RP : RawPanels)
 				{
-					if (RP.Key == Fi) { FloorPanels.Add(&RP); }
+					if (RP.Key == Fi && RP.Value) { FloorPanels.Add(RP.Value); }
 				}
 				const FVector CXY(OpeningCenter.X, OpeningCenter.Y, 0.f);
 				if (FloorPanels.Num() >= 2)
 				{
-					// Verst-langs-de-pocket geparkeerd paneel = BACK (minste reis naar z'n dicht-stand).
-					const float D0 = FVector::DotProduct(FloorPanels[0]->Value->GetComponentLocation(), SlideDir);
-					const float D1 = FVector::DotProduct(FloorPanels[1]->Value->GetComponentLocation(), SlideDir);
-					UStaticMeshComponent* BackC  = (D0 > D1) ? FloorPanels[0]->Value : FloorPanels[1]->Value;
-					UStaticMeshComponent* FrontC = (D0 > D1) ? FloorPanels[1]->Value : FloorPanels[0]->Value;
-					FElevPanelInit B; B.Comp = BackC; B.FloorIdx = Fi;
-					B.ClosedPos = CXY + FVector(0.f, 0.f, BackC->GetComponentLocation().Z);
-					B.SlideDist = 73.f;
+					const FVector FrontClosed2D = CXY;
+					const FVector BackClosed2D  = CXY - SpanDir * 68.f;
+					// Koppel componenten aan front/back op MINIMALE verplaatsing vanaf hun map-stand.
+					const FVector P0 = FloorPanels[0]->GetComponentLocation();
+					const FVector P1 = FloorPanels[1]->GetComponentLocation();
+					const float Cost01 = FVector::Dist2D(P0, FrontClosed2D) + FVector::Dist2D(P1, BackClosed2D);
+					const float Cost10 = FVector::Dist2D(P1, FrontClosed2D) + FVector::Dist2D(P0, BackClosed2D);
+					UStaticMeshComponent* FrontC = (Cost01 <= Cost10) ? FloorPanels[0] : FloorPanels[1];
+					UStaticMeshComponent* BackC  = (Cost01 <= Cost10) ? FloorPanels[1] : FloorPanels[0];
 					FElevPanelInit F; F.Comp = FrontC; F.FloorIdx = Fi;
-					F.ClosedPos = CXY - SlideDir * 68.f + FVector(0.f, 0.f, FrontC->GetComponentLocation().Z);
+					F.ClosedPos = FrontClosed2D + FVector(0.f, 0.f, FrontC->GetComponentLocation().Z);
 					F.SlideDist = 146.f;
-					Panels.Add(B); Panels.Add(F);
+					FElevPanelInit B; B.Comp = BackC; B.FloorIdx = Fi;
+					B.ClosedPos = BackClosed2D + FVector(0.f, 0.f, BackC->GetComponentLocation().Z);
+					B.SlideDist = 78.f;
+					Panels.Add(F); Panels.Add(B);
 				}
 				else if (FloorPanels.Num() == 1)
 				{
-					FElevPanelInit A; A.Comp = FloorPanels[0]->Value; A.FloorIdx = Fi;
-					A.ClosedPos = CXY - SlideDir * 34.f + FVector(0.f, 0.f, FloorPanels[0]->Value->GetComponentLocation().Z);
+					FElevPanelInit A; A.Comp = FloorPanels[0]; A.FloorIdx = Fi;
+					A.ClosedPos = CXY - SpanDir * 34.f + FVector(0.f, 0.f, FloorPanels[0]->GetComponentLocation().Z);
 					A.SlideDist = 146.f;
 					Panels.Add(A);
 				}
