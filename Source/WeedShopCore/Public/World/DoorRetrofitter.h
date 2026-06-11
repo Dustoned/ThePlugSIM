@@ -55,6 +55,7 @@ protected:
 	void VerticalReplicate();
 	void RunVertJob(const TArray<FVector>& Marks, const FString& JobId);
 	TSet<FString> DoneJobs;                  // afgeronde jobs (deze sessie)
+	TWeakObjectPtr<class ULevelStreamingDynamic> BakedOverlay; // gebakken kamers (async geladen)
 	TMap<FString, int32> JobLastCount;       // streaming-stabiliteit per job
 	TMap<FString, int32> JobStreak;
 

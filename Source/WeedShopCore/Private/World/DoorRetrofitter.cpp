@@ -111,9 +111,9 @@ void ADoorRetrofitter::BeginPlay()
 	if (FPackageName::DoesPackageExist(TEXT("/Game/_Project/Maps/BakedRooms")))
 	{
 		bool bBakedOk = false;
-		ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), TEXT("/Game/_Project/Maps/BakedRooms"),
+		BakedOverlay = ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), TEXT("/Game/_Project/Maps/BakedRooms"),
 			FVector::ZeroVector, FRotator::ZeroRotator, bBakedOk);
-		UE_LOG(LogWeedShop, Log, TEXT("BakedRooms-overlay geladen: %d"), bBakedOk ? 1 : 0);
+		UE_LOG(LogWeedShop, Log, TEXT("BakedRooms-overlay laden gestart: %d"), bBakedOk ? 1 : 0);
 	}
 
 	ScanAndConvert();
@@ -737,6 +737,10 @@ void ADoorRetrofitter::VerticalReplicate()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	const FString MapPath = W->GetOutermost()->GetName();
+
+	// WACHT op de gebakken overlay: de jobs deduppen tegen de gebakken actors - draait een job
+	// EERDER dan de (async ladende) overlay, dan bouwt 'ie alles dubbel (z-fighting, dubbele deuren).
+	if (BakedOverlay.IsValid() && !BakedOverlay->IsLevelLoaded()) { return; }
 
 	TArray<TArray<FVector>> Jobs;
 	// 1) Opgeslagen jobs.
