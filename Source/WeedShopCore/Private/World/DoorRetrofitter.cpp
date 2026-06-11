@@ -669,8 +669,10 @@ void ADoorRetrofitter::CloneRooms()
 	{
 		FHitResult Hit;
 		FCollisionQueryParams QP(SCENE_QUERY_STAT(RoomVoidProbe), false);
-		const FVector Start(P.X, P.Y, SrcFramePos.Z + 120.f);
-		return W->LineTraceSingleByChannel(Hit, Start, Start - FVector(0.f, 0.f, 340.f), ECC_Visibility, QP);
+		// Alleen de VLOER-band checken (vloer-oppervlak ~Z+8): niet dieper prikken, anders raak je het
+		// plafond van de verdieping eronder (Z~-30) en lijkt een leeg slot bezet.
+		const FVector Start(P.X, P.Y, SrcFramePos.Z + 100.f);
+		return W->LineTraceSingleByChannel(Hit, Start, Start - FVector(0.f, 0.f, 110.f), ECC_Visibility, QP);
 	};
 	auto RoomBox2D = [&](const FTransform& FrameTM) -> FBox2D
 	{
