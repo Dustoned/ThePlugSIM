@@ -978,6 +978,19 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 				{
 					continue; // open lucht eronder -> hier bestaat het gebouw niet meer
 				}
+				// GEVEL-OMSLUITING: binnen het gebouw raken horizontale stralen (op borsthoogte van deze
+				// verdieping) in vrijwel alle richtingen de gevel-schil. Buiten het gebouw (smallere toren
+				// boven een breder podium) is minstens een kant open lucht -> niet plakken. De check op
+				// alleen-gebouw-eronder droeg zwevers van verdieping naar verdieping verder omhoog.
+				int32 ShellHits = 0;
+				const FVector SStart(NL.X, NL.Y, TgtZ + 160.f);
+				const FVector Dirs[4] = { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) };
+				for (const FVector& SD : Dirs)
+				{
+					FHitResult SHit;
+					if (W->LineTraceSingleByChannel(SHit, SStart, SStart + SD * 2000.f, ECC_Visibility, GQP)) { ++ShellHits; }
+				}
+				if (ShellHits < 3) { continue; } // niet omsloten -> buiten de gevel van deze verdieping
 			}
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
