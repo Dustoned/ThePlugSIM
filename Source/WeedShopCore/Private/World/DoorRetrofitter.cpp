@@ -759,7 +759,7 @@ void ADoorRetrofitter::VerticalReplicate()
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
 	// MET materialen: de map geeft bv. het raam-glas op ingerichte verdiepingen een OVERRIDE (helder
 	// glas) - zonder die override valt geplakt glas terug op het standaard-materiaal (parallax/nep-3D).
-	struct FSliceEntry { UStaticMesh* Mesh; FTransform TM; FVector BO; TArray<UMaterialInterface*> Mats; };
+	struct FSliceEntry { UStaticMesh* Mesh; FTransform TM; FVector BO; TArray<UMaterialInterface*> Mats; bool bSyncOnly = false; };
 	TArray<FSliceEntry> Slice;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -783,14 +783,15 @@ void ADoorRetrofitter::VerticalReplicate()
 			// uiteinden, waardoor randstukken met pivot net buiten de rechthoek afvielen (halve kamers).
 			const FVector L = Comp->Bounds.Origin;
 			if (!InRects(L)) { continue; }
-			// Venster ruim in de hoogte: de bovenste gevel-rij (glas/kozijnen, centers ~SrcZ+470) hoort
-			// bij deze verdieping en moet z'n heldere materiaal mee-syncen. Wat al bestaat wordt toch
-			// alleen ge-materiaal-synct (dedupe), dus te veel meenemen kan geen kwaad.
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 520.f) { continue; }
 			FSliceEntry E;
 			E.Mesh = Comp->GetStaticMesh();
 			E.TM = Comp->GetComponentTransform();
 			E.BO = L;
+			// Boven de eigen verdieping-band (SrcZ+335): SYNC-ONLY - die bovenste gevel-glas-rij krijgt
+			// alleen het heldere materiaal op BESTAANDE meshes, maar wordt nooit gespawnd. Anders plak je
+			// per verdieping stukjes van de volgende en bouwt het gebouw zichzelf eindeloos omhoog.
+			E.bSyncOnly = (L.Z > SrcZ + 335.f);
 			for (int32 Mi = 0; Mi < Comp->GetNumMaterials(); ++Mi) { E.Mats.Add(Comp->GetMaterial(Mi)); }
 			Slice.Add(E);
 		}
@@ -875,6 +876,7 @@ void ADoorRetrofitter::VerticalReplicate()
 				}
 				continue;
 			}
+			if (M.bSyncOnly) { continue; } // alleen materiaal-sync, nooit spawnen
 			// SETBACK-check: alleen plakken als er gebouw ONDER dit punt zit (trapsgewijze gebouwen
 			// zijn boven smaller - anders zweven vloeren in de lucht boven terrassen).
 			{
