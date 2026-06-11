@@ -99,6 +99,8 @@ void ADayNightController::BeginPlay()
 			// Via de SETTERS (direct de property zetten ververst de render-state niet -> bleef enorm).
 			SunDL->SetLightSourceAngle(1.5f);      // zelfde formaat als de maan (lekker zichtbaar)
 			SunDL->SetLightSourceSoftAngle(0.f);   // geen extra zachte rand
+			SunDL->ForwardShadingPriority = 10;    // zon wint van de maan -> geen 'multiple directional lights'-warning
+			SunDL->MarkRenderStateDirty();
 		}
 	}
 
@@ -117,6 +119,8 @@ void ADayNightController::BeginPlay()
 				MoonDL->SetAtmosphereSunLightIndex(1); // index 1 = tweede hemel-lichaam (maan-schijf)
 				MoonDL->SetLightSourceAngle(1.5f);     // duidelijke maan, maar geen mega-bal
 				MoonDL->SetLightSourceSoftAngle(0.f);
+				MoonDL->ForwardShadingPriority = 0;
+				MoonDL->MarkRenderStateDirty();
 				MoonDL->SetLightColor(FLinearColor(0.62f, 0.68f, 0.85f)); // koel maanlicht
 			}
 		}

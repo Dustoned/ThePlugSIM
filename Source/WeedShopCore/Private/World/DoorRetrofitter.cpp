@@ -91,6 +91,10 @@ void ADoorRetrofitter::BeginPlay()
 	Super::BeginPlay();
 	// Meteen een eerste pass + daarna periodiek blijven scannen (world partition / level instances
 	// streamen gebouwen later in; die deuren pakken we dan alsnog).
+	// Renderer-warnings (bv. ForwardShadingPriority) lopen BUITEN ClearOnScreenDebugMessages om ->
+	// alle on-screen debug-meldingen uitschakelen in pack-maps. Onze UMG-UI blijft gewoon werken.
+	GAreScreenMessagesEnabled = false;
+
 	ScanAndConvert();
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);
 
