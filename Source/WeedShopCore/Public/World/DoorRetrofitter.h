@@ -51,6 +51,7 @@ protected:
 	int32 LastSourceCount = -1; // streaming-stabiliteit van de bron-kamer
 	int32 CloneLogCooldown = 0;
 	bool bFogTamed = false; // basis-scenario-fog 1x getemd (zon-gloed eruit)
+	TSet<TWeakObjectPtr<class ULocalLightComponent>> IndoorLightsFixed; // static -> movable gezet
 
 	// Kaart-capture (lazy aangemaakt bij de eerste CaptureMapNow).
 	void EnsureMapCapture();

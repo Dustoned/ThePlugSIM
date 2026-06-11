@@ -12,6 +12,9 @@
 #include "Engine/PostProcessVolume.h"
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
+#include "Components/LocalLightComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "GameFramework/Character.h"
@@ -458,6 +461,26 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				It->bEnabled = false;
 				It->BlendWeight = 0.f;
+			}
+		}
+
+		// BINNEN-LAMPEN: de map heeft GEEN gebakken lighting, maar de point/spot-lampen staan op
+		// Static mobility - die geven runtime dus letterlijk geen licht (zwarte plafonds ondanks
+		// lampen). Op Movable zetten = echt licht; schaduwen uit voor performance (honderden lampjes).
+		for (TActorIterator<AActor> ItL(W); ItL; ++ItL)
+		{
+			AActor* AL = *ItL;
+			if (!IsValid(AL)) { continue; }
+			TInlineComponentArray<ULocalLightComponent*> Lights(AL);
+			for (ULocalLightComponent* LC : Lights)
+			{
+				if (!LC || IndoorLightsFixed.Contains(LC)) { continue; }
+				IndoorLightsFixed.Add(LC);
+				if (LC->Mobility != EComponentMobility::Movable)
+				{
+					LC->SetMobility(EComponentMobility::Movable);
+					LC->SetCastShadows(false);
+				}
 			}
 		}
 
