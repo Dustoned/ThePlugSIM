@@ -758,26 +758,39 @@ void ADoorRetrofitter::CloneRooms()
 		const FIntPoint Key(FMath::RoundToInt(FrameLoc.X / 100.f), FMath::RoundToInt(FrameLoc.Y / 100.f));
 		if (ClonedRooms.Contains(Key)) { continue; }
 
-		// Beide orientaties proberen (frame kan 180 graden gedraaid geplaatst zijn): de goede orientatie
-		// heeft VOID op het kamer-centrum en op de meeste hoeken.
+		// DETERMINISTISCHE orientatie: meet vlak bij de deur welke kant de GANG is (daar ligt vloer -
+		// daar loop je immers) en welke kant de lege kamer (void). Probes ver de kamer in waren
+		// afhankelijk van streaming-volgorde -> per sessie een andere (soms 180 graden gedraaide) kamer.
+		const FVector Through = Target.GetUnitAxis(EAxis::X).GetSafeNormal2D();
+		const bool bFloorA = HasFloorBelow(FrameLoc + Through * 130.f);
+		const bool bFloorB = HasFloorBelow(FrameLoc - Through * 130.f);
+		if (bFloorA == bFloorB)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) onduidelijk (vloer beide kanten: %d) - overslaan"), FrameLoc.X, FrameLoc.Y, bFloorA ? 1 : 0);
+			continue; // geen eenduidige gang/void-kant -> hier hoort geen kloon
+		}
+		const FVector RoomDir = bFloorA ? -Through : Through;
+
+		// Kies de orientatie (0 of 180 graden) waarvan het kamer-centrum aan de gemeten void-kant ligt.
 		FTransform Best = FTransform::Identity;
 		int32 BestVoids = -1;
 		for (int32 Flip = 0; Flip < 2; ++Flip)
 		{
 			FTransform Cand = Target;
 			if (Flip) { Cand.SetRotation(Cand.GetRotation() * FQuat(FVector::UpVector, PI)); }
-			const FVector CenterW = Cand.TransformPosition(RefRel[0]);
-			if (HasFloorBelow(CenterW)) { continue; } // hier ligt al een kamer/vloer
+			const FVector CandRoomDir = (Cand.TransformPosition(RefRel[0]) - FrameLoc).GetSafeNormal2D();
+			if (FVector::DotProduct(CandRoomDir, RoomDir) < 0.5f) { continue; } // kamer zou de gang-kant op staan
 			int32 Voids = 0;
 			for (int32 i = 1; i < RefRel.Num(); ++i)
 			{
 				if (!HasFloorBelow(Cand.TransformPosition(RefRel[i]))) { ++Voids; }
 			}
-			if (Voids > BestVoids) { BestVoids = Voids; Best = Cand; }
+			BestVoids = Voids; Best = Cand;
+			break; // eerste (en enige) orientatie aan de juiste kant
 		}
 		if (BestVoids < 2)
 		{
-			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) afgekeurd - beste orientatie %d/4 hoeken void"), FrameLoc.X, FrameLoc.Y, BestVoids);
+			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) afgekeurd - %d/4 hoeken void aan de kamer-kant"), FrameLoc.X, FrameLoc.Y, BestVoids);
 			continue;
 		}
 
