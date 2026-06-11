@@ -96,7 +96,9 @@ void ADayNightController::BeginPlay()
 		if (UDirectionalLightComponent* SunDL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent()))
 		{
 			SunDL->SetAtmosphereSunLight(true);
-			SunDL->LightSourceAngle = 0.4f; // realistische (kleine) zonneschijf i.p.v. een enorme bal
+			// Via de SETTERS (direct de property zetten ververst de render-state niet -> bleef enorm).
+			SunDL->SetLightSourceAngle(0.35f);     // realistische kleine zonneschijf
+			SunDL->SetLightSourceSoftAngle(0.f);   // geen extra zachte rand
 		}
 	}
 
@@ -113,7 +115,8 @@ void ADayNightController::BeginPlay()
 			{
 				MoonDL->SetAtmosphereSunLight(true);
 				MoonDL->SetAtmosphereSunLightIndex(1); // index 1 = tweede hemel-lichaam (maan-schijf)
-				MoonDL->LightSourceAngle = 0.45f;      // maan-schijf iets kleiner dan de zon
+				MoonDL->SetLightSourceAngle(0.4f);     // maan-schijf iets kleiner dan de zon
+				MoonDL->SetLightSourceSoftAngle(0.f);
 				MoonDL->SetLightColor(FLinearColor(0.62f, 0.68f, 0.85f)); // koel maanlicht
 			}
 		}
