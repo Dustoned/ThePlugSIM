@@ -382,15 +382,6 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			if (!Comp || !Comp->GetStaticMesh() || GlassFixedComps.Contains(Comp)) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName().ToLower();
-			// HDRI-fotokoepel verbergen: daar zit een vaste felle zon in de FOTO gebakken (beweegt nooit).
-			// De map heeft echte SkyAtmosphere-actors - die volgen onze draaiende zon wel.
-			if (MeshName.Contains(TEXT("envirodome")) || MeshName.Contains(TEXT("hdri")))
-			{
-				GlassFixedComps.Add(Comp);
-				Comp->SetVisibility(false);
-				Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-				continue;
-			}
 			if (!MeshName.Contains(TEXT("glass")) && !MeshName.Contains(TEXT("window"))) { continue; }
 			GlassFixedComps.Add(Comp); // niet nogmaals checken
 			const bool bNoCollision = Comp->GetCollisionEnabled() == ECollisionEnabled::NoCollision

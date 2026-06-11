@@ -1183,7 +1183,7 @@ void AThePlugSIMCharacter::BeginPlay()
 
 		bool bHasController = false;
 		for (TActorIterator<ADayNightController> It(GetWorld()); It; ++It) { bHasController = true; break; }
-		if (!bHasController) // ook in pack-maps: onze controller adopteert hun zon (dag/nacht overal)
+		if (!bHasController && !bExternalMap) // pack-maps houden hun eigen (mooie) fabriek-belichting
 		{
 			GetWorld()->SpawnActor<ADayNightController>(ADayNightController::StaticClass(), FTransform::Identity);
 		}
