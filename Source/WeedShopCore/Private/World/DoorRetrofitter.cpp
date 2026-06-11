@@ -810,6 +810,18 @@ void ADoorRetrofitter::VerticalReplicate()
 	}
 	bVertCloneDone = true;
 
+	// Hash-set van alles wat de BRON-verdieping wel heeft: elementen die op een doel-verdieping
+	// bestaan maar hier niet, zijn door de makers verwijderd (nep-glas e.d.) -> spiegelen.
+	TSet<uint64> SliceHashes;
+	for (const FSliceEntry& E2 : Slice)
+	{
+		const uint64 SH = GetTypeHash(E2.Mesh->GetFName())
+			^ (uint64)(FMath::RoundToInt(E2.BO.X / 10.f) * 73856093)
+			^ (uint64)(FMath::RoundToInt(E2.BO.Y / 10.f) * 19349663)
+			^ (uint64)(FMath::RoundToInt(E2.BO.Z / 10.f) * 83492791);
+		SliceHashes.Add(SH);
+	}
+
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	int32 TotalPlaced = 0;
 	// VAN ONDER NAAR BOVEN tot de hoogte-marker: elke verdieping rust op de vorige (de setback-check
@@ -1109,16 +1121,6 @@ void ADoorRetrofitter::CloneRooms()
 	}
 	// Wachten tot de bron VOLLEDIG ingestreamd is: vorige keer kloonde hij met 38 van de ~120 meshes
 	// (half-leeg fragment). Pas klonen als de telling 2 scans achter elkaar gelijk is en hoog genoeg.
-	TSet<uint64> SliceHashes;
-	for (const FSliceEntry& E2 : SourceSet)
-	{
-		const uint64 SH = GetTypeHash(E2.Mesh->GetFName())
-			^ (uint64)(FMath::RoundToInt(E2.BO.X / 10.f) * 73856093)
-			^ (uint64)(FMath::RoundToInt(E2.BO.Y / 10.f) * 19349663)
-			^ (uint64)(FMath::RoundToInt(E2.BO.Z / 10.f) * 83492791);
-		SliceHashes.Add(SH);
-	}
-
 	if (SourceSet.Num() == LastSourceCount) { ++SourceStableStreak; } else { SourceStableStreak = 0; }
 	LastSourceCount = SourceSet.Num();
 	if (SourceSet.Num() < 34 || SourceStableStreak < 2) // 3 scans dezelfde telling = echt klaar met streamen
