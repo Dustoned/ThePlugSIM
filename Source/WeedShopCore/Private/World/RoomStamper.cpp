@@ -67,10 +67,26 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 	const float Feet = Marks[0].Z - 98.f;
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f);
 
-	// Anker zoeken: het deurframe binnen de rechthoek op deze verdieping (entree van de kamer).
+	// Anker zoeken: de VOORDEUR = het deurframe met een SM_Door_Apartment02-blad ernaast
+	// (badkamer/binnendeuren hebben een ander blad en tellen niet mee). Fallback als er geen
+	// appartement-deur in de rechthoek hangt: het frame dichtst bij de rechthoek-rand.
+	TArray<FVector> AptLeaves;
+	for (TActorIterator<AActor> LeafIt(W); LeafIt; ++LeafIt)
+	{
+		if (!IsValid(*LeafIt)) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> LeafComps(*LeafIt);
+		for (UStaticMeshComponent* Comp : LeafComps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			if (!Comp->GetStaticMesh()->GetName().Contains(TEXT("Door_Apartment02"))) { continue; }
+			AptLeaves.Add(Comp->GetComponentLocation());
+		}
+	}
 	FTransform AnchorTM = FTransform::Identity;
-	bool bAnchor = false;
+	FTransform FallbackTM = FTransform::Identity;
+	bool bAnchor = false, bFallback = false;
 	float BestD = TNumericLimits<float>::Max();
+	float BestEdge = TNumericLimits<float>::Max();
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
 		if (!IsValid(*It)) { continue; }
@@ -82,14 +98,20 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 			const FVector L = Comp->GetComponentLocation();
 			if (FMath::Abs(L.Z - SrcZ) > 60.f) { continue; }
 			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
-			// VOORDEUR-keuze: afstand tot de dichtstbijzijnde rechthoek-rand - de entree zit op de
-			// omtrek-muur (kleine rand-afstand), binnendeuren (badkamer) dieper naar binnen.
+			float LeafD = TNumericLimits<float>::Max();
+			for (const FVector& LV : AptLeaves)
+			{
+				if (FMath::Abs(LV.Z - L.Z) > 200.f) { continue; }
+				LeafD = FMath::Min(LeafD, FVector::Dist2D(LV, L));
+			}
+			if (LeafD < 200.f && LeafD < BestD) { BestD = LeafD; AnchorTM = Comp->GetComponentTransform(); bAnchor = true; }
 			const float EdgeDist = FMath::Min(
 				FMath::Min(L.X - Rect.Min.X, Rect.Max.X - L.X),
 				FMath::Min(L.Y - Rect.Min.Y, Rect.Max.Y - L.Y));
-			if (EdgeDist < BestD) { BestD = EdgeDist; AnchorTM = Comp->GetComponentTransform(); bAnchor = true; }
+			if (EdgeDist < BestEdge) { BestEdge = EdgeDist; FallbackTM = Comp->GetComponentTransform(); bFallback = true; }
 		}
 	}
+	if (!bAnchor && bFallback) { AnchorTM = FallbackTM; bAnchor = true; }
 	if (!bAnchor) { OutError = TEXT("No door frame found inside the marked rect"); return false; }
 	// Anker plat op de verdieping (geen pitch/roll, Z op vloer-niveau) zodat snappen schoon blijft.
 	AnchorTM.SetRotation(FRotator(0.f, AnchorTM.GetRotation().Rotator().Yaw, 0.f).Quaternion());
@@ -243,8 +265,9 @@ FTransform ARoomStamper::ComputeAnchor() const
 	if (bHit && Hit.GetComponent())
 	{
 		UStaticMeshComponent* HitSMC = Cast<UStaticMeshComponent>(Hit.GetComponent());
-		// Zoek het dichtstbijzijnde deurframe binnen 220 van het raakpunt (frame zelf of via blad/muur).
-		FTransform BestFrame; float BestD = 220.f; bool bFrame = false;
+		// ALLEEN op VOORDEUREN snappen: een frame telt alleen mee als er een SM_Door_Apartment02-blad
+		// naast hangt (badkamer/binnendeuren dus niet). Frames binnen 220 van het raakpunt.
+		TArray<FTransform> CandFrames; TArray<float> CandDist; TArray<FVector> NearLeaves;
 		for (TActorIterator<AActor> It(W); It; ++It)
 		{
 			if (!IsValid(*It) || *It == this) { continue; }
@@ -252,10 +275,29 @@ FTransform ARoomStamper::ComputeAnchor() const
 			for (UStaticMeshComponent* Comp : Comps)
 			{
 				if (!Comp || !Comp->GetStaticMesh()) { continue; }
-				if (!Comp->GetStaticMesh()->GetName().Contains(TEXT("DoorFrame"))) { continue; }
-				const float D = FVector::Dist(Comp->GetComponentLocation(), Hit.ImpactPoint);
-				if (D < BestD) { BestD = D; BestFrame = Comp->GetComponentTransform(); bFrame = true; }
+				const FString MN = Comp->GetStaticMesh()->GetName();
+				const FVector CL = Comp->GetComponentLocation();
+				if (MN.Contains(TEXT("DoorFrame")))
+				{
+					const float D = FVector::Dist(CL, Hit.ImpactPoint);
+					if (D < 220.f) { CandFrames.Add(Comp->GetComponentTransform()); CandDist.Add(D); }
+				}
+				else if (MN.Contains(TEXT("Door_Apartment02")) && FVector::Dist2D(CL, Hit.ImpactPoint) < 600.f)
+				{
+					NearLeaves.Add(CL);
+				}
 			}
+		}
+		FTransform BestFrame; float BestD = 220.f; bool bFrame = false;
+		for (int32 Ci = 0; Ci < CandFrames.Num(); ++Ci)
+		{
+			const FVector FL = CandFrames[Ci].GetLocation();
+			bool bApt = false;
+			for (const FVector& LV : NearLeaves)
+			{
+				if (FMath::Abs(LV.Z - FL.Z) < 200.f && FVector::Dist2D(LV, FL) < 200.f) { bApt = true; break; }
+			}
+			if (bApt && CandDist[Ci] < BestD) { BestD = CandDist[Ci]; BestFrame = CandFrames[Ci]; bFrame = true; }
 		}
 		if (bFrame)
 		{
@@ -271,7 +313,9 @@ FTransform ARoomStamper::ComputeAnchor() const
 				if (FVector::DotProduct(C0, ToPawn) > 0.f) { BaseYaw = FY + 180.f; }
 			}
 			const_cast<ARoomStamper*>(this)->bSnappedToDoor = true;
-			return FTransform(FRotator(0.f, BaseYaw + UserYaw, 0.f), L);
+			// Altijd GELIJK met de deur: alleen 0/180 toegestaan - 90-graden resten uit grid-modus vervallen.
+			const float Flip = FMath::Fmod(FMath::GridSnap(UserYaw, 180.f), 360.f);
+			return FTransform(FRotator(0.f, BaseYaw + Flip, 0.f), L);
 		}
 	}
 	const_cast<ARoomStamper*>(this)->bSnappedToDoor = false;
