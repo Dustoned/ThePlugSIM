@@ -818,6 +818,7 @@ void ADoorRetrofitter::VerticalReplicate()
 		// mesh-naam + positie op 10cm-grid van alles wat er al staat.
 		TMap<uint64, UStaticMeshComponent*> Existing; // hash -> bestaande comp (voor materiaal-sync)
 		int32 ExistCount = 0;
+		int32 TightCount = 0; // bestaande meshes BINNEN de rechthoek zelf (gevel van deze verdieping)
 		for (TActorIterator<AActor> It(W); It; ++It)
 		{
 			AActor* A = *It;
@@ -834,6 +835,7 @@ void ADoorRetrofitter::VerticalReplicate()
 				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 525.f) { continue; }
 				++ExistCount;
 				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
+				++TightCount;
 				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
 					^ (uint64)(FMath::RoundToInt(L.X / 10.f) * 73856093)
 					^ (uint64)(FMath::RoundToInt(L.Y / 10.f) * 19349663)
@@ -842,6 +844,13 @@ void ADoorRetrofitter::VerticalReplicate()
 			}
 		}
 		if (ExistCount < 25) { continue; } // geen verdieping hier (boven het dak / onder de grond)
+		// En er moet ook BINNEN de rechthoek zelf al gevel/structuur van deze verdieping staan -
+		// anders bouw je het gebouw 1-2 verdiepingen te hoog door (dak/parapet in de buurt telde mee).
+		if (TightCount < 8)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - geen eigen gevel in de rechthoek (tight=%d)"), N, TgtZ, TightCount);
+			continue;
+		}
 
 		int32 Placed = 0;
 		for (const FSliceEntry& M : Slice)
