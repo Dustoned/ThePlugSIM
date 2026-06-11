@@ -639,7 +639,7 @@ void ADoorRetrofitter::CloneRooms()
 	}
 	// Wachten tot de bron VOLLEDIG ingestreamd is: vorige keer kloonde hij met 38 van de ~120 meshes
 	// (half-leeg fragment). Pas klonen als de telling 2 scans achter elkaar gelijk is en hoog genoeg.
-	if (SourceSet.Num() < 60 || SourceSet.Num() != LastSourceCount)
+	if (SourceSet.Num() < 34 || SourceSet.Num() != LastSourceCount) // bron-kamer = 41 meshes totaal (gemeten)
 	{
 		LastSourceCount = SourceSet.Num();
 		return;
