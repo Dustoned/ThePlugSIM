@@ -712,29 +712,66 @@ void ADoorRetrofitter::ScanAndConvert()
 // eronder gekopieerd - ZONDER draaien of schuiven, puur +/-350cm per verdieping. Meshes die daar al
 // staan (gevel, ramen, lift, gang) worden overgeslagen (dedupe), dus alleen het ontbrekende
 // interieur wordt aangevuld. Werkt alleen als het bestand precies 1 marker voor deze map bevat.
+// Verzamelt alle kamer-jobs: opgeslagen jobs uit Saved/RoomJobs.txt (1 regel per job:
+// "x,y,z|x,y,z|x,y,z") + de huidige 3 losse markers als concept-job. Elke job bouwt z'n
+// verdiepingen zodra de speler in de buurt van die bron komt.
 void ADoorRetrofitter::VerticalReplicate()
 {
-	if (bVertCloneDone) { return; }
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	const FString MapPath = W->GetOutermost()->GetName();
 
-	TArray<FString> Lines;
-	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
-	TArray<FVector> Marks;
-	for (const FString& Line : Lines)
+	TArray<TArray<FVector>> Jobs;
+	// 1) Opgeslagen jobs.
 	{
-		if (!Line.Contains(MapPath)) { continue; }
-		const int32 PIdx = Line.Find(TEXT("pos=("));
-		if (PIdx == INDEX_NONE) { continue; }
-		FString PosStr = Line.Mid(PIdx + 5);
-		int32 Close = INDEX_NONE;
-		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
-		TArray<FString> Parts;
-		PosStr.ParseIntoArray(Parts, TEXT(","));
-		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+		TArray<FString> JobLines;
+		FFileHelper::LoadFileToStringArray(JobLines, *(FPaths::ProjectSavedDir() / TEXT("RoomJobs.txt")));
+		for (const FString& JL : JobLines)
+		{
+			TArray<FString> Triples;
+			JL.ParseIntoArray(Triples, TEXT("|"));
+			if (Triples.Num() != 3) { continue; }
+			TArray<FVector> JM;
+			for (const FString& T : Triples)
+			{
+				TArray<FString> Cs;
+				T.ParseIntoArray(Cs, TEXT(","));
+				if (Cs.Num() >= 3) { JM.Add(FVector(FCString::Atof(*Cs[0]), FCString::Atof(*Cs[1]), FCString::Atof(*Cs[2]))); }
+			}
+			if (JM.Num() == 3) { Jobs.Add(JM); }
+		}
 	}
-	if (Marks.Num() != 3) { return; } // 3 markers: 2 = kamer-rechthoek, 3e = hoogte van de bovenste kamer
+	// 2) Concept-job: de huidige 3 losse markers.
+	{
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+		TArray<FVector> Marks;
+		for (const FString& Line : Lines)
+		{
+			if (!Line.Contains(MapPath)) { continue; }
+			const int32 PIdx = Line.Find(TEXT("pos=("));
+			if (PIdx == INDEX_NONE) { continue; }
+			FString PosStr = Line.Mid(PIdx + 5);
+			int32 Close = INDEX_NONE;
+			if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+			TArray<FString> Parts;
+			PosStr.ParseIntoArray(Parts, TEXT(","));
+			if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+		}
+		if (Marks.Num() == 3) { Jobs.Add(Marks); }
+	}
+
+	for (const TArray<FVector>& JM : Jobs)
+	{
+		const FString JobId = FString::Printf(TEXT("%d_%d_%d"), FMath::RoundToInt(JM[0].X), FMath::RoundToInt(JM[0].Y), FMath::RoundToInt(JM[2].Z));
+		if (!DoneJobs.Contains(JobId)) { RunVertJob(JM, JobId); }
+	}
+}
+
+void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& JobId)
+{
+	UWorld* W = GetWorld();
+	if (!W || Marks.Num() != 3) { return; }
 
 	// EEN strakke rechthoek tussen de 2 markers (+30cm marge): alles daarbinnen gaat mee, alles
 	// daarbuiten (gevel-details, balkons, terras) blijft VOLLEDIG met rust.
@@ -808,14 +845,16 @@ void ADoorRetrofitter::VerticalReplicate()
 		}
 	}
 	// Wachten tot de bron-verdieping volledig ingestreamd is (3 scans dezelfde telling).
-	if (Slice.Num() == VertLastCount) { ++VertStableStreak; } else { VertStableStreak = 0; }
-	VertLastCount = Slice.Num();
-	if (Slice.Num() < 30 || VertStableStreak < 3)
+	int32& JLast = JobLastCount.FindOrAdd(JobId, -1);
+	int32& JStreak = JobStreak.FindOrAdd(JobId, 0);
+	if (Slice.Num() == JLast) { ++JStreak; } else { JStreak = 0; }
+	JLast = Slice.Num();
+	if (Slice.Num() < 30 || JStreak < 3)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: bron-slice %d meshes (streak %d) - wacht"), Slice.Num(), VertStableStreak);
+		UE_LOG(LogWeedShop, Warning, TEXT("VertClone[%s]: bron-slice %d meshes (streak %d) - wacht"), *JobId, Slice.Num(), JStreak);
 		return;
 	}
-	bVertCloneDone = true;
+	DoneJobs.Add(JobId);
 
 	// Hash-set van alles wat de BRON-verdieping wel heeft: elementen die op een doel-verdieping
 	// bestaan maar hier niet, zijn door de makers verwijderd (nep-glas e.d.) -> spiegelen.

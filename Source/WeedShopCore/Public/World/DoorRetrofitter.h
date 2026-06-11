@@ -53,9 +53,10 @@ protected:
 	// Verticale verdieping-kopie: 1 enkele marker = kopieer die verdieping-slice naar alle
 	// verdiepingen erboven/eronder (zelfde gebouw), met dedupe (bestaande meshes overslaan).
 	void VerticalReplicate();
-	bool bVertCloneDone = false;
-	int32 VertLastCount = -1;
-	int32 VertStableStreak = 0;
+	void RunVertJob(const TArray<FVector>& Marks, const FString& JobId);
+	TSet<FString> DoneJobs;                  // afgeronde jobs (deze sessie)
+	TMap<FString, int32> JobLastCount;       // streaming-stabiliteit per job
+	TMap<FString, int32> JobStreak;
 
 	// Kamer-kloner: lege deur-slots (deur naar de void) krijgen een kopie van het bron-appartement.
 	void CloneRooms();

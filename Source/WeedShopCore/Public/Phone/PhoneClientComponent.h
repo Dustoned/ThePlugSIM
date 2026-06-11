@@ -300,6 +300,10 @@ public:
 
 	// Test-tool: geef de complete building-kit (alle Struct_-items, oneindig bruikbaar). Client -> server.
 	void RequestGiveBuildKit();
+
+	// Test-tool: sla de huidige 3 markers op als permanente kamer-job (RoomJobs.txt) en maak de
+	// markers vrij voor het volgende gebouw. Puur lokaal bestand-werk.
+	void SaveRoomJob();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();
 

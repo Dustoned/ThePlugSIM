@@ -294,6 +294,11 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } }, 13);
 		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// Kamer-job opslaan: huidige 3 markers worden permanent (RoomJobs.txt, elke sessie herbouwd).
+		UWeedActionButton* JobB = MakeActionBtn(TEXT("Save room build (clears markers)"), FLinearColor(0.45f, 0.35f, 0.15f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveRoomJob(); } }, 13);
+		BodyRow(JobB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// --- Live light-tuning (stuurt de lokale DayNightController direct aan; geen restart nodig) ---
 		LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
 		BodyRow(MakeText(TEXT("Lighting (live)"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));

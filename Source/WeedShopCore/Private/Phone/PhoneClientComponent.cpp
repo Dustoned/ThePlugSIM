@@ -2220,6 +2220,39 @@ void UPhoneClientComponent::RequestDevHeatEvent(bool bBust) { ServerDevHeatEvent
 
 void UPhoneClientComponent::RequestGiveBuildKit() { ServerGiveBuildKit(); }
 
+void UPhoneClientComponent::SaveRoomJob()
+{
+	UWorld* W = GetWorld();
+	const FString MapPath = W ? W->GetOutermost()->GetName() : FString();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Marks;
+	for (const FString& Line : Lines)
+	{
+		if (!Line.Contains(MapPath)) { continue; }
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Line.Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+	}
+	if (Marks.Num() != 3)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Need exactly 3 markers to save a room build"));
+		return;
+	}
+	const FString JobLine = FString::Printf(TEXT("%.0f,%.0f,%.0f|%.0f,%.0f,%.0f|%.0f,%.0f,%.0f"),
+		Marks[0].X, Marks[0].Y, Marks[0].Z, Marks[1].X, Marks[1].Y, Marks[1].Z, Marks[2].X, Marks[2].Y, Marks[2].Z) + LINE_TERMINATOR;
+	FFileHelper::SaveStringToFile(JobLine, *(FPaths::ProjectSavedDir() / TEXT("RoomJobs.txt")),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	// Markers vrijmaken voor het volgende gebouw.
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Green, TEXT("Room build saved! Markers cleared - on to the next building"));
+}
+
 void UPhoneClientComponent::ServerGiveBuildKit_Implementation()
 {
 	APawn* P = Cast<APawn>(GetOwner());
