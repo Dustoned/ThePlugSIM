@@ -756,7 +756,10 @@ void ADoorRetrofitter::VerticalReplicate()
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
 
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
-	TArray<TPair<UStaticMesh*, FTransform>> Slice;
+	// MET materialen: de map geeft bv. het raam-glas op ingerichte verdiepingen een OVERRIDE (helder
+	// glas) - zonder die override valt geplakt glas terug op het standaard-materiaal (parallax/nep-3D).
+	struct FSliceEntry { UStaticMesh* Mesh; FTransform TM; TArray<UMaterialInterface*> Mats; };
+	TArray<FSliceEntry> Slice;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
 		AActor* A = *It;
@@ -769,8 +772,8 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName();
 			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
-			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam"))
-				|| MeshName.Contains(TEXT("DomeCam")) || MeshName.Contains(TEXT("SecurityLight"))) { continue; } // camera's/spots zweven los van hun muur in kopieen
+			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam")) || MeshName.Contains(TEXT("MatineeCam"))
+				|| MeshName.Contains(TEXT("DomeCam")) || MeshName.Contains(TEXT("SecurityLight"))) { continue; } // (editor-)camera's/spots horen niet in kopieen
 			// Buiten-meubilair niet mee-kopieren (zweefde op elke verdieping boven het terras).
 			if (MeshName.Contains(TEXT("Umbrella")) || MeshName.Contains(TEXT("Parasol")) || MeshName.Contains(TEXT("Lounger"))
 				|| MeshName.Contains(TEXT("SunBed")) || MeshName.Contains(TEXT("Sunbed")) || MeshName.Contains(TEXT("Chair"))
@@ -778,7 +781,11 @@ void ADoorRetrofitter::VerticalReplicate()
 			const FVector L = Comp->GetComponentLocation();
 			if (!InRects(L)) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 330.f) { continue; } // alleen deze verdieping-slice
-			Slice.Add(TPair<UStaticMesh*, FTransform>(Comp->GetStaticMesh(), Comp->GetComponentTransform()));
+			FSliceEntry E;
+			E.Mesh = Comp->GetStaticMesh();
+			E.TM = Comp->GetComponentTransform();
+			for (int32 Mi = 0; Mi < Comp->GetNumMaterials(); ++Mi) { E.Mats.Add(Comp->GetMaterial(Mi)); }
+			Slice.Add(E);
 		}
 	}
 	// Wachten tot de bron-verdieping volledig ingestreamd is (3 scans dezelfde telling).
@@ -841,12 +848,12 @@ void ADoorRetrofitter::VerticalReplicate()
 		if (ExistCount < 25) { continue; } // geen verdieping hier (boven het dak / onder de grond)
 
 		int32 Placed = 0;
-		for (const TPair<UStaticMesh*, FTransform>& M : Slice)
+		for (const FSliceEntry& M : Slice)
 		{
-			FTransform NewTM = M.Value;
+			FTransform NewTM = M.TM;
 			NewTM.AddToTranslation(FVector(0.f, 0.f, Dz));
 			const FVector NL = NewTM.GetLocation();
-			const uint64 H = GetTypeHash(M.Key->GetFName())
+			const uint64 H = GetTypeHash(M.Mesh->GetFName())
 				^ (uint64)(FMath::RoundToInt(NL.X / 10.f) * 73856093)
 				^ (uint64)(FMath::RoundToInt(NL.Y / 10.f) * 19349663)
 				^ (uint64)(FMath::RoundToInt(NL.Z / 10.f) * 83492791);
@@ -867,8 +874,13 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
 			{
 				C->SetMobility(EComponentMobility::Movable);
-				C->SetStaticMesh(M.Key);
+				C->SetStaticMesh(M.Mesh);
 				C->SetCanEverAffectNavigation(false);
+				// Bron-materialen overnemen (incl. heldere glas-overrides van de map-makers).
+				for (int32 Mi = 0; Mi < M.Mats.Num(); ++Mi)
+				{
+					if (M.Mats[Mi]) { C->SetMaterial(Mi, M.Mats[Mi]); }
+				}
 			}
 			++Placed;
 		}
