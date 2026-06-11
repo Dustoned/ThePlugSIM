@@ -45,6 +45,10 @@ protected:
 	TMap<FIntPoint, int32> ElevPrevCount;
 	TSet<FIntPoint> ElevBuilt;
 
+	// Kamer-kloner: lege deur-slots (deur naar de void) krijgen een kopie van het bron-appartement.
+	void CloneRooms();
+	TSet<FIntPoint> ClonedRooms; // per deur-slot (pos/100) zodat we niet dubbel klonen
+
 	// Kaart-capture (lazy aangemaakt bij de eerste CaptureMapNow).
 	void EnsureMapCapture();
 	UPROPERTY() TObjectPtr<class UTextureRenderTarget2D> MapRT;
