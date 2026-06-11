@@ -338,14 +338,36 @@ void UPhoneWidget::FillSettingsBody()
 				BodyRow(UndoB, FMargin(0.f, 3.f, 0.f, 2.f));
 				for (const FString& SLine : PlacedStamps)
 				{
+					// Regel: template|x,y,z|yaw -> naam + positie, met TP- en verwijder-knop.
 					TArray<FString> SParts;
 					SLine.ParseIntoArray(SParts, TEXT("|"));
-					const FString Disp = SParts.Num() > 1
-						? FString::Printf(TEXT("Remove %s @ %s"), *SParts[0], *SParts[1])
-						: FString::Printf(TEXT("Remove %s"), *SLine);
-					UWeedActionButton* RemB = MakeActionBtn(Disp, FLinearColor(0.45f, 0.18f, 0.18f),
-						[this, SLine]() { ARoomStamper::RemoveStamp(GetWorld(), SLine); FillSettingsBody(); }, 10);
-					BodyRow(RemB, FMargin(0.f, 1.f, 0.f, 1.f));
+					FVector StampPos = FVector::ZeroVector; bool bHasPos = false;
+					if (SParts.Num() > 1)
+					{
+						TArray<FString> PosParts;
+						SParts[1].ParseIntoArray(PosParts, TEXT(","));
+						if (PosParts.Num() >= 3)
+						{
+							StampPos = FVector(FCString::Atof(*PosParts[0]), FCString::Atof(*PosParts[1]), FCString::Atof(*PosParts[2]));
+							bHasPos = true;
+						}
+					}
+					UHorizontalBox* SRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+					UHorizontalBoxSlot* SLab = SRow->AddChildToHorizontalBox(MakeText(
+						FString::Printf(TEXT("%s  (%.0f, %.0f)"), SParts.Num() > 0 ? *SParts[0] : *SLine, StampPos.X, StampPos.Y),
+						11, FLinearColor(0.85f, 0.9f, 1.f)));
+					SLab->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SLab->SetVerticalAlignment(VAlign_Center);
+					if (bHasPos)
+					{
+						SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
+							[this, StampPos]()
+							{
+								if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(StampPos + FVector(0.f, 0.f, 120.f)); }
+							}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+					}
+					SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+						[this, SLine]() { ARoomStamper::RemoveStamp(GetWorld(), SLine); FillSettingsBody(); }, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+					BodyRow(SRow, FMargin(0.f, 1.f, 0.f, 1.f));
 				}
 			}
 		}
