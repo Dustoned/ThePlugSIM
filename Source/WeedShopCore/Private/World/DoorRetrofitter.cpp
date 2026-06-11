@@ -324,12 +324,36 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (!Leaf) { continue; }
 
 		// Origineel blad verbergen + collision uit (verwijderen kan niet altijd in gestreamde levels).
-		// Het blad-yaw naar de dichtstbijzijnde 90 graden snappen: de map parkeert sommige deuren
-		// HALF-OPEN als decor - gesnapt staat de werkende deur netjes dicht in het kozijn.
+		// DICHT-stand bepalen: de map parkeert deuren (half/heel) OPEN als decor. Dicht = blad
+		// evenwijdig aan het KOZIJN -> zoek het dichtstbijzijnde deur-frame en lijn het yaw daarop
+		// uit (de hinge-pivot staat vast, dus alleen de rotatie hoeft recht).
 		FTransform LeafTM = Comp->GetComponentTransform();
 		{
 			FRotator R = LeafTM.GetRotation().Rotator();
-			R.Yaw = FMath::GridSnap(R.Yaw, 90.f);
+			float ClosedYaw = FMath::GridSnap(R.Yaw, 90.f); // fallback zonder frame
+			float BestD = 160.f;
+			for (TActorIterator<AActor> FrIt(W); FrIt; ++FrIt)
+			{
+				if (!IsValid(*FrIt)) { continue; }
+				TInlineComponentArray<UStaticMeshComponent*> FrComps(*FrIt);
+				for (UStaticMeshComponent* Fr : FrComps)
+				{
+					if (!Fr || !Fr->GetStaticMesh()) { continue; }
+					if (!Fr->GetStaticMesh()->GetName().Contains(TEXT("DoorFrame"))) { continue; }
+					const FVector FrL = Fr->GetComponentLocation();
+					if (FMath::Abs(FrL.Z - LeafTM.GetLocation().Z) > 60.f) { continue; }
+					const float Dd = FVector::Dist2D(FrL, LeafTM.GetLocation());
+					if (Dd >= BestD) { continue; }
+					BestD = Dd;
+					// Dicht = evenwijdig aan het frame: kies frameYaw of frameYaw+180 (wat het dichtst
+					// bij de huidige blad-rotatie ligt qua scharnier-richting).
+					const float FY = Fr->GetComponentRotation().Yaw;
+					const float D0 = FMath::Abs(FMath::FindDeltaAngleDegrees(R.Yaw, FY));
+					const float D1 = FMath::Abs(FMath::FindDeltaAngleDegrees(R.Yaw, FY + 180.f));
+					ClosedYaw = (D0 <= D1) ? FY : FY + 180.f;
+				}
+			}
+			R.Yaw = ClosedYaw;
 			LeafTM.SetRotation(R.Quaternion());
 		}
 		SMA->SetActorHiddenInGame(true);
