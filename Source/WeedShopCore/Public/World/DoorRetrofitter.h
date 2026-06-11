@@ -48,6 +48,7 @@ protected:
 	// Kamer-kloner: lege deur-slots (deur naar de void) krijgen een kopie van het bron-appartement.
 	void CloneRooms();
 	TSet<FIntPoint> ClonedRooms; // per deur-slot (pos/100) zodat we niet dubbel klonen
+	int32 LastSourceCount = -1; // streaming-stabiliteit van de bron-kamer
 
 	// Kaart-capture (lazy aangemaakt bij de eerste CaptureMapNow).
 	void EnsureMapCapture();

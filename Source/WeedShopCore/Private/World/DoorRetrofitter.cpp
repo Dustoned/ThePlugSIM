@@ -637,7 +637,13 @@ void ADoorRetrofitter::CloneRooms()
 			SourceSet.Add(TPair<UStaticMesh*, FTransform>(Comp->GetStaticMesh(), Comp->GetComponentTransform()));
 		}
 	}
-	if (SourceSet.Num() < 10) { return; } // bron nog niet volledig gestreamd
+	// Wachten tot de bron VOLLEDIG ingestreamd is: vorige keer kloonde hij met 38 van de ~120 meshes
+	// (half-leeg fragment). Pas klonen als de telling 2 scans achter elkaar gelijk is en hoog genoeg.
+	if (SourceSet.Num() < 60 || SourceSet.Num() != LastSourceCount)
+	{
+		LastSourceCount = SourceSet.Num();
+		return;
+	}
 
 	// Referentie-punten van de bron-kamer in FRAME-lokale ruimte (centrum + 4 ingetrokken hoeken).
 	const FTransform SrcInv = SrcFrameTM.Inverse();
@@ -676,6 +682,8 @@ void ADoorRetrofitter::CloneRooms()
 	for (const FTransform& Target : TargetFrames)
 	{
 		const FVector FrameLoc = Target.GetLocation();
+		// TESTFASE: eerst alleen de ene gemarkeerde deur (bij spot -2704,-1595) - daarna uitrollen.
+		if (FVector::Dist2D(FrameLoc, FVector(-2704.f, -1595.f, 0.f)) > 250.f) { continue; }
 		const FIntPoint Key(FMath::RoundToInt(FrameLoc.X / 100.f), FMath::RoundToInt(FrameLoc.Y / 100.f));
 		if (ClonedRooms.Contains(Key)) { continue; }
 
