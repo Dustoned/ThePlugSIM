@@ -783,7 +783,10 @@ void ADoorRetrofitter::VerticalReplicate()
 			// uiteinden, waardoor randstukken met pivot net buiten de rechthoek afvielen (halve kamers).
 			const FVector L = Comp->Bounds.Origin;
 			if (!InRects(L)) { continue; }
-			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 335.f) { continue; } // alleen deze verdieping-slice
+			// Venster ruim in de hoogte: de bovenste gevel-rij (glas/kozijnen, centers ~SrcZ+470) hoort
+			// bij deze verdieping en moet z'n heldere materiaal mee-syncen. Wat al bestaat wordt toch
+			// alleen ge-materiaal-synct (dedupe), dus te veel meenemen kan geen kwaad.
+			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 520.f) { continue; }
 			FSliceEntry E;
 			E.Mesh = Comp->GetStaticMesh();
 			E.TM = Comp->GetComponentTransform();
@@ -828,7 +831,7 @@ void ADoorRetrofitter::VerticalReplicate()
 				// kamer-rechthoek juist bijna niets (daarom zijn ze leeg) - maar de gang/gevel ernaast
 				// bewijst dat de verdieping bestaat. De dedupe-index blijft op de strakke zone.
 				if (L.X < Outer.Min.X - 1300.f || L.X > Outer.Max.X + 1300.f || L.Y < Outer.Min.Y - 1300.f || L.Y > Outer.Max.Y + 1300.f) { continue; }
-				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 340.f) { continue; }
+				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 525.f) { continue; }
 				++ExistCount;
 				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
 				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
