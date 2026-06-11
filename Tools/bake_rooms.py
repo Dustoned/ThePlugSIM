@@ -47,7 +47,9 @@ with open(BAKE_FILE, encoding="utf-8") as f:
             skipped += 1
             continue
         existing.add(key)
-        actor = actor_sub.spawn_actor_from_object(mesh, unreal.Vector(px, py, pz), unreal.Rotator(rp, ry, rr))
+        # LET OP: unreal.Rotator(...) is (ROLL, PITCH, YAW) - positioneel (pitch, yaw, roll) doorgeven
+        # kantelde elk gedraaid stuk in de bake (plafonds rechtop, muren plat). Keyword-args = veilig.
+        actor = actor_sub.spawn_actor_from_object(mesh, unreal.Vector(px, py, pz), unreal.Rotator(roll=rr, pitch=rp, yaw=ry))
         if not actor:
             continue
         actor.set_actor_scale3d(unreal.Vector(sx, sy, sz))
