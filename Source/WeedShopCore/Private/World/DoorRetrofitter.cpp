@@ -824,10 +824,15 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 	}
 	const float Feet = Marks[0].Z - 98.f;
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
-	// Marker 3 = tot en met welke verdieping gevuld wordt (zweef/sta op de hoogte van de bovenste kamer).
+	// Marker 3 bepaalt de vul-richting en -grens:
+	// - BOVEN de bron (sta/zweef op het DAK): vult omhoog, bovenste kamer komt 1 onder de marker.
+	// - ONDER de bron (sta op de VLOER van de laagste gewenste kamer): vult omlaag t/m die verdieping.
 	const float CapFeet = Marks[2].Z - 98.f;
 	const float CapStorey = 480.f + 350.f * FMath::RoundToFloat((CapFeet - 480.f) / 350.f);
-	const int32 CapN = FMath::Clamp(FMath::RoundToInt((CapStorey - SrcZ) / 350.f) - 1, 1, 30); // bovenste kamer komt ONDER marker 3 (sta/zweef op het dak)
+	const int32 CapDelta = FMath::RoundToInt((CapStorey - SrcZ) / 350.f);
+	const int32 CapN = (CapDelta >= 0)
+		? FMath::Clamp(CapDelta - 1, 1, 30)    // omhoog: dak-conventie
+		: FMath::Clamp(CapDelta, -30, -1);     // omlaag: vloer-conventie
 
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
 	// MET materialen: de map geeft bv. het raam-glas op ingerichte verdiepingen een OVERRIDE (helder
@@ -906,8 +911,11 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 	// VAN BOVEN NAAR BENEDEN tot de hoogte-marker: de bovenste verdieping heeft het echte dak/
 	// penthouse boven zich, en elke gevulde verdieping legt het plafond voor de verdieping eronder.
 	// Zo werkt de plafond-boven-je-test (de enige die niet te foppen is) op elke verdieping.
-	for (int32 N = CapN; N >= 1; --N)
+	const int32 NFrom = (CapN > 0) ? 1 : CapN;
+	const int32 NTo = (CapN > 0) ? CapN : -1;
+	for (int32 N = NFrom; N <= NTo; ++N)
 	{
+		if (N == 0) { continue; }
 		const float Dz = N * 350.f;
 		const float TgtZ = SrcZ + Dz;
 		if (TgtZ < 470.f) { continue; } // begane grond heeft een andere hoogte (430) - overslaan
