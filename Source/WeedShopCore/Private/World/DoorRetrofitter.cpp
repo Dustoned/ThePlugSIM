@@ -822,7 +822,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
 	// MET materialen: de map geeft bv. het raam-glas op ingerichte verdiepingen een OVERRIDE (helder
 	// glas) - zonder die override valt geplakt glas terug op het standaard-materiaal (parallax/nep-3D).
-	struct FSliceEntry { UStaticMesh* Mesh; FTransform TM; FVector BO; TArray<UMaterialInterface*> Mats; bool bSyncOnly = false; };
+	struct FSliceEntry { UStaticMesh* Mesh; FTransform TM; FVector BO; FVector Ext = FVector::ZeroVector; TArray<UMaterialInterface*> Mats; bool bSyncOnly = false; };
 	TArray<FSliceEntry> Slice;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -857,6 +857,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 			E.Mesh = Comp->GetStaticMesh();
 			E.TM = Comp->GetComponentTransform();
 			E.BO = L;
+			E.Ext = Comp->Bounds.BoxExtent;
 			// Boven de eigen verdieping-band (SrcZ+335): SYNC-ONLY - die bovenste gevel-glas-rij krijgt
 			// alleen het heldere materiaal op BESTAANDE meshes, maar wordt nooit gespawnd. Anders plak je
 			// per verdieping stukjes van de volgende en bouwt het gebouw zichzelf eindeloos omhoog.
@@ -982,19 +983,30 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 				{
 					continue; // open lucht eronder -> hier bestaat het gebouw niet meer
 				}
-				// GEVEL-OMSLUITING: binnen het gebouw raken horizontale stralen (op borsthoogte van deze
-				// verdieping) in vrijwel alle richtingen de gevel-schil. Buiten het gebouw (smallere toren
-				// boven een breder podium) is minstens een kant open lucht -> niet plakken. De check op
-				// alleen-gebouw-eronder droeg zwevers van verdieping naar verdieping verder omhoog.
-				int32 ShellHits = 0;
-				const FVector SStart(NL.X, NL.Y, TgtZ + 160.f);
+				// GEVEL-OMSLUITING: het stuk moet HELEMAAL binnen het gebouw vallen - het MIDDELPUNT en
+				// alle 4 XY-hoeken (15cm ingetrokken) moeten omsloten zijn door de gevel-schil
+				// (horizontale stralen raken in >=3 van 4 richtingen iets). Muren waarvan een uiteinde
+				// door de gevel prikt (smallere toren boven het podium) vallen zo af.
 				const FVector Dirs[4] = { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) };
-				for (const FVector& SD : Dirs)
+				const float Ex = FMath::Max(0.f, M.Ext.X - 15.f);
+				const float Ey = FMath::Max(0.f, M.Ext.Y - 15.f);
+				const FVector2D TestPts[5] = {
+					FVector2D(NL.X, NL.Y),
+					FVector2D(NL.X + Ex, NL.Y + Ey), FVector2D(NL.X + Ex, NL.Y - Ey),
+					FVector2D(NL.X - Ex, NL.Y + Ey), FVector2D(NL.X - Ex, NL.Y - Ey) };
+				bool bEnclosed = true;
+				for (const FVector2D& TP : TestPts)
 				{
-					FHitResult SHit;
-					if (W->LineTraceSingleByChannel(SHit, SStart, SStart + SD * 2000.f, ECC_Visibility, GQP)) { ++ShellHits; }
+					int32 ShellHits = 0;
+					const FVector SStart(TP.X, TP.Y, TgtZ + 160.f);
+					for (const FVector& SD : Dirs)
+					{
+						FHitResult SHit;
+						if (W->LineTraceSingleByChannel(SHit, SStart, SStart + SD * 2000.f, ECC_Visibility, GQP)) { ++ShellHits; }
+					}
+					if (ShellHits < 3) { bEnclosed = false; break; }
 				}
-				if (ShellHits < 3) { continue; } // niet omsloten -> buiten de gevel van deze verdieping
+				if (!bEnclosed) { continue; } // steekt (deels) buiten de gevel van deze verdieping
 			}
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
