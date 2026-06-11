@@ -88,11 +88,27 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 	DoorOpen = 1.f; // begane grond: deuren open, klaar om in te stappen
 	DwellTimer = DwellSeconds;
 	SetActorLocation(FVector(CabXY.X, CabXY.Y, CabZ));
-	// Cabine met de OPENING naar de liftdeur draaien (aanname: opening = lokale +X; klopt 'ie niet,
-	// dan is dit de plek om 90/180 graden bij te draaien).
+	// Cabine-mesh: pivot zit OP de open kant (lokale bounds X -200..0, opening = +X-vlak).
+	// CabCenterXY is het deurvlak (frame-pivot), dus actor-pivot daar neerzetten en de lokale +X
+	// naar de gang draaien -> cabine valt precies in de schacht, opening tegen de deur.
 	FVector Open2D = OpeningDir; Open2D.Z = 0.f;
 	if (Open2D.Normalize()) { SetActorRotation(Open2D.Rotation()); }
 	if (Cab) { Cab->SetRelativeLocation(FVector::ZeroVector); }
+
+	// Verdieping-display IN de cabine: tegen de achterwand, op ooghoogte, kijkend naar de opening.
+	if (Cab && !CabDigit)
+	{
+		CabDigit = NewObject<UStaticMeshComponent>(this);
+		CabDigit->SetupAttachment(Cab);
+		CabDigit->RegisterComponent();
+		CabDigit->SetMobility(EComponentMobility::Movable);
+		CabDigit->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		CabDigit->SetCanEverAffectNavigation(false);
+		CabDigit->SetRelativeLocation(FVector(-192.f, 0.f, 175.f));
+		CabDigit->SetRelativeRotation(FRotator::ZeroRotator); // lokale +X = naar de opening
+		CabDigit->SetRelativeScale3D(FVector(5.f));
+	}
+	UpdateSigns();
 }
 
 void APackElevator::CallToFloor(int32 FloorIdx)
@@ -115,6 +131,13 @@ void APackElevator::UpdateSigns()
 	for (const TWeakObjectPtr<APackElevatorButton>& B : Buttons)
 	{
 		if (APackElevatorButton* Btn = B.Get()) { Btn->SetDigit(CurFloor); }
+	}
+	if (CabDigit && CabDigitShown != CurFloor)
+	{
+		CabDigitShown = CurFloor;
+		const int32 D = FMath::Clamp(CurFloor, 0, 9);
+		const FString Path = FString::Printf(TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorNumber_%d.SM_ElevatorNumber_%d"), D, D);
+		if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path)) { CabDigit->SetStaticMesh(M); }
 	}
 }
 

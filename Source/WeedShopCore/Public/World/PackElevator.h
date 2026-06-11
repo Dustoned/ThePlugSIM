@@ -41,6 +41,8 @@ protected:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Cab;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> CabDigit; // verdieping-display IN de cabine
+	int32 CabDigitShown = -1;
 
 	struct FPanelRef
 	{

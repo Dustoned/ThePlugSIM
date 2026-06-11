@@ -38,6 +38,7 @@ void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator&
 		DigitMesh->SetCanEverAffectNavigation(false);
 	}
 	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
+	DigitMesh->SetWorldScale3D(FVector(6.f)); // digit-mesh is 3x5cm -> opschalen naar leesbaar bordje
 }
 
 void APackElevatorButton::SetDigit(int32 Digit)

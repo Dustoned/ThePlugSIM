@@ -361,7 +361,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	// stabiel is (alle verdiepingen ingestreamd) spawnen we een werkende APackElevator met de bestaande
 	// schuif-panelen + de pack-cabine.
 	{
-		struct FShaft { FVector Ref = FVector::ZeroVector; TArray<float> FloorZ; };
+		struct FShaft { FVector Ref = FVector::ZeroVector; float FrameYaw = 0.f; TArray<float> FloorZ; };
 		TMap<FIntPoint, FShaft> Shafts;
 		TArray<TPair<FVector, UStaticMeshComponent*>> AllPanels; // (positie, paneel)
 		for (TActorIterator<AActor> It(W); It; ++It)
@@ -379,6 +379,7 @@ void ADoorRetrofitter::ScanAndConvert()
 					const FIntPoint Key(FMath::RoundToInt(L.X / 100.f), FMath::RoundToInt(L.Y / 100.f));
 					FShaft& Sh = Shafts.FindOrAdd(Key);
 					Sh.Ref = L;
+					Sh.FrameYaw = Comp->GetComponentRotation().Yaw;
 					Sh.FloorZ.AddUnique(L.Z);
 				}
 				else if (MeshName == TEXT("SM_ElevatorDoor"))
@@ -411,15 +412,16 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (Panels.Num() == 0) { continue; }
 
-			// Schuifrichting + cabine-positie data-gedreven uit de 2 begane-grond-panelen.
-			FVector SlideDir = FVector::XAxisVector;
-			FVector OpeningCenter = KV.Value.Ref;
+			// FRAME-gebaseerde geometrie (gemeten): frame-pivot = exacte opening-centrum (lokale Y +-77),
+			// lokale X = door de muur heen (16cm diep). Panelen alleen nog voor de schuifrichting-keuze.
+			const FRotator FrameRot(0.f, KV.Value.FrameYaw, 0.f);
+			FVector SlideDir = FrameRot.RotateVector(FVector::YAxisVector).GetSafeNormal2D();
+			const FVector OpeningCenter = KV.Value.Ref;
 			if (GroundPanelPos.Num() >= 2)
 			{
-				SlideDir = (GroundPanelPos[1] - GroundPanelPos[0]).GetSafeNormal2D();
-				// Paneel-pivots zitten aan de schuif-kant van hun blad (68 breed): het echte midden van de
-				// opening ligt daarom 34 terug langs de schuifrichting.
-				OpeningCenter = (GroundPanelPos[0] + GroundPanelPos[1]) * 0.5f - SlideDir * 34.f;
+				// Teken van de schuifrichting uit de panelen (pocket-kant), as zelf uit het frame.
+				const FVector PanelDir = (GroundPanelPos[1] - GroundPanelPos[0]).GetSafeNormal2D();
+				if (FVector::DotProduct(PanelDir, SlideDir) < 0.f) { SlideDir = -SlideDir; }
 			}
 			// Schacht-kant FYSIEK bepalen: trace vanaf verdieping 1 omlaag aan beide kanten van de deur.
 			// De kant ZONDER vloer eronder (gat dat doorloopt) is de schacht.
@@ -435,21 +437,25 @@ void ADoorRetrofitter::ScanAndConvert()
 			const bool bFloorPos = HasFloorBelow(Perp);
 			const bool bFloorNeg = HasFloorBelow(-Perp);
 			const FVector ShaftSide = (!bFloorPos && bFloorNeg) ? Perp : ((!bFloorNeg && bFloorPos) ? -Perp : Perp);
-			const FVector CabCenter = OpeningCenter + ShaftSide * 105.f;
+			// Cabine-pivot = de OPEN kant van de cabine-mesh -> pivot exact op het deurvlak (frame-pivot),
+			// 2cm de schacht in tegen z-fighting. De Setup draait de opening naar de gang.
+			const FVector CabCenter = OpeningCenter + ShaftSide * 2.f;
 
 			FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			if (APackElevator* Elev = W->SpawnActor<APackElevator>(APackElevator::StaticClass(), FTransform(FVector(CabCenter.X, CabCenter.Y, Floors[0])), SP))
 			{
 				Elev->Setup(Floors, SlideDir, Panels, CabCenter, -ShaftSide);
-				// Per verdieping: call-knop naast de deur + digit-bordje boven de deur (gang-kant).
+				// Per verdieping: call-knop naast de deur + digit-bordje boven de deur, beide op het
+				// gang-muurvlak (frame is 16cm diep; pivot aan een kant -> 17cm uit het centrum).
 				for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
 				{
-					const FVector BtnLoc = FVector(OpeningCenter.X, OpeningCenter.Y, Floors[Fi] + 110.f) + SlideDir * 100.f - ShaftSide * 8.f;
 					const FRotator BtnRot = (-ShaftSide).Rotation();
+					const FVector WallFace = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) - ShaftSide * 17.f;
+					const FVector BtnLoc = WallFace + SlideDir * 110.f + FVector(0.f, 0.f, Floors[Fi] + 115.f);
 					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, BtnLoc), SP))
 					{
 						Btn->Setup(Elev, Fi);
-						const FVector SignLoc = FVector(OpeningCenter.X, OpeningCenter.Y, Floors[Fi] + 235.f) - ShaftSide * 10.f;
+						const FVector SignLoc = WallFace + FVector(0.f, 0.f, Floors[Fi] + 255.f);
 						Btn->SetupSign(SignLoc, BtnRot);
 						Elev->RegisterButton(Btn);
 					}
