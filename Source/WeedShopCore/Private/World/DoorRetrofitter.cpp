@@ -117,6 +117,31 @@ void ADoorRetrofitter::BeginPlay()
 		}
 		if (!bElevScan) { UE_LOG(LogWeedShop, Warning, TEXT("ELEVSCAN: geen marked spot voor deze map gevonden")); }
 	}
+
+	// Dev: -SpotScan -> teleporteer naar de laatste marked spot en dump alles rond de laatste 2 spots.
+	if (FParse::Param(FCommandLine::Get(), TEXT("SpotScan")))
+	{
+		const FString MapPath2 = GetWorld() ? GetWorld()->GetOutermost()->GetName() : FString();
+		TArray<FString> Lines2;
+		FFileHelper::LoadFileToStringArray(Lines2, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+		for (int32 i = Lines2.Num() - 1; i >= 0; --i)
+		{
+			if (!Lines2[i].Contains(MapPath2)) { continue; }
+			const int32 PIdx = Lines2[i].Find(TEXT("pos=("));
+			if (PIdx == INDEX_NONE) { continue; }
+			FString PosStr = Lines2[i].Mid(PIdx + 5);
+			int32 Close = INDEX_NONE;
+			if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+			TArray<FString> Parts;
+			PosStr.ParseIntoArray(Parts, TEXT(","));
+			if (Parts.Num() < 3) { continue; }
+			ElevScanPos = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
+			GetWorldTimerManager().SetTimer(ElevScanTimer, this, &ADoorRetrofitter::ElevTeleport, 5.f, false);
+			GetWorldTimerManager().SetTimer(SpotScanTimer, this, &ADoorRetrofitter::SpotDump, 16.f, false);
+			UE_LOG(LogWeedShop, Warning, TEXT("SPOTSCAN gepland: spot (%.0f, %.0f, %.0f)"), ElevScanPos.X, ElevScanPos.Y, ElevScanPos.Z);
+			break;
+		}
+	}
 }
 
 void ADoorRetrofitter::ElevTeleport()
@@ -129,6 +154,55 @@ void ADoorRetrofitter::ElevTeleport()
 		}
 	}
 	GetWorldTimerManager().SetTimer(ElevScanTimer, this, &ADoorRetrofitter::ElevDump, 8.f, false);
+}
+
+// -SpotScan: dump alle static meshes rond de laatste 2 marked spots (bron-kamer vs lege kamer)
+// naar Saved/SpotScan.txt. Statisch hulpje, aangeroepen vanuit BeginPlay-timer.
+void ADoorRetrofitter::SpotDump()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Spots;
+	for (int32 i = Lines.Num() - 1; i >= 0 && Spots.Num() < 2; --i)
+	{
+		if (!Lines[i].Contains(MapPath)) { continue; }
+		const int32 PIdx = Lines[i].Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Lines[i].Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() < 3) { continue; }
+		Spots.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2])));
+	}
+	FString Out;
+	for (int32 SpotIdx = 0; SpotIdx < Spots.Num(); ++SpotIdx)
+	{
+		Out += FString::Printf(TEXT("=== SPOT %d: (%.0f, %.0f, %.0f) ==="), SpotIdx, Spots[SpotIdx].X, Spots[SpotIdx].Y, Spots[SpotIdx].Z);
+		Out += LINE_TERMINATOR;
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			if (!IsValid(*It)) { continue; }
+			TInlineComponentArray<UStaticMeshComponent*> Comps(*It);
+			for (UStaticMeshComponent* Comp : Comps)
+			{
+				if (!Comp || !Comp->GetStaticMesh()) { continue; }
+				const FVector L = Comp->GetComponentLocation();
+				if (FVector::Dist2D(L, Spots[SpotIdx]) > 900.f || FMath::Abs(L.Z - Spots[SpotIdx].Z) > 350.f) { continue; }
+				const FRotator R = Comp->GetComponentRotation();
+				Out += FString::Printf(TEXT("%s | pos=(%.0f, %.0f, %.0f) | rot=(%.0f, %.0f, %.0f) | scale=(%.2f, %.2f, %.2f)"),
+					*Comp->GetStaticMesh()->GetName(), L.X, L.Y, L.Z, R.Pitch, R.Yaw, R.Roll,
+					Comp->GetComponentScale().X, Comp->GetComponentScale().Y, Comp->GetComponentScale().Z);
+				Out += LINE_TERMINATOR;
+			}
+		}
+	}
+	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("SpotScan.txt")));
+	UE_LOG(LogWeedShop, Warning, TEXT("SPOTSCAN klaar (%d spots, %d tekens) -> Saved/SpotScan.txt"), Spots.Num(), Out.Len());
 }
 
 void ADoorRetrofitter::ElevDump()

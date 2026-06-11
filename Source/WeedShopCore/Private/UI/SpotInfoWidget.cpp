@@ -57,8 +57,9 @@ void USpotInfoWidget::ToggleInfo()
 		if (const APawn* P = GetOwningPlayerPawn())
 		{
 			const FVector L = P->GetActorLocation();
+			const float Yaw = GetOwningPlayer() ? GetOwningPlayer()->GetControlRotation().Yaw : 0.f;
 			const FString MapPath = GetWorld() ? GetWorld()->GetOutermost()->GetName() : TEXT("?");
-			const FString Line = FString::Printf(TEXT("F9 | map=%s | pos=(%.0f, %.0f, %.0f)"), *MapPath, L.X, L.Y, L.Z) + TEXT("\n");
+			const FString Line = FString::Printf(TEXT("F9 | map=%s | pos=(%.0f, %.0f, %.0f) | yaw=%.0f"), *MapPath, L.X, L.Y, L.Z, Yaw) + TEXT("\n");
 			const FString File = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
 			FFileHelper::SaveStringToFile(Line, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,
 				&IFileManager::Get(), FILEWRITE_Append);

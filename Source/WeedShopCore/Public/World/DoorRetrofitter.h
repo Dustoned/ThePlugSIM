@@ -34,6 +34,8 @@ protected:
 	bool bElevScan = false;
 	void ElevTeleport();
 	void ElevDump();
+	void SpotDump();
+	FTimerHandle SpotScanTimer;
 	TSet<TWeakObjectPtr<AActor>> Converted; // originele actors die al een werkende deur kregen
 	int32 TotalConverted = 0;
 	TArray<TWeakObjectPtr<class ACityDoor>> SpawnedDoors; // om los GLAS aan de juiste deur te hangen
