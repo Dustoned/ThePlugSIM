@@ -488,12 +488,20 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 				{
 					const bool bFlying = CM->MovementMode == MOVE_Flying;
 					CM->SetMovementMode(bFlying ? MOVE_Walking : MOVE_Flying);
+					// NOCLIP tijdens het vliegen: capsule-collision uit zodat je door muren/vloeren kunt
+					// (en nooit meer vast komt te zitten); weer aan zodra je landt.
+					if (UCapsuleComponent* Cap = GetCapsuleComponent())
+					{
+						Cap->SetCollisionEnabled(bFlying ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::QueryOnly);
+						Cap->SetCollisionResponseToChannel(ECC_WorldStatic, bFlying ? ECR_Block : ECR_Ignore);
+						Cap->SetCollisionResponseToChannel(ECC_WorldDynamic, bFlying ? ECR_Block : ECR_Ignore);
+					}
 					if (!bFlying)
 					{
 						CM->MaxFlySpeed = 1400.f;
 						CM->BrakingDecelerationFlying = 4096.f;
 					}
-					UWeedToast::NotifyPawn(this, -1, 2.f, FColor::Cyan, bFlying ? TEXT("Fly mode OFF") : TEXT("Fly mode ON (Space = up, Ctrl = down, F7 = off)"));
+					UWeedToast::NotifyPawn(this, -1, 2.f, FColor::Cyan, bFlying ? TEXT("Fly mode OFF") : TEXT("Fly mode ON + noclip (Space = up, Ctrl = down, F7 = off)"));
 				}
 			}
 			bFlyKeyWasDown = bF7;
