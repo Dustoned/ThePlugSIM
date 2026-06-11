@@ -993,8 +993,10 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 			{
 				FHitResult UpHit;
 				const FVector UStart(TP.X, TP.Y, TopZ);
-				const FVector UEnd(TP.X, TP.Y, TgtZ + 368.f);
-				if (UEnd.Z <= UStart.Z + 2.f) { continue; } // stuk reikt al tot het plafond
+				// LANG omhoog kijken (26m): lege verdiepingen hebben onderling geen platen, maar binnen
+				// de gebouw-voetafdruk raakt de straal uiteindelijk altijd het dak/penthouse. Buiten de
+				// voetafdruk (doorstekende stukken) is het lucht tot in de hemel -> afgekeurd.
+				const FVector UEnd(TP.X, TP.Y, TopZ + 2600.f);
 				if (!W->LineTraceSingleByChannel(UpHit, UStart, UEnd, ECC_Visibility, GQP)) { bCovered = false; break; }
 			}
 			if (bCovered) { PieceFits[Si] = true; ++FitPass; }
