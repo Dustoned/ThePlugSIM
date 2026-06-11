@@ -641,10 +641,183 @@ void ADoorRetrofitter::ScanAndConvert()
 	}
 
 	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
+	BuildMarkedRooms();
 
 	if (NewThisPass > 0)
 	{
 		UE_LOG(LogWeedShop, Log, TEXT("DoorRetrofitter: %d nieuwe deuren werkend gemaakt (totaal %d)"), NewThisPass, TotalConverted);
+	}
+}
+
+// Kamers BOUWEN van losse onderdelen binnen gemarkeerde rechthoeken. Werkwijze voor de speler:
+// vlieg (F7) of loop naar een lege kamer-ruimte, zet F9 op de ene hoek, F9 op de tegenoverliggende
+// hoek (zelfde verdieping) - elk PAAR opeenvolgende marks wordt een kamer: vloer, muren (met opening
+// bij een deur-frame aan de rand), plafond en een lamp. As-aligned (de hotels zijn dat ook).
+void ADoorRetrofitter::BuildMarkedRooms()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Marks;
+	for (const FString& Line : Lines)
+	{
+		if (!Line.Contains(MapPath)) { continue; }
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Line.Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+	}
+
+	const FString IntDir = TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/");
+	auto LoadPart = [&](const TCHAR* Name) -> UStaticMesh*
+	{
+		return LoadObject<UStaticMesh>(nullptr, *(IntDir + Name + TEXT(".") + Name));
+	};
+
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	auto Spawn = [&](UStaticMesh* M, const FVector& Loc, float Yaw)
+	{
+		if (!M) { return; }
+		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), Loc), SP);
+		if (!A) { return; }
+		if (UStaticMeshComponent* C = A->GetStaticMeshComponent())
+		{
+			C->SetMobility(EComponentMobility::Movable);
+			C->SetStaticMesh(M);
+			C->SetCanEverAffectNavigation(false);
+		}
+	};
+
+	for (int32 Pi = 0; Pi + 1 < Marks.Num(); Pi += 2)
+	{
+		const FVector& A = Marks[Pi];
+		const FVector& B = Marks[Pi + 1];
+		if (FMath::Abs(A.Z - B.Z) > 200.f) { continue; }            // verschillende verdiepingen -> geen paar
+		if (FVector::Dist2D(A, B) < 250.f) { continue; }            // te klein/per ongeluk
+
+		// Rechthoek (as-aligned), gesnapt op 10cm; afmetingen op 100cm veelvouden (minimaal 2m).
+		float X0 = FMath::Min(A.X, B.X), X1 = FMath::Max(A.X, B.X);
+		float Y0 = FMath::Min(A.Y, B.Y), Y1 = FMath::Max(A.Y, B.Y);
+		const int32 Wd = FMath::Max(200, 100 * FMath::RoundToInt((X1 - X0) / 100.f));
+		const int32 Dp = FMath::Max(200, 100 * FMath::RoundToInt((Y1 - Y0) / 100.f));
+		X0 = FMath::GridSnap(X0, 10.f); Y0 = FMath::GridSnap(Y0, 10.f);
+		const float FloorZ = FMath::GridSnap(FMath::Min(A.Z, B.Z) - 98.f, 5.f); // voeten = Z-98
+
+		const FIntPoint Key(FMath::RoundToInt((X0 + Wd * 0.5f) / 100.f), FMath::RoundToInt((Y0 + Dp * 0.5f) / 100.f));
+		if (BuiltRects.Contains(Key)) { continue; }
+		BuiltRects.Add(Key);
+
+		// Deur-opening: dichtstbijzijnde deur-frame binnen 250 van de rand bepaalt waar GEEN muur komt.
+		FVector DoorPos = FVector::ZeroVector;
+		float DoorBest = 250.f;
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			if (!IsValid(*It)) { continue; }
+			TInlineComponentArray<UStaticMeshComponent*> Comps(*It);
+			for (UStaticMeshComponent* Comp : Comps)
+			{
+				if (!Comp || !Comp->GetStaticMesh()) { continue; }
+				const FString MeshName = Comp->GetStaticMesh()->GetName();
+				if (!MeshName.StartsWith(TEXT("SM_DoorFrameCommerical")) && !MeshName.StartsWith(TEXT("SM_Door_Apartment"))) { continue; }
+				const FVector L = Comp->GetComponentLocation();
+				if (FMath::Abs(L.Z - FloorZ) > 60.f) { continue; }
+				// afstand tot de rechthoek-rand
+				const float Dx = FMath::Max(0.f, FMath::Max(X0 - (float)L.X, (float)L.X - (X0 + (float)Wd)));
+				const float Dy = FMath::Max(0.f, FMath::Max(Y0 - (float)L.Y, (float)L.Y - (Y0 + (float)Dp)));
+				const float D = FMath::Sqrt(Dx * Dx + Dy * Dy);
+				if (D < DoorBest) { DoorBest = D; DoorPos = L; }
+			}
+		}
+		const bool bHasDoor = DoorBest < 250.f;
+
+		// VLOER + PLAFOND: kolommen van 4m (rest 1m), tegels pivot op de +X/+Y-hoek.
+		UStaticMesh* F44 = LoadPart(TEXT("SM_Floor_4x4m")); UStaticMesh* F43 = LoadPart(TEXT("SM_Floor_4x3m"));
+		UStaticMesh* F41 = LoadPart(TEXT("SM_Floor_4x1m")); UStaticMesh* F11 = LoadPart(TEXT("SM_Floor_1x1m"));
+		UStaticMesh* C44 = LoadPart(TEXT("SM_Ceiling_4x4m")); UStaticMesh* C43 = LoadPart(TEXT("SM_Ceiling_4x3m"));
+		UStaticMesh* C41 = LoadPart(TEXT("SM_Ceiling_4x1m")); UStaticMesh* C11 = LoadPart(TEXT("SM_Ceiling_1x1m"));
+		int32 Gx = 0;
+		while (Gx < Wd)
+		{
+			const int32 Sx = (Wd - Gx >= 400) ? 400 : 100;
+			int32 Gy = 0;
+			while (Gy < Dp)
+			{
+				int32 Sy;
+				if (Sx == 400) { Sy = (Dp - Gy >= 400) ? 400 : ((Dp - Gy >= 300) ? 300 : 100); }
+				else { Sy = 100; }
+				UStaticMesh* FM = (Sx == 400) ? ((Sy == 400) ? F44 : (Sy == 300) ? F43 : F41) : F11;
+				UStaticMesh* CM = (Sx == 400) ? ((Sy == 400) ? C44 : (Sy == 300) ? C43 : C41) : C11;
+				const FVector Pivot(X0 + Gx + Sx, Y0 + Gy + Sy, FloorZ);
+				Spawn(FM, Pivot, 0.f);
+				Spawn(CM, FVector(Pivot.X, Pivot.Y, FloorZ + 320.f), 0.f);
+				Gy += Sy;
+			}
+			Gx += Sx;
+		}
+
+		// MUREN: per rand segmenten (4m/2m/1m/0.5m), met gat van 1.7m rond de deur op die rand.
+		UStaticMesh* W4 = LoadPart(TEXT("SM_InteriorWall_01_4m")); UStaticMesh* W2 = LoadPart(TEXT("SM_InteriorWall_01_2m"));
+		UStaticMesh* W1 = LoadPart(TEXT("SM_InteriorWall_01_1m")); UStaticMesh* W05 = LoadPart(TEXT("SM_InteriorWall_01_0_5m"));
+		struct FEdge { FVector Start; FVector Dir; float Len; float Yaw; }; // Dir = looprichting van de rand
+		// Plaatsing zo dat de 5cm dikte BINNEN de rechthoek valt (pivots per metingen).
+		const FEdge Edges[4] = {
+			{ FVector(X0 + 5.f, Y0, FloorZ),      FVector(0, 1, 0),  (float)Dp, 0.f },    // linker rand (x=X0)
+			{ FVector(X0 + Wd - 5.f, Y0 + Dp, FloorZ), FVector(0, -1, 0), (float)Dp, 180.f }, // rechter rand
+			{ FVector(X0 + Wd, Y0, FloorZ),       FVector(-1, 0, 0), (float)Wd, -90.f },  // onder rand (y=Y0)
+			{ FVector(X0, Y0 + Dp, FloorZ),       FVector(1, 0, 0),  (float)Wd, 90.f },   // boven rand
+		};
+		for (const FEdge& E : Edges)
+		{
+			// Deur-gat op deze rand? Projecteer de deur op de rand-as.
+			float GapStart = -1.f, GapEnd = -1.f;
+			if (bHasDoor)
+			{
+				const FVector Rel = DoorPos - E.Start;
+				const float Along = FVector::DotProduct(Rel, E.Dir);
+				const float Perp = (Rel - E.Dir * Along).Size2D();
+				if (Perp < 60.f && Along > -90.f && Along < E.Len + 90.f)
+				{
+					GapStart = Along - 85.f; GapEnd = Along + 85.f;
+				}
+			}
+			float Pos = 0.f;
+			while (Pos < E.Len - 24.f)
+			{
+				// In het deur-gat? Spring eroverheen.
+				if (GapStart >= 0.f && Pos >= GapStart - 1.f && Pos < GapEnd)
+				{
+					Pos = GapEnd;
+					continue;
+				}
+				float Avail = E.Len - Pos;
+				if (GapStart >= 0.f && Pos < GapStart) { Avail = FMath::Min(Avail, GapStart - Pos); }
+				float Seg; UStaticMesh* SegM;
+				if (Avail >= 400.f) { Seg = 400.f; SegM = W4; }
+				else if (Avail >= 200.f) { Seg = 200.f; SegM = W2; }
+				else if (Avail >= 100.f) { Seg = 100.f; SegM = W1; }
+				else if (Avail >= 50.f) { Seg = 50.f; SegM = W05; }
+				else { break; }
+				// Muur-mesh loopt lokaal -Y vanaf de pivot -> pivot aan het VERRE eind van het segment.
+				const FVector Pivot = E.Start + E.Dir * (Pos + Seg);
+				Spawn(SegM, Pivot, E.Yaw);
+				Pos += Seg;
+			}
+		}
+
+		// LAMP in het midden, aan het plafond.
+		if (UStaticMesh* Lamp = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/CityBeachStrip/Meshes/CeilingProps/SM_CeilingLight02.SM_CeilingLight02")))
+		{
+			Spawn(Lamp, FVector(X0 + Wd * 0.5f, Y0 + Dp * 0.5f, FloorZ + 319.f), 0.f);
+		}
+
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomBuilder: kamer gebouwd %dx%dcm op (%.0f, %.0f, %.0f), deur=%d"), Wd, Dp, X0, Y0, FloorZ, bHasDoor ? 1 : 0);
 	}
 }
 

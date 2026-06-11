@@ -472,6 +472,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	// F9: dev-overlay met positie + mesh-onder-crosshair (en logt de plek naar MarkedSpots.txt).
+	// F7: vlieg-modus (markers zetten op hoogte); Space = stijgen, Ctrl = dalen.
 	if (IsLocallyControlled())
 	{
 		if (const APlayerController* PCk = Cast<APlayerController>(GetController()))
@@ -479,6 +480,29 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			const bool bF9 = PCk->IsInputKeyDown(EKeys::F9);
 			if (bF9 && !bSpotKeyWasDown) { if (Phone) { Phone->ToggleSpotInfo(); } }
 			bSpotKeyWasDown = bF9;
+
+			const bool bF7 = PCk->IsInputKeyDown(EKeys::F7);
+			if (bF7 && !bFlyKeyWasDown)
+			{
+				if (UCharacterMovementComponent* CM = GetCharacterMovement())
+				{
+					const bool bFlying = CM->MovementMode == MOVE_Flying;
+					CM->SetMovementMode(bFlying ? MOVE_Walking : MOVE_Flying);
+					if (!bFlying)
+					{
+						CM->MaxFlySpeed = 1400.f;
+						CM->BrakingDecelerationFlying = 4096.f;
+					}
+					UWeedToast::NotifyPawn(this, -1, 2.f, FColor::Cyan, bFlying ? TEXT("Fly mode OFF") : TEXT("Fly mode ON (Space = up, Ctrl = down, F7 = off)"));
+				}
+			}
+			bFlyKeyWasDown = bF7;
+
+			if (GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying)
+			{
+				if (PCk->IsInputKeyDown(EKeys::SpaceBar))    { AddMovementInput(FVector::UpVector, 1.f); }
+				if (PCk->IsInputKeyDown(EKeys::LeftControl)) { AddMovementInput(FVector::UpVector, -1.f); }
+			}
 		}
 	}
 	UpdateProxyAnim(DeltaSeconds); // client-kant: remote speler walk/idle/jump (host gebruikt de ABP)

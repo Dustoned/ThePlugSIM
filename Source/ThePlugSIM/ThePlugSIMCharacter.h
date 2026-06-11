@@ -80,6 +80,7 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	bool bThirdPerson = false;
 	bool bTpKeyWasDown = false; // edge-detect voor de toggle-toets
 	bool bSpotKeyWasDown = false; // edge-detect F9 (dev spot-info)
+	bool bFlyKeyWasDown = false;  // edge-detect F7 (vlieg-modus)
 	void ToggleThirdPerson();
 	UFUNCTION()
 	void ApplySoftPhysics(); // Lola: haar/rok/cloth-bones laten nawapperen (physics-blend)

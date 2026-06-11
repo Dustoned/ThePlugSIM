@@ -45,6 +45,11 @@ protected:
 	TMap<FIntPoint, int32> ElevPrevCount;
 	TSet<FIntPoint> ElevBuilt;
 
+	// Kamer-BOUWER: bouwt kamers van losse pack-onderdelen binnen door de speler gemarkeerde
+	// rechthoeken (2 opeenvolgende F9-marks = 2 tegenoverliggende hoeken).
+	void BuildMarkedRooms();
+	TSet<FIntPoint> BuiltRects;
+
 	// Kamer-kloner: lege deur-slots (deur naar de void) krijgen een kopie van het bron-appartement.
 	void CloneRooms();
 	TSet<FIntPoint> ClonedRooms; // per deur-slot (pos/100) zodat we niet dubbel klonen
