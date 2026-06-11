@@ -328,8 +328,10 @@ void ADoorRetrofitter::ScanAndConvert()
 		// evenwijdig aan het KOZIJN -> zoek het dichtstbijzijnde deur-frame en lijn het yaw daarop
 		// uit (de hinge-pivot staat vast, dus alleen de rotatie hoeft recht).
 		FTransform LeafTM = Comp->GetComponentTransform();
+		float SwingOverride = 0.f; // 0 = gebruik de standaard draairichting van het blad-type
 		{
 			FRotator R = LeafTM.GetRotation().Rotator();
+			const float ParkedYaw = R.Yaw;
 			float ClosedYaw = FMath::GridSnap(R.Yaw, 90.f); // fallback zonder frame
 			float BestD = 160.f;
 			FVector BestFrameLoc = FVector::ZeroVector;
@@ -362,6 +364,13 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			R.Yaw = ClosedYaw;
 			LeafTM.SetRotation(R.Quaternion());
+			// De map parkeerde de deur OPEN naar z'n legale kant (daar is bewezen ruimte, geen kozijn/
+			// muur) -> gebruik die richting als draairichting van de werkende deur.
+			const float ParkedDelta = FMath::FindDeltaAngleDegrees(ClosedYaw, ParkedYaw);
+			if (FMath::Abs(ParkedDelta) > 25.f)
+			{
+				SwingOverride = (ParkedDelta > 0.f) ? FMath::Abs(Leaf->OpenDeg) : -FMath::Abs(Leaf->OpenDeg);
+			}
 		}
 		SMA->SetActorHiddenInGame(true);
 		SMA->SetActorEnableCollision(false);
@@ -371,7 +380,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (ACityDoor* Door = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), LeafTM, SP))
 		{
 			Door->SetActorScale3D(LeafTM.GetScale3D());
-			Door->SetupLeaf(Comp->GetStaticMesh(), Leaf->OpenDeg);
+			Door->SetupLeaf(Comp->GetStaticMesh(), (SwingOverride != 0.f) ? SwingOverride : Leaf->OpenDeg);
 			SpawnedDoors.Add(Door);
 			++NewThisPass;
 			++TotalConverted;
