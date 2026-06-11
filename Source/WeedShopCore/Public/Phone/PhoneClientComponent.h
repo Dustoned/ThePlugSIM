@@ -304,6 +304,10 @@ public:
 	// Test-tool: sla de huidige 3 markers op als permanente kamer-job (RoomJobs.txt) en maak de
 	// markers vrij voor het volgende gebouw. Puur lokaal bestand-werk.
 	void SaveRoomJob();
+
+	// Room-stamper: kamer binnen 2 markers opslaan als template / stempel-modus starten.
+	void SaveRoomTemplateNow();
+	void StartRoomStamp(const FString& TemplateName);
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();
 

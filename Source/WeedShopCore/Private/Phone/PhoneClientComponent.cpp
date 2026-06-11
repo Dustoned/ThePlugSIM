@@ -41,6 +41,7 @@
 #include "UI/AtmWidget.h"
 #include "UI/WardrobeWidget.h"
 #include "UI/SpotInfoWidget.h"
+#include "World/RoomStamper.h"
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
 #include "UI/DryingRackWidget.h"
@@ -2219,6 +2220,41 @@ void UPhoneClientComponent::ServerSafeMove_Implementation(int64 Cents, bool bToS
 void UPhoneClientComponent::RequestDevHeatEvent(bool bBust) { ServerDevHeatEvent(bBust); }
 
 void UPhoneClientComponent::RequestGiveBuildKit() { ServerGiveBuildKit(); }
+
+void UPhoneClientComponent::SaveRoomTemplateNow()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString Name = FString::Printf(TEXT("Room_%d"), ARoomStamper::ListTemplates().Num() + 1);
+	FString Err;
+	if (ARoomStamper::SaveTemplateFromMarkers(W, Name, Err))
+	{
+		// Markers vrijmaken voor de volgende kamer.
+		FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Green, FString::Printf(TEXT("Template '%s' saved! Markers cleared"), *Name));
+	}
+	else
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, Err);
+	}
+}
+
+void UPhoneClientComponent::StartRoomStamp(const FString& TemplateName)
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	ARoomStamper* Stamper = nullptr;
+	for (TActorIterator<ARoomStamper> It(W); It; ++It) { Stamper = *It; break; }
+	if (!Stamper) { Stamper = W->SpawnActor<ARoomStamper>(ARoomStamper::StaticClass(), FTransform::Identity); }
+	if (Stamper && Stamper->BeginStamp(TemplateName))
+	{
+		CloseAllUI(); // telefoon dicht zodat je vrij kunt mikken
+	}
+	else
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Could not load that template"));
+	}
+}
 
 void UPhoneClientComponent::SaveRoomJob()
 {

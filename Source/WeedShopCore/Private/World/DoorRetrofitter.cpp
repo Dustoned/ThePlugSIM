@@ -5,6 +5,7 @@
 #include "World/DayNightController.h"
 #include "World/PackElevator.h"
 #include "World/PackElevatorButton.h"
+#include "World/RoomStamper.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
 #include "Engine/ExponentialHeightFog.h"
@@ -715,6 +716,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
 	// BuildMarkedRooms(); // UIT: marker-kopie werkte niet lekker - vervangen door de dev building-tool (muren/vloeren tekenen via het bouw-systeem)
 	VerticalReplicate();
+	ApplySavedStamps();
 
 	if (NewThisPass > 0)
 	{
@@ -1470,5 +1472,62 @@ void ADoorRetrofitter::CloneRooms()
 	{
 		FFileHelper::SaveStringToFile(RoomCloneLog, *(FPaths::ProjectSavedDir() / TEXT("RoomClone.txt")),
 			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	}
+}
+
+// Geplaatste kamer-stempels (RoomStamps.txt) elke sessie herbouwen, tot ze gebakken zijn
+// (dan staat hun STAMP-id in BakedJobs.txt en staat de geometrie al in de map).
+void ADoorRetrofitter::ApplySavedStamps()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	if (BakedOverlay.IsValid() && !BakedOverlay->IsLevelLoaded()) { return; } // wacht op de bake-overlay
+
+	TSet<FString> BakedJobs;
+	{
+		TArray<FString> BakedLines;
+		FFileHelper::LoadFileToStringArray(BakedLines, *(FPaths::ProjectSavedDir() / TEXT("BakedJobs.txt")));
+		for (const FString& BL : BakedLines) { BakedJobs.Add(BL.TrimStartAndEnd()); }
+	}
+
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> P;
+		Line.ParseIntoArray(P, TEXT("|"));
+		if (P.Num() < 3) { continue; }
+		TArray<FString> Lp;
+		P[1].ParseIntoArray(Lp, TEXT(","));
+		if (Lp.Num() < 3) { continue; }
+		const FVector AL(FCString::Atof(*Lp[0]), FCString::Atof(*Lp[1]), FCString::Atof(*Lp[2]));
+		const float AY = FCString::Atof(*P[2]);
+		const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"), FMath::RoundToInt(AL.X), FMath::RoundToInt(AL.Y), FMath::RoundToInt(AY));
+		if (BakedJobs.Contains(StampId) || AppliedStamps.Contains(StampId)) { continue; }
+		AppliedStamps.Add(StampId);
+
+		TArray<FStampPiece> Pieces;
+		if (!ARoomStamper::LoadTemplate(P[0], Pieces)) { continue; }
+		const FTransform Anchor(FRotator(0.f, AY, 0.f), AL);
+		int32 Placed = 0;
+		for (const FStampPiece& Piece : Pieces)
+		{
+			const FTransform NewTM = Piece.RelTM * Anchor;
+			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
+			if (!SMA) { continue; }
+			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
+			{
+				C->SetMobility(EComponentMobility::Movable);
+				C->SetStaticMesh(Piece.Mesh);
+				C->SetCanEverAffectNavigation(false);
+				for (int32 Mi = 0; Mi < Piece.Mats.Num(); ++Mi)
+				{
+					if (Piece.Mats[Mi]) { C->SetMaterial(Mi, Piece.Mats[Mi]); }
+				}
+			}
+			++Placed;
+		}
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: sessie-herbouw '%s' op (%.0f, %.0f) - %d stukken"), *P[0], AL.X, AL.Y, Placed);
 	}
 }

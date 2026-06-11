@@ -1,0 +1,356 @@
+#include "World/RoomStamper.h"
+
+#include "WeedShopCore.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "Materials/MaterialInterface.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "HAL/FileManager.h"
+#include "EngineUtils.h"
+#include "UI/WeedToast.h"
+
+namespace
+{
+	FString TemplatesDir() { return FPaths::ProjectSavedDir() / TEXT("RoomTemplates"); }
+
+	// Marker-parsing (zelfde formaat als MarkedSpots.txt).
+	TArray<FVector> ReadMarks(UWorld* W)
+	{
+		TArray<FVector> Marks;
+		const FString MapPath = W ? W->GetOutermost()->GetName() : FString();
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+		for (const FString& Line : Lines)
+		{
+			if (!Line.Contains(MapPath)) { continue; }
+			const int32 PIdx = Line.Find(TEXT("pos=("));
+			if (PIdx == INDEX_NONE) { continue; }
+			FString PosStr = Line.Mid(PIdx + 5);
+			int32 Close = INDEX_NONE;
+			if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+			TArray<FString> Parts;
+			PosStr.ParseIntoArray(Parts, TEXT(","));
+			if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+		}
+		return Marks;
+	}
+}
+
+ARoomStamper::ARoomStamper()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+}
+
+TArray<FString> ARoomStamper::ListTemplates()
+{
+	TArray<FString> Files;
+	IFileManager::Get().FindFiles(Files, *(TemplatesDir() / TEXT("*.txt")), true, false);
+	for (FString& F : Files) { F = FPaths::GetBaseFilename(F); }
+	Files.Sort();
+	return Files;
+}
+
+bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateName, FString& OutError)
+{
+	const TArray<FVector> Marks = ReadMarks(W);
+	if (Marks.Num() < 2) { OutError = TEXT("Set 2 markers around the room first"); return false; }
+
+	FBox2D Rect(ForceInit);
+	Rect += FVector2D(Marks[0].X, Marks[0].Y);
+	Rect += FVector2D(Marks[1].X, Marks[1].Y);
+	Rect = Rect.ExpandBy(130.f);
+	const float Feet = Marks[0].Z - 98.f;
+	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f);
+
+	// Anker zoeken: het deurframe binnen de rechthoek op deze verdieping (entree van de kamer).
+	FTransform AnchorTM = FTransform::Identity;
+	bool bAnchor = false;
+	float BestD = TNumericLimits<float>::Max();
+	const FVector2D RC = Rect.GetCenter();
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		if (!IsValid(*It)) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(*It);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			if (!Comp->GetStaticMesh()->GetName().Contains(TEXT("DoorFrame"))) { continue; }
+			const FVector L = Comp->GetComponentLocation();
+			if (FMath::Abs(L.Z - SrcZ) > 60.f) { continue; }
+			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
+			const float D = FVector::DistSquared2D(L, FVector(RC.X, RC.Y, 0.f));
+			if (D < BestD) { BestD = D; AnchorTM = Comp->GetComponentTransform(); bAnchor = true; }
+		}
+	}
+	if (!bAnchor) { OutError = TEXT("No door frame found inside the marked rect"); return false; }
+	// Anker plat op de verdieping (geen pitch/roll, Z op vloer-niveau) zodat snappen schoon blijft.
+	AnchorTM.SetRotation(FRotator(0.f, AnchorTM.GetRotation().Rotator().Yaw, 0.f).Quaternion());
+	AnchorTM.SetLocation(FVector(AnchorTM.GetLocation().X, AnchorTM.GetLocation().Y, SrcZ));
+	const FTransform AnchorInv = AnchorTM.Inverse();
+
+	// Stukken verzamelen (zelfde uitsluitingen als de verticale vuller).
+	FString Out;
+	int32 Count = 0;
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A)) { continue; }
+		const bool bHiddenActor = A->IsHidden();
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MeshName = Comp->GetStaticMesh()->GetName();
+			if (bHiddenActor && !MeshName.Contains(TEXT("Door"))) { continue; }
+			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam")) || MeshName.Contains(TEXT("MatineeCam"))
+				|| MeshName.Contains(TEXT("DomeCam")) || MeshName.Contains(TEXT("SecurityLight"))
+				|| MeshName.Contains(TEXT("Railing")) || MeshName.Contains(TEXT("Handrail")) || MeshName.Contains(TEXT("Balustrade"))
+				|| MeshName.StartsWith(TEXT("SM_Top_"))
+				|| MeshName.Contains(TEXT("Umbrella")) || MeshName.Contains(TEXT("Parasol")) || MeshName.Contains(TEXT("Lounger"))
+				|| MeshName.Contains(TEXT("SunBed")) || MeshName.Contains(TEXT("Sunbed")) || MeshName.Contains(TEXT("Chair"))
+				|| MeshName.Contains(TEXT("Table")) || MeshName.Contains(TEXT("Awning")) || MeshName.Contains(TEXT("Pool"))) { continue; }
+			const FVector L = Comp->Bounds.Origin;
+			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
+			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 335.f) { continue; }
+
+			const FTransform Rel = Comp->GetComponentTransform() * AnchorInv;
+			const FVector RL = Rel.GetLocation();
+			const FRotator RR = Rel.GetRotation().Rotator();
+			const FVector RS = Rel.GetScale3D();
+			FString MatList;
+			for (int32 Mi = 0; Mi < Comp->GetNumMaterials(); ++Mi)
+			{
+				if (Mi > 0) { MatList += TEXT(";"); }
+				UMaterialInterface* M = Comp->GetMaterial(Mi);
+				MatList += M ? M->GetPathName() : TEXT("-");
+			}
+			Out += FString::Printf(TEXT("PIECE|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
+				*Comp->GetStaticMesh()->GetPathName(), RL.X, RL.Y, RL.Z, RR.Pitch, RR.Yaw, RR.Roll, RS.X, RS.Y, RS.Z, *MatList);
+			Out += LINE_TERMINATOR;
+			++Count;
+		}
+	}
+	if (Count < 8) { OutError = FString::Printf(TEXT("Only %d pieces found - room not streamed in?"), Count); return false; }
+
+	IFileManager::Get().MakeDirectory(*TemplatesDir(), true);
+	FFileHelper::SaveStringToFile(Out, *(TemplatesDir() / (TemplateName + TEXT(".txt"))));
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: template '%s' opgeslagen (%d stukken)"), *TemplateName, Count);
+	return true;
+}
+
+bool ARoomStamper::LoadTemplate(const FString& TemplateName, TArray<FStampPiece>& OutPieces)
+{
+	OutPieces.Reset();
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *(TemplatesDir() / (TemplateName + TEXT(".txt"))))) { return false; }
+	for (const FString& Line : Lines)
+	{
+		if (!Line.StartsWith(TEXT("PIECE|"))) { continue; }
+		TArray<FString> P;
+		Line.ParseIntoArray(P, TEXT("|"));
+		if (P.Num() < 5) { continue; }
+		FStampPiece Piece;
+		Piece.Mesh = LoadObject<UStaticMesh>(nullptr, *P[1]);
+		if (!Piece.Mesh) { continue; }
+		TArray<FString> L, R, S;
+		P[2].ParseIntoArray(L, TEXT(",")); P[3].ParseIntoArray(R, TEXT(",")); P[4].ParseIntoArray(S, TEXT(","));
+		if (L.Num() < 3 || R.Num() < 3 || S.Num() < 3) { continue; }
+		Piece.RelTM = FTransform(
+			FRotator(FCString::Atof(*R[0]), FCString::Atof(*R[1]), FCString::Atof(*R[2])),
+			FVector(FCString::Atof(*L[0]), FCString::Atof(*L[1]), FCString::Atof(*L[2])),
+			FVector(FCString::Atof(*S[0]), FCString::Atof(*S[1]), FCString::Atof(*S[2])));
+		if (P.Num() >= 6)
+		{
+			TArray<FString> Ms;
+			P[5].ParseIntoArray(Ms, TEXT(";"));
+			for (const FString& Mp : Ms)
+			{
+				Piece.Mats.Add((Mp != TEXT("-")) ? LoadObject<UMaterialInterface>(nullptr, *Mp) : nullptr);
+			}
+		}
+		OutPieces.Add(Piece);
+	}
+	return OutPieces.Num() > 0;
+}
+
+bool ARoomStamper::BeginStamp(const FString& TemplateName)
+{
+	CancelStamp();
+	if (!LoadTemplate(TemplateName, Pieces)) { return false; }
+
+	// Preview-componenten (geen collision; volgen het anker live).
+	for (const FStampPiece& Piece : Pieces)
+	{
+		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+		C->SetupAttachment(GetRootComponent());
+		C->RegisterComponent();
+		C->SetMobility(EComponentMobility::Movable);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		C->SetCanEverAffectNavigation(false);
+		C->SetStaticMesh(Piece.Mesh);
+		C->SetRelativeTransform(Piece.RelTM);
+		for (int32 Mi = 0; Mi < Piece.Mats.Num(); ++Mi)
+		{
+			if (Piece.Mats[Mi]) { C->SetMaterial(Mi, Piece.Mats[Mi]); }
+		}
+		PreviewComps.Add(C);
+	}
+	ActiveTemplate = TemplateName;
+	UserYaw = 0.f;
+	bStamping = true;
+	UWeedToast::NotifyPawn(GetWorld()->GetFirstPlayerController() ? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr,
+		-1, 4.f, FColor::Cyan, TEXT("STAMP: aim (door snaps to door!) - R rotate, LMB place, RMB cancel"));
+	return true;
+}
+
+void ARoomStamper::CancelStamp()
+{
+	for (UStaticMeshComponent* C : PreviewComps) { if (C) { C->DestroyComponent(); } }
+	PreviewComps.Reset();
+	bStamping = false;
+}
+
+FTransform ARoomStamper::ComputeAnchor() const
+{
+	UWorld* W = GetWorld();
+	APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+	APawn* P = PC ? PC->GetPawn() : nullptr;
+	if (!PC || !P) { return FTransform::Identity; }
+
+	FVector ViewLoc; FRotator ViewRot;
+	PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+	FHitResult Hit;
+	FCollisionQueryParams QP(SCENE_QUERY_STAT(RoomStampTrace), false);
+	QP.AddIgnoredActor(P);
+	QP.AddIgnoredActor(const_cast<ARoomStamper*>(this));
+	const bool bHit = W->LineTraceSingleByChannel(Hit, ViewLoc, ViewLoc + ViewRot.Vector() * 3000.f, ECC_Visibility, QP);
+
+	// DEUR-OP-DEUR: mik je op (de buurt van) een deurframe, dan snapt het anker er exact op.
+	if (bHit && Hit.GetComponent())
+	{
+		UStaticMeshComponent* HitSMC = Cast<UStaticMeshComponent>(Hit.GetComponent());
+		// Zoek het dichtstbijzijnde deurframe binnen 220 van het raakpunt (frame zelf of via blad/muur).
+		FTransform BestFrame; float BestD = 220.f; bool bFrame = false;
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			if (!IsValid(*It) || *It == this) { continue; }
+			TInlineComponentArray<UStaticMeshComponent*> Comps(*It);
+			for (UStaticMeshComponent* Comp : Comps)
+			{
+				if (!Comp || !Comp->GetStaticMesh()) { continue; }
+				if (!Comp->GetStaticMesh()->GetName().Contains(TEXT("DoorFrame"))) { continue; }
+				const float D = FVector::Dist(Comp->GetComponentLocation(), Hit.ImpactPoint);
+				if (D < BestD) { BestD = D; BestFrame = Comp->GetComponentTransform(); bFrame = true; }
+			}
+		}
+		if (bFrame)
+		{
+			FRotator R(0.f, BestFrame.GetRotation().Rotator().Yaw + UserYaw, 0.f); // R = 180-flip
+			FVector L = BestFrame.GetLocation();
+			L.Z = 480.f + 350.f * FMath::RoundToFloat((L.Z - 480.f) / 350.f); // verdieping-grid
+			const_cast<ARoomStamper*>(this)->bSnappedToDoor = true;
+			return FTransform(R, L);
+		}
+	}
+	const_cast<ARoomStamper*>(this)->bSnappedToDoor = false;
+
+	// GRID-modus: raakpunt (of 12m voor je) gesnapt op 50cm + verdieping van de speler.
+	FVector Base = bHit ? Hit.ImpactPoint : (ViewLoc + ViewRot.Vector() * 1200.f);
+	Base.X = FMath::GridSnap(Base.X, 50.f);
+	Base.Y = FMath::GridSnap(Base.Y, 50.f);
+	const float Feet = P->GetActorLocation().Z - 88.f;
+	Base.Z = (FMath::Abs(Feet - 50.f) < 215.f) ? 50.f : 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f);
+	return FTransform(FRotator(0.f, FMath::GridSnap(ViewRot.Yaw, 90.f) + UserYaw, 0.f), Base);
+}
+
+void ARoomStamper::UpdatePreview()
+{
+	SetActorTransform(CurrentAnchor);
+}
+
+void ARoomStamper::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!bStamping) { return; }
+	UWorld* W = GetWorld();
+	APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+	if (!PC) { return; }
+
+	CurrentAnchor = ComputeAnchor();
+	UpdatePreview();
+
+	const bool bRot = PC->IsInputKeyDown(EKeys::R);
+	if (bRot && !bRotKeyWas) { UserYaw = FMath::Fmod(UserYaw + (bSnappedToDoor ? 180.f : 90.f), 360.f); }
+	bRotKeyWas = bRot;
+
+	const bool bPlace = PC->IsInputKeyDown(EKeys::LeftMouseButton);
+	if (bPlace && !bPlaceKeyWas) { PlaceStamp(); }
+	bPlaceKeyWas = bPlace;
+
+	const bool bCancel = PC->IsInputKeyDown(EKeys::RightMouseButton);
+	if (bCancel && !bCancelKeyWas)
+	{
+		CancelStamp();
+		UWeedToast::NotifyPawn(PC->GetPawn(), -1, 2.f, FColor::Orange, TEXT("Stamp cancelled"));
+	}
+	bCancelKeyWas = bCancel;
+}
+
+void ARoomStamper::PlaceStamp()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	FString BakeOut;
+	int32 Placed = 0;
+	for (const FStampPiece& Piece : Pieces)
+	{
+		const FTransform NewTM = Piece.RelTM * CurrentAnchor;
+		AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
+		if (!SMA) { continue; }
+		if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
+		{
+			C->SetMobility(EComponentMobility::Movable);
+			C->SetStaticMesh(Piece.Mesh);
+			C->SetCanEverAffectNavigation(false);
+			for (int32 Mi = 0; Mi < Piece.Mats.Num(); ++Mi)
+			{
+				if (Piece.Mats[Mi]) { C->SetMaterial(Mi, Piece.Mats[Mi]); }
+			}
+		}
+		const FVector SL = NewTM.GetLocation();
+		const FRotator SR = NewTM.GetRotation().Rotator();
+		const FVector SS = NewTM.GetScale3D();
+		FString MatList;
+		for (int32 Mi = 0; Mi < Piece.Mats.Num(); ++Mi)
+		{
+			if (Mi > 0) { MatList += TEXT(";"); }
+			MatList += Piece.Mats[Mi] ? Piece.Mats[Mi]->GetPathName() : TEXT("-");
+		}
+		BakeOut += FString::Printf(TEXT("SPAWN|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
+			*Piece.Mesh->GetPathName(), SL.X, SL.Y, SL.Z, SR.Pitch, SR.Yaw, SR.Roll, SS.X, SS.Y, SS.Z, *MatList);
+		BakeOut += LINE_TERMINATOR;
+		++Placed;
+	}
+
+	// Persistentie: stempel-regel (herbouw per sessie tot de bake) + bake-export.
+	const FVector AL = CurrentAnchor.GetLocation();
+	const float AY = CurrentAnchor.GetRotation().Rotator().Yaw;
+	const FString StampLine = FString::Printf(TEXT("%s|%.1f,%.1f,%.1f|%.1f"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY) + LINE_TERMINATOR;
+	FFileHelper::SaveStringToFile(StampLine, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"), FMath::RoundToInt(AL.X), FMath::RoundToInt(AL.Y), FMath::RoundToInt(AY));
+	FFileHelper::SaveStringToFile(FString::Printf(TEXT("JOB|%s"), *StampId) + LINE_TERMINATOR + BakeOut,
+		*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: '%s' geplaatst op (%.0f, %.0f, %.0f) yaw %.0f - %d stukken"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY, Placed);
+	UWeedToast::NotifyPawn(GetWorld()->GetFirstPlayerController() ? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr,
+		-1, 2.5f, FColor::Green, FString::Printf(TEXT("Room stamped! (%d pieces) - LMB again to stamp more, RMB to stop"), Placed));
+}

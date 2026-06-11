@@ -26,6 +26,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
+#include "World/RoomStamper.h"
 #include "Misc/Paths.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -298,6 +299,25 @@ void UPhoneWidget::FillSettingsBody()
 		UWeedActionButton* JobB = MakeActionBtn(TEXT("Save room build (clears markers)"), FLinearColor(0.45f, 0.35f, 0.15f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveRoomJob(); } }, 13);
 		BodyRow(JobB, FMargin(0.f, 0.f, 0.f, 8.f));
+
+		// --- Room stamper: kamers als stempel plaatsen (deur snapt op deur, R = draaien) ---
+		BodyRow(MakeText(TEXT("Room stamper"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 6.f, 0.f, 2.f));
+		UWeedActionButton* TplB = MakeActionBtn(TEXT("Save room as template (2 markers)"), FLinearColor(0.25f, 0.4f, 0.5f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveRoomTemplateNow(); FillSettingsBody(); } }, 12);
+		BodyRow(TplB, FMargin(0.f, 0.f, 0.f, 4.f));
+		{
+			const TArray<FString> Templates = ARoomStamper::ListTemplates();
+			if (Templates.Num() == 0)
+			{
+				BodyRow(MakeText(TEXT("No templates yet - mark a room (2 corners) and save it."), 10, FLinearColor(0.6f, 0.64f, 0.74f)), FMargin(0.f, 0.f, 0.f, 4.f));
+			}
+			for (const FString& Tpl : Templates)
+			{
+				UWeedActionButton* StampB = MakeActionBtn(FString::Printf(TEXT("Stamp: %s"), *Tpl), FLinearColor(0.2f, 0.35f, 0.25f),
+					[this, Tpl]() { if (Phone.IsValid()) { Phone->StartRoomStamp(Tpl); } }, 12);
+				BodyRow(StampB, FMargin(0.f, 1.f, 0.f, 1.f));
+			}
+		}
 
 		// --- Live light-tuning (stuurt de lokale DayNightController direct aan; geen restart nodig) ---
 		LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
