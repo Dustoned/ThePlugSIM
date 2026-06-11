@@ -619,7 +619,15 @@ void ADoorRetrofitter::CloneRooms()
 			else { TargetFrames.Add(Comp->GetComponentTransform()); }
 		}
 	}
-	if (!bSrcFound || TargetFrames.Num() == 0) { return; }
+	if (!bSrcFound || TargetFrames.Num() == 0)
+	{
+		if (--CloneLogCooldown <= 0)
+		{
+			CloneLogCooldown = 5;
+			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: wacht - bronFrame=%d kandidaten=%d"), bSrcFound ? 1 : 0, TargetFrames.Num());
+		}
+		return;
+	}
 
 	// 2) Bron-set: alle zichtbare meshes in het bron-volume.
 	TArray<TPair<UStaticMesh*, FTransform>> SourceSet;
@@ -641,6 +649,7 @@ void ADoorRetrofitter::CloneRooms()
 	// (half-leeg fragment). Pas klonen als de telling 2 scans achter elkaar gelijk is en hoog genoeg.
 	if (SourceSet.Num() < 34 || SourceSet.Num() != LastSourceCount) // bron-kamer = 41 meshes totaal (gemeten)
 	{
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: bron-set %d meshes (vorige %d) - wacht op stabiel/compleet"), SourceSet.Num(), LastSourceCount);
 		LastSourceCount = SourceSet.Num();
 		return;
 	}
@@ -684,6 +693,7 @@ void ADoorRetrofitter::CloneRooms()
 		const FVector FrameLoc = Target.GetLocation();
 		// TESTFASE: eerst alleen de ene gemarkeerde deur (bij spot -2704,-1595) - daarna uitrollen.
 		if (FVector::Dist2D(FrameLoc, FVector(-2704.f, -1595.f, 0.f)) > 250.f) { continue; }
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: test-frame gevonden op (%.0f, %.0f, %.0f)"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z);
 		const FIntPoint Key(FMath::RoundToInt(FrameLoc.X / 100.f), FMath::RoundToInt(FrameLoc.Y / 100.f));
 		if (ClonedRooms.Contains(Key)) { continue; }
 
@@ -704,7 +714,11 @@ void ADoorRetrofitter::CloneRooms()
 			}
 			if (Voids > BestVoids) { BestVoids = Voids; Best = Cand; }
 		}
-		if (BestVoids < 2) { continue; } // geen overtuigend lege kant -> overslaan
+		if (BestVoids < 2)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) afgekeurd - beste orientatie %d/4 hoeken void"), FrameLoc.X, FrameLoc.Y, BestVoids);
+			continue;
+		}
 
 		// Overlap-bewaking: niet klonen als het volume een al-geplaatste kamer raakt.
 		const FBox2D NewBox = RoomBox2D(Best);

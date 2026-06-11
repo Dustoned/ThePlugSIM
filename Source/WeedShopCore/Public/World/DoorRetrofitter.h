@@ -49,6 +49,7 @@ protected:
 	void CloneRooms();
 	TSet<FIntPoint> ClonedRooms; // per deur-slot (pos/100) zodat we niet dubbel klonen
 	int32 LastSourceCount = -1; // streaming-stabiliteit van de bron-kamer
+	int32 CloneLogCooldown = 0;
 
 	// Kaart-capture (lazy aangemaakt bij de eerste CaptureMapNow).
 	void EnsureMapCapture();
