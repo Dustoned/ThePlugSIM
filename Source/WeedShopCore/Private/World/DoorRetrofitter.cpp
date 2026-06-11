@@ -748,6 +748,9 @@ void ADoorRetrofitter::CloneRooms()
 	TArray<FBox2D> Placed;
 	Placed.Add(FBox2D(FVector2D(SrcBox.Min.X, SrcBox.Min.Y), FVector2D(SrcBox.Max.X, SrcBox.Max.Y)));
 
+	FString RoomCloneLog;
+	RoomCloneLog += FString::Printf(TEXT("bron-frame=(%.0f, %.0f, %.0f) bronset=%d kandidaten=%d"), SrcFrameTM.GetLocation().X, SrcFrameTM.GetLocation().Y, SrcFrameTM.GetLocation().Z, SourceSet.Num(), TargetFrames.Num()) + LINE_TERMINATOR;
+
 	int32 NewRooms = 0;
 	for (const FTransform& Target : TargetFrames)
 	{
@@ -766,6 +769,7 @@ void ADoorRetrofitter::CloneRooms()
 		const bool bFloorB = HasFloorBelow(FrameLoc - Through * 130.f);
 		if (bFloorA == bFloorB)
 		{
+			RoomCloneLog += FString::Printf(TEXT("ONDUIDELIJK frame=(%.0f, %.0f, %.0f) vloerA=%d vloerB=%d"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, bFloorA ? 1 : 0, bFloorB ? 1 : 0) + LINE_TERMINATOR;
 			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) onduidelijk (vloer beide kanten: %d) - overslaan"), FrameLoc.X, FrameLoc.Y, bFloorA ? 1 : 0);
 			continue; // geen eenduidige gang/void-kant -> hier hoort geen kloon
 		}
@@ -788,8 +792,9 @@ void ADoorRetrofitter::CloneRooms()
 			BestVoids = Voids; Best = Cand;
 			break; // eerste (en enige) orientatie aan de juiste kant
 		}
-		if (BestVoids < 2)
+		if (BestVoids < 4) // STRENG: de hele kamer moet in lege ruimte passen, anders niet klonen
 		{
+			RoomCloneLog += FString::Printf(TEXT("AFGEKEURD frame=(%.0f, %.0f, %.0f) voids=%d/4 roomdir=(%.2f, %.2f)"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, BestVoids, RoomDir.X, RoomDir.Y) + LINE_TERMINATOR;
 			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) afgekeurd - %d/4 hoeken void aan de kamer-kant"), FrameLoc.X, FrameLoc.Y, BestVoids);
 			continue;
 		}
@@ -809,6 +814,7 @@ void ADoorRetrofitter::CloneRooms()
 		if (bOverlaps)
 		{
 			ClonedRooms.Add(Key); // niet blijven proberen
+			RoomCloneLog += FString::Printf(TEXT("OVERLAP frame=(%.0f, %.0f, %.0f) box=(%.0f, %.0f)-(%.0f, %.0f)"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, NewBox.Min.X, NewBox.Min.Y, NewBox.Max.X, NewBox.Max.Y) + LINE_TERMINATOR;
 			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: deur (%.0f, %.0f) overgeslagen - kamer zou overlappen"), FrameLoc.X, FrameLoc.Y);
 			continue;
 		}
@@ -833,6 +839,11 @@ void ADoorRetrofitter::CloneRooms()
 			++PlacedMeshes;
 		}
 		++NewRooms;
+		RoomCloneLog += FString::Printf(TEXT("GEKLOOND frame=(%.0f, %.0f, %.0f) frameyaw=%.0f kloonyaw=%.0f roomdir=(%.2f, %.2f) box=(%.0f, %.0f)-(%.0f, %.0f) meshes=%d"),
+			FrameLoc.X, FrameLoc.Y, FrameLoc.Z, Target.GetRotation().Rotator().Yaw, Best.GetRotation().Rotator().Yaw,
+			RoomDir.X, RoomDir.Y, NewBox.Min.X, NewBox.Min.Y, NewBox.Max.X, NewBox.Max.Y, PlacedMeshes) + LINE_TERMINATOR;
 		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: kamer gekloond bij frame (%.0f, %.0f, %.0f) - %d meshes, %d/4 hoeken void"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, PlacedMeshes, BestVoids);
 	}
+
+	FFileHelper::SaveStringToFile(RoomCloneLog, *(FPaths::ProjectSavedDir() / TEXT("RoomClone.txt")));
 }
