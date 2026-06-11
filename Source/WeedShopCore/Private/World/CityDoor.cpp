@@ -80,6 +80,12 @@ void ACityDoor::Setup(float Width, float Height, const FLinearColor& Color)
 	}
 }
 
+void ACityDoor::SetSlideMode(float InSlideDist)
+{
+	bSlideMode = true;
+	SlideDist = InSlideDist;
+}
+
 void ACityDoor::SetupLeaf(UStaticMesh* LeafMesh, float OpenDeg, float TriggerRadius)
 {
 	if (!Panel || !LeafMesh) { return; }
@@ -177,7 +183,21 @@ void ACityDoor::Tick(float DeltaSeconds)
 	const bool bEffectiveOpen = bOpen || (NpcNear > 0 && !bPlayerHome);
 	const float Target = bEffectiveOpen ? OpenSwingDeg : 0.f;
 	CurAngle = FMath::FInterpTo(CurAngle, Target, DeltaSeconds, 7.f);
-	if (Hinge) { Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f)); }
+	if (Hinge)
+	{
+		if (bSlideMode)
+		{
+			// Schuifdeur: zelfde easing, maar als translatie langs het blad (lokale Y vanaf de pivot)
+			// i.p.v. als rotatie. Teken van OpenSwingDeg bepaalt de schuif-kant.
+			const float Frac = (OpenSwingDeg != 0.f) ? (CurAngle / OpenSwingDeg) : 0.f;
+			const float Dir = (OpenSwingDeg >= 0.f) ? 1.f : -1.f;
+			Hinge->SetRelativeLocation(FVector(0.f, Dir * Frac * SlideDist, 0.f));
+		}
+		else
+		{
+			Hinge->SetRelativeRotation(FRotator(0.f, CurAngle, 0.f));
+		}
+	}
 
 	// Paneel is SOLIDE zodra de deur stilstaat (helemaal dicht OF helemaal open tegen de muur), maar negeert
 	// pawns TIJDENS het zwaaien - zo duwt het bewegende paneel je niet weg en loop je er vrij doorheen.

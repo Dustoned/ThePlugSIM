@@ -28,6 +28,9 @@ public:
 	// (geen cube/schaal) en draai open naar OpenDeg. Voor de DoorRetrofitter in externe maps.
 	void SetupLeaf(class UStaticMesh* LeafMesh, float OpenDeg, float TriggerRadius = 150.f);
 
+	// SCHUIFDEUR-modus (balkon-puien): het blad schuift opzij langs z'n eigen breedte i.p.v. draaien.
+	void SetSlideMode(float InSlideDist);
+
 	// Extra mee-draaiend onderdeel (bv. het losse GLAS van een pack-deurblad): hangt aan het scharnier
 	// op de gegeven wereld-transform, zodat het met de deur mee opent.
 	void AddLeafExtra(class UStaticMesh* Mesh, const FTransform& WorldTM);
@@ -74,6 +77,8 @@ protected:
 	int32 OtherNear = 0;    // aantal andere pawns (speler) in de zone
 	float CurAngle = 0.f;   // huidige scharnierhoek
 	float OpenSwingDeg = -95.f; // doelhoek bij open (per deur instelbaar; dubbele-deur rechter helft = +95)
+	bool bSlideMode = false;    // true = schuiven (balkon-pui) i.p.v. draaien
+	float SlideDist = 130.f;    // schuif-afstand (cm, langs lokale Y van het blad)
 	bool bOpen = false;     // open/dicht (getoggled via interact)
 	bool bLocked = false;   // bewoner-deur: kan niet door de speler geopend worden
 	bool bPlayerHome = false; // jouw eigen woning (open/dicht, prompt "Your home")

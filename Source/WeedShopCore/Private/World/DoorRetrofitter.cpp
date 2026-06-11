@@ -398,6 +398,13 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			Door->SetActorScale3D(LeafTM.GetScale3D());
 			Door->SetupLeaf(Comp->GetStaticMesh(), (SwingOverride != 0.f) ? SwingOverride : Leaf->OpenDeg);
+			// Balkon-puien zijn SCHUIFdeuren: blad glijdt opzij langs z'n eigen breedte (geen zwaai die
+			// het terras of de kamer in slaat).
+			if (FString(Leaf->MeshName).Contains(TEXT("BalconyDoor")))
+			{
+				const float LeafWidth = Comp->GetStaticMesh()->GetBoundingBox().GetSize().Y;
+				Door->SetSlideMode(FMath::Max(100.f, LeafWidth - 8.f));
+			}
 			SpawnedDoors.Add(Door);
 			++NewThisPass;
 			++TotalConverted;
