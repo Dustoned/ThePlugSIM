@@ -852,6 +852,28 @@ void ADoorRetrofitter::VerticalReplicate()
 			UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - geen eigen gevel in de rechthoek (tight=%d)"), N, TgtZ, TightCount);
 			continue;
 		}
+		// DAK-TEST: een echte verdieping heeft altijd een PLAFOND boven zich (de vloerplaat van de
+		// verdieping erboven, of het dak). Boven op het dak is alleen lucht - parapet/penthouse-randen
+		// haalden de tight-check, dus dit is het sluitende criterium tegen te hoog doorbouwen.
+		{
+			const FVector2D RC = Outer.GetCenter();
+			int32 CeilingHits = 0;
+			const FVector Probes[3] = {
+				FVector(RC.X, RC.Y, TgtZ + 150.f),
+				FVector(FMath::Lerp(Outer.Min.X, Outer.Max.X, 0.25f), FMath::Lerp(Outer.Min.Y, Outer.Max.Y, 0.25f), TgtZ + 150.f),
+				FVector(FMath::Lerp(Outer.Min.X, Outer.Max.X, 0.75f), FMath::Lerp(Outer.Min.Y, Outer.Max.Y, 0.75f), TgtZ + 150.f) };
+			for (const FVector& Pp : Probes)
+			{
+				FHitResult UpHit;
+				FCollisionQueryParams UQP(SCENE_QUERY_STAT(VertCloneCeil), false);
+				if (W->LineTraceSingleByChannel(UpHit, Pp, Pp + FVector(0.f, 0.f, 420.f), ECC_Visibility, UQP)) { ++CeilingHits; }
+			}
+			if (CeilingHits < 2)
+			{
+				UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - geen plafond erboven (%d/3, dak bereikt)"), N, TgtZ, CeilingHits);
+				continue;
+			}
+		}
 
 		int32 Placed = 0;
 		for (const FSliceEntry& M : Slice)
