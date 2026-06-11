@@ -817,9 +817,13 @@ void ADoorRetrofitter::VerticalReplicate()
 			{
 				if (!Comp || !Comp->GetStaticMesh()) { continue; }
 				const FVector L = Comp->GetComponentLocation();
-				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
+				// RUIME zone voor de bestaat-deze-verdieping-check: lege verdiepingen hebben binnen de
+				// kamer-rechthoek juist bijna niets (daarom zijn ze leeg) - maar de gang/gevel ernaast
+				// bewijst dat de verdieping bestaat. De dedupe-index blijft op de strakke zone.
+				if (L.X < Outer.Min.X - 1300.f || L.X > Outer.Max.X + 1300.f || L.Y < Outer.Min.Y - 1300.f || L.Y > Outer.Max.Y + 1300.f) { continue; }
 				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 335.f) { continue; }
 				++ExistCount;
+				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
 				{
 					const FString CompMeshName = Comp->GetStaticMesh()->GetName();
 					if (CompMeshName.Contains(TEXT("Window")) && !CompMeshName.Contains(TEXT("_Interior")))
