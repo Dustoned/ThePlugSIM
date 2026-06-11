@@ -332,6 +332,9 @@ void ADoorRetrofitter::ScanAndConvert()
 			FRotator R = LeafTM.GetRotation().Rotator();
 			float ClosedYaw = FMath::GridSnap(R.Yaw, 90.f); // fallback zonder frame
 			float BestD = 160.f;
+			FVector BestFrameLoc = FVector::ZeroVector;
+			float BestFrameYaw = 0.f;
+			bool bHaveFrame = false;
 			for (TActorIterator<AActor> FrIt(W); FrIt; ++FrIt)
 			{
 				if (!IsValid(*FrIt)) { continue; }
@@ -344,14 +347,18 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (FMath::Abs(FrL.Z - LeafTM.GetLocation().Z) > 60.f) { continue; }
 					const float Dd = FVector::Dist2D(FrL, LeafTM.GetLocation());
 					if (Dd >= BestD) { continue; }
-					BestD = Dd;
-					// Dicht = evenwijdig aan het frame: kies frameYaw of frameYaw+180 (wat het dichtst
-					// bij de huidige blad-rotatie ligt qua scharnier-richting).
-					const float FY = Fr->GetComponentRotation().Yaw;
-					const float D0 = FMath::Abs(FMath::FindDeltaAngleDegrees(R.Yaw, FY));
-					const float D1 = FMath::Abs(FMath::FindDeltaAngleDegrees(R.Yaw, FY + 180.f));
-					ClosedYaw = (D0 <= D1) ? FY : FY + 180.f;
+					BestD = Dd; BestFrameLoc = FrL; BestFrameYaw = Fr->GetComponentRotation().Yaw; bHaveFrame = true;
 				}
+			}
+			if (bHaveFrame)
+			{
+				// Dicht = blad IN de opening: het blad strekt zich lokaal -Y uit vanaf het scharnier,
+				// dus de span-richting moet van het scharnier naar het KOZIJN-MIDDEN wijzen (de andere
+				// deurpost). Dat maakt de keuze frameYaw vs frameYaw+180 ondubbelzinnig - "dichtstbij
+				// huidige hoek" koos bij wijd-open geparkeerde deuren de verkeerde kant (blad over de muur).
+				const FVector ToCenter = (BestFrameLoc - LeafTM.GetLocation()).GetSafeNormal2D();
+				const FVector Span0 = FRotator(0.f, BestFrameYaw, 0.f).RotateVector(FVector(0.f, -1.f, 0.f));
+				ClosedYaw = (FVector::DotProduct(FVector(Span0.X, Span0.Y, 0.f), ToCenter) >= 0.f) ? BestFrameYaw : BestFrameYaw + 180.f;
 			}
 			R.Yaw = ClosedYaw;
 			LeafTM.SetRotation(R.Quaternion());
