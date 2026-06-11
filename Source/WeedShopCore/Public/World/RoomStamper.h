@@ -57,8 +57,8 @@ public:
 	// Spiegel een piece-transform over het XZ-vlak van het anker (links-rechts t.o.v. de voordeur):
 	// locatie Y-negatie, rotator (pitch, -yaw, -roll), scale Y-negatie (mesh zelf gespiegeld).
 	static FTransform MirrorRelTM(const FTransform& In);
-	// Piece-bewuste spiegeling: deurbladen/kozijnen krijgen yaw 180-theta met POSITIEVE scale
-	// (negatieve scale breekt de deur-converter; voor platte/symmetrische meshes is dit exact gelijk).
+	// Piece-bewuste spiegeling: deurBLADEN krijgen yaw 180-theta met POSITIEVE scale (negatieve
+	// scale breekt de deur-converter). Kozijnen spiegelen WEL echt mee (hun aanslag zit aan een kant).
 	static FTransform MirrorPieceTM(const FStampPiece& Piece);
 
 protected:

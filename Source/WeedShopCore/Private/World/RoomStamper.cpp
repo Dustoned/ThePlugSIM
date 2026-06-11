@@ -440,6 +440,14 @@ void ARoomStamper::PlaceStamp()
 		AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 		if (!SMA) { continue; }
 		SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen
+		if (bMirrored)
+		{
+			const FString MNm = Piece.Mesh->GetName();
+			if (MNm.Contains(TEXT("Door")) && !MNm.Contains(TEXT("DoorFrame")) && !MNm.Contains(TEXT("Wall")))
+			{
+				SMA->Tags.Add(TEXT("MirroredDoor")); // converter: standaard-zwaai omklappen
+			}
+		}
 		if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
 		{
 			C->SetMobility(EComponentMobility::Movable);
@@ -618,12 +626,12 @@ FTransform ARoomStamper::MirrorRelTM(const FTransform& In)
 FTransform ARoomStamper::MirrorPieceTM(const FStampPiece& Piece)
 {
 	const FString MN = Piece.Mesh ? Piece.Mesh->GetName() : FString();
-	// Deurbladen en kozijnen NIET met negatieve scale spiegelen: de deur-converter rekent met
-	// normale scale (dicht-stand naar kozijn-midden, zwaai uit de geparkeerde stand) en zette de
-	// gespiegelde deur aan de verkeerde kant. Een plat blad gespiegeld over het ankervlak is exact
-	// hetzelfde als dat blad met yaw 180-theta op de gespiegelde plek, met gewone scale.
-	const bool bDoorish = MN.Contains(TEXT("Door")) && !MN.Contains(TEXT("Wall"));
-	if (!bDoorish) { return MirrorRelTM(Piece.RelTM); }
+	// Alleen deurBLADEN niet met negatieve scale spiegelen: de deur-converter rekent met normale
+	// scale. Een plat blad gespiegeld over het ankervlak is exact hetzelfde als dat blad met yaw
+	// 180-theta op de gespiegelde plek met gewone scale. KOZIJNEN spiegelen wel echt mee: hun
+	// aanslag/sponning zit aan een kant - geroteerd ipv gespiegeld zit de deur te diep in het gat.
+	const bool bLeaf = MN.Contains(TEXT("Door")) && !MN.Contains(TEXT("DoorFrame")) && !MN.Contains(TEXT("Wall"));
+	if (!bLeaf) { return MirrorRelTM(Piece.RelTM); }
 	const FVector L = Piece.RelTM.GetLocation();
 	const FRotator R = Piece.RelTM.GetRotation().Rotator();
 	return FTransform(FRotator(R.Pitch, 180.f - R.Yaw, R.Roll), FVector(L.X, -L.Y, L.Z), Piece.RelTM.GetScale3D());

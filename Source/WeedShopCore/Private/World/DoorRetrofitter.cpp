@@ -390,6 +390,13 @@ void ADoorRetrofitter::ScanAndConvert()
 				SwingOverride = (ParkedDelta > 0.f) ? FMath::Abs(Leaf->OpenDeg) : -FMath::Abs(Leaf->OpenDeg);
 			}
 		}
+		// Blad uit een GESPIEGELDE stempel dat dicht geparkeerd staat (geen zwaai-hint): in een
+		// gespiegelde kamer hoort de standaard-zwaai precies andersom, anders slaat de deur door
+		// het kozijn.
+		if (SwingOverride == 0.f && SMA->ActorHasTag(TEXT("MirroredDoor")))
+		{
+			SwingOverride = -Leaf->OpenDeg;
+		}
 		SMA->SetActorHiddenInGame(true);
 		SMA->SetActorEnableCollision(false);
 		Converted.Add(SMA);
@@ -1519,6 +1526,14 @@ void ADoorRetrofitter::ApplySavedStamps()
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
 			SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen via de phone
+			if (bMirror)
+			{
+				const FString MNm = Piece.Mesh ? Piece.Mesh->GetName() : FString();
+				if (MNm.Contains(TEXT("Door")) && !MNm.Contains(TEXT("DoorFrame")) && !MNm.Contains(TEXT("Wall")))
+				{
+					SMA->Tags.Add(TEXT("MirroredDoor")); // converter: standaard-zwaai omklappen
+				}
+			}
 			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
 			{
 				C->SetMobility(EComponentMobility::Movable);
