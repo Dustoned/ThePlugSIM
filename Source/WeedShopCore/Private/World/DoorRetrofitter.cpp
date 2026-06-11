@@ -7,6 +7,9 @@
 #include "World/PackElevatorButton.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "Engine/PostProcessVolume.h"
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -417,6 +420,32 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 			}
 		}
+		// GESTAPELDE LIGHTING-SCENARIO'S: de map streamt Sunny/Sunny_02..04/Sunset.. allemaal TEGELIJK
+		// in - elk met eigen fog (roze sunset-tint!), post-process en atmosfeer. Die optelsom gaf de
+		// gigantische gloed-bal + roze waas. Alleen het basis-scenario (Lighting_Sunny) mag blijven.
+		auto IsSurplusScenario = [](const AActor* A) -> bool
+		{
+			const ULevel* Lvl = A ? A->GetLevel() : nullptr;
+			const FString Pkg = Lvl ? Lvl->GetOutermost()->GetName() : FString();
+			if (!Pkg.Contains(TEXT("/Maps/Lighting/"))) { return false; }    // niet uit een scenario
+			return !Pkg.EndsWith(TEXT("Lighting_Sunny"));                     // basis-scenario houden
+		};
+		for (TActorIterator<AExponentialHeightFog> It(W); It; ++It)
+		{
+			if (IsSurplusScenario(*It) && It->GetComponent() && It->GetComponent()->IsVisible())
+			{
+				It->GetComponent()->SetVisibility(false);
+			}
+		}
+		for (TActorIterator<APostProcessVolume> It(W); It; ++It)
+		{
+			if (IsSurplusScenario(*It) && It->bEnabled)
+			{
+				It->bEnabled = false;
+				It->BlendWeight = 0.f;
+			}
+		}
+
 		ASkyLight* AdoptedSky = DN->GetSky();
 		for (TActorIterator<ASkyLight> It(W); It; ++It)
 		{

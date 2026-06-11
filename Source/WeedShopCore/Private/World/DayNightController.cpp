@@ -115,7 +115,7 @@ void ADayNightController::BeginPlay()
 			{
 				MoonDL->SetAtmosphereSunLight(true);
 				MoonDL->SetAtmosphereSunLightIndex(1); // index 1 = tweede hemel-lichaam (maan-schijf)
-				MoonDL->SetLightSourceAngle(3.f);      // lekker grote game-maan (realistisch 0.5 oogt als een puntje)
+				MoonDL->SetLightSourceAngle(1.5f);     // duidelijke maan, maar geen mega-bal
 				MoonDL->SetLightSourceSoftAngle(0.f);
 				MoonDL->SetLightColor(FLinearColor(0.62f, 0.68f, 0.85f)); // koel maanlicht
 			}
@@ -139,6 +139,8 @@ void ADayNightController::BeginPlay()
 			S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
 			S.bOverride_AutoExposureBias = true;
 			S.AutoExposureBias = ExposureBias; // vaste belichtingscompensatie (lager = donkerder)
+			S.bOverride_BloomIntensity = true;
+			S.BloomIntensity = 0.35f; // bescheiden bloom: geen mega-gloed rond de zon
 			PPV = PP;
 		}
 	}
