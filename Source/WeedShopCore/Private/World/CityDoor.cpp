@@ -151,6 +151,14 @@ FString ACityDoor::FriendlyNpcName(FName NpcId)
 void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)
 {
 	if (bLocked) { return; } // bewoner-deur: op slot voor de speler
+	if (!bOpen && InstigatorPawn)
+	{
+		// Open altijd VAN de speler af: kies de draai-kant op basis van aan welke kant je staat
+		// (anders zwaait 'ie in je gezicht of een aangrenzende muur in).
+		const FVector ToPawn = InstigatorPawn->GetActorLocation() - GetActorLocation();
+		const float Side = FVector::DotProduct(ToPawn, GetActorRightVector());
+		OpenSwingDeg = FMath::Abs(OpenSwingDeg) * ((Side > 0.f) ? -1.f : 1.f);
+	}
 	bOpen = !bOpen; // F = open/dicht
 }
 

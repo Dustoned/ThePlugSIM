@@ -324,7 +324,14 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (!Leaf) { continue; }
 
 		// Origineel blad verbergen + collision uit (verwijderen kan niet altijd in gestreamde levels).
-		const FTransform LeafTM = Comp->GetComponentTransform();
+		// Het blad-yaw naar de dichtstbijzijnde 90 graden snappen: de map parkeert sommige deuren
+		// HALF-OPEN als decor - gesnapt staat de werkende deur netjes dicht in het kozijn.
+		FTransform LeafTM = Comp->GetComponentTransform();
+		{
+			FRotator R = LeafTM.GetRotation().Rotator();
+			R.Yaw = FMath::GridSnap(R.Yaw, 90.f);
+			LeafTM.SetRotation(R.Quaternion());
+		}
 		SMA->SetActorHiddenInGame(true);
 		SMA->SetActorEnableCollision(false);
 		Converted.Add(SMA);
@@ -707,6 +714,7 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName();
 			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
+			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam"))) { continue; } // camera's zweven los van hun muur in kopieen
 			const FVector L = Comp->GetComponentLocation();
 			if (FMath::Abs(L.X - Mark.X) > BoxR || FMath::Abs(L.Y - Mark.Y) > BoxR) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 330.f) { continue; } // alleen deze verdieping-slice
@@ -781,12 +789,12 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (Existing.Contains(H)) { continue; } // staat hier al (gevel/raam/lift/gang)
 			// Doorkijk-raam (_Interior) vervangt het parallax-raam (nep-3D, niet doorzichtig) op die plek.
 			const FString PasteMeshName = M.Key->GetName();
-			if (PasteMeshName.Contains(TEXT("_Interior")))
+			if (PasteMeshName.Contains(TEXT("_Interior")) && PasteMeshName.Contains(TEXT("Window")))
 			{
-				const FString ParallaxName = PasteMeshName.Replace(TEXT("_Interior"), TEXT(""));
+				// ELK parallax-/nep-raam binnen 60cm verbergen (naam-varianten zoals _b matchten niet exact).
 				for (FWinRef& WR : ExistingWindows)
 				{
-					if (WR.Comp && WR.Name == ParallaxName && FVector::Dist2D(WR.Pos, NL) < 60.f)
+					if (WR.Comp && FVector::Dist2D(WR.Pos, NL) < 60.f)
 					{
 						WR.Comp->SetVisibility(false);
 						WR.Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
