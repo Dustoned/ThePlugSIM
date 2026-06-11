@@ -26,6 +26,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
 #include "World/RoomStamper.h"
 #include "World/CityDoor.h"
 #include "EngineUtils.h"
@@ -325,9 +326,17 @@ void UPhoneWidget::FillSettingsBody()
 			}
 			for (const FString& Tpl : Templates)
 			{
+				UHorizontalBox* TRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 				UWeedActionButton* StampB = MakeActionBtn(FString::Printf(TEXT("Stamp: %s"), *Tpl), FLinearColor(0.2f, 0.35f, 0.25f),
 					[this, Tpl]() { if (Phone.IsValid()) { Phone->StartRoomStamp(Tpl); } }, 12);
-				BodyRow(StampB, FMargin(0.f, 1.f, 0.f, 1.f));
+				TRow->AddChildToHorizontalBox(StampB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				TRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+					[this, Tpl]()
+					{
+						IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("RoomTemplates") / (Tpl + TEXT(".txt"))));
+						FillSettingsBody();
+					}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+				BodyRow(TRow, FMargin(0.f, 1.f, 0.f, 1.f));
 			}
 		}
 		// Geplaatste (nog niet gebakken) stempels: undo + per stuk verwijderen.
