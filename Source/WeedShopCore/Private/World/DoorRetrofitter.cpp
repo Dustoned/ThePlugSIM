@@ -593,43 +593,35 @@ void ADoorRetrofitter::CloneRooms()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 
-	// BRON-appartement (1e verdieping hotel, uit de SpotScan): entree-deur SM_Door_Apartment02 op
-	// (-2492, -1764, 480) yaw -180; het appartement-volume in wereld-coordinaten.
-	const FVector SrcDoorPos(-2492.f, -1764.f, 480.f);
+	// BRON-appartement (1e verdieping hotel, uit de SpotScan). Anker = het DEUR-FRAME (pivot is het
+	// midden van de deuropening - deur-BLADEN ankeren niet: hun pivot is het scharnier en de
+	// scharnier-kant wisselt per deur, waardoor klonen verschoven/gespiegeld landden).
+	const FVector SrcFramePos(-2508.f, -1699.f, 480.f);
 	const FBox SrcBox(FVector(-2512.f, -2418.f, 472.f), FVector(-1695.f, -1552.f, 828.f));
 
-	// 1) Bron-deur-leaf vinden (verborgen origineel of zichtbaar - we willen alleen z'n exacte transform).
-	FTransform SrcDoorTM = FTransform::Identity;
+	// 1) Bron-frame + alle kandidaat-frames op dezelfde etage verzamelen.
+	FTransform SrcFrameTM = FTransform::Identity;
 	bool bSrcFound = false;
-	TArray<TPair<FTransform, UStaticMeshComponent*>> ApartmentLeaves; // alle apartment-deuren op deze etage
+	TArray<FTransform> TargetFrames;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
 		AActor* A = *It;
-		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass())) { continue; }
+		if (!IsValid(A) || A->IsHidden()) { continue; }
+		if (A->IsA(ACityDoor::StaticClass()) || A->IsA(APackElevator::StaticClass()) || A->IsA(APackElevatorButton::StaticClass())) { continue; }
 		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
 		for (UStaticMeshComponent* Comp : Comps)
 		{
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
-			const FString MeshName = Comp->GetStaticMesh()->GetName();
-			if (!MeshName.StartsWith(TEXT("SM_Door_Apartment"))) { continue; }
+			if (Comp->GetStaticMesh()->GetName() != TEXT("SM_DoorFrameCommerical_01")) { continue; }
 			const FVector L = Comp->GetComponentLocation();
-			if (FMath::Abs(L.Z - SrcDoorPos.Z) > 12.f) { continue; } // zelfde verdieping-band
-			if (FVector::Dist2D(L, SrcDoorPos) < 12.f)
-			{
-				SrcDoorTM = Comp->GetComponentTransform();
-				bSrcFound = true;
-			}
-			else
-			{
-				ApartmentLeaves.Add(TPair<FTransform, UStaticMeshComponent*>(Comp->GetComponentTransform(), Comp));
-			}
+			if (FMath::Abs(L.Z - SrcFramePos.Z) > 12.f) { continue; } // zelfde etage
+			if (FVector::Dist2D(L, SrcFramePos) < 12.f) { SrcFrameTM = Comp->GetComponentTransform(); bSrcFound = true; }
+			else { TargetFrames.Add(Comp->GetComponentTransform()); }
 		}
 	}
-	if (!bSrcFound) { return; } // bron-gebied nog niet ingestreamd
+	if (!bSrcFound || TargetFrames.Num() == 0) { return; }
 
-	// 2) Bron-set verzamelen: alle ZICHTBARE meshes in het bron-volume (schil + interieur).
-	//    Verborgen originelen (geconverteerde deur-bladen) en onze eigen actors slaan we over;
-	//    de kloon-bladen worden na het spawnen vanzelf weer werkende deuren via de leaf-converter.
+	// 2) Bron-set: alle zichtbare meshes in het bron-volume.
 	TArray<TPair<UStaticMesh*, FTransform>> SourceSet;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -645,42 +637,106 @@ void ADoorRetrofitter::CloneRooms()
 			SourceSet.Add(TPair<UStaticMesh*, FTransform>(Comp->GetStaticMesh(), Comp->GetComponentTransform()));
 		}
 	}
-	if (SourceSet.Num() < 10) { return; } // bron nog niet (volledig) gestreamd
+	if (SourceSet.Num() < 10) { return; } // bron nog niet volledig gestreamd
 
-	// 3) Doel-deuren: apartment-bladen op dezelfde etage waar ACHTER de deur geen vloer is (void).
-	int32 NewRooms = 0;
-	for (const TPair<FTransform, UStaticMeshComponent*>& Leaf : ApartmentLeaves)
+	// Referentie-punten van de bron-kamer in FRAME-lokale ruimte (centrum + 4 ingetrokken hoeken).
+	const FTransform SrcInv = SrcFrameTM.Inverse();
+	const FVector C = SrcBox.GetCenter();
+	const FVector E = SrcBox.GetExtent();
+	TArray<FVector> RefRel;
+	RefRel.Add(SrcInv.TransformPosition(C));
+	RefRel.Add(SrcInv.TransformPosition(C + FVector(E.X - 80.f, E.Y - 80.f, 0.f)));
+	RefRel.Add(SrcInv.TransformPosition(C + FVector(-(E.X - 80.f), E.Y - 80.f, 0.f)));
+	RefRel.Add(SrcInv.TransformPosition(C + FVector(E.X - 80.f, -(E.Y - 80.f), 0.f)));
+	RefRel.Add(SrcInv.TransformPosition(C + FVector(-(E.X - 80.f), -(E.Y - 80.f), 0.f)));
+
+	auto HasFloorBelow = [&](const FVector& P) -> bool
 	{
-		const FVector LeafPos = Leaf.Key.GetLocation();
-		const FIntPoint Key(FMath::RoundToInt(LeafPos.X / 100.f), FMath::RoundToInt(LeafPos.Y / 100.f));
-		if (ClonedRooms.Contains(Key)) { continue; }
-
-		// Probe: midden achter de deur (leaf-lokaal: -X = kamer-kant, -Y = naar het midden van het blad).
-		const FVector Probe = LeafPos + Leaf.Key.GetRotation().RotateVector(FVector(-80.f, -66.f, 0.f)) + FVector(0.f, 0.f, 80.f);
 		FHitResult Hit;
 		FCollisionQueryParams QP(SCENE_QUERY_STAT(RoomVoidProbe), false);
-		const bool bHasFloor = W->LineTraceSingleByChannel(Hit, Probe, Probe - FVector(0.f, 0.f, 300.f), ECC_Visibility, QP);
-		if (bHasFloor) { continue; } // hier zit al een kamer
+		const FVector Start(P.X, P.Y, SrcFramePos.Z + 120.f);
+		return W->LineTraceSingleByChannel(Hit, Start, Start - FVector(0.f, 0.f, 340.f), ECC_Visibility, QP);
+	};
+	auto RoomBox2D = [&](const FTransform& FrameTM) -> FBox2D
+	{
+		FBox2D B(ForceInit);
+		for (int32 i = 1; i < RefRel.Num(); ++i)
+		{
+			const FVector Wp = FrameTM.TransformPosition(RefRel[i]);
+			B += FVector2D(Wp.X, Wp.Y);
+		}
+		return B;
+	};
 
-		// 4) Klonen: delta-transform van bron-deur naar deze deur, toegepast op de hele bron-set.
+	// Al-geplaatste kamer-volumes (incl. de bron zelf) - klonen mogen elkaar niet overlappen.
+	TArray<FBox2D> Placed;
+	Placed.Add(FBox2D(FVector2D(SrcBox.Min.X, SrcBox.Min.Y), FVector2D(SrcBox.Max.X, SrcBox.Max.Y)));
+
+	int32 NewRooms = 0;
+	for (const FTransform& Target : TargetFrames)
+	{
+		const FVector FrameLoc = Target.GetLocation();
+		const FIntPoint Key(FMath::RoundToInt(FrameLoc.X / 100.f), FMath::RoundToInt(FrameLoc.Y / 100.f));
+		if (ClonedRooms.Contains(Key)) { continue; }
+
+		// Beide orientaties proberen (frame kan 180 graden gedraaid geplaatst zijn): de goede orientatie
+		// heeft VOID op het kamer-centrum en op de meeste hoeken.
+		FTransform Best = FTransform::Identity;
+		int32 BestVoids = -1;
+		for (int32 Flip = 0; Flip < 2; ++Flip)
+		{
+			FTransform Cand = Target;
+			if (Flip) { Cand.SetRotation(Cand.GetRotation() * FQuat(FVector::UpVector, PI)); }
+			const FVector CenterW = Cand.TransformPosition(RefRel[0]);
+			if (HasFloorBelow(CenterW)) { continue; } // hier ligt al een kamer/vloer
+			int32 Voids = 0;
+			for (int32 i = 1; i < RefRel.Num(); ++i)
+			{
+				if (!HasFloorBelow(Cand.TransformPosition(RefRel[i]))) { ++Voids; }
+			}
+			if (Voids > BestVoids) { BestVoids = Voids; Best = Cand; }
+		}
+		if (BestVoids < 2) { continue; } // geen overtuigend lege kant -> overslaan
+
+		// Overlap-bewaking: niet klonen als het volume een al-geplaatste kamer raakt.
+		const FBox2D NewBox = RoomBox2D(Best);
+		bool bOverlaps = false;
+		for (const FBox2D& Pb : Placed)
+		{
+			if (Pb.Intersect(NewBox))
+			{
+				const float OvW = FMath::Min(Pb.Max.X, NewBox.Max.X) - FMath::Max(Pb.Min.X, NewBox.Min.X);
+				const float OvH = FMath::Min(Pb.Max.Y, NewBox.Max.Y) - FMath::Max(Pb.Min.Y, NewBox.Min.Y);
+				if (OvW > 60.f && OvH > 60.f) { bOverlaps = true; break; } // >60cm echte overlap
+			}
+		}
+		if (bOverlaps)
+		{
+			ClonedRooms.Add(Key); // niet blijven proberen
+			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: deur (%.0f, %.0f) overgeslagen - kamer zou overlappen"), FrameLoc.X, FrameLoc.Y);
+			continue;
+		}
+
+		// Klonen: bron-frame -> deze orientatie.
 		ClonedRooms.Add(Key);
-		const FTransform Delta = SrcDoorTM.Inverse() * Leaf.Key;
+		Placed.Add(NewBox);
+		const FTransform Delta = SrcInv * Best;
 		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		int32 Placed = 0;
+		int32 PlacedMeshes = 0;
 		for (const TPair<UStaticMesh*, FTransform>& M : SourceSet)
 		{
 			const FTransform NewTM = M.Value * Delta;
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
-			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
+			if (UStaticMeshComponent* Cm = SMA->GetStaticMeshComponent())
 			{
-				C->SetMobility(EComponentMobility::Movable);
-				C->SetStaticMesh(M.Key);
-				C->SetCanEverAffectNavigation(false);
+				Cm->SetMobility(EComponentMobility::Movable);
+				Cm->SetStaticMesh(M.Key);
+				Cm->SetCanEverAffectNavigation(false);
 			}
-			++Placed;
+			++PlacedMeshes;
 		}
 		++NewRooms;
-		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: kamer gekloond achter deur (%.0f, %.0f, %.0f) - %d meshes"), LeafPos.X, LeafPos.Y, LeafPos.Z, Placed);
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: kamer gekloond bij frame (%.0f, %.0f, %.0f) - %d meshes, %d/4 hoeken void"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, PlacedMeshes, BestVoids);
 	}
 }
