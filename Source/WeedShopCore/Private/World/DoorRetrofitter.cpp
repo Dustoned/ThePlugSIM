@@ -759,7 +759,7 @@ void ADoorRetrofitter::VerticalReplicate()
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
 	// MET materialen: de map geeft bv. het raam-glas op ingerichte verdiepingen een OVERRIDE (helder
 	// glas) - zonder die override valt geplakt glas terug op het standaard-materiaal (parallax/nep-3D).
-	struct FSliceEntry { UStaticMesh* Mesh; FTransform TM; TArray<UMaterialInterface*> Mats; };
+	struct FSliceEntry { UStaticMesh* Mesh; FTransform TM; FVector BO; TArray<UMaterialInterface*> Mats; };
 	TArray<FSliceEntry> Slice;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -779,12 +779,15 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (MeshName.Contains(TEXT("Umbrella")) || MeshName.Contains(TEXT("Parasol")) || MeshName.Contains(TEXT("Lounger"))
 				|| MeshName.Contains(TEXT("SunBed")) || MeshName.Contains(TEXT("Sunbed")) || MeshName.Contains(TEXT("Chair"))
 				|| MeshName.Contains(TEXT("Table")) || MeshName.Contains(TEXT("Awning")) || MeshName.Contains(TEXT("Pool"))) { continue; }
-			const FVector L = Comp->GetComponentLocation();
+			// Op het VISUELE MIDDELPUNT (bounds) testen, niet de pivot: pivots zitten op hoeken/
+			// uiteinden, waardoor randstukken met pivot net buiten de rechthoek afvielen (halve kamers).
+			const FVector L = Comp->Bounds.Origin;
 			if (!InRects(L)) { continue; }
-			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 330.f) { continue; } // alleen deze verdieping-slice
+			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 335.f) { continue; } // alleen deze verdieping-slice
 			FSliceEntry E;
 			E.Mesh = Comp->GetStaticMesh();
 			E.TM = Comp->GetComponentTransform();
+			E.BO = L;
 			for (int32 Mi = 0; Mi < Comp->GetNumMaterials(); ++Mi) { E.Mats.Add(Comp->GetMaterial(Mi)); }
 			Slice.Add(E);
 		}
@@ -820,12 +823,12 @@ void ADoorRetrofitter::VerticalReplicate()
 			for (UStaticMeshComponent* Comp : Comps)
 			{
 				if (!Comp || !Comp->GetStaticMesh()) { continue; }
-				const FVector L = Comp->GetComponentLocation();
+				const FVector L = Comp->Bounds.Origin; // zelfde basis als de bron-capture
 				// RUIME zone voor de bestaat-deze-verdieping-check: lege verdiepingen hebben binnen de
 				// kamer-rechthoek juist bijna niets (daarom zijn ze leeg) - maar de gang/gevel ernaast
 				// bewijst dat de verdieping bestaat. De dedupe-index blijft op de strakke zone.
 				if (L.X < Outer.Min.X - 1300.f || L.X > Outer.Max.X + 1300.f || L.Y < Outer.Min.Y - 1300.f || L.Y > Outer.Max.Y + 1300.f) { continue; }
-				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 335.f) { continue; }
+				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 340.f) { continue; }
 				++ExistCount;
 				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
 				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
@@ -842,7 +845,7 @@ void ADoorRetrofitter::VerticalReplicate()
 		{
 			FTransform NewTM = M.TM;
 			NewTM.AddToTranslation(FVector(0.f, 0.f, Dz));
-			const FVector NL = NewTM.GetLocation();
+			const FVector NL = M.BO + FVector(0.f, 0.f, Dz); // bounds-center op de doel-verdieping
 			const uint64 H = GetTypeHash(M.Mesh->GetFName())
 				^ (uint64)(FMath::RoundToInt(NL.X / 10.f) * 73856093)
 				^ (uint64)(FMath::RoundToInt(NL.Y / 10.f) * 19349663)
