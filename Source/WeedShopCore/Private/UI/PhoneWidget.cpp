@@ -27,6 +27,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "World/RoomStamper.h"
+#include "World/CityDoor.h"
+#include "EngineUtils.h"
 #include "Misc/Paths.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -372,6 +374,30 @@ void UPhoneWidget::FillSettingsBody()
 			}
 		}
 
+		// Dev-opruimer: kijk naar een (zwevende of foute) deur, open de phone en klik - deur weg.
+		UWeedActionButton* KillDoorB = MakeActionBtn(TEXT("Remove door in crosshair"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]()
+			{
+				APlayerController* PC = GetOwningPlayer();
+				UWorld* DW = GetWorld();
+				if (!PC || !DW) { return; }
+				FVector VL; FRotator VR;
+				PC->GetPlayerViewPoint(VL, VR);
+				FHitResult Hit;
+				FCollisionQueryParams Q;
+				Q.AddIgnoredActor(PC->GetPawn());
+				const bool bHit = DW->LineTraceSingleByChannel(Hit, VL, VL + VR.Vector() * 2500.f, ECC_Visibility, Q);
+				const FVector Target = bHit ? Hit.ImpactPoint : VL + VR.Vector() * 600.f;
+				ACityDoor* Best = nullptr; float BestD = 250.f;
+				for (TActorIterator<ACityDoor> It(DW); It; ++It)
+				{
+					if (!IsValid(*It)) { continue; }
+					const float D = FVector::Dist(It->GetActorLocation(), Target);
+					if (D < BestD) { BestD = D; Best = *It; }
+				}
+				if (Best) { Best->Destroy(); }
+			}, 11);
+		BodyRow(KillDoorB, FMargin(0.f, 6.f, 0.f, 0.f));
 	}
 	else if (SettingsCat == 3) // Light: live light-tuning (stuurt de lokale DayNightController direct aan)
 	{

@@ -493,6 +493,38 @@ bool ARoomStamper::RemoveStamp(UWorld* W, const FString& StampLine)
 		if (IsValid(*It) && It->ActorHasTag(Tag)) { It->Destroy(); ++Killed; }
 	}
 
+	// 1b) Werkende deuren (ACityDoor) die uit stempel-bladen geconverteerd zijn maar de tag missen
+	// (oudere stempels): alles binnen het kamer-volume opruimen, behalve de eigen voordeur van het
+	// gebouw (vlak bij het anker).
+	{
+		TArray<FString> P;
+		StampLine.ParseIntoArray(P, TEXT("|"));
+		TArray<FStampPiece> TplPieces;
+		TArray<FString> Lp;
+		if (P.Num() >= 3) { P[1].ParseIntoArray(Lp, TEXT(",")); }
+		if (Lp.Num() >= 3 && LoadTemplate(P[0], TplPieces))
+		{
+			const FVector AL(FCString::Atof(*Lp[0]), FCString::Atof(*Lp[1]), FCString::Atof(*Lp[2]));
+			const float AY = FCString::Atof(*P[2]);
+			const bool bMirror = P.Num() >= 4 && P[3].TrimStartAndEnd() == TEXT("M");
+			const FTransform Anchor(FRotator(0.f, AY, 0.f), AL);
+			FBox RoomBox(ForceInit);
+			for (const FStampPiece& Piece : TplPieces)
+			{
+				RoomBox += ((bMirror ? MirrorRelTM(Piece.RelTM) : Piece.RelTM) * Anchor).GetLocation();
+			}
+			RoomBox = RoomBox.ExpandBy(FVector(60.f, 60.f, 60.f));
+			for (TActorIterator<ACityDoor> It(W); It; ++It)
+			{
+				if (!IsValid(*It)) { continue; }
+				const FVector DL = It->GetActorLocation();
+				if (!RoomBox.IsInside(DL)) { continue; }
+				if (FVector::Dist2D(DL, AL) < 170.f) { continue; } // voordeur van het gebouw zelf
+				It->Destroy(); ++Killed;
+			}
+		}
+	}
+
 	// 2) Regel uit RoomStamps.txt (anders komt hij volgende sessie terug).
 	{
 		const FString Path = FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt");

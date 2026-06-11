@@ -398,6 +398,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (ACityDoor* Door = W->SpawnActor<ACityDoor>(ACityDoor::StaticClass(), LeafTM, SP))
 		{
 			Door->SetActorScale3D(LeafTM.GetScale3D());
+			Door->Tags.Append(SMA->Tags); // stamp-id mee: undo/verwijderen pakt dan ook de werkende deur
 			Door->SetupLeaf(Comp->GetStaticMesh(), (SwingOverride != 0.f) ? SwingOverride : Leaf->OpenDeg);
 			// Balkon-puien zijn SCHUIFdeuren: blad glijdt opzij langs z'n eigen breedte (geen zwaai die
 			// het terras of de kamer in slaat).
