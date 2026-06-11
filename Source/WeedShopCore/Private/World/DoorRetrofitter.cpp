@@ -959,7 +959,9 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		}
 		// (Geen dak-heuristieken: marker 3 bepaalt de top. ExistCount/TightCount alleen ter info.)
 
-		if (bBakedJob) { goto HideOnly; } // gebakken: geometrie staat al in de map - nooit meer bouwen
+		int32 Placed = 0;
+		if (!bBakedJob) // gebakken: geometrie staat al in de map - nooit meer bouwen
+		{
 		// FASE 1: keuren - past de kamer hier (vrijwel) volledig? Zo niet: hele verdieping overslaan.
 		// Half-passende kamers (smallere toren boven het podium) gaven alleen maar troep; een lege
 		// verdieping kan later z'n eigen (passende) bron-job krijgen via de building-tool.
@@ -1004,7 +1006,6 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 			continue;
 		}
 
-		int32 Placed = 0;
 		for (int32 Si = 0; Si < Slice.Num(); ++Si)
 		{
 			const FSliceEntry& M = Slice[Si];
@@ -1062,7 +1063,8 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		}
 		// Kamer geplaatst -> SPIEGEL DE BRON: elk raam/glas-element dat hier staat maar op de bron-
 		// verdieping NIET (de makers haalden het daar weg voor de ingerichte look) verbergen we ook.
-HideOnly:
+		} // einde niet-gebakken bouw-pad
+
 		int32 GlassHidden = 0;
 		// Alleen raam-spiegelen als er een substantiele kamer staat (geplaatst of gebakken).
 		if (bBakedJob || Placed > Slice.Num() / 2)
