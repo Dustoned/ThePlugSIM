@@ -1,4 +1,5 @@
 #include "World/RoomStamper.h"
+#include "World/CityDoor.h"
 
 #include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
@@ -125,6 +126,9 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 	{
 		AActor* A = *It;
 		if (!IsValid(A)) { continue; }
+		// Runtime-deuren overslaan: hun blad is de conversie van het (verborgen) geparkeerde
+		// origineel dat hieronder al meegenomen wordt - anders stapelen de deurbladen zich op.
+		if (A->IsA(ACityDoor::StaticClass())) { continue; }
 		const bool bHiddenActor = A->IsHidden();
 		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
 		for (UStaticMeshComponent* Comp : Comps)
@@ -142,6 +146,9 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 			const FVector L = Comp->Bounds.Origin;
 			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 335.f) { continue; }
+			// Het voordeur-blad niet meenemen: het frame waar je op snapt heeft al een werkende deur.
+			if (MeshName.Contains(TEXT("Door")) && !MeshName.Contains(TEXT("DoorFrame"))
+				&& FVector::Dist2D(L, AnchorTM.GetLocation()) < 170.f) { continue; }
 
 			const FTransform Rel = Comp->GetComponentTransform() * AnchorInv;
 			const FVector RL = Rel.GetLocation();
