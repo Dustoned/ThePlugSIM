@@ -212,22 +212,26 @@ void UPhoneWidget::BuildSettingsApp()
 	const AWeedShopGameState* GSt = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const bool bDevMode = GSt && GSt->IsFreeBuild();
 	if (!bDevMode && SettingsCat != 0) { SettingsCat = 0; }
-	static const TCHAR* CatNames[2] = { TEXT("Status"), TEXT("Test") };
-	const int32 NumTabs = bDevMode ? 2 : 1;
+	static const TCHAR* CatNames[5] = { TEXT("Status"), TEXT("Test"), TEXT("Rooms"), TEXT("Light"), TEXT("Spots") };
+	const int32 NumTabs = bDevMode ? 5 : 1;
 	UHorizontalBox* Cats = WidgetTree->ConstructWidget<UHorizontalBox>();
 	for (int32 i = 0; i < NumTabs; ++i)
 	{
 		const FLinearColor Col = (i == SettingsCat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
 		UWeedActionButton* B = MakeActionBtn(CatNames[i], Col,
-			[this, i]() { SettingsCat = i; bRebinding = false; RebindMsg.Reset(); RefreshSettingsTabs(); FillSettingsBody(); }, 12);
+			[this, i]() { SettingsCat = i; bRebinding = false; RebindMsg.Reset(); RefreshSettingsTabs(); FillSettingsBody(); }, 10);
 		UHorizontalBoxSlot* CS = Cats->AddChildToHorizontalBox(B);
 		CS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
 		SettingsTabBtns.Add(B);
 	}
 	ContentBox->AddChildToVerticalBox(Cats)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
+	// Body in een ScrollBox zodat lange lijsten netjes binnen de telefoon blijven (scrollen ipv overlopen).
+	UScrollBox* BodyScroll = WidgetTree->ConstructWidget<UScrollBox>();
 	SettingsBody = WidgetTree->ConstructWidget<UVerticalBox>();
-	ContentBox->AddChildToVerticalBox(SettingsBody);
+	BodyScroll->AddChild(SettingsBody);
+	UVerticalBoxSlot* ScrollSlot = ContentBox->AddChildToVerticalBox(BodyScroll);
+	ScrollSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	FillSettingsBody();
 }
 
@@ -250,6 +254,9 @@ void UPhoneWidget::FillSettingsBody()
 {
 	if (!SettingsBody) { return; }
 	SettingsBody->ClearChildren();
+	// Slider-pointers resetten: hun widgets zijn zojuist vernietigd; ApplyLightSliders mag er niet meer aan zitten.
+	TimeSpeedSlider = nullptr; TimeSpeedV = nullptr;
+	LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
 	auto BodyRow = [this](UWidget* W, const FMargin& Pad) { SettingsBody->AddChildToVerticalBox(W)->SetPadding(Pad); };
@@ -294,7 +301,10 @@ void UPhoneWidget::FillSettingsBody()
 		UWeedActionButton* KitB = MakeActionBtn(TEXT("Give build kit (free, infinite)"), FLinearColor(0.2f, 0.45f, 0.3f),
 			[this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } }, 13);
 		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 8.f));
-
+	}
+	else if (SettingsCat == 2) // Rooms: kamer-builds + stamper
+	{
+		BodyRow(MakeText(TEXT("Room builder"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
 		// Kamer-job opslaan: huidige 3 markers worden permanent (RoomJobs.txt, elke sessie herbouwd).
 		UWeedActionButton* JobB = MakeActionBtn(TEXT("Save room build (clears markers)"), FLinearColor(0.45f, 0.35f, 0.15f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveRoomJob(); } }, 13);
@@ -340,8 +350,9 @@ void UPhoneWidget::FillSettingsBody()
 			}
 		}
 
-		// --- Live light-tuning (stuurt de lokale DayNightController direct aan; geen restart nodig) ---
-		LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
+	}
+	else if (SettingsCat == 3) // Light: live light-tuning (stuurt de lokale DayNightController direct aan)
+	{
 		BodyRow(MakeText(TEXT("Lighting (live)"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
 		ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
 		const float Moon = DN ? DN->MoonIntensity : 0.65f;
@@ -361,9 +372,14 @@ void UPhoneWidget::FillSettingsBody()
 		AddLightSlider(TEXT("Exposure"),      Exp / 16.f,            LExp,   LExpV);
 		ApplyLightSliders(); // labels meteen vullen met de echte waardes
 
-		// --- Marked spots (F9/WeedMarkSpot): bekijken, ernaartoe teleporteren, verwijderen ---
+		UWeedActionButton* SaveB = MakeActionBtn(TEXT("Save light config"), FLinearColor(0.22f, 0.5f, 0.32f),
+			[this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SaveLightConfig(); } }, 12);
+		BodyRow(SaveB, FMargin(0.f, 8.f, 0.f, 0.f));
+	}
+	else if (SettingsCat == 4) // Spots: F9-markers bekijken / teleporteren / verwijderen
+	{
 		{
-			BodyRow(MakeText(TEXT("Marked spots"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 10.f, 0.f, 2.f));
+			BodyRow(MakeText(TEXT("Marked spots"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
 			const FString SpotFile = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
 			TArray<FString> SpotLines;
 			FFileHelper::LoadFileToStringArray(SpotLines, *SpotFile);
@@ -372,7 +388,7 @@ void UPhoneWidget::FillSettingsBody()
 			{
 				BodyRow(MakeText(TEXT("No spots yet - press F9 in-game to mark one."), 11, FLinearColor(0.6f, 0.64f, 0.74f)), FMargin(0.f, 0.f, 0.f, 4.f));
 			}
-			const int32 MaxShow = 8;
+			const int32 MaxShow = 20;
 			for (int32 SpotIdx = FMath::Max(0, SpotLines.Num() - MaxShow); SpotIdx < SpotLines.Num(); ++SpotIdx)
 			{
 				const FString& Line = SpotLines[SpotIdx];
@@ -431,10 +447,6 @@ void UPhoneWidget::FillSettingsBody()
 				BodyRow(MakeText(FString::Printf(TEXT("(showing last %d of %d)"), MaxShow, SpotLines.Num()), 9, FLinearColor(0.55f, 0.58f, 0.68f)), FMargin(0.f, 2.f, 0.f, 0.f));
 			}
 		}
-
-		UWeedActionButton* SaveB = MakeActionBtn(TEXT("Save light config"), FLinearColor(0.22f, 0.5f, 0.32f),
-			[this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SaveLightConfig(); } }, 12);
-		BodyRow(SaveB, FMargin(0.f, 8.f, 0.f, 0.f));
 	}
 	else // Status
 	{
