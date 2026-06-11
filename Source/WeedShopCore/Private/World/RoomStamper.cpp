@@ -482,6 +482,8 @@ void ARoomStamper::PlaceStamp()
 		*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 
+	ApplyWindowFix(W, ActiveTemplate, CurrentAnchor, bMirrored);
+
 	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: '%s' geplaatst op (%.0f, %.0f, %.0f) yaw %.0f - %d stukken"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY, Placed);
 	UWeedToast::NotifyPawn(GetWorld()->GetFirstPlayerController() ? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr,
 		-1, 2.5f, FColor::Green, FString::Printf(TEXT("Room stamped! (%d pieces) - LMB again to stamp more, RMB to stop"), Placed));
@@ -635,4 +637,95 @@ FTransform ARoomStamper::MirrorPieceTM(const FStampPiece& Piece)
 	const FVector L = Piece.RelTM.GetLocation();
 	const FRotator R = Piece.RelTM.GetRotation().Rotator();
 	return FTransform(FRotator(R.Pitch, 180.f - R.Yaw, R.Roll), FVector(L.X, -L.Y, L.Z), Piece.RelTM.GetScale3D());
+}
+
+void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const FTransform& Anchor, bool bMirror)
+{
+	if (!W) { return; }
+	TArray<FStampPiece> Tpl;
+	if (!LoadTemplate(TemplateName, Tpl)) { return; }
+
+	// Footprint van de stempel + wereldposities (en glas-materiaal) van de template-ramen.
+	FBox Foot(ForceInit);
+	TArray<TPair<FVector, UMaterialInterface*>> TplWindows;
+	for (const FStampPiece& Piece : Tpl)
+	{
+		const FTransform TM = (bMirror ? MirrorPieceTM(Piece) : Piece.RelTM) * Anchor;
+		Foot += TM.GetLocation();
+		const FString MN = Piece.Mesh ? Piece.Mesh->GetName() : FString();
+		if (MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")) || MN.Contains(TEXT("BalconyDoor")))
+		{
+			TplWindows.Add(TPair<FVector, UMaterialInterface*>(TM.GetLocation(), Piece.Mats.Num() > 0 ? Piece.Mats[0] : nullptr));
+		}
+	}
+	Foot = Foot.ExpandBy(FVector(60.f, 60.f, 0.f));
+	const float ZMin = Anchor.GetLocation().Z - 30.f;
+	const float ZMax = Anchor.GetLocation().Z + 360.f;
+
+	int32 Hidden = 0, Synced = 0;
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass())) { continue; }
+		// Eigen stempel-actors overslaan (die dragen een STAMP_-tag).
+		bool bStampActor = false;
+		for (const FName& Tg : A->Tags) { if (Tg.ToString().StartsWith(TEXT("STAMP_"))) { bStampActor = true; break; } }
+		if (bStampActor) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh() || !Comp->IsVisible()) { continue; }
+			const FString MN = Comp->GetStaticMesh()->GetName();
+			if (!(MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")))) { continue; }
+			const FVector L = Comp->Bounds.Origin;
+			if (L.X < Foot.Min.X || L.X > Foot.Max.X || L.Y < Foot.Min.Y || L.Y > Foot.Max.Y) { continue; }
+			if (L.Z < ZMin || L.Z > ZMax) { continue; }
+
+			// Valt dit gevel-raam samen met een template-raam? Dan neemt het echte raam het over.
+			// Materiaal-check zodat we na een bake niet het echte (gebakken) raam zelf verbergen.
+			bool bHideThis = false;
+			for (const TPair<FVector, UMaterialInterface*>& TW : TplWindows)
+			{
+				if (FVector::Dist2D(TW.Key, L) < 90.f && FMath::Abs(TW.Key.Z - L.Z) < 180.f)
+				{
+					if (TW.Value && Comp->GetMaterial(0) != TW.Value) { bHideThis = true; }
+					break;
+				}
+			}
+			if (bHideThis)
+			{
+				Comp->SetVisibility(false, true);
+				++Hidden;
+				continue;
+			}
+
+			// Geen match: dit gevel-raam hoort GEEN kamer te tonen. Look terughalen van een donor:
+			// zelfde mesh in dezelfde kolom op een verdieping buiten de stempel.
+			UStaticMeshComponent* Donor = nullptr;
+			float DonorDz = TNumericLimits<float>::Max();
+			for (TActorIterator<AActor> DIt(W); DIt; ++DIt)
+			{
+				if (!IsValid(*DIt)) { continue; }
+				TInlineComponentArray<UStaticMeshComponent*> DComps(*DIt);
+				for (UStaticMeshComponent* DC : DComps)
+				{
+					if (!DC || DC == Comp || DC->GetStaticMesh() != Comp->GetStaticMesh() || !DC->IsVisible()) { continue; }
+					const FVector DL = DC->Bounds.Origin;
+					if (DL.Z >= ZMin && DL.Z <= ZMax) { continue; } // binnen de stempel = geen donor
+					if (FVector::Dist2D(DL, L) > 250.f) { continue; } // zelfde gevel-kolom
+					const float Dz = FMath::Abs(DL.Z - L.Z);
+					if (Dz < DonorDz) { DonorDz = Dz; Donor = DC; }
+				}
+			}
+			if (Donor && Donor->GetMaterial(0) != Comp->GetMaterial(0))
+			{
+				for (int32 Mi = 0; Mi < Donor->GetNumMaterials() && Mi < Comp->GetNumMaterials(); ++Mi)
+				{
+					Comp->SetMaterial(Mi, Donor->GetMaterial(Mi));
+				}
+				++Synced;
+			}
+		}
+	}
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d gevel-ramen verborgen, %d looks hersteld"), *TemplateName, Hidden, Synced);
 }

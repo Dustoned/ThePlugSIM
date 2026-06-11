@@ -1513,13 +1513,15 @@ void ADoorRetrofitter::ApplySavedStamps()
 		const float AY = FCString::Atof(*P[2]);
 		const bool bMirror = P.Num() >= 4 && P[3].TrimStartAndEnd() == TEXT("M");
 		const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"), FMath::RoundToInt(AL.X), FMath::RoundToInt(AL.Y), FMath::RoundToInt(AY));
-		if (BakedJobs.Contains(StampId) || AppliedStamps.Contains(StampId)) { continue; }
+		if (AppliedStamps.Contains(StampId)) { continue; }
 		AppliedStamps.Add(StampId);
+		const bool bBakedStamp = BakedJobs.Contains(StampId); // gebakken: geometrie staat al in de map
 
 		TArray<FStampPiece> Pieces;
 		if (!ARoomStamper::LoadTemplate(P[0], Pieces)) { continue; }
 		const FTransform Anchor(FRotator(0.f, AY, 0.f), AL);
 		int32 Placed = 0;
+		if (!bBakedStamp)
 		for (const FStampPiece& Piece : Pieces)
 		{
 			const FTransform NewTM = (bMirror ? ARoomStamper::MirrorPieceTM(Piece) : Piece.RelTM) * Anchor;
@@ -1546,6 +1548,8 @@ void ADoorRetrofitter::ApplySavedStamps()
 			}
 			++Placed;
 		}
+		// Gevel-ramen elke sessie opnieuw laten kloppen (verbergen/look-herstel is niet bakbaar).
+		ARoomStamper::ApplyWindowFix(W, P[0], Anchor, bMirror);
 		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: sessie-herbouw '%s' op (%.0f, %.0f) - %d stukken"), *P[0], AL.X, AL.Y, Placed);
 	}
 }

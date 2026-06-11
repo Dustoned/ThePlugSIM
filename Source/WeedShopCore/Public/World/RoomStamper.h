@@ -61,6 +61,11 @@ public:
 	// scale breekt de deur-converter). Kozijnen spiegelen WEL echt mee (hun aanslag zit aan een kant).
 	static FTransform MirrorPieceTM(const FStampPiece& Piece);
 
+	// Gevel-ramen laten kloppen met de gestempelde kamer: gevel-ramen die samenvallen met een
+	// template-raam verbergen (het echte raam neemt het over), gevel-ramen binnen de stempel
+	// ZONDER match krijgen hun look terug van een donor-raam op een andere verdieping.
+	static void ApplyWindowFix(UWorld* W, const FString& TemplateName, const FTransform& Anchor, bool bMirror);
+
 protected:
 	virtual void Tick(float DeltaSeconds) override;
 
