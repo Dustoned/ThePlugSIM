@@ -404,9 +404,10 @@ void ADoorRetrofitter::ScanAndConvert()
 	{
 		DN->TryAdoptSky();
 		ADirectionalLight* AdoptedSun = DN->GetSun();
+		ADirectionalLight* OurMoon = DN->GetMoon();
 		for (TActorIterator<ADirectionalLight> It(W); It; ++It)
 		{
-			if (*It == AdoptedSun) { continue; }
+			if (*It == AdoptedSun || *It == OurMoon) { continue; }
 			if (ULightComponent* LC = It->GetLightComponent())
 			{
 				if (LC->IsVisible())

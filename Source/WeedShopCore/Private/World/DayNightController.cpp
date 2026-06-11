@@ -100,6 +100,25 @@ void ADayNightController::BeginPlay()
 		}
 	}
 
+	// MAAN: eigen tweede directional light in tegenfase met de zon (komt op bij zonsondergang,
+	// gaat onder bij zonsopkomst) met echte maan-schijf via atmosphere-light-index 1.
+	if (!Moon.IsValid())
+	{
+		Moon = W->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), FTransform(FRotator(-45.f, 157.5f, 0.f)));
+		if (Moon.IsValid() && Moon->GetLightComponent())
+		{
+			Moon->GetLightComponent()->SetMobility(EComponentMobility::Movable);
+			Moon->GetLightComponent()->SetCastShadows(true);
+			if (UDirectionalLightComponent* MoonDL = Cast<UDirectionalLightComponent>(Moon->GetLightComponent()))
+			{
+				MoonDL->SetAtmosphereSunLight(true);
+				MoonDL->SetAtmosphereSunLightIndex(1); // index 1 = tweede hemel-lichaam (maan-schijf)
+				MoonDL->LightSourceAngle = 0.45f;      // maan-schijf iets kleiner dan de zon
+				MoonDL->SetLightColor(FLinearColor(0.62f, 0.68f, 0.85f)); // koel maanlicht
+			}
+		}
+	}
+
 	// SkyLight voor ambient (zoek bestaande; in pack-maps streamt 'ie later in -> TryAdoptSky).
 	TryAdoptSky();
 
@@ -309,22 +328,41 @@ void ADayNightController::Tick(float DeltaSeconds)
 	else                                                    { DayF = 1.f; }
 	DayF = FMath::Clamp(DayF, 0.f, 1.f);
 
-	// Zon overdag een boog; 's nachts MAANLICHT van bovenaf (niet onder de horizon) zodat de hele
-	// stad navigeerbaar blijft i.p.v. pikzwart tussen de lampen.
+	// ZON: doorlopende 24-uurs boog zoals in het echt - komt op rond ZZO, piekt 's middags en zakt
+	// 's avonds echt onder de horizon tussen NW en N (yaw 337.5). 's Nachts staat 'ie onder de horizon.
 	if (Sun.IsValid() && Sun->GetLightComponent())
 	{
-		const float Pitch = (DayF > 0.08f) ? (90.f - Hour * 15.f) : MoonPitch; // dag-boog of hoge maan
-		// Yaw 337.5 -> de zon gaat 's avonds onder tussen NW en N (kompas ~337) en komt op rond ZZO.
-		Sun->SetActorRotation(FRotator(Pitch, 337.5f, 0.f));
+		// Boog gekoppeld aan zonsopkomst/-ondergang uit de klok: pitch 0 bij opkomst, -90 rond de
+		// middag, 0 bij ondergang, en 's nachts door naar +(onder de horizon).
+		const float DayLen = FMath::Max(1.f, Sunset - Sunrise);
+		const float SunPhase = (Hour - Sunrise) / DayLen;      // 0 = opkomst, 1 = ondergang
+		const float SunPitch = -180.f * SunPhase;               // -180-boog over de dag, daarna onder de horizon
+		Sun->SetActorRotation(FRotator(SunPitch, 337.5f, 0.f));
 
 		UDirectionalLightComponent* DL = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
 		if (DL)
 		{
-			// 's Nachts maanlicht (navigeerbaar), overdag fel zonlicht — beide live instelbaar.
-			DL->SetIntensity(FMath::Lerp(MoonIntensity, SunIntensity, DayF));
+			DL->SetIntensity(SunIntensity * FMath::Max(DayF, 0.02f)); // onder de horizon vrijwel uit
 			const FLinearColor Warm(1.f, 0.96f, 0.88f);
-			const FLinearColor NightBlue(0.55f, 0.62f, 0.85f);
-			DL->SetLightColor(FMath::Lerp(NightBlue, Warm, DayF));
+			const FLinearColor Dawn(1.f, 0.72f, 0.5f); // gouden randje rond op-/ondergang
+			DL->SetLightColor(FMath::Lerp(Dawn, Warm, FMath::Clamp(DayF * 1.4f - 0.2f, 0.f, 1.f)));
+		}
+	}
+
+	// MAAN: tegenfase - komt op bij zonsondergang, staat rond 1u 's nachts hoog en gaat onder bij
+	// zonsopkomst. Levert het navigeerbare nachtlicht (MoonIntensity) en een echte maan-schijf.
+	if (Moon.IsValid() && Moon->GetLightComponent())
+	{
+		const float NightLen = FMath::Max(1.f, 24.f - (Sunset - Sunrise));
+		float NightHour = Hour - Sunset;                        // uren sinds zonsondergang
+		if (NightHour < 0.f) { NightHour += 24.f; }
+		const float MoonPhase = NightHour / NightLen;           // 0 = maan-opkomst, 1 = maan-ondergang
+		const float MoonPitchNow = -180.f * MoonPhase;
+		Moon->SetActorRotation(FRotator(MoonPitchNow, 322.5f, 0.f)); // ondergang net iets westelijker dan de zon
+
+		if (UDirectionalLightComponent* MoonDL = Cast<UDirectionalLightComponent>(Moon->GetLightComponent()))
+		{
+			MoonDL->SetIntensity(MoonIntensity * (1.f - DayF)); // overdag uit, 's nachts vol
 		}
 	}
 

@@ -44,6 +44,7 @@ public:
 
 	// De geadopteerde zon (voor opruimen van extra directional lights in pack-maps).
 	class ADirectionalLight* GetSun() const { return Sun.Get(); }
+	class ADirectionalLight* GetMoon() const { return Moon.Get(); }
 	class ASkyLight* GetSky() const { return Sky.Get(); }
 	// Pack-maps: sky (her-)adopteren zodra een gestreamde skylight binnenkomt.
 	void TryAdoptSky();
@@ -60,6 +61,7 @@ protected:
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 
 	TWeakObjectPtr<ADirectionalLight> Sun;
+	TWeakObjectPtr<ADirectionalLight> Moon; // eigen maan-licht: komt op bij zonsondergang, gaat onder bij zonsopkomst
 	TWeakObjectPtr<ASkyLight> Sky;
 
 	UPROPERTY() TArray<TObjectPtr<UPointLightComponent>> LampLights;
