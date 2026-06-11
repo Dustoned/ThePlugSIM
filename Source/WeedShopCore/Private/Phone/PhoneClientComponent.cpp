@@ -2218,6 +2218,26 @@ void UPhoneClientComponent::ServerSafeMove_Implementation(int64 Cents, bool bToS
 
 void UPhoneClientComponent::RequestDevHeatEvent(bool bBust) { ServerDevHeatEvent(bBust); }
 
+void UPhoneClientComponent::RequestGiveBuildKit() { ServerGiveBuildKit(); }
+
+void UPhoneClientComponent::ServerGiveBuildKit_Implementation()
+{
+	APawn* P = Cast<APawn>(GetOwner());
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return; }
+	static const TCHAR* Kit[] = {
+		TEXT("Struct_Wall4m"), TEXT("Struct_Wall2m"), TEXT("Struct_Wall1m"),
+		TEXT("Struct_WallDoor4m"), TEXT("Struct_WallDoor3m"),
+		TEXT("Struct_Floor4x4"), TEXT("Struct_Floor1x1"),
+		TEXT("Struct_Ceil4x4"), TEXT("Struct_Ceil1x1"),
+		TEXT("Struct_CeilLamp"), TEXT("Struct_Door") };
+	for (const TCHAR* Id : Kit)
+	{
+		Inv->AddItem(FName(Id), 1);
+	}
+	UWeedToast::NotifyPawn(P, -1, 3.f, FColor::Green, TEXT("Building kit added (11 pieces, infinite use)"));
+}
+
 void UPhoneClientComponent::ServerDevHeatEvent_Implementation(bool bBust)
 {
 	AWeedShopGameState* GS = GetGS();

@@ -298,6 +298,11 @@ public:
 	// Test-tool: zet de tijd op midden-dag (false) of midden-nacht (true). Client -> server.
 	void RequestSetDayNight(bool bNight);
 
+	// Test-tool: geef de complete building-kit (alle Struct_-items, oneindig bruikbaar). Client -> server.
+	void RequestGiveBuildKit();
+	UFUNCTION(Server, Reliable)
+	void ServerGiveBuildKit();
+
 	// Boek bankgeld over naar een co-op vriend (fee + dag-limiet). Client -> server.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void RequestTransfer(int64 AmountCents);

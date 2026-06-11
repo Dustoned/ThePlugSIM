@@ -735,6 +735,10 @@ void ADoorRetrofitter::VerticalReplicate()
 		// Bestaat deze verdieping (heeft het gebouw hier uberhaupt geometrie)? En dedupe-index bouwen:
 		// mesh-naam + positie op 10cm-grid van alles wat er al staat.
 		TSet<uint64> Existing;
+		// Raam-administratie: bestaande (parallax-)ramen op deze verdieping, zodat we ze kunnen
+		// verbergen zodra de kopie het echte doorkijk-raam (_Interior-variant) plaatst.
+		struct FWinRef { UStaticMeshComponent* Comp; FString Name; FVector Pos; };
+		TArray<FWinRef> ExistingWindows;
 		int32 ExistCount = 0;
 		for (TActorIterator<AActor> It(W); It; ++It)
 		{
@@ -748,6 +752,13 @@ void ADoorRetrofitter::VerticalReplicate()
 				if (FMath::Abs(L.X - Mark.X) > BoxR + 50.f || FMath::Abs(L.Y - Mark.Y) > BoxR + 50.f) { continue; }
 				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 335.f) { continue; }
 				++ExistCount;
+				{
+					const FString CompMeshName = Comp->GetStaticMesh()->GetName();
+					if (CompMeshName.Contains(TEXT("Window")) && !CompMeshName.Contains(TEXT("_Interior")))
+					{
+						ExistingWindows.Add({ Comp, CompMeshName, L });
+					}
+				}
 				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
 					^ (uint64)(FMath::RoundToInt(L.X / 10.f) * 73856093)
 					^ (uint64)(FMath::RoundToInt(L.Y / 10.f) * 19349663)
@@ -768,6 +779,20 @@ void ADoorRetrofitter::VerticalReplicate()
 				^ (uint64)(FMath::RoundToInt(NL.Y / 10.f) * 19349663)
 				^ (uint64)(FMath::RoundToInt(NL.Z / 10.f) * 83492791);
 			if (Existing.Contains(H)) { continue; } // staat hier al (gevel/raam/lift/gang)
+			// Doorkijk-raam (_Interior) vervangt het parallax-raam (nep-3D, niet doorzichtig) op die plek.
+			const FString PasteMeshName = M.Key->GetName();
+			if (PasteMeshName.Contains(TEXT("_Interior")))
+			{
+				const FString ParallaxName = PasteMeshName.Replace(TEXT("_Interior"), TEXT(""));
+				for (FWinRef& WR : ExistingWindows)
+				{
+					if (WR.Comp && WR.Name == ParallaxName && FVector::Dist2D(WR.Pos, NL) < 60.f)
+					{
+						WR.Comp->SetVisibility(false);
+						WR.Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					}
+				}
+			}
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
 			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())

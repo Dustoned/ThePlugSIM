@@ -289,6 +289,11 @@ void UPhoneWidget::FillSettingsBody()
 		EvtBtns->AddChildToHorizontalBox(BustB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		BodyRow(EvtBtns, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// Building-kit: alle bouw-onderdelen (muren/vloeren/plafonds/deur/lamp) gratis + oneindig.
+		UWeedActionButton* KitB = MakeActionBtn(TEXT("Give build kit (free, infinite)"), FLinearColor(0.2f, 0.45f, 0.3f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } }, 13);
+		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// --- Live light-tuning (stuurt de lokale DayNightController direct aan; geen restart nodig) ---
 		LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
 		BodyRow(MakeText(TEXT("Lighting (live)"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));

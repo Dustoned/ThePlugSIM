@@ -1063,9 +1063,13 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 
 	UInventoryComponent* Inv = GetOwnerInventory();
-	if (!Inv || !Inv->RemoveItem(ItemId, 1))
+	// Bouw-onderdelen (building-tool) zijn ONEINDIG: niet verbruiken bij het plaatsen.
+	if (!Def.bIsStructure)
 	{
-		return;
+		if (!Inv || !Inv->RemoveItem(ItemId, 1))
+		{
+			return;
+		}
 	}
 
 	FActorSpawnParameters SpawnParams;
