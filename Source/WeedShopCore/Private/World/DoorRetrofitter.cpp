@@ -949,9 +949,54 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		}
 		// (Geen dak-heuristieken: marker 3 bepaalt de top. ExistCount/TightCount alleen ter info.)
 
-		int32 Placed = 0;
-		for (const FSliceEntry& M : Slice)
+		// FASE 1: keuren - past de kamer hier (vrijwel) volledig? Zo niet: hele verdieping overslaan.
+		// Half-passende kamers (smallere toren boven het podium) gaven alleen maar troep; een lege
+		// verdieping kan later z'n eigen (passende) bron-job krijgen via de building-tool.
+		int32 FitEligible = 0, FitPass = 0;
+		TArray<bool> PieceFits;
+		PieceFits.SetNum(Slice.Num());
+		for (int32 Si = 0; Si < Slice.Num(); ++Si)
 		{
+			const FSliceEntry& M = Slice[Si];
+			PieceFits[Si] = false;
+			if (M.bSyncOnly) { continue; }
+			const FVector NLf = M.BO + FVector(0.f, 0.f, Dz);
+			++FitEligible;
+			FCollisionQueryParams GQP(SCENE_QUERY_STAT(VertCloneFit), false);
+			FHitResult GroundHit;
+			const FVector GStart(NLf.X, NLf.Y, TgtZ + 90.f);
+			if (!W->LineTraceSingleByChannel(GroundHit, GStart, GStart - FVector(0.f, 0.f, 470.f), ECC_Visibility, GQP)) { continue; }
+			const FVector FitDirs[4] = { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) };
+			const float FEx = FMath::Max(0.f, M.Ext.X - 15.f);
+			const float FEy = FMath::Max(0.f, M.Ext.Y - 15.f);
+			const FVector2D FitPts[5] = {
+				FVector2D(NLf.X, NLf.Y),
+				FVector2D(NLf.X + FEx, NLf.Y + FEy), FVector2D(NLf.X + FEx, NLf.Y - FEy),
+				FVector2D(NLf.X - FEx, NLf.Y + FEy), FVector2D(NLf.X - FEx, NLf.Y - FEy) };
+			bool bEnc = true;
+			for (const FVector2D& TP : FitPts)
+			{
+				int32 SH = 0;
+				const FVector SStart(TP.X, TP.Y, TgtZ + 160.f);
+				for (const FVector& SD : FitDirs)
+				{
+					FHitResult SHit;
+					if (W->LineTraceSingleByChannel(SHit, SStart, SStart + SD * 2000.f, ECC_Visibility, GQP)) { ++SH; }
+				}
+				if (SH < 3) { bEnc = false; break; }
+			}
+			if (bEnc) { PieceFits[Si] = true; ++FitPass; }
+		}
+		if (FitEligible > 0 && FitPass < FitEligible * 9 / 10)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - kamer past hier niet (%d/%d stukken)"), N, TgtZ, FitPass, FitEligible);
+			continue;
+		}
+
+		int32 Placed = 0;
+		for (int32 Si = 0; Si < Slice.Num(); ++Si)
+		{
+			const FSliceEntry& M = Slice[Si];
 			FTransform NewTM = M.TM;
 			NewTM.AddToTranslation(FVector(0.f, 0.f, Dz));
 			const FVector NL = M.BO + FVector(0.f, 0.f, Dz); // bounds-center op de doel-verdieping
@@ -973,41 +1018,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 				continue;
 			}
 			if (M.bSyncOnly) { continue; } // alleen materiaal-sync, nooit spawnen
-			// SETBACK-check: alleen plakken als er gebouw ONDER dit punt zit (trapsgewijze gebouwen
-			// zijn boven smaller - anders zweven vloeren in de lucht boven terrassen).
-			{
-				FHitResult GroundHit;
-				FCollisionQueryParams GQP(SCENE_QUERY_STAT(VertCloneGround), false);
-				const FVector GStart(NL.X, NL.Y, TgtZ + 90.f);
-				if (!W->LineTraceSingleByChannel(GroundHit, GStart, GStart - FVector(0.f, 0.f, 470.f), ECC_Visibility, GQP))
-				{
-					continue; // open lucht eronder -> hier bestaat het gebouw niet meer
-				}
-				// GEVEL-OMSLUITING: het stuk moet HELEMAAL binnen het gebouw vallen - het MIDDELPUNT en
-				// alle 4 XY-hoeken (15cm ingetrokken) moeten omsloten zijn door de gevel-schil
-				// (horizontale stralen raken in >=3 van 4 richtingen iets). Muren waarvan een uiteinde
-				// door de gevel prikt (smallere toren boven het podium) vallen zo af.
-				const FVector Dirs[4] = { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) };
-				const float Ex = FMath::Max(0.f, M.Ext.X - 15.f);
-				const float Ey = FMath::Max(0.f, M.Ext.Y - 15.f);
-				const FVector2D TestPts[5] = {
-					FVector2D(NL.X, NL.Y),
-					FVector2D(NL.X + Ex, NL.Y + Ey), FVector2D(NL.X + Ex, NL.Y - Ey),
-					FVector2D(NL.X - Ex, NL.Y + Ey), FVector2D(NL.X - Ex, NL.Y - Ey) };
-				bool bEnclosed = true;
-				for (const FVector2D& TP : TestPts)
-				{
-					int32 ShellHits = 0;
-					const FVector SStart(TP.X, TP.Y, TgtZ + 160.f);
-					for (const FVector& SD : Dirs)
-					{
-						FHitResult SHit;
-						if (W->LineTraceSingleByChannel(SHit, SStart, SStart + SD * 2000.f, ECC_Visibility, GQP)) { ++ShellHits; }
-					}
-					if (ShellHits < 3) { bEnclosed = false; break; }
-				}
-				if (!bEnclosed) { continue; } // steekt (deels) buiten de gevel van deze verdieping
-			}
+			if (!PieceFits[Si]) { continue; } // uitslag van de keuring (fase 1)
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
 			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
