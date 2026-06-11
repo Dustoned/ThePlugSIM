@@ -653,6 +653,11 @@ void ADoorRetrofitter::ScanAndConvert()
 // vlieg (F7) of loop naar een lege kamer-ruimte, zet F9 op de ene hoek, F9 op de tegenoverliggende
 // hoek (zelfde verdieping) - elk PAAR opeenvolgende marks wordt een kamer: vloer, muren (met opening
 // bij een deur-frame aan de rand), plafond en een lamp. As-aligned (de hotels zijn dat ook).
+// Kamer-KOPIEERDER, volledig speler-gestuurd: het EERSTE paar F9-marks = de BRON-rechthoek (zet ze
+// om de echte ingerichte kamer heen, badkamer incl.). Elk VOLGEND paar = een doel-plek: alles binnen
+// de bron-rechthoek wordt 1-op-1 daarheen gekopieerd (verschuiving, geen rotatie - markeer doelen met
+// dezelfde orientatie t.o.v. hun deur). Vloer-hoogte snapt automatisch op de echte vloer. Verborgen
+// deur-bladen worden mee-gekopieerd en door de leaf-converter weer werkende deuren.
 void ADoorRetrofitter::BuildMarkedRooms()
 {
 	UWorld* W = GetWorld();
@@ -674,68 +679,11 @@ void ADoorRetrofitter::BuildMarkedRooms()
 		PosStr.ParseIntoArray(Parts, TEXT(","));
 		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
 	}
+	if (Marks.Num() < 4) { return; } // bron-paar + minstens 1 doel-paar
 
-	const FString IntDir = TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/");
-	auto LoadPart = [&](const TCHAR* Name) -> UStaticMesh*
+	auto NearestFloorZ = [&](const FVector& Around, float Fallback) -> float
 	{
-		return LoadObject<UStaticMesh>(nullptr, *(IntDir + Name + TEXT(".") + Name));
-	};
-
-	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	auto Spawn = [&](UStaticMesh* M, const FVector& Loc, float Yaw)
-	{
-		if (!M) { return; }
-		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), Loc), SP);
-		if (!A) { return; }
-		if (UStaticMeshComponent* C = A->GetStaticMeshComponent())
-		{
-			C->SetMobility(EComponentMobility::Movable);
-			C->SetStaticMesh(M);
-			C->SetCanEverAffectNavigation(false);
-		}
-	};
-
-	for (int32 Pi = 0; Pi + 1 < Marks.Num(); Pi += 2)
-	{
-		const FVector& MA = Marks[Pi];
-		const FVector& MB = Marks[Pi + 1];
-		if (FMath::Abs(MA.Z - MB.Z) > 200.f) { continue; }
-		if (FVector::Dist2D(MA, MB) < 250.f) { continue; }
-
-		float X0 = FMath::Min(MA.X, MB.X), X1 = FMath::Max(MA.X, MB.X);
-		float Y0 = FMath::Min(MA.Y, MB.Y), Y1 = FMath::Max(MA.Y, MB.Y);
-		const int32 Wd = FMath::Max(200, 100 * FMath::RoundToInt((X1 - X0) / 100.f));
-		const int32 Dp = FMath::Max(200, 100 * FMath::RoundToInt((Y1 - Y0) / 100.f));
-		X0 = FMath::GridSnap(X0, 10.f); Y0 = FMath::GridSnap(Y0, 10.f);
-
-		const FIntPoint Key(FMath::RoundToInt((X0 + Wd * 0.5f) / 100.f), FMath::RoundToInt((Y0 + Dp * 0.5f) / 100.f));
-		if (BuiltRects.Contains(Key)) { continue; }
-		BuiltRects.Add(Key);
-
-		// VLOER-HOOGTE: snap op de Z van de dichtstbijzijnde BESTAANDE vloer-tegel van het gebouw
-		// (sta-hoogte van de speler gaf altijd een paar cm verschil met de echte vloer).
-		float FloorZ = FMath::GridSnap(FMath::Min(MA.Z, MB.Z) - 98.f, 5.f);
-		{
-			const FVector RectC(X0 + Wd * 0.5f, Y0 + Dp * 0.5f, 0.f);
-			float BestDz = 200.f;
-			for (TActorIterator<AActor> It(W); It; ++It)
-			{
-				if (!IsValid(*It)) { continue; }
-				TInlineComponentArray<UStaticMeshComponent*> Comps(*It);
-				for (UStaticMeshComponent* Comp : Comps)
-				{
-					if (!Comp || !Comp->GetStaticMesh()) { continue; }
-					if (!Comp->GetStaticMesh()->GetName().StartsWith(TEXT("SM_Floor"))) { continue; }
-					const FVector L = Comp->GetComponentLocation();
-					if (FVector::Dist2D(L, RectC) > 1200.f) { continue; }
-					const float Dz = FMath::Abs(L.Z - FloorZ);
-					if (Dz < BestDz) { BestDz = Dz; FloorZ = L.Z; }
-				}
-			}
-		}
-
-		// DEUREN langs de rand: ALLE deur-frames/bladen dicht bij de rechthoek-rand krijgen een opening.
-		TArray<FVector> DoorSpots;
+		float Best = Fallback, BestDz = 220.f;
 		for (TActorIterator<AActor> It(W); It; ++It)
 		{
 			if (!IsValid(*It)) { continue; }
@@ -743,163 +691,81 @@ void ADoorRetrofitter::BuildMarkedRooms()
 			for (UStaticMeshComponent* Comp : Comps)
 			{
 				if (!Comp || !Comp->GetStaticMesh()) { continue; }
-				const FString MeshName = Comp->GetStaticMesh()->GetName();
-				if (!MeshName.StartsWith(TEXT("SM_DoorFrameCommerical")) && !MeshName.StartsWith(TEXT("SM_Door_Apartment"))) { continue; }
+				if (!Comp->GetStaticMesh()->GetName().StartsWith(TEXT("SM_Floor"))) { continue; }
 				const FVector L = Comp->GetComponentLocation();
-				if (FMath::Abs(L.Z - FloorZ) > 60.f) { continue; }
-				const float Dx = FMath::Max(0.f, FMath::Max(X0 - (float)L.X, (float)L.X - (X0 + (float)Wd)));
-				const float Dy = FMath::Max(0.f, FMath::Max(Y0 - (float)L.Y, (float)L.Y - (Y0 + (float)Dp)));
-				if (FMath::Sqrt(Dx * Dx + Dy * Dy) < 200.f) { DoorSpots.Add(L); }
+				if (FVector::Dist2D(L, Around) > 1500.f) { continue; }
+				const float Dz = FMath::Abs(L.Z - Fallback);
+				if (Dz < BestDz) { BestDz = Dz; Best = L.Z; }
 			}
 		}
+		return Best;
+	};
 
-		// BADKAMER-hoek bepalen: bij de entree (dichtstbijzijnde deur), of anders de X0/Y0-hoek.
-		FVector EntryDoor = DoorSpots.Num() ? DoorSpots[0] : FVector(X0, Y0, FloorZ);
-		if (DoorSpots.Num() > 1)
+	// BRON: eerste paar.
+	const FVector SA = Marks[0], SB = Marks[1];
+	if (FMath::Abs(SA.Z - SB.Z) > 200.f || FVector::Dist2D(SA, SB) < 250.f) { return; }
+	const float SX0 = FMath::Min(SA.X, SB.X), SX1 = FMath::Max(SA.X, SB.X);
+	const float SY0 = FMath::Min(SA.Y, SB.Y), SY1 = FMath::Max(SA.Y, SB.Y);
+	const float SrcFloorZ = NearestFloorZ(FVector((SX0 + SX1) * 0.5f, (SY0 + SY1) * 0.5f, 0.f), FMath::Min(SA.Z, SB.Z) - 98.f);
+
+	// Bron-inhoud verzamelen (incl. verborgen deur-bladen zodat de kopie werkende deuren krijgt).
+	TArray<TPair<UStaticMesh*, FTransform>> SourceSet;
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A)) { continue; }
+		if (A->IsA(ACityDoor::StaticClass()) || A->IsA(APackElevator::StaticClass()) || A->IsA(APackElevatorButton::StaticClass())) { continue; }
+		const bool bHiddenActor = A->IsHidden();
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
 		{
-			float BD = TNumericLimits<float>::Max();
-			for (const FVector& D : DoorSpots)
-			{
-				const float Dd = FVector::Dist2D(D, FVector(X0 + Wd * 0.5f, Y0 + Dp * 0.5f, 0.f));
-				if (Dd < BD) { BD = Dd; EntryDoor = D; }
-			}
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MeshName = Comp->GetStaticMesh()->GetName();
+			// Verborgen actors alleen meenemen als het (geconverteerde) deur-bladen zijn.
+			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
+			const FVector L = Comp->GetComponentLocation();
+			if (L.X < SX0 - 12.f || L.X > SX1 + 12.f || L.Y < SY0 - 12.f || L.Y > SY1 + 12.f) { continue; }
+			if (L.Z < SrcFloorZ - 8.f || L.Z > SrcFloorZ + 332.f) { continue; }
+			SourceSet.Add(TPair<UStaticMesh*, FTransform>(Comp->GetStaticMesh(), Comp->GetComponentTransform()));
 		}
-		const bool bBathroom = (Wd >= 500 && Dp >= 500);
-		const bool bBathLeft = EntryDoor.X < X0 + Wd * 0.5f;
-		const bool bBathBottom = EntryDoor.Y < Y0 + Dp * 0.5f;
-		const float BX0 = bBathLeft ? X0 : X0 + Wd - 300.f;
-		const float BY0 = bBathBottom ? Y0 : Y0 + Dp - 300.f;
+	}
+	if (SourceSet.Num() == LastSourceCount) { ++SourceStableStreak; } else { SourceStableStreak = 0; }
+	LastSourceCount = SourceSet.Num();
+	if (SourceSet.Num() < 8 || SourceStableStreak < 2) { return; } // wachten tot de bron volledig gestreamd is
 
-		// VLOER + PLAFOND over de hele rechthoek (badkamer-tegels komen er 1.5cm bovenop).
-		UStaticMesh* F44 = LoadPart(TEXT("SM_Floor_4x4m")); UStaticMesh* F43 = LoadPart(TEXT("SM_Floor_4x3m"));
-		UStaticMesh* F41 = LoadPart(TEXT("SM_Floor_4x1m")); UStaticMesh* F11 = LoadPart(TEXT("SM_Floor_1x1m"));
-		UStaticMesh* C44 = LoadPart(TEXT("SM_Ceiling_4x4m")); UStaticMesh* C43 = LoadPart(TEXT("SM_Ceiling_4x3m"));
-		UStaticMesh* C41 = LoadPart(TEXT("SM_Ceiling_4x1m")); UStaticMesh* C11 = LoadPart(TEXT("SM_Ceiling_1x1m"));
-		int32 Gx = 0;
-		while (Gx < Wd)
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	// DOELEN: elk volgend paar = kopie-plek (verschuiving t.o.v. de bron-min-hoek).
+	for (int32 Pi = 2; Pi + 1 < Marks.Num(); Pi += 2)
+	{
+		const FVector& TA = Marks[Pi];
+		const FVector& TB = Marks[Pi + 1];
+		if (FMath::Abs(TA.Z - TB.Z) > 200.f || FVector::Dist2D(TA, TB) < 250.f) { continue; }
+		const float TX0 = FMath::Min(TA.X, TB.X);
+		const float TY0 = FMath::Min(TA.Y, TB.Y);
+		const FIntPoint Key(FMath::RoundToInt(TX0 / 100.f), FMath::RoundToInt(TY0 / 100.f));
+		if (BuiltRects.Contains(Key)) { continue; }
+		BuiltRects.Add(Key);
+
+		const float TFloorZ = NearestFloorZ(FVector(TX0 + (SX1 - SX0) * 0.5f, TY0 + (SY1 - SY0) * 0.5f, 0.f), FMath::Min(TA.Z, TB.Z) - 98.f);
+		const FVector Offset(TX0 - SX0, TY0 - SY0, TFloorZ - SrcFloorZ);
+
+		int32 Placed = 0;
+		for (const TPair<UStaticMesh*, FTransform>& M : SourceSet)
 		{
-			const int32 Sx = (Wd - Gx >= 400) ? 400 : 100;
-			int32 Gy = 0;
-			while (Gy < Dp)
+			FTransform NewTM = M.Value;
+			NewTM.AddToTranslation(Offset);
+			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
+			if (!SMA) { continue; }
+			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
 			{
-				int32 Sy;
-				if (Sx == 400) { Sy = (Dp - Gy >= 400) ? 400 : ((Dp - Gy >= 300) ? 300 : 100); }
-				else { Sy = 100; }
-				UStaticMesh* FM = (Sx == 400) ? ((Sy == 400) ? F44 : (Sy == 300) ? F43 : F41) : F11;
-				UStaticMesh* CM = (Sx == 400) ? ((Sy == 400) ? C44 : (Sy == 300) ? C43 : C41) : C11;
-				const FVector Pivot(X0 + Gx + Sx, Y0 + Gy + Sy, FloorZ);
-				Spawn(FM, Pivot, 0.f);
-				Spawn(CM, FVector(Pivot.X, Pivot.Y, FloorZ + 320.f), 0.f);
-				Gy += Sy;
+				C->SetMobility(EComponentMobility::Movable);
+				C->SetStaticMesh(M.Key);
+				C->SetCanEverAffectNavigation(false);
 			}
-			Gx += Sx;
+			++Placed;
 		}
-
-		// MUREN: dubbelzijdig (de pack-muren zijn enkelzijdig - de map zet ze zelf ook rug-aan-rug).
-		UStaticMesh* W4 = LoadPart(TEXT("SM_InteriorWall_01_4m")); UStaticMesh* W2 = LoadPart(TEXT("SM_InteriorWall_01_2m"));
-		UStaticMesh* W1 = LoadPart(TEXT("SM_InteriorWall_01_1m")); UStaticMesh* W05 = LoadPart(TEXT("SM_InteriorWall_01_0_5m"));
-		auto WallFor = [&](float Avail) -> TPair<float, UStaticMesh*>
-		{
-			if (Avail >= 400.f) { return TPair<float, UStaticMesh*>(400.f, W4); }
-			if (Avail >= 200.f) { return TPair<float, UStaticMesh*>(200.f, W2); }
-			if (Avail >= 100.f) { return TPair<float, UStaticMesh*>(100.f, W1); }
-			if (Avail >= 50.f) { return TPair<float, UStaticMesh*>(50.f, W05); }
-			return TPair<float, UStaticMesh*>(0.f, nullptr);
-		};
-		struct FEdge { FVector Start; FVector Dir; FVector Inward; float Len; float Yaw; };
-		// Start bevat de 5cm-inzet; Inward = de kamer in. Tweede (gespiegelde) muur per segment:
-		// yaw+180, pivot = pivot1 - Dir*Seg - Inward*5 (zelfde 5cm-strook, gezicht de andere kant op).
-		const FEdge Edges[4] = {
-			{ FVector(X0 + 5.f, Y0, FloorZ),           FVector(0, 1, 0),  FVector(1, 0, 0),  (float)Dp, 0.f },
-			{ FVector(X0 + Wd - 5.f, Y0 + Dp, FloorZ), FVector(0, -1, 0), FVector(-1, 0, 0), (float)Dp, 180.f },
-			{ FVector(X0 + Wd, Y0, FloorZ),            FVector(-1, 0, 0), FVector(0, 1, 0),  (float)Wd, -90.f },
-			{ FVector(X0, Y0 + Dp, FloorZ),            FVector(1, 0, 0),  FVector(0, -1, 0), (float)Wd, 90.f },
-		};
-		auto BuildWallRun = [&](const FEdge& E, const TArray<TPair<float, float>>& Gaps)
-		{
-			float Pos = 0.f;
-			while (Pos < E.Len - 24.f)
-			{
-				bool bInGap = false;
-				float NextGapStart = E.Len;
-				for (const TPair<float, float>& G : Gaps)
-				{
-					if (Pos >= G.Key - 1.f && Pos < G.Value) { Pos = G.Value; bInGap = true; break; }
-					if (G.Key > Pos) { NextGapStart = FMath::Min(NextGapStart, G.Key); }
-				}
-				if (bInGap) { continue; }
-				const float Avail = FMath::Min(E.Len - Pos, NextGapStart - Pos);
-				const TPair<float, UStaticMesh*> Seg = WallFor(Avail);
-				if (!Seg.Value) { Pos = NextGapStart; if (Pos >= E.Len - 1.f) { break; } continue; }
-				const FVector Pivot1 = E.Start + E.Dir * (Pos + Seg.Key);
-				Spawn(Seg.Value, Pivot1, E.Yaw);
-				Spawn(Seg.Value, Pivot1 - E.Dir * Seg.Key - E.Inward * 5.f, E.Yaw + 180.f);
-				Pos += Seg.Key;
-			}
-		};
-		for (const FEdge& E : Edges)
-		{
-			TArray<TPair<float, float>> Gaps;
-			for (const FVector& D : DoorSpots)
-			{
-				const FVector Rel = D - E.Start;
-				const float Along = FVector::DotProduct(Rel, E.Dir);
-				const float Perp = (Rel - E.Dir * Along).Size2D();
-				if (Perp < 150.f && Along > -95.f && Along < E.Len + 95.f)
-				{
-					Gaps.Add(TPair<float, float>(FMath::Max(0.f, Along - 95.f), FMath::Min(E.Len, Along + 95.f)));
-				}
-			}
-			Gaps.Sort([](const TPair<float, float>& A, const TPair<float, float>& B) { return A.Key < B.Key; });
-			BuildWallRun(E, Gaps);
-		}
-
-		// BADKAMER: 3x3m binnen-kamer in de entree-hoek met tegel-vloer (1x1-tegels hebben de
-		// badkamer-look), eigen plafond op 290 en dubbele muren met een 90cm-doorgang.
-		if (bBathroom)
-		{
-			for (int32 Tx = 0; Tx < 3; ++Tx)
-			{
-				for (int32 Ty = 0; Ty < 3; ++Ty)
-				{
-					Spawn(F11, FVector(BX0 + Tx * 100.f + 100.f, BY0 + Ty * 100.f + 100.f, FloorZ + 1.5f), 0.f);
-					Spawn(C11, FVector(BX0 + Tx * 100.f + 100.f, BY0 + Ty * 100.f + 100.f, FloorZ + 290.f), 0.f);
-				}
-			}
-			// Binnen-muren: de 2 kanten die niet tegen de kamer-rand liggen. Doorgang (90cm) in het
-			// midden van de muur die naar de kamer wijst.
-			const float IWx = bBathLeft ? BX0 + 300.f : BX0;           // verticale binnen-muur (loopt langs Y)
-			const float IWy = bBathBottom ? BY0 + 300.f : BY0;         // horizontale binnen-muur (loopt langs X)
-			// Verticale muur met deur-gat in het midden (gat 95-205 van de 300).
-			{
-				FEdge E { FVector(IWx + (bBathLeft ? -5.f : 5.f) * 0.f, 0.f, 0.f), FVector(0, 1, 0), FVector(bBathLeft ? -1.f : 1.f, 0, 0), 300.f, 0.f };
-				E.Start = FVector(IWx + (bBathLeft ? 0.f : 5.f) - (bBathLeft ? -5.f : 0.f) * 0.f, BY0, FloorZ);
-				E.Start.X = IWx + (bBathLeft ? 0.f : 0.f) + 5.f * (bBathLeft ? 0.f : 0.f);
-				E.Start = FVector(IWx + 5.f, BY0, FloorZ);
-				E.Inward = FVector(1, 0, 0);
-				TArray<TPair<float, float>> Gaps;
-				Gaps.Add(TPair<float, float>(105.f, 195.f));
-				BuildWallRun(E, Gaps);
-			}
-			// Horizontale muur (dicht).
-			{
-				FEdge E { FVector(BX0, IWy + 5.f, FloorZ), FVector(1, 0, 0), FVector(0, 1, 0), 300.f, 90.f };
-				E.Start = FVector(BX0, IWy, FloorZ);
-				E.Inward = FVector(0, -1, 0);
-				E.Yaw = 90.f;
-				E.Start = FVector(BX0, IWy, FloorZ);
-				TArray<TPair<float, float>> NoGaps;
-				BuildWallRun(E, NoGaps);
-			}
-		}
-
-		// LAMP in het kamer-midden.
-		if (UStaticMesh* Lamp = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/CityBeachStrip/Meshes/CeilingProps/SM_CeilingLight02.SM_CeilingLight02")))
-		{
-			Spawn(Lamp, FVector(X0 + Wd * 0.5f, Y0 + Dp * 0.5f, FloorZ + 319.f), 0.f);
-		}
-
-		UE_LOG(LogWeedShop, Warning, TEXT("RoomBuilder: kamer %dx%dcm op (%.0f, %.0f, %.0f), deuren=%d, badkamer=%d"), Wd, Dp, X0, Y0, FloorZ, DoorSpots.Num(), bBathroom ? 1 : 0);
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomBuilder: kopie geplaatst op (%.0f, %.0f, %.0f) - %d meshes (bron %d)"), TX0, TY0, TFloorZ, Placed, SourceSet.Num());
 	}
 }
 
