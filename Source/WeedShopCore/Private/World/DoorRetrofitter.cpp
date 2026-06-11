@@ -693,12 +693,17 @@ void ADoorRetrofitter::VerticalReplicate()
 		PosStr.ParseIntoArray(Parts, TEXT(","));
 		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
 	}
-	if (Marks.Num() != 1) { return; } // precies 1 marker = verticale kopie-modus
+	if (Marks.Num() != 2) { return; } // precies 2 markers = verticale kopie van die rechthoek
 
+	// Kopie-gebied = exact de rechthoek tussen de 2 markers (+30cm marge). Zo blijft het terras/balkon
+	// erbuiten - de eerdere royale box kopieerde parasols en ligbedjes zwevend de lucht in.
 	const FVector Mark = Marks[0];
-	const float Feet = Mark.Z - 98.f;
+	const float MinX = FMath::Min(Marks[0].X, Marks[1].X) - 30.f;
+	const float MaxX = FMath::Max(Marks[0].X, Marks[1].X) + 30.f;
+	const float MinY = FMath::Min(Marks[0].Y, Marks[1].Y) - 30.f;
+	const float MaxY = FMath::Max(Marks[0].Y, Marks[1].Y) + 30.f;
+	const float Feet = FMath::Min(Marks[0].Z, Marks[1].Z) - 98.f;
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
-	const float BoxR = 2200.f; // royale box om de marker (dedupe maakt te veel meenemen onschadelijk)
 
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
 	TArray<TPair<UStaticMesh*, FTransform>> Slice;
@@ -716,7 +721,7 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
 			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam"))) { continue; } // camera's zweven los van hun muur in kopieen
 			const FVector L = Comp->GetComponentLocation();
-			if (FMath::Abs(L.X - Mark.X) > BoxR || FMath::Abs(L.Y - Mark.Y) > BoxR) { continue; }
+			if (L.X < MinX || L.X > MaxX || L.Y < MinY || L.Y > MaxY) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 330.f) { continue; } // alleen deze verdieping-slice
 			Slice.Add(TPair<UStaticMesh*, FTransform>(Comp->GetStaticMesh(), Comp->GetComponentTransform()));
 		}
@@ -757,7 +762,7 @@ void ADoorRetrofitter::VerticalReplicate()
 			{
 				if (!Comp || !Comp->GetStaticMesh()) { continue; }
 				const FVector L = Comp->GetComponentLocation();
-				if (FMath::Abs(L.X - Mark.X) > BoxR + 50.f || FMath::Abs(L.Y - Mark.Y) > BoxR + 50.f) { continue; }
+				if (L.X < MinX - 50.f || L.X > MaxX + 50.f || L.Y < MinY - 50.f || L.Y > MaxY + 50.f) { continue; }
 				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 335.f) { continue; }
 				++ExistCount;
 				{
