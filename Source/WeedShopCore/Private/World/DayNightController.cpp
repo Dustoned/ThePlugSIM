@@ -115,7 +115,7 @@ void ADayNightController::BeginPlay()
 			{
 				MoonDL->SetAtmosphereSunLight(true);
 				MoonDL->SetAtmosphereSunLightIndex(1); // index 1 = tweede hemel-lichaam (maan-schijf)
-				MoonDL->SetLightSourceAngle(0.4f);     // maan-schijf iets kleiner dan de zon
+				MoonDL->SetLightSourceAngle(3.f);      // lekker grote game-maan (realistisch 0.5 oogt als een puntje)
 				MoonDL->SetLightSourceSoftAngle(0.f);
 				MoonDL->SetLightColor(FLinearColor(0.62f, 0.68f, 0.85f)); // koel maanlicht
 			}
