@@ -855,6 +855,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		return;
 	}
 	DoneJobs.Add(JobId);
+	FString BakeOut; // export voor de editor-bake (permanent in de map zetten)
 
 	// Hash-set van alles wat de BRON-verdieping wel heeft: elementen die op een doel-verdieping
 	// bestaan maar hier niet, zijn door de makers verwijderd (nep-glas e.d.) -> spiegelen.
@@ -974,6 +975,21 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 					if (M.Mats[Mi]) { C->SetMaterial(Mi, M.Mats[Mi]); }
 				}
 			}
+			// Export-regel voor de editor-bake: mesh|pos|rot|scale|materialen.
+			{
+				const FVector SL = NewTM.GetLocation();
+				const FRotator SR = NewTM.GetRotation().Rotator();
+				const FVector SS = NewTM.GetScale3D();
+				FString MatList;
+				for (int32 Mi = 0; Mi < M.Mats.Num(); ++Mi)
+				{
+					if (Mi > 0) { MatList += TEXT(";"); }
+					MatList += M.Mats[Mi] ? M.Mats[Mi]->GetPathName() : TEXT("-");
+				}
+				BakeOut += FString::Printf(TEXT("SPAWN|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
+					*M.Mesh->GetPathName(), SL.X, SL.Y, SL.Z, SR.Pitch, SR.Yaw, SR.Roll, SS.X, SS.Y, SS.Z, *MatList);
+				BakeOut += LINE_TERMINATOR;
+			}
 			++Placed;
 		}
 		// Kamer geplaatst -> SPIEGEL DE BRON: elk raam/glas-element dat hier staat maar op de bron-
@@ -989,12 +1005,21 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 				{
 					WC.Key->SetVisibility(false);
 					WC.Key->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					const FVector HL = WC.Key->Bounds.Origin;
+					BakeOut += FString::Printf(TEXT("HIDE|%s|%.1f,%.1f,%.1f"), *WC.Key->GetStaticMesh()->GetName(), HL.X, HL.Y, HL.Z);
+					BakeOut += LINE_TERMINATOR;
 					++GlassHidden;
 				}
 			}
 		}
 		TotalPlaced += Placed;
 		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al, %d nep-glas verborgen)"), N, TgtZ, Placed, ExistCount, GlassHidden);
+	}
+	if (BakeOut.Len() > 0)
+	{
+		FFileHelper::SaveStringToFile(FString::Printf(TEXT("JOB|%s"), *JobId) + LINE_TERMINATOR + BakeOut,
+			*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
+			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	UE_LOG(LogWeedShop, Warning, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
 }
