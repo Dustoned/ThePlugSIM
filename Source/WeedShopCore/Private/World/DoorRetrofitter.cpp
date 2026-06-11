@@ -948,7 +948,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 					// Strikt BINNEN de kopie-rechthoek en in de eigen verdieping-band: de 50cm-buffer
 					// eromheen ving buur-ramen die geen bron-tegenhanger hebben -> die werden onterecht
 					// verborgen. Buur-vakken blijven nu met rust.
-					if ((GN.Contains(TEXT("Glass")) || GN.Contains(TEXT("Window"))) && InRects(L) && (L.Z - TgtZ) < 340.f)
+					if ((GN.Contains(TEXT("Glass")) || GN.Contains(TEXT("Window")) || GN.Contains(TEXT("BalconyDoor"))) && InRects(L) && (L.Z - TgtZ) < 340.f)
 					{
 						// Hash van de BRON-positie (pos - Dz): bestaat die niet in de bron-slice, dan
 						// heeft de maker dit element op de ingerichte verdieping VERWIJDERD -> wij ook.
