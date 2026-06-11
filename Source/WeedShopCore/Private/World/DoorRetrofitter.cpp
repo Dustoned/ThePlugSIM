@@ -740,7 +740,7 @@ void ADoorRetrofitter::VerticalReplicate()
 	FBox2D Outer(ForceInit);
 	Outer += FVector2D(Marks[0].X, Marks[0].Y);
 	Outer += FVector2D(Marks[1].X, Marks[1].Y);
-	Outer = Outer.ExpandBy(30.f);
+	Outer = Outer.ExpandBy(130.f); // ruim genoeg om de OMSLUITENDE muren + gevel-binnenkant te pakken (middelpunt ligt op de muur-lijn), nog binnen het balkon
 	auto InRects = [&Outer](const FVector& L) -> bool
 	{
 		return L.X >= Outer.Min.X && L.X <= Outer.Max.X && L.Y >= Outer.Min.Y && L.Y <= Outer.Max.Y;
