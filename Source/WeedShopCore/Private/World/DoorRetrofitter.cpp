@@ -748,7 +748,10 @@ void ADoorRetrofitter::BuildMarkedRooms()
 		BuiltRects.Add(Key);
 
 		const float TFloorZ = NearestFloorZ(FVector(TX0 + (SX1 - SX0) * 0.5f, TY0 + (SY1 - SY0) * 0.5f, 0.f), FMath::Min(TA.Z, TB.Z) - 98.f);
-		const FVector Offset(TX0 - SX0, TY0 - SY0, TFloorZ - SrcFloorZ);
+		// GRID-SNAP: het hele gebouw staat op een 1m-grid - door de verschuiving op 100cm te snappen
+		// vallen alle gekopieerde muren exact in lijn met de muren eronder en de buitengevel
+		// (en sluiten ramen er straks strak op aan). Marks hoeven dus maar ~50cm nauwkeurig.
+		const FVector Offset(FMath::GridSnap(TX0 - SX0, 100.f), FMath::GridSnap(TY0 - SY0, 100.f), TFloorZ - SrcFloorZ);
 
 		int32 Placed = 0;
 		for (const TPair<UStaticMesh*, FTransform>& M : SourceSet)
