@@ -757,6 +757,14 @@ void ADoorRetrofitter::VerticalReplicate()
 	};
 	FBox2D Outer(ForceInit);
 	for (const FBox2D& R : Rects) { Outer += R.Min; Outer += R.Max; }
+	// Alleen capteren als de speler dichtbij de bron is - anders is de bron half-gestreamd en
+	// kopieer je halve kamers.
+	{
+		APlayerController* PC = W->GetFirstPlayerController();
+		APawn* P = PC ? PC->GetPawn() : nullptr;
+		const FVector2D OC = Outer.GetCenter();
+		if (!P || FVector::Dist2D(P->GetActorLocation(), FVector(OC.X, OC.Y, 0.f)) > 2800.f) { return; }
+	}
 	const float Feet = Marks[0].Z - 98.f;
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
 
@@ -784,7 +792,7 @@ void ADoorRetrofitter::VerticalReplicate()
 	// Wachten tot de bron-verdieping volledig ingestreamd is (3 scans dezelfde telling).
 	if (Slice.Num() == VertLastCount) { ++VertStableStreak; } else { VertStableStreak = 0; }
 	VertLastCount = Slice.Num();
-	if (Slice.Num() < 30 || VertStableStreak < 2)
+	if (Slice.Num() < 30 || VertStableStreak < 3)
 	{
 		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: bron-slice %d meshes (streak %d) - wacht"), Slice.Num(), VertStableStreak);
 		return;
@@ -851,6 +859,17 @@ void ADoorRetrofitter::VerticalReplicate()
 				^ (uint64)(FMath::RoundToInt(NL.Y / 10.f) * 19349663)
 				^ (uint64)(FMath::RoundToInt(NL.Z / 10.f) * 83492791);
 			if (Existing.Contains(H)) { continue; } // staat hier al (gevel/raam/lift/gang)
+			// SETBACK-check: alleen plakken als er gebouw ONDER dit punt zit (trapsgewijze gebouwen
+			// zijn boven smaller - anders zweven vloeren in de lucht boven terrassen).
+			{
+				FHitResult GroundHit;
+				FCollisionQueryParams GQP(SCENE_QUERY_STAT(VertCloneGround), false);
+				const FVector GStart(NL.X, NL.Y, TgtZ + 90.f);
+				if (!W->LineTraceSingleByChannel(GroundHit, GStart, GStart - FVector(0.f, 0.f, 470.f), ECC_Visibility, GQP))
+				{
+					continue; // open lucht eronder -> hier bestaat het gebouw niet meer
+				}
+			}
 			// Doorkijk-raam (_Interior) vervangt het parallax-raam (nep-3D, niet doorzichtig) op die plek.
 			const FString PasteMeshName = M.Key->GetName();
 			if (PasteMeshName.Contains(TEXT("_Interior")) && PasteMeshName.Contains(TEXT("Window")))
