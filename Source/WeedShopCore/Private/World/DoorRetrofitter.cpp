@@ -733,13 +733,14 @@ void ADoorRetrofitter::VerticalReplicate()
 		PosStr.ParseIntoArray(Parts, TEXT(","));
 		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
 	}
-	if (Marks.Num() != 1) { return; } // 1 marker midden in de bron-kamer = verticale kopie-modus
+	if (Marks.Num() != 2) { return; } // 2 markers: verste hoek kamer <-> verste hoek badkamer
 
-	// Grote box om de marker (dit werkte het best: complete kamers). Terras-meubilair wordt op
-	// NAAM uitgefilterd en de setback-check hieronder knipt alles wat buiten het gebouw valt.
+	// EEN strakke rechthoek tussen de 2 markers (+30cm marge): alles daarbinnen gaat mee, alles
+	// daarbuiten (gevel-details, balkons, terras) blijft VOLLEDIG met rust.
 	FBox2D Outer(ForceInit);
-	Outer += FVector2D(Marks[0].X - 2200.f, Marks[0].Y - 2200.f);
-	Outer += FVector2D(Marks[0].X + 2200.f, Marks[0].Y + 2200.f);
+	Outer += FVector2D(Marks[0].X, Marks[0].Y);
+	Outer += FVector2D(Marks[1].X, Marks[1].Y);
+	Outer = Outer.ExpandBy(30.f);
 	auto InRects = [&Outer](const FVector& L) -> bool
 	{
 		return L.X >= Outer.Min.X && L.X <= Outer.Max.X && L.Y >= Outer.Min.Y && L.Y <= Outer.Max.Y;
@@ -809,11 +810,7 @@ void ADoorRetrofitter::VerticalReplicate()
 
 		// Bestaat deze verdieping (heeft het gebouw hier uberhaupt geometrie)? En dedupe-index bouwen:
 		// mesh-naam + positie op 10cm-grid van alles wat er al staat.
-		TSet<uint64> Existing;
-		// Raam-administratie: bestaande (parallax-)ramen op deze verdieping, zodat we ze kunnen
-		// verbergen zodra de kopie het echte doorkijk-raam (_Interior-variant) plaatst.
-		struct FWinRef { UStaticMeshComponent* Comp; FString Name; FVector Pos; };
-		TArray<FWinRef> ExistingWindows;
+		TMap<uint64, UStaticMeshComponent*> Existing; // hash -> bestaande comp (voor materiaal-sync)
 		int32 ExistCount = 0;
 		for (TActorIterator<AActor> It(W); It; ++It)
 		{
@@ -831,18 +828,11 @@ void ADoorRetrofitter::VerticalReplicate()
 				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 335.f) { continue; }
 				++ExistCount;
 				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
-				{
-					const FString CompMeshName = Comp->GetStaticMesh()->GetName();
-					if (CompMeshName.Contains(TEXT("Window")) && !CompMeshName.Contains(TEXT("_Interior")))
-					{
-						ExistingWindows.Add({ Comp, CompMeshName, L });
-					}
-				}
 				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
 					^ (uint64)(FMath::RoundToInt(L.X / 10.f) * 73856093)
 					^ (uint64)(FMath::RoundToInt(L.Y / 10.f) * 19349663)
 					^ (uint64)(FMath::RoundToInt(L.Z / 10.f) * 83492791);
-				Existing.Add(H);
+				Existing.Add(H, Comp);
 			}
 		}
 		if (ExistCount < 25) { continue; } // geen verdieping hier (boven het dak / onder de grond)
@@ -857,7 +847,19 @@ void ADoorRetrofitter::VerticalReplicate()
 				^ (uint64)(FMath::RoundToInt(NL.X / 10.f) * 73856093)
 				^ (uint64)(FMath::RoundToInt(NL.Y / 10.f) * 19349663)
 				^ (uint64)(FMath::RoundToInt(NL.Z / 10.f) * 83492791);
-			if (Existing.Contains(H)) { continue; } // staat hier al (gevel/raam/lift/gang)
+			if (UStaticMeshComponent** Found = Existing.Find(H))
+			{
+				// Staat hier al (gevel/raam/gang): NIET dubbel plaatsen, maar wel de bron-materialen
+				// overnemen - zo wordt parallax-glas (nep-3D) hier helder glas, zonder iets te slopen.
+				if (*Found)
+				{
+					for (int32 Mi = 0; Mi < M.Mats.Num() && Mi < (*Found)->GetNumMaterials(); ++Mi)
+					{
+						if (M.Mats[Mi] && (*Found)->GetMaterial(Mi) != M.Mats[Mi]) { (*Found)->SetMaterial(Mi, M.Mats[Mi]); }
+					}
+				}
+				continue;
+			}
 			// SETBACK-check: alleen plakken als er gebouw ONDER dit punt zit (trapsgewijze gebouwen
 			// zijn boven smaller - anders zweven vloeren in de lucht boven terrassen).
 			{
@@ -884,22 +886,8 @@ void ADoorRetrofitter::VerticalReplicate()
 			}
 			++Placed;
 		}
-		// Verdieping kreeg interieur -> ALLE parallax-ramen (nep-3D) in de kamer-zone verbergen;
-		// de kopie zet er de echte _Interior doorkijk-ramen voor in de plaats. Positie-matchen per
-		// raam miste varianten die net verschoven staan.
-		if (Placed > 10)
-		{
-			for (FWinRef& WR : ExistingWindows)
-			{
-				if (WR.Comp)
-				{
-					WR.Comp->SetVisibility(false);
-					WR.Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-				}
-			}
-		}
 		TotalPlaced += Placed;
-		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al, %d ramen geswapt)"), N, TgtZ, Placed, ExistCount, ExistingWindows.Num());
+		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al)"), N, TgtZ, Placed, ExistCount);
 	}
 	UE_LOG(LogWeedShop, Warning, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
 }
