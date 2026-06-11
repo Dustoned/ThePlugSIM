@@ -808,7 +808,10 @@ void ADoorRetrofitter::VerticalReplicate()
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	int32 TotalPlaced = 0;
-	for (int32 N = -8; N <= 8; ++N)
+	// VAN BOVEN NAAR BENEDEN: de bovenste echte verdieping heeft het dak als plafond (slaagt),
+	// en elke gevulde verdieping legt z'n vloerplaat neer = het plafond voor de verdieping eronder.
+	// (Lege verdiepingen missen onderling hun platen - bottom-up keurde daardoor alles af.)
+	for (int32 N = 8; N >= -8; --N)
 	{
 		if (N == 0) { continue; }
 		const float Dz = N * 350.f;
