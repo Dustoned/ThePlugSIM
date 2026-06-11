@@ -50,6 +50,7 @@ protected:
 	TSet<FIntPoint> ClonedRooms; // per deur-slot (pos/100) zodat we niet dubbel klonen
 	int32 LastSourceCount = -1; // streaming-stabiliteit van de bron-kamer
 	int32 CloneLogCooldown = 0;
+	bool bFogTamed = false; // basis-scenario-fog 1x getemd (zon-gloed eruit)
 
 	// Kaart-capture (lazy aangemaakt bij de eerste CaptureMapNow).
 	void EnsureMapCapture();

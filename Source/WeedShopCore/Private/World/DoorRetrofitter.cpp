@@ -432,9 +432,20 @@ void ADoorRetrofitter::ScanAndConvert()
 		};
 		for (TActorIterator<AExponentialHeightFog> It(W); It; ++It)
 		{
-			if (IsSurplusScenario(*It) && It->GetComponent() && It->GetComponent()->IsVisible())
+			UExponentialHeightFogComponent* FC = It->GetComponent();
+			if (!FC) { continue; }
+			if (IsSurplusScenario(*It))
 			{
-				It->GetComponent()->SetVisibility(false);
+				if (FC->IsVisible()) { FC->SetVisibility(false); }
+			}
+			else if (!bFogTamed)
+			{
+				// Basis-fog houden voor diepte, maar de ZON-GLOED eruit: de directional inscattering +
+				// volumetric fog (getuned voor de oude HDRI-koepel) vulden de halve hemel met een
+				// lichtbal. De SkyAtmosphere geeft zelf al nette afstands-haze.
+				FC->SetDirectionalInscatteringColor(FLinearColor::Black);
+				FC->SetVolumetricFog(false);
+				bFogTamed = true;
 			}
 		}
 		for (TActorIterator<APostProcessVolume> It(W); It; ++It)
