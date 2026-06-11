@@ -50,6 +50,13 @@ protected:
 	void BuildMarkedRooms();
 	TSet<FIntPoint> BuiltRects;
 
+	// Verticale verdieping-kopie: 1 enkele marker = kopieer die verdieping-slice naar alle
+	// verdiepingen erboven/eronder (zelfde gebouw), met dedupe (bestaande meshes overslaan).
+	void VerticalReplicate();
+	bool bVertCloneDone = false;
+	int32 VertLastCount = -1;
+	int32 VertStableStreak = 0;
+
 	// Kamer-kloner: lege deur-slots (deur naar de void) krijgen een kopie van het bron-appartement.
 	void CloneRooms();
 	TSet<FIntPoint> ClonedRooms; // per deur-slot (pos/100) zodat we niet dubbel klonen

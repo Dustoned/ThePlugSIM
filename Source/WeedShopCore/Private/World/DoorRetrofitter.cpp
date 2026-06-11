@@ -642,6 +642,7 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
 	// BuildMarkedRooms(); // UIT: marker-kopie werkte niet lekker - vervangen door de dev building-tool (muren/vloeren tekenen via het bouw-systeem)
+	VerticalReplicate();
 
 	if (NewThisPass > 0)
 	{
@@ -658,6 +659,131 @@ void ADoorRetrofitter::ScanAndConvert()
 // de bron-rechthoek wordt 1-op-1 daarheen gekopieerd (verschuiving, geen rotatie - markeer doelen met
 // dezelfde orientatie t.o.v. hun deur). Vloer-hoogte snapt automatisch op de echte vloer. Verborgen
 // deur-bladen worden mee-gekopieerd en door de leaf-converter weer werkende deuren.
+// VERTICALE VERDIEPING-KOPIE: zet 1 enkele F9-marker midden in een ingerichte kamer/verdieping.
+// Alles in die verdieping-slice (box om de marker) wordt 1-op-1 naar de verdiepingen erboven en
+// eronder gekopieerd - ZONDER draaien of schuiven, puur +/-350cm per verdieping. Meshes die daar al
+// staan (gevel, ramen, lift, gang) worden overgeslagen (dedupe), dus alleen het ontbrekende
+// interieur wordt aangevuld. Werkt alleen als het bestand precies 1 marker voor deze map bevat.
+void ADoorRetrofitter::VerticalReplicate()
+{
+	if (bVertCloneDone) { return; }
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Marks;
+	for (const FString& Line : Lines)
+	{
+		if (!Line.Contains(MapPath)) { continue; }
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Line.Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+	}
+	if (Marks.Num() != 1) { return; } // precies 1 marker = verticale kopie-modus
+
+	const FVector Mark = Marks[0];
+	const float Feet = Mark.Z - 98.f;
+	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
+	const float BoxR = 2200.f; // royale box om de marker (dedupe maakt te veel meenemen onschadelijk)
+
+	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
+	TArray<TPair<UStaticMesh*, FTransform>> Slice;
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A)) { continue; }
+		if (A->IsA(ACityDoor::StaticClass()) || A->IsA(APackElevator::StaticClass()) || A->IsA(APackElevatorButton::StaticClass())) { continue; }
+		const bool bHiddenActor = A->IsHidden();
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MeshName = Comp->GetStaticMesh()->GetName();
+			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
+			const FVector L = Comp->GetComponentLocation();
+			if (FMath::Abs(L.X - Mark.X) > BoxR || FMath::Abs(L.Y - Mark.Y) > BoxR) { continue; }
+			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 330.f) { continue; } // alleen deze verdieping-slice
+			Slice.Add(TPair<UStaticMesh*, FTransform>(Comp->GetStaticMesh(), Comp->GetComponentTransform()));
+		}
+	}
+	// Wachten tot de bron-verdieping volledig ingestreamd is (3 scans dezelfde telling).
+	if (Slice.Num() == VertLastCount) { ++VertStableStreak; } else { VertStableStreak = 0; }
+	VertLastCount = Slice.Num();
+	if (Slice.Num() < 30 || VertStableStreak < 2)
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: bron-slice %d meshes (streak %d) - wacht"), Slice.Num(), VertStableStreak);
+		return;
+	}
+	bVertCloneDone = true;
+
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	int32 TotalPlaced = 0;
+	for (int32 N = -8; N <= 8; ++N)
+	{
+		if (N == 0) { continue; }
+		const float Dz = N * 350.f;
+		const float TgtZ = SrcZ + Dz;
+		if (TgtZ < 470.f) { continue; } // begane grond heeft een andere hoogte (430) - overslaan
+
+		// Bestaat deze verdieping (heeft het gebouw hier uberhaupt geometrie)? En dedupe-index bouwen:
+		// mesh-naam + positie op 10cm-grid van alles wat er al staat.
+		TSet<uint64> Existing;
+		int32 ExistCount = 0;
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			AActor* A = *It;
+			if (!IsValid(A)) { continue; }
+			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+			for (UStaticMeshComponent* Comp : Comps)
+			{
+				if (!Comp || !Comp->GetStaticMesh()) { continue; }
+				const FVector L = Comp->GetComponentLocation();
+				if (FMath::Abs(L.X - Mark.X) > BoxR + 50.f || FMath::Abs(L.Y - Mark.Y) > BoxR + 50.f) { continue; }
+				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 335.f) { continue; }
+				++ExistCount;
+				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
+					^ (uint64)(FMath::RoundToInt(L.X / 10.f) * 73856093)
+					^ (uint64)(FMath::RoundToInt(L.Y / 10.f) * 19349663)
+					^ (uint64)(FMath::RoundToInt(L.Z / 10.f) * 83492791);
+				Existing.Add(H);
+			}
+		}
+		if (ExistCount < 25) { continue; } // geen verdieping hier (boven het dak / onder de grond)
+
+		int32 Placed = 0;
+		for (const TPair<UStaticMesh*, FTransform>& M : Slice)
+		{
+			FTransform NewTM = M.Value;
+			NewTM.AddToTranslation(FVector(0.f, 0.f, Dz));
+			const FVector NL = NewTM.GetLocation();
+			const uint64 H = GetTypeHash(M.Key->GetFName())
+				^ (uint64)(FMath::RoundToInt(NL.X / 10.f) * 73856093)
+				^ (uint64)(FMath::RoundToInt(NL.Y / 10.f) * 19349663)
+				^ (uint64)(FMath::RoundToInt(NL.Z / 10.f) * 83492791);
+			if (Existing.Contains(H)) { continue; } // staat hier al (gevel/raam/lift/gang)
+			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
+			if (!SMA) { continue; }
+			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
+			{
+				C->SetMobility(EComponentMobility::Movable);
+				C->SetStaticMesh(M.Key);
+				C->SetCanEverAffectNavigation(false);
+			}
+			++Placed;
+		}
+		TotalPlaced += Placed;
+		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al)"), N, TgtZ, Placed, ExistCount);
+	}
+	UE_LOG(LogWeedShop, Warning, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
+}
+
 void ADoorRetrofitter::BuildMarkedRooms()
 {
 	UWorld* W = GetWorld();
