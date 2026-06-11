@@ -108,6 +108,36 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigit->SetRelativeRotation(FRotator::ZeroRotator); // lokale +X = naar de opening
 		CabDigit->SetRelativeScale3D(FVector(5.f));
 	}
+	// Cabine-schuifdeuren: 2 panelen op de open kant (lokale X ~ -8), samen 136 breed gecentreerd.
+	// Ze rijden mee met de cabine en schuiven synchroon met de hal-deuren open/dicht.
+	if (Cab && !CabDoorFront)
+	{
+		// Hal-schuifrichting omzetten naar cabine-lokale Y (de opening ligt langs de lokale Y-as).
+		const FVector LocalSlide = GetActorRotation().UnrotateVector(SlideDir);
+		CabSlideSignY = (LocalSlide.Y >= 0.f) ? 1.f : -1.f;
+		UStaticMesh* DoorMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorDoor.SM_ElevatorDoor"));
+		auto MakeCabDoor = [&](const TCHAR* Name, const FVector& RelPos) -> UStaticMeshComponent*
+		{
+			UStaticMeshComponent* D = NewObject<UStaticMeshComponent>(this, Name);
+			D->SetupAttachment(Cab);
+			D->RegisterComponent();
+			D->SetMobility(EComponentMobility::Movable);
+			D->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			D->SetCanEverAffectNavigation(false);
+			if (DoorMesh) { D->SetStaticMesh(DoorMesh); }
+			D->SetRelativeLocation(RelPos);
+			return D;
+		};
+		// Deur-mesh loopt lokaal Y -68..0 vanaf z'n pivot: pivot op +68 dekt 0..68, pivot op 0 dekt -68..0.
+		CabDoorFrontBase = FVector(-8.f, 68.f, 0.f);
+		CabDoorBackBase  = FVector(-8.f, 0.f, 0.f);
+		// Het paneel aan de pocket-kant is het ACHTERSTE (66), het andere schuift er volledig achter (132).
+		if (CabSlideSignY < 0.f) { Swap(CabDoorFrontBase, CabDoorBackBase); }
+		CabDoorFront = MakeCabDoor(TEXT("CabDoorFront"), CabDoorFrontBase);
+		CabDoorBack  = MakeCabDoor(TEXT("CabDoorBack"), CabDoorBackBase);
+	}
+
+	BuildCabButtonPanel();
 	UpdateSigns();
 }
 
@@ -115,6 +145,36 @@ void APackElevator::CallToFloor(int32 FloorIdx)
 {
 	if (!Floors.IsValidIndex(FloorIdx)) { return; }
 	TargetFloor = FloorIdx;
+}
+
+void APackElevator::BuildCabButtonPanel()
+{
+	UWorld* W = GetWorld();
+	if (!W || !Cab || Floors.Num() < 2) { return; }
+	// Paneel op de zijwand naast de opening (lokale Y-wand aan de pocket-tegenovergestelde kant,
+	// zodat 'ie niet achter de openschuivende cabine-deur verdwijnt): kolommen de diepte in, rijen omhoog.
+	const float WallY = (CabSlideSignY > 0.f) ? -96.f : 96.f; // tegenover de pocket-kant
+	const float FaceYaw = (WallY < 0.f) ? 90.f : -90.f;       // knop kijkt de cabine in
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
+	{
+		const int32 Col = Fi / 4;
+		const int32 Row = Fi % 4;
+		const FVector RelPos(-34.f - Col * 26.f, WallY, 105.f + Row * 26.f);
+		APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), Cab->GetComponentTransform(), SP);
+		if (!Btn) { continue; }
+		Btn->Setup(this, Fi);
+		Btn->SetCabMode();
+		Btn->AttachToComponent(Cab, FAttachmentTransformRules::SnapToTargetIncludingScale);
+		Btn->SetActorRelativeLocation(RelPos);
+		Btn->SetActorRelativeRotation(FRotator(0.f, FaceYaw, 0.f));
+		// Vast verdieping-cijfer boven de knop (klein), kijkend dezelfde kant op.
+		const FTransform CabTM = Cab->GetComponentTransform();
+		const FVector SignWorld = CabTM.TransformPosition(RelPos + FVector(0.f, (WallY < 0.f) ? 2.f : -2.f, 17.f));
+		const FRotator SignRot = (CabTM.GetRotation() * FRotator(0.f, FaceYaw, 0.f).Quaternion()).Rotator();
+		Btn->SetupSign(SignWorld, SignRot, 2.5f);
+		Btn->SetDigit(Fi);
+	}
 }
 
 void APackElevator::RegisterButton(APackElevatorButton* Btn)
@@ -130,7 +190,8 @@ void APackElevator::UpdateSigns()
 {
 	for (const TWeakObjectPtr<APackElevatorButton>& B : Buttons)
 	{
-		if (APackElevatorButton* Btn = B.Get()) { Btn->SetDigit(CurFloor); }
+		APackElevatorButton* Btn = B.Get();
+		if (Btn && !Btn->IsCabButton()) { Btn->SetDigit(CurFloor); } // cab-knoppen houden hun vaste label
 	}
 	if (CabDigit && CabDigitShown != CurFloor)
 	{
@@ -178,6 +239,9 @@ void APackElevator::Tick(float DeltaSeconds)
 		const float Amount = bThisFloor ? DoorOpen : 0.f;
 		C->SetWorldLocation(R.ClosedPos + SlideDir * (R.SlideDist * Amount));
 	}
+	// Cabine-deuren schuiven synchroon mee (lokaal langs de opening).
+	if (CabDoorFront) { CabDoorFront->SetRelativeLocation(CabDoorFrontBase + FVector(0.f, CabSlideSignY * 132.f * DoorOpen, 0.f)); }
+	if (CabDoorBack)  { CabDoorBack->SetRelativeLocation(CabDoorBackBase + FVector(0.f, CabSlideSignY * 66.f * DoorOpen, 0.f)); }
 
 	if (bMoving)
 	{
@@ -196,26 +260,8 @@ void APackElevator::Tick(float DeltaSeconds)
 		return;
 	}
 
-	// Stilstaand met open(ende) deuren: passagier aan boord -> na korte wacht naar de volgende verdieping.
-	if (IsPawnAboard())
-	{
-		BoardedTimer += DeltaSeconds;
-		if (BoardedTimer >= DepartSeconds)
-		{
-			TargetFloor = (CurFloor + 1) % Floors.Num(); // wrap: bovenste -> begane grond
-			BoardedTimer = 0.f;
-		}
-	}
-	else
-	{
-		BoardedTimer = 0.f;
-		// Leeg en niet beneden? Na de dwell-tijd terug naar de begane grond.
-		DwellTimer -= DeltaSeconds;
-		if (DwellTimer <= 0.f && CurFloor != 0)
-		{
-			TargetFloor = 0;
-		}
-	}
+	// Geen automatisch rijden: de lift vertrekt alleen via de cabine-knoppen (kies verdieping)
+	// of een call-knop op een verdieping. Echte lift-ervaring.
 }
 
 void APackElevator::Interact_Implementation(APawn* InstigatorPawn)

@@ -43,6 +43,17 @@ protected:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Cab;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> CabDigit; // verdieping-display IN de cabine
 	int32 CabDigitShown = -1;
+	// Cabine-schuifdeuren (dubbele deuren: deze rijden met de cabine mee, de hal-panelen blijven per verdieping).
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> CabDoorFront;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> CabDoorBack;
+	FVector CabDoorFrontBase = FVector::ZeroVector;
+	FVector CabDoorBackBase = FVector::ZeroVector;
+	float CabSlideSignY = 1.f; // schuifrichting van de hal-deuren omgezet naar cabine-lokale Y
+
+public:
+	// Knoppenpaneel in de cabine: per verdieping een knop + cijfer (vast label), naast de opening.
+	void BuildCabButtonPanel();
+protected:
 
 	struct FPanelRef
 	{

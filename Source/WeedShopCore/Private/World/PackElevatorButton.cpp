@@ -26,7 +26,7 @@ void APackElevatorButton::Setup(APackElevator* InElevator, int32 InFloorIdx)
 	FloorIdx = InFloorIdx;
 }
 
-void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator& SignRot)
+void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator& SignRot, float Scale)
 {
 	if (!DigitMesh)
 	{
@@ -38,7 +38,7 @@ void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator&
 		DigitMesh->SetCanEverAffectNavigation(false);
 	}
 	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
-	DigitMesh->SetWorldScale3D(FVector(6.f)); // digit-mesh is 3x5cm -> opschalen naar leesbaar bordje
+	DigitMesh->SetWorldScale3D(FVector(Scale)); // digit-mesh is 3x5cm -> opschalen naar leesbaar formaat
 }
 
 void APackElevatorButton::SetDigit(int32 Digit)
@@ -58,7 +58,18 @@ void APackElevatorButton::Interact_Implementation(APawn* InstigatorPawn)
 	if (APackElevator* E = Elevator.Get()) { E->CallToFloor(FloorIdx); }
 }
 
+void APackElevatorButton::SetCabMode()
+{
+	bCabMode = true;
+}
+
 FText APackElevatorButton::GetInteractionPrompt_Implementation() const
 {
+	if (bCabMode)
+	{
+		return FText::FromString(FloorIdx == 0
+			? FString(TEXT("Go to ground floor (0)"))
+			: FString::Printf(TEXT("Go to floor %d"), FloorIdx));
+	}
 	return FText::FromString(TEXT("Call elevator"));
 }
