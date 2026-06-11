@@ -783,6 +783,9 @@ void ADoorRetrofitter::VerticalReplicate()
 			// Balkon-railing niet mee-kopieren (stond bij de badkamer-rand binnen de rechthoek en
 			// werd op elke verdieping tegen de muur geplakt).
 			if (MeshName.Contains(TEXT("Railing")) || MeshName.Contains(TEXT("Handrail")) || MeshName.Contains(TEXT("Balustrade"))) { continue; }
+			// Muur-afdek/dakrand-stukjes (SM_Top_*, parapet-kapjes van de terras-rand bij de bron) horen
+			// alleen op dakranden - niet op elke verdieping tegen de gevel.
+			if (MeshName.StartsWith(TEXT("SM_Top_"))) { continue; }
 			// Buiten-meubilair niet mee-kopieren (zweefde op elke verdieping boven het terras).
 			if (MeshName.Contains(TEXT("Umbrella")) || MeshName.Contains(TEXT("Parasol")) || MeshName.Contains(TEXT("Lounger"))
 				|| MeshName.Contains(TEXT("SunBed")) || MeshName.Contains(TEXT("Sunbed")) || MeshName.Contains(TEXT("Chair"))
