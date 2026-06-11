@@ -693,16 +693,31 @@ void ADoorRetrofitter::VerticalReplicate()
 		PosStr.ParseIntoArray(Parts, TEXT(","));
 		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
 	}
-	if (Marks.Num() != 2) { return; } // precies 2 markers = verticale kopie van die rechthoek
+	if (Marks.Num() < 2 || Marks.Num() % 2 != 0) { return; } // paren van 2 = rechthoeken
 
-	// Kopie-gebied = exact de rechthoek tussen de 2 markers (+30cm marge). Zo blijft het terras/balkon
-	// erbuiten - de eerdere royale box kopieerde parasols en ligbedjes zwevend de lucht in.
-	const FVector Mark = Marks[0];
-	const float MinX = FMath::Min(Marks[0].X, Marks[1].X) - 30.f;
-	const float MaxX = FMath::Max(Marks[0].X, Marks[1].X) + 30.f;
-	const float MinY = FMath::Min(Marks[0].Y, Marks[1].Y) - 30.f;
-	const float MaxY = FMath::Max(Marks[0].Y, Marks[1].Y) + 30.f;
-	const float Feet = FMath::Min(Marks[0].Z, Marks[1].Z) - 98.f;
+	// Kopie-gebied = de UNIE van rechthoeken: elk PAAR markers is een rechthoek (+30cm marge).
+	// Zo dek je een appartement dat uit losse delen bestaat (hoofdkamer + badkamer via een deur):
+	// paar 1 om de hoofdkamer, paar 2 om de badkamer, evt. paar 3 om het halletje, etc.
+	TArray<FBox2D> Rects;
+	for (int32 Ri = 0; Ri + 1 < Marks.Num(); Ri += 2)
+	{
+		FBox2D R(ForceInit);
+		R += FVector2D(Marks[Ri].X, Marks[Ri].Y);
+		R += FVector2D(Marks[Ri + 1].X, Marks[Ri + 1].Y);
+		R = R.ExpandBy(30.f);
+		Rects.Add(R);
+	}
+	auto InRects = [&Rects](const FVector& L) -> bool
+	{
+		for (const FBox2D& R : Rects)
+		{
+			if (L.X >= R.Min.X && L.X <= R.Max.X && L.Y >= R.Min.Y && L.Y <= R.Max.Y) { return true; }
+		}
+		return false;
+	};
+	FBox2D Outer(ForceInit);
+	for (const FBox2D& R : Rects) { Outer += R.Min; Outer += R.Max; }
+	const float Feet = Marks[0].Z - 98.f;
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
 
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
@@ -721,7 +736,7 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
 			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam"))) { continue; } // camera's zweven los van hun muur in kopieen
 			const FVector L = Comp->GetComponentLocation();
-			if (L.X < MinX || L.X > MaxX || L.Y < MinY || L.Y > MaxY) { continue; }
+			if (!InRects(L)) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 330.f) { continue; } // alleen deze verdieping-slice
 			Slice.Add(TPair<UStaticMesh*, FTransform>(Comp->GetStaticMesh(), Comp->GetComponentTransform()));
 		}
@@ -762,7 +777,7 @@ void ADoorRetrofitter::VerticalReplicate()
 			{
 				if (!Comp || !Comp->GetStaticMesh()) { continue; }
 				const FVector L = Comp->GetComponentLocation();
-				if (L.X < MinX - 50.f || L.X > MaxX + 50.f || L.Y < MinY - 50.f || L.Y > MaxY + 50.f) { continue; }
+				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
 				if (L.Z < TgtZ - 25.f || L.Z > TgtZ + 335.f) { continue; }
 				++ExistCount;
 				{
