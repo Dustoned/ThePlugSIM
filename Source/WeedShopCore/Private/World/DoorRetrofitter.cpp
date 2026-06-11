@@ -823,6 +823,7 @@ void ADoorRetrofitter::VerticalReplicate()
 		// Bestaat deze verdieping (heeft het gebouw hier uberhaupt geometrie)? En dedupe-index bouwen:
 		// mesh-naam + positie op 10cm-grid van alles wat er al staat.
 		TMap<uint64, UStaticMeshComponent*> Existing; // hash -> bestaande comp (voor materiaal-sync)
+		TArray<UStaticMeshComponent*> ParallaxGlass; // losse _Glass-platen (nep-3D) binnen de rechthoek
 		int32 ExistCount = 0;
 		int32 TightCount = 0; // bestaande meshes BINNEN de rechthoek zelf (gevel van deze verdieping)
 		for (TActorIterator<AActor> It(W); It; ++It)
@@ -842,6 +843,13 @@ void ADoorRetrofitter::VerticalReplicate()
 				++ExistCount;
 				if (L.X < Outer.Min.X - 50.f || L.X > Outer.Max.X + 50.f || L.Y < Outer.Min.Y - 50.f || L.Y > Outer.Max.Y + 50.f) { continue; }
 				++TightCount;
+				{
+					const FString GN = Comp->GetStaticMesh()->GetName();
+					if (GN.EndsWith(TEXT("_Glass")) && !GN.Contains(TEXT("_Interior")))
+					{
+						ParallaxGlass.Add(Comp); // nep-3D buitenglas van dit kamer-vak
+					}
+				}
 				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
 					^ (uint64)(FMath::RoundToInt(L.X / 10.f) * 73856093)
 					^ (uint64)(FMath::RoundToInt(L.Y / 10.f) * 19349663)
@@ -901,8 +909,24 @@ void ADoorRetrofitter::VerticalReplicate()
 			}
 			++Placed;
 		}
+		// Kamer geplaatst -> het nep-3D buitenglas van dit kamer-vak verbergen: de map-makers doen dat
+		// op de ingerichte verdieping ook (het echte heldere glas zit in de binnen-raamdelen die we
+		// meekopieren). Alleen losse _Glass-platen, kozijnen blijven staan.
+		int32 GlassHidden = 0;
+		if (Placed > 10)
+		{
+			for (UStaticMeshComponent* GC : ParallaxGlass)
+			{
+				if (GC && GC->IsVisible())
+				{
+					GC->SetVisibility(false);
+					GC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					++GlassHidden;
+				}
+			}
+		}
 		TotalPlaced += Placed;
-		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al)"), N, TgtZ, Placed, ExistCount);
+		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al, %d nep-glas verborgen)"), N, TgtZ, Placed, ExistCount, GlassHidden);
 	}
 	UE_LOG(LogWeedShop, Warning, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
 }
