@@ -49,6 +49,7 @@ protected:
 	void CloneRooms();
 	TSet<FIntPoint> ClonedRooms; // per deur-slot (pos/100) zodat we niet dubbel klonen
 	int32 LastSourceCount = -1; // streaming-stabiliteit van de bron-kamer
+	int32 SourceStableStreak = 0;
 	int32 CloneLogCooldown = 0;
 	bool bFogTamed = false; // basis-scenario-fog 1x getemd (zon-gloed eruit)
 	TSet<TWeakObjectPtr<class ULocalLightComponent>> IndoorLightsFixed; // static -> movable gezet

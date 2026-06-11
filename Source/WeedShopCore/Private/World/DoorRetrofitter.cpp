@@ -21,6 +21,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "CollisionQueryParams.h"
@@ -706,10 +707,11 @@ void ADoorRetrofitter::CloneRooms()
 	}
 	// Wachten tot de bron VOLLEDIG ingestreamd is: vorige keer kloonde hij met 38 van de ~120 meshes
 	// (half-leeg fragment). Pas klonen als de telling 2 scans achter elkaar gelijk is en hoog genoeg.
-	if (SourceSet.Num() < 34 || SourceSet.Num() != LastSourceCount) // bron-kamer = 41 meshes totaal (gemeten)
+	if (SourceSet.Num() == LastSourceCount) { ++SourceStableStreak; } else { SourceStableStreak = 0; }
+	LastSourceCount = SourceSet.Num();
+	if (SourceSet.Num() < 34 || SourceStableStreak < 2) // 3 scans dezelfde telling = echt klaar met streamen
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: bron-set %d meshes (vorige %d) - wacht op stabiel/compleet"), SourceSet.Num(), LastSourceCount);
-		LastSourceCount = SourceSet.Num();
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: bron-set %d meshes (streak %d) - wacht op stabiel/compleet"), SourceSet.Num(), SourceStableStreak);
 		return;
 	}
 
@@ -749,7 +751,6 @@ void ADoorRetrofitter::CloneRooms()
 	Placed.Add(FBox2D(FVector2D(SrcBox.Min.X, SrcBox.Min.Y), FVector2D(SrcBox.Max.X, SrcBox.Max.Y)));
 
 	FString RoomCloneLog;
-	RoomCloneLog += FString::Printf(TEXT("bron-frame=(%.0f, %.0f, %.0f) bronset=%d kandidaten=%d"), SrcFrameTM.GetLocation().X, SrcFrameTM.GetLocation().Y, SrcFrameTM.GetLocation().Z, SourceSet.Num(), TargetFrames.Num()) + LINE_TERMINATOR;
 
 	int32 NewRooms = 0;
 	for (const FTransform& Target : TargetFrames)
@@ -777,27 +778,40 @@ void ADoorRetrofitter::CloneRooms()
 
 		// Kies de orientatie (0 of 180 graden) waarvan het kamer-centrum aan de gemeten void-kant ligt.
 		FTransform Best = FTransform::Identity;
-		int32 BestVoids = -1;
+		bool bHaveCand = false;
 		for (int32 Flip = 0; Flip < 2; ++Flip)
 		{
 			FTransform Cand = Target;
 			if (Flip) { Cand.SetRotation(Cand.GetRotation() * FQuat(FVector::UpVector, PI)); }
 			const FVector CandRoomDir = (Cand.TransformPosition(RefRel[0]) - FrameLoc).GetSafeNormal2D();
 			if (FVector::DotProduct(CandRoomDir, RoomDir) < 0.5f) { continue; } // kamer zou de gang-kant op staan
-			int32 Voids = 0;
-			for (int32 i = 1; i < RefRel.Num(); ++i)
-			{
-				if (!HasFloorBelow(Cand.TransformPosition(RefRel[i]))) { ++Voids; }
-			}
-			BestVoids = Voids; Best = Cand;
-			break; // eerste (en enige) orientatie aan de juiste kant
+			Best = Cand; bHaveCand = true;
+			break;
 		}
-		if (BestVoids < 4) // STRENG: de hele kamer moet in lege ruimte passen, anders niet klonen
+		if (!bHaveCand) { continue; }
+
+		// VOLLEDIGE footprint-check: bemonster het hele kamer-oppervlak in een raster van ~90cm.
+		// Hoeken-checks misten gangen die DWARS door het oppervlak lopen - daardoor viel de kloon-muur
+		// over de gang en blokkeerde 'ie andere deuren. Nu: elk bezet rastercel = afkeuren.
+		int32 GridTotal = 0, GridOccupied = 0;
+		for (float Gx = SrcBox.Min.X + 70.f; Gx < SrcBox.Max.X - 30.f; Gx += 90.f)
 		{
-			RoomCloneLog += FString::Printf(TEXT("AFGEKEURD frame=(%.0f, %.0f, %.0f) voids=%d/4 roomdir=(%.2f, %.2f)"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, BestVoids, RoomDir.X, RoomDir.Y) + LINE_TERMINATOR;
-			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) afgekeurd - %d/4 hoeken void aan de kamer-kant"), FrameLoc.X, FrameLoc.Y, BestVoids);
+			for (float Gy = SrcBox.Min.Y + 70.f; Gy < SrcBox.Max.Y - 30.f; Gy += 90.f)
+			{
+				const FVector Rel = SrcInv.TransformPosition(FVector(Gx, Gy, C.Z));
+				const FVector Wp = Best.TransformPosition(Rel);
+				++GridTotal;
+				if (HasFloorBelow(Wp)) { ++GridOccupied; }
+			}
+		}
+		if (GridOccupied > 0)
+		{
+			ClonedRooms.Add(Key); // dit slot past gewoon niet - niet blijven proberen
+			RoomCloneLog += FString::Printf(TEXT("PAST-NIET frame=(%.0f, %.0f, %.0f) bezet=%d/%d roomdir=(%.2f, %.2f)"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, GridOccupied, GridTotal, RoomDir.X, RoomDir.Y) + LINE_TERMINATOR;
+			UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: frame (%.0f, %.0f) past niet - %d/%d rastercellen bezet"), FrameLoc.X, FrameLoc.Y, GridOccupied, GridTotal);
 			continue;
 		}
+		const int32 BestVoids = 4; // footprint volledig leeg
 
 		// Overlap-bewaking: niet klonen als het volume een al-geplaatste kamer raakt.
 		const FBox2D NewBox = RoomBox2D(Best);
@@ -845,5 +859,9 @@ void ADoorRetrofitter::CloneRooms()
 		UE_LOG(LogWeedShop, Warning, TEXT("RoomCloner: kamer gekloond bij frame (%.0f, %.0f, %.0f) - %d meshes, %d/4 hoeken void"), FrameLoc.X, FrameLoc.Y, FrameLoc.Z, PlacedMeshes, BestVoids);
 	}
 
-	FFileHelper::SaveStringToFile(RoomCloneLog, *(FPaths::ProjectSavedDir() / TEXT("RoomClone.txt")));
+	if (RoomCloneLog.Len() > 0)
+	{
+		FFileHelper::SaveStringToFile(RoomCloneLog, *(FPaths::ProjectSavedDir() / TEXT("RoomClone.txt")),
+			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	}
 }
