@@ -758,7 +758,7 @@ void ADoorRetrofitter::VerticalReplicate()
 	// Marker 3 = tot en met welke verdieping gevuld wordt (zweef/sta op de hoogte van de bovenste kamer).
 	const float CapFeet = Marks[2].Z - 98.f;
 	const float CapStorey = 480.f + 350.f * FMath::RoundToFloat((CapFeet - 480.f) / 350.f);
-	const int32 CapN = FMath::Clamp(FMath::RoundToInt((CapStorey - SrcZ) / 350.f), 1, 30);
+	const int32 CapN = FMath::Clamp(FMath::RoundToInt((CapStorey - SrcZ) / 350.f) - 1, 1, 30); // bovenste kamer komt ONDER marker 3 (sta/zweef op het dak)
 
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
 	// MET materialen: de map geeft bv. het raam-glas op ingerichte verdiepingen een OVERRIDE (helder
