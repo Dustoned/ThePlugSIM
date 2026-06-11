@@ -54,6 +54,10 @@ public:
 	// Stamp-id (STAMP_x_y_yaw) uit een RoomStamps-regel (template|x,y,z|yaw).
 	static FString StampIdFromLine(const FString& Line);
 
+	// Spiegel een piece-transform over het XZ-vlak van het anker (links-rechts t.o.v. de voordeur):
+	// locatie Y-negatie, rotator (pitch, -yaw, -roll), scale Y-negatie (mesh zelf gespiegeld).
+	static FTransform MirrorRelTM(const FTransform& In);
+
 protected:
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -69,5 +73,6 @@ protected:
 	FVector CentroidRel = FVector::ZeroVector; // kamer-zwaartepunt relatief aan het anker (voor van-je-af plaatsen)
 	float UserYaw = 0.f;     // R-rotatie (90-graden stappen, of 180-flip bij deur-snap)
 	bool bSnappedToDoor = false;
-	bool bRotKeyWas = false, bPlaceKeyWas = false, bCancelKeyWas = false;
+	bool bMirrored = false; // T = spiegelen (links-rechts t.o.v. de voordeur)
+	bool bRotKeyWas = false, bPlaceKeyWas = false, bCancelKeyWas = false, bMirrorKeyWas = false;
 };

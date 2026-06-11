@@ -1503,6 +1503,7 @@ void ADoorRetrofitter::ApplySavedStamps()
 		if (Lp.Num() < 3) { continue; }
 		const FVector AL(FCString::Atof(*Lp[0]), FCString::Atof(*Lp[1]), FCString::Atof(*Lp[2]));
 		const float AY = FCString::Atof(*P[2]);
+		const bool bMirror = P.Num() >= 4 && P[3].TrimStartAndEnd() == TEXT("M");
 		const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"), FMath::RoundToInt(AL.X), FMath::RoundToInt(AL.Y), FMath::RoundToInt(AY));
 		if (BakedJobs.Contains(StampId) || AppliedStamps.Contains(StampId)) { continue; }
 		AppliedStamps.Add(StampId);
@@ -1513,7 +1514,7 @@ void ADoorRetrofitter::ApplySavedStamps()
 		int32 Placed = 0;
 		for (const FStampPiece& Piece : Pieces)
 		{
-			const FTransform NewTM = Piece.RelTM * Anchor;
+			const FTransform NewTM = (bMirror ? ARoomStamper::MirrorRelTM(Piece.RelTM) : Piece.RelTM) * Anchor;
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
 			SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen via de phone

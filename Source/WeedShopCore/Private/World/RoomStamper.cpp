@@ -233,9 +233,10 @@ bool ARoomStamper::BeginStamp(const FString& TemplateName)
 
 	ActiveTemplate = TemplateName;
 	UserYaw = 0.f;
+	bMirrored = false;
 	bStamping = true;
 	UWeedToast::NotifyPawn(GetWorld()->GetFirstPlayerController() ? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr,
-		-1, 4.f, FColor::Cyan, TEXT("STAMP: aim (door snaps to door!) - R rotate, LMB place, RMB cancel"));
+		-1, 4.f, FColor::Cyan, TEXT("STAMP: aim (door snaps to door!) - R rotate, T mirror, LMB place, RMB cancel"));
 	return true;
 }
 
@@ -252,6 +253,9 @@ FTransform ARoomStamper::ComputeAnchor() const
 	APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
 	APawn* P = PC ? PC->GetPawn() : nullptr;
 	if (!PC || !P) { return FTransform::Identity; }
+
+	// Bij spiegelen klapt het kamer-lichaam naar de andere kant van het anker (Y-negatie).
+	const FVector EffCentroid = bMirrored ? FVector(CentroidRel.X, -CentroidRel.Y, CentroidRel.Z) : CentroidRel;
 
 	FVector ViewLoc; FRotator ViewRot;
 	PC->GetPlayerViewPoint(ViewLoc, ViewRot);
@@ -309,7 +313,7 @@ FTransform ARoomStamper::ComputeAnchor() const
 			const FVector ToPawn = (P->GetActorLocation() - L).GetSafeNormal2D();
 			float BaseYaw = FY;
 			{
-				const FVector C0 = FRotator(0.f, FY, 0.f).RotateVector(CentroidRel).GetSafeNormal2D();
+				const FVector C0 = FRotator(0.f, FY, 0.f).RotateVector(EffCentroid).GetSafeNormal2D();
 				if (FVector::DotProduct(C0, ToPawn) > 0.f) { BaseYaw = FY + 180.f; }
 			}
 			const_cast<ARoomStamper*>(this)->bSnappedToDoor = true;
@@ -328,7 +332,7 @@ FTransform ARoomStamper::ComputeAnchor() const
 	Base.Z = (FMath::Abs(Feet - 50.f) < 215.f) ? 50.f : 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f);
 	// VAN JE AF: draai het anker zo dat het kamer-zwaartepunt in je kijkrichting ligt (de kamer
 	// strekt zich voor je uit, niet om/achter je heen). R draait alsnog in 90-stappen.
-	const float CentroidYaw = FMath::RadiansToDegrees(FMath::Atan2(CentroidRel.Y, CentroidRel.X));
+	const float CentroidYaw = FMath::RadiansToDegrees(FMath::Atan2(EffCentroid.Y, EffCentroid.X));
 	const float BaseYaw = FMath::GridSnap(ViewRot.Yaw - CentroidYaw, 90.f);
 	return FTransform(FRotator(0.f, BaseYaw + UserYaw, 0.f), Base);
 }
@@ -352,6 +356,18 @@ void ARoomStamper::Tick(float DeltaSeconds)
 	const bool bRot = PC->IsInputKeyDown(EKeys::R);
 	if (bRot && !bRotKeyWas) { UserYaw = FMath::Fmod(UserYaw + (bSnappedToDoor ? 180.f : 90.f), 360.f); }
 	bRotKeyWas = bRot;
+
+	const bool bMir = PC->IsInputKeyDown(EKeys::T);
+	if (bMir && !bMirrorKeyWas)
+	{
+		bMirrored = !bMirrored;
+		for (int32 Pi = 0; Pi < PreviewComps.Num() && Pi < Pieces.Num(); ++Pi)
+		{
+			if (PreviewComps[Pi]) { PreviewComps[Pi]->SetRelativeTransform(bMirrored ? MirrorRelTM(Pieces[Pi].RelTM) : Pieces[Pi].RelTM); }
+		}
+		UWeedToast::NotifyPawn(PC->GetPawn(), -1, 1.5f, FColor::Cyan, bMirrored ? TEXT("Mirrored (T to undo)") : TEXT("Normal"));
+	}
+	bMirrorKeyWas = bMir;
 
 	const bool bPlace = PC->IsInputKeyDown(EKeys::LeftMouseButton);
 	if (bPlace && !bPlaceKeyWas) { PlaceStamp(); }
@@ -379,7 +395,7 @@ void ARoomStamper::PlaceStamp()
 	int32 Placed = 0;
 	for (const FStampPiece& Piece : Pieces)
 	{
-		const FTransform NewTM = Piece.RelTM * CurrentAnchor;
+		const FTransform NewTM = (bMirrored ? MirrorRelTM(Piece.RelTM) : Piece.RelTM) * CurrentAnchor;
 		AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 		if (!SMA) { continue; }
 		SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen
@@ -409,7 +425,8 @@ void ARoomStamper::PlaceStamp()
 	}
 
 	// Persistentie: stempel-regel (herbouw per sessie tot de bake) + bake-export.
-	const FString StampLine = FString::Printf(TEXT("%s|%.1f,%.1f,%.1f|%.1f"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY) + LINE_TERMINATOR;
+	const FString StampLine = FString::Printf(TEXT("%s|%.1f,%.1f,%.1f|%.1f%s"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY,
+		bMirrored ? TEXT("|M") : TEXT("")) + LINE_TERMINATOR;
 	FFileHelper::SaveStringToFile(StampLine, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	FFileHelper::SaveStringToFile(FString::Printf(TEXT("JOB|%s"), *StampId) + LINE_TERMINATOR + BakeOut,
@@ -515,4 +532,12 @@ bool ARoomStamper::UndoLastStamp(UWorld* W, FString& OutInfo)
 	Last.ParseIntoArray(P, TEXT("|"));
 	OutInfo = P.Num() > 0 ? P[0] : Last;
 	return RemoveStamp(W, Last);
+}
+
+FTransform ARoomStamper::MirrorRelTM(const FTransform& In)
+{
+	const FVector L = In.GetLocation();
+	const FRotator R = In.GetRotation().Rotator();
+	const FVector S = In.GetScale3D();
+	return FTransform(FRotator(R.Pitch, -R.Yaw, -R.Roll), FVector(L.X, -L.Y, L.Z), FVector(S.X, -S.Y, S.Z));
 }
