@@ -26,6 +26,8 @@
 #include "Misc/Parse.h"
 #include "CollisionQueryParams.h"
 #include "Engine/HitResult.h"
+#include "Engine/LevelStreamingDynamic.h"
+#include "Misc/PackageName.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
@@ -98,6 +100,17 @@ void ADoorRetrofitter::BeginPlay()
 	// Renderer-warnings (bv. ForwardShadingPriority) lopen BUITEN ClearOnScreenDebugMessages om ->
 	// alle on-screen debug-meldingen uitschakelen in pack-maps. Onze UMG-UI blijft gewoon werken.
 	GAreScreenMessagesEnabled = false;
+
+	// GEBAKKEN KAMERS: onze eigen BakedRooms-level (gevuld via Tools/bake_rooms.py) als overlay
+	// over de pack-map laden - permanent map-onderdeel dat ook in packaged builds meegaat. De
+	// runtime-jobs deduppen er automatisch tegen (zelfde mesh+positie = overslaan).
+	if (FPackageName::DoesPackageExist(TEXT("/Game/_Project/Maps/BakedRooms")))
+	{
+		bool bBakedOk = false;
+		ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), TEXT("/Game/_Project/Maps/BakedRooms"),
+			FVector::ZeroVector, FRotator::ZeroRotator, bBakedOk);
+		UE_LOG(LogWeedShop, Log, TEXT("BakedRooms-overlay geladen: %d"), bBakedOk ? 1 : 0);
+	}
 
 	ScanAndConvert();
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);

@@ -1,22 +1,22 @@
-# bake_rooms.py - bakt de runtime-gebouwde kamers PERMANENT in de CityBeachStrip-map.
-# Leest Saved/RoomBake.txt (geexporteerd door de game: SPAWN-regels met mesh/transform/materialen)
-# en spawnt die als echte StaticMeshActors in de persistent map, daarna save. HIDE-regels worden
-# overgeslagen (parallax-glas verbergen blijft runtime: die comps zitten in gedeelde level-instances
-# die we niet veilig kunnen bewerken). Idempotent: bestaat er al een actor met dezelfde mesh op
-# dezelfde plek, dan wordt 'ie overgeslagen.
+# bake_rooms.py - bakt de runtime-gebouwde kamers in ONZE EIGEN level-file
+# /Game/_Project/Maps/BakedRooms.umap (licht, geen world partition, ships mee in packaged builds).
+# De game laadt die runtime als level-instance over de beach-map heen. De grote pack-map zelf
+# blijft onaangeraakt (headless bewerken daarvan crasht op sublevel-streaming).
+# Idempotent: bestaande gebakken actors worden overgeslagen, dus re-baken na nieuwe kamers kan altijd.
 import unreal, os
 
-MAP_PATH = "/Game/CityBeachStrip/Maps/CityBeachStrip"
+BAKED_MAP = "/Game/_Project/Maps/BakedRooms"
 BAKE_FILE = os.path.join(unreal.SystemLibrary.get_project_saved_directory(), "RoomBake.txt")
 
-les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-les.load_level(MAP_PATH)
+if unreal.EditorAssetLibrary.does_asset_exist(BAKED_MAP):
+    world = unreal.EditorLoadingAndSavingUtils.load_map(BAKED_MAP)
+else:
+    world = unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
+if not world:
+    raise RuntimeError("kon geen bake-wereld openen")
 
-ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
-world = ues.get_editor_world()
 actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
-# Bestaande actors indexeren (mesh-naam + positie op 10cm) voor idempotentie.
 existing = set()
 for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.StaticMeshActor):
     c = a.static_mesh_component
@@ -51,16 +51,15 @@ with open(BAKE_FILE, encoding="utf-8") as f:
         if not actor:
             continue
         actor.set_actor_scale3d(unreal.Vector(sx, sy, sz))
-        actor.set_folder_path("BakedRooms")
         comp = actor.static_mesh_component
         if comp:
             for mi, mp in enumerate(mats_s.split(";")):
                 if mp and mp != "-":
-                    mat = unreal.load_asset(mp.split(".")[0]) if "." in mp else unreal.load_asset(mp)
+                    mat = unreal.load_asset(mp.split(".")[0])
                     if mat:
                         comp.set_material(mi, mat)
         spawned += 1
 
 unreal.log_warning("BAKE: %d actors gespawnd, %d bestonden al" % (spawned, skipped))
-les.save_current_level()
-unreal.log_warning("BAKE: map opgeslagen")
+unreal.EditorLoadingAndSavingUtils.save_map(world, BAKED_MAP)
+unreal.log_warning("BAKE: opgeslagen als %s" % BAKED_MAP)
