@@ -81,13 +81,13 @@ void ADayNightController::BeginPlay()
 
 	LocalInstance = this; // bereikbaar voor de phone-UI (live tunen)
 
-	// Pack-maps (CityBeachStrip): de originele look leunde op een superheldere HDRI-koepel.
-	// Compenseer met hogere ambient + fellere zon, anders oogt alles dof/donker vergeleken met eerst.
+	// PACK-MAPS: MINIMAL-modus - overdag blijft de stock-look 100% intact (geen zon/fog/scenario-
+	// ingrepen; dat sloopte de art-stijl). 's Nachts dimmen we alleen de BESTAANDE lichten van de
+	// map en gaat de HDRI-fotokoepel (dag-lucht) uit zodat de donkere hemel zichtbaar wordt.
 	if (W->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip")))
 	{
-		SkyDay = 2.2f;
-		SkyNight = 1.1f;
-		SunIntensity = 9.f;
+		bPackMinimal = true;
+		return; // geen eigen zon/maan/PPV/lampen - Tick regelt alleen het dimmen
 	}
 
 	// Bestaande zon (directional light) zoeken; anders zelf een Movable aanmaken.
@@ -337,6 +337,70 @@ void ADayNightController::Tick(float DeltaSeconds)
 	const float Hour = DC->GetClockHour();         // 0..24
 	const float Sunrise = DC->SunriseHour;          // 6
 	const float Sunset = DC->SunsetHour;            // 20
+
+	// MINIMAL-modus (pack-maps): dim de bestaande lichten met de klok en toggle de fotokoepel.
+	if (bPackMinimal)
+	{
+		float MinDayF;
+		if (Hour <= Sunrise - 1.f || Hour >= Sunset + 1.f)      { MinDayF = 0.f; }
+		else if (Hour < Sunrise + 1.f)                          { MinDayF = (Hour - (Sunrise - 1.f)) * 0.5f; }
+		else if (Hour > Sunset - 1.f)                           { MinDayF = 1.f - (Hour - (Sunset - 1.f)) * 0.5f; }
+		else                                                    { MinDayF = 1.f; }
+		MinDayF = FMath::Clamp(MinDayF, 0.f, 1.f);
+
+		// Periodiek nieuwe lichten/koepels registreren (world partition streamt bij).
+		LightScanTimer -= DeltaSeconds;
+		if (LightScanTimer <= 0.f)
+		{
+			LightScanTimer = 3.f;
+			UWorld* W2 = GetWorld();
+			for (TActorIterator<AActor> It(W2); It; ++It)
+			{
+				AActor* A = *It;
+				if (!IsValid(A)) { continue; }
+				TInlineComponentArray<ULightComponent*> Lights(A);
+				for (ULightComponent* LC : Lights)
+				{
+					if (!LC || SeenLights.Contains(LC)) { continue; }
+					SeenLights.Add(LC);
+					FDimLight D; D.Light = LC; D.OrigIntensity = LC->Intensity;
+					DimLights.Add(D);
+				}
+				TInlineComponentArray<UStaticMeshComponent*> Meshes(A);
+				for (UStaticMeshComponent* MC : Meshes)
+				{
+					if (!MC || !MC->GetStaticMesh()) { continue; }
+					const FString MN = MC->GetStaticMesh()->GetName();
+					if (MN.Contains(TEXT("EnviroDome")) || MN.Contains(TEXT("HDRI")))
+					{
+						DomeComps.AddUnique(MC);
+					}
+				}
+			}
+		}
+
+		// Lichten dimmen: 's nachts ~7% van origineel (de gebouw-strips/emissives van de map blijven
+		// vanzelf - dat is materiaal, geen licht - dus de stad houdt z'n mooie nachtgloed).
+		const float Mul = FMath::Lerp(0.07f, 1.f, MinDayF);
+		for (FDimLight& D : DimLights)
+		{
+			if (ULightComponent* LC = D.Light.Get())
+			{
+				const float Want = D.OrigIntensity * Mul;
+				if (!FMath::IsNearlyEqual(LC->Intensity, Want, D.OrigIntensity * 0.01f + 0.1f)) { LC->SetIntensity(Want); }
+			}
+		}
+		// Fotokoepel (dag-lucht met ingebakken zon): 's nachts uit zodat de donkere hemel toont.
+		const bool bDomeVisible = MinDayF > 0.3f;
+		for (const TWeakObjectPtr<UStaticMeshComponent>& Dc : DomeComps)
+		{
+			if (UStaticMeshComponent* MC = Dc.Get())
+			{
+				if (MC->IsVisible() != bDomeVisible) { MC->SetVisibility(bDomeVisible); }
+			}
+		}
+		return;
+	}
 
 	// Daglicht-factor (0 = nacht, 1 = klaarlichte dag) met zachte overgangen rond op-/ondergang.
 	float DayF;

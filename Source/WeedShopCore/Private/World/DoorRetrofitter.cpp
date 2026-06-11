@@ -449,7 +449,8 @@ void ADoorRetrofitter::ScanAndConvert()
 	// Vreemde zonnen/skylights uitschakelen: de pack streamt lighting-scenario's in (meerdere
 	// directional lights + skylights). Destroy is onbetrouwbaar op gestreamde actors -> component
 	// onzichtbaar + intensiteit 0 werkt altijd. Onze controller adopteert daarna sky/atmosfeer.
-	if (ADayNightController* DN = ADayNightController::GetLocal(W))
+	ADayNightController* DN = ADayNightController::GetLocal(W);
+	if (DN && !DN->IsPackMinimal()) // minimal-modus: stock-belichting volledig met rust laten
 	{
 		DN->TryAdoptSky();
 		ADirectionalLight* AdoptedSun = DN->GetSun();

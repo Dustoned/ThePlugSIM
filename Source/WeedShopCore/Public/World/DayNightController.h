@@ -44,6 +44,8 @@ public:
 
 	// De geadopteerde zon (voor opruimen van extra directional lights in pack-maps).
 	class ADirectionalLight* GetSun() const { return Sun.Get(); }
+	// Pack-map minimal-modus: stock-look overdag, 's nachts alleen de bestaande lichten dimmen.
+	bool IsPackMinimal() const { return bPackMinimal; }
 	class ADirectionalLight* GetMoon() const { return Moon.Get(); }
 	class ASkyLight* GetSky() const { return Sky.Get(); }
 	// Pack-maps: sky (her-)adopteren zodra een gestreamde skylight binnenkomt.
@@ -60,6 +62,13 @@ protected:
 
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 
+	bool bPackMinimal = false;
+	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
+	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
+	TArray<FDimLight> DimLights;
+	TArray<TWeakObjectPtr<class UStaticMeshComponent>> DomeComps; // HDRI-fotokoepel (dag-lucht)
+	TSet<TWeakObjectPtr<class ULightComponent>> SeenLights;
+	float LightScanTimer = 0.f;
 	TWeakObjectPtr<ADirectionalLight> Sun;
 	TWeakObjectPtr<ADirectionalLight> Moon; // eigen maan-licht: komt op bij zonsondergang, gaat onder bij zonsopkomst
 	TWeakObjectPtr<ASkyLight> Sky;

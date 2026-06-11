@@ -1215,7 +1215,7 @@ void AThePlugSIMCharacter::BeginPlay()
 
 		bool bHasController = false;
 		for (TActorIterator<ADayNightController> It(GetWorld()); It; ++It) { bHasController = true; break; }
-		if (!bHasController && !bExternalMap) // pack-maps houden hun eigen (mooie) fabriek-belichting
+		if (!bHasController) // pack-maps: MINIMAL-modus (stock-look overdag, dimmen 's nachts)
 		{
 			GetWorld()->SpawnActor<ADayNightController>(ADayNightController::StaticClass(), FTransform::Identity);
 		}
