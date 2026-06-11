@@ -733,7 +733,7 @@ void ADoorRetrofitter::VerticalReplicate()
 		PosStr.ParseIntoArray(Parts, TEXT(","));
 		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
 	}
-	if (Marks.Num() != 2) { return; } // 2 markers: verste hoek kamer <-> verste hoek badkamer
+	if (Marks.Num() != 3) { return; } // 3 markers: 2 = kamer-rechthoek, 3e = hoogte van de bovenste kamer
 
 	// EEN strakke rechthoek tussen de 2 markers (+30cm marge): alles daarbinnen gaat mee, alles
 	// daarbuiten (gevel-details, balkons, terras) blijft VOLLEDIG met rust.
@@ -755,6 +755,10 @@ void ADoorRetrofitter::VerticalReplicate()
 	}
 	const float Feet = Marks[0].Z - 98.f;
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
+	// Marker 3 = tot en met welke verdieping gevuld wordt (zweef/sta op de hoogte van de bovenste kamer).
+	const float CapFeet = Marks[2].Z - 98.f;
+	const float CapStorey = 480.f + 350.f * FMath::RoundToFloat((CapFeet - 480.f) / 350.f);
+	const int32 CapN = FMath::Clamp(FMath::RoundToInt((CapStorey - SrcZ) / 350.f), 1, 30);
 
 	// Bron-slice verzamelen (incl. verborgen geconverteerde deur-bladen -> werkende deuren in de kopie).
 	// MET materialen: de map geeft bv. het raam-glas op ingerichte verdiepingen een OVERRIDE (helder
@@ -808,12 +812,10 @@ void ADoorRetrofitter::VerticalReplicate()
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	int32 TotalPlaced = 0;
-	// VAN BOVEN NAAR BENEDEN: de bovenste echte verdieping heeft het dak als plafond (slaagt),
-	// en elke gevulde verdieping legt z'n vloerplaat neer = het plafond voor de verdieping eronder.
-	// (Lege verdiepingen missen onderling hun platen - bottom-up keurde daardoor alles af.)
-	for (int32 N = 8; N >= -8; --N)
+	// VAN ONDER NAAR BOVEN tot de hoogte-marker: elke verdieping rust op de vorige (de setback-check
+	// heeft dan altijd geometrie onder zich). Geen dak-heuristieken meer - de speler bepaalt de top.
+	for (int32 N = 1; N <= CapN; ++N)
 	{
-		if (N == 0) { continue; }
 		const float Dz = N * 350.f;
 		const float TgtZ = SrcZ + Dz;
 		if (TgtZ < 470.f) { continue; } // begane grond heeft een andere hoogte (430) - overslaan
@@ -847,36 +849,7 @@ void ADoorRetrofitter::VerticalReplicate()
 				Existing.Add(H, Comp);
 			}
 		}
-		if (ExistCount < 25) { continue; } // geen verdieping hier (boven het dak / onder de grond)
-		// En er moet ook BINNEN de rechthoek zelf al gevel/structuur van deze verdieping staan -
-		// anders bouw je het gebouw 1-2 verdiepingen te hoog door (dak/parapet in de buurt telde mee).
-		if (TightCount < 8)
-		{
-			UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - geen eigen gevel in de rechthoek (tight=%d)"), N, TgtZ, TightCount);
-			continue;
-		}
-		// DAK-TEST: een echte verdieping heeft altijd een PLAFOND boven zich (de vloerplaat van de
-		// verdieping erboven, of het dak). Boven op het dak is alleen lucht - parapet/penthouse-randen
-		// haalden de tight-check, dus dit is het sluitende criterium tegen te hoog doorbouwen.
-		{
-			const FVector2D RC = Outer.GetCenter();
-			int32 CeilingHits = 0;
-			const FVector Probes[3] = {
-				FVector(RC.X, RC.Y, TgtZ + 150.f),
-				FVector(FMath::Lerp(Outer.Min.X, Outer.Max.X, 0.25f), FMath::Lerp(Outer.Min.Y, Outer.Max.Y, 0.25f), TgtZ + 150.f),
-				FVector(FMath::Lerp(Outer.Min.X, Outer.Max.X, 0.75f), FMath::Lerp(Outer.Min.Y, Outer.Max.Y, 0.75f), TgtZ + 150.f) };
-			for (const FVector& Pp : Probes)
-			{
-				FHitResult UpHit;
-				FCollisionQueryParams UQP(SCENE_QUERY_STAT(VertCloneCeil), false);
-				if (W->LineTraceSingleByChannel(UpHit, Pp, Pp + FVector(0.f, 0.f, 420.f), ECC_Visibility, UQP)) { ++CeilingHits; }
-			}
-			if (CeilingHits < 2)
-			{
-				UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - geen plafond erboven (%d/3, dak bereikt)"), N, TgtZ, CeilingHits);
-				continue;
-			}
-		}
+		// (Geen dak-heuristieken: marker 3 bepaalt de top. ExistCount/TightCount alleen ter info.)
 
 		int32 Placed = 0;
 		for (const FSliceEntry& M : Slice)
