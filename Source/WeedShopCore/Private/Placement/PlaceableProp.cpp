@@ -3,6 +3,7 @@
 #include "Placement/PlaceableTypes.h"
 #include "Placement/PropMeshKit.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Net/UnrealNetwork.h"
 #include "Game/WeedShopGameState.h"
@@ -53,6 +54,7 @@ void APlaceableProp::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(APlaceableProp, ItemId);
+	DOREPLIFETIME(APlaceableProp, bDoorOpen);
 }
 
 void APlaceableProp::OnConstruction(const FTransform& Transform)
@@ -92,6 +94,33 @@ void APlaceableProp::SetupVisual()
 	if (Def.bIsStructure)
 	{
 		const FString SId = ItemId.ToString();
+		if (Def.bIsHingedDoor)
+		{
+			// Deurblad: pivot = het scharnier (mesh-eigenschap) -> relatief op de origin laten staan,
+			// zodat SetRelativeRotation netjes om het scharnier draait.
+			Mesh->SetRelativeLocation(FVector::ZeroVector);
+			Mesh->SetRelativeRotation(FRotator(0.f, bDoorOpen ? -100.f : 0.f, 0.f));
+			HideParts();
+			return;
+		}
+		if (SId == TEXT("Struct_CeilLamp"))
+		{
+			Mesh->SetRelativeLocation(FVector::ZeroVector); // pivot zit al aan de plafond-kant
+			if (!StructLight)
+			{
+				StructLight = NewObject<UPointLightComponent>(this);
+				StructLight->SetupAttachment(GetRootComponent());
+				StructLight->RegisterComponent();
+				StructLight->SetMobility(EComponentMobility::Movable);
+				StructLight->SetRelativeLocation(FVector(0.f, 0.f, -28.f));
+				StructLight->SetIntensity(3200.f);
+				StructLight->SetLightColor(FLinearColor(1.f, 0.93f, 0.82f)); // warm wit
+				StructLight->SetAttenuationRadius(950.f);
+				StructLight->SetCastShadows(false);
+			}
+			HideParts();
+			return;
+		}
 		if (SId.StartsWith(TEXT("Struct_Wall")))
 		{
 			Mesh->SetRelativeLocation(FVector(2.5f, Def.BoxHalf.Y, 0.f)); // eind-pivot, span lokaal -Y
@@ -285,14 +314,37 @@ FText APlaceableProp::GetInteractionPrompt_Implementation() const
 	{
 		return FText::FromString(TEXT("Wardrobe - change your outfit  -  hold G to pick up"));
 	}
+	if (bHas && Def.bIsHingedDoor)
+	{
+		return FText::FromString(bDoorOpen ? TEXT("Close door  -  hold G to pick up") : TEXT("Open door  -  hold G to pick up"));
+	}
 	const FString Name = bHas ? Def.DisplayName : ItemId.ToString();
 	return FText::FromString(FString::Printf(TEXT("%s - hold G to pick up"), *Name));
+}
+
+void APlaceableProp::OnRep_DoorOpen()
+{
+	if (Mesh) { Mesh->SetRelativeRotation(FRotator(0.f, bDoorOpen ? -100.f : 0.f, 0.f)); }
 }
 
 void APlaceableProp::Interact_Implementation(APawn* InstigatorPawn)
 {
 	// Upgrade -> stuur de interactie door naar het object waar 'ie bij hoort (pot/rek/machine).
 	if (AActor* Host = FindUpgradeHostFor(this)) { IInteractable::Execute_Interact(Host, InstigatorPawn); return; }
+
+	// Scharnier-deur (building-tool): F = open/dicht.
+	{
+		FPlaceableDef DoorDef;
+		if (GetPlaceableDef(ItemId, DoorDef) && DoorDef.bIsHingedDoor)
+		{
+			if (HasAuthority())
+			{
+				bDoorOpen = !bDoorOpen;
+				OnRep_DoorOpen();
+			}
+			return;
+		}
+	}
 
 	// Alleen bedden doen iets: nacht overslaan tot 07:00 + hier opslaan (= je laad-/spawnpunt).
 	FPlaceableDef Def;

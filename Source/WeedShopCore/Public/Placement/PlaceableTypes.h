@@ -32,6 +32,7 @@ struct FPlaceableDef
 	bool bIsStructure = false;         // true -> bouw-onderdeel (muur/vloer/plafond): altijd grid-snap, vrij plaatsbaar (dev building-tool)
 	bool bIsCeilingPiece = false;      // true -> structure-plafond: komt 320cm boven de verdieping-vloer
 	bool bIsDoubleWall = false;        // true -> muur krijgt een gespiegelde tweede mesh (pack-muren zijn enkelzijdig)
+	bool bIsHingedDoor = false;        // true -> draaiende deur (F = open/dicht, scharnier op de mesh-pivot)
 };
 
 // Alle gedefinieerde placeables.

@@ -195,6 +195,8 @@ namespace
 		{ TEXT("Struct_Floor1x1"), TEXT("Floor 1x1m (tiles)"), TEXT("Build: tile floor section"), 100, 1 },
 		{ TEXT("Struct_Ceil4x4"), TEXT("Ceiling 4x4m"), TEXT("Build: ceiling section"), 100, 1 },
 		{ TEXT("Struct_Ceil1x1"), TEXT("Ceiling 1x1m"), TEXT("Build: ceiling section"), 100, 1 },
+		{ TEXT("Struct_CeilLamp"), TEXT("Ceiling lamp (built-in)"), TEXT("Build: ceiling light, real glow"), 100, 1 },
+		{ TEXT("Struct_Door"), TEXT("Room door (working)"), TEXT("Build: hinged door, F to open"), 100, 1 },
 		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("Warm hanging spot light"),         3500, 1 },
 		// Plant-verzorging (later spel): mest = meer opbrengst; sprays = behandel mold/pest.
 		{ TEXT("Fertilizer_Basic"), TEXT("Fertilizer"),       TEXT("+15% yield this harvest"),          2000, 3 },
