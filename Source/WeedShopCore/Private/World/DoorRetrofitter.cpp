@@ -1515,7 +1515,7 @@ void ADoorRetrofitter::ApplySavedStamps()
 		int32 Placed = 0;
 		for (const FStampPiece& Piece : Pieces)
 		{
-			const FTransform NewTM = (bMirror ? ARoomStamper::MirrorRelTM(Piece.RelTM) : Piece.RelTM) * Anchor;
+			const FTransform NewTM = (bMirror ? ARoomStamper::MirrorPieceTM(Piece) : Piece.RelTM) * Anchor;
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
 			SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen via de phone

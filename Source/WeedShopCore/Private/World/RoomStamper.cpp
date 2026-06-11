@@ -390,7 +390,7 @@ void ARoomStamper::Tick(float DeltaSeconds)
 		bMirrored = !bMirrored;
 		for (int32 Pi = 0; Pi < PreviewComps.Num() && Pi < Pieces.Num(); ++Pi)
 		{
-			if (PreviewComps[Pi]) { PreviewComps[Pi]->SetRelativeTransform(bMirrored ? MirrorRelTM(Pieces[Pi].RelTM) : Pieces[Pi].RelTM); }
+			if (PreviewComps[Pi]) { PreviewComps[Pi]->SetRelativeTransform(bMirrored ? MirrorPieceTM(Pieces[Pi]) : Pieces[Pi].RelTM); }
 		}
 		UWeedToast::NotifyPawn(PC->GetPawn(), -1, 1.5f, FColor::Cyan, bMirrored ? TEXT("Mirrored (T to undo)") : TEXT("Normal"));
 	}
@@ -436,7 +436,7 @@ void ARoomStamper::PlaceStamp()
 	int32 Placed = 0;
 	for (const FStampPiece& Piece : Pieces)
 	{
-		const FTransform NewTM = (bMirrored ? MirrorRelTM(Piece.RelTM) : Piece.RelTM) * CurrentAnchor;
+		const FTransform NewTM = (bMirrored ? MirrorPieceTM(Piece) : Piece.RelTM) * CurrentAnchor;
 		AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 		if (!SMA) { continue; }
 		SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen
@@ -545,7 +545,7 @@ bool ARoomStamper::RemoveStamp(UWorld* W, const FString& StampLine)
 			FBox RoomBox(ForceInit);
 			for (const FStampPiece& Piece : TplPieces)
 			{
-				RoomBox += ((bMirror ? MirrorRelTM(Piece.RelTM) : Piece.RelTM) * Anchor).GetLocation();
+				RoomBox += ((bMirror ? MirrorPieceTM(Piece) : Piece.RelTM) * Anchor).GetLocation();
 			}
 			RoomBox = RoomBox.ExpandBy(FVector(60.f, 60.f, 60.f));
 			for (TActorIterator<ACityDoor> It(W); It; ++It)
@@ -613,4 +613,18 @@ FTransform ARoomStamper::MirrorRelTM(const FTransform& In)
 	const FRotator R = In.GetRotation().Rotator();
 	const FVector S = In.GetScale3D();
 	return FTransform(FRotator(R.Pitch, -R.Yaw, -R.Roll), FVector(L.X, -L.Y, L.Z), FVector(S.X, -S.Y, S.Z));
+}
+
+FTransform ARoomStamper::MirrorPieceTM(const FStampPiece& Piece)
+{
+	const FString MN = Piece.Mesh ? Piece.Mesh->GetName() : FString();
+	// Deurbladen en kozijnen NIET met negatieve scale spiegelen: de deur-converter rekent met
+	// normale scale (dicht-stand naar kozijn-midden, zwaai uit de geparkeerde stand) en zette de
+	// gespiegelde deur aan de verkeerde kant. Een plat blad gespiegeld over het ankervlak is exact
+	// hetzelfde als dat blad met yaw 180-theta op de gespiegelde plek, met gewone scale.
+	const bool bDoorish = MN.Contains(TEXT("Door")) && !MN.Contains(TEXT("Wall"));
+	if (!bDoorish) { return MirrorRelTM(Piece.RelTM); }
+	const FVector L = Piece.RelTM.GetLocation();
+	const FRotator R = Piece.RelTM.GetRotation().Rotator();
+	return FTransform(FRotator(R.Pitch, 180.f - R.Yaw, R.Roll), FVector(L.X, -L.Y, L.Z), Piece.RelTM.GetScale3D());
 }
