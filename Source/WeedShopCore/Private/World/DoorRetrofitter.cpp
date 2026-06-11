@@ -769,7 +769,8 @@ void ADoorRetrofitter::VerticalReplicate()
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName();
 			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
-			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam"))) { continue; } // camera's zweven los van hun muur in kopieen
+			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam"))
+				|| MeshName.Contains(TEXT("DomeCam")) || MeshName.Contains(TEXT("SecurityLight"))) { continue; } // camera's/spots zweven los van hun muur in kopieen
 			// Buiten-meubilair niet mee-kopieren (zweefde op elke verdieping boven het terras).
 			if (MeshName.Contains(TEXT("Umbrella")) || MeshName.Contains(TEXT("Parasol")) || MeshName.Contains(TEXT("Lounger"))
 				|| MeshName.Contains(TEXT("SunBed")) || MeshName.Contains(TEXT("Sunbed")) || MeshName.Contains(TEXT("Chair"))
@@ -861,20 +862,6 @@ void ADoorRetrofitter::VerticalReplicate()
 					continue; // open lucht eronder -> hier bestaat het gebouw niet meer
 				}
 			}
-			// Doorkijk-raam (_Interior) vervangt het parallax-raam (nep-3D, niet doorzichtig) op die plek.
-			const FString PasteMeshName = M.Key->GetName();
-			if (PasteMeshName.Contains(TEXT("_Interior")) && PasteMeshName.Contains(TEXT("Window")))
-			{
-				// ELK parallax-/nep-raam binnen 60cm verbergen (naam-varianten zoals _b matchten niet exact).
-				for (FWinRef& WR : ExistingWindows)
-				{
-					if (WR.Comp && FVector::Dist2D(WR.Pos, NL) < 60.f)
-					{
-						WR.Comp->SetVisibility(false);
-						WR.Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-					}
-				}
-			}
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
 			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
@@ -885,8 +872,22 @@ void ADoorRetrofitter::VerticalReplicate()
 			}
 			++Placed;
 		}
+		// Verdieping kreeg interieur -> ALLE parallax-ramen (nep-3D) in de kamer-zone verbergen;
+		// de kopie zet er de echte _Interior doorkijk-ramen voor in de plaats. Positie-matchen per
+		// raam miste varianten die net verschoven staan.
+		if (Placed > 10)
+		{
+			for (FWinRef& WR : ExistingWindows)
+			{
+				if (WR.Comp)
+				{
+					WR.Comp->SetVisibility(false);
+					WR.Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				}
+			}
+		}
 		TotalPlaced += Placed;
-		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al)"), N, TgtZ, Placed, ExistCount);
+		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al, %d ramen geswapt)"), N, TgtZ, Placed, ExistCount, ExistingWindows.Num());
 	}
 	UE_LOG(LogWeedShop, Warning, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
 }
