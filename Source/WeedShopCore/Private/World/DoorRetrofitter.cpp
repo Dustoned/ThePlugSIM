@@ -101,6 +101,10 @@ void ADoorRetrofitter::BeginPlay()
 	// alle on-screen debug-meldingen uitschakelen in pack-maps. Onze UMG-UI blijft gewoon werken.
 	GAreScreenMessagesEnabled = false;
 
+	// Verse bake-export per sessie: de append-file stapelde anders alle (ook oude, foute) runs op
+	// en de bake bakte die hele historie mee.
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")), false, true, true);
+
 	// GEBAKKEN KAMERS: onze eigen BakedRooms-level (gevuld via Tools/bake_rooms.py) als overlay
 	// over de pack-map laden - permanent map-onderdeel dat ook in packaged builds meegaat. De
 	// runtime-jobs deduppen er automatisch tegen (zelfde mesh+positie = overslaan).
