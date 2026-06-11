@@ -122,6 +122,7 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 	// Stukken verzamelen (zelfde uitsluitingen als de verticale vuller).
 	FString Out;
 	int32 Count = 0;
+	TArray<TPair<FVector, FString>> LeafLines; // deurbladen apart: max 1 per deuropening
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
 		AActor* A = *It;
@@ -146,8 +147,10 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 			const FVector L = Comp->Bounds.Origin;
 			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 335.f) { continue; }
-			// Het voordeur-blad niet meenemen: het frame waar je op snapt heeft al een werkende deur.
+			// Het voordeur-BLAD niet meenemen (het doelframe heeft al een werkende deur) - maar
+			// muurdelen met een deuropening in de naam (SM_InteriorWall_3m_Door01 e.d.) horen er WEL bij.
 			if (MeshName.Contains(TEXT("Door")) && !MeshName.Contains(TEXT("DoorFrame"))
+				&& !MeshName.Contains(TEXT("Wall"))
 				&& FVector::Dist2D(L, AnchorTM.GetLocation()) < 170.f) { continue; }
 
 			const FTransform Rel = Comp->GetComponentTransform() * AnchorInv;
@@ -161,11 +164,28 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 				UMaterialInterface* M = Comp->GetMaterial(Mi);
 				MatList += M ? M->GetPathName() : TEXT("-");
 			}
-			Out += FString::Printf(TEXT("PIECE|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
+			FString PieceLine = FString::Printf(TEXT("PIECE|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
 				*Comp->GetStaticMesh()->GetPathName(), RL.X, RL.Y, RL.Z, RR.Pitch, RR.Yaw, RR.Roll, RS.X, RS.Y, RS.Z, *MatList);
-			Out += LINE_TERMINATOR;
-			++Count;
+			PieceLine += LINE_TERMINATOR;
+			const bool bLeaf = MeshName.Contains(TEXT("Door")) && !MeshName.Contains(TEXT("DoorFrame")) && !MeshName.Contains(TEXT("Wall"));
+			if (bLeaf) { LeafLines.Add(TPair<FVector, FString>(L, PieceLine)); }
+			else { Out += PieceLine; ++Count; }
 		}
+	}
+	// Maximaal EEN deurblad per deuropening: kopieen (top-ups, oude vullingen, geparkeerde dubbelen)
+	// op dezelfde plek vallen weg - dit was de bron van de gestapelde badkamerdeuren.
+	TArray<FVector> LeafKept;
+	for (const TPair<FVector, FString>& Lf : LeafLines)
+	{
+		bool bDup = false;
+		for (const FVector& K : LeafKept)
+		{
+			if (FVector::Dist2D(K, Lf.Key) < 150.f && FMath::Abs(K.Z - Lf.Key.Z) < 200.f) { bDup = true; break; }
+		}
+		if (bDup) { continue; }
+		LeafKept.Add(Lf.Key);
+		Out += Lf.Value;
+		++Count;
 	}
 	if (Count < 8) { OutError = FString::Printf(TEXT("Only %d pieces found - room not streamed in?"), Count); return false; }
 
@@ -398,6 +418,20 @@ void ARoomStamper::PlaceStamp()
 	const FVector AL = CurrentAnchor.GetLocation();
 	const float AY = CurrentAnchor.GetRotation().Rotator().Yaw;
 	const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"), FMath::RoundToInt(AL.X), FMath::RoundToInt(AL.Y), FMath::RoundToInt(AY));
+	// Niet twee keer op precies dezelfde plek stempelen (dubbelklik) - dat stapelt twee kamers op elkaar.
+	{
+		TArray<FString> Existing;
+		FFileHelper::LoadFileToStringArray(Existing, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+		for (const FString& Ex : Existing)
+		{
+			if (StampIdFromLine(Ex.TrimStartAndEnd()) == StampId)
+			{
+				UWeedToast::NotifyPawn(GetWorld()->GetFirstPlayerController() ? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr,
+					-1, 2.5f, FColor::Orange, TEXT("Already stamped here - move or rotate first"));
+				return;
+			}
+		}
+	}
 	FString BakeOut;
 	int32 Placed = 0;
 	for (const FStampPiece& Piece : Pieces)
