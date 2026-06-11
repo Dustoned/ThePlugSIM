@@ -450,7 +450,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				// Basis-fog houden voor diepte, maar de ZON-GLOED eruit: de directional inscattering +
 				// volumetric fog (getuned voor de oude HDRI-koepel) vulden de halve hemel met een
 				// lichtbal. De SkyAtmosphere geeft zelf al nette afstands-haze.
-				FC->SetDirectionalInscatteringColor(FLinearColor::Black);
+				FC->SetDirectionalInscatteringColor(FLinearColor(0.16f, 0.14f, 0.12f)); // subtiele warme zon-gloed (vol = mega-bal, zwart = doods)
 				FC->SetVolumetricFog(false);
 				bFogTamed = true;
 			}

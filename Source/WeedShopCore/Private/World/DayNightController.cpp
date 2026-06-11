@@ -81,6 +81,15 @@ void ADayNightController::BeginPlay()
 
 	LocalInstance = this; // bereikbaar voor de phone-UI (live tunen)
 
+	// Pack-maps (CityBeachStrip): de originele look leunde op een superheldere HDRI-koepel.
+	// Compenseer met hogere ambient + fellere zon, anders oogt alles dof/donker vergeleken met eerst.
+	if (W->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip")))
+	{
+		SkyDay = 2.2f;
+		SkyNight = 1.1f;
+		SunIntensity = 9.f;
+	}
+
 	// Bestaande zon (directional light) zoeken; anders zelf een Movable aanmaken.
 	for (TActorIterator<ADirectionalLight> It(W); It; ++It) { Sun = *It; break; }
 	if (!Sun.IsValid())
@@ -144,7 +153,7 @@ void ADayNightController::BeginPlay()
 			S.bOverride_AutoExposureBias = true;
 			S.AutoExposureBias = ExposureBias; // vaste belichtingscompensatie (lager = donkerder)
 			S.bOverride_BloomIntensity = true;
-			S.BloomIntensity = 0.35f; // bescheiden bloom: geen mega-gloed rond de zon
+			S.BloomIntensity = 0.5f; // wat sfeer-gloed, maar geen mega-bal
 			PPV = PP;
 		}
 	}
