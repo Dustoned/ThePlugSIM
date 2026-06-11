@@ -782,14 +782,24 @@ void ADoorRetrofitter::VerticalReplicate()
 		if (Marks.Num() == 3) { Jobs.Add(Marks); }
 	}
 
+	// Welke jobs zijn al GEBAKKEN (permanent in BakedRooms.umap)? Die mogen nooit meer spawnen -
+	// de gebakken geometrie maakt de keuring soepeler waardoor eerder-afgekeurde rand-stukken
+	// ineens slagen en er troep bovenop gebouwd wordt. Alleen de raam-verberging blijft.
+	TSet<FString> BakedJobs;
+	{
+		TArray<FString> BakedLines;
+		FFileHelper::LoadFileToStringArray(BakedLines, *(FPaths::ProjectSavedDir() / TEXT("BakedJobs.txt")));
+		for (const FString& BL : BakedLines) { BakedJobs.Add(BL.TrimStartAndEnd()); }
+	}
+
 	for (const TArray<FVector>& JM : Jobs)
 	{
 		const FString JobId = FString::Printf(TEXT("%d_%d_%d"), FMath::RoundToInt(JM[0].X), FMath::RoundToInt(JM[0].Y), FMath::RoundToInt(JM[2].Z));
-		if (!DoneJobs.Contains(JobId)) { RunVertJob(JM, JobId); }
+		if (!DoneJobs.Contains(JobId)) { RunVertJob(JM, JobId, BakedJobs.Contains(JobId)); }
 	}
 }
 
-void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& JobId)
+void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& JobId, bool bBakedJob)
 {
 	UWorld* W = GetWorld();
 	if (!W || Marks.Num() != 3) { return; }
@@ -949,6 +959,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		}
 		// (Geen dak-heuristieken: marker 3 bepaalt de top. ExistCount/TightCount alleen ter info.)
 
+		if (bBakedJob) { goto HideOnly; } // gebakken: geometrie staat al in de map - nooit meer bouwen
 		// FASE 1: keuren - past de kamer hier (vrijwel) volledig? Zo niet: hele verdieping overslaan.
 		// Half-passende kamers (smallere toren boven het podium) gaven alleen maar troep; een lege
 		// verdieping kan later z'n eigen (passende) bron-job krijgen via de building-tool.
@@ -1051,10 +1062,10 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		}
 		// Kamer geplaatst -> SPIEGEL DE BRON: elk raam/glas-element dat hier staat maar op de bron-
 		// verdieping NIET (de makers haalden het daar weg voor de ingerichte look) verbergen we ook.
+HideOnly:
 		int32 GlassHidden = 0;
-		// Alleen raam-spiegelen als er een SUBSTANTIELE kamer geplaatst is (inspringende verdiepingen
-		// krijgen maar een halve kamer door de setback-knip - daar de ramen niet slopen).
-		if (Placed > Slice.Num() / 2)
+		// Alleen raam-spiegelen als er een substantiele kamer staat (geplaatst of gebakken).
+		if (bBakedJob || Placed > Slice.Num() / 2)
 		{
 			for (const TPair<UStaticMeshComponent*, uint64>& WC : WindowCandidates)
 			{

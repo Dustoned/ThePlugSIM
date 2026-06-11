@@ -61,5 +61,18 @@ with open(BAKE_FILE, encoding="utf-8") as f:
         spawned += 1
 
 unreal.log_warning("BAKE: %d actors gespawnd, %d bestonden al" % (spawned, skipped))
+# Job-ids als GEBAKKEN registreren: de game mag die jobs nooit meer spawnen (alleen raam-verbergen).
+baked_jobs_path = os.path.join(unreal.SystemLibrary.get_project_saved_directory(), "BakedJobs.txt")
+done = set()
+if os.path.exists(baked_jobs_path):
+    with open(baked_jobs_path, encoding="utf-8") as bf:
+        done = {l.strip() for l in bf if l.strip()}
+with open(BAKE_FILE, encoding="utf-8") as f:
+    for line in f:
+        if line.startswith("JOB|"):
+            done.add(line.strip().split("|", 1)[1])
+with open(baked_jobs_path, "w", encoding="utf-8") as bf:
+    bf.write("\n".join(sorted(done)) + "\n")
+
 unreal.EditorLoadingAndSavingUtils.save_map(world, BAKED_MAP)
 unreal.log_warning("BAKE: opgeslagen als %s" % BAKED_MAP)

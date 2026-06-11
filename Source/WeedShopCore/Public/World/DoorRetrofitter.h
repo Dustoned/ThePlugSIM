@@ -53,7 +53,7 @@ protected:
 	// Verticale verdieping-kopie: 1 enkele marker = kopieer die verdieping-slice naar alle
 	// verdiepingen erboven/eronder (zelfde gebouw), met dedupe (bestaande meshes overslaan).
 	void VerticalReplicate();
-	void RunVertJob(const TArray<FVector>& Marks, const FString& JobId);
+	void RunVertJob(const TArray<FVector>& Marks, const FString& JobId, bool bBakedJob);
 	TSet<FString> DoneJobs;                  // afgeronde jobs (deze sessie)
 	TWeakObjectPtr<class ULevelStreamingDynamic> BakedOverlay; // gebakken kamers (async geladen)
 	TMap<FString, int32> JobLastCount;       // streaming-stabiliteit per job
