@@ -640,7 +640,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
-	CloneRooms();
+	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
 
 	if (NewThisPass > 0)
 	{
