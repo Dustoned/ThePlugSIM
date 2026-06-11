@@ -857,7 +857,10 @@ void ADoorRetrofitter::VerticalReplicate()
 				++TightCount;
 				{
 					const FString GN = Comp->GetStaticMesh()->GetName();
-					if (GN.Contains(TEXT("Glass")) || GN.Contains(TEXT("Window")))
+					// Strikt BINNEN de kopie-rechthoek en in de eigen verdieping-band: de 50cm-buffer
+					// eromheen ving buur-ramen die geen bron-tegenhanger hebben -> die werden onterecht
+					// verborgen. Buur-vakken blijven nu met rust.
+					if ((GN.Contains(TEXT("Glass")) || GN.Contains(TEXT("Window"))) && InRects(L) && (L.Z - TgtZ) < 340.f)
 					{
 						// Hash van de BRON-positie (pos - Dz): bestaat die niet in de bron-slice, dan
 						// heeft de maker dit element op de ingerichte verdieping VERWIJDERD -> wij ook.
@@ -930,7 +933,9 @@ void ADoorRetrofitter::VerticalReplicate()
 		// Kamer geplaatst -> SPIEGEL DE BRON: elk raam/glas-element dat hier staat maar op de bron-
 		// verdieping NIET (de makers haalden het daar weg voor de ingerichte look) verbergen we ook.
 		int32 GlassHidden = 0;
-		if (Placed > 10)
+		// Alleen raam-spiegelen als er een SUBSTANTIELE kamer geplaatst is (inspringende verdiepingen
+		// krijgen maar een halve kamer door de setback-knip - daar de ramen niet slopen).
+		if (Placed > Slice.Num() / 2)
 		{
 			for (const TPair<UStaticMeshComponent*, uint64>& WC : WindowCandidates)
 			{
