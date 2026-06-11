@@ -97,7 +97,7 @@ void ADayNightController::BeginPlay()
 		{
 			SunDL->SetAtmosphereSunLight(true);
 			// Via de SETTERS (direct de property zetten ververst de render-state niet -> bleef enorm).
-			SunDL->SetLightSourceAngle(0.35f);     // realistische kleine zonneschijf
+			SunDL->SetLightSourceAngle(1.5f);      // zelfde formaat als de maan (lekker zichtbaar)
 			SunDL->SetLightSourceSoftAngle(0.f);   // geen extra zachte rand
 		}
 	}
