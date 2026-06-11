@@ -57,6 +57,7 @@ protected:
 	UPROPERTY() TArray<FStampPiece> Pieces;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> PreviewComps;
 	FTransform CurrentAnchor;
+	FVector CentroidRel = FVector::ZeroVector; // kamer-zwaartepunt relatief aan het anker (voor van-je-af plaatsen)
 	float UserYaw = 0.f;     // R-rotatie (90-graden stappen, of 180-flip bij deur-snap)
 	bool bSnappedToDoor = false;
 	bool bRotKeyWas = false, bPlaceKeyWas = false, bCancelKeyWas = false;
