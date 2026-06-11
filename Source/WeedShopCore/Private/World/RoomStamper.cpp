@@ -71,7 +71,6 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 	FTransform AnchorTM = FTransform::Identity;
 	bool bAnchor = false;
 	float BestD = TNumericLimits<float>::Max();
-	const FVector2D RC = Rect.GetCenter();
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
 		if (!IsValid(*It)) { continue; }
@@ -83,8 +82,12 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 			const FVector L = Comp->GetComponentLocation();
 			if (FMath::Abs(L.Z - SrcZ) > 60.f) { continue; }
 			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
-			const float D = FVector::DistSquared2D(L, FVector(RC.X, RC.Y, 0.f));
-			if (D < BestD) { BestD = D; AnchorTM = Comp->GetComponentTransform(); bAnchor = true; }
+			// VOORDEUR-keuze: afstand tot de dichtstbijzijnde rechthoek-rand - de entree zit op de
+			// omtrek-muur (kleine rand-afstand), binnendeuren (badkamer) dieper naar binnen.
+			const float EdgeDist = FMath::Min(
+				FMath::Min(L.X - Rect.Min.X, Rect.Max.X - L.X),
+				FMath::Min(L.Y - Rect.Min.Y, Rect.Max.Y - L.Y));
+			if (EdgeDist < BestD) { BestD = EdgeDist; AnchorTM = Comp->GetComponentTransform(); bAnchor = true; }
 		}
 	}
 	if (!bAnchor) { OutError = TEXT("No door frame found inside the marked rect"); return false; }
@@ -200,6 +203,12 @@ bool ARoomStamper::BeginStamp(const FString& TemplateName)
 		}
 		PreviewComps.Add(C);
 	}
+	// Kamer-zwaartepunt (relatief aan het anker): bepaalt de van-je-af-orientatie bij plaatsen.
+	CentroidRel = FVector::ZeroVector;
+	for (const FStampPiece& Piece : Pieces) { CentroidRel += Piece.RelTM.GetLocation(); }
+	CentroidRel /= FMath::Max(1, Pieces.Num());
+	CentroidRel.Z = 0.f;
+
 	ActiveTemplate = TemplateName;
 	UserYaw = 0.f;
 	bStamping = true;
@@ -250,11 +259,19 @@ FTransform ARoomStamper::ComputeAnchor() const
 		}
 		if (bFrame)
 		{
-			FRotator R(0.f, BestFrame.GetRotation().Rotator().Yaw + UserYaw, 0.f); // R = 180-flip
 			FVector L = BestFrame.GetLocation();
 			L.Z = 480.f + 350.f * FMath::RoundToFloat((L.Z - 480.f) / 350.f); // verdieping-grid
+			// Standaard de kant VAN DE SPELER AF: kies frameYaw of frameYaw+180 zodat het kamer-
+			// zwaartepunt van je af wijst; R flipt alsnog 180 als je 'm toch andersom wil.
+			const float FY = BestFrame.GetRotation().Rotator().Yaw;
+			const FVector ToPawn = (P->GetActorLocation() - L).GetSafeNormal2D();
+			float BaseYaw = FY;
+			{
+				const FVector C0 = FRotator(0.f, FY, 0.f).RotateVector(CentroidRel).GetSafeNormal2D();
+				if (FVector::DotProduct(C0, ToPawn) > 0.f) { BaseYaw = FY + 180.f; }
+			}
 			const_cast<ARoomStamper*>(this)->bSnappedToDoor = true;
-			return FTransform(R, L);
+			return FTransform(FRotator(0.f, BaseYaw + UserYaw, 0.f), L);
 		}
 	}
 	const_cast<ARoomStamper*>(this)->bSnappedToDoor = false;
@@ -265,7 +282,11 @@ FTransform ARoomStamper::ComputeAnchor() const
 	Base.Y = FMath::GridSnap(Base.Y, 50.f);
 	const float Feet = P->GetActorLocation().Z - 88.f;
 	Base.Z = (FMath::Abs(Feet - 50.f) < 215.f) ? 50.f : 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f);
-	return FTransform(FRotator(0.f, FMath::GridSnap(ViewRot.Yaw, 90.f) + UserYaw, 0.f), Base);
+	// VAN JE AF: draai het anker zo dat het kamer-zwaartepunt in je kijkrichting ligt (de kamer
+	// strekt zich voor je uit, niet om/achter je heen). R draait alsnog in 90-stappen.
+	const float CentroidYaw = FMath::RadiansToDegrees(FMath::Atan2(CentroidRel.Y, CentroidRel.X));
+	const float BaseYaw = FMath::GridSnap(ViewRot.Yaw - CentroidYaw, 90.f);
+	return FTransform(FRotator(0.f, BaseYaw + UserYaw, 0.f), Base);
 }
 
 void ARoomStamper::UpdatePreview()
