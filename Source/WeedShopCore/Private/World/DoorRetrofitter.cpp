@@ -857,7 +857,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		{
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName();
-			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
+			if (bHiddenActor && !MeshName.Contains(TEXT("Door"))) { continue; } // alle geconverteerde bladen (ook BalconyDoor) mee
 			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam")) || MeshName.Contains(TEXT("MatineeCam"))
 				|| MeshName.Contains(TEXT("DomeCam")) || MeshName.Contains(TEXT("SecurityLight"))) { continue; } // (editor-)camera's/spots horen niet in kopieen
 			// Balkon-railing niet mee-kopieren (stond bij de badkamer-rand binnen de rechthoek en
@@ -1080,6 +1080,37 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		// Kamer geplaatst -> SPIEGEL DE BRON: elk raam/glas-element dat hier staat maar op de bron-
 		// verdieping NIET (de makers haalden het daar weg voor de ingerichte look) verbergen we ook.
 		} // einde niet-gebakken bouw-pad
+		else
+		{
+			// GEBAKKEN verdieping: alleen ontbrekende DEUR-bladen bijvullen (bv. balkon-puien die in
+			// eerdere bakes niet meegingen door het te smalle blad-filter). Dedupe voorkomt dubbelen;
+			// de leaf-converter maakt er daarna werkende (schuif)deuren van.
+			for (const FSliceEntry& M : Slice)
+			{
+				if (M.bSyncOnly || !M.Mesh->GetName().Contains(TEXT("Door"))) { continue; }
+				FTransform NewTM = M.TM;
+				NewTM.AddToTranslation(FVector(0.f, 0.f, Dz));
+				const FVector NL = M.BO + FVector(0.f, 0.f, Dz);
+				const uint64 H = GetTypeHash(M.Mesh->GetFName())
+					^ (uint64)(FMath::RoundToInt(NL.X / 10.f) * 73856093)
+					^ (uint64)(FMath::RoundToInt(NL.Y / 10.f) * 19349663)
+					^ (uint64)(FMath::RoundToInt(NL.Z / 10.f) * 83492791);
+				if (Existing.Contains(H)) { continue; }
+				AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
+				if (!SMA) { continue; }
+				if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
+				{
+					C->SetMobility(EComponentMobility::Movable);
+					C->SetStaticMesh(M.Mesh);
+					C->SetCanEverAffectNavigation(false);
+					for (int32 Mi = 0; Mi < M.Mats.Num(); ++Mi)
+					{
+						if (M.Mats[Mi]) { C->SetMaterial(Mi, M.Mats[Mi]); }
+					}
+				}
+				++Placed;
+			}
+		}
 
 		int32 GlassHidden = 0;
 		// Alleen raam-spiegelen als er een substantiele kamer staat (geplaatst of gebakken).
