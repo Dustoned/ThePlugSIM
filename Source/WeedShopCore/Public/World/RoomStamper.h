@@ -45,6 +45,15 @@ public:
 	// Template-stukken laden (gedeeld met de sessie-herbouw in de retrofitter).
 	static bool LoadTemplate(const FString& TemplateName, TArray<FStampPiece>& OutPieces);
 
+	// Geplaatste, nog NIET gebakken stempels (regels uit RoomStamps.txt).
+	static TArray<FString> ListPlacedStamps(UWorld* W);
+	// Verwijder een geplaatste stempel: actors weg + regel uit RoomStamps.txt + bake-blok uit RoomBake.txt.
+	static bool RemoveStamp(UWorld* W, const FString& StampLine);
+	// Undo: de laatst geplaatste (niet gebakken) stempel weghalen.
+	static bool UndoLastStamp(UWorld* W, FString& OutInfo);
+	// Stamp-id (STAMP_x_y_yaw) uit een RoomStamps-regel (template|x,y,z|yaw).
+	static FString StampIdFromLine(const FString& Line);
+
 protected:
 	virtual void Tick(float DeltaSeconds) override;
 

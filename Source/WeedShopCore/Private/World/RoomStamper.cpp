@@ -372,6 +372,9 @@ void ARoomStamper::PlaceStamp()
 	if (!W) { return; }
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	const FVector AL = CurrentAnchor.GetLocation();
+	const float AY = CurrentAnchor.GetRotation().Rotator().Yaw;
+	const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"), FMath::RoundToInt(AL.X), FMath::RoundToInt(AL.Y), FMath::RoundToInt(AY));
 	FString BakeOut;
 	int32 Placed = 0;
 	for (const FStampPiece& Piece : Pieces)
@@ -379,6 +382,7 @@ void ARoomStamper::PlaceStamp()
 		const FTransform NewTM = Piece.RelTM * CurrentAnchor;
 		AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 		if (!SMA) { continue; }
+		SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen
 		if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
 		{
 			C->SetMobility(EComponentMobility::Movable);
@@ -405,12 +409,9 @@ void ARoomStamper::PlaceStamp()
 	}
 
 	// Persistentie: stempel-regel (herbouw per sessie tot de bake) + bake-export.
-	const FVector AL = CurrentAnchor.GetLocation();
-	const float AY = CurrentAnchor.GetRotation().Rotator().Yaw;
 	const FString StampLine = FString::Printf(TEXT("%s|%.1f,%.1f,%.1f|%.1f"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY) + LINE_TERMINATOR;
 	FFileHelper::SaveStringToFile(StampLine, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
-	const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"), FMath::RoundToInt(AL.X), FMath::RoundToInt(AL.Y), FMath::RoundToInt(AY));
 	FFileHelper::SaveStringToFile(FString::Printf(TEXT("JOB|%s"), *StampId) + LINE_TERMINATOR + BakeOut,
 		*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
@@ -418,4 +419,100 @@ void ARoomStamper::PlaceStamp()
 	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: '%s' geplaatst op (%.0f, %.0f, %.0f) yaw %.0f - %d stukken"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY, Placed);
 	UWeedToast::NotifyPawn(GetWorld()->GetFirstPlayerController() ? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr,
 		-1, 2.5f, FColor::Green, FString::Printf(TEXT("Room stamped! (%d pieces) - LMB again to stamp more, RMB to stop"), Placed));
+}
+
+FString ARoomStamper::StampIdFromLine(const FString& Line)
+{
+	TArray<FString> P;
+	Line.ParseIntoArray(P, TEXT("|"));
+	if (P.Num() < 3) { return FString(); }
+	TArray<FString> Lp;
+	P[1].ParseIntoArray(Lp, TEXT(","));
+	if (Lp.Num() < 3) { return FString(); }
+	return FString::Printf(TEXT("STAMP_%d_%d_%d"),
+		FMath::RoundToInt(FCString::Atof(*Lp[0])),
+		FMath::RoundToInt(FCString::Atof(*Lp[1])),
+		FMath::RoundToInt(FCString::Atof(*P[2])));
+}
+
+TArray<FString> ARoomStamper::ListPlacedStamps(UWorld* W)
+{
+	TSet<FString> Baked;
+	{
+		TArray<FString> BL;
+		FFileHelper::LoadFileToStringArray(BL, *(FPaths::ProjectSavedDir() / TEXT("BakedJobs.txt")));
+		for (const FString& B : BL) { Baked.Add(B.TrimStartAndEnd()); }
+	}
+	TArray<FString> Lines, Out;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+	for (const FString& L : Lines)
+	{
+		const FString T = L.TrimStartAndEnd();
+		if (T.IsEmpty()) { continue; }
+		const FString Id = StampIdFromLine(T);
+		if (Id.IsEmpty() || Baked.Contains(Id)) { continue; }
+		Out.Add(T);
+	}
+	return Out;
+}
+
+bool ARoomStamper::RemoveStamp(UWorld* W, const FString& StampLine)
+{
+	const FString Id = StampIdFromLine(StampLine);
+	if (Id.IsEmpty() || !W) { return false; }
+
+	// 1) Alle actors met deze stamp-tag weghalen (geplaatst of sessie-herbouwd).
+	int32 Killed = 0;
+	const FName Tag(*Id);
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		if (IsValid(*It) && It->ActorHasTag(Tag)) { It->Destroy(); ++Killed; }
+	}
+
+	// 2) Regel uit RoomStamps.txt (anders komt hij volgende sessie terug).
+	{
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt");
+		TArray<FString> Lines, Keep;
+		FFileHelper::LoadFileToStringArray(Lines, *Path);
+		for (const FString& L : Lines)
+		{
+			const FString T = L.TrimStartAndEnd();
+			if (!T.IsEmpty() && StampIdFromLine(T) == Id) { continue; }
+			Keep.Add(L);
+		}
+		FFileHelper::SaveStringToFile(FString::Join(Keep, LINE_TERMINATOR) + LINE_TERMINATOR, *Path,
+			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	}
+
+	// 3) Bake-blok uit RoomBake.txt (JOB|id + de SPAWN-regels erna, tot het volgende JOB-blok).
+	{
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("RoomBake.txt");
+		TArray<FString> Lines, Keep;
+		FFileHelper::LoadFileToStringArray(Lines, *Path);
+		bool bSkipping = false;
+		for (const FString& L : Lines)
+		{
+			const FString T = L.TrimStartAndEnd();
+			if (T == FString::Printf(TEXT("JOB|%s"), *Id)) { bSkipping = true; continue; }
+			if (bSkipping && T.StartsWith(TEXT("JOB|"))) { bSkipping = false; }
+			if (bSkipping && T.StartsWith(TEXT("SPAWN|"))) { continue; }
+			Keep.Add(L);
+		}
+		FFileHelper::SaveStringToFile(FString::Join(Keep, LINE_TERMINATOR) + LINE_TERMINATOR, *Path,
+			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	}
+
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: stempel %s verwijderd (%d actors)"), *Id, Killed);
+	return true;
+}
+
+bool ARoomStamper::UndoLastStamp(UWorld* W, FString& OutInfo)
+{
+	const TArray<FString> Placed = ListPlacedStamps(W);
+	if (Placed.Num() == 0) { OutInfo = TEXT("No stamps to undo"); return false; }
+	const FString Last = Placed.Last();
+	TArray<FString> P;
+	Last.ParseIntoArray(P, TEXT("|"));
+	OutInfo = P.Num() > 0 ? P[0] : Last;
+	return RemoveStamp(W, Last);
 }

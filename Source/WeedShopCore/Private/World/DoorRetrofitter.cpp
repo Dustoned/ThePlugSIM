@@ -1516,6 +1516,7 @@ void ADoorRetrofitter::ApplySavedStamps()
 			const FTransform NewTM = Piece.RelTM * Anchor;
 			AStaticMeshActor* SMA = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), NewTM, SP);
 			if (!SMA) { continue; }
+			SMA->Tags.Add(FName(*StampId)); // voor undo/verwijderen via de phone
 			if (UStaticMeshComponent* C = SMA->GetStaticMeshComponent())
 			{
 				C->SetMobility(EComponentMobility::Movable);

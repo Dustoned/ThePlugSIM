@@ -318,6 +318,27 @@ void UPhoneWidget::FillSettingsBody()
 				BodyRow(StampB, FMargin(0.f, 1.f, 0.f, 1.f));
 			}
 		}
+		// Geplaatste (nog niet gebakken) stempels: undo + per stuk verwijderen.
+		{
+			const TArray<FString> PlacedStamps = ARoomStamper::ListPlacedStamps(GetWorld());
+			if (PlacedStamps.Num() > 0)
+			{
+				UWeedActionButton* UndoB = MakeActionBtn(TEXT("Undo last stamp"), FLinearColor(0.55f, 0.3f, 0.2f),
+					[this]() { FString Info; ARoomStamper::UndoLastStamp(GetWorld(), Info); FillSettingsBody(); }, 12);
+				BodyRow(UndoB, FMargin(0.f, 3.f, 0.f, 2.f));
+				for (const FString& SLine : PlacedStamps)
+				{
+					TArray<FString> SParts;
+					SLine.ParseIntoArray(SParts, TEXT("|"));
+					const FString Disp = SParts.Num() > 1
+						? FString::Printf(TEXT("Remove %s @ %s"), *SParts[0], *SParts[1])
+						: FString::Printf(TEXT("Remove %s"), *SLine);
+					UWeedActionButton* RemB = MakeActionBtn(Disp, FLinearColor(0.45f, 0.18f, 0.18f),
+						[this, SLine]() { ARoomStamper::RemoveStamp(GetWorld(), SLine); FillSettingsBody(); }, 10);
+					BodyRow(RemB, FMargin(0.f, 1.f, 0.f, 1.f));
+				}
+			}
+		}
 
 		// --- Live light-tuning (stuurt de lokale DayNightController direct aan; geen restart nodig) ---
 		LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
