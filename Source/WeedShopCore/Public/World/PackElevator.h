@@ -13,6 +13,16 @@
 
 class UStaticMeshComponent;
 
+// Init-data per hal-schuifpaneel: de retrofitter berekent de ECHTE dicht-positie (de map parkeert ze
+// half-open als decor) + hoe ver dit paneel telescopisch moet schuiven.
+struct FElevPanelInit
+{
+	UStaticMeshComponent* Comp = nullptr;
+	int32 FloorIdx = 0;
+	FVector ClosedPos = FVector::ZeroVector;
+	float SlideDist = 0.f;
+};
+
 UCLASS()
 class WEEDSHOPCORE_API APackElevator : public AActor, public IInteractable
 {
@@ -23,7 +33,7 @@ public:
 
 	// Floors = gesorteerde verdieping-Z's (vloerniveau). InSlideDir = schuifrichting van de panelen
 	// (wereld, pocket-kant). Panels = per verdieping (index in Floors) de bestaande schuif-panelen.
-	void Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<TPair<int32, UStaticMeshComponent*>>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir);
+	void Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<FElevPanelInit>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir);
 
 	// Roep de lift naar deze verdieping (call-knoppen).
 	void CallToFloor(int32 FloorIdx);

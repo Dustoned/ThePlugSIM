@@ -36,7 +36,7 @@ APackElevator::APackElevator()
 	}
 }
 
-void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<TPair<int32, UStaticMeshComponent*>>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir)
+void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<FElevPanelInit>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir)
 {
 	Floors = InFloors;
 	Floors.Sort();
@@ -46,40 +46,17 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 	SlideDir.Normalize();
 
 	Panels.Reset();
-	for (const TPair<int32, UStaticMeshComponent*>& P : InPanels)
+	for (const FElevPanelInit& P : InPanels)
 	{
-		if (!P.Value) { continue; }
-		// BELANGRIJK: de map-panelen zijn Static - zonder Movable doet SetWorldLocation stilletjes NIETS
-		// (daarom bewogen de deuren eerst niet).
-		P.Value->SetMobility(EComponentMobility::Movable);
+		if (!P.Comp) { continue; }
+		// BELANGRIJK: de map-panelen zijn Static - zonder Movable doet SetWorldLocation stilletjes NIETS.
+		P.Comp->SetMobility(EComponentMobility::Movable);
 		FPanelRef R;
-		R.Comp = P.Value;
-		R.ClosedPos = P.Value->GetComponentLocation();
-		R.FloorIdx = P.Key;
+		R.Comp = P.Comp;
+		R.ClosedPos = P.ClosedPos; // ECHTE dicht-stand (de map parkeert ze half-open)
+		R.FloorIdx = P.FloorIdx;
+		R.SlideDist = P.SlideDist;
 		Panels.Add(R);
-	}
-	// Telescoop: per verdieping schuift het paneel dat het dichtst bij de schuifrichting-kant zit het
-	// verst (130), het andere de helft (65) - dan stapelen ze netjes achter elkaar.
-	for (int32 FloorIdx = 0; FloorIdx < Floors.Num(); ++FloorIdx)
-	{
-		FPanelRef* A = nullptr; FPanelRef* B = nullptr;
-		for (FPanelRef& R : Panels)
-		{
-			if (R.FloorIdx != FloorIdx) { continue; }
-			if (!A) { A = &R; } else { B = &R; }
-		}
-		if (A && B)
-		{
-			// SlideDir wijst naar de pocket-kant: het paneel dat daar al het dichtst bij zit (hoogste dot)
-			// is het ACHTERSTE (schuift 66), het voorste schuift er volledig achter (132).
-			const float DotA = FVector::DotProduct(A->ClosedPos, SlideDir);
-			const float DotB = FVector::DotProduct(B->ClosedPos, SlideDir);
-			FPanelRef* Back  = (DotA > DotB) ? A : B;
-			FPanelRef* Front = (DotA > DotB) ? B : A;
-			Front->SlideDist = 132.f;
-			Back->SlideDist = 66.f;
-		}
-		else if (A) { A->SlideDist = 132.f; }
 	}
 
 	CurFloor = 0;
@@ -112,7 +89,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 	// Ze rijden mee met de cabine en schuiven synchroon met de hal-deuren open/dicht.
 	if (Cab && !CabDoorFront)
 	{
-		// Hal-schuifrichting omzetten naar cabine-lokale Y (de opening ligt langs de lokale Y-as).
+		// Hal-schuifrichting (pocket-kant) omzetten naar cabine-lokale Y (opening ligt langs lokale Y).
 		const FVector LocalSlide = GetActorRotation().UnrotateVector(SlideDir);
 		CabSlideSignY = (LocalSlide.Y >= 0.f) ? 1.f : -1.f;
 		UStaticMesh* DoorMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorDoor.SM_ElevatorDoor"));
@@ -128,11 +105,19 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 			D->SetRelativeLocation(RelPos);
 			return D;
 		};
-		// Deur-mesh loopt lokaal Y -68..0 vanaf z'n pivot: pivot op +68 dekt 0..68, pivot op 0 dekt -68..0.
-		CabDoorFrontBase = FVector(-8.f, 68.f, 0.f);
-		CabDoorBackBase  = FVector(-8.f, 0.f, 0.f);
-		// Het paneel aan de pocket-kant is het ACHTERSTE (66), het andere schuift er volledig achter (132).
-		if (CabSlideSignY < 0.f) { Swap(CabDoorFrontBase, CabDoorBackBase); }
+		// Deur-mesh dekt lokaal [pivot-68, pivot]: pivots op 0 en +68 dekken samen [-68, +68].
+		// FRONT = de helft die het verst van de pocket ligt (moet de hele opening oversteken, 146);
+		// BACK = de pocket-kant-helft (73). Pocket op +Y -> front = pivot 0; pocket op -Y -> front = pivot 68.
+		if (CabSlideSignY > 0.f)
+		{
+			CabDoorFrontBase = FVector(-8.f, 0.f, 0.f);
+			CabDoorBackBase  = FVector(-8.f, 68.f, 0.f);
+		}
+		else
+		{
+			CabDoorFrontBase = FVector(-8.f, 68.f, 0.f);
+			CabDoorBackBase  = FVector(-8.f, 0.f, 0.f);
+		}
 		CabDoorFront = MakeCabDoor(TEXT("CabDoorFront"), CabDoorFrontBase);
 		CabDoorBack  = MakeCabDoor(TEXT("CabDoorBack"), CabDoorBackBase);
 	}
@@ -240,8 +225,8 @@ void APackElevator::Tick(float DeltaSeconds)
 		C->SetWorldLocation(R.ClosedPos + SlideDir * (R.SlideDist * Amount));
 	}
 	// Cabine-deuren schuiven synchroon mee (lokaal langs de opening).
-	if (CabDoorFront) { CabDoorFront->SetRelativeLocation(CabDoorFrontBase + FVector(0.f, CabSlideSignY * 132.f * DoorOpen, 0.f)); }
-	if (CabDoorBack)  { CabDoorBack->SetRelativeLocation(CabDoorBackBase + FVector(0.f, CabSlideSignY * 66.f * DoorOpen, 0.f)); }
+	if (CabDoorFront) { CabDoorFront->SetRelativeLocation(CabDoorFrontBase + FVector(0.f, CabSlideSignY * 146.f * DoorOpen, 0.f)); }
+	if (CabDoorBack)  { CabDoorBack->SetRelativeLocation(CabDoorBackBase + FVector(0.f, CabSlideSignY * 73.f * DoorOpen, 0.f)); }
 
 	if (bMoving)
 	{
@@ -266,15 +251,12 @@ void APackElevator::Tick(float DeltaSeconds)
 
 void APackElevator::Interact_Implementation(APawn* InstigatorPawn)
 {
-	// F = direct vertrekken naar de volgende verdieping (zonder de instap-wachttijd af te wachten).
-	if (!bMoving && Floors.Num() >= 2)
-	{
-		TargetFloor = (CurFloor + 1) % Floors.Num();
-	}
+	// Geen actie op de cabine zelf: de verdieping kies je met de knoppen in de cabine.
+	// (Eerst deed F hier "volgende verdieping" - dan ging de lift omhoog waar je ook klikte.)
 }
 
 FText APackElevator::GetInteractionPrompt_Implementation() const
 {
 	if (bMoving) { return FText::FromString(TEXT("Elevator moving...")); }
-	return FText::FromString(FString::Printf(TEXT("Elevator - floor %d/%d (step in, or F to go)"), CurFloor + 1, Floors.Num()));
+	return FText::FromString(FString::Printf(TEXT("Elevator - floor %d of 0-%d (use the buttons inside)"), CurFloor, Floors.Num() - 1));
 }

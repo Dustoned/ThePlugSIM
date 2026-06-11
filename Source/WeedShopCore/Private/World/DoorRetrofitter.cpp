@@ -399,7 +399,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			TArray<float> Floors = KV.Value.FloorZ;
 			Floors.Sort();
 			// Panelen koppelen aan verdieping-index (zelfde Z, binnen 250 XY van de schacht).
-			TArray<TPair<int32, UStaticMeshComponent*>> Panels;
+			TArray<TPair<int32, UStaticMeshComponent*>> RawPanels;
 			TArray<FVector> GroundPanelPos;
 			for (const TPair<FVector, UStaticMeshComponent*>& P : AllPanels)
 			{
@@ -407,22 +407,59 @@ void ADoorRetrofitter::ScanAndConvert()
 				int32 FloorIdx = INDEX_NONE;
 				for (int32 i = 0; i < Floors.Num(); ++i) { if (FMath::Abs(P.Key.Z - Floors[i]) < 60.f) { FloorIdx = i; break; } }
 				if (FloorIdx == INDEX_NONE) { continue; }
-				Panels.Add(TPair<int32, UStaticMeshComponent*>(FloorIdx, P.Value));
+				RawPanels.Add(TPair<int32, UStaticMeshComponent*>(FloorIdx, P.Value));
 				if (FloorIdx == 0) { GroundPanelPos.Add(P.Key); }
 			}
-			if (Panels.Num() == 0) { continue; }
+			if (RawPanels.Num() == 0) { continue; }
 
 			// FRAME-gebaseerde geometrie (gemeten): frame-pivot = exacte opening-centrum (lokale Y +-77),
-			// lokale X = door de muur heen (16cm diep). Panelen alleen nog voor de schuifrichting-keuze.
+			// lokale X = door de muur heen (16cm diep). De POCKET-kant = waar de map de panelen
+			// (half-open als decor!) geparkeerd heeft t.o.v. het centrum.
 			const FRotator FrameRot(0.f, KV.Value.FrameYaw, 0.f);
 			FVector SlideDir = FrameRot.RotateVector(FVector::YAxisVector).GetSafeNormal2D();
 			const FVector OpeningCenter = KV.Value.Ref;
 			if (GroundPanelPos.Num() >= 2)
 			{
-				// Teken van de schuifrichting uit de panelen (pocket-kant), as zelf uit het frame.
-				const FVector PanelDir = (GroundPanelPos[1] - GroundPanelPos[0]).GetSafeNormal2D();
-				if (FVector::DotProduct(PanelDir, SlideDir) < 0.f) { SlideDir = -SlideDir; }
+				const FVector ParkedAvg = (GroundPanelPos[0] + GroundPanelPos[1]) * 0.5f;
+				if (FVector::DotProduct(ParkedAvg - OpeningCenter, SlideDir) < 0.f) { SlideDir = -SlideDir; }
 			}
+
+			// ECHTE dicht-posities berekenen: paneel-mesh dekt [pivot-68, pivot] langs de pocket-richting.
+			// BACK (pocket-helft) dicht op het centrum, FRONT (verre helft) op centrum-68 -> samen 136
+			// gecentreerd over de opening. Open: front schuift 146 (hele opening over), back 73.
+			TArray<FElevPanelInit> Panels;
+			for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
+			{
+				TArray<TPair<int32, UStaticMeshComponent*>*> FloorPanels;
+				for (TPair<int32, UStaticMeshComponent*>& RP : RawPanels)
+				{
+					if (RP.Key == Fi) { FloorPanels.Add(&RP); }
+				}
+				const FVector CXY(OpeningCenter.X, OpeningCenter.Y, 0.f);
+				if (FloorPanels.Num() >= 2)
+				{
+					// Verst-langs-de-pocket geparkeerd paneel = BACK (minste reis naar z'n dicht-stand).
+					const float D0 = FVector::DotProduct(FloorPanels[0]->Value->GetComponentLocation(), SlideDir);
+					const float D1 = FVector::DotProduct(FloorPanels[1]->Value->GetComponentLocation(), SlideDir);
+					UStaticMeshComponent* BackC  = (D0 > D1) ? FloorPanels[0]->Value : FloorPanels[1]->Value;
+					UStaticMeshComponent* FrontC = (D0 > D1) ? FloorPanels[1]->Value : FloorPanels[0]->Value;
+					FElevPanelInit B; B.Comp = BackC; B.FloorIdx = Fi;
+					B.ClosedPos = CXY + FVector(0.f, 0.f, BackC->GetComponentLocation().Z);
+					B.SlideDist = 73.f;
+					FElevPanelInit F; F.Comp = FrontC; F.FloorIdx = Fi;
+					F.ClosedPos = CXY - SlideDir * 68.f + FVector(0.f, 0.f, FrontC->GetComponentLocation().Z);
+					F.SlideDist = 146.f;
+					Panels.Add(B); Panels.Add(F);
+				}
+				else if (FloorPanels.Num() == 1)
+				{
+					FElevPanelInit A; A.Comp = FloorPanels[0]->Value; A.FloorIdx = Fi;
+					A.ClosedPos = CXY - SlideDir * 34.f + FVector(0.f, 0.f, FloorPanels[0]->Value->GetComponentLocation().Z);
+					A.SlideDist = 146.f;
+					Panels.Add(A);
+				}
+			}
+			if (Panels.Num() == 0) { continue; }
 			// Schacht-kant FYSIEK bepalen: trace vanaf verdieping 1 omlaag aan beide kanten van de deur.
 			// De kant ZONDER vloer eronder (gat dat doorloopt) is de schacht.
 			const FVector Perp = FVector::CrossProduct(SlideDir, FVector::UpVector).GetSafeNormal2D();
