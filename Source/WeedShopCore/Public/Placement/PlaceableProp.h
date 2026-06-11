@@ -53,5 +53,6 @@ protected:
 	// enkele mesh zichtbaar. Onder Root (ongeschaald), dus onderdelen in echte cm vanaf de vloer (z=0).
 	UPROPERTY() TObjectPtr<USceneComponent> Deco;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> MirrorMesh; // tweede zijde van enkelzijdige pack-muren
 	void HideParts();
 };

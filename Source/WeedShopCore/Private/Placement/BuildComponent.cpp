@@ -452,7 +452,27 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 			FHitResult Hit;
 			bAimHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
-			if (bAimHit)
+
+			// BUILDING-TOOL (bouw-onderdelen): altijd grid-snap, ook in de lucht/void te plaatsen
+			// (geen raak-punt nodig), Z snapt op de verdieping van de SPELER, plafonds 320 erboven.
+			if (CurrentDef.bIsStructure)
+			{
+				FVector P = bAimHit ? Hit.ImpactPoint : End;
+				// Verdieping van de speler: beach-map verdiepingen (50, dan 480 + n*350); de speler
+				// staat zelf altijd op een echte vloer, dus dit snapt betrouwbaar.
+				const float Feet = OwnerPawn->GetActorLocation().Z - 88.f;
+				float StoreyZ;
+				if (FMath::Abs(Feet - 50.f) < 215.f) { StoreyZ = 50.f; }
+				else { StoreyZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); }
+				P.X = FMath::GridSnap(P.X, 50.f);
+				P.Y = FMath::GridSnap(P.Y, 50.f);
+				P.Z = StoreyZ + (CurrentDef.bIsCeilingPiece ? 320.f : 0.f);
+				PreviewLocation = P;
+				PreviewRotation = FRotator(0.f, FMath::GridSnap<float>(ViewRot.Yaw + PlaceYawOffset, 90.f), 0.f);
+				bAimHit = true;     // preview altijd tonen
+				bValidSpot = true;  // vrij bouwen: naast/tegen andere stukken aan mag gewoon
+			}
+			else if (bAimHit)
 			{
 				PreviewLocation = Hit.ImpactPoint;
 				PreviewRotation = FRotator(0.f, ViewRot.Yaw + PlaceYawOffset, 0.f); // kijkrichting + handmatige R-draai
@@ -1020,6 +1040,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	// Wand-mounts/plafondlampen: niet DOOR een ander geplaatst object heen (zijdelingse overlap/clippen).
 	if (!bUpgrade && (Def.bIsLamp || Def.bIsWallMount)
+		&& !Def.bIsStructure
 		&& OverlapsOtherPlaceable(World, GetOwner(), Location, Def.BoxHalf, Rotation.Quaternion()))
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Can't place inside another object.")); }
@@ -1028,7 +1049,11 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 
 	// Alleen BINNEN (je eigen woning; in free-build overal binnen) - NOOIT buiten, tenzij outdoors-toegestaan.
 	// (IsInOwnedHome regelt zelf de free-build-uitzondering via een binnen-check.)
-	if (!bUpgrade && !Def.bAllowOutdoors && !IsInOwnedHome(Location))
+	if (Def.bIsStructure)
+	{
+		// Building-tool: geen overlap-/binnen-regels (vrij tekenen van muren/vloeren).
+	}
+	else if (!bUpgrade && !Def.bAllowOutdoors && !IsInOwnedHome(Location))
 	{
 		if (GEngine)
 		{

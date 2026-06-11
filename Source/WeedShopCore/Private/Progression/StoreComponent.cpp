@@ -185,6 +185,16 @@ namespace
 		{ TEXT("Safe_Large"),  TEXT("Large safe"),  TEXT("Stash up to EUR 250k - robbery-proof"),   8000000,  1 },
 		{ TEXT("Safe_Vault"),  TEXT("Vault"),       TEXT("Stash up to EUR 1M - robbery-proof"),     30000000, 1 },
 		{ TEXT("Wardrobe"), TEXT("Wardrobe"), TEXT("Change your outfit at home"), 15000, 1 },
+		// Building-tool onderdelen (dev): kamers tekenen in de beach-map.
+		{ TEXT("Struct_Wall4m"), TEXT("Wall 4m"), TEXT("Build: interior wall 4m"), 100, 1 },
+		{ TEXT("Struct_Wall2m"), TEXT("Wall 2m"), TEXT("Build: interior wall 2m"), 100, 1 },
+		{ TEXT("Struct_Wall1m"), TEXT("Wall 1m"), TEXT("Build: interior wall 1m"), 100, 1 },
+		{ TEXT("Struct_WallDoor4m"), TEXT("Wall 4m + doorway"), TEXT("Build: wall with door opening"), 100, 1 },
+		{ TEXT("Struct_WallDoor3m"), TEXT("Wall 3m + doorway"), TEXT("Build: wall with door opening"), 100, 1 },
+		{ TEXT("Struct_Floor4x4"), TEXT("Floor 4x4m (carpet)"), TEXT("Build: carpet floor section"), 100, 1 },
+		{ TEXT("Struct_Floor1x1"), TEXT("Floor 1x1m (tiles)"), TEXT("Build: tile floor section"), 100, 1 },
+		{ TEXT("Struct_Ceil4x4"), TEXT("Ceiling 4x4m"), TEXT("Build: ceiling section"), 100, 1 },
+		{ TEXT("Struct_Ceil1x1"), TEXT("Ceiling 1x1m"), TEXT("Build: ceiling section"), 100, 1 },
 		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("Warm hanging spot light"),         3500, 1 },
 		// Plant-verzorging (later spel): mest = meer opbrengst; sprays = behandel mold/pest.
 		{ TEXT("Fertilizer_Basic"), TEXT("Fertilizer"),       TEXT("+15% yield this harvest"),          2000, 3 },
@@ -387,6 +397,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Safe_Large"))      { return 30; }
 	if (S == TEXT("Safe_Vault"))      { return 42; }
 	if (S == TEXT("Wardrobe"))        { return 1; }
+	if (S.StartsWith(TEXT("Struct_"))) { return 1; }
 	if (S == TEXT("Table"))           { return 2; }
 	if (S == TEXT("Chest"))           { return 5; }
 	if (S == TEXT("Shelf"))           { return 8; }
@@ -510,7 +521,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
 			// Furniture/meubels + de grote edibles-appliances (oven & koelkast horen bij het meubilair).
 			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")
-				|| S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Fridge_")) || S.StartsWith(TEXT("Safe_")) || S == TEXT("Wardrobe")); break;
+				|| S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Fridge_")) || S.StartsWith(TEXT("Safe_")) || S == TEXT("Wardrobe") || S.StartsWith(TEXT("Struct_"))); break;
 			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care
 			case 10: bMatch = S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_")); break; // (legacy) hasj-keten - nu via Kitchen

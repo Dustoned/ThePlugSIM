@@ -87,6 +87,38 @@ void APlaceableProp::SetupVisual()
 	// Mesh omhoog zodat de onderkant op de actor-origin (= vloer) staat.
 	Mesh->SetRelativeLocation(FVector(0.f, 0.f, Def.BoxHalf.Z));
 
+	// Bouw-onderdelen (building-tool): pack-meshes hebben hoek/eind-pivots -> centreer op de
+	// prop-origin. Muren zijn enkelzijdig: spiegel-mesh erbij zodat ze van beide kanten zichtbaar zijn.
+	if (Def.bIsStructure)
+	{
+		const FString SId = ItemId.ToString();
+		if (SId.StartsWith(TEXT("Struct_Wall")))
+		{
+			Mesh->SetRelativeLocation(FVector(2.5f, Def.BoxHalf.Y, 0.f)); // eind-pivot, span lokaal -Y
+			if (Def.bIsDoubleWall)
+			{
+				if (!MirrorMesh)
+				{
+					MirrorMesh = NewObject<UStaticMeshComponent>(this);
+					MirrorMesh->SetupAttachment(GetRootComponent());
+					MirrorMesh->RegisterComponent();
+					MirrorMesh->SetMobility(EComponentMobility::Movable);
+					MirrorMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // collision zit al op de hoofd-mesh
+					MirrorMesh->SetCanEverAffectNavigation(false);
+				}
+				MirrorMesh->SetStaticMesh(Mesh->GetStaticMesh());
+				MirrorMesh->SetRelativeLocation(FVector(-2.5f, -Def.BoxHalf.Y, 0.f));
+				MirrorMesh->SetRelativeRotation(FRotator(0.f, 180.f, 0.f));
+			}
+		}
+		else
+		{
+			Mesh->SetRelativeLocation(FVector(Def.BoxHalf.X, Def.BoxHalf.Y, 0.f)); // hoek-pivot (max-hoek)
+		}
+		HideParts();
+		return; // geen mockup-onderdelen
+	}
+
 	// Samengestelde mockups voor de meest "blok"-achtige meubels. Vloer = z=0; object groeit omhoog.
 	const float W = Def.MeshScale.X * 100.f;
 	const float D = Def.MeshScale.Y * 100.f;

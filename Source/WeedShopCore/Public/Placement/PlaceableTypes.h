@@ -29,6 +29,9 @@ struct FPlaceableDef
 	bool bIsProcessor = false;         // true -> spawnt AProcessorMachine (Mesh_/Press_: hasj-keten)
 	bool bIsSafe = false;              // true -> spawnt AAtm in safe-modus (kluis: cash veilig stashen)
 	bool bIsWardrobe = false;          // true -> kledingkast: interact opent het outfit-menu (speler-customization)
+	bool bIsStructure = false;         // true -> bouw-onderdeel (muur/vloer/plafond): altijd grid-snap, vrij plaatsbaar (dev building-tool)
+	bool bIsCeilingPiece = false;      // true -> structure-plafond: komt 320cm boven de verdieping-vloer
+	bool bIsDoubleWall = false;        // true -> muur krijgt een gespiegelde tweede mesh (pack-muren zijn enkelzijdig)
 };
 
 // Alle gedefinieerde placeables.

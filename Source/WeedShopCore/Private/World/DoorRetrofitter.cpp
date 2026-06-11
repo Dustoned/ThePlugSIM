@@ -641,7 +641,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	}
 
 	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
-	BuildMarkedRooms();
+	// BuildMarkedRooms(); // UIT: marker-kopie werkte niet lekker - vervangen door de dev building-tool (muren/vloeren tekenen via het bouw-systeem)
 
 	if (NewThisPass > 0)
 	{
