@@ -823,7 +823,7 @@ void ADoorRetrofitter::VerticalReplicate()
 		// Bestaat deze verdieping (heeft het gebouw hier uberhaupt geometrie)? En dedupe-index bouwen:
 		// mesh-naam + positie op 10cm-grid van alles wat er al staat.
 		TMap<uint64, UStaticMeshComponent*> Existing; // hash -> bestaande comp (voor materiaal-sync)
-		TArray<UStaticMeshComponent*> ParallaxGlass; // losse _Glass-platen (nep-3D) binnen de rechthoek
+		TArray<TPair<UStaticMeshComponent*, uint64>> WindowCandidates; // (comp, hash van bron-positie)
 		int32 ExistCount = 0;
 		int32 TightCount = 0; // bestaande meshes BINNEN de rechthoek zelf (gevel van deze verdieping)
 		for (TActorIterator<AActor> It(W); It; ++It)
@@ -845,9 +845,15 @@ void ADoorRetrofitter::VerticalReplicate()
 				++TightCount;
 				{
 					const FString GN = Comp->GetStaticMesh()->GetName();
-					if (GN.EndsWith(TEXT("_Glass")) && !GN.Contains(TEXT("_Interior")))
+					if (GN.Contains(TEXT("Glass")) || GN.Contains(TEXT("Window")))
 					{
-						ParallaxGlass.Add(Comp); // nep-3D buitenglas van dit kamer-vak
+						// Hash van de BRON-positie (pos - Dz): bestaat die niet in de bron-slice, dan
+						// heeft de maker dit element op de ingerichte verdieping VERWIJDERD -> wij ook.
+						const uint64 BackH = GetTypeHash(Comp->GetStaticMesh()->GetFName())
+							^ (uint64)(FMath::RoundToInt(L.X / 10.f) * 73856093)
+							^ (uint64)(FMath::RoundToInt(L.Y / 10.f) * 19349663)
+							^ (uint64)(FMath::RoundToInt((L.Z - Dz) / 10.f) * 83492791);
+						WindowCandidates.Add(TPair<UStaticMeshComponent*, uint64>(Comp, BackH));
 					}
 				}
 				const uint64 H = GetTypeHash(Comp->GetStaticMesh()->GetFName())
@@ -909,18 +915,17 @@ void ADoorRetrofitter::VerticalReplicate()
 			}
 			++Placed;
 		}
-		// Kamer geplaatst -> het nep-3D buitenglas van dit kamer-vak verbergen: de map-makers doen dat
-		// op de ingerichte verdieping ook (het echte heldere glas zit in de binnen-raamdelen die we
-		// meekopieren). Alleen losse _Glass-platen, kozijnen blijven staan.
+		// Kamer geplaatst -> SPIEGEL DE BRON: elk raam/glas-element dat hier staat maar op de bron-
+		// verdieping NIET (de makers haalden het daar weg voor de ingerichte look) verbergen we ook.
 		int32 GlassHidden = 0;
 		if (Placed > 10)
 		{
-			for (UStaticMeshComponent* GC : ParallaxGlass)
+			for (const TPair<UStaticMeshComponent*, uint64>& WC : WindowCandidates)
 			{
-				if (GC && GC->IsVisible())
+				if (WC.Key && WC.Key->IsVisible() && !SliceHashes.Contains(WC.Value))
 				{
-					GC->SetVisibility(false);
-					GC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					WC.Key->SetVisibility(false);
+					WC.Key->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 					++GlassHidden;
 				}
 			}
@@ -1104,6 +1109,16 @@ void ADoorRetrofitter::CloneRooms()
 	}
 	// Wachten tot de bron VOLLEDIG ingestreamd is: vorige keer kloonde hij met 38 van de ~120 meshes
 	// (half-leeg fragment). Pas klonen als de telling 2 scans achter elkaar gelijk is en hoog genoeg.
+	TSet<uint64> SliceHashes;
+	for (const FSliceEntry& E2 : SourceSet)
+	{
+		const uint64 SH = GetTypeHash(E2.Mesh->GetFName())
+			^ (uint64)(FMath::RoundToInt(E2.BO.X / 10.f) * 73856093)
+			^ (uint64)(FMath::RoundToInt(E2.BO.Y / 10.f) * 19349663)
+			^ (uint64)(FMath::RoundToInt(E2.BO.Z / 10.f) * 83492791);
+		SliceHashes.Add(SH);
+	}
+
 	if (SourceSet.Num() == LastSourceCount) { ++SourceStableStreak; } else { SourceStableStreak = 0; }
 	LastSourceCount = SourceSet.Num();
 	if (SourceSet.Num() < 34 || SourceStableStreak < 2) // 3 scans dezelfde telling = echt klaar met streamen
