@@ -903,9 +903,10 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	int32 TotalPlaced = 0;
-	// VAN ONDER NAAR BOVEN tot de hoogte-marker: elke verdieping rust op de vorige (de setback-check
-	// heeft dan altijd geometrie onder zich). Geen dak-heuristieken meer - de speler bepaalt de top.
-	for (int32 N = 1; N <= CapN; ++N)
+	// VAN BOVEN NAAR BENEDEN tot de hoogte-marker: de bovenste verdieping heeft het echte dak/
+	// penthouse boven zich, en elke gevulde verdieping legt het plafond voor de verdieping eronder.
+	// Zo werkt de plafond-boven-je-test (de enige die niet te foppen is) op elke verdieping.
+	for (int32 N = CapN; N >= 1; --N)
 	{
 		const float Dz = N * 350.f;
 		const float TgtZ = SrcZ + Dz;
@@ -975,30 +976,28 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 			if (M.bSyncOnly) { continue; }
 			const FVector NLf = M.BO + FVector(0.f, 0.f, Dz);
 			++FitEligible;
+			// PLAFOND-BOVEN-JE-TEST: binnen het gebouw zit recht boven elk stuk (centrum + 4 hoeken,
+			// 15cm ingetrokken) de vloerplaat van de verdieping erboven (net gebouwd - we gaan top-down)
+			// of het echte dak. Buiten het gebouw is boven je open lucht. Straal-checks opzij faalden
+			// in de dichte straat (overburen binnen bereik); deze is niet te foppen.
 			FCollisionQueryParams GQP(SCENE_QUERY_STAT(VertCloneFit), false);
-			FHitResult GroundHit;
-			const FVector GStart(NLf.X, NLf.Y, TgtZ + 90.f);
-			if (!W->LineTraceSingleByChannel(GroundHit, GStart, GStart - FVector(0.f, 0.f, 470.f), ECC_Visibility, GQP)) { continue; }
-			const FVector FitDirs[4] = { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) };
 			const float FEx = FMath::Max(0.f, M.Ext.X - 15.f);
 			const float FEy = FMath::Max(0.f, M.Ext.Y - 15.f);
 			const FVector2D FitPts[5] = {
 				FVector2D(NLf.X, NLf.Y),
 				FVector2D(NLf.X + FEx, NLf.Y + FEy), FVector2D(NLf.X + FEx, NLf.Y - FEy),
 				FVector2D(NLf.X - FEx, NLf.Y + FEy), FVector2D(NLf.X - FEx, NLf.Y - FEy) };
-			bool bEnc = true;
+			const float TopZ = FMath::Max(NLf.Z + M.Ext.Z + 8.f, TgtZ + 8.f);
+			bool bCovered = true;
 			for (const FVector2D& TP : FitPts)
 			{
-				int32 SH = 0;
-				const FVector SStart(TP.X, TP.Y, TgtZ + 160.f);
-				for (const FVector& SD : FitDirs)
-				{
-					FHitResult SHit;
-					if (W->LineTraceSingleByChannel(SHit, SStart, SStart + SD * 2000.f, ECC_Visibility, GQP)) { ++SH; }
-				}
-				if (SH < 3) { bEnc = false; break; }
+				FHitResult UpHit;
+				const FVector UStart(TP.X, TP.Y, TopZ);
+				const FVector UEnd(TP.X, TP.Y, TgtZ + 368.f);
+				if (UEnd.Z <= UStart.Z + 2.f) { continue; } // stuk reikt al tot het plafond
+				if (!W->LineTraceSingleByChannel(UpHit, UStart, UEnd, ECC_Visibility, GQP)) { bCovered = false; break; }
 			}
-			if (bEnc) { PieceFits[Si] = true; ++FitPass; }
+			if (bCovered) { PieceFits[Si] = true; ++FitPass; }
 		}
 		if (FitEligible > 0 && FitPass < FitEligible * 9 / 10)
 		{
