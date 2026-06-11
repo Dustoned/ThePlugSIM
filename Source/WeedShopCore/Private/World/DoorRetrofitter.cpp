@@ -733,30 +733,17 @@ void ADoorRetrofitter::VerticalReplicate()
 		PosStr.ParseIntoArray(Parts, TEXT(","));
 		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
 	}
-	if (Marks.Num() < 2 || Marks.Num() % 2 != 0) { return; } // paren van 2 = rechthoeken
+	if (Marks.Num() != 1) { return; } // 1 marker midden in de bron-kamer = verticale kopie-modus
 
-	// Kopie-gebied = de UNIE van rechthoeken: elk PAAR markers is een rechthoek (+30cm marge).
-	// Zo dek je een appartement dat uit losse delen bestaat (hoofdkamer + badkamer via een deur):
-	// paar 1 om de hoofdkamer, paar 2 om de badkamer, evt. paar 3 om het halletje, etc.
-	TArray<FBox2D> Rects;
-	for (int32 Ri = 0; Ri + 1 < Marks.Num(); Ri += 2)
-	{
-		FBox2D R(ForceInit);
-		R += FVector2D(Marks[Ri].X, Marks[Ri].Y);
-		R += FVector2D(Marks[Ri + 1].X, Marks[Ri + 1].Y);
-		R = R.ExpandBy(30.f);
-		Rects.Add(R);
-	}
-	auto InRects = [&Rects](const FVector& L) -> bool
-	{
-		for (const FBox2D& R : Rects)
-		{
-			if (L.X >= R.Min.X && L.X <= R.Max.X && L.Y >= R.Min.Y && L.Y <= R.Max.Y) { return true; }
-		}
-		return false;
-	};
+	// Grote box om de marker (dit werkte het best: complete kamers). Terras-meubilair wordt op
+	// NAAM uitgefilterd en de setback-check hieronder knipt alles wat buiten het gebouw valt.
 	FBox2D Outer(ForceInit);
-	for (const FBox2D& R : Rects) { Outer += R.Min; Outer += R.Max; }
+	Outer += FVector2D(Marks[0].X - 2200.f, Marks[0].Y - 2200.f);
+	Outer += FVector2D(Marks[0].X + 2200.f, Marks[0].Y + 2200.f);
+	auto InRects = [&Outer](const FVector& L) -> bool
+	{
+		return L.X >= Outer.Min.X && L.X <= Outer.Max.X && L.Y >= Outer.Min.Y && L.Y <= Outer.Max.Y;
+	};
 	// Alleen capteren als de speler dichtbij de bron is - anders is de bron half-gestreamd en
 	// kopieer je halve kamers.
 	{
@@ -783,6 +770,10 @@ void ADoorRetrofitter::VerticalReplicate()
 			const FString MeshName = Comp->GetStaticMesh()->GetName();
 			if (bHiddenActor && !MeshName.StartsWith(TEXT("SM_Door"))) { continue; }
 			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam"))) { continue; } // camera's zweven los van hun muur in kopieen
+			// Buiten-meubilair niet mee-kopieren (zweefde op elke verdieping boven het terras).
+			if (MeshName.Contains(TEXT("Umbrella")) || MeshName.Contains(TEXT("Parasol")) || MeshName.Contains(TEXT("Lounger"))
+				|| MeshName.Contains(TEXT("SunBed")) || MeshName.Contains(TEXT("Sunbed")) || MeshName.Contains(TEXT("Chair"))
+				|| MeshName.Contains(TEXT("Table")) || MeshName.Contains(TEXT("Awning")) || MeshName.Contains(TEXT("Pool"))) { continue; }
 			const FVector L = Comp->GetComponentLocation();
 			if (!InRects(L)) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 330.f) { continue; } // alleen deze verdieping-slice
