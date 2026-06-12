@@ -279,11 +279,26 @@ void ADoorRetrofitter::EnsureMapCapture()
 	UWorld* W = GetWorld();
 	if (!W || MapCapture) { return; }
 
-	// Wereld-omvang bepalen uit de static-mesh-actors (1x): centrum + ortho-breedte van de kaart.
+	// KAART-GEBIED: staat er een spelers-grens (MapBorder.txt), dan is DAT de kaart - gecentreerd
+	// op de ring en precies zo breed. Zonder grens: wereld-omvang uit de static-mesh-actors.
 	FBox B(ForceInit);
-	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
-		if (IsValid(*It)) { B += It->GetActorLocation(); }
+		TArray<FString> BorderLines;
+		FFileHelper::LoadFileToStringArray(BorderLines, *(FPaths::ProjectSavedDir() / TEXT("MapBorder.txt")));
+		for (const FString& BLine : BorderLines)
+		{
+			TArray<FString> Pc;
+			BLine.ParseIntoArray(Pc, TEXT(","));
+			if (Pc.Num() >= 3) { B += FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2])); }
+		}
+	}
+	const bool bFromBorder = B.IsValid;
+	if (!bFromBorder)
+	{
+		for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
+		{
+			if (IsValid(*It)) { B += It->GetActorLocation(); }
+		}
 	}
 	float TopZ = 10000.f;
 	if (B.IsValid)
@@ -291,8 +306,12 @@ void ADoorRetrofitter::EnsureMapCapture()
 		const FVector C = B.GetCenter();
 		MapCenter = FVector2D(C.X, C.Y);
 		const FVector E = B.GetExtent();
-		MapOrtho = FMath::Clamp(FMath::Max(E.X, E.Y) * 2.3f, 20000.f, 300000.f);
+		MapOrtho = bFromBorder
+			? FMath::Max(E.X, E.Y) * 2.1f                              // grens-ring = de kaart
+			: FMath::Clamp(FMath::Max(E.X, E.Y) * 2.3f, 20000.f, 300000.f);
 		TopZ = B.Max.Z + 20000.f;
+		UE_LOG(LogWeedShop, Warning, TEXT("MapCapture: centrum=(%.0f, %.0f) ortho=%.0f topZ=%.0f bron=%s"),
+			MapCenter.X, MapCenter.Y, MapOrtho, TopZ, bFromBorder ? TEXT("border") : TEXT("actors"));
 	}
 
 	MapRT = NewObject<UTextureRenderTarget2D>(this, TEXT("PackMapRT"));
