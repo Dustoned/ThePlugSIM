@@ -732,6 +732,11 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 	// gevel liggen (uitstekende muurvin / kozijnen door de dichte muur). Meet via de eerste match de
 	// offset langs de raam-normaal en schuif alle stempel-actors zo dat de kamermuur 6cm ACHTER de
 	// gevel ligt. Idempotent per sessie: respawn is vers, daarna een keer schuiven.
+	const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"),
+		FMath::RoundToInt(Anchor.GetLocation().X), FMath::RoundToInt(Anchor.GetLocation().Y),
+		FMath::RoundToInt(Anchor.GetRotation().Rotator().Yaw));
+	const FName StampTag(*StampId);
+
 	FVector StampShift = FVector::ZeroVector;
 	if (Matches.Num() > 0)
 	{
@@ -744,10 +749,6 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		if (FMath::Abs(Shift) > 1.f)
 		{
 			StampShift = Out * Shift;
-			const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"),
-				FMath::RoundToInt(Anchor.GetLocation().X), FMath::RoundToInt(Anchor.GetLocation().Y),
-				FMath::RoundToInt(Anchor.GetRotation().Rotator().Yaw));
-			const FName StampTag(*StampId);
 			for (TActorIterator<AActor> It(W); It; ++It)
 			{
 				if (IsValid(*It) && It->ActorHasTag(StampTag)) { It->AddActorWorldOffset(StampShift); }
@@ -755,8 +756,20 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		}
 	}
 
-	// PASS 3: gematchte gevel-ramen verbergen - het echte kamer-raam neemt de opening over.
+	// Helder glas-materiaal van het template-raam (voor het echt maken van gevel-ramen).
+	TArray<TObjectPtr<UMaterialInterface>> ClearGlass;
+	for (const FStampPiece& Piece : Tpl)
+	{
+		const FString PMN = Piece.Mesh ? Piece.Mesh->GetName() : FString();
+		if (PMN.Contains(TEXT("Glass")) && Piece.Mats.Num() > 0) { ClearGlass = Piece.Mats; break; }
+	}
+
+	// PASS 3: het gematchte GEVEL-raam wordt zelf het raam van de kamer (het staat op de goede
+	// plek en hoort bij dit gebouw): fake-3D kaartje verbergen + glas helder maken. Ons eigen
+	// template-raam daar gaat weg (anders dubbel glas/kozijn). Instanced gevel-ramen kunnen geen
+	// per-instance materiaal krijgen: die verbergen we en daar blijft ons eigen raam juist staan.
 	int32 Hidden = 0;
+	TSet<int32> TakenOver; // template-raam indexen waar het gevel-raam het overneemt
 	for (const FFacadeHit& M : Matches)
 	{
 		if (M.ISM)
@@ -768,11 +781,46 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 				M.ISM->UpdateInstanceTransform(M.Inst, ITM, true, true, true);
 				++Hidden;
 			}
+			continue;
 		}
-		else if (M.Comp)
+		if (!M.Comp || !M.Comp->GetStaticMesh()) { continue; }
+		TakenOver.Add(M.TWi);
+		const FString CMN = M.Comp->GetStaticMesh()->GetName();
+		if (CMN.EndsWith(TEXT("_Interior")))
 		{
-			M.Comp->SetVisibility(false, true);
+			M.Comp->SetVisibility(false, true); // fake-3D kaartje weg
 			++Hidden;
+		}
+		else if (CMN.Contains(TEXT("Glass")) && ClearGlass.Num() > 0)
+		{
+			for (int32 Mi = 0; Mi < ClearGlass.Num() && Mi < M.Comp->GetNumMaterials(); ++Mi)
+			{
+				if (ClearGlass[Mi]) { M.Comp->SetMaterial(Mi, ClearGlass[Mi]); }
+			}
+		}
+	}
+	// PASS 3b: eigen template-ramen verbergen op plekken waar het gevel-raam het overneemt.
+	if (TakenOver.Num() > 0)
+	{
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			if (!IsValid(*It) || !It->ActorHasTag(StampTag)) { continue; }
+			AStaticMeshActor* SMA = Cast<AStaticMeshActor>(*It);
+			UStaticMeshComponent* C = SMA ? SMA->GetStaticMeshComponent() : nullptr;
+			if (!C || !C->GetStaticMesh()) { continue; }
+			const FString CMN = C->GetStaticMesh()->GetName();
+			if (!(CMN.Contains(TEXT("Window")) || CMN.Contains(TEXT("Glass")))) { continue; }
+			const FVector L = SMA->GetActorLocation();
+			for (int32 Ti : TakenOver)
+			{
+				const FVector TP = TplWindows[Ti].Pos + StampShift;
+				if (FVector::Dist2D(TP, L) < 160.f && FMath::Abs(TP.Z - L.Z) < 300.f)
+				{
+					SMA->SetActorHiddenInGame(true);
+					SMA->SetActorEnableCollision(false);
+					break;
+				}
+			}
 		}
 	}
 
@@ -782,12 +830,6 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 	// de kamer-muur erachter is van binnenuit gewoon dicht maar van buiten onzichtbaar (single-
 	// sided), dus je kijkt er echt de kamer mee in.
 	int32 Synced = 0;
-	TArray<TObjectPtr<UMaterialInterface>> ClearGlass;
-	for (const FStampPiece& Piece : Tpl)
-	{
-		const FString PMN = Piece.Mesh ? Piece.Mesh->GetName() : FString();
-		if (PMN.Contains(TEXT("Glass")) && Piece.Mats.Num() > 0) { ClearGlass = Piece.Mats; break; }
-	}
 	for (UStaticMeshComponent* Comp : Unmatched)
 	{
 		if (!IsValid(Comp) || !Comp->GetStaticMesh()) { continue; }
