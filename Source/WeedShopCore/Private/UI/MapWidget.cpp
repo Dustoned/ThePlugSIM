@@ -66,11 +66,13 @@ FReply UMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FP
 	UPhoneClientComponent* Ph = GetPhone();
 	if (!Ph) { return FReply::Unhandled(); }
 
-	// Rechtermuisknop = waypoint wissen.
+	// Rechtermuisknop: slepen = kaart pannen; klik zonder slepen = waypoint wissen (op mouse-up).
 	if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
 	{
-		Ph->ClearWaypoint();
-		return FReply::Handled();
+		bPanning = true;
+		bDragged = false;
+		LastDragLocal = Canvas ? Canvas->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition()) : FVector2D::ZeroVector;
+		return FReply::Handled().CaptureMouse(TakeWidget());
 	}
 	// Links = waypoint op de aangeklikte plek (klik-pixel -> kaart-lokaal -> wereld).
 	const FVector2D Local = Canvas->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
@@ -366,16 +368,49 @@ void UMapWidget::BuildBlocks()
 	bBuiltBlocks = true;
 }
 
+FReply UMapWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (!bPanning || !Canvas || Scale <= 0.f) { return FReply::Unhandled(); }
+	const FVector2D Local = Canvas->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+	const FVector2D D = Local - LastDragLocal;
+	if (!D.IsNearlyZero())
+	{
+		if (D.Size() > 3.f) { bDragged = true; }
+		if (!bManualPan) { bManualPan = true; PanCenter = CenterXY; }
+		// canvas-x = wereld +Y, canvas-y = wereld -X; slepen verschuift de view tegengesteld.
+		PanCenter.Y -= D.X / Scale;
+		PanCenter.X += D.Y / Scale;
+		LastDragLocal = Local;
+	}
+	return FReply::Handled();
+}
+
+FReply UMapWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton && bPanning)
+	{
+		bPanning = false;
+		if (!bDragged)
+		{
+			if (UPhoneClientComponent* Ph = GetPhone()) { Ph->ClearWaypoint(); }
+		}
+		return FReply::Handled().ReleaseMouseCapture();
+	}
+	return FReply::Unhandled();
+}
+
 void UMapWidget::UpdateView()
 {
 	if (!bZoomable || !MapImage || !MapImage->Slot) { return; }
 	// View-centrum = de speler, geklemd zodat de view binnen de kaart blijft.
 	FVector2D VC = MapCenterFull;
-	if (APawn* P = GetOwningPlayerPawn()) { VC = FVector2D(P->GetActorLocation().X, P->GetActorLocation().Y); }
+	if (bManualPan) { VC = PanCenter; }
+	else if (APawn* P = GetOwningPlayerPawn()) { VC = FVector2D(P->GetActorLocation().X, P->GetActorLocation().Y); }
 	const float HalfWorld = (GMapDS / FMath::Max(0.0001f, Scale0)) * 0.5f;
 	const float HalfView = HalfWorld / FMath::Max(1.f, Zoom);
 	VC.X = FMath::Clamp(VC.X, MapCenterFull.X - (HalfWorld - HalfView), MapCenterFull.X + (HalfWorld - HalfView));
 	VC.Y = FMath::Clamp(VC.Y, MapCenterFull.Y - (HalfWorld - HalfView), MapCenterFull.Y + (HalfWorld - HalfView));
+	if (bManualPan) { PanCenter = VC; } // geklemd terugschrijven
 	CenterXY = VC;
 	Scale = Scale0 * Zoom;
 	// Kaart-afbeelding schalen en schuiven zodat VC in het canvas-midden ligt.
@@ -398,6 +433,9 @@ FReply UMapWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FPointe
 
 void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
+	const bool bVisNow = IsVisible();
+	if (bVisNow && !bWasVisible) { bManualPan = false; bPanning = false; } // openen = centreren op de speler
+	bWasVisible = bVisNow;
 	UpdateView();
 	Super::NativeTick(MyGeometry, DeltaTime);
 

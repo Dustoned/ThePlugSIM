@@ -40,6 +40,8 @@ protected:
 
 	FVector2D CanvasToWorld(FVector2D Local) const; // inverse van WorldToCanvas
 	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	class UPhoneClientComponent* GetPhone() const;
 
 	bool bFullscreen = false;
@@ -51,6 +53,13 @@ protected:
 	float Scale0 = 0.05f;                            // schaal bij zoom 1 (hele kaart in beeld)
 	float Zoom = 1.f;
 	bool bZoomable = false;
+	// Pannen: RMB-slepen verschuift de view; kaart openen centreert altijd weer op de speler.
+	bool bPanning = false;
+	bool bDragged = false;
+	bool bManualPan = false;
+	bool bWasVisible = false;
+	FVector2D LastDragLocal = FVector2D::ZeroVector;
+	FVector2D PanCenter = FVector2D::ZeroVector;
 	void UpdateView();
 
 	TWeakObjectPtr<ACityGenerator> City;
