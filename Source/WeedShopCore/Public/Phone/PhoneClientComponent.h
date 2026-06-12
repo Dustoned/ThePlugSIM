@@ -314,6 +314,9 @@ public:
 	// NPC-looproute: F9-markers (op volgorde over de stoep) -> spawn-/wandel-punten voor NPC's.
 	void SaveNpcRoute();
 	void ClearNpcRoute();
+	// Binnen-looppad (trappenhuis): F9-markers op volgorde -> smart-link ketting voor NPC's.
+	void SaveStairsPath();
+	void ClearStairsPath();
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();

@@ -2768,6 +2768,47 @@ void UPhoneClientComponent::SaveNpcRoute()
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("NPC route %d saved (%d points, closed loop)! Markers cleared - restart applies"), NRoutes, Marks.Num()));
 }
 
+void UPhoneClientComponent::SaveStairsPath()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Marks;
+	for (const FString& Line : Lines)
+	{
+		if (!Line.Contains(MapPath)) { continue; }
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Line.Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+	}
+	if (Marks.Num() < 2)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Set at least 2 markers along the indoor path (in order)"));
+		return;
+	}
+	FString Cur;
+	FFileHelper::LoadFileToString(Cur, *WeedData::File(TEXT("StairsPath.txt")));
+	if (!Cur.IsEmpty() && !Cur.EndsWith(LINE_TERMINATOR)) { Cur += LINE_TERMINATOR; }
+	if (!Cur.IsEmpty()) { Cur += TEXT("---"); Cur += LINE_TERMINATOR; }
+	for (const FVector& M : Marks) { Cur += FString::Printf(TEXT("%.1f,%.1f,%.1f"), M.X, M.Y, M.Z) + LINE_TERMINATOR; }
+	FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("StairsPath.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Stairs path saved (%d points)! Restart applies the links"), Marks.Num()));
+}
+
+void UPhoneClientComponent::ClearStairsPath()
+{
+	WeedData::DeleteFile(TEXT("StairsPath.txt"));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Stairs paths cleared (restart applies)"));
+}
+
 void UPhoneClientComponent::ClearNpcRoute()
 {
 	WeedData::DeleteFile(TEXT("NpcRoute.txt"));

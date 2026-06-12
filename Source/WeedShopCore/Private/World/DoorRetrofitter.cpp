@@ -789,6 +789,57 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	// BINNEN-LOOPPADEN (StairsPath.txt): door de speler gemarkeerde kettingen - elk opeenvolgend
+	// paar markers wordt een smart-link. Zo tekent de speler letterlijk hoe NPC's door een
+	// gebouw (trappenhuis) naar buiten lopen. Een paar passes na start, zodat de navmesh er is.
+	if (ScanPass == 12)
+	{
+		TArray<FString> SLines;
+		FFileHelper::LoadFileToStringArray(SLines, *WeedData::File(TEXT("StairsPath.txt")));
+		TArray<FVector> Chain;
+		int32 NLinks = 0;
+		auto FlushChain = [&]()
+		{
+			for (int32 ci = 0; ci + 1 < Chain.Num(); ++ci)
+			{
+				bool bNear = false;
+				for (const FVector& PL : PlacedNavLinks)
+				{
+					if (FVector::Dist(PL, Chain[ci]) < 100.f) { bNear = true; break; }
+				}
+				if (bNear) { continue; }
+				const FTransform LTM(Chain[ci]);
+				if (ANavLinkProxy* Lnk = W->SpawnActorDeferred<ANavLinkProxy>(ANavLinkProxy::StaticClass(), LTM))
+				{
+					Lnk->PointLinks.Empty();
+					Lnk->bSmartLinkIsRelevant = true;
+					if (UNavLinkCustomComponent* Smart = Lnk->GetSmartLinkComp())
+					{
+						Smart->SetLinkData(FVector::ZeroVector, Chain[ci + 1] - Chain[ci], ENavLinkDirection::BothWays);
+						Smart->SetEnabled(true);
+					}
+					Lnk->FinishSpawning(LTM);
+					Lnk->SetSmartLinkEnabled(true);
+					PlacedNavLinks.Add(Chain[ci]);
+					++NLinks;
+				}
+			}
+			Chain.Reset();
+		};
+		for (const FString& SL : SLines)
+		{
+			if (SL.TrimStartAndEnd().StartsWith(TEXT("---"))) { FlushChain(); continue; }
+			TArray<FString> Pc;
+			SL.ParseIntoArray(Pc, TEXT(","));
+			if (Pc.Num() >= 3) { Chain.Add(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]))); }
+		}
+		FlushChain();
+		if (NLinks > 0)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("Binnen-looppaden: %d smart-links gelegd uit StairsPath.txt"), NLinks);
+		}
+	}
+
 	// NAVMESH IN DE TOREN: alle nav-invokers staan langs de route (kilometers verderop), dus de
 	// toren zelf had geen navmesh - bewoners konden geen stap zetten en teleporteerden terug naar
 	// huis. Een vast anker midden in de toren dekt alle verdiepingen plus het trappenhuis.

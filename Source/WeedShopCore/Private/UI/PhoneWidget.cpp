@@ -324,6 +324,14 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->ClearNpcRoute(); } }, 11);
 		BodyRow(RouteXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// BINNEN-LOOPPAD: F9-markers op volgorde door het trappenhuis -> smart-link ketting.
+		UWeedActionButton* StairsB = MakeActionBtn(TEXT("Save stairs path (markers, in order)"), FLinearColor(0.3f, 0.4f, 0.25f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveStairsPath(); } }, 12);
+		BodyRow(StairsB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* StairsXB = MakeActionBtn(TEXT("Clear stairs paths"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]() { if (Phone.IsValid()) { Phone->ClearStairsPath(); } }, 11);
+		BodyRow(StairsXB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// WALK-THROUGH: maak het object in je crosshair doorloopbaar (pawn-collision uit) en sla
 		// het op in Saved/NoCollide.txt - elke sessie opnieuw toegepast, dus permanent ingebakken.
 		UWeedActionButton* NoColB = MakeActionBtn(TEXT("Walk-through: unblock crosshair target"), FLinearColor(0.25f, 0.4f, 0.45f),
