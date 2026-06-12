@@ -1552,4 +1552,33 @@ void ADoorRetrofitter::ApplySavedStamps()
 		ARoomStamper::ApplyWindowFix(W, P[0], Anchor, bMirror);
 		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: sessie-herbouw '%s' op (%.0f, %.0f) - %d stukken"), *P[0], AL.X, AL.Y, Placed);
 	}
+
+	// Late streaming: gevel-ramen die bij de eerste pass nog niet geladen waren alsnog fixen.
+	if (!bStampFixTimersSet)
+	{
+		bStampFixTimersSet = true;
+		GetWorldTimerManager().SetTimer(StampFixT1, this, &ADoorRetrofitter::RefreshStampWindowFixes, 15.f, false);
+		GetWorldTimerManager().SetTimer(StampFixT2, this, &ADoorRetrofitter::RefreshStampWindowFixes, 45.f, false);
+	}
+}
+
+void ADoorRetrofitter::RefreshStampWindowFixes()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> P;
+		Line.ParseIntoArray(P, TEXT("|"));
+		if (P.Num() < 3) { continue; }
+		TArray<FString> Lp;
+		P[1].ParseIntoArray(Lp, TEXT(","));
+		if (Lp.Num() < 3) { continue; }
+		const FVector AL(FCString::Atof(*Lp[0]), FCString::Atof(*Lp[1]), FCString::Atof(*Lp[2]));
+		const float AY = FCString::Atof(*P[2]);
+		const bool bMirror = P.Num() >= 4 && P[3].TrimStartAndEnd() == TEXT("M");
+		ARoomStamper::ApplyWindowFix(W, P[0], FTransform(FRotator(0.f, AY, 0.f), AL), bMirror);
+	}
 }

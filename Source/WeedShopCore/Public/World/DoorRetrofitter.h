@@ -54,7 +54,10 @@ protected:
 	// verdiepingen erboven/eronder (zelfde gebouw), met dedupe (bestaande meshes overslaan).
 	void VerticalReplicate();
 	void ApplySavedStamps();
+	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
 	TSet<FString> AppliedStamps;
+	FTimerHandle StampFixT1, StampFixT2;
+	bool bStampFixTimersSet = false;
 	void RunVertJob(const TArray<FVector>& Marks, const FString& JobId, bool bBakedJob);
 	TSet<FString> DoneJobs;                  // afgeronde jobs (deze sessie)
 	TWeakObjectPtr<class ULevelStreamingDynamic> BakedOverlay; // gebakken kamers (async geladen)

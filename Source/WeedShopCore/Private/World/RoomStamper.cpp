@@ -744,18 +744,29 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		const FTplWin& TW = TplWindows[M0.TWi];
 		FVector N = FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f));
 		FVector Out = (FVector::DotProduct(N, FVector(TW.Pos.X - Center.X, TW.Pos.Y - Center.Y, 0.f)) >= 0.f) ? N : -N;
-		const float DdOut = FVector::DotProduct(M0.Pos - TW.Pos, Out); // gevel t.o.v. kamer-muur (buitenwaarts +)
+		// Meet tegen de ECHTE huidige positie van ons raamsegment (niet de template-positie):
+		// dan is de shift idempotent en kan de fix veilig opnieuw draaien na late streaming.
+		FVector WallRef = TW.Pos;
+		for (TActorIterator<AActor> AIt(W); AIt; ++AIt)
+		{
+			if (!IsValid(*AIt) || !AIt->ActorHasTag(StampTag)) { continue; }
+			AStaticMeshActor* WSMA = Cast<AStaticMeshActor>(*AIt);
+			UStaticMeshComponent* WC = WSMA ? WSMA->GetStaticMeshComponent() : nullptr;
+			if (!WC || !WC->GetStaticMesh() || !WC->GetStaticMesh()->GetName().Contains(TEXT("Window"))) { continue; }
+			const FVector WL = WSMA->GetActorLocation();
+			if (FVector::Dist2D(WL, TW.Pos) < 200.f && FMath::Abs(WL.Z - TW.Pos.Z) < 300.f) { WallRef = WL; break; }
+		}
+		const float DdOut = FVector::DotProduct(M0.Pos - WallRef, Out); // gevel t.o.v. kamer-muur (buitenwaarts +)
 		const float Shift = FMath::Clamp(DdOut - 6.f, -60.f, 60.f);
 		if (FMath::Abs(Shift) > 1.f)
 		{
 			StampShift = Out * Shift;
 			// ALLEEN de buitenmuur-laag verschuiven (muurdelen + ramen op het raam-vlak), NIET de
-			// hele kamer: de entree is op de gang-deur gesnapt en moet daar exact blijven - de
-			// hele kamer schuiven trok muren bij de ingang los (onzichtbare muur / kieren).
+			// hele kamer: de entree is op de gang-deur gesnapt en moet daar exact blijven.
 			for (TActorIterator<AActor> It(W); It; ++It)
 			{
 				if (!IsValid(*It) || !It->ActorHasTag(StampTag)) { continue; }
-				const float Dd = FVector::DotProduct(It->GetActorLocation() - TW.Pos, Out);
+				const float Dd = FVector::DotProduct(It->GetActorLocation() - WallRef, Out);
 				if (Dd < -40.f) { continue; } // binnenin de kamer: laten staan
 				It->AddActorWorldOffset(StampShift);
 			}
@@ -770,12 +781,11 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		if (PMN.Contains(TEXT("Glass")) && Piece.Mats.Num() > 0) { ClearGlass = Piece.Mats; break; }
 	}
 
-	// PASS 3: het gematchte GEVEL-raam wordt zelf het raam van de kamer (het staat op de goede
-	// plek en hoort bij dit gebouw): fake-3D kaartje verbergen + glas helder maken. Ons eigen
-	// template-raam daar gaat weg (anders dubbel glas/kozijn). Instanced gevel-ramen kunnen geen
-	// per-instance materiaal krijgen: die verbergen we en daar blijft ons eigen raam juist staan.
-	int32 Hidden = 0, GlassCleared = 0;
-	TSet<int32> TakenOver; // template-raam indexen met een gevel-raam ervoor
+	// PASS 3: gematchte gevel-ramen VOLLEDIG verbergen. Ons eigen raamsegment (een compleet
+	// muurstuk met het raam erin) zit er vlak achter en neemt de opening over - gevel-kozijn en
+	// eigen kozijn samen zichtbaar (net verschoven) was een rommel van dubbele ramen.
+	// (GEEN eigen stukken verbergen: dat slaat een gat in de buitenmuur van de kamer.)
+	int32 Hidden = 0;
 	for (const FFacadeHit& M : Matches)
 	{
 		if (M.ISM)
@@ -789,26 +799,8 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			}
 			continue;
 		}
-		if (!M.Comp || !M.Comp->GetStaticMesh()) { continue; }
-		TakenOver.Add(M.TWi);
-		const FString CMN = M.Comp->GetStaticMesh()->GetName();
-		if (CMN.EndsWith(TEXT("_Interior")))
-		{
-			M.Comp->SetVisibility(false, true); // fake-3D kaartje weg
-			++Hidden;
-		}
-		else if (CMN.Contains(TEXT("Glass")) && ClearGlass.Num() > 0)
-		{
-			for (int32 Mi = 0; Mi < ClearGlass.Num() && Mi < M.Comp->GetNumMaterials(); ++Mi)
-			{
-				if (ClearGlass[Mi]) { M.Comp->SetMaterial(Mi, ClearGlass[Mi]); }
-			}
-			++GlassCleared;
-		}
+		if (M.Comp) { M.Comp->SetVisibility(false, true); ++Hidden; }
 	}
-	// (GEEN eigen stukken verbergen: de "ramen" van dit pack zijn complete 4m muursegmenten met
-	// het raam erin gebouwd - die weghalen slaat een gat in de buitenmuur van de kamer. Het
-	// gevel-raam ervoor is helder gemaakt, dus je kijkt er gewoon doorheen naar binnen.)
 
 	// PASS 4: niet-gematchte gevel-ramen binnen de stempel ECHT maken in plaats van fake: het
 	// gevel-raam staat op de goede plek (hoort bij dit gebouw), alleen de fake-3D view moet weg.
@@ -836,6 +828,6 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		}
 	}
 
-	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, shift (%.0f, %.0f), %d glas helder, %d verborgen, %d extra echt gemaakt (%d tpl-ramen)"),
-		*TemplateName, Cands, Matches.Num(), StampShift.X, StampShift.Y, GlassCleared, Hidden, Synced, TplWindows.Num());
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, shift (%.0f, %.0f), %d gevel-ramen verborgen, %d echt gemaakt (%d tpl-ramen)"),
+		*TemplateName, Cands, Matches.Num(), StampShift.X, StampShift.Y, Hidden, Synced, TplWindows.Num());
 }
