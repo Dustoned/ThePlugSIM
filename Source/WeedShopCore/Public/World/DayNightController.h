@@ -39,6 +39,13 @@ public:
 	UPROPERTY() float LampIntensity = 42000.f; // straatlamp-intensiteit (lumens, stad-straatlampen)
 	UPROPERTY() float ExposureBias  = 9.f;     // vaste belichtingscompensatie (lager = donkerder)
 
+	// Pack-map (beach) tunables - live via de Light-tab sliders:
+	UPROPERTY() float NightGain     = 0.55f;   // nacht-donkerte (color gain schaal, lager = donkerder)
+	UPROPERTY() float NightExposure = -1.5f;   // nacht exposure-bias (lager = donkerder nacht)
+	UPROPERTY() float DayBloom      = 0.4f;    // dag-gloed (bloom: neon/stoplichten vs zon-waas)
+	UPROPERTY() float SunHaze       = 0.002f;  // atmosfeer-nevel rond de zon (Mie)
+	float LastAppliedHaze = -1.f;
+
 	// Schrijf de huidige waardes naar Saved/LightConfig.txt (+ log), zodat ze als defaults te bakken zijn.
 	void SaveLightConfig() const;
 

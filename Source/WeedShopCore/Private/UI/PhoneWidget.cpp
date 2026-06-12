@@ -421,21 +421,33 @@ void UPhoneWidget::FillSettingsBody()
 	{
 		BodyRow(MakeText(TEXT("Lighting (live)"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
 		ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
+		const bool bPackL = DN && DN->IsPackMinimal();
 		const float Moon = DN ? DN->MoonIntensity : 0.65f;
 		const float Sun  = DN ? DN->SunIntensity  : 6.5f;
-		const float SkN  = DN ? DN->SkyNight       : 0.85f;
-		const float SkD  = DN ? DN->SkyDay         : 1.0f;
-		const float Pit  = DN ? DN->MoonPitch      : -52.f;
 		const float Lmp  = DN ? DN->LampIntensity  : 28000.f;
-		const float Exp  = DN ? DN->ExposureBias   : 9.f;
 		// Norm = (waarde - min) / (max - min) per regelaar.
 		AddLightSlider(TEXT("Moon (night)"),  Moon / 3.f,            LMoon,  LMoonV);
 		AddLightSlider(TEXT("Sun (day)"),     Sun / 12.f,            LSun,   LSunV);
-		AddLightSlider(TEXT("Sky night"),     SkN / 2.f,             LSkyN,  LSkyNV);
-		AddLightSlider(TEXT("Sky day"),       SkD / 2.f,             LSkyD,  LSkyDV);
-		AddLightSlider(TEXT("Moon angle"),    (Pit + 90.f) / 90.f,   LPitch, LPitchV);
 		AddLightSlider(TEXT("Street lamps"),  Lmp / 80000.f,         LLamp,  LLampV);
-		AddLightSlider(TEXT("Exposure"),      Exp / 16.f,            LExp,   LExpV);
+		if (bPackL)
+		{
+			// Beach-map: de knoppen van het nieuwe dag/nacht-systeem.
+			AddLightSlider(TEXT("Night dark"),     DN->NightGain,                   LSkyN,  LSkyNV);
+			AddLightSlider(TEXT("Night exposure"), (DN->NightExposure + 4.f) / 4.f, LSkyD,  LSkyDV);
+			AddLightSlider(TEXT("Day glow"),       DN->DayBloom / 1.5f,             LPitch, LPitchV);
+			AddLightSlider(TEXT("Sun haze"),       DN->SunHaze / 0.008f,            LExp,   LExpV);
+		}
+		else
+		{
+			const float SkN  = DN ? DN->SkyNight       : 0.85f;
+			const float SkD  = DN ? DN->SkyDay         : 1.0f;
+			const float Pit  = DN ? DN->MoonPitch      : -52.f;
+			const float Exp  = DN ? DN->ExposureBias   : 9.f;
+			AddLightSlider(TEXT("Sky night"),     SkN / 2.f,             LSkyN,  LSkyNV);
+			AddLightSlider(TEXT("Sky day"),       SkD / 2.f,             LSkyD,  LSkyDV);
+			AddLightSlider(TEXT("Moon angle"),    (Pit + 90.f) / 90.f,   LPitch, LPitchV);
+			AddLightSlider(TEXT("Exposure"),      Exp / 16.f,            LExp,   LExpV);
+		}
 		ApplyLightSliders(); // labels meteen vullen met de echte waardes
 
 		UWeedActionButton* SaveB = MakeActionBtn(TEXT("Save light config"), FLinearColor(0.22f, 0.5f, 0.32f),
@@ -607,19 +619,34 @@ void UPhoneWidget::ApplyLightSliders()
 	if (!DN || !LMoon) { return; }
 	DN->MoonIntensity = LMoon->GetValue()  * 3.f;
 	DN->SunIntensity  = LSun  ? LSun->GetValue()  * 12.f    : DN->SunIntensity;
-	DN->SkyNight      = LSkyN ? LSkyN->GetValue() * 2.f     : DN->SkyNight;
-	DN->SkyDay        = LSkyD ? LSkyD->GetValue() * 2.f     : DN->SkyDay;
-	DN->MoonPitch     = LPitch? LPitch->GetValue() * 90.f - 90.f : DN->MoonPitch;
 	DN->LampIntensity = LLamp ? LLamp->GetValue() * 80000.f : DN->LampIntensity;
-	DN->ExposureBias  = LExp  ? LExp->GetValue()  * 16.f    : DN->ExposureBias;
-
 	if (LMoonV)  { LMoonV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->MoonIntensity))); }
 	if (LSunV)   { LSunV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SunIntensity))); }
-	if (LSkyNV)  { LSkyNV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SkyNight))); }
-	if (LSkyDV)  { LSkyDV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SkyDay))); }
-	if (LPitchV) { LPitchV->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), DN->MoonPitch))); }
 	if (LLampV)  { LLampV->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), DN->LampIntensity))); }
-	if (LExpV)   { LExpV->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), DN->ExposureBias))); }
+
+	if (DN->IsPackMinimal())
+	{
+		// Beach-map: nieuwe dag/nacht-knoppen.
+		if (LSkyN)  { DN->NightGain     = LSkyN->GetValue(); }
+		if (LSkyD)  { DN->NightExposure = LSkyD->GetValue() * 4.f - 4.f; }
+		if (LPitch) { DN->DayBloom      = LPitch->GetValue() * 1.5f; }
+		if (LExp)   { DN->SunHaze       = LExp->GetValue() * 0.008f; }
+		if (LSkyNV)  { LSkyNV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->NightGain))); }
+		if (LSkyDV)  { LSkyDV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->NightExposure))); }
+		if (LPitchV) { LPitchV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->DayBloom))); }
+		if (LExpV)   { LExpV->SetText(FText::FromString(FString::Printf(TEXT("%.4f"), DN->SunHaze))); }
+	}
+	else
+	{
+		DN->SkyNight      = LSkyN ? LSkyN->GetValue() * 2.f     : DN->SkyNight;
+		DN->SkyDay        = LSkyD ? LSkyD->GetValue() * 2.f     : DN->SkyDay;
+		DN->MoonPitch     = LPitch? LPitch->GetValue() * 90.f - 90.f : DN->MoonPitch;
+		DN->ExposureBias  = LExp  ? LExp->GetValue()  * 16.f    : DN->ExposureBias;
+		if (LSkyNV)  { LSkyNV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SkyNight))); }
+		if (LSkyDV)  { LSkyDV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SkyDay))); }
+		if (LPitchV) { LPitchV->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), DN->MoonPitch))); }
+		if (LExpV)   { LExpV->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), DN->ExposureBias))); }
+	}
 }
 
 UTextBlock* UPhoneWidget::MakeText(const FString& Txt, int32 Size, const FLinearColor& Col, bool bCenter)

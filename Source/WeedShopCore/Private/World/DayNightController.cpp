@@ -47,8 +47,8 @@ ADayNightController* ADayNightController::GetLocal(UWorld* W)
 void ADayNightController::SaveLightConfig() const
 {
 	const FString Cfg = FString::Printf(
-		TEXT("MoonIntensity=%.3f\nSunIntensity=%.3f\nSkyNight=%.3f\nSkyDay=%.3f\nMoonPitch=%.1f\nLampIntensity=%.0f\nExposureBias=%.2f\n"),
-		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias);
+		TEXT("MoonIntensity=%.3f\nSunIntensity=%.3f\nSkyNight=%.3f\nSkyDay=%.3f\nMoonPitch=%.1f\nLampIntensity=%.0f\nExposureBias=%.2f\nNightGain=%.3f\nNightExposure=%.2f\nDayBloom=%.3f\nSunHaze=%.5f\n"),
+		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias, NightGain, NightExposure, DayBloom, SunHaze);
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("LightConfig.txt");
 	FFileHelper::SaveStringToFile(Cfg, *Path);
 	UE_LOG(LogTemp, Warning, TEXT("[LightConfig] saved to %s\n%s"), *Path, *Cfg);
@@ -465,20 +465,29 @@ void ADayNightController::Tick(float DeltaSeconds)
 		}
 		// HEMEL-WAAS temmen: de Mie-nevel van de map-atmosfeer maakte een gigantisch wazig
 		// zonsgebied (halve hemel wit). Minder nevel-dichtheid + halo strakker om de schijf.
-		if (!bAtmosphereTuned)
+		if (!FMath::IsNearlyEqual(LastAppliedHaze, SunHaze, 0.00002f))
 		{
 			for (TObjectIterator<USkyAtmosphereComponent> AtIt; AtIt; ++AtIt)
 			{
 				if (AtIt->GetWorld() != GetWorld()) { continue; }
-				AtIt->SetMieScatteringScale(0.002f);
+				AtIt->SetMieScatteringScale(SunHaze);
 				AtIt->SetMieAnisotropy(0.96f);
-				bAtmosphereTuned = true;
+				LastAppliedHaze = SunHaze;
 			}
 		}
 
-		if (NightPPV.IsValid()) { NightPPV->BlendWeight = 1.f - MinDayF; }
+		if (NightPPV.IsValid())
+		{
+			NightPPV->BlendWeight = 1.f - MinDayF;
+			NightPPV->Settings.AutoExposureBias = NightExposure;
+			NightPPV->Settings.ColorGain = FVector4(0.82f * NightGain, 0.91f * NightGain, 1.27f * NightGain, 1.f);
+		}
 		// Bloom-rem ALLEEN overdag (tegen de zon-waas) - 's nachts volle bloei voor neon en lampen.
-		if (BloomPPV.IsValid()) { BloomPPV->BlendWeight = MinDayF; }
+		if (BloomPPV.IsValid())
+		{
+			BloomPPV->BlendWeight = MinDayF;
+			BloomPPV->Settings.BloomIntensity = DayBloom;
+		}
 
 		// Pack-lampen op kloktijd (zelfde regel als onze eigen map: aan vanaf 17u, uit om 8u).
 		const float WantLampI = (Hour < 8.f || Hour >= 17.f) ? LampIntensity : 0.f;
