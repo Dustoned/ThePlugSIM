@@ -791,8 +791,9 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// BINNEN-LOOPPADEN (StairsPath.txt): door de speler gemarkeerde kettingen - elk opeenvolgend
 	// paar markers wordt een smart-link. Zo tekent de speler letterlijk hoe NPC's door een
-	// gebouw (trappenhuis) naar buiten lopen. Een paar passes na start, zodat de navmesh er is.
-	if (ScanPass == 12)
+	// gebouw (trappenhuis) naar buiten lopen. PAS NA het toren-navmesh-anker laden (de navmesh
+	// moet er echt zijn, anders zijn de al-beloopbaar-testen onzin) en op 5 min hertesten.
+	if ((ScanPass == 60 || ScanPass == 150) && bTowerInvokerPlaced)
 	{
 		TArray<FString> SLines;
 		FFileHelper::LoadFileToStringArray(SLines, *WeedData::File(TEXT("StairsPath.txt")));
@@ -1149,8 +1150,17 @@ void ADoorRetrofitter::ScanAndConvert()
 				const bool bAInside = Openness(CandA) <= Openness(CandB);
 				Inside = bAInside ? CandA : CandB;
 				Front = bAInside ? CandB : CandA;
-				SpawnAt = Inside;
-				bOk = true;
+				// Op de KAMER-navmesh klikken: een pawn die naast de navmesh staat (muur/meubel)
+				// kan geen enkel pad starten en blijft eeuwig in de kamer staan.
+				UNavigationSystemV1* NavI = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
+				FNavLocation InNav;
+				if (NavI && NavI->ProjectPointToNavigation(Inside + FVector(0.f, 0.f, 50.f), InNav, FVector(350.f, 350.f, 220.f)))
+				{
+					Inside = InNav.Location;
+					SpawnAt = Inside;
+					bOk = true;
+				}
+				// anders: bOk blijft false -> achteraan de wachtrij (navmesh daar nog niet klaar)
 			}
 			else if (!StreetRef.IsNearlyZero())
 			{
