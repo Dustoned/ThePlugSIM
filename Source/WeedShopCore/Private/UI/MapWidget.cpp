@@ -133,16 +133,16 @@ UBorder* UMapWidget::AddDot(const FLinearColor& Col, float Sz, int32 ZOrder)
 	return B;
 }
 
-UWidget* UMapWidget::AddPersonIcon()
+UWidget* UMapWidget::AddPersonIcon(const FLinearColor& Tint, float Sz, int32 ZOrder)
 {
 	USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
-	SB->SetWidthOverride(20.f); SB->SetHeightOverride(20.f);
-	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 20.f, FLinearColor(0.3f, 1.f, 0.4f)));
+	SB->SetWidthOverride(Sz); SB->SetHeightOverride(Sz);
+	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, Sz, Tint));
 	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(SB);
 	Cs->SetAutoSize(false);
-	Cs->SetSize(FVector2D(20.f, 20.f));
+	Cs->SetSize(FVector2D(Sz, Sz));
 	Cs->SetAlignment(FVector2D(0.5f, 0.5f));
-	Cs->SetZOrder(21);
+	Cs->SetZOrder(ZOrder);
 	return SB;
 }
 
@@ -257,7 +257,7 @@ void UMapWidget::BuildBlocks()
 		Zoom = FMath::Clamp((GMapDS / Scale0) / 350000.f * 20.f, 6.f, 40.f);
 		if (Canvas) { Canvas->SetClipping(EWidgetClipping::ClipToBounds); }
 		PackMap->CaptureMapNow();
-		PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 26);
+		PlayerDot = AddPersonIcon(FLinearColor(0.2f, 0.9f, 1.f), 24.f, 26); // jij: cyaan poppetje
 		WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
 		if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 		bBuiltBlocks = true;
@@ -349,7 +349,7 @@ void UMapWidget::BuildBlocks()
 	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
-	PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 26);
+	PlayerDot = AddPersonIcon(FLinearColor(0.2f, 0.9f, 1.f), 24.f, 26); // jij: cyaan poppetje
 	WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 	// (Titel/uitleg/legenda staan in het zijpaneel rechts, niet meer over de kaart.)
@@ -492,8 +492,8 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			{
 				const APawn* Pw = PS ? PS->GetPawn() : nullptr;
 				if (!Pw || Pw == LocalPawn) { continue; }
-				while (CoopDots.Num() <= Used) { CoopDots.Add(AddDot(FLinearColor(0.3f, 0.55f, 1.f), 16.f, 26)); }
-				if (UBorder* Dot = CoopDots[Used])
+				while (CoopDots.Num() <= Used) { CoopDots.Add(AddPersonIcon(FLinearColor(0.3f, 0.55f, 1.f), 24.f, 26)); } // co-op maatje: blauw poppetje
+				if (UWidget* Dot = CoopDots[Used])
 				{
 					const FVector L = Pw->GetActorLocation();
 					if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(WorldToCanvas(L.X, L.Y)); }

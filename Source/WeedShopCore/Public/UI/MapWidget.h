@@ -30,8 +30,8 @@ protected:
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
 	UPROPERTY() TObjectPtr<class UImage> MapImage; // echte top-down render van de stad
 	bool bImageSet = false;
-	UPROPERTY() TObjectPtr<UBorder> PlayerDot;
-	UPROPERTY() TArray<TObjectPtr<UBorder>> CoopDots; // mede-spelers (blauw)
+	UPROPERTY() TObjectPtr<UWidget> PlayerDot; // poppetje (zelfde icoon als de kompas)
+	UPROPERTY() TArray<TObjectPtr<UWidget>> CoopDots; // mede-spelers (blauw poppetje)
 	UPROPERTY() TObjectPtr<UBorder> WaypointDot;
 	UPROPERTY() TObjectPtr<class UWidget> HomeIcon; // goud huisje op JOUW woning
 	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;        // roamers (cyaan stipjes)
@@ -68,7 +68,7 @@ protected:
 	FVector2D WorldToCanvas(float Wx, float Wy) const;
 	void BuildBlocks();
 	UBorder* AddDot(const FLinearColor& Col, float Sz, int32 ZOrder);
-	class UWidget* AddPersonIcon(); // groen poppetje-icoon op het canvas
+	class UWidget* AddPersonIcon(const FLinearColor& Tint = FLinearColor(0.3f, 1.f, 0.4f), float Sz = 20.f, int32 ZOrder = 21); // poppetje-icoon op het canvas
 	UTextBlock* AddCanvasText(const FString& T, FVector2D Pos, float W, int32 Size, const FLinearColor& Col, int32 ZOrder);
 	// Nummer/label op een klein donker afgerond chip-vlak (altijd leesbaar, ongeacht het dak eronder).
 	class UWidget* AddPill(const FString& T, FVector2D Pos, int32 Size, const FLinearColor& TextCol, int32 ZOrder);
