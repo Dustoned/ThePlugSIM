@@ -1164,37 +1164,25 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (PR.bInside)
 			{
-				// Kamer-kant vs gang-kant van de voordeur (vrije-ruimte-meting).
-				const FVector Fw = A->GetActorForwardVector();
-				const FVector Rt = A->GetActorRightVector();
-				auto Openness = [&](const FVector& P)
+				// Spawn BINNEN op de begane grond, vlak voor de uitgang (een paar ketting-punten
+				// voor het einde): je ZIET ze dus altijd het gebouw uit komen lopen - de deuren
+				// door, de stoep op, jouw route op. De verdieping-afdaling daarboven is decor;
+				// dit is wat je op straat ziet, en het werkt altijd.
+				float BestCd = TNumericLimits<float>::Max();
+				const TArray<FVector>* Ch0 = nullptr;
+				for (const TArray<FVector>& Ch : NpcChains)
 				{
-					float Sum = 0.f;
-					const FVector Dirs[4] = { Fw, -Fw, Rt, -Rt };
-					for (const FVector& Dir : Dirs)
-					{
-						FHitResult H;
-						const FVector S = P + FVector(0.f, 0.f, 120.f);
-						Sum += W->LineTraceSingleByChannel(H, S, S + Dir * 1200.f, ECC_Visibility) ? H.Distance : 1200.f;
-					}
-					return Sum;
-				};
-				const FVector CandA = DL + Fw * 240.f;
-				const FVector CandB = DL - Fw * 240.f;
-				const bool bAInside = Openness(CandA) <= Openness(CandB);
-				Inside = bAInside ? CandA : CandB;
-				Front = bAInside ? CandB : CandA;
-				// Op de KAMER-navmesh klikken: een pawn die naast de navmesh staat (muur/meubel)
-				// kan geen enkel pad starten en blijft eeuwig in de kamer staan.
-				UNavigationSystemV1* NavI = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
-				FNavLocation InNav;
-				if (NavI && NavI->ProjectPointToNavigation(Inside + FVector(0.f, 0.f, 50.f), InNav, FVector(350.f, 350.f, 220.f)))
+					const float Dd = FVector::DistSquared2D(Ch[0], DL);
+					if (Dd < BestCd) { BestCd = Dd; Ch0 = &Ch; }
+				}
+				if (Ch0 && Ch0->Num() >= 2)
 				{
-					Inside = InNav.Location;
-					SpawnAt = Inside;
+					const int32 StartIdx = FMath::Max(0, Ch0->Num() - 3);
+					SpawnAt = (*Ch0)[StartIdx];
+					Front = SpawnAt;
+					Inside = SpawnAt;
 					bOk = true;
 				}
-				// anders: bOk blijft false -> achteraan de wachtrij (navmesh daar nog niet klaar)
 			}
 			else if (!StreetRef.IsNearlyZero())
 			{
@@ -1261,15 +1249,24 @@ void ADoorRetrofitter::ScanAndConvert()
 						const float Dd = FVector::DistSquared2D(SpIt2->GetActorLocation(), SpawnAt);
 						if (Dd < BestOd) { BestOd = Dd; OwnerSp = *SpIt2; }
 					}
-					// Binnen gespawnd: de dichtstbijzijnde ketting is het entry-pad naar buiten.
+					// Binnen gespawnd: de STAART van de ketting (vanaf het spawn-punt) is het
+					// looppad naar buiten - deuren door, stoep op.
 					const TArray<FVector>* Entry = nullptr;
+					TArray<FVector> EntryTail;
 					if (PR.bInside)
 					{
 						float BestCd = TNumericLimits<float>::Max();
+						const TArray<FVector>* Ch0 = nullptr;
 						for (const TArray<FVector>& Ch : NpcChains)
 						{
-							const float Dd = FVector::DistSquared2D(Ch[0], SpawnAt);
-							if (Dd < BestCd) { BestCd = Dd; Entry = &Ch; }
+							const float Dd = FVector::DistSquared2D(Ch[0], DL);
+							if (Dd < BestCd) { BestCd = Dd; Ch0 = &Ch; }
+						}
+						if (Ch0 && Ch0->Num() >= 2)
+						{
+							const int32 StartIdx = FMath::Max(0, Ch0->Num() - 3);
+							for (int32 e = StartIdx; e < Ch0->Num(); ++e) { EntryTail.Add((*Ch0)[e]); }
+							if (EntryTail.Num() >= 2) { Entry = &EntryTail; }
 						}
 					}
 					if (OwnerSp) { OwnerSp->AdoptWalker(Cb, Entry); }
