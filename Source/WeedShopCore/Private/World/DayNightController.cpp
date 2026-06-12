@@ -409,17 +409,39 @@ void ADayNightController::Tick(float DeltaSeconds)
 					if ((bTallLamp || bSmallLamp) && !PackLampSeen.Contains(MC))
 					{
 						PackLampSeen.Add(MC);
-						UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
-						PL->SetupAttachment(GetRootComponent());
-						PL->RegisterComponent();
 						const FVector BO = MC->Bounds.Origin;
-						const float Up = bTallLamp ? MC->Bounds.BoxExtent.Z * 0.7f : -25.f;
-						PL->SetWorldLocation(BO + FVector(0.f, 0.f, Up));
+						UPointLightComponent* PL = nullptr;
+						if (bTallLamp)
+						{
+							// Lantaarn: SPOT met de kegel recht omlaag = realistische lichtpoel op de grond.
+							USpotLightComponent* SL2 = NewObject<USpotLightComponent>(this);
+							SL2->SetupAttachment(GetRootComponent());
+							SL2->RegisterComponent();
+							SL2->SetWorldLocationAndRotation(BO + FVector(0.f, 0.f, MC->Bounds.BoxExtent.Z * 0.7f - 50.f), FRotator(-90.f, 0.f, 0.f));
+							SL2->SetInnerConeAngle(35.f);
+							SL2->SetOuterConeAngle(62.f);
+							SL2->SetAttenuationRadius(1500.f);
+							PL = SL2;
+						}
+						else
+						{
+							UPointLightComponent* PP2 = NewObject<UPointLightComponent>(this);
+							PP2->SetupAttachment(GetRootComponent());
+							PP2->RegisterComponent();
+							PP2->SetWorldLocation(BO + FVector(0.f, 0.f, -30.f));
+							PP2->SetAttenuationRadius(850.f);
+							PL = PP2;
+						}
 						PL->SetMobility(EComponentMobility::Movable);
-						PL->SetAttenuationRadius(bTallLamp ? 1700.f : 900.f);
-						PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
+						// Inverse-squared UIT: gelijkmatige poel en de lamp-kop wordt niet weggeblazen
+						// (vlakbij de bron explodeerde het kwadratische licht op de kop-mesh).
+						PL->bUseInverseSquaredFalloff = false;
+						PL->LightFalloffExponent = 2.5f;
+						PL->SetLightColor(FLinearColor(1.f, 0.85f, 0.6f));
 						PL->SetIntensity(0.f);
 						PL->SetCastShadows(false);
+						PL->MarkRenderStateDirty();
+						PL->ComponentTags.Add(bTallLamp ? TEXT("TallLamp") : TEXT("SmallLamp"));
 						PackLampLights.Add(PL);
 					}
 				}
@@ -495,11 +517,14 @@ void ADayNightController::Tick(float DeltaSeconds)
 			BloomPPV->Settings.BloomIntensity = DayBloom;
 		}
 
-		// Pack-lampen op kloktijd (zelfde regel als onze eigen map: aan vanaf 17u, uit om 8u).
-		const float WantLampI = (Hour < 8.f || Hour >= 17.f) ? LampIntensity : 0.f;
+		// Pack-lampen op kloktijd (aan vanaf 17u, uit om 8u). Falloff staat uit, dus de
+		// intensiteit is unitless: slider-default 42000 wordt kegel 7.0 / poel 4.7.
+		const bool bLampOn = (Hour < 8.f || Hour >= 17.f);
 		for (UPointLightComponent* PL : PackLampLights)
 		{
-			if (PL && !FMath::IsNearlyEqual(PL->Intensity, WantLampI, 1.f)) { PL->SetIntensity(WantLampI); }
+			if (!PL) { continue; }
+			const float Want = bLampOn ? (PL->ComponentHasTag(TEXT("TallLamp")) ? LampIntensity / 6000.f : LampIntensity / 9000.f) : 0.f;
+			if (!FMath::IsNearlyEqual(PL->Intensity, Want, 0.05f)) { PL->SetIntensity(Want); }
 		}
 
 		// BLOOM-REM (altijd aan): de zonneschijf blies via de bloom op tot een gigantische witte
