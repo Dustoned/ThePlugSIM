@@ -148,9 +148,6 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 			const FVector L = Comp->Bounds.Origin;
 			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 335.f) { continue; }
-			// Parallax interior-kaartjes van ramen (SM_..._Window_..._Interior) niet meenemen: ze zijn
-			// eenzijdig naar buiten gericht en blokkeren het echte doorkijkje de kamer in.
-			if (MeshName.Contains(TEXT("Window")) && MeshName.EndsWith(TEXT("_Interior"))) { continue; }
 			// Het voordeur-BLAD niet meenemen (het doelframe heeft al een werkende deur) - maar
 			// muurdelen met een deuropening in de naam (SM_InteriorWall_3m_Door01 e.d.) horen er WEL bij.
 			if (MeshName.Contains(TEXT("Door")) && !MeshName.Contains(TEXT("DoorFrame"))
@@ -210,8 +207,6 @@ bool ARoomStamper::LoadTemplate(const FString& TemplateName, TArray<FStampPiece>
 		TArray<FString> P;
 		Line.ParseIntoArray(P, TEXT("|"));
 		if (P.Num() < 5) { continue; }
-		// Parallax interior-kaartjes ook uit oude templates filteren.
-		if (P[1].Contains(TEXT("Window")) && P[1].EndsWith(TEXT("_Interior"))) { continue; }
 		FStampPiece Piece;
 		Piece.Mesh = LoadObject<UStaticMesh>(nullptr, *P[1]);
 		if (!Piece.Mesh) { continue; }
