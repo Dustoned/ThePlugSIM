@@ -223,7 +223,15 @@ bool ARoomStamper::LoadTemplate(const FString& TemplateName, TArray<FStampPiece>
 			P[5].ParseIntoArray(Ms, TEXT(";"));
 			for (const FString& Mp : Ms)
 			{
-				Piece.Mats.Add((Mp != TEXT("-")) ? LoadObject<UMaterialInterface>(nullptr, *Mp) : nullptr);
+				FString MPath = Mp;
+				// Stempel-kamers zijn ECHTE interieurs: het parallax fake-3D glas (MI_Window) wordt
+				// vervangen door het doorzichtige tweezijdige glas van het pack, zodat je van buiten
+				// echt de kamer in kijkt.
+				if (MPath.Contains(TEXT("MI_Window.MI_Window")))
+				{
+					MPath = MPath.Replace(TEXT("MI_Window.MI_Window"), TEXT("MI_Window_TwoSided.MI_Window_TwoSided"));
+				}
+				Piece.Mats.Add((MPath != TEXT("-")) ? LoadObject<UMaterialInterface>(nullptr, *MPath) : nullptr);
 			}
 		}
 		OutPieces.Add(Piece);

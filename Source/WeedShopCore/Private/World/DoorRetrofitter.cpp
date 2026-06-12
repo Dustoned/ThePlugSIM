@@ -1580,5 +1580,35 @@ void ADoorRetrofitter::RefreshStampWindowFixes()
 		const float AY = FCString::Atof(*P[2]);
 		const bool bMirror = P.Num() >= 4 && P[3].TrimStartAndEnd() == TEXT("M");
 		ARoomStamper::ApplyWindowFix(W, P[0], FTransform(FRotator(0.f, AY, 0.f), AL), bMirror);
+
+		// DIAGNOSE: alles rond de stempel dumpen (naam, positie, zichtbaar, materiaal, eigenaar)
+		// zodat we exact zien welke meshes er bij de buitenmuur staan/verbergen.
+		FString Dump;
+		int32 DumpCount = 0;
+		for (TActorIterator<AActor> DIt(W); DIt; ++DIt)
+		{
+			AActor* DA = *DIt;
+			if (!IsValid(DA)) { continue; }
+			TInlineComponentArray<UStaticMeshComponent*> DComps(DA);
+			for (UStaticMeshComponent* DC : DComps)
+			{
+				if (!DC || !DC->GetStaticMesh()) { continue; }
+				const FVector DL = DC->Bounds.Origin;
+				if (FVector::Dist2D(DL, AL) > 1300.f || DL.Z < AL.Z - 60.f || DL.Z > AL.Z + 420.f) { continue; }
+				FString TagStr;
+				for (const FName& Tg : DA->Tags) { TagStr += Tg.ToString() + TEXT(","); }
+				UMaterialInterface* M0 = DC->GetMaterial(0);
+				Dump += FString::Printf(TEXT("%s | (%.0f, %.0f, %.0f) | vis=%d hid=%d | mat=%s | tags=%s | actor=%s"),
+					*DC->GetStaticMesh()->GetName(), DL.X, DL.Y, DL.Z,
+					DC->IsVisible() ? 1 : 0, DA->IsHidden() ? 1 : 0,
+					M0 ? *M0->GetName() : TEXT("-"), *TagStr, *DA->GetClass()->GetName());
+				Dump += LINE_TERMINATOR;
+				++DumpCount;
+				if (DumpCount > 400) { break; }
+			}
+			if (DumpCount > 400) { break; }
+		}
+		FFileHelper::SaveStringToFile(Dump, *(FPaths::ProjectSavedDir() / TEXT("StampAreaDump.txt")));
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: area-dump %d comps -> StampAreaDump.txt"), DumpCount);
 	}
 }
