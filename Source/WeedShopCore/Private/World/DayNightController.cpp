@@ -37,6 +37,34 @@ ADayNightController::ADayNightController()
 	SetRootComponent(Root);
 }
 
+void ADayNightController::ApplyMapPhotoLight()
+{
+	// Vaste ochtendstand (zon ~50 graden, schuin uit het ZO-kwadrant van de boog): zelfde look
+	// als de captures die er goed uitzagen. Tick draait elk frame en zet alles direct weer terug.
+	if (PackSun.IsValid() && PackSun->GetLightComponent())
+	{
+		PackSun->SetActorRotation(FRotator(-50.f, 337.5f, 0.f));
+		PackSun->GetLightComponent()->SetIntensity(SunIntensity);
+	}
+	if (PackMoon.IsValid() && PackMoon->GetLightComponent())
+	{
+		PackMoon->GetLightComponent()->SetIntensity(0.f);
+	}
+	if (NightPPV.IsValid()) { NightPPV->BlendWeight = 0.f; }
+	if (BloomPPV.IsValid()) { BloomPPV->BlendWeight = 1.f; }
+	for (FDimLight& D : DimLights)
+	{
+		if (ULightComponent* LC = D.Light.Get())
+		{
+			if (LC->IsA(USkyLightComponent::StaticClass())) { LC->SetIntensity(D.OrigIntensity); }
+		}
+	}
+	for (UPointLightComponent* PL : PackLampLights)
+	{
+		if (PL) { PL->SetIntensity(0.f); }
+	}
+}
+
 ADayNightController* ADayNightController::GetLocal(UWorld* W)
 {
 	if (LocalInstance.IsValid()) { return LocalInstance.Get(); }

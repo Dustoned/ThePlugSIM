@@ -339,8 +339,8 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->ShowFlags.SetAtmosphere(false);   // atmosfeer tussen camera en grond idem
 	MapCapture->ShowFlags.SetDynamicShadows(false); // geen slagschaduwen op de luchtfoto (boardwalk-schaduw over het strand)
 	// (Belichting/post-processing AAN laten: FinalColor-captures renderen zwart zonder lighting.
-	// De nacht-oplossing zit in de TIMING: we schieten de kaart alleen bij daglicht - zie
-	// ScanAndConvert/bDayMapCaptured.)
+	// Tijd-onafhankelijk: CaptureMapNow zet de belichting 1 frame in de foto-stand van de
+	// dag/nacht-controller - de kaart ziet er dus altijd uit als een rustige ochtend.)
 	// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met MapWidget::WorldToCanvas).
 	MapCapture->SetWorldLocationAndRotation(FVector(MapCenter.X, MapCenter.Y, TopZ), FRotator(-90.f, 0.f, 0.f));
 }
@@ -357,6 +357,12 @@ void ADoorRetrofitter::CaptureMapNow()
 		{
 			if (IsValid(*It)) { MapCapture->HiddenActors.Add(*It); }
 		}
+	}
+	// Altijd dezelfde rustige ochtend-belichting op de foto, ongeacht de kloktijd (middagzon
+	// blies de kaart naar wit; nacht maakte hem zwart). Tick van de controller herstelt direct.
+	if (ADayNightController* DN = ADayNightController::GetLocal(GetWorld()))
+	{
+		DN->ApplyMapPhotoLight();
 	}
 	MapCapture->CaptureScene();
 }
@@ -394,21 +400,16 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
-	// Kaart bij DAGLICHT schieten: een capture in de nacht (eigen zon onder + nachtgrading) gaf
-	// een zwarte/egale kaart. Een keer per sessie zodra de klok ruim in de dag zit.
+	// Kaart een keer per sessie schieten - de foto-stand maakt de capture tijd-onafhankelijk,
+	// dus ook wie 's nachts spawnt heeft meteen een dag-kaart. Wel even wachten tot de
+	// dag/nacht-controller zijn zon heeft gespawnd (paar ticks na BeginPlay).
 	if (!bDayMapCaptured)
 	{
-		if (AWeedShopGameState* GSm = W->GetGameState<AWeedShopGameState>())
+		ADayNightController* DNm = ADayNightController::GetLocal(W);
+		if (DNm && DNm->HasPackSun())
 		{
-			if (GSm->GetDayCycle())
-			{
-				const float Hm = GSm->GetDayCycle()->GetClockHour();
-				if (Hm > 7.5f && Hm < 19.f)
-				{
-					CaptureMapNow();
-					bDayMapCaptured = true;
-				}
-			}
+			CaptureMapNow();
+			bDayMapCaptured = true;
 		}
 	}
 

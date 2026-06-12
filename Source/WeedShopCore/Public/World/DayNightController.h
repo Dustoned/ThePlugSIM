@@ -29,6 +29,11 @@ public:
 	// De lokale controller (lokaal/cosmetisch gespawnd) -> bereikbaar vanuit de phone-UI om de
 	// belichting live te tunen zonder restart.
 	static ADayNightController* GetLocal(UWorld* W);
+	// FOTO-STAND voor de M-kaart: forceert 1 frame een vaste ochtendzon (geen wit middag-licht,
+	// geen nacht-grading, lampen uit) zodat de luchtfoto er ALTIJD hetzelfde uitziet, ongeacht de
+	// kloktijd. De eerstvolgende Tick herstelt alles automatisch vanaf de klok.
+	void ApplyMapPhotoLight();
+	bool HasPackSun() const { return PackSun.IsValid(); }
 
 	// Live-instelbare belichting (sliders in de phone Settings/Test). Defaults = de "huidige" look.
 	UPROPERTY() float MoonIntensity = 0.65f;   // nacht: zon-/maanlicht-intensiteit
