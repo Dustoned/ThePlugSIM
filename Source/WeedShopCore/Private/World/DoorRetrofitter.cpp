@@ -798,6 +798,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		FFileHelper::LoadFileToStringArray(SLines, *WeedData::File(TEXT("StairsPath.txt")));
 		TArray<FVector> Chain;
 		int32 NLinks = 0;
+		UNavigationSystemV1* NavC = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
 		auto FlushChain = [&]()
 		{
 			for (int32 ci = 0; ci + 1 < Chain.Num(); ++ci)
@@ -808,6 +809,18 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (FVector::Dist(PL, Chain[ci]) < 100.f) { bNear = true; break; }
 				}
 				if (bNear) { continue; }
+				// Alleen een link leggen waar de navmesh het NIET al zelf kan: kan je er gewoon
+				// heen lopen (volledig pad, niet absurd omlopen), dan is een link overbodig - en
+				// een onnodige link laat NPC's in een rechte lijn (door muren) lopen.
+				if (NavC)
+				{
+					UNavigationPath* PathC = NavC->FindPathToLocationSynchronously(W, Chain[ci] + FVector(0.f, 0.f, 50.f), Chain[ci + 1] + FVector(0.f, 0.f, 50.f), nullptr);
+					const float Direct = FVector::Dist(Chain[ci], Chain[ci + 1]);
+					if (PathC && PathC->IsValid() && !PathC->IsPartial() && PathC->GetPathLength() < FMath::Max(600.f, Direct * 2.5f))
+					{
+						continue; // navmesh kan dit stuk al zelf
+					}
+				}
 				const FTransform LTM(Chain[ci]);
 				if (ANavLinkProxy* Lnk = W->SpawnActorDeferred<ANavLinkProxy>(ANavLinkProxy::StaticClass(), LTM))
 				{
