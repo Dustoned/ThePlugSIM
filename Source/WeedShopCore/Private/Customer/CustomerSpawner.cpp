@@ -333,6 +333,29 @@ void ACustomerSpawner::TrySpawn()
 					}
 					if (Cw->GetVelocity().SizeSquared2D() > 25.f) { St.Stall = 0; continue; }
 					++St.Stall;
+					// Hardnekkig vast op dit segment (12s+): BUITEN ZICHT van de speler naar het
+					// punt hoppen en verder lopen - de marker-lijn wordt zo altijd afgelegd, ook
+					// waar navmesh en rechte lijn het allebei laten afweten (trapgat-randen).
+					if (St.Stall >= 6)
+					{
+						bool bUnseen = true;
+						for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
+						{
+							const APlayerController* PCs = PIt->Get();
+							const APawn* Pps = PCs ? PCs->GetPawn() : nullptr;
+							if (!Pps) { continue; }
+							const FVector To = Cur - Pps->GetActorLocation();
+							if (To.Size() < 1200.f) { bUnseen = false; break; }
+							if (To.Size() < 5000.f && FVector::DotProduct(PCs->GetControlRotation().Vector(), To.GetSafeNormal()) > 0.05f) { bUnseen = false; break; }
+						}
+						if (bUnseen)
+						{
+							Cw->SetActorLocation(Tgt + FVector(0.f, 0.f, 90.f), false, nullptr, ETeleportType::TeleportPhysics);
+							++St.EntryIdx;
+							St.Stall = 0;
+							continue;
+						}
+					}
 					if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
 					{
 						AI->MoveToLocation(Tgt, 60.f, true, St.Stall < 3);
