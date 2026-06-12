@@ -80,6 +80,7 @@ protected:
 
 	int32 CurFloor = 0;
 	int32 TargetFloor = 0;
+	int32 ShownFloor = 0;      // verdieping op de displays: telt LIVE mee terwijl de cabine rijdt
 	float CabZ = 0.f;          // huidige cabine-vloerhoogte
 	float DoorOpen = 0.f;      // 0 = dicht, 1 = open (animatie)
 	float DwellTimer = 0.f;    // wachttijd met open deuren

@@ -62,6 +62,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 
 	CurFloor = 0;
 	TargetFloor = 0;
+	ShownFloor = 0;
 	CabZ = Floors.Num() ? Floors[0] : 0.f;
 	DoorOpen = 1.f; // begane grond: deuren open, klaar om in te stappen
 	DwellTimer = DwellSeconds;
@@ -142,6 +143,8 @@ void APackElevator::CallToFloor(int32 FloorIdx)
 {
 	if (!Floors.IsValidIndex(FloorIdx)) { return; }
 	TargetFloor = FloorIdx;
+	// Lift staat al hier: deuren (weer) openen in plaats van rijden.
+	if (FloorIdx == CurFloor && !bMoving) { DwellTimer = DwellSeconds; }
 }
 
 void APackElevator::BuildCabButtonPanel()
@@ -184,7 +187,7 @@ void APackElevator::RegisterButton(APackElevatorButton* Btn)
 	if (Btn)
 	{
 		Buttons.Add(Btn);
-		Btn->SetDigit(CurFloor);
+		Btn->SetDigit(ShownFloor);
 	}
 }
 
@@ -193,12 +196,12 @@ void APackElevator::UpdateSigns()
 	for (const TWeakObjectPtr<APackElevatorButton>& B : Buttons)
 	{
 		APackElevatorButton* Btn = B.Get();
-		if (Btn && !Btn->IsCabButton()) { Btn->SetDigit(CurFloor); } // cab-knoppen houden hun vaste label
+		if (Btn && !Btn->IsCabButton()) { Btn->SetDigit(ShownFloor); } // cab-knoppen houden hun vaste label
 	}
-	if (CabDigit && CabDigitShown != CurFloor)
+	if (CabDigit && CabDigitShown != ShownFloor)
 	{
-		CabDigitShown = CurFloor;
-		const int32 D = FMath::Clamp(CurFloor, 0, 9);
+		CabDigitShown = ShownFloor;
+		const int32 D = FMath::Clamp(ShownFloor, 0, 9);
 		const FString Path = FString::Printf(TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorNumber_%d.SM_ElevatorNumber_%d"), D, D);
 		if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path)) { CabDigit->SetStaticMesh(M); }
 	}
@@ -260,8 +263,32 @@ void APackElevator::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Deuren: open op een verdieping met stilstaande cabine, dicht tijdens het rijden.
-	const bool bWantOpen = !bMoving;
+	// LIVE VERDIEPING-TELLER: displays tellen mee met de cabine (0, 1, 2, ...) in plaats van
+	// pas het eindcijfer te tonen bij aankomst.
+	if (bMoving)
+	{
+		int32 Nearest = ShownFloor;
+		float BestD = TNumericLimits<float>::Max();
+		for (int32 i = 0; i < Floors.Num(); ++i)
+		{
+			const float Dz = FMath::Abs(Floors[i] - CabZ);
+			if (Dz < BestD) { BestD = Dz; Nearest = i; }
+		}
+		if (Nearest != ShownFloor)
+		{
+			ShownFloor = Nearest;
+			UpdateSigns();
+		}
+	}
+
+	// Deuren: open na aankomst (dwell-tijd) of zolang er iemand in de cabine staat - daarna
+	// netjes DICHT, ook op de begane grond. Een call-knop op de verdieping opent ze weer.
+	if (!bMoving)
+	{
+		if (IsPawnAboard()) { DwellTimer = FMath::Max(DwellTimer, 1.5f); } // niemand opsluiten
+		DwellTimer -= DeltaSeconds;
+	}
+	const bool bWantOpen = !bMoving && DwellTimer > 0.f;
 	DoorOpen = FMath::FInterpConstantTo(DoorOpen, bWantOpen ? 1.f : 0.f, DeltaSeconds, 1.f / DoorSlideTime);
 	for (const FPanelRef& R : Panels)
 	{
@@ -286,6 +313,7 @@ void APackElevator::Tick(float DeltaSeconds)
 		{
 			CabZ = TargetZ;
 			CurFloor = TargetFloor;
+			ShownFloor = CurFloor;
 			DwellTimer = DwellSeconds;
 			BoardedTimer = 0.f;
 			UpdateSigns(); // bordjes boven de deuren: cabine is nu op deze verdieping
