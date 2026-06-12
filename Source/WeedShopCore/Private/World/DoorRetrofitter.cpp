@@ -905,12 +905,38 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 		if (SpawnerLocs.Num() > 0)
 		{
+			// Voordeur-lookup voor bewoners (NameIdx -> deur), om gezakte bewoners VERS te
+			// kunnen respawnen: NPC weg, tag van de deur af, de woningen-pass zet 'm opnieuw
+			// binnen in z'n huis neer.
+			TMap<int32, ACityDoor*> ResidentDoors;
+			for (TActorIterator<ACityDoor> DIt(W); DIt; ++DIt)
+			{
+				if (!IsValid(*DIt) || !DIt->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
+				const FVector DLoc = DIt->GetActorLocation();
+				const int32 NIdx = FMath::Abs(FMath::RoundToInt(DLoc.X * 0.13f) + FMath::RoundToInt(DLoc.Y * 0.31f) + FMath::RoundToInt(DLoc.Z * 0.77f));
+				ResidentDoors.Add(NIdx, *DIt);
+			}
 			int32 NRescued = 0;
 			for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
 			{
 				ACustomerBase* Cb = *CIt;
 				if (!IsValid(Cb)) { continue; }
 				const FVector L = Cb->GetActorLocation();
+				if (Cb->IsResident())
+				{
+					// Bewoner: vergelijk met de hoogte van z'n EIGEN voordeur.
+					const FString IdS = Cb->NpcId.ToString();
+					const int32 NIdx = IdS.StartsWith(TEXT("Resident_")) ? FCString::Atoi(*IdS.RightChop(9)) : -1;
+					ACityDoor* const* Dp = ResidentDoors.Find(NIdx);
+					if (!Dp) { continue; }
+					if (L.Z > (*Dp)->GetActorLocation().Z - 300.f) { continue; }
+					(*Dp)->Tags.Remove(TEXT("ResidentNpc"));
+					Cb->Destroy();
+					LastAptDoorCount = -1; // woningen-pass opnieuw -> verse bewoner thuis
+					++NRescued;
+					continue;
+				}
+				// Klant: vergelijk met het dichtstbijzijnde spawn-punt; opruimen = respawn.
 				FVector Best = SpawnerLocs[0];
 				float BestD = TNumericLimits<float>::Max();
 				for (const FVector& SL : SpawnerLocs)
@@ -918,22 +944,13 @@ void ADoorRetrofitter::ScanAndConvert()
 					const float Dd = FVector::DistSquared2D(SL, L);
 					if (Dd < BestD) { BestD = Dd; Best = SL; }
 				}
-				// Onder dek-niveau (ruim onder de dichtstbijzijnde spawner) = onder de map beland.
 				if (L.Z > Best.Z - 180.f) { continue; }
-				// Klanten OPRUIMEN in plaats van teleporteren: hun spawner zet ze vanzelf opnieuw
-				// goed neer - teleporteren gaf een stilstaande klomp op een spawn-punt.
-				if (!Cb->IsResident())
-				{
-					Cb->Destroy();
-					++NRescued;
-					continue;
-				}
-				Cb->SetActorLocation(Best + FVector(0.f, 0.f, 120.f), false, nullptr, ETeleportType::TeleportPhysics);
+				Cb->Destroy();
 				++NRescued;
 			}
 			if (NRescued > 0)
 			{
-				UE_LOG(LogWeedShop, Warning, TEXT("NPC-vangnet: %d doorgevallen NPC's teruggezet op de boulevard"), NRescued);
+				UE_LOG(LogWeedShop, Warning, TEXT("NPC-vangnet: %d gezakte NPC's gerespawned"), NRescued);
 			}
 			// DIAGNOSE (om de ~30s): waar lopen ze, en hoe ver onder/boven het dichtstbijzijnde
 			// spawn-punt? Zo zien we direct wie er nog onder de map zit (bewoner vs klant).

@@ -27,6 +27,9 @@ ACustomerSpawner::ACustomerSpawner()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bTickEvenWhenPaused = true;
+	// ZONDER root-component heeft een runtime-gespawnde spawner GEEN transform: GetActorLocation()
+	// is dan altijd (0,0,0) - alle klanten spawnden daardoor op de oorsprong onder het dek.
+	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
 void ACustomerSpawner::BeginPlay()
@@ -254,6 +257,17 @@ void ACustomerSpawner::TrySpawn()
 		// STRAKKE hoogte-marge (100cm): de stoep en het service-niveau eronder schelen ~200cm -
 		// alles wat niet vrijwel exact op spawn-hoogte projecteert is het verkeerde niveau.
 		const float ZTol = 100.f;
+		// GEZAKTE wandelaars meteen opruimen: deze spawner vult ze hieronder vers aan op de
+		// juiste hoogte - effectief een respawn op de stoep.
+		for (int32 wi = Spawned.Num() - 1; wi >= 0; --wi)
+		{
+			ACustomerBase* Cw0 = Spawned[wi];
+			if (IsValid(Cw0) && Cw0->GetActorLocation().Z < GetActorLocation().Z - 150.f)
+			{
+				Cw0->Destroy();
+				Spawned.RemoveAt(wi);
+			}
+		}
 		// SLENTEREN: stilstaande wandelaars krijgen een nieuw doel op stoep-hoogte rond dit punt.
 		for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
 		{
