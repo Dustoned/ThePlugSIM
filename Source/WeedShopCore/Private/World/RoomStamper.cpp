@@ -148,6 +148,9 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 			const FVector L = Comp->Bounds.Origin;
 			if (L.X < Rect.Min.X || L.X > Rect.Max.X || L.Y < Rect.Min.Y || L.Y > Rect.Max.Y) { continue; }
 			if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 335.f) { continue; }
+			// Parallax interior-kaartjes van ramen (SM_..._Window_..._Interior) niet meenemen: ze zijn
+			// eenzijdig naar buiten gericht en blokkeren het echte doorkijkje de kamer in.
+			if (MeshName.Contains(TEXT("Window")) && MeshName.EndsWith(TEXT("_Interior"))) { continue; }
 			// Het voordeur-BLAD niet meenemen (het doelframe heeft al een werkende deur) - maar
 			// muurdelen met een deuropening in de naam (SM_InteriorWall_3m_Door01 e.d.) horen er WEL bij.
 			if (MeshName.Contains(TEXT("Door")) && !MeshName.Contains(TEXT("DoorFrame"))
@@ -207,6 +210,8 @@ bool ARoomStamper::LoadTemplate(const FString& TemplateName, TArray<FStampPiece>
 		TArray<FString> P;
 		Line.ParseIntoArray(P, TEXT("|"));
 		if (P.Num() < 5) { continue; }
+		// Parallax interior-kaartjes ook uit oude templates filteren.
+		if (P[1].Contains(TEXT("Window")) && P[1].EndsWith(TEXT("_Interior"))) { continue; }
 		FStampPiece Piece;
 		Piece.Mesh = LoadObject<UStaticMesh>(nullptr, *P[1]);
 		if (!Piece.Mesh) { continue; }
@@ -667,18 +672,20 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 
 	// Vlak-bewuste match: langs het raam-vlak moet het precies kloppen (breedte), haaks erop
 	// (de diepte gevel<->kamer-muur) mag flink verschillen.
-	auto MatchesTplWindow = [&TplWindows](const FVector& L) -> bool
+	auto MatchesTplWindow = [&TplWindows](const FVector& L) -> int32
 	{
-		for (const FTplWin& TW : TplWindows)
+		for (int32 Ti = 0; Ti < TplWindows.Num(); ++Ti)
 		{
+			const FTplWin& TW = TplWindows[Ti];
 			if (FMath::Abs(TW.Pos.Z - L.Z) > 300.f) { continue; }
 			const FVector D = L - TW.Pos;
 			const float A = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f))));
 			const float B = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(0.f, 1.f, 0.f))));
-			if ((A < 130.f && B < 380.f) || (B < 130.f && A < 380.f)) { return true; }
+			if ((A < 130.f && B < 380.f) || (B < 130.f && A < 380.f)) { return Ti; }
 		}
-		return false;
+		return INDEX_NONE;
 	};
+	TSet<int32> MatchedTW; // template-ramen die een echte gevel-opening hebben
 
 	int32 Hidden = 0, Synced = 0, Cands = 0;
 	for (TActorIterator<AActor> It(W); It; ++It)
@@ -706,8 +713,10 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 					if (IL.Z < ZMin || IL.Z > ZMax) { continue; }
 					if (!FootWide.IsInsideXY(IL)) { continue; }
 					++Cands;
-					if (MatchesTplWindow(IL))
+					const int32 TWi = MatchesTplWindow(IL);
+					if (TWi != INDEX_NONE)
 					{
+						MatchedTW.Add(TWi);
 						ITM.SetScale3D(FVector(0.001f));
 						ISM->UpdateInstanceTransform(Ii, ITM, true, true, true);
 						++Hidden;
@@ -721,8 +730,10 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			if (!FootWide.IsInsideXY(L)) { continue; }
 			++Cands;
 
-			if (MatchesTplWindow(L))
+			const int32 TWi = MatchesTplWindow(L);
+			if (TWi != INDEX_NONE)
 			{
+				MatchedTW.Add(TWi);
 				Comp->SetVisibility(false, true);
 				++Hidden;
 				continue;
@@ -757,6 +768,35 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			}
 		}
 	}
-	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d gevel-ramen verborgen, %d looks hersteld (%d template-ramen)"),
-		*TemplateName, Cands, Hidden, Synced, TplWindows.Num());
+	// Eigen ramen ZONDER gevel-opening iets naar binnen trekken: hun kozijn is dikker dan de muur
+	// en prikt anders als een vierkantje door de dichte gevel heen.
+	int32 Recessed = 0;
+	{
+		const FString StampId = FString::Printf(TEXT("STAMP_%d_%d_%d"),
+			FMath::RoundToInt(Anchor.GetLocation().X), FMath::RoundToInt(Anchor.GetLocation().Y),
+			FMath::RoundToInt(Anchor.GetRotation().Rotator().Yaw));
+		const FName StampTag(*StampId);
+		const FVector Center = Foot.GetCenter();
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			if (!IsValid(*It) || !It->ActorHasTag(StampTag)) { continue; }
+			AStaticMeshActor* SMA = Cast<AStaticMeshActor>(*It);
+			UStaticMeshComponent* C = SMA ? SMA->GetStaticMeshComponent() : nullptr;
+			if (!C || !C->GetStaticMesh() || !C->GetStaticMesh()->GetName().Contains(TEXT("Window"))) { continue; }
+			const FVector L = SMA->GetActorLocation();
+			for (int32 Ti = 0; Ti < TplWindows.Num(); ++Ti)
+			{
+				if (MatchedTW.Contains(Ti)) { continue; }
+				if (FVector::Dist2D(TplWindows[Ti].Pos, L) > 130.f || FMath::Abs(TplWindows[Ti].Pos.Z - L.Z) > 300.f) { continue; }
+				const FVector N = FRotator(0.f, TplWindows[Ti].Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f));
+				const float Sgn = (FVector::DotProduct(FVector(Center.X - L.X, Center.Y - L.Y, 0.f), N) >= 0.f) ? 1.f : -1.f;
+				SMA->AddActorWorldOffset(N * Sgn * 18.f);
+				++Recessed;
+				break;
+			}
+		}
+	}
+
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d gevel-ramen verborgen, %d looks hersteld, %d ramen naar binnen getrokken (%d template-ramen)"),
+		*TemplateName, Cands, Hidden, Synced, Recessed, TplWindows.Num());
 }
