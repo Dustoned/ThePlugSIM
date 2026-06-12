@@ -464,7 +464,10 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// Het LIGHTING-SCENARIO van de map (Lighting_Sunny/Sunset sublevels: zon + skylight +
 		// gevel-belichting) gaat 's nachts UIT - dan blijven donkere gebouwen met alleen de
 		// lampen en emissives over: precies de nacht-look die de map zelf in zich heeft.
-		const bool bScenarioVisible = MinDayF > 0.25f;
+		// ALTIJD zichtbaar: de dimmer regelt de scenario-lichten al per type (zonnen 0, skylight
+		// ramp), dus het level hoeft niet meer aan/uit - die harde toggle gaf om ~5:30 een
+		// abrupte look-switch. Alle dag/nacht-overgangen lopen nu via vloeiende ramps.
+		const bool bScenarioVisible = true;
 		for (ULevelStreaming* SL : GetWorld()->GetStreamingLevels())
 		{
 			if (!SL) { continue; }
