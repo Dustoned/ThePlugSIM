@@ -777,6 +777,10 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			FMath::RoundToInt(Anchor.GetRotation().Rotator().Yaw));
 		const FName StampTag(*StampId);
 		const FVector Center = Foot.GetCenter();
+		// Match per POSITIE-cluster: raam en glas staan als aparte entries op dezelfde plek - als
+		// een van de twee een gevel-opening matchte, hoort het hele raam daar te BLIJVEN.
+		TArray<FVector> MatchedPos;
+		for (int32 Ti : MatchedTW) { MatchedPos.Add(TplWindows[Ti].Pos); }
 		for (TActorIterator<AActor> It(W); It; ++It)
 		{
 			if (!IsValid(*It) || !It->ActorHasTag(StampTag)) { continue; }
@@ -784,9 +788,14 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			UStaticMeshComponent* C = SMA ? SMA->GetStaticMeshComponent() : nullptr;
 			if (!C || !C->GetStaticMesh() || !C->GetStaticMesh()->GetName().Contains(TEXT("Window"))) { continue; }
 			const FVector L = SMA->GetActorLocation();
+			bool bAtMatched = false;
+			for (const FVector& MP : MatchedPos)
+			{
+				if (FVector::Dist2D(MP, L) < 160.f && FMath::Abs(MP.Z - L.Z) < 300.f) { bAtMatched = true; break; }
+			}
+			if (bAtMatched) { continue; }
 			for (int32 Ti = 0; Ti < TplWindows.Num(); ++Ti)
 			{
-				if (MatchedTW.Contains(Ti)) { continue; }
 				if (FVector::Dist2D(TplWindows[Ti].Pos, L) > 130.f || FMath::Abs(TplWindows[Ti].Pos.Z - L.Z) > 300.f) { continue; }
 				const FVector N = FRotator(0.f, TplWindows[Ti].Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f));
 				const float Sgn = (FVector::DotProduct(FVector(Center.X - L.X, Center.Y - L.Y, 0.f), N) >= 0.f) ? 1.f : -1.f;
