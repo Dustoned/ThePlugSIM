@@ -304,6 +304,15 @@ void UPhoneWidget::FillSettingsBody()
 		UWeedActionButton* KitB = MakeActionBtn(TEXT("Give build kit (free, infinite)"), FLinearColor(0.2f, 0.45f, 0.3f),
 			[this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } }, 13);
 		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 8.f));
+
+		// Map-grens: F9-markers in volgorde langs de rand -> blokkerende glazen wand die
+		// zichtbaar wordt als je dichtbij komt.
+		UWeedActionButton* BorderB = MakeActionBtn(TEXT("Save map border (markers, in order)"), FLinearColor(0.3f, 0.35f, 0.5f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveMapBorder(); } }, 12);
+		BodyRow(BorderB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* BorderXB = MakeActionBtn(TEXT("Clear map border"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]() { if (Phone.IsValid()) { Phone->ClearMapBorder(); } }, 11);
+		BodyRow(BorderXB, FMargin(0.f, 0.f, 0.f, 8.f));
 	}
 	else if (SettingsCat == 2) // Rooms: kamer-builds + stamper
 	{

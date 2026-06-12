@@ -6,6 +6,7 @@
 #include "World/PackElevator.h"
 #include "World/PackElevatorButton.h"
 #include "World/RoomStamper.h"
+#include "World/MapBorder.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
 #include "Engine/ExponentialHeightFog.h"
@@ -116,6 +117,9 @@ void ADoorRetrofitter::BeginPlay()
 			FVector::ZeroVector, FRotator::ZeroRotator, bBakedOk);
 		UE_LOG(LogWeedShop, Log, TEXT("BakedRooms-overlay laden gestart: %d"), bBakedOk ? 1 : 0);
 	}
+
+	// Map-grens herstellen (als de speler er een gezet heeft; Rebuild is no-op zonder bestand).
+	if (UWorld* WB = GetWorld()) { WB->SpawnActor<AMapBorder>(AMapBorder::StaticClass(), FTransform::Identity); }
 
 	ScanAndConvert();
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);

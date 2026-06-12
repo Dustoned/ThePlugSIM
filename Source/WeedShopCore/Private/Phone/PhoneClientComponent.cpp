@@ -42,6 +42,8 @@
 #include "UI/WardrobeWidget.h"
 #include "UI/SpotInfoWidget.h"
 #include "World/RoomStamper.h"
+#include "World/MapBorder.h"
+#include "HAL/FileManager.h"
 #include "UI/PackWidget.h"
 #include "UI/ShelfWidget.h"
 #include "UI/DryingRackWidget.h"
@@ -2683,4 +2685,50 @@ void UPhoneClientComponent::ServerProposeContactStrain_Implementation(FName Cont
 		}
 	}
 	GS->GetContacts()->ProposeAlternativeStrain(ContactId, Strain, OffThc, OffQual);
+}
+
+void UPhoneClientComponent::SaveMapBorder()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Marks;
+	for (const FString& Line : Lines)
+	{
+		if (!Line.Contains(MapPath)) { continue; }
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Line.Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+	}
+	if (Marks.Num() < 2)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Set at least 2 markers along the border (in order)"));
+		return;
+	}
+	FString Out;
+	for (const FVector& M : Marks) { Out += FString::Printf(TEXT("%.1f,%.1f,%.1f"), M.X, M.Y, M.Z) + LINE_TERMINATOR; }
+	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("MapBorder.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	AMapBorder* Border = nullptr;
+	for (TActorIterator<AMapBorder> It(W); It; ++It) { Border = *It; break; }
+	if (!Border) { Border = W->SpawnActor<AMapBorder>(AMapBorder::StaticClass(), FTransform::Identity); }
+	if (Border) { Border->Rebuild(); }
+	UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Green, FString::Printf(TEXT("Map border saved (%d points)! Markers cleared"), Marks.Num()));
+}
+
+void UPhoneClientComponent::ClearMapBorder()
+{
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("MapBorder.txt")));
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<AMapBorder> It(W); It; ++It) { It->Rebuild(); }
+	}
+	UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Map border cleared"));
 }

@@ -308,6 +308,9 @@ public:
 	// Room-stamper: kamer binnen 2 markers opslaan als template / stempel-modus starten.
 	void SaveRoomTemplateNow();
 	void StartRoomStamp(const FString& TemplateName);
+	// Map-grens: huidige markers (in volgorde) worden een blokkerende glazen wand (Saved/MapBorder.txt).
+	void SaveMapBorder();
+	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();
 
