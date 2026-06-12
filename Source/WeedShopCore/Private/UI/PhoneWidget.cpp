@@ -2275,7 +2275,8 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 
 	// Settings/Test: light-sliders live toepassen terwijl je sleept (geen restart nodig).
-	if (!bHome && App == 4 && SettingsCat == 1 && LMoon)
+	// Sinds de tab-splitsing: time-speed zit in Test (cat 1), licht-sliders in Light (cat 3).
+	if (!bHome && App == 4 && ((SettingsCat == 1 && TimeSpeedSlider) || (SettingsCat == 3 && LMoon)))
 	{
 		ApplyLightSliders();
 	}
