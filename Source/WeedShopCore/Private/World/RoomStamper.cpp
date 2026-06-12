@@ -17,7 +17,7 @@
 
 namespace
 {
-	FString TemplatesDir() { return FPaths::ProjectSavedDir() / TEXT("RoomTemplates"); }
+	FString TemplatesDir() { return WeedData::Dir(TEXT("RoomTemplates")); }
 
 	// Marker-parsing (zelfde formaat als MarkedSpots.txt).
 	TArray<FVector> ReadMarks(UWorld* W)
@@ -496,7 +496,7 @@ void ARoomStamper::PlaceStamp()
 	// Niet twee keer op precies dezelfde plek stempelen (dubbelklik) - dat stapelt twee kamers op elkaar.
 	{
 		TArray<FString> Existing;
-		FFileHelper::LoadFileToStringArray(Existing, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+		FFileHelper::LoadFileToStringArray(Existing, *(WeedData::File(TEXT("RoomStamps.txt"))));
 		for (const FString& Ex : Existing)
 		{
 			if (StampIdFromLine(Ex.TrimStartAndEnd()) == StampId)
@@ -551,7 +551,7 @@ void ARoomStamper::PlaceStamp()
 	// Persistentie: stempel-regel (herbouw per sessie tot de bake) + bake-export.
 	const FString StampLine = FString::Printf(TEXT("%s|%.1f,%.1f,%.1f|%.1f%s"), *ActiveTemplate, AL.X, AL.Y, AL.Z, AY,
 		bMirrored ? TEXT("|M") : TEXT("")) + LINE_TERMINATOR;
-	FFileHelper::SaveStringToFile(StampLine, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")),
+	FFileHelper::SaveStringToFile(StampLine, *(WeedData::File(TEXT("RoomStamps.txt"))),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	FFileHelper::SaveStringToFile(FString::Printf(TEXT("JOB|%s"), *StampId) + LINE_TERMINATOR + BakeOut,
 		*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
@@ -583,11 +583,11 @@ TArray<FString> ARoomStamper::ListPlacedStamps(UWorld* W)
 	TSet<FString> Baked;
 	{
 		TArray<FString> BL;
-		FFileHelper::LoadFileToStringArray(BL, *(FPaths::ProjectSavedDir() / TEXT("BakedJobs.txt")));
+		FFileHelper::LoadFileToStringArray(BL, *(WeedData::File(TEXT("BakedJobs.txt"))));
 		for (const FString& B : BL) { Baked.Add(B.TrimStartAndEnd()); }
 	}
 	TArray<FString> Lines, Out;
-	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+	FFileHelper::LoadFileToStringArray(Lines, *(WeedData::File(TEXT("RoomStamps.txt"))));
 	for (const FString& L : Lines)
 	{
 		const FString T = L.TrimStartAndEnd();
@@ -646,7 +646,7 @@ bool ARoomStamper::RemoveStamp(UWorld* W, const FString& StampLine)
 
 	// 2) Regel uit RoomStamps.txt (anders komt hij volgende sessie terug).
 	{
-		const FString Path = FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt");
+		const FString Path = WeedData::File(TEXT("RoomStamps.txt"));
 		TArray<FString> Lines, Keep;
 		FFileHelper::LoadFileToStringArray(Lines, *Path);
 		for (const FString& L : Lines)

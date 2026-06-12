@@ -1,4 +1,5 @@
 #include "World/MapBorder.h"
+#include "WeedShopCore.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -32,7 +33,7 @@ void AMapBorder::Rebuild()
 	Points.Reset();
 
 	TArray<FString> Lines;
-	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MapBorder.txt")));
+	FFileHelper::LoadFileToStringArray(Lines, *(WeedData::File(TEXT("MapBorder.txt"))));
 	for (const FString& Line : Lines)
 	{
 		TArray<FString> P;

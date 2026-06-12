@@ -1,4 +1,5 @@
 #include "UI/PhoneWidget.h"
+#include "WeedShopCore.h"
 
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -363,7 +364,7 @@ void UPhoneWidget::FillSettingsBody()
 		UWeedActionButton* NoColXB = MakeActionBtn(TEXT("Clear walk-throughs"), FLinearColor(0.4f, 0.22f, 0.22f),
 			[this]()
 			{
-				IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
+				WeedData::DeleteFile(TEXT("NoCollide.txt"));
 				if (Phone.IsValid()) { Phone->Toast(TEXT("Walk-throughs cleared (restart restores collision)"), FColor::Orange, 4.f); }
 			}, 11);
 		BodyRow(NoColXB, FMargin(0.f, 0.f, 0.f, 8.f));
@@ -396,7 +397,7 @@ void UPhoneWidget::FillSettingsBody()
 				TRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
 					[this, Tpl]()
 					{
-						IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("RoomTemplates") / (Tpl + TEXT(".txt"))));
+						WeedData::DeleteFile(FString(TEXT("RoomTemplates")) / (Tpl + TEXT(".txt")));
 						FillSettingsBody();
 					}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 				BodyRow(TRow, FMargin(0.f, 1.f, 0.f, 1.f));
@@ -481,7 +482,7 @@ void UPhoneWidget::FillSettingsBody()
 		UWeedActionButton* LockDoorXB = MakeActionBtn(TEXT("Clear locked doors"), FLinearColor(0.4f, 0.22f, 0.22f),
 			[this]()
 			{
-				IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("LockedDoors.txt")));
+				WeedData::DeleteFile(TEXT("LockedDoors.txt"));
 				if (Phone.IsValid()) { Phone->Toast(TEXT("Locked doors cleared (restart restores)"), FColor::Orange, 4.f); }
 			}, 11);
 		BodyRow(LockDoorXB, FMargin(0.f, 0.f, 0.f, 8.f));

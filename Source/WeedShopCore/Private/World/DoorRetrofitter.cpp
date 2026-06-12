@@ -287,7 +287,7 @@ void ADoorRetrofitter::EnsureMapCapture()
 	FBox B(ForceInit);
 	{
 		TArray<FString> BorderLines;
-		FFileHelper::LoadFileToStringArray(BorderLines, *(FPaths::ProjectSavedDir() / TEXT("MapBorder.txt")));
+		FFileHelper::LoadFileToStringArray(BorderLines, *(WeedData::File(TEXT("MapBorder.txt"))));
 		for (const FString& BLine : BorderLines)
 		{
 			TArray<FString> Pc;
@@ -404,7 +404,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	if (!bNoCollideLoaded)
 	{
 		bNoCollideLoaded = true;
-		FFileHelper::LoadFileToStringArray(NoCollideLines, *(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
+		FFileHelper::LoadFileToStringArray(NoCollideLines, *(WeedData::File(TEXT("NoCollide.txt"))));
 	}
 	if (ScanPass % 5 == 1) { ApplyInstantGlass(); }
 
@@ -671,7 +671,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	if (!bLockedDoorsLoaded)
 	{
 		bLockedDoorsLoaded = true;
-		FFileHelper::LoadFileToStringArray(LockedDoorLines, *(FPaths::ProjectSavedDir() / TEXT("LockedDoors.txt")));
+		FFileHelper::LoadFileToStringArray(LockedDoorLines, *(WeedData::File(TEXT("LockedDoors.txt"))));
 	}
 	if (LockedDoorLines.Num() > 0)
 	{
@@ -1252,7 +1252,7 @@ void ADoorRetrofitter::ApplyInstantGlass()
 	{
 		bGlassRectsLoaded = true;
 		TArray<FString> JobLines;
-		FFileHelper::LoadFileToStringArray(JobLines, *(FPaths::ProjectSavedDir() / TEXT("RoomJobs.txt")));
+		FFileHelper::LoadFileToStringArray(JobLines, *(WeedData::File(TEXT("RoomJobs.txt"))));
 		for (const FString& JL : JobLines)
 		{
 			TArray<FString> Triples;
@@ -1326,7 +1326,7 @@ void ADoorRetrofitter::VerticalReplicate()
 	// 1) Opgeslagen jobs.
 	{
 		TArray<FString> JobLines;
-		FFileHelper::LoadFileToStringArray(JobLines, *(FPaths::ProjectSavedDir() / TEXT("RoomJobs.txt")));
+		FFileHelper::LoadFileToStringArray(JobLines, *(WeedData::File(TEXT("RoomJobs.txt"))));
 		for (const FString& JL : JobLines)
 		{
 			TArray<FString> Triples;
@@ -1368,7 +1368,7 @@ void ADoorRetrofitter::VerticalReplicate()
 	TSet<FString> BakedJobs;
 	{
 		TArray<FString> BakedLines;
-		FFileHelper::LoadFileToStringArray(BakedLines, *(FPaths::ProjectSavedDir() / TEXT("BakedJobs.txt")));
+		FFileHelper::LoadFileToStringArray(BakedLines, *(WeedData::File(TEXT("BakedJobs.txt"))));
 		for (const FString& BL : BakedLines) { BakedJobs.Add(BL.TrimStartAndEnd()); }
 	}
 
@@ -2075,12 +2075,12 @@ void ADoorRetrofitter::ApplySavedStamps()
 	TSet<FString> BakedJobs;
 	{
 		TArray<FString> BakedLines;
-		FFileHelper::LoadFileToStringArray(BakedLines, *(FPaths::ProjectSavedDir() / TEXT("BakedJobs.txt")));
+		FFileHelper::LoadFileToStringArray(BakedLines, *(WeedData::File(TEXT("BakedJobs.txt"))));
 		for (const FString& BL : BakedLines) { BakedJobs.Add(BL.TrimStartAndEnd()); }
 	}
 
 	TArray<FString> Lines;
-	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+	FFileHelper::LoadFileToStringArray(Lines, *(WeedData::File(TEXT("RoomStamps.txt"))));
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	for (const FString& Line : Lines)
 	{
@@ -2172,7 +2172,7 @@ void ADoorRetrofitter::RefreshStampWindowFixes()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	TArray<FString> Lines;
-	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("RoomStamps.txt")));
+	FFileHelper::LoadFileToStringArray(Lines, *(WeedData::File(TEXT("RoomStamps.txt"))));
 	for (const FString& Line : Lines)
 	{
 		TArray<FString> P;

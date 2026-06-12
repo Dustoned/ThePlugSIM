@@ -2730,7 +2730,7 @@ void UPhoneClientComponent::SaveMapBorder()
 
 void UPhoneClientComponent::ClearMapBorder()
 {
-	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("MapBorder.txt")));
+	WeedData::DeleteFile(TEXT("MapBorder.txt"));
 	if (UWorld* W = GetWorld())
 	{
 		for (TActorIterator<AMapBorder> It(W); It; ++It) { It->Rebuild(); }

@@ -1,4 +1,5 @@
 #include "World/DayNightController.h"
+#include "WeedShopCore.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/LevelStreaming.h"
 #include "Components/SkyAtmosphereComponent.h"
@@ -748,7 +749,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 void ADayNightController::LoadLightConfig()
 {
 	TArray<FString> Lines;
-	if (!FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("LightConfig.txt")))) { return; }
+	if (!FFileHelper::LoadFileToStringArray(Lines, *WeedData::File(TEXT("LightConfig.txt")))) { return; }
 	for (const FString& Line : Lines)
 	{
 		FString K, V;
