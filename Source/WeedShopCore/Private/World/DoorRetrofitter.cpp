@@ -1559,6 +1559,7 @@ void ADoorRetrofitter::ApplySavedStamps()
 		TArray<FStampPiece> Pieces;
 		if (!ARoomStamper::LoadTemplate(P[0], Pieces)) { continue; }
 		const FTransform Anchor(FRotator(0.f, AY, 0.f), AL);
+		FString StampBakeOut; // bake-export van deze stempel (RoomBake.txt wordt per sessie geleegd)
 		int32 Placed = 0;
 		if (!bBakedStamp)
 		for (const FStampPiece& Piece : Pieces)
@@ -1585,8 +1586,31 @@ void ADoorRetrofitter::ApplySavedStamps()
 					if (Piece.Mats[Mi]) { C->SetMaterial(Mi, Piece.Mats[Mi]); }
 				}
 			}
+			{
+				const FVector SL = NewTM.GetLocation();
+				const FRotator SR = NewTM.GetRotation().Rotator();
+				const FVector SS = NewTM.GetScale3D();
+				FString MatList;
+				for (int32 Mi = 0; Mi < Piece.Mats.Num(); ++Mi)
+				{
+					if (Mi > 0) { MatList += TEXT(";"); }
+					MatList += Piece.Mats[Mi] ? Piece.Mats[Mi]->GetPathName() : TEXT("-");
+				}
+				StampBakeOut += FString::Printf(TEXT("SPAWN|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
+					*Piece.Mesh->GetPathName(), SL.X, SL.Y, SL.Z, SR.Pitch, SR.Yaw, SR.Roll, SS.X, SS.Y, SS.Z, *MatList);
+				StampBakeOut += LINE_TERMINATOR;
+			}
 			++Placed;
 		}
+		// Bake-export: sessie-herbouwde stempels horen ook in RoomBake.txt (het bestand wordt per
+		// sessie geleegd; zonder her-export zou een stempel uit een eerdere sessie nooit baken).
+		if (!bBakedStamp && Placed > 0)
+		{
+			FFileHelper::SaveStringToFile(FString::Printf(TEXT("JOB|%s"), *StampId) + LINE_TERMINATOR + StampBakeOut,
+				*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
+				FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		}
+
 		// Gevel-ramen elke sessie opnieuw laten kloppen (verbergen/look-herstel is niet bakbaar).
 		ARoomStamper::ApplyWindowFix(W, P[0], Anchor, bMirror);
 		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: sessie-herbouw '%s' op (%.0f, %.0f) - %d stukken"), *P[0], AL.X, AL.Y, Placed);
