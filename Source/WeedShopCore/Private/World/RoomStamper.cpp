@@ -722,6 +722,9 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 	const FTplWin& TW = TplWindows[RefTW];
 	FVector N = FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f));
 	FVector Out = (FVector::DotProduct(N, FVector(TW.Pos.X - Center.X, TW.Pos.Y - Center.Y, 0.f)) >= 0.f) ? N : -N;
+	// Uitlijnen op het GEOMETRISCHE midden (bounds) van de segmenten, niet op pivots: raam-
+	// varianten (Window_01 vs Window_04) hebben verschillende pivot-punten waardoor de muur-
+	// vlakken op pivot-uitlijning een zichtbare traprand met de buursegmenten kregen.
 	FVector WallRef = TW.Pos;
 	for (TActorIterator<AActor> AIt(W); AIt; ++AIt)
 	{
@@ -729,7 +732,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		AStaticMeshActor* WSMA = Cast<AStaticMeshActor>(*AIt);
 		UStaticMeshComponent* WC = WSMA ? WSMA->GetStaticMeshComponent() : nullptr;
 		if (!WC || !WC->GetStaticMesh() || !WC->GetStaticMesh()->GetName().Contains(TEXT("Window"))) { continue; }
-		const FVector WL = WSMA->GetActorLocation();
+		const FVector WL = WC->Bounds.Origin;
 		if (FVector::Dist2D(WL, TW.Pos) < 200.f && FMath::Abs(WL.Z - TW.Pos.Z) < 300.f) { WallRef = WL; break; }
 	}
 	const float DdOut = FVector::DotProduct(RefFacade - WallRef, Out);
@@ -743,7 +746,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		{
 			if (!IsValid(*It) || !It->ActorHasTag(StampTag)) { continue; }
 			const float Dd = FVector::DotProduct(It->GetActorLocation() - WallRef, Out);
-			if (Dd < -40.f) { continue; } // binnenin de kamer: laten staan (entree blijft gesnapt)
+			if (Dd < -60.f) { continue; } // binnenin de kamer: laten staan (entree blijft gesnapt)
 			It->AddActorWorldOffset(StampShift);
 			++Moved;
 		}

@@ -4,6 +4,7 @@ First-person wiet-sim: begin als straatdealer in je appartement, word een legale
 
 ## Belangrijkste documenten
 - **[ROADMAP.md](ROADMAP.md)** — de levende roadmap: wat er gebouwd wordt en in welke volgorde. **Plan vanaf hier.**
+- **[FIXLIST.md](FIXLIST.md)** — alle audit-bevindingen (2026-06-12) als afvinkbare werklijst: probleem → file → fix.
 - **[Claude-brief-weedshop.md](Claude-brief-weedshop.md)** — de complete visie en architectuur. Bron van waarheid voor wát de game is.
 - **[DECISIONS.md](DECISIONS.md)** — log van alle beslissingen die we gaandeweg maken (geheugen voor de AI-agent).
 
