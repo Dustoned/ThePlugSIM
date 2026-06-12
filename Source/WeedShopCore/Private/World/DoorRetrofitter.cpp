@@ -1200,11 +1200,14 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 		if (BestS < 0) { continue; } // nog niet beslisbaar - volgende pass
 		const float HoleW = BestL * Step;
 		const float HoleC = -Range + (BestS + BestL * 0.5f - 0.5f) * Step;
-		// Partner-blad van dezelfde pui (tweede rail, vlak ernaast geparkeerd)?
+		// Partner-blad van dezelfde pui (tweede rail, vlak ernaast geparkeerd)? Op PANEEL-midden
+		// vergelijken - de actor-pivots (scharnieren) zitten bij gespiegelde bladen ~1,5m uit elkaar.
 		ACityDoor* Mate = nullptr;
 		for (ACityDoor* M : Puis)
 		{
-			if (M != D && !Done.Contains(M) && FVector::Dist(M->GetActorLocation(), D->GetActorLocation()) < 60.f) { Mate = M; break; }
+			if (M == D || Done.Contains(M)) { continue; }
+			UStaticMeshComponent* MP = M->GetPanel();
+			if (MP && FVector::Dist(MP->Bounds.Origin, C0) < 60.f) { Mate = M; break; }
 		}
 		auto Apply = [&](ACityDoor* Dr, float TargetS)
 		{
