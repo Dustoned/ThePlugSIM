@@ -824,6 +824,27 @@ void ADoorRetrofitter::ScanAndConvert()
 				SpawnAt = Inside;
 				bOk = true;
 			}
+			// Voor BEIDE varianten: het dichtstbijzijnde straat-punt bepalen - voor toren-bewoners
+			// wordt dat de hoogte-referentie van hun loopdoelen (de trap af, de straat op).
+			FVector StreetRef = FVector::ZeroVector;
+			{
+				float BestRd = TNumericLimits<float>::Max();
+				for (const TArray<FVector>& Ring : NpcRings)
+				{
+					for (const FVector& RP2 : Ring)
+					{
+						const float Dd = FVector::DistSquared2D(RP2, DL);
+						if (Dd < BestRd) { BestRd = Dd; StreetRef = RP2; }
+					}
+				}
+				for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+				{
+					if (!IsValid(*SpIt)) { continue; }
+					const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), DL);
+					if (Dd < BestRd) { BestRd = Dd; StreetRef = SpIt->GetActorLocation(); }
+				}
+				if (BestRd == TNumericLimits<float>::Max()) { StreetRef = FVector::ZeroVector; }
+			}
 			else
 			{
 				float BestSd = TNumericLimits<float>::Max();
@@ -856,8 +877,9 @@ void ADoorRetrofitter::ScanAndConvert()
 				if (Cb)
 				{
 					Cb->NpcId = FName(*FString::Printf(TEXT("Resident_%d"), NameIdx));
-					Cb->SetupResident(Front, Inside, FString::FromInt(A->GetAptNumber()), Front);
-					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner verschenen: Apt %d (%s)"), A->GetAptNumber(), PR.bInside ? TEXT("binnen, toren") : TEXT("op straat"));
+					const FVector Hall = StreetRef.IsNearlyZero() ? Front : StreetRef;
+					Cb->SetupResident(Front, Inside, FString::FromInt(A->GetAptNumber()), Hall);
+					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner verschenen: Apt %d (%s, straat-ref Z=%.0f)"), A->GetAptNumber(), PR.bInside ? TEXT("binnen, toren") : TEXT("op straat"), Hall.Z);
 				}
 			}
 			else

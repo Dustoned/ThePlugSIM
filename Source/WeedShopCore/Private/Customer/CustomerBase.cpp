@@ -1545,9 +1545,10 @@ bool ACustomerBase::IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const F
 	if (!City)
 	{
 		// Pack-map (geen CityGenerator): geen stoep-data, maar wel een harde HOOGTE-regel.
-		// Een roam-doel hoort op het straatniveau van je eigen voordeur te liggen - niet op
-		// het service-niveau onder het boulevard-dek (daar doken bewoners steeds heen).
-		const FVector Ref = HomeExitSidewalkSpot.IsNearlyZero() ? HomeFrontSpot : HomeExitSidewalkSpot;
+		// Referentie = het HAL/STRAAT-punt als dat is meegegeven (toren-bewoners krijgen daar
+		// het straatniveau door, zodat ze de trap af naar beneden lopen i.p.v. op hun eigen
+		// verdieping andermans appartementen in te dwalen), anders het punt voor de voordeur.
+		const FVector Ref = bHasHomeHall ? HomeHallPos : (HomeExitSidewalkSpot.IsNearlyZero() ? HomeFrontSpot : HomeExitSidewalkSpot);
 		return Ref.IsNearlyZero() || FMath::Abs(Point.Z - Ref.Z) < 250.f;
 	}
 
