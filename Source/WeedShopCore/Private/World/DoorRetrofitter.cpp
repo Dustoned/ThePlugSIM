@@ -341,6 +341,12 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->ShowFlags.SetFog(false);          // hoogte-fog wast de luchtfoto anders uit
 	MapCapture->ShowFlags.SetAtmosphere(false);   // atmosfeer tussen camera en grond idem
 	MapCapture->ShowFlags.SetDynamicShadows(false); // geen slagschaduwen op de luchtfoto (boardwalk-schaduw over het strand)
+	MapCapture->ShowFlags.SetDistanceFieldAO(false);  // weg-meshes onder het strand lekken een donkere AO-afdruk op het zand
+	MapCapture->ShowFlags.SetLumenGlobalIllumination(false);
+	MapCapture->ShowFlags.SetGlobalIllumination(false);
+	MapCapture->ShowFlags.SetAmbientOcclusion(false);
+	MapCapture->ShowFlags.SetScreenSpaceAO(false);
+	MapCapture->ShowFlags.SetContactShadows(false);
 	// (Belichting/post-processing AAN laten: FinalColor-captures renderen zwart zonder lighting.
 	// Tijd-onafhankelijk: CaptureMapNow zet de belichting 1 frame in de foto-stand van de
 	// dag/nacht-controller - de kaart ziet er dus altijd uit als een rustige ochtend.)
