@@ -462,13 +462,16 @@ void ADoorRetrofitter::ScanAndConvert()
 	// Draait opnieuw zodra het aantal deuren verandert (streaming/stamps laden na elkaar in).
 	{
 		TArray<ACityDoor*> Apt;
+		TArray<ACityDoor*> Balc;
 		for (TActorIterator<ACityDoor> It(W); It; ++It)
 		{
-			if (IsValid(*It) && It->ActorHasTag(TEXT("AptDoor"))) { Apt.Add(*It); }
+			if (!IsValid(*It)) { continue; }
+			if (It->ActorHasTag(TEXT("AptDoor"))) { Apt.Add(*It); }
+			else if (It->ActorHasTag(TEXT("BalcDoor"))) { Balc.Add(*It); }
 		}
-		if (Apt.Num() > 0 && Apt.Num() != LastAptDoorCount)
+		if (Apt.Num() > 0 && Apt.Num() + Balc.Num() != LastAptDoorCount)
 		{
-			LastAptDoorCount = Apt.Num();
+			LastAptDoorCount = Apt.Num() + Balc.Num();
 			Apt.Sort([](const ACityDoor& A, const ACityDoor& B) { return A.GetActorLocation().Z > B.GetActorLocation().Z; });
 			ACityDoor* Starter = Apt[0];
 			StarterDoor = Starter;
@@ -522,8 +525,31 @@ void ADoorRetrofitter::ScanAndConvert()
 					D->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
 				}
 			}
+			// SCHUIFPUIEN: elke balkon-pui hoort bij de dichtstbijzijnde voordeur op (ongeveer)
+			// dezelfde verdieping - zelfde bewoner, zelfde slot. De pui van het starter-huis blijft
+			// gewoon van jou (open/dicht zoals normaal).
+			int32 NBalcLocked = 0;
+			for (ACityDoor* Bd : Balc)
+			{
+				const FVector BL = Bd->GetActorLocation();
+				ACityDoor* Near = nullptr;
+				float BestD = 1600.f;
+				for (ACityDoor* A : Apt)
+				{
+					const FVector AL = A->GetActorLocation();
+					if (FMath::Abs(AL.Z - BL.Z) > 260.f) { continue; }
+					const float Dd = FVector::Dist2D(AL, BL);
+					if (Dd < BestD) { BestD = Dd; Near = A; }
+				}
+				if (!Near) { continue; } // losse pui (winkel/lobby): met rust laten
+				if (Near == Starter) { Bd->SetPlayerHome(); continue; }
+				const FVector L = Near->GetActorLocation();
+				const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
+				Bd->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+				++NBalcLocked;
+			}
 			const FVector Top = Starter->GetActorLocation();
-			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
+			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
 		}
 	}
 
@@ -738,6 +764,10 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (FString(Leaf->MeshName).Contains(TEXT("Door_Apartment02")))
 			{
 				Door->Tags.Add(TEXT("AptDoor")); // woning-voordeur: slot-pass maakt hier bewoners van
+			}
+			else if (FString(Leaf->MeshName).Contains(TEXT("BalconyDoor")))
+			{
+				Door->Tags.Add(TEXT("BalcDoor")); // schuifpui: slot-pass koppelt 'm aan de bewoner van de woning
 			}
 			Door->SetupLeaf(Comp->GetStaticMesh(), (SwingOverride != 0.f) ? SwingOverride : Leaf->OpenDeg);
 			// Balkon-puien zijn SCHUIFdeuren: blad glijdt opzij langs z'n eigen breedte (geen zwaai die
