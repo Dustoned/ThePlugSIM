@@ -919,13 +919,33 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (Dd < BestD) { BestD = Dd; Best = SL; }
 				}
 				// Onder dek-niveau (ruim onder de dichtstbijzijnde spawner) = onder de map beland.
-				if (L.Z > Best.Z - 280.f) { continue; }
+				if (L.Z > Best.Z - 180.f) { continue; }
 				Cb->SetActorLocation(Best + FVector(0.f, 0.f, 120.f), false, nullptr, ETeleportType::TeleportPhysics);
 				++NRescued;
 			}
 			if (NRescued > 0)
 			{
 				UE_LOG(LogWeedShop, Warning, TEXT("NPC-vangnet: %d doorgevallen NPC's teruggezet op de boulevard"), NRescued);
+			}
+			// DIAGNOSE (om de ~30s): waar lopen ze, en hoe ver onder/boven het dichtstbijzijnde
+			// spawn-punt? Zo zien we direct wie er nog onder de map zit (bewoner vs klant).
+			if (ScanPass % 15 == 2)
+			{
+				for (TActorIterator<ACustomerBase> CIt2(W); CIt2; ++CIt2)
+				{
+					ACustomerBase* Cb2 = *CIt2;
+					if (!IsValid(Cb2)) { continue; }
+					const FVector L2 = Cb2->GetActorLocation();
+					float NearZ = L2.Z;
+					float BestD2 = TNumericLimits<float>::Max();
+					for (const FVector& SL : SpawnerLocs)
+					{
+						const float Dd2 = FVector::DistSquared2D(SL, L2);
+						if (Dd2 < BestD2) { BestD2 = Dd2; NearZ = SL.Z; }
+					}
+					UE_LOG(LogWeedShop, Warning, TEXT("NPC %s res=%d op (%.0f, %.0f, %.0f) dZ=%.0f"),
+						*Cb2->NpcId.ToString(), Cb2->IsResident() ? 1 : 0, L2.X, L2.Y, L2.Z, L2.Z - NearZ);
+				}
 			}
 		}
 	}

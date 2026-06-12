@@ -242,6 +242,28 @@ void ACustomerSpawner::TrySpawn()
 	// Verlopen klanten opruimen.
 	Spawned.RemoveAll([](const TObjectPtr<ACustomerBase>& C) { return !IsValid(C); });
 
+	// LOSSE WANDELAARS (pack-map, bSpawnResidents=false): het bewoners-systeem vereist de
+	// CityGenerator en die bestaat hier niet - dus spawnen we gewone klanten rond dit punt.
+	// De navmesh-projectie heeft een KRAPPE Z-marge: bestaat er hier alleen navmesh op het
+	// onderniveau (onder het dek), dan spawnen we NIET in plaats van eronder.
+	if (!bSpawnResidents)
+	{
+		if (Spawned.Num() >= MaxCustomers) { return; }
+		UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World);
+		if (!Nav) { return; }
+		FNavLocation SpawnNav;
+		const FVector Around = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
+		if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, 220.f))) { return; }
+		if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > 220.f) { return; } // onderniveau geweigerd
+		FActorSpawnParameters SP;
+		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		TSubclassOf<ACustomerBase> Cls = CustomerClass;
+		if (!Cls) { Cls = ACustomerBase::StaticClass(); }
+		ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, FTransform(SpawnNav.Location + FVector(0.f, 0.f, 100.f)), SP);
+		if (C) { Spawned.Add(C); }
+		return;
+	}
+
 	// De stad-bevolking = bewoners (dealbaar). Eén keer toewijzen zodra de stad gebouwd is.
 	// (Geen test/random-modus meer: die ruimde alle klanten op behalve één.)
 	if (!bResidentsSpawned) { SpawnResidents(); }
