@@ -615,6 +615,31 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	// HANDMATIG VERGRENDELDE DEUREN (Lock door in crosshair): op slot zoals een bewoner-deur maar
+	// zonder naam. Elke pass en NA de woningen-pass, zodat een handmatig slot altijd wint.
+	if (!bLockedDoorsLoaded)
+	{
+		bLockedDoorsLoaded = true;
+		FFileHelper::LoadFileToStringArray(LockedDoorLines, *(FPaths::ProjectSavedDir() / TEXT("LockedDoors.txt")));
+	}
+	if (LockedDoorLines.Num() > 0)
+	{
+		for (const FString& LL : LockedDoorLines)
+		{
+			TArray<FString> LP;
+			LL.ParseIntoArray(LP, TEXT(","));
+			if (LP.Num() < 3) { continue; }
+			const FVector Want(FCString::Atof(*LP[0]), FCString::Atof(*LP[1]), FCString::Atof(*LP[2]));
+			for (TActorIterator<ACityDoor> It(W); It; ++It)
+			{
+				if (IsValid(*It) && !It->IsLocked() && FVector::DistSquared(It->GetActorLocation(), Want) < 120.f * 120.f)
+				{
+					It->SetResident(FString());
+				}
+			}
+		}
+	}
+
 	// Kaart een keer per sessie schieten - de foto-stand maakt de capture tijd-onafhankelijk,
 	// dus ook wie 's nachts spawnt heeft meteen een dag-kaart. Wel even wachten tot de
 	// dag/nacht-controller zijn zon heeft gespawnd (paar ticks na BeginPlay).

@@ -446,6 +446,46 @@ void UPhoneWidget::FillSettingsBody()
 			}
 		}
 
+		// Deur op slot: vergrendeld zoals een bewoner-deur maar ZONDER naam (prompt "LOCKED").
+		// Permanent via Saved/LockedDoors.txt - elke sessie opnieuw toegepast.
+		UWeedActionButton* LockDoorB = MakeActionBtn(TEXT("Lock door in crosshair"), FLinearColor(0.35f, 0.3f, 0.2f),
+			[this]()
+			{
+				APlayerController* PC = GetOwningPlayer();
+				UWorld* DW = GetWorld();
+				if (!PC || !DW || !Phone.IsValid()) { return; }
+				FVector VL; FRotator VR;
+				PC->GetPlayerViewPoint(VL, VR);
+				FHitResult Hit;
+				FCollisionQueryParams Q;
+				Q.AddIgnoredActor(PC->GetPawn());
+				const bool bHit = DW->LineTraceSingleByChannel(Hit, VL, VL + VR.Vector() * 2500.f, ECC_Visibility, Q);
+				const FVector Target = bHit ? Hit.ImpactPoint : VL + VR.Vector() * 600.f;
+				ACityDoor* Best = nullptr;
+				float BestD = 250.f;
+				for (TActorIterator<ACityDoor> It(DW); It; ++It)
+				{
+					const float Dd = FVector::Dist(It->GetActorLocation(), Target);
+					if (Dd < BestD) { BestD = Dd; Best = *It; }
+				}
+				if (!Best) { Phone->Toast(TEXT("No door in crosshair"), FColor::Orange, 2.5f); return; }
+				Best->SetResident(FString());
+				const FVector DLoc = Best->GetActorLocation();
+				FString Cur;
+				FFileHelper::LoadFileToString(Cur, *(FPaths::ProjectSavedDir() / TEXT("LockedDoors.txt")));
+				Cur += FString::Printf(TEXT("%.1f,%.1f,%.1f\n"), DLoc.X, DLoc.Y, DLoc.Z);
+				FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("LockedDoors.txt")));
+				Phone->Toast(TEXT("Door locked (saved)"), FColor::Cyan, 3.f);
+			}, 12);
+		BodyRow(LockDoorB, FMargin(0.f, 6.f, 0.f, 2.f));
+		UWeedActionButton* LockDoorXB = MakeActionBtn(TEXT("Clear locked doors"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]()
+			{
+				IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("LockedDoors.txt")));
+				if (Phone.IsValid()) { Phone->Toast(TEXT("Locked doors cleared (restart restores)"), FColor::Orange, 4.f); }
+			}, 11);
+		BodyRow(LockDoorXB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// Dev-opruimer: kijk naar een (zwevende of foute) deur, open de phone en klik - deur weg.
 		UWeedActionButton* KillDoorB = MakeActionBtn(TEXT("Remove door in crosshair"), FLinearColor(0.4f, 0.22f, 0.22f),
 			[this]()

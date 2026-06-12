@@ -60,6 +60,9 @@ protected:
 	// Walk-throughs (Saved/NoCollide.txt): elke sessie opnieuw toepassen, ook op gestreamde meshes.
 	TArray<FString> NoCollideLines;
 	bool bNoCollideLoaded = false;
+	// Handmatig vergrendelde deuren (Saved/LockedDoors.txt): slot zonder bewoner-naam.
+	TArray<FString> LockedDoorLines;
+	bool bLockedDoorsLoaded = false;
 	int32 ScanPass = 0;
 	// Starter-huis + huur (EUR 500 per 31 dagen, voortgang in Saved/RentState.txt).
 	TWeakObjectPtr<class ACityDoor> StarterDoor;
