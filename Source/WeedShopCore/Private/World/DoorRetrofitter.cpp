@@ -771,9 +771,9 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (A->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
 					FPendingResident PR;
 					PR.Door = A;
-					// Binnen-spawnen staat UIT tot de trap-navlink bewezen werkt: bewoners zijn nu
-					// gewone route-wandelaars met een naam - ver weg spawnen, route lopen, klaar.
-					PR.bInside = false;
+					// Toren-bewoners spawnen BINNEN en lopen als gewone route-wandelaar vanzelf de
+					// trap af naar de route (de trap-navlinks maken dat pad nu compleet).
+					PR.bInside = FVector::Dist2D(A->GetActorLocation(), TowerXY) < 4000.f;
 					A->Tags.Add(TEXT("ResidentNpc"));
 					PendingResidents.Add(PR);
 					++NQueued;
