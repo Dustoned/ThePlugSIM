@@ -768,7 +768,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 	// plek en hoort bij dit gebouw): fake-3D kaartje verbergen + glas helder maken. Ons eigen
 	// template-raam daar gaat weg (anders dubbel glas/kozijn). Instanced gevel-ramen kunnen geen
 	// per-instance materiaal krijgen: die verbergen we en daar blijft ons eigen raam juist staan.
-	int32 Hidden = 0;
+	int32 Hidden = 0, GlassCleared = 0, OwnHidden = 0;
 	TSet<int32> TakenOver; // template-raam indexen waar het gevel-raam het overneemt
 	for (const FFacadeHit& M : Matches)
 	{
@@ -797,6 +797,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			{
 				if (ClearGlass[Mi]) { M.Comp->SetMaterial(Mi, ClearGlass[Mi]); }
 			}
+			++GlassCleared;
 		}
 	}
 	// PASS 3b: eigen template-ramen verbergen op plekken waar het gevel-raam het overneemt.
@@ -818,6 +819,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 				{
 					SMA->SetActorHiddenInGame(true);
 					SMA->SetActorEnableCollision(false);
+					++OwnHidden;
 					break;
 				}
 			}
@@ -850,6 +852,6 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		}
 	}
 
-	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, stempel-shift (%.0f, %.0f), %d gevel-ramen verborgen, %d ramen echt gemaakt (%d template-ramen)"),
-		*TemplateName, Cands, Matches.Num(), StampShift.X, StampShift.Y, Hidden, Synced, TplWindows.Num());
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, shift (%.0f, %.0f), %d glas helder, %d eigen ramen weg, %d verborgen, %d extra echt gemaakt (%d tpl-ramen)"),
+		*TemplateName, Cands, Matches.Num(), StampShift.X, StampShift.Y, GlassCleared, OwnHidden, Hidden, Synced, TplWindows.Num());
 }
