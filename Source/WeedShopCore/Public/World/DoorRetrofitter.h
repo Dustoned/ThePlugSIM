@@ -55,6 +55,8 @@ protected:
 	void VerticalReplicate();
 	void ApplySavedStamps();
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
+	void MakeBakedWindowsReal();    // gebakken kamers: nep-glas -> echt doorzichtig glas, direct bij overlay-load
+	bool bBakedWindowsReal = false;
 	TSet<FString> AppliedStamps;
 	FTimerHandle StampFixT1, StampFixT2;
 	bool bStampFixTimersSet = false;

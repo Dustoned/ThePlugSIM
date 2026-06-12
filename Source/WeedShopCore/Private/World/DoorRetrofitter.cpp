@@ -1490,6 +1490,11 @@ void ADoorRetrofitter::ApplySavedStamps()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	if (BakedOverlay.IsValid() && !BakedOverlay->IsLevelLoaded()) { return; } // wacht op de bake-overlay
+	if (!bBakedWindowsReal && BakedOverlay.IsValid() && BakedOverlay->GetLoadedLevel())
+	{
+		bBakedWindowsReal = true;
+		MakeBakedWindowsReal();
+	}
 
 	TSet<FString> BakedJobs;
 	{
@@ -1611,4 +1616,42 @@ void ADoorRetrofitter::RefreshStampWindowFixes()
 		FFileHelper::SaveStringToFile(Dump, *(FPaths::ProjectSavedDir() / TEXT("StampAreaDump.txt")));
 		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: area-dump %d comps -> StampAreaDump.txt"), DumpCount);
 	}
+}
+
+// Gebakken kamers zijn ECHTE interieurs: hun raam-stukken kwamen uit de oude pipeline en dragen
+// nog het parallax nep-glas (MI_Window) of nep-kamer cubemaps (MI_ApartmentWindows/MI_ShopWindows).
+// Een pass over de bake-overlay zodra die geladen is - dus exact het moment waarop de ramen
+// verschijnen - zet ze om naar het echte tweezijdige glas. Geen vertraging zichtbaar.
+void ADoorRetrofitter::MakeBakedWindowsReal()
+{
+	ULevel* L = BakedOverlay.IsValid() ? BakedOverlay->GetLoadedLevel() : nullptr;
+	if (!L) { return; }
+	UMaterialInterface* Clear = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Game/CityBeachStrip/Materials/Glass/MI_Window_TwoSided.MI_Window_TwoSided"));
+	if (!Clear) { return; }
+
+	int32 Swapped = 0;
+	for (AActor* A : L->Actors)
+	{
+		if (!IsValid(A)) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MN = Comp->GetStaticMesh()->GetName();
+			if (!(MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")) || MN.Contains(TEXT("BalconyDoor")))) { continue; }
+			for (int32 Mi = 0; Mi < Comp->GetNumMaterials(); ++Mi)
+			{
+				UMaterialInterface* Cur = Comp->GetMaterial(Mi);
+				if (!Cur) { continue; }
+				const FString CurName = Cur->GetName();
+				if (CurName == TEXT("MI_Window") || CurName.Contains(TEXT("ApartmentWindows")) || CurName.Contains(TEXT("ShopWindows")))
+				{
+					Comp->SetMaterial(Mi, Clear);
+					++Swapped;
+				}
+			}
+		}
+	}
+	UE_LOG(LogWeedShop, Warning, TEXT("BakedRooms: %d nep-glas slots omgezet naar echt doorzichtig glas"), Swapped);
 }
