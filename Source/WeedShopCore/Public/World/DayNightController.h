@@ -64,6 +64,7 @@ protected:
 
 	bool bPackMinimal = false;
 	TWeakObjectPtr<class APostProcessVolume> NightPPV; // alleen 's nachts gewicht (exposure omlaag)
+	TWeakObjectPtr<class ADirectionalLight> PackMoon;  // eigen maan op pack-maps (alleen 's nachts aan)
 	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
 	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
 	TArray<FDimLight> DimLights;

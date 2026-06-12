@@ -360,6 +360,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			{
 				AActor* A = *It;
 				if (!IsValid(A)) { continue; }
+				if (A == PackMoon.Get()) { continue; } // onze eigen maan niet mee-dimmen
 				TInlineComponentArray<ULightComponent*> Lights(A);
 				for (ULightComponent* LC : Lights)
 				{
@@ -430,6 +431,33 @@ void ADayNightController::Tick(float DeltaSeconds)
 			if (!SL) { continue; }
 			if (!SL->GetWorldAssetPackageName().Contains(TEXT("/Maps/Lighting/"))) { continue; }
 			SL->SetShouldBeVisible(bScenarioVisible);
+		}
+
+		// MAAN: eigen zacht blauw strijklicht bij nacht - de echte zon/maan-cyclus-look van vroeger.
+		// Luistert naar de Moon-sliders in de Light-tab (MoonIntensity/MoonPitch), overdag op 0.
+		if (!PackMoon.IsValid())
+		{
+			if (ADirectionalLight* M = GetWorld()->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), FTransform(FRotator(MoonPitch, 200.f, 0.f))))
+			{
+				if (ULightComponent* MC = M->GetLightComponent())
+				{
+					MC->SetMobility(EComponentMobility::Movable);
+					MC->SetIntensity(0.f);
+					MC->SetLightColor(FLinearColor(0.55f, 0.65f, 0.9f));
+					MC->SetCastShadows(true);
+					if (UDirectionalLightComponent* MDL = Cast<UDirectionalLightComponent>(MC))
+					{
+						MDL->SetAtmosphereSunLight(false);
+						MDL->ForwardShadingPriority = 0;
+					}
+				}
+				PackMoon = M;
+			}
+		}
+		if (PackMoon.IsValid() && PackMoon->GetLightComponent())
+		{
+			PackMoon->SetActorRotation(FRotator(MoonPitch, 200.f, 0.f));
+			PackMoon->GetLightComponent()->SetIntensity((1.f - MinDayF) * MoonIntensity);
 		}
 		// Fotokoepel (dag-lucht met ingebakken zon): 's nachts uit zodat de donkere hemel toont.
 		const bool bDomeVisible = MinDayF > 0.3f;
