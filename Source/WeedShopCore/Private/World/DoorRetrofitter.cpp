@@ -743,54 +743,118 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				const int32 LiteCap = 10;
 				int32 NNew = 0;
+				// TOREN-woningen (bij het starter-appartement): die hebben WEL een route naar
+				// beneden - hun bewoners mogen binnen spawnen en zelf naar buiten lopen. Daarvoor
+				// tellen ook de hogere verdiepingen mee, niet alleen Apt 1xx.
+				const FVector TowerXY = Starter->GetActorLocation();
+				for (ACityDoor* A : Apt)
+				{
+					if (A == Starter || Ground.Contains(A)) { continue; }
+					if (FVector::Dist2D(A->GetActorLocation(), TowerXY) < 4000.f) { Ground.Add(A); }
+				}
+				int32 NQueued = 0;
 				for (ACityDoor* A : Ground)
 				{
-					if (NLive >= LiteCap) { break; }
+					if (NLive + PendingResidents.Num() >= LiteCap) { break; }
 					if (A->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
-					// OP STRAAT spawnen, niet in de kamer: de strip-kamers hebben (nog) geen trap of
-					// gang naar buiten, dus binnen gespawnde bewoners zaten opgesloten. Thuisplek =
-					// het dichtstbijzijnde punt van de NPC-route voor hun gebouw; "naar huis" is
-					// daarheen teruglopen (en daar 's nachts verdwijnen).
-					const FVector DL = A->GetActorLocation();
-					FVector Street = FVector::ZeroVector;
-					float BestSd = TNumericLimits<float>::Max();
-					for (const TArray<FVector>& Ring : NpcRings)
-					{
-						for (const FVector& RP2 : Ring)
-						{
-							const float Dd = FVector::DistSquared2D(RP2, DL);
-							if (Dd < BestSd) { BestSd = Dd; Street = RP2; }
-						}
-					}
-					if (BestSd == TNumericLimits<float>::Max())
-					{
-						// Geen route gezet: dichtstbijzijnde klanten-spawner als straat-anker.
-						for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
-						{
-							if (!IsValid(*SpIt)) { continue; }
-							const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), DL);
-							if (Dd < BestSd) { BestSd = Dd; Street = SpIt->GetActorLocation(); }
-						}
-					}
-					if (BestSd == TNumericLimits<float>::Max()) { break; } // nergens straat bekend - later opnieuw
-					FActorSpawnParameters RP;
-					RP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-					ACustomerBase* Cb = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Street + FVector(0.f, 0.f, 110.f)), RP);
-					if (!Cb) { continue; }
-					const int32 NameIdx = FMath::Abs(FMath::RoundToInt(DL.X * 0.13f) + FMath::RoundToInt(DL.Y * 0.31f) + FMath::RoundToInt(DL.Z * 0.77f));
-					Cb->NpcId = FName(*FString::Printf(TEXT("Resident_%d"), NameIdx));
-					Cb->SetupResident(Street, Street, FString::FromInt(A->GetAptNumber()), Street);
+					FPendingResident PR;
+					PR.Door = A;
+					PR.bInside = FVector::Dist2D(A->GetActorLocation(), TowerXY) < 4000.f; // toren: binnen spawnen
 					A->Tags.Add(TEXT("ResidentNpc"));
-					++NLive;
-					++NNew;
+					PendingResidents.Add(PR);
+					++NQueued;
 				}
-				if (NNew > 0)
+				if (NQueued > 0)
 				{
-					UE_LOG(LogWeedShop, Warning, TEXT("Bewoners-lite: %d nieuwe bewoners (totaal %d/%d) op begane-grond woningen"), NNew, NLive, LiteCap);
+					UE_LOG(LogWeedShop, Warning, TEXT("Bewoners-lite: %d bewoners in de wachtrij (totaal %d/%d), verschijnen gespreid"), NQueued, NLive + PendingResidents.Num(), LiteCap);
 				}
 			}
 			const FVector Top = Starter->GetActorLocation();
 			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
+		}
+	}
+
+	// BEWONERS-WACHTRIJ: een bewoner per ~10 seconden laten verschijnen (niet allemaal tegelijk).
+	// Toren-woningen (bij de starter) spawnen BINNEN en lopen zelf naar buiten; de rest spawnt op
+	// het dichtstbijzijnde route-punt voor hun gebouw.
+	if (PendingResidents.Num() > 0 && (ScanPass % 5 == 0))
+	{
+		FPendingResident PR = PendingResidents[0];
+		PendingResidents.RemoveAt(0);
+		ACityDoor* A = PR.Door.Get();
+		if (A)
+		{
+			const FVector DL = A->GetActorLocation();
+			const int32 NameIdx = FMath::Abs(FMath::RoundToInt(DL.X * 0.13f) + FMath::RoundToInt(DL.Y * 0.31f) + FMath::RoundToInt(DL.Z * 0.77f));
+			FVector SpawnAt = FVector::ZeroVector;
+			FVector Front = FVector::ZeroVector;
+			FVector Inside = FVector::ZeroVector;
+			bool bOk = false;
+			if (PR.bInside)
+			{
+				// Kamer-kant vs gang-kant van de voordeur (vrije-ruimte-meting).
+				const FVector Fw = A->GetActorForwardVector();
+				const FVector Rt = A->GetActorRightVector();
+				auto Openness = [&](const FVector& P)
+				{
+					float Sum = 0.f;
+					const FVector Dirs[4] = { Fw, -Fw, Rt, -Rt };
+					for (const FVector& Dir : Dirs)
+					{
+						FHitResult H;
+						const FVector S = P + FVector(0.f, 0.f, 120.f);
+						Sum += W->LineTraceSingleByChannel(H, S, S + Dir * 1200.f, ECC_Visibility) ? H.Distance : 1200.f;
+					}
+					return Sum;
+				};
+				const FVector CandA = DL + Fw * 240.f;
+				const FVector CandB = DL - Fw * 240.f;
+				const bool bAInside = Openness(CandA) <= Openness(CandB);
+				Inside = bAInside ? CandA : CandB;
+				Front = bAInside ? CandB : CandA;
+				SpawnAt = Inside;
+				bOk = true;
+			}
+			else
+			{
+				float BestSd = TNumericLimits<float>::Max();
+				for (const TArray<FVector>& Ring : NpcRings)
+				{
+					for (const FVector& RP2 : Ring)
+					{
+						const float Dd = FVector::DistSquared2D(RP2, DL);
+						if (Dd < BestSd) { BestSd = Dd; SpawnAt = RP2; }
+					}
+				}
+				for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+				{
+					if (!IsValid(*SpIt)) { continue; }
+					const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), DL);
+					if (Dd < BestSd) { BestSd = Dd; SpawnAt = SpIt->GetActorLocation(); }
+				}
+				if (BestSd < TNumericLimits<float>::Max())
+				{
+					Front = SpawnAt;
+					Inside = SpawnAt;
+					bOk = true;
+				}
+			}
+			if (bOk)
+			{
+				FActorSpawnParameters RP;
+				RP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				ACustomerBase* Cb = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnAt + FVector(0.f, 0.f, 110.f)), RP);
+				if (Cb)
+				{
+					Cb->NpcId = FName(*FString::Printf(TEXT("Resident_%d"), NameIdx));
+					Cb->SetupResident(Front, Inside, FString::FromInt(A->GetAptNumber()), Front);
+					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner verschenen: Apt %d (%s)"), A->GetAptNumber(), PR.bInside ? TEXT("binnen, toren") : TEXT("op straat"));
+				}
+			}
+			else
+			{
+				A->Tags.Remove(TEXT("ResidentNpc")); // nog geen plek bekend: later opnieuw proberen
+			}
 		}
 	}
 
