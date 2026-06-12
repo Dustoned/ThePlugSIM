@@ -393,11 +393,45 @@ void ADoorRetrofitter::CaptureMapNow()
 	MapCapture->CaptureScene();
 }
 
+bool ADoorRetrofitter::FindStreetPoint(float WorldY, FVector& Out) const
+{
+	UWorld* W = GetWorld();
+	if (!W) { return false; }
+	// Boulevard loopt langs Y; zoek per kandidaat-X een straat-achtige mesh onder een down-trace.
+	static const float XOffsets[] = { 0.f, 600.f, -600.f, 1200.f, -1200.f, 1800.f, -1800.f, 2600.f, -2600.f, 3400.f, -3400.f };
+	FVector Fallback = FVector::ZeroVector;
+	bool bHaveFallback = false;
+	for (float Dx : XOffsets)
+	{
+		FHitResult H;
+		const FVector S(Dx, WorldY, 3000.f);
+		if (!W->LineTraceSingleByChannel(H, S, S - FVector(0.f, 0.f, 3500.f), ECC_Visibility)) { continue; }
+		if (H.ImpactNormal.Z < 0.7f || H.ImpactPoint.Z > 350.f) { continue; } // muren/daken/podium overslaan
+		const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
+		const FString Nm = (SMC && SMC->GetStaticMesh()) ? SMC->GetStaticMesh()->GetName() : FString();
+		if (Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road")) || Nm.Contains(TEXT("ConcretePath")))
+		{
+			Out = H.ImpactPoint + FVector(0.f, 0.f, 60.f);
+			return true;
+		}
+		if (!bHaveFallback) { Fallback = H.ImpactPoint + FVector(0.f, 0.f, 60.f); bHaveFallback = true; }
+	}
+	if (bHaveFallback) { Out = Fallback; return true; } // grond gevonden maar geen straat-mesh: beter dan niets
+	return false;
+}
+
 void ADoorRetrofitter::ScanAndConvert()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	++ScanPass;
+	if (ScanPass == 1)
+	{
+		// Boulevard-spawn-punten (Y-as): rond de oude bewezen plek (0) plus gespreid noord en zuid
+		// binnen de map-border. Punten die nog niet gestreamd zijn blijven pending en proberen
+		// elke pass opnieuw.
+		PendingSpawnerYs = { -20000.f, -8000.f, 0.f, 12000.f, 24000.f };
+	}
 
 	// WALK-THROUGHS: via de Test-tab gemarkeerde objecten (NoCollide.txt) doorloopbaar maken.
 	// Periodiek herhaald zodat ook later-gestreamde meshes hun pawn-collision verliezen.
@@ -445,31 +479,38 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
-	// KLANTEN + NAVMESH op de pack-map: zodra de speler er staat, registreren we hier een
-	// navigatie-invoker (de dynamische navmesh bouwt dan tiles in dit gebied - het volume zit in
-	// de BakedRooms-overlay) en zetten we een klanten-spawner neer: NPC's spawnen, lopen naar een
-	// plek in de buurt, kunnen van je kopen en vertrekken weer. Eerste gameplay op deze map.
-	if (!bWalkersSpawned)
+	// KLANTEN + NAVMESH op de pack-map: VASTE spawn-punten verspreid langs de boulevard (niet de
+	// speler-positie - die staat tegenwoordig bij sessiestart al in het starter-appartement).
+	// Elk punt zoekt zelf de stoep via down-traces op straat-meshes en krijgt een eigen
+	// nav-invoker, zodat de navmesh overal rond de spawners groeit en NPC's daar rondlopen.
+	if (PendingSpawnerYs.Num() > 0)
 	{
-		APlayerController* PCw = W->GetFirstPlayerController();
-		APawn* Pw = PCw ? PCw->GetPawn() : nullptr;
-		if (Pw)
+		for (int32 i = PendingSpawnerYs.Num() - 1; i >= 0; --i)
 		{
-			bWalkersSpawned = true;
-			const FVector SpawnLoc = Pw->GetActorLocation();
-			SetActorLocation(SpawnLoc); // retrofitter = invoker-anker
+			FVector Street;
+			if (!FindStreetPoint(PendingSpawnerYs[i], Street)) { continue; } // nog niet gestreamd - volgende pass
+			ACustomerSpawner* CSw = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(Street));
+			if (!CSw) { continue; }
+			CSw->bSpawnResidents = false; // bewoners-systeem volgt later (woningen-brug)
+			CSw->MaxCustomers = 5;
+			CSw->SpotRadius = 700.f;
+			CSw->FinishSpawning(FTransform(Street));
 			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
 			{
-				NavSys->RegisterNavigationInvoker(this, 9000.f, 11000.f);
+				NavSys->RegisterNavigationInvoker(CSw, 9000.f, 11000.f);
 			}
-			ACustomerSpawner* CSw = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(SpawnLoc));
-			if (CSw)
+			UE_LOG(LogWeedShop, Warning, TEXT("Pack-map: klanten-spawner + nav-invoker op (%.0f, %.0f, %.0f)"), Street.X, Street.Y, Street.Z);
+			if (!bWalkersSpawned)
 			{
-				CSw->bSpawnResidents = false; // bewoners-systeem hangt aan de CityGenerator (eigen map)
-				CSw->MaxCustomers = 6;
-				CSw->FinishSpawning(FTransform(SpawnLoc));
+				// Retrofitter zelf als extra invoker-anker op het eerste gevonden straat-punt.
+				bWalkersSpawned = true;
+				SetActorLocation(Street);
+				if (UNavigationSystemV1* NavSys2 = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+				{
+					NavSys2->RegisterNavigationInvoker(this, 9000.f, 11000.f);
+				}
 			}
-			UE_LOG(LogWeedShop, Warning, TEXT("Pack-map: klanten-spawner + nav-invoker geplaatst op (%.0f, %.0f)"), SpawnLoc.X, SpawnLoc.Y);
+			PendingSpawnerYs.RemoveAt(i);
 		}
 	}
 

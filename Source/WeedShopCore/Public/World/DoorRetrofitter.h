@@ -66,6 +66,9 @@ protected:
 	// Direct-helder glas: binnen elke kamer-job-kolom worden nep-glas materialen METEEN vervangen
 	// door het doorzichtige glas, in plaats van te wachten tot de job zelf draait (nabijheid+scans).
 	void ApplyInstantGlass();
+	// Zoek de stoep/straat op een vaste Y langs de boulevard (down-traces op straat-meshes).
+	bool FindStreetPoint(float WorldY, FVector& Out) const;
+	TArray<float> PendingSpawnerYs; // boulevard-punten waar nog een klanten-spawner moet komen
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;
