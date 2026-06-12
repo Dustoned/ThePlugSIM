@@ -46,11 +46,14 @@ void AMapBorder::Rebuild()
 		TEXT("/Game/CityBeachStrip/Materials/Glass/MI_Window_TwoSided.MI_Window_TwoSided"));
 	if (!Cube) { return; }
 
-	// Open keten in marker-volgorde; wil je hem sluiten, zet de laatste marker bij de eerste.
-	for (int32 i = 0; i + 1 < Points.Num(); ++i)
+	SegSpans.Reset();
+	// Keten in marker-volgorde; bij 3+ markers wordt de ring AUTOMATISCH gesloten
+	// (laatste marker -> eerste marker), bij precies 2 blijft het een los recht stuk.
+	const int32 NumSegs = (Points.Num() >= 3) ? Points.Num() : Points.Num() - 1;
+	for (int32 i = 0; i < NumSegs; ++i)
 	{
 		const FVector A = Points[i];
-		const FVector B = Points[i + 1];
+		const FVector B = Points[(i + 1) % Points.Num()];
 		const float Len = FVector::Dist2D(A, B);
 		if (Len < 50.f) { continue; }
 		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(B.Y - A.Y, B.X - A.X));
@@ -70,6 +73,7 @@ void AMapBorder::Rebuild()
 		C->SetCanEverAffectNavigation(false);
 		C->SetVisibility(false); // verschijnt pas als je dichtbij komt (Tick)
 		Segments.Add(C);
+		SegSpans.Add(TPair<FVector, FVector>(A, B));
 	}
 	UE_LOG(LogTemp, Warning, TEXT("MapBorder: %d wand-segmenten gebouwd uit %d markers"), Segments.Num(), Points.Num());
 }
@@ -84,12 +88,12 @@ void AMapBorder::Tick(float DeltaSeconds)
 
 	ToastCooldown -= 0.25f;
 	float Nearest = TNumericLimits<float>::Max();
-	for (int32 i = 0; i < Segments.Num() && i + 1 < Points.Num() + 1; ++i)
+	for (int32 i = 0; i < Segments.Num() && i < SegSpans.Num(); ++i)
 	{
 		UStaticMeshComponent* C = Segments[i];
 		if (!C) { continue; }
-		const FVector A = Points[i];
-		const FVector B = Points[i + 1];
+		const FVector A = SegSpans[i].Key;
+		const FVector B = SegSpans[i].Value;
 		const float D = FMath::PointDistToSegment(FVector(L.X, L.Y, 0.f),
 			FVector(A.X, A.Y, 0.f), FVector(B.X, B.Y, 0.f));
 		Nearest = FMath::Min(Nearest, D);

@@ -28,5 +28,6 @@ protected:
 
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Segments;
 	TArray<FVector> Points;
+	TArray<TPair<FVector, FVector>> SegSpans; // per segment de eindpunten (incl. het sluitstuk)
 	float ToastCooldown = 0.f;
 };
