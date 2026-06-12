@@ -1,4 +1,5 @@
 #include "World/CityDoor.h"
+#include "Components/TextRenderComponent.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
@@ -116,6 +117,39 @@ void ACityDoor::AddLeafExtra(UStaticMesh* Mesh, const FTransform& WorldTM)
 	LeafExtras.Add(C);
 }
 
+void ACityDoor::SetAptNumber(int32 Num)
+{
+	AptNumber = Num;
+	if (!Panel || !Panel->GetStaticMesh() || !Hinge) { return; }
+	// Bordje OP het deurblad (beide kanten), op ooghoogte gecentreerd - draait netjes met de deur mee.
+	const FBox B = Panel->GetStaticMesh()->GetBoundingBox();
+	if (AptTexts.Num() == 0)
+	{
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
+			T->SetupAttachment(Hinge);
+			T->RegisterComponent();
+			AptTexts.Add(T);
+		}
+	}
+	const float Yc = (B.Min.Y + B.Max.Y) * 0.5f;
+	const float Zc = FMath::Min(B.Max.Z - 30.f, B.Max.Z * 0.8f);
+	for (int32 Side = 0; Side < AptTexts.Num(); ++Side)
+	{
+		UTextRenderComponent* T = AptTexts[Side];
+		if (!T) { continue; }
+		const bool bFront = (Side == 0);
+		T->SetRelativeLocation(FVector(bFront ? B.Max.X + 1.2f : B.Min.X - 1.2f, Yc, Zc));
+		T->SetRelativeRotation(FRotator(0.f, bFront ? 0.f : 180.f, 0.f));
+		T->SetText(FText::AsCultureInvariant(FString::FromInt(Num)));
+		T->SetHorizontalAlignment(EHTA_Center);
+		T->SetVerticalAlignment(EVRTA_TextCenter);
+		T->SetWorldSize(20.f);
+		T->SetTextRenderColor(FColor(255, 214, 120));
+	}
+}
+
 FString ACityDoor::ResidentNameForIndex(int32 Index)
 {
 	static const TCHAR* First[] = {
@@ -168,14 +202,15 @@ void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)
 
 FText ACityDoor::GetInteractionPrompt_Implementation() const
 {
+	const FString AptLbl = (AptNumber > 0) ? FString::Printf(TEXT("Apt %d - "), AptNumber) : FString();
 	if (bLocked)
 	{
-		if (bForSale) { return FText::FromString(TEXT("FOR SALE - buy via phone (Upgrades)")); }
+		if (bForSale) { return FText::FromString(FString::Printf(TEXT("%sFOR SALE - buy via phone (Upgrades)"), *AptLbl)); }
 		return FText::FromString(ResidentName.IsEmpty()
-			? FString(TEXT("LOCKED"))
-			: FString::Printf(TEXT("LOCKED - %s lives here"), *ResidentName));
+			? FString::Printf(TEXT("%sLOCKED"), *AptLbl)
+			: FString::Printf(TEXT("%sLOCKED - %s lives here"), *AptLbl, *ResidentName));
 	}
-	if (bPlayerHome) { return bOpen ? FText::FromString(TEXT("Your home - close")) : FText::FromString(TEXT("Your home - open")); }
+	if (bPlayerHome) { return FText::FromString(FString::Printf(TEXT("%syour home - %s"), *AptLbl, bOpen ? TEXT("close") : TEXT("open"))); }
 	return bOpen ? FText::FromString(TEXT("Close door")) : FText::FromString(TEXT("Open door"));
 }
 

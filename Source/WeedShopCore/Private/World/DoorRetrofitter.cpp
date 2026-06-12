@@ -414,16 +414,59 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			LastAptDoorCount = Apt.Num();
 			Apt.Sort([](const ACityDoor& A, const ACityDoor& B) { return A.GetActorLocation().Z > B.GetActorLocation().Z; });
-			for (int32 i = 0; i < Apt.Num(); ++i)
+			ACityDoor* Starter = Apt[0];
+			// NUMMERING zoals een echt complex: deuren clusteren per GEBOUW (XY-afstand), binnen een
+			// gebouw per verdieping (Z-banden) een volgnummer -> Apt 101, 102, 201, ... Bordje op de deur.
+			TArray<TArray<ACityDoor*>> Buildings;
+			for (ACityDoor* D : Apt)
 			{
-				if (i == 0) { Apt[i]->SetPlayerHome(); continue; }
-				// Bewoner-naam stabiel op POSITIE (niet op lijst-volgorde): zelfde naam per deur, elke sessie.
-				const FVector L = Apt[i]->GetActorLocation();
-				const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
-				Apt[i]->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+				TArray<ACityDoor*>* Found = nullptr;
+				for (TArray<ACityDoor*>& Bld : Buildings)
+				{
+					if (FVector::Dist2D(Bld[0]->GetActorLocation(), D->GetActorLocation()) < 3000.f) { Found = &Bld; break; }
+				}
+				if (Found) { Found->Add(D); }
+				else { TArray<ACityDoor*> NewB; NewB.Add(D); Buildings.Add(NewB); }
 			}
-			const FVector Top = Apt[0]->GetActorLocation();
-			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren op slot (bewoners), starter-huis op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, Top.X, Top.Y, Top.Z);
+			for (TArray<ACityDoor*>& Bld : Buildings)
+			{
+				TArray<float> Floors;
+				for (ACityDoor* D : Bld)
+				{
+					const float Z = D->GetActorLocation().Z;
+					if (!Floors.ContainsByPredicate([Z](float F) { return FMath::Abs(F - Z) < 150.f; })) { Floors.Add(Z); }
+				}
+				Floors.Sort();
+				auto FloorOf = [&Floors](const ACityDoor& D)
+				{
+					const float Z = D.GetActorLocation().Z;
+					for (int32 f = 0; f < Floors.Num(); ++f) { if (FMath::Abs(Floors[f] - Z) < 150.f) { return f; } }
+					return 0;
+				};
+				Bld.Sort([&FloorOf](const ACityDoor& A, const ACityDoor& B)
+				{
+					const int32 FA = FloorOf(A), FB = FloorOf(B);
+					if (FA != FB) { return FA < FB; }
+					const FVector LA = A.GetActorLocation(), LB = B.GetActorLocation();
+					if (!FMath::IsNearlyEqual(LA.Y, LB.Y, 50.f)) { return LA.Y < LB.Y; }
+					return LA.X < LB.X;
+				});
+				int32 CurFloor = -1, Unit = 0;
+				for (ACityDoor* D : Bld)
+				{
+					const int32 FloorIdx = FloorOf(*D);
+					if (FloorIdx != CurFloor) { CurFloor = FloorIdx; Unit = 0; }
+					++Unit;
+					D->SetAptNumber((FloorIdx + 1) * 100 + Unit);
+					if (D == Starter) { D->SetPlayerHome(); continue; }
+					// Bewoner-naam stabiel op POSITIE (niet op lijst-volgorde): zelfde naam per deur, elke sessie.
+					const FVector L = D->GetActorLocation();
+					const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
+					D->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+				}
+			}
+			const FVector Top = Starter->GetActorLocation();
+			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
 		}
 	}
 

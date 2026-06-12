@@ -43,6 +43,11 @@ public:
 	// -> de bijbehorende funny naam; lege id -> "Customer". Gebruikt door deal/map-popups als fallback.
 	static FString FriendlyNpcName(FName NpcId);
 
+	// Appartement-nummer (verdieping*100 + volgnummer, zoals een echt complex): bordje op het
+	// deurblad aan beide kanten + het nummer in de interactie-prompts.
+	void SetAptNumber(int32 Num);
+	int32 GetAptNumber() const { return AptNumber; }
+
 	// Maak dit een bewoner-deur: op slot voor de speler, met "LOCKED - <naam> lives here".
 	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
 	bool IsLocked() const { return bLocked; }
@@ -72,6 +77,7 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Hinge;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Panel;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> LeafExtras; // glas-delen van het blad (collision volgt het paneel)
+	UPROPERTY() TArray<TObjectPtr<class UTextRenderComponent>> AptTexts; // nummerbordjes (voor- en achterkant van het blad)
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USphereComponent> Trigger; // nabijheid-zone
 
 	int32 NpcNear = 0;      // aantal NPC's in de zone
@@ -85,4 +91,5 @@ protected:
 	bool bPlayerHome = false; // jouw eigen woning (open/dicht, prompt "Your home")
 	bool bForSale = false;    // koopbaar pand, nog niet van jou
 	FString ResidentName;   // naam voor de "LOCKED - ... lives here"-prompt
+	int32 AptNumber = 0;    // 0 = geen nummer (winkeldeur e.d.)
 };
