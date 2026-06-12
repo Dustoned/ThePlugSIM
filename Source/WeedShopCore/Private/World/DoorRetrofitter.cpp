@@ -15,6 +15,7 @@
 #include "Engine/TargetPoint.h"
 #include "NavigationPath.h"
 #include "Navigation/NavLinkProxy.h"
+#include "NavLinkCustomComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
@@ -913,22 +914,22 @@ void ADoorRetrofitter::ScanAndConvert()
 				{
 					if (FVector::Dist(PL, From) < 300.f) { return; }
 				}
-				// DEFERRED spawnen: de link-punten moeten gezet zijn VOORDAT de component
-				// registreert, anders neemt de navmesh ze niet mee.
+				// SMART LINK: simpele PointLinks registreren bij runtime-spawn niet (hermeting
+				// bleef PARTIEEL); de smart-link component is de runtime-betrouwbare variant.
 				const FTransform LinkTM(From);
 				if (ANavLinkProxy* Lnk = W->SpawnActorDeferred<ANavLinkProxy>(ANavLinkProxy::StaticClass(), LinkTM))
 				{
 					Lnk->PointLinks.Empty();
-					FNavigationLink L3;
-					L3.Left = FVector::ZeroVector;
-					L3.Right = To - From;
-					L3.Direction = ENavLinkDirection::BothWays;
-					L3.SnapRadius = 120.f;
-					L3.SnapHeight = 80.f;
-					Lnk->PointLinks.Add(L3);
+					Lnk->bSmartLinkIsRelevant = true;
+					if (UNavLinkCustomComponent* Smart = Lnk->GetSmartLinkComp())
+					{
+						Smart->SetLinkData(FVector::ZeroVector, To - From, ENavLinkDirection::BothWays);
+						Smart->SetEnabled(true);
+					}
 					Lnk->FinishSpawning(LinkTM);
+					Lnk->SetSmartLinkEnabled(true);
 					PlacedNavLinks.Add(From);
-					Out += FString::Printf(TEXT("NAVLINK vast: (%.0f, %.0f, %.0f) -> (%.0f, %.0f, %.0f)\n"), From.X, From.Y, From.Z, To.X, To.Y, To.Z);
+					Out += FString::Printf(TEXT("NAVLINK smart: (%.0f, %.0f, %.0f) -> (%.0f, %.0f, %.0f)\n"), From.X, From.Y, From.Z, To.X, To.Y, To.Z);
 				}
 			};
 			PlaceLink(FVector(-3111.f, -2086.f, 490.f), FVector(-3014.f, -1976.f, 80.f)); // (A) verdieping 1 -> trap-voet
