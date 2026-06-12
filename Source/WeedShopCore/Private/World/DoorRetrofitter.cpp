@@ -389,6 +389,8 @@ void ADoorRetrofitter::ScanAndConvert()
 		bNoCollideLoaded = true;
 		FFileHelper::LoadFileToStringArray(NoCollideLines, *(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
 	}
+	if (ScanPass % 5 == 1) { ApplyInstantGlass(); }
+
 	if (NoCollideLines.Num() > 0 && (ScanPass % 5 == 1))
 	{
 		for (const FString& NL : NoCollideLines)
@@ -1091,6 +1093,75 @@ void ADoorRetrofitter::ScanAndConvert()
 // Verzamelt alle kamer-jobs: opgeslagen jobs uit Saved/RoomJobs.txt (1 regel per job:
 // "x,y,z|x,y,z|x,y,z") + de huidige 3 losse markers als concept-job. Elke job bouwt z'n
 // verdiepingen zodra de speler in de buurt van die bron komt.
+void ADoorRetrofitter::ApplyInstantGlass()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// Kolom-rechthoeken 1x opbouwen uit de kamer-jobs (zelfde rechthoek als RunVertJob gebruikt).
+	if (!bGlassRectsLoaded)
+	{
+		bGlassRectsLoaded = true;
+		TArray<FString> JobLines;
+		FFileHelper::LoadFileToStringArray(JobLines, *(FPaths::ProjectSavedDir() / TEXT("RoomJobs.txt")));
+		for (const FString& JL : JobLines)
+		{
+			TArray<FString> Triples;
+			JL.ParseIntoArray(Triples, TEXT("|"));
+			if (Triples.Num() != 3) { continue; }
+			TArray<FVector> JM;
+			for (const FString& T : Triples)
+			{
+				TArray<FString> Cs;
+				T.ParseIntoArray(Cs, TEXT(","));
+				if (Cs.Num() >= 3) { JM.Add(FVector(FCString::Atof(*Cs[0]), FCString::Atof(*Cs[1]), FCString::Atof(*Cs[2]))); }
+			}
+			if (JM.Num() != 3) { continue; }
+			FBox B(ForceInit);
+			B += JM[0];
+			B += JM[1];
+			B = B.ExpandBy(FVector(130.f, 130.f, 0.f));
+			// Kolom-hoogte: van bron tot cap-marker, met ruime marge naar boven en onder.
+			B.Min.Z = FMath::Min3(JM[0].Z, JM[1].Z, JM[2].Z) - 500.f;
+			B.Max.Z = FMath::Max3(JM[0].Z, JM[1].Z, JM[2].Z) + 900.f;
+			GlassRects.Add(B);
+		}
+	}
+	if (GlassRects.Num() == 0) { return; }
+	UMaterialInterface* Clear = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/CityBeachStrip/Materials/Glass/MI_Window_TwoSided.MI_Window_TwoSided"));
+	if (!Clear) { return; }
+	int32 NSwapped = 0;
+	for (TObjectIterator<UStaticMeshComponent> CIt; CIt; ++CIt)
+	{
+		UStaticMeshComponent* C = *CIt;
+		if (!C || C->GetWorld() != W || !C->GetStaticMesh()) { continue; }
+		// Gedeelde instanties (ISM) overslaan: een materiaal-wissel daar raakt de hele stad.
+		if (Cast<UInstancedStaticMeshComponent>(C)) { continue; }
+		const FVector L = C->Bounds.Origin;
+		bool bIn = false;
+		for (const FBox& B : GlassRects)
+		{
+			if (B.IsInsideOrOn(L)) { bIn = true; break; }
+		}
+		if (!bIn) { continue; }
+		for (int32 Si = 0; Si < C->GetNumMaterials(); ++Si)
+		{
+			UMaterialInterface* M = C->GetMaterial(Si);
+			const FString MN = M ? M->GetName() : FString();
+			if (MN.Contains(TEXT("TwoSided"))) { continue; }
+			// Alleen de nep-glas materialen: parallax (MI_Window exact) en de cubemap-nepkamers.
+			if (MN == TEXT("MI_Window") || MN.Contains(TEXT("ApartmentWindows")) || MN.Contains(TEXT("ShopWindows")))
+			{
+				C->SetMaterial(Si, Clear);
+				++NSwapped;
+			}
+		}
+	}
+	if (NSwapped > 0)
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("InstantGlass: %d raam-slots direct helder gemaakt (%d kolommen)"), NSwapped, GlassRects.Num());
+	}
+}
+
 void ADoorRetrofitter::VerticalReplicate()
 {
 	UWorld* W = GetWorld();

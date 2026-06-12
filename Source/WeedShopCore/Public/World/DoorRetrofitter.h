@@ -63,6 +63,11 @@ protected:
 	// Handmatig vergrendelde deuren (Saved/LockedDoors.txt): slot zonder bewoner-naam.
 	TArray<FString> LockedDoorLines;
 	bool bLockedDoorsLoaded = false;
+	// Direct-helder glas: binnen elke kamer-job-kolom worden nep-glas materialen METEEN vervangen
+	// door het doorzichtige glas, in plaats van te wachten tot de job zelf draait (nabijheid+scans).
+	void ApplyInstantGlass();
+	TArray<FBox> GlassRects;
+	bool bGlassRectsLoaded = false;
 	int32 ScanPass = 0;
 	// Starter-huis + huur (EUR 500 per 31 dagen, voortgang in Saved/RentState.txt).
 	TWeakObjectPtr<class ACityDoor> StarterDoor;
