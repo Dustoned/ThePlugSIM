@@ -337,6 +337,7 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->PostProcessSettings.AutoExposureMaxBrightness = 0.45f;
 	MapCapture->ShowFlags.SetFog(false);          // hoogte-fog wast de luchtfoto anders uit
 	MapCapture->ShowFlags.SetAtmosphere(false);   // atmosfeer tussen camera en grond idem
+	MapCapture->ShowFlags.SetDynamicShadows(false); // geen slagschaduwen op de luchtfoto (boardwalk-schaduw over het strand)
 	// (Belichting/post-processing AAN laten: FinalColor-captures renderen zwart zonder lighting.
 	// De nacht-oplossing zit in de TIMING: we schieten de kaart alleen bij daglicht - zie
 	// ScanAndConvert/bDayMapCaptured.)
