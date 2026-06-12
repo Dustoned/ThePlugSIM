@@ -1745,48 +1745,8 @@ void ADoorRetrofitter::ApplyCachedWindowHides()
 		{
 			UE_LOG(LogWeedShop, Warning, TEXT("WindowHides: %d gecachte gevel-verbergingen geladen"), CachedHides.Num());
 		}
-
-		// Kolommen van gebakken jobs bepalen (RoomJobs.txt + BakedJobs.txt) voor de glas-swap.
-		ClearGlassMat = LoadObject<UMaterialInterface>(nullptr,
-			TEXT("/Game/CityBeachStrip/Materials/Glass/MI_Window_TwoSided.MI_Window_TwoSided"));
-		TSet<FString> BakedIds;
-		{
-			TArray<FString> BL;
-			FFileHelper::LoadFileToStringArray(BL, *(FPaths::ProjectSavedDir() / TEXT("BakedJobs.txt")));
-			for (const FString& B : BL) { BakedIds.Add(B.TrimStartAndEnd()); }
-		}
-		TArray<FString> JobLines;
-		FFileHelper::LoadFileToStringArray(JobLines, *(FPaths::ProjectSavedDir() / TEXT("RoomJobs.txt")));
-		for (const FString& JL : JobLines)
-		{
-			TArray<FString> Triples;
-			JL.ParseIntoArray(Triples, TEXT("|"));
-			if (Triples.Num() != 3) { continue; }
-			TArray<FVector> JM;
-			for (const FString& T : Triples)
-			{
-				TArray<FString> Cs;
-				T.ParseIntoArray(Cs, TEXT(","));
-				if (Cs.Num() >= 3) { JM.Add(FVector(FCString::Atof(*Cs[0]), FCString::Atof(*Cs[1]), FCString::Atof(*Cs[2]))); }
-			}
-			if (JM.Num() != 3) { continue; }
-			const FString JobId = FString::Printf(TEXT("%d_%d_%d"), FMath::RoundToInt(JM[0].X), FMath::RoundToInt(JM[0].Y), FMath::RoundToInt(JM[2].Z));
-			if (!BakedIds.Contains(JobId)) { continue; }
-			FBakedGlassRect R;
-			FBox2D Rect(ForceInit);
-			Rect += FVector2D(JM[0].X, JM[0].Y);
-			Rect += FVector2D(JM[1].X, JM[1].Y);
-			R.Rect = Rect.ExpandBy(130.f);
-			R.ZMin = FMath::Min(JM[0].Z, JM[2].Z) - 150.f;
-			R.ZMax = FMath::Max(JM[0].Z, JM[2].Z) + 400.f;
-			BakedGlassRects.Add(R);
-		}
-		if (BakedGlassRects.Num() > 0)
-		{
-			UE_LOG(LogWeedShop, Warning, TEXT("WindowHides: %d gebakken job-kolommen voor directe glas-swap"), BakedGlassRects.Num());
-		}
 	}
-	if (CachedHides.Num() == 0 && BakedGlassRects.Num() == 0) { return; }
+	if (CachedHides.Num() == 0) { return; }
 
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
@@ -1796,38 +1756,13 @@ void ADoorRetrofitter::ApplyCachedWindowHides()
 		if (!C || !C->GetStaticMesh() || !C->IsVisible()) { continue; }
 		const FName MeshName = C->GetStaticMesh()->GetFName();
 		const FVector L = C->Bounds.Origin;
-		bool bHiddenNow = false;
 		for (const FCachedHide& H : CachedHides)
 		{
 			if (H.Mesh != MeshName) { continue; }
 			if (FMath::Abs(H.Pos.X - L.X) > 30.f || FMath::Abs(H.Pos.Y - L.Y) > 30.f || FMath::Abs(H.Pos.Z - L.Z) > 30.f) { continue; }
 			C->SetVisibility(false);
 			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			bHiddenNow = true;
 			break;
-		}
-		if (bHiddenNow || !ClearGlassMat) { continue; }
-
-		// Glas-swap binnen gebakken job-kolommen: nep-glas/cubemaps -> echt doorzichtig glas,
-		// direct bij het instreamen (de kamers erachter zijn echt, dus je mag erin kijken).
-		const FString MN = MeshName.ToString();
-		if (!(MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")) || MN.Contains(TEXT("BalconyDoor")))) { continue; }
-		bool bInRect = false;
-		for (const FBakedGlassRect& R : BakedGlassRects)
-		{
-			if (L.Z >= R.ZMin && L.Z <= R.ZMax
-				&& L.X >= R.Rect.Min.X && L.X <= R.Rect.Max.X && L.Y >= R.Rect.Min.Y && L.Y <= R.Rect.Max.Y) { bInRect = true; break; }
-		}
-		if (!bInRect) { continue; }
-		for (int32 Mi = 0; Mi < C->GetNumMaterials(); ++Mi)
-		{
-			UMaterialInterface* Cur = C->GetMaterial(Mi);
-			if (!Cur) { continue; }
-			const FString CurName = Cur->GetName();
-			if (CurName == TEXT("MI_Window") || CurName.Contains(TEXT("ApartmentWindows")) || CurName.Contains(TEXT("ShopWindows")))
-			{
-				C->SetMaterial(Mi, ClearGlassMat);
-			}
 		}
 	}
 }

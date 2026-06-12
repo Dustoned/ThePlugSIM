@@ -63,11 +63,6 @@ protected:
 	void ApplyCachedWindowHides();
 	TArray<FCachedHide> CachedHides;
 	bool bHidesLoaded = false;
-	// Kolommen van GEBAKKEN kamer-jobs: al het nep-glas (MI_Window/cubemaps) daarbinnen wordt bij
-	// het instreamen direct vervangen door echt doorzichtig glas - de kamers erachter zijn echt.
-	struct FBakedGlassRect { FBox2D Rect; float ZMin; float ZMax; };
-	TArray<FBakedGlassRect> BakedGlassRects;
-	TObjectPtr<UMaterialInterface> ClearGlassMat;
 	TSet<FString> AppliedStamps;
 	FTimerHandle StampFixT1, StampFixT2;
 	bool bStampFixTimersSet = false;
