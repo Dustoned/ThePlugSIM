@@ -2753,11 +2753,19 @@ void UPhoneClientComponent::SaveNpcRoute()
 		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Set at least 2 markers along the sidewalk (in order)"));
 		return;
 	}
-	FString Out;
-	for (const FVector& M : Marks) { Out += FString::Printf(TEXT("%.1f,%.1f,%.1f"), M.X, M.Y, M.Z) + LINE_TERMINATOR; }
-	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("NpcRoute.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	// TOEVOEGEN i.p.v. overschrijven: elke save is een eigen route-ring ("---" als scheiding),
+	// zodat je meerdere loopgebieden kunt neerleggen. Eerste en laatste marker worden bij het
+	// laden automatisch verbonden (gesloten ring, net als de map-border).
+	FString Cur;
+	FFileHelper::LoadFileToString(Cur, *WeedData::File(TEXT("NpcRoute.txt")));
+	int32 NRoutes = 1;
+	for (int32 ci = 0; ci < Cur.Len(); ++ci) { if (Cur[ci] == TEXT('-')) { ++NRoutes; ci += 2; } }
+	if (!Cur.IsEmpty() && !Cur.EndsWith(LINE_TERMINATOR)) { Cur += LINE_TERMINATOR; }
+	if (!Cur.IsEmpty()) { Cur += TEXT("---"); Cur += LINE_TERMINATOR; }
+	for (const FVector& M : Marks) { Cur += FString::Printf(TEXT("%.1f,%.1f,%.1f"), M.X, M.Y, M.Z) + LINE_TERMINATOR; }
+	FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("NpcRoute.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
-	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("NPC route saved (%d points)! Restart applies spawners along it"), Marks.Num()));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("NPC route %d saved (%d points, closed loop)! Markers cleared - restart applies"), NRoutes, Marks.Num()));
 }
 
 void UPhoneClientComponent::ClearNpcRoute()

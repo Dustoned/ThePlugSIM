@@ -432,27 +432,67 @@ void ADoorRetrofitter::ScanAndConvert()
 	++ScanPass;
 	if (ScanPass == 1)
 	{
-		// SPELER-ROUTE eerst: heeft de speler met F9-markers een looproute opgeslagen
-		// (NpcRoute.txt), dan zijn DAT de spawn-/wandel-punten - exact waar hij ze wil.
-		// Anders de standaard boulevard-punten (Y-as) met dek-zoeker.
-		TArray<FString> RouteLines;
-		FFileHelper::LoadFileToStringArray(RouteLines, *WeedData::File(TEXT("NpcRoute.txt")));
-		for (const FString& RL : RouteLines)
+		// SPELER-ROUTES eerst: F9-marker-ringen uit NpcRoute.txt ("---" scheidt routes). Elke
+		// route is een GESLOTEN ring (eerste en laatste marker verbonden); langs alle segmenten
+		// worden tussenpunten bijgevuld zodat de nav-dekking en spawn-spreiding de hele ring
+		// rond lopen. Geen routes -> de standaard boulevard-punten met dek-zoeker.
 		{
-			TArray<FString> Pc;
-			RL.ParseIntoArray(Pc, TEXT(","));
-			if (Pc.Num() >= 3)
+			TArray<FString> RouteLines;
+			FFileHelper::LoadFileToStringArray(RouteLines, *WeedData::File(TEXT("NpcRoute.txt")));
+			TArray<TArray<FVector>> Routes;
+			TArray<FVector> CurRoute;
+			for (const FString& RL : RouteLines)
 			{
-				PendingSpawnerPoints.Add(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2])));
+				if (RL.TrimStartAndEnd().StartsWith(TEXT("---")))
+				{
+					if (CurRoute.Num() >= 2) { Routes.Add(CurRoute); }
+					CurRoute.Reset();
+					continue;
+				}
+				TArray<FString> Pc;
+				RL.ParseIntoArray(Pc, TEXT(","));
+				if (Pc.Num() >= 3) { CurRoute.Add(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]))); }
 			}
-		}
-		if (PendingSpawnerPoints.Num() > 0)
-		{
-			UE_LOG(LogWeedShop, Warning, TEXT("NPC-route: %d speler-punten gebruikt voor spawners"), PendingSpawnerPoints.Num());
-		}
-		else
-		{
-			PendingSpawnerYs = { -20000.f, -8000.f, 0.f, 12000.f, 24000.f };
+			if (CurRoute.Num() >= 2) { Routes.Add(CurRoute); }
+			for (const TArray<FVector>& Route : Routes)
+			{
+				const int32 NSeg = (Route.Num() >= 3) ? Route.Num() : Route.Num() - 1; // ring: laatste->eerste erbij
+				for (int32 si = 0; si < NSeg; ++si)
+				{
+					const FVector A = Route[si];
+					const FVector B = Route[(si + 1) % Route.Num()];
+					PendingSpawnerPoints.Add(A);
+					// Tussenpunten om de ~40m zodat dekking en spawns het hele segment vullen.
+					const float SegLen = FVector::Dist2D(A, B);
+					const int32 NMid = FMath::FloorToInt(SegLen / 4000.f);
+					for (int32 mi = 1; mi <= NMid; ++mi)
+					{
+						PendingSpawnerPoints.Add(FMath::Lerp(A, B, float(mi) / float(NMid + 1)));
+					}
+				}
+			}
+			// Deduplicatie: punten die te dicht op elkaar liggen (markers + interpolatie) samenvoegen.
+			for (int32 i = PendingSpawnerPoints.Num() - 1; i >= 0; --i)
+			{
+				for (int32 j = 0; j < i; ++j)
+				{
+					if (FVector::Dist2D(PendingSpawnerPoints[i], PendingSpawnerPoints[j]) < 1500.f)
+					{
+						PendingSpawnerPoints.RemoveAt(i);
+						break;
+					}
+				}
+			}
+			if (PendingSpawnerPoints.Num() > 0)
+			{
+				// Klanten-budget over de punten verdelen (niet 4x zoveel NPC's omdat er meer punten zijn).
+				RouteCustomersPerPoint = FMath::Clamp(40 / PendingSpawnerPoints.Num(), 2, 5);
+				UE_LOG(LogWeedShop, Warning, TEXT("NPC-routes: %d ringen -> %d spawn-punten (%d klanten per punt)"), Routes.Num(), PendingSpawnerPoints.Num(), RouteCustomersPerPoint);
+			}
+			else
+			{
+				PendingSpawnerYs = { -20000.f, -8000.f, 0.f, 12000.f, 24000.f };
+			}
 		}
 	}
 	// Route-punten van de speler: direct plaatsen (positie is al ground-truth op de stoep).
@@ -462,7 +502,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		ACustomerSpawner* CSr = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(Pt));
 		if (!CSr) { continue; }
 		CSr->bSpawnResidents = false;
-		CSr->MaxCustomers = 4;
+		CSr->MaxCustomers = RouteCustomersPerPoint;
 		CSr->SpotRadius = 500.f;
 		CSr->ActivationRange = 10000.f;
 		CSr->FinishSpawning(FTransform(Pt));
