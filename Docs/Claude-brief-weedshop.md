@@ -267,44 +267,14 @@ Geplande tabellen:
 
 ---
 
-## 8. A–Z STAPPENPLAN
+## 8. ROADMAP — zie `Docs/ROADMAP.md`
 
-Volgorde van leeg project → speelbare basis → assets → polish. Kolom **Wie**: *Jij* (editor), *Codex* (tekst), *Samen* (Codex levert, jij koppelt). Voor elke *Jij*-stap geldt: lukt het niet, vraag Codex om instructies of een Python-script.
+Het oorspronkelijke A–Z stappenplan dat hier stond is **afgerond** (A t/m Y gebouwd; de packaged build leeft door als roadmap-item) en op 2026-06-12 vervangen door het levende roadmap-document **[`Docs/ROADMAP.md`](ROADMAP.md)**. Dat is vanaf nu de bron van waarheid voor wat er gebouwd wordt en in welke volgorde:
 
-| # | Fase | Stap (en hoe) | Wie | Klaar wanneer (DoD) |
-|---|---|---|---|---|
-| A | Fundament | Core loop in 1 zin + MVP-scope op papier | Jij | één zin + 3-5 MVP-features genoteerd |
-| B | Fundament | Engine-versie kiezen & vastpinnen (UE Launcher) | Jij | versie genoteerd in `/docs/DECISIONS.md` |
-| C | Fundament | Project aanmaken vanuit template (Top Down / FP) | Jij | leeg project opent & speelt |
-| D | Fundament | Git + Git LFS + `.gitignore` + `.gitattributes` | Samen | eerste commit gepusht, LFS actief |
-| E | Fundament | C++ gameplay-module `WeedShopCore` opzetten | Codex | module compileert leeg |
-| F | Fundament | Conventies & mapstructuur vastleggen | Codex | `CONVENTIONS.md` in repo |
-| G | Vertical slice | Grey-box level: appartement + stukje straat (simpele meshes) | Jij | je kunt door appartement en straat lopen |
-| H | Vertical slice | Player/camera/input via template testen | Jij | bewegen + interact-knop werkt |
-| I | Vertical slice | Interaction-systeem (`IInteractable`) | Codex | knop op toonbank triggert C++ event |
-| J | Vertical slice | Economy/Wallet subsystem | Codex | geld op/af, zichtbaar in log |
-| K | Vertical slice | Inventory + `DT_Products` + minimale kweek (1 plant groeit → oogst → voorraad) | Samen | je kunt oogsten en hebt voorraad om te verkopen |
-| L | Vertical slice | Klant-actor + spawn + NavMesh + wachtrij/geduld | Samen | klant spawnt, wacht in rij, geduld telt af |
-| M | Vertical slice | Deal-flow: wens → prijs-slider → accept/afdingen/weiger (boos weg) | Codex | deal-loop draait 1× incl. afdingen |
-| N | Vertical slice | Real-time dag/nacht-cyclus (20 min licht / 10 min donker) + lichting | Samen | cyclus loopt door, licht↔donker wisselt |
-| O | Vertical slice | HUD-logica + `WBP_HUD` koppelen | Samen | geld/bestelling/dag op scherm |
-| P | Vertical slice | Save/Load | Codex | geld+dag overleven herstart; save-schema is klaar voor NPC-profielen |
-| Q | **CHECK** | **MVP-speeltest: is de loop leuk?** | Jij | go/no-go beslissing genomen |
-| R | Content | Volle kweek (strains, kwaliteit, gear, meerdere planten) + producten/klanttypes via CSV | Codex | meerdere strains/producten & klanttypes in spel |
-| S | Content | Milestones + unlocks (nieuwe producten/gear) + upgrades | Samen | milestone unlockt iets; min. 1 upgrade werkt |
-| S2 | Content | Plaatsbare furniture/potten/build-mode: kopen → ghost preview → geldige plaatsing | Samen | min. 1 kweekpot en 1 furniture item plaatsbaar met vloer-/muur-collision; co-op placement-preview/reservering is ontworpen en gehaakt |
-| T | Content | Balans-pass (prijzen/geduld/spawn-tempo) | Samen | speelt fair, niet te makkelijk/saai |
-| T2 | Content | TAB/telefoon-management: Map, Contacts, Suppliers, Shops, online orders, delivery fee, panden/upgrades/staff en gedeelde klantcontacten/messages | Samen | hub toont alleen unlocked opties; bestelling/afspraak beïnvloedt shared state |
-| U | Assets | Meshes/materials importeren, grey-box vervangen | Samen | ruimte ziet er "echt" uit |
-| V | Assets | Audio & VFX hooks (events vanuit C++) | Samen | geluid bij verkoop & dagwissel |
-| W | Feel | Juice: feedback, UI-animatie, camera-shake, tweens | Samen | acties voelen "sappig" |
-| X | Polish | Menu's: main menu, pause, settings | Samen | starten/pauzeren/afsluiten werkt |
-| Y | Polish | Bugfix + performance pass | Samen | 15 min spelen zonder crash |
-| Z | Ship | Packaged build maken (standalone `.exe`) | Jij | `.exe` draait buiten de editor |
-
-> **Nacht-gameplay** (meer/schichtigere klanten, politie-heat → bust, overval-events) landt in de **Content-fase (rond stap R–T)**, nadat de kern-loop werkt. De dag/nacht-cyclus zélf zit al in stap N; de gevólgen ervan voeg je later toe, zodat de MVP klein blijft.
->
-> **Straat-werving** (samples uitdelen → prospect komt naar appartement) hoort bij fase 1 en sluit aan op stap L–M. De allereerste slice mag klanten nog direct laten verschijnen; de sample-funnel voeg je er kort daarna aan toe.
+1. **Fase 1** — beach-map (CityBeachStrip) wordt de echte spelwereld (homes/NPC's/winkels/leveringen porten).
+2. **Fase 2** — levels 1-50 écht goed: balans-pass, mid-game variatie, co-op-testronde + fixes, save-gaten.
+3. **Fase 3** — de 50+ shop-fase (gereserveerd, pas daarna).
+4. **Doorlopend** — tech-hygiëne (dead code, soak/performance, packaged build).
 
 ---
 

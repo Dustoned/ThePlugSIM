@@ -647,11 +647,11 @@ FTransform ARoomStamper::MirrorPieceTM(const FStampPiece& Piece)
 
 void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const FTransform& Anchor, bool bMirror)
 {
-	// FILOSOFIE (na veel iteraties, idee van de speler): de GEVEL van het gebouw blijft volledig
-	// met rust - de buurvakken zien er goed uit, dus dit vak moet er exact zo uitzien. Het enige
-	// wat hier gebeurt: de buitenmuur-laag van de stempel wordt 10cm ACHTER het gevel-raamvlak
-	// weggestopt zodat er niks door de gevel naar buiten steekt. Idempotent (meet tegen de echte
-	// actor-posities), dus veilig om vaker te draaien na late streaming.
+	// AANPAK (speler): de buitenmuur van de stempel VERVANGT het stuk gebouw-gevel waar de kamer
+	// zit. Dus: (1) meet het gevel-vlak via het dichtstbijzijnde gevel-raam, (2) schuif de
+	// buitenmuur-laag van de stempel EXACT op dat vlak, (3) verberg de gevel-segmenten (muur/raam/
+	// glas) die er nu dubbel overheen liggen. Een muur, echte ramen, zelfde vlak als de buren.
+	// Idempotent: meet tegen echte actor-posities; verborgen gevel-stukken doen niet meer mee.
 	if (!W) { return; }
 	TArray<FStampPiece> Tpl;
 	if (!LoadTemplate(TemplateName, Tpl)) { return; }
@@ -680,8 +680,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		FMath::RoundToInt(Anchor.GetRotation().Rotator().Yaw));
 	const FName StampTag(*StampId);
 
-	// Dichtstbijzijnde GEVEL-raam (niet van de stempel zelf) bij een van onze template-ramen
-	// zoeken: dat bepaalt het referentievlak van de gevel.
+	// 1) Gevel-referentie: dichtstbijzijnde zichtbare gevel-raam bij een van onze template-ramen.
 	int32 RefTW = INDEX_NONE;
 	FVector RefFacade = FVector::ZeroVector;
 	float BestLat = 130.f;
@@ -702,11 +701,11 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			if (L.Z < ZMin || L.Z > ZMax || !FootWide.IsInsideXY(L)) { continue; }
 			for (int32 Ti = 0; Ti < TplWindows.Num(); ++Ti)
 			{
-				const FTplWin& TW = TplWindows[Ti];
-				if (FMath::Abs(TW.Pos.Z - L.Z) > 300.f) { continue; }
-				const FVector D = L - TW.Pos;
-				const float A1 = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f))));
-				const float B1 = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(0.f, 1.f, 0.f))));
+				const FTplWin& TWc = TplWindows[Ti];
+				if (FMath::Abs(TWc.Pos.Z - L.Z) > 300.f) { continue; }
+				const FVector D = L - TWc.Pos;
+				const float A1 = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TWc.Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f))));
+				const float B1 = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TWc.Yaw, 0.f).RotateVector(FVector(0.f, 1.f, 0.f))));
 				const float Lat = FMath::Min(A1, B1);
 				const float Dep = FMath::Max(A1, B1);
 				if (Lat < BestLat && Dep < 380.f) { BestLat = Lat; RefTW = Ti; RefFacade = L; }
@@ -715,12 +714,11 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 	}
 	if (RefTW == INDEX_NONE)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - geen gevel-referentie gevonden (nog niet gestreamd?)"), *TemplateName);
+		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - geen gevel-referentie (al vervangen of nog niet gestreamd)"), *TemplateName);
 		return;
 	}
 
-	// Buitenmuur-laag 10cm achter het gevel-raamvlak wegstoppen. Meet tegen de ECHTE huidige
-	// positie van ons raamsegment zodat herhaald draaien geen dubbele shift geeft.
+	// 2) Buitenmuur-laag EXACT op het gevel-vlak zetten (meet tegen de echte actor-positie).
 	const FTplWin& TW = TplWindows[RefTW];
 	FVector N = FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f));
 	FVector Out = (FVector::DotProduct(N, FVector(TW.Pos.X - Center.X, TW.Pos.Y - Center.Y, 0.f)) >= 0.f) ? N : -N;
@@ -734,9 +732,10 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		const FVector WL = WSMA->GetActorLocation();
 		if (FVector::Dist2D(WL, TW.Pos) < 200.f && FMath::Abs(WL.Z - TW.Pos.Z) < 300.f) { WallRef = WL; break; }
 	}
-	const float DdOut = FVector::DotProduct(RefFacade - WallRef, Out); // gevel t.o.v. kamer-muur (buitenwaarts +)
-	const float Shift = FMath::Clamp(DdOut - 10.f, -60.f, 60.f);      // doel: 10cm achter de gevel
+	const float DdOut = FVector::DotProduct(RefFacade - WallRef, Out);
+	const float Shift = FMath::Clamp(DdOut, -60.f, 60.f); // doel: exact op het gevel-vlak
 	int32 Moved = 0;
+	FVector WallPlane = WallRef;
 	if (FMath::Abs(Shift) > 1.f)
 	{
 		const FVector StampShift = Out * Shift;
@@ -748,7 +747,71 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			It->AddActorWorldOffset(StampShift);
 			++Moved;
 		}
+		WallPlane = WallRef + StampShift;
 	}
-	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - gevel ongemoeid, buitenmuur-laag %.0fcm getuckt (%d stukken)"),
-		*TemplateName, Shift, Moved);
+
+	// 3) De gevel-segmenten die nu DUBBEL over onze muur liggen verbergen: muur/raam/glas-stukken
+	// van het gebouw op ons muurvlak (diepte < 60) binnen de raam-span (lateraal < 210 per raam).
+	int32 Replaced = 0;
+	const FVector WallDir = FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(0.f, 1.f, 0.f));
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass())) { continue; }
+		bool bStampActor = false;
+		for (const FName& Tg : A->Tags) { if (Tg.ToString().StartsWith(TEXT("STAMP_"))) { bStampActor = true; break; } }
+		if (bStampActor) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MN = Comp->GetStaticMesh()->GetName();
+			const bool bWallish = (MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")) || MN.Contains(TEXT("Wall")))
+				&& !MN.Contains(TEXT("Pillar")) && !MN.Contains(TEXT("Column")) && !MN.Contains(TEXT("Beam"))
+				&& !MN.Contains(TEXT("Floor")) && !MN.Contains(TEXT("Roof"));
+			if (!bWallish) { continue; }
+
+			if (UInstancedStaticMeshComponent* ISM = Cast<UInstancedStaticMeshComponent>(Comp))
+			{
+				for (int32 Ii = 0; Ii < ISM->GetInstanceCount(); ++Ii)
+				{
+					FTransform ITM;
+					if (!ISM->GetInstanceTransform(Ii, ITM, true)) { continue; }
+					const FVector IL = ITM.GetLocation();
+					if (IL.Z < ZMin || IL.Z > ZMax) { continue; }
+					const float Dep = FMath::Abs(FVector::DotProduct(IL - WallPlane, Out));
+					if (Dep > 60.f) { continue; }
+					bool bInSpan = false;
+					for (const FTplWin& TWs : TplWindows)
+					{
+						if (FMath::Abs(FVector::DotProduct(IL - (TWs.Pos + Out * Shift), WallDir)) < 210.f
+							&& FMath::Abs(TWs.Pos.Z - IL.Z) < 300.f) { bInSpan = true; break; }
+					}
+					if (!bInSpan) { continue; }
+					ITM.SetScale3D(FVector(0.001f));
+					ISM->UpdateInstanceTransform(Ii, ITM, true, true, true);
+					++Replaced;
+				}
+				continue;
+			}
+
+			if (!Comp->IsVisible()) { continue; }
+			const FVector L = Comp->Bounds.Origin;
+			if (L.Z < ZMin || L.Z > ZMax) { continue; }
+			const float Dep = FMath::Abs(FVector::DotProduct(L - WallPlane, Out));
+			if (Dep > 60.f) { continue; }
+			bool bInSpan = false;
+			for (const FTplWin& TWs : TplWindows)
+			{
+				if (FMath::Abs(FVector::DotProduct(L - (TWs.Pos + Out * Shift), WallDir)) < 210.f
+					&& FMath::Abs(TWs.Pos.Z - L.Z) < 300.f) { bInSpan = true; break; }
+			}
+			if (!bInSpan) { continue; }
+			Comp->SetVisibility(false, true);
+			++Replaced;
+		}
+	}
+
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - muur op gevel-vlak gezet (shift %.0fcm, %d stukken), %d gevel-segmenten vervangen"),
+		*TemplateName, Shift, Moved, Replaced);
 }
