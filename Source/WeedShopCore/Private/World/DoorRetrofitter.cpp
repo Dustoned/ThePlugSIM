@@ -292,7 +292,7 @@ void ADoorRetrofitter::EnsureMapCapture()
 			if (Pc.Num() >= 3) { B += FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2])); }
 		}
 	}
-	const bool bFromBorder = B.IsValid;
+	const bool bFromBorder = (B.IsValid != 0);
 	if (!bFromBorder)
 	{
 		for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
