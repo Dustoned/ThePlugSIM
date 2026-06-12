@@ -436,6 +436,30 @@ void ADoorRetrofitter::ScanAndConvert()
 	++ScanPass;
 	if (ScanPass == 1)
 	{
+		// Binnen-kettingen (StairsPath.txt) alvast parsen: de bewoners-wachtrij gebruikt ze om
+		// te bepalen welke toren-deuren binnen mogen spawnen (en welk pad ze dan aflopen).
+		{
+			TArray<FString> SLines;
+			FFileHelper::LoadFileToStringArray(SLines, *WeedData::File(TEXT("StairsPath.txt")));
+			TArray<FVector> Chain;
+			for (const FString& SL : SLines)
+			{
+				if (SL.TrimStartAndEnd().StartsWith(TEXT("---")))
+				{
+					if (Chain.Num() >= 2) { NpcChains.Add(Chain); }
+					Chain.Reset();
+					continue;
+				}
+				TArray<FString> Pc;
+				SL.ParseIntoArray(Pc, TEXT(","));
+				if (Pc.Num() >= 3) { Chain.Add(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]))); }
+			}
+			if (Chain.Num() >= 2) { NpcChains.Add(Chain); }
+			if (NpcChains.Num() > 0)
+			{
+				UE_LOG(LogWeedShop, Warning, TEXT("Binnen-kettingen: %d geladen (entry-paden voor toren-bewoners)"), NpcChains.Num());
+			}
+		}
 		// SPELER-ROUTES eerst: F9-marker-ringen uit NpcRoute.txt ("---" scheidt routes). Elke
 		// route is een GESLOTEN ring (eerste en laatste marker verbonden); langs alle segmenten
 		// worden tussenpunten bijgevuld zodat de nav-dekking en spawn-spreiding de hele ring
@@ -772,9 +796,19 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (A->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
 					FPendingResident PR;
 					PR.Door = A;
-					// Toren-bewoners spawnen BINNEN en lopen als gewone route-wandelaar vanzelf de
-					// trap af naar de route (de trap-navlinks maken dat pad nu compleet).
-					PR.bInside = FVector::Dist2D(A->GetActorLocation(), TowerXY) < 4000.f;
+					// BINNEN spawnen alleen als er een speler-gemarkeerde ketting in de buurt van
+					// deze deur begint (zelfde verdieping-band): die ketting is dan hun looppad
+					// naar buiten. Geen ketting = op straat spawnen.
+					PR.bInside = false;
+					const FVector DLq = A->GetActorLocation();
+					for (const TArray<FVector>& Ch : NpcChains)
+					{
+						if (FVector::Dist2D(Ch[0], DLq) < 2500.f && FMath::Abs(Ch[0].Z - DLq.Z) < 280.f)
+						{
+							PR.bInside = true;
+							break;
+						}
+					}
 					A->Tags.Add(TEXT("ResidentNpc"));
 					PendingResidents.Add(PR);
 					++NQueued;
@@ -1227,7 +1261,18 @@ void ADoorRetrofitter::ScanAndConvert()
 						const float Dd = FVector::DistSquared2D(SpIt2->GetActorLocation(), SpawnAt);
 						if (Dd < BestOd) { BestOd = Dd; OwnerSp = *SpIt2; }
 					}
-					if (OwnerSp) { OwnerSp->AdoptWalker(Cb); }
+					// Binnen gespawnd: de dichtstbijzijnde ketting is het entry-pad naar buiten.
+					const TArray<FVector>* Entry = nullptr;
+					if (PR.bInside)
+					{
+						float BestCd = TNumericLimits<float>::Max();
+						for (const TArray<FVector>& Ch : NpcChains)
+						{
+							const float Dd = FVector::DistSquared2D(Ch[0], SpawnAt);
+							if (Dd < BestCd) { BestCd = Dd; Entry = &Ch; }
+						}
+					}
+					if (OwnerSp) { OwnerSp->AdoptWalker(Cb, Entry); }
 					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner-wandelaar verschenen: Apt %d op route (%.0f, %.0f)"), A->GetAptNumber(), SpawnAt.X, SpawnAt.Y);
 				}
 			}

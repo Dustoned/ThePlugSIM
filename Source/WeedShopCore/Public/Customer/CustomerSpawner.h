@@ -63,8 +63,10 @@ public:
 	TArray<FVector> PatrolRoute;
 
 	// Een elders gespawnde NPC (bv. bewoner-met-naam) als gewone wandelaar adopteren: zelfde
-	// patrouille over de route, zelfde opruim-regels - geen aparte logica.
-	void AdoptWalker(class ACustomerBase* C);
+	// patrouille over de route, zelfde opruim-regels - geen aparte logica. Optioneel met een
+	// ENTRY-pad (speler-gemarkeerde ketting, bv. trap naar beneden): die wordt eerst punt-voor-
+	// punt afgelopen, daarna voegt de wandelaar in op de normale route-patrouille.
+	void AdoptWalker(class ACustomerBase* C, const TArray<FVector>* EntryPath = nullptr);
 
 	// Hoe ver van het spawn-punt de klanten gaan staan.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
@@ -134,7 +136,14 @@ protected:
 	float NextResidentMonitorRealTime = 0.f;
 	int32 ResidentMonitorSamplesRemaining = 0;
 
-	struct FPatrolState { int32 NextIdx = 0; int32 Dir = 1; };
+	struct FPatrolState
+	{
+		int32 NextIdx = 0;
+		int32 Dir = 1;
+		TArray<FVector> Entry; // eerst dit pad aflopen (trap-ketting), daarna de route
+		int32 EntryIdx = 0;
+		int32 Stall = 0;       // stilstand-teller: na 3x direct lopen i.p.v. pathfinding
+	};
 	TMap<TWeakObjectPtr<ACustomerBase>, FPatrolState> Patrol; // per wandelaar: volgend route-punt + richting
 
 	UPROPERTY(Transient)

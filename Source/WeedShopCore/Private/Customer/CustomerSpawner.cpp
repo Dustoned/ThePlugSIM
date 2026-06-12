@@ -33,23 +33,28 @@ ACustomerSpawner::ACustomerSpawner()
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
-void ACustomerSpawner::AdoptWalker(ACustomerBase* C)
+void ACustomerSpawner::AdoptWalker(ACustomerBase* C, const TArray<FVector>* EntryPath)
 {
 	if (!C) { return; }
 	Spawned.Add(C);
 	if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->MaxWalkSpeed = 165.f; }
+	FPatrolState St;
+	if (EntryPath && EntryPath->Num() >= 2)
+	{
+		St.Entry = *EntryPath;
+	}
 	if (PatrolRoute.Num() >= 2)
 	{
-		FPatrolState St;
+		const FVector RefLoc = St.Entry.Num() > 0 ? St.Entry.Last() : C->GetActorLocation();
 		float BD = TNumericLimits<float>::Max();
 		for (int32 ri = 0; ri < PatrolRoute.Num(); ++ri)
 		{
-			const float Dd = FVector::DistSquared2D(PatrolRoute[ri], C->GetActorLocation());
+			const float Dd = FVector::DistSquared2D(PatrolRoute[ri], RefLoc);
 			if (Dd < BD) { BD = Dd; St.NextIdx = ri; }
 		}
 		St.Dir = FMath::RandBool() ? 1 : -1;
-		Patrol.Add(C, St);
 	}
+	Patrol.Add(C, St);
 }
 
 void ACustomerSpawner::BeginPlay()
@@ -314,6 +319,26 @@ void ACustomerSpawner::TrySpawn()
 				if (!IsValid(Cw) || Cw->bNeedsPlayer) { continue; }
 				FPatrolState& St = Patrol.FindOrAdd(Cw);
 				const FVector Cur = Cw->GetActorLocation();
+				// ENTRY-pad eerst (speler-gemarkeerde ketting, bv. de trap af): punt-voor-punt,
+				// en blijft hij steken dan loopt hij het segment RECHTSTREEKS (geen pathfinding) -
+				// de ketting-punten van de speler zijn fysiek beloopbaar, ook over de trap.
+				if (St.Entry.Num() > 0 && St.EntryIdx < St.Entry.Num())
+				{
+					const FVector Tgt = St.Entry[St.EntryIdx];
+					if (FVector::Dist(Cur, Tgt) < 170.f)
+					{
+						++St.EntryIdx;
+						St.Stall = 0;
+						continue;
+					}
+					if (Cw->GetVelocity().SizeSquared2D() > 25.f) { St.Stall = 0; continue; }
+					++St.Stall;
+					if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
+					{
+						AI->MoveToLocation(Tgt, 60.f, true, St.Stall < 3);
+					}
+					continue;
+				}
 				const bool bArrived = FVector::Dist2D(Cur, PatrolRoute[St.NextIdx]) < 240.f;
 				const bool bMoving = Cw->GetVelocity().SizeSquared2D() > 25.f;
 				if (bArrived)

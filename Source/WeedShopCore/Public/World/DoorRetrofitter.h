@@ -78,6 +78,7 @@ protected:
 	bool bTowerInvokerPlaced = false; // navmesh-anker in de starter-toren (alle verdiepingen)
 	TMap<TWeakObjectPtr<class ACustomerBase>, float> ResidentStuckSince; // boven vast: "lift nemen"-timer
 	TArray<FVector> PlacedNavLinks; // automatische trap-naar-straat links (dedupe)
+	TArray<TArray<FVector>> NpcChains; // speler-gemarkeerde binnen-kettingen (StairsPath.txt)
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;
