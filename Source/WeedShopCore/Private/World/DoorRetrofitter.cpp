@@ -913,14 +913,20 @@ void ADoorRetrofitter::ScanAndConvert()
 				{
 					if (FVector::Dist(PL, From) < 300.f) { return; }
 				}
-				if (ANavLinkProxy* Lnk = W->SpawnActor<ANavLinkProxy>(ANavLinkProxy::StaticClass(), FTransform(From)))
+				// DEFERRED spawnen: de link-punten moeten gezet zijn VOORDAT de component
+				// registreert, anders neemt de navmesh ze niet mee.
+				const FTransform LinkTM(From);
+				if (ANavLinkProxy* Lnk = W->SpawnActorDeferred<ANavLinkProxy>(ANavLinkProxy::StaticClass(), LinkTM))
 				{
 					Lnk->PointLinks.Empty();
 					FNavigationLink L3;
 					L3.Left = FVector::ZeroVector;
 					L3.Right = To - From;
 					L3.Direction = ENavLinkDirection::BothWays;
+					L3.SnapRadius = 120.f;
+					L3.SnapHeight = 80.f;
 					Lnk->PointLinks.Add(L3);
+					Lnk->FinishSpawning(LinkTM);
 					PlacedNavLinks.Add(From);
 					Out += FString::Printf(TEXT("NAVLINK vast: (%.0f, %.0f, %.0f) -> (%.0f, %.0f, %.0f)\n"), From.X, From.Y, From.Z, To.X, To.Y, To.Z);
 				}
