@@ -433,6 +433,21 @@ void ADayNightController::Tick(float DeltaSeconds)
 		}
 		if (NightPPV.IsValid()) { NightPPV->BlendWeight = 1.f - MinDayF; }
 
+		// BLOOM-REM (altijd aan): de zonneschijf blies via de bloom op tot een gigantische witte
+		// waas over de halve hemel. Alleen bloom geremd, verder niks aan de look veranderd.
+		if (!BloomPPV.IsValid())
+		{
+			if (APostProcessVolume* BloomVol = GetWorld()->SpawnActor<APostProcessVolume>())
+			{
+				BloomVol->bUnbound = true;
+				BloomVol->Priority = 999.f;
+				BloomVol->BlendWeight = 1.f;
+				BloomVol->Settings.bOverride_BloomIntensity = true;
+				BloomVol->Settings.BloomIntensity = 0.3f;
+				BloomPPV = BloomVol;
+			}
+		}
+
 		// Het LIGHTING-SCENARIO van de map (Lighting_Sunny/Sunset sublevels: zon + skylight +
 		// gevel-belichting) gaat 's nachts UIT - dan blijven donkere gebouwen met alleen de
 		// lampen en emissives over: precies de nacht-look die de map zelf in zich heeft.
