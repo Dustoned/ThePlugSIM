@@ -28,6 +28,12 @@ public:
 	// Cabine-knop: vast verdieping-label (geen live indicator) + "Go to floor X"-prompt.
 	void SetCabMode();
 	bool IsCabButton() const { return bCabMode; }
+	int32 GetFloorIdx() const { return FloorIdx; }
+
+	// Richting-pijl bij het bordje (^ = omhoog, v = omlaag, 0 = uit) zolang de lift onderweg is.
+	void SetArrow(int32 Dir);
+	// Gloei op de cabine-knop van de DOEL-verdieping, zodat je ziet waar de lift heen gaat.
+	void SetHighlight(bool bOn);
 
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
@@ -35,6 +41,12 @@ public:
 protected:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Mesh;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> DigitMesh;
+	UPROPERTY() TObjectPtr<class UTextRenderComponent> ArrowText;
+	UPROPERTY() TObjectPtr<class UPointLightComponent> GlowLight;
+	FVector SignLocW = FVector::ZeroVector;   // wereld-positie van het bordje (voor de pijl ernaast)
+	FRotator SignRotW = FRotator::ZeroRotator;
+	bool bHaveSign = false;
+	int32 CurArrow = 0;
 	int32 CurDigit = -1;
 	bool bCabMode = false;
 	TWeakObjectPtr<APackElevator> Elevator;

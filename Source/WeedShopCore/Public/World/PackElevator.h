@@ -86,5 +86,8 @@ protected:
 	float BoardedTimer = 0.f;  // hoe lang er iemand in de cabine staat
 	bool bMoving = false;
 	TArray<TWeakObjectPtr<class APackElevatorButton>> Buttons;
+	UPROPERTY() TObjectPtr<class UTextRenderComponent> CabArrow; // ^/v naast het cabine-display
+	int32 LastArrowDir = 0;   // -1/0/+1: alleen bij verandering naar de knoppen pushen
+	int32 LastGlowFloor = -2; // doel-verdieping die nu gloeit (-1 = geen)
 	void UpdateSigns();
 };

@@ -7,6 +7,7 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/TextRenderComponent.h"
 #include "EngineUtils.h"
 
 namespace
@@ -84,6 +85,17 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigit->SetRelativeLocation(FVector(-192.f, 0.f, 175.f));
 		CabDigit->SetRelativeRotation(FRotator::ZeroRotator); // lokale +X = naar de opening
 		CabDigit->SetRelativeScale3D(FVector(5.f));
+		// Richting-pijl naast het display: ^ of v zolang de lift rijdt.
+		CabArrow = NewObject<UTextRenderComponent>(this);
+		CabArrow->SetupAttachment(Cab);
+		CabArrow->RegisterComponent();
+		CabArrow->SetMobility(EComponentMobility::Movable);
+		CabArrow->SetRelativeLocation(FVector(-192.f, -32.f, 178.f));
+		CabArrow->SetRelativeRotation(FRotator::ZeroRotator);
+		CabArrow->SetWorldSize(26.f);
+		CabArrow->SetHorizontalAlignment(EHTA_Center);
+		CabArrow->SetVerticalAlignment(EVRTA_TextCenter);
+		CabArrow->SetVisibility(false);
 	}
 	// Cabine-schuifdeuren: 2 panelen op de open kant (lokale X ~ -8), samen 136 breed gecentreerd.
 	// Ze rijden mee met de cabine en schuiven synchroon met de hal-deuren open/dicht.
@@ -141,11 +153,15 @@ void APackElevator::BuildCabButtonPanel()
 	const float WallY = (CabSlideSignY > 0.f) ? -96.f : 96.f; // tegenover de pocket-kant
 	const float FaceYaw = (WallY < 0.f) ? 90.f : -90.f;       // knop kijkt de cabine in
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	// Layout als een ECHTE lift: rijen van 2, onderaan beginnen (0 links-onder, 1 rechts-onder,
+	// daarboven 2-3, enz). Welke X-kolom 'links' is hangt af van welke wand het paneel heeft.
 	for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
 	{
-		const int32 Col = Fi / 4;
-		const int32 Row = Fi % 4;
-		const FVector RelPos(-34.f - Col * 26.f, WallY, 105.f + Row * 26.f);
+		const int32 Row = Fi / 2;
+		const int32 VCol = Fi % 2; // 0 = links gezien vanuit de cabine, 1 = rechts
+		const float XNear = -34.f, XFar = -60.f;
+		const float ColX = (WallY < 0.f) ? (VCol == 0 ? XFar : XNear) : (VCol == 0 ? XNear : XFar);
+		const FVector RelPos(ColX, WallY, 105.f + Row * 26.f);
 		APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), Cab->GetComponentTransform(), SP);
 		if (!Btn) { continue; }
 		Btn->Setup(this, Fi);
@@ -153,12 +169,13 @@ void APackElevator::BuildCabButtonPanel()
 		Btn->AttachToComponent(Cab, FAttachmentTransformRules::SnapToTargetIncludingScale);
 		Btn->SetActorRelativeLocation(RelPos);
 		Btn->SetActorRelativeRotation(FRotator(0.f, FaceYaw, 0.f));
-		// Vast verdieping-cijfer boven de knop (klein), kijkend dezelfde kant op.
+		// Het CIJFER zit OP de knop (niet erboven): je klikt gewoon op het nummer waar je heen wilt.
 		const FTransform CabTM = Cab->GetComponentTransform();
-		const FVector SignWorld = CabTM.TransformPosition(RelPos + FVector(0.f, (WallY < 0.f) ? 2.f : -2.f, 17.f));
+		const FVector SignWorld = CabTM.TransformPosition(RelPos + FVector(0.f, (WallY < 0.f) ? 2.4f : -2.4f, 0.f));
 		const FRotator SignRot = (CabTM.GetRotation() * FRotator(0.f, FaceYaw, 0.f).Quaternion()).Rotator();
-		Btn->SetupSign(SignWorld, SignRot, 2.5f);
+		Btn->SetupSign(SignWorld, SignRot, 3.0f);
 		Btn->SetDigit(Fi);
+		Buttons.Add(Btn); // mee in de lijst voor doel-gloei (UpdateSigns slaat cab-knoppen al over)
 	}
 }
 
@@ -211,6 +228,37 @@ void APackElevator::Tick(float DeltaSeconds)
 
 	const float TargetZ = Floors[TargetFloor];
 	bMoving = !FMath::IsNearlyEqual(CabZ, TargetZ, 1.f);
+
+	// RICHTING-PIJL (^/v) op elke verdieping + in de cabine zolang de lift onderweg is.
+	const int32 ArrowDir = bMoving ? ((TargetZ > CabZ) ? 1 : -1) : 0;
+	if (ArrowDir != LastArrowDir)
+	{
+		LastArrowDir = ArrowDir;
+		for (const TWeakObjectPtr<APackElevatorButton>& B : Buttons)
+		{
+			if (APackElevatorButton* Btn = B.Get()) { Btn->SetArrow(ArrowDir); }
+		}
+		if (CabArrow)
+		{
+			CabArrow->SetVisibility(ArrowDir != 0);
+			if (ArrowDir != 0)
+			{
+				CabArrow->SetText(FText::AsCultureInvariant(ArrowDir > 0 ? TEXT("^") : TEXT("v")));
+				CabArrow->SetTextRenderColor(ArrowDir > 0 ? FColor(110, 255, 140) : FColor(255, 170, 90));
+			}
+		}
+	}
+	// DOEL-GLOEI: de cabine-knop van de verdieping waar de lift heen gaat licht op.
+	const int32 GlowFloor = (bMoving || TargetFloor != CurFloor) ? TargetFloor : -1;
+	if (GlowFloor != LastGlowFloor)
+	{
+		LastGlowFloor = GlowFloor;
+		for (const TWeakObjectPtr<APackElevatorButton>& B : Buttons)
+		{
+			APackElevatorButton* Btn = B.Get();
+			if (Btn && Btn->IsCabButton()) { Btn->SetHighlight(Btn->GetFloorIdx() == GlowFloor); }
+		}
+	}
 
 	// Deuren: open op een verdieping met stilstaande cabine, dicht tijdens het rijden.
 	const bool bWantOpen = !bMoving;

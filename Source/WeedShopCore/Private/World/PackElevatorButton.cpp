@@ -3,6 +3,8 @@
 #include "World/PackElevator.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Components/TextRenderComponent.h"
+#include "Components/PointLightComponent.h"
 
 APackElevatorButton::APackElevatorButton()
 {
@@ -39,6 +41,60 @@ void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator&
 	}
 	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
 	DigitMesh->SetWorldScale3D(FVector(Scale)); // digit-mesh is 3x5cm -> opschalen naar leesbaar formaat
+	SignLocW = SignWorldLoc;
+	SignRotW = SignRot;
+	bHaveSign = true;
+	// Cabine-knop: het CIJFER is de knop - aankijken van het cijfer moet de interact-prompt geven.
+	if (bCabMode)
+	{
+		DigitMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	}
+}
+
+void APackElevatorButton::SetArrow(int32 Dir)
+{
+	if (bCabMode || !bHaveSign || Dir == CurArrow) { return; }
+	CurArrow = Dir;
+	if (!ArrowText)
+	{
+		ArrowText = NewObject<UTextRenderComponent>(this);
+		ArrowText->SetupAttachment(GetRootComponent());
+		ArrowText->RegisterComponent();
+		ArrowText->SetMobility(EComponentMobility::Movable);
+		// Naast het verdieping-bordje boven de deur, zelfde kant op kijkend.
+		ArrowText->SetWorldLocationAndRotation(SignLocW + SignRotW.RotateVector(FVector(2.f, -26.f, 0.f)), SignRotW);
+		ArrowText->SetWorldSize(24.f);
+		ArrowText->SetHorizontalAlignment(EHTA_Center);
+		ArrowText->SetVerticalAlignment(EVRTA_TextCenter);
+	}
+	if (Dir == 0)
+	{
+		ArrowText->SetVisibility(false);
+		return;
+	}
+	ArrowText->SetVisibility(true);
+	ArrowText->SetText(FText::AsCultureInvariant(Dir > 0 ? TEXT("^") : TEXT("v")));
+	ArrowText->SetTextRenderColor(Dir > 0 ? FColor(110, 255, 140) : FColor(255, 170, 90));
+}
+
+void APackElevatorButton::SetHighlight(bool bOn)
+{
+	if (!GlowLight)
+	{
+		if (!bOn) { return; }
+		GlowLight = NewObject<UPointLightComponent>(this);
+		GlowLight->SetupAttachment(DigitMesh ? DigitMesh.Get() : Cast<USceneComponent>(GetRootComponent()));
+		GlowLight->RegisterComponent();
+		GlowLight->SetMobility(EComponentMobility::Movable);
+		GlowLight->SetRelativeLocation(FVector(2.f, 0.f, 0.f)); // net voor het cijfer-plaatje
+		GlowLight->bUseInverseSquaredFalloff = false;
+		GlowLight->LightFalloffExponent = 2.f;
+		GlowLight->SetAttenuationRadius(50.f);
+		GlowLight->SetLightColor(FLinearColor(1.f, 0.82f, 0.45f));
+		GlowLight->SetCastShadows(false);
+		GlowLight->SetIntensity(0.f);
+	}
+	GlowLight->SetIntensity(bOn ? 5.f : 0.f);
 }
 
 void APackElevatorButton::SetDigit(int32 Digit)
