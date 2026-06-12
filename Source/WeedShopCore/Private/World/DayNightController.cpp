@@ -10,6 +10,7 @@
 #include "Engine/SkyLight.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/LocalLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "UObject/UObjectIterator.h"
@@ -366,6 +367,17 @@ void ADayNightController::Tick(float DeltaSeconds)
 				{
 					if (!LC || SeenLights.Contains(LC)) { continue; }
 					SeenLights.Add(LC);
+					// Map-lampen staan op Static mobility = runtime letterlijk GEEN licht. Movable
+					// maken (schaduwen uit voor performance, honderden lampjes) - dit is de oude
+					// binnen-lampen fix van voor de minimal-reset; toen deden de lampen het wel.
+					if (ULocalLightComponent* LLC = Cast<ULocalLightComponent>(LC))
+					{
+						if (LLC->Mobility != EComponentMobility::Movable)
+						{
+							LLC->SetMobility(EComponentMobility::Movable);
+							LLC->SetCastShadows(false);
+						}
+					}
 					FDimLight D; D.Light = LC; D.OrigIntensity = LC->Intensity;
 					DimLights.Add(D);
 				}
@@ -385,14 +397,13 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// Lichten dimmen. ZONLICHT (directional) moet 's nachts ECHT uit - een restje van 7% werd
 		// door de auto-exposure weer opgeblazen tot daglicht onder een zwarte hemel. Skylight bijna
 		// uit; alle overige lichten 7% (de emissive strips van de map blijven vanzelf - materiaal).
-		const float Mul = FMath::Lerp(0.07f, 1.f, MinDayF);
 		const float SunMul = MinDayF;                       // zon: 0 bij volle nacht
 		const float SkyMul = FMath::Lerp(0.02f, 1.f, MinDayF);
 		for (FDimLight& D : DimLights)
 		{
 			if (ULightComponent* LC = D.Light.Get())
 			{
-				float LMul = Mul;
+				float LMul = 1.f; // lampen (point/spot) blijven ALTIJD vol - zij ZIJN het nachtlicht
 				if (LC->IsA(UDirectionalLightComponent::StaticClass())) { LMul = SunMul; }
 				else if (LC->IsA(USkyLightComponent::StaticClass()))    { LMul = SkyMul; }
 				const float Want = D.OrigIntensity * LMul;
