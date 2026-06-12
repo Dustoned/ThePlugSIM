@@ -67,6 +67,7 @@ protected:
 	TWeakObjectPtr<class ADirectionalLight> PackMoon;  // eigen maan op pack-maps (alleen 's nachts aan)
 	TWeakObjectPtr<class ADirectionalLight> PackSun;   // eigen bewegende zon op pack-maps
 	TWeakObjectPtr<class APostProcessVolume> BloomPPV; // bloom-rem (zonneschijn was een witte waas)
+	bool bAtmosphereTuned = false; // Mie-waas van de map-atmosfeer een keer temmen
 	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
 	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
 	TArray<FDimLight> DimLights;

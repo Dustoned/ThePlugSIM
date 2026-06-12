@@ -1,6 +1,7 @@
 #include "World/DayNightController.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/LevelStreaming.h"
+#include "Components/SkyAtmosphereComponent.h"
 
 #include "World/DayCycleComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -440,6 +441,19 @@ void ADayNightController::Tick(float DeltaSeconds)
 				NightPPV = NightVol;
 			}
 		}
+		// HEMEL-WAAS temmen: de Mie-nevel van de map-atmosfeer maakte een gigantisch wazig
+		// zonsgebied (halve hemel wit). Minder nevel-dichtheid + halo strakker om de schijf.
+		if (!bAtmosphereTuned)
+		{
+			for (TObjectIterator<USkyAtmosphereComponent> AtIt; AtIt; ++AtIt)
+			{
+				if (AtIt->GetWorld() != GetWorld()) { continue; }
+				AtIt->SetMieScatteringScale(0.002f);
+				AtIt->SetMieAnisotropy(0.96f);
+				bAtmosphereTuned = true;
+			}
+		}
+
 		if (NightPPV.IsValid()) { NightPPV->BlendWeight = 1.f - MinDayF; }
 
 		// BLOOM-REM (altijd aan): de zonneschijf blies via de bloom op tot een gigantische witte
