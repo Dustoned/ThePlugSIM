@@ -317,7 +317,7 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapRT = NewObject<UTextureRenderTarget2D>(this, TEXT("PackMapRT"));
 	MapRT->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
 	MapRT->ClearColor = FLinearColor(0.04f, 0.05f, 0.07f, 1.f);
-	MapRT->InitAutoFormat(1024, 1024);
+	MapRT->InitAutoFormat(4096, 4096); // hoge resolutie: de kaart is nu zoombaar tot straat-niveau
 	MapRT->UpdateResourceImmediate(true);
 
 	MapCapture = NewObject<USceneCaptureComponent2D>(this, TEXT("PackMapCapture"));
