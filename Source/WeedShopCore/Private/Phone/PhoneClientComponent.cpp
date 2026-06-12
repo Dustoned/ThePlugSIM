@@ -827,6 +827,11 @@ void UPhoneClientComponent::ToggleSpotInfo()
 	if (SpotInfoWidget) { SpotInfoWidget->ToggleInfo(); }
 }
 
+bool UPhoneClientComponent::IsSpotInfoVisible() const
+{
+	return SpotInfoWidget && SpotInfoWidget->IsInfoVisible();
+}
+
 void UPhoneClientComponent::OpenWardrobe()
 {
 	EnsureWidget();

@@ -138,6 +138,11 @@ public:
 	// zo wijs je plekken aan (bv. een hotel-lobby) waar Claude daarna in code iets kan bouwen.
 	UFUNCTION(Exec) void WeedMarkSpot(const FString& Label);
 
+	// Dev: meld waar de capsule tegenaan botst (alleen met F9-overlay aan) - onzichtbare blockers.
+	UFUNCTION()
+	void OnCapsuleBump(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+	float BumpToastAt = 0.f;
+
 protected:
 
 	/** Called from Input Actions for movement input */

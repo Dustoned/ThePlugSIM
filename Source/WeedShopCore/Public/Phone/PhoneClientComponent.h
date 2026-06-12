@@ -109,7 +109,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|ATM")
 	bool IsAtmOpen() const { return bAtmOpen; }
 	bool IsWardrobeOpen() const { return bWardrobeOpen; }
-	void ToggleSpotInfo(); // F9 dev-overlay: positie + waar je naar kijkt (mesh-id)
+	void ToggleSpotInfo();
+	bool IsSpotInfoVisible() const; // F9 dev-overlay: positie + waar je naar kijkt (mesh-id)
 	void OpenWardrobe();
 	void CloseWardrobe();
 

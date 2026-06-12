@@ -1045,6 +1045,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 void AThePlugSIMCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	if (UCapsuleComponent* Cap = GetCapsuleComponent()) { Cap->OnComponentHit.AddDynamic(this, &AThePlugSIMCharacter::OnCapsuleBump); }
 
 	ApplySkinMesh(); // skin toepassen (default man; save-restore/keuze overschrijft via RestoreSkin/OnRep)
 
@@ -1729,4 +1730,25 @@ void AThePlugSIMCharacter::OpenPotUpgradeUI()
 			Phone->SetSupplierCat(8 /*Pot Upgrades*/);
 		}
 	}
+}
+
+void AThePlugSIMCharacter::OnCapsuleBump(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+{
+	if (!IsLocallyControlled() || !OtherComp) { return; }
+	if (FMath::Abs(Hit.ImpactNormal.Z) > 0.5f) { return; } // vloer/helling: niet interessant
+	if (!Phone || !Phone->IsSpotInfoVisible()) { return; }  // alleen met de F9-overlay aan
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	if (Now < BumpToastAt) { return; }
+	BumpToastAt = Now + 2.f;
+
+	const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(OtherComp);
+	FString Name;
+	if (SMC && SMC->GetStaticMesh()) { Name = SMC->GetStaticMesh()->GetName(); }
+	else
+	{
+		Name = FString::Printf(TEXT("%s/%s"), *OtherComp->GetClass()->GetName(),
+			OtherActor ? *OtherActor->GetName() : TEXT("?"));
+	}
+	UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Yellow,
+		FString::Printf(TEXT("BUMP: %s%s"), *Name, OtherComp->IsVisible() ? TEXT("") : TEXT(" [invisible]")));
 }
