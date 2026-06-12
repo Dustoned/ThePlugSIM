@@ -33,6 +33,25 @@ ACustomerSpawner::ACustomerSpawner()
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
+void ACustomerSpawner::AdoptWalker(ACustomerBase* C)
+{
+	if (!C) { return; }
+	Spawned.Add(C);
+	if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->MaxWalkSpeed = 165.f; }
+	if (PatrolRoute.Num() >= 2)
+	{
+		FPatrolState St;
+		float BD = TNumericLimits<float>::Max();
+		for (int32 ri = 0; ri < PatrolRoute.Num(); ++ri)
+		{
+			const float Dd = FVector::DistSquared2D(PatrolRoute[ri], C->GetActorLocation());
+			if (Dd < BD) { BD = Dd; St.NextIdx = ri; }
+		}
+		St.Dir = FMath::RandBool() ? 1 : -1;
+		Patrol.Add(C, St);
+	}
+}
+
 void ACustomerSpawner::BeginPlay()
 {
 	Super::BeginPlay();

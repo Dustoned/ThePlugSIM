@@ -62,6 +62,10 @@ public:
 	// punt-voor-punt af, ieder met een eigen richting. Leeg = los rondslenteren bij het punt.
 	TArray<FVector> PatrolRoute;
 
+	// Een elders gespawnde NPC (bv. bewoner-met-naam) als gewone wandelaar adopteren: zelfde
+	// patrouille over de route, zelfde opruim-regels - geen aparte logica.
+	void AdoptWalker(class ACustomerBase* C);
+
 	// Hoe ver van het spawn-punt de klanten gaan staan.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpotRadius = 350.f;

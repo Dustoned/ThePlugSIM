@@ -771,7 +771,9 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (A->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
 					FPendingResident PR;
 					PR.Door = A;
-					PR.bInside = FVector::Dist2D(A->GetActorLocation(), TowerXY) < 4000.f; // toren: binnen spawnen
+					// Binnen-spawnen staat UIT tot de trap-navlink bewezen werkt: bewoners zijn nu
+					// gewone route-wandelaars met een naam - ver weg spawnen, route lopen, klaar.
+					PR.bInside = false;
 					A->Tags.Add(TEXT("ResidentNpc"));
 					PendingResidents.Add(PR);
 					++NQueued;
@@ -1085,9 +1087,19 @@ void ADoorRetrofitter::ScanAndConvert()
 				if (Cb)
 				{
 					Cb->NpcId = FName(*FString::Printf(TEXT("Resident_%d"), NameIdx));
-					const FVector Hall = StreetRef.IsNearlyZero() ? Front : StreetRef;
-					Cb->SetupResident(Front, Inside, FString::FromInt(A->GetAptNumber()), Hall);
-					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner verschenen: Apt %d (%s, straat-ref Z=%.0f)"), A->GetAptNumber(), PR.bInside ? TEXT("binnen, toren") : TEXT("op straat"), Hall.Z);
+					// GEEN bewoners-logica (thuis/emergence/herstel vocht met alles): bewoner =
+					// gewone wandelaar met een naam. De dichtstbijzijnde route-spawner adopteert
+					// hem: zelfde patrouille over de route als iedereen, niks anders.
+					ACustomerSpawner* OwnerSp = nullptr;
+					float BestOd = TNumericLimits<float>::Max();
+					for (TActorIterator<ACustomerSpawner> SpIt2(W); SpIt2; ++SpIt2)
+					{
+						if (!IsValid(*SpIt2)) { continue; }
+						const float Dd = FVector::DistSquared2D(SpIt2->GetActorLocation(), SpawnAt);
+						if (Dd < BestOd) { BestOd = Dd; OwnerSp = *SpIt2; }
+					}
+					if (OwnerSp) { OwnerSp->AdoptWalker(Cb); }
+					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner-wandelaar verschenen: Apt %d op route (%.0f, %.0f)"), A->GetAptNumber(), SpawnAt.X, SpawnAt.Y);
 				}
 			}
 			else if (!bRequeued)
