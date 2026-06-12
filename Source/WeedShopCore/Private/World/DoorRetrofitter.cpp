@@ -367,29 +367,21 @@ void ADoorRetrofitter::CaptureMapNow()
 			if (IsValid(*It)) { MapCapture->HiddenActors.Add(*It); }
 		}
 	}
-	// DIAGNOSE (eenmalig per sessie): alle weg-achtige meshes dumpen - de donkere weg-afdruk op
-	// het strand is geen schaduw/AO, dus het is echte geometrie die we moeten verbergen.
+	// SPLINE-RESTJES verbergen: de makers lieten een pad-spline onder het strand liggen waarvan
+	// de donkergrijze SplineEditorMesh-previews door de luchtfoto heen tekenden als een rare
+	// "weg-schaduw" op het zand. Voor elke capture opnieuw (vangt ook laat-gestreamde restjes).
 	{
-		static bool bRoadDumped = false;
-		if (!bRoadDumped)
+		int32 NHidden = 0;
+		for (TObjectIterator<UStaticMeshComponent> RIt; RIt; ++RIt)
 		{
-			bRoadDumped = true;
-			FString Out;
-			for (TObjectIterator<UStaticMeshComponent> RIt; RIt; ++RIt)
-			{
-				UStaticMeshComponent* C = *RIt;
-				if (!C || C->GetWorld() != GetWorld() || !C->GetStaticMesh()) { continue; }
-				const FString Nm = C->GetStaticMesh()->GetName();
-				if (!(Nm.Contains(TEXT("Road")) || Nm.Contains(TEXT("Highway")) || Nm.Contains(TEXT("Bridge"))
-					|| Nm.Contains(TEXT("Asphalt")) || Nm.Contains(TEXT("Overpass")) || Nm.Contains(TEXT("Boardwalk"))
-					|| Nm.Contains(TEXT("Pier")) || Nm.Contains(TEXT("Street")))) { continue; }
-				const FVector O = C->Bounds.Origin;
-				const FVector E = C->Bounds.BoxExtent;
-				Out += FString::Printf(TEXT("%s|%.0f,%.0f,%.0f|ext=%.0f,%.0f,%.0f|vis=%d\n"),
-					*Nm, O.X, O.Y, O.Z, E.X, E.Y, E.Z, C->IsVisible() ? 1 : 0);
-			}
-			FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("RoadDump.txt")));
-			UE_LOG(LogWeedShop, Warning, TEXT("RoadDump geschreven (%d tekens)"), Out.Len());
+			UStaticMeshComponent* C = *RIt;
+			if (!C || C->GetWorld() != GetWorld() || !C->GetStaticMesh()) { continue; }
+			if (C->GetStaticMesh()->GetName() != TEXT("SplineEditorMesh")) { continue; }
+			if (C->IsVisible()) { C->SetVisibility(false); ++NHidden; }
+		}
+		if (NHidden > 0)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("SplineEditorMesh-restjes verborgen: %d"), NHidden);
 		}
 	}
 	// Altijd dezelfde rustige ochtend-belichting op de foto, ongeacht de kloktijd (middagzon
