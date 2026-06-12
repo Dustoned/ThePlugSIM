@@ -66,6 +66,8 @@ protected:
 	// Direct-helder glas: binnen elke kamer-job-kolom worden nep-glas materialen METEEN vervangen
 	// door het doorzichtige glas, in plaats van te wachten tot de job zelf draait (nabijheid+scans).
 	void ApplyInstantGlass();
+	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
+	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;
 	bool bGlassRectsLoaded = false;
 	int32 ScanPass = 0;

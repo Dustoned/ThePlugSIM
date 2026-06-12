@@ -691,6 +691,9 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	// PUI-BLADEN op het echte gevel-gat centreren (gemeten, niet gegokt).
+	FixBalconyPuiPositions();
+
 	// Kaart een keer per sessie schieten - de foto-stand maakt de capture tijd-onafhankelijk,
 	// dus ook wie 's nachts spawnt heeft meteen een dag-kaart. Wel even wachten tot de
 	// dag/nacht-controller zijn zon heeft gespawnd (paar ticks na BeginPlay).
@@ -793,52 +796,8 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				const float LeafWidth = Comp->GetStaticMesh()->GetBoundingBox().GetSize().Y;
 				Door->SetSlideMode(FMath::Max(100.f, LeafWidth - 8.f));
-				// OPEN-geparkeerde pui (decor): het blad ligt gestapeld op het vaste paneel ernaast
-				// en de deuropening staat wagenwijd open - terwijl "dicht" voor de werkende deur de
-				// spawn-stand is. Detecteer de stapeling en schuif de werkende deur naar de vrije
-				// opening: dicht is dan ook echt DICHT (zeker nu bewoners hun pui op slot hebben).
-				const FVector LeafC = Comp->Bounds.Origin;
-				const FVector Axis = LeafTM.GetRotation().GetAxisY();
-				bool bStacked = false;
-				float InteriorAxisOff = 0.f; // as-offset van het dichtstbijzijnde _Interior-plaatje (vaste-glas-kant)
-				float InteriorDist = 99999.f;
-				for (TObjectIterator<UStaticMeshComponent> SIt; SIt; ++SIt)
-				{
-					UStaticMeshComponent* SC = *SIt;
-					if (!SC || SC->GetWorld() != W || SC == Comp || !SC->GetStaticMesh()) { continue; }
-					const FString SNm = SC->GetStaticMesh()->GetName();
-					if (!SNm.Contains(TEXT("BalconyDoor"))) { continue; }
-					if (SNm == Leaf->MeshName || SNm == FString(Leaf->MeshName) + TEXT("_Glass")) { continue; }
-					const float Dd = FVector::Dist(SC->Bounds.Origin, LeafC);
-					if (Dd < 80.f) { bStacked = true; }
-					if (SNm.Contains(TEXT("Interior")) && Dd < InteriorDist)
-					{
-						InteriorDist = Dd;
-						InteriorAxisOff = FVector::DotProduct(SC->Bounds.Origin - LeafC, Axis);
-					}
-				}
-				const FVector CandA = LeafC + Axis * LeafWidth;
-				const FVector CandB = LeafC - Axis * LeafWidth;
-				const FCollisionShape Probe = FCollisionShape::MakeSphere(38.f);
-				const bool bABlocked = W->OverlapBlockingTestByChannel(CandA, FQuat::Identity, ECC_Visibility, Probe);
-				const bool bBBlocked = W->OverlapBlockingTestByChannel(CandB, FQuat::Identity, ECC_Visibility, Probe);
-				// Dichte kant kiezen: probes als die het eens zijn (een kant vrij), anders wijst het
-				// _Interior-plaatje de richting. Uit de praktijk-log: het plaatje zit aan de
-				// DEUROPENING-kant (kant == sign(intOff) bij alle probe-beslissingen), dus dicht = ERHEEN.
-				int32 ClosedSign = 0;
-				if (bABlocked != bBBlocked)            { ClosedSign = bABlocked ? -1 : +1; }
-				else if (InteriorAxisOff > 25.f)       { ClosedSign = +1; }
-				else if (InteriorAxisOff < -25.f)      { ClosedSign = -1; }
-				UE_LOG(LogWeedShop, Warning, TEXT("BalcPui %s (%.0f, %.0f, %.0f): stacked=%d probeA=%d probeB=%d intOff=%.0f kant=%d"),
-					Leaf->MeshName, LeafC.X, LeafC.Y, LeafC.Z, bStacked ? 1 : 0, bABlocked ? 1 : 0, bBBlocked ? 1 : 0, InteriorAxisOff, ClosedSign);
-				if (bStacked && ClosedSign != 0)
-				{
-					const FVector Closed = LeafC + Axis * (ClosedSign * LeafWidth);
-					const FVector LocalDelta = LeafTM.GetRotation().UnrotateVector(Closed - LeafC);
-					Door->SetSlideClosedOffset(FVector(0.f, LocalDelta.Y, 0.f));
-					Door->SetOpenSwing((LocalDelta.Y <= 0.f) ? 95.f : -95.f); // open = terug naar de geparkeerde kant
-					UE_LOG(LogWeedShop, Warning, TEXT("Pui dichtgezet: %s op (%.0f, %.0f, %.0f)"), Leaf->MeshName, LeafC.X, LeafC.Y, LeafC.Z);
-				}
+				// Dicht-positie wordt NIET hier gegokt: FixBalconyPuiPositions meet het echte gat
+				// in de gevel met dwars-traces en centreert de bladen daarop.
 			}
 			SpawnedDoors.Add(Door);
 			++NewThisPass;
@@ -1186,6 +1145,101 @@ void ADoorRetrofitter::ScanAndConvert()
 // Verzamelt alle kamer-jobs: opgeslagen jobs uit Saved/RoomJobs.txt (1 regel per job:
 // "x,y,z|x,y,z|x,y,z") + de huidige 3 losse markers als concept-job. Elke job bouwt z'n
 // verdiepingen zodra de speler in de buurt van die bron komt.
+void ADoorRetrofitter::FixBalconyPuiPositions()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// Onbehandelde pui-deuren verzamelen; traces negeren ALLE werkende deuren (anders meet je
+	// je eigen blad in plaats van de gevel).
+	TArray<ACityDoor*> Puis;
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(PuiHole), false);
+	for (TActorIterator<ACityDoor> It(W); It; ++It)
+	{
+		if (!IsValid(*It)) { continue; }
+		Q.AddIgnoredActor(*It);
+		if (It->ActorHasTag(TEXT("BalcDoor")) && !It->ActorHasTag(TEXT("PuiFixed"))) { Puis.Add(*It); }
+	}
+	if (Puis.Num() == 0) { return; }
+
+	TSet<ACityDoor*> Done;
+	for (ACityDoor* D : Puis)
+	{
+		if (Done.Contains(D)) { continue; }
+		UStaticMeshComponent* Pn = D->GetPanel();
+		if (!Pn || !Pn->GetStaticMesh()) { continue; }
+		const FVector C0 = Pn->Bounds.Origin;
+		const float Wd = FMath::Max(80.f, Pn->Bounds.BoxExtent.Y * 2.f);
+		const FVector AxW = D->GetActorRotation().RotateVector(FVector(0.f, 1.f, 0.f));
+		const FVector AxN = D->GetActorRotation().RotateVector(FVector(1.f, 0.f, 0.f));
+		// Dwars-door-de-gevel traces langs de breedte: vrij = deuropening, geraakt = vast glas/muur.
+		const float Range = 340.f, Step = 20.f;
+		const int32 NSamp = FMath::RoundToInt(Range * 2.f / Step) + 1;
+		TArray<bool> Free;
+		Free.Reserve(NSamp);
+		for (int32 i = 0; i < NSamp; ++i)
+		{
+			const FVector P = C0 + AxW * (-Range + i * Step);
+			FHitResult H;
+			Free.Add(!W->LineTraceSingleByChannel(H, P - AxN * 120.f, P + AxN * 120.f, ECC_Pawn, Q));
+		}
+		// Langste vrije strook die aan BEIDE kanten door geraakte samples begrensd wordt (een
+		// strook tot de scan-rand betekent: buurt nog niet ingestreamd -> volgende pass opnieuw).
+		int32 BestS = -1, BestL = 0;
+		{
+			int32 i = 0;
+			while (i < NSamp)
+			{
+				if (!Free[i]) { ++i; continue; }
+				int32 j = i;
+				while (j < NSamp && Free[j]) { ++j; }
+				const bool bBounded = (i > 0) && (j < NSamp);
+				if (bBounded && (j - i) > BestL) { BestS = i; BestL = j - i; }
+				i = j;
+			}
+		}
+		if (BestS < 0) { continue; } // nog niet beslisbaar - volgende pass
+		const float HoleW = BestL * Step;
+		const float HoleC = -Range + (BestS + BestL * 0.5f - 0.5f) * Step;
+		// Partner-blad van dezelfde pui (tweede rail, vlak ernaast geparkeerd)?
+		ACityDoor* Mate = nullptr;
+		for (ACityDoor* M : Puis)
+		{
+			if (M != D && !Done.Contains(M) && FVector::Dist(M->GetActorLocation(), D->GetActorLocation()) < 60.f) { Mate = M; break; }
+		}
+		auto Apply = [&](ACityDoor* Dr, float TargetS)
+		{
+			UStaticMeshComponent* P2 = Dr->GetPanel();
+			const FVector Cc = P2 ? P2->Bounds.Origin : Dr->GetActorLocation();
+			const FVector LocalD = Dr->GetActorRotation().UnrotateVector((C0 + AxW * TargetS) - Cc);
+			Dr->SetSlideClosedOffset(FVector(0.f, LocalD.Y, 0.f));
+			Dr->SetOpenSwing((LocalD.Y <= 0.f) ? 95.f : -95.f); // open = terugschuiven richting parkeer-kant
+			Dr->Tags.Add(TEXT("PuiFixed"));
+			Done.Add(Dr);
+		};
+		if (HoleW < 50.f)
+		{
+			// Geen gat: blad staat al goed (dicht geparkeerd). Niets verschuiven.
+			D->Tags.Add(TEXT("PuiFixed"));
+			Done.Add(D);
+			if (Mate) { Mate->Tags.Add(TEXT("PuiFixed")); Done.Add(Mate); }
+			continue;
+		}
+		if (Mate && HoleW > Wd * 1.2f)
+		{
+			// Twee bladen verdelen het gat: zij aan zij.
+			Apply(D, HoleC - Wd * 0.5f + 4.f);
+			Apply(Mate, HoleC + Wd * 0.5f - 4.f);
+		}
+		else
+		{
+			Apply(D, HoleC);
+			if (Mate) { Apply(Mate, HoleC); }
+		}
+		UE_LOG(LogWeedShop, Warning, TEXT("PuiHole: gat %.0f breed op s=%.0f bij (%.0f, %.0f, %.0f) - %s"),
+			HoleW, HoleC, C0.X, C0.Y, C0.Z, Mate ? TEXT("2 bladen verdeeld") : TEXT("1 blad gecentreerd"));
+	}
+}
+
 void ADoorRetrofitter::ApplyInstantGlass()
 {
 	UWorld* W = GetWorld();
