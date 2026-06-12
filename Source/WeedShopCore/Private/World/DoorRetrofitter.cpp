@@ -13,6 +13,7 @@
 #include "Phone/PhoneClientComponent.h"
 #include "NavigationSystem.h"
 #include "Engine/TargetPoint.h"
+#include "NavigationPath.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
@@ -872,6 +873,71 @@ void ADoorRetrofitter::ScanAndConvert()
 				UE_LOG(LogWeedShop, Warning, TEXT("Bewoner %s nam de lift: van Z %.0f naar de straat (%.0f, %.0f)"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
 			}
 		}
+	}
+
+	// DIAGNOSE TRAP: bestaat er een trap in de toren, ligt er navmesh op, en is er een pad van
+	// een verdiepingsgang naar de straat? Eenmalig zodra de toren-navmesh even heeft kunnen bouwen.
+	if (ScanPass == 30 && StarterDoor.IsValid())
+	{
+		const FVector TLoc = StarterDoor->GetActorLocation();
+		FString Out;
+		// 1) Alle trap-achtige meshes binnen 3500 van de toren (alle hoogtes).
+		for (TObjectIterator<UStaticMeshComponent> SIt; SIt; ++SIt)
+		{
+			UStaticMeshComponent* C = *SIt;
+			if (!C || C->GetWorld() != W || !C->GetStaticMesh()) { continue; }
+			const FString Nm = C->GetStaticMesh()->GetName();
+			if (!(Nm.Contains(TEXT("Stair")) || Nm.Contains(TEXT("Step")) || Nm.Contains(TEXT("Ladder")) || Nm.Contains(TEXT("Ramp")))) { continue; }
+			const FVector O = C->Bounds.Origin;
+			if (FVector::Dist2D(O, TLoc) > 3500.f) { continue; }
+			Out += FString::Printf(TEXT("TRAP %s|%.0f,%.0f,%.0f|ext=%.0f,%.0f,%.0f|vis=%d|col=%d\n"),
+				*Nm, O.X, O.Y, O.Z, C->Bounds.BoxExtent.X, C->Bounds.BoxExtent.Y, C->Bounds.BoxExtent.Z,
+				(C->IsVisible() && C->GetOwner() && !C->GetOwner()->IsHidden()) ? 1 : 0,
+				C->GetCollisionEnabled() != ECollisionEnabled::NoCollision ? 1 : 0);
+		}
+		// 2) Navmesh-dekking: projectie op een raster rond de toren op meerdere verdiepings-hoogtes.
+		if (UNavigationSystemV1* NavD = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+		{
+			const float Heights[6] = { 540.f, 920.f, 1270.f, 1620.f, 1970.f, 2580.f };
+			for (float Hz : Heights)
+			{
+				int32 NProj = 0;
+				for (int32 gx = -3; gx <= 3; ++gx)
+				{
+					for (int32 gy = -3; gy <= 3; ++gy)
+					{
+						FNavLocation NL;
+						if (NavD->ProjectPointToNavigation(FVector(TLoc.X + gx * 400.f, TLoc.Y + gy * 400.f, Hz), NL, FVector(200.f, 200.f, 150.f))) { ++NProj; }
+					}
+				}
+				Out += FString::Printf(TEXT("NAVMESH Z=%.0f: %d/49 raster-punten geprojecteerd\n"), Hz, NProj);
+			}
+			// 3) Pad-test: van het gang-punt voor de starter-deur naar het dichtstbijzijnde straat-punt.
+			FVector StreetP = FVector::ZeroVector;
+			float BestD2 = TNumericLimits<float>::Max();
+			for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+			{
+				if (!IsValid(*SpIt)) { continue; }
+				const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), TLoc);
+				if (Dd < BestD2) { BestD2 = Dd; StreetP = SpIt->GetActorLocation(); }
+			}
+			if (BestD2 < TNumericLimits<float>::Max())
+			{
+				UNavigationPath* Path = NavD->FindPathToLocationSynchronously(W, TLoc + FVector(0.f, 0.f, 50.f), StreetP, nullptr);
+				Out += FString::Printf(TEXT("PADTEST gang(Z=%.0f) -> straat(%.0f, %.0f, %.0f): %s (%d punten, %.0f lang)\n"),
+					TLoc.Z, StreetP.X, StreetP.Y, StreetP.Z,
+					Path ? (Path->IsValid() ? (Path->IsPartial() ? TEXT("PARTIEEL") : TEXT("VOLLEDIG")) : TEXT("GEEN")) : TEXT("NULL"),
+					Path ? Path->PathPoints.Num() : 0,
+					Path ? Path->GetPathLength() : 0.f);
+				if (Path && Path->PathPoints.Num() > 0)
+				{
+					const FVector End = Path->PathPoints.Last();
+					Out += FString::Printf(TEXT("PADTEST eindigt op (%.0f, %.0f, %.0f)\n"), End.X, End.Y, End.Z);
+				}
+			}
+		}
+		FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("StairDump.txt")));
+		UE_LOG(LogWeedShop, Warning, TEXT("StairDump geschreven (%d tekens)"), Out.Len());
 	}
 
 	// BEWONERS-WACHTRIJ: een bewoner per ~10 seconden laten verschijnen (niet allemaal tegelijk).
