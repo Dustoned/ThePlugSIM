@@ -71,6 +71,7 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Hinge;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Panel;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> LeafExtras; // glas-delen van het blad (collision volgt het paneel)
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USphereComponent> Trigger; // nabijheid-zone
 
 	int32 NpcNear = 0;      // aantal NPC's in de zone

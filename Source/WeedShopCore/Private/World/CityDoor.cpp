@@ -108,8 +108,12 @@ void ACityDoor::AddLeafExtra(UStaticMesh* Mesh, const FTransform& WorldTM)
 	C->RegisterComponent();
 	C->SetStaticMesh(Mesh);
 	C->SetWorldTransform(WorldTM);
-	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// Het glas van het blad moet net zo blokkeren als het paneel - anders stap je bij een dichte
+	// deur dwars door de ruit. De pawn-response volgt het paneel (toggle in Tick).
+	C->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	C->SetCollisionResponseToAllChannels(ECR_Block);
 	C->SetCanEverAffectNavigation(false);
+	LeafExtras.Add(C);
 }
 
 FString ACityDoor::ResidentNameForIndex(int32 Index)
@@ -208,5 +212,10 @@ void ACityDoor::Tick(float DeltaSeconds)
 		const bool bSettled = FMath::Abs(CurAngle - Target) < 2.f;
 		const bool bBlockPawn = bSettled && NpcNear == 0;
 		Panel->SetCollisionResponseToChannel(ECC_Pawn, bBlockPawn ? ECR_Block : ECR_Ignore);
+		// Glas-delen van het blad volgen het paneel (anders loop je door de ruit van een dichte deur).
+		for (UStaticMeshComponent* Extra : LeafExtras)
+		{
+			if (Extra) { Extra->SetCollisionResponseToChannel(ECC_Pawn, bBlockPawn ? ECR_Block : ECR_Ignore); }
+		}
 	}
 }
