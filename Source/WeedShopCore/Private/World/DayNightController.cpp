@@ -361,7 +361,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			{
 				AActor* A = *It;
 				if (!IsValid(A)) { continue; }
-				if (A == PackMoon.Get()) { continue; } // onze eigen maan niet mee-dimmen
+				if (A == PackMoon.Get() || A == PackSun.Get()) { continue; } // eigen zon/maan niet mee-dimmen
 				TInlineComponentArray<ULightComponent*> Lights(A);
 				for (ULightComponent* LC : Lights)
 				{
@@ -458,20 +458,59 @@ void ADayNightController::Tick(float DeltaSeconds)
 					MC->SetCastShadows(true);
 					if (UDirectionalLightComponent* MDL = Cast<UDirectionalLightComponent>(MC))
 					{
-						MDL->SetAtmosphereSunLight(false);
+						MDL->SetAtmosphereSunLight(true);   // maan-schijf aan de hemel
+						MDL->SetAtmosphereSunLightIndex(1); // slot 1 = maan (0 = zon)
+						MDL->SetLightSourceAngle(1.5f);
 						MDL->ForwardShadingPriority = 0;
 					}
 				}
 				PackMoon = M;
 			}
 		}
+		// EIGEN BEWEGENDE ZON: volledige dagboog - op bij zonsopkomst, piek 's middags, onder
+		// tussen NW en N (yaw 337.5), precies zoals op onze eigen map.
+		if (!PackSun.IsValid())
+		{
+			if (ADirectionalLight* SunA = GetWorld()->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), FTransform(FRotator(-45.f, 337.5f, 0.f))))
+			{
+				if (ULightComponent* SC2 = SunA->GetLightComponent())
+				{
+					SC2->SetMobility(EComponentMobility::Movable);
+					SC2->SetCastShadows(true);
+					SC2->SetIntensity(0.f);
+					if (UDirectionalLightComponent* SDL = Cast<UDirectionalLightComponent>(SC2))
+					{
+						SDL->SetAtmosphereSunLight(true);
+						SDL->SetLightSourceAngle(1.5f);
+						SDL->SetLightSourceSoftAngle(0.f);
+						SDL->ForwardShadingPriority = 10;
+						SDL->MarkRenderStateDirty();
+					}
+				}
+				PackSun = SunA;
+			}
+		}
+		const float DayLen2 = FMath::Max(1.f, Sunset - Sunrise);
+		if (PackSun.IsValid() && PackSun->GetLightComponent())
+		{
+			const float SunPhase2 = (Hour - Sunrise) / DayLen2;
+			PackSun->SetActorRotation(FRotator(-180.f * SunPhase2, 337.5f, 0.f));
+			PackSun->GetLightComponent()->SetIntensity(SunIntensity * MinDayF);
+		}
+		// MAAN: tegenboog door de nacht - op bij zonsondergang, onder bij zonsopkomst, zelfde N-lijn.
 		if (PackMoon.IsValid() && PackMoon->GetLightComponent())
 		{
-			PackMoon->SetActorRotation(FRotator(MoonPitch, 200.f, 0.f));
+			float NightF = 0.f;
+			const float NightLen = FMath::Max(1.f, 24.f - DayLen2);
+			if (Hour >= Sunset)      { NightF = (Hour - Sunset) / NightLen; }
+			else if (Hour < Sunrise) { NightF = (Hour + 24.f - Sunset) / NightLen; }
+			PackMoon->SetActorRotation(FRotator(-180.f * NightF, 337.5f, 0.f));
 			PackMoon->GetLightComponent()->SetIntensity((1.f - MinDayF) * MoonIntensity);
 		}
 		// Fotokoepel (dag-lucht met ingebakken zon): 's nachts uit zodat de donkere hemel toont.
-		const bool bDomeVisible = MinDayF > 0.3f;
+		// Foto-koepel PERMANENT uit: er zit een vaste zon in de foto gebakken - botst met
+		// onze bewegende zon. De atmosfeer-lucht volgt nu de echte zonnestand.
+		const bool bDomeVisible = false;
 		for (const TWeakObjectPtr<UStaticMeshComponent>& Dc : DomeComps)
 		{
 			if (UStaticMeshComponent* MC = Dc.Get())
