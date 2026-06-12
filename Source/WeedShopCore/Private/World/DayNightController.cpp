@@ -362,7 +362,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			{
 				AActor* A = *It;
 				if (!IsValid(A)) { continue; }
-				if (A == PackMoon.Get() || A == PackSun.Get()) { continue; } // eigen zon/maan niet mee-dimmen
+				if (A == PackMoon.Get() || A == PackSun.Get() || A == this) { continue; } // eigen zon/maan/lampen niet mee-dimmen
 				TInlineComponentArray<ULightComponent*> Lights(A);
 				for (ULightComponent* LC : Lights)
 				{
@@ -400,6 +400,28 @@ void ADayNightController::Tick(float DeltaSeconds)
 					{
 						DomeComps.AddUnique(MC);
 					}
+					// PACK-LAMPEN: lantaarns/plafondlampen van de map zijn alleen mesh (geen licht).
+					// Warm puntlicht eraan hangen; de klok zet ze 's avonds aan en 's ochtends uit.
+					const bool bTallLamp = MN == TEXT("SM_StreetLight_01") || MN == TEXT("SM_StreetLight_02")
+						|| MN == TEXT("SM_LampPostBeach_01") || MN == TEXT("SM_AlleyLamp") || MN == TEXT("SM_UtilityPole_Lamp");
+					const bool bSmallLamp = MN == TEXT("SM_CeilingLight") || MN == TEXT("SM_CeilingLight02")
+						|| MN == TEXT("SM_WallLight01") || MN == TEXT("SM_PoolLight");
+					if ((bTallLamp || bSmallLamp) && !PackLampSeen.Contains(MC))
+					{
+						PackLampSeen.Add(MC);
+						UPointLightComponent* PL = NewObject<UPointLightComponent>(this);
+						PL->SetupAttachment(GetRootComponent());
+						PL->RegisterComponent();
+						const FVector BO = MC->Bounds.Origin;
+						const float Up = bTallLamp ? MC->Bounds.BoxExtent.Z * 0.7f : -25.f;
+						PL->SetWorldLocation(BO + FVector(0.f, 0.f, Up));
+						PL->SetMobility(EComponentMobility::Movable);
+						PL->SetAttenuationRadius(bTallLamp ? 1700.f : 900.f);
+						PL->SetLightColor(FLinearColor(1.f, 0.82f, 0.5f));
+						PL->SetIntensity(0.f);
+						PL->SetCastShadows(false);
+						PackLampLights.Add(PL);
+					}
 				}
 			}
 		}
@@ -435,9 +457,9 @@ void ADayNightController::Tick(float DeltaSeconds)
 				NightVol->Settings.bOverride_AutoExposureBias = true;
 				NightVol->Settings.AutoExposureBias = -1.5f;
 				NightVol->Settings.bOverride_ColorGain = true;
-				NightVol->Settings.ColorGain = FVector4(0.22f, 0.27f, 0.45f, 1.f); // donker nachtblauw
+				NightVol->Settings.ColorGain = FVector4(0.45f, 0.5f, 0.7f, 1.f); // nachtblauw, zacht genoeg voor neon/lampen
 				NightVol->Settings.bOverride_ColorSaturation = true;
-				NightVol->Settings.ColorSaturation = FVector4(0.8f, 0.8f, 0.8f, 1.f);
+				NightVol->Settings.ColorSaturation = FVector4(0.9f, 0.9f, 0.9f, 1.f);
 				NightPPV = NightVol;
 			}
 		}
@@ -455,6 +477,15 @@ void ADayNightController::Tick(float DeltaSeconds)
 		}
 
 		if (NightPPV.IsValid()) { NightPPV->BlendWeight = 1.f - MinDayF; }
+		// Bloom-rem ALLEEN overdag (tegen de zon-waas) - 's nachts volle bloei voor neon en lampen.
+		if (BloomPPV.IsValid()) { BloomPPV->BlendWeight = MinDayF; }
+
+		// Pack-lampen op kloktijd (zelfde regel als onze eigen map: aan vanaf 17u, uit om 8u).
+		const float WantLampI = (Hour < 8.f || Hour >= 17.f) ? LampIntensity : 0.f;
+		for (UPointLightComponent* PL : PackLampLights)
+		{
+			if (PL && !FMath::IsNearlyEqual(PL->Intensity, WantLampI, 1.f)) { PL->SetIntensity(WantLampI); }
+		}
 
 		// BLOOM-REM (altijd aan): de zonneschijf blies via de bloom op tot een gigantische witte
 		// waas over de halve hemel. Alleen bloom geremd, verder niks aan de look veranderd.

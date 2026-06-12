@@ -68,6 +68,10 @@ protected:
 	TWeakObjectPtr<class ADirectionalLight> PackSun;   // eigen bewegende zon op pack-maps
 	TWeakObjectPtr<class APostProcessVolume> BloomPPV; // bloom-rem (zonneschijn was een witte waas)
 	bool bAtmosphereTuned = false; // Mie-waas van de map-atmosfeer een keer temmen
+	// Pack-lampen: de lantaarn/plafondlamp-meshes van de map hebben geen echte lichten -
+	// wij hangen er warme puntlichten aan die op de klok aan/uit gaan.
+	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> PackLampLights;
+	TSet<UStaticMeshComponent*> PackLampSeen;
 	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
 	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
 	TArray<FDimLight> DimLights;
