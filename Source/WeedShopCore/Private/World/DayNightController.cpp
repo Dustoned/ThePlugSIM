@@ -497,7 +497,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 				BloomVol->Priority = 999.f;
 				BloomVol->BlendWeight = 1.f;
 				BloomVol->Settings.bOverride_BloomIntensity = true;
-				BloomVol->Settings.BloomIntensity = 0.05f;
+				BloomVol->Settings.BloomIntensity = 0.4f; // genoeg gloed voor neon/stoplichten, zonder zon-bom
 				// Exposure-boost begrenzen: de auto-exposure krikte de scene zo ver op dat de lucht
 				// rond de zon naar wit verzadigde - een gigantische gloeibal ipv een zonneschijf.
 				BloomVol->Settings.bOverride_AutoExposureMaxBrightness = true;
