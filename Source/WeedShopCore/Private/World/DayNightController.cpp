@@ -1,5 +1,6 @@
 #include "World/DayNightController.h"
 #include "Engine/PostProcessVolume.h"
+#include "Engine/LevelStreaming.h"
 
 #include "World/DayCycleComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -404,6 +405,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			if (APostProcessVolume* NightVol = GetWorld()->SpawnActor<APostProcessVolume>())
 			{
 				NightVol->bUnbound = true;
+				NightVol->Priority = 1000.f; // wint van de PPV van het lighting-scenario
 				NightVol->BlendWeight = 0.f;
 				// Exposure remmen EN via color grading donker/koel maken: de gevels van de map zijn
 				// gebakken/emissive verlicht, dus alleen lichten dimmen deed niks. Grading zit NA de
@@ -418,6 +420,17 @@ void ADayNightController::Tick(float DeltaSeconds)
 			}
 		}
 		if (NightPPV.IsValid()) { NightPPV->BlendWeight = 1.f - MinDayF; }
+
+		// Het LIGHTING-SCENARIO van de map (Lighting_Sunny/Sunset sublevels: zon + skylight +
+		// gevel-belichting) gaat 's nachts UIT - dan blijven donkere gebouwen met alleen de
+		// lampen en emissives over: precies de nacht-look die de map zelf in zich heeft.
+		const bool bScenarioVisible = MinDayF > 0.25f;
+		for (ULevelStreaming* SL : GetWorld()->GetStreamingLevels())
+		{
+			if (!SL) { continue; }
+			if (!SL->GetWorldAssetPackageName().Contains(TEXT("/Maps/Lighting/"))) { continue; }
+			SL->SetShouldBeVisible(bScenarioVisible);
+		}
 		// Fotokoepel (dag-lucht met ingebakken zon): 's nachts uit zodat de donkere hemel toont.
 		const bool bDomeVisible = MinDayF > 0.3f;
 		for (const TWeakObjectPtr<UStaticMeshComponent>& Dc : DomeComps)
