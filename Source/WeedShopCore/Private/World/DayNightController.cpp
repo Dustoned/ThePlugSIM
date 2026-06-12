@@ -1,4 +1,4 @@
-﻿#include "World/DayNightController.h"
+#include "World/DayNightController.h"
 #include "Engine/PostProcessVolume.h"
 
 #include "World/DayCycleComponent.h"
@@ -405,8 +405,15 @@ void ADayNightController::Tick(float DeltaSeconds)
 			{
 				NightVol->bUnbound = true;
 				NightVol->BlendWeight = 0.f;
+				// Exposure remmen EN via color grading donker/koel maken: de gevels van de map zijn
+				// gebakken/emissive verlicht, dus alleen lichten dimmen deed niks. Grading zit NA de
+				// auto-exposure in de pipeline - die kan dit dus niet terugcompenseren.
 				NightVol->Settings.bOverride_AutoExposureBias = true;
-				NightVol->Settings.AutoExposureBias = -2.0f;
+				NightVol->Settings.AutoExposureBias = -1.5f;
+				NightVol->Settings.bOverride_ColorGain = true;
+				NightVol->Settings.ColorGain = FVector4(0.22f, 0.27f, 0.45f, 1.f); // donker nachtblauw
+				NightVol->Settings.bOverride_ColorSaturation = true;
+				NightVol->Settings.ColorSaturation = FVector4(0.8f, 0.8f, 0.8f, 1.f);
 				NightPPV = NightVol;
 			}
 		}
