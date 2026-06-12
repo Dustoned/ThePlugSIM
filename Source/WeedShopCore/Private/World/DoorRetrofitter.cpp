@@ -223,9 +223,12 @@ void ADoorRetrofitter::SpotDump()
 				const FVector L = Comp->GetComponentLocation();
 				if (FVector::Dist2D(L, Spots[SpotIdx]) > 900.f || FMath::Abs(L.Z - Spots[SpotIdx].Z) > 350.f) { continue; }
 				const FRotator R = Comp->GetComponentRotation();
-				Out += FString::Printf(TEXT("%s | pos=(%.0f, %.0f, %.0f) | rot=(%.0f, %.0f, %.0f) | scale=(%.2f, %.2f, %.2f)"),
+				FString TagStr;
+				for (const FName& Tg : It->Tags) { TagStr += Tg.ToString() + TEXT(","); }
+				Out += FString::Printf(TEXT("%s | pos=(%.0f, %.0f, %.0f) | rot=(%.0f, %.0f, %.0f) | vis=%d hid=%d | %s | tags=%s"),
 					*Comp->GetStaticMesh()->GetName(), L.X, L.Y, L.Z, R.Pitch, R.Yaw, R.Roll,
-					Comp->GetComponentScale().X, Comp->GetComponentScale().Y, Comp->GetComponentScale().Z);
+					Comp->IsVisible() ? 1 : 0, It->IsHidden() ? 1 : 0,
+					*It->GetClass()->GetName(), *TagStr);
 				Out += LINE_TERMINATOR;
 			}
 		}

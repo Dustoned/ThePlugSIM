@@ -124,6 +124,8 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 	FString Out;
 	int32 Count = 0;
 	TArray<TPair<FVector, FString>> LeafLines; // deurbladen apart: max 1 per deuropening
+	TSet<UStaticMeshComponent*> CapturedComps;
+	TArray<FVector> BalconyPts; // posities van gecapturede pui-stukken (voor de pui-als-geheel pass
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
 		AActor* A = *It;
@@ -168,9 +170,12 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 			FString PieceLine = FString::Printf(TEXT("PIECE|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
 				*Comp->GetStaticMesh()->GetPathName(), RL.X, RL.Y, RL.Z, RR.Pitch, RR.Yaw, RR.Roll, RS.X, RS.Y, RS.Z, *MatList);
 			PieceLine += LINE_TERMINATOR;
-			const bool bLeaf = MeshName.Contains(TEXT("Door")) && !MeshName.Contains(TEXT("DoorFrame")) && !MeshName.Contains(TEXT("Wall"));
+			const bool bLeaf = MeshName.Contains(TEXT("Door")) && !MeshName.Contains(TEXT("DoorFrame"))
+				&& !MeshName.Contains(TEXT("Wall")) && !MeshName.Contains(TEXT("Glass")); // glas ligt op blad-positie - niet wegdedupen
 			if (bLeaf) { LeafLines.Add(TPair<FVector, FString>(L, PieceLine)); }
 			else { Out += PieceLine; ++Count; }
+			CapturedComps.Add(Comp);
+			if (MeshName.Contains(TEXT("BalconyDoor"))) { BalconyPts.Add(L); }
 		}
 	}
 	// Maximaal EEN deurblad per deuropening: kopieen (top-ups, oude vullingen, geparkeerde dubbelen)
@@ -188,6 +193,47 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 		Out += Lf.Value;
 		++Count;
 	}
+	// BALKONPUI ALS GEHEEL: zit er een BalconyDoor-stuk in de capture, pak dan ALLE BalconyDoor-
+	// stukken (frame, glas, schuifbladen incl. de verborgen geparkeerde originelen) binnen 4m mee.
+	// De schuifbladen hangen aan de uiteinden van de pui en vielen anders telkens half buiten de
+	// marker-rechthoek - zonder bladen valt er niks te schuiven en blijft de pui fake van buiten.
+	if (BalconyPts.Num() > 0)
+	{
+		for (TActorIterator<AActor> It2(W); It2; ++It2)
+		{
+			AActor* A2 = *It2;
+			if (!IsValid(A2) || A2->IsA(ACityDoor::StaticClass())) { continue; }
+			TInlineComponentArray<UStaticMeshComponent*> Comps2(A2);
+			for (UStaticMeshComponent* Comp : Comps2)
+			{
+				if (!Comp || !Comp->GetStaticMesh() || CapturedComps.Contains(Comp)) { continue; }
+				const FString MeshName = Comp->GetStaticMesh()->GetName();
+				if (!MeshName.Contains(TEXT("BalconyDoor"))) { continue; }
+				const FVector L = Comp->Bounds.Origin;
+				if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 520.f) { continue; }
+				bool bNear = false;
+				for (const FVector& BP : BalconyPts) { if (FVector::Dist2D(BP, L) < 400.f) { bNear = true; break; } }
+				if (!bNear) { continue; }
+				CapturedComps.Add(Comp);
+				const FTransform Rel = Comp->GetComponentTransform() * AnchorInv;
+				const FVector RL = Rel.GetLocation();
+				const FRotator RR = Rel.GetRotation().Rotator();
+				const FVector RS = Rel.GetScale3D();
+				FString MatList;
+				for (int32 Mi = 0; Mi < Comp->GetNumMaterials(); ++Mi)
+				{
+					if (Mi > 0) { MatList += TEXT(";"); }
+					UMaterialInterface* M = Comp->GetMaterial(Mi);
+					MatList += M ? M->GetPathName() : TEXT("-");
+				}
+				Out += FString::Printf(TEXT("PIECE|%s|%.2f,%.2f,%.2f|%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%s"),
+					*Comp->GetStaticMesh()->GetPathName(), RL.X, RL.Y, RL.Z, RR.Pitch, RR.Yaw, RR.Roll, RS.X, RS.Y, RS.Z, *MatList);
+				Out += LINE_TERMINATOR;
+				++Count;
+			}
+		}
+	}
+
 	if (Count < 8) { OutError = FString::Printf(TEXT("Only %d pieces found - room not streamed in?"), Count); return false; }
 
 	IFileManager::Get().MakeDirectory(*TemplatesDir(), true);
