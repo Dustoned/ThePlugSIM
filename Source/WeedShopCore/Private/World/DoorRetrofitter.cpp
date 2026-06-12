@@ -8,6 +8,7 @@
 #include "World/RoomStamper.h"
 #include "World/MapBorder.h"
 #include "Customer/CustomerSpawner.h"
+#include "Customer/CustomerBase.h"
 #include "Economy/EconomyComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "NavigationSystem.h"
@@ -605,6 +606,74 @@ void ADoorRetrofitter::ScanAndConvert()
 				const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
 				Bd->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
 				++NBalcLocked;
+			}
+			// BEWONERS-LITE: een deel van de BEGANE-GROND woningen (Apt 1xx) krijgt een ECHT
+			// rondlopende bewoner - zelfde naam als op het deurbordje (NpcId Resident_<idx> mapt
+			// via FriendlyNpcName op dezelfde naam). Boven-verdiepingen blijven virtueel (NPC's
+			// kunnen geen lift bedienen) en boven de cap blijven woningen leeg: daar bouwt de
+			// speler nog kamers bij - die krijgen vanzelf een bewoner zodra ze er zijn. De
+			// straat-spawners blijven onafhankelijk hiervan gewone klanten leveren.
+			{
+				TArray<ACityDoor*> Ground;
+				for (ACityDoor* A : Apt)
+				{
+					if (A == Starter) { continue; }
+					if (A->GetAptNumber() < 100 || A->GetAptNumber() >= 200) { continue; }
+					Ground.Add(A);
+				}
+				Ground.Sort([](const ACityDoor& A, const ACityDoor& B)
+				{
+					const FVector LA = A.GetActorLocation(), LB = B.GetActorLocation();
+					if (!FMath::IsNearlyEqual(LA.X, LB.X, 50.f)) { return LA.X < LB.X; }
+					return LA.Y < LB.Y;
+				});
+				int32 NLive = 0;
+				for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
+				{
+					if (IsValid(*CIt) && CIt->IsResident()) { ++NLive; }
+				}
+				const int32 LiteCap = 10;
+				int32 NNew = 0;
+				for (ACityDoor* A : Ground)
+				{
+					if (NLive >= LiteCap) { break; }
+					if (A->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
+					// Kamer-kant vs straat-kant van de voordeur (zelfde meting als de starter-teleport).
+					const FVector DL = A->GetActorLocation();
+					const FVector Fw = A->GetActorForwardVector();
+					const FVector Rt = A->GetActorRightVector();
+					auto Openness = [&](const FVector& P)
+					{
+						float Sum = 0.f;
+						const FVector Dirs[4] = { Fw, -Fw, Rt, -Rt };
+						for (const FVector& Dir : Dirs)
+						{
+							FHitResult H;
+							const FVector S = P + FVector(0.f, 0.f, 120.f);
+							Sum += W->LineTraceSingleByChannel(H, S, S + Dir * 1200.f, ECC_Visibility) ? H.Distance : 1200.f;
+						}
+						return Sum;
+					};
+					const FVector CandA = DL + Fw * 240.f;
+					const FVector CandB = DL - Fw * 240.f;
+					const bool bAInside = Openness(CandA) <= Openness(CandB);
+					const FVector Inside = bAInside ? CandA : CandB;
+					const FVector Front = bAInside ? CandB : CandA;
+					FActorSpawnParameters RP;
+					RP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+					ACustomerBase* Cb = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Inside + FVector(0.f, 0.f, 100.f)), RP);
+					if (!Cb) { continue; }
+					const int32 NameIdx = FMath::Abs(FMath::RoundToInt(DL.X * 0.13f) + FMath::RoundToInt(DL.Y * 0.31f) + FMath::RoundToInt(DL.Z * 0.77f));
+					Cb->NpcId = FName(*FString::Printf(TEXT("Resident_%d"), NameIdx));
+					Cb->SetupResident(Front, Inside, FString::FromInt(A->GetAptNumber()), Front);
+					A->Tags.Add(TEXT("ResidentNpc"));
+					++NLive;
+					++NNew;
+				}
+				if (NNew > 0)
+				{
+					UE_LOG(LogWeedShop, Warning, TEXT("Bewoners-lite: %d nieuwe bewoners (totaal %d/%d) op begane-grond woningen"), NNew, NLive, LiteCap);
+				}
 			}
 			const FVector Top = Starter->GetActorLocation();
 			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
