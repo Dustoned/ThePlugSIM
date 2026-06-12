@@ -314,6 +314,11 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->PostProcessSettings.AutoExposureMaxBrightness = 0.45f;
 	MapCapture->ShowFlags.SetFog(false);          // hoogte-fog wast de luchtfoto anders uit
 	MapCapture->ShowFlags.SetAtmosphere(false);   // atmosfeer tussen camera en grond idem
+	// UNLIT schieten: sinds de echte dag/nachtcyclus is de wereld 's nachts donker en telt de
+	// nacht-grading mee in de capture - de kaart werd een donkerblauw vlak. Zonder belichting
+	// en post-processing is de luchtfoto altijd leesbaar, op elk tijdstip.
+	MapCapture->ShowFlags.SetLighting(false);
+	MapCapture->ShowFlags.SetPostProcessing(false);
 	// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met MapWidget::WorldToCanvas).
 	MapCapture->SetWorldLocationAndRotation(FVector(MapCenter.X, MapCenter.Y, TopZ), FRotator(-90.f, 0.f, 0.f));
 }
