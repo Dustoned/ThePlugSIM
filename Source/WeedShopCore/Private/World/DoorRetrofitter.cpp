@@ -7,6 +7,8 @@
 #include "World/PackElevatorButton.h"
 #include "World/RoomStamper.h"
 #include "World/MapBorder.h"
+#include "Game/WeedShopGameState.h"
+#include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
 #include "Engine/ExponentialHeightFog.h"
