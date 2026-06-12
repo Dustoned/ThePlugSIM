@@ -920,6 +920,14 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				// Onder dek-niveau (ruim onder de dichtstbijzijnde spawner) = onder de map beland.
 				if (L.Z > Best.Z - 180.f) { continue; }
+				// Klanten OPRUIMEN in plaats van teleporteren: hun spawner zet ze vanzelf opnieuw
+				// goed neer - teleporteren gaf een stilstaande klomp op een spawn-punt.
+				if (!Cb->IsResident())
+				{
+					Cb->Destroy();
+					++NRescued;
+					continue;
+				}
 				Cb->SetActorLocation(Best + FVector(0.f, 0.f, 120.f), false, nullptr, ETeleportType::TeleportPhysics);
 				++NRescued;
 			}

@@ -1,4 +1,5 @@
 #include "Customer/CustomerSpawner.h"
+#include "AIController.h"
 
 #include "WeedShopCore.h"
 #include "Customer/CustomerBase.h"
@@ -248,13 +249,31 @@ void ACustomerSpawner::TrySpawn()
 	// onderniveau (onder het dek), dan spawnen we NIET in plaats van eronder.
 	if (!bSpawnResidents)
 	{
-		if (Spawned.Num() >= MaxCustomers) { return; }
 		UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World);
 		if (!Nav) { return; }
+		// STRAKKE hoogte-marge (100cm): de stoep en het service-niveau eronder schelen ~200cm -
+		// alles wat niet vrijwel exact op spawn-hoogte projecteert is het verkeerde niveau.
+		const float ZTol = 100.f;
+		// SLENTEREN: stilstaande wandelaars krijgen een nieuw doel op stoep-hoogte rond dit punt.
+		for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
+		{
+			if (!IsValid(Cw)) { continue; }
+			if (Cw->GetVelocity().SizeSquared2D() > 25.f) { continue; } // loopt al ergens heen
+			if (FMath::FRand() > 0.6f) { continue; }                    // niet iedereen tegelijk
+			FNavLocation Goal;
+			const FVector GAround = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), 0.f);
+			if (!Nav->ProjectPointToNavigation(GAround, Goal, FVector(400.f, 400.f, ZTol))) { continue; }
+			if (FMath::Abs(Goal.Location.Z - GetActorLocation().Z) > ZTol) { continue; }
+			if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
+			{
+				AI->MoveToLocation(Goal.Location, 60.f);
+			}
+		}
+		if (Spawned.Num() >= MaxCustomers) { return; }
 		FNavLocation SpawnNav;
 		const FVector Around = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
-		if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, 220.f))) { return; }
-		if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > 220.f) { return; } // onderniveau geweigerd
+		if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, ZTol))) { return; }
+		if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { return; } // onderniveau geweigerd
 		FActorSpawnParameters SP;
 		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		TSubclassOf<ACustomerBase> Cls = CustomerClass;
