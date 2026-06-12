@@ -118,9 +118,28 @@ void USpotInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	};
 	if (!TryBlockSweep(CamLoc, CamRot.Vector()))
 	{
-		// Heuphoogte, plat vooruit (waar je lijf daadwerkelijk tegenaan loopt).
+		// Exact wat je lijf doet: CAPSULE-sweep op OBJECT-types (sommige blockers reageren wel
+		// op object-collisie maar negeren trace-kanalen, dan vond de gewone sweep niks).
 		FVector Flat = CamRot.Vector(); Flat.Z = 0.f; Flat.Normalize();
-		TryBlockSweep(P->GetActorLocation() + FVector(0.f, 0.f, -30.f), Flat);
+		FHitResult CapHit;
+		FCollisionObjectQueryParams ObjQ;
+		ObjQ.AddObjectTypesToQuery(ECC_WorldStatic);
+		ObjQ.AddObjectTypesToQuery(ECC_WorldDynamic);
+		const FVector Start = P->GetActorLocation();
+		if (GetWorld() && GetWorld()->SweepSingleByObjectType(CapHit, Start, Start + Flat * 220.f, FQuat::Identity, ObjQ,
+			FCollisionShape::MakeCapsule(30.f, 80.f), QP) && CapHit.GetComponent())
+		{
+			const UStaticMeshComponent* BMC = Cast<UStaticMeshComponent>(CapHit.GetComponent());
+			FString BName;
+			if (BMC && BMC->GetStaticMesh()) { BName = BMC->GetStaticMesh()->GetName(); }
+			else
+			{
+				BName = FString::Printf(TEXT("%s/%s"), *CapHit.GetComponent()->GetClass()->GetName(),
+					CapHit.GetActor() ? *CapHit.GetActor()->GetName() : TEXT("?"));
+			}
+			LookAt += FString::Printf(TEXT("\nBLOCK %s  (%.1fm)%s"), *BName, CapHit.Distance / 100.f,
+				CapHit.GetComponent()->IsVisible() ? TEXT("") : TEXT(" [invisible]"));
+		}
 	}
 
 	InfoText->SetText(FText::FromString(FString::Printf(
