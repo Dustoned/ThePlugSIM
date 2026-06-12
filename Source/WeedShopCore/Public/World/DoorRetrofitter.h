@@ -57,6 +57,10 @@ protected:
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
 	bool bDayMapCaptured = false;   // kaart een keer per sessie schieten (foto-stand maakt tijd irrelevant)
 	int32 LastAptDoorCount = -1;    // woningen-slot-pass: opnieuw draaien als er deuren bij komen
+	// Walk-throughs (Saved/NoCollide.txt): elke sessie opnieuw toepassen, ook op gestreamde meshes.
+	TArray<FString> NoCollideLines;
+	bool bNoCollideLoaded = false;
+	int32 ScanPass = 0;
 	// Starter-huis + huur (EUR 500 per 31 dagen, voortgang in Saved/RentState.txt).
 	TWeakObjectPtr<class ACityDoor> StarterDoor;
 	bool bMovedIntoHome = false;    // speler 1x per sessie in z'n appartement zetten

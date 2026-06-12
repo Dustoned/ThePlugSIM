@@ -25,6 +25,7 @@
 #include "Components/LocalLightComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/FileHelper.h"
@@ -373,6 +374,51 @@ void ADoorRetrofitter::ScanAndConvert()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+	++ScanPass;
+
+	// WALK-THROUGHS: via de Test-tab gemarkeerde objecten (NoCollide.txt) doorloopbaar maken.
+	// Periodiek herhaald zodat ook later-gestreamde meshes hun pawn-collision verliezen.
+	if (!bNoCollideLoaded)
+	{
+		bNoCollideLoaded = true;
+		FFileHelper::LoadFileToStringArray(NoCollideLines, *(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
+	}
+	if (NoCollideLines.Num() > 0 && (ScanPass % 5 == 1))
+	{
+		for (const FString& NL : NoCollideLines)
+		{
+			TArray<FString> NP;
+			NL.ParseIntoArray(NP, TEXT("|"));
+			if (NP.Num() < 2) { continue; }
+			TArray<FString> NC;
+			NP[1].ParseIntoArray(NC, TEXT(","));
+			if (NC.Num() < 3) { continue; }
+			const FVector Want(FCString::Atof(*NC[0]), FCString::Atof(*NC[1]), FCString::Atof(*NC[2]));
+			for (TObjectIterator<UStaticMeshComponent> CIt; CIt; ++CIt)
+			{
+				UStaticMeshComponent* C = *CIt;
+				if (!C || C->GetWorld() != W || !C->GetStaticMesh()) { continue; }
+				if (C->GetStaticMesh()->GetName() != NP[0]) { continue; }
+				bool bMatch = FVector::DistSquared(C->GetComponentLocation(), Want) < 120.f * 120.f;
+				if (!bMatch)
+				{
+					if (UInstancedStaticMeshComponent* IC = Cast<UInstancedStaticMeshComponent>(C))
+					{
+						const int32 NI = IC->GetInstanceCount();
+						for (int32 ii = 0; ii < NI && !bMatch; ++ii)
+						{
+							FTransform IT;
+							if (IC->GetInstanceTransform(ii, IT, true) && FVector::DistSquared(IT.GetLocation(), Want) < 120.f * 120.f) { bMatch = true; }
+						}
+					}
+				}
+				if (bMatch && C->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Ignore)
+				{
+					C->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+				}
+			}
+		}
+	}
 
 	// KLANTEN + NAVMESH op de pack-map: zodra de speler er staat, registreren we hier een
 	// navigatie-invoker (de dynamische navmesh bouwt dan tiles in dit gebied - het volume zit in

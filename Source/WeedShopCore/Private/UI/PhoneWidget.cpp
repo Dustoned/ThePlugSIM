@@ -25,6 +25,7 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
 #include "World/RoomStamper.h"
@@ -313,6 +314,59 @@ void UPhoneWidget::FillSettingsBody()
 		UWeedActionButton* BorderXB = MakeActionBtn(TEXT("Clear map border"), FLinearColor(0.4f, 0.22f, 0.22f),
 			[this]() { if (Phone.IsValid()) { Phone->ClearMapBorder(); } }, 11);
 		BodyRow(BorderXB, FMargin(0.f, 0.f, 0.f, 8.f));
+
+		// WALK-THROUGH: maak het object in je crosshair doorloopbaar (pawn-collision uit) en sla
+		// het op in Saved/NoCollide.txt - elke sessie opnieuw toegepast, dus permanent ingebakken.
+		UWeedActionButton* NoColB = MakeActionBtn(TEXT("Walk-through: unblock crosshair target"), FLinearColor(0.25f, 0.4f, 0.45f),
+			[this]()
+			{
+				APlayerController* PC = GetOwningPlayer();
+				UWorld* DW = GetWorld();
+				if (!PC || !DW || !Phone.IsValid()) { return; }
+				FVector VL; FRotator VR;
+				PC->GetPlayerViewPoint(VL, VR);
+				FHitResult Hit;
+				FCollisionQueryParams Q;
+				Q.AddIgnoredActor(PC->GetPawn());
+				// Pawn-kanaal: raakt precies dat wat JOU blokkeert (ook onzichtbare blockers).
+				if (!DW->LineTraceSingleByChannel(Hit, VL, VL + VR.Vector() * 2500.f, ECC_Pawn, Q) || !Hit.GetComponent())
+				{
+					Phone->Toast(TEXT("Nothing blocking in crosshair"), FColor::Orange, 2.5f);
+					return;
+				}
+				// Vloer-beveiliging: alleen muur-achtige vlakken, anders zak je door de wereld.
+				if (FMath::Abs(Hit.ImpactNormal.Z) > 0.6f)
+				{
+					Phone->Toast(TEXT("Aim at a wall/object, not the floor"), FColor::Orange, 3.f);
+					return;
+				}
+				UPrimitiveComponent* Comp = Hit.GetComponent();
+				Comp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+				FVector SaveLoc = Comp->GetComponentLocation();
+				FString MeshNm = Comp->GetName();
+				if (UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(Comp))
+				{
+					if (SMC->GetStaticMesh()) { MeshNm = SMC->GetStaticMesh()->GetName(); }
+				}
+				if (UInstancedStaticMeshComponent* IC = Cast<UInstancedStaticMeshComponent>(Comp))
+				{
+					FTransform IT;
+					if (Hit.Item >= 0 && IC->GetInstanceTransform(Hit.Item, IT, true)) { SaveLoc = IT.GetLocation(); }
+				}
+				FString Cur;
+				FFileHelper::LoadFileToString(Cur, *(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
+				Cur += FString::Printf(TEXT("%s|%.1f,%.1f,%.1f\n"), *MeshNm, SaveLoc.X, SaveLoc.Y, SaveLoc.Z);
+				FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
+				Phone->Toast(FString::Printf(TEXT("Walk-through: %s (saved)"), *MeshNm), FColor::Cyan, 3.f);
+			}, 12);
+		BodyRow(NoColB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* NoColXB = MakeActionBtn(TEXT("Clear walk-throughs"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]()
+			{
+				IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
+				if (Phone.IsValid()) { Phone->Toast(TEXT("Walk-throughs cleared (restart restores collision)"), FColor::Orange, 4.f); }
+			}, 11);
+		BodyRow(NoColXB, FMargin(0.f, 0.f, 0.f, 8.f));
 	}
 	else if (SettingsCat == 2) // Rooms: kamer-builds + stamper
 	{
