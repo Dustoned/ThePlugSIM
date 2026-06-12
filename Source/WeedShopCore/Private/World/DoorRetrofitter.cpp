@@ -14,6 +14,7 @@
 #include "NavigationSystem.h"
 #include "Engine/TargetPoint.h"
 #include "NavigationPath.h"
+#include "Navigation/NavLinkProxy.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
@@ -511,7 +512,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		CSr->bSpawnResidents = false;
 		CSr->MaxCustomers = RouteCustomersPerPoint;
 		CSr->SpotRadius = 500.f;
-		CSr->ActivationRange = 10000.f;
+		CSr->ActivationRange = 25000.f; // ruim: de navmesh-check op de spawn-plek bewaakt streaming al
 		// De ring waar dit punt bij hoort meegeven: wandelaars patrouilleren de hele route.
 		{
 			float BestRingD = TNumericLimits<float>::Max();
@@ -605,7 +606,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			CSw->bSpawnResidents = false; // bewoners-lite draait via de woningen-pass
 			CSw->MaxCustomers = 5;
 			CSw->SpotRadius = 500.f; // dicht bij de stoep blijven
-			CSw->ActivationRange = 10000.f; // pas spawnen als een speler in de buurt is (streaming)
+			CSw->ActivationRange = 25000.f; // ruim: de navmesh-check op de spawn-plek bewaakt streaming al
 			CSw->FinishSpawning(FTransform(Street));
 			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
 			{
@@ -877,7 +878,7 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// DIAGNOSE TRAP: bestaat er een trap in de toren, ligt er navmesh op, en is er een pad van
 	// een verdiepingsgang naar de straat? Eenmalig zodra de toren-navmesh even heeft kunnen bouwen.
-	if (ScanPass == 30 && StarterDoor.IsValid())
+	if ((ScanPass == 30 || ScanPass == 90 || ScanPass == 180) && StarterDoor.IsValid())
 	{
 		const FVector TLoc = StarterDoor->GetActorLocation();
 		FString Out;
@@ -933,6 +934,34 @@ void ADoorRetrofitter::ScanAndConvert()
 				{
 					const FVector End = Path->PathPoints.Last();
 					Out += FString::Printf(TEXT("PADTEST eindigt op (%.0f, %.0f, %.0f)\n"), End.X, End.Y, End.Z);
+					// AUTO-TRAP-LINK: de trap brengt het pad tot de DEK-RAND en strandt daar boven
+					// straat-niveau. Leg op dat strand-punt een nav-link naar de straat eronder -
+					// daarna is de route gang -> trap -> dek -> straat compleet.
+					if (Path->IsValid() && Path->IsPartial() && End.Z > StreetP.Z + 200.f)
+					{
+						bool bNearExisting = false;
+						for (const FVector& PL : PlacedNavLinks)
+						{
+							if (FVector::Dist(PL, End) < 500.f) { bNearExisting = true; break; }
+						}
+						FNavLocation Down;
+						if (!bNearExisting && NavD->ProjectPointToNavigation(FVector(End.X, End.Y, StreetP.Z), Down, FVector(800.f, 800.f, 160.f))
+							&& Down.Location.Z < End.Z - 150.f)
+						{
+							if (ANavLinkProxy* Lnk = W->SpawnActor<ANavLinkProxy>(ANavLinkProxy::StaticClass(), FTransform(End)))
+							{
+								Lnk->PointLinks.Empty();
+								FNavigationLink NL2;
+								NL2.Left = FVector::ZeroVector;
+								NL2.Right = Down.Location - End;
+								NL2.Direction = ENavLinkDirection::BothWays;
+								Lnk->PointLinks.Add(NL2);
+								PlacedNavLinks.Add(End);
+								Out += FString::Printf(TEXT("NAVLINK gelegd: (%.0f, %.0f, %.0f) -> (%.0f, %.0f, %.0f)\n"),
+									End.X, End.Y, End.Z, Down.Location.X, Down.Location.Y, Down.Location.Z);
+							}
+						}
+					}
 				}
 			}
 		}
