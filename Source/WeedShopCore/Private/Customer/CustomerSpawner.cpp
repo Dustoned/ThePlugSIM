@@ -255,15 +255,18 @@ void ACustomerSpawner::TrySpawn()
 	{
 		UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World);
 		if (!Nav) { return; }
-		// STRAKKE hoogte-marge (100cm): de stoep en het service-niveau eronder schelen ~200cm -
-		// alles wat niet vrijwel exact op spawn-hoogte projecteert is het verkeerde niveau.
-		const float ZTol = 100.f;
-		// GEZAKTE wandelaars meteen opruimen: deze spawner vult ze hieronder vers aan op de
-		// juiste hoogte - effectief een respawn op de stoep.
+		// STRAKKE hoogte-marge (50cm): het service-niveau (~200cm lager) EN terras-tafels
+		// (~75cm hoger - navmesh-eilandjes waar NPC's op vast stonden) vallen er beide buiten.
+		const float ZTol = 50.f;
+		// Opruimen: wandelaars die GEZAKT zijn (onder de stoep) of ergens OP geklommen staan
+		// (terras-tafel, >60cm boven spawn-hoogte). Deze spawner vult ze hieronder vers aan -
+		// effectief een respawn op de stoep.
 		for (int32 wi = Spawned.Num() - 1; wi >= 0; --wi)
 		{
 			ACustomerBase* Cw0 = Spawned[wi];
-			if (IsValid(Cw0) && Cw0->GetActorLocation().Z < GetActorLocation().Z - 150.f)
+			if (!IsValid(Cw0)) { continue; }
+			const float Dz = Cw0->GetActorLocation().Z - GetActorLocation().Z;
+			if (Dz < -150.f || Dz > 60.f)
 			{
 				Cw0->Destroy();
 				Spawned.RemoveAt(wi);
@@ -289,7 +292,18 @@ void ACustomerSpawner::TrySpawn()
 				if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
 				{
 					const FVector Jit(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), 0.f);
-					AI->MoveToLocation(PatrolRoute[St.NextIdx] + Jit, 90.f);
+					FVector Goal = PatrolRoute[St.NextIdx] + Jit;
+					FNavLocation GoalNav;
+					if (Nav->ProjectPointToNavigation(Goal, GoalNav, FVector(200.f, 200.f, ZTol))
+						&& FMath::Abs(GoalNav.Location.Z - PatrolRoute[St.NextIdx].Z) <= ZTol)
+					{
+						Goal = GoalNav.Location; // netjes op de stoep, niet op een tafel ernaast
+					}
+					else
+					{
+						Goal = PatrolRoute[St.NextIdx]; // jitter viel verkeerd: het kale route-punt
+					}
+					AI->MoveToLocation(Goal, 90.f);
 				}
 			}
 		}
@@ -316,6 +330,24 @@ void ACustomerSpawner::TrySpawn()
 		const FVector Around = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
 		if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, ZTol))) { return; }
 		if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { return; } // onderniveau geweigerd
+		// NIET voor de neus van de speler verschijnen: ver weg (60m+) mag altijd, dichterbij
+		// alleen als de plek BUITEN beeld ligt (achter de kijkrichting). Zo zie je ze nooit
+		// poppen - alleen aan komen lopen.
+		for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
+		{
+			const APlayerController* PC = PIt->Get();
+			const APawn* Pp = PC ? PC->GetPawn() : nullptr;
+			if (!Pp) { continue; }
+			const FVector To = SpawnNav.Location - Pp->GetActorLocation();
+			const float Dp = To.Size2D();
+			if (Dp < 2500.f) { return; } // te dichtbij: altijd merkbaar
+			if (Dp < 6000.f)
+			{
+				const FVector Dir = To.GetSafeNormal2D();
+				const FVector View = PC->GetControlRotation().Vector().GetSafeNormal2D();
+				if (FVector::DotProduct(View, Dir) > 0.1f) { return; } // in beeld: volgende keer
+			}
+		}
 		FActorSpawnParameters SP;
 		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		TSubclassOf<ACustomerBase> Cls = CustomerClass;
