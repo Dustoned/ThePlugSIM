@@ -1458,6 +1458,10 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		{
 			AActor* A = *It;
 			if (!IsValid(A)) { continue; }
+			// ONZE werkende deuren NOOIT als raam-kandidaat zien: een dichtgeschoven pui-blad staat
+			// niet meer op de bron-positie en werd dan als "door de maker verwijderd glas" verborgen
+			// - weg schuifdeur. Deuren zijn van ons, niet van de gevel.
+			if (A->IsA(ACityDoor::StaticClass())) { continue; }
 			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
 			for (UStaticMeshComponent* Comp : Comps)
 			{
