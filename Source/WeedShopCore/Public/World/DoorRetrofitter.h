@@ -75,6 +75,7 @@ protected:
 	// Bewoners gespreid laten verschijnen (1 per ~10s), niet allemaal tegelijk.
 	struct FPendingResident { TWeakObjectPtr<class ACityDoor> Door; bool bInside = false; };
 	TArray<FPendingResident> PendingResidents;
+	bool bTowerInvokerPlaced = false; // navmesh-anker in de starter-toren (alle verdiepingen)
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;

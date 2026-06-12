@@ -12,6 +12,7 @@
 #include "Economy/EconomyComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "NavigationSystem.h"
+#include "Engine/TargetPoint.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
@@ -780,6 +781,24 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			const FVector Top = Starter->GetActorLocation();
 			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
+		}
+	}
+
+	// NAVMESH IN DE TOREN: alle nav-invokers staan langs de route (kilometers verderop), dus de
+	// toren zelf had geen navmesh - bewoners konden geen stap zetten en teleporteerden terug naar
+	// huis. Een vast anker midden in de toren dekt alle verdiepingen plus het trappenhuis.
+	if (!bTowerInvokerPlaced && StarterDoor.IsValid())
+	{
+		bTowerInvokerPlaced = true;
+		const FVector TLoc = StarterDoor->GetActorLocation();
+		const FVector AnchorLoc(TLoc.X, TLoc.Y, FMath::Max(200.f, TLoc.Z - 1000.f));
+		if (AActor* Anchor = W->SpawnActor<ATargetPoint>(ATargetPoint::StaticClass(), FTransform(AnchorLoc)))
+		{
+			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+			{
+				NavSys->RegisterNavigationInvoker(Anchor, 9000.f, 11000.f);
+			}
+			UE_LOG(LogWeedShop, Warning, TEXT("Toren-navmesh anker op (%.0f, %.0f, %.0f)"), AnchorLoc.X, AnchorLoc.Y, AnchorLoc.Z);
 		}
 	}
 
