@@ -63,6 +63,7 @@ protected:
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 
 	bool bPackMinimal = false;
+	TWeakObjectPtr<class APostProcessVolume> NightPPV; // alleen 's nachts gewicht (exposure omlaag)
 	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
 	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
 	TArray<FDimLight> DimLights;

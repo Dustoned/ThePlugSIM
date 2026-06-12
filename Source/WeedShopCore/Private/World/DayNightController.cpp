@@ -1,4 +1,5 @@
 #include "World/DayNightController.h"
+#include "Engine/PostProcessVolume.h"
 
 #include "World/DayCycleComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -379,17 +380,37 @@ void ADayNightController::Tick(float DeltaSeconds)
 			}
 		}
 
-		// Lichten dimmen: 's nachts ~7% van origineel (de gebouw-strips/emissives van de map blijven
-		// vanzelf - dat is materiaal, geen licht - dus de stad houdt z'n mooie nachtgloed).
+		// Lichten dimmen. ZONLICHT (directional) moet 's nachts ECHT uit - een restje van 7% werd
+		// door de auto-exposure weer opgeblazen tot daglicht onder een zwarte hemel. Skylight bijna
+		// uit; alle overige lichten 7% (de emissive strips van de map blijven vanzelf - materiaal).
 		const float Mul = FMath::Lerp(0.07f, 1.f, MinDayF);
+		const float SunMul = MinDayF;                       // zon: 0 bij volle nacht
+		const float SkyMul = FMath::Lerp(0.02f, 1.f, MinDayF);
 		for (FDimLight& D : DimLights)
 		{
 			if (ULightComponent* LC = D.Light.Get())
 			{
-				const float Want = D.OrigIntensity * Mul;
+				float LMul = Mul;
+				if (LC->IsA(UDirectionalLightComponent::StaticClass())) { LMul = SunMul; }
+				else if (LC->IsA(USkyLightComponent::StaticClass()))    { LMul = SkyMul; }
+				const float Want = D.OrigIntensity * LMul;
 				if (!FMath::IsNearlyEqual(LC->Intensity, Want, D.OrigIntensity * 0.01f + 0.1f)) { LC->SetIntensity(Want); }
 			}
 		}
+		// Nacht-PPV: overdag gewicht 0 (stock dag-look 100% intact), 's nachts exposure omlaag
+		// zodat de auto-exposure de duisternis niet terugcompenseert naar daglicht.
+		if (!NightPPV.IsValid())
+		{
+			if (APostProcessVolume* PPV = GetWorld()->SpawnActor<APostProcessVolume>())
+			{
+				PPV->bUnbound = true;
+				PPV->BlendWeight = 0.f;
+				PPV->Settings.bOverride_AutoExposureBias = true;
+				PPV->Settings.AutoExposureBias = -2.0f;
+				NightPPV = PPV;
+			}
+		}
+		if (NightPPV.IsValid()) { NightPPV->BlendWeight = 1.f - MinDayF; }
 		// Fotokoepel (dag-lucht met ingebakken zon): 's nachts uit zodat de donkere hemel toont.
 		const bool bDomeVisible = MinDayF > 0.3f;
 		for (const TWeakObjectPtr<UStaticMeshComponent>& Dc : DomeComps)
