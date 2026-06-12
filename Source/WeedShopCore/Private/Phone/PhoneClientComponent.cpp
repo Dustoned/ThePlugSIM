@@ -1,4 +1,5 @@
 #include "Phone/PhoneClientComponent.h"
+#include "DrawDebugHelpers.h"
 
 #include "WeedShopCore.h"
 #include "Game/WeedShopGameState.h"
@@ -2801,6 +2802,71 @@ void UPhoneClientComponent::SaveStairsPath()
 	FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("StairsPath.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Stairs path saved (%d points)! Restart applies the links"), Marks.Num()));
+}
+
+void UPhoneClientComponent::ShowAllPaths()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	FlushPersistentDebugLines(W);
+	auto ParseBlocks = [](const FString& FileName, TArray<TArray<FVector>>& Out)
+	{
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *WeedData::File(FileName));
+		TArray<FVector> Cur;
+		for (const FString& L : Lines)
+		{
+			if (L.TrimStartAndEnd().StartsWith(TEXT("---")))
+			{
+				if (Cur.Num() >= 2) { Out.Add(Cur); }
+				Cur.Reset();
+				continue;
+			}
+			TArray<FString> P;
+			L.ParseIntoArray(P, TEXT(","));
+			if (P.Num() >= 3) { Cur.Add(FVector(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]))); }
+		}
+		if (Cur.Num() >= 2) { Out.Add(Cur); }
+	};
+	int32 NRoutes = 0, NChains = 0;
+	// Loop-ringen: groen, gesloten (laatste -> eerste), iets boven de grond.
+	{
+		TArray<TArray<FVector>> Routes;
+		ParseBlocks(TEXT("NpcRoute.txt"), Routes);
+		for (const TArray<FVector>& R : Routes)
+		{
+			const int32 NSeg = (R.Num() >= 3) ? R.Num() : R.Num() - 1;
+			for (int32 i = 0; i < NSeg; ++i)
+			{
+				const FVector A = R[i] + FVector(0.f, 0.f, 120.f);
+				const FVector B = R[(i + 1) % R.Num()] + FVector(0.f, 0.f, 120.f);
+				DrawDebugLine(W, A, B, FColor::Green, true, -1.f, 0, 14.f);
+			}
+			for (const FVector& P : R) { DrawDebugSphere(W, P + FVector(0.f, 0.f, 120.f), 45.f, 8, FColor::Green, true); }
+			++NRoutes;
+		}
+	}
+	// Gebouw-kettingen: oranje, open lijnen.
+	{
+		TArray<TArray<FVector>> Chains;
+		ParseBlocks(TEXT("StairsPath.txt"), Chains);
+		for (const TArray<FVector>& C : Chains)
+		{
+			for (int32 i = 0; i + 1 < C.Num(); ++i)
+			{
+				DrawDebugLine(W, C[i] + FVector(0.f, 0.f, 100.f), C[i + 1] + FVector(0.f, 0.f, 100.f), FColor::Orange, true, -1.f, 0, 14.f);
+			}
+			for (const FVector& P : C) { DrawDebugSphere(W, P + FVector(0.f, 0.f, 100.f), 40.f, 8, FColor::Orange, true); }
+			++NChains;
+		}
+	}
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Cyan, FString::Printf(TEXT("Showing %d routes (green) + %d building paths (orange)"), NRoutes, NChains));
+}
+
+void UPhoneClientComponent::HideAllPaths()
+{
+	if (UWorld* W = GetWorld()) { FlushPersistentDebugLines(W); }
+	UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::White, TEXT("Paths hidden"));
 }
 
 void UPhoneClientComponent::ClearStairsPath()

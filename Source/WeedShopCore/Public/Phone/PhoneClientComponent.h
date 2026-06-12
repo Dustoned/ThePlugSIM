@@ -317,6 +317,9 @@ public:
 	// Binnen-looppad (trappenhuis): F9-markers op volgorde -> smart-link ketting voor NPC's.
 	void SaveStairsPath();
 	void ClearStairsPath();
+	// Alle gezette paden visualiseren: loop-ringen (groen) + gebouw-kettingen (oranje).
+	void ShowAllPaths();
+	void HideAllPaths();
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();

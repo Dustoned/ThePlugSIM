@@ -307,14 +307,14 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } }, 13);
 		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 8.f));
 
-		// Map-grens: F9-markers in volgorde langs de rand -> blokkerende glazen wand die
-		// zichtbaar wordt als je dichtbij komt.
-		UWeedActionButton* BorderB = MakeActionBtn(TEXT("Save map border (markers, in order)"), FLinearColor(0.3f, 0.35f, 0.5f),
-			[this]() { if (Phone.IsValid()) { Phone->SaveMapBorder(); } }, 12);
-		BodyRow(BorderB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* BorderXB = MakeActionBtn(TEXT("Clear map border"), FLinearColor(0.4f, 0.22f, 0.22f),
-			[this]() { if (Phone.IsValid()) { Phone->ClearMapBorder(); } }, 11);
-		BodyRow(BorderXB, FMargin(0.f, 0.f, 0.f, 8.f));
+		// Paden-overzicht: alle gezette loop-ringen (groen) en gebouw-kettingen (oranje) in de
+		// wereld tekenen. (De border-knoppen zijn hier vervangen - de grens staat vast en gebakken.)
+		UWeedActionButton* PathsB = MakeActionBtn(TEXT("Show all paths"), FLinearColor(0.2f, 0.45f, 0.35f),
+			[this]() { if (Phone.IsValid()) { Phone->ShowAllPaths(); } }, 12);
+		BodyRow(PathsB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* PathsXB = MakeActionBtn(TEXT("Hide paths"), FLinearColor(0.3f, 0.3f, 0.35f),
+			[this]() { if (Phone.IsValid()) { Phone->HideAllPaths(); } }, 11);
+		BodyRow(PathsXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
 		// NPC-LOOPROUTE: F9-markers op volgorde over de stoep -> daar spawnen en lopen de NPC's.
 		UWeedActionButton* RouteB = MakeActionBtn(TEXT("Save NPC walk route (markers, in order)"), FLinearColor(0.25f, 0.45f, 0.3f),
