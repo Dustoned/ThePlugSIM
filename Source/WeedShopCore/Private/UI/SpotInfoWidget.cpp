@@ -126,8 +126,23 @@ void USpotInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		ObjQ.AddObjectTypesToQuery(ECC_WorldStatic);
 		ObjQ.AddObjectTypesToQuery(ECC_WorldDynamic);
 		const FVector Start = P->GetActorLocation();
-		if (GetWorld() && GetWorld()->SweepSingleByObjectType(CapHit, Start, Start + Flat * 220.f, FQuat::Identity, ObjQ,
-			FCollisionShape::MakeCapsule(30.f, 80.f), QP) && CapHit.GetComponent())
+		// Niet-blokkerende hits (trigger-bollen e.d.) overslaan en doorzoeken: alleen iets dat
+		// pawns ECHT blokkeert telt - anders maskeert een onschuldige overlap het echte blok.
+		FCollisionQueryParams QP2 = QP;
+		bool bGotBlock = false;
+		for (int32 Tries = 0; Tries < 6 && !bGotBlock; ++Tries)
+		{
+			if (!GetWorld() || !GetWorld()->SweepSingleByObjectType(CapHit, Start, Start + Flat * 220.f, FQuat::Identity, ObjQ,
+				FCollisionShape::MakeCapsule(30.f, 80.f), QP2) || !CapHit.GetComponent()) { break; }
+			if (CapHit.GetComponent()->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Block
+				|| CapHit.GetComponent()->GetCollisionEnabled() == ECollisionEnabled::QueryOnly)
+			{
+				QP2.AddIgnoredComponent(CapHit.GetComponent());
+				continue;
+			}
+			bGotBlock = true;
+		}
+		if (bGotBlock)
 		{
 			const UStaticMeshComponent* BMC = Cast<UStaticMeshComponent>(CapHit.GetComponent());
 			FString BName;
