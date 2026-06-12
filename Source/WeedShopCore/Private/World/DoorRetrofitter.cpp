@@ -400,6 +400,33 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	// WONINGEN: elke apartment-voordeur (Door_Apartment02) hoort bij een bewoner en zit OP SLOT
+	// ("LOCKED - <naam> lives here"), behalve de STARTER: de hoogste woning van de stad (bovenste
+	// verdieping van de Ventura-toren) is van jou - die deur opent gewoon, prompt "Your home".
+	// Draait opnieuw zodra het aantal deuren verandert (streaming/stamps laden na elkaar in).
+	{
+		TArray<ACityDoor*> Apt;
+		for (TActorIterator<ACityDoor> It(W); It; ++It)
+		{
+			if (IsValid(*It) && It->ActorHasTag(TEXT("AptDoor"))) { Apt.Add(*It); }
+		}
+		if (Apt.Num() > 0 && Apt.Num() != LastAptDoorCount)
+		{
+			LastAptDoorCount = Apt.Num();
+			Apt.Sort([](const ACityDoor& A, const ACityDoor& B) { return A.GetActorLocation().Z > B.GetActorLocation().Z; });
+			for (int32 i = 0; i < Apt.Num(); ++i)
+			{
+				if (i == 0) { Apt[i]->SetPlayerHome(); continue; }
+				// Bewoner-naam stabiel op POSITIE (niet op lijst-volgorde): zelfde naam per deur, elke sessie.
+				const FVector L = Apt[i]->GetActorLocation();
+				const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
+				Apt[i]->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+			}
+			const FVector Top = Apt[0]->GetActorLocation();
+			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren op slot (bewoners), starter-huis op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, Top.X, Top.Y, Top.Z);
+		}
+	}
+
 	// Kaart een keer per sessie schieten - de foto-stand maakt de capture tijd-onafhankelijk,
 	// dus ook wie 's nachts spawnt heeft meteen een dag-kaart. Wel even wachten tot de
 	// dag/nacht-controller zijn zon heeft gespawnd (paar ticks na BeginPlay).
@@ -487,6 +514,10 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			Door->SetActorScale3D(LeafTM.GetScale3D());
 			Door->Tags.Append(SMA->Tags); // stamp-id mee: undo/verwijderen pakt dan ook de werkende deur
+			if (FString(Leaf->MeshName).Contains(TEXT("Door_Apartment02")))
+			{
+				Door->Tags.Add(TEXT("AptDoor")); // woning-voordeur: slot-pass maakt hier bewoners van
+			}
 			Door->SetupLeaf(Comp->GetStaticMesh(), (SwingOverride != 0.f) ? SwingOverride : Leaf->OpenDeg);
 			// Balkon-puien zijn SCHUIFdeuren: blad glijdt opzij langs z'n eigen breedte (geen zwaai die
 			// het terras of de kamer in slaat).

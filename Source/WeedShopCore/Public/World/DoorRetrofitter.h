@@ -55,7 +55,8 @@ protected:
 	void VerticalReplicate();
 	void ApplySavedStamps();
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
-	bool bDayMapCaptured = false;   // kaart een keer per sessie bij DAGLICHT schieten
+	bool bDayMapCaptured = false;   // kaart een keer per sessie schieten (foto-stand maakt tijd irrelevant)
+	int32 LastAptDoorCount = -1;    // woningen-slot-pass: opnieuw draaien als er deuren bij komen
 	bool bWalkersSpawned = false;   // klanten-spawner + nav-invoker een keer plaatsen
 	void MakeBakedWindowsReal();    // gebakken kamers: nep-glas -> echt doorzichtig glas, direct bij overlay-load
 	bool bBakedWindowsReal = false;
