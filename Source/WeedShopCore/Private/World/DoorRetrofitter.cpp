@@ -332,6 +332,8 @@ void ADoorRetrofitter::ScanAndConvert()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 
+	ApplyCachedWindowHides();
+
 	int32 NewThisPass = 0;
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
@@ -839,6 +841,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		const FVector2D OC = Outer.GetCenter();
 		if (!P || FVector::Dist2D(P->GetActorLocation(), FVector(OC.X, OC.Y, 0.f)) > 2800.f) { return; }
 	}
+	TArray<FString> NewHideLines; // voor de persistente raam-verberg cache
 	const float Feet = Marks[0].Z - 98.f;
 	const float SrcZ = 480.f + 350.f * FMath::RoundToFloat((Feet - 480.f) / 350.f); // verdieping-grid
 	// Marker 3 bepaalt de vul-richting en -grens:
@@ -1135,6 +1138,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 					const FVector HL = WC.Key->Bounds.Origin;
 					BakeOut += FString::Printf(TEXT("HIDE|%s|%.1f,%.1f,%.1f"), *WC.Key->GetStaticMesh()->GetName(), HL.X, HL.Y, HL.Z);
 					BakeOut += LINE_TERMINATOR;
+					NewHideLines.Add(FString::Printf(TEXT("HIDE|%s|%.0f,%.0f,%.0f"), *WC.Key->GetStaticMesh()->GetName(), HL.X, HL.Y, HL.Z));
 					++GlassHidden;
 				}
 			}
@@ -1147,6 +1151,27 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		FFileHelper::SaveStringToFile(FString::Printf(TEXT("JOB|%s"), *JobId) + LINE_TERMINATOR + BakeOut,
 			*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
 			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	}
+	// Persistente raam-verberg cache bijwerken: volgende sessies verbergen deze gevel-ramen direct
+	// bij het instreamen, zonder dat de speler in de buurt hoeft te komen.
+	if (NewHideLines.Num() > 0)
+	{
+		const FString HidePath = FPaths::ProjectSavedDir() / TEXT("WindowHides.txt");
+		TArray<FString> Existing;
+		FFileHelper::LoadFileToStringArray(Existing, *HidePath);
+		TSet<FString> All(Existing);
+		bool bNew = false;
+		for (const FString& HLine : NewHideLines)
+		{
+			if (!All.Contains(HLine)) { All.Add(HLine); bNew = true; }
+		}
+		if (bNew)
+		{
+			FFileHelper::SaveStringToFile(FString::Join(All.Array(), LINE_TERMINATOR) + LINE_TERMINATOR, *HidePath,
+				FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+			bHidesLoaded = false; // in-memory cache verversen
+			CachedHides.Reset();
+		}
 	}
 	UE_LOG(LogWeedShop, Warning, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
 }
@@ -1654,4 +1679,54 @@ void ADoorRetrofitter::MakeBakedWindowsReal()
 		}
 	}
 	UE_LOG(LogWeedShop, Warning, TEXT("BakedRooms: %d nep-glas slots omgezet naar echt doorzichtig glas"), Swapped);
+}
+
+// Past de persistente raam-verberg cache toe (Saved/WindowHides.txt). Draait elke scan-pass:
+// gevel-ramen van gevulde kamers worden verborgen ZODRA ze instreamen, waar de speler ook is -
+// voorheen gebeurde dat pas als de speler binnen 28m van de bron kwam (de bron-capture heeft
+// nabijheid nodig, maar het toepassen van bekende verbergingen niet).
+void ADoorRetrofitter::ApplyCachedWindowHides()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	if (!bHidesLoaded)
+	{
+		bHidesLoaded = true;
+		CachedHides.Reset();
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("WindowHides.txt")));
+		for (const FString& L : Lines)
+		{
+			TArray<FString> P;
+			L.ParseIntoArray(P, TEXT("|"));
+			if (P.Num() < 3 || P[0] != TEXT("HIDE")) { continue; }
+			TArray<FString> C;
+			P[2].ParseIntoArray(C, TEXT(","));
+			if (C.Num() < 3) { continue; }
+			CachedHides.Add({ FName(*P[1]), FVector(FCString::Atof(*C[0]), FCString::Atof(*C[1]), FCString::Atof(*C[2])) });
+		}
+		if (CachedHides.Num() > 0)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("WindowHides: %d gecachte gevel-verbergingen geladen"), CachedHides.Num());
+		}
+	}
+	if (CachedHides.Num() == 0) { return; }
+
+	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
+	{
+		AStaticMeshActor* SMA = *It;
+		if (!IsValid(SMA)) { continue; }
+		UStaticMeshComponent* C = SMA->GetStaticMeshComponent();
+		if (!C || !C->GetStaticMesh() || !C->IsVisible()) { continue; }
+		const FName MeshName = C->GetStaticMesh()->GetFName();
+		const FVector L = C->Bounds.Origin;
+		for (const FCachedHide& H : CachedHides)
+		{
+			if (H.Mesh != MeshName) { continue; }
+			if (FMath::Abs(H.Pos.X - L.X) > 30.f || FMath::Abs(H.Pos.Y - L.Y) > 30.f || FMath::Abs(H.Pos.Z - L.Z) > 30.f) { continue; }
+			C->SetVisibility(false);
+			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			break;
+		}
+	}
 }

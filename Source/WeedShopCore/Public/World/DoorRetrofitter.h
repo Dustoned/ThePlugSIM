@@ -57,6 +57,12 @@ protected:
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
 	void MakeBakedWindowsReal();    // gebakken kamers: nep-glas -> echt doorzichtig glas, direct bij overlay-load
 	bool bBakedWindowsReal = false;
+	// Persistente raam-verberg cache: eenmaal berekende gevel-verbergingen (Saved/WindowHides.txt)
+	// worden elke scan-pass toegepast zodra een raam instreamt - geen speler-nabijheid meer nodig.
+	struct FCachedHide { FName Mesh; FVector Pos; };
+	void ApplyCachedWindowHides();
+	TArray<FCachedHide> CachedHides;
+	bool bHidesLoaded = false;
 	TSet<FString> AppliedStamps;
 	FTimerHandle StampFixT1, StampFixT2;
 	bool bStampFixTimersSet = false;
