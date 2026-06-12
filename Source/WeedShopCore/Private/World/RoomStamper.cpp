@@ -210,9 +210,11 @@ bool ARoomStamper::SaveTemplateFromMarkers(UWorld* W, const FString& TemplateNam
 				const FString MeshName = Comp->GetStaticMesh()->GetName();
 				if (!MeshName.Contains(TEXT("BalconyDoor"))) { continue; }
 				const FVector L = Comp->Bounds.Origin;
-				if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 520.f) { continue; }
+				// Alleen de EIGEN verdieping (de pui van de verdieping erboven lekte mee bij +520).
+				if (L.Z < SrcZ - 20.f || L.Z > SrcZ + 300.f) { continue; }
+				// 8m: de schuif-sectie hangt tot ~5,5m opzij van het vaste 6m-glasdeel.
 				bool bNear = false;
-				for (const FVector& BP : BalconyPts) { if (FVector::Dist2D(BP, L) < 400.f) { bNear = true; break; } }
+				for (const FVector& BP : BalconyPts) { if (FVector::Dist2D(BP, L) < 800.f) { bNear = true; break; } }
 				if (!bNear) { continue; }
 				CapturedComps.Add(Comp);
 				const FTransform Rel = Comp->GetComponentTransform() * AnchorInv;
