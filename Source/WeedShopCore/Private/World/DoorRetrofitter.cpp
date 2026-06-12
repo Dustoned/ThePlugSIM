@@ -901,6 +901,32 @@ void ADoorRetrofitter::ScanAndConvert()
 		// 2) Navmesh-dekking: projectie op een raster rond de toren op meerdere verdiepings-hoogtes.
 		if (UNavigationSystemV1* NavD = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
 		{
+			// VASTE reparatie-links (uit de meting van deze toren):
+			// (A) verdieping 1 -> trap-voet: de onderste trap-vlucht zat niet in de navmesh,
+			//     waardoor NPC's een verdieping te hoog naar buiten gingen. De link loopt over
+			//     de trap heen, dus visueel lopen ze 'm gewoon af.
+			// (B) stoep-rand -> route: het pad vanaf de trap-voet strandde op een opstapje van
+			//     1,5m vlak voor het route-punt.
+			auto PlaceLink = [&](const FVector& From, const FVector& To)
+			{
+				for (const FVector& PL : PlacedNavLinks)
+				{
+					if (FVector::Dist(PL, From) < 300.f) { return; }
+				}
+				if (ANavLinkProxy* Lnk = W->SpawnActor<ANavLinkProxy>(ANavLinkProxy::StaticClass(), FTransform(From)))
+				{
+					Lnk->PointLinks.Empty();
+					FNavigationLink L3;
+					L3.Left = FVector::ZeroVector;
+					L3.Right = To - From;
+					L3.Direction = ENavLinkDirection::BothWays;
+					Lnk->PointLinks.Add(L3);
+					PlacedNavLinks.Add(From);
+					Out += FString::Printf(TEXT("NAVLINK vast: (%.0f, %.0f, %.0f) -> (%.0f, %.0f, %.0f)\n"), From.X, From.Y, From.Z, To.X, To.Y, To.Z);
+				}
+			};
+			PlaceLink(FVector(-3111.f, -2086.f, 490.f), FVector(-3014.f, -1976.f, 80.f)); // (A) verdieping 1 -> trap-voet
+			PlaceLink(FVector(-988.f, -3135.f, 15.f), FVector(-1075.f, -3138.f, 165.f));  // (B) stoep-rand -> route
 			const float Heights[6] = { 540.f, 920.f, 1270.f, 1620.f, 1970.f, 2580.f };
 			for (float Hz : Heights)
 			{
@@ -936,34 +962,56 @@ void ADoorRetrofitter::ScanAndConvert()
 				{
 					const FVector End = Path->PathPoints.Last();
 					Out += FString::Printf(TEXT("PADTEST eindigt op (%.0f, %.0f, %.0f)\n"), End.X, End.Y, End.Z);
-					// AUTO-TRAP-LINK: de trap brengt het pad tot de DEK-RAND en strandt daar boven
-					// straat-niveau. Leg op dat strand-punt een nav-link naar de straat eronder -
-					// daarna is de route gang -> trap -> dek -> straat compleet.
-					if (Path->IsValid() && Path->IsPartial() && End.Z > StreetP.Z + 200.f)
+					// (De automatische dek-link is vervangen door de vaste trap-links hierboven:
+					// via het dek naar buiten was precies de verkeerde verdieping.)
+				}
+			}
+		}
+		// 4) TRAP-VOET: wat staat er onderaan het trappenhuis (de trap loopt fysiek door tot de
+		// begane grond, maar het pad neemt de dek-uitgang een verdieping te hoog)? Dump alles
+		// rond de trap-voet plus een pad-test vanaf daar naar de straat.
+		{
+			const FVector StairBase(-3014.f, -1976.f, 80.f);
+			for (TObjectIterator<UStaticMeshComponent> BIt; BIt; ++BIt)
+			{
+				UStaticMeshComponent* C = *BIt;
+				if (!C || C->GetWorld() != W || !C->GetStaticMesh()) { continue; }
+				const FVector O = C->Bounds.Origin;
+				if (FVector::Dist2D(O, StairBase) > 700.f || O.Z < -100.f || O.Z > 600.f) { continue; }
+				const FString Nm = C->GetStaticMesh()->GetName();
+				if (!(Nm.Contains(TEXT("Door")) || Nm.Contains(TEXT("Wall")) || Nm.Contains(TEXT("Stair")) || Nm.Contains(TEXT("Floor")) || Nm.Contains(TEXT("Glass")))) { continue; }
+				AActor* Own = C->GetOwner();
+				Out += FString::Printf(TEXT("VOET %s|owner=%s|%.0f,%.0f,%.0f|vis=%d|pawn=%d\n"),
+					*Nm, Own ? *Own->GetClass()->GetName() : TEXT("?"), O.X, O.Y, O.Z,
+					(C->IsVisible() && Own && !Own->IsHidden()) ? 1 : 0,
+					(C->GetCollisionEnabled() != ECollisionEnabled::NoCollision && C->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Block) ? 1 : 0);
+			}
+			if (UNavigationSystemV1* NavB = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+			{
+				FVector StreetB = FVector::ZeroVector;
+				float BestB = TNumericLimits<float>::Max();
+				for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+				{
+					if (!IsValid(*SpIt)) { continue; }
+					const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), StairBase);
+					if (Dd < BestB) { BestB = Dd; StreetB = SpIt->GetActorLocation(); }
+				}
+				if (BestB < TNumericLimits<float>::Max())
+				{
+					UNavigationPath* PB = NavB->FindPathToLocationSynchronously(W, StairBase, StreetB, nullptr);
+					Out += FString::Printf(TEXT("VOET-PADTEST (%.0f, %.0f, %.0f) -> straat: %s (%.0f lang)\n"),
+						StairBase.X, StairBase.Y, StairBase.Z,
+						PB ? (PB->IsValid() ? (PB->IsPartial() ? TEXT("PARTIEEL") : TEXT("VOLLEDIG")) : TEXT("GEEN")) : TEXT("NULL"),
+						PB ? PB->GetPathLength() : 0.f);
+					if (PB && PB->PathPoints.Num() > 0)
 					{
-						bool bNearExisting = false;
-						for (const FVector& PL : PlacedNavLinks)
-						{
-							if (FVector::Dist(PL, End) < 500.f) { bNearExisting = true; break; }
-						}
-						FNavLocation Down;
-						if (!bNearExisting && NavD->ProjectPointToNavigation(FVector(End.X, End.Y, StreetP.Z), Down, FVector(800.f, 800.f, 160.f))
-							&& Down.Location.Z < End.Z - 150.f)
-						{
-							if (ANavLinkProxy* Lnk = W->SpawnActor<ANavLinkProxy>(ANavLinkProxy::StaticClass(), FTransform(End)))
-							{
-								Lnk->PointLinks.Empty();
-								FNavigationLink NL2;
-								NL2.Left = FVector::ZeroVector;
-								NL2.Right = Down.Location - End;
-								NL2.Direction = ENavLinkDirection::BothWays;
-								Lnk->PointLinks.Add(NL2);
-								PlacedNavLinks.Add(End);
-								Out += FString::Printf(TEXT("NAVLINK gelegd: (%.0f, %.0f, %.0f) -> (%.0f, %.0f, %.0f)\n"),
-									End.X, End.Y, End.Z, Down.Location.X, Down.Location.Y, Down.Location.Z);
-							}
-						}
+						const FVector EndB = PB->PathPoints.Last();
+						Out += FString::Printf(TEXT("VOET-PADTEST eindigt op (%.0f, %.0f, %.0f)\n"), EndB.X, EndB.Y, EndB.Z);
 					}
+					// En de verbinding trap-voet OMHOOG naar de eerste verdieping (Z ~480):
+					UNavigationPath* PU = NavB->FindPathToLocationSynchronously(W, StairBase, FVector(-3111.f, -2086.f, 500.f), nullptr);
+					Out += FString::Printf(TEXT("VOET-OMHOOG naar Z500: %s\n"),
+						PU ? (PU->IsValid() ? (PU->IsPartial() ? TEXT("PARTIEEL") : TEXT("VOLLEDIG")) : TEXT("GEEN")) : TEXT("NULL"));
 				}
 			}
 		}
