@@ -757,7 +757,9 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			if (FVector::Dist2D(WL, TW.Pos) < 200.f && FMath::Abs(WL.Z - TW.Pos.Z) < 300.f) { WallRef = WL; break; }
 		}
 		const float DdOut = FVector::DotProduct(M0.Pos - WallRef, Out); // gevel t.o.v. kamer-muur (buitenwaarts +)
-		const float Shift = FMath::Clamp(DdOut - 6.f, -60.f, 60.f);
+		// Doel: 2cm achter de plek van het originele gevel-raam - vrijwel flush (normale raamnis),
+		// 6cm gaf een zichtbare gleuf met gele lichtranden rond elk raam.
+		const float Shift = FMath::Clamp(DdOut - 2.f, -60.f, 60.f);
 		if (FMath::Abs(Shift) > 1.f)
 		{
 			StampShift = Out * Shift;
