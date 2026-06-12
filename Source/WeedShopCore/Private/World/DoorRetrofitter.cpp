@@ -471,10 +471,17 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (!Comp || !Comp->GetStaticMesh() || GlassFixedComps.Contains(Comp)) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName().ToLower();
 			if (!MeshName.Contains(TEXT("glass")) && !MeshName.Contains(TEXT("window"))) { continue; }
-			// INTERIEUR-glas van DEURPARTIJEN niet blokkeren (SM_Base_Door_xx_Glass_Interior):
-			// dat is de vaste nep-interieur plaat ACHTER de werkende deuren - blokkeren zette een
-			// onzichtbare muur in de geopende deuropening. De deuren zelf regelen hun collision.
-			if (MeshName.Contains(TEXT("door")) && MeshName.Contains(TEXT("interior"))) { continue; }
+			// INTERIEUR-glas van DEURPARTIJEN mag NOOIT blokkeren (SM_Base_Door_xx_Glass_Interior):
+			// dat is de vaste nep-interieur plaat ACHTER de werkende deuren. Sommige staan in de
+			// map ZELF al op blokkeren - dus actief op doorlaatbaar zetten, niet alleen overslaan.
+			if (MeshName.Contains(TEXT("door")) && MeshName.Contains(TEXT("interior")))
+			{
+				if (Comp->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Block)
+				{
+					Comp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+				}
+				continue;
+			}
 			GlassFixedComps.Add(Comp); // niet nogmaals checken
 			const bool bNoCollision = Comp->GetCollisionEnabled() == ECollisionEnabled::NoCollision
 				|| Comp->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Block;
