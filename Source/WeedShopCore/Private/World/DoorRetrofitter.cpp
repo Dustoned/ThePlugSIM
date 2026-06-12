@@ -741,7 +741,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				{
 					if (IsValid(*CIt) && CIt->IsResident()) { ++NLive; }
 				}
-				const int32 LiteCap = 10;
+				const int32 LiteCap = 12;
 				int32 NNew = 0;
 				// TOREN-woningen (bij het starter-appartement): die hebben WEL een route naar
 				// beneden - hun bewoners mogen binnen spawnen en zelf naar buiten lopen. Daarvoor
@@ -752,6 +752,15 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (A == Starter || Ground.Contains(A)) { continue; }
 					if (FVector::Dist2D(A->GetActorLocation(), TowerXY) < 4000.f) { Ground.Add(A); }
 				}
+				// Toren-woningen EERST: anders is de cap al vol met strip-woningen voordat er ook
+				// maar een bewoner binnen in de toren gespawnd is.
+				Ground.Sort([&TowerXY](const ACityDoor& A, const ACityDoor& B)
+				{
+					const bool bTa = FVector::Dist2D(A.GetActorLocation(), TowerXY) < 4000.f;
+					const bool bTb = FVector::Dist2D(B.GetActorLocation(), TowerXY) < 4000.f;
+					if (bTa != bTb) { return bTa; }
+					return A.GetActorLocation().X < B.GetActorLocation().X;
+				});
 				int32 NQueued = 0;
 				for (ACityDoor* A : Ground)
 				{
@@ -1012,15 +1021,25 @@ void ADoorRetrofitter::ScanAndConvert()
 				const FVector L = Cb->GetActorLocation();
 				if (Cb->IsResident())
 				{
-					// Bewoner: vergelijk met de hoogte van z'n EIGEN voordeur.
+					// Bewoner: vergelijk met het STRAAT-niveau (dichtstbijzijnd spawn-punt) - niet
+					// met de deur-hoogte: straat-bewoners wonen beneden op de route, en hun deur
+					// kan verdiepingen hoger zitten. Alleen wie ECHT onder de straat zakt telt.
+					FVector BestR = SpawnerLocs[0];
+					float BestRD = TNumericLimits<float>::Max();
+					for (const FVector& SL : SpawnerLocs)
+					{
+						const float Dd = FVector::DistSquared2D(SL, L);
+						if (Dd < BestRD) { BestRD = Dd; BestR = SL; }
+					}
+					if (L.Z > BestR.Z - 250.f) { continue; }
 					const FString IdS = Cb->NpcId.ToString();
 					const int32 NIdx = IdS.StartsWith(TEXT("Resident_")) ? FCString::Atoi(*IdS.RightChop(9)) : -1;
-					ACityDoor* const* Dp = ResidentDoors.Find(NIdx);
-					if (!Dp) { continue; }
-					if (L.Z > (*Dp)->GetActorLocation().Z - 300.f) { continue; }
-					(*Dp)->Tags.Remove(TEXT("ResidentNpc"));
+					if (ACityDoor* const* Dp = ResidentDoors.Find(NIdx))
+					{
+						(*Dp)->Tags.Remove(TEXT("ResidentNpc"));
+						LastAptDoorCount = -1; // woningen-pass opnieuw -> verse bewoner
+					}
 					Cb->Destroy();
-					LastAptDoorCount = -1; // woningen-pass opnieuw -> verse bewoner thuis
 					++NRescued;
 					continue;
 				}
