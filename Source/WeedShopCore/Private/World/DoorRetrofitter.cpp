@@ -314,12 +314,9 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->PostProcessSettings.AutoExposureMaxBrightness = 0.45f;
 	MapCapture->ShowFlags.SetFog(false);          // hoogte-fog wast de luchtfoto anders uit
 	MapCapture->ShowFlags.SetAtmosphere(false);   // atmosfeer tussen camera en grond idem
-	// UNLIT schieten: sinds de echte dag/nachtcyclus is de wereld 's nachts donker en telt de
-	// nacht-grading mee in de capture - de kaart werd een donkerblauw vlak. Zonder belichting
-	// en post-processing is de luchtfoto altijd leesbaar, op elk tijdstip.
-	MapCapture->ShowFlags.SetLighting(false);
-	MapCapture->ShowFlags.SetPostProcessing(false);
-	MapCapture->ShowFlags.SetTranslucency(false);  // water/glas rendert unlit als dekkende plaat over de stad heen
+	// (Belichting/post-processing AAN laten: FinalColor-captures renderen zwart zonder lighting.
+	// De nacht-oplossing zit in de TIMING: we schieten de kaart alleen bij daglicht - zie
+	// ScanAndConvert/bDayMapCaptured.)
 	// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met MapWidget::WorldToCanvas).
 	MapCapture->SetWorldLocationAndRotation(FVector(MapCenter.X, MapCenter.Y, TopZ), FRotator(-90.f, 0.f, 0.f));
 }
@@ -344,6 +341,24 @@ void ADoorRetrofitter::ScanAndConvert()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+
+	// Kaart bij DAGLICHT schieten: een capture in de nacht (eigen zon onder + nachtgrading) gaf
+	// een zwarte/egale kaart. Een keer per sessie zodra de klok ruim in de dag zit.
+	if (!bDayMapCaptured)
+	{
+		if (AWeedShopGameState* GSm = W->GetGameState<AWeedShopGameState>())
+		{
+			if (GSm->GetDayCycle())
+			{
+				const float Hm = GSm->GetDayCycle()->GetClockHour();
+				if (Hm > 7.5f && Hm < 19.f)
+				{
+					CaptureMapNow();
+					bDayMapCaptured = true;
+				}
+			}
+		}
+	}
 
 	int32 NewThisPass = 0;
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
