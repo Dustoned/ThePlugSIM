@@ -56,6 +56,7 @@ protected:
 	void ApplySavedStamps();
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
 	bool bDayMapCaptured = false;   // kaart een keer per sessie bij DAGLICHT schieten
+	bool bWalkersSpawned = false;   // klanten-spawner + nav-invoker een keer plaatsen
 	void MakeBakedWindowsReal();    // gebakken kamers: nep-glas -> echt doorzichtig glas, direct bij overlay-load
 	bool bBakedWindowsReal = false;
 	TSet<FString> AppliedStamps;

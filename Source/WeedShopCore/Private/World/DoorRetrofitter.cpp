@@ -7,6 +7,8 @@
 #include "World/PackElevatorButton.h"
 #include "World/RoomStamper.h"
 #include "World/MapBorder.h"
+#include "Customer/CustomerSpawner.h"
+#include "NavigationSystem.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
@@ -343,6 +345,34 @@ void ADoorRetrofitter::ScanAndConvert()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+
+	// KLANTEN + NAVMESH op de pack-map: zodra de speler er staat, registreren we hier een
+	// navigatie-invoker (de dynamische navmesh bouwt dan tiles in dit gebied - het volume zit in
+	// de BakedRooms-overlay) en zetten we een klanten-spawner neer: NPC's spawnen, lopen naar een
+	// plek in de buurt, kunnen van je kopen en vertrekken weer. Eerste gameplay op deze map.
+	if (!bWalkersSpawned)
+	{
+		APlayerController* PCw = W->GetFirstPlayerController();
+		APawn* Pw = PCw ? PCw->GetPawn() : nullptr;
+		if (Pw)
+		{
+			bWalkersSpawned = true;
+			const FVector SpawnLoc = Pw->GetActorLocation();
+			SetActorLocation(SpawnLoc); // retrofitter = invoker-anker
+			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+			{
+				NavSys->RegisterNavigationInvoker(this, 9000.f, 11000.f);
+			}
+			ACustomerSpawner* CSw = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(SpawnLoc));
+			if (CSw)
+			{
+				CSw->bSpawnResidents = false; // bewoners-systeem hangt aan de CityGenerator (eigen map)
+				CSw->MaxCustomers = 6;
+				CSw->FinishSpawning(FTransform(SpawnLoc));
+			}
+			UE_LOG(LogWeedShop, Warning, TEXT("Pack-map: klanten-spawner + nav-invoker geplaatst op (%.0f, %.0f)"), SpawnLoc.X, SpawnLoc.Y);
+		}
+	}
 
 	// Kaart bij DAGLICHT schieten: een capture in de nacht (eigen zon onder + nachtgrading) gaf
 	// een zwarte/egale kaart. Een keer per sessie zodra de klok ruim in de dag zit.
