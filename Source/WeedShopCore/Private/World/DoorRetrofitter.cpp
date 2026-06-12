@@ -798,7 +798,10 @@ void ADoorRetrofitter::ScanAndConvert()
 				// spawn-stand is. Detecteer de stapeling en schuif de werkende deur naar de vrije
 				// opening: dicht is dan ook echt DICHT (zeker nu bewoners hun pui op slot hebben).
 				const FVector LeafC = Comp->Bounds.Origin;
+				const FVector Axis = LeafTM.GetRotation().GetAxisY();
 				bool bStacked = false;
+				float InteriorAxisOff = 0.f; // as-offset van het dichtstbijzijnde _Interior-plaatje (vaste-glas-kant)
+				float InteriorDist = 99999.f;
 				for (TObjectIterator<UStaticMeshComponent> SIt; SIt; ++SIt)
 				{
 					UStaticMeshComponent* SC = *SIt;
@@ -806,24 +809,35 @@ void ADoorRetrofitter::ScanAndConvert()
 					const FString SNm = SC->GetStaticMesh()->GetName();
 					if (!SNm.Contains(TEXT("BalconyDoor"))) { continue; }
 					if (SNm == Leaf->MeshName || SNm == FString(Leaf->MeshName) + TEXT("_Glass")) { continue; }
-					if (FVector::Dist(SC->Bounds.Origin, LeafC) < 35.f) { bStacked = true; break; }
-				}
-				if (bStacked)
-				{
-					const FVector Axis = LeafTM.GetRotation().GetAxisY();
-					const FVector CandA = LeafC + Axis * LeafWidth;
-					const FVector CandB = LeafC - Axis * LeafWidth;
-					const FCollisionShape Probe = FCollisionShape::MakeSphere(38.f);
-					const bool bABlocked = W->OverlapBlockingTestByChannel(CandA, FQuat::Identity, ECC_Visibility, Probe);
-					const bool bBBlocked = W->OverlapBlockingTestByChannel(CandB, FQuat::Identity, ECC_Visibility, Probe);
-					if (bABlocked != bBBlocked)
+					const float Dd = FVector::Dist(SC->Bounds.Origin, LeafC);
+					if (Dd < 80.f) { bStacked = true; }
+					if (SNm.Contains(TEXT("Interior")) && Dd < InteriorDist)
 					{
-						const FVector Closed = bABlocked ? CandB : CandA;
-						const FVector LocalDelta = LeafTM.GetRotation().UnrotateVector(Closed - LeafC);
-						Door->SetSlideClosedOffset(FVector(0.f, LocalDelta.Y, 0.f));
-						Door->SetOpenSwing((LocalDelta.Y <= 0.f) ? 95.f : -95.f); // open = terug naar de geparkeerde kant
-						UE_LOG(LogWeedShop, Warning, TEXT("Pui dichtgezet: %s op (%.0f, %.0f, %.0f)"), Leaf->MeshName, LeafC.X, LeafC.Y, LeafC.Z);
+						InteriorDist = Dd;
+						InteriorAxisOff = FVector::DotProduct(SC->Bounds.Origin - LeafC, Axis);
 					}
+				}
+				const FVector CandA = LeafC + Axis * LeafWidth;
+				const FVector CandB = LeafC - Axis * LeafWidth;
+				const FCollisionShape Probe = FCollisionShape::MakeSphere(38.f);
+				const bool bABlocked = W->OverlapBlockingTestByChannel(CandA, FQuat::Identity, ECC_Visibility, Probe);
+				const bool bBBlocked = W->OverlapBlockingTestByChannel(CandB, FQuat::Identity, ECC_Visibility, Probe);
+				// Dichte kant kiezen: probes als die het eens zijn (een kant vrij), anders wijst het
+				// _Interior-plaatje de richting. Uit de praktijk-log: het plaatje zit aan de
+				// DEUROPENING-kant (kant == sign(intOff) bij alle probe-beslissingen), dus dicht = ERHEEN.
+				int32 ClosedSign = 0;
+				if (bABlocked != bBBlocked)            { ClosedSign = bABlocked ? -1 : +1; }
+				else if (InteriorAxisOff > 25.f)       { ClosedSign = +1; }
+				else if (InteriorAxisOff < -25.f)      { ClosedSign = -1; }
+				UE_LOG(LogWeedShop, Warning, TEXT("BalcPui %s (%.0f, %.0f, %.0f): stacked=%d probeA=%d probeB=%d intOff=%.0f kant=%d"),
+					Leaf->MeshName, LeafC.X, LeafC.Y, LeafC.Z, bStacked ? 1 : 0, bABlocked ? 1 : 0, bBBlocked ? 1 : 0, InteriorAxisOff, ClosedSign);
+				if (bStacked && ClosedSign != 0)
+				{
+					const FVector Closed = LeafC + Axis * (ClosedSign * LeafWidth);
+					const FVector LocalDelta = LeafTM.GetRotation().UnrotateVector(Closed - LeafC);
+					Door->SetSlideClosedOffset(FVector(0.f, LocalDelta.Y, 0.f));
+					Door->SetOpenSwing((LocalDelta.Y <= 0.f) ? 95.f : -95.f); // open = terug naar de geparkeerde kant
+					UE_LOG(LogWeedShop, Warning, TEXT("Pui dichtgezet: %s op (%.0f, %.0f, %.0f)"), Leaf->MeshName, LeafC.X, LeafC.Y, LeafC.Z);
 				}
 			}
 			SpawnedDoors.Add(Door);
