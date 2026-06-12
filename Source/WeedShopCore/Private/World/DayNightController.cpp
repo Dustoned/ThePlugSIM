@@ -1,4 +1,4 @@
-#include "World/DayNightController.h"
+﻿#include "World/DayNightController.h"
 #include "Engine/PostProcessVolume.h"
 
 #include "World/DayCycleComponent.h"
@@ -211,8 +211,8 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 
-	// Eén lantaarn naast ELKE NPC die BUITEN staat (NPC's binnen het huis krijgen er geen).
-	// Geen ring, geen skip-checks: precies één paal per buiten-NPC, op de stoep (naar de muur gesnapt).
+	// EÃ©n lantaarn naast ELKE NPC die BUITEN staat (NPC's binnen het huis krijgen er geen).
+	// Geen ring, geen skip-checks: precies Ã©Ã©n paal per buiten-NPC, op de stoep (naar de muur gesnapt).
 	for (TActorIterator<ACustomerBase> It(W); It; ++It)
 	{
 		ACustomerBase* Npc = *It;
@@ -241,7 +241,7 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 			}
 		}
 
-		// Plek: ~110cm vóór de muur (op de stoep); anders gewoon vlak naast de NPC.
+		// Plek: ~110cm vÃ³Ã³r de muur (op de stoep); anders gewoon vlak naast de NPC.
 		const FVector LampXY = bFound ? (BestPoint - BestDir * 110.f) : (Loc + FVector(160.f, 120.f, 0.f));
 
 		// Grond zoeken vanaf NPC-hoogte omlaag (niet van hoog, anders vang je het dak/de luifel).
@@ -254,7 +254,7 @@ void ADayNightController::BuildStreetLamps(const FVector& Center)
 		}
 		else
 		{
-			AddLamp(Loc - FVector(0.f, 0.f, 88.f)); // altijd één lamp, ook zonder vloer-hit
+			AddLamp(Loc - FVector(0.f, 0.f, 88.f)); // altijd Ã©Ã©n lamp, ook zonder vloer-hit
 		}
 	}
 }
@@ -401,13 +401,13 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// zodat de auto-exposure de duisternis niet terugcompenseert naar daglicht.
 		if (!NightPPV.IsValid())
 		{
-			if (APostProcessVolume* PPV = GetWorld()->SpawnActor<APostProcessVolume>())
+			if (APostProcessVolume* NightVol = GetWorld()->SpawnActor<APostProcessVolume>())
 			{
-				PPV->bUnbound = true;
-				PPV->BlendWeight = 0.f;
-				PPV->Settings.bOverride_AutoExposureBias = true;
-				PPV->Settings.AutoExposureBias = -2.0f;
-				NightPPV = PPV;
+				NightVol->bUnbound = true;
+				NightVol->BlendWeight = 0.f;
+				NightVol->Settings.bOverride_AutoExposureBias = true;
+				NightVol->Settings.AutoExposureBias = -2.0f;
+				NightPPV = NightVol;
 			}
 		}
 		if (NightPPV.IsValid()) { NightPPV->BlendWeight = 1.f - MinDayF; }
