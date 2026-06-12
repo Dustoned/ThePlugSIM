@@ -316,6 +316,14 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->ClearMapBorder(); } }, 11);
 		BodyRow(BorderXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// NPC-LOOPROUTE: F9-markers op volgorde over de stoep -> daar spawnen en lopen de NPC's.
+		UWeedActionButton* RouteB = MakeActionBtn(TEXT("Save NPC walk route (markers, in order)"), FLinearColor(0.25f, 0.45f, 0.3f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveNpcRoute(); } }, 12);
+		BodyRow(RouteB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* RouteXB = MakeActionBtn(TEXT("Clear NPC walk route"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]() { if (Phone.IsValid()) { Phone->ClearNpcRoute(); } }, 11);
+		BodyRow(RouteXB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// WALK-THROUGH: maak het object in je crosshair doorloopbaar (pawn-collision uit) en sla
 		// het op in Saved/NoCollide.txt - elke sessie opnieuw toegepast, dus permanent ingebakken.
 		UWeedActionButton* NoColB = MakeActionBtn(TEXT("Walk-through: unblock crosshair target"), FLinearColor(0.25f, 0.4f, 0.45f),

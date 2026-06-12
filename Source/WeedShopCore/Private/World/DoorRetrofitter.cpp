@@ -432,10 +432,55 @@ void ADoorRetrofitter::ScanAndConvert()
 	++ScanPass;
 	if (ScanPass == 1)
 	{
-		// Boulevard-spawn-punten (Y-as): rond de oude bewezen plek (0) plus gespreid noord en zuid
-		// binnen de map-border. Punten die nog niet gestreamd zijn blijven pending en proberen
-		// elke pass opnieuw.
-		PendingSpawnerYs = { -20000.f, -8000.f, 0.f, 12000.f, 24000.f };
+		// SPELER-ROUTE eerst: heeft de speler met F9-markers een looproute opgeslagen
+		// (NpcRoute.txt), dan zijn DAT de spawn-/wandel-punten - exact waar hij ze wil.
+		// Anders de standaard boulevard-punten (Y-as) met dek-zoeker.
+		TArray<FString> RouteLines;
+		FFileHelper::LoadFileToStringArray(RouteLines, *WeedData::File(TEXT("NpcRoute.txt")));
+		for (const FString& RL : RouteLines)
+		{
+			TArray<FString> Pc;
+			RL.ParseIntoArray(Pc, TEXT(","));
+			if (Pc.Num() >= 3)
+			{
+				PendingSpawnerPoints.Add(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2])));
+			}
+		}
+		if (PendingSpawnerPoints.Num() > 0)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("NPC-route: %d speler-punten gebruikt voor spawners"), PendingSpawnerPoints.Num());
+		}
+		else
+		{
+			PendingSpawnerYs = { -20000.f, -8000.f, 0.f, 12000.f, 24000.f };
+		}
+	}
+	// Route-punten van de speler: direct plaatsen (positie is al ground-truth op de stoep).
+	for (int32 i = PendingSpawnerPoints.Num() - 1; i >= 0; --i)
+	{
+		const FVector Pt = PendingSpawnerPoints[i] + FVector(0.f, 0.f, 60.f);
+		ACustomerSpawner* CSr = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(Pt));
+		if (!CSr) { continue; }
+		CSr->bSpawnResidents = false;
+		CSr->MaxCustomers = 4;
+		CSr->SpotRadius = 500.f;
+		CSr->ActivationRange = 10000.f;
+		CSr->FinishSpawning(FTransform(Pt));
+		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+		{
+			NavSys->RegisterNavigationInvoker(CSr, 9000.f, 11000.f);
+		}
+		UE_LOG(LogWeedShop, Warning, TEXT("Pack-map: route-spawner op (%.0f, %.0f, %.0f)"), Pt.X, Pt.Y, Pt.Z);
+		if (!bWalkersSpawned)
+		{
+			bWalkersSpawned = true;
+			SetActorLocation(Pt);
+			if (UNavigationSystemV1* NavSys2 = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
+			{
+				NavSys2->RegisterNavigationInvoker(this, 9000.f, 11000.f);
+			}
+		}
+		PendingSpawnerPoints.RemoveAt(i);
 	}
 
 	// WALK-THROUGHS: via de Test-tab gemarkeerde objecten (NoCollide.txt) doorloopbaar maken.

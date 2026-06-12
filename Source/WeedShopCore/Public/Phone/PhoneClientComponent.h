@@ -311,6 +311,9 @@ public:
 	void StartRoomStamp(const FString& TemplateName);
 	// Map-grens: huidige markers (in volgorde) worden een blokkerende glazen wand (Saved/MapBorder.txt).
 	void SaveMapBorder();
+	// NPC-looproute: F9-markers (op volgorde over de stoep) -> spawn-/wandel-punten voor NPC's.
+	void SaveNpcRoute();
+	void ClearNpcRoute();
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();
