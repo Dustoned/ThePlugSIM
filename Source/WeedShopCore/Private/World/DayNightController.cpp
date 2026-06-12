@@ -378,6 +378,15 @@ void ADayNightController::Tick(float DeltaSeconds)
 							LLC->SetCastShadows(false);
 						}
 					}
+					// Map-zonnen (scenario) mogen de hemel niet sturen: atmosfeer-claim eraf zodat
+					// ONZE bewegende zon vanaf seconde een de lucht bepaalt (anders bleef de vaste
+					// scenario-zon aan de horizon hangen tot een dag/nacht-wissel).
+					if (UDirectionalLightComponent* MapDL = Cast<UDirectionalLightComponent>(LC))
+					{
+						MapDL->SetMobility(EComponentMobility::Movable);
+						MapDL->SetAtmosphereSunLight(false);
+						MapDL->MarkRenderStateDirty();
+					}
 					FDimLight D; D.Light = LC; D.OrigIntensity = LC->Intensity;
 					DimLights.Add(D);
 				}
@@ -397,7 +406,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// Lichten dimmen. ZONLICHT (directional) moet 's nachts ECHT uit - een restje van 7% werd
 		// door de auto-exposure weer opgeblazen tot daglicht onder een zwarte hemel. Skylight bijna
 		// uit; alle overige lichten 7% (de emissive strips van de map blijven vanzelf - materiaal).
-		const float SunMul = MinDayF;                       // zon: 0 bij volle nacht
+		const float SunMul = 0.f;                           // map-zonnen permanent uit: onze bewegende zon is DE zon
 		const float SkyMul = FMath::Lerp(0.02f, 1.f, MinDayF);
 		for (FDimLight& D : DimLights)
 		{
