@@ -99,20 +99,28 @@ void USpotInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			: (Hit.GetActor() ? Hit.GetActor()->GetClass()->GetName() : TEXT("?"));
 		LookAt = FString::Printf(TEXT("%s  (%.1fm)"), *MeshName, Hit.Distance / 100.f);
 	}
-	// ONZICHTBARE BLOCKERS opsporen: tweede trace op het Pawn-kanaal. Raakt die iets dat DICHTERBIJ
-	// ligt dan wat je ziet, dan staat daar iets onzichtbaars dat je tegenhoudt - naam erbij tonen.
-	FHitResult BlockHit;
-	if (GetWorld() && GetWorld()->LineTraceSingleByChannel(BlockHit, CamLoc, CamLoc + CamRot.Vector() * 2500.f, ECC_Pawn, QP))
+	// ONZICHTBARE BLOCKERS opsporen: BOL-SWEEP (25cm, zo dik als je lijf) op het Pawn-kanaal langs
+	// je blik, plus een tweede sweep op heuphoogte recht vooruit - vangt ook smalle blockers die
+	// een dunne kijklijn missen. Dichterbij dan wat je ziet = er staat iets onzichtbaars.
+	const float VisDist = Hit.bBlockingHit ? Hit.Distance : 2500.f;
+	auto TryBlockSweep = [&](const FVector& From, const FVector& Dir) -> bool
 	{
-		const float VisDist = Hit.bBlockingHit ? Hit.Distance : 2500.f;
-		if (BlockHit.Distance < VisDist - 40.f)
-		{
-			const UStaticMeshComponent* BMC = Cast<UStaticMeshComponent>(BlockHit.GetComponent());
-			const FString BName = (BMC && BMC->GetStaticMesh()) ? BMC->GetStaticMesh()->GetName()
-				: (BlockHit.GetActor() ? BlockHit.GetActor()->GetClass()->GetName() : TEXT("?"));
-			LookAt += FString::Printf(TEXT("\nBLOCK %s  (%.1fm)%s"), *BName, BlockHit.Distance / 100.f,
-				(BMC && !BMC->IsVisible()) ? TEXT(" [invisible]") : TEXT(""));
-		}
+		FHitResult BlockHit;
+		if (!GetWorld() || !GetWorld()->SweepSingleByChannel(BlockHit, From, From + Dir * 600.f, FQuat::Identity,
+			ECC_Pawn, FCollisionShape::MakeSphere(25.f), QP)) { return false; }
+		if (BlockHit.Distance >= VisDist - 40.f) { return false; }
+		const UStaticMeshComponent* BMC = Cast<UStaticMeshComponent>(BlockHit.GetComponent());
+		const FString BName = (BMC && BMC->GetStaticMesh()) ? BMC->GetStaticMesh()->GetName()
+			: (BlockHit.GetActor() ? BlockHit.GetActor()->GetClass()->GetName() : TEXT("?"));
+		LookAt += FString::Printf(TEXT("\nBLOCK %s  (%.1fm)%s"), *BName, BlockHit.Distance / 100.f,
+			(BMC && !BMC->IsVisible()) ? TEXT(" [invisible]") : TEXT(""));
+		return true;
+	};
+	if (!TryBlockSweep(CamLoc, CamRot.Vector()))
+	{
+		// Heuphoogte, plat vooruit (waar je lijf daadwerkelijk tegenaan loopt).
+		FVector Flat = CamRot.Vector(); Flat.Z = 0.f; Flat.Normalize();
+		TryBlockSweep(P->GetActorLocation() + FVector(0.f, 0.f, -30.f), Flat);
 	}
 
 	InfoText->SetText(FText::FromString(FString::Printf(
