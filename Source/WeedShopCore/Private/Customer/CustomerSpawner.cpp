@@ -226,6 +226,19 @@ void ACustomerSpawner::TrySpawn()
 	UWorld* World = GetWorld();
 	if (!World || !HasAuthority()) { return; }
 
+	// Streaming-gate: zonder speler in de buurt is de grond hier mogelijk niet ingeladen -
+	// dan zakken verse NPC's door de wereld. Even wachten tot iemand dichtbij komt.
+	if (ActivationRange > 0.f)
+	{
+		bool bNear = false;
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			const APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+			if (P && FVector::Dist2D(P->GetActorLocation(), GetActorLocation()) < ActivationRange) { bNear = true; break; }
+		}
+		if (!bNear) { return; }
+	}
+
 	// Verlopen klanten opruimen.
 	Spawned.RemoveAll([](const TObjectPtr<ACustomerBase>& C) { return !IsValid(C); });
 

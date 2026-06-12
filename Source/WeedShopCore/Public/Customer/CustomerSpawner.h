@@ -53,6 +53,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpawnInterval = 10.f;
 
+	// Alleen spawnen als er een speler binnen deze afstand is (0 = altijd). Voor streaming-maps:
+	// zonder speler in de buurt is de grond daar niet ingeladen en vallen NPC's door de wereld.
+	UPROPERTY(EditAnywhere, Category = "Spawn")
+	float ActivationRange = 0.f;
+
 	// Hoe ver van het spawn-punt de klanten gaan staan.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpotRadius = 350.f;

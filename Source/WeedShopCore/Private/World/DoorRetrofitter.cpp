@@ -492,9 +492,10 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (!FindStreetPoint(PendingSpawnerYs[i], Street)) { continue; } // nog niet gestreamd - volgende pass
 			ACustomerSpawner* CSw = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(Street));
 			if (!CSw) { continue; }
-			CSw->bSpawnResidents = false; // bewoners-systeem volgt later (woningen-brug)
+			CSw->bSpawnResidents = false; // bewoners-lite draait via de woningen-pass
 			CSw->MaxCustomers = 5;
 			CSw->SpotRadius = 700.f;
+			CSw->ActivationRange = 10000.f; // pas spawnen als een speler in de buurt is (streaming)
 			CSw->FinishSpawning(FTransform(Street));
 			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
 			{
@@ -803,6 +804,41 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// PUI-BLADEN op het echte gevel-gat centreren (gemeten, niet gegokt).
 	FixBalconyPuiPositions();
+
+	// VANGNET: NPC's die door niet-gestreamde grond zijn gezakt (Z onder de wereld) terugzetten
+	// op het dichtstbijzijnde spawner-punt. Residents gaan terug naar hun huis-positie via de
+	// normale resident-logica zodra ze weer op de navmesh staan.
+	{
+		TArray<FVector> SpawnerLocs;
+		for (TActorIterator<ACustomerSpawner> SIt(W); SIt; ++SIt)
+		{
+			if (IsValid(*SIt)) { SpawnerLocs.Add(SIt->GetActorLocation()); }
+		}
+		if (SpawnerLocs.Num() > 0)
+		{
+			int32 NRescued = 0;
+			for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
+			{
+				ACustomerBase* Cb = *CIt;
+				if (!IsValid(Cb)) { continue; }
+				const FVector L = Cb->GetActorLocation();
+				if (L.Z > -250.f) { continue; } // staat gewoon op de wereld
+				FVector Best = SpawnerLocs[0];
+				float BestD = TNumericLimits<float>::Max();
+				for (const FVector& SL : SpawnerLocs)
+				{
+					const float Dd = FVector::DistSquared2D(SL, L);
+					if (Dd < BestD) { BestD = Dd; Best = SL; }
+				}
+				Cb->SetActorLocation(Best + FVector(0.f, 0.f, 120.f), false, nullptr, ETeleportType::TeleportPhysics);
+				++NRescued;
+			}
+			if (NRescued > 0)
+			{
+				UE_LOG(LogWeedShop, Warning, TEXT("NPC-vangnet: %d doorgevallen NPC's teruggezet op de boulevard"), NRescued);
+			}
+		}
+	}
 
 	// Kaart een keer per sessie schieten - de foto-stand maakt de capture tijd-onafhankelijk,
 	// dus ook wie 's nachts spawnt heeft meteen een dag-kaart. Wel even wachten tot de
