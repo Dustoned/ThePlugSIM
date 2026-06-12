@@ -519,7 +519,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 
 		// Pack-lampen op kloktijd (aan vanaf 17u, uit om 8u). Falloff staat uit, dus de
 		// intensiteit is unitless: slider-default 42000 wordt kegel 7.0 / poel 4.7.
-		const bool bLampOn = (Hour < 8.f || Hour >= 17.f);
+		const bool bLampOn = MinDayF < 0.35f; // aan met de schemering, uit zodra het echt licht is
 		for (UPointLightComponent* PL : PackLampLights)
 		{
 			if (!PL) { continue; }
