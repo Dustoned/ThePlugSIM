@@ -398,8 +398,11 @@ bool ADoorRetrofitter::FindStreetPoint(float WorldY, FVector& Out) const
 {
 	UWorld* W = GetWorld();
 	if (!W) { return false; }
-	// Boulevard loopt langs Y; zoek per kandidaat-X een straat-achtige mesh onder een down-trace.
-	static const float XOffsets[] = { 0.f, 600.f, -600.f, 1200.f, -1200.f, 1800.f, -1800.f, 2600.f, -2600.f, 3400.f, -3400.f };
+	// De BOULEVARD van deze map is een verhoogd dek (Z ~480-620, waar de speler loopt). Het
+	// onderniveau (Z ~0-50) is de strand-/service-laag - daar horen geen wandelaars. Zoek per
+	// kandidaat-X (waaier rond de strip) de BOVENSTE vlakke hit op dek-hoogte, liefst een
+	// straat/stoep-mesh.
+	static const float XOffsets[] = { -2000.f, -1400.f, -2600.f, -800.f, -3200.f, -200.f, 400.f, 1000.f, 1600.f };
 	FVector Fallback = FVector::ZeroVector;
 	bool bHaveFallback = false;
 	for (float Dx : XOffsets)
@@ -407,17 +410,18 @@ bool ADoorRetrofitter::FindStreetPoint(float WorldY, FVector& Out) const
 		FHitResult H;
 		const FVector S(Dx, WorldY, 3000.f);
 		if (!W->LineTraceSingleByChannel(H, S, S - FVector(0.f, 0.f, 3500.f), ECC_Visibility)) { continue; }
-		if (H.ImpactNormal.Z < 0.7f || H.ImpactPoint.Z > 350.f) { continue; } // muren/daken/podium overslaan
+		if (H.ImpactNormal.Z < 0.7f) { continue; }                                  // muren overslaan
+		if (H.ImpactPoint.Z < 300.f || H.ImpactPoint.Z > 800.f) { continue; }       // alleen DEK-hoogte
 		const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
 		const FString Nm = (SMC && SMC->GetStaticMesh()) ? SMC->GetStaticMesh()->GetName() : FString();
-		if (Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road")) || Nm.Contains(TEXT("ConcretePath")))
+		if (Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road")) || Nm.Contains(TEXT("ConcretePath")) || Nm.Contains(TEXT("Floor")))
 		{
 			Out = H.ImpactPoint + FVector(0.f, 0.f, 60.f);
 			return true;
 		}
 		if (!bHaveFallback) { Fallback = H.ImpactPoint + FVector(0.f, 0.f, 60.f); bHaveFallback = true; }
 	}
-	if (bHaveFallback) { Out = Fallback; return true; } // grond gevonden maar geen straat-mesh: beter dan niets
+	if (bHaveFallback) { Out = Fallback; return true; } // dek gevonden maar geen straat-mesh: beter dan niets
 	return false;
 }
 
@@ -494,7 +498,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (!CSw) { continue; }
 			CSw->bSpawnResidents = false; // bewoners-lite draait via de woningen-pass
 			CSw->MaxCustomers = 5;
-			CSw->SpotRadius = 700.f;
+			CSw->SpotRadius = 500.f; // dicht bij de stoep blijven
 			CSw->ActivationRange = 10000.f; // pas spawnen als een speler in de buurt is (streaming)
 			CSw->FinishSpawning(FTransform(Street));
 			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
@@ -822,7 +826,6 @@ void ADoorRetrofitter::ScanAndConvert()
 				ACustomerBase* Cb = *CIt;
 				if (!IsValid(Cb)) { continue; }
 				const FVector L = Cb->GetActorLocation();
-				if (L.Z > -250.f) { continue; } // staat gewoon op de wereld
 				FVector Best = SpawnerLocs[0];
 				float BestD = TNumericLimits<float>::Max();
 				for (const FVector& SL : SpawnerLocs)
@@ -830,6 +833,8 @@ void ADoorRetrofitter::ScanAndConvert()
 					const float Dd = FVector::DistSquared2D(SL, L);
 					if (Dd < BestD) { BestD = Dd; Best = SL; }
 				}
+				// Onder dek-niveau (ruim onder de dichtstbijzijnde spawner) = onder de map beland.
+				if (L.Z > Best.Z - 280.f) { continue; }
 				Cb->SetActorLocation(Best + FVector(0.f, 0.f, 120.f), false, nullptr, ETeleportType::TeleportPhysics);
 				++NRescued;
 			}
