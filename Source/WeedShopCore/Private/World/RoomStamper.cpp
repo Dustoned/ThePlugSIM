@@ -749,9 +749,15 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		if (FMath::Abs(Shift) > 1.f)
 		{
 			StampShift = Out * Shift;
+			// ALLEEN de buitenmuur-laag verschuiven (muurdelen + ramen op het raam-vlak), NIET de
+			// hele kamer: de entree is op de gang-deur gesnapt en moet daar exact blijven - de
+			// hele kamer schuiven trok muren bij de ingang los (onzichtbare muur / kieren).
 			for (TActorIterator<AActor> It(W); It; ++It)
 			{
-				if (IsValid(*It) && It->ActorHasTag(StampTag)) { It->AddActorWorldOffset(StampShift); }
+				if (!IsValid(*It) || !It->ActorHasTag(StampTag)) { continue; }
+				const float Dd = FVector::DotProduct(It->GetActorLocation() - TW.Pos, Out);
+				if (Dd < -40.f) { continue; } // binnenin de kamer: laten staan
+				It->AddActorWorldOffset(StampShift);
 			}
 		}
 	}
