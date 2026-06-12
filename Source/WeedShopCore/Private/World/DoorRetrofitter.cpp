@@ -871,6 +871,11 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName();
 			if (bHiddenActor && !MeshName.Contains(TEXT("Door"))) { continue; } // alle geconverteerde bladen (ook BalconyDoor) mee
+			// COMPONENT-onzichtbare stukken overslaan (behalve deur-bladen): de stempel-gevelfix
+			// verbergt vervangen gevel-ramen via SetVisibility - die horen NIET in de slice, anders
+			// gelden ze op de doelverdiepingen als origineel (rare-formaat ramen blijven daar staan
+			// en de raam-verberging slaat ze over).
+			if (!Comp->IsVisible() && !MeshName.Contains(TEXT("Door"))) { continue; }
 			if (MeshName.Contains(TEXT("Camera")) || MeshName.Contains(TEXT("SecurityCam")) || MeshName.Contains(TEXT("MatineeCam"))
 				|| MeshName.Contains(TEXT("DomeCam")) || MeshName.Contains(TEXT("SecurityLight"))) { continue; } // (editor-)camera's/spots horen niet in kopieen
 			// Balkon-railing niet mee-kopieren (stond bij de badkamer-rand binnen de rechthoek en
