@@ -1544,7 +1544,11 @@ bool ACustomerBase::IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const F
 {
 	if (!City)
 	{
-		return true;
+		// Pack-map (geen CityGenerator): geen stoep-data, maar wel een harde HOOGTE-regel.
+		// Een roam-doel hoort op het straatniveau van je eigen voordeur te liggen - niet op
+		// het service-niveau onder het boulevard-dek (daar doken bewoners steeds heen).
+		const FVector Ref = HomeExitSidewalkSpot.IsNearlyZero() ? HomeFrontSpot : HomeExitSidewalkSpot;
+		return Ref.IsNearlyZero() || FMath::Abs(Point.Z - Ref.Z) < 250.f;
 	}
 
 	const TArray<FCityMapBlock>& Blocks = GetResidentMapBlocksCached(City);
