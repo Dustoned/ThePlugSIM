@@ -774,82 +774,65 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		WallPlane = WallRef + StampShift;
 	}
 
-	// 3) De gevel-segmenten die DUBBEL over onze muur liggen verbergen. Niet per raam matchen
-	// (gespiegelde stempels verschuiven het raam-patroon lateraal waardoor half-overlappende
-	// segmenten bleven staan) maar op OVERLAP met de volledige muurspan van de stempel: alles
-	// van het gebouw dat met onze buitenmuur overlapt gaat weg - onze muur IS daar de gevel.
+	// 3) De gevel-segmenten die nu DUBBEL over onze muur liggen verbergen: muur/raam/glas-stukken
+	// van het gebouw op ons muurvlak (diepte < 60) binnen de raam-span (lateraal < 210 per raam).
 	int32 Replaced = 0;
 	const FVector WallDir = FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(0.f, 1.f, 0.f));
-	const FVector WallDirAbs(FMath::Abs(WallDir.X), FMath::Abs(WallDir.Y), 0.f);
-
-	// Volledige laterale span van onze buitenmuur-laag (bounds meegerekend).
-	float SpanMin = TNumericLimits<float>::Max();
-	float SpanMax = -TNumericLimits<float>::Max();
-	for (TActorIterator<AActor> SIt(W); SIt; ++SIt)
+	for (TActorIterator<AActor> It(W); It; ++It)
 	{
-		if (!IsValid(*SIt) || !SIt->ActorHasTag(StampTag)) { continue; }
-		AStaticMeshActor* SSMA = Cast<AStaticMeshActor>(*SIt);
-		UStaticMeshComponent* SC = SSMA ? SSMA->GetStaticMeshComponent() : nullptr;
-		if (!SC || !SC->GetStaticMesh()) { continue; }
-		const FVector SL = SC->Bounds.Origin;
-		if (SL.Z < ZMin || SL.Z > ZMax) { continue; }
-		if (FMath::Abs(FVector::DotProduct(SL - WallPlane, Out)) > 60.f) { continue; } // alleen de buitenmuur-laag
-		const float SLat = FVector::DotProduct(SL - WallPlane, WallDir);
-		const float SExt = FVector::DotProduct(SC->Bounds.BoxExtent, WallDirAbs);
-		SpanMin = FMath::Min(SpanMin, SLat - SExt);
-		SpanMax = FMath::Max(SpanMax, SLat + SExt);
-	}
-	if (SpanMax > SpanMin)
-	{
-		// Iets krimpen zodat het aansluitende buursegment op de rand niet meegepakt wordt.
-		SpanMin += 15.f;
-		SpanMax -= 15.f;
-		for (TActorIterator<AActor> It(W); It; ++It)
+		AActor* A = *It;
+		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass())) { continue; }
+		bool bStampActor = false;
+		for (const FName& Tg : A->Tags) { if (Tg.ToString().StartsWith(TEXT("STAMP_"))) { bStampActor = true; break; } }
+		if (bStampActor) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
 		{
-			AActor* A = *It;
-			if (!IsValid(A) || A->IsA(ACityDoor::StaticClass())) { continue; }
-			bool bStampActor = false;
-			for (const FName& Tg : A->Tags) { if (Tg.ToString().StartsWith(TEXT("STAMP_"))) { bStampActor = true; break; } }
-			if (bStampActor) { continue; }
-			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
-			for (UStaticMeshComponent* Comp : Comps)
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MN = Comp->GetStaticMesh()->GetName();
+			const bool bWallish = (MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")) || MN.Contains(TEXT("Wall")))
+				&& !MN.Contains(TEXT("Pillar")) && !MN.Contains(TEXT("Column")) && !MN.Contains(TEXT("Beam"))
+				&& !MN.Contains(TEXT("Floor")) && !MN.Contains(TEXT("Roof"));
+			if (!bWallish) { continue; }
+
+			if (UInstancedStaticMeshComponent* ISM = Cast<UInstancedStaticMeshComponent>(Comp))
 			{
-				if (!Comp || !Comp->GetStaticMesh()) { continue; }
-				const FString MN = Comp->GetStaticMesh()->GetName();
-				const bool bWallish = (MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")) || MN.Contains(TEXT("Wall")))
-					&& !MN.Contains(TEXT("Pillar")) && !MN.Contains(TEXT("Column")) && !MN.Contains(TEXT("Beam"))
-					&& !MN.Contains(TEXT("Floor")) && !MN.Contains(TEXT("Roof"));
-				if (!bWallish) { continue; }
-
-				if (UInstancedStaticMeshComponent* ISM = Cast<UInstancedStaticMeshComponent>(Comp))
+				for (int32 Ii = 0; Ii < ISM->GetInstanceCount(); ++Ii)
 				{
-					for (int32 Ii = 0; Ii < ISM->GetInstanceCount(); ++Ii)
+					FTransform ITM;
+					if (!ISM->GetInstanceTransform(Ii, ITM, true)) { continue; }
+					const FVector IL = ITM.GetLocation();
+					if (IL.Z < ZMin || IL.Z > ZMax) { continue; }
+					const float Dep = FMath::Abs(FVector::DotProduct(IL - WallPlane, Out));
+					if (Dep > 60.f) { continue; }
+					bool bInSpan = false;
+					for (const FTplWin& TWs : TplWindows)
 					{
-						FTransform ITM;
-						if (!ISM->GetInstanceTransform(Ii, ITM, true)) { continue; }
-						const FVector IL = ITM.GetLocation();
-						if (IL.Z < ZMin || IL.Z > ZMax) { continue; }
-						if (FMath::Abs(FVector::DotProduct(IL - WallPlane, Out)) > 60.f) { continue; }
-						const float ILat = FVector::DotProduct(IL - WallPlane, WallDir);
-						if (ILat < SpanMin || ILat > SpanMax) { continue; }
-						ITM.SetScale3D(FVector(0.001f));
-						ISM->UpdateInstanceTransform(Ii, ITM, true, true, true);
-						++Replaced;
+						if (FMath::Abs(FVector::DotProduct(IL - (TWs.Pos + Out * Shift), WallDir)) < 210.f
+							&& FMath::Abs(TWs.Pos.Z - IL.Z) < 300.f) { bInSpan = true; break; }
 					}
-					continue;
+					if (!bInSpan) { continue; }
+					ITM.SetScale3D(FVector(0.001f));
+					ISM->UpdateInstanceTransform(Ii, ITM, true, true, true);
+					++Replaced;
 				}
-
-				if (!Comp->IsVisible()) { continue; }
-				const FVector L = Comp->Bounds.Origin;
-				if (L.Z < ZMin || L.Z > ZMax) { continue; }
-				if (FMath::Abs(FVector::DotProduct(L - WallPlane, Out)) > 60.f) { continue; }
-				const float CLat = FVector::DotProduct(L - WallPlane, WallDir);
-				const float CExt = FVector::DotProduct(Comp->Bounds.BoxExtent, WallDirAbs);
-				// Overlap-test: ook half-overlappende segmenten (centrum buiten de span) gaan weg.
-				if (CLat + CExt < SpanMin || CLat - CExt > SpanMax) { continue; }
-				Comp->SetVisibility(false, true);
-				++Replaced;
+				continue;
 			}
+
+			if (!Comp->IsVisible()) { continue; }
+			const FVector L = Comp->Bounds.Origin;
+			if (L.Z < ZMin || L.Z > ZMax) { continue; }
+			const float Dep = FMath::Abs(FVector::DotProduct(L - WallPlane, Out));
+			if (Dep > 60.f) { continue; }
+			bool bInSpan = false;
+			for (const FTplWin& TWs : TplWindows)
+			{
+				if (FMath::Abs(FVector::DotProduct(L - (TWs.Pos + Out * Shift), WallDir)) < 210.f
+					&& FMath::Abs(TWs.Pos.Z - L.Z) < 300.f) { bInSpan = true; break; }
+			}
+			if (!bInSpan) { continue; }
+			Comp->SetVisibility(false, true);
+			++Replaced;
 		}
 	}
 
