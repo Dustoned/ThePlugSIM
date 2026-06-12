@@ -234,6 +234,24 @@ bool ARoomStamper::LoadTemplate(const FString& TemplateName, TArray<FStampPiece>
 				Piece.Mats.Add((MPath != TEXT("-")) ? LoadObject<UMaterialInterface>(nullptr, *MPath) : nullptr);
 			}
 		}
+		// Fake-3D cubemap-slots (MI_ApartmentWindows/MI_ShopWindows) op de mesh ZELF vervangen door
+		// echt doorzichtig glas - het paneel-slot van raamsegmenten tekent anders een nep-kamer,
+		// ook als er geen override voor dat slot in de template staat.
+		if (Piece.Mesh)
+		{
+			const TArray<FStaticMaterial>& SMats = Piece.Mesh->GetStaticMaterials();
+			for (int32 Si = 0; Si < SMats.Num(); ++Si)
+			{
+				UMaterialInterface* Cur = (Piece.Mats.IsValidIndex(Si) && Piece.Mats[Si]) ? Piece.Mats[Si] : SMats[Si].MaterialInterface;
+				const FString CurName = Cur ? Cur->GetName() : FString();
+				if (CurName.Contains(TEXT("ApartmentWindows")) || CurName.Contains(TEXT("ShopWindows")))
+				{
+					while (Piece.Mats.Num() <= Si) { Piece.Mats.Add(nullptr); }
+					Piece.Mats[Si] = LoadObject<UMaterialInterface>(nullptr,
+						TEXT("/Game/CityBeachStrip/Materials/Glass/MI_Window_TwoSided.MI_Window_TwoSided"));
+				}
+			}
+		}
 		OutPieces.Add(Piece);
 	}
 	return OutPieces.Num() > 0;
