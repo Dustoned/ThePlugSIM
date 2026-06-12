@@ -42,6 +42,9 @@ void ACustomerSpawner::AdoptWalker(ACustomerBase* C, const TArray<FVector>* Entr
 	if (EntryPath && EntryPath->Num() >= 2)
 	{
 		St.Entry = *EntryPath;
+		// Terugweg = dezelfde ketting omgekeerd; na 3-7 minuten route gaat hij naar huis.
+		for (int32 ri = EntryPath->Num() - 1; ri >= 0; --ri) { St.ReturnPath.Add((*EntryPath)[ri]); }
+		St.PatrolUntil = (GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f) + FMath::FRandRange(180.f, 420.f);
 	}
 	if (PatrolRoute.Num() >= 2)
 	{
@@ -329,6 +332,12 @@ void ACustomerSpawner::TrySpawn()
 					{
 						++St.EntryIdx;
 						St.Stall = 0;
+						// Thuisgekomen (terugweg helemaal afgelegd): binnen despawnen - de
+						// woningen-pass zet later een verse bewoner neer (kringloop).
+						if (St.bHomeward && St.EntryIdx >= St.Entry.Num())
+						{
+							Cw->Destroy();
+						}
 						continue;
 					}
 					if (Cw->GetVelocity().SizeSquared2D() > 25.f) { St.Stall = 0; continue; }
@@ -360,6 +369,15 @@ void ACustomerSpawner::TrySpawn()
 					{
 						AI->MoveToLocation(Tgt, 60.f, true, St.Stall < 3);
 					}
+					continue;
+				}
+				// Tijd om naar huis te gaan? Ketting omgekeerd teruglopen (zichtbaar het gebouw in).
+				if (!St.bHomeward && St.ReturnPath.Num() >= 2 && World->GetRealTimeSeconds() > St.PatrolUntil && St.PatrolUntil > 0.f)
+				{
+					St.bHomeward = true;
+					St.Entry = St.ReturnPath;
+					St.EntryIdx = 0;
+					St.Stall = 0;
 					continue;
 				}
 				const bool bArrived = FVector::Dist2D(Cur, PatrolRoute[St.NextIdx]) < 240.f;

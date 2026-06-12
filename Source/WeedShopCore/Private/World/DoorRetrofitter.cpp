@@ -1125,6 +1125,39 @@ void ADoorRetrofitter::ScanAndConvert()
 		UE_LOG(LogWeedShop, Warning, TEXT("StairDump geschreven (%d tekens)"), Out.Len());
 	}
 
+	// HERRIJZENIS: deuren met een ResidentNpc-tag waarvan de NPC niet meer bestaat (thuisgekomen
+	// en gedespawned, of opgeruimd) krijgen hun tag terug vrij - de woningen-pass zet er dan een
+	// verse bewoner neer. Zo blijft er continu volk in en uit de gebouwen lopen.
+	if (ScanPass % 10 == 3)
+	{
+		TSet<FString> LiveIds;
+		for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
+		{
+			if (IsValid(*CIt)) { LiveIds.Add(CIt->NpcId.ToString()); }
+		}
+		int32 NFreed = 0;
+		for (TActorIterator<ACityDoor> DIt(W); DIt; ++DIt)
+		{
+			ACityDoor* Dd = *DIt;
+			if (!IsValid(Dd) || !Dd->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
+			const FVector DLoc = Dd->GetActorLocation();
+			const int32 NIdx = FMath::Abs(FMath::RoundToInt(DLoc.X * 0.13f) + FMath::RoundToInt(DLoc.Y * 0.31f) + FMath::RoundToInt(DLoc.Z * 0.77f));
+			if (LiveIds.Contains(FString::Printf(TEXT("Resident_%d"), NIdx))) { continue; }
+			bool bPending = false;
+			for (const FPendingResident& PRq : PendingResidents)
+			{
+				if (PRq.Door.Get() == Dd) { bPending = true; break; }
+			}
+			if (bPending) { continue; }
+			Dd->Tags.Remove(TEXT("ResidentNpc"));
+			++NFreed;
+		}
+		if (NFreed > 0)
+		{
+			LastAptDoorCount = -1; // woningen-pass opnieuw -> verse bewoners in de wachtrij
+		}
+	}
+
 	// BEWONERS-WACHTRIJ: een bewoner per ~10 seconden laten verschijnen (niet allemaal tegelijk).
 	// Toren-woningen (bij de starter) spawnen BINNEN en lopen zelf naar buiten; de rest spawnt op
 	// het dichtstbijzijnde route-punt voor hun gebouw.

@@ -143,6 +143,11 @@ protected:
 		TArray<FVector> Entry; // eerst dit pad aflopen (trap-ketting), daarna de route
 		int32 EntryIdx = 0;
 		int32 Stall = 0;       // stilstand-teller: na 3x direct lopen i.p.v. pathfinding
+		// KRINGLOOP: bewoners met een entry-pad lopen na een tijdje de ketting omgekeerd terug
+		// naar binnen en despawnen daar - de woningen-pass zet later een verse bewoner neer.
+		TArray<FVector> ReturnPath;
+		float PatrolUntil = 0.f; // realtime-moment waarop hij naar huis gaat
+		bool bHomeward = false;
 	};
 	TMap<TWeakObjectPtr<ACustomerBase>, FPatrolState> Patrol; // per wandelaar: volgend route-punt + richting
 
