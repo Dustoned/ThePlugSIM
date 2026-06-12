@@ -747,34 +747,39 @@ void ADoorRetrofitter::ScanAndConvert()
 				{
 					if (NLive >= LiteCap) { break; }
 					if (A->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
-					// Kamer-kant vs straat-kant van de voordeur (zelfde meting als de starter-teleport).
+					// OP STRAAT spawnen, niet in de kamer: de strip-kamers hebben (nog) geen trap of
+					// gang naar buiten, dus binnen gespawnde bewoners zaten opgesloten. Thuisplek =
+					// het dichtstbijzijnde punt van de NPC-route voor hun gebouw; "naar huis" is
+					// daarheen teruglopen (en daar 's nachts verdwijnen).
 					const FVector DL = A->GetActorLocation();
-					const FVector Fw = A->GetActorForwardVector();
-					const FVector Rt = A->GetActorRightVector();
-					auto Openness = [&](const FVector& P)
+					FVector Street = FVector::ZeroVector;
+					float BestSd = TNumericLimits<float>::Max();
+					for (const TArray<FVector>& Ring : NpcRings)
 					{
-						float Sum = 0.f;
-						const FVector Dirs[4] = { Fw, -Fw, Rt, -Rt };
-						for (const FVector& Dir : Dirs)
+						for (const FVector& RP2 : Ring)
 						{
-							FHitResult H;
-							const FVector S = P + FVector(0.f, 0.f, 120.f);
-							Sum += W->LineTraceSingleByChannel(H, S, S + Dir * 1200.f, ECC_Visibility) ? H.Distance : 1200.f;
+							const float Dd = FVector::DistSquared2D(RP2, DL);
+							if (Dd < BestSd) { BestSd = Dd; Street = RP2; }
 						}
-						return Sum;
-					};
-					const FVector CandA = DL + Fw * 240.f;
-					const FVector CandB = DL - Fw * 240.f;
-					const bool bAInside = Openness(CandA) <= Openness(CandB);
-					const FVector Inside = bAInside ? CandA : CandB;
-					const FVector Front = bAInside ? CandB : CandA;
+					}
+					if (BestSd == TNumericLimits<float>::Max())
+					{
+						// Geen route gezet: dichtstbijzijnde klanten-spawner als straat-anker.
+						for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+						{
+							if (!IsValid(*SpIt)) { continue; }
+							const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), DL);
+							if (Dd < BestSd) { BestSd = Dd; Street = SpIt->GetActorLocation(); }
+						}
+					}
+					if (BestSd == TNumericLimits<float>::Max()) { break; } // nergens straat bekend - later opnieuw
 					FActorSpawnParameters RP;
 					RP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-					ACustomerBase* Cb = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Inside + FVector(0.f, 0.f, 100.f)), RP);
+					ACustomerBase* Cb = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Street + FVector(0.f, 0.f, 110.f)), RP);
 					if (!Cb) { continue; }
 					const int32 NameIdx = FMath::Abs(FMath::RoundToInt(DL.X * 0.13f) + FMath::RoundToInt(DL.Y * 0.31f) + FMath::RoundToInt(DL.Z * 0.77f));
 					Cb->NpcId = FName(*FString::Printf(TEXT("Resident_%d"), NameIdx));
-					Cb->SetupResident(Front, Inside, FString::FromInt(A->GetAptNumber()), Front);
+					Cb->SetupResident(Street, Street, FString::FromInt(A->GetAptNumber()), Street);
 					A->Tags.Add(TEXT("ResidentNpc"));
 					++NLive;
 					++NNew;
