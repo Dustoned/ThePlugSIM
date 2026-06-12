@@ -667,18 +667,15 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 
 	// Vlak-bewuste match: langs het raam-vlak moet het precies kloppen (breedte), haaks erop
 	// (de diepte gevel<->kamer-muur) mag flink verschillen.
-	auto MatchesTplWindow = [&TplWindows](const FVector& L, const UMaterialInterface* Mat0, bool& bOutSameMat) -> bool
+	auto MatchesTplWindow = [&TplWindows](const FVector& L) -> bool
 	{
 		for (const FTplWin& TW : TplWindows)
 		{
-			if (FMath::Abs(TW.Pos.Z - L.Z) > 180.f) { continue; }
+			if (FMath::Abs(TW.Pos.Z - L.Z) > 300.f) { continue; }
 			const FVector D = L - TW.Pos;
 			const float A = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(1.f, 0.f, 0.f))));
 			const float B = FMath::Abs(FVector::DotProduct(D, FRotator(0.f, TW.Yaw, 0.f).RotateVector(FVector(0.f, 1.f, 0.f))));
-			const bool bNear = (A < 130.f && B < 380.f) || (B < 130.f && A < 380.f);
-			if (!bNear) { continue; }
-			bOutSameMat = (TW.Mat != nullptr && Mat0 == TW.Mat);
-			return true;
+			if ((A < 130.f && B < 380.f) || (B < 130.f && A < 380.f)) { return true; }
 		}
 		return false;
 	};
@@ -709,8 +706,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 					if (IL.Z < ZMin || IL.Z > ZMax) { continue; }
 					if (!FootWide.IsInsideXY(IL)) { continue; }
 					++Cands;
-					bool bSameMat = false;
-					if (MatchesTplWindow(IL, nullptr, bSameMat))
+					if (MatchesTplWindow(IL))
 					{
 						ITM.SetScale3D(FVector(0.001f));
 						ISM->UpdateInstanceTransform(Ii, ITM, true, true, true);
@@ -725,15 +721,10 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			if (!FootWide.IsInsideXY(L)) { continue; }
 			++Cands;
 
-			bool bSameMat = false;
-			if (MatchesTplWindow(L, Comp->GetMaterial(0), bSameMat))
+			if (MatchesTplWindow(L))
 			{
-				// Zelfde glas-materiaal = waarschijnlijk het echte (gebakken) raam zelf: laten staan.
-				if (!bSameMat)
-				{
-					Comp->SetVisibility(false, true);
-					++Hidden;
-				}
+				Comp->SetVisibility(false, true);
+				++Hidden;
 				continue;
 			}
 

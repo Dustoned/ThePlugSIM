@@ -27,9 +27,14 @@ for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.StaticMesh
 
 spawned = 0
 skipped = 0
+current_stamp = None  # stamp-blokken: JOB|STAMP_... staat VOOR zijn SPAWN-regels
 with open(BAKE_FILE, encoding="utf-8") as f:
     for line in f:
         line = line.strip()
+        if line.startswith("JOB|"):
+            jid = line.split("|", 1)[1]
+            current_stamp = jid if jid.startswith("STAMP_") else None
+            continue
         if not line.startswith("SPAWN|"):
             continue
         parts = line.split("|")
@@ -53,6 +58,8 @@ with open(BAKE_FILE, encoding="utf-8") as f:
         if not actor:
             continue
         actor.set_actor_scale3d(unreal.Vector(sx, sy, sz))
+        if current_stamp:
+            actor.tags = [unreal.Name(current_stamp)]  # window-fix herkent eigen (gebakken) ramen
         comp = actor.static_mesh_component
         if comp:
             for mi, mp in enumerate(mats_s.split(";")):
