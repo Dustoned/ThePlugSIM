@@ -1,5 +1,7 @@
 #include "World/CityDoor.h"
 #include "Components/TextRenderComponent.h"
+#include "Economy/EconomyComponent.h"
+#include "Phone/PhoneClientComponent.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
@@ -194,6 +196,23 @@ FString ACityDoor::FriendlyNpcName(FName NpcId)
 
 void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)
 {
+	// Achterstallige huur: F aan je eigen voordeur = betalen (cash), daarna is de deur weer van jou.
+	if (bRentDue)
+	{
+		UEconomyComponent* Ec = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UEconomyComponent>() : nullptr;
+		UPhoneClientComponent* Ph = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+		if (Ec && Ec->RemoveMoney(RentCents))
+		{
+			bRentDue = false;
+			bLocked = false;
+			bRentJustPaid = true;
+		}
+		else if (Ph)
+		{
+			Ph->Toast(FString::Printf(TEXT("Not enough cash - rent is EUR %d"), (int32)(RentCents / 100)), FColor::Red, 3.f);
+		}
+		return;
+	}
 	if (bLocked) { return; } // bewoner-deur: op slot voor de speler
 	// Draairichting is vast (de legale kant, afgeleid van hoe de map de deur parkeerde) -
 	// dynamisch van-de-speler-af kiezen duwde deuren door het kozijn.
@@ -203,6 +222,10 @@ void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)
 FText ACityDoor::GetInteractionPrompt_Implementation() const
 {
 	const FString AptLbl = (AptNumber > 0) ? FString::Printf(TEXT("Apt %d - "), AptNumber) : FString();
+	if (bRentDue)
+	{
+		return FText::FromString(FString::Printf(TEXT("%sRENT OVERDUE - F: pay EUR %d"), *AptLbl, (int32)(RentCents / 100)));
+	}
 	if (bLocked)
 	{
 		if (bForSale) { return FText::FromString(FString::Printf(TEXT("%sFOR SALE - buy via phone (Upgrades)"), *AptLbl)); }

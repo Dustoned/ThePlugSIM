@@ -57,6 +57,11 @@ protected:
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
 	bool bDayMapCaptured = false;   // kaart een keer per sessie schieten (foto-stand maakt tijd irrelevant)
 	int32 LastAptDoorCount = -1;    // woningen-slot-pass: opnieuw draaien als er deuren bij komen
+	// Starter-huis + huur (EUR 500 per 31 dagen, voortgang in Saved/RentState.txt).
+	TWeakObjectPtr<class ACityDoor> StarterDoor;
+	bool bMovedIntoHome = false;    // speler 1x per sessie in z'n appartement zetten
+	int32 RentDueDay = -1;          // dag-nummer waarop de huur vervalt
+	int32 LastRentSeenLeft = -9999; // om 1x per dag te toasten/saven
 	bool bWalkersSpawned = false;   // klanten-spawner + nav-invoker een keer plaatsen
 	void MakeBakedWindowsReal();    // gebakken kamers: nep-glas -> echt doorzichtig glas, direct bij overlay-load
 	bool bBakedWindowsReal = false;

@@ -52,6 +52,11 @@ public:
 	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
 	bool IsLocked() const { return bLocked; }
 
+	// HUUR: achterstallig -> deur op slot, F aan de deur = betalen (cash van de pawn).
+	void SetRentOverdue(int64 Cents) { bLocked = true; bRentDue = true; RentCents = Cents; bForSale = false; bOpen = false; }
+	bool IsRentOverdue() const { return bRentDue; }
+	bool ConsumeRentJustPaid() { const bool b = bRentJustPaid; bRentJustPaid = false; return b; }
+
 	// Jouw eigen woning: open/dicht zoals normaal, prompt "Your home".
 	void SetPlayerHome() { bLocked = false; bPlayerHome = true; bForSale = false; ResidentName.Empty(); }
 	// Koopbaar pand (nog niet van jou): op slot met "TE KOOP - koop via telefoon".
@@ -92,4 +97,7 @@ protected:
 	bool bForSale = false;    // koopbaar pand, nog niet van jou
 	FString ResidentName;   // naam voor de "LOCKED - ... lives here"-prompt
 	int32 AptNumber = 0;    // 0 = geen nummer (winkeldeur e.d.)
+	bool bRentDue = false;      // huur achterstallig: op slot tot betaald (F aan de deur)
+	bool bRentJustPaid = false; // 1x-signaal naar de huur-administratie (DoorRetrofitter)
+	int64 RentCents = 0;        // openstaand huurbedrag
 };

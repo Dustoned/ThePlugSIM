@@ -8,6 +8,8 @@
 #include "World/RoomStamper.h"
 #include "World/MapBorder.h"
 #include "Customer/CustomerSpawner.h"
+#include "Economy/EconomyComponent.h"
+#include "Phone/PhoneClientComponent.h"
 #include "NavigationSystem.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
@@ -415,6 +417,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			LastAptDoorCount = Apt.Num();
 			Apt.Sort([](const ACityDoor& A, const ACityDoor& B) { return A.GetActorLocation().Z > B.GetActorLocation().Z; });
 			ACityDoor* Starter = Apt[0];
+			StarterDoor = Starter;
 			// NUMMERING zoals een echt complex: deuren clusteren per GEBOUW (XY-afstand), binnen een
 			// gebouw per verdieping (Z-banden) een volgnummer -> Apt 101, 102, 201, ... Bordje op de deur.
 			TArray<TArray<ACityDoor*>> Buildings;
@@ -467,6 +470,102 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			const FVector Top = Starter->GetActorLocation();
 			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
+		}
+	}
+
+	// STARTER-HUIS: je begint IN je eigen appartement, en er loopt HUUR: EUR 500 per 31 dagen.
+	// Genoeg cash op de vervaldag = automatisch geind; te weinig = deur op slot tot je aan de
+	// deur betaalt (F). Dagen-resterend overleeft sessies via Saved/RentState.txt.
+	if (StarterDoor.IsValid())
+	{
+		APlayerController* PCr = W->GetFirstPlayerController();
+		APawn* Pr = PCr ? PCr->GetPawn() : nullptr;
+		// 1x per sessie naar binnen: de KAMER-kant van de voordeur vinden door aan beide kanten
+		// de vrije ruimte te meten - een kamer is krap, de galerij/gang is lang.
+		if (!bMovedIntoHome && Pr && bWalkersSpawned)
+		{
+			bMovedIntoHome = true;
+			const FVector DL = StarterDoor->GetActorLocation();
+			const FVector Fw = StarterDoor->GetActorForwardVector();
+			const FVector Rt = StarterDoor->GetActorRightVector();
+			auto Openness = [&](const FVector& P)
+			{
+				float Sum = 0.f;
+				const FVector Dirs[4] = { Fw, -Fw, Rt, -Rt };
+				for (const FVector& Dir : Dirs)
+				{
+					FHitResult H;
+					const FVector S = P + FVector(0.f, 0.f, 120.f);
+					Sum += W->LineTraceSingleByChannel(H, S, S + Dir * 1200.f, ECC_Visibility) ? H.Distance : 1200.f;
+				}
+				return Sum;
+			};
+			const FVector CandA = DL + Fw * 240.f;
+			const FVector CandB = DL - Fw * 240.f;
+			const FVector Inside = (Openness(CandA) <= Openness(CandB)) ? CandA : CandB;
+			Pr->SetActorLocation(Inside + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
+			if (UPhoneClientComponent* Phw = Pr->FindComponentByClass<UPhoneClientComponent>())
+			{
+				Phw->Toast(FString::Printf(TEXT("Welcome home - Apt %d. Rent: EUR 500 due every 31 days."), StarterDoor->GetAptNumber()), FColor::Cyan, 6.f);
+			}
+		}
+		// Huur-administratie op de dag-teller.
+		AWeedShopGameState* GSr = W->GetGameState<AWeedShopGameState>();
+		UDayCycleComponent* DCr = GSr ? GSr->GetDayCycle() : nullptr;
+		if (DCr)
+		{
+			const int32 Day = DCr->GetDayNumber();
+			if (RentDueDay < 0)
+			{
+				int32 DaysLeft = 31;
+				FString RS;
+				if (FFileHelper::LoadFileToString(RS, *(FPaths::ProjectSavedDir() / TEXT("RentState.txt"))))
+				{
+					DaysLeft = FMath::Clamp(FCString::Atoi(*RS), 0, 31);
+				}
+				RentDueDay = Day + DaysLeft;
+			}
+			const int32 Left = RentDueDay - Day;
+			if (Left != LastRentSeenLeft)
+			{
+				LastRentSeenLeft = Left;
+				FFileHelper::SaveStringToFile(FString::FromInt(FMath::Max(0, Left)), *(FPaths::ProjectSavedDir() / TEXT("RentState.txt")));
+				if (Left > 0 && Left <= 7 && Pr)
+				{
+					if (UPhoneClientComponent* Ph7 = Pr->FindComponentByClass<UPhoneClientComponent>())
+					{
+						Ph7->Toast(FString::Printf(TEXT("Rent: EUR 500 due in %d day%s"), Left, Left == 1 ? TEXT("") : TEXT("s")), FColor::Yellow, 4.f);
+					}
+				}
+			}
+			if (Left <= 0 && !StarterDoor->IsRentOverdue())
+			{
+				UEconomyComponent* Ec = Pr ? Pr->FindComponentByClass<UEconomyComponent>() : nullptr;
+				UPhoneClientComponent* Phr = Pr ? Pr->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+				if (Ec && Ec->RemoveMoney(50000))
+				{
+					RentDueDay = Day + 31;
+					if (Phr) { Phr->Toast(TEXT("Rent paid: EUR 500. Next rent in 31 days."), FColor::Green, 5.f); }
+				}
+				else
+				{
+					StarterDoor->SetRentOverdue(50000);
+					if (Phr) { Phr->Toast(TEXT("RENT OVERDUE - EUR 500. Your door is locked: pay at the door (F)."), FColor::Red, 7.f); }
+				}
+			}
+			// Aan de deur betaald? Dan loopt de volgende maand weer.
+			if (StarterDoor->ConsumeRentJustPaid())
+			{
+				RentDueDay = Day + 31;
+				FFileHelper::SaveStringToFile(FString::FromInt(31), *(FPaths::ProjectSavedDir() / TEXT("RentState.txt")));
+				if (Pr)
+				{
+					if (UPhoneClientComponent* Php = Pr->FindComponentByClass<UPhoneClientComponent>())
+					{
+						Php->Toast(TEXT("Rent paid: EUR 500. Next rent in 31 days."), FColor::Green, 5.f);
+					}
+				}
+			}
 		}
 	}
 
