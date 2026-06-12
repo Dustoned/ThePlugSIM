@@ -39,12 +39,19 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> NpcLabels;
 
 	FVector2D CanvasToWorld(FVector2D Local) const; // inverse van WorldToCanvas
+	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	class UPhoneClientComponent* GetPhone() const;
 
 	bool bFullscreen = false;
 	bool bBuiltBlocks = false;
 	FVector2D CenterXY = FVector2D::ZeroVector;
 	float Scale = 0.05f;
+	// ZOOM (pack-map): standaard dicht op de speler, scrollwiel zoomt uit tot de hele grens-ring.
+	FVector2D MapCenterFull = FVector2D::ZeroVector; // centrum van de volledige capture
+	float Scale0 = 0.05f;                            // schaal bij zoom 1 (hele kaart in beeld)
+	float Zoom = 1.f;
+	bool bZoomable = false;
+	void UpdateView();
 
 	TWeakObjectPtr<ACityGenerator> City;
 	TWeakObjectPtr<class ADoorRetrofitter> PackMap; // pack-map-adapter (kaart zonder CityGenerator)

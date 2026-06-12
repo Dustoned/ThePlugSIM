@@ -248,6 +248,12 @@ void UMapWidget::BuildBlocks()
 	{
 		CenterXY = PackMap->GetMapCenter();
 		Scale = GMapDS / FMath::Max(1.f, PackMap->GetMapOrthoWidth());
+		// Zoombaar: standaard DICHT op de speler (view ~3,5km breed), scrollwiel tot de hele ring.
+		MapCenterFull = CenterXY;
+		Scale0 = Scale;
+		bZoomable = true;
+		Zoom = FMath::Clamp((GMapDS / Scale0) / 350000.f * 20.f, 6.f, 40.f);
+		if (Canvas) { Canvas->SetClipping(EWidgetClipping::ClipToBounds); }
 		PackMap->CaptureMapNow();
 		PlayerDot = AddDot(FLinearColor(0.2f, 0.9f, 1.f), 16.f, 26);
 		WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
@@ -360,8 +366,39 @@ void UMapWidget::BuildBlocks()
 	bBuiltBlocks = true;
 }
 
+void UMapWidget::UpdateView()
+{
+	if (!bZoomable || !MapImage || !MapImage->Slot) { return; }
+	// View-centrum = de speler, geklemd zodat de view binnen de kaart blijft.
+	FVector2D VC = MapCenterFull;
+	if (APawn* P = GetOwningPlayerPawn()) { VC = FVector2D(P->GetActorLocation().X, P->GetActorLocation().Y); }
+	const float HalfWorld = (GMapDS / FMath::Max(0.0001f, Scale0)) * 0.5f;
+	const float HalfView = HalfWorld / FMath::Max(1.f, Zoom);
+	VC.X = FMath::Clamp(VC.X, MapCenterFull.X - (HalfWorld - HalfView), MapCenterFull.X + (HalfWorld - HalfView));
+	VC.Y = FMath::Clamp(VC.Y, MapCenterFull.Y - (HalfWorld - HalfView), MapCenterFull.Y + (HalfWorld - HalfView));
+	CenterXY = VC;
+	Scale = Scale0 * Zoom;
+	// Kaart-afbeelding schalen en schuiven zodat VC in het canvas-midden ligt.
+	const float rx = VC.X - MapCenterFull.X;
+	const float ry = VC.Y - MapCenterFull.Y;
+	const FVector2D PFull(GMapDS * 0.5f + ry * Scale0, GMapDS * 0.5f - rx * Scale0);
+	if (UCanvasPanelSlot* Is = Cast<UCanvasPanelSlot>(MapImage->Slot))
+	{
+		Is->SetSize(FVector2D(GMapDS * Zoom, GMapDS * Zoom));
+		Is->SetPosition(FVector2D(GMapDS * 0.5f, GMapDS * 0.5f) - PFull * Zoom);
+	}
+}
+
+FReply UMapWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (!bZoomable) { return FReply::Unhandled(); }
+	Zoom = FMath::Clamp(Zoom * (InMouseEvent.GetWheelDelta() > 0.f ? 1.3f : 0.77f), 1.f, 60.f);
+	return FReply::Handled();
+}
+
 void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
+	UpdateView();
 	Super::NativeTick(MyGeometry, DeltaTime);
 
 	if (!City.IsValid())
