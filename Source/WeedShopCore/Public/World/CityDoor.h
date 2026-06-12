@@ -30,6 +30,9 @@ public:
 
 	// SCHUIFDEUR-modus (balkon-puien): het blad schuift opzij langs z'n eigen breedte i.p.v. draaien.
 	void SetSlideMode(float InSlideDist);
+	// Dicht-stand-offset (lokaal): voor puien die in de map OPEN geparkeerd staan (blad gestapeld op
+	// het vaste paneel). Dicht = blad verschoven naar de vrije opening; open = terug naar geparkeerd.
+	void SetSlideClosedOffset(const FVector& LocalOff);
 
 	// Extra mee-draaiend onderdeel (bv. het losse GLAS van een pack-deurblad): hangt aan het scharnier
 	// op de gegeven wereld-transform, zodat het met de deur mee opent.
@@ -91,6 +94,7 @@ protected:
 	float OpenSwingDeg = -95.f; // doelhoek bij open (per deur instelbaar; dubbele-deur rechter helft = +95)
 	bool bSlideMode = false;    // true = schuiven (balkon-pui) i.p.v. draaien
 	float SlideDist = 130.f;    // schuif-afstand (cm, langs lokale Y van het blad)
+	FVector SlideBase = FVector::ZeroVector; // dicht-stand-offset van het blad (open-geparkeerde pui)
 	bool bOpen = false;     // open/dicht (getoggled via interact)
 	bool bLocked = false;   // bewoner-deur: kan niet door de speler geopend worden
 	bool bPlayerHome = false; // jouw eigen woning (open/dicht, prompt "Your home")

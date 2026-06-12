@@ -367,6 +367,31 @@ void ADoorRetrofitter::CaptureMapNow()
 			if (IsValid(*It)) { MapCapture->HiddenActors.Add(*It); }
 		}
 	}
+	// DIAGNOSE (eenmalig per sessie): alle weg-achtige meshes dumpen - de donkere weg-afdruk op
+	// het strand is geen schaduw/AO, dus het is echte geometrie die we moeten verbergen.
+	{
+		static bool bRoadDumped = false;
+		if (!bRoadDumped)
+		{
+			bRoadDumped = true;
+			FString Out;
+			for (TObjectIterator<UStaticMeshComponent> RIt; RIt; ++RIt)
+			{
+				UStaticMeshComponent* C = *RIt;
+				if (!C || C->GetWorld() != GetWorld() || !C->GetStaticMesh()) { continue; }
+				const FString Nm = C->GetStaticMesh()->GetName();
+				if (!(Nm.Contains(TEXT("Road")) || Nm.Contains(TEXT("Highway")) || Nm.Contains(TEXT("Bridge"))
+					|| Nm.Contains(TEXT("Asphalt")) || Nm.Contains(TEXT("Overpass")) || Nm.Contains(TEXT("Boardwalk"))
+					|| Nm.Contains(TEXT("Pier")) || Nm.Contains(TEXT("Street")))) { continue; }
+				const FVector O = C->Bounds.Origin;
+				const FVector E = C->Bounds.BoxExtent;
+				Out += FString::Printf(TEXT("%s|%.0f,%.0f,%.0f|ext=%.0f,%.0f,%.0f|vis=%d\n"),
+					*Nm, O.X, O.Y, O.Z, E.X, E.Y, E.Z, C->IsVisible() ? 1 : 0);
+			}
+			FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("RoadDump.txt")));
+			UE_LOG(LogWeedShop, Warning, TEXT("RoadDump geschreven (%d tekens)"), Out.Len());
+		}
+	}
 	// Altijd dezelfde rustige ochtend-belichting op de foto, ongeacht de kloktijd (middagzon
 	// blies de kaart naar wit; nacht maakte hem zwart). Tick van de controller herstelt direct.
 	if (ADayNightController* DN = ADayNightController::GetLocal(GetWorld()))
@@ -776,6 +801,38 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				const float LeafWidth = Comp->GetStaticMesh()->GetBoundingBox().GetSize().Y;
 				Door->SetSlideMode(FMath::Max(100.f, LeafWidth - 8.f));
+				// OPEN-geparkeerde pui (decor): het blad ligt gestapeld op het vaste paneel ernaast
+				// en de deuropening staat wagenwijd open - terwijl "dicht" voor de werkende deur de
+				// spawn-stand is. Detecteer de stapeling en schuif de werkende deur naar de vrije
+				// opening: dicht is dan ook echt DICHT (zeker nu bewoners hun pui op slot hebben).
+				const FVector LeafC = Comp->Bounds.Origin;
+				bool bStacked = false;
+				for (TObjectIterator<UStaticMeshComponent> SIt; SIt; ++SIt)
+				{
+					UStaticMeshComponent* SC = *SIt;
+					if (!SC || SC->GetWorld() != W || SC == Comp || !SC->GetStaticMesh()) { continue; }
+					const FString SNm = SC->GetStaticMesh()->GetName();
+					if (!SNm.Contains(TEXT("BalconyDoor"))) { continue; }
+					if (SNm == Leaf->MeshName || SNm == FString(Leaf->MeshName) + TEXT("_Glass")) { continue; }
+					if (FVector::Dist(SC->Bounds.Origin, LeafC) < 35.f) { bStacked = true; break; }
+				}
+				if (bStacked)
+				{
+					const FVector Axis = LeafTM.GetRotation().GetAxisY();
+					const FVector CandA = LeafC + Axis * LeafWidth;
+					const FVector CandB = LeafC - Axis * LeafWidth;
+					const FCollisionShape Probe = FCollisionShape::MakeSphere(38.f);
+					const bool bABlocked = W->OverlapBlockingTestByChannel(CandA, FQuat::Identity, ECC_Visibility, Probe);
+					const bool bBBlocked = W->OverlapBlockingTestByChannel(CandB, FQuat::Identity, ECC_Visibility, Probe);
+					if (bABlocked != bBBlocked)
+					{
+						const FVector Closed = bABlocked ? CandB : CandA;
+						const FVector LocalDelta = LeafTM.GetRotation().UnrotateVector(Closed - LeafC);
+						Door->SetSlideClosedOffset(FVector(0.f, LocalDelta.Y, 0.f));
+						Door->SetOpenSwing((LocalDelta.Y <= 0.f) ? 95.f : -95.f); // open = terug naar de geparkeerde kant
+						UE_LOG(LogWeedShop, Warning, TEXT("Pui dichtgezet: %s op (%.0f, %.0f, %.0f)"), Leaf->MeshName, LeafC.X, LeafC.Y, LeafC.Z);
+					}
+				}
 			}
 			SpawnedDoors.Add(Door);
 			++NewThisPass;

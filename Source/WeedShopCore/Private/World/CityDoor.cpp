@@ -89,6 +89,12 @@ void ACityDoor::SetSlideMode(float InSlideDist)
 	SlideDist = InSlideDist;
 }
 
+void ACityDoor::SetSlideClosedOffset(const FVector& LocalOff)
+{
+	SlideBase = LocalOff;
+	if (Hinge) { Hinge->SetRelativeLocation(SlideBase); } // meteen in de dichte stand zetten
+}
+
 void ACityDoor::SetupLeaf(UStaticMesh* LeafMesh, float OpenDeg, float TriggerRadius)
 {
 	if (!Panel || !LeafMesh) { return; }
@@ -111,6 +117,12 @@ void ACityDoor::AddLeafExtra(UStaticMesh* Mesh, const FTransform& WorldTM)
 	C->RegisterComponent();
 	C->SetStaticMesh(Mesh);
 	C->SetWorldTransform(WorldTM);
+	// Open-geparkeerde pui: het paneel is naar de dichte stand verschoven (SlideBase), maar het
+	// glas-mesh staat in de map nog op de geparkeerde stand - zelfde verschuiving meegeven.
+	if (!SlideBase.IsNearlyZero())
+	{
+		C->AddWorldOffset(GetActorRotation().RotateVector(SlideBase));
+	}
 	// Het glas van het blad moet net zo blokkeren als het paneel - anders stap je bij een dichte
 	// deur dwars door de ruit. De pawn-response volgt het paneel (toggle in Tick).
 	C->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -253,7 +265,7 @@ void ACityDoor::Tick(float DeltaSeconds)
 			// i.p.v. als rotatie. Teken van OpenSwingDeg bepaalt de schuif-kant.
 			const float Frac = (OpenSwingDeg != 0.f) ? (CurAngle / OpenSwingDeg) : 0.f;
 			const float Dir = (OpenSwingDeg >= 0.f) ? 1.f : -1.f;
-			Hinge->SetRelativeLocation(FVector(0.f, Dir * Frac * SlideDist, 0.f));
+			Hinge->SetRelativeLocation(SlideBase + FVector(0.f, Dir * Frac * SlideDist, 0.f));
 		}
 		else
 		{
