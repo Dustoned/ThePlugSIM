@@ -776,39 +776,38 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		}
 	}
 
-	// PASS 4: niet-gematchte gevel-ramen strak binnen de stempel: look terughalen van een donor
-	// (zelfde mesh, zelfde kolom, andere verdieping).
+	// PASS 4: niet-gematchte gevel-ramen binnen de stempel ECHT maken in plaats van fake: het
+	// gevel-raam staat op de goede plek (hoort bij dit gebouw), alleen de fake-3D view moet weg.
+	// Parallax interior-kaartjes verbergen + het heldere glas van het template-raam overnemen;
+	// de kamer-muur erachter is van binnenuit gewoon dicht maar van buiten onzichtbaar (single-
+	// sided), dus je kijkt er echt de kamer mee in.
 	int32 Synced = 0;
+	TArray<TObjectPtr<UMaterialInterface>> ClearGlass;
+	for (const FStampPiece& Piece : Tpl)
+	{
+		const FString PMN = Piece.Mesh ? Piece.Mesh->GetName() : FString();
+		if (PMN.Contains(TEXT("Glass")) && Piece.Mats.Num() > 0) { ClearGlass = Piece.Mats; break; }
+	}
 	for (UStaticMeshComponent* Comp : Unmatched)
 	{
-		if (!IsValid(Comp)) { continue; }
-		const FVector L = Comp->Bounds.Origin;
-		UStaticMeshComponent* Donor = nullptr;
-		float DonorDz = TNumericLimits<float>::Max();
-		for (TActorIterator<AActor> DIt(W); DIt; ++DIt)
+		if (!IsValid(Comp) || !Comp->GetStaticMesh()) { continue; }
+		const FString CMN = Comp->GetStaticMesh()->GetName();
+		if (CMN.EndsWith(TEXT("_Interior")))
 		{
-			if (!IsValid(*DIt)) { continue; }
-			TInlineComponentArray<UStaticMeshComponent*> DComps(*DIt);
-			for (UStaticMeshComponent* DC : DComps)
-			{
-				if (!DC || DC == Comp || DC->GetStaticMesh() != Comp->GetStaticMesh() || !DC->IsVisible()) { continue; }
-				const FVector DL = DC->Bounds.Origin;
-				if (DL.Z >= ZMin && DL.Z <= ZMax) { continue; }
-				if (FVector::Dist2D(DL, L) > 250.f) { continue; }
-				const float Dz = FMath::Abs(DL.Z - L.Z);
-				if (Dz < DonorDz) { DonorDz = Dz; Donor = DC; }
-			}
+			Comp->SetVisibility(false, true); // fake-3D kaartje weg
+			++Synced;
+			continue;
 		}
-		if (Donor && Donor->GetMaterial(0) != Comp->GetMaterial(0))
+		if (CMN.Contains(TEXT("Glass")) && ClearGlass.Num() > 0)
 		{
-			for (int32 Mi = 0; Mi < Donor->GetNumMaterials() && Mi < Comp->GetNumMaterials(); ++Mi)
+			for (int32 Mi = 0; Mi < ClearGlass.Num() && Mi < Comp->GetNumMaterials(); ++Mi)
 			{
-				Comp->SetMaterial(Mi, Donor->GetMaterial(Mi));
+				if (ClearGlass[Mi]) { Comp->SetMaterial(Mi, ClearGlass[Mi]); }
 			}
 			++Synced;
 		}
 	}
 
-	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, stempel-shift (%.0f, %.0f), %d gevel-ramen verborgen, %d looks hersteld (%d template-ramen)"),
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, stempel-shift (%.0f, %.0f), %d gevel-ramen verborgen, %d ramen echt gemaakt (%d template-ramen)"),
 		*TemplateName, Cands, Matches.Num(), StampShift.X, StampShift.Y, Hidden, Synced, TplWindows.Num());
 }
