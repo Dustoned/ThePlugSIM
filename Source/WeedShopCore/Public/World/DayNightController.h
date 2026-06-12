@@ -48,6 +48,8 @@ public:
 
 	// Schrijf de huidige waardes naar Saved/LightConfig.txt (+ log), zodat ze als defaults te bakken zijn.
 	void SaveLightConfig() const;
+	// Laad Saved/LightConfig.txt terug in de tunables (anders is de Save-knop zinloos).
+	void LoadLightConfig();
 
 	// De geadopteerde zon (voor opruimen van extra directional lights in pack-maps).
 	class ADirectionalLight* GetSun() const { return Sun.Get(); }

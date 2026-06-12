@@ -85,6 +85,8 @@ void ADayNightController::BeginPlay()
 
 	LocalInstance = this; // bereikbaar voor de phone-UI (live tunen)
 
+	LoadLightConfig(); // opgeslagen slider-waardes terugladen
+
 	// PACK-MAPS: MINIMAL-modus - overdag blijft de stock-look 100% intact (geen zon/fog/scenario-
 	// ingrepen; dat sloopte de art-stijl). 's Nachts dimmen we alleen de BESTAANDE lichten van de
 	// map en gaat de HDRI-fotokoepel (dag-lucht) uit zodat de donkere hemel zichtbaar wordt.
@@ -713,4 +715,28 @@ void ADayNightController::Tick(float DeltaSeconds)
 			}
 		}
 	}
+}
+
+void ADayNightController::LoadLightConfig()
+{
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("LightConfig.txt")))) { return; }
+	for (const FString& Line : Lines)
+	{
+		FString K, V;
+		if (!Line.Split(TEXT("="), &K, &V)) { continue; }
+		const float F = FCString::Atof(*V);
+		if      (K == TEXT("MoonIntensity")) { MoonIntensity = F; }
+		else if (K == TEXT("SunIntensity"))  { SunIntensity = F; }
+		else if (K == TEXT("SkyNight"))      { SkyNight = F; }
+		else if (K == TEXT("SkyDay"))        { SkyDay = F; }
+		else if (K == TEXT("MoonPitch"))     { MoonPitch = F; }
+		else if (K == TEXT("LampIntensity")) { LampIntensity = F; }
+		else if (K == TEXT("ExposureBias"))  { ExposureBias = F; }
+		else if (K == TEXT("NightGain"))     { NightGain = F; }
+		else if (K == TEXT("NightExposure")) { NightExposure = F; }
+		else if (K == TEXT("DayBloom"))      { DayBloom = F; }
+		else if (K == TEXT("SunHaze"))       { SunHaze = F; }
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[LightConfig] geladen (%d regels)"), Lines.Num());
 }
