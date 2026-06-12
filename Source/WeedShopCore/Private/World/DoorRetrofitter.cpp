@@ -319,6 +319,7 @@ void ADoorRetrofitter::EnsureMapCapture()
 	// en post-processing is de luchtfoto altijd leesbaar, op elk tijdstip.
 	MapCapture->ShowFlags.SetLighting(false);
 	MapCapture->ShowFlags.SetPostProcessing(false);
+	MapCapture->ShowFlags.SetTranslucency(false);  // water/glas rendert unlit als dekkende plaat over de stad heen
 	// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met MapWidget::WorldToCanvas).
 	MapCapture->SetWorldLocationAndRotation(FVector(MapCenter.X, MapCenter.Y, TopZ), FRotator(-90.f, 0.f, 0.f));
 }
