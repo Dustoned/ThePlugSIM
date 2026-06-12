@@ -799,6 +799,27 @@ void ADoorRetrofitter::ScanAndConvert()
 			FVector Front = FVector::ZeroVector;
 			FVector Inside = FVector::ZeroVector;
 			bool bOk = false;
+			// Dichtstbijzijnde STRAAT-punt (route of spawner): voor toren-bewoners de hoogte-
+			// referentie van hun loopdoelen (de trap af, de straat op), voor de rest de thuisplek.
+			FVector StreetRef = FVector::ZeroVector;
+			{
+				float BestRd = TNumericLimits<float>::Max();
+				for (const TArray<FVector>& Ring : NpcRings)
+				{
+					for (const FVector& RP2 : Ring)
+					{
+						const float Dd = FVector::DistSquared2D(RP2, DL);
+						if (Dd < BestRd) { BestRd = Dd; StreetRef = RP2; }
+					}
+				}
+				for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+				{
+					if (!IsValid(*SpIt)) { continue; }
+					const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), DL);
+					if (Dd < BestRd) { BestRd = Dd; StreetRef = SpIt->GetActorLocation(); }
+				}
+				if (BestRd == TNumericLimits<float>::Max()) { StreetRef = FVector::ZeroVector; }
+			}
 			if (PR.bInside)
 			{
 				// Kamer-kant vs gang-kant van de voordeur (vrije-ruimte-meting).
@@ -824,50 +845,12 @@ void ADoorRetrofitter::ScanAndConvert()
 				SpawnAt = Inside;
 				bOk = true;
 			}
-			// Voor BEIDE varianten: het dichtstbijzijnde straat-punt bepalen - voor toren-bewoners
-			// wordt dat de hoogte-referentie van hun loopdoelen (de trap af, de straat op).
-			FVector StreetRef = FVector::ZeroVector;
+			else if (!StreetRef.IsNearlyZero())
 			{
-				float BestRd = TNumericLimits<float>::Max();
-				for (const TArray<FVector>& Ring : NpcRings)
-				{
-					for (const FVector& RP2 : Ring)
-					{
-						const float Dd = FVector::DistSquared2D(RP2, DL);
-						if (Dd < BestRd) { BestRd = Dd; StreetRef = RP2; }
-					}
-				}
-				for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
-				{
-					if (!IsValid(*SpIt)) { continue; }
-					const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), DL);
-					if (Dd < BestRd) { BestRd = Dd; StreetRef = SpIt->GetActorLocation(); }
-				}
-				if (BestRd == TNumericLimits<float>::Max()) { StreetRef = FVector::ZeroVector; }
-			}
-			else
-			{
-				float BestSd = TNumericLimits<float>::Max();
-				for (const TArray<FVector>& Ring : NpcRings)
-				{
-					for (const FVector& RP2 : Ring)
-					{
-						const float Dd = FVector::DistSquared2D(RP2, DL);
-						if (Dd < BestSd) { BestSd = Dd; SpawnAt = RP2; }
-					}
-				}
-				for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
-				{
-					if (!IsValid(*SpIt)) { continue; }
-					const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), DL);
-					if (Dd < BestSd) { BestSd = Dd; SpawnAt = SpIt->GetActorLocation(); }
-				}
-				if (BestSd < TNumericLimits<float>::Max())
-				{
-					Front = SpawnAt;
-					Inside = SpawnAt;
-					bOk = true;
-				}
+				SpawnAt = StreetRef;
+				Front = StreetRef;
+				Inside = StreetRef;
+				bOk = true;
 			}
 			if (bOk)
 			{
