@@ -21,6 +21,7 @@
 #include "Engine/GameInstance.h"
 #include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "NavigationSystem.h"
 
 ACustomerSpawner::ACustomerSpawner()
@@ -268,19 +269,46 @@ void ACustomerSpawner::TrySpawn()
 				Spawned.RemoveAt(wi);
 			}
 		}
-		// SLENTEREN: stilstaande wandelaars krijgen een nieuw doel op stoep-hoogte rond dit punt.
-		for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
+		// ROUTE-PATROUILLE: wandelaars lopen de gemarkeerde ring punt-voor-punt af. Wie bij z'n
+		// punt is (of stilstaat) krijgt het volgende punt, met wat zijwaartse variatie zodat het
+		// geen ganzenmars wordt. Klanten die op de speler wachten (deal) blijven met rust.
+		if (PatrolRoute.Num() >= 2)
 		{
-			if (!IsValid(Cw)) { continue; }
-			if (Cw->GetVelocity().SizeSquared2D() > 25.f) { continue; } // loopt al ergens heen
-			if (FMath::FRand() > 0.6f) { continue; }                    // niet iedereen tegelijk
-			FNavLocation Goal;
-			const FVector GAround = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), 0.f);
-			if (!Nav->ProjectPointToNavigation(GAround, Goal, FVector(400.f, 400.f, ZTol))) { continue; }
-			if (FMath::Abs(Goal.Location.Z - GetActorLocation().Z) > ZTol) { continue; }
-			if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
+			for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
 			{
-				AI->MoveToLocation(Goal.Location, 60.f);
+				if (!IsValid(Cw) || Cw->bNeedsPlayer) { continue; }
+				FPatrolState& St = Patrol.FindOrAdd(Cw);
+				const FVector Cur = Cw->GetActorLocation();
+				const bool bArrived = FVector::Dist2D(Cur, PatrolRoute[St.NextIdx]) < 240.f;
+				const bool bMoving = Cw->GetVelocity().SizeSquared2D() > 25.f;
+				if (bArrived)
+				{
+					St.NextIdx = (St.NextIdx + St.Dir + PatrolRoute.Num()) % PatrolRoute.Num();
+				}
+				if (!bArrived && bMoving) { continue; }
+				if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
+				{
+					const FVector Jit(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), 0.f);
+					AI->MoveToLocation(PatrolRoute[St.NextIdx] + Jit, 90.f);
+				}
+			}
+		}
+		else
+		{
+			// Geen route: los rondslenteren rond dit punt (op stoep-hoogte).
+			for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
+			{
+				if (!IsValid(Cw) || Cw->bNeedsPlayer) { continue; }
+				if (Cw->GetVelocity().SizeSquared2D() > 25.f) { continue; }
+				if (FMath::FRand() > 0.6f) { continue; }
+				FNavLocation Goal;
+				const FVector GAround = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), 0.f);
+				if (!Nav->ProjectPointToNavigation(GAround, Goal, FVector(400.f, 400.f, ZTol))) { continue; }
+				if (FMath::Abs(Goal.Location.Z - GetActorLocation().Z) > ZTol) { continue; }
+				if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
+				{
+					AI->MoveToLocation(Goal.Location, 60.f);
+				}
 			}
 		}
 		if (Spawned.Num() >= MaxCustomers) { return; }
@@ -293,7 +321,24 @@ void ACustomerSpawner::TrySpawn()
 		TSubclassOf<ACustomerBase> Cls = CustomerClass;
 		if (!Cls) { Cls = ACustomerBase::StaticClass(); }
 		ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, FTransform(SpawnNav.Location + FVector(0.f, 0.f, 100.f)), SP);
-		if (C) { Spawned.Add(C); }
+		if (C)
+		{
+			Spawned.Add(C);
+			// Rustige wandeltred + start-patrouille: dichtstbijzijnde route-punt, willekeurige kant op.
+			if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->MaxWalkSpeed = 165.f; }
+			if (PatrolRoute.Num() >= 2)
+			{
+				FPatrolState St;
+				float BD = TNumericLimits<float>::Max();
+				for (int32 ri = 0; ri < PatrolRoute.Num(); ++ri)
+				{
+					const float Dd = FVector::DistSquared2D(PatrolRoute[ri], C->GetActorLocation());
+					if (Dd < BD) { BD = Dd; St.NextIdx = ri; }
+				}
+				St.Dir = FMath::RandBool() ? 1 : -1;
+				Patrol.Add(C, St);
+			}
+		}
 		return;
 	}
 

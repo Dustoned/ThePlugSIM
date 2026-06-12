@@ -456,20 +456,25 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (CurRoute.Num() >= 2) { Routes.Add(CurRoute); }
 			for (const TArray<FVector>& Route : Routes)
 			{
+				TArray<FVector> Ring; // de volledige ring OP VOLGORDE (incl. tussenpunten) voor de patrouille
 				const int32 NSeg = (Route.Num() >= 3) ? Route.Num() : Route.Num() - 1; // ring: laatste->eerste erbij
 				for (int32 si = 0; si < NSeg; ++si)
 				{
 					const FVector A = Route[si];
 					const FVector B = Route[(si + 1) % Route.Num()];
 					PendingSpawnerPoints.Add(A);
+					Ring.Add(A);
 					// Tussenpunten om de ~40m zodat dekking en spawns het hele segment vullen.
 					const float SegLen = FVector::Dist2D(A, B);
 					const int32 NMid = FMath::FloorToInt(SegLen / 4000.f);
 					for (int32 mi = 1; mi <= NMid; ++mi)
 					{
-						PendingSpawnerPoints.Add(FMath::Lerp(A, B, float(mi) / float(NMid + 1)));
+						const FVector Mid = FMath::Lerp(A, B, float(mi) / float(NMid + 1));
+						PendingSpawnerPoints.Add(Mid);
+						Ring.Add(Mid);
 					}
 				}
+				if (Ring.Num() >= 2) { NpcRings.Add(Ring); }
 			}
 			// Deduplicatie: punten die te dicht op elkaar liggen (markers + interpolatie) samenvoegen.
 			for (int32 i = PendingSpawnerPoints.Num() - 1; i >= 0; --i)
@@ -505,6 +510,20 @@ void ADoorRetrofitter::ScanAndConvert()
 		CSr->MaxCustomers = RouteCustomersPerPoint;
 		CSr->SpotRadius = 500.f;
 		CSr->ActivationRange = 10000.f;
+		// De ring waar dit punt bij hoort meegeven: wandelaars patrouilleren de hele route.
+		{
+			float BestRingD = TNumericLimits<float>::Max();
+			int32 BestRing = -1;
+			for (int32 gi = 0; gi < NpcRings.Num(); ++gi)
+			{
+				for (const FVector& RP2 : NpcRings[gi])
+				{
+					const float Dd2 = FVector::DistSquared2D(RP2, Pt);
+					if (Dd2 < BestRingD) { BestRingD = Dd2; BestRing = gi; }
+				}
+			}
+			if (BestRing >= 0) { CSr->PatrolRoute = NpcRings[BestRing]; }
+		}
 		CSr->FinishSpawning(FTransform(Pt));
 		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
 		{

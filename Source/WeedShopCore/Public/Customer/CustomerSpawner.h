@@ -58,6 +58,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float ActivationRange = 0.f;
 
+	// ROUTE-PATROUILLE (pack-map): de gemarkeerde ring (op volgorde). Wandelaars lopen 'm
+	// punt-voor-punt af, ieder met een eigen richting. Leeg = los rondslenteren bij het punt.
+	TArray<FVector> PatrolRoute;
+
 	// Hoe ver van het spawn-punt de klanten gaan staan.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpotRadius = 350.f;
@@ -125,6 +129,9 @@ protected:
 	bool bResidentMonitorDone = false;
 	float NextResidentMonitorRealTime = 0.f;
 	int32 ResidentMonitorSamplesRemaining = 0;
+
+	struct FPatrolState { int32 NextIdx = 0; int32 Dir = 1; };
+	TMap<TWeakObjectPtr<ACustomerBase>, FPatrolState> Patrol; // per wandelaar: volgend route-punt + richting
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ACustomerBase>> Spawned;

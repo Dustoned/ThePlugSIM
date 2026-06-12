@@ -71,6 +71,7 @@ protected:
 	TArray<float> PendingSpawnerYs; // boulevard-punten waar nog een klanten-spawner moet komen
 	TArray<FVector> PendingSpawnerPoints; // speler-gemarkeerde route-punten (NpcRoute.txt)
 	int32 RouteCustomersPerPoint = 4;     // klanten-budget verdeeld over de route-punten
+	TArray<TArray<FVector>> NpcRings;     // volledige route-ringen op volgorde (voor de patrouille)
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;
