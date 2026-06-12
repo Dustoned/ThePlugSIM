@@ -33,6 +33,13 @@ ACustomerSpawner::ACustomerSpawner()
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
+namespace
+{
+	// Gedeelde chill-bezetting (over alle spawners): plek-sleutel -> wie er staat/heen loopt.
+	TMap<FIntVector, TWeakObjectPtr<ACustomerBase>> GChillTaken;
+	FIntVector ChillKey(const FVector& P) { return FIntVector(FMath::RoundToInt(P.X / 50.f), FMath::RoundToInt(P.Y / 50.f), 0); }
+}
+
 void ACustomerSpawner::AdoptWalker(ACustomerBase* C, const TArray<FVector>* EntryPath)
 {
 	if (!C) { return; }
@@ -56,6 +63,33 @@ void ACustomerSpawner::AdoptWalker(ACustomerBase* C, const TArray<FVector>* Entr
 			if (Dd < BD) { BD = Dd; St.NextIdx = ri; }
 		}
 		St.Dir = FMath::RandBool() ? 1 : -1;
+	}
+	// CHILL-toewijzing: ~40% van de wandelaars pakt een vrije hang-plek in de buurt en blijft
+	// daar vandaag staan (na een eventueel entry-pad eerst).
+	if (ChillSpots.Num() > 0 && FMath::FRand() < 0.4f)
+	{
+		const FVector RefLoc = St.Entry.Num() > 0 ? St.Entry.Last() : C->GetActorLocation();
+		float BD = TNumericLimits<float>::Max();
+		FVector Best = FVector::ZeroVector;
+		for (const FVector& Sp : ChillSpots)
+		{
+			const TWeakObjectPtr<ACustomerBase>* Taken = GChillTaken.Find(ChillKey(Sp));
+			if (Taken && Taken->IsValid()) { continue; } // bezet
+			const float Dd = FVector::DistSquared2D(Sp, RefLoc);
+			if (Dd < BD && Dd < 12000.f * 12000.f) { BD = Dd; Best = Sp; }
+		}
+		if (!Best.IsNearlyZero())
+		{
+			St.ChillSpot = Best;
+			GChillTaken.Add(ChillKey(Best), C);
+			if (UWorld* Wd = GetWorld())
+			{
+				if (AWeedShopGameState* GSd = Wd->GetGameState<AWeedShopGameState>())
+				{
+					if (GSd->GetDayCycle()) { St.ChillDay = GSd->GetDayCycle()->GetDayNumber(); }
+				}
+			}
+		}
 	}
 	Patrol.Add(C, St);
 }
@@ -370,6 +404,31 @@ void ACustomerSpawner::TrySpawn()
 						AI->MoveToLocation(Tgt, 60.f, true, St.Stall < 3);
 					}
 					continue;
+				}
+				// CHILL-PLEK: erheen lopen en blijven staan tot de dag wisselt.
+				if (!St.ChillSpot.IsNearlyZero())
+				{
+					int32 CurDay = -1;
+					if (AWeedShopGameState* GSc = World->GetGameState<AWeedShopGameState>())
+					{
+						if (GSc->GetDayCycle()) { CurDay = GSc->GetDayCycle()->GetDayNumber(); }
+					}
+					if (St.ChillDay >= 0 && CurDay >= 0 && CurDay != St.ChillDay)
+					{
+						GChillTaken.Remove(ChillKey(St.ChillSpot));
+						St.ChillSpot = FVector::ZeroVector; // nieuwe dag: weer de route op
+					}
+					else
+					{
+						if (FVector::Dist2D(Cur, St.ChillSpot) < 140.f) { St.Stall = 0; continue; } // staat te chillen
+						if (Cw->GetVelocity().SizeSquared2D() > 25.f) { St.Stall = 0; continue; }
+						++St.Stall;
+						if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
+						{
+							AI->MoveToLocation(St.ChillSpot, 80.f, true, St.Stall < 3);
+						}
+						continue;
+					}
 				}
 				// Tijd om naar huis te gaan? Ketting omgekeerd teruglopen (zichtbaar het gebouw in).
 				if (!St.bHomeward && St.ReturnPath.Num() >= 2 && World->GetRealTimeSeconds() > St.PatrolUntil && St.PatrolUntil > 0.f)

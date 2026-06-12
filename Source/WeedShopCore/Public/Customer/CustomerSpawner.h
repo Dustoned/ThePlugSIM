@@ -62,6 +62,10 @@ public:
 	// punt-voor-punt af, ieder met een eigen richting. Leeg = los rondslenteren bij het punt.
 	TArray<FVector> PatrolRoute;
 
+	// CHILL-PLEKKEN: gemarkeerde hang-plekken; een deel van de wandelaars loopt erheen en
+	// blijft daar staan tot de dag wisselt (bezetting wordt gedeeld bijgehouden).
+	TArray<FVector> ChillSpots;
+
 	// Een elders gespawnde NPC (bv. bewoner-met-naam) als gewone wandelaar adopteren: zelfde
 	// patrouille over de route, zelfde opruim-regels - geen aparte logica. Optioneel met een
 	// ENTRY-pad (speler-gemarkeerde ketting, bv. trap naar beneden): die wordt eerst punt-voor-
@@ -148,6 +152,8 @@ protected:
 		TArray<FVector> ReturnPath;
 		float PatrolUntil = 0.f; // realtime-moment waarop hij naar huis gaat
 		bool bHomeward = false;
+		FVector ChillSpot = FVector::ZeroVector; // hang-plek voor vandaag (Zero = geen)
+		int32 ChillDay = -1;
 	};
 	TMap<TWeakObjectPtr<ACustomerBase>, FPatrolState> Patrol; // per wandelaar: volgend route-punt + richting
 

@@ -324,6 +324,14 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->ClearNpcRoute(); } }, 11);
 		BodyRow(RouteXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// CHILL-PLEKKEN: F9-markers op hang-plekken -> NPC's lopen erheen en blijven er de dag staan.
+		UWeedActionButton* ChillB = MakeActionBtn(TEXT("Save chill spots (markers)"), FLinearColor(0.2f, 0.38f, 0.45f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveChillSpots(); } }, 12);
+		BodyRow(ChillB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* ChillXB = MakeActionBtn(TEXT("Clear chill spots"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]() { if (Phone.IsValid()) { Phone->ClearChillSpots(); } }, 11);
+		BodyRow(ChillXB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// BINNEN-LOOPPAD: F9-markers op volgorde door het trappenhuis -> smart-link ketting.
 		UWeedActionButton* StairsB = MakeActionBtn(TEXT("Save stairs path (markers, in order)"), FLinearColor(0.3f, 0.4f, 0.25f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveStairsPath(); } }, 12);

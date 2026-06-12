@@ -436,6 +436,21 @@ void ADoorRetrofitter::ScanAndConvert()
 	++ScanPass;
 	if (ScanPass == 1)
 	{
+		// Chill-plekken (ChillSpots.txt) laden: hang-plekken voor een deel van de wandelaars.
+		{
+			TArray<FString> CLines;
+			FFileHelper::LoadFileToStringArray(CLines, *WeedData::File(TEXT("ChillSpots.txt")));
+			for (const FString& CL : CLines)
+			{
+				TArray<FString> Pc;
+				CL.ParseIntoArray(Pc, TEXT(","));
+				if (Pc.Num() >= 3) { LoadedChillSpots.Add(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]))); }
+			}
+			if (LoadedChillSpots.Num() > 0)
+			{
+				UE_LOG(LogWeedShop, Warning, TEXT("Chill-plekken: %d geladen"), LoadedChillSpots.Num());
+			}
+		}
 		// Binnen-kettingen (StairsPath.txt) alvast parsen: de bewoners-wachtrij gebruikt ze om
 		// te bepalen welke toren-deuren binnen mogen spawnen (en welk pad ze dan aflopen).
 		{
@@ -538,6 +553,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		CSr->MaxCustomers = RouteCustomersPerPoint;
 		CSr->SpotRadius = 500.f;
 		CSr->ActivationRange = 25000.f; // ruim: de navmesh-check op de spawn-plek bewaakt streaming al
+		CSr->ChillSpots = LoadedChillSpots;
 		// De ring waar dit punt bij hoort meegeven: wandelaars patrouilleren de hele route.
 		{
 			float BestRingD = TNumericLimits<float>::Max();

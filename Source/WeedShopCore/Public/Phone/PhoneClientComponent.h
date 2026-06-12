@@ -320,6 +320,9 @@ public:
 	// Alle gezette paden visualiseren: loop-ringen (groen) + gebouw-kettingen (oranje).
 	void ShowAllPaths();
 	void HideAllPaths();
+	// Chill-plekken: F9-markers -> plekken waar NPC's heen lopen en blijven hangen tot de dag om is.
+	void SaveChillSpots();
+	void ClearChillSpots();
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();

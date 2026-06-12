@@ -2804,6 +2804,46 @@ void UPhoneClientComponent::SaveStairsPath()
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Stairs path saved (%d points)! Restart applies the links"), Marks.Num()));
 }
 
+void UPhoneClientComponent::SaveChillSpots()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Marks;
+	for (const FString& Line : Lines)
+	{
+		if (!Line.Contains(MapPath)) { continue; }
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Line.Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+	}
+	if (Marks.Num() < 1)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Set markers on the chill spots first"));
+		return;
+	}
+	FString Cur;
+	FFileHelper::LoadFileToString(Cur, *WeedData::File(TEXT("ChillSpots.txt")));
+	if (!Cur.IsEmpty() && !Cur.EndsWith(LINE_TERMINATOR)) { Cur += LINE_TERMINATOR; }
+	for (const FVector& M : Marks) { Cur += FString::Printf(TEXT("%.1f,%.1f,%.1f"), M.X, M.Y, M.Z) + LINE_TERMINATOR; }
+	FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("ChillSpots.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("%d chill spots added! Restart applies"), Marks.Num()));
+}
+
+void UPhoneClientComponent::ClearChillSpots()
+{
+	WeedData::DeleteFile(TEXT("ChillSpots.txt"));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Chill spots cleared (restart applies)"));
+}
+
 void UPhoneClientComponent::ShowAllPaths()
 {
 	UWorld* W = GetWorld();
@@ -2860,7 +2900,21 @@ void UPhoneClientComponent::ShowAllPaths()
 			++NChains;
 		}
 	}
-	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Cyan, FString::Printf(TEXT("Showing %d routes (green) + %d building paths (orange)"), NRoutes, NChains));
+	// Chill-plekken: cyaan bollen.
+	int32 NChill = 0;
+	{
+		TArray<FString> CLines;
+		FFileHelper::LoadFileToStringArray(CLines, *WeedData::File(TEXT("ChillSpots.txt")));
+		for (const FString& CL : CLines)
+		{
+			TArray<FString> P;
+			CL.ParseIntoArray(P, TEXT(","));
+			if (P.Num() < 3) { continue; }
+			DrawDebugSphere(W, FVector(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2])) + FVector(0.f, 0.f, 110.f), 55.f, 10, FColor::Cyan, true);
+			++NChill;
+		}
+	}
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Cyan, FString::Printf(TEXT("Showing %d routes (green) + %d building paths (orange) + %d chill spots (cyan)"), NRoutes, NChains, NChill));
 }
 
 void UPhoneClientComponent::HideAllPaths()
