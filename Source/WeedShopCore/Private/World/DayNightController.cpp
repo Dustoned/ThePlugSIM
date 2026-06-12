@@ -435,7 +435,9 @@ void ADayNightController::Tick(float DeltaSeconds)
 		{
 			if (ULightComponent* LC = D.Light.Get())
 			{
-				float LMul = 1.f; // lampen (point/spot) blijven ALTIJD vol - zij ZIJN het nachtlicht
+				// Map-lampen (point/spot) volgen de Street lamps slider als schaal (default 42000
+				// = 1.0x) - op volle authored sterkte waren ze vervelend fel.
+				float LMul = FMath::Clamp(LampIntensity / 42000.f, 0.f, 2.f);
 				if (LC->IsA(UDirectionalLightComponent::StaticClass())) { LMul = SunMul; }
 				else if (LC->IsA(USkyLightComponent::StaticClass()))    { LMul = SkyMul; }
 				const float Want = D.OrigIntensity * LMul;
@@ -460,6 +462,10 @@ void ADayNightController::Tick(float DeltaSeconds)
 				NightVol->Settings.ColorGain = FVector4(0.45f, 0.5f, 0.7f, 1.f); // nachtblauw, zacht genoeg voor neon/lampen
 				NightVol->Settings.bOverride_ColorSaturation = true;
 				NightVol->Settings.ColorSaturation = FVector4(0.9f, 0.9f, 0.9f, 1.f);
+				// Nacht-bloom OMHOOG: neon en borden bloeien dan weer mooi op de gevels (de lagere
+				// nacht-exposure dempt de bloom-bleed anders te veel).
+				NightVol->Settings.bOverride_BloomIntensity = true;
+				NightVol->Settings.BloomIntensity = 1.3f;
 				NightPPV = NightVol;
 			}
 		}
