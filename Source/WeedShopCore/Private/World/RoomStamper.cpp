@@ -774,8 +774,8 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 	// plek en hoort bij dit gebouw): fake-3D kaartje verbergen + glas helder maken. Ons eigen
 	// template-raam daar gaat weg (anders dubbel glas/kozijn). Instanced gevel-ramen kunnen geen
 	// per-instance materiaal krijgen: die verbergen we en daar blijft ons eigen raam juist staan.
-	int32 Hidden = 0, GlassCleared = 0, OwnHidden = 0;
-	TSet<int32> TakenOver; // template-raam indexen waar het gevel-raam het overneemt
+	int32 Hidden = 0, GlassCleared = 0;
+	TSet<int32> TakenOver; // template-raam indexen met een gevel-raam ervoor
 	for (const FFacadeHit& M : Matches)
 	{
 		if (M.ISM)
@@ -806,31 +806,9 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 			++GlassCleared;
 		}
 	}
-	// PASS 3b: eigen template-ramen verbergen op plekken waar het gevel-raam het overneemt.
-	if (TakenOver.Num() > 0)
-	{
-		for (TActorIterator<AActor> It(W); It; ++It)
-		{
-			if (!IsValid(*It) || !It->ActorHasTag(StampTag)) { continue; }
-			AStaticMeshActor* SMA = Cast<AStaticMeshActor>(*It);
-			UStaticMeshComponent* C = SMA ? SMA->GetStaticMeshComponent() : nullptr;
-			if (!C || !C->GetStaticMesh()) { continue; }
-			const FString CMN = C->GetStaticMesh()->GetName();
-			if (!(CMN.Contains(TEXT("Window")) || CMN.Contains(TEXT("Glass")))) { continue; }
-			const FVector L = SMA->GetActorLocation();
-			for (int32 Ti : TakenOver)
-			{
-				const FVector TP = TplWindows[Ti].Pos + StampShift;
-				if (FVector::Dist2D(TP, L) < 160.f && FMath::Abs(TP.Z - L.Z) < 300.f)
-				{
-					SMA->SetActorHiddenInGame(true);
-					SMA->SetActorEnableCollision(false);
-					++OwnHidden;
-					break;
-				}
-			}
-		}
-	}
+	// (GEEN eigen stukken verbergen: de "ramen" van dit pack zijn complete 4m muursegmenten met
+	// het raam erin gebouwd - die weghalen slaat een gat in de buitenmuur van de kamer. Het
+	// gevel-raam ervoor is helder gemaakt, dus je kijkt er gewoon doorheen naar binnen.)
 
 	// PASS 4: niet-gematchte gevel-ramen binnen de stempel ECHT maken in plaats van fake: het
 	// gevel-raam staat op de goede plek (hoort bij dit gebouw), alleen de fake-3D view moet weg.
@@ -858,6 +836,6 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		}
 	}
 
-	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, shift (%.0f, %.0f), %d glas helder, %d eigen ramen weg, %d verborgen, %d extra echt gemaakt (%d tpl-ramen)"),
-		*TemplateName, Cands, Matches.Num(), StampShift.X, StampShift.Y, GlassCleared, OwnHidden, Hidden, Synced, TplWindows.Num());
+	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - %d kandidaten, %d matches, shift (%.0f, %.0f), %d glas helder, %d verborgen, %d extra echt gemaakt (%d tpl-ramen)"),
+		*TemplateName, Cands, Matches.Num(), StampShift.X, StampShift.Y, GlassCleared, Hidden, Synced, TplWindows.Num());
 }
