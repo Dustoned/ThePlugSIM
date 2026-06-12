@@ -866,10 +866,49 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			else if (!StreetRef.IsNearlyZero())
 			{
-				SpawnAt = StreetRef;
+				// VER van de speler spawnen (buiten zicht) en naar huis laten WANDELEN: kies het
+				// route-punt met de beste mix van speler-afstand en niet-onnodig-ver-van-huis.
+				// De thuisplek blijft het punt bij hun eigen gebouw - daar slenteren ze heen.
+				FVector SpawnFar = StreetRef;
+				float BestScore = -TNumericLimits<float>::Max();
+				for (const TArray<FVector>& Ring : NpcRings)
+				{
+					for (const FVector& RP2 : Ring)
+					{
+						float MinPlayer = 99999.f;
+						for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+						{
+							const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+							if (Pp) { MinPlayer = FMath::Min(MinPlayer, FVector::Dist2D(Pp->GetActorLocation(), RP2)); }
+						}
+						const float Score = FMath::Min(MinPlayer, 12000.f) - FVector::Dist2D(RP2, StreetRef) * 0.25f;
+						if (Score > BestScore) { BestScore = Score; SpawnFar = RP2; }
+					}
+				}
+				SpawnAt = SpawnFar;
 				Front = StreetRef;
 				Inside = StreetRef;
 				bOk = true;
+			}
+			// Navmesh-check op de spawn-plek (straat-variant): lukt de projectie op de juiste
+			// hoogte niet, dan is de plek nog niet klaar (streaming) - rustig achteraan de rij,
+			// in plaats van eindeloos over de map te blijven her-spawnen.
+			bool bRequeued = false;
+			if (bOk && !PR.bInside)
+			{
+				UNavigationSystemV1* NavR = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
+				FNavLocation NavLoc;
+				if (NavR && NavR->ProjectPointToNavigation(SpawnAt, NavLoc, FVector(300.f, 300.f, 60.f))
+					&& FMath::Abs(NavLoc.Location.Z - SpawnAt.Z) <= 60.f)
+				{
+					SpawnAt = NavLoc.Location;
+				}
+				else
+				{
+					PendingResidents.Add(PR); // tag blijft staan: zelfde woning, latere poging
+					bRequeued = true;
+					bOk = false;
+				}
 			}
 			if (bOk)
 			{
@@ -884,9 +923,10 @@ void ADoorRetrofitter::ScanAndConvert()
 					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner verschenen: Apt %d (%s, straat-ref Z=%.0f)"), A->GetAptNumber(), PR.bInside ? TEXT("binnen, toren") : TEXT("op straat"), Hall.Z);
 				}
 			}
-			else
+			else if (!bRequeued)
 			{
-				A->Tags.Remove(TEXT("ResidentNpc")); // nog geen plek bekend: later opnieuw proberen
+				// Geen plek bekend (geen route/spawners hier): ook achteraan de rij, latere poging.
+				PendingResidents.Add(PR);
 			}
 		}
 	}
