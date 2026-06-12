@@ -99,6 +99,21 @@ void USpotInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			: (Hit.GetActor() ? Hit.GetActor()->GetClass()->GetName() : TEXT("?"));
 		LookAt = FString::Printf(TEXT("%s  (%.1fm)"), *MeshName, Hit.Distance / 100.f);
 	}
+	// ONZICHTBARE BLOCKERS opsporen: tweede trace op het Pawn-kanaal. Raakt die iets dat DICHTERBIJ
+	// ligt dan wat je ziet, dan staat daar iets onzichtbaars dat je tegenhoudt - naam erbij tonen.
+	FHitResult BlockHit;
+	if (GetWorld() && GetWorld()->LineTraceSingleByChannel(BlockHit, CamLoc, CamLoc + CamRot.Vector() * 2500.f, ECC_Pawn, QP))
+	{
+		const float VisDist = Hit.bBlockingHit ? Hit.Distance : 2500.f;
+		if (BlockHit.Distance < VisDist - 40.f)
+		{
+			const UStaticMeshComponent* BMC = Cast<UStaticMeshComponent>(BlockHit.GetComponent());
+			const FString BName = (BMC && BMC->GetStaticMesh()) ? BMC->GetStaticMesh()->GetName()
+				: (BlockHit.GetActor() ? BlockHit.GetActor()->GetClass()->GetName() : TEXT("?"));
+			LookAt += FString::Printf(TEXT("\nBLOCK %s  (%.1fm)%s"), *BName, BlockHit.Distance / 100.f,
+				(BMC && !BMC->IsVisible()) ? TEXT(" [invisible]") : TEXT(""));
+		}
+	}
 
 	InfoText->SetText(FText::FromString(FString::Printf(
 		TEXT("MAP %s\nPOS %.0f, %.0f, %.0f   YAW %.0f\nLOOK %s\n(F9 logged this spot to MarkedSpots.txt)"),
