@@ -1316,11 +1316,11 @@ void ADoorRetrofitter::ScanAndConvert()
 				ACustomerBase* Cb = *CIt;
 				if (!IsValid(Cb)) { continue; }
 				const FVector L = Cb->GetActorLocation();
-				if (Cb->IsResident())
+				if (Cb->NpcId.ToString().StartsWith(TEXT("Resident_")))
 				{
-					// Bewoner: vergelijk met het STRAAT-niveau (dichtstbijzijnd spawn-punt) - niet
-					// met de deur-hoogte: straat-bewoners wonen beneden op de route, en hun deur
-					// kan verdiepingen hoger zitten. Alleen wie ECHT onder de straat zakt telt.
+					// Bewoner (op NpcId - IsResident is sinds de vereenvoudiging altijd false):
+					// vergelijk met het STRAAT-niveau (dichtstbijzijnd spawn-punt). Alleen wie
+					// ECHT onder de straat zakt wordt gerespawned; boven (trap/verdieping) is ok.
 					FVector BestR = SpawnerLocs[0];
 					float BestRD = TNumericLimits<float>::Max();
 					for (const FVector& SL : SpawnerLocs)

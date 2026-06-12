@@ -277,15 +277,28 @@ void ACustomerSpawner::TrySpawn()
 		// STRAKKE hoogte-marge (50cm): het service-niveau (~200cm lager) EN terras-tafels
 		// (~75cm hoger - navmesh-eilandjes waar NPC's op vast stonden) vallen er beide buiten.
 		const float ZTol = 50.f;
-		// Opruimen: wandelaars die GEZAKT zijn (onder de stoep) of ergens OP geklommen staan
-		// (terras-tafel, >60cm boven spawn-hoogte). Deze spawner vult ze hieronder vers aan -
-		// effectief een respawn op de stoep.
+		// Opruimen: wandelaars die GEZAKT zijn (onder de stoep) of ergens OP geklommen staan.
+		// Hoogte vergelijken met het DICHTSTBIJZIJNDE route-punt (de route heeft verloop - tegen
+		// de eigen spawner meten doodde wandelaars die gewoon de ring afliepen). Bewoners
+		// (Resident_-id) zijn vrijgesteld: die zijn legitiem binnen/boven (trap, verdiepingen).
 		for (int32 wi = Spawned.Num() - 1; wi >= 0; --wi)
 		{
 			ACustomerBase* Cw0 = Spawned[wi];
 			if (!IsValid(Cw0)) { continue; }
-			const float Dz = Cw0->GetActorLocation().Z - GetActorLocation().Z;
-			if (Dz < -150.f || Dz > 60.f)
+			if (Cw0->NpcId.ToString().StartsWith(TEXT("Resident_"))) { continue; }
+			const FVector L0 = Cw0->GetActorLocation();
+			float RefZ = GetActorLocation().Z;
+			if (PatrolRoute.Num() >= 2)
+			{
+				float BD0 = TNumericLimits<float>::Max();
+				for (const FVector& RPt : PatrolRoute)
+				{
+					const float Dd0 = FVector::DistSquared2D(RPt, L0);
+					if (Dd0 < BD0) { BD0 = Dd0; RefZ = RPt.Z; }
+				}
+			}
+			const float Dz = L0.Z - RefZ;
+			if (Dz < -150.f || Dz > 220.f)
 			{
 				Cw0->Destroy();
 				Spawned.RemoveAt(wi);
