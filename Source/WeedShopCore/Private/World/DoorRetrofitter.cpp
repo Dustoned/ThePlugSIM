@@ -802,6 +802,78 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	// "LIFT NEMEN": bewoners op een verdieping zonder loop-pad naar beneden (de toren heeft geen
+	// doorlopende trap-navmesh; de lift kunnen NPC's niet bedienen) blijven anders eeuwig voor
+	// hun deur staan. Wie daar ~10s stilstaat wordt - ALLEEN buiten zicht van de speler - naar
+	// een ver route-punt beneden verplaatst en wandelt vandaar gewoon naar huis: alsof hij de
+	// lift heeft genomen terwijl jij even niet keek.
+	{
+		TArray<FVector> StreetPts;
+		for (TActorIterator<ACustomerSpawner> SIt(W); SIt; ++SIt)
+		{
+			if (IsValid(*SIt)) { StreetPts.Add(SIt->GetActorLocation()); }
+		}
+		if (StreetPts.Num() > 0)
+		{
+			const float Now = W->GetRealTimeSeconds();
+			for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
+			{
+				ACustomerBase* Cb = *CIt;
+				if (!IsValid(Cb) || !Cb->IsResident() || Cb->IsHidden()) { continue; }
+				const FVector L = Cb->GetActorLocation();
+				// Straat-niveau hier = dichtstbijzijnd spawn-punt; ruim erboven = op een verdieping.
+				float NearZ = L.Z;
+				float BestD = TNumericLimits<float>::Max();
+				for (const FVector& SP2 : StreetPts)
+				{
+					const float Dd = FVector::DistSquared2D(SP2, L);
+					if (Dd < BestD) { BestD = Dd; NearZ = SP2.Z; }
+				}
+				const bool bUpstairs = L.Z > NearZ + 300.f;
+				const bool bStill = Cb->GetVelocity().SizeSquared2D() < 25.f;
+				if (!bUpstairs || !bStill)
+				{
+					ResidentStuckSince.Remove(Cb);
+					continue;
+				}
+				float& Since = ResidentStuckSince.FindOrAdd(Cb, Now);
+				if (Now - Since < 10.f) { continue; }
+				// Buiten zicht? Geen speler dichtbij, en niet in iemands kijkrichting.
+				bool bUnseen = true;
+				for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+				{
+					const APlayerController* PC = PIt->Get();
+					const APawn* Pp = PC ? PC->GetPawn() : nullptr;
+					if (!Pp) { continue; }
+					const FVector To = L - Pp->GetActorLocation();
+					if (To.Size() < 1500.f) { bUnseen = false; break; }
+					if (To.Size() < 7000.f && FVector::DotProduct(PC->GetControlRotation().Vector(), To.GetSafeNormal()) > 0.05f) { bUnseen = false; break; }
+				}
+				if (!bUnseen) { continue; }
+				// Ver route-punt kiezen (zelfde regel als bewoner-spawns: ver van de speler).
+				FVector Dest = StreetPts[0];
+				float BestScore = -TNumericLimits<float>::Max();
+				for (const TArray<FVector>& Ring : NpcRings)
+				{
+					for (const FVector& RP2 : Ring)
+					{
+						float MinPlayer = 99999.f;
+						for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+						{
+							const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+							if (Pp) { MinPlayer = FMath::Min(MinPlayer, FVector::Dist2D(Pp->GetActorLocation(), RP2)); }
+						}
+						const float Score = FMath::Min(MinPlayer, 12000.f) - FVector::Dist2D(RP2, L) * 0.15f;
+						if (Score > BestScore) { BestScore = Score; Dest = RP2; }
+					}
+				}
+				Cb->SetActorLocation(Dest + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
+				ResidentStuckSince.Remove(Cb);
+				UE_LOG(LogWeedShop, Warning, TEXT("Bewoner %s nam de lift: van Z %.0f naar de straat (%.0f, %.0f)"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
+			}
+		}
+	}
+
 	// BEWONERS-WACHTRIJ: een bewoner per ~10 seconden laten verschijnen (niet allemaal tegelijk).
 	// Toren-woningen (bij de starter) spawnen BINNEN en lopen zelf naar buiten; de rest spawnt op
 	// het dichtstbijzijnde route-punt voor hun gebouw.

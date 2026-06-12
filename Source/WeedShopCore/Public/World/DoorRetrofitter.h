@@ -76,6 +76,7 @@ protected:
 	struct FPendingResident { TWeakObjectPtr<class ACityDoor> Door; bool bInside = false; };
 	TArray<FPendingResident> PendingResidents;
 	bool bTowerInvokerPlaced = false; // navmesh-anker in de starter-toren (alle verdiepingen)
+	TMap<TWeakObjectPtr<class ACustomerBase>, float> ResidentStuckSince; // boven vast: "lift nemen"-timer
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;
