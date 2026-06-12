@@ -57,7 +57,7 @@ void AMapBorder::Rebuild()
 		const float Len = FVector::Dist2D(A, B);
 		if (Len < 50.f) { continue; }
 		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(B.Y - A.Y, B.X - A.X));
-		const FVector Mid((A.X + B.X) * 0.5f, (A.Y + B.Y) * 0.5f, FMath::Min(A.Z, B.Z) + 500.f);
+		const FVector Mid((A.X + B.X) * 0.5f, (A.Y + B.Y) * 0.5f, FMath::Min(A.Z, B.Z) + 2000.f);
 
 		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
 		C->SetupAttachment(RootComponent);
@@ -66,8 +66,9 @@ void AMapBorder::Rebuild()
 		C->SetStaticMesh(Cube);
 		if (Glass) { C->SetMaterial(0, Glass); }
 		C->SetWorldLocationAndRotation(Mid, FRotator(0.f, Yaw, 0.f));
-		// Hoge dunne glaswand: 14m hoog (2m onder marker tot 12m erboven), 12cm dik.
-		C->SetWorldScale3D(FVector(Len / 100.f, 0.12f, 14.f));
+		// Hoge dunne glaswand: 100m hoog (30m ONDER de marker tot 70m erboven) - ook met vliegen
+		// of via een dip eronder kom je er niet langs. 12cm dik.
+		C->SetWorldScale3D(FVector(Len / 100.f, 0.12f, 100.f));
 		C->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		C->SetCollisionResponseToAllChannels(ECR_Block);
 		C->SetCanEverAffectNavigation(false);
