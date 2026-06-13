@@ -116,6 +116,19 @@ void ADayNightController::BeginPlay()
 
 	LoadLightConfig(); // opgeslagen slider-waardes terugladen
 
+	// Grafische keuze van de speler: Lumen uit = GI en reflecties op de goedkope methode.
+	{
+		FString GfxTxt;
+		if (FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt"))) && GfxTxt.Contains(TEXT("LumenOff=1")))
+		{
+			if (GEngine)
+			{
+				GEngine->Exec(GetWorld(), TEXT("r.DynamicGlobalIlluminationMethod 0"));
+				GEngine->Exec(GetWorld(), TEXT("r.ReflectionMethod 0"));
+			}
+		}
+	}
+
 	// PACK-MAPS: MINIMAL-modus - overdag blijft de stock-look 100% intact (geen zon/fog/scenario-
 	// ingrepen; dat sloopte de art-stijl). 's Nachts dimmen we alleen de BESTAANDE lichten van de
 	// map en gaat de HDRI-fotokoepel (dag-lucht) uit zodat de donkere hemel zichtbaar wordt.

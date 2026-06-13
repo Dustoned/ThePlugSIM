@@ -1,4 +1,6 @@
 #include "UI/SettingsWidget.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 #include "UI/WeedUiStyle.h"
 #include "UI/HotkeyHintWidget.h"
@@ -296,6 +298,28 @@ void USettingsWidget::RefreshContent()
 				GG->SetOverallScalabilityLevel(Next); GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
 			}
 		});
+
+		// Lumen aan/uit: GI + reflecties op de goedkope methode = flink snellere frames op
+		// zware scenes. Keuze wordt onthouden (Saved/GraphicsConfig.txt) en bij start toegepast.
+		{
+			FString GfxTxt;
+			const bool bLumenOff = FFileHelper::LoadFileToString(GfxTxt, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt"))) && GfxTxt.Contains(TEXT("LumenOff=1"));
+			AddValueRow(TEXT("Lumen (GI + reflections)"), bLumenOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff]()
+			{
+				const bool bNewOff = !bLumenOff;
+				if (UWorld* LW = GetWorld())
+				{
+					if (GEngine)
+					{
+						GEngine->Exec(LW, bNewOff ? TEXT("r.DynamicGlobalIlluminationMethod 0") : TEXT("r.DynamicGlobalIlluminationMethod 1"));
+						GEngine->Exec(LW, bNewOff ? TEXT("r.ReflectionMethod 0") : TEXT("r.ReflectionMethod 1"));
+					}
+				}
+				FFileHelper::SaveStringToFile(bNewOff ? FString(TEXT("LumenOff=1")) : FString(TEXT("LumenOff=0")),
+					*(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+				RefreshContent();
+			});
+		}
 
 		// VSync.
 		AddValueRow(TEXT("V-Sync"), G->IsVSyncEnabled() ? TEXT("On") : TEXT("Off"), [this]()
