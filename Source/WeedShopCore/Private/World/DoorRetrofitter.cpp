@@ -545,20 +545,28 @@ void ADoorRetrofitter::ScanAndConvert()
 				auto SnapToPath = [&](const FVector& P, const FVector& SegDir) -> FVector
 				{
 					const FVector Side = FVector::CrossProduct(SegDir.GetSafeNormal2D(), FVector::UpVector);
-					static const float Offs[] = { 0.f, 150.f, -150.f, 300.f, -300.f, 450.f, -450.f, 650.f, -650.f, 900.f, -900.f, 1200.f, -1200.f };
-					for (float Of : Offs)
+					static const float Offs[] = { 0.f, 150.f, -150.f, 300.f, -300.f, 450.f, -450.f, 650.f, -650.f,
+						900.f, -900.f, 1200.f, -1200.f, 1500.f, -1500.f, 2000.f, -2000.f };
+					// Twee rondes: eerst zoeken naar een echt PAD (ConcretePath e.d.) - pas als dat
+					// nergens ligt genoegen nemen met gewone stoep/straat. Anders snapte een park-
+					// slinger naar de boulevard-stoep ernaast in plaats van het witte pad.
+					for (int32 Round = 0; Round < 2; ++Round)
 					{
-						const FVector C2 = P + Side * Of;
-						FHitResult H;
-						if (!W->LineTraceSingleByChannel(H, C2 + FVector(0.f, 0.f, 400.f), C2 - FVector(0.f, 0.f, 400.f), ECC_Visibility)) { continue; }
-						const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
-						if (!SMC || !SMC->GetStaticMesh()) { continue; }
-						const FString Nm = SMC->GetStaticMesh()->GetName();
-						if (Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road"))
-							|| Nm.Contains(TEXT("ConcretePath")) || Nm.Contains(TEXT("Pavement")) || Nm.Contains(TEXT("Boardwalk"))
-							|| Nm.Contains(TEXT("Crosswalk")) || Nm.Contains(TEXT("Path")))
+						for (float Of : Offs)
 						{
-							return FVector(C2.X, C2.Y, H.ImpactPoint.Z + 10.f);
+							const FVector C2 = P + Side * Of;
+							FHitResult H;
+							if (!W->LineTraceSingleByChannel(H, C2 + FVector(0.f, 0.f, 400.f), C2 - FVector(0.f, 0.f, 400.f), ECC_Visibility)) { continue; }
+							const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
+							if (!SMC || !SMC->GetStaticMesh()) { continue; }
+							const FString Nm = SMC->GetStaticMesh()->GetName();
+							const bool bIsPath = Nm.Contains(TEXT("ConcretePath")) || Nm.Contains(TEXT("Path")) || Nm.Contains(TEXT("Boardwalk"));
+							const bool bIsStreet = Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road"))
+								|| Nm.Contains(TEXT("Pavement")) || Nm.Contains(TEXT("Crosswalk"));
+							if ((Round == 0 && bIsPath) || (Round == 1 && (bIsPath || bIsStreet)))
+							{
+								return FVector(C2.X, C2.Y, H.ImpactPoint.Z + 10.f);
+							}
 						}
 					}
 					return P; // niets gevonden (bv. nog niet gestreamd): originele lijn aanhouden
