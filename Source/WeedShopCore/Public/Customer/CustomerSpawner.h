@@ -58,9 +58,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float ActivationRange = 0.f;
 
-	// ROUTE-PATROUILLE (pack-map): de gemarkeerde ring (op volgorde). Wandelaars lopen 'm
-	// punt-voor-punt af, ieder met een eigen richting. Leeg = los rondslenteren bij het punt.
-	TArray<FVector> PatrolRoute;
+	// LOOP-NETWERK (pack-map): alle routes, dwarsstraten en oversteekplekken samengeknoopt tot
+	// een graaf. Wandelaars doen een random walk (nooit direct terug waar ze vandaan kwamen),
+	// dus kruispunten en oversteken werken vanzelf als verbindingen. Leeg = los slenteren.
+	TArray<FVector> NetNodes;
+	TArray<TArray<int32>> NetAdj;
 
 	// CHILL-PLEKKEN: gemarkeerde hang-plekken; een deel van de wandelaars loopt erheen en
 	// blijft daar staan tot de dag wisselt (bezetting wordt gedeeld bijgehouden).
@@ -143,6 +145,7 @@ protected:
 	struct FPatrolState
 	{
 		int32 NextIdx = 0;
+		int32 PrevIdx = -1; // waar hij vandaan kwam (geen U-bochtjes op kruispunten)
 		int32 Dir = 1;
 		TArray<FVector> Entry; // eerst dit pad aflopen (trap-ketting), daarna de route
 		int32 EntryIdx = 0;

@@ -531,6 +531,77 @@ void ADoorRetrofitter::ScanAndConvert()
 					}
 				}
 			}
+			// LOOP-GRAAF bouwen: alle paden (met tussenpunten) als knopen-ketens; knopen dichter
+			// dan 7m smelten samen, en knopen van VERSCHILLENDE paden binnen 16m krijgen een
+			// verbindings-kant - zo haken dwarsstraten en oversteekplekken vanzelf in de lanen.
+			{
+				TArray<int32> NodeBlock; // welk pad een knoop maakte (voor de junction-kanten)
+				auto GetNode = [&](const FVector& P, int32 BlockId) -> int32
+				{
+					for (int32 ni = 0; ni < GraphNodes.Num(); ++ni)
+					{
+						if (FVector::DistSquared2D(GraphNodes[ni], P) < 700.f * 700.f) { return ni; }
+					}
+					GraphNodes.Add(P);
+					NodeBlock.Add(BlockId);
+					GraphAdj.AddDefaulted();
+					return GraphNodes.Num() - 1;
+				};
+				auto AddEdge = [&](int32 A2, int32 B2)
+				{
+					if (A2 == B2) { return; }
+					GraphAdj[A2].AddUnique(B2);
+					GraphAdj[B2].AddUnique(A2);
+				};
+				int32 BlockId = 0;
+				for (const TArray<FVector>& Route : Routes)
+				{
+					const int32 NSeg = (Route.Num() >= 3) ? Route.Num() : Route.Num() - 1;
+					int32 PrevNode = -1;
+					int32 FirstNode = -1;
+					for (int32 si = 0; si < NSeg; ++si)
+					{
+						const FVector A2 = Route[si];
+						const FVector B2 = Route[(si + 1) % Route.Num()];
+						const int32 NA = GetNode(A2, BlockId);
+						if (FirstNode < 0) { FirstNode = NA; }
+						if (PrevNode >= 0) { AddEdge(PrevNode, NA); }
+						PrevNode = NA;
+						const float SegLen = FVector::Dist2D(A2, B2);
+						const int32 NMid = FMath::FloorToInt(SegLen / 4000.f);
+						for (int32 mi = 1; mi <= NMid; ++mi)
+						{
+							const int32 NM = GetNode(FMath::Lerp(A2, B2, float(mi) / float(NMid + 1)), BlockId);
+							AddEdge(PrevNode, NM);
+							PrevNode = NM;
+						}
+					}
+					if (Route.Num() >= 3 && PrevNode >= 0 && FirstNode >= 0)
+					{
+						const int32 NL2 = GetNode(Route[NSeg % Route.Num()], BlockId);
+						AddEdge(PrevNode, NL2);
+						AddEdge(NL2, FirstNode);
+					}
+					else if (Route.Num() == 2 && PrevNode >= 0)
+					{
+						AddEdge(PrevNode, GetNode(Route[1], BlockId));
+					}
+					++BlockId;
+				}
+				// Junction-kanten tussen knopen van verschillende paden die vlak bij elkaar liggen.
+				for (int32 a2 = 0; a2 < GraphNodes.Num(); ++a2)
+				{
+					for (int32 b2 = a2 + 1; b2 < GraphNodes.Num(); ++b2)
+					{
+						if (NodeBlock[a2] == NodeBlock[b2]) { continue; }
+						if (FVector::DistSquared2D(GraphNodes[a2], GraphNodes[b2]) < 1600.f * 1600.f)
+						{
+							AddEdge(a2, b2);
+						}
+					}
+				}
+				UE_LOG(LogWeedShop, Warning, TEXT("Loop-graaf: %d knopen uit %d paden"), GraphNodes.Num(), Routes.Num());
+			}
 			if (PendingSpawnerPoints.Num() > 0)
 			{
 				// Klanten-budget over de punten verdelen (niet 4x zoveel NPC's omdat er meer punten zijn).
@@ -554,20 +625,9 @@ void ADoorRetrofitter::ScanAndConvert()
 		CSr->SpotRadius = 500.f;
 		CSr->ActivationRange = 25000.f; // ruim: de navmesh-check op de spawn-plek bewaakt streaming al
 		CSr->ChillSpots = LoadedChillSpots;
-		// De ring waar dit punt bij hoort meegeven: wandelaars patrouilleren de hele route.
-		{
-			float BestRingD = TNumericLimits<float>::Max();
-			int32 BestRing = -1;
-			for (int32 gi = 0; gi < NpcRings.Num(); ++gi)
-			{
-				for (const FVector& RP2 : NpcRings[gi])
-				{
-					const float Dd2 = FVector::DistSquared2D(RP2, Pt);
-					if (Dd2 < BestRingD) { BestRingD = Dd2; BestRing = gi; }
-				}
-			}
-			if (BestRing >= 0) { CSr->PatrolRoute = NpcRings[BestRing]; }
-		}
+		// De volledige loop-graaf meegeven: wandelaars zwerven over het hele netwerk.
+		CSr->NetNodes = GraphNodes;
+		CSr->NetAdj = GraphAdj;
 		CSr->FinishSpawning(FTransform(Pt));
 		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
 		{

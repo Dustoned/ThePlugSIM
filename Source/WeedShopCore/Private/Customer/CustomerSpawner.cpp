@@ -53,16 +53,16 @@ void ACustomerSpawner::AdoptWalker(ACustomerBase* C, const TArray<FVector>* Entr
 		for (int32 ri = EntryPath->Num() - 1; ri >= 0; --ri) { St.ReturnPath.Add((*EntryPath)[ri]); }
 		St.PatrolUntil = (GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f) + FMath::FRandRange(180.f, 420.f);
 	}
-	if (PatrolRoute.Num() >= 2)
+	if (NetNodes.Num() >= 2)
 	{
 		const FVector RefLoc = St.Entry.Num() > 0 ? St.Entry.Last() : C->GetActorLocation();
 		float BD = TNumericLimits<float>::Max();
-		for (int32 ri = 0; ri < PatrolRoute.Num(); ++ri)
+		for (int32 ri = 0; ri < NetNodes.Num(); ++ri)
 		{
-			const float Dd = FVector::DistSquared2D(PatrolRoute[ri], RefLoc);
+			const float Dd = FVector::DistSquared2D(NetNodes[ri], RefLoc);
 			if (Dd < BD) { BD = Dd; St.NextIdx = ri; }
 		}
-		St.Dir = FMath::RandBool() ? 1 : -1;
+		St.PrevIdx = -1;
 	}
 	// CHILL-toewijzing: ~40% van de wandelaars pakt een vrije hang-plek in de buurt en blijft
 	// daar vandaag staan (na een eventueel entry-pad eerst).
@@ -330,10 +330,10 @@ void ACustomerSpawner::TrySpawn()
 			if (Cw0->NpcId.ToString().StartsWith(TEXT("Resident_"))) { continue; }
 			const FVector L0 = Cw0->GetActorLocation();
 			float RefZ = GetActorLocation().Z;
-			if (PatrolRoute.Num() >= 2)
+			if (NetNodes.Num() >= 2)
 			{
 				float BD0 = TNumericLimits<float>::Max();
-				for (const FVector& RPt : PatrolRoute)
+				for (const FVector& RPt : NetNodes)
 				{
 					const float Dd0 = FVector::DistSquared2D(RPt, L0);
 					if (Dd0 < BD0) { BD0 = Dd0; RefZ = RPt.Z; }
@@ -349,7 +349,7 @@ void ACustomerSpawner::TrySpawn()
 		// ROUTE-PATROUILLE: wandelaars lopen de gemarkeerde ring punt-voor-punt af. Wie bij z'n
 		// punt is (of stilstaat) krijgt het volgende punt, met wat zijwaartse variatie zodat het
 		// geen ganzenmars wordt. Klanten die op de speler wachten (deal) blijven met rust.
-		if (PatrolRoute.Num() >= 2)
+		if (NetNodes.Num() >= 2)
 		{
 			for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
 			{
@@ -439,26 +439,41 @@ void ACustomerSpawner::TrySpawn()
 					St.Stall = 0;
 					continue;
 				}
-				const bool bArrived = FVector::Dist2D(Cur, PatrolRoute[St.NextIdx]) < 240.f;
+				if (!NetAdj.IsValidIndex(St.NextIdx)) { St.NextIdx = 0; St.PrevIdx = -1; }
+				const bool bArrived = FVector::Dist2D(Cur, NetNodes[St.NextIdx]) < 240.f;
 				const bool bMoving = Cw->GetVelocity().SizeSquared2D() > 25.f;
 				if (bArrived)
 				{
-					St.NextIdx = (St.NextIdx + St.Dir + PatrolRoute.Num()) % PatrolRoute.Num();
+					// Kruispunt: willekeurige volgende knoop, maar niet direct terug.
+					const TArray<int32>& Nb = NetAdj[St.NextIdx];
+					int32 Pick = St.NextIdx;
+					if (Nb.Num() == 1) { Pick = Nb[0]; }
+					else if (Nb.Num() > 1)
+					{
+						for (int32 t = 0; t < 6; ++t)
+						{
+							const int32 Cand = Nb[FMath::RandRange(0, Nb.Num() - 1)];
+							if (Cand != St.PrevIdx) { Pick = Cand; break; }
+						}
+						if (Pick == St.NextIdx) { Pick = Nb[0]; }
+					}
+					St.PrevIdx = St.NextIdx;
+					St.NextIdx = Pick;
 				}
 				if (!bArrived && bMoving) { continue; }
 				if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
 				{
 					const FVector Jit(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), 0.f);
-					FVector Goal = PatrolRoute[St.NextIdx] + Jit;
+					FVector Goal = NetNodes[St.NextIdx] + Jit;
 					FNavLocation GoalNav;
 					if (Nav->ProjectPointToNavigation(Goal, GoalNav, FVector(200.f, 200.f, ZTol))
-						&& FMath::Abs(GoalNav.Location.Z - PatrolRoute[St.NextIdx].Z) <= ZTol)
+						&& FMath::Abs(GoalNav.Location.Z - NetNodes[St.NextIdx].Z) <= ZTol)
 					{
 						Goal = GoalNav.Location; // netjes op de stoep, niet op een tafel ernaast
 					}
 					else
 					{
-						Goal = PatrolRoute[St.NextIdx]; // jitter viel verkeerd: het kale route-punt
+						Goal = NetNodes[St.NextIdx]; // jitter viel verkeerd: de kale knoop
 					}
 					AI->MoveToLocation(Goal, 90.f);
 				}
@@ -513,18 +528,18 @@ void ACustomerSpawner::TrySpawn()
 		if (C)
 		{
 			Spawned.Add(C);
-			// Rustige wandeltred + start-patrouille: dichtstbijzijnde route-punt, willekeurige kant op.
+			// Rustige wandeltred + start-patrouille: dichtstbijzijnde graaf-knoop.
 			if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->MaxWalkSpeed = 165.f; }
-			if (PatrolRoute.Num() >= 2)
+			if (NetNodes.Num() >= 2)
 			{
 				FPatrolState St;
 				float BD = TNumericLimits<float>::Max();
-				for (int32 ri = 0; ri < PatrolRoute.Num(); ++ri)
+				for (int32 ri = 0; ri < NetNodes.Num(); ++ri)
 				{
-					const float Dd = FVector::DistSquared2D(PatrolRoute[ri], C->GetActorLocation());
+					const float Dd = FVector::DistSquared2D(NetNodes[ri], C->GetActorLocation());
 					if (Dd < BD) { BD = Dd; St.NextIdx = ri; }
 				}
-				St.Dir = FMath::RandBool() ? 1 : -1;
+				St.PrevIdx = -1;
 				Patrol.Add(C, St);
 			}
 		}

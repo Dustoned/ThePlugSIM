@@ -80,6 +80,9 @@ protected:
 	TArray<FVector> PlacedNavLinks; // automatische trap-naar-straat links (dedupe)
 	TArray<TArray<FVector>> NpcChains; // speler-gemarkeerde binnen-kettingen (StairsPath.txt)
 	TArray<FVector> LoadedChillSpots;  // hang-plekken (ChillSpots.txt)
+	// Loop-graaf: alle routes/dwarsstraten/oversteken samengeknoopt (knopen + buren).
+	TArray<FVector> GraphNodes;
+	TArray<TArray<int32>> GraphAdj;
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;
