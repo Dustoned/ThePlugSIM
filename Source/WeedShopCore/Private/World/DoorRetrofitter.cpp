@@ -2271,12 +2271,24 @@ void ADoorRetrofitter::TickVirtualCrowd()
 		for (const FVector& PP : PlayerPos) { M = FMath::Min(M, FVector::Dist2D(PP, P)); }
 		return M;
 	};
+	// Voor SPAWN-verstoppen: alleen dichtbij relevant (verder weg valt verschijnen niet op).
 	auto InAnyView = [&](const FVector& P) -> bool
 	{
 		for (int32 pi = 0; pi < PlayerPos.Num(); ++pi)
 		{
 			const FVector To = P - PlayerPos[pi];
 			if (To.Size2D() < 6000.f && FVector::DotProduct(PlayerView[pi], To.GetSafeNormal()) > 0.1f) { return true; }
+		}
+		return false;
+	};
+	// Voor DESPAWN: op ELKE afstand - iemand die 300m verderop recht voor je loopt mag nooit
+	// voor je ogen oplossen.
+	auto InAnyViewFar = [&](const FVector& P) -> bool
+	{
+		for (int32 pi = 0; pi < PlayerPos.Num(); ++pi)
+		{
+			const FVector To = P - PlayerPos[pi];
+			if (FVector::DotProduct(PlayerView[pi], To.GetSafeNormal()) > 0.05f) { return true; }
 		}
 		return false;
 	};
@@ -2301,10 +2313,11 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			++NBodies;
 			// Lichaam leeft: data volgt het lichaam.
 			V.Pos = B->GetActorLocation();
-			// Speler ver weg: lichaam opruimen, data wandelt door vanaf hier - maar NOOIT in
-			// het zicht (op een lange rechte strip kijk je verder dan de oude grens).
+			// Speler ver weg: lichaam opruimen, data wandelt door vanaf hier - maar NOOIT
+			// zolang het in iemands beeld is (op welke afstand dan ook). De virtuele wandelaar
+			// loopt door en het lichaam komt exact daar terug zodra je weer in de buurt komt.
 			const float BodyD = MinPlayerDist(V.Pos);
-			if (BodyD > 22000.f && (!InAnyView(V.Pos) || BodyD > 35000.f))
+			if (BodyD > 25000.f && !InAnyViewFar(V.Pos))
 			{
 				// Dichtstbijzijnde knoop als volgende bestemming.
 				float BD = TNumericLimits<float>::Max();
