@@ -146,6 +146,27 @@ UWidget* UMapWidget::AddPersonIcon(const FLinearColor& Tint, float Sz, int32 ZOr
 	return SB;
 }
 
+UWidget* UMapWidget::AddPlayerMarker()
+{
+	// SPELER-BAKEN: grote witte cirkel met een diepblauw poppetje erin, getekend boven alle
+	// NPC-stippen - op elke zoom direct te vinden tussen de drukte.
+	UBorder* Ring = WidgetTree->ConstructWidget<UBorder>();
+	Ring->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.95f), 21.f));
+	Ring->SetPadding(FMargin(4.f));
+	USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
+	SB->SetWidthOverride(32.f);
+	SB->SetHeightOverride(32.f);
+	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 32.f, FLinearColor(0.0f, 0.45f, 0.95f)));
+	Ring->SetContent(SB);
+	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Ring);
+	Cs->SetAutoSize(false);
+	Cs->SetSize(FVector2D(42.f, 42.f));
+	Cs->SetAlignment(FVector2D(0.5f, 0.5f));
+	Cs->SetZOrder(30);
+	Ring->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return Ring;
+}
+
 TSharedRef<SWidget> UMapWidget::RebuildWidget()
 {
 	if (WidgetTree && !WidgetTree->RootWidget)
@@ -257,7 +278,7 @@ void UMapWidget::BuildBlocks()
 		Zoom = FMath::Clamp((GMapDS / Scale0) / 350000.f * 20.f, 6.f, 40.f);
 		if (Canvas) { Canvas->SetClipping(EWidgetClipping::ClipToBounds); }
 		PackMap->CaptureMapNow();
-		PlayerDot = AddPersonIcon(FLinearColor(0.2f, 0.9f, 1.f), 24.f, 26); // jij: cyaan poppetje
+		PlayerDot = AddPlayerMarker(); // jij: groot wit baken met blauw poppetje
 		WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
 		if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 		bBuiltBlocks = true;
@@ -349,7 +370,7 @@ void UMapWidget::BuildBlocks()
 	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
-	PlayerDot = AddPersonIcon(FLinearColor(0.2f, 0.9f, 1.f), 24.f, 26); // jij: cyaan poppetje
+	PlayerDot = AddPlayerMarker(); // jij: groot wit baken met blauw poppetje
 	WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
 	if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
 	// (Titel/uitleg/legenda staan in het zijpaneel rechts, niet meer over de kaart.)
