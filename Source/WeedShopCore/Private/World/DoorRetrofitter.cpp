@@ -627,7 +627,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		CSr->bSpawnResidents = false;
 		CSr->MaxCustomers = RouteCustomersPerPoint;
 		CSr->SpotRadius = 500.f;
-		CSr->ActivationRange = 25000.f; // ruim: de navmesh-check op de spawn-plek bewaakt streaming al
+		CSr->ActivationRange = 0.f; // altijd vullen: de straat-trace weigert niet-gestreamde grond vanzelf
 		CSr->ChillSpots = LoadedChillSpots;
 		// De volledige loop-graaf meegeven: wandelaars zwerven over het hele netwerk.
 		CSr->NetNodes = GraphNodes;
@@ -711,7 +711,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			CSw->bSpawnResidents = false; // bewoners-lite draait via de woningen-pass
 			CSw->MaxCustomers = 5;
 			CSw->SpotRadius = 500.f; // dicht bij de stoep blijven
-			CSw->ActivationRange = 25000.f; // ruim: de navmesh-check op de spawn-plek bewaakt streaming al
+			CSw->ActivationRange = 0.f; // altijd vullen: de straat-trace weigert niet-gestreamde grond vanzelf
 			CSw->FinishSpawning(FTransform(Street));
 			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W))
 			{
