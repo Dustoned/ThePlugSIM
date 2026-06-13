@@ -111,7 +111,8 @@ protected:
 	int32 ScanPass = 0;
 	// Starter-huis + huur (EUR 500 per 31 dagen, voortgang in Saved/RentState.txt).
 	TWeakObjectPtr<class ACityDoor> StarterDoor;
-	bool bMovedIntoHome = false;    // speler 1x per sessie in z'n appartement zetten
+	bool bMovedIntoHome = false;    // (legacy, ongebruikt sinds per-speler HomedPawns)
+	TSet<TWeakObjectPtr<APawn>> HomedPawns; // welke speler-pawns al thuisgezet zijn (host + co-op)
 	FVector HomeAnchor = FVector::ZeroVector; // thuis-plek (voor het settle-venster)
 	float HomeSettleUntil = 0.f;    // tot dit moment terugzetten als je door de vloer valt
 	int32 RentDueDay = -1;          // dag-nummer waarop de huur vervalt

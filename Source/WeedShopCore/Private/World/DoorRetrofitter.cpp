@@ -1512,14 +1512,10 @@ void ADoorRetrofitter::ScanAndConvert()
 	{
 		APlayerController* PCr = W->GetFirstPlayerController();
 		APawn* Pr = PCr ? PCr->GetPawn() : nullptr;
-		// 1x per sessie naar binnen: de KAMER-kant van de voordeur is de kant waar de deur
-		// naartoe openzwaait (appartement-deuren zwaaien de kamer in) - deterministisch, geen
-		// vrije-ruimte-meting die bij een grote kamer en kleine lift-lobby de gang kon kiezen.
-		if (!bMovedIntoHome && Pr && bWalkersSpawned)
+		// Thuis-plek 1x bepalen (speler-gekozen Save home spawn wint, anders de kamer-kant van
+		// de starter-deur via de zwaairichting). Geldt voor ALLE spelers (ook de co-op partner).
+		if (HomeAnchor.IsNearlyZero() && bWalkersSpawned)
 		{
-			bMovedIntoHome = true;
-			// SPELER-GEKOZEN spawn-plek (Save home spawn) wint altijd; anders de kamer-kant
-			// van de starter-deur via de zwaairichting.
 			FVector Inside;
 			FString HomeTxt;
 			bool bCustom = false;
@@ -1541,12 +1537,23 @@ void ADoorRetrofitter::ScanAndConvert()
 				Inside = DL + Fw * 240.f * SwingSide;
 			}
 			HomeAnchor = Inside + FVector(0.f, 0.f, 110.f);
-			Pr->SetActorLocation(HomeAnchor, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+		// Elke speler die nog niet thuisgezet is naar de thuis-plek (kleine spreiding zodat
+		// co-op-spelers niet in elkaar spawnen). Werkt ook voor een later-joinende partner.
+		if (!HomeAnchor.IsNearlyZero())
+		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+		{
+			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+			if (!Pw || HomedPawns.Contains(Pw)) { continue; }
+			const int32 Slot = HomedPawns.Num();
+			HomedPawns.Add(Pw);
+			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
+			Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
 			// SETTLE-venster: de penthouse-vloer (world-partition) is bij het teleporteren vaak nog
-			// niet ingestreamd, dus val je erdoorheen naar een lagere verdieping. Hou de speler 12s
+			// niet ingestreamd, dus val je erdoorheen naar een lagere verdieping. Hou de spelers 12s
 			// op de thuis-plek tot de vloer-collision geladen is - zie de check in TickVirtualMove.
 			HomeSettleUntil = W->GetRealTimeSeconds() + 12.f;
-			if (UPhoneClientComponent* Phw = Pr->FindComponentByClass<UPhoneClientComponent>())
+			if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>())
 			{
 				Phw->Toast(FString::Printf(TEXT("Welcome home - Apt %d. Rent: EUR 500 due every 31 days."), StarterDoor->GetAptNumber()), FColor::Cyan, 6.f);
 			}
@@ -2390,10 +2397,11 @@ void ADoorRetrofitter::TickVirtualMove()
 	{
 		if (WS->GetRealTimeSeconds() < HomeSettleUntil && !HomeAnchor.IsNearlyZero())
 		{
-			APlayerController* PC = WS->GetFirstPlayerController();
-			APawn* Pp = PC ? PC->GetPawn() : nullptr;
-			if (Pp)
+			// ALLE spelers (host + co-op partner): val je door de nog-ladende vloer, terug omhoog.
+			for (FConstPlayerControllerIterator It = WS->GetPlayerControllerIterator(); It; ++It)
 			{
+				APawn* Pp = It->Get() ? It->Get()->GetPawn() : nullptr;
+				if (!Pp) { continue; }
 				const FVector L = Pp->GetActorLocation();
 				if (FVector::Dist2D(L, HomeAnchor) < 600.f && L.Z < HomeAnchor.Z - 200.f)
 				{
