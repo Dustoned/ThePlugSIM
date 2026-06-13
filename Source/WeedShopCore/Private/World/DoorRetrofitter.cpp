@@ -1543,19 +1543,35 @@ void ADoorRetrofitter::ScanAndConvert()
 		// vier de richtingen een wand binnen bereik raken.
 		if (!HomeAnchor.IsNearlyZero() && !bHomeBoxReady)
 		{
-			const FVector S = HomeAnchor + FVector(0.f, 0.f, 40.f);
+			// Traces NEGEREN spelers en geplaatste objecten (anders meet een trace tegen jezelf of
+			// een meubel een veel te kleine kamer). Vanaf 2 hoogtes en per as de VERSTE hit nemen,
+			// zodat nissen/lage objecten de box niet onnodig inkrimpen.
+			FCollisionQueryParams BQ(SCENE_QUERY_STAT(HomeBox), false);
+			for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+			{
+				if (APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr) { BQ.AddIgnoredActor(Pp); }
+			}
 			auto Wall = [&](const FVector& Dir) -> float
 			{
-				FHitResult H;
-				return W->LineTraceSingleByChannel(H, S, S + Dir * 2000.f, ECC_Visibility) ? H.Distance : -1.f;
+				float Best = -1.f;
+				for (float Hz : { 40.f, 150.f }) // op vloer-hoogte EN op tafel-hoogte meten
+				{
+					const FVector S = HomeAnchor + FVector(0.f, 0.f, Hz);
+					FHitResult H;
+					const float D = W->LineTraceSingleByChannel(H, S, S + Dir * 2500.f, ECC_WorldStatic, BQ) ? H.Distance : -1.f;
+					Best = FMath::Max(Best, D);
+				}
+				return Best;
 			};
 			const float Xp = Wall(FVector(1, 0, 0)), Xn = Wall(FVector(-1, 0, 0));
 			const float Yp = Wall(FVector(0, 1, 0)), Yn = Wall(FVector(0, -1, 0));
 			if (Xp > 150.f && Xn > 150.f && Yp > 150.f && Yn > 150.f)
 			{
-				// +60 marge zodat je tot tegen de wand mag plaatsen.
-				HomeBoxMin = FVector(HomeAnchor.X - Xn - 60.f, HomeAnchor.Y - Yn - 60.f, HomeAnchor.Z - 160.f);
-				HomeBoxMax = FVector(HomeAnchor.X + Xp + 60.f, HomeAnchor.Y + Yp + 60.f, HomeAnchor.Z + 450.f);
+				// Ruime box: tot de wand + 120 marge, en elke as minstens 800 half zodat je nooit
+				// "buiten je huis" krijgt terwijl je er gewoon in staat.
+				auto Half = [](float Wall, float Anchor, int Sign) { return FMath::Max(800.f, Wall + 120.f); };
+				HomeBoxMin = FVector(HomeAnchor.X - Half(Xn, 0, 0), HomeAnchor.Y - Half(Yn, 0, 0), HomeAnchor.Z - 220.f);
+				HomeBoxMax = FVector(HomeAnchor.X + Half(Xp, 0, 0), HomeAnchor.Y + Half(Yp, 0, 0), HomeAnchor.Z + 520.f);
 				bHomeBoxReady = true;
 				UE_LOG(LogWeedShop, Warning, TEXT("Huis-box gemeten: X %.0f..%.0f Y %.0f..%.0f"), HomeBoxMin.X, HomeBoxMax.X, HomeBoxMin.Y, HomeBoxMax.Y);
 			}
