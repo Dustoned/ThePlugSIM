@@ -35,7 +35,9 @@ AStorageShelf::AStorageShelf()
 
 int32 AStorageShelf::GetCapacity() const
 {
-	return (ShelfTier == FName(TEXT("Chest"))) ? 20 : 24;
+	if (ShelfTier == FName(TEXT("Chest")))  { return 20; }
+	if (ShelfTier == FName(TEXT("Fridge"))) { return 16; } // koelkast: kleinere voorraad
+	return 24;
 }
 
 FString AStorageShelf::GetTitle() const
@@ -59,7 +61,10 @@ void AStorageShelf::SetupVisual()
 	Mesh->SetWorldScale3D(Def.MeshScale);
 
 	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
-	const FLinearColor Col = bChest ? FLinearColor(0.32f, 0.20f, 0.10f) : FLinearColor(0.45f, 0.30f, 0.18f);
+	const bool bFridge = (ShelfTier == FName(TEXT("Fridge")));
+	const FLinearColor Col = bChest ? FLinearColor(0.32f, 0.20f, 0.10f)
+		: bFridge ? FLinearColor(0.85f, 0.86f, 0.88f) // staal-wit
+		: FLinearColor(0.45f, 0.30f, 0.18f);
 	if (DynMat) { DynMat->SetVectorParameterValue(TEXT("Color"), Col); }
 	if (Parts.Num() < 9) { return; }
 
@@ -72,7 +77,17 @@ void AStorageShelf::SetupVisual()
 
 	Mesh->SetVisibility(false);
 
-	if (bChest)
+	if (bFridge)
+	{
+		// Koelkast: romp + horizontale naad (vriesvak/koelvak) + verticale handgreep.
+		const FLinearColor Steel(0.78f, 0.80f, 0.83f), HandleC(0.25f, 0.26f, 0.28f), Seam(0.6f, 0.62f, 0.65f);
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(W, D, H), FVector(0, 0, 0), Steel);                                  // romp
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(W * 1.01f, D * 0.04f, H * 0.02f), FVector(0, -D * 0.5f, Floor + H * 0.66f), Seam); // deur-naad
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W * 0.06f, D * 0.06f, H * 0.28f), FVector(W * 0.32f, -D * 0.5f - 2.f, Floor + H * 0.78f), HandleC); // greep boven
+		PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W * 0.06f, D * 0.06f, H * 0.40f), FVector(W * 0.32f, -D * 0.5f - 2.f, Floor + H * 0.30f), HandleC); // greep onder
+		for (int32 i = 4; i < 9; ++i) { if (Parts[i]) { Parts[i]->SetVisibility(false); } }
+	}
+	else if (bChest)
 	{
 		// Kist: romp + schuin deksel + 2 sloten/beslag.
 		const float BodyH = H * 0.62f;
@@ -157,5 +172,6 @@ void AStorageShelf::Interact_Implementation(APawn* InstigatorPawn)
 FText AStorageShelf::GetInteractionPrompt_Implementation() const
 {
 	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
-	return FText::FromString(FString::Printf(TEXT("%s  (%d/%d slots)"), bChest ? TEXT("Storage chest") : TEXT("Storage shelf"), Contents.Num(), GetCapacity()));
+	const TCHAR* Name = bChest ? TEXT("Storage chest") : (ShelfTier == FName(TEXT("Fridge")) ? TEXT("Fridge") : TEXT("Storage shelf"));
+	return FText::FromString(FString::Printf(TEXT("%s  (%d/%d slots)"), Name, Contents.Num(), GetCapacity()));
 }
