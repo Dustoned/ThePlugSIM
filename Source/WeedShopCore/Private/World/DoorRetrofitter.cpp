@@ -1638,15 +1638,25 @@ void ADoorRetrofitter::ScanAndConvert()
 			TArray<FString> Pc;
 			SL.ParseIntoArray(Pc, TEXT(","));
 			if (Pc.Num() < 5) { continue; }
-			const FVector Pos(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]));
-			const float Yaw = FCString::Atof(*Pc[3]);
+			FVector Pos(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]));
+			// VLOER zoeken: de F9-marker zit op capsule-hoogte (~90cm boven de vloer). Trace omlaag
+			// zodat balie/ATM op de echte vloer komen i.p.v. te zweven.
+			{
+				FHitResult FH;
+				if (W->LineTraceSingleByChannel(FH, Pos + FVector(0.f, 0.f, 150.f), Pos - FVector(0.f, 0.f, 400.f), ECC_Visibility))
+				{
+					Pos.Z = FH.ImpactPoint.Z;
+				}
+			}
+			// 180 gedraaid: de balie-voorkant (klant-kant) kijkt nu naar waar JIJ keek bij het zetten.
+			const float Yaw = FCString::Atof(*Pc[3]) + 180.f;
 			const int32 KindI = FCString::Atoi(*Pc[4]);
 			EShopKind Kind = (KindI == 0) ? EShopKind::Grow : (KindI == 1) ? EShopKind::Supplies : EShopKind::Furniture;
 			FLinearColor Sign = (KindI == 0) ? FLinearColor(0.30f, 0.85f, 0.35f)
 				: (KindI == 1) ? FLinearColor(0.30f, 0.65f, 0.95f) : FLinearColor(0.65f, 0.45f, 0.85f);
 			const FRotator Rot(0.f, Yaw, 0.f);
 			FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			AStoreCounter* Counter = W->SpawnActor<AStoreCounter>(AStoreCounter::StaticClass(), FTransform(Rot, Pos + FVector(0.f, 0.f, 5.f)), SP);
+			AStoreCounter* Counter = W->SpawnActor<AStoreCounter>(AStoreCounter::StaticClass(), FTransform(Rot, Pos + FVector(0.f, 0.f, 2.f)), SP);
 			if (!Counter) { continue; }
 			Counter->Kind = Kind;
 			Counter->SetupVisual(Sign);
