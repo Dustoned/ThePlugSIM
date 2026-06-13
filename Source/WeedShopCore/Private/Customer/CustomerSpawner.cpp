@@ -136,7 +136,7 @@ void ACustomerSpawner::BeginPlay()
 	if (HasAuthority())
 	{
 		// Snel retry-interval zodat de bewoners verschijnen zodra de stad gebouwd is.
-		GetWorldTimerManager().SetTimer(SpawnTimer, this, &ACustomerSpawner::TrySpawn, 2.0f, true, 1.0f);
+		GetWorldTimerManager().SetTimer(SpawnTimer, this, &ACustomerSpawner::TrySpawn, 1.0f, true, 1.0f);
 	}
 }
 
@@ -571,11 +571,20 @@ void ACustomerSpawner::TrySpawn()
 			}
 		}
 		if (Spawned.Num() >= MaxCustomers) { return; }
+		// SNELLER VULLEN: meerdere kandidaat-pogingen per tik - afkeuringen (geen straat onder
+		// de voeten, verkeerde hoogte) verspillen dan geen hele beurt meer. De stad vult zo in
+		// seconden in plaats van minuten, ook de overkant van de grote weg.
 		FNavLocation SpawnNav;
-		const FVector Around = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
-		if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, ZTol))) { return; }
-		if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { return; } // onderniveau geweigerd
-		if (!IsOnStreetSurface(World, SpawnNav.Location)) { return; } // alleen op straat/stoep spawnen
+		bool bFound = false;
+		for (int32 Attempt = 0; Attempt < 6 && !bFound; ++Attempt)
+		{
+			const FVector Around = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
+			if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, ZTol))) { continue; }
+			if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { continue; } // onderniveau
+			if (!IsOnStreetSurface(World, SpawnNav.Location)) { continue; } // alleen straat/stoep
+			bFound = true;
+		}
+		if (!bFound) { return; }
 		// NIET voor de neus van de speler verschijnen: ver weg (60m+) mag altijd, dichterbij
 		// alleen als de plek BUITEN beeld ligt (achter de kijkrichting). Zo zie je ze nooit
 		// poppen - alleen aan komen lopen.
