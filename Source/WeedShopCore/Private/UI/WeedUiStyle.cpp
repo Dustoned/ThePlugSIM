@@ -448,7 +448,7 @@ namespace WeedUI
 			else if (K == TEXT("safe"))      Add({ TEXT("chest"), TEXT("bank"), TEXT("furniture") });
 			else if (K == TEXT("block"))     Add({ TEXT("furniture") });
 			else if (K == TEXT("upgrade"))   Add({ TEXT("ui_upgrade"), TEXT("gear"), TEXT("ui_gear") });
-			else if (K == TEXT("machine"))   Add({ TEXT("press"), TEXT("oven"), TEXT("rack"), TEXT("ui_gear") });
+			else if (K == TEXT("machine"))   Add({ TEXT("press"), TEXT("oven"), TEXT("ui_gear") });
 			else if (K == TEXT("hash"))      Add({ TEXT("ui_hash"), TEXT("weed") });
 			else if (K == TEXT("crystals"))  Add({ TEXT("weed") });
 			else if (K == TEXT("butter"))    Add({ TEXT("edible"), TEXT("furniture") });
