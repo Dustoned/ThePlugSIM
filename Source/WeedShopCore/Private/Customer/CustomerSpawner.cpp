@@ -451,7 +451,10 @@ void ACustomerSpawner::TrySpawn()
 					}
 					if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
 					{
-						AI->MoveToLocation(Tgt, 60.f, true, St.Stall < 3);
+						// ALTIJD rechtstreeks van marker naar marker: pathfinding zocht anders
+						// "slimme" kortere wegen buiten de gemarkeerde lijn om (dwars over het
+						// zand het hotel uit). Jouw lijn is de wet; de hop-vangrail dekt klemmen.
+						AI->MoveToLocation(Tgt, 60.f, true, false);
 					}
 					continue;
 				}
