@@ -2239,7 +2239,7 @@ void UPhoneClientComponent::ServerGiveFurnitureKit_Implementation()
 	if (!Inv) { return; }
 	// Woon-meubels (geen grow/processing-gear): genoeg om een kamer mee in te richten.
 	static const TCHAR* Kit[] = {
-		TEXT("Mattress"), TEXT("Table"), TEXT("Fridge_Std"), TEXT("Shelf"),
+		TEXT("Mattress"), TEXT("Table"), TEXT("Fridge"), TEXT("Shelf"),
 		TEXT("Wardrobe"), TEXT("Sink"), TEXT("Lamp_Ceiling"), TEXT("Chest"),
 		TEXT("Bench_Pack"), TEXT("Safe_Small") };
 	for (const TCHAR* Id : Kit) { Inv->AddItem(FName(Id), 3); }
