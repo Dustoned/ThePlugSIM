@@ -412,10 +412,9 @@ void ACustomerSpawner::TrySpawn()
 			for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
 			{
 				if (!IsValid(Cw)) { continue; }
-				// Klanten met een koopwens (bNeedsPlayer) werden volledig overgeslagen en stonden
-				// dus als standbeelden te wachten. Wachten mag alleen als de speler echt in de
-				// buurt is (deal-afstand); anders gewoon doorslenteren met de wens op zak.
-				if (Cw->bNeedsPlayer)
+				// PRAAT-PAUZE: een wandelaar stopt alleen als de speler vlak bij hem staat
+				// (praat/deal-afstand) en loopt direct weer door zodra je wegloopt. Koopwens of
+				// niet - niemand staat meer zomaar stil op straat.
 				{
 					float MinPd = TNumericLimits<float>::Max();
 					for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
@@ -423,7 +422,11 @@ void ACustomerSpawner::TrySpawn()
 						const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
 						if (Pp) { MinPd = FMath::Min(MinPd, FVector::Dist2D(Pp->GetActorLocation(), Cw->GetActorLocation())); }
 					}
-					if (MinPd < 5000.f) { continue; } // speler dichtbij: blijf staan voor de deal
+					if (MinPd < 350.f)
+					{
+						if (AAIController* AIp = Cast<AAIController>(Cw->GetController())) { AIp->StopMovement(); }
+						continue;
+					}
 				}
 				FPatrolState& St = Patrol.FindOrAdd(Cw);
 				const FVector Cur = Cw->GetActorLocation();
