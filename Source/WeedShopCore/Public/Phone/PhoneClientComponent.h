@@ -322,6 +322,8 @@ public:
 	void HideAllPaths();
 	// Kijk naar een pad-bolletje en verwijder dat hele pad (route of gebouw-ketting).
 	void DeletePathInCrosshair();
+	// Thuis-spawn: zet 1 F9-marker op de plek in je kamer waar je elke sessie wil beginnen.
+	void SaveHomeSpawn();
 	// Chill-plekken: F9-markers -> plekken waar NPC's heen lopen en blijven hangen tot de dag om is.
 	void SaveChillSpots();
 	void ClearChillSpots();

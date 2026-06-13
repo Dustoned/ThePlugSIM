@@ -328,6 +328,11 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->ClearNpcRoute(); } }, 11);
 		BodyRow(RouteXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// THUIS-SPAWN: sla je huidige positie op als vaste start-plek (ga in je kamer staan).
+		UWeedActionButton* HomeB = MakeActionBtn(TEXT("Save home spawn (stand on the spot)"), FLinearColor(0.25f, 0.35f, 0.5f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveHomeSpawn(); } }, 12);
+		BodyRow(HomeB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// CHILL-PLEKKEN: F9-markers op hang-plekken -> NPC's lopen erheen en blijven er de dag staan.
 		UWeedActionButton* ChillB = MakeActionBtn(TEXT("Save chill spots (markers)"), FLinearColor(0.2f, 0.38f, 0.45f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveChillSpots(); } }, 12);

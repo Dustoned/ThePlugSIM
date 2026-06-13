@@ -1483,10 +1483,28 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (!bMovedIntoHome && Pr && bWalkersSpawned)
 		{
 			bMovedIntoHome = true;
-			const FVector DL = StarterDoor->GetActorLocation();
-			const FVector Fw = StarterDoor->GetActorForwardVector();
-			const float SwingSide = (StarterDoor->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
-			const FVector Inside = DL + Fw * 240.f * SwingSide;
+			// SPELER-GEKOZEN spawn-plek (Save home spawn) wint altijd; anders de kamer-kant
+			// van de starter-deur via de zwaairichting.
+			FVector Inside;
+			FString HomeTxt;
+			bool bCustom = false;
+			if (FFileHelper::LoadFileToString(HomeTxt, *WeedData::File(TEXT("HomeSpawn.txt"))))
+			{
+				TArray<FString> Pc;
+				HomeTxt.TrimStartAndEnd().ParseIntoArray(Pc, TEXT(","));
+				if (Pc.Num() >= 3)
+				{
+					Inside = FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]));
+					bCustom = true;
+				}
+			}
+			if (!bCustom)
+			{
+				const FVector DL = StarterDoor->GetActorLocation();
+				const FVector Fw = StarterDoor->GetActorForwardVector();
+				const float SwingSide = (StarterDoor->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
+				Inside = DL + Fw * 240.f * SwingSide;
+			}
 			Pr->SetActorLocation(Inside + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
 			if (UPhoneClientComponent* Phw = Pr->FindComponentByClass<UPhoneClientComponent>())
 			{

@@ -2917,6 +2917,18 @@ void UPhoneClientComponent::ShowAllPaths()
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Cyan, FString::Printf(TEXT("Showing %d routes (green) + %d building paths (orange) + %d chill spots (cyan)"), NRoutes, NChains, NChill));
 }
 
+void UPhoneClientComponent::SaveHomeSpawn()
+{
+	UWorld* W = GetWorld();
+	APawn* P = Cast<APawn>(GetOwner());
+	if (!W || !P) { return; }
+	// Geen marker nodig: JE STAAT er gewoon - huidige positie is de spawn-plek.
+	const FVector L = P->GetActorLocation();
+	FFileHelper::SaveStringToFile(FString::Printf(TEXT("%.1f,%.1f,%.1f"), L.X, L.Y, L.Z),
+		*(FPaths::ProjectSavedDir() / TEXT("HomeSpawn.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, TEXT("Home spawn saved - you'll start RIGHT HERE every session"));
+}
+
 void UPhoneClientComponent::DeletePathInCrosshair()
 {
 	UWorld* W = GetWorld();
