@@ -95,6 +95,15 @@ protected:
 	};
 	TArray<FVirtualWalker> Crowd;
 	void TickVirtualCrowd();
+	// Kaart: posities van wandelaars ZONDER lichaam (de verren) - zo toont de M-kaart altijd
+	// de hele crowd, niet alleen de gematerialiseerde lichamen om de speler heen.
+	void GetVirtualWalkerPositions(TArray<FVector>& Out) const
+	{
+		for (const FVirtualWalker& V : Crowd)
+		{
+			if (!V.Body.IsValid()) { Out.Add(V.Pos); }
+		}
+	}
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;

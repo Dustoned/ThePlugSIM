@@ -578,6 +578,25 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			++NRoam;
 		}
 	}
+	// VIRTUELE wandelaars (zonder lichaam, te ver weg): zelfde cyaan puntje - de kaart toont
+	// dus altijd de hele crowd, ook waar de wereld niet geladen is.
+	for (TActorIterator<ADoorRetrofitter> RIt(GetWorld()); RIt; ++RIt)
+	{
+		TArray<FVector> Virtuals;
+		RIt->GetVirtualWalkerPositions(Virtuals);
+		for (const FVector& VP : Virtuals)
+		{
+			const FVector2D Pos = WorldToCanvas(VP.X, VP.Y);
+			while (NpcDots.Num() <= NRoam) { NpcDots.Add(AddDot(FLinearColor(0.25f, 0.45f, 1.f), 10.f, 18)); }
+			if (UBorder* Dot = NpcDots[NRoam])
+			{
+				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(Pos); }
+				Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			++NRoam;
+		}
+		break;
+	}
 	// Overtollige markers verbergen.
 	for (int32 k = NRoam; k < NpcDots.Num(); ++k) { if (NpcDots[k]) { NpcDots[k]->SetVisibility(ESlateVisibility::Collapsed); } }
 	for (int32 k = NNeed; k < NeedIcons.Num(); ++k) { if (NeedIcons[k]) { NeedIcons[k]->SetVisibility(ESlateVisibility::Collapsed); } }
