@@ -666,10 +666,10 @@ void ADoorRetrofitter::ScanAndConvert()
 					Shuffle(StripNodes);
 					Shuffle(AllNodes);
 					int32 StripCursor = 0, AllCursor = 0;
-					for (int32 ci = 0; ci < 70; ++ci)
+					for (int32 ci = 0; ci < 150; ++ci)
 					{
 						FVirtualWalker V;
-						V.bStripLover = (ci < 49) && StripNodes.Num() > 0;
+						V.bStripLover = (ci < 105) && StripNodes.Num() > 0;
 						if (V.bStripLover)
 						{
 							V.NextIdx = StripNodes[StripCursor % StripNodes.Num()];
@@ -691,7 +691,7 @@ void ADoorRetrofitter::ScanAndConvert()
 						}
 						Crowd.Add(V);
 					}
-					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars gespreid geseed (%d strip-vast over %d strip-knopen)"), Crowd.Num(), 49, StripNodes.Num());
+					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars gespreid geseed (%d strip-vast over %d strip-knopen)"), Crowd.Num(), 105, StripNodes.Num());
 				}
 			}
 			if (PendingSpawnerPoints.Num() > 0)
@@ -2395,6 +2395,9 @@ void ADoorRetrofitter::TickVirtualCrowd()
 		OutGround = H.ImpactPoint;
 		return true;
 	};
+	// LICHAAM-PLAFOND: max ~55 echte lichamen tegelijk (de performance-grens); de rest blijft
+	// data. Lichamen gaan naar de virtuelen die het dichtst bij een speler lopen.
+	const int32 BodyCap = 55;
 	int32 NBodies = 0;
 	for (FVirtualWalker& V : Crowd)
 	{
@@ -2423,9 +2426,10 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			continue;
 		}
 		// (Beweging gebeurt in TickVirtualMove op 10x/s - hier alleen het zware werk.)
-		// MATERIALISEREN: speler binnen bereik, niet pal in beeld, en echte straat onder de voeten.
+		// MATERIALISEREN: speler binnen bereik, niet pal in beeld, echte straat onder de voeten
+		// en onder het lichaam-plafond.
 		const float Pd = MinPlayerDist(V.Pos);
-		if (Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))
+		if (NBodies < BodyCap && Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))
 		{
 			FVector Ground;
 			if (!StreetAt(V.Pos, Ground)) { continue; } // wereld hier (nog) niet geladen
@@ -2444,6 +2448,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			SPv.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			ACustomerBase* B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), SPv);
 			if (!B) { continue; }
+			++NBodies;
 			V.Body = B;
 			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).
 			ACustomerSpawner* Near = nullptr;
