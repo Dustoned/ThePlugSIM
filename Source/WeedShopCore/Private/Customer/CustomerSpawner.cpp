@@ -43,6 +43,22 @@ namespace
 
 namespace
 {
+	// STRAAT-CHECK: een plek telt alleen als de grond eronder een straat/stoep-mesh is
+	// (SM_Street, SM_BlackStreet, Sidewalk, Road, ...). Voorkomt spawnen/mikken bovenop
+	// containers, tafels en andere props - preventief, dus geen teleport-redders nodig.
+	bool IsOnStreetSurface(UWorld* W, const FVector& P)
+	{
+		if (!W) { return false; }
+		FHitResult H;
+		if (!W->LineTraceSingleByChannel(H, P + FVector(0.f, 0.f, 250.f), P - FVector(0.f, 0.f, 250.f), ECC_Visibility)) { return false; }
+		const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
+		if (!SMC || !SMC->GetStaticMesh()) { return false; }
+		const FString Nm = SMC->GetStaticMesh()->GetName();
+		return Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road"))
+			|| Nm.Contains(TEXT("ConcretePath")) || Nm.Contains(TEXT("Pavement")) || Nm.Contains(TEXT("Boardwalk"))
+			|| Nm.Contains(TEXT("Crosswalk")) || Nm.Contains(TEXT("Floor"));
+	}
+
 	// Goedkope wandelaar: animatie alleen updaten als hij in beeld is + URO (lagere anim-rate
 	// op afstand). Nodig om ~70 NPC's te kunnen draaien zonder de framerate te slopen.
 	void MakeWalkerCheap(ACustomerBase* C)
@@ -521,13 +537,14 @@ void ACustomerSpawner::TrySpawn()
 					FVector Goal = NetNodes[St.NextIdx] + Jit;
 					FNavLocation GoalNav;
 					if (Nav->ProjectPointToNavigation(Goal, GoalNav, FVector(200.f, 200.f, ZTol))
-						&& FMath::Abs(GoalNav.Location.Z - NetNodes[St.NextIdx].Z) <= ZTol)
+						&& FMath::Abs(GoalNav.Location.Z - NetNodes[St.NextIdx].Z) <= ZTol
+						&& IsOnStreetSurface(World, GoalNav.Location))
 					{
-						Goal = GoalNav.Location; // netjes op de stoep, niet op een tafel ernaast
+						Goal = GoalNav.Location; // netjes op de stoep, niet op een container ernaast
 					}
 					else
 					{
-						Goal = NetNodes[St.NextIdx]; // jitter viel verkeerd: de kale knoop
+						Goal = NetNodes[St.NextIdx]; // jitter viel verkeerd: de kale knoop (= jouw lijn)
 					}
 					AI->MoveToLocation(Goal, 90.f);
 				}
@@ -556,6 +573,7 @@ void ACustomerSpawner::TrySpawn()
 		const FVector Around = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
 		if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, ZTol))) { return; }
 		if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { return; } // onderniveau geweigerd
+		if (!IsOnStreetSurface(World, SpawnNav.Location)) { return; } // alleen op straat/stoep spawnen
 		// NIET voor de neus van de speler verschijnen: ver weg (60m+) mag altijd, dichterbij
 		// alleen als de plek BUITEN beeld ligt (achter de kijkrichting). Zo zie je ze nooit
 		// poppen - alleen aan komen lopen.

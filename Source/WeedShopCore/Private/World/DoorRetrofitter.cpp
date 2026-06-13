@@ -519,18 +519,21 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				if (Ring.Num() >= 2) { NpcRings.Add(Ring); }
 			}
-			// Deduplicatie: spawners hoeven niet om de 15m - om de ~40m is zat (de nav-invokers
-			// dekken 90m, en het loop-NETWERK regelt de spreiding van de wandelaars zelf).
-			for (int32 i = PendingSpawnerPoints.Num() - 1; i >= 0; --i)
+			// UITDUNNEN naar ~1 spawner per 40m: greedy keep-lijst (een punt blijft als hij ver
+			// genoeg van alle BEWAARDE punten ligt). De oude variant vergeleek met alle eerdere
+			// originele punten en dunde een aaneengesloten keten daardoor uit tot 1 punt.
 			{
-				for (int32 j = 0; j < i; ++j)
+				TArray<FVector> Kept;
+				for (const FVector& Pt0 : PendingSpawnerPoints)
 				{
-					if (FVector::Dist2D(PendingSpawnerPoints[i], PendingSpawnerPoints[j]) < 4000.f)
+					bool bNear = false;
+					for (const FVector& Kp : Kept)
 					{
-						PendingSpawnerPoints.RemoveAt(i);
-						break;
+						if (FVector::DistSquared2D(Pt0, Kp) < 4000.f * 4000.f) { bNear = true; break; }
 					}
+					if (!bNear) { Kept.Add(Pt0); }
 				}
+				PendingSpawnerPoints = Kept;
 			}
 			// LOOP-GRAAF bouwen: alle paden (met tussenpunten) als knopen-ketens; knopen dichter
 			// dan 7m smelten samen, en knopen van VERSCHILLENDE paden binnen 16m krijgen een
