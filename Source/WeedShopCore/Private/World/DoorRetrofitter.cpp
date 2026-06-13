@@ -634,10 +634,20 @@ void ADoorRetrofitter::ScanAndConvert()
 				// daarmee vanaf seconde 1 overal "bevolkt", lichamen volgen waar de speler komt.
 				if (GraphNodes.Num() >= 2)
 				{
+					// MAIN STRIP = de oost-zone (X > -1500: boulevard + beide stoepen van de grote
+					// weg). 70% van de crowd is "strip-volk" en wordt daar geseed; de rest zwerft.
+					TArray<int32> StripNodes;
+					for (int32 ni = 0; ni < GraphNodes.Num(); ++ni)
+					{
+						if (GraphNodes[ni].X > -1500.f) { StripNodes.Add(ni); }
+					}
 					for (int32 ci = 0; ci < 70; ++ci)
 					{
 						FVirtualWalker V;
-						V.NextIdx = FMath::RandRange(0, GraphNodes.Num() - 1);
+						V.bStripLover = (ci < 49) && StripNodes.Num() > 0;
+						V.NextIdx = V.bStripLover
+							? StripNodes[FMath::RandRange(0, StripNodes.Num() - 1)]
+							: FMath::RandRange(0, GraphNodes.Num() - 1);
 						V.Pos = GraphNodes[V.NextIdx];
 						if (GraphAdj[V.NextIdx].Num() > 0)
 						{
@@ -646,7 +656,7 @@ void ADoorRetrofitter::ScanAndConvert()
 						}
 						Crowd.Add(V);
 					}
-					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars geseed over de graaf"), Crowd.Num());
+					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars geseed (%d strip-vast, %d strip-knopen)"), Crowd.Num(), 49, StripNodes.Num());
 				}
 			}
 			if (PendingSpawnerPoints.Num() > 0)
@@ -2259,8 +2269,10 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			++NBodies;
 			// Lichaam leeft: data volgt het lichaam.
 			V.Pos = B->GetActorLocation();
-			// Speler ver weg: lichaam opruimen, data wandelt door vanaf hier.
-			if (MinPlayerDist(V.Pos) > 22000.f)
+			// Speler ver weg: lichaam opruimen, data wandelt door vanaf hier - maar NOOIT in
+			// het zicht (op een lange rechte strip kijk je verder dan de oude grens).
+			const float BodyD = MinPlayerDist(V.Pos);
+			if (BodyD > 22000.f && (!InAnyView(V.Pos) || BodyD > 35000.f))
 			{
 				// Dichtstbijzijnde knoop als volgende bestemming.
 				float BD = TNumericLimits<float>::Max();
@@ -2302,6 +2314,31 @@ void ADoorRetrofitter::TickVirtualCrowd()
 				else if (Pick == V.PrevIdx && Nb.Num() > 1)
 				{
 					for (int32 t = 0; t < 4 && Pick == V.PrevIdx; ++t) { Pick = Nb[FMath::RandRange(0, Nb.Num() - 1)]; }
+				}
+				// STRIP-VOORKEUR: strip-volk verlaat de strip-zone maar zelden, en wie er toch
+				// vanaf gedwaald is, drijft zachtjes terug richting de strip (hogere X).
+				if (V.bStripLover && Nb.Num() > 1)
+				{
+					const bool bCurIn = GraphNodes[V.NextIdx].X > -1500.f;
+					const bool bPickIn = GraphNodes[Pick].X > -1500.f;
+					if (bCurIn && !bPickIn && FMath::FRand() < 0.85f)
+					{
+						for (int32 NbIdx : Nb)
+						{
+							if (NbIdx != V.PrevIdx && GraphNodes[NbIdx].X > -1500.f) { Pick = NbIdx; break; }
+						}
+					}
+					else if (!bCurIn && FMath::FRand() < 0.5f)
+					{
+						int32 BestNb = Pick;
+						float BestX = -TNumericLimits<float>::Max();
+						for (int32 NbIdx : Nb)
+						{
+							if (NbIdx == V.PrevIdx) { continue; }
+							if (GraphNodes[NbIdx].X > BestX) { BestX = GraphNodes[NbIdx].X; BestNb = NbIdx; }
+						}
+						Pick = BestNb;
+					}
 				}
 				V.PrevIdx = V.NextIdx;
 				V.NextIdx = Pick;

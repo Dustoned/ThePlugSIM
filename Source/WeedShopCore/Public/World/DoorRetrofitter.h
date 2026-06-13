@@ -90,6 +90,7 @@ protected:
 		FVector Pos = FVector::ZeroVector;
 		int32 NextIdx = 0;
 		int32 PrevIdx = -1;
+		bool bStripLover = false; // blijft het liefst op de main strip (oost-zone)
 		TWeakObjectPtr<class ACustomerBase> Body;
 	};
 	TArray<FVirtualWalker> Crowd;
