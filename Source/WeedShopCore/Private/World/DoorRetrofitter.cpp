@@ -645,26 +645,50 @@ void ADoorRetrofitter::ScanAndConvert()
 					// MAIN STRIP = de oost-zone (X > -1500: boulevard + beide stoepen van de grote
 					// weg). 70% van de crowd is "strip-volk" en wordt daar geseed; de rest zwerft.
 					TArray<int32> StripNodes;
+					TArray<int32> AllNodes;
 					for (int32 ni = 0; ni < GraphNodes.Num(); ++ni)
 					{
+						AllNodes.Add(ni);
 						if (GraphNodes[ni].X > -1500.f) { StripNodes.Add(ni); }
 					}
+					// SCHUDDEN en rond-verdelen: ieder z'n eigen knoop (pas hergebruik als alle
+					// knopen op zijn) - geen start-hoopjes meer op dezelfde tegel.
+					auto Shuffle = [](TArray<int32>& Arr)
+					{
+						for (int32 i = Arr.Num() - 1; i > 0; --i)
+						{
+							Arr.Swap(i, FMath::RandRange(0, i));
+						}
+					};
+					Shuffle(StripNodes);
+					Shuffle(AllNodes);
+					int32 StripCursor = 0, AllCursor = 0;
 					for (int32 ci = 0; ci < 70; ++ci)
 					{
 						FVirtualWalker V;
 						V.bStripLover = (ci < 49) && StripNodes.Num() > 0;
-						V.NextIdx = V.bStripLover
-							? StripNodes[FMath::RandRange(0, StripNodes.Num() - 1)]
-							: FMath::RandRange(0, GraphNodes.Num() - 1);
+						if (V.bStripLover)
+						{
+							V.NextIdx = StripNodes[StripCursor % StripNodes.Num()];
+							++StripCursor;
+						}
+						else
+						{
+							V.NextIdx = AllNodes.Num() > 0 ? AllNodes[AllCursor % AllNodes.Num()] : 0;
+							++AllCursor;
+						}
 						V.Pos = GraphNodes[V.NextIdx];
 						if (GraphAdj[V.NextIdx].Num() > 0)
 						{
 							V.PrevIdx = V.NextIdx;
 							V.NextIdx = GraphAdj[V.NextIdx][FMath::RandRange(0, GraphAdj[V.NextIdx].Num() - 1)];
+							// Start ergens ONDERWEG naar de volgende knoop: ook bij knoop-hergebruik
+							// staat iedereen dan op een eigen plek langs de lijn.
+							V.Pos = FMath::Lerp(V.Pos, GraphNodes[V.NextIdx], FMath::FRandRange(0.1f, 0.9f));
 						}
 						Crowd.Add(V);
 					}
-					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars geseed (%d strip-vast, %d strip-knopen)"), Crowd.Num(), 49, StripNodes.Num());
+					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars gespreid geseed (%d strip-vast over %d strip-knopen)"), Crowd.Num(), 49, StripNodes.Num());
 				}
 			}
 			if (PendingSpawnerPoints.Num() > 0)
