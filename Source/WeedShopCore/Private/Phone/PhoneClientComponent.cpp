@@ -2879,6 +2879,60 @@ void UPhoneClientComponent::SaveShopSpots()
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("%d %s shop(s) saved! Restart builds them"), Marks.Num(), KN[Kind]));
 }
 
+void UPhoneClientComponent::SetShopTypeInCrosshair()
+{
+	UWorld* W = GetWorld();
+	APawn* Pn = Cast<APawn>(GetOwner());
+	APlayerController* PC = Pn ? Cast<APlayerController>(Pn->GetController()) : nullptr;
+	if (!W || !PC) { return; }
+	FVector VL; FRotator VR;
+	PC->GetPlayerViewPoint(VL, VR);
+	FHitResult Hit;
+	FCollisionQueryParams Q; Q.AddIgnoredActor(Pn);
+	const bool bHit = W->LineTraceSingleByChannel(Hit, VL, VL + VR.Vector() * 4000.f, ECC_Visibility, Q);
+	const FVector Target = bHit ? Hit.ImpactPoint : VL + VR.Vector() * 1000.f;
+	// Dichtstbijzijnde toonbank bij je kijk-punt.
+	AStoreCounter* Best = nullptr; float BestD = 400.f;
+	for (TActorIterator<AStoreCounter> It(W); It; ++It)
+	{
+		const float Dd = FVector::Dist(It->GetActorLocation(), Target);
+		if (Dd < BestD) { BestD = Dd; Best = *It; }
+	}
+	if (!Best)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("No shop counter in crosshair"));
+		return;
+	}
+	// Soort cyclen (Grow/Supplies/Furniture) + kleur + de prompt updaten.
+	const int32 NewKind = (((int32)Best->Kind) + 1) % 3; // enum 0=Grow 1=Supplies 2=Furniture
+	Best->Kind = (EShopKind)NewKind;
+	const FLinearColor Sign = (NewKind == 0) ? FLinearColor(0.30f, 0.85f, 0.35f)
+		: (NewKind == 1) ? FLinearColor(0.30f, 0.65f, 0.95f) : FLinearColor(0.65f, 0.45f, 0.85f);
+	Best->SetupVisual(Sign);
+	// In ShopSpots.txt de regel updaten waarvan de XY het dichtst bij deze toonbank ligt.
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *WeedData::File(TEXT("ShopSpots.txt")));
+	int32 BestLine = -1; float BestLD = TNumericLimits<float>::Max();
+	const FVector BL = Best->GetActorLocation();
+	for (int32 li = 0; li < Lines.Num(); ++li)
+	{
+		TArray<FString> Pc; Lines[li].ParseIntoArray(Pc, TEXT(","));
+		if (Pc.Num() < 5) { continue; }
+		const float Dd = FVector::Dist2D(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), 0.f), FVector(BL.X, BL.Y, 0.f));
+		if (Dd < BestLD) { BestLD = Dd; BestLine = li; }
+	}
+	if (BestLine >= 0)
+	{
+		TArray<FString> Pc; Lines[BestLine].ParseIntoArray(Pc, TEXT(","));
+		Pc[4] = FString::FromInt(NewKind);
+		Lines[BestLine] = FString::Join(Pc, TEXT(","));
+		FString Out; for (const FString& L : Lines) { Out += L + LINE_TERMINATOR; }
+		FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("ShopSpots.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	}
+	static const TCHAR* KN[3] = { TEXT("Grow shop"), TEXT("Supplies"), TEXT("Furniture") };
+	UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Cyan, FString::Printf(TEXT("Shop type -> %s"), KN[NewKind]));
+}
+
 void UPhoneClientComponent::ClearShopSpots()
 {
 	WeedData::DeleteFile(TEXT("ShopSpots.txt"));

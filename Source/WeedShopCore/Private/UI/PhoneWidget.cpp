@@ -345,6 +345,10 @@ void UPhoneWidget::FillSettingsBody()
 		UWeedActionButton* ShopB = MakeActionBtn(TEXT("Save shop spots (stand at counter)"), FLinearColor(0.4f, 0.3f, 0.15f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveShopSpots(); } }, 12);
 		BodyRow(ShopB, FMargin(0.f, 0.f, 0.f, 2.f));
+		// Bestaande winkel ter plekke van soort wisselen: kijk ernaar en tik.
+		UWeedActionButton* ShopSetB = MakeActionBtn(TEXT("Set shop type in crosshair"), FLinearColor(0.3f, 0.34f, 0.2f),
+			[this]() { if (Phone.IsValid()) { Phone->SetShopTypeInCrosshair(); } }, 11);
+		BodyRow(ShopSetB, FMargin(0.f, 0.f, 0.f, 2.f));
 		UWeedActionButton* ShopXB = MakeActionBtn(TEXT("Clear shop spots"), FLinearColor(0.4f, 0.22f, 0.22f),
 			[this]() { if (Phone.IsValid()) { Phone->ClearShopSpots(); } }, 11);
 		BodyRow(ShopXB, FMargin(0.f, 0.f, 0.f, 8.f));

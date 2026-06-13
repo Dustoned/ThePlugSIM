@@ -334,6 +334,8 @@ public:
 	int32 SelectedShopKind = 0;
 	int32 GetSelectedShopKind() const { return SelectedShopKind; }
 	void CycleSelectedShopKind() { SelectedShopKind = (SelectedShopKind + 1) % 3; }
+	// Kijk naar een winkel-toonbank en wissel de soort ter plekke (live + opgeslagen).
+	void SetShopTypeInCrosshair();
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();
