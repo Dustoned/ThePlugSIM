@@ -605,6 +605,24 @@ void ADoorRetrofitter::ScanAndConvert()
 					}
 				}
 				UE_LOG(LogWeedShop, Warning, TEXT("Loop-graaf: %d knopen uit %d paden"), GraphNodes.Num(), Routes.Num());
+				// CROWD SEEDEN: 70 virtuele wandelaars verspreid over de hele graaf - de stad is
+				// daarmee vanaf seconde 1 overal "bevolkt", lichamen volgen waar de speler komt.
+				if (GraphNodes.Num() >= 2)
+				{
+					for (int32 ci = 0; ci < 70; ++ci)
+					{
+						FVirtualWalker V;
+						V.NextIdx = FMath::RandRange(0, GraphNodes.Num() - 1);
+						V.Pos = GraphNodes[V.NextIdx];
+						if (GraphAdj[V.NextIdx].Num() > 0)
+						{
+							V.PrevIdx = V.NextIdx;
+							V.NextIdx = GraphAdj[V.NextIdx][FMath::RandRange(0, GraphAdj[V.NextIdx].Num() - 1)];
+						}
+						Crowd.Add(V);
+					}
+					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars geseed over de graaf"), Crowd.Num());
+				}
 			}
 			if (PendingSpawnerPoints.Num() > 0)
 			{
@@ -625,7 +643,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		ACustomerSpawner* CSr = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(Pt));
 		if (!CSr) { continue; }
 		CSr->bSpawnResidents = false;
-		CSr->MaxCustomers = RouteCustomersPerPoint;
+		CSr->MaxCustomers = 0; // lichamen komen uit de virtuele crowd; spawner = patrouille-aansturing
 		CSr->SpotRadius = 500.f;
 		CSr->ActivationRange = 0.f; // altijd vullen: de straat-trace weigert niet-gestreamde grond vanzelf
 		CSr->ChillSpots = LoadedChillSpots;
@@ -1519,6 +1537,9 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	// VIRTUELE CROWD: data-stappen + lichamen materialiseren/opruimen.
+	TickVirtualCrowd();
+
 	// PUI-BLADEN op het echte gevel-gat centreren (gemeten, niet gegokt).
 	FixBalconyPuiPositions();
 
@@ -2159,6 +2180,134 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 		}
 		UE_LOG(LogWeedShop, Warning, TEXT("PuiHole: gat %.0f breed op s=%.0f bij (%.0f, %.0f, %.0f) - %s"),
 			HoleW, HoleC, C0.X, C0.Y, C0.Z, Mate ? TEXT("2 bladen verdeeld") : TEXT("1 blad gecentreerd"));
+	}
+}
+
+void ADoorRetrofitter::TickVirtualCrowd()
+{
+	UWorld* W = GetWorld();
+	if (!W || GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
+	// Speler-posities en kijkrichtingen cachen.
+	TArray<FVector> PlayerPos;
+	TArray<FVector> PlayerView;
+	for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+	{
+		const APlayerController* PC = PIt->Get();
+		const APawn* Pp = PC ? PC->GetPawn() : nullptr;
+		if (!Pp) { continue; }
+		PlayerPos.Add(Pp->GetActorLocation());
+		PlayerView.Add(PC->GetControlRotation().Vector());
+	}
+	auto MinPlayerDist = [&](const FVector& P) -> float
+	{
+		float M = TNumericLimits<float>::Max();
+		for (const FVector& PP : PlayerPos) { M = FMath::Min(M, FVector::Dist2D(PP, P)); }
+		return M;
+	};
+	auto InAnyView = [&](const FVector& P) -> bool
+	{
+		for (int32 pi = 0; pi < PlayerPos.Num(); ++pi)
+		{
+			const FVector To = P - PlayerPos[pi];
+			if (To.Size2D() < 6000.f && FVector::DotProduct(PlayerView[pi], To.GetSafeNormal()) > 0.1f) { return true; }
+		}
+		return false;
+	};
+	auto StreetAt = [&](const FVector& P, FVector& OutGround) -> bool
+	{
+		FHitResult H;
+		if (!W->LineTraceSingleByChannel(H, P + FVector(0.f, 0.f, 300.f), P - FVector(0.f, 0.f, 300.f), ECC_Visibility)) { return false; }
+		const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
+		if (!SMC || !SMC->GetStaticMesh()) { return false; }
+		const FString Nm = SMC->GetStaticMesh()->GetName();
+		if (!(Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road"))
+			|| Nm.Contains(TEXT("ConcretePath")) || Nm.Contains(TEXT("Pavement")) || Nm.Contains(TEXT("Boardwalk"))
+			|| Nm.Contains(TEXT("Crosswalk")) || Nm.Contains(TEXT("Floor")))) { return false; }
+		OutGround = H.ImpactPoint;
+		return true;
+	};
+	int32 NBodies = 0;
+	for (FVirtualWalker& V : Crowd)
+	{
+		if (ACustomerBase* B = V.Body.Get())
+		{
+			++NBodies;
+			// Lichaam leeft: data volgt het lichaam.
+			V.Pos = B->GetActorLocation();
+			// Speler ver weg: lichaam opruimen, data wandelt door vanaf hier.
+			if (MinPlayerDist(V.Pos) > 22000.f)
+			{
+				// Dichtstbijzijnde knoop als volgende bestemming.
+				float BD = TNumericLimits<float>::Max();
+				for (int32 ni = 0; ni < GraphNodes.Num(); ++ni)
+				{
+					const float Dd = FVector::DistSquared2D(GraphNodes[ni], V.Pos);
+					if (Dd < BD) { BD = Dd; V.NextIdx = ni; }
+				}
+				V.PrevIdx = -1;
+				B->Destroy();
+				V.Body = nullptr;
+			}
+			continue;
+		}
+		// DATA-STAP: 2 seconden wandelen richting de volgende knoop (zelfde tred als lichamen).
+		const FVector Tgt = GraphNodes[V.NextIdx];
+		const FVector To2 = Tgt - V.Pos;
+		const float D2 = To2.Size2D();
+		const float Step = 330.f;
+		if (D2 <= Step)
+		{
+			V.Pos = Tgt;
+			// Volgende knoop: rechtdoor-voorkeur, geen U-bocht.
+			const TArray<int32>& Nb = GraphAdj[V.NextIdx];
+			if (Nb.Num() > 0)
+			{
+				int32 Pick = Nb[FMath::RandRange(0, Nb.Num() - 1)];
+				FVector InDir = FVector::ZeroVector;
+				if (GraphNodes.IsValidIndex(V.PrevIdx)) { InDir = (GraphNodes[V.NextIdx] - GraphNodes[V.PrevIdx]).GetSafeNormal2D(); }
+				int32 Straight = -1;
+				float BestDot = -2.f;
+				for (int32 NbIdx : Nb)
+				{
+					if (NbIdx == V.PrevIdx) { continue; }
+					const float Dot = InDir.IsNearlyZero() ? 0.f : FVector::DotProduct(InDir, (GraphNodes[NbIdx] - GraphNodes[V.NextIdx]).GetSafeNormal2D());
+					if (Dot > BestDot) { BestDot = Dot; Straight = NbIdx; }
+				}
+				if (Straight >= 0 && BestDot > 0.5f && FMath::FRand() < 0.75f) { Pick = Straight; }
+				else if (Pick == V.PrevIdx && Nb.Num() > 1)
+				{
+					for (int32 t = 0; t < 4 && Pick == V.PrevIdx; ++t) { Pick = Nb[FMath::RandRange(0, Nb.Num() - 1)]; }
+				}
+				V.PrevIdx = V.NextIdx;
+				V.NextIdx = Pick;
+			}
+		}
+		else
+		{
+			V.Pos += To2.GetSafeNormal2D() * Step;
+		}
+		// MATERIALISEREN: speler binnen bereik, niet pal in beeld, en echte straat onder de voeten.
+		const float Pd = MinPlayerDist(V.Pos);
+		if (Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))
+		{
+			FVector Ground;
+			if (!StreetAt(V.Pos, Ground)) { continue; } // wereld hier (nog) niet geladen
+			FActorSpawnParameters SPv;
+			SPv.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			ACustomerBase* B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Ground + FVector(0.f, 0.f, 100.f)), SPv);
+			if (!B) { continue; }
+			V.Body = B;
+			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).
+			ACustomerSpawner* Near = nullptr;
+			float BD = TNumericLimits<float>::Max();
+			for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+			{
+				if (!IsValid(*SpIt)) { continue; }
+				const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), Ground);
+				if (Dd < BD) { BD = Dd; Near = *SpIt; }
+			}
+			if (Near) { Near->AdoptWalker(B); }
+		}
 	}
 }
 

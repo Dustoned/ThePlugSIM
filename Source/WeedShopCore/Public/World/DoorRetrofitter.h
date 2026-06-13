@@ -83,6 +83,17 @@ protected:
 	// Loop-graaf: alle routes/dwarsstraten/oversteken samengeknoopt (knopen + buren).
 	TArray<FVector> GraphNodes;
 	TArray<TArray<int32>> GraphAdj;
+	// VIRTUELE CROWD: 70 wandelaars als data over de graaf (hele stad, altijd); binnen bereik
+	// van een speler krijgen ze een echt lichaam, daarbuiten lopen ze als data door.
+	struct FVirtualWalker
+	{
+		FVector Pos = FVector::ZeroVector;
+		int32 NextIdx = 0;
+		int32 PrevIdx = -1;
+		TWeakObjectPtr<class ACustomerBase> Body;
+	};
+	TArray<FVirtualWalker> Crowd;
+	void TickVirtualCrowd();
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
 	TArray<FBox> GlassRects;
