@@ -539,6 +539,30 @@ void ADoorRetrofitter::ScanAndConvert()
 			// dan 7m smelten samen, en knopen van VERSCHILLENDE paden binnen 16m krijgen een
 			// verbindings-kant - zo haken dwarsstraten en oversteekplekken vanzelf in de lanen.
 			{
+				// PAD-SNAP: een tussenpunt klikt zichzelf zijwaarts op de echte pad/straat-mesh.
+				// De speler zet rechte lijnen tussen markers; slingert het echte pad (park), dan
+				// volgen de knopen nu de slinger in plaats van dwars over het gras te snijden.
+				auto SnapToPath = [&](const FVector& P, const FVector& SegDir) -> FVector
+				{
+					const FVector Side = FVector::CrossProduct(SegDir.GetSafeNormal2D(), FVector::UpVector);
+					static const float Offs[] = { 0.f, 150.f, -150.f, 300.f, -300.f, 450.f, -450.f, 650.f, -650.f, 900.f, -900.f, 1200.f, -1200.f };
+					for (float Of : Offs)
+					{
+						const FVector C2 = P + Side * Of;
+						FHitResult H;
+						if (!W->LineTraceSingleByChannel(H, C2 + FVector(0.f, 0.f, 400.f), C2 - FVector(0.f, 0.f, 400.f), ECC_Visibility)) { continue; }
+						const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
+						if (!SMC || !SMC->GetStaticMesh()) { continue; }
+						const FString Nm = SMC->GetStaticMesh()->GetName();
+						if (Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road"))
+							|| Nm.Contains(TEXT("ConcretePath")) || Nm.Contains(TEXT("Pavement")) || Nm.Contains(TEXT("Boardwalk"))
+							|| Nm.Contains(TEXT("Crosswalk")) || Nm.Contains(TEXT("Path")))
+						{
+							return FVector(C2.X, C2.Y, H.ImpactPoint.Z + 10.f);
+						}
+					}
+					return P; // niets gevonden (bv. nog niet gestreamd): originele lijn aanhouden
+				};
 				TArray<int32> NodeBlock; // welk pad een knoop maakte (voor de junction-kanten)
 				auto GetNode = [&](const FVector& P, int32 BlockId) -> int32
 				{
@@ -572,10 +596,11 @@ void ADoorRetrofitter::ScanAndConvert()
 						if (PrevNode >= 0) { AddEdge(PrevNode, NA); }
 						PrevNode = NA;
 						const float SegLen = FVector::Dist2D(A2, B2);
-						const int32 NMid = FMath::FloorToInt(SegLen / 4000.f);
+						const int32 NMid = FMath::FloorToInt(SegLen / 2500.f); // dichter op elkaar: bochten volgen strakker
 						for (int32 mi = 1; mi <= NMid; ++mi)
 						{
-							const int32 NM = GetNode(FMath::Lerp(A2, B2, float(mi) / float(NMid + 1)), BlockId);
+							const FVector RawMid = FMath::Lerp(A2, B2, float(mi) / float(NMid + 1));
+							const int32 NM = GetNode(SnapToPath(RawMid, B2 - A2), BlockId);
 							AddEdge(PrevNode, NM);
 							PrevNode = NM;
 						}
