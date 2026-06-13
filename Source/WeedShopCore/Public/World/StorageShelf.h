@@ -44,6 +44,10 @@ public:
 
 	void SetupVisual();
 
+	// Versheid: laat boter/edibles in dit (niet-Fridge) meubel langzaam in kwaliteit zakken.
+	void DegradeShelfPerishables();
+	FTimerHandle PerishTimer;
+
 	// Aantal verschillende stapels dat dit opslag-meubel kan bevatten (per type).
 	int32 GetCapacity() const;
 

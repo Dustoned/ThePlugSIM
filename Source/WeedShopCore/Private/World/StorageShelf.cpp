@@ -130,6 +130,29 @@ void AStorageShelf::BeginPlay()
 {
 	Super::BeginPlay();
 	SetupVisual();
+	// Versheid: een GEWONE plank/kist laat boter/edibles ook bederven (alleen een Fridge koelt).
+	// Server-timer elke 10s; Fridge-shelves slaan we over zodat ze de inhoud vers houden.
+	if (HasAuthority() && ShelfTier != FName(TEXT("Fridge")))
+	{
+		GetWorldTimerManager().SetTimer(PerishTimer, this, &AStorageShelf::DegradeShelfPerishables, 10.f, true, 10.f);
+	}
+}
+
+void AStorageShelf::DegradeShelfPerishables()
+{
+	const float Step = 1.6f;
+	bool bChanged = false;
+	for (FShelfStack& S : Contents)
+	{
+		const FString Id = S.ItemId.ToString();
+		const bool bPerish = Id.StartsWith(TEXT("ButterMix")) || Id.StartsWith(TEXT("Edible")) || Id == TEXT("Butter");
+		if (bPerish && S.QualityPct > 0.f)
+		{
+			S.QualityPct = FMath::Max(0.f, S.QualityPct - Step);
+			bChanged = true;
+		}
+	}
+	if (bChanged) { ForceNetUpdate(); }
 }
 
 int32 AStorageShelf::ServerStore(FName ItemId, int32 Count, float Thc, float QualityPct)

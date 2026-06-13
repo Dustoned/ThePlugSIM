@@ -5,11 +5,49 @@
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
+#include "TimerManager.h"
+
+namespace
+{
+	// Boter/edibles bederven buiten de koeling (ButterMix = gekookte boter, Edible = eindproduct,
+	// Butter = ingredient). QualityPct zakt -> mindere edibles / lagere verkoopwaarde.
+	bool IsPerishableItem(FName Id)
+	{
+		const FString S = Id.ToString();
+		return S.StartsWith(TEXT("ButterMix")) || S.StartsWith(TEXT("Edible")) || S == TEXT("Butter");
+	}
+}
 
 UInventoryComponent::UInventoryComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
+}
+
+void UInventoryComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	// Versheid-pass (alleen server): elke 10s bederven boter/edibles in je inventory een beetje.
+	// In een Fridge bewaarde stapels zitten in de shelf en degraderen daar NIET (zie StorageShelf).
+	if (GetOwnerRole() == ROLE_Authority)
+	{
+		GetWorld()->GetTimerManager().SetTimer(PerishTimer, this, &UInventoryComponent::DegradePerishables, 10.f, true, 10.f);
+	}
+}
+
+void UInventoryComponent::DegradePerishables()
+{
+	const float Step = 1.6f; // ~10 min van 100% naar 0% bij normale tijd (sneller bij time-speed)
+	bool bChanged = false;
+	for (FInventoryStack& St : Stacks)
+	{
+		if (IsPerishableItem(St.ItemId) && St.QualityPct > 0.f)
+		{
+			St.QualityPct = FMath::Max(0.f, St.QualityPct - Step);
+			bChanged = true;
+		}
+	}
+	if (bChanged) { OnRep_Stacks(); }
 }
 
 void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

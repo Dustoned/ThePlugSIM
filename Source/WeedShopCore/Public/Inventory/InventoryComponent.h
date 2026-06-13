@@ -208,7 +208,12 @@ public:
 	void SortGrid(int32 Mode);
 
 protected:
+	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	// Versheid: boter/edibles verliezen langzaam QualityPct buiten een Fridge (server-timer).
+	void DegradePerishables();
+	FTimerHandle PerishTimer;
 
 	UPROPERTY(ReplicatedUsing = OnRep_Stacks)
 	TArray<FInventoryStack> Stacks;
