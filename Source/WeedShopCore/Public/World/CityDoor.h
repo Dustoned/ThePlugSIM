@@ -55,6 +55,7 @@ public:
 	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
 	bool IsLocked() const { return bLocked; }
 	UStaticMeshComponent* GetPanel() const { return Panel; }
+	float GetOpenSwing() const { return OpenSwingDeg; }
 
 	// HUUR: achterstallig -> deur op slot, F aan de deur = betalen (cash van de pawn).
 	void SetRentOverdue(int64 Cents) { bLocked = true; bRentDue = true; RentCents = Cents; bForSale = false; bOpen = false; }

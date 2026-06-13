@@ -1365,28 +1365,12 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (PR.bInside)
 			{
-				// Spawn IN het eigen appartement (kamer-kant van de voordeur): de bewoner loopt
-				// zijn deur uit, de gang door, en daalt via de speler-ketting (trap) af tot het
-				// laatste marker-punt op straat. Vastlopers nemen buiten zicht de hop-vangrail.
+				// Spawn IN het eigen appartement: de kamer-kant = de kant waar de deur naartoe
+				// openzwaait (appartement-deuren zwaaien de kamer in) - deterministisch.
 				const FVector Fw = A->GetActorForwardVector();
-				const FVector Rt = A->GetActorRightVector();
-				auto Openness = [&](const FVector& P)
-				{
-					float Sum = 0.f;
-					const FVector Dirs[4] = { Fw, -Fw, Rt, -Rt };
-					for (const FVector& Dir : Dirs)
-					{
-						FHitResult H;
-						const FVector S = P + FVector(0.f, 0.f, 120.f);
-						Sum += W->LineTraceSingleByChannel(H, S, S + Dir * 1200.f, ECC_Visibility) ? H.Distance : 1200.f;
-					}
-					return Sum;
-				};
-				const FVector CandA = DL + Fw * 240.f;
-				const FVector CandB = DL - Fw * 240.f;
-				const bool bAInside = Openness(CandA) <= Openness(CandB);
-				Inside = bAInside ? CandA : CandB;
-				Front = bAInside ? CandB : CandA;
+				const float SwingSide = (A->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
+				Inside = DL + Fw * 240.f * SwingSide;
+				Front = DL - Fw * 240.f * SwingSide;
 				UNavigationSystemV1* NavI = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
 				FNavLocation InNav;
 				if (NavI && NavI->ProjectPointToNavigation(Inside + FVector(0.f, 0.f, 50.f), InNav, FVector(350.f, 350.f, 220.f)))
@@ -1493,29 +1477,16 @@ void ADoorRetrofitter::ScanAndConvert()
 	{
 		APlayerController* PCr = W->GetFirstPlayerController();
 		APawn* Pr = PCr ? PCr->GetPawn() : nullptr;
-		// 1x per sessie naar binnen: de KAMER-kant van de voordeur vinden door aan beide kanten
-		// de vrije ruimte te meten - een kamer is krap, de galerij/gang is lang.
+		// 1x per sessie naar binnen: de KAMER-kant van de voordeur is de kant waar de deur
+		// naartoe openzwaait (appartement-deuren zwaaien de kamer in) - deterministisch, geen
+		// vrije-ruimte-meting die bij een grote kamer en kleine lift-lobby de gang kon kiezen.
 		if (!bMovedIntoHome && Pr && bWalkersSpawned)
 		{
 			bMovedIntoHome = true;
 			const FVector DL = StarterDoor->GetActorLocation();
 			const FVector Fw = StarterDoor->GetActorForwardVector();
-			const FVector Rt = StarterDoor->GetActorRightVector();
-			auto Openness = [&](const FVector& P)
-			{
-				float Sum = 0.f;
-				const FVector Dirs[4] = { Fw, -Fw, Rt, -Rt };
-				for (const FVector& Dir : Dirs)
-				{
-					FHitResult H;
-					const FVector S = P + FVector(0.f, 0.f, 120.f);
-					Sum += W->LineTraceSingleByChannel(H, S, S + Dir * 1200.f, ECC_Visibility) ? H.Distance : 1200.f;
-				}
-				return Sum;
-			};
-			const FVector CandA = DL + Fw * 240.f;
-			const FVector CandB = DL - Fw * 240.f;
-			const FVector Inside = (Openness(CandA) <= Openness(CandB)) ? CandA : CandB;
+			const float SwingSide = (StarterDoor->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
+			const FVector Inside = DL + Fw * 240.f * SwingSide;
 			Pr->SetActorLocation(Inside + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
 			if (UPhoneClientComponent* Phw = Pr->FindComponentByClass<UPhoneClientComponent>())
 			{
