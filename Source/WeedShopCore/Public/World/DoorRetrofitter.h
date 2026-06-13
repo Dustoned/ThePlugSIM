@@ -85,6 +85,7 @@ protected:
 	TArray<TArray<FVector>> NpcChains; // speler-gemarkeerde binnen-kettingen (StairsPath.txt)
 	TArray<FVector> LoadedChillSpots;  // hang-plekken (ChillSpots.txt)
 	bool bShopsPlaced = false;         // winkels (ShopSpots.txt) eenmalig neerzetten
+	bool bFurniturePlaced = false;     // starter-meubels (StarterFurniture.txt) op een verse game
 	// Loop-graaf: alle routes/dwarsstraten/oversteken samengeknoopt (knopen + buren).
 	TArray<FVector> GraphNodes;
 	TArray<TArray<int32>> GraphAdj;

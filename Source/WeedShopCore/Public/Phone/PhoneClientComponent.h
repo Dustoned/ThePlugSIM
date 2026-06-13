@@ -301,6 +301,11 @@ public:
 
 	// Test-tool: geef de complete building-kit (alle Struct_-items, oneindig bruikbaar). Client -> server.
 	void RequestGiveBuildKit();
+	// Meubel-kit: alle woon-meubels in je inventory zodat je de kamer kunt inrichten. Client -> server.
+	void RequestGiveFurnitureKit();
+	// Huidige meubels rond je heen opslaan als starter-layout (StarterFurniture.txt) + clear.
+	void SaveStarterFurniture();
+	void ClearStarterFurniture();
 
 	// Test-tool: sla de huidige 3 markers op als permanente kamer-job (RoomJobs.txt) en maak de
 	// markers vrij voor het volgende gebouw. Puur lokaal bestand-werk.
@@ -339,6 +344,8 @@ public:
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();
+	UFUNCTION(Server, Reliable)
+	void ServerGiveFurnitureKit();
 
 	// Boek bankgeld over naar een co-op vriend (fee + dag-limiet). Client -> server.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")

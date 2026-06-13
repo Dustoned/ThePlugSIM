@@ -305,7 +305,17 @@ void UPhoneWidget::FillSettingsBody()
 		// Building-kit: alle bouw-onderdelen (muren/vloeren/plafonds/deur/lamp) gratis + oneindig.
 		UWeedActionButton* KitB = MakeActionBtn(TEXT("Give build kit (free, infinite)"), FLinearColor(0.2f, 0.45f, 0.3f),
 			[this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } }, 13);
-		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 8.f));
+		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 4.f));
+		// Meubel-kit + starter-layout opslaan: richt je kamer in en sla 'm op als start-inrichting.
+		UWeedActionButton* FurnKitB = MakeActionBtn(TEXT("Give furniture kit"), FLinearColor(0.25f, 0.4f, 0.45f),
+			[this]() { if (Phone.IsValid()) { Phone->RequestGiveFurnitureKit(); } }, 13);
+		BodyRow(FurnKitB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* FurnSaveB = MakeActionBtn(TEXT("Save starter furniture (stand in room)"), FLinearColor(0.4f, 0.3f, 0.15f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveStarterFurniture(); } }, 12);
+		BodyRow(FurnSaveB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* FurnXB = MakeActionBtn(TEXT("Clear starter furniture"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]() { if (Phone.IsValid()) { Phone->ClearStarterFurniture(); } }, 11);
+		BodyRow(FurnXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
 		// Paden-overzicht: alle gezette loop-ringen (groen) en gebouw-kettingen (oranje) in de
 		// wereld tekenen. (De border-knoppen zijn hier vervangen - de grens staat vast en gebakken.)

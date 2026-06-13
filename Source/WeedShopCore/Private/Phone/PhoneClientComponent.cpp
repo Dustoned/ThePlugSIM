@@ -50,6 +50,8 @@
 #include "UI/DryingRackWidget.h"
 #include "UI/StoreWidget.h"
 #include "World/StoreCounter.h"
+#include "Placement/PlaceableProp.h"
+#include "World/WaterSink.h"
 #include "Progression/LevelComponent.h"
 #include "World/HeatComponent.h" // huur-schuld -> heat
 #include "World/Atm.h"           // kluis-capaciteit scannen
@@ -2228,6 +2230,63 @@ void UPhoneClientComponent::ServerSafeMove_Implementation(int64 Cents, bool bToS
 void UPhoneClientComponent::RequestDevHeatEvent(bool bBust) { ServerDevHeatEvent(bBust); }
 
 void UPhoneClientComponent::RequestGiveBuildKit() { ServerGiveBuildKit(); }
+void UPhoneClientComponent::RequestGiveFurnitureKit() { ServerGiveFurnitureKit(); }
+
+void UPhoneClientComponent::ServerGiveFurnitureKit_Implementation()
+{
+	APawn* P = Cast<APawn>(GetOwner());
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return; }
+	// Woon-meubels (geen grow/processing-gear): genoeg om een kamer mee in te richten.
+	static const TCHAR* Kit[] = {
+		TEXT("Mattress"), TEXT("Table"), TEXT("Fridge_Std"), TEXT("Shelf"),
+		TEXT("Wardrobe"), TEXT("Sink"), TEXT("Lamp_Ceiling"), TEXT("Chest"),
+		TEXT("Bench_Pack"), TEXT("Safe_Small") };
+	for (const TCHAR* Id : Kit) { Inv->AddItem(FName(Id), 3); }
+	UWeedToast::NotifyPawn(P, -1, 3.f, FColor::Green, TEXT("Furniture kit added - place them via the build mode"));
+}
+
+void UPhoneClientComponent::SaveStarterFurniture()
+{
+	UWorld* W = GetWorld();
+	APawn* P = Cast<APawn>(GetOwner());
+	if (!W || !P) { return; }
+	// Alle meubels rond de speler (de kamer waar je in staat): radius 1500, Z +/-500.
+	const FVector C = P->GetActorLocation();
+	FString Out;
+	int32 N = 0;
+	for (TActorIterator<APlaceableProp> It(W); It; ++It)
+	{
+		APlaceableProp* Pr = *It;
+		if (!IsValid(Pr) || Pr->ItemId.IsNone()) { continue; }
+		const FVector L = Pr->GetActorLocation();
+		if (FVector::Dist2D(L, C) > 1500.f || FMath::Abs(L.Z - C.Z) > 500.f) { continue; }
+		Out += FString::Printf(TEXT("%s,%.1f,%.1f,%.1f,%.1f"), *Pr->ItemId.ToString(), L.X, L.Y, L.Z, Pr->GetActorRotation().Yaw) + LINE_TERMINATOR;
+		++N;
+	}
+	for (TActorIterator<AWaterSink> It(W); It; ++It)
+	{
+		AWaterSink* Sk = *It;
+		if (!IsValid(Sk)) { continue; }
+		const FVector L = Sk->GetActorLocation();
+		if (FVector::Dist2D(L, C) > 1500.f || FMath::Abs(L.Z - C.Z) > 500.f) { continue; }
+		Out += FString::Printf(TEXT("Sink,%.1f,%.1f,%.1f,%.1f"), L.X, L.Y, L.Z, Sk->GetActorRotation().Yaw) + LINE_TERMINATOR;
+		++N;
+	}
+	if (N == 0)
+	{
+		UWeedToast::NotifyPawn(P, -1, 3.f, FColor::Orange, TEXT("No furniture near you to save - place some first"));
+		return;
+	}
+	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("StarterFurniture.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(P, -1, 4.f, FColor::Green, FString::Printf(TEXT("Starter layout saved (%d items)! New games start furnished"), N));
+}
+
+void UPhoneClientComponent::ClearStarterFurniture()
+{
+	WeedData::DeleteFile(TEXT("StarterFurniture.txt"));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Starter furniture cleared"));
+}
 
 void UPhoneClientComponent::SaveRoomTemplateNow()
 {

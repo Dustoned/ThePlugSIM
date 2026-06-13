@@ -11,6 +11,10 @@
 #include "Customer/CustomerBase.h"
 #include "World/StoreCounter.h"
 #include "World/Atm.h"
+#include "Placement/PlaceableProp.h"
+#include "World/WaterSink.h"
+#include "Save/SaveGameSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Economy/EconomyComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "NavigationSystem.h"
@@ -1623,6 +1627,50 @@ void ADoorRetrofitter::ScanAndConvert()
 					It->SetResident(FString());
 				}
 			}
+		}
+	}
+
+	// STARTER-MEUBELS (StarterFurniture.txt): op een VERSE game de opgeslagen inrichting
+	// neerzetten (bij een geladen game herstelt de save-subsystem de props zelf).
+	if (!bFurniturePlaced)
+	{
+		bFurniturePlaced = true;
+		bool bFresh = true;
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>()) { bFresh = Sv->IsFreshGame(); }
+		}
+		if (bFresh)
+		{
+			TArray<FString> FL;
+			FFileHelper::LoadFileToStringArray(FL, *WeedData::File(TEXT("StarterFurniture.txt")));
+			int32 NF = 0;
+			for (const FString& L : FL)
+			{
+				TArray<FString> Pc;
+				L.ParseIntoArray(Pc, TEXT(","));
+				if (Pc.Num() < 5) { continue; }
+				const FName ItemId(*Pc[0]);
+				const FVector Loc(FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]), FCString::Atof(*Pc[3]));
+				const FRotator Rot(0.f, FCString::Atof(*Pc[4]), 0.f);
+				FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				if (Pc[0] == TEXT("Sink"))
+				{
+					if (AWaterSink* Sk = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(Rot, Loc), SP))
+					{
+						Sk->Tags.Add(FName(TEXT("AutoFixture")));
+						++NF;
+					}
+				}
+				else if (APlaceableProp* Pr = W->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), FTransform(Rot, Loc), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+				{
+					Pr->ItemId = ItemId;
+					Pr->FinishSpawning(FTransform(Rot, Loc));
+					Pr->Tags.Add(FName(TEXT("AutoFixture")));
+					++NF;
+				}
+			}
+			if (NF > 0) { UE_LOG(LogWeedShop, Warning, TEXT("Starter-meubels geplaatst: %d"), NF); }
 		}
 	}
 
