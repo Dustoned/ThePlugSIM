@@ -411,7 +411,20 @@ void ACustomerSpawner::TrySpawn()
 		{
 			for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
 			{
-				if (!IsValid(Cw) || Cw->bNeedsPlayer) { continue; }
+				if (!IsValid(Cw)) { continue; }
+				// Klanten met een koopwens (bNeedsPlayer) werden volledig overgeslagen en stonden
+				// dus als standbeelden te wachten. Wachten mag alleen als de speler echt in de
+				// buurt is (deal-afstand); anders gewoon doorslenteren met de wens op zak.
+				if (Cw->bNeedsPlayer)
+				{
+					float MinPd = TNumericLimits<float>::Max();
+					for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
+					{
+						const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+						if (Pp) { MinPd = FMath::Min(MinPd, FVector::Dist2D(Pp->GetActorLocation(), Cw->GetActorLocation())); }
+					}
+					if (MinPd < 5000.f) { continue; } // speler dichtbij: blijf staan voor de deal
+				}
 				FPatrolState& St = Patrol.FindOrAdd(Cw);
 				const FVector Cur = Cw->GetActorLocation();
 				// ENTRY-pad eerst (speler-gemarkeerde ketting, bv. de trap af): punt-voor-punt,
