@@ -1,4 +1,4 @@
-#include "World/DoorRetrofitter.h"
+﻿#include "World/DoorRetrofitter.h"
 
 #include "WeedShopCore.h"
 #include "World/CityDoor.h"
@@ -2247,6 +2247,14 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 		}
 		UE_LOG(LogWeedShop, Warning, TEXT("PuiHole: gat %.0f breed op s=%.0f bij (%.0f, %.0f, %.0f) - %s"),
 			HoleW, HoleC, C0.X, C0.Y, C0.Z, Mate ? TEXT("2 bladen verdeeld") : TEXT("1 blad gecentreerd"));
+	}
+}
+
+void ADoorRetrofitter::GetVirtualWalkerPositions(TArray<FVector>& Out) const
+{
+	for (const FVirtualWalker& V : Crowd)
+	{
+		if (!V.Body.IsValid()) { Out.Add(V.Pos); }
 	}
 }
 
