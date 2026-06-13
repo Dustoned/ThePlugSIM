@@ -574,6 +574,12 @@ void ACustomerSpawner::TrySpawn()
 			}
 		}
 		if (Spawned.Num() >= MaxCustomers) { return; }
+		++TryCount;
+		if (TryCount % 30 == 0)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("Spawner (%.0f, %.0f, %.0f): %d/%d - afgekeurd nav=%d hoogte=%d straat=%d zicht=%d"),
+				GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z, Spawned.Num(), MaxCustomers, RejNav, RejZ, RejStreet, RejView);
+		}
 		// DAG-START VULLING: bij sessiestart en elke nieuwe dag gooit de spawner zichzelf in
 		// een klap vol (zonder de niet-in-beeld-regel) - de hele strip staat dan meteen vol
 		// volk, boven en onder. Daarna geldt de normale druppel-aanvulling met alle regels.
@@ -589,9 +595,9 @@ void ACustomerSpawner::TrySpawn()
 			{
 				FNavLocation BNav;
 				const FVector BAround = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
-				if (!Nav->ProjectPointToNavigation(BAround, BNav, FVector(400.f, 400.f, ZTol))) { continue; }
-				if (FMath::Abs(BNav.Location.Z - GetActorLocation().Z) > ZTol) { continue; }
-				if (!IsOnStreetSurface(World, BNav.Location)) { continue; }
+				if (!Nav->ProjectPointToNavigation(BAround, BNav, FVector(400.f, 400.f, ZTol))) { ++RejNav; continue; }
+				if (FMath::Abs(BNav.Location.Z - GetActorLocation().Z) > ZTol) { ++RejZ; continue; }
+				if (!IsOnStreetSurface(World, BNav.Location)) { ++RejStreet; continue; }
 				FActorSpawnParameters BSP;
 				BSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 				TSubclassOf<ACustomerBase> BCls = CustomerClass;
@@ -630,12 +636,6 @@ void ACustomerSpawner::TrySpawn()
 			if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { ++RejZ; continue; } // onderniveau
 			if (!IsOnStreetSurface(World, SpawnNav.Location)) { ++RejStreet; continue; } // alleen straat/stoep
 			bFound = true;
-		}
-		++TryCount;
-		if (TryCount % 30 == 0 && Spawned.Num() < MaxCustomers)
-		{
-			UE_LOG(LogWeedShop, Warning, TEXT("Spawner (%.0f, %.0f, %.0f): %d/%d - afgekeurd nav=%d hoogte=%d straat=%d zicht=%d"),
-				GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z, Spawned.Num(), MaxCustomers, RejNav, RejZ, RejStreet, RejView);
 		}
 		if (!bFound) { return; }
 		// NIET voor de neus van de speler verschijnen: ver weg (60m+) mag altijd, dichterbij
