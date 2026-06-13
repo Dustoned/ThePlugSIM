@@ -327,6 +327,9 @@ public:
 	// Chill-plekken: F9-markers -> plekken waar NPC's heen lopen en blijven hangen tot de dag om is.
 	void SaveChillSpots();
 	void ClearChillSpots();
+	// Winkel-plekken: F9-markers -> op elk een werkende winkel (toonbank + ATM + verkoper).
+	void SaveShopSpots();
+	void ClearShopSpots();
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();

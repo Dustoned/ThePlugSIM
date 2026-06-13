@@ -2838,6 +2838,55 @@ void UPhoneClientComponent::SaveChillSpots()
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("%d chill spots added! Restart applies"), Marks.Num()));
 }
 
+void UPhoneClientComponent::SaveShopSpots()
+{
+	UWorld* W = GetWorld();
+	APawn* Pn = Cast<APawn>(GetOwner());
+	if (!W || !Pn) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	TArray<FVector> Marks;
+	for (const FString& Line : Lines)
+	{
+		if (!Line.Contains(MapPath)) { continue; }
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx == INDEX_NONE) { continue; }
+		FString PosStr = Line.Mid(PIdx + 5);
+		int32 Close = INDEX_NONE;
+		if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+		TArray<FString> Parts;
+		PosStr.ParseIntoArray(Parts, TEXT(","));
+		if (Parts.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))); }
+	}
+	if (Marks.Num() < 1)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Stand where the counter goes (facing the customer side) and set a marker first"));
+		return;
+	}
+	// Bestaande winkels tellen zodat de soort-cyclus (Grow/Supplies/Furniture) doorloopt.
+	FString Cur;
+	FFileHelper::LoadFileToString(Cur, *WeedData::File(TEXT("ShopSpots.txt")));
+	int32 Existing = 0;
+	{ TArray<FString> EL; Cur.ParseIntoArray(EL, TEXT("\n")); for (const FString& L : EL) { if (!L.TrimStartAndEnd().IsEmpty()) { ++Existing; } } }
+	const float Yaw = Pn->GetActorRotation().Yaw; // toonbank kijkt zoals jij keek (naar de klanten)
+	if (!Cur.IsEmpty() && !Cur.EndsWith(LINE_TERMINATOR)) { Cur += LINE_TERMINATOR; }
+	for (int32 i = 0; i < Marks.Num(); ++i)
+	{
+		const int32 Kind = (Existing + i) % 3; // 0=Grow 1=Supplies 2=Furniture
+		Cur += FString::Printf(TEXT("%.1f,%.1f,%.1f,%.1f,%d"), Marks[i].X, Marks[i].Y, Marks[i].Z, Yaw, Kind) + LINE_TERMINATOR;
+	}
+	FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("ShopSpots.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("%d shop(s) saved! Restart builds the counters + keepers"), Marks.Num()));
+}
+
+void UPhoneClientComponent::ClearShopSpots()
+{
+	WeedData::DeleteFile(TEXT("ShopSpots.txt"));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Shop spots cleared (restart applies)"));
+}
+
 void UPhoneClientComponent::ClearChillSpots()
 {
 	WeedData::DeleteFile(TEXT("ChillSpots.txt"));

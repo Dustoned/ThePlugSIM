@@ -9,6 +9,8 @@
 #include "World/MapBorder.h"
 #include "Customer/CustomerSpawner.h"
 #include "Customer/CustomerBase.h"
+#include "World/StoreCounter.h"
+#include "World/Atm.h"
 #include "Economy/EconomyComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "NavigationSystem.h"
@@ -32,6 +34,7 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -1621,6 +1624,51 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 			}
 		}
+	}
+
+	// WINKELS (ShopSpots.txt): op elke speler-markeerde plek een toonbank + ATM + verkoper.
+	if (!bShopsPlaced)
+	{
+		bShopsPlaced = true;
+		TArray<FString> ShopLines;
+		FFileHelper::LoadFileToStringArray(ShopLines, *WeedData::File(TEXT("ShopSpots.txt")));
+		int32 NShops = 0;
+		for (const FString& SL : ShopLines)
+		{
+			TArray<FString> Pc;
+			SL.ParseIntoArray(Pc, TEXT(","));
+			if (Pc.Num() < 5) { continue; }
+			const FVector Pos(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]));
+			const float Yaw = FCString::Atof(*Pc[3]);
+			const int32 KindI = FCString::Atoi(*Pc[4]);
+			EShopKind Kind = (KindI == 0) ? EShopKind::Grow : (KindI == 1) ? EShopKind::Supplies : EShopKind::Furniture;
+			FLinearColor Sign = (KindI == 0) ? FLinearColor(0.30f, 0.85f, 0.35f)
+				: (KindI == 1) ? FLinearColor(0.30f, 0.65f, 0.95f) : FLinearColor(0.65f, 0.45f, 0.85f);
+			const FRotator Rot(0.f, Yaw, 0.f);
+			FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AStoreCounter* Counter = W->SpawnActor<AStoreCounter>(AStoreCounter::StaticClass(), FTransform(Rot, Pos + FVector(0.f, 0.f, 5.f)), SP);
+			if (!Counter) { continue; }
+			Counter->Kind = Kind;
+			Counter->SetupVisual(Sign);
+			const FVector Fwd = Counter->GetActorForwardVector();
+			const FVector Tang(-Fwd.Y, Fwd.X, 0.f);
+			W->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rot, Pos + Tang * 210.f + FVector(0.f, 0.f, 2.f)), SP);
+			// Verkoper achter de balie (de klant-kant is +Fwd, dus de keeper staat op -Fwd).
+			float HalfH = 88.f;
+			if (const ACustomerBase* CDO = ACustomerBase::StaticClass()->GetDefaultObject<ACustomerBase>())
+			{
+				if (const UCapsuleComponent* Cap = CDO->GetCapsuleComponent()) { HalfH = Cap->GetScaledCapsuleHalfHeight(); }
+			}
+			FVector KPos = Pos - Fwd * 80.f; KPos.Z = Pos.Z + HalfH + 2.f;
+			if (ACustomerBase* Keeper = W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Rot, KPos), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+			{
+				Keeper->bShopkeeper = true;
+				Keeper->FinishSpawning(FTransform(Rot, KPos));
+				if (!Keeper->GetController()) { Keeper->SpawnDefaultController(); }
+			}
+			++NShops;
+		}
+		if (NShops > 0) { UE_LOG(LogWeedShop, Warning, TEXT("Winkels geplaatst: %d (toonbank + ATM + verkoper)"), NShops); }
 	}
 
 	// VIRTUELE CROWD: data-stappen + lichamen materialiseren/opruimen.

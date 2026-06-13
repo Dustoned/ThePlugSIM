@@ -333,6 +333,15 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->SaveHomeSpawn(); } }, 12);
 		BodyRow(HomeB, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// WINKEL-PLEKKEN: ga staan waar de toonbank komt (kijkend naar de klant-kant), zet een
+		// F9-marker en sla op -> werkende winkel (toonbank + ATM + verkoper) na een herstart.
+		UWeedActionButton* ShopB = MakeActionBtn(TEXT("Save shop spots (stand at counter)"), FLinearColor(0.4f, 0.3f, 0.15f),
+			[this]() { if (Phone.IsValid()) { Phone->SaveShopSpots(); } }, 12);
+		BodyRow(ShopB, FMargin(0.f, 0.f, 0.f, 2.f));
+		UWeedActionButton* ShopXB = MakeActionBtn(TEXT("Clear shop spots"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]() { if (Phone.IsValid()) { Phone->ClearShopSpots(); } }, 11);
+		BodyRow(ShopXB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// CHILL-PLEKKEN: F9-markers op hang-plekken -> NPC's lopen erheen en blijven er de dag staan.
 		UWeedActionButton* ChillB = MakeActionBtn(TEXT("Save chill spots (markers)"), FLinearColor(0.2f, 0.38f, 0.45f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveChillSpots(); } }, 12);
