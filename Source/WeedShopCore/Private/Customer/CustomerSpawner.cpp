@@ -22,6 +22,7 @@
 #include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "NavigationSystem.h"
 
 ACustomerSpawner::ACustomerSpawner()
@@ -40,10 +41,25 @@ namespace
 	FIntVector ChillKey(const FVector& P) { return FIntVector(FMath::RoundToInt(P.X / 50.f), FMath::RoundToInt(P.Y / 50.f), 0); }
 }
 
+namespace
+{
+	// Goedkope wandelaar: animatie alleen updaten als hij in beeld is + URO (lagere anim-rate
+	// op afstand). Nodig om ~70 NPC's te kunnen draaien zonder de framerate te slopen.
+	void MakeWalkerCheap(ACustomerBase* C)
+	{
+		if (USkeletalMeshComponent* Mesh = C->GetMesh())
+		{
+			Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+			Mesh->bEnableUpdateRateOptimizations = true;
+		}
+	}
+}
+
 void ACustomerSpawner::AdoptWalker(ACustomerBase* C, const TArray<FVector>* EntryPath)
 {
 	if (!C) { return; }
 	Spawned.Add(C);
+	MakeWalkerCheap(C);
 	if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->MaxWalkSpeed = 165.f; }
 	FPatrolState St;
 	if (EntryPath && EntryPath->Num() >= 2)
@@ -323,10 +339,26 @@ void ACustomerSpawner::TrySpawn()
 		// Hoogte vergelijken met het DICHTSTBIJZIJNDE route-punt (de route heeft verloop - tegen
 		// de eigen spawner meten doodde wandelaars die gewoon de ring afliepen). Bewoners
 		// (Resident_-id) zijn vrijgesteld: die zijn legitiem binnen/boven (trap, verdiepingen).
+		// Afstands-throttle: NPC's ver van alle spelers (120m+) tikken op halve snelheid - je
+		// ziet ze toch nauwelijks, en dit halveert de CPU-kosten van de verre helft van de crowd.
 		for (int32 wi = Spawned.Num() - 1; wi >= 0; --wi)
 		{
 			ACustomerBase* Cw0 = Spawned[wi];
 			if (!IsValid(Cw0)) { continue; }
+			{
+				float MinPd = TNumericLimits<float>::Max();
+				for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
+				{
+					const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+					if (Pp) { MinPd = FMath::Min(MinPd, FVector::Dist2D(Pp->GetActorLocation(), Cw0->GetActorLocation())); }
+				}
+				const bool bFar = MinPd > 12000.f;
+				Cw0->SetActorTickInterval(bFar ? 0.4f : 0.f);
+				if (UCharacterMovementComponent* Mv0 = Cw0->GetCharacterMovement())
+				{
+					Mv0->SetComponentTickInterval(bFar ? 0.15f : 0.f);
+				}
+			}
 			if (Cw0->NpcId.ToString().StartsWith(TEXT("Resident_"))) { continue; }
 			const FVector L0 = Cw0->GetActorLocation();
 			float RefZ = GetActorLocation().Z;
@@ -444,18 +476,40 @@ void ACustomerSpawner::TrySpawn()
 				const bool bMoving = Cw->GetVelocity().SizeSquared2D() > 25.f;
 				if (bArrived)
 				{
-					// Kruispunt: willekeurige volgende knoop, maar niet direct terug.
+					// Kruispunt: RECHTDOOR-voorkeur (75%) zodat ze niet constant oversteken of
+					// zigzaggen - afslaan is de uitzondering. Nooit direct terug.
 					const TArray<int32>& Nb = NetAdj[St.NextIdx];
 					int32 Pick = St.NextIdx;
 					if (Nb.Num() == 1) { Pick = Nb[0]; }
 					else if (Nb.Num() > 1)
 					{
-						for (int32 t = 0; t < 6; ++t)
+						FVector InDir = FVector::ZeroVector;
+						if (NetNodes.IsValidIndex(St.PrevIdx))
 						{
-							const int32 Cand = Nb[FMath::RandRange(0, Nb.Num() - 1)];
-							if (Cand != St.PrevIdx) { Pick = Cand; break; }
+							InDir = (NetNodes[St.NextIdx] - NetNodes[St.PrevIdx]).GetSafeNormal2D();
 						}
-						if (Pick == St.NextIdx) { Pick = Nb[0]; }
+						int32 Straight = -1;
+						float BestDot = -2.f;
+						for (int32 NbIdx : Nb)
+						{
+							if (NbIdx == St.PrevIdx) { continue; }
+							const float Dot = InDir.IsNearlyZero() ? 0.f
+								: FVector::DotProduct(InDir, (NetNodes[NbIdx] - NetNodes[St.NextIdx]).GetSafeNormal2D());
+							if (Dot > BestDot) { BestDot = Dot; Straight = NbIdx; }
+						}
+						if (Straight >= 0 && BestDot > 0.5f && FMath::FRand() < 0.75f)
+						{
+							Pick = Straight; // gewoon doorlopen
+						}
+						else
+						{
+							for (int32 t = 0; t < 6; ++t)
+							{
+								const int32 Cand = Nb[FMath::RandRange(0, Nb.Num() - 1)];
+								if (Cand != St.PrevIdx) { Pick = Cand; break; }
+							}
+							if (Pick == St.NextIdx) { Pick = (Straight >= 0) ? Straight : Nb[0]; }
+						}
 					}
 					St.PrevIdx = St.NextIdx;
 					St.NextIdx = Pick;
@@ -529,6 +583,7 @@ void ACustomerSpawner::TrySpawn()
 		{
 			Spawned.Add(C);
 			// Rustige wandeltred + start-patrouille: dichtstbijzijnde graaf-knoop.
+			MakeWalkerCheap(C);
 			if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->MaxWalkSpeed = 165.f; }
 			if (NetNodes.Num() >= 2)
 			{

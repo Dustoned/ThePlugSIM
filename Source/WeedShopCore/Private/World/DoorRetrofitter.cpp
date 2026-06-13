@@ -519,12 +519,13 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				if (Ring.Num() >= 2) { NpcRings.Add(Ring); }
 			}
-			// Deduplicatie: punten die te dicht op elkaar liggen (markers + interpolatie) samenvoegen.
+			// Deduplicatie: spawners hoeven niet om de 15m - om de ~40m is zat (de nav-invokers
+			// dekken 90m, en het loop-NETWERK regelt de spreiding van de wandelaars zelf).
 			for (int32 i = PendingSpawnerPoints.Num() - 1; i >= 0; --i)
 			{
 				for (int32 j = 0; j < i; ++j)
 				{
-					if (FVector::Dist2D(PendingSpawnerPoints[i], PendingSpawnerPoints[j]) < 1500.f)
+					if (FVector::Dist2D(PendingSpawnerPoints[i], PendingSpawnerPoints[j]) < 4000.f)
 					{
 						PendingSpawnerPoints.RemoveAt(i);
 						break;
@@ -604,9 +605,9 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (PendingSpawnerPoints.Num() > 0)
 			{
-				// Klanten-budget over de punten verdelen (niet 4x zoveel NPC's omdat er meer punten zijn).
-				RouteCustomersPerPoint = FMath::Clamp(40 / PendingSpawnerPoints.Num(), 2, 5);
-				UE_LOG(LogWeedShop, Warning, TEXT("NPC-routes: %d ringen -> %d spawn-punten (%d klanten per punt)"), Routes.Num(), PendingSpawnerPoints.Num(), RouteCustomersPerPoint);
+				// Klanten-budget: doel ~70 NPC's totaal, verdeeld over de spawn-punten.
+				RouteCustomersPerPoint = FMath::Clamp(FMath::RoundToInt(70.f / float(PendingSpawnerPoints.Num())), 1, 6);
+				UE_LOG(LogWeedShop, Warning, TEXT("NPC-routes: %d paden -> %d spawn-punten (%d klanten per punt, doel ~70)"), Routes.Num(), PendingSpawnerPoints.Num(), RouteCustomersPerPoint);
 			}
 			else
 			{
