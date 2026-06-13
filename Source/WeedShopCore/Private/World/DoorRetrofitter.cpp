@@ -1551,27 +1551,31 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				if (APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr) { BQ.AddIgnoredActor(Pp); }
 			}
+			// DICHTSTBIJZIJNDE wand op het WorldStatic-kanaal (muren = static; meubels zijn dynamic
+			// en tellen dus niet mee), op twee hoogtes -> de kleinste geldige hit is de echte wand.
 			auto Wall = [&](const FVector& Dir) -> float
 			{
-				float Best = -1.f;
-				for (float Hz : { 40.f, 150.f }) // op vloer-hoogte EN op tafel-hoogte meten
+				float Near = -1.f;
+				for (float Hz : { 40.f, 150.f })
 				{
 					const FVector S = HomeAnchor + FVector(0.f, 0.f, Hz);
 					FHitResult H;
-					const float D = W->LineTraceSingleByChannel(H, S, S + Dir * 2500.f, ECC_WorldStatic, BQ) ? H.Distance : -1.f;
-					Best = FMath::Max(Best, D);
+					if (W->LineTraceSingleByChannel(H, S, S + Dir * 2500.f, ECC_WorldStatic, BQ))
+					{
+						Near = (Near < 0.f) ? H.Distance : FMath::Min(Near, H.Distance);
+					}
 				}
-				return Best;
+				return Near;
 			};
 			const float Xp = Wall(FVector(1, 0, 0)), Xn = Wall(FVector(-1, 0, 0));
 			const float Yp = Wall(FVector(0, 1, 0)), Yn = Wall(FVector(0, -1, 0));
 			if (Xp > 150.f && Xn > 150.f && Yp > 150.f && Yn > 150.f)
 			{
-				// Ruime box: tot de wand + 120 marge, en elke as minstens 800 half zodat je nooit
-				// "buiten je huis" krijgt terwijl je er gewoon in staat.
-				auto Half = [](float Wall, float Anchor, int Sign) { return FMath::Max(800.f, Wall + 120.f); };
-				HomeBoxMin = FVector(HomeAnchor.X - Half(Xn, 0, 0), HomeAnchor.Y - Half(Yn, 0, 0), HomeAnchor.Z - 220.f);
-				HomeBoxMax = FVector(HomeAnchor.X + Half(Xp, 0, 0), HomeAnchor.Y + Half(Yp, 0, 0), HomeAnchor.Z + 520.f);
+				// Box tot de echte wand + 90 marge (zo kun je tot tegen de muur plaatsen), met een
+				// kleine ondergrens. Geen gang-bleed meer (dichtstbijzijnde wand i.p.v. de verste).
+				auto Half = [](float WallDist) { return FMath::Max(350.f, WallDist + 90.f); };
+				HomeBoxMin = FVector(HomeAnchor.X - Half(Xn), HomeAnchor.Y - Half(Yn), HomeAnchor.Z - 220.f);
+				HomeBoxMax = FVector(HomeAnchor.X + Half(Xp), HomeAnchor.Y + Half(Yp), HomeAnchor.Z + 520.f);
 				bHomeBoxReady = true;
 				UE_LOG(LogWeedShop, Warning, TEXT("Huis-box gemeten: X %.0f..%.0f Y %.0f..%.0f"), HomeBoxMin.X, HomeBoxMax.X, HomeBoxMin.Y, HomeBoxMax.Y);
 			}
