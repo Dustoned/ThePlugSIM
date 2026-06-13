@@ -412,21 +412,13 @@ void ACustomerSpawner::TrySpawn()
 			for (const TObjectPtr<ACustomerBase>& Cw : Spawned)
 			{
 				if (!IsValid(Cw)) { continue; }
-				// PRAAT-PAUZE: een wandelaar stopt alleen als de speler vlak bij hem staat
-				// (praat/deal-afstand) en loopt direct weer door zodra je wegloopt. Koopwens of
-				// niet - niemand staat meer zomaar stil op straat.
+				// PRAAT-PAUZE: ALLEEN tijdens echte interactie (deal-HUD open met deze klant)
+				// staat hij stil - daarna pakt hij z'n wandeling direct weer op. Dichtbij staan
+				// alleen is geen reden om te stoppen.
+				if (World->GetRealTimeSeconds() < Cw->ConversationHoldUntil)
 				{
-					float MinPd = TNumericLimits<float>::Max();
-					for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
-					{
-						const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
-						if (Pp) { MinPd = FMath::Min(MinPd, FVector::Dist2D(Pp->GetActorLocation(), Cw->GetActorLocation())); }
-					}
-					if (MinPd < 350.f)
-					{
-						if (AAIController* AIp = Cast<AAIController>(Cw->GetController())) { AIp->StopMovement(); }
-						continue;
-					}
+					if (AAIController* AIp = Cast<AAIController>(Cw->GetController())) { AIp->StopMovement(); }
+					continue;
 				}
 				FPatrolState& St = Patrol.FindOrAdd(Cw);
 				const FVector Cur = Cw->GetActorLocation();

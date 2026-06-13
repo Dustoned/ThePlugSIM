@@ -437,6 +437,11 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	UPhoneClientComponent* Ph = GetPhone();
 	ACustomerBase* C = Ph ? Ph->GetDealCustomer() : nullptr;
 	bool bOpen = Ph && Ph->IsDealOpen() && C != nullptr;
+	// Zolang dit HUD open staat: de klant pauzeert z'n wandeling (en loopt daarna weer door).
+	if (bOpen && GetWorld())
+	{
+		C->ConversationHoldUntil = GetWorld()->GetRealTimeSeconds() + 0.6f;
+	}
 
 	// Loop je weg -> sluit (alleen dichtbij dealen).
 	if (bOpen)

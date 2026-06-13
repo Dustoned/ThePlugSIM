@@ -78,6 +78,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "WeedShop|Customer")
 	FName NpcId = NAME_None;
 
+	// PRAAT-PAUZE: zolang dit moment in de toekomst ligt staat de wandelaar stil (het deal-HUD
+	// houdt dit elke tick vers zolang het open is). Daarna loopt hij gewoon weer door.
+	float ConversationHoldUntil = 0.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Order, Category = "WeedShop|Customer")
 	FName DesiredProductId = NAME_None;
 
