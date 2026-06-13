@@ -155,6 +155,19 @@ void ACustomerBase::UpdateNpcAnim(float DeltaSeconds)
 	if (UAnimSequence* Seq = (NewState == 1) ? NpcWalk : NpcIdle) { M->PlayAnimation(Seq, true); }
 }
 
+void ACustomerBase::ForceIdleAnimNow()
+{
+	NpcMoveHold = 0.f;
+	if (NpcAnimState != 0)
+	{
+		NpcAnimState = 0;
+		if (USkeletalMeshComponent* M = GetMesh())
+		{
+			if (NpcIdle) { M->PlayAnimation(NpcIdle, true); }
+		}
+	}
+}
+
 bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAllowPartialPath, bool bForceRepath)
 {
 	if (!GetController())

@@ -447,6 +447,7 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		// zodat de walk-animatie meteen naar idle klapt zodra je het gesprek opent.
 		if (AAIController* AI = Cast<AAIController>(C->GetController())) { AI->StopMovement(); }
 		if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->StopMovementImmediately(); }
+		C->ForceIdleAnimNow(); // voorbij de walk-naijler: animatie klapt dit frame naar idle
 	}
 
 	// Loop je weg -> sluit (alleen dichtbij dealen).

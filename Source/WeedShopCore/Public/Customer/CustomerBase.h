@@ -82,6 +82,9 @@ public:
 	// houdt dit elke tick vers zolang het open is). Daarna loopt hij gewoon weer door.
 	float ConversationHoldUntil = 0.f;
 
+	// Animatie ONMIDDELLIJK naar idle (voorbij de 0,5s walk-naijler) - voor het deal-scherm.
+	void ForceIdleAnimNow();
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Order, Category = "WeedShop|Customer")
 	FName DesiredProductId = NAME_None;
 
