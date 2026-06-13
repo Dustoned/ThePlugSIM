@@ -317,6 +317,22 @@ namespace WeedUI
 			if (Has(TEXT("Fert")))                                       return { TEXT("fertilizer"),FLinearColor(0.55f, 0.85f, 0.55f), EIcon::Leaf };
 			if (Has(TEXT("Spray")) || Has(TEXT("Pest")))                 return { TEXT("spray"),     FLinearColor(0.6f, 0.9f, 0.7f),   EIcon::Gear };
 
+			// Gootsteen -> water-icoon (i.p.v. het generieke meubel).
+			if (ItemId == TEXT("Sink"))                                  return { TEXT("water"),     FLinearColor(0.4f, 0.7f, 0.95f),   EIcon::Coin };
+			// Kluis/vault -> kist-icoon (opslag/slot).
+			if (Has(TEXT("Safe")) || Has(TEXT("Vault")))                 return { TEXT("safe"),      FLinearColor(0.6f, 0.62f, 0.68f),  EIcon::Home };
+			// Bouwstukken (muren/vloeren/plafonds) -> blok-icoon.
+			if (Has(TEXT("Struct_")))                                    return { TEXT("block"),     FLinearColor(0.6f, 0.62f, 0.66f),  EIcon::Gear };
+			// Gear-upgrades & machine-upgrades -> upgrade-icoon (chevron/pijl).
+			if (Has(TEXT("Gear_")) || Has(TEXT("DryUp_")) || Has(TEXT("ProcUp_")))
+			                                                             return { TEXT("upgrade"),   FLinearColor(0.6f, 0.85f, 0.95f),  EIcon::Upgrade };
+			// Verwerkings-machines (hasj-/edibles-/concentraat-keten) -> machine/gear-icoon.
+			if (Has(TEXT("Press")) || Has(TEXT("Mesh_")) || Has(TEXT("Oven")) || Has(TEXT("Pan_"))
+				|| Has(TEXT("Rosin")) || Has(TEXT("Iso_")) || Has(TEXT("Moon")) || Has(TEXT("Oil_")) || Has(TEXT("Heatpress")))
+			                                                             return { TEXT("machine"),   FLinearColor(0.7f, 0.74f, 0.8f),   EIcon::Gear };
+			// Kledingkast -> meubel-icoon (eigen kleur).
+			if (Has(TEXT("Wardrobe")))                                   return { TEXT("wardrobe"),  FLinearColor(0.62f, 0.55f, 0.7f),  EIcon::Home };
+
 			// Specifieke meubels (eigen icoon); anders de generieke catch-all.
 			if (ItemId == TEXT("Fridge"))                                return { TEXT("fridge"),    FLinearColor(0.6f, 0.7f, 0.8f),    EIcon::Home };
 			if (ItemId == TEXT("Mattress") || Has(TEXT("Bed")))          return { TEXT("bed"),       FLinearColor(0.7f, 0.6f, 0.75f),   EIcon::Home };
@@ -429,6 +445,17 @@ namespace WeedUI
 			else if (K == TEXT("table"))     Add({ TEXT("furniture") });
 			else if (K == TEXT("shelf"))     Add({ TEXT("bookshelf"), TEXT("furniture") });
 			else if (K == TEXT("chest"))     Add({ TEXT("furniture") });
+			else if (K == TEXT("safe"))      Add({ TEXT("chest"), TEXT("bank"), TEXT("furniture") });
+			else if (K == TEXT("block"))     Add({ TEXT("furniture") });
+			else if (K == TEXT("upgrade"))   Add({ TEXT("ui_upgrade"), TEXT("gear"), TEXT("ui_gear") });
+			else if (K == TEXT("machine"))   Add({ TEXT("press"), TEXT("oven"), TEXT("rack"), TEXT("ui_gear") });
+			else if (K == TEXT("hash"))      Add({ TEXT("ui_hash"), TEXT("weed") });
+			else if (K == TEXT("crystals"))  Add({ TEXT("weed") });
+			else if (K == TEXT("butter"))    Add({ TEXT("edible"), TEXT("furniture") });
+			else if (K == TEXT("mix"))       Add({ TEXT("butter"), TEXT("edible") });
+			else if (K == TEXT("baked"))     Add({ TEXT("edible"), TEXT("weed") });
+			else if (K == TEXT("edible"))    Add({ TEXT("baked"), TEXT("weed") });
+			else if (K == TEXT("wardrobe"))  Add({ TEXT("furniture") });
 			else if (K == TEXT("furniture")) Add({ TEXT("stash"), TEXT("inventory"), TEXT("box") });
 			return C;
 		}
