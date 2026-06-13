@@ -1539,7 +1539,12 @@ void ADoorRetrofitter::ScanAndConvert()
 				const float SwingSide = (StarterDoor->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
 				Inside = DL + Fw * 240.f * SwingSide;
 			}
-			Pr->SetActorLocation(Inside + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
+			HomeAnchor = Inside + FVector(0.f, 0.f, 110.f);
+			Pr->SetActorLocation(HomeAnchor, false, nullptr, ETeleportType::TeleportPhysics);
+			// SETTLE-venster: de penthouse-vloer (world-partition) is bij het teleporteren vaak nog
+			// niet ingestreamd, dus val je erdoorheen naar een lagere verdieping. Hou de speler 12s
+			// op de thuis-plek tot de vloer-collision geladen is - zie de check in TickVirtualMove.
+			HomeSettleUntil = W->GetRealTimeSeconds() + 12.f;
 			if (UPhoneClientComponent* Phw = Pr->FindComponentByClass<UPhoneClientComponent>())
 			{
 				Phw->Toast(FString::Printf(TEXT("Welcome home - Apt %d. Rent: EUR 500 due every 31 days."), StarterDoor->GetAptNumber()), FColor::Cyan, 6.f);
@@ -2377,6 +2382,26 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 
 void ADoorRetrofitter::TickVirtualMove()
 {
+	// THUIS-SETTLE (10Hz): val je vlak na het thuis-teleporteren door de nog-niet-geladen
+	// penthouse-vloer, dan zet ik je terug op de thuis-plek tot de vloer-collision er is. Stopt
+	// zodra het venster om is of je bewust wegloopt (XY > 6m van de thuis-plek).
+	if (UWorld* WS = GetWorld())
+	{
+		if (WS->GetRealTimeSeconds() < HomeSettleUntil && !HomeAnchor.IsNearlyZero())
+		{
+			APlayerController* PC = WS->GetFirstPlayerController();
+			APawn* Pp = PC ? PC->GetPawn() : nullptr;
+			if (Pp)
+			{
+				const FVector L = Pp->GetActorLocation();
+				if (FVector::Dist2D(L, HomeAnchor) < 600.f && L.Z < HomeAnchor.Z - 200.f)
+				{
+					Pp->SetActorLocation(HomeAnchor, false, nullptr, ETeleportType::TeleportPhysics);
+					if (UMovementComponent* Mv = Pp->FindComponentByClass<UMovementComponent>()) { Mv->StopMovementImmediately(); }
+				}
+			}
+		}
+	}
 	if (GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
 	const float Step = 16.5f; // 165 cm/s wandeltred op een 0,1s-tik: vloeiend op de kaart
 	for (FVirtualWalker& V : Crowd)

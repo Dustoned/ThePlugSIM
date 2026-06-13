@@ -112,6 +112,8 @@ protected:
 	// Starter-huis + huur (EUR 500 per 31 dagen, voortgang in Saved/RentState.txt).
 	TWeakObjectPtr<class ACityDoor> StarterDoor;
 	bool bMovedIntoHome = false;    // speler 1x per sessie in z'n appartement zetten
+	FVector HomeAnchor = FVector::ZeroVector; // thuis-plek (voor het settle-venster)
+	float HomeSettleUntil = 0.f;    // tot dit moment terugzetten als je door de vloer valt
 	int32 RentDueDay = -1;          // dag-nummer waarop de huur vervalt
 	int32 LastRentSeenLeft = -9999; // om 1x per dag te toasten/saven
 	bool bWalkersSpawned = false;   // klanten-spawner + nav-invoker een keer plaatsen
