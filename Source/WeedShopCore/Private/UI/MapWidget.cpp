@@ -1,5 +1,6 @@
 #include "UI/MapWidget.h"
-#include "World/CityDoor.h" // FriendlyNpcName fallback
+#include "World/CityDoor.h"
+#include "World/StoreCounter.h" // FriendlyNpcName fallback
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -614,6 +615,31 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		break;
 	}
+	// WINKELS: duidelijk geel winkel-icoon op elke toonbank, boven de NPC-stippen.
+	int32 NShop = 0;
+	for (TActorIterator<AStoreCounter> SIt(GetWorld()); SIt; ++SIt)
+	{
+		if (!IsValid(*SIt)) { continue; }
+		const FVector L = SIt->GetActorLocation();
+		const FVector2D Pos = WorldToCanvas(L.X, L.Y);
+		while (ShopIcons.Num() <= NShop)
+		{
+			USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
+			SB->SetWidthOverride(26.f); SB->SetHeightOverride(26.f);
+			SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Shop, 26.f, FLinearColor(1.f, 0.85f, 0.1f)));
+			UCanvasPanelSlot* Cs2 = Canvas->AddChildToCanvas(SB);
+			Cs2->SetAutoSize(false); Cs2->SetSize(FVector2D(26.f, 26.f)); Cs2->SetAlignment(FVector2D(0.5f, 0.5f)); Cs2->SetZOrder(28);
+			ShopIcons.Add(SB);
+		}
+		if (UWidget* Ico = ShopIcons[NShop])
+		{
+			if (UCanvasPanelSlot* Cs2 = Cast<UCanvasPanelSlot>(Ico->Slot)) { Cs2->SetPosition(Pos); }
+			Ico->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		++NShop;
+	}
+	for (int32 k = NShop; k < ShopIcons.Num(); ++k) { if (ShopIcons[k]) { ShopIcons[k]->SetVisibility(ESlateVisibility::Collapsed); } }
+
 	// Overtollige markers verbergen.
 	for (int32 k = NRoam; k < NpcDots.Num(); ++k) { if (NpcDots[k]) { NpcDots[k]->SetVisibility(ESlateVisibility::Collapsed); } }
 	for (int32 k = NNeed; k < NeedIcons.Num(); ++k) { if (NeedIcons[k]) { NeedIcons[k]->SetVisibility(ESlateVisibility::Collapsed); } }

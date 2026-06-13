@@ -1,5 +1,5 @@
 MoonIntensity=0.429
-SunIntensity=3.441
+SunIntensity=1.412
 SkyNight=0.850
 SkyDay=1.000
 MoonPitch=-52.0
