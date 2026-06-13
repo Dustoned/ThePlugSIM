@@ -330,6 +330,10 @@ public:
 	// Winkel-plekken: F9-markers -> op elk een werkende winkel (toonbank + ATM + verkoper).
 	void SaveShopSpots();
 	void ClearShopSpots();
+	// Welke soort de eerstvolgende opgeslagen winkel(s) worden (0=Grow 1=Supplies 2=Furniture).
+	int32 SelectedShopKind = 0;
+	int32 GetSelectedShopKind() const { return SelectedShopKind; }
+	void CycleSelectedShopKind() { SelectedShopKind = (SelectedShopKind + 1) % 3; }
 	void ClearMapBorder();
 	UFUNCTION(Server, Reliable)
 	void ServerGiveBuildKit();

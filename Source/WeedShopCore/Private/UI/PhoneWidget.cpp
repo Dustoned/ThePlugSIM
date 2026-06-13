@@ -333,8 +333,15 @@ void UPhoneWidget::FillSettingsBody()
 			[this]() { if (Phone.IsValid()) { Phone->SaveHomeSpawn(); } }, 12);
 		BodyRow(HomeB, FMargin(0.f, 0.f, 0.f, 8.f));
 
-		// WINKEL-PLEKKEN: ga staan waar de toonbank komt (kijkend naar de klant-kant), zet een
-		// F9-marker en sla op -> werkende winkel (toonbank + ATM + verkoper) na een herstart.
+		// WINKEL-PLEKKEN: kies de SOORT, ga staan waar de toonbank komt (kijkend naar de klant-
+		// kant), zet een F9-marker en sla op -> werkende winkel (toonbank + ATM + verkoper).
+		{
+			static const TCHAR* KN[3] = { TEXT("Grow shop"), TEXT("Supplies"), TEXT("Furniture") };
+			const int32 SelK = Phone.IsValid() ? FMath::Clamp(Phone->GetSelectedShopKind(), 0, 2) : 0;
+			UWeedActionButton* ShopKindB = MakeActionBtn(FString::Printf(TEXT("Shop type: %s  (tap to change)"), KN[SelK]), FLinearColor(0.32f, 0.36f, 0.2f),
+				[this]() { if (Phone.IsValid()) { Phone->CycleSelectedShopKind(); FillSettingsBody(); } }, 12);
+			BodyRow(ShopKindB, FMargin(0.f, 0.f, 0.f, 2.f));
+		}
 		UWeedActionButton* ShopB = MakeActionBtn(TEXT("Save shop spots (stand at counter)"), FLinearColor(0.4f, 0.3f, 0.15f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveShopSpots(); } }, 12);
 		BodyRow(ShopB, FMargin(0.f, 0.f, 0.f, 2.f));
