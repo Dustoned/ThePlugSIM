@@ -1,4 +1,4 @@
-﻿#include "World/DoorRetrofitter.h"
+#include "World/DoorRetrofitter.h"
 
 #include "WeedShopCore.h"
 #include "World/CityDoor.h"
@@ -135,6 +135,9 @@ void ADoorRetrofitter::BeginPlay()
 
 	ScanAndConvert();
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);
+	// Virtuele crowd beweegt op een eigen snelle tik (10x/s, kleine stapjes): vloeiend op de
+	// kaart, en het zware werk (traces voor materialiseren) blijft op de 2s-pass.
+	GetWorldTimerManager().SetTimer(CrowdMoveTimer, this, &ADoorRetrofitter::TickVirtualMove, 0.1f, true);
 
 	// Dev: -ElevScan -> pak de LAATSTE gemarkeerde spot (MarkedSpots.txt) op deze map, teleporteer de
 	// speler erheen (streamt het gebouw in) en dump de elevator-meshes naar Saved/ElevScan.txt.
@@ -2250,6 +2253,69 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 	}
 }
 
+void ADoorRetrofitter::TickVirtualMove()
+{
+	if (GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
+	const float Step = 16.5f; // 165 cm/s wandeltred op een 0,1s-tik: vloeiend op de kaart
+	for (FVirtualWalker& V : Crowd)
+	{
+		if (V.Body.IsValid()) { continue; } // lichaam beweegt zichzelf
+		const FVector Tgt = GraphNodes[V.NextIdx];
+		const FVector To2 = Tgt - V.Pos;
+		const float D2 = To2.Size2D();
+		if (D2 > Step)
+		{
+			V.Pos += To2.GetSafeNormal2D() * Step;
+			continue;
+		}
+		V.Pos = Tgt;
+		// Volgende knoop: rechtdoor-voorkeur, geen U-bocht, met strip-voorkeur.
+		const TArray<int32>& Nb = GraphAdj[V.NextIdx];
+		if (Nb.Num() == 0) { continue; }
+		int32 Pick = Nb[FMath::RandRange(0, Nb.Num() - 1)];
+		FVector InDir = FVector::ZeroVector;
+		if (GraphNodes.IsValidIndex(V.PrevIdx)) { InDir = (GraphNodes[V.NextIdx] - GraphNodes[V.PrevIdx]).GetSafeNormal2D(); }
+		int32 Straight = -1;
+		float BestDot = -2.f;
+		for (int32 NbIdx : Nb)
+		{
+			if (NbIdx == V.PrevIdx) { continue; }
+			const float Dot = InDir.IsNearlyZero() ? 0.f : FVector::DotProduct(InDir, (GraphNodes[NbIdx] - GraphNodes[V.NextIdx]).GetSafeNormal2D());
+			if (Dot > BestDot) { BestDot = Dot; Straight = NbIdx; }
+		}
+		if (Straight >= 0 && BestDot > 0.5f && FMath::FRand() < 0.75f) { Pick = Straight; }
+		else if (Pick == V.PrevIdx && Nb.Num() > 1)
+		{
+			for (int32 t = 0; t < 4 && Pick == V.PrevIdx; ++t) { Pick = Nb[FMath::RandRange(0, Nb.Num() - 1)]; }
+		}
+		if (V.bStripLover && Nb.Num() > 1)
+		{
+			const bool bCurIn = GraphNodes[V.NextIdx].X > -1500.f;
+			const bool bPickIn = GraphNodes[Pick].X > -1500.f;
+			if (bCurIn && !bPickIn && FMath::FRand() < 0.85f)
+			{
+				for (int32 NbIdx : Nb)
+				{
+					if (NbIdx != V.PrevIdx && GraphNodes[NbIdx].X > -1500.f) { Pick = NbIdx; break; }
+				}
+			}
+			else if (!bCurIn && FMath::FRand() < 0.5f)
+			{
+				int32 BestNb = Pick;
+				float BestX = -TNumericLimits<float>::Max();
+				for (int32 NbIdx : Nb)
+				{
+					if (NbIdx == V.PrevIdx) { continue; }
+					if (GraphNodes[NbIdx].X > BestX) { BestX = GraphNodes[NbIdx].X; BestNb = NbIdx; }
+				}
+				Pick = BestNb;
+			}
+		}
+		V.PrevIdx = V.NextIdx;
+		V.NextIdx = Pick;
+	}
+}
+
 void ADoorRetrofitter::GetVirtualWalkerPositions(TArray<FVector>& Out) const
 {
 	for (const FVirtualWalker& V : Crowd)
@@ -2340,67 +2406,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			}
 			continue;
 		}
-		// DATA-STAP: 2 seconden wandelen richting de volgende knoop (zelfde tred als lichamen).
-		const FVector Tgt = GraphNodes[V.NextIdx];
-		const FVector To2 = Tgt - V.Pos;
-		const float D2 = To2.Size2D();
-		const float Step = 330.f;
-		if (D2 <= Step)
-		{
-			V.Pos = Tgt;
-			// Volgende knoop: rechtdoor-voorkeur, geen U-bocht.
-			const TArray<int32>& Nb = GraphAdj[V.NextIdx];
-			if (Nb.Num() > 0)
-			{
-				int32 Pick = Nb[FMath::RandRange(0, Nb.Num() - 1)];
-				FVector InDir = FVector::ZeroVector;
-				if (GraphNodes.IsValidIndex(V.PrevIdx)) { InDir = (GraphNodes[V.NextIdx] - GraphNodes[V.PrevIdx]).GetSafeNormal2D(); }
-				int32 Straight = -1;
-				float BestDot = -2.f;
-				for (int32 NbIdx : Nb)
-				{
-					if (NbIdx == V.PrevIdx) { continue; }
-					const float Dot = InDir.IsNearlyZero() ? 0.f : FVector::DotProduct(InDir, (GraphNodes[NbIdx] - GraphNodes[V.NextIdx]).GetSafeNormal2D());
-					if (Dot > BestDot) { BestDot = Dot; Straight = NbIdx; }
-				}
-				if (Straight >= 0 && BestDot > 0.5f && FMath::FRand() < 0.75f) { Pick = Straight; }
-				else if (Pick == V.PrevIdx && Nb.Num() > 1)
-				{
-					for (int32 t = 0; t < 4 && Pick == V.PrevIdx; ++t) { Pick = Nb[FMath::RandRange(0, Nb.Num() - 1)]; }
-				}
-				// STRIP-VOORKEUR: strip-volk verlaat de strip-zone maar zelden, en wie er toch
-				// vanaf gedwaald is, drijft zachtjes terug richting de strip (hogere X).
-				if (V.bStripLover && Nb.Num() > 1)
-				{
-					const bool bCurIn = GraphNodes[V.NextIdx].X > -1500.f;
-					const bool bPickIn = GraphNodes[Pick].X > -1500.f;
-					if (bCurIn && !bPickIn && FMath::FRand() < 0.85f)
-					{
-						for (int32 NbIdx : Nb)
-						{
-							if (NbIdx != V.PrevIdx && GraphNodes[NbIdx].X > -1500.f) { Pick = NbIdx; break; }
-						}
-					}
-					else if (!bCurIn && FMath::FRand() < 0.5f)
-					{
-						int32 BestNb = Pick;
-						float BestX = -TNumericLimits<float>::Max();
-						for (int32 NbIdx : Nb)
-						{
-							if (NbIdx == V.PrevIdx) { continue; }
-							if (GraphNodes[NbIdx].X > BestX) { BestX = GraphNodes[NbIdx].X; BestNb = NbIdx; }
-						}
-						Pick = BestNb;
-					}
-				}
-				V.PrevIdx = V.NextIdx;
-				V.NextIdx = Pick;
-			}
-		}
-		else
-		{
-			V.Pos += To2.GetSafeNormal2D() * Step;
-		}
+		// (Beweging gebeurt in TickVirtualMove op 10x/s - hier alleen het zware werk.)
 		// MATERIALISEREN: speler binnen bereik, niet pal in beeld, en echte straat onder de voeten.
 		const float Pd = MinPlayerDist(V.Pos);
 		if (Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))

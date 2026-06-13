@@ -1,4 +1,4 @@
-﻿// ADoorRetrofitter - maakt statische deur-bladen in een asset-pack-map (bv. CityBeachStrip) werkend:
+// ADoorRetrofitter - maakt statische deur-bladen in een asset-pack-map (bv. CityBeachStrip) werkend:
 // vindt StaticMeshActors met bekende deur-blad-meshes (pivot op het scharnier) en vervangt ze door een
 // ACityDoor met datzelfde blad (F = open/dicht, NPC-auto-open, settled-collision). Scant periodiek door
 // zodat ook gebouwen die later in-streamen (level instances / world partition) hun deuren krijgen.
@@ -98,7 +98,9 @@ protected:
 		TWeakObjectPtr<class ACustomerBase> Body;
 	};
 	TArray<FVirtualWalker> Crowd;
-	void TickVirtualCrowd();
+	void TickVirtualCrowd();      // 2s: lichamen materialiseren/opruimen (traces)
+	void TickVirtualMove();       // 10x per seconde: vloeiende data-stapjes (alleen rekenwerk)
+	FTimerHandle CrowdMoveTimer;
 
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).
 	void FixBalconyPuiPositions();
