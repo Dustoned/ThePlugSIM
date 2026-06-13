@@ -571,6 +571,50 @@ void ACustomerSpawner::TrySpawn()
 			}
 		}
 		if (Spawned.Num() >= MaxCustomers) { return; }
+		// DAG-START VULLING: bij sessiestart en elke nieuwe dag gooit de spawner zichzelf in
+		// een klap vol (zonder de niet-in-beeld-regel) - de hele strip staat dan meteen vol
+		// volk, boven en onder. Daarna geldt de normale druppel-aanvulling met alle regels.
+		int32 BurstDay = -1;
+		if (AWeedShopGameState* GSb = World->GetGameState<AWeedShopGameState>())
+		{
+			if (GSb->GetDayCycle()) { BurstDay = GSb->GetDayCycle()->GetDayNumber(); }
+		}
+		if (BurstDay >= 0 && BurstDay != LastBurstDay)
+		{
+			LastBurstDay = BurstDay;
+			int32 Guard = MaxCustomers * 8;
+			while (Spawned.Num() < MaxCustomers && Guard-- > 0)
+			{
+				FNavLocation BNav;
+				const FVector BAround = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
+				if (!Nav->ProjectPointToNavigation(BAround, BNav, FVector(400.f, 400.f, ZTol))) { continue; }
+				if (FMath::Abs(BNav.Location.Z - GetActorLocation().Z) > ZTol) { continue; }
+				if (!IsOnStreetSurface(World, BNav.Location)) { continue; }
+				FActorSpawnParameters BSP;
+				BSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				TSubclassOf<ACustomerBase> BCls = CustomerClass;
+				if (!BCls) { BCls = ACustomerBase::StaticClass(); }
+				if (ACustomerBase* BC = World->SpawnActor<ACustomerBase>(BCls, FTransform(BNav.Location + FVector(0.f, 0.f, 100.f)), BSP))
+				{
+					Spawned.Add(BC);
+					MakeWalkerCheap(BC);
+					if (UCharacterMovementComponent* BMv = BC->GetCharacterMovement()) { BMv->MaxWalkSpeed = 165.f; }
+					if (NetNodes.Num() >= 2)
+					{
+						FPatrolState BSt;
+						float BBD = TNumericLimits<float>::Max();
+						for (int32 ri = 0; ri < NetNodes.Num(); ++ri)
+						{
+							const float Dd = FVector::DistSquared2D(NetNodes[ri], BC->GetActorLocation());
+							if (Dd < BBD) { BBD = Dd; BSt.NextIdx = ri; }
+						}
+						BSt.PrevIdx = -1;
+						Patrol.Add(BC, BSt);
+					}
+				}
+			}
+			return;
+		}
 		// SNELLER VULLEN: meerdere kandidaat-pogingen per tik - afkeuringen (geen straat onder
 		// de voeten, verkeerde hoogte) verspillen dan geen hele beurt meer. De stad vult zo in
 		// seconden in plaats van minuten, ook de overkant van de grote weg.

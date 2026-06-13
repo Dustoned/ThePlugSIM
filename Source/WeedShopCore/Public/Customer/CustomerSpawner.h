@@ -159,6 +159,7 @@ protected:
 		int32 ChillDay = -1;
 	};
 	TMap<TWeakObjectPtr<ACustomerBase>, FPatrolState> Patrol; // per wandelaar: volgend route-punt + richting
+	int32 LastBurstDay = -1; // dag-start vulling: 1x per dag het quotum in een klap vullen
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ACustomerBase>> Spawned;
