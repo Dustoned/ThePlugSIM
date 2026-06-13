@@ -119,14 +119,8 @@ void ADayNightController::BeginPlay()
 	// Grafische keuze van de speler: Lumen uit = GI en reflecties op de goedkope methode.
 	{
 		FString GfxTxt;
-		if (FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt"))) && GfxTxt.Contains(TEXT("LumenOff=1")))
-		{
-			if (GEngine)
-			{
-				GEngine->Exec(GetWorld(), TEXT("r.DynamicGlobalIlluminationMethod 0"));
-				GEngine->Exec(GetWorld(), TEXT("r.ReflectionMethod 0"));
-			}
-		}
+		const bool bLumenOff = FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt"))) && GfxTxt.Contains(TEXT("LumenOff=1"));
+		WeedShop_ApplyLumen(bLumenOff);
 	}
 
 	// PACK-MAPS: MINIMAL-modus - overdag blijft de stock-look 100% intact (geen zon/fog/scenario-

@@ -14,6 +14,10 @@ DECLARE_LOG_CATEGORY_EXTERN(LogWeedShop, Log, All);
 // map-load toont dan het laadscherm. De boot naar het hoofdmenu zet dit NIET -> daar geen laadscherm.
 WEEDSHOPCORE_API void WeedShop_RequestGameLoadingScreen();
 
+// Lumen (GI + reflecties) aan/uit via de render-cvars. Gedeeld door de settings-knop en de
+// opstart-toepassing zodat de speler-keuze altijd dezelfde weg loopt.
+WEEDSHOPCORE_API void WeedShop_ApplyLumen(bool bLumenOff);
+
 // GEBAKKEN DATA: wereld-configuratie (map-border, kamer-jobs, deur-sloten, licht-instellingen)
 // leeft tijdens het ontwikkelen in Saved/, maar Saved/ gaat NIET mee in een gepackagede build.
 // Een snapshot staat daarom in Content/BakedData/ (packaged via DirectoriesToAlwaysStageAsUFS).

@@ -15,12 +15,42 @@
 #include "Styling/CoreStyle.h"
 #include "Misc/Paths.h"
 #include "UObject/UObjectGlobals.h"
+#include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY(LogWeedShop);
 
 // Alleen tonen bij de eerstvolgende IN-GAME level-reload (gezet door New Game/Load/Continue).
 static bool GShowGameLoadingScreen = false;
 void WeedShop_RequestGameLoadingScreen() { GShowGameLoadingScreen = true; }
+
+// Lumen (GI + reflecties) aan/uit. Zet de cvars DIRECT via de console-manager op de hoogste
+// game-prioriteit, plus de harde Lumen-Allow-schakelaars (die deinst niets terug). Logt de
+// werkelijke waardes na afloop zodat we kunnen verifieren dat het echt geschakeld is.
+void WeedShop_ApplyLumen(bool bLumenOff)
+{
+	IConsoleManager& CM = IConsoleManager::Get();
+	auto SetCV = [&](const TCHAR* Name, int32 Val)
+	{
+		if (IConsoleVariable* CV = CM.FindConsoleVariable(Name))
+		{
+			CV->Set(Val, ECVF_SetByConsole);
+		}
+	};
+	SetCV(TEXT("r.DynamicGlobalIlluminationMethod"), bLumenOff ? 0 : 1);
+	SetCV(TEXT("r.ReflectionMethod"), bLumenOff ? 0 : 1);
+	SetCV(TEXT("r.Lumen.DiffuseIndirect.Allow"), bLumenOff ? 0 : 1);
+	SetCV(TEXT("r.Lumen.Reflections.Allow"), bLumenOff ? 0 : 1);
+
+	auto GetCV = [&](const TCHAR* Name) -> int32
+	{
+		const IConsoleVariable* CV = CM.FindConsoleVariable(Name);
+		return CV ? CV->GetInt() : -999;
+	};
+	UE_LOG(LogWeedShop, Warning, TEXT("Lumen %s -> GIMethod=%d ReflMethod=%d DiffuseAllow=%d ReflAllow=%d"),
+		bLumenOff ? TEXT("UIT") : TEXT("AAN"),
+		GetCV(TEXT("r.DynamicGlobalIlluminationMethod")), GetCV(TEXT("r.ReflectionMethod")),
+		GetCV(TEXT("r.Lumen.DiffuseIndirect.Allow")), GetCV(TEXT("r.Lumen.Reflections.Allow")));
+}
 
 // --- Slate loading screen (geen UObjects/UMG: draait veilig tijdens het laden) ---
 class SWeedLoadingScreen : public SCompoundWidget
