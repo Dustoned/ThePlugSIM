@@ -27,6 +27,14 @@ public:
 	// de hele crowd, niet alleen de gematerialiseerde lichamen om de speler heen.
 	void GetVirtualWalkerPositions(TArray<FVector>& Out) const;
 
+	// Gemeten huis-box (wand-traces vanaf de thuis-plek): de build-tool laat alleen plaatsen
+	// binnen je eigen huis. False zolang de box nog niet betrouwbaar gemeten is.
+	bool GetHomeBox(FVector& OutMin, FVector& OutMax) const
+	{
+		if (!bHomeBoxReady) { return false; }
+		OutMin = HomeBoxMin; OutMax = HomeBoxMax; return true;
+	}
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -115,6 +123,9 @@ protected:
 	TSet<TWeakObjectPtr<APawn>> HomedPawns; // welke speler-pawns al thuisgezet zijn (host + co-op)
 	FVector HomeAnchor = FVector::ZeroVector; // thuis-plek (voor het settle-venster)
 	float HomeSettleUntil = 0.f;    // tot dit moment terugzetten als je door de vloer valt
+	FVector HomeBoxMin = FVector::ZeroVector; // gemeten huis-grenzen (build-tool restrictie)
+	FVector HomeBoxMax = FVector::ZeroVector;
+	bool bHomeBoxReady = false;
 	int32 RentDueDay = -1;          // dag-nummer waarop de huur vervalt
 	int32 LastRentSeenLeft = -9999; // om 1x per dag te toasten/saven
 	bool bWalkersSpawned = false;   // klanten-spawner + nav-invoker een keer plaatsen

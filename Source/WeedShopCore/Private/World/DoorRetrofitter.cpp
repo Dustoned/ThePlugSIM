@@ -1538,6 +1538,28 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			HomeAnchor = Inside + FVector(0.f, 0.f, 110.f);
 		}
+		// HUIS-BOX meten (wand-traces): zodra de wanden geladen zijn, de kamer rond de thuis-plek
+		// opmeten zodat de build-tool alleen BINNEN je eigen huis laat plaatsen. Lock zodra alle
+		// vier de richtingen een wand binnen bereik raken.
+		if (!HomeAnchor.IsNearlyZero() && !bHomeBoxReady)
+		{
+			const FVector S = HomeAnchor + FVector(0.f, 0.f, 40.f);
+			auto Wall = [&](const FVector& Dir) -> float
+			{
+				FHitResult H;
+				return W->LineTraceSingleByChannel(H, S, S + Dir * 2000.f, ECC_Visibility) ? H.Distance : -1.f;
+			};
+			const float Xp = Wall(FVector(1, 0, 0)), Xn = Wall(FVector(-1, 0, 0));
+			const float Yp = Wall(FVector(0, 1, 0)), Yn = Wall(FVector(0, -1, 0));
+			if (Xp > 150.f && Xn > 150.f && Yp > 150.f && Yn > 150.f)
+			{
+				// +60 marge zodat je tot tegen de wand mag plaatsen.
+				HomeBoxMin = FVector(HomeAnchor.X - Xn - 60.f, HomeAnchor.Y - Yn - 60.f, HomeAnchor.Z - 160.f);
+				HomeBoxMax = FVector(HomeAnchor.X + Xp + 60.f, HomeAnchor.Y + Yp + 60.f, HomeAnchor.Z + 450.f);
+				bHomeBoxReady = true;
+				UE_LOG(LogWeedShop, Warning, TEXT("Huis-box gemeten: X %.0f..%.0f Y %.0f..%.0f"), HomeBoxMin.X, HomeBoxMax.X, HomeBoxMin.Y, HomeBoxMax.Y);
+			}
+		}
 		// Elke speler die nog niet thuisgezet is naar de thuis-plek (kleine spreiding zodat
 		// co-op-spelers niet in elkaar spawnen). Werkt ook voor een later-joinende partner.
 		if (!HomeAnchor.IsNearlyZero())

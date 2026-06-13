@@ -25,6 +25,7 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
+#include "World/DoorRetrofitter.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
@@ -889,6 +890,21 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 			}
 		}
 		return false; // je hebt woningen -> buiten je home(s) (incl. de gang) mag niet
+	}
+
+	// PACK-MAP (geen CityGenerator): de retrofitter levert een gemeten huis-box. Plaatsen mag
+	// dan ALLEEN binnen je eigen huis - net als op de dev-map met ApartmentHomes.
+	if (!City)
+	{
+		for (TActorIterator<ADoorRetrofitter> It(World); It; ++It)
+		{
+			FVector Min, Max;
+			if (It->GetHomeBox(Min, Max))
+			{
+				return P.X >= Min.X && P.X <= Max.X && P.Y >= Min.Y && P.Y <= Max.Y && P.Z >= Min.Z && P.Z <= Max.Z;
+			}
+			break; // box nog niet gemeten -> val door naar de free-build fallback
+		}
 	}
 
 	// Sandbox/free-build zonder eigen woning: val terug op "overal binnen toegestaan, niet buiten".
