@@ -148,23 +148,19 @@ UWidget* UMapWidget::AddPersonIcon(const FLinearColor& Tint, float Sz, int32 ZOr
 
 UWidget* UMapWidget::AddPlayerMarker()
 {
-	// SPELER-BAKEN: grote witte cirkel met een diepblauw poppetje erin, getekend boven alle
-	// NPC-stippen - op elke zoom direct te vinden tussen de drukte.
-	UBorder* Ring = WidgetTree->ConstructWidget<UBorder>();
-	Ring->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.95f), 21.f));
-	Ring->SetPadding(FMargin(4.f));
+	// SPELER-BAKEN: fel-magenta poppetje (geen cirkel) - knalt eruit tussen het blauw van de
+	// NPC's, getekend boven alle stippen zodat je jezelf op elke zoom direct vindt.
 	USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
-	SB->SetWidthOverride(32.f);
-	SB->SetHeightOverride(32.f);
-	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 32.f, FLinearColor(0.0f, 0.45f, 0.95f)));
-	Ring->SetContent(SB);
-	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(Ring);
+	SB->SetWidthOverride(30.f);
+	SB->SetHeightOverride(30.f);
+	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 30.f, FLinearColor(1.f, 0.1f, 0.85f)));
+	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(SB);
 	Cs->SetAutoSize(false);
-	Cs->SetSize(FVector2D(42.f, 42.f));
+	Cs->SetSize(FVector2D(30.f, 30.f));
 	Cs->SetAlignment(FVector2D(0.5f, 0.5f));
 	Cs->SetZOrder(30);
-	Ring->SetVisibility(ESlateVisibility::HitTestInvisible);
-	return Ring;
+	SB->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return SB;
 }
 
 TSharedRef<SWidget> UMapWidget::RebuildWidget()
