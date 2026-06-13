@@ -584,7 +584,6 @@ void ACustomerSpawner::TrySpawn()
 		}
 		if (BurstDay >= 0 && BurstDay != LastBurstDay)
 		{
-			LastBurstDay = BurstDay;
 			int32 Guard = MaxCustomers * 8;
 			while (Spawned.Num() < MaxCustomers && Guard-- > 0)
 			{
@@ -599,6 +598,7 @@ void ACustomerSpawner::TrySpawn()
 				if (!BCls) { BCls = ACustomerBase::StaticClass(); }
 				if (ACustomerBase* BC = World->SpawnActor<ACustomerBase>(BCls, FTransform(BNav.Location + FVector(0.f, 0.f, 100.f)), BSP))
 				{
+					LastBurstDay = BurstDay; // dag-beurt pas verbruikt zodra er echt iets lukt
 					Spawned.Add(BC);
 					MakeWalkerCheap(BC);
 					if (UCharacterMovementComponent* BMv = BC->GetCharacterMovement()) { BMv->MaxWalkSpeed = 165.f; }
@@ -626,10 +626,16 @@ void ACustomerSpawner::TrySpawn()
 		for (int32 Attempt = 0; Attempt < 6 && !bFound; ++Attempt)
 		{
 			const FVector Around = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
-			if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, ZTol))) { continue; }
-			if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { continue; } // onderniveau
-			if (!IsOnStreetSurface(World, SpawnNav.Location)) { continue; } // alleen straat/stoep
+			if (!Nav->ProjectPointToNavigation(Around, SpawnNav, FVector(400.f, 400.f, ZTol))) { ++RejNav; continue; }
+			if (FMath::Abs(SpawnNav.Location.Z - GetActorLocation().Z) > ZTol) { ++RejZ; continue; } // onderniveau
+			if (!IsOnStreetSurface(World, SpawnNav.Location)) { ++RejStreet; continue; } // alleen straat/stoep
 			bFound = true;
+		}
+		++TryCount;
+		if (TryCount % 30 == 0 && Spawned.Num() < MaxCustomers)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("Spawner (%.0f, %.0f, %.0f): %d/%d - afgekeurd nav=%d hoogte=%d straat=%d zicht=%d"),
+				GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z, Spawned.Num(), MaxCustomers, RejNav, RejZ, RejStreet, RejView);
 		}
 		if (!bFound) { return; }
 		// NIET voor de neus van de speler verschijnen: ver weg (60m+) mag altijd, dichterbij
@@ -642,12 +648,12 @@ void ACustomerSpawner::TrySpawn()
 			if (!Pp) { continue; }
 			const FVector To = SpawnNav.Location - Pp->GetActorLocation();
 			const float Dp = To.Size2D();
-			if (Dp < 2500.f) { return; } // te dichtbij: altijd merkbaar
+			if (Dp < 2500.f) { ++RejView; return; } // te dichtbij: altijd merkbaar
 			if (Dp < 6000.f)
 			{
 				const FVector Dir = To.GetSafeNormal2D();
 				const FVector View = PC->GetControlRotation().Vector().GetSafeNormal2D();
-				if (FVector::DotProduct(View, Dir) > 0.1f) { return; } // in beeld: volgende keer
+				if (FVector::DotProduct(View, Dir) > 0.1f) { ++RejView; return; } // in beeld: volgende keer
 			}
 		}
 		FActorSpawnParameters SP;

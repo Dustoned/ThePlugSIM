@@ -160,6 +160,8 @@ protected:
 	};
 	TMap<TWeakObjectPtr<ACustomerBase>, FPatrolState> Patrol; // per wandelaar: volgend route-punt + richting
 	int32 LastBurstDay = -1; // dag-start vulling: 1x per dag het quotum in een klap vullen
+	// Diagnose: waarom keurt deze spawner kandidaten af? (gelogd zolang het quotum niet vol is)
+	int32 RejNav = 0, RejZ = 0, RejStreet = 0, RejView = 0, TryCount = 0;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ACustomerBase>> Spawned;
