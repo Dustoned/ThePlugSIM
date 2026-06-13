@@ -314,7 +314,11 @@ void UPhoneWidget::FillSettingsBody()
 		BodyRow(PathsB, FMargin(0.f, 0.f, 0.f, 2.f));
 		UWeedActionButton* PathsXB = MakeActionBtn(TEXT("Hide paths"), FLinearColor(0.3f, 0.3f, 0.35f),
 			[this]() { if (Phone.IsValid()) { Phone->HideAllPaths(); } }, 11);
-		BodyRow(PathsXB, FMargin(0.f, 0.f, 0.f, 8.f));
+		BodyRow(PathsXB, FMargin(0.f, 0.f, 0.f, 2.f));
+		// Kijk naar een pad-bolletje (Show all paths) en verwijder precies dat pad.
+		UWeedActionButton* PathDelB = MakeActionBtn(TEXT("Delete path in crosshair"), FLinearColor(0.45f, 0.22f, 0.22f),
+			[this]() { if (Phone.IsValid()) { Phone->DeletePathInCrosshair(); } }, 11);
+		BodyRow(PathDelB, FMargin(0.f, 0.f, 0.f, 8.f));
 
 		// NPC-LOOPROUTE: F9-markers op volgorde over de stoep -> daar spawnen en lopen de NPC's.
 		UWeedActionButton* RouteB = MakeActionBtn(TEXT("Save NPC walk route (markers, in order)"), FLinearColor(0.25f, 0.45f, 0.3f),

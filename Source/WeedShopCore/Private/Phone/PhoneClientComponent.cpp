@@ -2917,6 +2917,72 @@ void UPhoneClientComponent::ShowAllPaths()
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Cyan, FString::Printf(TEXT("Showing %d routes (green) + %d building paths (orange) + %d chill spots (cyan)"), NRoutes, NChains, NChill));
 }
 
+void UPhoneClientComponent::DeletePathInCrosshair()
+{
+	UWorld* W = GetWorld();
+	APawn* P = Cast<APawn>(GetOwner());
+	APlayerController* PC = P ? Cast<APlayerController>(P->GetController()) : nullptr;
+	if (!W || !PC) { return; }
+	FVector VL;
+	FRotator VR;
+	PC->GetPlayerViewPoint(VL, VR);
+	FHitResult Hit;
+	FCollisionQueryParams Q;
+	Q.AddIgnoredActor(P);
+	const bool bHit = W->LineTraceSingleByChannel(Hit, VL, VL + VR.Vector() * 8000.f, ECC_Visibility, Q);
+	const FVector Target = bHit ? Hit.ImpactPoint : VL + VR.Vector() * 1500.f;
+
+	// Zoek over beide bestanden het pad-blok met het dichtstbijzijnde punt (max 6m van je kijk-punt).
+	auto TryDelete = [&](const FString& FileName, const TCHAR* Label) -> bool
+	{
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *WeedData::File(FileName));
+		TArray<TArray<FString>> Blocks;
+		TArray<FString> Cur;
+		for (const FString& L : Lines)
+		{
+			if (L.TrimStartAndEnd().StartsWith(TEXT("---")))
+			{
+				if (Cur.Num() > 0) { Blocks.Add(Cur); }
+				Cur.Reset();
+				continue;
+			}
+			if (!L.TrimStartAndEnd().IsEmpty()) { Cur.Add(L); }
+		}
+		if (Cur.Num() > 0) { Blocks.Add(Cur); }
+		int32 BestBlock = -1;
+		float BestD = 600.f;
+		for (int32 bi = 0; bi < Blocks.Num(); ++bi)
+		{
+			for (const FString& L : Blocks[bi])
+			{
+				TArray<FString> Pc;
+				L.ParseIntoArray(Pc, TEXT(","));
+				if (Pc.Num() < 3) { continue; }
+				const FVector Pt(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]));
+				const float Dd = FVector::Dist2D(Pt, Target);
+				if (Dd < BestD) { BestD = Dd; BestBlock = bi; }
+			}
+		}
+		if (BestBlock < 0) { return false; }
+		const int32 NPts = Blocks[BestBlock].Num();
+		Blocks.RemoveAt(BestBlock);
+		FString Out;
+		for (int32 bi = 0; bi < Blocks.Num(); ++bi)
+		{
+			if (bi > 0) { Out += TEXT("---"); Out += LINE_TERMINATOR; }
+			for (const FString& L : Blocks[bi]) { Out += L; Out += LINE_TERMINATOR; }
+		}
+		FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / FileName), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+		UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("%s deleted (%d points) - restart applies to walkers"), Label, NPts));
+		ShowAllPaths(); // lijnen meteen hertekenen zodat je ziet dat 'ie weg is
+		return true;
+	};
+	if (TryDelete(TEXT("NpcRoute.txt"), TEXT("Walk route"))) { return; }
+	if (TryDelete(TEXT("StairsPath.txt"), TEXT("Stairs path"))) { return; }
+	UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("No path point near crosshair (use Show all paths)"));
+}
+
 void UPhoneClientComponent::HideAllPaths()
 {
 	if (UWorld* W = GetWorld()) { FlushPersistentDebugLines(W); }

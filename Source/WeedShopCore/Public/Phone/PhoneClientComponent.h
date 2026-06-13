@@ -320,6 +320,8 @@ public:
 	// Alle gezette paden visualiseren: loop-ringen (groen) + gebouw-kettingen (oranje).
 	void ShowAllPaths();
 	void HideAllPaths();
+	// Kijk naar een pad-bolletje en verwijder dat hele pad (route of gebouw-ketting).
+	void DeletePathInCrosshair();
 	// Chill-plekken: F9-markers -> plekken waar NPC's heen lopen en blijven hangen tot de dag om is.
 	void SaveChillSpots();
 	void ClearChillSpots();
