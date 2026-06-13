@@ -1,4 +1,6 @@
 #include "UI/DealWidget.h"
+#include "AIController.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "World/CityDoor.h" // FriendlyNpcName fallback
 
 #include "UI/WeedUiStyle.h"
@@ -441,6 +443,10 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bOpen && GetWorld())
 	{
 		C->ConversationHoldUntil = GetWorld()->GetRealTimeSeconds() + 0.6f;
+		// DIRECT stilzetten (de patrouille-tik komt pas tot een seconde later): beweging op nul
+		// zodat de walk-animatie meteen naar idle klapt zodra je het gesprek opent.
+		if (AAIController* AI = Cast<AAIController>(C->GetController())) { AI->StopMovement(); }
+		if (UCharacterMovementComponent* Mv = C->GetCharacterMovement()) { Mv->StopMovementImmediately(); }
 	}
 
 	// Loop je weg -> sluit (alleen dichtbij dealen).
