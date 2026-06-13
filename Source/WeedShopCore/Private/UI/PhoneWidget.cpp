@@ -266,123 +266,80 @@ void UPhoneWidget::FillSettingsBody()
 
 	auto BodyRow = [this](UWidget* W, const FMargin& Pad) { SettingsBody->AddChildToVerticalBox(W)->SetPadding(Pad); };
 
-	if (SettingsCat == 1) // Test-tools (dag/nacht snel wisselen voor testing)
+	if (SettingsCat == 1) // Test-tools, nu in nette secties
 	{
-		BodyRow(MakeText(TEXT("Testing"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+		// --- Compacte helpers voor deze tab ---
+		const FLinearColor CSave(0.26f, 0.42f, 0.32f), CClr(0.42f, 0.22f, 0.22f), CAim(0.28f, 0.34f, 0.48f), CKit(0.24f, 0.4f, 0.45f);
+		auto Section = [&](const TCHAR* T) { BodyRow(MakeText(T, 11, FLinearColor(0.45f, 0.72f, 1.f)), FMargin(0.f, 8.f, 0.f, 2.f)); };
+		auto Single = [&](const FString& L, const FLinearColor& C, TFunction<void()> F) { BodyRow(MakeActionBtn(L, C, F, 11), FMargin(0.f, 0.f, 0.f, 3.f)); };
+		auto Pair = [&](const FString& L1, const FLinearColor& C1, TFunction<void()> F1, const FString& L2, const FLinearColor& C2, TFunction<void()> F2)
+		{
+			UHorizontalBox* HB = WidgetTree->ConstructWidget<UHorizontalBox>();
+			HB->AddChildToHorizontalBox(MakeActionBtn(L1, C1, F1, 11))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			if (UHorizontalBoxSlot* S2 = HB->AddChildToHorizontalBox(MakeActionBtn(L2, C2, F2, 11)))
+			{
+				S2->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				S2->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+			}
+			BodyRow(HB, FMargin(0.f, 0.f, 0.f, 3.f));
+		};
+
+		// === WORLD ===
+		Section(TEXT("WORLD"));
 		if (GS && GS->GetDayCycle())
 		{
 			const float H = GS->GetDayCycle()->GetClockHour();
-			BodyRow(MakeText(FString::Printf(TEXT("Now: %02d:%02d  (%s)"), (int32)H, (int32)((H - (int32)H) * 60.f),
-				GS->GetDayCycle()->IsNight() ? TEXT("night") : TEXT("day")), 11, FLinearColor(0.65f, 0.7f, 0.8f)), FMargin(0.f, 0.f, 0.f, 8.f));
+			BodyRow(MakeText(FString::Printf(TEXT("%02d:%02d  (%s)"), (int32)H, (int32)((H - (int32)H) * 60.f),
+				GS->GetDayCycle()->IsNight() ? TEXT("night") : TEXT("day")), 11, FLinearColor(0.65f, 0.7f, 0.8f)), FMargin(0.f, 0.f, 0.f, 3.f));
 		}
-		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UWeedActionButton* DayB = MakeActionBtn(TEXT("Set Day"), FLinearColor(0.85f, 0.7f, 0.2f),
-			[this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(false); } }, 13);
-		UWeedActionButton* NightB = MakeActionBtn(TEXT("Set Night"), FLinearColor(0.25f, 0.3f, 0.55f),
-			[this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } }, 13);
-		Btns->AddChildToHorizontalBox(DayB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		Btns->AddChildToHorizontalBox(NightB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		BodyRow(Btns, FMargin(0.f, 0.f, 0.f, 8.f));
-
-		// Tijd-versnelling: global time dilation 1x-8x (alles sneller: klok, NPC's, drogen, timers) zodat
-		// je bij het testen niet hoeft te wachten. Sleepbaar; live toegepast via ApplyLightSliders (tick).
+		Pair(TEXT("Set Day"), FLinearColor(0.85f, 0.7f, 0.2f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(false); } },
+			 TEXT("Set Night"), FLinearColor(0.25f, 0.3f, 0.55f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } });
 		TimeSpeedSlider = nullptr; TimeSpeedV = nullptr;
 		{
 			const float CurDilation = GetWorld() ? UGameplayStatics::GetGlobalTimeDilation(GetWorld()) : 1.f;
 			AddLightSlider(TEXT("Time speed"), (FMath::Clamp(CurDilation, 1.f, 8.f) - 1.f) / 7.f, TimeSpeedSlider, TimeSpeedV);
 		}
+		Pair(TEXT("Trigger Robbery"), FLinearColor(0.7f, 0.4f, 0.15f), [this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(false); } },
+			 TEXT("Trigger Bust"), FLinearColor(0.6f, 0.2f, 0.2f), [this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(true); } });
 
-		// Dev: forceer een overval / bust (om de kluis + apartment-leeghaal te testen zonder op nacht+heat te wachten).
-		UHorizontalBox* EvtBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UWeedActionButton* RobB = MakeActionBtn(TEXT("Trigger Robbery"), FLinearColor(0.7f, 0.4f, 0.15f),
-			[this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(false); } }, 13);
-		UWeedActionButton* BustB = MakeActionBtn(TEXT("Trigger Bust"), FLinearColor(0.6f, 0.2f, 0.2f),
-			[this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(true); } }, 13);
-		EvtBtns->AddChildToHorizontalBox(RobB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		EvtBtns->AddChildToHorizontalBox(BustB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		BodyRow(EvtBtns, FMargin(0.f, 0.f, 0.f, 8.f));
+		// === BUILD & FURNISH ===
+		Section(TEXT("BUILD & FURNISH"));
+		Pair(TEXT("Build kit"), CKit, [this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } },
+			 TEXT("Furniture kit"), CKit, [this]() { if (Phone.IsValid()) { Phone->RequestGiveFurnitureKit(); } });
+		Pair(TEXT("Save furniture"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveStarterFurniture(); } },
+			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearStarterFurniture(); } });
 
-		// Building-kit: alle bouw-onderdelen (muren/vloeren/plafonds/deur/lamp) gratis + oneindig.
-		UWeedActionButton* KitB = MakeActionBtn(TEXT("Give build kit (free, infinite)"), FLinearColor(0.2f, 0.45f, 0.3f),
-			[this]() { if (Phone.IsValid()) { Phone->RequestGiveBuildKit(); } }, 13);
-		BodyRow(KitB, FMargin(0.f, 0.f, 0.f, 4.f));
-		// Meubel-kit + starter-layout opslaan: richt je kamer in en sla 'm op als start-inrichting.
-		UWeedActionButton* FurnKitB = MakeActionBtn(TEXT("Give furniture kit"), FLinearColor(0.25f, 0.4f, 0.45f),
-			[this]() { if (Phone.IsValid()) { Phone->RequestGiveFurnitureKit(); } }, 13);
-		BodyRow(FurnKitB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* FurnSaveB = MakeActionBtn(TEXT("Save starter furniture (stand in room)"), FLinearColor(0.4f, 0.3f, 0.15f),
-			[this]() { if (Phone.IsValid()) { Phone->SaveStarterFurniture(); } }, 12);
-		BodyRow(FurnSaveB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* FurnXB = MakeActionBtn(TEXT("Clear starter furniture"), FLinearColor(0.4f, 0.22f, 0.22f),
-			[this]() { if (Phone.IsValid()) { Phone->ClearStarterFurniture(); } }, 11);
-		BodyRow(FurnXB, FMargin(0.f, 0.f, 0.f, 8.f));
+		// === HOME ===
+		Section(TEXT("HOME"));
+		Single(TEXT("Save home spawn (stand here)"), CAim, [this]() { if (Phone.IsValid()) { Phone->SaveHomeSpawn(); } });
 
-		// Paden-overzicht: alle gezette loop-ringen (groen) en gebouw-kettingen (oranje) in de
-		// wereld tekenen. (De border-knoppen zijn hier vervangen - de grens staat vast en gebakken.)
-		UWeedActionButton* PathsB = MakeActionBtn(TEXT("Show all paths"), FLinearColor(0.2f, 0.45f, 0.35f),
-			[this]() { if (Phone.IsValid()) { Phone->ShowAllPaths(); } }, 12);
-		BodyRow(PathsB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* PathsXB = MakeActionBtn(TEXT("Hide paths"), FLinearColor(0.3f, 0.3f, 0.35f),
-			[this]() { if (Phone.IsValid()) { Phone->HideAllPaths(); } }, 11);
-		BodyRow(PathsXB, FMargin(0.f, 0.f, 0.f, 2.f));
-		// Kijk naar een pad-bolletje (Show all paths) en verwijder precies dat pad.
-		UWeedActionButton* PathDelB = MakeActionBtn(TEXT("Delete path in crosshair"), FLinearColor(0.45f, 0.22f, 0.22f),
-			[this]() { if (Phone.IsValid()) { Phone->DeletePathInCrosshair(); } }, 11);
-		BodyRow(PathDelB, FMargin(0.f, 0.f, 0.f, 8.f));
+		// === NPC ROUTES & SPOTS ===
+		Section(TEXT("NPC ROUTES & SPOTS"));
+		Pair(TEXT("Save walk route"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveNpcRoute(); } },
+			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearNpcRoute(); } });
+		Pair(TEXT("Save chill spots"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveChillSpots(); } },
+			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearChillSpots(); } });
+		Pair(TEXT("Save stairs path"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveStairsPath(); } },
+			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearStairsPath(); } });
+		Pair(TEXT("Show paths"), CAim, [this]() { if (Phone.IsValid()) { Phone->ShowAllPaths(); } },
+			 TEXT("Hide paths"), FLinearColor(0.3f, 0.3f, 0.35f), [this]() { if (Phone.IsValid()) { Phone->HideAllPaths(); } });
+		Single(TEXT("Delete path (aim at dot)"), CClr, [this]() { if (Phone.IsValid()) { Phone->DeletePathInCrosshair(); } });
 
-		// NPC-LOOPROUTE: F9-markers op volgorde over de stoep -> daar spawnen en lopen de NPC's.
-		UWeedActionButton* RouteB = MakeActionBtn(TEXT("Save NPC walk route (markers, in order)"), FLinearColor(0.25f, 0.45f, 0.3f),
-			[this]() { if (Phone.IsValid()) { Phone->SaveNpcRoute(); } }, 12);
-		BodyRow(RouteB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* RouteXB = MakeActionBtn(TEXT("Clear NPC walk route"), FLinearColor(0.4f, 0.22f, 0.22f),
-			[this]() { if (Phone.IsValid()) { Phone->ClearNpcRoute(); } }, 11);
-		BodyRow(RouteXB, FMargin(0.f, 0.f, 0.f, 8.f));
-
-		// THUIS-SPAWN: sla je huidige positie op als vaste start-plek (ga in je kamer staan).
-		UWeedActionButton* HomeB = MakeActionBtn(TEXT("Save home spawn (stand on the spot)"), FLinearColor(0.25f, 0.35f, 0.5f),
-			[this]() { if (Phone.IsValid()) { Phone->SaveHomeSpawn(); } }, 12);
-		BodyRow(HomeB, FMargin(0.f, 0.f, 0.f, 8.f));
-
-		// WINKEL-PLEKKEN: kies de SOORT, ga staan waar de toonbank komt (kijkend naar de klant-
-		// kant), zet een F9-marker en sla op -> werkende winkel (toonbank + ATM + verkoper).
+		// === SHOPS ===
+		Section(TEXT("SHOPS"));
 		{
 			static const TCHAR* KN[3] = { TEXT("Grow shop"), TEXT("Supplies"), TEXT("Furniture") };
 			const int32 SelK = Phone.IsValid() ? FMath::Clamp(Phone->GetSelectedShopKind(), 0, 2) : 0;
-			UWeedActionButton* ShopKindB = MakeActionBtn(FString::Printf(TEXT("Shop type: %s  (tap to change)"), KN[SelK]), FLinearColor(0.32f, 0.36f, 0.2f),
-				[this]() { if (Phone.IsValid()) { Phone->CycleSelectedShopKind(); FillSettingsBody(); } }, 12);
-			BodyRow(ShopKindB, FMargin(0.f, 0.f, 0.f, 2.f));
+			Single(FString::Printf(TEXT("Shop type: %s  (tap)"), KN[SelK]), FLinearColor(0.32f, 0.36f, 0.2f),
+				[this]() { if (Phone.IsValid()) { Phone->CycleSelectedShopKind(); FillSettingsBody(); } });
 		}
-		UWeedActionButton* ShopB = MakeActionBtn(TEXT("Save shop spots (stand at counter)"), FLinearColor(0.4f, 0.3f, 0.15f),
-			[this]() { if (Phone.IsValid()) { Phone->SaveShopSpots(); } }, 12);
-		BodyRow(ShopB, FMargin(0.f, 0.f, 0.f, 2.f));
-		// Bestaande winkel ter plekke van soort wisselen: kijk ernaar en tik.
-		UWeedActionButton* ShopSetB = MakeActionBtn(TEXT("Set shop type in crosshair"), FLinearColor(0.3f, 0.34f, 0.2f),
-			[this]() { if (Phone.IsValid()) { Phone->SetShopTypeInCrosshair(); } }, 11);
-		BodyRow(ShopSetB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* ShopXB = MakeActionBtn(TEXT("Clear shop spots"), FLinearColor(0.4f, 0.22f, 0.22f),
-			[this]() { if (Phone.IsValid()) { Phone->ClearShopSpots(); } }, 11);
-		BodyRow(ShopXB, FMargin(0.f, 0.f, 0.f, 8.f));
+		Pair(TEXT("Save shops (at counter)"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveShopSpots(); } },
+			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearShopSpots(); } });
+		Single(TEXT("Set shop type (aim)"), CAim, [this]() { if (Phone.IsValid()) { Phone->SetShopTypeInCrosshair(); } });
 
-		// CHILL-PLEKKEN: F9-markers op hang-plekken -> NPC's lopen erheen en blijven er de dag staan.
-		UWeedActionButton* ChillB = MakeActionBtn(TEXT("Save chill spots (markers)"), FLinearColor(0.2f, 0.38f, 0.45f),
-			[this]() { if (Phone.IsValid()) { Phone->SaveChillSpots(); } }, 12);
-		BodyRow(ChillB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* ChillXB = MakeActionBtn(TEXT("Clear chill spots"), FLinearColor(0.4f, 0.22f, 0.22f),
-			[this]() { if (Phone.IsValid()) { Phone->ClearChillSpots(); } }, 11);
-		BodyRow(ChillXB, FMargin(0.f, 0.f, 0.f, 8.f));
-
-		// BINNEN-LOOPPAD: F9-markers op volgorde door het trappenhuis -> smart-link ketting.
-		UWeedActionButton* StairsB = MakeActionBtn(TEXT("Save stairs path (markers, in order)"), FLinearColor(0.3f, 0.4f, 0.25f),
-			[this]() { if (Phone.IsValid()) { Phone->SaveStairsPath(); } }, 12);
-		BodyRow(StairsB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* StairsXB = MakeActionBtn(TEXT("Clear stairs paths"), FLinearColor(0.4f, 0.22f, 0.22f),
-			[this]() { if (Phone.IsValid()) { Phone->ClearStairsPath(); } }, 11);
-		BodyRow(StairsXB, FMargin(0.f, 0.f, 0.f, 8.f));
-
-		// WALK-THROUGH: maak het object in je crosshair doorloopbaar (pawn-collision uit) en sla
-		// het op in Saved/NoCollide.txt - elke sessie opnieuw toegepast, dus permanent ingebakken.
-		UWeedActionButton* NoColB = MakeActionBtn(TEXT("Walk-through: unblock crosshair target"), FLinearColor(0.25f, 0.4f, 0.45f),
-			[this]()
+		// === MAP FIXES ===
+		Section(TEXT("MAP FIXES"));
+		Pair(TEXT("Walk-through (aim)"), CKit, [this]()
 			{
 				APlayerController* PC = GetOwningPlayer();
 				UWorld* DW = GetWorld();
@@ -392,13 +349,11 @@ void UPhoneWidget::FillSettingsBody()
 				FHitResult Hit;
 				FCollisionQueryParams Q;
 				Q.AddIgnoredActor(PC->GetPawn());
-				// Pawn-kanaal: raakt precies dat wat JOU blokkeert (ook onzichtbare blockers).
 				if (!DW->LineTraceSingleByChannel(Hit, VL, VL + VR.Vector() * 2500.f, ECC_Pawn, Q) || !Hit.GetComponent())
 				{
 					Phone->Toast(TEXT("Nothing blocking in crosshair"), FColor::Orange, 2.5f);
 					return;
 				}
-				// Vloer-beveiliging: alleen muur-achtige vlakken, anders zak je door de wereld.
 				if (FMath::Abs(Hit.ImpactNormal.Z) > 0.6f)
 				{
 					Phone->Toast(TEXT("Aim at a wall/object, not the floor"), FColor::Orange, 3.f);
@@ -422,15 +377,12 @@ void UPhoneWidget::FillSettingsBody()
 				Cur += FString::Printf(TEXT("%s|%.1f,%.1f,%.1f\n"), *MeshNm, SaveLoc.X, SaveLoc.Y, SaveLoc.Z);
 				FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("NoCollide.txt")));
 				Phone->Toast(FString::Printf(TEXT("Walk-through: %s (saved)"), *MeshNm), FColor::Cyan, 3.f);
-			}, 12);
-		BodyRow(NoColB, FMargin(0.f, 0.f, 0.f, 2.f));
-		UWeedActionButton* NoColXB = MakeActionBtn(TEXT("Clear walk-throughs"), FLinearColor(0.4f, 0.22f, 0.22f),
-			[this]()
+			},
+			TEXT("Clear"), CClr, [this]()
 			{
 				WeedData::DeleteFile(TEXT("NoCollide.txt"));
 				if (Phone.IsValid()) { Phone->Toast(TEXT("Walk-throughs cleared (restart restores collision)"), FColor::Orange, 4.f); }
-			}, 11);
-		BodyRow(NoColXB, FMargin(0.f, 0.f, 0.f, 8.f));
+			});
 	}
 	else if (SettingsCat == 2) // Rooms: kamer-builds + stamper
 	{
