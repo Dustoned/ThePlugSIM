@@ -348,9 +348,11 @@ void ACustomerSpawner::TrySpawn()
 	{
 		UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World);
 		if (!Nav) { return; }
-		// STRAKKE hoogte-marge (50cm): het service-niveau (~200cm lager) EN terras-tafels
-		// (~75cm hoger - navmesh-eilandjes waar NPC's op vast stonden) vallen er beide buiten.
-		const float ZTol = 50.f;
+		// Hoogte-marge 90cm: de spawner-actor staat zelf 60cm boven het marker-punt, dus 50cm
+		// keurde ALLES af (straat ligt altijd ~60cm onder de spawner). Het service-niveau
+		// (~200cm lager) valt nog steeds buiten de marge, en props (containers/tafels) worden
+		// nu door de STRAAT-NAAM-check geweerd, niet meer door de hoogte.
+		const float ZTol = 90.f;
 		// Opruimen: wandelaars die GEZAKT zijn (onder de stoep) of ergens OP geklommen staan.
 		// Hoogte vergelijken met het DICHTSTBIJZIJNDE route-punt (de route heeft verloop - tegen
 		// de eigen spawner meten doodde wandelaars die gewoon de ring afliepen). Bewoners
