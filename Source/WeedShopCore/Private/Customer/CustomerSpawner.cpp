@@ -68,6 +68,14 @@ namespace
 			Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 			Mesh->bEnableUpdateRateOptimizations = true;
 		}
+		// RVO-ontwijking: wandelaars stappen netjes om elkaar (en de speler) heen in plaats
+		// van elkaar eeuwig klem te duwen bij frontale ontmoetingen.
+		if (UCharacterMovementComponent* Mv = C->GetCharacterMovement())
+		{
+			Mv->SetAvoidanceEnabled(true);
+			Mv->AvoidanceConsiderationRadius = 300.f;
+			Mv->AvoidanceWeight = 0.5f;
+		}
 	}
 }
 

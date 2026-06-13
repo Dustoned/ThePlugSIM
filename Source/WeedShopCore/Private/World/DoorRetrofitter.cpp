@@ -2317,9 +2317,20 @@ void ADoorRetrofitter::TickVirtualCrowd()
 		{
 			FVector Ground;
 			if (!StreetAt(V.Pos, Ground)) { continue; } // wereld hier (nog) niet geladen
+			// BOTSVRIJ neerzetten: staat er al iemand, dan een stukje opzij - voorkomt in elkaar
+			// gespawnde tweetallen die elkaar eeuwig klem duwen.
+			FVector SpawnP = Ground + FVector(0.f, 0.f, 100.f);
+			for (int32 t = 0; t < 4; ++t)
+			{
+				if (!W->OverlapBlockingTestByChannel(SpawnP, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(45.f, 90.f))) { break; }
+				FVector Alt = Ground + FVector(FMath::FRandRange(-240.f, 240.f), FMath::FRandRange(-240.f, 240.f), 0.f);
+				FVector AltGround;
+				if (StreetAt(Alt, AltGround)) { SpawnP = AltGround + FVector(0.f, 0.f, 100.f); }
+				else { SpawnP = Ground + FVector(FMath::FRandRange(-120.f, 120.f), FMath::FRandRange(-120.f, 120.f), 100.f); }
+			}
 			FActorSpawnParameters SPv;
 			SPv.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			ACustomerBase* B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Ground + FVector(0.f, 0.f, 100.f)), SPv);
+			ACustomerBase* B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), SPv);
 			if (!B) { continue; }
 			V.Body = B;
 			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).
