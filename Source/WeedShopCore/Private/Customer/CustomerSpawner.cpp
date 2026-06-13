@@ -551,7 +551,30 @@ void ACustomerSpawner::TrySpawn()
 					St.PrevIdx = St.NextIdx;
 					St.NextIdx = Pick;
 				}
-				if (!bArrived && bMoving) { continue; }
+				if (!bArrived && bMoving) { St.Stall = 0; continue; }
+				if (!bArrived) { ++St.Stall; }
+				// VASTLOPER-HERSTEL: na 6 mislukte tikken is het doel kennelijk onbereikbaar
+				// (navmesh-gat) - dichtstbijzijnde knoop herberekenen en een ANDERE kant op.
+				if (St.Stall >= 6)
+				{
+					float BD2 = TNumericLimits<float>::Max();
+					int32 NearN = St.NextIdx;
+					for (int32 ri = 0; ri < NetNodes.Num(); ++ri)
+					{
+						const float Dd = FVector::DistSquared2D(NetNodes[ri], Cur);
+						if (Dd < BD2) { BD2 = Dd; NearN = ri; }
+					}
+					const TArray<int32>& NbR = NetAdj.IsValidIndex(NearN) ? NetAdj[NearN] : NetAdj[0];
+					int32 NewPick = NearN;
+					for (int32 t = 0; t < 6; ++t)
+					{
+						const int32 Cand = NbR.Num() > 0 ? NbR[FMath::RandRange(0, NbR.Num() - 1)] : NearN;
+						if (Cand != St.NextIdx) { NewPick = Cand; break; }
+					}
+					St.PrevIdx = NearN;
+					St.NextIdx = NewPick;
+					St.Stall = 0;
+				}
 				if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
 				{
 					const FVector Jit(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), 0.f);
@@ -567,7 +590,9 @@ void ACustomerSpawner::TrySpawn()
 					{
 						Goal = NetNodes[St.NextIdx]; // jitter viel verkeerd: de kale knoop (= jouw lijn)
 					}
-					AI->MoveToLocation(Goal, 90.f);
+					// Na 3 mislukte tikken: RECHTSTREEKS lopen - stoeprandjes en kleine navmesh-
+					// gaten zijn fysiek gewoon beloopbaar.
+					AI->MoveToLocation(Goal, 90.f, true, St.Stall < 3);
 				}
 			}
 		}
