@@ -1365,12 +1365,39 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (PR.bInside)
 			{
-				// Spawn IN het eigen appartement: de kamer-kant = de kant waar de deur naartoe
-				// openzwaait (appartement-deuren zwaaien de kamer in) - deterministisch.
+				// Spawn IN het eigen appartement. Kamer-detectie: rondom-waaier van 12 stralen
+				// per kant - de LANGSTE straal verraadt de gang (die schiet de lange gang in),
+				// in een kamer kaatst alles dichtbij. Twijfel (beide ruimtes klein/groot)? Dan
+				// beslist de zwaairichting van de deur (apt-deuren zwaaien doorgaans de kamer in).
 				const FVector Fw = A->GetActorForwardVector();
-				const float SwingSide = (A->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
-				Inside = DL + Fw * 240.f * SwingSide;
-				Front = DL - Fw * 240.f * SwingSide;
+				auto MaxRay = [&](const FVector& P) -> float
+				{
+					float MaxD = 0.f;
+					const FVector S = P + FVector(0.f, 0.f, 130.f);
+					for (int32 di = 0; di < 12; ++di)
+					{
+						const float Ang = di * 30.f;
+						const FVector Dir = FRotator(0.f, Ang, 0.f).Vector();
+						FHitResult H;
+						const float Dd = W->LineTraceSingleByChannel(H, S, S + Dir * 3000.f, ECC_Visibility) ? H.Distance : 3000.f;
+						MaxD = FMath::Max(MaxD, Dd);
+					}
+					return MaxD;
+				};
+				const FVector CandA = DL + Fw * 240.f;
+				const FVector CandB = DL - Fw * 240.f;
+				const float RayA = MaxRay(CandA);
+				const float RayB = MaxRay(CandB);
+				if (FMath::Abs(RayA - RayB) > 300.f)
+				{
+					Inside = (RayA < RayB) ? CandA : CandB; // kleinste max-straal = de kamer
+				}
+				else
+				{
+					const float SwingSide = (A->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
+					Inside = DL + Fw * 240.f * SwingSide;
+				}
+				Front = DL * 2.f - Inside;
 				UNavigationSystemV1* NavI = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
 				FNavLocation InNav;
 				if (NavI && NavI->ProjectPointToNavigation(Inside + FVector(0.f, 0.f, 50.f), InNav, FVector(350.f, 350.f, 220.f)))
