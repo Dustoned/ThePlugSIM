@@ -86,6 +86,10 @@ protected:
 	// wij hangen er warme puntlichten aan die op de klok aan/uit gaan.
 	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> PackLampLights;
 	TSet<UStaticMeshComponent*> PackLampSeen;
+	// Emissive-diffusers van plafondlampen (MI_Light, 'Brightness'): mee aan/uit dimmen met de lamp,
+	// anders blijft de lamp-box wit gloeien terwijl het licht uit is.
+	UPROPERTY() TArray<TObjectPtr<class UMaterialInstanceDynamic>> PackCeilEmis;
+	TArray<float> PackCeilEmisBright;
 	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
 	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
 	TArray<FDimLight> DimLights;

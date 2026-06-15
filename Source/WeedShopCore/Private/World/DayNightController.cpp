@@ -544,6 +544,21 @@ void ADayNightController::Tick(float DeltaSeconds)
 							Glow->ComponentTags.Add(TEXT("CeilGlow"));
 							Glow->MarkRenderStateDirty();
 							PackLampLights.Add(Glow);
+							// Diffuser-mesh (MI_Light, 'Brightness') mee dimmen als de lamp uit is -> de lamp-box
+							// gloeit niet meer wit zonder licht te geven.
+							for (int32 mi = 0; mi < MC->GetNumMaterials(); ++mi)
+							{
+								UMaterialInterface* Mat = MC->GetMaterial(mi);
+								if (Mat && (Mat->GetName().Contains(TEXT("Light")) || Mat->GetName().Contains(TEXT("Emmis")) || Mat->GetName().Contains(TEXT("Emis"))))
+								{
+									if (UMaterialInstanceDynamic* EMID = MC->CreateDynamicMaterialInstance(mi))
+									{
+										float Orig = 1.f; EMID->GetScalarParameterValue(TEXT("Brightness"), Orig);
+										PackCeilEmis.Add(EMID);
+										PackCeilEmisBright.Add(Orig > 0.f ? Orig : 1.f);
+									}
+								}
+							}
 						}
 						else
 						{
@@ -689,6 +704,18 @@ void ADayNightController::Tick(float DeltaSeconds)
 			const bool bCeil = PL->ComponentHasTag(TEXT("CeilLamp")) || PL->ComponentHasTag(TEXT("CeilGlow"));
 			const float Want = ((bCeil ? (MinDayF < 0.95f) : (MinDayF < 0.7f)) ? (LampIntensity / Div) : 0.f);
 			if (!FMath::IsNearlyEqual(PL->Intensity, Want, 0.05f)) { PL->SetIntensity(Want); }
+		}
+
+		// Diffuser-emissive ('Brightness') mee aan/uit met de plafondlampen (zelfde drempel) -> de lamp-box
+		// gloeit niet meer wit als de lamp uit is.
+		const float CeilEmisOn = (MinDayF < 0.95f) ? 1.f : 0.f;
+		for (int32 i = 0; i < PackCeilEmis.Num(); ++i)
+		{
+			if (UMaterialInstanceDynamic* E = PackCeilEmis[i])
+			{
+				const float B = PackCeilEmisBright.IsValidIndex(i) ? PackCeilEmisBright[i] : 1.f;
+				E->SetScalarParameterValue(TEXT("Brightness"), B * CeilEmisOn);
+			}
 		}
 
 		// BLOOM-REM (altijd aan): de zonneschijf blies via de bloom op tot een gigantische witte
