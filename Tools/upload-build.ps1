@@ -1,13 +1,13 @@
 # upload-build.ps1 - package ThePlugSIM (Win64) in een of meer texture-kwaliteiten, zip elk,
 # en upload ze samen als ASSETS onder EEN GitHub Release.
-# Gebruik:  powershell -ExecutionPolicy Bypass -File "<pad>\Tools\upload-build.ps1" [-Qualities 2K] [-Notes "wat is er nieuw"]
-#   -Qualities 2K (default) = een build onder een release. UE's Shipping-compressie (IoStore+Oodle)
-#   drukt de build sowieso naar ~700 MB, dus een aparte 1K scheelt maar ~1% - daarom niet standaard.
-#   Wil je toch meerdere als assets onder EEN release:  -Qualities 2K,1K   (4K kan ook).
+# Gebruik:  powershell -ExecutionPolicy Bypass -File "<pad>\Tools\upload-build.ps1" [-Qualities 1K] [-Notes "wat is er nieuw"]
+#   -Qualities 1K (default) = textures op 1K zodat de COMPLETE build (strand-map + characters)
+#   onder GitHub's 2GB-asset-limiet past. 2K/4K geven een grotere build (>2GB) die je extern
+#   moet hosten (Drive/WeTransfer). Meerdere als losse assets onder EEN release:  -Qualities 1K,2K
 param(
     [string]$Notes = "Nieuwe test-build.",
     [string]$Config = "Shipping",
-    [ValidateSet("4K","2K","1K")][string[]]$Qualities = @("2K")
+    [ValidateSet("4K","2K","1K")][string[]]$Qualities = @("1K")
 )
 $ErrorActionPreference = "Stop"
 $Proj    = "C:\Users\Dustoned\Documents\Unreal Projects\ThePlugSIM - Claude"
@@ -91,7 +91,10 @@ foreach ($q in $Qualities) {
     $Zip = Join-Path $Proj "Build\ThePlugSIM-$Stamp-$q.zip"
     Write-Host "== [$q] Zippen -> $Zip =="
     if (Test-Path $Zip) { Remove-Item $Zip -Force }
-    Compress-Archive -Path (Join-Path $WinDir "*") -DestinationPath $Zip -CompressionLevel Optimal
+    # Compress-Archive faalt boven ~2GB ("stream te lang", buffert in geheugen).
+    # ZipFile.CreateFromDirectory streamt naar disk en ondersteunt Zip64 (grote builds).
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($WinDir, $Zip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
     $SizeMB = [math]::Round((Get-Item $Zip).Length / 1MB, 1)
     Write-Host "== [$q] Zip klaar: $SizeMB MB =="
 
@@ -116,10 +119,10 @@ if ($LASTEXITCODE -ne 0) { Write-Error "GitHub release upload mislukt"; exit 1 }
 # Onthoud welke commit deze build was, voor de changelog van de volgende keer.
 (git -C "$Proj" rev-parse HEAD).Trim() | Set-Content $ShaFile -Encoding ascii
 
-# Reset de texture-cap terug naar de 2K-default zodat de repo-config schoon blijft.
+# Reset de texture-cap terug naar de 1K-default zodat de repo-config schoon blijft.
 if (Test-Path $Ini) {
     $IniText = [System.IO.File]::ReadAllText($Ini)
-    $IniText = [regex]::Replace($IniText, "MaxLODSize=\d+", "MaxLODSize=2048")
+    $IniText = [regex]::Replace($IniText, "MaxLODSize=\d+", "MaxLODSize=1024")
     [System.IO.File]::WriteAllText($Ini, $IniText, (New-Object System.Text.UTF8Encoding($false)))
 }
 
