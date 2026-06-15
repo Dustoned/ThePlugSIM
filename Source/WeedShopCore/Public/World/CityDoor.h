@@ -64,6 +64,7 @@ public:
 
 	// Jouw eigen woning: open/dicht zoals normaal, prompt "Your home".
 	void SetPlayerHome() { bLocked = false; bPlayerHome = true; bForSale = false; ResidentName.Empty(); }
+	bool IsPlayerHome() const { return bPlayerHome; }
 	// Koopbaar pand (nog niet van jou): op slot met "TE KOOP - koop via telefoon".
 	void SetForSale() { bLocked = true; bPlayerHome = false; bForSale = true; bOpen = false; ResidentName.Empty(); }
 

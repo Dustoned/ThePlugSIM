@@ -384,19 +384,44 @@ void UPhoneClientComponent::ApplyLocalDoors()
 			if (const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>())
 			{ for (int32 Idx : Ph->OwnedHomes) { OwnedAny.Add(Idx); } }
 		}
+		// Per eigen woning ALLEEN de dichtstbijzijnde voordeur (+ balkonpui) als player-home markeren -
+		// niet elke deur binnen de box, want dan pakt 'ie de buur-deur (bv. 701 naast je 703) erbij.
+		TSet<ACityDoor*> HomeDoors;
+		for (int32 Idx : OwnedAny)
+		{
+			if (!BHomes.IsValidIndex(Idx)) { continue; }
+			const FApartmentHome& H = BHomes[Idx];
+			ACityDoor* BestFront = nullptr; float BestFD = 0.f;
+			ACityDoor* BestBalc = nullptr; float BestBD = 0.f;
+			for (TActorIterator<ACityDoor> It(W); It; ++It)
+			{
+				ACityDoor* Dr = *It;
+				if (!Dr) { continue; }
+				const bool bBalc = Dr->ActorHasTag(TEXT("BalcDoor"));
+				const bool bApt  = Dr->ActorHasTag(TEXT("AptDoor"));
+				if (!bBalc && !bApt) { continue; }
+				const FVector DL = Dr->GetActorLocation();
+				if (FMath::Abs(DL.X - H.InteriorPos.X) > H.RoomHalf.X + 160.f) { continue; }
+				if (FMath::Abs(DL.Y - H.InteriorPos.Y) > H.RoomHalf.Y + 160.f) { continue; }
+				if (DL.Z < H.InteriorPos.Z - 220.f || DL.Z > H.InteriorPos.Z + 420.f) { continue; }
+				const float D = FVector::DistSquared(DL, H.InteriorPos);
+				if (bBalc) { if (!BestBalc || D < BestBD) { BestBD = D; BestBalc = Dr; } }
+				else       { if (!BestFront || D < BestFD) { BestFD = D; BestFront = Dr; } }
+			}
+			if (BestFront) { HomeDoors.Add(BestFront); }
+			if (BestBalc)  { HomeDoors.Add(BestBalc); }
+		}
+		// Markeer je eigen deur(en); deuren die ten onrechte 'your home' staan terugzetten naar bewoner.
 		for (TActorIterator<ACityDoor> It(W); It; ++It)
 		{
 			ACityDoor* Dr = *It;
 			if (!Dr) { continue; }
-			const FVector DL = Dr->GetActorLocation();
-			for (int32 Idx : OwnedAny)
+			if (HomeDoors.Contains(Dr)) { Dr->SetPlayerHome(); }
+			else if (Dr->IsPlayerHome())
 			{
-				if (!BHomes.IsValidIndex(Idx)) { continue; }
-				const FApartmentHome& H = BHomes[Idx];
-				if (FMath::Abs(DL.X - H.InteriorPos.X) <= H.RoomHalf.X + 160.f
-					&& FMath::Abs(DL.Y - H.InteriorPos.Y) <= H.RoomHalf.Y + 160.f
-					&& DL.Z >= H.InteriorPos.Z - 220.f && DL.Z <= H.InteriorPos.Z + 420.f)
-				{ Dr->SetPlayerHome(); break; }
+				const FVector L = Dr->GetActorLocation();
+				const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
+				Dr->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
 			}
 		}
 		return;
