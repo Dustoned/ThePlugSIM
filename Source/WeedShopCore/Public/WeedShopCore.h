@@ -75,4 +75,37 @@ namespace WeedData
 		IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / Name), false, false, true);
 		IFileManager::Get().Delete(*(FPaths::ProjectContentDir() / TEXT("BakedData") / Name), false, false, true);
 	}
+
+	// Bij opstart van een verse (packaged) install: kopieer ALLE gebakken data-bestanden naar Saved/,
+	// zodat ook code die direct uit ProjectSavedDir() leest (en dus de File()-resolver omzeilt) z'n data
+	// vindt. Kopieert alleen ontbrekende bestanden -> in de editor (waar Saved/ al gevuld is) een no-op,
+	// en speler-wijzigingen in een bestaande install blijven staan. Eén niveau submappen mee (RoomTemplates).
+	inline void RestoreAll()
+	{
+		IFileManager& FM = IFileManager::Get();
+		const FString BakedRoot = FPaths::ProjectContentDir() / TEXT("BakedData");
+		const FString SavedRoot = FPaths::ProjectSavedDir();
+		if (!FPaths::DirectoryExists(BakedRoot)) { return; }
+
+		TArray<FString> Files;
+		FM.FindFiles(Files, *(BakedRoot / TEXT("*.*")), true, false);
+		for (const FString& F : Files)
+		{
+			const FString Dst = SavedRoot / F;
+			if (!FPaths::FileExists(Dst)) { FM.Copy(*Dst, *(BakedRoot / F)); }
+		}
+
+		TArray<FString> Dirs;
+		FM.FindFiles(Dirs, *(BakedRoot / TEXT("*")), false, true);
+		for (const FString& D : Dirs)
+		{
+			TArray<FString> SubFiles;
+			FM.FindFiles(SubFiles, *(BakedRoot / D / TEXT("*.*")), true, false);
+			for (const FString& F : SubFiles)
+			{
+				const FString Dst = SavedRoot / D / F;
+				if (!FPaths::FileExists(Dst)) { FM.Copy(*Dst, *(BakedRoot / D / F)); }
+			}
+		}
+	}
 }

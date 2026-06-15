@@ -223,6 +223,11 @@ class FWeedShopCoreModule : public FDefaultGameModuleImpl
 public:
 	virtual void StartupModule() override
 	{
+		// Verse (packaged) install: herstel de gebakken wereld-data (markers, apartments, routes,
+		// rent, ...) naar Saved/ zodat ook de directe ProjectSavedDir()-loads hun data vinden.
+		// In de editor een no-op (Saved/ is al gevuld). Ook op de server (data-only) nuttig.
+		WeedData::RestoreAll();
+
 		if (IsRunningDedicatedServer()) { return; }
 		// Bind altijd (de slate/movieplayer-check gebeurt pas bij het tonen, niet hier).
 		FCoreUObjectDelegates::PreLoadMap.AddRaw(this, &FWeedShopCoreModule::OnPreLoadMap);

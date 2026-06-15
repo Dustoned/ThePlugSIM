@@ -1,11 +1,11 @@
 MoonIntensity=0.429
-SunIntensity=1.412
+SunIntensity=0.800
 SkyNight=0.850
 SkyDay=1.000
 MoonPitch=-52.0
-LampIntensity=47286
+LampIntensity=3325
 ExposureBias=9.00
-NightGain=0.760
+NightGain=1.000
 NightExposure=0.00
 DayBloom=0.012
 SunHaze=0.00311

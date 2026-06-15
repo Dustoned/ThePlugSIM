@@ -1,0 +1,1 @@
+GEKLOOND frame=(-2709, -1495, 480) frameyaw=-90 kloonyaw=-90 roomdir=(0.00, 1.00) box=(-2776, -1419)-(-2070, -762) meshes=38
