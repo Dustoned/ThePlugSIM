@@ -25,6 +25,8 @@
 #include "GameFramework/GameUserSettings.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "Widgets/SWindow.h"
 
 namespace
 {
@@ -271,18 +273,27 @@ void USettingsWidget::RefreshContent()
 		// Resolutie-dropdown.
 		AddResolutionRow();
 
-		// Window mode.
-		const EWindowMode::Type WM = G->GetFullscreenMode();
-		const FString WMName = (WM == EWindowMode::Fullscreen) ? TEXT("Fullscreen")
-			: (WM == EWindowMode::WindowedFullscreen) ? TEXT("Borderless") : TEXT("Windowed");
-		AddValueRow(TEXT("Window mode"), WMName, [this]()
+		// Window mode - lees de ECHTE huidige vensterstatus van het live venster. GameUserSettings::
+		// GetFullscreenMode() kan achterlopen (na alt-tab / OS-wissel / fallback), waardoor het label
+		// niet klopte met wat je zag en je vanaf een verkeerde stand cyclede.
+		EWindowMode::Type ActualWM = G->GetFullscreenMode();
+		if (GEngine && GEngine->GameViewport)
+		{
+			TSharedPtr<SWindow> Win = GEngine->GameViewport->GetWindow();
+			if (Win.IsValid()) { ActualWM = Win->GetWindowMode(); }
+		}
+		const FString WMName = (ActualWM == EWindowMode::Fullscreen) ? TEXT("Fullscreen")
+			: (ActualWM == EWindowMode::WindowedFullscreen) ? TEXT("Borderless") : TEXT("Windowed");
+		AddValueRow(TEXT("Window mode"), WMName, [this, ActualWM]()
 		{
 			if (UGameUserSettings* GG = GUS())
 			{
-				const EWindowMode::Type Cur = GG->GetFullscreenMode();
-				EWindowMode::Type Next = (Cur == EWindowMode::Fullscreen) ? EWindowMode::WindowedFullscreen
-					: (Cur == EWindowMode::WindowedFullscreen) ? EWindowMode::Windowed : EWindowMode::Fullscreen;
-				GG->SetFullscreenMode(Next); GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
+				const EWindowMode::Type Next = (ActualWM == EWindowMode::Fullscreen) ? EWindowMode::WindowedFullscreen
+					: (ActualWM == EWindowMode::WindowedFullscreen) ? EWindowMode::Windowed : EWindowMode::Fullscreen;
+				GG->SetFullscreenMode(Next);
+				GG->ApplyResolutionSettings(false); // past venster-modus + resolutie direct + betrouwbaar toe
+				GG->SaveSettings();
+				RefreshContent();
 			}
 		});
 
