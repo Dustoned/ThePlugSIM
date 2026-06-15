@@ -88,6 +88,9 @@ foreach ($q in $Qualities) {
         Write-Host "== [$q] WAARSCHUWING: vc_redist niet gevonden op $Redist - niet meegebundeld =="
     }
 
+    # Debug-symbolen (.pdb, ~224MB) niet meeleveren - niet nodig voor spelers, scheelt grootte.
+    Get-ChildItem $WinDir -Recurse -Filter *.pdb -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+
     $Zip = Join-Path $Proj "Build\ThePlugSIM-$Stamp-$q.zip"
     Write-Host "== [$q] Zippen -> $Zip =="
     if (Test-Path $Zip) { Remove-Item $Zip -Force }
