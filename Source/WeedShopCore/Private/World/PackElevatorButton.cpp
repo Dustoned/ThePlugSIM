@@ -40,17 +40,10 @@ void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator&
 		DigitMesh->SetMobility(EComponentMobility::Movable);
 		DigitMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		DigitMesh->SetCanEverAffectNavigation(false);
-		// Knop-cijfer: het pack-emissive materiaal toont het ECHTE cijfer (MI_ElevatorEmmsive: BaseColor =
-		// cijfer-atlas, per-mesh UV's kiezen het cijfer) en laat het zacht oplichten. (Het oude M_DigitGlow
-		// was egaal wit -> cijfer verdween, alleen een leeg lichtvlakje.)
-		static UMaterialInterface* NumEmis = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/CityBeachStrip/Materials/Architecture/Interiors/Elevator/MI_ElevatorEmmsive.MI_ElevatorEmmsive"));
-		if (NumEmis)
-		{
-			if (UMaterialInstanceDynamic* M = DigitMesh->CreateAndSetMaterialInstanceDynamicFromMaterial(0, NumEmis))
-			{
-				M->SetScalarParameterValue(TEXT("Brightness"), 1.6f); // rustige glow (instance-default was 2.0)
-			}
-		}
+		// Cijfer-VLAK zwart maken (de cijfer-textuur kwam er toch niet uit). Het cijfer zelf zetten we er
+		// wit (TextRender) overheen -> zwart scherm + wit oplichtend nummer.
+		static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+		if (Black) { DigitMesh->SetMaterial(0, Black); }
 	}
 	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
 	DigitMesh->SetWorldScale3D(FVector(Scale)); // digit-mesh is 3x5cm -> opschalen naar leesbaar formaat
@@ -119,9 +112,11 @@ void APackElevatorButton::SetDigit(int32 Digit)
 	if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path))
 	{
 		DigitMesh->SetStaticMesh(M);
+		// SetStaticMesh kan de materiaal-override resetten -> het zwarte vlak opnieuw zetten.
+		static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+		if (Black) { DigitMesh->SetMaterial(0, Black); }
 	}
-	// Het witte vlak licht egaal op (de cijfer-textuur komt er niet uit) -> we leggen er zelf een ZWART
-	// cijfer overheen, net voor de plaat. Zwart silhouet op wit = leest als een verlicht nummer.
+	// Zwart vlak + WIT cijfer er net voor -> ziet eruit als een verlicht nummer (wit op zwart).
 	if (!DigitText)
 	{
 		DigitText = NewObject<UTextRenderComponent>(this);
@@ -130,7 +125,7 @@ void APackElevatorButton::SetDigit(int32 Digit)
 		DigitText->SetMobility(EComponentMobility::Movable);
 		DigitText->SetHorizontalAlignment(EHTA_Center);
 		DigitText->SetVerticalAlignment(EVRTA_TextCenter);
-		DigitText->SetTextRenderColor(FColor(8, 8, 10));
+		DigitText->SetTextRenderColor(FColor(245, 245, 250));
 		DigitText->SetCanEverAffectNavigation(false);
 		DigitText->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}

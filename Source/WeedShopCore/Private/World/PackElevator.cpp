@@ -88,16 +88,10 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigit->SetRelativeLocation(FVector(-192.f, 0.f, 175.f));
 		CabDigit->SetRelativeRotation(FRotator::ZeroRotator); // lokale +X = naar de opening
 		CabDigit->SetRelativeScale3D(FVector(5.f));
-		// Cabine-cijfer: pack-emissive toont het ECHTE cijfer (MI_ElevatorEmmsive: BaseColor = cijfer-atlas,
-		// per-mesh UV's) en licht zacht op. (M_DigitGlow was egaal wit -> cijfer weg, leeg lichtvlakje.)
-		static UMaterialInterface* NumEmis = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/CityBeachStrip/Materials/Architecture/Interiors/Elevator/MI_ElevatorEmmsive.MI_ElevatorEmmsive"));
-		if (NumEmis)
-		{
-			if (UMaterialInstanceDynamic* M = CabDigit->CreateAndSetMaterialInstanceDynamicFromMaterial(0, NumEmis))
-			{
-				M->SetScalarParameterValue(TEXT("Brightness"), 1.6f);
-			}
-		}
+		// Cabine-cijfer-VLAK zwart maken; het cijfer komt er wit (TextRender) overheen -> zwart scherm,
+		// wit oplichtend nummer.
+		static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+		if (Black) { CabDigit->SetMaterial(0, Black); }
 		// Richting-pijl naast het display: ^ of v zolang de lift rijdt.
 		CabArrow = NewObject<UTextRenderComponent>(this);
 		CabArrow->SetupAttachment(Cab);
@@ -119,7 +113,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigitText->SetWorldSize(22.f);
 		CabDigitText->SetHorizontalAlignment(EHTA_Center);
 		CabDigitText->SetVerticalAlignment(EVRTA_TextCenter);
-		CabDigitText->SetTextRenderColor(FColor(8, 8, 10));
+		CabDigitText->SetTextRenderColor(FColor(245, 245, 250));
 	}
 	// Cabine-schuifdeuren: 2 panelen op de open kant (lokale X ~ -8), samen 136 breed gecentreerd.
 	// Ze rijden mee met de cabine en schuiven synchroon met de hal-deuren open/dicht.
@@ -226,7 +220,12 @@ void APackElevator::UpdateSigns()
 		CabDigitShown = ShownFloor;
 		const int32 D = FMath::Clamp(ShownFloor, 0, 9);
 		const FString Path = FString::Printf(TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorNumber_%d.SM_ElevatorNumber_%d"), D, D);
-		if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path)) { CabDigit->SetStaticMesh(M); }
+		if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path))
+		{
+			CabDigit->SetStaticMesh(M);
+			static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+			if (Black) { CabDigit->SetMaterial(0, Black); } // override kan door SetStaticMesh resetten
+		}
 		if (CabDigitText) { CabDigitText->SetText(FText::AsNumber(D)); }
 	}
 }
