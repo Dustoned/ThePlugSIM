@@ -211,9 +211,41 @@ bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAl
 	return false;
 }
 
+// Random NPC-skin uit de pack-pool. Alle skeletons zijn compatibel gemaakt met SK_Mannequin,
+// dus de single-node walk/idle-anims (Mannequin) blijven gewoon op deze meshes werken.
+static USkeletalMesh* WeedNpc_PickSkin(int32 Seed)
+{
+	static const TCHAR* Pool[] = {
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_A.SK_Citizens_Pack_Tony_A"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_D.SK_Citizens_Pack_Tony_D"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_1.SK_FullBody_Casual_1"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_2.SK_FullBody_Casual_2"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_3.SK_FullBody_Casual_3"),
+		TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"),
+		TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"),
+	};
+	const int32 N = UE_ARRAY_COUNT(Pool);
+	const uint32 H = (uint32)Seed * 2654435761u + 12345u;
+	return LoadObject<USkeletalMesh>(nullptr, Pool[H % (uint32)N]);
+}
+
 void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Geef deze NPC een willekeurige (maar stabiele) skin uit de pool i.p.v. allemaal dezelfde
+	// mannequin. Seed: NpcId (stabiel per bewoner) of de roam-seed, anders de instance-id.
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		int32 Seed = !NpcId.IsNone() ? (int32)GetTypeHash(NpcId) : RoamRouteSeed;
+		if (Seed == 0) { Seed = (int32)GetUniqueID(); }
+		if (USkeletalMesh* Sk = WeedNpc_PickSkin(Seed)) { M->SetSkeletalMesh(Sk); }
+	}
 
 	// Loop/idle zelf aansturen (single-node) -> NPC's animeren echt i.p.v. glijden.
 	if (USkeletalMeshComponent* M = GetMesh())
