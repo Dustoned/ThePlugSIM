@@ -4,7 +4,9 @@
 #include "UI/WeedShopHUD.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Controller.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "UObject/ConstructorHelpers.h"
 
 AWeedShopGameMode::AWeedShopGameMode()
@@ -36,11 +38,26 @@ APawn* AWeedShopGameMode::SpawnDefaultPawnAtTransform_Implementation(AController
 	UClass* PawnClass = GetDefaultPawnClassForController(NewPlayerController);
 	if (!PawnClass || !GetWorld()) { return Super::SpawnDefaultPawnAtTransform_Implementation(NewPlayerController, SpawnTransform); }
 
+	// Elke EXTRA speler opzij van de PlayerStart zetten i.p.v. er bovenop: als de 2e speler op de host
+	// spawnt, schuift de engine 'm OMHOOG om de overlap op te lossen -> zwevende 2e speler. Een vaste zijdelingse
+	// spreiding (op vloer-hoogte) per al-aanwezige speler voorkomt de overlap én het omhoog schuiven.
+	FTransform T = SpawnTransform;
+	int32 Existing = 0;
+	for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+	{
+		if (*It && It->GetController() && It->GetController()->IsPlayerController()) { ++Existing; }
+	}
+	if (Existing > 0)
+	{
+		const FVector Right = T.GetRotation().GetRightVector();
+		T.AddToTranslation(Right * (95.f * Existing));
+	}
+
 	FActorSpawnParameters SpawnInfo;
 	SpawnInfo.Instigator = GetInstigator();
 	SpawnInfo.ObjectFlags |= RF_Transient;
 	// ALTIJD spawnen, positie bijstellen indien nodig -> nooit een null-pawn (geen "Couldn't spawn player").
 	SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	APawn* Result = GetWorld()->SpawnActor<APawn>(PawnClass, SpawnTransform, SpawnInfo);
+	APawn* Result = GetWorld()->SpawnActor<APawn>(PawnClass, T, SpawnInfo);
 	return Result;
 }

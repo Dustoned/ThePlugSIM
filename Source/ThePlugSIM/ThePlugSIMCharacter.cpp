@@ -1119,9 +1119,9 @@ void AThePlugSIMCharacter::BeginPlay()
 		// (na spawn) zodat het de spawn-collision niet raakt.
 		M->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f));
 
-		// Alleen op een client die een ANDERE speler ziet (simulated proxy): de template-ABP speelt daar
-		// geen loop -> wij sturen zelf walk/idle/jump aan. De host houdt de template-ABP (werkt daar wel).
-		if (GetLocalRole() == ROLE_SimulatedProxy && GetNetMode() == NM_Client && (ProxyIdle || ProxyWalk))
+		// Elke ANDERE speler die je ziet (simulated proxy) - OOK op de host (listen-server) - krijgt onze
+		// eigen walk/idle/jump-fallback. (De template-ABP animeert de proxy niet -> hij gleed/slidede.)
+		if (GetLocalRole() == ROLE_SimulatedProxy && (ProxyIdle || ProxyWalk))
 		{
 			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			if (ProxyIdle) { M->PlayAnimation(ProxyIdle, true); }
