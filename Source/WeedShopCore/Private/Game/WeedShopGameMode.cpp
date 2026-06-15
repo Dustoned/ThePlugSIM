@@ -64,7 +64,9 @@ APawn* AWeedShopGameMode::SpawnDefaultPawnAtTransform_Implementation(AController
 
 	// Op de VLOER zetten: de zijdelingse spreiding/AlwaysSpawn-adjust kan de speler iets in de lucht
 	// neerzetten -> down-trace en de voeten op de grond plaatsen (geen zwevende 2e speler).
-	if (ACharacter* Ch = Cast<ACharacter>(Result))
+	// ALLEEN nadat de wereld is gestart (physics-scene klaar): bij de host-init laadt de map nog en zou een
+	// trace de scene in een halve staat raken -> dat corrumpeerde de boel en liet de lift-build crashen.
+	if (ACharacter* Ch = (GetWorld()->HasBegunPlay() ? Cast<ACharacter>(Result) : nullptr))
 	{
 		const float HalfH = Ch->GetCapsuleComponent() ? Ch->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 96.f;
 		const FVector P = Ch->GetActorLocation();

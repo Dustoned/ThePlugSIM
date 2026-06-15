@@ -41,6 +41,7 @@ APackElevator::APackElevator()
 
 void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<FElevPanelInit>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir)
 {
+	if (!GetWorld()) { return; } // co-op: niet bouwen als de actor (nog) niet in een geldige wereld zit
 	Floors = InFloors;
 	Floors.Sort();
 	CabXY = FVector(CabCenterXY.X, CabCenterXY.Y, 0.f);
@@ -88,6 +89,12 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigit->SetRelativeLocation(FVector(-192.f, 0.f, 175.f));
 		CabDigit->SetRelativeRotation(FRotator::ZeroRotator); // lokale +X = naar de opening
 		CabDigit->SetRelativeScale3D(FVector(5.f));
+		// Eerst een echte mesh (cijfer 0) zodat slot 0 bestaat vóór SetMaterial (geen material/render op een
+		// mesh-loze component). UpdateSigns wisselt 'm later naar de juiste verdieping.
+		if (UStaticMesh* M0 = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorNumber_0.SM_ElevatorNumber_0")))
+		{
+			CabDigit->SetStaticMesh(M0);
+		}
 		// Cabine-cijfer-VLAK zwart maken; het cijfer komt er wit (TextRender) overheen -> zwart scherm,
 		// wit oplichtend nummer.
 		static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
