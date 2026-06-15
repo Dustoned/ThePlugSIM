@@ -3937,6 +3937,6 @@ void ADoorRetrofitter::RegisterHomeAtPlayer(APawn* Player)
 	if (UPhoneClientComponent* Ph = Player->FindComponentByClass<UPhoneClientComponent>())
 	{
 		Ph->Toast(FString::Printf(TEXT("Home registered: %s  (~%.0f x %.0f m, EUR %lld)"),
-			*Name, Half.X * 2.f / 100.f, Half.Y * 2.f / 100.f, (long long)(PriceCents / 100)), FColor::Green, 6.f);
+			*Name, Half.X * 2.f / 100.f, Half.Y * 2.f / 100.f, (long long)(WeedRoundEuros((int64)PriceCents) / 100)), FColor::Green, 6.f);
 	}
 }

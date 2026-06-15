@@ -1,4 +1,5 @@
 #include "Cultivation/PotTypes.h"
+#include "WeedShopCore.h"
 
 const TArray<FPotDef>& GetAllPots()
 {
@@ -120,5 +121,6 @@ int32 GetPotUpgradeCost(int32 UpgIndex, FName PotTier)
 	}
 	// Schaal met de tier-index (Broken=0 ... Fabric=3): duurdere potten = duurdere upgrades.
 	const int32 Tier = FMath::Max(0, GetPotTierIndex(PotTier));
-	return Ups[UpgIndex].BaseCostCents * (Tier + 1);
+	const int64 V = WeedRoundEuros((int64)Ups[UpgIndex].BaseCostCents * (Tier + 1));
+	return Ups[UpgIndex].BaseCostCents > 0 ? (int32)FMath::Max<int64>(100, V) : (int32)V;
 }

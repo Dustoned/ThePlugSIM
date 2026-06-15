@@ -1,4 +1,5 @@
 #include "UI/AtmWidget.h"
+#include "WeedShopCore.h"
 
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
@@ -109,10 +110,10 @@ void UAtmWidget::FillBody()
 	auto Row = [this](UWidget* W, const FMargin& Pad) { Body->AddChildToVerticalBox(W)->SetPadding(Pad); };
 
 	// Saldo-regels (altijd zichtbaar).
-	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Cash (black):  EUR %.2f"), Econ->GetBalanceEuros()), 15, FLinearColor(0.95f, 0.9f, 0.5f)), FMargin(0, 0, 0, 2));
-	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Bank (white):  EUR %.2f"), Econ->GetBankEuros()), 15, FLinearColor(0.55f, 0.95f, 1.f)), FMargin(0, 0, 0, 2));
+	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Cash (black):  EUR %lld"), (long long)(WeedRoundEuros(Econ->GetCashCents()) / 100)), 15, FLinearColor(0.95f, 0.9f, 0.5f)), FMargin(0, 0, 0, 2));
+	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Bank (white):  EUR %lld"), (long long)(WeedRoundEuros(Econ->GetBankCents()) / 100)), 15, FLinearColor(0.55f, 0.95f, 1.f)), FMargin(0, 0, 0, 2));
 	const int64 SafeCap = Ph ? Ph->GetSafeCapCents() : 0;
-	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Safe (secure): EUR %.2f / %.0f"), Econ->GetSafeEuros(), SafeCap / 100.f), 15, FLinearColor(0.6f, 1.f, 0.7f)), FMargin(0, 0, 0, 8));
+	Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Safe (secure): EUR %lld / %lld"), (long long)(WeedRoundEuros(Econ->GetSafeCents()) / 100), (long long)(WeedRoundEuros(SafeCap) / 100)), 15, FLinearColor(0.6f, 1.f, 0.7f)), FMargin(0, 0, 0, 8));
 
 	// Tabs.
 	static const TCHAR* TabNames[3] = { TEXT("Deposit"), TEXT("Send to friend"), TEXT("Safe") };
@@ -131,7 +132,7 @@ void UAtmWidget::FillBody()
 	{
 		Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Deposit cash -> bank.  Tax %.0f%% on entry.  Big deposits raise heat."),
 			Econ->DepositTaxPct * 100.f), 11, FLinearColor(0.7f, 0.78f, 0.74f)), FMargin(0, 0, 0, 2));
-		Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Daily room left: EUR %.2f"), Econ->GetDailyDepositRemainingCents() / 100.f),
+		Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Daily room left: EUR %lld"), (long long)(WeedRoundEuros(Econ->GetDailyDepositRemainingCents()) / 100)),
 			12, FLinearColor(0.85f, 0.9f, 0.85f)), FMargin(0, 0, 0, 8));
 
 		const int64 Amts[3] = { 100000, 500000, 2000000 };
@@ -161,7 +162,7 @@ void UAtmWidget::FillBody()
 		for (int32 i = 0; i < 3; ++i)
 		{
 			const int64 A = Amts[i];
-			const int64 Fee = (int64)(A * Econ->TransferFeePct);
+			const int64 Fee = WeedRoundEuros((int64)(A * Econ->TransferFeePct));
 			UWeedActionButton* B = AtmBtn(WidgetTree, FLinearColor(0.2f, 0.34f, 0.5f), 8.f, [Ph, A]() { if (Ph) { Ph->RequestTransfer(A); } });
 			B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %lld\n(fee %lld)"), (long long)(A / 100), (long long)(Fee / 100)), 12, FLinearColor::White, true));
 			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);

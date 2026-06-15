@@ -1,4 +1,5 @@
 #include "UI/WeedShopHUD.h"
+#include "WeedShopCore.h"
 
 #include "Engine/Engine.h"
 #include "Engine/Canvas.h"
@@ -256,7 +257,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		DrawText(Left, FLinearColor(0.7f, 0.8f, 0.95f), SX, y, Font);
 		if (GS && GS->GetEconomy())
 		{
-			DrawText(FString::Printf(TEXT("EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
+			DrawText(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(GS->GetEconomy()->GetCashCents()) / 100)),
 				FLinearColor(0.7f, 1.f, 0.7f), PX + PhoneW - 150.f, y, Font);
 		}
 	}
@@ -319,11 +320,11 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 						const FLinearColor Col = bPurchased ? FLinearColor::Gray
 							: (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f));
 						if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), idx)),
-							FString::Printf(TEXT("%s  -  EUR %.2f%s"), *Name.ToString(), Cost / 100.f, Suffix),
+							FString::Printf(TEXT("%s  -  EUR %d%s"), *Name.ToString(), (int32)(WeedRoundEuros((int64)Cost) / 100), Suffix),
 							InnerX, y, InnerW, Col))
 						{
 							HoverTooltip = bPurchased ? TEXT("Already purchased")
-								: (bAvailable ? FString::Printf(TEXT("Buy for EUR %.2f"), Cost / 100.f)
+								: (bAvailable ? FString::Printf(TEXT("Buy for EUR %d"), (int32)(WeedRoundEuros((int64)Cost) / 100))
 									: TEXT("Locked - reach the required phase first"));
 						}
 						y += RowH;
@@ -421,7 +422,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				}
 				if (GS->GetEconomy())
 				{
-					DrawText(FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros()),
+					DrawText(FString::Printf(TEXT("Cash: EUR %lld"), (long long)(WeedRoundEuros(GS->GetEconomy()->GetCashCents()) / 100)),
 						FLinearColor::White, InnerX, y, Font); y += 22.f;
 				}
 				if (GS->GetHeat())
@@ -528,7 +529,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 	DrawText(TEXT("SUPPLIER STORE"), FLinearColor(0.6f, 1.f, 0.6f), SX + Pad, SY + 10.f, Font);
 	if (GS->GetEconomy())
 	{
-		const FString Cash = FString::Printf(TEXT("Cash: EUR %.2f"), GS->GetEconomy()->GetBalanceEuros());
+		const FString Cash = FString::Printf(TEXT("Cash: EUR %lld"), (long long)(WeedRoundEuros(GS->GetEconomy()->GetCashCents()) / 100));
 		float tw = 0.f, th = 0.f; GetTextSize(Cash, tw, th, Font);
 		DrawText(Cash, FLinearColor(0.85f, 0.95f, 1.f), SX + StoreW - Pad - tw, SY + 10.f, Font);
 	}
@@ -584,7 +585,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 				const int32 SQty = SellStacks[si].Quantity;
 				DrawText(FString::Printf(TEXT("%s   x%d"), *PrettyItemName(SellStacks[si].ItemId), SQty),
 					FLinearColor(0.9f, 0.92f, 1.f), CatX + 10.f, y + 3.f, Font);
-				DrawText(FString::Printf(TEXT("EUR %.2f each  (all: EUR %.2f)"), Val / 100.f, (Val * SQty) / 100.f),
+				DrawText(FString::Printf(TEXT("EUR %d each  (all: EUR %d)"), (int32)(WeedRoundEuros((int64)Val) / 100), (int32)(WeedRoundEuros((int64)Val * SQty) / 100)),
 					FLinearColor(1.f, 0.85f, 0.5f), CatX + 10.f, y + 19.f, Font);
 				Btn(FName(*FString::Printf(TEXT("sella_%d"), si)), TEXT("Sell all"), CatX + CatZoneW - 190.f, y + 5.f, 90.f, RowHt - 12.f,
 					FLinearColor(0.45f, 0.30f, 0.12f, 0.98f), FLinearColor::White);
@@ -625,7 +626,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 			float bx = cxs;
 			DrawRect(FLinearColor(0.16f, 0.42f, 0.22f, 0.98f), bx, bty, TagW, bh);
 			{
-				const FString PriceStr = FString::Printf(TEXT("EUR %.2f"), Price / 100.f);
+				const FString PriceStr = FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)Price) / 100));
 				float tw = 0.f, th = 0.f; GetTextSize(PriceStr, tw, th, Font);
 				DrawText(PriceStr, FLinearColor(0.88f, 1.f, 0.88f), bx + FMath::Max(3.f, (TagW - tw) * 0.5f), bty + 4.f, Font);
 			}
@@ -668,7 +669,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 		if (LName.Len() > 18) { LName = LName.Left(17) + TEXT("."); }
 		DrawRect(FLinearColor(0.09f, 0.10f, 0.13f, 0.95f), CartX + 4.f, cy - 2.f, CartW - 8.f, 38.f);
 		DrawText(FString::Printf(TEXT("%s  x%d"), *LName, LQty), FLinearColor(0.9f, 0.92f, 1.f), CartInnerX, cy, Font);
-		DrawText(FString::Printf(TEXT("EUR %.2f"), LinePrice / 100.f), FLinearColor(1.f, 0.95f, 0.7f), CartInnerX, cy + 16.f, Font);
+		DrawText(FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)LinePrice) / 100)), FLinearColor(1.f, 0.95f, 0.7f), CartInnerX, cy + 16.f, Font);
 		Btn(FName(*FString::Printf(TEXT("cdec_%d"), li)), TEXT("-"), CartX + CartW - 84.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
 		Btn(FName(*FString::Printf(TEXT("cinc_%d"), li)), TEXT("+"), CartX + CartW - 58.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
 		Btn(FName(*FString::Printf(TEXT("cdel_%d"), li)), TEXT("x"), CartX + CartW - 32.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.42f, 0.18f, 0.18f, 0.98f), FLinearColor::White);
@@ -677,7 +678,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 
 	// Cart-footer: totaal + CHECKOUT + Clear.
 	DrawRect(FLinearColor(0.2f, 0.2f, 0.25f, 0.9f), CartX + 8.f, CartFooterY - 6.f, CartW - 16.f, 1.f);
-	DrawText(FString::Printf(TEXT("Total: EUR %.2f"), Phone->GetCartTotalCents() / 100.f),
+	DrawText(FString::Printf(TEXT("Total: EUR %d"), (int32)(WeedRoundEuros((int64)Phone->GetCartTotalCents()) / 100)),
 		FLinearColor(1.f, 0.95f, 0.55f), CartInnerX, CartFooterY, Font);
 	Btn(FName(TEXT("checkout")), TEXT("CHECKOUT"), CartInnerX, CartFooterY + 24.f, CartW - 20.f, 30.f,
 		Phone->GetCartNumLines() > 0 ? FLinearColor(0.2f, 0.55f, 0.27f, 0.98f) : FLinearColor(0.18f, 0.2f, 0.22f, 0.95f), FLinearColor::White);
@@ -1013,7 +1014,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	const bool bSub = Phone->IsOfferingSubstitute();
 	const int32 Market = FMath::Max(1, Phone->GetOfferMarketCents());
 
-	DrawText(FString::Printf(TEXT("Wants: %dg %s   (market EUR %.2f)"), Qty, *WantProduct, WantMarket / 100.f),
+	DrawText(FString::Printf(TEXT("Wants: %dg %s   (market EUR %d)"), Qty, *WantProduct, (int32)(WeedRoundEuros((int64)WantMarket) / 100)),
 		FLinearColor::White, InnerX, y, Font);
 	y += 22.f;
 	if (bSub)
@@ -1054,8 +1055,8 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	const float EffPct = float(EffAsk) / Market;
 
 	// Prijs-regel volgt de hover (met "preview"-hint zolang je nog niet geklikt hebt).
-	DrawText(FString::Printf(TEXT("Your price: EUR %.2f / unit  (%.0f%% of market)   Total: EUR %.2f%s"),
-		EffAsk / 100.f, EffPct * 100.f, (EffAsk * Qty) / 100.f, bOverTrack ? TEXT("   <- preview") : TEXT("")),
+	DrawText(FString::Printf(TEXT("Your price: EUR %d / unit  (%.0f%% of market)   Total: EUR %d%s"),
+		(int32)(WeedRoundEuros((int64)EffAsk) / 100), EffPct * 100.f, (int32)(WeedRoundEuros((int64)EffAsk * Qty) / 100), bOverTrack ? TEXT("   <- preview") : TEXT("")),
 		FLinearColor(1.f, 0.95f, 0.6f), InnerX, y, Font);
 	y += 26.f;
 
@@ -1474,7 +1475,7 @@ void AWeedShopHUD::DrawPotUpgradeUI(UPhoneClientComponent* Phone)
 		else
 		{
 			DrawButton(FName(*FString::Printf(TEXT("potupg_%d"), i)),
-				FString::Printf(TEXT("Buy  -  EUR %.2f"), Cost / 100.f), InnerX, y, 220.f, FLinearColor::White);
+				FString::Printf(TEXT("Buy  -  EUR %d"), (int32)(WeedRoundEuros((int64)Cost) / 100)), InnerX, y, 220.f, FLinearColor::White);
 		}
 		y += RowH + 4.f;
 	}

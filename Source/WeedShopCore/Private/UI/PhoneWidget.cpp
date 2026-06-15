@@ -843,14 +843,14 @@ void UPhoneWidget::UpdateStoreCartText()
 		{
 			// Sell-app: puur de verkoopwaarde van de cart (altijd "+", je ontvangt geld).
 			const int32 Sell = Phone->GetCartSellCents();
-			StoreCartText->SetText(FText::FromString(FString::Printf(TEXT("Cart %d   +EUR %.2f"), Phone->GetCartNumLines(), Sell / 100.f)));
+			StoreCartText->SetText(FText::FromString(FString::Printf(TEXT("Cart %d   +EUR %d"), Phone->GetCartNumLines(), (int32)(WeedRoundEuros((int64)Sell) / 100))));
 			return;
 		}
 		// Toon het NETTO bedrag (koop + bezorging - verkoop). Negatief = je ontvangt geld (+).
 		const int32 Net = Phone->GetCartNetCents(DeliveryOpt);
 		const FString Amt = (Net < 0)
-			? FString::Printf(TEXT("+EUR %.2f"), -Net / 100.f)
-			: FString::Printf(TEXT("EUR %.2f"), Net / 100.f);
+			? FString::Printf(TEXT("+EUR %d"), (int32)(WeedRoundEuros((int64)(-Net)) / 100))
+			: FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)Net) / 100));
 		StoreCartText->SetText(FText::FromString(FString::Printf(TEXT("Cart %d   %s"), Phone->GetCartNumLines(), *Amt)));
 	}
 }
@@ -1318,7 +1318,7 @@ void UPhoneWidget::BuildBankApp()
 		AddRow(Desc);
 		AddRow(MakeText(TEXT(""), 8, FLinearColor::Transparent));
 		const int64 Cost = UPhoneClientComponent::PhoneUpgradeCostCents;
-		AddRow(MakeActionBtn(FString::Printf(TEXT("Unlock  -  EUR %.0f"), Cost / 100.f),
+		AddRow(MakeActionBtn(FString::Printf(TEXT("Unlock  -  EUR %lld"), (long long)(WeedRoundEuros(Cost) / 100)),
 			FLinearColor(0.16f, 0.5f, 0.85f), [this]() { if (Phone.IsValid()) { Phone->RequestBuyPhoneUpgrade(); } MarkDirty(); }, 14));
 		return;
 	}
@@ -1327,8 +1327,8 @@ void UPhoneWidget::BuildBankApp()
 
 	// --- Balans-kaart (zoals een echte bank-app: groot saldo bovenaan) ---
 	AddRow(MakeText(TEXT("BANK BALANCE"), 11, FLinearColor(0.5f, 0.7f, 0.95f), false));
-	AddRow(MakeText(FString::Printf(TEXT("EUR %.2f"), Econ->GetBankEuros()), 26, FLinearColor(0.7f, 0.92f, 1.f), false));
-	AddRow(MakeText(FString::Printf(TEXT("Cash to deposit:  EUR %.2f"), Econ->GetBalanceEuros()), 12, FLinearColor(0.7f, 0.72f, 0.78f)));
+	AddRow(MakeText(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(Econ->GetBankCents()) / 100)), 26, FLinearColor(0.7f, 0.92f, 1.f), false));
+	AddRow(MakeText(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(Econ->GetCashCents()) / 100)), 12, FLinearColor(0.7f, 0.72f, 0.78f)));
 	AddRow(MakeText(TEXT(""), 10, FLinearColor::Transparent));
 
 	// --- Storten (cash -> bank), bescheiden presets + max ---
@@ -1594,7 +1594,7 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 				}
 				else
 				{
-					RB->SetContent(MakeActionBtn(FString::Printf(TEXT("Buy  EUR %.2f"), Cost / 100.f), FLinearColor(0.2f, 0.5f, 0.28f),
+					RB->SetContent(MakeActionBtn(FString::Printf(TEXT("Buy  EUR %d"), (int32)(WeedRoundEuros((int64)Cost) / 100)), FLinearColor(0.2f, 0.5f, 0.28f),
 						[this, Ph, WPot, ui]() { if (AGrowPlant* P = WPot.Get()) { Ph->RequestPotUpgradeFor(P, ui); RefreshStore(); } }, 10));
 				}
 				UHorizontalBoxSlot* RS2 = Row->AddChildToHorizontalBox(RB); RS2->SetVerticalAlignment(VAlign_Center);
@@ -1669,7 +1669,7 @@ void UPhoneWidget::FillStoreList()
 			CVB->AddChildToVerticalBox(NameT);
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 			UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(MakeText(
-				bSell ? FString::Printf(TEXT("x%d   +EUR %.2f"), LQty, LineP / 100.f) : FString::Printf(TEXT("x%d   EUR %.2f"), LQty, LineP / 100.f),
+				bSell ? FString::Printf(TEXT("x%d   +EUR %d"), LQty, (int32)(WeedRoundEuros((int64)LineP) / 100)) : FString::Printf(TEXT("x%d   EUR %d"), LQty, (int32)(WeedRoundEuros((int64)LineP) / 100)),
 				12, bSell ? FLinearColor(0.7f, 1.f, 0.7f) : FLinearColor(1.f, 0.95f, 0.7f)));
 			T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
 			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -1); RefreshStore(); }));
@@ -1683,7 +1683,7 @@ void UPhoneWidget::FillStoreList()
 		if (StoreFooter && bSellApp)
 		{
 			const int32 SellSub = Ph->GetCartSellCents();
-			UTextBlock* TotT = MakeText(FString::Printf(TEXT("You receive: EUR %.2f"), SellSub / 100.f),
+			UTextBlock* TotT = MakeText(FString::Printf(TEXT("You receive: EUR %d"), (int32)(WeedRoundEuros((int64)SellSub) / 100)),
 				15, FLinearColor(0.6f, 1.f, 0.65f));
 			TotT->SetJustification(ETextJustify::Right);
 			StoreFooter->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 6.f, 4.f, 4.f));
@@ -1704,7 +1704,7 @@ void UPhoneWidget::FillStoreList()
 				UHorizontalBox* Opts = WidgetTree->ConstructWidget<UHorizontalBox>();
 				for (int32 d = 0; d < 3; ++d)
 				{
-					const int32 OptFee = FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(d));
+					const int32 OptFee = (int32)WeedRoundEuros((int64)FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(d)));
 					const bool bSel = (d == DeliveryOpt);
 					const FLinearColor Col = bSel ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
 					UWeedActionButton* OB = MakeActionBtn(TEXT(""), Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
@@ -1712,7 +1712,7 @@ void UPhoneWidget::FillStoreList()
 					UVerticalBox* OVB = WidgetTree->ConstructWidget<UVerticalBox>();
 					FString PriceStr;
 					if (OptFee <= 0) { PriceStr = TEXT("FREE"); }
-					else { const float E = OptFee / 100.f; PriceStr = (E >= 100.f) ? FString::Printf(TEXT("€%.0f"), E) : FString::Printf(TEXT("€%.2f"), E); }
+					else { PriceStr = FString::Printf(TEXT("€%d"), (int32)(WeedRoundEuros((int64)OptFee) / 100)); }
 					OVB->AddChildToVerticalBox(MakeText(PriceStr, 15, FLinearColor(1.f, 0.95f, 0.55f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
 					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryName(d), 11, FLinearColor(0.95f, 0.97f, 1.f), true));
 					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryTimeText(d), 9, FLinearColor(0.65f, 0.7f, 0.8f), true));
@@ -1743,10 +1743,10 @@ void UPhoneWidget::FillStoreList()
 			}
 
 			// Opbouw-regel (kort): koop - verkoop - bezorging. Geen decimalen + alleen tonen wat van toepassing is.
-			const int32 Fee = FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(DeliveryOpt));
-			FString BD = FString::Printf(TEXT("Buy EUR %.0f"), BuySub / 100.f);
-			if (SellSub > 0) { BD += FString::Printf(TEXT("  -  Sell EUR %.0f"), SellSub / 100.f); }
-			if (Fee > 0)     { BD += FString::Printf(TEXT("  +  Deliv EUR %.0f"), Fee / 100.f); }
+			const int32 Fee = (int32)WeedRoundEuros((int64)FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(DeliveryOpt)));
+			FString BD = FString::Printf(TEXT("Buy EUR %d"), (int32)(WeedRoundEuros((int64)BuySub) / 100));
+			if (SellSub > 0) { BD += FString::Printf(TEXT("  -  Sell EUR %d"), (int32)(WeedRoundEuros((int64)SellSub) / 100)); }
+			if (Fee > 0)     { BD += FString::Printf(TEXT("  +  Deliv EUR %d"), (int32)(WeedRoundEuros((int64)Fee) / 100)); }
 			UTextBlock* Breakdown = MakeText(BD, 10, FLinearColor(0.68f, 0.72f, 0.82f));
 			Breakdown->SetAutoWrapText(true);
 			Breakdown->SetJustification(ETextJustify::Right);
@@ -1754,8 +1754,8 @@ void UPhoneWidget::FillStoreList()
 
 			// Netto: positief = betalen, negatief = ontvangen.
 			const int32 Net = Ph->GetCartNetCents(DeliveryOpt);
-			UTextBlock* TotT = MakeText(Net >= 0 ? FString::Printf(TEXT("Total: EUR %.2f"), Net / 100.f)
-				: FString::Printf(TEXT("You receive: EUR %.2f"), -Net / 100.f),
+			UTextBlock* TotT = MakeText(Net >= 0 ? FString::Printf(TEXT("Total: EUR %d"), (int32)(WeedRoundEuros((int64)Net) / 100))
+				: FString::Printf(TEXT("You receive: EUR %d"), (int32)(WeedRoundEuros((int64)(-Net)) / 100)),
 				15, Net >= 0 ? FLinearColor(1.f, 0.95f, 0.55f) : FLinearColor(0.6f, 1.f, 0.65f));
 			TotT->SetJustification(ETextJustify::Right);
 			StoreFooter->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 2.f, 4.f, 4.f));
@@ -1795,10 +1795,10 @@ void UPhoneWidget::FillStoreList()
 			UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
 			CardB->SetContent(CardVB);
 			CardVB->AddChildToVerticalBox(MakeText(WeedUI::PrettyItemName(Id), 14, FLinearColor(0.95f, 0.97f, 1.f)));
-			CardVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("You have %d   -   sells for EUR %.2f each"), Have, Val / 100.f), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+			CardVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("You have %d   -   sells for EUR %d each"), Have, (int32)(WeedRoundEuros((int64)Val) / 100)), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
 
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("+EUR %.2f"), (Val * Pend) / 100.f), 13, FLinearColor(0.7f, 1.f, 0.7f)));
+			UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("+EUR %d"), (int32)(WeedRoundEuros((int64)Val * Pend) / 100)), 13, FLinearColor(0.7f, 1.f, 0.7f)));
 			PT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PT->SetVerticalAlignment(VAlign_Center);
 			const FName PickId = Id;
 			UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, FLinearColor::White);
@@ -1873,7 +1873,7 @@ void UPhoneWidget::FillStoreList()
 		}
 
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("EUR %.2f"), Price / 100.f), 13, FLinearColor(0.7f, 1.f, 0.7f)));
+		UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)Price) / 100)), 13, FLinearColor(0.7f, 1.f, 0.7f)));
 		PT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PT->SetVerticalAlignment(VAlign_Center);
 		const FName PickId = Id;
 		UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, FLinearColor::White);
@@ -2110,7 +2110,7 @@ void UPhoneWidget::RefreshContent()
 					Info->AddChildToVerticalBox(MakeText(InfoLine, 10, FLinearColor(0.62f, 0.78f, 0.92f)));
 				}
 				const FString PriceStr = (O.PriceCents > 0)
-					? FString::Printf(TEXT("%s   EUR %.0f"), *O.Sub, O.PriceCents / 100.f)
+					? FString::Printf(TEXT("%s   EUR %lld"), *O.Sub, (long long)(WeedRoundEuros(O.PriceCents) / 100))
 					: (bOwned ? FString::Printf(TEXT("%s   (in bezit)"), *O.Sub) : FString::Printf(TEXT("%s   (starter)"), *O.Sub));
 				Info->AddChildToVerticalBox(MakeText(PriceStr, 10, FLinearColor(0.65f, 0.7f, 0.8f)));
 				UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
@@ -2134,7 +2134,7 @@ void UPhoneWidget::RefreshContent()
 					else          { OwnBox->AddChildToVerticalBox(MakeButton(TEXT("Ga hierheen"), 8, O.HomeIndex, FLinearColor(0.25f, 0.45f, 0.6f))); }
 					if (SellVal > 0)
 					{
-						OwnBox->AddChildToVerticalBox(MakeButton(*FString::Printf(TEXT("Sell EUR %.0f"), SellVal / 100.f), 9, O.HomeIndex, FLinearColor(0.5f, 0.32f, 0.2f)))
+						OwnBox->AddChildToVerticalBox(MakeButton(*FString::Printf(TEXT("Sell EUR %d"), (int32)(WeedRoundEuros((int64)SellVal) / 100)), 9, O.HomeIndex, FLinearColor(0.5f, 0.32f, 0.2f)))
 							->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
 					}
 					RB->SetHeightOverride(SellVal > 0 ? 58.f : 28.f);

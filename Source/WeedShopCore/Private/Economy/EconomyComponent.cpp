@@ -153,7 +153,7 @@ void UEconomyComponent::OnRep_Balance()
 void UEconomyComponent::AddBank(int64 AmountCents, bool bTaxed)
 {
 	if (GetOwnerRole() != ROLE_Authority || AmountCents <= 0) { return; }
-	const int64 Tax = bTaxed ? (int64)FMath::RoundToDouble(AmountCents * DepositTaxPct) : 0;
+	const int64 Tax = bTaxed ? WeedRoundEuros((int64)FMath::RoundToDouble(AmountCents * DepositTaxPct)) : 0;
 	SetBank(GetBankCents() + (AmountCents - Tax));
 	OnMoneyEarned.Broadcast(AmountCents - Tax);
 }
@@ -194,7 +194,7 @@ bool UEconomyComponent::TransferBank(int64 AmountCents)
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, TEXT("Daily transfer limit reached - try again tomorrow.")); }
 		return false;
 	}
-	const int64 Fee = (int64)FMath::RoundToDouble(AmountCents * TransferFeePct);
+	const int64 Fee = WeedRoundEuros((int64)FMath::RoundToDouble(AmountCents * TransferFeePct));
 	// Per-speler geld: het bedrag + fee verlaat MIJN bank; de ontvanger wordt elders bijgeschreven.
 	if (GetBankCents() < AmountCents + Fee)
 	{
@@ -206,8 +206,8 @@ bool UEconomyComponent::TransferBank(int64 AmountCents)
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor(120, 200, 255),
-			FString::Printf(TEXT("Sent EUR %.2f to a friend (fee EUR %.2f). Transfers left today: %d"),
-				AmountCents / 100.f, Fee / 100.f, GetTransfersRemainingToday()));
+			FString::Printf(TEXT("Sent EUR %lld to a friend (fee EUR %lld). Transfers left today: %d"),
+				(long long)(WeedRoundEuros(AmountCents) / 100), (long long)(Fee / 100), GetTransfersRemainingToday()));
 	}
 	return true;
 }
@@ -228,7 +228,7 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 		return 0;
 	}
 	const int64 Amount = FMath::Min(CashAmount, Remaining);
-	const int64 Tax = (int64)FMath::RoundToDouble(Amount * DepositTaxPct);
+	const int64 Tax = WeedRoundEuros((int64)FMath::RoundToDouble(Amount * DepositTaxPct));
 	const int64 ToBank = Amount - Tax;
 
 	SetBalance(BalanceCents - Amount);  // cash eraf (lokaal/per speler)
@@ -257,7 +257,7 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor(120, 200, 255),
-			FString::Printf(TEXT("Laundered EUR %.2f -> bank (tax EUR %.2f)"), ToBank / 100.f, Tax / 100.f));
+			FString::Printf(TEXT("Laundered EUR %lld -> bank (tax EUR %lld)"), (long long)(WeedRoundEuros(ToBank) / 100), (long long)(Tax / 100)));
 	}
 	return ToBank;
 }

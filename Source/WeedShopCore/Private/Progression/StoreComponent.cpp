@@ -58,7 +58,7 @@ bool UStoreComponent::GetSeedDisplay(FName StrainId, FText& OutName, int32& OutP
 		return false;
 	}
 	OutName = Row->DisplayName;
-	OutPriceCents = Row->SeedPriceCents;
+	OutPriceCents = Row->SeedPriceCents > 0 ? (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)Row->SeedPriceCents)) : 0;
 	return true;
 }
 
@@ -86,7 +86,8 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 	}
 
 	UEconomyComponent* Econ = (Buyer && Buyer->GetOwner()) ? Buyer->GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
-	if (!Econ || !Econ->RemoveMoney(Row->SeedPriceCents))
+	const int64 SeedCost = Row->SeedPriceCents > 0 ? FMath::Max<int64>(100, WeedRoundEuros((int64)Row->SeedPriceCents)) : 0;
+	if (!Econ || !Econ->RemoveMoney(SeedCost))
 	{
 		if (GEngine)
 		{
@@ -240,7 +241,7 @@ bool UStoreComponent::GetSupplyDisplay(FName SupplyId, FText& OutName, int32& Ou
 		if (SupplyId == FName(S.Id))
 		{
 			OutName = FText::FromString(S.Name);
-			OutPriceCents = S.PriceCents;
+			OutPriceCents = S.PriceCents > 0 ? (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)S.PriceCents)) : 0;
 			OutPackSize = S.PackSize;
 			return true;
 		}
@@ -265,20 +266,22 @@ int32 UStoreComponent::GetSellValueCents(FName ItemId) const
 	FText Name; int32 Buy = 0; int32 Pack = 1;
 	if (!StrainFromSeedItem(ItemId).IsNone() && GetSeedDisplay(StrainFromSeedItem(ItemId), Name, Buy))
 	{
-		return FMath::RoundToInt(Buy * 0.70f);
+		const int64 V = WeedRoundEuros((int64)FMath::RoundToInt(Buy * 0.70f));
+		return Buy > 0 ? (int32)FMath::Max<int64>(100, V) : (int32)V;
 	}
 	if (GetSupplyDisplay(ItemId, Name, Buy, Pack))
 	{
 		// Pack-prijs / pack-grootte = prijs per stuk, 70% terug.
 		const float PerUnit = Pack > 0 ? float(Buy) / Pack : float(Buy);
-		return FMath::RoundToInt(PerUnit * 0.70f);
+		const int64 V = WeedRoundEuros((int64)FMath::RoundToInt(PerUnit * 0.70f));
+		return Buy > 0 ? (int32)FMath::Max<int64>(100, V) : (int32)V;
 	}
 
 	// Meubels (placeables zonder koopprijs) hebben een vaste verkoopwaarde.
 	FPlaceableDef Pd;
 	if (GetPlaceableDef(ItemId, Pd) && Pd.SellCents > 0)
 	{
-		return Pd.SellCents;
+		return (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)Pd.SellCents));
 	}
 	return 0;
 }
@@ -304,7 +307,7 @@ bool UStoreComponent::SellItem(FName ItemId, UInventoryComponent* Seller)
 	}
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 2.5f, FColor::Green, FString::Printf(TEXT("Sold %s (+EUR %.2f)"), *ItemId.ToString(), Price / 100.f));
+		UWeedToast::Notify(-1, 2.5f, FColor::Green, FString::Printf(TEXT("Sold %s (+EUR %d)"), *ItemId.ToString(), (int32)(WeedRoundEuros((int64)Price) / 100)));
 	}
 	return true;
 }

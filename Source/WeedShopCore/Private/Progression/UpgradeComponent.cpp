@@ -65,7 +65,8 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 
 	// Betalen — upgrades koop je via de telefoon (online/legaal) -> met BANKGELD (wit) van de koper.
 	UEconomyComponent* Econ = PayFrom ? PayFrom : GS->GetEconomy();
-	if (!Econ || !Econ->RemoveBank(Row->CostCents))
+	const int64 UpgCost = Row->CostCents > 0 ? FMath::Max<int64>(100, WeedRoundEuros((int64)Row->CostCents)) : 0;
+	if (!Econ || !Econ->RemoveBank(UpgCost))
 	{
 		if (GEngine)
 		{
@@ -111,7 +112,7 @@ bool UUpgradeComponent::GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32
 		return false;
 	}
 	OutName = Row->DisplayName;
-	OutCostCents = Row->CostCents;
+	OutCostCents = Row->CostCents > 0 ? (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)Row->CostCents)) : 0;
 	bOutPurchased = Purchased.Contains(UpgradeId);
 
 	bOutAvailable = true;

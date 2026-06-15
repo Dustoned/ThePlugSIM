@@ -1,4 +1,5 @@
 #include "UI/InventoryWidget.h"
+#include "WeedShopCore.h"
 
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
@@ -626,13 +627,13 @@ void UInventoryWidget::RebuildContent()
 			if (bCash)
 			{
 				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.09f, 0.97f);
-				// Toon het ECHTE saldo inclusief centen (de cash-stapel zelf telt alleen hele euro's).
+				// Toon het saldo in hele euro's (de game rekent/toont alles in hele euro's).
 				const APawn* Pw = GetOwningPlayerPawn();
 				const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
-				const double Euros = Ec ? (Ec->GetCashCents() / 100.0) : static_cast<double>(S.Quantity);
-				Cell->Line2 = FString::Printf(TEXT("EUR %.2f"), Euros);
-				Cell->Badge = (Euros >= 1000.0) ? FString::Printf(TEXT("%.0fk"), Euros / 1000.0) : FString::Printf(TEXT("%.0f"), Euros);
-				Cell->Tooltip += FString::Printf(TEXT("\nEUR %.2f contant"), Euros);
+				const int64 Euros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : static_cast<int64>(S.Quantity);
+				Cell->Line2 = FString::Printf(TEXT("EUR %lld"), (long long)Euros);
+				Cell->Badge = (Euros >= 1000) ? FString::Printf(TEXT("%.0fk"), Euros / 1000.0) : FString::Printf(TEXT("%lld"), (long long)Euros);
+				Cell->Tooltip += FString::Printf(TEXT("\nEUR %lld contant"), (long long)Euros);
 			}
 			else if (bWet)
 			{

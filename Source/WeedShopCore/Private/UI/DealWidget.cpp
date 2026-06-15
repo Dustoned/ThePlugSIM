@@ -1,4 +1,5 @@
 #include "UI/DealWidget.h"
+#include "WeedShopCore.h"
 #include "AIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "World/CityDoor.h" // FriendlyNpcName fallback
@@ -377,18 +378,18 @@ void UDealWidget::UpdateLive()
 	if (!bHasWeed)
 	{
 		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.
-		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dg %s  (market EUR %.2f)"),
-			Qty, *PrettyName(C->DesiredProductId), C->GetMarketPriceCents() / 100.f)));
+		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dg %s  (market EUR %d)"),
+			Qty, *PrettyName(C->DesiredProductId), (int32)(WeedRoundEuros((int64)C->GetMarketPriceCents()) / 100))));
 		return;
 	}
 
-	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dx %s  (market EUR %.2f)"),
-		Qty, *PrettyName(C->DesiredProductId), C->GetMarketPriceCents() / 100.f)));
+	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dx %s  (market EUR %d)"),
+		Qty, *PrettyName(C->DesiredProductId), (int32)(WeedRoundEuros((int64)C->GetMarketPriceCents()) / 100))));
 	SubText->SetText(FText::FromString(bSub ? FString::Printf(TEXT("Offering instead: %s  (substitute)"), *PrettyName(Offered)) : FString()));
 
 	const float Pct = float(Ask) / Market * 100.f;
-	PriceText->SetText(FText::FromString(FString::Printf(TEXT("Your price: EUR %.2f / unit  (%.0f%%)   Total EUR %.2f"),
-		Ask / 100.f, Pct, (Ask * Qty) / 100.f)));
+	PriceText->SetText(FText::FromString(FString::Printf(TEXT("Your price: EUR %d / unit  (%.0f%%)   Total EUR %d"),
+		(int32)(WeedRoundEuros((int64)Ask) / 100), Pct, (int32)(WeedRoundEuros((int64)Ask * Qty) / 100))));
 	// Slider volgt het bod als de speler 'm niet vasthoudt.
 	if (PriceSlider && !bSliderHeld)
 	{

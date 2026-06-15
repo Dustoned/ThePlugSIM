@@ -1,4 +1,5 @@
 #include "UI/StoreWidget.h"
+#include "WeedShopCore.h"
 
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
@@ -272,7 +273,7 @@ void UStoreWidget::FillBody()
 		IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
 
 		// Prijs.
-		Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %.2f"), Price / 100.f), 13, FLinearColor(0.95f, 0.9f, 0.6f), false, true))
+		Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)Price) / 100)), 13, FLinearColor(0.95f, 0.9f, 0.6f), false, true))
 			->SetVerticalAlignment(VAlign_Center);
 
 		if (bLocked)
@@ -303,7 +304,7 @@ void UStoreWidget::FillBody()
 		APawn* Pw = GetOwningPlayerPawn();
 		const UEconomyComponent* Econ = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
 		BalanceText->SetText(Econ
-			? FText::FromString(FString::Printf(TEXT("Cash EUR %.2f     Bank EUR %.2f"), Econ->GetCashCents() / 100.f, Econ->GetBankCents() / 100.f))
+			? FText::FromString(FString::Printf(TEXT("Cash EUR %lld     Bank EUR %lld"), (long long)(WeedRoundEuros(Econ->GetCashCents()) / 100), (long long)(WeedRoundEuros(Econ->GetBankCents()) / 100)))
 			: FText::GetEmpty());
 	}
 
@@ -313,12 +314,12 @@ void UStoreWidget::FillBody()
 	{
 		CartText->SetText(FText::FromString(Lines == 0
 			? FString(TEXT("Cart empty"))
-			: FString::Printf(TEXT("Cart: %d item(s)   EUR %.2f"), Lines, CartTotalCents() / 100.f)));
+			: FString::Printf(TEXT("Cart: %d item(s)   EUR %d"), Lines, (int32)(WeedRoundEuros((int64)CartTotalCents()) / 100))));
 	}
 	if (CheckoutBtn)
 	{
 		CheckoutBtn->SetContent(WeedUI::Text(WidgetTree,
-			bConfirmPending ? FString::Printf(TEXT("Confirm purchase - EUR %.2f"), CartTotalCents() / 100.f) : FString(TEXT("Checkout")),
+			bConfirmPending ? FString::Printf(TEXT("Confirm purchase - EUR %d"), (int32)(WeedRoundEuros((int64)CartTotalCents()) / 100)) : FString(TEXT("Checkout")),
 			14, FLinearColor::White, true, true));
 	}
 }

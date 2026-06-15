@@ -2954,7 +2954,9 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	// Losse Bud_ (niet verpakt) + de tussenstappen zijn NIET verkoopbaar aan klanten. (Oil IS nu wel
 	// verkoopbaar: het was een eindproduct zonder afzet -> dead weight.)
 	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_"))) { return 0; }
-	return Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult) : 0;
+	const int32 Raw = Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult) : 0;
+	const int64 Rounded = WeedRoundEuros((int64)Raw);
+	return Raw > 0 ? (int32)FMath::Max<int64>(100, Rounded) : (int32)Rounded;
 }
 
 FName ACustomerBase::PickDesiredProduct(AWeedShopGameState* GS, UDataTable* InProductTable, FName InNpcId, int32& OutQty)
@@ -3278,7 +3280,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	int32 OrderBonusCents = 0;
 	if (IsOrder() && !bSubstitute && SoldThc >= GetOrderMinThc() && SoldGrams >= DesiredQuantity)
 	{
-		OrderBonusCents = FMath::RoundToInt(Total * (GetOrderBonusMult() - 1.f));
+		OrderBonusCents = (int32)WeedRoundEuros((int64)FMath::RoundToInt(Total * (GetOrderBonusMult() - 1.f)));
 		Total += OrderBonusCents;
 		bOrderFulfilled = true;
 	}
@@ -3291,8 +3293,8 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		{
 			Say(TEXT("Exactly what I wanted. Pleasure doing business."));
 			UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 5.f, FColor(255, 215, 90),
-				FString::Printf(TEXT("VIP order filled! +%d%% bonus (+EUR %.2f)"),
-					FMath::RoundToInt((GetOrderBonusMult() - 1.f) * 100.f), OrderBonusCents / 100.f));
+				FString::Printf(TEXT("VIP order filled! +%d%% bonus (+EUR %d)"),
+					FMath::RoundToInt((GetOrderBonusMult() - 1.f) * 100.f), (int32)(WeedRoundEuros((int64)OrderBonusCents) / 100)));
 		}
 	}
 

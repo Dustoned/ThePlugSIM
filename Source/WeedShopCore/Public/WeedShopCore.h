@@ -10,6 +10,9 @@
 // Gebruik in code als:  UE_LOG(LogWeedShop, Log, TEXT("..."));
 DECLARE_LOG_CATEGORY_EXTERN(LogWeedShop, Log, All);
 
+// Geld: rond cents af op hele euro's (multiple van 100). De game toont/rekent alles in hele euro's.
+inline int64 WeedRoundEuros(int64 Cents) { return ((Cents < 0 ? Cents - 50 : Cents + 50) / 100) * 100; }
+
 // Roep dit aan vlak vóór een level-reload die IN-GAME gaat (New Game/Load/Continue): de eerstvolgende
 // map-load toont dan het laadscherm. De boot naar het hoofdmenu zet dit NIET -> daar geen laadscherm.
 WEEDSHOPCORE_API void WeedShop_RequestGameLoadingScreen();

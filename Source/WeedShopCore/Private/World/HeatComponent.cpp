@@ -131,12 +131,12 @@ void UHeatComponent::TriggerBust()
 	{
 		return;
 	}
-	const int64 Loss = FMath::Max<int64>(500, (int64)(Econ->GetBalanceCents() * 0.2));
+	const int64 Loss = FMath::Max<int64>(500, WeedRoundEuros((int64)(Econ->GetBalanceCents() * 0.2)));
 	Econ->RemoveMoney(Loss);
 	SetHeat(Heat - 40.f);
 	UE_LOG(LogWeedShop, Log, TEXT("BUST! Politie pakte %lld cents."), (long long)Loss);
 	NotifyAllPlayers(GetWorld(), FColor::Red, 6.f,
-		FString::Printf(TEXT("BUST! Police took EUR %.2f"), Loss / 100.f));
+		FString::Printf(TEXT("BUST! Police took EUR %lld"), (long long)(WeedRoundEuros(Loss) / 100)));
 }
 
 void UHeatComponent::TriggerRobbery()
@@ -147,7 +147,7 @@ void UHeatComponent::TriggerRobbery()
 	{
 		return;
 	}
-	const int64 Loss = FMath::Max<int64>(300, (int64)(Econ->GetBalanceCents() * 0.15));
+	const int64 Loss = FMath::Max<int64>(300, WeedRoundEuros((int64)(Econ->GetBalanceCents() * 0.15)));
 	Econ->RemoveMoney(Loss);   // alleen on-hand cash: de kluis (SafeCents) en de bank blijven veilig
 	SetHeat(Heat - 15.f);
 
@@ -181,6 +181,6 @@ void UHeatComponent::TriggerRobbery()
 	UE_LOG(LogWeedShop, Log, TEXT("Overval! %lld cents + apartment leeggehaald (%d planten, %d rekken, %d machines)."),
 		(long long)Loss, Plants, Racks, Machines);
 	NotifyAllPlayers(GetWorld(), FColor(255, 140, 0), 8.f,
-		FString::Printf(TEXT("Robbery! EUR %.2f stolen + your apartment got cleaned out (%d plants, %d racks, %d machines). Use a safe!"),
-			Loss / 100.f, Plants, Racks, Machines));
+		FString::Printf(TEXT("Robbery! EUR %lld stolen + your apartment got cleaned out (%d plants, %d racks, %d machines). Use a safe!"),
+			(long long)(WeedRoundEuros(Loss) / 100), Plants, Racks, Machines));
 }

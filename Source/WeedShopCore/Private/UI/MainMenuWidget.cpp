@@ -1,4 +1,5 @@
 #include "UI/MainMenuWidget.h"
+#include "WeedShopCore.h"
 
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
@@ -69,7 +70,7 @@ namespace
 	// "€ 12.345" met punt als duizendtal-scheiding.
 	FString FmtEuro(int64 Cents)
 	{
-		const int64 Euro = Cents / 100;
+		const int64 Euro = WeedRoundEuros(Cents) / 100;
 		FString Digits = FString::Printf(TEXT("%lld"), Euro < 0 ? -Euro : Euro);
 		FString Grouped;
 		int32 Count = 0;

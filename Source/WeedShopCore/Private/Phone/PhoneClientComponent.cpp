@@ -104,7 +104,7 @@ int32 UPhoneClientComponent::GetRentDueCents() const
 		Total += 40000;                                  // basis-huur per appartement (EUR 400)
 		Total += (int64)GetHomeSellValueCents(H) * 12 / 100; // duurder pand -> meer huur
 	}
-	return static_cast<int32>(Total);
+	return static_cast<int32>(WeedRoundEuros(Total));
 }
 
 void UPhoneClientComponent::ProcessRentForDay(int32 Day)
@@ -119,7 +119,7 @@ void UPhoneClientComponent::ProcessRentForDay(int32 Day)
 		if (Rent0 > 0 && GEngine)
 		{
 			UWeedToast::NotifyPawn(GetOwner(), -1, 7.f, FColor(255, 210, 120),
-				FString::Printf(TEXT("Make money for rent! EUR %.2f due by day %d (in 30 days) - it comes off your bank."), Rent0 / 100.f, RentDueDay));
+				FString::Printf(TEXT("Make money for rent! EUR %d due by day %d (in 30 days) - it comes off your bank."), (int32)(WeedRoundEuros((int64)Rent0) / 100), RentDueDay));
 		}
 	}
 
@@ -141,8 +141,8 @@ void UPhoneClientComponent::ProcessRentForDay(int32 Day)
 		if (GEngine)
 		{
 			UWeedToast::NotifyPawn(GetOwner(), -1, 6.f, bDebt ? FColor::Red : FColor(150, 220, 160), bDebt
-				? FString::Printf(TEXT("Rent EUR %.2f charged - bank is in the RED (EUR %.2f). Pay it off, heat rising!"), Rent / 100.f, Econ->GetBankCents() / 100.f)
-				: FString::Printf(TEXT("Rent paid: EUR %.2f. Bank: EUR %.2f"), Rent / 100.f, Econ->GetBankCents() / 100.f));
+				? FString::Printf(TEXT("Rent EUR %d charged - bank is in the RED (EUR %lld). Pay it off, heat rising!"), (int32)(WeedRoundEuros((int64)Rent) / 100), (long long)(WeedRoundEuros((int64)Econ->GetBankCents()) / 100))
+				: FString::Printf(TEXT("Rent paid: EUR %d. Bank: EUR %lld"), (int32)(WeedRoundEuros((int64)Rent) / 100), (long long)(WeedRoundEuros((int64)Econ->GetBankCents()) / 100)));
 		}
 	}
 	RentDueDay = Day + 30; // volgende termijn over 30 dagen
@@ -379,8 +379,10 @@ void UPhoneClientComponent::GetHomesUnified(TArray<FApartmentHome>& Out) const
 void UPhoneClientComponent::GetOffersUnified(TArray<FCityPropertyOffer>& Out) const
 {
 	Out.Reset();
-	if (ACityGenerator* City = FindCity()) { City->GetPropertyOffers(Out); return; }
-	if (ADoorRetrofitter* Retro = FindRetro()) { Retro->GetBeachPropertyOffers(Out); }
+	if (ACityGenerator* City = FindCity()) { City->GetPropertyOffers(Out); }
+	else if (ADoorRetrofitter* Retro = FindRetro()) { Retro->GetBeachPropertyOffers(Out); }
+	// Alle pand-prijzen op hele euro's zodat tonen, kopen en verkopen consistent zijn.
+	for (FCityPropertyOffer& O : Out) { if (O.PriceCents > 0) { O.PriceCents = FMath::Max<int64>(100, WeedRoundEuros(O.PriceCents)); } }
 }
 
 void UPhoneClientComponent::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
@@ -674,7 +676,7 @@ void UPhoneClientComponent::PropertyTick()
 		if (Rent0 > 0 && GEngine)
 		{
 			UWeedToast::NotifyPawn(GetOwner(), -1, 8.f, FColor(255, 210, 120),
-				FString::Printf(TEXT("Make money for rent! EUR %.2f due by day %d (in 30 days) - it comes off your bank."), Rent0 / 100.f, RentDueDay));
+				FString::Printf(TEXT("Make money for rent! EUR %d due by day %d (in 30 days) - it comes off your bank."), (int32)(WeedRoundEuros((int64)Rent0) / 100), RentDueDay));
 		}
 	}
 }
@@ -804,7 +806,7 @@ int32 UPhoneClientComponent::GetHomeSellValueCents(int32 HomeIndex) const
 	const FCityPropertyOffer* Off = Offers.FindByPredicate(
 		[HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex || O.Homes.Contains(HomeIndex); });
 	if (!Off || Off->PriceCents <= 0) { return 0; }  // starter (gratis) is niet verkoopbaar
-	return (int32)((int64)Off->PriceCents * 65 / 100); // 65% terug
+	return (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)Off->PriceCents * 65 / 100)); // 65% terug
 }
 
 void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
@@ -820,7 +822,7 @@ void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
 		return;
 	}
 
-	const int64 Refund = (int64)Off->PriceCents * 65 / 100;
+	const int64 Refund = WeedRoundEuros((int64)Off->PriceCents * 65 / 100);
 	if (UEconomyComponent* Econ = GetOwnerEconomy()) { Econ->AddBank(Refund, false); }
 
 	for (int32 Idx : Off->Homes) { OwnedHomes.Remove(Idx); }                       // hele aanbieding (1 of 3 panden)
@@ -831,7 +833,7 @@ void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
 	}
 	if (SelectedDeliveryHome == HomeIndex || Off->Homes.Contains(SelectedDeliveryHome)) { SelectedDeliveryHome = -1; }
 	ApplyLocalDoors();
-	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Property sold: +EUR %.0f"), Refund / 100.f)); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("Property sold: +EUR %lld"), (long long)(Refund / 100))); }
 }
 
 bool UPhoneClientComponent::GetActiveHomeLocation(FVector& OutWorld) const
@@ -1375,12 +1377,13 @@ void UPhoneClientComponent::ServerClaimGoal_Implementation(int32 Idx)
 	if (!Goals || !Goals->MarkClaimed(Idx)) { return; }     // niet klaar of al geclaimd
 	const FGoalDef& Gd = UGoalsComponent::Goals()[Idx];
 
-	// Geld-reward (cash) + item-reward naar deze speler.
-	if (Gd.RewardMoneyCents > 0)
+	// Geld-reward (cash) + item-reward naar deze speler. Hele euro's.
+	const int64 RewardMoney = Gd.RewardMoneyCents > 0 ? FMath::Max<int64>(100, WeedRoundEuros((int64)Gd.RewardMoneyCents)) : 0;
+	if (RewardMoney > 0)
 	{
 		if (UEconomyComponent* Ec = GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr)
 		{
-			Ec->AddMoney((int32)Gd.RewardMoneyCents);
+			Ec->AddMoney(RewardMoney);
 		}
 	}
 	if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0)
@@ -1392,8 +1395,8 @@ void UPhoneClientComponent::ServerClaimGoal_Implementation(int32 Idx)
 	if (GEngine)
 	{
 		FString Reward;
-		if (Gd.RewardMoneyCents > 0) { Reward += FString::Printf(TEXT("EUR %lld"), (long long)(Gd.RewardMoneyCents / 100)); }
-		if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0) { Reward += FString::Printf(TEXT("%s%dx %s"), Gd.RewardMoneyCents > 0 ? TEXT(" + ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem)); }
+		if (RewardMoney > 0) { Reward += FString::Printf(TEXT("EUR %lld"), (long long)(RewardMoney / 100)); }
+		if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0) { Reward += FString::Printf(TEXT("%s%dx %s"), RewardMoney > 0 ? TEXT(" + ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem)); }
 		UWeedToast::NotifyPawn(GetOwner(), -1, 4.5f, FColor(255, 210, 70), FString::Printf(TEXT("GOAL COMPLETE: %s  ->  %s"), *Gd.Title, *Reward));
 	}
 }
@@ -1819,13 +1822,13 @@ void UPhoneClientComponent::SetDealAskCents(int32 Cents)
 	const int32 Market = GetOfferMarketCents();
 	if (Market <= 0)
 	{
-		DealAskCents = FMath::Max(0, Cents);
+		DealAskCents = FMath::Max(0, (int32)WeedRoundEuros((int64)Cents));
 		return;
 	}
-	// Band: 40%..200% van de markt van het aangeboden product.
-	const int32 Lo = FMath::RoundToInt(Market * 0.40f);
-	const int32 Hi = FMath::RoundToInt(Market * 2.00f);
-	DealAskCents = FMath::Clamp(Cents, Lo, Hi);
+	// Band: 40%..200% van de markt van het aangeboden product. Hele euro's.
+	const int32 Lo = (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)FMath::RoundToInt(Market * 0.40f)));
+	const int32 Hi = (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)FMath::RoundToInt(Market * 2.00f)));
+	DealAskCents = FMath::Clamp((int32)WeedRoundEuros((int64)Cents), Lo, Hi);
 }
 
 void UPhoneClientComponent::MarkUiClickConsumed()
@@ -1879,6 +1882,7 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 	UEconomyComponent* Econ = GetOwnerEconomy();
 	UInventoryComponent* Stock = GetOwnerInventory();
 
+	AskCents = AskCents > 0 ? (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)AskCents)) : (int32)WeedRoundEuros((int64)AskCents);
 	const EDealResult Result = Customer->SubmitOfferProduct(ProductId, AskCents, Econ, Stock);
 
 	// NPC reageert in het praat-venster.
@@ -1898,7 +1902,7 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 		{
 		case EDealResult::Accepted:
 			Col = FColor::Green;
-			Msg = FString::Printf(TEXT("Deal! Sold for EUR %.2f"), (AskCents * Customer->DesiredQuantity) / 100.f);
+			Msg = FString::Printf(TEXT("Deal! Sold for EUR %d"), (int32)(WeedRoundEuros((int64)AskCents * Customer->DesiredQuantity) / 100));
 			break;
 		case EDealResult::Haggle:
 			Col = FColor::Yellow;  Msg = TEXT("Too expensive — they want to haggle."); break;
@@ -2009,7 +2013,7 @@ void UPhoneClientComponent::ServerStoreCheckout_Implementation(const TArray<FNam
 		if (L.bSeed) { Inv->AddItem(Store->SeedItemId(L.Id), L.Qty); }
 		else         { Inv->AddItem(L.Id, FMath::Max(1, L.Pack) * L.Qty); }
 	}
-	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160), FString::Printf(TEXT("Bought for EUR %.2f"), Total / 100.f)); }
+	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160), FString::Printf(TEXT("Bought for EUR %lld"), (long long)(WeedRoundEuros(Total) / 100))); }
 }
 
 void UPhoneClientComponent::SetTab(int32 NewTab)
@@ -2277,7 +2281,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	{
 		BuySub += (int64)Store->GetCatalogPriceCents(BuyIds[i]) * (BuyQtys.IsValidIndex(i) ? BuyQtys[i] : 0);
 	}
-	const int64 Fee = FMath::RoundToInt(BuySub * DeliveryFeePct(DeliveryOption));
+	const int64 Fee = WeedRoundEuros((int64)FMath::RoundToInt(BuySub * DeliveryFeePct(DeliveryOption)));
 
 	// 2) Verkoop-opbrengst op basis van wat de speler echt heeft (clamp; nog niet verwijderen).
 	int64 SellProceeds = 0;
@@ -2314,7 +2318,7 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	{
 		if (GEngine && SellProceeds > 0)
 		{
-			UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Green, FString::Printf(TEXT("Sold for EUR %.2f"), SellProceeds / 100.f));
+			UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Green, FString::Printf(TEXT("Sold for EUR %lld"), (long long)(WeedRoundEuros(SellProceeds) / 100)));
 		}
 		return;
 	}
@@ -2760,7 +2764,7 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Yellow,
-			FString::Printf(TEXT("Order cancelled - EUR %.2f refunded"), Refund / 100.f));
+			FString::Printf(TEXT("Order cancelled - EUR %lld refunded"), (long long)(WeedRoundEuros(Refund) / 100)));
 	}
 	PendingDeliveries.RemoveAt(Idx);
 }
