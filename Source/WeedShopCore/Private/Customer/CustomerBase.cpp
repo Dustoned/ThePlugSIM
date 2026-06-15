@@ -211,41 +211,39 @@ bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAl
 	return false;
 }
 
-// Random NPC-skin uit de pack-pool. Alle skeletons zijn compatibel gemaakt met SK_Mannequin,
-// dus de single-node walk/idle-anims (Mannequin) blijven gewoon op deze meshes werken.
-static USkeletalMesh* WeedNpc_PickSkin(int32 Seed)
+// NPC-skin per KLANT-TIER (1=Casual .. 5=Whale) zodat je op straat ziet wie wat is: lager tier =
+// plainere/gewonere look, hoger tier = de karaktervolle/herkenbare looks (je vaste klanten/whales
+// vallen op). Binnen een tier varieert 't op seed. Alle skeletons zijn compatibel met SK_Mannequin,
+// dus de single-node walk/idle-anims blijven werken.
+// NB: indeling is een eerste gok (ik kan de meshes niet zien) - looks zijn makkelijk te verschuiven.
+static USkeletalMesh* WeedNpc_PickSkinForTier(int32 Tier, int32 Seed)
 {
-	static const TCHAR* Pool[] = {
-		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
-		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
-		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
+	static const TCHAR* High[] = { // tier 4-5: VIP/whale-uitstraling (Tony = bril + wiethoed)
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_A.SK_Citizens_Pack_Tony_A"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_D.SK_Citizens_Pack_Tony_D"),
+	};
+	static const TCHAR* Mid[] = { // tier 3: normale casual mensen
 		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_1.SK_FullBody_Casual_1"),
 		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_2.SK_FullBody_Casual_2"),
 		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_3.SK_FullBody_Casual_3"),
-		TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"),
-		TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"),
 	};
-	const int32 N = UE_ARRAY_COUNT(Pool);
+	static const TCHAR* Low[] = { // tier 1-2: gewone/anonieme straat-mensen
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
+	};
+	const TCHAR* const* Band = Low; int32 N = UE_ARRAY_COUNT(Low);
+	if (Tier >= 4)      { Band = High; N = UE_ARRAY_COUNT(High); }
+	else if (Tier == 3) { Band = Mid;  N = UE_ARRAY_COUNT(Mid); }
 	const uint32 H = (uint32)Seed * 2654435761u + 12345u;
-	return LoadObject<USkeletalMesh>(nullptr, Pool[H % (uint32)N]);
+	return LoadObject<USkeletalMesh>(nullptr, Band[H % (uint32)N]);
 }
 
 void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// Geef deze NPC een willekeurige (maar stabiele) skin uit de pool i.p.v. allemaal dezelfde
-	// mannequin. Seed: NpcId (stabiel per bewoner) of de roam-seed, anders de instance-id.
-	if (USkeletalMeshComponent* M = GetMesh())
-	{
-		int32 Seed = !NpcId.IsNone() ? (int32)GetTypeHash(NpcId) : RoamRouteSeed;
-		if (Seed == 0) { Seed = (int32)GetUniqueID(); }
-		if (USkeletalMesh* Sk = WeedNpc_PickSkin(Seed)) { M->SetSkeletalMesh(Sk); }
-	}
 
 	// Loop/idle zelf aansturen (single-node) -> NPC's animeren echt i.p.v. glijden.
 	if (USkeletalMeshComponent* M = GetMesh())
@@ -278,6 +276,13 @@ void ACustomerBase::BeginPlay()
 			{
 				Respect = R; Loyalty = L; Addiction = A;
 			}
+		}
+
+		// Skin op basis van KLANT-TIER -> op straat herkenbaar wie high/low-tier is (NpcId is nu bekend).
+		if (USkeletalMeshComponent* SkM = GetMesh())
+		{
+			const int32 Tier = (GS && GS->GetNpcRegistry()) ? GS->GetNpcRegistry()->GetCustomerTier(NpcId) : 1;
+			if (USkeletalMesh* Sk = WeedNpc_PickSkinForTier(Tier, (int32)GetTypeHash(NpcId))) { SkM->SetSkeletalMesh(Sk); }
 		}
 
 		// Nog te weinig verslaving? Dan is dit (nog) geen koper maar een prospect: eerst opwarmen
