@@ -1,8 +1,11 @@
 # upload-build.ps1 - package ThePlugSIM (Win64), zip it, en upload als GitHub Release.
-# Gebruik:  powershell -ExecutionPolicy Bypass -File Tools\upload-build.ps1 -Notes "wat is er nieuw"
+# Gebruik:  powershell -ExecutionPolicy Bypass -File "<pad>\Tools\upload-build.ps1" [-Quality 2K|1K|4K] [-Notes "wat is er nieuw"]
+#   -Quality 2K (default) = aanbevolen balans; 1K = kleinste download; 4K = beste kwaliteit.
+#   Voor twee losse releases: draai 'm twee keer, met -Quality 2K en met -Quality 1K.
 param(
     [string]$Notes = "Nieuwe test-build.",
-    [string]$Config = "Shipping"
+    [string]$Config = "Shipping",
+    [ValidateSet("2K","1K","4K")][string]$Quality = "2K"
 )
 $ErrorActionPreference = "Stop"
 $Proj   = "C:\Users\Dustoned\Documents\Unreal Projects\ThePlugSIM - Claude"
@@ -11,6 +14,16 @@ $UAT    = "E:\UE\UE_5.7\Engine\Build\BatchFiles\RunUAT.bat"
 $Archive = Join-Path $Proj "Build\Archive"
 $Repo   = "Dustoned/ThePlugSIM"
 New-Item -ItemType Directory -Force (Join-Path $Proj "Build") | Out-Null
+
+# Texture-resolutie-cap voor deze build (Config\DefaultDeviceProfiles.ini). Bron-assets blijven onaangetast.
+$MaxLOD = @{ "4K" = 4096; "2K" = 2048; "1K" = 1024 }[$Quality]
+$Ini = Join-Path $Proj "Config\DefaultDeviceProfiles.ini"
+if (Test-Path $Ini) {
+    $IniText = [System.IO.File]::ReadAllText($Ini)
+    $IniText = [regex]::Replace($IniText, "MaxLODSize=\d+", "MaxLODSize=$MaxLOD")
+    [System.IO.File]::WriteAllText($Ini, $IniText, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "== Texture-cap gezet op $Quality ($MaxLOD px) =="
+}
 
 # Geen -Notes meegegeven? Lees dan automatisch de patch notes uit Docs\PATCHNOTES.md (UTF-8).
 $NotesPath = Join-Path $Proj "Docs\PATCHNOTES.md"
@@ -52,10 +65,10 @@ if (Test-Path $SrcUI) {
     Write-Host "== Losse UI-bestanden (iconen + menu-art) meegekopieerd naar de build =="
 }
 
-# Versie/tag op datum-tijd.
+# Versie/tag op datum-tijd + kwaliteit (zo botsen 2K- en 1K-release niet).
 $Stamp = Get-Date -Format "yyyyMMdd-HHmm"
-$Tag   = "build-$Stamp"
-$Zip   = Join-Path $Proj "Build\ThePlugSIM-$Stamp.zip"
+$Tag   = "build-$Stamp-$Quality"
+$Zip   = Join-Path $Proj "Build\ThePlugSIM-$Stamp-$Quality.zip"
 
 Write-Host "== Zippen -> $Zip =="
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
@@ -65,15 +78,25 @@ $SizeMB = [math]::Round((Get-Item $Zip).Length / 1MB, 1)
 Write-Host "== Zip klaar: $SizeMB MB =="
 
 Write-Host "== Uploaden naar GitHub Release ($Tag) =="
-$Title = "ThePlugSIM test-build $Stamp"
-$Body  = "$Notes`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download de zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
+$QLabel = @{ "4K" = "4K textures - beste kwaliteit, grootste download"; "2K" = "2K textures - aanbevolen balans"; "1K" = "1K textures - kleinste download" }[$Quality]
+$Title = "ThePlugSIM test-build $Stamp ($Quality)"
+$Body  = "$Notes`n`n## Deze download`n$QLabel`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download de zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
 # Notes via een UTF-8 bestand (--notes-file) zodat symbolen (pijlen/vinkjes/lijnen in de patch notes) correct renderen.
 $NotesFile = Join-Path $Proj "Build\release-notes.md"
 [System.IO.File]::WriteAllText($NotesFile, $Body, (New-Object System.Text.UTF8Encoding($false)))
-gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" --latest
+# 2K is de aanbevolen 'latest'; andere kwaliteiten staan als losse release in de lijst.
+$LatestArg = if ($Quality -eq "2K") { @("--latest") } else { @("--latest=false") }
+gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" @LatestArg
 if ($LASTEXITCODE -ne 0) { Write-Error "GitHub release upload mislukt"; exit 1 }
 
 # Onthoud welke commit deze build was, voor de changelog van de volgende keer.
 (git -C "$Proj" rev-parse HEAD).Trim() | Set-Content $ShaFile -Encoding ascii
+
+# Reset de texture-cap terug naar de 2K-default zodat de repo-config schoon blijft.
+if (Test-Path $Ini) {
+    $IniText = [System.IO.File]::ReadAllText($Ini)
+    $IniText = [regex]::Replace($IniText, "MaxLODSize=\d+", "MaxLODSize=2048")
+    [System.IO.File]::WriteAllText($Ini, $IniText, (New-Object System.Text.UTF8Encoding($false)))
+}
 
 Write-Host "== KLAAR! Vrienden kunnen downloaden op: https://github.com/$Repo/releases/latest =="
