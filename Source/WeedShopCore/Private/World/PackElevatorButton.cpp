@@ -3,6 +3,7 @@
 #include "World/PackElevator.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/PointLightComponent.h"
 
@@ -38,6 +39,9 @@ void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator&
 		DigitMesh->SetMobility(EComponentMobility::Movable);
 		DigitMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		DigitMesh->SetCanEverAffectNavigation(false);
+		// Knop-cijfer licht zelf zacht wit op (unlit emissive) -> altijd leesbaar, geen echte lichtbron.
+		static UMaterialInterface* DigitGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitGlow.M_DigitGlow"));
+		if (DigitGlow) { DigitMesh->SetMaterial(0, DigitGlow); }
 	}
 	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
 	DigitMesh->SetWorldScale3D(FVector(Scale)); // digit-mesh is 3x5cm -> opschalen naar leesbaar formaat

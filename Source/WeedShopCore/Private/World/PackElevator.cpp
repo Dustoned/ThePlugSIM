@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/TextRenderComponent.h"
@@ -86,6 +87,9 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigit->SetRelativeLocation(FVector(-192.f, 0.f, 175.f));
 		CabDigit->SetRelativeRotation(FRotator::ZeroRotator); // lokale +X = naar de opening
 		CabDigit->SetRelativeScale3D(FVector(5.f));
+		// Cijfer licht zelf zacht wit op (unlit emissive) -> altijd leesbaar, zonder echte lichtbron.
+		static UMaterialInterface* DigitGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitGlow.M_DigitGlow"));
+		if (DigitGlow) { CabDigit->SetMaterial(0, DigitGlow); }
 		// Richting-pijl naast het display: ^ of v zolang de lift rijdt.
 		CabArrow = NewObject<UTextRenderComponent>(this);
 		CabArrow->SetupAttachment(Cab);
