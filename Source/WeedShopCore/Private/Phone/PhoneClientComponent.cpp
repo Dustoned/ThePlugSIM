@@ -572,19 +572,25 @@ void UPhoneClientComponent::SpawnLightSwitches()
 			if (YIdx != INDEX_NONE) { Yaw = FCString::Atof(*Line.Mid(YIdx + 4)); }
 			MarkSpots.Add({ M, Yaw });
 		}
+		// F9 plakt nieuwe markers erachter: gebruik alleen de LAATSTE 2 (meest recente) zodat opnieuw
+		// markeren de schakelaars VERPLAATST i.p.v. er dubbele bij te zetten.
+		while (MarkSpots.Num() > 2) { MarkSpots.RemoveAt(0); }
 		if (MarkSpots.Num() > 0)
 		{
 			for (int32 m = 0; m < MarkSpots.Num(); ++m)
 			{
 				// F9 logt waar je STOND, niet waar je KEEK. Trace vanaf de marker in je kijkrichting (yaw)
 				// tot de muur en plak het plaatje daar plat tegenaan, met de voorkant de kamer in.
+				// WorldStatic eerst (muren blokkeren dat betrouwbaar), Visibility als reserve.
 				const FVector Start = MarkSpots[m].P;
 				const FVector Dir = FRotator(0.f, MarkSpots[m].Yaw, 0.f).Vector();
 				FVector Pos = Start;
 				FRotator Rot(0.f, MarkSpots[m].Yaw + 180.f, 0.f);
 				FHitResult Hit;
 				FCollisionQueryParams Q(FName(TEXT("LightSwitchWall")), /*bTraceComplex=*/false, P);
-				if (W->LineTraceSingleByChannel(Hit, Start, Start + Dir * 600.f, ECC_Visibility, Q))
+				bool bHit = W->LineTraceSingleByChannel(Hit, Start, Start + Dir * 700.f, ECC_WorldStatic, Q);
+				if (!bHit) { bHit = W->LineTraceSingleByChannel(Hit, Start, Start + Dir * 700.f, ECC_Visibility, Q); }
+				if (bHit)
 				{
 					Pos = Hit.Location - Dir * 4.f; // net vóór de muur (geen z-fighting)
 					if (!Hit.Normal.IsNearlyZero()) { Rot = Hit.Normal.Rotation(); } // voorkant = uit de muur de kamer in
