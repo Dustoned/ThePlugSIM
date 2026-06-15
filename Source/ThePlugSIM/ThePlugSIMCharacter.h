@@ -190,6 +190,9 @@ protected:
 	/** Geeft de speler een startvoorraad (vloei, wat wiet, een zaadje). */
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// Vlieg-modus (MOVE_Flying) repliceert; de noclip-collision koppelen we hieraan zodat ALLE clients
+	// dezelfde staat tonen (anders vliegt een co-op-speler bij de ander mét collision = "zwevend/sliding").
+	virtual void OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode) override;
 
 	/** Telefoon-logica (openen, tabs, kopen, afspraken) — aangestuurd door input + HUD-klikken. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))

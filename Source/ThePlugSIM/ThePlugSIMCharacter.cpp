@@ -270,6 +270,20 @@ void AThePlugSIMCharacter::WeedUnstuck()
 	RecoverToSafe(true); // handmatige reset -> dichtstbijzijnde begaanbare plek (weg), niet naar huis
 }
 
+void AThePlugSIMCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
+{
+	Super::OnMovementModeChanged(PrevMovementMode, PreviousCustomMode);
+	// De noclip-collision volgt de (gerepliceerde) vlieg-modus, zodat host EN client dezelfde staat tonen:
+	// een vliegende co-op-speler gaat overal door muren (geen "zwevend mét collision/sliding" bij de ander).
+	if (UCapsuleComponent* Cap = GetCapsuleComponent())
+	{
+		const bool bFlying = GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying;
+		Cap->SetCollisionEnabled(bFlying ? ECollisionEnabled::QueryOnly : ECollisionEnabled::QueryAndPhysics);
+		Cap->SetCollisionResponseToChannel(ECC_WorldStatic, bFlying ? ECR_Ignore : ECR_Block);
+		Cap->SetCollisionResponseToChannel(ECC_WorldDynamic, bFlying ? ECR_Ignore : ECR_Block);
+	}
+}
+
 void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 {
 	// Mijn EIGEN pawn gebruikt de ABP/FP-view -> geen fallback. Elke ANDERE speler die ik zie (host ziet de
@@ -545,20 +559,14 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 				if (UCharacterMovementComponent* CM = GetCharacterMovement())
 				{
 					const bool bFlying = CM->MovementMode == MOVE_Flying;
-					CM->SetMovementMode(bFlying ? MOVE_Walking : MOVE_Flying);
-					// NOCLIP tijdens het vliegen: capsule-collision uit zodat je door muren/vloeren kunt
-					// (en nooit meer vast komt te zitten); weer aan zodra je landt.
-					if (UCapsuleComponent* Cap = GetCapsuleComponent())
-					{
-						Cap->SetCollisionEnabled(bFlying ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::QueryOnly);
-						Cap->SetCollisionResponseToChannel(ECC_WorldStatic, bFlying ? ECR_Block : ECR_Ignore);
-						Cap->SetCollisionResponseToChannel(ECC_WorldDynamic, bFlying ? ECR_Block : ECR_Ignore);
-					}
 					if (!bFlying)
 					{
 						CM->MaxFlySpeed = 1400.f;
 						CM->BrakingDecelerationFlying = 4096.f;
 					}
+					// SetMovementMode triggert OnMovementModeChanged -> daar gaat de noclip-collision aan/uit
+					// (gerepliceerde mode = zelfde noclip op host EN client).
+					CM->SetMovementMode(bFlying ? MOVE_Walking : MOVE_Flying);
 					UWeedToast::NotifyPawn(this, -1, 2.f, FColor::Cyan, bFlying ? TEXT("Fly mode OFF") : TEXT("Fly mode ON + noclip (Space = up, Ctrl = down, F7 = off)"));
 				}
 			}
