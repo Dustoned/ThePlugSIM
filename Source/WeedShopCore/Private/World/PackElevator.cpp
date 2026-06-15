@@ -358,6 +358,7 @@ void APackElevator::Interact_Implementation(APawn* InstigatorPawn)
 
 FText APackElevator::GetInteractionPrompt_Implementation() const
 {
-	if (bMoving) { return FText::FromString(TEXT("Elevator moving...")); }
-	return FText::FromString(FString::Printf(TEXT("Elevator - floor %d of 0-%d (use the buttons inside)"), CurFloor, Floors.Num() - 1));
+	// Geen prompt op de cabine zelf: iedereen weet hoe een lift werkt; je kiest de verdieping met de
+	// knoppen. (De knoppen tonen hun eigen prompt.)
+	return FText::GetEmpty();
 }
