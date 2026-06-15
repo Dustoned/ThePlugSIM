@@ -1,29 +1,23 @@
-# upload-build.ps1 - package ThePlugSIM (Win64), zip it, en upload als GitHub Release.
-# Gebruik:  powershell -ExecutionPolicy Bypass -File "<pad>\Tools\upload-build.ps1" [-Quality 2K|1K|4K] [-Notes "wat is er nieuw"]
-#   -Quality 2K (default) = aanbevolen balans; 1K = kleinste download; 4K = beste kwaliteit.
-#   Voor twee losse releases: draai 'm twee keer, met -Quality 2K en met -Quality 1K.
+# upload-build.ps1 - package ThePlugSIM (Win64) in een of meer texture-kwaliteiten, zip elk,
+# en upload ze samen als ASSETS onder EEN GitHub Release.
+# Gebruik:  powershell -ExecutionPolicy Bypass -File "<pad>\Tools\upload-build.ps1" [-Qualities 2K,1K] [-Notes "wat is er nieuw"]
+#   -Qualities 2K,1K (default) = beide builds onder een release (2K = aanbevolen, 1K = kleinste download).
+#   Wil je er maar een:  -Qualities 2K   of   -Qualities 1K   (4K kan ook).
 param(
     [string]$Notes = "Nieuwe test-build.",
     [string]$Config = "Shipping",
-    [ValidateSet("2K","1K","4K")][string]$Quality = "2K"
+    [ValidateSet("4K","2K","1K")][string[]]$Qualities = @("2K","1K")
 )
 $ErrorActionPreference = "Stop"
-$Proj   = "C:\Users\Dustoned\Documents\Unreal Projects\ThePlugSIM - Claude"
-$UProj  = Join-Path $Proj "ThePlugSIM.uproject"
-$UAT    = "E:\UE\UE_5.7\Engine\Build\BatchFiles\RunUAT.bat"
+$Proj    = "C:\Users\Dustoned\Documents\Unreal Projects\ThePlugSIM - Claude"
+$UProj   = Join-Path $Proj "ThePlugSIM.uproject"
+$UAT     = "E:\UE\UE_5.7\Engine\Build\BatchFiles\RunUAT.bat"
 $Archive = Join-Path $Proj "Build\Archive"
-$Repo   = "Dustoned/ThePlugSIM"
+$Repo    = "Dustoned/ThePlugSIM"
+$Ini     = Join-Path $Proj "Config\DefaultDeviceProfiles.ini"
+$CapMap  = @{ "4K" = 4096; "2K" = 2048; "1K" = 1024 }
+$QLabel  = @{ "4K" = "4K textures - beste kwaliteit, grootste download"; "2K" = "2K textures - aanbevolen balans"; "1K" = "1K textures - kleinste download" }
 New-Item -ItemType Directory -Force (Join-Path $Proj "Build") | Out-Null
-
-# Texture-resolutie-cap voor deze build (Config\DefaultDeviceProfiles.ini). Bron-assets blijven onaangetast.
-$MaxLOD = @{ "4K" = 4096; "2K" = 2048; "1K" = 1024 }[$Quality]
-$Ini = Join-Path $Proj "Config\DefaultDeviceProfiles.ini"
-if (Test-Path $Ini) {
-    $IniText = [System.IO.File]::ReadAllText($Ini)
-    $IniText = [regex]::Replace($IniText, "MaxLODSize=\d+", "MaxLODSize=$MaxLOD")
-    [System.IO.File]::WriteAllText($Ini, $IniText, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host "== Texture-cap gezet op $Quality ($MaxLOD px) =="
-}
 
 # Geen -Notes meegegeven? Lees dan automatisch de patch notes uit Docs\PATCHNOTES.md (UTF-8).
 $NotesPath = Join-Path $Proj "Docs\PATCHNOTES.md"
@@ -40,58 +34,69 @@ $Changelog = ""
 if ($LastSha -ne "") { $Changelog = (git -C "$Proj" log "$LastSha..HEAD" --pretty=format:"- %s") -join "`n" }
 if ([string]::IsNullOrWhiteSpace($Changelog)) { $Changelog = "- (eerste build / geen nieuwe commits)" }
 
+# Een tijdstempel/tag voor de hele build-sessie - alle kwaliteiten komen onder DEZE ene release.
+$Stamp = Get-Date -Format "yyyyMMdd-HHmm"
+$Tag   = "build-$Stamp"
+
 Write-Host "== Editor sluiten (DLL-lock voorkomen) =="
 Get-Process UnrealEditor -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3
 
-Write-Host "== Packagen ($Config) - dit duurt even... =="
-& $UAT BuildCookRun "-project=$UProj" -noP4 -platform=Win64 "-clientconfig=$Config" `
-    -cook -build -stage -pak -archive "-archivedirectory=$Archive" -nocompileeditor -utf8output
-if ($LASTEXITCODE -ne 0) { Write-Error "Packagen mislukt (UAT exit $LASTEXITCODE)"; exit 1 }
+# Per kwaliteit: cap zetten -> packagen -> losse UI mee -> zippen. Zips verzamelen voor de release.
+$Zips = @()
+$AssetLines = @()
+foreach ($q in $Qualities) {
+    $MaxLOD = $CapMap[$q]
+    if (Test-Path $Ini) {
+        $IniText = [System.IO.File]::ReadAllText($Ini)
+        $IniText = [regex]::Replace($IniText, "MaxLODSize=\d+", "MaxLODSize=$MaxLOD")
+        [System.IO.File]::WriteAllText($Ini, $IniText, (New-Object System.Text.UTF8Encoding($false)))
+    }
+    Write-Host "== [$q] Texture-cap gezet op $MaxLOD px =="
 
-# Gestagede build vinden (de map met ThePlugSIM.exe).
-$WinDir = Join-Path $Archive "Windows"
-if (-not (Test-Path $WinDir)) { $WinDir = Join-Path $Archive "WindowsNoEditor" }
-if (-not (Test-Path $WinDir)) { Write-Error "Geen gestagede build gevonden in $Archive"; exit 1 }
+    Write-Host "== [$q] Packagen ($Config) - dit duurt even... =="
+    & $UAT BuildCookRun "-project=$UProj" -noP4 -platform=Win64 "-clientconfig=$Config" `
+        -cook -build -stage -pak -archive "-archivedirectory=$Archive" -nocompileeditor -utf8output
+    if ($LASTEXITCODE -ne 0) { Write-Error "Packagen ($q) mislukt (UAT exit $LASTEXITCODE)"; exit 1 }
 
-# Losse runtime-bestanden mee-kopieren: de game laadt iconen + menu-art rechtstreeks van schijf
-# (Content/_Project/UI), maar die zitten niet in de gecookte .pak. Zonder dit valt de build terug
-# op procedurele iconen en mist 't menu z'n achtergrond/logo.
-$SrcUI = Join-Path $Proj "Content\_Project\UI"
-$DstUI = Join-Path $WinDir "ThePlugSIM\Content\_Project\UI"
-if (Test-Path $SrcUI) {
-    New-Item -ItemType Directory -Force $DstUI | Out-Null
-    Copy-Item -Recurse -Force (Join-Path $SrcUI "*") $DstUI
-    Write-Host "== Losse UI-bestanden (iconen + menu-art) meegekopieerd naar de build =="
+    # Gestagede build vinden (de map met ThePlugSIM.exe).
+    $WinDir = Join-Path $Archive "Windows"
+    if (-not (Test-Path $WinDir)) { $WinDir = Join-Path $Archive "WindowsNoEditor" }
+    if (-not (Test-Path $WinDir)) { Write-Error "Geen gestagede build gevonden in $Archive"; exit 1 }
+
+    # Losse runtime-bestanden mee-kopieren: de game laadt iconen + menu-art rechtstreeks van schijf
+    # (Content/_Project/UI), maar die zitten niet in de gecookte .pak. Zonder dit valt de build terug
+    # op procedurele iconen en mist 't menu z'n achtergrond/logo.
+    $SrcUI = Join-Path $Proj "Content\_Project\UI"
+    $DstUI = Join-Path $WinDir "ThePlugSIM\Content\_Project\UI"
+    if (Test-Path $SrcUI) {
+        New-Item -ItemType Directory -Force $DstUI | Out-Null
+        Copy-Item -Recurse -Force (Join-Path $SrcUI "*") $DstUI
+        Write-Host "== [$q] Losse UI-bestanden (iconen + menu-art) meegekopieerd naar de build =="
+    }
+
+    $Zip = Join-Path $Proj "Build\ThePlugSIM-$Stamp-$q.zip"
+    Write-Host "== [$q] Zippen -> $Zip =="
+    if (Test-Path $Zip) { Remove-Item $Zip -Force }
+    Compress-Archive -Path (Join-Path $WinDir "*") -DestinationPath $Zip -CompressionLevel Optimal
+    $SizeMB = [math]::Round((Get-Item $Zip).Length / 1MB, 1)
+    Write-Host "== [$q] Zip klaar: $SizeMB MB =="
+
+    $Zips += $Zip
+    $AssetLines += "- **ThePlugSIM-$Stamp-$q.zip** - $($QLabel[$q]) ($SizeMB MB)"
 }
 
-# Versie/tag op datum-tijd + kwaliteit (zo botsen 2K- en 1K-release niet).
-$Stamp = Get-Date -Format "yyyyMMdd-HHmm"
-$Tag   = "build-$Stamp-$Quality"
-$Zip   = Join-Path $Proj "Build\ThePlugSIM-$Stamp-$Quality.zip"
-
-Write-Host "== Zippen -> $Zip =="
-if (Test-Path $Zip) { Remove-Item $Zip -Force }
-Compress-Archive -Path (Join-Path $WinDir "*") -DestinationPath $Zip -CompressionLevel Optimal
-
-$SizeMB = [math]::Round((Get-Item $Zip).Length / 1MB, 1)
-Write-Host "== Zip klaar: $SizeMB MB =="
-
-Write-Host "== Uploaden naar GitHub Release ($Tag) =="
-$QLabel = @{ "4K" = "4K textures - beste kwaliteit, grootste download"; "2K" = "2K textures - aanbevolen balans"; "1K" = "1K textures - kleinste download" }[$Quality]
-$Title = "ThePlugSIM test-build $Stamp ($Quality)"
-$Body  = "$Notes`n`n## Deze download`n$QLabel`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download de zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
-# Notes via een UTF-8 bestand (--notes-file) zodat symbolen (pijlen/vinkjes/lijnen in de patch notes) correct renderen.
+# Release-tekst (een keer), met een Downloads-sectie die beide assets benoemt.
+$Title = "ThePlugSIM test-build $Stamp"
+$Downloads = ($AssetLines -join "`n")
+$Body = "$Notes`n`n## Downloads (kies een kwaliteit)`n$Downloads`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download een zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
 $NotesFile = Join-Path $Proj "Build\release-notes.md"
 [System.IO.File]::WriteAllText($NotesFile, $Body, (New-Object System.Text.UTF8Encoding($false)))
-# 2K is de aanbevolen 'latest'; andere kwaliteiten staan als losse release in de lijst.
-# (Geen array-splat: PowerShell pakt een 1-element-array uit tot string en splat die dan
-#  karakter-voor-karakter -> losse '-' brak gh. Daarom twee expliciete calls.)
-if ($Quality -eq "2K") {
-    gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" --latest
-} else {
-    gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" --latest=false
-}
+
+# Een release met ALLE zips als assets. $Zips is een array; een native command rolt 'm uit tot
+# losse argumenten (GEEN @-splat - dat zou een 1-element-array als string char-voor-char splatten).
+Write-Host "== Uploaden naar GitHub Release ($Tag) met $($Zips.Count) asset(s) =="
+gh release create $Tag $Zips --repo $Repo --title "$Title" --notes-file "$NotesFile" --latest
 if ($LASTEXITCODE -ne 0) { Write-Error "GitHub release upload mislukt"; exit 1 }
 
 # Onthoud welke commit deze build was, voor de changelog van de volgende keer.
