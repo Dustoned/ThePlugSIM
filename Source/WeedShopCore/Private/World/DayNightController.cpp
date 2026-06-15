@@ -106,6 +106,64 @@ void ADayNightController::TryAdoptSky()
 	}
 }
 
+float ADayNightController::CeilingOnIntensity(const UPointLightComponent* PL) const
+{
+	if (!PL) { return 0.f; }
+	// Zelfde schaal als de klok-loop (zie Tick): CeilLamp = hoofdkegel, CeilGlow = zachte room-fill.
+	const float Div = PL->ComponentHasTag(TEXT("CeilGlow")) ? 9000.f : 900.f;
+	return LampIntensity / Div;
+}
+
+void ADayNightController::CollectCeilingLightsNear(const FVector& Center, float Radius, TArray<UPointLightComponent*>& OutLights) const
+{
+	const float R2 = Radius * Radius;
+	for (UPointLightComponent* PL : PackLampLights)
+	{
+		if (!PL) { continue; }
+		if (!PL->ComponentHasTag(TEXT("CeilLamp")) && !PL->ComponentHasTag(TEXT("CeilGlow"))) { continue; }
+		if (FVector::DistSquared(PL->GetComponentLocation(), Center) <= R2) { OutLights.Add(PL); }
+	}
+}
+
+void ADayNightController::CollectCeilingEmisNear(const FVector& Center, float Radius, TArray<UMaterialInstanceDynamic*>& OutMids, TArray<float>& OutBright, TArray<FVector>& OutPos) const
+{
+	const float R2 = Radius * Radius;
+	for (int32 i = 0; i < PackCeilEmis.Num(); ++i)
+	{
+		UMaterialInstanceDynamic* E = PackCeilEmis[i];
+		if (!E || !PackCeilEmisPos.IsValidIndex(i)) { continue; }
+		if (FVector::DistSquared(PackCeilEmisPos[i], Center) <= R2)
+		{
+			OutMids.Add(E);
+			OutBright.Add(PackCeilEmisBright.IsValidIndex(i) ? PackCeilEmisBright[i] : 1.f);
+			OutPos.Add(PackCeilEmisPos[i]);
+		}
+	}
+}
+
+void ADayNightController::GetCeilingLampPositions(TArray<FVector>& Out) const
+{
+	// Alleen de hoofd-kegel (CeilLamp) telt als "een lamp" - de glow zit op dezelfde plek.
+	for (UPointLightComponent* PL : PackLampLights)
+	{
+		if (PL && PL->ComponentHasTag(TEXT("CeilLamp"))) { Out.Add(PL->GetComponentLocation()); }
+	}
+}
+
+void ADayNightController::SetSwitchControlledLight(UPointLightComponent* PL, bool bControlled)
+{
+	if (!PL) { return; }
+	if (bControlled) { SwitchControlledLights.Add(PL); }
+	else { SwitchControlledLights.Remove(PL); }
+}
+
+void ADayNightController::SetSwitchControlledEmis(UMaterialInstanceDynamic* E, bool bControlled)
+{
+	if (!E) { return; }
+	if (bControlled) { SwitchControlledEmis.Add(E); }
+	else { SwitchControlledEmis.Remove(E); }
+}
+
 void ADayNightController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -556,6 +614,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 										float Orig = 1.f; EMID->GetScalarParameterValue(TEXT("Brightness"), Orig);
 										PackCeilEmis.Add(EMID);
 										PackCeilEmisBright.Add(Orig > 0.f ? Orig : 1.f);
+										PackCeilEmisPos.Add(BO);
 									}
 								}
 							}
@@ -698,6 +757,9 @@ void ADayNightController::Tick(float DeltaSeconds)
 		for (UPointLightComponent* PL : PackLampLights)
 		{
 			if (!PL) { continue; }
+			// Door een lichtschakelaar overgenomen plafondlampen: de schakelaar bepaalt aan/uit + dim,
+			// niet de klok -> hier overslaan.
+			if (SwitchControlledLights.Contains(PL)) { continue; }
 			const float Div = PL->ComponentHasTag(TEXT("TallLamp")) ? 6000.f
 				: PL->ComponentHasTag(TEXT("CeilLamp")) ? 900.f
 					: PL->ComponentHasTag(TEXT("CeilGlow")) ? 9000.f : 9000.f; // glow = zacht plafond/hoek-fill, geen 2e hoofdlamp
@@ -713,6 +775,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		{
 			if (UMaterialInstanceDynamic* E = PackCeilEmis[i])
 			{
+				if (SwitchControlledEmis.Contains(E)) { continue; } // schakelaar bestuurt deze box-gloed
 				const float B = PackCeilEmisBright.IsValidIndex(i) ? PackCeilEmisBright[i] : 1.f;
 				E->SetScalarParameterValue(TEXT("Brightness"), B * CeilEmisOn);
 			}

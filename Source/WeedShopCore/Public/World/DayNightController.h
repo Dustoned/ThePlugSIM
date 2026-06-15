@@ -65,6 +65,21 @@ public:
 	// Pack-maps: sky (her-)adopteren zodra een gestreamde skylight binnenkomt.
 	void TryAdoptSky();
 
+	// --- Lichtschakelaars (APackLightSwitch) ---
+	// De schakelaars in je appartement nemen de plafondlampen in hun buurt over van de klok: zo
+	// volgen die niet meer de straatlantaarns maar jouw aan/uit + dimmer-stand (per kamer onthouden).
+	// Plafondlamp-posities (mesh-origins) van CeilLamp-lampen binnen [Center +/- R] verzamelen.
+	void CollectCeilingLightsNear(const FVector& Center, float Radius, TArray<class UPointLightComponent*>& OutLights) const;
+	// Emissive-diffusers (de glow-box) binnen [Center +/- R] + hun originele brightness.
+	void CollectCeilingEmisNear(const FVector& Center, float Radius, TArray<class UMaterialInstanceDynamic*>& OutMids, TArray<float>& OutBright, TArray<FVector>& OutPos) const;
+	// Alle plafondlamp-posities (voor auto-plaatsing van de schakelaars per kamer).
+	void GetCeilingLampPositions(TArray<FVector>& Out) const;
+	// Lamp/emissive door een schakelaar laten besturen i.p.v. de klok (true) of teruggeven (false).
+	void SetSwitchControlledLight(class UPointLightComponent* PL, bool bControlled);
+	void SetSwitchControlledEmis(class UMaterialInstanceDynamic* E, bool bControlled);
+	// Canonieke "aan"-intensiteit die de klok aan deze lamp zou geven (schakelaar schaalt met dimmer).
+	float CeilingOnIntensity(const class UPointLightComponent* PL) const;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -90,6 +105,10 @@ protected:
 	// anders blijft de lamp-box wit gloeien terwijl het licht uit is.
 	UPROPERTY() TArray<TObjectPtr<class UMaterialInstanceDynamic>> PackCeilEmis;
 	TArray<float> PackCeilEmisBright;
+	TArray<FVector> PackCeilEmisPos;   // wereld-positie (mesh-origin) per emissive -> matchen aan een kamer/schakelaar
+	// Lampen/emissives die door een lichtschakelaar bestuurd worden: de klok-loop slaat ze over.
+	TSet<TObjectPtr<class UPointLightComponent>> SwitchControlledLights;
+	TSet<TObjectPtr<class UMaterialInstanceDynamic>> SwitchControlledEmis;
 	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
 	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
 	TArray<FDimLight> DimLights;

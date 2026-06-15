@@ -66,6 +66,10 @@
 #include "UI/LevelUpWidget.h"
 #include "UI/CrosshairWidget.h"
 #include "UI/SettingsWidget.h"
+#include "UI/LightDimmerWidget.h"
+#include "World/PackLightSwitch.h"
+#include "World/DayNightController.h"
+#include "Misc/FileHelper.h"
 #include "UI/MapWidget.h"
 #include "Interaction/PlayerNpcActions.h"
 #include "Customer/CustomerBase.h"
@@ -194,6 +198,28 @@ void UPhoneClientComponent::CloseSettings()
 {
 	bSettingsOpen = false;
 	UpdateCursor();
+}
+
+void UPhoneClientComponent::OpenLightDimmer(APackLightSwitch* Sw)
+{
+	if (!Sw) { return; }
+	EnsureWidget();
+	DimmerSwitch = Sw;
+	Sw->SetOn(true); // dimmer openen = licht aan (zodat je het effect van de slider ziet)
+	bLightDimmerOpen = true;
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::CloseLightDimmer()
+{
+	bLightDimmerOpen = false;
+	DimmerSwitch = nullptr;
+	UpdateCursor();
+}
+
+APackLightSwitch* UPhoneClientComponent::GetDimmerSwitch() const
+{
+	return DimmerSwitch.Get();
 }
 
 AWeedShopGameState* UPhoneClientComponent::GetGS() const
@@ -459,6 +485,130 @@ void UPhoneClientComponent::OnRep_Property()
 	ApplyLocalDoors();
 }
 
+void UPhoneClientComponent::SpawnLightSwitches()
+{
+	APawn* P = Cast<APawn>(GetOwner());
+	if (!P || !P->IsLocallyControlled()) { return; }
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	ADayNightController* DNC = ADayNightController::GetLocal(W);
+	if (!DNC) { return; } // plafondlampen nog niet verzameld -> volgende tick opnieuw
+
+	TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
+	if (Homes.Num() == 0) { return; }
+
+	// Gedeeld co-op: woningen van eender welke speler tellen als "ons".
+	TSet<int32> OwnedAny;
+	for (TActorIterator<APawn> It(W); It; ++It)
+	{
+		if (const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>())
+		{ for (int32 Idx : Ph->OwnedHomes) { OwnedAny.Add(Idx); } }
+	}
+	if (OwnedAny.Num() == 0) { return; }
+
+	TArray<FVector> LampPos; DNC->GetCeilingLampPositions(LampPos);
+
+	// Marker-override: F9-speler-markers met 'switch' in het label op deze map.
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> MarkLines;
+	FFileHelper::LoadFileToStringArray(MarkLines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	for (int32 Idx : OwnedAny)
+	{
+		if (LightSwitchHomesDone.Contains(Idx) || !Homes.IsValidIndex(Idx)) { continue; }
+		const FApartmentHome& H = Homes[Idx];
+
+		auto InBounds = [&H](const FVector& L)
+		{
+			return FMath::Abs(L.X - H.InteriorPos.X) <= H.RoomHalf.X + 120.f
+				&& FMath::Abs(L.Y - H.InteriorPos.Y) <= H.RoomHalf.Y + 120.f
+				&& L.Z >= H.InteriorPos.Z - H.RoomHalf.Z - 60.f
+				&& L.Z <= H.InteriorPos.Z + H.RoomHalf.Z + 120.f;
+		};
+
+		// Voordeur van deze woning (dichtstbijzijnde AptDoor binnen de box) - bepaalt hoogte + richting.
+		FVector DoorPos = H.DoorPos; ACityDoor* BestFront = nullptr; float BestFD = 0.f;
+		for (TActorIterator<ACityDoor> It(W); It; ++It)
+		{
+			ACityDoor* Dr = *It;
+			if (!Dr || !Dr->ActorHasTag(TEXT("AptDoor"))) { continue; }
+			const FVector DL = Dr->GetActorLocation();
+			if (!InBounds(DL)) { continue; }
+			const float D = FVector::DistSquared(DL, H.InteriorPos);
+			if (!BestFront || D < BestFD) { BestFD = D; BestFront = Dr; }
+		}
+		if (BestFront) { DoorPos = BestFront->GetActorLocation(); }
+		const float SwitchZ = DoorPos.Z + 110.f; // handhoogte boven de vloer (deur staat op de vloer)
+
+		auto SpawnSwitch = [&](const FVector& Pos, const FString& Role, float Radius)
+		{
+			FVector Dir = H.InteriorPos - Pos; Dir.Z = 0.f;
+			const FRotator Rot = Dir.IsNearlyZero() ? FRotator::ZeroRotator : Dir.Rotation();
+			if (APackLightSwitch* Sw = W->SpawnActor<APackLightSwitch>(APackLightSwitch::StaticClass(), Pos, Rot, SP))
+			{
+				Sw->Setup(FString::Printf(TEXT("apt%d_%s"), Idx, *Role), Radius);
+			}
+		};
+
+		// 1) Markers in deze woning? -> die bepalen ALLES (elke marker = een schakelaar).
+		TArray<FVector> MarkSpots;
+		for (const FString& Line : MarkLines)
+		{
+			if (!Line.Contains(MapPath) || !Line.ToLower().Contains(TEXT("switch"))) { continue; }
+			const int32 PIdx = Line.Find(TEXT("pos=("));
+			if (PIdx == INDEX_NONE) { continue; }
+			FString PosStr = Line.Mid(PIdx + 5);
+			int32 ClosePar = INDEX_NONE; if (PosStr.FindChar(TEXT(')'), ClosePar)) { PosStr = PosStr.Left(ClosePar); }
+			TArray<FString> Parts; PosStr.ParseIntoArray(Parts, TEXT(","));
+			if (Parts.Num() >= 3)
+			{
+				const FVector M(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
+				if (InBounds(M)) { MarkSpots.Add(M); }
+			}
+		}
+		if (MarkSpots.Num() > 0)
+		{
+			for (int32 m = 0; m < MarkSpots.Num(); ++m) { SpawnSwitch(MarkSpots[m], FString::Printf(TEXT("mark%d"), m), 600.f); }
+			LightSwitchHomesDone.Add(Idx);
+			continue;
+		}
+
+		// 2) Auto. Lampen van deze woning verzamelen; nog geen lampen -> volgende tick opnieuw.
+		TArray<FVector> Apt;
+		for (const FVector& L : LampPos) { if (InBounds(L)) { Apt.Add(L); } }
+		if (Apt.Num() == 0) { continue; }
+
+		// Hoofd-schakelaar: net binnen de voordeur, opzij tegen de muur, op handhoogte.
+		FVector InDir = H.InteriorPos - DoorPos; InDir.Z = 0.f;
+		if (!InDir.Normalize()) { InDir = FVector(1.f, 0.f, 0.f); }
+		const FVector RightDir = FVector::CrossProduct(FVector::UpVector, InDir).GetSafeNormal();
+		const FVector MainPos = FVector(DoorPos.X, DoorPos.Y, SwitchZ) + InDir * 35.f + RightDir * 55.f;
+		SpawnSwitch(MainPos, TEXT("main"), 520.f);
+
+		// Badkamer-schakelaar: bij de lamp die het verst van de deur ligt (beste gok zonder kamer-geometrie).
+		if (Apt.Num() >= 2)
+		{
+			int32 FarI = INDEX_NONE; float FarD = -1.f;
+			for (int32 li = 0; li < Apt.Num(); ++li)
+			{
+				const float D = FVector::DistSquared2D(Apt[li], DoorPos);
+				if (D > FarD) { FarD = D; FarI = li; }
+			}
+			if (FarI != INDEX_NONE)
+			{
+				FVector BDir = DoorPos - Apt[FarI]; BDir.Z = 0.f;
+				if (!BDir.Normalize()) { BDir = -InDir; }
+				const FVector BathPos = FVector(Apt[FarI].X, Apt[FarI].Y, SwitchZ) + BDir * 80.f;
+				SpawnSwitch(BathPos, TEXT("bath"), 360.f);
+			}
+		}
+
+		LightSwitchHomesDone.Add(Idx);
+	}
+}
+
 void UPhoneClientComponent::PropertyTick()
 {
 	// Server: ken eenmalig het starter-flatje toe bij een VERSE start (load zet de staat zelf). Werkt op
@@ -485,6 +635,7 @@ void UPhoneClientComponent::PropertyTick()
 		}
 	}
 	ApplyLocalDoors();
+	SpawnLightSwitches();
 
 	// Intro-melding (1x, vroeg): zodra je je starter-flat hebt, vertel het huur-doel.
 	if (GetOwnerRole() == ROLE_Authority && !bShownRentIntro && OwnedHomes.Num() > 0)
@@ -728,7 +879,7 @@ void UPhoneClientComponent::RefreshInputMode()
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen || bWardrobeOpen;
+	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen || bWardrobeOpen || bLightDimmerOpen;
 	// Maar 1 UI tegelijk: opent er een ander scherm, dan gaat de fullscreen-kaart dicht.
 	if (bAnyUI && MapOverlay)
 	{
@@ -840,6 +991,8 @@ void UPhoneClientComponent::EnsureWidget()
 	if (MainMenuWidget) { MainMenuWidget->SetPhone(this); MainMenuWidget->AddToViewport(42); }
 	SettingsWidget = CreateWidget<USettingsWidget>(PC, USettingsWidget::StaticClass());
 	if (SettingsWidget) { SettingsWidget->SetPhone(this); SettingsWidget->AddToViewport(44); }
+	LightDimmerWidget = CreateWidget<ULightDimmerWidget>(PC, ULightDimmerWidget::StaticClass());
+	if (LightDimmerWidget) { LightDimmerWidget->SetPhone(this); LightDimmerWidget->AddToViewport(27); }
 	// Save-indicator bovenop alles (ook over pauze/menu heen) zodat je 'm altijd ziet.
 	SaveIndicatorWidget = CreateWidget<USaveIndicatorWidget>(PC, USaveIndicatorWidget::StaticClass());
 	if (SaveIndicatorWidget) { SaveIndicatorWidget->AddToViewport(50); }

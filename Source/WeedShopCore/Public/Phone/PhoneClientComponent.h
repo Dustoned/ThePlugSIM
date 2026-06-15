@@ -92,6 +92,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
 	bool IsSettingsOpen() const { return bSettingsOpen; }
 
+	// --- Lichtschakelaar-dimmer (popup met verticale slider; zie APackLightSwitch). ---
+	void OpenLightDimmer(class APackLightSwitch* Sw);
+	void CloseLightDimmer();
+	bool IsLightDimmerOpen() const { return bLightDimmerOpen; }
+	class APackLightSwitch* GetDimmerSwitch() const;
+
 	// Game-instellingen (lokaal toegepast + bewaard in config).
 	void ApplyFov(float NewFov);
 	void SetLookSensitivity(float S);
@@ -699,6 +705,7 @@ protected:
 
 	UFUNCTION() void OnRep_Property();
 	void ApplyLocalDoors();              // ontgrendel lokaal mijn eigen deuren ("Your home")
+	void SpawnLightSwitches();           // plaats lichtschakelaars in je eigen woning (1x per woning)
 	UFUNCTION(Server, Reliable) void ServerBuyProperty(int32 HomeIndex);
 	UFUNCTION(Server, Reliable) void ServerSetActiveHome(int32 HomeIndex);
 	UFUNCTION(Server, Reliable) void ServerSellProperty(int32 HomeIndex);
@@ -847,6 +854,13 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class USettingsWidget> SettingsWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class ULightDimmerWidget> LightDimmerWidget;
+	bool bLightDimmerOpen = false;
+	TWeakObjectPtr<class APackLightSwitch> DimmerSwitch;
+	// Lichtschakelaars per gekochte woning (1x plaatsen zodra de plafondlampen geladen zijn).
+	TSet<int32> LightSwitchHomesDone;
 
 	bool bOpen = false;
 	int32 Tab = 0;
