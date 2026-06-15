@@ -286,18 +286,24 @@ void USettingsWidget::RefreshContent()
 			}
 		});
 
-		// Quality preset.
-		const int32 Q = G->GetOverallScalabilityLevel();
-		static const TCHAR* QN[4] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
-		const FString QName = (Q >= 0 && Q <= 3) ? QN[Q] : TEXT("Custom");
-		AddValueRow(TEXT("Quality"), QName, [this]()
+		// Quality preset - incl. 'Potato' ONDER Low voor hele zwakke pc's (50% render-resolutie,
+		// minimale textures/streaming/foliage/schaduwen, Lumen uit). Cyclus: Potato->Low->...->Epic.
+		FString GfxQ;
+		const bool bPotato = FFileHelper::LoadFileToString(GfxQ, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt"))) && GfxQ.Contains(TEXT("Potato=1"));
+		int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
+		const int32 TierNow = bPotato ? -1 : ScalQ;
+		static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+		const FString QName = QN[TierNow + 1];
+		AddValueRow(TEXT("Quality"), QName, [this, TierNow]()
 		{
-			if (UGameUserSettings* GG = GUS())
-			{
-				int32 Cur = GG->GetOverallScalabilityLevel(); if (Cur < 0) { Cur = 2; }
-				const int32 Next = (Cur + 1) % 4;
-				GG->SetOverallScalabilityLevel(Next); GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
-			}
+			const int32 Next = (TierNow >= 3) ? -1 : TierNow + 1;
+			WeedShop_ApplyGraphicsTier(Next);
+			// Potato-vlag onthouden, bestaande LumenOff behouden.
+			FString T; FFileHelper::LoadFileToString(T, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")));
+			const bool bLum = T.Contains(TEXT("LumenOff=1"));
+			FFileHelper::SaveStringToFile(FString::Printf(TEXT("LumenOff=%d\nPotato=%d\n"), bLum ? 1 : 0, (Next <= -1) ? 1 : 0),
+				*(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+			RefreshContent();
 		});
 
 		// Lumen aan/uit: GI + reflecties op de goedkope methode = flink snellere frames op
@@ -309,7 +315,10 @@ void USettingsWidget::RefreshContent()
 			{
 				const bool bNewOff = !bLumenOff;
 				WeedShop_ApplyLumen(bNewOff);
-				FFileHelper::SaveStringToFile(bNewOff ? FString(TEXT("LumenOff=1")) : FString(TEXT("LumenOff=0")),
+				// LumenOff opslaan maar de Potato-vlag behouden.
+				FString T; FFileHelper::LoadFileToString(T, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")));
+				const bool bPot = T.Contains(TEXT("Potato=1"));
+				FFileHelper::SaveStringToFile(FString::Printf(TEXT("LumenOff=%d\nPotato=%d\n"), bNewOff ? 1 : 0, bPot ? 1 : 0),
 					*(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 				RefreshContent();
 			});

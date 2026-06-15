@@ -20,6 +20,7 @@
 #include "Containers/Ticker.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "GameFramework/GameUserSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 
@@ -112,6 +113,41 @@ void WeedShop_ApplyLumen(bool bLumenOff)
 		bLumenOff ? TEXT("UIT") : TEXT("AAN"),
 		GetCV(TEXT("r.DynamicGlobalIlluminationMethod")), GetCV(TEXT("r.ReflectionMethod")),
 		GetCV(TEXT("r.Lumen.DiffuseIndirect.Allow")), GetCV(TEXT("r.Lumen.Reflections.Allow")));
+}
+
+// Grafische kwaliteit-tier. Tier -1 = Potato (onder Low): scalability 0 PLUS extra agressieve
+// verlagingen voor hele zwakke pc's. Tier 0..3 = Low/Medium/High/Epic (puur scalability, cvars
+// terug naar normaal zodat omhoog-schakelen vanuit Potato alles weer herstelt).
+void WeedShop_ApplyGraphicsTier(int32 Tier)
+{
+	const bool bPotato = (Tier <= -1);
+	const int32 Scal = bPotato ? 0 : FMath::Clamp(Tier, 0, 3);
+
+	if (UGameUserSettings* GU = GEngine ? GEngine->GetGameUserSettings() : nullptr)
+	{
+		GU->SetOverallScalabilityLevel(Scal);
+		GU->ApplySettings(false);
+		GU->SaveSettings();
+	}
+
+	IConsoleManager& CM = IConsoleManager::Get();
+	auto SetF = [&](const TCHAR* Name, float Val)
+	{
+		if (IConsoleVariable* CV = CM.FindConsoleVariable(Name)) { CV->Set(Val, ECVF_SetByConsole); }
+	};
+	// Potato = alles zo laag mogelijk BOVENOP scalability 0; anders terug naar normale waardes.
+	SetF(TEXT("r.ScreenPercentage"),     bPotato ? 50.f   : 100.f);  // render op halve resolutie
+	SetF(TEXT("r.Streaming.MipBias"),    bPotato ? 2.5f   : 0.f);    // lagere-res textures runtime
+	SetF(TEXT("r.Streaming.PoolSize"),   bPotato ? 300.f  : 1000.f); // kleinere texture-pool (VRAM)
+	SetF(TEXT("r.ViewDistanceScale"),    bPotato ? 0.4f   : 1.f);
+	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.25f  : 1.f);
+	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.25f  : 1.f);
+	SetF(TEXT("r.Shadow.MaxResolution"), bPotato ? 256.f  : 1024.f);
+	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f    : 4.f);
+	if (bPotato) { WeedShop_ApplyLumen(true); } // Lumen uit op Potato (zwaarste post-effect)
+
+	UE_LOG(LogWeedShop, Warning, TEXT("Graphics-tier: %s (scalability %d)"),
+		bPotato ? TEXT("POTATO") : (Scal == 0 ? TEXT("Low") : Scal == 1 ? TEXT("Medium") : Scal == 2 ? TEXT("High") : TEXT("Epic")), Scal);
 }
 
 // --- Slate loading screen (geen UObjects/UMG: draait veilig tijdens het laden) ---

@@ -117,11 +117,14 @@ void ADayNightController::BeginPlay()
 
 	LoadLightConfig(); // opgeslagen slider-waardes terugladen
 
-	// Grafische keuze van de speler: Lumen uit = GI en reflecties op de goedkope methode.
+	// Grafische keuze van de speler: kwaliteit-tier (incl. Potato) + Lumen uit = GI/reflecties goedkoop.
 	{
 		FString GfxTxt;
-		const bool bLumenOff = FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt"))) && GfxTxt.Contains(TEXT("LumenOff=1"));
-		WeedShop_ApplyLumen(bLumenOff);
+		FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt")));
+		const bool bLumenOff = GfxTxt.Contains(TEXT("LumenOff=1"));
+		const bool bPotato = GfxTxt.Contains(TEXT("Potato=1"));
+		if (bPotato) { WeedShop_ApplyGraphicsTier(-1); } // scalability 0 + extra verlagingen + Lumen uit
+		else { WeedShop_ApplyLumen(bLumenOff); }
 	}
 
 	// PACK-MAPS: MINIMAL-modus - overdag blijft de stock-look 100% intact (geen zon/fog/scenario-

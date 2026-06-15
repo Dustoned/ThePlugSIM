@@ -32,6 +32,11 @@ WEEDSHOPCORE_API FString WeedShop_LoadLine(int32 Step);
 // opstart-toepassing zodat de speler-keuze altijd dezelfde weg loopt.
 WEEDSHOPCORE_API void WeedShop_ApplyLumen(bool bLumenOff);
 
+// Grafische kwaliteit-tier toepassen. Tier: -1 = Potato (onder Low, voor zwakke pc's:
+// scalability 0 + 50% render-resolutie, minimale textures/streaming, lage view-distance/
+// foliage/schaduwen, Lumen uit), 0 = Low, 1 = Medium, 2 = High, 3 = Epic.
+WEEDSHOPCORE_API void WeedShop_ApplyGraphicsTier(int32 Tier);
+
 // GEBAKKEN DATA: wereld-configuratie (map-border, kamer-jobs, deur-sloten, licht-instellingen)
 // leeft tijdens het ontwikkelen in Saved/, maar Saved/ gaat NIET mee in een gepackagede build.
 // Een snapshot staat daarom in Content/BakedData/ (packaged via DirectoriesToAlwaysStageAsUFS).
