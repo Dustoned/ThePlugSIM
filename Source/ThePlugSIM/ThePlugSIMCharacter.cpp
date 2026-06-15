@@ -67,6 +67,10 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
 
+	// Third-person lichaam (wat co-op-spelers van JOU zien) op de capsule-BODEM zetten: zonder deze offset
+	// staat de mesh op het capsule-midden -> de voeten zweven ~96cm boven de vloer (co-op "zwevende speler").
+	if (GetMesh()) { GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f)); }
+
 	// Navigation-invoker: genereert runtime-navmesh rond de speler (de stad is procedureel, dus geen
 	// vooraf gebakken navmesh). Ruime straal zodat NPC's over de stoepen kunnen lopen rond jou.
 	NavInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavInvoker"));
