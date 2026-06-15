@@ -576,9 +576,20 @@ void UPhoneClientComponent::SpawnLightSwitches()
 		{
 			for (int32 m = 0; m < MarkSpots.Num(); ++m)
 			{
-				// Bij het markeren keek je naar de muur -> het plaatje kijkt de kamer in (yaw + 180).
-				const FRotator Rot(0.f, MarkSpots[m].Yaw + 180.f, 0.f);
-				if (APackLightSwitch* Sw = W->SpawnActor<APackLightSwitch>(APackLightSwitch::StaticClass(), MarkSpots[m].P, Rot, SP))
+				// F9 logt waar je STOND, niet waar je KEEK. Trace vanaf de marker in je kijkrichting (yaw)
+				// tot de muur en plak het plaatje daar plat tegenaan, met de voorkant de kamer in.
+				const FVector Start = MarkSpots[m].P;
+				const FVector Dir = FRotator(0.f, MarkSpots[m].Yaw, 0.f).Vector();
+				FVector Pos = Start;
+				FRotator Rot(0.f, MarkSpots[m].Yaw + 180.f, 0.f);
+				FHitResult Hit;
+				FCollisionQueryParams Q(FName(TEXT("LightSwitchWall")), /*bTraceComplex=*/false, P);
+				if (W->LineTraceSingleByChannel(Hit, Start, Start + Dir * 600.f, ECC_Visibility, Q))
+				{
+					Pos = Hit.Location - Dir * 4.f; // net vóór de muur (geen z-fighting)
+					if (!Hit.Normal.IsNearlyZero()) { Rot = Hit.Normal.Rotation(); } // voorkant = uit de muur de kamer in
+				}
+				if (APackLightSwitch* Sw = W->SpawnActor<APackLightSwitch>(APackLightSwitch::StaticClass(), Pos, Rot, SP))
 				{
 					Sw->Setup(FString::Printf(TEXT("apt%d_mark%d"), Idx, m), 600.f);
 				}
