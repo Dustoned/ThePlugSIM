@@ -86,8 +86,9 @@ void APlaceableProp::SetupVisual()
 		Mesh->SetStaticMesh(M);
 	}
 	Mesh->SetRelativeScale3D(Def.MeshScale);
-	// Mesh omhoog zodat de onderkant op de actor-origin (= vloer) staat.
-	Mesh->SetRelativeLocation(FVector(0.f, 0.f, Def.BoxHalf.Z));
+	// Mesh omhoog zodat de onderkant op de actor-origin (= vloer) staat. Pack-meshes met een pivot AAN
+	// DE BASIS (bBasePivot) staan al goed -> niet extra omhoog schuiven (anders zweven ze).
+	Mesh->SetRelativeLocation(FVector(0.f, 0.f, Def.bBasePivot ? 0.f : Def.BoxHalf.Z));
 
 	// Bouw-onderdelen (building-tool): pack-meshes hebben hoek/eind-pivots -> centreer op de
 	// prop-origin. Muren zijn enkelzijdig: spiegel-mesh erbij zodat ze van beide kanten zichtbaar zijn.

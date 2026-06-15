@@ -53,6 +53,32 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		// Lichtschakelaar: hangt aan de muur (wall-mount). Spawnt een APackLightSwitch (tap = aan/uit, hold = dimmer;
 		// claimt de plafondlampen in de buurt). Plaats er een bij de deur en een bij de badkamer.
 		{ TEXT("LightSwitch"), TEXT("Light switch"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.03f, 0.085f, 0.13f), FVector(3.f, 6.f, 8.f), false, 800, false, false, false, false, false, false, false, /*bIsWallMount*/ true, false, false, false, false, false, false, false, false, /*bIsLightSwitch*/ true },
+
+		// --- HUISKAMER-MEUBELS (om je kamers in te richten) -----------------------------------------
+		// Echte pack-meshes (pivot aan de basis -> bBasePivot=true, laatste veld). Generieke props
+		// (oppakken = terug in inventory). Decor, geen speciale functie.
+		{ TEXT("Furn_ChairPlastic"), TEXT("Plastic chair"), TEXT("/Game/CityBeachStrip/Meshes/PlasticChair/SM_PlasticChair"), FVector(1.f), FVector(32.f, 34.f, 51.f), false, 600,  false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, /*bBasePivot*/ true },
+		{ TEXT("Furn_ChairGarden"),  TEXT("Garden chair"),  TEXT("/Game/CityBeachStrip/Meshes/OutdoorFurniture/SM_GardenChair"), FVector(1.f), FVector(23.f, 30.f, 47.f), false, 700,  false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_ChairWood"),    TEXT("Wooden chair"),  TEXT("/Game/CityBeachStrip/Meshes/OutdoorFurniture/SM_OutsideChair"), FVector(1.f), FVector(40.f, 38.f, 52.f), false, 800,  false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_TableSmall"),   TEXT("Small table"),   TEXT("/Game/CityBeachStrip/Meshes/OutdoorFurniture/SM_GardenTable"), FVector(1.f), FVector(58.f, 37.f, 40.f), false, 1500, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_TableRound"),   TEXT("Round table"),   TEXT("/Game/CityBeachStrip/Meshes/OutdoorFurniture/SM_OutsideTable"), FVector(1.f), FVector(59.f, 59.f, 42.f), false, 1800, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_Bench"),        TEXT("Bench"),         TEXT("/Game/CityBeachStrip/Meshes/Bench/SM_Bench"), FVector(1.f), FVector(112.f, 39.f, 46.f), false, 2000, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_Plant"),        TEXT("Potted tree"),   TEXT("/Game/CityBeachStrip/Meshes/Plants/SM_DragonTree1"), FVector(0.7f), FVector(45.f, 45.f, 100.f), false, 1200, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_Planter"),      TEXT("Wood planter"),  TEXT("/Game/CityBeachStrip/Meshes/Planters/SM_WoodPlanter01"), FVector(1.f), FVector(33.f, 33.f, 31.f), false, 800,  false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_DecoPot"),      TEXT("Decorative pot"),TEXT("/Game/CityBeachStrip/Meshes/Pots/SM_Pot03"), FVector(1.f), FVector(15.f, 15.f, 15.f), false, 300,  false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+		{ TEXT("Furn_Crate"),        TEXT("Crate"),         TEXT("/Game/CityBeachStrip/Meshes/PlasticCrate/SM_PlasticCrate"), FVector(1.f), FVector(30.f, 20.f, 8.f), false, 200,  false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
+
+		// Basic-shape huiskamer-meubels (zelfde stijl als Table/Fridge; center-pivot, normale offset).
+		{ TEXT("Furn_Sofa"),       TEXT("Sofa"),         TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(2.0f, 0.9f, 0.7f),  FVector(100.f, 45.f, 35.f), false, 3000 },
+		{ TEXT("Furn_TV"),         TEXT("TV (wall)"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.3f, 0.08f, 0.78f),FVector(65.f, 4.f, 39.f),  false, 2500, false, false, false, false, false, false, false, /*bIsWallMount*/ true },
+		{ TEXT("Furn_TVStand"),    TEXT("TV cabinet"),   TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.6f, 0.45f, 0.5f), FVector(80.f, 22.f, 25.f), false, 2000 },
+		{ TEXT("Furn_CoffeeTable"),TEXT("Coffee table"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.0f, 0.6f, 0.4f),  FVector(50.f, 30.f, 20.f), false, 1200 },
+		{ TEXT("Furn_Bookshelf"),  TEXT("Bookshelf"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.0f, 0.3f, 1.8f),  FVector(50.f, 15.f, 90.f), false, 2200 },
+		{ TEXT("Furn_Dresser"),    TEXT("Dresser"),      TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.0f, 0.5f, 1.0f),  FVector(50.f, 25.f, 50.f), false, 1800 },
+		{ TEXT("Furn_Nightstand"), TEXT("Nightstand"),   TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.45f, 0.45f, 0.5f),FVector(22.f, 22.f, 25.f), false, 700 },
+		{ TEXT("Furn_Desk"),       TEXT("Desk"),         TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.4f, 0.7f, 0.78f), FVector(70.f, 35.f, 39.f), false, 1600 },
+		{ TEXT("Furn_Rug"),        TEXT("Rug"),          TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(2.0f, 1.4f, 0.04f), FVector(100.f, 70.f, 2.f), false, 500 },
+		{ TEXT("Furn_FloorLamp"),  TEXT("Floor lamp"),   TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.18f, 0.18f, 1.6f), FVector(9.f, 9.f, 80.f), false, 900 },
 		// --- Pot-gear: fysieke accessoires die je NAAST/op je pot zet; de pot leest welke vlakbij staan en
 		//     past die bonus toe zolang 't accessoire er staat. Generieke props (oppakken = terug in inv).
 		{ TEXT("Gear_Drainage"),  TEXT("Drainage layer"),  TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.26f, 0.26f, 0.18f), FVector(13.f, 13.f, 9.f),  false, 1200 },

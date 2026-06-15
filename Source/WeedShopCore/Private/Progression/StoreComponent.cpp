@@ -181,6 +181,28 @@ namespace
 		// Meubels (placeables, binnen neerzetten). Puur inrichting voor nu.
 		{ TEXT("Table"),    TEXT("Table"),    TEXT("A sturdy table"),       12000, 1 },
 		{ TEXT("Mattress"), TEXT("Mattress"), TEXT("Somewhere to crash"),    8000, 1 },
+		// Huiskamer-meubels (decor om je kamers in te richten) + de lichtschakelaar.
+		{ TEXT("LightSwitch"),     TEXT("Light switch"),  TEXT("Wall switch: tap on/off, hold to dim. Controls nearby ceiling lamps"), 1500, 1 },
+		{ TEXT("Furn_Sofa"),       TEXT("Sofa"),          TEXT("Comfy couch"),            7000, 1 },
+		{ TEXT("Furn_ChairPlastic"),TEXT("Plastic chair"),TEXT("A simple chair"),         1500, 1 },
+		{ TEXT("Furn_ChairGarden"),TEXT("Garden chair"),  TEXT("A garden chair"),         1800, 1 },
+		{ TEXT("Furn_ChairWood"),  TEXT("Wooden chair"),  TEXT("A wooden chair"),         2000, 1 },
+		{ TEXT("Furn_TableSmall"), TEXT("Small table"),   TEXT("A small table"),          3500, 1 },
+		{ TEXT("Furn_TableRound"), TEXT("Round table"),   TEXT("A round table"),          4000, 1 },
+		{ TEXT("Furn_Bench"),      TEXT("Bench"),         TEXT("A long bench"),           4500, 1 },
+		{ TEXT("Furn_CoffeeTable"),TEXT("Coffee table"),  TEXT("A low coffee table"),     2800, 1 },
+		{ TEXT("Furn_TV"),         TEXT("TV (wall)"),     TEXT("Wall-mounted flatscreen"),6000, 1 },
+		{ TEXT("Furn_TVStand"),    TEXT("TV cabinet"),    TEXT("A media cabinet"),        4500, 1 },
+		{ TEXT("Furn_Bookshelf"),  TEXT("Bookshelf"),     TEXT("A tall bookshelf"),       5000, 1 },
+		{ TEXT("Furn_Dresser"),    TEXT("Dresser"),       TEXT("A chest of drawers"),     4000, 1 },
+		{ TEXT("Furn_Nightstand"), TEXT("Nightstand"),    TEXT("A bedside table"),        1500, 1 },
+		{ TEXT("Furn_Desk"),       TEXT("Desk"),          TEXT("A work desk"),            3500, 1 },
+		{ TEXT("Furn_FloorLamp"),  TEXT("Floor lamp"),    TEXT("A standing lamp"),        2000, 1 },
+		{ TEXT("Furn_Rug"),        TEXT("Rug"),           TEXT("A floor rug"),            1200, 1 },
+		{ TEXT("Furn_Plant"),      TEXT("Potted tree"),   TEXT("A decorative tree"),      2500, 1 },
+		{ TEXT("Furn_Planter"),    TEXT("Wood planter"),  TEXT("A wooden planter"),       1800, 1 },
+		{ TEXT("Furn_DecoPot"),    TEXT("Decorative pot"),TEXT("A decorative pot"),        700, 1 },
+		{ TEXT("Furn_Crate"),      TEXT("Crate"),         TEXT("A storage crate (decor)"), 500, 1 },
 		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("Keeps things cold"),    30000, 1 },
 		{ TEXT("Shelf"),    TEXT("Storage shelf"), TEXT("Store stock in the shop - 24 slots"), 18000, 1 },
 		{ TEXT("Chest"),    TEXT("Storage chest"), TEXT("Stash items at home - 20 slots"),     9000, 1 },
@@ -530,6 +552,7 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 6: bMatch = S.StartsWith(TEXT("WaterBottle")); break;
 			// Furniture/meubels + de grote edibles-appliances (oven & koelkast horen bij het meubilair).
 			case 7: bMatch = (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S == TEXT("Shelf") || S == TEXT("Chest") || S == TEXT("Lamp_Ceiling")
+				|| S.StartsWith(TEXT("Furn_")) || S == TEXT("LightSwitch")
 				|| S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Fridge_")) || S.StartsWith(TEXT("Safe_")) || S == TEXT("Wardrobe") || S.StartsWith(TEXT("Struct_"))); break;
 			case 8: bMatch = S.StartsWith(TEXT("Gear_")); break; // Pot-gear (fysieke accessoires)
 			case 9: bMatch = S.StartsWith(TEXT("Fertilizer_")) || S.StartsWith(TEXT("Spray_")); break; // Plant care

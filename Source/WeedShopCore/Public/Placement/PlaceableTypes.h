@@ -34,6 +34,7 @@ struct FPlaceableDef
 	bool bIsDoubleWall = false;        // true -> muur krijgt een gespiegelde tweede mesh (pack-muren zijn enkelzijdig)
 	bool bIsHingedDoor = false;        // true -> draaiende deur (F = open/dicht, scharnier op de mesh-pivot)
 	bool bIsLightSwitch = false;       // true -> spawnt APackLightSwitch (tap = aan/uit, hold = dimmer; claimt plafondlampen)
+	bool bBasePivot = false;           // true -> mesh-pivot zit al aan de basis (pack-meubels): NIET extra omhoog schuiven
 };
 
 // Alle gedefinieerde placeables.
