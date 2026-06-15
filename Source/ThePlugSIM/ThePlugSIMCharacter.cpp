@@ -272,9 +272,18 @@ void AThePlugSIMCharacter::WeedUnstuck()
 
 void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 {
-	if (!bProxyAnim) { return; }
+	// Mijn EIGEN pawn gebruikt de ABP/FP-view -> geen fallback. Elke ANDERE speler die ik zie (host ziet de
+	// joiner als ROLE_Authority, een client ziet 'm als SimulatedProxy - beide zijn niet-lokaal) krijgt onze
+	// single-node walk/idle/jump/telefoon. Lazy: zet de single-node-modus zodra we 'm voor het eerst tikken.
+	if (IsLocallyControlled()) { return; }
 	USkeletalMeshComponent* M = GetMesh();
-	if (!M) { return; }
+	if (!M || (!ProxyIdle && !ProxyWalk)) { return; }
+	if (!bProxyAnim)
+	{
+		M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		bProxyAnim = true;
+		ProxyAnimState = -1; // forceer de eerste pose-apply
+	}
 	// 'Beweegt' bepalen uit de positie (de capsule springt op net-updates) en kort vasthouden.
 	const FVector Cur = GetActorLocation();
 	if (bHasProxyPrev)
@@ -1118,16 +1127,8 @@ void AThePlugSIMCharacter::BeginPlay()
 		// staat de mesh op het capsule-midden -> voeten zweven ~96cm (co-op "zwevende speler"). In BeginPlay
 		// (na spawn) zodat het de spawn-collision niet raakt.
 		M->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f));
-
-		// Elke ANDERE speler die je ziet (simulated proxy) - OOK op de host (listen-server) - krijgt onze
-		// eigen walk/idle/jump-fallback. (De template-ABP animeert de proxy niet -> hij gleed/slidede.)
-		if (GetLocalRole() == ROLE_SimulatedProxy && (ProxyIdle || ProxyWalk))
-		{
-			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-			if (ProxyIdle) { M->PlayAnimation(ProxyIdle, true); }
-			ProxyAnimState = 0;
-			bProxyAnim = true;
-		}
+		// (De walk/idle/jump-fallback voor ANDERE spelers wordt lazy aangezet in UpdateProxyAnim zodra die
+		//  pawn niet-lokaal blijkt - werkt zo op host EN client, ongeacht Authority/SimulatedProxy.)
 	}
 
 	// Forceer de movement-instellingen at RUNTIME (een Blueprint-default kan de constructor overschrijven).
