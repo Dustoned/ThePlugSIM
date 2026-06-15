@@ -116,17 +116,22 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	// Verduisterende achtergrond.
 	UBorder* Dim = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SetDim"));
 	Dim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.82f), 0.f));
-	// Fill + marges: het paneel vult bijna het hele scherm (fullscreen-feel) en schaalt mee met de resolutie.
-	Dim->SetHorizontalAlignment(HAlign_Fill); Dim->SetVerticalAlignment(VAlign_Fill);
-	Dim->SetPadding(FMargin(120.f, 56.f));
+	// Verticaal vullen (tall = fullscreen-feel) maar horizontaal een GECENTREERDE kolom met vaste
+	// max-breedte -> op widescreen geen edge-to-edge uitrekken (geen enorme lege middenruimte),
+	// maar een nette gecentreerde settings-kolom.
+	Dim->SetHorizontalAlignment(HAlign_Center); Dim->SetVerticalAlignment(VAlign_Fill);
+	Dim->SetPadding(FMargin(0.f, 50.f));
 	Card = Dim;
 	UCanvasPanelSlot* DS = Root->AddChildToCanvas(Dim);
 	DS->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f)); DS->SetOffsets(FMargin(0.f));
 
+	USizeBox* Col = WidgetTree->ConstructWidget<USizeBox>();
+	Col->SetWidthOverride(920.f); // content-breedte cap -> optimaal op widescreen; hoogte vult mee
+	Dim->SetContent(Col);
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
 	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 18.f));
-	Panel->SetPadding(FMargin(32.f, 26.f));
-	Dim->SetContent(Panel);
+	Panel->SetPadding(FMargin(34.f, 26.f));
+	Col->SetContent(Panel);
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
