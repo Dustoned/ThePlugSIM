@@ -92,6 +92,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
 	bool IsSettingsOpen() const { return bSettingsOpen; }
 
+	// Telefoon-open status (gerepliceerd): andere spelers spelen hierop een 'texting'-animatie af.
+	bool IsPhoneOpenReplicated() const { return bPhoneOpenRep; }
+	UFUNCTION(Server, Reliable)
+	void ServerSetPhoneOpen(bool bInOpen);
+
 	// --- Lichtschakelaar-dimmer (popup met verticale slider; zie APackLightSwitch). ---
 	void OpenLightDimmer(class APackLightSwitch* Sw);
 	void CloseLightDimmer();
@@ -863,6 +868,8 @@ protected:
 	TSet<int32> LightSwitchHomesDone;
 
 	bool bOpen = false;
+	UPROPERTY(Replicated)
+	bool bPhoneOpenRep = false;   // server-side spiegel van bOpen -> proxies tonen de texting-anim
 	int32 Tab = 0;
 	bool bHomeScreen = true; // toon het app-rooster i.p.v. een geopende app
 

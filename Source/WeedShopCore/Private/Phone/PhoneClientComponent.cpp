@@ -94,6 +94,12 @@ void UPhoneClientComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME(UPhoneClientComponent, OwnedHomes);
 	DOREPLIFETIME(UPhoneClientComponent, ActiveHome);
 	DOREPLIFETIME(UPhoneClientComponent, RentDueDay);
+	DOREPLIFETIME(UPhoneClientComponent, bPhoneOpenRep);
+}
+
+void UPhoneClientComponent::ServerSetPhoneOpen_Implementation(bool bInOpen)
+{
+	bPhoneOpenRep = bInOpen; // server-authoritative -> repliceert naar alle proxies (texting-anim)
 }
 
 int32 UPhoneClientComponent::GetRentDueCents() const
@@ -1050,6 +1056,8 @@ void UPhoneClientComponent::Toggle()
 		bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false; bStoreOpen = false;
 		bHomeScreen = true; // open altijd op het home-scherm met de apps
 	}
+	// Andere spelers laten zien dat je op je telefoon zit (gerepliceerde texting-anim).
+	if (GetOwner() && GetOwner()->GetLocalRole() != ROLE_SimulatedProxy) { ServerSetPhoneOpen(bOpen); }
 	UpdateCursor();
 }
 

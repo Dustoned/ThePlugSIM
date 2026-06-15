@@ -126,6 +126,9 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	if (PWalk.Succeeded()) { ProxyWalk = PWalk.Object; }
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> PJump(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Fall_Loop.MM_Fall_Loop"));
 	if (PJump.Succeeded()) { ProxyJump = PJump.Object; }
+	// 'Texting'-pose: andere spelers zien je op je telefoon staan (cellphone-check anim uit de NPC-pack).
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> PPhone(TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Check_Cellphone.Anim_Check_Cellphone"));
+	if (PPhone.Succeeded()) { ProxyPhone = PPhone.Object; }
 
 	GetCapsuleComponent()->SetCapsuleSize(34.0f, 96.0f);
 
@@ -280,12 +283,17 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	}
 	ProxyPrevLoc = Cur; bHasProxyPrev = true;
 
+	// Telefoon open (gerepliceerd)? -> 'texting'-pose tonen wanneer je stilstaat.
+	bool bPhone = false;
+	if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
+
 	int32 NewState = 0; // idle
 	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling()) { NewState = 2; } // lucht (mode repliceert)
 	else if (ProxyMoveHold > 0.f) { NewState = 1; } // lopen
+	else if (bPhone && ProxyPhone) { NewState = 3; } // stilstaan + telefoon = texting
 	if (NewState == ProxyAnimState) { return; }
 	ProxyAnimState = NewState;
-	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 1) ? ProxyWalk : ProxyIdle;
+	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 3) ? ProxyPhone : (NewState == 1) ? ProxyWalk : ProxyIdle;
 	if (!Seq) { Seq = ProxyIdle; }
 	if (Seq) { M->PlayAnimation(Seq, true); }
 }
