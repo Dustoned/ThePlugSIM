@@ -123,8 +123,10 @@ void ADayNightController::BeginPlay()
 		FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt")));
 		const bool bLumenOff = GfxTxt.Contains(TEXT("LumenOff=1"));
 		const bool bPotato = GfxTxt.Contains(TEXT("Potato=1"));
+		const bool bMbOff = GfxTxt.Contains(TEXT("MotionBlurOff=1"));
 		if (bPotato) { WeedShop_ApplyGraphicsTier(-1); } // scalability 0 + extra verlagingen + Lumen uit
 		else { WeedShop_ApplyLumen(bLumenOff); }
+		if (bMbOff) { WeedShop_ApplyMotionBlur(true); }
 	}
 
 	// PACK-MAPS: MINIMAL-modus - overdag blijft de stock-look 100% intact (geen zon/fog/scenario-

@@ -286,40 +286,82 @@ void USettingsWidget::RefreshContent()
 			}
 		});
 
-		// Quality preset - incl. 'Potato' ONDER Low voor hele zwakke pc's (50% render-resolutie,
-		// minimale textures/streaming/foliage/schaduwen, Lumen uit). Cyclus: Potato->Low->...->Epic.
-		FString GfxQ;
-		const bool bPotato = FFileHelper::LoadFileToString(GfxQ, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt"))) && GfxQ.Contains(TEXT("Potato=1"));
-		int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
-		const int32 TierNow = bPotato ? -1 : ScalQ;
-		static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
-		const FString QName = QN[TierNow + 1];
-		AddValueRow(TEXT("Quality"), QName, [this, TierNow]()
+		// PRESET - zet alles in één keer. Potato (onder Low, voor zwakke pc's) -> Low -> Medium -> High -> Epic.
 		{
-			const int32 Next = (TierNow >= 3) ? -1 : TierNow + 1;
-			WeedShop_ApplyGraphicsTier(Next);
-			// Potato-vlag onthouden, bestaande LumenOff behouden.
-			FString T; FFileHelper::LoadFileToString(T, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")));
-			const bool bLum = T.Contains(TEXT("LumenOff=1"));
-			FFileHelper::SaveStringToFile(FString::Printf(TEXT("LumenOff=%d\nPotato=%d\n"), bLum ? 1 : 0, (Next <= -1) ? 1 : 0),
-				*(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
-			RefreshContent();
-		});
-
-		// Lumen aan/uit: GI + reflecties op de goedkope methode = flink snellere frames op
-		// zware scenes. Keuze wordt onthouden (Saved/GraphicsConfig.txt) en bij start toegepast.
-		{
-			FString GfxTxt;
-			const bool bLumenOff = FFileHelper::LoadFileToString(GfxTxt, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt"))) && GfxTxt.Contains(TEXT("LumenOff=1"));
-			AddValueRow(TEXT("Lumen (GI + reflections)"), bLumenOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff]()
+			bool bLumenOff, bPotato, bMbOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff);
+			int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
+			const int32 TierNow = bPotato ? -1 : ScalQ;
+			static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+			AddValueRow(TEXT("Preset (all)"), QN[TierNow + 1], [this, TierNow]()
 			{
-				const bool bNewOff = !bLumenOff;
-				WeedShop_ApplyLumen(bNewOff);
-				// LumenOff opslaan maar de Potato-vlag behouden.
-				FString T; FFileHelper::LoadFileToString(T, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")));
-				const bool bPot = T.Contains(TEXT("Potato=1"));
-				FFileHelper::SaveStringToFile(FString::Printf(TEXT("LumenOff=%d\nPotato=%d\n"), bNewOff ? 1 : 0, bPot ? 1 : 0),
-					*(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+				const int32 Next = (TierNow >= 3) ? -1 : TierNow + 1;
+				WeedShop_ApplyGraphicsTier(Next);
+				bool bLum, bPot, bMb; WeedShop_ReadGfxFlags(bLum, bPot, bMb);
+				WeedShop_WriteGfxFlags(bLum, (Next <= -1), bMb); // Potato-vlag bij; Lumen/MotionBlur behouden
+				RefreshContent();
+			});
+		}
+
+		// --- Losse kwaliteit-instellingen (elk Low/Medium/High/Epic; samen vormen ze het preset) ---
+		auto AddQ = [this](const FString& Lbl, int32 Cur, TFunction<void(UGameUserSettings*, int32)> Apply)
+		{
+			static const TCHAR* LV[4] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+			AddValueRow(Lbl, (Cur >= 0 && Cur <= 3) ? LV[Cur] : TEXT("Custom"), [this, Cur, Apply]()
+			{
+				if (UGameUserSettings* GG = GUS())
+				{
+					const int32 c = (Cur < 0) ? 2 : Cur;
+					Apply(GG, (c + 1) % 4);
+					GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
+				}
+			});
+		};
+		AddQ(TEXT("View distance"),    G->GetViewDistanceQuality(),   [](UGameUserSettings* GG, int32 n){ GG->SetViewDistanceQuality(n); });
+		AddQ(TEXT("Textures"),         G->GetTextureQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetTextureQuality(n); });
+		AddQ(TEXT("Shadows"),          G->GetShadowQuality(),         [](UGameUserSettings* GG, int32 n){ GG->SetShadowQuality(n); });
+		AddQ(TEXT("Anti-aliasing"),    G->GetAntiAliasingQuality(),   [](UGameUserSettings* GG, int32 n){ GG->SetAntiAliasingQuality(n); });
+		AddQ(TEXT("Effects"),          G->GetVisualEffectQuality(),   [](UGameUserSettings* GG, int32 n){ GG->SetVisualEffectQuality(n); });
+		AddQ(TEXT("Post-processing"),  G->GetPostProcessingQuality(), [](UGameUserSettings* GG, int32 n){ GG->SetPostProcessingQuality(n); });
+		AddQ(TEXT("Foliage"),          G->GetFoliageQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetFoliageQuality(n); });
+		AddQ(TEXT("Shading (shaders)"),G->GetShadingQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetShadingQuality(n); });
+		AddQ(TEXT("Reflections"),      G->GetReflectionQuality(),     [](UGameUserSettings* GG, int32 n){ GG->SetReflectionQuality(n); });
+
+		// Resolutie-schaal (render-%): 50 -> 75 -> 100.
+		{
+			const int32 RS = FMath::RoundToInt(G->GetResolutionScaleNormalized() * 100.f);
+			AddValueRow(TEXT("Resolution scale"), FString::Printf(TEXT("%d%%"), RS), [this]()
+			{
+				if (UGameUserSettings* GG = GUS())
+				{
+					const int32 Cur = FMath::RoundToInt(GG->GetResolutionScaleNormalized() * 100.f);
+					const int32 Next = (Cur < 63) ? 75 : (Cur < 88) ? 100 : 50;
+					GG->SetResolutionScaleNormalized(Next / 100.f);
+					GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
+				}
+			});
+		}
+
+		// Lumen (GI + reflecties op de goedkope methode) - aan/uit.
+		{
+			bool bLumenOff, bPotato, bMbOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff);
+			AddValueRow(TEXT("Lumen (GI + reflections)"), bLumenOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff]()
+			{
+				WeedShop_ApplyLumen(!bLumenOff);
+				WeedShop_WriteGfxFlags(!bLumenOff, bPotato, bMbOff);
+				RefreshContent();
+			});
+		}
+
+		// Motion blur - aan/uit.
+		{
+			bool bLumenOff, bPotato, bMbOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff);
+			AddValueRow(TEXT("Motion blur"), bMbOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff]()
+			{
+				WeedShop_ApplyMotionBlur(!bMbOff);
+				WeedShop_WriteGfxFlags(bLumenOff, bPotato, !bMbOff);
 				RefreshContent();
 			});
 		}

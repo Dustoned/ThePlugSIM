@@ -37,6 +37,12 @@ WEEDSHOPCORE_API void WeedShop_ApplyLumen(bool bLumenOff);
 // foliage/schaduwen, Lumen uit), 0 = Low, 1 = Medium, 2 = High, 3 = Epic.
 WEEDSHOPCORE_API void WeedShop_ApplyGraphicsTier(int32 Tier);
 
+// Motion blur aan/uit + de cvar-gebaseerde grafische vlaggen (Lumen/Potato/MotionBlur) in
+// Saved/GraphicsConfig.txt als geheel lezen/schrijven (zo wist het zetten van één vlag de andere niet).
+WEEDSHOPCORE_API void WeedShop_ApplyMotionBlur(bool bOff);
+WEEDSHOPCORE_API void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff);
+WEEDSHOPCORE_API void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff);
+
 // GEBAKKEN DATA: wereld-configuratie (map-border, kamer-jobs, deur-sloten, licht-instellingen)
 // leeft tijdens het ontwikkelen in Saved/, maar Saved/ gaat NIET mee in een gepackagede build.
 // Een snapshot staat daarom in Content/BakedData/ (packaged via DirectoriesToAlwaysStageAsUFS).

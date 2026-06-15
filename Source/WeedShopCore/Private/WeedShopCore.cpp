@@ -21,6 +21,7 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/GameUserSettings.h"
+#include "Misc/FileHelper.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 
@@ -148,6 +149,34 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 
 	UE_LOG(LogWeedShop, Warning, TEXT("Graphics-tier: %s (scalability %d)"),
 		bPotato ? TEXT("POTATO") : (Scal == 0 ? TEXT("Low") : Scal == 1 ? TEXT("Medium") : Scal == 2 ? TEXT("High") : TEXT("Epic")), Scal);
+}
+
+// Motion blur aan/uit (post-process). Off = 0, On = standaard halve sterkte.
+void WeedShop_ApplyMotionBlur(bool bOff)
+{
+	if (IConsoleVariable* CV = IConsoleManager::Get().FindConsoleVariable(TEXT("r.MotionBlur.Amount")))
+	{
+		CV->Set(bOff ? 0.f : 0.5f, ECVF_SetByConsole);
+	}
+}
+
+// De cvar-gebaseerde grafische vlaggen (Lumen/Potato/MotionBlur) leven samen in Saved/GraphicsConfig.txt.
+// Read/Write als geheel zodat het wijzigen van één vlag de andere niet wist.
+void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff)
+{
+	FString T;
+	FFileHelper::LoadFileToString(T, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")));
+	bLumenOff      = T.Contains(TEXT("LumenOff=1"));
+	bPotato        = T.Contains(TEXT("Potato=1"));
+	bMotionBlurOff = T.Contains(TEXT("MotionBlurOff=1"));
+}
+
+void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff)
+{
+	const FString Out = FString::Printf(TEXT("LumenOff=%d\nPotato=%d\nMotionBlurOff=%d\n"),
+		bLumenOff ? 1 : 0, bPotato ? 1 : 0, bMotionBlurOff ? 1 : 0);
+	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 }
 
 // --- Slate loading screen (geen UObjects/UMG: draait veilig tijdens het laden) ---
