@@ -44,4 +44,9 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> StonedRow;
 	UPROPERTY() TObjectPtr<UProgressBar> StonedBar;
 	UPROPERTY() TObjectPtr<UTextBlock> StonedText;
+
+	// Laadscherm-dismiss: het laadscherm blijft staan tot de speler stil in de kamer staat (of een safety-cap).
+	float LoadShownTime = 0.f;
+	float LoadStillTime = 0.f;
+	bool bLoadStopped = false;
 };

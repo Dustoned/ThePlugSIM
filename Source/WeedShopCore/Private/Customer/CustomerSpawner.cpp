@@ -398,7 +398,12 @@ void ACustomerSpawner::TrySpawn()
 				}
 			}
 			const float Dz = L0.Z - RefZ;
-			if (Dz < -150.f || Dz > 220.f)
+			// Een NPC die GEWOON LOOPT (horizontale snelheid > 0) NOOIT despawnen: de route loopt over
+			// hellingen/stoepranden/trapjes waar de Z afwijkt van het dichtstbijzijnde route-punt, en dat
+			// is geen reden om te killen. Alleen STILSTAANDE NPC's die echt ver onder/boven zitten (door de
+			// map gezakt of op een prop geklommen) opruimen.
+			const bool bWalking = Cw0->GetVelocity().SizeSquared2D() > 30.f * 30.f;
+			if (!bWalking && (Dz < -150.f || Dz > 300.f))
 			{
 				Cw0->Destroy();
 				Spawned.RemoveAt(wi);

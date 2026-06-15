@@ -55,7 +55,7 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 
 	// --- Speler-skin (man/vrouw, uitbreidbaar). Gerepliceerd zodat co-op je skin ziet. ---
 	UPROPERTY(ReplicatedUsing = OnRep_Skin)
-	uint8 PlayerSkin = 0; // 0 = man (Manny), 1 = vrouw (Quinn)
+	uint8 PlayerSkin = 2; // default = Casual girl 1 (Manny/Quinn niet meer default). 0=Manny 1=Quinn 2-4=girls
 	UFUNCTION()
 	void OnRep_Skin();
 	void ApplySkinMesh();
@@ -69,7 +69,7 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitNeck = 0;  // Necklace (0 = None)
 	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitSocks = 0; // Socks (0 = None)
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> OutfitComps; // aangehangen part-meshes (TP + FP)
-	void AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson);
+	void AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson, bool bMale = false);
 	void SyncOutfitViewFlags(); // owner-see/FP-type van de parts gelijktrekken met hun body (na view-toggle)
 
 	// --- 3rd-person toggle (toets B): bekijk jezelf / je skin ---
@@ -137,6 +137,10 @@ public:
 	// `WeedMarkSpot <label>` schrijft je huidige positie+kijkrichting naar Saved/MarkedSpots.txt -
 	// zo wijs je plekken aan (bv. een hotel-lobby) waar Claude daarna in code iets kan bouwen.
 	UFUNCTION(Exec) void WeedMarkSpot(const FString& Label);
+
+	// Beach-map woning-registry (ROADMAP 4.1): registreer de kamer waar je NU staat als koopbare woning
+	// (DoorRetrofitter meet de wanden + schrijft BeachHomes.txt). Dev-only (free-build). Bind: F6.
+	UFUNCTION(Exec) void WeedRegisterHome();
 
 	// Dev: meld waar de capsule tegenaan botst (alleen met F9-overlay aan) - onzichtbare blockers.
 	UFUNCTION()
@@ -291,6 +295,12 @@ public:
 	float FloatTime = 0.f; // tijd dat je in de lucht hangt met bijna geen valsnelheid (= vast)
 	void TickStuckRecovery(float DeltaSeconds);
 	bool FindFloorAt(const FVector& Near, FVector& OutSafe) const; // omlaag-trace naar de echte vloer
+	// Zet de speler terug op een veilige plek (capsule/zwaartekracht/rechtop herstel). bManual = naar de
+	// DICHTSTBIJZIJNDE begaanbare plek (weg/stoep/vloer via navmesh) - NIET naar huis. Anders (auto-
+	// recovery uit de lucht) = de laatste-grond-plek, dan de spawn.
+	void RecoverToSafe(bool bManual);
+	// Handmatige "vastgelopen?"-reset (knop in het pauze-menu): naar de dichtstbijzijnde begaanbare weg.
+	UFUNCTION(Exec, BlueprintCallable, Category = "Player") void WeedUnstuck();
 
 	// Co-op-animatie ALLEEN op een client die een ANDERE speler ziet (simulated proxy op NM_Client):
 	// daar speelt de template-ABP geen loop (glijden). We kiezen walk/idle/jump uit positie-beweging +

@@ -27,6 +27,7 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 	void FillBody();
+	void BuildUnpackSection(); // uitpak-rijen onderaan de body (onder de pack-knop)
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
@@ -38,7 +39,9 @@ protected:
 
 	FName SelStrain;       // gekozen gedroogde Bud_<strain>
 	FName SelContainer;    // gekozen container (Cont_*)
-	int32 SelGrams = 1;    // gekozen aantal gram (1..capaciteit)
-	int32 CurCap = 1;      // huidige max (container-cap geklemd op beschikbare wiet)
+	int32 SelBags = 1;     // gekozen aantal bags (1..MaxBags)
+	int32 MaxBags = 1;     // max bags = containers die je hebt vs wiet die je hebt
+	int32 PackCap = 1;     // capaciteit (gram) van de gekozen container
+	int32 PackBudHave = 0; // beschikbare gram van de gekozen strain
 	FString LastSig;       // herbouw alleen bij wijziging
 };

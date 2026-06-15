@@ -11,9 +11,34 @@
 #include "Cultivation/DryingRack.h"
 #include "World/ProcessorMachine.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "EngineUtils.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+
+namespace
+{
+	// Co-op: stuur een melding naar ALLE spelers (elk op z'n eigen client) i.p.v. alleen lokaal op de host.
+	// NotifyPawn routeert per pawn via de PhoneClientComponent naar de juiste client. Valt terug op een
+	// lokale melding als er (nog) geen pawns zijn.
+	void NotifyAllPlayers(UWorld* W, const FColor& Color, float Time, const FString& Msg)
+	{
+		bool bAny = false;
+		if (W)
+		{
+			for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+			{
+				if (APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr)
+				{
+					UWeedToast::NotifyPawn(Pw, -1, Time, Color, Msg);
+					bAny = true;
+				}
+			}
+		}
+		if (!bAny) { UWeedToast::Notify(-1, Time, Color, Msg); }
+	}
+}
 
 UHeatComponent::UHeatComponent()
 {
@@ -110,11 +135,8 @@ void UHeatComponent::TriggerBust()
 	Econ->RemoveMoney(Loss);
 	SetHeat(Heat - 40.f);
 	UE_LOG(LogWeedShop, Log, TEXT("BUST! Politie pakte %lld cents."), (long long)Loss);
-	if (GEngine)
-	{
-		UWeedToast::Notify(-1, 6.f, FColor::Red,
-			FString::Printf(TEXT("BUST! Police took EUR %.2f"), Loss / 100.f));
-	}
+	NotifyAllPlayers(GetWorld(), FColor::Red, 6.f,
+		FString::Printf(TEXT("BUST! Police took EUR %.2f"), Loss / 100.f));
 }
 
 void UHeatComponent::TriggerRobbery()
@@ -158,10 +180,7 @@ void UHeatComponent::TriggerRobbery()
 
 	UE_LOG(LogWeedShop, Log, TEXT("Overval! %lld cents + apartment leeggehaald (%d planten, %d rekken, %d machines)."),
 		(long long)Loss, Plants, Racks, Machines);
-	if (GEngine)
-	{
-		UWeedToast::Notify(-1, 8.f, FColor(255, 140, 0),
-			FString::Printf(TEXT("Robbery! EUR %.2f stolen + your apartment got cleaned out (%d plants, %d racks, %d machines). Use a safe!"),
-				Loss / 100.f, Plants, Racks, Machines));
-	}
+	NotifyAllPlayers(GetWorld(), FColor(255, 140, 0), 8.f,
+		FString::Printf(TEXT("Robbery! EUR %.2f stolen + your apartment got cleaned out (%d plants, %d racks, %d machines). Use a safe!"),
+			Loss / 100.f, Plants, Racks, Machines));
 }

@@ -31,6 +31,7 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 
 	void OnResume();
+	void OnUnstuck();
 	void OnSave();
 	void OnLoad();
 	void OnSettings();

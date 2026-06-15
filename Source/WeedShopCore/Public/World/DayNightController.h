@@ -89,6 +89,18 @@ protected:
 	// Minimal-modus: alle gevonden lichten met hun originele intensiteit (dim-factor per klok).
 	struct FDimLight { TWeakObjectPtr<class ULightComponent> Light; float OrigIntensity = 0.f; };
 	TArray<FDimLight> DimLights;
+	// Reflection captures van de map: overdag gebakken -> 's nachts spiegelen ramen/water nog daglicht.
+	// Hun brightness mee-dimmen met de klok (0 = nacht) haalt die foute dag-reflectie weg.
+	struct FRefCap { TWeakObjectPtr<class UReflectionCaptureComponent> Cap; float OrigBrightness = 1.f; };
+	TArray<FRefCap> RefCaps;
+	TSet<class UReflectionCaptureComponent*> SeenRefCaps;
+	float LastRefMul = -1.f;
+	// SKYLIGHTS apart: USkyLightComponent erft van ULightComponentBase (NIET ULightComponent), dus de
+	// gewone dim-scan miste 'm -> de movable skylight bleef 's nachts op dag-sterkte en spiegelde z'n
+	// hemel-cubemap fel op water/ramen. Hier wel verzameld + gedimd met de klok.
+	struct FSkyDim { TWeakObjectPtr<class USkyLightComponent> Sky; float OrigIntensity = 1.f; };
+	TArray<FSkyDim> SkyDims;
+	TSet<class USkyLightComponent*> SeenSky;
 	TArray<TWeakObjectPtr<class UStaticMeshComponent>> DomeComps; // HDRI-fotokoepel (dag-lucht)
 	TSet<TWeakObjectPtr<class ULightComponent>> SeenLights;
 	float LightScanTimer = 0.f;

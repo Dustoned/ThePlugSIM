@@ -40,12 +40,14 @@ namespace
 		}
 		if (Best != INDEX_NONE) { return Best; }
 
-		// 2) Fallback: dichtstbijzijnde woning-centrum in XY, mits binnen kamergrootte + marge.
+		// 2) Fallback: dichtstbijzijnde woning-centrum, mits binnen kamergrootte + marge. 3D-afstand
+		// (niet XY): bij gestapelde flats (zelfde XY, andere verdieping) telt de Z-afstand mee, zodat
+		// een unit een etage hoger/lager NIET wint van de unit op de eigen verdieping.
 		float BestF = TNumericLimits<float>::Max();
 		for (int32 i = 0; i < Homes.Num(); ++i)
 		{
 			const FApartmentHome& H = Homes[i];
-			const float DD = FVector::DistSquared2D(L, H.InteriorPos);
+			const float DD = FVector::DistSquared(L, H.InteriorPos);
 			const float Cap = FMath::Max(H.RoomHalf.X, H.RoomHalf.Y) + 300.f;
 			if (DD < Cap * Cap && DD < BestF) { BestF = DD; Best = i; }
 		}

@@ -63,7 +63,9 @@ public:
 	int32 NumReady() const { int32 R = 0; for (const FProcEntry& E : Entries) { if (E.bDone) { ++R; } } return R; }
 
 	// Server: laad een stapel invoer (mesh: Bud_, press: Crystal_). Geeft aantal verwerkte gram terug (0 = vol/fout).
-	int32 ServerLoad(FName InId, int32 Qty, float Thc, float QualPct);
+	// OutPrefixOverride (optioneel): forceer een ander output-type i.p.v. OutputPrefixFor (bv. de koelkast die met
+	// ingredienten cookies/gummies maakt i.p.v. de standaard cannabutter-edible).
+	int32 ServerLoad(FName InId, int32 Qty, float Thc, float QualPct, const FString& OutPrefixOverride = FString());
 	// Server: oogst één klare batch op index. Vult Out* en geeft true bij succes.
 	bool ServerCollectIndex(int32 Index, FName& OutId, int32& OutQty, float& OutThc, float& OutQual);
 

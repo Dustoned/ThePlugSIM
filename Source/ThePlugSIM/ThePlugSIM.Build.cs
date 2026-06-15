@@ -25,13 +25,7 @@ public class ThePlugSIM : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { "WeedShopCore" });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"ThePlugSIM",
-			"ThePlugSIM/Variant_Horror",
-			"ThePlugSIM/Variant_Horror/UI",
-			"ThePlugSIM/Variant_Shooter",
-			"ThePlugSIM/Variant_Shooter/AI",
-			"ThePlugSIM/Variant_Shooter/UI",
-			"ThePlugSIM/Variant_Shooter/Weapons"
+			"ThePlugSIM"
 		});
 
 		// Uncomment if you are using Slate UI

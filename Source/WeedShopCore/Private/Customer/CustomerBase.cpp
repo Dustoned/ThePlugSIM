@@ -102,8 +102,13 @@ ACustomerBase::ACustomerBase()
 		if (NIdle.Succeeded()) { NpcIdle = NIdle.Object; }
 		static ConstructorHelpers::FObjectFinder<UAnimSequence> NWalk(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Fwd.MF_Unarmed_Walk_Fwd"));
 		if (NWalk.Succeeded()) { NpcWalk = NWalk.Object; }
-		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
-		MeshComp->bEnableUpdateRateOptimizations = false;
+		// NPC-OPTIMALISATIE (alle NPC's standaard goedkoop, niet alleen spawner-walkers):
+		//  - OnlyTickPoseWhenRendered: buiten beeld animeert de NPC niet (beweegt nog wel). Scheelt
+		//    enorm bij een grote menigte - de meeste NPC's zijn op een willekeurig moment niet in beeld.
+		//  - URO aan: NPC's die WEL in beeld zijn maar klein/ver updaten hun animatie minder vaak
+		//    (frame-skip op scherm-grootte). Dit is precies wat een "anim-budget"-tool onder de motorkap doet.
+		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		MeshComp->bEnableUpdateRateOptimizations = true;
 		MeshComp->SetCastShadow(false);
 	}
 
@@ -2880,13 +2885,9 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 
 int32 ACustomerBase::GetMarketPriceCents() const
 {
-	if (!ProductTable || DesiredProductId.IsNone())
-	{
-		return 0;
-	}
-	const FWeedShopProductRow* Row =
-		ProductTable->FindRow<FWeedShopProductRow>(DesiredProductId, TEXT("ACustomerBase::GetMarketPriceCents"), false);
-	return Row ? Row->MarketPriceCents : 0;
+	// Via de unified prijs-functie: zo krijgt een gewenst zakje/concentraat ook de juiste prijs
+	// (bag -> bud-rij, concentraat × premium-factor) i.p.v. €0 bij een ontbrekende directe rij.
+	return GetMarketPriceForProduct(DesiredProductId);
 }
 
 int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
@@ -2900,17 +2901,25 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	// Verkoopbaar aan klanten: verpakte wiet (Bag_) + de verwerkte drugs (Crystal_/Hash_/Edible_), geprijsd
 	// via de strain-rij (Bud_<strain>) maal een premium-factor. Tussenstappen (Baked_/ButterMix_) niet.
 	auto StrainOf = [&](int32 PreLen) { return FName(*FString::Printf(TEXT("Bud_%s"), *S.RightChop(PreLen))); };
+	// Premium-factor per gram CONCENTRAAT t.o.v. de bud-prijs. De lage-conversie ketens (rosin/bubble/
+	// hash/oil leveren maar ~10-24% van het ingaande gewicht) moeten per gram veel duurder zijn, anders
+	// is de hele keten minder waard dan de ruwe bud gewoon verkopen. Mults afgestemd op:
+	// (totaal-conv × mult) > 1.5 op de Std/Pro-machines = concentreren loont duidelijk.
 	if      (S.StartsWith(TEXT("Bag_")))     { LookupId = FName(*FString::Printf(TEXT("Bud_%s"), *UInventoryComponent::BagStrain(ProductId).ToString())); }
-	else if (S.StartsWith(TEXT("Crystal_")))  { LookupId = StrainOf(8); Mult = 2.2f; }
-	else if (S.StartsWith(TEXT("Hash_")))     { LookupId = StrainOf(5); Mult = 3.2f; }
+	else if (S.StartsWith(TEXT("Crystal_")))  { LookupId = StrainOf(8); Mult = 4.0f; }   // kief (tussenstap -> pers tot hash)
+	else if (S.StartsWith(TEXT("Hash_")))     { LookupId = StrainOf(5); Mult = 10.0f; }  // 2-staps keten (mesh+press)
 	else if (S.StartsWith(TEXT("Edible_")))   { LookupId = StrainOf(7); Mult = 4.0f; }
-	else if (S.StartsWith(TEXT("Rosin_")))    { LookupId = StrainOf(6); Mult = 4.2f; }  // solventless premium
-	else if (S.StartsWith(TEXT("Bubble_")))   { LookupId = StrainOf(7); Mult = 3.8f; }  // ice/bubble hash
-	else if (S.StartsWith(TEXT("Moonrock_"))) { LookupId = StrainOf(9); Mult = 3.4f; }  // moonrocks
+	else if (S.StartsWith(TEXT("Cookie_")))   { LookupId = StrainOf(7); Mult = 4.2f; }  // baked edible (ingredients)
+	else if (S.StartsWith(TEXT("Gummy_")))    { LookupId = StrainOf(6); Mult = 4.2f; }  // set edible (ingredients)
+	else if (S.StartsWith(TEXT("Rosin_")))    { LookupId = StrainOf(6); Mult = 9.0f; }   // solventless premium (lage conv)
+	else if (S.StartsWith(TEXT("Bubble_")))   { LookupId = StrainOf(7); Mult = 11.0f; }  // ice/bubble hash (laagste conv)
+	else if (S.StartsWith(TEXT("Oil_")))      { LookupId = StrainOf(4); Mult = 9.0f; }   // cannabis-olie (premium concentraat)
+	else if (S.StartsWith(TEXT("Moonrock_"))) { LookupId = StrainOf(9); Mult = 3.4f; }  // moonrocks (hoge conv)
 	const FWeedShopProductRow* Row =
 		ProductTable->FindRow<FWeedShopProductRow>(LookupId, TEXT("ACustomerBase::GetMarketPriceForProduct"), false);
-	// Losse Bud_ (niet verpakt) + tussenstappen zijn NIET verkoopbaar aan klanten.
-	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Oil_"))) { return 0; }
+	// Losse Bud_ (niet verpakt) + de tussenstappen zijn NIET verkoopbaar aan klanten. (Oil IS nu wel
+	// verkoopbaar: het was een eindproduct zonder afzet -> dead weight.)
+	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_"))) { return 0; }
 	return Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult) : 0;
 }
 
@@ -2976,10 +2985,13 @@ FName ACustomerBase::PickDesiredProduct(AWeedShopGameState* GS, UDataTable* InPr
 	if (PlayerLvl < 40) { WRosin  = 0.f; } // Rosin ~lvl 40
 	if (PlayerLvl < 46) { WBubble = 0.f; } // Isolator (bubble hash) ~lvl 46
 
+	const float WCookie = WEdible * 0.5f; // cookies/gummies delen de edible-vraag (zelfde level-gate)
+	const float WGummy  = WEdible * 0.5f;
 	struct FPick { const TCHAR* Px; float W; };
 	const FPick Picks[] = {
 		{ TEXT("Bag_"), WWeed }, { TEXT("Hash_"), WHash }, { TEXT("Edible_"), WEdible },
-		{ TEXT("Moonrock_"), WMoon }, { TEXT("Rosin_"), WRosin }, { TEXT("Bubble_"), WBubble } };
+		{ TEXT("Moonrock_"), WMoon }, { TEXT("Rosin_"), WRosin }, { TEXT("Bubble_"), WBubble },
+		{ TEXT("Cookie_"), WCookie }, { TEXT("Gummy_"), WGummy } };
 	float Total = 0.f; for (const FPick& P : Picks) { Total += P.W; }
 	FString ProdType = TEXT("Bag_");
 	if (Total > 0.f)
@@ -3004,6 +3016,7 @@ float ACustomerBase::GetExpectedThc() const
 	S.RemoveFromStart(TEXT("Bag_"));      S.RemoveFromStart(TEXT("Bud_"));
 	S.RemoveFromStart(TEXT("Hash_"));     S.RemoveFromStart(TEXT("Edible_"));   S.RemoveFromStart(TEXT("Crystal_"));
 	S.RemoveFromStart(TEXT("Moonrock_")); S.RemoveFromStart(TEXT("Rosin_"));    S.RemoveFromStart(TEXT("Bubble_"));
+	S.RemoveFromStart(TEXT("Cookie_"));   S.RemoveFromStart(TEXT("Gummy_"));
 	if (S.IsEmpty()) { return 15.f; }
 	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
@@ -3223,11 +3236,30 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		StockFrom->RemoveItem(ProductId, SoldGrams);
 	}
 	if (SoldGrams <= 0) { return EDealResult::NoStock; }
-	const int32 Total = AskPriceCentsPerUnit * SoldGrams;
+	int32 Total = AskPriceCentsPerUnit * SoldGrams;
+
+	// DAG-ORDER vervuld: de juiste strain (geen substituut), THC >= eis en de volle bestelde hoeveelheid
+	// -> bonus-uitbetaling bovenop de prijs. Eenmalig (de afspraak-klant vertrekt hierna).
+	bool bOrderFulfilled = false;
+	int32 OrderBonusCents = 0;
+	if (IsOrder() && !bSubstitute && SoldThc >= GetOrderMinThc() && SoldGrams >= DesiredQuantity)
+	{
+		OrderBonusCents = FMath::RoundToInt(Total * (GetOrderBonusMult() - 1.f));
+		Total += OrderBonusCents;
+		bOrderFulfilled = true;
+	}
+
 	if (PayTo)
 	{
 		PayTo->AddMoney(Total);
 		PayTo->NoteLegitIncome(Total); // verkoop-omzet -> "schone ruimte" om wit te wassen (anti-witwas-heat)
+		if (bOrderFulfilled)
+		{
+			Say(TEXT("Exactly what I wanted. Pleasure doing business."));
+			UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 5.f, FColor(255, 215, 90),
+				FString::Printf(TEXT("VIP order filled! +%d%% bonus (+EUR %.2f)"),
+					FMath::RoundToInt((GetOrderBonusMult() - 1.f) * 100.f), OrderBonusCents / 100.f));
+		}
 	}
 
 	float dR = 0.f, dL = 0.f, dA = 0.f;
@@ -3298,12 +3330,17 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		if (UGoalsComponent* Gl = GSc->GetGoals()) { Gl->NoteDeal(); Gl->NoteGramsSold(SoldGrams); } // goal-tellers: deal + gram verkocht
 	}
 
-	// XP: per verdiende euro + een vaste bonus per geslaagde deal.
+	// XP op MOEITE (verkochte grammen × THC-bonus), NIET op verdiende euro's. Anders balloont de XP mee
+	// met de geld-inflatie van de late strains en vlieg je door lvl 30-50; nu blijft 0-50 een gelijkmatige
+	// grind. THC weegt mee (premium = meer XP/gram): 14% -> x1.35, 40% -> x2.0.
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (ULevelComponent* Lv = GS->GetLeveling())
 		{
-			Lv->AddXP(5 + Total / 100);
+			// Basis-XP op moeite (gram x THC-bonus) + extra XP voor een vervulde VIP-order (premium opdracht).
+			int32 DealXP = 5 + FMath::RoundToInt(SoldGrams * (1.f + SoldThc / 40.f));
+			if (bOrderFulfilled) { DealXP += 15 + FMath::RoundToInt(SoldGrams * 0.5f); }
+			Lv->AddXP(DealXP);
 		}
 		// Heat: op straat dealen trekt aandacht. 's Nachts fors riskanter dan overdag (BustThreshold = 80).
 		if (UHeatComponent* Heat = GS->GetHeat())

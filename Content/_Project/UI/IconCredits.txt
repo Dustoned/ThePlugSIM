@@ -1,0 +1,45 @@
+# Icon attribution - one line per icon:  stem | artist | source
+# Read by the in-game Credits screen. Noun Project icons are CC BY 3.0.
+press     | huijae Jang     | Noun Project
+weed      | Hey Rabbit      | Noun Project
+seed      | Azam Ishaq      | Noun Project
+weed_bag  | Hat-Tech        | Noun Project
+weed_jar  | Smashing Stocks | Noun Project
+weed_sack | KP Arts         | Noun Project
+crystals  | Creative Mahira | Noun Project
+butter    | Andra Wisma     | Noun Project
+edible    | Andy Horvath    | Noun Project
+cookie    | Azam Ishaq      | Noun Project
+mix       | Vectors Market  | Noun Project
+oven      | akmal abdul muta'al mahdi | Noun Project
+pan       | Yayat           | Noun Project
+mesh      | LUTFI GANI AL ACHMAD | Noun Project
+icehash   | Jooyun Lee      | Noun Project
+oil       | Hat-Tech        | Noun Project
+mixstation| WEBTECHOPS LLP  | Noun Project
+growlamp  | Amethyst Studio | Noun Project
+drainage  | NAPISAH         | Noun Project
+fan       | Kmg Design      | Noun Project
+faucet    | Uswa KDT        | Noun Project
+bloom     | Bayu Purnama Jatnika | Noun Project
+safe      | Larea           | Noun Project
+wardrobe  | franc11s        | Noun Project
+rosin     | Aly Dodds       | Noun Project
+filter    | Singlar         | Noun Project
+motor     | satouru sai     | Noun Project
+insulation| c_ART_o         | Noun Project
+papers    | my name is mud  | Noun Project
+seal      | Oleksandr Panasovskyi | Noun Project
+joint     | Hey Rabbit      | Noun Project
+rack      | Amethyst Studio | Noun Project
+gummy     | ThePlugSIM      | original (AI-assisted)
+moonrock  | ThePlugSIM      | original (AI-assisted)
+growtent  | ThePlugSIM      | original (AI-assisted)
+hash      | ThePlugSIM      | original (AI-assisted)
+drop      | ThePlugSIM      | original (procedural droplet)
+bubble    | ThePlugSIM      | composite (hash balls + leaf)
+block     | ThePlugSIM      | original (AI-assisted)
+bench     | ThePlugSIM      | original (AI-assisted)
+baked     | ThePlugSIM      | composite (derived from weed icon)
+phone     | Design Circle   | Noun Project
+phone_vibrate | Alice Design | Noun Project

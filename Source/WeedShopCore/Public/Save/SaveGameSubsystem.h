@@ -197,6 +197,9 @@ protected:
 	EPending Pending = EPending::None;
 	FString PendingLoadName;
 	EGameStartMode PendingStartMode = EGameStartMode::Normal;
+	// De mode waarin deze sessie draait (overleeft de hele sessie, anders dan PendingStartMode die na
+	// het toepassen reset). Bepaalt of dev-tools/free-build aan staan en wordt mee opgeslagen.
+	EGameStartMode SessionStartMode = EGameStartMode::Normal;
 	bool bPendingCompetitive = false; // co-op modus voor de volgende verse host-game
 	void ReloadCurrentLevel(const FString& Options = TEXT(""));
 	// Geef de host-speler de startstaat (geld + items) van de gekozen modus.

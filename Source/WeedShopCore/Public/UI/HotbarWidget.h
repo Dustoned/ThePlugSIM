@@ -25,7 +25,8 @@ protected:
 
 	UPROPERTY() TArray<TObjectPtr<UBorder>> SlotBoxes;
 	UPROPERTY() TArray<TObjectPtr<USizeBox>> SlotIconBoxes; // icoon-container per slot (inhoud wisselt)
-	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotNames;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotNames;   // tag-tekst in de bubble (OG, GSC, II, ...)
+	UPROPERTY() TArray<TObjectPtr<UBorder>> SlotTagPills;   // tag-bubble onderaan (verbergen als geen tag)
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotBadges;  // aantal/gram-tekst
 	UPROPERTY() TArray<TObjectPtr<UBorder>> SlotBadgePills; // pill-achtergrond (verbergen als leeg)
 	UPROPERTY() TArray<TObjectPtr<UInvCell>> DropCells;     // transparante sleep/drop-cel per slot

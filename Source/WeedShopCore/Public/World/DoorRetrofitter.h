@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "World/CityGenerator.h" // FApartmentHome / FCityPropertyOffer (beach-map woning-registry)
 #include "DoorRetrofitter.generated.h"
 
 UCLASS()
@@ -34,6 +35,20 @@ public:
 		if (!bHomeBoxReady) { return false; }
 		OutMin = HomeBoxMin; OutMax = HomeBoxMax; return true;
 	}
+	// De thuis-plek (altijd gezet via HomeSpawn.txt) -> ruime fallback-bouwzone als de wand-box nog
+	// niet betrouwbaar gemeten is, zodat je altijd in je eigen huis kunt bouwen.
+	FVector GetHomeAnchor() const { return HomeAnchor; }
+
+	// --- BEACH-MAP WONING-REGISTRY (ROADMAP 4.1) ---
+	// Woningen op de pack-map zonder ACityGenerator: index 0 = starter (gratis, al van jou), 1.. =
+	// koopbare woningen die de speler met de marker-toets registreert (opgeslagen in BeachHomes.txt).
+	const TArray<FApartmentHome>& GetBeachHomes() const { return BeachHomes; }
+	void GetBeachPropertyOffers(TArray<FCityPropertyOffer>& Out) const;
+	// Marker-tool (dev): registreer de kamer waar de speler NU staat als koopbare woning - meet de
+	// wanden, schat een prijs uit de oppervlakte, schrijf naar BeachHomes.txt en herbouw de registry.
+	void RegisterHomeAtPlayer(class APawn* Player);
+	// (Her)bouw de registry uit de starter-plek + BeachHomes.txt.
+	void RebuildBeachHomes();
 
 protected:
 	virtual void BeginPlay() override;
@@ -122,7 +137,14 @@ protected:
 	bool bMovedIntoHome = false;    // (legacy, ongebruikt sinds per-speler HomedPawns)
 	TSet<TWeakObjectPtr<APawn>> HomedPawns; // welke speler-pawns al thuisgezet zijn (host + co-op)
 	FVector HomeAnchor = FVector::ZeroVector; // thuis-plek (voor het settle-venster)
-	float HomeSettleUntil = 0.f;    // tot dit moment terugzetten als je door de vloer valt
+	float HomeSettleUntil = 0.f;    // absolute cap: pin de speler tot dit moment als de vloer nog niet geladen is
+	bool bRoomFloorReady = false;   // true zodra de penthouse-vloer onder de thuis-plek is ingestreamd
+	// Beach-map woning-registry (zie boven). Prijzen lopen parallel aan BeachHomes (index 0 = starter = 0).
+	TArray<FApartmentHome> BeachHomes;
+	TArray<int64> BeachHomePrices;
+	bool bBeachHomesBuilt = false;
+	// Meet de kamer rond een punt met 4 wand-traces -> halve-afmeting (X/Y). False als <4 wanden binnen bereik.
+	bool MeasureRoomHalf(const FVector& Center, FVector& OutHalf) const;
 	FVector HomeBoxMin = FVector::ZeroVector; // gemeten huis-grenzen (build-tool restrictie)
 	FVector HomeBoxMax = FVector::ZeroVector;
 	bool bHomeBoxReady = false;

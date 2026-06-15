@@ -63,6 +63,14 @@ namespace WeedUI
 	// Leesbare naam voor een item-id (Bud_X -> X, Seed_X -> X seed, etc.).
 	WEEDSHOPCORE_API FString PrettyItemName(FName ItemId);
 
+	// Korte TAG op het icoon (strain/variant) zodat items met hetzelfde icoon te onderscheiden zijn
+	// (OG seeds vs Silver Haze seeds, Basic vs Premium soil). Leeg = uniek icoon, geen tag nodig.
+	WEEDSHOPCORE_API FString ItemTag(FName ItemId);
+
+	// KORTE code voor de tag-bubble op het icoon (UPPERCASE, ~2-4 tekens): strain-afkorting (OG, GSC,
+	// SH), tier-rank (I/II/III), of materiaal/gram-code (PLA, 100g). Leeg = uniek icoon, geen bubble.
+	WEEDSHOPCORE_API FString ItemTagShort(FName ItemId);
+
 	// Aantal-badge voor een slot: zakjes -> "Nx Xg", wiet -> "Xg", overig stapelbaar -> "xN", anders "".
 	WEEDSHOPCORE_API FString ItemQtyBadge(FName ItemId, int32 Qty);
 

@@ -138,7 +138,7 @@ UWidget* UMapWidget::AddPersonIcon(const FLinearColor& Tint, float Sz, int32 ZOr
 {
 	USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
 	SB->SetWidthOverride(Sz); SB->SetHeightOverride(Sz);
-	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, Sz, Tint));
+	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, Sz, Tint)); // Icon() is al ScaleToFit (aspect-veilig)
 	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(SB);
 	Cs->SetAutoSize(false);
 	Cs->SetSize(FVector2D(Sz, Sz));
@@ -154,7 +154,7 @@ UWidget* UMapWidget::AddPlayerMarker()
 	USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
 	SB->SetWidthOverride(30.f);
 	SB->SetHeightOverride(30.f);
-	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 30.f, FLinearColor(1.f, 0.1f, 0.85f)));
+	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 30.f, FLinearColor(1.f, 0.1f, 0.85f))); // Icon() al ScaleToFit
 	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(SB);
 	Cs->SetAutoSize(false);
 	Cs->SetSize(FVector2D(30.f, 30.f));

@@ -141,6 +141,44 @@ namespace
 	{
 		return FCoreStyle::GetDefaultFontStyle("Regular", Size);
 	}
+
+	// Berichten-body als WrapBox van losse woorden, met de BELANGRIJKE woorden VETGEDRUKT: alles met een
+	// cijfer (grams, % THC, prijs, tijd) en strain-/product-woorden. Zo springt eruit wát en hoeveel ze vragen.
+	UWidget* MakeRichBody(UWidgetTree* Tree, const FString& Body, int32 Size, const FLinearColor& Col)
+	{
+		static const TSet<FString> Emph = {
+			// strain-woorden:
+			TEXT("silver"),TEXT("haze"),TEXT("blue"),TEXT("dream"),TEXT("northern"),TEXT("lights"),TEXT("big"),
+			TEXT("bud"),TEXT("buds"),TEXT("white"),TEXT("widow"),TEXT("jack"),TEXT("herer"),TEXT("sour"),
+			TEXT("diesel"),TEXT("pineapple"),TEXT("express"),TEXT("amnesia"),TEXT("og"),TEXT("kush"),
+			TEXT("bubba"),TEXT("durban"),TEXT("poison"),TEXT("gorilla"),TEXT("glue"),TEXT("purple"),TEXT("girl"),
+			TEXT("scout"),TEXT("cookies"),TEXT("cookie"),TEXT("cream"),TEXT("wedding"),TEXT("cake"),TEXT("gelato"),
+			TEXT("mimosa"),TEXT("runtz"),TEXT("apple"),TEXT("fritter"),TEXT("zkittlez"),TEXT("gary"),TEXT("payton"),
+			TEXT("critical"),TEXT("mass"),TEXT("streetweed"),TEXT("street"),
+			// product-woorden:
+			TEXT("weed"),TEXT("joint"),TEXT("joints"),TEXT("hash"),TEXT("rosin"),TEXT("oil"),TEXT("moonrock"),
+			TEXT("moonrocks"),TEXT("gummies"),TEXT("gummy"),TEXT("edible"),TEXT("edibles"),TEXT("brick"),TEXT("thc"),
+		};
+		UWrapBox* Wrap = Tree->ConstructWidget<UWrapBox>();
+		// Vaste wrap-breedte zodat de tekst HORIZONTAAL vult als een normale chat-bubbel (anders wrapt
+		// 'ie per woord tot een smalle kolom).
+		Wrap->SetExplicitWrapSize(true);
+		Wrap->SetWrapSize(186.f);
+		TArray<FString> Words;
+		Body.ParseIntoArray(Words, TEXT(" "), true);
+		for (const FString& W : Words)
+		{
+			bool bDigit = false; FString Key;
+			for (TCHAR c : W) { if (FChar::IsDigit(c)) { bDigit = true; } if (FChar::IsAlpha(c)) { Key.AppendChar(FChar::ToLower(c)); } }
+			const bool bBold = bDigit || Emph.Contains(Key);
+			UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
+			T->SetText(FText::FromString(W + TEXT(" ")));
+			T->SetFont(FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", Size));
+			T->SetColorAndOpacity(FSlateColor(bBold ? FLinearColor(1.f, 1.f, 1.f) : Col));
+			Wrap->AddChildToWrapBox(T);
+		}
+		return Wrap;
+	}
 }
 
 void UPhoneButton::HandleClicked()
@@ -643,17 +681,14 @@ void UPhoneWidget::FillSettingsBody()
 			IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
 			const uint8 Cur = Skn ? Skn->GetPlayerSkinIndex() : 0;
 			BodyRow(MakeText(TEXT("Character"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+			// Male = citizens Tony (skin 5). De oude Manny/Quinn-mannequins zijn weg.
 			UHorizontalBox* GBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
 			UWeedActionButton* MaleB = MakeActionBtn(TEXT("Male"),
-				(Cur == 0) ? FLinearColor(0.20f, 0.55f, 0.85f) : FLinearColor(0.15f, 0.16f, 0.21f),
-				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(0); } FillSettingsBody(); }, 13);
-			UWeedActionButton* FemB = MakeActionBtn(TEXT("Female"),
-				(Cur == 1) ? FLinearColor(0.78f, 0.32f, 0.55f) : FLinearColor(0.15f, 0.16f, 0.21f),
-				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(1); } FillSettingsBody(); }, 13);
+				(Cur == 5) ? FLinearColor(0.20f, 0.55f, 0.85f) : FLinearColor(0.15f, 0.16f, 0.21f),
+				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(5); } FillSettingsBody(); }, 13);
 			GBtns->AddChildToHorizontalBox(MaleB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			GBtns->AddChildToHorizontalBox(FemB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			BodyRow(GBtns, FMargin(0.f, 0.f, 0.f, 4.f));
-			// Casual-meisjes (Streetwear-pack) op skin 2/3/4 - vervangt de oude Lola-skin.
+			// Female-keuzes: Casual-meisjes op skin 2/3/4.
 			UHorizontalBox* CBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
 			const TCHAR* CasualLabels[3] = { TEXT("Girl 1"), TEXT("Girl 2"), TEXT("Girl 3") };
 			for (int32 ci = 0; ci < 3; ++ci)
@@ -872,12 +907,12 @@ void UPhoneWidget::BuildChatApp()
 		for (const FName& Cid : Order)
 		{
 			// Laatste bericht + of er ONGELEZEN berichten van dit contact zijn (wist bij het openen van de chat).
-			FString LastBody; FText Name;
+			FString LastBody; FText Name; float LastClock = -1.f;
 			for (const FPhoneMessage& M : Msgs)
 			{
 				if (!IsMsgForLocal(M)) { continue; }
 				if (M.FromContactId != Cid) { continue; }
-				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; break; }
+				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; LastClock = M.SentClockHour; break; }
 			}
 			const bool bOpen = Phone.IsValid() && Phone->HasUnreadFrom(Cid);
 			if (LastBody.Len() > 30) { LastBody = LastBody.Left(29) + TEXT("."); }
@@ -900,6 +935,13 @@ void UPhoneWidget::BuildChatApp()
 			Info->AddChildToVerticalBox(Prev);
 			UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
 			IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
+			// Tijdstempel van het laatste bericht (HH:MM, in-game klok) rechts in de rij.
+			if (LastClock >= 0.f)
+			{
+				const int32 Hh = (int32)LastClock; const int32 Mm = (int32)((LastClock - Hh) * 60.f);
+				UHorizontalBoxSlot* TsS = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("%02d:%02d"), Hh, Mm), 9, FLinearColor(0.5f, 0.55f, 0.66f)));
+				TsS->SetVerticalAlignment(VAlign_Top); TsS->SetPadding(FMargin(6.f, 1.f, 2.f, 0.f));
+			}
 			if (bOpen) { Row->AddChildToHorizontalBox(MakeText(TEXT("NEW"), 11, FLinearColor(0.5f, 1.f, 0.6f)))->SetVerticalAlignment(VAlign_Center); }
 			const FName Pick = Cid;
 			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), FLinearColor(0.2f, 0.4f, 0.55f),
@@ -983,8 +1025,8 @@ void UPhoneWidget::BuildChatApp()
 		UBorder* Bub = WidgetTree->ConstructWidget<UBorder>();
 		Bub->SetBrush(RoundedBrush(M.bFromMe ? FLinearColor(0.16f, 0.35f, 0.22f, 0.97f) : FLinearColor(0.16f, 0.18f, 0.24f, 0.97f), 10.f));
 		Bub->SetPadding(FMargin(9.f, 6.f, 9.f, 6.f));
-		UTextBlock* BodyT = MakeText(Body, 12, FLinearColor(0.95f, 0.97f, 1.f));
-		BodyT->SetAutoWrapText(true);
+		// Body met de belangrijke woorden vetgedrukt (grams/%/strain/product) i.p.v. één platte tekst.
+		UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, FLinearColor(0.95f, 0.97f, 1.f));
 		// Tijdstempel (HH:MM, in-game klok) onder het bericht - zoals een normale berichten-app.
 		UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		BubVB->AddChildToVerticalBox(BodyT);
@@ -1791,8 +1833,24 @@ void UPhoneWidget::FillStoreList()
 		CardB->SetContent(CardHB);
 		const FName IconId = UStoreComponent::IsSeedCategory(Cat) ? UStoreComponent::SeedItemId(Id) : Id;
 		USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
-		IcoSz->SetWidthOverride(40.f); IcoSz->SetHeightOverride(40.f);
-		IcoSz->SetContent(WeedUI::ItemIcon(WidgetTree, IconId, 40.f));
+		IcoSz->SetWidthOverride(52.f); IcoSz->SetHeightOverride(52.f);
+		{
+			// Icoon + tag-bubble (OG, GSC, II, 100g, ...) onderaan, net als in de hotbar/inventory.
+			UOverlay* IcoOv = WidgetTree->ConstructWidget<UOverlay>();
+			UOverlaySlot* IconOS = IcoOv->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, IconId, 52.f));
+			IconOS->SetHorizontalAlignment(HAlign_Fill); IconOS->SetVerticalAlignment(VAlign_Fill);
+			const FString STag = WeedUI::ItemTagShort(IconId);
+			if (!STag.IsEmpty())
+			{
+				UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
+				TagPill->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.42f, 0.20f, 0.96f), 5.f));
+				TagPill->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
+				TagPill->SetContent(MakeText(STag, 8, FLinearColor(0.98f, 1.f, 0.99f)));
+				UOverlaySlot* TagOS = IcoOv->AddChildToOverlay(TagPill);
+				TagOS->SetHorizontalAlignment(HAlign_Center); TagOS->SetVerticalAlignment(VAlign_Bottom);
+			}
+			IcoSz->SetContent(IcoOv);
+		}
 		UHorizontalBoxSlot* IcoSlot = CardHB->AddChildToHorizontalBox(IcoSz);
 		IcoSlot->SetVerticalAlignment(VAlign_Center); IcoSlot->SetPadding(FMargin(0.f, 0.f, 9.f, 0.f));
 

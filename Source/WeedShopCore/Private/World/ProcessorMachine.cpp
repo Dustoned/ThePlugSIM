@@ -269,7 +269,7 @@ void AProcessorMachine::Tick(float DeltaSeconds)
 	if (bChanged) { UpdateRep(); }
 }
 
-int32 AProcessorMachine::ServerLoad(FName InId, int32 Qty, float Thc, float QualPct)
+int32 AProcessorMachine::ServerLoad(FName InId, int32 Qty, float Thc, float QualPct, const FString& OutPrefixOverride)
 {
 	if (!HasAuthority() || Qty <= 0) { return 0; }
 	int32 Cap = 1; float Sec, Conv, ThcMult; bool bPress;
@@ -281,7 +281,8 @@ int32 AProcessorMachine::ServerLoad(FName InId, int32 Qty, float Thc, float Qual
 	const FString Strain = S.RightChop(Pre.Len());
 
 	FProcEntry E;
-	E.OutItemId = FName(*(OutputPrefixFor(MachineTier) + Strain));
+	const FString OutPre = OutPrefixOverride.IsEmpty() ? OutputPrefixFor(MachineTier) : OutPrefixOverride;
+	E.OutItemId = FName(*(OutPre + Strain));
 	E.Quantity = FMath::Max(1, FMath::RoundToInt(Qty * Conv * UpYieldMult)); // upgrade-gear verhoogt de opbrengst
 	E.Thc = FMath::Min(90.f, (Thc > 0.f ? Thc : 15.f) * ThcMult);
 	E.Quality = QualPct > 0.f ? QualPct : 60.f;
@@ -365,15 +366,41 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 				return;
 			}
 		}
-		const int32 Used = ServerLoad(Act, Qty, Thc, Qual);
+		// De koelkast-keuken maakt COOKIES of GUMMIES als je de bak-ingredienten bij je hebt; anders de
+		// standaard cannabutter-edible. Sugar is voor beide nodig; + flour -> cookies, + gelatin -> gummies.
+		// (Heb je zowel flour als gelatin: cookies krijgen voorrang.) Ingredienten worden verbruikt.
+		const bool bFridge = MachineTier.ToString().StartsWith(TEXT("Fridge_"));
+		FString OutOverride;
+		bool bUseFlour = false, bUseGelatin = false, bUseSugar = false;
+		if (bFridge)
+		{
+			const bool bHasSugar   = Inv->HasItem(FName(TEXT("Sugar")), 1);
+			const bool bHasFlour   = Inv->HasItem(FName(TEXT("Flour")), 1);
+			const bool bHasGelatin = Inv->HasItem(FName(TEXT("Gelatin")), 1);
+			if (bHasSugar && bHasFlour)        { OutOverride = TEXT("Cookie_"); bUseFlour = true; bUseSugar = true; }
+			else if (bHasSugar && bHasGelatin) { OutOverride = TEXT("Gummy_");  bUseGelatin = true; bUseSugar = true; }
+		}
+
+		const int32 Used = ServerLoad(Act, Qty, Thc, Qual, OutOverride);
 		if (Used > 0)
 		{
 			Inv->RemoveFromStackById(Sid, Used);
 			if (bNeedsButter) { Inv->RemoveItem(FName(TEXT("Butter")), 1); }
 			if (bNeedsOil && !OilId.IsNone()) { Inv->RemoveItem(OilId, 1); }
+			if (bUseFlour)   { Inv->RemoveItem(FName(TEXT("Flour")), 1); }
+			if (bUseGelatin) { Inv->RemoveItem(FName(TEXT("Gelatin")), 1); }
+			if (bUseSugar)   { Inv->RemoveItem(FName(TEXT("Sugar")), 1); }
 			if (GEngine)
 			{
-				UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 200, 255), FString::Printf(TEXT("Loaded %dg - processing..."), Used));
+				if (!OutOverride.IsEmpty())
+				{
+					const TCHAR* What = (OutOverride == TEXT("Cookie_")) ? TEXT("Baking cookies") : TEXT("Setting gummies");
+					UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 200, 255), FString::Printf(TEXT("%s (%dg)..."), What, Used));
+				}
+				else
+				{
+					UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(120, 200, 255), FString::Printf(TEXT("Loaded %dg - processing..."), Used));
+				}
 			}
 		}
 	}
@@ -383,7 +410,7 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 		FString Msg = TEXT("Hold dried weed (E) to extract crystals.");
 		if      (T.StartsWith(TEXT("Oven_")))   { Msg = TEXT("Hold dried weed (E) to bake/decarb it."); }
 		else if (T.StartsWith(TEXT("Pan_")))    { Msg = TEXT("Hold baked weed (E) to cook with butter."); }
-		else if (T.StartsWith(TEXT("Fridge_"))) { Msg = TEXT("Hold cooked butter (E) to set it in the fridge."); }
+		else if (T.StartsWith(TEXT("Fridge_"))) { Msg = TEXT("Hold cooked butter (E): + flour & sugar = cookies, + gelatin & sugar = gummies, else edibles."); }
 		else if (T.StartsWith(TEXT("Oil_")))    { Msg = TEXT("Hold dried weed (E) to press into cannabis oil."); }
 		else if (T.StartsWith(TEXT("Moon_")))   { Msg = TEXT("Hold dried weed (E) to coat with oil into moonrocks."); }
 		else if (T.StartsWith(TEXT("Rosin_")))  { Msg = TEXT("Hold dried weed (E) to press into rosin."); }
@@ -398,7 +425,7 @@ FText AProcessorMachine::GetInteractionPrompt_Implementation() const
 	const FString T = MachineTier.ToString();
 	const bool bOven = T.StartsWith(TEXT("Oven_")), bPan = T.StartsWith(TEXT("Pan_")), bFridge = T.StartsWith(TEXT("Fridge_")), bPress = IsPressTier(MachineTier);
 	auto CollectLbl = [&]() { return bFridge ? TEXT("Collect edibles") : bPan ? TEXT("Collect cooked butter") : bOven ? TEXT("Collect baked weed") : bPress ? TEXT("Collect hash") : TEXT("Collect crystals"); };
-	auto IdleLbl = [&]() { return bFridge ? TEXT("Fridge  (set cooked butter)") : bPan ? TEXT("Pan  (cook baked weed + butter)") : bOven ? TEXT("Oven  (bake dried weed)") : bPress ? TEXT("Heatpress  (hold crystals)") : TEXT("Mesh extractor  (hold dried weed)"); };
+	auto IdleLbl = [&]() { return bFridge ? TEXT("Fridge  (butter mix -> edibles / cookies / gummies)") : bPan ? TEXT("Pan  (cook baked weed + butter)") : bOven ? TEXT("Oven  (bake dried weed)") : bPress ? TEXT("Heatpress  (hold crystals)") : TEXT("Mesh extractor  (hold dried weed)"); };
 	// Klaar?
 	for (const FProcEntry& E : Entries) { if (E.bDone) { return FText::FromString(CollectLbl()); } }
 	// Bezig? -> resterende tijd van de bijna-klare batch.

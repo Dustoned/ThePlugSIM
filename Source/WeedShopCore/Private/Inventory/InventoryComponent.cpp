@@ -14,7 +14,8 @@ namespace
 	bool IsPerishableItem(FName Id)
 	{
 		const FString S = Id.ToString();
-		return S.StartsWith(TEXT("ButterMix")) || S.StartsWith(TEXT("Edible")) || S == TEXT("Butter");
+		return S.StartsWith(TEXT("ButterMix")) || S.StartsWith(TEXT("Edible")) || S == TEXT("Butter")
+			|| S.StartsWith(TEXT("Cookie")) || S.StartsWith(TEXT("Gummy"));
 	}
 }
 

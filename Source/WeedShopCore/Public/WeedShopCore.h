@@ -14,6 +14,20 @@ DECLARE_LOG_CATEGORY_EXTERN(LogWeedShop, Log, All);
 // map-load toont dan het laadscherm. De boot naar het hoofdmenu zet dit NIET -> daar geen laadscherm.
 WEEDSHOPCORE_API void WeedShop_RequestGameLoadingScreen();
 
+// Stopt het in-game laadscherm handmatig (het blijft staan tot dit wordt aangeroepen). De HUD roept dit
+// aan zodra de speler stil in de kamer staat (floor ingestreamd), met een eigen safety-cap.
+WEEDSHOPCORE_API void WeedShop_StopGameLoadingScreen();
+
+// "Kamer klaar"-vlag: DoorRetrofitter zet 'm zodra de penthouse-vloer onder de thuis-plek is ingestreamd.
+// Het in-game cover-scherm (UBootCoverWidget) blijft over beeld tot dit waar is. Reset bij een nieuwe load.
+WEEDSHOPCORE_API void WeedShop_SetRoomReady(bool bReady);
+WEEDSHOPCORE_API bool WeedShop_IsRoomReady();
+
+// Gedeelde laad-timer + tekst: zowel de movie-loadingscreen als het in-game cover-scherm gebruiken deze,
+// zodat ze er IDENTIEK uitzien en de progress/tekst naadloos doorlopen (geen zichtbare overgang).
+WEEDSHOPCORE_API double WeedShop_LoadElapsedSeconds();
+WEEDSHOPCORE_API FString WeedShop_LoadLine(int32 Step);
+
 // Lumen (GI + reflecties) aan/uit via de render-cvars. Gedeeld door de settings-knop en de
 // opstart-toepassing zodat de speler-keuze altijd dezelfde weg loopt.
 WEEDSHOPCORE_API void WeedShop_ApplyLumen(bool bLumenOff);

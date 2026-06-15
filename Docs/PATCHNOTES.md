@@ -1,4 +1,57 @@
 PATCH NOTES
+Version 1.6.0 — 15 juni 2026
+
+Korte intro:
+De grootste update tot nu toe: een verse strand-stad als standaard speelwereld, een echte
+character-keuze (speel als man óf vrouw, met je eigen kleding), een volledig herziene dag/nacht-
+look, en een hoop levendigheid + prestatie-werk aan de NPC's.
+
+━━━━━━━━━━━━━━━━━━━━
+
+NEW FEATURES
+
++ Character-keuze: man of vrouw  (de hoofdfeature)
+   • Speel nu als een stadse man (nieuw) óf als een van 3 vrouwelijke characters.
+   • Elk met een eigen kledingkast; je keuze + outfit worden netjes in je save bewaard.
+   • De oude grijze mannequins zijn vervangen.
+
++ Veel grotere kledingkast
+   Alle kleding, haarstijlen en accessoires uit de pack verschijnen nu automatisch in de wardrobe —
+   geen handmatige selectie meer.
+
++ Strand-stad als standaard nieuwe-game-wereld
+   Een nieuw spel start nu op de beach-strip (de oude city-map blijft als 'classic' kiesbaar).
+
++ VIP dag-orders via de telefoon
+   Af en toe een premium-bestelling: een specifieke strain met een minimale THC vóór een deadline,
+   tegen een bonusprijs. Schaalt mee met je level — een doel voor de mid-game.
+
++ Levendiger NPC's
+   Een set nieuwe animaties (zitten, leunen, telefoneren, …) zodat de menigte meer doet dan lopen.
+
++ Pack-bench opgefrist
+   Pak meerdere bags in één keer in, met item-iconen en zonder scrollen.
+
+FIXES & IMPROVEMENTS
+
+• Dag/nacht volledig herzien: geen valse zon-reflectie meer op water en ramen 's nachts. Zon én
+  maan trekken nu écht over de hemel (op- en ondergang rond NW-N), en hun weerschijn beweegt mee.
+  De zon is ook getemperd zodat 'ie niet meer uitblaast.
+
+• Binnen-verlichting: plafondlampen geven nu een nette lichtkegel op de vloer + een zachte gloed
+  door de kamer, en blijven aan zolang het binnen donker is.
+
+• NPC's verdwijnen niet meer terwijl ze gewoon aan het lopen zijn.
+
+• Veel betere NPC-prestatie: NPC's buiten beeld animeren niet meer en verre NPC's updaten zuiniger,
+  zodat er flink meer rond kan lopen zonder dat de framerate inzakt.
+
+• Bewoners van het starter-gebouw komen nu netjes de trap af naar de straat i.p.v. vast te lopen.
+
+• Map-iconen (speler/winkels) worden niet meer uitgerekt.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.5.1 — 10 juni 2026
 
 Korte intro:

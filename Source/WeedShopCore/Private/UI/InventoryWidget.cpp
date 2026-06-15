@@ -103,6 +103,21 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 			PS->SetHorizontalAlignment(HAlign_Right);
 			PS->SetVerticalAlignment(bHotbar ? VAlign_Bottom : VAlign_Top);
 		}
+
+		// Strain/variant-TAG-bubble onderaan de cel (alleen rooster) -> onderscheid items met hetzelfde icoon.
+		if (!Tag.IsEmpty() && !bHotbar)
+		{
+			UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 9, FLinearColor(0.98f, 1.f, 0.99f), false, true);
+			UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
+			TagPill->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.42f, 0.20f, 0.96f), 6.f));
+			TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+			TagPill->SetContent(TagT);
+			TagPill->SetVisibility(ESlateVisibility::HitTestInvisible);
+			UOverlaySlot* TagOS = Ov->AddChildToOverlay(TagPill);
+			TagOS->SetHorizontalAlignment(HAlign_Center);
+			TagOS->SetVerticalAlignment(VAlign_Bottom);
+			TagOS->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+		}
 	}
 	// Volledige naam + details bij hover (zodat lange namen die niet in de cel passen toch leesbaar zijn).
 	if (!Tooltip.IsEmpty()) { SetToolTipText(FText::FromString(Tooltip)); }
@@ -520,8 +535,8 @@ void UInventoryWidget::RebuildStash()
 		Row->SetContent(RHB);
 
 		USizeBox* IconSz = WidgetTree->ConstructWidget<USizeBox>();
-		IconSz->SetWidthOverride(26.f); IconSz->SetHeightOverride(26.f);
-		IconSz->SetContent(WeedUI::ItemIcon(WidgetTree, Id, 26.f));
+		IconSz->SetWidthOverride(46.f); IconSz->SetHeightOverride(46.f);
+		IconSz->SetContent(WeedUI::ItemIcon(WidgetTree, Id, 46.f));
 		UHorizontalBoxSlot* ISlot = RHB->AddChildToHorizontalBox(IconSz);
 		ISlot->SetVerticalAlignment(VAlign_Center); ISlot->SetPadding(FMargin(0.f, 0.f, 7.f, 0.f));
 
@@ -569,8 +584,11 @@ void UInventoryWidget::RebuildContent()
 	{
 		const int32 StackId = Order[cell];
 		const int32 Idx = Inv->FindStackById(StackId);
-		// Items die op de hotbar staan tonen we NIET in het rooster (ze staan onderin de hotbar).
-		if (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId)) { continue; }
+		// Items die op de hotbar staan tonen we NIET als item in het rooster (ze staan onderin de hotbar),
+		// maar we HOUDEN WEL hun vaste cel als LEGE cel. Anders verspringt het rooster (en lijken er
+		// lege slots bij te komen) zodra je een item naar/van de hotbar sleept. Nu blijft het aantal
+		// rooster-cellen altijd gelijk en vult een hotbar-item gewoon weer z'n eigen cel.
+		const bool bOnHotbar = (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId));
 
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 		Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); // vierkante icon-slot zoals de hotbar
@@ -578,9 +596,9 @@ void UInventoryWidget::RebuildContent()
 		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
 		Cell->SlotIndex = -1; Cell->GridCell = cell;
 		Cell->Inv = Inv; Cell->Owner = this;
-		Cell->IconSize = 50.f;
+		Cell->IconSize = 68.f;
 
-		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx));
+		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx) && !bOnHotbar);
 		if (bShowItem)
 		{
 			const FInventoryStack& S = Stacks[Idx];
@@ -602,6 +620,7 @@ void UInventoryWidget::RebuildContent()
 			// (de tooltip + het icoon maken alsnog volledig duidelijk wat het is).
 			const FString FullName = WeedUI::PrettyItemName(ItemId);
 			Cell->Line1 = (FullName.Len() > 20) ? (FullName.Left(19) + TEXT("...")) : FullName;
+			Cell->Tag = WeedUI::ItemTagShort(ItemId); // korte strain/rank-code in de bubble onderaan de cel
 			Cell->Tooltip = FullName;
 
 			if (bCash)

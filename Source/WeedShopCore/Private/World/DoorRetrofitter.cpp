@@ -38,6 +38,7 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/MovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -481,9 +482,42 @@ void ADoorRetrofitter::ScanAndConvert()
 				if (Pc.Num() >= 3) { Chain.Add(FVector(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]))); }
 			}
 			if (Chain.Num() >= 2) { NpcChains.Add(Chain); }
+			// 1) Elke keten van BOVEN naar BENEDEN oriënteren (eerste punt hoogste Z), zodat het
+			//    aflopen altijd richting straat gaat - ongeacht in welke richting je 'm markeerde.
+			for (TArray<FVector>& Ch : NpcChains)
+			{
+				if (Ch.Num() >= 2 && Ch[0].Z < Ch.Last().Z)
+				{
+					for (int32 a = 0, b = Ch.Num() - 1; a < b; ++a, --b) { Ch.Swap(a, b); }
+				}
+			}
+			// 2) Kettingen waarvan het eindpunt aansluit op het beginpunt van een andere aaneenknopen
+			//    tot één doorlopende afdaling. Anders strandt een bewoner van de bovenste verdieping op
+			//    een tussenbordes waar zijn keten ophoudt i.p.v. door te lopen tot de straat.
+			{
+				bool bMerged = true;
+				while (bMerged)
+				{
+					bMerged = false;
+					for (int32 i = 0; i < NpcChains.Num() && !bMerged; ++i)
+					{
+						for (int32 j = 0; j < NpcChains.Num(); ++j)
+						{
+							if (i == j) { continue; }
+							if (FVector::Dist(NpcChains[i].Last(), NpcChains[j][0]) < 250.f)
+							{
+								NpcChains[i].Append(NpcChains[j]);
+								NpcChains.RemoveAt(j);
+								bMerged = true;
+								break;
+							}
+						}
+					}
+				}
+			}
 			if (NpcChains.Num() > 0)
 			{
-				UE_LOG(LogWeedShop, Warning, TEXT("Binnen-kettingen: %d geladen (entry-paden voor toren-bewoners)"), NpcChains.Num());
+				UE_LOG(LogWeedShop, Warning, TEXT("Binnen-kettingen: %d geladen+geknoopt (entry-paden voor toren-bewoners)"), NpcChains.Num());
 			}
 		}
 		// SPELER-ROUTES eerst: F9-marker-ringen uit NpcRoute.txt ("---" scheidt routes). Elke
@@ -977,13 +1011,19 @@ void ADoorRetrofitter::ScanAndConvert()
 					// naar buiten. Geen ketting = op straat spawnen.
 					PR.bInside = false;
 					const FVector DLq = A->GetActorLocation();
+					// Binnen spawnen als ENIG punt op een keten op dezelfde verdieping vlakbij deze deur ligt
+					// (na de merge is Ch[0] de top - alleen dat checken zou alle lagere verdiepingen missen).
 					for (const TArray<FVector>& Ch : NpcChains)
 					{
-						if (FVector::Dist2D(Ch[0], DLq) < 2500.f && FMath::Abs(Ch[0].Z - DLq.Z) < 280.f)
+						for (const FVector& CP : Ch)
 						{
-							PR.bInside = true;
-							break;
+							if (FVector::Dist2D(CP, DLq) < 2000.f && FMath::Abs(CP.Z - DLq.Z) < 280.f)
+							{
+								PR.bInside = true;
+								break;
+							}
 						}
+						if (PR.bInside) { break; }
 					}
 					A->Tags.Add(TEXT("ResidentNpc"));
 					PendingResidents.Add(PR);
@@ -1481,19 +1521,29 @@ void ADoorRetrofitter::ScanAndConvert()
 						const float Dd = FVector::DistSquared2D(SpIt2->GetActorLocation(), SpawnAt);
 						if (Dd < BestOd) { BestOd = Dd; OwnerSp = *SpIt2; }
 					}
-					// Binnen gespawnd: de VOLLEDIGE ketting (vanaf jouw eerste marker in de gang)
-					// is het looppad - deur uit, gang door, trap af, tot het laatste punt op straat.
-					const TArray<FVector>* Entry = nullptr;
+					// Binnen gespawnd: loop vanaf het punt op de (geknoopte) keten dat het DICHTST bij deze
+					// deur ligt - op de eigen verdieping - AF tot het laatste punt op straat. Zo daalt een
+					// bovenverdieping-bewoner het volledige resterende pad af i.p.v. op een bordes te stranden.
+					TArray<FVector> EntrySuffix;
 					if (PR.bInside)
 					{
-						float BestCd = TNumericLimits<float>::Max();
+						float BestPd = TNumericLimits<float>::Max();
+						const TArray<FVector>* BestCh = nullptr;
+						int32 BestPi = 0;
 						for (const TArray<FVector>& Ch : NpcChains)
 						{
-							const float Dd = FVector::DistSquared2D(Ch[0], DL);
-							if (Dd < BestCd) { BestCd = Dd; Entry = &Ch; }
+							for (int32 pi = 0; pi < Ch.Num(); ++pi)
+							{
+								const float Dd = FVector::DistSquared(Ch[pi], DL); // 3D: kiest het juiste verdieping-punt
+								if (Dd < BestPd) { BestPd = Dd; BestCh = &Ch; BestPi = pi; }
+							}
+						}
+						if (BestCh)
+						{
+							for (int32 pi = BestPi; pi < BestCh->Num(); ++pi) { EntrySuffix.Add((*BestCh)[pi]); }
 						}
 					}
-					if (OwnerSp) { OwnerSp->AdoptWalker(Cb, Entry); }
+					if (OwnerSp) { OwnerSp->AdoptWalker(Cb, EntrySuffix.Num() >= 2 ? &EntrySuffix : nullptr); }
 					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner-wandelaar verschenen: Apt %d op route (%.0f, %.0f)"), A->GetAptNumber(), SpawnAt.X, SpawnAt.Y);
 				}
 			}
@@ -1502,6 +1552,48 @@ void ADoorRetrofitter::ScanAndConvert()
 				// Geen plek bekend (geen route/spawners hier): ook achteraan de rij, latere poging.
 				PendingResidents.Add(PR);
 			}
+		}
+	}
+
+	// VROEGE thuis-teleport: de HomeSpawn-locatie is statisch (baked data), dus we kunnen METEEN naar huis
+	// zonder te wachten op de hele stad/deuren. Zo sta je nooit eerst op straat. De settle-check (TickVirtualMove)
+	// houdt je op de plek tot de penthouse-vloer is ingestreamd. Gebeurt op de eerste scan (~binnen het laadscherm).
+	if (HomeAnchor.IsNearlyZero())
+	{
+		FString HomeTxt;
+		if (FFileHelper::LoadFileToString(HomeTxt, *WeedData::File(TEXT("HomeSpawn.txt"))))
+		{
+			TArray<FString> Pc;
+			HomeTxt.TrimStartAndEnd().ParseIntoArray(Pc, TEXT(","));
+			if (Pc.Num() >= 3)
+			{
+				const FVector Inside(FCString::Atof(*Pc[0]), FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]));
+				HomeAnchor = Inside + FVector(0.f, 0.f, 110.f);
+			}
+		}
+	}
+	if (!HomeAnchor.IsNearlyZero())
+	{
+		if (!bBeachHomesBuilt) { RebuildBeachHomes(); } // registry vullen zodra de thuis-plek bekend is
+		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+		{
+			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+			if (!Pw || HomedPawns.Contains(Pw)) { continue; }
+			const int32 Slot = HomedPawns.Num();
+			HomedPawns.Add(Pw);
+			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
+			Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
+			// METEEN BEVRIEZEN (vliegen, geen zwaartekracht): zo val je NIET door de nog-ladende
+			// world-partition vloer. De floor-pin in TickVirtualMove zet je weer op MOVE_Walking en
+			// precies op de ECHTE vloer zodra die is ingestreamd - dus nooit op een verkeerde hoogte.
+			if (UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>())
+			{
+				CMv->StopMovementImmediately();
+				CMv->SetMovementMode(MOVE_Flying);
+			}
+			// Beach-map: ken de starter-woning toe in de phone-registry (idempotent via bPropertyInit).
+			if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>()) { Phw->PropertyTick(); }
+			HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
 		}
 	}
 
@@ -1577,6 +1669,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				HomeBoxMin = FVector(HomeAnchor.X - Half(Xn), HomeAnchor.Y - Half(Yn), HomeAnchor.Z - 220.f);
 				HomeBoxMax = FVector(HomeAnchor.X + Half(Xp), HomeAnchor.Y + Half(Yp), HomeAnchor.Z + 520.f);
 				bHomeBoxReady = true;
+				RebuildBeachHomes(); // starter-bounds zijn nu accuraat -> registry verversen
 				UE_LOG(LogWeedShop, Warning, TEXT("Huis-box gemeten: X %.0f..%.0f Y %.0f..%.0f"), HomeBoxMin.X, HomeBoxMax.X, HomeBoxMin.Y, HomeBoxMax.Y);
 			}
 		}
@@ -1591,10 +1684,17 @@ void ADoorRetrofitter::ScanAndConvert()
 			HomedPawns.Add(Pw);
 			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
 			Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
+			// METEEN bevriezen (vliegen, geen zwaartekracht) zodat je niet door de nog-ladende vloer valt;
+			// de floor-pin ontdooit je en zet je op de echte vloer zodra die er is.
+			if (UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>())
+			{
+				CMv->StopMovementImmediately();
+				CMv->SetMovementMode(MOVE_Flying);
+			}
 			// SETTLE-venster: de penthouse-vloer (world-partition) is bij het teleporteren vaak nog
 			// niet ingestreamd, dus val je erdoorheen naar een lagere verdieping. Hou de spelers 12s
 			// op de thuis-plek tot de vloer-collision geladen is - zie de check in TickVirtualMove.
-			HomeSettleUntil = W->GetRealTimeSeconds() + 12.f;
+			HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
 			if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>())
 			{
 				Phw->Toast(FString::Printf(TEXT("Welcome home - Apt %d. Rent: EUR 500 due every 31 days."), StarterDoor->GetAptNumber()), FColor::Cyan, 6.f);
@@ -2437,20 +2537,56 @@ void ADoorRetrofitter::TickVirtualMove()
 	// zodra het venster om is of je bewust wegloopt (XY > 6m van de thuis-plek).
 	if (UWorld* WS = GetWorld())
 	{
-		if (WS->GetRealTimeSeconds() < HomeSettleUntil && !HomeAnchor.IsNearlyZero())
+		// VLOER-PIN: de world-partition penthouse-vloer is vlak na het thuis-teleporteren vaak nog niet
+		// ingestreamd. We HOUDEN de speler op de thuis-plek (zodat 'ie NIET door het gebouw valt) en checken
+		// elke tik of de vloer er al is (down-trace, WorldStatic). Zodra de vloer er is: speler er netjes
+		// bovenop + loslaten. Een absolute cap (HomeSettleUntil) voorkomt eindeloos pinnen als er iets misgaat.
+		if (!bRoomFloorReady && !HomeAnchor.IsNearlyZero())
 		{
-			// ALLE spelers (host + co-op partner): val je door de nog-ladende vloer, terug omhoog.
+			const bool bCap = WS->GetRealTimeSeconds() >= HomeSettleUntil;
+			FCollisionQueryParams FQ(SCENE_QUERY_STAT(RoomFloor), false);
+			for (FConstPlayerControllerIterator It = WS->GetPlayerControllerIterator(); It; ++It)
+			{
+				if (APawn* P0 = It->Get() ? It->Get()->GetPawn() : nullptr) { FQ.AddIgnoredActor(P0); }
+			}
+			const FVector TS = HomeAnchor + FVector(0.f, 0.f, 30.f);
+			// Korte trace (260cm): de EIGEN vloer (niet een verdieping lager, ~410cm+).
+			FHitResult FloorHit;
+			bool bPlace = WS->LineTraceSingleByChannel(FloorHit, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, FQ);
+			FVector PlaceLoc = bPlace ? FloorHit.Location : FVector::ZeroVector;
+			// Laatste redmiddel op de cap (de eigen vloer kwam maar niet): RUIME trace (1000cm) naar ELKE
+			// vloer eronder, zodat we je ergens op neerzetten i.p.v. door de wereld te laten vallen.
+			if (!bPlace && bCap)
+			{
+				FHitResult Deep;
+				if (WS->LineTraceSingleByChannel(Deep, TS, TS - FVector(0.f, 0.f, 1000.f), ECC_WorldStatic, FQ))
+				{ bPlace = true; PlaceLoc = Deep.Location; }
+			}
+
 			for (FConstPlayerControllerIterator It = WS->GetPlayerControllerIterator(); It; ++It)
 			{
 				APawn* Pp = It->Get() ? It->Get()->GetPawn() : nullptr;
-				if (!Pp) { continue; }
-				const FVector L = Pp->GetActorLocation();
-				if (FVector::Dist2D(L, HomeAnchor) < 600.f && L.Z < HomeAnchor.Z - 200.f)
+				if (!Pp || !HomedPawns.Contains(Pp)) { continue; }
+				if (FVector::Dist2D(Pp->GetActorLocation(), HomeAnchor) > 900.f) { continue; } // bewust weggelopen
+				UCharacterMovementComponent* CMv = Pp->FindComponentByClass<UCharacterMovementComponent>();
+				if (bPlace)
 				{
+					// Vloer (eigen, of - laatste redmiddel - eronder) gevonden -> netjes erbovenop + lopen.
+					Pp->SetActorLocation(PlaceLoc + FVector(0.f, 0.f, 96.f), false, nullptr, ETeleportType::TeleportPhysics);
+					if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
+				}
+				else
+				{
+					// Nog GEEN vloer (ook niet diep) -> vasthouden op de thuis-plek en BEVROREN (vliegen,
+					// geen zwaartekracht). NOOIT ontdooien zonder vloer, ook niet na de cap -> je valt dus
+					// nooit door de wereld; hooguit zweef je heel even langer tot de vloer instreamt.
 					Pp->SetActorLocation(HomeAnchor, false, nullptr, ETeleportType::TeleportPhysics);
-					if (UMovementComponent* Mv = Pp->FindComponentByClass<UMovementComponent>()) { Mv->StopMovementImmediately(); }
+					if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
 				}
 			}
+			// Pas 'klaar' melden (laadscherm mag weg) als je ECHT op een vloer staat. Geen vloer = bevroren
+			// blijven en de pin blijft draaien tot de vloer er is; de cover heeft z'n eigen tijd-cap.
+			if (bPlace) { bRoomFloorReady = true; WeedShop_SetRoomReady(true); }
 		}
 	}
 	if (GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
@@ -3657,4 +3793,150 @@ void ADoorRetrofitter::MakeBakedWindowsReal()
 		}
 	}
 	UE_LOG(LogWeedShop, Warning, TEXT("BakedRooms: %d nep-glas slots omgezet naar echt doorzichtig glas"), Swapped);
+}
+
+// ===========================================================================================
+//  BEACH-MAP WONING-REGISTRY (ROADMAP 4.1)
+//  Index 0 = starter (gratis); 1.. = via de marker-toets geregistreerde koopbare kamers
+//  (opgeslagen in Saved/BeachHomes.txt: "InteriorX,Y,Z, HalfX,HalfY, PriceCents, Naam").
+// ===========================================================================================
+bool ADoorRetrofitter::MeasureRoomHalf(const FVector& Center, FVector& OutHalf) const
+{
+	UWorld* W = GetWorld();
+	if (!W) { return false; }
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(RoomMeasure), false);
+	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (APawn* Pp = It->Get() ? It->Get()->GetPawn() : nullptr) { Q.AddIgnoredActor(Pp); }
+	}
+	// Dichtstbijzijnde wand per as op het WorldStatic-kanaal (muren = static; meubels zijn dynamic),
+	// op twee hoogtes -> de kleinste geldige hit is de echte wand.
+	auto Wall = [&](const FVector& Dir) -> float
+	{
+		float Near = -1.f;
+		for (float Hz : { 40.f, 150.f })
+		{
+			const FVector S = Center + FVector(0.f, 0.f, Hz);
+			FHitResult H;
+			if (W->LineTraceSingleByChannel(H, S, S + Dir * 3000.f, ECC_WorldStatic, Q))
+			{
+				Near = (Near < 0.f) ? H.Distance : FMath::Min(Near, H.Distance);
+			}
+		}
+		return Near;
+	};
+	const float Xp = Wall(FVector(1, 0, 0)), Xn = Wall(FVector(-1, 0, 0));
+	const float Yp = Wall(FVector(0, 1, 0)), Yn = Wall(FVector(0, -1, 0));
+	if (Xp < 0.f || Xn < 0.f || Yp < 0.f || Yn < 0.f) { return false; }
+	// Halve-afmeting tot de verste wand per as + kleine marge (zo dekt de box de hele kamer ook als je
+	// niet exact in het midden stond), met een ondergrens.
+	OutHalf = FVector(FMath::Max(350.f, FMath::Max(Xp, Xn) + 60.f),
+	                  FMath::Max(350.f, FMath::Max(Yp, Yn) + 60.f), 320.f);
+	return true;
+}
+
+void ADoorRetrofitter::RebuildBeachHomes()
+{
+	BeachHomes.Reset();
+	BeachHomePrices.Reset();
+
+	// Index 0 = de starter-woning (gratis, al van jou). Interieur op vloerhoogte (HomeAnchor - 110),
+	// bounds uit de gemeten huis-box als die er is, anders een ruime default.
+	if (!HomeAnchor.IsNearlyZero())
+	{
+		FApartmentHome H;
+		H.InteriorPos = FVector(HomeAnchor.X, HomeAnchor.Y, HomeAnchor.Z - 110.f);
+		H.DoorPos = H.InteriorPos;
+		H.HallPos = H.InteriorPos;
+		H.Number = TEXT("Home");
+		H.bApartment = true;
+		H.Floor = 1;
+		H.RoomHalf = bHomeBoxReady
+			? FVector((HomeBoxMax.X - HomeBoxMin.X) * 0.5f, (HomeBoxMax.Y - HomeBoxMin.Y) * 0.5f, 320.f)
+			: FVector(750.f, 750.f, 320.f);
+		BeachHomes.Add(H);
+		BeachHomePrices.Add(0);
+	}
+
+	// Index 1.. = koopbare woningen uit BeachHomes.txt (door de speler geregistreerd met de marker-toets).
+	TArray<FString> Lines;
+	if (FFileHelper::LoadFileToStringArray(Lines, *WeedData::File(TEXT("BeachHomes.txt"))))
+	{
+		for (const FString& Raw : Lines)
+		{
+			const FString Line = Raw.TrimStartAndEnd();
+			if (Line.IsEmpty() || Line.StartsWith(TEXT("#"))) { continue; }
+			TArray<FString> P;
+			Line.ParseIntoArray(P, TEXT(","));
+			if (P.Num() < 6) { continue; }
+			FApartmentHome H;
+			H.InteriorPos = FVector(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]));
+			H.RoomHalf = FVector(FMath::Max(150.f, FCString::Atof(*P[3])),
+			                     FMath::Max(150.f, FCString::Atof(*P[4])), 320.f);
+			H.DoorPos = H.InteriorPos;
+			H.HallPos = H.InteriorPos;
+			H.bApartment = true;
+			H.Number = (P.Num() >= 7) ? P[6].TrimStartAndEnd() : FString::Printf(TEXT("Unit %d"), BeachHomes.Num());
+			BeachHomes.Add(H);
+			BeachHomePrices.Add((int64)FCString::Atoi64(*P[5]));
+		}
+	}
+	bBeachHomesBuilt = true;
+}
+
+void ADoorRetrofitter::GetBeachPropertyOffers(TArray<FCityPropertyOffer>& Out) const
+{
+	Out.Reset();
+	for (int32 i = 0; i < BeachHomes.Num(); ++i)
+	{
+		FCityPropertyOffer O;
+		O.HomeIndex = i;
+		O.Homes.Add(i);
+		O.bStarter = (i == 0);
+		O.PriceCents = O.bStarter ? 0 : (BeachHomePrices.IsValidIndex(i) ? BeachHomePrices[i] : 0);
+		O.Title = O.bStarter ? TEXT("Your apartment") : BeachHomes[i].Number;
+		O.Sub = FString::Printf(TEXT("~%.0f x %.0f m"),
+			BeachHomes[i].RoomHalf.X * 2.f / 100.f, BeachHomes[i].RoomHalf.Y * 2.f / 100.f);
+		Out.Add(O);
+	}
+}
+
+void ADoorRetrofitter::RegisterHomeAtPlayer(APawn* Player)
+{
+	UWorld* W = GetWorld();
+	if (!W || !Player) { return; }
+	const FVector Loc = Player->GetActorLocation();
+
+	// Kamer rond de speler meten (wanden). Lukt dat niet -> nette default.
+	FVector Half;
+	if (!MeasureRoomHalf(Loc, Half)) { Half = FVector(450.f, 450.f, 320.f); }
+
+	// Interieur op vloerhoogte: trace omlaag naar het vloerslab.
+	FVector Inside = Loc;
+	{
+		FHitResult Fl;
+		FCollisionQueryParams FQ(SCENE_QUERY_STAT(HomeRegFloor), false, Player);
+		if (W->LineTraceSingleByChannel(Fl, Loc + FVector(0.f, 0.f, 40.f), Loc - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, FQ))
+		{
+			Inside.Z = Fl.Location.Z;
+		}
+	}
+
+	// Prijs schatten uit de oppervlakte (~EUR 200 / m2, oplopend met grootte). Tunebaar per regel achteraf.
+	const float AreaM2 = (Half.X * 2.f / 100.f) * (Half.Y * 2.f / 100.f);
+	const int64 PriceCents = (int64)FMath::RoundToInt(AreaM2 * 200.0) * 100;
+
+	const FString Name = FString::Printf(TEXT("Unit %d"), BeachHomes.Num());
+	const FString Row = FString::Printf(TEXT("%.0f,%.0f,%.0f,%.0f,%.0f,%lld,%s\n"),
+		Inside.X, Inside.Y, Inside.Z, Half.X, Half.Y, (long long)PriceCents, *Name);
+	FFileHelper::SaveStringToFile(Row, *WeedData::File(TEXT("BeachHomes.txt")),
+		FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+
+	RebuildBeachHomes();
+
+	if (UPhoneClientComponent* Ph = Player->FindComponentByClass<UPhoneClientComponent>())
+	{
+		Ph->Toast(FString::Printf(TEXT("Home registered: %s  (~%.0f x %.0f m, EUR %lld)"),
+			*Name, Half.X * 2.f / 100.f, Half.Y * 2.f / 100.f, (long long)(PriceCents / 100)), FColor::Green, 6.f);
+	}
 }

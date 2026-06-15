@@ -66,13 +66,12 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 		Box->SetContent(Ov);
 
-		// Icoon, iets boven het midden (laat onderaan ruimte voor de naam).
+		// Icoon gecentreerd (geen naam-tekst meer onderaan -> mag groot/in het midden).
 		USizeBox* IcoBox = WidgetTree->ConstructWidget<USizeBox>();
-		IcoBox->SetWidthOverride(38.f); IcoBox->SetHeightOverride(38.f);
+		IcoBox->SetWidthOverride(52.f); IcoBox->SetHeightOverride(52.f);
 		UOverlaySlot* IcoOS = Ov->AddChildToOverlay(IcoBox);
 		IcoOS->SetHorizontalAlignment(HAlign_Center);
-		IcoOS->SetVerticalAlignment(VAlign_Top);
-		IcoOS->SetPadding(FMargin(0.f, 9.f, 0.f, 0.f));
+		IcoOS->SetVerticalAlignment(VAlign_Center);
 
 		// Slotnummer linksboven.
 		UOverlaySlot* NumOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), i + 1), 9, FLinearColor(0.55f, 0.58f, 0.7f), false, true));
@@ -89,12 +88,17 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		BadgeOS->SetHorizontalAlignment(HAlign_Right);
 		BadgeOS->SetVerticalAlignment(VAlign_Top);
 
-		// Naam onderaan, klein (gecentreerd, afgekapt).
-		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor(0.85f, 0.88f, 0.96f), true);
-		Name->SetClipping(EWidgetClipping::ClipToBounds);
-		UOverlaySlot* NameOS = Ov->AddChildToOverlay(Name);
+		// TAG-bubble onderaan: korte code (OG, GSC, II, 100g, ...) in een pilletje i.p.v. de hele naam.
+		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 9, FLinearColor(0.98f, 1.f, 0.99f), false, true);
+		UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
+		TagPill->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.42f, 0.20f, 0.96f), 6.f)); // groene tag-bubble
+		TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+		TagPill->SetContent(Name);
+		TagPill->SetVisibility(ESlateVisibility::Collapsed);
+		UOverlaySlot* NameOS = Ov->AddChildToOverlay(TagPill);
 		NameOS->SetHorizontalAlignment(HAlign_Center);
 		NameOS->SetVerticalAlignment(VAlign_Bottom);
+		NameOS->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
 
 		// Transparante cel bovenop die drag (vanaf dit slot) en drop (toewijzen) afhandelt. Alleen
 		// actief als de inventory open is (dan zetten we de hele hotbar hit-testbaar).
@@ -111,6 +115,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		SlotBoxes.Add(Box);
 		SlotIconBoxes.Add(IcoBox);
 		SlotNames.Add(Name);
+		SlotTagPills.Add(TagPill);
 		SlotBadges.Add(Badge);
 		SlotBadgePills.Add(BadgePill);
 		SlotLastIcon.Add(NAME_None);
@@ -120,14 +125,19 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 	// --- Telefoon-icoon rechts van de hotbar met notificatie-bubble (aantal gemiste berichten) ---
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(48.f); Sz->SetHeightOverride(48.f); // strak om het icoon -> badge valt op de hoek
-		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
-		Sz->SetContent(Ov);
+		Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f); // ZELFDE maat als de hotbar-slots
+		UOverlay* SlotOv = WidgetTree->ConstructWidget<UOverlay>();
+		Sz->SetContent(SlotOv);
 
-		// Alleen het telefoon-icoon (geen doos/achtergrond), gecentreerd.
+		// GEEN doos achter de telefoon: gewoon het kale telefoon-icoon (zoals gevraagd).
+		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+		UOverlaySlot* OvOS = SlotOv->AddChildToOverlay(Ov);
+		OvOS->SetHorizontalAlignment(HAlign_Fill); OvOS->SetVerticalAlignment(VAlign_Fill);
+
+		// Telefoon-icoon gecentreerd op NATUURLIJKE verhouding (UiGlyph is aspect-fit -> niet uitgerekt).
 		PhoneIconBox = WidgetTree->ConstructWidget<USizeBox>();
-		PhoneIconBox->SetWidthOverride(46.f); PhoneIconBox->SetHeightOverride(46.f);
-		PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("phone"), 46.f, FLinearColor(0.85f, 0.92f, 1.f), WeedUI::EIcon::Message));
+		PhoneIconBox->SetWidthOverride(60.f); PhoneIconBox->SetHeightOverride(60.f);
+		PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("phone"), 60.f, FLinearColor(0.85f, 0.92f, 1.f), WeedUI::EIcon::Message));
 		PhoneIconBox->SetRenderTransformPivot(FVector2D(0.5f, 0.5f)); // midden-pivot voor de tril-animatie
 		UOverlaySlot* IconOS = Ov->AddChildToOverlay(PhoneIconBox);
 		IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
@@ -208,13 +218,21 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				SlotLastIcon[i] = S.ItemId;
 				SlotLastWaterState[i] = SlotWaterState;
 				// Geef per fles z'n eigen water mee (FMath::RoundToInt(S.Quality)) zodat vol/leeg per slot klopt.
-				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 34.f, bIsWater ? FMath::RoundToInt(S.Quality) : -1));
+				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 48.f, bIsWater ? FMath::RoundToInt(S.Quality) : -1));
 			}
 
-			FString Nm = WeedUI::PrettyItemName(S.ItemId);
-			if (Nm.Len() > 10) { Nm = Nm.Left(9) + TEXT("."); }
-			SlotNames[i]->SetText(FText::FromString(Nm));
-			SlotNames[i]->SetColorAndOpacity(FSlateColor(WeedUI::ItemAccent(S.ItemId)));
+			// TAG-bubble: korte code (OG, GSC, II, 100g, ...) i.p.v. de volledige naam. Leeg = geen bubble
+			// (unieke iconen spreken voor zich -> minder rommel).
+			const FString Tag = WeedUI::ItemTagShort(S.ItemId);
+			if (Tag.IsEmpty())
+			{
+				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetVisibility(ESlateVisibility::Collapsed); }
+			}
+			else
+			{
+				SlotNames[i]->SetText(FText::FromString(Tag));
+				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible); }
+			}
 
 			// Aantal-badge: zakjes "Nx Xg", wiet "Xg", overig stapelbaar "xN", niets voor cash.
 			const FString BadgeStr = WeedUI::ItemQtyBadge(S.ItemId, S.Quantity);
@@ -230,6 +248,7 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				SlotIconBoxes[i]->SetContent(WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor::Transparent));
 			}
 			SlotNames[i]->SetText(FText::GetEmpty());
+			if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetVisibility(ESlateVisibility::Collapsed); }
 			SlotBadges[i]->SetText(FText::GetEmpty());
 			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(ESlateVisibility::Collapsed); }
 		}
@@ -251,7 +270,7 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (PhoneIconBox && Vibe != PhoneVibeState)
 		{
 			PhoneVibeState = Vibe;
-			PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, Vibe ? TEXT("phone_vibrate") : TEXT("phone"), 46.f,
+			PhoneIconBox->SetContent(WeedUI::UiGlyph(WidgetTree, Vibe ? TEXT("phone_vibrate") : TEXT("phone"), 60.f,
 				Vibe ? FLinearColor(1.f, 0.85f, 0.4f) : FLinearColor(0.85f, 0.92f, 1.f), WeedUI::EIcon::Message));
 		}
 		// Tril-animatie zolang er ongelezen berichten zijn.

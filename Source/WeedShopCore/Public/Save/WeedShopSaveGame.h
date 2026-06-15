@@ -121,8 +121,8 @@ struct FPlayerSaveData
 	UPROPERTY() TArray<int32> OwnedHomes;
 	UPROPERTY() int32 ActiveHome = -1;
 
-	// Speler-skin (0 = man, 1 = vrouw).
-	UPROPERTY() uint8 Skin = 0;
+	// Speler-skin. Default = Casual girl 1 (2). 0=Manny 1=Quinn 2-4=Casual girls.
+	UPROPERTY() uint8 Skin = 2;
 	UPROPERTY() uint8 OutfitTop = 0;
 	UPROPERTY() uint8 OutfitLegs = 0;
 	UPROPERTY() uint8 OutfitShoes = 0;
@@ -188,6 +188,11 @@ public:
 	// Vrij bouwen (testing/sandbox) -> overal plaatsen toegestaan.
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	bool bFreeBuild = false;
+
+	// Start-mode van deze save: 0 = Normal, 1 = Sandbox, 2 = Testing. Bepaalt op load of dev-tools/
+	// free-build aan staan. Oude saves zonder dit veld defaulten naar 0 (Normal) -> automatisch clean.
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	uint8 StartMode = 0;
 
 	// Co-op speelmodus: 0 = Co-op (samen), 1 = Competitive (versus).
 	UPROPERTY(VisibleAnywhere, Category = "Save")

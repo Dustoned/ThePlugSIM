@@ -5,7 +5,10 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
+#include "Components/ScaleBox.h"
 #include "Components/Border.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/TextBlock.h"
 #include "Styling/CoreStyle.h"
 #include "Engine/Texture2D.h"
@@ -59,6 +62,20 @@ namespace WeedUI
 
 	FSlateFontInfo Font(int32 Size, bool bBold)
 	{
+		// Project-font = Aileron (uit de Dark GUI-kit). Eenmalig laden + ge-root; valt terug op de
+		// engine-default als het asset er niet is, zodat de UI nooit zonder font komt te zitten.
+		static const TCHAR* Base = TEXT("/Game/dark-gui-main-menu-pro-kit---complete-solution--honeti/dark-gui-main-menu-pro-kit---complete-solution--honeti/ultimate_dark_gui/fonts/");
+		static UObject* Reg = nullptr; static UObject* Bld = nullptr; static bool bInit = false;
+		if (!bInit)
+		{
+			bInit = true;
+			Reg = LoadObject<UObject>(nullptr, *(FString(Base) + TEXT("f_Aileron-Regular.f_Aileron-Regular")));
+			Bld = LoadObject<UObject>(nullptr, *(FString(Base) + TEXT("f_Aileron-SemiBold.f_Aileron-SemiBold")));
+			if (Reg) { Reg->AddToRoot(); }
+			if (Bld) { Bld->AddToRoot(); }
+		}
+		UObject* F = bBold ? (Bld ? Bld : Reg) : (Reg ? Reg : Bld);
+		if (F) { return FSlateFontInfo(F, Size); }
 		return FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", Size);
 	}
 
@@ -179,6 +196,8 @@ namespace WeedUI
 		if (S.StartsWith(TEXT("Baked_")))     { return TEXT("Baked ") + NiceName(S.RightChop(6)); }
 		if (S.StartsWith(TEXT("ButterMix_"))) { return NiceName(S.RightChop(10)) + TEXT(" butter mix"); }
 		if (S.StartsWith(TEXT("Edible_")))    { return NiceName(S.RightChop(7)) + TEXT(" cannabutter"); }
+		if (S.StartsWith(TEXT("Cookie_")))    { return NiceName(S.RightChop(7)) + TEXT(" cookies"); }
+		if (S.StartsWith(TEXT("Gummy_")))     { return NiceName(S.RightChop(6)) + TEXT(" gummies"); }
 		if (S.StartsWith(TEXT("Moonrock_")))  { return NiceName(S.RightChop(9)) + TEXT(" moonrocks"); }
 		if (S.StartsWith(TEXT("Rosin_")))     { return NiceName(S.RightChop(6)) + TEXT(" rosin"); }
 		if (S.StartsWith(TEXT("Bubble_")))    { return NiceName(S.RightChop(7)) + TEXT(" bubble hash"); }
@@ -204,6 +223,165 @@ namespace WeedUI
 			}
 		}
 		return NiceName(S);
+	}
+
+	// Korte, duidelijke TAG op het icoon (strain voor wiet/seeds, variant voor soil/pot/etc.) zodat je
+	// items met hetzelfde icoon uit elkaar houdt: OG seeds vs Silver Haze seeds, Basic vs Premium soil.
+	// Leeg voor items met een uniek icoon (die hebben geen tag nodig).
+	FString ItemTag(FName ItemId)
+	{
+		const FString S = ItemId.ToString();
+		auto After = [&S](int32 N) { return NiceName(S.RightChop(N)); };
+		if (S.StartsWith(TEXT("Seed_")))        { return After(5); }
+		if (S.StartsWith(TEXT("WetBud_")))      { return After(7); }
+		if (S.StartsWith(TEXT("Bud_")))         { return After(4); }
+		if (S.StartsWith(TEXT("Bag_")))         { return NiceName(UInventoryComponent::BagStrain(ItemId).ToString()); }
+		if (S.StartsWith(TEXT("Joint_")))       { return After(6); }
+		if (S.StartsWith(TEXT("Crystal_")))     { return After(8); }
+		if (S.StartsWith(TEXT("Hash_")))        { return After(5); }
+		if (S.StartsWith(TEXT("Baked_")))       { return After(6); }
+		if (S.StartsWith(TEXT("ButterMix_")))   { return After(10); }
+		if (S.StartsWith(TEXT("Edible_")))      { return After(7); }
+		if (S.StartsWith(TEXT("Cookie_")))      { return After(7); }
+		if (S.StartsWith(TEXT("Gummy_")))       { return After(6); }
+		if (S.StartsWith(TEXT("Rosin_")))       { return After(6); }
+		if (S.StartsWith(TEXT("Bubble_")))      { return After(7); }
+		if (S.StartsWith(TEXT("Moonrock_")))    { return After(9); }
+		if (S.StartsWith(TEXT("Oil_")))         { return After(4); }
+		if (S.StartsWith(TEXT("Soil_")))        { return After(5); }
+		if (S.StartsWith(TEXT("Pot_")))         { return After(4); }
+		if (S.StartsWith(TEXT("WaterBottle_"))) { return After(12); }
+		if (S.StartsWith(TEXT("Fertilizer_")))  { return After(11); }
+		if (S.StartsWith(TEXT("Spray_")))       { return After(6); }
+		if (S.StartsWith(TEXT("Papers_")))      { return After(7); }
+		if (S.StartsWith(TEXT("DryRack_")))     { return After(8); }
+		return FString();
+	}
+
+	// KORTE bubble-code (UPPERCASE, ~2-4 tekens) op het icoon. Zie header.
+	FString ItemTagShort(FName ItemId)
+	{
+		const FString S = ItemId.ToString();
+		auto Suf = [&S](int32 N) { return S.RightChop(N); };
+
+		// Strain -> canonieke wiet-afkorting (fallback: hoofdletters/cijfers, anders eerste 3 letters).
+		auto StrainCode = [](const FString& St) -> FString
+		{
+			static const TMap<FString, FString> M = {
+				{TEXT("Streetweed"),TEXT("STR")}, {TEXT("CriticalMass"),TEXT("CM")}, {TEXT("SilverHaze"),TEXT("SH")},
+				{TEXT("BlueDream"),TEXT("BD")}, {TEXT("NorthernLights"),TEXT("NL")}, {TEXT("BigBud"),TEXT("BB")},
+				{TEXT("WhiteWidow"),TEXT("WW")}, {TEXT("JackHerer"),TEXT("JH")}, {TEXT("SourDiesel"),TEXT("SD")},
+				{TEXT("PineappleExpress"),TEXT("PE")}, {TEXT("AmnesiaHaze"),TEXT("AH")}, {TEXT("OGKush"),TEXT("OG")},
+				{TEXT("BubbaKush"),TEXT("BK")}, {TEXT("DurbanPoison"),TEXT("DP")}, {TEXT("GorillaGlue"),TEXT("GG")},
+				{TEXT("PurpleHaze"),TEXT("PH")}, {TEXT("GirlScoutCookies"),TEXT("GSC")}, {TEXT("CookiesCream"),TEXT("CC")},
+				{TEXT("WeddingCake"),TEXT("WC")}, {TEXT("Gelato"),TEXT("GEL")}, {TEXT("Mimosa"),TEXT("MIM")},
+				{TEXT("Runtz"),TEXT("RTZ")}, {TEXT("AppleFritter"),TEXT("AF")}, {TEXT("Zkittlez"),TEXT("ZKZ")},
+				{TEXT("GaryPayton"),TEXT("GP")},
+			};
+			if (const FString* F = M.Find(St)) { return *F; }
+			FString Caps;
+			for (TCHAR c : St) { if (FChar::IsUpper(c) || FChar::IsDigit(c)) { Caps.AppendChar(c); } }
+			return (Caps.Len() >= 2) ? Caps.Left(3) : St.Left(3).ToUpper();
+		};
+		// Tier-woord -> rank.
+		auto Tier = [](const FString& V) -> FString
+		{
+			if (V == TEXT("Cheap") || V == TEXT("Basic"))   { return TEXT("I"); }
+			if (V == TEXT("Std")   || V == TEXT("Rich"))    { return TEXT("II"); }
+			if (V == TEXT("Pro")   || V == TEXT("Premium")) { return TEXT("III"); }
+			return FString();
+		};
+		auto IsTierWord = [](const FString& V)
+		{
+			return V == TEXT("Cheap") || V == TEXT("Std") || V == TEXT("Pro")
+				|| V == TEXT("Basic") || V == TEXT("Rich") || V == TEXT("Premium");
+		};
+		auto Map4 = [](const FString& V, const TCHAR* a, const TCHAR* ca, const TCHAR* b, const TCHAR* cb,
+			const TCHAR* c, const TCHAR* cc, const TCHAR* d, const TCHAR* cd) -> FString
+		{
+			if (V == a) return ca; if (V == b) return cb; if (V == c) return cc; if (V == d) return cd;
+			return FString();
+		};
+
+		// --- Wiet-producten: strain-code ---
+		if (S.StartsWith(TEXT("Seed_")))      { return StrainCode(Suf(5)); }
+		if (S.StartsWith(TEXT("WetBud_")))    { return StrainCode(Suf(7)); }
+		if (S.StartsWith(TEXT("Bud_")))       { return StrainCode(Suf(4)); }
+		if (S.StartsWith(TEXT("Bag_")))       { return StrainCode(UInventoryComponent::BagStrain(ItemId).ToString()); }
+		if (S.StartsWith(TEXT("Joint_")))     { return StrainCode(Suf(6)); }
+		if (S.StartsWith(TEXT("Crystal_")))   { return StrainCode(Suf(8)); }
+		if (S.StartsWith(TEXT("Hash_")))      { return StrainCode(Suf(5)); }
+		if (S.StartsWith(TEXT("Baked_")))     { return StrainCode(Suf(6)); }
+		if (S.StartsWith(TEXT("ButterMix_"))) { return StrainCode(Suf(10)); }
+		if (S.StartsWith(TEXT("Edible_")))    { return StrainCode(Suf(7)); }
+		if (S.StartsWith(TEXT("Cookie_")))    { return StrainCode(Suf(7)); }
+		if (S.StartsWith(TEXT("Gummy_")))     { return StrainCode(Suf(6)); }
+		if (S.StartsWith(TEXT("Moonrock_")))  { return StrainCode(Suf(9)); }
+		if (S.StartsWith(TEXT("Bubble_")))    { return StrainCode(Suf(7)); }
+		// Rosin_/Oil_ zijn BEIDE product (strain) en machine (tier): onderscheid via het tier-woord.
+		if (S.StartsWith(TEXT("Rosin_")))     { return IsTierWord(Suf(6)) ? Tier(Suf(6)) : StrainCode(Suf(6)); }
+		if (S.StartsWith(TEXT("Oil_")))       { return IsTierWord(Suf(4)) ? Tier(Suf(4)) : StrainCode(Suf(4)); }
+
+		// --- Teelt-varianten ---
+		if (S.StartsWith(TEXT("Soil_")))        { return Tier(Suf(5)); }
+		if (S.StartsWith(TEXT("Pot_")))         { return Map4(Suf(4), TEXT("Broken"),TEXT("BRK"), TEXT("Clay"),TEXT("CLY"), TEXT("Plastic"),TEXT("PLA"), TEXT("Fabric"),TEXT("FAB")); }
+		if (S.StartsWith(TEXT("WaterBottle_"))) { return Map4(Suf(12), TEXT("Plastic"),TEXT("PLA"), TEXT("Steel"),TEXT("STL"), TEXT("Jerrycan"),TEXT("JRY"), TEXT("Tank"),TEXT("TNK")); }
+		if (S.StartsWith(TEXT("Fertilizer_")))  { const FString V = Suf(11); return V==TEXT("Basic") ? FString(TEXT("BSC")) : (V==TEXT("Bloom") ? FString(TEXT("BLM")) : FString()); }
+		if (S.StartsWith(TEXT("Spray_")))       { const FString V = Suf(6); return V==TEXT("Fungicide")?FString(TEXT("FNG")):(V==TEXT("Pesticide")?FString(TEXT("PST")):(V==TEXT("Broad")?FString(TEXT("BRD")):FString())); }
+
+		// --- Consumables / opslag ---
+		if (S.StartsWith(TEXT("Papers_")))      { return Map4(Suf(7), TEXT("Small"),TEXT("SM"), TEXT("Big"),TEXT("BIG"), TEXT("Blunt"),TEXT("BLT"), TEXT("Backwoods"),TEXT("BWD")); }
+		if (S.StartsWith(TEXT("Safe_")))        { return Map4(Suf(5), TEXT("Small"),TEXT("S"), TEXT("Medium"),TEXT("M"), TEXT("Large"),TEXT("L"), TEXT("Vault"),TEXT("VLT")); }
+		if (S.StartsWith(TEXT("Cont_")))
+		{
+			const FString V = Suf(5);
+			if (V==TEXT("Bag2")) return TEXT("2g");   if (V==TEXT("Bag5")) return TEXT("5g");
+			if (V==TEXT("Jar10")) return TEXT("10g"); if (V==TEXT("Jar15")) return TEXT("15g");
+			if (V==TEXT("Block100")) return TEXT("100g"); if (V==TEXT("Garbage500")) return TEXT("500g");
+			return FString();
+		}
+		if (S.StartsWith(TEXT("DryRack_")))     { return Tier(Suf(8)); }
+
+		// --- Pot-gear upgrades ---
+		if (S.StartsWith(TEXT("Gear_")))
+		{
+			const FString V = Suf(5);
+			if (V==TEXT("Drainage")) return TEXT("DRN"); if (V==TEXT("Insulation")) return TEXT("INS"); if (V==TEXT("Bloom")) return TEXT("BLM");
+			if (V.StartsWith(TEXT("Lamp")))  return TEXT("L") + V.RightChop(4);
+			if (V.StartsWith(TEXT("Tent")))  return TEXT("T") + V.RightChop(4);
+			if (V.StartsWith(TEXT("Water"))) return TEXT("W") + V.RightChop(5);
+			return FString();
+		}
+		if (S.StartsWith(TEXT("DryUp_")))       { const FString V = Suf(6); return V==TEXT("Fan")?FString(TEXT("FAN")):(V==TEXT("Seal")?FString(TEXT("SEL")):FString()); }
+		if (S.StartsWith(TEXT("ProcUp_")))      { const FString V = Suf(7); return V==TEXT("Motor")?FString(TEXT("MOT")):(V==TEXT("Yield")?FString(TEXT("YLD")):FString()); }
+
+		// --- Machine-tiers (Cheap/Std/Pro of Std/Pro) -> rank ---
+		if (S.StartsWith(TEXT("Mesh_")))   { return Tier(Suf(5)); }
+		if (S.StartsWith(TEXT("Press_")))  { return Tier(Suf(6)); }
+		if (S.StartsWith(TEXT("Oven_")))   { return Tier(Suf(5)); }
+		if (S.StartsWith(TEXT("Pan_")))    { return Tier(Suf(4)); }
+		if (S.StartsWith(TEXT("Fridge_"))) { return Tier(Suf(7)); }
+		if (S.StartsWith(TEXT("Iso_")))    { return Tier(Suf(4)); }
+		if (S.StartsWith(TEXT("Moon_")))   { return Tier(Suf(5)); }
+
+		// --- Packing-bench tiers ---
+		if (S == TEXT("Bench_Pack"))  { return TEXT("I"); }
+		if (S == TEXT("Bench_Pack2")) { return TEXT("II"); }
+		if (S == TEXT("Bench_Pack3")) { return TEXT("III"); }
+
+		// --- Bouw-stukken ---
+		if (S.StartsWith(TEXT("Struct_")))
+		{
+			const FString V = Suf(7);
+			if (V==TEXT("Wall4m")) return TEXT("W4"); if (V==TEXT("Wall2m")) return TEXT("W2"); if (V==TEXT("Wall1m")) return TEXT("W1");
+			if (V==TEXT("WallDoor4m")) return TEXT("D4"); if (V==TEXT("WallDoor3m")) return TEXT("D3");
+			if (V==TEXT("Floor4x4")) return TEXT("F4"); if (V==TEXT("Floor1x1")) return TEXT("F1");
+			if (V==TEXT("Ceil4x4")) return TEXT("C4"); if (V==TEXT("Ceil1x1")) return TEXT("C1");
+			if (V==TEXT("CeilLamp")) return TEXT("LMP"); if (V==TEXT("Door")) return TEXT("DR");
+			return FString();
+		}
+
+		return FString();
 	}
 
 	// Het uit vormen opgebouwde icoon (fallback als er geen PNG is).
@@ -285,6 +463,7 @@ namespace WeedUI
 		{
 			const FString S = ItemId.ToString();
 			auto Has = [&S](const TCHAR* P) { return S.StartsWith(P); };
+			auto IsTier = [&S]() { return S.EndsWith(TEXT("_Std")) || S.EndsWith(TEXT("_Pro")) || S.EndsWith(TEXT("_Cheap")); };
 
 			if (ItemId == TEXT("Cash"))                                  return { TEXT("cash"),      FLinearColor(0.35f, 0.85f, 0.45f), EIcon::Coin };
 			if (ItemId == TEXT("Atm") || Has(TEXT("Bank")))              return { TEXT("bank"),      FLinearColor(0.45f, 0.8f, 0.55f),  EIcon::Coin };
@@ -303,6 +482,14 @@ namespace WeedUI
 			if (Has(TEXT("ButterMix_")))                                 return { TEXT("mix"),       FLinearColor(0.85f, 0.72f, 0.30f), EIcon::Leaf };
 			if (Has(TEXT("Edible_")))                                    return { TEXT("edible"),    FLinearColor(0.80f, 0.62f, 0.25f), EIcon::Leaf };
 			if (ItemId == TEXT("Butter"))                                return { TEXT("butter"),    FLinearColor(0.95f, 0.85f, 0.35f), EIcon::Shop };
+			if (Has(TEXT("Cookie_")))                                    return { TEXT("cookie"),    FLinearColor(0.80f, 0.55f, 0.30f), EIcon::Leaf };
+			if (Has(TEXT("Gummy_")))                                     return { TEXT("gummy"),     FLinearColor(0.95f, 0.45f, 0.55f), EIcon::Leaf };
+
+			// Concentraat-PRODUCTEN (de machine met dezelfde naam eindigt op _Std/_Pro/_Cheap; deze niet).
+			if (Has(TEXT("Bubble_")))                                    return { TEXT("bubble"),    FLinearColor(0.55f, 0.80f, 0.95f), EIcon::Leaf }; // ice/bubble hash
+			if (Has(TEXT("Moonrock_")))                                  return { TEXT("moonrock"),  FLinearColor(0.62f, 0.55f, 0.80f), EIcon::Leaf };
+			if (Has(TEXT("Rosin_")) && !IsTier())                        return { TEXT("rosin"),     FLinearColor(0.95f, 0.80f, 0.40f), EIcon::Leaf };
+			if (Has(TEXT("Oil_"))   && !IsTier())                        return { TEXT("oil"),       FLinearColor(0.90f, 0.75f, 0.35f), EIcon::Coin };
 
 			if (Has(TEXT("Cont_")))                                      return { TEXT("packaging"), FLinearColor(0.45f, 0.6f, 0.95f),  EIcon::Shop };
 			if (Has(TEXT("Papers_")))                                    return { TEXT("papers"),    FLinearColor(0.7f, 0.7f, 0.85f),   EIcon::Message };
@@ -318,18 +505,36 @@ namespace WeedUI
 			if (Has(TEXT("Spray")) || Has(TEXT("Pest")))                 return { TEXT("spray"),     FLinearColor(0.6f, 0.9f, 0.7f),   EIcon::Gear };
 
 			// Gootsteen -> water-icoon (i.p.v. het generieke meubel).
-			if (ItemId == TEXT("Sink"))                                  return { TEXT("water"),     FLinearColor(0.4f, 0.7f, 0.95f),   EIcon::Coin };
+			if (ItemId == TEXT("Sink"))                                  return { TEXT("faucet"),    FLinearColor(0.4f, 0.7f, 0.95f),   EIcon::Coin };
 			// Kluis/vault -> kist-icoon (opslag/slot).
 			if (Has(TEXT("Safe")) || Has(TEXT("Vault")))                 return { TEXT("safe"),      FLinearColor(0.6f, 0.62f, 0.68f),  EIcon::Home };
 			// Bouwstukken (muren/vloeren/plafonds) -> blok-icoon.
 			if (Has(TEXT("Struct_")))                                    return { TEXT("block"),     FLinearColor(0.6f, 0.62f, 0.66f),  EIcon::Gear };
 			// Gear-upgrades & machine-upgrades -> upgrade-icoon (chevron/pijl).
+			// Upgrades kregen allemaal hetzelfde chevron; route ze nu naar een passend (vaak bestaand) icoon.
+			if (Has(TEXT("Gear_Lamp")))                                  return { TEXT("growlamp"),  FLinearColor(0.95f, 0.85f, 0.45f), EIcon::Flame };
+			if (Has(TEXT("Gear_Tent")))                                  return { TEXT("growtent"),  FLinearColor(0.55f, 0.6f, 0.7f),   EIcon::Home };
+			if (Has(TEXT("Gear_Water")))                                 return { TEXT("drop"),      FLinearColor(0.4f, 0.7f, 0.95f),   EIcon::Coin };
+			if (Has(TEXT("Gear_Bloom")))                                 return { TEXT("bloom"),     FLinearColor(0.95f, 0.55f, 0.7f),  EIcon::Leaf };
+			if (Has(TEXT("Gear_Drainage")))                              return { TEXT("drainage"),  FLinearColor(0.65f, 0.5f, 0.35f),  EIcon::Leaf };
+			if (Has(TEXT("Gear_Insulation")))                            return { TEXT("insulation"),FLinearColor(0.7f, 0.75f, 0.85f),  EIcon::Upgrade };
+			if (Has(TEXT("DryUp_Fan")))                                  return { TEXT("fan"),       FLinearColor(0.6f, 0.8f, 0.9f),    EIcon::Gear };
+			if (Has(TEXT("DryUp_Seal")))                                 return { TEXT("seal"),      FLinearColor(0.7f, 0.75f, 0.85f),  EIcon::Upgrade };
+			if (Has(TEXT("ProcUp_Motor")))                               return { TEXT("motor"),     FLinearColor(0.7f, 0.74f, 0.8f),   EIcon::Gear };
+			if (Has(TEXT("ProcUp_Yield")))                               return { TEXT("filter"),    FLinearColor(0.7f, 0.74f, 0.8f),   EIcon::Gear };
 			if (Has(TEXT("Gear_")) || Has(TEXT("DryUp_")) || Has(TEXT("ProcUp_")))
 			                                                             return { TEXT("upgrade"),   FLinearColor(0.6f, 0.85f, 0.95f),  EIcon::Upgrade };
-			// Verwerkings-machines (hasj-/edibles-/concentraat-keten) -> machine/gear-icoon.
-			if (Has(TEXT("Press")) || Has(TEXT("Mesh_")) || Has(TEXT("Oven")) || Has(TEXT("Pan_"))
-				|| Has(TEXT("Rosin")) || Has(TEXT("Iso_")) || Has(TEXT("Moon")) || Has(TEXT("Oil_")) || Has(TEXT("Heatpress")))
-			                                                             return { TEXT("machine"),   FLinearColor(0.7f, 0.74f, 0.8f),   EIcon::Gear };
+			// Verwerkings-machines: elk een eigen icoon (deze items zijn altijd tiers, _Std/_Pro/_Cheap).
+			const FLinearColor MachineCol(0.70f, 0.74f, 0.80f);
+			if (Has(TEXT("Mesh_")))                                      return { TEXT("mesh"),        MachineCol, EIcon::Gear };
+			if (Has(TEXT("Press")) || Has(TEXT("Heatpress")))           return { TEXT("press"),       MachineCol, EIcon::Gear };
+			if (Has(TEXT("Oven")))                                       return { TEXT("oven"),        MachineCol, EIcon::Gear };
+			if (Has(TEXT("Pan_")))                                       return { TEXT("pan"),         MachineCol, EIcon::Gear };
+			if (Has(TEXT("Rosin")))                                      return { TEXT("rosinpress"),  MachineCol, EIcon::Gear };
+			if (Has(TEXT("Iso_")))                                       return { TEXT("icehash"),     MachineCol, EIcon::Gear };
+			if (Has(TEXT("Oil_")))                                       return { TEXT("oilpress"),    MachineCol, EIcon::Gear };
+			if (Has(TEXT("Moon")))                                       return { TEXT("mixstation"),  MachineCol, EIcon::Gear };
+			if (Has(TEXT("Fridge_")))                                    return { TEXT("fridge"),      FLinearColor(0.6f, 0.7f, 0.8f), EIcon::Home };
 			// Kledingkast -> meubel-icoon (eigen kleur).
 			if (Has(TEXT("Wardrobe")))                                   return { TEXT("wardrobe"),  FLinearColor(0.62f, 0.55f, 0.7f),  EIcon::Home };
 
@@ -449,12 +654,36 @@ namespace WeedUI
 			else if (K == TEXT("block"))     Add({ TEXT("furniture") });
 			else if (K == TEXT("upgrade"))   Add({ TEXT("ui_upgrade"), TEXT("gear"), TEXT("ui_gear") });
 			else if (K == TEXT("machine"))   Add({ TEXT("press"), TEXT("oven"), TEXT("ui_gear") });
+			else if (K == TEXT("mesh"))      Add({ TEXT("ui_gear") });
+			else if (K == TEXT("oven"))      Add({ TEXT("ui_gear") });
+			else if (K == TEXT("pan"))       Add({ TEXT("ui_gear") });
+			else if (K == TEXT("rosinpress")) Add({ TEXT("press"), TEXT("ui_gear") });
+			else if (K == TEXT("icehash"))   Add({ TEXT("ui_gear") });
+			else if (K == TEXT("oilpress"))  Add({ TEXT("press"), TEXT("ui_gear") });
+			else if (K == TEXT("mixstation")) Add({ TEXT("ui_gear") });
+			else if (K == TEXT("bubble"))    Add({ TEXT("hash"), TEXT("crystals"), TEXT("weed") });
+			else if (K == TEXT("rosin"))     Add({ TEXT("hash"), TEXT("crystals"), TEXT("weed") });
+			else if (K == TEXT("moonrock"))  Add({ TEXT("crystals"), TEXT("weed") });
+			else if (K == TEXT("oil"))       Add({ TEXT("crystals"), TEXT("weed") });
+			else if (K == TEXT("drop"))      Add({ TEXT("water") });
+			else if (K == TEXT("faucet"))    Add({ TEXT("water") });
+			else if (K == TEXT("growlamp"))  Add({ TEXT("lamp"), TEXT("ui_upgrade") });
+			else if (K == TEXT("growtent"))  Add({ TEXT("tent"), TEXT("ui_upgrade") });
+			else if (K == TEXT("drainage"))  Add({ TEXT("soil"), TEXT("ui_upgrade") });
+			else if (K == TEXT("bloom"))     Add({ TEXT("fertilizer"), TEXT("weed") });
+			else if (K == TEXT("insulation")) Add({ TEXT("ui_upgrade"), TEXT("upgrade") });
+			else if (K == TEXT("fan"))       Add({ TEXT("ui_gear") });
+			else if (K == TEXT("seal"))      Add({ TEXT("ui_upgrade"), TEXT("upgrade") });
+			else if (K == TEXT("motor"))     Add({ TEXT("ui_gear") });
+			else if (K == TEXT("filter"))    Add({ TEXT("mesh"), TEXT("ui_gear") });
 			else if (K == TEXT("hash"))      Add({ TEXT("ui_hash"), TEXT("weed") });
 			else if (K == TEXT("crystals"))  Add({ TEXT("weed") });
 			else if (K == TEXT("butter"))    Add({ TEXT("edible"), TEXT("furniture") });
 			else if (K == TEXT("mix"))       Add({ TEXT("butter"), TEXT("edible") });
 			else if (K == TEXT("baked"))     Add({ TEXT("edible"), TEXT("weed") });
 			else if (K == TEXT("edible"))    Add({ TEXT("baked"), TEXT("weed") });
+			else if (K == TEXT("cookie"))    Add({ TEXT("baked"), TEXT("edible"), TEXT("weed") });
+			else if (K == TEXT("gummy"))     Add({ TEXT("edible"), TEXT("baked"), TEXT("weed") });
 			else if (K == TEXT("wardrobe"))  Add({ TEXT("furniture") });
 			else if (K == TEXT("furniture")) Add({ TEXT("stash"), TEXT("inventory"), TEXT("box") });
 			return C;
@@ -509,13 +738,27 @@ namespace WeedUI
 	static FString ExactIconStem(FName ItemId)
 	{
 		const FString S = ItemId.ToString();
+		if (S.StartsWith(TEXT("WetBud_")))  { return TEXT("weed_wet"); } // natte wiet: bud + druppel
+		// Verpakte wiet (Bag_<strain>_<gram>): kies het container-icoon op gram-formaat, zodat een zakje,
+		// een pot/jar en de grote sack duidelijk uit elkaar te houden zijn in de inventory.
+		if (S.StartsWith(TEXT("Bag_")))
+		{
+			const int32 G = UInventoryComponent::BagGrams(ItemId);
+			if (G > 0)
+			{
+				if (G <= 5)   { return TEXT("weed_bag"); }   // zakje (Bag2/Bag5)
+				if (G <= 50)  { return TEXT("weed_jar"); }   // pot/jar (Jar10/Jar15)
+				if (G <= 100) { return TEXT("block"); }      // geperste block 100g (wiet-brick)
+				return TEXT("weed_sack");                    // bulk vuilniszak 500g (Garbage500)
+			}
+		}
 		if (S.StartsWith(TEXT("Bench_")))  { return TEXT("bench"); }
-		if (S == TEXT("Cont_Bag2"))        { return TEXT("bag_small"); }
-		if (S == TEXT("Cont_Bag5"))        { return TEXT("bag_big"); }
-		if (S == TEXT("Cont_Jar10"))       { return TEXT("jar_small"); }
-		if (S == TEXT("Cont_Jar15"))       { return TEXT("jar_big"); }
-		if (S == TEXT("Cont_Block100"))    { return TEXT("block"); }
-		if (S == TEXT("Cont_Garbage500"))  { return TEXT("garbage"); }
+		if (S == TEXT("Cont_Bag2"))        { return TEXT("weed_bag"); }  // zip-lock wiet-baggie (tag 2g)
+		if (S == TEXT("Cont_Bag5"))        { return TEXT("weed_bag"); }  // zelfde baggie, tag 5g onderscheidt
+		if (S == TEXT("Cont_Jar10"))       { return TEXT("weed_jar"); }  // cannabis-pot (tag 10g)
+		if (S == TEXT("Cont_Jar15"))       { return TEXT("weed_jar"); }  // zelfde pot, tag 15g
+		if (S == TEXT("Cont_Block100"))    { return TEXT("block"); }     // pers-blok 100g
+		if (S == TEXT("Cont_Garbage500"))  { return TEXT("weed_sack"); } // bulk vuilniszak = het sack-icoon
 		return FString();
 	}
 
@@ -562,15 +805,28 @@ namespace WeedUI
 		//    (bv. nat = blauw, droog = groen op exact hetzelfde hemp-icoon).
 		if (UTexture2D* Tex = ItemIconTexture(ItemId, WaterChargesOverride))
 		{
-			UImage* Img = Tree->ConstructWidget<UImage>();
+			const FLinearColor Accent = ItemAccent(ItemId);
 			FSlateBrush B;
 			B.SetResourceObject(Tex);
-			B.ImageSize = FVector2D(Size, Size);
+			// Aspect-ratio + wat marge -> consistente, professionele schaal (nooit gestretcht, nooit tot de rand).
+			const float TW = FMath::Max(1.f, (float)Tex->GetSizeX());
+			const float TH = FMath::Max(1.f, (float)Tex->GetSizeY());
+			const float Sc = (Size * 0.94f) / FMath::Max(TW, TH);
+			B.ImageSize = FVector2D(TW * Sc, TH * Sc);
 			B.DrawAs = ESlateBrushDrawType::Image;
+
+			UImage* Img = Tree->ConstructWidget<UImage>();
 			Img->SetBrush(B);
-			Img->SetColorAndOpacity(ItemAccent(ItemId));
+			// Heldere, BIJPASSENDE categoriekleur (geen wit) -> duidelijk en herkenbaar op de donkere slot.
+			Img->SetColorAndOpacity(FMath::Lerp(Accent, FLinearColor::White, 0.22f));
 			Img->SetVisibility(ESlateVisibility::HitTestInvisible);
-			return Img;
+			// ScaleToFit: behoudt ALTIJD de aspect-ratio, ook als de container (een SizeBox met vaste
+			// vierkante maat) anders de brush zou uitrekken. Zo nooit meer gestretcht in hoogte/breedte.
+			UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
+			Fit->SetStretch(EStretch::ScaleToFit);
+			Fit->AddChild(Img);
+			Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
+			return Fit;
 		}
 
 		// 2) Nette procedurele tegel: gekleurde afgeronde achtergrond + flat glyph in dezelfde tint.
@@ -616,12 +872,23 @@ namespace WeedUI
 			UImage* Img = Tree->ConstructWidget<UImage>();
 			FSlateBrush B;
 			B.SetResourceObject(Tex);
-			B.ImageSize = FVector2D(Size, Size);
+			// Aspect-ratio behouden (langste zijde = Size) -> portret-glyphs zoals de telefoon worden NIET
+			// tot een vierkant uitgerekt.
+			const float TW = FMath::Max(1.f, (float)Tex->GetSizeX());
+			const float TH = FMath::Max(1.f, (float)Tex->GetSizeY());
+			const float Sc = Size / FMath::Max(TW, TH);
+			B.ImageSize = FVector2D(TW * Sc, TH * Sc);
 			B.DrawAs = ESlateBrushDrawType::Image;
 			Img->SetBrush(B);
 			Img->SetColorAndOpacity(Tint); // wit PNG -> krijgt de gevraagde kleur
 			Img->SetVisibility(ESlateVisibility::HitTestInvisible);
-			return Img;
+			// ScaleToFit: behoudt ALTIJD de aspect-ratio, ook als de plek (een SizeBox of canvas-slot met
+			// vaste vierkante maat) de brush anders zou uitrekken. Eén bron-fix voor alle gestretchte iconen.
+			UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
+			Fit->SetStretch(EStretch::ScaleToFit);
+			Fit->AddChild(Img);
+			Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
+			return Fit;
 		}
 		return IconShape(Tree, Fallback, Size, Tint);
 	}

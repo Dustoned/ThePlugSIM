@@ -694,7 +694,7 @@ void UMainMenuWidget::RefreshSlots()
 		// Map-selectie: toggle bovenaan de mode-keuze. De keuze gaat via SetPendingMap mee de start in.
 		{
 			const bool bBeach = (PendingNewMap == 1);
-			const FString MapLbl = bBeach ? TEXT("Map: BEACH CITY  (new - test)") : TEXT("Map: CITY APARTMENT  (main)");
+			const FString MapLbl = bBeach ? TEXT("Map: BEACH CITY  (main)") : TEXT("Map: CITY APARTMENT  (classic)");
 			const FLinearColor MapCol = bBeach ? FLinearColor(0.13f, 0.30f, 0.38f, 0.96f) : FLinearColor(0.16f, 0.16f, 0.22f, 0.96f);
 			UWeedActionButton* MapB = WidgetTree->ConstructWidget<UWeedActionButton>();
 			MapB->OnClicked.AddDynamic(MapB, &UWeedActionButton::Handle);

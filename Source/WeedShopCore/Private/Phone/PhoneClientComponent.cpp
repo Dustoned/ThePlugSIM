@@ -2,6 +2,7 @@
 #include "DrawDebugHelpers.h"
 
 #include "WeedShopCore.h"
+#include "UI/BootCoverWidget.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
 #include "Progression/UpgradeComponent.h"
@@ -15,6 +16,7 @@
 #include "Customer/CustomerSpawner.h"
 #include "World/DeliveryDrone.h"
 #include "World/CityGenerator.h"
+#include "World/DoorRetrofitter.h"
 #include "World/CityDoor.h"
 #include "EngineUtils.h"
 #include "Cultivation/PotTypes.h"
@@ -334,10 +336,30 @@ ACityGenerator* UPhoneClientComponent::FindCity() const
 	return nullptr;
 }
 
-void UPhoneClientComponent::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
+ADoorRetrofitter* UPhoneClientComponent::FindRetro() const
+{
+	if (!GetWorld()) { return nullptr; }
+	for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { return *It; }
+	return nullptr;
+}
+
+void UPhoneClientComponent::GetHomesUnified(TArray<FApartmentHome>& Out) const
 {
 	Out.Reset();
-	if (ACityGenerator* City = FindCity()) { City->GetPropertyOffers(Out); }
+	if (ACityGenerator* City = FindCity()) { Out = City->GetApartmentHomes(); return; }
+	if (ADoorRetrofitter* Retro = FindRetro()) { Out = Retro->GetBeachHomes(); }
+}
+
+void UPhoneClientComponent::GetOffersUnified(TArray<FCityPropertyOffer>& Out) const
+{
+	Out.Reset();
+	if (ACityGenerator* City = FindCity()) { City->GetPropertyOffers(Out); return; }
+	if (ADoorRetrofitter* Retro = FindRetro()) { Retro->GetBeachPropertyOffers(Out); }
+}
+
+void UPhoneClientComponent::GetPropertyOffers(TArray<FCityPropertyOffer>& Out) const
+{
+	GetOffersUnified(Out);
 }
 
 void UPhoneClientComponent::ApplyLocalDoors()
@@ -347,10 +369,38 @@ void UPhoneClientComponent::ApplyLocalDoors()
 	//  geen "LOCKED - <naam>"-popup, en door speler 1 gekochte woningen bleven op slot.)
 	APawn* P = Cast<APawn>(GetOwner());
 	if (!P || !P->IsLocallyControlled()) { return; }
-	ACityGenerator* City = FindCity();
-	if (!City) { return; }
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+	ACityGenerator* City = FindCity();
+	if (!City)
+	{
+		// BEACH-MAP (geen City-door-lijst): open ALLE deuren BINNEN een gekochte woning (de hele kamer
+		// wordt van jou). Andere deuren laat de DoorRetrofitter op resident/locked staan.
+		TArray<FApartmentHome> BHomes; GetHomesUnified(BHomes);
+		if (BHomes.Num() == 0) { return; }
+		TSet<int32> OwnedAny; // gedeeld co-op: een woning van EENDER WELKE speler telt als "ons"
+		for (TActorIterator<APawn> It(W); It; ++It)
+		{
+			if (const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>())
+			{ for (int32 Idx : Ph->OwnedHomes) { OwnedAny.Add(Idx); } }
+		}
+		for (TActorIterator<ACityDoor> It(W); It; ++It)
+		{
+			ACityDoor* Dr = *It;
+			if (!Dr) { continue; }
+			const FVector DL = Dr->GetActorLocation();
+			for (int32 Idx : OwnedAny)
+			{
+				if (!BHomes.IsValidIndex(Idx)) { continue; }
+				const FApartmentHome& H = BHomes[Idx];
+				if (FMath::Abs(DL.X - H.InteriorPos.X) <= H.RoomHalf.X + 160.f
+					&& FMath::Abs(DL.Y - H.InteriorPos.Y) <= H.RoomHalf.Y + 160.f
+					&& DL.Z >= H.InteriorPos.Z - 220.f && DL.Z <= H.InteriorPos.Z + 420.f)
+				{ Dr->SetPlayerHome(); break; }
+			}
+		}
+		return;
+	}
 	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
 
 	// Gedeeld co-op: een woning die door EENDER WELKE speler bezeten wordt, telt als "ons".
@@ -386,12 +436,11 @@ void UPhoneClientComponent::OnRep_Property()
 
 void UPhoneClientComponent::PropertyTick()
 {
-	ACityGenerator* City = FindCity();
-	if (!City) { return; } // stad nog niet gebouwd
-	// Server: ken eenmalig het starter-flatje toe bij een VERSE start (load zet de staat zelf).
+	// Server: ken eenmalig het starter-flatje toe bij een VERSE start (load zet de staat zelf). Werkt op
+	// de procedurele stad EN de beach-map (offers via GetOffersUnified - City of DoorRetrofitter-registry).
 	if (GetOwnerRole() == ROLE_Authority && !bPropertyInit)
 	{
-		TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+		TArray<FCityPropertyOffer> Offers; GetOffersUnified(Offers);
 		if (Offers.Num() > 0)
 		{
 			bPropertyInit = true;
@@ -403,7 +452,7 @@ void UPhoneClientComponent::PropertyTick()
 					{
 						OwnedHomes.AddUnique(O.HomeIndex);
 						ActiveHome = O.HomeIndex;
-						MoveOwnerToHome(O.HomeIndex);
+						if (FindCity()) { MoveOwnerToHome(O.HomeIndex); } // beach-map: DoorRetrofitter plaatst je al
 						break;
 					}
 				}
@@ -436,10 +485,9 @@ void UPhoneClientComponent::RestoreProperty(const TArray<int32>& InOwned, int32 
 
 void UPhoneClientComponent::MoveOwnerToHome(int32 HomeIndex)
 {
-	ACityGenerator* City = FindCity();
 	APawn* Pawn = Cast<APawn>(GetOwner());
-	if (!City || !Pawn) { return; }
-	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (!Pawn) { return; }
+	TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
 	if (!Homes.IsValidIndex(HomeIndex)) { return; }
 	const FVector Interior = Homes[HomeIndex].InteriorPos;
 	// Zet de speler STEVIG op de vloer van de woning: trace omlaag naar het vloerslab en plaats de capsule
@@ -493,11 +541,9 @@ void UPhoneClientComponent::ClientLandAtHome_Implementation(FVector To)
 
 void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
 {
-	ACityGenerator* City = FindCity();
-	if (!City) { return; }
-	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	TArray<FCityPropertyOffer> Offers; GetOffersUnified(Offers);
 	const FCityPropertyOffer* Off = Offers.FindByPredicate([HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex; });
-	if (!Off) { return; }                       // alleen de 3 aangeboden panden
+	if (!Off) { return; }                       // alleen de aangeboden panden
 	if (OwnedHomes.Contains(HomeIndex)) { return; }
 	if (Off->PriceCents > 0)
 	{
@@ -526,9 +572,8 @@ void UPhoneClientComponent::ServerSetActiveHome_Implementation(int32 HomeIndex)
 void UPhoneClientComponent::SetActiveHomeFromLocation(const FVector& WorldLoc)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
-	ACityGenerator* City = FindCity();
-	if (!City) { return; }
-	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
+	if (Homes.Num() == 0) { return; }
 	// Zoek een GEKOCHTE woning waarvan de kamer-bounds deze locatie bevatten (bv. het bed staat erin).
 	for (int32 Idx : OwnedHomes)
 	{
@@ -550,9 +595,7 @@ void UPhoneClientComponent::SetActiveHomeFromLocation(const FVector& WorldLoc)
 
 int32 UPhoneClientComponent::GetHomeSellValueCents(int32 HomeIndex) const
 {
-	ACityGenerator* City = FindCity();
-	if (!City) { return 0; }
-	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	TArray<FCityPropertyOffer> Offers; GetOffersUnified(Offers);
 	const FCityPropertyOffer* Off = Offers.FindByPredicate(
 		[HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex || O.Homes.Contains(HomeIndex); });
 	if (!Off || Off->PriceCents <= 0) { return 0; }  // starter (gratis) is niet verkoopbaar
@@ -562,9 +605,7 @@ int32 UPhoneClientComponent::GetHomeSellValueCents(int32 HomeIndex) const
 void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
 {
 	if (!OwnedHomes.Contains(HomeIndex)) { return; }
-	ACityGenerator* City = FindCity();
-	if (!City) { return; }
-	TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
+	TArray<FCityPropertyOffer> Offers; GetOffersUnified(Offers);
 	const FCityPropertyOffer* Off = Offers.FindByPredicate(
 		[HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex || O.Homes.Contains(HomeIndex); });
 	if (!Off) { return; }
@@ -591,9 +632,7 @@ void UPhoneClientComponent::ServerSellProperty_Implementation(int32 HomeIndex)
 bool UPhoneClientComponent::GetActiveHomeLocation(FVector& OutWorld) const
 {
 	if (ActiveHome < 0) { return false; }
-	ACityGenerator* City = FindCity();
-	if (!City) { return false; }
-	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
 	if (!Homes.IsValidIndex(ActiveHome)) { return false; }
 	OutWorld = Homes[ActiveHome].DoorPos; // plek vóór je voordeur (waar de home-marker heen wijst)
 	return true;
@@ -602,9 +641,9 @@ bool UPhoneClientComponent::GetActiveHomeLocation(FVector& OutWorld) const
 int32 UPhoneClientComponent::GetHomePlayerIsInside() const
 {
 	const APawn* Pawn = Cast<APawn>(GetOwner());
-	ACityGenerator* City = FindCity();
-	if (!Pawn || !City) { return -1; }
-	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	if (!Pawn) { return -1; }
+	TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
+	if (Homes.Num() == 0) { return -1; }
 	const FVector P = Pawn->GetActorLocation();
 	for (int32 Idx : OwnedHomes)
 	{
@@ -624,23 +663,17 @@ int32 UPhoneClientComponent::GetHomePlayerIsInside() const
 
 FString UPhoneClientComponent::GetHomeLabel(int32 HomeIndex) const
 {
-	ACityGenerator* City = FindCity();
-	if (City)
+	TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
+	if (Homes.IsValidIndex(HomeIndex) && !Homes[HomeIndex].Number.IsEmpty())
 	{
-		const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
-		if (Homes.IsValidIndex(HomeIndex) && !Homes[HomeIndex].Number.IsEmpty())
-		{
-			return FString::Printf(TEXT("Nr %s"), *Homes[HomeIndex].Number);
-		}
+		return FString::Printf(TEXT("Nr %s"), *Homes[HomeIndex].Number);
 	}
 	return FString::Printf(TEXT("Home %d"), HomeIndex);
 }
 
 FString UPhoneClientComponent::GetHomeInfoLine(int32 HomeIndex) const
 {
-	ACityGenerator* City = FindCity();
-	if (!City) { return FString(); }
-	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+	TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
 	if (!Homes.IsValidIndex(HomeIndex)) { return FString(); }
 	const FApartmentHome& H = Homes[HomeIndex];
 	FString Line = H.bApartment ? TEXT("Appartement") : TEXT("Rijtjeshuis");
@@ -730,6 +763,17 @@ void UPhoneClientComponent::EnsureWidget()
 		PhoneWidget->SetPhone(this);
 		PhoneWidget->AddToViewport(20);
 	}
+	// IN-GAME COVER-SCHERM (de "2e" loadingscreen): een vol-scherm widget die NA de map-load over beeld
+	// blijft tot je echt stil in de kamer staat (vloer onder je gevonden) en dan wegfade't. Ziet er
+	// identiek uit aan het oude movie-scherm. Alleen tonen als we via een laad-transitie binnenkomen
+	// (New Game / Load / Join zetten de gedeelde laad-timer); buiten een transitie is 'ie niet nodig.
+	if (WeedShop_LoadElapsedSeconds() > 0.0)
+	{
+		if (UBootCoverWidget* Cover = CreateWidget<UBootCoverWidget>(PC, UBootCoverWidget::StaticClass()))
+		{
+			Cover->AddToViewport(100); // bovenop ALLE HUD (pauze/menu zitten op 40-44) tijdens het laden
+		}
+	}
 	// Status-HUD (altijd zichtbaar) + deal-scherm via dezelfde, bewezen route.
 	StatusWidget = CreateWidget<UStatusHudWidget>(PC, UStatusHudWidget::StaticClass());
 	if (StatusWidget) { StatusWidget->AddToViewport(0); }
@@ -756,7 +800,7 @@ void UPhoneClientComponent::EnsureWidget()
 	WardrobeWidget = CreateWidget<UWardrobeWidget>(PC, UWardrobeWidget::StaticClass());
 	if (WardrobeWidget) { WardrobeWidget->SetPhone(this); WardrobeWidget->AddToViewport(34); }
 	SpotInfoWidget = CreateWidget<USpotInfoWidget>(PC, USpotInfoWidget::StaticClass());
-	if (SpotInfoWidget) { SpotInfoWidget->AddToViewport(8); SpotInfoWidget->SetInfoVisibleSilent(true); } // default AAN (troubleshoot-fase)
+	if (SpotInfoWidget) { SpotInfoWidget->AddToViewport(8); SpotInfoWidget->SetInfoVisibleSilent(false); } // default UIT (clean HUD; toggle-baar)
 	PackWidget = CreateWidget<UPackWidget>(PC, UPackWidget::StaticClass());
 	if (PackWidget) { PackWidget->SetPhone(this); PackWidget->AddToViewport(29); }
 	ShelfWidget = CreateWidget<UShelfWidget>(PC, UShelfWidget::StaticClass());
@@ -826,6 +870,9 @@ void UPhoneClientComponent::CloseAtm()
 
 void UPhoneClientComponent::ToggleSpotInfo()
 {
+	// Dev-tool (F9 spot-markers): alleen in Sandbox/Testing. In een normaal spel doet dit niks -> clean playthrough.
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!GS || !GS->IsFreeBuild()) { return; }
 	EnsureWidget();
 	if (SpotInfoWidget) { SpotInfoWidget->ToggleInfo(); }
 }
@@ -2117,10 +2164,9 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 	//    binnen bent, of je actieve woning). Op de grond (DoorPos) -> de drone hoeft niet door muren/omhoog.
 	{
 		const int32 DH = ResolveDeliveryHome();
-		ACityGenerator* City = FindCity();
-		if (City && DH >= 0)
+		if (DH >= 0)
 		{
-			const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
+			TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
 			if (Homes.IsValidIndex(DH)) { Point = Homes[DH].DoorPos; bFound = true; }
 		}
 	}

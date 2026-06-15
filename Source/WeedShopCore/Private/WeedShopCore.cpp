@@ -11,17 +11,79 @@
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Images/SThrobber.h"
 #include "Widgets/Text/STextBlock.h"
+#include "Widgets/Notifications/SProgressBar.h"
 #include "Brushes/SlateColorBrush.h"
 #include "Styling/CoreStyle.h"
 #include "Misc/Paths.h"
 #include "UObject/UObjectGlobals.h"
 #include "HAL/IConsoleManager.h"
+#include "Containers/Ticker.h"
+#include "Engine/World.h"
+#include "Engine/Engine.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 
 DEFINE_LOG_CATEGORY(LogWeedShop);
 
 // Alleen tonen bij de eerstvolgende IN-GAME level-reload (gezet door New Game/Load/Continue).
 static bool GShowGameLoadingScreen = false;
-void WeedShop_RequestGameLoadingScreen() { GShowGameLoadingScreen = true; }
+static bool GRoomFloorReady = false;
+static double GLoadStartSeconds = 0.0;
+static uint32 GLoadSeed = 0; // per-launch seed -> elke keer andere laad-regels (gedeeld door movie + cover)
+void WeedShop_RequestGameLoadingScreen()
+{
+	GShowGameLoadingScreen = true;
+	GRoomFloorReady = false;
+	GLoadStartSeconds = FPlatformTime::Seconds(); // gedeelde laad-timer voor movie + cover (naadloos)
+	GLoadSeed = (uint32)FPlatformTime::Cycles() * 2654435761u + 12345u; // verandert elke game-start
+}
+void WeedShop_SetRoomReady(bool bReady) { GRoomFloorReady = bReady; }
+bool WeedShop_IsRoomReady() { return GRoomFloorReady; }
+double WeedShop_LoadElapsedSeconds() { return GLoadStartSeconds > 0.0 ? (FPlatformTime::Seconds() - GLoadStartSeconds) : 0.0; }
+
+// Gedeelde grappige laad-regels. Beide laadschermen kiezen via WeedShop_LoadLine(step) exact dezelfde regel.
+static const TArray<FString>& GLoadLines()
+{
+	static const TArray<FString> L = {
+		TEXT("Building the city..."), TEXT("Watering the plants..."), TEXT("Trimming the buds..."),
+		TEXT("Rolling the welcome joint..."), TEXT("Stocking the shelves..."), TEXT("Brewing the coffee..."),
+		TEXT("Lighting the neon sign..."), TEXT("Counting the cash..."), TEXT("Calling the supplier..."),
+		TEXT("Warming up the customers..."), TEXT("Polishing the bongs..."), TEXT("Hiding the good stuff..."),
+		TEXT("Pressing the hash..."), TEXT("Baking the edibles..."), TEXT("Curing the jars..."),
+		TEXT("Tipping the bouncer..."), TEXT("Charging the ATM..."), TEXT("Setting the mood lighting..."),
+		TEXT("Bribing the parking meter..."), TEXT("Weighing the grams..."), TEXT("Sorting the strains..."),
+		TEXT("Opening the shutters..."), TEXT("Refilling the lighter..."), TEXT("Streaming the rooms..."),
+		// Extra regels voor meer variatie:
+		TEXT("Grinding the kief..."), TEXT("Restocking the rolling papers..."), TEXT("Feeding the parking meter..."),
+		TEXT("Spraying the air freshener..."), TEXT("Defrosting the gummies..."), TEXT("Untangling the grow lights..."),
+		TEXT("Counting the seeds..."), TEXT("Checking the humidity..."), TEXT("Dimming the back room..."),
+		TEXT("Wiping the display case..."), TEXT("Sweeping the floor..."), TEXT("Paying off the inspector..."),
+		TEXT("Testing the smoke alarm..."), TEXT("Rolling out the welcome mat..."), TEXT("Loading the playlist..."),
+		TEXT("Cracking a window..."), TEXT("Sealing the baggies..."), TEXT("Topping up the change drawer..."),
+		TEXT("Greasing the door hinges..."), TEXT("Stacking the press blocks..."), TEXT("Labelling the jars..."),
+		TEXT("Shooing the seagulls..."), TEXT("Booting the security cams..."), TEXT("Misting the seedlings..."),
+	};
+	return L;
+}
+FString WeedShop_LoadLine(int32 Step)
+{
+	const TArray<FString>& L = GLoadLines();
+	if (L.Num() == 0) { return FString(); }
+	// Step + per-launch seed door een mix-hash -> elke game-start een andere volgorde, maar deterministisch
+	// per (Step, seed) zodat movie en cover exact dezelfde regel tonen. Eerste regel altijd "Building the
+	// city..." (Step 0, seed 0-pad) zou saai zijn -> we mengen de seed er ook in Step 0 doorheen.
+	uint32 H = (uint32)Step * 2654435761u + GLoadSeed;
+	H ^= H >> 13; H *= 3266489917u; H ^= H >> 16;
+	return L[(int32)(H % (uint32)L.Num())];
+}
+
+void WeedShop_StopGameLoadingScreen()
+{
+	if (GetMoviePlayer() && GetMoviePlayer()->IsMovieCurrentlyPlaying())
+	{
+		GetMoviePlayer()->StopMovie();
+	}
+}
 
 // Lumen (GI + reflecties) aan/uit. Zet de cvars DIRECT via de console-manager op de hoogste
 // game-prioriteit, plus de harde Lumen-Allow-schakelaars (die deinst niets terug). Logt de
@@ -63,7 +125,16 @@ public:
 	{
 		// Donkergroen-zwarte achtergrond (sfeer past bij de game). Static: brush moet blijven leven.
 		static const FSlateColorBrush BgBrush(FLinearColor(0.025f, 0.05f, 0.035f, 1.f));
-		static const FSlateColorBrush BarBrush(FLinearColor(0.06f, 0.11f, 0.07f, 1.f));
+		// EXPLICIETE bar-stijl zodat de movie-bar EXACT gelijk is aan de UMG-cover-bar (UBootCoverWidget):
+		// zelfde donkere achtergrond + witte fill (getint door FillColorAndOpacity), geen default-stijl.
+		static const FSlateColorBrush BarBgBrush(FLinearColor(0.06f, 0.11f, 0.07f, 1.f));
+		static const FSlateColorBrush BarFillBrush(FLinearColor::White);
+		static const FProgressBarStyle BarStyle = FProgressBarStyle()
+			.SetBackgroundImage(BarBgBrush)
+			.SetFillImage(BarFillBrush)
+			.SetMarqueeImage(BarFillBrush);
+
+		SetCanTick(true); // we updaten zelf de progress bar + wisselende tekst
 
 		ChildSlot
 		[
@@ -91,22 +162,59 @@ public:
 					.Font(FCoreStyle::GetDefaultFontStyle("Italic", 18))
 					.ColorAndOpacity(FLinearColor(0.55f, 0.6f, 0.55f))
 				]
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0.f, 40.f, 0.f, 0.f)
+				// Wisselende grappige status-tekst.
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0.f, 44.f, 0.f, 10.f)
 				[
-					SNew(SThrobber)
-					.PieceImage(&BarBrush)
-					.NumPieces(7)
+					SAssignNew(StatusText, STextBlock)
+					.Text(FText::FromString(WeedShop_LoadLine(0)))
+					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 15))
+					.ColorAndOpacity(FLinearColor(0.6f, 0.85f, 0.62f))
 				]
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0.f, 28.f, 0.f, 0.f)
+				// Progress bar onder de tekst.
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
 				[
-					SNew(STextBlock)
-					.Text(FText::FromString(TEXT("Building the city...")))
-					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 14))
-					.ColorAndOpacity(FLinearColor(0.5f, 0.55f, 0.5f))
+					SNew(SBox).WidthOverride(360.f).HeightOverride(10.f)
+					[
+						SAssignNew(Bar, SProgressBar)
+						.Style(&BarStyle)
+						.Percent(0.05f)
+						.FillColorAndOpacity(FLinearColor(0.4f, 0.85f, 0.45f))
+					]
 				]
 			]
 		];
 	}
+
+	virtual void Tick(const FGeometry& Geo, const double InCurrentTime, const float InDeltaTime) override
+	{
+		SCompoundWidget::Tick(Geo, InCurrentTime, InDeltaTime);
+		const float E = (float)WeedShop_LoadElapsedSeconds();
+		const bool bReady = WeedShop_IsRoomReady();
+		if (bReady && ReadyAt < 0.f) { ReadyAt = E; }
+		// Zelfde EERLIJKE creep als de cover (UBootCoverWidget): vloeiend tot ~55% terwijl de map streamt.
+		// De movie verdwijnt zodra het level klaar is; de cover loopt vanaf exact deze stand verder.
+		if (Bar.IsValid()) { Bar->SetPercent(bReady ? 1.f : FMath::Clamp(0.55f * (1.f - FMath::Exp(-E / 6.f)), 0.04f, 1.f)); }
+		const int32 Step = (int32)(E / 1.6f);
+		if (Step != LastStep && StatusText.IsValid())
+		{
+			LastStep = Step;
+			StatusText->SetText(FText::FromString(WeedShop_LoadLine(Step)));
+		}
+		// EEN doorlopend scherm: stopt zodra de kamer klaar is (vloer onder de speler gevonden, gemeld
+		// via WeedShop_SetRoomReady) + korte buffer. De harde cap (24s) is alleen een noodrem zodat het
+		// nooit blijft hangen als room-ready om wat voor reden ook niet binnenkomt.
+		const bool bBufferDone = (ReadyAt >= 0.f) && (E - ReadyAt > 1.5f);
+		if (bBufferDone || E > 24.f)
+		{
+			if (IGameMoviePlayer* MP = GetMoviePlayer()) { MP->StopMovie(); }
+		}
+	}
+
+private:
+	TSharedPtr<STextBlock> StatusText;
+	TSharedPtr<SProgressBar> Bar;
+	int32 LastStep = -1;
+	float ReadyAt = -1.f;
 };
 
 // --- Module: hookt de map-load delegates om de loading screen te tonen ---
@@ -133,11 +241,18 @@ private:
 		if (!GShowGameLoadingScreen) { return; }
 		GShowGameLoadingScreen = false;
 
+		// TWEE SCHERMEN, NAADLOOS IN ELKAAR OVERLOPEND:
+		// 1) Dit MOVIE-scherm dekt de engine-map-load en VERDWIJNT automatisch zodra het level klaar is
+		//    (bAutoCompleteWhenLoadingCompletes + GEEN manual-wait -> nooit een hang). Z'n progress-bar
+		//    staat op dat moment NIET op 100% maar op de gedeelde laad-stand (E/12).
+		// 2) Daaronder ligt dan al het in-game COVER-scherm (UBootCoverWidget, PhoneClientComponent::
+		//    EnsureWidget): exact dezelfde look + DEZELFDE gedeelde timer/bar/tekst. Het loopt dus
+		//    gewoon DOOR vanaf waar de movie zat (geen 'klaar -> opnieuw') tot je stil in de kamer staat.
 		FLoadingScreenAttributes Attr;
-		Attr.bAutoCompleteWhenLoadingCompletes = true;   // verdwijnt vanzelf zodra de map klaar is
-		Attr.bMoviesAreSkippable = true;
+		Attr.bAutoCompleteWhenLoadingCompletes = true;  // movie weg zodra het level geladen is (geen hang)
+		Attr.bMoviesAreSkippable = false;
 		Attr.bWaitForManualStop = false;
-		Attr.MinimumLoadingScreenDisplayTime = 1.2f;     // altijd kort tonen -> nooit een zwarte flits
+		Attr.MinimumLoadingScreenDisplayTime = 1.0f;
 		Attr.WidgetLoadingScreen = SNew(SWeedLoadingScreen);
 		GetMoviePlayer()->SetupLoadingScreen(Attr);
 	}

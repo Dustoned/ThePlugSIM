@@ -87,6 +87,17 @@ struct FPhoneMessage
 	// Heeft de klant al een "you there?"-herinnering gestuurd?
 	UPROPERTY()
 	bool bNudged = false;
+
+	// --- DAG-ORDER (premium VIP-opdracht, schaalt met level) ---
+	// True = premium order: specifieke strain + min-THC vóór de deadline = bonus-uitbetaling.
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	bool bOrder = false;
+	// Minimaal vereiste THC% van het geleverde product (0 = geen eis).
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	float MinThc = 0.f;
+	// Bonus-factor op de verkoopprijs als je op spec levert (1.0 = geen bonus, 1.6 = +60%).
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	float BonusMult = 1.f;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPhoneMessagesChanged);

@@ -145,7 +145,8 @@ void AStorageShelf::DegradeShelfPerishables()
 	for (FShelfStack& S : Contents)
 	{
 		const FString Id = S.ItemId.ToString();
-		const bool bPerish = Id.StartsWith(TEXT("ButterMix")) || Id.StartsWith(TEXT("Edible")) || Id == TEXT("Butter");
+		const bool bPerish = Id.StartsWith(TEXT("ButterMix")) || Id.StartsWith(TEXT("Edible")) || Id == TEXT("Butter")
+			|| Id.StartsWith(TEXT("Cookie")) || Id.StartsWith(TEXT("Gummy"));
 		if (bPerish && S.QualityPct > 0.f)
 		{
 			S.QualityPct = FMath::Max(0.f, S.QualityPct - Step);

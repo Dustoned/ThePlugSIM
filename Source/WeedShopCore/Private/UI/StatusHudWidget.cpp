@@ -1,5 +1,7 @@
 #include "UI/StatusHudWidget.h"
 
+#include "WeedShopCore.h"
+#include "GameFramework/Pawn.h"
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -58,8 +60,9 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	UBorder* Card = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Card"));
-	Card->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.82f), 18.f));
-	Card->SetPadding(FMargin(14.f, 12.f, 16.f, 12.f));
+	// Onzichtbare achtergrond (zoals gevraagd): geen paneel, geen kader. Leesbaar via een sterke tekst-schaduw.
+	Card->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 14.f));
+	Card->SetPadding(FMargin(2.f, 2.f, 2.f, 2.f));
 	Card->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Card);
@@ -132,6 +135,14 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		StonedRow = Row;
 		StonedRow->SetVisibility(ESlateVisibility::Collapsed);
 	}
+
+	// Schaduw op alle HUD-tekst -> leesbaar zonder paneel-achtergrond.
+	auto Shade = [](UTextBlock* T)
+	{
+		if (T) { T->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); T->SetShadowOffset(FVector2D(1.6f, 2.f)); }
+	};
+	Shade(CashText); Shade(BankText); Shade(TimeText);
+	Shade(HeatText); Shade(LevelText); Shade(StonedText);
 }
 
 void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)

@@ -328,6 +328,7 @@ bool USaveGameSubsystem::RunPendingOnWorldReady()
 
 void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 {
+	SessionStartMode = Mode; // onthoud de mode voor de hele sessie (save + dev-tools)
 	AWeedShopGameState* GS = GetWeedGameState();
 	UWorld* World = GS ? GS->GetWorld() : nullptr;
 	APawn* P = (World && World->GetFirstPlayerController()) ? World->GetFirstPlayerController()->GetPawn() : nullptr;
@@ -642,6 +643,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
 	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); Save->bShopLicensed = Lv->IsShopLicensed(); }
 	Save->bFreeBuild = GS->IsFreeBuild();
+	Save->StartMode = (uint8)SessionStartMode; // mode meeschrijven -> op load weten we of dev-tools mogen
 	if (UWorld* Wm = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr) { Save->MapPath = Wm->GetOutermost()->GetName(); }
 	Save->CoopMode = (uint8)GS->GetCoopMode();
 
@@ -707,7 +709,12 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	PlaytimeMark = FDateTime::UtcNow();
 
 	// Gedeelde staat terugzetten.
-	GS->SetFreeBuild(Save->bFreeBuild);
+	// Free-build/dev-tools komen NU uit de start-mode, niet meer uit de losse bFreeBuild-vlag: oude
+	// saves (die per ongeluk bFreeBuild=true kregen op de pack-map) defaulten naar StartMode 0 (Normal)
+	// en worden zo automatisch een clean playthrough. Alleen echte Sandbox/Testing-saves houden dev-tools.
+	SessionStartMode = (EGameStartMode)Save->StartMode;
+	const bool bDevMode = (SessionStartMode == EGameStartMode::Sandbox || SessionStartMode == EGameStartMode::Testing);
+	GS->SetFreeBuild(bDevMode);
 	GS->SetCoopMode((ECoopMode)Save->CoopMode);
 	if (UDayCycleComponent* Day = GS->GetDayCycle()) { Day->SetTimeOfDaySeconds(Save->TimeOfDaySeconds); }
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }

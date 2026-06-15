@@ -903,7 +903,16 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 			{
 				return P.X >= Min.X && P.X <= Max.X && P.Y >= Min.Y && P.Y <= Max.Y && P.Z >= Min.Z && P.Z <= Max.Z;
 			}
-			break; // box nog niet gemeten -> val door naar de free-build fallback
+			// Wand-box nog niet (betrouwbaar) gemeten -> ruime fallback rond de thuis-plek, zodat je
+			// ALTIJD in je eigen huis kunt bouwen (anders kan een Normal-speler niets plaatsen).
+			const FVector HA = It->GetHomeAnchor();
+			if (!HA.IsNearlyZero())
+			{
+				const bool bInBox = FMath::Abs(P.X - HA.X) <= 750.f && FMath::Abs(P.Y - HA.Y) <= 750.f
+					&& P.Z >= HA.Z - 220.f && P.Z <= HA.Z + 520.f;
+				return bInBox && IsIndoors(P); // binnen + onder een dak (geen balkon/buiten)
+			}
+			break; // geen thuis-plek bekend -> val door naar de free-build fallback
 		}
 	}
 

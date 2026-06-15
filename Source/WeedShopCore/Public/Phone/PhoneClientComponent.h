@@ -423,6 +423,12 @@ public:
 
 	// --- Woningen (3 koopbare panden in de Upgrades-app) ---
 	class ACityGenerator* FindCity() const;
+	// Pack-map (geen ACityGenerator): de DoorRetrofitter host dan de woning-registry (ROADMAP 4.1).
+	class ADoorRetrofitter* FindRetro() const;
+	// Woningen/aanbiedingen uit de City OF de beach-registry (DoorRetrofitter) - call-sites hoeven niet
+	// meer te weten welke bron actief is.
+	void GetHomesUnified(TArray<struct FApartmentHome>& Out) const;
+	void GetOffersUnified(TArray<struct FCityPropertyOffer>& Out) const;
 	void GetPropertyOffers(TArray<struct FCityPropertyOffer>& Out) const;
 	bool IsPropertyOwned(int32 HomeIndex) const { return OwnedHomes.Contains(HomeIndex); }
 	bool IsActiveHome(int32 HomeIndex) const { return ActiveHome == HomeIndex; }

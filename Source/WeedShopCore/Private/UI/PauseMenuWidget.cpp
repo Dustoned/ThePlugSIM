@@ -3,6 +3,7 @@
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Save/SaveGameSubsystem.h"
+#include "GameFramework/Pawn.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -84,6 +85,7 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 	};
 
 	AddBtn(TEXT("Resume"),        FLinearColor(0.20f, 0.50f, 0.30f), [this]() { OnResume(); });
+	AddBtn(TEXT("Unstuck"),       FLinearColor(0.40f, 0.34f, 0.18f), [this]() { OnUnstuck(); });
 	AddBtn(TEXT("Settings"),      FLinearColor(0.24f, 0.30f, 0.42f), [this]() { OnSettings(); });
 	AddBtn(TEXT("Save game"),     FLinearColor(0.22f, 0.40f, 0.52f), [this]() { OnSave(); });
 	AddBtn(TEXT("Load game"),     FLinearColor(0.22f, 0.40f, 0.52f), [this]() { OnLoad(); });
@@ -96,6 +98,18 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 
 void UPauseMenuWidget::OnResume()
 {
+	if (PhoneComp.IsValid()) { PhoneComp->ClosePause(); }
+}
+
+void UPauseMenuWidget::OnUnstuck()
+{
+	// Roep WeedUnstuck (UFUNCTION op de speler-pawn) via reflectie aan - de pawn-class zit in de boven-
+	// module, dus we kunnen 'm hier niet rechtstreeks includen. Daarna het menu sluiten zodat je de
+	// teleport ziet. WeedUnstuck zelf zet je op de dichtstbijzijnde begaanbare plek (weg), niet thuis.
+	if (APawn* P = GetOwningPlayerPawn())
+	{
+		if (UFunction* Fn = P->FindFunction(FName(TEXT("WeedUnstuck")))) { P->ProcessEvent(Fn, nullptr); }
+	}
 	if (PhoneComp.IsValid()) { PhoneComp->ClosePause(); }
 }
 

@@ -14,6 +14,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/LocalLightComponent.h"
 #include "Components/SpotLightComponent.h"
+#include "Components/ReflectionCaptureComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "UObject/UObjectIterator.h"
 #include "Engine/StaticMesh.h"
@@ -429,12 +430,59 @@ void ADayNightController::Tick(float DeltaSeconds)
 					FDimLight D; D.Light = LC; D.OrigIntensity = LC->Intensity;
 					DimLights.Add(D);
 				}
+				// REFLECTION CAPTURES verzamelen (sphere/box reflection capture actors van de map):
+				// overdag gebakken -> 's nachts dimmen we hun brightness mee met de klok.
+				TInlineComponentArray<UReflectionCaptureComponent*> Caps(A);
+				for (UReflectionCaptureComponent* RC : Caps)
+				{
+					if (!RC || SeenRefCaps.Contains(RC)) { continue; }
+					SeenRefCaps.Add(RC);
+					FRefCap RcEntry; RcEntry.Cap = RC; RcEntry.OrigBrightness = RC->Brightness;
+					// METEEN dimmen op de huidige klok-stand. (Anders blijft een capture die LATER instreamt
+					// op dag-helderheid staan: de periodieke dim draait alleen als MinDayF verandert.)
+					RC->Brightness = RcEntry.OrigBrightness * MinDayF;
+					RC->MarkRenderStateDirty();
+					RefCaps.Add(RcEntry);
+				}
+				// SKYLIGHTS apart verzamelen: USkyLightComponent is GEEN ULightComponent, dus de
+				// licht-scan hierboven miste 'm. De movable skylight spiegelt z'n hemel-cubemap als
+				// specular op water/ramen -> op volle dag-sterkte een felle "zon" 's nachts. Dimmen.
+				TInlineComponentArray<USkyLightComponent*> SkyComps(A);
+				for (USkyLightComponent* SLC : SkyComps)
+				{
+					if (!SLC || SeenSky.Contains(SLC)) { continue; }
+					SeenSky.Add(SLC);
+					// REAL-TIME CAPTURE aan: anders gebruikt de skylight een STATISCHE (gebakken) hemel-
+					// cubemap -> de reflectie zit muurvast op één plek en toont een oude zon, ongeacht waar
+					// onze zon/maan echt staat. Live capturen = de reflectie volgt de echte zon/maan-stand
+					// EN 's nachts is de gevangen lucht donker (geen valse dag-reflectie meer).
+					SLC->SetMobility(EComponentMobility::Movable);
+					SLC->SetRealTimeCaptureEnabled(true);
+					// Onderste hemisfeer NIET zwart: anders verlicht de skylight alleen omhoog-kijkende
+					// vlakken (de vloer) en blijft de PLAFOND-onderkant pikzwart overdag. Nu krijgt de
+					// plafond-onderzijde ook ambient -> geen zwart dak meer binnen bij daglicht.
+					SLC->bLowerHemisphereIsBlack = false;
+					SLC->RecaptureSky();
+					FSkyDim SkEntry; SkEntry.Sky = SLC; SkEntry.OrigIntensity = SLC->Intensity;
+					SLC->SetIntensity(SkEntry.OrigIntensity * FMath::Lerp(0.06f, 1.f, MinDayF)); // meteen op klok-stand
+					SkyDims.Add(SkEntry);
+				}
 				TInlineComponentArray<UStaticMeshComponent*> Meshes(A);
 				for (UStaticMeshComponent* MC : Meshes)
 				{
 					if (!MC || !MC->GetStaticMesh()) { continue; }
 					const FString MN = MC->GetStaticMesh()->GetName();
-					if (MN.Contains(TEXT("EnviroDome")) || MN.Contains(TEXT("HDRI")))
+					// Sky-dome/HDRI-koepel met ingebakken (dag)zon: sky-specifieke namen die GEEN gebouwen/
+					// water/skyscrapers raken. 's Nachts verbergen we 'm zodat de ingebakken zon niet toont.
+					const FString AN = A->GetName();
+					auto SkyLike = [](const FString& S)
+					{
+						return S.Contains(TEXT("EnviroDome")) || S.Contains(TEXT("HDRI")) || S.Contains(TEXT("Dome"))
+							|| S.Contains(TEXT("Cyclorama")) || S.Contains(TEXT("Backdrop")) || S.Contains(TEXT("Horizon"))
+							|| S.Contains(TEXT("SkySphere")) || S.Contains(TEXT("SkyDome")) || S.Contains(TEXT("SkyBox"))
+							|| S.Contains(TEXT("Skybox")) || S.Contains(TEXT("EnviroSky"));
+					};
+					if (SkyLike(MN) || SkyLike(AN))
 					{
 						DomeComps.AddUnique(MC);
 					}
@@ -442,7 +490,8 @@ void ADayNightController::Tick(float DeltaSeconds)
 					// Warm puntlicht eraan hangen; de klok zet ze 's avonds aan en 's ochtends uit.
 					const bool bTallLamp = MN == TEXT("SM_StreetLight_01") || MN == TEXT("SM_StreetLight_02")
 						|| MN == TEXT("SM_LampPostBeach_01") || MN == TEXT("SM_AlleyLamp") || MN == TEXT("SM_UtilityPole_Lamp");
-					const bool bSmallLamp = MN == TEXT("SM_CeilingLight") || MN == TEXT("SM_CeilingLight02")
+					const bool bCeilLamp = MN.Contains(TEXT("CeilingLight")) || MN.Contains(TEXT("CeilLight")) || MN.Contains(TEXT("Ceiling_Light"));
+					const bool bSmallLamp = bCeilLamp
 						|| MN == TEXT("SM_WallLight01") || MN == TEXT("SM_PoolLight");
 					if ((bTallLamp || bSmallLamp) && !PackLampSeen.Contains(MC))
 					{
@@ -461,6 +510,36 @@ void ADayNightController::Tick(float DeltaSeconds)
 							SL2->SetAttenuationRadius(1500.f);
 							PL = SL2;
 						}
+						else if (bCeilLamp)
+						{
+							// Plafondlamp: SPOT recht omlaag met een WIJDE, zachte kegel -> nette lichtkegel
+							// op de vloer + room-glow, i.p.v. alleen een klein puntje bij de lamp.
+							USpotLightComponent* CSp = NewObject<USpotLightComponent>(this);
+							CSp->SetupAttachment(GetRootComponent());
+							CSp->RegisterComponent();
+							CSp->SetWorldLocationAndRotation(BO + FVector(0.f, 0.f, -8.f), FRotator(-90.f, 0.f, 0.f));
+							CSp->SetInnerConeAngle(26.f);   // helder hart
+							CSp->SetOuterConeAngle(80.f);   // wijd + zachte rand
+							CSp->SetAttenuationRadius(1400.f);
+							PL = CSp;
+							// EXTRA: een zacht OMNI-puntje bij dezelfde lamp. De neerwaartse spot laat het
+							// plafond + de hoeken donker; dit puntje vult de kamer (incl. plafond) met een
+							// warme gloed. Samen = nette kegel op de vloer EN room-glow rondom.
+							UPointLightComponent* Glow = NewObject<UPointLightComponent>(this);
+							Glow->SetupAttachment(GetRootComponent());
+							Glow->RegisterComponent();
+							Glow->SetWorldLocation(BO);
+							Glow->SetAttenuationRadius(750.f);
+							Glow->SetMobility(EComponentMobility::Movable);
+							Glow->bUseInverseSquaredFalloff = false;
+							Glow->LightFalloffExponent = 1.3f;
+							Glow->SetLightColor(FLinearColor(1.f, 0.85f, 0.6f));
+							Glow->SetIntensity(0.f);
+							Glow->SetCastShadows(false);
+							Glow->ComponentTags.Add(TEXT("CeilGlow"));
+							Glow->MarkRenderStateDirty();
+							PackLampLights.Add(Glow);
+						}
 						else
 						{
 							UPointLightComponent* PP2 = NewObject<UPointLightComponent>(this);
@@ -474,12 +553,12 @@ void ADayNightController::Tick(float DeltaSeconds)
 						// Inverse-squared UIT: gelijkmatige poel en de lamp-kop wordt niet weggeblazen
 						// (vlakbij de bron explodeerde het kwadratische licht op de kop-mesh).
 						PL->bUseInverseSquaredFalloff = false;
-						PL->LightFalloffExponent = 2.5f;
+						PL->LightFalloffExponent = bCeilLamp ? 1.6f : 2.5f; // plafond: zachtere falloff = meer room-fill
 						PL->SetLightColor(FLinearColor(1.f, 0.85f, 0.6f));
 						PL->SetIntensity(0.f);
 						PL->SetCastShadows(false);
 						PL->MarkRenderStateDirty();
-						PL->ComponentTags.Add(bTallLamp ? TEXT("TallLamp") : TEXT("SmallLamp"));
+						PL->ComponentTags.Add(bTallLamp ? TEXT("TallLamp") : (bCeilLamp ? TEXT("CeilLamp") : TEXT("SmallLamp")));
 						PackLampLights.Add(PL);
 					}
 				}
@@ -504,6 +583,37 @@ void ADayNightController::Tick(float DeltaSeconds)
 				if (!FMath::IsNearlyEqual(LC->Intensity, Want, D.OrigIntensity * 0.01f + 0.1f)) { LC->SetIntensity(Want); }
 			}
 		}
+		// REFLECTION CAPTURES mee-dimmen met de klok: de map heeft sphere/box reflection captures die
+		// overdag zijn gebakken en de (al gedimde) skylight-specular BINNEN hun straal overschrijven ->
+		// ramen/water bleven 's nachts daglicht spiegelen. Brightness * dag-factor (0 = diepe nacht)
+		// haalt die dag-reflectie weg; SSR + neon vullen het nacht-beeld. De dag-look blijft 100% intact.
+		if (!FMath::IsNearlyEqual(LastRefMul, MinDayF, 0.02f))
+		{
+			LastRefMul = MinDayF;
+			for (FRefCap& R : RefCaps)
+			{
+				if (UReflectionCaptureComponent* RC = R.Cap.Get())
+				{
+					RC->Brightness = R.OrigBrightness * MinDayF;
+					RC->MarkRenderStateDirty();
+				}
+			}
+		}
+		// SKYLIGHT-SPECULAR mee-dimmen (ELKE tick, met diff-check): dit is de ECHTE bron van de
+		// nacht-reflectie op water/ramen - een movable skylight op volle sterkte spiegelt z'n
+		// hemel-cubemap. Ongated zodat een eventuele resetter naar dag-sterkte meteen weer gedimd wordt.
+		{
+			const float SkyWant = FMath::Lerp(0.06f, 1.f, MinDayF);
+			for (FSkyDim& Sk : SkyDims)
+			{
+				if (USkyLightComponent* SLC = Sk.Sky.Get())
+				{
+					const float Want = Sk.OrigIntensity * SkyWant;
+					if (!FMath::IsNearlyEqual(SLC->Intensity, Want, Sk.OrigIntensity * 0.01f + 0.001f)) { SLC->SetIntensity(Want); }
+				}
+			}
+		}
+
 		// Nacht-PPV: overdag gewicht 0 (stock dag-look 100% intact), 's nachts exposure omlaag
 		// zodat de auto-exposure de duisternis niet terugcompenseert naar daglicht.
 		if (!NightPPV.IsValid())
@@ -526,6 +636,13 @@ void ADayNightController::Tick(float DeltaSeconds)
 				// nacht-exposure dempt de bloom-bleed anders te veel).
 				NightVol->Settings.bOverride_BloomIntensity = true;
 				NightVol->Settings.BloomIntensity = 1.3f;
+				// SSR UIT 's nachts: het oceaanwater (130 MI_Ocean-planes) en de ramen spiegelden via
+				// screen-space reflections de resterende heldere horizon-rand -> die felle "zonsondergang"
+				// op het water/de ramen midden in de nacht. Met dome verborgen, captures op 0 en skylight
+				// bijna uit is SSR de laatste bron; die hier wegblenden haalt de nacht-reflectie definitief
+				// weg. Schaalt mee met BlendWeight (1-MinDayF) dus overdag 100% intact.
+				NightVol->Settings.bOverride_ScreenSpaceReflectionIntensity = true;
+				NightVol->Settings.ScreenSpaceReflectionIntensity = 0.f;
 				NightPPV = NightVol;
 			}
 		}
@@ -557,11 +674,15 @@ void ADayNightController::Tick(float DeltaSeconds)
 
 		// Pack-lampen op kloktijd (aan vanaf 17u, uit om 8u). Falloff staat uit, dus de
 		// intensiteit is unitless: slider-default 42000 wordt kegel 7.0 / poel 4.7.
-		const bool bLampOn = MinDayF < 0.35f; // aan met de schemering, uit zodra het echt licht is
+		// Per-lamp drempel hieronder: binnen-plafondlampen blijven bijna altijd aan, buitenlampen volgen de schemering.
 		for (UPointLightComponent* PL : PackLampLights)
 		{
 			if (!PL) { continue; }
-			const float Want = bLampOn ? (PL->ComponentHasTag(TEXT("TallLamp")) ? LampIntensity / 6000.f : LampIntensity / 9000.f) : 0.f;
+			const float Div = PL->ComponentHasTag(TEXT("TallLamp")) ? 6000.f
+				: PL->ComponentHasTag(TEXT("CeilLamp")) ? 900.f
+					: PL->ComponentHasTag(TEXT("CeilGlow")) ? 9000.f : 9000.f; // glow = zacht plafond/hoek-fill, geen 2e hoofdlamp
+			const bool bCeil = PL->ComponentHasTag(TEXT("CeilLamp")) || PL->ComponentHasTag(TEXT("CeilGlow"));
+			const float Want = ((bCeil ? (MinDayF < 0.95f) : (MinDayF < 0.7f)) ? (LampIntensity / Div) : 0.f);
 			if (!FMath::IsNearlyEqual(PL->Intensity, Want, 0.05f)) { PL->SetIntensity(Want); }
 		}
 
@@ -647,19 +768,28 @@ void ADayNightController::Tick(float DeltaSeconds)
 		const float DayLen2 = FMath::Max(1.f, Sunset - Sunrise);
 		if (PackSun.IsValid() && PackSun->GetLightComponent())
 		{
-			const float SunPhase2 = (Hour - Sunrise) / DayLen2;
-			PackSun->SetActorRotation(FRotator(-180.f * SunPhase2, 337.5f, 0.f));
-			PackSun->GetLightComponent()->SetIntensity(SunIntensity * MinDayF);
+			// HOOGTE-MODEL: de altitude volgt de tijd - 0 op de horizon bij op-/ondergang, hoog 's
+			// middags, en NEGATIEF (echt ONDER de horizon) 's nachts -> de zon zinkt realistisch weg.
+			// De yaw zwaait uit en komt terug zodat op- EN ondergang bij NW-N (337.5) liggen, met de
+			// reflectie die er tussenin meebeweegt. Intensiteit volgt de hoogte (uit onder de horizon),
+			// dus de zon en maan zijn nooit tegelijk boven de horizon -> nooit 2 schijven.
+			const float p = (Hour - Sunrise) / DayLen2;                 // NIET geklampt: <0/>1 = onder de horizon
+			const float Alt = FMath::Sin(p * PI);                       // >0 boven horizon (dag), <0 onder (nacht)
+			const float SunYaw = 337.5f + FMath::Sin(FMath::Clamp(p, 0.f, 1.f) * PI) * 50.f;
+			PackSun->SetActorRotation(FRotator(-Alt * 78.f, SunYaw, 0.f)); // -78 hoog, +78 diep onder, 0 op horizon
+			PackSun->GetLightComponent()->SetIntensity(SunIntensity * FMath::Clamp(Alt * 3.f, 0.f, 1.f));
 		}
 		// MAAN: tegenboog door de nacht - op bij zonsondergang, onder bij zonsopkomst, zelfde N-lijn.
 		if (PackMoon.IsValid() && PackMoon->GetLightComponent())
 		{
-			float NightF = 0.f;
+			// Zelfde hoogte-model voor de maan, maar op de NACHT-fase: boven de horizon 's nachts,
+			// ONDER de horizon overdag (dus geen maan-schijf bij daglicht). Op/onder ook bij NW-N.
 			const float NightLen = FMath::Max(1.f, 24.f - DayLen2);
-			if (Hour >= Sunset)      { NightF = (Hour - Sunset) / NightLen; }
-			else if (Hour < Sunrise) { NightF = (Hour + 24.f - Sunset) / NightLen; }
-			PackMoon->SetActorRotation(FRotator(-180.f * NightF, 337.5f, 0.f));
-			PackMoon->GetLightComponent()->SetIntensity((1.f - MinDayF) * MoonIntensity);
+			const float np = (Hour >= Sunset) ? (Hour - Sunset) / NightLen : (Hour + 24.f - Sunset) / NightLen;
+			const float MAlt = FMath::Sin(np * PI);                  // >0 boven horizon (nacht), <0 onder (dag)
+			const float MnYaw = 337.5f + FMath::Sin(FMath::Clamp(np, 0.f, 1.f) * PI) * 50.f;
+			PackMoon->SetActorRotation(FRotator(-MAlt * 78.f, MnYaw, 0.f));
+			PackMoon->GetLightComponent()->SetIntensity(MoonIntensity * FMath::Clamp(MAlt * 3.f, 0.f, 1.f));
 		}
 		// Fotokoepel (dag-lucht met ingebakken zon): 's nachts uit zodat de donkere hemel toont.
 		// Foto-koepel PERMANENT uit: er zit een vaste zon in de foto gebakken - botst met

@@ -149,6 +149,10 @@ namespace
 		{ TEXT("Pan_Std"),     TEXT("Cooking pan"),          TEXT("Baked weed + butter -> cannabutter mix (~55s)"),     14000, 1 },
 		{ TEXT("Fridge_Std"),  TEXT("Fridge conversion"),    TEXT("Turn a fridge into a setting unit: butter mix -> edibles, big THC (~3 min)"), 7000, 1 },
 		{ TEXT("Butter"),      TEXT("Butter"),               TEXT("Cooking ingredient for the pan (cannabutter)"),        300, 1 },
+		// Bak-ingredienten voor de koelkast-keuken: butter mix + deze -> cookies of gummies (eindproduct).
+		{ TEXT("Flour"),       TEXT("Flour"),                TEXT("Baking ingredient: butter mix + flour + sugar -> cookies"),   200, 1 },
+		{ TEXT("Sugar"),       TEXT("Sugar"),                TEXT("Baking ingredient for cookies and gummies"),                 150, 1 },
+		{ TEXT("Gelatin"),     TEXT("Gelatin"),              TEXT("Setting ingredient: butter mix + gelatin + sugar -> gummies"), 250, 1 },
 		// Pro-edibles: sneller + grotere capaciteit (zelfde THC). Voor massa-productie.
 		{ TEXT("Oven_Pro"),    TEXT("Pro range cooker"),     TEXT("Faster bake + 4 batches (~25s)"),                    30000, 1 },
 		{ TEXT("Pan_Pro"),     TEXT("Pro cooktop"),          TEXT("Faster cook + 4 batches, less loss (~35s)"),         36000, 1 },
@@ -251,7 +255,7 @@ int32 UStoreComponent::GetSellValueCents(FName ItemId) const
 	const FString S = ItemId.ToString();
 	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("Joint_"))
 		|| S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_")) || S.StartsWith(TEXT("Baked_"))
-		|| S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_"))
+		|| S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_")) || S.StartsWith(TEXT("Cookie_")) || S.StartsWith(TEXT("Gummy_"))
 		|| S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Bubble_")) || S.StartsWith(TEXT("Moonrock_")) || S.StartsWith(TEXT("Oil_")))
 	{
 		return 0;
@@ -383,7 +387,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	// Verpak-tafels
 	if (S == TEXT("Bench_Pack"))      { return 1; }
 	if (S == TEXT("Bench_Pack2"))     { return 19; }
-	if (S == TEXT("Bench_Pack3"))     { return 30; }
+	if (S == TEXT("Bench_Pack3"))     { return 35; } // naar 35 (was 30): vult een leeg laat-level, 30 houdt nog genoeg
 	// Containers (verpakkingsmateriaal) — van klein naar bulk.
 	if (S == TEXT("Cont_Bag2"))       { return 1; }
 	if (S == TEXT("Cont_Bag5"))       { return 5; }  // grote zakjes pas vanaf level 5 (eerst kleine)
@@ -438,10 +442,10 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 			if (Thc < 25.f) { return 21; }  // Amnesia Haze, OG Kush
 			if (Thc < 28.f) { return 26; }  // Gorilla Glue
 			if (Thc < 30.f) { return 31; }  // Girl Scout Cookies
-			if (Thc < 32.f) { return 36; }  // Wedding Cake
-			if (Thc < 34.f) { return 40; }  // Gelato (Cali)
-			if (Thc < 36.f) { return 44; }  // Runtz (Cali)
-			return 48;                      // Zkittlez (Cali) - net voor de licentie
+			if (Thc < 32.f) { return 37; }  // Wedding Cake (was 36 -> oneven gat-level)
+			if (Thc < 34.f) { return 41; }  // Gelato (Cali) (was 40 -> oneven gat-level)
+			if (Thc < 36.f) { return 45; }  // Runtz (Cali) (was 44 -> oneven gat-level)
+			return 49;                      // Zkittlez (Cali) - net voor de licentie (was 48)
 		}
 	}
 	return 1;

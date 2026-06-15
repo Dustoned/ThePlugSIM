@@ -87,7 +87,8 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 
 	// Kaart LINKS-midden (zo valt 'ie nooit achter de telefoon, die rechts opent).
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HandCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.84f), 12.f));
+	// Onzichtbare achtergrond: geen paneel, geen kader. Alleen de accent-balk + tekst (met schaduw) blijven over.
+	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 12.f));
 	CardB->SetPadding(FMargin(0.f));
 	Card = CardB;
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
@@ -143,6 +144,13 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	HintText->SetAutoWrapText(true);
 	Col->AddChildToVerticalBox(HintText)->SetPadding(FMargin(14.f, 2.f, 14.f, 12.f));
 
+	// Schaduw op de hoofdteksten -> leesbaar zonder paneel-achtergrond.
+	auto Shade = [](UTextBlock* T)
+	{
+		if (T) { T->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); T->SetShadowOffset(FVector2D(1.6f, 2.f)); }
+	};
+	Shade(TypeText); Shade(NameText); Shade(QtyText); Shade(HintText);
+
 	Card->SetRenderOpacity(0.f);
 }
 
@@ -173,6 +181,8 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const float Target = bHasItem ? 1.f : 0.f;
 	Shown = FMath::FInterpTo(Shown, Target, DeltaTime, 12.f);
 	Card->SetRenderOpacity(Shown);
+	// Volledig dichtklappen als 'ie weg is -> nooit een leeg kader/blok dat blijft hangen.
+	Card->SetVisibility(Shown > 0.02f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	if (Shown <= 0.02f && !bHasItem) { return; }
 
 	if (!bHasItem) { return; }
@@ -262,9 +272,11 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			UHorizontalBox* RowH = WidgetTree->ConstructWidget<UHorizontalBox>();
 			UTextBlock* L = WeedUI::Text(WidgetTree, Label, 12, FLinearColor(0.6f, 0.64f, 0.74f));
+			L->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); L->SetShadowOffset(FVector2D(1.6f, 2.f));
 			UHorizontalBoxSlot* LS = RowH->AddChildToHorizontalBox(L);
 			LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 			UTextBlock* V = WeedUI::Text(WidgetTree, Value, 13, FLinearColor(0.95f, 0.97f, 1.f), false, true);
+			V->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); V->SetShadowOffset(FVector2D(1.6f, 2.f));
 			V->SetJustification(ETextJustify::Right);
 			UHorizontalBoxSlot* VS = RowH->AddChildToHorizontalBox(V);
 			VS->SetVerticalAlignment(VAlign_Center);

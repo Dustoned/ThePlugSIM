@@ -233,6 +233,13 @@ public:
 	// Product = volledig item-id (Bag_/Hash_/Edible_<strain>); leeg => bouw uit Strain (Bag_).
 	void SetApptWant(FName Strain, int32 Qty, FName Product = NAME_None) { ApptWantStrain = Strain; ApptWantQty = Qty; ApptWantProduct = Product; }
 
+	// DAG-ORDER: deze afspraak is een premium order. Levert de speler de juiste strain met THC >= MinThc,
+	// dan betaalt de klant BonusMult x de normale prijs (1.0 = geen bonus). Eenmalig per order.
+	void SetApptOrder(float MinThc, float BonusMult) { ApptOrderMinThc = MinThc; ApptOrderBonusMult = BonusMult; }
+	bool IsOrder() const { return ApptOrderBonusMult > 1.f; }
+	float GetOrderMinThc() const { return ApptOrderMinThc; }
+	float GetOrderBonusMult() const { return ApptOrderBonusMult; }
+
 	// Gedeelde keuze-logica: WAT wil een klant van deze tier (volledig product-id Bag_/Hash_/Edible_<strain>) +
 	// HOEVEEL (OutQty). Gebruikt door zowel walk-ins als telefoon-afspraken zodat ze identiek schalen.
 	static FName PickDesiredProduct(class AWeedShopGameState* GS, class UDataTable* ProductTable, FName NpcId, int32& OutQty);
@@ -371,6 +378,8 @@ protected:
 	FName ApptWantStrain = NAME_None; // vooraf bepaalde wens (uit het afspraak-bericht)
 	int32 ApptWantQty = 0;
 	FName ApptWantProduct = NAME_None; // volledig product-id uit de afspraak (Bag_/Hash_/Edible_<strain>)
+	float ApptOrderMinThc = 0.f;       // DAG-ORDER: vereiste min-THC% (0 = geen order)
+	float ApptOrderBonusMult = 1.f;    // DAG-ORDER: prijs-bonusfactor bij levering op spec (1.0 = geen order)
 	// COMPETITIVE: actieve relatie-sleutel ("NpcId#spelerId") van de speler die nu met deze klant dealt.
 	// NAME_None in co-op (dan geldt de gedeelde NpcId-relatie).
 	FName ActiveRelKey = NAME_None;

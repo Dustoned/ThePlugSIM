@@ -194,6 +194,43 @@ void UContactsComponent::SendRandomAppointment()
 	Msg.SentRealTime = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.f; // voor follow-up/opgeven + reactiesnelheid
 	Msg.Kind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
 
+	// --- DAG-ORDER: mid-game variatie. Vanaf level ~12 wordt een afspraak soms een premium VIP-order:
+	// een specifieke wiet-strain met een min-THC-eis, een ruimere deadline en een bonus-uitbetaling.
+	// Schaalt mee met level (vaker + groter + meer bonus). Beloont een goed gevulde, diverse voorraad.
+	const AWeedShopGameState* GSo = Cast<AWeedShopGameState>(GetOwner());
+	const int32 PlayerLvl = (GSo && GSo->GetLeveling()) ? GSo->GetLeveling()->GetLevel() : 1;
+	{
+		const bool bWeedProduct = WantProduct.ToString().StartsWith(TEXT("Bag_"));
+		const float OrderChance = FMath::Clamp((PlayerLvl - 10) * 0.025f, 0.f, 0.45f);
+		float StrainThc = 0.f;
+		if (bWeedProduct && !WantStrain.IsNone() && GSo)
+		{
+			if (UStoreComponent* St = GSo->GetStore()) { float y = 0.f, g = 0.f; St->GetStrainStats(WantStrain, StrainThc, y, g); }
+		}
+		if (bWeedProduct && StrainThc > 0.f && !bNight && FMath::FRand() < OrderChance)
+		{
+			Msg.bOrder = true;
+			// Min-THC: net onder de strain-basis, zodat een echte batch van DEZE strain (of sterker) slaagt,
+			// maar een goedkopere lager-THC substituut niet. Vergevingsgezind voor kwaliteitsverlies.
+			Msg.MinThc = FMath::Max(1.f, FMath::RoundToFloat(StrainThc) - 1.f);
+			// Bonus +50% (level 12) oplopend tot +100% (level 50+).
+			Msg.BonusMult = FMath::Clamp(1.5f + PlayerLvl / 100.f, 1.5f, 2.0f);
+			// Premium = grotere bestelling.
+			WantQty = FMath::Max(WantQty, FMath::RandRange(6, 14));
+			Msg.WantQty = WantQty;
+			// Ruimere deadline (3-7 min) zodat je voorraad kunt halen/aanvullen.
+			const float OrderOffset = FMath::FRandRange(180.f, 420.f);
+			Msg.AppointmentTimeOfDay = FMath::Fmod(Now + OrderOffset, Length);
+			const int32 OTotalMin = ClockMinutesOf(Msg.AppointmentTimeOfDay);
+			const int32 OHH = (OTotalMin / 60) % 24;
+			const int32 OMM = OTotalMin % 60;
+			const int32 BonusPct = FMath::RoundToInt((Msg.BonusMult - 1.f) * 100.f);
+			Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
+				? FText::FromString(FString::Printf(TEXT("VIP order: %dg %s, min %.0f%% THC by %02d:%02d. On spec I pay +%d%%. I'll come to you."), WantQty, *WantStr, Msg.MinThc, OHH, OMM, BonusPct))
+				: FText::FromString(FString::Printf(TEXT("VIP order: %dg %s, min %.0f%% THC by %02d:%02d. On spec I pay +%d%%. Bring it to my place."), WantQty, *WantStr, Msg.MinThc, OHH, OMM, BonusPct));
+		}
+	}
+
 	// Adres opzoeken bij de bewoner met dit NpcId, zodat "kom bij mij langs" vertelt WAAR je heen moet.
 	FString AddrStr;
 	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
@@ -201,11 +238,22 @@ void UContactsComponent::SendRandomAppointment()
 		if (It->NpcId == C.ContactId && It->IsResident()) { AddrStr = It->GetHomeNumber(); break; }
 	}
 
-	Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
-		? FText::FromString(FString::Printf(TEXT("Yo, got any %s? Need %dg. I'll come by at %02d:%02d."), *WantStr, WantQty, HH, MM))
-		: (AddrStr.IsEmpty()
-			? FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - can you come by mine at %02d:%02d?"), *WantStr, WantQty, HH, MM))
-			: FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - come by my place (no. %s) at %02d:%02d?"), *WantStr, WantQty, *AddrStr, HH, MM)));
+	if (!Msg.bOrder)
+	{
+		Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
+			? FText::FromString(FString::Printf(TEXT("Yo, got any %s? Need %dg. I'll come by at %02d:%02d."), *WantStr, WantQty, HH, MM))
+			: (AddrStr.IsEmpty()
+				? FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - can you come by mine at %02d:%02d?"), *WantStr, WantQty, HH, MM))
+				: FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - come by my place (no. %s) at %02d:%02d?"), *WantStr, WantQty, *AddrStr, HH, MM)));
+	}
+	else if (Msg.Kind == EAppointmentKind::YouGoToThem && !AddrStr.IsEmpty())
+	{
+		// Order met huisadres: voeg het adres toe zodat je weet waar je moet leveren.
+		const int32 OTotalMin = ClockMinutesOf(Msg.AppointmentTimeOfDay);
+		const int32 BonusPct = FMath::RoundToInt((Msg.BonusMult - 1.f) * 100.f);
+		Msg.Body = FText::FromString(FString::Printf(TEXT("VIP order: %dg %s, min %.0f%% THC by %02d:%02d. On spec I pay +%d%%. Bring it to no. %s."),
+			WantQty, *WantStr, Msg.MinThc, (OTotalMin / 60) % 24, OTotalMin % 60, BonusPct, *AddrStr));
+	}
 
 	// COMPETITIVE: dit bericht is voor ÉÉN speler (eigen telefoon). Doel = de favoriete speler van dit contact
 	// (TopOwner), anders een willekeurige verbonden speler. Co-op laat ForPlayerId leeg (iedereen ziet het).
@@ -332,6 +380,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		if (It->NpcId == Msg.FromContactId && It->IsResident())
 		{
 			It->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
+			if (Msg.bOrder) { It->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
 			It->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
 			return;
 		}
@@ -408,6 +457,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	Cust->NpcId = Msg.FromContactId; // dit is dezelfde persoon als het contact
 	Cust->ProductTable = ProductTable;
 	Cust->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
+	if (Msg.bOrder) { Cust->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
 	if (!Msg.WantProduct.IsNone())
 	{
 		Cust->DesiredProductId = Msg.WantProduct; // volledig product (kan hasj/edible zijn)

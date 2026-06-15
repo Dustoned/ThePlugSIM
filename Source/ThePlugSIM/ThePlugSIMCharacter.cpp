@@ -17,6 +17,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
 #include "NavigationInvokerComponent.h"
+#include "NavigationSystem.h"
 #include "World/DayNightController.h"
 #include "World/CityGenerator.h"
 #include "World/DoorRetrofitter.h"
@@ -204,16 +205,44 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 			MM, GetVelocity().Z, Move->GravityScale, Move->GetGravityZ(), bCol ? 1 : 0));
 	}
 
-	// Zoek een ECHTE vloer: eerst onder de laatste-grond-plek, anders onder de spawn, anders gewoon de spawn.
-	FVector Safe;
-	if (!FindFloorAt(LastGroundLoc, Safe))
+	RecoverToSafe(false); // auto: terug naar de laatste veilige grond-plek
+	FallTime = 0.f; FloatTime = 0.f;
+}
+
+void AThePlugSIMCharacter::RecoverToSafe(bool bManual)
+{
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (!Move) { return; }
+
+	// Doel-plek. bManual (knop/H) = de DICHTSTBIJZIJNDE begaanbare plek (weg/stoep/vloer) via de navmesh
+	// - NIET naar huis (thuis-TP mag niet altijd kunnen). Anders (auto-recovery) = laatste-grond-plek.
+	FVector Safe; bool bGot = false;
+	if (bManual)
 	{
-		if (!FindFloorAt(InitialSpawnLoc, Safe)) { Safe = InitialSpawnLoc + FVector(0.f, 0.f, 100.f); }
+		const FVector Loc = GetActorLocation();
+		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
+		{
+			FNavLocation Proj;
+			// Eerst dichtbij zoeken (op de weg/stoep waar je staat), anders een ruimere straal.
+			if (Nav->ProjectPointToNavigation(Loc, Proj, FVector(900.f, 900.f, 700.f))
+				|| Nav->ProjectPointToNavigation(Loc, Proj, FVector(4000.f, 4000.f, 1500.f)))
+			{
+				Safe = Proj.Location + FVector(0.f, 0.f, 30.f);
+				bGot = true;
+			}
+		}
+	}
+	if (!bGot)
+	{
+		if (!FindFloorAt(LastGroundLoc, Safe))
+		{
+			if (!FindFloorAt(InitialSpawnLoc, Safe)) { Safe = InitialSpawnLoc + FVector(0.f, 0.f, 100.f); }
+		}
 	}
 
-	// BELANGRIJK: eerst teleporteren, dan pas op lopen zetten + vloer-check forceren (anders checkt 'ie
-	// de grond op de oude vast-plek en blijft 'ie vallen). Forceer ook zwaartekracht + capsule-collision
-	// terug aan, voor het geval iets ze had uitgezet (dat verklaart 'eeuwig zweven').
+	// Eerst teleporteren, dan op lopen zetten + vloer-check forceren. Forceer ook zwaartekracht +
+	// capsule-collision terug aan (voor het geval iets ze had uitgezet -> 'eeuwig zweven'). Altijd RECHTOP
+	// (alleen yaw): een scheve capsule detecteert geen vloer en blijft anders vallen.
 	if (GetCapsuleComponent()) { GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics); }
 	Move->GravityScale = 1.0f;
 	if (AWorldSettings* WS = GetWorldSettings())
@@ -222,14 +251,18 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	}
 	Move->StopMovementImmediately();
 	Move->Velocity = FVector::ZeroVector;
-	// Altijd RECHTOP terugzetten (alleen yaw): zo geneest een scheve capsule zichzelf. Een gekantelde
-	// actor (bv. ooit met pitch geteleporteerd) detecteert geen vloer en blijft anders eeuwig vallen.
 	const FRotator UprightYaw(0.f, GetActorRotation().Yaw, 0.f);
 	TeleportTo(Safe, UprightYaw, false, true);
 	Move->SetMovementMode(MOVE_Walking);
 	Move->bForceNextFloorCheck = true;
-	FallTime = 0.f; FloatTime = 0.f;
-	UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Yellow, TEXT("Recovered your position (you got stuck)."));
+	UWeedToast::NotifyPawn(this, -1, 2.5f, FColor::Yellow,
+		bManual ? TEXT("Unstuck - moved to the nearest road.") : TEXT("Recovered your position (you got stuck)."));
+}
+
+void AThePlugSIMCharacter::WeedUnstuck()
+{
+	if (!IsLocallyControlled()) { return; }
+	RecoverToSafe(true); // handmatige reset -> dichtstbijzijnde begaanbare plek (weg), niet naar huis
 }
 
 void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
@@ -305,6 +338,7 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 		case 2:  Path = WeedOutfit::FullBodyPaths[0]; break;
 		case 3:  Path = WeedOutfit::FullBodyPaths[1]; break;
 		case 4:  Path = WeedOutfit::FullBodyPaths[2]; break;
+		case 5:  Path = WeedOutfit::PartAt(0, GetOutfitPart(0), true).Path; break; // male = gekozen complete Tony-look
 		default: Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"); break;
 	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
@@ -330,16 +364,16 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	// de body). Geldt alleen voor de Casual-skins (2-4); Manny/Quinn hebben (nog) geen losse outfits.
 	for (USkeletalMeshComponent* C : OutfitComps) { if (C) { C->DestroyComponent(); } }
 	OutfitComps.Reset();
-	if (PlayerSkin >= 2)
+	if (PlayerSkin >= 2 && PlayerSkin <= 4)
 	{
-		AttachOutfitParts(GetMesh(), false);
-		AttachOutfitParts(FirstPersonMesh, true);
+		AttachOutfitParts(GetMesh(), false, false);       // female (Casual girls)
+		AttachOutfitParts(FirstPersonMesh, true, false);
 		SyncOutfitViewFlags();
 	}
 
 	// Skins met eigen physics-asset (haar/cloth) -> die bones laten nawapperen. Deferred zodat de physics-state
 	// klaar is na de mesh-swap. (Manny/Quinn: de mesh-swap reset de physics, dus niks te doen.)
-	if (PlayerSkin >= 2)
+	if (PlayerSkin >= 2 && PlayerSkin <= 4)
 	{
 		FTimerHandle Th;
 		GetWorldTimerManager().SetTimer(Th, this, &AThePlugSIMCharacter::ApplySoftPhysics, 0.2f, false);
@@ -395,17 +429,17 @@ void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
 
 void AThePlugSIMCharacter::ServerSetSkin_Implementation(uint8 NewSkin)
 {
-	PlayerSkin = (NewSkin > 4) ? 4 : NewSkin;
+	PlayerSkin = (NewSkin > 5) ? 5 : NewSkin;
 	ApplySkinMesh(); // server lokaal toepassen; repliceert naar clients -> OnRep_Skin
 }
 
 void AThePlugSIMCharacter::RestoreSkin(uint8 S)
 {
-	PlayerSkin = (S > 4) ? 4 : S;
+	PlayerSkin = (S > 5) ? 5 : S;
 	ApplySkinMesh();
 }
 
-void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson)
+void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson, bool bMale)
 {
 	if (!BodyComp) { return; }
 	auto Attach = [&](const TCHAR* MeshPath)
@@ -421,10 +455,10 @@ void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, b
 		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		OutfitComps.Add(C);
 	};
-	Attach(WeedOutfit::UnderwearPath);
+	if (!bMale) { Attach(WeedOutfit::UnderwearPath); } // female-underwear niet op de male-body
 	for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx)
 	{
-		Attach(WeedOutfit::PartAt(SlotIdx, GetOutfitPart(SlotIdx)).Path);
+		Attach(WeedOutfit::PartAt(SlotIdx, GetOutfitPart(SlotIdx), bMale).Path);
 	}
 }
 
@@ -447,7 +481,7 @@ void AThePlugSIMCharacter::SyncOutfitViewFlags()
 
 void AThePlugSIMCharacter::ServerSetOutfit_Implementation(uint8 Slot, uint8 Index)
 {
-	const uint8 Clamped = (uint8)FMath::Clamp<int32>(Index, 0, WeedOutfit::PartCount(Slot) - 1);
+	const uint8 Clamped = (uint8)FMath::Clamp<int32>(Index, 0, WeedOutfit::PartCount(Slot, PlayerSkin == 5) - 1);
 	switch (Slot)
 	{
 	case 1:  OutfitLegs = Clamped; break;
@@ -477,11 +511,16 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	{
 		if (const APlayerController* PCk = Cast<APlayerController>(GetController()))
 		{
-			const bool bF9 = PCk->IsInputKeyDown(EKeys::F9);
+			// ALLE F-toetsen (F7 fly/noclip, F9 spot-overlay) zijn dev-tools: alleen in Sandbox/Testing
+			// (free-build). In een normale playthrough doen ze niets.
+			const AWeedShopGameState* GSdev = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+			const bool bDevKeys = GSdev && GSdev->IsFreeBuild();
+
+			const bool bF9 = bDevKeys && PCk->IsInputKeyDown(EKeys::F9);
 			if (bF9 && !bSpotKeyWasDown) { if (Phone) { Phone->ToggleSpotInfo(); } }
 			bSpotKeyWasDown = bF9;
 
-			const bool bF7 = PCk->IsInputKeyDown(EKeys::F7);
+			const bool bF7 = bDevKeys && PCk->IsInputKeyDown(EKeys::F7);
 			if (bF7 && !bFlyKeyWasDown)
 			{
 				if (UCharacterMovementComponent* CM = GetCharacterMovement())
@@ -771,6 +810,7 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	// F10 = woning-types-overzicht. Werkt zonder console.
 	Input->BindKey(EKeys::F8,  IE_Pressed, this, &AThePlugSIMCharacter::WeedSaveFurniture);
 	Input->BindKey(EKeys::F10, IE_Pressed, this, &AThePlugSIMCharacter::WeedFurnitureTypes);
+	Input->BindKey(EKeys::F6,  IE_Pressed, this, &AThePlugSIMCharacter::WeedRegisterHome); // woning registreren (dev)
 
 	// ESC: pauze-/menu-scherm. bExecuteWhenPaused zodat je er ook UIT kunt met ESC terwijl de
 	// wereld gepauzeerd is (anders worden de pawn-bindings niet uitgevoerd tijdens pauze).
@@ -1115,8 +1155,9 @@ void AThePlugSIMCharacter::BeginPlay()
 		// dubbel in je tas en stond je huis leeg.)
 
 		// Om te kunnen beginnen krijg je wél het droogrek en de inpaktafel in je inventory, zodat je ze
-		// zelf in je huis kunt neerzetten (drogen + verpakken hoort bij de basis-gameplay).
-		Inventory->AddItem(FName(TEXT("DryRack_Std")), 1);
+		// zelf in je huis kunt neerzetten (drogen + verpakken hoort bij de basis-gameplay). LET OP: de
+		// CHEAP rack is de level-1 starter; DryRack_Std unlockt pas op level 12 (dus die NIET als start).
+		Inventory->AddItem(FName(TEXT("DryRack_Cheap")), 1);
 		Inventory->AddItem(FName(TEXT("Bench_Pack")), 1);
 		// 10 kleine zakjes (2g) om je eerste oogst te verpakken en te verkopen. Grotere zakjes ontgrendel je later.
 		Inventory->AddItem(FName(TEXT("Cont_Bag2")), 10);
@@ -1231,14 +1272,11 @@ void AThePlugSIMCharacter::BeginPlay()
 			GetWorld()->SpawnActor<ACityGenerator>(ACityGenerator::StaticClass(), FTransform::Identity);
 		}
 		// Externe pack-map: maak de statische deur-bladen werkend (open/dicht + NPC-auto-open).
+		// LET OP: hier GEEN free-build meer forceren! CityBeachStrip is nu de gewone speelmap, dus dat
+		// zette in ELKE modus (ook Normal) alle dev-tools aan. Free-build komt nu puur uit de start-mode
+		// (Sandbox/Testing via ApplyStartMode) of uit de geladen save.
 		if (bExternalMap)
 		{
-			// Verkennen = testing-modus: Test-tools in de telefoon (dag/nacht-switch, tijd-versnelling,
-			// events) + vrij bouwen, zodat je de map volledig kunt testen.
-			if (AWeedShopGameState* GSx = GetWorld()->GetGameState<AWeedShopGameState>())
-			{
-				GSx->SetFreeBuild(true);
-			}
 			bool bHasRetro = false;
 			for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { bHasRetro = true; break; }
 			if (!bHasRetro)
@@ -1279,6 +1317,9 @@ void AThePlugSIMCharacter::WeedSaveFurniture()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+	// Dev-tool (F8): alleen in Sandbox/Testing (free-build) - stil in een normale playthrough.
+	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
+	if (!GSd || !GSd->IsFreeBuild()) { return; }
 	if (!HasAuthority())
 	{
 		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedSaveFurniture: run this on the host."));
@@ -1292,6 +1333,17 @@ void AThePlugSIMCharacter::WeedSaveFurniture()
 	UWeedToast::Notify(-1, 5.f, Types > 0 ? FColor::Green : FColor::Orange,
 		Types > 0 ? FString::Printf(TEXT("Furniture templates saved (%d type(s))."), Types)
 				  : TEXT("Nothing to save: place furniture inside a home first."));
+}
+
+void AThePlugSIMCharacter::WeedRegisterHome()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// Dev-tool (F6): alleen in Sandbox/Testing (free-build).
+	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
+	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	for (TActorIterator<ADoorRetrofitter> It(W); It; ++It) { It->RegisterHomeAtPlayer(this); return; }
+	UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedRegisterHome: geen DoorRetrofitter (alleen op de pack-map)."));
 }
 
 void AThePlugSIMCharacter::WeedClearFurniture()
@@ -1322,6 +1374,9 @@ void AThePlugSIMCharacter::WeedFurnitureTypes()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+	// Dev-tool (F10): alleen in Sandbox/Testing (free-build).
+	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
+	if (!GSd || !GSd->IsFreeBuild()) { return; }
 	ACityGenerator* City = nullptr;
 	for (TActorIterator<ACityGenerator> It(W); It; ++It) { City = *It; break; }
 	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("No city found.")); return; }

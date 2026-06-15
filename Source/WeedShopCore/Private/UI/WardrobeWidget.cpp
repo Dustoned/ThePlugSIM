@@ -54,6 +54,7 @@ namespace
 		case 2:  return WeedOutfit::FullBodyPaths[0];
 		case 3:  return WeedOutfit::FullBodyPaths[1];
 		case 4:  return WeedOutfit::FullBodyPaths[2];
+		case 5:  return WeedOutfit::MaleBodyPath; // male (Tony basis-body + kleren)
 		default: return TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple");
 		}
 	}
@@ -239,7 +240,9 @@ void UWardrobeWidget::RebuildPreviewActor()
 	BodyComp->SetMobility(EComponentMobility::Movable);
 	BodyComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	if (USkeletalMesh* BodyMesh = LoadObject<USkeletalMesh>(nullptr, BodyMeshPath(Skin)))
+	// Male (5): de body volgt de gekozen complete Tony-look; anders de vaste skin-mapping.
+	const TCHAR* BodyPath = (Skin == 5 && Pl) ? WeedOutfit::PartAt(0, Pl->GetOutfitPart(0), true).Path : BodyMeshPath(Skin);
+	if (USkeletalMesh* BodyMesh = LoadObject<USkeletalMesh>(nullptr, BodyPath))
 	{
 		BodyComp->SetSkeletalMeshAsset(BodyMesh);
 	}
@@ -252,9 +255,10 @@ void UWardrobeWidget::RebuildPreviewActor()
 		}
 	}
 
-	// Outfit-parts (leader-pose) voor de Casual-skins.
+	// Outfit-parts (leader-pose): Casual-girls (2-4, female) of de male (5, citizens Tony - eigen kleren).
 	if (Skin >= 2 && Pl)
 	{
+		const bool bMaleSkin = (Skin == 5);
 		auto Attach = [&](const TCHAR* MeshPath)
 		{
 			if (!MeshPath) { return; } // "None"-keuze
@@ -267,10 +271,10 @@ void UWardrobeWidget::RebuildPreviewActor()
 			C->SetLeaderPoseComponent(BodyComp);
 			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		};
-		Attach(WeedOutfit::UnderwearPath);
+		if (!bMaleSkin) { Attach(WeedOutfit::UnderwearPath); }
 		for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx)
 		{
-			Attach(WeedOutfit::PartAt(SlotIdx, Pl->GetOutfitPart(SlotIdx)).Path);
+			Attach(WeedOutfit::PartAt(SlotIdx, Pl->GetOutfitPart(SlotIdx), bMaleSkin).Path);
 		}
 	}
 
@@ -371,16 +375,21 @@ void UWardrobeWidget::FillBody()
 	// --- Body-keuze ---
 	Row(WeedUI::Text(WidgetTree, TEXT("Body"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
 	UHorizontalBox* BodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
-	static const TCHAR* BodyNames[5] = { TEXT("Male"), TEXT("Female"), TEXT("Girl 1"), TEXT("Girl 2"), TEXT("Girl 3") };
-	for (uint8 bi = 0; bi < 5; ++bi)
+	// Manny/Quinn (0/1) zijn geen keuze meer. Male = Tony (5, citizens), Female = Casual girl (2), + extra girls.
+	struct FBodyChoice { uint8 Idx; const TCHAR* Name; };
+	static const FBodyChoice Choices[] = { { 5, TEXT("Male") }, { 2, TEXT("Female") }, { 3, TEXT("Girl 2") }, { 4, TEXT("Girl 3") } };
+	bool bFirstBody = true;
+	for (const FBodyChoice& Ch : Choices)
 	{
+		const uint8 bi = Ch.Idx;
 		UWeedActionButton* BB = WrdBtn(WidgetTree,
 			(Skin == bi) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f), 8.f,
 			[this, bi]() { if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); } LastSig.Reset(); });
-		BB->SetContent(WeedUI::Text(WidgetTree, BodyNames[bi], 12, FLinearColor::White, true));
+		BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, FLinearColor::White, true));
 		UHorizontalBoxSlot* BS = BodyRowBox->AddChildToHorizontalBox(BB);
 		BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		BS->SetPadding(FMargin(bi == 0 ? 0.f : 4.f, 0.f, 0.f, 0.f));
+		BS->SetPadding(FMargin(bFirstBody ? 0.f : 4.f, 0.f, 0.f, 0.f));
+		bFirstBody = false;
 	}
 	Row(BodyRowBox, FMargin(0, 0, 0, 10));
 
@@ -393,14 +402,16 @@ void UWardrobeWidget::FillBody()
 
 	// --- Outfit-slots: < naam > per categorie ---
 	// Volgorde van boven naar onder: Headwear, Hair, Necklace, Top, Pants, Socks, Shoes.
+	const bool bMaleSkin = (Skin == 5);
 	static const int32 DisplayOrder[] = { 4, 3, 5, 0, 1, 6, 2 };
 	for (const int32 SlotIdx : DisplayOrder)
 	{
-		const int32 Count = WeedOutfit::PartCount(SlotIdx);
+		if (bMaleSkin && SlotIdx != 0) { continue; } // male: alleen de "Look"-keuze (de rest zit in de assembled look)
+		const int32 Count = WeedOutfit::PartCount(SlotIdx, bMaleSkin);
 		const uint8 Cur = Pl->GetOutfitPart(SlotIdx);
-		const WeedOutfit::FPart& Part = WeedOutfit::PartAt(SlotIdx, Cur);
+		const WeedOutfit::FPart& Part = WeedOutfit::PartAt(SlotIdx, Cur, bMaleSkin);
 
-		Row(WeedUI::Text(WidgetTree, WeedOutfit::SlotName(SlotIdx), 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
+		Row(WeedUI::Text(WidgetTree, bMaleSkin ? TEXT("Look") : WeedOutfit::SlotName(SlotIdx), 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
 		UHorizontalBox* R = WidgetTree->ConstructWidget<UHorizontalBox>();
 
 		UWeedActionButton* PrevB = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
