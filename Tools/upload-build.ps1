@@ -85,8 +85,13 @@ $Body  = "$Notes`n`n## Deze download`n$QLabel`n`n## Wijzigingen sinds de vorige 
 $NotesFile = Join-Path $Proj "Build\release-notes.md"
 [System.IO.File]::WriteAllText($NotesFile, $Body, (New-Object System.Text.UTF8Encoding($false)))
 # 2K is de aanbevolen 'latest'; andere kwaliteiten staan als losse release in de lijst.
-$LatestArg = if ($Quality -eq "2K") { @("--latest") } else { @("--latest=false") }
-gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" @LatestArg
+# (Geen array-splat: PowerShell pakt een 1-element-array uit tot string en splat die dan
+#  karakter-voor-karakter -> losse '-' brak gh. Daarom twee expliciete calls.)
+if ($Quality -eq "2K") {
+    gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" --latest
+} else {
+    gh release create $Tag "$Zip" --repo $Repo --title "$Title" --notes-file "$NotesFile" --latest=false
+}
 if ($LASTEXITCODE -ne 0) { Write-Error "GitHub release upload mislukt"; exit 1 }
 
 # Onthoud welke commit deze build was, voor de changelog van de volgende keer.
