@@ -145,7 +145,9 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.25f  : 1.f);
 	SetF(TEXT("r.Shadow.MaxResolution"), bPotato ? 256.f  : 1024.f);
 	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f    : 4.f);
-	if (bPotato) { WeedShop_ApplyLumen(true); } // Lumen uit op Potato (zwaarste post-effect)
+	// Lumen volgt de tier: Potato + Low = UIT (perf); Medium/High/Epic = AAN (mooie GI + reflecties +
+	// soft indirect shadows). Zonder dit bleef een eerdere 'Lumen uit' hangen -> grainy/vlak op Epic.
+	WeedShop_ApplyLumen(Tier <= 0);
 
 	UE_LOG(LogWeedShop, Warning, TEXT("Graphics-tier: %s (scalability %d)"),
 		bPotato ? TEXT("POTATO") : (Scal == 0 ? TEXT("Low") : Scal == 1 ? TEXT("Medium") : Scal == 2 ? TEXT("High") : TEXT("Epic")), Scal);

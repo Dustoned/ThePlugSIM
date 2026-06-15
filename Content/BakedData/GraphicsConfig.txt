@@ -1,1 +1,3 @@
-LumenOff=1
+LumenOff=0
+Potato=0
+MotionBlurOff=0
