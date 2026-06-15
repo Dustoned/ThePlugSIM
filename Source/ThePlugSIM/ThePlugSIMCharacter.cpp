@@ -66,10 +66,8 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
-
-	// Third-person lichaam (wat co-op-spelers van JOU zien) op de capsule-BODEM zetten: zonder deze offset
-	// staat de mesh op het capsule-midden -> de voeten zweven ~96cm boven de vloer (co-op "zwevende speler").
-	if (GetMesh()) { GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f)); }
+	// (Mesh-offset voor co-op staat in BeginPlay, niet hier - in de constructor zou het de spawn-collision
+	//  beinvloeden en de player-spawn laten falen.)
 
 	// Navigation-invoker: genereert runtime-navmesh rond de speler (de stad is procedureel, dus geen
 	// vooraf gebakken navmesh). Ruime straal zodat NPC's over de stoepen kunnen lopen rond jou.
@@ -1115,6 +1113,11 @@ void AThePlugSIMCharacter::BeginPlay()
 	{
 		M->bEnableUpdateRateOptimizations = false;
 		M->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+		// Third-person lichaam (wat co-op-spelers van JOU zien) op de capsule-BODEM zetten: zonder offset
+		// staat de mesh op het capsule-midden -> voeten zweven ~96cm (co-op "zwevende speler"). In BeginPlay
+		// (na spawn) zodat het de spawn-collision niet raakt.
+		M->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f));
 
 		// Alleen op een client die een ANDERE speler ziet (simulated proxy): de template-ABP speelt daar
 		// geen loop -> wij sturen zelf walk/idle/jump aan. De host houdt de template-ABP (werkt daar wel).
