@@ -334,6 +334,20 @@ int32 UNpcRegistryComponent::GetCustomerTier(FName NpcId) const
 	return TierFromXP(GetCustomerXP(NpcId));
 }
 
+int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed)
+{
+	FNpcState* S = Find(NpcId);
+	if (!S) { return 0; }
+	if (S->SkinIndex >= 0) { return S->SkinIndex; } // al toegewezen -> stabiel, nooit meer wijzigen
+	// Globale pool: 0-2 Karl (laag), 3-5 Casual (mid), 6-9 Tony (high). Band uit de tier-bij-toewijzing.
+	int32 Lo = 0, Hi = 2;
+	if (Tier >= 4)      { Lo = 6; Hi = 9; }
+	else if (Tier == 3) { Lo = 3; Hi = 5; }
+	const uint32 H = (uint32)Seed * 2654435761u + 12345u;
+	S->SkinIndex = Lo + (int32)(H % (uint32)(Hi - Lo + 1));
+	return S->SkinIndex;
+}
+
 void UNpcRegistryComponent::AddCustomerValue(FName NpcId, int32 GramsSold)
 {
 	if (GetOwnerRole() != ROLE_Authority || GramsSold <= 0) { return; }

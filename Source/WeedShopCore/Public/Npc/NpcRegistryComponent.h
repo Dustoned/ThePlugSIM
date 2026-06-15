@@ -55,6 +55,11 @@ struct FNpcState
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float ApptCooldownMult = 1.f;
 
+	// Vaste uiterlijk-skin (index in de globale NPC-skin-pool). 1x toegewezen (tier-gewogen) en daarna
+	// NOOIT meer gewijzigd -> dezelfde persoon ziet er altijd hetzelfde uit (ook na tier-stijging/save).
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	int32 SkinIndex = -1;
+
 	// --- Klant-tier/level (los van respect/loyaliteit) ---
 	// Klantwaarde-XP: loopt op door deals (verkochte grammen x loyaliteit x persoonlijke honger). Bepaalt de tier.
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
@@ -146,6 +151,9 @@ public:
 	void AddCustomerValue(FName NpcId, int32 GramsSold);
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	int32 GetCustomerTier(FName NpcId) const;          // 1..5
+	// Vaste uiterlijk-skin-index: 1x toegewezen (tier-gewogen via Seed) en daarna persistent bewaard.
+	// Geeft de bewaarde index terug, of wijst er bij eerste keer één toe. Server-side.
+	int32 GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed);
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	int32 GetCustomerXP(FName NpcId) const;
 	// Naam van een tier (1..5) + de bestel-range (grammen) van een tier (met persoonlijke variatie via NpcId).

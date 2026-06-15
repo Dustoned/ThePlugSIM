@@ -211,34 +211,26 @@ bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAl
 	return false;
 }
 
-// NPC-skin per KLANT-TIER (1=Casual .. 5=Whale) zodat je op straat ziet wie wat is: lager tier =
-// plainere/gewonere look, hoger tier = de karaktervolle/herkenbare looks (je vaste klanten/whales
-// vallen op). Binnen een tier varieert 't op seed. Alle skeletons zijn compatibel met SK_Mannequin,
-// dus de single-node walk/idle-anims blijven werken.
-// NB: indeling is een eerste gok (ik kan de meshes niet zien) - looks zijn makkelijk te verschuiven.
-static USkeletalMesh* WeedNpc_PickSkinForTier(int32 Tier, int32 Seed)
+// Globale NPC-skin-pool. De registry kiest de index 1x (tier-gewogen) en BEWAART 'm in de
+// persistente NPC-state -> dezelfde persoon ziet er altijd hetzelfde uit (ook na tier-stijging,
+// respawn of save/load). Indeling: 0-2 Karl (laag), 3-5 Casual (mid), 6-9 Tony (high/whale).
+// Alle skeletons zijn compatibel met SK_Mannequin, dus de single-node walk/idle-anims blijven werken.
+static USkeletalMesh* WeedNpc_SkinByIndex(int32 Idx)
 {
-	static const TCHAR* High[] = { // tier 4-5: VIP/whale-uitstraling (Tony = bril + wiethoed)
+	static const TCHAR* Pool[] = {
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_1.SK_FullBody_Casual_1"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_2.SK_FullBody_Casual_2"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_3.SK_FullBody_Casual_3"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_A.SK_Citizens_Pack_Tony_A"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_D.SK_Citizens_Pack_Tony_D"),
 	};
-	static const TCHAR* Mid[] = { // tier 3: normale casual mensen
-		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_1.SK_FullBody_Casual_1"),
-		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_2.SK_FullBody_Casual_2"),
-		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_3.SK_FullBody_Casual_3"),
-	};
-	static const TCHAR* Low[] = { // tier 1-2: gewone/anonieme straat-mensen
-		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
-		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
-		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
-	};
-	const TCHAR* const* Band = Low; int32 N = UE_ARRAY_COUNT(Low);
-	if (Tier >= 4)      { Band = High; N = UE_ARRAY_COUNT(High); }
-	else if (Tier == 3) { Band = Mid;  N = UE_ARRAY_COUNT(Mid); }
-	const uint32 H = (uint32)Seed * 2654435761u + 12345u;
-	return LoadObject<USkeletalMesh>(nullptr, Band[H % (uint32)N]);
+	const int32 N = UE_ARRAY_COUNT(Pool);
+	return LoadObject<USkeletalMesh>(nullptr, Pool[FMath::Clamp(Idx, 0, N - 1)]);
 }
 
 void ACustomerBase::BeginPlay()
@@ -278,11 +270,16 @@ void ACustomerBase::BeginPlay()
 			}
 		}
 
-		// Skin op basis van KLANT-TIER -> op straat herkenbaar wie high/low-tier is (NpcId is nu bekend).
+		// Skin: 1x toegewezen (tier-gewogen) + PERSISTENT bewaard per NPC -> verandert nooit meer,
+		// ook niet als de tier later stijgt. Zo zie je op straat wie wat is, stabiel per persoon.
 		if (USkeletalMeshComponent* SkM = GetMesh())
 		{
-			const int32 Tier = (GS && GS->GetNpcRegistry()) ? GS->GetNpcRegistry()->GetCustomerTier(NpcId) : 1;
-			if (USkeletalMesh* Sk = WeedNpc_PickSkinForTier(Tier, (int32)GetTypeHash(NpcId))) { SkM->SetSkeletalMesh(Sk); }
+			if (UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr)
+			{
+				const int32 Tier = Reg->GetCustomerTier(NpcId);
+				const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)GetTypeHash(NpcId));
+				if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx)) { SkM->SetSkeletalMesh(Sk); }
+			}
 		}
 
 		// Nog te weinig verslaving? Dan is dit (nog) geen koper maar een prospect: eerst opwarmen
