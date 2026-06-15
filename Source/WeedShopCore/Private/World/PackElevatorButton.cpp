@@ -128,6 +128,10 @@ void APackElevatorButton::SetDigit(int32 Digit)
 		DigitText->SetTextRenderColor(FColor(245, 245, 250));
 		DigitText->SetCanEverAffectNavigation(false);
 		DigitText->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		// Zelf-oplichtend (unlit emissive) tekst-materiaal: het cijfer is overal helder wit, ook in een
+		// donkere gang (het default tekst-materiaal is BELICHT -> daar werd het cijfer dof).
+		static UMaterialInterface* TextGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitTextGlow.M_DigitTextGlow"));
+		if (TextGlow) { DigitText->SetTextMaterial(TextGlow); }
 	}
 	const FVector Fwd = DigitMesh->GetForwardVector(); // +X = uit het vlak naar de kijker
 	DigitText->SetWorldLocationAndRotation(DigitMesh->GetComponentLocation() + Fwd * 3.f, DigitMesh->GetComponentRotation());

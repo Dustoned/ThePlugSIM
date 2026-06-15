@@ -114,6 +114,8 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigitText->SetHorizontalAlignment(EHTA_Center);
 		CabDigitText->SetVerticalAlignment(EVRTA_TextCenter);
 		CabDigitText->SetTextRenderColor(FColor(245, 245, 250));
+		static UMaterialInterface* TextGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitTextGlow.M_DigitTextGlow"));
+		if (TextGlow) { CabDigitText->SetTextMaterial(TextGlow); }
 	}
 	// Cabine-schuifdeuren: 2 panelen op de open kant (lokale X ~ -8), samen 136 breed gecentreerd.
 	// Ze rijden mee met de cabine en schuiven synchroon met de hal-deuren open/dicht.
