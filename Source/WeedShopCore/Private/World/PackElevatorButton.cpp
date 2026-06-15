@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/PointLightComponent.h"
 
@@ -39,9 +40,17 @@ void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator&
 		DigitMesh->SetMobility(EComponentMobility::Movable);
 		DigitMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		DigitMesh->SetCanEverAffectNavigation(false);
-		// Knop-cijfer licht zelf zacht wit op (unlit emissive) -> altijd leesbaar, geen echte lichtbron.
-		static UMaterialInterface* DigitGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitGlow.M_DigitGlow"));
-		if (DigitGlow) { DigitMesh->SetMaterial(0, DigitGlow); }
+		// Knop-cijfer: het pack-emissive materiaal toont het ECHTE cijfer (MI_ElevatorEmmsive: BaseColor =
+		// cijfer-atlas, per-mesh UV's kiezen het cijfer) en laat het zacht oplichten. (Het oude M_DigitGlow
+		// was egaal wit -> cijfer verdween, alleen een leeg lichtvlakje.)
+		static UMaterialInterface* NumEmis = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/CityBeachStrip/Materials/Architecture/Interiors/Elevator/MI_ElevatorEmmsive.MI_ElevatorEmmsive"));
+		if (NumEmis)
+		{
+			if (UMaterialInstanceDynamic* M = DigitMesh->CreateAndSetMaterialInstanceDynamicFromMaterial(0, NumEmis))
+			{
+				M->SetScalarParameterValue(TEXT("Brightness"), 1.6f); // rustige glow (instance-default was 2.0)
+			}
+		}
 	}
 	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
 	DigitMesh->SetWorldScale3D(FVector(Scale)); // digit-mesh is 3x5cm -> opschalen naar leesbaar formaat

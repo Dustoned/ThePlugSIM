@@ -552,25 +552,37 @@ void UPhoneClientComponent::SpawnLightSwitches()
 			}
 		};
 
-		// 1) Markers in deze woning? -> die bepalen ALLES (elke marker = een schakelaar).
-		TArray<FVector> MarkSpots;
+		// 1) Heb je zelf plekken gemarkeerd (F9) binnen deze woning? -> die bepalen ALLES; elke marker wordt
+		//    een schakelaar. We filteren NIET op label (F9 logt als 'F9'); de woning-grens is genoeg scoping.
+		struct FMarkSpot { FVector P; float Yaw; };
+		TArray<FMarkSpot> MarkSpots;
 		for (const FString& Line : MarkLines)
 		{
-			if (!Line.Contains(MapPath) || !Line.ToLower().Contains(TEXT("switch"))) { continue; }
+			if (!Line.Contains(MapPath)) { continue; }
 			const int32 PIdx = Line.Find(TEXT("pos=("));
 			if (PIdx == INDEX_NONE) { continue; }
 			FString PosStr = Line.Mid(PIdx + 5);
 			int32 ClosePar = INDEX_NONE; if (PosStr.FindChar(TEXT(')'), ClosePar)) { PosStr = PosStr.Left(ClosePar); }
 			TArray<FString> Parts; PosStr.ParseIntoArray(Parts, TEXT(","));
-			if (Parts.Num() >= 3)
-			{
-				const FVector M(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
-				if (InBounds(M)) { MarkSpots.Add(M); }
-			}
+			if (Parts.Num() < 3) { continue; }
+			const FVector M(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
+			if (!InBounds(M)) { continue; }
+			float Yaw = 0.f;
+			const int32 YIdx = Line.Find(TEXT("yaw="));
+			if (YIdx != INDEX_NONE) { Yaw = FCString::Atof(*Line.Mid(YIdx + 4)); }
+			MarkSpots.Add({ M, Yaw });
 		}
 		if (MarkSpots.Num() > 0)
 		{
-			for (int32 m = 0; m < MarkSpots.Num(); ++m) { SpawnSwitch(MarkSpots[m], FString::Printf(TEXT("mark%d"), m), 600.f); }
+			for (int32 m = 0; m < MarkSpots.Num(); ++m)
+			{
+				// Bij het markeren keek je naar de muur -> het plaatje kijkt de kamer in (yaw + 180).
+				const FRotator Rot(0.f, MarkSpots[m].Yaw + 180.f, 0.f);
+				if (APackLightSwitch* Sw = W->SpawnActor<APackLightSwitch>(APackLightSwitch::StaticClass(), MarkSpots[m].P, Rot, SP))
+				{
+					Sw->Setup(FString::Printf(TEXT("apt%d_mark%d"), Idx, m), 600.f);
+				}
+			}
 			LightSwitchHomesDone.Add(Idx);
 			continue;
 		}
