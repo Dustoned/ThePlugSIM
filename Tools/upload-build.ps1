@@ -76,6 +76,18 @@ foreach ($q in $Qualities) {
         Write-Host "== [$q] Losse UI-bestanden (iconen + menu-art) meegekopieerd naar de build =="
     }
 
+    # Visual C++ runtime-installer meebundelen: zonder die runtime start een UE-game niet
+    # (VCRUNTIME140-fout). Vrienden draaien 'm een keer als de game niet opstart.
+    $Redist = "E:\UE\UE_5.7\Engine\Extras\Redist\en-us\vc_redist.x64.exe"
+    if (Test-Path $Redist) {
+        Copy-Item $Redist (Join-Path $WinDir "vc_redist.x64.exe") -Force
+        $ReadmeTxt = "ThePlugSIM`r`n`r`nStarten: dubbelklik ThePlugSIM.exe`r`n`r`nStart de game niet (foutmelding over VCRUNTIME140 of een ontbrekende .dll)?`r`nVoer dan eerst vc_redist.x64.exe uit (Microsoft Visual C++ runtime) en start de game opnieuw.`r`n"
+        [System.IO.File]::WriteAllText((Join-Path $WinDir "LEES MIJ EERST.txt"), $ReadmeTxt, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "== [$q] vc_redist.x64.exe + leesmij meegebundeld in de build =="
+    } else {
+        Write-Host "== [$q] WAARSCHUWING: vc_redist niet gevonden op $Redist - niet meegebundeld =="
+    }
+
     $Zip = Join-Path $Proj "Build\ThePlugSIM-$Stamp-$q.zip"
     Write-Host "== [$q] Zippen -> $Zip =="
     if (Test-Path $Zip) { Remove-Item $Zip -Force }
