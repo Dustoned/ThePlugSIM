@@ -109,6 +109,17 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabArrow->SetHorizontalAlignment(EHTA_Center);
 		CabArrow->SetVerticalAlignment(EVRTA_TextCenter);
 		CabArrow->SetVisibility(false);
+		// Zwart cijfer over de witte cabine-plaat (lokale +X = naar de opening = naar de kijker).
+		CabDigitText = NewObject<UTextRenderComponent>(this);
+		CabDigitText->SetupAttachment(Cab);
+		CabDigitText->RegisterComponent();
+		CabDigitText->SetMobility(EComponentMobility::Movable);
+		CabDigitText->SetRelativeLocation(FVector(-192.f + 3.f, 0.f, 175.f));
+		CabDigitText->SetRelativeRotation(FRotator::ZeroRotator);
+		CabDigitText->SetWorldSize(22.f);
+		CabDigitText->SetHorizontalAlignment(EHTA_Center);
+		CabDigitText->SetVerticalAlignment(EVRTA_TextCenter);
+		CabDigitText->SetTextRenderColor(FColor(8, 8, 10));
 	}
 	// Cabine-schuifdeuren: 2 panelen op de open kant (lokale X ~ -8), samen 136 breed gecentreerd.
 	// Ze rijden mee met de cabine en schuiven synchroon met de hal-deuren open/dicht.
@@ -216,6 +227,7 @@ void APackElevator::UpdateSigns()
 		const int32 D = FMath::Clamp(ShownFloor, 0, 9);
 		const FString Path = FString::Printf(TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorNumber_%d.SM_ElevatorNumber_%d"), D, D);
 		if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path)) { CabDigit->SetStaticMesh(M); }
+		if (CabDigitText) { CabDigitText->SetText(FText::AsNumber(D)); }
 	}
 }
 

@@ -88,6 +88,7 @@ protected:
 	bool bMoving = false;
 	TArray<TWeakObjectPtr<class APackElevatorButton>> Buttons;
 	UPROPERTY() TObjectPtr<class UTextRenderComponent> CabArrow; // ^/v naast het cabine-display
+	UPROPERTY() TObjectPtr<class UTextRenderComponent> CabDigitText; // zwart cijfer over de witte cabine-plaat
 	int32 LastArrowDir = 0;   // -1/0/+1: alleen bij verandering naar de knoppen pushen
 	int32 LastGlowFloor = -2; // doel-verdieping die nu gloeit (-1 = geen)
 	void UpdateSigns();

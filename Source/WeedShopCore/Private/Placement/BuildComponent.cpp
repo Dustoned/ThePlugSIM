@@ -11,6 +11,7 @@
 #include "World/StorageShelf.h"
 #include "World/WaterSink.h"
 #include "World/CeilingLamp.h"
+#include "World/PackLightSwitch.h"
 #include "World/ProcessorMachine.h"
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
@@ -51,7 +52,7 @@ namespace
 			|| A->IsA(ADryingRack::StaticClass()) || A->IsA(AProcessorMachine::StaticClass())
 			|| A->IsA(AStorageShelf::StaticClass()) || A->IsA(AAtm::StaticClass())
 			|| A->IsA(APackBench::StaticClass()) || A->IsA(AWaterSink::StaticClass())
-			|| A->IsA(ACeilingLamp::StaticClass()));
+			|| A->IsA(ACeilingLamp::StaticClass()) || A->IsA(APackLightSwitch::StaticClass()));
 	}
 
 	// Overlapt de (geroteerde) box rond Center met een ANDER geplaatst object? Muren/vloeren tellen niet mee,
@@ -858,7 +859,7 @@ bool UBuildComponent::IsPickable(const AActor* A) const
 	if (!A || A->ActorHasTag(FName(TEXT("Cosmetic")))) { return false; } // NPC-woning-meubels: niet oppakbaar
 	return (Cast<AGrowPlant>(A) || Cast<APlaceableProp>(A) || Cast<ADryingRack>(A)
 		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A) || Cast<ACeilingLamp>(A)
-		|| Cast<AAtm>(A));
+		|| Cast<AAtm>(A) || Cast<APackLightSwitch>(A));
 }
 
 bool UBuildComponent::IsInOwnedHome(const FVector& P) const
@@ -1189,6 +1190,19 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		{
 			Pot->PotTier = ItemId;
 			Pot->FinishSpawning(FTransform(Rotation, Location));
+		}
+	}
+	else if (Def.bIsLightSwitch)
+	{
+		APackLightSwitch* Sw = World->SpawnActorDeferred<APackLightSwitch>(
+			APackLightSwitch::StaticClass(), FTransform(Rotation, Location),
+			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Sw)
+		{
+			// Stabiele sleutel uit de wereldpositie (op 10cm) -> aan/uit + dim onthouden per plek/woning.
+			Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"),
+				FMath::RoundToInt(Location.X / 10.f), FMath::RoundToInt(Location.Y / 10.f), FMath::RoundToInt(Location.Z / 10.f)), 520.f);
+			Sw->FinishSpawning(FTransform(Rotation, Location));
 		}
 	}
 	else

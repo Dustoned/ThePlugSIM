@@ -50,6 +50,9 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Sink"), TEXT("Sink"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.8f, 0.55f, 0.9f), FVector(40.f, 27.f, 45.f), false, 0, false, false, false, false, false, /*bIsSink*/ true },
 		// Plafondlamp: warme spot. Spawnt een ACeilingLamp. Binnen plaatsen.
 		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("/Engine/BasicShapes/Cone.Cone"), FVector(0.28f, 0.28f, 0.22f), FVector(20.f, 20.f, 14.f), false, 0, false, false, false, false, false, false, /*bIsLamp*/ true },
+		// Lichtschakelaar: hangt aan de muur (wall-mount). Spawnt een APackLightSwitch (tap = aan/uit, hold = dimmer;
+		// claimt de plafondlampen in de buurt). Plaats er een bij de deur en een bij de badkamer.
+		{ TEXT("LightSwitch"), TEXT("Light switch"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.03f, 0.085f, 0.13f), FVector(3.f, 6.f, 8.f), false, 800, false, false, false, false, false, false, false, /*bIsWallMount*/ true, false, false, false, false, false, false, false, false, /*bIsLightSwitch*/ true },
 		// --- Pot-gear: fysieke accessoires die je NAAST/op je pot zet; de pot leest welke vlakbij staan en
 		//     past die bonus toe zolang 't accessoire er staat. Generieke props (oppakken = terug in inv).
 		{ TEXT("Gear_Drainage"),  TEXT("Drainage layer"),  TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.26f, 0.26f, 0.18f), FVector(13.f, 13.f, 9.f),  false, 1200 },

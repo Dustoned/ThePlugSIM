@@ -666,7 +666,8 @@ void UPhoneClientComponent::PropertyTick()
 		}
 	}
 	ApplyLocalDoors();
-	SpawnLightSwitches();
+	// (Lichtschakelaars zijn nu een PLACEABLE item + met F8 in de furniture-template te bewaren,
+	//  niet meer automatisch via markers.)
 
 	// Intro-melding (1x, vroeg): zodra je je starter-flat hebt, vertel het huur-doel.
 	if (GetOwnerRole() == ROLE_Authority && !bShownRentIntro && OwnedHomes.Num() > 0)

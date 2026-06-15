@@ -41,6 +41,8 @@ public:
 protected:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Mesh;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> DigitMesh;
+	// Zwart cijfer OVER het witte (oplichtende) vlak -> ziet eruit als een verlicht nummer.
+	UPROPERTY() TObjectPtr<class UTextRenderComponent> DigitText;
 	UPROPERTY() TObjectPtr<class UTextRenderComponent> ArrowText;
 	UPROPERTY() TObjectPtr<class UPointLightComponent> GlowLight;
 	FVector SignLocW = FVector::ZeroVector;   // wereld-positie van het bordje (voor de pijl ernaast)

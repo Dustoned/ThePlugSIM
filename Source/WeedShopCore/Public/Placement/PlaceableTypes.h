@@ -33,6 +33,7 @@ struct FPlaceableDef
 	bool bIsCeilingPiece = false;      // true -> structure-plafond: komt 320cm boven de verdieping-vloer
 	bool bIsDoubleWall = false;        // true -> muur krijgt een gespiegelde tweede mesh (pack-muren zijn enkelzijdig)
 	bool bIsHingedDoor = false;        // true -> draaiende deur (F = open/dicht, scharnier op de mesh-pivot)
+	bool bIsLightSwitch = false;       // true -> spawnt APackLightSwitch (tap = aan/uit, hold = dimmer; claimt plafondlampen)
 };
 
 // Alle gedefinieerde placeables.

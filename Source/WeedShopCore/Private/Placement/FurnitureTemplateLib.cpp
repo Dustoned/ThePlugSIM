@@ -7,6 +7,7 @@
 #include "World/PackBench.h"
 #include "World/StorageShelf.h"
 #include "World/CeilingLamp.h"
+#include "World/PackLightSwitch.h"
 #include "World/Atm.h"
 
 #include "Engine/World.h"
@@ -90,6 +91,10 @@ namespace
 		for (TActorIterator<AAtm> It(W); It; ++It)
 		{
 			if (IsValid(*It) && !IsAuto(*It)) { Out.Add({ FName(TEXT("Atm")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+		}
+		for (TActorIterator<APackLightSwitch> It(W); It; ++It)
+		{
+			if (IsValid(*It) && !IsAuto(*It)) { Out.Add({ FName(TEXT("LightSwitch")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 	}
 }
@@ -306,6 +311,17 @@ AActor* FurnitureTemplates::SpawnEntry(UWorld* W, const FFurnitureEntry& E, cons
 		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		Spawned = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM, SP);
 	}
+	else if (S == TEXT("LightSwitch"))
+	{
+		APackLightSwitch* Sw = W->SpawnActorDeferred<APackLightSwitch>(APackLightSwitch::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Sw)
+		{
+			Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"),
+				FMath::RoundToInt(L.X / 10.f), FMath::RoundToInt(L.Y / 10.f), FMath::RoundToInt(L.Z / 10.f)), 520.f);
+			Sw->FinishSpawning(TM);
+		}
+		Spawned = Sw;
+	}
 	else
 	{
 		// Standaard meubel (Table/Fridge/Mattress/...): APlaceableProp met ItemId.
@@ -332,5 +348,6 @@ int32 FurnitureTemplates::ClearPlaced(UWorld* W)
 	for (TActorIterator<AStorageShelf> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
 	for (TActorIterator<ACeilingLamp> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
 	for (TActorIterator<AAtm> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
+	for (TActorIterator<APackLightSwitch> It(W); It; ++It) { if (IsValid(*It)) { It->Destroy(); ++N; } }
 	return N;
 }

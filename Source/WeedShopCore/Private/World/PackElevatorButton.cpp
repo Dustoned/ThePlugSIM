@@ -120,6 +120,24 @@ void APackElevatorButton::SetDigit(int32 Digit)
 	{
 		DigitMesh->SetStaticMesh(M);
 	}
+	// Het witte vlak licht egaal op (de cijfer-textuur komt er niet uit) -> we leggen er zelf een ZWART
+	// cijfer overheen, net voor de plaat. Zwart silhouet op wit = leest als een verlicht nummer.
+	if (!DigitText)
+	{
+		DigitText = NewObject<UTextRenderComponent>(this);
+		DigitText->SetupAttachment(GetRootComponent());
+		DigitText->RegisterComponent();
+		DigitText->SetMobility(EComponentMobility::Movable);
+		DigitText->SetHorizontalAlignment(EHTA_Center);
+		DigitText->SetVerticalAlignment(EVRTA_TextCenter);
+		DigitText->SetTextRenderColor(FColor(8, 8, 10));
+		DigitText->SetCanEverAffectNavigation(false);
+		DigitText->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	const FVector Fwd = DigitMesh->GetForwardVector(); // +X = uit het vlak naar de kijker
+	DigitText->SetWorldLocationAndRotation(DigitMesh->GetComponentLocation() + Fwd * 3.f, DigitMesh->GetComponentRotation());
+	DigitText->SetWorldSize(FMath::Max(8.f, DigitMesh->GetComponentScale().X * 4.2f));
+	DigitText->SetText(FText::AsNumber(FMath::Clamp(Digit, 0, 9)));
 }
 
 void APackElevatorButton::Interact_Implementation(APawn* InstigatorPawn)
