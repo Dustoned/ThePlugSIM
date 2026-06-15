@@ -1,12 +1,13 @@
 # upload-build.ps1 - package ThePlugSIM (Win64) in een of meer texture-kwaliteiten, zip elk,
 # en upload ze samen als ASSETS onder EEN GitHub Release.
-# Gebruik:  powershell -ExecutionPolicy Bypass -File "<pad>\Tools\upload-build.ps1" [-Qualities 2K,1K] [-Notes "wat is er nieuw"]
-#   -Qualities 2K,1K (default) = beide builds onder een release (2K = aanbevolen, 1K = kleinste download).
-#   Wil je er maar een:  -Qualities 2K   of   -Qualities 1K   (4K kan ook).
+# Gebruik:  powershell -ExecutionPolicy Bypass -File "<pad>\Tools\upload-build.ps1" [-Qualities 2K] [-Notes "wat is er nieuw"]
+#   -Qualities 2K (default) = een build onder een release. UE's Shipping-compressie (IoStore+Oodle)
+#   drukt de build sowieso naar ~700 MB, dus een aparte 1K scheelt maar ~1% - daarom niet standaard.
+#   Wil je toch meerdere als assets onder EEN release:  -Qualities 2K,1K   (4K kan ook).
 param(
     [string]$Notes = "Nieuwe test-build.",
     [string]$Config = "Shipping",
-    [ValidateSet("4K","2K","1K")][string[]]$Qualities = @("2K","1K")
+    [ValidateSet("4K","2K","1K")][string[]]$Qualities = @("2K")
 )
 $ErrorActionPreference = "Stop"
 $Proj    = "C:\Users\Dustoned\Documents\Unreal Projects\ThePlugSIM - Claude"
@@ -89,7 +90,8 @@ foreach ($q in $Qualities) {
 # Release-tekst (een keer), met een Downloads-sectie die beide assets benoemt.
 $Title = "ThePlugSIM test-build $Stamp"
 $Downloads = ($AssetLines -join "`n")
-$Body = "$Notes`n`n## Downloads (kies een kwaliteit)`n$Downloads`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download een zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
+$DlHeader = if ($Zips.Count -gt 1) { "## Downloads (kies een kwaliteit)" } else { "## Download" }
+$Body = "$Notes`n`n$DlHeader`n$Downloads`n`n## Wijzigingen sinds de vorige build`n$Changelog`n`n---`nWindows $Config build. Download de zip, pak het uit en start ThePlugSIM.exe.`nCo-op: host start een LAN/IP-spel; anderen verbinden via het IP van de host (zelfde netwerk, of port-forward 7777, of een VPN zoals Radmin of ZeroTier)."
 $NotesFile = Join-Path $Proj "Build\release-notes.md"
 [System.IO.File]::WriteAllText($NotesFile, $Body, (New-Object System.Text.UTF8Encoding($false)))
 
