@@ -27,6 +27,7 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Widgets/SWindow.h"
+#include "UnrealClient.h"
 
 namespace
 {
@@ -114,19 +115,18 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// Verduisterende achtergrond.
 	UBorder* Dim = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SetDim"));
-	Dim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.78f), 0.f));
-	Dim->SetHorizontalAlignment(HAlign_Center); Dim->SetVerticalAlignment(VAlign_Center);
+	Dim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.82f), 0.f));
+	// Fill + marges: het paneel vult bijna het hele scherm (fullscreen-feel) en schaalt mee met de resolutie.
+	Dim->SetHorizontalAlignment(HAlign_Fill); Dim->SetVerticalAlignment(VAlign_Fill);
+	Dim->SetPadding(FMargin(120.f, 56.f));
 	Card = Dim;
 	UCanvasPanelSlot* DS = Root->AddChildToCanvas(Dim);
 	DS->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f)); DS->SetOffsets(FMargin(0.f));
 
-	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-	Sz->SetWidthOverride(620.f); Sz->SetHeightOverride(480.f);
-	Dim->SetContent(Sz);
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
 	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 18.f));
-	Panel->SetPadding(FMargin(22.f));
-	Sz->SetContent(Panel);
+	Panel->SetPadding(FMargin(32.f, 26.f));
+	Dim->SetContent(Panel);
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
@@ -146,9 +146,11 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	Tabs->AddChildToHorizontalBox(TabAudio)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	VB->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
-	// Inhoud.
+	// Inhoud - scrollbaar zodat alle (graphics-)rijen netjes BINNEN het paneel passen i.p.v. eroverheen.
+	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
 	Body = WidgetTree->ConstructWidget<UVerticalBox>();
-	UVerticalBoxSlot* BSlot = VB->AddChildToVerticalBox(Body);
+	Scroll->AddChild(Body);
+	UVerticalBoxSlot* BSlot = VB->AddChildToVerticalBox(Scroll);
 	BSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
 	// Back onderaan.
@@ -208,7 +210,14 @@ void USettingsWidget::AddResolutionRow()
 	TArray<FIntPoint> Modes;
 	UKismetSystemLibrary::GetSupportedFullscreenResolutions(Modes);
 	if (Modes.Num() == 0) { Modes = { FIntPoint(1280,720), FIntPoint(1600,900), FIntPoint(1920,1080), FIntPoint(2560,1440) }; }
-	const FIntPoint Cur = G ? G->GetScreenResolution() : FIntPoint(1920, 1080);
+	FIntPoint Cur = G ? G->GetScreenResolution() : FIntPoint(1920, 1080);
+	// De ECHTE huidige render-resolutie van het venster (GetScreenResolution kan achterlopen in windowed
+	// of na een resize) -> de dropdown toont wat er nu daadwerkelijk op staat.
+	if (GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport)
+	{
+		const FIntPoint VP = GEngine->GameViewport->Viewport->GetSizeXY();
+		if (VP.X > 0 && VP.Y > 0) { Cur = VP; }
+	}
 	FString CurOpt;
 	for (const FIntPoint& M : Modes)
 	{
