@@ -323,8 +323,9 @@ void USettingsWidget::RefreshContent()
 				const int32 Next = (TierNow >= 3) ? -1 : TierNow + 1;
 				WeedShop_ApplyGraphicsTier(Next);
 				bool bLum, bPot, bMb; WeedShop_ReadGfxFlags(bLum, bPot, bMb);
-				// Lumen-vlag volgt de preset (uit op Potato/Low, aan op Medium/High/Epic); MotionBlur behouden.
-				WeedShop_WriteGfxFlags((Next <= 0), (Next <= -1), bMb);
+				// Lumen-vlag volgt de preset: alleen EPIC heeft Lumen aan (Potato t/m High = uit voor perf);
+				// MotionBlur behouden.
+				WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb);
 				RefreshContent();
 			});
 		}

@@ -72,7 +72,9 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	// Navigation-invoker: genereert runtime-navmesh rond de speler (de stad is procedureel, dus geen
 	// vooraf gebakken navmesh). Ruime straal zodat NPC's over de stoepen kunnen lopen rond jou.
 	NavInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavInvoker"));
-	NavInvoker->SetGenerationRadii(9000.f, 11000.f);
+	// Runtime-navmesh rond de speler. 90/110m was enorm duur (continue regeneratie over 220m diameter).
+	// 45/60m is ruim genoeg: NPC's vlakbij lopen normaal, verre NPC's worden toch al gethrottled. Grote CPU-winst.
+	NavInvoker->SetGenerationRadii(4500.f, 6000.f);
 	
 	// Create the first person mesh that will be viewed only by this character's owner
 	FirstPersonMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("First Person Mesh"));

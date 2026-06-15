@@ -143,11 +143,25 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	SetF(TEXT("r.ViewDistanceScale"),    bPotato ? 0.4f   : 1.f);
 	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.25f  : 1.f);
 	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.25f  : 1.f);
-	SetF(TEXT("r.Shadow.MaxResolution"), bPotato ? 256.f  : 1024.f);
 	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f    : 4.f);
-	// Lumen volgt de tier: Potato + Low = UIT (perf); Medium/High/Epic = AAN (mooie GI + reflecties +
-	// soft indirect shadows). Zonder dit bleef een eerdere 'Lumen uit' hangen -> grainy/vlak op Epic.
-	WeedShop_ApplyLumen(Tier <= 0);
+
+	// --- LUMEN: de #1 GPU-kost. Alleen op EPIC. Potato/Low/Medium/High draaien zonder (de speler vindt
+	//     de Lumen-uit-look prima), wat op High ~20-25 FPS scheelt. Epic blijft de mooie-maar-dure optie.
+	WeedShop_ApplyLumen(Tier < 3);
+
+	// --- SCHADUWEN + dure GI-bijdragen per tier (grootste winst na Lumen) ---
+	const bool bEpic = (Tier >= 3);
+	// Distance-field shadows + volumetric fog: duur, weinig zichtbare meerwaarde -> alleen Epic.
+	SetF(TEXT("r.DistanceFieldShadowing"), bEpic ? 1.f : 0.f);
+	SetF(TEXT("r.VolumetricFog"),          bEpic ? 1.f : 0.f);
+	// CSM (zonschaduw) resolutie + cascades per tier. Potato krijgt JUIST betere schaduwen (1024 i.p.v. de
+	// blokkerige 256/1-cascade default) want dat was de zwakke plek; verder oplopend.
+	const float CsmRes = bPotato ? 1024.f : (Tier <= 1 ? 1024.f : (Tier == 2 ? 2048.f : 4096.f));
+	SetF(TEXT("r.Shadow.MaxCSMResolution"), CsmRes);
+	SetF(TEXT("r.Shadow.MaxResolution"),    bPotato ? 512.f : (Tier == 2 ? 2048.f : (bEpic ? 4096.f : 1024.f)));
+	SetF(TEXT("r.Shadow.CSM.MaxCascades"),  bPotato ? 2.f   : (Tier <= 1 ? 3.f : 4.f));
+	// Kleine/verre schaduwen wegcullen (perf, nauwelijks zichtbaar): hoger = meer cullen.
+	SetF(TEXT("r.Shadow.RadiusThreshold"),  bPotato ? 0.05f : (Tier == 2 ? 0.03f : 0.01f));
 
 	UE_LOG(LogWeedShop, Warning, TEXT("Graphics-tier: %s (scalability %d)"),
 		bPotato ? TEXT("POTATO") : (Scal == 0 ? TEXT("Low") : Scal == 1 ? TEXT("Medium") : Scal == 2 ? TEXT("High") : TEXT("Epic")), Scal);
