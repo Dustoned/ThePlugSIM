@@ -4,6 +4,7 @@
 #include "UI/WeedShopHUD.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h"
 
 AWeedShopGameMode::AWeedShopGameMode()
@@ -28,4 +29,18 @@ AWeedShopGameMode::AWeedShopGameMode()
 	{
 		PlayerControllerClass = PCBP.Class;
 	}
+}
+
+APawn* AWeedShopGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayerController, const FTransform& SpawnTransform)
+{
+	UClass* PawnClass = GetDefaultPawnClassForController(NewPlayerController);
+	if (!PawnClass || !GetWorld()) { return Super::SpawnDefaultPawnAtTransform_Implementation(NewPlayerController, SpawnTransform); }
+
+	FActorSpawnParameters SpawnInfo;
+	SpawnInfo.Instigator = GetInstigator();
+	SpawnInfo.ObjectFlags |= RF_Transient;
+	// ALTIJD spawnen, positie bijstellen indien nodig -> nooit een null-pawn (geen "Couldn't spawn player").
+	SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	APawn* Result = GetWorld()->SpawnActor<APawn>(PawnClass, SpawnTransform, SpawnInfo);
+	return Result;
 }

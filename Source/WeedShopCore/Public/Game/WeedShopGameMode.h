@@ -19,4 +19,9 @@ class WEEDSHOPCORE_API AWeedShopGameMode : public AGameModeBase
 
 public:
 	AWeedShopGameMode();
+
+	// Forceer dat de speler-pawn ALTIJD spawnt (positie bijstellen indien nodig): bij co-op-join spawnt de
+	// 2e speler op dezelfde PlayerStart als de host -> botsing -> met een strikte collision-methode geeft
+	// de spawn null en crasht de engine met "Couldn't spawn player". AlwaysSpawn voorkomt dat.
+	virtual APawn* SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayerController, const FTransform& SpawnTransform) override;
 };
