@@ -764,13 +764,16 @@ void ADayNightController::Tick(float DeltaSeconds)
 				: PL->ComponentHasTag(TEXT("CeilLamp")) ? 900.f
 					: PL->ComponentHasTag(TEXT("CeilGlow")) ? 9000.f : 9000.f; // glow = zacht plafond/hoek-fill, geen 2e hoofdlamp
 			const bool bCeil = PL->ComponentHasTag(TEXT("CeilLamp")) || PL->ComponentHasTag(TEXT("CeilGlow"));
-			const float Want = ((bCeil ? (MinDayF < 0.95f) : (MinDayF < 0.7f)) ? (LampIntensity / Div) : 0.f);
+			// Plafondlampen (gebouw-/hotelgangen, interieurs) hebben geen daglicht -> ALTIJD aan.
+			// Buitenlampen (straatlantaarns) volgen wel de schemering. Door een schakelaar geclaimde
+			// lampen zijn hierboven al overgeslagen.
+			const float Want = ((bCeil ? true : (MinDayF < 0.7f)) ? (LampIntensity / Div) : 0.f);
 			if (!FMath::IsNearlyEqual(PL->Intensity, Want, 0.05f)) { PL->SetIntensity(Want); }
 		}
 
-		// Diffuser-emissive ('Brightness') mee aan/uit met de plafondlampen (zelfde drempel) -> de lamp-box
-		// gloeit niet meer wit als de lamp uit is.
-		const float CeilEmisOn = (MinDayF < 0.95f) ? 1.f : 0.f;
+		// Diffuser-emissive ('Brightness'): plafond-boxen altijd mee-glow (lampen zijn altijd aan); door een
+		// schakelaar geclaimde boxen worden hieronder overgeslagen.
+		const float CeilEmisOn = 1.f;
 		for (int32 i = 0; i < PackCeilEmis.Num(); ++i)
 		{
 			if (UMaterialInstanceDynamic* E = PackCeilEmis[i])
