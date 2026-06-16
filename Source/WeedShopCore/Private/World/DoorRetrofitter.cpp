@@ -2792,7 +2792,15 @@ void ADoorRetrofitter::TickVirtualCrowd()
 					if (Dd < BD) { BD = Dd; V.NextIdx = ni; }
 				}
 				V.PrevIdx = -1;
-				B->Destroy();
+				// PARKEREN i.p.v. vernietigen: verberg + zet stil + tick uit, en bewaar in de pool. Bij her-
+				// materialiseren hergebruiken we 'm (geen modulaire rebuild = geen ~40ms hitch, zoals de dev-city
+				// die z'n NPC's maar 1x bouwt).
+				B->SetActorHiddenInGame(true);
+				B->SetActorEnableCollision(false);
+				B->SetActorTickEnabled(false);
+				if (UCharacterMovementComponent* CM = B->FindComponentByClass<UCharacterMovementComponent>())
+				{ CM->StopMovementImmediately(); CM->DisableMovement(); }
+				CrowdPool.Add(B);
 				V.Body = nullptr;
 			}
 			continue;
@@ -2801,7 +2809,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 		// MATERIALISEREN: speler binnen bereik, niet pal in beeld, echte straat onder de voeten
 		// en onder het lichaam-plafond.
 		const float Pd = MinPlayerDist(V.Pos);
-		if (NBodies < BodyCap && Spawned < MaxSpawnPerTick && Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))
+		if (NBodies < BodyCap && Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))
 		{
 			FVector Ground;
 			if (!StreetAt(V.Pos, Ground)) { continue; } // wereld hier (nog) niet geladen
@@ -2816,16 +2824,34 @@ void ADoorRetrofitter::TickVirtualCrowd()
 				if (StreetAt(Alt, AltGround)) { SpawnP = AltGround + FVector(0.f, 0.f, 100.f); }
 				else { SpawnP = Ground + FVector(FMath::FRandRange(-120.f, 120.f), FMath::FRandRange(-120.f, 120.f), 100.f); }
 			}
-			FActorSpawnParameters SPv;
-			SPv.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			// Deferred spawn: bCrowdNpc VOOR BeginPlay zetten -> goedkope vaste-mesh-skin i.p.v. de dure
-			// modulaire build (de ~30-40ms hitch per spawn). Achtergrond-crowd hoeft geen modulaire variatie.
-			ACustomerBase* B = W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			ACustomerBase* B = nullptr;
+			// 1) HERGEBRUIK uit de pool (gratis - geen modulaire rebuild). Altijd toegestaan (geen cap).
+			while (CrowdPool.Num() > 0 && !B)
+			{
+				ACustomerBase* P = CrowdPool.Pop();
+				if (IsValid(P)) { B = P; }
+			}
+			if (B)
+			{
+				B->SetActorLocation(SpawnP);
+				B->SetActorHiddenInGame(false);
+				B->SetActorEnableCollision(true);
+				B->SetActorTickEnabled(true);
+				if (UCharacterMovementComponent* CM = B->FindComponentByClass<UCharacterMovementComponent>()) { CM->SetMovementMode(MOVE_Walking); }
+			}
+			else
+			{
+				// 2) Pool leeg -> ECHT bouwen (modulaire variatie zoals overal). Dit is de dure stap (~40ms),
+				//    dus maar MaxSpawnPerTick per call -> de pool warmt op over een paar seconden, daarna alleen
+				//    nog gratis hergebruik = glad (net als de dev-city die z'n NPC's maar 1x bouwt).
+				if (Spawned >= MaxSpawnPerTick) { continue; }
+				++Spawned;
+				FActorSpawnParameters SPv;
+				SPv.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), SPv);
+			}
 			if (!B) { continue; }
-			B->bCrowdNpc = true;
-			B->FinishSpawning(FTransform(SpawnP));
 			++NBodies;
-			++Spawned;
 			V.Body = B;
 			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).
 			ACustomerSpawner* Near = nullptr;

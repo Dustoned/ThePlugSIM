@@ -123,6 +123,9 @@ protected:
 		TWeakObjectPtr<class ACustomerBase> Body;
 	};
 	TArray<FVirtualWalker> Crowd;
+	// POOL van geparkeerde (verborgen) crowd-lichamen: een ver-weg-lichaam wordt geparkeerd i.p.v. vernietigd
+	// en hergebruikt bij her-materialiseren -> elke NPC wordt maar 1x modulair gebouwd (geen rebuild-hitch).
+	UPROPERTY() TArray<TObjectPtr<class ACustomerBase>> CrowdPool;
 	void TickVirtualCrowd();      // ~0.5s: lichamen materialiseren/opruimen (traces + spawns - DUUR)
 	void TickVirtualMove();       // 10x per seconde: vloeiende data-stapjes (alleen rekenwerk)
 	int32 CrowdSubTick = 0;       // throttle: TickVirtualCrowd maar 1x per N TickVirtualMove-calls (geen 10Hz-spawn-cascade)
