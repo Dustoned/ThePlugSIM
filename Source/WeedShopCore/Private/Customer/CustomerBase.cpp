@@ -263,6 +263,17 @@ static FLinearColor WeedNpc_ClothColor(uint32 H)
 // Forward-decl: tint de kleding-slots van een (deel-)mesh-component.
 static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed);
 
+// STABIELE seed uit de NpcId-string (FNV-1a). GetTypeHash(FName) is NIET stabiel tussen sessies (hangt af
+// van de naam-tabel-volgorde) -> daarmee zou een NPC bij elke load andere kleren/kleur krijgen. Deze hash
+// hangt alleen van de tekst af, dus dezelfde persoon ziet er ALTIJD hetzelfde uit (herkenbaar).
+static uint32 WeedNpc_StableSeed(FName NpcId)
+{
+	const FString S = NpcId.ToString();
+	uint32 H = 2166136261u;
+	for (const TCHAR Ch : S) { H = (H ^ (uint32)Ch) * 16777619u; }
+	return H ? H : 1u;
+}
+
 // MODULAIRE Casual-NPC: bouw een persoon uit losse kledingstukken (Casual_Wear_Pack1) -> elke NPC krijgt
 // een eigen combinatie top/broek/schoenen/kapsel/hoofd. De basis-body draait de anim; de kledingstukken
 // volgen via SetLeaderPoseComponent (zelfde UE4_Mannequin_Skeleton_Main). Plus per-part random kleur.
@@ -402,18 +413,19 @@ void ACustomerBase::BeginPlay()
 			if (UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr)
 			{
 				const int32 Tier = Reg->GetCustomerTier(NpcId);
-				const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)GetTypeHash(NpcId));
+				const uint32 LookSeed = WeedNpc_StableSeed(NpcId); // stabiel -> altijd dezelfde look
+				const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)LookSeed);
 				if (SkinIdx >= 3 && SkinIdx <= 5)
 				{
 					// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd
 					// (per-part ook random kleur). Veel meer dan alleen kleur-variatie.
-					WeedNpc_BuildModular(this, SkM, (uint32)GetTypeHash(NpcId));
+					WeedNpc_BuildModular(this, SkM, LookSeed);
 				}
 				else if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx))
 				{
 					SkM->SetSkeletalMesh(Sk);
 					// Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop (zelfde mesh, ander shirt).
-					WeedNpc_TintClothing(SkM, (uint32)GetTypeHash(NpcId));
+					WeedNpc_TintClothing(SkM, LookSeed);
 				}
 			}
 		}
