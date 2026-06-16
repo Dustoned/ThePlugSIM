@@ -1582,18 +1582,32 @@ void ADoorRetrofitter::ScanAndConvert()
 			const int32 Slot = HomedPawns.Num();
 			HomedPawns.Add(Pw);
 			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
-			Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
-			// METEEN BEVRIEZEN (vliegen, geen zwaartekracht): zo val je NIET door de nog-ladende
-			// world-partition vloer. De floor-pin in TickVirtualMove zet je weer op MOVE_Walking en
-			// precies op de ECHTE vloer zodra die is ingestreamd - dus nooit op een verkeerde hoogte.
-			if (UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>())
+			UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
+			if (bRoomFloorReady)
 			{
-				CMv->StopMovementImmediately();
-				CMv->SetMovementMode(MOVE_Flying);
+				// Vloer is AL ingestreamd (later-joinende partner): de settle-loop draait niet meer, dus zou
+				// een zweef-bevriezing nooit meer ontdooien = eeuwig zwevende joiner. Direct op de vloer + lopend.
+				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandEarly), false);
+				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
+				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
+				const FVector TS = HomeAnchor + Off + FVector(0.f, 0.f, 120.f);
+				FVector Dest = HomeAnchor + Off + FVector(0.f, 0.f, 96.f);
+				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 600.f), ECC_WorldStatic, LQ))
+				{ Dest = FH.Location + FVector(0.f, 0.f, 96.f); }
+				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
+				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
+			}
+			else
+			{
+				// Vloer nog niet klaar -> METEEN BEVRIEZEN (vliegen, geen zwaartekracht): zo val je NIET door de
+				// nog-ladende world-partition vloer. De floor-pin in TickVirtualMove zet je op MOVE_Walking en
+				// op de ECHTE vloer zodra die is ingestreamd.
+				Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
+				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
+				HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
 			}
 			// Beach-map: ken de starter-woning toe in de phone-registry (idempotent via bPropertyInit).
 			if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>()) { Phw->PropertyTick(); }
-			HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
 		}
 	}
 
@@ -1683,18 +1697,31 @@ void ADoorRetrofitter::ScanAndConvert()
 			const int32 Slot = HomedPawns.Num();
 			HomedPawns.Add(Pw);
 			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
-			Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
-			// METEEN bevriezen (vliegen, geen zwaartekracht) zodat je niet door de nog-ladende vloer valt;
-			// de floor-pin ontdooit je en zet je op de echte vloer zodra die er is.
-			if (UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>())
+			UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
+			if (bRoomFloorReady)
 			{
-				CMv->StopMovementImmediately();
-				CMv->SetMovementMode(MOVE_Flying);
+				// De vloer is AL ingestreamd (bv. een LATER-joinende partner): de settle-loop draait niet meer
+				// (die is gegate op !bRoomFloorReady), dus zou een zweef-bevriezing hier nooit meer ontdooien
+				// = eeuwig zwevende/slidende joiner. Daarom 'm hier DIRECT op de vloer zetten + lopend.
+				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandLate), false);
+				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
+				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
+				const FVector TS = HomeAnchor + Off + FVector(0.f, 0.f, 120.f);
+				FVector Dest = HomeAnchor + Off + FVector(0.f, 0.f, 96.f);
+				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 600.f), ECC_WorldStatic, LQ))
+				{ Dest = FH.Location + FVector(0.f, 0.f, 96.f); }
+				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
+				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
 			}
-			// SETTLE-venster: de penthouse-vloer (world-partition) is bij het teleporteren vaak nog
-			// niet ingestreamd, dus val je erdoorheen naar een lagere verdieping. Hou de spelers 12s
-			// op de thuis-plek tot de vloer-collision geladen is - zie de check in TickVirtualMove.
-			HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
+			else
+			{
+				// Vloer nog niet klaar -> METEEN bevriezen (vliegen, geen zwaartekracht) zodat je niet door de
+				// nog-ladende vloer valt; de floor-pin in TickVirtualMove ontdooit je op de echte vloer zodra
+				// die er is. SETTLE-venster open zetten.
+				Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
+				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
+				HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
+			}
 			if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>())
 			{
 				Phw->Toast(FString::Printf(TEXT("Welcome home - Apt %d. Rent: EUR 500 due every 31 days."), StarterDoor->GetAptNumber()), FColor::Cyan, 6.f);
