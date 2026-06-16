@@ -372,31 +372,35 @@ void UWardrobeWidget::FillBody()
 
 	auto Row = [this](UWidget* W, const FMargin& Pad) { Body->AddChildToVerticalBox(W)->SetPadding(Pad); };
 
-	// --- Body-keuze ---
-	Row(WeedUI::Text(WidgetTree, TEXT("Body"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
-	UHorizontalBox* BodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
-	// Manny/Quinn (0/1) zijn geen keuze meer. Male = Tony (5, citizens), Female = Casual girl (2), + extra girls.
-	struct FBodyChoice { uint8 Idx; const TCHAR* Name; };
-	static const FBodyChoice Choices[] = { { 5, TEXT("Male") }, { 2, TEXT("Female") }, { 3, TEXT("Girl 2") }, { 4, TEXT("Girl 3") } };
-	bool bFirstBody = true;
-	for (const FBodyChoice& Ch : Choices)
+	// --- Model-keuze (binnen het gekozen geslacht). Man/Vrouw schakel je in Phone -> Settings -> Game. ---
+	const bool bFemaleSkin = (Skin >= 1 && Skin <= 4); // 1 = Quinn (legacy), 2-4 = Casual girls
+	if (bFemaleSkin)
 	{
-		const uint8 bi = Ch.Idx;
-		UWeedActionButton* BB = WrdBtn(WidgetTree,
-			(Skin == bi) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f), 8.f,
-			[this, bi]() { if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); } LastSig.Reset(); });
-		BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, FLinearColor::White, true));
-		UHorizontalBoxSlot* BS = BodyRowBox->AddChildToHorizontalBox(BB);
-		BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		BS->SetPadding(FMargin(bFirstBody ? 0.f : 4.f, 0.f, 0.f, 0.f));
-		bFirstBody = false;
+		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
+		UHorizontalBox* BodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
+		struct FBodyChoice { uint8 Idx; const TCHAR* Name; };
+		static const FBodyChoice Choices[] = { { 2, TEXT("Girl 1") }, { 3, TEXT("Girl 2") }, { 4, TEXT("Girl 3") } };
+		bool bFirstBody = true;
+		for (const FBodyChoice& Ch : Choices)
+		{
+			const uint8 bi = Ch.Idx;
+			UWeedActionButton* BB = WrdBtn(WidgetTree,
+				(Skin == bi) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f), 8.f,
+				[this, bi]() { if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); } LastSig.Reset(); });
+			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, FLinearColor::White, true));
+			UHorizontalBoxSlot* BS = BodyRowBox->AddChildToHorizontalBox(BB);
+			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			BS->SetPadding(FMargin(bFirstBody ? 0.f : 4.f, 0.f, 0.f, 0.f));
+			bFirstBody = false;
+		}
+		Row(BodyRowBox, FMargin(0, 0, 0, 6));
 	}
-	Row(BodyRowBox, FMargin(0, 0, 0, 10));
+	Row(WeedUI::Text(WidgetTree, TEXT("Switch Male / Female in Phone - Settings - Game."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 0, 0, 10));
 
+	// Legacy Manny/Quinn (0/1) hebben geen losse outfit-parts -> kies hierboven een model.
 	if (Skin < 2)
 	{
-		Row(WeedUI::Text(WidgetTree, TEXT("Outfits are available for the girls (for now)."), 13, FLinearColor(0.65f, 0.68f, 0.78f)), FMargin(0, 8, 0, 0));
-		Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 12, 0, 0));
+		Row(WeedUI::Text(WidgetTree, TEXT("Pick a model above for outfits."), 13, FLinearColor(0.65f, 0.68f, 0.78f)), FMargin(0, 6, 0, 0));
 		return;
 	}
 

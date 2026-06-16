@@ -7,6 +7,7 @@
 #include "UI/HotkeyHintWidget.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Input/ControlSettings.h"
+#include "Interaction/PlayerNpcActions.h"
 #include "Components/ScrollBox.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -415,6 +416,23 @@ void USettingsWidget::RefreshContent()
 	}
 	else if (Category == 1) // Game
 	{
+		// Character: Man/Vrouw-keuze. Het MODEL/gezicht + bijbehorende kleren kies je daarna in de Wardrobe.
+		if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
+		{
+			const uint8 Sk = PA->GetPlayerSkinIndex();
+			const bool bMale = (Sk == 5 || Sk == 0); // 5 = man (Tony), 0 = Manny (legacy) ; 1-4 = vrouw
+			AddValueRow(TEXT("Character"), bMale ? TEXT("Male") : TEXT("Female"), [this]()
+			{
+				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
+				{
+					const uint8 Cur = P->GetPlayerSkinIndex();
+					const bool bIsMale = (Cur == 5 || Cur == 0);
+					P->SetPlayerSkinIndex(bIsMale ? 2 : 5); // -> vrouw (Girl 1) of man (Tony)
+					RefreshContent();
+				}
+			});
+		}
+
 		UPhoneClientComponent* Ph = GetPhone();
 		const float Fov = Ph ? Ph->GetFov() : 90.f;          // 60..120
 		const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f; // 0.1..3.0
