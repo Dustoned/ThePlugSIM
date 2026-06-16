@@ -77,6 +77,10 @@ protected:
 	// Adaptieve scan-cadans: stabiel (niks nieuws ingestreamd) -> van 2s naar 8s, scheelt 4x de sweep-hitch.
 	int32 ScanIdleStreak = 0;
 	bool bScanSlow = false;
+	// Wereld 'dirty' = er is een level/cel in/uit-gestreamd sinds de vorige sweep -> 1x zwaar scannen.
+	// Staat alles stil, dan slaat de zware ombouw-sweep zichzelf over (geen periodieke freeze).
+	bool bWorldDirty = true;
+	FVector LastScanPlayerPos = FVector(1e9f); // vangnet: flink verplaatst -> ook dirty (cel mogelijk gestreamd)
 
 	// Lift-schachten (per XY-cluster van deurframes): stabiliteits-check + gebouwde schachten.
 	TMap<FIntPoint, int32> ElevPrevCount;

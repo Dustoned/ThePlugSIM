@@ -148,6 +148,21 @@ void ADoorRetrofitter::BeginPlay()
 	// kaart, en het zware werk (traces voor materialiseren) blijft op de 2s-pass.
 	GetWorldTimerManager().SetTimer(CrowdMoveTimer, this, &ADoorRetrofitter::TickVirtualMove, 0.1f, true);
 
+	// STREAMING-SIGNAAL: de zware ombouw-sweep (deuren/glas/lampen/liften) hoeft ALLEEN te draaien als er
+	// nieuwe geometrie instreamt. World-partition cellen + level-instances vuren deze delegates -> we
+	// markeren de wereld 'dirty' en doen dan 1 sweep; staat alles stil, dan slaat de sweep zichzelf over
+	// (geen periodieke freeze meer). Eenmaal omgebouwd gebied blijft omgebouwd.
+	{
+		TWeakObjectPtr<ADoorRetrofitter> WeakThis(this);
+		auto MarkDirty = [WeakThis](ULevel*, UWorld* InW)
+		{
+			ADoorRetrofitter* Self = WeakThis.Get();
+			if (Self && InW == Self->GetWorld()) { Self->bWorldDirty = true; }
+		};
+		FWorldDelegates::LevelAddedToWorld.AddWeakLambda(this, MarkDirty);
+		FWorldDelegates::LevelRemovedFromWorld.AddWeakLambda(this, MarkDirty);
+	}
+
 	// Dev: -ElevScan -> pak de LAATSTE gemarkeerde spot (MarkedSpots.txt) op deze map, teleporteer de
 	// speler erheen (streamt het gebouw in) en dump de elevator-meshes naar Saved/ElevScan.txt.
 	if (FParse::Param(FCommandLine::Get(), TEXT("ElevScan")))
@@ -2040,8 +2055,29 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
-	FHitchTimer _tConvert(TEXT("Scan:Convert"), ScanPass);
 	int32 NewThisPass = 0;
+	// "INBAKKEN": de zware ombouw-sweeps (deuren/glas/raam/lampen/liften) lopen elk over ALLE actors.
+	// Die hoeven ALLEEN te draaien als er nieuwe geometrie is ingestreamd (bWorldDirty via de level-
+	// delegates), tijdens de eerste init, of als zeldzame backstop. Anders volledig overslaan -> geen
+	// periodieke volle-actor-iteratie = geen periodieke freeze. Eenmaal omgebouwd gebied blijft omgebouwd.
+	// Vangnet: flink verplaatst sinds de vorige zware sweep? Dan zijn er waarschijnlijk nieuwe cellen
+	// gestreamd (ook als de delegate ze miste) -> opnieuw zwaar scannen. Stilstaan = niet dirty = geen freeze.
+	for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+	{
+		const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+		if (Pp && FVector::DistSquared(Pp->GetActorLocation(), LastScanPlayerPos) > 6000.f * 6000.f) { bWorldDirty = true; break; }
+	}
+	const bool bRunHeavy = bWorldDirty || (ScanPass < 30) || (ScanPass % 20 == 0);
+	bWorldDirty = false;
+	if (bRunHeavy)
+	{
+		// onthoud waar we voor het laatst zwaar scanden (voor het verplaatsings-vangnet)
+		for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+		{
+			const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+			if (Pp) { LastScanPlayerPos = Pp->GetActorLocation(); break; }
+		}
+	FHitchTimer _tConvert(TEXT("Scan:Convert"), ScanPass);
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
 		AStaticMeshActor* SMA = *It;
@@ -2468,6 +2504,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 		}
 	}
+	} // einde bRunHeavy: zware ombouw-sweeps overgeslagen als er niks instreamt (geen periodieke freeze)
 
 	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
 	// BuildMarkedRooms(); // UIT: marker-kopie werkte niet lekker - vervangen door de dev building-tool (muren/vloeren tekenen via het bouw-systeem)
