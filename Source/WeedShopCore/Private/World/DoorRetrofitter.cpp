@@ -451,6 +451,10 @@ void ADoorRetrofitter::ScanAndConvert()
 	if (!W) { return; }
 	++ScanPass;
 	FHitchTimer HT_(TEXT("ScanAndConvert"), ScanPass);
+	// Werk-meting voor de adaptieve cadans: groeit een van de setup-sets/tellers, dan is er iets
+	// nieuws ingestreamd en verwerkt -> snel blijven scannen. Anders terugschakelen naar traag.
+	const int32 _scanWork0 = Converted.Num() + ConvScanRejected.Num() + GlassScanSeen.Num()
+		+ WinFixSeen.Num() + LampScanSeen.Num() + ElevScanSeen.Num() + ElevBuilt.Num();
 	if (ScanPass == 1)
 	{
 		// Chill-plekken (ChillSpots.txt) laden: hang-plekken voor een deel van de wandelaars.
@@ -2473,6 +2477,22 @@ void ADoorRetrofitter::ScanAndConvert()
 	if (NewThisPass > 0)
 	{
 		UE_LOG(LogWeedShop, Log, TEXT("DoorRetrofitter: %d nieuwe deuren werkend gemaakt (totaal %d)"), NewThisPass, TotalConverted);
+	}
+
+	// ADAPTIEVE CADANS: heeft deze pass iets nieuws verwerkt (set gegroeid of deur gebouwd)?
+	const int32 _scanWork1 = Converted.Num() + ConvScanRejected.Num() + GlassScanSeen.Num()
+		+ WinFixSeen.Num() + LampScanSeen.Num() + ElevScanSeen.Num() + ElevBuilt.Num();
+	const bool bWorked = (_scanWork1 != _scanWork0) || (NewThisPass > 0) || (PendingResidents.Num() > 0);
+	if (bWorked) { ScanIdleStreak = 0; } else { ++ScanIdleStreak; }
+	// 3 passes niks nieuws -> wereld is uitgestreamd/stabiel: scan 4x trager (8s i.p.v. 2s) zodat de
+	// onvermijdelijke volle-actor-sweep-hitch veel minder vaak gebeurt. Streamt er weer iets in (set
+	// groeit), dan meteen terug naar 2s zodat nieuwe deuren/liften snel werkend worden.
+	const bool bWantSlow = (ScanIdleStreak >= 3);
+	if (bWantSlow != bScanSlow)
+	{
+		bScanSlow = bWantSlow;
+		GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, bScanSlow ? 8.0f : 2.0f, true);
+		UE_LOG(LogWeedShop, Warning, TEXT("[SCANDIAG] cadans -> %s"), bScanSlow ? TEXT("8s (stabiel)") : TEXT("2s (actief)"));
 	}
 }
 

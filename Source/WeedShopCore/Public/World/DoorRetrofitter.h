@@ -74,6 +74,9 @@ protected:
 	TSet<TWeakObjectPtr<AActor>> WinFixSeen;      // actors zonder (nog te fixen) glas/raam-collision
 	TSet<TWeakObjectPtr<AActor>> LampScanSeen;    // actors zonder binnen-lamp-componenten
 	TSet<TWeakObjectPtr<AActor>> ElevScanSeen;    // actors zonder lift-frame/paneel-mesh
+	// Adaptieve scan-cadans: stabiel (niks nieuws ingestreamd) -> van 2s naar 8s, scheelt 4x de sweep-hitch.
+	int32 ScanIdleStreak = 0;
+	bool bScanSlow = false;
 
 	// Lift-schachten (per XY-cluster van deurframes): stabiliteits-check + gebouwde schachten.
 	TMap<FIntPoint, int32> ElevPrevCount;
