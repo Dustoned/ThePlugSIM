@@ -2321,6 +2321,11 @@ void ADoorRetrofitter::ScanAndConvert()
 		for (TPair<FIntPoint, FShaft>& KV : Shafts)
 		{
 			if (ElevBuilt.Contains(KV.Key)) { continue; }
+			// CRASH-GUARD: pas een lift bouwen als de wereld STABIEL is (kamer ingestreamd). Tijdens de vroege
+			// map-init/world-partition-streaming is de physics/render-scene nog in opbouw; een lift spawnen +
+			// componenten registreren raakte die dan -> EXCEPTION_ACCESS_VIOLATION in PackElevator::Setup.
+			// Volgende scan-pass proberen we opnieuw zodra de wereld klaar is.
+			if (!WeedShop_IsRoomReady()) { continue; }
 			int32& Prev = ElevPrevCount.FindOrAdd(KV.Key);
 			const int32 Count = KV.Value.FloorZ.Num();
 			if (Count < 2 || Count != Prev) { Prev = Count; continue; } // wacht tot 2 scans stabiel
