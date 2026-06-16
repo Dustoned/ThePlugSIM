@@ -713,10 +713,10 @@ void ADoorRetrofitter::ScanAndConvert()
 					Shuffle(StripNodes);
 					Shuffle(AllNodes);
 					int32 StripCursor = 0, AllCursor = 0;
-					for (int32 ci = 0; ci < 150; ++ci)
+					for (int32 ci = 0; ci < 70; ++ci) // PERSISTENT: alle wandelaars worden 1x een blijvend lichaam
 					{
 						FVirtualWalker V;
-						V.bStripLover = (ci < 105) && StripNodes.Num() > 0;
+						V.bStripLover = (ci < 49) && StripNodes.Num() > 0;
 						if (V.bStripLover)
 						{
 							V.NextIdx = StripNodes[StripCursor % StripNodes.Num()];
@@ -2764,7 +2764,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 	};
 	// LICHAAM-PLAFOND: max ~55 echte lichamen tegelijk (de performance-grens); de rest blijft
 	// data. Lichamen gaan naar de virtuelen die het dichtst bij een speler lopen.
-	const int32 BodyCap = 55;
+	const int32 BodyCap = 70; // = crowd-grootte: alle wandelaars worden 1x een PERSISTENT lichaam (geen despawn)
 	int32 NBodies = 0;
 	// SPAWN-SPREIDING: max enkele echte NPC's PER CALL materialiseren. Elke spawn doet een synchrone
 	// modulaire build (mesh-loads + components); een hele rij in 1 frame = de periodieke hang. Met deze cap
@@ -2776,33 +2776,10 @@ void ADoorRetrofitter::TickVirtualCrowd()
 		if (ACustomerBase* B = V.Body.Get())
 		{
 			++NBodies;
-			// Lichaam leeft: data volgt het lichaam.
-			V.Pos = B->GetActorLocation();
-			// Speler ver weg: lichaam opruimen, data wandelt door vanaf hier - maar NOOIT
-			// zolang het in iemands beeld is (op welke afstand dan ook). De virtuele wandelaar
-			// loopt door en het lichaam komt exact daar terug zodra je weer in de buurt komt.
-			const float BodyD = MinPlayerDist(V.Pos);
-			if (BodyD > 25000.f && !InAnyViewFar(V.Pos))
-			{
-				// Dichtstbijzijnde knoop als volgende bestemming.
-				float BD = TNumericLimits<float>::Max();
-				for (int32 ni = 0; ni < GraphNodes.Num(); ++ni)
-				{
-					const float Dd = FVector::DistSquared2D(GraphNodes[ni], V.Pos);
-					if (Dd < BD) { BD = Dd; V.NextIdx = ni; }
-				}
-				V.PrevIdx = -1;
-				// PARKEREN i.p.v. vernietigen: verberg + zet stil + tick uit, en bewaar in de pool. Bij her-
-				// materialiseren hergebruiken we 'm (geen modulaire rebuild = geen ~40ms hitch, zoals de dev-city
-				// die z'n NPC's maar 1x bouwt).
-				B->SetActorHiddenInGame(true);
-				B->SetActorEnableCollision(false);
-				B->SetActorTickEnabled(false);
-				if (UCharacterMovementComponent* CM = B->FindComponentByClass<UCharacterMovementComponent>())
-				{ CM->StopMovementImmediately(); CM->DisableMovement(); }
-				CrowdPool.Add(B);
-				V.Body = nullptr;
-			}
+			V.Pos = B->GetActorLocation(); // data volgt het lichaam (voor de map-marker)
+			// GEEN despawn meer: een eenmaal gematerialiseerde NPC BLIJFT bestaan en doorlopen (zoals de dev-city).
+			// Ver weg verdwijnt vanzelf alleen z'n model + animatie (SetCullDistance + OnlyTickPoseWhenRendered),
+			// het lichaam loopt door op de map en de marker klopt altijd. Geen constante despawn-churn meer.
 			continue;
 		}
 		// (Beweging gebeurt in TickVirtualMove op 10x/s - hier alleen het zware werk.)
