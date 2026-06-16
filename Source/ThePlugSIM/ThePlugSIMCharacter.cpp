@@ -438,12 +438,11 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	if (USkeletalMeshComponent* M = GetMesh())
 	{
 		M->SetSkeletalMeshAsset(Skin);
-		// Manny/Quinn (SK_Mannequin): zet de ECHTE locomotie-ABP op de body -> vloeiende, richting-gebaseerde
-		// beweging (walk/run/idle/jump) die OOK op de simulated proxy draait (velocity repliceert). Dat ziet er
-		// veel beter uit dan de kale single-node 'walk-forward'. Andere skins (Casual/Tony, ander skelet) houden
-		// de single-node proxy-fallback want die ABP draait daar niet betrouwbaar.
+		// Zet de ECHTE locomotie-ABP (ABP_Unarmed, SK_Mannequin) op de body -> vloeiende, richting-gebaseerde
+		// beweging (walk/run/idle/jump) die OOK op de simulated proxy draait (velocity repliceert). Werkt op
+		// ALLE skins: Manny/Quinn native, en Casual/Tony via compatibele-skeletons (UE4_Mannequin_Skeleton_Main
+		// + Citizens staan in SK_Mannequin's compat-lijst). Veel beter dan de kale single-node 'walk-forward'.
 		bBodyHasLocoAbp = false;
-		if (PlayerSkin == 0 || PlayerSkin == 1)
 		{
 			static TSubclassOf<UAnimInstance> LocoAbp = LoadClass<UAnimInstance>(nullptr,
 				TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
