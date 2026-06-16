@@ -124,7 +124,7 @@ void ACityGenerator::AddCityLamp(const FVector& BaseWorld)
 		// Gloeiende lampbol in het kapje (kleurt warmgeel als 'ie aan is).
 		if (Sphere)
 		{
-			UStaticMeshComponent* Head = AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 4.f), FVector(26.f, 26.f, 24.f), FLinearColor(0.2f, 0.2f, 0.22f), false);
+			UStaticMeshComponent* Head = AddBox(Sphere, BaseWorld + FVector(0.f, 0.f, PoleH + 4.f), FVector(26.f, 26.f, 24.f), FLinearColor(0.2f, 0.2f, 0.22f), false, FRotator::ZeroRotator, /*bInstance=*/false);
 			if (Head)
 			{
 				if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Head->GetMaterial(0))) { LampHeadMats.Add(M); }
@@ -210,10 +210,46 @@ void ACityGenerator::Tick(float DeltaSeconds)
 	}
 }
 
+UHierarchicalInstancedStaticMeshComponent* ACityGenerator::GetBoxISM(UStaticMesh* M, bool bCollides)
+{
+	const FString Key = FString::Printf(TEXT("%s_%d"), *M->GetPathName(), bCollides ? 1 : 0);
+	if (TObjectPtr<UHierarchicalInstancedStaticMeshComponent>* Found = BoxISMs.Find(Key)) { return Found->Get(); }
+	UHierarchicalInstancedStaticMeshComponent* H = NewObject<UHierarchicalInstancedStaticMeshComponent>(this);
+	H->SetupAttachment(Root);
+	H->SetStaticMesh(M);
+	H->SetMobility(EComponentMobility::Static);
+	H->SetCollisionEnabled(bCollides ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
+	H->SetCanEverAffectNavigation(bCollides);
+	H->NumCustomDataFloats = 3; // per-instance kleur (R,G,B) -> M_CityBox leest dit als BaseColor
+	if (UMaterialInterface* CityBox = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_CityBox.M_CityBox")))
+	{
+		H->SetMaterial(0, CityBox);
+	}
+	H->RegisterComponent();
+	BoxISMs.Add(Key, H);
+	return H;
+}
+
 UStaticMeshComponent* ACityGenerator::AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld,
-	const FVector& SizeCm, const FLinearColor& Color, bool bCollides, const FRotator& Rot)
+	const FVector& SizeCm, const FLinearColor& Color, bool bCollides, const FRotator& Rot, bool bInstance)
 {
 	if (!MeshAsset) { return nullptr; }
+	// Standaard: als INSTANCE in de gedeelde HISM met de kleur als per-instance custom data -> 1 draw-call
+	// per shape+collision i.p.v. duizenden losse componenten. Pure draw-call-reductie, zelfde look.
+	if (bInstance)
+	{
+		if (UHierarchicalInstancedStaticMeshComponent* H = GetBoxISM(MeshAsset, bCollides))
+		{
+			const int32 Idx = H->AddInstance(FTransform(Rot, CenterWorld, SizeCm / 100.f), /*bWorldSpace=*/true);
+			if (Idx != INDEX_NONE)
+			{
+				H->SetCustomDataValue(Idx, 0, Color.R, false);
+				H->SetCustomDataValue(Idx, 1, Color.G, false);
+				H->SetCustomDataValue(Idx, 2, Color.B, true);
+			}
+		}
+		return nullptr;
+	}
 	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
 	C->SetupAttachment(Root);
 	C->SetStaticMesh(MeshAsset);
@@ -1578,7 +1614,8 @@ void ACityGenerator::BuildWallWindows(float CenterX, float CenterY, bool bAlongX
 		const float Th = bGlass ? 6.f : T;
 		const FVector C = bAlongX ? FVector(aCenter, Perp, zC) : FVector(Perp, aCenter, zC);
 		const FVector S = bAlongX ? FVector(aLen, Th, zH) : FVector(Th, aLen, zH);
-		return AddBox(Cube, C, S, Col, true);
+		// Glas houdt een echte component (eigen translucent GlassMat); opaque muur-stukken instancen.
+		return AddBox(Cube, C, S, Col, true, FRotator::ZeroRotator, /*bInstance=*/!bGlass);
 	};
 	// Borstwering + glasstrook + latei over een muur-stuk [s0..s1] op verdieping met basis fb.
 	auto Bands = [&](float s0, float s1, float fb)

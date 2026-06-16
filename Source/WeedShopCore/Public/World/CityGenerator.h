@@ -111,8 +111,15 @@ protected:
 		int32 Floors, float FloorH, float T, const FLinearColor& Wall, float DoorCenter, float DoorW, float DoorTop);
 
 	// Eén blok-mesh toevoegen onder de root. SizeCm = volledige afmeting; CenterWorld = wereld-midden.
+	// bInstance (default) = als INSTANCE in een gedeelde HISM met per-instance kleur (1 draw-call per
+	// shape+collision i.p.v. duizenden losse componenten) -> geeft nullptr terug. bInstance=false = een
+	// echte losse UStaticMeshComponent (voor de zeldzame gevallen die de component nog nodig hebben, bv.
+	// glas met eigen translucent materiaal of de lamp-kop-MID).
 	UStaticMeshComponent* AddBox(UStaticMesh* MeshAsset, const FVector& CenterWorld, const FVector& SizeCm,
-		const FLinearColor& Color, bool bCollides, const FRotator& Rot = FRotator::ZeroRotator);
+		const FLinearColor& Color, bool bCollides, const FRotator& Rot = FRotator::ZeroRotator, bool bInstance = true);
+	// HISM per (shape-mesh + collision) voor de stad-boxen; per-instance custom data 0..2 = kleur (RGB).
+	class UHierarchicalInstancedStaticMeshComponent* GetBoxISM(class UStaticMesh* M, bool bCollides);
+	UPROPERTY() TMap<FString, TObjectPtr<class UHierarchicalInstancedStaticMeshComponent>> BoxISMs;
 
 	// Een schuin zadeldak (twee tegen elkaar leunende vlakken) bovenop een gebouw.
 	void AddGableRoof(const FVector& TopCenter, float Width, float Depth, float RidgeH, bool bRidgeAlongX, const FLinearColor& Color);
