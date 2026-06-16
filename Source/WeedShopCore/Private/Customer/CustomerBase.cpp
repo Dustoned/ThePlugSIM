@@ -490,37 +490,6 @@ static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* 
 	if (Pick(2u, 113u) == 0u) { AddPart(Load(TEXT("Watch")), 113u); }
 }
 
-// GANG-SKIN-variant: legt het GangSkin-materiaal (M_Gang, vaste Gang05-textureset) over de body -> een
-// herkenbaar gang-type op straat. M_Gang heeft geen params, dus simpel als materiaal-override op alle slots.
-static void WeedNpc_ApplyGang(USkeletalMeshComponent* SkM)
-{
-	if (!SkM) { return; }
-	UMaterialInterface* MG = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GangSkin/M_Gang.M_Gang"));
-	if (!MG) { return; }
-	const int32 N = SkM->GetNumMaterials();
-	for (int32 i = 0; i < N; ++i) { SkM->SetMaterial(i, MG); }
-}
-
-// Per-NPC IDLE-pose uit GenericNPCAnimPack2 (armen over elkaar, hand op heup, licht voorover leunen, ...)
-// -> niet iedereen staat in exact dezelfde houding stil. De pack-anims draaien op UE4_Mannequin_Skeleton;
-// dat skelet is nu als compatible toegevoegd aan de NPC-skeletten zodat single-node ze afspeelt (geen zweven).
-// Index 0/1 houdt de oorspronkelijke MM_Idle aan zodat een deel de standaard-houding houdt.
-static UAnimSequence* WeedNpc_PickIdle(uint32 Seed)
-{
-	static const TCHAR* Pool[] = {
-		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
-		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
-		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle.Anim_Idle"),
-		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hands_Crossed.Anim_Idle_Hands_Crossed"),
-		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hands_On_Waist.Anim_Idle_Hands_On_Waist"),
-		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hand_On_Waist.Anim_Idle_Hand_On_Waist"),
-		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Lean_Forward_1.Anim_Idle_Lean_Forward_1"),
-		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Lean_Forward_2.Anim_Idle_Lean_Forward_2"),
-	};
-	const uint32 N = (uint32)UE_ARRAY_COUNT(Pool);
-	return LoadObject<UAnimSequence>(nullptr, Pool[(Seed * 2654435761u + 17u) % N]);
-}
-
 // Natuurlijke haarkleur uit een hash (zwart/bruin/blond/auburn/grijs/wit).
 static FLinearColor WeedNpc_HairColor(uint32 H)
 {
@@ -592,6 +561,44 @@ static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed)
 	}
 }
 
+// Bouwt het uiterlijk (mesh + modulaire parts + kleur-tint) deterministisch op uit NpcId (seed) + RepSkinIndex.
+// Draait op host EN client: meshes/parts/MIDs repliceren niet, maar zijn 100% afleidbaar uit deze twee
+// gerepliceerde waarden, dus host en client bouwen exact dezelfde persoon lokaal. 1x per pawn (idempotent).
+void ACustomerBase::BuildAppearance()
+{
+	if (bAppearanceBuilt) { return; }
+	if (NpcId.IsNone() || RepSkinIndex < 0) { return; } // wacht tot beide gerepliceerd zijn (client)
+	USkeletalMeshComponent* SkM = GetMesh();
+	if (!SkM) { return; }
+
+	const uint32 LookSeed = WeedNpc_StableSeed(NpcId); // stabiel -> altijd dezelfde look
+	const int32 SkinIdx = RepSkinIndex;
+	if (SkinIdx >= 3 && SkinIdx <= 5)
+	{
+		// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd (+ kleur).
+		WeedNpc_BuildModular(this, SkM, LookSeed);
+	}
+	else if (SkinIdx >= 6 && SkinIdx <= 9)
+	{
+		// Tony-band -> MODULAIRE Citizens-persoon: random top/broek/schoenen/pet/bril/horloge (+ kleur).
+		WeedNpc_BuildModularCitizens(this, SkM, LookSeed);
+	}
+	else if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx))
+	{
+		SkM->SetSkeletalMesh(Sk);
+		WeedNpc_TintClothing(SkM, LookSeed); // Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop
+	}
+	bAppearanceBuilt = true;
+
+	// Activity-NPC: na de mesh-swap z'n vaste pose opnieuw aanzetten (SetSkeletalMesh kan de single-node reset).
+	if (ActivityAnimIndex >= 0) { ApplyActivityAnim(); }
+}
+
+void ACustomerBase::OnRep_Appearance()
+{
+	BuildAppearance(); // client: zodra NpcId + RepSkinIndex binnen zijn, bouw exact dezelfde persoon lokaal op
+}
+
 void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
@@ -631,49 +638,15 @@ void ACustomerBase::BeginPlay()
 			}
 		}
 
-		// Skin: 1x toegewezen (tier-gewogen) + PERSISTENT bewaard per NPC -> verandert nooit meer,
-		// ook niet als de tier later stijgt. Zo zie je op straat wie wat is, stabiel per persoon.
-		if (USkeletalMeshComponent* SkM = GetMesh())
+		// Skin-index 1x toegewezen (tier-gewogen) + PERSISTENT bewaard per NPC. We bewaren 'm OOK gerepliceerd
+		// op de pawn (RepSkinIndex) zodat een co-op-CLIENT exact hetzelfde uiterlijk lokaal opbouwt; de mesh +
+		// modulaire parts + tint repliceren namelijk niet. De host bouwt het uiterlijk hier direct op.
+		if (UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr)
 		{
-			if (UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr)
-			{
-				const int32 Tier = Reg->GetCustomerTier(NpcId);
-				const uint32 LookSeed = WeedNpc_StableSeed(NpcId); // stabiel -> altijd dezelfde look
-				const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)LookSeed);
-				if ((LookSeed % 12u) == 0u)
-				{
-					// Kleine deterministische fractie (~8%) -> GangSkin-variant op de standaard-body. Stabiel
-					// per NPC (uit de seed), dus geen registry-re-roll nodig; herkenbaar gang-type op straat.
-					WeedNpc_ApplyGang(SkM);
-				}
-				else if (SkinIdx >= 3 && SkinIdx <= 5)
-				{
-					// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd
-					// (per-part ook random kleur). Veel meer dan alleen kleur-variatie.
-					WeedNpc_BuildModular(this, SkM, LookSeed);
-				}
-				else if (SkinIdx >= 6 && SkinIdx <= 9)
-				{
-					// Tony-band -> MODULAIRE Citizens-persoon: random top/broek/schoenen/pet/bril/horloge
-					// (Citizens-skelet, ~192 combo's x kleur i.p.v. 4 vaste Tony's).
-					WeedNpc_BuildModularCitizens(this, SkM, LookSeed);
-				}
-				else if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx))
-				{
-					SkM->SetSkeletalMesh(Sk);
-					// Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop (zelfde mesh, ander shirt).
-					WeedNpc_TintClothing(SkM, LookSeed);
-				}
-
-				// IDLE-variatie: kies per NPC een idle-houding (armen over elkaar/hand op heup/leunen/...).
-				// Vervangt de gedeelde idle; walk blijft hetzelfde. Herstart hem als de NPC nu stilstaat.
-				if (UAnimSequence* PickedIdle = WeedNpc_PickIdle(LookSeed))
-				{
-					NpcIdle = PickedIdle;
-					if (NpcAnimState == 0) { SkM->PlayAnimation(NpcIdle, true); }
-				}
-			}
+			const int32 Tier = Reg->GetCustomerTier(NpcId);
+			RepSkinIndex = Reg->GetOrAssignSkin(NpcId, Tier, (int32)WeedNpc_StableSeed(NpcId));
 		}
+		BuildAppearance();
 
 		// Activity-NPC (dev-tool): heeft nu een varieerde skin, maar is verder inert -> geen koop-/afspraak-/
 		// product-logica. Z'n loop-naar-de-plek + anim wordt in TickActivity afgehandeld.
@@ -727,6 +700,8 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, State);
 	DOREPLIFETIME(ACustomerBase, SpeechLine);
 	DOREPLIFETIME(ACustomerBase, ActivityAnimIndex);
+	DOREPLIFETIME(ACustomerBase, NpcId);        // co-op: client heeft de seed nodig voor het uiterlijk
+	DOREPLIFETIME(ACustomerBase, RepSkinIndex); // co-op: welke skin/band -> client herbouwt 'm lokaal
 	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
 	DOREPLIFETIME(ACustomerBase, bTalkingToPlayer);
 	DOREPLIFETIME(ACustomerBase, bShopkeeper);

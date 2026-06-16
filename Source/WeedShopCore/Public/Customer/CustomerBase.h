@@ -75,8 +75,17 @@ public:
 	TObjectPtr<UDataTable> ProductTable;
 
 	// Welke persoon dit is (rij in DT_NPCs). Leeg = krijgt er één toegewezen bij spawn.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "WeedShop|Customer")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Appearance, Category = "WeedShop|Customer")
 	FName NpcId = NAME_None;
+
+	// Skin-index (uit het register) gerepliceerd zodat een co-op-CLIENT exact hetzelfde uiterlijk lokaal
+	// opbouwt: mesh + modulaire parts + kleur-tint repliceren NIET, dus de client herbouwt ze deterministisch
+	// uit NpcId (seed) + deze index. Zonder dit zag een join-client overal de kale standaard-mannequin.
+	UPROPERTY(ReplicatedUsing = OnRep_Appearance)
+	int32 RepSkinIndex = -1;
+	UFUNCTION() void OnRep_Appearance();
+	void BuildAppearance();
+	bool bAppearanceBuilt = false;
 
 	// PRAAT-PAUZE: zolang dit moment in de toekomst ligt staat de wandelaar stil (het deal-HUD
 	// houdt dit elke tick vers zolang het open is). Daarna loopt hij gewoon weer door.
