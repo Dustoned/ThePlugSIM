@@ -9,6 +9,7 @@
 #include "Animation/AnimInstance.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Misc/Paths.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
@@ -259,6 +260,58 @@ static FLinearColor WeedNpc_ClothColor(uint32 H)
 	return FLinearColor::MakeFromHSV8(Hue, Sat, Val);
 }
 
+// Forward-decl: tint de kleding-slots van een (deel-)mesh-component.
+static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed);
+
+// MODULAIRE Casual-NPC: bouw een persoon uit losse kledingstukken (Casual_Wear_Pack1) -> elke NPC krijgt
+// een eigen combinatie top/broek/schoenen/kapsel/hoofd. De basis-body draait de anim; de kledingstukken
+// volgen via SetLeaderPoseComponent (zelfde UE4_Mannequin_Skeleton_Main). Plus per-part random kleur.
+// Geeft enorme variatie (3^5 combo's x kleur) zonder nieuwe assets. Iets duurder (meer componenten) dus
+// alleen voor de Casual-fractie; Karl/Tony blijven 1 losse mesh.
+static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, uint32 Seed)
+{
+	if (!Owner || !Body) { return; }
+	static const TCHAR* C = TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/");
+	// Naakte basis-body op de hoofd-mesh (wordt bedekt door de kledingstukken).
+	if (USkeletalMesh* B = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body.SK_Body")))
+	{
+		Body->SetSkeletalMesh(B);
+	}
+	auto Pick = [&](const TArray<FString>& Opts, uint32 Salt) -> FString
+	{
+		if (Opts.Num() == 0) { return FString(); }
+		return Opts[(Seed * 131u + Salt) % (uint32)Opts.Num()];
+	};
+	// Slots: pad-lijsten (relatief aan C). Salt per slot zodat keuzes onafhankelijk variëren.
+	struct FSlot { TArray<FString> Opts; uint32 Salt; bool bCloth; };
+	const TArray<FSlot> Slots = {
+		{ { TEXT("Heads/SK_Head_Casual_1"), TEXT("Heads/SK_Head_Casual_2"), TEXT("Heads/SK_Head_Casual_3") }, 11u, false },
+		{ { TEXT("Cloth/Torso/SK_Top_1"), TEXT("Cloth/Torso/SK_Top_2"), TEXT("Cloth/Torso/SK_Hoodies_Mini") }, 23u, true },
+		{ { TEXT("Cloth/Legs/SK_Baggy_Jeans"), TEXT("Cloth/Legs/SK_Wide_Leg_Jeans"), TEXT("Cloth/Legs/SK_Shorts_1") }, 41u, true },
+		{ { TEXT("Cloth/Shoes/SK_Sneakers_2"), TEXT("Cloth/Shoes/SK_Sneakers_4"), TEXT("Cloth/Shoes/SK_Sneakers_5") }, 67u, true },
+		{ { TEXT("Hairs/SK_HairShort"), TEXT("Hairs/SK_Hair_Braid"), TEXT("Hairs/SK_Hair_Medium_1") }, 89u, false },
+	};
+	for (const FSlot& Sl : Slots)
+	{
+		const FString Rel = Pick(Sl.Opts, Sl.Salt);
+		if (Rel.IsEmpty()) { continue; }
+		const FString Path = FString(C) + Rel + TEXT(".") + FPaths::GetCleanFilename(Rel);
+		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
+		if (!PM) { continue; }
+		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
+		Part->SetupAttachment(Body);
+		Part->RegisterComponent();
+		Part->SetSkeletalMesh(PM);
+		Part->SetLeaderPoseComponent(Body); // volgt de pose van de basis-body -> animeert mee, geen eigen eval
+		Part->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		Part->bEnableUpdateRateOptimizations = true;
+		Part->SetCastShadow(false);
+		Part->SetCullDistance(16000.f);
+		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (Sl.bCloth) { WeedNpc_TintClothing(Part, Seed + Sl.Salt); } // top/broek/schoenen krijgen random kleur
+	}
+}
+
 // Per-NPC RANDOM kleding-kleur: tint alleen de kleding-materiaalslots (Citizens 'Tone_A..F' / Casual
 // 'ColorCloth*') met kleuren uit de NPC-seed -> elke Karl/Tony/Casual heeft een ander shirt/broek/sneakers
 // zonder extra meshes. Huid/gezicht/haar/ogen blijven ongemoeid. Niet-bestaande params worden genegeerd.
@@ -344,9 +397,18 @@ void ACustomerBase::BeginPlay()
 			{
 				const int32 Tier = Reg->GetCustomerTier(NpcId);
 				const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)GetTypeHash(NpcId));
-				if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx)) { SkM->SetSkeletalMesh(Sk); }
-				// Per-NPC random kleren-kleur bovenop de skin -> veel meer onderscheid (zelfde mesh, ander shirt).
-				WeedNpc_TintClothing(SkM, (uint32)GetTypeHash(NpcId));
+				if (SkinIdx >= 3 && SkinIdx <= 5)
+				{
+					// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd
+					// (per-part ook random kleur). Veel meer dan alleen kleur-variatie.
+					WeedNpc_BuildModular(this, SkM, (uint32)GetTypeHash(NpcId));
+				}
+				else if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx))
+				{
+					SkM->SetSkeletalMesh(Sk);
+					// Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop (zelfde mesh, ander shirt).
+					WeedNpc_TintClothing(SkM, (uint32)GetTypeHash(NpcId));
+				}
 			}
 		}
 
