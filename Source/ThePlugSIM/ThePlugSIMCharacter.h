@@ -197,6 +197,10 @@ protected:
 	// Vlieg-modus (MOVE_Flying) repliceert; de noclip-collision koppelen we hieraan zodat ALLE clients
 	// dezelfde staat tonen (anders vliegt een co-op-speler bij de ander mét collision = "zwevend/sliding").
 	virtual void OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode) override;
+	// Zet de capsule-collision op solid (lopen) of noclip (vliegen). Aangeroepen door OnMovementModeChanged
+	// EN bij spawn/BeginPlay - want spawnt de pawn direct in MOVE_Walking (geen overgang), dan vuurt
+	// OnMovementModeChanged niet en zou de collision op de archetype/ignore-staat blijven hangen (joiner-noclip).
+	void ApplyNoclipCollision(bool bFlying);
 
 	/** Telefoon-logica (openen, tabs, kopen, afspraken) — aangestuurd door input + HUD-klikken. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))

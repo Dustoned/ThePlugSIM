@@ -275,18 +275,22 @@ void AThePlugSIMCharacter::WeedUnstuck()
 	RecoverToSafe(true); // handmatige reset -> dichtstbijzijnde begaanbare plek (weg), niet naar huis
 }
 
-void AThePlugSIMCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
+void AThePlugSIMCharacter::ApplyNoclipCollision(bool bFlying)
 {
-	Super::OnMovementModeChanged(PrevMovementMode, PreviousCustomMode);
 	// De noclip-collision volgt de (gerepliceerde) vlieg-modus, zodat host EN client dezelfde staat tonen:
 	// een vliegende co-op-speler gaat overal door muren (geen "zwevend mét collision/sliding" bij de ander).
 	if (UCapsuleComponent* Cap = GetCapsuleComponent())
 	{
-		const bool bFlying = GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying;
 		Cap->SetCollisionEnabled(bFlying ? ECollisionEnabled::QueryOnly : ECollisionEnabled::QueryAndPhysics);
 		Cap->SetCollisionResponseToChannel(ECC_WorldStatic, bFlying ? ECR_Ignore : ECR_Block);
 		Cap->SetCollisionResponseToChannel(ECC_WorldDynamic, bFlying ? ECR_Ignore : ECR_Block);
 	}
+}
+
+void AThePlugSIMCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
+{
+	Super::OnMovementModeChanged(PrevMovementMode, PreviousCustomMode);
+	ApplyNoclipCollision(GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying);
 }
 
 void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
@@ -1159,6 +1163,10 @@ void AThePlugSIMCharacter::BeginPlay()
 		Move->JumpZVelocity = 450.0f;
 		Move->AirControl = 0.5f;
 		if (Move->MovementMode == MOVE_None) { Move->SetMovementMode(MOVE_Walking); }
+		// Expliciet de noclip-collision in lijn brengen met de huidige modus. Spawnt de pawn al in MOVE_Walking
+		// (geen overgang), dan vuurt OnMovementModeChanged niet -> zonder dit bleef de collision op de
+		// archetype/ignore-staat hangen = joiner die door alles heen loopt en het niet uit kan zetten.
+		ApplyNoclipCollision(Move->MovementMode == MOVE_Flying);
 	}
 
 	// BELANGRIJK: GravityScale vermenigvuldigt de WERELD-zwaartekracht. Als de map "Global Gravity Z"
