@@ -123,8 +123,9 @@ protected:
 		TWeakObjectPtr<class ACustomerBase> Body;
 	};
 	TArray<FVirtualWalker> Crowd;
-	void TickVirtualCrowd();      // 2s: lichamen materialiseren/opruimen (traces)
+	void TickVirtualCrowd();      // ~0.5s: lichamen materialiseren/opruimen (traces + spawns - DUUR)
 	void TickVirtualMove();       // 10x per seconde: vloeiende data-stapjes (alleen rekenwerk)
+	int32 CrowdSubTick = 0;       // throttle: TickVirtualCrowd maar 1x per N TickVirtualMove-calls (geen 10Hz-spawn-cascade)
 	FTimerHandle CrowdMoveTimer;
 
 	// Balkon-puien op het ECHTE gat in de gevel centreren (gemeten met dwars-traces).

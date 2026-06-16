@@ -2692,8 +2692,10 @@ void ADoorRetrofitter::TickVirtualMove()
 		V.NextIdx = Pick;
 	}
 
-	// Lichamen materialiseren/opruimen op deze 10Hz-tick (met spawn-cap per call -> vloeiend, geen burst-hang).
-	TickVirtualCrowd();
+	// Lichamen materialiseren/opruimen: NIET elke 10Hz-tick (dat gaf een spawn-cascade: een ~30ms modulaire
+	// NPC-build maakt de frame > 0.1s -> de timer haalt in -> nog een spawn -> erger en erger). Maar 1x per
+	// 5 ticks (~0.5s) zodat de spawns netjes gespreid binnendruppelen zonder de frame te laten hangen.
+	if (++CrowdSubTick >= 5) { CrowdSubTick = 0; TickVirtualCrowd(); }
 }
 
 void ADoorRetrofitter::GetVirtualWalkerPositions(TArray<FVector>& Out) const
@@ -2767,7 +2769,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 	// SPAWN-SPREIDING: max enkele echte NPC's PER CALL materialiseren. Elke spawn doet een synchrone
 	// modulaire build (mesh-loads + components); een hele rij in 1 frame = de periodieke hang. Met deze cap
 	// + de 10Hz-cadans (zie de call in TickVirtualMove) druppelen ze vloeiend binnen i.p.v. in bursts.
-	const int32 MaxSpawnPerTick = 2;
+	const int32 MaxSpawnPerTick = 1; // 1 modulaire NPC-build (~30ms) per call -> geen dubbele-spawn-hitch
 	int32 Spawned = 0;
 	for (FVirtualWalker& V : Crowd)
 	{
