@@ -27,7 +27,8 @@ public class WeedShopCore : ModuleRules
 			"NavigationSystem",
 			"ImageWrapper",  // PNG-swatch -> wit masker (menu-knoppen kleurbaar maken)
 			"MoviePlayer",   // loading screen tijdens level-reload (New Game/Load) i.p.v. zwart beeld
-			"AssetRegistry"  // wardrobe: pack-mappen scannen voor auto-detectie van alle kleding/haar
+			"AssetRegistry", // wardrobe: pack-mappen scannen voor auto-detectie van alle kleding/haar
+			"RHI"            // PipelineStateCache: PSO-precaching-status -> laadscherm wacht erop
 		});
 	}
 }

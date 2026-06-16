@@ -17,6 +17,7 @@
 #include "Brushes/SlateColorBrush.h"
 #include "Styling/CoreStyle.h"
 #include "Math/UnrealMathUtility.h"
+#include "PipelineStateCache.h" // PSO-precaching-status: laadscherm wacht tot de pipeline-states klaar zijn
 #if WITH_EDITOR
 #include "ShaderCompiler.h" // GShaderCompilingManager: wacht tot de shaders klaar zijn (geen zwarte scene)
 #endif
@@ -126,10 +127,14 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	// Shader-compile-status (editor): of ze nog bezig zijn (bepaalt de fade-gate + cap).
 #if WITH_EDITOR
-	const bool bShadersBusy = (GShaderCompilingManager && GShaderCompilingManager->IsCompiling());
+	const bool bShaderCompile = (GShaderCompilingManager && GShaderCompilingManager->IsCompiling());
 #else
-	const bool bShadersBusy = false; // packaged build: shaders zijn al gecompileerd
+	const bool bShaderCompile = false; // packaged build: shader-bytecode is al gecompileerd
 #endif
+	// PSO-PRECACHING (editor EN packaged): wacht tot de pipeline-states klaar zijn -> dan compileren ze in HET
+	// LAADSCHERM i.p.v. als "rendering shaders"-hitch tijdens het spelen. Drained zodra de geladen wereld klaar is.
+	const bool bPSOBusy = (PipelineStateCache::NumActivePrecacheRequests() > 0);
+	const bool bShadersBusy = bShaderCompile || bPSOBusy;
 
 	// Cover weghalen: kamer klaar + korte na-buffer (omgeving laat bijladen). MAAR niet zolang de
 	// shaders nog compileren (editor) - anders zie je een zwarte/onafgewerkte scene met nog-niet-klare
