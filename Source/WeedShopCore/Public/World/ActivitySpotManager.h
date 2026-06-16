@@ -53,7 +53,7 @@ public:
 	// Verwijder de spot van deze NPC (despawn + herschrijf bestand).
 	void RemoveSpotForNpc(ACustomerBase* Npc);
 	// 'Pin' een NPC tijdens het bewerken zodat het tijdvak 'm niet despawn't (anders verlies je 'm uit beeld).
-	void SetEditingNpc(ACustomerBase* Npc) { EditingNpc = Npc; }
+	void SetEditingNpc(ACustomerBase* Npc);
 
 	// Pad naar het opslagbestand (ProjectSaved/ActivitySpots.txt).
 	static FString GetSaveFile();

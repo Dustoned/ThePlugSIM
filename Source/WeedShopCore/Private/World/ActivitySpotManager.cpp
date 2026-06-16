@@ -136,6 +136,8 @@ void AActivitySpotManager::Tick(float DeltaSeconds)
 	}
 }
 
+void AActivitySpotManager::SetEditingNpc(ACustomerBase* Npc) { EditingNpc = Npc; }
+
 int32 AActivitySpotManager::IndexForNpc(const ACustomerBase* Npc) const
 {
 	if (!Npc) { return INDEX_NONE; }

@@ -27,4 +27,16 @@ public:
 
 	// Spawnt o.a. de centrale AActivitySpotManager (dev-tool: NPC's op vaste plek + tijdvak + anim).
 	virtual void BeginPlay() override;
+
+	// Houd een REMOTE joiner vast tot de host-wereld echt klaar is (kamer ingestreamd). Joinde een client
+	// terwijl de host nog in het laadscherm zat, dan spawnde z'n pawn in een half-opgebouwde wereld
+	// (collision/physics nog niet klaar) -> crash op de host. De host zelf (local controller) spawnt gewoon.
+	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
+
+private:
+	bool IsHostWorldReady() const;
+	void FlushPendingJoiners();
+
+	TArray<TWeakObjectPtr<APlayerController>> PendingJoiners;
+	FTimerHandle JoinFlushTimer;
 };

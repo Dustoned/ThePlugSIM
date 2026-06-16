@@ -2,7 +2,9 @@
 
 #include "Game/WeedShopGameState.h"
 #include "World/ActivitySpotManager.h"
+#include "WeedShopCore.h"
 #include "UI/WeedShopHUD.h"
+#include "TimerManager.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Controller.h"
@@ -49,6 +51,50 @@ void AWeedShopGameMode::BeginPlay()
 			W->SpawnActor<AActivitySpotManager>(AActivitySpotManager::StaticClass(), FTransform::Identity);
 		}
 	}
+}
+
+bool AWeedShopGameMode::IsHostWorldReady() const
+{
+	// Wereld klaar = BeginPlay gestart EN de kamer is ingestreamd (laad-cover weg). Pas dan is de physics-/
+	// collision-scene stabiel genoeg om een joiner-pawn in te spawnen zonder de host te crashen.
+	const UWorld* W = GetWorld();
+	if (!W || !W->HasBegunPlay()) { return false; }
+	// Noodrem (zoals de cover z'n 24s-cap): als room-ready om wat voor reden ook niet binnenkomt, laat de
+	// joiner na ~26s alsnog toe i.p.v. eeuwig vasthouden.
+	return WeedShop_IsRoomReady() || WeedShop_LoadElapsedSeconds() > 26.0;
+}
+
+void AWeedShopGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+	// Een REMOTE joiner die binnenkomt terwijl de host nog laadt -> niet meteen spawnen, maar vasthouden tot
+	// de wereld klaar is. De host (local controller) en alle joins ná het laden spawnen gewoon direct.
+	if (NewPlayer && !NewPlayer->IsLocalController() && !IsHostWorldReady())
+	{
+		PendingJoiners.AddUnique(NewPlayer);
+		if (UWorld* W = GetWorld())
+		{
+			if (!W->GetTimerManager().IsTimerActive(JoinFlushTimer))
+			{
+				W->GetTimerManager().SetTimer(JoinFlushTimer, this, &AWeedShopGameMode::FlushPendingJoiners, 0.4f, true);
+			}
+		}
+		return;
+	}
+	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+}
+
+void AWeedShopGameMode::FlushPendingJoiners()
+{
+	if (!IsHostWorldReady()) { return; } // nog niet klaar -> volgende tik opnieuw proberen
+	for (const TWeakObjectPtr<APlayerController>& WP : PendingJoiners)
+	{
+		if (APlayerController* PC = WP.Get())
+		{
+			if (!PC->GetPawn()) { RestartPlayer(PC); } // nu pas de pawn spawnen (wereld is stabiel)
+		}
+	}
+	PendingJoiners.Reset();
+	if (UWorld* W = GetWorld()) { W->GetTimerManager().ClearTimer(JoinFlushTimer); }
 }
 
 APawn* AWeedShopGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayerController, const FTransform& SpawnTransform)
