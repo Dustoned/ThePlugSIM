@@ -83,6 +83,7 @@ UHierarchicalInstancedStaticMeshComponent* ACityGenerator::GetPropISM(const FStr
 	H->SetMobility(EComponentMobility::Static);
 	H->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	H->SetCanEverAffectNavigation(true); // NPC's lopen om de props heen
+	H->SetCullDistances(11000, 14000); // kleine straat-props: ver weg toch onzichtbaar -> niet renderen
 	H->RegisterComponent();
 	PropISMs.Add(Key, H);
 	return H;
@@ -225,6 +226,9 @@ UHierarchicalInstancedStaticMeshComponent* ACityGenerator::GetBoxISM(UStaticMesh
 	{
 		H->SetMaterial(0, CityBox);
 	}
+	// Verre gebouw-instances stoppen met renderen (+ HISM doet automatisch frustum/occlusion-culling).
+	// Ruim genoeg dat de stad-skyline normaal staat; alleen de verste blokken (meestal toch verdekt) fade weg.
+	H->SetCullDistances(14000, 18000);
 	H->RegisterComponent();
 	BoxISMs.Add(Key, H);
 	return H;
