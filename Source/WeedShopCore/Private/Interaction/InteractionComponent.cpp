@@ -153,6 +153,18 @@ void UInteractionComponent::TryInteract()
 		}
 	}
 
+	// Niet-gerepliceerde, per-speler wereld-objecten (deuren/liften/schakelaars): LOKAAL uitvoeren op de speler
+	// die interact. Een server-RPC zou de host-kopie van de deur openen (desync: opent op host-view, en de
+	// client kan door z'n eigen nog-dichte deur niet/wel heen). Lokaal = visueel + collision matchen per scherm.
+	if (const IInteractable* AsI = Cast<IInteractable>(Target))
+	{
+		if (AsI->IsClientLocalInteract())
+		{
+			PerformInteract(Target);
+			return;
+		}
+	}
+
 	// Host / single-player heeft authority -> meteen uitvoeren. Client -> via de server.
 	if (GetOwnerRole() == ROLE_Authority)
 	{

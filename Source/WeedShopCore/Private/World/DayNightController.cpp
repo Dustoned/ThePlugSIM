@@ -460,6 +460,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		{
 			LightScanTimer = 6.f; // streamende lichten worden binnen 6s opgepikt; halve scan-kost
 			UWorld* W2 = GetWorld();
+			const int32 SeenBefore = SeenLights.Num() + SeenRefCaps.Num() + SeenSky.Num() + PackLampSeen.Num();
 			for (TActorIterator<AActor> It(W2); It; ++It)
 			{
 				AActor* A = *It;
@@ -642,6 +643,11 @@ void ADayNightController::Tick(float DeltaSeconds)
 					}
 				}
 			}
+			// BACK-OFF: vond deze scan niks nieuws, dan is de map gestreamd/stabiel -> scan-interval naar 30s
+			// (geen periodieke 6s-hitch meer tijdens normaal spelen). Weer snel (6s) zodra er iets opduikt.
+			const int32 SeenAfter = SeenLights.Num() + SeenRefCaps.Num() + SeenSky.Num() + PackLampSeen.Num();
+			if (SeenAfter > SeenBefore) { LightScanDry = 0; LightScanTimer = 6.f; }
+			else if (++LightScanDry >= 3) { LightScanTimer = 30.f; }
 		}
 
 		// Per-frame licht-loops alleen draaien als de klok-factor of de lamp-slider echt veranderde (+ 2Hz

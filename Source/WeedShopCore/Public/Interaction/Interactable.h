@@ -33,4 +33,10 @@ public:
 	// Korte regel voor de prompt-UI, bv. "Druk E om te oogsten". Leeg = geen prompt.
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "WeedShop|Interaction")
 	FText GetInteractionPrompt() const;
+
+	// CO-OP: true = deze interactie draait LOKAAL op de speler die 'm doet (geen Server-RPC). Bedoeld voor
+	// NIET-gerepliceerde, per-speler wereld-objecten (deuren/liften/schakelaars): ieder bedient z'n eigen
+	// lokale kopie zodat visueel + collision per scherm kloppen. (Een server-RPC zou de host-kopie openen, en
+	// een non-replicated actor heeft sowieso geen net-identiteit om te referencen.) Default false = server-auth.
+	virtual bool IsClientLocalInteract() const { return false; }
 };

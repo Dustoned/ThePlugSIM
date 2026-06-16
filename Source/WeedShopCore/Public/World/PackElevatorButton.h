@@ -37,6 +37,7 @@ public:
 
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
+	virtual bool IsClientLocalInteract() const override { return true; } // lift niet-gerepliceerd: lokaal per speler
 
 protected:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Mesh;

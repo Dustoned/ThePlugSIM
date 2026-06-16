@@ -133,6 +133,7 @@ protected:
 	TArray<TWeakObjectPtr<class UStaticMeshComponent>> DomeComps; // HDRI-fotokoepel (dag-lucht)
 	TSet<TWeakObjectPtr<class ULightComponent>> SeenLights;
 	float LightScanTimer = 0.f;
+	int32 LightScanDry = 0; // opeenvolgende scans zonder iets nieuws -> scan-interval omhoog (geen 6s-hitch meer)
 	TWeakObjectPtr<ADirectionalLight> Sun;
 	TWeakObjectPtr<ADirectionalLight> Moon; // eigen maan-licht: komt op bij zonsondergang, gaat onder bij zonsopkomst
 	TWeakObjectPtr<ASkyLight> Sky;
