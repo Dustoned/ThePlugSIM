@@ -11,7 +11,9 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
 #include "Phone/PhoneClientComponent.h"
+#include "WeedShopCore.h"
 
 TWeakObjectPtr<UWeedToast> UWeedToast::Active;
 
@@ -100,8 +102,29 @@ void UWeedToast::Push(int32 Key, float Time, const FLinearColor& Color, const FS
 void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
-	SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (!Stack) { return; }
+
+	// Geen toasts over het HOOFDMENU of tijdens het LAADSCHERM: meldingen horen pas te verschijnen als je
+	// echt in-game bent (na de loading screen). Tijdens het menu/laden de wachtrij leeggooien zodat ook geen
+	// opgespaarde melding er net na opploft. (Bv. bij joinen kwamen host-toasts over het main menu heen.)
+	bool bSuppress = WeedShop_LoadElapsedSeconds() > 0.0 && !WeedShop_IsRoomReady(); // laad-cover nog actief
+	if (!bSuppress)
+	{
+		if (const APawn* P = GetOwningPlayerPawn())
+		{
+			if (const UPhoneClientComponent* Ph = P->FindComponentByClass<UPhoneClientComponent>())
+			{
+				if (Ph->IsMainMenuOpen()) { bSuppress = true; }
+			}
+		}
+	}
+	if (bSuppress)
+	{
+		if (Entries.Num() > 0) { Entries.Reset(); LastSig.Reset(); Stack->ClearChildren(); }
+		SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+	SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
 	// Verlopen meldingen opruimen.
