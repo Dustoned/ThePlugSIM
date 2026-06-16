@@ -333,6 +333,65 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 	}
 }
 
+// MODULAIRE Citizens-NPC (Tony-parts): zelfde idee als WeedNpc_BuildModular maar met de Citizens-pack
+// (ander skelet SKEL_Citizens_Pack_Skeleton). Basis = Tony_Body (naakte body met hoofd/ogen/mond); daar
+// overheen losse garments (Tshirt/Shirt top, Pants/Shorts broek, Shoes/Sneakers, pet/hoed/panama, bril,
+// horloge) als follower-pose componenten. Kleur via Tone_A..F. ~192 combo's x kleur i.p.v. 4 vaste Tony's.
+// Karl heeft maar 1 part-set (geen winst) dus die blijft een vaste mesh; dit is alleen voor de Tony-band.
+static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* Body, uint32 Seed)
+{
+	if (!Owner || !Body) { return; }
+	static const TCHAR* C = TEXT("/Game/Citizens_Pack/Meshes/Citizens_Pack_Parts_Tony/SK_Citizens_Pack_Tony_");
+
+	auto Load = [&](const TCHAR* Rel) -> USkeletalMesh*
+	{
+		const FString Path = FString(C) + Rel + TEXT(".SK_Citizens_Pack_Tony_") + Rel;
+		return LoadObject<USkeletalMesh>(nullptr, *Path);
+	};
+	auto AddPart = [&](USkeletalMesh* PM, uint32 Salt)
+	{
+		if (!PM) { return; }
+		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
+		Part->SetupAttachment(Body);
+		Part->RegisterComponent();
+		Part->SetSkeletalMesh(PM);
+		Part->SetLeaderPoseComponent(Body); // volgt de pose van de basis-body (zelfde Citizens-skelet)
+		Part->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		Part->bEnableUpdateRateOptimizations = true;
+		Part->SetCastShadow(false);
+		Part->SetCullDistance(16000.f);
+		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		WeedNpc_TintClothing(Part, Seed + Salt); // Set1/Set2-slots krijgen random kleur (Tone_A..F)
+	};
+	auto Pick = [&](uint32 N, uint32 Salt) -> uint32 { return (Seed * 137u + Salt) % N; };
+
+	// Torso-stijl: 0=naakte body + Tshirt, 1=naakte body + Shirt, 2=Body_Cloth (shirt in de body gebakken).
+	const uint32 Torso = Pick(3u, 5u);
+	USkeletalMesh* BaseBody = (Torso == 2u) ? Load(TEXT("Body_Cloth")) : Load(TEXT("Body"));
+	if (!BaseBody) { BaseBody = Load(TEXT("Body")); }
+	if (BaseBody) { Body->SetSkeletalMesh(BaseBody); }
+	WeedNpc_TintClothing(Body, Seed); // tint een eventueel ingebakken shirt (Body_Cloth) mee
+	if (Torso == 0u) { AddPart(Load(TEXT("Tshirt")), 11u); }
+	else if (Torso == 1u) { AddPart(Load(TEXT("Shirt")), 11u); }
+
+	// Broek: Pants of Shorts.
+	AddPart((Pick(2u, 23u) == 0u) ? Load(TEXT("Pants")) : Load(TEXT("Shorts")), 23u);
+	// Schoenen: Shoes of Sneakers.
+	AddPart((Pick(2u, 41u) == 0u) ? Load(TEXT("Shoes")) : Load(TEXT("Sneakers")), 41u);
+	// Hoofddeksel: vaak niks (Tony is kaal), soms pet/hoed/panama.
+	switch (Pick(5u, 67u))
+	{
+		case 1u: AddPart(Load(TEXT("Cap")), 67u); break;
+		case 2u: AddPart(Load(TEXT("Hat")), 67u); break;
+		case 3u: AddPart(Load(TEXT("Panama")), 67u); break;
+		default: break; // 0,4 -> kaal
+	}
+	// Bril: ~1/3.
+	if (Pick(3u, 89u) == 0u) { AddPart(Load(TEXT("Glasses")), 89u); }
+	// Horloge: ~1/2.
+	if (Pick(2u, 113u) == 0u) { AddPart(Load(TEXT("Watch")), 113u); }
+}
+
 // Natuurlijke haarkleur uit een hash (zwart/bruin/blond/auburn/grijs/wit).
 static FLinearColor WeedNpc_HairColor(uint32 H)
 {
@@ -457,6 +516,12 @@ void ACustomerBase::BeginPlay()
 					// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd
 					// (per-part ook random kleur). Veel meer dan alleen kleur-variatie.
 					WeedNpc_BuildModular(this, SkM, LookSeed);
+				}
+				else if (SkinIdx >= 6 && SkinIdx <= 9)
+				{
+					// Tony-band -> MODULAIRE Citizens-persoon: random top/broek/schoenen/pet/bril/horloge
+					// (Citizens-skelet, ~192 combo's x kleur i.p.v. 4 vaste Tony's).
+					WeedNpc_BuildModularCitizens(this, SkM, LookSeed);
 				}
 				else if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx))
 				{
