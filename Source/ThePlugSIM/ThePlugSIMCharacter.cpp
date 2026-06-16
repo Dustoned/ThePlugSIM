@@ -146,6 +146,16 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	GetCharacterMovement()->JumpZVelocity = 450.0f;  // normale sprong
 	GetCharacterMovement()->SetWalkableFloorAngle(50.0f);
 
+	// CO-OP SYNC: vloeiende beweging van de ANDERE speler (simulated proxy). Exponential network-smoothing
+	// interpoleert de proxy-positie i.p.v. te happen op elke net-update; hogere update-frequentie = strakkere
+	// sync. (Default liet 'm soms houterig ogen.) De smooth-afstanden ruim genoeg voor de loopsnelheid.
+	GetCharacterMovement()->NetworkSmoothingMode = ENetworkSmoothingMode::Exponential;
+	GetCharacterMovement()->NetworkMaxSmoothUpdateDistance = 256.f;
+	GetCharacterMovement()->NetworkNoSmoothUpdateDistance = 384.f;
+	SetNetUpdateFrequency(100.f);   // 100Hz positie-updates naar de andere speler (LAN/lokaal ruim haalbaar)
+	SetMinNetUpdateFrequency(33.f);
+	NetPriority = 3.0f;             // spelers belangrijker dan props/NPC's voor bandbreedte
+
 	// Voorraad-component (oogst in, verkoop uit).
 	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
 
