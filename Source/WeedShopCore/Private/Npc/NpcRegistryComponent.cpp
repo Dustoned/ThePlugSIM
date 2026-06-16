@@ -338,13 +338,13 @@ int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed
 {
 	FNpcState* S = Find(NpcId);
 	if (!S) { return 0; }
-	const int32 kSkinVer = 1; // bump dit om ALLE NPC's 1x opnieuw te laten rollen na een schema-wijziging
+	const int32 kSkinVer = 2; // bump dit om ALLE NPC's 1x opnieuw te laten rollen na een schema-wijziging
 	if (S->SkinIndex >= 0 && S->SkinVer >= kSkinVer) { return S->SkinIndex; } // al toegewezen op huidig schema
-	// BREDE banden voor maximale variatie (10 geklede skins: 0-2 Karl, 3-5 Casual-vrouw, 6-9 Tony), met
-	// lichte tier-smaak. Lage/straat-tier krijgt JUIST een brede mix zodat je niet steeds dezelfde ziet.
-	static const int32 Low[]  = { 0, 1, 2, 3, 4, 5, 6, 7 };          // Karl + Casual-vrouw + wat Tony (8)
-	static const int32 Mid[]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };    // alles (10)
-	static const int32 High[] = { 3, 4, 5, 6, 7, 8, 9 };            // Casual + net geklede Tony (7)
+	// 3-5 = MODULAIRE Casual (honderden combinaties); 0-2 Karl, 6-9 Tony (vaste meshes + kleur). Modulair is
+	// dubbel gewogen zodat ~de helft van de bevolking de grote variatie krijgt (de rest blijft goedkoop).
+	static const int32 Low[]  = { 0, 1, 2, 3, 4, 5, 3, 4, 5, 6, 7 };          // ~55% modulair
+	static const int32 Mid[]  = { 0, 1, 2, 3, 4, 5, 3, 4, 5, 6, 7, 8, 9 };    // modulair + wat Tony
+	static const int32 High[] = { 6, 7, 8, 9, 3, 4, 5, 3, 4, 5 };            // net geklede Tony + veel modulair
 	const int32* Band = Low; int32 BN = (int32)UE_ARRAY_COUNT(Low);
 	if (Tier >= 4)      { Band = High; BN = (int32)UE_ARRAY_COUNT(High); }
 	else if (Tier == 3) { Band = Mid;  BN = (int32)UE_ARRAY_COUNT(Mid); }

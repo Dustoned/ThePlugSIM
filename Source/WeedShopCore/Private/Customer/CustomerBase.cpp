@@ -260,8 +260,9 @@ static FLinearColor WeedNpc_ClothColor(uint32 H)
 	return FLinearColor::MakeFromHSV8(Hue, Sat, Val);
 }
 
-// Forward-decl: tint de kleding-slots van een (deel-)mesh-component.
+// Forward-decl: tint de kleding-slots / het haar van een (deel-)mesh-component.
 static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed);
+static void WeedNpc_TintHair(USkeletalMeshComponent* SkM, uint32 Seed);
 
 // STABIELE seed uit de NpcId-string (FNV-1a). GetTypeHash(FName) is NIET stabiel tussen sessies (hangt af
 // van de naam-tabel-volgorde) -> daarmee zou een NPC bij elke load andere kleren/kleur krijgen. Deze hash
@@ -297,7 +298,9 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 	struct FSlot { TArray<FString> Opts; uint32 Salt; bool bCloth; };
 	const TArray<FSlot> Slots = {
 		{ { TEXT("Heads/SK_Head_Casual_1"), TEXT("Heads/SK_Head_Casual_2"), TEXT("Heads/SK_Head_Casual_3") }, 11u, false },
-		{ { TEXT("Cloth/Torso/SK_Top_1"), TEXT("Cloth/Torso/SK_Top_2"), TEXT("Cloth/Torso/SK_Hoodies_Mini") }, 23u, true },
+		{ { TEXT("Cloth/Torso/SK_Top_1"), TEXT("Cloth/Torso/SK_Top_2"), TEXT("Cloth/Torso/SK_Hoodies_Mini"),
+		    TEXT("Cloth/Torso/SK_Top_1_Optimized_Outerwear"), TEXT("Cloth/Torso/SK_Top_2_Optimized_Outerwear"),
+		    TEXT("Cloth/Torso/SK_Top_1_Optimized_Shirt") }, 23u, true },
 		{ { TEXT("Cloth/Legs/SK_Baggy_Jeans"), TEXT("Cloth/Legs/SK_Wide_Leg_Jeans"), TEXT("Cloth/Legs/SK_Shorts_1") }, 41u, true },
 		{ { TEXT("Cloth/Shoes/SK_Sneakers_2"), TEXT("Cloth/Shoes/SK_Sneakers_4"), TEXT("Cloth/Shoes/SK_Sneakers_5") }, 67u, true },
 		// Haar + hoofddeksels (kaal/pet/hoed/panama) -> veel kapsel- en hoed-variatie.
@@ -325,7 +328,41 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 		Part->SetCastShadow(false);
 		Part->SetCullDistance(16000.f);
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		if (Sl.bCloth) { WeedNpc_TintClothing(Part, Seed + Sl.Salt); } // top/broek/schoenen krijgen random kleur
+		if (Sl.bCloth) { WeedNpc_TintClothing(Part, Seed + Sl.Salt); }      // top/broek/schoenen: random kleur
+		else           { WeedNpc_TintHair(Part, Seed + Sl.Salt); }          // haar: random natuurlijke haarkleur
+	}
+}
+
+// Natuurlijke haarkleur uit een hash (zwart/bruin/blond/auburn/grijs/wit).
+static FLinearColor WeedNpc_HairColor(uint32 H)
+{
+	H = H * 2654435761u + 7u;
+	static const FLinearColor Pal[] = {
+		FLinearColor(0.02f, 0.02f, 0.02f), FLinearColor(0.05f, 0.035f, 0.025f),  // zwart, donkerbruin
+		FLinearColor(0.13f, 0.08f, 0.045f), FLinearColor(0.27f, 0.17f, 0.085f),  // bruin, lichtbruin
+		FLinearColor(0.55f, 0.42f, 0.20f), FLinearColor(0.34f, 0.11f, 0.05f),    // blond, auburn
+		FLinearColor(0.45f, 0.45f, 0.47f), FLinearColor(0.80f, 0.80f, 0.82f),    // grijs, wit
+	};
+	return Pal[H % (uint32)UE_ARRAY_COUNT(Pal)];
+}
+
+// Random natuurlijke haarkleur op de haar-materiaalslots (M_Hair: RootColor/TipColor/DyeColor).
+static void WeedNpc_TintHair(USkeletalMeshComponent* SkM, uint32 Seed)
+{
+	if (!SkM) { return; }
+	const TArray<UMaterialInterface*> Mats = SkM->GetMaterials();
+	for (int32 i = 0; i < Mats.Num(); ++i)
+	{
+		UMaterialInterface* MI = Mats[i];
+		if (!MI) { continue; }
+		const FString Nm = MI->GetName();
+		if (!Nm.Contains(TEXT("Hair")) || Nm.Contains(TEXT("Pin"))) { continue; } // alleen echt haar (geen hairpin)
+		UMaterialInstanceDynamic* MID = SkM->CreateDynamicMaterialInstance(i);
+		if (!MID) { continue; }
+		const FLinearColor C = WeedNpc_HairColor(Seed + (uint32)i);
+		MID->SetVectorParameterValue(TEXT("RootColor"), C * 0.7f);
+		MID->SetVectorParameterValue(TEXT("TipColor"),  C);
+		MID->SetVectorParameterValue(TEXT("DyeColor"),  C);
 	}
 }
 
