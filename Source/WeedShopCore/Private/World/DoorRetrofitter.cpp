@@ -1916,8 +1916,8 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (NShops > 0) { UE_LOG(LogWeedShop, Warning, TEXT("Winkels geplaatst: %d (toonbank + ATM + verkoper)"), NShops); }
 	}
 
-	// VIRTUELE CROWD: data-stappen + lichamen materialiseren/opruimen.
-	TickVirtualCrowd();
+	// (VIRTUELE CROWD materialiseren/opruimen draait nu op de 10Hz-tick TickVirtualMove i.p.v. hier - met een
+	//  spawn-cap per call, zodat NPC's vloeiend druppelen i.p.v. elke 2s in een burst = periodieke hang.)
 
 	// PUI-BLADEN op het echte gevel-gat centreren (gemeten, niet gegokt).
 	FixBalconyPuiPositions();
@@ -2680,6 +2680,9 @@ void ADoorRetrofitter::TickVirtualMove()
 		V.PrevIdx = V.NextIdx;
 		V.NextIdx = Pick;
 	}
+
+	// Lichamen materialiseren/opruimen op deze 10Hz-tick (met spawn-cap per call -> vloeiend, geen burst-hang).
+	TickVirtualCrowd();
 }
 
 void ADoorRetrofitter::GetVirtualWalkerPositions(TArray<FVector>& Out) const
@@ -2749,6 +2752,11 @@ void ADoorRetrofitter::TickVirtualCrowd()
 	// data. Lichamen gaan naar de virtuelen die het dichtst bij een speler lopen.
 	const int32 BodyCap = 55;
 	int32 NBodies = 0;
+	// SPAWN-SPREIDING: max enkele echte NPC's PER CALL materialiseren. Elke spawn doet een synchrone
+	// modulaire build (mesh-loads + components); een hele rij in 1 frame = de periodieke hang. Met deze cap
+	// + de 10Hz-cadans (zie de call in TickVirtualMove) druppelen ze vloeiend binnen i.p.v. in bursts.
+	const int32 MaxSpawnPerTick = 2;
+	int32 Spawned = 0;
 	for (FVirtualWalker& V : Crowd)
 	{
 		if (ACustomerBase* B = V.Body.Get())
@@ -2779,7 +2787,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 		// MATERIALISEREN: speler binnen bereik, niet pal in beeld, echte straat onder de voeten
 		// en onder het lichaam-plafond.
 		const float Pd = MinPlayerDist(V.Pos);
-		if (NBodies < BodyCap && Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))
+		if (NBodies < BodyCap && Spawned < MaxSpawnPerTick && Pd < 18000.f && Pd > 2500.f && !InAnyView(V.Pos))
 		{
 			FVector Ground;
 			if (!StreetAt(V.Pos, Ground)) { continue; } // wereld hier (nog) niet geladen
@@ -2799,6 +2807,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			ACustomerBase* B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), SPv);
 			if (!B) { continue; }
 			++NBodies;
+			++Spawned;
 			V.Body = B;
 			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).
 			ACustomerSpawner* Near = nullptr;
