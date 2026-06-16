@@ -441,11 +441,16 @@ bool ADoorRetrofitter::FindStreetPoint(float WorldY, FVector& Out) const
 	return false;
 }
 
+// DIAGNOSE: logt als een functie-pass langer dan ~2ms duurt (= een frame-hitch). RAII -> werkt op elk
+// return-pad. Tijdelijk, om de periodieke stutter hard te lokaliseren.
+namespace { struct FHitchTimer { double S; const TCHAR* N; int32 P; FHitchTimer(const TCHAR* In, int32 Ip):S(FPlatformTime::Seconds()),N(In),P(Ip){} ~FHitchTimer(){ const double Ms=(FPlatformTime::Seconds()-S)*1000.0; if(Ms>2.0){ UE_LOG(LogWeedShop, Warning, TEXT("[HITCH] %s (pass %d): %.1f ms"), N, P, Ms);} } }; }
+
 void ADoorRetrofitter::ScanAndConvert()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	++ScanPass;
+	FHitchTimer HT_(TEXT("ScanAndConvert"), ScanPass);
 	if (ScanPass == 1)
 	{
 		// Chill-plekken (ChillSpots.txt) laden: hang-plekken voor een deel van de wandelaars.
@@ -2569,6 +2574,7 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 
 void ADoorRetrofitter::TickVirtualMove()
 {
+	FHitchTimer HT_(TEXT("TickVirtualMove"), ScanPass);
 	// THUIS-SETTLE (10Hz): val je vlak na het thuis-teleporteren door de nog-niet-geladen
 	// penthouse-vloer, dan zet ik je terug op de thuis-plek tot de vloer-collision er is. Stopt
 	// zodra het venster om is of je bewust wegloopt (XY > 6m van de thuis-plek).
@@ -2702,6 +2708,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 {
 	UWorld* W = GetWorld();
 	if (!W || GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
+	FHitchTimer HT_(TEXT("TickVirtualCrowd"), Crowd.Num());
 	// Speler-posities en kijkrichtingen cachen.
 	TArray<FVector> PlayerPos;
 	TArray<FVector> PlayerView;

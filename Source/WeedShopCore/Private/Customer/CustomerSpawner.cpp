@@ -25,6 +25,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "NavigationSystem.h"
 
+// DIAGNOSE (tijdelijk): logt als een spawner-pass > ~2ms duurt (= frame-hitch). RAII -> werkt op elk return-pad.
+namespace { struct FSpawnHitch { double S; const TCHAR* N; FSpawnHitch(const TCHAR* In):S(FPlatformTime::Seconds()),N(In){} ~FSpawnHitch(){ const double Ms=(FPlatformTime::Seconds()-S)*1000.0; if(Ms>2.0){ UE_LOG(LogWeedShop, Warning, TEXT("[HITCH] %s: %.1f ms"), N, Ms);} } }; }
+
 ACustomerSpawner::ACustomerSpawner()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -156,6 +159,7 @@ void ACustomerSpawner::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+	FSpawnHitch HT_(TEXT("Spawner::Tick"));
 	if (bResidentsSpawned)
 	{
 		GetWorldTimerManager().ClearTimer(SpawnTimer);
@@ -331,6 +335,7 @@ void ACustomerSpawner::TrySpawn()
 {
 	UWorld* World = GetWorld();
 	if (!World || !HasAuthority()) { return; }
+	FSpawnHitch HT_(TEXT("Spawner::TrySpawn"));
 
 	// Streaming-gate: zonder speler in de buurt is de grond hier mogelijk niet ingeladen -
 	// dan zakken verse NPC's door de wereld. Even wachten tot iemand dichtbij komt.
