@@ -141,7 +141,10 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	SetF(TEXT("r.ScreenPercentage"),     bPotato ? 42.f   : 100.f);  // render op ~42% resolutie
 	SetF(TEXT("r.Streaming.MipBias"),    bPotato ? 3.0f   : 0.f);    // veel lagere-res textures runtime
 	SetF(TEXT("r.Streaming.PoolSize"),   bPotato ? 250.f  : 1000.f); // kleine texture-pool (VRAM)
-	SetF(TEXT("r.ViewDistanceScale"),    bPotato ? 0.35f  : 1.f);
+	// View-distance GRADUAAL per tier: schaalt ALLE cull-afstanden mee (NPC's, gebouwen/props-HISMs, foliage,
+	// algemene mesh-draw-distance). Lager = dichterbij cullen = meer FPS. Potato cullt agressief, Epic ziet ver.
+	const float ViewDist = bPotato ? 0.35f : (Tier == 0 ? 0.6f : (Tier == 1 ? 0.85f : (Tier == 2 ? 1.0f : 1.3f)));
+	SetF(TEXT("r.ViewDistanceScale"),    ViewDist);
 	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.2f   : 1.f);
 	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.2f   : 1.f);
 	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f    : 4.f);
