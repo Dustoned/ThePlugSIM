@@ -59,6 +59,10 @@ struct FNpcState
 	// NOOIT meer gewijzigd -> dezelfde persoon ziet er altijd hetzelfde uit (ook na tier-stijging/save).
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	int32 SkinIndex = -1;
+	// Schema-versie van de skin-toewijzing. Oude saves (0) krijgen 1x een re-roll naar de bredere geklede
+	// banden (anders blijven ze hangen op de oude smalle Karl-verdeling = veel dezelfde skins).
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	int32 SkinVer = 0;
 
 	// --- Klant-tier/level (los van respect/loyaliteit) ---
 	// Klantwaarde-XP: loopt op door deals (verkochte grammen x loyaliteit x persoonlijke honger). Bepaalt de tier.

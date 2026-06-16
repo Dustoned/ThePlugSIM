@@ -111,10 +111,10 @@ ACustomerBase::ACustomerBase()
 		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		MeshComp->bEnableUpdateRateOptimizations = true;
 		MeshComp->SetCastShadow(false);
-		//  - Max render-afstand: verre NPC's (>90m, die je toch nauwelijks ziet) worden helemaal niet meer
-		//    getekend (skinned mesh = duur). Ze blijven wel leven/lopen (gameplay intact), renderen weer
-		//    zodra ze dichterbij komen. Scheelt veel draw-calls/skinning bij 65 rondlopende residents.
-		MeshComp->SetCullDistance(9000.f);
+		//  - Max render-afstand: heel verre NPC's worden niet getekend (skinned mesh = duur), maar ruim genoeg
+		//    dat wat je op de kaart ziet ook in de wereld zichtbaar is (de stad is ~150m). Schaalt mee met de
+		//    graphics-tier via r.ViewDistanceScale (lagere tier cullt dichterbij = meer FPS).
+		MeshComp->SetCullDistance(16000.f);
 	}
 
 	// AI: laat een AIController de klant besturen zodat hij kan pathfinden.

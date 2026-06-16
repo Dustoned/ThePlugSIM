@@ -338,19 +338,19 @@ int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed
 {
 	FNpcState* S = Find(NpcId);
 	if (!S) { return 0; }
-	if (S->SkinIndex >= 0) { return S->SkinIndex; } // al toegewezen -> stabiel, nooit meer wijzigen
-	// BREDE banden voor veel variatie op straat + female-skins (10-12), met lichte tier-smaak:
-	//   laag/casual -> Karl + FullBody Casual + female (9 opties);  mid -> casual + wat Tony + female;
-	//   high/whale  -> net geklede Tony + nette Casual/female. Tiers blijven herkenbaar maar je ziet niet
-	//   steeds dezelfde 3 skins.
-	static const int32 Low[]  = { 0, 1, 2, 3, 4, 5 };       // Karl + geklede Casual-vrouw
-	static const int32 Mid[]  = { 0, 1, 2, 3, 4, 6, 7 };    // Karl + Casual + wat Tony
-	static const int32 High[] = { 6, 7, 8, 9, 3, 4, 5 };    // net geklede Tony + Casual
+	const int32 kSkinVer = 1; // bump dit om ALLE NPC's 1x opnieuw te laten rollen na een schema-wijziging
+	if (S->SkinIndex >= 0 && S->SkinVer >= kSkinVer) { return S->SkinIndex; } // al toegewezen op huidig schema
+	// BREDE banden voor maximale variatie (10 geklede skins: 0-2 Karl, 3-5 Casual-vrouw, 6-9 Tony), met
+	// lichte tier-smaak. Lage/straat-tier krijgt JUIST een brede mix zodat je niet steeds dezelfde ziet.
+	static const int32 Low[]  = { 0, 1, 2, 3, 4, 5, 6, 7 };          // Karl + Casual-vrouw + wat Tony (8)
+	static const int32 Mid[]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };    // alles (10)
+	static const int32 High[] = { 3, 4, 5, 6, 7, 8, 9 };            // Casual + net geklede Tony (7)
 	const int32* Band = Low; int32 BN = (int32)UE_ARRAY_COUNT(Low);
 	if (Tier >= 4)      { Band = High; BN = (int32)UE_ARRAY_COUNT(High); }
 	else if (Tier == 3) { Band = Mid;  BN = (int32)UE_ARRAY_COUNT(Mid); }
 	const uint32 H = (uint32)Seed * 2654435761u + 12345u;
 	S->SkinIndex = Band[H % (uint32)BN];
+	S->SkinVer = kSkinVer;
 	return S->SkinIndex;
 }
 
