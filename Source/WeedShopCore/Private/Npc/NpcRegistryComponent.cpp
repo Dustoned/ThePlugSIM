@@ -339,12 +339,18 @@ int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed
 	FNpcState* S = Find(NpcId);
 	if (!S) { return 0; }
 	if (S->SkinIndex >= 0) { return S->SkinIndex; } // al toegewezen -> stabiel, nooit meer wijzigen
-	// Globale pool: 0-2 Karl (laag), 3-5 Casual (mid), 6-9 Tony (high). Band uit de tier-bij-toewijzing.
-	int32 Lo = 0, Hi = 2;
-	if (Tier >= 4)      { Lo = 6; Hi = 9; }
-	else if (Tier == 3) { Lo = 3; Hi = 5; }
+	// BREDE banden voor veel variatie op straat + female-skins (10-12), met lichte tier-smaak:
+	//   laag/casual -> Karl + FullBody Casual + female (9 opties);  mid -> casual + wat Tony + female;
+	//   high/whale  -> net geklede Tony + nette Casual/female. Tiers blijven herkenbaar maar je ziet niet
+	//   steeds dezelfde 3 skins.
+	static const int32 Low[]  = { 0, 1, 2, 3, 4, 5, 10, 11, 12 };
+	static const int32 Mid[]  = { 3, 4, 5, 6, 7, 10, 11, 12 };
+	static const int32 High[] = { 6, 7, 8, 9, 4, 5, 11, 12 };
+	const int32* Band = Low; int32 BN = (int32)UE_ARRAY_COUNT(Low);
+	if (Tier >= 4)      { Band = High; BN = (int32)UE_ARRAY_COUNT(High); }
+	else if (Tier == 3) { Band = Mid;  BN = (int32)UE_ARRAY_COUNT(Mid); }
 	const uint32 H = (uint32)Seed * 2654435761u + 12345u;
-	S->SkinIndex = Lo + (int32)(H % (uint32)(Hi - Lo + 1));
+	S->SkinIndex = Band[H % (uint32)BN];
 	return S->SkinIndex;
 }
 

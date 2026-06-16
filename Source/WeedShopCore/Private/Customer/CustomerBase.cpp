@@ -215,9 +215,13 @@ bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAl
 	return false;
 }
 
-// Globale NPC-skin-pool. De registry kiest de index 1x (tier-gewogen) en BEWAART 'm in de
-// persistente NPC-state -> dezelfde persoon ziet er altijd hetzelfde uit (ook na tier-stijging,
-// respawn of save/load). Indeling: 0-2 Karl (laag), 3-5 Casual (mid), 6-9 Tony (high/whale).
+// Globale NPC-skin-pool (NIET de standaard Manny/Quinn - die zijn voor de speler). De registry kiest de
+// index 1x en BEWAART 'm in de persistente NPC-state -> dezelfde persoon ziet er altijd hetzelfde uit
+// (ook na tier-stijging, respawn of save/load).
+//  0-2  Karl A/B/C        (Citizens, casual man)
+//  3-5  FullBody Casual    (man/vrouw, UE4_Mannequin_Skeleton_Main)
+//  6-9  Tony A/B/C/D       (Citizens, net gekleed - high/whale-flavor)
+//  10-12 SK_Casual 1/2/3   (Casual-pack VROUW-varianten, eigen skelet maar SK_Mannequin-compatibel)
 // Alle skeletons zijn compatibel met SK_Mannequin, dus de single-node walk/idle-anims blijven werken.
 static USkeletalMesh* WeedNpc_SkinByIndex(int32 Idx)
 {
@@ -232,6 +236,9 @@ static USkeletalMesh* WeedNpc_SkinByIndex(int32 Idx)
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_D.SK_Citizens_Pack_Tony_D"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_1/SK_Casual_1.SK_Casual_1"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_2/SK_Casual_2.SK_Casual_2"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_3/SK_Casual_3.SK_Casual_3"),
 	};
 	const int32 N = UE_ARRAY_COUNT(Pool);
 	return LoadObject<USkeletalMesh>(nullptr, Pool[FMath::Clamp(Idx, 0, N - 1)]);
