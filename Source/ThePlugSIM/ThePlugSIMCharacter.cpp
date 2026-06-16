@@ -11,6 +11,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Animation/AnimInstance.h"
 #include "Net/UnrealNetwork.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
@@ -328,13 +329,8 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	// single-node walk/idle/jump/telefoon. Lazy: zet de single-node-modus zodra we 'm voor het eerst tikken.
 	if (IsLocallyControlled()) { return; }
 	USkeletalMeshComponent* M = GetMesh();
-	if (!M || (!ProxyIdle && !ProxyWalk)) { return; }
-	if (!bProxyAnim)
-	{
-		M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-		bProxyAnim = true;
-		ProxyAnimState = -1; // forceer de eerste pose-apply
-	}
+	if (!M) { return; }
+
 	// 'Beweegt' bepalen uit de positie (de capsule springt op net-updates) en kort vasthouden.
 	const FVector Cur = GetActorLocation();
 	if (bHasProxyPrev)
@@ -345,14 +341,37 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	}
 	ProxyPrevLoc = Cur; bHasProxyPrev = true;
 
-	// Telefoon open (gerepliceerd)? -> 'texting'-pose tonen wanneer je stilstaat.
+	const bool bMoving = ProxyMoveHold > 0.f;
+	const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
 	bool bPhone = false;
 	if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
 
+	if (bBodyHasLocoAbp)
+	{
+		// Manny/Quinn: de locomotie-ABP doet walk/run/idle/jump (velocity repliceert -> draait op de proxy).
+		// Alleen voor TEXTING (telefoon open + stilstaan) wisselen we even naar de single-node texting-pose.
+		const bool bTexting = bPhone && !bMoving && !bFalling && ProxyPhone != nullptr;
+		const int32 NewState = bTexting ? 3 : 0;
+		if (NewState != ProxyAnimState)
+		{
+			ProxyAnimState = NewState;
+			if (bTexting) { M->SetAnimationMode(EAnimationMode::AnimationSingleNode); M->PlayAnimation(ProxyPhone, true); }
+			else          { M->SetAnimationMode(EAnimationMode::AnimationBlueprint); } // terug naar de locomotie-ABP
+		}
+		return;
+	}
+
+	// Andere skins (ander skelet, ABP draait daar niet betrouwbaar): single-node fallback.
+	if (!ProxyIdle && !ProxyWalk) { return; }
+	if (M->GetAnimationMode() != EAnimationMode::AnimationSingleNode)
+	{
+		M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		ProxyAnimState = -1;
+	}
 	int32 NewState = 0; // idle
-	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling()) { NewState = 2; } // lucht (mode repliceert)
-	else if (ProxyMoveHold > 0.f) { NewState = 1; } // lopen
-	else if (bPhone && ProxyPhone) { NewState = 3; } // stilstaan + telefoon = texting
+	if (bFalling) { NewState = 2; }
+	else if (bMoving) { NewState = 1; }
+	else if (bPhone && ProxyPhone) { NewState = 3; }
 	if (NewState == ProxyAnimState) { return; }
 	ProxyAnimState = NewState;
 	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 3) ? ProxyPhone : (NewState == 1) ? ProxyWalk : ProxyIdle;
@@ -416,7 +435,22 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	if (!Skin) { return; }
 
 	// Third-person body (co-op + jij in 3rd-person) EN first-person mesh (jouw eigen view, hoofd verborgen).
-	if (USkeletalMeshComponent* M = GetMesh()) { M->SetSkeletalMeshAsset(Skin); }
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		M->SetSkeletalMeshAsset(Skin);
+		// Manny/Quinn (SK_Mannequin): zet de ECHTE locomotie-ABP op de body -> vloeiende, richting-gebaseerde
+		// beweging (walk/run/idle/jump) die OOK op de simulated proxy draait (velocity repliceert). Dat ziet er
+		// veel beter uit dan de kale single-node 'walk-forward'. Andere skins (Casual/Tony, ander skelet) houden
+		// de single-node proxy-fallback want die ABP draait daar niet betrouwbaar.
+		bBodyHasLocoAbp = false;
+		if (PlayerSkin == 0 || PlayerSkin == 1)
+		{
+			static TSubclassOf<UAnimInstance> LocoAbp = LoadClass<UAnimInstance>(nullptr,
+				TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
+			if (LocoAbp) { M->SetAnimInstanceClass(LocoAbp); bBodyHasLocoAbp = true; } // anders: single-node fallback
+		}
+		ProxyAnimState = -1; // forceer her-evaluatie in UpdateProxyAnim (anim-mode kan zijn gewisseld)
+	}
 	if (FirstPersonMesh)
 	{
 		FirstPersonMesh->SetSkeletalMeshAsset(Skin);

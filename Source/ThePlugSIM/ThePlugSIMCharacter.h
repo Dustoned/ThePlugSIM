@@ -331,7 +331,8 @@ public:
 	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyJump;
 	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyPhone; // andere spelers zien je 'texten' als je je telefoon open hebt
 	bool bProxyAnim = false;
-	int32 ProxyAnimState = -1;        // -1 nog niet, 0 idle, 1 walk, 2 lucht, 3 telefoon
+	bool bBodyHasLocoAbp = false;     // Manny/Quinn-skin -> echte locomotie-ABP op de body; anders single-node-fallback
+	int32 ProxyAnimState = -1;        // -1 nog niet, 0 idle/ABP, 1 walk, 2 lucht, 3 telefoon
 	FVector ProxyPrevLoc = FVector::ZeroVector;
 	bool bHasProxyPrev = false;
 	float ProxyMoveHold = 0.f;        // resterende tijd dat we 'beweegt' aanhouden tussen net-updates
