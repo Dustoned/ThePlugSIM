@@ -45,6 +45,16 @@ public:
 	// Geeft de naam van de verwijderde spot terug (leeg = niets gevonden binnen bereik).
 	FString RemoveNearestSpot(const FVector& Near, float MaxDist = 400.f);
 
+	// --- Editor-menu (per NPC) ---
+	// Lees de huidige instellingen van de spot die bij deze NPC hoort.
+	bool GetSpotSettings(ACustomerBase* Npc, int32& OutAnimIdx, float& OutStart, float& OutEnd) const;
+	// Pas instellingen toe (live op de NPC + herschrijf bestand).
+	void UpdateSpotForNpc(ACustomerBase* Npc, int32 AnimIdx, float HourStart, float HourEnd);
+	// Verwijder de spot van deze NPC (despawn + herschrijf bestand).
+	void RemoveSpotForNpc(ACustomerBase* Npc);
+	// 'Pin' een NPC tijdens het bewerken zodat het tijdvak 'm niet despawn't (anders verlies je 'm uit beeld).
+	void SetEditingNpc(ACustomerBase* Npc) { EditingNpc = Npc; }
+
 	// Pad naar het opslagbestand (ProjectSaved/ActivitySpots.txt).
 	static FString GetSaveFile();
 
@@ -56,8 +66,11 @@ private:
 	float CurrentHour() const;
 	ACustomerBase* SpawnActivityNpc(const FActivitySpotData& S);
 
+	int32 IndexForNpc(const ACustomerBase* Npc) const;
+
 	UPROPERTY()
 	TArray<FActivitySpotData> Spots;
 
+	TWeakObjectPtr<ACustomerBase> EditingNpc; // wordt niet gedespawned terwijl het menu open is
 	float EvalTimer = 0.f;
 };

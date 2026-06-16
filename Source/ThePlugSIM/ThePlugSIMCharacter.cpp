@@ -49,6 +49,8 @@
 #include "Customer/CustomerBase.h"
 #include "Customer/CustomerSpawner.h"
 #include "World/ActivitySpotManager.h"
+#include "ActivitySpotEditorWidget.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
@@ -575,74 +577,13 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			}
 			bFlyKeyWasDown = bF7;
 
-			// --- Activity-spots (dev-tool) ---
-			// F10: blader door de animatie-catalog. Shift+F10: plaats hier een activity-spot (NPC verschijnt op
-			//      het gekozen tijdvak en doet die anim, kijkend in je huidige richting).
-			// F12: blader door het tijdvak (hele dag/ochtend/middag/avond/nacht). Shift+F12: wis de dichtstbij spot.
-			const bool bShift = PCk->IsInputKeyDown(EKeys::LeftShift) || PCk->IsInputKeyDown(EKeys::RightShift);
-
-			// Tijdvak-presets (start,end) + label.
-			auto TimeWindow = [](int32 Sel, float& OutStart, float& OutEnd) -> const TCHAR*
-			{
-				switch (((Sel % 5) + 5) % 5)
-				{
-					case 1:  OutStart = 6.f;  OutEnd = 12.f; return TEXT("Morning 6-12");
-					case 2:  OutStart = 12.f; OutEnd = 18.f; return TEXT("Afternoon 12-18");
-					case 3:  OutStart = 18.f; OutEnd = 24.f; return TEXT("Evening 18-24");
-					case 4:  OutStart = 22.f; OutEnd = 6.f;  return TEXT("Night 22-6");
-					default: OutStart = 0.f;  OutEnd = 24.f; return TEXT("All day");
-				}
-			};
-
+			// --- Activity-NPC (dev-tool, 1 toets) ---
+			// F10: kijk je naar een activity-NPC -> open het instel-menu (anim / van-tot / wissen). Kijk je
+			//      nergens naar -> plaats hier een nieuwe activity-NPC (default: hele dag, eerste anim), die je
+			//      daarna met F10 kunt aanklikken om in te stellen.
 			const bool bF10 = bDevKeys && PCk->IsInputKeyDown(EKeys::F10);
-			if (bF10 && !bActAnimKeyWasDown)
-			{
-				if (bShift)
-				{
-					// Plaats een spot op de huidige plek/kijkrichting.
-					AActivitySpotManager* Mgr = nullptr;
-					for (TActorIterator<AActivitySpotManager> It(GetWorld()); It; ++It) { Mgr = *It; break; }
-					if (Mgr)
-					{
-						float Ts = 0.f, Te = 24.f; const TCHAR* TLbl = TimeWindow(ActSelTime, Ts, Te);
-						const int32 Total = Mgr->AddSpotLive(GetActorLocation(), GetControlRotation().Yaw, ActSelAnim, Ts, Te);
-						UWeedToast::NotifyPawn(this, -1, 4.f, FColor::Green, FString::Printf(
-							TEXT("Activity spot placed: %s @ %s (total %d)"), *ACustomerBase::ActivityAnimLabel(ActSelAnim), TLbl, Total));
-					}
-					else
-					{
-						UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Orange, TEXT("No activity manager (host only)."));
-					}
-				}
-				else
-				{
-					const int32 N = FMath::Max(1, ACustomerBase::ActivityAnimNum());
-					ActSelAnim = (ActSelAnim + 1) % N;
-					UWeedToast::NotifyPawn(this, -1, 2.5f, FColor::Cyan, FString::Printf(
-						TEXT("Activity anim: %s (%d/%d) - Shift+F10 to place"), *ACustomerBase::ActivityAnimLabel(ActSelAnim), ActSelAnim + 1, N));
-				}
-			}
+			if (bF10 && !bActAnimKeyWasDown) { HandleActivityKey(); }
 			bActAnimKeyWasDown = bF10;
-
-			const bool bF12 = bDevKeys && PCk->IsInputKeyDown(EKeys::F12);
-			if (bF12 && !bActTimeKeyWasDown)
-			{
-				if (bShift)
-				{
-					AActivitySpotManager* Mgr = nullptr;
-					for (TActorIterator<AActivitySpotManager> It(GetWorld()); It; ++It) { Mgr = *It; break; }
-					const FString Removed = Mgr ? Mgr->RemoveNearestSpot(GetActorLocation()) : FString();
-					UWeedToast::NotifyPawn(this, -1, 3.f, Removed.IsEmpty() ? FColor::Orange : FColor::Yellow,
-						Removed.IsEmpty() ? TEXT("No activity spot nearby to remove.") : FString::Printf(TEXT("Removed activity spot: %s"), *Removed));
-				}
-				else
-				{
-					ActSelTime = (ActSelTime + 1) % 5;
-					float Ts = 0.f, Te = 24.f; const TCHAR* TLbl = TimeWindow(ActSelTime, Ts, Te);
-					UWeedToast::NotifyPawn(this, -1, 2.5f, FColor::Cyan, FString::Printf(TEXT("Activity time: %s"), TLbl));
-				}
-			}
-			bActTimeKeyWasDown = bF12;
 
 			if (GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying)
 			{
@@ -1393,6 +1334,61 @@ void AThePlugSIMCharacter::OnCashChanged(int64 NewCashCents)
 	{
 		Inventory->SetCashDisplayEuros(NewCashCents / 100);
 	}
+}
+
+void AThePlugSIMCharacter::HandleActivityKey()
+{
+	UWorld* W = GetWorld();
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!W || !PC) { return; }
+
+	// Menu al open? Laat het de input afhandelen (Klaar-knop sluit).
+	if (ActivityEditor && ActivityEditor->IsInViewport()) { return; }
+
+	AActivitySpotManager* Mgr = nullptr;
+	for (TActorIterator<AActivitySpotManager> It(W); It; ++It) { Mgr = *It; break; }
+	if (!Mgr)
+	{
+		UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Orange, TEXT("Activity spots are host-only."));
+		return;
+	}
+
+	// Camera-trace: kijk ik naar een bestaande activity-NPC?
+	FVector CamLoc = GetActorLocation(); FRotator CamRot = GetControlRotation();
+	if (PC->PlayerCameraManager) { CamLoc = PC->PlayerCameraManager->GetCameraLocation(); CamRot = PC->PlayerCameraManager->GetCameraRotation(); }
+	const FVector End = CamLoc + CamRot.Vector() * 600.f;
+	FHitResult Hit;
+	FCollisionQueryParams Q(FName(TEXT("ActivityPick")), false, this);
+	ACustomerBase* Aimed = nullptr;
+	if (W->LineTraceSingleByChannel(Hit, CamLoc, End, ECC_Pawn, Q))
+	{
+		Aimed = Cast<ACustomerBase>(Hit.GetActor());
+		if (Aimed && !Aimed->IsActivityNpc()) { Aimed = nullptr; }
+	}
+
+	if (Aimed)
+	{
+		// Open het instel-menu voor deze NPC.
+		if (!ActivityEditor)
+		{
+			ActivityEditor = CreateWidget<UActivitySpotEditorWidget>(PC, UActivitySpotEditorWidget::StaticClass());
+		}
+		if (ActivityEditor)
+		{
+			ActivityEditor->Setup(Mgr, Aimed);
+			if (!ActivityEditor->IsInViewport()) { ActivityEditor->AddToViewport(60); }
+			FInputModeGameAndUI Mode;
+			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			Mode.SetHideCursorDuringCapture(false);
+			PC->SetInputMode(Mode);
+			PC->bShowMouseCursor = true;
+		}
+		return;
+	}
+
+	// Niks aangewezen -> plaats een nieuwe activity-NPC (hele dag, eerste anim) op deze plek/kijkrichting.
+	Mgr->AddSpotLive(GetActorLocation(), GetControlRotation().Yaw, 0, 0.f, 24.f);
+	UWeedToast::NotifyPawn(this, -1, 4.f, FColor::Green, TEXT("Activity NPC placed. Aim at it + F10 to set animation / time."));
 }
 
 void AThePlugSIMCharacter::WeedMarkSpot(const FString& Label)

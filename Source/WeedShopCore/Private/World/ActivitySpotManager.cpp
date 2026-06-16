@@ -129,10 +129,49 @@ void AActivitySpotManager::Tick(float DeltaSeconds)
 		}
 		else if (!bActive && bHasNpc)
 		{
+			if (S.Npc.Get() == EditingNpc.Get()) { continue; } // pinned tijdens bewerken -> niet despawnen
 			S.Npc->Destroy();
 			S.Npc = nullptr;
 		}
 	}
+}
+
+int32 AActivitySpotManager::IndexForNpc(const ACustomerBase* Npc) const
+{
+	if (!Npc) { return INDEX_NONE; }
+	for (int32 i = 0; i < Spots.Num(); ++i) { if (Spots[i].Npc.Get() == Npc) { return i; } }
+	return INDEX_NONE;
+}
+
+bool AActivitySpotManager::GetSpotSettings(ACustomerBase* Npc, int32& OutAnimIdx, float& OutStart, float& OutEnd) const
+{
+	const int32 i = IndexForNpc(Npc);
+	if (i == INDEX_NONE) { return false; }
+	OutAnimIdx = Spots[i].AnimIdx;
+	OutStart   = Spots[i].HourStart;
+	OutEnd     = Spots[i].HourEnd;
+	return true;
+}
+
+void AActivitySpotManager::UpdateSpotForNpc(ACustomerBase* Npc, int32 AnimIdx, float HourStart, float HourEnd)
+{
+	const int32 i = IndexForNpc(Npc);
+	if (i == INDEX_NONE) { return; }
+	Spots[i].AnimIdx   = AnimIdx;
+	Spots[i].HourStart = HourStart;
+	Spots[i].HourEnd   = HourEnd;
+	if (Npc) { Npc->SetActivityAnimNow(AnimIdx); } // live zichtbaar
+	RewriteFile();
+}
+
+void AActivitySpotManager::RemoveSpotForNpc(ACustomerBase* Npc)
+{
+	const int32 i = IndexForNpc(Npc);
+	if (i == INDEX_NONE) { return; }
+	if (EditingNpc.Get() == Npc) { EditingNpc = nullptr; }
+	if (Spots[i].Npc.IsValid()) { Spots[i].Npc->Destroy(); }
+	Spots.RemoveAt(i);
+	RewriteFile();
 }
 
 int32 AActivitySpotManager::AddSpotLive(const FVector& Pos, float Yaw, int32 AnimIdx, float HourStart, float HourEnd)

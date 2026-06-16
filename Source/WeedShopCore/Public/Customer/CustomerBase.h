@@ -262,6 +262,10 @@ public:
 	void BeginActivity(const FVector& Spot, float Yaw, int32 AnimIdx);
 	bool IsActivityNpc() const { return bActivityNpc; }
 
+	// Live de activity-anim wisselen (editor-menu) -> direct zichtbaar op host + clients (gerepliceerd).
+	void SetActivityAnimNow(int32 AnimIdx);
+	int32 GetActivityAnim() const { return ActivityPendingAnim; }
+
 	// Gedeelde activity-anim-catalog (GenericNPCAnimPack2). Index-gebaseerd zodat de spot-file compact blijft
 	// en host/client dezelfde pose kiezen. Append-only laten zodat opgeslagen indices stabiel blijven.
 	static int32 ActivityAnimNum();

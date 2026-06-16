@@ -227,6 +227,16 @@ void ACustomerBase::BeginActivity(const FVector& Spot, float Yaw, int32 AnimIdx)
 	ActivityAnimIndex = -1; // tijdens de aanloop nog gewoon walk/idle
 }
 
+void ACustomerBase::SetActivityAnimNow(int32 AnimIdx)
+{
+	ActivityPendingAnim = FMath::Clamp(AnimIdx, 0, FMath::Max(0, ActivityAnimNum() - 1));
+	if (bActivityArrived)
+	{
+		ActivityAnimIndex = ActivityPendingAnim; // gerepliceerd -> OnRep speelt 'm op clients
+		ApplyActivityAnim();                      // host: direct
+	}
+}
+
 void ACustomerBase::ApplyActivityAnim()
 {
 	if (ActivityAnimIndex < 0) { return; }

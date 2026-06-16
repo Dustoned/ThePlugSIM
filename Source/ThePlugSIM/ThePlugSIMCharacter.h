@@ -81,10 +81,10 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	bool bTpKeyWasDown = false; // edge-detect voor de toggle-toets
 	bool bSpotKeyWasDown = false; // edge-detect F9 (dev spot-info)
 	bool bFlyKeyWasDown = false;  // edge-detect F7 (vlieg-modus)
-	bool bActAnimKeyWasDown = false; // edge-detect F10 (activity: anim kiezen / Shift = plaatsen)
-	bool bActTimeKeyWasDown = false; // edge-detect F12 (activity: tijdvak / Shift = dichtstbijzijnde wissen)
-	int32 ActSelAnim = 0;            // gekozen activity-animatie (catalog-index)
-	int32 ActSelTime = 0;            // gekozen tijdvak-preset (0 hele dag,1 ochtend,2 middag,3 avond,4 nacht)
+	bool bActAnimKeyWasDown = false; // edge-detect F10 (activity-NPC plaatsen/bewerken)
+	// F10: kijk je naar een activity-NPC -> open het menu; anders plaats er een. (host, free-build)
+	void HandleActivityKey();
+	UPROPERTY() TObjectPtr<class UActivitySpotEditorWidget> ActivityEditor = nullptr;
 	void ToggleThirdPerson();
 	UFUNCTION()
 	void ApplySoftPhysics(); // Lola: haar/rok/cloth-bones laten nawapperen (physics-blend)
