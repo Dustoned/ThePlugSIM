@@ -78,6 +78,11 @@ struct FPhoneMessage
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	FString ForPlayerId;
 
+	// GELEZEN: gezet door de server zodra een speler de chat-thread opent. Repliceert mee (de hele Messages-
+	// array repliceert), zodat de ongelezen-badge bij BEIDE co-op-spelers tegelijk verdwijnt.
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	bool bSeen = false;
+
 	// Realtime-seconden toen dit verzoek binnenkwam (voor follow-up/opgeven + reactiesnelheid). < 0 = n.v.t.
 	UPROPERTY()
 	float SentRealTime = -1.f;
@@ -135,6 +140,10 @@ public:
 	// Server: voeg een los info-bericht van een contact toe (afspraak-status: onderweg / ben er / te laat).
 	// Verschijnt als ongelezen inkomend bericht (telt mee voor de notificatie-bubble), geen openstaande afspraak.
 	void PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body);
+
+	// Server: markeer alle inkomende berichten van deze contact als gelezen (bSeen). Repliceert mee, zodat
+	// de ongelezen-badge bij BEIDE co-op-spelers tegelijk verdwijnt.
+	void MarkThreadSeen(FName ContactId);
 
 	// Save/load: zet de hele contacten- + berichten-lijst terug.
 	void RestoreContacts(const TArray<FPhoneContact>& InContacts, const TArray<FPhoneMessage>& InMessages);

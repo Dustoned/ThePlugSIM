@@ -702,6 +702,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, ActivityAnimIndex);
 	DOREPLIFETIME(ACustomerBase, NpcId);        // co-op: client heeft de seed nodig voor het uiterlijk
 	DOREPLIFETIME(ACustomerBase, RepSkinIndex); // co-op: welke skin/band -> client herbouwt 'm lokaal
+	DOREPLIFETIME(ACustomerBase, DealingPawn);  // co-op: wie deal er nu (exclusiviteit)
 	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
 	DOREPLIFETIME(ACustomerBase, bTalkingToPlayer);
 	DOREPLIFETIME(ACustomerBase, bShopkeeper);
@@ -719,10 +720,11 @@ void ACustomerBase::PushApptMessage(const FString& InBody)
 	Con->PushInfoMessage(NpcId, FText::FromString(ACityDoor::FriendlyNpcName(NpcId)), FText::FromString(InBody));
 }
 
-void ACustomerBase::SetTalkingToPlayer(bool b)
+void ACustomerBase::SetTalkingToPlayer(bool b, APawn* Pawn)
 {
 	if (!HasAuthority()) { return; }
 	bTalkingToPlayer = b;
+	DealingPawn = b ? Pawn : nullptr; // gerepliceerd -> andere client weet wie bezig is
 	if (b)
 	{
 		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }

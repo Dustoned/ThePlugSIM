@@ -254,9 +254,11 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerProposeContactStrain(FName ContactId, FName Strain);
 
-	// Berichten-notificatie (client-lokaal, per speler). De bubble op het telefoon-icoon telt ongelezen
-	// inkomende berichten en gaat pas weg als je de CHAT van die persoon echt opent (MarkChatSeen).
+	// Berichten-notificatie. De bubble op het telefoon-icoon telt ongelezen inkomende berichten en gaat pas
+	// weg als je de CHAT van die persoon echt opent (MarkChatSeen -> server zet bSeen, gerepliceerd naar BEIDE
+	// co-op-spelers zodat de badge bij allebei tegelijk verdwijnt).
 	void MarkChatSeen(FName ContactId);
+	UFUNCTION(Server, Reliable) void ServerMarkThreadSeen(FName ContactId);
 	int32 GetUnreadMessageCount() const;
 	bool HasUnreadFrom(FName ContactId) const; // ongelezen inkomende berichten van dit contact?
 

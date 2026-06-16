@@ -156,7 +156,13 @@ public:
 	// In gesprek met een speler -> de NPC stopt met lopen tot het gesprek sluit (server-authoritative).
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
 	bool bTalkingToPlayer = false;
-	void SetTalkingToPlayer(bool b);
+	// CO-OP-EXCLUSIVITEIT: welke speler nu met deze NPC praat/deal (gerepliceerd). Zo kan speler 2 niet
+	// tegelijk met dezelfde klant dealen (anders dubbele verkoop). nullptr = vrij.
+	UPROPERTY(Replicated)
+	TObjectPtr<APawn> DealingPawn = nullptr;
+	void SetTalkingToPlayer(bool b, APawn* Pawn = nullptr);
+	// true = een ANDERE speler dan Pawn is al met deze NPC bezig.
+	bool IsBusyWithOther(const APawn* Pawn) const { return bTalkingToPlayer && DealingPawn != nullptr && DealingPawn != Pawn; }
 
 	// Verkoper achter de winkel-balie: staat altijd stil en is GEEN deal-klant (de balie opent de winkel).
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")

@@ -789,3 +789,14 @@ void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderNam
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 	OnRep_Messages();    // server: meteen lokaal de UI bijwerken
 }
+
+void UContactsComponent::MarkThreadSeen(FName ContactId)
+{
+	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
+	bool bChanged = false;
+	for (FPhoneMessage& M : Messages)
+	{
+		if (!M.bFromMe && M.FromContactId == ContactId && !M.bSeen) { M.bSeen = true; bChanged = true; }
+	}
+	if (bChanged) { OnRep_Messages(); } // server: meteen lokaal de badge bijwerken; repliceert naar clients
+}

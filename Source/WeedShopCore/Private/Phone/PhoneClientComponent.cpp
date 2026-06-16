@@ -236,15 +236,14 @@ AWeedShopGameState* UPhoneClientComponent::GetGS() const
 void UPhoneClientComponent::MarkChatSeen(FName ContactId)
 {
 	if (ContactId.IsNone()) { return; }
-	const AWeedShopGameState* GS = GetGS();
-	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
-	if (!Con) { return; }
-	int32 Cnt = 0;
-	for (const FPhoneMessage& M : Con->GetMessages())
-	{
-		if (!M.bFromMe && M.FromContactId == ContactId) { ++Cnt; }
-	}
-	MsgSeen.Add(ContactId, Cnt);
+	// Server-authoritative: zet bSeen op de berichten (repliceert) zodat de badge bij BEIDE spelers verdwijnt.
+	ServerMarkThreadSeen(ContactId);
+}
+
+void UPhoneClientComponent::ServerMarkThreadSeen_Implementation(FName ContactId)
+{
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && GS->GetContacts()) { GS->GetContacts()->MarkThreadSeen(ContactId); }
 }
 
 bool UPhoneClientComponent::HasUnreadFrom(FName ContactId) const
@@ -252,9 +251,11 @@ bool UPhoneClientComponent::HasUnreadFrom(FName ContactId) const
 	const AWeedShopGameState* GS = GetGS();
 	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 	if (!Con) { return false; }
-	int32 Cnt = 0;
-	for (const FPhoneMessage& M : Con->GetMessages()) { if (!M.bFromMe && M.FromContactId == ContactId) { ++Cnt; } }
-	return Cnt > MsgSeen.FindRef(ContactId);
+	for (const FPhoneMessage& M : Con->GetMessages())
+	{
+		if (!M.bFromMe && M.FromContactId == ContactId && !M.bSeen) { return true; }
+	}
+	return false;
 }
 
 int32 UPhoneClientComponent::GetUnreadMessageCount() const
@@ -262,20 +263,15 @@ int32 UPhoneClientComponent::GetUnreadMessageCount() const
 	const AWeedShopGameState* GS = GetGS();
 	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 	if (!Con) { return 0; }
-	// Competitive: tel alleen JOUW berichten (eigen telefoon); co-op telt alles.
+	// Competitive: tel alleen JOUW berichten (eigen telefoon); co-op telt alles. Ongelezen = !bSeen (gerepliceerd).
 	const APawn* Me = Cast<APawn>(GetOwner());
 	const bool bComp = GS->IsCompetitive();
 	const FString MyId = (bComp && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
-	TMap<FName, int32> Cnt;
+	int32 Unread = 0;
 	for (const FPhoneMessage& M : Con->GetMessages())
 	{
 		if (bComp && !M.ForPlayerId.IsEmpty() && M.ForPlayerId != MyId) { continue; }
-		if (!M.bFromMe) { Cnt.FindOrAdd(M.FromContactId)++; }
-	}
-	int32 Unread = 0;
-	for (const TPair<FName, int32>& KV : Cnt)
-	{
-		Unread += FMath::Max(0, KV.Value - MsgSeen.FindRef(KV.Key));
+		if (!M.bFromMe && !M.bSeen) { ++Unread; }
 	}
 	return Unread;
 }
@@ -1772,13 +1768,23 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 
 void UPhoneClientComponent::ServerSetCustomerTalking_Implementation(ACustomerBase* Customer, bool bTalking)
 {
-	if (Customer) { Customer->SetTalkingToPlayer(bTalking); }
+	if (!Customer) { return; }
+	APawn* MyPawn = Cast<APawn>(GetOwner());
+	// EXCLUSIVITEIT: niet overnemen als een ANDERE speler al met deze klant bezig is.
+	if (bTalking && Customer->IsBusyWithOther(MyPawn)) { return; }
+	Customer->SetTalkingToPlayer(bTalking, MyPawn);
 }
 
 void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 {
 	if (!Customer)
 	{
+		return;
+	}
+	// CO-OP: maar 1 speler tegelijk met een NPC. Is een ANDERE speler al bezig -> niet openen.
+	if (Customer->IsBusyWithOther(Cast<APawn>(GetOwner())))
+	{
+		UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Someone else is talking to this person."));
 		return;
 	}
 	// Praat-venster opent voor IEDEREEN (naam, stats, dialoog, joint geven). De deal-sectie zelf
@@ -1885,6 +1891,11 @@ void UPhoneClientComponent::RequestGiveJoint(ACustomerBase* Customer)
 void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, FName ProductId, int32 AskCents)
 {
 	if (!Customer)
+	{
+		return;
+	}
+	// EXCLUSIVITEIT (server-auth): is een ANDERE speler al met deze klant bezig -> weigeren (geen dubbele verkoop).
+	if (Customer->IsBusyWithOther(Cast<APawn>(GetOwner())))
 	{
 		return;
 	}
