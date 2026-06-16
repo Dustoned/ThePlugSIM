@@ -275,22 +275,40 @@ void AThePlugSIMCharacter::WeedUnstuck()
 	RecoverToSafe(true); // handmatige reset -> dichtstbijzijnde begaanbare plek (weg), niet naar huis
 }
 
-void AThePlugSIMCharacter::ApplyNoclipCollision(bool bFlying)
+void AThePlugSIMCharacter::ApplyNoclipCollision(bool bNoClip)
 {
-	// De noclip-collision volgt de (gerepliceerde) vlieg-modus, zodat host EN client dezelfde staat tonen:
-	// een vliegende co-op-speler gaat overal door muren (geen "zwevend mét collision/sliding" bij de ander).
 	if (UCapsuleComponent* Cap = GetCapsuleComponent())
 	{
-		Cap->SetCollisionEnabled(bFlying ? ECollisionEnabled::QueryOnly : ECollisionEnabled::QueryAndPhysics);
-		Cap->SetCollisionResponseToChannel(ECC_WorldStatic, bFlying ? ECR_Ignore : ECR_Block);
-		Cap->SetCollisionResponseToChannel(ECC_WorldDynamic, bFlying ? ECR_Ignore : ECR_Block);
+		Cap->SetCollisionEnabled(bNoClip ? ECollisionEnabled::QueryOnly : ECollisionEnabled::QueryAndPhysics);
+		Cap->SetCollisionResponseToChannel(ECC_WorldStatic, bNoClip ? ECR_Ignore : ECR_Block);
+		Cap->SetCollisionResponseToChannel(ECC_WorldDynamic, bNoClip ? ECR_Ignore : ECR_Block);
 	}
+}
+
+void AThePlugSIMCharacter::SetDevNoClip(bool bEnable)
+{
+	bDevNoClip = bEnable;
+	ApplyNoclipCollision(bEnable);                       // lokaal direct
+	if (!HasAuthority()) { ServerSetDevNoClip(bEnable); } // server zet 'm + repliceert naar andere spelers
+}
+
+void AThePlugSIMCharacter::ServerSetDevNoClip_Implementation(bool bEnable)
+{
+	bDevNoClip = bEnable;          // gerepliceerd -> OnRep_DevNoClip op de andere clients
+	ApplyNoclipCollision(bEnable); // host-kant
+}
+
+void AThePlugSIMCharacter::OnRep_DevNoClip()
+{
+	ApplyNoclipCollision(bDevNoClip); // andere spelers zien je door muren gaan
 }
 
 void AThePlugSIMCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
 {
 	Super::OnMovementModeChanged(PrevMovementMode, PreviousCustomMode);
-	ApplyNoclipCollision(GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying);
+	// BEWUST geen collision-koppeling aan MOVE_Flying meer: het thuis-spawn/settle-systeem zet spelers
+	// tijdelijk in MOVE_Flying (zweven tot de vloer er is) en dat mag de collision niet uitzetten.
+	// Noclip wordt enkel door SetDevNoClip (F7) gestuurd.
 }
 
 void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
@@ -367,6 +385,7 @@ void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(AThePlugSIMCharacter, OutfitAcc);
 	DOREPLIFETIME(AThePlugSIMCharacter, OutfitNeck);
 	DOREPLIFETIME(AThePlugSIMCharacter, OutfitSocks);
+	DOREPLIFETIME(AThePlugSIMCharacter, bDevNoClip); // F7-noclip zichtbaar voor andere spelers
 }
 
 void AThePlugSIMCharacter::ApplySkinMesh()
@@ -573,9 +592,11 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 						CM->MaxFlySpeed = 1400.f;
 						CM->BrakingDecelerationFlying = 4096.f;
 					}
-					// SetMovementMode triggert OnMovementModeChanged -> daar gaat de noclip-collision aan/uit
-					// (gerepliceerde mode = zelfde noclip op host EN client).
 					CM->SetMovementMode(bFlying ? MOVE_Walking : MOVE_Flying);
+					// Noclip is een APARTE gerepliceerde vlag (niet aan MOVE_Flying gekoppeld): fly aan = noclip aan,
+					// fly uit = noclip uit. Zo zien andere spelers je door muren gaan, maar raakt het settle-zweven
+					// (dat ook MOVE_Flying gebruikt) de collision nooit.
+					SetDevNoClip(!bFlying);
 					UWeedToast::NotifyPawn(this, -1, 2.f, FColor::Cyan, bFlying ? TEXT("Fly mode OFF") : TEXT("Fly mode ON + noclip (Space = up, Ctrl = down, F7 = off)"));
 				}
 			}
@@ -1163,10 +1184,9 @@ void AThePlugSIMCharacter::BeginPlay()
 		Move->JumpZVelocity = 450.0f;
 		Move->AirControl = 0.5f;
 		if (Move->MovementMode == MOVE_None) { Move->SetMovementMode(MOVE_Walking); }
-		// Expliciet de noclip-collision in lijn brengen met de huidige modus. Spawnt de pawn al in MOVE_Walking
-		// (geen overgang), dan vuurt OnMovementModeChanged niet -> zonder dit bleef de collision op de
-		// archetype/ignore-staat hangen = joiner die door alles heen loopt en het niet uit kan zetten.
-		ApplyNoclipCollision(Move->MovementMode == MOVE_Flying);
+		// Expliciet solide collision bij spawn (tenzij dev-noclip aanstaat). Niet afhankelijk van MOVE_Flying:
+		// een pawn die via het settle-systeem kort in MOVE_Flying staat hoort gewoon solide te blijven.
+		ApplyNoclipCollision(bDevNoClip);
 	}
 
 	// BELANGRIJK: GravityScale vermenigvuldigt de WERELD-zwaartekracht. Als de map "Global Gravity Z"

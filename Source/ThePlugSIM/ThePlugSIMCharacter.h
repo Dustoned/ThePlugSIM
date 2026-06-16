@@ -197,10 +197,19 @@ protected:
 	// Vlieg-modus (MOVE_Flying) repliceert; de noclip-collision koppelen we hieraan zodat ALLE clients
 	// dezelfde staat tonen (anders vliegt een co-op-speler bij de ander mét collision = "zwevend/sliding").
 	virtual void OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode) override;
-	// Zet de capsule-collision op solid (lopen) of noclip (vliegen). Aangeroepen door OnMovementModeChanged
-	// EN bij spawn/BeginPlay - want spawnt de pawn direct in MOVE_Walking (geen overgang), dan vuurt
-	// OnMovementModeChanged niet en zou de collision op de archetype/ignore-staat blijven hangen (joiner-noclip).
-	void ApplyNoclipCollision(bool bFlying);
+	// Zet de capsule-collision op solid of noclip. Gestuurd door de EXPLICIETE dev-noclip-vlag hieronder -
+	// NIET door MOVE_Flying: het thuis-spawn/settle-systeem (DoorRetrofitter) zet spelers tijdelijk in
+	// MOVE_Flying om te zweven tot de vloer gevonden is; dat mag de collision NOOIT uitzetten (anders
+	// noclip+slide op de joiner). Alleen F7 (dev-tool) zet bDevNoClip.
+	void ApplyNoclipCollision(bool bNoClip);
+
+	// DEV-noclip (F7): expliciete, gerepliceerde vlag zodat ANDERE spelers je ook door muren zien gaan.
+	// Losgekoppeld van MOVE_Flying zodat het settle-zweven de collision niet raakt.
+	UPROPERTY(ReplicatedUsing = OnRep_DevNoClip)
+	bool bDevNoClip = false;
+	UFUNCTION() void OnRep_DevNoClip();
+	void SetDevNoClip(bool bEnable);
+	UFUNCTION(Server, Reliable) void ServerSetDevNoClip(bool bEnable);
 
 	/** Telefoon-logica (openen, tabs, kopen, afspraken) — aangestuurd door input + HUD-klikken. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
