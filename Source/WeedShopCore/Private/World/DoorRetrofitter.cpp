@@ -2818,8 +2818,12 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			}
 			FActorSpawnParameters SPv;
 			SPv.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			ACustomerBase* B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), SPv);
+			// Deferred spawn: bCrowdNpc VOOR BeginPlay zetten -> goedkope vaste-mesh-skin i.p.v. de dure
+			// modulaire build (de ~30-40ms hitch per spawn). Achtergrond-crowd hoeft geen modulaire variatie.
+			ACustomerBase* B = W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 			if (!B) { continue; }
+			B->bCrowdNpc = true;
+			B->FinishSpawning(FTransform(SpawnP));
 			++NBodies;
 			++Spawned;
 			V.Body = B;

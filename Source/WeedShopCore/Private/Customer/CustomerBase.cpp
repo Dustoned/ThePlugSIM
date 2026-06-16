@@ -573,7 +573,14 @@ void ACustomerBase::BuildAppearance()
 
 	const uint32 LookSeed = WeedNpc_StableSeed(NpcId); // stabiel -> altijd dezelfde look
 	const int32 SkinIdx = RepSkinIndex;
-	if (SkinIdx >= 3 && SkinIdx <= 5)
+	// PERF: ambient achtergrond-crowd krijgt een GOEDKOPE vaste mesh (1 component) i.p.v. de modulaire build
+	// (6 component-registraties = ~30-40ms hitch per spawn). Nog steeds gevarieerd (Karl/Casual/Tony fixed +
+	// kleur-tint). Alleen NPC's waar je mee DEALT (niet-crowd) krijgen de volle modulaire variatie.
+	if (bCrowdNpc)
+	{
+		if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx)) { SkM->SetSkeletalMesh(Sk); WeedNpc_TintClothing(SkM, LookSeed); }
+	}
+	else if (SkinIdx >= 3 && SkinIdx <= 5)
 	{
 		// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd (+ kleur).
 		WeedNpc_BuildModular(this, SkM, LookSeed);

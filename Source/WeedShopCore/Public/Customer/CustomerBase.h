@@ -319,6 +319,11 @@ protected:
 	void ApplyActivityAnim();                       // speelt de catalog-anim ActivityAnimIndex (host + OnRep)
 	UFUNCTION() void OnRep_ActivityAnim();
 	bool bActivityNpc = false;
+public:
+	// Ambient achtergrond-crowd: goedkope vaste-mesh-skin i.p.v. de dure modulaire build (perf). Door de
+	// virtuele-menigte-materialisatie gezet VOOR BeginPlay (SpawnActorDeferred).
+	bool bCrowdNpc = false;
+protected:
 	FVector ActivitySpot = FVector::ZeroVector;     // doelplek
 	float ActivityYaw = 0.f;                         // kijkrichting op de plek
 	int32 ActivityPendingAnim = 0;                   // welke anim op aankomst (host-kant)
