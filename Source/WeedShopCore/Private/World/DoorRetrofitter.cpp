@@ -2036,14 +2036,17 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	FHitchTimer _tConvert(TEXT("Scan:Convert"), ScanPass);
 	int32 NewThisPass = 0;
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
 		AStaticMeshActor* SMA = *It;
-		if (!IsValid(SMA) || Converted.Contains(SMA)) { continue; }
+		if (!IsValid(SMA) || Converted.Contains(SMA) || ConvScanRejected.Contains(SMA)) { continue; }
 		UStaticMeshComponent* Comp = SMA->GetStaticMeshComponent();
 		const FLeafDef* Leaf = Comp ? MatchLeaf(Comp->GetStaticMesh()) : nullptr;
-		if (!Leaf) { continue; }
+		// GEEN deur-blad: 1x vaststellen en daarna NOOIT meer onderzoeken (mesh van een actor wijzigt
+		// niet). Anders MatchLeaf + geneste volle-actor-frame-scan elke 2s over duizenden props = ~90ms hang.
+		if (!Leaf) { ConvScanRejected.Add(SMA); continue; }
 
 		// Origineel blad verbergen + collision uit (verwijderen kan niet altijd in gestreamde levels).
 		// DICHT-stand bepalen: de map parkeert deuren (half/heel) OPEN als decor. Dicht = blad
@@ -2136,12 +2139,13 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// Glas-pass: losse glas-meshes van de bladen aan de dichtstbijzijnde geconverteerde deur hangen,
 	// zodat het raam met de deur mee draait i.p.v. in de lucht te blijven hangen.
+	FHitchTimer _tGlass(TEXT("Scan:Glass"), ScanPass);
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
 		AStaticMeshActor* SMA = *It;
-		if (!IsValid(SMA) || Converted.Contains(SMA)) { continue; }
+		if (!IsValid(SMA) || Converted.Contains(SMA) || GlassScanSeen.Contains(SMA)) { continue; }
 		UStaticMeshComponent* Comp = SMA->GetStaticMeshComponent();
-		if (!Comp || !IsLeafGlass(Comp->GetStaticMesh())) { continue; }
+		if (!Comp || !IsLeafGlass(Comp->GetStaticMesh())) { GlassScanSeen.Add(SMA); continue; } // geen deur-glas: nooit meer checken
 
 		const FVector GlassLoc = Comp->GetComponentLocation();
 		ACityDoor* Best = nullptr; float BestD = 60.f;
@@ -2164,6 +2168,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	// Raam-fixup: glas-/raam-COMPONENTEN (van elk actor-type: losse actors, level instances, ISM/HISM)
 	// staan in de map op no-collision/pawn-ignore, waardoor je dwars door ramen heen loopt. Forceer
 	// blokkeren voor de speler. (Door-glas aan onze scharnieren is van ACityDoor - die slaan we over.)
+	FHitchTimer _tRaamFix(TEXT("Scan:RaamFix"), ScanPass);
 	int32 GlassFixed = 0;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -2171,8 +2176,9 @@ void ADoorRetrofitter::ScanAndConvert()
 		// Sla onze deuren, al-geconverteerde originelen (verborgen bladen/glas) en alles wat
 		// onzichtbaar is over - anders zet je collision terug op het verborgen deur-glas en
 		// staat er een onzichtbare blokkade in de deuropening.
-		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass()) || Converted.Contains(A) || A->IsHidden()) { continue; }
+		if (!IsValid(A) || A->IsA(ACityDoor::StaticClass()) || Converted.Contains(A) || A->IsHidden() || WinFixSeen.Contains(A)) { continue; }
 		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		WinFixSeen.Add(A); // 1x onderzocht: glas-comps zijn nu gefixt/op-ignore, of er is geen glas - nooit meer scannen
 		for (UStaticMeshComponent* Comp : Comps)
 		{
 			if (!Comp || !Comp->GetStaticMesh() || GlassFixedComps.Contains(Comp)) { continue; }
@@ -2210,6 +2216,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	ADayNightController* DN = ADayNightController::GetLocal(W);
 	if (DN && !DN->IsPackMinimal()) // minimal-modus: stock-belichting volledig met rust laten
 	{
+		FHitchTimer _tLight(TEXT("Scan:Lighting"), ScanPass);
 		DN->TryAdoptSky();
 		ADirectionalLight* AdoptedSun = DN->GetSun();
 		ADirectionalLight* OurMoon = DN->GetMoon();
@@ -2268,8 +2275,9 @@ void ADoorRetrofitter::ScanAndConvert()
 		for (TActorIterator<AActor> ItL(W); ItL; ++ItL)
 		{
 			AActor* AL = *ItL;
-			if (!IsValid(AL)) { continue; }
+			if (!IsValid(AL) || LampScanSeen.Contains(AL)) { continue; }
 			TInlineComponentArray<ULocalLightComponent*> Lights(AL);
+			LampScanSeen.Add(AL); // 1x onderzocht: lampen staan nu op Movable, of er zijn er geen - nooit meer scannen
 			for (ULocalLightComponent* LC : Lights)
 			{
 				if (!LC || IndoorLightsFixed.Contains(LC)) { continue; }
@@ -2301,14 +2309,16 @@ void ADoorRetrofitter::ScanAndConvert()
 	// stabiel is (alle verdiepingen ingestreamd) spawnen we een werkende APackElevator met de bestaande
 	// schuif-panelen + de pack-cabine.
 	{
+		FHitchTimer _tElev(TEXT("Scan:Elevator"), ScanPass);
 		struct FShaft { FVector Ref = FVector::ZeroVector; float FrameYaw = 0.f; TArray<float> FloorZ; };
 		TMap<FIntPoint, FShaft> Shafts;
 		TArray<TPair<FVector, UStaticMeshComponent*>> AllPanels; // (positie, paneel)
 		for (TActorIterator<AActor> It(W); It; ++It)
 		{
 			AActor* A = *It;
-			if (!IsValid(A) || A->IsA(APackElevator::StaticClass())) { continue; }
+			if (!IsValid(A) || A->IsA(APackElevator::StaticClass()) || ElevScanSeen.Contains(A)) { continue; }
 			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+			bool bElevActor = false;
 			for (UStaticMeshComponent* Comp : Comps)
 			{
 				if (!Comp || !Comp->GetStaticMesh()) { continue; }
@@ -2316,6 +2326,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				const FVector L = Comp->GetComponentLocation();
 				if (MeshName == TEXT("SM_ElevatorDoorFrame01"))
 				{
+					bElevActor = true;
 					const FIntPoint Key(FMath::RoundToInt(L.X / 100.f), FMath::RoundToInt(L.Y / 100.f));
 					FShaft& Sh = Shafts.FindOrAdd(Key);
 					Sh.Ref = L;
@@ -2324,9 +2335,12 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				else if (MeshName == TEXT("SM_ElevatorDoor"))
 				{
+					bElevActor = true;
 					AllPanels.Add(TPair<FVector, UStaticMeshComponent*>(L, Comp));
 				}
 			}
+			// Geen lift-mesh? Nooit meer scannen. Wel lift-frames: blijven checken tot de schacht staat (ElevBuilt).
+			if (!bElevActor) { ElevScanSeen.Add(A); }
 		}
 		for (TPair<FIntPoint, FShaft>& KV : Shafts)
 		{
@@ -2453,8 +2467,8 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
 	// BuildMarkedRooms(); // UIT: marker-kopie werkte niet lekker - vervangen door de dev building-tool (muren/vloeren tekenen via het bouw-systeem)
-	VerticalReplicate();
-	ApplySavedStamps();
+	{ FHitchTimer _tVert(TEXT("Scan:VertReplicate"), ScanPass); VerticalReplicate(); }
+	{ FHitchTimer _tStamp(TEXT("Scan:Stamps"), ScanPass); ApplySavedStamps(); }
 
 	if (NewThisPass > 0)
 	{

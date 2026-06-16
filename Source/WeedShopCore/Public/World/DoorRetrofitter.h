@@ -64,9 +64,16 @@ protected:
 	void SpotDump();
 	FTimerHandle SpotScanTimer;
 	TSet<TWeakObjectPtr<AActor>> Converted; // originele actors die al een werkende deur kregen
+	TSet<TWeakObjectPtr<AActor>> ConvScanRejected; // static-meshes die GEEN blad/glas zijn: 1x checken, daarna skippen (anders elke pass alles opnieuw)
 	int32 TotalConverted = 0;
 	TArray<TWeakObjectPtr<class ACityDoor>> SpawnedDoors; // om los GLAS aan de juiste deur te hangen
 	TSet<TWeakObjectPtr<class UPrimitiveComponent>> GlassFixedComps; // raam-componenten die al geforceerd blokkeren
+	// Seen-sets: actors die door een setup-sweep al onderzocht zijn en NIETS (meer) te doen hebben -
+	// helemaal overslaan i.p.v. elke 2s opnieuw hun component-arrays bouwen + string-checken (de ~90ms hang).
+	TSet<TWeakObjectPtr<AActor>> GlassScanSeen;   // static-meshes die geen los deur-glas zijn
+	TSet<TWeakObjectPtr<AActor>> WinFixSeen;      // actors zonder (nog te fixen) glas/raam-collision
+	TSet<TWeakObjectPtr<AActor>> LampScanSeen;    // actors zonder binnen-lamp-componenten
+	TSet<TWeakObjectPtr<AActor>> ElevScanSeen;    // actors zonder lift-frame/paneel-mesh
 
 	// Lift-schachten (per XY-cluster van deurframes): stabiliteits-check + gebouwde schachten.
 	TMap<FIntPoint, int32> ElevPrevCount;
