@@ -50,6 +50,12 @@ public:
 	UPROPERTY() float DayBloom      = 0.4f;    // dag-gloed (bloom: neon/stoplichten vs zon-waas)
 	UPROPERTY() float SunHaze       = 0.002f;  // atmosfeer-nevel rond de zon (Mie)
 	float LastAppliedHaze = -1.f;
+	// Per-frame licht-loops (dim-lights/skylight/pack-lampen) alleen draaien als de klok-factor of de
+	// lamp-slider echt veranderde (+ een 2Hz vangnet voor externe resets) -> scheelt elke frame honderden
+	// iteraties zonder zichtbaar verschil.
+	float LastLightUpdateMinDayF = -2.f;
+	float LastLightUpdateLampI = -1.f;
+	float LightUpdateTimer = 0.f;
 
 	// Schrijf de huidige waardes naar Saved/LightConfig.txt (+ log), zodat ze als defaults te bakken zijn.
 	void SaveLightConfig() const;

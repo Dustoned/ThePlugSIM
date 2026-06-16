@@ -136,13 +136,14 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	{
 		if (IConsoleVariable* CV = CM.FindConsoleVariable(Name)) { CV->Set(Val, ECVF_SetByConsole); }
 	};
-	// Potato = alles zo laag mogelijk BOVENOP scalability 0; anders terug naar normale waardes.
-	SetF(TEXT("r.ScreenPercentage"),     bPotato ? 50.f   : 100.f);  // render op halve resolutie
-	SetF(TEXT("r.Streaming.MipBias"),    bPotato ? 2.5f   : 0.f);    // lagere-res textures runtime
-	SetF(TEXT("r.Streaming.PoolSize"),   bPotato ? 300.f  : 1000.f); // kleinere texture-pool (VRAM)
-	SetF(TEXT("r.ViewDistanceScale"),    bPotato ? 0.4f   : 1.f);
-	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.25f  : 1.f);
-	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.25f  : 1.f);
+	// Potato = alles zo laag mogelijk BOVENOP scalability 0 (nog agressiever voor echt zwakke pc's);
+	// anders terug naar normale waardes.
+	SetF(TEXT("r.ScreenPercentage"),     bPotato ? 42.f   : 100.f);  // render op ~42% resolutie
+	SetF(TEXT("r.Streaming.MipBias"),    bPotato ? 3.0f   : 0.f);    // veel lagere-res textures runtime
+	SetF(TEXT("r.Streaming.PoolSize"),   bPotato ? 250.f  : 1000.f); // kleine texture-pool (VRAM)
+	SetF(TEXT("r.ViewDistanceScale"),    bPotato ? 0.35f  : 1.f);
+	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.2f   : 1.f);
+	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.2f   : 1.f);
 	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f    : 4.f);
 
 	// --- LUMEN: de #1 GPU-kost. Alleen op EPIC. Potato/Low/Medium/High draaien zonder (de speler vindt

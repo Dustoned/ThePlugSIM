@@ -383,6 +383,9 @@ void ACustomerSpawner::TrySpawn()
 				if (UCharacterMovementComponent* Mv0 = Cw0->GetCharacterMovement())
 				{
 					Mv0->SetComponentTickInterval(bFar ? 0.15f : 0.f);
+					// RVO-avoidance (per-tick buren berekenen) uit voor verre NPC's (>120m, meestal off-screen):
+					// pure CPU-winst, geen zichtbaar verschil - ze hoeven daar niet netjes om elkaar te lopen.
+					if (Mv0->bUseRVOAvoidance == bFar) { Mv0->SetAvoidanceEnabled(!bFar); }
 				}
 			}
 			if (Cw0->NpcId.ToString().StartsWith(TEXT("Resident_"))) { continue; }

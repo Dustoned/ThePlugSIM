@@ -458,7 +458,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		LightScanTimer -= DeltaSeconds;
 		if (LightScanTimer <= 0.f)
 		{
-			LightScanTimer = 3.f;
+			LightScanTimer = 6.f; // streamende lichten worden binnen 6s opgepikt; halve scan-kost
 			UWorld* W2 = GetWorld();
 			for (TActorIterator<AActor> It(W2); It; ++It)
 			{
@@ -644,11 +644,21 @@ void ADayNightController::Tick(float DeltaSeconds)
 			}
 		}
 
+		// Per-frame licht-loops alleen draaien als de klok-factor of de lamp-slider echt veranderde (+ 2Hz
+		// vangnet voor een externe resetter). Anders zijn de gewenste intensiteiten identiek aan vorige frame
+		// -> de hele iteratie over honderden lichten overslaan = pure CPU-winst, geen zichtbaar verschil.
+		LightUpdateTimer -= DeltaSeconds;
+		const bool bUpdateLights = FMath::Abs(MinDayF - LastLightUpdateMinDayF) > 0.003f
+			|| !FMath::IsNearlyEqual(LampIntensity, LastLightUpdateLampI, 1.f)
+			|| LightUpdateTimer <= 0.f;
+		if (bUpdateLights) { LastLightUpdateMinDayF = MinDayF; LastLightUpdateLampI = LampIntensity; LightUpdateTimer = 0.5f; }
+
 		// Lichten dimmen. ZONLICHT (directional) moet 's nachts ECHT uit - een restje van 7% werd
 		// door de auto-exposure weer opgeblazen tot daglicht onder een zwarte hemel. Skylight bijna
 		// uit; alle overige lichten 7% (de emissive strips van de map blijven vanzelf - materiaal).
 		const float SunMul = 0.f;                           // map-zonnen permanent uit: onze bewegende zon is DE zon
 		const float SkyMul = FMath::Lerp(0.02f, 1.f, MinDayF);
+		if (bUpdateLights)
 		for (FDimLight& D : DimLights)
 		{
 			if (ULightComponent* LC = D.Light.Get())
@@ -681,6 +691,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// SKYLIGHT-SPECULAR mee-dimmen (ELKE tick, met diff-check): dit is de ECHTE bron van de
 		// nacht-reflectie op water/ramen - een movable skylight op volle sterkte spiegelt z'n
 		// hemel-cubemap. Ongated zodat een eventuele resetter naar dag-sterkte meteen weer gedimd wordt.
+		if (bUpdateLights)
 		{
 			const float SkyWant = FMath::Lerp(0.06f, 1.f, MinDayF);
 			for (FSkyDim& Sk : SkyDims)
@@ -754,6 +765,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// Pack-lampen op kloktijd (aan vanaf 17u, uit om 8u). Falloff staat uit, dus de
 		// intensiteit is unitless: slider-default 42000 wordt kegel 7.0 / poel 4.7.
 		// Per-lamp drempel hieronder: binnen-plafondlampen blijven bijna altijd aan, buitenlampen volgen de schemering.
+		if (bUpdateLights)
 		for (UPointLightComponent* PL : PackLampLights)
 		{
 			if (!PL) { continue; }
@@ -774,6 +786,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// Diffuser-emissive ('Brightness'): plafond-boxen altijd mee-glow (lampen zijn altijd aan); door een
 		// schakelaar geclaimde boxen worden hieronder overgeslagen.
 		const float CeilEmisOn = 1.f;
+		if (bUpdateLights)
 		for (int32 i = 0; i < PackCeilEmis.Num(); ++i)
 		{
 			if (UMaterialInstanceDynamic* E = PackCeilEmis[i])
