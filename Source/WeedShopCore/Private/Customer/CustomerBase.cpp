@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/AnimInstance.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
@@ -145,7 +146,7 @@ ACustomerBase::ACustomerBase()
 
 void ACustomerBase::UpdateNpcAnim(float DeltaSeconds)
 {
-	if (!bNpcAnimStarted) { return; }
+	if (bNpcUseAbp || !bNpcAnimStarted) { return; } // AnimBP stuurt de locomotie zelf aan
 	USkeletalMeshComponent* M = GetMesh();
 	if (!M) { return; }
 	// 'Beweegt' uit de positie (werkt op host én client-proxy), kort vasthouden tussen net-updates.
@@ -248,10 +249,21 @@ void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Loop/idle zelf aansturen (single-node) -> NPC's animeren echt i.p.v. glijden.
+	// NPC-locomotie via de DEFAULT-MANNEQUIN AnimBP (ABP_Unarmed: walk/idle/jog uit velocity, nette
+	// voet-planting/turns) i.p.v. de basale single-node walk/idle-loop. Werkt op alle skins (allemaal
+	// SK_Mannequin-compatibel). Overleeft de skin-wissel (anim-instance her-init met dezelfde class).
+	// Valt terug op single-node als de ABP niet laadt.
 	if (USkeletalMeshComponent* M = GetMesh())
 	{
-		if (NpcIdle || NpcWalk)
+		static UClass* NpcAbp = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
+		if (NpcAbp)
+		{
+			M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+			M->SetAnimInstanceClass(NpcAbp);
+			bNpcUseAbp = true;
+			bNpcAnimStarted = true;
+		}
+		else if (NpcIdle || NpcWalk)
 		{
 			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			if (NpcIdle) { M->PlayAnimation(NpcIdle, true); }

@@ -275,6 +275,7 @@ protected:
 	UPROPERTY() TObjectPtr<class UAnimSequence> NpcIdle;
 	UPROPERTY() TObjectPtr<class UAnimSequence> NpcWalk;
 	bool bNpcAnimStarted = false;
+	bool bNpcUseAbp = false;        // true = volle locomotie-AnimBP (default mannequin) i.p.v. single-node loop
 	int32 NpcAnimState = -1;        // -1 nog niet, 0 idle, 1 walk
 	FVector NpcPrevLoc = FVector::ZeroVector;
 	bool bHasNpcPrev = false;
