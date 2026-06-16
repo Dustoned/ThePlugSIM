@@ -2,6 +2,7 @@
 #include "WeedShopCore.h"
 
 #include "UI/WeedUiStyle.h"
+#include "UI/BootCoverWidget.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Save/SaveGameSubsystem.h"
 
@@ -659,6 +660,20 @@ void UMainMenuWidget::OnJoinCoop()
 		return;
 	}
 	if (StatusText) { StatusText->SetText(FText::FromString(FString::Printf(TEXT("Connecting to %s..."), *Ip))); }
+
+	// FULLSCREEN-LAADSCHERM meteen tonen (zelfde look als de movie + de in-game cover) zodat de VERBIND-fase
+	// niet kaal is met alleen kleine 'connecting'-tekst. De gedeelde laad-timer wordt hier vers gezet zodat de
+	// cover-progress klopt; daarna nemen de movie-loadingscreen (bij map-load) en de in-game cover het naadloos
+	// over - alle drie zien er identiek uit, dus de overgang is onzichtbaar.
+	WeedShop_RequestGameLoadingScreen();
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (UBootCoverWidget* Cover = CreateWidget<UBootCoverWidget>(PC, UBootCoverWidget::StaticClass()))
+		{
+			Cover->AddToViewport(1000); // bovenop het hele menu
+		}
+	}
+
 	Save->JoinLan(Ip);
 }
 
