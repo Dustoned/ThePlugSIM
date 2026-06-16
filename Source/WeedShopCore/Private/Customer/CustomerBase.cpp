@@ -289,7 +289,13 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 		{ { TEXT("Cloth/Torso/SK_Top_1"), TEXT("Cloth/Torso/SK_Top_2"), TEXT("Cloth/Torso/SK_Hoodies_Mini") }, 23u, true },
 		{ { TEXT("Cloth/Legs/SK_Baggy_Jeans"), TEXT("Cloth/Legs/SK_Wide_Leg_Jeans"), TEXT("Cloth/Legs/SK_Shorts_1") }, 41u, true },
 		{ { TEXT("Cloth/Shoes/SK_Sneakers_2"), TEXT("Cloth/Shoes/SK_Sneakers_4"), TEXT("Cloth/Shoes/SK_Sneakers_5") }, 67u, true },
-		{ { TEXT("Hairs/SK_HairShort"), TEXT("Hairs/SK_Hair_Braid"), TEXT("Hairs/SK_Hair_Medium_1") }, 89u, false },
+		// Haar + hoofddeksels (kaal/pet/hoed/panama) -> veel kapsel- en hoed-variatie.
+		{ { TEXT("Hairs/SK_HairShort"), TEXT("Hairs/SK_Hairshort_Cap"), TEXT("Hairs/SK_Hairshort_Hat"), TEXT("Hairs/SK_Hairshort_Panama"),
+		    TEXT("Hairs/SK_Hair_Braid"),
+		    TEXT("Hairs/SK_Hair_Medium_1"), TEXT("Hairs/SK_Hair_Medium_1_Cap"), TEXT("Hairs/SK_Hair_Medium_1_Hat"), TEXT("Hairs/SK_Hair_Medium_1_Panama"),
+		    TEXT("Hairs/SK_Hair_Medium_2_Cap"), TEXT("Hairs/SK_Hair_Medium_2_Hat"), TEXT("Hairs/SK_Hair_Medium_2_Panama") }, 89u, false },
+		// Optionele accessoire: meestal niks, soms koptelefoon (lege string = sla over).
+		{ { TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("Cloth/Accessories/Head_Accessories/SK_Headphones") }, 113u, false },
 	};
 	for (const FSlot& Sl : Slots)
 	{
