@@ -134,6 +134,8 @@ protected:
 	TSet<TWeakObjectPtr<class ULightComponent>> SeenLights;
 	float LightScanTimer = 0.f;
 	int32 LightScanDry = 0; // opeenvolgende scans zonder iets nieuws -> scan-interval omhoog (geen 6s-hitch meer)
+	TSet<TWeakObjectPtr<AActor>> LightScanSeenActors; // al-verwerkte actors -> volledig overslaan (geen herhaalde
+	                                                  // per-actor component-gather + string-checks elke scan = de periodieke hang)
 	TWeakObjectPtr<ADirectionalLight> Sun;
 	TWeakObjectPtr<ADirectionalLight> Moon; // eigen maan-licht: komt op bij zonsondergang, gaat onder bij zonsopkomst
 	TWeakObjectPtr<ASkyLight> Sky;

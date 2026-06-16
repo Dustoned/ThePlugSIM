@@ -70,6 +70,8 @@
 #include "World/PackLightSwitch.h"
 #include "World/DayNightController.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Camera/CameraActor.h"
 #include "UI/MapWidget.h"
 #include "Interaction/PlayerNpcActions.h"
 #include "Customer/CustomerBase.h"
@@ -1193,16 +1195,60 @@ void UPhoneClientComponent::ShowMainMenu()
 	// Sluit alles anders zodat het titelscherm schoon bovenop ligt.
 	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
 	bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false; bPauseOpen = false;
+	// LIVE-achtergrond: is er een menu-camera voor deze map, zet de view daarop en NIET pauzeren (anders
+	// bevriest de wereld = geen bewegende bomen). Geen cam -> oude gedrag (pauze + statische view).
+	const bool bLiveCam = ApplyMenuCam();
 	if (APlayerController* PC = GetPC())
 	{
-		if (GetWorld() && GetWorld()->GetNetMode() == NM_Standalone) { PC->SetPause(true); }
+		if (!bLiveCam && GetWorld() && GetWorld()->GetNetMode() == NM_Standalone) { PC->SetPause(true); }
 	}
 	UpdateCursor();
+}
+
+bool UPhoneClientComponent::ApplyMenuCam()
+{
+	APlayerController* PC = GetPC();
+	UWorld* W = GetWorld();
+	if (!PC || !W) { return false; }
+	FString Txt;
+	if (!FFileHelper::LoadFileToString(Txt, *(FPaths::ProjectSavedDir() / TEXT("MenuCam.txt")))) { return false; }
+	TArray<FString> F;
+	Txt.TrimStartAndEnd().ParseIntoArray(F, TEXT("|"));
+	if (F.Num() < 7) { return false; }
+	if (F[0].TrimStartAndEnd() != W->GetOutermost()->GetName()) { return false; } // cam hoort bij een andere map
+	const FVector Loc(FCString::Atof(*F[1]), FCString::Atof(*F[2]), FCString::Atof(*F[3]));
+	const FRotator Rot(FCString::Atof(*F[4]), FCString::Atof(*F[5]), FCString::Atof(*F[6]));
+	if (!MenuCamActor.IsValid())
+	{
+		FActorSpawnParameters SP; SP.ObjectFlags |= RF_Transient;
+		MenuCamActor = W->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FTransform(Rot, Loc), SP);
+	}
+	AActor* Cam = MenuCamActor.Get();
+	if (!Cam) { return false; }
+	Cam->SetActorLocationAndRotation(Loc, Rot);
+	PC->SetViewTargetWithBlend(Cam, 0.f);
+	PC->SetIgnoreMoveInput(true);   // speler kan niet bewegen tijdens het menu (wereld tikt wel door)
+	PC->SetIgnoreLookInput(true);
+	return true;
+}
+
+void UPhoneClientComponent::ClearMenuCam()
+{
+	APlayerController* PC = GetPC();
+	if (PC)
+	{
+		if (APawn* P = PC->GetPawn()) { PC->SetViewTargetWithBlend(P, 0.25f); }
+		PC->SetIgnoreMoveInput(false);
+		PC->SetIgnoreLookInput(false);
+	}
+	if (MenuCamActor.IsValid()) { MenuCamActor->Destroy(); }
+	MenuCamActor = nullptr;
 }
 
 void UPhoneClientComponent::HideMainMenu()
 {
 	bMainMenuOpen = false;
+	ClearMenuCam(); // view terug naar de speler + input weer vrij
 	if (APlayerController* PC = GetPC()) { PC->SetPause(false); }
 	UpdateCursor();
 }

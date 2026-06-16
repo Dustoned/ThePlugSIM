@@ -621,7 +621,12 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			const bool bDevKeys = GSdev && GSdev->IsFreeBuild();
 
 			const bool bF9 = bDevKeys && PCk->IsInputKeyDown(EKeys::F9);
-			if (bF9 && !bSpotKeyWasDown) { if (Phone) { Phone->ToggleSpotInfo(); } }
+			if (bF9 && !bSpotKeyWasDown)
+			{
+				// Shift+F9: leg de HUIDIGE camera-plek vast als hoofdmenu-achtergrond (live backdrop). F9 los = spot-overlay.
+				if (PCk->IsInputKeyDown(EKeys::LeftShift) || PCk->IsInputKeyDown(EKeys::RightShift)) { WeedSaveMenuCam(); }
+				else if (Phone) { Phone->ToggleSpotInfo(); }
+			}
 			bSpotKeyWasDown = bF9;
 
 			const bool bF7 = bDevKeys && PCk->IsInputKeyDown(EKeys::F7);
@@ -1474,6 +1479,22 @@ void AThePlugSIMCharacter::WeedMarkSpot(const FString& Label)
 		&IFileManager::Get(), FILEWRITE_Append);
 	UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Cyan,
 		FString::Printf(TEXT("Spot marked: %s (%.0f, %.0f, %.0f)"), Label.IsEmpty() ? TEXT("spot") : *Label, L.X, L.Y, L.Z));
+}
+
+void AThePlugSIMCharacter::WeedSaveMenuCam()
+{
+	// Leg de exacte camera-stand vast (locatie + rotatie van de PlayerCameraManager) als hoofdmenu-achtergrond.
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	FVector CamLoc = GetActorLocation(); FRotator CamRot = GetControlRotation();
+	if (PC && PC->PlayerCameraManager) { CamLoc = PC->PlayerCameraManager->GetCameraLocation(); CamRot = PC->PlayerCameraManager->GetCameraRotation(); }
+	const FString MapPath = GetWorld() ? GetWorld()->GetOutermost()->GetName() : TEXT("?");
+	// Eén regel (laatste wint): map|X|Y|Z|Pitch|Yaw|Roll. Overschrijft -> altijd de meest recente plek.
+	const FString Line = FString::Printf(TEXT("%s|%.1f|%.1f|%.1f|%.2f|%.2f|%.2f"),
+		*MapPath, CamLoc.X, CamLoc.Y, CamLoc.Z, CamRot.Pitch, CamRot.Yaw, CamRot.Roll);
+	const FString File = FPaths::ProjectSavedDir() / TEXT("MenuCam.txt");
+	FFileHelper::SaveStringToFile(Line, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(this, -1, 4.f, FColor::Green,
+		TEXT("Menu camera saved here. It's now the main-menu backdrop on this map."));
 }
 
 void AThePlugSIMCharacter::WeedSaveFurniture()

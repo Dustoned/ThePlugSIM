@@ -141,6 +141,8 @@ public:
 	// `WeedMarkSpot <label>` schrijft je huidige positie+kijkrichting naar Saved/MarkedSpots.txt -
 	// zo wijs je plekken aan (bv. een hotel-lobby) waar Claude daarna in code iets kan bouwen.
 	UFUNCTION(Exec) void WeedMarkSpot(const FString& Label);
+	// Dev (Shift+F9): leg de huidige camera-plek vast als hoofdmenu-achtergrond (Saved/MenuCam.txt).
+	void WeedSaveMenuCam();
 
 	// Beach-map woning-registry (ROADMAP 4.1): registreer de kamer waar je NU staat als koopbare woning
 	// (DoorRetrofitter meet de wanden + schrijft BeachHomes.txt). Dev-only (free-build). Bind: F6.

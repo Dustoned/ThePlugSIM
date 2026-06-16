@@ -466,6 +466,11 @@ void ADayNightController::Tick(float DeltaSeconds)
 				AActor* A = *It;
 				if (!IsValid(A)) { continue; }
 				if (A == PackMoon.Get() || A == PackSun.Get() || A == this) { continue; } // eigen zon/maan/lampen niet mee-dimmen
+				// AL VERWERKT? Volledig overslaan: anders doen we per scan voor ELKE actor opnieuw de dure
+				// component-gather + mesh-naam-string-checks (= de periodieke hang). Map-actors krijgen runtime
+				// geen nieuwe componenten, dus 1x verwerken volstaat; nieuw-gestreamde actors zijn nog niet seen.
+				if (LightScanSeenActors.Contains(A)) { continue; }
+				LightScanSeenActors.Add(A);
 				TInlineComponentArray<ULightComponent*> Lights(A);
 				for (ULightComponent* LC : Lights)
 				{

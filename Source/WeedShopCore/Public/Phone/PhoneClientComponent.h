@@ -81,6 +81,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Menu")
 	bool IsMainMenuOpen() const { return bMainMenuOpen; }
 
+	// Hoofdmenu LIVE-achtergrond: zet de view op een opgeslagen camera-plek (Saved/MenuCam.txt) voor deze map,
+	// zonder te pauzeren -> bewegende bomen/zonsondergang achter het menu. Geeft true als er een cam voor deze
+	// map is. ClearMenuCam herstelt de view naar de speler.
+	bool ApplyMenuCam();
+	void ClearMenuCam();
+
 	// Toon het titelscherm en open meteen de Load-slot-picker (vanuit het pauze-menu).
 	void OpenMainMenuLoad();
 
@@ -855,6 +861,9 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UMainMenuWidget> MainMenuWidget;
+
+	// Camera-actor voor de live hoofdmenu-achtergrond (gespawnd op de opgeslagen plek; opgeruimd bij sluiten).
+	TWeakObjectPtr<AActor> MenuCamActor;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class USaveIndicatorWidget> SaveIndicatorWidget;
