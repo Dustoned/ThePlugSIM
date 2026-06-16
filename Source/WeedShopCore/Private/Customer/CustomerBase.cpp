@@ -7,6 +7,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimInstance.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "AIController.h"
@@ -247,6 +249,54 @@ static USkeletalMesh* WeedNpc_SkinByIndex(int32 Idx)
 	return LoadObject<USkeletalMesh>(nullptr, Pool[FMath::Clamp(Idx, 0, N - 1)]);
 }
 
+// Gedempte, deterministische kleding-kleur uit een hash (realistische tinten: niet te fel/donker).
+static FLinearColor WeedNpc_ClothColor(uint32 H)
+{
+	H = H * 2654435761u + 40503u;
+	const uint8 Hue = (uint8)(H % 256u);
+	const uint8 Sat = (uint8)(60 + ((H >> 8) % 95u));   // ~0.23..0.60 verzadiging (gedempt)
+	const uint8 Val = (uint8)(80 + ((H >> 16) % 110u)); // ~0.31..0.75 helderheid
+	return FLinearColor::MakeFromHSV8(Hue, Sat, Val);
+}
+
+// Per-NPC RANDOM kleding-kleur: tint alleen de kleding-materiaalslots (Citizens 'Tone_A..F' / Casual
+// 'ColorCloth*') met kleuren uit de NPC-seed -> elke Karl/Tony/Casual heeft een ander shirt/broek/sneakers
+// zonder extra meshes. Huid/gezicht/haar/ogen blijven ongemoeid. Niet-bestaande params worden genegeerd.
+static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed)
+{
+	if (!SkM) { return; }
+	const TArray<UMaterialInterface*> Mats = SkM->GetMaterials();
+	for (int32 i = 0; i < Mats.Num(); ++i)
+	{
+		UMaterialInterface* MI = Mats[i];
+		if (!MI) { continue; }
+		const FString Nm = MI->GetName();
+		if (Nm.Contains(TEXT("Hair"))) { continue; } // 'Hair_cap' is geen kleding
+		const bool bCloth = Nm.Contains(TEXT("Cloth")) || Nm.Contains(TEXT("Set")) || Nm.Contains(TEXT("Top"))
+			|| Nm.Contains(TEXT("Jean")) || Nm.Contains(TEXT("Pant")) || Nm.Contains(TEXT("Short"))
+			|| Nm.Contains(TEXT("Hoodie")) || Nm.Contains(TEXT("Shirt")) || Nm.Contains(TEXT("Sweater"))
+			|| Nm.Contains(TEXT("Jacket")) || Nm.Contains(TEXT("Sneak")) || Nm.Contains(TEXT("Shoe"))
+			|| Nm.Contains(TEXT("Panama"));
+		if (!bCloth) { continue; }
+		UMaterialInstanceDynamic* MID = SkM->CreateDynamicMaterialInstance(i);
+		if (!MID) { continue; }
+		const FLinearColor C1 = WeedNpc_ClothColor(Seed * 131u + (uint32)i * 7u + 1u);
+		const FLinearColor C2 = WeedNpc_ClothColor(Seed * 131u + (uint32)i * 7u + 2u);
+		// Casual-kleding (M_Cloth / M_Cloth_Masks):
+		MID->SetVectorParameterValue(TEXT("ColorCloth"),  C1);
+		MID->SetVectorParameterValue(TEXT("ColorCloth1"), C1);
+		MID->SetVectorParameterValue(TEXT("ColorCloth2"), C2);
+		MID->SetVectorParameterValue(TEXT("ColorCloth3"), C1);
+		// Citizens-kleding (Tone_A..F): zachte variatie rond 1 basiskleur zodat het samenhangend blijft.
+		MID->SetVectorParameterValue(TEXT("Tone_A"), C1);
+		MID->SetVectorParameterValue(TEXT("Tone_B"), C1 * 0.8f);
+		MID->SetVectorParameterValue(TEXT("Tone_C"), C2);
+		MID->SetVectorParameterValue(TEXT("Tone_D"), C1 * 1.1f);
+		MID->SetVectorParameterValue(TEXT("Tone_E"), C2 * 0.85f);
+		MID->SetVectorParameterValue(TEXT("Tone_F"), C1 * 0.7f);
+	}
+}
+
 void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
@@ -295,6 +345,8 @@ void ACustomerBase::BeginPlay()
 				const int32 Tier = Reg->GetCustomerTier(NpcId);
 				const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)GetTypeHash(NpcId));
 				if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx)) { SkM->SetSkeletalMesh(Sk); }
+				// Per-NPC random kleren-kleur bovenop de skin -> veel meer onderscheid (zelfde mesh, ander shirt).
+				WeedNpc_TintClothing(SkM, (uint32)GetTypeHash(NpcId));
 			}
 		}
 
