@@ -343,9 +343,9 @@ int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed
 	//   laag/casual -> Karl + FullBody Casual + female (9 opties);  mid -> casual + wat Tony + female;
 	//   high/whale  -> net geklede Tony + nette Casual/female. Tiers blijven herkenbaar maar je ziet niet
 	//   steeds dezelfde 3 skins.
-	static const int32 Low[]  = { 0, 1, 2, 3, 4, 5, 10, 11, 12 };
-	static const int32 Mid[]  = { 3, 4, 5, 6, 7, 10, 11, 12 };
-	static const int32 High[] = { 6, 7, 8, 9, 4, 5, 11, 12 };
+	static const int32 Low[]  = { 0, 1, 2, 3, 4, 5 };       // Karl + geklede Casual-vrouw
+	static const int32 Mid[]  = { 0, 1, 2, 3, 4, 6, 7 };    // Karl + Casual + wat Tony
+	static const int32 High[] = { 6, 7, 8, 9, 3, 4, 5 };    // net geklede Tony + Casual
 	const int32* Band = Low; int32 BN = (int32)UE_ARRAY_COUNT(Low);
 	if (Tier >= 4)      { Band = High; BN = (int32)UE_ARRAY_COUNT(High); }
 	else if (Tier == 3) { Band = Mid;  BN = (int32)UE_ARRAY_COUNT(Mid); }

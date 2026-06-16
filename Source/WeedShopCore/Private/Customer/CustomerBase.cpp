@@ -219,20 +219,22 @@ bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAl
 // Globale NPC-skin-pool (NIET de standaard Manny/Quinn - die zijn voor de speler). De registry kiest de
 // index 1x en BEWAART 'm in de persistente NPC-state -> dezelfde persoon ziet er altijd hetzelfde uit
 // (ook na tier-stijging, respawn of save/load).
-//  0-2  Karl A/B/C        (Citizens, casual man)
-//  3-5  FullBody Casual    (man/vrouw, UE4_Mannequin_Skeleton_Main)
-//  6-9  Tony A/B/C/D       (Citizens, net gekleed - high/whale-flavor)
-//  10-12 SK_Casual 1/2/3   (Casual-pack VROUW-varianten, eigen skelet maar SK_Mannequin-compatibel)
-// Alle skeletons zijn compatibel met SK_Mannequin, dus de single-node walk/idle-anims blijven werken.
+//  0-2   Karl A/B/C       (Citizens, casual man)
+//  3-5   SK_Casual 1/2/3  (Casual-pack vrouw, GEKLEED - was de naakte FullBody, nu vervangen)
+//  6-9   Tony A/B/C/D     (Citizens, net gekleed - high/whale-flavor)
+//  10-12 SK_Casual 1/2/3  (idem als 3-5, voor oude opgeslagen indices)
+// Alle skins zijn GEKLEED en SK_Mannequin-compatibel, dus de single-node walk/idle-anims blijven werken.
 static USkeletalMesh* WeedNpc_SkinByIndex(int32 Idx)
 {
 	static const TCHAR* Pool[] = {
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
-		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_1.SK_FullBody_Casual_1"),
-		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_2.SK_FullBody_Casual_2"),
-		TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/FullBody/SK_FullBody_Casual_3.SK_FullBody_Casual_3"),
+		// 3-5: WAS de FullBody-Casual, maar die zijn NAAKT (alleen body+head, geen kleding) -> vervangen door
+		// de geklede Casual-skins zodat bestaande NPC's met index 3-5 ook gekleed worden (geen re-roll nodig).
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_1/SK_Casual_1.SK_Casual_1"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_2/SK_Casual_2.SK_Casual_2"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_3/SK_Casual_3.SK_Casual_3"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_A.SK_Citizens_Pack_Tony_A"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
@@ -249,21 +251,12 @@ void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// NPC-locomotie via de DEFAULT-MANNEQUIN AnimBP (ABP_Unarmed: walk/idle/jog uit velocity, nette
-	// voet-planting/turns) i.p.v. de basale single-node walk/idle-loop. Werkt op alle skins (allemaal
-	// SK_Mannequin-compatibel). Overleeft de skin-wissel (anim-instance her-init met dezelfde class).
-	// Valt terug op single-node als de ABP niet laadt.
+	// Loop/idle zelf aansturen (single-node) -> NPC's animeren echt i.p.v. glijden. (Een volle locomotie-
+	// AnimBP draait NIET betrouwbaar op de gemengde NPC-skeletten via compatibele-skeletons -> ref-pose/
+	// zweven; single-node PlayAnimation is veel toleranter en werkt op alle skins.)
 	if (USkeletalMeshComponent* M = GetMesh())
 	{
-		static UClass* NpcAbp = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
-		if (NpcAbp)
-		{
-			M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-			M->SetAnimInstanceClass(NpcAbp);
-			bNpcUseAbp = true;
-			bNpcAnimStarted = true;
-		}
-		else if (NpcIdle || NpcWalk)
+		if (NpcIdle || NpcWalk)
 		{
 			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			if (NpcIdle) { M->PlayAnimation(NpcIdle, true); }
