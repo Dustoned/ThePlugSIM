@@ -48,6 +48,7 @@
 #include "Interaction/InteractionComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Customer/CustomerSpawner.h"
+#include "World/ActivitySpotManager.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
@@ -573,6 +574,75 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 				}
 			}
 			bFlyKeyWasDown = bF7;
+
+			// --- Activity-spots (dev-tool) ---
+			// F10: blader door de animatie-catalog. Shift+F10: plaats hier een activity-spot (NPC verschijnt op
+			//      het gekozen tijdvak en doet die anim, kijkend in je huidige richting).
+			// F12: blader door het tijdvak (hele dag/ochtend/middag/avond/nacht). Shift+F12: wis de dichtstbij spot.
+			const bool bShift = PCk->IsInputKeyDown(EKeys::LeftShift) || PCk->IsInputKeyDown(EKeys::RightShift);
+
+			// Tijdvak-presets (start,end) + label.
+			auto TimeWindow = [](int32 Sel, float& OutStart, float& OutEnd) -> const TCHAR*
+			{
+				switch (((Sel % 5) + 5) % 5)
+				{
+					case 1:  OutStart = 6.f;  OutEnd = 12.f; return TEXT("Morning 6-12");
+					case 2:  OutStart = 12.f; OutEnd = 18.f; return TEXT("Afternoon 12-18");
+					case 3:  OutStart = 18.f; OutEnd = 24.f; return TEXT("Evening 18-24");
+					case 4:  OutStart = 22.f; OutEnd = 6.f;  return TEXT("Night 22-6");
+					default: OutStart = 0.f;  OutEnd = 24.f; return TEXT("All day");
+				}
+			};
+
+			const bool bF10 = bDevKeys && PCk->IsInputKeyDown(EKeys::F10);
+			if (bF10 && !bActAnimKeyWasDown)
+			{
+				if (bShift)
+				{
+					// Plaats een spot op de huidige plek/kijkrichting.
+					AActivitySpotManager* Mgr = nullptr;
+					for (TActorIterator<AActivitySpotManager> It(GetWorld()); It; ++It) { Mgr = *It; break; }
+					if (Mgr)
+					{
+						float Ts = 0.f, Te = 24.f; const TCHAR* TLbl = TimeWindow(ActSelTime, Ts, Te);
+						const int32 Total = Mgr->AddSpotLive(GetActorLocation(), GetControlRotation().Yaw, ActSelAnim, Ts, Te);
+						UWeedToast::NotifyPawn(this, -1, 4.f, FColor::Green, FString::Printf(
+							TEXT("Activity spot placed: %s @ %s (total %d)"), *ACustomerBase::ActivityAnimLabel(ActSelAnim), TLbl, Total));
+					}
+					else
+					{
+						UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Orange, TEXT("No activity manager (host only)."));
+					}
+				}
+				else
+				{
+					const int32 N = FMath::Max(1, ACustomerBase::ActivityAnimNum());
+					ActSelAnim = (ActSelAnim + 1) % N;
+					UWeedToast::NotifyPawn(this, -1, 2.5f, FColor::Cyan, FString::Printf(
+						TEXT("Activity anim: %s (%d/%d) - Shift+F10 to place"), *ACustomerBase::ActivityAnimLabel(ActSelAnim), ActSelAnim + 1, N));
+				}
+			}
+			bActAnimKeyWasDown = bF10;
+
+			const bool bF12 = bDevKeys && PCk->IsInputKeyDown(EKeys::F12);
+			if (bF12 && !bActTimeKeyWasDown)
+			{
+				if (bShift)
+				{
+					AActivitySpotManager* Mgr = nullptr;
+					for (TActorIterator<AActivitySpotManager> It(GetWorld()); It; ++It) { Mgr = *It; break; }
+					const FString Removed = Mgr ? Mgr->RemoveNearestSpot(GetActorLocation()) : FString();
+					UWeedToast::NotifyPawn(this, -1, 3.f, Removed.IsEmpty() ? FColor::Orange : FColor::Yellow,
+						Removed.IsEmpty() ? TEXT("No activity spot nearby to remove.") : FString::Printf(TEXT("Removed activity spot: %s"), *Removed));
+				}
+				else
+				{
+					ActSelTime = (ActSelTime + 1) % 5;
+					float Ts = 0.f, Te = 24.f; const TCHAR* TLbl = TimeWindow(ActSelTime, Ts, Te);
+					UWeedToast::NotifyPawn(this, -1, 2.5f, FColor::Cyan, FString::Printf(TEXT("Activity time: %s"), TLbl));
+				}
+			}
+			bActTimeKeyWasDown = bF12;
 
 			if (GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying)
 			{

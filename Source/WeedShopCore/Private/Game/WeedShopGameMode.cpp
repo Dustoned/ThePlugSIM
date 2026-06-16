@@ -1,6 +1,7 @@
 #include "Game/WeedShopGameMode.h"
 
 #include "Game/WeedShopGameState.h"
+#include "World/ActivitySpotManager.h"
 #include "UI/WeedShopHUD.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -32,6 +33,21 @@ AWeedShopGameMode::AWeedShopGameMode()
 	if (PCBP.Succeeded())
 	{
 		PlayerControllerClass = PCBP.Class;
+	}
+}
+
+void AWeedShopGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+	// Eén centrale, server-only activity-spot-manager (laadt ActivitySpots.txt, spawnt NPC's per tijdvak).
+	if (UWorld* W = GetWorld())
+	{
+		bool bExists = false;
+		for (TActorIterator<AActivitySpotManager> It(W); It; ++It) { bExists = true; break; }
+		if (!bExists)
+		{
+			W->SpawnActor<AActivitySpotManager>(AActivitySpotManager::StaticClass(), FTransform::Identity);
+		}
 	}
 }
 

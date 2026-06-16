@@ -24,4 +24,7 @@ public:
 	// 2e speler op dezelfde PlayerStart als de host -> botsing -> met een strikte collision-methode geeft
 	// de spawn null en crasht de engine met "Couldn't spawn player". AlwaysSpawn voorkomt dat.
 	virtual APawn* SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayerController, const FTransform& SpawnTransform) override;
+
+	// Spawnt o.a. de centrale AActivitySpotManager (dev-tool: NPC's op vaste plek + tijdvak + anim).
+	virtual void BeginPlay() override;
 };

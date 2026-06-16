@@ -256,6 +256,19 @@ public:
 	// Gebruikt door de nacht-populatie/dagelijkse rotatie i.p.v. een directe Destroy (geen plop op straat).
 	void SendHomeAndDespawn();
 
+	// --- ACTIVITY-NPC (dev-tool: vaste plek + animatie op een tijdvak) ---
+	// Maak van deze NPC een 'activity'-NPC: hij loopt naar Spot, draait naar Yaw en speelt de catalog-anim
+	// AnimIdx (looped). De normale klant-/bewoner-logica wordt overgeslagen (inert). Op authority aanroepen.
+	void BeginActivity(const FVector& Spot, float Yaw, int32 AnimIdx);
+	bool IsActivityNpc() const { return bActivityNpc; }
+
+	// Gedeelde activity-anim-catalog (GenericNPCAnimPack2). Index-gebaseerd zodat de spot-file compact blijft
+	// en host/client dezelfde pose kiezen. Append-only laten zodat opgeslagen indices stabiel blijven.
+	static int32 ActivityAnimNum();
+	static const TCHAR* ActivityAnimPath(int32 Idx);
+	static FString ActivityAnimLabel(int32 Idx);
+	static class UAnimSequence* ResolveActivityAnim(int32 Idx);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -281,6 +294,18 @@ protected:
 	bool bHasNpcPrev = false;
 	float NpcMoveHold = 0.f;
 	void UpdateNpcAnim(float DeltaSeconds);
+
+	// Activity-NPC-state (dev-tool: loopt naar een vaste plek en speelt daar een anim op een tijdvak).
+	void TickActivity(float DeltaSeconds);
+	void ApplyActivityAnim();                       // speelt de catalog-anim ActivityAnimIndex (host + OnRep)
+	UFUNCTION() void OnRep_ActivityAnim();
+	bool bActivityNpc = false;
+	FVector ActivitySpot = FVector::ZeroVector;     // doelplek
+	float ActivityYaw = 0.f;                         // kijkrichting op de plek
+	int32 ActivityPendingAnim = 0;                   // welke anim op aankomst (host-kant)
+	bool bActivityArrived = false;
+	UPROPERTY(ReplicatedUsing = OnRep_ActivityAnim)
+	int32 ActivityAnimIndex = -1;                    // -1 = (nog) geen activity-pose; >=0 = catalog-index
 
 	// Bewoner-schema (dag-roamen / 's nachts thuis).
 	void TickResident(float DeltaSeconds);

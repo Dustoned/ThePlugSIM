@@ -150,6 +150,7 @@ ACustomerBase::ACustomerBase()
 void ACustomerBase::UpdateNpcAnim(float DeltaSeconds)
 {
 	if (bNpcUseAbp || !bNpcAnimStarted) { return; } // AnimBP stuurt de locomotie zelf aan
+	if (ActivityAnimIndex >= 0) { return; }          // activity-NPC speelt z'n vaste pose -> niet overschrijven
 	USkeletalMeshComponent* M = GetMesh();
 	if (!M) { return; }
 	// 'Beweegt' uit de positie (werkt op host én client-proxy), kort vasthouden tussen net-updates.
@@ -178,6 +179,93 @@ void ACustomerBase::ForceIdleAnimNow()
 		{
 			if (NpcIdle) { M->PlayAnimation(NpcIdle, true); }
 		}
+	}
+}
+
+// --- ACTIVITY-NPC: catalog + gedrag (dev-tool: vaste plek + anim op een tijdvak) ---
+namespace
+{
+	struct FActivityAnim { const TCHAR* Path; const TCHAR* Label; };
+	// Append-only: nieuwe entries onderaan toevoegen zodat opgeslagen spot-indices stabiel blijven.
+	static const FActivityAnim GActivityAnims[] = {
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Wall_1.Anim_Idle_Wall_1"),               TEXT("Lean against wall") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hands_Crossed.Anim_Idle_Hands_Crossed"), TEXT("Arms crossed") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hands_On_Waist.Anim_Idle_Hands_On_Waist"),TEXT("Hands on waist") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Lean_Forward_1.Anim_Idle_Lean_Forward_1"),TEXT("Lean forward") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Phone_Talking_Big.Anim_Phone_Talking_Big"),    TEXT("Phone call") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Check_Cellphone.Anim_Check_Cellphone"),        TEXT("Check phone") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Music_From_Phone.Anim_Music_From_Phone"),      TEXT("Music on phone") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Dance_1.Anim_Dance_1"),                        TEXT("Dance 1") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Dance_2.Anim_Dance_2"),                        TEXT("Dance 2") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Call_Taxi_1.Anim_Call_Taxi_1"),               TEXT("Hail taxi") },
+		{ TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Sit_Floor_1.Anim_Sit_Floor_1"),               TEXT("Sit on floor") },
+	};
+}
+
+int32 ACustomerBase::ActivityAnimNum() { return (int32)UE_ARRAY_COUNT(GActivityAnims); }
+const TCHAR* ACustomerBase::ActivityAnimPath(int32 Idx)
+{
+	return (Idx >= 0 && Idx < ActivityAnimNum()) ? GActivityAnims[Idx].Path : nullptr;
+}
+FString ACustomerBase::ActivityAnimLabel(int32 Idx)
+{
+	return (Idx >= 0 && Idx < ActivityAnimNum()) ? FString(GActivityAnims[Idx].Label) : TEXT("?");
+}
+UAnimSequence* ACustomerBase::ResolveActivityAnim(int32 Idx)
+{
+	const TCHAR* P = ActivityAnimPath(Idx);
+	return P ? LoadObject<UAnimSequence>(nullptr, P) : nullptr;
+}
+
+void ACustomerBase::BeginActivity(const FVector& Spot, float Yaw, int32 AnimIdx)
+{
+	bActivityNpc = true;
+	ActivitySpot = Spot;
+	ActivityYaw = Yaw;
+	ActivityPendingAnim = FMath::Clamp(AnimIdx, 0, FMath::Max(0, ActivityAnimNum() - 1));
+	bActivityArrived = false;
+	ActivityAnimIndex = -1; // tijdens de aanloop nog gewoon walk/idle
+}
+
+void ACustomerBase::ApplyActivityAnim()
+{
+	if (ActivityAnimIndex < 0) { return; }
+	if (USkeletalMeshComponent* M = GetMesh())
+	{
+		if (UAnimSequence* Seq = ResolveActivityAnim(ActivityAnimIndex))
+		{
+			M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			M->PlayAnimation(Seq, true);
+			NpcAnimState = 2; // niet 0/1 -> UpdateNpcAnim laat 'm met rust
+		}
+	}
+}
+
+void ACustomerBase::OnRep_ActivityAnim()
+{
+	if (ActivityAnimIndex >= 0) { ApplyActivityAnim(); }
+}
+
+void ACustomerBase::TickActivity(float DeltaSeconds)
+{
+	// Loop naar de plek; eenmaal aangekomen: stoppen, naar de kijkrichting draaien en de anim spelen.
+	const float Dist = FVector::Dist2D(GetActorLocation(), ActivitySpot);
+	if (!bActivityArrived && Dist > 110.f)
+	{
+		WalkTo(ActivitySpot, 80.f);
+		return;
+	}
+	bActivityArrived = true;
+	if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+	// Netjes naar de kijkrichting draaien (vloeiend, geen snap).
+	const FRotator Cur = GetActorRotation();
+	const FRotator Want(0.f, ActivityYaw, 0.f);
+	SetActorRotation(FMath::RInterpConstantTo(Cur, Want, DeltaSeconds, 220.f));
+	// Pose aanzetten (1x): zet de gerepliceerde index -> OnRep speelt 'm op clients, host speelt direct.
+	if (ActivityAnimIndex != ActivityPendingAnim)
+	{
+		ActivityAnimIndex = ActivityPendingAnim;
+		ApplyActivityAnim();
 	}
 }
 
@@ -514,7 +602,7 @@ void ACustomerBase::BeginPlay()
 
 	if (HasAuthority())
 	{
-		State = ECustomerState::WantsToOrder;
+		if (!bActivityNpc) { State = ECustomerState::WantsToOrder; }
 		BasePatienceSeconds = PatienceSeconds;
 
 		// Koppel aan een persoon in het register en laad zijn persistente stats.
@@ -577,6 +665,13 @@ void ACustomerBase::BeginPlay()
 			}
 		}
 
+		// Activity-NPC (dev-tool): heeft nu een varieerde skin, maar is verder inert -> geen koop-/afspraak-/
+		// product-logica. Z'n loop-naar-de-plek + anim wordt in TickActivity afgehandeld.
+		if (bActivityNpc)
+		{
+			return;
+		}
+
 		// Nog te weinig verslaving? Dan is dit (nog) geen koper maar een prospect: eerst opwarmen
 		// met gratis samples. Wie al verslaafd genoeg is (bv. een vaste klant) wil meteen kopen.
 		if (Addiction < AddictionToBuy)
@@ -621,6 +716,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, Addiction);
 	DOREPLIFETIME(ACustomerBase, State);
 	DOREPLIFETIME(ACustomerBase, SpeechLine);
+	DOREPLIFETIME(ACustomerBase, ActivityAnimIndex);
 	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
 	DOREPLIFETIME(ACustomerBase, bTalkingToPlayer);
 	DOREPLIFETIME(ACustomerBase, bShopkeeper);
@@ -700,6 +796,13 @@ void ACustomerBase::Tick(float DeltaSeconds)
 
 	if (!HasAuthority())
 	{
+		return;
+	}
+
+	// Activity-NPC (dev-tool): loopt naar z'n vaste plek en doet daar z'n anim - geen klant-/bewoner-logica.
+	if (bActivityNpc)
+	{
+		TickActivity(DeltaSeconds);
 		return;
 	}
 
@@ -826,6 +929,11 @@ void ACustomerBase::SetupResident(const FVector& FrontSpot, const FVector& Inter
 
 bool ACustomerBase::ShouldShowOnCityMap() const
 {
+	// Activity-NPC's (dev-tool) zijn vaste ambiance, geen klanten -> niet als stip op de map.
+	if (bActivityNpc)
+	{
+		return false;
+	}
 	// Winkeliers staan vast achter hun balie - geen map-stip (oogt anders als een vastzittende NPC).
 	if (bShopkeeper)
 	{
