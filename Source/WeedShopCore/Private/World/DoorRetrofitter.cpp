@@ -872,6 +872,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	// verdieping van de Ventura-toren) is van jou - die deur opent gewoon, prompt "Your home".
 	// Draait opnieuw zodra het aantal deuren verandert (streaming/stamps laden na elkaar in).
 	{
+		FHitchTimer _tDoorBlock(TEXT("Scan:DoorBlock"), ScanPass);
 		TArray<ACityDoor*> Apt;
 		TArray<ACityDoor*> Balc;
 		for (TActorIterator<ACityDoor> It(W); It; ++It)
@@ -880,6 +881,8 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (It->ActorHasTag(TEXT("AptDoor"))) { Apt.Add(*It); }
 			else if (It->ActorHasTag(TEXT("BalcDoor"))) { Balc.Add(*It); }
 		}
+		const bool _bRecluster = (Apt.Num() > 0 && Apt.Num() + Balc.Num() != LastAptDoorCount);
+		UE_LOG(LogWeedShop, Warning, TEXT("[SCANDIAG] pass=%d apt=%d balc=%d last=%d -> %s"), ScanPass, Apt.Num(), Balc.Num(), LastAptDoorCount, _bRecluster ? TEXT("RECLUSTER (O(deuren^2))") : TEXT("stable"));
 		if (Apt.Num() > 0 && Apt.Num() + Balc.Num() != LastAptDoorCount)
 		{
 			LastAptDoorCount = Apt.Num() + Balc.Num();
@@ -1133,6 +1136,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	// een ver route-punt beneden verplaatst en wandelt vandaar gewoon naar huis: alsof hij de
 	// lift heeft genomen terwijl jij even niet keek.
 	{
+		FHitchTimer _tLift(TEXT("Scan:LiftTake"), ScanPass);
 		TArray<FVector> StreetPts;
 		for (TActorIterator<ACustomerSpawner> SIt(W); SIt; ++SIt)
 		{
@@ -1931,6 +1935,7 @@ void ADoorRetrofitter::ScanAndConvert()
 	// op het dichtstbijzijnde spawner-punt. Residents gaan terug naar hun huis-positie via de
 	// normale resident-logica zodra ze weer op de navmesh staan.
 	{
+		FHitchTimer _tVangnet(TEXT("Scan:Vangnet"), ScanPass);
 		TArray<FVector> SpawnerLocs;
 		for (TActorIterator<ACustomerSpawner> SIt(W); SIt; ++SIt)
 		{
@@ -2478,6 +2483,19 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
+	FHitchTimer _tPui(TEXT("Scan:Pui"), ScanPass);
+	// ALLEEN puien NABIJ een speler proberen. Op de world-partition beach-map is de gevel-geometrie
+	// van verre puien NIET ingestreamd -> hun traces lossen nooit op -> ze blijven onafgehandeld en
+	// werden zo ELKE 2s opnieuw ge-traced (24 puien x ~35 line-traces = ~90ms hang, nonstop). Vlakbij
+	// een speler IS de gevel er wel: daar lost de pui in 1-2 passes op, krijgt 'PuiFixed' en valt weg.
+	TArray<FVector> Players;
+	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (const APawn* Pp = It->Get() ? It->Get()->GetPawn() : nullptr) { Players.Add(Pp->GetActorLocation()); }
+	}
+	if (Players.Num() == 0) { return; }
+	const float NearSq = 9000.f * 9000.f; // ~90m: binnen streaming-bereik
+
 	// Onbehandelde pui-deuren verzamelen; traces negeren ALLE werkende deuren (anders meet je
 	// je eigen blad in plaats van de gevel).
 	TArray<ACityDoor*> Puis;
@@ -2486,14 +2504,25 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 	{
 		if (!IsValid(*It)) { continue; }
 		Q.AddIgnoredActor(*It);
-		if (It->ActorHasTag(TEXT("BalcDoor")) && !It->ActorHasTag(TEXT("PuiFixed"))) { Puis.Add(*It); }
+		if (It->ActorHasTag(TEXT("BalcDoor")) && !It->ActorHasTag(TEXT("PuiFixed")))
+		{
+			const FVector PL = It->GetActorLocation();
+			for (const FVector& PP : Players)
+			{
+				if (FVector::DistSquared(PP, PL) < NearSq) { Puis.Add(*It); break; }
+			}
+		}
 	}
 	if (Puis.Num() == 0) { return; }
 
 	TSet<ACityDoor*> Done;
+	int32 Processed = 0;
+	const int32 MaxPerCall = 6; // harde cap: ook in een dichte cluster nooit een spike
 	for (ACityDoor* D : Puis)
 	{
 		if (Done.Contains(D)) { continue; }
+		if (Processed >= MaxPerCall) { break; }
+		++Processed;
 		UStaticMeshComponent* Pn = D->GetPanel();
 		if (!Pn || !Pn->GetStaticMesh()) { continue; }
 		const FVector C0 = Pn->Bounds.Origin;
