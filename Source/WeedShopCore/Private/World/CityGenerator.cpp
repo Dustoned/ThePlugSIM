@@ -2,6 +2,7 @@
 
 #include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
@@ -73,31 +74,40 @@ void ACityGenerator::BeginPlay()
 	BuildCity();
 }
 
-UStaticMeshComponent* ACityGenerator::AddCityProp(const TCHAR* MeshPath, const FVector& Loc, float Yaw)
+UHierarchicalInstancedStaticMeshComponent* ACityGenerator::GetPropISM(const FString& Key, UStaticMesh* M)
+{
+	if (TObjectPtr<UHierarchicalInstancedStaticMeshComponent>* Found = PropISMs.Find(Key)) { return Found->Get(); }
+	UHierarchicalInstancedStaticMeshComponent* H = NewObject<UHierarchicalInstancedStaticMeshComponent>(this);
+	H->SetupAttachment(Root);
+	H->SetStaticMesh(M);
+	H->SetMobility(EComponentMobility::Static);
+	H->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	H->SetCanEverAffectNavigation(true); // NPC's lopen om de props heen
+	H->RegisterComponent();
+	PropISMs.Add(Key, H);
+	return H;
+}
+
+void ACityGenerator::AddCityProp(const TCHAR* MeshPath, const FVector& Loc, float Yaw)
 {
 	UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, MeshPath);
-	if (!M) { return nullptr; }
-	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
-	C->SetupAttachment(Root);
-	C->SetStaticMesh(M);
-	C->SetMobility(EComponentMobility::Static);
-	C->SetWorldLocationAndRotation(Loc, FRotator(0.f, Yaw, 0.f));
-	C->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	C->SetCanEverAffectNavigation(true);
-	C->RegisterComponent();
-	return C;
+	if (!M) { return; }
+	// Als INSTANCE in de gedeelde HISM voor dit mesh-pad -> 1 draw-call per mesh-type (i.p.v. honderden).
+	if (UHierarchicalInstancedStaticMeshComponent* H = GetPropISM(FString(MeshPath), M))
+	{
+		H->AddInstance(FTransform(FRotator(0.f, Yaw, 0.f), Loc, FVector::OneVector), /*bWorldSpace=*/true);
+	}
 }
 
 void ACityGenerator::AddCityLamp(const FVector& BaseWorld)
 {
 	// Echte lantaarn uit de CityBeachStrip-pack; lichten op de gemeten paal-hoogte. Fallback = oude mockup.
 	float PoleH = 470.f;
-	if (UStaticMeshComponent* Lamp = AddCityProp(TEXT("/Game/CityBeachStrip/Meshes/LampPost/SM_LampPostBeach_01.SM_LampPostBeach_01"), BaseWorld, 0.f))
+	const TCHAR* LampPath = TEXT("/Game/CityBeachStrip/Meshes/LampPost/SM_LampPostBeach_01.SM_LampPostBeach_01");
+	if (UStaticMesh* LM = LoadObject<UStaticMesh>(nullptr, LampPath))
 	{
-		if (const UStaticMesh* LM = Lamp->GetStaticMesh())
-		{
-			PoleH = FMath::Clamp((float)LM->GetBoundingBox().Max.Z - 35.f, 250.f, 900.f);
-		}
+		AddCityProp(LampPath, BaseWorld, 0.f); // instanced
+		PoleH = FMath::Clamp((float)LM->GetBoundingBox().Max.Z - 35.f, 250.f, 900.f);
 	}
 	else
 	{

@@ -95,8 +95,12 @@ protected:
 
 	// Straatlantaarn (paal + kop + warm puntlicht) die 's avonds aan gaat.
 	void AddCityLamp(const FVector& BaseWorld);
-	// Statisch straat-prop uit een asset-pack (bankje/vuilnisbak/hydrant/...); nullptr-safe fallback.
-	class UStaticMeshComponent* AddCityProp(const TCHAR* MeshPath, const FVector& Loc, float Yaw);
+	// Statisch straat-prop uit een asset-pack (bankje/vuilnisbak/hydrant/lantaarnpaal/...). Wordt als
+	// INSTANCE in een gedeelde HISM gezet (1 draw-call per mesh-type i.p.v. honderden losse componenten).
+	void AddCityProp(const TCHAR* MeshPath, const FVector& Loc, float Yaw);
+	// HISM per uniek mesh-pad (street-props instancen). 1 component per mesh-type, N instances.
+	class UHierarchicalInstancedStaticMeshComponent* GetPropISM(const FString& Key, class UStaticMesh* M);
+	UPROPERTY() TMap<FString, TObjectPtr<class UHierarchicalInstancedStaticMeshComponent>> PropISMs;
 
 	// Centraal parkje: gras, paden, boompjes, bankjes en een laag hekje.
 	void BuildPark(float CX, float CY, float Size, float GroundTopZ);
