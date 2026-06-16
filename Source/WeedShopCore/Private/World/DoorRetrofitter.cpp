@@ -1587,13 +1587,16 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				// Vloer is AL ingestreamd (later-joinende partner): de settle-loop draait niet meer, dus zou
 				// een zweef-bevriezing nooit meer ontdooien = eeuwig zwevende joiner. Direct op de vloer + lopend.
+				// Zelfde korte CENTER-trace als de host-settle (HomeAnchor +30, 260 diep) zodat we de EIGEN
+				// penthouse-vloer pakken; de zij-offset alleen op de PLAATSING (anders trace je naast de vloer
+				// op een dak/terras). Geen hit (zou niet mogen, host staat er) -> thuis-plek, gravity zet 'm neer.
 				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandEarly), false);
 				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
 				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
-				const FVector TS = HomeAnchor + Off + FVector(0.f, 0.f, 120.f);
-				FVector Dest = HomeAnchor + Off + FVector(0.f, 0.f, 96.f);
-				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 600.f), ECC_WorldStatic, LQ))
-				{ Dest = FH.Location + FVector(0.f, 0.f, 96.f); }
+				const FVector TS = HomeAnchor + FVector(0.f, 0.f, 30.f);
+				FVector Dest = HomeAnchor + Off;
+				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, LQ))
+				{ Dest = FH.Location + FVector(Off.X, Off.Y, 96.f); }
 				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
 				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
 			}
@@ -1702,14 +1705,16 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				// De vloer is AL ingestreamd (bv. een LATER-joinende partner): de settle-loop draait niet meer
 				// (die is gegate op !bRoomFloorReady), dus zou een zweef-bevriezing hier nooit meer ontdooien
-				// = eeuwig zwevende/slidende joiner. Daarom 'm hier DIRECT op de vloer zetten + lopend.
+				// = eeuwig zwevende/slidende joiner. Daarom 'm hier DIRECT op de vloer zetten + lopend. Zelfde
+				// korte CENTER-trace als de host-settle (HomeAnchor +30, 260 diep) zodat we de EIGEN penthouse-
+				// vloer pakken; zij-offset alleen op de PLAATSING (anders trace je naast de vloer op een dak).
 				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandLate), false);
 				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
 				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
-				const FVector TS = HomeAnchor + Off + FVector(0.f, 0.f, 120.f);
-				FVector Dest = HomeAnchor + Off + FVector(0.f, 0.f, 96.f);
-				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 600.f), ECC_WorldStatic, LQ))
-				{ Dest = FH.Location + FVector(0.f, 0.f, 96.f); }
+				const FVector TS = HomeAnchor + FVector(0.f, 0.f, 30.f);
+				FVector Dest = HomeAnchor + Off;
+				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, LQ))
+				{ Dest = FH.Location + FVector(Off.X, Off.Y, 96.f); }
 				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
 				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
 			}
