@@ -392,6 +392,37 @@ static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* 
 	if (Pick(2u, 113u) == 0u) { AddPart(Load(TEXT("Watch")), 113u); }
 }
 
+// GANG-SKIN-variant: legt het GangSkin-materiaal (M_Gang, vaste Gang05-textureset) over de body -> een
+// herkenbaar gang-type op straat. M_Gang heeft geen params, dus simpel als materiaal-override op alle slots.
+static void WeedNpc_ApplyGang(USkeletalMeshComponent* SkM)
+{
+	if (!SkM) { return; }
+	UMaterialInterface* MG = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GangSkin/M_Gang.M_Gang"));
+	if (!MG) { return; }
+	const int32 N = SkM->GetNumMaterials();
+	for (int32 i = 0; i < N; ++i) { SkM->SetMaterial(i, MG); }
+}
+
+// Per-NPC IDLE-pose uit GenericNPCAnimPack2 (armen over elkaar, hand op heup, licht voorover leunen, ...)
+// -> niet iedereen staat in exact dezelfde houding stil. De pack-anims draaien op UE4_Mannequin_Skeleton;
+// dat skelet is nu als compatible toegevoegd aan de NPC-skeletten zodat single-node ze afspeelt (geen zweven).
+// Index 0/1 houdt de oorspronkelijke MM_Idle aan zodat een deel de standaard-houding houdt.
+static UAnimSequence* WeedNpc_PickIdle(uint32 Seed)
+{
+	static const TCHAR* Pool[] = {
+		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
+		TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
+		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle.Anim_Idle"),
+		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hands_Crossed.Anim_Idle_Hands_Crossed"),
+		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hands_On_Waist.Anim_Idle_Hands_On_Waist"),
+		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Hand_On_Waist.Anim_Idle_Hand_On_Waist"),
+		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Lean_Forward_1.Anim_Idle_Lean_Forward_1"),
+		TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Idle_Lean_Forward_2.Anim_Idle_Lean_Forward_2"),
+	};
+	const uint32 N = (uint32)UE_ARRAY_COUNT(Pool);
+	return LoadObject<UAnimSequence>(nullptr, Pool[(Seed * 2654435761u + 17u) % N]);
+}
+
 // Natuurlijke haarkleur uit een hash (zwart/bruin/blond/auburn/grijs/wit).
 static FLinearColor WeedNpc_HairColor(uint32 H)
 {
@@ -511,7 +542,13 @@ void ACustomerBase::BeginPlay()
 				const int32 Tier = Reg->GetCustomerTier(NpcId);
 				const uint32 LookSeed = WeedNpc_StableSeed(NpcId); // stabiel -> altijd dezelfde look
 				const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)LookSeed);
-				if (SkinIdx >= 3 && SkinIdx <= 5)
+				if ((LookSeed % 12u) == 0u)
+				{
+					// Kleine deterministische fractie (~8%) -> GangSkin-variant op de standaard-body. Stabiel
+					// per NPC (uit de seed), dus geen registry-re-roll nodig; herkenbaar gang-type op straat.
+					WeedNpc_ApplyGang(SkM);
+				}
+				else if (SkinIdx >= 3 && SkinIdx <= 5)
 				{
 					// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd
 					// (per-part ook random kleur). Veel meer dan alleen kleur-variatie.
@@ -528,6 +565,14 @@ void ACustomerBase::BeginPlay()
 					SkM->SetSkeletalMesh(Sk);
 					// Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop (zelfde mesh, ander shirt).
 					WeedNpc_TintClothing(SkM, LookSeed);
+				}
+
+				// IDLE-variatie: kies per NPC een idle-houding (armen over elkaar/hand op heup/leunen/...).
+				// Vervangt de gedeelde idle; walk blijft hetzelfde. Herstart hem als de NPC nu stilstaat.
+				if (UAnimSequence* PickedIdle = WeedNpc_PickIdle(LookSeed))
+				{
+					NpcIdle = PickedIdle;
+					if (NpcAnimState == 0) { SkM->PlayAnimation(NpcIdle, true); }
 				}
 			}
 		}
