@@ -84,6 +84,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UContactsComponent* GetContacts() const { return Contacts; }
 
+	// Gedeelde co-op wereld-state (deuren e.d. die per-client lokaal staan maar gesynct moeten zijn).
+	class UWorldSyncComponent* GetWorldSync() const { return WorldSync; }
+
 	// Register van alle NPC's met persistente per-persoon stats.
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	UNpcRegistryComponent* GetNpcRegistry() const { return NpcRegistry; }
@@ -173,6 +176,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UContactsComponent> Contacts;
+
+	UPROPERTY()
+	TObjectPtr<class UWorldSyncComponent> WorldSync;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UNpcRegistryComponent> NpcRegistry;

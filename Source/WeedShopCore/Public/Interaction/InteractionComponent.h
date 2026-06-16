@@ -83,6 +83,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerInteract(AActor* Target);
 
+	// CO-OP gedeelde deur: toggle de deur (stabiel positie-id) in de WorldSync-component op de GameState.
+	UFUNCTION(Server, Reliable)
+	void ServerToggleDoor(uint32 DoorId);
+
 	// De daadwerkelijke uitvoering (draait op de server, of in SP/host direct).
 	void PerformInteract(AActor* Target);
 

@@ -12,6 +12,9 @@
 #include "Engine/StaticMesh.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
+#include "Game/WeedShopGameState.h"
+#include "World/WorldSyncComponent.h"
+#include "Engine/World.h"
 
 ACityDoor::ACityDoor()
 {
@@ -46,6 +49,8 @@ ACityDoor::ACityDoor()
 void ACityDoor::BeginPlay()
 {
 	Super::BeginPlay();
+	// Stabiel gedeeld id uit de (deterministische) wereld-positie + yaw -> identiek op host en alle clients.
+	DoorSyncId = UWorldSyncComponent::MakeId(GetActorLocation(), GetActorRotation().Yaw);
 	if (Trigger)
 	{
 		Trigger->OnComponentBeginOverlap.AddDynamic(this, &ACityDoor::OnTriggerBegin);
@@ -252,6 +257,16 @@ FText ACityDoor::GetInteractionPrompt_Implementation() const
 void ACityDoor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// CO-OP: de speler-open/dicht-stand komt uit de gedeelde WorldSync (door beide spelers via een Server-RPC
+	// gezet) -> elke client toont dezelfde deur. (NPC-auto-open hieronder blijft lokaal/cosmetisch.)
+	if (DoorSyncId != 0)
+	{
+		const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+		if (const UWorldSyncComponent* WS = GS ? GS->GetWorldSync() : nullptr)
+		{
+			bOpen = WS->IsDoorOpen(DoorSyncId);
+		}
+	}
 	// Speler: geen auto-open (open/sluit zelf met F = bOpen). NPC's: openen elke deur die ze tegenkomen ZODAT
 	// ze niet vastlopen bij gebouw-ingangen/gangen - behalve JOUW eigen huis (dat opent niet vanzelf voor NPC's).
 	const bool bEffectiveOpen = bOpen || (NpcNear > 0 && !bPlayerHome);

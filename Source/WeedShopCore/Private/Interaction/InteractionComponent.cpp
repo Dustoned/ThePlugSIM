@@ -4,6 +4,9 @@
 #include "Interaction/Interactable.h"
 #include "Customer/CustomerBase.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Game/WeedShopGameState.h"
+#include "World/WorldSyncComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
 
@@ -153,11 +156,18 @@ void UInteractionComponent::TryInteract()
 		}
 	}
 
-	// Niet-gerepliceerde, per-speler wereld-objecten (deuren/liften/schakelaars): LOKAAL uitvoeren op de speler
-	// die interact. Een server-RPC zou de host-kopie van de deur openen (desync: opent op host-view, en de
-	// client kan door z'n eigen nog-dichte deur niet/wel heen). Lokaal = visueel + collision matchen per scherm.
+	// CO-OP GEDEELDE DEUR: niet-gerepliceerde deur op een deterministische positie -> stuur het stabiele id naar
+	// de server, die toggelt de gedeelde open-set (WorldSync). Zo zien BEIDE spelers de deur open/dicht gaan en
+	// klopt de collision op elk scherm. (We kunnen de actor zelf niet over een RPC sturen: bReplicates=false.)
 	if (const IInteractable* AsI = Cast<IInteractable>(Target))
 	{
+		const uint32 DoorId = AsI->GetWorldSyncDoorId();
+		if (DoorId != 0)
+		{
+			ServerToggleDoor(DoorId);
+			return;
+		}
+		// Overige niet-gerepliceerde lokale objecten (lampen/liften - nog niet gedeeld): lokaal uitvoeren.
 		if (AsI->IsClientLocalInteract())
 		{
 			PerformInteract(Target);
@@ -190,6 +200,13 @@ void UInteractionComponent::ServerInteract_Implementation(AActor* Target)
 	}
 
 	PerformInteract(Target);
+}
+
+void UInteractionComponent::ServerToggleDoor_Implementation(uint32 DoorId)
+{
+	const UWorld* W = GetWorld();
+	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->ServerToggleDoor(DoorId); }
 }
 
 void UInteractionComponent::PerformInteract(AActor* Target)

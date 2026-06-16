@@ -75,7 +75,9 @@ public:
 	// Interact (F) opent/sluit de deur.
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
-	virtual bool IsClientLocalInteract() const override { return true; } // niet-gerepliceerd: lokaal per speler
+	// CO-OP: gedeeld via stabiel positie-id (WorldSync) i.p.v. lokaal -> beide spelers zien de deur open/dicht.
+	virtual uint32 GetWorldSyncDoorId() const override { return DoorSyncId; }
+	uint32 DoorSyncId = 0; // berekend in BeginPlay uit positie+yaw (deterministisch gelijk op host/clients)
 
 protected:
 	virtual void BeginPlay() override;

@@ -15,6 +15,7 @@
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Phone/ContactsComponent.h"
+#include "World/WorldSyncComponent.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
@@ -29,6 +30,7 @@ AWeedShopGameState::AWeedShopGameState()
 	Upgrades = CreateDefaultSubobject<UUpgradeComponent>(TEXT("Upgrades"));
 	Store = CreateDefaultSubobject<UStoreComponent>(TEXT("Store"));
 	Contacts = CreateDefaultSubobject<UContactsComponent>(TEXT("Contacts"));
+	WorldSync = CreateDefaultSubobject<UWorldSyncComponent>(TEXT("WorldSync"));
 	NpcRegistry = CreateDefaultSubobject<UNpcRegistryComponent>(TEXT("NpcRegistry"));
 	Heat = CreateDefaultSubobject<UHeatComponent>(TEXT("Heat"));
 	Leveling = CreateDefaultSubobject<ULevelComponent>(TEXT("Leveling"));

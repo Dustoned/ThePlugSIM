@@ -39,4 +39,9 @@ public:
 	// lokale kopie zodat visueel + collision per scherm kloppen. (Een server-RPC zou de host-kopie openen, en
 	// een non-replicated actor heeft sowieso geen net-identiteit om te referencen.) Default false = server-auth.
 	virtual bool IsClientLocalInteract() const { return false; }
+
+	// CO-OP GEDEELDE DEUR: != 0 betekent dat dit een niet-gerepliceerde, per-client deterministische deur is die
+	// via een STABIEL POSITIE-ID gesynct wordt. De interactie stuurt dan dit id naar de server (i.p.v. de
+	// actor, die geen net-identiteit heeft) -> server toggelt de gedeelde open-set -> alle clients volgen.
+	virtual uint32 GetWorldSyncDoorId() const { return 0; }
 };
