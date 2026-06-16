@@ -155,26 +155,30 @@ void UHeatComponent::TriggerRobbery()
 	int32 Plants = 0, Racks = 0, Machines = 0;
 	if (UWorld* World = GetWorld())
 	{
-		FVector HomePos = FVector::ZeroVector; bool bHasHome = false;
-		if (APlayerController* PC = World->GetFirstPlayerController())
+		// Verzamel de thuis-plek van ELKE speler (niet alleen de host): in co-op delen ze er meestal een,
+		// in competitive hebben ze er elk een -> berooft het apartment van iedereen, niet alleen speler 0.
+		TArray<FVector> Homes;
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 		{
-			if (APawn* Pw = PC->GetPawn())
-			{
-				if (UPhoneClientComponent* Ph = Pw->FindComponentByClass<UPhoneClientComponent>())
-				{
-					bHasHome = Ph->GetActiveHomeLocation(HomePos);
-				}
-			}
+			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+			UPhoneClientComponent* Ph = Pw ? Pw->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+			FVector HP;
+			if (Ph && Ph->GetActiveHomeLocation(HP)) { Homes.AddUnique(HP); }
 		}
-		if (bHasHome)
+		if (Homes.Num() > 0)
 		{
 			const float R2 = 1600.f * 1600.f; // radius rond het apartment-interieur (~16m, dekt een kamer)
+			auto NearAnyHome = [&Homes, R2](const FVector& Loc)
+			{
+				for (const FVector& HP : Homes) { if (FVector::DistSquared(Loc, HP) < R2) { return true; } }
+				return false;
+			};
 			for (TActorIterator<AGrowPlant> It(World); It; ++It)
-			{ if (FVector::DistSquared(It->GetActorLocation(), HomePos) < R2) { It->RobClear(); ++Plants; } }
+			{ if (NearAnyHome(It->GetActorLocation())) { It->RobClear(); ++Plants; } }
 			for (TActorIterator<ADryingRack> It(World); It; ++It)
-			{ if (FVector::DistSquared(It->GetActorLocation(), HomePos) < R2) { It->RestoreEntries(TArray<FDryEntry>()); ++Racks; } }
+			{ if (NearAnyHome(It->GetActorLocation())) { It->RestoreEntries(TArray<FDryEntry>()); ++Racks; } }
 			for (TActorIterator<AProcessorMachine> It(World); It; ++It)
-			{ if (FVector::DistSquared(It->GetActorLocation(), HomePos) < R2) { It->RestoreEntries(TArray<FProcEntry>()); ++Machines; } }
+			{ if (NearAnyHome(It->GetActorLocation())) { It->RestoreEntries(TArray<FProcEntry>()); ++Machines; } }
 		}
 	}
 

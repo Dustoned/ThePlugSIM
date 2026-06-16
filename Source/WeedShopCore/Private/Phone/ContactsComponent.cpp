@@ -421,9 +421,24 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 
 	if (!bPlacedAtHome)
 	{
-		if (const APlayerController* PC = World->GetFirstPlayerController())
+		// Bij de JUISTE speler: competitive-afspraak hoort bij de speler in Msg.ForPlayerId (niet altijd de
+		// host). Co-op (ForPlayerId leeg) -> host/eerste speler; het thuis is daar toch gedeeld.
+		const APawn* Player = nullptr;
+		if (!Msg.ForPlayerId.IsEmpty())
 		{
-			if (const APawn* Player = PC->GetPawn())
+			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+			{
+				APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+				if (P && USaveGameSubsystem::StablePlayerId(P) == Msg.ForPlayerId) { Player = P; break; }
+			}
+		}
+		if (!Player)
+		{
+			const APlayerController* PC0 = World->GetFirstPlayerController();
+			Player = PC0 ? PC0->GetPawn() : nullptr;
+		}
+		{
+			if (Player)
 			{
 				// "Ik kom langs": wacht BUITEN bij je hoofdingang (de plek vóór je voordeur, waar ook de
 				// pakketjes komen) - nooit binnen in de kamer.
