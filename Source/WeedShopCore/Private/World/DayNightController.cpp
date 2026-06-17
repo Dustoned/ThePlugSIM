@@ -436,8 +436,6 @@ void ADayNightController::AddLamp(const FVector& BaseOnGround)
 void ADayNightController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	// DIAGNOSE (tijdelijk): logt als deze tick > ~2ms duurt (= hitch). RAII -> werkt op elk return-pad.
-	struct FDNHitch { double S; FDNHitch():S(FPlatformTime::Seconds()){} ~FDNHitch(){ const double Ms=(FPlatformTime::Seconds()-S)*1000.0; if(Ms>2.0){ UE_LOG(LogWeedShop, Warning, TEXT("[HITCH] DayNight::Tick: %.1f ms"), Ms);} } } DNHitch_;
 
 	const UDayCycleComponent* DC = GetDayCycle();
 	if (!DC) { return; }

@@ -456,16 +456,11 @@ bool ADoorRetrofitter::FindStreetPoint(float WorldY, FVector& Out) const
 	return false;
 }
 
-// DIAGNOSE: logt als een functie-pass langer dan ~2ms duurt (= een frame-hitch). RAII -> werkt op elk
-// return-pad. Tijdelijk, om de periodieke stutter hard te lokaliseren.
-namespace { struct FHitchTimer { double S; const TCHAR* N; int32 P; FHitchTimer(const TCHAR* In, int32 Ip):S(FPlatformTime::Seconds()),N(In),P(Ip){} ~FHitchTimer(){ const double Ms=(FPlatformTime::Seconds()-S)*1000.0; if(Ms>2.0){ UE_LOG(LogWeedShop, Warning, TEXT("[HITCH] %s (pass %d): %.1f ms"), N, P, Ms);} } }; }
-
 void ADoorRetrofitter::ScanAndConvert()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	++ScanPass;
-	FHitchTimer HT_(TEXT("ScanAndConvert"), ScanPass);
 	// Werk-meting voor de adaptieve cadans: groeit een van de setup-sets/tellers, dan is er iets
 	// nieuws ingestreamd en verwerkt -> snel blijven scannen. Anders terugschakelen naar traag.
 	const int32 _scanWork0 = Converted.Num() + ConvScanRejected.Num() + GlassScanSeen.Num()
@@ -891,7 +886,6 @@ void ADoorRetrofitter::ScanAndConvert()
 	// verdieping van de Ventura-toren) is van jou - die deur opent gewoon, prompt "Your home".
 	// Draait opnieuw zodra het aantal deuren verandert (streaming/stamps laden na elkaar in).
 	{
-		FHitchTimer _tDoorBlock(TEXT("Scan:DoorBlock"), ScanPass);
 		TArray<ACityDoor*> Apt;
 		TArray<ACityDoor*> Balc;
 		for (TActorIterator<ACityDoor> It(W); It; ++It)
@@ -900,8 +894,6 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (It->ActorHasTag(TEXT("AptDoor"))) { Apt.Add(*It); }
 			else if (It->ActorHasTag(TEXT("BalcDoor"))) { Balc.Add(*It); }
 		}
-		const bool _bRecluster = (Apt.Num() > 0 && Apt.Num() + Balc.Num() != LastAptDoorCount);
-		UE_LOG(LogWeedShop, Warning, TEXT("[SCANDIAG] pass=%d apt=%d balc=%d last=%d -> %s"), ScanPass, Apt.Num(), Balc.Num(), LastAptDoorCount, _bRecluster ? TEXT("RECLUSTER (O(deuren^2))") : TEXT("stable"));
 		if (Apt.Num() > 0 && Apt.Num() + Balc.Num() != LastAptDoorCount)
 		{
 			LastAptDoorCount = Apt.Num() + Balc.Num();
@@ -1155,7 +1147,6 @@ void ADoorRetrofitter::ScanAndConvert()
 	// een ver route-punt beneden verplaatst en wandelt vandaar gewoon naar huis: alsof hij de
 	// lift heeft genomen terwijl jij even niet keek.
 	{
-		FHitchTimer _tLift(TEXT("Scan:LiftTake"), ScanPass);
 		TArray<FVector> StreetPts;
 		for (TActorIterator<ACustomerSpawner> SIt(W); SIt; ++SIt)
 		{
@@ -1954,7 +1945,6 @@ void ADoorRetrofitter::ScanAndConvert()
 	// op het dichtstbijzijnde spawner-punt. Residents gaan terug naar hun huis-positie via de
 	// normale resident-logica zodra ze weer op de navmesh staan.
 	{
-		FHitchTimer _tVangnet(TEXT("Scan:Vangnet"), ScanPass);
 		TArray<FVector> SpawnerLocs;
 		for (TActorIterator<ACustomerSpawner> SIt(W); SIt; ++SIt)
 		{
@@ -2077,7 +2067,6 @@ void ADoorRetrofitter::ScanAndConvert()
 			const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
 			if (Pp) { LastScanPlayerPos = Pp->GetActorLocation(); break; }
 		}
-	FHitchTimer _tConvert(TEXT("Scan:Convert"), ScanPass);
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
 		AStaticMeshActor* SMA = *It;
@@ -2179,7 +2168,6 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// Glas-pass: losse glas-meshes van de bladen aan de dichtstbijzijnde geconverteerde deur hangen,
 	// zodat het raam met de deur mee draait i.p.v. in de lucht te blijven hangen.
-	FHitchTimer _tGlass(TEXT("Scan:Glass"), ScanPass);
 	for (TActorIterator<AStaticMeshActor> It(W); It; ++It)
 	{
 		AStaticMeshActor* SMA = *It;
@@ -2208,7 +2196,6 @@ void ADoorRetrofitter::ScanAndConvert()
 	// Raam-fixup: glas-/raam-COMPONENTEN (van elk actor-type: losse actors, level instances, ISM/HISM)
 	// staan in de map op no-collision/pawn-ignore, waardoor je dwars door ramen heen loopt. Forceer
 	// blokkeren voor de speler. (Door-glas aan onze scharnieren is van ACityDoor - die slaan we over.)
-	FHitchTimer _tRaamFix(TEXT("Scan:RaamFix"), ScanPass);
 	int32 GlassFixed = 0;
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -2256,7 +2243,6 @@ void ADoorRetrofitter::ScanAndConvert()
 	ADayNightController* DN = ADayNightController::GetLocal(W);
 	if (DN && !DN->IsPackMinimal()) // minimal-modus: stock-belichting volledig met rust laten
 	{
-		FHitchTimer _tLight(TEXT("Scan:Lighting"), ScanPass);
 		DN->TryAdoptSky();
 		ADirectionalLight* AdoptedSun = DN->GetSun();
 		ADirectionalLight* OurMoon = DN->GetMoon();
@@ -2349,7 +2335,6 @@ void ADoorRetrofitter::ScanAndConvert()
 	// stabiel is (alle verdiepingen ingestreamd) spawnen we een werkende APackElevator met de bestaande
 	// schuif-panelen + de pack-cabine.
 	{
-		FHitchTimer _tElev(TEXT("Scan:Elevator"), ScanPass);
 		struct FShaft { FVector Ref = FVector::ZeroVector; float FrameYaw = 0.f; TArray<float> FloorZ; };
 		TMap<FIntPoint, FShaft> Shafts;
 		TArray<TPair<FVector, UStaticMeshComponent*>> AllPanels; // (positie, paneel)
@@ -2508,8 +2493,8 @@ void ADoorRetrofitter::ScanAndConvert()
 
 	// CloneRooms(); // UIT op verzoek: kamer-klonen gaf muren/vloeren op verkeerde plekken. Code blijft staan voor een latere, betere aanpak (kamer op maat van het slot).
 	// BuildMarkedRooms(); // UIT: marker-kopie werkte niet lekker - vervangen door de dev building-tool (muren/vloeren tekenen via het bouw-systeem)
-	{ FHitchTimer _tVert(TEXT("Scan:VertReplicate"), ScanPass); VerticalReplicate(); }
-	{ FHitchTimer _tStamp(TEXT("Scan:Stamps"), ScanPass); ApplySavedStamps(); }
+	VerticalReplicate();
+	ApplySavedStamps();
 
 	if (NewThisPass > 0)
 	{
@@ -2529,7 +2514,6 @@ void ADoorRetrofitter::ScanAndConvert()
 	{
 		bScanSlow = bWantSlow;
 		GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, bScanSlow ? 8.0f : 2.0f, true);
-		UE_LOG(LogWeedShop, Warning, TEXT("[SCANDIAG] cadans -> %s"), bScanSlow ? TEXT("8s (stabiel)") : TEXT("2s (actief)"));
 	}
 }
 
@@ -2554,7 +2538,6 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
-	FHitchTimer _tPui(TEXT("Scan:Pui"), ScanPass);
 	// ALLEEN puien NABIJ een speler proberen. Op de world-partition beach-map is de gevel-geometrie
 	// van verre puien NIET ingestreamd -> hun traces lossen nooit op -> ze blijven onafgehandeld en
 	// werden zo ELKE 2s opnieuw ge-traced (24 puien x ~35 line-traces = ~90ms hang, nonstop). Vlakbij
@@ -2674,7 +2657,6 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 
 void ADoorRetrofitter::TickVirtualMove()
 {
-	FHitchTimer HT_(TEXT("TickVirtualMove"), ScanPass);
 	// THUIS-SETTLE (10Hz): val je vlak na het thuis-teleporteren door de nog-niet-geladen
 	// penthouse-vloer, dan zet ik je terug op de thuis-plek tot de vloer-collision er is. Stopt
 	// zodra het venster om is of je bewust wegloopt (XY > 6m van de thuis-plek).
@@ -2810,7 +2792,6 @@ void ADoorRetrofitter::TickVirtualCrowd()
 {
 	UWorld* W = GetWorld();
 	if (!W || GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
-	FHitchTimer HT_(TEXT("TickVirtualCrowd"), Crowd.Num());
 	// Speler-posities en kijkrichtingen cachen.
 	TArray<FVector> PlayerPos;
 	TArray<FVector> PlayerView;

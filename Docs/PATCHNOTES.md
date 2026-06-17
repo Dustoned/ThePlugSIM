@@ -1,4 +1,56 @@
 PATCH NOTES
+Version 1.7.0 — 17 juni 2026
+
+Korte intro:
+Deze update draait om soepel spelen. De terugkerende stotter — de game hing op de strand-map
+elke paar seconden even vast — is bij de wortel opgelost. NPC's blijven nu netjes bestaan i.p.v.
+constant te verdwijnen, en co-op is flink betrouwbaarder: deuren, berichten en deals lopen nu
+gelijk tussen beide spelers.
+
+━━━━━━━━━━━━━━━━━━━━
+
+PERFORMANCE  (de hoofdfix)
+
+• De periodieke stotter is weg. De game bouwde de strand-stad (deuren, glas, lampen, liften)
+  eindeloos elke paar seconden opnieuw om — óók als er niets veranderde. Dat zware werk gebeurt
+  nu alleen nog wanneer je een nieuw gebied in loopt dat ingeladen wordt; sta je stil of loop je
+  door al-bekend gebied, dan blijft het vloeiend.
+
+• NPC's op de strand-map verdwijnen niet meer. Ze worden één keer geplaatst en blijven bestaan
+  + doorlopen; ver weg verdwijnt alleen hun model + animatie (voor de prestatie), maar ze blijven
+  netjes op de kaart staan — de map-markers kloppen nu weer met waar iedereen echt loopt.
+
+• Shaders worden zoveel mogelijk vooraf tijdens de laadschermen klaargezet, zodat je minder korte
+  haperingen krijgt de eerste keer dat er iets nieuws in beeld komt.
+
+CO-OP
+
+• Deuren zijn nu gedeeld: opent speler 1 een deur, dan ziet speler 2 'm ook open — en je loopt
+  niet meer dwars door een dichte deur bij de ander heen.
+
+• Maar één speler tegelijk kan met een NPC dealen. Is je maat al in gesprek met een klant, dan
+  krijg je een melding i.p.v. dat je 'm overneemt — geen dubbele verkoop meer.
+
+• Telefoon-berichten: lees jij een gesprek, dan verdwijnt de ongelezen-badge ook bij je co-op maat.
+
+• Een afspraak verschijnt nu bij de júiste speler (niet altijd bij de host), en een overval berooft
+  het huis van de speler die 'm krijgt.
+
+• De joinende speler zweeft/glijdt niet meer en zit niet meer met noclip vast; de beweging en
+  loop-animaties van je maat zien er nu correct uit.
+
+• De host crasht niet meer als iemand probeert te joinen terwijl het eerste laadscherm nog bezig is.
+
+OVERIG
+
++ Een echt laadscherm bij het joinen van een co-op spel (zelfde stijl als de andere laadschermen),
+  i.p.v. een klein 'connecting'-tekstje.
+
+• De hoofdmenu-achtergrond is nu een live beach-camera i.p.v. een stilstaand beeld.
+
+━━━━━━━━━━━━━━━━━━━━
+
+PATCH NOTES
 Version 1.6.0 — 15 juni 2026
 
 Korte intro:
