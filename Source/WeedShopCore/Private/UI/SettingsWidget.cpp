@@ -314,8 +314,8 @@ void USettingsWidget::RefreshContent()
 
 		// PRESET - zet alles in één keer. Potato (onder Low, voor zwakke pc's) -> Low -> Medium -> High -> Epic.
 		{
-			bool bLumenOff, bPotato, bMbOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff);
+			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
 			int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
 			const int32 TierNow = bPotato ? -1 : ScalQ;
 			static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
@@ -323,10 +323,10 @@ void USettingsWidget::RefreshContent()
 			{
 				const int32 Next = (TierNow >= 3) ? -1 : TierNow + 1;
 				WeedShop_ApplyGraphicsTier(Next);
-				bool bLum, bPot, bMb; WeedShop_ReadGfxFlags(bLum, bPot, bMb);
-				// Lumen-vlag volgt de preset: alleen EPIC heeft Lumen aan (Potato t/m High = uit voor perf);
+				bool bLum, bPot, bMb, bVSM, bRT; WeedShop_ReadGfxFlags(bLum, bPot, bMb, bVSM, bRT);
+				// Vlaggen volgen de preset: Lumen + ray tracing alleen op Epic; VSM uit op Potato/Low;
 				// MotionBlur behouden.
-				WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb);
+				WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb, (Next <= 0), (Next < 3));
 				RefreshContent();
 			});
 		}
@@ -372,24 +372,48 @@ void USettingsWidget::RefreshContent()
 
 		// Lumen (GI + reflecties op de goedkope methode) - aan/uit.
 		{
-			bool bLumenOff, bPotato, bMbOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff);
-			AddValueRow(TEXT("Lumen (GI + reflections)"), bLumenOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff]()
+			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+			AddValueRow(TEXT("Lumen (GI + reflections)"), bLumenOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
 			{
 				WeedShop_ApplyLumen(!bLumenOff);
-				WeedShop_WriteGfxFlags(!bLumenOff, bPotato, bMbOff);
+				WeedShop_WriteGfxFlags(!bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+				RefreshContent();
+			});
+		}
+
+		// Ray tracing (RT-schaduwen/reflecties/AO/GI) - aan/uit. Zware render-feature; standaard alleen op Epic.
+		{
+			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+			AddValueRow(TEXT("Ray tracing"), bRTOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
+			{
+				WeedShop_ApplyRayTracing(!bRTOff);
+				WeedShop_WriteGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, !bRTOff);
+				RefreshContent();
+			});
+		}
+
+		// Virtual shadow maps - aan/uit. Duurder dan gewone shadow maps; standaard uit op Potato/Low.
+		{
+			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+			AddValueRow(TEXT("Virtual shadow maps"), bVSMOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
+			{
+				WeedShop_ApplyVSM(!bVSMOff);
+				WeedShop_WriteGfxFlags(bLumenOff, bPotato, bMbOff, !bVSMOff, bRTOff);
 				RefreshContent();
 			});
 		}
 
 		// Motion blur - aan/uit.
 		{
-			bool bLumenOff, bPotato, bMbOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff);
-			AddValueRow(TEXT("Motion blur"), bMbOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff]()
+			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+			AddValueRow(TEXT("Motion blur"), bMbOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
 			{
 				WeedShop_ApplyMotionBlur(!bMbOff);
-				WeedShop_WriteGfxFlags(bLumenOff, bPotato, !bMbOff);
+				WeedShop_WriteGfxFlags(bLumenOff, bPotato, !bMbOff, bVSMOff, bRTOff);
 				RefreshContent();
 			});
 		}

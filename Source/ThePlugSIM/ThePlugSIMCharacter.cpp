@@ -1549,6 +1549,14 @@ void AThePlugSIMCharacter::WeedClearFurniture()
 		Give(TEXT("Table"), 5);   Give(TEXT("Fridge"), 5);    Give(TEXT("Mattress"), 5); Give(TEXT("Sink"), 5);
 		Give(TEXT("DryRack_Std"), 3); Give(TEXT("Bench_Pack"), 3); Give(TEXT("Shelf"), 3); Give(TEXT("Chest"), 3);
 		Give(TEXT("Lamp_Ceiling"), 3); Give(TEXT("Atm"), 2);
+		// Nieuwe huiskamer-meubels (decoratie) - ook in de dev-pack zodat je er meteen mee kunt inrichten.
+		Give(TEXT("Furn_ChairPlastic"), 3); Give(TEXT("Furn_ChairGarden"), 3); Give(TEXT("Furn_ChairWood"), 3);
+		Give(TEXT("Furn_TableSmall"), 2);   Give(TEXT("Furn_TableRound"), 2);  Give(TEXT("Furn_CoffeeTable"), 2);
+		Give(TEXT("Furn_Desk"), 2);         Give(TEXT("Furn_Bench"), 2);       Give(TEXT("Furn_Sofa"), 2);
+		Give(TEXT("Furn_TV"), 2);           Give(TEXT("Furn_TVStand"), 2);     Give(TEXT("Furn_Bookshelf"), 2);
+		Give(TEXT("Furn_Dresser"), 2);      Give(TEXT("Furn_Nightstand"), 2);  Give(TEXT("Furn_FloorLamp"), 3);
+		Give(TEXT("Furn_Plant"), 3);        Give(TEXT("Furn_Planter"), 2);     Give(TEXT("Furn_DecoPot"), 3);
+		Give(TEXT("Furn_Crate"), 3);
 	}
 
 	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d furniture cleared + furniture set (incl. sink) back in inventory."), N));
@@ -1644,9 +1652,19 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 	{
 		return;
 	}
-	// In plaats-modus: bevestig de plaatsing.
+	// In plaats-modus: bevestig de plaatsing. MAAR kijk je een NIET-plaatsbaar wereld-object aan (deur,
+	// lift, ...), dan interact je daar gewoon mee (deur openen) i.p.v. te plaatsen - zo loop je door je huis
+	// terwijl je een item vasthoudt. (GetFocusedActor levert alleen interactables; plaatsbare dingen als een
+	// pot/rek negeren we zodat je er nog steeds naast kunt plaatsen.)
 	if (Build && Build->IsPlacing())
 	{
+		if (UInteractionComponent* IC = FindComponentByClass<UInteractionComponent>())
+		{
+			if (AActor* Focus = IC->GetFocusedActor())
+			{
+				if (!Build->IsPickable(Focus)) { IC->TryInteract(); return; }
+			}
+		}
 		Build->ConfirmPlacement();
 		return;
 	}
@@ -1763,6 +1781,14 @@ void AThePlugSIMCharacter::OnInteractKey()
 	}
 	if (Build && Build->IsPlacing())
 	{
+		// Niet-plaatsbaar wereld-object aankijken (deur/lift) -> interact i.p.v. plaatsen bevestigen.
+		if (UInteractionComponent* ICp = FindComponentByClass<UInteractionComponent>())
+		{
+			if (AActor* Focus = ICp->GetFocusedActor())
+			{
+				if (!Build->IsPickable(Focus)) { ICp->TryInteract(); return; }
+			}
+		}
 		Build->ConfirmPlacement();
 		return;
 	}

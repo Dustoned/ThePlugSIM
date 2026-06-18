@@ -150,6 +150,17 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		Hints.Emplace(K(TEXT("Rotate")), TEXT("Rotate"));
 		Hints.Emplace(TEXT("Shift"), TEXT("Snap to grid"));
 		Hints.Emplace(TEXT("Scroll"), TEXT("Put away"));
+		// Kijk je tijdens het plaatsen een NIET-plaatsbaar wereld-object aan (deur/lift), dan kun je er nog
+		// steeds mee interacten (F) i.p.v. plaatsen -> toon de prompt + de Interact-toets.
+		AActor* Focus = Interact ? Interact->GetFocusedActor() : nullptr;
+		if (Focus && Build && !Build->IsPickable(Focus))
+		{
+			FString Prompt = TEXT("Interact");
+			const FText T = IInteractable::Execute_GetInteractionPrompt(Focus);
+			if (!T.IsEmpty()) { Prompt = T.ToString(); }
+			FocusPrompt = Prompt;
+			Hints.Emplace(K(TEXT("Interact")), TEXT("Interact"));
+		}
 	}
 	else if (bPhone)
 	{

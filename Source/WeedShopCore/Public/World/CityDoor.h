@@ -54,6 +54,10 @@ public:
 	// Maak dit een bewoner-deur: op slot voor de speler, met "LOCKED - <naam> lives here".
 	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
 	bool IsLocked() const { return bLocked; }
+	// Staat het blad NU in de dichte stand? (snap meet het blad-midden -> alleen kloppend als 'ie dicht is)
+	bool IsPanelClosedNow() const { return FMath::Abs(CurAngle) < 2.f; }
+	// Zet een scheef-geconverteerde deur netjes in het dichtstbijzijnde deurvak (blad gecentreerd op het kozijn).
+	static void SnapToNearestFrame(class UWorld* W, ACityDoor* Door);
 	UStaticMeshComponent* GetPanel() const { return Panel; }
 	float GetOpenSwing() const { return OpenSwingDeg; }
 

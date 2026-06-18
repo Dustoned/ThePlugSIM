@@ -183,14 +183,19 @@ int32 FurnitureTemplates::SaveFromWorld(UWorld* W, ACityGenerator* City)
 			E.Yaw = P.Yaw - (bLongX ? 0.f : 90.f);
 			Entries.Add(E);
 		}
-		// Heb je in sandbox zelf een sink geplaatst? Dan gebruik die. Zo niet, behoud de bestaande sink
-		// van dit type (sinks zijn in een normaal spel vast/niet plaatsbaar), zodat 'ie niet verdwijnt.
-		const bool bUserSink = Entries.ContainsByPredicate([](const FFurnitureEntry& E) { return E.ItemId == FName(TEXT("Sink")); });
-		if (!bUserSink)
+		// Vaste/auto-fixtures (sink, fridge): die zijn in een normaal spel auto-geplaatst en worden bij het
+		// verzamelen overgeslagen (AutoFixture-tag). Heb je 'm deze keer NIET zelf neergezet, behoud dan de
+		// bestaande uit het template - anders verdwijnt 'ie elke F8-save. (Wel zelf geplaatst -> jouw versie.)
+		static const FName Fixtures[] = { FName(TEXT("Sink")), FName(TEXT("Fridge")) };
+		if (const TArray<FFurnitureEntry>* Old = Merged.Find(Type))
 		{
-			if (const TArray<FFurnitureEntry>* Old = Merged.Find(Type))
+			for (const FName& Fix : Fixtures)
 			{
-				for (const FFurnitureEntry& OE : *Old) { if (OE.ItemId == FName(TEXT("Sink"))) { Entries.Add(OE); } }
+				const bool bUserPlaced = Entries.ContainsByPredicate([&](const FFurnitureEntry& E) { return E.ItemId == Fix; });
+				if (!bUserPlaced)
+				{
+					for (const FFurnitureEntry& OE : *Old) { if (OE.ItemId == Fix) { Entries.Add(OE); } }
+				}
 			}
 		}
 		Merged.Add(Type, Entries); // overschrijf dit type (met behoud van de sink)

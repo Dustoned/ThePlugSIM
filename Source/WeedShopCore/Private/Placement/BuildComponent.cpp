@@ -17,6 +17,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "World/CityGenerator.h"
+#include "World/CityDoor.h" // geen wand-mounts/objecten op deuren plaatsen
 #include "Interaction/InteractionComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Components/StaticMeshComponent.h"
@@ -481,6 +482,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				float FloorNormalZ = Hit.ImpactNormal.Z;
 				// Mik je (onder welke hoek dan ook) op een geplaatst object -> nooit geldig (geen stapelen).
 				bool bOnPlaceable = IsPlaceableActor(Hit.GetActor());
+				// Op een DEUR (open of dicht) mag je niks plaatsen - die telt niet als muur/vloer.
+				const bool bOnDoor = Hit.GetActor() && Hit.GetActor()->IsA(ACityDoor::StaticClass());
 
 					if (CurrentDef.bIsWallMount)
 					{
@@ -499,13 +502,17 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 						{
 							const FVector Tang(-D.Y, D.X, 0.f); // horizontale richting langs de muur
 							const float Along = FVector::DotProduct(Center, Tang);
-							Center += Tang * (FMath::GridSnap<float>(Along, GridSize) - Along);
-							Center.Z = FMath::GridSnap<float>(Center.Z, GridSize);
+							// Snap langs de muur op de BREEDTE van het rek (lokale X = langs de muur) zodat twee
+							// rekken naast elkaar FLUSH aansluiten zonder gat - niet op een los wereld-raster.
+							const float WallStep = FMath::Max(20.f, CurrentDef.BoxHalf.X * 2.f);
+							Center += Tang * (FMath::GridSnap<float>(Along, WallStep) - Along);
+							const float HeightStep = FMath::Max(20.f, CurrentDef.BoxHalf.Z * 2.f); // verticaal flush
+							Center.Z = FMath::GridSnap<float>(Center.Z, HeightStep);
 						}
 						PreviewLocation = Center;
 						// Wand-mount (rek) mag alleen BINNEN (eigen woning, of overal binnen in free-build) - niet buiten,
-						// en niet DOOR een ander geplaatst object heen (zijdelings clippen).
-						bValidSpot = bWall && !bOnPlaceable
+						// niet op een DEUR, en niet DOOR een ander geplaatst object heen (zijdelings clippen).
+						bValidSpot = bWall && !bOnPlaceable && !bOnDoor
 							&& !OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion())
 							&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
 					}
@@ -550,16 +557,20 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 								FHitResult HX1, HX2, HY1, HY2;
 								const bool bX1 = GetWorld()->LineTraceSingleByChannel(HX1, TS, TS + FVector(1500.f, 0, 0), ECC_Visibility, Params);
 								const bool bX2 = GetWorld()->LineTraceSingleByChannel(HX2, TS, TS + FVector(-1500.f, 0, 0), ECC_Visibility, Params);
+								// Kleine marge van de muur af zodat de cel die het DICHTST bij de muur ligt ALTIJD
+								// plaatsbaar blijft (trim/dikkere collision clipt anders net -> rood). Zo dicht mogelijk
+								// tegen de muur, maar nooit ongeldig.
+								const float WallGap = 4.f;
 								float OriginX = 0.f;
-								if (bX1 && (!bX2 || HX1.Distance <= HX2.Distance)) OriginX = HX1.ImpactPoint.X - EffHX;
-								else if (bX2) OriginX = HX2.ImpactPoint.X + EffHX;
+								if (bX1 && (!bX2 || HX1.Distance <= HX2.Distance)) OriginX = HX1.ImpactPoint.X - EffHX - WallGap;
+								else if (bX2) OriginX = HX2.ImpactPoint.X + EffHX + WallGap;
 								PreviewLocation.X = OriginX + FMath::GridSnap<float>(PreviewLocation.X - OriginX, GridSize);
 
 								const bool bY1 = GetWorld()->LineTraceSingleByChannel(HY1, TS, TS + FVector(0, 1500.f, 0), ECC_Visibility, Params);
 								const bool bY2 = GetWorld()->LineTraceSingleByChannel(HY2, TS, TS + FVector(0, -1500.f, 0), ECC_Visibility, Params);
 								float OriginY = 0.f;
-								if (bY1 && (!bY2 || HY1.Distance <= HY2.Distance)) OriginY = HY1.ImpactPoint.Y - EffHY;
-								else if (bY2) OriginY = HY2.ImpactPoint.Y + EffHY;
+								if (bY1 && (!bY2 || HY1.Distance <= HY2.Distance)) OriginY = HY1.ImpactPoint.Y - EffHY - WallGap;
+								else if (bY2) OriginY = HY2.ImpactPoint.Y + EffHY + WallGap;
 								PreviewLocation.Y = OriginY + FMath::GridSnap<float>(PreviewLocation.Y - OriginY, GridSize);
 							}
 						}
@@ -902,7 +913,15 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 			FVector Min, Max;
 			if (It->GetHomeBox(Min, Max))
 			{
-				return P.X >= Min.X && P.X <= Max.X && P.Y >= Min.Y && P.Y <= Max.Y && P.Z >= Min.Z && P.Z <= Max.Z;
+				if (P.X >= Min.X && P.X <= Max.X && P.Y >= Min.Y && P.Y <= Max.Y && P.Z >= Min.Z && P.Z <= Max.Z) { return true; }
+				// De gemeten box neemt de DICHTSTBIJZIJNDE wand per richting en is daardoor soms te krap (anker
+				// niet gecentreerd, nissen, lage static props). Sta daarom ook toe wat BINNEN is (onder een dak)
+				// en ruim bij je thuis-plek ligt -> je kunt in je hele huis bouwen, maar niet buiten/op het balkon.
+				const FVector HA2 = It->GetHomeAnchor();
+				if (!HA2.IsNearlyZero()
+					&& FMath::Abs(P.X - HA2.X) <= 850.f && FMath::Abs(P.Y - HA2.Y) <= 850.f
+					&& P.Z >= HA2.Z - 220.f && P.Z <= HA2.Z + 520.f && IsIndoors(P)) { return true; }
+				return false;
 			}
 			// Wand-box nog niet (betrouwbaar) gemeten -> ruime fallback rond de thuis-plek, zodat je
 			// ALTIJD in je eigen huis kunt bouwen (anders kan een Normal-speler niets plaatsen).

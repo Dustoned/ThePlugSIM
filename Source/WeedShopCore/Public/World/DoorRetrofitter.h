@@ -98,12 +98,19 @@ protected:
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
 	bool bDayMapCaptured = false;   // kaart een keer per sessie schieten (foto-stand maakt tijd irrelevant)
 	int32 LastAptDoorCount = -1;    // woningen-slot-pass: opnieuw draaien als er deuren bij komen
+	int32 LastLockApplyCount = -2;  // handmatige sloten: alleen hertoepassen als het deur-aantal wijzigt (geen elke-pass-lus)
 	// Walk-throughs (Saved/NoCollide.txt): elke sessie opnieuw toepassen, ook op gestreamde meshes.
 	TArray<FString> NoCollideLines;
 	bool bNoCollideLoaded = false;
 	// Handmatig vergrendelde deuren (Saved/LockedDoors.txt): slot zonder bewoner-naam.
 	TArray<FString> LockedDoorLines;
 	bool bLockedDoorsLoaded = false;
+	// Deur-snaps (Saved/DoorSnaps.txt): "origX,Y,Z|doelX,Y,Z" - deuren die naast hun kozijn geconverteerd
+	// worden, springen elke sessie terug naar het juiste deurvak.
+	TArray<FString> DoorSnapLines;
+	bool bDoorSnapsLoaded = false;
+	int32 LastSnapApplyCount = -2;
+	TSet<TWeakObjectPtr<class ACityDoor>> SnappedDoors; // elke deur 1x snappen (geen heen-en-weer-geschuif)
 	// Direct-helder glas: binnen elke kamer-job-kolom worden nep-glas materialen METEEN vervangen
 	// door het doorzichtige glas, in plaats van te wachten tot de job zelf draait (nabijheid+scans).
 	void ApplyInstantGlass();

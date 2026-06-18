@@ -278,6 +278,25 @@ int32 UPhoneClientComponent::GetUnreadMessageCount() const
 	return Unread;
 }
 
+// Aantal ongelezen berichten van EEN specifiek contact (voor de teller-badge in de berichtenlijst).
+int32 UPhoneClientComponent::GetUnreadCountFrom(FName ContactId) const
+{
+	const AWeedShopGameState* GS = GetGS();
+	const UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return 0; }
+	const APawn* Me = Cast<APawn>(GetOwner());
+	const bool bComp = GS->IsCompetitive();
+	const FString MyId = (bComp && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
+	int32 Unread = 0;
+	for (const FPhoneMessage& M : Con->GetMessages())
+	{
+		if (M.FromContactId != ContactId) { continue; }
+		if (bComp && !M.ForPlayerId.IsEmpty() && M.ForPlayerId != MyId) { continue; }
+		if (!M.bFromMe && !M.bSeen) { ++Unread; }
+	}
+	return Unread;
+}
+
 APlayerController* UPhoneClientComponent::GetPC() const
 {
 	if (const APawn* Pawn = Cast<APawn>(GetOwner()))

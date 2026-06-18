@@ -581,7 +581,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 	};
 	const FLinearColor Hi(0.42f, 0.16f, 0.72f, 0.96f);
 	const FLinearColor Dark(0.06f, 0.07f, 0.09f, 0.78f);
-	AddBtn(TEXT("Continue"),   Hi,   [this]() { OnStart(); });
+	AddBtn(TEXT("Continue"),   Hi,   [this]() { OnContinue(); }); // laatst gebruikte slot -> nieuwste autosave/save
 	AddBtn(TEXT("New game"),   Dark, [this]() { OnStart(); });
 	AddBtn(TEXT("Load game"),  Dark, [this]() { OnContinue(); });
 	AddBtn(TEXT("Co-op"),      Dark, [this]() { OpenCoop(); });

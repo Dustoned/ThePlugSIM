@@ -266,6 +266,7 @@ public:
 	void MarkChatSeen(FName ContactId);
 	UFUNCTION(Server, Reliable) void ServerMarkThreadSeen(FName ContactId);
 	int32 GetUnreadMessageCount() const;
+	int32 GetUnreadCountFrom(FName ContactId) const; // aantal ongelezen berichten van dit contact (teller-badge)
 	bool HasUnreadFrom(FName ContactId) const; // ongelezen inkomende berichten van dit contact?
 
 	// Verkoop het item op voorraad-stapel StackIndex aan de supplier (70% terug).

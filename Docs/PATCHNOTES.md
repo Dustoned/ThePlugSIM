@@ -1,4 +1,71 @@
 PATCH NOTES
+Version 1.8.0 — 18 juni 2026
+
+Korte intro:
+Een grote oppoets-update voor je eigen woning: inrichten werkt nu zoals je verwacht. Meubels
+sluiten netjes tegen de muur aan, je kunt door je hele huis bouwen, en spullen (sinks, koelkast)
+blijven nu staan na het opslaan. Plus een hoop kleine maar fijne fixes aan deuren, het hoofdmenu
+en de graphics-instellingen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+INRICHTEN & MEUBELS
+
+• Je kunt nu door je HELE woning bouwen. Eerder waren er plekken (vloer én muur) waar plaatsen
+  onterecht geweigerd werd; die zijn nu gewoon vrij.
+
+• Meubels sluiten netjes tegen de muur aan, zónder gaten. Houd je Shift ingedrukt, dan snappen
+  twee meubels naast elkaar precies flush aan elkaar.
+
+• Strak tegen de muur plaatsen blijft nu altijd geldig — geen rood/“kan hier niet” meer doordat
+  het net tegen de muur clipte. Zo dicht mogelijk, maar altijd plaatsbaar.
+
+• Je kunt geen meubels of droogrekken meer op deuren plaatsen (open of dicht).
+
+• Met een item in je hand kun je nu nog steeds deuren openen en interacten (F) i.p.v. dat je
+  meteen plaatst — zo loop je gewoon door je huis terwijl je iets vasthoudt. De besturing
+  rechtsonder laat dit ook zien.
+
+• Elk nieuw meubel heeft nu z’n eigen passende icoon (geen gedeelde placeholder meer).
+
+OPSLAAN
+
+• Sinks worden nu opgeslagen en blijven na het laden staan (verdwenen eerder elke keer).
+
+• De koelkast blijft nu netjes in je opgeslagen woning-inrichting staan.
+
+• “Continue” in het hoofdmenu laadt nu echt je laatste opgeslagen spel, i.p.v. een nieuw spel
+  te starten.
+
+DEUREN
+
+• Deuren die op slot horen te zijn, blijven nu ook echt op slot — je kon per ongeluk elke
+  gesloten deur openen.
+
+• De scheve badkamerdeur in het starter-appartement zit nu netjes in het kozijn en blijft staan
+  (geen heen-en-weer-geschuif meer).
+
+NPC’s & TELEFOON
+
+• Minder NPC’s die vlak voor je neus verdwijnen; NPC’s op lager gelegen terrein worden niet meer
+  per ongeluk opgeruimd.
+
+• In de berichten-lijst zie je nu per contact HOEVEEL ongelezen berichten je hebt, i.p.v. alleen
+  een “NEW”-label.
+
+• Je voorraadkluis (HOME STASH) toont nu alleen je seed- en weed-spullen, niet de volledige
+  inhoud van al je kasten en schappen.
+
+GRAPHICS
+
+• Ray tracing en virtual shadow maps zijn nu echte aan/uit-instellingen (standaard uit op Potato
+  en Low voor de prestatie).
+
+• Nieuwe GPU-keuze in de graphics-instellingen — standaard wordt je dedicated videokaart gekozen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+PATCH NOTES
 Version 1.7.0 — 17 juni 2026
 
 Korte intro:

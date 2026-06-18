@@ -15,6 +15,7 @@
 #include "Game/WeedShopGameState.h"
 #include "World/WorldSyncComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h" // TActorIterator (deur-snap: kozijn zoeken)
 
 ACityDoor::ACityDoor()
 {
@@ -209,6 +210,33 @@ FString ACityDoor::FriendlyNpcName(FName NpcId)
 		return ResidentNameForIndex(FCString::Atoi(*S.RightChop(9)));
 	}
 	return S.IsEmpty() ? FString(TEXT("Customer")) : S;
+}
+
+// Zet een deur die naast z'n kozijn geconverteerd is netjes IN het deurvak: zoek het dichtstbijzijnde
+// deur-kozijn (DoorFrame-mesh op ~dezelfde verdieping) en verschuif de deur zó dat het BLAD-MIDDEN op het
+// kozijn-midden landt (de deur-pivot is het scharnier, niet het midden -> anders dekt het blad maar de helft).
+void ACityDoor::SnapToNearestFrame(UWorld* W, ACityDoor* Door)
+{
+	if (!W || !IsValid(Door)) { return; }
+	const FVector DLoc = Door->GetActorLocation();
+	FVector FrameXY = FVector::ZeroVector; float FbD = 400.f; bool bFrame = false;
+	for (TActorIterator<AActor> AIt(W); AIt; ++AIt)
+	{
+		if (!IsValid(*AIt) || AIt->IsA(ACityDoor::StaticClass())) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Cs(*AIt);
+		for (UStaticMeshComponent* C : Cs)
+		{
+			if (!C || !C->GetStaticMesh() || !C->GetStaticMesh()->GetName().Contains(TEXT("DoorFrame"))) { continue; }
+			const FVector FL = C->GetComponentLocation();
+			if (FMath::Abs(FL.Z - DLoc.Z) > 200.f) { continue; }
+			const float Dd = FVector::Dist2D(FL, DLoc);
+			if (Dd < FbD) { FbD = Dd; FrameXY = FL; bFrame = true; }
+		}
+	}
+	if (!bFrame) { return; }
+	UStaticMeshComponent* Panel = Door->GetPanel();
+	const FVector PanelCtr = (Panel && Panel->GetStaticMesh()) ? Panel->Bounds.Origin : DLoc;
+	Door->SetActorLocation(FVector(DLoc.X + (FrameXY.X - PanelCtr.X), DLoc.Y + (FrameXY.Y - PanelCtr.Y), DLoc.Z));
 }
 
 void ACityDoor::Interact_Implementation(APawn* InstigatorPawn)

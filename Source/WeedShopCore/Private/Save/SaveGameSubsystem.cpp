@@ -24,6 +24,7 @@
 #include "Placement/PlaceableProp.h"
 #include "World/CeilingLamp.h"             // plafondlampen opslaan/herstellen
 #include "World/ProcessorMachine.h"        // hasj-machines opslaan/herstellen
+#include "World/WaterSink.h"               // sinks opslaan/herstellen (kind 8)
 #include "Cultivation/WaterCanComponent.h" // water in je fles
 #include "World/HeatComponent.h"           // politie-heat
 #include "EngineUtils.h"
@@ -806,6 +807,11 @@ void USaveGameSubsystem::GatherPlaced(UWorld* World, TArray<FPlacedObjectSave>& 
 		FPlacedObjectSave O; O.Kind = 5; O.ItemId = FName(TEXT("Atm"));
 		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
 	}
+	for (TActorIterator<AWaterSink> It(World); It; ++It)
+	{
+		FPlacedObjectSave O; O.Kind = 8; O.ItemId = FName(TEXT("Sink"));
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
+	}
 	for (TActorIterator<APlaceableProp> It(World); It; ++It)
 	{
 		FPlacedObjectSave O; O.Kind = 0; O.ItemId = It->ItemId;
@@ -841,6 +847,10 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 	for (TActorIterator<APlaceableProp> It(World); It; ++It) { ToKill.Add(*It); }
 	for (TActorIterator<ACeilingLamp> It(World); It; ++It) { ToKill.Add(*It); }
 	for (TActorIterator<AProcessorMachine> It(World); It; ++It) { ToKill.Add(*It); }
+	// Sinks alleen vervangen als de save ECHT sink-data bevat - anders zou een oude save (zonder sinks)
+	// de vaste apartment-sink wissen. Bevat de save wel sinks, dan zijn die geplaatste/verplaatste sinks.
+	const bool bHasSinkSave = In.ContainsByPredicate([](const FPlacedObjectSave& O) { return O.Kind == 8; });
+	if (bHasSinkSave) { for (TActorIterator<AWaterSink> It(World); It; ++It) { ToKill.Add(*It); } }
 	for (AActor* A : ToKill) { if (A) { A->Destroy(); } }
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -891,6 +901,9 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 			break;
 		case 6: // plafondlamp (eigen actor)
 			World->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM, SP);
+			break;
+		case 8: // sink (gootsteen) - O.Location is al de actor-positie (incl. mesh-pivot offset)
+			World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM, SP);
 			break;
 		case 7: // hasj-machine (mesh/press)
 		{

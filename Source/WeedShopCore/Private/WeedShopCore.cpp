@@ -116,6 +116,36 @@ void WeedShop_ApplyLumen(bool bLumenOff)
 		GetCV(TEXT("r.Lumen.DiffuseIndirect.Allow")), GetCV(TEXT("r.Lumen.Reflections.Allow")));
 }
 
+// Virtual Shadow Maps aan/uit. VSM is een dure render-/GPU-feature die de Potato-instelling NIET uitzette
+// (los van de CSM-schaduw-instellingen). Uit = terug naar gewone shadow maps -> flink goedkoper.
+void WeedShop_ApplyVSM(bool bOff)
+{
+	IConsoleManager& CM = IConsoleManager::Get();
+	if (IConsoleVariable* CV = CM.FindConsoleVariable(TEXT("r.Shadow.Virtual.Enable")))
+	{
+		CV->Set(bOff ? 0 : 1, ECVF_SetByConsole);
+	}
+	UE_LOG(LogWeedShop, Warning, TEXT("Virtual Shadow Maps %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
+}
+
+// Ray-tracing-EFFECTEN aan/uit. r.RayTracing zelf is een opstart-CVar (niet live te schakelen), maar de
+// effecten (schaduwen/reflecties/AO/GI via RT) wel - en die zijn de render-thread-kost. ForceRayTracingEffects=0
+// zet ze allemaal uit; de losse schakelaars als extra zekerheid. -1 = terug naar de standaard (effecten aan).
+void WeedShop_ApplyRayTracing(bool bOff)
+{
+	IConsoleManager& CM = IConsoleManager::Get();
+	auto SetCV = [&](const TCHAR* Name, int32 Val)
+	{
+		if (IConsoleVariable* CV = CM.FindConsoleVariable(Name)) { CV->Set(Val, ECVF_SetByConsole); }
+	};
+	SetCV(TEXT("r.RayTracing.ForceRayTracingEffects"), bOff ? 0 : -1);
+	SetCV(TEXT("r.RayTracing.Shadows"),               bOff ? 0 : 1);
+	SetCV(TEXT("r.RayTracing.AmbientOcclusion"),      bOff ? 0 : 1);
+	SetCV(TEXT("r.RayTracing.Reflections"),           bOff ? 0 : 1);
+	SetCV(TEXT("r.RayTracing.GlobalIllumination"),    bOff ? 0 : 1);
+	UE_LOG(LogWeedShop, Warning, TEXT("Ray-tracing-effecten %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
+}
+
 // Grafische kwaliteit-tier. Tier -1 = Potato (onder Low): scalability 0 PLUS extra agressieve
 // verlagingen voor hele zwakke pc's. Tier 0..3 = Low/Medium/High/Epic (puur scalability, cvars
 // terug naar normaal zodat omhoog-schakelen vanuit Potato alles weer herstelt).
@@ -152,6 +182,9 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	// --- LUMEN: de #1 GPU-kost. Alleen op EPIC. Potato/Low/Medium/High draaien zonder (de speler vindt
 	//     de Lumen-uit-look prima), wat op High ~20-25 FPS scheelt. Epic blijft de mooie-maar-dure optie.
 	WeedShop_ApplyLumen(Tier < 3);
+	// --- RAY TRACING + VIRTUAL SHADOW MAPS: zware render-features die de Potato-tier vroeger NIET uitzette ---
+	WeedShop_ApplyRayTracing(Tier < 3);  // RT-effecten alleen op Epic
+	WeedShop_ApplyVSM(Tier <= 0);        // VSM uit op Potato + Low (gewone shadow maps = veel goedkoper)
 
 	// --- SCHADUWEN + dure GI-bijdragen per tier (grootste winst na Lumen) ---
 	const bool bEpic = (Tier >= 3);
@@ -182,19 +215,21 @@ void WeedShop_ApplyMotionBlur(bool bOff)
 
 // De cvar-gebaseerde grafische vlaggen (Lumen/Potato/MotionBlur) leven samen in Saved/GraphicsConfig.txt.
 // Read/Write als geheel zodat het wijzigen van één vlag de andere niet wist.
-void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff)
+void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff, bool& bVSMOff, bool& bRTOff)
 {
 	FString T;
 	FFileHelper::LoadFileToString(T, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")));
 	bLumenOff      = T.Contains(TEXT("LumenOff=1"));
 	bPotato        = T.Contains(TEXT("Potato=1"));
 	bMotionBlurOff = T.Contains(TEXT("MotionBlurOff=1"));
+	bVSMOff        = T.Contains(TEXT("VSMOff=1"));
+	bRTOff         = T.Contains(TEXT("RTOff=1"));
 }
 
-void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff)
+void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff)
 {
-	const FString Out = FString::Printf(TEXT("LumenOff=%d\nPotato=%d\nMotionBlurOff=%d\n"),
-		bLumenOff ? 1 : 0, bPotato ? 1 : 0, bMotionBlurOff ? 1 : 0);
+	const FString Out = FString::Printf(TEXT("LumenOff=%d\nPotato=%d\nMotionBlurOff=%d\nVSMOff=%d\nRTOff=%d\n"),
+		bLumenOff ? 1 : 0, bPotato ? 1 : 0, bMotionBlurOff ? 1 : 0, bVSMOff ? 1 : 0, bRTOff ? 1 : 0);
 	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 }

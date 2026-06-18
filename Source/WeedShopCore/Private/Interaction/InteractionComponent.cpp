@@ -2,6 +2,7 @@
 
 #include "WeedShopCore.h"
 #include "Interaction/Interactable.h"
+#include "World/CityDoor.h" // IsLocked()-check: gelockte deuren niet via WorldSync open-toggelen
 #include "Customer/CustomerBase.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -164,6 +165,12 @@ void UInteractionComponent::TryInteract()
 		const uint32 DoorId = AsI->GetWorldSyncDoorId();
 		if (DoorId != 0)
 		{
+			// OP SLOT (bewoner/te-huur/huur-achterstand)? NIET via WorldSync open-toggelen - laat de deur zelf
+			// beslissen (blokkeren, of huur betalen aan je eigen deur). Anders open je elke gelockte deur gewoon.
+			if (const ACityDoor* Dr = Cast<ACityDoor>(Target))
+			{
+				if (Dr->IsLocked()) { PerformInteract(Target); return; }
+			}
 			ServerToggleDoor(DoorId);
 			return;
 		}

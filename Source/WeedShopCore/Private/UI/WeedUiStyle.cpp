@@ -545,6 +545,28 @@ namespace WeedUI
 			if (Has(TEXT("Shelf")))                                      return { TEXT("shelf"),     FLinearColor(0.6f, 0.55f, 0.45f),  EIcon::Home };
 			if (Has(TEXT("Chest")))                                      return { TEXT("chest"),     FLinearColor(0.6f, 0.5f, 0.35f),   EIcon::Home };
 
+			// NIEUWE HUISKAMER-MEUBELS: elk een eigen icoon (i.p.v. allemaal hetzelfde placeholder-meubel).
+			const FLinearColor Wood(0.62f, 0.5f, 0.38f), Grey(0.6f, 0.58f, 0.66f), Green(0.55f, 0.9f, 0.55f);
+			if (ItemId == TEXT("Furn_ChairPlastic"))                     return { TEXT("office-chair"),      Grey,  EIcon::Home };
+			if (ItemId == TEXT("Furn_ChairGarden"))                      return { TEXT("director-chair"),    Grey,  EIcon::Home };
+			if (ItemId == TEXT("Furn_ChairWood"))                        return { TEXT("wooden-chair"),      Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_TableSmall"))                       return { TEXT("table"),             Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_TableRound"))                       return { TEXT("round-table"),       Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_CoffeeTable"))                      return { TEXT("table"),             Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_Desk"))                             return { TEXT("desk"),              Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_Bench"))                            return { TEXT("park-bench"),        Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_Sofa"))                             return { TEXT("sofa"),              FLinearColor(0.7f, 0.6f, 0.55f), EIcon::Home };
+			if (ItemId == TEXT("Furn_TV"))                               return { TEXT("tv"),                FLinearColor(0.35f, 0.35f, 0.4f), EIcon::Home };
+			if (ItemId == TEXT("Furn_TVStand"))                          return { TEXT("desk"),              Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_Bookshelf"))                        return { TEXT("bookshelf"),         Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_Dresser"))                          return { TEXT("wardrobe"),          FLinearColor(0.62f, 0.55f, 0.7f), EIcon::Home };
+			if (ItemId == TEXT("Furn_Nightstand"))                       return { TEXT("chest"),             Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_FloorLamp"))                        return { TEXT("flexible-lamp"),     FLinearColor(0.95f, 0.85f, 0.45f), EIcon::Flame };
+			if (ItemId == TEXT("Furn_Plant"))                            return { TEXT("carnivorous-plant"), Green, EIcon::Home };
+			if (ItemId == TEXT("Furn_Planter"))                          return { TEXT("plant-roots"),       Green, EIcon::Home };
+			if (ItemId == TEXT("Furn_DecoPot"))                          return { TEXT("pot"),               Wood,  EIcon::Home };
+			if (ItemId == TEXT("Furn_Crate"))                            return { TEXT("cargo-crate"),       FLinearColor(0.7f, 0.65f, 0.5f), EIcon::Home };
+
 			// Meubels en de rest.
 			return { TEXT("furniture"), FLinearColor(0.55f, 0.58f, 0.66f), EIcon::Home };
 		}
@@ -668,6 +690,16 @@ namespace WeedUI
 			else if (K == TEXT("drop"))      Add({ TEXT("water") });
 			else if (K == TEXT("faucet"))    Add({ TEXT("water") });
 			else if (K == TEXT("growlamp"))  Add({ TEXT("lamp"), TEXT("ui_upgrade") });
+			// Huiskamer-meubels: terugvallen op een generiek meubel-icoon als de eigen PNG ontbreekt.
+			else if (K == TEXT("office-chair") || K == TEXT("director-chair") || K == TEXT("wooden-chair")) Add({ TEXT("furniture") });
+			else if (K == TEXT("round-table") || K == TEXT("desk"))       Add({ TEXT("table"), TEXT("furniture") });
+			else if (K == TEXT("park-bench"))                             Add({ TEXT("bench"), TEXT("furniture") });
+			else if (K == TEXT("sofa"))                                  Add({ TEXT("furniture") });
+			else if (K == TEXT("tv"))                                    Add({ TEXT("furniture") });
+			else if (K == TEXT("bookshelf"))                             Add({ TEXT("shelf"), TEXT("furniture") });
+			else if (K == TEXT("flexible-lamp"))                         Add({ TEXT("lamp"), TEXT("furniture") });
+			else if (K == TEXT("carnivorous-plant") || K == TEXT("plant-roots")) Add({ TEXT("furniture") });
+			else if (K == TEXT("cargo-crate"))                           Add({ TEXT("furniture") });
 			else if (K == TEXT("growtent"))  Add({ TEXT("tent"), TEXT("ui_upgrade") });
 			else if (K == TEXT("drainage"))  Add({ TEXT("soil"), TEXT("ui_upgrade") });
 			else if (K == TEXT("bloom"))     Add({ TEXT("fertilizer"), TEXT("weed") });

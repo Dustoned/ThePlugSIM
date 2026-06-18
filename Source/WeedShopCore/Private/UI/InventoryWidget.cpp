@@ -488,6 +488,16 @@ void UInventoryWidget::RebuildStash()
 	if (!StashList) { return; }
 	StashList->ClearChildren();
 
+	// HOME STASH toont ALLEEN kweek-/wiet-items (zaden + wiet + hash/edibles/concentraten); meubels,
+	// supplies en apparaten die je ook in een kast/chest legt horen hier niet thuis.
+	auto IsStashItem = [](FName Id)
+	{
+		const FString S = Id.ToString();
+		return S.StartsWith(TEXT("Seed_")) || S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Bag_"))
+			|| S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Joint_"))
+			|| S.StartsWith(TEXT("Hash")) || S.StartsWith(TEXT("Edible")) || S.Contains(TEXT("Brownie"))
+			|| S.StartsWith(TEXT("Moonrock")) || S.StartsWith(TEXT("Rosin")) || S.StartsWith(TEXT("Oil_")) || S.StartsWith(TEXT("Isolator"));
+	};
 	// Tel alles uit alle shelves/chests samen, per item-id (gram + gewogen THC%).
 	TArray<FName> Order;
 	TMap<FName, int32> Qty;
@@ -499,6 +509,7 @@ void UInventoryWidget::RebuildStash()
 			for (const FShelfStack& S : It->Contents)
 			{
 				if (S.ItemId.IsNone() || S.Quantity <= 0) { continue; }
+				if (!IsStashItem(S.ItemId)) { continue; } // alleen kweek/wiet in de HOME STASH
 				if (!Qty.Contains(S.ItemId)) { Order.Add(S.ItemId); }
 				Qty.FindOrAdd(S.ItemId) += S.Quantity;
 				ThcW.FindOrAdd(S.ItemId) += S.Thc * S.Quantity;

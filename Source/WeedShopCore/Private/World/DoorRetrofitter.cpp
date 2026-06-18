@@ -1812,14 +1812,17 @@ void ADoorRetrofitter::ScanAndConvert()
 	}
 
 	// HANDMATIG VERGRENDELDE DEUREN (Lock door in crosshair): op slot zoals een bewoner-deur maar
-	// zonder naam. Elke pass en NA de woningen-pass, zodat een handmatig slot altijd wint.
+	// zonder naam, NA de woningen-pass zodat een handmatig slot altijd wint. ALLEEN hertoepassen als het
+	// deur-aantal wijzigt (nieuwe deuren ingestreamd) i.p.v. elke pass - die O(regels x alle deuren)-lus
+	// elke 2s was de lag-spike-bron. Eenmaal gelockt blijft 'ie gelockt.
 	if (!bLockedDoorsLoaded)
 	{
 		bLockedDoorsLoaded = true;
 		FFileHelper::LoadFileToStringArray(LockedDoorLines, *(WeedData::File(TEXT("LockedDoors.txt"))));
 	}
-	if (LockedDoorLines.Num() > 0)
+	if (LockedDoorLines.Num() > 0 && LastAptDoorCount != LastLockApplyCount)
 	{
+		LastLockApplyCount = LastAptDoorCount;
 		for (const FString& LL : LockedDoorLines)
 		{
 			TArray<FString> LP;
@@ -1832,6 +1835,41 @@ void ADoorRetrofitter::ScanAndConvert()
 				{
 					It->SetResident(FString());
 				}
+			}
+		}
+	}
+
+	// DEUR-SNAPS (DoorSnaps.txt): deuren die naast hun kozijn geconverteerd worden naar het juiste deurvak
+	// zetten. Alleen hertoepassen bij deur-aantal-wijziging (net als de sloten) - geen elke-pass-lus.
+	if (!bDoorSnapsLoaded)
+	{
+		bDoorSnapsLoaded = true;
+		FFileHelper::LoadFileToStringArray(DoorSnapLines, *(WeedData::File(TEXT("DoorSnaps.txt"))));
+	}
+	if (DoorSnapLines.Num() > 0)
+	{
+		for (const FString& SL : DoorSnapLines)
+		{
+			// Elke regel = een markeer-positie (X,Y,Z) van een scheve deur. Pak de dichtstbijzijnde deur en
+			// snap 'm EEN KEER netjes in z'n kozijn - en ALLEEN als 'ie dicht staat (anders meet de snap het
+			// open-zwaaiende blad verkeerd en gaat 'ie heen-en-weer schuiven). Eenmaal gesnapt = met rust.
+			TArray<FString> P;
+			SL.ParseIntoArray(P, TEXT(","));
+			if (P.Num() < 3) { continue; }
+			const FVector Mark(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]));
+			ACityDoor* Best = nullptr; float BestD = 150.f;
+			for (TActorIterator<ACityDoor> It(W); It; ++It)
+			{
+				if (!IsValid(*It)) { continue; }
+				const FVector DL = It->GetActorLocation();
+				if (FMath::Abs(DL.Z - Mark.Z) > 300.f) { continue; }
+				const float D2 = FVector::Dist2D(DL, Mark);
+				if (D2 < BestD) { BestD = D2; Best = *It; }
+			}
+			if (Best && !SnappedDoors.Contains(Best) && Best->IsPanelClosedNow())
+			{
+				ACityDoor::SnapToNearestFrame(W, Best);
+				SnappedDoors.Add(Best);
 			}
 		}
 	}
@@ -1981,7 +2019,12 @@ void ADoorRetrofitter::ScanAndConvert()
 						const float Dd = FVector::DistSquared2D(SL, L);
 						if (Dd < BestRD) { BestRD = Dd; BestR = SL; }
 					}
-					if (L.Z > BestR.Z - 250.f) { continue; }
+					// ECHT door de map gezakt? Down-trace: is er grond vlak onder 'm, dan staat 'ie gewoon op
+					// een lager stuk (strand/lager straatdeel) en laten we 'm met rust. Geen grond = gevallen.
+					{
+						FHitResult GH; FCollisionQueryParams GQ(SCENE_QUERY_STAT(NpcFloorR), false, Cb);
+						if (W->LineTraceSingleByChannel(GH, L + FVector(0,0,50.f), L - FVector(0,0,700.f), ECC_WorldStatic, GQ)) { continue; }
+					}
 					const FString IdS = Cb->NpcId.ToString();
 					const int32 NIdx = IdS.StartsWith(TEXT("Resident_")) ? FCString::Atoi(*IdS.RightChop(9)) : -1;
 					if (ACityDoor* const* Dp = ResidentDoors.Find(NIdx))
@@ -2001,7 +2044,12 @@ void ADoorRetrofitter::ScanAndConvert()
 					const float Dd = FVector::DistSquared2D(SL, L);
 					if (Dd < BestD) { BestD = Dd; Best = SL; }
 				}
-				if (L.Z > Best.Z - 180.f) { continue; }
+				// ECHT door de map gezakt? Down-trace i.p.v. hoogte-vergelijking (de map heeft lagere stukken;
+				// een Z-check alleen ruimde NPC's op die gewoon op lager terrein liepen = constant despawnen).
+				{
+					FHitResult GH; FCollisionQueryParams GQ(SCENE_QUERY_STAT(NpcFloorC), false, Cb);
+					if (W->LineTraceSingleByChannel(GH, L + FVector(0,0,50.f), L - FVector(0,0,700.f), ECC_WorldStatic, GQ)) { continue; }
+				}
 				Cb->Destroy();
 				++NRescued;
 			}

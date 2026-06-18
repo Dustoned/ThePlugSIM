@@ -540,6 +540,40 @@ void UPhoneWidget::FillSettingsBody()
 			}, 11);
 		BodyRow(LockDoorXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
+		// Deur die naast z'n kozijn staat: richt erop + klik -> springt naar het dichtstbijzijnde deur-kozijn.
+		// Permanent via Saved/DoorSnaps.txt (DoorRetrofitter zet 'm elke sessie terug op de juiste plek).
+		UWeedActionButton* SnapDoorB = MakeActionBtn(TEXT("Snap door to frame"), FLinearColor(0.25f, 0.35f, 0.3f),
+			[this]()
+			{
+				APlayerController* PC = GetOwningPlayer();
+				UWorld* DW = GetWorld();
+				if (!PC || !DW || !Phone.IsValid()) { return; }
+				FVector VL; FRotator VR; PC->GetPlayerViewPoint(VL, VR);
+				FHitResult Hit; FCollisionQueryParams Q; Q.AddIgnoredActor(PC->GetPawn());
+				const bool bHit = DW->LineTraceSingleByChannel(Hit, VL, VL + VR.Vector() * 2500.f, ECC_Visibility, Q);
+				const FVector Aim = bHit ? Hit.ImpactPoint : VL + VR.Vector() * 600.f;
+				ACityDoor* Best = nullptr; float BestD = 250.f;
+				for (TActorIterator<ACityDoor> It(DW); It; ++It) { const float Dd = FVector::Dist(It->GetActorLocation(), Aim); if (Dd < BestD) { BestD = Dd; Best = *It; } }
+				if (!Best) { Phone->Toast(TEXT("No door in crosshair"), FColor::Orange, 2.5f); return; }
+				// Markeer de HUIDIGE (foute) plek -> opslaan, en snap meteen. De DoorRetrofitter snapt elke
+				// sessie de deur bij deze positie automatisch in z'n kozijn (gedeelde helper -> zelfde resultaat).
+				const FVector DLoc = Best->GetActorLocation();
+				ACityDoor::SnapToNearestFrame(DW, Best);
+				FString Cur;
+				FFileHelper::LoadFileToString(Cur, *(FPaths::ProjectSavedDir() / TEXT("DoorSnaps.txt")));
+				Cur += FString::Printf(TEXT("%.1f,%.1f,%.1f\n"), DLoc.X, DLoc.Y, DLoc.Z);
+				FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("DoorSnaps.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+				Phone->Toast(TEXT("Door snapped to frame (saved)"), FColor::Cyan, 3.f);
+			}, 12);
+		BodyRow(SnapDoorB, FMargin(0.f, 4.f, 0.f, 2.f));
+		UWeedActionButton* SnapDoorXB = MakeActionBtn(TEXT("Clear door snaps"), FLinearColor(0.4f, 0.22f, 0.22f),
+			[this]()
+			{
+				WeedData::DeleteFile(TEXT("DoorSnaps.txt"));
+				if (Phone.IsValid()) { Phone->Toast(TEXT("Door snaps cleared (restart restores)"), FColor::Orange, 4.f); }
+			}, 11);
+		BodyRow(SnapDoorXB, FMargin(0.f, 0.f, 0.f, 8.f));
+
 		// Dev-opruimer: kijk naar een (zwevende of foute) deur, open de phone en klik - deur weg.
 		UWeedActionButton* KillDoorB = MakeActionBtn(TEXT("Remove door in crosshair"), FLinearColor(0.4f, 0.22f, 0.22f),
 			[this]()
@@ -942,7 +976,17 @@ void UPhoneWidget::BuildChatApp()
 				UHorizontalBoxSlot* TsS = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("%02d:%02d"), Hh, Mm), 9, FLinearColor(0.5f, 0.55f, 0.66f)));
 				TsS->SetVerticalAlignment(VAlign_Top); TsS->SetPadding(FMargin(6.f, 1.f, 2.f, 0.f));
 			}
-			if (bOpen) { Row->AddChildToHorizontalBox(MakeText(TEXT("NEW"), 11, FLinearColor(0.5f, 1.f, 0.6f)))->SetVerticalAlignment(VAlign_Center); }
+			// Aantal-badge: groen pilletje met het aantal ongelezen berichten van dit contact (i.p.v. enkel "NEW").
+			const int32 UnreadN = Phone.IsValid() ? Phone->GetUnreadCountFrom(Cid) : 0;
+			if (UnreadN > 0)
+			{
+				UBorder* Badge = WidgetTree->ConstructWidget<UBorder>();
+				Badge->SetBrush(RoundedBrush(FLinearColor(0.2f, 0.72f, 0.36f, 1.f), 9.f));
+				Badge->SetPadding(FMargin(UnreadN > 9 ? 6.f : 8.f, 2.f, UnreadN > 9 ? 6.f : 8.f, 2.f));
+				Badge->SetContent(MakeText(FString::Printf(TEXT("%d"), UnreadN), 12, FLinearColor(0.04f, 0.1f, 0.05f)));
+				UHorizontalBoxSlot* BS = Row->AddChildToHorizontalBox(Badge);
+				BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
+			}
 			const FName Pick = Cid;
 			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), FLinearColor(0.2f, 0.4f, 0.55f),
 				[this, Pick]() { OpenChatContact = Pick; bOfferStrainView = false; ProposeMins = -1; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);

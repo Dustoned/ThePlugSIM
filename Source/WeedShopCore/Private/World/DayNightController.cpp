@@ -182,8 +182,15 @@ void ADayNightController::BeginPlay()
 		const bool bLumenOff = GfxTxt.Contains(TEXT("LumenOff=1"));
 		const bool bPotato = GfxTxt.Contains(TEXT("Potato=1"));
 		const bool bMbOff = GfxTxt.Contains(TEXT("MotionBlurOff=1"));
-		if (bPotato) { WeedShop_ApplyGraphicsTier(-1); } // scalability 0 + extra verlagingen + Lumen uit
-		else { WeedShop_ApplyLumen(bLumenOff); }
+		const bool bVSMOff = GfxTxt.Contains(TEXT("VSMOff=1"));
+		const bool bRTOff = GfxTxt.Contains(TEXT("RTOff=1"));
+		if (bPotato) { WeedShop_ApplyGraphicsTier(-1); } // scalability 0 + extra verlagingen + Lumen/RT/VSM uit
+		else
+		{
+			WeedShop_ApplyLumen(bLumenOff);
+			WeedShop_ApplyVSM(bVSMOff);
+			WeedShop_ApplyRayTracing(bRTOff);
+		}
 		if (bMbOff) { WeedShop_ApplyMotionBlur(true); }
 	}
 

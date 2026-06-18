@@ -43,8 +43,10 @@ WEEDSHOPCORE_API void WeedShop_ApplyGraphicsTier(int32 Tier);
 // Motion blur aan/uit + de cvar-gebaseerde grafische vlaggen (Lumen/Potato/MotionBlur) in
 // Saved/GraphicsConfig.txt als geheel lezen/schrijven (zo wist het zetten van één vlag de andere niet).
 WEEDSHOPCORE_API void WeedShop_ApplyMotionBlur(bool bOff);
-WEEDSHOPCORE_API void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff);
-WEEDSHOPCORE_API void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff);
+WEEDSHOPCORE_API void WeedShop_ApplyVSM(bool bOff);          // Virtual Shadow Maps aan/uit
+WEEDSHOPCORE_API void WeedShop_ApplyRayTracing(bool bOff);   // ray-tracing-effecten aan/uit
+WEEDSHOPCORE_API void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff, bool& bVSMOff, bool& bRTOff);
+WEEDSHOPCORE_API void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff);
 
 // GEBAKKEN DATA: wereld-configuratie (map-border, kamer-jobs, deur-sloten, licht-instellingen)
 // leeft tijdens het ontwikkelen in Saved/, maar Saved/ gaat NIET mee in een gepackagede build.
