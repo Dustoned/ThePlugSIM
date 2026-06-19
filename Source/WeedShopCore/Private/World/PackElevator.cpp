@@ -52,7 +52,9 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 	Panels.Reset();
 	for (const FElevPanelInit& P : InPanels)
 	{
-		if (!P.Comp) { continue; }
+		// IsValid (niet alleen null): een map-paneel kan tijdens streaming pending-kill zijn. Schrijven
+		// (SetMobility) door zo'n vrijgegeven component corrumpeert de heap -> crash bij de volgende NewObject.
+		if (!IsValid(P.Comp)) { continue; }
 		// BELANGRIJK: de map-panelen zijn Static - zonder Movable doet SetWorldLocation stilletjes NIETS.
 		P.Comp->SetMobility(EComponentMobility::Movable);
 		FPanelRef R;
@@ -97,7 +99,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		}
 		// Cabine-cijfer-VLAK zwart maken; het cijfer komt er wit (TextRender) overheen -> zwart scherm,
 		// wit oplichtend nummer.
-		static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+		UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack")); // GEEN static: dangelt na GC bij stream-out -> heap-corruptie
 		if (Black) { CabDigit->SetMaterial(0, Black); }
 		// Richting-pijl naast het display: ^ of v zolang de lift rijdt.
 		CabArrow = NewObject<UTextRenderComponent>(this);
@@ -121,7 +123,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigitText->SetHorizontalAlignment(EHTA_Center);
 		CabDigitText->SetVerticalAlignment(EVRTA_TextCenter);
 		CabDigitText->SetTextRenderColor(FColor(245, 245, 250));
-		static UMaterialInterface* TextGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitTextGlow.M_DigitTextGlow"));
+		UMaterialInterface* TextGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitTextGlow.M_DigitTextGlow")); // GEEN static: dangelt na GC -> heap-corruptie
 		if (TextGlow) { CabDigitText->SetTextMaterial(TextGlow); }
 	}
 	// Cabine-schuifdeuren: 2 panelen op de open kant (lokale X ~ -8), samen 136 breed gecentreerd.
@@ -132,9 +134,9 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		const FVector LocalSlide = GetActorRotation().UnrotateVector(SlideDir);
 		CabSlideSignY = (LocalSlide.Y >= 0.f) ? 1.f : -1.f;
 		UStaticMesh* DoorMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorDoor.SM_ElevatorDoor"));
-		auto MakeCabDoor = [&](const TCHAR* Name, const FVector& RelPos) -> UStaticMeshComponent*
+		auto MakeCabDoor = [&](const FVector& RelPos) -> UStaticMeshComponent*
 		{
-			UStaticMeshComponent* D = NewObject<UStaticMeshComponent>(this, Name);
+			UStaticMeshComponent* D = NewObject<UStaticMeshComponent>(this); // auto-naam (geen vaste naam-collisie)
 			D->SetupAttachment(Cab);
 			D->RegisterComponent();
 			D->SetMobility(EComponentMobility::Movable);
@@ -157,8 +159,8 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 			CabDoorFrontBase = FVector(-8.f, 68.f, 0.f);
 			CabDoorBackBase  = FVector(-8.f, 0.f, 0.f);
 		}
-		CabDoorFront = MakeCabDoor(TEXT("CabDoorFront"), CabDoorFrontBase);
-		CabDoorBack  = MakeCabDoor(TEXT("CabDoorBack"), CabDoorBackBase);
+		CabDoorFront = MakeCabDoor(CabDoorFrontBase);
+		CabDoorBack  = MakeCabDoor(CabDoorBackBase);
 	}
 
 	BuildCabButtonPanel();
@@ -232,7 +234,7 @@ void APackElevator::UpdateSigns()
 		if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *Path))
 		{
 			CabDigit->SetStaticMesh(M);
-			static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+			UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack")); // GEEN static: dangelt na GC bij stream-out -> heap-corruptie
 			if (Black) { CabDigit->SetMaterial(0, Black); } // override kan door SetStaticMesh resetten
 		}
 		if (CabDigitText) { CabDigitText->SetText(FText::AsNumber(D)); }

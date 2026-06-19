@@ -42,7 +42,7 @@ void APackElevatorButton::SetupSign(const FVector& SignWorldLoc, const FRotator&
 		DigitMesh->SetCanEverAffectNavigation(false);
 		// Cijfer-VLAK zwart maken (de cijfer-textuur kwam er toch niet uit). Het cijfer zelf zetten we er
 		// wit (TextRender) overheen -> zwart scherm + wit oplichtend nummer.
-		static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+		UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack")); // GEEN static: dangelt na GC bij stream-out -> heap-corruptie
 		if (Black) { DigitMesh->SetMaterial(0, Black); }
 	}
 	DigitMesh->SetWorldLocationAndRotation(SignWorldLoc, SignRot);
@@ -113,7 +113,7 @@ void APackElevatorButton::SetDigit(int32 Digit)
 	{
 		DigitMesh->SetStaticMesh(M);
 		// SetStaticMesh kan de materiaal-override resetten -> het zwarte vlak opnieuw zetten.
-		static UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack"));
+		UMaterialInterface* Black = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitBlack.M_DigitBlack")); // GEEN static: dangelt na GC bij stream-out -> heap-corruptie
 		if (Black) { DigitMesh->SetMaterial(0, Black); }
 	}
 	// Zwart vlak + WIT cijfer er net voor -> ziet eruit als een verlicht nummer (wit op zwart).
@@ -130,7 +130,7 @@ void APackElevatorButton::SetDigit(int32 Digit)
 		DigitText->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		// Zelf-oplichtend (unlit emissive) tekst-materiaal: het cijfer is overal helder wit, ook in een
 		// donkere gang (het default tekst-materiaal is BELICHT -> daar werd het cijfer dof).
-		static UMaterialInterface* TextGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitTextGlow.M_DigitTextGlow"));
+		UMaterialInterface* TextGlow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitTextGlow.M_DigitTextGlow")); // GEEN static: dangelt na GC -> heap-corruptie
 		if (TextGlow) { DigitText->SetTextMaterial(TextGlow); }
 	}
 	const FVector Fwd = DigitMesh->GetForwardVector(); // +X = uit het vlak naar de kijker

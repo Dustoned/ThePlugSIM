@@ -553,6 +553,32 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
 
+	// BEZORGINGEN: oranje pakket-icoon bij de voordeur, altijd zichtbaar tot opgehaald (gedeeld via de
+	// GameState, dus ook de mede-speler ziet 'm). Boven winkels/klanten, onder de speler-marker.
+	int32 NDel = 0;
+	if (GS)
+	{
+		for (const FActiveDelivery& Del : GS->GetActiveDeliveries())
+		{
+			while (DeliveryIcons.Num() <= NDel)
+			{
+				USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
+				SB->SetWidthOverride(24.f); SB->SetHeightOverride(24.f);
+				SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Box, 24.f, FLinearColor(1.f, 0.6f, 0.15f)));
+				UCanvasPanelSlot* Cs2 = Canvas->AddChildToCanvas(SB);
+				Cs2->SetAutoSize(false); Cs2->SetSize(FVector2D(24.f, 24.f)); Cs2->SetAlignment(FVector2D(0.5f, 0.5f)); Cs2->SetZOrder(29);
+				DeliveryIcons.Add(SB);
+			}
+			if (UWidget* Ico = DeliveryIcons[NDel])
+			{
+				if (UCanvasPanelSlot* Cs2 = Cast<UCanvasPanelSlot>(Ico->Slot)) { Cs2->SetPosition(WorldToCanvas(Del.World.X, Del.World.Y)); }
+				Ico->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			++NDel;
+		}
+	}
+	for (int32 k = NDel; k < DeliveryIcons.Num(); ++k) { if (DeliveryIcons[k]) { DeliveryIcons[k]->SetVisibility(ESlateVisibility::Collapsed); } }
+
 	int32 NRoam = 0, NNeed = 0;
 	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
 	{

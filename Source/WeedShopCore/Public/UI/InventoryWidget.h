@@ -122,5 +122,10 @@ protected:
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<UInventoryComponent> BoundInv;
 	bool bDirty = true;
+	FString LastStashSig = TEXT("\x01"); // HOME STASH alleen herbouwen als de shelf-inhoud ECHT wijzigt (niet bij elke backpack-sleep)
+	// Vaste cel-slots: éénmalig gebouwd, daarna vervangen we alleen de inhoud van cellen die ECHT wijzigden
+	// (per-cel signatuur). Geen ClearChildren meer -> geen grid-flikker bij elke sleep.
+	UPROPERTY() TArray<TObjectPtr<class USizeBox>> CellBoxes;
+	TArray<FString> CellSigs;
 	int32 SortMode = 0; // 0=naam, 1=aantal, 2=categorie
 };

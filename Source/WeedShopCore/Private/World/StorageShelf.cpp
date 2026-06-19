@@ -35,8 +35,10 @@ AStorageShelf::AStorageShelf()
 
 int32 AStorageShelf::GetCapacity() const
 {
-	if (ShelfTier == FName(TEXT("Chest")))  { return 20; }
-	if (ShelfTier == FName(TEXT("Fridge"))) { return 16; } // koelkast: kleinere voorraad
+	if (ShelfTier == FName(TEXT("Chest")))        { return 20; }
+	if (ShelfTier == FName(TEXT("Fridge")))       { return 8;  } // basis-koelkast: klein, vroeg in 't spel
+	if (ShelfTier == FName(TEXT("Fridge_Large"))) { return 16; } // grotere koelkast (upgrade)
+	if (ShelfTier == FName(TEXT("Fridge_XL")))    { return 28; } // walk-in koelkast (top-upgrade)
 	return 24;
 }
 
@@ -52,6 +54,7 @@ void AStorageShelf::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AStorageShelf, ShelfTier);
 	DOREPLIFETIME(AStorageShelf, Contents);
+	DOREPLIFETIME(AStorageShelf, Cooking);
 }
 
 void AStorageShelf::SetupVisual()
@@ -61,7 +64,7 @@ void AStorageShelf::SetupVisual()
 	Mesh->SetWorldScale3D(Def.MeshScale);
 
 	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
-	const bool bFridge = (ShelfTier == FName(TEXT("Fridge")));
+	const bool bFridge = ShelfTier.ToString().StartsWith(TEXT("Fridge")); // alle koelkast-tiers (Fridge / _Large / _XL)
 	const FLinearColor Col = bChest ? FLinearColor(0.32f, 0.20f, 0.10f)
 		: bFridge ? FLinearColor(0.85f, 0.86f, 0.88f) // staal-wit
 		: FLinearColor(0.45f, 0.30f, 0.18f);
@@ -132,10 +135,58 @@ void AStorageShelf::BeginPlay()
 	SetupVisual();
 	// Versheid: een GEWONE plank/kist laat boter/edibles ook bederven (alleen een Fridge koelt).
 	// Server-timer elke 10s; Fridge-shelves slaan we over zodat ze de inhoud vers houden.
-	if (HasAuthority() && ShelfTier != FName(TEXT("Fridge")))
+	if (HasAuthority() && !ShelfTier.ToString().StartsWith(TEXT("Fridge")))
 	{
 		GetWorldTimerManager().SetTimer(PerishTimer, this, &AStorageShelf::DegradeShelfPerishables, 10.f, true, 10.f);
 	}
+	// Koelkast: 1s-timer die lopende edible-batches laat zetten en het resultaat in de voorraad legt.
+	if (HasAuthority() && IsFridge())
+	{
+		GetWorldTimerManager().SetTimer(CookTimer, this, &AStorageShelf::TickCooking, 1.f, true, 1.f);
+	}
+}
+
+void AStorageShelf::TickCooking()
+{
+	if (!HasAuthority() || Cooking.Num() == 0) { return; }
+	int32 Cap; float Sec = 180.f, Conv, Mult; bool bP;
+	AProcessorMachine::GetProcDef(TEXT("Fridge_Std"), Cap, Sec, Conv, Mult, bP);
+	const float Total = FMath::Max(1.f, Sec);
+	bool bChanged = false;
+	for (int32 i = Cooking.Num() - 1; i >= 0; --i)
+	{
+		FProcEntry& E = Cooking[i];
+		if (!E.bDone)
+		{
+			E.Elapsed += 1.f;
+			if (E.Elapsed >= Total) { E.bDone = true; }
+			bChanged = true;
+		}
+		if (E.bDone)
+		{
+			// Klaar -> in de koelkast-voorraad. Lukt 't niet (koelkast vol), volgende tick opnieuw proberen.
+			if (ServerStore(E.OutItemId, E.Quantity, E.Thc, E.Quality) > 0) { Cooking.RemoveAt(i); bChanged = true; }
+		}
+	}
+	if (bChanged) { ForceNetUpdate(); }
+}
+
+bool AStorageShelf::ServerStartEdible(const FString& Strain, int32 Qty, float Thc, float Qual, const FString& OutPrefix)
+{
+	if (!HasAuthority() || !IsFridge() || Qty <= 0 || Strain.IsEmpty()) { return false; }
+	if (Cooking.Num() >= FridgeCookCap()) { return false; }
+	int32 Cap; float Sec, Conv = 1.f, Mult = 1.55f; bool bP;
+	AProcessorMachine::GetProcDef(TEXT("Fridge_Std"), Cap, Sec, Conv, Mult, bP); // hergebruik 't koelkast-recept
+	FProcEntry E;
+	const FString Pre = OutPrefix.IsEmpty() ? TEXT("Edible_") : OutPrefix;
+	E.OutItemId = FName(*(Pre + Strain));
+	E.Quantity = FMath::Max(1, FMath::RoundToInt(Qty * Conv));
+	E.Thc = FMath::Min(90.f, (Thc > 0.f ? Thc : 15.f) * Mult);
+	E.Quality = Qual > 0.f ? Qual : 60.f;
+	E.Elapsed = 0.f; E.bDone = false;
+	Cooking.Add(E);
+	ForceNetUpdate();
+	return true;
 }
 
 void AStorageShelf::DegradeShelfPerishables()
@@ -196,6 +247,7 @@ void AStorageShelf::Interact_Implementation(APawn* InstigatorPawn)
 FText AStorageShelf::GetInteractionPrompt_Implementation() const
 {
 	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
-	const TCHAR* Name = bChest ? TEXT("Storage chest") : (ShelfTier == FName(TEXT("Fridge")) ? TEXT("Fridge") : TEXT("Storage shelf"));
+	const bool bFridge = ShelfTier.ToString().StartsWith(TEXT("Fridge"));
+	const TCHAR* Name = bChest ? TEXT("Storage chest") : (bFridge ? TEXT("Fridge") : TEXT("Storage shelf"));
 	return FText::FromString(FString::Printf(TEXT("%s  (%d/%d slots)"), Name, Contents.Num(), GetCapacity()));
 }

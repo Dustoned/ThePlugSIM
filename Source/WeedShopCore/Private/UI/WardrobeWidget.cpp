@@ -184,6 +184,15 @@ void UWardrobeWidget::EnsurePreview()
 			C->PostProcessSettings.AutoExposureMinBrightness = 1.0f;
 			C->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
 			C->PostProcessSettings.AutoExposureMaxBrightness = 1.0f;
+			// Histogram-methode EXPLICIET kiezen zodat de min==max-lock ook echt pakt (de wereld-default kon een
+			// andere methode zijn, waardoor de lock niet greep en 'ie de eerste seconden helder inregelde). Plus
+			// instant adaptatie-snelheid -> meteen op de vaste exposure-scale, geen flits. (Manual maakte 'm zwart.)
+			C->PostProcessSettings.bOverride_AutoExposureMethod = true;
+			C->PostProcessSettings.AutoExposureMethod = AEM_Histogram;
+			C->PostProcessSettings.bOverride_AutoExposureSpeedUp = true;
+			C->PostProcessSettings.AutoExposureSpeedUp = 100.f;
+			C->PostProcessSettings.bOverride_AutoExposureSpeedDown = true;
+			C->PostProcessSettings.AutoExposureSpeedDown = 100.f;
 		}
 		// Lampen aan de CAMERA: de voorkant is altijd verlicht, hoe je ook draait.
 		if (UPointLightComponent* Key = NewObject<UPointLightComponent>(Cap))
@@ -285,11 +294,11 @@ void UWardrobeWidget::UpdatePreviewCamera()
 {
 	if (!PreviewCapture.IsValid() || !PreviewActor.IsValid()) { return; }
 	const FVector Stage = PreviewActor->GetActorLocation();
-	const FVector Focus = Stage + FVector(0.f, 0.f, FMath::Clamp(PreviewFocusZ, 50.f, 140.f)); // verticaal slepen schuift dit
+	const FVector Focus = Stage + FVector(0.f, 0.f, FMath::Clamp(PreviewFocusZ, 5.f, 150.f)); // verticaal slepen schuift dit
 	const float Rad = FMath::DegreesToRadians(PreviewYaw);
 	// Start recht voor het poppetje (mannequin kijkt naar +X), orbit met PreviewYaw.
 	const FVector Dir(FMath::Cos(Rad), FMath::Sin(Rad), 0.f);
-	const FVector CamLoc = Focus + Dir * FMath::Clamp(PreviewDist, 150.f, 330.f);
+	const FVector CamLoc = Focus + Dir * FMath::Clamp(PreviewDist, 70.f, 330.f);
 	PreviewCapture->SetActorLocationAndRotation(CamLoc, (Focus - CamLoc).Rotation());
 }
 
@@ -343,7 +352,7 @@ FReply UWardrobeWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPo
 		}
 		const FVector2D Delta = InMouseEvent.GetCursorDelta();
 		PreviewYaw = FMath::Fmod(PreviewYaw + Delta.X * 0.7f, 360.f);              // horizontaal = draaien
-		PreviewFocusZ = FMath::Clamp(PreviewFocusZ + Delta.Y * 0.15f, 50.f, 140.f); // verticaal = hoofd <-> schoenen (rustig + begrensd)
+		PreviewFocusZ = FMath::Clamp(PreviewFocusZ + Delta.Y * 0.15f, 5.f, 150.f); // verticaal = hoofd <-> schoenen (rustig + begrensd)
 		UpdatePreviewCamera();
 		return FReply::Handled();
 	}
@@ -354,7 +363,7 @@ FReply UWardrobeWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FP
 {
 	if (PhoneComp.IsValid() && PhoneComp->IsWardrobeOpen() && IsOverPreview(InMouseEvent))
 	{
-		PreviewDist = FMath::Clamp(PreviewDist - InMouseEvent.GetWheelDelta() * 20.f, 150.f, 330.f);
+		PreviewDist = FMath::Clamp(PreviewDist - InMouseEvent.GetWheelDelta() * 20.f, 70.f, 330.f);
 		UpdatePreviewCamera();
 		return FReply::Handled();
 	}
@@ -365,6 +374,8 @@ void UWardrobeWidget::FillBody()
 {
 	if (!Body) { return; }
 	Body->ClearChildren();
+	SlotNameTexts.Reset();
+	ModelButtons.Reset(); ModelButtonSkins.Reset();
 
 	IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
 	if (!Pl) { Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("No character."), 14, FLinearColor::Gray)); return; }
@@ -386,8 +397,15 @@ void UWardrobeWidget::FillBody()
 			const uint8 bi = Ch.Idx;
 			UWeedActionButton* BB = WrdBtn(WidgetTree,
 				(Skin == bi) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f), 8.f,
-				[this, bi]() { if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); } LastSig.Reset(); });
+				[this, bi]()
+				{
+					if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); }
+					// In-place: actieve knop oplichten + alle slot-teksten verversen (geen full rebuild -> geen flikker).
+					RecolorModelButtons(bi);
+					for (const TPair<int32, TWeakObjectPtr<UTextBlock>>& KV : SlotNameTexts) { UpdateSlotText(KV.Key); }
+				});
 			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, FLinearColor::White, true));
+			ModelButtons.Add(BB); ModelButtonSkins.Add(bi);
 			UHorizontalBoxSlot* BS = BodyRowBox->AddChildToHorizontalBox(BB);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			BS->SetPadding(FMargin(bFirstBody ? 0.f : 4.f, 0.f, 0.f, 0.f));
@@ -419,30 +437,33 @@ void UWardrobeWidget::FillBody()
 		UHorizontalBox* R = WidgetTree->ConstructWidget<UHorizontalBox>();
 
 		UWeedActionButton* PrevB = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
-			[this, SlotIdx, Cur, Count]()
+			[this, SlotIdx, Count]()
 			{
 				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 				{
+					const uint8 Cur = P->GetOutfitPart(SlotIdx); // VERS lezen (niet de capture van bij het bouwen)
 					P->SetOutfitPart(SlotIdx, (uint8)((Cur + Count - 1) % Count));
 				}
-				LastSig.Reset();
+				UpdateSlotText(SlotIdx); // in-place, geen rebuild
 			});
 		PrevB->SetContent(WeedUI::Text(WidgetTree, TEXT("<"), 14, FLinearColor::White, true));
 		R->AddChildToHorizontalBox(PrevB);
 
 		UTextBlock* NameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s  (%d/%d)"), Part.Name, Cur + 1, Count), 14, FLinearColor(0.95f, 0.95f, 1.f), false, true);
+		SlotNameTexts.Add(SlotIdx, NameT); // bewaren -> in-place updaten bij </>
 		UHorizontalBoxSlot* NS = R->AddChildToHorizontalBox(NameT);
 		NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		NS->SetHorizontalAlignment(HAlign_Center); NS->SetVerticalAlignment(VAlign_Center);
 
 		UWeedActionButton* NextB = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
-			[this, SlotIdx, Cur, Count]()
+			[this, SlotIdx, Count]()
 			{
 				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 				{
+					const uint8 Cur = P->GetOutfitPart(SlotIdx);
 					P->SetOutfitPart(SlotIdx, (uint8)((Cur + 1) % Count));
 				}
-				LastSig.Reset();
+				UpdateSlotText(SlotIdx);
 			});
 		NextB->SetContent(WeedUI::Text(WidgetTree, TEXT(">"), 14, FLinearColor::White, true));
 		R->AddChildToHorizontalBox(NextB);
@@ -451,6 +472,36 @@ void UWardrobeWidget::FillBody()
 	}
 
 	Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom. Press B in-game for third person."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 12, 0, 0));
+}
+
+void UWardrobeWidget::UpdateSlotText(int32 SlotIdx)
+{
+	TWeakObjectPtr<UTextBlock>* Found = SlotNameTexts.Find(SlotIdx);
+	if (!Found || !Found->IsValid()) { return; }
+	const IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
+	if (!Pl) { return; }
+	const bool bMaleSkin = (Pl->GetPlayerSkinIndex() == 5);
+	const int32 Count = WeedOutfit::PartCount(SlotIdx, bMaleSkin);
+	const uint8 Cur = Pl->GetOutfitPart(SlotIdx);
+	const WeedOutfit::FPart& Part = WeedOutfit::PartAt(SlotIdx, Cur, bMaleSkin);
+	Found->Get()->SetText(FText::FromString(FString::Printf(TEXT("%s  (%d/%d)"), Part.Name, Cur + 1, Count)));
+}
+
+void UWardrobeWidget::RecolorModelButtons(uint8 ActiveSkin)
+{
+	for (int32 i = 0; i < ModelButtons.Num(); ++i)
+	{
+		UWeedActionButton* B = ModelButtons[i].Get();
+		if (!B) { continue; }
+		const FLinearColor Col = (ModelButtonSkins.IsValidIndex(i) && ModelButtonSkins[i] == ActiveSkin)
+			? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f);
+		FButtonStyle S;
+		S.Normal = WeedUI::Rounded(Col, 8.f);
+		S.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
+		S.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
+		S.NormalPadding = FMargin(8.f, 5.f); S.PressedPadding = FMargin(8.f, 5.f);
+		B->SetStyle(S);
+	}
 }
 
 void UWardrobeWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -469,12 +520,14 @@ void UWardrobeWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	EnsurePreview();
 
-	// Alleen herbouwen bij wijziging (skin of outfit) -> geen flicker.
-	FString Sig;
+	// Body alleen herbouwen bij een STRUCTURELE wijziging (legacy <2 / female 2-4 / male 5). Een outfit-keuze
+	// of model-wissel binnen dezelfde categorie updaten we IN-PLACE (geen flikker, geen rebuild).
+	int32 Cat = 0;
 	if (const IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 	{
-		Sig = FString::Printf(TEXT("%d"), Pl->GetPlayerSkinIndex());
-		for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx) { Sig += FString::Printf(TEXT("|%d"), Pl->GetOutfitPart(SlotIdx)); }
+		const uint8 Sk = Pl->GetPlayerSkinIndex();
+		Cat = (Sk >= 2 && Sk <= 4) ? 1 : (Sk == 5 ? 2 : 0);
 	}
+	const FString Sig = FString::FromInt(Cat);
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 }

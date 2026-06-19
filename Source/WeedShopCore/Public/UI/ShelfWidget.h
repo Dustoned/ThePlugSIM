@@ -72,6 +72,10 @@ public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 	// Afhandeling van een drop: bDroppedOnShelfSide = de kolom waar je losliet (true=schap -> opslaan).
 	void HandleShelfDrop(bool bDroppedOnShelfSide, class UShelfDragOp* Op);
+	// Een stapel uit je ECHTE inventory (UInvDragOp) in het schap droppen -> opslaan. (De echte inventory
+	// staat ernaast open, net als bij de droogrek; uit het schap halen doe je door een schap-item op je
+	// inventory te slepen - dat handelt de InventoryWidget zelf af.)
+	void HandleInvStore(class UInvDragOp* Op);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

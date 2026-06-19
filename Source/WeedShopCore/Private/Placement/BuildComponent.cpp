@@ -266,6 +266,109 @@ void UBuildComponent::EnsureGhost()
 	}
 }
 
+void UBuildComponent::EnsureDoorMarks()
+{
+	if (DoorMarks.Num() > 0 || !GetOwner()) { return; }
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UMaterialInterface* GhostMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost"));
+	for (int32 i = 0; i < 8; ++i)
+	{
+		UStaticMeshComponent* M = NewObject<UStaticMeshComponent>(GetOwner());
+		if (!M) { continue; }
+		M->SetupAttachment(GetOwner()->GetRootComponent());
+		M->RegisterComponent();
+		M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		M->SetCastShadow(false);
+		M->SetAbsolute(true, true, true);
+		if (Cube) { M->SetStaticMesh(Cube); }
+		UMaterialInstanceDynamic* MID = GhostMat ? UMaterialInstanceDynamic::Create(GhostMat, this) : nullptr;
+		if (MID) { MID->SetVectorParameterValue(TEXT("GhostColor"), FLinearColor(1.f, 0.18f, 0.18f, 1.f)); M->SetMaterial(0, MID); }
+		M->SetVisibility(false);
+		DoorMarks.Add(M);
+		DoorMarkMIDs.Add(MID);
+	}
+}
+
+void UBuildComponent::RefreshDoorCache(const FVector& Center)
+{
+	CachedDoorPositions.Reset();
+	LastDoorCachePos = Center;
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// Goedkope ruimtelijke query i.p.v. alle actors aflopen: pak alle collidende objecten binnen ~16 m en
+	// houd de STATIC-MESH-componenten over waarvan de mesh-naam "Door" bevat (maar geen "DoorFrame"/"Doorway").
+	// Zo vangen we ZOWEL omgezette ACityDoor-bladen ALS nog-niet-omgezette apartment-deur-meshes (los van class).
+	TArray<FOverlapResult> Ov;
+	FCollisionObjectQueryParams Obj;
+	Obj.AddObjectTypesToQuery(ECC_WorldStatic);
+	Obj.AddObjectTypesToQuery(ECC_WorldDynamic);
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(DoorCache), false);
+	if (GetOwner()) { Q.AddIgnoredActor(GetOwner()); }
+	if (W->OverlapMultiByObjectType(Ov, Center, FQuat::Identity, Obj, FCollisionShape::MakeSphere(1600.f), Q))
+	{
+		for (const FOverlapResult& R : Ov)
+		{
+			const UStaticMeshComponent* C = Cast<UStaticMeshComponent>(R.GetComponent());
+			if (!C || !C->GetStaticMesh()) { continue; }
+			const FString N = C->GetStaticMesh()->GetName();
+			if (!N.Contains(TEXT("Door")) || N.Contains(TEXT("DoorFrame")) || N.Contains(TEXT("Doorway"))) { continue; }
+			// MIDDEN van het deurblad (bounds-center) i.p.v. de component-origin - die zit op het SCHARNIER,
+			// naast de opening, waardoor de marker naast de deur belandde. Z = onderkant bounds = de vloer.
+			const FBox B = C->Bounds.GetBox();
+			const FVector Ctr = B.GetCenter();
+			const FVector Pos(Ctr.X, Ctr.Y, B.Min.Z);
+			// ALLEEN de deuren van JOUW eigen huis (niet elke deur in de gang/bij de buren). Test een punt net
+			// BINNEN de opening (richting waar je staat te plaatsen): een deur in je eigen muur valt dan binnen
+			// je huis-grens, een buur-/gang-deur niet. Op de plaats-Z (die ligt sowieso binnen je huis).
+			FVector TestPt(Ctr.X, Ctr.Y, Center.Z);
+			FVector Toward = Center - TestPt; Toward.Z = 0.f;
+			if (!Toward.IsNearlyZero()) { TestPt += Toward.GetSafeNormal() * 55.f; }
+			if (!IsInOwnedHome(TestPt)) { continue; }
+			bool bDup = false;
+			for (const FVector& P : CachedDoorPositions) { if (FVector::DistSquared2D(P, Pos) < 80.f * 80.f) { bDup = true; break; } }
+			if (!bDup) { CachedDoorPositions.Add(Pos); }
+		}
+	}
+}
+
+bool UBuildComponent::UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf)
+{
+	EnsureDoorMarks();
+	UWorld* W = GetWorld();
+	if (!bShow || !W)
+	{
+		for (UStaticMeshComponent* M : DoorMarks) { if (M) { M->SetVisibility(false); } }
+		return false;
+	}
+	// Deur-cache verversen zodra je ~1,5 m bent verplaatst (deuren staan stil -> geen scan per tick).
+	if (CachedDoorPositions.Num() == 0 || FVector::Dist2D(FootCenter, LastDoorCachePos) > 150.f) { RefreshDoorCache(FootCenter); }
+
+	bool bBlocked = false;
+	int32 mi = 0;
+	const float HZone = 60.f; // halve no-go-zone rond een deur-opening (cm)
+	for (const FVector& DL : CachedDoorPositions)
+	{
+		if (mi >= DoorMarks.Num()) { break; }
+		if (FVector::Dist2D(DL, FootCenter) > 1200.f) { continue; } // alleen deuren in de buurt
+		const float FloorZ = DL.Z; // DL.Z is al de vloer (onderkant deur-bounds)
+		if (UStaticMeshComponent* M = DoorMarks[mi])
+		{
+			// DUIDELIJK zichtbaar laag rood blok (geen flinterdun vlak dat onder een scherende hoek wegvalt):
+			// ~120x120 cm en ~26 cm hoog, op de vloer voor/in de deuropening.
+			M->SetWorldLocationAndRotation(FVector(DL.X, DL.Y, FloorZ + 13.f), FRotator::ZeroRotator);
+			M->SetWorldScale3D(FVector(HZone * 2.f / 100.f, HZone * 2.f / 100.f, 0.26f)); // cube=100cm -> ~120x120x26
+			M->SetVisibility(true);
+		}
+		// Geblokkeerd zodra het MIDDEN van je plaatsing ín het rode vlak valt -> exact wat je ziet, geen
+		// onzichtbare marge eromheen. Zo kun je tot tegen de marker aan plaatsen (zo dichtbij mogelijk).
+		(void)FootHalf;
+		if (FMath::Abs(DL.X - FootCenter.X) < HZone && FMath::Abs(DL.Y - FootCenter.Y) < HZone && FMath::Abs(FootCenter.Z - FloorZ) < 220.f) { bBlocked = true; }
+		++mi;
+	}
+	for (; mi < DoorMarks.Num(); ++mi) { if (DoorMarks[mi]) { DoorMarks[mi]->SetVisibility(false); } }
+	return bBlocked;
+}
+
 void UBuildComponent::DestroyPreview()
 {
 	if (AActor* A = PreviewActor.Get()) { A->Destroy(); }
@@ -669,6 +772,9 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 	// Eigen ghost bijwerken (lokaal).
 	const bool bShow = bPlacing && bAimHit;
+	// Rode no-go-vlakken op de vloer bij deur-openingen in de buurt tonen tijdens plaatsen, en plaatsing die
+	// over een deur-opening valt blokkeren (zodat je geen meubel in een deuropening zet). Niet voor de building-tool.
+	if (UpdateDoorwayMarkers(bShow && !CurrentDef.bIsStructure, PreviewLocation, CurrentDef.BoxHalf)) { bValidSpot = false; }
 	// Plaatsing-offset (root t.o.v. het trefpunt) — gelijk aan hoe het object straks gespawnd wordt.
 	float ZOff = 0.f;
 	if (CurrentDef.bIsLamp) { ZOff = -CurrentDef.BoxHalf.Z; }

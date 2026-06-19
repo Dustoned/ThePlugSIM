@@ -145,10 +145,10 @@ namespace
 		{ TEXT("Press_Cheap"), TEXT("Heatpress"),            TEXT("Crystals -> hash, higher THC (~90s)"),        18000, 1 },
 		{ TEXT("Press_Std"),   TEXT("Pro heatpress"),        TEXT("Less loss + faster (~70s, 2 batches)"),       45000, 1 },
 		{ TEXT("Press_Pro"),   TEXT("Industrial press"),     TEXT("Best yield + THC (~50s, 3 batches)"),        120000, 1 },
-		// Edibles-keten: Oven (decarb) -> Pan (boter koken) -> Koelkast (zetten, hoge THC%). + boter als ingredient.
+		// Edibles-keten: Oven (decarb) -> Pan (boter koken) -> ELKE koelkast zet 't om in edibles (geen conversion
+		// kit meer: koop gewoon een Fridge en "Make edibles" in het koelkast-menu). + boter als ingredient.
 		{ TEXT("Oven_Std"),    TEXT("Oven / stove"),         TEXT("Dried weed -> baked weed (decarb, ~40s)"),           12000, 1 },
 		{ TEXT("Pan_Std"),     TEXT("Cooking pan"),          TEXT("Baked weed + butter -> cannabutter mix (~55s)"),     14000, 1 },
-		{ TEXT("Fridge_Std"),  TEXT("Fridge conversion"),    TEXT("Turn a fridge into a setting unit: butter mix -> edibles, big THC (~3 min)"), 7000, 1 },
 		{ TEXT("Butter"),      TEXT("Butter"),               TEXT("Cooking ingredient for the pan (cannabutter)"),        300, 1 },
 		// Bak-ingredienten voor de koelkast-keuken: butter mix + deze -> cookies of gummies (eindproduct).
 		{ TEXT("Flour"),       TEXT("Flour"),                TEXT("Baking ingredient: butter mix + flour + sugar -> cookies"),   200, 1 },
@@ -157,7 +157,6 @@ namespace
 		// Pro-edibles: sneller + grotere capaciteit (zelfde THC). Voor massa-productie.
 		{ TEXT("Oven_Pro"),    TEXT("Pro range cooker"),     TEXT("Faster bake + 4 batches (~25s)"),                    30000, 1 },
 		{ TEXT("Pan_Pro"),     TEXT("Pro cooktop"),          TEXT("Faster cook + 4 batches, less loss (~35s)"),         36000, 1 },
-		{ TEXT("Fridge_Pro"),  TEXT("Walk-in fridge"),       TEXT("Sets 8 batches, faster (~110s)"),                    42000, 1 },
 		// Concentraat-ketens: solventless rosin, ice/bubble (isolator) + moonrocks. Eigen machines, sterke producten.
 		{ TEXT("Rosin_Std"),   TEXT("Rosin press"),          TEXT("Dried weed -> solventless rosin (high THC, ~75s)"),      25000,  1 },
 		{ TEXT("Rosin_Pro"),   TEXT("Hydraulic rosin press"),TEXT("More yield + faster (~55s, 2 batches)"),                 70000,  1 },
@@ -203,7 +202,7 @@ namespace
 		{ TEXT("Furn_Planter"),    TEXT("Wood planter"),  TEXT("A wooden planter"),       1800, 1 },
 		{ TEXT("Furn_DecoPot"),    TEXT("Decorative pot"),TEXT("A decorative pot"),        700, 1 },
 		{ TEXT("Furn_Crate"),      TEXT("Crate"),         TEXT("A storage crate (decor)"), 500, 1 },
-		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("Keeps things cold"),    30000, 1 },
+		{ TEXT("Fridge"),   TEXT("Fridge"),   TEXT("Keeps food cold + sets butter mix into edibles (no conversion kit needed)"),    15000, 1 },
 		{ TEXT("Shelf"),    TEXT("Storage shelf"), TEXT("Store stock in the shop - 24 slots"), 18000, 1 },
 		{ TEXT("Chest"),    TEXT("Storage chest"), TEXT("Stash items at home - 20 slots"),     9000, 1 },
 		// Kluizen (progressie): cash veilig stashen, een overval pakt 'm niet. Grotere kluis = meer capaciteit.
@@ -212,18 +211,7 @@ namespace
 		{ TEXT("Safe_Large"),  TEXT("Large safe"),  TEXT("Stash up to EUR 250k - robbery-proof"),   8000000,  1 },
 		{ TEXT("Safe_Vault"),  TEXT("Vault"),       TEXT("Stash up to EUR 1M - robbery-proof"),     30000000, 1 },
 		{ TEXT("Wardrobe"), TEXT("Wardrobe"), TEXT("Change your outfit at home"), 15000, 1 },
-		// Building-tool onderdelen (dev): kamers tekenen in de beach-map.
-		{ TEXT("Struct_Wall4m"), TEXT("Wall 4m"), TEXT("Build: interior wall 4m"), 100, 1 },
-		{ TEXT("Struct_Wall2m"), TEXT("Wall 2m"), TEXT("Build: interior wall 2m"), 100, 1 },
-		{ TEXT("Struct_Wall1m"), TEXT("Wall 1m"), TEXT("Build: interior wall 1m"), 100, 1 },
-		{ TEXT("Struct_WallDoor4m"), TEXT("Wall 4m + doorway"), TEXT("Build: wall with door opening"), 100, 1 },
-		{ TEXT("Struct_WallDoor3m"), TEXT("Wall 3m + doorway"), TEXT("Build: wall with door opening"), 100, 1 },
-		{ TEXT("Struct_Floor4x4"), TEXT("Floor 4x4m (carpet)"), TEXT("Build: carpet floor section"), 100, 1 },
-		{ TEXT("Struct_Floor1x1"), TEXT("Floor 1x1m (tiles)"), TEXT("Build: tile floor section"), 100, 1 },
-		{ TEXT("Struct_Ceil4x4"), TEXT("Ceiling 4x4m"), TEXT("Build: ceiling section"), 100, 1 },
-		{ TEXT("Struct_Ceil1x1"), TEXT("Ceiling 1x1m"), TEXT("Build: ceiling section"), 100, 1 },
-		{ TEXT("Struct_CeilLamp"), TEXT("Ceiling lamp (built-in)"), TEXT("Build: ceiling light, real glow"), 100, 1 },
-		{ TEXT("Struct_Door"), TEXT("Room door (working)"), TEXT("Build: hinged door, F to open"), 100, 1 },
+		// (Alle building-tool Struct_-onderdelen - walls, floors, ceilings, room door - zijn uit de store gehaald.)
 		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("Warm hanging spot light"),         3500, 1 },
 		// Plant-verzorging (later spel): mest = meer opbrengst; sprays = behandel mold/pest.
 		{ TEXT("Fertilizer_Basic"), TEXT("Fertilizer"),       TEXT("+15% yield this harvest"),          2000, 3 },
@@ -390,11 +378,10 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Butter"))          { return 9; }
 	if (S == TEXT("Oven_Std"))        { return 9; }
 	if (S == TEXT("Pan_Std"))         { return 9; }
-	if (S == TEXT("Fridge_Std"))      { return 9; }
+	// De koelkast die 't ZET = de gewone "Fridge" (level 9, hieronder); geen aparte conversion kit meer.
 	// Pro-edibles unlocken samen later (massa-productie).
 	if (S == TEXT("Oven_Pro"))        { return 21; }
 	if (S == TEXT("Pan_Pro"))         { return 21; }
-	if (S == TEXT("Fridge_Pro"))      { return 21; }
 	// Concentraat-ketens (high-end content richting de level-50-licentie).
 	if (S == TEXT("Rosin_Std"))       { return 40; }
 	if (S == TEXT("Moon_Pro"))        { return 38; }
@@ -432,7 +419,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Table"))           { return 2; }
 	if (S == TEXT("Chest"))           { return 5; }
 	if (S == TEXT("Shelf"))           { return 8; }
-	if (S == TEXT("Fridge"))          { return 13; }
+	if (S == TEXT("Fridge"))          { return 9; }  // koelkast = ook de edibles-setter -> samen met oven/pan
 	// Plant-verzorging (mold/pest komt later in het spel).
 	if (S == TEXT("Fertilizer_Basic")) { return 17; }
 	if (S == TEXT("Fertilizer_Bloom")) { return 27; }

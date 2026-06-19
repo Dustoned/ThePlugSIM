@@ -107,6 +107,16 @@ protected:
 	// Maakt de ghost-mesh + dynamisch materiaal aan indien nodig.
 	void EnsureGhost();
 
+	// Pool van rode "deur-opening"-vlakken (no-go) die tijdens plaatsen op de vloer bij deuren in de buurt
+	// verschijnen. Returnt true als de footprint een deur-opening overlapt (dan mag je daar niet plaatsen).
+	void EnsureDoorMarks();
+	bool UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf);
+	// Deur-posities in de buurt verzamelen via een overlap-sphere op mesh-naam "Door" (vangt apartment-deuren
+	// of ze nu wel/niet tot ACityDoor zijn omgezet). Gecachet; ververst pas als je significant beweegt.
+	void RefreshDoorCache(const FVector& Center);
+	TArray<FVector> CachedDoorPositions;
+	FVector LastDoorCachePos = FVector(1e9f);
+
 	// Preview = een echt (transient, cosmetisch) exemplaar van het te plaatsen model, in ghost-kleur,
 	// zodat de preview er exact zo uitziet als wat je plaatst. Lokaal.
 	void SpawnPreview(const struct FPlaceableDef& Def, FName ItemId);
@@ -147,6 +157,10 @@ protected:
 	// Heldere ring op de pot die DEZE gear gaat krijgen (de dichtstbijzijnde pot in bereik).
 	UPROPERTY(Transient) TObjectPtr<UStaticMeshComponent> TargetRing;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> TargetRingMID;
+
+	// Rode no-go-vlakken bij deur-openingen (tijdens plaatsen). Pool, hergebruikt per frame.
+	UPROPERTY(Transient) TArray<TObjectPtr<UStaticMeshComponent>> DoorMarks;
+	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> DoorMarkMIDs;
 
 	// Echt model als preview (transient) + gedeeld ghost-materiaal voor al z'n onderdelen.
 	UPROPERTY(Transient) TWeakObjectPtr<AActor> PreviewActor;

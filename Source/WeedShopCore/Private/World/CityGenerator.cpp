@@ -315,7 +315,7 @@ void ACityGenerator::AddSignText(const FVector& WorldLoc, int32 DirX, int32 DirY
 	if (bGlow)
 	{
 		// Unlit/emissive variant van het standaard tekstmateriaal -> letters lichten zelf op (leesbaar 's nachts).
-		static UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_NumGlow.M_NumGlow"));
+		UMaterialInterface* GlowMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_NumGlow.M_NumGlow")); // GEEN static: dangelt na GC bij stream-out -> heap-corruptie
 		if (GlowMat) { T->SetTextMaterial(GlowMat); }
 	}
 }

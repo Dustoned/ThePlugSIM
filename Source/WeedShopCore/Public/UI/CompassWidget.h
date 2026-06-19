@@ -31,6 +31,7 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> CardinalLabels;
 	UPROPERTY() TArray<TObjectPtr<UWidget>> Markers;       // mensen buiten (groen poppetje)
 	UPROPERTY() TArray<TObjectPtr<UWidget>> CoopMarkers;   // mede-spelers (blauw poppetje)
+	UPROPERTY() TArray<TObjectPtr<UWidget>> DeliveryMarkers; // bezorgingen (oranje pakket-icoon)
 	UPROPERTY() TObjectPtr<UWidget> HomeMarker;            // je basis (goud huisje)
 	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;        // generiek waypoint (blauw)
 

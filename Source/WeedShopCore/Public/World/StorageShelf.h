@@ -7,6 +7,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Interaction/Interactable.h"
+#include "World/ProcessorMachine.h" // FProcEntry + statisch Fridge_Std-recept (koelkast zet ButterMix -> edibles)
 #include "StorageShelf.generated.h"
 
 class UStaticMeshComponent;
@@ -48,6 +49,10 @@ public:
 	void DegradeShelfPerishables();
 	FTimerHandle PerishTimer;
 
+	// Koelkast: laat edible-batches lopen (server-timer) en stort klaar resultaat in de koelkast-voorraad.
+	void TickCooking();
+	FTimerHandle CookTimer;
+
 	// Aantal verschillende stapels dat dit opslag-meubel kan bevatten (per type).
 	int32 GetCapacity() const;
 
@@ -56,6 +61,17 @@ public:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Shelf")
 	TArray<FShelfStack> Contents;
+
+	// Koelkast-verwerking: lopende edible-batches (ButterMix -> Edible/Cookie/Gummy). Klaar -> vanzelf in Contents.
+	// Een fridge is gewoon een fridge: hierin maak je boter/edibles, geen aparte "conversion kit" nodig.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Shelf")
+	TArray<FProcEntry> Cooking;
+
+	bool IsFridge() const { return ShelfTier.ToString().StartsWith(TEXT("Fridge")); }
+	int32 FridgeCookCap() const { return 4; } // max gelijktijdige edible-batches in een koelkast
+
+	// Server: start een edible-batch (Strain = strain-naam, OutPrefix = Edible_/Cookie_/Gummy_). False = vol/fout.
+	bool ServerStartEdible(const FString& Strain, int32 Qty, float Thc, float Qual, const FString& OutPrefix);
 
 	// Server: leg Count stuks van ItemId (met THC/kwaliteit) op het schap. Geeft het werkelijk
 	// opgeslagen aantal terug (0 als vol).

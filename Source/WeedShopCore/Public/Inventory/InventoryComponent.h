@@ -42,9 +42,10 @@ class WEEDSHOPCORE_API UInventoryComponent : public UActorComponent
 public:
 	UInventoryComponent();
 
-	// Max aantal slots (= aantal stapels; 0 = ongelimiteerd).
+	// Max aantal slots (= aantal stapels; 0 = ongelimiteerd). Start bewust laag (je hebt ook 8 hotbar-slots);
+	// grid + UI volgen deze waarde automatisch. Cel 0 = cash-stapel, dus effectief ~9 vrije slots aan 't begin.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")
-	int32 MaxStacks = 24;
+	int32 MaxStacks = 10;
 
 	// Max draaggewicht (abstracte kg). 0 = ongelimiteerd.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")

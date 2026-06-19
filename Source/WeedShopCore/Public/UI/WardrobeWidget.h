@@ -56,5 +56,13 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> Body;
 
-	FString LastSig; // herbouw alleen bij wijziging (geen flicker)
+	// In-place updates: Body wordt alleen herbouwd bij een STRUCTURELE wijziging (legacy/female/male). Een
+	// outfit-keuze (</>) of model-wissel update alleen de betreffende tekst/knop-kleur -> geen flikker.
+	TMap<int32, TWeakObjectPtr<class UTextBlock>> SlotNameTexts; // SlotIdx -> "naam (cur/count)"-tekst
+	TArray<TWeakObjectPtr<class UWeedActionButton>> ModelButtons; // Girl 1/2/3-knoppen
+	TArray<uint8> ModelButtonSkins;                               // parallel: skin-index per knop
+	void UpdateSlotText(int32 SlotIdx);          // herbereken + SetText op de slot-naam in plaats
+	void RecolorModelButtons(uint8 ActiveSkin);  // actieve model-knop oplichten zonder rebuild
+
+	FString LastSig; // herbouw alleen bij STRUCTURELE wijziging (geen flicker)
 };

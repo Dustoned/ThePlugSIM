@@ -173,10 +173,13 @@ public:
 
 	void RequestShelfStore(FName ItemId, int32 Count);
 	void RequestShelfTake(int32 SlotIndex, int32 Count);
+	void RequestShelfCook(int32 SlotIndex); // koelkast: zet de ButterMix op schap-slot SlotIndex om in edibles
 	UFUNCTION(Server, Reliable)
 	void ServerShelfStore(class AStorageShelf* Shelf, FName ItemId, int32 Count);
 	UFUNCTION(Server, Reliable)
 	void ServerShelfTake(class AStorageShelf* Shelf, int32 SlotIndex, int32 Count);
+	UFUNCTION(Server, Reliable)
+	void ServerShelfCook(class AStorageShelf* Shelf, int32 SlotIndex);
 
 	// --- Goals/milestones: een behaald doel claimen (reward naar deze speler) ---
 	void ClaimGoal(int32 Idx);

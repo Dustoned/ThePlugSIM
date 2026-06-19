@@ -4,6 +4,7 @@
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
 #include "UI/DryingRackWidget.h" // UDryDragOp: een klare batch in de inventory droppen = oogsten
+#include "UI/ShelfWidget.h"      // UShelfDragOp: een item uit een schap in de inventory droppen = pakken
 #include "Inventory/InventoryComponent.h"
 #include "Economy/EconomyComponent.h" // cash met centen tonen
 #include "World/StorageShelf.h"
@@ -188,6 +189,23 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 		return false;
 	}
 
+	// Een item UIT een opslag-schap (UShelfDragOp) op de inventory OF de hotbar droppen = uit het schap halen.
+	if (UShelfDragOp* ShelfOp = Cast<UShelfDragOp>(InOperation))
+	{
+		if (ShelfOp->bFromShelf && ShelfOp->ShelfIndex >= 0 && ShelfOp->Qty > 0 && Inv.IsValid())
+		{
+			if (AActor* PawnOwner = Inv->GetOwner())
+			{
+				if (UPhoneClientComponent* Ph = PawnOwner->FindComponentByClass<UPhoneClientComponent>())
+				{
+					Ph->RequestShelfTake(ShelfOp->ShelfIndex, ShelfOp->Qty);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	UInvDragOp* Op = Cast<UInvDragOp>(InOperation);
 	if (!Op || !Inv.IsValid() || Op->StackId == 0) { return false; }
 
@@ -236,8 +254,10 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 		}
 		else if (Op->FromSlot >= 0)
 		{
-			// Vanaf de hotbar in het rooster gesleept -> snelkoppeling van de hotbar halen.
+			// Vanaf de hotbar in het rooster gesleept -> snelkoppeling van de hotbar halen EN het item op
+			// de losgelaten cel zetten (anders verschijnt 'ie weer op z'n oude/eerste-vrije rooster-cel).
 			Inv->UnassignHotbarStack(Op->StackId);
+			Inv->MoveStackToCell(Op->StackId, GridCell);
 		}
 	}
 	if (Owner.IsValid()) { Owner->MarkDirty(); }
@@ -578,8 +598,9 @@ void UInventoryWidget::RebuildStash()
 
 void UInventoryWidget::RebuildContent()
 {
-	RebuildStash();
-
+	// LET OP: de HOME STASH wordt NIET meer hier herbouwd. Die heeft een eigen signatuur (zie NativeTick) en
+	// herbouwt alleen als de shelf-inhoud echt wijzigt - anders flikkerde de hele stash (+ volledige-wereld
+	// shelf-scan) bij elke backpack-sleep mee.
 	UInventoryComponent* Inv = GetInv();
 	if (!Inv || !Grid) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();
@@ -589,28 +610,53 @@ void UInventoryWidget::RebuildContent()
 
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 
-	// --- Rooster met VASTE posities: items blijven staan waar je ze neerzet ---
-	Grid->ClearChildren();
+	// --- Rooster met VASTE posities: de cel-SLOTS blijven VAST in de WrapBox; we vervangen alleen de inhoud
+	//     van cellen die ECHT wijzigden (op een sleep zijn dat er 2). Geen ClearChildren -> geen flikker. ---
 	const TArray<int32>& Order = Inv->GetGridOrder();
-	for (int32 cell = 0; cell < Order.Num(); ++cell)
+	const int32 NCells = Order.Num();
+	if (CellBoxes.Num() != NCells)
+	{
+		Grid->ClearChildren();
+		CellBoxes.Reset(); CellSigs.Reset();
+		for (int32 i = 0; i < NCells; ++i)
+		{
+			USizeBox* B = WidgetTree->ConstructWidget<USizeBox>();
+			B->SetWidthOverride(86.f); B->SetHeightOverride(86.f);
+			Grid->AddChildToWrapBox(B);
+			CellBoxes.Add(B); CellSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+		}
+	}
+	for (int32 cell = 0; cell < NCells; ++cell)
 	{
 		const int32 StackId = Order[cell];
 		const int32 Idx = Inv->FindStackById(StackId);
-		// Items die op de hotbar staan tonen we NIET als item in het rooster (ze staan onderin de hotbar),
-		// maar we HOUDEN WEL hun vaste cel als LEGE cel. Anders verspringt het rooster (en lijken er
-		// lege slots bij te komen) zodra je een item naar/van de hotbar sleept. Nu blijft het aantal
-		// rooster-cellen altijd gelijk en vult een hotbar-item gewoon weer z'n eigen cel.
+		// Hotbar-items tonen we niet in het rooster, maar hun cel blijft als lege cel staan (rooster verspringt niet).
 		const bool bOnHotbar = (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId));
+		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx) && !bOnHotbar);
 
-		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); // vierkante icon-slot zoals de hotbar
+		// Signatuur van de zichtbare cel-staat: onveranderd -> cel met rust laten (geen rebuild, geen flikker).
+		FString Sig = TEXT("E");
+		if (bShowItem)
+		{
+			const FInventoryStack& Sg = Stacks[Idx];
+			int64 CashEuros = 0;
+			if (Sg.ItemId == TEXT("Cash"))
+			{
+				const APawn* Pw = GetOwningPlayerPawn();
+				const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
+				CashEuros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : (int64)Sg.Quantity;
+			}
+			const int32 WaterLv = Sg.ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(Sg.Quality) : -1;
+			Sig = FString::Printf(TEXT("I|%s|%d|%.1f|%.1f|%d|%lld|%d"), *Sg.ItemId.ToString(), Sg.Quantity, Sg.Quality, Sg.QualityPct, WaterLv, (long long)CashEuros, Inv->CountStacksOf(Sg.ItemId));
+		}
+		if (!CellSigs.IsValidIndex(cell) || !CellBoxes.IsValidIndex(cell)) { continue; }
+		if (Sig == CellSigs[cell]) { continue; } // niets veranderd aan deze cel
+		CellSigs[cell] = Sig;
 
 		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
 		Cell->SlotIndex = -1; Cell->GridCell = cell;
 		Cell->Inv = Inv; Cell->Owner = this;
 		Cell->IconSize = 68.f;
-
-		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx) && !bOnHotbar);
 		if (bShowItem)
 		{
 			const FInventoryStack& S = Stacks[Idx];
@@ -675,8 +721,7 @@ void UInventoryWidget::RebuildContent()
 			Cell->StackId = 0; Cell->bDraggable = false;
 			Cell->Bg = FLinearColor(0.13f, 0.14f, 0.18f, 0.55f);
 		}
-		Sz->SetContent(Cell);
-		Grid->AddChildToWrapBox(Sz);
+		CellBoxes[cell]->SetContent(Cell);
 	}
 }
 
@@ -710,7 +755,7 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	// Naast een gekoppeld paneel (droogrek): HOME STASH verbergen (puur preview), card smaller, en het paar
 	// dicht bij elkaar in het midden (rek rechts-van-midden, inventory links-van-midden). Anders: normaal gecentreerd.
-	const bool bSideBySide = PhoneComp.IsValid() && PhoneComp->IsDryRackOpen();
+	const bool bSideBySide = PhoneComp.IsValid() && (PhoneComp->IsDryRackOpen() || PhoneComp->IsShelfOpen());
 	if (StashBox) { StashBox->SetVisibility(bSideBySide ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
 	if (CardSlot)
 	{
@@ -728,6 +773,21 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			CardSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 			CardSlot->SetPosition(FVector2D(0.f, -30.f));
 		}
+	}
+
+	// HOME STASH: alleen herbouwen als de shelf-inhoud ECHT veranderde (niet bij elke grid-sleep). Goedkope
+	// signatuur i.p.v. de volledige widget-herbouw + wereld-scan elke keer (dat liet de halve inventory flikkeren).
+	if (!bSideBySide)
+	{
+		FString SSig;
+		if (UWorld* W = GetWorld())
+		{
+			for (TActorIterator<AStorageShelf> It(W); It; ++It)
+			{
+				for (const FShelfStack& S : It->Contents) { SSig.Appendf(TEXT("%s%d|"), *S.ItemId.ToString(), S.Quantity); }
+			}
+		}
+		if (SSig != LastStashSig) { LastStashSig = SSig; RebuildStash(); }
 	}
 
 	if (bDirty)

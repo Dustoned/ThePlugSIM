@@ -189,6 +189,19 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> WaitBarLabel;
 	float WaitBarSentTime = -1.f;      // SentRealTime van het open bericht (basis voor de aftelbalk)
 	void UpdateWaitBarLive();          // werkt de wacht-balk live bij
+
+	// --- Afspraak-urgentie in de gesprekkenlijst: slanke aftelbalk + kleur per contact, gesorteerd op urgentie ---
+	// Urgentie-fractie (1 -> 0): fase B = live klant ApptTimeout; fase A = tijd tot het afspraak-moment
+	// (AppointmentTimeOfDay vs dag-klok). False = geen lopende afspraak met dit contact.
+	// Phase 0=onderweg (toon kloktijd OutClockMins), 1=wacht-aan-deur (aftel OutSecsLeft), 2=wacht-op-antwoord.
+	bool GetApptUrgency(FName ContactId, float& OutFrac, int32& OutSecsLeft, int32& OutPhase, int32& OutClockMins) const;
+	// bReply=true -> BLAUW vers (jouw beurt: accept/decline); anders GROEN vers (afspraak loopt). Beide -> geel -> rood.
+	static FLinearColor UrgencyColor(float Frac, bool bReply = false);
+	UPROPERTY() TMap<FName, TObjectPtr<class UProgressBar>> ListApptBars; // per contact in de lijst
+	UPROPERTY() TMap<FName, TObjectPtr<class UBorder>> ListCards;         // per contact (live re-tint)
+	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> ListPreviews;         // per contact (live "arrives in / left"-tekst)
+	void UpdateListBarsLive();         // werkt de lijst-balken + kleuren + preview live bij (geen rebuild)
+
 	void BuildPackagesApp();           // bouwt de losse Packages-app in ContentBox
 	void FillPackagesInto(class UScrollBox* Scroll); // vult de bestellingen-kaarten in een scroll
 	void FillPotUpgradesInto(class UScrollBox* Scroll); // "Pot Upgrades"-tab: per geplaatste pot

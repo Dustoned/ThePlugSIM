@@ -37,6 +37,9 @@ protected:
 	UPROPERTY() TObjectPtr<class UTextBlock> GramLabel;
 	UPROPERTY() TObjectPtr<class UTextBlock> PackBtnLabel;
 
+	UPROPERTY() TObjectPtr<class UTextBlock> TabBtnLabel; // header-knop naast Close: "Unpack bags" / "Back to packing"
+	bool bUnpackTab = false; // true = aparte unpack-tab (alleen de uitpak-lijst); false = de normale pack-flow
+
 	FName SelStrain;       // gekozen gedroogde Bud_<strain>
 	FName SelContainer;    // gekozen container (Cont_*)
 	int32 SelBags = 1;     // gekozen aantal bags (1..MaxBags)

@@ -16,6 +16,10 @@
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "NavigationSystem.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "World/StoreCounter.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "UObject/ConstructorHelpers.h"
@@ -183,6 +187,7 @@ void UContactsComponent::SendRandomAppointment()
 	FName WantStrain = NAME_None;
 	{ FString L, R; if (WantProduct.ToString().Split(TEXT("_"), &L, &R)) { WantStrain = FName(*R); } }
 	const FString WantStr = WantProduct.IsNone() ? TEXT("weed") : WeedUI::PrettyItemName(WantProduct);
+	const FString WantClean = WantStr.Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase); // "Silver Haze bag" -> "Silver Haze" (gewoon de strain)
 
 	FPhoneMessage Msg;
 	Msg.FromContactId = C.ContactId;
@@ -224,10 +229,9 @@ void UContactsComponent::SendRandomAppointment()
 			const int32 OTotalMin = ClockMinutesOf(Msg.AppointmentTimeOfDay);
 			const int32 OHH = (OTotalMin / 60) % 24;
 			const int32 OMM = OTotalMin % 60;
-			const int32 BonusPct = FMath::RoundToInt((Msg.BonusMult - 1.f) * 100.f);
 			Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
-				? FText::FromString(FString::Printf(TEXT("VIP order: %dg %s, min %.0f%% THC by %02d:%02d. On spec I pay +%d%%. I'll come to you."), WantQty, *WantStr, Msg.MinThc, OHH, OMM, BonusPct))
-				: FText::FromString(FString::Printf(TEXT("VIP order: %dg %s, min %.0f%% THC by %02d:%02d. On spec I pay +%d%%. Bring it to my place."), WantQty, *WantStr, Msg.MinThc, OHH, OMM, BonusPct));
+				? FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nI'll come to you."), WantQty, *WantClean, Msg.MinThc, OHH, OMM))
+				: FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nBring it to my place."), WantQty, *WantClean, Msg.MinThc, OHH, OMM));
 		}
 	}
 
@@ -241,18 +245,17 @@ void UContactsComponent::SendRandomAppointment()
 	if (!Msg.bOrder)
 	{
 		Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
-			? FText::FromString(FString::Printf(TEXT("Yo, got any %s? Need %dg. I'll come by at %02d:%02d."), *WantStr, WantQty, HH, MM))
+			? FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nI'll come by at %02d:%02d."), *WantClean, WantQty, HH, MM))
 			: (AddrStr.IsEmpty()
-				? FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - can you come by mine at %02d:%02d?"), *WantStr, WantQty, HH, MM))
-				: FText::FromString(FString::Printf(TEXT("Got any %s? Need %dg - come by my place (no. %s) at %02d:%02d?"), *WantStr, WantQty, *AddrStr, HH, MM)));
+				? FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nCan you come to my place at %02d:%02d?"), *WantClean, WantQty, HH, MM))
+				: FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nCome to my place (no. %s) at %02d:%02d?"), *WantClean, WantQty, *AddrStr, HH, MM)));
 	}
 	else if (Msg.Kind == EAppointmentKind::YouGoToThem && !AddrStr.IsEmpty())
 	{
 		// Order met huisadres: voeg het adres toe zodat je weet waar je moet leveren.
 		const int32 OTotalMin = ClockMinutesOf(Msg.AppointmentTimeOfDay);
-		const int32 BonusPct = FMath::RoundToInt((Msg.BonusMult - 1.f) * 100.f);
-		Msg.Body = FText::FromString(FString::Printf(TEXT("VIP order: %dg %s, min %.0f%% THC by %02d:%02d. On spec I pay +%d%%. Bring it to no. %s."),
-			WantQty, *WantStr, Msg.MinThc, (OTotalMin / 60) % 24, OTotalMin % 60, BonusPct, *AddrStr));
+		Msg.Body = FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nBring it to my place (no. %s)."),
+			WantQty, *WantClean, Msg.MinThc, (OTotalMin / 60) % 24, OTotalMin % 60, *AddrStr));
 	}
 
 	// COMPETITIVE: dit bericht is voor ÉÉN speler (eigen telefoon). Doel = de favoriete speler van dit contact
@@ -365,6 +368,52 @@ void UContactsComponent::CheckAppointments()
 	}
 }
 
+// Een LOGISCHE wacht-plek voor een afspraak: een door de speler gemarkeerde meet-spot (MeetSpots.txt) voor
+// deze map, anders vlakbij een winkel-toonbank. Geen dak, geen midden-op-de-weg. False = niks gevonden.
+static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
+{
+	if (!W) { return false; }
+	TArray<FVector> Cands;
+	TArray<FString> Lines;
+	if (FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MeetSpots.txt"))))
+	{
+		const FString CurMap = W->GetOutermost()->GetName();
+		for (const FString& Raw : Lines)
+		{
+			TArray<FString> P; Raw.TrimStartAndEnd().ParseIntoArray(P, TEXT("|"));
+			if (P.Num() >= 4 && P[0] == CurMap)
+			{
+				Cands.Add(FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3])));
+			}
+		}
+	}
+	// Geen gemarkeerde plekken -> val terug op de winkels (al gemarkeerd door de speler, dus logisch + bereikbaar).
+	if (Cands.Num() == 0)
+	{
+		for (TActorIterator<AStoreCounter> It(W); It; ++It) { if (IsValid(*It)) { Cands.Add(It->GetActorLocation()); } }
+	}
+	if (Cands.Num() == 0) { return false; }
+	Out = Cands[FMath::RandRange(0, Cands.Num() - 1)];
+	return true;
+}
+
+// De vaste "hotel-hoofdingang" die de speler met Shift+F7 zette (DeliveryPoint.txt) - waar ook de pakketjes
+// landen. Voor een "ik kom naar JOUW plek"-afspraak wacht de NPC daar i.p.v. op de apartment-deur (= dak).
+static bool ReadDeliveryPoint(UWorld* W, FVector& Out)
+{
+	if (!W) { return false; }
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("DeliveryPoint.txt")))) { return false; }
+	const FString CurMap = W->GetOutermost()->GetName();
+	bool bFound = false;
+	for (const FString& Raw : Lines)
+	{
+		TArray<FString> P; Raw.TrimStartAndEnd().ParseIntoArray(P, TEXT("|"));
+		if (P.Num() >= 4 && P[0] == CurMap) { Out = FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3])); bFound = true; }
+	}
+	return bFound;
+}
+
 void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 {
 	UWorld* World = GetWorld();
@@ -440,23 +489,52 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		{
 			if (Player)
 			{
-				// "Ik kom langs": wacht BUITEN bij je hoofdingang (de plek vóór je voordeur, waar ook de
-				// pakketjes komen) - nooit binnen in de kamer.
-				FVector HomeDoor;
 				const UPhoneClientComponent* Ph = Player->FindComponentByClass<UPhoneClientComponent>();
-				if (bComeToYou && Ph && Ph->GetActiveHomeLocation(HomeDoor))
+				FVector HomeDoor;
+
+				// "Kom bij MIJ" (YouGoToThem): wacht op een LOGISCHE plek - een door de speler gemarkeerde
+				// meet-spot (Ctrl+F7: steegje/hotel-hal/...) of anders vlakbij een winkel. NOOIT op het dak
+				// (de apartment-pos zit boven) of midden op de weg (random nav).
+				if (!bComeToYou)
 				{
-					SpawnLoc = HomeDoor + FVector(0.f, 0.f, 4.f);
+					FVector MeetLoc;
+					if (PickLogicalMeetSpot(World, MeetLoc)) { SpawnLoc = MeetLoc; bPlacedAtHome = true; }
 				}
-				else
+
+				// "Ik kom langs" (TheyComeToYou): wacht bij JOUW hoofdingang = de hotel-hal (de Shift+F7 delivery-
+				// marker), NOOIT op de apartment-deur boven (= dak). Anders de actieve-woning-deur, dan vóór jou.
+				if (!bPlacedAtHome && bComeToYou)
 				{
-					SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
-					SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
-					SpawnRot.Pitch = 0.f;
-					SpawnRot.Roll = 0.f;
+					FVector HotelHall;
+					if (ReadDeliveryPoint(World, HotelHall)) { SpawnLoc = HotelHall; bPlacedAtHome = true; }
+				}
+				if (!bPlacedAtHome)
+				{
+					if (bComeToYou && Ph && Ph->GetActiveHomeLocation(HomeDoor))
+					{
+						SpawnLoc = HomeDoor + FVector(0.f, 0.f, 4.f);
+					}
+					else
+					{
+						SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
+						SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
+						SpawnRot.Pitch = 0.f;
+						SpawnRot.Roll = 0.f;
+					}
 				}
 			}
 		}
+	}
+
+	// ALTIJD op de echte vloer zetten (nooit op een tafel/stoel/kast): meubels zijn WorldDynamic, dus een
+	// ECC_WorldStatic-trace omlaag gaat er dwars doorheen en raakt de map-vloer. Geen treffer -> Z blijft staan.
+	if (World)
+	{
+		FHitResult Floor;
+		const FVector FS(SpawnLoc.X, SpawnLoc.Y, SpawnLoc.Z + 300.f);
+		const FVector FE = FS - FVector(0.f, 0.f, 1500.f);
+		FCollisionQueryParams FQ(FName(TEXT("ApptFloor")), false);
+		if (World->LineTraceSingleByChannel(Floor, FS, FE, ECC_WorldStatic, FQ)) { SpawnLoc.Z = Floor.ImpactPoint.Z + 4.f; }
 	}
 
 	// Deferred spawn zodat we NpcId zetten vóór BeginPlay (klant laadt dan z'n eigen stats).
@@ -492,7 +570,16 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	Cust->bDespawnAfterServed = true; // afspraak-klant vertrekt na de deal
 	Cust->bNeedsPlayer = true;        // afspraak: poppetje op de kompas (je moet bij deze zijn)
 
+	// Blijf op je plek wachten (geen rondlopen) + ruim na de deal netjes op je eigen plek op.
+	Cust->SetSpot(SpawnLoc);
+	Cust->SetHome(SpawnLoc);
+
 	Cust->FinishSpawning(SpawnTM);
+
+	// Echte afspraak-state: bApptActive + een afgetelde wachttijd die schaalt met afstand + respect/loyaliteit
+	// (ComputeApptWaitSeconds). Zo werken de chat-progressbar EN de no-show ook voor deze (niet-resident) NPC,
+	// i.p.v. de oude 30s-patience waardoor 'ie te snel vertrok.
+	Cust->BeginAppointment(bComeToYou);
 
 	UE_LOG(LogWeedShop, Log, TEXT("Appointment customer spawned for %s."), *Msg.SenderName.ToString());
 }

@@ -38,6 +38,9 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
 
+	// Hoeveel cm de FP-camera omhoog komt tijdens een sprong (zodat je over je optrekkende body heen kijkt).
+	float JumpCamLift = 34.f;
+
 	/** 3D-model van het item dat je vasthoudt (alleen voor jezelf zichtbaar). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UStaticMeshComponent> HeldItemMesh;
@@ -147,6 +150,14 @@ public:
 	// Beach-map woning-registry (ROADMAP 4.1): registreer de kamer waar je NU staat als koopbare woning
 	// (DoorRetrofitter meet de wanden + schrijft BeachHomes.txt). Dev-only (free-build). Bind: F6.
 	UFUNCTION(Exec) void WeedRegisterHome();
+
+	// Bezorg-punt vastleggen: sla je HUIDIGE plek op als de vaste plek waar de drone pakketjes neerzet
+	// (bv. helemaal beneden bij de hotel-hoofdingang). Per map, laatste wint. Dev-only. Bind: Shift+F7.
+	UFUNCTION(Exec) void WeedMarkDeliveryPoint();
+
+	// Afspraak-ontmoetingsplek TOEVOEGEN: sla je HUIDIGE plek op als logische plek waar "come by"-NPC's
+	// kunnen verschijnen (bij een winkel, steegje, hotel-hal). Meerdere mogelijk (append). Bind: Ctrl+F7.
+	UFUNCTION(Exec) void WeedAddMeetSpot();
 
 	// Dev: meld waar de capsule tegenaan botst (alleen met F9-overlay aan) - onzichtbare blockers.
 	UFUNCTION()

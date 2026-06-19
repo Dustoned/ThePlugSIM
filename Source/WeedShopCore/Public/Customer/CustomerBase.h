@@ -259,10 +259,15 @@ public:
 	// HOEVEEL (OutQty). Gebruikt door zowel walk-ins als telefoon-afspraken zodat ze identiek schalen.
 	static FName PickDesiredProduct(class AWeedShopGameState* GS, class UDataTable* ProductTable, FName NpcId, int32& OutQty);
 
-	// Voor de chat-progressbar (client leest gerepliceerde ApptTimeout). Loopt van 1 -> 0 tot de NPC opgeeft.
-	static constexpr float ApptTimeoutMax = 360.f; // moet matchen met de timer in BeginAppointment
+	// Voor de chat-progressbar (client leest gerepliceerde ApptTimeout + ApptTimeoutMax). Loopt van 1 -> 0 tot de
+	// NPC opgeeft. ApptTimeoutMax is PER-NPC (schaalt met afstand + respect/loyaliteit) zodat de bar altijd vol start.
+	UPROPERTY(Replicated) float ApptTimeoutMax = 360.f;
 	float GetApptTimeLeft() const { return FMath::Max(0.f, ApptTimeout); }
-	float GetApptFraction() const { return FMath::Clamp(ApptTimeout / ApptTimeoutMax, 0.f, 1.f); }
+	float GetApptFraction() const { return (ApptTimeoutMax > 1.f) ? FMath::Clamp(ApptTimeout / ApptTimeoutMax, 0.f, 1.f) : 0.f; }
+	// Wacht-tijd: basis + afstand-tot-speler + respect/loyaliteit van deze NPC (vertrouwde klant wacht langer).
+	float ComputeApptWaitSeconds() const;
+	// Gedeelde no-show: speler kwam niet opdagen -> boos chat-bericht + stat-verlies + vertrekken (1 plek).
+	void NotifyNoShowAndLeave();
 
 	// Park-wachtrij (spawner): is deze bewoner bezig met z'n park-trip (er naartoe lopen of er even staan)?
 	bool IsParkTripActive() const { return bRoamGoalIsPark || bPendingRoamGoalIsPark || ParkPauseTimer > 0.f; }

@@ -444,7 +444,7 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 		// + Citizens staan in SK_Mannequin's compat-lijst). Veel beter dan de kale single-node 'walk-forward'.
 		bBodyHasLocoAbp = false;
 		{
-			static TSubclassOf<UAnimInstance> LocoAbp = LoadClass<UAnimInstance>(nullptr,
+			TSubclassOf<UAnimInstance> LocoAbp = LoadClass<UAnimInstance>(nullptr, // GEEN static: unrooted -> kan dangelen na GC
 				TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
 			if (LocoAbp) { M->SetAnimInstanceClass(LocoAbp); bBodyHasLocoAbp = true; } // anders: single-node fallback
 		}
@@ -609,6 +609,18 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	// FP-camera: tijdens een SPRONG (airborne) brengen we de camera wat OMHOOG, zodat je over je optrekkende
+	// body/benen heen kijkt i.p.v. er middenin. Op de grond terug naar de vaste ooghoogte (stabiel, geen
+	// loop-bob). Smoothing ertussen -> vloeiende sprong-beweging. Alleen de lokale speler.
+	if (IsLocallyControlled() && FirstPersonCameraComponent && GetCharacterMovement())
+	{
+		const bool bAir = GetCharacterMovement()->IsFalling();
+		const float DesiredRelZ = bAir ? (70.f + JumpCamLift) : 70.f;
+		FVector RelLoc = FirstPersonCameraComponent->GetRelativeLocation();
+		RelLoc.Z = FMath::FInterpTo(RelLoc.Z, DesiredRelZ, DeltaSeconds, bAir ? 14.f : 9.f);
+		FirstPersonCameraComponent->SetRelativeLocation(RelLoc);
+	}
+
 	// F9: dev-overlay met positie + mesh-onder-crosshair (en logt de plek naar MarkedSpots.txt).
 	// F7: vlieg-modus (markers zetten op hoogte); Space = stijgen, Ctrl = dalen.
 	if (IsLocallyControlled())
@@ -630,7 +642,17 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			bSpotKeyWasDown = bF9;
 
 			const bool bF7 = bDevKeys && PCk->IsInputKeyDown(EKeys::F7);
-			if (bF7 && !bFlyKeyWasDown)
+			if (bF7 && !bFlyKeyWasDown && (PCk->IsInputKeyDown(EKeys::LeftShift) || PCk->IsInputKeyDown(EKeys::RightShift)))
+			{
+				// Shift+F7: leg de HUIDIGE plek vast als vaste bezorg-plek (hotel-hoofdingang). F7 los = fly.
+				WeedMarkDeliveryPoint();
+			}
+			else if (bF7 && !bFlyKeyWasDown && (PCk->IsInputKeyDown(EKeys::LeftControl) || PCk->IsInputKeyDown(EKeys::RightControl)))
+			{
+				// Ctrl+F7: voeg een afspraak-ontmoetingsplek toe (logische plek: winkel/steegje/hotel-hal).
+				WeedAddMeetSpot();
+			}
+			else if (bF7 && !bFlyKeyWasDown)
 			{
 				if (UCharacterMovementComponent* CM = GetCharacterMovement())
 				{
@@ -1528,6 +1550,44 @@ void AThePlugSIMCharacter::WeedRegisterHome()
 	if (!GSd || !GSd->IsFreeBuild()) { return; }
 	for (TActorIterator<ADoorRetrofitter> It(W); It; ++It) { It->RegisterHomeAtPlayer(this); return; }
 	UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedRegisterHome: geen DoorRetrofitter (alleen op de pack-map)."));
+}
+
+void AThePlugSIMCharacter::WeedMarkDeliveryPoint()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
+	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	// Eén regel (laatste wint), per map: map|X|Y|Z. FindDeliveryPoint leest dit als HOOGSTE prioriteit,
+	// dus alle pakketjes landen voortaan op deze exacte plek (bv. helemaal beneden bij de hotel-ingang).
+	const FVector L = GetActorLocation();
+	const FString MapPath = W->GetOutermost()->GetName();
+	const FString Line = FString::Printf(TEXT("%s|%.1f|%.1f|%.1f"), *MapPath, L.X, L.Y, L.Z);
+	const FString File = FPaths::ProjectSavedDir() / TEXT("DeliveryPoint.txt");
+	FFileHelper::SaveStringToFile(Line, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(this, -1, 5.f, FColor::Green,
+		TEXT("Delivery point set here - all packages now drop at this spot (e.g. the hotel entrance)."));
+}
+
+void AThePlugSIMCharacter::WeedAddMeetSpot()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
+	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	// Append (meerdere plekken per map): map|X|Y|Z. "Come by"-afspraak-NPC's kiezen willekeurig één van deze
+	// logische plekken (bij een winkel, steegje, hotel-hal) i.p.v. op een dak of midden op de weg.
+	const FVector L = GetActorLocation();
+	const FString MapPath = W->GetOutermost()->GetName();
+	const FString Line = FString::Printf(TEXT("%s|%.1f|%.1f|%.1f"), *MapPath, L.X, L.Y, L.Z) + LINE_TERMINATOR;
+	const FString File = FPaths::ProjectSavedDir() / TEXT("MeetSpots.txt");
+	FFileHelper::SaveStringToFile(Line, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,
+		&IFileManager::Get(), FILEWRITE_Append);
+	// Tel hoeveel er nu staan (voor deze map).
+	int32 Count = 0; TArray<FString> All;
+	if (FFileHelper::LoadFileToStringArray(All, *File)) { for (const FString& R : All) { if (R.TrimStartAndEnd().StartsWith(MapPath + TEXT("|"))) { ++Count; } } }
+	UWeedToast::NotifyPawn(this, -1, 4.f, FColor::Cyan,
+		FString::Printf(TEXT("Meet spot added (%d on this map). Appointment NPCs will wait at these spots."), Count));
 }
 
 void AThePlugSIMCharacter::WeedClearFurniture()

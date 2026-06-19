@@ -13,8 +13,11 @@
 #include "World/Atm.h"
 #include "Placement/PlaceableProp.h"
 #include "World/WaterSink.h"
+#include "World/StorageShelf.h"
+#include "Placement/PlaceableTypes.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Engine/StaticMesh.h" // IsCompiling()/GetRenderData(): lift pas bouwen als de meshes echt klaar zijn
 #include "Economy/EconomyComponent.h"
 #include "Phone/PhoneClientComponent.h"
 #include "NavigationSystem.h"
@@ -1898,11 +1901,24 @@ void ADoorRetrofitter::ScanAndConvert()
 				const FVector Loc(FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]), FCString::Atof(*Pc[3]));
 				const FRotator Rot(0.f, FCString::Atof(*Pc[4]), 0.f);
 				FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				FPlaceableDef Def;
+				const bool bShelf = GetPlaceableDef(ItemId, Def) && Def.bIsShelf; // Fridge/Shelf/Chest = eigen class
 				if (Pc[0] == TEXT("Sink"))
 				{
 					if (AWaterSink* Sk = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(Rot, Loc), SP))
 					{
 						Sk->Tags.Add(FName(TEXT("AutoFixture")));
+						++NF;
+					}
+				}
+				else if (bShelf)
+				{
+					// Opslag-meubel (Fridge/Shelf/Chest): als functionele AStorageShelf terugzetten, niet als dode prop.
+					if (AStorageShelf* Sh = W->SpawnActorDeferred<AStorageShelf>(AStorageShelf::StaticClass(), FTransform(Rot, Loc), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+					{
+						Sh->ShelfTier = ItemId;
+						Sh->FinishSpawning(FTransform(Rot, Loc));
+						Sh->Tags.Add(FName(TEXT("AutoFixture")));
 						++NF;
 					}
 				}
@@ -2409,7 +2425,9 @@ void ADoorRetrofitter::ScanAndConvert()
 				else if (MeshName == TEXT("SM_ElevatorDoor"))
 				{
 					bElevActor = true;
-					AllPanels.Add(TPair<FVector, UStaticMeshComponent*>(L, Comp));
+					// Valideer de COMPONENT zelf (niet alleen de actor): tijdens streaming kan 'ie pending-kill
+					// zijn terwijl de actor nog IsValid was -> later schrijven (SetMobility) = heap-corruptie.
+					if (IsValid(Comp)) { AllPanels.Add(TPair<FVector, UStaticMeshComponent*>(L, Comp)); }
 				}
 			}
 			// Geen lift-mesh? Nooit meer scannen. Wel lift-frames: blijven checken tot de schacht staat (ElevBuilt).
@@ -2423,6 +2441,23 @@ void ADoorRetrofitter::ScanAndConvert()
 			// componenten registreren raakte die dan -> EXCEPTION_ACCESS_VIOLATION in PackElevator::Setup.
 			// Volgende scan-pass proberen we opnieuw zodra de wereld klaar is.
 			if (!WeedShop_IsRoomReady()) { continue; }
+			// EN: pas bouwen als de LIFT-MESHES echt klaar zijn (niet meer async aan het compileren/laden).
+			// "Waiting on static mesh SM_ElevatorNumber_X before playing" -> een mesh/TextRender erop zetten in
+			// Setup terwijl de render-data nog niet bestaat = de access violation. Wacht tot ze klaar zijn.
+			{
+				static const TCHAR* ElevMeshPaths[] = {
+					TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorCabin.SM_ElevatorCabin"),
+					TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorDoor.SM_ElevatorDoor"),
+					TEXT("/Game/CityBeachStrip/Meshes/Architecture/Interiors/Elevator/SM_ElevatorNumber_0.SM_ElevatorNumber_0"),
+				};
+				bool bMeshesReady = true;
+				for (const TCHAR* MP : ElevMeshPaths)
+				{
+					UStaticMesh* EM = LoadObject<UStaticMesh>(nullptr, MP);
+					if (!EM || EM->IsCompiling() || EM->GetRenderData() == nullptr) { bMeshesReady = false; break; }
+				}
+				if (!bMeshesReady) { continue; } // volgende scan-pass opnieuw proberen
+			}
 			int32& Prev = ElevPrevCount.FindOrAdd(KV.Key);
 			const int32 Count = KV.Value.FloorZ.Num();
 			if (Count < 2 || Count != Prev) { Prev = Count; continue; } // wacht tot 2 scans stabiel
@@ -2449,7 +2484,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			// uit de paneel-rotatie (niet uit parkeer-posities raden: de map parkeert ze vrijwel dicht).
 			const FVector OpeningCenter = KV.Value.Ref;
 			FVector SpanDir = FVector::XAxisVector;
-			if (RawPanels.Num() > 0 && RawPanels[0].Value)
+			if (RawPanels.Num() > 0 && IsValid(RawPanels[0].Value))
 			{
 				SpanDir = -RawPanels[0].Value->GetComponentRotation().RotateVector(FVector::YAxisVector).GetSafeNormal2D();
 			}
@@ -2465,7 +2500,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				TArray<UStaticMeshComponent*> FloorPanels;
 				for (TPair<int32, UStaticMeshComponent*>& RP : RawPanels)
 				{
-					if (RP.Key == Fi && RP.Value) { FloorPanels.Add(RP.Value); }
+					if (RP.Key == Fi && IsValid(RP.Value)) { FloorPanels.Add(RP.Value); }
 				}
 				const FVector CXY(OpeningCenter.X, OpeningCenter.Y, 0.f);
 				if (FloorPanels.Num() >= 2)

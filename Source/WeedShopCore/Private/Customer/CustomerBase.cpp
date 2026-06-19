@@ -715,6 +715,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, bShopkeeper);
 	DOREPLIFETIME(ACustomerBase, bApptActive);
 	DOREPLIFETIME(ACustomerBase, ApptTimeout);
+	DOREPLIFETIME(ACustomerBase, ApptTimeoutMax);
 	DOREPLIFETIME(ACustomerBase, NpcId);
 }
 
@@ -838,6 +839,21 @@ void ACustomerBase::Tick(float DeltaSeconds)
 	{
 		TickResident(DeltaSeconds);
 		return;
+	}
+
+	// Afspraak-NPC (verse fallback, geen resident): eigen aftel-timer i.p.v. de 30s-patience, zodat de chat-
+	// progress-bar + de no-show OOK voor deze NPC werken. (Resident-afspraken lopen via TickResident.)
+	if (bApptActive)
+	{
+		ApptTimeout -= DeltaSeconds;
+		if (ApptTimeout > 0.f && ApptTimeout < 75.f && !bApptSaidWaiting && State != ECustomerState::Served)
+		{
+			PushApptMessage(TEXT("Yo, where you at? I can't wait much longer..."));
+			bApptSaidWaiting = true;
+		}
+		if (State == ECustomerState::Served || State == ECustomerState::Leaving) { EndAppointment(); }
+		else if (ApptTimeout <= 0.f) { NotifyNoShowAndLeave(); }
+		return; // geen 30s-patience-drain zolang de afspraak loopt
 	}
 
 	// Geduld loopt af zolang hij wacht (wil bestellen of onderhandelt).
@@ -1587,7 +1603,8 @@ void ACustomerBase::BeginAppointment(bool bComeToPlayer)
 	bApptActive = true;
 	bApptComeToPlayer = bComeToPlayer;
 	bApptArrived = false;
-	ApptTimeout = ApptTimeoutMax; // daarna geeft de NPC de afspraak op
+	ApptTimeoutMax = ComputeApptWaitSeconds(); // wacht-tijd schaalt met afstand + respect/loyaliteit van deze NPC
+	ApptTimeout = ApptTimeoutMax;              // daarna geeft de NPC de afspraak op
 	bApptSaidOnWay = bApptSaidHere = bApptSaidWaiting = false;
 	SetNeedsPlayer(true);      // poppetje op de kompas zodat de speler weet waar te zijn
 	BecomeBuyerNow();          // afspraak = wil kopen (geen prospect-sampling meer)
@@ -1633,6 +1650,48 @@ void ACustomerBase::EndAppointment()
 	bHasResidentPrevMoveLoc = false;
 	bHasResidentBestDistToGoal = false;
 	ResidentRecoveryAttempts = 0;
+}
+
+float ACustomerBase::ComputeApptWaitSeconds() const
+{
+	// Basis + afstand-tot-dichtstbijzijnde-speler + respect/loyaliteit van deze NPC (uit de registry, persistent).
+	// Een vertrouwde, loyale klant wacht langer op je; een nieuwe/chagrijnige korter. Schappelijk geclamped.
+	float Wait = 110.f;
+	const UWorld* W = GetWorld();
+	if (W)
+	{
+		float Best = TNumericLimits<float>::Max();
+		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (const APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr)
+			{
+				Best = FMath::Min(Best, (float)FVector::Dist2D(P->GetActorLocation(), GetActorLocation()));
+			}
+		}
+		if (Best < TNumericLimits<float>::Max()) { Wait += FMath::Min(Best / 120.f, 90.f); } // verder = wat langer
+	}
+	float R = Respect, L = Loyalty;
+	if (const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+		{
+			float rr = 0.f, ll = 0.f, aa = 0.f; FText nm;
+			if (!NpcId.IsNone() && Reg->GetStats(NpcId, rr, ll, aa, nm)) { R = rr; L = ll; }
+		}
+	}
+	Wait += (FMath::Max(0.f, R) + FMath::Max(0.f, L)) * 1.0f; // 0..100 elk -> tot +200s bij volle trust
+	return FMath::Clamp(Wait, 90.f, 420.f);
+}
+
+void ACustomerBase::NotifyNoShowAndLeave()
+{
+	if (!HasAuthority()) { return; }
+	// Speler kwam niet opdagen: één nette penalty (Respect via LeaveAngry, Loyalty hier) + boos chat-bericht.
+	Loyalty = ClampAttr(Loyalty - 8.f);
+	PushApptMessage(TEXT("You never showed. Don't waste my time again - that costs you."));
+	EndAppointment();
+	LeaveAngry();           // Respect -10 + State = Leaving (geen extra Respect-penalty hier; geen dubbeltelling)
+	WriteStatsToRegistry(); // bijgewerkte Respect + Loyalty wegschrijven
 }
 
 ACityGenerator* ACustomerBase::GetResidentCity(UWorld* W)
@@ -3020,13 +3079,7 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 		else if (ApptTimeout <= 0.f)
 		{
-			// Te lang laten wachten -> de NPC geeft de afspraak op: respect + loyaliteit omlaag en vertrekt.
-			Respect = ClampAttr(Respect - 5.f);
-			Loyalty = ClampAttr(Loyalty - 8.f);
-			WriteStatsToRegistry();
-			Say(TEXT("You took too long. I'm out."));
-			EndAppointment();
-			LeaveAngry();
+			NotifyNoShowAndLeave(); // boos chat-bericht + penalty + vertrekken (gedeeld; geen dubbele Respect-penalty)
 		}
 		else if (bApptComeToPlayer)
 		{

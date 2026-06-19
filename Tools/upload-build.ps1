@@ -27,6 +27,25 @@ if ($Notes -eq "Nieuwe test-build." -and (Test-Path $NotesPath)) {
     Write-Host "== Patch notes geladen uit Docs\PATCHNOTES.md =="
 }
 
+# In-game versie (hoofdmenu, linksonder) synchroon houden met de bovenste "Version X.Y.Z" uit de patch
+# notes. Zo klopt de versie in de game ALTIJD met de release zonder dat ik 'm met de hand hoef te bumpen.
+$VerHeader = Join-Path $Proj "Source\WeedShopCore\Public\WeedShopVersion.h"
+if ((Test-Path $NotesPath) -and (Test-Path $VerHeader)) {
+    $notesTxt = [System.IO.File]::ReadAllText($NotesPath, [System.Text.Encoding]::UTF8)
+    $vm = [regex]::Match($notesTxt, 'Version\s+(\d+\.\d+\.\d+)')
+    if ($vm.Success) {
+        $ver = $vm.Groups[1].Value
+        $vh = [System.IO.File]::ReadAllText($VerHeader)
+        $vh2 = [regex]::Replace($vh, 'WEEDSHOP_VERSION_STRING\s+TEXT\("[^"]*"\)', "WEEDSHOP_VERSION_STRING TEXT(`"$ver`")")
+        if ($vh2 -ne $vh) {
+            [System.IO.File]::WriteAllText($VerHeader, $vh2, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "== In-game versie gezet op v$ver (uit PATCHNOTES.md) =="
+        } else {
+            Write-Host "== In-game versie al v$ver =="
+        }
+    }
+}
+
 # Automatische changelog uit git-commits sinds de vorige build.
 $ShaFile = Join-Path $Proj "Build\last-build-sha.txt"
 $LastSha = ""

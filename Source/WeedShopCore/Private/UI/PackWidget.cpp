@@ -93,6 +93,11 @@ void UPackWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* TS = Head->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("PACKING BENCH"), 18, FLinearColor(0.6f, 1.f, 0.6f), false, true));
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
+	// Aparte UNPACK-tab: grote knop naast Close die wisselt tussen de pack-flow en de uitpak-lijst.
+	UWeedActionButton* TabB = PackBtn(WidgetTree, FLinearColor(0.20f, 0.40f, 0.52f), [this]() { bUnpackTab = !bUnpackTab; LastSig.Reset(); FillBody(); });
+	TabBtnLabel = WeedUI::Text(WidgetTree, TEXT("Unpack bags"), 13, FLinearColor::White, true);
+	TabB->SetContent(TabBtnLabel);
+	Head->AddChildToHorizontalBox(TabB)->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	UWeedActionButton* CloseB = PackBtn(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), [this]() { if (PhoneComp.IsValid()) { PhoneComp->ClosePack(); } });
 	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 12, FLinearColor::White, true));
 	Head->AddChildToHorizontalBox(CloseB);
@@ -112,6 +117,10 @@ void UPackWidget::FillBody()
 	UInventoryComponent* Inv = GetInv(GetOwningPlayerPawn());
 	if (!Inv) { return; }
 
+	// Tab-knop label bijwerken + de aparte UNPACK-tab (toont ALLEEN de uitpak-lijst, geen pack-flow).
+	if (TabBtnLabel) { TabBtnLabel->SetText(FText::FromString(bUnpackTab ? TEXT("Back to packing") : TEXT("Unpack bags"))); }
+	if (bUnpackTab) { BuildUnpackSection(); return; }
+
 	auto Row = [this](UWidget* W, const FMargin& P) { Body->AddChildToVerticalBox(W)->SetPadding(P); };
 
 	// === 1) Kies een gedroogde strain (Bud_) ===
@@ -129,10 +138,10 @@ void UPackWidget::FillBody()
 			*WeedUI::PrettyItemName(Bud), S.Quantity, S.Quality, S.QualityPct), 12));
 		Row(B, FMargin(0, 2, 0, 2));
 	}
-	if (!bAnyBud) { Row(WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry it on a rack first."), 11, FLinearColor::Gray), FMargin(0, 6, 0, 6)); BuildUnpackSection(); return; }
+	if (!bAnyBud) { Row(WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry it on a rack first."), 11, FLinearColor::Gray), FMargin(0, 6, 0, 6)); return; }
 
 	const int32 BudHave = SelStrain.IsNone() ? 0 : Inv->GetQuantity(SelStrain);
-	if (SelStrain.IsNone() || BudHave <= 0) { BuildUnpackSection(); return; }
+	if (SelStrain.IsNone() || BudHave <= 0) { return; }
 
 	// === 2) Kies een container ===
 	Row(WeedUI::Text(WidgetTree, TEXT("2.  Pick a bag/jar"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 4));
@@ -152,10 +161,10 @@ void UPackWidget::FillBody()
 			*WeedUI::PrettyItemName(ContId), Cap, Owned), 12));
 		Row(B, FMargin(0, 2, 0, 2));
 	}
-	if (!bAnyCont) { Row(WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them in the Grow shop."), 11, FLinearColor(1.f, 0.7f, 0.5f)), FMargin(0, 4, 0, 0)); BuildUnpackSection(); return; }
+	if (!bAnyCont) { Row(WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them in the Grow shop."), 11, FLinearColor(1.f, 0.7f, 0.5f)), FMargin(0, 4, 0, 0)); return; }
 
 	// === 3) Hoeveel bags? (elk bakje tot capaciteit; laatste mag een restje zijn) ===
-	if (SelContainer.IsNone() || !Inv->HasItem(SelContainer, 1)) { BuildUnpackSection(); return; }
+	if (SelContainer.IsNone() || !Inv->HasItem(SelContainer, 1)) { return; }
 	PackCap = FMath::Max(1, UPhoneClientComponent::ContainerCapacity(SelContainer));
 	PackBudHave = BudHave;
 	const int32 OwnedCont = Inv->GetQuantity(SelContainer);
@@ -223,9 +232,7 @@ void UPackWidget::FillBody()
 	PackBtnLabel = WeedUI::Text(WidgetTree, FString::Printf(TEXT("Pack %d bag%s   (%dg)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), UsedG), 13, FLinearColor::White, true);
 	PackB->SetContent(PackBtnLabel);
 	Row(PackB, FMargin(0, 2, 0, 2));
-
-	// Uitpakken onderaan: nieuwe bags verschijnen hier, ONDER de pack-knop, zodat die niet verschuift.
-	BuildUnpackSection();
+	// (Uitpakken zit nu in de aparte "Unpack bags"-tab in de header, niet meer inline onder de pack-knop.)
 }
 
 void UPackWidget::BuildUnpackSection()
@@ -247,6 +254,7 @@ void UPackWidget::BuildUnpackSection()
 		B->SetContent(IconText(WidgetTree, Bag, FString::Printf(TEXT("Unpack %s  (%dg -> loose)"), *WeedUI::PrettyItemName(Bag), S.Quantity), 11));
 		Row(B, FMargin(0, 2, 0, 2));
 	}
+	if (!bAnyBag) { Row(WeedUI::Text(WidgetTree, TEXT("No packed bags to unpack - pack some first."), 11, FLinearColor::Gray), FMargin(0, 8, 0, 6)); }
 }
 
 void UPackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)

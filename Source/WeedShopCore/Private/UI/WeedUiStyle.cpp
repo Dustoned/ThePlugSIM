@@ -447,6 +447,11 @@ namespace WeedUI
 			AddShape(Tree, Canvas, S * 0.24f, S * 0.40f, S * 0.52f, S * 0.46f, C, S * 0.05f);          // huis
 			AddShape(Tree, Canvas, S * 0.42f, S * 0.58f, S * 0.16f, S * 0.28f, Dim, S * 0.02f);        // deur
 			break;
+		case EIcon::Box:
+			AddShape(Tree, Canvas, S * 0.16f, S * 0.26f, S * 0.68f, S * 0.58f, C, S * 0.06f);          // doos-body
+			AddShape(Tree, Canvas, S * 0.16f, S * 0.26f, S * 0.68f, S * 0.15f, Dim, S * 0.04f);        // bovenflap (schaduw)
+			AddShape(Tree, Canvas, S * 0.44f, S * 0.26f, S * 0.12f, S * 0.58f, Dim, S * 0.02f);        // verticale tape
+			break;
 		}
 		return Canvas;
 	}
@@ -891,6 +896,7 @@ namespace WeedUI
 		case EIcon::Gear:    return TEXT("ui_gear");
 		case EIcon::Map:     return TEXT("ui_map");
 		case EIcon::Home:    return TEXT("ui_home");
+		case EIcon::Box:     return TEXT("ui_box");
 		}
 		return TEXT("");
 	}

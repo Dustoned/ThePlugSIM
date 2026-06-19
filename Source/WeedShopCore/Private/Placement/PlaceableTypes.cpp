@@ -47,7 +47,7 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		// Opslag-kist: laag/breed kistje, ook gewoon opslag (spawnt een AStorageShelf, tier "Chest").
 		{ TEXT("Chest"), TEXT("Storage chest"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.0f, 0.6f, 0.55f), FVector(50.f, 30.f, 27.f), false, 0, false, false, false, false, /*bIsShelf*/ true },
 		// Gootsteen: waterfles vullen. Spawnt een AWaterSink. Binnen plaatsen.
-		{ TEXT("Sink"), TEXT("Sink"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.8f, 0.55f, 0.9f), FVector(40.f, 27.f, 45.f), false, 0, false, false, false, false, false, /*bIsSink*/ true },
+		{ TEXT("Sink"), TEXT("Sink"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.84f, 0.56f, 1.0f), FVector(42.f, 28.f, 50.f), false, 0, false, false, false, false, false, /*bIsSink*/ true },
 		// Plafondlamp: warme spot. Spawnt een ACeilingLamp. Binnen plaatsen.
 		{ TEXT("Lamp_Ceiling"), TEXT("Ceiling lamp"), TEXT("/Engine/BasicShapes/Cone.Cone"), FVector(0.28f, 0.28f, 0.22f), FVector(20.f, 20.f, 14.f), false, 0, false, false, false, false, false, false, /*bIsLamp*/ true },
 		// Lichtschakelaar: hangt aan de muur (wall-mount). Spawnt een APackLightSwitch (tap = aan/uit, hold = dimmer;

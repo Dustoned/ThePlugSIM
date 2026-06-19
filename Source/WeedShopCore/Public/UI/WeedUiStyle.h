@@ -40,7 +40,7 @@ namespace WeedUI
 {
 	enum class EIcon : uint8
 	{
-		Coin, Clock, Flame, Level, Leaf, Upgrade, Shop, Person, Message, Gear, Map, Home
+		Coin, Clock, Flame, Level, Leaf, Upgrade, Shop, Person, Message, Gear, Map, Home, Box
 	};
 
 	// Afgeronde-box brush (geen texture nodig).

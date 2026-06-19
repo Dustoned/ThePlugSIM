@@ -1,4 +1,71 @@
 PATCH NOTES
+Version 1.9.0 — 20 juni 2026
+
+Korte intro:
+Een grote update rond de telefoon en je klanten: berichten en VIP-orders lezen nu veel
+duidelijker, afspraken staan op logische plekken, je koelkast maakt voortaan zélf edibles
+(geen aparte kit meer), en de inventory/koelkast-balans + de winkel zijn opgeschoond.
+
+━━━━━━━━━━━━━━━━━━━━
+
+TELEFOON & BERICHTEN
+
+• VIP-orders en chat-berichten zijn opnieuw vormgegeven: strain en de minimale THC staan op
+  hun eigen regel, belangrijke info (gram, %, tijd) is dikgedrukt, en niks loopt meer uit de
+  tekstballon — alles breekt netjes af binnen de bubbel.
+
+• Live urgentie in de berichten-lijst: een voortgangsbalk + kleur (groen → oranje → rood) laat
+  zien hoeveel tijd je nog hebt tot een afspraak of antwoord. De meest urgente berichten staan
+  automatisch bovenaan.
+
+• Kom je niet opdagen bij een afspraak, dan stuurt de klant een boos bericht en verlies je wat
+  respect/loyaliteit.
+
+KLANTEN & AFSPRAKEN
+
+• Een klant die langskomt (of jou laat komen) staat nu op een logische plek — bij z'n
+  appartement-deur, in de hotel-hal, of dicht bij een winkel/steegje — niet meer op daken of
+  midden op de weg. NPC's staan altijd netjes op de grond.
+
+• Hoe verder weg en hoe hoger het respect/loyaliteit van de klant, hoe langer 'ie op je wacht.
+
+BEZORGING
+
+• Pakket-bezorging gaat nu naar de voordeur van het hotel, met een duidelijk pakket-icoon op
+  zowel de kaart als het kompas. De bezorg-drone komt altijd uit het noordwesten aanvliegen.
+
+KOELKAST & EDIBLES
+
+• Een koelkast is nu gewoon een koelkast: zet er butter mix in en maak er direct edibles van
+  (of cookies/gummies als je suiker + bloem/gelatine bij je hebt). De aparte "fridge conversion
+  kit" is niet meer nodig.
+
+INRICHTEN & BALANS
+
+• Je inventory begint met minder slots (je 8 hotbar-slots staan daar los naast).
+
+• De koelkast begint met minder opslag.
+
+• Pack-bench: uitpakken zit nu in een eigen "Unpack bags"-tab naast Close, i.p.v. onder de
+  inpak-knop.
+
+• Bouw-onderdelen (muren, vloeren, plafonds, kamerdeur) zijn uit de winkel gehaald.
+
+FIXES
+
+• De inventory-, kledingkast- en schap-menu's flikkeren niet meer bij elke wijziging
+  (in-place updates i.p.v. volledig herbouwen).
+
+• De kledingkast-preview is niet meer overbelicht of zwart bij het openen.
+
+• Plaats-highlights bij deuren tonen nu alleen bij de deuren van je eigen appartement.
+
+• De koelkast die je plaatst blijft nu bewaard via "Save furniture" (verdween eerder elke keer,
+  net als de sink).
+
+━━━━━━━━━━━━━━━━━━━━
+
+PATCH NOTES
 Version 1.8.0 — 18 juni 2026
 
 Korte intro:

@@ -4,6 +4,7 @@
 #include "Customer/CustomerBase.h"
 #include "Customer/CustomerSpawner.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Game/WeedShopGameState.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -107,6 +108,18 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	WaypointMarker->SetVisibility(ESlateVisibility::Collapsed);
 	UCanvasPanelSlot* WS = Band->AddChildToCanvas(WaypointMarker);
 	WS->SetAutoSize(false); WS->SetSize(FVector2D(10.f, 14.f)); WS->SetAlignment(FVector2D(0.5f, 0.5f));
+
+	// Bezorg-markers: oranje pakket-icoontje dat naar de voordeur-bezorging wijst (max 4 tegelijk).
+	for (int32 i = 0; i < 4; ++i)
+	{
+		USizeBox* DB = WidgetTree->ConstructWidget<USizeBox>();
+		DB->SetWidthOverride(18.f); DB->SetHeightOverride(18.f);
+		DB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Box, 18.f, FLinearColor(1.f, 0.6f, 0.15f)));
+		DB->SetVisibility(ESlateVisibility::Collapsed);
+		UCanvasPanelSlot* DS = Band->AddChildToCanvas(DB);
+		DS->SetAutoSize(false); DS->SetSize(FVector2D(18.f, 18.f)); DS->SetAlignment(FVector2D(0.5f, 0.5f));
+		DeliveryMarkers.Add(DB);
+	}
 }
 
 void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y)
@@ -211,4 +224,20 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			WaypointMarker->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
+
+	// Bezorgingen: pakket-marker richting de voordeur, altijd zichtbaar tot opgehaald (gedeeld via de
+	// GameState -> ook de mede-speler ziet 'm). Bearing vanuit de LOKALE speler.
+	int32 dm = 0;
+	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		for (const FActiveDelivery& Del : GS->GetActiveDeliveries())
+		{
+			if (dm >= DeliveryMarkers.Num()) { break; }
+			const FVector D = Del.World - PL;
+			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
+			PlaceOnBand(DeliveryMarkers[dm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+			++dm;
+		}
+	}
+	for (; dm < DeliveryMarkers.Num(); ++dm) { DeliveryMarkers[dm]->SetVisibility(ESlateVisibility::Collapsed); }
 }

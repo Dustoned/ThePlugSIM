@@ -66,11 +66,17 @@ namespace
 	{
 		for (TActorIterator<APlaceableProp> It(W); It; ++It)
 		{
-			if (IsValid(*It) && !It->ItemId.IsNone() && !IsAuto(*It)) { Out.Add({ It->ItemId, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+			if (!IsValid(*It) || It->ItemId.IsNone()) { continue; }
+			// Fridge = vaste fixture: ALTIJD bakken (ook al is 'ie auto-geplaatst), zodat F8 'm meeneemt.
+			// De auto-fridge is een APlaceableProp met ItemId "Fridge" (zie SpawnEntry). Andere props alleen
+			// als JIJ ze zelf neerzette.
+			const bool bFixture = (It->ItemId == FName(TEXT("Fridge")));
+			if (!IsAuto(*It) || bFixture) { Out.Add({ It->ItemId, It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 		for (TActorIterator<AWaterSink> It(W); It; ++It)
 		{
-			if (IsValid(*It) && !IsAuto(*It)) { Out.Add({ FName(TEXT("Sink")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
+			// Sink = vaste fixture: ALTIJD bakken (ook al is 'ie auto-geplaatst), zodat F8 'm meeneemt.
+			if (IsValid(*It)) { Out.Add({ FName(TEXT("Sink")), It->GetActorLocation(), (float)It->GetActorRotation().Yaw }); }
 		}
 		for (TActorIterator<ADryingRack> It(W); It; ++It)
 		{

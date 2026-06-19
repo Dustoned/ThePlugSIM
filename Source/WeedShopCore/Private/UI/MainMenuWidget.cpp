@@ -1,5 +1,6 @@
 #include "UI/MainMenuWidget.h"
 #include "WeedShopCore.h"
+#include "WeedShopVersion.h" // centrale versie-string (auto-bijgewerkt door upload-build.ps1)
 
 #include "UI/WeedUiStyle.h"
 #include "UI/BootCoverWidget.h"
@@ -416,7 +417,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		StS->SetHorizontalAlignment(HAlign_Center); StS->SetVerticalAlignment(VAlign_Bottom); StS->SetPadding(FMargin(0.f, 0.f, 0.f, 40.f));
 
 		// Eigen versie-nummer linksonder.
-		UTextBlock* Ver = WeedUI::Text(WidgetTree, TEXT("v0.1.0  -  pre-alpha"), 12, FLinearColor(0.70f, 0.66f, 0.80f), false);
+		UTextBlock* Ver = WeedUI::Text(WidgetTree, FString::Printf(TEXT("v%s  -  pre-alpha"), WEEDSHOP_VERSION_STRING), 12, FLinearColor(0.70f, 0.66f, 0.80f), false);
 		UOverlaySlot* VS = Layers->AddChildToOverlay(Ver);
 		VS->SetHorizontalAlignment(HAlign_Left); VS->SetVerticalAlignment(VAlign_Bottom); VS->SetPadding(FMargin(24.f, 0.f, 0.f, 16.f));
 
@@ -592,7 +593,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 	Left->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(2.f, 14.f, 0.f, 0.f));
 
 	// Eigen versie-nummer linksonder (ook in de fallback-versie).
-	UTextBlock* Ver = WeedUI::Text(WidgetTree, TEXT("v0.1.0  -  pre-alpha"), 12, FLinearColor(0.70f, 0.66f, 0.80f), false);
+	UTextBlock* Ver = WeedUI::Text(WidgetTree, FString::Printf(TEXT("v%s  -  pre-alpha"), WEEDSHOP_VERSION_STRING), 12, FLinearColor(0.70f, 0.66f, 0.80f), false);
 	UOverlaySlot* VS = Layers->AddChildToOverlay(Ver);
 	VS->SetHorizontalAlignment(HAlign_Left); VS->SetVerticalAlignment(VAlign_Bottom); VS->SetPadding(FMargin(24.f, 0.f, 0.f, 16.f));
 }

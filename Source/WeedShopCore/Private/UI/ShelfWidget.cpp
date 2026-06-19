@@ -1,6 +1,7 @@
 #include "UI/ShelfWidget.h"
 
 #include "UI/WeedUiStyle.h"
+#include "UI/InventoryWidget.h" // UInvDragOp: vanuit je echte inventory in het schap droppen = opslaan
 #include "Phone/PhoneClientComponent.h"
 #include "World/StorageShelf.h"
 #include "Inventory/InventoryComponent.h"
@@ -92,10 +93,11 @@ void UShelfCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointe
 
 bool UShelfCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	UShelfDragOp* Op = Cast<UShelfDragOp>(InOperation);
-	if (!Op || !Owner.IsValid()) { return false; }
-	Owner->HandleShelfDrop(bShelfSide, Op); // bShelfSide = de kolom waar je losliet
-	return true;
+	if (!Owner.IsValid()) { return false; }
+	// Vanuit je echte inventory/hotbar in het schap gesleept -> opslaan.
+	if (UInvDragOp* InvOp = Cast<UInvDragOp>(InOperation)) { Owner->HandleInvStore(InvOp); return true; }
+	// Een schap-item terug op het schap droppen doet niks (uit het schap halen = naar je inventory slepen).
+	return Cast<UShelfDragOp>(InOperation) != nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,9 +120,9 @@ TSharedRef<SWidget> UShelfDropZone::RebuildWidget()
 
 bool UShelfDropZone::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	UShelfDragOp* Op = Cast<UShelfDragOp>(InOperation);
-	if (Op && Owner.IsValid()) { Owner->HandleShelfDrop(bShelfSide, Op); return true; }
-	return false;
+	if (!Owner.IsValid()) { return false; }
+	if (UInvDragOp* InvOp = Cast<UInvDragOp>(InOperation)) { Owner->HandleInvStore(InvOp); return true; }
+	return Cast<UShelfDragOp>(InOperation) != nullptr; // schap-item terug op het schap = niks
 }
 
 // ---------------------------------------------------------------------------
@@ -166,12 +168,14 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 	CardB->SetPadding(FMargin(16.f));
 	Card = CardB;
 
+	// Links-van-het-midden, net als de droogrek: je ECHTE inventory staat rechts ernaast open. Zo gebruik
+	// je overal hetzelfde inventory-systeem (slepen tussen je inventory/hotbar en het schap).
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-	CS->SetAlignment(FVector2D(0.5f, 0.5f));
+	CS->SetAlignment(FVector2D(1.f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(680.f, 470.f));
-	CS->SetPosition(FVector2D(0.f, 0.f));
+	CS->SetSize(FVector2D(560.f, 452.f));
+	CS->SetPosition(FVector2D(-12.f, -30.f));
 
 	UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(Outer);
@@ -184,33 +188,22 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseShelf(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag items between the shelf and your inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag from your inventory to store. Drag a shelf item onto your inventory to take it out."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	UHorizontalBox* Cols = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UVerticalBoxSlot* ColsSlot = Outer->AddChildToVerticalBox(Cols);
-	ColsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-
-	auto MakeColumn = [this](const FString& Title, const FLinearColor& Col, TObjectPtr<UScrollBox>& OutScroll, bool bShelfSide) -> UWidget*
-	{
-		UBorder* B = WidgetTree->ConstructWidget<UBorder>();
-		B->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
-		B->SetPadding(FMargin(8.f));
-		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-		B->SetContent(VB);
-		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Title, 13, Col, false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-		OutScroll = WidgetTree->ConstructWidget<UScrollBox>();
-		VB->AddChildToVerticalBox(OutScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		// Hele kolom als drop-doel (droppen ergens in het vak telt, niet alleen op een cel).
-		UShelfDropZone* DZ = WidgetTree->ConstructWidget<UShelfDropZone>();
-		DZ->bShelfSide = bShelfSide; DZ->Owner = this; DZ->Inner = B;
-		return DZ;
-	};
-
-	UWidget* ShelfCol = MakeColumn(TEXT("On the shelf"), FLinearColor(0.6f, 0.85f, 1.f), ShelfList, true);
-	UWidget* InvCol = MakeColumn(TEXT("Your inventory"), FLinearColor(0.7f, 1.f, 0.75f), InvList, false);
-	UHorizontalBoxSlot* L = Cols->AddChildToHorizontalBox(ShelfCol); L->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); L->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
-	UHorizontalBoxSlot* R = Cols->AddChildToHorizontalBox(InvCol);  R->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); R->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+	// Eén kolom: de inhoud van het schap. (De rechter "jouw inventory"-kolom is weg - dat is nu je echte
+	// inventory ernaast.) Hele kolom is drop-doel zodat je overal in het vak kunt loslaten om op te slaan.
+	UBorder* B = WidgetTree->ConstructWidget<UBorder>();
+	B->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
+	B->SetPadding(FMargin(8.f));
+	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+	B->SetContent(VB);
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("On the shelf"), 13, FLinearColor(0.6f, 0.85f, 1.f), false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	ShelfList = WidgetTree->ConstructWidget<UScrollBox>();
+	VB->AddChildToVerticalBox(ShelfList)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UShelfDropZone* DZ = WidgetTree->ConstructWidget<UShelfDropZone>();
+	DZ->bShelfSide = true; DZ->Owner = this; DZ->Inner = B;
+	Outer->AddChildToVerticalBox(DZ)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 }
 
 void UShelfWidget::HandleShelfDrop(bool bDroppedOnShelfSide, UShelfDragOp* Op)
@@ -230,13 +223,27 @@ void UShelfWidget::HandleShelfDrop(bool bDroppedOnShelfSide, UShelfDragOp* Op)
 	LastSig.Reset(); // forceer een refresh
 }
 
+void UShelfWidget::HandleInvStore(UInvDragOp* Op)
+{
+	if (!Op || !PhoneComp.IsValid() || Op->StackId == 0) { return; }
+	APawn* P = GetOwningPlayerPawn();
+	const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return; }
+	const int32 Idx = Inv->FindStackById(Op->StackId);
+	const TArray<FInventoryStack>& St = Inv->GetStacks();
+	if (!St.IsValidIndex(Idx)) { return; }
+	const FInventoryStack& S = St[Idx];
+	if (S.ItemId == FName(TEXT("Cash")) || S.Quantity <= 0) { return; } // geen briefgeld opslaan
+	PhoneComp->RequestShelfStore(S.ItemId, S.Quantity); // de hele gesleepte stapel het schap in
+	LastSig.Reset();
+}
+
 void UShelfWidget::FillBody()
 {
-	if (!ShelfList || !InvList || !PhoneComp.IsValid()) { return; }
+	if (!ShelfList || !PhoneComp.IsValid()) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 	AStorageShelf* Shelf = Ph->GetShelf();
 	ShelfList->ClearChildren();
-	InvList->ClearChildren();
 
 	if (TitleText && Shelf)
 	{
@@ -288,32 +295,33 @@ void UShelfWidget::FillBody()
 		Grid->AddChildToWrapBox(ESz);
 	}
 
-	// --- Inventory-kolom (per item samengevoegd) ---
+	// --- Koelkast: edibles maken (ButterMix -> Edible/Cookie/Gummy). Een fridge is een fridge: geen conversion kit. ---
+	if (Shelf && Shelf->IsFridge())
 	{
-		UWrapBox* Grid = AddGrid(InvList);
-		APawn* P = GetOwningPlayerPawn();
-		const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
-		if (Inv)
+		UVerticalBox* EB = WidgetTree->ConstructWidget<UVerticalBox>();
+		EB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Make edibles"), 13, FLinearColor(0.7f, 0.9f, 0.6f), false, true))->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
+
+		bool bAnyButter = false;
+		for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
 		{
-			TArray<FName> Order; TMap<FName, int32> Totals;
-			for (const FInventoryStack& St : Inv->GetStacks())
-			{
-				if (St.ItemId == FName(TEXT("Cash")) || St.Quantity <= 0) { continue; }
-				if (!Totals.Contains(St.ItemId)) { Order.Add(St.ItemId); }
-				Totals.FindOrAdd(St.ItemId) += St.Quantity;
-			}
-			for (const FName& Id : Order)
-			{
-				UShelfCell* C = MakeCell(false, -1, Id, Totals[Id], Inv->GetItemQuality(Id));
-				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-				Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f); Sz->SetContent(C);
-				Grid->AddChildToWrapBox(Sz);
-			}
+			const FShelfStack& S = Shelf->Contents[i];
+			if (!S.ItemId.ToString().StartsWith(TEXT("ButterMix_"))) { continue; }
+			bAnyButter = true;
+			const int32 Idx = i;
+			const FString Label = FString::Printf(TEXT("Set %s  (%dg)"), *WeedUI::PrettyItemName(S.ItemId), S.Quantity);
+			UWeedActionButton* B = ShelfBtn(WidgetTree, Label, FLinearColor(0.22f, 0.42f, 0.26f),
+				[this, Idx]() { if (PhoneComp.IsValid()) { PhoneComp->RequestShelfCook(Idx); LastSig.Reset(); } });
+			EB->AddChildToVerticalBox(B)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 		}
-		UShelfCell* Empty = MakeCell(false, -1, NAME_None, 0, 0.f);
-		USizeBox* ESz = WidgetTree->ConstructWidget<USizeBox>();
-		ESz->SetWidthOverride(78.f); ESz->SetHeightOverride(78.f); ESz->SetContent(Empty);
-		Grid->AddChildToWrapBox(ESz);
+		if (!bAnyButter)
+		{
+			EB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Store butter mix here, then set it into edibles (add sugar+flour for cookies, sugar+gelatin for gummies)."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+		}
+		if (Shelf->Cooking.Num() > 0)
+		{
+			EB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Setting %d batch%s... (~3 min, lands in the fridge)"), Shelf->Cooking.Num(), Shelf->Cooking.Num() == 1 ? TEXT("") : TEXT("es")), 11, FLinearColor(0.55f, 0.78f, 1.f)))->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+		}
+		ShelfList->AddChild(EB);
 	}
 }
 
@@ -331,14 +339,9 @@ void UShelfWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		Sig += FString::Printf(TEXT("S%d:"), Shelf->Contents.Num());
 		for (const FShelfStack& S : Shelf->Contents) { Sig += FString::Printf(TEXT("%s%d|"), *S.ItemId.ToString(), S.Quantity); }
+		Sig += FString::Printf(TEXT("C%d"), Shelf->Cooking.Num()); // koelkast: ververs als een edible-batch start/klaar is
 	}
-	if (APawn* P = GetOwningPlayerPawn())
-	{
-		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
-		{
-			Sig += TEXT("I:");
-			for (const FInventoryStack& St : Inv->GetStacks()) { Sig += FString::Printf(TEXT("%s%d|"), *St.ItemId.ToString(), St.Quantity); }
-		}
-	}
+	// De shelf-grid toont ALLEEN de shelf-inhoud (de echte inventory staat los ernaast). Dus NIET meer op de
+	// inventory-inhoud reageren - anders herbouwde de shelf bij elke backpack-sleep mee = flikker.
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 }

@@ -146,38 +146,48 @@ namespace
 	// cijfer (grams, % THC, prijs, tijd) en strain-/product-woorden. Zo springt eruit wát en hoeveel ze vragen.
 	UWidget* MakeRichBody(UWidgetTree* Tree, const FString& Body, int32 Size, const FLinearColor& Col)
 	{
-		static const TSet<FString> Emph = {
-			// strain-woorden:
-			TEXT("silver"),TEXT("haze"),TEXT("blue"),TEXT("dream"),TEXT("northern"),TEXT("lights"),TEXT("big"),
-			TEXT("bud"),TEXT("buds"),TEXT("white"),TEXT("widow"),TEXT("jack"),TEXT("herer"),TEXT("sour"),
-			TEXT("diesel"),TEXT("pineapple"),TEXT("express"),TEXT("amnesia"),TEXT("og"),TEXT("kush"),
-			TEXT("bubba"),TEXT("durban"),TEXT("poison"),TEXT("gorilla"),TEXT("glue"),TEXT("purple"),TEXT("girl"),
-			TEXT("scout"),TEXT("cookies"),TEXT("cookie"),TEXT("cream"),TEXT("wedding"),TEXT("cake"),TEXT("gelato"),
-			TEXT("mimosa"),TEXT("runtz"),TEXT("apple"),TEXT("fritter"),TEXT("zkittlez"),TEXT("gary"),TEXT("payton"),
-			TEXT("critical"),TEXT("mass"),TEXT("streetweed"),TEXT("street"),
-			// product-woorden:
-			TEXT("weed"),TEXT("joint"),TEXT("joints"),TEXT("hash"),TEXT("rosin"),TEXT("oil"),TEXT("moonrock"),
-			TEXT("moonrocks"),TEXT("gummies"),TEXT("gummy"),TEXT("edible"),TEXT("edibles"),TEXT("brick"),TEXT("thc"),
-		};
-		UWrapBox* Wrap = Tree->ConstructWidget<UWrapBox>();
-		// Vaste wrap-breedte zodat de tekst HORIZONTAAL vult als een normale chat-bubbel (anders wrapt
-		// 'ie per woord tot een smalle kolom).
-		Wrap->SetExplicitWrapSize(true);
-		Wrap->SetWrapSize(186.f);
-		TArray<FString> Words;
-		Body.ParseIntoArray(Words, TEXT(" "), true);
-		for (const FString& W : Words)
+		// Per \n-regel een WRAPBOX (breekt lange regels netjes af BINNEN de bubbel i.p.v. eruit te lopen).
+		// Belangrijke woorden VET: getallen/%/tijd (9g, 13%, 11:14) en ALL-CAPS termen (VIP, THC); rest gewoon.
+		UVerticalBox* VB = Tree->ConstructWidget<UVerticalBox>();
+		TArray<FString> Lines;
+		Body.ParseIntoArray(Lines, TEXT("\n"), false);
+		for (const FString& Line : Lines)
 		{
-			bool bDigit = false; FString Key;
-			for (TCHAR c : W) { if (FChar::IsDigit(c)) { bDigit = true; } if (FChar::IsAlpha(c)) { Key.AppendChar(FChar::ToLower(c)); } }
-			const bool bBold = bDigit || Emph.Contains(Key);
-			UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
-			T->SetText(FText::FromString(W + TEXT(" ")));
-			T->SetFont(FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", Size));
-			T->SetColorAndOpacity(FSlateColor(bBold ? FLinearColor(1.f, 1.f, 1.f) : Col));
-			Wrap->AddChildToWrapBox(T);
+			UWrapBox* WB = Tree->ConstructWidget<UWrapBox>();
+			WB->SetExplicitWrapSize(true);
+			WB->SetWrapSize(222.f); // binnen de 244px-bubbel
+			TArray<FString> Words;
+			Line.ParseIntoArray(Words, TEXT(" "), true);
+			// Woorden met dezelfde stijl samenvoegen tot 1 TextBlock (minder widgets = goedkopere telefoon-draw),
+			// maar geknipt op ~16 tekens zodat de WrapBox lange regels nog steeds binnen de bubbel afbreekt.
+			FString Run; bool bRunBold = false; int32 RunLen = 0;
+			auto Flush = [&]()
+			{
+				if (Run.IsEmpty()) { return; }
+				UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
+				T->SetText(FText::FromString(Run));
+				T->SetFont(FCoreStyle::GetDefaultFontStyle(bRunBold ? "Bold" : "Regular", Size));
+				T->SetColorAndOpacity(FSlateColor(bRunBold ? FLinearColor(1.f, 1.f, 1.f) : Col));
+				WB->AddChildToWrapBox(T);
+				Run.Reset(); RunLen = 0;
+			};
+			for (const FString& W : Words)
+			{
+				bool bDigit = false, bAllUpper = (W.Len() >= 2);
+				for (TCHAR c : W)
+				{
+					if (FChar::IsDigit(c) || c == TEXT('%')) { bDigit = true; }
+					if (FChar::IsAlpha(c) && !FChar::IsUpper(c)) { bAllUpper = false; }
+				}
+				const bool bBold = bDigit || bAllUpper;
+				if (!Run.IsEmpty() && (bBold != bRunBold || RunLen + W.Len() + 1 > 16)) { Flush(); }
+				if (Run.IsEmpty()) { bRunBold = bBold; }
+				Run += W; Run += TEXT(" "); RunLen += W.Len() + 1;
+			}
+			Flush();
+			VB->AddChildToVerticalBox(WB);
 		}
-		return Wrap;
+		return VB;
 	}
 }
 
@@ -897,6 +907,65 @@ bool UPhoneWidget::IsMsgForLocal(const FPhoneMessage& M) const
 	return P && USaveGameSubsystem::StablePlayerId(P) == M.ForPlayerId;
 }
 
+FLinearColor UPhoneWidget::UrgencyColor(float Frac, bool bReply)
+{
+	if (Frac < 0.2f)  { return FLinearColor(0.92f, 0.28f, 0.22f); } // rood - bijna op
+	if (Frac < 0.45f) { return FLinearColor(0.95f, 0.7f, 0.2f); }   // geel/oranje - loopt af
+	// Vers: BLAUW als 't op JOU wacht (accept/decline), GROEN als de afspraak loopt -> direct onderscheid.
+	return bReply ? FLinearColor(0.35f, 0.62f, 0.98f) : FLinearColor(0.35f, 0.8f, 0.45f);
+}
+
+bool UPhoneWidget::GetApptUrgency(FName ContactId, float& OutFrac, int32& OutSecsLeft, int32& OutPhase, int32& OutClockMins) const
+{
+	OutFrac = 0.f; OutSecsLeft = 0; OutPhase = 0; OutClockMins = 0;
+	if (ContactId.IsNone() || !GetWorld()) { return false; }
+	// Fase B: een live klant met een lopende afspraak -> z'n ApptTimeout-fractie (telt af tot 'ie opgeeft).
+	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	{
+		if (It->NpcId == ContactId && It->HasActiveAppointment())
+		{
+			OutFrac = It->GetApptFraction();
+			OutSecsLeft = FMath::CeilToInt(It->GetApptTimeLeft());
+			OutPhase = 1;
+			return true;
+		}
+	}
+	// Nog geen klant -> kijk naar het afspraak-bericht zelf.
+	AWeedShopGameState* GS = GetWorld()->GetGameState<AWeedShopGameState>();
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	UDayCycleComponent* Day = GS ? GS->GetDayCycle() : nullptr;
+	if (!Con) { return false; }
+	const float NowReal = GetWorld()->GetTimeSeconds();
+	const float NowDay = Day ? Day->GetTimeOfDaySeconds() : 0.f;
+	const float Length = Day ? FMath::Max(1.f, Day->DayLengthSeconds + Day->NightLengthSeconds) : 1.f;
+	for (const FPhoneMessage& M : Con->GetMessages())
+	{
+		if (!IsMsgForLocal(M) || M.FromContactId != ContactId || M.bFromMe) { continue; }
+		if (M.AppointmentTimeOfDay < 0.f) { continue; } // geen afspraak-bericht -> geen balk
+		if (M.Status == 0)
+		{
+			// Fase 2: wacht op JOUW antwoord (accept/decline) - telt af tot de klant opgeeft (150s). EERST dit.
+			const float Left = 150.f - (NowReal - M.SentRealTime);
+			OutFrac = FMath::Clamp(Left / 150.f, 0.f, 1.f);
+			OutSecsLeft = FMath::CeilToInt(FMath::Max(0.f, Left));
+			OutPhase = 2;
+			return true;
+		}
+		if (M.Status == 1 && Day)
+		{
+			// Fase 0: geaccepteerd, klant nog niet gespawnd -> tijd tot het afspraak-MOMENT (vast 240s-venster).
+			float Remaining = M.AppointmentTimeOfDay - NowDay;
+			if (Remaining < 0.f) { Remaining += Length; }
+			OutFrac = FMath::Clamp(Remaining / 240.f, 0.f, 1.f);
+			OutSecsLeft = FMath::CeilToInt(Remaining);
+			OutClockMins = Con->ClockMinutesOf(M.AppointmentTimeOfDay); // kloktijd van de afspraak (bv. 11:00)
+			OutPhase = 0;
+			return true;
+		}
+	}
+	return false;
+}
+
 int32 UPhoneWidget::MessagesSignature() const
 {
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
@@ -913,6 +982,9 @@ int32 UPhoneWidget::MessagesSignature() const
 		++Cnt;
 		Sig = Sig * 31 + (int32)M.Status + (M.bFromMe ? 5 : 0);
 	}
+	// GEEN urgentie-bucket meer: de balken + kleuren + sorteer-volgorde tijdens het aftellen werken live
+	// (UpdateListBarsLive) zonder herbouw. Zo herbouwt de lijst alleen nog bij een ECHT bericht-verschil,
+	// niet elke keer dat een afspraak-balk een kleur-drempel kruist (dat gaf onnodig geflits).
 	return Sig * 1000003 + Cnt;
 }
 
@@ -920,6 +992,7 @@ void UPhoneWidget::BuildChatApp()
 {
 	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None; // alleen geldig in een actieve-afspraak-thread
 	WaitBar = nullptr; WaitBarLabel = nullptr; WaitBarSentTime = -1.f;     // wacht-balk voor een open deal-bericht
+	ListApptBars.Reset(); ListCards.Reset(); ListPreviews.Reset();         // lijst-urgentie-widgets (live bijgewerkt)
 	if (!Phone.IsValid()) { return; }
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
@@ -934,6 +1007,17 @@ void UPhoneWidget::BuildChatApp()
 		TArray<FName> Order;
 		for (const FPhoneMessage& M : Msgs) { if (!IsMsgForLocal(M)) { continue; } Order.AddUnique(M.FromContactId); }
 		if (Order.Num() == 0) { AddInfoRow(TEXT("No messages yet."), FLinearColor::Gray, 13); return; }
+		// URGENTIE-sortering: contacten met een lopende afspraak bovenaan (meest urgent = kleinste fractie eerst),
+		// daarna de rest in de bestaande nieuwste-eerst-volgorde (stabiel). ForPlayerId-filter blijft via Order.
+		Order.StableSort([this](const FName& A, const FName& B)
+		{
+			float fa, fb; int32 sa, sb, pa, pb, ca, cb;
+			const bool ua = GetApptUrgency(A, fa, sa, pa, ca);
+			const bool ub = GetApptUrgency(B, fb, sb, pb, cb);
+			if (ua != ub) { return ua; }   // afspraken boven gewone chats
+			if (ua) { return fa < fb; }     // kleinere fractie = urgenter = hoger
+			return false;                    // anders recentheid-volgorde behouden
+		});
 
 		UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
 		UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
@@ -949,10 +1033,22 @@ void UPhoneWidget::BuildChatApp()
 				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; LastClock = M.SentClockHour; break; }
 			}
 			const bool bOpen = Phone.IsValid() && Phone->HasUnreadFrom(Cid);
+			// Lopende afspraak? -> live preview ("Arrives in M:SS" / "At the door - M:SS left") + urgentie-kleur.
+			float UFrac = 0.f; int32 USecs = 0, UPhase = 0, UClockM = 0;
+			const bool bUrgent = GetApptUrgency(Cid, UFrac, USecs, UPhase, UClockM);
+			if (bUrgent)
+			{
+				LastBody = (UPhase == 2) ? FString::Printf(TEXT("Reply needed - %d:%02d"), USecs / 60, USecs % 60)
+					: (UPhase == 0) ? FString::Printf(TEXT("Coming - arrives at %02d:%02d"), (UClockM / 60) % 24, UClockM % 60)
+					: FString::Printf(TEXT("At the door now - %d:%02d left"), USecs / 60, USecs % 60);
+			}
 			if (LastBody.Len() > 30) { LastBody = LastBody.Left(29) + TEXT("."); }
 
+			const FLinearColor U = UrgencyColor(UFrac, UPhase == 2);
 			UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
-			Card->SetBrush(RoundedBrush(bOpen ? FLinearColor(0.12f, 0.17f, 0.13f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+			Card->SetBrush(RoundedBrush(bUrgent ? FLinearColor(U.R * 0.28f, U.G * 0.28f, U.B * 0.28f, 0.97f)
+				: (bOpen ? FLinearColor(0.12f, 0.17f, 0.13f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f)), 8.f));
+			ListCards.Add(Cid, Card);
 			Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 			Card->SetContent(Row);
@@ -966,7 +1062,21 @@ void UPhoneWidget::BuildChatApp()
 			}
 			UTextBlock* Prev = MakeText(LastBody, 10, FLinearColor(0.62f, 0.66f, 0.76f));
 			Prev->SetClipping(EWidgetClipping::ClipToBounds);
+			ListPreviews.Add(Cid, Prev);
 			Info->AddChildToVerticalBox(Prev);
+			if (bUrgent)
+			{
+				// Slanke aftelbalk onder de preview - in één oogopslag zie je hoeveel tijd je nog hebt.
+				USizeBox* BarBox = WidgetTree->ConstructWidget<USizeBox>();
+				BarBox->SetHeightOverride(5.f);
+				UProgressBar* LB = WidgetTree->ConstructWidget<UProgressBar>();
+				LB->SetPercent(UFrac);
+				LB->SetFillColorAndOpacity(U);
+				LB->SetVisibility(ESlateVisibility::HitTestInvisible);
+				BarBox->SetContent(LB);
+				Info->AddChildToVerticalBox(BarBox)->SetPadding(FMargin(0.f, 3.f, 6.f, 0.f));
+				ListApptBars.Add(Cid, LB);
+			}
 			UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
 			IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
 			// Tijdstempel van het laatste bericht (HH:MM, in-game klok) rechts in de rij.
@@ -1030,23 +1140,27 @@ void UPhoneWidget::BuildChatApp()
 		ContentBox->AddChildToVerticalBox(TB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	}
 
-	// Loopt er een afspraak met deze persoon? Toon een aftellende balk (loopt naar 0 tot 'ie opgeeft).
-	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	// Loopt er een afspraak met deze persoon? Aftellende balk: fase A = tijd tot 'ie KOMT (afspraak-moment),
+	// fase B = tijd tot 'ie OPGEEFT. Werkt dus al vóór de klant fysiek is, en kleurt groen->geel->rood.
 	{
-		if (It->NpcId != OpenChatContact || !It->HasActiveAppointment()) { continue; }
-		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
-		Box->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.13f, 0.10f, 0.95f), 8.f));
-		Box->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
-		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-		Box->SetContent(VB);
-		ApptBarLabel = MakeText(TEXT("Waiting..."), 11, FLinearColor(0.8f, 0.9f, 0.8f));
-		VB->AddChildToVerticalBox(ApptBarLabel);
-		ApptBar = WidgetTree->ConstructWidget<UProgressBar>();
-		ApptBar->SetPercent(It->GetApptFraction());
-		VB->AddChildToVerticalBox(ApptBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-		ApptBarContact = OpenChatContact;
-		ContentBox->AddChildToVerticalBox(Box)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-		break;
+		float TFrac = 0.f; int32 TSecs = 0, TPhase = 0, TClockM = 0;
+		// Fase 2 (wacht-op-antwoord) toont de aparte WaitBar hieronder; hier alleen fase 0 (arrives) + 1 (at door).
+		if (GetApptUrgency(OpenChatContact, TFrac, TSecs, TPhase, TClockM) && TPhase != 2)
+		{
+			UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
+			Box->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.13f, 0.10f, 0.95f), 8.f));
+			Box->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+			Box->SetContent(VB);
+			ApptBarLabel = MakeText(TEXT("Waiting..."), 11, FLinearColor(0.8f, 0.9f, 0.8f));
+			VB->AddChildToVerticalBox(ApptBarLabel);
+			ApptBar = WidgetTree->ConstructWidget<UProgressBar>();
+			ApptBar->SetPercent(TFrac);
+			ApptBar->SetFillColorAndOpacity(UrgencyColor(TFrac));
+			VB->AddChildToVerticalBox(ApptBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+			ApptBarContact = OpenChatContact;
+			ContentBox->AddChildToVerticalBox(Box)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+		}
 	}
 
 	// Berichten chronologisch (oudste boven). Msgs is nieuwste-eerst -> achterstevoren itereren.
@@ -1086,7 +1200,7 @@ void UPhoneWidget::BuildChatApp()
 		Bub->SetContent(BubVB);
 
 		USizeBox* Cap = WidgetTree->ConstructWidget<USizeBox>();
-		Cap->SetMaxDesiredWidth(210.f);
+		Cap->SetMaxDesiredWidth(244.f);
 		Cap->SetContent(Bub);
 
 		UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -1524,31 +1638,50 @@ void UPhoneWidget::UpdatePackagesLive()
 void UPhoneWidget::UpdateApptBarLive()
 {
 	if (!ApptBar || ApptBarContact.IsNone() || !GetWorld()) { return; }
-	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	float Frac = 0.f; int32 Secs = 0, Phase = 0, ClockM = 0;
+	if (GetApptUrgency(ApptBarContact, Frac, Secs, Phase, ClockM))
 	{
-		if (It->NpcId != ApptBarContact) { continue; }
-		if (It->HasActiveAppointment())
+		ApptBar->SetPercent(Frac);
+		ApptBar->SetFillColorAndOpacity(UrgencyColor(Frac, Phase == 2));
+		if (ApptBarLabel)
 		{
-			const float Frac = It->GetApptFraction();
-			ApptBar->SetPercent(Frac);
-			ApptBar->SetFillColorAndOpacity(Frac < 0.2f ? FLinearColor(0.9f, 0.3f, 0.25f) : (Frac < 0.45f ? FLinearColor(0.9f, 0.7f, 0.25f) : FLinearColor(0.35f, 0.8f, 0.45f)));
-			if (ApptBarLabel)
+			ApptBarLabel->SetText(FText::FromString(Phase == 0
+				? FString::Printf(TEXT("Coming - arrives at %02d:%02d"), (ClockM / 60) % 24, ClockM % 60)
+				: FString::Printf(TEXT("At the door now - leaves in %d:%02d"), Secs / 60, Secs % 60)));
+		}
+	}
+	else
+	{
+		// Afspraak voorbij (deal gesloten of vertrokken) -> balk leeg + loslaten.
+		ApptBar->SetPercent(0.f);
+		if (ApptBarLabel) { ApptBarLabel->SetText(FText::FromString(TEXT("Done."))); }
+		ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
+	}
+}
+
+void UPhoneWidget::UpdateListBarsLive()
+{
+	for (const TPair<FName, TObjectPtr<UProgressBar>>& KV : ListApptBars)
+	{
+		float Frac = 0.f; int32 Secs = 0, Phase = 0, ClockM = 0;
+		const bool bActive = GetApptUrgency(KV.Key, Frac, Secs, Phase, ClockM);
+		const FLinearColor U = UrgencyColor(Frac, Phase == 2);
+		if (UProgressBar* Bar = KV.Value) { Bar->SetPercent(bActive ? Frac : 0.f); Bar->SetFillColorAndOpacity(U); }
+		if (TObjectPtr<UBorder>* Card = ListCards.Find(KV.Key))
+		{
+			if (UBorder* C = *Card) { if (bActive) { C->SetBrushColor(FLinearColor(U.R * 0.28f, U.G * 0.28f, U.B * 0.28f, 0.97f)); } }
+		}
+		if (TObjectPtr<UTextBlock>* Prev = ListPreviews.Find(KV.Key))
+		{
+			if (UTextBlock* P = *Prev)
 			{
-				const int32 Left = FMath::CeilToInt(It->GetApptTimeLeft());
-				ApptBarLabel->SetText(FText::FromString(FString::Printf(TEXT("Waiting at the door - leaves in %d:%02d"), Left / 60, Left % 60)));
+				if (bActive) { P->SetText(FText::FromString(Phase == 2
+					? FString::Printf(TEXT("Reply needed - %d:%02d"), Secs / 60, Secs % 60)
+					: Phase == 0 ? FString::Printf(TEXT("Coming - arrives at %02d:%02d"), (ClockM / 60) % 24, ClockM % 60)
+					: FString::Printf(TEXT("At the door now - %d:%02d left"), Secs / 60, Secs % 60))); }
 			}
 		}
-		else
-		{
-			// Afspraak voorbij (deal of vertrokken) -> balk weghalen.
-			ApptBar->SetPercent(0.f);
-			if (ApptBarLabel) { ApptBarLabel->SetText(FText::FromString(TEXT("Gone."))); }
-			ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
-		}
-		return;
 	}
-	// NPC niet meer gevonden -> balk loslaten.
-	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
 }
 
 void UPhoneWidget::UpdateWaitBarLive()
@@ -2534,7 +2667,7 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		const int32 Sig = MessagesSignature();
 		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
-		else { UpdateApptBarLive(); UpdateWaitBarLive(); } // afspraak- + wacht-balk live bijwerken (zonder herbouw)
+		else { UpdateApptBarLive(); UpdateWaitBarLive(); UpdateListBarsLive(); } // balken live bijwerken (zonder herbouw)
 		// Tijd-kiezer-ondergrens LIVE laten meelopen zonder rebuild (geen flash): klem ProposeMins op
 		// 30 min..23,5u vooruit met de huidige klok en werk alleen het klok-label bij.
 		if (App == 3 && PickerClockText && !PickerContact.IsNone() && GS && GS->GetDayCycle())

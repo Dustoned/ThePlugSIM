@@ -1436,16 +1436,33 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		const FVector C = H.InteriorPos; const FVector R = H.RoomHalf;
 		const bool bCosmetic = !OfferSet.Contains(Idx); // NPC-woning -> cosmetisch; jouw woning -> interactief
 
+		auto At = [&](float fx, float fy) { FVector L = C + FVector(R.X * fx, R.Y * fy, 0.f); L.Z = FloorZ(L, C.Z) + 2.f; return L; };
+		// Gootsteen = AWaterSink (eigen class); mesh-pivot in het midden -> ~halve hoogte omhoog. Vaste fixture.
+		auto SpawnSink = [&]()
+		{
+			FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
+			FActorSpawnParameters SkSP; SkSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			if (AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc), SkSP))
+			{ Sink->Tags.Add(FName(TEXT("Cosmetic"))); Sink->Tags.Add(FName(TEXT("AutoFixture"))); }
+		};
+
 		const FString Type = FurnitureTemplates::TypeKey(H.bApartment, H.RoomHalf);
 		KeyCount.FindOrAdd(Type)++;
 		if (bHaveTemplates)
 		{
 			if (const TArray<FFurnitureEntry>* Entries = Templates.Find(Type))
 			{
+				bool bHasFridge = false, bHasSink = false;
 				for (const FFurnitureEntry& E : *Entries)
 				{
+					if (E.ItemId == FName(TEXT("Fridge"))) { bHasFridge = true; }
+					if (E.ItemId == FName(TEXT("Sink")))   { bHasSink = true; }
 					if (AActor* A = FurnitureTemplates::SpawnEntry(World, E, C, R, bCosmetic)) { A->Tags.Add(FName(TEXT("AutoFixture"))); }
 				}
+				// Garandeer de vaste fixtures: ELK huis hoort een fridge + sink te hebben, ook als een eerdere
+				// F8-save ze uit het template heeft gegooid. Zo staat er ALTIJD een fridge in je start-huis.
+				if (!bHasFridge) { SpawnProp(FName(TEXT("Fridge")), At(0.45f, 0.45f), 180.f, bCosmetic); }
+				if (!bHasSink)   { SpawnSink(); }
 				KeyMatched.Add(Type); ++NTpl;
 				continue;
 			}
@@ -1453,17 +1470,10 @@ void ACustomerSpawner::SpawnHomeAndShopFixtures(ACityGenerator* City)
 		}
 		++NFb;
 
-		auto At = [&](float fx, float fy) { FVector L = C + FVector(R.X * fx, R.Y * fy, 0.f); L.Z = FloorZ(L, C.Z) + 2.f; return L; };
 		SpawnProp(FName(TEXT("Mattress")), At(-0.45f, -0.45f), 0.f, bCosmetic);
 		SpawnProp(FName(TEXT("Fridge")),   At( 0.45f,  0.45f), 180.f, bCosmetic);
 		SpawnProp(FName(TEXT("Table")),    At( 0.0f,   0.40f), 0.f, bCosmetic);
-		// Gootsteen = AWaterSink (eigen class); mesh-pivot in het midden -> ~halve hoogte omhoog.
-		{
-			FVector SinkLoc = At(0.45f, -0.45f); SinkLoc.Z += 45.f;
-			FActorSpawnParameters SkSP; SkSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			AWaterSink* Sink = World->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(FRotator(0.f, 90.f, 0.f), SinkLoc), SkSP);
-			if (Sink) { Sink->Tags.Add(FName(TEXT("Cosmetic"))); Sink->Tags.Add(FName(TEXT("AutoFixture"))); } // vaste fixture + niet in capture
-		}
+		SpawnSink();
 	}
 
 	// Diagnostiek-log: vergelijk de echte woning-sleutels met de beschikbare template-sleutels.

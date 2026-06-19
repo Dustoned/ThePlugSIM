@@ -1298,13 +1298,17 @@ void UPhoneClientComponent::OpenShelf(AStorageShelf* Shelf)
 	EnsureWidget();
 	ShelfActor = Shelf;
 	bShelfOpen = true;
-	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bDryRackOpen = false;
+	// Open OOK je echte inventory ernaast (net als de droogrek): zo sleep je rechtstreeks tussen je
+	// inventory/hotbar en het schap, met overal hetzelfde inventory-systeem.
+	bInventoryOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bPackOpen = false; bDryRackOpen = false; bStoreOpen = false;
 	UpdateCursor();
 }
 
 void UPhoneClientComponent::CloseShelf()
 {
 	bShelfOpen = false;
+	bInventoryOpen = false; // sluit de echte inventory die met het schap mee openging
 	ShelfActor = nullptr;
 	UpdateCursor();
 }
@@ -1402,6 +1406,61 @@ void UPhoneClientComponent::RequestShelfStore(FName ItemId, int32 Count)
 void UPhoneClientComponent::RequestShelfTake(int32 SlotIndex, int32 Count)
 {
 	ServerShelfTake(ShelfActor.Get(), SlotIndex, Count);
+}
+
+void UPhoneClientComponent::RequestShelfCook(int32 SlotIndex)
+{
+	ServerShelfCook(ShelfActor.Get(), SlotIndex);
+}
+
+void UPhoneClientComponent::ServerShelfCook_Implementation(AStorageShelf* Shelf, int32 SlotIndex)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Shelf || !Inv || !Shelf->IsFridge()) { return; }
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Shelf->GetActorLocation()) > 400.f) { return; }
+	if (!Shelf->Contents.IsValidIndex(SlotIndex)) { return; }
+
+	const FShelfStack& S = Shelf->Contents[SlotIndex];
+	const FString Id = S.ItemId.ToString();
+	if (!Id.StartsWith(TEXT("ButterMix_")))
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Only butter mix sets into edibles.")); }
+		return;
+	}
+	if (Shelf->Cooking.Num() >= Shelf->FridgeCookCap())
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Fridge is busy (max 4 batches setting).")); }
+		return;
+	}
+	const FString Strain = Id.RightChop(FString(TEXT("ButterMix_")).Len());
+
+	// Cookies/gummies als de speler de bak-ingredienten bij zich heeft (zoals de oude conversion-fridge deed).
+	// Sugar is voor beide nodig; + flour -> cookies, + gelatin -> gummies (cookies krijgen voorrang).
+	FString OutPre;
+	bool bUseFlour = false, bUseGelatin = false, bUseSugar = false;
+	const bool bHasSugar   = Inv->HasItem(FName(TEXT("Sugar")), 1);
+	const bool bHasFlour   = Inv->HasItem(FName(TEXT("Flour")), 1);
+	const bool bHasGelatin = Inv->HasItem(FName(TEXT("Gelatin")), 1);
+	if (bHasSugar && bHasFlour)        { OutPre = TEXT("Cookie_"); bUseFlour = true; bUseSugar = true; }
+	else if (bHasSugar && bHasGelatin) { OutPre = TEXT("Gummy_");  bUseGelatin = true; bUseSugar = true; }
+
+	// Haal de hele ButterMix-stapel uit de koelkast en start de batch met diens THC/kwaliteit.
+	FName Oid; float Ot = 0.f, Oq = 0.f;
+	const int32 Taken = Shelf->ServerTake(SlotIndex, S.Quantity, Oid, Ot, Oq);
+	if (Taken <= 0) { return; }
+	if (!Shelf->ServerStartEdible(Strain, Taken, Ot, Oq, OutPre))
+	{
+		Shelf->ServerStore(Oid, Taken, Ot, Oq); // mislukt -> ButterMix terug op het schap
+		return;
+	}
+	if (bUseFlour)   { Inv->RemoveItem(FName(TEXT("Flour")), 1); }
+	if (bUseGelatin) { Inv->RemoveItem(FName(TEXT("Gelatin")), 1); }
+	if (bUseSugar)   { Inv->RemoveItem(FName(TEXT("Sugar")), 1); }
+	if (GEngine)
+	{
+		const TCHAR* What = OutPre == TEXT("Cookie_") ? TEXT("Baking cookies") : (OutPre == TEXT("Gummy_") ? TEXT("Setting gummies") : TEXT("Setting edibles"));
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor(120, 200, 255), FString::Printf(TEXT("%s (%dg, ~3 min)..."), What, Taken));
+	}
 }
 
 void UPhoneClientComponent::ServerShelfStore_Implementation(AStorageShelf* Shelf, FName ItemId, int32 Count)
@@ -2433,13 +2492,18 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	if (UWorld* World = GetWorld())
 	{
 		const FVector Drop = FindDeliveryPoint();
-		const FVector Start = Drop + FVector(-1700.f, 700.f, 1500.f);
+		// Altijd vanuit het NOORDWESTEN aanvliegen (+X = noord, -Y = west) en hoog -> over de open zee/strand-
+		// kant, zodat de drone nergens door gebouwen heen vliegt voor 'ie bij de voordeur indaalt.
+		const FVector Start = Drop + FVector(1700.f, -1700.f, 1600.f);
 		ADeliveryDrone* Drone = World->SpawnActor<ADeliveryDrone>(ADeliveryDrone::StaticClass(), FTransform(Start));
 		if (Drone)
 		{
 			Drone->Setup(Start, Drop, Flight, OrderId, BuyIds, BuyQtys, this);
 			PD.Drone = Drone;
 		}
+		// Bezorg-marker bij de voordeur (Drop), gedeeld via de GameState -> map + kompas tonen 'm bij ALLE
+		// spelers tot het pakket opgehaald is.
+		if (GS) { GS->AddDeliveryTarget(OrderId, Drop); }
 	}
 	PendingDeliveries.Add(PD);
 
@@ -2456,14 +2520,62 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 	FVector Point = FVector::ZeroVector;
 	bool bFound = false;
 
-	// 0) Bij voorkeur: voor de voordeur van het GEKOZEN bezorg-huis (handmatig, of het huis waar je nu
-	//    binnen bent, of je actieve woning). Op de grond (DoorPos) -> de drone hoeft niet door muren/omhoog.
+	// HOOGSTE prioriteit: een door de speler vastgelegd bezorg-punt (Shift+F7) voor DEZE map - bv. helemaal
+	// beneden bij de hotel-hoofdingang. Overschrijft de huis-deur-heuristiek volledig (markers zijn op de
+	// pack-map ground truth; deur-heuristiek pakte de bovendeur van het appartement).
+	{
+		TArray<FString> DpLines;
+		if (FFileHelper::LoadFileToStringArray(DpLines, *(FPaths::ProjectSavedDir() / TEXT("DeliveryPoint.txt"))))
+		{
+			const FString CurMap = World ? World->GetOutermost()->GetName() : FString(TEXT("?"));
+			for (const FString& Raw : DpLines)
+			{
+				TArray<FString> P; Raw.TrimStartAndEnd().ParseIntoArray(P, TEXT("|"));
+				if (P.Num() >= 4 && P[0] == CurMap)
+				{
+					Point = FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3]));
+					bFound = true;
+				}
+			}
+		}
+	}
+
+	// 0) Anders: voor de VOORDEUR van het GEKOZEN bezorg-huis (handmatig, het huis waar je nu binnen
+	//    bent, of je actieve woning). DoorPos is op de pack-map het kamer-MIDDEN, dus zoeken we de echte
+	//    deur-actor (dichtstbijzijnde eigen-woning-deur bij dit huis) en zetten het pakket NET BUITEN op de
+	//    stoep - niet midden in de kamer en niet door het dak.
+	if (!bFound)
 	{
 		const int32 DH = ResolveDeliveryHome();
 		if (DH >= 0)
 		{
 			TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
-			if (Homes.IsValidIndex(DH)) { Point = Homes[DH].DoorPos; bFound = true; }
+			if (Homes.IsValidIndex(DH))
+			{
+				const FVector Interior = Homes[DH].InteriorPos;
+				Point = Homes[DH].DoorPos; bFound = true;
+				if (World)
+				{
+					ACityDoor* BestAny = nullptr;  float BestAnyD = TNumericLimits<float>::Max();
+					ACityDoor* BestHome = nullptr; float BestHomeD = TNumericLimits<float>::Max();
+					const float MaxR = FMath::Max(Homes[DH].RoomHalf.X, Homes[DH].RoomHalf.Y) + 400.f;
+					for (TActorIterator<ACityDoor> It(const_cast<UWorld*>(World)); It; ++It)
+					{
+						if (!IsValid(*It)) { continue; }
+						const float D2 = FVector::DistSquared2D(It->GetActorLocation(), Interior);
+						if (D2 > MaxR * MaxR) { continue; }
+						if (D2 < BestAnyD) { BestAnyD = D2; BestAny = *It; }
+						if (It->IsPlayerHome() && D2 < BestHomeD) { BestHomeD = D2; BestHome = *It; }
+					}
+					if (ACityDoor* Door = BestHome ? BestHome : BestAny)
+					{
+						const FVector DoorLoc = Door->GetActorLocation();
+						FVector Outward = DoorLoc - Interior; Outward.Z = 0.f; Outward = Outward.GetSafeNormal();
+						if (Outward.IsNearlyZero()) { Outward = Door->GetActorForwardVector(); Outward.Z = 0.f; Outward = Outward.GetSafeNormal(); }
+						Point = DoorLoc + Outward * 150.f; // op de stoep, net buiten de voordeur
+					}
+				}
+			}
 		}
 	}
 
@@ -2519,6 +2631,8 @@ void UPhoneClientComponent::NotifyDroneArrived(int32 OrderId)
 void UPhoneClientComponent::OnPackagePickedUp(int32 OrderId)
 {
 	PendingDeliveries.RemoveAll([OrderId](const FPendingDelivery& D) { return D.OrderId == OrderId; });
+	// Marker weghalen (map + kompas) zodra het pakket opgehaald is.
+	if (UWorld* W = GetWorld()) { if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { GS->RemoveDeliveryTarget(OrderId); } }
 }
 
 void UPhoneClientComponent::RequestDeposit(int64 CashAmount)
@@ -2613,6 +2727,19 @@ void UPhoneClientComponent::SaveStarterFurniture()
 		const FVector L = Sk->GetActorLocation();
 		if (FVector::Dist2D(L, C) > 1500.f || FMath::Abs(L.Z - C.Z) > 500.f) { continue; }
 		Out += FString::Printf(TEXT("Sink,%.1f,%.1f,%.1f,%.1f"), L.X, L.Y, L.Z, Sk->GetActorRotation().Yaw) + LINE_TERMINATOR;
+		++N;
+	}
+	// Opslag-meubels (Fridge/Shelf/Chest) zijn een EIGEN class (AStorageShelf), geen APlaceableProp - net als
+	// de sink. Zonder deze loop verdween jouw geplaatste fridge elke keer. We schrijven de ShelfTier als ItemId
+	// zodat de load-kant 'm weer als AStorageShelf (functioneel) terugzet i.p.v. een dode prop.
+	for (TActorIterator<AStorageShelf> It(W); It; ++It)
+	{
+		AStorageShelf* Sh = *It;
+		if (!IsValid(Sh)) { continue; }
+		const FVector L = Sh->GetActorLocation();
+		if (FVector::Dist2D(L, C) > 1500.f || FMath::Abs(L.Z - C.Z) > 500.f) { continue; }
+		const FName Tier = Sh->ShelfTier.IsNone() ? FName(TEXT("Shelf")) : Sh->ShelfTier;
+		Out += FString::Printf(TEXT("%s,%.1f,%.1f,%.1f,%.1f"), *Tier.ToString(), L.X, L.Y, L.Z, Sh->GetActorRotation().Yaw) + LINE_TERMINATOR;
 		++N;
 	}
 	if (N == 0)

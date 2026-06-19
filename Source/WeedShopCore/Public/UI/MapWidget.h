@@ -37,6 +37,7 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UBorder>> NpcDots;        // roamers (cyaan stipjes)
 	UPROPERTY() TArray<TObjectPtr<class UWidget>> ShopIcons; // winkels (geel winkel-icoon)
 	UPROPERTY() TArray<TObjectPtr<class UWidget>> NeedIcons; // klanten-voor-jou (groen poppetje)
+	UPROPERTY() TArray<TObjectPtr<class UWidget>> DeliveryIcons; // bezorgingen (oranje pakket-icoon bij de voordeur)
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> NpcLabels;
 
 	FVector2D CanvasToWorld(FVector2D Local) const; // inverse van WorldToCanvas

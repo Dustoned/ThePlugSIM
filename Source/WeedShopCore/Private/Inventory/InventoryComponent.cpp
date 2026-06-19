@@ -763,10 +763,26 @@ void UInventoryComponent::MoveStackToCell(int32 StackId, int32 Cell)
 {
 	if (StackId == 0 || !GridOrder.IsValidIndex(Cell)) { return; }
 	const int32 Cur = GridOrder.IndexOfByKey(StackId);
-	if (Cur == INDEX_NONE || Cur == Cell) { return; }
-	// Wissel de inhoud van bron- en doelcel (doel kan leeg of bezet zijn).
-	GridOrder[Cur] = GridOrder[Cell];
-	GridOrder[Cell] = StackId;
+	if (Cur == Cell) { return; }
+	if (Cur != INDEX_NONE)
+	{
+		// Al in het rooster -> wissel de inhoud van bron- en doelcel (doel kan leeg of bezet zijn).
+		GridOrder[Cur] = GridOrder[Cell];
+		GridOrder[Cell] = StackId;
+	}
+	else
+	{
+		// Stack zat nog NIET in het rooster (bv. net vanaf de hotbar gesleept): zet 'm op de losgelaten
+		// cel; een eventuele bewoner van die cel schuift naar de eerste vrije plek. Zo landt 'ie precies
+		// waar je 'm neerzet i.p.v. terug te springen naar z'n oude/automatische cel.
+		const int32 Occ = GridOrder[Cell];
+		GridOrder[Cell] = StackId;
+		if (Occ != 0)
+		{
+			const int32 Free = GridOrder.IndexOfByKey(0);
+			if (Free != INDEX_NONE) { GridOrder[Free] = Occ; } else { GridOrder.Add(Occ); }
+		}
+	}
 	OnInventoryChanged.Broadcast();
 }
 

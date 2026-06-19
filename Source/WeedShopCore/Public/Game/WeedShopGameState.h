@@ -33,6 +33,16 @@ struct FCompetitorScore
 	UPROPERTY(BlueprintReadOnly, Category = "WeedShop") int32 Customers = 0;   // aantal vaste klanten
 };
 
+// Eén actieve bezorging: de wereldlocatie van het pakket (bij de voordeur). Gerepliceerd zodat map +
+// kompas bij ALLE spelers een pakket-marker tonen tot het opgehaald is.
+USTRUCT()
+struct FActiveDelivery
+{
+	GENERATED_BODY()
+	UPROPERTY() int32 OrderId = 0;
+	UPROPERTY() FVector World = FVector::ZeroVector;
+};
+
 class UEconomyComponent;
 class UDayCycleComponent;
 class UMilestoneComponent;
@@ -141,6 +151,14 @@ public:
 	TArray<FCompetitorScore> Standings;
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	const TArray<FCompetitorScore>& GetStandings() const { return Standings; }
+
+	// Actieve bezorgingen (pakket-locaties bij de voordeur). Gerepliceerd -> map + kompas tonen overal
+	// een pakket-marker tot opgehaald. Server-only muteren via Add/Remove (op order + bij pickup).
+	UPROPERTY(Replicated)
+	TArray<FActiveDelivery> ActiveDeliveries;
+	const TArray<FActiveDelivery>& GetActiveDeliveries() const { return ActiveDeliveries; }
+	void AddDeliveryTarget(int32 OrderId, const FVector& World);
+	void RemoveDeliveryTarget(int32 OrderId);
 
 protected:
 	virtual void BeginPlay() override;
