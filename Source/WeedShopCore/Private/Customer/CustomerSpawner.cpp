@@ -646,11 +646,12 @@ void ACustomerSpawner::TrySpawn()
 				if (!Nav->ProjectPointToNavigation(BAround, BNav, FVector(400.f, 400.f, ZTol))) { ++RejNav; continue; }
 				if (FMath::Abs(BNav.Location.Z - GetActorLocation().Z) > ZTol) { ++RejZ; continue; }
 				if (!IsOnStreetSurface(World, BNav.Location)) { ++RejStreet; continue; }
-				FActorSpawnParameters BSP;
-				BSP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 				TSubclassOf<ACustomerBase> BCls = CustomerClass;
 				if (!BCls) { BCls = ACustomerBase::StaticClass(); }
-				if (ACustomerBase* BC = World->SpawnActor<ACustomerBase>(BCls, FTransform(BNav.Location + FVector(0.f, 0.f, 100.f)), BSP))
+				// DEFERRED + bCrowdNpc VOOR BeginPlay: ambient walker -> goedkope 1-mesh-build (geen modulaire spawn-hitch).
+				ACustomerBase* BC = World->SpawnActorDeferred<ACustomerBase>(BCls, FTransform(BNav.Location + FVector(0.f, 0.f, 100.f)), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (BC) { BC->bCrowdNpc = true; BC->FinishSpawning(FTransform(BNav.Location + FVector(0.f, 0.f, 100.f))); }
+				if (BC)
 				{
 					LastBurstDay = BurstDay; // dag-beurt pas verbruikt zodra er echt iets lukt
 					Spawned.Add(BC);
@@ -704,11 +705,11 @@ void ACustomerSpawner::TrySpawn()
 				if (FVector::DotProduct(View, Dir) > 0.1f) { ++RejView; return; } // in beeld: volgende keer
 			}
 		}
-		FActorSpawnParameters SP;
-		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		TSubclassOf<ACustomerBase> Cls = CustomerClass;
 		if (!Cls) { Cls = ACustomerBase::StaticClass(); }
-		ACustomerBase* C = World->SpawnActor<ACustomerBase>(Cls, FTransform(SpawnNav.Location + FVector(0.f, 0.f, 100.f)), SP);
+		// DEFERRED + bCrowdNpc VOOR BeginPlay: ambient walker -> goedkope 1-mesh-build (geen modulaire spawn-hitch).
+			ACustomerBase* C = World->SpawnActorDeferred<ACustomerBase>(Cls, FTransform(SpawnNav.Location + FVector(0.f, 0.f, 100.f)), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (C) { C->bCrowdNpc = true; C->FinishSpawning(FTransform(SpawnNav.Location + FVector(0.f, 0.f, 100.f))); }
 		if (C)
 		{
 			Spawned.Add(C);
@@ -731,8 +732,8 @@ void ACustomerSpawner::TrySpawn()
 		return;
 	}
 
-	// De stad-bevolking = bewoners (dealbaar). Eén keer toewijzen zodra de stad gebouwd is.
-	// (Geen test/random-modus meer: die ruimde alle klanten op behalve één.)
+	// De stad-bevolking = bewoners (dealbaar). EÃ©n keer toewijzen zodra de stad gebouwd is.
+	// (Geen test/random-modus meer: die ruimde alle klanten op behalve Ã©Ã©n.)
 	if (!bResidentsSpawned) { SpawnResidents(); }
 	if (bResidentsSpawned)
 	{
@@ -840,7 +841,7 @@ void ACustomerSpawner::SpawnResidents()
 	UWorld* World = GetWorld();
 	if (!World || !HasAuthority()) { return; }
 
-	// Eén spawner regelt de bewoners: staan er al bewoners, dan niets doen (geen dubbele).
+	// EÃ©n spawner regelt de bewoners: staan er al bewoners, dan niets doen (geen dubbele).
 	for (TActorIterator<ACustomerBase> It(World); It; ++It)
 	{
 		if (IsValid(*It) && It->IsResident()) { bResidentsSpawned = true; return; }
@@ -899,9 +900,9 @@ void ACustomerSpawner::SpawnResidents()
 	TSubclassOf<ACustomerBase> Cls = CustomerClass;
 	if (!Cls) { Cls = ACustomerBase::StaticClass(); }
 
-	// Fysieke roamers kiezen we per UNIEKE hoofdingang: alle units van één appartement-/flatgebouw delen
+	// Fysieke roamers kiezen we per UNIEKE hoofdingang: alle units van Ã©Ã©n appartement-/flatgebouw delen
 	// dezelfde DoorPos, dus zonder dit zouden er tig bewoners op exact dezelfde stoephoek clusteren.
-	// Eén roamer per ingang, gespreid over de stad.
+	// EÃ©n roamer per ingang, gespreid over de stad.
 	auto DoorKey = [](const FVector& P) { return FIntVector(FMath::RoundToInt(P.X / 50.f), FMath::RoundToInt(P.Y / 50.f), 0); };
 	TArray<int32> AllUnits;  // ALLE niet-koopbare units = rotatie-pool: zo komt over de dagen iedereen met een deur buiten
 	TArray<int32> Entrances; // initiele actieve pool: rijtjeshuis = 1, flatgebouw = paar units VERSPREID over de verdiepingen
@@ -1130,7 +1131,7 @@ void ACustomerSpawner::CheckResidentRotation()
 		ApplyDayNightPopulation(NightNow == 1);
 	}
 
-	// Geleidelijke dag-bijvulling: spawn de resterende bewoners NIET in één frame (dat gaf een burst -> ze
+	// Geleidelijke dag-bijvulling: spawn de resterende bewoners NIET in Ã©Ã©n frame (dat gaf een burst -> ze
 	// emergen tegelijk en gaan samen tollen), maar een paar per ~0.5s tot MaxResidents. Zo verschijnen ze
 	// gespreid na de dag/nacht-switch.
 	if (NightNow == 0)
@@ -1223,7 +1224,7 @@ void ACustomerSpawner::ApplyDayNightPopulation(bool bNight)
 	}
 	else
 	{
-		// Dag: crowd weer aanvullen tot MaxResidents (nieuwe gezichten eerst). NIET alles in één frame: alleen
+		// Dag: crowd weer aanvullen tot MaxResidents (nieuwe gezichten eerst). NIET alles in Ã©Ã©n frame: alleen
 		// een klein begin-batchje hier; de rest vult CheckResidentRotation geleidelijk bij (geen spawn-burst ->
 		// geen samen-tollen na de dag/nacht-switch).
 		const int32 DayTarget = (MaxResidents > 0) ? MaxResidents : EligibleHomes.Num();

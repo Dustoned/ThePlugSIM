@@ -632,27 +632,15 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			const AWeedShopGameState* GSdev = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 			const bool bDevKeys = GSdev && GSdev->IsFreeBuild();
 
+			// F9: spot-overlay aan/uit + markeer je plek (basis voor routes/zones/shops). De rest (menu-cam,
+			// bezorg-/meet-plek, build-area, activity-NPC, register-home, furniture-template) zit nu in het F10-dev-menu.
 			const bool bF9 = bDevKeys && PCk->IsInputKeyDown(EKeys::F9);
-			if (bF9 && !bSpotKeyWasDown)
-			{
-				// Shift+F9: leg de HUIDIGE camera-plek vast als hoofdmenu-achtergrond (live backdrop). F9 los = spot-overlay.
-				if (PCk->IsInputKeyDown(EKeys::LeftShift) || PCk->IsInputKeyDown(EKeys::RightShift)) { WeedSaveMenuCam(); }
-				else if (Phone) { Phone->ToggleSpotInfo(); }
-			}
+			if (bF9 && !bSpotKeyWasDown && Phone) { Phone->ToggleSpotInfo(); }
 			bSpotKeyWasDown = bF9;
 
+			// F7: vlieg-/noclip-modus aan/uit (Space = op, Ctrl = neer).
 			const bool bF7 = bDevKeys && PCk->IsInputKeyDown(EKeys::F7);
-			if (bF7 && !bFlyKeyWasDown && (PCk->IsInputKeyDown(EKeys::LeftShift) || PCk->IsInputKeyDown(EKeys::RightShift)))
-			{
-				// Shift+F7: leg de HUIDIGE plek vast als vaste bezorg-plek (hotel-hoofdingang). F7 los = fly.
-				WeedMarkDeliveryPoint();
-			}
-			else if (bF7 && !bFlyKeyWasDown && (PCk->IsInputKeyDown(EKeys::LeftControl) || PCk->IsInputKeyDown(EKeys::RightControl)))
-			{
-				// Ctrl+F7: voeg een afspraak-ontmoetingsplek toe (logische plek: winkel/steegje/hotel-hal).
-				WeedAddMeetSpot();
-			}
-			else if (bF7 && !bFlyKeyWasDown)
+			if (bF7 && !bFlyKeyWasDown)
 			{
 				if (UCharacterMovementComponent* CM = GetCharacterMovement())
 				{
@@ -672,18 +660,8 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			}
 			bFlyKeyWasDown = bF7;
 
-			// --- Activity-NPC (dev-tool, 1 toets) ---
-			// F10: kijk je naar een activity-NPC -> open het instel-menu (anim / van-tot / wissen). Kijk je
-			//      nergens naar -> plaats hier een nieuwe activity-NPC (default: hele dag, eerste anim), die je
-			//      daarna met F10 kunt aanklikken om in te stellen.
-			const bool bF10 = bDevKeys && PCk->IsInputKeyDown(EKeys::F10);
-			if (bF10 && !bActAnimKeyWasDown) { HandleActivityKey(); }
-			bActAnimKeyWasDown = bF10;
-
-			// F11: markeer een hoek van je build-gebied (2 hoeken -> de box; alleen daarbinnen mag je bouwen).
-			const bool bF11 = bDevKeys && PCk->IsInputKeyDown(EKeys::F11);
-			if (bF11 && !bBuildAreaKeyWasDown) { WeedMarkBuildArea(); }
-			bBuildAreaKeyWasDown = bF11;
+			// (Activity-NPC, build-area, register-home, furniture-template, menu-cam, bezorg-/meet-plek: nu knoppen
+			//  in het F10-dev-menu i.p.v. losse hotkeys. F10 opent het menu.)
 
 			if (GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying)
 			{
@@ -945,12 +923,9 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	// B: wissel tussen first-person en third-person (om jezelf / je skin te bekijken).
 	Input->BindKey(EKeys::B, IE_Pressed, this, &AThePlugSIMCharacter::ToggleThirdPerson);
 
-	// Furniture-authoring hotkeys (sandbox): F8 = templates opslaan (F9 = nu de spot-info-overlay;
-	// meubels wissen kan nog via het console-commando WeedClearFurniture),
-	// F10 = woning-types-overzicht. Werkt zonder console.
-	Input->BindKey(EKeys::F8,  IE_Pressed, this, &AThePlugSIMCharacter::WeedSaveFurniture);
-	Input->BindKey(EKeys::F10, IE_Pressed, this, &AThePlugSIMCharacter::WeedFurnitureTypes);
-	Input->BindKey(EKeys::F6,  IE_Pressed, this, &AThePlugSIMCharacter::WeedRegisterHome); // woning registreren (dev)
+	// Dev: F10 = het DEV-MENU (één sidebar met ALLE dev-tools). F9 = spot-overlay, F7 = fly (per-tick, elders).
+	// Alle andere dev-acties zijn nu knoppen IN het menu i.p.v. losse hotkeys (de WeedXxx-console-commando's blijven).
+	if (Ph) { Input->BindKey(EKeys::F10, IE_Pressed, Ph, &UPhoneClientComponent::ToggleDevMenu); }
 
 	// ESC: pauze-/menu-scherm. bExecuteWhenPaused zodat je er ook UIT kunt met ESC terwijl de
 	// wereld gepauzeerd is (anders worden de pawn-bindings niet uitgevoerd tijdens pauze).
@@ -1508,6 +1483,43 @@ void AThePlugSIMCharacter::WeedMarkSpot(const FString& Label)
 		FString::Printf(TEXT("Spot marked: %s (%.0f, %.0f, %.0f)"), Label.IsEmpty() ? TEXT("spot") : *Label, L.X, L.Y, L.Z));
 }
 
+void AThePlugSIMCharacter::WeedSaveNoBuild()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// Latch de huidige F9-markers (MarkedSpots.txt) als NO-BUILD-zones in een EIGEN bestand (NoBuildZones.txt) dat
+	// GEEN ander dev-tool leegmaakt - zo verdwijnen je zones nooit meer. Paren markers = boxen; append (meerdere muren).
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	const FString MapName = W->GetOutermost()->GetName();
+	FString Add; int32 N = 0;
+	for (const FString& L : Lines)
+	{
+		if (L.Contains(MapName) && L.Contains(TEXT("pos=("))) { Add += L + TEXT("\n"); ++N; }
+	}
+	if (N < 2)
+	{
+		UWeedToast::NotifyPawn(this, -1, 5.f, FColor::Orange,
+			TEXT("Mark at least 2 spots with F9 first (the diagonal corners of the area/wall), then run WeedSaveNoBuild."));
+		return;
+	}
+	const FString File = FPaths::ProjectSavedDir() / TEXT("NoBuildZones.txt");
+	FFileHelper::SaveStringToFile(Add, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,
+		&IFileManager::Get(), FILEWRITE_Append);
+	// MarkedSpots leeg zodat de volgende zone vers begint (zoals de andere save-acties).
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(this, -1, 5.f, FColor::Green,
+		FString::Printf(TEXT("No-build zone saved (%d corners). Permanent - run WeedClearNoBuild to reset."), N));
+}
+
+void AThePlugSIMCharacter::WeedClearNoBuild()
+{
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("NoBuildZones.txt")),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Cyan, TEXT("All no-build zones cleared."));
+}
+
 void AThePlugSIMCharacter::WeedSaveMenuCam()
 {
 	// Leg de exacte camera-stand vast (locatie + rotatie van de PlayerCameraManager) als hoofdmenu-achtergrond.
@@ -1848,6 +1860,7 @@ void AThePlugSIMCharacter::OnPauseKey()
 	// ALLES in één keer dicht. Staat er niets open, dan opent ESC het pauze-menu.
 	// Op het titelscherm doet ESC niets (je kiest daar Start/Continue/Quit).
 	if (!Phone || Phone->IsMainMenuOpen()) { return; }
+	if (Phone->IsLinkModeActive()) { Phone->ExitLinkMode(); return; } // Esc = klaar met lampen linken (markers weg)
 	if (Phone->IsMapOpen()) { Phone->CloseMapOverlay(); return; }
 	if (Phone->IsAnyGameUIOpen()) { Phone->CloseAllUI(); }
 	else { Phone->TogglePause(); }

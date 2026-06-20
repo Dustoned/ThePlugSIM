@@ -2,7 +2,9 @@
 #include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Game/WeedShopGameState.h"
 #include "Progression/StoreComponent.h"
@@ -15,16 +17,48 @@ ADeliveryPackage::ADeliveryPackage()
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 
-	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	SetRootComponent(Mesh);
+	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(Root);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeFinder(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (CubeFinder.Succeeded()) { Mesh->SetStaticMesh(CubeFinder.Object); }
-	// Kartonnen doosje: bruinig, ~40cm kubus.
-	Mesh->SetWorldScale3D(FVector(0.4f, 0.4f, 0.4f));
-	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> MatFinder(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-	if (MatFinder.Succeeded()) { Mesh->SetMaterial(0, MatFinder.Object); }
+
+	// Kartonnen doos: bruine kubus ~42x42x40cm, gecentreerd op de actor-origin (zodat de drone-drop-offset blijft
+	// kloppen) met de collision erop.
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(Root);
+	if (CubeFinder.Succeeded()) { Mesh->SetStaticMesh(CubeFinder.Object); }
+	Mesh->SetRelativeScale3D(FVector(0.42f, 0.42f, 0.40f));
+	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	if (MatFinder.Succeeded())
+	{
+		if (UMaterialInstanceDynamic* M = Mesh->CreateDynamicMaterialInstance(0, MatFinder.Object))
+		{
+			M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.46f, 0.32f, 0.18f)); // karton-bruin
+		}
+	}
+
+	// Pakkettape: beige kruis bovenop (2 dunne strips, net over de rand zoals echte tape). Geen collision.
+	TapeX = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TapeX"));
+	TapeY = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TapeY"));
+	UStaticMeshComponent* Tapes[2] = { TapeX, TapeY };
+	const FVector TapeScale[2] = { FVector(0.46f, 0.10f, 0.04f), FVector(0.10f, 0.46f, 0.04f) };
+	for (int32 i = 0; i < 2; ++i)
+	{
+		UStaticMeshComponent* T = Tapes[i];
+		T->SetupAttachment(Root);
+		if (CubeFinder.Succeeded()) { T->SetStaticMesh(CubeFinder.Object); }
+		T->SetRelativeScale3D(TapeScale[i]);
+		T->SetRelativeLocation(FVector(0.f, 0.f, 20.f)); // op het deksel (doos-halfhoogte = 20cm)
+		T->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (MatFinder.Succeeded())
+		{
+			if (UMaterialInstanceDynamic* TM = T->CreateDynamicMaterialInstance(0, MatFinder.Object))
+			{
+				TM->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.80f, 0.72f, 0.55f)); // beige tape
+			}
+		}
+	}
 }
 
 void ADeliveryPackage::SetupOrder(int32 InOrderId, const TArray<FName>& InIds, const TArray<int32>& InQtys, UPhoneClientComponent* InPhone)

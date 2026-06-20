@@ -679,10 +679,12 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 						const bool bWall = FMath::Abs(N.Z) < 0.4f; // verticaal vlak
 						FVector D = FVector(N.X, N.Y, 0.f).GetSafeNormal(); // horizontale muur-normaal (de kamer in)
 						if (D.IsNearlyZero()) { D = FVector(1.f, 0.f, 0.f); }
-						// Lokale +Y wijst langs de normaal (de kamer in); de rug (-Y) ligt vlak tegen de muur.
-						PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X)) - 90.f, 0.f);
+						// De lightswitch-plaat staat dun op LOKALE X (knop op +X); rek/TV hebben hun diepte op +Y.
+						// Richt de juiste as langs de muur-normaal, zodat de knop/voorkant de kamer in (naar de speler) wijst.
+						const bool bFaceX = CurrentDef.bIsLightSwitch;
+						PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X)) - (bFaceX ? 0.f : 90.f), 0.f);
 						// Midden = trefpunt + normaal * halve diepte (rug strak tegen de muur). Hoogte = waar je mikt.
-						FVector Center = Hit.ImpactPoint + D * CurrentDef.BoxHalf.Y;
+						FVector Center = Hit.ImpactPoint + D * (bFaceX ? CurrentDef.BoxHalf.X : CurrentDef.BoxHalf.Y);
 						// Shift: snap langs de muur (horizontale tangent) en in hoogte op het raster.
 						const APlayerController* PCw = Cast<APlayerController>(OwnerPawn->GetController());
 						if (PCw && (PCw->IsInputKeyDown(EKeys::LeftShift) || PCw->IsInputKeyDown(EKeys::RightShift)) && GridSize > 1.f)
@@ -697,11 +699,21 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							Center.Z = FMath::GridSnap<float>(Center.Z, HeightStep);
 						}
 						PreviewLocation = Center;
-						// Wand-mount (rek) mag alleen BINNEN (eigen woning, of overal binnen in free-build) - niet buiten,
-						// niet op een DEUR, en niet DOOR een ander geplaatst object heen (zijdelings clippen).
-						bValidSpot = bWall && !bOnPlaceable && !bOnDoor
-							&& !OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion())
-							&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation));
+						// Wand-mount (rek/lamp/TV) mag alleen op een MUUR, niet op een deur/ander object, niet DOOR een
+						// ander object heen, en BINNEN je eigen huis. De huis-check pakt een punt iets DIEPER de kamer in
+						// (de muur ligt op de build-box-rand, dus de rug-positie valt anders nét buiten en weigert 'ie
+						// onterecht). Plus: bij rood de ECHTE reden tonen i.p.v. een oude "Aim at the floor"-hint.
+						const bool bWmOverlap = OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion());
+						const bool bWmHome = CurrentDef.bAllowOutdoors || IsInOwnedHome(Hit.ImpactPoint + D * (CurrentDef.BoxHalf.Y + 40.f));
+						bValidSpot = bWall && !bOnPlaceable && !bOnDoor && !bWmOverlap && bWmHome;
+						if (!bValidSpot)
+						{
+							PlacementHint = !bWall ? TEXT("Aim at a wall")
+								: bOnDoor ? TEXT("Not on a door")
+								: bOnPlaceable ? TEXT("Can't place on top of that")
+								: !bWmHome ? TEXT("Only inside your own home")
+								: TEXT("Too close to another object");
+						}
 					}
 					else
 					{
@@ -1011,6 +1023,10 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	{
 		ReturnItem = FName(TEXT("Atm"));
 	}
+	else if (Cast<APackLightSwitch>(Target))
+	{
+		ReturnItem = FName(TEXT("LightSwitch")); // schakelaar terug als inventory-item (was: viel in de else -> niets)
+	}
 	else
 	{
 		return; // niet oppakbaar
@@ -1109,7 +1125,9 @@ void UBuildComponent::RefreshNoBuildZones()
 	NoBuildZones.Reset();
 	UWorld* W = GetWorld();
 	if (!W) { return; }
-	const FString File = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
+	// EIGEN bestand (niet MarkedSpots.txt - dat wordt door andere dev-tools leeggemaakt). Hierin worden de
+	// no-build-markers vastgezet via WeedSaveNoBuild; zo verdwijnen je zones nooit meer.
+	const FString File = FPaths::ProjectSavedDir() / TEXT("NoBuildZones.txt");
 	FString Content;
 	if (!FFileHelper::LoadFileToString(Content, *File)) { return; }
 	const FString MapName = W->GetOutermost()->GetName();
@@ -1129,14 +1147,15 @@ void UBuildComponent::RefreshNoBuildZones()
 		if (N.Num() < 3) { continue; }
 		Pts.Add(FVector(FCString::Atof(*N[0].TrimStartAndEnd()), FCString::Atof(*N[1].TrimStartAndEnd()), FCString::Atof(*N[2].TrimStartAndEnd())));
 	}
-	// Elk PAAR markers = een no-build-box (min/max XY; ruime Z rond de markers - die staan op heuphoogte).
+	// Elk PAAR markers = een no-build-box (min/max XY). Z loopt van net onder de vloer tot boven plafondhoogte
+	// (markers staan op heuphoogte ~+88), zodat ook hoge wall-mounts (lightswitch/TV) op die muur geblokkeerd zijn.
 	for (int32 i = 0; i + 1 < Pts.Num(); i += 2)
 	{
 		const FVector A = Pts[i], B = Pts[i + 1];
 		const float MidZ = (A.Z + B.Z) * 0.5f;
 		NoBuildZones.Add(FBox(
-			FVector(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y), MidZ - 260.f),
-			FVector(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y), MidZ + 200.f)));
+			FVector(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y), MidZ - 200.f),
+			FVector(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y), MidZ + 360.f)));
 	}
 }
 
@@ -1383,13 +1402,25 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		// Building-tool: geen overlap-/binnen-regels (vrij tekenen van muren/vloeren).
 	}
-	else if (!bUpgrade && !Def.bAllowOutdoors && !IsInOwnedHome(Location))
+	else if (!bUpgrade && !Def.bAllowOutdoors)
 	{
-		if (GEngine)
+		bool bHomeOk = IsInOwnedHome(Location);
+		// Wand-mount staat op de muur (= op de build-box-rand), dus Location valt soms nét buiten. Check dan ook
+		// een punt iets de kamer in (4 richtingen) - net als de preview - zodat plaatsen op je EIGEN muur lukt.
+		// Buiten je huis blijft 't geweigerd (geen enkel richtingspunt valt dan binnen).
+		if (!bHomeOk && Def.bIsWallMount)
 		{
-			UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("You can only build inside (not outdoors)."));
+			bHomeOk = IsInOwnedHome(Location + FVector(45.f, 0.f, 0.f)) || IsInOwnedHome(Location + FVector(-45.f, 0.f, 0.f))
+				|| IsInOwnedHome(Location + FVector(0.f, 45.f, 0.f)) || IsInOwnedHome(Location + FVector(0.f, -45.f, 0.f));
 		}
-		return;
+		if (!bHomeOk)
+		{
+			if (GEngine)
+			{
+				UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("You can only build inside (not outdoors)."));
+			}
+			return;
+		}
 	}
 
 	UInventoryComponent* Inv = GetOwnerInventory();
@@ -1505,7 +1536,7 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		{
 			// Stabiele sleutel uit de wereldpositie (op 10cm) -> aan/uit + dim onthouden per plek/woning.
 			Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"),
-				FMath::RoundToInt(Location.X / 10.f), FMath::RoundToInt(Location.Y / 10.f), FMath::RoundToInt(Location.Z / 10.f)), 520.f);
+				FMath::RoundToInt(Location.X / 10.f), FMath::RoundToInt(Location.Y / 10.f), FMath::RoundToInt(Location.Z / 10.f)), 800.f);
 			Sw->FinishSpawning(FTransform(Rotation, Location));
 		}
 	}

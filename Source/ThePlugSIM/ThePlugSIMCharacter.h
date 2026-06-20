@@ -144,6 +144,11 @@ public:
 	// `WeedMarkSpot <label>` schrijft je huidige positie+kijkrichting naar Saved/MarkedSpots.txt -
 	// zo wijs je plekken aan (bv. een hotel-lobby) waar Claude daarna in code iets kan bouwen.
 	UFUNCTION(Exec) void WeedMarkSpot(const FString& Label);
+	// `WeedSaveNoBuild`: zet de huidige F9-markers vast als NO-BUILD-zones in Saved/NoBuildZones.txt (eigen bestand
+	// dat geen ander dev-tool wist). Markeer 2 hoeken (diagonaal) van een muur/gebied met F9, dan dit commando.
+	UFUNCTION(Exec) void WeedSaveNoBuild();
+	// `WeedClearNoBuild`: wis alle no-build-zones.
+	UFUNCTION(Exec) void WeedClearNoBuild();
 	// Dev (Shift+F9): leg de huidige camera-plek vast als hoofdmenu-achtergrond (Saved/MenuCam.txt).
 	void WeedSaveMenuCam();
 
@@ -260,6 +265,15 @@ public:
 		switch (Slot) { case 1: return OutfitLegs; case 2: return OutfitShoes; case 3: return OutfitHair; case 4: return OutfitAcc; case 5: return OutfitNeck; case 6: return OutfitSocks; default: return OutfitTop; }
 	}
 	virtual void SetOutfitPart(int32 Slot, uint8 Index) override { ServerSetOutfit((uint8)Slot, Index); }
+
+	// Dev-menu-knoppen (F10-sidebar) roepen deze aan i.p.v. losse hotkeys; wrappen de bestaande dev-functies.
+	virtual void DevRegisterHome() override { WeedRegisterHome(); }
+	virtual void DevMarkDeliveryPoint() override { WeedMarkDeliveryPoint(); }
+	virtual void DevAddMeetSpot() override { WeedAddMeetSpot(); }
+	virtual void DevSaveFurnitureTemplate() override { WeedSaveFurniture(); }
+	virtual void DevMarkBuildAreaCorner() override { WeedMarkBuildArea(); }
+	virtual void DevSaveMenuCam() override { WeedSaveMenuCam(); }
+	virtual void DevActivityNpcAtAim() override { HandleActivityKey(); }
 
 	/** Open/sluit het roll-paneel (toets R) — daar kies je het aantal gram. */
 	void ToggleRollUI();

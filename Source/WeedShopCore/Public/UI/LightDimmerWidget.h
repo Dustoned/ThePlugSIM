@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UBorder;
 class USlider;
 class UTextBlock;
+class UWeedActionButton;
 
 UCLASS()
 class WEEDSHOPCORE_API ULightDimmerWidget : public UUserWidget
@@ -34,6 +35,8 @@ protected:
 	UPROPERTY() TObjectPtr<UBorder> Card;
 	UPROPERTY() TObjectPtr<USlider> Slider;
 	UPROPERTY() TObjectPtr<UTextBlock> ValueText;
+	UPROPERTY() TObjectPtr<UWeedActionButton> LinkButton;
+	UPROPERTY() TObjectPtr<UTextBlock> LinkButtonText; // label wisselt "Link lampen" <-> "Complete linking"
 
 	bool bSliderHeld = false;
 	TWeakObjectPtr<class APackLightSwitch> LastSwitch;

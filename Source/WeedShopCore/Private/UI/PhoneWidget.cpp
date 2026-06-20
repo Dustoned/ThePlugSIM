@@ -144,11 +144,18 @@ namespace
 
 	// Berichten-body als WrapBox van losse woorden, met de BELANGRIJKE woorden VETGEDRUKT: alles met een
 	// cijfer (grams, % THC, prijs, tijd) en strain-/product-woorden. Zo springt eruit wát en hoeveel ze vragen.
-	UWidget* MakeRichBody(UWidgetTree* Tree, const FString& Body, int32 Size, const FLinearColor& Col)
+	UWidget* MakeRichBody(UWidgetTree* Tree, const FString& Body, int32 Size, const FLinearColor& Col, const FString& BoldExtra = FString())
 	{
 		// Per \n-regel een WRAPBOX (breekt lange regels netjes af BINNEN de bubbel i.p.v. eruit te lopen).
-		// Belangrijke woorden VET: getallen/%/tijd (9g, 13%, 11:14) en ALL-CAPS termen (VIP, THC); rest gewoon.
+		// Belangrijke woorden VET: getallen/%/tijd (9g, 13%, 11:14), ALL-CAPS termen (VIP, THC), EN de strain/product
+		// (via BoldExtra) zodat de klant z'n bestelling meteen ziet; rest gewoon.
 		UVerticalBox* VB = Tree->ConstructWidget<UVerticalBox>();
+		// Extra-vet woorden (de strain/product) als losse lowercase woorden voor de vergelijking.
+		TSet<FString> ExtraWords;
+		{
+			TArray<FString> EW; BoldExtra.ToLower().ParseIntoArray(EW, TEXT(" "), true);
+			for (const FString& E : EW) { if (E.Len() >= 2) { ExtraWords.Add(E); } }
+		}
 		TArray<FString> Lines;
 		Body.ParseIntoArray(Lines, TEXT("\n"), false);
 		for (const FString& Line : Lines)
@@ -179,7 +186,16 @@ namespace
 					if (FChar::IsDigit(c) || c == TEXT('%')) { bDigit = true; }
 					if (FChar::IsAlpha(c) && !FChar::IsUpper(c)) { bAllUpper = false; }
 				}
-				const bool bBold = bDigit || bAllUpper;
+				// Strain/product-woord? (kale alfa-kern vergelijken, dus "Haze?" matcht ook.)
+				bool bExtra = false;
+				if (ExtraWords.Num() > 0)
+				{
+					FString Core = W.ToLower();
+					while (Core.Len() > 0 && !FChar::IsAlpha(Core[0])) { Core.RemoveAt(0); }
+					while (Core.Len() > 0 && !FChar::IsAlpha(Core[Core.Len() - 1])) { Core.RemoveAt(Core.Len() - 1); }
+					bExtra = Core.Len() >= 2 && ExtraWords.Contains(Core);
+				}
+				const bool bBold = bDigit || bAllUpper || bExtra;
 				if (!Run.IsEmpty() && (bBold != bRunBold || RunLen + W.Len() + 1 > 16)) { Flush(); }
 				if (Run.IsEmpty()) { bRunBold = bBold; }
 				Run += W; Run += TEXT(" "); RunLen += W.Len() + 1;
@@ -262,11 +278,10 @@ void UPhoneWidget::BuildSettingsApp()
 
 	// Categorie-knoppen. De 'Test'-tab (dag/nacht-switch e.d.) alleen in dev-modes (Sandbox/Testing), niet in een normaal spel.
 	SettingsTabBtns.Reset();
-	const AWeedShopGameState* GSt = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	const bool bDevMode = GSt && GSt->IsFreeBuild();
-	if (!bDevMode && SettingsCat != 0) { SettingsCat = 0; }
-	static const TCHAR* CatNames[5] = { TEXT("Status"), TEXT("Test"), TEXT("Rooms"), TEXT("Light"), TEXT("Spots") };
-	const int32 NumTabs = bDevMode ? 5 : 1;
+	// Dev-tabs (Test/Rooms/Light/Spots) zijn verhuisd naar het losse DEV-MENU (F10). De telefoon toont alleen Status.
+	SettingsCat = 0;
+	static const TCHAR* CatNames[1] = { TEXT("Status") };
+	const int32 NumTabs = 1;
 	UHorizontalBox* Cats = WidgetTree->ConstructWidget<UHorizontalBox>();
 	for (int32 i = 0; i < NumTabs; ++i)
 	{
@@ -356,6 +371,9 @@ void UPhoneWidget::FillSettingsBody()
 			 TEXT("Furniture kit"), CKit, [this]() { if (Phone.IsValid()) { Phone->RequestGiveFurnitureKit(); } });
 		Pair(TEXT("Save furniture"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveStarterFurniture(); } },
 			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearStarterFurniture(); } });
+		// No-build-zone: markeer 2 hoeken (F9) van een muur/gebied -> knop zet ze vast (eigen bestand, blijft staan).
+		Pair(TEXT("Save no-build zone (2 F9 corners)"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveNoBuildZone(); } },
+			 TEXT("Clear no-build"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearNoBuildZone(); } });
 
 		// === HOME ===
 		Section(TEXT("HOME"));
@@ -1184,7 +1202,10 @@ void UPhoneWidget::BuildChatApp()
 		Bub->SetBrush(RoundedBrush(M.bFromMe ? FLinearColor(0.16f, 0.35f, 0.22f, 0.97f) : FLinearColor(0.16f, 0.18f, 0.24f, 0.97f), 10.f));
 		Bub->SetPadding(FMargin(9.f, 6.f, 9.f, 6.f));
 		// Body met de belangrijke woorden vetgedrukt (grams/%/strain/product) i.p.v. één platte tekst.
-		UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, FLinearColor(0.95f, 0.97f, 1.f));
+		// Strain/product ook altijd vet: zelfde "pretty name minus bag" als waarmee de body is opgebouwd.
+		FString BoldStrain;
+		if (!M.WantProduct.IsNone()) { BoldStrain = WeedUI::PrettyItemName(M.WantProduct).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase); }
+		UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, FLinearColor(0.95f, 0.97f, 1.f), BoldStrain);
 		// Tijdstempel (HH:MM, in-game klok) onder het bericht - zoals een normale berichten-app.
 		UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		BubVB->AddChildToVerticalBox(BodyT);

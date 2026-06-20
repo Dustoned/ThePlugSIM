@@ -33,6 +33,7 @@
 #include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
 #include "UI/PhoneWidget.h"
+#include "UI/DevMenuWidget.h"
 #include "UI/DealWidget.h"
 #include "UI/StatusHudWidget.h"
 #include "UI/PlantInfoWidget.h"
@@ -69,6 +70,8 @@
 #include "UI/LightDimmerWidget.h"
 #include "World/PackLightSwitch.h"
 #include "World/DayNightController.h"
+#include "World/LampLinkMarker.h"
+#include "Components/PointLightComponent.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Camera/CameraActor.h"
@@ -228,6 +231,76 @@ void UPhoneClientComponent::CloseLightDimmer()
 APackLightSwitch* UPhoneClientComponent::GetDimmerSwitch() const
 {
 	return DimmerSwitch.Get();
+}
+
+void UPhoneClientComponent::EnterLinkMode()
+{
+	if (bLinkModeActive) { return; }
+	APackLightSwitch* Sw = DimmerSwitch.Get();
+	UWorld* W = GetWorld();
+	ADayNightController* DNC = W ? ADayNightController::GetLocal(W) : nullptr;
+	if (!Sw || !W || !DNC) { return; }
+
+	bLinkModeActive = true;
+	LinkSwitch = Sw;
+	Sw->SetLinkPreview(true); // alle lampen in de buurt even aan + de gelinkte BLAUW kleuren
+
+	// Enumereer de lampen via DEZELFDE bron als ClaimLamps (CollectCeilingLightsNear) zodat de marker-key
+	// gegarandeerd identiek is aan de claim-key. Dedupe op key (CeilLamp + CeilGlow delen 1 positie).
+	// Enumereer de DIFFUSERS (lightboxes) via CollectCeilingEmisNear -> markers + blauwe glow vallen precies op
+	// de lamp-box. De sleutel (MakeLampKey, grof op Z) is identiek aan die in ClaimLamps voor dezelfde lamp.
+	TArray<UMaterialInstanceDynamic*> Mids; TArray<float> Bright; TArray<FVector> Pos;
+	DNC->CollectCeilingEmisNear(Sw->GetActorLocation(), Sw->GetControlRadius(), Mids, Bright, Pos);
+	TSet<FString> Seen;
+	for (const FVector& LampPos : Pos)
+	{
+		const FString Key = APackLightSwitch::MakeLampKey(LampPos);
+		if (Seen.Contains(Key)) { continue; }
+		Seen.Add(Key);
+
+		FActorSpawnParameters SP;
+		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		// Klik-doel + blauwe glow MIDDEN op de lightbox (diffuser-positie).
+		if (ALampLinkMarker* M = W->SpawnActor<ALampLinkMarker>(ALampLinkMarker::StaticClass(), FTransform(LampPos), SP))
+		{
+			M->Init(Sw, this, Key); // Init -> RefreshLink: blauw als al gelinkt
+			LinkMarkers.Add(M);
+		}
+	}
+
+	// Dimmer dicht; link-modus draait verder als losse game-input-state (los van de 450cm dimmer-auto-close).
+	CloseLightDimmer();
+	// Sluit vanzelf na 60s zonder klik (elke marker-klik reset 'm via NotifyLinkActivity).
+	if (W) { W->GetTimerManager().SetTimer(LinkIdleTimer, this, &UPhoneClientComponent::ExitLinkMode, 60.f, false); }
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Cyan,
+		TEXT("Link-modus: kijk een lamp aan + interact om te koppelen (blauw = gelinkt). Esc of dim-menu = klaar."));
+}
+
+void UPhoneClientComponent::ExitLinkMode()
+{
+	if (!bLinkModeActive) { return; }
+	bLinkModeActive = false;
+	if (APackLightSwitch* Sw = LinkSwitch.Get()) { Sw->SetLinkPreview(false); } // lampen terug naar normaal
+	LinkSwitch = nullptr;
+	for (ALampLinkMarker* M : LinkMarkers) { if (M) { M->Destroy(); } }
+	LinkMarkers.Reset();
+	if (UWorld* W = GetWorld()) { W->GetTimerManager().ClearTimer(LinkIdleTimer); }
+	// Links zijn al per-klik opgeslagen (ToggleLampLink->SaveLinks); niets extra te bewaren.
+}
+
+void UPhoneClientComponent::NotifyLinkActivity()
+{
+	if (!bLinkModeActive) { return; }
+	if (UWorld* W = GetWorld())
+	{
+		W->GetTimerManager().SetTimer(LinkIdleTimer, this, &UPhoneClientComponent::ExitLinkMode, 60.f, false);
+	}
+}
+
+void UPhoneClientComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ExitLinkMode(); // markers opruimen bij pawn-death / level-transitie
+	Super::EndPlay(EndPlayReason);
 }
 
 AWeedShopGameState* UPhoneClientComponent::GetGS() const
@@ -934,7 +1007,7 @@ void UPhoneClientComponent::RefreshInputMode()
 
 void UPhoneClientComponent::UpdateCursor()
 {
-	const bool bAnyUI = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen || bWardrobeOpen || bLightDimmerOpen;
+	const bool bAnyUI = bOpen || bDevMenuOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen || bWardrobeOpen || bLightDimmerOpen;
 	// Maar 1 UI tegelijk: opent er een ander scherm, dan gaat de fullscreen-kaart dicht.
 	if (bAnyUI && MapOverlay)
 	{
@@ -993,6 +1066,13 @@ void UPhoneClientComponent::EnsureWidget()
 	{
 		PhoneWidget->SetPhone(this);
 		PhoneWidget->AddToViewport(20);
+	}
+	// Dev-menu (F10): één sidebar met alle dev-tools. Boven de telefoon (20), onder pauze (40).
+	DevMenuWidget = CreateWidget<UDevMenuWidget>(PC, UDevMenuWidget::StaticClass());
+	if (DevMenuWidget)
+	{
+		DevMenuWidget->SetPhone(this);
+		DevMenuWidget->AddToViewport(21);
 	}
 	// IN-GAME COVER-SCHERM (de "2e" loadingscreen): een vol-scherm widget die NA de map-load over beeld
 	// blijft tot je echt stil in de kamer staat (vloer onder je gevonden) en dan wegfade't. Ziet er
@@ -1071,10 +1151,25 @@ void UPhoneClientComponent::Toggle()
 		bInventoryOpen = false;
 		bPotUpgradeOpen = false;
 		bAtmOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false; bStoreOpen = false;
+		bDevMenuOpen = false; // dev-menu en telefoon niet tegelijk
 		bHomeScreen = true; // open altijd op het home-scherm met de apps
 	}
 	// Andere spelers laten zien dat je op je telefoon zit (gerepliceerde texting-anim).
 	if (GetOwner() && GetOwner()->GetLocalRole() != ROLE_SimulatedProxy) { ServerSetPhoneOpen(bOpen); }
+	UpdateCursor();
+}
+
+void UPhoneClientComponent::ToggleDevMenu()
+{
+	const AWeedShopGameState* GS = GetGS();
+	if (!GS || !GS->IsFreeBuild()) { return; } // dev-menu alleen in Sandbox/Testing (stil in een normaal spel)
+	EnsureWidget();
+	bDevMenuOpen = !bDevMenuOpen;
+	if (bDevMenuOpen)
+	{
+		bOpen = false; // telefoon en dev-menu niet tegelijk
+		if (DevMenuWidget) { DevMenuWidget->MarkDirty(); } // dynamische lijsten vers bij openen
+	}
 	UpdateCursor();
 }
 
@@ -1182,7 +1277,7 @@ void UPhoneClientComponent::ClosePause()
 
 bool UPhoneClientComponent::IsAnyGameUIOpen() const
 {
-	return bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen
+	return bOpen || bDevMenuOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen
 		|| bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bSettingsOpen || bWardrobeOpen;
 }
 
@@ -1191,6 +1286,7 @@ void UPhoneClientComponent::CloseAllUI()
 	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false;
 	bPotUpgradeOpen = false; bMergeOpen = false; bAtmOpen = false; bPackOpen = false;
 	bShelfOpen = false; bDryRackOpen = false; bPauseOpen = false; bSettingsOpen = false; bWardrobeOpen = false;
+	bDevMenuOpen = false;
 	if (APlayerController* PC = GetPC())
 	{
 		if (GetWorld() && GetWorld()->GetNetMode() == NM_Standalone) { PC->SetPause(false); }
@@ -2742,6 +2838,17 @@ void UPhoneClientComponent::SaveStarterFurniture()
 		Out += FString::Printf(TEXT("%s,%.1f,%.1f,%.1f,%.1f"), *Tier.ToString(), L.X, L.Y, L.Z, Sh->GetActorRotation().Yaw) + LINE_TERMINATOR;
 		++N;
 	}
+	// Lichtschakelaars (APackLightSwitch = eigen class, geen prop) -> zonder deze loop verdwenen jouw
+	// geplaatste schakelaars elke save (net als sink/shelf hierboven).
+	for (TActorIterator<APackLightSwitch> It(W); It; ++It)
+	{
+		APackLightSwitch* Sw = *It;
+		if (!IsValid(Sw)) { continue; }
+		const FVector L = Sw->GetActorLocation();
+		if (FVector::Dist2D(L, C) > 1500.f || FMath::Abs(L.Z - C.Z) > 500.f) { continue; }
+		Out += FString::Printf(TEXT("LightSwitch,%.1f,%.1f,%.1f,%.1f"), L.X, L.Y, L.Z, Sw->GetActorRotation().Yaw) + LINE_TERMINATOR;
+		++N;
+	}
 	if (N == 0)
 	{
 		UWeedToast::NotifyPawn(P, -1, 3.f, FColor::Orange, TEXT("No furniture near you to save - place some first"));
@@ -3295,6 +3402,43 @@ void UPhoneClientComponent::SaveNpcRoute()
 	FFileHelper::SaveStringToFile(Cur, *(FPaths::ProjectSavedDir() / TEXT("NpcRoute.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green, FString::Printf(TEXT("NPC route %d saved (%d points, closed loop)! Markers cleared - restart applies"), NRoutes, Marks.Num()));
+}
+
+void UPhoneClientComponent::SaveNoBuildZone()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	// Hele marker-regels van deze map bewaren (BuildComponent leest er pos=(X,Y,Z) uit; paren = boxen).
+	FString Add; int32 N = 0;
+	for (const FString& Line : Lines)
+	{
+		if (Line.Contains(MapPath) && Line.Contains(TEXT("pos=("))) { Add += Line + LINE_TERMINATOR; ++N; }
+	}
+	if (N < 2)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 5.f, FColor::Orange, TEXT("Mark at least 2 corners (diagonal) of the wall/area with F9 first."));
+		return;
+	}
+	// EIGEN bestand dat geen ander dev-tool leegmaakt; APPEND (in-memory) zodat meerdere muren/deuren stapelen.
+	const FString File = FPaths::ProjectSavedDir() / TEXT("NoBuildZones.txt");
+	FString Cur;
+	FFileHelper::LoadFileToString(Cur, *File);
+	if (!Cur.IsEmpty() && !Cur.EndsWith(LINE_TERMINATOR)) { Cur += LINE_TERMINATOR; }
+	Cur += Add;
+	FFileHelper::SaveStringToFile(Cur, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	// Markers wissen zodat het kladblok leeg blijft voor de volgende zone.
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green,
+		FString::Printf(TEXT("No-build zone saved (%d corners). Permanent - markers cleared."), N));
+}
+
+void UPhoneClientComponent::ClearNoBuildZone()
+{
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("NoBuildZones.txt")));
+	UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Cyan, TEXT("All no-build zones cleared."));
 }
 
 void UPhoneClientComponent::SaveStairsPath()

@@ -166,7 +166,19 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	}
 	Op->DefaultDragVisual = Vis;
 
+	// Sleep je 'm los BUITEN een drop-doel (op niks) -> hele stapel op de grond droppen.
+	Op->DropInv = Inv;
+	Op->OnDragCancelled.AddDynamic(Op, &UInvDragOp::HandleDroppedOutside);
+
 	OutOperation = Op;
+}
+
+void UInvDragOp::HandleDroppedOutside(UDragDropOperation* Operation)
+{
+	if (DropInv.IsValid() && StackId != 0)
+	{
+		DropInv->RequestDropStack(StackId);
+	}
 }
 
 bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)

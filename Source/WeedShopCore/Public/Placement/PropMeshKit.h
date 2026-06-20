@@ -12,6 +12,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/UObjectGlobals.h"
+#include "Placement/PlaceableTypes.h"
 
 namespace PropKit
 {
@@ -163,6 +164,26 @@ namespace PropKit
 		return Acc[NameHash(Key) % (int32)(sizeof(Acc) / sizeof(Acc[0]))];
 	}
 
+	// Laad de geregistreerde placeable-mesh (echte CityBeachStrip-asset of basis-vorm) als één MINI-onderdeel, met
+	// behoud van de footprint-proporties (Def.MeshScale). Voor furniture/structures = exacte mini; voor overige
+	// placeables zonder eigen branch = nette geproportioneerde vorm i.p.v. een "?"-blokje. False = niet plaatsbaar.
+	inline bool BuildRegistryMesh(AActor* Owner, USceneComponent* Parent, FName ItemId, float ScaleMul,
+		bool bFirstPerson, bool bCollision)
+	{
+		FPlaceableDef Def;
+		if (!GetPlaceableDef(ItemId, Def) || !Def.MeshPath) { return false; }
+		UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Def.MeshPath);
+		if (!M) { return false; }
+		// Geplaatste afmeting = natuurlijke bounds * component-schaal; normaliseer de grootste as naar ~12cm.
+		const FVector PlacedHalf = M->GetBounds().BoxExtent * Def.MeshScale;
+		const float MaxDim = FMath::Max3(PlacedHalf.X, PlacedHalf.Y, PlacedHalf.Z) * 2.f;
+		const float Norm = (MaxDim > 1.f) ? (12.f / MaxDim) : 0.12f;
+		const FVector CompScale = Def.MeshScale * Norm * ScaleMul; // SpawnItemPart zet schaal = SizeCm/100
+		SpawnItemPart(Owner, Parent, M, CompScale * 100.f, FVector::ZeroVector,
+			FLinearColor(0.60f, 0.58f, 0.56f), FRotator::ZeroRotator, bFirstPerson, bCollision);
+		return true;
+	}
+
 	// Bouw een herkenbaar model per item (uit basis-vormen) onder de parent. Gebruikt voor hand + wereld-item.
 	inline void BuildItemModel(AActor* Owner, USceneComponent* Parent, FName ItemId, float ScaleMul = 1.f,
 		bool bFirstPerson = false, bool bCollision = false)
@@ -272,10 +293,11 @@ namespace PropKit
 		}
 		else if (S.StartsWith(TEXT("Pot_")))
 		{
-			P(Co, FVector(10.5f, 10.5f, 10.0f), FVector(0, 0, -0.5f), FLinearColor(0.64f, 0.36f, 0.22f), FRotator(180, 0, 0)); // taps pot
-			P(Cy, FVector(11.5f, 11.5f, 2.2f), FVector(0, 0, 4.8f), FLinearColor(0.58f, 0.32f, 0.19f)); // rand
-			P(Cy, FVector(9.6f, 9.6f, 1.6f), FVector(0, 0, 4.1f), FLinearColor(0.18f, 0.13f, 0.09f));   // aarde
-			P(Cy, FVector(6.6f, 6.6f, 1.2f), FVector(0, 0, -5.0f), FLinearColor(0.50f, 0.28f, 0.16f));  // voet/schotel
+			// Rechte CILINDER-pot (zoals de geplaatste GrowPlant: Cylinder-body 50x40, geen taps/cone-goblet).
+			P(Cy, FVector(10.6f, 10.6f, 9.2f), FVector(0, 0, -0.6f), FLinearColor(0.64f, 0.36f, 0.22f)); // cilinder-body
+			P(Cy, FVector(11.4f, 11.4f, 1.8f), FVector(0, 0, 3.9f), FLinearColor(0.58f, 0.32f, 0.19f));  // rand-lip boven
+			P(Cy, FVector(9.3f, 9.3f, 1.2f), FVector(0, 0, 3.7f), FLinearColor(0.16f, 0.12f, 0.08f));    // donkere holle binnenkant
+			P(Cy, FVector(7.8f, 7.8f, 1.4f), FVector(0, 0, -4.9f), FLinearColor(0.50f, 0.28f, 0.16f));   // voetje onder
 		}
 		else if (S == TEXT("Cash"))
 		{
@@ -322,10 +344,332 @@ namespace PropKit
 			P(Cu, FVector(8.2f, 4.6f, 0.8f), FVector(0, 0, 1.7f), FLinearColor(0.98f, 0.92f, 0.55f)); // top
 			P(Cu, FVector(8.3f, 4.7f, 1.0f), FVector(0, 0, -1.3f), FLinearColor(0.85f, 0.84f, 0.80f)); // folie-wikkel
 		}
+		else if (S.StartsWith(TEXT("DryRack_")))
+		{
+			P(Cu, FVector(1.0f, 2.4f, 12.0f), FVector(-4.7f, 0, 0), FLinearColor(0.40f, 0.30f, 0.20f)); // linker staander
+			P(Cu, FVector(1.0f, 2.4f, 12.0f), FVector( 4.7f, 0, 0), FLinearColor(0.40f, 0.30f, 0.20f)); // rechter staander
+			P(Cu, FVector(10.0f, 2.4f, 1.0f), FVector(0, 0,  5.5f), FLinearColor(0.40f, 0.30f, 0.20f)); // bovenbalk
+			P(Cu, FVector(10.0f, 2.4f, 1.0f), FVector(0, 0, -5.5f), FLinearColor(0.40f, 0.30f, 0.20f)); // onderbalk
+			P(Cu, FVector(8.0f, 0.6f, 10.0f), FVector(0, -1.1f, 0), FLinearColor(0.62f, 0.58f, 0.48f)); // achtergaas
+			P(Cu, FVector(8.0f, 1.0f, 0.6f), FVector(0, 0.3f,  4.2f), FLinearColor(0.30f, 0.22f, 0.14f)); // hang-roede 1
+			P(Cu, FVector(8.0f, 1.0f, 0.6f), FVector(0, 0.3f,  2.4f), FLinearColor(0.30f, 0.22f, 0.14f)); // hang-roede 2
+			P(Cu, FVector(8.0f, 1.0f, 0.6f), FVector(0, 0.3f,  0.6f), FLinearColor(0.30f, 0.22f, 0.14f)); // hang-roede 3
+			P(Cu, FVector(8.0f, 1.0f, 0.6f), FVector(0, 0.3f, -1.2f), FLinearColor(0.30f, 0.22f, 0.14f)); // hang-roede 4
+			P(Cu, FVector(8.0f, 1.0f, 0.6f), FVector(0, 0.3f, -3.0f), FLinearColor(0.30f, 0.22f, 0.14f)); // hang-roede 5
+			P(Cu, FVector(4.6f, 1.0f, 2.0f), FVector(0, 0.3f,  3.1f), FLinearColor(0.20f, 0.45f, 0.16f)); // wiet-bos 1
+			P(Cu, FVector(4.6f, 1.0f, 2.0f), FVector(0, 0.3f,  1.3f), FLinearColor(0.20f, 0.45f, 0.16f)); // wiet-bos 2
+			P(Cu, FVector(4.6f, 1.0f, 2.0f), FVector(0, 0.3f, -0.5f), FLinearColor(0.20f, 0.45f, 0.16f)); // wiet-bos 3
+			P(Cu, FVector(4.6f, 1.0f, 2.0f), FVector(0, 0.3f, -2.3f), FLinearColor(0.20f, 0.45f, 0.16f)); // wiet-bos 4
+			P(Cu, FVector(4.6f, 1.0f, 2.0f), FVector(0, 0.3f, -4.1f), FLinearColor(0.20f, 0.45f, 0.16f)); // wiet-bos 5
+		}
+		else if (S.StartsWith(TEXT("Bench_Pack")))
+		{
+			P(Cu, FVector(13.0f, 8.5f, 1.2f), FVector(0, 0, 5.4f), FLinearColor(0.62f, 0.65f, 0.70f)); // werkblad
+			P(Cu, FVector(12.0f, 6.8f, 0.8f), FVector(0, 0, -2.4f), FLinearColor(0.40f, 0.28f, 0.17f)); // onderplank
+			P(Cu, FVector(1.1f, 1.1f, 10.6f), FVector( 5.4f,  3.4f, -0.5f), FLinearColor(0.34f, 0.42f, 0.52f)); // poot VR
+			P(Cu, FVector(1.1f, 1.1f, 10.6f), FVector( 5.4f, -3.4f, -0.5f), FLinearColor(0.34f, 0.42f, 0.52f)); // poot VL
+			P(Cu, FVector(1.1f, 1.1f, 10.6f), FVector(-5.4f,  3.4f, -0.5f), FLinearColor(0.34f, 0.42f, 0.52f)); // poot AR
+			P(Cu, FVector(1.1f, 1.1f, 10.6f), FVector(-5.4f, -3.4f, -0.5f), FLinearColor(0.34f, 0.42f, 0.52f)); // poot AL
+			P(Cu, FVector(2.6f, 2.0f, 1.4f), FVector(3.0f, 0, 6.7f), FLinearColor(0.15f, 0.16f, 0.18f)); // weegschaal
+			P(Cy, FVector(2.0f, 2.0f, 2.6f), FVector(-3.2f, 0, 6.6f), FLinearColor(0.85f, 0.82f, 0.6f), FRotator(0.f, 0.f, 90.f)); // rol zakjes
+		}
+		else if (S.StartsWith(TEXT("Shelf")) || S.StartsWith(TEXT("Chest")))
+		{
+			if (S.StartsWith(TEXT("Chest")))
+			{
+				P(Cu, FVector(13.0f, 8.0f, 6.5f), FVector(0, 0, -1.8f), FLinearColor(0.32f, 0.20f, 0.10f)); // romp
+				P(Cu, FVector(13.3f, 8.2f, 3.2f), FVector(0, 0, 2.6f), FLinearColor(0.40f, 0.26f, 0.14f), FRotator(8.f, 0.f, 0.f)); // schuin deksel
+				P(Cu, FVector(1.3f, 8.4f, 4.0f), FVector(-3.9f, 0, -1.5f), FLinearColor(0.22f, 0.14f, 0.07f)); // beslagstrip links
+				P(Cu, FVector(1.3f, 8.4f, 4.0f), FVector( 3.9f, 0, -1.5f), FLinearColor(0.22f, 0.14f, 0.07f)); // beslagstrip rechts
+				P(Cu, FVector(1.8f, 0.8f, 1.4f), FVector(0, 4.1f, -0.5f), FLinearColor(0.70f, 0.60f, 0.20f)); // messing slot
+			}
+			else
+			{
+				P(Cu, FVector(0.8f, 7.0f, 13.0f), FVector(-5.6f, 0, 0), FLinearColor(0.45f, 0.30f, 0.18f)); // zijpaneel links
+				P(Cu, FVector(0.8f, 7.0f, 13.0f), FVector( 5.6f, 0, 0), FLinearColor(0.45f, 0.30f, 0.18f)); // zijpaneel rechts
+				P(Cu, FVector(12.0f, 0.7f, 13.0f), FVector(0, 3.15f, 0), FLinearColor(0.32f, 0.21f, 0.13f)); // achterwand
+				P(Cu, FVector(10.4f, 6.4f, 0.7f), FVector(0, 0, -5.0f), FLinearColor(0.56f, 0.38f, 0.23f)); // legbord 1
+				P(Cu, FVector(10.4f, 6.4f, 0.7f), FVector(0, 0, -1.7f), FLinearColor(0.56f, 0.38f, 0.23f)); // legbord 2
+				P(Cu, FVector(10.4f, 6.4f, 0.7f), FVector(0, 0, 1.6f), FLinearColor(0.56f, 0.38f, 0.23f)); // legbord 3
+				P(Cu, FVector(10.4f, 6.4f, 0.7f), FVector(0, 0, 4.9f), FLinearColor(0.56f, 0.38f, 0.23f)); // legbord 4
+			}
+		}
+		else if (S.StartsWith(TEXT("Sink")))
+		{
+			P(Cu, FVector(9.6f, 6.5f, 10.1f), FVector(0, 0, -2.2f), FLinearColor(0.82f, 0.80f, 0.76f)); // kastje (volle hoogte, zoals geplaatst)
+			P(Cu, FVector(0.3f, 6.6f, 5.0f), FVector(0, 0, -2.4f), FLinearColor(0.45f, 0.44f, 0.42f)); // deur-naad
+			P(Cu, FVector(10.1f, 6.7f, 0.8f), FVector(0, 0, 1.1f), FLinearColor(0.55f, 0.57f, 0.60f)); // werkblad
+			P(Cu, FVector(5.8f, 5.0f, 0.9f), FVector(0, 0, 1.0f), FLinearColor(0.70f, 0.72f, 0.75f)); // rvs bak-rand
+			P(Cu, FVector(4.6f, 3.8f, 0.8f), FVector(0, 0, 0.9f), FLinearColor(0.30f, 0.32f, 0.35f)); // bak-opening
+			P(Cu, FVector(1.0f, 1.0f, 0.7f), FVector(0, -2.2f, 1.7f), FLinearColor(0.70f, 0.72f, 0.75f)); // kraan-voet
+			P(Cy, FVector(0.6f, 0.6f, 3.0f), FVector(0, -2.2f, 3.4f), FLinearColor(0.70f, 0.72f, 0.75f)); // kraan-hals
+			P(Cy, FVector(0.55f, 0.55f, 2.2f), FVector(0, -1.1f, 4.7f), FLinearColor(0.70f, 0.72f, 0.75f), FRotator(0, 0, 90)); // kraan-tuit
+		}
+		else if (S.StartsWith(TEXT("Lamp_Ceiling")))
+		{
+			P(Cy, FVector(4.8f, 4.8f, 0.9f), FVector(0, 0, 6.5f), FLinearColor(0.05f, 0.05f, 0.07f)); // ophangplaatje (plat schijfje)
+			P(Cy, FVector(0.9f, 0.9f, 3.6f), FVector(0, 0, 4.0f), FLinearColor(0.05f, 0.05f, 0.07f)); // dun steeltje
+			P(Co, FVector(8.4f, 8.4f, 6.6f), FVector(0, 0, 0.5f), FLinearColor(0.07f, 0.07f, 0.09f), FRotator(180, 0, 0)); // kapje (28:22 verhouding)
+			P(Sp, FVector(3.6f, 3.6f, 3.6f), FVector(0, 0, -2.5f), FLinearColor(1.0f, 0.85f, 0.5f)); // warm gloeilampje
+		}
+		else if (S.StartsWith(TEXT("LightSwitch")))
+		{
+			P(Cu, FVector(1.2f, 8.5f, 13.0f), FVector(0, 0, 0), FLinearColor(0.90f, 0.90f, 0.88f)); // schakelplaatje (dun in X, breed in Y)
+			P(Cu, FVector(2.2f, 4.5f, 6.0f), FVector(1.6f, 0, 0), FLinearColor(0.75f, 0.75f, 0.72f)); // tuimelaar steekt uit in +X
+		}
+		else if (S == TEXT("Table") || S.StartsWith(TEXT("Furn_CoffeeTable")) || S.StartsWith(TEXT("Furn_Desk")))
+		{
+			P(Cu, FVector(13.0f, 9.0f, 1.2f), FVector(0, 0, 3.4f), FLinearColor(0.52f, 0.36f, 0.22f)); // tafelblad
+			P(Cu, FVector(1.2f, 1.2f, 6.8f), FVector( 5.4f,  3.4f, -0.5f), FLinearColor(0.40f, 0.27f, 0.16f)); // poot
+			P(Cu, FVector(1.2f, 1.2f, 6.8f), FVector( 5.4f, -3.4f, -0.5f), FLinearColor(0.40f, 0.27f, 0.16f)); // poot
+			P(Cu, FVector(1.2f, 1.2f, 6.8f), FVector(-5.4f,  3.4f, -0.5f), FLinearColor(0.40f, 0.27f, 0.16f)); // poot
+			P(Cu, FVector(1.2f, 1.2f, 6.8f), FVector(-5.4f, -3.4f, -0.5f), FLinearColor(0.40f, 0.27f, 0.16f)); // poot
+		}
+		// === Huiskamer-meubels (basis-vorm placeables) -> herkenbaar mini-model =======================
+		else if (S.StartsWith(TEXT("Furn_TVStand")))
+		{
+			P(Cu, FVector(15.0f, 4.2f, 4.8f), FVector(0, 0, -1.2f), FLinearColor(0.40f, 0.28f, 0.18f));
+			P(Cu, FVector(15.2f, 4.4f, 0.5f), FVector(0, 0, 1.9f),  FLinearColor(0.50f, 0.36f, 0.24f));
+			P(Cu, FVector(1.0f, 4.3f, 3.6f),  FVector(0, 0, -1.2f), FLinearColor(0.30f, 0.22f, 0.14f));
+			P(Cu, FVector(7.0f, 4.3f, 0.4f),  FVector(-3.8f, 0, -1.2f), FLinearColor(0.55f, 0.50f, 0.46f));
+			P(Cu, FVector(7.0f, 4.3f, 0.4f),  FVector(3.8f, 0, -1.2f),  FLinearColor(0.55f, 0.50f, 0.46f));
+			P(Cy, FVector(1.2f, 1.2f, 0.6f),  FVector(0, 2.2f, -0.8f),  FLinearColor(0.70f, 0.65f, 0.55f));
+			P(Cy, FVector(1.2f, 1.2f, 0.6f),  FVector(0, 2.2f, 0.8f),   FLinearColor(0.70f, 0.65f, 0.55f));
+		}
+		else if (S.StartsWith(TEXT("Furn_Bookshelf")))
+		{
+			P(Cu, FVector(0.8f, 6.8f, 12.6f), FVector(-4.8f, 0, 0), FLinearColor(0.38f, 0.26f, 0.16f));
+			P(Cu, FVector(0.8f, 6.8f, 12.6f), FVector(4.8f, 0, 0),  FLinearColor(0.38f, 0.26f, 0.16f));
+			P(Cu, FVector(10.0f, 0.5f, 12.6f), FVector(0, 3.15f, 0), FLinearColor(0.28f, 0.18f, 0.10f));
+			P(Cu, FVector(9.6f, 6.4f, 0.5f), FVector(0, 0, 5.2f),  FLinearColor(0.42f, 0.30f, 0.18f));
+			P(Cu, FVector(9.6f, 6.4f, 0.5f), FVector(0, 0, 2.2f),  FLinearColor(0.42f, 0.30f, 0.18f));
+			P(Cu, FVector(9.6f, 6.4f, 0.5f), FVector(0, 0, -0.8f), FLinearColor(0.42f, 0.30f, 0.18f));
+			P(Cu, FVector(9.6f, 6.4f, 0.5f), FVector(0, 0, -3.8f), FLinearColor(0.42f, 0.30f, 0.18f));
+			P(Cu, FVector(4.2f, 6.0f, 1.8f), FVector(-2.4f, 0.5f, 4.2f), FLinearColor(0.55f, 0.42f, 0.28f));
+		}
+		else if (S.StartsWith(TEXT("Furn_Dresser")))
+		{
+			P(Cu, FVector(10.0f, 5.2f, 9.8f), FVector(0, 0, 0),    FLinearColor(0.38f, 0.26f, 0.16f));
+			P(Cu, FVector(10.2f, 5.4f, 0.5f), FVector(0, 0, 4.9f), FLinearColor(0.46f, 0.32f, 0.20f));
+			P(Cu, FVector(9.8f, 5.0f, 2.0f), FVector(0, 0, 3.6f),  FLinearColor(0.45f, 0.32f, 0.20f));
+			P(Cu, FVector(9.8f, 5.0f, 2.0f), FVector(0, 0, 1.4f),  FLinearColor(0.42f, 0.30f, 0.18f));
+			P(Cu, FVector(9.8f, 5.0f, 2.0f), FVector(0, 0, -0.8f), FLinearColor(0.45f, 0.32f, 0.20f));
+			P(Cu, FVector(9.8f, 5.0f, 2.0f), FVector(0, 0, -3.0f), FLinearColor(0.42f, 0.30f, 0.18f));
+			P(Cy, FVector(0.8f, 0.8f, 0.4f), FVector(3.8f, 2.6f, 3.6f),  FLinearColor(0.75f, 0.60f, 0.30f));
+			P(Cy, FVector(0.8f, 0.8f, 0.4f), FVector(3.8f, 2.6f, -0.8f), FLinearColor(0.75f, 0.60f, 0.30f));
+		}
+		else if (S.StartsWith(TEXT("Furn_Nightstand")))
+		{
+			P(Cu, FVector(4.2f, 4.2f, 4.8f), FVector(0, 0, -0.2f), FLinearColor(0.38f, 0.26f, 0.16f));
+			P(Cu, FVector(4.4f, 4.4f, 0.4f), FVector(0, 0, 2.3f),  FLinearColor(0.46f, 0.32f, 0.20f));
+			P(Cu, FVector(4.0f, 4.0f, 1.6f), FVector(0, 0, 0.6f),  FLinearColor(0.42f, 0.30f, 0.18f));
+			P(Cy, FVector(0.6f, 0.6f, 0.3f), FVector(1.6f, 2.1f, 0.6f), FLinearColor(0.70f, 0.55f, 0.25f));
+			P(Cu, FVector(0.8f, 0.8f, 4.6f), FVector(-1.8f, 2.0f, 0), FLinearColor(0.28f, 0.18f, 0.10f));
+			P(Cu, FVector(0.8f, 0.8f, 4.6f), FVector(1.8f, 2.0f, 0),  FLinearColor(0.28f, 0.18f, 0.10f));
+		}
+		else if (S.StartsWith(TEXT("Furn_Rug")))
+		{
+			P(Cu, FVector(19.0f, 13.0f, 0.3f), FVector(0, 0, 0),     FLinearColor(0.65f, 0.50f, 0.35f));
+			P(Cu, FVector(19.2f, 13.2f, 0.1f), FVector(0, 0, 0.12f), FLinearColor(0.72f, 0.58f, 0.42f));
+			P(Cu, FVector(17.0f, 11.0f, 0.2f), FVector(0, 0, -0.06f),FLinearColor(0.60f, 0.45f, 0.30f));
+			P(Cu, FVector(9.0f, 5.0f, 0.15f), FVector(3.0f, 2.5f, -0.05f),   FLinearColor(0.58f, 0.42f, 0.28f));
+			P(Cu, FVector(8.0f, 4.5f, 0.15f), FVector(-4.0f, -3.0f, -0.05f), FLinearColor(0.62f, 0.48f, 0.32f));
+		}
+		else if (S.StartsWith(TEXT("Furn_FloorLamp")))
+		{
+			P(Cy, FVector(1.6f, 1.6f, 7.8f), FVector(0, 0, 2.2f),  FLinearColor(0.22f, 0.22f, 0.25f));
+			P(Cy, FVector(4.4f, 4.4f, 0.8f), FVector(0, 0, -3.0f), FLinearColor(0.32f, 0.32f, 0.36f));
+			P(Cy, FVector(0.5f, 0.5f, 3.0f), FVector(0, 0, 6.8f),  FLinearColor(0.20f, 0.20f, 0.22f));
+			P(Co, FVector(5.2f, 5.2f, 4.2f), FVector(0, 0, 9.5f),  FLinearColor(0.92f, 0.88f, 0.72f));
+			P(Sp, FVector(1.2f, 1.2f, 1.2f), FVector(0, 0, 10.6f), FLinearColor(1.0f, 0.95f, 0.50f));
+		}
+		// === Appliances / opslag =====================================================================
+		else if (S == TEXT("Fridge"))
+		{
+			P(Cu, FVector(9.0f, 7.2f, 16.5f), FVector(0, 0, 0), FLinearColor(0.92f, 0.92f, 0.90f));
+			P(Cu, FVector(0.4f, 7.4f, 16.8f), FVector(0, 0, 0), FLinearColor(0.75f, 0.75f, 0.73f));
+			P(Cu, FVector(0.8f, 0.8f, 6.0f),  FVector(3.8f, -3.8f, 4.0f), FLinearColor(0.50f, 0.50f, 0.50f));
+			P(Cu, FVector(8.6f, 6.8f, 1.5f),  FVector(0, 0, 7.5f),  FLinearColor(0.88f, 0.88f, 0.86f));
+			P(Cu, FVector(8.2f, 6.4f, 1.8f),  FVector(0, 0, -7.8f), FLinearColor(0.85f, 0.85f, 0.83f));
+		}
+		else if (S == TEXT("Mattress"))
+		{
+			P(Cu, FVector(12.0f, 9.0f, 3.2f), FVector(0, 0, -0.4f), FLinearColor(0.55f, 0.50f, 0.48f));
+			P(Sp, FVector(12.4f, 9.4f, 3.6f), FVector(0, 0, -0.2f), FLinearColor(0.58f, 0.53f, 0.50f));
+			P(Cu, FVector(4.8f, 3.6f, 1.8f),  FVector(3.2f, 3.2f, 1.8f), FLinearColor(0.72f, 0.68f, 0.65f));
+			P(Sp, FVector(5.2f, 4.0f, 2.0f),  FVector(3.2f, 3.2f, 2.0f), FLinearColor(0.75f, 0.70f, 0.67f));
+			P(Cu, FVector(11.6f, 8.6f, 0.6f), FVector(0, 0, 1.8f),  FLinearColor(0.42f, 0.38f, 0.35f));
+		}
+		else if (S == TEXT("Wardrobe"))
+		{
+			P(Cu, FVector(10.4f, 5.0f, 19.2f), FVector(0, 0, 0), FLinearColor(0.62f, 0.48f, 0.35f));
+			P(Cu, FVector(5.0f, 5.2f, 19.4f),  FVector(-2.6f, 0, 0), FLinearColor(0.55f, 0.42f, 0.29f));
+			P(Cu, FVector(5.0f, 5.2f, 19.4f),  FVector(2.6f, 0, 0),  FLinearColor(0.55f, 0.42f, 0.29f));
+			P(Cu, FVector(0.5f, 5.4f, 19.6f),  FVector(0, 0, 0), FLinearColor(0.45f, 0.35f, 0.22f));
+			P(Cy, FVector(0.7f, 0.7f, 1.2f),   FVector(-2.4f, -2.8f, 5.0f), FLinearColor(0.70f, 0.65f, 0.55f), FRotator(0, 0, 90));
+			P(Cy, FVector(0.7f, 0.7f, 1.2f),   FVector(2.4f, -2.8f, 5.0f),  FLinearColor(0.70f, 0.65f, 0.55f), FRotator(0, 0, 90));
+			P(Cu, FVector(10.8f, 5.0f, 0.8f),  FVector(0, 0, 9.8f), FLinearColor(0.48f, 0.37f, 0.25f));
+		}
+		// === Grow-gear ===============================================================================
+		else if (S.StartsWith(TEXT("Gear_Drainage")))
+		{
+			P(Cu, FVector(9.0f, 9.0f, 2.0f), FVector(0, 0, 0),    FLinearColor(0.60f, 0.48f, 0.35f));
+			P(Cu, FVector(9.6f, 9.6f, 0.6f), FVector(0, 0, 1.0f), FLinearColor(0.50f, 0.40f, 0.28f));
+			P(Cu, FVector(8.0f, 8.0f, 1.6f), FVector(0, 0, -0.2f),FLinearColor(0.65f, 0.54f, 0.40f));
+			P(Sp, FVector(0.8f, 0.8f, 0.8f), FVector(2.8f, 2.8f, 0.5f),  FLinearColor(0.72f, 0.68f, 0.62f));
+			P(Sp, FVector(0.9f, 0.9f, 0.9f), FVector(-2.5f, 3.0f, 0.3f), FLinearColor(0.68f, 0.60f, 0.50f));
+			P(Sp, FVector(0.7f, 0.7f, 0.7f), FVector(1.2f, -3.2f, 0.6f), FLinearColor(0.70f, 0.62f, 0.52f));
+		}
+		else if (S.StartsWith(TEXT("Gear_Insulation")))
+		{
+			P(Cu, FVector(8.0f, 8.0f, 7.0f), FVector(0, 0, 0), FLinearColor(0.88f, 0.86f, 0.80f));
+			P(Cu, FVector(7.0f, 7.0f, 6.0f), FVector(0, 0, 0), FLinearColor(0.92f, 0.91f, 0.88f));
+			P(Cu, FVector(6.2f, 6.2f, 5.2f), FVector(0, 0, 0), FLinearColor(0.42f, 0.38f, 0.32f));
+			P(Cu, FVector(7.8f, 0.6f, 6.8f), FVector(0, 3.6f, 0), FLinearColor(0.72f, 0.70f, 0.65f));
+			P(Cu, FVector(0.6f, 7.8f, 6.8f), FVector(3.8f, 0, 0), FLinearColor(0.72f, 0.70f, 0.65f));
+			P(Cu, FVector(1.2f, 1.2f, 0.8f), FVector(-2.2f, -2.2f, 3.2f), FLinearColor(0.35f, 0.30f, 0.25f));
+		}
+		else if (S.StartsWith(TEXT("Gear_Bloom")))
+		{
+			P(Cy, FVector(4.0f, 4.0f, 8.0f), FVector(0, 0, -0.5f), FLinearColor(0.15f, 0.18f, 0.25f));
+			P(Cy, FVector(4.2f, 4.2f, 0.8f), FVector(0, 0, -1.2f), FLinearColor(0.12f, 0.15f, 0.22f));
+			P(Cy, FVector(3.2f, 3.2f, 2.6f), FVector(0, 0, 0.4f),  FLinearColor(0.20f, 0.22f, 0.28f));
+			P(Cy, FVector(2.0f, 2.0f, 1.2f), FVector(0, 0, 4.2f),  FLinearColor(0.35f, 0.32f, 0.30f));
+			P(Cu, FVector(3.8f, 0.5f, 3.2f), FVector(0, 0, 0),     FLinearColor(0.85f, 0.42f, 0.18f));
+		}
+		else if (S.StartsWith(TEXT("Gear_Lamp")))
+		{
+			P(Co, FVector(10.0f, 10.0f, 5.0f), FVector(0, 0, 2.0f), FLinearColor(0.75f, 0.72f, 0.68f));
+			P(Cu, FVector(9.0f, 0.9f, 0.9f), FVector(0, -3.5f, -0.5f), FLinearColor(0.55f, 0.25f, 0.75f));
+			P(Cu, FVector(9.0f, 0.9f, 0.9f), FVector(0, 3.5f, -0.5f),  FLinearColor(0.55f, 0.25f, 0.75f));
+			P(Cu, FVector(9.0f, 0.9f, 0.9f), FVector(0, 0, 0.5f),      FLinearColor(0.95f, 0.90f, 0.88f));
+			P(Cu, FVector(1.2f, 1.2f, 1.2f), FVector(0, 0, -3.0f),     FLinearColor(0.40f, 0.35f, 0.32f));
+			P(Sp, FVector(0.5f, 0.5f, 0.5f), FVector(3.0f, -2.0f, 0.2f), FLinearColor(1.0f, 0.80f, 0.20f));
+		}
+		else if (S.StartsWith(TEXT("Gear_Tent")))
+		{
+			P(Cu, FVector(9.0f, 9.0f, 10.0f), FVector(0, 0, 0), FLinearColor(0.30f, 0.28f, 0.25f));
+			P(Cu, FVector(8.4f, 8.4f, 9.4f),  FVector(0, 0, 0), FLinearColor(0.85f, 0.83f, 0.78f));
+			P(Cu, FVector(8.8f, 0.5f, 9.8f),  FVector(0, 4.2f, 0),  FLinearColor(0.15f, 0.14f, 0.12f));
+			P(Cu, FVector(0.5f, 8.8f, 9.8f),  FVector(-4.2f, 0, 0), FLinearColor(0.15f, 0.14f, 0.12f));
+			P(Cu, FVector(9.2f, 9.2f, 0.8f),  FVector(0, 0, 5.0f),  FLinearColor(0.75f, 0.72f, 0.68f));
+			P(Sp, FVector(1.0f, 1.0f, 1.0f),  FVector(3.2f, 3.2f, -3.5f), FLinearColor(0.20f, 0.18f, 0.15f));
+		}
+		else if (S.StartsWith(TEXT("Gear_Water")))
+		{
+			P(Cy, FVector(6.0f, 6.0f, 8.0f), FVector(0, 0, 0), FLinearColor(0.18f, 0.32f, 0.52f));
+			P(Cy, FVector(6.4f, 6.4f, 0.8f), FVector(0, 0, 4.2f), FLinearColor(0.12f, 0.25f, 0.42f));
+			P(Cu, FVector(0.6f, 0.6f, 4.0f), FVector(3.0f, 3.0f, 2.0f),  FLinearColor(0.28f, 0.26f, 0.24f));
+			P(Cu, FVector(0.6f, 0.6f, 3.5f), FVector(-3.5f, 2.5f, 1.5f), FLinearColor(0.28f, 0.26f, 0.24f));
+			P(Cu, FVector(0.5f, 0.5f, 1.2f), FVector(0, -3.2f, 3.8f),    FLinearColor(0.32f, 0.32f, 0.30f));
+		}
+		// === Losse dry/proc upgrade-gear =============================================================
+		else if (S == TEXT("DryUp_Fan"))
+		{
+			P(Cy, FVector(6.0f, 6.0f, 2.0f), FVector(0, 0, 0), FLinearColor(0.28f, 0.26f, 0.24f));
+			P(Cu, FVector(4.8f, 0.5f, 0.6f), FVector(0, 0, 0), FLinearColor(0.32f, 0.30f, 0.28f));
+			P(Cu, FVector(0.5f, 4.8f, 0.6f), FVector(0, 0, 0), FLinearColor(0.32f, 0.30f, 0.28f));
+			P(Cu, FVector(3.5f, 3.5f, 0.5f), FVector(0, 0, 0.8f), FLinearColor(0.30f, 0.28f, 0.26f), FRotator(0, 0, 45));
+			P(Sp, FVector(0.5f, 0.5f, 0.5f), FVector(0, 0, 1.2f), FLinearColor(0.15f, 0.15f, 0.18f));
+		}
+		else if (S == TEXT("DryUp_Seal"))
+		{
+			P(Cu, FVector(5.0f, 5.0f, 4.0f), FVector(0, 0, 0), FLinearColor(0.52f, 0.50f, 0.48f));
+			P(Cu, FVector(5.4f, 5.4f, 0.6f), FVector(0, 0, 2.2f), FLinearColor(0.42f, 0.40f, 0.38f));
+			P(Cu, FVector(4.4f, 4.4f, 3.6f), FVector(0, 0, -0.2f),FLinearColor(0.35f, 0.33f, 0.30f));
+			P(Cu, FVector(0.8f, 5.2f, 0.5f), FVector(2.2f, 0, 1.8f), FLinearColor(0.68f, 0.18f, 0.18f));
+			P(Cu, FVector(1.4f, 1.4f, 0.8f), FVector(-1.8f, -1.8f, 1.6f), FLinearColor(0.22f, 0.20f, 0.18f));
+		}
+		else if (S == TEXT("ProcUp_Motor"))
+		{
+			P(Cu, FVector(6.0f, 6.0f, 6.0f), FVector(0, 0, 0), FLinearColor(0.35f, 0.32f, 0.30f));
+			P(Cu, FVector(5.0f, 5.0f, 5.0f), FVector(0, 0, 0), FLinearColor(0.28f, 0.26f, 0.24f));
+			P(Cy, FVector(3.0f, 3.0f, 6.2f), FVector(0, 0, 0.5f), FLinearColor(0.48f, 0.45f, 0.42f));
+			P(Cy, FVector(0.8f, 0.8f, 2.0f), FVector(0, 0, -3.0f),FLinearColor(0.18f, 0.16f, 0.14f));
+			P(Cu, FVector(1.2f, 1.2f, 1.2f), FVector(2.0f, -2.0f, 2.0f), FLinearColor(0.15f, 0.15f, 0.18f));
+		}
+		else if (S == TEXT("ProcUp_Yield"))
+		{
+			P(Cy, FVector(4.2f, 4.2f, 9.0f), FVector(0, 0, 0), FLinearColor(0.25f, 0.28f, 0.32f));
+			P(Cy, FVector(4.6f, 4.6f, 0.8f), FVector(0, 0, 4.8f), FLinearColor(0.35f, 0.38f, 0.42f));
+			P(Cy, FVector(3.8f, 3.8f, 0.6f), FVector(0, 0, -4.6f),FLinearColor(0.18f, 0.20f, 0.24f));
+			P(Cu, FVector(4.4f, 0.4f, 8.8f), FVector(0, 2.0f, 0), FLinearColor(0.15f, 0.18f, 0.22f));
+			P(Cu, FVector(0.5f, 0.5f, 2.0f), FVector(0, 0, 6.0f), FLinearColor(0.42f, 0.45f, 0.50f));
+		}
+		// === Processor-machines (gegate op bIsProcessor zodat product-Oil_/Rosin_ niet hier matchen) ===
+		else if (FPlaceableDef MDef; GetPlaceableDef(ItemId, MDef) && MDef.bIsProcessor)
+		{
+			if (S.StartsWith(TEXT("Fridge_")) || S.StartsWith(TEXT("Iso_")))
+			{
+				P(Cu, FVector(8.0f, 7.0f, 9.5f), FVector(0, 0, 0.5f), FLinearColor(0.88f, 0.88f, 0.90f));
+				P(Cu, FVector(7.0f, 0.5f, 8.0f), FVector(0, -3.5f, 0.8f), FLinearColor(0.20f, 0.20f, 0.22f));
+				P(Cu, FVector(7.2f, 0.7f, 7.8f), FVector(0, -3.6f, 0.8f), FLinearColor(0.75f, 0.75f, 0.78f));
+				P(Cy, FVector(0.5f, 0.5f, 1.8f), FVector(3.4f, -3.2f, 1.0f), FLinearColor(0.65f, 0.65f, 0.68f));
+				P(Cu, FVector(6.8f, 0.3f, 1.0f), FVector(0, -2.8f, 4.0f), FLinearColor(0.55f, 0.58f, 0.62f));
+				P(Cu, FVector(6.8f, 0.3f, 1.0f), FVector(0, -2.8f, 2.2f), FLinearColor(0.55f, 0.58f, 0.62f));
+				P(Cu, FVector(6.8f, 0.3f, 1.0f), FVector(0, -2.8f, 0.4f), FLinearColor(0.55f, 0.58f, 0.62f));
+			}
+			else if (S.StartsWith(TEXT("Oven_")) || S.StartsWith(TEXT("Pan_")))
+			{
+				P(Cu, FVector(9.0f, 7.0f, 8.5f), FVector(0, -0.5f, -1.0f), FLinearColor(0.32f, 0.32f, 0.34f));
+				P(Cu, FVector(7.4f, 0.9f, 5.0f), FVector(0, -3.6f, 0.5f),  FLinearColor(0.15f, 0.15f, 0.18f));
+				P(Cu, FVector(7.6f, 1.1f, 5.2f), FVector(0, -3.65f, 0.5f), FLinearColor(0.22f, 0.22f, 0.26f));
+				P(Cu, FVector(8.4f, 8.0f, 1.4f), FVector(0, 0, 4.8f),      FLinearColor(0.65f, 0.62f, 0.50f));
+				P(Cy, FVector(0.7f, 0.7f, 0.5f), FVector(2.2f, 2.2f, 5.2f),   FLinearColor(0.20f, 0.20f, 0.22f));
+				P(Cy, FVector(0.7f, 0.7f, 0.5f), FVector(-2.2f, 2.2f, 5.2f),  FLinearColor(0.20f, 0.20f, 0.22f));
+				P(Sp, FVector(0.8f, 0.8f, 0.8f), FVector(3.0f, 2.8f, 5.8f),   FLinearColor(1.0f, 0.4f, 0.2f));
+			}
+			else // Mesh_/Press_/Rosin_/Oil_/Moon_ -> tafel-pers
+			{
+				P(Cu, FVector(10.0f, 8.0f, 2.2f), FVector(0, 0, -4.8f), FLinearColor(0.35f, 0.35f, 0.35f));
+				P(Cu, FVector(9.0f, 7.2f, 2.0f),  FVector(0, 0, 4.0f),  FLinearColor(0.45f, 0.45f, 0.48f));
+				P(Cy, FVector(1.2f, 1.2f, 7.2f),  FVector(0, 0, 1.2f),  FLinearColor(0.28f, 0.28f, 0.30f));
+				P(Cu, FVector(9.4f, 7.6f, 1.8f),  FVector(0, 0, 5.4f),  FLinearColor(0.70f, 0.70f, 0.72f));
+				P(Cy, FVector(0.8f, 0.8f, 1.0f),  FVector(3.5f, 2.5f, 5.2f),  FLinearColor(0.85f, 0.35f, 0.15f));
+				P(Cy, FVector(0.8f, 0.8f, 1.0f),  FVector(-3.5f, 2.5f, 5.2f), FLinearColor(0.85f, 0.35f, 0.15f));
+				P(Cu, FVector(8.0f, 0.6f, 3.0f),  FVector(0, 3.8f, 0.5f), FLinearColor(0.50f, 0.50f, 0.52f));
+			}
+		}
+		// === Concentraat-producten (waren ook "?"-blokjes bij droppen) ===============================
+		else if (S.StartsWith(TEXT("Oil_")))
+		{
+			P(Cy, FVector(3.4f, 3.4f, 7.2f), FVector(0, 0, -0.4f), FLinearColor(0.88f, 0.58f, 0.12f)); // amber-olie vial
+			P(Cy, FVector(2.8f, 2.8f, 4.0f), FVector(0, 0, -1.4f), FLinearColor(0.92f, 0.64f, 0.16f)); // olie binnenin
+			P(Cy, FVector(3.6f, 3.6f, 0.9f), FVector(0, 0, 3.4f),  FLinearColor(0.20f, 0.18f, 0.12f)); // dop
+			P(Cy, FVector(1.0f, 1.0f, 3.0f), FVector(0, 0, 5.2f),  FLinearColor(0.55f, 0.40f, 0.22f)); // druppelaar
+		}
+		else if (S.StartsWith(TEXT("Rosin_")))
+		{
+			const FLinearColor R = FMath::Lerp(FLinearColor(0.88f, 0.60f, 0.14f), Accent, 0.16f);
+			P(Sp, FVector(5.4f, 5.4f, 2.8f), FVector(0, 0, 0.4f), R);                       // amber rosin-blob
+			P(Sp, FVector(3.2f, 3.2f, 2.0f), FVector(1.8f, 1.0f, 0.8f), R * 1.15f);
+			P(Sp, FVector(2.6f, 2.6f, 1.7f), FVector(-1.7f, 0.8f, 0.6f), R * 0.9f);
+			P(Cu, FVector(7.4f, 7.4f, 0.4f), FVector(0, 0, -1.4f), FLinearColor(0.90f, 0.88f, 0.80f)); // perkament
+		}
+		else if (S.StartsWith(TEXT("Bubble_")))
+		{
+			const FLinearColor B2 = FMath::Lerp(FLinearColor(0.74f, 0.62f, 0.40f), Accent, 0.14f);
+			P(Sp, FVector(5.6f, 5.6f, 4.0f), FVector(0, 0, 0), B2);                          // blonde bubble-hash bol
+			P(Sp, FVector(3.4f, 3.4f, 2.6f), FVector(1.8f, 1.2f, 1.0f), B2 * 1.12f);
+			P(Sp, FVector(3.0f, 3.0f, 2.2f), FVector(-1.7f, 0.9f, 0.7f), B2 * 0.88f);
+			P(Sp, FVector(2.4f, 2.4f, 1.8f), FVector(0.4f, -1.8f, 1.2f), B2);
+		}
+		else if (S.StartsWith(TEXT("Moonrock_")))
+		{
+			const FLinearColor M2 = FMath::Lerp(FLinearColor(0.16f, 0.24f, 0.14f), Accent, 0.20f);
+			P(Sp, FVector(6.2f, 6.2f, 5.6f), FVector(0, 0, 0), M2);                          // donkere gecoate nug
+			P(Sp, FVector(4.2f, 4.2f, 4.0f), FVector(2.2f, 1.0f, 1.0f), M2 * 1.2f);
+			P(Sp, FVector(3.8f, 3.8f, 3.6f), FVector(-2.0f, 1.2f, 0.8f), M2 * 0.85f);
+			P(Sp, FVector(0.7f, 0.7f, 0.7f), FVector(1.5f, 1.0f, 2.6f), FLinearColor(0.85f, 0.86f, 0.92f)); // kief-glinster
+		}
 		else
 		{
-			P(Cu, FVector(6.5f, 6.5f, 6.5f), FVector(0, 0, 0), FLinearColor(0.60f, 0.60f, 0.65f));
-			P(Cu, FVector(7.0f, 1.0f, 7.0f), FVector(0, 0, 0), FLinearColor(0.50f, 0.50f, 0.55f), FRotator(0, 0, 45)); // "?"-markering
+			// Andere placeable (furniture/structure/processor/...): toon z'n geregistreerde mesh als mini i.p.v. een "?".
+			if (!BuildRegistryMesh(Owner, Parent, ItemId, ScaleMul, bFirstPerson, bCollision))
+			{
+				P(Cu, FVector(6.5f, 6.5f, 6.5f), FVector(0, 0, 0), FLinearColor(0.60f, 0.60f, 0.65f));
+				P(Cu, FVector(7.0f, 1.0f, 7.0f), FVector(0, 0, 0), FLinearColor(0.50f, 0.50f, 0.55f), FRotator(0, 0, 45)); // "?"-markering
+			}
 		}
 	}
 

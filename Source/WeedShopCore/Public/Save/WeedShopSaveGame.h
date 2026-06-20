@@ -18,7 +18,8 @@ struct FInvSaveItem
 	UPROPERTY() int32 Quantity = 0;
 	UPROPERTY() float Thc = 0.f;
 	UPROPERTY() float QualityPct = 0.f;
-	UPROPERTY() int32 GridCell = -1; // slot-positie in de inventory-grid (-1 = onbekend/oude save)
+	UPROPERTY() int32 GridCell = -1; // backpack-grid-positie (-1 = onbekend/oude save of op de hotbar)
+	UPROPERTY() int32 HotbarSlot = -1; // op welk APART hotbar-slot deze stapel zit (-1 = niet op de hotbar)
 };
 
 // --- Geplaatste wereld-objecten ---

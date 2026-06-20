@@ -43,6 +43,10 @@ APlaceableProp::APlaceableProp()
 		if (P) { P->SetMobility(EComponentMobility::Movable); }
 		Parts.Add(P);
 	}
+
+	RuntimeModel = CreateDefaultSubobject<USceneComponent>(TEXT("RuntimeModel"));
+	RuntimeModel->SetupAttachment(Root);
+	RuntimeModel->SetUsingAbsoluteScale(true); // kinderen in echte cm, negeer root-schaal
 }
 
 void APlaceableProp::HideParts()
@@ -270,9 +274,22 @@ void APlaceableProp::SetupVisual()
 	}
 	else
 	{
-		// Geen mockup voor dit item -> de enkele mesh blijft zichtbaar.
-		Mesh->SetVisibility(true);
-		HideParts();
+		// Basis-vorm placeholder (Cube/Cylinder/Cone uit /Engine/BasicShapes/) -> bouw hetzelfde herkenbare
+		// primitieven-model dat het gedropte/hand-item ook gebruikt, i.p.v. een kale doos.
+		const bool bBasicShape = Def.MeshPath && FString(Def.MeshPath).Contains(TEXT("/Engine/BasicShapes/"));
+		if (bBasicShape && RuntimeModel)
+		{
+			Mesh->SetVisibility(false);            // root-doos verbergen (collision blijft via de Mesh-comp)
+			HideParts();
+			PropKit::ClearItemModel(RuntimeModel); // alleen onze eigen runtime-parts wissen (nooit Parts[])
+			PropKit::BuildItemModel(this, RuntimeModel, ItemId, 1.f, /*bFirstPerson*/ false, /*bCollision*/ false);
+		}
+		else
+		{
+			Mesh->SetVisibility(true);
+			HideParts();
+			if (RuntimeModel) { PropKit::ClearItemModel(RuntimeModel); }
+		}
 	}
 }
 

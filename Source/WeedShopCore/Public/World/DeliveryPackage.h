@@ -9,6 +9,7 @@
 #include "Interaction/Interactable.h"
 #include "DeliveryPackage.generated.h"
 
+class USceneComponent;
 class UStaticMeshComponent;
 class UPhoneClientComponent;
 
@@ -29,7 +30,13 @@ public:
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Delivery")
-	TObjectPtr<UStaticMeshComponent> Mesh;
+	TObjectPtr<USceneComponent> Root;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Delivery")
+	TObjectPtr<UStaticMeshComponent> Mesh; // de kartonnen doos
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Delivery")
+	TObjectPtr<UStaticMeshComponent> TapeX; // pakkettape-strip (kruis bovenop)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Delivery")
+	TObjectPtr<UStaticMeshComponent> TapeY;
 
 	int32 OrderId = 0;
 	TArray<FName> Ids;

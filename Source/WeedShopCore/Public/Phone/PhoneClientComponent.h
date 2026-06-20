@@ -27,6 +27,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void Toggle();
 
+	// Open/sluit het dev-menu (F10, alleen free-build) - één sidebar met alle dev-tools.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
+	void ToggleDevMenu();
+	bool IsDevMenuOpen() const { return bDevMenuOpen; }
+
 	// Maakt de UMG-widgets (status/telefoon/deal) aan op de lokale client (lui, idempotent).
 	void EnsureWidget();
 
@@ -108,6 +113,12 @@ public:
 	void CloseLightDimmer();
 	bool IsLightDimmerOpen() const { return bLightDimmerOpen; }
 	class APackLightSwitch* GetDimmerSwitch() const;
+
+	// --- Lamp-link-modus: klik lampen om ze aan de gekozen schakelaar te koppelen (groen/wit markers). ---
+	void EnterLinkMode(); // start vanuit de dimmer-popup; sluit de dimmer + spawnt de klikbare lamp-markers
+	void ExitLinkMode();  // ruimt de markers op (Esc / weglopen); links zijn al per-klik opgeslagen
+	bool IsLinkModeActive() const { return bLinkModeActive; }
+	void NotifyLinkActivity(); // reset de 1-min inactiviteits-timer (aangeroepen door een marker-klik)
 
 	// Game-instellingen (lokaal toegepast + bewaard in config).
 	void ApplyFov(float NewFov);
@@ -342,6 +353,10 @@ public:
 	// NPC-looproute: F9-markers (op volgorde over de stoep) -> spawn-/wandel-punten voor NPC's.
 	void SaveNpcRoute();
 	void ClearNpcRoute();
+	// No-build-zones: zet de huidige F9-markers (2 hoeken = box) vast in EIGEN bestand Saved/NoBuildZones.txt
+	// (dat geen ander dev-tool wist) + leeg MarkedSpots. Daar mag je dan niks plaatsen (incl. wall-mounts).
+	void SaveNoBuildZone();
+	void ClearNoBuildZone();
 	// Binnen-looppad (trappenhuis): F9-markers op volgorde -> smart-link ketting voor NPC's.
 	void SaveStairsPath();
 	void ClearStairsPath();
@@ -680,6 +695,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // link-modus markers opruimen
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(Server, Reliable)
@@ -800,6 +816,9 @@ protected:
 	TObjectPtr<class UPhoneWidget> PhoneWidget;
 
 	UPROPERTY(Transient)
+	TObjectPtr<class UDevMenuWidget> DevMenuWidget;
+
+	UPROPERTY(Transient)
 	TObjectPtr<class UMapWidget> MapOverlay;
 
 	// Waypoint (wereld-positie) die de speler op de kaart zette.
@@ -879,10 +898,16 @@ protected:
 	TObjectPtr<class ULightDimmerWidget> LightDimmerWidget;
 	bool bLightDimmerOpen = false;
 	TWeakObjectPtr<class APackLightSwitch> DimmerSwitch;
+	// Lamp-link-modus:
+	bool bLinkModeActive = false;
+	TWeakObjectPtr<class APackLightSwitch> LinkSwitch; // schakelaar waarvoor we nu lampen linken
+	UPROPERTY(Transient) TArray<TObjectPtr<class ALampLinkMarker>> LinkMarkers;
+	FTimerHandle LinkIdleTimer; // link-modus sluit vanzelf na 60s zonder marker-klik
 	// Lichtschakelaars per gekochte woning (1x plaatsen zodra de plafondlampen geladen zijn).
 	TSet<int32> LightSwitchHomesDone;
 
 	bool bOpen = false;
+	bool bDevMenuOpen = false;
 	UPROPERTY(Replicated)
 	bool bPhoneOpenRep = false;   // server-side spiegel van bOpen -> proxies tonen de texting-anim
 	int32 Tab = 0;

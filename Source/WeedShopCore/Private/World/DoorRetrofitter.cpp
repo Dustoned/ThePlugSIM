@@ -14,6 +14,7 @@
 #include "Placement/PlaceableProp.h"
 #include "World/WaterSink.h"
 #include "World/StorageShelf.h"
+#include "World/PackLightSwitch.h"
 #include "Placement/PlaceableTypes.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Engine/GameInstance.h"
@@ -1911,7 +1912,19 @@ void ADoorRetrofitter::ScanAndConvert()
 						++NF;
 					}
 				}
-				else if (bShelf)
+				else if (Pc[0] == TEXT("LightSwitch"))
+					{
+						// Lichtschakelaar = eigen APackLightSwitch (geen prop). Stabiele sleutel uit de positie
+						// (zelfde als bij plaatsen) zodat aan/uit + dim per plek onthouden blijft.
+						if (APackLightSwitch* Sw = W->SpawnActorDeferred<APackLightSwitch>(APackLightSwitch::StaticClass(), FTransform(Rot, Loc), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+						{
+							Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"), FMath::RoundToInt(Loc.X / 10.f), FMath::RoundToInt(Loc.Y / 10.f), FMath::RoundToInt(Loc.Z / 10.f)), 800.f);
+							Sw->FinishSpawning(FTransform(Rot, Loc));
+							Sw->Tags.Add(FName(TEXT("AutoFixture")));
+							++NF;
+						}
+					}
+					else if (bShelf)
 				{
 					// Opslag-meubel (Fridge/Shelf/Chest): als functionele AStorageShelf terugzetten, niet als dode prop.
 					if (AStorageShelf* Sh = W->SpawnActorDeferred<AStorageShelf>(AStorageShelf::StaticClass(), FTransform(Rot, Loc), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
@@ -2751,25 +2764,18 @@ void ADoorRetrofitter::TickVirtualMove()
 		// bovenop + loslaten. Een absolute cap (HomeSettleUntil) voorkomt eindeloos pinnen als er iets misgaat.
 		if (!bRoomFloorReady && !HomeAnchor.IsNearlyZero())
 		{
-			const bool bCap = WS->GetRealTimeSeconds() >= HomeSettleUntil;
 			FCollisionQueryParams FQ(SCENE_QUERY_STAT(RoomFloor), false);
 			for (FConstPlayerControllerIterator It = WS->GetPlayerControllerIterator(); It; ++It)
 			{
 				if (APawn* P0 = It->Get() ? It->Get()->GetPawn() : nullptr) { FQ.AddIgnoredActor(P0); }
 			}
 			const FVector TS = HomeAnchor + FVector(0.f, 0.f, 30.f);
-			// Korte trace (260cm): de EIGEN vloer (niet een verdieping lager, ~410cm+).
+			// ALLEEN de EIGEN vloer (260cm). Een verdieping lager zit ~410cm+; die pakken we NOOIT, anders land je
+			// op een LAGERE verdieping = een ander appartement (precies de "ik spawn opeens ergens anders"-bug).
+			// Eigen vloer nog niet ingestreamd? -> bevroren blijven (zie hieronder) tot 'ie er is; NIET omlaag vallen.
 			FHitResult FloorHit;
-			bool bPlace = WS->LineTraceSingleByChannel(FloorHit, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, FQ);
-			FVector PlaceLoc = bPlace ? FloorHit.Location : FVector::ZeroVector;
-			// Laatste redmiddel op de cap (de eigen vloer kwam maar niet): RUIME trace (1000cm) naar ELKE
-			// vloer eronder, zodat we je ergens op neerzetten i.p.v. door de wereld te laten vallen.
-			if (!bPlace && bCap)
-			{
-				FHitResult Deep;
-				if (WS->LineTraceSingleByChannel(Deep, TS, TS - FVector(0.f, 0.f, 1000.f), ECC_WorldStatic, FQ))
-				{ bPlace = true; PlaceLoc = Deep.Location; }
-			}
+			const bool bPlace = WS->LineTraceSingleByChannel(FloorHit, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, FQ);
+			const FVector PlaceLoc = bPlace ? FloorHit.Location : FVector::ZeroVector;
 
 			for (FConstPlayerControllerIterator It = WS->GetPlayerControllerIterator(); It; ++It)
 			{
@@ -2987,9 +2993,10 @@ void ADoorRetrofitter::TickVirtualCrowd()
 				//    nog gratis hergebruik = glad (net als de dev-city die z'n NPC's maar 1x bouwt).
 				if (Spawned >= MaxSpawnPerTick) { continue; }
 				++Spawned;
-				FActorSpawnParameters SPv;
-				SPv.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-				B = W->SpawnActor<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), SPv);
+				// DEFERRED zodat bCrowdNpc geZET is VOOR BeginPlay->BuildAppearance: ambient walker krijgt de
+				// goedkope 1-mesh-build i.p.v. de modulaire 6-component-build (~40ms hitch/spawn = het stotteren).
+				B = W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (B) { B->bCrowdNpc = true; B->FinishSpawning(FTransform(SpawnP)); }
 			}
 			if (!B) { continue; }
 			++NBodies;

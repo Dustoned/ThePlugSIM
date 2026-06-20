@@ -32,4 +32,14 @@ public:
 	// uit WeedOutfit (OutfitCatalog.h). Geldt voor de Casual-skins (2-4); cross-module via deze interface.
 	virtual uint8 GetOutfitPart(int32 Slot) const { return 0; }
 	virtual void SetOutfitPart(int32 Slot, uint8 Index) {}
+
+	// Dev-tools (vanuit het F10-dev-menu): aim-/positie-gebaseerde acties die in de game-module leven.
+	// De bijbehorende losse hotkeys (F6/F8/F11/Shift+F7/Ctrl+F7/Shift+F9/oude F10) zijn vervallen.
+	virtual void DevRegisterHome() {}
+	virtual void DevMarkDeliveryPoint() {}
+	virtual void DevAddMeetSpot() {}
+	virtual void DevSaveFurnitureTemplate() {}
+	virtual void DevMarkBuildAreaCorner() {}
+	virtual void DevSaveMenuCam() {}
+	virtual void DevActivityNpcAtAim() {}
 };

@@ -28,6 +28,10 @@ public:
 	UPROPERTY() int32 FromSlot = -1; // >=0 = vanaf hotbar-slot
 	UPROPERTY() int32 FromCell = -1; // >=0 = vanuit een rooster-cel
 	UPROPERTY() bool bSplit = false; // true = Shift ingedrukt -> de helft afsplitsen bij drop
+
+	// Sleep je 'm BUITEN de inventory (op niks) los -> hele stapel op de grond droppen (OnDragCancelled).
+	TWeakObjectPtr<UInventoryComponent> DropInv;
+	UFUNCTION() void HandleDroppedOutside(UDragDropOperation* Operation);
 };
 
 // Eén sleepbare/droppbare cel. Bouwt zijn eigen visuele inhoud uit de meegegeven velden, zodat hij als

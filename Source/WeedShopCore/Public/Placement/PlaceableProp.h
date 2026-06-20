@@ -55,6 +55,7 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> MirrorMesh; // tweede zijde van enkelzijdige pack-muren
 	UPROPERTY() TObjectPtr<class UPointLightComponent> StructLight; // echt licht voor Struct_CeilLamp
+	UPROPERTY() TObjectPtr<USceneComponent> RuntimeModel; // container voor runtime-opgebouwde basis-vorm modellen (BuildItemModel)
 	UPROPERTY(ReplicatedUsing = OnRep_DoorOpen) bool bDoorOpen = false; // Struct_Door open/dicht
 	UFUNCTION() void OnRep_DoorOpen();
 	void HideParts();

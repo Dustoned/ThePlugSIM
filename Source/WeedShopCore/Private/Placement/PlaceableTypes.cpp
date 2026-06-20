@@ -69,8 +69,8 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Furn_Crate"),        TEXT("Crate"),         TEXT("/Game/CityBeachStrip/Meshes/PlasticCrate/SM_PlasticCrate"), FVector(1.f), FVector(30.f, 20.f, 8.f), false, 200,  false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true },
 
 		// Basic-shape huiskamer-meubels (zelfde stijl als Table/Fridge; center-pivot, normale offset).
-		{ TEXT("Furn_Sofa"),       TEXT("Sofa"),         TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(2.0f, 0.9f, 0.7f),  FVector(100.f, 45.f, 35.f), false, 3000 },
-		{ TEXT("Furn_TV"),         TEXT("TV (wall)"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.3f, 0.08f, 0.78f),FVector(65.f, 4.f, 39.f),  false, 2500, false, false, false, false, false, false, false, /*bIsWallMount*/ true },
+		{ TEXT("Furn_Sofa"),       TEXT("Sofa"),         TEXT("/Game/CityBeachStrip/Meshes/TrashProps/Couch/SM_Couch"), FVector(1.f), FVector(100.f, 45.f, 40.f), false, 3000, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, /*bBasePivot*/ true },
+		{ TEXT("Furn_TV"),         TEXT("TV (old)"),     TEXT("/Game/CityBeachStrip/Meshes/TrashProps/OldTV/SM_OldTV"), FVector(1.f), FVector(35.f, 20.f, 28.f), false, 2500, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, /*bBasePivot*/ true },
 		{ TEXT("Furn_TVStand"),    TEXT("TV cabinet"),   TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.6f, 0.45f, 0.5f), FVector(80.f, 22.f, 25.f), false, 2000 },
 		{ TEXT("Furn_CoffeeTable"),TEXT("Coffee table"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.0f, 0.6f, 0.4f),  FVector(50.f, 30.f, 20.f), false, 1200 },
 		{ TEXT("Furn_Bookshelf"),  TEXT("Bookshelf"),    TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(1.0f, 0.3f, 1.8f),  FVector(50.f, 15.f, 90.f), false, 2200 },

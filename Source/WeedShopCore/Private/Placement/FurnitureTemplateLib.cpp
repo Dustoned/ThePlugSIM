@@ -328,7 +328,7 @@ AActor* FurnitureTemplates::SpawnEntry(UWorld* W, const FFurnitureEntry& E, cons
 		if (Sw)
 		{
 			Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"),
-				FMath::RoundToInt(L.X / 10.f), FMath::RoundToInt(L.Y / 10.f), FMath::RoundToInt(L.Z / 10.f)), 520.f);
+				FMath::RoundToInt(L.X / 10.f), FMath::RoundToInt(L.Y / 10.f), FMath::RoundToInt(L.Z / 10.f)), 800.f);
 			Sw->FinishSpawning(TM);
 		}
 		Spawned = Sw;

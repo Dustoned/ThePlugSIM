@@ -25,6 +25,7 @@
 #include "World/CeilingLamp.h"             // plafondlampen opslaan/herstellen
 #include "World/ProcessorMachine.h"        // hasj-machines opslaan/herstellen
 #include "World/WaterSink.h"               // sinks opslaan/herstellen (kind 8)
+#include "World/PackLightSwitch.h"          // lichtschakelaars opslaan/herstellen (kind 9)
 #include "Cultivation/WaterCanComponent.h" // water in je fles
 #include "World/HeatComponent.h"           // politie-heat
 #include "EngineUtils.h"
@@ -525,14 +526,9 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 		{
 			if (S.ItemId == FName(TEXT("Cash")) || S.Quantity <= 0) { continue; } // cash = afgeleid van economy
 			FInvSaveItem It; It.ItemId = S.ItemId; It.Quantity = S.Quantity; It.Thc = S.Quality; It.QualityPct = S.QualityPct;
-			It.GridCell = Inv->GetStackCell(S.StackId); // bewaar de exacte slot-positie
+			It.GridCell = Inv->GetStackCell(S.StackId);      // backpack-positie (-1 als de stapel op de hotbar zit)
+			It.HotbarSlot = Inv->GetHotbarSlotOf(S.StackId); // op welk APART hotbar-slot deze stapel zit (-1 = niet)
 			Out.Items.Add(It);
-		}
-		// Hotbar: per slot de grid-cel van de toegewezen stapel (stabiel over reload; -1 = leeg).
-		for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h)
-		{
-			const int32 Sid = Inv->GetHotbarStackId(h);
-			Out.HotbarCells.Add(Sid != 0 ? Inv->GetStackCell(Sid) : -1);
 		}
 		Out.ActiveSlot = Inv->GetActiveSlot();
 	}
@@ -579,23 +575,16 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	}
 	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
 	{
-		// Zet de stacks EXACT terug op hun opgeslagen slot (geen merge/sortering -> slots wisselen niet).
-		TArray<FInventoryStack> RestoredStacks; TArray<int32> Cells;
-		RestoredStacks.Reserve(Data.Items.Num()); Cells.Reserve(Data.Items.Num());
+		// Zet de stacks EXACT terug op hun opgeslagen plek: backpack-stapels op hun grid-cel, hotbar-stapels op hun
+		// APARTE hotbar-slot (per stapel bewaard). Geen merge/sortering -> niks verschuift, en hotbar blijft hotbar.
+		TArray<FInventoryStack> RestoredStacks; TArray<int32> Cells; TArray<int32> HotbarSlots;
+		RestoredStacks.Reserve(Data.Items.Num()); Cells.Reserve(Data.Items.Num()); HotbarSlots.Reserve(Data.Items.Num());
 		for (const FInvSaveItem& It : Data.Items)
 		{
 			FInventoryStack S; S.ItemId = It.ItemId; S.Quantity = It.Quantity; S.Quality = It.Thc; S.QualityPct = It.QualityPct;
-			RestoredStacks.Add(S); Cells.Add(It.GridCell);
+			RestoredStacks.Add(S); Cells.Add(It.GridCell); HotbarSlots.Add(It.HotbarSlot);
 		}
-		Inv->RestoreStacksAndGrid(RestoredStacks, Cells);
-		// Hotbar terugzetten: zoek per opgeslagen cel de (nieuwe) stapel-id en wijs 'm aan het slot toe.
-		for (int32 h = 0; h < Data.HotbarCells.Num() && h < UInventoryComponent::HotbarSize; ++h)
-		{
-			const int32 Cell = Data.HotbarCells[h];
-			if (Cell < 0) { continue; }
-			const int32 Sid = Inv->GetStackIdAtCell(Cell);
-			if (Sid != 0) { Inv->AssignHotbarStack(h, Sid); }
-		}
+		Inv->RestoreStacksAndGrid(RestoredStacks, Cells, HotbarSlots);
 		Inv->SetActiveSlot(Data.ActiveSlot);
 	}
 	// (Water zit in de fles-stack Quality en is al hersteld via de inventory-items hierboven.)
@@ -823,6 +812,14 @@ void USaveGameSubsystem::GatherPlaced(UWorld* World, TArray<FPlacedObjectSave>& 
 		FPlacedObjectSave O; O.Kind = 6; O.ItemId = FName(TEXT("Lamp_Ceiling"));
 		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
 	}
+	// Lichtschakelaars: alleen SPELER-geplaatste (sw_*) -> auto-geplaatste (apt_*) komen vanzelf terug per woning.
+	// De stand (aan/dim) + lamp-links zitten in hun eigen txt-bestanden (per positie); hier alleen de positie.
+	for (TActorIterator<APackLightSwitch> It(World); It; ++It)
+	{
+		if (!IsValid(*It) || !It->GetPersistKey().StartsWith(TEXT("sw_"))) { continue; }
+		FPlacedObjectSave O; O.Kind = 9; O.ItemId = FName(TEXT("LightSwitch"));
+		O.Location = It->GetActorLocation(); O.Rotation = It->GetActorRotation(); Out.Add(O);
+	}
 	// Hasj-machines (mesh/press): tier + lopende batches (hergebruik de DryEntries-velden, kind 7).
 	for (TActorIterator<AProcessorMachine> It(World); It; ++It)
 	{
@@ -851,7 +848,10 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 	// de vaste apartment-sink wissen. Bevat de save wel sinks, dan zijn die geplaatste/verplaatste sinks.
 	const bool bHasSinkSave = In.ContainsByPredicate([](const FPlacedObjectSave& O) { return O.Kind == 8; });
 	if (bHasSinkSave) { for (TActorIterator<AWaterSink> It(World); It; ++It) { ToKill.Add(*It); } }
-	for (AActor* A : ToKill) { if (A) { A->Destroy(); } }
+	const bool bHasSwitchSave = In.ContainsByPredicate([](const FPlacedObjectSave& O) { return O.Kind == 9; });
+		// Speler-geplaatste schakelaars (sw_*) vervangen door de opgeslagen set; auto-switches (apt_*) blijven staan.
+		if (bHasSwitchSave) { for (TActorIterator<APackLightSwitch> It(World); It; ++It) { if (IsValid(*It) && It->GetPersistKey().StartsWith(TEXT("sw_"))) { ToKill.Add(*It); } } }
+		for (AActor* A : ToKill) { if (A) { A->Destroy(); } }
 
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	for (const FPlacedObjectSave& O : In)
@@ -915,7 +915,18 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 			}
 			break;
 		}
-		default: // generieke prop / meubel
+		case 9: // lichtschakelaar (speler-geplaatst) - stand + links komen uit hun eigen txt-bestanden (per positie)
+			{
+				APackLightSwitch* Sw = World->SpawnActorDeferred<APackLightSwitch>(APackLightSwitch::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (Sw)
+				{
+					Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"),
+						FMath::RoundToInt(O.Location.X / 10.f), FMath::RoundToInt(O.Location.Y / 10.f), FMath::RoundToInt(O.Location.Z / 10.f)), 800.f);
+					Sw->FinishSpawning(TM);
+				}
+				break;
+			}
+			default: // generieke prop / meubel
 		{
 			APlaceableProp* Pr = World->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 			if (Pr) { Pr->ItemId = O.ItemId; Pr->FinishSpawning(TM); }

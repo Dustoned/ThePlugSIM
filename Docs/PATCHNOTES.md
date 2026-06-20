@@ -1,4 +1,46 @@
 PATCH NOTES
+Version 1.10.0 — 21 juni 2026
+
+Korte intro:
+Een grote bouw- en licht-update: alle dev-tools zitten nu in één overzichtelijk F10-menu, je
+lichtschakelaars zijn helemaal opnieuw gedaan (oppakbaar, opslagbaar, dimbaar én je kunt nu
+handmatig kiezen wélke lampen aan een schakelaar hangen), en bijna elk item heeft eindelijk een
+echt 3D-model — ook als je 't op de grond gooit. Plus een soepelere stad en een paar bugs eruit.
+
+━━━━━━━━━━━━━━━━━━━━
+
+LICHTSCHAKELAARS & LAMPEN
+
+• Schakelaars zijn nu volwaardig: je kunt ze oppakken en verplaatsen, ze worden opgeslagen
+  (aan/uit + dimmer-stand onthouden), en ze zien eruit als een echte schakelaar (plaatje + tuimelaar).
+
+• Nieuw — lampen koppelen: hou een schakelaar vast → "Link lampen" → klik de lampen die je eraan
+  wilt hangen; gekoppelde lampen lichten blauw op. Afronden via Esc, "Complete linking", of vanzelf
+  na een minuut. Twee schakelaars in één huis vechten niet meer om dezelfde lamp (geen geknipper).
+
+BOUWEN & DEV-MENU
+
+• Eén F10-toets opent een grote dev-sidebar met álle bouw-/dev-tools netjes gesorteerd met uitleg —
+  geen wirwar van losse hotkeys meer.
+
+• Wall-mounts (schakelaars e.d.) kun je nu op je eigen muren plaatsen.
+
+ITEM-MODELLEN
+
+• Bijna elk item heeft nu een herkenbaar 3D-model — meubels, machines, grow-gear, potten,
+  concentraten — zowel geplaatst als wanneer je 't op de grond gooit. Geen witte blokjes meer.
+
+PRESTATIES & FIXES
+
+• De stad loopt soepeler: de achtergrond-menigte bouwt veel goedkoper op, geen schokjes meer bij
+  het volstromen van de straat.
+
+• Nieuwe-game-spawn fix: je valt niet meer per ongeluk in een verkeerd/lager appartement.
+
+• Inventory: je hotbar en rugzak blijven correct staan na opslaan/laden.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Version 1.9.0 — 20 juni 2026
 
 Korte intro:

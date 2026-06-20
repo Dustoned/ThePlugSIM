@@ -6,6 +6,7 @@
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
 #include "TimerManager.h"
+#include "World/WorldItemPickup.h"
 
 namespace
 {
@@ -527,7 +528,7 @@ void UInventoryComponent::ClearAll()
 	OnRep_Stacks();
 }
 
-void UInventoryComponent::RestoreStacksAndGrid(const TArray<FInventoryStack>& InStacks, const TArray<int32>& InCells)
+void UInventoryComponent::RestoreStacksAndGrid(const TArray<FInventoryStack>& InStacks, const TArray<int32>& InCells, const TArray<int32>& InHotbarSlots)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
 
@@ -540,6 +541,7 @@ void UInventoryComponent::RestoreStacksAndGrid(const TArray<FInventoryStack>& In
 	GridOrder.Reset();
 	const int32 Cells = (MaxStacks > 0) ? MaxStacks : (InStacks.Num() + 1);
 	GridOrder.SetNumZeroed(Cells);
+	HotbarStacks.Reset(); HotbarStacks.SetNumZeroed(HotbarSize); // hotbar-toewijzing komt exact uit InHotbarSlots
 
 	if (bHadCash)
 	{
@@ -557,6 +559,10 @@ void UInventoryComponent::RestoreStacksAndGrid(const TArray<FInventoryStack>& In
 		NewS.StackId = NextStackId++;
 		Stacks.Add(NewS);
 		KnownStacks.Add(NewS.StackId);
+
+		// Zat deze stapel op de hotbar? -> direct aan dat slot toewijzen en NIET in het backpack-rooster zetten.
+		const int32 HSlot = InHotbarSlots.IsValidIndex(i) ? InHotbarSlots[i] : -1;
+		if (HSlot >= 0 && HSlot < HotbarSize) { HotbarStacks[HSlot] = NewS.StackId; continue; }
 
 		const int32 Cell = InCells.IsValidIndex(i) ? InCells[i] : INDEX_NONE;
 		if (GridOrder.IsValidIndex(Cell) && GridOrder[Cell] == 0)
@@ -749,6 +755,29 @@ void UInventoryComponent::ServerSplitStack_Implementation(int32 StackId, int32 A
 	New.StackId = NextStackId++;
 	Stacks.Add(New);
 	OnRep_Stacks();
+}
+
+void UInventoryComponent::ServerDropStack_Implementation(int32 StackId)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	const int32 Idx = FindStackById(StackId);
+	if (!Stacks.IsValidIndex(Idx)) { return; }
+	const FInventoryStack St = Stacks[Idx];
+	if (St.ItemId.IsNone() || St.Quantity <= 0 || St.ItemId == FName(TEXT("Cash"))) { return; } // briefgeld niet zo droppen
+
+	RemoveFromStackById(StackId, St.Quantity); // de hele stapel de inventory uit
+
+	AActor* Own = GetOwner();
+	UWorld* W = GetWorld();
+	if (!Own || !W) { return; }
+	FVector Fwd = Own->GetActorForwardVector(); Fwd.Z = 0.f; Fwd = Fwd.GetSafeNormal();
+	FVector Loc = Own->GetActorLocation() + Fwd * 90.f;
+	Loc.Z -= (Own->GetSimpleCollisionHalfHeight() - 12.f); // bij de voeten neerleggen
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (AWorldItemPickup* P = W->SpawnActor<AWorldItemPickup>(AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP))
+	{
+		P->Setup(St.ItemId, St.Quantity, St.Quality, St.QualityPct);
+	}
 }
 
 int32 UInventoryComponent::CategoryRank(FName ItemId)

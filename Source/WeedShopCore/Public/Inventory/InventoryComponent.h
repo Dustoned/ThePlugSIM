@@ -86,6 +86,10 @@ public:
 	void RequestMergeTwo(int32 IntoStackId, int32 FromStackId) { ServerMergeTwo(IntoStackId, FromStackId); }
 	UFUNCTION(Server, Reliable) void ServerMergeTwo(int32 IntoStackId, int32 FromStackId);
 
+	// Drop een hele stapel op de grond (sleep 'm de inventory UIT, los op niks) -> wereld-pickup bij de voeten.
+	void RequestDropStack(int32 StackId) { ServerDropStack(StackId); }
+	UFUNCTION(Server, Reliable) void ServerDropStack(int32 StackId);
+
 	// Of dit item stapelbaar is (bv. flessen niet). Bepaalt of merge/split mag.
 	static bool IsStackable(FName ItemId);
 
@@ -106,7 +110,8 @@ public:
 	// Server. Zet de inventory EXACT terug zoals opgeslagen: elke stack op z'n opgeslagen grid-cel,
 	// geen merge/sortering. InCells[i] = grid-cel van InStacks[i] (-1 = eerste vrije). De cash-stack
 	// (afgeleid van economy) blijft op cel 0. Voor save/load zodat slots niet meer wisselen.
-	void RestoreStacksAndGrid(const TArray<FInventoryStack>& InStacks, const TArray<int32>& InCells);
+	// InHotbarSlots[i] = hotbar-slot van stapel i (-1 = niet op de hotbar). Hotbar-stapels gaan NIET in het backpack-rooster.
+	void RestoreStacksAndGrid(const TArray<FInventoryStack>& InStacks, const TArray<int32>& InCells, const TArray<int32>& InHotbarSlots = TArray<int32>());
 
 	// Totaal aantal van dit item over alle stapels.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
@@ -179,6 +184,8 @@ public:
 	// StackId in hotbar-slot Slot (0 = leeg).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	int32 GetHotbarStackId(int32 Slot) const;
+	// Op welk hotbar-slot zit deze stapel (-1 = geen). Voor de save (bewaart de hotbar-toewijzing per stapel).
+	int32 GetHotbarSlotOf(int32 StackId) const { return HotbarStacks.IndexOfByKey(StackId); }
 
 	// Of een stapel op de hotbar staat.
 	bool IsStackOnHotbar(int32 StackId) const;

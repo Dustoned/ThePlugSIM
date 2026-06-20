@@ -20,24 +20,52 @@ APackLightSwitch::APackLightSwitch()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = false; // licht is lokaal/cosmetisch
 
+	// Root (onschaalbaar) zodat plaat + tuimelknop elk hun eigen schaal/positie houden.
+	USceneComponent* RootC = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(RootC);
+
 	Plate = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Plate"));
-	SetRootComponent(Plate);
+	Plate->SetupAttachment(RootC);
 	Plate->SetMobility(EComponentMobility::Movable);
-	// Klein muurplaatje. Cube = 100cm -> dun in de kijk-richting (X), smal (Y), hoger (Z).
+	// Muurplaatje. Cube = 100cm -> dun in de kijk-richting (X), smal (Y), hoger (Z).
 	if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
 	{
 		Plate->SetStaticMesh(M);
 	}
-	Plate->SetWorldScale3D(FVector(0.03f, 0.085f, 0.13f));
+	Plate->SetRelativeScale3D(FVector(0.03f, 0.085f, 0.13f));
 	// Aanklikbaar voor de interactie-trace (ECC_Visibility), maar geen fysieke botsing.
 	Plate->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Plate->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Plate->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	Plate->SetCanEverAffectNavigation(false);
-	// Zacht wit oplichtend plaatje (zelfde unlit-glow als de elevator-cijfers) -> in het donker te vinden.
+	// Belicht cremE-plaatje (NIET het felle witte glow-kubusje van eerst) -> ziet eruit als een echte
+	// schakelaar-plaat i.p.v. een wit blok.
+	if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
+	{
+		PlateMID = UMaterialInstanceDynamic::Create(Base, this);
+		if (PlateMID)
+		{
+			PlateMID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.85f, 0.84f, 0.79f));
+			Plate->SetMaterial(0, PlateMID);
+		}
+	}
+
+	// Tuimelknop (rocker): klein kubusje dat uit de plaat-voorkant steekt, met een zachte glow zodat ALLEEN
+	// de knop in het donker oplicht (niet de hele plaat) -> leest als een schakelaar met indicatie.
+	Toggle = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Toggle"));
+	Toggle->SetupAttachment(RootC);
+	Toggle->SetMobility(EComponentMobility::Movable);
+	if (UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+	{
+		Toggle->SetStaticMesh(M);
+	}
+	Toggle->SetRelativeScale3D(FVector(0.022f, 0.045f, 0.06f)); // 2.2cm diep x 4.5 breed x 6 hoog
+	Toggle->SetRelativeLocation(FVector(1.6f, 0.f, 0.f));       // steekt uit de plaat naar de kamer (+X)
+	Toggle->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Toggle->SetCanEverAffectNavigation(false);
 	if (UMaterialInterface* Glow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_DigitGlow.M_DigitGlow")))
 	{
-		Plate->SetMaterial(0, Glow);
+		Toggle->SetMaterial(0, Glow);
 	}
 }
 
@@ -46,12 +74,34 @@ void APackLightSwitch::Setup(const FString& InKey, float InRadius)
 	PersistKey = InKey;
 	if (InRadius > 0.f) { ControlRadius = InRadius; }
 	Load();
+	LoadLinks();
 }
 
 void APackLightSwitch::BeginPlay()
 {
 	Super::BeginPlay();
 	ClaimTimer = 1.f; // direct een eerste claim-poging in de eerste Tick
+}
+
+void APackLightSwitch::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Bij verwijderen (oppakken/clear): de geclaimde lampen + emissives teruggeven aan de dag/nacht-klok,
+	// anders blijven ze 'bevroren' op hun laatste stand hangen (niemand stuurt ze meer aan).
+	if (UWorld* W = GetWorld())
+	{
+		if (ADayNightController* DNC = ADayNightController::GetLocal(W))
+		{
+			for (const TWeakObjectPtr<UPointLightComponent>& WP : Lights)
+			{
+				if (UPointLightComponent* PL = WP.Get()) { DNC->SetSwitchControlledLight(PL, false); }
+			}
+			for (const TWeakObjectPtr<UMaterialInstanceDynamic>& WP : Emis)
+			{
+				if (UMaterialInstanceDynamic* M = WP.Get()) { DNC->SetSwitchControlledEmis(M, false); }
+			}
+		}
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 static float LightSwitch_Mult(float B01)
@@ -71,6 +121,144 @@ static APackLightSwitch* LightSwitch_Nearest(UWorld* W, const FVector& P)
 	return Best;
 }
 
+// True als een ANDERE schakelaar deze lamp expliciet gelinkt heeft (dan mag een auto-switch 'm niet pakken).
+static bool LinkSwitch_ClaimedByOther(UWorld* W, const FString& LampKey, const APackLightSwitch* Self)
+{
+	for (TActorIterator<APackLightSwitch> It(W); It; ++It)
+	{
+		if (*It == Self) { continue; }
+		if (It->HasManualLinks() && It->IsLampLinked(LampKey)) { return true; }
+	}
+	return false;
+}
+
+FString APackLightSwitch::MakeLampKey(const FVector& P)
+{
+	const int32 X = FMath::RoundToInt(P.X / 50.f) * 50;
+	const int32 Y = FMath::RoundToInt(P.Y / 50.f) * 50;
+	const int32 Z = FMath::RoundToInt(P.Z / 200.f) * 200; // grof op Z: de point-light (~45cm onder de fixture) en
+	                                                       // de emissive van DEZELFDE lamp vallen zo in 1 cel;
+	                                                       // verschillende verdiepingen (~320cm) blijven gescheiden.
+	return FString::Printf(TEXT("%d_%d_%d"), X, Y, Z);
+}
+
+bool APackLightSwitch::OwnsByLinkOrProximity(UWorld* W, const FVector& Pos) const
+{
+	const FString Key = MakeLampKey(Pos);
+	if (HasManualLinks()) { return LinkedLampKeys.Contains(Key); } // handmatig => exact deze set, niks anders
+	// Geen manual links => oud auto-gedrag, maar een lamp die een ANDERE switch gelinkt heeft niet afpakken.
+	if (LinkSwitch_ClaimedByOther(W, Key, this)) { return false; }
+	return LightSwitch_Nearest(W, Pos) == this;
+}
+
+void APackLightSwitch::ToggleLampLink(const FString& LampKey)
+{
+	if (LinkedLampKeys.Contains(LampKey)) { LinkedLampKeys.Remove(LampKey); }
+	else { LinkedLampKeys.Add(LampKey); }
+	SaveLinks();
+	// In de link-modus alleen herkleuren (de preview heeft de lampen al overgenomen); anders meteen echt herclaimen.
+	if (bLinkPreview) { ApplyLinkPreview(); } else { ClaimLamps(); }
+}
+
+void APackLightSwitch::LoadLinks()
+{
+	if (PersistKey.IsEmpty()) { return; }
+	LinkedLampKeys.Reset();
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *WeedData::File(TEXT("LightSwitchLinks.txt")));
+	for (const FString& L : Lines)
+	{
+		FString K, V;
+		if (L.Split(TEXT("="), &K, &V) && K.TrimStartAndEnd() == PersistKey)
+		{
+			TArray<FString> Keys;
+			V.ParseIntoArray(Keys, TEXT(","), true);
+			for (FString& One : Keys) { LinkedLampKeys.Add(One.TrimStartAndEnd()); }
+			return;
+		}
+	}
+}
+
+void APackLightSwitch::SaveLinks() const
+{
+	if (PersistKey.IsEmpty()) { return; }
+	const FString Path = WeedData::File(TEXT("LightSwitchLinks.txt"));
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *Path);
+	Lines.RemoveAll([this](const FString& L)
+	{
+		FString K, V;
+		return L.Split(TEXT("="), &K, &V) && K.TrimStartAndEnd() == PersistKey;
+	});
+	if (LinkedLampKeys.Num() > 0)
+	{
+		TArray<FString> Keys = LinkedLampKeys.Array();
+		Lines.Add(FString::Printf(TEXT("%s=%s"), *PersistKey, *FString::Join(Keys, TEXT(","))));
+	}
+	FFileHelper::SaveStringToFile(FString::Join(Lines, TEXT("\n")) + TEXT("\n"), *Path,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+}
+
+void APackLightSwitch::SetLinkPreview(bool bEnable)
+{
+	if (bEnable == bLinkPreview) { return; }
+	UWorld* W = GetWorld();
+	ADayNightController* DNC = W ? ADayNightController::GetLocal(W) : nullptr;
+	if (!DNC) { return; }
+	bLinkPreview = bEnable;
+
+	if (bEnable)
+	{
+		// Diffusers (lightboxes) in de buurt overnemen. Gelinkte DIMMEN we sterk zodat de blauwe marker-glow
+		// erover heen domineert (= blauwe lightbox); niet-gelinkte blijven helder wit aan, zodat je ze ziet+klikt.
+		PreviewEmis.Reset();
+		PreviewEmisPos.Reset();
+		PreviewEmisBright.Reset();
+		TArray<UMaterialInstanceDynamic*> Mids; TArray<float> Bright; TArray<FVector> Pos;
+		DNC->CollectCeilingEmisNear(GetActorLocation(), ControlRadius, Mids, Bright, Pos);
+		for (int32 i = 0; i < Mids.Num(); ++i)
+		{
+			UMaterialInstanceDynamic* M = Mids[i];
+			if (!M) { continue; }
+			PreviewEmis.Add(M);
+			PreviewEmisPos.Add(Pos.IsValidIndex(i) ? Pos[i] : FVector::ZeroVector);
+			PreviewEmisBright.Add(Bright.IsValidIndex(i) ? Bright[i] : 1.f);
+			DNC->SetSwitchControlledEmis(M, true); // de klok laat 'm los; wij sturen de brightness tijdens preview
+		}
+		ApplyLinkPreview();
+	}
+	else
+	{
+		// Terug naar normaal: originele brightness herstellen; niet-gelinkte diffusers weer aan de klok geven.
+		for (int32 i = 0; i < PreviewEmis.Num(); ++i)
+		{
+			UMaterialInstanceDynamic* M = PreviewEmis[i].Get();
+			if (!M) { continue; }
+			if (PreviewEmisBright.IsValidIndex(i)) { M->SetScalarParameterValue(TEXT("Brightness"), PreviewEmisBright[i]); }
+			const FString Key = MakeLampKey(PreviewEmisPos.IsValidIndex(i) ? PreviewEmisPos[i] : FVector::ZeroVector);
+			if (!LinkedLampKeys.Contains(Key)) { DNC->SetSwitchControlledEmis(M, false); } // niet gelinkt -> auto
+		}
+		PreviewEmis.Reset();
+		PreviewEmisPos.Reset();
+		PreviewEmisBright.Reset();
+		ClaimLamps(); // echte eigendom + aan/uit/dim herstellen op basis van de definitieve links
+	}
+}
+
+void APackLightSwitch::ApplyLinkPreview()
+{
+	for (int32 i = 0; i < PreviewEmis.Num(); ++i)
+	{
+		UMaterialInstanceDynamic* M = PreviewEmis[i].Get();
+		if (!M) { continue; }
+		const FString Key = MakeLampKey(PreviewEmisPos.IsValidIndex(i) ? PreviewEmisPos[i] : FVector::ZeroVector);
+		const bool bLinked = LinkedLampKeys.Contains(Key);
+		const float Orig = PreviewEmisBright.IsValidIndex(i) ? PreviewEmisBright[i] : 1.f;
+		// Gelinkt: wit-glow flink dimmen (blauwe marker domineert). Niet-gelinkt: helder wit aan.
+		M->SetScalarParameterValue(TEXT("Brightness"), bLinked ? Orig * 0.10f : Orig);
+	}
+}
+
 void APackLightSwitch::ClaimLamps()
 {
 	UWorld* W = GetWorld();
@@ -78,13 +266,32 @@ void APackLightSwitch::ClaimLamps()
 	if (!DNC) { return; }
 	const FVector Loc = GetActorLocation();
 
+	// LOSLATEN: lampen/emissives waarvoor wij niet (meer) de dichtstbijzijnde schakelaar zijn -> vrijgeven,
+	// zodat de ECHTE dichtstbijzijnde schakelaar ze exclusief aanstuurt. Zonder dit blijft een eerder geplaatste
+	// schakelaar een lamp vasthouden die nu bij een dichtere hoort -> beide sturen 'm om-en-om aan/uit = knipperen.
+	Lights.RemoveAll([&](const TWeakObjectPtr<UPointLightComponent>& WP)
+	{
+		UPointLightComponent* PL = WP.Get();
+		return !PL || !OwnsByLinkOrProximity(W, PL->GetComponentLocation());
+	});
+	for (int32 i = Emis.Num() - 1; i >= 0; --i)
+	{
+		const bool bDrop = !Emis[i].IsValid() || (EmisPos.IsValidIndex(i) && !OwnsByLinkOrProximity(W, EmisPos[i]));
+		if (bDrop)
+		{
+			Emis.RemoveAt(i);
+			if (EmisBase.IsValidIndex(i)) { EmisBase.RemoveAt(i); }
+			if (EmisPos.IsValidIndex(i)) { EmisPos.RemoveAt(i); }
+		}
+	}
+
 	TArray<UPointLightComponent*> NearLights;
 	DNC->CollectCeilingLightsNear(Loc, ControlRadius, NearLights);
 	for (UPointLightComponent* PL : NearLights)
 	{
 		if (!PL) { continue; }
 		// Alleen claimen als WIJ de dichtstbijzijnde schakelaar zijn -> grote kamer vs badkamer splitst vanzelf.
-		if (LightSwitch_Nearest(W, PL->GetComponentLocation()) != this) { continue; }
+		if (!OwnsByLinkOrProximity(W, PL->GetComponentLocation())) { continue; }
 		bool bAlready = false;
 		for (const TWeakObjectPtr<UPointLightComponent>& E : Lights) { if (E.Get() == PL) { bAlready = true; break; } }
 		if (bAlready) { continue; }
@@ -98,12 +305,13 @@ void APackLightSwitch::ClaimLamps()
 	{
 		UMaterialInstanceDynamic* Mid = NearMids[i];
 		if (!Mid) { continue; }
-		if (LightSwitch_Nearest(W, NearPos[i]) != this) { continue; }
+		if (!OwnsByLinkOrProximity(W, NearPos[i])) { continue; }
 		bool bAlready = false;
 		for (const TWeakObjectPtr<UMaterialInstanceDynamic>& E : Emis) { if (E.Get() == Mid) { bAlready = true; break; } }
 		if (bAlready) { continue; }
 		Emis.Add(Mid);
 		EmisBase.Add(NearBright[i]);
+		EmisPos.Add(NearPos[i]);
 		DNC->SetSwitchControlledEmis(Mid, true);
 	}
 

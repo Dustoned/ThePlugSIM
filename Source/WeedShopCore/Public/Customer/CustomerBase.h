@@ -326,7 +326,9 @@ protected:
 	bool bActivityNpc = false;
 public:
 	// Ambient achtergrond-crowd: goedkope vaste-mesh-skin i.p.v. de dure modulaire build (perf). Door de
-	// virtuele-menigte-materialisatie gezet VOOR BeginPlay (SpawnActorDeferred).
+	// virtuele-menigte-materialisatie gezet VOOR BeginPlay (SpawnActorDeferred). Gerepliceerd zodat een co-op-
+	// CLIENT 'm ook 1-mesh bouwt (zit in de initiele bunch, dus voor OnRep_Appearance/RepSkinIndex draait).
+	UPROPERTY(Replicated)
 	bool bCrowdNpc = false;
 protected:
 	FVector ActivitySpot = FVector::ZeroVector;     // doelplek

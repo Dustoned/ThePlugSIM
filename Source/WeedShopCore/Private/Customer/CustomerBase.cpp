@@ -597,8 +597,24 @@ void ACustomerBase::BuildAppearance()
 	}
 	bAppearanceBuilt = true;
 
-	// Activity-NPC: na de mesh-swap z'n vaste pose opnieuw aanzetten (SetSkeletalMesh kan de single-node reset).
-	if (ActivityAnimIndex >= 0) { ApplyActivityAnim(); }
+	// De mesh-swap hierboven (SetSkeletalMesh) RESET de single-node-anim. Opnieuw aanzetten, anders blijft een NPC
+	// die niet beweegt (bv. een wachtende afspraak-klant) in de ref-/T-pose hangen -> de leader-posed modulaire
+	// delen volgen die en 'vallen uit elkaar'. UpdateNpcAnim herstelt dit NIET (re-playt alleen bij een state-
+	// wissel lopen<->staan, dus een altijd-stilstaande NPC krijgt nooit een re-play). Geldt op host EN client
+	// (client komt hier via OnRep_Appearance).
+	if (ActivityAnimIndex >= 0)
+	{
+		ApplyActivityAnim(); // activity-NPC: z'n vaste pose
+	}
+	else if (bNpcAnimStarted)
+	{
+		if (USkeletalMeshComponent* M2 = GetMesh())
+		{
+			M2->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			if (NpcIdle) { M2->PlayAnimation(NpcIdle, true); }
+			NpcAnimState = 0;
+		}
+	}
 }
 
 void ACustomerBase::OnRep_Appearance()
@@ -709,6 +725,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, ActivityAnimIndex);
 	DOREPLIFETIME(ACustomerBase, NpcId);        // co-op: client heeft de seed nodig voor het uiterlijk
 	DOREPLIFETIME(ACustomerBase, RepSkinIndex); // co-op: welke skin/band -> client herbouwt 'm lokaal
+	DOREPLIFETIME(ACustomerBase, bCrowdNpc);    // co-op: ambient walker -> client bouwt ook de goedkope 1-mesh
 	DOREPLIFETIME(ACustomerBase, DealingPawn);  // co-op: wie deal er nu (exclusiviteit)
 	DOREPLIFETIME(ACustomerBase, bNeedsPlayer);
 	DOREPLIFETIME(ACustomerBase, bTalkingToPlayer);

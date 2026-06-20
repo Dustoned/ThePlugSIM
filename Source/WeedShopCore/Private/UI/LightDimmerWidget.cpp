@@ -74,6 +74,33 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 	ValueText = WeedUI::Text(WidgetTree, TEXT("50%"), 16, FLinearColor(1.f, 0.95f, 0.7f), true, true);
 	VB->AddChildToVerticalBox(ValueText)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
+	// "Link lampen"-knop: sluit de dimmer en start de link-modus (klikbare groen/wit lamp-markers).
+	UWeedActionButton* LinkB = WidgetTree->ConstructWidget<UWeedActionButton>();
+	LinkB->OnClicked.AddDynamic(LinkB, &UWeedActionButton::Handle);
+	LinkB->OnAction.BindLambda([this](int32, int32)
+	{
+		if (UPhoneClientComponent* P = Ph.Get())
+		{
+			if (P->IsLinkModeActive()) { P->ExitLinkMode(); P->CloseLightDimmer(); } // "Complete linking" -> stop + dicht
+			else { P->EnterLinkMode(); }
+		}
+	});
+	{
+		const FLinearColor Col(0.22f, 0.34f, 0.52f);
+		FButtonStyle St;
+		St.Normal = WeedUI::Rounded(Col, 10.f);
+		St.Hovered = WeedUI::Rounded(Col * 1.3f, 10.f);
+		St.Pressed = WeedUI::Rounded(Col * 0.8f, 10.f);
+		St.NormalPadding = FMargin(16.f, 8.f); St.PressedPadding = FMargin(16.f, 8.f);
+		LinkB->SetStyle(St);
+	}
+	LinkButton = LinkB;
+	LinkButtonText = WeedUI::Text(WidgetTree, TEXT("Link lampen"), 14, FLinearColor::White, true, true);
+	LinkB->SetContent(LinkButtonText);
+	UVerticalBoxSlot* SlotL = VB->AddChildToVerticalBox(LinkB);
+	SlotL->SetHorizontalAlignment(HAlign_Center);
+	SlotL->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+
 	// Sluit-knop.
 	UWeedActionButton* Close = WidgetTree->ConstructWidget<UWeedActionButton>();
 	Close->OnClicked.AddDynamic(Close, &UWeedActionButton::Handle);
@@ -112,6 +139,10 @@ void ULightDimmerWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime
 
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	if (LinkButtonText)
+	{
+		LinkButtonText->SetText(FText::FromString((P && P->IsLinkModeActive()) ? TEXT("Complete linking") : TEXT("Link lampen")));
+	}
 	if (!bOpen) { LastSwitch = nullptr; bSliderHeld = false; return; }
 
 	// Net geopend (of andere schakelaar): slider op de huidige helderheid van die schakelaar zetten.

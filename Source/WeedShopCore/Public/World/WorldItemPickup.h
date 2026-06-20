@@ -7,6 +7,8 @@
 #include "Interaction/Interactable.h"
 #include "WorldItemPickup.generated.h"
 
+class UBoxComponent;
+
 UCLASS()
 class WEEDSHOPCORE_API AWorldItemPickup : public AActor, public IInteractable
 {
@@ -29,9 +31,16 @@ protected:
 	UPROPERTY(Replicated) float Thc = 0.f;
 	UPROPERTY(Replicated) float Qual = 0.f;
 
-	UPROPERTY() TObjectPtr<USceneComponent> Root;
-	UPROPERTY() TObjectPtr<UStaticMeshComponent> Mesh;
+	UPROPERTY() TObjectPtr<UBoxComponent> Body;        // physics-doos + root: valt + draagt collision en line-trace
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> Mesh; // anker; het echte model wordt er klein onder gebouwd
+
+	// Schaal van het gedropte model (mul op BuildItemModel). Klein, maar herkenbaar (was 0.6 = veel te klein).
+	UPROPERTY(EditAnywhere, Category = "Pickup") float ItemScale = 1.5f;
+
+	FTimerHandle FreezeTimer;
 
 	UFUNCTION() void OnRep_Item();
 	void RefreshVisual();
+	void AutoFitBody();   // physics-doos passend om het echte model schalen (i.p.v. een vaste 14cm)
+	void FreezePhysics(); // na settelen physics uit (geen eindeloze sim/perf)
 };
