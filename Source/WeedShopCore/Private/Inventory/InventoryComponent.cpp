@@ -320,7 +320,8 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 		}
 		while (Remaining > 0) // nieuwe stapels (elk tot het maximum)
 		{
-			if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks)
+			// Limiet = backpack (MaxStacks) + hotbar (HotbarSize): de hotbar is aparte opslag, telt los van de 10.
+			if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks + HotbarSize)
 			{
 				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
 				break;
@@ -345,7 +346,8 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 	{
 		const int32 ExistingIdx = FindMergeStackIndex(ItemId, ThcPercent, QualityPct);
 		const int32 NewStacks = bStackable ? (ExistingIdx != INDEX_NONE ? 0 : 1) : Count;
-		if (GetUsedSlots() + NewStacks > MaxStacks)
+		// Limiet = backpack (MaxStacks) + hotbar (HotbarSize): de hotbar is aparte opslag, telt los van de 10.
+		if (GetUsedSlots() + NewStacks > MaxStacks + HotbarSize)
 		{
 			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
 			return false;
@@ -482,7 +484,7 @@ void UInventoryComponent::UnassignHotbarStack(int32 StackId)
 	{
 		if (S == StackId) { S = 0; bChanged = true; }
 	}
-	if (bChanged) { OnInventoryChanged.Broadcast(); }
+	if (bChanged) { RefreshGridAuto(); OnInventoryChanged.Broadcast(); } // van hotbar af -> terug in 't backpack-rooster
 }
 
 bool UInventoryComponent::RemoveItem(FName ItemId, int32 Count)
@@ -634,6 +636,7 @@ void UInventoryComponent::AssignHotbarStack(int32 Slot, int32 StackId)
 	}
 	HotbarStacks[Slot] = StackId;
 	KnownStacks.Add(StackId); // handmatig geplaatst telt als "gezien"
+	RefreshGridAuto();   // item zit nu op de hotbar -> z'n backpack-cel vrijgeven
 	RefreshActiveStack(); // hand-item kan gewisseld zijn -> server syncen
 	OnInventoryChanged.Broadcast();
 }
@@ -676,15 +679,17 @@ void UInventoryComponent::RefreshGridAuto()
 	const int32 Cells = (MaxStacks > 0) ? MaxStacks : Stacks.Num();
 	if (GridOrder.Num() != Cells) { GridOrder.SetNum(Cells); } // SetNum behoudt bestaande posities
 
-	// Verwijder verdwenen stapels (laat het gat staan zodat de rest blijft staan).
+	// Cel vrijgeven als de stapel weg is OF nu op de hotbar staat. De hotbar is APARTE opslag (8 eigen slots),
+	// niet onderdeel van dit backpack-rooster -> zo bezetten hotbar-items geen backpack-cel meer (10 echt vrij).
 	for (int32& S : GridOrder)
 	{
-		if (S != 0 && FindStackById(S) == INDEX_NONE) { S = 0; }
+		if (S != 0 && (FindStackById(S) == INDEX_NONE || IsStackOnHotbar(S))) { S = 0; }
 	}
-	// Nieuwe stapels in de eerste vrije cel zetten (en daarna blijven ze daar). Een split-helft gaat
+	// Nieuwe (niet-hotbar) stapels in de eerste vrije cel zetten (en daarna blijven ze daar). Een split-helft gaat
 	// naar de specifiek gevraagde cel (PendingSplitCell), als die nog leeg is.
 	for (const FInventoryStack& St : Stacks)
 	{
+		if (IsStackOnHotbar(St.StackId)) { continue; } // hotbar-items horen niet in 't backpack-rooster
 		if (GridOrder.Contains(St.StackId)) { continue; }
 		int32 Target = INDEX_NONE;
 		if (bPendingSplit && PendingSplitCell >= 0 && GridOrder.IsValidIndex(PendingSplitCell) && GridOrder[PendingSplitCell] == 0)
@@ -733,7 +738,7 @@ void UInventoryComponent::ServerSplitStack_Implementation(int32 StackId, int32 A
 	if (!Stacks.IsValidIndex(Idx)) { return; }
 	if (Stacks[Idx].ItemId == TEXT("Cash")) { return; }     // briefgeld niet splitsen
 	if (Stacks[Idx].Quantity <= Amount) { return; }          // niks te splitsen (zou alles zijn)
-	if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks) { return; } // geen ruimte voor een extra stapel
+	if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks + HotbarSize) { return; } // geen ruimte (backpack + hotbar vol)
 
 	Stacks[Idx].Quantity -= Amount;
 	FInventoryStack New;

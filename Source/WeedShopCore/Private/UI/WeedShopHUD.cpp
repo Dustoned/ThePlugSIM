@@ -156,13 +156,22 @@ void AWeedShopHUD::DrawHUD()
 		{
 			if (BC->IsPlacing())
 			{
-				const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
-				const float CY = Canvas ? Canvas->ClipY : 720.f;
 				const bool bValid = BC->IsPlacementValid();
-				DrawText(bValid ? TEXT("Ready to place")
-								: TEXT("Only inside your own home - aim at the floor"),
-					bValid ? FLinearColor(0.6f, 1.f, 0.6f) : FLinearColor(1.f, 0.8f, 0.4f),
-					CX - 110.f, CY - 140.f, Font);
+				const FString Msg = bValid ? FString(TEXT("Ready to place")) : BC->GetPlacementHint();
+				const FLinearColor TxtCol = bValid ? FLinearColor(0.78f, 1.f, 0.80f) : FLinearColor(1.f, 0.88f, 0.55f);
+				const FLinearColor Accent = bValid ? FLinearColor(0.30f, 0.80f, 0.42f, 1.f) : FLinearColor(0.96f, 0.72f, 0.26f, 1.f);
+				// Nette gecentreerde popup-balk (zoals de toast-notificaties) i.p.v. een piepklein tekstje boven de hotbar.
+				const float Scale = 1.25f;
+				float TW = 0.f, TH = 0.f; GetTextSize(Msg, TW, TH, Font, Scale);
+				const float ClipXf = Canvas ? Canvas->ClipX : 1280.f;
+				const float ClipYf = Canvas ? Canvas->ClipY : 720.f;
+				const float PadX = 24.f, PadY = 11.f;
+				const float BW = TW + PadX * 2.f, BH = TH + PadY * 2.f;
+				const float BX = (ClipXf - BW) * 0.5f;
+				const float BY = ClipYf - 210.f; // boven de hotbar
+				DrawRect(FLinearColor(0.04f, 0.05f, 0.07f, 0.9f), BX, BY, BW, BH);   // donkere popup-achtergrond
+				DrawRect(Accent, BX, BY, BW, 3.f);                                   // accent-streep boven
+				DrawText(Msg, TxtCol, BX + PadX, BY + PadY, Font, Scale, false);
 			}
 		}
 	}

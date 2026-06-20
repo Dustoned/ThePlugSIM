@@ -159,6 +159,13 @@ public:
 	// kunnen verschijnen (bij een winkel, steegje, hotel-hal). Meerdere mogelijk (append). Bind: Ctrl+F7.
 	UFUNCTION(Exec) void WeedAddMeetSpot();
 
+	// Build-gebied markeren: loop naar 2 TEGENOVERGESTELDE hoeken van je kamer en druk F11 op elke hoek (of typ
+	// WeedMarkBuildArea in de console). Daarna mag je ALLEEN binnen die box bouwen. Per map, dev-only.
+	UFUNCTION(Exec) void WeedMarkBuildArea();
+	FVector BuildCorner1 = FVector::ZeroVector;
+	bool bHaveBuildCorner1 = false;
+	bool bBuildAreaKeyWasDown = false; // edge-detect F11
+
 	// Dev: meld waar de capsule tegenaan botst (alleen met F9-overlay aan) - onzichtbare blockers.
 	UFUNCTION()
 	void OnCapsuleBump(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);

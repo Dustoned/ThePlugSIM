@@ -680,6 +680,11 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			if (bF10 && !bActAnimKeyWasDown) { HandleActivityKey(); }
 			bActAnimKeyWasDown = bF10;
 
+			// F11: markeer een hoek van je build-gebied (2 hoeken -> de box; alleen daarbinnen mag je bouwen).
+			const bool bF11 = bDevKeys && PCk->IsInputKeyDown(EKeys::F11);
+			if (bF11 && !bBuildAreaKeyWasDown) { WeedMarkBuildArea(); }
+			bBuildAreaKeyWasDown = bF11;
+
 			if (GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_Flying)
 			{
 				if (PCk->IsInputKeyDown(EKeys::SpaceBar))    { AddMovementInput(FVector::UpVector, 1.f); }
@@ -1588,6 +1593,33 @@ void AThePlugSIMCharacter::WeedAddMeetSpot()
 	if (FFileHelper::LoadFileToStringArray(All, *File)) { for (const FString& R : All) { if (R.TrimStartAndEnd().StartsWith(MapPath + TEXT("|"))) { ++Count; } } }
 	UWeedToast::NotifyPawn(this, -1, 4.f, FColor::Cyan,
 		FString::Printf(TEXT("Meet spot added (%d on this map). Appointment NPCs will wait at these spots."), Count));
+}
+
+void AThePlugSIMCharacter::WeedMarkBuildArea()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
+	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	const FVector L = GetActorLocation();
+	const FVector Corner(L.X, L.Y, L.Z - GetSimpleCollisionHalfHeight()); // voet-hoogte = vloer
+	if (!bHaveBuildCorner1)
+	{
+		BuildCorner1 = Corner; bHaveBuildCorner1 = true;
+		UWeedToast::NotifyPawn(this, -1, 5.f, FColor::Cyan,
+			TEXT("Build-area corner 1 set. Walk to the OPPOSITE corner of your room and press Ctrl+F9 again."));
+		return;
+	}
+	// 2e hoek -> schrijf de box: map|x1|y1|z1|x2|y2|z2 (laatste wint). BuildComponent leest dit en staat dan
+	// ALLEEN bouwen toe binnen deze box (jouw markers zijn leidend, niet de home-heuristiek).
+	const FString MapPath = W->GetOutermost()->GetName();
+	const FString Line = FString::Printf(TEXT("%s|%.1f|%.1f|%.1f|%.1f|%.1f|%.1f"),
+		*MapPath, BuildCorner1.X, BuildCorner1.Y, BuildCorner1.Z, Corner.X, Corner.Y, Corner.Z);
+	const FString File = FPaths::ProjectSavedDir() / TEXT("BuildArea.txt");
+	FFileHelper::SaveStringToFile(Line, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	bHaveBuildCorner1 = false;
+	UWeedToast::NotifyPawn(this, -1, 6.f, FColor::Green,
+		TEXT("Build area set! You can now only build INSIDE these 2 corners (your room). Re-mark anytime."));
 }
 
 void AThePlugSIMCharacter::WeedClearFurniture()

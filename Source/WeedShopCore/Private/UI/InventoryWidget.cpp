@@ -605,8 +605,11 @@ void UInventoryWidget::RebuildContent()
 	if (!Inv || !Grid) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 
+	// Toon de gevulde BACKPACK-cellen / 10 (de hotbar is aparte opslag en telt hier niet mee -> geen "17/10" meer).
+	int32 BackpackUsed = 0;
+	for (int32 S : Inv->GetGridOrder()) { if (S != 0) { ++BackpackUsed; } }
 	WeightText->SetText(FText::FromString(FString::Printf(TEXT("Slots %d/%d    Weight %.1f / %.0f kg"),
-		Inv->GetUsedSlots(), Inv->MaxStacks, Inv->GetTotalWeight(), Inv->MaxWeight)));
+		FMath::Min(BackpackUsed, Inv->MaxStacks), Inv->MaxStacks, Inv->GetTotalWeight(), Inv->MaxWeight)));
 
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 

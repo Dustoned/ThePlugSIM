@@ -27,6 +27,8 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
+#include "Misc/FileHelper.h" // Saved/BuildArea.txt lezen (speler-build-box)
+#include "Misc/Paths.h"
 #include "World/DoorRetrofitter.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
@@ -88,6 +90,10 @@ UBuildComponent::UBuildComponent()
 void UBuildComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	// Speler-markers (build-box + no-build-zones) eenmalig inladen zodat de eerste placement meteen klopt en er
+	// geen file-read-hitch bij placement-start is.
+	RefreshBuildArea();
+	RefreshNoBuildZones();
 }
 
 void UBuildComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -271,7 +277,7 @@ void UBuildComponent::EnsureDoorMarks()
 	if (DoorMarks.Num() > 0 || !GetOwner()) { return; }
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	UMaterialInterface* GhostMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_PlacementGhost.M_PlacementGhost"));
-	for (int32 i = 0; i < 8; ++i)
+	for (int32 i = 0; i < 64; ++i) // pool voor het no-go-raster (7x7 cellen + ruimte)
 	{
 		UStaticMeshComponent* M = NewObject<UStaticMeshComponent>(GetOwner());
 		if (!M) { continue; }
@@ -333,40 +339,107 @@ void UBuildComponent::RefreshDoorCache(const FVector& Center)
 
 bool UBuildComponent::UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf)
 {
-	EnsureDoorMarks();
+	(void)FootHalf;
 	UWorld* W = GetWorld();
-	if (!bShow || !W)
-	{
-		for (UStaticMeshComponent* M : DoorMarks) { if (M) { M->SetVisibility(false); } }
-		return false;
-	}
+	if (!bShow || !W) { return false; }
 	// Deur-cache verversen zodra je ~1,5 m bent verplaatst (deuren staan stil -> geen scan per tick).
 	if (CachedDoorPositions.Num() == 0 || FVector::Dist2D(FootCenter, LastDoorCachePos) > 150.f) { RefreshDoorCache(FootCenter); }
+	// Blokkeer zodra het MIDDEN van je plaatsing in een deur-zone valt. De rode vlakken worden door
+	// UpdateNoGoGrid getekend (die hergebruikt de DoorMarks-pool) - hier alleen de boolean voor de ghost.
+	return DoorBlocksCell(FootCenter);
+}
 
-	bool bBlocked = false;
+bool UBuildComponent::DoorBlocksCell(const FVector& Cell) const
+{
+	const float HZone = 60.f; // halve no-go-zone rond een deur-opening (cm): de drempel/zwaai vrijhouden, niet meer
+	for (const FVector& DL : CachedDoorPositions)
+	{
+		if (FMath::Abs(DL.X - Cell.X) < HZone && FMath::Abs(DL.Y - Cell.Y) < HZone && FMath::Abs(Cell.Z - DL.Z) < 220.f) { return true; }
+	}
+	return false;
+}
+
+bool UBuildComponent::IsPlacementValidAt(const FVector& Loc, float Yaw, float& FloorZOut, bool& bHasFloorOut) const
+{
+	bHasFloorOut = false;
+	FloorZOut = Loc.Z;
+	UWorld* W = GetWorld();
+	if (!W) { return false; }
+	// Zelfde down-trace als de ghost (regels 698-707): zoek de vloer onder deze XY.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopGridSample), false);
+	if (GetOwner()) { Params.AddIgnoredActor(GetOwner()); }
+	FHitResult Down;
+	const FVector DStart(Loc.X, Loc.Y, Loc.Z + 250.f);
+	const FVector DEnd(Loc.X, Loc.Y, Loc.Z - 250.f);
+	if (!W->LineTraceSingleByChannel(Down, DStart, DEnd, ECC_Visibility, Params)) { return false; }
+	bHasFloorOut = true;
+	FloorZOut = Down.ImpactPoint.Z;
+	const FVector P(Loc.X, Loc.Y, Down.ImpactPoint.Z);
+	const bool bFloor = Down.ImpactNormal.Z > 0.7f;
+	const bool bOnPlaceable = IsPlaceableActor(Down.GetActor());
+	// Exact de ground-floor ghost-regel (727-729), zonder de bGroundLevel-term (het raster sampelt al op de vloer).
+	return bFloor && !bOnPlaceable
+		&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(P))
+		&& !IsSpotBlocked(P, CurrentDef.BoxHalf, Yaw, CurrentDef.bIsPot);
+}
+
+void UBuildComponent::UpdateNoGoGrid(bool bShow, const FVector& Center, float Yaw)
+{
+	EnsureDoorMarks();
+	auto HideAll = [this]() { for (UStaticMeshComponent* M : DoorMarks) { if (M) { M->SetVisibility(false); } } LastGridPos = FVector(1e9f); };
+	UWorld* W = GetWorld();
+	if (!bShow || !W) { HideAll(); return; }
+	// Buiten je eigen huis (en niet outdoors-toegestaan)? Niks tonen.
+	if (!CurrentDef.bAllowOutdoors && !IsInOwnedHome(Center)) { HideAll(); return; }
+	// Deur-cache warm houden (deuren staan stil -> ververs alleen als je ~1,5 m bent verplaatst).
+	if (CachedDoorPositions.Num() == 0 || FVector::Dist2D(Center, LastDoorCachePos) > 150.f) { RefreshDoorCache(Center); }
+	// Posities zitten VAST op de deuren (volgen je blik niet). Geldigheid maar af en toe hersamplen (geen per-tick).
+	const float Now = W->GetTimeSeconds();
+	const bool bRot = FMath::Abs(FMath::FindDeltaAngleDegrees(LastGridYaw, Yaw)) > 10.f;
+	if (!bRot && FVector::Dist2D(Center, LastGridPos) < 60.f && (Now - LastGridTime) < 0.3f && (Now - LastGridTime) >= 0.f) { return; }
+	LastGridPos = Center; LastGridYaw = Yaw; LastGridTime = Now;
+
+	// Rond ELKE deur in de buurt een klein raster (vast op de deur). Kleur ALLEEN de cellen die de echte validatie
+	// afkeurt EN op vloer-hoogte liggen. Zo zit het rood exact waar je niet mag plaatsen - de deuropening - ook als
+	// de deur-positie wat ruw is (we tonen alleen wat de check echt blokkeert). Muren/raam regelt de ghost zelf al.
+	static const float Offs[4] = { -90.f, -30.f, 30.f, 90.f }; // 4x4 raster, ±90cm rond de deur
+	const float Step = GridSize; // 60cm
+	FCollisionQueryParams TP(SCENE_QUERY_STAT(NoGoFloor), false);
+	if (GetOwner()) { TP.AddIgnoredActor(GetOwner()); }
 	int32 mi = 0;
-	const float HZone = 60.f; // halve no-go-zone rond een deur-opening (cm)
 	for (const FVector& DL : CachedDoorPositions)
 	{
 		if (mi >= DoorMarks.Num()) { break; }
-		if (FVector::Dist2D(DL, FootCenter) > 1200.f) { continue; } // alleen deuren in de buurt
-		const float FloorZ = DL.Z; // DL.Z is al de vloer (onderkant deur-bounds)
-		if (UStaticMeshComponent* M = DoorMarks[mi])
+		if (FVector::Dist2D(DL, Center) > 800.f) { continue; } // alleen deuren dichtbij
+		for (float oy : Offs)
+		for (float ox : Offs)
 		{
-			// DUIDELIJK zichtbaar laag rood blok (geen flinterdun vlak dat onder een scherende hoek wegvalt):
-			// ~120x120 cm en ~26 cm hoog, op de vloer voor/in de deuropening.
-			M->SetWorldLocationAndRotation(FVector(DL.X, DL.Y, FloorZ + 13.f), FRotator::ZeroRotator);
-			M->SetWorldScale3D(FVector(HZone * 2.f / 100.f, HZone * 2.f / 100.f, 0.26f)); // cube=100cm -> ~120x120x26
-			M->SetVisibility(true);
+			if (mi >= DoorMarks.Num()) { break; }
+			const FVector CellXY(DL.X + ox, DL.Y + oy, DL.Z);
+			// Vloer onder deze cel zoeken.
+			FHitResult Down;
+			const bool bHasFloor = W->LineTraceSingleByChannel(Down, FVector(CellXY.X, CellXY.Y, DL.Z + 255.f), FVector(CellXY.X, CellXY.Y, DL.Z - 255.f), ECC_Visibility, TP);
+			const float FloorZ = bHasFloor ? Down.ImpactPoint.Z : DL.Z;
+			const FVector P(CellXY.X, CellXY.Y, FloorZ);
+			// ALLEEN het echte deur/obstakel tonen (deurblad/muur via IsSpotBlocked, of de smalle deur-zone) - NIET
+			// de huis-grens. Zo blijft open bouwbare vloer schoon; het rood zit op het deur-obstakel zelf.
+			const bool bObstacle = IsSpotBlocked(P, CurrentDef.BoxHalf, Yaw, CurrentDef.bIsPot) || DoorBlocksCell(P);
+			// Alleen vloer-niveau (niet een cel die op een muur-bovenkant landt -> die gaf hoge zwevende blokjes).
+			const bool bPaint = bHasFloor && FMath::Abs(FloorZ - DL.Z) < 60.f && bObstacle;
+			if (UStaticMeshComponent* M = DoorMarks[mi])
+			{
+				if (bPaint)
+				{
+					M->SetWorldLocationAndRotation(FVector(CellXY.X, CellXY.Y, FloorZ + 15.f), FRotator::ZeroRotator);
+					M->SetWorldScale3D(FVector(Step / 100.f * 0.9f, Step / 100.f * 0.9f, 0.30f));
+					M->SetVisibility(true);
+				}
+				else { M->SetVisibility(false); }
+			}
+			++mi;
 		}
-		// Geblokkeerd zodra het MIDDEN van je plaatsing ín het rode vlak valt -> exact wat je ziet, geen
-		// onzichtbare marge eromheen. Zo kun je tot tegen de marker aan plaatsen (zo dichtbij mogelijk).
-		(void)FootHalf;
-		if (FMath::Abs(DL.X - FootCenter.X) < HZone && FMath::Abs(DL.Y - FootCenter.Y) < HZone && FMath::Abs(FootCenter.Z - FloorZ) < 220.f) { bBlocked = true; }
-		++mi;
 	}
 	for (; mi < DoorMarks.Num(); ++mi) { if (DoorMarks[mi]) { DoorMarks[mi]->SetVisibility(false); } }
-	return bBlocked;
 }
 
 void UBuildComponent::DestroyPreview()
@@ -446,6 +519,8 @@ void UBuildComponent::CancelPlacing()
 	{
 		TargetRing->SetVisibility(false);
 	}
+	for (UStaticMeshComponent* M : DoorMarks) { if (M) { M->SetVisibility(false); } } // no-go-raster verbergen
+	LastGridPos = FVector(1e9f);
 	DestroyPreview();
 }
 
@@ -470,6 +545,15 @@ AActor* UBuildComponent::FindUpgradeTarget(int32 Kind, const FVector& Near) cons
 void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	// Speler-markers (Saved/BuildArea.txt + MarkedSpots.txt) herlezen: de build-box (waar je WEL mag) + de no-build-
+	// zones (deuropeningen). ALLEEN tijdens plaatsen, en gegate op 2s -> geen file-reads als je gewoon rondloopt,
+	// dus geen onnodige tick-kosten of spikes. Eenmalig al ingeladen in BeginPlay, dus de eerste placement-frame klopt.
+	if (bPlacing)
+	{
+		BuildAreaTimer -= DeltaTime;
+		if (BuildAreaTimer <= 0.f) { BuildAreaTimer = 2.f; RefreshBuildArea(); RefreshNoBuildZones(); }
+	}
 
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	if (!OwnerPawn)
@@ -723,10 +807,20 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					const bool bFloor = FloorNormalZ > 0.7f;
 					const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
 					const bool bGroundLevel = FMath::Abs(PreviewLocation.Z - FeetZ) < 30.f;
+					const bool bHome = CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation);
+					const bool bBlocked = IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
 					// Vrij bouwen: laat grondhoogte- en "indoors only"-regel vallen (surface + anti-clip blijven).
-					bValidSpot = bFloor && (bFree || bGroundLevel) && !bOnPlaceable
-							&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(PreviewLocation))
-							&& !IsSpotBlocked(PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw, CurrentDef.bIsPot);
+					bValidSpot = bFloor && (bFree || bGroundLevel) && !bOnPlaceable && bHome && !bBlocked;
+					// Concrete reden voor de popup-hint i.p.v. altijd "alleen in je huis".
+					if (bValidSpot) { PlacementHint.Reset(); }
+					else
+					{
+						PlacementHint = !bFloor ? TEXT("Aim at the floor")
+							: bOnPlaceable ? TEXT("Can't place on top of that")
+							: !(bFree || bGroundLevel) ? TEXT("Aim at floor level (not up on something)")
+							: !bHome ? TEXT("Only inside your own home")
+							: TEXT("In the way - too close to a wall, door or object");
+					}
 				}
 				} // einde else: niet-wandmount (vloer/plafond)
 			}
@@ -772,9 +866,15 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 	// Eigen ghost bijwerken (lokaal).
 	const bool bShow = bPlacing && bAimHit;
-	// Rode no-go-vlakken op de vloer bij deur-openingen in de buurt tonen tijdens plaatsen, en plaatsing die
-	// over een deur-opening valt blokkeren (zodat je geen meubel in een deuropening zet). Niet voor de building-tool.
-	if (UpdateDoorwayMarkers(bShow && !CurrentDef.bIsStructure, PreviewLocation, CurrentDef.BoxHalf)) { bValidSpot = false; }
+	// DEUR-OPENING vrijhouden: valt je plaatsing in de smalle deur-zone (drempel/zwaai, ~60cm rond de deur), dan
+	// ongeldig -> de ghost wordt rood. Géén los rood raster meer (gaf bij open deuren te veel/verkeerd); alleen de
+	// ghost + de hint. Niet voor de building-tool (structures).
+	if (bShow && !CurrentDef.bIsStructure && (IsInNoBuildZone(PreviewLocation) || UpdateDoorwayMarkers(true, PreviewLocation, CurrentDef.BoxHalf)))
+	{
+		bValidSpot = false;
+		PlacementHint = TEXT("Keep the doorway clear");
+	}
+	UpdateNoGoGrid(false, PreviewLocation, PreviewRotation.Yaw); // oude raster-cellen verborgen houden
 	// Plaatsing-offset (root t.o.v. het trefpunt) — gelijk aan hoe het object straks gespawnd wordt.
 	float ZOff = 0.f;
 	if (CurrentDef.bIsLamp) { ZOff = -CurrentDef.BoxHalf.Z; }
@@ -979,8 +1079,78 @@ bool UBuildComponent::IsPickable(const AActor* A) const
 		|| Cast<AAtm>(A) || Cast<APackLightSwitch>(A));
 }
 
+void UBuildComponent::RefreshBuildArea()
+{
+	bHaveBuildArea = false;
+	BuildAreaBox = FBox(ForceInit);
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString File = FPaths::ProjectSavedDir() / TEXT("BuildArea.txt");
+	FString Content;
+	if (!FFileHelper::LoadFileToString(Content, *File)) { return; }
+	const FString MapPath = W->GetOutermost()->GetName();
+	TArray<FString> Lines; Content.ParseIntoArrayLines(Lines);
+	for (const FString& Ln : Lines)
+	{
+		TArray<FString> Parts; Ln.ParseIntoArray(Parts, TEXT("|"), true);
+		if (Parts.Num() < 7 || Parts[0] != MapPath) { continue; }
+		const FVector C1(FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]), FCString::Atof(*Parts[3]));
+		const FVector C2(FCString::Atof(*Parts[4]), FCString::Atof(*Parts[5]), FCString::Atof(*Parts[6]));
+		const float FloorZ = FMath::Min(C1.Z, C2.Z);
+		BuildAreaBox = FBox(
+			FVector(FMath::Min(C1.X, C2.X), FMath::Min(C1.Y, C2.Y), FloorZ - 70.f),
+			FVector(FMath::Max(C1.X, C2.X), FMath::Max(C1.Y, C2.Y), FloorZ + 380.f));
+		bHaveBuildArea = true; // laatste geldige regel voor deze map wint
+	}
+}
+
+void UBuildComponent::RefreshNoBuildZones()
+{
+	NoBuildZones.Reset();
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const FString File = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
+	FString Content;
+	if (!FFileHelper::LoadFileToString(Content, *File)) { return; }
+	const FString MapName = W->GetOutermost()->GetName();
+	// Lees alle markers voor deze map (formaat: "F9 | map=<map> | pos=(X, Y, Z) | yaw=..").
+	TArray<FVector> Pts;
+	TArray<FString> Lines; Content.ParseIntoArrayLines(Lines);
+	for (const FString& Ln : Lines)
+	{
+		if (!Ln.Contains(MapName)) { continue; }
+		int32 PosStart = Ln.Find(TEXT("pos=("));
+		if (PosStart == INDEX_NONE) { continue; }
+		PosStart += 5;
+		const int32 PosEnd = Ln.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromStart, PosStart);
+		if (PosEnd == INDEX_NONE) { continue; }
+		TArray<FString> N;
+		Ln.Mid(PosStart, PosEnd - PosStart).ParseIntoArray(N, TEXT(","), true);
+		if (N.Num() < 3) { continue; }
+		Pts.Add(FVector(FCString::Atof(*N[0].TrimStartAndEnd()), FCString::Atof(*N[1].TrimStartAndEnd()), FCString::Atof(*N[2].TrimStartAndEnd())));
+	}
+	// Elk PAAR markers = een no-build-box (min/max XY; ruime Z rond de markers - die staan op heuphoogte).
+	for (int32 i = 0; i + 1 < Pts.Num(); i += 2)
+	{
+		const FVector A = Pts[i], B = Pts[i + 1];
+		const float MidZ = (A.Z + B.Z) * 0.5f;
+		NoBuildZones.Add(FBox(
+			FVector(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y), MidZ - 260.f),
+			FVector(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y), MidZ + 200.f)));
+	}
+}
+
+bool UBuildComponent::IsInNoBuildZone(const FVector& P) const
+{
+	for (const FBox& Z : NoBuildZones) { if (Z.IsInsideOrOn(P)) { return true; } }
+	return false;
+}
+
 bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 {
+	// Speler-markers zijn LEIDEND: is er een build-box gemarkeerd (Ctrl+F9), dan mag je ALLEEN daarbinnen bouwen.
+	if (bHaveBuildArea) { return BuildAreaBox.IsInsideOrOn(P); }
+
 	const UWorld* World = GetWorld();
 	AActor* Owner = GetOwner();
 	if (!Owner || !World) { return false; }
@@ -1091,9 +1261,18 @@ bool UBuildComponent::IsSpotBlocked(const FVector& FloorPoint, const FVector& Bo
 
 	// 1) Niet in muren/objecten clippen: footprint iets ingekort zodat je er strak tegenaan mag.
 	const FCollisionShape ClipBox = FCollisionShape::MakeBox(FVector(FMath::Max(2.f, BoxHalf.X - 2.f), FMath::Max(2.f, BoxHalf.Y - 2.f), HalfZ));
-	if (World->OverlapAnyTestByObjectType(Center, Rot, ObjParams, ClipBox, QP))
+	TArray<FOverlapResult> ClipHits;
+	if (World->OverlapMultiByObjectType(ClipHits, Center, Rot, ObjParams, ClipBox, QP))
 	{
-		return true;
+		for (const FOverlapResult& H : ClipHits)
+		{
+			// DEUR: negeer ALLEEN de nabijheid-trigger (USphereComponent, ~150cm auto-open-zone) - die telde mee als
+			// obstakel en blokkeerde een groot rond vlak "waar de deur niet eens komt". Het deurBLAD (static mesh)
+			// telt WEL, zodat je niet middenin de deur plaatst. Muren/meubels tellen altijd.
+			const AActor* HA = H.GetActor();
+			if (HA && HA->IsA(ACityDoor::StaticClass()) && !Cast<UStaticMeshComponent>(H.GetComponent())) { continue; }
+			return true; // echt obstakel (muur/meubel/deurblad)
+		}
 	}
 
 	// 2) Potten hebben extra tussenruimte nodig (plant-groei): ruimere box, alleen andere potten tellen.

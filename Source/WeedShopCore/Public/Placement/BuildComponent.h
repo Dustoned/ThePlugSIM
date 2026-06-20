@@ -67,6 +67,8 @@ public:
 	// Of de huidige preview-positie geldig is (kijkt naar een vlak/de vloer).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
 	bool IsPlacementValid() const { return bValidSpot; }
+	// Concrete reden waarom je niet mag plaatsen (voor de popup-hint), i.p.v. altijd dezelfde tekst.
+	FString GetPlacementHint() const { return PlacementHint.IsEmpty() ? FString(TEXT("Can't place here")) : PlacementHint; }
 
 	// Alleen binnenshuis plaatsen toestaan (er moet een plafond/dak boven de plek zitten).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Build")
@@ -107,15 +109,37 @@ protected:
 	// Maakt de ghost-mesh + dynamisch materiaal aan indien nodig.
 	void EnsureGhost();
 
-	// Pool van rode "deur-opening"-vlakken (no-go) die tijdens plaatsen op de vloer bij deuren in de buurt
-	// verschijnen. Returnt true als de footprint een deur-opening overlapt (dan mag je daar niet plaatsen).
+	// Pool van rode no-go-vlakken (raster-cellen) die tijdens plaatsen op de vloer verschijnen waar je NIET mag plaatsen.
 	void EnsureDoorMarks();
+	// Boolean: valt het MIDDEN van je plaatsing in een deur-no-go-zone? (Voedt de ghost-validatie op regel 777.)
 	bool UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf);
+	bool DoorBlocksCell(const FVector& Cell) const; // valt deze cel in een deur-zone (60cm rond een gecachete deur)?
 	// Deur-posities in de buurt verzamelen via een overlap-sphere op mesh-naam "Door" (vangt apartment-deuren
 	// of ze nu wel/niet tot ACityDoor zijn omgezet). Gecachet; ververst pas als je significant beweegt.
 	void RefreshDoorCache(const FVector& Center);
 	TArray<FVector> CachedDoorPositions;
 	FVector LastDoorCachePos = FVector(1e9f);
+
+	// No-go-raster: sampelt de ECHTE plaats-validatie (zelfde check als de ghost) over een raster rond je en
+	// kleurt de ongeldige vloer-cellen rood. Zo zie je exact waar je niet mag plaatsen (deuren incl.).
+	bool IsPlacementValidAt(const FVector& Loc, float Yaw, float& FloorZOut, bool& bHasFloorOut) const;
+	void UpdateNoGoGrid(bool bShow, const FVector& Center, float Yaw);
+	FVector LastGridPos = FVector(1e9f);
+	float LastGridYaw = 0.f;
+	float LastGridTime = -1.f;
+
+	// Speler-gedefinieerde build-box (2 hoek-markers via Ctrl+F9 -> Saved/BuildArea.txt). Als gezet voor deze map:
+	// ALLEEN binnen deze box mag je bouwen (jouw markers zijn leidend i.p.v. de onbetrouwbare home-heuristiek).
+	void RefreshBuildArea();
+	FBox BuildAreaBox = FBox(ForceInit);
+	bool bHaveBuildArea = false;
+	float BuildAreaTimer = 0.f;
+
+	// NO-BUILD-zones: PAREN markers uit Saved/MarkedSpots.txt (F9) vormen elk een box waarbinnen plaatsen NIET mag
+	// (bv. een deuropening). Speler-markers zijn leidend; periodiek herlezen. Returnt true als P in een no-build-box valt.
+	void RefreshNoBuildZones();
+	bool IsInNoBuildZone(const FVector& P) const;
+	TArray<FBox> NoBuildZones;
 
 	// Preview = een echt (transient, cosmetisch) exemplaar van het te plaatsen model, in ghost-kleur,
 	// zodat de preview er exact zo uitziet als wat je plaatst. Lokaal.
@@ -172,6 +196,7 @@ protected:
 
 	bool bPlacing = false;
 	bool bValidSpot = false;
+	FString PlacementHint; // reden waarom plaatsen nu niet mag (gevuld in de validatie-tak, getoond in de HUD-popup)
 	FName PlacingItemId = NAME_None;
 	FPlaceableDef CurrentDef;            // definitie van het item dat je nu plaatst
 	FVector PreviewLocation = FVector::ZeroVector;

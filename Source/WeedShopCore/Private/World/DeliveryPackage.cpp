@@ -60,8 +60,9 @@ void ADeliveryPackage::Interact_Implementation(APawn* InstigatorPawn)
 		int32 Got = 0;
 		for (int32 q = 0; q < Want; ++q)
 		{
-			// Al betaald bij checkout -> gewoon toevoegen (faalt alleen bij te weinig ruimte).
-			if (Store->GrantAny(Ids[i], Inv)) { ++Got; }
+			// Al betaald bij checkout -> gewoon toevoegen. GrantAny pakt supply/zaden (pack-grootte); lukt dat niet
+			// (bv. een MEUBEL/MACHINE of ander cart-item), dan direct AddItem. Faalt alleen nog bij te weinig ruimte.
+			if (Store->GrantAny(Ids[i], Inv) || Inv->AddItem(Ids[i], 1)) { ++Got; }
 			else { break; } // geen plek -> rest blijft in de doos
 		}
 		Delivered += Got;
@@ -81,12 +82,13 @@ void ADeliveryPackage::Interact_Implementation(APawn* InstigatorPawn)
 	}
 	else
 	{
-		// Niet alles paste -> rest blijft in de doos.
+		// Niet alles paste -> rest blijft in de doos. Bijna altijd: inventory vol (rugzak-slots op).
 		Ids = RemIds; Qtys = RemQ;
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 3.f, FColor::Orange,
-				FString::Printf(TEXT("Took %d item(s); %d left in the box (make room / cash)."), Delivered, TotalItems()));
+			UWeedToast::Notify(-1, 5.f, FColor::Orange, Delivered > 0
+				? FString::Printf(TEXT("Took %d item(s); %d still in the box - inventory full. Free up a slot and interact again."), Delivered, TotalItems())
+				: FString::Printf(TEXT("Inventory full - %d item(s) stay in the box. Free up a backpack slot, then interact again."), TotalItems()));
 		}
 	}
 }
