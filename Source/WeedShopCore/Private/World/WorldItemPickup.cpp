@@ -26,10 +26,16 @@ AWorldItemPickup::AWorldItemPickup()
 	Body->SetCollisionObjectType(ECC_PhysicsBody);
 	Body->SetCollisionResponseToAllChannels(ECR_Block);        // valt op de vloer + line-trace (ECC_Visibility) raakt 'm
 	Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // duwt spelers niet weg (co-op: geen zwevende speler)
-	Body->SetMassOverrideInKg(NAME_None, 0.4f, true);
-	Body->SetLinearDamping(0.6f);
-	Body->SetAngularDamping(0.8f);
-	Body->SetUseCCD(true);
+	// NIET op de CDO: SetMassOverrideInKg vraagt het physics-materiaal op, en tijdens de CDO-constructie
+	// (o.a. bij het cooken) is GEngine nog niet geinitialiseerd -> "GetSimplePhysicalMaterial: GEngine not
+	// initialized" = cook-error. Op echte instances (runtime) is GEngine wel op, dus daar draait 't gewoon.
+	if (!HasAnyFlags(RF_ClassDefaultObject))
+	{
+		Body->SetMassOverrideInKg(NAME_None, 0.4f, true);
+		Body->SetLinearDamping(0.6f);
+		Body->SetAngularDamping(0.8f);
+		Body->SetUseCCD(true);
+	}
 	// SetSimulatePhysics zelf gebeurt server-side in Setup() (niet in de CDO ivm replicatie-volgorde).
 
 	// Mesh = ANKER; het echte 3D-model wordt er runtime als losse onderdelen onder gebouwd (PropKit::BuildItemModel),
