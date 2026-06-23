@@ -1,4 +1,41 @@
 PATCH NOTES
+Version 1.12.0 — 23 juni 2026
+
+Korte intro:
+Grote balans-update: de economie loopt nu lekker op van straatdealer naar de dure strains, alles
+heeft realistisch gewicht, en je beweegt netter — standaard lopen, Shift om te rennen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+ECONOMIE & PROGRESSIE
+
+• De dure (Cali-)strains lonen nu écht: winst én ROI stijgen met elke tier i.p.v. in te storten —
+  je betere wiet is eindelijk je beste verdienste.
+• Meer opbrengst per plant (hogere yields) zodat je meer te verkopen hebt.
+• Verkoop-XP telt nu naar de WAARDE van je deal i.p.v. naar grammen — overstappen op dure strains
+  levelt je nu net zo snel als een bak goedkope street-wiet.
+• Snellere start: Streetweed groeit nu in 2,5 minuut.
+
+GEWICHT
+
+• Alles heeft nu realistisch gewicht: meubels en placeables zijn zwaar, en verpakte zakken/jars
+  wegen mee met de grammen die erin zitten.
+• Je ziet het gewicht nu per item in de tooltip, en de draagcap is echt haalbaar — vol gooien,
+  verkooptocht, bijvullen.
+
+HEAT / POLITIE
+
+• Te veel potten in je appartement (boven de 6) trekt politie-aandacht: elke extra pot houdt je
+  heat omhoog. Wil je groter kweken, dan heb je een grotere plek nodig.
+• 's Nachts zakt je heat niet meer vanzelf — dealen in het donker blijft langer riskant.
+
+BEWEGING
+
+• Je loopt nu standaard rustig; hou Shift ingedrukt om te rennen.
+• Rustigere sta-houding, en in first-person prikt je eigen arm niet meer in beeld.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Version 1.11.0 — 23 juni 2026
 
 Korte intro:
