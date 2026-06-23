@@ -1,0 +1,4 @@
+F9 | map=/Game/CityBeachStrip/Maps/CityBeachStrip | pos=(-3396, -1520, 2328) | yaw=92
+F9 | map=/Game/CityBeachStrip/Maps/CityBeachStrip | pos=(-3373, -822, 2328) | yaw=1
+F9 | map=/Game/CityBeachStrip/Maps/CityBeachStrip | pos=(-2687, -1520, 2328) | yaw=92
+F9 | map=/Game/CityBeachStrip/Maps/CityBeachStrip | pos=(-2753, -837, 2328) | yaw=174

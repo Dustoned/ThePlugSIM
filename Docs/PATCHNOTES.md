@@ -1,4 +1,37 @@
 PATCH NOTES
+Version 1.11.0 — 23 juni 2026
+
+Korte intro:
+Co-op krijgt een Competitive-modus: twee spelers, elk een eigen appartement met je volledige
+inrichting. En jullie spelen standaard als 1 man + 1 vrouw, met een fijnere sprong.
+
+━━━━━━━━━━━━━━━━━━━━
+
+COMPETITIVE CO-OP (nieuw)
+
+• Nieuwe co-op-modus "Competitive": host én joiner krijgen elk hun eigen appartement i.p.v. samen
+  in één kamer — je spawnt meteen in je eigen kamer.
+
+• Je complete inrichting staat in beide kamers (de tweede is een net spiegelbeeld over de
+  tussenmuur), inclusief werkende lichtschakelaars.
+
+• Per-speler deuren: je eigen voordeur + badkamer zijn van jou ("your home"), die van je partner
+  zitten op slot ("Co-op partner"). Alle andere appartementen houden gewoon hun bewoners.
+
+• Het oude start-penthouse blijft in Competitive leeg en donker — alles staat nu in jullie eigen kamers.
+
+CO-OP
+
+• Jullie spelen standaard als 1 man + 1 vrouw — geskinde personages, geen grijze mannequins. Wissel
+  je personage altijd zelf via de wardrobe.
+
+ALGEMEEN
+
+• Sprong-hoogte verlaagd: je hoofd/camera prikt niet meer door het plafond als je springt (ook niet
+  vanaf meubels).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Version 1.10.0 — 21 juni 2026
 
 Korte intro:
