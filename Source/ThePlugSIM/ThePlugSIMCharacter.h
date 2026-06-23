@@ -149,6 +149,11 @@ public:
 	UFUNCTION(Exec) void WeedSaveNoBuild();
 	// `WeedClearNoBuild`: wis alle no-build-zones.
 	UFUNCTION(Exec) void WeedClearNoBuild();
+	// `WeedSaveCompSpawns`: COMPETITIVE co-op spawn-punten. Zet 2x F9 (marker 1 in je host-kamer, marker 2 in
+	// de buurkamer) en draai dit -> CompSpawns.txt. De host spawnt in kamer 1 (met je 703-inrichting gekopieerd),
+	// de joiner in kamer 2 (de spiegel). Vervangt de kapotte deur-nummer-geometrie. `WeedClearCompSpawns` wist 't.
+	UFUNCTION(Exec) void WeedSaveCompSpawns();
+	UFUNCTION(Exec) void WeedClearCompSpawns();
 	// Dev (Shift+F9): leg de huidige camera-plek vast als hoofdmenu-achtergrond (Saved/MenuCam.txt).
 	void WeedSaveMenuCam();
 
@@ -218,6 +223,7 @@ protected:
 
 	/** Geeft de speler een startvoorraad (vloei, wat wiet, een zaadje). */
 	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override; // co-op: joiner krijgt standaard de andere gender
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// Vlieg-modus (MOVE_Flying) repliceert; de noclip-collision koppelen we hieraan zodat ALLE clients
 	// dezelfde staat tonen (anders vliegt een co-op-speler bij de ander mét collision = "zwevend/sliding").

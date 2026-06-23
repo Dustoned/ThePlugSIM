@@ -475,6 +475,12 @@ void UBuildComponent::SpawnPreview(const FPlaceableDef& Def, FName ItemId)
 
 	if (!A) { return; }
 
+	// LOKAAL/COSMETISCH: de preview mag NOOIT repliceren. De gespawnde class (APlaceableProp e.d.) heeft
+	// bReplicates=true, dus zonder dit ziet je co-op-partner jouw preview als een SOLIDE object op de grond
+	// (het ghost-materiaal wordt alleen lokaal gezet en repliceert niet). De partner-preview loopt via
+	// UpdateRemoteGhost (gerepliceerde staat), niet via de preview-actor zelf.
+	A->SetReplicates(false);
+
 	// Geen botsing/schaduw; ghost-materiaal op alle (zichtbare) mesh-onderdelen -> ziet eruit als wat je plaatst.
 	if (!PreviewMID)
 	{
@@ -1120,6 +1126,15 @@ void UBuildComponent::RefreshBuildArea()
 	}
 }
 
+ADoorRetrofitter* UBuildComponent::GetCompRetro() const
+{
+	if (CompRetroCache.IsValid()) { return CompRetroCache.Get(); }
+	const UWorld* W = GetWorld();
+	if (!W) { return nullptr; }
+	for (TActorIterator<ADoorRetrofitter> It(W); It; ++It) { CompRetroCache = *It; return *It; }
+	return nullptr;
+}
+
 void UBuildComponent::RefreshNoBuildZones()
 {
 	NoBuildZones.Reset();
@@ -1157,6 +1172,13 @@ void UBuildComponent::RefreshNoBuildZones()
 			FVector(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y), MidZ - 200.f),
 			FVector(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y), MidZ + 360.f)));
 	}
+
+	// COMPETITIVE co-op: de retrofitter levert de naar 603/602 verschoven no-build-zones mee (leeg buiten competitive).
+	if (ADoorRetrofitter* Retro = GetCompRetro())
+	{
+		TArray<FBox> CZ; Retro->GetCompetitiveNoBuildZones(CZ);
+		NoBuildZones.Append(CZ);
+	}
 }
 
 bool UBuildComponent::IsInNoBuildZone(const FVector& P) const
@@ -1167,8 +1189,21 @@ bool UBuildComponent::IsInNoBuildZone(const FVector& P) const
 
 bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 {
-	// Speler-markers zijn LEIDEND: is er een build-box gemarkeerd (Ctrl+F9), dan mag je ALLEEN daarbinnen bouwen.
-	if (bHaveBuildArea) { return BuildAreaBox.IsInsideOrOn(P); }
+	// COMPETITIVE co-op: de eigen gespiegelde kamer (Apt 603/602) is bouwbaar. Gecachete retrofitter (geen
+	// actor-scan per call); leeg/geen effect buiten competitive. Alleen geraadpleegd op de pack-map / bij een
+	// build-marker, dus de city-map betaalt hier niets voor.
+	auto InCompHome = [this, &P]() -> bool
+	{
+		ADoorRetrofitter* Retro = GetCompRetro();
+		if (!Retro) { return false; }
+		TArray<FBox> CHB; Retro->GetCompetitiveHomeBoxes(CHB);
+		for (const FBox& B : CHB) { if (B.IsInsideOrOn(P)) { return true; } }
+		return false;
+	};
+
+	// Speler-markers zijn LEIDEND: is er een build-box gemarkeerd (Ctrl+F9), dan mag je ALLEEN daarbinnen
+	// bouwen - in competitive ook in je eigen gespiegelde kamer (de solo-marker dekt 603/602 niet).
+	if (bHaveBuildArea) { return BuildAreaBox.IsInsideOrOn(P) || InCompHome(); }
 
 	const UWorld* World = GetWorld();
 	AActor* Owner = GetOwner();
@@ -1203,6 +1238,8 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 	// dan ALLEEN binnen je eigen huis - net als op de dev-map met ApartmentHomes.
 	if (!City)
 	{
+		// COMPETITIVE: eigen gespiegelde kamer (603/602) eerst -> daar mag altijd gebouwd worden.
+		if (InCompHome()) { return true; }
 		for (TActorIterator<ADoorRetrofitter> It(World); It; ++It)
 		{
 			FVector Min, Max;

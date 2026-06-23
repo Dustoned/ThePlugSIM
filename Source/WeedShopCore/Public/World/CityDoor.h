@@ -52,7 +52,16 @@ public:
 	int32 GetAptNumber() const { return AptNumber; }
 
 	// Maak dit een bewoner-deur: op slot voor de speler, met "LOCKED - <naam> lives here".
-	void SetResident(const FString& Name) { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
+	// COMPETITIVE: als deze deur door een speler geclaimd is (bCompForced), negeer bewoner-toewijzing - anders
+	// flikkert 'ie tussen "your home" en een NPC-naam doordat meerdere systemen (DoorRetrofitter + CustomerSpawner)
+	// elke scan een bewoner toewijzen.
+	void SetResident(const FString& Name) { if (bCompForced) { return; } bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = Name; bOpen = false; }
+	// COMPETITIVE co-op: claim deze deur als speler-huis (open) of als partner-deur (op slot, "Co-op partner")
+	// en zet 'm STICKY -> verdere bewoner-toewijzing wordt genegeerd.
+	void SetCompPlayerHome() { bLocked = false; bPlayerHome = true; bForSale = false; ResidentName.Empty(); bCompForced = true; }
+	void SetCompPartner() { bLocked = true; bPlayerHome = false; bForSale = false; ResidentName = TEXT("Co-op partner"); bOpen = false; bCompForced = true; }
+	void SetCompRelease() { bCompForced = false; } // niet langer een competitive-deur -> weer vrij voor bewoner-pass
+	bool IsCompForced() const { return bCompForced; }
 	bool IsLocked() const { return bLocked; }
 	// Staat het blad NU in de dichte stand? (snap meet het blad-midden -> alleen kloppend als 'ie dicht is)
 	bool IsPanelClosedNow() const { return FMath::Abs(CurAngle) < 2.f; }
@@ -67,7 +76,9 @@ public:
 	bool ConsumeRentJustPaid() { const bool b = bRentJustPaid; bRentJustPaid = false; return b; }
 
 	// Jouw eigen woning: open/dicht zoals normaal, prompt "Your home".
-	void SetPlayerHome() { bLocked = false; bPlayerHome = true; bForSale = false; ResidentName.Empty(); }
+	// COMPETITIVE: een speler-geclaimde deur (bCompForced) niet stilletjes laten ontgrendelen door de
+	// bewoner-pass o.i.d. - alleen SetCompPlayerHome/SetCompPartner mogen 'm nog wijzigen.
+	void SetPlayerHome() { if (bCompForced) { return; } bLocked = false; bPlayerHome = true; bForSale = false; ResidentName.Empty(); }
 	bool IsPlayerHome() const { return bPlayerHome; }
 	// Koopbaar pand (nog niet van jou): op slot met "TE KOOP - koop via telefoon".
 	void SetForSale() { bLocked = true; bPlayerHome = false; bForSale = true; bOpen = false; ResidentName.Empty(); }
@@ -109,6 +120,7 @@ protected:
 	bool bLocked = false;   // bewoner-deur: kan niet door de speler geopend worden
 	bool bPlayerHome = false; // jouw eigen woning (open/dicht, prompt "Your home")
 	bool bForSale = false;    // koopbaar pand, nog niet van jou
+	bool bCompForced = false; // COMPETITIVE: speler-geclaimde deur (speler-huis/partner) -> negeer bewoner-toewijzing
 	FString ResidentName;   // naam voor de "LOCKED - ... lives here"-prompt
 	int32 AptNumber = 0;    // 0 = geen nummer (winkeldeur e.d.)
 	bool bRentDue = false;      // huur achterstallig: op slot tot betaald (F aan de deur)

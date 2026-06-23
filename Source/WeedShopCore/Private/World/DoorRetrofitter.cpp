@@ -947,7 +947,12 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (FloorIdx != CurFloor) { CurFloor = FloorIdx; Unit = 0; }
 					++Unit;
 					D->SetAptNumber((FloorIdx + 1) * 100 + Unit);
+					// Starter -> speler-huis. Door competitive geclaimde deuren (bCompForced) NIET aanraken: de
+					// B-block in TickCompetitiveRooms regelt die als jouw deur / partner-deur. ALLE andere deuren -
+					// ook vlakbij de competitive-kamers - krijgen gewoon een NPC-bewoner (anders is half het gebouw
+					// "van een speler"). bCompForced houdt SetResident tegen, dus geen geflikker op de 2 echte deuren.
 					if (D == Starter) { D->SetPlayerHome(); continue; }
+					if (D->IsCompForced()) { continue; }
 					// Bewoner-naam stabiel op POSITIE (niet op lijst-volgorde): zelfde naam per deur, elke sessie.
 					const FVector L = D->GetActorLocation();
 					const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
@@ -1595,9 +1600,35 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 		}
 	}
+	// COMPETITIVE: de host woont in z'n MARKER-kamer, niet in 703. Override de thuis-plek VROEG (voordat de
+	// homing + settle-pin 'm gebruiken), zodat de normale machinerie de host in de marker-kamer neerzet i.p.v.
+	// in 703 (geen teleport-gevecht, geen zweven). De originele 703-plek bewaren als meubel-kopie-referentie.
+	if (Comp703Anchor.IsNearlyZero())
+	{
+		AWeedShopGameState* GScomp = W->GetGameState<AWeedShopGameState>();
+		if (GScomp && GScomp->IsCompetitive())
+		{
+			TArray<FVector> Mk; GetCompetitiveMarkers(Mk);
+			if (Mk.Num() >= 2)
+			{
+				Comp703Anchor = HomeAnchor.IsNearlyZero() ? (Mk[0] + FVector(0.f, 0.f, 110.f)) : HomeAnchor;
+				// Per machine: de joiner (client) settelt in de TWEEDE marker-kamer (602), de host in de eerste
+				// (603). Zo spawnt elke speler METEEN in z'n eigen kamer - geen spawn-in-603-dan-teleport meer.
+				const FVector MyMark = (W->GetNetMode() == NM_Client) ? Mk[1] : Mk[0];
+				HomeAnchor = MyMark + FVector(0.f, 0.f, 110.f);
+				UE_LOG(LogWeedShop, Warning, TEXT("Competitive: thuis-plek -> eigen marker (%.0f,%.0f,%.0f) [client=%d]; 703-ref=(%.0f,%.0f,%.0f)"), HomeAnchor.X, HomeAnchor.Y, HomeAnchor.Z, W->GetNetMode() == NM_Client ? 1 : 0, Comp703Anchor.X, Comp703Anchor.Y, Comp703Anchor.Z);
+			}
+		}
+	}
 	if (!HomeAnchor.IsNearlyZero())
 	{
 		if (!bBeachHomesBuilt) { RebuildBeachHomes(); } // registry vullen zodra de thuis-plek bekend is
+		// COMPETITIVE: op de HOST staat HomeAnchor op de host-kamer (603). Een NIET-lokale pawn (= de joiner)
+		// hoort in de joiner-kamer (Mk[1]=602) -> die hier METEEN daar neerzetten i.p.v. in 603 (anders zie je
+		// 'm eerst in de host-kamer verschijnen en pas daarna wegteleporteren naar 602).
+		AWeedShopGameState* GSearly = W->GetGameState<AWeedShopGameState>();
+		const bool bCompEarly = GSearly && GSearly->IsCompetitive();
+		TArray<FVector> MkEarly; if (bCompEarly) { GetCompetitiveMarkers(MkEarly); }
 		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
 		{
 			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
@@ -1605,6 +1636,9 @@ void ADoorRetrofitter::ScanAndConvert()
 			const int32 Slot = HomedPawns.Num();
 			HomedPawns.Add(Pw);
 			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
+			// Thuis-plek voor DEZE pawn: lokaal = HomeAnchor (eigen kamer op deze machine); de remote joiner op
+			// de host -> de joiner-kamer (Mk[1]). Zo plaatst de server de joiner direct in 602, geen 603-flits.
+			const FVector PawnHome = (bCompEarly && MkEarly.Num() >= 2 && !Pw->IsLocallyControlled()) ? (MkEarly[1] + FVector(0.f, 0.f, 110.f)) : HomeAnchor;
 			UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
 			if (bRoomFloorReady)
 			{
@@ -1616,8 +1650,8 @@ void ADoorRetrofitter::ScanAndConvert()
 				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandEarly), false);
 				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
 				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
-				const FVector TS = HomeAnchor + FVector(0.f, 0.f, 30.f);
-				FVector Dest = HomeAnchor + Off;
+				const FVector TS = PawnHome + FVector(0.f, 0.f, 30.f);
+				FVector Dest = PawnHome + Off;
 				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, LQ))
 				{ Dest = FH.Location + FVector(Off.X, Off.Y, 96.f); }
 				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
@@ -1628,7 +1662,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				// Vloer nog niet klaar -> METEEN BEVRIEZEN (vliegen, geen zwaartekracht): zo val je NIET door de
 				// nog-ladende world-partition vloer. De floor-pin in TickVirtualMove zet je op MOVE_Walking en
 				// op de ECHTE vloer zodra die is ingestreamd.
-				Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
+				Pw->SetActorLocation(PawnHome + Off, false, nullptr, ETeleportType::TeleportPhysics);
 				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
 				HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
 			}
@@ -1723,7 +1757,15 @@ void ADoorRetrofitter::ScanAndConvert()
 			const int32 Slot = HomedPawns.Num();
 			HomedPawns.Add(Pw);
 			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
-			UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
+			// COMPETITIVE: een later-joinende remote pawn op de host -> direct in de joiner-kamer (Mk[1]=602).
+				FVector PawnHome = HomeAnchor;
+				if (!Pw->IsLocallyControlled())
+				{
+					AWeedShopGameState* GSl = W->GetGameState<AWeedShopGameState>();
+					if (GSl && GSl->IsCompetitive())
+					{ TArray<FVector> MkL; GetCompetitiveMarkers(MkL); if (MkL.Num() >= 2) { PawnHome = MkL[1] + FVector(0.f, 0.f, 110.f); } }
+				}
+				UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
 			if (bRoomFloorReady)
 			{
 				// De vloer is AL ingestreamd (bv. een LATER-joinende partner): de settle-loop draait niet meer
@@ -1734,8 +1776,8 @@ void ADoorRetrofitter::ScanAndConvert()
 				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandLate), false);
 				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
 				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
-				const FVector TS = HomeAnchor + FVector(0.f, 0.f, 30.f);
-				FVector Dest = HomeAnchor + Off;
+				const FVector TS = PawnHome + FVector(0.f, 0.f, 30.f);
+				FVector Dest = PawnHome + Off;
 				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, LQ))
 				{ Dest = FH.Location + FVector(Off.X, Off.Y, 96.f); }
 				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
@@ -1746,7 +1788,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				// Vloer nog niet klaar -> METEEN bevriezen (vliegen, geen zwaartekracht) zodat je niet door de
 				// nog-ladende vloer valt; de floor-pin in TickVirtualMove ontdooit je op de echte vloer zodra
 				// die er is. SETTLE-venster open zetten.
-				Pw->SetActorLocation(HomeAnchor + Off, false, nullptr, ETeleportType::TeleportPhysics);
+				Pw->SetActorLocation(PawnHome + Off, false, nullptr, ETeleportType::TeleportPhysics);
 				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
 				HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
 			}
@@ -1888,7 +1930,11 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>()) { bFresh = Sv->IsFreshGame(); }
 		}
-		if (bFresh)
+		// COMPETITIVE: het 703-penthouse (originele solo-kamer) blijft LEEG - de inrichting wordt naar 603/602
+		// gekopieerd waar de spelers zitten. Alleen in Competitive.
+		AWeedShopGameState* GSstarter = W->GetGameState<AWeedShopGameState>();
+		const bool bCompStarter = GSstarter && GSstarter->IsCompetitive();
+		if (bFresh && !bCompStarter)
 		{
 			TArray<FString> FL;
 			FFileHelper::LoadFileToStringArray(FL, *WeedData::File(TEXT("StarterFurniture.txt")));
@@ -1946,6 +1992,10 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (NF > 0) { UE_LOG(LogWeedShop, Warning, TEXT("Starter-meubels geplaatst: %d"), NF); }
 		}
 	}
+
+	// COMPETITIVE co-op: spiegel de solo-kamer naar Apt 603 (kopie) + 602 (echte spiegel) en zet beide
+	// spelers in hun eigen kamer. Self-gated op IsCompetitive -> in normale co-op gebeurt hier niets.
+	TickCompetitiveRooms();
 
 	// WINKELS (ShopSpots.txt): op elke speler-markeerde plek een toonbank + ATM + verkoper.
 	if (!bShopsPlaced)
@@ -2762,6 +2812,8 @@ void ADoorRetrofitter::TickVirtualMove()
 		// ingestreamd. We HOUDEN de speler op de thuis-plek (zodat 'ie NIET door het gebouw valt) en checken
 		// elke tik of de vloer er al is (down-trace, WorldStatic). Zodra de vloer er is: speler er netjes
 		// bovenop + loslaten. Een absolute cap (HomeSettleUntil) voorkomt eindeloos pinnen als er iets misgaat.
+		// De thuis-plek (HomeAnchor) is in competitive vroeg overschreven naar de host-marker, dus deze pin
+		// zet de speler gewoon in z'n eigen kamer neer (normale settle, geen apart competitive-gevecht meer).
 		if (!bRoomFloorReady && !HomeAnchor.IsNearlyZero())
 		{
 			FCollisionQueryParams FQ(SCENE_QUERY_STAT(RoomFloor), false);
@@ -4067,6 +4119,31 @@ bool ADoorRetrofitter::MeasureRoomHalf(const FVector& Center, FVector& OutHalf) 
 	                  FMath::Max(350.f, FMath::Max(Yp, Yn) + 60.f), 320.f);
 	return true;
 }
+bool ADoorRetrofitter::MeasureRoomCenter(const FVector& Near, FVector& OutCenter) const
+{
+	UWorld* W = GetWorld();
+	if (!W) { return false; }
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(RoomCenter), false);
+	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+	{ if (APawn* Pp = It->Get() ? It->Get()->GetPawn() : nullptr) { Q.AddIgnoredActor(Pp); } }
+	auto Wall = [&](const FVector& Dir) -> float
+	{
+		float Nr = -1.f;
+		for (float Hz : { 40.f, 150.f })
+		{
+			const FVector S = Near + FVector(0.f, 0.f, Hz);
+			FHitResult H;
+			if (W->LineTraceSingleByChannel(H, S, S + Dir * 3000.f, ECC_WorldStatic, Q))
+			{ Nr = (Nr < 0.f) ? H.Distance : FMath::Min(Nr, H.Distance); }
+		}
+		return Nr;
+	};
+	const float Xp = Wall(FVector(1, 0, 0)), Xn = Wall(FVector(-1, 0, 0));
+	const float Yp = Wall(FVector(0, 1, 0)), Yn = Wall(FVector(0, -1, 0));
+	if (Xp < 0.f || Xn < 0.f || Yp < 0.f || Yn < 0.f) { return false; }
+	OutCenter = Near + FVector((Xp - Xn) * 0.5f, (Yp - Yn) * 0.5f, 0.f);
+	return true;
+}
 
 void ADoorRetrofitter::RebuildBeachHomes()
 {
@@ -4115,6 +4192,509 @@ void ADoorRetrofitter::RebuildBeachHomes()
 		}
 	}
 	bBeachHomesBuilt = true;
+}
+
+// ===========================================================================================
+//  COMPETITIVE AUTO-SPIEGEL (alleen in Competitive co-op)
+//  De solo-kamer (StarterFurniture.txt) staat in Apt <starter> (bv. 703, het penthouse). In
+//  Competitive krijgen de twee spelers ELK een eigen kamer: host -> Apt <starter-100> (603, exact
+//  één etage lager = identieke kamervorm), joiner -> Apt <starter-101> (602, de buurkamer). 603 krijgt
+//  een 1-op-1 KOPIE van de inrichting (pure verschuiving), 602 een ECHTE SPIEGEL over de gedeelde muur.
+//  No-build-zones + de build-zone (home-area) van de solo-kamer worden meeverschoven. In co-op (niet
+//  competitive) wordt geen van deze code uitgevoerd, dus daar verandert er niets.
+// ===========================================================================================
+ACityDoor* ADoorRetrofitter::FindAptDoor(int32 Number, const FVector& NearXY) const
+{
+	UWorld* W = GetWorld();
+	if (!W || Number <= 0) { return nullptr; }
+	ACityDoor* Best = nullptr; float BestD = TNumericLimits<float>::Max();
+	for (TActorIterator<ACityDoor> It(W); It; ++It)
+	{
+		if (!IsValid(*It) || It->GetAptNumber() != Number) { continue; }
+		const float D = FVector::Dist2D(It->GetActorLocation(), NearXY);
+		if (D < BestD) { BestD = D; Best = *It; }
+	}
+	return Best;
+}
+
+ACityDoor* ADoorRetrofitter::FindNearestDoor(const FVector& P) const
+{
+	UWorld* W = GetWorld();
+	if (!W) { return nullptr; }
+	ACityDoor* Best = nullptr; float BestD = 1400.f * 1400.f; // binnen ~14m (anders geen kamer-deur dichtbij)
+	for (TActorIterator<ACityDoor> It(W); It; ++It)
+	{
+		if (!IsValid(*It)) { continue; }
+		const float D = FVector::DistSquared(It->GetActorLocation(), P);
+		if (D < BestD) { BestD = D; Best = *It; }
+	}
+	return Best;
+}
+
+void ADoorRetrofitter::GetHomeNoBuildZones(const FBox& HomeBox, TArray<FBox>& Out) const
+{
+	Out.Reset();
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// Zelfde bron + parse als UBuildComponent::RefreshNoBuildZones (NoBuildZones.txt, paren markers).
+	FString Content;
+	if (!FFileHelper::LoadFileToString(Content, *(FPaths::ProjectSavedDir() / TEXT("NoBuildZones.txt")))) { return; }
+	const FString MapName = W->GetOutermost()->GetName();
+	TArray<FVector> Pts;
+	TArray<FString> Lines; Content.ParseIntoArrayLines(Lines);
+	for (const FString& Ln : Lines)
+	{
+		if (!Ln.Contains(MapName)) { continue; }
+		int32 PosStart = Ln.Find(TEXT("pos=("));
+		if (PosStart == INDEX_NONE) { continue; }
+		PosStart += 5;
+		const int32 PosEnd = Ln.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromStart, PosStart);
+		if (PosEnd == INDEX_NONE) { continue; }
+		TArray<FString> N;
+		Ln.Mid(PosStart, PosEnd - PosStart).ParseIntoArray(N, TEXT(","), true);
+		if (N.Num() < 3) { continue; }
+		Pts.Add(FVector(FCString::Atof(*N[0].TrimStartAndEnd()), FCString::Atof(*N[1].TrimStartAndEnd()), FCString::Atof(*N[2].TrimStartAndEnd())));
+	}
+	for (int32 i = 0; i + 1 < Pts.Num(); i += 2)
+	{
+		const FVector A = Pts[i], B = Pts[i + 1];
+		const float MidZ = (A.Z + B.Z) * 0.5f;
+		const FBox Zone(FVector(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y), MidZ - 200.f),
+		                FVector(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y), MidZ + 360.f));
+		if (HomeBox.IsInsideOrOn(Zone.GetCenter())) { Out.Add(Zone); }
+	}
+}
+
+AActor* ADoorRetrofitter::SpawnHomeItem(UWorld* W, FName ItemId, const FVector& Loc, float Yaw)
+{
+	if (!W || ItemId.IsNone()) { return nullptr; }
+	// Dispatch IDENTIEK aan de StarterFurniture-loader, zodat een competitive-kamer 1-op-1 dezelfde
+	// meubel-types/oppakbaarheid krijgt als de solo-kamer. AutoFixture-tag zoals de starter-inrichting.
+	const FRotator Rot(0.f, Yaw, 0.f);
+	const FTransform TM(Rot, Loc);
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AActor* Spawned = nullptr;
+	FPlaceableDef Def;
+	const bool bShelf = GetPlaceableDef(ItemId, Def) && Def.bIsShelf; // Fridge/Shelf/Chest = eigen class
+	if (ItemId == FName(TEXT("Sink")))
+	{
+		Spawned = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM, SP);
+	}
+	else if (ItemId == FName(TEXT("LightSwitch")))
+	{
+		if (APackLightSwitch* Sw = W->SpawnActorDeferred<APackLightSwitch>(APackLightSwitch::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+		{
+			Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"), FMath::RoundToInt(Loc.X / 10.f), FMath::RoundToInt(Loc.Y / 10.f), FMath::RoundToInt(Loc.Z / 10.f)), 800.f);
+			Sw->FinishSpawning(TM);
+			Spawned = Sw;
+		}
+	}
+	else if (bShelf)
+	{
+		if (AStorageShelf* Sh = W->SpawnActorDeferred<AStorageShelf>(AStorageShelf::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+		{
+			Sh->ShelfTier = ItemId;
+			Sh->FinishSpawning(TM);
+			Spawned = Sh;
+		}
+	}
+	else if (APlaceableProp* Pr = W->SpawnActorDeferred<APlaceableProp>(APlaceableProp::StaticClass(), TM, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+	{
+		Pr->ItemId = ItemId;
+		Pr->FinishSpawning(TM);
+		Spawned = Pr;
+	}
+	if (Spawned) { Spawned->Tags.Add(FName(TEXT("AutoFixture"))); }
+	return Spawned;
+}
+
+void ADoorRetrofitter::GetCompetitiveHomeBoxes(TArray<FBox>& Out) const
+{
+	Out.Reset();
+	if (!bCompHomesReady) { return; }
+	// PER-SPELER-EIGENDOM: elke speler mag ALLEEN in z'n eigen kamer bouwen. De host-machine (listen-server,
+	// niet-client) hoort bij 603; de joiner-machine (client) bij 602. Dus geef alleen de EIGEN box terug.
+	UWorld* W = GetWorld();
+	const bool bClient = W && W->GetNetMode() == NM_Client;
+	const FBox& MyBox = bClient ? CompHomeBoxJoiner : CompHomeBoxHost;
+	if (MyBox.IsValid) { Out.Add(MyBox); }
+}
+
+void ADoorRetrofitter::GetCompetitiveMarkers(TArray<FVector>& Out) const
+{
+	Out.Reset();
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// 1) Expliciet vastgelegd (CompSpawns.txt: X,Y,Z per regel).
+	TArray<FString> CS;
+	FFileHelper::LoadFileToStringArray(CS, *(FPaths::ProjectSavedDir() / TEXT("CompSpawns.txt")));
+	for (const FString& L : CS)
+	{
+		TArray<FString> P; L.TrimStartAndEnd().ParseIntoArray(P, TEXT(","), true);
+		if (P.Num() >= 3) { Out.Add(FVector(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]))); }
+	}
+	// 2) Fallback: de LAATSTE 2 F9-markers (MarkedSpots.txt) van deze map.
+	if (Out.Num() < 2)
+	{
+		TArray<FString> MS;
+		FFileHelper::LoadFileToStringArray(MS, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+		const FString MapName = W->GetOutermost()->GetName();
+		TArray<FVector> All;
+		for (const FString& L : MS)
+		{
+			if (!L.Contains(MapName)) { continue; }
+			int32 s = L.Find(TEXT("pos=(")); if (s == INDEX_NONE) { continue; }
+			s += 5;
+			const int32 e = L.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromStart, s);
+			if (e == INDEX_NONE) { continue; }
+			TArray<FString> N; L.Mid(s, e - s).ParseIntoArray(N, TEXT(","), true);
+			if (N.Num() >= 3) { All.Add(FVector(FCString::Atof(*N[0].TrimStartAndEnd()), FCString::Atof(*N[1].TrimStartAndEnd()), FCString::Atof(*N[2].TrimStartAndEnd()))); }
+		}
+		if (All.Num() >= 2) { Out.Reset(); Out.Add(All[0]); Out.Add(All[1]); }
+	}
+}
+
+void ADoorRetrofitter::TickCompetitiveRooms()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>();
+	const bool bComp = GS && GS->IsCompetitive();
+	// TIJDELIJKE DIAGNOSE: waarom vuurt competitive niet? Log de gate-states de eerste ~40 scans.
+	if (!bCompHomesReady && CompDiagCount < 40)
+	{
+		++CompDiagCount;
+		const int32 SrcN = StarterDoor.IsValid() ? StarterDoor->GetAptNumber() : -1;
+		int32 nHost = 0, nJoin = 0;
+		if (SrcN > 0) { for (TActorIterator<ACityDoor> It(W); It; ++It) { if (!IsValid(*It)) { continue; } const int32 A = It->GetAptNumber(); if (A == SrcN - 100) { ++nHost; } else if (A == SrcN - 101) { ++nJoin; } } }
+		UE_LOG(LogWeedShop, Warning, TEXT("[CompDiag] GS=%d comp=%d boxReady=%d anchor=%d starter=Apt%d  deuren603=%d 602=%d netmode=%d"),
+			GS ? 1 : 0, bComp ? 1 : 0, bHomeBoxReady ? 1 : 0, HomeAnchor.IsNearlyZero() ? 0 : 1, SrcN, nHost, nJoin, (int32)W->GetNetMode());
+	}
+	if (!bComp) { return; } // ALLEEN in Competitive co-op
+
+	// PER-MACHINE, ELKE SCAN: precies de 2 deuren van JOUW kamer -> sticky speler-huis (open); de 2 deuren van
+	// de partner-kamer -> sticky "Co-op partner" (op slot). Alleen de 2 DICHTSTBIJZIJNDE per kamer (zelfde
+	// verdieping) - buur-appartementen blijven NPC-deuren. Deuren die niet meer gekozen worden -> loslaten.
+	if (bCompHomesReady)
+	{
+		const bool bClient = W->GetNetMode() == NM_Client;
+		const FVector MyC = bClient ? CompAnchorJoiner : CompAnchorHost;
+		const FVector OtherC = bClient ? CompAnchorHost : CompAnchorJoiner;
+		// EIGEN kamer = AUTO (de lokale speler staat erin -> betrouwbaar; dit werkte al goed voor player 2).
+		// PARTNER-kamer (ver weg) = jouw F9-deur-markers als die er zijn (auto pakt daar soms een buurdeur),
+		// anders auto.
+		auto PickDoors = [&](const FVector& C, TArray<ACityDoor*>& Out)
+		{
+			FCollisionQueryParams LoSQ(SCENE_QUERY_STAT(CompDoorLoS), false);
+			for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+			{ if (APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr) { LoSQ.AddIgnoredActor(Pp); } }
+			TArray<TPair<float, ACityDoor*>> Cand;
+			for (TActorIterator<ACityDoor> It(W); It; ++It)
+			{
+				if (!IsValid(*It)) { continue; }
+				const FVector DL = It->GetActorLocation();
+				if (FMath::Abs(DL.Z - C.Z) > 300.f) { continue; }
+				const float D2 = FVector::Dist2D(DL, C);
+				if (D2 > 1200.f) { continue; }
+				const FVector A(C.X, C.Y, DL.Z + 60.f);
+				const FVector B = DL + FVector(0.f, 0.f, 60.f);
+				FHitResult LoS;
+				if (W->LineTraceSingleByChannel(LoS, A, B, ECC_WorldStatic, LoSQ) && LoS.Distance < FVector::Dist(A, B) - 110.f) { continue; }
+				Cand.Add(TPair<float, ACityDoor*>(D2, *It));
+			}
+			Cand.Sort([](const TPair<float, ACityDoor*>& X, const TPair<float, ACityDoor*>& Y) { return X.Key < Y.Key; });
+			for (const TPair<float, ACityDoor*>& P : Cand) { if (P.Value->GetAptNumber() > 0) { Out.Add(P.Value); break; } }
+			for (const TPair<float, ACityDoor*>& P : Cand) { if (Out.Num() >= 2) { break; } if (!Out.Contains(P.Value)) { Out.Add(P.Value); } }
+		};
+		TArray<ACityDoor*> Mine, Partner;
+		PickDoors(MyC, Mine); // EIGEN kamer: auto - niet aankomen (player 2 werkte hiermee)
+		{
+			// PARTNER-deuren via F9-markers IN de partner-kamer (dichter bij OtherC dan MyC): de speler zet een
+			// marker OP de deur. Zo wijst de host de juiste deuren in de verre kamer aan.
+			TArray<FString> MS;
+			FFileHelper::LoadFileToStringArray(MS, *(FPaths::ProjectSavedDir() / TEXT("CompDoors.txt"))); // GEBAKKEN deur-markers (permanent)
+			{ TArray<FString> MSlive; FFileHelper::LoadFileToStringArray(MSlive, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt"))); MS.Append(MSlive); } // + live F9-markers (aanpassingen)
+			const FString MapName = W->GetOutermost()->GetName();
+			for (const FString& Lm : MS)
+			{
+				if (!Lm.Contains(MapName)) { continue; }
+				int32 sPos = Lm.Find(TEXT("pos=(")); if (sPos == INDEX_NONE) { continue; }
+				sPos += 5;
+				const int32 ePos = Lm.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromStart, sPos);
+				if (ePos == INDEX_NONE) { continue; }
+				TArray<FString> Nn; Lm.Mid(sPos, ePos - sPos).ParseIntoArray(Nn, TEXT(","), true);
+				if (Nn.Num() < 3) { continue; }
+				const FVector Mk(FCString::Atof(*Nn[0].TrimStartAndEnd()), FCString::Atof(*Nn[1].TrimStartAndEnd()), FCString::Atof(*Nn[2].TrimStartAndEnd()));
+				if (FVector::Dist2D(Mk, OtherC) >= FVector::Dist2D(Mk, MyC)) { continue; } // alleen partner-kamer
+				ACityDoor* Best = nullptr; float BestD2 = 250.f * 250.f;
+				for (TActorIterator<ACityDoor> It(W); It; ++It)
+				{
+					if (!IsValid(*It)) { continue; }
+					if (FMath::Abs(It->GetActorLocation().Z - Mk.Z) > 300.f) { continue; }
+					const float Dq = FVector::DistSquared2D(It->GetActorLocation(), Mk);
+					if (Dq < BestD2) { BestD2 = Dq; Best = *It; }
+				}
+				if (Best && !Partner.Contains(Best)) { Partner.Add(Best); }
+			}
+		}
+		if (Partner.Num() == 0) { PickDoors(OtherC, Partner); } // geen partner-markers -> auto
+		Partner.RemoveAll([&](ACityDoor* D) { return Mine.Contains(D); });
+		TSet<TWeakObjectPtr<ACityDoor>> NewClaim;
+		for (ACityDoor* D : Mine) { NewClaim.Add(D); }
+		for (ACityDoor* D : Partner) { NewClaim.Add(D); }
+		for (const TWeakObjectPtr<ACityDoor>& Old : CompClaimedDoors)
+		{ if (Old.IsValid() && !NewClaim.Contains(Old)) { Old.Get()->SetCompRelease(); } }
+		for (ACityDoor* D : Mine) { D->SetCompPlayerHome(); }
+		for (ACityDoor* D : Partner) { D->SetCompPartner(); }
+		CompClaimedDoors = NewClaim;
+		if (CompDoorWait < 14) { ++CompDoorWait; FString Ms, Ps; for (ACityDoor* D : Mine) { Ms += FString::Printf(TEXT("#%d@(%.0f,%.0f) "), D->GetAptNumber(), D->GetActorLocation().X, D->GetActorLocation().Y); } for (ACityDoor* D : Partner) { Ps += FString::Printf(TEXT("#%d@(%.0f,%.0f) "), D->GetAptNumber(), D->GetActorLocation().X, D->GetActorLocation().Y); } UE_LOG(LogWeedShop, Warning, TEXT("[CompDoor] client=%d MyC=(%.0f,%.0f) OtherC=(%.0f,%.0f) eigen=[%s] partner=[%s]"), bClient ? 1 : 0, MyC.X, MyC.Y, OtherC.X, OtherC.Y, *Ms, *Ps); }
+	}
+
+	// COMPETITIVE: het lege 703-penthouse donker houden - plafondlampen 1x uit (de DNC zet ze anders 's avonds
+	// aan terwijl er niemand zit). SetSwitchControlledLight zodat de DNC ze niet meer terug aanzet.
+	if (bCompHomesReady && !bComp703LightsOff && !Comp703Anchor.IsNearlyZero())
+	{
+		if (ADayNightController* DNC703 = ADayNightController::GetLocal(W))
+		{
+			TArray<UPointLightComponent*> L703;
+			DNC703->CollectCeilingLightsNear(Comp703Anchor, 750.f, L703);
+			for (UPointLightComponent* PL : L703)
+			{
+				if (!PL) { continue; }
+				DNC703->SetSwitchControlledLight(PL, true);
+				PL->SetIntensity(0.f);
+			}
+			if (L703.Num() > 0) { bComp703LightsOff = true; UE_LOG(LogWeedShop, Warning, TEXT("Competitive: 703-penthouse lampen uit (%d)"), L703.Num()); }
+		}
+	}
+
+	// 1) GEOMETRIE (op ELKE machine, 1x): zoek de deuren 603/602, bereken build-boxes + anchors +
+	//    no-build. Deterministisch (zelfde deuren + gemeten box op host en client), dus de lokale
+	//    build-checks (BuildComponent) kloppen overal.
+	if (!bCompHomesReady && !HomeAnchor.IsNearlyZero())
+	{
+		// De 2 SPELER-MARKERS (CompSpawns.txt) zijn ground truth: de deur-nummer-geometrie klopt op deze
+		// pack-map niet (603/602 lagen verkeerd). Marker 1 = host-kamer, marker 2 = joiner-kamer (vloer-posities).
+		TArray<FString> CS;
+		FFileHelper::LoadFileToStringArray(CS, *(FPaths::ProjectSavedDir() / TEXT("CompSpawns.txt")));
+		TArray<FVector> Marks;
+		for (const FString& L : CS)
+		{
+			TArray<FString> P; L.TrimStartAndEnd().ParseIntoArray(P, TEXT(","), true);
+			if (P.Num() >= 3) { Marks.Add(FVector(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]))); }
+		}
+		// Fallback: geen CompSpawns.txt? Pak de LAATSTE 2 F9-markers (MarkedSpots.txt) van deze map -
+		// dan hoeft de speler alleen 2x F9 te zetten (geen console-commando nodig). Marker 1 = host, 2 = joiner.
+		if (Marks.Num() < 2)
+		{
+			TArray<FString> MS;
+			FFileHelper::LoadFileToStringArray(MS, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+			const FString MapName = W->GetOutermost()->GetName();
+			TArray<FVector> All;
+			for (const FString& L : MS)
+			{
+				if (!L.Contains(MapName)) { continue; }
+				int32 s = L.Find(TEXT("pos=(")); if (s == INDEX_NONE) { continue; }
+				s += 5;
+				const int32 e = L.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromStart, s);
+				if (e == INDEX_NONE) { continue; }
+				TArray<FString> N; L.Mid(s, e - s).ParseIntoArray(N, TEXT(","), true);
+				if (N.Num() >= 3) { All.Add(FVector(FCString::Atof(*N[0].TrimStartAndEnd()), FCString::Atof(*N[1].TrimStartAndEnd()), FCString::Atof(*N[2].TrimStartAndEnd()))); }
+			}
+			if (All.Num() >= 2) { Marks.Reset(); Marks.Add(All[0]); Marks.Add(All[1]); }
+		}
+		if (Marks.Num() >= 2)
+		{
+			const FVector MA = Marks[0]; // host-kamer (vloer)
+			const FVector MB = Marks[1]; // joiner-kamer (vloer)
+			const FVector C703 = Comp703Anchor.IsNearlyZero() ? FVector(HomeAnchor.X, HomeAnchor.Y, HomeAnchor.Z - 110.f) : FVector(Comp703Anchor.X, Comp703Anchor.Y, Comp703Anchor.Z - 110.f); // ECHTE 703-referentie (HomeAnchor is naar de marker overschreven)
+			FVector Half;
+			if (bHomeBoxReady) { Half = FVector((HomeBoxMax.X - HomeBoxMin.X) * 0.5f, (HomeBoxMax.Y - HomeBoxMin.Y) * 0.5f, 320.f); }
+			else if (!MeasureRoomHalf(HomeAnchor, Half)) { Half = FVector(600.f, 600.f, 320.f); }
+			const FVector Off603(0.f, 0.f, MA.Z - C703.Z); // RECHT OMLAAG (zelfde XY als 703) - consistent met de meubel-kopie
+				CompV603 = Off603;
+				CompAnchorHost   = MA + FVector(0.f, 0.f, 110.f);
+				CompAnchorJoiner = MB + FVector(0.f, 0.f, 110.f);
+				// Spiegel-centrum = midden tussen de 603-KOPIE (op 703's XY = C703) en het mik-punt in 602.
+				// Tgt602 = MB + halve (C703->MA)-translatie, met -40 X (iets naar ZUID) zoals getuned door de speler.
+				const FVector Tgt602(MB.X + (C703.X - MA.X) * 0.5f - 40.f, MB.Y + (C703.Y - MA.Y) * 0.5f, MB.Z);
+				CompMirrorM = FVector((C703.X + Tgt602.X) * 0.5f, (C703.Y + Tgt602.Y) * 0.5f, MB.Z);
+				CompMirrorN = FVector(Tgt602.X - C703.X, Tgt602.Y - C703.Y, 0.f).GetSafeNormal();
+				auto MirrorBoxXY = [&](const FBox& B) -> FBox {
+					const FVector C = B.GetCenter();
+					const float dd = (C.X - CompMirrorM.X) * CompMirrorN.X + (C.Y - CompMirrorM.Y) * CompMirrorN.Y;
+					const FVector Cm(C.X - 2.f * dd * CompMirrorN.X, C.Y - 2.f * dd * CompMirrorN.Y, C.Z);
+					const FVector E = B.GetExtent();
+					return FBox(Cm - E, Cm + E);
+				};
+				// BOUWZONE (home-area): jouw 703-build-area (BuildArea.txt) recht omlaag naar 603 + gespiegeld naar 602.
+				FBox Area703(ForceInit);
+				{
+					FString BA;
+					if (FFileHelper::LoadFileToString(BA, *(FPaths::ProjectSavedDir() / TEXT("BuildArea.txt")))) {
+						TArray<FString> BLines; BA.ParseIntoArrayLines(BLines);
+						const FString MapPath = W->GetOutermost()->GetName();
+						for (const FString& Ln : BLines) {
+							TArray<FString> Pp; Ln.ParseIntoArray(Pp, TEXT("|"), true);
+							if (Pp.Num() < 7 || Pp[0] != MapPath) { continue; }
+							const FVector B1(FCString::Atof(*Pp[1]), FCString::Atof(*Pp[2]), FCString::Atof(*Pp[3]));
+							const FVector B2(FCString::Atof(*Pp[4]), FCString::Atof(*Pp[5]), FCString::Atof(*Pp[6]));
+							const float FZ = FMath::Min(B1.Z, B2.Z);
+							Area703 = FBox(FVector(FMath::Min(B1.X, B2.X), FMath::Min(B1.Y, B2.Y), FZ - 70.f), FVector(FMath::Max(B1.X, B2.X), FMath::Max(B1.Y, B2.Y), FZ + 380.f));
+						}
+					}
+				}
+				if (Area703.IsValid) {
+					CompHomeBoxHost   = Area703.ShiftBy(Off603);
+					CompHomeBoxJoiner = MirrorBoxXY(CompHomeBoxHost);
+				} else {
+					CompHomeBoxHost   = FBox(FVector(MA.X - Half.X, MA.Y - Half.Y, MA.Z - 120.f), FVector(MA.X + Half.X, MA.Y + Half.Y, MA.Z + 520.f));
+					CompHomeBoxJoiner = FBox(FVector(MB.X - Half.X, MB.Y - Half.Y, MB.Z - 120.f), FVector(MB.X + Half.X, MB.Y + Half.Y, MB.Z + 520.f));
+				}
+				// NO-BUILD-zones: jouw 703-zones recht omlaag naar 603 + gespiegeld naar 602.
+				const FBox Box703(FVector(C703.X - (Half.X + 350.f), C703.Y - (Half.Y + 350.f), C703.Z - 120.f), FVector(C703.X + (Half.X + 350.f), C703.Y + (Half.Y + 350.f), C703.Z + 520.f));
+				TArray<FBox> SrcZones; GetHomeNoBuildZones(Box703, SrcZones);
+				CompNoBuildZones.Reset();
+				for (const FBox& Z : SrcZones) { const FBox Z603 = Z.ShiftBy(Off603); CompNoBuildZones.Add(Z603); CompNoBuildZones.Add(MirrorBoxXY(Z603)); }
+			// Dichtstbijzijnde deur bij elke marker -> speler-kamer (van het bewoner-slot af).
+			if (ACityDoor* DH = CompDoorHost.Get()) { DH->SetPlayerHome(); }
+			if (ACityDoor* DJ = CompDoorJoiner.Get()) { DJ->SetPlayerHome(); }
+			bCompHomesReady = true;
+			UE_LOG(LogWeedShop, Warning, TEXT("Competitive: kamers klaar via markers - host=(%.0f,%.0f,%.0f) joiner=(%.0f,%.0f,%.0f) no-build %d"), MA.X, MA.Y, MA.Z, MB.X, MB.Y, MB.Z, CompNoBuildZones.Num());
+		}
+		else if (CompDiagCount < 40)
+		{
+			UE_LOG(LogWeedShop, Warning, TEXT("Competitive: WACHT op spawn-markers - zet 2x F9 (1 per appartement) + console WeedSaveCompSpawns (nu %d gevonden)"), Marks.Num());
+		}
+	}
+
+	// 2) MEUBEL-SPIEGEL (alleen host/standalone, verse game, 1x): kopie 703->603, echte spiegel ->602.
+	//    Alleen de host spawnt (meubels repliceren naar de client); op een geladen game herstelt de save
+	//    de meubels zelf, dus dan niet opnieuw spawnen.
+	if (bCompHomesReady && !bCompMirrorDone && W->GetNetMode() != NM_Client)
+	{
+		bool bFresh = true;
+		if (UGameInstance* GI = W->GetGameInstance())
+		{ if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>()) { bFresh = Sv->IsFreshGame(); } }
+		if (bFresh && !CompMirrorN.IsNearlyZero())
+		{
+						TArray<FString> FL;
+			FFileHelper::LoadFileToStringArray(FL, *WeedData::File(TEXT("StarterFurniture.txt")));
+			struct FFI { FName Id; FVector Loc; float Yaw; };
+				TArray<FFI> Items; FVector Cf(0.f, 0.f, 0.f);
+				for (const FString& L : FL)
+				{
+					TArray<FString> Pc; L.ParseIntoArray(Pc, TEXT(","));
+					if (Pc.Num() < 5) { continue; }
+					FFI It; It.Id = FName(*Pc[0]);
+					It.Loc = FVector(FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]), FCString::Atof(*Pc[3]));
+					It.Yaw = FCString::Atof(*Pc[4]);
+					Items.Add(It); Cf += It.Loc;
+				}
+				if (Items.Num() > 0) { Cf /= (float)Items.Num(); }
+				const FVector CompMA = CompAnchorHost - FVector(0.f, 0.f, 110.f);
+				const FVector Ref703 = Comp703Anchor.IsNearlyZero() ? HomeAnchor : Comp703Anchor;
+				const FVector CopyOff(0.f, 0.f, CompAnchorHost.Z - Ref703.Z); // 603 ligt recht ONDER 703 -> zelfde XY, alleen omlaag (matcht de kamer erboven exact)
+				int32 NMir = 0;
+				for (const FFI& It : Items)
+				{
+					const FVector L603 = It.Loc + CopyOff;
+					SpawnHomeItem(W, It.Id, L603, It.Yaw);
+					const float d = (L603.X - CompMirrorM.X) * CompMirrorN.X + (L603.Y - CompMirrorM.Y) * CompMirrorN.Y;
+					const FVector L602(L603.X - 2.f * d * CompMirrorN.X, L603.Y - 2.f * d * CompMirrorN.Y, L603.Z);
+					float Yaw602 = It.Yaw;
+					// De spiegel klapt 1 as om: meubels die LANGS de spiegel-as kijken (loodrecht op de andere as)
+					// moeten 180 om om weer de goede kant op te staan; meubels langs de andere as blijven gelijk.
+					// Wand-montage (lichtschakelaar) orienteert zichzelf op de muur -> die laten we met rust.
+					const float FacingDotN = FMath::Cos(FMath::DegreesToRadians(It.Yaw)) * CompMirrorN.X + FMath::Sin(FMath::DegreesToRadians(It.Yaw)) * CompMirrorN.Y;
+					if (It.Id != FName(TEXT("LightSwitch")) && FMath::Abs(FacingDotN) < 0.5f) { Yaw602 = It.Yaw + 180.f; }
+					SpawnHomeItem(W, It.Id, L602, Yaw602);
+					NMir += 2;
+				}
+				UE_LOG(LogWeedShop, Warning, TEXT("Competitive: %d meubels gecentreerd; zwaartepunt 703=(%.0f,%.0f) host=(%.0f,%.0f)"), NMir, Cf.X, Cf.Y, CompMA.X, CompMA.Y);
+		}
+		bCompMirrorDone = true;
+	}
+
+	// 2b) LICHTSCHAKELAARS op de CLIENT lokaal spawnen: APackLightSwitch repliceert niet (bReplicates=false),
+	//     dus zonder dit ziet de joiner geen schakelaars in 602. De host heeft ze al via stap 2; de client
+	//     berekent dezelfde posities (CopyOff + spiegel uit stap 1 = machine-onafhankelijk).
+	if (bCompHomesReady && !bCompSwitchesDone && !CompMirrorN.IsNearlyZero() && W->GetNetMode() == NM_Client)
+	{
+		const FVector Ref703sw = Comp703Anchor.IsNearlyZero() ? HomeAnchor : Comp703Anchor;
+		const FVector CopyOffSw(0.f, 0.f, CompAnchorHost.Z - Ref703sw.Z);
+		TArray<FString> FLsw;
+		FFileHelper::LoadFileToStringArray(FLsw, *WeedData::File(TEXT("StarterFurniture.txt")));
+		for (const FString& Lsw : FLsw)
+		{
+			TArray<FString> Pc; Lsw.ParseIntoArray(Pc, TEXT(","));
+			if (Pc.Num() < 5 || Pc[0] != TEXT("LightSwitch")) { continue; }
+			const FVector Loc0(FCString::Atof(*Pc[1]), FCString::Atof(*Pc[2]), FCString::Atof(*Pc[3]));
+			const float Yaw0 = FCString::Atof(*Pc[4]);
+			const FVector L603 = Loc0 + CopyOffSw;
+			SpawnHomeItem(W, FName(TEXT("LightSwitch")), L603, Yaw0);
+			const float dsw = (L603.X - CompMirrorM.X) * CompMirrorN.X + (L603.Y - CompMirrorM.Y) * CompMirrorN.Y;
+			const FVector L602(L603.X - 2.f * dsw * CompMirrorN.X, L603.Y - 2.f * dsw * CompMirrorN.Y, L603.Z);
+			SpawnHomeItem(W, FName(TEXT("LightSwitch")), L602, Yaw0);
+		}
+		bCompSwitchesDone = true;
+		UE_LOG(LogWeedShop, Warning, TEXT("Competitive: lichtschakelaars lokaal op client gespawnd"));
+	}
+
+
+	// 3) SPELERS naar hun eigen kamer (host/standalone): host -> 603, ieder ander -> 602. Eén keer per
+	//    speler; een speler die AL in z'n kamer staat (geladen game) wordt niet verplaatst. Eigen mini-pin:
+	//    vloer er nog niet? -> even bevriezen, volgende scan opnieuw (de bevroren speler triggert het streamen).
+	if (bCompHomesReady && bCompMirrorDone && W->GetNetMode() != NM_Client)
+	{
+		// Deuren van 603/602 speler-eigen houden (de woningen-pass kan ze anders her-locken als bewoner).
+		if (ACityDoor* DH = CompDoorHost.Get()) { DH->SetPlayerHome(); }
+		if (ACityDoor* DJ = CompDoorJoiner.Get()) { DJ->SetPlayerHome(); }
+		APlayerController* HostPC = W->GetFirstPlayerController();
+		APawn* HostPawn = HostPC ? HostPC->GetPawn() : nullptr;
+		if (CompDiag3Count < 16)
+		{
+			++CompDiag3Count;
+			UE_LOG(LogWeedShop, Warning, TEXT("[CompDiag3] hostPawn=(%.0f,%.0f,%.0f) anchorH=(%.0f,%.0f,%.0f) homed=%d"),
+				HostPawn ? HostPawn->GetActorLocation().X : 0.f, HostPawn ? HostPawn->GetActorLocation().Y : 0.f, HostPawn ? HostPawn->GetActorLocation().Z : 0.f, CompAnchorHost.X, CompAnchorHost.Y, CompAnchorHost.Z, CompHomedPawns.Num());
+		}
+		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+		{
+			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+			if (!Pw || CompHomedPawns.Contains(Pw)) { continue; }
+			const bool bHost = (Pw == HostPawn);
+			const FVector PLoc = Pw->GetActorLocation();
+			// Staat 'ie al in z'n EIGEN kamer? -> klaar. PER ROL: host hoort in 603, joiner in 602. Anders
+				// markeert de joiner zich "thuis" in 603 (waar 'ie initieel via de gedeelde HomeAnchor spawnt) en
+				// gaat 'ie nooit naar 602.
+				const FBox& MyBox = bHost ? CompHomeBoxHost : CompHomeBoxJoiner;
+				if (MyBox.IsValid && MyBox.IsInsideOrOn(PLoc)) { CompHomedPawns.Add(Pw); continue; }
+			const FVector Anchor = bHost ? CompAnchorHost : CompAnchorJoiner;
+			UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
+			FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(CompHomeLand), false);
+			for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
+			{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
+			const FVector TS = Anchor + FVector(0.f, 0.f, 30.f);
+			if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 320.f), ECC_WorldStatic, LQ))
+			{
+				// Vloer gevonden -> netjes erbovenop + lopend.
+				Pw->SetActorLocation(FH.Location + FVector(0.f, 0.f, 96.f), false, nullptr, ETeleportType::TeleportPhysics);
+				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
+				CompHomedPawns.Add(Pw);
+				if (UPhoneClientComponent* Ph = Pw->FindComponentByClass<UPhoneClientComponent>())
+				{
+					// kamer-nummer is met markers niet meer relevant
+					Ph->Toast(bHost ? TEXT("Competitive: this is your apartment.") : TEXT("Competitive: this is your apartment (mirror)."), FColor::Cyan, 6.f);
+				}
+			}
+			else
+			{
+				// Vloer nog niet ingestreamd -> op de plek bevriezen (vliegen, geen zwaartekracht) tot 'ie er is.
+				Pw->SetActorLocation(Anchor, false, nullptr, ETeleportType::TeleportPhysics);
+				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
+			}
+		}
+	}
 }
 
 void ADoorRetrofitter::GetBeachPropertyOffers(TArray<FCityPropertyOffer>& Out) const

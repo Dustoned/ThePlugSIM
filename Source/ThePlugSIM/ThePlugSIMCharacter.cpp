@@ -144,7 +144,7 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 	GetCharacterMovement()->AirControl = 0.5f;
 	GetCharacterMovement()->GravityScale = 1.0f;     // zwaartekracht gegarandeerd aan
-	GetCharacterMovement()->JumpZVelocity = 450.0f;  // normale sprong
+	GetCharacterMovement()->JumpZVelocity = 350.0f;  // normale sprong
 	GetCharacterMovement()->SetWalkableFloorAngle(50.0f);
 
 	// CO-OP SYNC: vloeiende beweging van de ANDERE speler (simulated proxy). Exponential network-smoothing
@@ -1197,6 +1197,28 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	}
 }
 
+void AThePlugSIMCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	// CO-OP STANDAARD-GENDER: 2 spelers samen = standaard 1 man + 1 vrouw. De host (lokale controller op de
+	// listen-server) blijft Manny (man, skin 0); een JOINER (remote controller) krijgt standaard Quinn (vrouw,
+	// skin 1). Alleen op een VERSE game (een geladen game herstelt de gekozen skin via RestoreSkin); de speler
+	// kan 't altijd zelf wijzigen via de wardrobe (ServerSetSkin).
+	if (HasAuthority() && NewController && NewController->IsA<APlayerController>())
+	{
+		bool bFresh = true;
+		if (UGameInstance* GI = GetGameInstance())
+		{ if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>()) { bFresh = Sv->IsFreshGame(); } }
+		if (bFresh)
+		{
+			// GESKINDE man/vrouw, GEEN grijze mannequins: host/solo (lokale controller) = man (Tony, skin 5);
+			// een JOINER (remote controller) = vrouw (Casual-girl, skin 2). Altijd zelf wijzigbaar via de wardrobe.
+			PlayerSkin = NewController->IsLocalController() ? 5 : 2;
+			ApplySkinMesh();
+		}
+	}
+}
+
 void AThePlugSIMCharacter::BeginPlay()
 {
 	Super::BeginPlay();
@@ -1231,7 +1253,7 @@ void AThePlugSIMCharacter::BeginPlay()
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
 		Move->GravityScale = 1.0f;
-		Move->JumpZVelocity = 450.0f;
+		Move->JumpZVelocity = 350.0f;
 		Move->AirControl = 0.5f;
 		if (Move->MovementMode == MOVE_None) { Move->SetMovementMode(MOVE_Walking); }
 		// Expliciet solide collision bij spawn (tenzij dev-noclip aanstaat). Niet afhankelijk van MOVE_Flying:
@@ -1518,6 +1540,51 @@ void AThePlugSIMCharacter::WeedClearNoBuild()
 	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("NoBuildZones.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 	UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Cyan, TEXT("All no-build zones cleared."));
+}
+
+void AThePlugSIMCharacter::WeedSaveCompSpawns()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	// COMPETITIVE co-op spawn-punten uit de F9-markers (MarkedSpots.txt) van DEZE map. Marker 1 = host-kamer,
+	// marker 2 = joiner-kamer. Per marker omlaag tracen naar de vloer zodat de spawn netjes op de grond staat.
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	const FString MapName = W->GetOutermost()->GetName();
+	TArray<FVector> Spots;
+	for (const FString& L : Lines)
+	{
+		if (!L.Contains(MapName)) { continue; }
+		int32 s = L.Find(TEXT("pos=("));
+		if (s == INDEX_NONE) { continue; }
+		s += 5;
+		const int32 e = L.Find(TEXT(")"), ESearchCase::IgnoreCase, ESearchDir::FromStart, s);
+		if (e == INDEX_NONE) { continue; }
+		TArray<FString> N; L.Mid(s, e - s).ParseIntoArray(N, TEXT(","), true);
+		if (N.Num() < 3) { continue; }
+		// GEEN downtrace: hou de capsule-positie (zelfde referentie als de 703-anchor) zodat de meubel-Z klopt.
+		Spots.Add(FVector(FCString::Atof(*N[0].TrimStartAndEnd()), FCString::Atof(*N[1].TrimStartAndEnd()), FCString::Atof(*N[2].TrimStartAndEnd())));
+	}
+	if (Spots.Num() < 2)
+	{
+		UWeedToast::NotifyPawn(this, -1, 6.f, FColor::Orange,
+			TEXT("Set 2 spots with F9 first: marker 1 in your apartment, marker 2 in the room next door. Then WeedSaveCompSpawns."));
+		return;
+	}
+	FString Out;
+	for (int32 i = 0; i < 2; ++i) { Out += FString::Printf(TEXT("%.0f,%.0f,%.0f\n"), Spots[i].X, Spots[i].Y, Spots[i].Z); }
+	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("CompSpawns.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	// MarkedSpots leeg zodat de volgende dev-tool vers begint (zoals de andere save-acties).
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(this, -1, 8.f, FColor::Green,
+		TEXT("Competitive spawns saved: marker 1 = host room, marker 2 = neighbour (mirror). Start a FRESH Competitive game to see it."));
+}
+
+void AThePlugSIMCharacter::WeedClearCompSpawns()
+{
+	FFileHelper::SaveStringToFile(FString(), *(FPaths::ProjectSavedDir() / TEXT("CompSpawns.txt")),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Cyan, TEXT("Competitive spawns cleared."));
 }
 
 void AThePlugSIMCharacter::WeedSaveMenuCam()

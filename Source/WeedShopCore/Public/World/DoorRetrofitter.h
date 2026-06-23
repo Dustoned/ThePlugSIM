@@ -50,6 +50,13 @@ public:
 	// (Her)bouw de registry uit de starter-plek + BeachHomes.txt.
 	void RebuildBeachHomes();
 
+	// --- COMPETITIVE auto-spiegel (alleen in Competitive co-op) ---
+	// Extra bouwbare home-boxes (Apt 603 host + 602 joiner) zodat beide spelers in hun eigen kamer
+	// mogen bouwen. Leeg buiten competitive (dan verandert er niets). Door BuildComponent geraadpleegd.
+	void GetCompetitiveHomeBoxes(TArray<FBox>& Out) const;
+	// Verschoven no-build-zones voor 603 + 602 (uit de solo-kamer). Leeg buiten competitive.
+	void GetCompetitiveNoBuildZones(TArray<FBox>& Out) const { Out = CompNoBuildZones; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -173,6 +180,37 @@ protected:
 	FVector HomeBoxMin = FVector::ZeroVector; // gemeten huis-grenzen (build-tool restrictie)
 	FVector HomeBoxMax = FVector::ZeroVector;
 	bool bHomeBoxReady = false;
+
+	// --- COMPETITIVE auto-spiegel: host -> Apt (starter-100 = 603), joiner -> de buurkamer (starter-101 = 602).
+	// Spiegelt de solo-kamer (StarterFurniture.txt + no-build + home-area) naar 603 (kopie) en 602 (echte spiegel)
+	// en zet beide spelers in hun eigen kamer. ALLEEN als de game-mode Competitive is; in co-op gebeurt er niets.
+	void TickCompetitiveRooms();                                              // berekent geometrie + spiegelt 1x (per scan aangeroepen, self-gated)
+	class ACityDoor* FindAptDoor(int32 Number, const FVector& NearXY) const;  // deur met dit appartement-nummer, dichtstbij NearXY
+	class ACityDoor* FindNearestDoor(const FVector& P) const;                 // dichtstbijzijnde deur bij een punt (om de kamer-deur te ontgrendelen)
+	bool MeasureRoomCenter(const FVector& Near, FVector& OutCenter) const;    // 4 wand-traces -> exact kamer-midden (false als <4 wanden binnen bereik / niet ingestreamd)
+	void GetHomeNoBuildZones(const FBox& HomeBox, TArray<FBox>& Out) const;   // no-build-boxen (NoBuildZones.txt) waarvan het centrum binnen HomeBox valt
+	AActor* SpawnHomeItem(class UWorld* W, FName ItemId, const FVector& Loc, float Yaw); // 1 meubel spawnen (dispatch = StarterFurniture)
+	bool bCompHomesReady = false;     // 603/602 geometrie berekend (anchors + build-boxes + no-build)
+	int32 CompDoorWait = 0;           // scans gewacht op de ingestreamde 603/602-deuren (voor de juiste spiegel-as)
+	bool bCompMirrorDone = false;     // meubel-spiegel 1x gedaan (verse game)
+	bool bCompSwitchesDone = false;   // lichtschakelaars 1x lokaal gespawnd (op ELKE machine - ze repliceren niet)
+	bool bComp703LightsOff = false;   // COMPETITIVE: het lege 703-penthouse z'n plafondlampen 1x uitgezet
+	FVector CompAnchorHost = FVector::ZeroVector;   // eye-height spawn 603 (host)
+	FVector CompAnchorJoiner = FVector::ZeroVector; // eye-height spawn 602 (joiner)
+	FBox CompHomeBoxHost = FBox(ForceInit);   // build-box 603
+	FBox CompHomeBoxJoiner = FBox(ForceInit); // build-box 602
+	FVector CompV603 = FVector::ZeroVector;   // 703 -> 603 verschuiving (furniture-kopie)
+	FVector CompMirrorN = FVector::ZeroVector; // spiegelvlak-normaal (603 -> 602, genormaliseerd, Z=0)
+	FVector CompMirrorM = FVector::ZeroVector; // spiegelvlak-punt (midden tussen 603 en 602)
+	TArray<FBox> CompNoBuildZones;            // verschoven no-build-boxen voor 603 + 602
+	TSet<TWeakObjectPtr<APawn>> CompHomedPawns; // spelers die al naar hun competitive-kamer gezet zijn
+	int32 CompDiagCount = 0;          // TIJDELIJK: tel diagnose-logs (waarom vuurt competitive niet)
+	int32 CompDiag3Count = 0;         // TIJDELIJK: stap-3 (speler-plaatsing) diagnose
+	TWeakObjectPtr<class ACityDoor> CompDoorHost;   // 603-deur (unlock -> speler-kamer i.p.v. NPC-bewoner)
+	TWeakObjectPtr<class ACityDoor> CompDoorJoiner; // 602-deur
+	TSet<TWeakObjectPtr<class ACityDoor>> CompClaimedDoors; // alle deuren die nu door competitive geclaimd zijn (voor loslaten als ze niet meer bij een kamer horen)
+	FVector Comp703Anchor = FVector::ZeroVector;    // de ORIGINELE 703-thuis-plek (bewaard voordat HomeAnchor naar de host-marker overschreven wordt) - referentie voor de meubel-kopie
+	void GetCompetitiveMarkers(TArray<FVector>& Out) const; // de 2 spawn-markers (CompSpawns.txt, anders de laatste 2 F9-markers)
 	int32 RentDueDay = -1;          // dag-nummer waarop de huur vervalt
 	int32 LastRentSeenLeft = -9999; // om 1x per dag te toasten/saven
 	bool bWalkersSpawned = false;   // klanten-spawner + nav-invoker een keer plaatsen

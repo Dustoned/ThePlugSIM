@@ -141,6 +141,12 @@ protected:
 	bool IsInNoBuildZone(const FVector& P) const;
 	TArray<FBox> NoBuildZones;
 
+	// COMPETITIVE co-op: gecachete retrofitter -> de eigen gespiegelde kamer (Apt 603/602) is bouwbaar +
+	// levert de verschoven no-build-zones. Cache voorkomt een actor-scan per IsInOwnedHome-call. Leeg/geen
+	// effect buiten competitive (en alleen op de pack-map geraadpleegd).
+	mutable TWeakObjectPtr<class ADoorRetrofitter> CompRetroCache;
+	class ADoorRetrofitter* GetCompRetro() const;
+
 	// Preview = een echt (transient, cosmetisch) exemplaar van het te plaatsen model, in ghost-kleur,
 	// zodat de preview er exact zo uitziet als wat je plaatst. Lokaal.
 	void SpawnPreview(const struct FPlaceableDef& Def, FName ItemId);
