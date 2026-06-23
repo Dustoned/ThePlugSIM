@@ -7,6 +7,7 @@
 #include "GameFramework/Pawn.h"
 #include "TimerManager.h"
 #include "World/WorldItemPickup.h"
+#include "Placement/PlaceableTypes.h" // GetPlaceableDef -> furniture-gewicht
 
 namespace
 {
@@ -450,17 +451,48 @@ float UInventoryComponent::GetUnitWeight(FName ItemId) const
 {
 	const FString S = ItemId.ToString();
 	if (S == TEXT("Cash")) { return 0.f; } // briefgeld weegt (praktisch) niets
-	if (S.StartsWith(TEXT("WetBud_"))) { return 0.007f; } // nat is iets zwaarder
-	if (S.StartsWith(TEXT("Bag_")))    { return 0.005f; } // verpakte wiet
-	if (S.StartsWith(TEXT("Cont_")))   { return 0.02f; }  // lege bakjes/jars
-	if (S.StartsWith(TEXT("Bud_")))    { return 0.005f; }
-	if (S.StartsWith(TEXT("Seed_")))   { return 0.002f; }
-	if (S.StartsWith(TEXT("Joint_")))  { return 0.01f; }
+
+	// FURNITURE / PLACEABLES: echt zwaar (per categorie via de placeable-flags). Een paar meubels vult zo de
+	// hele draagkracht. Getallen bewust GAMEY (niet realistisch) zodat de cap een echte rem is.
+	{
+		FPlaceableDef PDef;
+		if (GetPlaceableDef(ItemId, PDef))
+		{
+			if (S == TEXT("Fridge")) { return 35.f; }
+			if (PDef.bIsAtm || PDef.bIsSafe) { return 30.f; }
+			if (PDef.bIsBed || PDef.bIsWardrobe) { return 25.f; }
+			if (PDef.bIsPackBench || PDef.bIsProcessor || PDef.bIsShelf) { return 22.f; }
+			if (PDef.bIsSink) { return 15.f; }
+			if (PDef.bIsStructure || PDef.bIsCeilingPiece) { return 12.f; } // muren/vloeren (dev)
+			if (PDef.bIsLamp || PDef.bIsLightSwitch || PDef.bIsWallMount) { return 2.f; } // klein wand-spul
+			if (S.StartsWith(TEXT("Furn_"))) { return 18.f; } // overige meubels (sofa/tv/...)
+			return 8.f; // overige placeables
+		}
+	}
+
+	// VERPAKTE ZAKKEN: verpakking + de grammen die erin zitten (hoe meer gram, hoe zwaarder).
+	// 2g-baggie ~1.56kg, 50g-jar ~3kg, 500g-vuilniszak ~16.5kg. ~3-4 stacks 2g-baggies = vol (cap 60).
+	if (S.StartsWith(TEXT("Bag_"))) { return 1.5f + (float)BagGrams(ItemId) * 0.03f; }
+
+	// LEGE CONTAINERS (per type: glas weegt meer dan een baggie).
+	if (S.StartsWith(TEXT("Cont_")))
+	{
+		if (S.Contains(TEXT("Jar")))     { return 0.3f; }  // glazen pot
+		if (S.Contains(TEXT("Garbage"))) { return 0.3f; }  // grote vuilniszak
+		if (S.Contains(TEXT("Block")))   { return 0.2f; }
+		return 0.1f;                                        // baggies
+	}
+
+	// LOSSE WIET (per gram) + kweek-verbruik. Ook gamey-zwaar zodat een volle voorraad telt.
+	if (S.StartsWith(TEXT("WetBud_"))) { return 0.04f; } // nat is iets zwaarder
+	if (S.StartsWith(TEXT("Bud_")))    { return 0.03f; }
+	if (S.StartsWith(TEXT("Seed_")))   { return 0.01f; }
+	if (S.StartsWith(TEXT("Joint_")))  { return 0.02f; }
 	if (S.StartsWith(TEXT("Papers_"))) { return 0.05f; }
-	if (S.StartsWith(TEXT("Soil_")))   { return 1.5f; }
-	if (S.StartsWith(TEXT("Pot")))     { return 4.0f; }
-	if (S.StartsWith(TEXT("WaterBottle"))) { return 0.6f; }
-	return 0.2f;
+	if (S.StartsWith(TEXT("Soil_")))   { return 5.f; }   // zak potgrond
+	if (S.StartsWith(TEXT("Pot")))     { return 2.f; }   // lege pot
+	if (S.StartsWith(TEXT("WaterBottle"))) { return 1.f; }
+	return 0.5f;
 }
 
 float UInventoryComponent::GetTotalWeight() const

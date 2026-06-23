@@ -77,9 +77,15 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	const bool bNight = Day && Day->IsNight();
 	const float Resist = GetSecurityResist();
 
-	// Heat zakt ALTIJD vanzelf (geen passieve opbouw meer). 's Nachts iets langzamer.
+	// "Te veel potten": tel periodiek de potten rond je apartment; elke pot boven de cap houdt een
+	// heat-VLOER aan (gedempt door beveiliging). Niet elke frame tellen - om de paar seconden.
+	PotScanTimer += DeltaTime;
+	if (PotScanTimer >= 3.f) { PotScanTimer = 0.f; CachedPotFloor = ComputePotHeatFloor() * (1.f - Resist); }
+
+	// Heat zakt ALTIJD vanzelf ('s nachts iets langzamer), maar niet onder de pot-vloer.
 	const float Decay = bNight ? NightDecayPerSecond : DayDecayPerSecond;
-	if (Heat > 0.f) { SetHeat(Heat - Decay * DeltaTime); }
+	const float NewHeat = FMath::Max(Heat - Decay * DeltaTime, CachedPotFloor);
+	if (!FMath::IsNearlyEqual(NewHeat, Heat)) { SetHeat(NewHeat); }
 
 	// Risico-events: alleen 's nachts, bij echt hoge heat, EN niet binnen de dagen-cooldown na een
 	// vorige bust/overval (zodat je een paar dagen rust hebt).
@@ -110,6 +116,49 @@ void UHeatComponent::AddHeat(float Amount)
 		return;
 	}
 	SetHeat(Heat + Amount * (1.f - GetSecurityResist()));
+}
+
+float UHeatComponent::ComputePotHeatFloor()
+{
+	UWorld* World = GetWorld();
+	if (!World) { return 0.f; }
+
+	// Verzamel de thuis-plek van elke speler (co-op: meestal een gedeeld apartment; competitive: elk een eigen).
+	TArray<FVector> Homes;
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+		UPhoneClientComponent* Ph = Pw ? Pw->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+		FVector HP;
+		if (Ph && Ph->GetActiveHomeLocation(HP)) { Homes.AddUnique(HP); }
+	}
+	if (Homes.Num() == 0) { bWasOverPotCap = false; return 0.f; }
+
+	// Tel de potten (AGrowPlant) binnen het apartment-bereik. De grote Fabric-pot is óók 1 AGrowPlant -> telt als 1.
+	const float R2 = 1600.f * 1600.f; // ~16m rond de apartment-plek (zelfde radius als de overval)
+	int32 PotCount = 0;
+	for (TActorIterator<AGrowPlant> It(World); It; ++It)
+	{
+		const FVector Loc = It->GetActorLocation();
+		for (const FVector& HP : Homes)
+		{
+			if (FVector::DistSquared(Loc, HP) < R2) { ++PotCount; break; }
+		}
+	}
+
+	const int32 Cap = FMath::Max(1, PotCap);
+	const int32 Excess = FMath::Max(0, PotCount - Cap);
+
+	// Eenmalige waarschuwing zodra je over de cap gaat (niet elke scan spammen).
+	const bool bOver = Excess > 0;
+	if (bOver && !bWasOverPotCap)
+	{
+		NotifyAllPlayers(World, FColor(255, 140, 0), 6.f,
+			FString::Printf(TEXT("Too many pots (%d/%d)! Extra plants keep police heat up - get a bigger place."), PotCount, Cap));
+	}
+	bWasOverPotCap = bOver;
+
+	return FMath::Min((float)Excess * HeatPerExcessPot, MaxPotHeat);
 }
 
 void UHeatComponent::SetHeat(float NewHeat)

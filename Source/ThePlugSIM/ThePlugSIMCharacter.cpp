@@ -3,6 +3,7 @@
 #include "ThePlugSIMCharacter.h"
 #include "UI/WeedToast.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "UObject/UnrealType.h"
 #include "Animation/AnimSequence.h"
 #include "UObject/ConstructorHelpers.h"
@@ -137,6 +138,10 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	// 'Texting'-pose: andere spelers zien je op je telefoon staan (cellphone-check anim uit de NPC-pack).
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> PPhone(TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Check_Cellphone.Anim_Check_Cellphone"));
 	if (PPhone.Succeeded()) { ProxyPhone = PPhone.Object; }
+	// Symmetrische idle voor de lokale speler (rechte houding, voeten gelijk) i.p.v. de scheve template-idle.
+	// Uit de NPC-pack (ander skelet, maar speelt prima single-node op de speler - net als de telefoon-anim).
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> PLocalIdle(TEXT("/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop.M_Neutral_Stand_Idle_Loop"));
+	if (PLocalIdle.Succeeded()) { LocalIdleAnim = PLocalIdle.Object; }
 
 	GetCapsuleComponent()->SetCapsuleSize(34.0f, 96.0f);
 
@@ -146,6 +151,7 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	GetCharacterMovement()->GravityScale = 1.0f;     // zwaartekracht gegarandeerd aan
 	GetCharacterMovement()->JumpZVelocity = 350.0f;  // normale sprong
 	GetCharacterMovement()->SetWalkableFloorAngle(50.0f);
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed; // standaard LOPEN (was 600 = jogtempo); Shift = rennen
 
 	// CO-OP SYNC: vloeiende beweging van de ANDERE speler (simulated proxy). Exponential network-smoothing
 	// interpoleert de proxy-positie i.p.v. te happen op elke net-update; hogere update-frequentie = strakkere
@@ -309,6 +315,23 @@ void AThePlugSIMCharacter::ServerSetDevNoClip_Implementation(bool bEnable)
 	ApplyNoclipCollision(bEnable); // host-kant
 }
 
+void AThePlugSIMCharacter::StartSprint()
+{
+	if (UCharacterMovementComponent* M = GetCharacterMovement()) { M->MaxWalkSpeed = SprintSpeed; } // lokaal direct (responsief)
+	if (!HasAuthority()) { ServerSetSprint(true); } // co-op: server ook, anders corrigeert client-prediction de snelheid
+}
+
+void AThePlugSIMCharacter::StopSprint()
+{
+	if (UCharacterMovementComponent* M = GetCharacterMovement()) { M->MaxWalkSpeed = WalkSpeed; }
+	if (!HasAuthority()) { ServerSetSprint(false); }
+}
+
+void AThePlugSIMCharacter::ServerSetSprint_Implementation(bool bSprint)
+{
+	if (UCharacterMovementComponent* M = GetCharacterMovement()) { M->MaxWalkSpeed = bSprint ? SprintSpeed : WalkSpeed; }
+}
+
 void AThePlugSIMCharacter::OnRep_DevNoClip()
 {
 	ApplyNoclipCollision(bDevNoClip); // andere spelers zien je door muren gaan
@@ -462,6 +485,19 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 				FirstPersonMesh->HideBoneByName(FName(B), EPhysBodyOp::PBO_None);
 			}
 		}
+	}
+
+	// First-person camera-afstand per skin: de UE5-mannequin-skins (Manny/Quinn/Tony) hebben bredere schouders +
+	// andere proporties dan de Casual-skins, waardoor je eigen body/armen pal naast de camera in beeld steken
+	// (o.a. de linkerarm die naar voren komt als je recht vooruit kijkt). Zet de camera voor die skins wat verder
+	// naar voren (voor de borst) zodat de armen netjes achter de camera hangen. Casual-skins (2-4) zijn al goed.
+	if (FirstPersonCameraComponent)
+	{
+		const bool bUE5Mannequin = (PlayerSkin <= 1 || PlayerSkin == 5); // 0 Manny, 1 Quinn, 5 Tony
+		FVector Rel = FirstPersonCameraComponent->GetRelativeLocation();
+		Rel.X = bUE5Mannequin ? 22.f : 8.f;
+		Rel.Y = 0.f; // gecentreerd; de links-zwaar-look kwam van de asymmetrische idle-pose (apart gefixt), niet de camera
+		FirstPersonCameraComponent->SetRelativeLocation(Rel);
 	}
 
 	// Outfit-parts (Wardrobe): oude parts opruimen en de gekozen kleding/haar aanhangen (leader-pose volgt
@@ -619,6 +655,36 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		FVector RelLoc = FirstPersonCameraComponent->GetRelativeLocation();
 		RelLoc.Z = FMath::FInterpTo(RelLoc.Z, DesiredRelZ, DeltaSeconds, bAir ? 14.f : 9.f);
 		FirstPersonCameraComponent->SetRelativeLocation(RelLoc);
+	}
+
+	// LOKALE speler: de template-ABP-idle staat scheef (1 voet voor). Bij stilstaan spelen we een symmetrische
+	// idle (single-node); zodra je beweegt/springt/telefoneert terug naar de locomotie-ABP. Alleen op state-wissel
+	// (geen per-frame gethrash) - zelfde patroon als de proxy-texting-switch in UpdateProxyAnim.
+	if (IsLocallyControlled() && bBodyHasLocoAbp && LocalIdleAnim)
+	{
+		// Speel de symmetrische idle als een DYNAMISCHE MONTAGE met blend-in/out (0.25s) OVER de loop-ABP heen
+		// (op de 'DefaultSlot'). Zo blendt idle<->lopen vloeiend i.p.v. de harde single-node-switch. De ABP blijft
+		// in Blueprint-modus draaien. (Vereist dat de ABP een DefaultSlot heeft; zo niet, dan toont de montage niks.)
+		if (UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			const bool bMoving = GetVelocity().SizeSquared2D() > 100.f; // > ~10 cm/s
+			const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+			bool bPhone = false;
+			if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
+			const int32 Want = (!bMoving && !bFalling && !bPhone) ? 1 : 0;
+			if (Want != LocalIdleState)
+			{
+				LocalIdleState = Want;
+				if (Want == 1)
+				{
+					UAnimMontage* IdleM = AnimInst->PlaySlotAnimationAsDynamicMontage(LocalIdleAnim, FName("DefaultSlot"), 0.25f, 0.25f, 1.0f, 99999);
+					// KRITISCH: de idle-montage mag je character-beweging NIET sturen. GASP-clips hebben root motion;
+					// die zou (staande idle) je op je plek houden -> je kunt niet weglopen. Uitzetten op de montage.
+					if (IdleM) { IdleM->bEnableRootMotionTranslation = false; IdleM->bEnableRootMotionRotation = false; }
+				}
+				else { AnimInst->StopAllMontages(0.25f); } // blend vloeiend terug naar de loop-ABP
+			}
+		}
 	}
 
 	// F9: dev-overlay met positie + mesh-onder-crosshair (en logt de plek naar MarkedSpots.txt).
@@ -912,6 +978,9 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	Input->BindKey(EKeys::Eight, IE_Pressed, this, &AThePlugSIMCharacter::HotbarOrPhoneKey);
 	Input->BindKey(EKeys::MouseScrollUp,   IE_Pressed, this, &AThePlugSIMCharacter::HotbarPrev);
 	Input->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AThePlugSIMCharacter::HotbarNext);
+	// Shift ingehouden = rennen, loslaten = weer lopen.
+	Input->BindKey(EKeys::LeftShift,  IE_Pressed,  this, &AThePlugSIMCharacter::StartSprint);
+	Input->BindKey(EKeys::LeftShift,  IE_Released, this, &AThePlugSIMCharacter::StopSprint);
 	Input->BindKey(EKeys::RightMouseButton, IE_Pressed,  this, &AThePlugSIMCharacter::OnSecondaryPressed);
 	Input->BindKey(EKeys::RightMouseButton, IE_Released, this, &AThePlugSIMCharacter::OnSecondaryReleased);
 	Input->BindKey(EKeys::LeftMouseButton,  IE_Pressed,  this, &AThePlugSIMCharacter::OnPrimaryClick);

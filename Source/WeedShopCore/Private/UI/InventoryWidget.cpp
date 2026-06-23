@@ -620,7 +620,7 @@ void UInventoryWidget::RebuildContent()
 	// Toon de gevulde BACKPACK-cellen / 10 (de hotbar is aparte opslag en telt hier niet mee -> geen "17/10" meer).
 	int32 BackpackUsed = 0;
 	for (int32 S : Inv->GetGridOrder()) { if (S != 0) { ++BackpackUsed; } }
-	WeightText->SetText(FText::FromString(FString::Printf(TEXT("Slots %d/%d    Weight %.1f / %.0f kg"),
+	WeightText->SetText(FText::FromString(FString::Printf(TEXT("Slots %d/%d    Weight %.1f / %.0f"),
 		FMath::Min(BackpackUsed, Inv->MaxStacks), Inv->MaxStacks, Inv->GetTotalWeight(), Inv->MaxWeight)));
 
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
@@ -713,6 +713,7 @@ void UInventoryWidget::RebuildContent()
 				Cell->Line2 = TEXT("WET - dry it first");
 				Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
 				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
+				{ const float UW = Inv->GetUnitWeight(ItemId); Cell->Tooltip += (S.Quantity > 1) ? FString::Printf(TEXT("\nWeight %.2f  (x%d = %.1f)"), UW, S.Quantity, UW * S.Quantity) : FString::Printf(TEXT("\nWeight %.2f"), UW); }
 			}
 			else
 			{
@@ -722,6 +723,7 @@ void UInventoryWidget::RebuildContent()
 					: TEXT("");
 				Cell->Badge = WeedUI::ItemQtyBadge(ItemId, S.Quantity);
 				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
+				{ const float UW = Inv->GetUnitWeight(ItemId); Cell->Tooltip += (S.Quantity > 1) ? FString::Printf(TEXT("\nWeight %.2f  (x%d = %.1f)"), UW, S.Quantity, UW * S.Quantity) : FString::Printf(TEXT("\nWeight %.2f"), UW); }
 				if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
 				{
 					Cell->bShowMerge = true;

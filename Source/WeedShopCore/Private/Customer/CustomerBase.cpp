@@ -3833,16 +3833,18 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		if (UGoalsComponent* Gl = GSc->GetGoals()) { Gl->NoteDeal(); Gl->NoteGramsSold(SoldGrams); } // goal-tellers: deal + gram verkocht
 	}
 
-	// XP op MOEITE (verkochte grammen × THC-bonus), NIET op verdiende euro's. Anders balloont de XP mee
-	// met de geld-inflatie van de late strains en vlieg je door lvl 30-50; nu blijft 0-50 een gelijkmatige
-	// grind. THC weegt mee (premium = meer XP/gram): 14% -> x1.35, 40% -> x2.0.
+	// XP volgt de VERKOOPWAARDE (euro's), NIET de grammen. Eerder schaalde XP op gram x THC, waardoor een
+	// dure premium-verkoop (weinig gram, veel waarde) minder XP gaf dan een bak goedkope street-wiet -> wie
+	// upgradede naar betere strains levelde juist trager. Nu lopen geld- en level-progressie gelijk op. De
+	// dure strains zijn level-gated, dus dit "balloont" niet voordat je er al bent. ~EUR5 omzet = 1 XP
+	// (deler is de tuning-knop). Total bevat al de eventuele VIP-order-bonus.
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (ULevelComponent* Lv = GS->GetLeveling())
 		{
-			// Basis-XP op moeite (gram x THC-bonus) + extra XP voor een vervulde VIP-order (premium opdracht).
-			int32 DealXP = 5 + FMath::RoundToInt(SoldGrams * (1.f + SoldThc / 40.f));
-			if (bOrderFulfilled) { DealXP += 15 + FMath::RoundToInt(SoldGrams * 0.5f); }
+			// Basis-XP op verkoopwaarde + extra (ook waarde-gewogen) voor een vervulde VIP-order.
+			int32 DealXP = 5 + FMath::RoundToInt(Total / 500.f);
+			if (bOrderFulfilled) { DealXP += 15 + FMath::RoundToInt(Total / 1000.f); }
 			Lv->AddXP(DealXP);
 		}
 		// Heat: op straat dealen trekt aandacht. 's Nachts fors riskanter dan overdag (BustThreshold = 80).

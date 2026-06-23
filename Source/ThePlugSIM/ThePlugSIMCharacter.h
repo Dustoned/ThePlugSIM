@@ -41,6 +41,16 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	// Hoeveel cm de FP-camera omhoog komt tijdens een sprong (zodat je over je optrekkende body heen kijkt).
 	float JumpCamLift = 34.f;
 
+	// Loopsnelheden: standaard LOPEN; Shift ingehouden = RENNEN. De blend-space toont walk/run vanzelf op snelheid.
+	// Co-op: de snelheid wordt ook server-side gezet (ServerSetSprint) zodat client-prediction niet corrigeert.
+	UPROPERTY(EditAnywhere, Category="WeedShop|Movement", meta=(AllowPrivateAccess="true"))
+	float WalkSpeed = 460.f;
+	UPROPERTY(EditAnywhere, Category="WeedShop|Movement", meta=(AllowPrivateAccess="true"))
+	float SprintSpeed = 680.f;
+	void StartSprint();
+	void StopSprint();
+	UFUNCTION(Server, Reliable) void ServerSetSprint(bool bSprint);
+
 	/** 3D-model van het item dat je vasthoudt (alleen voor jezelf zichtbaar). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UStaticMeshComponent> HeldItemMesh;
@@ -374,6 +384,11 @@ public:
 	bool bBodyHasLocoAbp = false;     // Manny/Quinn-skin -> echte locomotie-ABP op de body; anders single-node-fallback
 	int32 ProxyAnimState = -1;        // -1 nog niet, 0 idle/ABP, 1 walk, 2 lucht, 3 telefoon
 	FVector ProxyPrevLoc = FVector::ZeroVector;
+
+	// LOKALE speler: de template-ABP-idle staat scheef (1 voet voor). Bij stilstaan vervangen we 'm door een
+	// symmetrische idle (single-node), en schakelen terug naar de ABP zodra je beweegt.
+	UPROPERTY() TObjectPtr<class UAnimSequence> LocalIdleAnim;
+	int32 LocalIdleState = -1;        // -1 nog niet bepaald, 0 = ABP (bewegend/in de lucht/telefoon), 1 = symmetrische idle
 	bool bHasProxyPrev = false;
 	float ProxyMoveHold = 0.f;        // resterende tijd dat we 'beweegt' aanhouden tussen net-updates
 	void UpdateProxyAnim(float DeltaSeconds);

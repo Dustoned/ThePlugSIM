@@ -1,7 +1,8 @@
-// UHeatComponent — politie-"heat"/risico op de GameState (gedeeld, co-op). Stijgt ALLEEN bij riskant
-// gedrag (straat-samples/dealen) en zakt ALTIJD vanzelf (langzamer 's nachts). Alleen 's nachts en bij
-// ECHT hoge heat is er een kleine kans op een **bust** of **overval** (verlies cash). Rustig blijven =
-// heat zakt naar 0 = geen events. Beveiliging-upgrade (HeatResist) dempt opbouw en kans.
+// UHeatComponent — politie-"heat"/risico op de GameState (gedeeld, co-op). Stijgt bij riskant gedrag
+// (straat-samples/dealen) en houdt een VLOER aan bij te veel potten (boven de apartment-cap). Zakt alleen
+// OVERDAG (langzaam); 's nachts blijft het staan en zakt pas weer als het dag wordt. Alleen 's nachts en bij
+// ECHT hoge heat (>=80) is er een kleine kans op een **bust** of **overval** (verlies cash). Rustig blijven +
+// niet te veel potten = heat zakt overdag weg = geen events. Beveiliging-upgrade (HeatResist) dempt opbouw + kans.
 
 #pragma once
 
@@ -21,12 +22,12 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	// Tunables. Heat zakt ALTIJD (geen passieve opbouw meer); 's nachts iets langzamer.
+	// Tunables. Heat zakt ALLEEN overdag (langzaam); 's nachts blijft het staan en zakt pas weer als het dag wordt.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
-	float DayDecayPerSecond = 0.8f;
+	float DayDecayPerSecond = 0.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
-	float NightDecayPerSecond = 0.3f;
+	float NightDecayPerSecond = 0.0f;
 
 	// Vanaf dit heat-niveau kan er 's nachts (zelden) een bust/overval gebeuren.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
@@ -42,6 +43,19 @@ public:
 	// Na een bust/overval: zoveel in-game dagen GEEN nieuw event (rust).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
 	int32 EventCooldownDays = 3;
+
+	// "Te veel potten": boven dit aantal potten (rond je apartment) houdt elke EXTRA pot een heat-VLOER aan.
+	// Je MAG overvol kweken, maar het trekt politie-aandacht. 1e apartment = 6; een groter apartment (later)
+	// verhoogt deze cap. De grote Fabric-pot (meerdere planten) telt gewoon als 1 pot.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	int32 PotCap = 6;
+
+	// Heat-vloer per overtollige pot (gedempt door de beveiliging-upgrade), gecapt op MaxPotHeat.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	float HeatPerExcessPot = 16.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	float MaxPotHeat = 90.f;
 
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Heat")
 	FOnHeatChanged OnHeatChanged;
@@ -85,4 +99,10 @@ protected:
 
 	float EventTimer = 0.f;
 	int32 LastEventDay = -1000; // dag van de laatste bust/overval (voor de dagen-cooldown)
+
+	// Pot-cap ("te veel potten"): periodieke telling -> heat-vloer + eenmalige waarschuwing bij over de cap.
+	float PotScanTimer = 0.f;
+	float CachedPotFloor = 0.f;
+	bool bWasOverPotCap = false;
+	float ComputePotHeatFloor(); // telt de potten rond het/de apartment(en) en geeft de heat-vloer terug
 };
