@@ -350,7 +350,22 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	// Mijn EIGEN pawn gebruikt de ABP/FP-view -> geen fallback. Elke ANDERE speler die ik zie (host ziet de
 	// joiner als ROLE_Authority, een client ziet 'm als SimulatedProxy - beide zijn niet-lokaal) krijgt onze
 	// single-node walk/idle/jump/telefoon. Lazy: zet de single-node-modus zodra we 'm voor het eerst tikken.
-	if (IsLocallyControlled()) { return; }
+	// In THIRD-PERSON (toets B) tonen we óók op je EIGEN body de proxy-poses (bv. de telefoon/texting-
+	// houding), want de normale ABP kent die niet -> anders zie je jezelf niks doen. In first-person
+	// blijft de ABP/FP-view leidend, dus daar returnen we nog steeds meteen.
+	if (IsLocallyControlled() && !bThirdPerson)
+	{
+		// Voorkom dat een single-node-pose (bv. texting) uit een 3p-sessie blijft hangen na terug naar 1p.
+		if (USkeletalMeshComponent* LM = GetMesh())
+		{
+			if (LM->GetAnimationMode() == EAnimationMode::AnimationSingleNode)
+			{
+				LM->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+				ProxyAnimState = 0;
+			}
+		}
+		return;
+	}
 	USkeletalMeshComponent* M = GetMesh();
 	if (!M) { return; }
 

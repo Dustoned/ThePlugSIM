@@ -404,11 +404,21 @@ void ACustomerSpawner::TrySpawn()
 			// hellingen/stoepranden/trapjes waar de Z afwijkt van het dichtstbijzijnde route-punt, en dat
 			// is geen reden om te killen. Alleen STILSTAANDE NPC's die echt ver onder/boven zitten (door de
 			// map gezakt of op een prop geklommen) opruimen.
-			const bool bWalking = Cw0->GetVelocity().SizeSquared2D() > 30.f * 30.f;
-			if (!bWalking && (Dz < -150.f || Dz > 300.f))
+			const bool bWalking = Cw0->GetVelocity().SizeSquared2D() > 25.f * 25.f;
+			if (!bWalking && (Dz < -250.f || Dz > 450.f))
 			{
-				Cw0->Destroy();
-				Spawned.RemoveAt(wi);
+				// Hysterese: pas opruimen na 2 OPEENVOLGENDE scans "stilstaand + ver buiten de Z-marge".
+				// Eén losse velocity-dip (RVO-avoidance/net-jitter/accel-curve) telt zo niet meer als
+				// "vastgelopen" -> geen lopende NPC die in zicht midden op straat wegpoft.
+				if (++Cw0->DespawnStrikes >= 2)
+				{
+					Cw0->Destroy();
+					Spawned.RemoveAt(wi);
+				}
+			}
+			else
+			{
+				Cw0->DespawnStrikes = 0;
 			}
 		}
 		// ROUTE-PATROUILLE: wandelaars lopen de gemarkeerde ring punt-voor-punt af. Wie bij z'n

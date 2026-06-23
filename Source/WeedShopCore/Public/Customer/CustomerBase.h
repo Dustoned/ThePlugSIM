@@ -78,6 +78,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Appearance, Category = "WeedShop|Customer")
 	FName NpcId = NAME_None;
 
+	// Server-only hysterese voor de despawn-scan: aantal opeenvolgende scans waarin deze wandelaar
+	// "stilstaand + ver buiten de Z-marge" was. Pas opruimen na >=2 strikes, zodat één losse velocity-dip
+	// (RVO/jitter/accel) een lopende NPC niet meer midden op straat laat verdwijnen. Reset zodra hij
+	// weer loopt of weer op hoogte staat.
+	int32 DespawnStrikes = 0;
+
 	// Skin-index (uit het register) gerepliceerd zodat een co-op-CLIENT exact hetzelfde uiterlijk lokaal
 	// opbouwt: mesh + modulaire parts + kleur-tint repliceren NIET, dus de client herbouwt ze deterministisch
 	// uit NpcId (seed) + deze index. Zonder dit zag een join-client overal de kale standaard-mannequin.

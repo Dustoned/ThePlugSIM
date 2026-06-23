@@ -1186,10 +1186,13 @@ void UPhoneClientComponent::GoHome()
 
 void UPhoneClientComponent::OpenAtm()
 {
-	// Open exact dezelfde Bank-app als op de telefoon (één consistente UI). Een fysieke ATM
-	// heeft geen telefoon-upgrade nodig -> bypass de lock met bBankViaAtm.
-	OpenToApp(9 /*Bank*/);
-	bBankViaAtm = true;
+	// Een fysieke ATM opent z'n EIGEN fullscreen geldautomaat-scherm (UAtmWidget), NIET de telefoon-
+	// Bank-app. UAtmWidget toont zichzelf zodra IsAtmOpen() true is; UpdateCursor() pakt de UI-input +
+	// cursor (bAtmOpen zit in de bAnyUI-check). Andere schermen sluiten (wederzijds uitsluitend).
+	EnsureWidget();
+	bAtmOpen = true;
+	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bPackOpen = false; bShelfOpen = false; bDryRackOpen = false; bWardrobeOpen = false;
+	UpdateCursor();
 }
 
 void UPhoneClientComponent::CloseAtm()
