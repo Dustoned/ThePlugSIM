@@ -1008,6 +1008,19 @@ void UPhoneClientComponent::RefreshInputMode()
 void UPhoneClientComponent::UpdateCursor()
 {
 	const bool bAnyUI = bOpen || bDevMenuOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen || bWardrobeOpen || bLightDimmerOpen;
+
+	// Texting-anim: houd de telefoon-pose vast zolang je in ELK telefoon-scherm zit (home OF een app:
+	// inventory/deal/atm/pack/shelf/dryrack/store/pot/merge/roll). Pause/wardrobe/dev-menu tellen niet -
+	// dan kijk je niet op je telefoon. Dit gerepliceerde signaal stuurt de texting-anim op alle proxies.
+	const bool bPhoneVisual = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen
+		|| bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen;
+	// Dedup tegen bPhoneOpenRep (op de host meteen gezet via de Server-RPC, op een client via replicatie) -
+	// zo is geen extra member nodig en blijft dit een .cpp-only wijziging die Live Coding kan hot-patchen.
+	if (bPhoneVisual != bPhoneOpenRep && GetOwner() && GetOwner()->GetLocalRole() != ROLE_SimulatedProxy)
+	{
+		ServerSetPhoneOpen(bPhoneVisual);
+	}
+
 	// Maar 1 UI tegelijk: opent er een ander scherm, dan gaat de fullscreen-kaart dicht.
 	if (bAnyUI && MapOverlay)
 	{
@@ -1154,8 +1167,8 @@ void UPhoneClientComponent::Toggle()
 		bDevMenuOpen = false; // dev-menu en telefoon niet tegelijk
 		bHomeScreen = true; // open altijd op het home-scherm met de apps
 	}
-	// Andere spelers laten zien dat je op je telefoon zit (gerepliceerde texting-anim).
-	if (GetOwner() && GetOwner()->GetLocalRole() != ROLE_SimulatedProxy) { ServerSetPhoneOpen(bOpen); }
+	// De texting-flag (telefoon-zichtbaar voor proxies) wordt nu gecentraliseerd in UpdateCursor gezet,
+	// zodat de pose ook aanblijft in de telefoon-apps (inventory/deal/atm/...), niet alleen op home.
 	UpdateCursor();
 }
 

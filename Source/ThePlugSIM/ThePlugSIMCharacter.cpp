@@ -384,14 +384,21 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	bool bPhone = false;
 	if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
 
+	// De texting-clip (Anim_Check_Cellphone) is een VOLLEDIGE cyclus: pakken -> kijken -> wegstoppen. We spelen
+	// 'm vooruit tot het 'kijk'-punt (PhoneHoldTime) en PAUZEREN daar zolang je telefoon open is; pas bij sluiten
+	// spelen we het laatste stuk (kijk-punt -> eind = wegstoppen). PhoneHoldFrac = waar in de clip de kijk-pose
+	// zit (visueel getuned). De cliplengte kennen we pas at runtime, dus het kijk-punt is een fractie daarvan.
+	const float PhoneHoldFrac    = 0.45f; // waar in de clip de 'kijk'-pose zit (vasthouden)
+	const float PhonePutAwayRate = 2.4f;  // sneller afspelen bij sluiten -> telefoon vrijwel 'gelijk' terug in de zak
+	const float PhoneClipLen  = ProxyPhone ? ProxyPhone->GetPlayLength() : 0.f;
+	const float PhoneHoldTime = PhoneClipLen * PhoneHoldFrac;
+
 	if (bBodyHasLocoAbp)
 	{
-		// Manny/Quinn: de locomotie-ABP doet walk/run/idle/jump (velocity repliceert -> draait op de proxy).
-		// Voor TEXTING (telefoon open + stilstaan) wisselen we naar de single-node telefoon-pose. Die spelen
-		// we ÉÉN keer vooruit af (telefoon erbij pakken) en laten 'm dan STIL op de laatste frame staan -
-		// niet loopen, want loopen geeft het ongewenste 'achterste-voren'-gepak. Bij sluiten draaien we
-		// dezelfde anim achteruit (telefoon netjes terug in de zak) en pas daarna terug naar de ABP.
-		// State 3 = vooruit/stil (texting), 4 = achteruit (wegstoppen).
+		// Manny/Quinn: de locomotie-ABP doet walk/run/idle/jump. Voor TEXTING wisselen we naar de single-node
+		// telefoon-clip en spelen 'm vooruit tot het kijk-punt, waar we 'm bevriezen (rate 0) -> de pose blijft
+		// staan zolang de telefoon open is. Bij sluiten spelen we het laatste stuk vooruit (wegstoppen) en gaan
+		// dan terug naar de ABP. State 3 = pakken/vasthouden, 4 = wegstoppen.
 		const bool bWantTexting = bPhone && !bMoving && !bFalling && ProxyPhone != nullptr;
 		if (bWantTexting)
 		{
@@ -400,27 +407,38 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 				ProxyAnimState = 3;
 				M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 				M->SetPlayRate(1.f);
-				M->PlayAnimation(ProxyPhone, false); // niet loopen -> blijft op de laatste (texting-)frame staan
+				M->PlayAnimation(ProxyPhone, false);
 			}
 			else if (ProxyAnimState == 4)
 			{
-				// Tijdens het wegstoppen weer geopend -> vanaf de huidige frame weer vooruit.
+				// Tijdens het wegstoppen weer geopend -> direct terug naar het kijk-punt en vasthouden
+				// (niet opnieuw de telefoon pakken).
 				ProxyAnimState = 3;
-				M->SetPlayRate(1.f);
-				M->Play(false);
+				M->SetPlayRate(0.f);
+				M->SetPosition(PhoneHoldTime, false);
+			}
+			// Vasthouden: zodra we het kijk-punt bereiken, bevriezen we de pose.
+			if (ProxyAnimState == 3 && PhoneHoldTime > 0.f && M->GetPosition() >= PhoneHoldTime)
+			{
+				M->SetPosition(PhoneHoldTime, false);
+				M->SetPlayRate(0.f);
 			}
 		}
 		else if (ProxyAnimState == 3)
 		{
-			// Telefoon wegstoppen: dezelfde anim achteruit afspelen vanaf de laatste frame.
+			// Telefoon sluiten: vanaf het KIJK-PUNT vooruit naar het eind (= wegstoppen). De positie zetten we
+			// expliciet NA Play(), want Play() kan vanaf frame 0 herstarten -> anders pakt-ie de telefoon
+			// opnieuw i.p.v. 'm weg te stoppen.
 			ProxyAnimState = 4;
-			M->SetPlayRate(-1.f);
 			M->Play(false);
+			M->SetPlayRate(PhonePutAwayRate);
+			M->SetPosition(PhoneHoldTime, false);
 		}
 		else if (ProxyAnimState == 4)
 		{
-			// Klaar met achteruit (terug bij frame 0)? -> terug naar de locomotie-ABP.
-			if (M->GetAnimationMode() != EAnimationMode::AnimationSingleNode || M->GetPosition() <= 0.02f || !M->IsPlaying())
+			// Klaar met wegstoppen (eind bereikt of niet meer aan het spelen)? -> terug naar de locomotie-ABP.
+			if (M->GetAnimationMode() != EAnimationMode::AnimationSingleNode || !M->IsPlaying()
+				|| (PhoneClipLen > 0.f && M->GetPosition() >= PhoneClipLen - 0.02f))
 			{
 				ProxyAnimState = 0;
 				M->SetPlayRate(1.f);
@@ -447,19 +465,32 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	else if (bMoving) { NewState = 1; }
 	else if (bPhone && ProxyPhone) { NewState = 3; }
 
-	// Telefoon-pose (3) spelen we één keer vooruit en laten 'm dan STIL staan; bij verlaten draaien we 'm
-	// eerst achteruit (state 4 = wegstoppen) voordat we naar de nieuwe pose gaan. Idle/walk/jump loopen wel.
-	if (ProxyAnimState == 3 && NewState != 3)
+	// Telefoon-pose (3): zelfde volledige-cyclus-clip als hierboven. Vooruit tot het kijk-punt + daar bevriezen;
+	// bij verlaten het laatste stuk vooruit afspelen (state 4 = wegstoppen) voor we naar de nieuwe pose gaan.
+	if (ProxyAnimState == 3)
 	{
+		if (NewState == 3)
+		{
+			// Vasthouden op het kijk-punt zolang de telefoon open is.
+			if (PhoneHoldTime > 0.f && M->GetPosition() >= PhoneHoldTime)
+			{
+				M->SetPosition(PhoneHoldTime, false);
+				M->SetPlayRate(0.f);
+			}
+			return;
+		}
+		// Verlaten -> wegstoppen: vanaf het kijk-punt vooruit naar het eind. Positie expliciet NA Play() zetten,
+		// want Play() kan vanaf frame 0 herstarten (= telefoon opnieuw pakken i.p.v. wegstoppen).
 		ProxyAnimState = 4;
-		M->SetPlayRate(-1.f);
-		M->Play(false); // telefoon netjes terug in de zak
+		M->Play(false);
+		M->SetPlayRate(PhonePutAwayRate);
+		M->SetPosition(PhoneHoldTime, false);
 		return;
 	}
 	if (ProxyAnimState == 4)
 	{
-		if (NewState == 3) { ProxyAnimState = 3; M->SetPlayRate(1.f); M->Play(false); return; } // weer geopend
-		if (M->IsPlaying() && M->GetPosition() > 0.02f) { return; } // nog bezig met wegstoppen
+		if (NewState == 3) { ProxyAnimState = 3; M->SetPlayRate(0.f); M->SetPosition(PhoneHoldTime, false); return; } // weer geopend -> terug naar kijk-punt
+		if (M->IsPlaying() && (PhoneClipLen <= 0.f || M->GetPosition() < PhoneClipLen - 0.02f)) { return; } // nog bezig met wegstoppen
 		ProxyAnimState = -1; // klaar -> hieronder de nieuwe pose forceren
 	}
 
@@ -468,7 +499,7 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	M->SetPlayRate(1.f);
 	if (NewState == 3)
 	{
-		M->PlayAnimation(ProxyPhone, false); // niet loopen -> blijft op de texting-frame staan
+		M->PlayAnimation(ProxyPhone, false); // vooruit; wordt hierboven op het kijk-punt bevroren (vasthouden)
 		return;
 	}
 	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 1) ? ProxyWalk : ProxyIdle;
