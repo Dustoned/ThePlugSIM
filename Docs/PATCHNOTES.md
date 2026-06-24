@@ -1,4 +1,46 @@
 PATCH NOTES
+Version 1.13.0 — 24 juni 2026
+
+Korte intro:
+Een flinke interface- en sfeer-update: een compleet nieuwe status-HUD, je personage pakt nu echt
+z'n telefoon en kijkt erop, NPC's draaien zich naar je toe als je dealt, en de straat-NPC's poppen
+niet meer vlak voor je neus. Plus een paar balans-fixes.
+
+━━━━━━━━━━━━━━━━━━━━
+
+HUD & SCHERM
+
+• Compleet nieuwe status-HUD linksboven: een strak donker paneel met je cash & bank, de dag + tijd,
+  je heat en je level (met MAX-badge), met iconen en voortgangsbalken.
+• Je stats (groei / water / kwaliteit / gram) en de klant- & deal-info staan nu onderin boven je
+  hotbar i.p.v. midden in beeld — zo zie je je plant of je klant gewoon terwijl je ermee bezig bent.
+  De interactie-knoppen (water geven, oppakken, …) blijven netjes bij het object zelf in beeld.
+
+TELEFOON
+
+• Je personage pakt nu echt z'n telefoon en kijkt erop zolang je 'm open hebt — in élk telefoon-
+  scherm (home, inventory, deal, ATM, pack…) — en stopt 'm bij sluiten snel terug in de zak. Ook
+  zichtbaar voor je co-op maat en in third-person (toets B).
+• De ATM opent weer als eigen volledig scherm i.p.v. het kleine telefoon-ATM'tje.
+• In third-person (B) zie je voortaan je eigen animaties (zoals het telefoneren) op je eigen body.
+
+NPC'S & STRAAT
+
+• NPC's draaien zich nu met hun gezicht naar je toe wanneer je met ze in gesprek bent / met ze dealt.
+• Spawn/despawn herzien: nieuwe NPC's verschijnen altijd ver van je vandaan en verdwijnen niet meer
+  vlak voor je neus. Richting het einde van de dag en 's nachts dunt de straat uit tot vooral nog
+  wat junkies.
+
+BALANS & FIXES
+
+• Street weed groeit weer in z'n normale tempo (een test-versneller stond per ongeluk nog aan,
+  waardoor het binnen seconden klaar was).
+• Pack-bench: bij uitpakken kies je nu zelf hoeveel zakjes je uitpakt, net als bij het inpakken —
+  niet meer automatisch de hele stapel in één keer.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PATCH NOTES
 Version 1.12.0 — 23 juni 2026
 
 Korte intro:
