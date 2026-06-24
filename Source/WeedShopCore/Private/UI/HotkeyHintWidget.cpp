@@ -86,7 +86,7 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	PS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	PS->SetAlignment(FVector2D(0.5f, 0.f));
 	PS->SetAutoSize(true);
-	PS->SetPosition(FVector2D(0.f, 70.f)); // net onder het crosshair
+	PS->SetPosition(FVector2D(0.f, 70.f)); // net onder het crosshair (bij het object - dat is z'n functie)
 }
 
 void UHotkeyHintWidget::AddRow(const FString& Key, const FString& Action)

@@ -89,9 +89,10 @@ public:
 	void RecomputeGearUpgradeMask(float DeltaSeconds);
 	float GearScanTimer = 0.f; // throttle voor de gear-scan
 
-	// Versnelt de groei (1 = realistisch; hoger = sneller voor demo/testen).
+	// Versnelt de groei (1 = realistisch; hoger = sneller voor demo/testen). REALISTISCH op 1: de groeitijden
+	// in DT_Strains (bv. Streetweed 2,5 min) gelden dan écht. NIET op een testwaarde laten staan voor release.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")
-	float GrowthSpeedMultiplier = 20.f;
+	float GrowthSpeedMultiplier = 1.f;
 
 	// Over-rijp verval: zodra een plek oogstklaar is en je niet oogst, zakt de gezondheid (health),
 	// en dus de kwaliteit. Het "bulk"-deel (health -> 10%) duurt RotBulkFactor x de groeitijd; de

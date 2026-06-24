@@ -847,6 +847,13 @@ void ACustomerBase::Tick(float DeltaSeconds)
 		else
 		{
 			if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+			// Draai met je gezicht naar de speler met wie je praat (server-side -> repliceert naar co-op-clients).
+			if (DealingPawn)
+			{
+				FRotator Want = (DealingPawn->GetActorLocation() - GetActorLocation()).Rotation();
+				Want.Pitch = 0.f; Want.Roll = 0.f;
+				SetActorRotation(FMath::RInterpConstantTo(GetActorRotation(), Want, DeltaSeconds, 220.f));
+			}
 			return;
 		}
 	}

@@ -37,6 +37,8 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> CashText;
 	UPROPERTY() TObjectPtr<UTextBlock> BankText;
 	UPROPERTY() TObjectPtr<UTextBlock> TimeText;
+	UPROPERTY() TObjectPtr<UTextBlock> DayText;   // header: "Day X" (links), TimeText = "HH:MM" (rechts)
+	UPROPERTY() TObjectPtr<UWidget> MaxBadge;     // "MAX"-badge naast het level, verborgen tot max-level
 	UPROPERTY() TObjectPtr<UProgressBar> HeatBar;
 	UPROPERTY() TObjectPtr<UTextBlock> HeatText;
 	UPROPERTY() TObjectPtr<UProgressBar> LevelBar;

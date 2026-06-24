@@ -92,10 +92,12 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	CardB->SetPadding(FMargin(0.f));
 	Card = CardB;
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(0.f, 0.5f, 0.f, 0.5f));
-	CS->SetAlignment(FVector2D(0.f, 0.5f));
+	// LinksONDER (boven de hotbar), niet links-midden: zo botst de vastgehouden-item-kaart niet meer
+	// met de status-HUD linksboven.
+	CS->SetAnchors(FAnchors(0.f, 1.f, 0.f, 1.f));
+	CS->SetAlignment(FVector2D(0.f, 1.f));
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(24.f, 0.f));
+	CS->SetPosition(FVector2D(24.f, -28.f));
 
 	// Accent-balk links + tekstkolom (vaste, smalle breedte -> kaart wordt verticaler dan breed).
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();

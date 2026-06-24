@@ -46,5 +46,10 @@ protected:
 	int32 MaxBags = 1;     // max bags = containers die je hebt vs wiet die je hebt
 	int32 PackCap = 1;     // capaciteit (gram) van de gekozen container
 	int32 PackBudHave = 0; // beschikbare gram van de gekozen strain
+
+	// Unpack-tab hergebruikt SelBags/MaxBags/GramSlider/GramLabel/PackBtnLabel (de tabs zijn wederzijds uitsluitend).
+	FName SelUnpackBag;     // gekozen verpakte Bag_<strain> om uit te pakken
+	int32 UnpackPerBag = 1; // gram per zakje van de gekozen bag (voor de labels)
+
 	FString LastSig;       // herbouw alleen bij wijziging
 };

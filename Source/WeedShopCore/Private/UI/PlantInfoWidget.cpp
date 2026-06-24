@@ -41,10 +41,12 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	Card = CardB;
 
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-	CS->SetAlignment(FVector2D(0.5f, 0.5f));
+	// Stats-kaart ONDERAAN (boven de hotbar): zo blijft de plant zelf in beeld vrij. De losse interactie-prompt
+	// ("Water the plant") blijft wel bij het crosshair/object (zit in HotkeyHintWidget).
+	CS->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
+	CS->SetAlignment(FVector2D(0.5f, 1.f)); // onderrand = ankerpunt
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(0.f, -60.f));
+	CS->SetPosition(FVector2D(0.f, -118.f)); // ~118px boven de schermrand, net boven de hotbar
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(VB);

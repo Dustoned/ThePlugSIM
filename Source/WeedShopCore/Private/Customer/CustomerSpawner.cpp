@@ -360,6 +360,16 @@ void ACustomerSpawner::TrySpawn()
 		// (~200cm lager) valt nog steeds buiten de marge, en props (containers/tafels) worden
 		// nu door de STRAAT-NAAM-check geweerd, niet meer door de hoogte.
 		const float ZTol = 90.f;
+		// Dag/nacht-doelaantal voor de crowd: overdag VOL (MaxCustomers), 's nachts dunt het uit naar alleen
+		// "junkies" (een kwart). Overtollige NPC's worden ALLEEN BUITEN ZICHT opgeruimd, nooit voor je neus.
+		int32 NightOrDayTarget = MaxCustomers;
+		if (AWeedShopGameState* GSnt = World->GetGameState<AWeedShopGameState>())
+		{
+			if (auto* DCnt = GSnt->GetDayCycle())
+			{
+				if (DCnt->IsNight()) { NightOrDayTarget = FMath::Max(2, MaxCustomers / 4); }
+			}
+		}
 		// Opruimen: wandelaars die GEZAKT zijn (onder de stoep) of ergens OP geklommen staan.
 		// Hoogte vergelijken met het DICHTSTBIJZIJNDE route-punt (de route heeft verloop - tegen
 		// de eigen spawner meten doodde wandelaars die gewoon de ring afliepen). Bewoners
@@ -370,24 +380,42 @@ void ACustomerSpawner::TrySpawn()
 		{
 			ACustomerBase* Cw0 = Spawned[wi];
 			if (!IsValid(Cw0)) { continue; }
+
+			// Afstand tot de DICHTSTBIJZIJNDE speler -> bepaalt de tick-throttle EN of we uberhaupt mogen despawnen.
+			float MinPd = TNumericLimits<float>::Max();
+			for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
 			{
-				float MinPd = TNumericLimits<float>::Max();
-				for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
-				{
-					const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
-					if (Pp) { MinPd = FMath::Min(MinPd, FVector::Dist2D(Pp->GetActorLocation(), Cw0->GetActorLocation())); }
-				}
-				const bool bFar = MinPd > 12000.f;
-				Cw0->SetActorTickInterval(bFar ? 0.4f : 0.f);
-				if (UCharacterMovementComponent* Mv0 = Cw0->GetCharacterMovement())
-				{
-					Mv0->SetComponentTickInterval(bFar ? 0.15f : 0.f);
-					// RVO-avoidance (per-tick buren berekenen) uit voor verre NPC's (>120m, meestal off-screen):
-					// pure CPU-winst, geen zichtbaar verschil - ze hoeven daar niet netjes om elkaar te lopen.
-					if (Mv0->bUseRVOAvoidance == bFar) { Mv0->SetAvoidanceEnabled(!bFar); }
-				}
+				const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+				if (Pp) { MinPd = FMath::Min(MinPd, FVector::Dist2D(Pp->GetActorLocation(), Cw0->GetActorLocation())); }
 			}
+			const bool bFar = MinPd > 12000.f;
+			Cw0->SetActorTickInterval(bFar ? 0.4f : 0.f);
+			if (UCharacterMovementComponent* Mv0 = Cw0->GetCharacterMovement())
+			{
+				Mv0->SetComponentTickInterval(bFar ? 0.15f : 0.f);
+				// RVO-avoidance (per-tick buren berekenen) uit voor verre NPC's (>120m, meestal off-screen):
+				// pure CPU-winst, geen zichtbaar verschil - ze hoeven daar niet netjes om elkaar te lopen.
+				if (Mv0->bUseRVOAvoidance == bFar) { Mv0->SetAvoidanceEnabled(!bFar); }
+			}
+
 			if (Cw0->NpcId.ToString().StartsWith(TEXT("Resident_"))) { continue; }
+
+			// KERN-REGEL: NOOIT voor de neus van de speler despawnen. Binnen ~80m verdwijnt er niks -> strikes
+			// resetten en door. Alleen BUITEN ZICHT (off-screen) ruimen we op. Zo zie je nooit meer een NPC
+			// midden op straat wegpoffen.
+			if (MinPd < 8000.f) { Cw0->DespawnStrikes = 0; continue; }
+
+			// Off-screen + TE VEEL volk -> opruimen tot het dag/nacht-doelaantal. Overdag is het doel vol, dus
+			// dit doet niets; 's nachts zakt het doel -> de crowd dunt off-screen vanzelf uit naar 'junkies'.
+			if (Spawned.Num() > NightOrDayTarget)
+			{
+				Cw0->Destroy();
+				Spawned.RemoveAt(wi);
+				continue;
+			}
+
+			// Off-screen + ECHT vastgelopen (stilstaand, ver onder/boven de route = door de map gezakt of op een
+			// prop geklommen) -> opruimen na 2 strikes. Veiligheidsnet, nooit zichtbaar (we zijn hier al off-screen).
 			const FVector L0 = Cw0->GetActorLocation();
 			float RefZ = GetActorLocation().Z;
 			if (NetNodes.Num() >= 2)
@@ -400,16 +428,9 @@ void ACustomerSpawner::TrySpawn()
 				}
 			}
 			const float Dz = L0.Z - RefZ;
-			// Een NPC die GEWOON LOOPT (horizontale snelheid > 0) NOOIT despawnen: de route loopt over
-			// hellingen/stoepranden/trapjes waar de Z afwijkt van het dichtstbijzijnde route-punt, en dat
-			// is geen reden om te killen. Alleen STILSTAANDE NPC's die echt ver onder/boven zitten (door de
-			// map gezakt of op een prop geklommen) opruimen.
 			const bool bWalking = Cw0->GetVelocity().SizeSquared2D() > 25.f * 25.f;
 			if (!bWalking && (Dz < -250.f || Dz > 450.f))
 			{
-				// Hysterese: pas opruimen na 2 OPEENVOLGENDE scans "stilstaand + ver buiten de Z-marge".
-				// Eén losse velocity-dip (RVO-avoidance/net-jitter/accel-curve) telt zo niet meer als
-				// "vastgelopen" -> geen lopende NPC die in zicht midden op straat wegpoft.
 				if (++Cw0->DespawnStrikes >= 2)
 				{
 					Cw0->Destroy();
@@ -631,7 +652,7 @@ void ACustomerSpawner::TrySpawn()
 				}
 			}
 		}
-		if (Spawned.Num() >= MaxCustomers) { return; }
+		if (Spawned.Num() >= NightOrDayTarget) { return; } // dag = vol, nacht = klein (junkies)
 		++TryCount;
 		if (TryCount % 30 == 0)
 		{
@@ -656,6 +677,21 @@ void ACustomerSpawner::TrySpawn()
 				if (!Nav->ProjectPointToNavigation(BAround, BNav, FVector(400.f, 400.f, ZTol))) { ++RejNav; continue; }
 				if (FMath::Abs(BNav.Location.Z - GetActorLocation().Z) > ZTol) { ++RejZ; continue; }
 				if (!IsOnStreetSurface(World, BNav.Location)) { ++RejStreet; continue; }
+				// Ook de dag-burst spawnt NIET voor je neus: in beeld of te dichtbij -> sla deze plek over.
+				{
+					bool bBurstSeen = false;
+					for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
+					{
+						const APlayerController* PCp = PIt->Get();
+						const APawn* Pp = PCp ? PCp->GetPawn() : nullptr;
+						if (!Pp) { continue; }
+						const FVector To = BNav.Location - Pp->GetActorLocation();
+						const float Dp = To.Size2D();
+						if (Dp < 2500.f) { bBurstSeen = true; break; }
+						if (Dp < 6000.f && FVector::DotProduct(PCp->GetControlRotation().Vector().GetSafeNormal2D(), To.GetSafeNormal2D()) > 0.1f) { bBurstSeen = true; break; }
+					}
+					if (bBurstSeen) { ++RejView; continue; }
+				}
 				TSubclassOf<ACustomerBase> BCls = CustomerClass;
 				if (!BCls) { BCls = ACustomerBase::StaticClass(); }
 				// DEFERRED + bCrowdNpc VOOR BeginPlay: ambient walker -> goedkope 1-mesh-build (geen modulaire spawn-hitch).

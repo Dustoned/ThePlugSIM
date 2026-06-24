@@ -170,9 +170,9 @@ public:
 	// UITPAKKEN: haal de wiet weer LOS uit een Bag_<strain> (terug naar Bud_<strain>), zodat je 'm kan
 	// herverpakken of rollen. Het zakje/de container raak je kwijt (verbruikt).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
-	void RequestUnpack(FName BagId);
+	void RequestUnpack(FName BagId, int32 Count);
 	UFUNCTION(Server, Reliable)
-	void ServerUnpack(FName BagId);
+	void ServerUnpack(FName BagId, int32 Count);
 
 	// --- Opslag-schap (in de wereld): stacks tussen je inventory en het schap verplaatsen ---
 	void OpenShelf(class AStorageShelf* Shelf);

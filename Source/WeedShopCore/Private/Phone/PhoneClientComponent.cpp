@@ -1687,31 +1687,32 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 	}
 }
 
-void UPhoneClientComponent::RequestUnpack(FName BagId) { ServerUnpack(BagId); }
+void UPhoneClientComponent::RequestUnpack(FName BagId, int32 Count) { ServerUnpack(BagId, Count); }
 
-void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId)
+void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId, int32 Count)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Inv) { return; }
 	const FString BagStr = BagId.ToString();
 	if (!BagStr.StartsWith(TEXT("Bag_"))) { return; } // alleen verpakte zakjes uitpakken
-	const int32 Count = Inv->GetQuantity(BagId);      // aantal zakjes in de stapel
-	if (Count <= 0) { return; }
+	const int32 Owned = Inv->GetQuantity(BagId);      // aantal zakjes in de stapel
+	if (Owned <= 0) { return; }
+	const int32 N = FMath::Clamp(Count, 1, Owned);    // ALLEEN het gevraagde aantal (max wat je hebt)
 
 	const FName Strain = UInventoryComponent::BagStrain(BagId);
 	const int32 PerBag = FMath::Max(1, UInventoryComponent::BagGrams(BagId));
-	const int32 TotalGrams = Count * PerBag;
+	const int32 TotalGrams = N * PerBag;
 	const FName BudId(*FString::Printf(TEXT("Bud_%s"), *Strain.ToString())); // Bag_X_g -> Bud_X
 	const float Thc = Inv->GetItemQuality(BagId);
 	const float Q = Inv->GetItemQualityPct(BagId);
 
-	if (!Inv->RemoveItem(BagId, Count)) { return; } // alle zakjes in deze stapel openen
-	Inv->AddItem(BudId, TotalGrams, Thc, Q);        // wiet weer los terug
+	if (!Inv->RemoveItem(BagId, N)) { return; } // alleen N zakjes openen
+	Inv->AddItem(BudId, TotalGrams, Thc, Q);     // wiet weer los terug
 
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Unpacked %dg %s (loose - repackage or roll)."), TotalGrams, *Strain.ToString()));
+			FString::Printf(TEXT("Unpacked %d bag%s = %dg %s (loose)."), N, N == 1 ? TEXT("") : TEXT("s"), TotalGrams, *Strain.ToString()));
 	}
 }
 

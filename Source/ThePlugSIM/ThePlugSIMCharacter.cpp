@@ -387,14 +387,50 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	if (bBodyHasLocoAbp)
 	{
 		// Manny/Quinn: de locomotie-ABP doet walk/run/idle/jump (velocity repliceert -> draait op de proxy).
-		// Alleen voor TEXTING (telefoon open + stilstaan) wisselen we even naar de single-node texting-pose.
-		const bool bTexting = bPhone && !bMoving && !bFalling && ProxyPhone != nullptr;
-		const int32 NewState = bTexting ? 3 : 0;
-		if (NewState != ProxyAnimState)
+		// Voor TEXTING (telefoon open + stilstaan) wisselen we naar de single-node telefoon-pose. Die spelen
+		// we ÉÉN keer vooruit af (telefoon erbij pakken) en laten 'm dan STIL op de laatste frame staan -
+		// niet loopen, want loopen geeft het ongewenste 'achterste-voren'-gepak. Bij sluiten draaien we
+		// dezelfde anim achteruit (telefoon netjes terug in de zak) en pas daarna terug naar de ABP.
+		// State 3 = vooruit/stil (texting), 4 = achteruit (wegstoppen).
+		const bool bWantTexting = bPhone && !bMoving && !bFalling && ProxyPhone != nullptr;
+		if (bWantTexting)
 		{
-			ProxyAnimState = NewState;
-			if (bTexting) { M->SetAnimationMode(EAnimationMode::AnimationSingleNode); M->PlayAnimation(ProxyPhone, true); }
-			else          { M->SetAnimationMode(EAnimationMode::AnimationBlueprint); } // terug naar de locomotie-ABP
+			if (ProxyAnimState != 3 && ProxyAnimState != 4)
+			{
+				ProxyAnimState = 3;
+				M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+				M->SetPlayRate(1.f);
+				M->PlayAnimation(ProxyPhone, false); // niet loopen -> blijft op de laatste (texting-)frame staan
+			}
+			else if (ProxyAnimState == 4)
+			{
+				// Tijdens het wegstoppen weer geopend -> vanaf de huidige frame weer vooruit.
+				ProxyAnimState = 3;
+				M->SetPlayRate(1.f);
+				M->Play(false);
+			}
+		}
+		else if (ProxyAnimState == 3)
+		{
+			// Telefoon wegstoppen: dezelfde anim achteruit afspelen vanaf de laatste frame.
+			ProxyAnimState = 4;
+			M->SetPlayRate(-1.f);
+			M->Play(false);
+		}
+		else if (ProxyAnimState == 4)
+		{
+			// Klaar met achteruit (terug bij frame 0)? -> terug naar de locomotie-ABP.
+			if (M->GetAnimationMode() != EAnimationMode::AnimationSingleNode || M->GetPosition() <= 0.02f || !M->IsPlaying())
+			{
+				ProxyAnimState = 0;
+				M->SetPlayRate(1.f);
+				M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+			}
+		}
+		else if (ProxyAnimState != 0)
+		{
+			ProxyAnimState = 0;
+			M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 		}
 		return;
 	}
@@ -410,9 +446,32 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	if (bFalling) { NewState = 2; }
 	else if (bMoving) { NewState = 1; }
 	else if (bPhone && ProxyPhone) { NewState = 3; }
+
+	// Telefoon-pose (3) spelen we één keer vooruit en laten 'm dan STIL staan; bij verlaten draaien we 'm
+	// eerst achteruit (state 4 = wegstoppen) voordat we naar de nieuwe pose gaan. Idle/walk/jump loopen wel.
+	if (ProxyAnimState == 3 && NewState != 3)
+	{
+		ProxyAnimState = 4;
+		M->SetPlayRate(-1.f);
+		M->Play(false); // telefoon netjes terug in de zak
+		return;
+	}
+	if (ProxyAnimState == 4)
+	{
+		if (NewState == 3) { ProxyAnimState = 3; M->SetPlayRate(1.f); M->Play(false); return; } // weer geopend
+		if (M->IsPlaying() && M->GetPosition() > 0.02f) { return; } // nog bezig met wegstoppen
+		ProxyAnimState = -1; // klaar -> hieronder de nieuwe pose forceren
+	}
+
 	if (NewState == ProxyAnimState) { return; }
 	ProxyAnimState = NewState;
-	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 3) ? ProxyPhone : (NewState == 1) ? ProxyWalk : ProxyIdle;
+	M->SetPlayRate(1.f);
+	if (NewState == 3)
+	{
+		M->PlayAnimation(ProxyPhone, false); // niet loopen -> blijft op de texting-frame staan
+		return;
+	}
+	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 1) ? ProxyWalk : ProxyIdle;
 	if (!Seq) { Seq = ProxyIdle; }
 	if (Seq) { M->PlayAnimation(Seq, true); }
 }

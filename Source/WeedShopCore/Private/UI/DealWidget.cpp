@@ -70,11 +70,12 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	Card = CardB;
 
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-	CS->SetAlignment(FVector2D(0.5f, 0.5f));
+	// Niet meer pal in het midden: onderaan (boven de hotbar) zodat de NPC in beeld vrij blijft.
+	CS->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
+	CS->SetAlignment(FVector2D(0.5f, 1.f)); // onderrand = ankerpunt
 	// AutoSize: de kaart krimpt naar zijn inhoud -> geen groot leeg grijs vlak bij niet-kopers.
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(0.f, 0.f));
+	CS->SetPosition(FVector2D(0.f, -120.f));
 
 	// Vaste breedte (zodat de Fill-knoppen netjes uitlijnen), hoogte volgt de inhoud.
 	USizeBox* Width = WidgetTree->ConstructWidget<USizeBox>();
