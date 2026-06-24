@@ -522,6 +522,26 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 						SpawnRot.Roll = 0.f;
 					}
 				}
+
+				// Bereikbaarheids-check: een gegokte meet-/home-plek kan op een dak of in geometrie liggen ->
+				// dan kun je de afspraak-NPC (en z'n groene marker) nooit bereiken. Projecteer op de navmesh;
+				// lukt dat niet, spawn dan vlak vóór de speler (altijd bereikbaar) en project die ook.
+				if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World))
+				{
+					FNavLocation Proj;
+					if (Nav->ProjectPointToNavigation(SpawnLoc, Proj, FVector(220.f, 220.f, 400.f)))
+					{
+						SpawnLoc = Proj.Location;
+					}
+					else
+					{
+						SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
+						SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
+						SpawnRot.Pitch = 0.f; SpawnRot.Roll = 0.f;
+						FNavLocation Proj2;
+						if (Nav->ProjectPointToNavigation(SpawnLoc, Proj2, FVector(220.f, 220.f, 400.f))) { SpawnLoc = Proj2.Location; }
+					}
+				}
 			}
 		}
 	}

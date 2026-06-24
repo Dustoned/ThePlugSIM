@@ -193,6 +193,8 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 			{
 				if (UPhoneClientComponent* Ph = PawnOwner->FindComponentByClass<UPhoneClientComponent>())
 				{
+					// Op een ROOSTER-cel gedropt -> daar plaatsen i.p.v. automatisch op de hotbar.
+					if (GridCell >= 0) { Inv->SetPendingGridCell(GridCell); }
 					Ph->RequestDryCollect(DryOp->EntryIndex);
 					return true;
 				}
@@ -210,6 +212,8 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 			{
 				if (UPhoneClientComponent* Ph = PawnOwner->FindComponentByClass<UPhoneClientComponent>())
 				{
+					// Op een ROOSTER-cel gedropt -> daar plaatsen i.p.v. automatisch op de hotbar.
+					if (GridCell >= 0) { Inv->SetPendingGridCell(GridCell); }
 					Ph->RequestShelfTake(ShelfOp->ShelfIndex, ShelfOp->Qty);
 					return true;
 				}

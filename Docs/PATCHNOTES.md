@@ -1,4 +1,39 @@
 PATCH NOTES
+Version 1.14.0 — 24 juni 2026
+
+Korte intro:
+De straat leeft nu echt: de NPC's lopen netjes rond op de strand-map en blijven niet meer constant
+verdwijnen en opnieuw verschijnen. Plus een opgeruimde HUD, een XP-balk op je telefoon en een rits
+kleinere fixes.
+
+━━━━━━━━━━━━━━━━━━━━
+
+NPC'S & STRAAT
+
+• De straat-NPC's lopen weer echt rond op de strand-map. Die map heeft geen navmesh, waardoor ze
+  bleven stilstaan — ze volgen nu rechtstreeks je gemarkeerde looproute.
+• Geen constant verdwijnen/opnieuw-verschijnen meer: twee crowd-systemen werkten elkaar tegen (de een
+  hield NPC's in leven, de ander ruimde ze meteen weer op). De crowd blijft nu stabiel rondlopen.
+• De map-markers kloppen weer: alleen NPC's die echt rondlopen krijgen een stip, zodat je ze ook
+  daadwerkelijk vindt waar de marker staat.
+
+HUD & TELEFOON
+
+• Status-HUD opgesplitst in twee compacte strips: linksboven dag/tijd + cash & bank, rechtsboven heat,
+  level en je stoned-meter. Het kompas is groter en doorzichtiger.
+• De telefoon heeft bovenaan een level/XP-balk: je ziet hoeveel XP je nog nodig hebt voor het volgende level.
+• Berichten tonen hun tijd nu in echte minuten ("5 min geleden") i.p.v. de snelle game-tijd.
+
+INVENTORY & WINKEL
+
+• Iets uit een opslag (drying rack / schap) naar je inventory slepen plaatst het nu in het vak waar je
+  het loslaat, i.p.v. dat het in je hotbar springt.
+• De supplies-winkel heeft de ontbrekende edible-ingrediënten erbij (bloem, suiker, gelatine).
+• De gootsteen is nu een vaste fixture: niet meer per ongeluk op te pakken en niet meer te koop.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PATCH NOTES
 Version 1.13.0 — 24 juni 2026
 
 Korte intro:

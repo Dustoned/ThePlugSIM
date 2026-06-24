@@ -175,6 +175,11 @@ public:
 	bool bShopkeeper = false;
 	bool IsShopkeeper() const { return bShopkeeper; }
 
+	// Server-authoritative map/kompas-zichtbaarheid (= ShouldShowOnCityMap), gerepliceerd zodat clients
+	// EXACT dezelfde NPC's markeren als de host (i.p.v. lokaal herrekenen uit half-gerepliceerde vlaggen).
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
+	bool bShowOnCityMap = false;
+
 	// Marktprijs per eenheid van het gewenste product (cents). 0 als onbekend.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	int32 GetMarketPriceCents() const;
@@ -336,6 +341,10 @@ public:
 	// CLIENT 'm ook 1-mesh bouwt (zit in de initiele bunch, dus voor OnRep_Appearance/RepSkinIndex draait).
 	UPROPERTY(Replicated)
 	bool bCrowdNpc = false;
+	// DoorRetrofitter VIRTUELE-CROWD-lichaam: door de DoorRetrofitter gematerialiseerd + BLIJVEND bedoeld (die
+	// beheert hun aantal zelf, BodyCap=70). De spawner-cull mag ze NIET opruimen, anders re-materialiseert de
+	// DoorRetrofitter ze meteen elders = de constante despawn/respawn-churn. Server-only vlag (cull draait server-side).
+	bool bVirtualCrowdBody = false;
 protected:
 	FVector ActivitySpot = FVector::ZeroVector;     // doelplek
 	float ActivityYaw = 0.f;                         // kijkrichting op de plek

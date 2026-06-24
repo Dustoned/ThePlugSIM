@@ -1019,7 +1019,7 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	}
 	else if (Cast<AWaterSink>(Target))
 	{
-		ReturnItem = FName(TEXT("Sink"));
+		return; // gootsteen = vaste fixture, niet oppakbaar
 	}
 	else if (Cast<ACeilingLamp>(Target))
 	{
@@ -1097,7 +1097,7 @@ bool UBuildComponent::IsPickable(const AActor* A) const
 {
 	if (!A || A->ActorHasTag(FName(TEXT("Cosmetic")))) { return false; } // NPC-woning-meubels: niet oppakbaar
 	return (Cast<AGrowPlant>(A) || Cast<APlaceableProp>(A) || Cast<ADryingRack>(A)
-		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<AWaterSink>(A) || Cast<ACeilingLamp>(A)
+		|| Cast<APackBench>(A) || Cast<AStorageShelf>(A) || Cast<ACeilingLamp>(A)
 		|| Cast<AAtm>(A) || Cast<APackLightSwitch>(A));
 }
 

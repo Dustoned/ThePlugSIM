@@ -82,6 +82,11 @@ public:
 	void RequestSplit(int32 StackId, int32 Amount, int32 ToCell);
 	UFUNCTION(Server, Reliable) void ServerSplitStack(int32 StackId, int32 Amount);
 
+	// Plaats de eerstvolgende NIEUWE stapel (bv. een item uit een storage-transfer dat je op een rooster-cel
+	// dropt) in die specifieke rooster-cel i.p.v. automatisch op de hotbar. Hergebruikt het split-placement-
+	// mechanisme (bPendingSplit/PendingSplitCell): RefreshHotbarAuto slaat de hotbar over, RefreshGridAuto plaatst 'm.
+	void SetPendingGridCell(int32 Cell) { bPendingSplit = true; PendingSplitCell = Cell; }
+
 	// Voeg PRECIES twee stapels samen (sleep From op Into). Alleen zelfde, stapelbaar item.
 	void RequestMergeTwo(int32 IntoStackId, int32 FromStackId) { ServerMergeTwo(IntoStackId, FromStackId); }
 	UFUNCTION(Server, Reliable) void ServerMergeTwo(int32 IntoStackId, int32 FromStackId);

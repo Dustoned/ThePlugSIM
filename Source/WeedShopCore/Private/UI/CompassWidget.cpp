@@ -35,14 +35,14 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 
 	// Achtergrondbalk bovenaan, gecentreerd.
 	UBorder* Bg = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CompassBg"));
-	Bg->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.7f), 10.f));
+	Bg->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.42f), 12.f));
 	Bg->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Bg->SetClipping(EWidgetClipping::ClipToBounds);
 	UCanvasPanelSlot* BgS = Root->AddChildToCanvas(Bg);
 	BgS->SetAnchors(FAnchors(0.5f, 0.f, 0.5f, 0.f));
 	BgS->SetAlignment(FVector2D(0.5f, 0.f));
 	BgS->SetAutoSize(false);
-	BgS->SetSize(FVector2D(BandW, 34.f));
+	BgS->SetSize(FVector2D(BandW, 42.f));
 	BgS->SetPosition(FVector2D(0.f, 12.f));
 
 	Band = WidgetTree->ConstructWidget<UCanvasPanel>();
@@ -54,14 +54,14 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	Center->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.85f), 1.f));
 	Center->SetVisibility(ESlateVisibility::HitTestInvisible);
 	UCanvasPanelSlot* CenS = Band->AddChildToCanvas(Center);
-	CenS->SetAutoSize(false); CenS->SetSize(FVector2D(2.f, 30.f));
-	CenS->SetAlignment(FVector2D(0.5f, 0.5f)); CenS->SetPosition(FVector2D(BandW * 0.5f, 17.f));
+	CenS->SetAutoSize(false); CenS->SetSize(FVector2D(2.f, 38.f));
+	CenS->SetAlignment(FVector2D(0.5f, 0.5f)); CenS->SetPosition(FVector2D(BandW * 0.5f, 21.f));
 
 	// Windstreken.
 	static const TCHAR* Names[8] = { TEXT("N"), TEXT("NE"), TEXT("E"), TEXT("SE"), TEXT("S"), TEXT("SW"), TEXT("W"), TEXT("NW") };
 	for (int32 i = 0; i < 8; ++i)
 	{
-		UTextBlock* T = WeedUI::Text(WidgetTree, Names[i], (i % 2 == 0) ? 14 : 10, (i % 2 == 0) ? FLinearColor::White : FLinearColor(0.6f, 0.65f, 0.75f), true);
+		UTextBlock* T = WeedUI::Text(WidgetTree, Names[i], (i % 2 == 0) ? 17 : 12, (i % 2 == 0) ? FLinearColor::White : FLinearColor(0.6f, 0.65f, 0.75f), true);
 		Band->AddChildToCanvas(T);
 		CardinalLabels.Add(T);
 		CardinalYaws.Add(i * 45.f);
@@ -154,7 +154,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	for (int32 i = 0; i < CardinalLabels.Num(); ++i)
 	{
 		const float Rel = FRotator::NormalizeAxis(CardinalYaws[i] - PlayerYaw);
-		PlaceOnBand(CardinalLabels[i], Rel, 11.f);
+		PlaceOnBand(CardinalLabels[i], Rel, 14.f);
 	}
 
 	// Alléén een poppetje voor klanten die je NU nodig hebt (afspraak / staat te wachten). Gewone
@@ -162,12 +162,12 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	int32 m = 0;
 	for (TActorIterator<ACustomerBase> It(GetWorld()); It && m < Markers.Num(); ++It)
 	{
-		if (!IsValid(*It) || !It->bNeedsPlayer) { continue; }
+		if (!IsValid(*It) || !It->bNeedsPlayer || !It->bShowOnCityMap) { continue; }
 		const FVector D = It->GetActorLocation() - PL;
 		if (D.SizeSquared2D() < 100.f) { continue; }
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
 		const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
-		PlaceOnBand(Markers[m], Rel, 22.f);
+		PlaceOnBand(Markers[m], Rel, 26.f);
 		++m;
 	}
 	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
@@ -184,7 +184,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const FVector D = Pw->GetActorLocation() - PL;
 			if (D.SizeSquared2D() < 100.f) { continue; }
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(CoopMarkers[cm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+			PlaceOnBand(CoopMarkers[cm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
 			++cm;
 		}
 	}
@@ -205,7 +205,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FVector D = HomeWorld - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(HomeMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+			PlaceOnBand(HomeMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
 		}
 		else { HomeMarker->SetVisibility(ESlateVisibility::Collapsed); }
 	}
@@ -217,7 +217,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FVector D = WaypointWorld - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(WaypointMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+			PlaceOnBand(WaypointMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
 		}
 		else
 		{
@@ -235,7 +235,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (dm >= DeliveryMarkers.Num()) { break; }
 			const FVector D = Del.World - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(DeliveryMarkers[dm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 22.f);
+			PlaceOnBand(DeliveryMarkers[dm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
 			++dm;
 		}
 	}

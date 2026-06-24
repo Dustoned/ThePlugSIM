@@ -1209,11 +1209,13 @@ void UPhoneWidget::BuildChatApp()
 		// Tijdstempel (HH:MM, in-game klok) onder het bericht - zoals een normale berichten-app.
 		UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		BubVB->AddChildToVerticalBox(BodyT);
-		if (M.SentClockHour >= 0.f)
+		// Tijdstempel op ECHTE tijd ("Xm ago") i.p.v. de in-game klok (die liep te snel).
+		if (M.SentRealTime >= 0.f)
 		{
-			const int32 Hh = (int32)M.SentClockHour;
-			const int32 Mm = (int32)((M.SentClockHour - Hh) * 60.f);
-			UTextBlock* TimeT = MakeText(FString::Printf(TEXT("%02d:%02d"), Hh, Mm), 8, FLinearColor(0.55f, 0.6f, 0.72f));
+			const float RealNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+			const int32 AgoSec = FMath::Max(0, (int32)(RealNow - M.SentRealTime));
+			const FString Ago = (AgoSec < 60) ? FString(TEXT("just now")) : (AgoSec < 3600) ? FString::Printf(TEXT("%dm ago"), AgoSec / 60) : FString::Printf(TEXT("%dh ago"), AgoSec / 3600);
+			UTextBlock* TimeT = MakeText(Ago, 8, FLinearColor(0.55f, 0.6f, 0.72f));
 			UVerticalBoxSlot* TSl = BubVB->AddChildToVerticalBox(TimeT);
 			TSl->SetHorizontalAlignment(M.bFromMe ? HAlign_Right : HAlign_Left);
 			TSl->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
@@ -2191,7 +2193,24 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 		UHorizontalBoxSlot* H3 = Status->AddChildToHorizontalBox(CashText);  H3->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); H3->SetHorizontalAlignment(HAlign_Right);
 	}
 	UVerticalBoxSlot* StatusSlot = VB->AddChildToVerticalBox(Status);
-	StatusSlot->SetPadding(FMargin(6.f, 4.f, 6.f, 8.f));
+	StatusSlot->SetPadding(FMargin(6.f, 4.f, 6.f, 4.f));
+
+	// Level/XP-voortgangsbalk onder de statusbalk: zie hoeveel XP je nog nodig hebt voor het volgende level.
+	{
+		UHorizontalBox* XpRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+		LevelXpBar = WidgetTree->ConstructWidget<UProgressBar>();
+		LevelXpBar->SetFillColorAndOpacity(FLinearColor(0.45f, 0.85f, 0.5f));
+		LevelXpBar->SetPercent(0.f);
+		USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>(); BarSz->SetHeightOverride(10.f);
+		BarSz->SetContent(LevelXpBar);
+		UHorizontalBoxSlot* BS = XpRow->AddChildToHorizontalBox(BarSz);
+		BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		LevelXpText = MakeText(TEXT("0 / 0 XP"), 9, FLinearColor(0.78f, 0.96f, 0.82f));
+		UHorizontalBoxSlot* TS = XpRow->AddChildToHorizontalBox(LevelXpText);
+		TS->SetVerticalAlignment(VAlign_Center);
+		UVerticalBoxSlot* XpSlot = VB->AddChildToVerticalBox(XpRow);
+		XpSlot->SetPadding(FMargin(8.f, 0.f, 8.f, 8.f));
+	}
 
 	// Scherm-vlak met de app-inhoud.
 	UBorder* Screen = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Screen"));
@@ -2629,7 +2648,16 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		if (LevelText && GS->GetLeveling())
 		{
-			LevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv %d"), GS->GetLeveling()->GetLevel())));
+			const ULevelComponent* Lv = GS->GetLeveling();
+			LevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv %d"), Lv->GetLevel())));
+			if (LevelXpBar) { LevelXpBar->SetPercent(Lv->GetLevelFraction()); }
+			if (LevelXpText)
+			{
+				const int32 ToNext = Lv->GetXPToNext();
+				LevelXpText->SetText(ToNext <= 0
+					? FText::FromString(TEXT("MAX"))
+					: FText::FromString(FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), ToNext)));
+			}
 		}
 	}
 

@@ -549,8 +549,9 @@ TArray<FName> UStoreComponent::GetSupplierCategory(int32 Cat) const
 			case 11: bMatch = S.StartsWith(TEXT("Pan_"))
 				|| S.StartsWith(TEXT("Mesh_")) || S.StartsWith(TEXT("Press_")) || S.StartsWith(TEXT("ProcUp_"))
 				|| S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Iso_")) || S.StartsWith(TEXT("Moon_")) || S.StartsWith(TEXT("Oil_")); break;
-			// Ingredients: kook-consumables (boter; later bloem/suiker/eieren e.d. voor koekjes/brownies).
-			case 12: bMatch = S == TEXT("Butter"); break;
+			// Ingredients: kook-consumables voor de keuken. Boter -> cannabutter; bloem + suiker -> koekjes;
+			// gelatine + suiker -> gummies. (Stonden al in de catalogus maar misten in deze categorie-filter.)
+			case 12: bMatch = S == TEXT("Butter") || S == TEXT("Flour") || S == TEXT("Sugar") || S == TEXT("Gelatin"); break;
 			default: break;
 			}
 			if (bMatch) { Out.Add(Id); }

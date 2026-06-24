@@ -733,7 +733,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, bApptActive);
 	DOREPLIFETIME(ACustomerBase, ApptTimeout);
 	DOREPLIFETIME(ACustomerBase, ApptTimeoutMax);
-	DOREPLIFETIME(ACustomerBase, NpcId);
+	DOREPLIFETIME(ACustomerBase, bShowOnCityMap); // map/kompas-zichtbaarheid: server = enige waarheid
 }
 
 void ACustomerBase::PushApptMessage(const FString& InBody)
@@ -810,6 +810,10 @@ void ACustomerBase::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+
+	// Map/kompas-zichtbaarheid server-authoritative bepalen + repliceren, zodat clients exact dezelfde
+	// markers tonen als de host (en niet lokaal herrekenen uit half-gerepliceerde vlaggen).
+	bShowOnCityMap = ShouldShowOnCityMap();
 
 	// Activity-NPC (dev-tool): loopt naar z'n vaste plek en doet daar z'n anim - geen klant-/bewoner-logica.
 	if (bActivityNpc)

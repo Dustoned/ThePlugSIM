@@ -93,6 +93,8 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> TimeText;
 	UPROPERTY() TObjectPtr<UTextBlock> LevelText;
 	UPROPERTY() TObjectPtr<UTextBlock> CashText;
+	UPROPERTY() TObjectPtr<class UProgressBar> LevelXpBar; // XP-voortgang naar het volgende level (onder de statusbalk)
+	UPROPERTY() TObjectPtr<UTextBlock> LevelXpText;        // "120 / 300 XP" naast de balk
 	UPROPERTY() TObjectPtr<UVerticalBox> ContentBox;
 	// Ongelezen-badge op de Messages-app in het home-rooster (live bijgewerkt, geen rebuild -> geen flash).
 	UPROPERTY() TObjectPtr<UBorder> MsgAppBadgePill;

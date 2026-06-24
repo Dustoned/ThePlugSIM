@@ -3051,6 +3051,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 				if (B) { B->bCrowdNpc = true; B->FinishSpawning(FTransform(SpawnP)); }
 			}
 			if (!B) { continue; }
+			B->bVirtualCrowdBody = true; // beheerd door de DoorRetrofitter (blijvend) - de spawner-cull laat 'm met rust
 			++NBodies;
 			V.Body = B;
 			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).

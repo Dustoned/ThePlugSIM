@@ -585,7 +585,8 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		ACustomerBase* C = *It;
 		if (!IsValid(C)) { continue; }
 		// Bewoners in binnen-/home-transitie niet als straat-NPC tonen: anders lijken ze vast te staan op woonblokken.
-		if (!C->ShouldShowOnCityMap()) { continue; }
+		// Gerepliceerde, server-authoritative vlag -> client toont exact dezelfde NPC's als de host.
+		if (!C->bShowOnCityMap) { continue; }
 
 		const FVector L = C->GetActorLocation();
 		const FVector2D Pos = WorldToCanvas(L.X, L.Y);
@@ -622,25 +623,8 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			++NRoam;
 		}
 	}
-	// VIRTUELE wandelaars (zonder lichaam, te ver weg): zelfde cyaan puntje - de kaart toont
-	// dus altijd de hele crowd, ook waar de wereld niet geladen is.
-	for (TActorIterator<ADoorRetrofitter> RIt(GetWorld()); RIt; ++RIt)
-	{
-		TArray<FVector> Virtuals;
-		RIt->GetVirtualWalkerPositions(Virtuals);
-		for (const FVector& VP : Virtuals)
-		{
-			const FVector2D Pos = WorldToCanvas(VP.X, VP.Y);
-			while (NpcDots.Num() <= NRoam) { NpcDots.Add(AddDot(FLinearColor(0.25f, 0.45f, 1.f), 10.f, 18)); }
-			if (UBorder* Dot = NpcDots[NRoam])
-			{
-				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(Dot->Slot)) { Cs->SetPosition(Pos); }
-				Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
-			}
-			++NRoam;
-		}
-		break;
-	}
+	// (Virtuele crowd-stippen verwijderd: die hadden geen echt lichaam, dus je kon ze nooit vinden. De kaart
+	//  toont nu ALLEEN fysiek aanwezige, rondlopende NPC's, zodat een stip altijd een vindbare NPC is.)
 	// WINKELS: duidelijk geel winkel-icoon op elke toonbank, boven de NPC-stippen.
 	int32 NShop = 0;
 	for (TActorIterator<AStoreCounter> SIt(GetWorld()); SIt; ++SIt)

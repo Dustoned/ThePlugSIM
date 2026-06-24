@@ -24,6 +24,20 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "NavigationSystem.h"
+#include "NavigationPath.h"
+
+// Aantal WANDELAARS (ambient crowd, GEEN bewoners) in de Spawned-lijst. De spawn/cull-caps gaan over de
+// wandelaar-crowd; bewoners (Resident_-id) zitten OOK in Spawned maar tellen NIET mee - anders is de cap
+// altijd overschreden door de ~65 bewoners (= er spawnen nooit ambient-wandelaars + alles wordt ge-culld).
+static int32 CountRoamers(const TArray<TObjectPtr<ACustomerBase>>& Arr)
+{
+	int32 N = 0;
+	for (const TObjectPtr<ACustomerBase>& C : Arr)
+	{
+		if (IsValid(C) && !C->IsResident()) { ++N; }
+	}
+	return N;
+}
 
 ACustomerSpawner::ACustomerSpawner()
 {
@@ -158,7 +172,9 @@ void ACustomerSpawner::Tick(float DeltaSeconds)
 	}
 	if (bResidentsSpawned)
 	{
-		GetWorldTimerManager().ClearTimer(SpawnTimer);
+		// SpawnTimer bewust NIET stoppen: TrySpawn moet blijven draaien voor doorlopende wandelaar-aanvulling
+		// + cull + de route-patrouille (die ALLE Spawned laat lopen). Zonder dit staat de hele crowd stil
+		// zodra de bewoners gespawnd zijn -> lege/stilstaande straat.
 		if (!bResidentMonitorActive && !bResidentMonitorDone)
 		{
 			StartResidentMovementMonitor();
@@ -327,6 +343,24 @@ void ACustomerSpawner::TickResidentMovementMonitor(float Now)
 	}
 }
 
+void ACustomerSpawner::EnsureRouteNavProbed(UNavigationSystemV1* Nav)
+{
+	if (RouteNavState >= 0) { return; }          // al getest (1x, gecachet)
+	if (NetNodes.Num() < 2 || !Nav) { return; }  // ring nog niet geladen -> volgende tik opnieuw proberen
+	// Probeer een ECHT pad tussen twee naburige ring-knopen. Lukt dat niet, dan levert de navmesh hier
+	// geen paden -> we lopen de ring daarna RECHTSTREEKS af (geen pathfinding) i.p.v. te bevriezen.
+	int32 A = 0, B = 1;
+	for (int32 i = 0; i < NetAdj.Num(); ++i)
+	{
+		if (NetAdj[i].Num() > 0) { A = i; B = NetAdj[i][0]; break; }
+	}
+	UNavigationPath* P = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), NetNodes[A], NetNodes[B], nullptr);
+	const bool bOk = P && P->IsValid() && P->PathPoints.Num() > 1;
+	RouteNavState = bOk ? 0 : 1;
+	UE_LOG(LogWeedShop, Warning, TEXT("Route-spawner nav-probe: %s (knoop %d->%d)"),
+		bOk ? TEXT("navmesh OK") : TEXT("NAVMESH DOOD -> direct ring-walk"), A, B);
+}
+
 void ACustomerSpawner::TrySpawn()
 {
 	UWorld* World = GetWorld();
@@ -355,6 +389,8 @@ void ACustomerSpawner::TrySpawn()
 	{
 		UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World);
 		if (!Nav) { return; }
+		EnsureRouteNavProbed(Nav);
+		const bool bDirectRing = IsRouteNavDead(); // dode navmesh -> ring RECHTSTREEKS aflopen (geen pathfinding)
 		// Hoogte-marge 90cm: de spawner-actor staat zelf 60cm boven het marker-punt, dus 50cm
 		// keurde ALLES af (straat ligt altijd ~60cm onder de spawner). Het service-niveau
 		// (~200cm lager) valt nog steeds buiten de marge, en props (containers/tafels) worden
@@ -367,7 +403,7 @@ void ACustomerSpawner::TrySpawn()
 		{
 			if (auto* DCnt = GSnt->GetDayCycle())
 			{
-				if (DCnt->IsNight()) { NightOrDayTarget = FMath::Max(2, MaxCustomers / 4); }
+				if (DCnt->IsNight()) { NightOrDayTarget = FMath::Max(2, NightRoamers); } // 's nachts de nacht-crowd (junkies)
 			}
 		}
 		// Opruimen: wandelaars die GEZAKT zijn (onder de stoep) of ergens OP geklommen staan.
@@ -398,7 +434,7 @@ void ACustomerSpawner::TrySpawn()
 				if (Mv0->bUseRVOAvoidance == bFar) { Mv0->SetAvoidanceEnabled(!bFar); }
 			}
 
-			if (Cw0->NpcId.ToString().StartsWith(TEXT("Resident_"))) { continue; }
+			if (Cw0->IsResident()) { continue; }
 
 			// KERN-REGEL: NOOIT voor de neus van de speler despawnen. Binnen ~80m verdwijnt er niks -> strikes
 			// resetten en door. Alleen BUITEN ZICHT (off-screen) ruimen we op. Zo zie je nooit meer een NPC
@@ -407,7 +443,9 @@ void ACustomerSpawner::TrySpawn()
 
 			// Off-screen + TE VEEL volk -> opruimen tot het dag/nacht-doelaantal. Overdag is het doel vol, dus
 			// dit doet niets; 's nachts zakt het doel -> de crowd dunt off-screen vanzelf uit naar 'junkies'.
-			if (Spawned.Num() > NightOrDayTarget)
+			// MAAR: de DoorRetrofitter-virtuele-crowd (blijvende lichamen, BodyCap=70) NOOIT cullen - die beheert
+			// z'n eigen aantal; cullden we ze, dan re-materialiseerde de DoorRetrofitter ze meteen elders (= de churn).
+			if (!Cw0->bVirtualCrowdBody && CountRoamers(Spawned) > NightOrDayTarget)
 			{
 				Cw0->Destroy();
 				Spawned.RemoveAt(wi);
@@ -532,7 +570,7 @@ void ACustomerSpawner::TrySpawn()
 						++St.Stall;
 						if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
 						{
-							AI->MoveToLocation(St.ChillSpot, 80.f, true, St.Stall < 3);
+							AI->MoveToLocation(St.ChillSpot, 80.f, true, !bDirectRing && St.Stall < 3);
 						}
 						continue;
 					}
@@ -617,20 +655,30 @@ void ACustomerSpawner::TrySpawn()
 				{
 					const FVector Jit(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), 0.f);
 					FVector Goal = NetNodes[St.NextIdx] + Jit;
-					FNavLocation GoalNav;
-					if (Nav->ProjectPointToNavigation(Goal, GoalNav, FVector(200.f, 200.f, ZTol))
-						&& FMath::Abs(GoalNav.Location.Z - NetNodes[St.NextIdx].Z) <= ZTol
-						&& IsOnStreetSurface(World, GoalNav.Location))
+					if (!bDirectRing)
 					{
-						Goal = GoalNav.Location; // netjes op de stoep, niet op een container ernaast
+						// Navmesh leeft: de knoop netjes op de stoep projecteren (props ernaast vermijden).
+						FNavLocation GoalNav;
+						if (Nav->ProjectPointToNavigation(Goal, GoalNav, FVector(200.f, 200.f, ZTol))
+							&& FMath::Abs(GoalNav.Location.Z - NetNodes[St.NextIdx].Z) <= ZTol
+							&& IsOnStreetSurface(World, GoalNav.Location))
+						{
+							Goal = GoalNav.Location; // netjes op de stoep, niet op een container ernaast
+						}
+						else
+						{
+							Goal = NetNodes[St.NextIdx]; // jitter viel verkeerd: de kale knoop (= jouw lijn)
+						}
 					}
 					else
 					{
-						Goal = NetNodes[St.NextIdx]; // jitter viel verkeerd: de kale knoop (= jouw lijn)
+						// Dode navmesh: GEEN projectie (die faalt of mikt verkeerd) - mik op de kale knoop
+						// (= jouw gemarkeerde ring, bewezen beloopbaar) en loop er RECHTSTREEKS heen.
+						Goal = NetNodes[St.NextIdx];
 					}
-					// Na 3 mislukte tikken: RECHTSTREEKS lopen - stoeprandjes en kleine navmesh-
-					// gaten zijn fysiek gewoon beloopbaar.
-					AI->MoveToLocation(Goal, 90.f, true, St.Stall < 3);
+					// bUsePathfinding=false zodra de navmesh dood is (of na 3 stalls): CharacterMovement
+					// loopt rechtstreeks naar Goal en botst nog steeds tegen muren/vloer (geen teleport).
+					AI->MoveToLocation(Goal, 90.f, true, !bDirectRing && St.Stall < 3);
 				}
 			}
 		}
@@ -652,7 +700,7 @@ void ACustomerSpawner::TrySpawn()
 				}
 			}
 		}
-		if (Spawned.Num() >= NightOrDayTarget) { return; } // dag = vol, nacht = klein (junkies)
+		if (CountRoamers(Spawned) >= NightOrDayTarget) { return; } // dag = vol, nacht = klein (junkies)
 		++TryCount;
 		if (TryCount % 30 == 0)
 		{
@@ -670,7 +718,7 @@ void ACustomerSpawner::TrySpawn()
 		if (BurstDay >= 0 && BurstDay != LastBurstDay)
 		{
 			int32 Guard = MaxCustomers * 8;
-			while (Spawned.Num() < MaxCustomers && Guard-- > 0)
+			while (CountRoamers(Spawned) < MaxCustomers && Guard-- > 0)
 			{
 				FNavLocation BNav;
 				const FVector BAround = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius, SpotRadius), FMath::FRandRange(-SpotRadius, SpotRadius), 0.f);
@@ -783,7 +831,9 @@ void ACustomerSpawner::TrySpawn()
 	if (!bResidentsSpawned) { SpawnResidents(); }
 	if (bResidentsSpawned)
 	{
-		GetWorldTimerManager().ClearTimer(SpawnTimer);
+		// SpawnTimer NIET stoppen: TrySpawn moet blijven draaien voor de ROUTE-PATROUILLE (die ALLE Spawned
+		// laat lopen, incl. de bewoners) + de aanvulling/cull. Stopte 'ie hier -> patrouille dood -> de hele
+		// crowd bevriest op z'n plek (= jouw "niemand loopt", NPC's blijven op exact dezelfde plek staan).
 		StartResidentMovementMonitor();
 	}
 }

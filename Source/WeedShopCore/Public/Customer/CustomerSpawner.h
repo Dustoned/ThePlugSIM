@@ -22,7 +22,7 @@ public:
 	TSubclassOf<ACustomerBase> CustomerClass;
 
 	UPROPERTY(EditAnywhere, Category = "Spawn")
-	int32 MaxCustomers = 3;
+	int32 MaxCustomers = 50;
 
 	// TEST: spawn slechts ÉÉN klant, met hoge stat (koopklaar), netjes in het centrale park (PlayerStart).
 	UPROPERTY(EditAnywhere, Category = "Spawn")
@@ -63,6 +63,15 @@ public:
 	// dus kruispunten en oversteken werken vanzelf als verbindingen. Leeg = los slenteren.
 	TArray<FVector> NetNodes;
 	TArray<TArray<int32>> NetAdj;
+
+	// NAV-DEAD DETECTIE (bv. CityBeachStrip): soms bestaat er wel een NavSystem maar levert de navmesh
+	// GEEN paden -> AI->MoveToLocation(bUsePathfinding=true) faalt en de route-wandelaars bevriezen
+	// (ze wisselden eindeloos tussen navmesh-poging en directe stap -> stonden stil). 1x getest zodra de
+	// ring geladen is; is de navmesh dood, dan lopen we de ring RECHTSTREEKS af (CharacterMovement, dus
+	// nog steeds muur/vloer-collision, geen teleport).
+	int8 RouteNavState = -1; // -1 = nog niet getest, 0 = navmesh werkt, 1 = navmesh dood (direct lopen)
+	bool IsRouteNavDead() const { return RouteNavState == 1; }
+	void EnsureRouteNavProbed(class UNavigationSystemV1* Nav);
 
 	// CHILL-PLEKKEN: gemarkeerde hang-plekken; een deel van de wandelaars loopt erheen en
 	// blijft daar staan tot de dag wisselt (bezetting wordt gedeeld bijgehouden).

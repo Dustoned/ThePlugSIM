@@ -41,6 +41,6 @@ protected:
 	FVector HomeWorld = FVector::ZeroVector;
 	bool bHomeFound = false;
 
-	static constexpr float BandW = 460.f;
+	static constexpr float BandW = 540.f;
 	static constexpr float HalfFov = 90.f; // toont 180 graden over de balk
 };
