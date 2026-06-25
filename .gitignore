@@ -34,3 +34,8 @@ Backup/
 /Content/__ExternalActors__/CityBeachStrip/
 /Content/*.rar
 
+
+# Dev-only: UnrealClaude MCP-plugin (editor-tool, geen game-content)
+/Plugins/UnrealClaude/
+# Losse download-zip (geen repo-content)
+/ThePlugSIM_HUD_HighRes_Unreal_Rebuild.zip

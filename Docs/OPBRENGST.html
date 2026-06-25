@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ThePlugSIM - Opbrengst & Winst</title>
+<style>
+  body { background:#0d1117; color:#c9d1d9; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; margin:0; line-height:1.55; }
+  .wrap { max-width:1060px; margin:0 auto; padding:28px 40px 90px; }
+  h1,h2 { border-bottom:1px solid #30363d; padding-bottom:6px; margin-top:34px; }
+  h1 { font-size:2em; } h2 { font-size:1.5em; } h3 { font-size:1.15em; margin-top:22px; }
+  table { border-collapse:collapse; margin:14px 0; }
+  th,td { border:1px solid #30363d; padding:6px 11px; text-align:left; white-space:nowrap; }
+  th { background:#161b22; }
+  tr:nth-child(2n) { background:#0f141a; }
+  pre { background:#161b22; padding:14px 16px; border-radius:8px; overflow-x:auto; }
+  pre,code { font-family:Consolas,"Cascadia Code","Courier New",monospace; }
+  pre code { font-size:12.5px; line-height:1.34; white-space:pre; background:none; padding:0; }
+  code { background:#161b22; padding:2px 5px; border-radius:4px; font-size:0.9em; }
+  a { color:#58a6ff; text-decoration:none; }
+  blockquote { border-left:3px solid #30363d; margin:14px 0; padding:2px 16px; color:#8b949e; }
+  hr { border:none; border-top:1px solid #30363d; margin:28px 0; }
+  ul { padding-left:22px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="out">Renderen...</div>
+<script id="src" type="text/markdown">
+# OPBRENGST & WINST — planten (ThePlugSIM)
+
+> Wat een plant **oplevert**: yield (gram), kwaliteit/THC, en de **winst per plant** met en zonder upgrades. Tegenhanger van [KOSTEN.md](KOSTEN.md) (wat alles kost) en [PROGRESSION.md](PROGRESSION.md) (de hele progressie).
+>
+> **Bronnen:** `GrowPlant.cpp` (yield/kwaliteit/THC/groei), `PotTypes.cpp`, `SoilTypes.cpp`, `Data/DT_Strains.csv` (kweek) · `CustomerBase.cpp`, `WeedDealLibrary.cpp`, `NpcRegistryComponent.cpp`, `Data/DT_Products.csv` (verkoop). Geld intern in centen; `WeedRoundEuros` rondt elke uitbetaling op hele euro's.
+>
+> Laatst bijgewerkt: 25 juni 2026
+
+---
+
+## ⚡ De 3 dingen die je écht moet weten
+
+1. **Kwaliteit% en THC% veranderen het GELD NIET.** Je verdient `vraagprijs €/g × verkochte grammen`. Kwaliteit/THC bepalen alleen of de klant je prijs **accepteert** — dus met betere weed kun je je vraagprijs hoger zetten zonder weigering, maar de prijs zelf is altijd jouw keuze × grammen.
+2. **Yield is de grote hefboom.** Een kale opzet haalt **~0,50×** de basis-yield; volledig geüpgraded **~3,22×** — dat is **~6,5× zoveel gram** van exact dezelfde plant.
+3. **Losse `Bud_` verkoopt NIET.** Je moet drogen (`WetBud_` → `Bud_`) én verpakken (`Bag_`) voordat een klant het koopt. Verwerken (hasj/edibles/concentraten) vermenigvuldigt de €/g fors (zie §8).
+
+---
+
+## 📐 De formules
+
+```
+YIELD (gram)   = round( BaseYield × CareQ × SoilYield × PotYield_eff × FertYield )   (min 1)
+
+   CareQ        = clamp(CareAvg, 0..1)          tijd-gewogen verzorging, geremd door MaxCare
+   SoilYield    = 1.00 / 1.25 / 1.50            Basic / Rich / Premium
+   PotYield_eff = PotBasis × (Bloom?×1.2) × (AutoWaterII?×1.1)
+                  PotBasis = 0.90 / 1.00 / 1.10 / 1.25   Broken / Clay / Plastic / Fabric
+   FertYield    = 1.00 / 1.15 / 1.30            geen / Basic / Bloom
+
+KWALITEIT%     = round( max(5, clamp(CareAvg,0..1) × SoilQuality × 100) )
+   SoilQuality = 1.00 / 1.15 / 1.30             Basic / Rich / Premium  (kan boven 100% duwen → cap 100)
+
+THC%           = round( clamp( BaseThc × GearQ × kans(0.94–1.06),  vloer = max(1, BaseThc×0.15),  cap 46 ) )
+   GearQ = 0.35·CareQ + 0.25·SoilQ + 0.22·PotQ + 0.18·FertQ     (gewichten = 1.0)
+      SoilQ = 0.50 / 0.75 / 1.00
+      PotQ  = 0.40 / 0.55 / 0.70 / 0.85  + drainage 0.04 + tent 0.04/0.07/0.11   (clamp 0.40–1.0)
+      FertQ = 0.60 / 0.75 / 0.90
+
+MaxCare (kwaliteit-PLAFOND) = clamp( PotCareCap + drainage 0.10 + tent 0.08/0.15/0.22 + research, 0.40–1.0 )
+   PotCareCap = 0.55 / 0.70 / 0.85 / 1.00       Broken / Clay / Plastic / Fabric
+
+GROEITIJD (wandklok) = GrowMinutes / (1 + research) / Lamp     Lamp = ×1.15 / ×1.30 / ×1.50
+
+VERKOOP (€) = vraagprijs_centen_per_gram × verkochte_gram   (+ evt. VIP-order-bonus +50…100%)
+```
+
+> ⚠️ **Verzorging is een tijd-gemiddelde** — op het laatst water geven redt de kwaliteit niet meer; je moet de hele groei vochtig houden (WaterLevel ≥ 0,25). Te láát oogsten laat de plant rotten → CareAvg zakt mee → minder gram én kwaliteit, en uiteindelijk dood (zaadje kwijt).
+
+---
+
+## 🌿 Per strain — basis-data
+
+| Strain | THC-basis | Yield-basis (g) | Groei (min) | Zaad | Markt €/g* | Unlock |
+|---|---|---|---|---|---|---|
+| Streetweed | 14% | **52** | 2,5 | €2,50 | €4 | 1 |
+| Critical Mass | 15% | **58** | 14 | €13,50 | €5,50 | 3 |
+| Silver Haze | 16% | 35 | 6 | €22,50 | €6 | 5 |
+| Blue Dream | 17% | 46 | 7 | €30 | €7 | 7 |
+| Northern Lights | 18% | 32 | 7 | €36 | €8 | 9 |
+| Big Bud | 18% | **63** | 16 | €80 | €10 | 11 |
+| White Widow | 20% | 30 | 8 | €60 | €11 | 13 |
+| Jack Herer | 21% | 35 | 9 | €80 | €12,50 | 15 |
+| Sour Diesel | 22% | 25 | 9 | €100 | €13,50 | 17 |
+| Pineapple Express | 23% | 30 | 10 | €115 | €14,50 | 19 |
+| Amnesia Haze | 24% | 25 | 10 | €140 | €14 | 21 |
+| OG Kush | 25% | 28 | 11 | €180 | €17 | 23 |
+| Bubba Kush | 26% | 23 | 11 | €180 | €21 | 25 |
+| Durban Poison | 27% | 28 | 11 | €195 | €19,50 | 27 |
+| Gorilla Glue | 28% | 21 | 12 | €180 | €28 | 29 |
+| Purple Haze | 29% | 18 | 12 | €195 | €34 | 31 |
+| Girl Scout Cookies | 30% | 17 | 13 | €210 | €39 | 33 |
+| Cookies & Cream | 31% | 17 | 13 | €225 | €42 | 35 |
+| Wedding Cake | 31% | 15 | 14 | €240 | €51 | 37 |
+| Gelato (Cali) | 34% | 15 | 15 | €250 | €54 | 39 |
+| Mimosa (Cali) | 35% | 14 | 15 | €270 | €63 | 41 |
+| Runtz (Cali) | 36% | 13 | 16 | €290 | €73 | 43 |
+| Apple Fritter (Cali) | 37% | 12 | 16 | €305 | €85 | 45 |
+| Zkittlez (Cali) | 38% | 11 | 17 | €325 | €100 | 47 |
+| Gary Payton (Cali) | 40% | **10** | 18 | €340 | €120 | 49 |
+
+\* Markt €/g = de "eerlijke" prijs uit `DT_Products` waar de acceptatie omheen draait (zie §7). **Ontwerp-curve:** THC klimt 14→40%, yield zakt 52→10 g. Lage strains = veel gram/goedkoop; Cali-toppers = weinig gram/duur per gram.
+
+---
+
+## ⬆️ Upgrade-effecten (wat doet wat)
+
+| Upgrade | Effect op **yield** | Effect op **kwaliteit-plafond** | Effect op **THC** | Effect op **snelheid** | Koop |
+|---|---|---|---|---|---|
+| **Pot** Broken→Clay→Plastic→Fabric | ×0.90 / 1.00 / 1.10 / **1.25** | cap 0.55 / 0.70 / 0.85 / **1.00** | PotQ 0.40/0.55/0.70/0.85 | — | €15/40/100/350 |
+| **Aarde** Basic→Rich→Premium | ×1.00 / 1.25 / **1.50** | qual ×1.00 / 1.15 / **1.30** | SoilQ 0.50/0.75/1.00 | — | €15/40/90 |
+| **Gear_Bloom** (bloei-booster) | **×1.2 (+20%)** | — | — | — | €50 |
+| **Gear_Water2** (auto-water II) | **×1.1 (+10%)** | (houdt water vol) | — | — | €260 |
+| **Fertilizer_Basic / _Bloom** | **×1.15 / ×1.30** | — | FertQ 0.75 / 0.90 | — | €20 / €45 |
+| **Gear_Drainage** | — | **+0.10** | +0.04 | — | €30 |
+| **Gear_Tent1/2/3** | — | **+0.08 / 0.15 / 0.22** | +0.04/0.07/0.11 | — | €70/130/240 |
+| **Gear_Lamp1/2/3** | — | — | — | **+15% / 30% / 50%** | €60/120/220 |
+| **Gear_Insulation** | — | (water droogt 2× trager) | — | — | €40 |
+| **Gear_Water1** (auto-water I) | — | (houdt water vol) | — | — | €140 |
+| **Spray_** (fungicide/pesticide/broad) | — | — | — | (geneest ziekte → plant groeit weer) | €25/25/60 |
+
+> **Alleen Bloom-booster + Auto-water II raken de YIELD** (×1.2 en ×1.1, stapelen multiplicatief). Lampen/tenten/drainage doen yield NIET — die zijn voor snelheid (lamp) en het kwaliteit/THC-plafond (tent/drainage).
+> **Tiers stapelen niet** — Lamp I+II+III = +50% (de hoogste), niet +95%. Tent idem. (Sinds de tier-auto-replace gaat de lagere tier-prop automatisch terug naar je inventory.)
+> **Gear is fysiek** — koop in de grow-shop (drogen-tab/grow-upg-tab) en zet de prop **binnen ~1,75 m** van de pot. Elke gear is tier- en level-gated (bv. Auto-water II vereist Fabric-pot + level 27, Tent III level 32).
+
+---
+
+## 📈 De grote hefboom: yield-multiplier
+
+| Opzet | CareQ | Soil | Pot_eff | Fert | **Totaal ×BaseYield** |
+|---|---|---|---|---|---|
+| **Kaal** (Broken + Basic, geen gear) | 0.55 | 1.00 | 0.90 | 1.00 | **≈ 0,50×** |
+| Midden (Clay + Rich + Bloom + Basic-fert) | 0.70 | 1.25 | 1.20 | 1.15 | ≈ 1,21× |
+| **Vol** (Fabric + Premium + Bloom + AutoWaterII + Bloom-fert) | 1.00 | 1.50 | 1.65 | 1.30 | **≈ 3,22×** |
+
+> Van kaal naar vol = **~6,5× zoveel gram** van dezelfde plant. Plus: Fabric-pot heeft **6 slots** i.p.v. 1 → de totale pot-doorvoer kan nog eens ×6.
+
+---
+
+## 💰 Winst per plant (bruto, op marktprijs)
+
+Yield × markt €/g, **per slot/plant**. Kaal = ~0,50×, Vol = ~3,22×. (Bruto = vóór kosten; netto-voorbeeld eronder.)
+
+| Strain | Markt €/g | **Kaal** g → bruto | **Vol** g → bruto | Vol × 6 slots (Fabric) |
+|---|---|---|---|---|
+| Streetweed | €4 | 26 g → **€104** | 167 g → **€668** | ~€4.000 |
+| Silver Haze | €6 | 17 g → €102 | 113 g → €678 | ~€4.070 |
+| Big Bud | €10 | 31 g → €310 | 203 g → **€2.030** | ~€12.180 |
+| White Widow | €11 | 15 g → €165 | 97 g → €1.067 | ~€6.400 |
+| OG Kush | €17 | 14 g → €238 | 90 g → €1.530 | ~€9.180 |
+| Purple Haze | €34 | 9 g → €306 | 58 g → €1.972 | ~€11.830 |
+| Gary Payton | €120 | 5 g → €600 | 32 g → **€3.840** | ~€23.040 |
+
+### Netto-voorbeeld — Big Bud, volledig geüpgraded, 1 plant
+
+| Post | € |
+|---|---|
+| Bruto (203 g × €10) | **+€2.030** |
+| Zaad (Big Bud) | −€80 |
+| Bloom-mest (per oogst) | −€45 |
+| Aarde-aandeel (Premium €90 / 6 oogsten) | −€15 |
+| Verpakking (~203 g aan bags, ~€0,30–0,40/g) | −€70 |
+| **Netto per plant** | **≈ €1.820** |
+
+> **Eenmalige setup** (niet per oogst): Fabric-pot €350 + Premium-aarde €90 + kern-gear (Bloom €50 + Tent III €240 + Auto-water II €260 + Drainage €30 ≈ €580) ≈ **~€1.020**. Verdien je in **één** Big-Bud-oogst terug — daarna is alles winst, ×6 slots.
+> ⚠️ Vol op een topstrain (Gary Payton €120/g) is **end-game**: die strain unlockt op level 49 en de zware gear op level 27–32. Vroeg in het spel zijn Streetweed/Big-Bud-volume realistischer.
+
+---
+
+## 🏷️ Verkoopprijs in de praktijk
+
+- **Markt €/g** = de eerlijke prijs (tabel §3). Daar draait de acceptatie omheen.
+- **Schuifbalk:** je mag vragen tussen **40% en 200%** van de markt (ondergrens €1).
+- **Harde budget-cap:** boven **€20/g** (telefoon-afspraken **€15/g**) weigert de klant altijd, ongeacht de schuif.
+- **Acceptatie-kans** (`WeedDealLibrary.cpp`):
+  ```
+  Basis = 70 − (vraag/markt − 1) × 100
+        + Respect×0.15 + Loyalty×0.15 + Addiction×0.25
+        + (kwaliteit − 0.60) × 55 × (1 − Addiction/100)      ← kwaliteit-term
+        + THC-bonus: clamp((THC − verwacht) × 2.5, 0, 45)
+  ```
+  - Op **marktprijs** met 60% kwaliteit ≈ **75% kans** → verkoopt bijna altijd.
+  - Op **1,5× markt** ≈ 25% kans; rond **~1,75× markt** valt de kans van een verse casual naar ~0.
+  - **100% kwaliteit** ≈ +20 kans; **hoge THC** tot +45 kans → daarmee duw je de vraagprijs richting de 200%/budget-cap zónder weigering.
+- **Weigeren vs afdingen:** vraag > markt → afdingen (geen straf); anders Geweigerd met **Respect −4**.
+
+> Kortom: betere weed = je mag **meer vragen** (richting €20/g cap), niet dat hetzelfde zakje meer waard wordt. Volume × een prijs net onder de cap is de winstmotor.
+
+---
+
+## 👥 Klant-types (tiers)
+
+Tier volgt uit `CustomerXP` (`TierFromXP`). Hoger = koopt meer + tolereert hogere prijs.
+
+| Tier | Naam | XP nodig | Order (g) | Prijs-tolerantie* | Strain-keuze |
+|---|---|---|---|---|---|
+| 1 | Casual | 0 | 1–3 | 0% | lage strains |
+| 2 | Regular | ≥80 | 3–6 | 6% | ↑ |
+| 3 | Heavy User | ≥220 | 6–12 | 12% | midden |
+| 4 | VIP | ≥500 | 10–20 | 20% | premium/verwerkt |
+| 5 | **Whale** | ≥1000 | **20–50** | **30%** | toppers (+ soms net boven je level) |
+
+\* Prijs-tolerantie verlaagt de *gevoelde* vraagprijs → een Whale behandelt €20/g als ~€14/g, dus accepteert veel hogere prijzen.
+
+- **Klant-XP per deal:** `grammen × (2 + Loyalty/50) × greed`. Meer gram + hogere loyaliteit → klimt naar Whale (grotere orders, meer tolerantie).
+- Start-stats: Respect 20, Loyalty 0, Addiction 10. Onder **Addiction 30** is het een "Prospect" — eerst gratis samples geven. Cooldown 240 s tussen orders (moet eerst "oproken").
+- Hogere tiers vragen vaker **verwerkte** vormen (hasj → edibles → moonrocks → rosin → bubble) en hogere strains.
+
+---
+
+## 🏭 Verwerkings-markup (waarde-kant)
+
+€/g van het verwerkte product = strain-markt-€/g **×** factor. (Verwerken levert veel minder gram op, maar per gram veel meer — netto > ~1,5× de ruwe bud op Std/Pro-machines.)
+
+| Product | ×markt €/g | | Product | ×markt €/g |
+|---|---|---|---|---|
+| `Bag_` (verpakte wiet) | **1,0×** | | `Rosin_` | 9,0× |
+| `Crystal_` (kief) | 4,0× | | `Oil_` (olie) | 9,0× |
+| `Hash_` | **10,0×** | | `Bubble_` (ice hash) | **11,0×** |
+| `Edible_` | 4,0× | | `Moonrock_` | 3,4× |
+| `Cookie_` / `Gummy_` | 4,2× | | `PreRolledJoint` | vast €7,00 |
+
+> **Verkoopt NIET (= €0):** losse `Bud_`, `WetBud_`, en tussenstappen `Baked_` / `ButterMix_`. Eerst verpakken of doorverwerken.
+
+---
+
+## ⭐ Verkoop-XP (speler-level)
+
+```
+DealXP = 5 + (Total_centen / 500)                         ≈ 5 + €Total/5  per verkoop
+   + bij vervulde VIP-order:  +15 + (Total_centen / 1000)
+```
+- XP schaalt met **euro-waarde**, niet grammen → dure deals = meer level-XP. Een €50-verkoop = **15 XP**.
+- **VIP-order-bonus** (telefoon-order, juiste strain, THC ≥ eis, volledige hoeveelheid): payout **×1,5 tot ×2,0** (schaalt met je level) — telt mee in Total dus óók extra XP.
+
+---
+
+## 🎯 Optimalisatie — takeaways
+
+1. **Upgrade yield vóór kwaliteit.** Bloom-booster (€50) + Auto-water II + Premium-aarde + Bloom-mest geven samen het grootste deel van de 3,22×. Kwaliteit/THC verhogen alleen je *prijsplafond* — handig, maar yield × volume is de motor.
+2. **Fabric-pot is de doorvoer-sprong** — 6 slots × 1,25 yield. De duurste pot maar veruit de hoogste winst/oppervlak.
+3. **Lampen = tijd, geen gram.** Koop ze om sneller te cyclen (meer oogsten/uur), niet voor meer per plant. Lamp III = 33% kortere wandklok.
+4. **Verkoop net onder de €20/g-cap** aan loyale/verslaafde klanten; kweek je klanten naar Whale (grote orders + 30% tolerantie).
+5. **Hoog-volume goedkope strains** (Streetweed 52 g, Big Bud 63 g) leveren vroeg meer cash dan dure low-yield Cali's — pas op end-game (volle gear + Whales) winnen de toppers per gram.
+6. **Verwerken loont** als je de machines hebt: Hash ×10, Bubble ×11 per gram — maar reken op ~10–24% conversie, dus alleen bij overschot/hoge tiers.
+
+---
+
+> **Onderhoud:** bij wijziging van de yield-formule (`GrowPlant.cpp`), pot/aarde/gear-waarden (`PotTypes.cpp`/`SoilTypes.cpp`), strain-data (`DT_Strains.csv`), marktprijzen (`DT_Products.csv`) of het deal-model (`WeedDealLibrary.cpp`/`CustomerBase.cpp`) dit doc mee-updaten. Kosten staan in [KOSTEN.md](KOSTEN.md), de volledige progressie in [PROGRESSION.md](PROGRESSION.md).
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script>
+  try { document.getElementById('out').innerHTML = marked.parse(document.getElementById('src').textContent); }
+  catch(e) { document.getElementById('out').textContent = 'marked.js kon niet laden (offline?). Gebruik dan een markdown-preview op OPBRENGST.md.'; }
+</script>
+</body>
+</html>

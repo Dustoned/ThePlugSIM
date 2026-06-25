@@ -210,10 +210,12 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const FInventoryStack& S = Stacks[Idx];
 			const FString IdStr = S.ItemId.ToString();
 
-			// Icoon (her)bouwen als het item veranderde, of als 't een fles is en DEZE fles z'n vol/leeg-staat flipte.
+			// Icoon (her)bouwen als het item veranderde, of als de icon-VARIANT flipte: een fles vol<->leeg,
+			// of een vloei ongeladen<->geladen (geladen paper toont het handen-rol-icoon i.p.v. het boekje).
 			const bool bIsWater = IdStr.StartsWith(TEXT("WaterBottle"));
-			const int32 SlotWaterState = bIsWater ? (S.Quality <= 0.f ? 1 : 0) : -1; // water zit in de stack-Quality
-			if (SlotLastIcon[i] != S.ItemId || (bIsWater && SlotWaterState != SlotLastWaterState[i]))
+			const bool bRollLoaded = IdStr.StartsWith(TEXT("Papers_")) && Phone && Phone->IsRollLoadedUI();
+			const int32 SlotWaterState = bIsWater ? (S.Quality <= 0.f ? 1 : 0) : (bRollLoaded ? 2 : 0);
+			if (SlotLastIcon[i] != S.ItemId || SlotWaterState != SlotLastWaterState[i])
 			{
 				SlotLastIcon[i] = S.ItemId;
 				SlotLastWaterState[i] = SlotWaterState;

@@ -21,6 +21,7 @@
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "Cultivation/WaterCanComponent.h"
+#include "Phone/PhoneClientComponent.h" // geladen-vloei-status voor het paper-icoon
 #include "Game/WeedShopGameState.h"
 #include "Progression/StoreComponent.h"
 #include "Engine/World.h"
@@ -180,6 +181,7 @@ namespace WeedUI
 		if (S == TEXT("Cont_Jar15"))          { return TEXT("Jars"); }
 		if (S == TEXT("Cont_Block100"))       { return TEXT("Press blocks"); }
 		if (S == TEXT("Cont_Garbage500"))     { return TEXT("Garbage bags"); }
+		if (S == TEXT("DryUp_FanSmall"))      { return TEXT("Small drying fan"); }
 		if (S == TEXT("DryUp_Fan"))           { return TEXT("Drying fan"); }
 		if (S == TEXT("DryUp_Seal"))          { return TEXT("Humidity sealer"); }
 		if (S == TEXT("ProcUp_Motor"))        { return TEXT("Power motor"); }
@@ -204,7 +206,14 @@ namespace WeedUI
 		if (S.StartsWith(TEXT("Oil_")))       { return NiceName(S.RightChop(4)) + TEXT(" oil"); }
 		if (S.StartsWith(TEXT("Bud_")))       { return NiceName(S.RightChop(4)); }
 		if (S.StartsWith(TEXT("Seed_")))      { return NiceName(S.RightChop(5)) + TEXT(" seed"); }
-		if (S.StartsWith(TEXT("Joint_")))     { return NiceName(S.RightChop(6)) + TEXT(" joint"); }
+		if (S.StartsWith(TEXT("Joint_")))
+		{
+			// Nieuw: Joint_<Strain>_<G>g -> "Silver Haze 3g joint". Oud: Joint_<G>g -> "3g joint".
+			const FName JStrain = UInventoryComponent::JointStrain(ItemId);
+			const int32 JG = UInventoryComponent::JointGrams(ItemId);
+			if (!JStrain.IsNone()) { return NiceName(JStrain.ToString()) + FString::Printf(TEXT(" %dg joint"), JG); }
+			return FString::Printf(TEXT("%dg joint"), JG);
+		}
 		if (S.StartsWith(TEXT("Papers_")))    { return S.RightChop(7) + TEXT(" papers"); }
 		if (S.StartsWith(TEXT("Soil_")))      { return S.RightChop(5) + TEXT(" soil"); }
 		if (S.StartsWith(TEXT("WaterBottle_"))) { return S.RightChop(12) + TEXT(" bottle"); }
@@ -236,7 +245,7 @@ namespace WeedUI
 		if (S.StartsWith(TEXT("WetBud_")))      { return After(7); }
 		if (S.StartsWith(TEXT("Bud_")))         { return After(4); }
 		if (S.StartsWith(TEXT("Bag_")))         { return NiceName(UInventoryComponent::BagStrain(ItemId).ToString()); }
-		if (S.StartsWith(TEXT("Joint_")))       { return After(6); }
+		if (S.StartsWith(TEXT("Joint_")))       { const FName JS = UInventoryComponent::JointStrain(ItemId); return JS.IsNone() ? FString::Printf(TEXT("%dg"), UInventoryComponent::JointGrams(ItemId)) : NiceName(JS.ToString()); }
 		if (S.StartsWith(TEXT("Crystal_")))     { return After(8); }
 		if (S.StartsWith(TEXT("Hash_")))        { return After(5); }
 		if (S.StartsWith(TEXT("Baked_")))       { return After(6); }
@@ -308,7 +317,7 @@ namespace WeedUI
 		if (S.StartsWith(TEXT("WetBud_")))    { return StrainCode(Suf(7)); }
 		if (S.StartsWith(TEXT("Bud_")))       { return StrainCode(Suf(4)); }
 		if (S.StartsWith(TEXT("Bag_")))       { return StrainCode(UInventoryComponent::BagStrain(ItemId).ToString()); }
-		if (S.StartsWith(TEXT("Joint_")))     { return StrainCode(Suf(6)); }
+		if (S.StartsWith(TEXT("Joint_")))     { const FName JS = UInventoryComponent::JointStrain(ItemId); return JS.IsNone() ? FString::Printf(TEXT("%dg"), UInventoryComponent::JointGrams(ItemId)) : StrainCode(JS.ToString()); }
 		if (S.StartsWith(TEXT("Crystal_")))   { return StrainCode(Suf(8)); }
 		if (S.StartsWith(TEXT("Hash_")))      { return StrainCode(Suf(5)); }
 		if (S.StartsWith(TEXT("Baked_")))     { return StrainCode(Suf(6)); }
@@ -523,6 +532,7 @@ namespace WeedUI
 			if (Has(TEXT("Gear_Bloom")))                                 return { TEXT("bloom"),     FLinearColor(0.95f, 0.55f, 0.7f),  EIcon::Leaf };
 			if (Has(TEXT("Gear_Drainage")))                              return { TEXT("drainage"),  FLinearColor(0.65f, 0.5f, 0.35f),  EIcon::Leaf };
 			if (Has(TEXT("Gear_Insulation")))                            return { TEXT("insulation"),FLinearColor(0.7f, 0.75f, 0.85f),  EIcon::Upgrade };
+			if (Has(TEXT("DryUp_FanSmall")))                             return { TEXT("fan"),       FLinearColor(0.6f, 0.8f, 0.9f),    EIcon::Gear };
 			if (Has(TEXT("DryUp_Fan")))                                  return { TEXT("fan"),       FLinearColor(0.6f, 0.8f, 0.9f),    EIcon::Gear };
 			if (Has(TEXT("DryUp_Seal")))                                 return { TEXT("seal"),      FLinearColor(0.7f, 0.75f, 0.85f),  EIcon::Upgrade };
 			if (Has(TEXT("ProcUp_Motor")))                               return { TEXT("motor"),     FLinearColor(0.7f, 0.74f, 0.8f),   EIcon::Gear };
@@ -776,24 +786,28 @@ namespace WeedUI
 	{
 		const FString S = ItemId.ToString();
 		if (S.StartsWith(TEXT("WetBud_")))  { return TEXT("weed_wet"); } // natte wiet: bud + druppel
-		// Verpakte wiet (Bag_<strain>_<gram>): kies het container-icoon op gram-formaat, zodat een zakje,
-		// een pot/jar en de grote sack duidelijk uit elkaar te houden zijn in de inventory.
+		// Afgewerkte joint: eigen plaatje (joint_rolled.png). joint.png is "handen die rollen" en hoort bij
+		// de GELADEN paper (zie ItemIconTexture), niet bij de klaar-joint.
+		if (S.StartsWith(TEXT("Joint_")))   { return TEXT("joint_rolled"); }
+		// Verpakte wiet (Bag_<strain>_<gram>): GEVULDE container op gram-formaat (zakje / pot / sack).
 		if (S.StartsWith(TEXT("Bag_")))
 		{
 			const int32 G = UInventoryComponent::BagGrams(ItemId);
 			if (G > 0)
 			{
-				if (G <= 5)   { return TEXT("weed_bag"); }   // zakje (Bag2/Bag5)
-				if (G <= 50)  { return TEXT("weed_jar"); }   // pot/jar (Jar10/Jar15)
+				if (G <= 5)   { return TEXT("weed_bag"); }   // gevuld zakje (Bag2/Bag5)
+				if (G <= 50)  { return TEXT("weed_jar"); }   // gevulde pot/jar (Jar10/Jar15)
 				if (G <= 100) { return TEXT("block"); }      // geperste block 100g (wiet-brick)
 				return TEXT("weed_sack");                    // bulk vuilniszak 500g (Garbage500)
 			}
 		}
 		if (S.StartsWith(TEXT("Bench_")))  { return TEXT("bench"); }
-		if (S == TEXT("Cont_Bag2"))        { return TEXT("weed_bag"); }  // zip-lock wiet-baggie (tag 2g)
-		if (S == TEXT("Cont_Bag5"))        { return TEXT("weed_bag"); }  // zelfde baggie, tag 5g onderscheidt
-		if (S == TEXT("Cont_Jar10"))       { return TEXT("weed_jar"); }  // cannabis-pot (tag 10g)
-		if (S == TEXT("Cont_Jar15"))       { return TEXT("weed_jar"); }  // zelfde pot, tag 15g
+		// Lege EN gevulde containers gebruiken dezelfde speler-bag/jar-iconen; leeg vs vol is het
+		// kleurverschil (Cont_ = packaging-blauwe tint, Bag_ = wiet-groene tint).
+		if (S == TEXT("Cont_Bag2"))        { return TEXT("weed_bag"); }
+		if (S == TEXT("Cont_Bag5"))        { return TEXT("weed_bag"); }
+		if (S == TEXT("Cont_Jar10"))       { return TEXT("weed_jar"); }
+		if (S == TEXT("Cont_Jar15"))       { return TEXT("weed_jar"); }
 		if (S == TEXT("Cont_Block100"))    { return TEXT("block"); }     // pers-blok 100g
 		if (S == TEXT("Cont_Garbage500"))  { return TEXT("weed_sack"); } // bulk vuilniszak = het sack-icoon
 		return FString();
@@ -827,6 +841,22 @@ namespace WeedUI
 				}
 			}
 			if (UTexture2D* T = LoadByStem(bEmpty ? TEXT("bottle_empty") : TEXT("bottle"))) { return T; }
+		}
+		// Geladen vloei: heeft de speler weed in de paper geladen (klaar om te rollen), toon dan het
+		// "handen die rollen"-icoon (joint.png) i.p.v. het losse boekje (papers.png) - zo zie je dat 'ie
+		// nog gerold moet worden. Terug naar het boekje zodra 'ie gerold of leeg is.
+		if (FString(CatFor(ItemId).Key) == TEXT("papers"))
+		{
+			if (UWorld* W = GWorld)
+			{
+				if (APawn* P = UGameplayStatics::GetPlayerPawn(W, 0))
+				{
+					if (UPhoneClientComponent* Ph = P->FindComponentByClass<UPhoneClientComponent>())
+					{
+						if (Ph->IsRollLoadedUI()) { if (UTexture2D* T2 = LoadByStem(TEXT("joint"))) { return T2; } }
+					}
+				}
+			}
 		}
 		for (const FString& Cand : IconCandidatesFor(ItemId))
 		{

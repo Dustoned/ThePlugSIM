@@ -148,6 +148,11 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	StrainBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(StrainBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
+	// Joint-kiezer (verborgen tot je "Give joint" klikt): kies WELKE joint je geeft, zonder te scrollen.
+	JointPickerBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	VB->AddChildToVerticalBox(JointPickerBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
+	JointPickerBox->SetVisibility(ESlateVisibility::Collapsed);
+
 	// Knoppen: Give joint (altijd) / Offer deal (alleen kopers) / Leave.
 	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 	auto MakeBtn = [this](const FString& Label, const FLinearColor& Col, int32 Act) -> UWeedActionButton*
@@ -160,7 +165,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 			UPhoneClientComponent* Ph = GetPhone();
 			if (!Ph) { return; }
 			if (A == 1) { Ph->ConfirmDeal(); }
-			else if (A == 2) { Ph->RequestGiveJoint(Ph->GetDealCustomer()); }
+			else if (A == 2) { GiveJointPressed(); }
 			else { Ph->CloseDeal(); }
 		});
 		FButtonStyle St;
@@ -248,6 +253,83 @@ void UDealWidget::RebuildStrains()
 	if (Buds.Num() == 0)
 	{
 		StrainBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("(no weed in your inventory)"), 12, FLinearColor::Gray));
+	}
+}
+
+void UDealWidget::GiveJointPressed()
+{
+	UPhoneClientComponent* Ph = GetPhone();
+	ACustomerBase* C = Ph ? Ph->GetDealCustomer() : nullptr;
+	APawn* P = GetOwningPlayerPawn();
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Ph || !C || !Inv || !JointPickerBox) { return; }
+
+	// Verzamel je joints (elke joint-stack = eigen strain/gram/kwaliteit).
+	TArray<FName> Joints;
+	for (const FInventoryStack& St : Inv->GetStacks())
+	{
+		if (St.Quantity > 0 && St.ItemId.ToString().StartsWith(TEXT("Joint_"))) { Joints.AddUnique(St.ItemId); }
+	}
+
+	if (Joints.Num() == 1)
+	{
+		// Eén joint -> meteen geven (geen keuze nodig); de reactie verschijnt in dit venster.
+		Ph->RequestGiveJointId(C, Joints[0]);
+		JointPickerBox->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+	// 0 of meerdere -> toon de kiezer (0 toont "roll one first"); nogmaals klikken sluit 'm weer.
+	if (JointPickerBox->GetVisibility() == ESlateVisibility::Visible)
+	{
+		JointPickerBox->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+	RebuildJointPicker();
+	JointPickerBox->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UDealWidget::RebuildJointPicker()
+{
+	if (!JointPickerBox) { return; }
+	JointPickerBox->ClearChildren();
+	APawn* P = GetOwningPlayerPawn();
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return; }
+
+	JointPickerBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Give which joint?"), 12, FLinearColor(0.85f, 0.78f, 0.55f)));
+
+	int32 Count = 0;
+	for (const FInventoryStack& St : Inv->GetStacks())
+	{
+		if (St.Quantity <= 0 || !St.ItemId.ToString().StartsWith(TEXT("Joint_"))) { continue; }
+		++Count;
+		const FName Id = St.ItemId;
+		const FName Strain = UInventoryComponent::JointStrain(Id);
+		const int32 Grams = UInventoryComponent::JointGrams(Id);
+		const float QPct = Inv->GetItemQualityPct(Id);
+		const FString Label = FString::Printf(TEXT("%s   %dg   Q%.0f%%   (x%d)"),
+			Strain.IsNone() ? TEXT("Joint") : *Strain.ToString(), Grams, QPct, St.Quantity);
+
+		UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
+		B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
+		B->OnAction.BindLambda([this, Id](int32, int32)
+		{
+			if (UPhoneClientComponent* X = GetPhone()) { X->RequestGiveJointId(X->GetDealCustomer(), Id); }
+			if (JointPickerBox) { JointPickerBox->SetVisibility(ESlateVisibility::Collapsed); }
+		});
+		const FLinearColor Col(0.30f, 0.26f, 0.14f);
+		FButtonStyle Sty;
+		Sty.Normal = WeedUI::Rounded(Col, 8.f);
+		Sty.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
+		Sty.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
+		Sty.NormalPadding = FMargin(8.f, 5.f); Sty.PressedPadding = FMargin(8.f, 5.f);
+		B->SetStyle(Sty);
+		B->SetContent(WeedUI::Text(WidgetTree, Label, 12, FLinearColor::White, true));
+		JointPickerBox->AddChildToVerticalBox(B)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	}
+	if (Count == 0)
+	{
+		JointPickerBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("No joints - roll one first (R)."), 12, FLinearColor(1.f, 0.7f, 0.45f)));
 	}
 }
 
@@ -457,7 +539,7 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		if (APawn* P = GetOwningPlayerPawn())
 		{
-			if (FVector::DistSquared(P->GetActorLocation(), C->GetActorLocation()) > FMath::Square(450.f))
+			if (FVector::DistSquared(P->GetActorLocation(), C->GetActorLocation()) > FMath::Square(300.f))
 			{
 				Ph->CloseDeal();
 				bOpen = false;
@@ -465,18 +547,26 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// De widget zelf blijft altijd ticken; alleen de kaart tonen/verbergen.
+	// De widget zelf blijft altijd ticken.
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bOpen) { LastCustomer = nullptr; return; }
+	if (!bOpen)
+	{
+		if (Card) { Card->SetVisibility(ESlateVisibility::Collapsed); }
+		LastCustomer = nullptr; return;
+	}
 
+	// EERST de inhoud (en dus de hoogte) vullen, DAARNA pas de kaart tonen -> geen 1-frame
+	// "flits van midden naar onder": de AutoSize/onderrand-slot zou anders op een lege/oude
+	// hoogte opmeten en pas de volgende frame omlaag settelen.
 	const FName Offered = Ph->GetOfferedProduct();
 	if (C != LastCustomer.Get() || Offered != LastOffered)
 	{
 		LastCustomer = C; LastOffered = Offered; bSliderHeld = false;
 		RebuildStrains();
+		if (JointPickerBox) { JointPickerBox->SetVisibility(ESlateVisibility::Collapsed); } // kiezer dicht bij nieuwe klant
 	}
 	UpdateLive();
+	if (Card) { Card->SetVisibility(ESlateVisibility::SelfHitTestInvisible); } // nu pas zichtbaar, al op echte hoogte
 
 	// Reset de "slider held"-vlag als de muisknop los is (zodat 'ie het bod weer kan volgen).
 	if (APlayerController* PC = GetOwningPlayer())

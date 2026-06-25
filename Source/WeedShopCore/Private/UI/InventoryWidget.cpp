@@ -235,8 +235,9 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 			&& St[ThisIdx].ItemId == St[DragIdx].ItemId && St[ThisIdx].ItemId != FName(TEXT("Cash"))
 			&& UInventoryComponent::IsStackable(St[ThisIdx].ItemId)) // geen flessen e.d. samenvoegen
 		{
-			Inv->RequestMergeTwo(StackId, Op->StackId); // alleen DEZE twee samenvoegen
-			if (Owner.IsValid()) { Owner->MarkDirty(); }
+			// Gelijke kwaliteit -> direct mergen; verschillend -> eerst bevestigen (popup).
+			if (Owner.IsValid()) { return Owner->TryMergeOrConfirm(StackId, Op->StackId); }
+			Inv->RequestMergeTwo(StackId, Op->StackId); // fallback zonder owner
 			return true;
 		}
 	}
@@ -253,8 +254,9 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 				&& St[ThisIdx].ItemId == St[DragIdx].ItemId && St[ThisIdx].ItemId != FName(TEXT("Cash"))
 				&& UInventoryComponent::IsStackable(St[ThisIdx].ItemId))
 			{
-				Inv->RequestMergeTwo(StackId, Op->StackId); // in de hotbar-stapel samenvoegen
-				if (Owner.IsValid()) { Owner->MarkDirty(); }
+				// Gelijke kwaliteit -> direct mergen; verschillend -> eerst bevestigen (popup).
+				if (Owner.IsValid()) { return Owner->TryMergeOrConfirm(StackId, Op->StackId); }
+				Inv->RequestMergeTwo(StackId, Op->StackId); // fallback zonder owner
 				return true;
 			}
 		}
@@ -409,6 +411,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 		->SetPadding(FMargin(2.f, 8.f, 0.f, 0.f));
 
 	BuildSplitPopup(Root);
+	BuildMergePopup(Root);
 }
 
 void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
@@ -460,9 +463,20 @@ void UInventoryWidget::OpenSplitPopup(int32 StackId)
 	const int32 Idx = I->FindStackById(StackId);
 	const TArray<FInventoryStack>& St = I->GetStacks();
 	if (!St.IsValidIndex(Idx)) { return; }
-	bSplitIsCash = (St[Idx].ItemId == FName(TEXT("Cash")));
-	if (!bSplitIsCash && (!UInventoryComponent::IsStackable(St[Idx].ItemId) || St[Idx].Quantity < 2)) { return; } // niks te splitsen
-	if (bSplitIsCash && St[Idx].Quantity < 1) { return; }
+	// Cash mag NIET meer gedropt worden: geen cash-split/drop-popup openen.
+	if (St[Idx].ItemId == FName(TEXT("Cash")))
+	{
+		if (AActor* Own = I->GetOwner())
+		{
+			if (UPhoneClientComponent* Ph = Own->FindComponentByClass<UPhoneClientComponent>())
+			{
+				Ph->Toast(TEXT("You can't drop cash."), FColor(255, 90, 90), 2.0f);
+			}
+		}
+		return;
+	}
+	bSplitIsCash = false;
+	if (!UInventoryComponent::IsStackable(St[Idx].ItemId) || St[Idx].Quantity < 2) { return; } // niks te splitsen
 	SplitStackId = StackId;
 	SplitTotal = St[Idx].Quantity;
 	SplitSlider->SetValue(0.5f);
@@ -512,6 +526,95 @@ void UInventoryWidget::CancelSplit()
 {
 	SplitStackId = 0;
 	if (SplitRoot) { SplitRoot->SetVisibility(ESlateVisibility::Collapsed); }
+}
+
+void UInventoryWidget::BuildMergePopup(UCanvasPanel* Root)
+{
+	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
+	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 14.f));
+	Panel->SetPadding(FMargin(18.f));
+
+	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+	Panel->SetContent(VB);
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapels samenvoegen"), 15, FLinearColor(0.7f, 1.f, 0.7f), true, true))
+		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	MergeLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor::White, true);
+	VB->AddChildToVerticalBox(MergeLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+
+	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UWeedActionButton* Conf = TileButton(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 8.f, [this]() { ConfirmMerge(); });
+	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Samenvoegen"), 12, FLinearColor::White, true));
+	UWeedActionButton* Canc = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f, [this]() { CancelMerge(); });
+	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, FLinearColor::White, true));
+	Btns->AddChildToHorizontalBox(Conf)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UHorizontalBoxSlot* CS2 = Btns->AddChildToHorizontalBox(Canc);
+	CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+	VB->AddChildToVerticalBox(Btns);
+
+	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+	Sz->SetWidthOverride(320.f);
+	Sz->SetContent(Panel);
+	MergeRoot = Sz;
+
+	UCanvasPanelSlot* PS = Root->AddChildToCanvas(Sz);
+	PS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+	PS->SetAlignment(FVector2D(0.5f, 0.5f));
+	PS->SetAutoSize(true);
+	PS->SetPosition(FVector2D(0.f, -30.f));
+	PS->SetZOrder(50);
+	Sz->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+bool UInventoryWidget::TryMergeOrConfirm(int32 IntoStackId, int32 FromStackId)
+{
+	UInventoryComponent* I = GetInv();
+	if (!I || IntoStackId == 0 || FromStackId == 0 || IntoStackId == FromStackId) { return false; }
+	const int32 IntoIdx = I->FindStackById(IntoStackId);
+	const int32 FromIdx = I->FindStackById(FromStackId);
+	const TArray<FInventoryStack>& St = I->GetStacks();
+	if (!St.IsValidIndex(IntoIdx) || !St.IsValidIndex(FromIdx)) { return false; }
+
+	const float ThcA = St[IntoIdx].Quality,   ThcB = St[FromIdx].Quality;
+	const float QuaA = St[IntoIdx].QualityPct, QuaB = St[FromIdx].QualityPct;
+
+	// Gelijke kwaliteit (binnen dezelfde 0.5-epsilon als de auto-merge) -> verliesvrij, direct mergen.
+	// Ook als de popup om wat voor reden niet bestaat: niet de actie verliezen, gewoon mergen.
+	if ((FMath::Abs(ThcA - ThcB) < 0.5f && FMath::Abs(QuaA - QuaB) < 0.5f) || !MergeRoot || !MergeLabel)
+	{
+		I->RequestMergeTwo(IntoStackId, FromStackId);
+		MarkDirty();
+		return true;
+	}
+
+	// Verschillende kwaliteit -> bevestigen: toon het gewogen-gemiddelde-resultaat vooraf.
+	const int32 Total = St[IntoIdx].Quantity + St[FromIdx].Quantity;
+	const float AvgThc = (Total > 0) ? (ThcA * St[IntoIdx].Quantity + ThcB * St[FromIdx].Quantity) / Total : 0.f;
+	const float AvgQua = (Total > 0) ? (QuaA * St[IntoIdx].Quantity + QuaB * St[FromIdx].Quantity) / Total : 0.f;
+	PendingMergeInto = IntoStackId;
+	PendingMergeFrom = FromStackId;
+	MergeLabel->SetText(FText::FromString(FString::Printf(
+		TEXT("THC: %.0f%% + %.0f%%  ->  %.0f%%\nKwaliteit: %.0f%% + %.0f%%  ->  %.0f%%"),
+		ThcA, ThcB, AvgThc, QuaA, QuaB, AvgQua)));
+	MergeRoot->SetVisibility(ESlateVisibility::Visible);
+	return true;
+}
+
+void UInventoryWidget::ConfirmMerge()
+{
+	UInventoryComponent* I = GetInv();
+	if (I && PendingMergeInto != 0 && PendingMergeFrom != 0)
+	{
+		I->RequestMergeTwo(PendingMergeInto, PendingMergeFrom);
+		MarkDirty();
+	}
+	CancelMerge();
+}
+
+void UInventoryWidget::CancelMerge()
+{
+	PendingMergeInto = 0;
+	PendingMergeFrom = 0;
+	if (MergeRoot) { MergeRoot->SetVisibility(ESlateVisibility::Collapsed); }
 }
 
 void UInventoryWidget::MergeItemNow(FName ItemId)
@@ -717,7 +820,7 @@ void UInventoryWidget::RebuildContent()
 				Cell->Line2 = TEXT("WET - dry it first");
 				Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
 				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
-				{ const float UW = Inv->GetUnitWeight(ItemId); Cell->Tooltip += (S.Quantity > 1) ? FString::Printf(TEXT("\nWeight %.2f  (x%d = %.1f)"), UW, S.Quantity, UW * S.Quantity) : FString::Printf(TEXT("\nWeight %.2f"), UW); }
+				Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
 			}
 			else
 			{
@@ -727,7 +830,7 @@ void UInventoryWidget::RebuildContent()
 					: TEXT("");
 				Cell->Badge = WeedUI::ItemQtyBadge(ItemId, S.Quantity);
 				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
-				{ const float UW = Inv->GetUnitWeight(ItemId); Cell->Tooltip += (S.Quantity > 1) ? FString::Printf(TEXT("\nWeight %.2f  (x%d = %.1f)"), UW, S.Quantity, UW * S.Quantity) : FString::Printf(TEXT("\nWeight %.2f"), UW); }
+				Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
 				if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
 				{
 					Cell->bShowMerge = true;

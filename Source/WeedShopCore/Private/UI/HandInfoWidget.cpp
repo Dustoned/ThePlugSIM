@@ -164,20 +164,19 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	APawn* P = GetOwningPlayerPawn();
 	const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	const UPhoneClientComponent* Ph = P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
 
 	// Verberg de popup als een vol-scherm menu open is (telefoon-apps/pauze/titel).
-	bool bUiBlocking = false;
-	if (P)
-	{
-		if (const UPhoneClientComponent* Ph = P->FindComponentByClass<UPhoneClientComponent>())
-		{
-			bUiBlocking = Ph->IsOpen() || Ph->IsPauseOpen() || Ph->IsMainMenuOpen() || Ph->IsSettingsOpen();
-		}
-	}
+	const bool bUiBlocking = Ph && (Ph->IsOpen() || Ph->IsPauseOpen() || Ph->IsMainMenuOpen() || Ph->IsSettingsOpen());
 
 	FName Id = Inv ? Inv->GetActiveItemId() : NAME_None;
 	const FString IdStr = Id.ToString();
 	const bool bHasItem = Inv && !Id.IsNone() && !bUiBlocking; // Cash mag nu wél (toont het bedrag)
+
+	// Geladen joint: hou je vloei vast met wiet erin geladen -> die info hoort HIER bij de hand-preview
+	// (niet bij de controls-kaart). RollDesc is de opgeslagen snapshot ("2g Silver Haze - 11% THC, ...").
+	const bool bRollLoaded = Ph && IdStr.StartsWith(TEXT("Papers_")) && Ph->IsRollLoadedUI();
+	const FString RollDesc = bRollLoaded ? Ph->GetRollLoadDesc() : FString();
 
 	// Fade in/uit.
 	const float Target = bHasItem ? 1.f : 0.f;
@@ -196,7 +195,7 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const float Qpct = Inv->GetItemQualityPct(Id);
 	const int32 ActiveSid = Inv->GetActiveStackId();
 	const float ActiveQ = Inv->GetStackQualityById(ActiveSid);
-	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%.0f"), *IdStr, Qty, Thc, Qpct, ActiveSid, ActiveQ);
+	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%.0f|%s"), *IdStr, Qty, Thc, Qpct, ActiveSid, ActiveQ, *RollDesc);
 	if (Key == LastKey) { return; }
 	LastKey = Key;
 
@@ -214,6 +213,7 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const FString Desc = Store->GetCatalogDesc(Id).ToString();
 		if (!Desc.IsEmpty()) { Hint = Desc; }
 	}
+	if (bRollLoaded) { Hint = TEXT("Loaded and ready to roll"); }
 
 	if (AccentBar) { AccentBar->SetBrush(WeedUI::Rounded(Col, 3.f)); }
 	if (TypeText) { TypeText->SetText(FText::FromString(Type)); TypeText->SetColorAndOpacity(FSlateColor(Col)); }
@@ -270,6 +270,15 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (StatBox)
 	{
 		StatBox->ClearChildren();
+			if (bRollLoaded)
+			{
+				// Geladen vloei -> toon de geladen-omschrijving (snapshot uit GetRollLoadDesc) bovenaan,
+				// volle breedte (wrapt). De "2g loaded"-info hoort hier bij de hand-preview, niet bij de controls.
+				UTextBlock* Ld = WeedUI::Text(WidgetTree, RollDesc, 13, FLinearColor(0.75f, 1.f, 0.78f), false, true);
+				Ld->SetAutoWrapText(true);
+				Ld->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); Ld->SetShadowOffset(FVector2D(1.6f, 2.f));
+				StatBox->AddChildToVerticalBox(Ld)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
+			}
 		auto AddStat = [this](const FString& Label, const FString& Value)
 		{
 			UHorizontalBox* RowH = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -300,9 +309,12 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		else if (IdStr.StartsWith(TEXT("Joint_")))
 		{
-			const int32 G = FCString::Atoi(*IdStr.Mid(6)); // Joint_3g -> 3
+			const int32 G = UInventoryComponent::JointGrams(Id); // Joint_3g / Joint_SilverHaze_3g -> 3
+			const FName JStrain = UInventoryComponent::JointStrain(Id);
+			if (!JStrain.IsNone()) { AddStat(TEXT("Strain"), WeedUI::PrettyItemName(FName(*(TEXT("Bud_") + JStrain.ToString())))); }
 			AddStat(TEXT("Per joint"), FString::Printf(TEXT("%d g"), G));
 			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
+			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));
 		}
 		else if (IdStr.StartsWith(TEXT("Seed_")))
 		{

@@ -70,6 +70,10 @@ public:
 	float SecondsUntilDecay(float OverTime) const;   // sec tot de kwaliteit begint te zakken (0 = al bezig)
 	bool IsSealed() const { return bUpSeal; }
 
+	// Leesbare namen van de actieve gear-upgrades op dit rek (Fan/Small fan/Sealer); leeg = geen.
+	// Spiegelt AGrowPlant::GetActiveUpgradesLabel zodat het rek z'n gear net als de pot toont bij look-at.
+	FString GetActiveUpgradesLabel() const;
+
 	// Server-acties vanuit het droogrek-scherm (afstand-check gebeurt in de PhoneClientComponent).
 	// Hangt een natte stapel op om te drogen. Geeft het aantal opgehangen gram terug (0 = vol/niet nat).
 	int32 ServerHangWet(FName WetId, int32 Qty, float Thc, float QualPct);
@@ -104,8 +108,9 @@ protected:
 	void UpdateRep();
 
 	// Losse upgrade-gear (DryUp_*) vlakbij: sneller drogen (fan) + kwaliteit beschermen (sealer).
-	float UpSpeedMult = 1.f;
-	bool bUpSeal = false;
+	// Gerepliceerd zodat clients de upgrades in de look-at-prompt zien (server rekent in RecomputeUpgrades).
+	UPROPERTY(Replicated) float UpSpeedMult = 1.f;
+	UPROPERTY(Replicated) bool bUpSeal = false;
 	float UpScanTimer = 0.f;
 	void RecomputeUpgrades(float DeltaSeconds);
 };

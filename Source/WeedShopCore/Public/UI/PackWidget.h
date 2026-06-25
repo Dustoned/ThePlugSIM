@@ -43,6 +43,7 @@ protected:
 	FName SelStrain;       // gekozen gedroogde Bud_<strain>
 	FName SelContainer;    // gekozen container (Cont_*)
 	int32 SelBags = 1;     // gekozen aantal bags (1..MaxBags)
+	int32 SelGrams = 0;    // gram per zakje (0 = volle container-cap); kleiner = bv. 1g-zakjes
 	int32 MaxBags = 1;     // max bags = containers die je hebt vs wiet die je hebt
 	int32 PackCap = 1;     // capaciteit (gram) van de gekozen container
 	int32 PackBudHave = 0; // beschikbare gram van de gekozen strain

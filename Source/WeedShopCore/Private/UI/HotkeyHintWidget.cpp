@@ -216,7 +216,7 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			if (Phone->IsRollLoadedUI())
 			{
-				Hints.Emplace(TEXT("Loaded"), Phone->GetRollLoadDesc());
+				// De geladen-omschrijving staat nu bij de hand-preview (UHandInfoWidget), niet meer hier.
 				Hints.Emplace(TEXT("Hold RMB"), TEXT("Roll the joint"));
 			}
 			else { Hints.Emplace(K(TEXT("RollLoad")), TEXT("Load")); }

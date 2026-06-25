@@ -3733,6 +3733,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		}
 		Respect = ClampAttr(Respect - (bSubstitute ? 2.f : 4.f));
 		WriteStatsToRegistry();
+		// Korte her-aanbied-cooldown na een weigering (GEEN tevreden-klant/aankoop-effect).
+		if (AWeedShopGameState* GSr = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (GSr->GetNpcRegistry() && !NpcId.IsNone()) { GSr->GetNpcRegistry()->MarkRefused(NpcId); }
+		}
 		return EDealResult::Refused;
 	}
 
@@ -3928,21 +3933,23 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 		return FText::FromString(FString::Printf(TEXT("%s - talk to the clerk"), Shop));
 	}
 
+	// Klant-tier (Casual..Whale) als prefix bij ELKE status, zodat je meteen ziet wat voor klant het is.
+	FString TierTag;
+	if (const AWeedShopGameState* GSt = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UNpcRegistryComponent* Reg = GSt->GetNpcRegistry())
+		{
+			if (!NpcId.IsNone()) { TierTag = FString::Printf(TEXT("[%s] "), *UNpcRegistryComponent::TierName(Reg->GetCustomerTier(NpcId))); }
+		}
+	}
+
 	switch (State)
 	{
 	case ECustomerState::WantsToOrder:
 	case ECustomerState::Negotiating:
 	{
-		// Toon de klant-tier + WAT/HOEVEEL ze willen, en (op afspraak) hoelang ze nog wachten.
-		FString Tier;
-		if (const AWeedShopGameState* GSt = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
-		{
-			if (UNpcRegistryComponent* Reg = GSt->GetNpcRegistry())
-			{
-				if (!NpcId.IsNone()) { Tier = UNpcRegistryComponent::TierName(Reg->GetCustomerTier(NpcId)); }
-			}
-		}
-		FString S = Tier.IsEmpty() ? TEXT("Deal") : FString::Printf(TEXT("[%s] Deal"), *Tier);
+		// Tier + WAT/HOEVEEL ze willen, en (op afspraak) hoelang ze nog wachten.
+		FString S = TierTag + TEXT("Deal");
 		if (!DesiredProductId.IsNone())
 		{
 			FString Item = DesiredProductId.ToString();
@@ -3958,9 +3965,9 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 		return FText::FromString(S);
 	}
 	case ECustomerState::Prospect:
-		return FText::FromString(TEXT("Give a hit"));
+		return FText::FromString(TierTag + TEXT("Give a hit"));
 	case ECustomerState::Served:
-		return FText::FromString(TEXT("Satisfied customer"));
+		return FText::FromString(TierTag + TEXT("Satisfied customer"));
 	default:
 		return FText::GetEmpty();
 	}

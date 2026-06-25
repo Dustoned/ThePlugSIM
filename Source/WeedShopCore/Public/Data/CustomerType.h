@@ -24,9 +24,9 @@ struct FCustomerTypeRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customer")
 	float PatienceSeconds = 30.f;
 
-	// Maximaal bedrag dat hij wil betalen (cents) — bod erboven wordt nooit geaccepteerd.
+	// Maximaal bedrag dat hij wil betalen (cents) — bod erboven wordt nooit geaccepteerd. V4: €80/g.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customer")
-	int32 BudgetCents = 2000;
+	int32 BudgetCents = 8000;
 
 	// Spawn-gewichten (relatief) voor dag resp. nacht. Nacht trekt schichtigere types.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customer")

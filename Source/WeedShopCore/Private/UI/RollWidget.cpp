@@ -140,10 +140,14 @@ void URollWidget::RebuildContent()
 
 	// Actie-knoppen.
 	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UWeedActionButton* RollB = RollBtn(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 10.f, [Ph]() { Ph->LoadRoll(); });
-	RollB->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Load  (%dg)  -  then hold right-click to roll"), G), 13, FLinearColor::White, true));
-	UHorizontalBoxSlot* RS = Btns->AddChildToHorizontalBox(RollB);
-	RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); RS->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+	// Alleen een Load-knop tonen als je ook echt wiet hebt -> geen lege joint kunnen laden/rollen.
+	if (bHasWeed)
+	{
+		UWeedActionButton* RollB = RollBtn(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 10.f, [Ph]() { Ph->LoadRoll(); });
+		RollB->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Load  (%dg)  -  then hold right-click to roll"), G), 13, FLinearColor::White, true));
+		UHorizontalBoxSlot* RS = Btns->AddChildToHorizontalBox(RollB);
+		RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); RS->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+	}
 
 	UWeedActionButton* CloseB = RollBtn(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 10.f, [Ph]() { Ph->ToggleRollUI(); });
 	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 13, FLinearColor::White, true));

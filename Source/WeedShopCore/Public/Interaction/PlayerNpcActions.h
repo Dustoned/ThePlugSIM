@@ -24,6 +24,9 @@ public:
 	// Geef de aangewezen klant een joint (zelfde effect als de hold-LMB sample-flow).
 	virtual void GiveJointToCustomer(ACustomerBase* Customer) {}
 
+	// Geef de klant een SPECIFIEKE joint (gekozen in de deal-kiezer) i.p.v. het hand-item.
+	virtual void GiveJointToCustomerId(ACustomerBase* Customer, FName JointId) {}
+
 	// Speler-skin (0 = man, 1 = vrouw, uitbreidbaar). Voor de settings-UI + save (cross-module via deze interface).
 	virtual uint8 GetPlayerSkinIndex() const { return 0; }
 	virtual void SetPlayerSkinIndex(uint8 SkinIndex) {}

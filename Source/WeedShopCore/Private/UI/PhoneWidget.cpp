@@ -2367,14 +2367,14 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GGrowApp) // Grow shop -> ALLES om te kweken (zaad, pot, aarde, water, upgrades, verzorging)
 	{
 		bSellApp = false;
-		AppCats = { 0, 1, 5, 6, 8, 9 }; // Seeds, Pots, Soil, Water, Grow Upg., Care
+		AppCats = { 0, 1, 5, 2, 8, 9 }; // Seeds, Pots, Soil, Drying, Grow Upg., Care
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}
 	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels, keuken)
 	{
 		bSellApp = false;
-		AppCats = { 4, 2, 3, 7, 11, 12 }; // Papers, Drying, Packing, Furniture, Kitchen (machines), Ingredients (boter etc.)
+		AppCats = { 4, 6, 3, 7, 11, 12 }; // Papers, Water, Packing, Furniture, Kitchen (machines), Ingredients (boter etc.)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
 		BuildStoreApp(ContentBox);
 	}

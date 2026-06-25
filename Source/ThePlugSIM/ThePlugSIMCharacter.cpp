@@ -247,15 +247,28 @@ void AThePlugSIMCharacter::RecoverToSafe(bool bManual)
 	if (bManual)
 	{
 		const FVector Loc = GetActorLocation();
-		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
+		// 1) De ECHTE weg in het MIDDEN: dichtstbijzijnde punt op de NPC-route-midlijn (val terug op de
+		//    straat-zoeker) via de DoorRetrofitter. Zo land je altijd op de boulevard buiten, niet op een
+		//    navmesh-eilandje binnen een pand of op een stoeprand.
+		for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It)
 		{
-			FNavLocation Proj;
-			// Eerst dichtbij zoeken (op de weg/stoep waar je staat), anders een ruimere straal.
-			if (Nav->ProjectPointToNavigation(Loc, Proj, FVector(900.f, 900.f, 700.f))
-				|| Nav->ProjectPointToNavigation(Loc, Proj, FVector(4000.f, 4000.f, 1500.f)))
+			FVector Road;
+			if (It->FindNearestRoadPoint(Loc, Road)) { Safe = Road; bGot = true; }
+			break; // er is er maar één
+		}
+		// 2) Geen DoorRetrofitter/route (bv. andere map): navmesh-projectie (oud gedrag).
+		if (!bGot)
+		{
+			if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
 			{
-				Safe = Proj.Location + FVector(0.f, 0.f, 30.f);
-				bGot = true;
+				FNavLocation Proj;
+				// Eerst dichtbij zoeken (op de weg/stoep waar je staat), anders een ruimere straal.
+				if (Nav->ProjectPointToNavigation(Loc, Proj, FVector(900.f, 900.f, 700.f))
+					|| Nav->ProjectPointToNavigation(Loc, Proj, FVector(4000.f, 4000.f, 1500.f)))
+				{
+					Safe = Proj.Location + FVector(0.f, 0.f, 30.f);
+					bGot = true;
+				}
 			}
 		}
 	}
@@ -883,7 +896,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
 			const bool bUiOpen = Phone && (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsRollOpen() || Phone->IsDealOpen());
-			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen && !Active.IsNone();
+			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen && !Active.IsNone() && Active != FName(TEXT("Cash"));
 			constexpr float DropHoldReq = 0.5f;
 			if (bDown)
 			{
@@ -1190,6 +1203,12 @@ void AThePlugSIMCharacter::GiveSample()
 		if (AActor* Focus = IC->GetFocusedActor())
 		{
 			ServerGiveSample(Focus);
+			// Open meteen de deal-kaart bij deze klant, zodat je de reactie ZIET (anders "lijkt het of
+			// er niks gebeurt"). De server-reactie (Say + relatie) verschijnt dan in het venster.
+			if (Phone)
+			{
+				if (ACustomerBase* C = Cast<ACustomerBase>(Focus)) { Phone->OpenDeal(C); }
+			}
 		}
 	}
 }
@@ -1200,10 +1219,32 @@ void AThePlugSIMCharacter::GiveJointToCustomer(ACustomerBase* Customer)
 	if (Customer) { ServerGiveSample(Customer); }
 }
 
+void AThePlugSIMCharacter::GiveJointToCustomerId(ACustomerBase* Customer, FName JointId)
+{
+	// Vanuit de deal-kiezer: geef precies DEZE gekozen joint (geen hand-item nodig).
+	if (Customer) { ServerGiveSampleId(Customer, JointId); }
+}
+
 void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 {
 	ACustomerBase* Customer = Cast<ACustomerBase>(Target);
-	if (!Customer)
+	if (!Customer || !Inventory) { return; }
+	// Hold-flow: geef de joint die je NU in je hand hebt (geselecteerd op de hotbar).
+	const FName HandId = Inventory->GetActiveItemId();
+	GiveSampleCore(Customer, HandId.ToString().StartsWith(TEXT("Joint_")) ? HandId : NAME_None);
+}
+
+void AThePlugSIMCharacter::ServerGiveSampleId_Implementation(AActor* Target, FName JointId)
+{
+	// Deal-kiezer: geef precies de gekozen joint (geen hand-item nodig).
+	ACustomerBase* Customer = Cast<ACustomerBase>(Target);
+	if (!Customer) { return; }
+	GiveSampleCore(Customer, JointId);
+}
+
+void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId)
+{
+	if (!Customer || !Inventory)
 	{
 		return;
 	}
@@ -1214,22 +1255,10 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 		return;
 	}
 
-	// Een sample is een gedraaide joint. Je geeft de joint die je NU in je hand hebt (geselecteerd op
-	// de hotbar) — niet automatisch de beste uit je voorraad.
-	if (!Inventory)
-	{
-		return;
-	}
-	FName BestJoint = NAME_None;
-	int32 BestGrams = 0;
-	{
-		const FString Hand = Inventory->GetActiveItemId().ToString();
-		if (Hand.StartsWith(TEXT("Joint_")) && Hand.EndsWith(TEXT("g")))
-		{
-			BestJoint = Inventory->GetActiveItemId();
-			BestGrams = FCString::Atoi(*Hand.Mid(6)); // "Joint_3g" -> 3
-		}
-	}
+	// Een sample is een gedraaide joint - hier de gekozen/vastgehouden joint-id.
+	const FName BestJoint = JointId.ToString().StartsWith(TEXT("Joint_")) ? JointId : NAME_None;
+	const int32 BestGrams = BestJoint.IsNone() ? 0 : UInventoryComponent::JointGrams(BestJoint); // "Joint_SilverHaze_3g" -> 3
+
 	// Wiet-kwaliteit van de joint (0..1) vóór we 'm weghalen — slechte wiet verslaaft/bindt minder.
 	const float WeedQ = FMath::Clamp(Inventory->GetItemQualityPct(BestJoint) / 100.f, 0.f, 1.f);
 
@@ -1237,7 +1266,7 @@ void AThePlugSIMCharacter::ServerGiveSample_Implementation(AActor* Target)
 	{
 		if (GEngine)
 		{
-			UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Orange, TEXT("Hold a joint in your hand (select it on the hotbar) — roll one first (R)."));
+			UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Orange, TEXT("No joint to give — roll one first (R)."));
 		}
 		return;
 	}
@@ -1452,12 +1481,12 @@ void AThePlugSIMCharacter::BeginPlay()
 		UControlSettings::Get()->OnBindingsChanged.AddUObject(this, &AThePlugSIMCharacter::RefreshKeyBindings);
 	}
 
-	// Startvoorraad (concept): wat vloei, een paar gram wiet en een zaadje.
+	// Startvoorraad (concept): wat vloei en 2 streetweed-zaadjes (de Silver Haze-wiet komt via de save-init).
 	if (HasAuthority() && Inventory)
 	{
 		// Lean begin: net genoeg om je eerste plant te kweken en je eerste joint te draaien.
 		Inventory->AddItem(FName(TEXT("Papers_Small")), 3);
-		Inventory->AddItem(FName(TEXT("Seed_SilverHaze")), 1);
+		Inventory->AddItem(FName(TEXT("Seed_Streetweed")), 2);
 		Inventory->AddItem(FName(TEXT("Soil_Basic")), 1);
 		Inventory->AddItem(FName(TEXT("WaterBottle_Plastic")), 1);
 		Inventory->AddItem(FName(TEXT("Pot_Broken")), 1);
@@ -1497,7 +1526,11 @@ void AThePlugSIMCharacter::BeginPlay()
 		{
 			if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
 			{
+				// Eerst proberen te herstellen uit de save (load-game). Op een VERSE Normal-game is dat een no-op
+				// en landen i.p.v. de eenmalige Normal-extras (Silver Haze, papers, start-cash) — zo spawnt ook
+				// co-op P2 met dezelfde startspullen als P1. De helper dedupt per speler + is no-op op load/clients.
 				Sv->RestorePlayerByPawn(this);
+				Sv->GrantNormalStartExtrasForPawn(this);
 			}
 		}
 	}
@@ -2273,7 +2306,7 @@ void AThePlugSIMCharacter::ServerSmokeJoint_Implementation(FName JointId)
 
 	// Hoe high: meer gram + hogere THC% + betere kwaliteit = sterker. Backwoods (10g) vol topwiet
 	// (~36% THC, 100% kwaliteit) tikt tegen het maximum aan.
-	const int32 Grams = FCString::Atoi(*JointId.ToString().Mid(6)); // "Joint_5g" -> 5
+	const int32 Grams = UInventoryComponent::JointGrams(JointId); // "Joint_5g" / "Joint_SilverHaze_5g" -> 5
 	const float Thc = Inventory->GetItemQuality(JointId);            // ~0..36
 	const float Q = Inventory->GetItemQualityPct(JointId) / 100.f;   // 0..1
 

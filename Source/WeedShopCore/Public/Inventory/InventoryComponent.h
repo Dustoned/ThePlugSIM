@@ -103,7 +103,13 @@ public:
 	static bool IsBag(FName ItemId);
 	static int32 BagGrams(FName ItemId);              // gram per zakje (0 = oude/maatloze bag)
 	static FName BagStrain(FName ItemId);             // strain-deel, bv. "SilverHaze"
-	static FName MakeBagId(FName Strain, int32 Grams);
+	static FName MakeBagId(FName Strain, FName ContainerId, int32 Grams);
+	static FName BagContainer(FName ItemId);   // -> "Cont_Bag2" etc, of NAME_None voor oude 2-token bags
+
+	// --- Joints: id onthoudt nu ook de STRAIN. Joint_<Strain>_<G>g (nieuw) / Joint_<G>g (oud, back-compat) ---
+	static FName MakeJointId(FName Strain, int32 Grams);   // Joint_<Strain>_<G>g  (Joint_<G>g als Strain==None)
+	static FName JointStrain(FName ItemId);                // strain, of NAME_None voor oude joints
+	static int32 JointGrams(FName ItemId);                 // gram uit de laatste token ("3g"->3)
 	// Totaal aantal grammen in alle zakjes van een strain (som van aantal * grootte).
 	int32 BagGramsAvailable(FName Strain) const;
 	// Totaal aantal GRAMMEN in zakjes van deze strain + de (op gram gewogen) THC%/kwaliteit. Voor de deal-stock.

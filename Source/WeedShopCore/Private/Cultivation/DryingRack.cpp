@@ -145,6 +145,8 @@ void ADryingRack::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(ADryingRack, RepReady);
 	DOREPLIFETIME(ADryingRack, RepCapacity);
 	DOREPLIFETIME(ADryingRack, Entries);
+	DOREPLIFETIME(ADryingRack, UpSpeedMult);
+	DOREPLIFETIME(ADryingRack, bUpSeal);
 }
 
 bool ADryingRack::GetRackDef(FName Tier, int32& OutCapacity, float& OutDrySeconds)
@@ -172,6 +174,15 @@ float ADryingRack::SecondsUntilDecay(float OverTime) const
 	return FMath::Max(0.f, DryGraceSeconds - OverTime);
 }
 
+FString ADryingRack::GetActiveUpgradesLabel() const
+{
+	TArray<FString> Names;
+	if (UpSpeedMult <= 0.7f)     { Names.Add(TEXT("Fan")); }       // DryUp_Fan (×0.7)
+	else if (UpSpeedMult < 1.0f) { Names.Add(TEXT("Small fan")); } // DryUp_FanSmall (×0.85)
+	if (bUpSeal)                 { Names.Add(TEXT("Sealer")); }    // DryUp_Seal
+	return FString::Join(Names, TEXT(", "));
+}
+
 void ADryingRack::RecomputeUpgrades(float DeltaSeconds)
 {
 	UpScanTimer -= DeltaSeconds;
@@ -186,7 +197,7 @@ void ADryingRack::RecomputeUpgrades(float DeltaSeconds)
 		for (TActorIterator<ADryingRack> R(W); R; ++R) { if (!IsValid(*R)) { continue; } const float d = FVector::DistSquared2D(R->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = *R; } }
 		return Best;
 	};
-	float Speed = 1.f; bool bSeal = false;
+	float FanMult = 1.f; bool bSeal = false;
 	for (TActorIterator<APlaceableProp> It(W); It; ++It)
 	{
 		APlaceableProp* P = *It; if (!IsValid(P)) { continue; }
@@ -195,10 +206,11 @@ void ADryingRack::RecomputeUpgrades(float DeltaSeconds)
 		const FVector L = P->GetActorLocation();
 		if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
 		if (NearestRack(L) != this) { continue; }
-		if (S == TEXT("DryUp_Fan")) { Speed *= 0.7f; }
+		if (S == TEXT("DryUp_Fan")) { FanMult = FMath::Min(FanMult, 0.7f); }
+		else if (S == TEXT("DryUp_FanSmall")) { FanMult = FMath::Min(FanMult, 0.85f); }
 		else if (S == TEXT("DryUp_Seal")) { bSeal = true; }
 	}
-	UpSpeedMult = Speed; bUpSeal = bSeal;
+	UpSpeedMult = FanMult; bUpSeal = bSeal;
 }
 
 void ADryingRack::UpdateRep()
@@ -270,13 +282,21 @@ void ADryingRack::Interact_Implementation(APawn* InstigatorPawn)
 
 FText ADryingRack::GetInteractionPrompt_Implementation() const
 {
+	FString Line;
 	if (RepReady > 0)
 	{
-		return FText::FromString(FString::Printf(TEXT("Drying rack  -  %d ready, %d drying"), RepReady, RepDrying));
+		Line = FString::Printf(TEXT("Drying rack  -  %d ready, %d drying"), RepReady, RepDrying);
 	}
-	if (RepDrying > 0)
+	else if (RepDrying > 0)
 	{
-		return FText::FromString(FString::Printf(TEXT("Drying rack  -  drying %d/%d"), RepDrying, RepCapacity));
+		Line = FString::Printf(TEXT("Drying rack  -  drying %d/%d"), RepDrying, RepCapacity);
 	}
-	return FText::FromString(FString::Printf(TEXT("Drying rack  (0/%d)"), RepCapacity));
+	else
+	{
+		Line = FString::Printf(TEXT("Drying rack  (0/%d)"), RepCapacity);
+	}
+	// Tweede regel = actieve gear, net als de "Upgrades:"-regel bij de pot.
+	const FString Ups = GetActiveUpgradesLabel();
+	Line += Ups.IsEmpty() ? TEXT("\nUpgrades: none") : FString::Printf(TEXT("\nUpgrades: %s"), *Ups);
+	return FText::FromString(Line);
 }

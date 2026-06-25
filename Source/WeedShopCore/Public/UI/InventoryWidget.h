@@ -86,6 +86,9 @@ public:
 	void OpenSplitPopup(int32 StackId);
 	// Voeg alle stapels van dit item samen (sleep een stapel op een gelijke -> mergen).
 	void MergeItemNow(FName ItemId);
+	// Sleep-merge van TWEE stapels: gelijke kwaliteit -> direct mergen; verschillende THC%/kwaliteit -> eerst bevestigen.
+	// Return true als de merge is afgehandeld (direct of via de bevestig-popup).
+	bool TryMergeOrConfirm(int32 IntoStackId, int32 FromStackId);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -122,6 +125,16 @@ protected:
 	int32 SplitStackId = 0;
 	int32 SplitTotal = 0;
 	bool bSplitIsCash = false; // split-popup staat in "drop cash"-modus (Cash-stapel)
+
+	// --- Merge-confirm-popup (alleen als de twee stapels VERSCHILLENDE THC%/kwaliteit% hebben;
+	//     gelijke kwaliteit merget direct, want dat is verliesvrij) ---
+	void BuildMergePopup(UCanvasPanel* Root);
+	void ConfirmMerge();
+	void CancelMerge();
+	UPROPERTY() TObjectPtr<UWidget> MergeRoot;     // hele overlay (Collapsed als dicht)
+	UPROPERTY() TObjectPtr<UTextBlock> MergeLabel; // toont het gewogen-gemiddelde-resultaat
+	int32 PendingMergeInto = 0;
+	int32 PendingMergeFrom = 0;
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<UInventoryComponent> BoundInv;

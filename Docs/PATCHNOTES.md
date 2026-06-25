@@ -1,4 +1,70 @@
 PATCH NOTES
+Version 1.15.0 — 25 juni 2026
+
+Korte intro:
+De grote economie-update: de hele strain-balans is opnieuw opgebouwd — nieuwe groeitijden, yields en
+THC per strain, met bijpassende prijzen en grotere klant-orders. Plus vindbare joints op straat, een
+joint-kiezer bij het dealen, kloppende iconen en een rits fixes.
+
+━━━━━━━━━━━━━━━━━━━━
+
+ECONOMIE & STRAINS (grote herbalancering)
+
+• Compleet nieuwe strain-curve: elke tier heeft nu een snelle/potente keuze (kort, weinig gram, hoge
+  THC) tot een heavy-bulk keuze (lang, veel gram, lagere THC). Streetweed is niet langer de OP starter;
+  late strains geven juist grote, langzame oogsten (Gary Payton tot 175 gram basis, 38 min).
+• Nieuwe markt- en zaadprijzen die bij de nieuwe yields passen (eerste balans-cut). Bulkstrains
+  verdienen via volume (lagere prijs per gram), snelle/potente strains via een hogere prijs per gram.
+• Klanten bestellen nu grotere hoeveelheden, oplopend per tier: Casual 2-5g, Regular 5-12g,
+  Heavy User 12-30g, VIP 30-70g, Whale 70-150g.
+• Je kunt premium-strains nu ook boven €20/g verkopen aan loyale/verslaafde klanten — de oude harde
+  prijscap is verruimd. Of een klant ja zegt hangt nu vooral aan prijs, kwaliteit, THC en jullie relatie.
+
+━━━━━━━━━━━━━━━━━━━━
+
+DEALEN & KLANTEN
+
+• "Give joint" bij een NPC opent nu een kiezer: je kiest welke joint je geeft (strain, gram, kwaliteit)
+  zonder eerst naar de joint in je hand te scrollen. Heb je er maar één, dan gaat 't direct.
+• Bij elke klant zie je nu z'n type/tier ([Casual] t/m [Whale]) als je 'm aankijkt, zodat je meteen
+  weet wat voor klant het is.
+• Geef je een joint terwijl je 'm in je hand vasthoudt, dan opent de praat-kaart nu meteen zodat je
+  de reactie van de NPC ziet i.p.v. dat het lijkt of er niks gebeurt.
+• Een klant die je aanbod afwijst kun je niet direct opnieuw aanspreken (korte cooldown).
+
+━━━━━━━━━━━━━━━━━━━━
+
+JOINTS
+
+• Verspreid over de map liggen nu vindbare joints bij prullenbakken en tuinbankjes — hoe beter de wiet
+  en THC, hoe zeldzamer. Afentoe vind je dus opeens een topper. Ze komen langzaam (~10 min) terug op
+  een andere vrije plek nadat je ze hebt opgeraapt.
+• Een joint toont z'n strain en kwaliteit in de hand-preview; de joint-modellen zijn iets kleiner.
+
+━━━━━━━━━━━━━━━━━━━━
+
+ICONEN
+
+• De vloei/joint-iconen kloppen nu: los boekje (ongeladen) → handen-rollen (geladen, nog te rollen) →
+  afgewerkte joint, elk met een eigen plaatje.
+• Lege baggies en potten zien er nu leeg uit; gevulde tonen de wiet erin.
+
+━━━━━━━━━━━━━━━━━━━━
+
+OVERIGE FIXES
+
+• "Unstuck" (vastgelopen-knop) zet je nu netjes op het midden van de dichtstbijzijnde weg.
+• De packing bench kan weer baggies van 1 gram maken (niet meer vast op 2 gram).
+• Contant geld kun je niet meer per ongeluk droppen (Q-inhouden of uit je inventory slepen).
+• In co-op spawnt speler 2 met dezelfde start-items als speler 1.
+• Pot-upgrades: maximaal één per soort per pot, en een hogere pot-tier vervangt de lagere automatisch
+  (de oude gaat terug naar je inventory). De droogrek-upgrades + een nieuwe goedkopere ventilator
+  staan nu in de grow-shop.
+• De level-up-melding verdwijnt iets sneller; het "geladen"-hintje van een joint staat nu bij je hand.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PATCH NOTES
 Version 1.14.0 — 24 juni 2026
 
 Korte intro:

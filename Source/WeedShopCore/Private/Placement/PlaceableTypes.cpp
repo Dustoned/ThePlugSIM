@@ -117,6 +117,7 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Moon_Std"),    TEXT("Moonrock station"),     TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f),false, 12000, false, false, false, false, false, false, false, false, true },
 		{ TEXT("Moon_Pro"),    TEXT("Pro moonrock station"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(0.75f, 0.7f, 0.55f), FVector(37.5f, 35.f, 27.5f),false, 28000, false, false, false, false, false, false, false, false, true },
 		// --- Losse upgrade-gear: zet vlakbij een DROOGREK of HASJ-MACHINE om 'm sneller/beter te maken.
+		{ TEXT("DryUp_FanSmall"), TEXT("Small drying fan"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.26f, 0.26f, 0.26f), FVector(13.f, 13.f, 13.f), false, 2200 },
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 3000 },
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.24f), FVector(15.f, 15.f, 12.f), false, 4500 },
 		{ TEXT("ProcUp_Motor"), TEXT("Power motor"),     TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 5000 },

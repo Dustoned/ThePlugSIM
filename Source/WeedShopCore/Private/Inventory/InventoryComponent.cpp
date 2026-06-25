@@ -82,19 +82,57 @@ int32 UInventoryComponent::BagGrams(FName ItemId)
 FName UInventoryComponent::BagStrain(FName ItemId)
 {
 	FString S = ItemId.ToString();
-	if (S.StartsWith(TEXT("Bag_"))) { S = S.RightChop(4); }
+	if (S.StartsWith(TEXT("Bag_"))) { S = S.RightChop(4); } // "SilverHaze" | "SilverHaze_2" | "SilverHaze_Bag2_2"
 	int32 U;
-	if (S.FindLastChar('_', U))
-	{
-		const FString Tail = S.RightChop(U + 1);
-		if (Tail.IsNumeric()) { S = S.Left(U); } // strip de maat-suffix
-	}
+	if (S.FindChar(TEXT('_'), U)) { S = S.Left(U); }        // strain = eerste token
 	return FName(*S);
 }
 
-FName UInventoryComponent::MakeBagId(FName Strain, int32 Grams)
+FName UInventoryComponent::BagContainer(FName ItemId)
 {
-	return FName(*FString::Printf(TEXT("Bag_%s_%d"), *Strain.ToString(), FMath::Max(1, Grams)));
+	FString S = ItemId.ToString();
+	if (!S.StartsWith(TEXT("Bag_"))) { return NAME_None; }
+	S = S.RightChop(4);
+	TArray<FString> Parts; S.ParseIntoArray(Parts, TEXT("_"), true);
+	if (Parts.Num() < 3) { return NAME_None; }              // oude 2-token bag -> geen container opgeslagen
+	return FName(*(TEXT("Cont_") + Parts[1]));               // middelste token = container-key
+}
+
+FName UInventoryComponent::MakeBagId(FName Strain, FName ContainerId, int32 Grams)
+{
+	const int32 G = FMath::Max(1, Grams);
+	if (ContainerId.IsNone())
+	{
+		return FName(*FString::Printf(TEXT("Bag_%s_%d"), *Strain.ToString(), G));
+	}
+	FString Key = ContainerId.ToString();
+	Key.RemoveFromStart(TEXT("Cont_"));               // "Cont_Bag2" -> "Bag2"
+	return FName(*FString::Printf(TEXT("Bag_%s_%s_%d"), *Strain.ToString(), *Key, G));
+}
+
+FName UInventoryComponent::MakeJointId(FName Strain, int32 Grams)
+{
+	const int32 G = FMath::Max(1, Grams);
+	if (Strain.IsNone()) { return FName(*FString::Printf(TEXT("Joint_%dg"), G)); }
+	return FName(*FString::Printf(TEXT("Joint_%s_%dg"), *Strain.ToString(), G));
+}
+
+int32 UInventoryComponent::JointGrams(FName ItemId)
+{
+	const FString S = ItemId.ToString();
+	int32 U;
+	if (!S.FindLastChar(TEXT('_'), U)) { return 0; }
+	return FCString::Atoi(*S.RightChop(U + 1)); // "3g" -> 3 (Atoi stopt bij 'g')
+}
+
+FName UInventoryComponent::JointStrain(FName ItemId)
+{
+	FString S = ItemId.ToString();
+	if (!S.StartsWith(TEXT("Joint_"))) { return NAME_None; }
+	S = S.RightChop(6); // "3g" (oud) of "SilverHaze_3g" (nieuw)
+	int32 U;
+	if (S.FindChar(TEXT('_'), U)) { return FName(*S.Left(U)); } // eerste token = strain
+	return NAME_None; // oud formaat, geen strain
 }
 
 int32 UInventoryComponent::BagGramsAvailable(FName Strain) const

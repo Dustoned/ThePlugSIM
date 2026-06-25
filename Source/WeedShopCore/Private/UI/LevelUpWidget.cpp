@@ -123,7 +123,7 @@ void ULevelUpWidget::ShowForLevel(int32 PrevLevel, int32 NewLevel)
 		? FText::FromString(TEXT("New in the shop:"))
 		: FText::FromString(TEXT("Keep grinding - more unlocks ahead.")));
 
-	HoldTimer = 6.f;   // zichtbaar houden, daarna uitfaden
+	HoldTimer = 4.f;   // zichtbaar houden, daarna uitfaden (iets korter — verdween net te laat)
 	Shown = 0.001f;    // begin met infaden
 }
 

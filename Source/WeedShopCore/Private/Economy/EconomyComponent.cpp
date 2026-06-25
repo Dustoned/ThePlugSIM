@@ -291,20 +291,7 @@ void UEconomyComponent::SetSafeCents(int64 NewCents)
 
 void UEconomyComponent::ServerDropCash_Implementation(int32 Euros)
 {
-	if (GetOwnerRole() != ROLE_Authority || Euros <= 0) { return; }
-	const int64 Cents = (int64)Euros * 100;
-	if (BalanceCents < Cents) { return; }        // niet genoeg cash
-	if (!RemoveMoney(Cents)) { return; }
-
-	APawn* P = Cast<APawn>(GetOwner());
-	UWorld* W = GetWorld();
-	if (!P || !W) { return; }
-	FVector Fwd = P->GetActorForwardVector(); Fwd.Z = 0.f; Fwd = Fwd.GetSafeNormal();
-	FVector Loc = P->GetActorLocation() + Fwd * 90.f;
-	Loc.Z -= (P->GetSimpleCollisionHalfHeight() - 12.f); // bij de voeten
-	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	if (AWorldItemPickup* Pick = W->SpawnActor<AWorldItemPickup>(AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP))
-	{
-		Pick->Setup(FName(TEXT("Cash")), Euros, 0.f, 0.f); // Qty = euro's
-	}
+	// Cash droppen is uitgeschakeld — geen geld als oppakbaar stapeltje spawnen.
+	// (De inventory blokkeert dit al bij OpenSplitPopup; dit is de server-backstop. Euros bewust ongebruikt.)
+	(void)Euros;
 }

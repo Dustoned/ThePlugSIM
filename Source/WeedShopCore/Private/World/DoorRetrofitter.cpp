@@ -27,6 +27,9 @@
 #include "Navigation/NavLinkProxy.h"
 #include "NavLinkCustomComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "World/WorldItemPickup.h"        // gescatterde joints (pickup-spawn)
+#include "Inventory/InventoryComponent.h" // UInventoryComponent::MakeJointId
+#include "Progression/StoreComponent.h"   // seed-catalogus + strain-stats (THC)
 #include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
@@ -458,6 +461,30 @@ bool ADoorRetrofitter::FindStreetPoint(float WorldY, FVector& Out) const
 	}
 	if (bHaveFallback) { Out = Fallback; return true; } // dek gevonden maar geen straat-mesh: beter dan niets
 	return false;
+}
+
+bool ADoorRetrofitter::FindNearestRoadPoint(const FVector& From, FVector& Out) const
+{
+	// 1) Beste bron: de speler-gemarkeerde NPC-route (NpcRings) = de loop-lijn over het MIDDEN van de
+	//    boulevard. Zoek het dichtstbijzijnde punt op alle (gesloten) ring-segmenten -> midden van de weg.
+	float BestSq = TNumericLimits<float>::Max();
+	FVector Best = FVector::ZeroVector;
+	bool bGot = false;
+	for (const TArray<FVector>& Ring : NpcRings)
+	{
+		const int32 N = Ring.Num();
+		if (N < 2) { continue; }
+		for (int32 i = 0; i < N; ++i)
+		{
+			const FVector P = FMath::ClosestPointOnSegment(From, Ring[i], Ring[(i + 1) % N]);
+			const float D = FVector::DistSquared(From, P);
+			if (D < BestSq) { BestSq = D; Best = P; bGot = true; }
+		}
+	}
+	if (bGot) { Out = Best + FVector(0.f, 0.f, 30.f); return true; }
+
+	// 2) Geen route gemarkeerd: val terug op de straat-zoeker op de eigen Y (boulevard-dek).
+	return FindStreetPoint(From.Y, Out);
 }
 
 void ADoorRetrofitter::ScanAndConvert()
@@ -2660,6 +2687,153 @@ void ADoorRetrofitter::ScanAndConvert()
 	{
 		bScanSlow = bWantSlow;
 		GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, bScanSlow ? 8.0f : 2.0f, true);
+	}
+
+	// VINDBARE JOINTS: één keer scatteren zodra de beach-geometrie (prullenbakken/bankjes) is ingestreamd.
+	// ScatterJoints() zet bJointsScattered alleen op true als het echt spots vond + joints plaatste; lukte
+	// dat (nog) niet, dan blijft de vlag false en proberen we het de volgende pass opnieuw.
+	if (!bJointsScattered && ScanPass >= 2) { ScatterJoints(); }
+}
+
+// ============================ VINDBARE JOINTS (scatter rond prullenbak/bankje) ============================
+// Server-only. Spawnt vindbare joint-pickups rond de prullenbakken + bankjes van de beach-strip. Elke joint
+// = random strain + papier-afgeleid gewicht + THC% + kwaliteit%, gewogen zodat GOEDE joints (hoge kwaliteit,
+// hoge-THC strain, grote backwoods) ZELDZAAM zijn. De speler loopt erheen en pakt 'm op (AWorldItemPickup-flow).
+
+// 1 random joint spawnen op Loc. Geeft de pickup terug (of nullptr als de store ontbreekt / spawn faalt).
+AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
+{
+	UWorld* World = GetWorld();
+	if (!World) { return nullptr; }
+	AWeedShopGameState* GS = World->GetGameState<AWeedShopGameState>();
+	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
+	if (!Store) { return nullptr; }
+
+	// Strains gesorteerd op BaseThc OPLOPEND (index 0 = laagste THC).
+	TArray<FName> Strains = Store->GetSeedCatalog();
+	if (Strains.Num() == 0) { return nullptr; }
+	Strains.Sort([Store](const FName& A, const FName& B)
+	{
+		float ThcA = 0.f, ThcB = 0.f, Y = 0.f, Gr = 0.f;
+		Store->GetStrainStats(A, ThcA, Y, Gr);
+		Store->GetStrainStats(B, ThcB, Y, Gr);
+		return ThcA < ThcB;
+	});
+
+	// BOTTOM-LOADED strain-keuze: FRand^2 weegt naar lage indices -> hoge-THC strains zijn ZELDZAAM.
+	const int32 N = Strains.Num();
+	const int32 Idx = FMath::Clamp(FMath::FloorToInt(N * FMath::Square(FMath::FRand())), 0, N - 1);
+	const FName Strain = Strains[Idx];
+	float BaseThc = 0.f, YieldG = 0.f, GrowM = 0.f;
+	Store->GetStrainStats(Strain, BaseThc, YieldG, GrowM);
+
+	// Papier-gewicht, gewogen naar klein (kleine joint gewoon, 10g backwoods zeldzaam).
+	const float R = FMath::FRand();
+	const int32 Grams = (R < 0.55f) ? 2 : (R < 0.85f) ? 5 : (R < 0.96f) ? 7 : 10;
+
+	// THC% dicht bij de strain-basis, nooit erboven.
+	const float ThcPercent = BaseThc * FMath::FRandRange(0.85f, 1.0f);
+	// Kwaliteit%: kubus => zwaar bottom-loaded, hoge kwaliteit ZELDZAAM.
+	const float QualityPct = 100.f * FMath::Pow(FMath::FRand(), 3.f);
+
+	const FName JointId = UInventoryComponent::MakeJointId(Strain, Grams);
+
+	FActorSpawnParameters SP;
+	SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AWorldItemPickup* P = World->SpawnActor<AWorldItemPickup>(
+		AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc + FVector(0.f, 0.f, 25.f)), SP);
+	if (P) { P->Setup(JointId, 1, ThcPercent, QualityPct); }
+	return P;
+}
+
+// One-time: prullenbak/bankje-locaties verzamelen en tot de cap vullen. Vond het geen spots, dan blijft
+// bJointsScattered false zodat de volgende scan-pass het opnieuw probeert (geometrie nog niet ingestreamd).
+void ADoorRetrofitter::ScatterJoints()
+{
+	if (!HasAuthority()) { return; }
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+
+	// Spots verzamelen: static-mesh-actors met een "SM_Bench"- of "...StreetTrashBin"-mesh.
+	JointSpots.Reset();
+	for (TActorIterator<AActor> It(W); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A)) { continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Comp : Comps)
+		{
+			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			const FString MeshName = Comp->GetStaticMesh()->GetName();
+			if (MeshName.Contains(TEXT("SM_Bench")) || MeshName.Contains(TEXT("StreetTrashBin")))
+			{
+				const FVector L = Comp->GetComponentLocation();
+				if (L.ContainsNaN()) { continue; } // implausibele spot overslaan
+				JointSpots.Add(L);
+			}
+		}
+	}
+	if (JointSpots.Num() == 0) { return; } // niets gevonden -> volgende pass opnieuw proberen
+
+	ScatteredJoints.Reset();
+	// Schud de spots en gebruik maar ~60% ervan (dus NIET elke prullenbak/bankje), met 1-2 joints per gekozen
+	// spot + zijwaartse offset (~40-70cm). Natuurlijk verspreid i.p.v. overal eentje. Bovengrens = MaxScatteredJoints.
+	for (int32 s = JointSpots.Num() - 1; s > 0; --s) { JointSpots.Swap(s, FMath::RandRange(0, s)); }
+	const int32 UseSpots = FMath::Max(1, FMath::CeilToInt(JointSpots.Num() * 0.6f));
+	for (int32 si = 0; si < UseSpots && ScatteredJoints.Num() < MaxScatteredJoints; ++si)
+	{
+		const int32 Here = FMath::RandRange(1, 2); // 1 of 2 joints op DEZE spot
+		for (int32 k = 0; k < Here && ScatteredJoints.Num() < MaxScatteredJoints; ++k)
+		{
+			const float Ang = FMath::FRandRange(0.f, 2.f * PI);
+			const float Rad = FMath::FRandRange(40.f, 70.f);
+			const FVector Loc = JointSpots[si] + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
+			if (AWorldItemPickup* P = MintJointAt(Loc)) { ScatteredJoints.Add(P); }
+		}
+	}
+	JointTarget = ScatteredJoints.Num(); // respawn houdt dit natuurlijke aantal aan, niet de bovengrens
+
+	bJointsScattered = true;
+	UE_LOG(LogWeedShop, Log, TEXT("Joints gescatterd: %d pickups rond %d prullenbakken/bankjes"),
+		ScatteredJoints.Num(), JointSpots.Num());
+
+	// Heel LANGZAAM bijvullen (~10 min): een leeggeraapte plek blijft lang leeg, zodat zelf joints draaien
+	// nut blijft houden. Refill gaat tot JointTarget.
+	GetWorldTimerManager().SetTimer(JointRespawnTimer, this, &ADoorRetrofitter::TopUpJoints, 600.f, true);
+}
+
+// Respawn-tick: dode/ongeldige entries prunen en de map weer bijvullen tot de cap.
+void ADoorRetrofitter::TopUpJoints()
+{
+	if (!HasAuthority()) { return; }
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+
+	ScatteredJoints.RemoveAll([](const TWeakObjectPtr<AWorldItemPickup>& P) { return !P.IsValid(); });
+
+	// Refill verschijnt ERGENS ANDERS: alleen op spots die nu VRIJ zijn (geen levende joint binnen ~120cm),
+	// geschud voor spreiding. Een opgeraapte joint komt na ~10 min dus terug op een andere lege plek -
+	// niet pal op dezelfde plek en niet bovenop een volle.
+	auto SpotOccupied = [this](const FVector& Spot) -> bool
+	{
+		for (const TWeakObjectPtr<AWorldItemPickup>& J : ScatteredJoints)
+		{
+			if (J.IsValid() && FVector::DistSquared2D(J->GetActorLocation(), Spot) < FMath::Square(120.f)) { return true; }
+		}
+		return false;
+	};
+	TArray<int32> Free;
+	for (int32 i = 0; i < JointSpots.Num(); ++i) { if (!SpotOccupied(JointSpots[i])) { Free.Add(i); } }
+	for (int32 s = Free.Num() - 1; s > 0; --s) { Free.Swap(s, FMath::RandRange(0, s)); }
+	for (int32 fi = 0; fi < Free.Num() && ScatteredJoints.Num() < JointTarget; ++fi)
+	{
+		const FVector Spot = JointSpots[Free[fi]];
+		const float Ang = FMath::FRandRange(0.f, 2.f * PI);
+		const float Rad = FMath::FRandRange(40.f, 70.f);
+		const FVector Loc = Spot + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
+		AWorldItemPickup* P = MintJointAt(Loc);
+		if (!P) { break; } // store/spawn faalt -> niet eindeloos doorlopen
+		ScatteredJoints.Add(P);
 	}
 }
 

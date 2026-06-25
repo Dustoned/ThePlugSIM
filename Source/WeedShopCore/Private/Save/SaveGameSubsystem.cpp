@@ -338,16 +338,8 @@ void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
 	// Normale start: een kleine startkit + EUR 420 (geen free-build, geen max level).
 	if (Mode == EGameStartMode::Normal)
 	{
-		if (!P) { return; }
-		if (UEconomyComponent* Econ = P->FindComponentByClass<UEconomyComponent>())
-		{
-			Econ->SetBalanceCents(15000); // EUR 150 cash
-		}
-		if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
-		{
-			Inv->AddItem(FName(TEXT("Papers_Small")), 10);
-			Inv->AddItem(FName(TEXT("Bud_SilverHaze")), 20, 13.f, 70.f); // 20g gedroogde Silver Haze
-		}
+		// Eén code-pad voor host + co-op joiners; de helper dedupt per speler.
+		GrantNormalStartExtrasForPawn(P);
 		return;
 	}
 
@@ -948,4 +940,26 @@ void USaveGameSubsystem::RestorePlayerByPawn(APawn* Pawn)
 	ApplyPlayer(Pawn, *Found);
 	RestoredPlayers.Add(Key);
 	UE_LOG(LogWeedShop, Log, TEXT("Player restored from save: id='%s' name='%s' (cash %lld, %d items)"), *Id, *Name, (long long)Found->CashCents, Found->Items.Num());
+}
+
+void USaveGameSubsystem::GrantNormalStartExtrasForPawn(APawn* Pawn)
+{
+	// Alleen server, alleen Normal, alleen een VERSE game (load herstelt zelf uit de save), exact 1x per speler.
+	if (!HasAuthorityWorld() || !Pawn) { return; }
+	if (SessionStartMode != EGameStartMode::Normal) { return; }
+	if (!IsFreshGame()) { return; } // Loaded != nullptr -> RestorePlayerByPawn herstelt deze speler uit de save
+	const APlayerState* PS = Pawn->GetPlayerState();
+	const int32 Pid = PS ? PS->GetPlayerId() : -1;
+	if (Pid < 0) { return; }                          // nog geen geldige speler-id
+	if (GrantedStartExtras.Contains(Pid)) { return; } // host kreeg ze al via ApplyStartMode / geen dubbele grant
+	GrantedStartExtras.Add(Pid);
+	if (UEconomyComponent* Econ = Pawn->FindComponentByClass<UEconomyComponent>())
+	{
+		Econ->SetBalanceCents(15000); // EUR 150 cash per speler (cash is per-pawn, niet gedeeld)
+	}
+	if (UInventoryComponent* Inv = Pawn->FindComponentByClass<UInventoryComponent>())
+	{
+		Inv->AddItem(FName(TEXT("Papers_Small")), 10);
+		Inv->AddItem(FName(TEXT("Bud_SilverHaze")), 20, 13.f, 70.f);
+	}
 }

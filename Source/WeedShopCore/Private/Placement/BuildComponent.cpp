@@ -1386,10 +1386,55 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	const FString IdS = ItemId.ToString();
 	const int32 UpKind = (GearUpgradeIndex(ItemId) >= 0) ? 1 : (IdS.StartsWith(TEXT("DryUp_")) ? 2 : (IdS.StartsWith(TEXT("ProcUp_")) ? 3 : 0));
 	const bool bUpgrade = (UpKind != 0);
-	if (bUpgrade && !FindUpgradeTarget(UpKind, Location))
+	AActor* UpgTarget = bUpgrade ? FindUpgradeTarget(UpKind, Location) : nullptr;
+	if (bUpgrade && !UpgTarget)
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Place this on a pot/rack/machine.")); }
 		return;
+	}
+	// Pot-gear: max 1 per upgrade EN max 1 tier per familie (lamp/tent/water) per pot.
+	if (bUpgrade && UpKind == 1)
+	{
+		if (AGrowPlant* TargetPot = Cast<AGrowPlant>(UpgTarget))
+		{
+			const int32 NewUi = GearUpgradeIndex(ItemId);
+			// Exact dezelfde upgrade al aanwezig -> weigeren.
+			if (NewUi >= 0 && TargetPot->HasPotUpgrade(NewUi))
+			{
+				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("This pot already has that upgrade.")); }
+				return;
+			}
+			// Tier-familie: hogere tier plaatsen haalt de lagere prop weg + terug naar inventory (geen stacking);
+			// een lagere tier op een hogere is een downgrade -> weigeren.
+			if (NewUi >= 0)
+			{
+				const TArray<int32> Fam = GearFamilyIndices(NewUi);
+				if (Fam.Num() > 1)
+				{
+					for (int32 OtherUi : Fam)
+					{
+						if (OtherUi == NewUi || !TargetPot->HasPotUpgrade(OtherUi)) { continue; }
+						if (OtherUi > NewUi)
+						{
+							if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("This pot already has a higher-tier upgrade.")); }
+							return;
+						}
+						const FName OldGearId = GearItemForUpgrade(OtherUi);
+						const FVector C = TargetPot->GetActorLocation();
+						for (TActorIterator<APlaceableProp> It(World); It; ++It)
+						{
+							APlaceableProp* P = *It;
+							if (!IsValid(P) || P->ItemId != OldGearId) { continue; }
+							const FVector L = P->GetActorLocation();
+							if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
+							if (UInventoryComponent* Inv = GetOwnerInventory()) { Inv->AddItem(OldGearId, 1); }
+							P->Destroy();
+							break;
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Gootsteen = vaste fixture in een normaal spel (niet plaatsbaar). In SANDBOX/free-build mag 't wél,

@@ -301,6 +301,20 @@ void UNpcRegistryComponent::MarkDealt(FName NpcId)
 	if (FNpcState* S = Find(NpcId)) { S->LastDealAbs = NowAbs(); }
 }
 
+void UNpcRegistryComponent::MarkRefused(FName NpcId)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	if (FNpcState* S = Find(NpcId)) { S->LastRefusalAbs = NowAbs(); }
+}
+
+bool UNpcRegistryComponent::IsOnRefusalCooldown(FName NpcId) const
+{
+	const FNpcState* S = Find(NpcId);
+	if (!S) { return false; }
+	const float Now = NowAbs();
+	return (S->LastRefusalAbs >= 0.f) && ((Now - S->LastRefusalAbs) < RefusalCooldownSeconds);
+}
+
 // --- Klant-tier (1 Casual .. 5 Whale) ---
 int32 UNpcRegistryComponent::TierFromXP(int32 XP)
 {
@@ -382,11 +396,11 @@ void UNpcRegistryComponent::GetTierOrderGrams(FName NpcId, int32& OutMin, int32&
 	int32 Mn, Mx;
 	switch (Tier)
 	{
-	case 5: Mn = 20; Mx = 50; break;
-	case 4: Mn = 10; Mx = 20; break;
-	case 3: Mn = 6;  Mx = 12; break;
-	case 2: Mn = 3;  Mx = 6;  break;
-	default: Mn = 1; Mx = 3;  break;
+	case 5: Mn = 70; Mx = 150; break; // Whale  (V4)
+	case 4: Mn = 30; Mx = 70;  break; // VIP
+	case 3: Mn = 12; Mx = 30;  break; // Heavy User
+	case 2: Mn = 5;  Mx = 12;  break; // Regular
+	default: Mn = 2; Mx = 5;   break; // Casual
 	}
 	const float VM = S ? FMath::Clamp(S->ValueMult, 0.7f, 1.5f) : 1.f; // persoonlijke gulzigheid
 	OutMin = FMath::Max(1, FMath::RoundToInt(Mn * VM));

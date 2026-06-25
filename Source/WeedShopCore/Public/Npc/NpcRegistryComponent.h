@@ -51,6 +51,11 @@ struct FNpcState
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float LastApptAbs = -1.f;
 
+	// Tijdstip (NowAbs) van de LAATSTE geweigerde deal. -1 = nooit. Aparte timer van LastDealAbs -> korte
+	// her-aanbied-cooldown na een weigering ZONDER 'tevreden klant'-effecten. Repliceert mee via States.
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	float LastRefusalAbs = -1.f;
+
 	// Cooldown-vermenigvuldiger op de afspraak-cooldown (snel antwoord = korter, traag/opgegeven = langer).
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float ApptCooldownMult = 1.f;
@@ -104,6 +109,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
 	float DealCooldownSeconds = 240.f;
 
+	// Kortere cooldown (zelfde dag-cyclus-seconden als DealCooldownSeconds) na een GEWEIGERDE deal.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
+	float RefusalCooldownSeconds = 75.f;
+
 	// Server: geef een NpcId uit aan een nieuwe klant (round-robin, slaat NPC's op cooldown over).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
 	FName AssignNpc();
@@ -137,6 +146,11 @@ public:
 	// Heeft deze NPC recent (binnen DealCooldownSeconds) een deal gedaan?
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	bool IsOnCooldown(FName NpcId) const;
+
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
+	void MarkRefused(FName NpcId);
+	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
+	bool IsOnRefusalCooldown(FName NpcId) const;
 
 	// Heeft deze NPC z'n nummer al gedeeld (contact)?
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")

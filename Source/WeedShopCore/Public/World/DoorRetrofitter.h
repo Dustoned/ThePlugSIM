@@ -28,6 +28,10 @@ public:
 	// de hele crowd, niet alleen de gematerialiseerde lichamen om de speler heen.
 	void GetVirtualWalkerPositions(TArray<FVector>& Out) const;
 
+	// "Unstuck": dichtstbijzijnde punt op de ECHTE weg in het MIDDEN - de speler-gemarkeerde NPC-route
+	// (NpcRings = loop-lijn over het midden van de boulevard); valt terug op de straat-zoeker (FindStreetPoint).
+	bool FindNearestRoadPoint(const FVector& From, FVector& Out) const;
+
 	// Gemeten huis-box (wand-traces vanaf de thuis-plek): de build-tool laat alleen plaatsen
 	// binnen je eigen huis. False zolang de box nog niet betrouwbaar gemeten is.
 	bool GetHomeBox(FVector& OutMin, FVector& OutMax) const
@@ -61,6 +65,20 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	void ScanAndConvert();
+
+	// --- GESCATTERDE VINDBARE JOINTS (rond prullenbakken + bankjes op de beach-strip) ---
+	// Server-authoritative: één keer spots verzamelen + tot de cap vullen, daarna periodiek bijvullen
+	// als de speler er een oppakt (oppakken vernietigt de pickup -> weak ptr null). Random strain +
+	// papier-gewicht + THC% + kwaliteit%, gewogen zodat GOEDE joints (hoge kwaliteit/hoge THC) ZELDZAAM zijn.
+	bool bJointsScattered = false;
+	TArray<FVector> JointSpots;                                          // gecachete prullenbak/bankje-locaties
+	TArray<TWeakObjectPtr<class AWorldItemPickup>> ScatteredJoints;      // levende gescatterde joints
+	int32 MaxScatteredJoints = 80;                                      // bovengrens op de map (tunable)
+	int32 JointTarget = 0;                                              // natuurlijk doel-aantal van de scatter (~0.6*spots*1.5)
+	FTimerHandle JointRespawnTimer;
+	void ScatterJoints();                                              // one-time: vind spots + vul tot de cap
+	void TopUpJoints();                                                // respawn-tick: dode prunen + bijvullen tot cap
+	class AWorldItemPickup* MintJointAt(const FVector& Loc);            // 1 random joint spawnen op Loc
 
 	FTimerHandle ScanTimer;
 	FTimerHandle ElevScanTimer;

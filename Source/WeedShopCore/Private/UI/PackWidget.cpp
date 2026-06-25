@@ -166,11 +166,50 @@ void UPackWidget::FillBody()
 	// === 3) Hoeveel bags? (elk bakje tot capaciteit; laatste mag een restje zijn) ===
 	if (SelContainer.IsNone() || !Inv->HasItem(SelContainer, 1)) { return; }
 	PackCap = FMath::Max(1, UPhoneClientComponent::ContainerCapacity(SelContainer));
+	// Gram per zakje: default = volle container-cap, clamp 1..cap (zo kan je bv. 1g-zakjes maken).
+	if (SelGrams <= 0) { SelGrams = PackCap; }
+	SelGrams = FMath::Clamp(SelGrams, 1, PackCap);
 	PackBudHave = BudHave;
 	const int32 OwnedCont = Inv->GetQuantity(SelContainer);
-	MaxBags = FMath::Max(1, FMath::Min(OwnedCont, FMath::DivideAndRoundUp(BudHave, PackCap)));
+	MaxBags = FMath::Max(1, FMath::Min(OwnedCont, BudHave / FMath::Max(1, SelGrams)));
 	SelBags = FMath::Clamp(SelBags, 1, MaxBags);
-	const int32 UsedG = FMath::Min(BudHave, SelBags * PackCap);
+	const int32 UsedG = FMath::Min(BudHave, SelBags * SelGrams);
+
+	// === 2.b) Gram per zakje (alleen tonen als de container meer dan 1g kan: anders geen keuze) ===
+	if (PackCap > 1)
+	{
+		Row(WeedUI::Text(WidgetTree, TEXT("2.b  Grams per bag"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 2));
+		Row(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d g per bag   (max %d)"), SelGrams, PackCap), 16, FLinearColor::White, false, true), FMargin(0, 0, 0, 4));
+
+		// -/+ stepper voor de gram-per-zakje. Wijziging => SelBags reset-clamp via herbouw (FillBody).
+		UHorizontalBox* GpbRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+		{
+			UWeedActionButton* Minus = PackBtn(WidgetTree, FLinearColor(0.20f, 0.27f, 0.22f),
+				[this]() { SelGrams = FMath::Clamp(SelGrams - 1, 1, PackCap); LastSig.Reset(); FillBody(); });
+			Minus->SetContent(WeedUI::Text(WidgetTree, TEXT("-"), 20, FLinearColor::White, true, true));
+			USizeBox* MB = WidgetTree->ConstructWidget<USizeBox>(); MB->SetWidthOverride(44.f); MB->SetContent(Minus);
+			GpbRow->AddChildToHorizontalBox(MB)->SetVerticalAlignment(VAlign_Fill);
+
+			UWeedActionButton* OneB = PackBtn(WidgetTree, FLinearColor(0.18f, 0.22f, 0.30f),
+				[this]() { SelGrams = FMath::Clamp(1, 1, PackCap); LastSig.Reset(); FillBody(); });
+			OneB->SetContent(WeedUI::Text(WidgetTree, TEXT("1g"), 12, FLinearColor::White, true));
+			UHorizontalBoxSlot* O1 = GpbRow->AddChildToHorizontalBox(OneB);
+			O1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); O1->SetPadding(FMargin(8.f, 0.f, 4.f, 0.f)); O1->SetVerticalAlignment(VAlign_Fill);
+
+			UWeedActionButton* MaxGB = PackBtn(WidgetTree, FLinearColor(0.18f, 0.22f, 0.30f),
+				[this]() { SelGrams = PackCap; LastSig.Reset(); FillBody(); });
+			MaxGB->SetContent(WeedUI::Text(WidgetTree, TEXT("Max"), 12, FLinearColor::White, true));
+			UHorizontalBoxSlot* G1 = GpbRow->AddChildToHorizontalBox(MaxGB);
+			G1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); G1->SetPadding(FMargin(4.f, 0.f, 8.f, 0.f)); G1->SetVerticalAlignment(VAlign_Fill);
+
+			UWeedActionButton* Plus = PackBtn(WidgetTree, FLinearColor(0.20f, 0.27f, 0.22f),
+				[this]() { SelGrams = FMath::Clamp(SelGrams + 1, 1, PackCap); LastSig.Reset(); FillBody(); });
+			Plus->SetContent(WeedUI::Text(WidgetTree, TEXT("+"), 20, FLinearColor::White, true, true));
+			USizeBox* PB = WidgetTree->ConstructWidget<USizeBox>(); PB->SetWidthOverride(44.f); PB->SetContent(Plus);
+			GpbRow->AddChildToHorizontalBox(PB)->SetVerticalAlignment(VAlign_Fill);
+		}
+		Row(GpbRow, FMargin(0, 0, 0, 6));
+	}
 
 	Row(WeedUI::Text(WidgetTree, TEXT("3.  How many bags?"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 2));
 	GramLabel = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d bag%s   (uses %dg, max %d)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), UsedG, MaxBags), 16, FLinearColor::White, false, true);
@@ -187,7 +226,7 @@ void UPackWidget::FillBody()
 	auto SetB = [this](int32 N)
 	{
 		SelBags = FMath::Clamp(N, 1, FMath::Max(1, MaxBags));
-		const int32 G = FMath::Min(PackBudHave, SelBags * PackCap);
+		const int32 G = FMath::Min(PackBudHave, SelBags * SelGrams);
 		if (GramSlider)   { GramSlider->SetValue(MaxBags > 1 ? float(SelBags - 1) / float(MaxBags - 1) : 1.f); }
 		if (GramLabel)    { GramLabel->SetText(FText::FromString(FString::Printf(TEXT("%d bag%s   (uses %dg, max %d)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G, MaxBags))); }
 		if (PackBtnLabel) { PackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Pack %d bag%s   (%dg)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G))); }
@@ -228,7 +267,7 @@ void UPackWidget::FillBody()
 	Row(PresetRow, FMargin(0, 0, 0, 8));
 
 	UWeedActionButton* PackB = PackBtn(WidgetTree, FLinearColor(0.2f, 0.5f, 0.3f),
-		[this, Ph]() { Ph->ServerPack(SelStrain, SelContainer, SelBags); LastSig.Reset(); });
+		[this, Ph]() { for (int32 i = 0; i < FMath::Max(1, SelBags); ++i) { Ph->RequestPackGrams(SelStrain, SelContainer, SelGrams); } LastSig.Reset(); });
 	PackBtnLabel = WeedUI::Text(WidgetTree, FString::Printf(TEXT("Pack %d bag%s   (%dg)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), UsedG), 13, FLinearColor::White, true);
 	PackB->SetContent(PackBtnLabel);
 	Row(PackB, FMargin(0, 2, 0, 2));
@@ -359,7 +398,7 @@ void UPackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			}
 			else
 			{
-				const int32 G = FMath::Min(PackBudHave, SelBags * PackCap);
+				const int32 G = FMath::Min(PackBudHave, SelBags * SelGrams);
 				if (GramLabel)    { GramLabel->SetText(FText::FromString(FString::Printf(TEXT("%d bag%s   (uses %dg, max %d)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G, MaxBags))); }
 				if (PackBtnLabel) { PackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Pack %d bag%s   (%dg)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G))); }
 			}

@@ -88,7 +88,7 @@ namespace PropKit
 		if      (S.StartsWith(TEXT("WetBud_")))     { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.20f, 0.42f, 0.18f); }
 		else if (S.StartsWith(TEXT("Bud_")))        { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.26f, 0.55f, 0.22f); }
 		else if (S.StartsWith(TEXT("Bag_")))        { Size = FVector(8.f, 5.f, 10.f); Col = FLinearColor(0.70f, 0.62f, 0.42f); }
-		else if (S.StartsWith(TEXT("Joint_")))      { M = Cylinder(); Size = FVector(1.8f, 1.8f, 9.f); Col = FLinearColor(0.93f, 0.92f, 0.85f); Rot = FRotator(0.f, 0.f, 90.f); }
+		else if (S.StartsWith(TEXT("Joint_")))      { M = Cylinder(); Size = FVector(1.3f, 1.3f, 6.5f); Col = FLinearColor(0.93f, 0.92f, 0.85f); Rot = FRotator(0.f, 0.f, 90.f); }
 		else if (S.StartsWith(TEXT("Crystal_")))    { Size = FVector(6.f, 6.f, 6.f);  Col = FLinearColor(0.80f, 0.85f, 0.95f); }
 		else if (S.StartsWith(TEXT("Hash_")))       { Size = FVector(6.f, 6.f, 4.f);  Col = FLinearColor(0.35f, 0.22f, 0.12f); }
 		else if (S.StartsWith(TEXT("Rosin_")))      { Size = FVector(5.f, 5.f, 3.f);  Col = FLinearColor(0.88f, 0.62f, 0.16f); } // amber rosin
@@ -233,12 +233,12 @@ namespace PropKit
 		}
 		else if (S.StartsWith(TEXT("Joint_")))
 		{
-			P(Cy, FVector(1.8f, 1.8f, 10.2f), FVector(0, 0, 0), FLinearColor(0.96f, 0.95f, 0.90f));  // vloei
-			P(Co, FVector(1.8f, 1.8f, 2.6f), FVector(0, 0, 6.2f), FLinearColor(0.90f, 0.88f, 0.80f)); // gedraaide top
-			P(Cy, FVector(1.9f, 1.9f, 2.6f), FVector(0, 0, -5.0f), FLinearColor(0.76f, 0.58f, 0.34f)); // filter
-			P(Cy, FVector(1.95f, 1.95f, 0.6f), FVector(0, 0, -3.6f), Accent);                          // strain-bandje
-			P(Sp, FVector(1.7f, 1.7f, 1.7f), FVector(0, 0, 7.4f), FLinearColor(1.0f, 0.5f, 0.12f));    // gloed
-			P(Sp, FVector(0.9f, 0.9f, 0.9f), FVector(0, 0, 7.9f), FLinearColor(1.0f, 0.85f, 0.30f));   // hete kern
+			P(Cy, FVector(1.3f, 1.3f, 7.3f), FVector(0, 0, 0), FLinearColor(0.96f, 0.95f, 0.90f));    // vloei
+			P(Co, FVector(1.3f, 1.3f, 1.9f), FVector(0, 0, 4.5f), FLinearColor(0.90f, 0.88f, 0.80f)); // gedraaide top
+			P(Cy, FVector(1.4f, 1.4f, 1.9f), FVector(0, 0, -3.6f), FLinearColor(0.76f, 0.58f, 0.34f)); // filter
+			P(Cy, FVector(1.4f, 1.4f, 0.45f), FVector(0, 0, -2.6f), Accent);                           // strain-bandje
+			P(Sp, FVector(1.2f, 1.2f, 1.2f), FVector(0, 0, 5.3f), FLinearColor(1.0f, 0.5f, 0.12f));    // gloed
+			P(Sp, FVector(0.65f, 0.65f, 0.65f), FVector(0, 0, 5.7f), FLinearColor(1.0f, 0.85f, 0.30f)); // hete kern
 		}
 		else if (S.StartsWith(TEXT("WaterBottle")))
 		{
@@ -564,13 +564,15 @@ namespace PropKit
 			P(Cu, FVector(0.5f, 0.5f, 1.2f), FVector(0, -3.2f, 3.8f),    FLinearColor(0.32f, 0.32f, 0.30f));
 		}
 		// === Losse dry/proc upgrade-gear =============================================================
-		else if (S == TEXT("DryUp_Fan"))
+		else if (S == TEXT("DryUp_Fan") || S == TEXT("DryUp_FanSmall"))
 		{
-			P(Cy, FVector(6.0f, 6.0f, 2.0f), FVector(0, 0, 0), FLinearColor(0.28f, 0.26f, 0.24f));
-			P(Cu, FVector(4.8f, 0.5f, 0.6f), FVector(0, 0, 0), FLinearColor(0.32f, 0.30f, 0.28f));
-			P(Cu, FVector(0.5f, 4.8f, 0.6f), FVector(0, 0, 0), FLinearColor(0.32f, 0.30f, 0.28f));
-			P(Cu, FVector(3.5f, 3.5f, 0.5f), FVector(0, 0, 0.8f), FLinearColor(0.30f, 0.28f, 0.26f), FRotator(0, 0, 45));
-			P(Sp, FVector(0.5f, 0.5f, 0.5f), FVector(0, 0, 1.2f), FLinearColor(0.15f, 0.15f, 0.18f));
+			// Rechtopstaande ventilator: voet op de vloer (Z=0), staander omhoog, kop met blaadjes -> niet meer in de grond.
+			P(Cu, FVector(5.0f, 4.0f, 0.6f), FVector(0, 0, 0.3f),    FLinearColor(0.22f, 0.20f, 0.18f));            // voet
+			P(Cy, FVector(0.8f, 0.8f, 6.0f), FVector(0, 0, 3.5f),    FLinearColor(0.30f, 0.28f, 0.26f));            // staander
+			P(Cy, FVector(6.0f, 6.0f, 2.0f), FVector(0, 2.0f, 7.0f), FLinearColor(0.28f, 0.26f, 0.24f), FRotator(90, 0, 0)); // kooi, rechtop
+			P(Cu, FVector(4.8f, 0.6f, 0.5f), FVector(0, 2.6f, 7.0f), FLinearColor(0.32f, 0.30f, 0.28f), FRotator(90, 0, 0)); // blad
+			P(Cu, FVector(0.5f, 0.6f, 4.8f), FVector(0, 2.6f, 7.0f), FLinearColor(0.32f, 0.30f, 0.28f), FRotator(90, 0, 0)); // blad
+			P(Sp, FVector(0.5f, 0.5f, 0.5f), FVector(0, 2.9f, 7.0f), FLinearColor(0.15f, 0.15f, 0.18f));          // naaf
 		}
 		else if (S == TEXT("DryUp_Seal"))
 		{

@@ -93,6 +93,23 @@ int32 HighestOwnedTier(int32 Mask, const TArray<int32>& BitIndices)
 	return Tier;
 }
 
+TArray<int32> GearFamilyIndices(int32 UpgIndex)
+{
+	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
+	TArray<int32> Out;
+	if (!Ups.IsValidIndex(UpgIndex)) { return Out; }
+	int32 Root = UpgIndex;
+	while (Ups.IsValidIndex(Root) && Ups[Root].PrereqIndex >= 0) { Root = Ups[Root].PrereqIndex; }
+	for (int32 i = 0; i < Ups.Num(); ++i)
+	{
+		int32 r = i;
+		while (Ups.IsValidIndex(r) && Ups[r].PrereqIndex >= 0) { r = Ups[r].PrereqIndex; }
+		if (r == Root) { Out.Add(i); }
+	}
+	Out.Sort();
+	return Out;
+}
+
 int32 GetPotTierIndex(FName PotTier)
 {
 	const TArray<FPotDef>& Pots = GetAllPots();

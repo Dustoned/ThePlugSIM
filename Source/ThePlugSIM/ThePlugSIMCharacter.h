@@ -271,9 +271,17 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerGiveSample(AActor* Target);
 
+	/** Server-RPC: geef een SPECIFIEKE joint (id) aan het doel - voor de deal-kiezer (geen hand-scroll nodig). */
+	UFUNCTION(Server, Reliable)
+	void ServerGiveSampleId(AActor* Target, FName JointId);
+
+	/** Gedeelde server-kern voor het joint-geven (range-check, RemoveItem, NPC-reactie). JointId = welke joint. */
+	void GiveSampleCore(class ACustomerBase* Customer, FName JointId);
+
 public:
 	/** IPlayerNpcActions: geef een specifieke klant een joint (vanuit het praat-venster). */
 	virtual void GiveJointToCustomer(ACustomerBase* Customer) override;
+	virtual void GiveJointToCustomerId(ACustomerBase* Customer, FName JointId) override;
 	virtual uint8 GetPlayerSkinIndex() const override { return PlayerSkin; }
 	virtual void SetPlayerSkinIndex(uint8 SkinIndex) override { ServerSetSkin(SkinIndex); }
 	virtual uint8 GetOutfitPart(int32 Slot) const override

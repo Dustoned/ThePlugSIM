@@ -34,6 +34,8 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 	void RebuildStrains();
 	void UpdateLive();
+	void GiveJointPressed();   // "Give joint" geklikt: 0 -> melding, 1 -> direct geven, >=2 -> kiezer
+	void RebuildJointPicker(); // vult de joint-kiezer (strain - gram - kwaliteit per joint)
 
 	UPhoneClientComponent* GetPhone() const;
 
@@ -57,6 +59,7 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> PreviewText;
 	UPROPERTY() TObjectPtr<UTextBlock> OfferLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> StrainBox;
+	UPROPERTY() TObjectPtr<UVerticalBox> JointPickerBox; // joint-kiezer (welke joint geef je deze NPC)
 	UPROPERTY() TObjectPtr<UTextBlock> NoWeedText;
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;

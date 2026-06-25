@@ -4,6 +4,7 @@
 #include "WeedShopCore.h"
 #include "UI/BootCoverWidget.h"
 #include "Game/WeedShopGameState.h"
+#include "Npc/NpcRegistryComponent.h" // GetNpcRegistry()->IsOnRefusalCooldown() = volledige type nodig
 #include "World/DayCycleComponent.h"
 #include "Progression/UpgradeComponent.h"
 #include "Progression/StoreComponent.h"
@@ -1687,7 +1688,7 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 	if (PackGrams <= 0) { return; }
 
 	const FName Strain(*BudStr.RightChop(4));                            // Bud_X -> X
-	const FName BagId = UInventoryComponent::MakeBagId(Strain, PackGrams); // -> Bag_X_<gram>
+	const FName BagId = UInventoryComponent::MakeBagId(Strain, ContainerId, PackGrams); // -> Bag_X_<gram>
 
 	Inv->RemoveFromStackById(BestSid, PackGrams);
 	Inv->RemoveItem(ContainerId, 1);
@@ -1722,10 +1723,24 @@ void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId, int32 Count
 	if (!Inv->RemoveItem(BagId, N)) { return; } // alleen N zakjes openen
 	Inv->AddItem(BudId, TotalGrams, Thc, Q);     // wiet weer los terug
 
+	// Lege container(s) teruggeven: 1 per uitgepakt zakje, zodat je ze kunt hergebruiken. De bag bewaart z'n
+	// container-type niet (id = Bag_<strain>_<gram>), dus we geven de KLEINSTE container die deze gram kon bevatten.
+	FName ContId = UInventoryComponent::BagContainer(BagId);   // exacte container waarin verpakt
+	if (ContId.IsNone())                                       // oude 2-token bag -> kleinste-passende
+	{
+		if      (PerBag <= 2)   { ContId = FName(TEXT("Cont_Bag2")); }
+		else if (PerBag <= 5)   { ContId = FName(TEXT("Cont_Bag5")); }
+		else if (PerBag <= 25)  { ContId = FName(TEXT("Cont_Jar10")); }
+		else if (PerBag <= 50)  { ContId = FName(TEXT("Cont_Jar15")); }
+		else if (PerBag <= 100) { ContId = FName(TEXT("Cont_Block100")); }
+		else                    { ContId = FName(TEXT("Cont_Garbage500")); }
+	}
+	Inv->AddItem(ContId, N);                     // N lege containers terug
+
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Unpacked %d bag%s = %dg %s (loose)."), N, N == 1 ? TEXT("") : TEXT("s"), TotalGrams, *Strain.ToString()));
+			FString::Printf(TEXT("Unpacked %d bag%s -> %dg %s + %d empty container%s back."), N, N == 1 ? TEXT("") : TEXT("s"), TotalGrams, *Strain.ToString(), N, N == 1 ? TEXT("") : TEXT("s")));
 	}
 }
 
@@ -1753,7 +1768,7 @@ void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName Contain
 		const int32 Grams = FMath::Min(Cap, Have);
 		if (!Inv->RemoveItem(BudId, Grams)) { break; }
 		Inv->RemoveItem(ContainerId, 1);
-		Inv->AddItem(UInventoryComponent::MakeBagId(Strain, Grams), 1, Thc, Q); // één gemaatd zakje
+		Inv->AddItem(UInventoryComponent::MakeBagId(Strain, ContainerId, Grams), 1, Thc, Q); // één gemaatd zakje
 		++BagsMade; TotalGrams += Grams;
 	}
 	if (GEngine && BagsMade > 0)
@@ -1835,6 +1850,20 @@ void UPhoneClientComponent::SetRollGrams(int32 Grams)
 
 void UPhoneClientComponent::ConfirmRoll()
 {
+	// Geen bruikbare wiet -> niet rollen (backstop voor de RMB-hold die via dit pad gaat).
+	FName WeedId; float Thc = 0.f, Q = 0.f;
+	if (!GetRollWeed(RollGrams, WeedId, Thc, Q))
+	{
+		SetRollLoadedUI(false, 0); // lading wissen zodat de RMB-roll stopt
+		if (GEngine)
+		{
+			UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange,
+				FString::Printf(TEXT("No weed to roll (%d g needed)."), RollGrams));
+		}
+		bRollOpen = false;
+		UpdateCursor();
+		return;
+	}
 	ServerRollJoint(RollGrams);
 	bRollOpen = false;
 	UpdateCursor();
@@ -1842,18 +1871,22 @@ void UPhoneClientComponent::ConfirmRoll()
 
 void UPhoneClientComponent::LoadRoll()
 {
-	SetRollLoadedUI(true, RollGrams);
-	// Onthoud welke wiet geladen is (voor de hint rechtsonder).
+	// Geen bruikbare wiet -> niet laden, geef een duidelijke melding (geen lege joint kunnen rollen).
 	FName WeedId; float Thc = 0.f, Q = 0.f;
-	if (GetRollWeed(RollGrams, WeedId, Thc, Q))
+	if (!GetRollWeed(RollGrams, WeedId, Thc, Q))
 	{
-		RollLoadDesc = FString::Printf(TEXT("%dg %s - %.0f%% THC, %.0f%% quality"),
-			RollGrams, *WeedUI::PrettyItemName(WeedId), Thc, Q);
+		SetRollLoadedUI(false, 0);
+		if (GEngine)
+		{
+			UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange,
+				FString::Printf(TEXT("No weed to roll (%d g needed) - grow/buy buds first."), RollGrams));
+		}
+		return;
 	}
-	else
-	{
-		RollLoadDesc = FString::Printf(TEXT("%dg loaded"), RollGrams);
-	}
+	SetRollLoadedUI(true, RollGrams);
+	// Onthoud welke wiet geladen is (voor de hand-preview links-onder).
+	RollLoadDesc = FString::Printf(TEXT("%dg %s - %.0f%% THC, %.0f%% quality"),
+		RollGrams, *WeedUI::PrettyItemName(WeedId), Thc, Q);
 	bRollOpen = false; // menu sluit; rollen door rechtermuis in te houden
 	UpdateCursor();
 }
@@ -1984,8 +2017,11 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 	Inv->RemoveItem(BudItem, Grams);
 	Inv->RemoveItem(Paper, 1);
 
-	// Joint-gram zit in de id (Joint_<G>g); THC% + Kwaliteit% bewaren we op de stapel.
-	const FName JointId(*FString::Printf(TEXT("Joint_%dg"), Grams));
+	// Joint-id onthoudt nu ook de STRAIN: Joint_<Strain>_<G>g. Strain = bud-id zonder de "Bud_"-prefix.
+	// THC% + Kwaliteit% bewaren we op de stapel (zoals voorheen).
+	FString StrainStr = BudItem.ToString();
+	StrainStr.RemoveFromStart(TEXT("Bud_"));
+	const FName JointId = UInventoryComponent::MakeJointId(FName(*StrainStr), Grams);
 	Inv->AddItem(JointId, 1, BudThc, BudQ);
 	// Goal-teller: joints gerold.
 	if (AWeedShopGameState* GSg = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
@@ -2023,6 +2059,16 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	{
 		UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("Someone else is talking to this person."));
 		return;
+	}
+	// Net geweigerd? Korte her-aanbied-cooldown: nog niet opnieuw openen (anti-spam, los van aankoop-cooldown).
+	if (const AWeedShopGameState* GSrc = GetGS())
+	{
+		if (GSrc->GetNpcRegistry() && Customer && !Customer->NpcId.IsNone()
+			&& GSrc->GetNpcRegistry()->IsOnRefusalCooldown(Customer->NpcId))
+		{
+			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("They just turned you down - give it a minute."));
+			return;
+		}
 	}
 	// Praat-venster opent voor IEDEREEN (naam, stats, dialoog, joint geven). De deal-sectie zelf
 	// (prijs/aanbod) tonen we in de UI alleen als 'ie ook echt wil kopen.
@@ -2125,6 +2171,16 @@ void UPhoneClientComponent::RequestGiveJoint(ACustomerBase* Customer)
 	}
 }
 
+void UPhoneClientComponent::RequestGiveJointId(ACustomerBase* Customer, FName JointId)
+{
+	if (!Customer) { return; }
+	// Routeer de gekozen joint naar de speler-pawn (game-module via de interface).
+	if (IPlayerNpcActions* Actions = Cast<IPlayerNpcActions>(GetOwner()))
+	{
+		Actions->GiveJointToCustomerId(Customer, JointId);
+	}
+}
+
 void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, FName ProductId, int32 AskCents)
 {
 	if (!Customer)
@@ -2140,6 +2196,14 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 	UInventoryComponent* Stock = GetOwnerInventory();
 
 	AskCents = AskCents > 0 ? (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)AskCents)) : (int32)WeedRoundEuros((int64)AskCents);
+	if (const AWeedShopGameState* GSs = GetGS())
+	{
+		if (GSs->GetNpcRegistry() && Customer && !Customer->NpcId.IsNone()
+			&& GSs->GetNpcRegistry()->IsOnRefusalCooldown(Customer->NpcId))
+		{
+			return; // net geweigerd: bod negeren tot de cooldown om is
+		}
+	}
 	const EDealResult Result = Customer->SubmitOfferProduct(ProductId, AskCents, Econ, Stock);
 
 	// NPC reageert in het praat-venster.

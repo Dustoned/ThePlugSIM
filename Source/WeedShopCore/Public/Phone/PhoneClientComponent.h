@@ -607,6 +607,9 @@ public:
 	// Geef de huidige praat-klant een joint (knop in het praat-venster). Routeert naar de speler-pawn.
 	void RequestGiveJoint(ACustomerBase* Customer);
 
+	// Geef de praat-klant een SPECIFIEKE joint (gekozen in de deal-kiezer). Routeert naar de speler-pawn.
+	void RequestGiveJointId(ACustomerBase* Customer, FName JointId);
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
 	bool IsDealOpen() const { return bDealOpen; }
 
@@ -747,7 +750,7 @@ protected:
 	// server-teleport pas aan na een beweging-update -> "moet springen om in de woning te komen").
 	UFUNCTION(Client, Reliable) void ClientLandAtHome(FVector To);
 
-	// Server: maak 1 joint van Grams gram bud (item-id Joint_<G>g; meer gram = betere kwaliteit).
+	// Server: maak 1 joint van Grams gram bud (item-id Joint_<Strain>_<G>g; meer gram = betere kwaliteit).
 	UFUNCTION(Server, Reliable)
 	void ServerRollJoint(int32 Grams);
 

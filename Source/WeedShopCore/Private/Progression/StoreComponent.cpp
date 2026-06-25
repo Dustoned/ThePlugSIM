@@ -167,6 +167,7 @@ namespace
 		{ TEXT("Moon_Std"),    TEXT("Moonrock station"),     TEXT("Dried weed + oil -> moonrocks (coated bud, big yield, ~60s)"), 45000,  1 },
 		{ TEXT("Moon_Pro"),    TEXT("Pro moonrock station"), TEXT("More yield + faster (~45s, 4 batches)"),                110000,  1 },
 		// Losse upgrade-gear voor droogrek / hasj-machines (zet 'm vlakbij de machine).
+		{ TEXT("DryUp_FanSmall"), TEXT("Small drying fan"), TEXT("Nearby drying rack: ~15% faster"), 4500, 1 },
 		{ TEXT("DryUp_Fan"),    TEXT("Drying fan"),      TEXT("Nearby drying rack: ~30% faster"),        9000,  1 },
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("Nearby drying rack: keeps quality higher"), 14000, 1 },
 		{ TEXT("ProcUp_Motor"), TEXT("Power motor"),     TEXT("Nearby hash machine: ~30% faster"),       16000, 1 },
@@ -395,6 +396,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Iso_Std"))         { return 46; }
 	if (S == TEXT("Iso_Pro"))         { return 48; }
 	// Losse upgrade-gear
+	if (S == TEXT("DryUp_FanSmall")) { return 5; }
 	if (S == TEXT("DryUp_Fan"))       { return 12; }
 	if (S == TEXT("DryUp_Seal"))      { return 18; }
 	if (S == TEXT("ProcUp_Motor"))    { return 22; }

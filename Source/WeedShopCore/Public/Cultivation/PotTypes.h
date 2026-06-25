@@ -53,6 +53,9 @@ bool IsPotUpgradeAllowed(int32 UpgIndex, FName PotTier);
 // Geeft het 1-gebaseerde tier-nummer terug (0 = geen).
 int32 HighestOwnedTier(int32 Mask, const TArray<int32>& BitIndices);
 
+// Alle tier-broers in dezelfde familie (Lamp/Tent/Water); {Ui} voor standalones.
+TArray<int32> GearFamilyIndices(int32 UpgIndex);
+
 // Of dit item-id een pot is (begint met "Pot").
 bool IsPotItem(FName ItemId);
 

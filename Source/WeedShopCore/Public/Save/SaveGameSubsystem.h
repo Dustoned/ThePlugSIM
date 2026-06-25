@@ -154,6 +154,11 @@ public:
 	// hersteld deze sessie. Aangeroepen wanneer een (co-op) speler de wereld in komt.
 	void RestorePlayerByPawn(APawn* Pawn);
 
+	// Server: geef DEZE pawn de eenmalige 'Normal' new-game extras (Silver Haze, extra papers, start-cash),
+	// alleen op een VERSE Normal-game en exact 1x per speler (dedup op PlayerState PlayerId). Zo krijgt ook
+	// een co-op joiner (P2) dezelfde startspullen als P1. No-op op clients/load-games/niet-Normal.
+	void GrantNormalStartExtrasForPawn(APawn* Pawn);
+
 protected:
 	AWeedShopGameState* GetWeedGameState() const;
 	bool HasAuthorityWorld() const;
@@ -184,6 +189,9 @@ protected:
 
 	// Welke usernames deze sessie al hersteld zijn (voorkomt dubbel herstel bij respawn).
 	TSet<FString> RestoredPlayers;
+
+	// PlayerId's die deze sessie al de eenmalige Normal-startextras kregen.
+	TSet<int32> GrantedStartExtras;
 
 	// Speeltijd-meting: base = waarde bij sessie-start (uit save), mark = wanneer die sessie begon.
 	double PlaytimeBaseSeconds = 0.0;

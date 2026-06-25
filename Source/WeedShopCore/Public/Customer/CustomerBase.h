@@ -116,9 +116,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "WeedShop|Customer")
 	float Addiction = 10.f;
 
-	// Maximaal bedrag per eenheid dat hij wil betalen (cents).
+	// Maximaal bedrag per eenheid dat hij wil betalen (cents). V4: €80/g i.p.v. €20/g, zodat premium-strains
+	// (markt tot ~€39/g) verkoopbaar zijn; de echte prijsdruk komt nu uit de acceptatie-formule.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
-	int32 BudgetCentsPerUnit = 2000;
+	int32 BudgetCentsPerUnit = 8000;
 
 	// Geduld in seconden; loopt af terwijl hij wacht.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
