@@ -2986,7 +2986,14 @@ void ADoorRetrofitter::TickVirtualCrowd()
 	};
 	// LICHAAM-PLAFOND: max ~55 echte lichamen tegelijk (de performance-grens); de rest blijft
 	// data. Lichamen gaan naar de virtuelen die het dichtst bij een speler lopen.
-	const int32 BodyCap = 70; // = crowd-grootte: alle wandelaars worden 1x een PERSISTENT lichaam (geen despawn)
+	// DAG/NACHT: overdag de volle crowd (70); 's nachts een KLEINERE crowd van vooral verslaafden -
+	// de niet-verslaafden gaan (off-screen) naar bed = minder mensen, meer junkies/kopers buiten.
+	bool bNight = false;
+	if (AWeedShopGameState* GSnt = W->GetGameState<AWeedShopGameState>())
+	{
+		if (auto* DCnt = GSnt->GetDayCycle()) { bNight = DCnt->IsNight(); }
+	}
+	const int32 BodyCap = bNight ? FMath::Max(2, NightCrowd) : 70;
 	int32 NBodies = 0;
 	// SPAWN-SPREIDING: max enkele echte NPC's PER CALL materialiseren. Elke spawn doet een synchrone
 	// modulaire build (mesh-loads + components); een hele rij in 1 frame = de periodieke hang. Met deze cap
@@ -2999,9 +3006,18 @@ void ADoorRetrofitter::TickVirtualCrowd()
 		{
 			++NBodies;
 			V.Pos = B->GetActorLocation(); // data volgt het lichaam (voor de map-marker)
-			// GEEN despawn meer: een eenmaal gematerialiseerde NPC BLIJFT bestaan en doorlopen (zoals de dev-city).
-			// Ver weg verdwijnt vanzelf alleen z'n model + animatie (SetCullDistance + OnlyTickPoseWhenRendered),
-			// het lichaam loopt door op de map en de marker klopt altijd. Geen constante despawn-churn meer.
+			// NACHT-UITDUNNING: te veel volk 's nachts -> de NIET-verslaafden (< drempel) gaan naar bed.
+			// Alleen OFF-SCREEN opruimen zodat je 't nooit ziet gebeuren = geen zichtbare churn; de junkies
+			// (>= drempel) blijven gewoon rondlopen. Overdag materialiseren de slapers vanzelf weer.
+			if (bNight && NBodies > BodyCap && B->GetAddiction() < NightAddictThreshold && !InAnyViewFar(V.Pos))
+			{
+				B->Destroy();
+				V.Body = nullptr;
+				--NBodies;
+				continue;
+			}
+			// Overdag (en de junkies 's nachts): BLIJFT bestaan en doorlopen. Ver weg verdwijnt alleen z'n
+			// model + animatie (SetCullDistance + OnlyTickPoseWhenRendered); het lichaam loopt door, marker klopt.
 			continue;
 		}
 		// (Beweging gebeurt in TickVirtualMove op 10x/s - hier alleen het zware werk.)

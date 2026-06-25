@@ -376,6 +376,9 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Press_Pro"))       { return 31; }
 	// Edibles-keten unlockt in ÉÉN keer (oven + pan + koelkast samen) zodat baked weed meteen bruikbaar is.
 	if (S == TEXT("Butter"))          { return 9; }
+	if (S == TEXT("Flour"))           { return 9; } // bak-ingredienten: pas nodig bij de edibles-gear (cookies/gummies)
+	if (S == TEXT("Sugar"))           { return 9; }
+	if (S == TEXT("Gelatin"))         { return 9; }
 	if (S == TEXT("Oven_Std"))        { return 9; }
 	if (S == TEXT("Pan_Std"))         { return 9; }
 	// De koelkast die 't ZET = de gewone "Fridge" (level 9, hieronder); geen aparte conversion kit meer.

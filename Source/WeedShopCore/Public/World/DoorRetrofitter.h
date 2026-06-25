@@ -151,6 +151,9 @@ protected:
 		TWeakObjectPtr<class ACustomerBase> Body;
 	};
 	TArray<FVirtualWalker> Crowd;
+	// 's Nachts loopt er een KLEINERE, zwaarder verslaafde crowd buiten (junkies/kopers); overdag de volle 70.
+	int32 NightCrowd = 25;
+	float NightAddictThreshold = 30.f; // verslaving >= dit = blijft 's nachts buiten (= AddictionToBuy)
 	// POOL van geparkeerde (verborgen) crowd-lichamen: een ver-weg-lichaam wordt geparkeerd i.p.v. vernietigd
 	// en hergebruikt bij her-materialiseren -> elke NPC wordt maar 1x modulair gebouwd (geen rebuild-hitch).
 	UPROPERTY() TArray<TObjectPtr<class ACustomerBase>> CrowdPool;

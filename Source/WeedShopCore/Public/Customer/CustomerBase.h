@@ -345,6 +345,8 @@ public:
 	// beheert hun aantal zelf, BodyCap=70). De spawner-cull mag ze NIET opruimen, anders re-materialiseert de
 	// DoorRetrofitter ze meteen elders = de constante despawn/respawn-churn. Server-only vlag (cull draait server-side).
 	bool bVirtualCrowdBody = false;
+	// Verslaving van dit lichaam (voor de nacht-crowd-selectie in de DoorRetrofitter: kopers >= AddictionToBuy).
+	float GetAddiction() const { return Addiction; }
 protected:
 	FVector ActivitySpot = FVector::ZeroVector;     // doelplek
 	float ActivityYaw = 0.f;                         // kijkrichting op de plek
