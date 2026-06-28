@@ -4,7 +4,7 @@ Version 1.17.0 — 28 juni 2026
 Korte intro:
 NPC- en first-person-update: de mensen op straat zijn gevarieerder (meer modellen/outfits, elke dag andere
 gezichten), reageren strakker op deals, en de eerste-persoons-camera beweegt nu natuurlijk met je hoofd mee —
-ook tijdens het springen.
+ook tijdens het springen. Daarnaast: opgeschoonde grafische instellingen en de kluis als extra item-opslag.
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -37,6 +37,31 @@ EERSTE PERSOON
   lopen, voor een veel realistischer gevoel.
 • Springen voelt strak: geen abrupte schok of zichtbare lichaamsdelen meer in beeld op het moment dat je afzet
   of in de lucht hangt.
+
+━━━━━━━━━━━━━━━━━━━━
+
+INSTELLINGEN & GRAFISCH
+
+• Het grafische instellingen-menu is opgeschoond: duidelijke, oplopende kwaliteit-standen in plaats van een
+  wirwar aan losse sliders, met een aparte schaduwen-aan/uit-schakelaar. De zwaarste besparing (Potato) zet
+  post-effects en schaduwen volledig uit voor zwakkere pc's.
+• Nieuwe bediening: een duidelijke "Save settings"-knop onderaan, en terug via Esc of de "< Back" linksboven.
+  Instellingen die pas na een herstart ingaan (zoals de schaduw-grens) melden dat nu netjes met een popup.
+
+━━━━━━━━━━━━━━━━━━━━
+
+KLUIS & OPSLAG
+
+• De kluis is omgebouwd van geldkluis naar extra item-opslag (oplopend aantal slots per upgrade-tier). De
+  aparte "Safe"-tab op de ATM is daarmee verdwenen. Geld dat nog in een oude kluis zat, wordt bij het laden
+  automatisch naar cash omgezet, zodat je niets kwijtraakt.
+
+━━━━━━━━━━━━━━━━━━━━
+
+DIVERSEN
+
+• Het personage-voorbeeld in de kledingkast werd 's nachts donker door het nieuwe lucht-/lichtsysteem — dat
+  voorbeeld is nu altijd goed verlicht, ongeacht tijd of weer.
 
 ━━━━━━━━━━━━━━━━━━━━
 
