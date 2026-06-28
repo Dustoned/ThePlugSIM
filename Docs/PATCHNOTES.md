@@ -13,6 +13,9 @@ NPC's & CROWD
 • Veel meer variatie op straat: nieuwe personagemodellen en outfits toegevoegd zodat de menigte minder
   "kloont". De gezichten rouleren bovendien per dag — je ziet steeds andere mensen, en dat wisselen gebeurt
   altijd buiten beeld (je betrapt het nooit live).
+• Een flink deel van de wandelaars wordt nu uit losse onderdelen opgebouwd (lichaam + hoofd + kleding +
+  accessoires) → honderden unieke combinaties, plus een nieuw type "gewone burger"-man. Vrijwel niemand lijkt
+  nog op elkaar.
 • NPC's stappen nu netter opzij als ze ergens tegenaan lopen, in plaats van tegen elkaar of een obstakel te
   blijven duwen.
 • Vervolg op de vorige fix: NPC's verdwijnen niet meer vlak voor je neus. Ze blijven gewoon rondlopen; ver weg
