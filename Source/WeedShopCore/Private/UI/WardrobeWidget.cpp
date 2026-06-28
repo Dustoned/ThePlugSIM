@@ -52,9 +52,10 @@ namespace
 		{
 		case 1:  return TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple");
 		case 2:  return WeedOutfit::FullBodyPaths[0];
-		case 3:  return WeedOutfit::FullBodyPaths[1];
-		case 4:  return WeedOutfit::FullBodyPaths[2];
-		case 5:  return WeedOutfit::MaleBodyPath; // male (Tony basis-body + kleren)
+		case 3:  return TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_01.SK_GamerGirl_01");                       // Gamer_Girl
+		case 4:  return TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_CasualOutfit.SK_SchoolGirl_CasualOutfit"); // School_Girl
+		case 5:  return WeedOutfit::MaleBodyPath;        // male (Tony basis-body + kleren)
+		case 6:  return WeedOutfit::CitizenManBodyPath;  // Citizen_man (headless basis-body)
 		default: return TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple");
 		}
 	}
@@ -178,21 +179,23 @@ void UWardrobeWidget::EnsurePreview()
 			if (PreviewActor.IsValid()) { C->ShowOnlyActors.Add(PreviewActor.Get()); }
 			C->FOVAngle = 30.f;
 			C->bCaptureEveryFrame = true; // live: animatie + outfit-wissels direct zichtbaar
+			C->bAlwaysPersistRenderingState = true; // exposure/TAA-history vasthouden -> de gepinde exposure drift niet meer weg na een paar seconden
 			// Vaste belichting, dag en nacht: pin de auto-exposure vast (min == max) zodat de preview
 			// niet meedimt met de zon; de eigen studio-lampen doen het werk.
 			C->PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
 			C->PostProcessSettings.AutoExposureMinBrightness = 1.0f;
 			C->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
 			C->PostProcessSettings.AutoExposureMaxBrightness = 1.0f;
-			// Histogram-methode EXPLICIET kiezen zodat de min==max-lock ook echt pakt (de wereld-default kon een
-			// andere methode zijn, waardoor de lock niet greep en 'ie de eerste seconden helder inregelde). Plus
-			// instant adaptatie-snelheid -> meteen op de vaste exposure-scale, geen flits. (Manual maakte 'm zwart.)
+			// VASTE belichting via AEM_Manual -> eye-adaptation HELEMAAL uit, geen drift meer (de min==max-histogram
+			// hield 'm niet vast: na een paar seconden dimde de preview alsnog). De EERDERE Manual-poging werd ZWART
+			// omdat 'ie de physical-camera-exposure (donkere EV) pakte -> die hier UIT + een vaste bias; lampen doen de rest.
 			C->PostProcessSettings.bOverride_AutoExposureMethod = true;
-			C->PostProcessSettings.AutoExposureMethod = AEM_Histogram;
-			C->PostProcessSettings.bOverride_AutoExposureSpeedUp = true;
-			C->PostProcessSettings.AutoExposureSpeedUp = 100.f;
-			C->PostProcessSettings.bOverride_AutoExposureSpeedDown = true;
-			C->PostProcessSettings.AutoExposureSpeedDown = 100.f;
+			C->PostProcessSettings.AutoExposureMethod = AEM_Manual;
+			C->PostProcessSettings.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+			C->PostProcessSettings.AutoExposureApplyPhysicalCameraExposure = 0; // GEEN physical-camera-EV (dat maakte 'm zwart)
+			C->PostProcessSettings.bOverride_AutoExposureBias = true;
+			C->PostProcessSettings.AutoExposureBias = 1.0f; // vaste belichting (tunebaar); geen adaptatie meer
+				C->ShowFlags.SetEyeAdaptation(false); // eye-adaptation-PAS uit -> geen overbelichte puls op de eerste frames bij het openen
 		}
 		// Lampen aan de CAMERA: de voorkant is altijd verlicht, hoe je ook draait.
 		if (UPointLightComponent* Key = NewObject<UPointLightComponent>(Cap))
@@ -261,7 +264,9 @@ void UWardrobeWidget::RebuildPreviewActor()
 	BodyComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// Male (5): de body volgt de gekozen complete Tony-look; anders de vaste skin-mapping.
-	const TCHAR* BodyPath = (Skin == 5 && Pl) ? WeedOutfit::PartAt(0, Pl->GetOutfitPart(0), true).Path : BodyMeshPath(Skin);
+	const TCHAR* BodyPath = (Skin == 5 && Pl) ? WeedOutfit::PartAt(0, Pl->GetOutfitPart(0), true).Path
+		: ((Skin == 3 || Skin == 4) && Pl) ? WeedOutfit::GirlVariantPath(Skin, Pl->GetOutfitPart(0)) // Gamer/School: gekozen variant-mesh
+		: BodyMeshPath(Skin);
 	if (USkeletalMesh* BodyMesh = LoadObject<USkeletalMesh>(nullptr, BodyPath))
 	{
 		BodyComp->SetSkeletalMeshAsset(BodyMesh);
@@ -274,11 +279,16 @@ void UWardrobeWidget::RebuildPreviewActor()
 			BodyComp->SetAnimInstanceClass(Char->GetMesh()->GetAnimClass());
 		}
 	}
+	// Haar/cloth STIL in de preview: cloth-sim + AnimDynamics + body-physics uit (alleen hier, niet in-game).
+	BodyComp->bDisableClothSimulation = true;
+	BodyComp->SetAllBodiesSimulatePhysics(false);
+	BodyComp->SetAllowAnimDynamicsAnimNode(false);
 
 	// Outfit-parts (leader-pose): Casual-girls (2-4, female) of de male (5, citizens Tony - eigen kleren).
-	if (Skin >= 2 && Pl)
+	if (Pl && (Skin == 2 || Skin == 5 || Skin == 6)) // Casual-girl (2), Tony (5), of Citizen_man (6) -> losse parts
 	{
-		const bool bMaleSkin = (Skin == 5);
+		const bool bMaleSkin = (Skin == 5 || Skin == 6);
+		const bool bCitMan = (Skin == 6);
 		auto Attach = [&](const TCHAR* MeshPath)
 		{
 			if (!MeshPath) { return; } // "None"-keuze
@@ -290,11 +300,17 @@ void UWardrobeWidget::RebuildPreviewActor()
 			C->SetSkeletalMeshAsset(PartMesh);
 			C->SetLeaderPoseComponent(BodyComp);
 			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			C->bDisableClothSimulation = true; // haar-part ook stil (eigen component, niet door de body-disable gedekt)
+			C->SetAllBodiesSimulatePhysics(false);
+			C->SetAllowAnimDynamicsAnimNode(false);
 		};
 		if (!bMaleSkin) { Attach(WeedOutfit::UnderwearPath); }
 		for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx)
 		{
-			Attach(WeedOutfit::PartAt(SlotIdx, Pl->GetOutfitPart(SlotIdx), bMaleSkin).Path);
+			const WeedOutfit::FPart& P = bCitMan
+				? WeedOutfit::PartAtM(SlotIdx, Pl->GetOutfitPart(SlotIdx), WeedOutfit::EMaleKind::CitizenMan)
+				: WeedOutfit::PartAt(SlotIdx, Pl->GetOutfitPart(SlotIdx), bMaleSkin);
+			Attach(P.Path);
 		}
 	}
 
@@ -401,7 +417,7 @@ void UWardrobeWidget::FillBody()
 		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
 		UHorizontalBox* BodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
 		struct FBodyChoice { uint8 Idx; const TCHAR* Name; };
-		static const FBodyChoice Choices[] = { { 2, TEXT("Girl 1") }, { 3, TEXT("Girl 2") }, { 4, TEXT("Girl 3") } };
+		static const FBodyChoice Choices[] = { { 2, TEXT("Casual") }, { 3, TEXT("Gamer Girl") }, { 4, TEXT("School Girl") } };
 		bool bFirstBody = true;
 		for (const FBodyChoice& Ch : Choices)
 		{
@@ -424,6 +440,34 @@ void UWardrobeWidget::FillBody()
 		}
 		Row(BodyRowBox, FMargin(0, 0, 0, 6));
 	}
+	// --- MALE model-keuze: Tony (complete looks, 1 slot) of Citizen (volledig modulair, 7 slots). ---
+	if (Skin == 5 || Skin == 6)
+	{
+		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
+		UHorizontalBox* MBodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
+		struct FMaleChoice { uint8 Idx; const TCHAR* Name; };
+		static const FMaleChoice MaleChoices[] = { { 5, TEXT("Tony") }, { 6, TEXT("Citizen") } };
+		bool bFirstMBody = true;
+		for (const FMaleChoice& Ch : MaleChoices)
+		{
+			const uint8 bi = Ch.Idx;
+			UWeedActionButton* BB = WrdBtn(WidgetTree,
+				(Skin == bi) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f), 8.f,
+				[this, bi]()
+				{
+					if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); }
+					RecolorModelButtons(bi);
+					// Tony<->Citizen wisselt de slot-STRUCTUUR (1 vs 7) -> categorie wijzigt -> NativeTick rebuildt FillBody (veilig, geen reentrante rebuild hier).
+				});
+			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, FLinearColor::White, true));
+			ModelButtons.Add(BB); ModelButtonSkins.Add(bi);
+			UHorizontalBoxSlot* BS = MBodyRowBox->AddChildToHorizontalBox(BB);
+			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			BS->SetPadding(FMargin(bFirstMBody ? 0.f : 4.f, 0.f, 0.f, 0.f));
+			bFirstMBody = false;
+		}
+		Row(MBodyRowBox, FMargin(0, 0, 0, 6));
+	}
 	Row(WeedUI::Text(WidgetTree, TEXT("Switch Male / Female in Phone - Settings - Game."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 0, 0, 10));
 
 	// Legacy Manny/Quinn (0/1) hebben geen losse outfit-parts -> kies hierboven een model.
@@ -433,18 +477,69 @@ void UWardrobeWidget::FillBody()
 		return;
 	}
 
+	// Gamer Girl (3) / School Girl (4) zijn COMPLETE meshes: geen Casual-kledingslots, maar een variant-switcher.
+	if (Skin == 3 || Skin == 4)
+	{
+		const int32 VarCount = FMath::Max(1, WeedOutfit::GirlVariantCount(Skin));
+		const uint8 CurVar = (uint8)FMath::Clamp((int32)Pl->GetOutfitPart(0), 0, VarCount - 1);
+		Row(WeedUI::Text(WidgetTree, TEXT("Outfit"), 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
+		UHorizontalBox* VR = WidgetTree->ConstructWidget<UHorizontalBox>();
+
+		UWeedActionButton* PrevV = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
+			[this, VarCount]()
+			{
+				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
+				{
+					const uint8 C = P->GetOutfitPart(0);
+					P->SetOutfitPart(0, (uint8)((C + VarCount - 1) % VarCount));
+				}
+				UpdateSlotText(0);
+			});
+		PrevV->SetContent(WeedUI::Text(WidgetTree, TEXT("<"), 14, FLinearColor::White, true));
+		VR->AddChildToHorizontalBox(PrevV);
+
+		UTextBlock* VNameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s  (%d/%d)"), WeedOutfit::GirlVariantName(Skin, CurVar), CurVar + 1, VarCount), 14, FLinearColor(0.95f, 0.95f, 1.f), false, true);
+		SlotNameTexts.Add(0, VNameT);
+		UHorizontalBoxSlot* VNS = VR->AddChildToHorizontalBox(VNameT);
+		VNS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		VNS->SetHorizontalAlignment(HAlign_Center); VNS->SetVerticalAlignment(VAlign_Center);
+
+		UWeedActionButton* NextV = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
+			[this, VarCount]()
+			{
+				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
+				{
+					const uint8 C = P->GetOutfitPart(0);
+					P->SetOutfitPart(0, (uint8)((C + 1) % VarCount));
+				}
+				UpdateSlotText(0);
+			});
+		NextV->SetContent(WeedUI::Text(WidgetTree, TEXT(">"), 14, FLinearColor::White, true));
+		VR->AddChildToHorizontalBox(NextV);
+
+		Row(VR, FMargin(0, 0, 0, 4));
+		Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom. Press B in-game for third person."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 12, 0, 0));
+		return; // geen Casual-slots voor Gamer/School
+	}
+
 	// --- Outfit-slots: < naam > per categorie ---
 	// Volgorde van boven naar onder: Headwear, Hair, Necklace, Top, Pants, Socks, Shoes.
-	const bool bMaleSkin = (Skin == 5);
+	const bool bMaleSkin = (Skin == 5 || Skin == 6);
+	const bool bCitMan = (Skin == 6);
 	static const int32 DisplayOrder[] = { 4, 3, 5, 0, 1, 6, 2 };
-	for (const int32 SlotIdx : DisplayOrder)
+	static const int32 CitManOrder[] = { 6, 0, 1, 2, 3, 4, 5 }; // Citizen: Face (kop) eerst, dan kleren
+	const int32* Order = bCitMan ? CitManOrder : DisplayOrder;
+	const int32 OrderNum = bCitMan ? (int32)UE_ARRAY_COUNT(CitManOrder) : (int32)UE_ARRAY_COUNT(DisplayOrder);
+	for (int32 oi = 0; oi < OrderNum; ++oi)
 	{
-		if (bMaleSkin && SlotIdx != 0) { continue; } // male: alleen de "Look"-keuze (de rest zit in de assembled look)
-		const int32 Count = WeedOutfit::PartCount(SlotIdx, bMaleSkin);
+		const int32 SlotIdx = Order[oi];
+		if (bMaleSkin && !bCitMan && SlotIdx != 0) { continue; } // Tony: alleen de "Look"-keuze; Citizen: alle 7 slots
+		const int32 Count = bCitMan ? WeedOutfit::PartCountM(SlotIdx, WeedOutfit::EMaleKind::CitizenMan) : WeedOutfit::PartCount(SlotIdx, bMaleSkin);
 		const uint8 Cur = Pl->GetOutfitPart(SlotIdx);
-		const WeedOutfit::FPart& Part = WeedOutfit::PartAt(SlotIdx, Cur, bMaleSkin);
+		const WeedOutfit::FPart& Part = bCitMan ? WeedOutfit::PartAtM(SlotIdx, Cur, WeedOutfit::EMaleKind::CitizenMan) : WeedOutfit::PartAt(SlotIdx, Cur, bMaleSkin);
 
-		Row(WeedUI::Text(WidgetTree, bMaleSkin ? TEXT("Look") : WeedOutfit::SlotName(SlotIdx), 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
+		const TCHAR* SlotLbl = bCitMan ? WeedOutfit::SlotNameM(SlotIdx, WeedOutfit::EMaleKind::CitizenMan) : (bMaleSkin ? TEXT("Look") : WeedOutfit::SlotName(SlotIdx));
+		Row(WeedUI::Text(WidgetTree, SlotLbl, 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
 		UHorizontalBox* R = WidgetTree->ConstructWidget<UHorizontalBox>();
 
 		UWeedActionButton* PrevB = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
@@ -491,10 +586,19 @@ void UWardrobeWidget::UpdateSlotText(int32 SlotIdx)
 	if (!Found || !Found->IsValid()) { return; }
 	const IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
 	if (!Pl) { return; }
-	const bool bMaleSkin = (Pl->GetPlayerSkinIndex() == 5);
-	const int32 Count = WeedOutfit::PartCount(SlotIdx, bMaleSkin);
+	const uint8 Sk = Pl->GetPlayerSkinIndex();
+	if ((Sk == 3 || Sk == 4) && SlotIdx == 0) // Gamer/School: variant-switcher (slot 0 = variant-index)
+	{
+		const int32 VC = FMath::Max(1, WeedOutfit::GirlVariantCount(Sk));
+		const uint8 CV = (uint8)FMath::Clamp((int32)Pl->GetOutfitPart(0), 0, VC - 1);
+		Found->Get()->SetText(FText::FromString(FString::Printf(TEXT("%s  (%d/%d)"), WeedOutfit::GirlVariantName(Sk, CV), CV + 1, VC)));
+		return;
+	}
+	const bool bMaleSkin = (Sk == 5 || Sk == 6);
+	const bool bCitMan = (Sk == 6);
+	const int32 Count = bCitMan ? WeedOutfit::PartCountM(SlotIdx, WeedOutfit::EMaleKind::CitizenMan) : WeedOutfit::PartCount(SlotIdx, bMaleSkin);
 	const uint8 Cur = Pl->GetOutfitPart(SlotIdx);
-	const WeedOutfit::FPart& Part = WeedOutfit::PartAt(SlotIdx, Cur, bMaleSkin);
+	const WeedOutfit::FPart& Part = bCitMan ? WeedOutfit::PartAtM(SlotIdx, Cur, WeedOutfit::EMaleKind::CitizenMan) : WeedOutfit::PartAt(SlotIdx, Cur, bMaleSkin);
 	Found->Get()->SetText(FText::FromString(FString::Printf(TEXT("%s  (%d/%d)"), Part.Name, Cur + 1, Count)));
 }
 
@@ -537,7 +641,7 @@ void UWardrobeWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (const IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 	{
 		const uint8 Sk = Pl->GetPlayerSkinIndex();
-		Cat = (Sk >= 2 && Sk <= 4) ? 1 : (Sk == 5 ? 2 : 0);
+		Cat = (Sk == 2) ? 1 : (Sk == 3 ? 4 : (Sk == 4 ? 5 : (Sk == 5 ? 2 : (Sk == 6 ? 3 : 0)))); // skin 3/4 eigen categorie -> rebuild bij Casual<->Gamer<->School (UI verschilt)
 	}
 	const FString Sig = FString::FromInt(Cat);
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }

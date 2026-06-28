@@ -549,18 +549,11 @@ static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_D.SK_Citizens_Pack_Tony_D"),
-		// --- NIEUWE packs (net naar schone paden verplaatst) ---
-		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_01.SK_GamerGirl_01"),
-		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_02.SK_GamerGirl_02"),
-		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_03.SK_GamerGirl_03"),
-		// School_Girl: terug erin om in-game te testen (jij zag 'm mogelijk wél werken). Eigen skelet -> als 'ie
-		// T-poset deelt 'ie GymGirls' probleem; zo niet is z'n skelet mannequin-compatibel en blijft 'ie staan.
-		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_CasualOutfit.SK_SchoolGirl_CasualOutfit"),
-		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SchoolOutfit.SK_SchoolGirl_SchoolOutfit"),
-		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SportOutfit.SK_SchoolGirl_SportOutfit"),
-		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SwimSuit.SK_SchoolGirl_SwimSuit"),
-		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_DressOutfit.SK_SchoolGirl_DressOutfit"),
-		// GymGirls UIT: eigen rig (skelet las als NONE) -> bevestigd kapot in je screenshot; pas terug na retarget.
+		// LET OP: Gamer_Girl + School_Girl bewust NIET in de crowd-pool. Het zijn complete meshes MET Chaos-Cloth
+		// (o.a. de dress). De crowd CHURNT (dagelijkse identiteit-rotatie + materialiseren/respawnen) -> telkens
+		// SetSkeletalMesh op een cloth-mesh -> de render-thread herbouwt de skeletal render-data -> RACE -> crash
+		// (access violation in RenderCore, ook als je stilstaat). Ze blijven gewoon als SPELER-skin (die churnt niet).
+		// GymGirls bleef al uit (eigen rig kapot). Wil je ze tóch in de crowd: eerst de cloth uit die meshes strippen.
 	};
 	const int32 N = UE_ARRAY_COUNT(Pool);
 	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, Pool[Seed % (uint32)N])) { return M; }
@@ -697,7 +690,25 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 		Part->SetCastShadow(true);
 		Part->SetCullDistance(16000.f);
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		// Geen tint: Citizen_man heeft z'n eigen materials (variatie komt uit de mesh-combo's).
+		// KLEUR-VARIANT: zelfde kledingstuk in een andere kleur (bv shirt_03 i.p.v. shirt_01) -> veel meer
+		// onderscheid (hoofd/haar/hoed/bril houden hun eigen materiaal). De pack heeft per stuk varianten _01.._05.
+		if (Rel.Contains(TEXT("shirt")) || Rel.Contains(TEXT("jacket")) || Rel.Contains(TEXT("pants")) || Rel.Contains(TEXT("shorts")) || Rel.Contains(TEXT("shoes")))
+		{
+			int32 us;
+			if (Rel.FindLastChar(TEXT('_'), us))
+			{
+				const FString Base = Rel.Left(us);
+				// Aantal kleur-varianten verschilt PER stuk: de meeste hebben _01.._05, maar shoes_classic heeft
+				// er maar 2 en jacket_leather 4. Clamp per stuk, anders laadt LoadObject een niet-bestaand asset
+				// (-> "Failed to find object ..._03/_05" in de log + NPC mist z'n schoenen/jas).
+				uint32 MaxVar = 5u;
+				if (Base.Contains(TEXT("shoes_classic")))       { MaxVar = 2u; }
+				else if (Base.Contains(TEXT("jacket_leather"))) { MaxVar = 4u; }
+				const uint32 Var = 1u + ((Seed * 73u + Sl.Salt) % MaxVar);
+				const FString MP = FString::Printf(TEXT("/Game/Citizen_man_01/materials/%s_%02u.%s_%02u"), *Base, Var, *Base, Var);
+				if (UMaterialInterface* MI = LoadObject<UMaterialInterface>(nullptr, *MP)) { Part->SetMaterial(0, MI); }
+			}
+		}
 	}
 }
 
@@ -718,12 +729,12 @@ void ACustomerBase::BuildAppearance()
 	// kleur-tint). Alleen NPC's waar je mee DEALT (niet-crowd) krijgen de volle modulaire variatie.
 	if (bCrowdNpc)
 	{
-		// MEER crowd-variatie: 4/6 houdt de goedkope vaste skin (incl. de girl-packs -> blijven vaak), 1/6 wordt een
-		// modulaire Regular_Male civilian, 1/6 een modulaire Casual/Tony. De modulaire builds geven honderden combo's
-		// (kleding/hoofd/accessoires), zijn gespreid (1/tick via DoorRetrofitter) + grotendeels achter de loading-cover.
-		const uint32 V = LookSeed % 6u;
-		if (V == 4u) { WeedNpc_BuildModularCitizenMan(this, SkM, LookSeed); }
-		else if (V == 5u) { if ((LookSeed & 8u) == 0u) { WeedNpc_BuildModular(this, SkM, LookSeed); } else { WeedNpc_BuildModularCitizens(this, SkM, LookSeed); } }
+		// VEEL crowd-variatie: 1/3 Regular_Male civilian (honderden mesh-combo's + kleur-varianten), 1/3 Casual/Tony
+		// modulair, 1/3 goedkope vaste skin (de girls + basis). De modulaire builds geven bijna-unieke mensen;
+		// gespreid (1/tick via DoorRetrofitter) + grotendeels achter de loading-cover.
+		const uint32 V = LookSeed % 3u;
+		if (V == 0u) { WeedNpc_BuildModularCitizenMan(this, SkM, LookSeed); }
+		else if (V == 1u) { if ((LookSeed & 8u) == 0u) { WeedNpc_BuildModular(this, SkM, LookSeed); } else { WeedNpc_BuildModularCitizens(this, SkM, LookSeed); } }
 		else if (USkeletalMesh* Sk = WeedNpc_CrowdSkin(LookSeed)) { SkM->SetSkeletalMesh(Sk); const FString SkP = Sk->GetPathName(); if (!SkP.Contains(TEXT("/Gamer_Girl/")) && !SkP.Contains(TEXT("/SchoolGirl/"))) { WeedNpc_TintClothing(SkM, LookSeed); } } // girl-packs: eigen outfits, niet overtinten
 	}
 	else if (SkinIdx >= 3 && SkinIdx <= 5)

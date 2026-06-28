@@ -743,25 +743,19 @@ void UPhoneWidget::FillSettingsBody()
 			IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
 			const uint8 Cur = Skn ? Skn->GetPlayerSkinIndex() : 0;
 			BodyRow(MakeText(TEXT("Character"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
-			// Male = citizens Tony (skin 5). De oude Manny/Quinn-mannequins zijn weg.
+			// Alleen Man/Vrouw hier; het EXACTE model (Casual/Gamer/School of Tony/Citizen) kies je in de Wardrobe.
+			const bool bMale = (Cur == 5 || Cur == 6 || Cur == 0);
 			UHorizontalBox* GBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
 			UWeedActionButton* MaleB = MakeActionBtn(TEXT("Male"),
-				(Cur == 5) ? FLinearColor(0.20f, 0.55f, 0.85f) : FLinearColor(0.15f, 0.16f, 0.21f),
-				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(5); } FillSettingsBody(); }, 13);
+				bMale ? FLinearColor(0.20f, 0.55f, 0.85f) : FLinearColor(0.15f, 0.16f, 0.21f),
+				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { const uint8 c = S->GetPlayerSkinIndex(); if (c != 5 && c != 6) { S->SetPlayerSkinIndex(5); } } FillSettingsBody(); }, 13);
 			GBtns->AddChildToHorizontalBox(MaleB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			UWeedActionButton* FemaleB = MakeActionBtn(TEXT("Female"),
+				!bMale ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.16f, 0.21f),
+				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { const uint8 c = S->GetPlayerSkinIndex(); if (c < 2 || c > 4) { S->SetPlayerSkinIndex(2); } } FillSettingsBody(); }, 13);
+			GBtns->AddChildToHorizontalBox(FemaleB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			BodyRow(GBtns, FMargin(0.f, 0.f, 0.f, 4.f));
-			// Female-keuzes: Casual-meisjes op skin 2/3/4.
-			UHorizontalBox* CBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
-			const TCHAR* CasualLabels[3] = { TEXT("Girl 1"), TEXT("Girl 2"), TEXT("Girl 3") };
-			for (int32 ci = 0; ci < 3; ++ci)
-			{
-				const uint8 SkinIdx = (uint8)(2 + ci);
-				UWeedActionButton* CB = MakeActionBtn(CasualLabels[ci],
-					(Cur == SkinIdx) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.16f, 0.21f),
-					[this, SkinIdx]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { S->SetPlayerSkinIndex(SkinIdx); } FillSettingsBody(); }, 13);
-				CBtns->AddChildToHorizontalBox(CB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			}
-			BodyRow(CBtns, FMargin(0.f, 0.f, 0.f, 10.f));
+			BodyRow(MakeText(TEXT("Pick the exact model in the Wardrobe."), 10, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0.f, 0.f, 0.f, 10.f));
 		}
 		if (GS && GS->GetLeveling())
 		{

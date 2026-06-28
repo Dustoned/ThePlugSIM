@@ -503,13 +503,13 @@ void USettingsWidget::RefreshContent()
 		if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 		{
 			const uint8 Sk = PA->GetPlayerSkinIndex();
-			const bool bMale = (Sk == 5 || Sk == 0); // 5 = man (Tony), 0 = Manny (legacy) ; 1-4 = vrouw
+			const bool bMale = (Sk == 5 || Sk == 6 || Sk == 0); // 5/6 = man (Tony/Citizen), 0 = Manny (legacy) ; 1-4 = vrouw
 			AddValueRow(TEXT("Character"), bMale ? TEXT("Male") : TEXT("Female"), [this]()
 			{
 				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 				{
 					const uint8 Cur = P->GetPlayerSkinIndex();
-					const bool bIsMale = (Cur == 5 || Cur == 0);
+					const bool bIsMale = (Cur == 5 || Cur == 6 || Cur == 0);
 					P->SetPlayerSkinIndex(bIsMale ? 2 : 5); // -> vrouw (Girl 1) of man (Tony)
 					RefreshContent();
 				}

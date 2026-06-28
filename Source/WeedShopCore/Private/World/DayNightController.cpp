@@ -84,7 +84,7 @@ void ADayNightController::SaveLightConfig() const
 		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias, NightGain, NightExposure, DayBloom, SunHaze, UdsExpDay, UdsExpDawnDusk, UdsExpNight, UdsCloud, UdsFog);
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("LightConfig.txt");
 	FFileHelper::SaveStringToFile(Cfg, *Path);
-	UE_LOG(LogTemp, Warning, TEXT("[LightConfig] saved to %s\n%s"), *Path, *Cfg);
+	UE_LOG(LogTemp, Log, TEXT("[LightConfig] saved to %s\n%s"), *Path, *Cfg);
 }
 
 const UDayCycleComponent* ADayNightController::GetDayCycle() const
@@ -113,7 +113,7 @@ float ADayNightController::CeilingOnIntensity(const UPointLightComponent* PL) co
 {
 	if (!PL) { return 0.f; }
 	// Zelfde schaal als de klok-loop (zie Tick): CeilLamp = hoofdkegel, CeilGlow = zachte room-fill.
-	const float Div = PL->ComponentHasTag(TEXT("CeilGlow")) ? 9000.f : 900.f;
+	const float Div = PL->ComponentHasTag(TEXT("CeilGlow")) ? 2500.f : 900.f; // CeilLamp 900 = origineel (hoofdlamp dim, vloer/ramen niet blown); CeilGlow 9000->2500 = zachte plafond-glow opgehelderd zodat 't PLAFOND verlicht; TUNEBAAR
 	return LampIntensity / Div;
 }
 
@@ -459,19 +459,19 @@ void ADayNightController::SpawnUDS()
 	UClass* UdsClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Ultra_Dynamic_Sky.Ultra_Dynamic_Sky_C"));
 	if (!UdsClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UDS] Ultra_Dynamic_Sky class niet gevonden - UDS uit, klassieke zon/maan blijft"));
+		UE_LOG(LogTemp, Verbose, TEXT("[UDS] Ultra_Dynamic_Sky class niet gevonden - UDS uit, klassieke zon/maan blijft"));
 		return;
 	}
 	FActorSpawnParameters SP;
 	SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AActor* Uds = W->SpawnActor<AActor>(UdsClass, FTransform::Identity, SP);
-	if (!Uds) { UE_LOG(LogTemp, Warning, TEXT("[UDS] spawn faalde")); return; }
+	if (!Uds) { UE_LOG(LogTemp, Verbose, TEXT("[UDS] spawn faalde")); return; }
 	UdsSky = Uds;
 	bUseUDS = true;
 	UdsTimeProp = Uds->GetClass()->FindPropertyByName(FName(TEXT("Time of Day")));
 	UdsUpdateFn = Uds->FindFunction(FName(TEXT("Update Active Variables")));
 	UdsUpdateStaticFn = Uds->FindFunction(FName(TEXT("Update Static Variables")));
-	UE_LOG(LogTemp, Warning, TEXT("[UDS] gespawnd. TimeProp=%s UpdateFn=%s(parms=%d)"),
+	UE_LOG(LogTemp, Verbose, TEXT("[UDS] gespawnd. TimeProp=%s UpdateFn=%s(parms=%d)"),
 		UdsTimeProp ? *UdsTimeProp->GetClass()->GetName() : TEXT("NULL"),
 		UdsUpdateFn ? TEXT("OK") : TEXT("NULL"),
 		UdsUpdateFn ? UdsUpdateFn->NumParms : -1);
@@ -480,16 +480,16 @@ void ADayNightController::SpawnUDS()
 	if (UClass* SndClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Sound/AmbientSound_Time_and_Weather_Controlled.AmbientSound_Time_and_Weather_Controlled_C")))
 	{
 		UdsSound = W->SpawnActor<AActor>(SndClass, FTransform::Identity, SP);
-		UE_LOG(LogTemp, Warning, TEXT("[UDS] sound-actor: %s"), UdsSound.IsValid() ? TEXT("OK") : TEXT("NULL"));
+		UE_LOG(LogTemp, Verbose, TEXT("[UDS] sound-actor: %s"), UdsSound.IsValid() ? TEXT("OK") : TEXT("NULL"));
 	}
-	else { UE_LOG(LogTemp, Warning, TEXT("[UDS] sound-class niet gevonden")); }
+	else { UE_LOG(LogTemp, Verbose, TEXT("[UDS] sound-class niet gevonden")); }
 
 	// Ultra Dynamic WEATHER zit OOK in deze pack -> spawnen voor ECHT weer (regen/sneeuw/storm/lightning).
 	// UDW detecteert de Sky zelf en koppelt alles. Met UDW aanwezig stuurt het weer de cloud/fog van de Sky.
 	if (UClass* WClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Ultra_Dynamic_Weather.Ultra_Dynamic_Weather_C")))
 	{
 		UdsWeatherActor = W->SpawnActor<AActor>(WClass, FTransform::Identity, SP);
-		UE_LOG(LogTemp, Warning, TEXT("[UDS] UDW (weer) gespawnd: %s"), UdsWeatherActor.IsValid() ? TEXT("OK") : TEXT("NULL"));
+		UE_LOG(LogTemp, Verbose, TEXT("[UDS] UDW (weer) gespawnd: %s"), UdsWeatherActor.IsValid() ? TEXT("OK") : TEXT("NULL"));
 		if (AActor* Udw = UdsWeatherActor.Get())
 		{
 			Udw->SetActorTickEnabled(true);
@@ -499,7 +499,7 @@ void ADayNightController::SpawnUDS()
 				const FString N = WFnIt->GetName();
 				if (N.Contains(TEXT("Weather")) || N.Contains(TEXT("Change")) || N.Contains(TEXT("Random")) || N.Contains(TEXT("Preset")))
 				{
-					UE_LOG(LogTemp, Warning, TEXT("[UDW-FUNC] %s (parms=%d)"), *N, WFnIt->NumParms);
+					UE_LOG(LogTemp, Verbose, TEXT("[UDW-FUNC] %s (parms=%d)"), *N, WFnIt->NumParms);
 				}
 			}
 			for (TFieldIterator<FProperty> WPrIt(Udw->GetClass()); WPrIt; ++WPrIt)
@@ -507,14 +507,14 @@ void ADayNightController::SpawnUDS()
 				const FString N = WPrIt->GetName();
 				if (N == TEXT("Weather") || N.Contains(TEXT("Random Weather")) || N.Contains(TEXT("Variation")) || N.Contains(TEXT("Cloud")) || N.Contains(TEXT("Coverage")) || N.Contains(TEXT("Manual")) || N.Contains(TEXT("Override")))
 				{
-					UE_LOG(LogTemp, Warning, TEXT("[UDW-PROP] %s : %s"), *N, *WPrIt->GetClass()->GetName());
+					UE_LOG(LogTemp, Verbose, TEXT("[UDW-PROP] %s : %s"), *N, *WPrIt->GetClass()->GetName());
 				}
 			}
 
 			SetRandomWeather(true); // natuurlijk wisselend weer aan bij start
 		}
 	}
-	else { UE_LOG(LogTemp, Warning, TEXT("[UDS] UDW-class niet gevonden")); }
+	else { UE_LOG(LogTemp, Verbose, TEXT("[UDS] UDW-class niet gevonden")); }
 
 	if (AActor* U2 = UdsSky.Get()) { U2->SetActorTickEnabled(true); } // UDS' eigen update-loop draaien
 	// Perf/VRAM: de real-time sky-light-capture over meerdere frames spreiden i.p.v. elke frame de hele
@@ -534,15 +534,15 @@ void ADayNightController::SpawnUDS()
 	{
 		Uds->ProcessEvent(UdsUpdateStaticFn, nullptr);
 	}
-	UE_LOG(LogTemp, Warning, TEXT("[UDS] aurora deze sessie: %s"), bAurora ? TEXT("JA") : TEXT("nee"));
+	UE_LOG(LogTemp, Verbose, TEXT("[UDS] aurora deze sessie: %s"), bAurora ? TEXT("JA") : TEXT("nee"));
 	// TEMP introspectie: star/glow-properties MET huidige waarde (om intensiteit/glow te kunnen tunen).
 	for (TFieldIterator<FProperty> SAIt(Uds->GetClass()); SAIt; ++SAIt)
 	{
 		const FString N = SAIt->GetName();
 		if (!(N.Contains(TEXT("Star")) || N.Contains(TEXT("Simulate")) || N.Contains(TEXT("Night Sky Glow")) || N.Contains(TEXT("Twinkle")) || N.Contains(TEXT("Nebula")))) { continue; }
-		if (FDoubleProperty* DP = CastField<FDoubleProperty>(*SAIt)) { UE_LOG(LogTemp, Warning, TEXT("[UDS-SA] %s = %.3f"), *N, DP->GetPropertyValue_InContainer(Uds)); }
-		else if (FBoolProperty* BP = CastField<FBoolProperty>(*SAIt)) { UE_LOG(LogTemp, Warning, TEXT("[UDS-SA] %s = %s"), *N, BP->GetPropertyValue_InContainer(Uds) ? TEXT("true") : TEXT("false")); }
-		else { UE_LOG(LogTemp, Warning, TEXT("[UDS-SA] %s : %s"), *N, *SAIt->GetClass()->GetName()); }
+		if (FDoubleProperty* DP = CastField<FDoubleProperty>(*SAIt)) { UE_LOG(LogTemp, Verbose, TEXT("[UDS-SA] %s = %.3f"), *N, DP->GetPropertyValue_InContainer(Uds)); }
+		else if (FBoolProperty* BP = CastField<FBoolProperty>(*SAIt)) { UE_LOG(LogTemp, Verbose, TEXT("[UDS-SA] %s = %s"), *N, BP->GetPropertyValue_InContainer(Uds) ? TEXT("true") : TEXT("false")); }
+		else { UE_LOG(LogTemp, Verbose, TEXT("[UDS-SA] %s : %s"), *N, *SAIt->GetClass()->GetName()); }
 	}
 
 	ApplyUdsLook(); // belichting; UDS houdt z'n eigen wolken
@@ -575,7 +575,7 @@ void ADayNightController::CallUdsUpdate()
 void ADayNightController::ApplyUdsLook()
 {
 	if (!UdsSky.IsValid()) { return; }
-	SetUdsBool(FName(TEXT("Apply Exposure Settings")), true); // UDS stuurt de exposure -> onze biases tellen
+	SetUdsBool(FName(TEXT("Apply Exposure Settings")), true); // UDS stuurt de exposure (UIT zetten blies de vloer wit + maakte de dag donker -> de UDS-exposure is juist correct voor de UDS-sky)
 	SetUdsDouble(FName(TEXT("Exposure Bias Day")), UdsExpDay);
 	SetUdsDouble(FName(TEXT("Exposure Bias Dawn/Dusk")), UdsExpDawnDusk);
 	SetUdsDouble(FName(TEXT("Exposure Bias Night")), UdsExpNight);
@@ -604,7 +604,7 @@ void ADayNightController::SetUdsWeather(int32 WeatherType)
 	SetUdsDouble(FName(TEXT("UDW Rain Value")), Rain);
 	SetUdsDouble(FName(TEXT("UDW Snow Value")), Snow);
 	ApplyUdsLook(); // zet cloud/fog/exposure + update; sliders blijven in sync via UdsCloud/UdsFog
-	UE_LOG(LogTemp, Warning, TEXT("[UDS] weer=%d (cloud=%.2f fog=%.2f rain=%.2f snow=%.2f)"), WeatherType, UdsCloud, UdsFog, Rain, Snow);
+	UE_LOG(LogTemp, Verbose, TEXT("[UDS] weer=%d (cloud=%.2f fog=%.2f rain=%.2f snow=%.2f)"), WeatherType, UdsCloud, UdsFog, Rain, Snow);
 }
 
 void ADayNightController::SetWeatherPreset(const FString& PresetName, double TransitionSeconds)
@@ -613,18 +613,18 @@ void ADayNightController::SetWeatherPreset(const FString& PresetName, double Tra
 	if (!Udw) { return; }
 	const FString Path = FString::Printf(TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s"), *PresetName, *PresetName);
 	UObject* Preset = LoadObject<UObject>(nullptr, *Path);
-	if (!Preset) { UE_LOG(LogTemp, Warning, TEXT("[UDW] preset niet gevonden: %s"), *PresetName); return; }
+	if (!Preset) { UE_LOG(LogTemp, Verbose, TEXT("[UDW] preset niet gevonden: %s"), *PresetName); return; }
 	if (TransitionSeconds <= 0.0) { TransitionSeconds = 120.0; } // dev-knop zonder tijd -> nette graduele default
 	UFunction* Fn = Udw->FindFunction(FName(TEXT("Change Weather")));
-	if (!Fn) { UE_LOG(LogTemp, Warning, TEXT("[UDW] Change Weather-functie niet gevonden")); return; }
+	if (!Fn) { UE_LOG(LogTemp, Verbose, TEXT("[UDW] Change Weather-functie niet gevonden")); return; }
 	// DE OORZAAK VAN DE "SNAP": `Weather Speed` is een globale snelheids-multiplier op de UDW-actor voor ÁLLE
 	// weer-veranderingen (incl. Change Weather; bron: UDW-docs + decompiled asset). Stond 'ie >1 (pack-default),
 	// dan comprimeerde 't onze 8s-transitie naar ~1s. Forceren op 1.0 zodat "Time To Transition (Seconds)" letterlijk
 	// in seconden geldt. (Log de oude waarde even ter bevestiging.)
 	if (FProperty* WSP = Udw->GetClass()->FindPropertyByName(FName(TEXT("Weather Speed"))))
 	{
-		if (FDoubleProperty* WD = CastField<FDoubleProperty>(WSP)) { UE_LOG(LogTemp, Warning, TEXT("[UDW] Weather Speed was %.2f -> 1.0"), WD->GetPropertyValue_InContainer(Udw)); WD->SetPropertyValue_InContainer(Udw, 1.0); }
-		else if (FFloatProperty* WF = CastField<FFloatProperty>(WSP)) { UE_LOG(LogTemp, Warning, TEXT("[UDW] Weather Speed was %.2f -> 1.0"), WF->GetPropertyValue_InContainer(Udw)); WF->SetPropertyValue_InContainer(Udw, 1.0f); }
+		if (FDoubleProperty* WD = CastField<FDoubleProperty>(WSP)) { UE_LOG(LogTemp, Verbose, TEXT("[UDW] Weather Speed was %.2f -> 1.0"), WD->GetPropertyValue_InContainer(Udw)); WD->SetPropertyValue_InContainer(Udw, 1.0); }
+		else if (FFloatProperty* WF = CastField<FFloatProperty>(WSP)) { UE_LOG(LogTemp, Verbose, TEXT("[UDW] Weather Speed was %.2f -> 1.0"), WF->GetPropertyValue_InContainer(Udw)); WF->SetPropertyValue_InContainer(Udw, 1.0f); }
 	}
 	// Change Weather heeft 2 params: "New Weather Type" (object=preset) + "Time To Transition To New Weather (Seconds)"
 	// (double, ECHTE seconden). Generiek op type gezet (1 object + 1 double in de signatuur). overgang = TransitionSeconds (variabel);
@@ -640,7 +640,7 @@ void ADayNightController::SetWeatherPreset(const FString& PresetName, double Tra
 		else if (FFloatProperty* FP = CastField<FFloatProperty>(P)) { FP->SetPropertyValue_InContainer(Buf, (float)TransitionSeconds); }
 	}
 	Udw->ProcessEvent(Fn, Buf);
-	UE_LOG(LogTemp, Warning, TEXT("[UDW] Change Weather -> %s (overgang %.0fs)"), *PresetName, TransitionSeconds);
+	UE_LOG(LogTemp, Verbose, TEXT("[UDW] Change Weather -> %s (overgang %.0fs)"), *PresetName, TransitionSeconds);
 }
 
 void ADayNightController::SetRandomWeather(bool bOn)
@@ -652,7 +652,7 @@ void ADayNightController::SetRandomWeather(bool bOn)
 		if (FByteProperty* RVProp = CastField<FByteProperty>(Udw->GetClass()->FindPropertyByName(FName(TEXT("Random Weather Variation"))))) { RVProp->SetPropertyValue_InContainer(Udw, 0); }
 	}
 	if (bOn) { WeatherTimer = 0.f; } // forceer een nieuwe keuze in de eerstvolgende Tick
-	UE_LOG(LogTemp, Warning, TEXT("[UDW] auto-weer (gewogen, per dag) -> %s"), bOn ? TEXT("aan") : TEXT("uit"));
+	UE_LOG(LogTemp, Verbose, TEXT("[UDW] auto-weer (gewogen, per dag) -> %s"), bOn ? TEXT("aan") : TEXT("uit"));
 }
 
 void ADayNightController::PickAndApplyWeather()
@@ -1117,7 +1117,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			if (SwitchControlledLights.Contains(PL)) { continue; }
 			const float Div = PL->ComponentHasTag(TEXT("TallLamp")) ? 6000.f
 				: PL->ComponentHasTag(TEXT("CeilLamp")) ? 900.f
-					: PL->ComponentHasTag(TEXT("CeilGlow")) ? 9000.f : 9000.f; // glow = zacht plafond/hoek-fill, geen 2e hoofdlamp
+					: PL->ComponentHasTag(TEXT("CeilGlow")) ? 2500.f : 9000.f; // CeilLamp 900 = origineel (hoofdlamp dim -> vloer/ramen niet blown); CeilGlow 9000->2500 = zachte plafond-glow op zodat het PLAFOND verlicht; straat ongewijzigd; TUNEBAAR
 			const bool bCeil = PL->ComponentHasTag(TEXT("CeilLamp")) || PL->ComponentHasTag(TEXT("CeilGlow"));
 			// Plafondlampen (gebouw-/hotelgangen, interieurs) hebben geen daglicht -> ALTIJD aan.
 			// Buitenlampen (straatlantaarns) volgen wel de schemering. Door een schakelaar geclaimde
@@ -1363,5 +1363,5 @@ void ADayNightController::LoadLightConfig()
 		else if (K == TEXT("UdsCloud"))       { UdsCloud = F; }
 		else if (K == TEXT("UdsFog"))         { UdsFog = F; }
 	}
-	UE_LOG(LogTemp, Warning, TEXT("[LightConfig] geladen (%d regels)"), Lines.Num());
+	UE_LOG(LogTemp, Log, TEXT("[LightConfig] geladen (%d regels)"), Lines.Num());
 }

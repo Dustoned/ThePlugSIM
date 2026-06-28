@@ -92,6 +92,7 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitNeck = 0;  // Necklace (0 = None)
 	UPROPERTY(ReplicatedUsing = OnRep_Skin) uint8 OutfitSocks = 0; // Socks (0 = None)
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> OutfitComps; // aangehangen part-meshes (TP + FP)
+	double LastGirlVariantSwap = 0.0; // throttle Gamer/School variant-swap (Chaos-Cloth-recreatie -> render-crash bij spammen)
 	void AttachOutfitParts(USkeletalMeshComponent* BodyComp, bool bFirstPerson, bool bMale = false);
 	void SyncOutfitViewFlags(); // owner-see/FP-type van de parts gelijktrekken met hun body (na view-toggle)
 

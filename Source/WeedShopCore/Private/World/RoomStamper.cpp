@@ -783,7 +783,7 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 	}
 	if (RefTW == INDEX_NONE)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - geen gevel-referentie (al vervangen of nog niet gestreamd)"), *TemplateName);
+		UE_LOG(LogWeedShop, Verbose, TEXT("RoomStamper: window-fix '%s' - geen gevel-referentie (al vervangen of nog niet gestreamd)"), *TemplateName); // Verbose: benign - 'al vervangen' is verwacht bij de 15s/45s-retry-passes
 		return;
 	}
 
@@ -884,6 +884,6 @@ void ARoomStamper::ApplyWindowFix(UWorld* W, const FString& TemplateName, const 
 		}
 	}
 
-	UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: window-fix '%s' - muur op gevel-vlak gezet (shift %.0fcm, %d stukken), %d gevel-segmenten vervangen"),
+	UE_LOG(LogWeedShop, Log, TEXT("RoomStamper: window-fix '%s' - muur op gevel-vlak gezet (shift %.0fcm, %d stukken), %d gevel-segmenten vervangen"), // Log: one-time per kamer-gevel
 		*TemplateName, Shift, Moved, Replaced);
 }

@@ -833,7 +833,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			NavSys->RegisterNavigationInvoker(CSr, 9000.f, 11000.f);
 		}
-		UE_LOG(LogWeedShop, Warning, TEXT("Pack-map: route-spawner op (%.0f, %.0f, %.0f)"), Pt.X, Pt.Y, Pt.Z);
+		UE_LOG(LogWeedShop, Log, TEXT("Pack-map: route-spawner op (%.0f, %.0f, %.0f)"), Pt.X, Pt.Y, Pt.Z); // Log: routine setup-telemetrie (37x bij opstart)
 		if (!bWalkersSpawned)
 		{
 			bWalkersSpawned = true;
@@ -1102,11 +1102,16 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				if (NQueued > 0)
 				{
-					UE_LOG(LogWeedShop, Warning, TEXT("Bewoners-lite: %d bewoners in de wachtrij (totaal %d/%d), verschijnen gespreid"), NQueued, NLive + PendingResidents.Num(), LiteCap);
+					UE_LOG(LogWeedShop, Verbose, TEXT("Bewoners-lite: %d bewoners in de wachtrij (totaal %d/%d), verschijnen gespreid"), NQueued, NLive + PendingResidents.Num(), LiteCap);
 				}
 			}
 			const FVector Top = Starter->GetActorLocation();
-			UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
+			const int32 WonSig = (Apt.Num() - 1) * 1000 + NBalcLocked; // log alleen bij echte deur/slot-verandering, niet elke bewoner-churn
+			if (WonSig != LastWoningenSig)
+			{
+				LastWoningenSig = WonSig;
+				UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
+			}
 		}
 	}
 
@@ -1409,7 +1414,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 		}
 		FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("StairDump.txt")));
-		UE_LOG(LogWeedShop, Warning, TEXT("StairDump geschreven (%d tekens)"), Out.Len());
+		UE_LOG(LogWeedShop, Verbose, TEXT("StairDump geschreven (%d tekens)"), Out.Len()); // Verbose: dev-dump naar txt
 	}
 
 	// HERRIJZENIS: deuren met een ResidentNpc-tag waarvan de NPC niet meer bestaat (thuisgekomen
@@ -1615,7 +1620,7 @@ void ADoorRetrofitter::ScanAndConvert()
 						}
 					}
 					if (OwnerSp) { OwnerSp->AdoptWalker(Cb, EntrySuffix.Num() >= 2 ? &EntrySuffix : nullptr); }
-					UE_LOG(LogWeedShop, Warning, TEXT("Bewoner-wandelaar verschenen: Apt %d op route (%.0f, %.0f)"), A->GetAptNumber(), SpawnAt.X, SpawnAt.Y);
+					UE_LOG(LogWeedShop, Verbose, TEXT("Bewoner-wandelaar verschenen: Apt %d op route (%.0f, %.0f)"), A->GetAptNumber(), SpawnAt.X, SpawnAt.Y); // Verbose: terugkerend (~elke 10s bewoner-churn)
 				}
 			}
 			else if (!bRequeued)
@@ -2179,26 +2184,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				UE_LOG(LogWeedShop, Warning, TEXT("NPC-vangnet: %d gezakte NPC's gerespawned"), NRescued);
 			}
-			// DIAGNOSE (om de ~30s): waar lopen ze, en hoe ver onder/boven het dichtstbijzijnde
-			// spawn-punt? Zo zien we direct wie er nog onder de map zit (bewoner vs klant).
-			if (ScanPass % 15 == 2)
-			{
-				for (TActorIterator<ACustomerBase> CIt2(W); CIt2; ++CIt2)
-				{
-					ACustomerBase* Cb2 = *CIt2;
-					if (!IsValid(Cb2)) { continue; }
-					const FVector L2 = Cb2->GetActorLocation();
-					float NearZ = L2.Z;
-					float BestD2 = TNumericLimits<float>::Max();
-					for (const FVector& SL : SpawnerLocs)
-					{
-						const float Dd2 = FVector::DistSquared2D(SL, L2);
-						if (Dd2 < BestD2) { BestD2 = Dd2; NearZ = SL.Z; }
-					}
-					UE_LOG(LogWeedShop, Warning, TEXT("NPC %s res=%d op (%.0f, %.0f, %.0f) dZ=%.0f"),
-						*Cb2->NpcId.ToString(), Cb2->IsResident() ? 1 : 0, L2.X, L2.Y, L2.Z, L2.Z - NearZ);
-				}
-			}
+			// (NPC-positie-diagnose verwijderd -> geen per-NPC log-spam meer.)
 		}
 	}
 
@@ -2227,6 +2213,10 @@ void ADoorRetrofitter::ScanAndConvert()
 		const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
 		if (Pp && FVector::DistSquared(Pp->GetActorLocation(), LastScanPlayerPos) > 6000.f * 6000.f) { bWorldDirty = true; break; }
 	}
+	// De periodieke %20-backstop BLIJFT: hij vangt LAAT-ingestreamde geometrie op (interieur-lampen/deuren die
+	// de dirty-delegate net te vroeg ving - de meshes laden async pas ná de eerste sweep). Eenmaal geclassificeerd
+	// (Converted/ConvScanRejected/LampScanSeen) is de sweep goedkoop (alleen Contains-checks). NIET weghalen:
+	// anders missen late interieur-lampen hun Movable-stap en blijven kamers 's nachts donker.
 	const bool bRunHeavy = bWorldDirty || (ScanPass < 30) || (ScanPass % 20 == 0);
 	bWorldDirty = false;
 	if (bRunHeavy)
@@ -2639,7 +2629,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			{ // TEMP [ELEVDIAG]
 				FString DiagS;
 				for (const FElevPanelInit& Pn : Panels) { DiagS += FString::Printf(TEXT("[F%d closed=(%.0f,%.0f,%.0f) slide=%.0f] "), Pn.FloorIdx, (float)Pn.ClosedPos.X, (float)Pn.ClosedPos.Y, (float)Pn.ClosedPos.Z, Pn.SlideDist); }
-				UE_LOG(LogTemp, Warning, TEXT("[ELEVDIAG] key=(%d,%d) floors=%d rawPanels=%d panels=%d span=(%.2f,%.2f) ref=(%.0f,%.0f) | %s"), KV.Key.X, KV.Key.Y, Floors.Num(), RawPanels.Num(), Panels.Num(), (float)SpanDir.X, (float)SpanDir.Y, (float)KV.Value.Ref.X, (float)KV.Value.Ref.Y, *DiagS);
+				UE_LOG(LogTemp, Verbose, TEXT("[ELEVDIAG] key=(%d,%d) floors=%d rawPanels=%d panels=%d span=(%.2f,%.2f) ref=(%.0f,%.0f) | %s"), KV.Key.X, KV.Key.Y, Floors.Num(), RawPanels.Num(), Panels.Num(), (float)SpanDir.X, (float)SpanDir.Y, (float)KV.Value.Ref.X, (float)KV.Value.Ref.Y, *DiagS); // Verbose: TEMP dev-diag
 			}
 			if (Panels.Num() == 0) { continue; }
 			// Schacht-kant FYSIEK bepalen: trace vanaf verdieping 1 omlaag aan beide kanten van de deur.
@@ -3011,7 +3001,7 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 			Apply(D, HoleC);
 			if (Mate) { Apply(Mate, HoleC); }
 		}
-		UE_LOG(LogWeedShop, Warning, TEXT("PuiHole: gat %.0f breed op s=%.0f bij (%.0f, %.0f, %.0f) - %s"),
+		UE_LOG(LogWeedShop, Verbose, TEXT("PuiHole: gat %.0f breed op s=%.0f bij (%.0f, %.0f, %.0f) - %s"), // Verbose: schuifpui-gat-carving setup-detail
 			HoleW, HoleC, C0.X, C0.Y, C0.Z, Mate ? TEXT("2 bladen verdeeld") : TEXT("1 blad gecentreerd"));
 	}
 }
@@ -3217,7 +3207,10 @@ void ADoorRetrofitter::TickVirtualCrowd()
 	// SPAWN-SPREIDING: max enkele echte NPC's PER CALL materialiseren. Elke spawn doet een synchrone
 	// modulaire build (mesh-loads + components); een hele rij in 1 frame = de periodieke hang. Met deze cap
 	// + de 10Hz-cadans (zie de call in TickVirtualMove) druppelen ze vloeiend binnen i.p.v. in bursts.
-	const int32 MaxSpawnPerTick = 1; // 1 modulaire NPC-build (~30ms) per call -> geen dubbele-spawn-hitch
+	// Tijdens het laden (de cover staat over beeld -> de spawn-hitch is verborgen) materialiseren we de crowd
+	// VERSNELD zodat de wereld vol staat VOORDAT de cover wegfadet. De cover zet CrowdSpawned zodra 'ie fadet ->
+	// daarna terug naar 1-per-keer voor smooth gameplay. (CrowdSpawned betekent hier: "de loading-cover is weg".)
+	const int32 MaxSpawnPerTick = WeedShop_IsCrowdSpawned() ? 1 : 4;
 	int32 Spawned = 0;
 	// DAGELIJKSE CROWD-ROTATIE: bij een nieuwe dag krijgt elke body (off-screen) één verse identiteit uit de
 	// ~250-pool -> elke dag andere gezichten zonder dat je 't ziet gebeuren. AssignNpc schuift de cursor door.
@@ -3550,7 +3543,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 	JLast = Slice.Num();
 	if (Slice.Num() < 30 || JStreak < 3)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("VertClone[%s]: bron-slice %d meshes (streak %d) - wacht"), *JobId, Slice.Num(), JStreak);
+		UE_LOG(LogWeedShop, Verbose, TEXT("VertClone[%s]: bron-slice %d meshes (streak %d) - wacht"), *JobId, Slice.Num(), JStreak);
 		return;
 	}
 	DoneJobs.Add(JobId);
@@ -3681,7 +3674,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 		}
 		if (FitEligible > 0 && FitPass < FitEligible * 9 / 10)
 		{
-			UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - kamer past hier niet (%d/%d stukken)"), N, TgtZ, FitPass, FitEligible);
+			UE_LOG(LogWeedShop, Verbose, TEXT("VertClone: verdieping %+d (Z %.0f) overgeslagen - kamer past hier niet (%d/%d stukken)"), N, TgtZ, FitPass, FitEligible);
 			continue;
 		}
 
@@ -3793,7 +3786,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 			}
 		}
 		TotalPlaced += Placed;
-		UE_LOG(LogWeedShop, Warning, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al, %d nep-glas verborgen)"), N, TgtZ, Placed, ExistCount, GlassHidden);
+		UE_LOG(LogWeedShop, Verbose, TEXT("VertClone: verdieping %+d (Z %.0f): %d meshes aangevuld (%d bestonden al, %d nep-glas verborgen)"), N, TgtZ, Placed, ExistCount, GlassHidden);
 	}
 	if (BakeOut.Len() > 0)
 	{
@@ -3801,7 +3794,7 @@ void ADoorRetrofitter::RunVertJob(const TArray<FVector>& Marks, const FString& J
 			*(FPaths::ProjectSavedDir() / TEXT("RoomBake.txt")),
 			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
-	UE_LOG(LogWeedShop, Warning, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
+	UE_LOG(LogWeedShop, Verbose, TEXT("VertClone: KLAAR - %d meshes totaal aangevuld vanaf slice Z %.0f (%d bron-meshes)"), TotalPlaced, SrcZ, Slice.Num());
 }
 
 void ADoorRetrofitter::BuildMarkedRooms()
@@ -4232,7 +4225,7 @@ void ADoorRetrofitter::ApplySavedStamps()
 
 		// Gevel-ramen elke sessie opnieuw laten kloppen (verbergen/look-herstel is niet bakbaar).
 		ARoomStamper::ApplyWindowFix(W, P[0], Anchor, bMirror);
-		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: sessie-herbouw '%s' op (%.0f, %.0f) - %d stukken"), *P[0], AL.X, AL.Y, Placed);
+		UE_LOG(LogWeedShop, Log, TEXT("RoomStamper: sessie-herbouw '%s' op (%.0f, %.0f) - %d stukken"), *P[0], AL.X, AL.Y, Placed); // Log: one-time per kamer
 	}
 
 	// Late streaming: gevel-ramen die bij de eerste pass nog niet geladen waren alsnog fixen.
@@ -4291,7 +4284,7 @@ void ADoorRetrofitter::RefreshStampWindowFixes()
 			if (DumpCount > 400) { break; }
 		}
 		FFileHelper::SaveStringToFile(Dump, *(FPaths::ProjectSavedDir() / TEXT("StampAreaDump.txt")));
-		UE_LOG(LogWeedShop, Warning, TEXT("RoomStamper: area-dump %d comps -> StampAreaDump.txt"), DumpCount);
+		UE_LOG(LogWeedShop, Verbose, TEXT("RoomStamper: area-dump %d comps -> StampAreaDump.txt"), DumpCount); // Verbose: dev-DIAGNOSE-dump
 	}
 }
 
@@ -4618,7 +4611,8 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 	AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>();
 	const bool bComp = GS && GS->IsCompetitive();
 	// TIJDELIJKE DIAGNOSE: waarom vuurt competitive niet? Log de gate-states de eerste ~40 scans.
-	if (!bCompHomesReady && CompDiagCount < 40)
+	// ALLEEN in competitive -> geen [CompDiag]-spam in single-player.
+	if (bComp && !bCompHomesReady && CompDiagCount < 40)
 	{
 		++CompDiagCount;
 		const int32 SrcN = StarterDoor.IsValid() ? StarterDoor->GetAptNumber() : -1;

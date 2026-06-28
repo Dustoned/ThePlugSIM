@@ -106,6 +106,52 @@ namespace WeedOutfit
 	static const FPart MaleNone[] = { { TEXT("None"), nullptr } };
 #undef CITM
 
+	// === CITIZEN_MAN (skin 6): modulaire male-parts (zelfde 7-slot-structuur als de vrouw, maar male-body).
+	//     Parts liggen plat in /Game/Citizen_man_01/mesh/ ; head zit op slot 6 (body is headless).
+#define CMAN(p) TEXT("/Game/Citizen_man_01/mesh/citizen_man_01_" p ".citizen_man_01_" p)
+	static const FPart CitMan_Top[] = {
+		{ TEXT("None"), nullptr },
+		{ TEXT("Shirt 1"), CMAN("shirt_01") }, { TEXT("Shirt 2"), CMAN("shirt_02") },
+		{ TEXT("T-Shirt 1"), CMAN("t_shirt_01") }, { TEXT("T-Shirt 2"), CMAN("t_shirt_02") },
+		{ TEXT("Sleeveless 1"), CMAN("sleevless_shirt_01") }, { TEXT("Sleeveless 2"), CMAN("sleevless_shirt_02") },
+		{ TEXT("Jacket 1"), CMAN("jacket_classic_01") }, { TEXT("Jacket 2"), CMAN("jacket_classic_02") },
+		{ TEXT("Leather 1"), CMAN("jacket_leather_01") }, { TEXT("Leather 2"), CMAN("jacket_leather_02") },
+		{ TEXT("Leather 3"), CMAN("jacket_leather_03") },
+	};
+	static const FPart CitMan_Pants[] = {
+		{ TEXT("Classic"), CMAN("pants_classic_01") }, { TEXT("Jeans"), CMAN("pants_jeans_01") }, { TEXT("Shorts"), CMAN("shorts_01") },
+	};
+	static const FPart CitMan_Shoes[] = {
+		{ TEXT("Classic"), CMAN("shoes_classic_01") }, { TEXT("Slippers"), CMAN("shoes_slippers_01") }, { TEXT("Sneakers"), CMAN("shoes_sneakers_01") },
+	};
+	static const FPart CitMan_Hair[]  = { { TEXT("None"), nullptr }, { TEXT("Hair"), CMAN("hair_01") } };
+	static const FPart CitMan_Hat[]   = { { TEXT("None"), nullptr }, { TEXT("Hat"),  CMAN("hat_01") } };
+	static const FPart CitMan_Glass[] = { { TEXT("None"), nullptr }, { TEXT("Glasses"), CMAN("glasses_frame_01") } };
+	static const FPart CitMan_Head[]  = {
+		{ TEXT("Head 1"), CMAN("head_01") }, { TEXT("Head 2"), CMAN("head_02") }, { TEXT("Head 3"), CMAN("head_03") },
+		{ TEXT("Head 4"), CMAN("head_04") }, { TEXT("Head 5"), CMAN("head_05") },
+	};
+#undef CMAN
+
+	// Per-slot index -> tabel. Slot 6 (was "Socks") = Head ; slot 5 (was "Necklace") = Glasses ; slot 4 = Hat.
+	static const FPart* const CitManSlots[] = {
+		CitMan_Top, CitMan_Pants, CitMan_Shoes, CitMan_Hair, CitMan_Hat, CitMan_Glass, CitMan_Head,
+	};
+	static const int32 CitManCounts[] = {
+		UE_ARRAY_COUNT(CitMan_Top), UE_ARRAY_COUNT(CitMan_Pants), UE_ARRAY_COUNT(CitMan_Shoes),
+		UE_ARRAY_COUNT(CitMan_Hair), UE_ARRAY_COUNT(CitMan_Hat), UE_ARRAY_COUNT(CitMan_Glass), UE_ARRAY_COUNT(CitMan_Head),
+	};
+	static int32 CitManCount(int32 Slot)
+	{
+		return (Slot >= 0 && Slot < UE_ARRAY_COUNT(CitManCounts)) ? CitManCounts[Slot] : 1;
+	}
+	static const FPart& CitManAt(int32 Slot, int32 Index)
+	{
+		static const FPart None{ TEXT("None"), nullptr };
+		if (Slot < 0 || Slot >= UE_ARRAY_COUNT(CitManSlots)) { return None; }
+		return CitManSlots[Slot][FMath::Clamp(Index, 0, CitManCounts[Slot] - 1)];
+	}
+
 	static int32 MaleCount(int32 Slot)
 	{
 		// Slot 0 (Top) = de look-keuze; alle andere slots zitten al in de assembled look (None).
@@ -142,4 +188,53 @@ namespace WeedOutfit
 		const int32 I = FMath::Clamp(Index, 0, Cat().Slots[Slot].Num() - 1);
 		return Cat().Slots[Slot][I];
 	}
+
+	int32 PartCountM(int32 Slot, EMaleKind Kind)
+	{
+		if (Slot < 0 || Slot >= GSlotCount) { return 0; }
+		return (Kind == EMaleKind::CitizenMan) ? CitManCount(Slot) : MaleCount(Slot);
+	}
+	const FPart& PartAtM(int32 Slot, int32 Index, EMaleKind Kind)
+	{
+		static const FPart None{ TEXT("None"), nullptr };
+		if (Slot < 0 || Slot >= GSlotCount) { return None; }
+		return (Kind == EMaleKind::CitizenMan) ? CitManAt(Slot, Index) : MaleAt(Slot, Index);
+	}
+	const TCHAR* SlotNameM(int32 Slot, EMaleKind Kind)
+	{
+		if (Kind != EMaleKind::CitizenMan) { return (Slot == 0) ? TEXT("Look") : SlotName(Slot); }
+		static const TCHAR* Labels[] = { TEXT("Top"), TEXT("Pants"), TEXT("Shoes"), TEXT("Hair"), TEXT("Hat"), TEXT("Glasses"), TEXT("Face") };
+		return (Slot >= 0 && Slot < UE_ARRAY_COUNT(Labels)) ? Labels[Slot] : TEXT("?");
+	}
+
+	// === GIRL VARIANTEN (complete meshes): Gamer (skin 3) + School (skin 4). De wardrobe verbergt voor deze
+	//     skins de Casual-kledingslots en toont een variant-switcher; ApplySkinMesh laadt de gekozen mesh.
+	struct FGirlVar { const TCHAR* Name; const TCHAR* Path; };
+	static const FGirlVar GGamerVars[] = {
+		{ TEXT("Outfit 1"), TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_01.SK_GamerGirl_01") },
+		{ TEXT("Outfit 2"), TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_02.SK_GamerGirl_02") },
+		{ TEXT("Outfit 3"), TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_03.SK_GamerGirl_03") },
+	};
+	static const FGirlVar GSchoolVars[] = {
+		{ TEXT("Casual"),   TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_CasualOutfit.SK_SchoolGirl_CasualOutfit") },
+		{ TEXT("School"),   TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SchoolOutfit.SK_SchoolGirl_SchoolOutfit") },
+		{ TEXT("Dress"),    TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_DressOutfit.SK_SchoolGirl_DressOutfit") },
+		{ TEXT("Sport"),    TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SportOutfit.SK_SchoolGirl_SportOutfit") },
+		{ TEXT("Swimsuit"), TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SwimSuit.SK_SchoolGirl_SwimSuit") },
+	};
+	static const FGirlVar& GirlVar(uint8 Skin, int32 Idx)
+	{
+		static const FGirlVar None{ TEXT("?"), nullptr };
+		if (Skin == 3) return GGamerVars[FMath::Clamp(Idx, 0, (int32)UE_ARRAY_COUNT(GGamerVars) - 1)];
+		if (Skin == 4) return GSchoolVars[FMath::Clamp(Idx, 0, (int32)UE_ARRAY_COUNT(GSchoolVars) - 1)];
+		return None;
+	}
+	int32 GirlVariantCount(uint8 Skin)
+	{
+		if (Skin == 3) return UE_ARRAY_COUNT(GGamerVars);
+		if (Skin == 4) return UE_ARRAY_COUNT(GSchoolVars);
+		return 0;
+	}
+	const TCHAR* GirlVariantPath(uint8 Skin, int32 Idx) { return GirlVar(Skin, Idx).Path; }
+	const TCHAR* GirlVariantName(uint8 Skin, int32 Idx) { return GirlVar(Skin, Idx).Name; }
 }

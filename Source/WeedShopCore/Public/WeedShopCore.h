@@ -26,6 +26,18 @@ WEEDSHOPCORE_API void WeedShop_StopGameLoadingScreen();
 WEEDSHOPCORE_API void WeedShop_SetRoomReady(bool bReady);
 WEEDSHOPCORE_API bool WeedShop_IsRoomReady();
 
+// "Loading-cover is weg"-vlag (historische naam: CrowdSpawned). De BootCoverWidget zet 'm zodra de cover wegfadet.
+// DoorRetrofitter leest 'm: cover nog op beeld -> crowd VERSNELD materialiseren (hitch verborgen); cover weg -> 1/keer
+// (smooth gameplay). Reset bij een nieuwe load (verse cover die weer over beeld komt).
+WEEDSHOPCORE_API void WeedShop_SetCrowdSpawned(bool bSpawned);
+WEEDSHOPCORE_API bool WeedShop_IsCrowdSpawned();
+
+// "Cover staat op beeld"-vlag: de BootCoverWidget (PhoneClientComponent) zet 'm zodra 'ie aangemaakt is. De
+// MOVIE-loadingscreen blijft staan tot dit waar is -> de cover neemt naadloos over, geen gat waarin je de
+// wereld ziet inladen (de witte flash). Reset bij een nieuwe load.
+WEEDSHOPCORE_API void WeedShop_SetCoverUp(bool bUp);
+WEEDSHOPCORE_API bool WeedShop_IsCoverUp();
+
 // Gedeelde laad-timer + tekst: zowel de movie-loadingscreen als het in-game cover-scherm gebruiken deze,
 // zodat ze er IDENTIEK uitzien en de progress/tekst naadloos doorlopen (geen zichtbare overgang).
 WEEDSHOPCORE_API double WeedShop_LoadElapsedSeconds();

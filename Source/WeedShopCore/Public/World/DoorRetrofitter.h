@@ -124,6 +124,7 @@ protected:
 	void RefreshStampWindowFixes(); // herhaal-pass voor laat-gestreamde gevel-ramen (idempotent)
 	bool bDayMapCaptured = false;   // kaart een keer per sessie schieten (foto-stand maakt tijd irrelevant)
 	int32 LastAptDoorCount = -1;    // woningen-slot-pass: opnieuw draaien als er deuren bij komen
+	int32 LastWoningenSig = -1;     // "Woningen op slot"-log alleen bij echte verandering (deur/slot-aantal), niet elke bewoner-churn
 	int32 LastLockApplyCount = -2;  // handmatige sloten: alleen hertoepassen als het deur-aantal wijzigt (geen elke-pass-lus)
 	// Walk-throughs (Saved/NoCollide.txt): elke sessie opnieuw toepassen, ook op gestreamde meshes.
 	TArray<FString> NoCollideLines;

@@ -357,7 +357,7 @@ void ACustomerSpawner::EnsureRouteNavProbed(UNavigationSystemV1* Nav)
 	UNavigationPath* P = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), NetNodes[A], NetNodes[B], nullptr);
 	const bool bOk = P && P->IsValid() && P->PathPoints.Num() > 1;
 	RouteNavState = bOk ? 0 : 1;
-	UE_LOG(LogWeedShop, Warning, TEXT("Route-spawner nav-probe: %s (knoop %d->%d)"),
+	UE_LOG(LogWeedShop, Log, TEXT("Route-spawner nav-probe: %s (knoop %d->%d)"), // Log: 1x per spawner, bedoelde fallback (geen fout)
 		bOk ? TEXT("navmesh OK") : TEXT("NAVMESH DOOD -> direct ring-walk"), A, B);
 }
 
@@ -705,7 +705,7 @@ void ACustomerSpawner::TrySpawn()
 		++TryCount;
 		if (TryCount % 30 == 0)
 		{
-			UE_LOG(LogWeedShop, Warning, TEXT("Spawner (%.0f, %.0f, %.0f): %d/%d - afgekeurd nav=%d hoogte=%d straat=%d zicht=%d"),
+			UE_LOG(LogWeedShop, Verbose, TEXT("Spawner (%.0f, %.0f, %.0f): %d/%d - afgekeurd nav=%d hoogte=%d straat=%d zicht=%d"), // Verbose: pure spawn-rejectie-diagnose, vuurde elke 30 pogingen (552 regels/sessie) - alleen nodig bij stad-populatie-debug
 				GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z, Spawned.Num(), MaxCustomers, RejNav, RejZ, RejStreet, RejView);
 		}
 		// DAG-START VULLING: bij sessiestart en elke nieuwe dag gooit de spawner zichzelf in

@@ -1,4 +1,45 @@
 PATCH NOTES
+Version 1.18.0 — 29 juni 2026
+
+Korte intro:
+Een grote kledingkast-uitbreiding, interieurs die 's avonds weer netjes verlicht zijn, en flink wat
+stabiliteit onder de motorkap — minder crashes, complete NPC-outfits en een veel schonere boel intern.
+
+━━━━━━━━━━━━━━━━━━━━
+
+KLEDINGKAST & PERSONAGES
+
+• Meer speelbare modellen: een nieuwe "gewone burger"-man met losse kledingstukken (top, broek, schoenen,
+  haar, hoed, bril) én meerdere gezichten om uit te kiezen — net zo modulair als de casual vrouw.
+• Kies je de Gamer- of School-Girl, dan verdwijnen de losse kledingopties en switch je in plaats daarvan
+  tussen hun eigen outfit-varianten (casual, school, jurk, sport, zwemkleding).
+• In de telefoon (Instellingen → Personage) kies je nu simpelweg Man of Vrouw; het exacte model stel je in
+  de kledingkast in.
+• De kledingkast-preview is meteen goed belicht bij het openen (geen donker-dan-bijdraaien meer), en de
+  haren bewegen niet meer raar in de wind in de preview.
+
+━━━━━━━━━━━━━━━━━━━━
+
+VERLICHTING
+
+• Interieurs zijn 's nachts weer normaal verlicht — plafonds en kamers waren te donker geworden. Opgelost
+  zonder dat de straat of de dag verandert.
+
+━━━━━━━━━━━━━━━━━━━━
+
+STABILITEIT & FIXES
+
+• Een crash met bepaalde NPC-modellen in de menigte is verholpen (kon ook gebeuren terwijl je stilstond).
+• NPC's missen geen kleding-onderdelen meer — sommige burgers verschenen zonder schoenen of jas.
+• Het laadscherm dekt nu netjes af tot de wereld echt speelklaar is, in plaats van vroeg weg te vallen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+(Intern: de ontwikkel-log is van ~950 naar ~10 meldingen opgeschoond en een save-laad-melding is verholpen —
+geen zichtbaar effect in de game, maar het maakt verder bouwen overzichtelijker.)
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.17.0 — 28 juni 2026
 
 Korte intro:

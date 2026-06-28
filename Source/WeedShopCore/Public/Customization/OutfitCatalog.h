@@ -36,4 +36,20 @@ namespace WeedOutfit
 	WEEDSHOPCORE_API const TCHAR* SlotName(int32 Slot);
 	WEEDSHOPCORE_API int32 PartCount(int32 Slot, bool bMale = false);
 	WEEDSHOPCORE_API const FPart& PartAt(int32 Slot, int32 Index, bool bMale = false);
+
+	// Welke male-catalogus: Tony = complete looks (slot 0); CitizenMan = volledig modulair (7 slots, per-part).
+	enum class EMaleKind : uint8 { Tony = 0, CitizenMan = 1 };
+
+	// Citizen_man basis-body (headless; hoofd + kleren layeren erop). UE4_Mannequin_Skeleton -> leader-pose.
+	inline const TCHAR* CitizenManBodyPath = TEXT("/Game/Citizen_man_01/mesh/citizen_man_01_body_01.citizen_man_01_body_01");
+
+	WEEDSHOPCORE_API int32 PartCountM(int32 Slot, EMaleKind Kind);
+	WEEDSHOPCORE_API const FPart& PartAtM(int32 Slot, int32 Index, EMaleKind Kind);
+	WEEDSHOPCORE_API const TCHAR* SlotNameM(int32 Slot, EMaleKind Kind); // male-specifieke labels (Glasses/Face)
+
+	// Girl complete-mesh varianten (skin 3 = Gamer, 4 = School): wardrobe-variant-switcher + ApplySkinMesh.
+	// Single source of truth -> zowel de UI (WeedShopCore) als ApplySkinMesh (ThePlugSIM) gebruiken dit.
+	WEEDSHOPCORE_API int32 GirlVariantCount(uint8 Skin);                 // 0 = geen variant-skin
+	WEEDSHOPCORE_API const TCHAR* GirlVariantPath(uint8 Skin, int32 Idx);
+	WEEDSHOPCORE_API const TCHAR* GirlVariantName(uint8 Skin, int32 Idx);
 }

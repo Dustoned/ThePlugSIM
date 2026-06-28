@@ -567,9 +567,10 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	{
 		case 1:  Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"); break;
 		case 2:  Path = WeedOutfit::FullBodyPaths[0]; break;
-		case 3:  Path = WeedOutfit::FullBodyPaths[1]; break;
-		case 4:  Path = WeedOutfit::FullBodyPaths[2]; break;
+		case 3:
+		case 4:  Path = WeedOutfit::GirlVariantPath(PlayerSkin, OutfitTop); break; // Gamer(3)/School(4): gekozen outfit-variant (OutfitTop = variant-index)
 		case 5:  Path = WeedOutfit::PartAt(0, GetOutfitPart(0), true).Path; break; // male = gekozen complete Tony-look
+		case 6:  Path = WeedOutfit::CitizenManBodyPath; break;                      // Citizen_man: headless modulaire basis-body
 		default: Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"); break;
 	}
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
@@ -593,7 +594,18 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	}
 	if (FirstPersonMesh)
 	{
-		FirstPersonMesh->SetSkeletalMeshAsset(Skin);
+		// Gamer Girl (skin 3): SK_GamerGirl heeft een verwrongen bind/ref-pose. De FP-mesh draait GEEN eigen
+		// animatie (alleen ref-pose), dus toont 'm verdraaid (de TP-mesh animeert wel via ABP_Unarmed -> die is
+		// goed). Gebruik voor de FP-view een neutrale Manny-mesh: nette ref-pose + correcte head-socket-camera.
+		if (PlayerSkin == 3)
+		{
+			USkeletalMesh* FpSkin = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
+			FirstPersonMesh->SetSkeletalMeshAsset(FpSkin ? FpSkin : Skin);
+		}
+		else
+		{
+			FirstPersonMesh->SetSkeletalMeshAsset(Skin);
+		}
 		// Verberg ALLEEN het hoofd (anders zie je je eigen kop). De nek + rest blijven, zodat je bij omlaag kijken
 		// een COMPLEET lichaam ziet (geen gat in je nek). De camera volgt nu je hoofd, dus de nek blobt niet meer.
 		static const TCHAR* HideBones[] = { TEXT("head"), TEXT("Head") };
@@ -612,7 +624,7 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	// naar voren (voor de borst) zodat de armen netjes achter de camera hangen. Casual-skins (2-4) zijn al goed.
 	if (FirstPersonCameraComponent)
 	{
-		const bool bUE5Mannequin = (PlayerSkin <= 1 || PlayerSkin == 5); // 0 Manny, 1 Quinn, 5 Tony
+		const bool bUE5Mannequin = (PlayerSkin <= 1 || PlayerSkin == 5 || PlayerSkin == 3); // 0 Manny, 1 Quinn, 5 Tony, 3 Gamer (FP-mesh = Manny)
 		FVector Rel = FirstPersonCameraComponent->GetRelativeLocation();
 		Rel.X = bUE5Mannequin ? 22.f : 8.f;
 		Rel.Y = 0.f; // gecentreerd; de links-zwaar-look kwam van de asymmetrische idle-pose (apart gefixt), niet de camera
@@ -623,10 +635,16 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	// de body). Geldt alleen voor de Casual-skins (2-4); Manny/Quinn hebben (nog) geen losse outfits.
 	for (USkeletalMeshComponent* C : OutfitComps) { if (C) { C->DestroyComponent(); } }
 	OutfitComps.Reset();
-	if (PlayerSkin >= 2 && PlayerSkin <= 4)
+	if (PlayerSkin == 2) // Casual-girl (skin 2): female per-part. Gamer_Girl/School_Girl (3/4) zijn complete meshes.
 	{
-		AttachOutfitParts(GetMesh(), false, false);       // female (Casual girls)
+		AttachOutfitParts(GetMesh(), false, false);       // female (Casual girl)
 		AttachOutfitParts(FirstPersonMesh, true, false);
+		SyncOutfitViewFlags();
+	}
+	else if (PlayerSkin == 6) // Citizen_man: male per-part (zelfde leader-pose-aanpak als de vrouw)
+	{
+		AttachOutfitParts(GetMesh(), false, true);
+		AttachOutfitParts(FirstPersonMesh, true, true);
 		SyncOutfitViewFlags();
 	}
 
@@ -643,7 +661,6 @@ void AThePlugSIMCharacter::ApplySoftPhysics()
 {
 	USkeletalMeshComponent* M = GetMesh();
 	if (!M || PlayerSkin < 2) { return; }
-	UE_LOG(LogTemp, Warning, TEXT("SOFTPHYS physasset=%s"), M->GetPhysicsAsset() ? TEXT("YES") : TEXT("NULL"));
 	M->SetEnableGravity(true);
 	int32 Enabled = 0, WithBody = 0;
 	const int32 NumBones = M->GetNumBones();
@@ -663,7 +680,7 @@ void AThePlugSIMCharacter::ApplySoftPhysics()
 			++Enabled;
 		}
 	}
-	UE_LOG(LogTemp, Warning, TEXT("SOFTPHYS done: %d soft-bones, %d met physics-body, van %d totaal"), Enabled, WithBody, NumBones);
+	UE_LOG(LogTemp, Verbose, TEXT("SOFTPHYS done: %d soft-bones, %d met physics-body, van %d totaal"), Enabled, WithBody, NumBones);
 }
 
 void AThePlugSIMCharacter::ToggleThirdPerson()
@@ -688,13 +705,13 @@ void AThePlugSIMCharacter::OnRep_Skin() { ApplySkinMesh(); }
 
 void AThePlugSIMCharacter::ServerSetSkin_Implementation(uint8 NewSkin)
 {
-	PlayerSkin = (NewSkin > 5) ? 5 : NewSkin;
+	PlayerSkin = (NewSkin > 6) ? 6 : NewSkin;
 	ApplySkinMesh(); // server lokaal toepassen; repliceert naar clients -> OnRep_Skin
 }
 
 void AThePlugSIMCharacter::RestoreSkin(uint8 S)
 {
-	PlayerSkin = (S > 5) ? 5 : S;
+	PlayerSkin = (S > 6) ? 6 : S;
 	ApplySkinMesh();
 }
 
@@ -715,9 +732,17 @@ void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, b
 		OutfitComps.Add(C);
 	};
 	if (!bMale) { Attach(WeedOutfit::UnderwearPath); } // female-underwear niet op de male-body
+	const bool bCitMan = (PlayerSkin == 6);
 	for (int32 SlotIdx = 0; SlotIdx < WeedOutfit::SlotCount(); ++SlotIdx)
 	{
-		Attach(WeedOutfit::PartAt(SlotIdx, GetOutfitPart(SlotIdx), bMale).Path);
+		// Citizen_man's hoofd is een LOSSE part (slot 6); op de FIRST-person-mesh sla je 'm over zodat je je
+		// eigen kop niet ziet (de body is headless, dus de body-bone-hide werkt hier niet).
+		if (bFirstPerson && bCitMan && SlotIdx == 6) { continue; }
+		const WeedOutfit::FPart& P = bMale
+			? (bCitMan ? WeedOutfit::PartAtM(SlotIdx, GetOutfitPart(SlotIdx), WeedOutfit::EMaleKind::CitizenMan)
+			           : WeedOutfit::PartAt(SlotIdx, GetOutfitPart(SlotIdx), true))
+			: WeedOutfit::PartAt(SlotIdx, GetOutfitPart(SlotIdx), false);
+		Attach(P.Path);
 	}
 }
 
@@ -740,7 +765,21 @@ void AThePlugSIMCharacter::SyncOutfitViewFlags()
 
 void AThePlugSIMCharacter::ServerSetOutfit_Implementation(uint8 Slot, uint8 Index)
 {
-	const uint8 Clamped = (uint8)FMath::Clamp<int32>(Index, 0, WeedOutfit::PartCount(Slot, PlayerSkin == 5) - 1);
+	// ANTI-CRASH: Gamer/School-varianten zijn complete meshes met Chaos-Cloth (o.a. de dress). Elke variant-swap
+	// recreeert de clothing-actors; te snel achter elkaar wisselen liet de render-thread op vrijgegeven cloth-data
+	// crashen (access violation in de Renderer). Throttle de variant-swap tot ~3/s zodat een recreatie eerst afrondt.
+	if ((PlayerSkin == 3 || PlayerSkin == 4) && Slot == 0)
+	{
+		const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+		if (Now - LastGirlVariantSwap < 0.35) { return; }
+		LastGirlVariantSwap = Now;
+	}
+	int32 Max;
+	if (PlayerSkin == 6)      { Max = WeedOutfit::PartCountM(Slot, WeedOutfit::EMaleKind::CitizenMan); }
+	else if (PlayerSkin == 5) { Max = WeedOutfit::PartCount(Slot, true); }
+	else if ((PlayerSkin == 3 || PlayerSkin == 4) && Slot == 0) { Max = WeedOutfit::GirlVariantCount(PlayerSkin); } // Gamer/School: slot 0 = variant-index
+	else                      { Max = WeedOutfit::PartCount(Slot, false); }
+	const uint8 Clamped = (uint8)FMath::Clamp<int32>(Index, 0, Max - 1);
 	switch (Slot)
 	{
 	case 1:  OutfitLegs = Clamped; break;
@@ -772,9 +811,20 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		// FP-camera: VASTE ooghoogte (stabiel) + procedurele loop-bob. GEEN head-bone-tracking (die jitterde door
 		// root-motion/animatie: DesiredRelZ sprong 55<->122). Tijdens een sprong stijgt de camera vanzelf mee met de
 		// capsule -> blijft op ooghoogte t.o.v. het lichaam (geen aparte lift meer nodig).
-		const float EyeHeight = 62.f; // ooghoogte capsule-relatief op de GROND. TUNEBAAR.
+		// Per-model FP-camera-tuning (capsule-relatief): voor-offset X + ooghoogte Z. Andere skins = andere lengte/
+		// proporties -> met één vaste waarde kijk je in je nek/lichaam. TUNEBAAR per skin (pas aan op feedback).
+		float CamX = 8.f, EyeHeight = 62.f;
+		switch (PlayerSkin)
+		{
+		case 0: case 1: CamX = 22.f; EyeHeight = 72.f; break; // Manny/Quinn (UE5, lang)
+		case 3:         CamX = 22.f; EyeHeight = 72.f; break; // Gamer Girl (FP-mesh = Manny)
+		case 5:         CamX = 22.f; EyeHeight = 70.f; break; // Tony (Citizens, man)
+		case 6:         CamX = 14.f; EyeHeight = 68.f; break; // Citizen_man (man)
+		case 2:         CamX = 8.f;  EyeHeight = 64.f; break; // Casual girl
+		case 4:         CamX = 8.f;  EyeHeight = 62.f; break; // School girl (eigen skelet)
+		default:        break;
+		}
 		const bool bAir = GetCharacterMovement()->IsFalling();
-		const float CamX = (PlayerSkin <= 1 || PlayerSkin == 5) ? 22.f : 8.f; // FP-camera voor-offset per skin (mannequin breder)
 
 		// De camera zit ECHT op je hoofd: we lezen de head-bone van de FP-mesh (owner-zichtbaar -> animeert ALTIJD;
 		// de body-mesh is voor jou verborgen en tickt in singleplayer NIET -> bevroren ref-pose, daarom deed 't eerder niks).

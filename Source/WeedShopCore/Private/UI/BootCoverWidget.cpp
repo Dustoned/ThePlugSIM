@@ -75,12 +75,12 @@ TSharedRef<SWidget> UBootCoverWidget::RebuildWidget()
 		{
 			FProgressBarStyle BarStyle;
 			BarStyle.BackgroundImage = FSlateColorBrush(FLinearColor(0.06f, 0.11f, 0.07f, 1.f));
-			BarStyle.FillImage = FSlateColorBrush(FLinearColor::White);
-			BarStyle.MarqueeImage = FSlateColorBrush(FLinearColor::White);
+			BarStyle.FillImage = FSlateColorBrush(FLinearColor(0.4f, 0.85f, 0.45f));   // PRE-getint groen -> nooit een witte flash voor de tint pakt
+			BarStyle.MarqueeImage = FSlateColorBrush(FLinearColor(0.4f, 0.85f, 0.45f));
 			Bar->SetWidgetStyle(BarStyle);
 		}
 		Bar->SetPercent(0.05f);
-		Bar->SetFillColorAndOpacity(FLinearColor(0.4f, 0.85f, 0.45f));
+		Bar->SetFillColorAndOpacity(FLinearColor::White); // brush is al groen -> neutrale tint (geen dubbele tint, geen witte flash)
 		BarBox->SetContent(Bar);
 		VB->AddChildToVerticalBox(BarBox)->SetHorizontalAlignment(HAlign_Center);
 	}
@@ -115,7 +115,7 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const float E = (float)WeedShop_LoadElapsedSeconds(); // gedeeld met de movie -> doorloopt naadloos
 	const bool bReady = WeedShop_IsRoomReady();
-	if (bReady && ReadyAt < 0.f) { ReadyAt = E; }
+	if (bReady && ReadyAt < 0.f) { ReadyAt = E; UE_LOG(LogTemp, Warning, TEXT("[COVER] floor-ready @E=%.1f"), E); }
 
 	// Zelfde tekst-formule als de movie (deterministisch) -> bij de overgang exact dezelfde regel.
 	const int32 Step = (int32)(E / 1.6f);
@@ -146,12 +146,22 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		StatusText->SetText(FText::FromString(TEXT("Compiling shaders...")));
 		LastStep = -2;
 	}
-	// Na-buffer pas STARTEN als zowel de kamer klaar is ALS de shaders klaar zijn -> dan settelen de
-	// lighting-scenarios + de dag/nacht-look + de auto-exposure nog ACHTER de cover in (anders zag je 2
-	// light-flashes bij spawn). +4s zodat het echt helemaal klaar is voordat de cover wegfadet.
-	if (bReady && !bShadersBusy && SettleAt < 0.f) { SettleAt = E; }
-	const bool bBufferDone = (SettleAt >= 0.f) && (E - SettleAt > 8.0f); // langere na-buffer: grote beach-map + nieuwe packs streamen na vloer-ready nog door
-	if (!bFading && (bBufferDone || E > HardCap)) { bFading = true; }
+	// AppearAt = wanneer de cover voor 't eerst tickt (= op beeld komt; de movie heeft tot dan gedekt).
+	if (AppearAt < 0.f) { AppearAt = E; UE_LOG(LogTemp, Warning, TEXT("[COVER] appear @E=%.1f bReady=%d shaders=%d"), E, bReady ? 1 : 0, bShadersBusy ? 1 : 0); }
+	// De WERELD is nog aan 't streamen/laden zolang er async package-loading loopt (precies de FlushAsyncLoading/
+	// QueuedPackages-regels in de log). Daar moet de cover op WACHTEN: pas faden als die loading ~2,5s STIL is
+	// (de initiele streaming-burst is dan klaar), EN de shaders klaar zijn, EN de cover minstens even op beeld stond.
+	// NIET op de floor-ready-vlag (die hing aan HomeAnchor en vuurde lang niet altijd). HardCap = ultieme vangrail.
+	if (IsAsyncLoading()) { LastLoadAt = E; }
+	const bool bLoadSettled = (E - FMath::Max(LastLoadAt, AppearAt)) > 2.5f;
+	const bool bMinShown = (E - AppearAt) > 3.0f;
+	if (!bFading && ((bMinShown && bLoadSettled && !bShadersBusy) || E > HardCap))
+	{
+		bFading = true;
+		WeedShop_SetCrowdSpawned(true); // DoorRetrofitter terug naar 1-per-keer (smooth gameplay)
+		WeedShop_SetCoverUp(false);     // cover is weg
+		UE_LOG(LogTemp, Warning, TEXT("[COVER] FADE @E=%.1f appearAt=%.1f lastLoad=%.1f shaders=%d hardcap=%.0f"), E, AppearAt, LastLoadAt, bShadersBusy ? 1 : 0, HardCap);
+	}
 
 	// VLOEIENDE, MONOTONE progress-bar: puur op TIJD, NOOIT op de togglende shader-status (die wisselt
 	// tussen shader-golven aan/uit -> dat liet de bar naar 100% en terug springen). Pas echt 100% als
@@ -159,9 +169,8 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Bar)
 	{
 		float Pct;
-		if (bFading)      { Pct = 1.f; }
-		else if (!bReady) { Pct = 0.55f * (1.f - FMath::Exp(-E / 6.f)); }
-		else              { Pct = 0.58f + 0.40f * (1.f - FMath::Exp(-FMath::Max(0.f, E - ReadyAt) / 6.f)); }
+		if (bFading) { Pct = 1.f; }
+		else { const float t = (AppearAt >= 0.f) ? (E - AppearAt) : 0.f; Pct = 0.55f + 0.42f * (1.f - FMath::Exp(-t / 4.f)); }
 		Bar->SetPercent(FMath::Clamp(Pct, 0.04f, 1.f));
 	}
 

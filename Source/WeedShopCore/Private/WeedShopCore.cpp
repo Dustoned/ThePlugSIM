@@ -30,17 +30,25 @@ DEFINE_LOG_CATEGORY(LogWeedShop);
 // Alleen tonen bij de eerstvolgende IN-GAME level-reload (gezet door New Game/Load/Continue).
 static bool GShowGameLoadingScreen = false;
 static bool GRoomFloorReady = false;
+static bool GCrowdSpawned = false; // nabije crowd-burst klaar (gezet door DoorRetrofitter) -> cover mag wegfaden
+static bool GCoverUp = false;      // in-game cover staat op beeld -> de movie mag overdragen (geen laad-gat)
 static double GLoadStartSeconds = 0.0;
 static uint32 GLoadSeed = 0; // per-launch seed -> elke keer andere laad-regels (gedeeld door movie + cover)
 void WeedShop_RequestGameLoadingScreen()
 {
 	GShowGameLoadingScreen = true;
 	GRoomFloorReady = false;
+	GCrowdSpawned = false; // verse load: crowd moet opnieuw materialiseren voordat de cover weg mag
+	GCoverUp = false;      // verse load: de movie wacht weer op de nieuwe cover
 	GLoadStartSeconds = FPlatformTime::Seconds(); // gedeelde laad-timer voor movie + cover (naadloos)
 	GLoadSeed = (uint32)FPlatformTime::Cycles() * 2654435761u + 12345u; // verandert elke game-start
 }
 void WeedShop_SetRoomReady(bool bReady) { GRoomFloorReady = bReady; }
 bool WeedShop_IsRoomReady() { return GRoomFloorReady; }
+void WeedShop_SetCrowdSpawned(bool bSpawned) { GCrowdSpawned = bSpawned; }
+bool WeedShop_IsCrowdSpawned() { return GCrowdSpawned; }
+void WeedShop_SetCoverUp(bool bUp) { GCoverUp = bUp; }
+bool WeedShop_IsCoverUp() { return GCoverUp; }
 double WeedShop_LoadElapsedSeconds() { return GLoadStartSeconds > 0.0 ? (FPlatformTime::Seconds() - GLoadStartSeconds) : 0.0; }
 
 // Gedeelde grappige laad-regels. Beide laadschermen kiezen via WeedShop_LoadLine(step) exact dezelfde regel.
@@ -110,7 +118,7 @@ void WeedShop_ApplyLumen(bool bLumenOff)
 		const IConsoleVariable* CV = CM.FindConsoleVariable(Name);
 		return CV ? CV->GetInt() : -999;
 	};
-	UE_LOG(LogWeedShop, Warning, TEXT("Lumen %s -> GIMethod=%d ReflMethod=%d DiffuseAllow=%d ReflAllow=%d"),
+	UE_LOG(LogWeedShop, Log, TEXT("Lumen %s -> GIMethod=%d ReflMethod=%d DiffuseAllow=%d ReflAllow=%d"),
 		bLumenOff ? TEXT("UIT") : TEXT("AAN"),
 		GetCV(TEXT("r.DynamicGlobalIlluminationMethod")), GetCV(TEXT("r.ReflectionMethod")),
 		GetCV(TEXT("r.Lumen.DiffuseIndirect.Allow")), GetCV(TEXT("r.Lumen.Reflections.Allow")));
@@ -125,7 +133,7 @@ void WeedShop_ApplyVSM(bool bOff)
 	{
 		CV->Set(bOff ? 0 : 1, ECVF_SetByConsole);
 	}
-	UE_LOG(LogWeedShop, Warning, TEXT("Virtual Shadow Maps %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
+	UE_LOG(LogWeedShop, Log, TEXT("Virtual Shadow Maps %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
 }
 
 // Distance-field-AO + global distance field aan/uit. Op grote maps (de stad-beach) bouwen die runtime een
@@ -144,7 +152,7 @@ void WeedShop_ApplyDistanceFieldGI(bool bOff)
 	// KRITISCH: de shadow-kwaliteit-slider zet op hoog/epic via scalability r.DistanceFieldShadowing AAN ->
 	// distance-field-shadows bouwen dezelfde brick-atlas -> OOM. Console-prio uit zodat de slider 'm niet aanzet.
 	SetI(TEXT("r.DistanceFieldShadowing"), bOff ? 0 : 1);
-	UE_LOG(LogWeedShop, Warning, TEXT("Distance-field GI %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
+	UE_LOG(LogWeedShop, Log, TEXT("Distance-field GI %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
 }
 
 // Open beach draait op gewone CSM-schaduwen (VSM staat uit ivm de VRAM-crash). Default-CSM op die map is
@@ -206,7 +214,7 @@ void WeedShop_ApplyBeachShadowQuality(bool bPotato)
 	// gehalveerde samples (4 i.p.v. 8) onderbemonsteren het contact-eind. Lager = schaduw plakt weer aan de voeten (player + alle NPCs).
 	SetF(TEXT("r.Shadow.Virtual.NormalBias"),                      0.25f); // 0.5 default -> halveert het zweef-gat; niet onder ~0.15 (dan acne)
 	SetF(TEXT("r.Shadow.Virtual.SMRT.RayLengthScaleDirectional"), 0.8f);  // 1.5 default -> strakkere penumbra bij het contactpunt met onze 4 samples
-	UE_LOG(LogWeedShop, Warning, TEXT("Beach-schaduw: smooth VSM (pool 8192, ShadowQ %d, moving-bias %.1f, rays %.0f, %s)"), ShadowQ, MoveBias, Rays, bPotato ? TEXT("potato/42%") : TEXT("full-res"));
+	UE_LOG(LogWeedShop, Log, TEXT("Beach-schaduw: smooth VSM (pool 8192, ShadowQ %d, moving-bias %.1f, rays %.0f, %s)"), ShadowQ, MoveBias, Rays, bPotato ? TEXT("potato/42%") : TEXT("full-res"));
 }
 
 // Beach-schaduw-GATE per tier. Gedeeld door BeginPlay + de Preset-rij + de losse settings, zodat ELKE tier-wissel
@@ -244,7 +252,7 @@ void WeedShop_ApplyRayTracing(bool bOff)
 	SetCV(TEXT("r.RayTracing.AmbientOcclusion"),      bOff ? 0 : 1);
 	SetCV(TEXT("r.RayTracing.Reflections"),           bOff ? 0 : 1);
 	SetCV(TEXT("r.RayTracing.GlobalIllumination"),    bOff ? 0 : 1);
-	UE_LOG(LogWeedShop, Warning, TEXT("Ray-tracing-effecten %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
+	UE_LOG(LogWeedShop, Log, TEXT("Ray-tracing-effecten %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
 }
 
 // Grafische kwaliteit-tier. Tier -1 = Potato (onder Low): scalability 0 PLUS extra agressieve
@@ -364,7 +372,7 @@ public:
 		// EXPLICIETE bar-stijl zodat de movie-bar EXACT gelijk is aan de UMG-cover-bar (UBootCoverWidget):
 		// zelfde donkere achtergrond + witte fill (getint door FillColorAndOpacity), geen default-stijl.
 		static const FSlateColorBrush BarBgBrush(FLinearColor(0.06f, 0.11f, 0.07f, 1.f));
-		static const FSlateColorBrush BarFillBrush(FLinearColor::White);
+		static const FSlateColorBrush BarFillBrush(FLinearColor(0.4f, 0.85f, 0.45f)); // PRE-getint groen -> nooit een witte flash voor de tint pakt
 		static const FProgressBarStyle BarStyle = FProgressBarStyle()
 			.SetBackgroundImage(BarBgBrush)
 			.SetFillImage(BarFillBrush)
@@ -414,7 +422,7 @@ public:
 						SAssignNew(Bar, SProgressBar)
 						.Style(&BarStyle)
 						.Percent(0.05f)
-						.FillColorAndOpacity(FLinearColor(0.4f, 0.85f, 0.45f))
+						.FillColorAndOpacity(FLinearColor::White) // brush is al groen -> neutrale tint (geen dubbele tint)
 					]
 				]
 			]
@@ -439,8 +447,9 @@ public:
 		// EEN doorlopend scherm: stopt zodra de kamer klaar is (vloer onder de speler gevonden, gemeld
 		// via WeedShop_SetRoomReady) + korte buffer. De harde cap (24s) is alleen een noodrem zodat het
 		// nooit blijft hangen als room-ready om wat voor reden ook niet binnenkomt.
-		const bool bBufferDone = (ReadyAt >= 0.f) && (E - ReadyAt > 1.5f);
-		if (bBufferDone || E > 24.f)
+		// De movie blijft staan tot de in-game COVER er is om naadloos over te nemen (geen gat waarin je de wereld
+		// ziet inladen = de witte flash). Safety-cap (90s) zodat 'ie NOOIT blijft hangen als de cover niet verschijnt.
+		if (WeedShop_IsCoverUp() || E > 90.f)
 		{
 			if (IGameMoviePlayer* MP = GetMoviePlayer()) { MP->StopMovie(); }
 		}
@@ -490,9 +499,9 @@ private:
 		//    EnsureWidget): exact dezelfde look + DEZELFDE gedeelde timer/bar/tekst. Het loopt dus
 		//    gewoon DOOR vanaf waar de movie zat (geen 'klaar -> opnieuw') tot je stil in de kamer staat.
 		FLoadingScreenAttributes Attr;
-		Attr.bAutoCompleteWhenLoadingCompletes = true;  // movie weg zodra het level geladen is (geen hang)
+		Attr.bAutoCompleteWhenLoadingCompletes = false; // NIET auto-weg op level-load -> de movie blijft tot de cover er is (geen gat/witte flash)
 		Attr.bMoviesAreSkippable = false;
-		Attr.bWaitForManualStop = false;
+		Attr.bWaitForManualStop = true;                 // stopt pas via StopMovie hieronder (cover op beeld, of safety-cap) -> nooit een hang
 		Attr.MinimumLoadingScreenDisplayTime = 1.0f;
 		Attr.WidgetLoadingScreen = SNew(SWeedLoadingScreen);
 		GetMoviePlayer()->SetupLoadingScreen(Attr);

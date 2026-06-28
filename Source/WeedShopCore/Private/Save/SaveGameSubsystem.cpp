@@ -612,12 +612,18 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	const FString TargetName = bAutosave ? AutoSlotNameFor(CurrentSlot) : SlotNameFor(CurrentSlot);
 
 	// Bestaande spelers behouden (zo blijft een co-op vriend die nu offline is bewaard).
-	UWeedShopSaveGame* Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(TargetName, 0));
+	// DoesSaveGameExist-gate: anders probeert LoadGameFromSlot een niet-bestaand .sav te lezen ->
+	// "LogStreaming: Failed to read file ...sav" bij elke eerste-save/verse slot.
+	UWeedShopSaveGame* Prev = UGameplayStatics::DoesSaveGameExist(TargetName, 0)
+		? Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(TargetName, 0)) : nullptr;
 	if (!Prev)
 	{
 		// Eerste schrijf naar dit bestand: erf de spelerslijst van het andere bestand in dit slot.
 		const FString OtherName = bAutosave ? SlotNameFor(CurrentSlot) : AutoSlotNameFor(CurrentSlot);
-		Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(OtherName, 0));
+		if (UGameplayStatics::DoesSaveGameExist(OtherName, 0))
+		{
+			Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(OtherName, 0));
+		}
 	}
 	if (Prev) { Save->Players = Prev->Players; }
 
