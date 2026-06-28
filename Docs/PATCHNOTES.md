@@ -1,4 +1,132 @@
 PATCH NOTES
+Version 1.17.0 — 28 juni 2026
+
+Korte intro:
+NPC- en first-person-update: de mensen op straat zijn gevarieerder (meer modellen/outfits, elke dag andere
+gezichten), reageren strakker op deals, en de eerste-persoons-camera beweegt nu natuurlijk met je hoofd mee —
+ook tijdens het springen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+NPC's & CROWD
+
+• Veel meer variatie op straat: nieuwe personagemodellen en outfits toegevoegd zodat de menigte minder
+  "kloont". De gezichten rouleren bovendien per dag — je ziet steeds andere mensen, en dat wisselen gebeurt
+  altijd buiten beeld (je betrapt het nooit live).
+• NPC's stappen nu netter opzij als ze ergens tegenaan lopen, in plaats van tegen elkaar of een obstakel te
+  blijven duwen.
+• Vervolg op de vorige fix: NPC's verdwijnen niet meer vlak voor je neus. Ze blijven gewoon rondlopen; ver weg
+  wordt alleen hun model tijdelijk niet getekend (prestaties), en ze komen terug zodra je dichterbij bent.
+
+━━━━━━━━━━━━━━━━━━━━
+
+DEALS & STRAAT
+
+• Mislukte deals kosten nu áltijd reputatie, in plaats van dat je er soms nog stats bij kreeg. Een afspraak
+  accepteren en niet komen opdagen kost flink respect + loyaliteit; enkel niet reageren op een bericht geeft
+  een lichtere terugval. In beide gevallen blijft de persoon gewoon rondlopen, met een afkoelperiode voordat
+  'ie je opnieuw benadert.
+• Joints uitdelen op straat draait nu vooral om verslaving: je maakt er klanten mee (de haak), maar het levert
+  nauwelijks nog directe reputatie op — die verdien je met échte verkopen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+EERSTE PERSOON
+
+• De camera zit nu op het hoofd en beweegt er natuurlijk mee — inclusief de subtiele hoofd-bob tijdens het
+  lopen, voor een veel realistischer gevoel.
+• Springen voelt strak: geen abrupte schok of zichtbare lichaamsdelen meer in beeld op het moment dat je afzet
+  of in de lucht hangt.
+
+━━━━━━━━━━━━━━━━━━━━
+
+ONDER DE MOTORKAP
+
+• Opschoning en stabiliteitswerk rond de NPC-crowd (interne diagnostiek verwijderd; geen invloed op het spel,
+  wel een schonere build).
+
+━━━━━━━━━━━━━━━━━━━━
+
+Version 1.16.2 — 26 juni 2026
+
+Korte intro:
+Schaduw-polish bovenop 1.16.1: de flikkerende/blokkerige schaduwen zijn opgelost — schaduwen zijn nu strak
+en stabiel op elke kwaliteit.
+
+━━━━━━━━━━━━━━━━━━━━
+
+SCHADUWEN
+
+• Opgelost: schaduwen flikkerden/flitsten en zagen er blokkerig uit (vooral op lagere instellingen). De
+  Virtual Shadow Maps draaiden op te krappe standaardwaarden — nu met een ruimere page-pool (geen flitsende
+  gaten meer), zachte schaduwranden, hogere resolutie, en een stabiele cache die niet langer door de
+  bewegende zon constant gereset wordt. Strakke, stabiele schaduwen op alle standen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+Version 1.16.1 — 26 juni 2026
+
+Korte intro:
+Fix-update bovenop 1.16.0: de "out of video memory"-crash bij het aanzetten van schaduwen is opgelost, de
+schaduwen werken nu volledig en soepel (incl. NPC-schaduwen), en de crowd blijft altijd rondlopen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+SCHADUWEN & CRASH-FIX
+
+• Opgelost: de "Out of video memory"-crash zodra je schaduwen aanzette. Bleek een UE5-geheugenbug — de
+  GPU-Scene reserveerde ~9,6 GB videogeheugen vooraf, waardoor de schaduw-allocatie faalde terwijl je
+  videokaart grotendeels leeg was. Nu uitgeschakeld via een engine-config-fix.
+• Schaduwen werken nu op elke kwaliteit en blijven soepel — ook als je richting de zon over de stad kijkt
+  (Virtual Shadow Maps met caching i.p.v. de hele stad elk frame opnieuw tekenen).
+• NPC's werpen nu ook schaduw.
+
+━━━━━━━━━━━━━━━━━━━━
+
+CROWD
+
+• NPC's blijven nu altijd aanwezig (dag én nacht). Ver weg wordt alleen hun model niet getekend (scheelt
+  prestaties), maar ze blijven doorlopen en komen terug zodra je dichterbij bent. Alleen een NPC die écht
+  lang ergens vastzit wordt nog verplaatst.
+
+━━━━━━━━━━━━━━━━━━━━
+
+Version 1.16.0 — 26 juni 2026
+
+Korte intro:
+De grote lucht-update: een volledig dynamisch hemel- en weersysteem (UltraDynamicSky + Weather). Echte
+wolken, regen, sneeuw en onweer die door de dag heen wisselen, een sterrenhemel met Melkweg en af en toe
+noorderlicht. Plus een herbalans van de vindbare joints en wat economie-tweaks. Draait nu op Unreal Engine 5.8.
+
+━━━━━━━━━━━━━━━━━━━━
+
+LUCHT & WEER (nieuw)
+
+• Volledig dynamische lucht met volumetrische wolken, zon/maan op de dag/nacht-klok, atmosfeer en mist.
+• Echt weer met deeltjes: het wisselt natuurlijk door de dag — meestal helder/bewolkt/mistig, af en toe
+  een korte regen- of (zeldzaam) sneeuwbui die vanzelf weer opklaart. Geen hele dag kutweer.
+• 's Nachts een sterrenhemel met de Melkweg, en een kleine kans op noorderlicht (aurora).
+• Tijd- en weer-gestuurde omgevingsgeluiden.
+• Dev-menu (F10): weer-knoppen (helder/bewolkt/regen/onweer/sneeuw/mist) + live sliders voor belichting,
+  sterren en nebula.
+
+━━━━━━━━━━━━━━━━━━━━
+
+JOINTS & ECONOMIE
+
+• Vindbare straat-joints opnieuw gebalanceerd: vroeg vind je er minder, en het groeit mee met je level —
+  ook de strain/kwaliteit sluit beter aan bij je huidige tier (maar je vindt nog steeds soms een mindere).
+• Cooldown op het geven van een joint aan een klant: je kunt iemand niet meer instant maxen met een stapel.
+• Koopprijzen van machines/uitrusting opgeschaald zodat ze bij de nieuwe yields/inkomsten passen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+ONDER DE MOTORKAP
+
+• Geüpgraded naar Unreal Engine 5.8.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.15.0 — 25 juni 2026
 
 Korte intro:

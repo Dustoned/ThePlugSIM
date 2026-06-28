@@ -706,7 +706,10 @@ void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
 	const float ApptTime = Messages[Found].AppointmentTimeOfDay;
 	const FText SenderName = Messages[Found].SenderName;
 	Messages[Found].Status = bAccept ? 1 : 2;
-	const float Delta = bAccept ? 5.f : -12.f;
+	// Accepteren geeft GEEN gratis loyaliteit meer: de beloning komt pas bij de VOLTOOIDE verkoop
+	// (ComputeAcceptedDeltas). Anders houd je +stats over aan een afspraak die je daarna alsnog laat
+	// mislukken (afdingen/weglopen/no-show) -> een mislukte deal mag NOOIT netto omhoog brengen.
+	const float Delta = bAccept ? 0.f : -12.f;
 	ApplyRelationshipDelta(ContactId, Delta);
 
 	// Reactiesnelheid bepaalt de volgende cooldown: snel antwoord = eerder weer een appje, traag = langer rust.

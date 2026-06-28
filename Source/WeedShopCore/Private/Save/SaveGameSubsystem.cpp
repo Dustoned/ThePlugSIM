@@ -547,7 +547,8 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	{
 		E->SetBalanceCents(Data.CashCents);
 		E->SetBankCents(Data.BankCents);
-		E->SetSafeCents(Data.SafeCents);
+		if (Data.SafeCents > 0) { E->SetBalanceCents(E->GetBalanceCents() + Data.SafeCents); } // safe = nu item-opslag: oud gestald geld terug naar cash
+		E->SetSafeCents(0);
 		E->RestoreDailyLimits(Data.DepositedTodayCents, Data.DepositDay, Data.TransfersToday);
 		E->RestoreLaunderState(Data.LegitIncomeCents, Data.LaunderedCents);
 	}

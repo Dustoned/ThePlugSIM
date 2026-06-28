@@ -1,5 +1,5 @@
 Name,DisplayName,BaseThcPercent,BaseYieldGrams,GrowMinutes,SeedPriceCents,HarvestProductId,UnlockLevel
-Streetweed,"Streetweed",17,26,6,1200,Bud_Streetweed,1
+Streetweed,"Streetweed",16,12,2.5,1200,Bud_Streetweed,1
 CriticalMass,"Critical Mass",15,58,12,3600,Bud_CriticalMass,3
 SilverHaze,"Silver Haze",19,20,5,2000,Bud_SilverHaze,5
 BlueDream,"Blue Dream",16,42,9,4600,Bud_BlueDream,7

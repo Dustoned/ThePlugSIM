@@ -56,6 +56,11 @@ struct FNpcState
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float LastRefusalAbs = -1.f;
 
+	// Tijdstip (NowAbs) van de LAATSTE gegeven sample (gratis joint). -1 = nooit. Eigen cooldown zodat je
+	// een NPC niet instant kunt maxen met een stapel joints. Repliceert mee via States.
+	UPROPERTY(BlueprintReadOnly, Category = "NPC")
+	float LastSampleAbs = -1.f;
+
 	// Cooldown-vermenigvuldiger op de afspraak-cooldown (snel antwoord = korter, traag/opgegeven = langer).
 	UPROPERTY(BlueprintReadOnly, Category = "NPC")
 	float ApptCooldownMult = 1.f;
@@ -113,6 +118,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
 	float RefusalCooldownSeconds = 75.f;
 
+	// Cooldown (dag-cyclus-seconden) tussen twee gratis joints aan dezelfde NPC -> geen instant-maxen.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|NPC")
+	float SampleCooldownSeconds = 120.f;
+
 	// Server: geef een NpcId uit aan een nieuwe klant (round-robin, slaat NPC's op cooldown over).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
 	FName AssignNpc();
@@ -151,6 +160,12 @@ public:
 	void MarkRefused(FName NpcId);
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	bool IsOnRefusalCooldown(FName NpcId) const;
+
+	// Sample-cooldown: leg vast dat deze NPC zojuist een gratis joint kreeg / check of 'ie op cooldown is.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
+	void MarkSampled(FName NpcId);
+	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
+	bool IsOnSampleCooldown(FName NpcId) const;
 
 	// Heeft deze NPC z'n nummer al gedeeld (contact)?
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")

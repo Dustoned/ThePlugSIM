@@ -68,6 +68,7 @@ public:
 	TArray<FProcEntry> Cooking;
 
 	bool IsFridge() const { return ShelfTier.ToString().StartsWith(TEXT("Fridge")); }
+	bool IsSafe() const { return ShelfTier.ToString().StartsWith(TEXT("Safe")); } // kluis: item-opslag-tier (geen bederf, eigen slot-aantal)
 	int32 FridgeCookCap() const { return 4; } // max gelijktijdige edible-batches in een koelkast
 
 	// Server: start een edible-batch (Strain = strain-naam, OutPrefix = Edible_/Cookie_/Gummy_). False = vol/fout.

@@ -28,7 +28,13 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Widgets/SWindow.h"
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <Windows.h>
+#include "Windows/HideWindowsPlatformTypes.h"
+#endif
 #include "UnrealClient.h"
+#include "GenericPlatform/GenericApplication.h" // FDisplayMetrics/FMonitorInfo (multi-monitor fullscreen)
 
 namespace
 {
@@ -107,6 +113,12 @@ FReply USettingsWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyE
 		bRebinding = false; RefreshContent();
 		return FReply::Handled();
 	}
+// Esc sluit het settings-menu (de grote Back-knop is vervangen door Save; back via Esc of de < Back linksboven).
+	if (InKeyEvent.GetKey() == EKeys::Escape)
+	{
+		if (UPhoneClientComponent* Ph = GetPhone()) { Ph->CloseSettings(); }
+		return FReply::Handled();
+	}
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
@@ -137,8 +149,13 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
 
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 20, FLinearColor(0.6f, 1.f, 0.6f), false, true))
-		->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+	// Header: kleine back-knop linksboven + titel.
+	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UWeedActionButton* BackTop = SetBtn(WidgetTree, TEXT("< Back"), FLinearColor(0.4f, 0.34f, 0.16f),
+		[this]() { if (UPhoneClientComponent* Ph = GetPhone()) { Ph->CloseSettings(); } }, 12);
+	Header->AddChildToHorizontalBox(BackTop)->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+	Header->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 20, FLinearColor(0.6f, 1.f, 0.6f), false, true));
+	VB->AddChildToVerticalBox(Header)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	// Categorie-tabs.
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -159,12 +176,35 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBoxSlot* BSlot = VB->AddChildToVerticalBox(Scroll);
 	BSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	// Back onderaan.
-	UWeedActionButton* Back = SetBtn(WidgetTree, TEXT("Back"), FLinearColor(0.4f, 0.34f, 0.16f),
-		[this]() { if (UPhoneClientComponent* Ph = GetPhone()) { Ph->CloseSettings(); } }, 13);
-	VB->AddChildToVerticalBox(Back)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+	// Save onderaan (waar Back stond). Back gaat nu via Esc + de knop linksboven.
+	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), FLinearColor(0.18f, 0.42f, 0.22f),
+		[this]() { if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); } bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR); RefreshContent(); }, 13);
+	VB->AddChildToVerticalBox(SaveBtn)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+
+	// === Modale "herstart nodig"-popup (verschijnt bij een schaduw-grens-wissel Potato <-> hoger). ===
+	UBorder* PopDim = WidgetTree->ConstructWidget<UBorder>();
+	PopDim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.62f), 0.f));
+	PopDim->SetHorizontalAlignment(HAlign_Center); PopDim->SetVerticalAlignment(VAlign_Center);
+	RestartPopup = PopDim;
+	UCanvasPanelSlot* PSlot = Root->AddChildToCanvas(PopDim);
+	PSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f)); PSlot->SetOffsets(FMargin(0.f));
+	USizeBox* PopBox = WidgetTree->ConstructWidget<USizeBox>(); PopBox->SetWidthOverride(560.f); PopDim->SetContent(PopBox);
+	UBorder* PopPanel = WidgetTree->ConstructWidget<UBorder>(); PopPanel->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.10f, 0.14f, 1.f), 16.f)); PopPanel->SetPadding(FMargin(28.f, 24.f)); PopBox->SetContent(PopPanel);
+	UVerticalBox* PopVB = WidgetTree->ConstructWidget<UVerticalBox>(); PopPanel->SetContent(PopVB);
+	PopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Restart required"), 18, FLinearColor(1.f, 0.85f, 0.4f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	UTextBlock* PopMsg = WeedUI::Text(WidgetTree, TEXT("Changes require a restart."), 12, FLinearColor(0.82f, 0.86f, 0.92f), true, false);
+	PopMsg->SetAutoWrapText(true);
+	PopVB->AddChildToVerticalBox(PopMsg)->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+	UWeedActionButton* PopOk = SetBtn(WidgetTree, TEXT("OK"), FLinearColor(0.18f, 0.42f, 0.22f), [this]() { if (RestartPopup) { RestartPopup->SetVisibility(ESlateVisibility::Collapsed); } }, 13);
+	PopVB->AddChildToVerticalBox(PopOk);
+	RestartPopup->SetVisibility(ESlateVisibility::Collapsed);
 
 	Card->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void USettingsWidget::ShowRestartPopup()
+{
+	if (RestartPopup) { RestartPopup->SetVisibility(ESlateVisibility::Visible); }
 }
 
 void USettingsWidget::AddValueRow(const FString& Label, const FString& Value, TFunction<void()> OnClick)
@@ -305,6 +345,32 @@ void USettingsWidget::RefreshContent()
 			{
 				const EWindowMode::Type Next = (ActualWM == EWindowMode::Fullscreen) ? EWindowMode::WindowedFullscreen
 					: (ActualWM == EWindowMode::WindowedFullscreen) ? EWindowMode::Windowed : EWindowMode::Fullscreen;
+				// Multi-monitor: bij Fullscreen/Borderless kiest UE standaard de PRIMAIRE monitor i.p.v. de monitor
+				// waar je venster staat -> de game springt naar het verkeerde scherm. Zoek de monitor onder het
+				// venster, veranker het daar en zet de resolutie op die monitor, zodat UE op DAT scherm fullscreent.
+				if (Next != EWindowMode::Windowed && GEngine && GEngine->GameViewport)
+					{
+						TSharedPtr<SWindow> FsWin = GEngine->GameViewport->GetWindow();
+						if (FsWin.IsValid())
+						{
+#if PLATFORM_WINDOWS
+							// Pak (DPI-onafhankelijk) de monitor ONDER het venster + diens HUIDIGE desktop-resolutie en zet die als
+							// fullscreen-resolutie -> UE fullscreent op DAT scherm op de juiste resolutie (i.p.v. 1600x900 / primair).
+							TSharedPtr<FGenericWindow> Native = FsWin->GetNativeWindow();
+							HWND Hwnd = Native.IsValid() ? (HWND)Native->GetOSWindowHandle() : nullptr;
+							HMONITOR Hmon = Hwnd ? MonitorFromWindow(Hwnd, MONITOR_DEFAULTTONEAREST) : nullptr;
+							if (Hmon)
+							{
+								MONITORINFOEXW Mi; FMemory::Memzero(&Mi, sizeof(Mi)); Mi.cbSize = sizeof(Mi);
+								DEVMODEW Dm; FMemory::Memzero(&Dm, sizeof(Dm)); Dm.dmSize = sizeof(Dm);
+								if (::GetMonitorInfoW(Hmon, &Mi) && ::EnumDisplaySettingsW(Mi.szDevice, ENUM_CURRENT_SETTINGS, &Dm) && Dm.dmPelsWidth > 0 && Dm.dmPelsHeight > 0)
+								{
+									GG->SetScreenResolution(FIntPoint((int32)Dm.dmPelsWidth, (int32)Dm.dmPelsHeight));
+								}
+							}
+#endif
+						}
+					}
 				GG->SetFullscreenMode(Next);
 				GG->ApplyResolutionSettings(false); // past venster-modus + resolutie direct + betrouwbaar toe
 				GG->SaveSettings();
@@ -326,10 +392,12 @@ void USettingsWidget::RefreshContent()
 				bool bLum, bPot, bMb, bVSM, bRT; WeedShop_ReadGfxFlags(bLum, bPot, bMb, bVSM, bRT);
 				// Vlaggen volgen de preset: Lumen + ray tracing alleen op Epic; VSM uit op Potato/Low;
 				// MotionBlur behouden.
-				WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb, (Next <= 0), (Next < 3));
+				WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb, bVSM, (Next < 3)); // VSMOff (schaduwen) NIET via de preset -> de Shadows-toggle bezit hem
+				if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bVSM); } } // tier-wissel past de beach-gate opnieuw toe -> schaduwen komen deterministisch terug
 				RefreshContent();
 			});
 		}
+
 
 		// --- Losse kwaliteit-instellingen (elk Low/Medium/High/Epic; samen vormen ze het preset) ---
 		auto AddQ = [this](const FString& Lbl, int32 Cur, TFunction<void(UGameUserSettings*, int32)> Apply)
@@ -341,19 +409,32 @@ void USettingsWidget::RefreshContent()
 				{
 					const int32 c = (Cur < 0) ? 2 : Cur;
 					Apply(GG, (c + 1) % 4);
-					GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
+					GG->ApplySettings(false); GG->SaveSettings();
+					// De beach forceert de VSM-config met console-prio -> her-toepassen zodat o.a. de Shadows-setting
+					// (VSM-scherpte) METEEN zichtbaar wordt i.p.v. pas na opnieuw laden van de map.
+					if (UWorld* WB = GetWorld())
+					{
+						if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip")))
+						{
+							bool bL2, bP2, bM2, bV2, bR2; WeedShop_ReadGfxFlags(bL2, bP2, bM2, bV2, bR2);
+							WeedShop_ApplyBeachShadows(bV2); // gedeelde gate: Potato=uit, Low+=VSM (forceerde eerder VSM altijd aan)
+						}
+					}
+					RefreshContent();
 				}
 			});
 		};
-		AddQ(TEXT("View distance"),    G->GetViewDistanceQuality(),   [](UGameUserSettings* GG, int32 n){ GG->SetViewDistanceQuality(n); });
 		AddQ(TEXT("Textures"),         G->GetTextureQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetTextureQuality(n); });
-		AddQ(TEXT("Shadows"),          G->GetShadowQuality(),         [](UGameUserSettings* GG, int32 n){ GG->SetShadowQuality(n); });
-		AddQ(TEXT("Anti-aliasing"),    G->GetAntiAliasingQuality(),   [](UGameUserSettings* GG, int32 n){ GG->SetAntiAliasingQuality(n); });
-		AddQ(TEXT("Effects"),          G->GetVisualEffectQuality(),   [](UGameUserSettings* GG, int32 n){ GG->SetVisualEffectQuality(n); });
-		AddQ(TEXT("Post-processing"),  G->GetPostProcessingQuality(), [](UGameUserSettings* GG, int32 n){ GG->SetPostProcessingQuality(n); });
-		AddQ(TEXT("Foliage"),          G->GetFoliageQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetFoliageQuality(n); });
-		AddQ(TEXT("Shading (shaders)"),G->GetShadingQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetShadingQuality(n); });
-		AddQ(TEXT("Reflections"),      G->GetReflectionQuality(),     [](UGameUserSettings* GG, int32 n){ GG->SetReflectionQuality(n); });
+		{ // Shadows: ON/OFF (eigen vlag, los van de Preset; VSM aan/uit). Geldt na herstart (VSM-pool).
+			bool bL0, bP0, bM0, bV0, bR0; WeedShop_ReadGfxFlags(bL0, bP0, bM0, bV0, bR0);
+			AddValueRow(TEXT("Shadows"), bV0 ? TEXT("Off") : TEXT("On"), [this, bL0, bP0, bM0, bV0, bR0]()
+			{
+				WeedShop_WriteGfxFlags(bL0, bP0, bM0, !bV0, bR0); // VSMOff togglen = schaduwen aan/uit
+				if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(!bV0); } }
+				ShowRestartPopup(); // VSM-pool kan niet live togglen -> geldt na herstart
+				RefreshContent();
+			});
+		}
 
 		// Resolutie-schaal (render-%): 50 -> 75 -> 100.
 		{
@@ -382,29 +463,7 @@ void USettingsWidget::RefreshContent()
 			});
 		}
 
-		// Ray tracing (RT-schaduwen/reflecties/AO/GI) - aan/uit. Zware render-feature; standaard alleen op Epic.
-		{
-			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-			AddValueRow(TEXT("Ray tracing"), bRTOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
-			{
-				WeedShop_ApplyRayTracing(!bRTOff);
-				WeedShop_WriteGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, !bRTOff);
-				RefreshContent();
-			});
-		}
 
-		// Virtual shadow maps - aan/uit. Duurder dan gewone shadow maps; standaard uit op Potato/Low.
-		{
-			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-			AddValueRow(TEXT("Virtual shadow maps"), bVSMOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
-			{
-				WeedShop_ApplyVSM(!bVSMOff);
-				WeedShop_WriteGfxFlags(bLumenOff, bPotato, bMbOff, !bVSMOff, bRTOff);
-				RefreshContent();
-			});
-		}
 
 		// Motion blur - aan/uit.
 		{
@@ -468,6 +527,14 @@ void USettingsWidget::RefreshContent()
 		SensSlider = AddSliderRow(TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, SensVal);
 		if (SensVal) { SensVal->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), Sens))); }
 		LastSensApplied = FMath::RoundToInt(Sens * 10.f);
+
+		// Head bobbing aan/uit (camera loop-wiebel).
+		const bool bBobNow = Ph ? Ph->GetHeadBob() : true;
+		AddValueRow(TEXT("Head bobbing"), bBobNow ? TEXT("On") : TEXT("Off"), [this, bBobNow]()
+		{
+			if (UPhoneClientComponent* P2 = GetPhone()) { P2->SetHeadBob(!bBobNow); }
+			RefreshContent();
+		});
 	}
 	else if (Category == 3) // Audio
 	{

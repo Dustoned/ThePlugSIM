@@ -146,7 +146,11 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		StatusText->SetText(FText::FromString(TEXT("Compiling shaders...")));
 		LastStep = -2;
 	}
-	const bool bBufferDone = (ReadyAt >= 0.f) && (E - ReadyAt > 1.6f) && !bShadersBusy;
+	// Na-buffer pas STARTEN als zowel de kamer klaar is ALS de shaders klaar zijn -> dan settelen de
+	// lighting-scenarios + de dag/nacht-look + de auto-exposure nog ACHTER de cover in (anders zag je 2
+	// light-flashes bij spawn). +4s zodat het echt helemaal klaar is voordat de cover wegfadet.
+	if (bReady && !bShadersBusy && SettleAt < 0.f) { SettleAt = E; }
+	const bool bBufferDone = (SettleAt >= 0.f) && (E - SettleAt > 4.0f);
 	if (!bFading && (bBufferDone || E > HardCap)) { bFading = true; }
 
 	// VLOEIENDE, MONOTONE progress-bar: puur op TIJD, NOOIT op de togglende shader-status (die wisselt

@@ -212,3 +212,13 @@ Prijsdoel:
 ---
 
 > **Onderhoud:** bij prijswijziging in `GSupplies[]` deze lijst mee-updaten. Houd machine- en meubelprijzen in `PROGRESSION.md` gelijk aan dit document. Nieuwe zaadprijzen pas invullen nadat marktprijs en winst per minuut in `OPBRENGST.md` zijn goedgekeurd.
+
+---
+
+## KOOPPRIJS-CUT — TOEGEPAST (25 juni 2026)
+
+> De "shopprijzen blijven ongewijzigd"-status hierboven is INGEHAALD: met de V4-curve voelde alles te goedkoop laat in het spel (inkomen ~5,6x omhoog). De koopprijzen (StoreComponent GSupplies) zijn nu progressief opgeschaald zodat de prijs/inkomen-verhouding weer klopt.
+> - Multiplier per unlock-level: 1-9 x2 . 10-19 x3 . 20-29 x4 . 30-39 x5 . 40-50 x6.
+> - Meubels/decor ongewijzigd (cosmetisch). Pot-upgrade-gear schaalt mee via de basis x tier-opslag.
+> - Voorbeelden: Pot_Fabric 350 -> 1.400 . Press_Pro 1.200 -> 6.000 . Safe_Vault 300k -> 1.8M.
+> - Bron van waarheid = de GSupplies-array (StoreComponent.cpp); de prijstabellen hierboven tonen nog de oude waardes.

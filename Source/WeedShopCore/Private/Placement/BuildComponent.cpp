@@ -470,7 +470,7 @@ void UBuildComponent::SpawnPreview(const FPlaceableDef& Def, FName ItemId)
 	else if (Def.bIsSink)       { A = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), TM); }
 	else if (Def.bIsLamp)       { A = W->SpawnActor<ACeilingLamp>(ACeilingLamp::StaticClass(), TM); }
 	else if (Def.bIsAtm)        { A = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM); }
-	else if (Def.bIsSafe)       { AAtm* S = W->SpawnActor<AAtm>(AAtm::StaticClass(), TM); if (S) { S->InitAsSafe(AAtm::SafeCapacityForItem(ItemId)); } A = S; }
+	else if (Def.bIsSafe)       { if (AStorageShelf* S = Cast<AStorageShelf>(Deferred(AStorageShelf::StaticClass()))) { S->ShelfTier = ItemId; S->FinishSpawning(TM); A = S; } } // kluis = opslag-kist-tier (item-opslag)
 	else                        { if (APlaceableProp* P = Cast<APlaceableProp>(Deferred(APlaceableProp::StaticClass()))) { P->ItemId = ItemId; P->FinishSpawning(TM); A = P; } }
 
 	if (!A) { return; }
@@ -897,7 +897,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	float ZOff = 0.f;
 	if (CurrentDef.bIsLamp) { ZOff = -CurrentDef.BoxHalf.Z; }
 	else if (CurrentDef.bIsDryRack) { ZOff = CurrentDef.bIsWallMount ? 0.f : CurrentDef.BoxHalf.Z; }
-	else if (CurrentDef.bIsSink || CurrentDef.bIsPackBench || CurrentDef.bIsShelf || CurrentDef.bIsProcessor) { ZOff = CurrentDef.BoxHalf.Z; }
+	else if (CurrentDef.bIsSink || CurrentDef.bIsPackBench || CurrentDef.bIsShelf || CurrentDef.bIsProcessor || CurrentDef.bIsSafe) { ZOff = CurrentDef.BoxHalf.Z; }
 	// pot / atm / generieke prop: root op de vloer (offset 0)
 
 	const bool bUsePreviewActor = PreviewActor.IsValid();
@@ -1079,7 +1079,7 @@ void UBuildComponent::UpdateRemoteGhost()
 	float ZOff = 0.f;
 	if (Def.bIsLamp) { ZOff = -Def.BoxHalf.Z; }
 	else if (Def.bIsDryRack) { ZOff = Def.bIsWallMount ? 0.f : Def.BoxHalf.Z; }
-	else if (Def.bIsSink || Def.bIsPackBench || Def.bIsShelf || Def.bIsProcessor) { ZOff = Def.BoxHalf.Z; }
+	else if (Def.bIsSink || Def.bIsPackBench || Def.bIsShelf || Def.bIsProcessor || Def.bIsSafe) { ZOff = Def.BoxHalf.Z; }
 
 	if (AActor* P = PreviewActor.Get())
 	{
@@ -1526,10 +1526,12 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	else if (Def.bIsSafe)
 	{
-		// Kluis: AAtm in safe-modus (zelfde UI, eigen capaciteit). Veilig bij een overval.
-		if (AAtm* S = World->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rotation, Location), SpawnParams))
+		// Kluis = opslag-kist (AStorageShelf-tier): items erin slepen i.p.v. cash. ShelfTier voor FinishSpawning
+		// zetten zodat BeginPlay het als safe herkent (geen bederf-timer).
+		if (AStorageShelf* S = World->SpawnActorDeferred<AStorageShelf>(AStorageShelf::StaticClass(), FTransform(Rotation, Location), GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
 		{
-			S->InitAsSafe(AAtm::SafeCapacityForItem(Def.ItemId));
+			S->ShelfTier = Def.ItemId;
+			S->FinishSpawning(FTransform(Rotation, Location));
 		}
 	}
 	else if (Def.bIsLamp)

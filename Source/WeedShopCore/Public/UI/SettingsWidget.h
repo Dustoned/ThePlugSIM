@@ -31,6 +31,7 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 	void RefreshTabs();
 	void RefreshContent();
+	void ShowRestartPopup(); // toont de "herstart nodig"-popup (schaduw-grens-wissel Potato <-> hoger)
 
 	UPhoneClientComponent* GetPhone() const;
 
@@ -48,6 +49,7 @@ protected:
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> Body;     // rechter inhoud (per categorie)
+	UPROPERTY() TObjectPtr<UWidget> RestartPopup;  // modale "herstart nodig"-popup, standaard verborgen
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGraphics;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGame;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabControls;

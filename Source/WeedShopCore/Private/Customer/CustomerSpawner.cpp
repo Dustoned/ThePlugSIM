@@ -87,8 +87,8 @@ namespace
 		if (UCharacterMovementComponent* Mv = C->GetCharacterMovement())
 		{
 			Mv->SetAvoidanceEnabled(true);
-			Mv->AvoidanceConsiderationRadius = 300.f;
-			Mv->AvoidanceWeight = 0.5f;
+			Mv->AvoidanceConsiderationRadius = 400.f; // verder vooruit kijken -> eerder uitwijken (was 300)
+			Mv->AvoidanceWeight = 0.75f;              // steviger aan de kant sliden bij een ontmoeting (was 0.5)
 		}
 	}
 }
@@ -453,7 +453,8 @@ void ACustomerSpawner::TrySpawn()
 			}
 
 			// Off-screen + ECHT vastgelopen (stilstaand, ver onder/boven de route = door de map gezakt of op een
-			// prop geklommen) -> opruimen na 2 strikes. Veiligheidsnet, nooit zichtbaar (we zijn hier al off-screen).
+			// prop geklommen) -> pas opruimen na ~30s. Speler-regel: NPC's zijn er ALTIJD; alleen eentje die
+			// echt LANG off-screen vastzit mag weg (re-materialiseert dan elders = "weg-tp"). Loop draait op 1Hz.
 			const FVector L0 = Cw0->GetActorLocation();
 			float RefZ = GetActorLocation().Z;
 			if (NetNodes.Num() >= 2)
@@ -467,9 +468,9 @@ void ACustomerSpawner::TrySpawn()
 			}
 			const float Dz = L0.Z - RefZ;
 			const bool bWalking = Cw0->GetVelocity().SizeSquared2D() > 25.f * 25.f;
-			if (!bWalking && (Dz < -250.f || Dz > 450.f))
+			if (!Cw0->bVirtualCrowdBody && !bWalking && (Dz < -250.f || Dz > 450.f)) // crowd-bodies ook off-screen NOOIT cullen (anti-churn pariteit)
 			{
-				if (++Cw0->DespawnStrikes >= 2)
+				if (++Cw0->DespawnStrikes >= 30) // ~30s continu off-screen + vast voordat 'ie weggaat (was 2s)
 				{
 					Cw0->Destroy();
 					Spawned.RemoveAt(wi);
@@ -510,7 +511,7 @@ void ACustomerSpawner::TrySpawn()
 						St.Stall = 0;
 						// Thuisgekomen (terugweg helemaal afgelegd): binnen despawnen - de
 						// woningen-pass zet later een verse bewoner neer (kringloop).
-						if (St.bHomeward && St.EntryIdx >= St.Entry.Num())
+						if (St.bHomeward && St.EntryIdx >= St.Entry.Num() && !Cw->bVirtualCrowdBody)
 						{
 							Cw->Destroy();
 						}

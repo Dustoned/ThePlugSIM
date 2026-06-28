@@ -74,7 +74,8 @@ protected:
 	TArray<FVector> JointSpots;                                          // gecachete prullenbak/bankje-locaties
 	TArray<TWeakObjectPtr<class AWorldItemPickup>> ScatteredJoints;      // levende gescatterde joints
 	int32 MaxScatteredJoints = 80;                                      // bovengrens op de map (tunable)
-	int32 JointTarget = 0;                                              // natuurlijk doel-aantal van de scatter (~0.6*spots*1.5)
+	int32 JointTarget = 0;                                              // huidig doel-aantal (level-geschaald)
+	int32 LevelJointTarget() const;                                     // doel-aantal joints o.b.v. speler-level (~12%->60% v/d spots)
 	FTimerHandle JointRespawnTimer;
 	void ScatterJoints();                                              // one-time: vind spots + vul tot de cap
 	void TopUpJoints();                                                // respawn-tick: dode prunen + bijvullen tot cap
@@ -167,6 +168,7 @@ protected:
 		int32 PrevIdx = -1;
 		bool bStripLover = false; // blijft het liefst op de main strip (oost-zone)
 		TWeakObjectPtr<class ACustomerBase> Body;
+		int32 RerolledGen = 0; // welke crowd-rotatie-generatie deze walker al heeft (voor de dagelijkse re-skin)
 	};
 	TArray<FVirtualWalker> Crowd;
 	// 's Nachts loopt er een KLEINERE, zwaarder verslaafde crowd buiten (junkies/kopers); overdag de volle 70.
@@ -175,6 +177,8 @@ protected:
 	// POOL van geparkeerde (verborgen) crowd-lichamen: een ver-weg-lichaam wordt geparkeerd i.p.v. vernietigd
 	// en hergebruikt bij her-materialiseren -> elke NPC wordt maar 1x modulair gebouwd (geen rebuild-hitch).
 	UPROPERTY() TArray<TObjectPtr<class ACustomerBase>> CrowdPool;
+	UPROPERTY() TArray<TObjectPtr<class ACustomerBase>> CrowdBodies; // STERKE ref naar gematerialiseerde crowd-bodies -> niet-geadopteerde GCen niet weg (anti-churn)
+	int32 LastCrowdDay = -1; int32 CrowdRerollGen = 0; // dagelijkse crowd-identiteit-rotatie (off-screen re-skin uit de ~250-pool)
 	void TickVirtualCrowd();      // ~0.5s: lichamen materialiseren/opruimen (traces + spawns - DUUR)
 	void TickVirtualMove();       // 10x per seconde: vloeiende data-stapjes (alleen rekenwerk)
 	int32 CrowdSubTick = 0;       // throttle: TickVirtualCrowd maar 1x per N TickVirtualMove-calls (geen 10Hz-spawn-cascade)

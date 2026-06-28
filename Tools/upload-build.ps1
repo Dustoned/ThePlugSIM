@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Proj    = "C:\Users\Dustoned\Documents\Unreal Projects\ThePlugSIM - Claude"
 $UProj   = Join-Path $Proj "ThePlugSIM.uproject"
-$UAT     = "D:\UE\UE_5.7\Engine\Build\BatchFiles\RunUAT.bat"
+$UAT     = "C:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\RunUAT.bat"
 $Archive = Join-Path $Proj "Build\Archive"
 $Repo    = "Dustoned/ThePlugSIM"
 $Ini     = Join-Path $Proj "Config\DefaultDeviceProfiles.ini"
@@ -97,7 +97,7 @@ foreach ($q in $Qualities) {
 
     # Visual C++ runtime-installer meebundelen: zonder die runtime start een UE-game niet
     # (VCRUNTIME140-fout). Vrienden draaien 'm een keer als de game niet opstart.
-    $Redist = "D:\UE\UE_5.7\Engine\Extras\Redist\en-us\vc_redist.x64.exe"
+    $Redist = "C:\Program Files\Epic Games\UE_5.8\Engine\Extras\Redist\en-us\vc_redist.x64.exe"
     if (Test-Path $Redist) {
         Copy-Item $Redist (Join-Path $WinDir "vc_redist.x64.exe") -Force
         $ReadmeTxt = "ThePlugSIM`r`n`r`nStarten: dubbelklik ThePlugSIM.exe`r`n`r`nStart de game niet (foutmelding over VCRUNTIME140 of een ontbrekende .dll)?`r`nVoer dan eerst vc_redist.x64.exe uit (Microsoft Visual C++ runtime) en start de game opnieuw.`r`n"

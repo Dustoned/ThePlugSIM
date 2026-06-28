@@ -96,8 +96,8 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
 	FirstPersonCameraComponent->SetRelativeLocation(FVector(8.f, 0.f, 70.f));
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
-	FirstPersonCameraComponent->bEnableFirstPersonFieldOfView = true;
-	FirstPersonCameraComponent->bEnableFirstPersonScale = true;
+	FirstPersonCameraComponent->bEnableFirstPersonFieldOfView = false; // TEST: aparte FP-FOV (70) tekent je zichtbare FP-voeten op een ander schermpunt dan je wereld-schaduw -> schaduw lijkt los van de voeten. Uit = FP-mesh op de gewone camera-FOV = voet valt samen met de schaduw. Kost: FP-armen/held-item ander uiterlijk. FP-FOV UIT: armen renderen op je WERELD-FOV (bv 120) zodat ze bij het lichaam passen (70 gaf mismatch). Alleen FP-scale (0.6, regel hieronder) aan zodat de armen niet enorm/dichtbij zijn.
+	FirstPersonCameraComponent->bEnableFirstPersonScale = true;       // idem: de 0.6-schaal verschoof de FP-voeten ook; uit = wereld-schaal
 	FirstPersonCameraComponent->FirstPersonFieldOfView = 70.0f;
 	FirstPersonCameraComponent->FirstPersonScale = 0.6f;
 
@@ -594,9 +594,10 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 	if (FirstPersonMesh)
 	{
 		FirstPersonMesh->SetSkeletalMeshAsset(Skin);
-		// Hoofd verbergen kan veilig: de camera zit op de capsule, niet meer op deze head-bone.
-		static const TCHAR* HeadBones[] = { TEXT("head"), TEXT("Head") };
-		for (const TCHAR* B : HeadBones)
+		// Verberg ALLEEN het hoofd (anders zie je je eigen kop). De nek + rest blijven, zodat je bij omlaag kijken
+		// een COMPLEET lichaam ziet (geen gat in je nek). De camera volgt nu je hoofd, dus de nek blobt niet meer.
+		static const TCHAR* HideBones[] = { TEXT("head"), TEXT("Head") };
+		for (const TCHAR* B : HideBones)
 		{
 			if (FirstPersonMesh->GetBoneIndex(FName(B)) != INDEX_NONE)
 			{
@@ -768,39 +769,89 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	// loop-bob). Smoothing ertussen -> vloeiende sprong-beweging. Alleen de lokale speler.
 	if (IsLocallyControlled() && FirstPersonCameraComponent && GetCharacterMovement())
 	{
+		// FP-camera: VASTE ooghoogte (stabiel) + procedurele loop-bob. GEEN head-bone-tracking (die jitterde door
+		// root-motion/animatie: DesiredRelZ sprong 55<->122). Tijdens een sprong stijgt de camera vanzelf mee met de
+		// capsule -> blijft op ooghoogte t.o.v. het lichaam (geen aparte lift meer nodig).
+		const float EyeHeight = 62.f; // ooghoogte capsule-relatief op de GROND. TUNEBAAR.
 		const bool bAir = GetCharacterMovement()->IsFalling();
-		const float DesiredRelZ = bAir ? (70.f + JumpCamLift) : 70.f;
-		FVector RelLoc = FirstPersonCameraComponent->GetRelativeLocation();
-		RelLoc.Z = FMath::FInterpTo(RelLoc.Z, DesiredRelZ, DeltaSeconds, bAir ? 14.f : 9.f);
+		const float CamX = (PlayerSkin <= 1 || PlayerSkin == 5) ? 22.f : 8.f; // FP-camera voor-offset per skin (mannequin breder)
+
+		// De camera zit ECHT op je hoofd: we lezen de head-bone van de FP-mesh (owner-zichtbaar -> animeert ALTIJD;
+		// de body-mesh is voor jou verborgen en tickt in singleplayer NIET -> bevroren ref-pose, daarom deed 't eerder niks).
+		// De camera volgt de NATUURLIJKE hoofdbeweging van de animatie -> echte head-bob bij lopen + automatisch correct
+		// bij springen (je lichaam schuift nooit in beeld). Rotatie blijft van de muis (bUsePawnControlRotation).
+		FVector HeadCapNow = GroundHeadCap; bool bHaveHead = false;
+		if (FirstPersonMesh && FirstPersonMesh->GetBoneIndex(FName("head")) != INDEX_NONE)
+		{
+			HeadCapNow = FVector(GetCapsuleComponent()->GetComponentTransform().InverseTransformPosition(FirstPersonMesh->GetSocketLocation(FName("head"))));
+			bHaveHead = true;
+		}
+		// Stilstaande grond-pose als referentie (traag -> middelt de loop-bob eruit i.p.v. 'm na te jagen).
+		if (!bAir && bHaveHead) { GroundHeadCap = FMath::VInterpTo(GroundHeadCap, HeadCapNow, DeltaSeconds, 3.f); }
+
+		// Verplaatsing van 't hoofd t.o.v. de stilstaande pose = natuurlijke head-bob (lopen) + sprong-beweging.
+		// Head-bob UIT (telefoon-setting): op de grond geen bob (stabiel), maar in de lucht volgt de camera nog steeds
+		// je hoofd zodat je lichaam niet in beeld komt bij een sprong.
+		const bool bBobOn = Phone ? Phone->GetHeadBob() : true;
+		FVector TargetOff = FVector::ZeroVector;
+		if (bHaveHead && (bAir || bBobOn)) { TargetOff = HeadCapNow - GroundHeadCap; }
+		// In de LUCHT schalen we 't laterale (Y) volgen met je KIJKRICHTING: kijk je VOORUIT dan volgen we Y niet
+		// (anders rukt de zijwaartse jump-anim-pop de camera opzij - "jerkt naar links"; je lichaam zit dan toch onder
+		// beeld). Kijk je OMLAAG (naar je lichaam) dan volgen we Y VOLLEDIG, zodat je lichaam op z'n plek blijft en je
+		// 'm gewoon de sprong-animatie ziet doen i.p.v. weg te zwiepen. Z (sprong+bob) en X (anti-"achter je rug") altijd.
+		if (bAir)
+		{
+			const float Pitch = FRotator::NormalizeAxis(GetControlRotation().Pitch);
+			TargetOff.Y *= FMath::GetMappedRangeValueClamped(FVector2D(-45.f, -12.f), FVector2D(1.f, 0.f), Pitch);
+			// De GASP-jump trekt je schouders/bovenlijf tot bóven je hoofd; head-tracking alleen is dan niet hoog genoeg.
+			// Extra OMHOOG als je VOORUIT/level kijkt -> je optrekkende lichaam blijft onder de voorwaartse view. Omlaag
+			// kijkend GEEN extra lift (dan zie je je lichaam gewoon normaal op ooghoogte). Vloeiend tussen via de pitch.
+			TargetOff.Z += 18.f * FMath::GetMappedRangeValueClamped(FVector2D(-38.f, -8.f), FVector2D(0.f, 1.f), Pitch);
+		}
+		SmoothedJumpOff = FMath::VInterpTo(SmoothedJumpOff, TargetOff, DeltaSeconds, bAir ? 14.f : 20.f);
+
+		FVector RelLoc;
+		RelLoc.X = CamX + SmoothedJumpOff.X;            // volg ook voor/achter -> nooit "achter je rug"
+		RelLoc.Y = SmoothedJumpOff.Y;                   // lateraal mee met 't hoofd
+		RelLoc.Z = EyeHeight + SmoothedJumpOff.Z;       // verticaal: echte head-bob + sprong
 		FirstPersonCameraComponent->SetRelativeLocation(RelLoc);
 	}
 
 	// LOKALE speler: de template-ABP-idle staat scheef (1 voet voor). Bij stilstaan spelen we een symmetrische
 	// idle (single-node); zodra je beweegt/springt/telefoneert terug naar de locomotie-ABP. Alleen op state-wissel
 	// (geen per-frame gethrash) - zelfde patroon als de proxy-texting-switch in UpdateProxyAnim.
-	if (IsLocallyControlled() && bBodyHasLocoAbp && LocalIdleAnim)
+	if (IsLocallyControlled() && bBodyHasLocoAbp)
 	{
-		// Speel de symmetrische idle als een DYNAMISCHE MONTAGE met blend-in/out (0.25s) OVER de loop-ABP heen
-		// (op de 'DefaultSlot'). Zo blendt idle<->lopen vloeiend i.p.v. de harde single-node-switch. De ABP blijft
-		// in Blueprint-modus draaien. (Vereist dat de ABP een DefaultSlot heeft; zo niet, dan toont de montage niks.)
+		// Speel de symmetrische idle (stilstaan) OF een RUSTIGE fall-loop (sprong) als DYNAMISCHE MONTAGE op de
+		// 'DefaultSlot' OVER de loco-ABP heen. Voor de sprong bypasst dit de schokkerige GASP-jump-start (MM_Jump),
+		// die je lichaam opzij/omhoog rukte; in plaats daarvan een kalme MM_Fall_Loop -> geen jerk in de lucht.
+		// De ABP blijft in Blueprint-modus draaien. (Vereist een DefaultSlot in de ABP; zo niet, montage toont niks.)
 		if (UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
 		{
 			const bool bMoving = GetVelocity().SizeSquared2D() > 100.f; // > ~10 cm/s
 			const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
 			bool bPhone = false;
 			if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
-			const int32 Want = (!bMoving && !bFalling && !bPhone) ? 1 : 0;
+			// 2 = sprong/val (kalme fall-pose), 1 = stilstaan (symmetrische idle), 0 = loco-ABP (lopen/rennen).
+			int32 Want = 0;
+			if (bFalling && ProxyJump) { Want = 2; }
+			else if (!bMoving && !bPhone && LocalIdleAnim) { Want = 1; }
 			if (Want != LocalIdleState)
 			{
 				LocalIdleState = Want;
 				if (Want == 1)
 				{
 					UAnimMontage* IdleM = AnimInst->PlaySlotAnimationAsDynamicMontage(LocalIdleAnim, FName("DefaultSlot"), 0.25f, 0.25f, 1.0f, 99999);
-					// KRITISCH: de idle-montage mag je character-beweging NIET sturen. GASP-clips hebben root motion;
-					// die zou (staande idle) je op je plek houden -> je kunt niet weglopen. Uitzetten op de montage.
+					// KRITISCH: root motion uit (GASP-clips hebben root motion; die zou je op je plek houden).
 					if (IdleM) { IdleM->bEnableRootMotionTranslation = false; IdleM->bEnableRootMotionRotation = false; }
 				}
-				else { AnimInst->StopAllMontages(0.25f); } // blend vloeiend terug naar de loop-ABP
+				else if (Want == 2)
+				{
+					// Kalme fall-loop i.p.v. de schokkerige jump-start. Snelle blend-in (0.1s) om de pop af te vangen.
+					UAnimMontage* FallM = AnimInst->PlaySlotAnimationAsDynamicMontage(ProxyJump, FName("DefaultSlot"), 0.1f, 0.2f, 1.0f, 99999);
+					if (FallM) { FallM->bEnableRootMotionTranslation = false; FallM->bEnableRootMotionRotation = false; }
+				}
+				else { AnimInst->StopAllMontages(0.2f); } // blend vloeiend terug naar de loco-ABP
 			}
 		}
 	}
@@ -1255,6 +1306,16 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 		return;
 	}
 
+	// Sample-cooldown: voorkom dat je een NPC instant maxet met een stapel joints (per-NPC, dag-cyclus-tijd).
+	if (AWeedShopGameState* GScd = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (GScd->GetNpcRegistry() && !Customer->NpcId.IsNone() && GScd->GetNpcRegistry()->IsOnSampleCooldown(Customer->NpcId))
+		{
+			if (GEngine) { UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Orange, TEXT("They're still smoking the last one - give it a minute.")); }
+			return;
+		}
+	}
+
 	// Een sample is een gedraaide joint - hier de gekozen/vastgehouden joint-id.
 	const FName BestJoint = JointId.ToString().StartsWith(TEXT("Joint_")) ? JointId : NAME_None;
 	const int32 BestGrams = BestJoint.IsNone() ? 0 : UInventoryComponent::JointGrams(BestJoint); // "Joint_SilverHaze_3g" -> 3
@@ -1274,9 +1335,11 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 	// Effectieve kwaliteit = wiet-kwaliteit geschaald met het aantal gram (zelfde formule als de
 	// joint-sterkte): een dun jointje voelt zwakker en bindt/verslaaft daardoor minder.
 	const float Quality = UPhoneClientComponent::JointIntensity(BestGrams, 0.f, WeedQ * 100.f);
-	float LoyGain = 4.f + Quality * 12.f;   // top-joint ~16, brak ~4
-	float AddGain = 3.f + Quality * 9.f;    // slechte wiet verslaaft nauwelijks
-	float RespGain = 1.f + Quality * 4.f;
+	// Joints zijn er VOORAL om te verslaven (de haak). Verslaving = hoofd-gain; loyaliteit/respect verdien
+	// je via VERKOOP, dus een gratis joint geeft daar hooguit een vleugje van.
+	float AddGain = 4.f + Quality * 12.f;   // VERSLAVING dominant (top-joint ~16, brak ~4)
+	float LoyGain = Quality * 3.f;          // alleen een vleugje goodwill bij goeie wiet (top ~3)
+	float RespGain = Quality * 2.5f;        // beetje respect voor goeie wiet (top ~2.5)
 
 	// Kieskeurigheid: weinig-verslaafde mensen (locals/kenners) lusten geen slappe joint.
 	const bool bPicky = Customer->Addiction < 20.f;
@@ -1298,6 +1361,7 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 		{
 			GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R + RespGain, L + LoyGain, A + AddGain);
 		}
+		GS->GetNpcRegistry()->MarkSampled(Customer->NpcId); // start de per-NPC sample-cooldown
 	}
 	Customer->Respect = FMath::Clamp(Customer->Respect + RespGain, 0.f, 100.f);
 	Customer->Loyalty = FMath::Clamp(Customer->Loyalty + LoyGain, 0.f, 100.f);
@@ -1447,7 +1511,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		// Third-person lichaam (wat co-op-spelers van JOU zien) op de capsule-BODEM zetten: zonder offset
 		// staat de mesh op het capsule-midden -> voeten zweven ~96cm (co-op "zwevende speler"). In BeginPlay
 		// (na spawn) zodat het de spawn-collision niet raakt.
-		M->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f));
+		M->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -98.f), FRotator(0.f, -90.f, 0.f)); // -98 i.p.v. -96: 2cm ONDER de capsule-bodem -> voeten op de vloer i.p.v. zwevend. CharacterMovement houdt de capsule ~2cm boven de grond (MAX_FLOOR_DIST); zonder deze compensatie zweeft de schaduw los van de voeten bij een lage zon. Zelfde 2cm-truc als de NPC's (-90 vs -88 capsule).
 		// (De walk/idle/jump-fallback voor ANDERE spelers wordt lazy aangezet in UpdateProxyAnim zodra die
 		//  pawn niet-lokaal blijkt - werkt zo op host EN client, ongeacht Authority/SimulatedProxy.)
 	}

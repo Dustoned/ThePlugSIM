@@ -266,6 +266,10 @@ void UMapWidget::BuildBlocks()
 	// blok-labels/huisnummers, wel speler/waypoint/NPC-dots + klik-voor-waypoint.
 	if (!City.IsValid() && PackMap.IsValid())
 	{
+		// EERST capturen: dat draait EnsureMapCapture, dat MapCenter/MapOrtho BEREKENT. Lazen we GetMapCenter()
+		// ervóór (zoals eerst), dan kreeg de 1e map-open de DEFAULT (0,0)/60000 -> CenterXY/MapCenterFull scheef =
+		// markers "ernaast". 2e open had MapCenter al berekend = goed. Nu vóór het lezen capturen = 1e open óók goed.
+		PackMap->CaptureMapNow();
 		CenterXY = PackMap->GetMapCenter();
 		Scale = GMapDS / FMath::Max(1.f, PackMap->GetMapOrthoWidth());
 		// Zoombaar: standaard DICHT op de speler (view ~3,5km breed), scrollwiel tot de hele ring.
@@ -274,7 +278,6 @@ void UMapWidget::BuildBlocks()
 		bZoomable = true;
 		Zoom = FMath::Clamp((GMapDS / Scale0) / 350000.f * 20.f, 6.f, 40.f);
 		if (Canvas) { Canvas->SetClipping(EWidgetClipping::ClipToBounds); }
-		PackMap->CaptureMapNow();
 		PlayerDot = AddPlayerMarker(); // jij: groot wit baken met blauw poppetje
 		WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
 		if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }

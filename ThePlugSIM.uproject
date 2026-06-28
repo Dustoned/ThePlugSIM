@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "ThePlugSIM_D",
+	"EngineAssociation": "PlugSIM_58",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -51,9 +51,8 @@
 			]
 		},
 		{
-			"Name": "Nwiro",
-			"Enabled": true,
-			"MarketplaceURL": "com.epicgames.launcher://ue/Fab/product/22e3bc90-ed91-4154-8bea-21c33e6a51b7"
+			"Name": "UnrealClaude",
+			"Enabled": true
 		}
 	]
 }

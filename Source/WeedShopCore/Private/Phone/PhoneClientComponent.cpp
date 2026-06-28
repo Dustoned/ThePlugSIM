@@ -176,6 +176,7 @@ void UPhoneClientComponent::LoadGameSettings()
 	GConfig->GetFloat(TEXT("ThePlugSIM.Game"), TEXT("MouseSensitivity"), Sens, GGameUserSettingsIni);
 	LookSensitivity = FMath::Clamp(Sens, 0.1f, 4.f);
 	ApplyFov(Fov);
+	bool bBob = true; GConfig->GetBool(TEXT("ThePlugSIM.Game"), TEXT("HeadBob"), bBob, GGameUserSettingsIni); bHeadBob = bBob;
 }
 
 void UPhoneClientComponent::ApplyFov(float NewFov)
@@ -196,6 +197,13 @@ void UPhoneClientComponent::SetLookSensitivity(float S)
 {
 	LookSensitivity = FMath::Clamp(S, 0.1f, 4.f);
 	GConfig->SetFloat(TEXT("ThePlugSIM.Game"), TEXT("MouseSensitivity"), LookSensitivity, GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
+}
+
+void UPhoneClientComponent::SetHeadBob(bool bOn)
+{
+	bHeadBob = bOn;
+	GConfig->SetBool(TEXT("ThePlugSIM.Game"), TEXT("HeadBob"), bHeadBob, GGameUserSettingsIni);
 	GConfig->Flush(false, GGameUserSettingsIni);
 }
 

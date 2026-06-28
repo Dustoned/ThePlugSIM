@@ -128,6 +128,107 @@ void WeedShop_ApplyVSM(bool bOff)
 	UE_LOG(LogWeedShop, Warning, TEXT("Virtual Shadow Maps %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
 }
 
+// Distance-field-AO + global distance field aan/uit. Op grote maps (de stad-beach) bouwen die runtime een
+// enorme brick-atlas (DistanceFieldBrickTexture, tienduizenden bricks) zodra de shadow/AO-pass aangaat ->
+// "Out of video memory" terwijl de GPU grotendeels leeg is (reserved-buffer-allocatie faalt). Geen GI-
+// feature die we onder Epic nodig hebben. Console-prio zodat de scalability-slider 'm niet kan aanzetten.
+void WeedShop_ApplyDistanceFieldGI(bool bOff)
+{
+	IConsoleManager& CM = IConsoleManager::Get();
+	auto SetI = [&](const TCHAR* Name, int32 Val)
+	{
+		if (IConsoleVariable* CV = CM.FindConsoleVariable(Name)) { CV->Set(Val, ECVF_SetByConsole); }
+	};
+	SetI(TEXT("r.DistanceFieldAO"),        bOff ? 0 : 1);
+	SetI(TEXT("r.AOGlobalDistanceField"),  bOff ? 0 : 1);
+	// KRITISCH: de shadow-kwaliteit-slider zet op hoog/epic via scalability r.DistanceFieldShadowing AAN ->
+	// distance-field-shadows bouwen dezelfde brick-atlas -> OOM. Console-prio uit zodat de slider 'm niet aanzet.
+	SetI(TEXT("r.DistanceFieldShadowing"), bOff ? 0 : 1);
+	UE_LOG(LogWeedShop, Warning, TEXT("Distance-field GI %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
+}
+
+// Open beach draait op gewone CSM-schaduwen (VSM staat uit ivm de VRAM-crash). Default-CSM op die map is
+// zuinig: NPC's/kleine props worden weggeculld (RadiusThreshold) en de resolutie/cascades zijn laag ->
+// slechte uitlijning + geen NPC-schaduw. Hier tillen we dat op. Plus de volumetrische wolken iets goedkoper
+// (raysamples) want die zijn de grote lag-bron als je naar de zon kijkt. Alles console-prio zodat de
+// scalability-slider deze niet platdrukt.
+void WeedShop_ApplyBeachShadowQuality(bool bPotato)
+{
+	IConsoleManager& CM = IConsoleManager::Get();
+	auto SetF = [&](const TCHAR* Name, float Val)
+	{
+		if (IConsoleVariable* CV = CM.FindConsoleVariable(Name)) { CV->Set(Val, ECVF_SetByConsole); }
+	};
+	SetF(TEXT("r.Shadow.RadiusThreshold"),         bPotato ? 0.03f : 0.01f);   // los HOOFD-mesh is klein -> op 0.08 werd z'n schaduw gecullt = koploze NPC-schaduw. 0.03 houdt koppen van NPC's dichtbij; echt verre/mini-casters vallen nog steeds af.
+	// r.ShadowQuality is het ENIGE dat de shadow-slider nog verandert (medium=3, high/epic=5). Die 5 = maximale
+	// PCF-filtering over de hele stad in beeld = de "super laggy richting de zon". Cap op 3 (speelbaar niveau)
+	// zodat high/epic ~even soepel als medium worden; de schaduw-look verschilt nauwelijks.
+	SetF(TEXT("r.ShadowQuality"),                        3.f);
+	SetF(TEXT("r.Shadow.MaxCSMResolution"),              2048.f);  // scherpere zon-schaduw
+	SetF(TEXT("r.Shadow.MaxResolution"),                 2048.f);
+	SetF(TEXT("r.Shadow.CSM.MaxCascades"),               4.f);     // betere dekking/uitlijning over de open map
+	SetF(TEXT("r.Shadow.CSM.TransitionScale"),           1.f);     // zachtere cascade-overgangen
+	// High/Epic verlengen via scalability de schaduw-AFSTAND -> bij een lage zon cast de hele stad schaduw
+	// (duizenden casters in beeld) -> zware lag richting de zon. Cap de afstand zodat high/epic ~even soepel
+	// als medium presteren; nabije schaduwen (waar 't telt) blijven scherp op 2048/4-cascade.
+	SetF(TEXT("r.Shadow.DistanceScale"),                 0.75f);
+	SetF(TEXT("r.VolumetricCloud.ViewRaySampleMaxCount"),   384.f);// wolken iets goedkoper richting de zon
+	SetF(TEXT("r.VolumetricCloud.ShadowViewRaySampleMaxCount"), 32.f);
+	// === VSM SMOOTH MOVING-SUN (Fortnite-recept, geverifieerd tegen UE5.8-bron) ===  De zon beweegt nu VLOEIEND
+	// (DriveUDS-throttle bijna weg). VSM gooit z'n directional-cache elk frame weg zodra de zon roteert - dat is de
+	// BEDOELDE werking; Epic verwierp throttling expliciet ("te veel artefacten op page-grenzen" = ons getik). Je
+	// maakt 't betaalbaar door de MOVING-sun-schaduw op LAGERE resolutie te zetten (de "halve res"-truc) + force-
+	// invalidate (skip cache-bookkeeping voor de zon, die cachet toch nooit). De flikker zat in de 512-pool (nu 8192),
+	// NIET in de bewegende zon - daarom kan de throttle weg zonder dat de flikker terugkomt. Console-prio, beach-only.
+	SetF(TEXT("r.Shadow.Virtual.Cache"),                              1.f);   // caching aan (lokale lampen/statische wereld)
+	SetF(TEXT("r.Shadow.Virtual.Cache.StaticSeparate"),              1.f);   // statische wereld los cachen van de bewegende zon -> gebouwen flikkeren niet mee
+	SetF(TEXT("r.Shadow.Virtual.MaxPhysicalPages"),              8192.f);    // ruime page-pool = geen thrash/flikker (~512MB VRAM, niks op een 4080). DIT hield de flikker weg.
+	SetF(TEXT("r.Shadow.Virtual.Cache.ForceInvalidateDirectional"),   1.f);  // AAN (terug na live-test): met 0 (cache op statische-zon-frames) gingen de BEWEGENDE NPC-schaduwen FLIKKEREN (dynamische casters niet elk frame geïnvalideerd). 1 = directional elk frame hertekenen = NPC-schaduwen smooth. Kost ~1ms; die winst moet ergens anders vandaan (decals/lamp-count/game-thread), NIET hier.
+	// === SCHERPTE schaalt met de "Shadows"-setting (sg.ShadowQuality 0..3) === Die slider werkte op de beach niet:
+	// hij zet CSM-cvars (niets voor VSM) en mijn config overschreef 'm. Nu stuurt 'ie de VSM-RESOLUTIE-bias. Flicker-
+	// veilige basis per render-res: potato draait op 42% -> bias mag niet positief (page-grens-popping); volle res mag
+	// +1 (goedkoop). De Shadows-setting maakt 't vanaf daar scherper: elke stap 0.5 lager = ~hogere VSM-resolutie.
+	int32 ShadowQ = 2; // default ~High als er nog geen settings zijn
+	if (UGameUserSettings* GU = GEngine ? GEngine->GetGameUserSettings() : nullptr) { ShadowQ = FMath::Clamp(GU->GetShadowQuality(), 0, 3); }
+	const float BaseBias = bPotato ? -0.5f : 1.0f;  // potato-Low naar -0.5 (meer VSM-res): bij een LAGE/scherende zon vallen de dunne delen (kop) van de lange schaduw niet meer tussen de texels. Hogere res = FIJNERE pages = ook MINDER popping, geen nieuwe flikker.
+	const float MoveBias = BaseBias - 0.5f * (float)ShadowQ;    // potato: -0.5/-1/-1.5/-2 ; volle res: +1/+0.5/0/-0.5 (Low..Epic)
+	SetF(TEXT("r.Shadow.Virtual.ResolutionLodBiasDirectionalMoving"), MoveBias);                  // smooth blijft (de 0.05-throttle bepaalt dat, niet de res)
+	SetF(TEXT("r.Shadow.Virtual.ResolutionLodBiasDirectional"),       FMath::Min(MoveBias, 0.f)); // stilstaande zon minstens zo scherp
+	SetF(TEXT("r.Shadow.Scene.LightActiveFrameCount"),               12.f);                       // soepel terugblenden naar scherp zodra de zon vertraagt/stopt
+	// SMRT-rays AAN, ÓÓK op potato-Low: met 0 rays = harde 1-tap schaduw -> op 42% render-res vallen dunne delen
+	// (kop, heupen) tussen de texels = ontbrekende stukken + shimmer in de bewegende NPC-schaduw. SMRT = multi-tap =
+	// zachte, COMPLETE schaduw. SMRT is GPU-kost en de GPU duimt (8ms) -> gratis t.o.v. de render-thread-bottleneck.
+	const float Rays = bPotato ? (6.f + 2.f * (float)ShadowQ) : (4.f + 4.f * (float)ShadowQ);     // potato 6/8/10/12 ; volle 4/8/12/16
+	SetF(TEXT("r.Shadow.Virtual.SMRT.RayCountDirectional"),          Rays);
+	SetF(TEXT("r.Shadow.Virtual.SMRT.SamplesPerRayDirectional"),     4.f);                          // 4 samples (was 2 op potato) = gladdere penumbra -> minder shimmer/flikker + vult dunne delen (GPU-kost, GPU duimt)
+	// CONTACT / PETER-PANNING: de schaduw moet AAN de voeten plakken, niet zweven. De engine-defaults (NormalBias 0.5,
+	// RayLengthScaleDirectional 1.5) duwen de schaduw van het contactpunt weg -- erger bij een lage scherende zon, en onze
+	// gehalveerde samples (4 i.p.v. 8) onderbemonsteren het contact-eind. Lager = schaduw plakt weer aan de voeten (player + alle NPCs).
+	SetF(TEXT("r.Shadow.Virtual.NormalBias"),                      0.25f); // 0.5 default -> halveert het zweef-gat; niet onder ~0.15 (dan acne)
+	SetF(TEXT("r.Shadow.Virtual.SMRT.RayLengthScaleDirectional"), 0.8f);  // 1.5 default -> strakkere penumbra bij het contactpunt met onze 4 samples
+	UE_LOG(LogWeedShop, Warning, TEXT("Beach-schaduw: smooth VSM (pool 8192, ShadowQ %d, moving-bias %.1f, rays %.0f, %s)"), ShadowQ, MoveBias, Rays, bPotato ? TEXT("potato/42%") : TEXT("full-res"));
+}
+
+// Beach-schaduw-GATE per tier. Gedeeld door BeginPlay + de Preset-rij + de losse settings, zodat ELKE tier-wissel
+// de schaduwen opnieuw + deterministisch toepast (console-prio overschrijft scalability, dus de vorige stand moet
+// expliciet teruggezet worden). Potato = schaduwen UIT (VSM uit + CSM-zon uit); Low en hoger = VSM smooth-sun.
+void WeedShop_ApplyBeachShadows(bool bPotato)
+{
+	// Potato = schaduwen UIT (maximaal barebones: VSM uit, dus geen page-pool gealloceerd). Low en hoger = VSM smooth-sun.
+	// LET OP: r.Shadow.Virtual.Enable kan niet betrouwbaar LIVE togglen (de pool alloceert 1x) -> over de Potato-grens OMHOOG
+	// wisselen vergt een HERSTART voor de schaduwen (speler-keuze: max barebones boven live-wisselen). Naar Potato werkt wel live.
+	if (bPotato)
+	{
+		WeedShop_ApplyVSM(true); // VSM uit (geen pool)
+		if (IConsoleVariable* CV = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ShadowQuality"))) { CV->Set(0.f, ECVF_SetByConsole); } // CSM-zon ook uit = geen schaduw
+	}
+	else
+	{
+		WeedShop_ApplyVSM(false);                // VSM aan
+		WeedShop_ApplyBeachShadowQuality(false); // zet r.ShadowQuality terug op 3
+	}
+}
+
 // Ray-tracing-EFFECTEN aan/uit. r.RayTracing zelf is een opstart-CVar (niet live te schakelen), maar de
 // effecten (schaduwen/reflecties/AO/GI via RT) wel - en die zijn de render-thread-kost. ForceRayTracingEffects=0
 // zet ze allemaal uit; de losse schakelaars als extra zekerheid. -1 = terug naar de standaard (effecten aan).
@@ -169,15 +270,30 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	// Potato = alles zo laag mogelijk BOVENOP scalability 0 (nog agressiever voor echt zwakke pc's);
 	// anders terug naar normale waardes.
 	SetF(TEXT("r.ScreenPercentage"),     bPotato ? 42.f   : 100.f);  // render op ~42% resolutie
-	SetF(TEXT("r.Streaming.MipBias"),    bPotato ? 3.0f   : 0.f);    // veel lagere-res textures runtime
-	SetF(TEXT("r.Streaming.PoolSize"),   bPotato ? 250.f  : 1000.f); // kleine texture-pool (VRAM)
+	SetF(TEXT("r.Streaming.MipBias"),    bPotato ? 3.0f : (Tier == 0 ? 1.5f : (Tier == 1 ? 0.5f : 0.f))); // ramp 3/1.5/0.5/0/0    // veel lagere-res textures runtime
+	SetF(TEXT("r.Streaming.PoolSize"),   bPotato ? 250.f : (Tier == 0 ? 500.f : (Tier == 1 ? 800.f : (Tier == 2 ? 1200.f : 2000.f)))); // ramp; texture-pool-EFFECT pas na herstart // kleine texture-pool (VRAM)
 	// View-distance GRADUAAL per tier: schaalt ALLE cull-afstanden mee (NPC's, gebouwen/props-HISMs, foliage,
 	// algemene mesh-draw-distance). Lager = dichterbij cullen = meer FPS. Potato cullt agressief, Epic ziet ver.
 	const float ViewDist = bPotato ? 0.35f : (Tier == 0 ? 0.6f : (Tier == 1 ? 0.85f : (Tier == 2 ? 1.0f : 1.3f)));
 	SetF(TEXT("r.ViewDistanceScale"),    ViewDist);
-	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.2f   : 1.f);
-	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.2f   : 1.f);
-	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f    : 4.f);
+	SetF(TEXT("r.LightMaxDrawDistanceScale"), ViewDist); // lampen-cull-afstand schaalt mee met de view distance (potato cullt lampen dichterbij = grote Lighting-winst, behoudt nabije vibe)
+	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.2f : (Tier == 0 ? 0.5f : (Tier == 1 ? 0.75f : 1.f)));
+	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.2f : (Tier == 0 ? 0.5f : (Tier == 1 ? 0.75f : 1.f)));
+	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f : (Tier == 0 ? 2.f : (Tier == 1 ? 4.f : (Tier == 2 ? 8.f : 16.f)))); // ramp 0/2/4/8/16
+	SetF(TEXT("r.Decal.FadeScreenSizeMult"), bPotato ? 0.25f : (Tier <= 1 ? 0.6f : 1.f)); // LAGER = MEER cullen! De mult schaalt de schijnbare scherm-grootte (CurrentScreenSize=(R/Dist)*Mult); hoog hield decals juist LANGER in beeld -> 4.0 was OMGEKEERD (856 decals bleven renderen). 0.25 op potato = verre/sub-pixel decals vallen uit de decal-pass = ~2,5-3,5ms Draw eraf (geverifieerd tegen UE5.8 CalculateDecalFadeAlpha)
+
+	// === POST-STACK per tier (Potato = HARD UIT, dan oplopend). Bloom/AO/SSR/DoF/lensflare reden voorheen mee op
+	// scalability-0 (= NIET uit); nu expliciet per tier -> Potato echt barebones + elke tier reset deterministisch.
+	const int32 Q = bPotato ? 0 : (Tier + 1); // 0=Potato 1=Low 2=Med 3=High 4=Epic
+	SetF(TEXT("r.BloomQuality"),               Q <= 0 ? 0.f : (Q == 1 ? 2.f : (Q == 2 ? 4.f : 5.f)));        // Potato: bloom UIT
+	SetF(TEXT("r.AmbientOcclusionLevels"),     Q <= 1 ? 0.f : (Q == 2 ? 1.f : (Q == 3 ? 2.f : 3.f)));        // AO uit op Potato+Low
+	SetF(TEXT("r.AmbientOcclusionMaxQuality"), Q <= 1 ? 0.f : 100.f);
+	SetF(TEXT("r.SSR.Quality"),                Q <= 1 ? 0.f : (Q == 2 ? 1.f : (Q == 3 ? 2.f : 3.f)));        // screen-space reflections uit op Potato+Low
+	SetF(TEXT("r.DepthOfFieldQuality"),        Q <= 1 ? 0.f : (Q == 2 ? 1.f : 2.f));                         // DoF uit op Potato+Low
+	SetF(TEXT("r.SSGI.Quality"),               0.f);                                                          // screen-space GI ALTIJD uit (duur; Lumen doet GI op Epic)
+	SetF(TEXT("r.LensFlareQuality"),           Q <= 1 ? 0.f : 2.f);                                          // lens flare uit op Potato+Low
+	SetF(TEXT("r.SceneColorFringeQuality"),    Q <= 0 ? 0.f : 1.f);                                          // chromatic aberration uit op Potato
+	SetF(TEXT("r.PostProcessAAQuality"),       Q <= 0 ? 0.f : (Q == 1 ? 2.f : (Q == 2 ? 4.f : (Q == 3 ? 5.f : 6.f)))); // TSR-kwaliteit; methode blijft TSR = nette upscale van de 42% Potato-render-res
 
 	// --- LUMEN: de #1 GPU-kost. Alleen op EPIC. Potato/Low/Medium/High draaien zonder (de speler vindt
 	//     de Lumen-uit-look prima), wat op High ~20-25 FPS scheelt. Epic blijft de mooie-maar-dure optie.
@@ -198,7 +314,7 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	SetF(TEXT("r.Shadow.MaxResolution"),    bPotato ? 512.f : (Tier == 2 ? 2048.f : (bEpic ? 4096.f : 1024.f)));
 	SetF(TEXT("r.Shadow.CSM.MaxCascades"),  bPotato ? 2.f   : (Tier <= 1 ? 3.f : 4.f));
 	// Kleine/verre schaduwen wegcullen (perf, nauwelijks zichtbaar): hoger = meer cullen.
-	SetF(TEXT("r.Shadow.RadiusThreshold"),  bPotato ? 0.05f : (Tier == 2 ? 0.03f : 0.01f));
+	SetF(TEXT("r.Shadow.RadiusThreshold"),  bPotato ? 0.05f : (Tier == 0 ? 0.04f : (Tier == 1 ? 0.03f : (Tier == 2 ? 0.02f : 0.01f)))); // monotoon 0.05/0.04/0.03/0.02/0.01 (was niet-monotoon: High 0.03 cullde meer dan Med+Epic 0.01)
 
 	UE_LOG(LogWeedShop, Warning, TEXT("Graphics-tier: %s (scalability %d)"),
 		bPotato ? TEXT("POTATO") : (Scal == 0 ? TEXT("Low") : Scal == 1 ? TEXT("Medium") : Scal == 2 ? TEXT("High") : TEXT("Epic")), Scal);

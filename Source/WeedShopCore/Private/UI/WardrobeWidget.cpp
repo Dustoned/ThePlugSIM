@@ -211,6 +211,17 @@ void UWardrobeWidget::EnsurePreview()
 			Fill->SetIntensity(4000.f); Fill->SetAttenuationRadius(800.f);
 			Fill->SetLightColor(FLinearColor(0.85f, 0.9f, 1.f)); Fill->SetCastShadows(false);
 		}
+		// Vaste "player-view"-lamp aan de camera: sinds de UDS-integratie dimt de wereld-SkyLight bij nacht naar ~0.06,
+		// waardoor de preview donker werd. Deze lamp hangt aan de camera en verlicht de kloon altijd vol, onafhankelijk
+		// van dag/nacht/weer (alleen in de capture, niet in de wereld).
+		if (UPointLightComponent* ViewLamp = NewObject<UPointLightComponent>(Cap))
+		{
+			ViewLamp->SetupAttachment(Cap->GetRootComponent());
+			ViewLamp->RegisterComponent();
+			ViewLamp->SetRelativeLocation(FVector(0.f, 0.f, 25.f));
+			ViewLamp->SetIntensity(7000.f); ViewLamp->SetAttenuationRadius(1800.f);
+			ViewLamp->SetLightColor(FLinearColor(1.f, 0.97f, 0.92f)); ViewLamp->SetCastShadows(false);
+		}
 		PreviewCapture = Cap;
 	}
 	else if (PreviewActor.IsValid())

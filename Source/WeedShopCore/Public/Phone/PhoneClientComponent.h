@@ -123,10 +123,13 @@ public:
 	// Game-instellingen (lokaal toegepast + bewaard in config).
 	void ApplyFov(float NewFov);
 	void SetLookSensitivity(float S);
+	void SetHeadBob(bool bOn);
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
 	float GetFov() const { return FovValue; }
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
 	float GetLookSensitivity() const { return LookSensitivity; }
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Settings")
+	bool GetHeadBob() const { return bHeadBob; }
 	void LoadGameSettings(); // leest FOV/sensitivity uit config en past FOV toe
 
 	// --- ATM (in de wereld): open/sluit het ATM-scherm (bankieren + storten + overboeken) ---
@@ -964,6 +967,7 @@ protected:
 	bool bSettingsOpen = false;
 	float FovValue = 90.f;
 	float LookSensitivity = 1.f;
+	bool bHeadBob = true;
 
 	bool bMergeOpen = false;
 	FName MergeItemId = NAME_None;

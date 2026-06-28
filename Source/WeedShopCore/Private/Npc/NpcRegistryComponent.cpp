@@ -130,6 +130,7 @@ void UNpcRegistryComponent::EnsureSeeded()
 		return;
 	}
 	TSet<FString> UsedNames;
+	TArray<FString> BaseNames;
 	int32 RowIndex = 0;
 	for (const FName& RowName : NpcTable->GetRowNames())
 	{
@@ -138,6 +139,7 @@ void UNpcRegistryComponent::EnsureSeeded()
 		{
 			continue;
 		}
+		BaseNames.Add(Def->DisplayName.ToString());
 		FNpcState S;
 		S.NpcId = RowName;
 		FString UniqueName = ShortFullName(Def->DisplayName.ToString(), RowIndex);
@@ -156,6 +158,27 @@ void UNpcRegistryComponent::EnsureSeeded()
 		}
 		States.Add(S);
 		++RowIndex;
+	}
+	// Pool aanvullen tot ~250 zodat de straat-crowd dagelijks door genoeg verschillende mensen kan roteren.
+	// Procedureel: eigen NpcId (= eigen seed -> eigen skin + persoonlijkheid), naam = variant van een bestaande naam.
+	{
+		const int32 PoolTarget = 250;
+		int32 Pad = 0;
+		while (States.Num() < PoolTarget && BaseNames.Num() > 0)
+		{
+			const FName Id(*FString::Printf(TEXT("NpcGen%03d"), 101 + Pad));
+			FNpcState S;
+			S.NpcId = Id;
+			FString Nm = ShortFullName(BaseNames[Pad % BaseNames.Num()], 1000 + Pad);
+			for (int32 Try = 1; UsedNames.Contains(Nm); ++Try) { Nm = ShortFullName(BaseNames[Pad % BaseNames.Num()], 1000 + Pad + Try * 97); }
+			UsedNames.Add(Nm);
+			S.DisplayName = FText::FromString(Nm);
+			PredictPersonality(Id, S.Respect, S.Loyalty, S.Addiction);
+			FRandomStream Rng(static_cast<int32>(GetTypeHash(Id)) ^ 0x5bd1e995);
+			S.ValueMult = 0.6f + Rng.FRand() * 1.0f;
+			States.Add(S);
+			++Pad;
+		}
 	}
 	UE_LOG(LogWeedShop, Log, TEXT("NPC registry loaded: %d people."), States.Num());
 }
@@ -313,6 +336,20 @@ bool UNpcRegistryComponent::IsOnRefusalCooldown(FName NpcId) const
 	if (!S) { return false; }
 	const float Now = NowAbs();
 	return (S->LastRefusalAbs >= 0.f) && ((Now - S->LastRefusalAbs) < RefusalCooldownSeconds);
+}
+
+void UNpcRegistryComponent::MarkSampled(FName NpcId)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	if (FNpcState* S = Find(NpcId)) { S->LastSampleAbs = NowAbs(); }
+}
+
+bool UNpcRegistryComponent::IsOnSampleCooldown(FName NpcId) const
+{
+	const FNpcState* S = Find(NpcId);
+	if (!S) { return false; }
+	const float Now = NowAbs();
+	return (S->LastSampleAbs >= 0.f) && ((Now - S->LastSampleAbs) < SampleCooldownSeconds);
 }
 
 // --- Klant-tier (1 Casual .. 5 Whale) ---

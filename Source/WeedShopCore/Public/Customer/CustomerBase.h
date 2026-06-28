@@ -140,6 +140,10 @@ public:
 	// Server: maak er direct een kopende klant van (bv. na een goede gratis joint).
 	void BecomeBuyerNow();
 
+	// Server: geef deze (crowd-)NPC een NIEUWE identiteit uit de pool -> nieuwe skin + stats. Voor de dagelijkse
+	// straat-crowd-rotatie (off-screen). Repliceert via NpcId + RepSkinIndex (clients herbouwen 't uiterlijk lokaal).
+	void ReassignCrowdIdentity(FName NewId);
+
 	// Appartement-/straat-klanten blijven (cooldown -> opnieuw bestellen). Afspraak-klanten despawnen.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
 	bool bDespawnAfterServed = false;

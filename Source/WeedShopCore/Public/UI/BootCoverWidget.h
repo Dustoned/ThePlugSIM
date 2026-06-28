@@ -33,6 +33,7 @@ private:
 
 	float Elapsed = 0.f;
 	float ReadyAt = -1.f;   // moment waarop de kamer klaar werd (voor een korte na-buffer)
+	float SettleAt = -1.f;  // kamer EN shaders klaar -> daarna nog wat tijd voor de lighting/exposure-settle (geen spawn-flashes)
 	float LastDPI = -1.f;   // laatst toegepaste DPI-compensatie (alleen herrekenen als 'ie wijzigt)
 	int32 LastStep = -1;
 	int32 ShaderPeak = 0;   // hoogste aantal shader-compile-jobs gezien (voor echte bar-voortgang)

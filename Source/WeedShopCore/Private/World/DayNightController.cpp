@@ -16,7 +16,12 @@
 #include "Components/SpotLightComponent.h"
 #include "Components/ReflectionCaptureComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/DecalComponent.h"
+#include "GameFramework/PlayerController.h" // licht-budget-pool: speler-positie voor de afstand-cap
+#include "GameFramework/Pawn.h"
+#include "HAL/IConsoleManager.h" // licht-budget-pool: r.LightMaxDrawDistanceScale uitlezen om de hide-afstand op de render-fade te knopen
 #include "UObject/UObjectIterator.h"
+#include "UObject/UnrealType.h" // FProperty/FDoubleProperty + TFieldIterator voor de UDS-brug
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -61,10 +66,8 @@ void ADayNightController::ApplyMapPhotoLight()
 			if (LC->IsA(USkyLightComponent::StaticClass())) { LC->SetIntensity(D.OrigIntensity); }
 		}
 	}
-	for (UPointLightComponent* PL : PackLampLights)
-	{
-		if (PL) { PL->SetIntensity(0.f); }
-	}
+	// (Lampen NIET meer op 0: de kaart-capture mag de straatverlichting tonen 's nachts -> leesbare nacht-kaart
+	//  met dag/nacht-cyclus. Overdag staan de lampen toch uit via de klok, dus de dag-kaart blijft schoon.)
 }
 
 ADayNightController* ADayNightController::GetLocal(UWorld* W)
@@ -77,8 +80,8 @@ ADayNightController* ADayNightController::GetLocal(UWorld* W)
 void ADayNightController::SaveLightConfig() const
 {
 	const FString Cfg = FString::Printf(
-		TEXT("MoonIntensity=%.3f\nSunIntensity=%.3f\nSkyNight=%.3f\nSkyDay=%.3f\nMoonPitch=%.1f\nLampIntensity=%.0f\nExposureBias=%.2f\nNightGain=%.3f\nNightExposure=%.2f\nDayBloom=%.3f\nSunHaze=%.5f\n"),
-		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias, NightGain, NightExposure, DayBloom, SunHaze);
+		TEXT("MoonIntensity=%.3f\nSunIntensity=%.3f\nSkyNight=%.3f\nSkyDay=%.3f\nMoonPitch=%.1f\nLampIntensity=%.0f\nExposureBias=%.2f\nNightGain=%.3f\nNightExposure=%.2f\nDayBloom=%.3f\nSunHaze=%.5f\nUdsExpDay=%.3f\nUdsExpDawnDusk=%.3f\nUdsExpNight=%.3f\nUdsCloud=%.3f\nUdsFog=%.3f\n"),
+		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias, NightGain, NightExposure, DayBloom, SunHaze, UdsExpDay, UdsExpDawnDusk, UdsExpNight, UdsCloud, UdsFog);
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("LightConfig.txt");
 	FFileHelper::SaveStringToFile(Cfg, *Path);
 	UE_LOG(LogTemp, Warning, TEXT("[LightConfig] saved to %s\n%s"), *Path, *Cfg);
@@ -176,13 +179,14 @@ void ADayNightController::BeginPlay()
 	LoadLightConfig(); // opgeslagen slider-waardes terugladen
 
 	// Grafische keuze van de speler: kwaliteit-tier (incl. Potato) + Lumen uit = GI/reflecties goedkoop.
+	bool bPotato = false; bool bVSMOff = false; // gehoist: de beach-tak heeft de shadows-vlag (VSMOff) + Potato nodig
 	{
 		FString GfxTxt;
 		FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt")));
 		const bool bLumenOff = GfxTxt.Contains(TEXT("LumenOff=1"));
-		const bool bPotato = GfxTxt.Contains(TEXT("Potato=1"));
+		bPotato = GfxTxt.Contains(TEXT("Potato=1"));
 		const bool bMbOff = GfxTxt.Contains(TEXT("MotionBlurOff=1"));
-		const bool bVSMOff = GfxTxt.Contains(TEXT("VSMOff=1"));
+		bVSMOff = GfxTxt.Contains(TEXT("VSMOff=1"));
 		const bool bRTOff = GfxTxt.Contains(TEXT("RTOff=1"));
 		if (bPotato) { WeedShop_ApplyGraphicsTier(-1); } // scalability 0 + extra verlagingen + Lumen/RT/VSM uit
 		else
@@ -200,6 +204,14 @@ void ADayNightController::BeginPlay()
 	if (W->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip")))
 	{
 		bPackMinimal = true;
+		// VSM AAN. De echte crash-oorzaak (GPU-Scene reserved-resources) is opgelost in DefaultEngine.ini
+		// [SystemSettings], dus VSM crasht niet meer ("Out of video memory" terwijl de GPU 70% leeg was). En VSM
+		// is hier juist de OPLOSSING voor de lag: het CACHET schaduwen i.p.v. de hele stad elk frame x4 cascades
+		// te hertekenen (was ~20.500 draw-calls, Draw-thread-bound = "super laggy richting de zon"). VSM = soepel
+		// + betere kwaliteit (NPC-schaduwen, uitlijning). Console-prio zodat 't op de beach altijd aan staat.
+				WeedShop_ApplyDistanceFieldGI(true); // zelfde OOM-familie: DF-AO bouwt een enorme brick-atlas op deze map
+		WeedShop_ApplyBeachShadows(bVSMOff); // schaduwen aan/uit = de VSMOff-vlag (eigen Shadows-toggle, los van de Preset/Potato)
+		SpawnUDS(); // UDS neemt zon/lucht/wolken/weer over; Tick voedt z'n tijd + dimt de gebakken gevels
 		return; // geen eigen zon/maan/PPV/lampen - Tick regelt alleen het dimmen
 	}
 
@@ -440,6 +452,249 @@ void ADayNightController::AddLamp(const FVector& BaseOnGround)
 	}
 }
 
+void ADayNightController::SpawnUDS()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	UClass* UdsClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Ultra_Dynamic_Sky.Ultra_Dynamic_Sky_C"));
+	if (!UdsClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UDS] Ultra_Dynamic_Sky class niet gevonden - UDS uit, klassieke zon/maan blijft"));
+		return;
+	}
+	FActorSpawnParameters SP;
+	SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AActor* Uds = W->SpawnActor<AActor>(UdsClass, FTransform::Identity, SP);
+	if (!Uds) { UE_LOG(LogTemp, Warning, TEXT("[UDS] spawn faalde")); return; }
+	UdsSky = Uds;
+	bUseUDS = true;
+	UdsTimeProp = Uds->GetClass()->FindPropertyByName(FName(TEXT("Time of Day")));
+	UdsUpdateFn = Uds->FindFunction(FName(TEXT("Update Active Variables")));
+	UdsUpdateStaticFn = Uds->FindFunction(FName(TEXT("Update Static Variables")));
+	UE_LOG(LogTemp, Warning, TEXT("[UDS] gespawnd. TimeProp=%s UpdateFn=%s(parms=%d)"),
+		UdsTimeProp ? *UdsTimeProp->GetClass()->GetName() : TEXT("NULL"),
+		UdsUpdateFn ? TEXT("OK") : TEXT("NULL"),
+		UdsUpdateFn ? UdsUpdateFn->NumParms : -1);
+
+	// Environment-sounds zitten NIET op de sky-actor -> aparte UDS-geluidsactor spawnen (tijd/weer-gestuurde ambience).
+	if (UClass* SndClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Sound/AmbientSound_Time_and_Weather_Controlled.AmbientSound_Time_and_Weather_Controlled_C")))
+	{
+		UdsSound = W->SpawnActor<AActor>(SndClass, FTransform::Identity, SP);
+		UE_LOG(LogTemp, Warning, TEXT("[UDS] sound-actor: %s"), UdsSound.IsValid() ? TEXT("OK") : TEXT("NULL"));
+	}
+	else { UE_LOG(LogTemp, Warning, TEXT("[UDS] sound-class niet gevonden")); }
+
+	// Ultra Dynamic WEATHER zit OOK in deze pack -> spawnen voor ECHT weer (regen/sneeuw/storm/lightning).
+	// UDW detecteert de Sky zelf en koppelt alles. Met UDW aanwezig stuurt het weer de cloud/fog van de Sky.
+	if (UClass* WClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Ultra_Dynamic_Weather.Ultra_Dynamic_Weather_C")))
+	{
+		UdsWeatherActor = W->SpawnActor<AActor>(WClass, FTransform::Identity, SP);
+		UE_LOG(LogTemp, Warning, TEXT("[UDS] UDW (weer) gespawnd: %s"), UdsWeatherActor.IsValid() ? TEXT("OK") : TEXT("NULL"));
+		if (AActor* Udw = UdsWeatherActor.Get())
+		{
+			Udw->SetActorTickEnabled(true);
+			// TEMP introspectie: UDW's weer-functies + Weather-preset/variatie-properties.
+			for (TFieldIterator<UFunction> WFnIt(Udw->GetClass()); WFnIt; ++WFnIt)
+			{
+				const FString N = WFnIt->GetName();
+				if (N.Contains(TEXT("Weather")) || N.Contains(TEXT("Change")) || N.Contains(TEXT("Random")) || N.Contains(TEXT("Preset")))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[UDW-FUNC] %s (parms=%d)"), *N, WFnIt->NumParms);
+				}
+			}
+			for (TFieldIterator<FProperty> WPrIt(Udw->GetClass()); WPrIt; ++WPrIt)
+			{
+				const FString N = WPrIt->GetName();
+				if (N == TEXT("Weather") || N.Contains(TEXT("Random Weather")) || N.Contains(TEXT("Variation")) || N.Contains(TEXT("Cloud")) || N.Contains(TEXT("Coverage")) || N.Contains(TEXT("Manual")) || N.Contains(TEXT("Override")))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[UDW-PROP] %s : %s"), *N, *WPrIt->GetClass()->GetName());
+				}
+			}
+
+			SetRandomWeather(true); // natuurlijk wisselend weer aan bij start
+		}
+	}
+	else { UE_LOG(LogTemp, Warning, TEXT("[UDS] UDW-class niet gevonden")); }
+
+	if (AActor* U2 = UdsSky.Get()) { U2->SetActorTickEnabled(true); } // UDS' eigen update-loop draaien
+	// Perf/VRAM: de real-time sky-light-capture over meerdere frames spreiden i.p.v. elke frame de hele
+	// cubemap -> lagere VRAM-piek + minder GPU-stoot (scheelt marge t.o.v. zware shadows).
+	SetUdsBool(FName(TEXT("Real Time Capture Uses Time Slicing")), true);
+
+	// Realistische sterren + Melkweg/nebula. Render Nebula stond default UIT; sterren waren te zwak (0.75).
+	SetUdsBool(FName(TEXT("Simulate Real Stars")), true);   // 360-graden hi-res starmap
+	SetUdsBool(FName(TEXT("Render Nebula")), true);         // nebula AAN (was uit); intensiteiten via ApplyUdsLook + sliders
+
+	// Aurora: 2D-aurora (Use Auroras) draait NAAST de wolken. TEST: geforceerd AAN; daarna ~15% random.
+	const bool bAurora = (FMath::FRand() < 0.15f); // ~15% kleine kans op aurora deze sessie
+	SetUdsBool(FName(TEXT("Use Auroras")), bAurora);
+	// Eenmalige static-rebuild bij spawn: bouwt de nacht-lucht-material op (sterren-texture, nebula, aurora).
+	// Cloud Coverage raken we niet aan -> default-wolken blijven heel.
+	if (UdsUpdateStaticFn && UdsUpdateStaticFn->NumParms == 0)
+	{
+		Uds->ProcessEvent(UdsUpdateStaticFn, nullptr);
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[UDS] aurora deze sessie: %s"), bAurora ? TEXT("JA") : TEXT("nee"));
+	// TEMP introspectie: star/glow-properties MET huidige waarde (om intensiteit/glow te kunnen tunen).
+	for (TFieldIterator<FProperty> SAIt(Uds->GetClass()); SAIt; ++SAIt)
+	{
+		const FString N = SAIt->GetName();
+		if (!(N.Contains(TEXT("Star")) || N.Contains(TEXT("Simulate")) || N.Contains(TEXT("Night Sky Glow")) || N.Contains(TEXT("Twinkle")) || N.Contains(TEXT("Nebula")))) { continue; }
+		if (FDoubleProperty* DP = CastField<FDoubleProperty>(*SAIt)) { UE_LOG(LogTemp, Warning, TEXT("[UDS-SA] %s = %.3f"), *N, DP->GetPropertyValue_InContainer(Uds)); }
+		else if (FBoolProperty* BP = CastField<FBoolProperty>(*SAIt)) { UE_LOG(LogTemp, Warning, TEXT("[UDS-SA] %s = %s"), *N, BP->GetPropertyValue_InContainer(Uds) ? TEXT("true") : TEXT("false")); }
+		else { UE_LOG(LogTemp, Warning, TEXT("[UDS-SA] %s : %s"), *N, *SAIt->GetClass()->GetName()); }
+	}
+
+	ApplyUdsLook(); // belichting; UDS houdt z'n eigen wolken
+}
+
+void ADayNightController::SetUdsDouble(FName P, double V)
+{
+	AActor* Uds = UdsSky.Get();
+	if (!Uds) { return; }
+	if (FProperty* Prop = Uds->GetClass()->FindPropertyByName(P))
+	{
+		if (FDoubleProperty* DP = CastField<FDoubleProperty>(Prop)) { DP->SetPropertyValue_InContainer(Uds, V); }
+		else if (FFloatProperty* FP = CastField<FFloatProperty>(Prop)) { FP->SetPropertyValue_InContainer(Uds, (float)V); }
+	}
+}
+
+void ADayNightController::SetUdsBool(FName P, bool V)
+{
+	AActor* Uds = UdsSky.Get();
+	if (!Uds) { return; }
+	if (FBoolProperty* BP = CastField<FBoolProperty>(Uds->GetClass()->FindPropertyByName(P))) { BP->SetPropertyValue_InContainer(Uds, V); }
+}
+
+void ADayNightController::CallUdsUpdate()
+{
+	AActor* Uds = UdsSky.Get();
+	if (Uds && UdsUpdateFn && UdsUpdateFn->NumParms == 0) { Uds->ProcessEvent(UdsUpdateFn, nullptr); }
+}
+
+void ADayNightController::ApplyUdsLook()
+{
+	if (!UdsSky.IsValid()) { return; }
+	SetUdsBool(FName(TEXT("Apply Exposure Settings")), true); // UDS stuurt de exposure -> onze biases tellen
+	SetUdsDouble(FName(TEXT("Exposure Bias Day")), UdsExpDay);
+	SetUdsDouble(FName(TEXT("Exposure Bias Dawn/Dusk")), UdsExpDawnDusk);
+	SetUdsDouble(FName(TEXT("Exposure Bias Night")), UdsExpNight);
+	SetUdsDouble(FName(TEXT("Extra Night Brightness when Cloudy")), UdsExtraNightCloudy);
+	SetUdsDouble(FName(TEXT("Stars Intensity")), UdsStars);
+	SetUdsDouble(FName(TEXT("Nebula Intensity")), UdsNebula);
+	SetUdsDouble(FName(TEXT("Night Sky Glow")), UdsNightGlow);
+	// Cloud Coverage/Fog bewust NIET op de Sky aanraken (UDW stuurt die via de weer-state).
+	CallUdsUpdate();
+}
+
+void ADayNightController::SetUdsWeather(int32 WeatherType)
+{
+	if (!UdsSky.IsValid()) { return; }
+	UdsWeather = WeatherType;
+	double Rain = 0.0, Snow = 0.0;
+	switch (WeatherType)
+	{
+	case 1: UdsCloud = 0.65f; UdsFog = 0.05f; break;             // Cloudy
+	case 2: UdsCloud = 0.85f; UdsFog = 0.25f; Rain = 0.8; break; // Rain
+	case 3: UdsCloud = 1.0f;  UdsFog = 0.15f; Rain = 1.0; break; // Storm
+	case 4: UdsCloud = 0.8f;  UdsFog = 0.2f;  Snow = 0.9; break; // Snow
+	case 5: UdsCloud = 0.35f; UdsFog = 0.85f; break;             // Fog
+	default: UdsCloud = 0.15f; UdsFog = 0.0f; break;             // Clear (0)
+	}
+	SetUdsDouble(FName(TEXT("UDW Rain Value")), Rain);
+	SetUdsDouble(FName(TEXT("UDW Snow Value")), Snow);
+	ApplyUdsLook(); // zet cloud/fog/exposure + update; sliders blijven in sync via UdsCloud/UdsFog
+	UE_LOG(LogTemp, Warning, TEXT("[UDS] weer=%d (cloud=%.2f fog=%.2f rain=%.2f snow=%.2f)"), WeatherType, UdsCloud, UdsFog, Rain, Snow);
+}
+
+void ADayNightController::SetWeatherPreset(const FString& PresetName, double TransitionSeconds)
+{
+	AActor* Udw = UdsWeatherActor.Get();
+	if (!Udw) { return; }
+	const FString Path = FString::Printf(TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s"), *PresetName, *PresetName);
+	UObject* Preset = LoadObject<UObject>(nullptr, *Path);
+	if (!Preset) { UE_LOG(LogTemp, Warning, TEXT("[UDW] preset niet gevonden: %s"), *PresetName); return; }
+	if (TransitionSeconds <= 0.0) { TransitionSeconds = 120.0; } // dev-knop zonder tijd -> nette graduele default
+	UFunction* Fn = Udw->FindFunction(FName(TEXT("Change Weather")));
+	if (!Fn) { UE_LOG(LogTemp, Warning, TEXT("[UDW] Change Weather-functie niet gevonden")); return; }
+	// DE OORZAAK VAN DE "SNAP": `Weather Speed` is een globale snelheids-multiplier op de UDW-actor voor ÁLLE
+	// weer-veranderingen (incl. Change Weather; bron: UDW-docs + decompiled asset). Stond 'ie >1 (pack-default),
+	// dan comprimeerde 't onze 8s-transitie naar ~1s. Forceren op 1.0 zodat "Time To Transition (Seconds)" letterlijk
+	// in seconden geldt. (Log de oude waarde even ter bevestiging.)
+	if (FProperty* WSP = Udw->GetClass()->FindPropertyByName(FName(TEXT("Weather Speed"))))
+	{
+		if (FDoubleProperty* WD = CastField<FDoubleProperty>(WSP)) { UE_LOG(LogTemp, Warning, TEXT("[UDW] Weather Speed was %.2f -> 1.0"), WD->GetPropertyValue_InContainer(Udw)); WD->SetPropertyValue_InContainer(Udw, 1.0); }
+		else if (FFloatProperty* WF = CastField<FFloatProperty>(WSP)) { UE_LOG(LogTemp, Warning, TEXT("[UDW] Weather Speed was %.2f -> 1.0"), WF->GetPropertyValue_InContainer(Udw)); WF->SetPropertyValue_InContainer(Udw, 1.0f); }
+	}
+	// Change Weather heeft 2 params: "New Weather Type" (object=preset) + "Time To Transition To New Weather (Seconds)"
+	// (double, ECHTE seconden). Generiek op type gezet (1 object + 1 double in de signatuur). overgang = TransitionSeconds (variabel);
+	// UDW bezit de cloud-coverage, dus de wolken bouwen vanzelf over die tijd op (NIET zelf UDS Cloud Coverage zetten).
+	uint8* Buf = (uint8*)FMemory_Alloca(FMath::Max<int32>((int32)Fn->ParmsSize, 1));
+	FMemory::Memzero(Buf, Fn->ParmsSize);
+	for (TFieldIterator<FProperty> It(Fn); It; ++It)
+	{
+		FProperty* P = *It;
+		if (!(P->PropertyFlags & CPF_Parm) || (P->PropertyFlags & CPF_ReturnParm)) { continue; }
+		if (FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(P)) { OP->SetObjectPropertyValue_InContainer(Buf, Preset); }
+		else if (FDoubleProperty* DP = CastField<FDoubleProperty>(P)) { DP->SetPropertyValue_InContainer(Buf, TransitionSeconds); }
+		else if (FFloatProperty* FP = CastField<FFloatProperty>(P)) { FP->SetPropertyValue_InContainer(Buf, (float)TransitionSeconds); }
+	}
+	Udw->ProcessEvent(Fn, Buf);
+	UE_LOG(LogTemp, Warning, TEXT("[UDW] Change Weather -> %s (overgang %.0fs)"), *PresetName, TransitionSeconds);
+}
+
+void ADayNightController::SetRandomWeather(bool bOn)
+{
+	bAutoWeather = bOn;
+	// UDW's EIGEN random-variatie altijd UIT (byte 0) -> wij kiezen het weer zelf, gewogen, per in-game dag.
+	if (AActor* Udw = UdsWeatherActor.Get())
+	{
+		if (FByteProperty* RVProp = CastField<FByteProperty>(Udw->GetClass()->FindPropertyByName(FName(TEXT("Random Weather Variation"))))) { RVProp->SetPropertyValue_InContainer(Udw, 0); }
+	}
+	if (bOn) { WeatherTimer = 0.f; } // forceer een nieuwe keuze in de eerstvolgende Tick
+	UE_LOG(LogTemp, Warning, TEXT("[UDW] auto-weer (gewogen, per dag) -> %s"), bOn ? TEXT("aan") : TEXT("uit"));
+}
+
+void ADayNightController::PickAndApplyWeather()
+{
+	// Gewogen: overwegend helder/bewolkt/mistig (~91%); regen ~7%; sneeuw/storm zeldzaam ~1,5% (beach).
+	struct FWPreset { const TCHAR* Name; float Weight; bool bBad; };
+	static const FWPreset Table[] = {
+		{ TEXT("Clear_Skies"), 4.0f, false }, { TEXT("Partly_Cloudy"), 4.0f, false }, { TEXT("Cloudy"), 3.0f, false },
+		{ TEXT("Overcast"), 2.0f, false }, { TEXT("Foggy"), 2.0f, false },
+		{ TEXT("Rain_Light"), 0.7f, true }, { TEXT("Rain"), 0.4f, true }, { TEXT("Rain_Thunderstorm"), 0.15f, true },
+		{ TEXT("Snow_Light"), 0.12f, true }, { TEXT("Snow"), 0.06f, true }, { TEXT("Snow_Blizzard"), 0.03f, true },
+	};
+	float Total = 0.f; for (const FWPreset& E : Table) { Total += E.Weight; }
+	float R = FMath::FRandRange(0.f, Total);
+	const FWPreset* Picked = &Table[0];
+	for (const FWPreset& E : Table) { R -= E.Weight; if (R <= 0.f) { Picked = &E; break; } }
+	const double TransSecs = (double)FMath::FRandRange(120.f, 240.f); // overgang clear->rainstorm e.d. = 2-4 min graduele opbouw (variabel)
+	SetWeatherPreset(FString(Picked->Name), TransSecs);
+	// Slecht weer blijft kort, maar nu mét de 20s graduele opbouw erin: 45-65s = ~20s wolken-opbouw + ~25-45s
+	// echte regen/sneeuw + daarna weer een graduele overgang weg. Mooi weer langer.
+	WeatherTimer = (float)TransSecs + (Picked->bBad ? FMath::FRandRange(60.f, 140.f) : FMath::FRandRange(150.f, 320.f)); // = overgang + settled-tijd -> overgang nooit afgekapt
+}
+
+void ADayNightController::DriveUDS(float ClockHour)
+{
+	AActor* Uds = UdsSky.Get();
+	if (!Uds) { return; }
+	const float Tod = FMath::Fmod(FMath::Fmod(ClockHour, 24.f) + 24.f, 24.f) * 100.f; // 0..2400
+	// SMOOTH ZON (was throttle 3.0 = ~0,45°-stappen = zichtbaar getik + de player-schaduw die niet meebewoog). De
+	// flikker die de throttle ooit verborg zat in de 512-page-pool (nu 8192) - NIET in de bewegende zon. Dus de zon
+	// mag weer vloeiend: 0.05 ToD (~0,0075°/stap = onzichtbaar) = praktisch elk frame, maar capt de UDS-update + VSM-
+	// re-render op ~27Hz (30-min dag) zodat de game-thread niet elk frame de hele UDS-BP draait. Bron: Fortnite-VSM-blog.
+	if (FMath::IsNearlyEqual(Tod, LastUdsTod, 0.05f)) { return; }
+	LastUdsTod = Tod;
+	if (UdsTimeProp)
+	{
+		if (FDoubleProperty* DP = CastField<FDoubleProperty>(UdsTimeProp)) { DP->SetPropertyValue_InContainer(Uds, Tod); }
+		else if (FFloatProperty* FP = CastField<FFloatProperty>(UdsTimeProp)) { FP->SetPropertyValue_InContainer(Uds, Tod); }
+	}
+	if (UdsUpdateFn && UdsUpdateFn->NumParms == 0) { Uds->ProcessEvent(UdsUpdateFn, nullptr); }
+}
+
 void ADayNightController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -454,6 +709,16 @@ void ADayNightController::Tick(float DeltaSeconds)
 	// MINIMAL-modus (pack-maps): dim de bestaande lichten met de klok en toggle de fotokoepel.
 	if (bPackMinimal)
 	{
+		if (bUseUDS)
+		{
+			DriveUDS(Hour); // UDS' lucht volgt onze gerepliceerde klok
+			if (bAutoWeather)
+			{
+				WeatherTimer -= DeltaSeconds;
+				if (WeatherTimer <= 0.f) { PickAndApplyWeather(); } // mooi weer ~2,5 in-game uur, slecht weer ~20-30 in-game min
+			}
+		}
+
 		float MinDayF;
 		if (Hour <= Sunrise - 1.f || Hour >= Sunset + 1.f)      { MinDayF = 0.f; }
 		else if (Hour < Sunrise + 1.f)                          { MinDayF = (Hour - (Sunrise - 1.f)) * 0.5f; }
@@ -472,7 +737,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			{
 				AActor* A = *It;
 				if (!IsValid(A)) { continue; }
-				if (A == PackMoon.Get() || A == PackSun.Get() || A == this) { continue; } // eigen zon/maan/lampen niet mee-dimmen
+				if (A == PackMoon.Get() || A == PackSun.Get() || A == this || A == UdsSky.Get()) { continue; } // eigen zon/maan/lampen + UDS niet mee-dimmen
 				// AL VERWERKT? Volledig overslaan: anders doen we per scan voor ELKE actor opnieuw de dure
 				// component-gather + mesh-naam-string-checks (= de periodieke hang). Map-actors krijgen runtime
 				// geen nieuwe componenten, dus 1x verwerken volstaat; nieuw-gestreamde actors zijn nog niet seen.
@@ -488,11 +753,20 @@ void ADayNightController::Tick(float DeltaSeconds)
 					// binnen-lampen fix van voor de minimal-reset; toen deden de lampen het wel.
 					if (ULocalLightComponent* LLC = Cast<ULocalLightComponent>(LC))
 					{
-						if (LLC->Mobility != EComponentMobility::Movable)
-						{
-							LLC->SetMobility(EComponentMobility::Movable);
-							LLC->SetCastShadows(false);
-						}
+						// FUNDAMENTELE PERF-FIX (deep-perf-systemic-audit 2026-06-27): NIET meer elke static map-light naar
+						// Movable promoten. Dát maakte ~1300 authored static lights DYNAMISCH = "Lights in scene 1416" =
+						// Lighting 4,3ms + InitViews 2,15ms = de #1 render-thread-kost. r.AllowStaticLighting=False -> die
+						// static lights geven toch GEEN gebakken licht; de raam-GLOW zit in EMISSIVE materials (niet in deze
+						// lights) en de speler-lampen zijn de controller's eigen PackLampLights (straat/plafond, blijven werken).
+						// Static map-lights met rust laten -> ze vallen uit de dynamische light-count. Alleen al-Movable verwerken.
+						if (LLC->Mobility != EComponentMobility::Movable) { LLC->SetVisibility(false); continue; } // static map-light (geen gebakken licht = GEEN licht) -> uit FScene = uit de light-count
+						// VERRE LAMPEN CULLEN (grootste perf-winst): de beach had ~1416 actieve lampen -> Lighting
+						// ~11ms = #1 render-thread-kost (stat scenerendering). Basis 350m; r.LightMaxDrawDistanceScale
+						// (per graphics-preset = view-distance-factor, gezet in WeedShop_ApplyGraphicsTier) schaalt mee
+						// -> potato ~120m, high ~350m. 30m fade = smooth uit, geen pop-in. Alleen point/spot
+						// (ULocalLightComponent); zon/maan (UDirectionalLightComponent) gaan via de andere tak = globaal.
+						LLC->SetMaxDrawDistance(25000.f);
+						LLC->SetMaxDistanceFadeRange(3000.f);
 					}
 					// Map-zonnen (scenario) mogen de hemel niet sturen: atmosfeer-claim eraf zodat
 					// ONZE bewegende zon vanaf seconde een de lucht bepaalt (anders bleef de vaste
@@ -519,6 +793,16 @@ void ADayNightController::Tick(float DeltaSeconds)
 					RC->Brightness = RcEntry.OrigBrightness * MinDayF;
 					RC->MarkRenderStateDirty();
 					RefCaps.Add(RcEntry);
+				}
+				// DECALS: 1401 op de beach (856 in beeld) = dure deferred-decal-pass. De per-decal FadeScreenSize staat
+				// op de CDO-default 0.01 -> r.Decal.FadeScreenSizeMult (x4) bijt amper. Basis omhoog naar 0.07 zodat
+				// verre/kleine decals echt uitfaden (x4 duwt ze dan tot FadeAlpha 0 = uit de decal-pass). 1x per decal; 6s-scan vangt gestreamde mee.
+				TInlineComponentArray<UDecalComponent*> Decals(A);
+				for (UDecalComponent* DecalC : Decals)
+				{
+					if (!DecalC || SeenDecals.Contains(DecalC)) { continue; }
+					SeenDecals.Add(DecalC);
+					DecalC->SetFadeScreenSize(0.12f); // hoger = meer cullen (stapelt op de cvar-flip). Knob: terug naar 0.10 als decals vlak bij je voeten poppen
 				}
 				// SKYLIGHTS apart verzamelen: USkyLightComponent is GEEN ULightComponent, dus de
 				// licht-scan hierboven miste 'm. De movable skylight spiegelt z'n hemel-cubemap als
@@ -569,7 +853,17 @@ void ADayNightController::Tick(float DeltaSeconds)
 					const bool bCeilLamp = MN.Contains(TEXT("CeilingLight")) || MN.Contains(TEXT("CeilLight")) || MN.Contains(TEXT("Ceiling_Light"));
 					const bool bSmallLamp = bCeilLamp
 						|| MN == TEXT("SM_WallLight01") || MN == TEXT("SM_PoolLight");
-					if ((bTallLamp || bSmallLamp) && !PackLampSeen.Contains(MC))
+					// PROP-CULL (Draw-winst richting de stad): kleine losse props (stoelen, tafels, prullenbakken, borden,
+						// terras-decor) op afstand uit beeld halen. Richting de stad staan er honderden in beeld = honderden
+						// draw calls (Draw ~10ms naar zee -> ~22ms naar de stad); een stoel op ~70m is een paar pixels. Cull-
+						// afstand op alleen de KLEINE Static-meshes (bounds-radius < 1.8m) -> gebouwen (Nanite), weg, auto's en
+						// grote props blijven. r.ViewDistanceScale (per tier) schaalt mee: potato ~70m, epic ~260m = tier-trap.
+						if (!bTallLamp && !bSmallLamp && !SkyLike(MN) && !SkyLike(AN)
+							&& MC->Mobility == EComponentMobility::Static && MC->Bounds.SphereRadius < 180.f)
+						{
+							MC->SetCullDistance(20000.f); // ~70m op potato (x r.ViewDistanceScale 0.35); engine dither-fade = pop-arm
+						}
+						if ((bTallLamp || bSmallLamp) && !PackLampSeen.Contains(MC))
 					{
 						PackLampSeen.Add(MC);
 						const FVector BO = MC->Bounds.Origin;
@@ -613,6 +907,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 							Glow->SetIntensity(0.f);
 							Glow->SetCastShadows(false);
 							Glow->ComponentTags.Add(TEXT("CeilGlow"));
+							Glow->SetMaxDrawDistance(25000.f); Glow->SetMaxDistanceFadeRange(3000.f); // mee-cullen met de view distance
 							Glow->MarkRenderStateDirty();
 							PackLampLights.Add(Glow);
 							// Diffuser-mesh (MI_Light, 'Brightness') mee dimmen als de lamp uit is -> de lamp-box
@@ -649,6 +944,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 						PL->SetLightColor(FLinearColor(1.f, 0.85f, 0.6f));
 						PL->SetIntensity(0.f);
 						PL->SetCastShadows(false);
+						PL->SetMaxDrawDistance(25000.f); PL->SetMaxDistanceFadeRange(3000.f); // mee-cullen met de view distance
 						PL->MarkRenderStateDirty();
 						PL->ComponentTags.Add(bTallLamp ? TEXT("TallLamp") : (bCeilLamp ? TEXT("CeilLamp") : TEXT("SmallLamp")));
 						PackLampLights.Add(PL);
@@ -660,6 +956,30 @@ void ADayNightController::Tick(float DeltaSeconds)
 			const int32 SeenAfter = SeenLights.Num() + SeenRefCaps.Num() + SeenSky.Num() + PackLampSeen.Num();
 			if (SeenAfter > SeenBefore) { LightScanDry = 0; LightScanTimer = 6.f; }
 			else if (++LightScanDry >= 3) { LightScanTimer = 30.f; }
+		}
+
+		// LICHT-BUDGET-POOL (foundationele perf-fix): verberg de VERRE Movable-lampen (distance-cull, vastgeknoopt aan de render-fade) -> uit de count + Lighting.
+		// De controller + pack registreren ~1186 echte Movable-lampen (817 eigen PackLampLights + 569 Movable map-lights);
+		// InitViews/Lighting schalen met dat AANTAL (de afstand-cull dimt alleen het RENDEREN, niet de count). SetVisibility(false)
+		// op de verre lampen haalt ze uit FScene::Lights = uit de count. Periodiek (0.35s), niet per frame; GetVisibleFlag-check
+		// vermijdt onnodige SetVisibility-churn. Zo schaalt de licht-kost met de POOL, niet met hoeveel content er nog bijkomt.
+		LightBudgetTimer -= DeltaSeconds;
+		if (LightBudgetTimer <= 0.f)
+		{
+			LightBudgetTimer = 0.35f;
+			FVector PP(0.f);
+			if (APlayerController* PC = GetWorld()->GetFirstPlayerController()) { if (APawn* Pn = PC->GetPawn()) { PP = Pn->GetActorLocation(); } }
+				static IConsoleVariable* CVarLMD = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LightMaxDrawDistanceScale"));
+				const float Scale = CVarLMD ? FMath::Max(CVarLMD->GetFloat(), 0.05f) : 1.f;
+				const float HideD2 = FMath::Square(25000.f * Scale + 2000.f); // render-cull-afstand + marge; lamp is daar via de renderer al uitgefade -> SetVisibility = pop-vrij
+				auto ApplyBudget = [&](ULightComponent* L)
+				{
+					if (!L) { return; }
+					const bool bVis = (L->Intensity > 1.f) && (FVector::DistSquared(L->GetComponentLocation(), PP) < HideD2); // ook UIT-lampen (intensiteit ~0, bv. straatlampen overdag) verbergen: die kostten anders volle Lighting voor niks. Pop-vrij want ze staan toch al op 0.
+					if (L->GetVisibleFlag() != bVis) { L->SetVisibility(bVis); }
+				};
+				for (const FDimLight& D : DimLights) { ApplyBudget(D.Light.Get()); }
+				for (UPointLightComponent* PL : PackLampLights) { ApplyBudget(PL); }
 		}
 
 		// Per-frame licht-loops alleen draaien als de klok-factor of de lamp-slider echt veranderde (+ 2Hz
@@ -751,12 +1071,17 @@ void ADayNightController::Tick(float DeltaSeconds)
 				// weg. Schaalt mee met BlendWeight (1-MinDayF) dus overdag 100% intact.
 				NightVol->Settings.bOverride_ScreenSpaceReflectionIntensity = true;
 				NightVol->Settings.ScreenSpaceReflectionIntensity = 0.f;
+				// Exposure-plafond (1.0) OOK bij nacht, dezelfde cap als de BloomPPV overdag. Stond de cap alleen op
+				// BloomPPV (gewicht = MinDayF), dan viel hij weg tijdens de dag/nacht-overgang en kon de auto-exposure
+				// kort naar wit overschieten (de "witte flits"). Cap in BEIDE volumes = over de hele blend ~1.0 = geen overshoot.
+				NightVol->Settings.bOverride_AutoExposureMaxBrightness = true;
+				NightVol->Settings.AutoExposureMaxBrightness = 1.0f;
 				NightPPV = NightVol;
 			}
 		}
 		// HEMEL-WAAS temmen: de Mie-nevel van de map-atmosfeer maakte een gigantisch wazig
 		// zonsgebied (halve hemel wit). Minder nevel-dichtheid + halo strakker om de schijf.
-		if (!FMath::IsNearlyEqual(LastAppliedHaze, SunHaze, 0.00002f))
+		if (!bUseUDS && !FMath::IsNearlyEqual(LastAppliedHaze, SunHaze, 0.00002f))
 		{
 			for (TObjectIterator<USkyAtmosphereComponent> AtIt; AtIt; ++AtIt)
 			{
@@ -850,7 +1175,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 
 		// MAAN: eigen zacht blauw strijklicht bij nacht - de echte zon/maan-cyclus-look van vroeger.
 		// Luistert naar de Moon-sliders in de Light-tab (MoonIntensity/MoonPitch), overdag op 0.
-		if (!PackMoon.IsValid())
+		if (!bUseUDS && !PackMoon.IsValid())
 		{
 			if (ADirectionalLight* M = GetWorld()->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), FTransform(FRotator(MoonPitch, 200.f, 0.f))))
 			{
@@ -873,7 +1198,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		}
 		// EIGEN BEWEGENDE ZON: volledige dagboog - op bij zonsopkomst, piek 's middags, onder
 		// tussen NW en N (yaw 337.5), precies zoals op onze eigen map.
-		if (!PackSun.IsValid())
+		if (!bUseUDS && !PackSun.IsValid())
 		{
 			if (ADirectionalLight* SunA = GetWorld()->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), FTransform(FRotator(-45.f, 337.5f, 0.f))))
 			{
@@ -895,7 +1220,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			}
 		}
 		const float DayLen2 = FMath::Max(1.f, Sunset - Sunrise);
-		if (PackSun.IsValid() && PackSun->GetLightComponent())
+		if (!bUseUDS && PackSun.IsValid() && PackSun->GetLightComponent())
 		{
 			// HOOGTE-MODEL: de altitude volgt de tijd - 0 op de horizon bij op-/ondergang, hoog 's
 			// middags, en NEGATIEF (echt ONDER de horizon) 's nachts -> de zon zinkt realistisch weg.
@@ -909,7 +1234,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 			PackSun->GetLightComponent()->SetIntensity(SunIntensity * FMath::Clamp(Alt * 3.f, 0.f, 1.f));
 		}
 		// MAAN: tegenboog door de nacht - op bij zonsondergang, onder bij zonsopkomst, zelfde N-lijn.
-		if (PackMoon.IsValid() && PackMoon->GetLightComponent())
+		if (!bUseUDS && PackMoon.IsValid() && PackMoon->GetLightComponent())
 		{
 			// Zelfde hoogte-model voor de maan, maar op de NACHT-fase: boven de horizon 's nachts,
 			// ONDER de horizon overdag (dus geen maan-schijf bij daglicht). Op/onder ook bij NW-N.
@@ -1032,6 +1357,11 @@ void ADayNightController::LoadLightConfig()
 		else if (K == TEXT("NightExposure")) { NightExposure = F; }
 		else if (K == TEXT("DayBloom"))      { DayBloom = F; }
 		else if (K == TEXT("SunHaze"))       { SunHaze = F; }
+		else if (K == TEXT("UdsExpDay"))      { UdsExpDay = F; }
+		else if (K == TEXT("UdsExpDawnDusk")) { UdsExpDawnDusk = F; }
+		else if (K == TEXT("UdsExpNight"))    { UdsExpNight = F; }
+		else if (K == TEXT("UdsCloud"))       { UdsCloud = F; }
+		else if (K == TEXT("UdsFog"))         { UdsFog = F; }
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[LightConfig] geladen (%d regels)"), Lines.Num());
 }

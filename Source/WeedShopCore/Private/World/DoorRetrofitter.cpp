@@ -1,6 +1,8 @@
 #include "World/DoorRetrofitter.h"
 
 #include "WeedShopCore.h"
+#include "HAL/IConsoleManager.h" // r.LightMaxDrawDistanceScale tijdelijk uit voor de kaart-capture (nacht-lampen)
+#include "RenderingThread.h"      // FlushRenderingCommands: capture afmaken vóór de cull-restore
 #include "World/CityDoor.h"
 #include "World/DayNightController.h"
 #include "World/PackElevator.h"
@@ -27,9 +29,11 @@
 #include "Navigation/NavLinkProxy.h"
 #include "NavLinkCustomComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "Npc/NpcRegistryComponent.h"
 #include "World/WorldItemPickup.h"        // gescatterde joints (pickup-spawn)
 #include "Inventory/InventoryComponent.h" // UInventoryComponent::MakeJointId
 #include "Progression/StoreComponent.h"   // seed-catalogus + strain-stats (THC)
+#include "Progression/LevelComponent.h"   // speler-level voor tier-schaling van de gescatterde joints
 #include "World/DayCycleComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
@@ -429,7 +433,19 @@ void ADoorRetrofitter::CaptureMapNow()
 	{
 		DN->ApplyMapPhotoLight();
 	}
+	// NACHT-KAART LEESBAAR: de kaart-camera staat heel hoog (TopZ) -> alle straatlampen vallen buiten hun max-draw-
+	// distance (de perf-cull) = pikzwarte nacht-foto. Even de lampen-cull UIT rond de capture zodat de straatverlichting
+	// in de foto komt (dag = zon, nacht = city-lights). FlushRenderingCommands: capture klaar vóór de cull-restore
+	// (anders race: restore op de game-thread vóór de render-thread captured = lampen alsnog gecullt).
+	IConsoleVariable* CVLamp = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LightMaxDrawDistanceScale"));
+	const float OldLampScale = CVLamp ? CVLamp->GetFloat() : 1.f;
+	if (CVLamp) { CVLamp->Set(1000.f, ECVF_SetByConsole); }
+	MapCapture->UpdateComponentToWorld(); // transform direct flushen vóór de capture
 	MapCapture->CaptureScene();
+	FlushRenderingCommands();
+	if (CVLamp) { CVLamp->Set(OldLampScale, ECVF_SetByConsole); }
+	// (Hercapture-op-volgende-tick verwijderd: de échte 1e-open-scheefheid was de volgorde-bug in MapWidget::BuildBlocks
+	//  -- CenterXY werd uit een nog niet berekende MapCenter gelezen. Dat is daar opgelost; hier geen re-capture meer nodig.)
 }
 
 bool ADoorRetrofitter::FindStreetPoint(float WorldY, FVector& Out) const
@@ -2620,6 +2636,11 @@ void ADoorRetrofitter::ScanAndConvert()
 					Panels.Add(A);
 				}
 			}
+			{ // TEMP [ELEVDIAG]
+				FString DiagS;
+				for (const FElevPanelInit& Pn : Panels) { DiagS += FString::Printf(TEXT("[F%d closed=(%.0f,%.0f,%.0f) slide=%.0f] "), Pn.FloorIdx, (float)Pn.ClosedPos.X, (float)Pn.ClosedPos.Y, (float)Pn.ClosedPos.Z, Pn.SlideDist); }
+				UE_LOG(LogTemp, Warning, TEXT("[ELEVDIAG] key=(%d,%d) floors=%d rawPanels=%d panels=%d span=(%.2f,%.2f) ref=(%.0f,%.0f) | %s"), KV.Key.X, KV.Key.Y, Floors.Num(), RawPanels.Num(), Panels.Num(), (float)SpanDir.X, (float)SpanDir.Y, (float)KV.Value.Ref.X, (float)KV.Value.Ref.Y, *DiagS);
+			}
 			if (Panels.Num() == 0) { continue; }
 			// Schacht-kant FYSIEK bepalen: trace vanaf verdieping 1 omlaag aan beide kanten van de deur.
 			// De kant ZONDER vloer eronder (gat dat doorloopt) is de schacht.
@@ -2720,9 +2741,18 @@ AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
 		return ThcA < ThcB;
 	});
 
-	// BOTTOM-LOADED strain-keuze: FRand^2 weegt naar lage indices -> hoge-THC strains zijn ZELDZAAM.
+	// Speler-level -> tier-fractie (0 op lvl 1, 1 op lvl 50).
+	int32 Level = 1;
+	if (GS->GetLeveling()) { Level = GS->GetLeveling()->GetLevel(); }
+	const float LevelFrac = FMath::Clamp((Level - 1) / 49.f, 0.f, 1.f);
+
+	// Strain schaalt mee met je tier: de index volgt je level (hogere strains naarmate je levelt). (1 - FRand^1.6)
+	// weegt NAAR je tier maar houdt een staart naar beneden -> meestal rond je tier, soms een mindere. Cap op
+	// je level +1 (zelden één tier boven je level = een leuke vondst), nooit ver erboven.
 	const int32 N = Strains.Num();
-	const int32 Idx = FMath::Clamp(FMath::FloorToInt(N * FMath::Square(FMath::FRand())), 0, N - 1);
+	const int32 LevelIdx = FMath::Clamp(FMath::RoundToInt(LevelFrac * (N - 1)), 0, N - 1);
+	const int32 MaxIdx = FMath::Clamp(LevelIdx + 1, 0, N - 1);
+	const int32 Idx = FMath::Clamp(FMath::FloorToInt((MaxIdx + 1) * (1.f - FMath::Pow(FMath::FRand(), 1.6f))), 0, MaxIdx);
 	const FName Strain = Strains[Idx];
 	float BaseThc = 0.f, YieldG = 0.f, GrowM = 0.f;
 	Store->GetStrainStats(Strain, BaseThc, YieldG, GrowM);
@@ -2733,8 +2763,10 @@ AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
 
 	// THC% dicht bij de strain-basis, nooit erboven.
 	const float ThcPercent = BaseThc * FMath::FRandRange(0.85f, 1.0f);
-	// Kwaliteit%: kubus => zwaar bottom-loaded, hoge kwaliteit ZELDZAAM.
-	const float QualityPct = 100.f * FMath::Pow(FMath::FRand(), 3.f);
+	// Kwaliteit% schaalt mee met level: de power-exponent zakt van ~2.8 (lvl 1, zwaar bottom-loaded) naar ~0.8
+	// (lvl 50, vaker hoog), maar houdt altijd een staart naar laag -> soms nog een slechte.
+	const float QExp = FMath::Clamp(2.8f - 2.0f * LevelFrac, 0.8f, 2.8f);
+	const float QualityPct = 100.f * FMath::Pow(FMath::FRand(), QExp);
 
 	const FName JointId = UInventoryComponent::MakeJointId(Strain, Grams);
 
@@ -2744,6 +2776,17 @@ AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
 		AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc + FVector(0.f, 0.f, 25.f)), SP);
 	if (P) { P->Setup(JointId, 1, ThcPercent, QualityPct); }
 	return P;
+}
+
+// Doel-aantal joints op de map o.b.v. het HUIDIGE speler-level: ~12% van de spots op lvl 1, +5% per 5 levels,
+// cap ~60% (en de bovengrens). Zo vind je vroeg WEINIG en groeit het mee terwijl je levelt.
+int32 ADoorRetrofitter::LevelJointTarget() const
+{
+	if (JointSpots.Num() == 0) { return 0; }
+	int32 Level = 1;
+	if (UWorld* W = GetWorld()) { if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { if (GS->GetLeveling()) { Level = GS->GetLeveling()->GetLevel(); } } }
+	const float Frac = FMath::Clamp(0.12f + (Level / 5) * 0.05f, 0.12f, 0.60f);
+	return FMath::Clamp(FMath::RoundToInt(JointSpots.Num() * Frac), 3, FMath::Min(MaxScatteredJoints, JointSpots.Num()));
 }
 
 // One-time: prullenbak/bankje-locaties verzamelen en tot de cap vullen. Vond het geen spots, dan blijft
@@ -2776,22 +2819,17 @@ void ADoorRetrofitter::ScatterJoints()
 	if (JointSpots.Num() == 0) { return; } // niets gevonden -> volgende pass opnieuw proberen
 
 	ScatteredJoints.Reset();
-	// Schud de spots en gebruik maar ~60% ervan (dus NIET elke prullenbak/bankje), met 1-2 joints per gekozen
-	// spot + zijwaartse offset (~40-70cm). Natuurlijk verspreid i.p.v. overal eentje. Bovengrens = MaxScatteredJoints.
+	// Aantal schaalt met je level (LevelJointTarget): vroeg WEINIG, later meer. Schud de spots en plaats 1 joint
+	// per gekozen spot (+ zijwaartse offset ~40-70cm) zodat ze netjes over de hele map verspreid liggen.
 	for (int32 s = JointSpots.Num() - 1; s > 0; --s) { JointSpots.Swap(s, FMath::RandRange(0, s)); }
-	const int32 UseSpots = FMath::Max(1, FMath::CeilToInt(JointSpots.Num() * 0.6f));
-	for (int32 si = 0; si < UseSpots && ScatteredJoints.Num() < MaxScatteredJoints; ++si)
+	JointTarget = LevelJointTarget();
+	for (int32 si = 0; si < JointSpots.Num() && ScatteredJoints.Num() < JointTarget; ++si)
 	{
-		const int32 Here = FMath::RandRange(1, 2); // 1 of 2 joints op DEZE spot
-		for (int32 k = 0; k < Here && ScatteredJoints.Num() < MaxScatteredJoints; ++k)
-		{
-			const float Ang = FMath::FRandRange(0.f, 2.f * PI);
-			const float Rad = FMath::FRandRange(40.f, 70.f);
-			const FVector Loc = JointSpots[si] + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
-			if (AWorldItemPickup* P = MintJointAt(Loc)) { ScatteredJoints.Add(P); }
-		}
+		const float Ang = FMath::FRandRange(0.f, 2.f * PI);
+		const float Rad = FMath::FRandRange(40.f, 70.f);
+		const FVector Loc = JointSpots[si] + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
+		if (AWorldItemPickup* P = MintJointAt(Loc)) { ScatteredJoints.Add(P); }
 	}
-	JointTarget = ScatteredJoints.Num(); // respawn houdt dit natuurlijke aantal aan, niet de bovengrens
 
 	bJointsScattered = true;
 	UE_LOG(LogWeedShop, Log, TEXT("Joints gescatterd: %d pickups rond %d prullenbakken/bankjes"),
@@ -2810,6 +2848,9 @@ void ADoorRetrofitter::TopUpJoints()
 	if (!W) { return; }
 
 	ScatteredJoints.RemoveAll([](const TWeakObjectPtr<AWorldItemPickup>& P) { return !P.IsValid(); });
+
+	// Doel opnieuw o.b.v. je HUIDIGE level -> het aantal joints op de map groeit mee terwijl je levelt.
+	JointTarget = LevelJointTarget();
 
 	// Refill verschijnt ERGENS ANDERS: alleen op spots die nu VRIJ zijn (geen levende joint binnen ~120cm),
 	// geschud voor spreiding. Een opgeraapte joint komt na ~10 min dus terug op een andere lege plek -
@@ -3107,6 +3148,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 {
 	UWorld* W = GetWorld();
 	if (!W || GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
+	CrowdBodies.RemoveAll([](const TObjectPtr<ACustomerBase>& X){ return !IsValid(X); }); // dode refs opruimen
 	// Speler-posities en kijkrichtingen cachen.
 	TArray<FVector> PlayerPos;
 	TArray<FVector> PlayerView;
@@ -3167,23 +3209,42 @@ void ADoorRetrofitter::TickVirtualCrowd()
 	{
 		if (auto* DCnt = GSnt->GetDayCycle()) { bNight = DCnt->IsNight(); }
 	}
-	const int32 BodyCap = bNight ? FMath::Max(2, NightCrowd) : 70;
+	// ALTIJD de volle crowd (dag EN nacht). De speler wil dat NPC's er gewoon altijd zijn; de nacht-
+	// uitdunning despawnte lopende NPC's en dat botst daarmee. (BodyCap=70 -> de despawn hieronder triggert
+	// nooit meer want NBodies komt nooit boven 70.)
+	const int32 BodyCap = 70;
 	int32 NBodies = 0;
 	// SPAWN-SPREIDING: max enkele echte NPC's PER CALL materialiseren. Elke spawn doet een synchrone
 	// modulaire build (mesh-loads + components); een hele rij in 1 frame = de periodieke hang. Met deze cap
 	// + de 10Hz-cadans (zie de call in TickVirtualMove) druppelen ze vloeiend binnen i.p.v. in bursts.
 	const int32 MaxSpawnPerTick = 1; // 1 modulaire NPC-build (~30ms) per call -> geen dubbele-spawn-hitch
 	int32 Spawned = 0;
+	// DAGELIJKSE CROWD-ROTATIE: bij een nieuwe dag krijgt elke body (off-screen) één verse identiteit uit de
+	// ~250-pool -> elke dag andere gezichten zonder dat je 't ziet gebeuren. AssignNpc schuift de cursor door.
+	int32 CrowdDay = 1;
+	if (AWeedShopGameState* GSday = W->GetGameState<AWeedShopGameState>()) { if (auto* DCday = GSday->GetDayCycle()) { CrowdDay = DCday->GetDayNumber(); } }
+	if (LastCrowdDay < 0) { LastCrowdDay = CrowdDay; }                 // eerste run: niet roteren (net gespawnd)
+	else if (CrowdDay != LastCrowdDay) { LastCrowdDay = CrowdDay; ++CrowdRerollGen; }
+	int32 RerollBudget = 2; // max 2 re-skins per call -> geen hitch (gespreid, off-screen)
+	UNpcRegistryComponent* CrowdReg = nullptr;
+	if (AWeedShopGameState* GSreg = W->GetGameState<AWeedShopGameState>()) { CrowdReg = GSreg->GetNpcRegistry(); }
 	for (FVirtualWalker& V : Crowd)
 	{
 		if (ACustomerBase* B = V.Body.Get())
 		{
 			++NBodies;
 			V.Pos = B->GetActorLocation(); // data volgt het lichaam (voor de map-marker)
+			// Dagelijkse rotatie: nog niet ge-reroll'd deze dag + ver + off-screen -> verse identiteit (nieuwe skin/stats).
+			if (V.RerolledGen < CrowdRerollGen && RerollBudget > 0 && CrowdReg && MinPlayerDist(V.Pos) > 8000.f && !InAnyView(V.Pos))
+			{
+				B->ReassignCrowdIdentity(CrowdReg->AssignNpc());
+				V.RerolledGen = CrowdRerollGen;
+				--RerollBudget;
+			}
 			// NACHT-UITDUNNING: te veel volk 's nachts -> de NIET-verslaafden (< drempel) gaan naar bed.
 			// Alleen OFF-SCREEN opruimen zodat je 't nooit ziet gebeuren = geen zichtbare churn; de junkies
 			// (>= drempel) blijven gewoon rondlopen. Overdag materialiseren de slapers vanzelf weer.
-			if (bNight && NBodies > BodyCap && B->GetAddiction() < NightAddictThreshold && !InAnyViewFar(V.Pos))
+			if (bNight && NBodies > BodyCap && B->GetAddiction() < NightAddictThreshold && MinPlayerDist(V.Pos) > 9000.f && !InAnyViewFar(V.Pos))
 			{
 				B->Destroy();
 				V.Body = nullptr;
@@ -3244,6 +3305,7 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			B->bVirtualCrowdBody = true; // beheerd door de DoorRetrofitter (blijvend) - de spawner-cull laat 'm met rust
 			++NBodies;
 			V.Body = B;
+				CrowdBodies.AddUnique(B); // sterke ref -> geen GC (anti-churn)
 			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).
 			ACustomerSpawner* Near = nullptr;
 			float BD = TNumericLimits<float>::Max();
@@ -4253,6 +4315,10 @@ void ADoorRetrofitter::MakeBakedWindowsReal()
 		for (UStaticMeshComponent* Comp : Comps)
 		{
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
+			// LICHTLEK-FIX: gebakken interieur-muren zijn vaak enkelzijdig/dun -> vanaf de zonkant cast de
+			// backface geen schaduw -> de zon lekt door massieve muren + liftdeuren (raam-patroon op de
+			// andere kant). Dubbelzijdig laten casten dicht dat lek. Geldt voor ALLE kamer-meshes.
+			if (!Comp->bCastShadowAsTwoSided) { Comp->bCastShadowAsTwoSided = true; Comp->MarkRenderStateDirty(); }
 			const FString MN = Comp->GetStaticMesh()->GetName();
 			if (!(MN.Contains(TEXT("Window")) || MN.Contains(TEXT("Glass")) || MN.Contains(TEXT("BalconyDoor")))) { continue; }
 			for (int32 Mi = 0; Mi < Comp->GetNumMaterials(); ++Mi)

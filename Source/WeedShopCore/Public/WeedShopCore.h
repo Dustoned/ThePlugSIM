@@ -44,6 +44,9 @@ WEEDSHOPCORE_API void WeedShop_ApplyGraphicsTier(int32 Tier);
 // Saved/GraphicsConfig.txt als geheel lezen/schrijven (zo wist het zetten van één vlag de andere niet).
 WEEDSHOPCORE_API void WeedShop_ApplyMotionBlur(bool bOff);
 WEEDSHOPCORE_API void WeedShop_ApplyVSM(bool bOff);          // Virtual Shadow Maps aan/uit
+WEEDSHOPCORE_API void WeedShop_ApplyDistanceFieldGI(bool bOff); // distance-field-AO + global-DF aan/uit (VRAM)
+WEEDSHOPCORE_API void WeedShop_ApplyBeachShadowQuality(bool bPotato = false);   // smooth moving-sun VSM (Fortnite-recept); potato = extra-zuinig (kwart-res moving, harde rays)
+WEEDSHOPCORE_API void WeedShop_ApplyBeachShadows(bool bPotato);                 // beach-schaduw-GATE per tier (gedeeld: BeginPlay + Preset + sliders) -> Potato=uit, Low+=VSM. Deterministisch bij elke tier-wissel.
 WEEDSHOPCORE_API void WeedShop_ApplyRayTracing(bool bOff);   // ray-tracing-effecten aan/uit
 WEEDSHOPCORE_API void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff, bool& bVSMOff, bool& bRTOff);
 WEEDSHOPCORE_API void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff);

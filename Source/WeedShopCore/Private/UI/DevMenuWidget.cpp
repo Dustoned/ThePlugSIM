@@ -210,6 +210,19 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 		Pair(TEXT("Set Day"), FLinearColor(0.62f, 0.52f, 0.2f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(false); } },
 			 TEXT("Set Night"), FLinearColor(0.26f, 0.3f, 0.5f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } },
 			 TEXT("Zet de klok meteen op middag of middernacht."));
+			Head(TEXT("Weer (UDW - echt weer)"));
+			Pair(TEXT("Clear"), FLinearColor(0.3f, 0.45f, 0.6f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetWeatherPreset(TEXT("Clear_Skies")); } },
+				 TEXT("Cloudy"), FLinearColor(0.36f, 0.39f, 0.43f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetWeatherPreset(TEXT("Cloudy")); } },
+				 TEXT("Helder of bewolkt."));
+			Pair(TEXT("Rain"), FLinearColor(0.24f, 0.34f, 0.5f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetWeatherPreset(TEXT("Rain")); } },
+				 TEXT("Thunderstorm"), FLinearColor(0.3f, 0.26f, 0.44f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetWeatherPreset(TEXT("Rain_Thunderstorm")); } },
+				 TEXT("Regen of onweer (met bliksem)."));
+			Pair(TEXT("Snow"), FLinearColor(0.5f, 0.55f, 0.62f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetWeatherPreset(TEXT("Snow")); } },
+				 TEXT("Fog"), FLinearColor(0.42f, 0.44f, 0.46f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetWeatherPreset(TEXT("Foggy")); } },
+				 TEXT("Sneeuw of mist."));
+			Pair(TEXT("Random weer AAN"), FLinearColor(0.24f, 0.42f, 0.3f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetRandomWeather(true); } },
+				 TEXT("UIT"), FLinearColor(0.42f, 0.3f, 0.24f), [this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SetRandomWeather(false); } },
+				 TEXT("Weer vanzelf laten wisselen, of uit voor handmatige controle."));
 		{
 			const float Cur = GetWorld() ? UGameplayStatics::GetGlobalTimeDilation(GetWorld()) : 1.f;
 			AddLightSlider(TEXT("Time speed"), (FMath::Clamp(Cur, 1.f, 8.f) - 1.f) / 7.f, TimeSpeedSlider, TimeSpeedV);
@@ -434,21 +447,25 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 		{
 			ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
 			const bool bPackL = DN && DN->IsPackMinimal();
-			const float Moon = DN ? DN->MoonIntensity : 0.65f;
-			const float Sun  = DN ? DN->SunIntensity  : 6.5f;
-			const float Lmp  = DN ? DN->LampIntensity : 28000.f;
-			AddLightSlider(TEXT("Moon (night)"), Moon / 3.f,    LMoon, LMoonV);
-			AddLightSlider(TEXT("Sun (day)"),    Sun / 12.f,    LSun,  LSunV);
-			AddLightSlider(TEXT("Street lamps"), Lmp / 80000.f, LLamp, LLampV);
 			if (bPackL)
 			{
-				AddLightSlider(TEXT("Night dark"),     DN->NightGain,                   LSkyN,  LSkyNV);
-				AddLightSlider(TEXT("Night exposure"), (DN->NightExposure + 4.f) / 4.f, LSkyD,  LSkyDV);
-				AddLightSlider(TEXT("Day glow"),       DN->DayBloom / 1.5f,             LPitch, LPitchV);
-				AddLightSlider(TEXT("Sun haze"),       DN->SunHaze / 0.008f,            LExp,   LExpV);
+				// UDS bezit de lucht -> deze sliders sturen UDS LIVE aan (geen rebuild nodig).
+				AddLightSlider(TEXT("Day exposure"),   DN ? (DN->UdsExpDay + 2.f) / 3.f : 0.5f,         LSun,   LSunV);
+				AddLightSlider(TEXT("Night exposure"), DN ? (DN->UdsExpNight + 4.f) / 5.f : 0.56f,      LMoon,  LMoonV);
+				AddLightSlider(TEXT("Dawn/dusk exp"),  DN ? (DN->UdsExpDawnDusk + 2.f) / 3.f : 0.57f,   LPitch, LPitchV);
+				AddLightSlider(TEXT("Street lamps"),   DN ? DN->LampIntensity / 80000.f : 0.35f,        LLamp,  LLampV);
+				AddLightSlider(TEXT("Stars"),          DN ? DN->UdsStars / 5.f : 0.5f,                  LSkyN,  LSkyNV);
+				AddLightSlider(TEXT("Nebula"),         DN ? DN->UdsNebula / 3.f : 0.4f,                 LSkyD,  LSkyDV);
+				AddLightSlider(TEXT("Night glow"),     DN ? DN->UdsNightGlow : 0.3f,                    LExp,   LExpV);
 			}
 			else
 			{
+				const float Moon = DN ? DN->MoonIntensity : 0.65f;
+				const float Sun  = DN ? DN->SunIntensity  : 6.5f;
+				const float Lmp  = DN ? DN->LampIntensity : 28000.f;
+				AddLightSlider(TEXT("Moon (night)"), Moon / 3.f,    LMoon, LMoonV);
+				AddLightSlider(TEXT("Sun (day)"),    Sun / 12.f,    LSun,  LSunV);
+				AddLightSlider(TEXT("Street lamps"), Lmp / 80000.f, LLamp, LLampV);
 				const float SkN = DN ? DN->SkyNight : 0.85f;
 				const float SkD = DN ? DN->SkyDay : 1.0f;
 				const float Pit = DN ? DN->MoonPitch : -52.f;
@@ -606,26 +623,34 @@ void UDevMenuWidget::ApplyLightSliders()
 
 	ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
 	if (!DN || !LMoon) { return; }
-	DN->MoonIntensity = LMoon->GetValue() * 3.f;
-	DN->SunIntensity  = LSun  ? LSun->GetValue()  * 12.f    : DN->SunIntensity;
-	DN->LampIntensity = LLamp ? LLamp->GetValue() * 80000.f : DN->LampIntensity;
-	if (LMoonV) { LMoonV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->MoonIntensity))); }
-	if (LSunV)  { LSunV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SunIntensity))); }
+
+	// Street lamps: zelfde slider in beide modi.
+	if (LLamp)  { DN->LampIntensity = LLamp->GetValue() * 80000.f; }
 	if (LLampV) { LLampV->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), DN->LampIntensity))); }
 
 	if (DN->IsPackMinimal())
 	{
-		if (LSkyN)  { DN->NightGain     = LSkyN->GetValue(); }
-		if (LSkyD)  { DN->NightExposure = LSkyD->GetValue() * 4.f - 4.f; }
-		if (LPitch) { DN->DayBloom      = LPitch->GetValue() * 1.5f; }
-		if (LExp)   { DN->SunHaze       = LExp->GetValue() * 0.008f; }
-		if (LSkyNV)  { LSkyNV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->NightGain))); }
-		if (LSkyDV)  { LSkyDV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->NightExposure))); }
-		if (LPitchV) { LPitchV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->DayBloom))); }
-		if (LExpV)   { LExpV->SetText(FText::FromString(FString::Printf(TEXT("%.4f"), DN->SunHaze))); }
+		// UDS: LSun=dag-exp, LMoon=nacht-exp, LPitch=dawn-exp, LSkyN=cloud, LSkyD=fog -> live naar UDS.
+		if (LSun)   { DN->UdsExpDay      = LSun->GetValue()  * 3.f - 2.f; }
+		if (LMoon)  { DN->UdsExpNight    = LMoon->GetValue() * 5.f - 4.f; }
+		if (LPitch) { DN->UdsExpDawnDusk = LPitch->GetValue() * 3.f - 2.f; }
+		if (LSkyN)  { DN->UdsStars     = LSkyN->GetValue() * 5.f; }
+		if (LSkyD)  { DN->UdsNebula    = LSkyD->GetValue() * 3.f; }
+		if (LExp)   { DN->UdsNightGlow = LExp->GetValue(); }
+		DN->ApplyUdsLook();
+		if (LSunV)   { LSunV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->UdsExpDay))); }
+		if (LMoonV)  { LMoonV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->UdsExpNight))); }
+		if (LPitchV) { LPitchV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->UdsExpDawnDusk))); }
+		if (LSkyNV)  { LSkyNV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->UdsStars))); }
+		if (LSkyDV)  { LSkyDV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->UdsNebula))); }
+		if (LExpV)   { LExpV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->UdsNightGlow))); }
 	}
 	else
 	{
+		DN->MoonIntensity = LMoon->GetValue() * 3.f;
+		DN->SunIntensity  = LSun  ? LSun->GetValue()  * 12.f : DN->SunIntensity;
+		if (LMoonV) { LMoonV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->MoonIntensity))); }
+		if (LSunV)  { LSunV->SetText(FText::FromString(FString::Printf(TEXT("%.2f"), DN->SunIntensity))); }
 		DN->SkyNight     = LSkyN  ? LSkyN->GetValue() * 2.f          : DN->SkyNight;
 		DN->SkyDay       = LSkyD  ? LSkyD->GetValue() * 2.f          : DN->SkyDay;
 		DN->MoonPitch    = LPitch ? LPitch->GetValue() * 90.f - 90.f : DN->MoonPitch;

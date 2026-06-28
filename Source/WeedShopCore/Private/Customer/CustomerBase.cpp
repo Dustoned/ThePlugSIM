@@ -113,7 +113,7 @@ ACustomerBase::ACustomerBase()
 		//    (frame-skip op scherm-grootte). Dit is precies wat een "anim-budget"-tool onder de motorkap doet.
 		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		MeshComp->bEnableUpdateRateOptimizations = true;
-		MeshComp->SetCastShadow(false);
+		MeshComp->SetCastShadow(true); // NPC-schaduw AAN: met VSM (gecachet) nu goedkoop genoeg; was uit in de CSM-tijd. RadiusThreshold cullt verre NPC's vanzelf.
 		//  - Max render-afstand: heel verre NPC's worden niet getekend (skinned mesh = duur), maar ruim genoeg
 		//    dat wat je op de kaart ziet ook in de wereld zichtbaar is (de stad is ~150m). Schaalt mee met de
 		//    graphics-tier via r.ViewDistanceScale (lagere tier cullt dichterbij = meer FPS).
@@ -361,6 +361,8 @@ static FLinearColor WeedNpc_ClothColor(uint32 H)
 // Forward-decl: tint de kleding-slots / het haar van een (deel-)mesh-component.
 static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed);
 static void WeedNpc_TintHair(USkeletalMeshComponent* SkM, uint32 Seed);
+static void WeedNpc_TintSkin(USkeletalMeshComponent* SkM, uint32 Seed);
+static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed);
 
 // STABIELE seed uit de NpcId-string (FNV-1a). GetTypeHash(FName) is NIET stabiel tussen sessies (hangt af
 // van de naam-tabel-volgorde) -> daarmee zou een NPC bij elke load andere kleren/kleur krijgen. Deze hash
@@ -423,7 +425,7 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 		Part->SetLeaderPoseComponent(Body); // volgt de pose van de basis-body -> animeert mee, geen eigen eval
 		Part->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		Part->bEnableUpdateRateOptimizations = true;
-		Part->SetCastShadow(false);
+		Part->SetCastShadow(true); // modulaire delen werpen OOK schaduw -> compleet silhouet. De Casual-basisbody is HOOFDLOOS (hoofd = los onderdeel), dus zonder dit miste de schaduw kop + heupen/kleding op die modellen. Ver weg gecullt (Shadow.RadiusThreshold + cull 16000); GPU heeft headroom.
 		Part->SetCullDistance(16000.f);
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		if (Sl.bCloth) { WeedNpc_TintClothing(Part, Seed + Sl.Salt); }      // top/broek/schoenen: random kleur
@@ -456,7 +458,7 @@ static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* 
 		Part->SetLeaderPoseComponent(Body); // volgt de pose van de basis-body (zelfde Citizens-skelet)
 		Part->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		Part->bEnableUpdateRateOptimizations = true;
-		Part->SetCastShadow(false);
+		Part->SetCastShadow(true); // modulaire delen werpen OOK schaduw -> compleet silhouet. De Casual-basisbody is HOOFDLOOS (hoofd = los onderdeel), dus zonder dit miste de schaduw kop + heupen/kleding op die modellen. Ver weg gecullt (Shadow.RadiusThreshold + cull 16000); GPU heeft headroom.
 		Part->SetCullDistance(16000.f);
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		WeedNpc_TintClothing(Part, Seed + Salt); // Set1/Set2-slots krijgen random kleur (Tone_A..F)
@@ -520,6 +522,91 @@ static void WeedNpc_TintHair(USkeletalMeshComponent* SkM, uint32 Seed)
 		MID->SetVectorParameterValue(TEXT("RootColor"), C * 0.7f);
 		MID->SetVectorParameterValue(TEXT("TipColor"),  C);
 		MID->SetVectorParameterValue(TEXT("DyeColor"),  C);
+		// HAAR GLOEIT IN DE ZON (tegenlicht schijnt door de haar-cards = bright halo). Temper de doorschijn +
+		// de felle highlight. M_Hair's exacte param-naam is onbekend, dus de gangbare proberen; niet-bestaande
+		// worden door UE genegeerd, de juiste pakt 'm.
+		MID->SetScalarParameterValue(TEXT("Backlit"), 0.f);          // hair-shader: geen zon-doorschijn
+		MID->SetScalarParameterValue(TEXT("Scatter"), 0.f);
+		MID->SetVectorParameterValue(TEXT("SubsurfaceColor"), FLinearColor::Black); // two-sided-foliage: geen transmissie
+		MID->SetScalarParameterValue(TEXT("Specular"), 0.25f);       // minder felle highlight
+		MID->SetScalarParameterValue(TEXT("Roughness"), 0.75f);      // ruwer = minder bloom op de highlight
+	}
+}
+
+// CROWD-skin-pool: alle VOLLEDIGE modellen waar de straat-crowd uit kiest (per NpcId-seed verdeeld) - de bestaande
+// Citizens/Casual + de nieuwe packs. Zo zie je ze in-game en kies je welke je houdt. Een pad dat niet laadt
+// (broken ref / verkeerd skelet) valt veilig terug op de basis-pool i.p.v. te crashen.
+static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
+{
+	static const TCHAR* Pool[] = {
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_1/SK_Casual_1.SK_Casual_1"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_2/SK_Casual_2.SK_Casual_2"),
+		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_3/SK_Casual_3.SK_Casual_3"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_A.SK_Citizens_Pack_Tony_A"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
+		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_D.SK_Citizens_Pack_Tony_D"),
+		// --- NIEUWE packs (net naar schone paden verplaatst) ---
+		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_01.SK_GamerGirl_01"),
+		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_02.SK_GamerGirl_02"),
+		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_03.SK_GamerGirl_03"),
+		// School_Girl: terug erin om in-game te testen (jij zag 'm mogelijk wél werken). Eigen skelet -> als 'ie
+		// T-poset deelt 'ie GymGirls' probleem; zo niet is z'n skelet mannequin-compatibel en blijft 'ie staan.
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_CasualOutfit.SK_SchoolGirl_CasualOutfit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SchoolOutfit.SK_SchoolGirl_SchoolOutfit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SportOutfit.SK_SchoolGirl_SportOutfit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SwimSuit.SK_SchoolGirl_SwimSuit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_DressOutfit.SK_SchoolGirl_DressOutfit"),
+		// GymGirls UIT: eigen rig (skelet las als NONE) -> bevestigd kapot in je screenshot; pas terug na retarget.
+	};
+	const int32 N = UE_ARRAY_COUNT(Pool);
+	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, Pool[Seed % (uint32)N])) { return M; }
+	return WeedNpc_SkinByIndex((int32)(Seed % 10u)); // niet-geladen pad -> veilige terugval op de basis-pool
+}
+
+// Per-NPC HUID + GEZICHT: wissel de huid-/gezicht-materiaalslots naar een willekeurige MI_Body_/MI_Head_ uit de
+// pack (10 huidskleuren + 10 gezichten). Pure SetMaterial-override op de BESTAANDE mesh -> 0 extra componenten,
+// 0 hitch. Niet-matchende slots worden veilig overgeslagen. Geeft de crowd ~10x10 extra variatie bovenop 't silhouet.
+static void WeedNpc_TintSkin(USkeletalMeshComponent* SkM, uint32 Seed)
+{
+	if (!SkM) { return; }
+	static const TCHAR* Body[] = {
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_1.MI_Body_1"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_2.MI_Body_2"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_3.MI_Body_3"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_4.MI_Body_4"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_5.MI_Body_5"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_6.MI_Body_6"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_7.MI_Body_7"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_8.MI_Body_8"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_9.MI_Body_9"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_10.MI_Body_10") };
+	static const TCHAR* Head[] = {
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_1.MI_Head_1"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_2.MI_Head_2"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_3.MI_Head_3"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_4.MI_Head_4"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_5.MI_Head_5"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_6.MI_Head_6"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_7.MI_Head_7"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_8.MI_Head_8"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_9.MI_Head_9"),
+		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_10.MI_Head_10") };
+	UMaterialInterface* BodyMat = LoadObject<UMaterialInterface>(nullptr, Body[(Seed * 2654435761u) % 10]);
+	UMaterialInterface* HeadMat = LoadObject<UMaterialInterface>(nullptr, Head[((Seed >> 8) * 2246822519u) % 10]);
+	const TArray<UMaterialInterface*> Mats = SkM->GetMaterials();
+	for (int32 i = 0; i < Mats.Num(); ++i)
+	{
+		if (!Mats[i]) { continue; }
+		const FString Nm = Mats[i]->GetName();
+		if (Nm.Contains(TEXT("Hair"))) { continue; }
+		const bool bCloth = Nm.Contains(TEXT("Cloth")) || Nm.Contains(TEXT("Top")) || Nm.Contains(TEXT("Pant")) || Nm.Contains(TEXT("Jean")) || Nm.Contains(TEXT("Short")) || Nm.Contains(TEXT("Shoe")) || Nm.Contains(TEXT("Sneak")) || Nm.Contains(TEXT("Set")) || Nm.Contains(TEXT("Shirt")) || Nm.Contains(TEXT("Hoodie")) || Nm.Contains(TEXT("Sweater"));
+		if (bCloth) { continue; }
+		if (BodyMat && (Nm.Contains(TEXT("Body")) || Nm.Contains(TEXT("Skin")) || Nm.Contains(TEXT("Arm")) || Nm.Contains(TEXT("Leg")))) { SkM->SetMaterial(i, BodyMat); }
+		else if (HeadMat && (Nm.Contains(TEXT("Head")) || Nm.Contains(TEXT("Face")))) { SkM->SetMaterial(i, HeadMat); }
 	}
 }
 
@@ -578,7 +665,7 @@ void ACustomerBase::BuildAppearance()
 	// kleur-tint). Alleen NPC's waar je mee DEALT (niet-crowd) krijgen de volle modulaire variatie.
 	if (bCrowdNpc)
 	{
-		if (USkeletalMesh* Sk = WeedNpc_SkinByIndex(SkinIdx)) { SkM->SetSkeletalMesh(Sk); WeedNpc_TintClothing(SkM, LookSeed); }
+		if (USkeletalMesh* Sk = WeedNpc_CrowdSkin(LookSeed)) { SkM->SetSkeletalMesh(Sk); WeedNpc_TintClothing(SkM, LookSeed); }
 	}
 	else if (SkinIdx >= 3 && SkinIdx <= 5)
 	{
@@ -785,6 +872,25 @@ bool ACustomerBase::RefreshProspect()
 	return false;
 }
 
+void ACustomerBase::ReassignCrowdIdentity(FName NewId)
+{
+	if (!HasAuthority() || NewId.IsNone() || NewId == NpcId) { return; }
+	NpcId = NewId;
+	// Stats + skin opnieuw afleiden uit de nieuwe identiteit (elke NpcId heeft z'n eigen vaste skin + persoonlijkheid).
+	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+		{
+			float R = Respect, L = Loyalty, A = Addiction; FText Nm;
+			if (Reg->GetStats(NpcId, R, L, A, Nm)) { Respect = R; Loyalty = L; Addiction = A; }
+			const int32 Tier = Reg->GetCustomerTier(NpcId);
+			RepSkinIndex = Reg->GetOrAssignSkin(NpcId, Tier, (int32)WeedNpc_StableSeed(NpcId));
+		}
+	}
+	bAppearanceBuilt = false;
+	BuildAppearance(); // host bouwt 't uiterlijk direct; co-op-clients via OnRep van NpcId/RepSkinIndex
+}
+
 void ACustomerBase::WriteStatsToRegistry()
 {
 	// In competitive schrijven we naar de per-speler-sleutel (ActiveRelKey); in co-op naar de gedeelde NpcId.
@@ -885,7 +991,7 @@ void ACustomerBase::Tick(float DeltaSeconds)
 	}
 
 	// Geduld loopt af zolang hij wacht (wil bestellen of onderhandelt).
-	if (State == ECustomerState::WantsToOrder || State == ECustomerState::Negotiating)
+	if ((State == ECustomerState::WantsToOrder || State == ECustomerState::Negotiating) && !bVirtualCrowdBody) // crowd-decoratie verloopt z'n geduld NIET -> vertrekt nooit als ontevreden klant (anti-churn)
 	{
 		PatienceSeconds -= DeltaSeconds;
 		if (PatienceSeconds <= 0.f)
@@ -908,7 +1014,7 @@ void ACustomerBase::Tick(float DeltaSeconds)
 				WalkTo(HomeLocation);
 			}
 			const bool bArrived = bHasHome && FVector::DistSquared2D(GetActorLocation(), HomeLocation) < FMath::Square(150.f);
-			if (bArrived || LeaveTimer >= 20.f)
+			if ((bArrived || LeaveTimer >= 20.f) && !bVirtualCrowdBody)
 			{
 				Destroy();
 			}
@@ -1714,11 +1820,28 @@ float ACustomerBase::ComputeApptWaitSeconds() const
 void ACustomerBase::NotifyNoShowAndLeave()
 {
 	if (!HasAuthority()) { return; }
-	// Speler kwam niet opdagen: één nette penalty (Respect via LeaveAngry, Loyalty hier) + boos chat-bericht.
+	// Je nam de afspraak AAN en bent niet (op tijd) komen opdagen -> dat telt ZWAARDER dan een genegeerd
+	// verzoek (de give-up-tak in ContactsComponent doet Respect-4). Stevige penalty + boos bericht.
+	Respect = ClampAttr(Respect - 10.f);
 	Loyalty = ClampAttr(Loyalty - 8.f);
 	PushApptMessage(TEXT("You never showed. Don't waste my time again - that costs you."));
 	EndAppointment();
-	LeaveAngry();           // Respect -10 + State = Leaving (geen extra Respect-penalty hier; geen dubbeltelling)
+	// ...maar hij despawnt NIET: hij loopt geirriteerd gewoon verder rond. En hij laat je daarna een tijd
+	// met rust (langere afspraak-cooldown), net als de give-up-tak bij een genegeerd verzoek. Alleen een
+	// eenmalig opgeroepen afspraak-NPC (one-off) ruimen we netjes (off-screen) op zodat ze niet ophopen.
+	if (!NpcId.IsNone())
+	{
+		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+			{
+				Reg->SetApptCooldownMult(NpcId, 2.5f); // laat je daarna langer met rust
+				Reg->NoteAppointment(NpcId);           // start de (langere) cooldown
+			}
+		}
+	}
+	if (bDespawnAfterServed) { State = ECustomerState::Leaving; }
+	else { State = ECustomerState::WantsToOrder; }
 	WriteStatsToRegistry(); // bijgewerkte Respect + Loyalty wegschrijven
 }
 

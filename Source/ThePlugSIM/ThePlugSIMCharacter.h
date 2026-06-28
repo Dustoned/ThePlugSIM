@@ -41,6 +41,16 @@ class AThePlugSIMCharacter : public ACharacter, public IPlayerNpcActions
 	// Hoeveel cm de FP-camera omhoog komt tijdens een sprong (zodat je over je optrekkende body heen kijkt).
 	float JumpCamLift = 34.f;
 
+	// Camera-ooghoogte volgt de verticale head-bone-beweging (van GetMesh) zodat de camera met je hoofd meebeweegt
+	// tijdens lopen/springen. RestHeadZ = ruststand (1x gemeten); HeadFollowAmount (0..1) dempt de bob.
+	float RestHeadZ = 0.f;
+	bool bRestHeadZSet = false;
+	float HeadFollowAmount = 0.6f;
+	float SmoothedEyeZ = 80.f; // bob-VRIJE gesmoothde ooghoogte (head-bone-volgend)
+	float BobPhase = 0.f;      // loop-bob fase
+	FVector GroundHeadCap = FVector(0.f, 0.f, 50.f); // FP-head positie (capsule-relatief) in de GROND-pose = referentie voor sprong-tracking
+	FVector SmoothedJumpOff = FVector::ZeroVector;    // gesmoothde 3D-camera-verschuiving tijdens een sprong (volgt exact je hoofd)
+
 	// Loopsnelheden: standaard LOPEN; Shift ingehouden = RENNEN. De blend-space toont walk/run vanzelf op snelheid.
 	// Co-op: de snelheid wordt ook server-side gezet (ServerSetSprint) zodat client-prediction niet corrigeert.
 	UPROPERTY(EditAnywhere, Category="WeedShop|Movement", meta=(AllowPrivateAccess="true"))

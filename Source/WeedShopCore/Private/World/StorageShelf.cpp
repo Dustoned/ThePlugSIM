@@ -39,6 +39,10 @@ int32 AStorageShelf::GetCapacity() const
 	if (ShelfTier == FName(TEXT("Fridge")))       { return 8;  } // basis-koelkast: klein, vroeg in 't spel
 	if (ShelfTier == FName(TEXT("Fridge_Large"))) { return 16; } // grotere koelkast (upgrade)
 	if (ShelfTier == FName(TEXT("Fridge_XL")))    { return 28; } // walk-in koelkast (top-upgrade)
+	if (ShelfTier == FName(TEXT("Safe_Small")))  { return 4;  } // kluis-tiers: item-slots per grootte (gehalveerd, top iets steiler)
+	if (ShelfTier == FName(TEXT("Safe_Medium"))) { return 8;  }
+	if (ShelfTier == FName(TEXT("Safe_Large")))  { return 14; }
+	if (ShelfTier == FName(TEXT("Safe_Vault")))  { return 20; }
 	return 24;
 }
 
@@ -65,7 +69,9 @@ void AStorageShelf::SetupVisual()
 
 	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
 	const bool bFridge = ShelfTier.ToString().StartsWith(TEXT("Fridge")); // alle koelkast-tiers (Fridge / _Large / _XL)
-	const FLinearColor Col = bChest ? FLinearColor(0.32f, 0.20f, 0.10f)
+	const bool bSafe = IsSafe();
+	const FLinearColor Col = bSafe ? FLinearColor(0.20f, 0.21f, 0.24f) // donker gunmetal (kluis)
+		: bChest ? FLinearColor(0.32f, 0.20f, 0.10f)
 		: bFridge ? FLinearColor(0.85f, 0.86f, 0.88f) // staal-wit
 		: FLinearColor(0.45f, 0.30f, 0.18f);
 	if (DynMat) { DynMat->SetVectorParameterValue(TEXT("Color"), Col); }
@@ -101,6 +107,16 @@ void AStorageShelf::SetupVisual()
 		PropKit::SetPart(Parts[4], PropKit::Cube(), FVector(W * 0.14f, D * 0.10f, H * 0.10f), FVector(0, D * 0.5f, Floor + BodyH * 0.55f), FLinearColor(0.7f, 0.6f, 0.2f));
 		for (int32 i = 5; i < 9; ++i) { if (Parts[i]) { Parts[i]->SetVisibility(false); } }
 	}
+	else if (bSafe)
+	{
+		// Kluis: solide romp + deur-paneel + draaiknop + greep (dicht, niet open zoals een schap).
+		const FLinearColor Door(0.28f, 0.29f, 0.33f), Dial(0.55f, 0.56f, 0.60f), HandleC(0.6f, 0.6f, 0.62f);
+		PropKit::SetPart(Parts[0], PropKit::Cube(), FVector(W, D, H), FVector(0, 0, 0), Col);
+		PropKit::SetPart(Parts[1], PropKit::Cube(), FVector(W * 0.80f, D * 0.06f, H * 0.80f), FVector(0, -D * 0.5f, 0), Door);
+		PropKit::SetPart(Parts[2], PropKit::Cube(), FVector(W * 0.16f, D * 0.10f, H * 0.16f), FVector(0, -D * 0.5f - 2.f, 0), Dial);
+		PropKit::SetPart(Parts[3], PropKit::Cube(), FVector(W * 0.05f, D * 0.10f, H * 0.34f), FVector(W * 0.28f, -D * 0.5f - 2.f, 0), HandleC);
+		for (int32 i = 4; i < 9; ++i) { if (Parts[i]) { Parts[i]->SetVisibility(false); } }
+	}
 	else
 	{
 		// Schap: 2 zijpanelen + achterwand + 4 legborden.
@@ -135,7 +151,7 @@ void AStorageShelf::BeginPlay()
 	SetupVisual();
 	// Versheid: een GEWONE plank/kist laat boter/edibles ook bederven (alleen een Fridge koelt).
 	// Server-timer elke 10s; Fridge-shelves slaan we over zodat ze de inhoud vers houden.
-	if (HasAuthority() && !ShelfTier.ToString().StartsWith(TEXT("Fridge")))
+	if (HasAuthority() && !ShelfTier.ToString().StartsWith(TEXT("Fridge")) && !IsSafe())
 	{
 		GetWorldTimerManager().SetTimer(PerishTimer, this, &AStorageShelf::DegradeShelfPerishables, 10.f, true, 10.f);
 	}
@@ -248,6 +264,6 @@ FText AStorageShelf::GetInteractionPrompt_Implementation() const
 {
 	const bool bChest = (ShelfTier == FName(TEXT("Chest")));
 	const bool bFridge = ShelfTier.ToString().StartsWith(TEXT("Fridge"));
-	const TCHAR* Name = bChest ? TEXT("Storage chest") : (bFridge ? TEXT("Fridge") : TEXT("Storage shelf"));
+	const TCHAR* Name = IsSafe() ? TEXT("Safe") : (bChest ? TEXT("Storage chest") : (bFridge ? TEXT("Fridge") : TEXT("Storage shelf")));
 	return FText::FromString(FString::Printf(TEXT("%s  (%d/%d slots)"), Name, Contents.Num(), GetCapacity()));
 }

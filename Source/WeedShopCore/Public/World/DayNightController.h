@@ -103,6 +103,42 @@ protected:
 	TWeakObjectPtr<class ADirectionalLight> PackSun;   // eigen bewegende zon op pack-maps
 	TWeakObjectPtr<class APostProcessVolume> BloomPPV; // bloom-rem (zonneschijn was een witte waas)
 	bool bAtmosphereTuned = false; // Mie-waas van de map-atmosfeer een keer temmen
+
+	// --- UltraDynamicSky-integratie (pack-maps): UDS levert zon/lucht/wolken/weer; wij voeden z'n tijd uit de klok ---
+	bool bUseUDS = false;
+	TWeakObjectPtr<AActor> UdsSky;          // runtime-gespawnde Ultra_Dynamic_Sky-actor
+	FProperty* UdsTimeProp = nullptr;       // "Time of Day" (0..2400)
+	UFunction* UdsUpdateFn = nullptr;       // "Update Active Variables"
+	UFunction* UdsUpdateStaticFn = nullptr; // "Update Static Variables" (forceert her-cache van o.a. wolken)
+	float LastUdsTod = -1.f;
+	float LastUdsCloud = -999.f, LastUdsFog = -999.f;
+	float UdsExtraNightCloudy = 0.f;         // cloudy-nacht-boost uit
+	int32 UdsWeather = 0;                    // 0 clear,1 cloudy,2 rain,3 storm,4 snow,5 fog
+	TWeakObjectPtr<AActor> UdsSound;         // environment-sound-actor (tijd/weer-gestuurd)
+	TWeakObjectPtr<AActor> UdsWeatherActor;  // Ultra Dynamic Weather (zit in de pack) -> echt regen/sneeuw/storm
+	void SpawnUDS();                         // laad + spawn de UDS-BP, cache property/functie
+	void DriveUDS(float ClockHour);          // Time of Day uit de klok + Update Active Variables
+	void SetUdsDouble(FName P, double V);
+	void SetUdsBool(FName P, bool V);
+	void CallUdsUpdate();
+
+public:
+	// UDS-look LIVE tunables (dev-menu Light-tab); UDS bezit de belichting via "Apply Exposure Settings".
+	UPROPERTY() float UdsExpDay = -0.5f;       // EV-bias dag (-2..+1)
+	UPROPERTY() float UdsExpDawnDusk = -0.3f;  // EV-bias dageraad/schemer
+	UPROPERTY() float UdsExpNight = -1.2f;      // EV-bias nacht (-4..+1)
+	UPROPERTY() float UdsCloud = 0.4f;         // wolkendek 0..1 (UDS-achtige default = partly cloudy)
+	UPROPERTY() float UdsFog = 0.f;            // mist 0..1
+	UPROPERTY() float UdsStars = 2.5f;         // sterren-intensiteit
+	UPROPERTY() float UdsNebula = 1.2f;        // nebula/melkweg-intensiteit
+	UPROPERTY() float UdsNightGlow = 0.3f;     // nacht-lucht-glow (lager = donkerder, sterren poppen)
+	void ApplyUdsLook();                       // push exposure + cloud + fog naar UDS (live)
+	void SetUdsWeather(int32 WeatherType);     // (oud, ongebruikt) Sky-only weer
+	void SetWeatherPreset(const FString& PresetName, double TransitionSeconds = 0.0); // UDW Change Weather (TransitionSeconds=0 -> nette default)
+	void SetRandomWeather(bool bOn);                  // auto-weer aan/uit (eigen gewogen loting per dag)
+	void PickAndApplyWeather();                       // kiest gewogen een weer (clear/cloudy/foggy vaak, sneeuw zeldzaam)
+	bool bAutoWeather = true;                          // auto-weer actief
+	float WeatherTimer = 0.f;                           // game-sec tot de volgende weer-keuze (kort na slecht weer)
 	// Pack-lampen: de lantaarn/plafondlamp-meshes van de map hebben geen echte lichten -
 	// wij hangen er warme puntlichten aan die op de klok aan/uit gaan.
 	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> PackLampLights;
@@ -123,6 +159,7 @@ protected:
 	struct FRefCap { TWeakObjectPtr<class UReflectionCaptureComponent> Cap; float OrigBrightness = 1.f; };
 	TArray<FRefCap> RefCaps;
 	TSet<class UReflectionCaptureComponent*> SeenRefCaps;
+	TSet<class UDecalComponent*> SeenDecals; // map-decals 1x FadeScreenSize omhoog -> verre decals faden echt uit (perf)
 	float LastRefMul = -1.f;
 	// SKYLIGHTS apart: USkyLightComponent erft van ULightComponentBase (NIET ULightComponent), dus de
 	// gewone dim-scan miste 'm -> de movable skylight bleef 's nachts op dag-sterkte en spiegelde z'n
@@ -133,6 +170,7 @@ protected:
 	TArray<TWeakObjectPtr<class UStaticMeshComponent>> DomeComps; // HDRI-fotokoepel (dag-lucht)
 	TSet<TWeakObjectPtr<class ULightComponent>> SeenLights;
 	float LightScanTimer = 0.f;
+	float LightBudgetTimer = 0.f; // licht-budget-pool: cap zichtbare Movable-lampen op de N-dichtstbij de speler (perf: count drijft InitViews/Lighting)
 	int32 LightScanDry = 0; // opeenvolgende scans zonder iets nieuws -> scan-interval omhoog (geen 6s-hitch meer)
 	TSet<TWeakObjectPtr<AActor>> LightScanSeenActors; // al-verwerkte actors -> volledig overslaan (geen herhaalde
 	                                                  // per-actor component-gather + string-checks elke scan = de periodieke hang)

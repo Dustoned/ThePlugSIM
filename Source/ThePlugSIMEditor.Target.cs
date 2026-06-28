@@ -8,7 +8,7 @@ public class ThePlugSIMEditorTarget : TargetRules
 	public ThePlugSIMEditorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
-		DefaultBuildSettings = BuildSettingsVersion.V6;
+		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_7;
 		ExtraModuleNames.Add("ThePlugSIM");
 		ExtraModuleNames.Add("WeedShopCore");
