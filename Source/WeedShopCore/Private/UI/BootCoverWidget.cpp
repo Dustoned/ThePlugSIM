@@ -139,7 +139,7 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Cover weghalen: kamer klaar + korte na-buffer (omgeving laat bijladen). MAAR niet zolang de
 	// shaders nog compileren (editor) - anders zie je een zwarte/onafgewerkte scene met nog-niet-klare
 	// materials. De harde cap is hoger als de shaders nog bezig zijn (eerste keer compileren duurt lang).
-	const float HardCap = bShadersBusy ? 120.f : 30.f;
+	const float HardCap = bShadersBusy ? 120.f : 45.f;
 	// Terwijl de shaders nog compileren: duidelijke melding (niet eindeloos 'random' tekst).
 	if (bShadersBusy && bReady && StatusText)
 	{
@@ -150,7 +150,7 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// lighting-scenarios + de dag/nacht-look + de auto-exposure nog ACHTER de cover in (anders zag je 2
 	// light-flashes bij spawn). +4s zodat het echt helemaal klaar is voordat de cover wegfadet.
 	if (bReady && !bShadersBusy && SettleAt < 0.f) { SettleAt = E; }
-	const bool bBufferDone = (SettleAt >= 0.f) && (E - SettleAt > 4.0f);
+	const bool bBufferDone = (SettleAt >= 0.f) && (E - SettleAt > 8.0f); // langere na-buffer: grote beach-map + nieuwe packs streamen na vloer-ready nog door
 	if (!bFading && (bBufferDone || E > HardCap)) { bFading = true; }
 
 	// VLOEIENDE, MONOTONE progress-bar: puur op TIJD, NOOIT op de togglende shader-status (die wisselt

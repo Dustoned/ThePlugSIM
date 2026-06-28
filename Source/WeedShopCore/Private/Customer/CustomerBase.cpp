@@ -718,7 +718,13 @@ void ACustomerBase::BuildAppearance()
 	// kleur-tint). Alleen NPC's waar je mee DEALT (niet-crowd) krijgen de volle modulaire variatie.
 	if (bCrowdNpc)
 	{
-		if (USkeletalMesh* Sk = WeedNpc_CrowdSkin(LookSeed)) { SkM->SetSkeletalMesh(Sk); WeedNpc_TintClothing(SkM, LookSeed); }
+		// MEER crowd-variatie: 4/6 houdt de goedkope vaste skin (incl. de girl-packs -> blijven vaak), 1/6 wordt een
+		// modulaire Regular_Male civilian, 1/6 een modulaire Casual/Tony. De modulaire builds geven honderden combo's
+		// (kleding/hoofd/accessoires), zijn gespreid (1/tick via DoorRetrofitter) + grotendeels achter de loading-cover.
+		const uint32 V = LookSeed % 6u;
+		if (V == 4u) { WeedNpc_BuildModularCitizenMan(this, SkM, LookSeed); }
+		else if (V == 5u) { if ((LookSeed & 8u) == 0u) { WeedNpc_BuildModular(this, SkM, LookSeed); } else { WeedNpc_BuildModularCitizens(this, SkM, LookSeed); } }
+		else if (USkeletalMesh* Sk = WeedNpc_CrowdSkin(LookSeed)) { SkM->SetSkeletalMesh(Sk); const FString SkP = Sk->GetPathName(); if (!SkP.Contains(TEXT("/Gamer_Girl/")) && !SkP.Contains(TEXT("/SchoolGirl/"))) { WeedNpc_TintClothing(SkM, LookSeed); } } // girl-packs: eigen outfits, niet overtinten
 	}
 	else if (SkinIdx >= 3 && SkinIdx <= 5)
 	{
@@ -939,6 +945,17 @@ void ACustomerBase::ReassignCrowdIdentity(FName NewId)
 			if (Reg->GetStats(NpcId, R, L, A, Nm)) { Respect = R; Loyalty = L; Addiction = A; }
 			const int32 Tier = Reg->GetCustomerTier(NpcId);
 			RepSkinIndex = Reg->GetOrAssignSkin(NpcId, Tier, (int32)WeedNpc_StableSeed(NpcId));
+		}
+	}
+	// Oude MODULAIRE parts opruimen vóór de re-skin: de modulaire builders maken losse child-mesh-componenten en
+	// ruimen ze niet zelf op -> zonder dit stapelen ze bij elke dagelijkse reroll (component-leak op crowd-NPC's).
+	if (USkeletalMeshComponent* Bd = GetMesh())
+	{
+		TArray<USceneComponent*> Kids;
+		Bd->GetChildrenComponents(false, Kids);
+		for (USceneComponent* K : Kids)
+		{
+			if (K && K->IsA<USkeletalMeshComponent>()) { K->DestroyComponent(); }
 		}
 	}
 	bAppearanceBuilt = false;
