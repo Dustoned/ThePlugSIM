@@ -648,6 +648,59 @@ static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed)
 	}
 }
 
+// MODULAIRE Civilian (Citizen_man_01 / "Regular Male"-pack): zelfde aanpak als WeedNpc_BuildModular, maar met
+// de Citizen_man_01-parts (óók op UE4_Mannequin_Skeleton -> volgen via LeaderPose, animeren mee). Basis =
+// headless body_01; daaroverheen 1 hoofd + 1 top (shirt/t-shirt/sleeveless/jacket) + 1 broek (classic/jeans/
+// shorts) + schoenen + optioneel haar/hoed + bril. 5x11x3x3 = honderden civilian-combo's, eigen materials.
+static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent* Body, uint32 Seed)
+{
+	if (!Owner || !Body) { return; }
+	static const TCHAR* C = TEXT("/Game/Citizen_man_01/mesh/");
+	// Naakte headless basis-body (wordt bedekt door hoofd + kleding).
+	if (USkeletalMesh* B = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Citizen_man_01/mesh/citizen_man_01_body_01.citizen_man_01_body_01")))
+	{
+		Body->SetSkeletalMesh(B);
+	}
+	auto Pick = [&](const TArray<FString>& Opts, uint32 Salt) -> FString
+	{
+		if (Opts.Num() == 0) { return FString(); }
+		return Opts[(Seed * 131u + Salt) % (uint32)Opts.Num()];
+	};
+	struct FSlot { TArray<FString> Opts; uint32 Salt; };
+	const TArray<FSlot> Slots = {
+		{ { TEXT("citizen_man_01_head_01"), TEXT("citizen_man_01_head_02"), TEXT("citizen_man_01_head_03"), TEXT("citizen_man_01_head_04"), TEXT("citizen_man_01_head_05") }, 11u },
+		{ { TEXT("citizen_man_01_shirt_01"), TEXT("citizen_man_01_shirt_02"), TEXT("citizen_man_01_t_shirt_01"), TEXT("citizen_man_01_t_shirt_02"),
+		    TEXT("citizen_man_01_sleevless_shirt_01"), TEXT("citizen_man_01_sleevless_shirt_02"),
+		    TEXT("citizen_man_01_jacket_classic_01"), TEXT("citizen_man_01_jacket_classic_02"),
+		    TEXT("citizen_man_01_jacket_leather_01"), TEXT("citizen_man_01_jacket_leather_02"), TEXT("citizen_man_01_jacket_leather_03") }, 23u },
+		{ { TEXT("citizen_man_01_pants_classic_01"), TEXT("citizen_man_01_pants_jeans_01"), TEXT("citizen_man_01_shorts_01") }, 41u },
+		{ { TEXT("citizen_man_01_shoes_classic_01"), TEXT("citizen_man_01_shoes_slippers_01"), TEXT("citizen_man_01_shoes_sneakers_01") }, 67u },
+		// Haar/hoofddeksel: kaal, haar of hoed.
+		{ { TEXT(""), TEXT("citizen_man_01_hair_01"), TEXT("citizen_man_01_hat_01") }, 89u },
+		// Optionele bril: meestal niks.
+		{ { TEXT(""), TEXT(""), TEXT(""), TEXT("citizen_man_01_glasses_frame_01") }, 113u },
+	};
+	for (const FSlot& Sl : Slots)
+	{
+		const FString Rel = Pick(Sl.Opts, Sl.Salt);
+		if (Rel.IsEmpty()) { continue; }
+		const FString Path = FString(C) + Rel + TEXT(".") + Rel; // parts liggen plat in /mesh/, objectnaam == bestandsnaam
+		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
+		if (!PM) { continue; }
+		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
+		Part->SetupAttachment(Body);
+		Part->RegisterComponent();
+		Part->SetSkeletalMesh(PM);
+		Part->SetLeaderPoseComponent(Body); // volgt de body-pose -> animeert mee, geen eigen eval
+		Part->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		Part->bEnableUpdateRateOptimizations = true;
+		Part->SetCastShadow(true);
+		Part->SetCullDistance(16000.f);
+		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		// Geen tint: Citizen_man heeft z'n eigen materials (variatie komt uit de mesh-combo's).
+	}
+}
+
 // Bouwt het uiterlijk (mesh + modulaire parts + kleur-tint) deterministisch op uit NpcId (seed) + RepSkinIndex.
 // Draait op host EN client: meshes/parts/MIDs repliceren niet, maar zijn 100% afleidbaar uit deze twee
 // gerepliceerde waarden, dus host en client bouwen exact dezelfde persoon lokaal. 1x per pawn (idempotent).
@@ -669,8 +722,9 @@ void ACustomerBase::BuildAppearance()
 	}
 	else if (SkinIdx >= 3 && SkinIdx <= 5)
 	{
-		// Casual-band -> MODULAIRE persoon: random combinatie van top/broek/schoenen/kapsel/hoofd (+ kleur).
-		WeedNpc_BuildModular(this, SkM, LookSeed);
+		// Casual-band -> MODULAIRE persoon. ~Helft Casual-kleding, ~helft Citizen_man (Regular Male civilian) -> meer variatie.
+		if ((LookSeed % 2u) == 0u) { WeedNpc_BuildModularCitizenMan(this, SkM, LookSeed); }
+		else                       { WeedNpc_BuildModular(this, SkM, LookSeed); }
 	}
 	else if (SkinIdx >= 6 && SkinIdx <= 9)
 	{
