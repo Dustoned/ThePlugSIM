@@ -12,7 +12,7 @@ class UCanvasPanel;
 class UWidget;
 class UTextBlock;
 
-UCLASS()
+UCLASS(Blueprintable)
 class WEEDSHOPCORE_API UPauseMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
@@ -26,17 +26,18 @@ public:
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	void BuildShell(UCanvasPanel* Root);
 
-	void OnResume();
-	void OnUnstuck();
-	void OnSave();
-	void OnLoad();
-	void OnSettings();
-	void OnMainMenu();
-	void OnQuit();
+	UFUNCTION() void OnResume();
+	UFUNCTION() void OnUnstuck();
+	UFUNCTION() void OnSave();
+	UFUNCTION() void OnLoad();
+	UFUNCTION() void OnSettings();
+	UFUNCTION() void OnMainMenu();
+	UFUNCTION() void OnQuit();
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 

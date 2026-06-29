@@ -1104,7 +1104,12 @@ void UPhoneClientComponent::EnsureWidget()
 	if (DryRackWidget) { DryRackWidget->SetPhone(this); DryRackWidget->AddToViewport(32); }
 	StoreWidget = CreateWidget<UStoreWidget>(PC, UStoreWidget::StaticClass());
 	if (StoreWidget) { StoreWidget->SetPhone(this); StoreWidget->AddToViewport(33); }
-	PauseWidget = CreateWidget<UPauseMenuWidget>(PC, UPauseMenuWidget::StaticClass());
+	{
+		// Pauzemenu: gebruik de kit-gestylde WBP-subclass als die bestaat, anders de C++-fallback.
+		UClass* PauseCls = LoadClass<UPauseMenuWidget>(nullptr, TEXT("/Game/UI/Screens/WBP_PauseMenu.WBP_PauseMenu_C"));
+		if (!PauseCls) { PauseCls = UPauseMenuWidget::StaticClass(); }
+		PauseWidget = CreateWidget<UPauseMenuWidget>(PC, PauseCls);
+	}
 	if (PauseWidget) { PauseWidget->SetPhone(this); PauseWidget->AddToViewport(40); }
 	MainMenuWidget = CreateWidget<UMainMenuWidget>(PC, UMainMenuWidget::StaticClass());
 	if (MainMenuWidget) { MainMenuWidget->SetPhone(this); MainMenuWidget->AddToViewport(42); }

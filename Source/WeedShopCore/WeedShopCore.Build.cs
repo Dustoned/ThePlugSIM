@@ -30,7 +30,15 @@ public class WeedShopCore : ModuleRules
 			"AssetRegistry", // wardrobe: pack-mappen scannen voor auto-detectie van alle kleding/haar
 			"RHI",           // PipelineStateCache: PSO-precaching-status -> laadscherm wacht erop
 			"RenderCore",    // FlushRenderingCommands: kaart-capture sync (nacht-lampen-cull rond CaptureScene)
-			"ApplicationCore" // FDisplayMetrics: monitor onder het venster vinden (multi-monitor fullscreen)
+			"ApplicationCore", // FDisplayMetrics: monitor onder het venster vinden (multi-monitor fullscreen)
+			"Json",          // WeedUiAuthoring: JSON-spec -> WBP-tree
+			"JsonUtilities"
 		});
+
+		if (Target.bBuildEditor)
+		{
+			// Editor-only: WeedUiAuthoring bouwt programmatisch widget-trees in WBP-assets (UI-rework).
+			PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "UMGEditor", "Kismet", "BlueprintGraph" });
+		}
 	}
 }

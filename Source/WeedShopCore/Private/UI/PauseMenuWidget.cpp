@@ -144,6 +144,22 @@ void UPauseMenuWidget::OnQuit()
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 
+void UPauseMenuWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	// WBP-pad: dit is een WBP-subclass met een eigen (kit-gestylde) tree -> bind de named knoppen aan de
+	// handlers. Op de pure C++-fallback bestaan deze namen niet -> no-op (de BuildShell-knoppen binden zelf).
+	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Resume"))))   { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnResume); }
+	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Unstuck"))))  { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnUnstuck); }
+	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Settings")))) { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnSettings); }
+	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Save"))))     { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnSave); }
+	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Load"))))     { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnLoad); }
+	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_MainMenu")))) { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnMainMenu); }
+	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Quit"))))     { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuit); }
+	if (UWidget* D = GetWidgetFromName(TEXT("Dim"))) { Backdrop = D; }
+	if (UTextBlock* S = Cast<UTextBlock>(GetWidgetFromName(TEXT("StatusText")))) { StatusText = S; }
+}
+
 void UPauseMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
