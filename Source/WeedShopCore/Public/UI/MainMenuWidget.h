@@ -57,6 +57,11 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> CoopPanel;        // co-op kaart (host / join)
 	UPROPERTY() TObjectPtr<class UEditableTextBox> CoopIpBox; // host-IP invoerveld
 	UPROPERTY() TObjectPtr<class UWeedActionButton> CoopModeBtn; // Co-op<->Competitive toggle
+	UPROPERTY() TObjectPtr<UWidget> CoopChooseBox;    // stap 0: Host / Join keuze
+	UPROPERTY() TObjectPtr<UWidget> CoopHostBox;      // stap 1: host-modus + host-knop
+	UPROPERTY() TObjectPtr<UWidget> CoopJoinBox;      // stap 2: IP-veld + join-knop
+	int32 CoopStage = 0;                              // 0=keuze, 1=host, 2=join
+	void SetCoopStage(int32 Stage);                   // toon de juiste co-op-stap
 
 	// Maakt een flikkerende neon-"lamp": gekleurde, afgeronde glow die zacht pulseert.
 	UBorder* AddGlow(class UOverlay* Layers, const FLinearColor& Color, float W, float H,

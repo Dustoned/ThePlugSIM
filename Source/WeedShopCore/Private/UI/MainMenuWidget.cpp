@@ -201,6 +201,20 @@ namespace
 		B.TintColor = FSlateColor(Tint);
 		return B;
 	}
+
+	// Standaard swatch-knopstijl (exact zoals de 6 hoofdscherm-knoppen): donker normaal -> paars hover.
+	// Zo voelen de New Game/Co-op-sub-knoppen als hetzelfde menu.
+	FButtonStyle SwatchStyle(UTexture2D* Tex, const FMargin& Pad)
+	{
+		FButtonStyle S;
+		const FLinearColor Norm(0.02f, 0.02f, 0.04f, 0.80f);
+		const FLinearColor Hover(0.62f, 0.26f, 0.95f, 0.97f);
+		const FLinearColor Press(0.74f, 0.36f, 1.00f, 1.00f);
+		if (Tex) { S.Normal = SwatchBrush(Tex, Norm); S.Hovered = SwatchBrush(Tex, Hover); S.Pressed = SwatchBrush(Tex, Press); }
+		else { S.Normal = WeedUI::Rounded(Norm, 6.f); S.Hovered = WeedUI::Rounded(Hover, 6.f); S.Pressed = WeedUI::Rounded(Press, 6.f); }
+		S.NormalPadding = Pad; S.PressedPadding = Pad;
+		return S;
+	}
 }
 
 TSharedRef<SWidget> UMainMenuWidget::RebuildWidget()
@@ -429,68 +443,41 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		EHS->SetHorizontalAlignment(HAlign_Center); EHS->SetVerticalAlignment(VAlign_Top); EHS->SetPadding(FMargin(0.f, 16.f, 0.f, 0.f));
 		EditHintText->SetVisibility(ESlateVisibility::Collapsed);
 
-		// --- Slot-picker (3 saves) — gecentreerde kaart, verborgen tot New Game/Load ---
+		// --- Slot-picker (3 saves) — LINKS op de achtergrond (zoals de hoofdmenu-knoppen), GEEN kaart ---
+		// Eigen canvas voor de keuze-panelen: proportioneel positioneren (DPI-onafhankelijk, zoals de menu-knoppen).
+		UCanvasPanel* PanelCanvas = WidgetTree->ConstructWidget<UCanvasPanel>();
+		PanelCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UOverlaySlot* PanC = Layers->AddChildToOverlay(PanelCanvas);
+		PanC->SetHorizontalAlignment(HAlign_Fill); PanC->SetVerticalAlignment(VAlign_Fill);
+
 		USizeBox* PickSize = WidgetTree->ConstructWidget<USizeBox>();
-		PickSize->SetWidthOverride(540.f);
-		UBorder* PickCard = WidgetTree->ConstructWidget<UBorder>();
-		PickCard->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.98f), 18.f));
-		PickCard->SetPadding(FMargin(26.f, 22.f, 26.f, 22.f));
-		PickSize->SetContent(PickCard);
+		PickSize->SetWidthOverride(470.f);
 		SlotPanel = PickSize;
-		UOverlaySlot* PkS = Layers->AddChildToOverlay(PickSize);
-		PkS->SetHorizontalAlignment(HAlign_Center); PkS->SetVerticalAlignment(VAlign_Center);
+		UCanvasPanelSlot* PkS = PanelCanvas->AddChildToCanvas(PickSize);
+		PkS->SetAnchors(FAnchors(0.5f, 0.438f, 0.5f, 0.438f)); // horizontaal gecentreerd, top op CONTINUE-hoogte
+		PkS->SetAlignment(FVector2D(0.5f, 0.f));
+		PkS->SetAutoSize(true); PkS->SetPosition(FVector2D(0.f, 0.f));
 
 		UVerticalBox* PickVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		PickCard->SetContent(PickVB);
-		PickerTitle = WeedUI::Text(WidgetTree, TEXT("CHOOSE A SLOT"), 20, FLinearColor(0.6f, 1.f, 0.6f), true, true);
-		PickVB->AddChildToVerticalBox(PickerTitle)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
-
-		// --- Vaste balk boven de slots: Autosave aan/uit + wanneer de laatste save was ---
-		{
-			UBorder* HeadBar = WidgetTree->ConstructWidget<UBorder>();
-			HeadBar->SetBrush(WeedUI::Rounded(FLinearColor(0.09f, 0.10f, 0.14f, 0.97f), 8.f));
-			HeadBar->SetPadding(FMargin(12.f, 8.f, 12.f, 8.f));
-			UHorizontalBox* HeadRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-			HeadBar->SetContent(HeadRow);
-
-			AutosaveBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
-			AutosaveBtn->OnClicked.AddDynamic(AutosaveBtn, &UWeedActionButton::Handle);
-			AutosaveBtn->OnAction.BindLambda([this](int32, int32) { OnToggleAutosave(); });
-			FButtonStyle AS;
-			AS.Normal  = WeedUI::Rounded(FLinearColor(0.16f, 0.17f, 0.22f, 1.f), 6.f);
-			AS.Hovered = WeedUI::Rounded(FLinearColor(0.30f, 0.16f, 0.50f, 1.f), 6.f);
-			AS.Pressed = WeedUI::Rounded(FLinearColor(0.40f, 0.20f, 0.62f, 1.f), 6.f);
-			AS.NormalPadding = FMargin(12.f, 6.f); AS.PressedPadding = FMargin(12.f, 6.f);
-			AutosaveBtn->SetStyle(AS);
-			AutosaveLabel = WeedUI::Text(WidgetTree, TEXT("Autosave: aan"), 13, FLinearColor(0.7f, 1.f, 0.7f), true, true);
-			AutosaveBtn->SetContent(AutosaveLabel);
-			UHorizontalBoxSlot* ABS = HeadRow->AddChildToHorizontalBox(AutosaveBtn);
-			ABS->SetVerticalAlignment(VAlign_Center);
-
-			LastSaveText = WeedUI::Text(WidgetTree, TEXT("Laatste save: -"), 12, FLinearColor(0.78f, 0.80f, 0.92f), false);
-			LastSaveText->SetJustification(ETextJustify::Right);
-			UHorizontalBoxSlot* LSS = HeadRow->AddChildToHorizontalBox(LastSaveText);
-			LSS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			LSS->SetHorizontalAlignment(HAlign_Right); LSS->SetVerticalAlignment(VAlign_Center);
-			LSS->SetPadding(FMargin(12.f, 0.f, 2.f, 0.f));
-
-			PickVB->AddChildToVerticalBox(HeadBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
-		}
-
-		// De slot-rijen worden per refresh dynamisch in deze box gezet (zodat we per slot ook
-		// een extra autosave-knop kunnen tonen).
+		PickSize->SetContent(PickVB);
+		// Slot-rijen (dynamisch per refresh) — EERST in de lijst, precies waar de menu-knoppen staan.
+		// Geen titel + geen autosave-koptekst-balk meer: gewoon een schone knoppenlijst, net als het hoofdmenu.
 		SlotsBox = WidgetTree->ConstructWidget<UVerticalBox>();
 		PickVB->AddChildToVerticalBox(SlotsBox);
+
+		// Autosave-toggle als gewone swatch-knop onderaan (geen losse "laatste save"-tekst).
+		AutosaveBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
+		AutosaveBtn->OnClicked.AddDynamic(AutosaveBtn, &UWeedActionButton::Handle);
+		AutosaveBtn->OnAction.BindLambda([this](int32, int32) { OnToggleAutosave(); });
+		AutosaveBtn->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 11.f)));
+		AutosaveLabel = WeedUI::Text(WidgetTree, TEXT("Autosave: aan"), 15, FLinearColor(0.92f, 0.96f, 1.f), true, true);
+		AutosaveBtn->SetContent(AutosaveLabel);
+		PickVB->AddChildToVerticalBox(AutosaveBtn)->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
 
 		UWeedActionButton* BackBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
 		BackBtn->OnClicked.AddDynamic(BackBtn, &UWeedActionButton::Handle);
 		BackBtn->OnAction.BindLambda([this](int32, int32) { ClosePicker(); });
-		FButtonStyle BS2;
-		BS2.Normal = WeedUI::Rounded(FLinearColor(0.30f, 0.13f, 0.14f, 0.96f), 8.f);
-		BS2.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.2f, 0.96f), 8.f);
-		BS2.Pressed = WeedUI::Rounded(FLinearColor(0.5f, 0.22f, 0.24f, 1.f), 8.f);
-		BS2.NormalPadding = FMargin(16.f, 10.f); BS2.PressedPadding = FMargin(16.f, 10.f);
-		BackBtn->SetStyle(BS2);
+		BackBtn->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 10.f)));
 		BackBtn->SetContent(WeedUI::Text(WidgetTree, TEXT("Back"), 13, FLinearColor::White, true));
 		PickVB->AddChildToVerticalBox(BackBtn)->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
 
@@ -501,56 +488,74 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		// --- CO-OP-kaart (host / join via IP) — gecentreerd, verborgen tot je op CO-OP klikt ---
 		{
 			USizeBox* CoopSize = WidgetTree->ConstructWidget<USizeBox>();
-			CoopSize->SetWidthOverride(520.f);
-			UBorder* CoopCard = WidgetTree->ConstructWidget<UBorder>();
-			CoopCard->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.98f), 18.f));
-			CoopCard->SetPadding(FMargin(26.f, 22.f));
-			CoopSize->SetContent(CoopCard);
+			CoopSize->SetWidthOverride(470.f);
 			CoopPanel = CoopSize;
-			UOverlaySlot* CpS = Layers->AddChildToOverlay(CoopSize);
-			CpS->SetHorizontalAlignment(HAlign_Center); CpS->SetVerticalAlignment(VAlign_Center);
+			UCanvasPanelSlot* CpS = PanelCanvas->AddChildToCanvas(CoopSize);
+			CpS->SetAnchors(FAnchors(0.5f, 0.55f, 0.5f, 0.55f)); // co-op-formulier iets onder midden (onder het logo)
+			CpS->SetAlignment(FVector2D(0.5f, 0.5f));
+			CpS->SetAutoSize(true); CpS->SetPosition(FVector2D(0.f, 0.f));
 
 			UVerticalBox* CoopVB = WidgetTree->ConstructWidget<UVerticalBox>();
-			CoopCard->SetContent(CoopVB);
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CO-OP (LAN)"), 20, FLinearColor(0.6f, 1.f, 0.6f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Host a game or enter the host IP."), 12, FLinearColor(0.78f, 0.8f, 0.92f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+			CoopSize->SetContent(CoopVB);
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CO-OP  (LAN)"), 24, FLinearColor(0.62f, 1.f, 0.74f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 
 			auto BigBtn = [&](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
 			{
 				UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
 				B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
 				B->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
-				FButtonStyle St;
-				St.Normal = WeedUI::Rounded(Col, 8.f);
-				St.Hovered = WeedUI::Rounded(Col * 1.4f, 8.f);
-				St.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
-				St.NormalPadding = FMargin(16.f, 12.f); St.PressedPadding = FMargin(16.f, 12.f);
-				B->SetStyle(St);
+				(void)Col; // sub-knoppen krijgen de uniforme swatch-stijl (zoals het hoofdscherm)
+				B->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 12.f)));
 				B->SetContent(WeedUI::Text(WidgetTree, Label, 15, FLinearColor::White, true, true));
 				return B;
 			};
 
-			// Modus-keuze (host): Co-op (samen) <-> Competitive (versus). Klik om te wisselen.
+			// === Stap 0: keuze Host / Join ===
+			UVerticalBox* ChooseBox = WidgetTree->ConstructWidget<UVerticalBox>();
+			CoopChooseBox = ChooseBox;
+			ChooseBox->AddChildToVerticalBox(BigBtn(TEXT("Host a game"), FLinearColor::White, [this]() { SetCoopStage(1); }))
+				->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+			ChooseBox->AddChildToVerticalBox(BigBtn(TEXT("Join a game"), FLinearColor::White, [this]() { SetCoopStage(2); }))
+				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+			CoopVB->AddChildToVerticalBox(ChooseBox);
+
+			// === Stap 1: host (modus-keuze + host-knop) ===
+			UVerticalBox* HostBox = WidgetTree->ConstructWidget<UVerticalBox>();
+			CoopHostBox = HostBox;
 			bHostCompetitive = false;
 			CoopModeBtn = BigBtn(TEXT("Mode: CO-OP  (build together)"), FLinearColor(0.14f, 0.30f, 0.20f, 0.96f), [this]() { OnToggleCoopMode(); });
-			CoopVB->AddChildToVerticalBox(CoopModeBtn)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Co-op = everything shared.  Competitive = own money + steal each other's customers."), 10, FLinearColor(0.7f, 0.72f, 0.85f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
-
-			// Host
-			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Host new co-op game"), FLinearColor(0.16f, 0.34f, 0.22f, 0.96f), [this]() { OnHostCoop(); }))
+			HostBox->AddChildToVerticalBox(CoopModeBtn)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+			HostBox->AddChildToVerticalBox(BigBtn(TEXT("Host new co-op game"), FLinearColor(0.16f, 0.34f, 0.22f, 0.96f), [this]() { OnHostCoop(); }))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+			CoopVB->AddChildToVerticalBox(HostBox);
 
-			// Join: label + IP-veld + knop.
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Connect to host (IP):"), 13, FLinearColor(0.82f, 0.86f, 1.f), false))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+			// === Stap 2: join (IP-veld + join-knop) ===
+			UVerticalBox* JoinBox = WidgetTree->ConstructWidget<UVerticalBox>();
+			CoopJoinBox = JoinBox;
+			JoinBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Connect to host (IP):"), 13, FLinearColor(0.82f, 0.86f, 1.f), false))->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 			CoopIpBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 			CoopIpBox->SetHintText(FText::FromString(TEXT("192.168.x.x")));
 			CoopIpBox->SetText(FText::FromString(TEXT("127.0.0.1")));
-			CoopVB->AddChildToVerticalBox(CoopIpBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Join"), FLinearColor(0.18f, 0.22f, 0.40f, 0.96f), [this]() { OnJoinCoop(); }))
+			{
+				// Donker invoerveld dat bij het thema past (i.p.v. het standaard witte vak).
+				FEditableTextBoxStyle TBS = CoopIpBox->WidgetStyle;
+				TBS.BackgroundImageNormal   = WeedUI::Rounded(FLinearColor(0.05f, 0.06f, 0.10f, 0.92f), 6.f);
+				TBS.BackgroundImageHovered  = WeedUI::Rounded(FLinearColor(0.07f, 0.09f, 0.14f, 0.95f), 6.f);
+				TBS.BackgroundImageFocused  = WeedUI::Rounded(FLinearColor(0.10f, 0.12f, 0.19f, 0.98f), 6.f);
+				TBS.BackgroundImageReadOnly = WeedUI::Rounded(FLinearColor(0.05f, 0.06f, 0.10f, 0.92f), 6.f);
+				TBS.ForegroundColor = FSlateColor(FLinearColor(0.92f, 0.95f, 1.f));
+				TBS.Padding = FMargin(12.f, 9.f);
+				CoopIpBox->SetWidgetStyle(TBS);
+			}
+			JoinBox->AddChildToVerticalBox(CoopIpBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+			JoinBox->AddChildToVerticalBox(BigBtn(TEXT("Join"), FLinearColor(0.18f, 0.22f, 0.40f, 0.96f), [this]() { OnJoinCoop(); }))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+			CoopVB->AddChildToVerticalBox(JoinBox);
 
-			// Back
-			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Back"), FLinearColor(0.30f, 0.13f, 0.14f, 0.96f), [this]() { CloseCoop(); }));
+			// Gedeelde Back: in host/join terug naar de keuze, in de keuze sluit co-op.
+			CoopVB->AddChildToVerticalBox(BigBtn(TEXT("Back"), FLinearColor(0.30f, 0.13f, 0.14f, 0.96f), [this]() { if (CoopStage != 0) { SetCoopStage(0); } else { CloseCoop(); } }));
+
+			SetCoopStage(0); // start bij de Host/Join-keuze
 
 			CoopPanel->SetVisibility(ESlateVisibility::Collapsed);
 		}
@@ -636,12 +641,21 @@ void UMainMenuWidget::OpenCoop()
 	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::Collapsed); }
 	if (SlotPanel) { SlotPanel->SetVisibility(ESlateVisibility::Collapsed); }
 	if (CoopPanel) { CoopPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+	SetCoopStage(0); // altijd starten bij de Host/Join-keuze
 }
 
 void UMainMenuWidget::CloseCoop()
 {
 	if (CoopPanel) { CoopPanel->SetVisibility(ESlateVisibility::Collapsed); }
 	if (MenuCanvas) { MenuCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+}
+
+void UMainMenuWidget::SetCoopStage(int32 Stage)
+{
+	CoopStage = Stage;
+	if (CoopChooseBox) { CoopChooseBox->SetVisibility(Stage == 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
+	if (CoopHostBox)   { CoopHostBox->SetVisibility(Stage == 1 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
+	if (CoopJoinBox)   { CoopJoinBox->SetVisibility(Stage == 2 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 }
 
 void UMainMenuWidget::OnHostCoop()
@@ -721,29 +735,15 @@ void UMainMenuWidget::RefreshSlots()
 			UWeedActionButton* MB = WidgetTree->ConstructWidget<UWeedActionButton>();
 			MB->OnClicked.AddDynamic(MB, &UWeedActionButton::Handle);
 			MB->OnAction.BindLambda([this, ModeVal](int32, int32) { OnModeChosen(ModeVal); });
-			FButtonStyle MS;
-			MS.Normal = WeedUI::Rounded(M.Col, 8.f);
-			MS.Hovered = WeedUI::Rounded(M.Col * 1.4f, 8.f);
-			MS.Pressed = WeedUI::Rounded(M.Col * 0.8f, 8.f);
-			MS.NormalPadding = FMargin(16.f, 12.f); MS.PressedPadding = FMargin(16.f, 12.f);
-			MB->SetStyle(MS);
+			MB->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 12.f)));
 			MB->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s\n%s"), M.Name, M.Desc), 14, FLinearColor::White, true));
 			SlotsBox->AddChildToVerticalBox(MB)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
 		}
 		return;
 	}
 
-	FButtonStyle MainStyle;
-	MainStyle.Normal  = WeedUI::Rounded(FLinearColor(0.12f, 0.13f, 0.17f, 0.96f), 8.f);
-	MainStyle.Hovered = WeedUI::Rounded(FLinearColor(0.42f, 0.18f, 0.72f, 0.96f), 8.f);
-	MainStyle.Pressed = WeedUI::Rounded(FLinearColor(0.52f, 0.24f, 0.85f, 1.f), 8.f);
-	MainStyle.NormalPadding = FMargin(16.f, 12.f); MainStyle.PressedPadding = FMargin(16.f, 12.f);
-
-	FButtonStyle AutoStyle;
-	AutoStyle.Normal  = WeedUI::Rounded(FLinearColor(0.10f, 0.14f, 0.18f, 0.96f), 7.f);
-	AutoStyle.Hovered = WeedUI::Rounded(FLinearColor(0.16f, 0.34f, 0.46f, 0.96f), 7.f);
-	AutoStyle.Pressed = WeedUI::Rounded(FLinearColor(0.20f, 0.42f, 0.56f, 1.f), 7.f);
-	AutoStyle.NormalPadding = FMargin(12.f, 7.f); AutoStyle.PressedPadding = FMargin(12.f, 7.f);
+	const FButtonStyle MainStyle = SwatchStyle(SwatchTex, FMargin(16.f, 12.f));
+	const FButtonStyle AutoStyle = SwatchStyle(SwatchTex, FMargin(12.f, 7.f));
 
 	for (int32 s = 0; s < USaveGameSubsystem::NumSlots; ++s)
 	{
@@ -827,13 +827,7 @@ void UMainMenuWidget::OnToggleCoopMode()
 	if (CoopModeBtn)
 	{
 		const FString L = bHostCompetitive ? TEXT("Mode: COMPETITIVE  (versus)") : TEXT("Mode: CO-OP  (build together)");
-		const FLinearColor Col = bHostCompetitive ? FLinearColor(0.42f, 0.16f, 0.16f, 0.96f) : FLinearColor(0.14f, 0.30f, 0.20f, 0.96f);
-		FButtonStyle St;
-		St.Normal = WeedUI::Rounded(Col, 8.f);
-		St.Hovered = WeedUI::Rounded(Col * 1.4f, 8.f);
-		St.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
-		St.NormalPadding = FMargin(16.f, 12.f); St.PressedPadding = FMargin(16.f, 12.f);
-		CoopModeBtn->SetStyle(St);
+		CoopModeBtn->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 12.f)));
 		CoopModeBtn->SetContent(WeedUI::Text(WidgetTree, L, 15, FLinearColor::White, true, true));
 	}
 }
