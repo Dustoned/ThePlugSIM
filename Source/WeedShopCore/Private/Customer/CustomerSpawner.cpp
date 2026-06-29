@@ -338,7 +338,7 @@ void ACustomerSpawner::EnsureRouteNavProbed(UNavigationSystemV1* Nav)
 	UNavigationPath* P = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), NetNodes[A], NetNodes[B], nullptr);
 	const bool bOk = P && P->IsValid() && P->PathPoints.Num() > 1;
 	RouteNavState = bOk ? 0 : 1;
-	UE_LOG(LogWeedShop, Log, TEXT("Route-spawner nav-probe: %s (knoop %d->%d)"), // Log: 1x per spawner, bedoelde fallback (geen fout)
+	UE_LOG(LogWeedShop, Verbose, TEXT("Route-spawner nav-probe: %s (knoop %d->%d)"), // Verbose: 37x bij opstart, bedoelde nav-dead fallback (geen fout)
 		bOk ? TEXT("navmesh OK") : TEXT("NAVMESH DOOD -> direct ring-walk"), A, B);
 }
 

@@ -833,7 +833,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		{
 			NavSys->RegisterNavigationInvoker(CSr, 9000.f, 11000.f);
 		}
-		UE_LOG(LogWeedShop, Log, TEXT("Pack-map: route-spawner op (%.0f, %.0f, %.0f)"), Pt.X, Pt.Y, Pt.Z); // Log: routine setup-telemetrie (37x bij opstart)
+		UE_LOG(LogWeedShop, Verbose, TEXT("Pack-map: route-spawner op (%.0f, %.0f, %.0f)"), Pt.X, Pt.Y, Pt.Z); // Verbose: 37x bij opstart, samenvatting = de NPC-routes-regel
 		if (!bWalkersSpawned)
 		{
 			bWalkersSpawned = true;
