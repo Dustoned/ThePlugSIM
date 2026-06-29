@@ -7,7 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "World/CityGenerator.h" // FApartmentHome / FCityPropertyOffer (beach-map woning-registry)
+#include "World/CityTypes.h" // FApartmentHome / FCityPropertyOffer (beach-map woning-registry)
 #include "DoorRetrofitter.generated.h"
 
 UCLASS()
