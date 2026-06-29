@@ -1066,7 +1066,7 @@ void UPhoneClientComponent::EnsureWidget()
 		{
 			Cover->AddToViewport(100); // bovenop ALLE HUD (pauze/menu zitten op 40-44) tijdens het laden
 			WeedShop_SetCoverUp(true);  // de movie mag nu overdragen (cover staat op beeld) -> geen laad-gat / witte flash
-			UE_LOG(LogTemp, Warning, TEXT("[COVER] created+viewport @E=%.1f"), WeedShop_LoadElapsedSeconds());
+			UE_LOG(LogTemp, Verbose, TEXT("[COVER] created+viewport @E=%.1f"), WeedShop_LoadElapsedSeconds());
 		}
 	}
 	// Status-HUD (altijd zichtbaar) + deal-scherm via dezelfde, bewezen route.

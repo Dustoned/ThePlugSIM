@@ -115,7 +115,7 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const float E = (float)WeedShop_LoadElapsedSeconds(); // gedeeld met de movie -> doorloopt naadloos
 	const bool bReady = WeedShop_IsRoomReady();
-	if (bReady && ReadyAt < 0.f) { ReadyAt = E; UE_LOG(LogTemp, Warning, TEXT("[COVER] floor-ready @E=%.1f"), E); }
+	if (bReady && ReadyAt < 0.f) { ReadyAt = E; UE_LOG(LogTemp, Verbose, TEXT("[COVER] floor-ready @E=%.1f"), E); }
 
 	// Zelfde tekst-formule als de movie (deterministisch) -> bij de overgang exact dezelfde regel.
 	const int32 Step = (int32)(E / 1.6f);
@@ -147,7 +147,7 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		LastStep = -2;
 	}
 	// AppearAt = wanneer de cover voor 't eerst tickt (= op beeld komt; de movie heeft tot dan gedekt).
-	if (AppearAt < 0.f) { AppearAt = E; UE_LOG(LogTemp, Warning, TEXT("[COVER] appear @E=%.1f bReady=%d shaders=%d"), E, bReady ? 1 : 0, bShadersBusy ? 1 : 0); }
+	if (AppearAt < 0.f) { AppearAt = E; UE_LOG(LogTemp, Verbose, TEXT("[COVER] appear @E=%.1f bReady=%d shaders=%d"), E, bReady ? 1 : 0, bShadersBusy ? 1 : 0); }
 	// De WERELD is nog aan 't streamen/laden zolang er async package-loading loopt (precies de FlushAsyncLoading/
 	// QueuedPackages-regels in de log). Daar moet de cover op WACHTEN: pas faden als die loading ~2,5s STIL is
 	// (de initiele streaming-burst is dan klaar), EN de shaders klaar zijn, EN de cover minstens even op beeld stond.
@@ -160,7 +160,7 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		bFading = true;
 		WeedShop_SetCrowdSpawned(true); // DoorRetrofitter terug naar 1-per-keer (smooth gameplay)
 		WeedShop_SetCoverUp(false);     // cover is weg
-		UE_LOG(LogTemp, Warning, TEXT("[COVER] FADE @E=%.1f appearAt=%.1f lastLoad=%.1f shaders=%d hardcap=%.0f"), E, AppearAt, LastLoadAt, bShadersBusy ? 1 : 0, HardCap);
+		UE_LOG(LogTemp, Verbose, TEXT("[COVER] FADE @E=%.1f appearAt=%.1f lastLoad=%.1f shaders=%d hardcap=%.0f"), E, AppearAt, LastLoadAt, bShadersBusy ? 1 : 0, HardCap);
 	}
 
 	// VLOEIENDE, MONOTONE progress-bar: puur op TIJD, NOOIT op de togglende shader-status (die wisselt
