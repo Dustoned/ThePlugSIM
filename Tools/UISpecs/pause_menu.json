@@ -1,0 +1,45 @@
+{
+  "type": "CanvasPanel", "name": "Root",
+  "children": [
+    {
+      "type": "Border", "name": "Dim",
+      "props": { "brushColor": "0,0,0,0", "hAlign": 2, "vAlign": 2 },
+      "slot": { "anchorMin": "0,0", "anchorMax": "1,1", "offsets": "0,0,0,0" },
+      "children": [
+        {
+          "type": "SizeBox", "name": "PanelSize", "props": { "widthOverride": 384 },
+          "children": [
+            {
+              "type": "Border", "name": "Frame",
+              "props": { "brushColor": "0.22,0.52,0.40,0.45", "radius": 18, "padding": "2,2,2,2" },
+              "children": [
+                {
+                  "type": "Border", "name": "Panel",
+                  "props": { "brushColor": "0.045,0.065,0.075,0.985", "radius": 16, "padding": "30,24,30,26" },
+                  "children": [
+                    {
+                      "type": "VerticalBox", "name": "VB",
+                      "children": [
+                        { "type": "TextBlock", "name": "Title", "props": { "text": "PAUSED", "fontSize": 27, "fontBold": true, "textColor": "0.50,0.88,0.72", "justify": 1 }, "slot": { "padding": "0,2,0,12", "hAlign": 2 } },
+                        { "type": "SizeBox", "name": "Divider", "props": { "heightOverride": 2 }, "slot": { "padding": "10,0,10,18" }, "children": [ { "type": "Border", "props": { "brushColor": "0.22,0.52,0.40,0.6", "radius": 1 } } ] },
+                        { "type": "Button", "name": "Btn_Resume", "props": { "brushColor": "0.16,0.46,0.34", "radius": 8, "padding": "18,13,18,13" }, "slot": { "padding": "0,5,0,5" }, "children": [ { "type": "TextBlock", "props": { "text": "Resume", "fontSize": 15, "fontBold": true, "textColor": "0.96,1,0.98", "justify": 1 } } ] },
+                        { "type": "Button", "name": "Btn_Unstuck", "props": { "brushColor": "0.10,0.13,0.16", "radius": 8, "padding": "18,13,18,13" }, "slot": { "padding": "0,5,0,5" }, "children": [ { "type": "TextBlock", "props": { "text": "Unstuck", "fontSize": 15, "fontBold": true, "textColor": "0.84,0.89,0.93", "justify": 1 } } ] },
+                        { "type": "Button", "name": "Btn_Settings", "props": { "brushColor": "0.10,0.13,0.16", "radius": 8, "padding": "18,13,18,13" }, "slot": { "padding": "0,5,0,5" }, "children": [ { "type": "TextBlock", "props": { "text": "Settings", "fontSize": 15, "fontBold": true, "textColor": "0.84,0.89,0.93", "justify": 1 } } ] },
+                        { "type": "Button", "name": "Btn_Save", "props": { "brushColor": "0.14,0.31,0.47", "radius": 8, "padding": "18,13,18,13" }, "slot": { "padding": "0,5,0,5" }, "children": [ { "type": "TextBlock", "props": { "text": "Save game", "fontSize": 15, "fontBold": true, "textColor": "0.88,0.94,1", "justify": 1 } } ] },
+                        { "type": "Button", "name": "Btn_Load", "props": { "brushColor": "0.31,0.20,0.44", "radius": 8, "padding": "18,13,18,13" }, "slot": { "padding": "0,5,0,5" }, "children": [ { "type": "TextBlock", "props": { "text": "Load game", "fontSize": 15, "fontBold": true, "textColor": "0.93,0.89,1", "justify": 1 } } ] },
+                        { "type": "Button", "name": "Btn_MainMenu", "props": { "brushColor": "0.10,0.13,0.16", "radius": 8, "padding": "18,13,18,13" }, "slot": { "padding": "0,5,0,5" }, "children": [ { "type": "TextBlock", "props": { "text": "Main menu", "fontSize": 15, "fontBold": true, "textColor": "0.84,0.89,0.93", "justify": 1 } } ] },
+                        { "type": "Button", "name": "Btn_Quit", "props": { "brushColor": "0.32,0.11,0.12", "radius": 8, "padding": "18,13,18,13" }, "slot": { "padding": "0,11,0,2" }, "children": [ { "type": "TextBlock", "props": { "text": "Quit to desktop", "fontSize": 15, "fontBold": true, "textColor": "1,0.89,0.87", "justify": 1 } } ] },
+                        { "type": "TextBlock", "name": "StatusText", "props": { "text": "", "fontSize": 12, "fontBold": true, "textColor": "0.55,0.95,0.78", "justify": 1 }, "slot": { "padding": "0,14,0,2", "hAlign": 2 } },
+                        { "type": "TextBlock", "name": "Hint", "props": { "text": "Esc to resume", "fontSize": 11, "textColor": "0.42,0.52,0.60", "justify": 1 }, "slot": { "padding": "0,2,0,0", "hAlign": 2 } }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
