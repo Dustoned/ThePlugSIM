@@ -965,4 +965,19 @@ namespace WeedUI
 	{
 		return UiGlyph(Tree, FString(UiKeyFor(Type)), Size, Tint, Type);
 	}
+
+	UWidget* KitIcon(UWidgetTree* Tree, const FString& Name, float Size, const FLinearColor& Tint)
+	{
+		static const FString Base = TEXT("/Game/dark-gui-main-menu-pro-kit---complete-solution--honeti/dark-gui-main-menu-pro-kit---complete-solution--honeti/ultimate_dark_gui/textures/ThemeCommon/Textures/Icons/128/");
+		UImage* Img = Tree->ConstructWidget<UImage>();
+		Img->SetVisibility(ESlateVisibility::HitTestInvisible);
+		const FString Path = Name.StartsWith(TEXT("/")) ? Name : (Base + Name + TEXT(".") + Name);
+		if (UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *Path))
+		{
+			Img->SetBrushFromTexture(Tex, false);
+			Img->SetBrushSize(FVector2D(Size, Size));
+			Img->SetColorAndOpacity(Tint);
+		}
+		return Img;
+	}
 }

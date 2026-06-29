@@ -60,6 +60,10 @@ namespace WeedUI
 	// Voor losse UI-iconen zoals zon/maan (dag-nacht) die geen EIcon hebben.
 	WEEDSHOPCORE_API UWidget* UiGlyph(UWidgetTree* Tree, const FString& Key, float Size, const FLinearColor& Tint, EIcon Fallback);
 
+	// Kit-icoon: laadt een texture uit de Dark GUI-kit op naam (bv. "t_drop_blue_128") en geeft
+	// een UImage (getint). Kant-en-klare game-iconen i.p.v. de procedurele vormpjes.
+	WEEDSHOPCORE_API UWidget* KitIcon(UWidgetTree* Tree, const FString& Name, float Size, const FLinearColor& Tint = FLinearColor::White);
+
 	// Leesbare naam voor een item-id (Bud_X -> X, Seed_X -> X seed, etc.).
 	WEEDSHOPCORE_API FString PrettyItemName(FName ItemId);
 

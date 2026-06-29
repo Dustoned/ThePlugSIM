@@ -102,12 +102,9 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>(); IcoSz->SetWidthOverride(26.f); IcoSz->SetHeightOverride(26.f);
 		IcoSz->SetContent(IcoKey.IsEmpty() ? WeedUI::Icon(WidgetTree, Ico, 26.f, IcoCol) : WeedUI::UiGlyph(WidgetTree, IcoKey, 26.f, IcoCol, Ico));
 		UHorizontalBoxSlot* IS = Chip->AddChildToHorizontalBox(IcoSz); IS->SetVerticalAlignment(VAlign_Center); IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-		UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
-		UTextBlock* Lbl = WeedUI::Text(WidgetTree, Label, 11, ColLabel, false, false); Shade(Lbl);
-		Col->AddChildToVerticalBox(Lbl);
-		OutVal = WeedUI::Text(WidgetTree, Val, 20, FLinearColor::White, false, true); Shade(OutVal);
-		Col->AddChildToVerticalBox(OutVal)->SetPadding(FMargin(0.f, -1.f, 0.f, 0.f));
-		Chip->AddChildToHorizontalBox(Col)->SetVerticalAlignment(VAlign_Center);
+		(void)Label; (void)ColLabel; // labels weg: alleen icoon + waarde (compacter, minder tekst, meer game-feel)
+		OutVal = WeedUI::Text(WidgetTree, Val, 21, FLinearColor::White, false, true); Shade(OutVal);
+		Chip->AddChildToHorizontalBox(OutVal)->SetVerticalAlignment(VAlign_Center);
 		Strip->AddChildToHorizontalBox(Chip)->SetVerticalAlignment(VAlign_Center);
 		return Chip;
 	};
@@ -150,8 +147,6 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		IcoSz->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Level, 26.f, ColPurple));
 		UHorizontalBoxSlot* IS = Chip->AddChildToHorizontalBox(IcoSz); IS->SetVerticalAlignment(VAlign_Center); IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
-		UTextBlock* Lbl = WeedUI::Text(WidgetTree, TEXT("Level"), 11, ColLabel, false, false); Shade(Lbl);
-		Col->AddChildToVerticalBox(Lbl);
 		UHorizontalBox* ValRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		LevelText = WeedUI::Text(WidgetTree, TEXT("1"), 20, FLinearColor::White, false, true); Shade(LevelText);
 		ValRow->AddChildToHorizontalBox(LevelText)->SetVerticalAlignment(VAlign_Center);

@@ -865,13 +865,13 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 	}
 	if (!HasSoil())
 	{
-		return NSLOCTEXT("WeedShop", "AddSoil", "Add soil (hold soil)");
+		return NSLOCTEXT("WeedShop", "AddSoil", "Add soil");
 	}
 	if (GetPlantedCount() < GetNumSlots())
 	{
-		return FText::FromString(FString::Printf(TEXT("Plant a seed (hold seed)  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
+		return FText::FromString(FString::Printf(TEXT("Plant a seed  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
 	}
-	return NSLOCTEXT("WeedShop", "WaterPlant", "Water the plant (hold bottle)"); // water-% staat al op de plant-kaart
+	return NSLOCTEXT("WeedShop", "WaterPlant", "Water the plant"); // water-% staat al op de plant-kaart
 }
 
 float AGrowPlant::GetMaxCare() const

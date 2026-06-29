@@ -60,7 +60,7 @@ void ULevelUpWidget::BuildShell(UCanvasPanel* Root)
 	LevelText = WeedUI::Text(WidgetTree, TEXT("Level 2"), 40, FLinearColor(1.f, 0.9f, 0.5f), true, true);
 	VB->AddChildToVerticalBox(LevelText)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	SubText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.7f, 0.95f, 0.75f), true, true);
+	SubText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.78f, 0.55f, 1.f), true, true);
 	VB->AddChildToVerticalBox(SubText)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	USizeBox* GridSz = WidgetTree->ConstructWidget<USizeBox>();

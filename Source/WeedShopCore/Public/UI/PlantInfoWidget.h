@@ -13,6 +13,8 @@ class UVerticalBox;
 class UTextBlock;
 class UProgressBar;
 class UCanvasPanel;
+class UImage;
+class UMaterialInterface;
 
 UCLASS()
 class WEEDSHOPCORE_API UPlantInfoWidget : public UUserWidget
@@ -39,7 +41,15 @@ protected:
 	UPROPERTY() TObjectPtr<UProgressBar> HealthBar;
 	UPROPERTY() TObjectPtr<UTextBlock> HealthText;
 	UPROPERTY() TObjectPtr<UTextBlock> YieldText;
+	UPROPERTY() TObjectPtr<UTextBlock> ThcText;
 	UPROPERTY() TObjectPtr<UTextBlock> SoilText;
 	UPROPERTY() TObjectPtr<UTextBlock> UpgradesText; // actieve gear-upgrades op deze pot (altijd zichtbaar)
 	UPROPERTY() TObjectPtr<UTextBlock> HintText;
+
+	// Radiale ring-gauges (water/health/groei) — UImage met M_RadialProgress (Percent + Color params).
+	UPROPERTY() TObjectPtr<UMaterialInterface> RadialMat;
+	UPROPERTY() TObjectPtr<UImage> WaterRing;
+	UPROPERTY() TObjectPtr<UImage> HealthRing;
+	UPROPERTY() TObjectPtr<UImage> GrowthRing;
+	UPROPERTY() TObjectPtr<UWidget> RingRow; // container voor show/hide
 };
