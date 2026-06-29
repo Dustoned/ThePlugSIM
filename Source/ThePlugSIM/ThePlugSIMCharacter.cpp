@@ -1675,7 +1675,6 @@ void AThePlugSIMCharacter::BeginPlay()
 				if (USaveGameSubsystem* Sv = GI->GetSubsystem<USaveGameSubsystem>())
 				{
 					bHandled = Sv->RunPendingOnWorldReady();
-					if (!bHandled) { Sv->WarmupBeachLevel(); } // kale boot -> menu komt; warm de beach vast in
 				}
 			}
 			if (!bHandled) { Phone->ShowMainMenu(); bShownMenu = true; }

@@ -220,28 +220,6 @@ void USaveGameSubsystem::ReloadCurrentLevel(const FString& Options)
 	UGameplayStatics::OpenLevel(W, FName(*LevelName), true, Options);
 }
 
-void USaveGameSubsystem::WarmupBeachLevel()
-{
-	if (bBeachWarmupStarted) { return; } // 1x per sessie
-	UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
-	if (!W) { return; }
-	// Al op de beach? Dan is voorladen zinloos (verspilt alleen geheugen).
-	if (W->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { return; }
-	bBeachWarmupStarted = true;
-	UE_LOG(LogWeedShop, Log, TEXT("Menu: beach-level async voorladen (warmup)..."));
-	// Async, lage prioriteit: het pakket + z'n harde refs komen in geheugen terwijl het menu draait, zodat
-	// de OpenLevel bij New Game/Load de schijf-fase grotendeels overslaat. Ref vasthouden tegen GC.
-	LoadPackageAsync(TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"),
-		FLoadPackageAsyncDelegate::CreateWeakLambda(this, [this](const FName&, UPackage* Pkg, EAsyncLoadingResult::Type Result)
-		{
-			if (Result == EAsyncLoadingResult::Succeeded && Pkg)
-			{
-				WarmBeachPackage = Pkg;
-				UE_LOG(LogWeedShop, Log, TEXT("Menu: beach-level warmup klaar (in geheugen)."));
-			}
-		}));
-}
-
 void USaveGameSubsystem::HostNewGameLan(int32 Slot, EGameStartMode Mode)
 {
 	// Zelfde verse start als New Game, maar herlaad het level ALS LISTEN-SERVER (?listen). Zo kan een
