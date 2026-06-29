@@ -283,7 +283,7 @@ void ADayNightController::BeginPlay()
 		}
 	}
 
-	// (Oude per-NPC lantaarnpalen verwijderd: de stad-straatlampen van de CityGenerator zijn nu de
+	// (Oude per-NPC lantaarnpalen verwijderd: de stad-straatlampen op de map zijn nu de
 	// straatverlichting, en die worden door de phone-slider (LampIntensity) live geregeld.)
 
 	// Alleen in onze eigen (gegenereerde) stad: pack-maps hebben hun eigen interieur-verlichting.

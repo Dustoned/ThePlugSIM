@@ -20,7 +20,6 @@ class UDataTable;
 class UEconomyComponent;
 class UInventoryComponent;
 class UStaticMeshComponent;
-class ACityGenerator;
 
 struct FResidentMovementSnapshot
 {
@@ -388,7 +387,6 @@ protected:
 	int32 ResidentGoalFailCount = 0;
 	FVector ParkCenter = FVector::ZeroVector; // gedeelde hub (stadscentrum/park)
 	bool bHasPark = false;
-	TWeakObjectPtr<ACityGenerator> CachedCity;
 	int32 RoamRouteSeed = 0;
 	int32 RoamLegIndex = 0;
 	int32 ParkLegCountdown = 0;
@@ -404,21 +402,20 @@ protected:
 	bool bLeavingHomeRoute = false;
 	bool bDespawnWhenInside = false;  // naar huis lopen en pas binnen despawnen (nacht/rotatie)
 	float DespawnSafetyTimer = 0.f;   // vangnet: na 90s alsnog (verborgen, binnen) despawnen
-	ACityGenerator* GetResidentCity(UWorld* W);
-	FVector SnapResidentPointToSidewalk(ACityGenerator* City, const FVector& Desired, bool bAllowPark) const;
-	bool IsResidentOutdoorSidewalkPoint(ACityGenerator* City, const FVector& Point, bool bAllowPark) const;
-	bool IsResidentParkPoint(ACityGenerator* City, const FVector& Point) const;
-	void BuildResidentStreetStops(ACityGenerator* City, TArray<FVector>& OutStops) const;
-	bool PickResidentStreetRoamGoal(ACityGenerator* City, int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const;
+	FVector SnapResidentPointToSidewalk(const FVector& Desired, bool bAllowPark) const;
+	bool IsResidentOutdoorSidewalkPoint(const FVector& Point, bool bAllowPark) const;
+	bool IsResidentParkPoint(const FVector& Point) const;
+	void BuildResidentStreetStops(TArray<FVector>& OutStops) const;
+	bool PickResidentStreetRoamGoal(int32 RouteLeg, FVector& OutGoal, float& OutSearchXY, float& OutSearchZ) const;
 	bool PickResidentRoamGoal(FVector& OutGoal, float& OutSearchXY, float& OutSearchZ);
 	bool SetResidentRoamGoal(const FVector& DesiredGoal, float SearchXY, float SearchZ);
 	int32 GetResidentParkVisitsToday(int32 Today) const;
 	float ComputeResidentParkVisitHour(int32 Today, int32 VisitSlot) const;
-	float ComputeResidentParkUrgencyHour(ACityGenerator* City, const class UDayCycleComponent* DayCycle, int32 Today, int32 VisitSlot) const;
-	int32 PickResidentParkVisitSlot(ACityGenerator* City, const class UDayCycleComponent* DayCycle, int32 Today, float Hour) const;
+	float ComputeResidentParkUrgencyHour(const class UDayCycleComponent* DayCycle, int32 Today, int32 VisitSlot) const;
+	int32 PickResidentParkVisitSlot(const class UDayCycleComponent* DayCycle, int32 Today, float Hour) const;
 	FVector ProjectResidentPointToNav(const FVector& Desired, const FVector& Extent) const;
 	FVector ResolveResidentHomeFrontSpot(const FVector& FrontSpot);
-	FVector ResolveResidentHomeExitSidewalkSpot(ACityGenerator* City, const FVector& SafeFrontSpot) const;
+	FVector ResolveResidentHomeExitSidewalkSpot(const FVector& SafeFrontSpot) const;
 	FVector GetResidentHomeEntrySpot() const;
 	void StartResidentHomeExit(bool bFromInterior);
 	bool TickResidentHomeExit(float DeltaSeconds);

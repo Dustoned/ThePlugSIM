@@ -463,11 +463,10 @@ public:
 	bool IsOpen() const { return bOpen; }
 
 	// --- Woningen (3 koopbare panden in de Upgrades-app) ---
-	class ACityGenerator* FindCity() const;
-	// Pack-map (geen ACityGenerator): de DoorRetrofitter host dan de woning-registry (ROADMAP 4.1).
+	// De DoorRetrofitter host de woning-registry op de beach-map (ROADMAP 4.1).
 	class ADoorRetrofitter* FindRetro() const;
-	// Woningen/aanbiedingen uit de City OF de beach-registry (DoorRetrofitter) - call-sites hoeven niet
-	// meer te weten welke bron actief is.
+	// Woningen/aanbiedingen uit de beach-registry (DoorRetrofitter) - call-sites hoeven niet
+	// te weten welke bron actief is.
 	void GetHomesUnified(TArray<struct FApartmentHome>& Out) const;
 	void GetOffersUnified(TArray<struct FCityPropertyOffer>& Out) const;
 	void GetPropertyOffers(TArray<struct FCityPropertyOffer>& Out) const;
@@ -731,7 +730,7 @@ protected:
 
 	// --- Woning-eigendom (per speler, gerepliceerd) ---
 	UPROPERTY(ReplicatedUsing = OnRep_Property)
-	TArray<int32> OwnedHomes;            // indices in CityGenerator::ApartmentHomes
+	TArray<int32> OwnedHomes;            // indices in de woning-registry (DoorRetrofitter beach-homes)
 	UPROPERTY(ReplicatedUsing = OnRep_Property)
 	int32 ActiveHome = -1;               // huidige woon-/spawn-plek
 	int32 SelectedDeliveryHome = -1;     // UI-keuze bezorg-huis (-1 = automatisch: huidige/binnen-huis)

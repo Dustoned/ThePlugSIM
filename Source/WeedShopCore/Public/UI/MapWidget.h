@@ -11,7 +11,6 @@
 class UCanvasPanel;
 class UBorder;
 class UTextBlock;
-class ACityGenerator;
 
 UCLASS()
 class WEEDSHOPCORE_API UMapWidget : public UUserWidget
@@ -64,8 +63,7 @@ protected:
 	FVector2D PanCenter = FVector2D::ZeroVector;
 	void UpdateView();
 
-	TWeakObjectPtr<ACityGenerator> City;
-	TWeakObjectPtr<class ADoorRetrofitter> PackMap; // pack-map-adapter (kaart zonder CityGenerator)
+	TWeakObjectPtr<class ADoorRetrofitter> PackMap; // pack-map-adapter (DoorRetrofitter-capture)
 
 	FVector2D WorldToCanvas(float Wx, float Wy) const;
 	void BuildBlocks();

@@ -16,7 +16,6 @@
 #include "Cultivation/DryingRack.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
-#include "World/CityGenerator.h"
 #include "World/CityDoor.h" // geen wand-mounts/objecten op deuren plaatsen
 #include "Interaction/InteractionComponent.h"
 #include "Game/WeedShopGameState.h"
@@ -1208,35 +1207,9 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 	const UWorld* World = GetWorld();
 	AActor* Owner = GetOwner();
 	if (!Owner || !World) { return false; }
-	UPhoneClientComponent* Ph = Owner->FindComponentByClass<UPhoneClientComponent>();
-	const TArray<int32> EmptyHomes;
-	const TArray<int32>& Owned = Ph ? Ph->GetOwnedHomes() : EmptyHomes;
-	ACityGenerator* City = nullptr;
-	for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
 
-	// Bezit je woning(en)? Dan mag je ALLEEN binnen je eigen home(s) bouwen — ook in free-build (geen gang/hal).
-	if (City && Owned.Num() > 0)
-	{
-		const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
-		for (int32 Idx : Owned)
-		{
-			if (!Homes.IsValidIndex(Idx)) { continue; }
-			const FApartmentHome& H = Homes[Idx];
-			const FVector& I = H.InteriorPos;
-			const FVector& R = H.RoomHalf;
-			if (FMath::Abs(P.X - I.X) <= R.X + 40.f &&
-				FMath::Abs(P.Y - I.Y) <= R.Y + 40.f &&
-				P.Z >= I.Z - 90.f && P.Z <= I.Z + R.Z + 60.f)
-			{
-				return true; // binnen een woning die je bezit
-			}
-		}
-		return false; // je hebt woningen -> buiten je home(s) (incl. de gang) mag niet
-	}
-
-	// PACK-MAP (geen CityGenerator): de retrofitter levert een gemeten huis-box. Plaatsen mag
-	// dan ALLEEN binnen je eigen huis - net als op de dev-map met ApartmentHomes.
-	if (!City)
+	// PACK-MAP (CityBeachStrip): de retrofitter levert een gemeten huis-box. Plaatsen mag
+	// dan ALLEEN binnen je eigen huis.
 	{
 		// COMPETITIVE: eigen gespiegelde kamer (603/602) eerst -> daar mag altijd gebouwd worden.
 		if (InCompHome()) { return true; }

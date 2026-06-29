@@ -21,7 +21,6 @@
 #include "NavigationInvokerComponent.h"
 #include "NavigationSystem.h"
 #include "World/DayNightController.h"
-#include "World/CityGenerator.h"
 #include "World/DoorRetrofitter.h"
 #include "Misc/FileHelper.h"
 #include "World/StoreCounter.h"
@@ -1720,15 +1719,6 @@ void AThePlugSIMCharacter::BeginPlay()
 			GetWorld()->SpawnActor<ADayNightController>(ADayNightController::StaticClass(), FTransform::Identity);
 		}
 
-		// Procedurele stad rond het speelgebied (deterministisch, lokaal gebouwd -> elke speler dezelfde stad).
-		// NIET in externe/asset-pack-maps (bv. /Game/CityBeachStrip/...) - daar willen we de map zelf zien,
-		// niet onze blokken-stad er dwars doorheen.
-		bool bHasCity = false;
-		for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { bHasCity = true; break; }
-		if (!bHasCity && !bExternalMap)
-		{
-			GetWorld()->SpawnActor<ACityGenerator>(ACityGenerator::StaticClass(), FTransform::Identity);
-		}
 		// Externe pack-map: maak de statische deur-bladen werkend (open/dicht + NPC-auto-open).
 		// LET OP: hier GEEN free-build meer forceren! CityBeachStrip is nu de gewone speelmap, dus dat
 		// zette in ELKE modus (ook Normal) alle dev-tools aan. Free-build komt nu puur uit de start-mode
@@ -1924,28 +1914,6 @@ void AThePlugSIMCharacter::WeedSaveMenuCam()
 		TEXT("Menu camera saved here. It's now the main-menu backdrop on this map."));
 }
 
-void AThePlugSIMCharacter::WeedSaveFurniture()
-{
-	UWorld* W = GetWorld();
-	if (!W) { return; }
-	// Dev-tool (F8): alleen in Sandbox/Testing (free-build) - stil in een normale playthrough.
-	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
-	if (!GSd || !GSd->IsFreeBuild()) { return; }
-	if (!HasAuthority())
-	{
-		UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedSaveFurniture: run this on the host."));
-		return;
-	}
-	ACityGenerator* City = nullptr;
-	for (TActorIterator<ACityGenerator> It(W); It; ++It) { City = *It; break; }
-	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("No city found.")); return; }
-
-	const int32 Types = FurnitureTemplates::SaveFromWorld(W, City);
-	UWeedToast::Notify(-1, 5.f, Types > 0 ? FColor::Green : FColor::Orange,
-		Types > 0 ? FString::Printf(TEXT("Furniture templates saved (%d type(s))."), Types)
-				  : TEXT("Nothing to save: place furniture inside a home first."));
-}
-
 void AThePlugSIMCharacter::WeedRegisterHome()
 {
 	UWorld* W = GetWorld();
@@ -2052,35 +2020,6 @@ void AThePlugSIMCharacter::WeedClearFurniture()
 	}
 
 	UWeedToast::Notify(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("%d furniture cleared + furniture set (incl. sink) back in inventory."), N));
-}
-
-void AThePlugSIMCharacter::WeedFurnitureTypes()
-{
-	UWorld* W = GetWorld();
-	if (!W) { return; }
-	// Dev-tool (F10): alleen in Sandbox/Testing (free-build).
-	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
-	if (!GSd || !GSd->IsFreeBuild()) { return; }
-	ACityGenerator* City = nullptr;
-	for (TActorIterator<ACityGenerator> It(W); It; ++It) { City = *It; break; }
-	if (!City) { UWeedToast::Notify(-1, 3.f, FColor::Red, TEXT("No city found.")); return; }
-
-	TMap<FString, int32> Counts;
-	FurnitureTemplates::CountHomeTypes(City, Counts);
-	TMap<FString, TArray<FFurnitureEntry>> Templates;
-	FurnitureTemplates::LoadTemplates(Templates);
-
-	TArray<FString> Keys; Counts.GetKeys(Keys); Keys.Sort();
-	int32 Done = 0;
-	for (const FString& K : Keys)
-	{
-		const bool bHas = Templates.Contains(K) && Templates[K].Num() > 0;
-		if (bHas) { ++Done; }
-		UE_LOG(LogTemp, Display, TEXT("WeedFurnitureType: %-12s %3d homes   %s"),
-			*K, Counts[K], bHas ? TEXT("[OK sjabloon]") : TEXT("[TODO]"));
-	}
-	UWeedToast::Notify(-1, 7.f, FColor::Cyan,
-		FString::Printf(TEXT("%d/%d home types furnished (list in log: WeedFurnitureType)."), Done, Keys.Num()));
 }
 
 void AThePlugSIMCharacter::ToggleRollUI()

@@ -16,7 +16,7 @@ void UWorldSyncComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 uint32 UWorldSyncComponent::MakeId(const FVector& Loc, float Yaw)
 {
 	// Afronden op een 10cm-grid + 1-graden-yaw zodat kleine float-verschillen host/client geen ander id geven.
-	// Posities/yaws zijn deterministisch identiek op elke machine (CityGenerator + DoorRetrofitter), dus dit id
+	// Posities/yaws zijn deterministisch identiek op elke machine (DoorRetrofitter), dus dit id
 	// is overal hetzelfde. FNV-1a hash voor een stabiele, deterministische waarde (geen GetTypeHash-grilligheid).
 	const int32 X = FMath::RoundToInt(Loc.X / 10.f);
 	const int32 Y = FMath::RoundToInt(Loc.Y / 10.f);

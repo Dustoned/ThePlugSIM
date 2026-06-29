@@ -9,7 +9,7 @@
 AStoreCounter::AStoreCounter()
 {
 	PrimaryActorTick.bCanEverTick = false;
-	bReplicates = false; // lokaal gespawnd door de (lokale) CityGenerator; interactie opent lokale UI
+	bReplicates = false; // lokaal gespawnd door de (lokale) DoorRetrofitter; interactie opent lokale UI
 
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);

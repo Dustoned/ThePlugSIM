@@ -22,7 +22,6 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UI/WeedUiStyle.h"
 #include "Styling/CoreStyle.h"
-#include "World/CityGenerator.h"
 #include "World/DoorRetrofitter.h"
 #include "Customer/CustomerBase.h"
 #include "GameFramework/GameStateBase.h"
@@ -262,112 +261,22 @@ void UMapWidget::BuildBlocks()
 {
 	if (!Canvas) { return; }
 
-	// Pack-map (geen CityGenerator): kale top-down kaart via de DoorRetrofitter-capture - geen
+	// Pack-map (CityBeachStrip): kale top-down kaart via de DoorRetrofitter-capture - geen
 	// blok-labels/huisnummers, wel speler/waypoint/NPC-dots + klik-voor-waypoint.
-	if (!City.IsValid() && PackMap.IsValid())
-	{
-		// EERST capturen: dat draait EnsureMapCapture, dat MapCenter/MapOrtho BEREKENT. Lazen we GetMapCenter()
-		// ervóór (zoals eerst), dan kreeg de 1e map-open de DEFAULT (0,0)/60000 -> CenterXY/MapCenterFull scheef =
-		// markers "ernaast". 2e open had MapCenter al berekend = goed. Nu vóór het lezen capturen = 1e open óók goed.
-		PackMap->CaptureMapNow();
-		CenterXY = PackMap->GetMapCenter();
-		Scale = GMapDS / FMath::Max(1.f, PackMap->GetMapOrthoWidth());
-		// Zoombaar: standaard DICHT op de speler (view ~3,5km breed), scrollwiel tot de hele ring.
-		MapCenterFull = CenterXY;
-		Scale0 = Scale;
-		bZoomable = true;
-		Zoom = FMath::Clamp((GMapDS / Scale0) / 350000.f * 20.f, 6.f, 40.f);
-		if (Canvas) { Canvas->SetClipping(EWidgetClipping::ClipToBounds); }
-		PlayerDot = AddPlayerMarker(); // jij: groot wit baken met blauw poppetje
-		WaypointDot = AddDot(FLinearColor(1.f, 0.85f, 0.15f), 18.f, 27);
-		if (WaypointDot) { WaypointDot->SetVisibility(ESlateVisibility::Collapsed); }
-		bBuiltBlocks = true;
-		return;
-	}
-	if (!City.IsValid()) { return; }
+	if (!PackMap.IsValid()) { return; }
 
-	const FVector C = City->GetCityCenter();
-	CenterXY = FVector2D(C.X, C.Y);
-	// Schaal afgestemd op de top-down render: het 760px-vlak = de OrthoWidth-brede wereldzone.
-	const float Ortho = FMath::Max(1.f, City->GetMapOrthoWidth());
-	Scale = GMapDS / Ortho;
-
-	// Bloklabels: winkelnaam (geel), park (groen) of flat-reeks "32 1-20" (wit). Rijtjeshuizen worden
-	// hieronder apart getekend (oriëntatie-bewust: nummers naast OF onder elkaar).
-	TArray<FCityMapBlock> Blocks;
-	City->GetMapBlocks(Blocks);
-	for (const FCityMapBlock& Bk : Blocks)
-	{
-		const bool bRowBlock = !Bk.bShop && Bk.Label != TEXT("Park") && !Bk.Label.Contains(TEXT("-"));
-		if (bRowBlock) { continue; } // rijtjeshuizen -> oriëntatie-bewuste chip hieronder
-		const FVector2D P = WorldToCanvas(Bk.Center.X, Bk.Center.Y);
-
-		if (Bk.bShop)
-		{
-			// Winkel = passend icoontje op het blok (GEEN nummer), met de naam eronder.
-			WeedUI::EIcon Ico = WeedUI::EIcon::Shop;
-			FLinearColor Tint(1.f, 0.86f, 0.35f);
-			if (Bk.Label == TEXT("GAS"))            { Ico = WeedUI::EIcon::Flame; Tint = FLinearColor(1.f, 0.45f, 0.35f); }
-			else if (Bk.Label == TEXT("GROW"))      { Ico = WeedUI::EIcon::Leaf;  Tint = FLinearColor(0.5f, 1.f, 0.5f); }
-			else if (Bk.Label == TEXT("FURNITURE")) { Ico = WeedUI::EIcon::Home;  Tint = FLinearColor(0.8f, 0.65f, 1.f); }
-			else if (Bk.Label == TEXT("SUPPLIES"))  { Ico = WeedUI::EIcon::Shop;  Tint = FLinearColor(0.5f, 0.78f, 1.f); }
-			if (UWidget* IcoW = WeedUI::Icon(WidgetTree, Ico, 34.f, Tint))
-			{
-				if (UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(IcoW))
-				{
-					Cs->SetAutoSize(false); Cs->SetSize(FVector2D(34.f, 34.f));
-					Cs->SetAlignment(FVector2D(0.5f, 0.5f)); Cs->SetPosition(P + FVector2D(0.f, -10.f)); Cs->SetZOrder(24);
-				}
-				IcoW->SetVisibility(ESlateVisibility::HitTestInvisible);
-			}
-			AddPill(Bk.Label, P + FVector2D(0.f, 16.f), 11, Tint, 24);
-		}
-		else
-		{
-			const FLinearColor Col = (Bk.Label == TEXT("Park")) ? FLinearColor(0.55f, 1.f, 0.6f) : FLinearColor(1.f, 1.f, 0.96f);
-			AddPill(Bk.Label, P, 11, Col, 24);
-		}
-	}
-
-	// Rijtjeshuizen: groepeer de ECHTE huizen per blok, bepaal de rij-oriëntatie uit hun posities en
-	// toon één nette chip met de nummers NAAST elkaar (rij langs X) of ONDER elkaar (rij langs Y),
-	// zodat het aansluit op hoe de huisjes op de kaart staan.
-	{
-		const float Pitch = FMath::Max(1.f, City->GetPitch());
-		// Posities meteen naar CANVAS-ruimte (de kaart-render draait de assen), zodat de oriëntatie klopt
-		// met wat je op het scherm ziet i.p.v. met de wereld-assen.
-		struct FRowGrp { TArray<TPair<FVector2D, FString>> Items; };
-		TMap<FIntPoint, FRowGrp> Groups;
-		for (const FApartmentHome& H : City->GetApartmentHomes())
-		{
-			if (H.bApartment || H.Number.IsEmpty() || H.Number.Contains(TEXT("-"))) { continue; }
-			const FIntPoint Key(FMath::RoundToInt((H.InteriorPos.X - C.X) / Pitch),
-								FMath::RoundToInt((H.InteriorPos.Y - C.Y) / Pitch));
-			const FVector2D Cv = WorldToCanvas(H.InteriorPos.X, H.InteriorPos.Y);
-			Groups.FindOrAdd(Key).Items.Add(TPair<FVector2D, FString>(Cv, H.Number));
-		}
-		for (TPair<FIntPoint, FRowGrp>& GP : Groups)
-		{
-			TArray<TPair<FVector2D, FString>>& It = GP.Value.Items;
-			if (It.Num() == 0) { continue; }
-			FVector2D Lo = It[0].Key, Hi = It[0].Key, Sum(0.f, 0.f);
-			for (const TPair<FVector2D, FString>& E : It)
-			{
-				Lo.X = FMath::Min(Lo.X, E.Key.X); Lo.Y = FMath::Min(Lo.Y, E.Key.Y);
-				Hi.X = FMath::Max(Hi.X, E.Key.X); Hi.Y = FMath::Max(Hi.Y, E.Key.Y);
-				Sum += E.Key;
-			}
-			// Spreiding in SCHERM-Y groter dan in scherm-X -> huisjes staan onder elkaar -> nummers stacken.
-			const bool bVertical = (Hi.Y - Lo.Y) > (Hi.X - Lo.X);
-			It.Sort([bVertical](const TPair<FVector2D, FString>& A, const TPair<FVector2D, FString>& B)
-				{ return bVertical ? (A.Key.Y < B.Key.Y) : (A.Key.X < B.Key.X); });
-			FString Lbl;
-			for (int32 i = 0; i < It.Num(); ++i) { if (i > 0) { Lbl += bVertical ? TEXT("\n") : TEXT(" "); } Lbl += It[i].Value; }
-			AddPill(Lbl, Sum / It.Num(), 9, FLinearColor(1.f, 1.f, 0.96f), 24);
-		}
-	}
-
-	City->CaptureMapNow(); // verse top-down render zodra de kaart opent
+	// EERST capturen: dat draait EnsureMapCapture, dat MapCenter/MapOrtho BEREKENT. Lazen we GetMapCenter()
+	// ervóór (zoals eerst), dan kreeg de 1e map-open de DEFAULT (0,0)/60000 -> CenterXY/MapCenterFull scheef =
+	// markers "ernaast". 2e open had MapCenter al berekend = goed. Nu vóór het lezen capturen = 1e open óók goed.
+	PackMap->CaptureMapNow();
+	CenterXY = PackMap->GetMapCenter();
+	Scale = GMapDS / FMath::Max(1.f, PackMap->GetMapOrthoWidth());
+	// Zoombaar: standaard DICHT op de speler (view ~3,5km breed), scrollwiel tot de hele ring.
+	MapCenterFull = CenterXY;
+	Scale0 = Scale;
+	bZoomable = true;
+	Zoom = FMath::Clamp((GMapDS / Scale0) / 350000.f * 20.f, 6.f, 40.f);
+	if (Canvas) { Canvas->SetClipping(EWidgetClipping::ClipToBounds); }
 
 	// Speler-marker (boven alles) + waypoint-marker (geel, verborgen tot je 'm zet).
 	PlayerDot = AddPlayerMarker(); // jij: groot wit baken met blauw poppetje
@@ -460,23 +369,18 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	UpdateView();
 	Super::NativeTick(MyGeometry, DeltaTime);
 
-	if (!City.IsValid())
-	{
-		for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { City = *It; break; }
-	}
-	if (!City.IsValid() && !PackMap.IsValid())
+	if (!PackMap.IsValid())
 	{
 		for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { PackMap = *It; break; }
 	}
-	if (!bBuiltBlocks && (City.IsValid() || PackMap.IsValid())) { BuildBlocks(); }
+	if (!bBuiltBlocks && PackMap.IsValid()) { BuildBlocks(); }
 	if (!bBuiltBlocks || !Canvas) { return; }
 
 	// Echte top-down render dekkend tonen: M_MapDisplay (UI/opaque) sampelt de SceneCapture-RT.
 	// De BaseColor-capture heeft alpha=0; dit materiaal negeert die alpha -> geen doorzichtige kaart.
-	if (!bImageSet && MapImage && (City.IsValid() || PackMap.IsValid()))
+	if (!bImageSet && MapImage && PackMap.IsValid())
 	{
-		UTextureRenderTarget2D* RT = City.IsValid() ? City->GetMapRenderTarget()
-			: (PackMap.IsValid() ? PackMap->GetMapRenderTarget() : nullptr);
+		UTextureRenderTarget2D* RT = PackMap.IsValid() ? PackMap->GetMapRenderTarget() : nullptr;
 		if (RT)
 		{
 			if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/Materials/M_MapDisplay.M_MapDisplay")))

@@ -7,7 +7,6 @@
 #include "World/DayCycleComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Phone/PhoneClientComponent.h"
-#include "World/CityGenerator.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Progression/StoreComponent.h"
 #include "Save/SaveGameSubsystem.h"
@@ -443,30 +442,8 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	FRotator SpawnRot = FRotator::ZeroRotator;
 	bool bPlacedAtHome = false;
 
-	if (!bComeToYou)
-	{
-		// Huis-index uit het NpcId "Resident_####" halen.
-		const FString IdStr = Msg.FromContactId.ToString();
-		if (IdStr.StartsWith(TEXT("Resident_")))
-		{
-			const int32 HomeIdx = FCString::Atoi(*IdStr.RightChop(9));
-			ACityGenerator* City = nullptr;
-			for (TActorIterator<ACityGenerator> It(World); It; ++It) { City = *It; break; }
-			if (City)
-			{
-				const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
-				if (Homes.IsValidIndex(HomeIdx))
-				{
-					const FApartmentHome& H = Homes[HomeIdx];
-					// Bij de DEUR: appartement -> in de gang vóór de unitdeur (HallPos); rijtjeshuis -> vóór
-					// de voordeur (DoorPos). Beide bereikbaar voor de speler.
-					const FVector DoorSpot = !H.HallPos.IsNearlyZero() ? H.HallPos : H.DoorPos;
-					SpawnLoc = DoorSpot + FVector(0.f, 0.f, 4.f);
-					bPlacedAtHome = true;
-				}
-			}
-		}
-	}
+	// Beach-map: contacten lopen niet meer bij een eigen procedurele woning rond. De afspraak-NPC
+	// spawnt daarom bij de SPELER (zie de fallback hieronder), ook voor "kom bij mij langs".
 
 	if (!bPlacedAtHome)
 	{

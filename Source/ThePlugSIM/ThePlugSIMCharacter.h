@@ -154,14 +154,9 @@ protected:
 public:
 	AThePlugSIMCharacter();
 
-	// --- Authoring (sandbox console-commando's): meubel-layout per woning-type opslaan/wissen ---
-	// `WeedSaveFurniture` slaat de huidige geplaatste meubels op als default-sjabloon per woning-type;
-	// verse games spawnen die layout dan in elke woning van dat type (incl. NPC-woningen).
-	UFUNCTION(Exec) void WeedSaveFurniture();
+	// --- Authoring (sandbox console-commando's): meubel-layout opnieuw inrichten ---
 	// `WeedClearFurniture` wist alle geplaatste meubels, zodat je opnieuw kunt inrichten.
 	UFUNCTION(Exec) void WeedClearFurniture();
-	// `WeedFurnitureTypes` toont hoeveel woning-types er zijn en welke al een opgeslagen sjabloon hebben.
-	UFUNCTION(Exec) void WeedFurnitureTypes();
 	// `WeedMarkSpot <label>` schrijft je huidige positie+kijkrichting naar Saved/MarkedSpots.txt -
 	// zo wijs je plekken aan (bv. een hotel-lobby) waar Claude daarna in code iets kan bouwen.
 	UFUNCTION(Exec) void WeedMarkSpot(const FString& Label);
@@ -305,7 +300,6 @@ public:
 	virtual void DevRegisterHome() override { WeedRegisterHome(); }
 	virtual void DevMarkDeliveryPoint() override { WeedMarkDeliveryPoint(); }
 	virtual void DevAddMeetSpot() override { WeedAddMeetSpot(); }
-	virtual void DevSaveFurnitureTemplate() override { WeedSaveFurniture(); }
 	virtual void DevMarkBuildAreaCorner() override { WeedMarkBuildArea(); }
 	virtual void DevSaveMenuCam() override { WeedSaveMenuCam(); }
 	virtual void DevActivityNpcAtAim() override { HandleActivityKey(); }

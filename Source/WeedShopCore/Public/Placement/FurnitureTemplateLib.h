@@ -8,7 +8,6 @@
 #include "CoreMinimal.h"
 
 class UWorld;
-class ACityGenerator;
 
 struct FFurnitureEntry
 {
@@ -25,13 +24,6 @@ namespace FurnitureTemplates
 	// Type-sleutel voor een woning: soort (Apt/Row) + kamergrootte (op 50cm gequantiseerd), zodat
 	// een grote kamer / grote rij z'n eigen sjabloon krijgt. Bijv. "Apt_44x18", "Row_60x20".
 	WEEDSHOPCORE_API FString TypeKey(bool bApartment, const FVector& RoomHalf);
-
-	// Tel hoeveel woningen er per type zijn (voor "hoeveel types moet ik doen"). Sleutel -> aantal.
-	WEEDSHOPCORE_API void CountHomeTypes(ACityGenerator* City, TMap<FString, int32>& Out);
-
-	// Capture de huidige geplaatste meubels per woning-type -> schrijf naar het bestand. Per type wordt
-	// de woning met de MEESTE meubels als sjabloon genomen. Geeft het aantal opgeslagen types terug.
-	WEEDSHOPCORE_API int32 SaveFromWorld(UWorld* W, ACityGenerator* City);
 
 	// Lees de templates (type -> entries). False als er geen bestand is.
 	WEEDSHOPCORE_API bool LoadTemplates(TMap<FString, TArray<FFurnitureEntry>>& Out);

@@ -16,7 +16,7 @@
 #include "Customer/CustomerBase.h"
 #include "Customer/CustomerSpawner.h"
 #include "World/DeliveryDrone.h"
-#include "World/CityGenerator.h"
+#include "World/CityTypes.h" // FApartmentHome / FCityPropertyOffer (verhuisd uit CityGenerator.h)
 #include "World/DoorRetrofitter.h"
 #include "World/CityDoor.h"
 #include "EngineUtils.h"
@@ -460,13 +460,6 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 // --- Woningen (3 koopbare panden) ---
 
-ACityGenerator* UPhoneClientComponent::FindCity() const
-{
-	if (!GetWorld()) { return nullptr; }
-	for (TActorIterator<ACityGenerator> It(GetWorld()); It; ++It) { return *It; }
-	return nullptr;
-}
-
 ADoorRetrofitter* UPhoneClientComponent::FindRetro() const
 {
 	if (!GetWorld()) { return nullptr; }
@@ -477,15 +470,13 @@ ADoorRetrofitter* UPhoneClientComponent::FindRetro() const
 void UPhoneClientComponent::GetHomesUnified(TArray<FApartmentHome>& Out) const
 {
 	Out.Reset();
-	if (ACityGenerator* City = FindCity()) { Out = City->GetApartmentHomes(); return; }
 	if (ADoorRetrofitter* Retro = FindRetro()) { Out = Retro->GetBeachHomes(); }
 }
 
 void UPhoneClientComponent::GetOffersUnified(TArray<FCityPropertyOffer>& Out) const
 {
 	Out.Reset();
-	if (ACityGenerator* City = FindCity()) { City->GetPropertyOffers(Out); }
-	else if (ADoorRetrofitter* Retro = FindRetro()) { Retro->GetBeachPropertyOffers(Out); }
+	if (ADoorRetrofitter* Retro = FindRetro()) { Retro->GetBeachPropertyOffers(Out); }
 	// Alle pand-prijzen op hele euro's zodat tonen, kopen en verkopen consistent zijn.
 	for (FCityPropertyOffer& O : Out) { if (O.PriceCents > 0) { O.PriceCents = FMath::Max<int64>(100, WeedRoundEuros(O.PriceCents)); } }
 }
@@ -504,86 +495,55 @@ void UPhoneClientComponent::ApplyLocalDoors()
 	if (!P || !P->IsLocallyControlled()) { return; }
 	UWorld* W = GetWorld();
 	if (!W) { return; }
-	ACityGenerator* City = FindCity();
-	if (!City)
+	// BEACH-MAP (geen City-door-lijst): open ALLE deuren BINNEN een gekochte woning (de hele kamer
+	// wordt van jou). Andere deuren laat de DoorRetrofitter op resident/locked staan.
+	TArray<FApartmentHome> BHomes; GetHomesUnified(BHomes);
+	if (BHomes.Num() == 0) { return; }
+	TSet<int32> OwnedAny; // gedeeld co-op: een woning van EENDER WELKE speler telt als "ons"
+	for (TActorIterator<APawn> It(W); It; ++It)
 	{
-		// BEACH-MAP (geen City-door-lijst): open ALLE deuren BINNEN een gekochte woning (de hele kamer
-		// wordt van jou). Andere deuren laat de DoorRetrofitter op resident/locked staan.
-		TArray<FApartmentHome> BHomes; GetHomesUnified(BHomes);
-		if (BHomes.Num() == 0) { return; }
-		TSet<int32> OwnedAny; // gedeeld co-op: een woning van EENDER WELKE speler telt als "ons"
-		for (TActorIterator<APawn> It(W); It; ++It)
-		{
-			if (const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>())
-			{ for (int32 Idx : Ph->OwnedHomes) { OwnedAny.Add(Idx); } }
-		}
-		// Per eigen woning ALLEEN de dichtstbijzijnde voordeur (+ balkonpui) als player-home markeren -
-		// niet elke deur binnen de box, want dan pakt 'ie de buur-deur (bv. 701 naast je 703) erbij.
-		TSet<ACityDoor*> HomeDoors;
-		for (int32 Idx : OwnedAny)
-		{
-			if (!BHomes.IsValidIndex(Idx)) { continue; }
-			const FApartmentHome& H = BHomes[Idx];
-			ACityDoor* BestFront = nullptr; float BestFD = 0.f;
-			ACityDoor* BestBalc = nullptr; float BestBD = 0.f;
-			for (TActorIterator<ACityDoor> It(W); It; ++It)
-			{
-				ACityDoor* Dr = *It;
-				if (!Dr) { continue; }
-				const bool bBalc = Dr->ActorHasTag(TEXT("BalcDoor"));
-				const bool bApt  = Dr->ActorHasTag(TEXT("AptDoor"));
-				if (!bBalc && !bApt) { continue; }
-				const FVector DL = Dr->GetActorLocation();
-				if (FMath::Abs(DL.X - H.InteriorPos.X) > H.RoomHalf.X + 160.f) { continue; }
-				if (FMath::Abs(DL.Y - H.InteriorPos.Y) > H.RoomHalf.Y + 160.f) { continue; }
-				if (DL.Z < H.InteriorPos.Z - 220.f || DL.Z > H.InteriorPos.Z + 420.f) { continue; }
-				const float D = FVector::DistSquared(DL, H.InteriorPos);
-				if (bBalc) { if (!BestBalc || D < BestBD) { BestBD = D; BestBalc = Dr; } }
-				else       { if (!BestFront || D < BestFD) { BestFD = D; BestFront = Dr; } }
-			}
-			if (BestFront) { HomeDoors.Add(BestFront); }
-			if (BestBalc)  { HomeDoors.Add(BestBalc); }
-		}
-		// Markeer je eigen deur(en); deuren die ten onrechte 'your home' staan terugzetten naar bewoner.
+		if (const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>())
+		{ for (int32 Idx : Ph->OwnedHomes) { OwnedAny.Add(Idx); } }
+	}
+	// Per eigen woning ALLEEN de dichtstbijzijnde voordeur (+ balkonpui) als player-home markeren -
+	// niet elke deur binnen de box, want dan pakt 'ie de buur-deur (bv. 701 naast je 703) erbij.
+	TSet<ACityDoor*> HomeDoors;
+	for (int32 Idx : OwnedAny)
+	{
+		if (!BHomes.IsValidIndex(Idx)) { continue; }
+		const FApartmentHome& H = BHomes[Idx];
+		ACityDoor* BestFront = nullptr; float BestFD = 0.f;
+		ACityDoor* BestBalc = nullptr; float BestBD = 0.f;
 		for (TActorIterator<ACityDoor> It(W); It; ++It)
 		{
 			ACityDoor* Dr = *It;
 			if (!Dr) { continue; }
-			if (HomeDoors.Contains(Dr)) { Dr->SetPlayerHome(); }
-			else if (Dr->IsPlayerHome())
-			{
-				const FVector L = Dr->GetActorLocation();
-				const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
-				Dr->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
-			}
+			const bool bBalc = Dr->ActorHasTag(TEXT("BalcDoor"));
+			const bool bApt  = Dr->ActorHasTag(TEXT("AptDoor"));
+			if (!bBalc && !bApt) { continue; }
+			const FVector DL = Dr->GetActorLocation();
+			if (FMath::Abs(DL.X - H.InteriorPos.X) > H.RoomHalf.X + 160.f) { continue; }
+			if (FMath::Abs(DL.Y - H.InteriorPos.Y) > H.RoomHalf.Y + 160.f) { continue; }
+			if (DL.Z < H.InteriorPos.Z - 220.f || DL.Z > H.InteriorPos.Z + 420.f) { continue; }
+			const float D = FVector::DistSquared(DL, H.InteriorPos);
+			if (bBalc) { if (!BestBalc || D < BestBD) { BestBD = D; BestBalc = Dr; } }
+			else       { if (!BestFront || D < BestFD) { BestFD = D; BestFront = Dr; } }
 		}
-		return;
+		if (BestFront) { HomeDoors.Add(BestFront); }
+		if (BestBalc)  { HomeDoors.Add(BestBalc); }
 	}
-	const TArray<FApartmentHome>& Homes = City->GetApartmentHomes();
-
-	// Gedeeld co-op: een woning die door EENDER WELKE speler bezeten wordt, telt als "ons".
-	TSet<int32> OwnedAny;
-	for (TActorIterator<APawn> It(W); It; ++It)
+	// Markeer je eigen deur(en); deuren die ten onrechte 'your home' staan terugzetten naar bewoner.
+	for (TActorIterator<ACityDoor> It(W); It; ++It)
 	{
-		if (const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>())
-		{
-			for (int32 Idx : Ph->OwnedHomes) { OwnedAny.Add(Idx); }
-		}
-	}
-	// Te-koop-panden (zelfde bron als de server-deursetup in CustomerSpawner).
-	TSet<int32> ForSale;
-	{
-		TArray<FCityPropertyOffer> Offers; City->GetPropertyOffers(Offers);
-		for (const FCityPropertyOffer& O : Offers) { for (int32 Idx : O.Homes) { ForSale.Add(Idx); } }
-	}
-
-	for (int32 i = 0; i < Homes.Num(); ++i)
-	{
-		ACityDoor* Dr = Homes[i].Door.Get();
+		ACityDoor* Dr = *It;
 		if (!Dr) { continue; }
-		if (OwnedAny.Contains(i))     { Dr->SetPlayerHome(); }                              // van een speler -> open
-		else if (ForSale.Contains(i)) { Dr->SetForSale(); }                                // te koop
-		else                          { Dr->SetResident(ACityDoor::ResidentNameForIndex(i)); } // bewoner -> LOCKED - naam
+		if (HomeDoors.Contains(Dr)) { Dr->SetPlayerHome(); }
+		else if (Dr->IsPlayerHome())
+		{
+			const FVector L = Dr->GetActorLocation();
+			const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
+			Dr->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+		}
 	}
 }
 
@@ -763,7 +723,7 @@ void UPhoneClientComponent::PropertyTick()
 					{
 						OwnedHomes.AddUnique(O.HomeIndex);
 						ActiveHome = O.HomeIndex;
-						if (FindCity()) { MoveOwnerToHome(O.HomeIndex); } // beach-map: DoorRetrofitter plaatst je al
+						// Beach-map: GEEN MoveOwnerToHome - de DoorRetrofitter plaatst de speler al.
 						break;
 					}
 				}

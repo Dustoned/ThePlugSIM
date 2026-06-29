@@ -91,36 +91,10 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	void TrySpawn();
+	// Diagnose-monitor (logt of de crowd echt beweegt). Draait alleen na bResidentsSpawned, wat op
+	// CityBeachStrip nooit gebeurt - blijft staan als no-op tot het LEGACY bewoners-pad ooit terugkomt.
 	void StartResidentMovementMonitor();
 	void TickResidentMovementMonitor(float Now);
-	// Maakt van C de koopklare test-klant op de park-plek (idempotent).
-	void SetupTestCustomer(ACustomerBase* C, const FVector& Park);
-	// Kent NPC-bewoners toe aan appartementen (één keer, zodra de stad gebouwd is).
-	void SpawnResidents();
-
-	// Plaatst wereld-fixtures bij een VERSE game: meubels (tafel/koelkast/matras) in elke koopbare/
-	// starter-woning, en een ATM in elke winkel. Server-side (repliceert), zodat ze oppakbaar/verplaatsbaar
-	// zijn en in de save belanden.
-	void SpawnHomeAndShopFixtures(class ACityGenerator* City);
-
-	// Woning-indexen die een fysieke bewoner kregen (voor het meubileren van NPC-woningen).
-	TSet<int32> ResidentHomeIndices;
-
-	// --- Dagelijkse rotatie van fysieke bewoners ---
-	// Spawn/despawn één bewoner op een woning-index (herbruikbaar voor de initiële spawn én rotatie).
-	ACustomerBase* SpawnOneResident(class ACityGenerator* City, int32 HomeIndex, bool bGuaranteedBuyer);
-	void DespawnResidentByHome(int32 HomeIndex);
-	ACustomerBase* FindResidentByHome(int32 HomeIndex) const;
-	// Wissel RotatePerDay fysieke bewoners voor virtuele (voorrang aan nog-niet-getoonde woningen).
-	void RotateResidents();
-	// Periodieke check (timer): nieuwe dag -> roteren; dag<->nacht-overgang -> populatie aanpassen.
-	void CheckResidentRotation();
-	// Past de straat-populatie aan op dag/nacht: nacht = ~NightRoamers (bijna) verslaafden buiten,
-	// dag = aanvullen tot MaxResidents met de normale mix.
-	void ApplyDayNightPopulation(bool bNight);
-	int8 LastNightState = -1; // -1 onbekend, 0 dag, 1 nacht
-	float NextDayRefillTime = 0.f; // real-time gate: dag-bijvulling gespreid (niet alle bewoners in één frame -> geen burst/tollen)
-	float NextCenterDiagTime = 0.f; // (vrij voor hergebruik)
 
 	// --- Park-wachtrij: iedereen komt 1-2x per dag even bij het park, maar netjes OM DE BEURT. ---
 	// Max een paar bewoners tegelijk "op park-trip" (lopen + even blijven); de rest staat in de FIFO-rij en
@@ -136,12 +110,6 @@ public:
 	void FinishParkVisit(ACustomerBase* C);
 
 protected:
-
-	TArray<int32> EligibleHomes;   // alle niet-koopbare ingang-woningen (de volledige pool)
-	TSet<int32> PhysicalHomes;     // woning-indexen die NU een fysieke bewoner hebben
-	TSet<int32> ActivatedEverHomes;// ooit fysiek geweest (voor "nieuwe gezichten eerst")
-	int32 LastRotationDay = -1;
-	FTimerHandle RotationTimer;
 
 	bool bResidentsSpawned = false;
 	FTimerHandle SpawnTimer;

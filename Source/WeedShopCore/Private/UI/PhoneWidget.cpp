@@ -57,7 +57,7 @@
 #include "Npc/NpcRegistryComponent.h"
 #include "Components/Slider.h"
 #include "World/DayNightController.h"
-#include "World/CityGenerator.h"
+#include "World/CityTypes.h"
 #include "UI/MapWidget.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Styling/SlateTypes.h"
