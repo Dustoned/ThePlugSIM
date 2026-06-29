@@ -47,7 +47,7 @@ namespace
 		S.Normal = WeedUI::Rounded(Col, 7.f);
 		S.Hovered = WeedUI::Rounded(Col * 1.3f, 7.f);
 		S.Pressed = WeedUI::Rounded(Col * 0.8f, 7.f);
-		S.NormalPadding = FMargin(10.f, 5.f); S.PressedPadding = FMargin(10.f, 5.f);
+		S.NormalPadding = FMargin(13.f, 7.f); S.PressedPadding = FMargin(13.f, 7.f);
 		B->SetStyle(S);
 		B->SetContent(WeedUI::Text(Tree, Label, Font, FLinearColor::White, true));
 		return B;
@@ -126,60 +126,76 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
-	// Verduisterende achtergrond.
+	// === Full-page achtergrond: dekt het HELE scherm (geen gecentreerd popup-kaartje meer). ===
 	UBorder* Dim = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SetDim"));
-	Dim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.82f), 0.f));
-	// Verticaal vullen (tall = fullscreen-feel) maar horizontaal een GECENTREERDE kolom met vaste
-	// max-breedte -> op widescreen geen edge-to-edge uitrekken (geen enorme lege middenruimte),
-	// maar een nette gecentreerde settings-kolom.
-	Dim->SetHorizontalAlignment(HAlign_Center); Dim->SetVerticalAlignment(VAlign_Fill);
-	Dim->SetPadding(FMargin(0.f, 50.f));
+	Dim->SetBrush(WeedUI::Rounded(FLinearColor(0.016f, 0.024f, 0.036f, 0.95f), 0.f));
+	Dim->SetHorizontalAlignment(HAlign_Fill); Dim->SetVerticalAlignment(VAlign_Fill);
+	Dim->SetPadding(FMargin(0.f));
 	Card = Dim;
 	UCanvasPanelSlot* DS = Root->AddChildToCanvas(Dim);
 	DS->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f)); DS->SetOffsets(FMargin(0.f));
 
-	USizeBox* Col = WidgetTree->ConstructWidget<USizeBox>();
-	Col->SetWidthOverride(920.f); // content-breedte cap -> optimaal op widescreen; hoogte vult mee
-	Dim->SetContent(Col);
-	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 18.f));
-	Panel->SetPadding(FMargin(34.f, 26.f));
-	Col->SetContent(Panel);
+	// Marge t.o.v. de schermranden (full-page, maar niet edge-glued).
+	UBorder* PagePad = WidgetTree->ConstructWidget<UBorder>();
+	PagePad->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f));
+	PagePad->SetHorizontalAlignment(HAlign_Fill); PagePad->SetVerticalAlignment(VAlign_Fill);
+	PagePad->SetPadding(FMargin(74.f, 48.f, 74.f, 40.f));
+	Dim->SetContent(PagePad);
 
-	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-	Panel->SetContent(VB);
+	UVerticalBox* MainVB = WidgetTree->ConstructWidget<UVerticalBox>();
+	PagePad->SetContent(MainVB);
 
-	// Header: kleine back-knop linksboven + titel.
+	// --- Header: grote titel links, Back rechts ---
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UWeedActionButton* BackTop = SetBtn(WidgetTree, TEXT("< Back"), FLinearColor(0.4f, 0.34f, 0.16f),
-		[this]() { if (UPhoneClientComponent* Ph = GetPhone()) { Ph->CloseSettings(); } }, 12);
-	Header->AddChildToHorizontalBox(BackTop)->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
-	Header->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 20, FLinearColor(0.6f, 1.f, 0.6f), false, true));
-	VB->AddChildToVerticalBox(Header)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+	UHorizontalBoxSlot* TitleS = Header->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 30, FLinearColor(0.62f, 1.f, 0.72f), false, true));
+	TitleS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TitleS->SetVerticalAlignment(VAlign_Center);
+	UWeedActionButton* BackTop = SetBtn(WidgetTree, TEXT("< Back"), FLinearColor(0.10f, 0.13f, 0.19f),
+		[this]() { if (UPhoneClientComponent* Ph = GetPhone()) { Ph->CloseSettings(); } }, 13);
+	Header->AddChildToHorizontalBox(BackTop)->SetVerticalAlignment(VAlign_Center);
+	MainVB->AddChildToVerticalBox(Header)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
-	// Categorie-tabs.
-	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
-	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 0; RefreshTabs(); RefreshContent(); }, 13);
-	TabGame = SetBtn(WidgetTree, TEXT("Game"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 1; RefreshTabs(); RefreshContent(); }, 13);
-	TabControls = SetBtn(WidgetTree, TEXT("Controls"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 2; RefreshTabs(); RefreshContent(); }, 13);
-	TabAudio = SetBtn(WidgetTree, TEXT("Audio"), FLinearColor(0.22f, 0.32f, 0.46f), [this]() { Category = 3; RefreshTabs(); RefreshContent(); }, 13);
-	Tabs->AddChildToHorizontalBox(TabGraphics)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
-	Tabs->AddChildToHorizontalBox(TabGame)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
-	Tabs->AddChildToHorizontalBox(TabControls)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
-	Tabs->AddChildToHorizontalBox(TabAudio)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
-	VB->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+	// --- Accent-divider onder de header ---
+	UBorder* HDiv = WidgetTree->ConstructWidget<UBorder>();
+	HDiv->SetBrush(WeedUI::Rounded(FLinearColor(0.24f, 0.86f, 0.55f, 0.5f), 2.f));
+	USizeBox* HDivSz = WidgetTree->ConstructWidget<USizeBox>(); HDivSz->SetHeightOverride(2.f); HDivSz->SetContent(HDiv);
+	MainVB->AddChildToVerticalBox(HDivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 22.f));
 
-	// Inhoud - scrollbaar zodat alle (graphics-)rijen netjes BINNEN het paneel passen i.p.v. eroverheen.
+	// --- Content: links de categorie-nav (verticale tabs), rechts de instellingen ---
+	UHorizontalBox* ContentRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UVerticalBoxSlot* ContentVS = MainVB->AddChildToVerticalBox(ContentRow);
+	ContentVS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	// Linker nav (240px breed; tabs vullen de breedte).
+	USizeBox* NavSz = WidgetTree->ConstructWidget<USizeBox>(); NavSz->SetWidthOverride(240.f);
+	UVerticalBox* Nav = WidgetTree->ConstructWidget<UVerticalBox>(); NavSz->SetContent(Nav);
+	ContentRow->AddChildToHorizontalBox(NavSz)->SetPadding(FMargin(0.f, 0.f, 30.f, 0.f));
+
+	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 0; RefreshTabs(); RefreshContent(); }, 15);
+	TabGame     = SetBtn(WidgetTree, TEXT("Game"),     FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 1; RefreshTabs(); RefreshContent(); }, 15);
+	TabControls = SetBtn(WidgetTree, TEXT("Controls"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 2; RefreshTabs(); RefreshContent(); }, 15);
+	TabAudio    = SetBtn(WidgetTree, TEXT("Audio"),    FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 3; RefreshTabs(); RefreshContent(); }, 15);
+	auto AddTab = [&](UWeedActionButton* B) { UVerticalBoxSlot* TS = Nav->AddChildToVerticalBox(B); TS->SetHorizontalAlignment(HAlign_Fill); TS->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f)); };
+	AddTab(TabGraphics); AddTab(TabGame); AddTab(TabControls); AddTab(TabAudio);
+
+	// Rechter content (scrollbaar; rijen in een leesbare max-breedte, links uitgelijnd).
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
+	UHorizontalBox* BodyRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	USizeBox* BodyCap = WidgetTree->ConstructWidget<USizeBox>(); BodyCap->SetWidthOverride(860.f);
 	Body = WidgetTree->ConstructWidget<UVerticalBox>();
-	Scroll->AddChild(Body);
-	UVerticalBoxSlot* BSlot = VB->AddChildToVerticalBox(Scroll);
-	BSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	BodyCap->SetContent(Body);
+	BodyRow->AddChildToHorizontalBox(BodyCap);
+	Scroll->AddChild(BodyRow);
+	UHorizontalBoxSlot* ScS = ContentRow->AddChildToHorizontalBox(Scroll);
+	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	// Save onderaan (waar Back stond). Back gaat nu via Esc + de knop linksboven.
-	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), FLinearColor(0.18f, 0.42f, 0.22f),
-		[this]() { if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); } bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR); RefreshContent(); }, 13);
-	VB->AddChildToVerticalBox(SaveBtn)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+	// --- Footer: Esc-hint links, Save rechts ---
+	UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UHorizontalBoxSlot* HintS = Footer->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Esc to go back"), 11, FLinearColor(0.5f, 0.55f, 0.64f)));
+	HintS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HintS->SetVerticalAlignment(VAlign_Center);
+	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), FLinearColor(0.18f, 0.45f, 0.24f),
+		[this]() { if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); } bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR); RefreshContent(); }, 14);
+	Footer->AddChildToHorizontalBox(SaveBtn)->SetVerticalAlignment(VAlign_Center);
+	MainVB->AddChildToVerticalBox(Footer)->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
 
 	// === Modale "herstart nodig"-popup (verschijnt bij een schaduw-grens-wissel Potato <-> hoger). ===
 	UBorder* PopDim = WidgetTree->ConstructWidget<UBorder>();
@@ -211,13 +227,13 @@ void USettingsWidget::AddValueRow(const FString& Label, const FString& Value, TF
 {
 	if (!Body) { return; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 14, FLinearColor(0.88f, 0.9f, 1.f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 	Sz->SetWidthOverride(220.f);
-	Sz->SetContent(SetBtn(WidgetTree, Value, FLinearColor(0.18f, 0.2f, 0.27f), OnClick, 12));
+	Sz->SetContent(SetBtn(WidgetTree, Value, FLinearColor(0.12f, 0.15f, 0.22f), OnClick, 16));
 	Row->AddChildToHorizontalBox(Sz)->SetVerticalAlignment(VAlign_Center);
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 5.f));
+	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
 }
 
 USlider* USettingsWidget::AddSliderRow(const FString& Label, float Normalized, TObjectPtr<UTextBlock>& OutValue)
@@ -225,21 +241,21 @@ USlider* USettingsWidget::AddSliderRow(const FString& Label, float Normalized, T
 	USlider* Slider = WidgetTree->ConstructWidget<USlider>();
 	if (!Body) { return Slider; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 14, FLinearColor(0.88f, 0.9f, 1.f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 
 	Slider->SetMinValue(0.f); Slider->SetMaxValue(1.f);
 	Slider->SetValue(FMath::Clamp(Normalized, 0.f, 1.f));
-	Slider->SetSliderBarColor(FLinearColor(0.18f, 0.2f, 0.27f));
-	Slider->SetSliderHandleColor(FLinearColor(0.55f, 0.8f, 1.f));
+	Slider->SetSliderBarColor(FLinearColor(0.12f, 0.15f, 0.22f));
+	Slider->SetSliderHandleColor(FLinearColor(0.42f, 0.9f, 0.62f));
 	USizeBox* SSz = WidgetTree->ConstructWidget<USizeBox>(); SSz->SetWidthOverride(220.f); SSz->SetHeightOverride(20.f); SSz->SetContent(Slider);
 	Row->AddChildToHorizontalBox(SSz)->SetVerticalAlignment(VAlign_Center);
 
-	OutValue = WeedUI::Text(WidgetTree, TEXT(""), 14, FLinearColor::White, true);
+	OutValue = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor::White, true);
 	USizeBox* VSz = WidgetTree->ConstructWidget<USizeBox>(); VSz->SetWidthOverride(56.f); VSz->SetContent(OutValue);
 	Row->AddChildToHorizontalBox(VSz)->SetVerticalAlignment(VAlign_Center);
 
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 6.f, 0.f, 6.f));
+	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 9.f, 0.f, 9.f));
 	return Slider;
 }
 
@@ -248,7 +264,7 @@ void USettingsWidget::AddResolutionRow()
 	if (!Body) { return; }
 	UGameUserSettings* G = GUS();
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Resolution"), 14, FLinearColor(0.88f, 0.9f, 1.f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Resolution"), 18, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 
 	ResCombo = WidgetTree->ConstructWidget<UComboBoxString>();
@@ -277,7 +293,7 @@ void USettingsWidget::AddResolutionRow()
 
 	USizeBox* CSz = WidgetTree->ConstructWidget<USizeBox>(); CSz->SetWidthOverride(220.f); CSz->SetContent(ResCombo);
 	Row->AddChildToHorizontalBox(CSz)->SetVerticalAlignment(VAlign_Center);
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 5.f));
+	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
 }
 
 void USettingsWidget::OnResolutionChanged(FString Item, ESelectInfo::Type SelectType)
@@ -302,9 +318,11 @@ void USettingsWidget::RefreshTabs()
 	auto Tint = [](UWeedActionButton* B, bool bSel)
 	{
 		if (!B) { return; }
-		const FLinearColor C = bSel ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.22f, 0.32f, 0.46f);
-		FButtonStyle S; S.Normal = WeedUI::Rounded(C, 7.f); S.Hovered = WeedUI::Rounded(C * 1.3f, 7.f); S.Pressed = WeedUI::Rounded(C * 0.8f, 7.f);
-		S.NormalPadding = FMargin(10.f, 5.f); S.PressedPadding = FMargin(10.f, 5.f);
+		// Geselecteerd = groen-getint accent, anders donker. Tall sidebar-tabs.
+		const FLinearColor C = bSel ? FLinearColor(0.15f, 0.42f, 0.26f, 0.98f) : FLinearColor(0.05f, 0.07f, 0.11f, 0.92f);
+		const FLinearColor H = bSel ? FLinearColor(0.19f, 0.50f, 0.32f, 1.f)  : FLinearColor(0.10f, 0.13f, 0.19f, 0.96f);
+		FButtonStyle S; S.Normal = WeedUI::Rounded(C, 8.f); S.Hovered = WeedUI::Rounded(H, 8.f); S.Pressed = WeedUI::Rounded(H, 8.f);
+		S.NormalPadding = FMargin(16.f, 13.f); S.PressedPadding = FMargin(16.f, 13.f);
 		B->SetStyle(S);
 	};
 	Tint(TabGraphics, Category == 0);
@@ -550,7 +568,7 @@ void USettingsWidget::RefreshContent()
 		if (VolMusicVal) { VolMusicVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(WeedUI::SoundCategoryVolume(2) * 100.f)))); }
 		LastVolMusic = FMath::RoundToInt(WeedUI::SoundCategoryVolume(2) * 100.f);
 
-		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 11, FLinearColor(0.55f, 0.6f, 0.7f)))
+		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 13, FLinearColor(0.55f, 0.6f, 0.7f)))
 			->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
 	}
 	else // Controls
@@ -559,7 +577,7 @@ void USettingsWidget::RefreshContent()
 		AddValueRow(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled() ? TEXT("On") : TEXT("Off"),
 			[this]() { UHotkeyHintWidget::SetHintsEnabled(!UHotkeyHintWidget::AreHintsEnabled()); RefreshContent(); });
 
-		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 11, FLinearColor(0.6f, 0.65f, 0.76f)))
+		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, FLinearColor(0.6f, 0.65f, 0.76f)))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
 
 		// Scrollbare lijst met alle acties (Main + Alt toets).
@@ -571,7 +589,7 @@ void USettingsWidget::RefreshContent()
 		for (const FName& Action : UControlSettings::AllActions())
 		{
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UTextBlock* NameT = WeedUI::Text(WidgetTree, UControlSettings::DisplayName(Action).ToString(), 13, FLinearColor(0.9f, 0.92f, 1.f));
+			UTextBlock* NameT = WeedUI::Text(WidgetTree, UControlSettings::DisplayName(Action).ToString(), 16, FLinearColor(0.9f, 0.92f, 1.f));
 			UHorizontalBoxSlot* NS = Row->AddChildToHorizontalBox(NameT);
 			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
 
@@ -585,7 +603,7 @@ void USettingsWidget::RefreshContent()
 				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 				Sz->SetWidthOverride(96.f);
 				Sz->SetContent(SetBtn(WidgetTree, Lbl, BtnCol,
-					[this, Action, bAlt]() { bRebinding = true; bRebindAlt = bAlt; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); RefreshContent(); }, 11));
+					[this, Action, bAlt]() { bRebinding = true; bRebindAlt = bAlt; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); RefreshContent(); }, 13));
 				Row->AddChildToHorizontalBox(Sz)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 			}
 			Scroll->AddChild(Row);
