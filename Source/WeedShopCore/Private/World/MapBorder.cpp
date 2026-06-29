@@ -77,7 +77,7 @@ void AMapBorder::Rebuild()
 		Segments.Add(C);
 		SegSpans.Add(TPair<FVector, FVector>(A, B));
 	}
-	UE_LOG(LogTemp, Warning, TEXT("MapBorder: %d wand-segmenten gebouwd uit %d markers"), Segments.Num(), Points.Num());
+	UE_LOG(LogTemp, Display, TEXT("MapBorder: %d wand-segmenten gebouwd uit %d markers"), Segments.Num(), Points.Num());
 }
 
 void AMapBorder::Tick(float DeltaSeconds)

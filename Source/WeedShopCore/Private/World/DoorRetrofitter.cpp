@@ -194,11 +194,11 @@ void ADoorRetrofitter::BeginPlay()
 			if (Parts.Num() < 3) { continue; }
 			ElevScanPos = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
 			bElevScan = true;
-			UE_LOG(LogWeedShop, Warning, TEXT("ELEVSCAN gestart: spot (%.0f, %.0f, %.0f)"), ElevScanPos.X, ElevScanPos.Y, ElevScanPos.Z);
+			UE_LOG(LogWeedShop, Verbose, TEXT("ELEVSCAN gestart: spot (%.0f, %.0f, %.0f)"), ElevScanPos.X, ElevScanPos.Y, ElevScanPos.Z);
 			GetWorldTimerManager().SetTimer(ElevScanTimer, this, &ADoorRetrofitter::ElevTeleport, 5.f, false);
 			break;
 		}
-		if (!bElevScan) { UE_LOG(LogWeedShop, Warning, TEXT("ELEVSCAN: geen marked spot voor deze map gevonden")); }
+		if (!bElevScan) { UE_LOG(LogWeedShop, Verbose, TEXT("ELEVSCAN: geen marked spot voor deze map gevonden")); }
 	}
 
 	// Dev: -SpotScan -> teleporteer naar de laatste marked spot en dump alles rond de laatste 2 spots.
@@ -221,7 +221,7 @@ void ADoorRetrofitter::BeginPlay()
 			ElevScanPos = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
 			GetWorldTimerManager().SetTimer(ElevScanTimer, this, &ADoorRetrofitter::ElevTeleport, 5.f, false);
 			GetWorldTimerManager().SetTimer(SpotScanTimer, this, &ADoorRetrofitter::SpotDump, 16.f, false);
-			UE_LOG(LogWeedShop, Warning, TEXT("SPOTSCAN gepland: spot (%.0f, %.0f, %.0f)"), ElevScanPos.X, ElevScanPos.Y, ElevScanPos.Z);
+			UE_LOG(LogWeedShop, Verbose, TEXT("SPOTSCAN gepland: spot (%.0f, %.0f, %.0f)"), ElevScanPos.X, ElevScanPos.Y, ElevScanPos.Z);
 			break;
 		}
 	}
@@ -288,7 +288,7 @@ void ADoorRetrofitter::SpotDump()
 		}
 	}
 	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("SpotScan.txt")));
-	UE_LOG(LogWeedShop, Warning, TEXT("SPOTSCAN klaar (%d spots, %d tekens) -> Saved/SpotScan.txt"), Spots.Num(), Out.Len());
+	UE_LOG(LogWeedShop, Verbose, TEXT("SPOTSCAN klaar (%d spots, %d tekens) -> Saved/SpotScan.txt"), Spots.Num(), Out.Len());
 }
 
 void ADoorRetrofitter::ElevDump()
@@ -317,7 +317,7 @@ void ADoorRetrofitter::ElevDump()
 		}
 	}
 	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("ElevScan.txt")));
-	UE_LOG(LogWeedShop, Warning, TEXT("ELEVSCAN dump klaar (%d tekens) -> Saved/ElevScan.txt"), Out.Len());
+	UE_LOG(LogWeedShop, Verbose, TEXT("ELEVSCAN dump klaar (%d tekens) -> Saved/ElevScan.txt"), Out.Len());
 }
 
 void ADoorRetrofitter::EnsureMapCapture()
@@ -356,7 +356,7 @@ void ADoorRetrofitter::EnsureMapCapture()
 			? FMath::Max(E.X, E.Y) * 2.1f                              // grens-ring = de kaart
 			: FMath::Clamp(FMath::Max(E.X, E.Y) * 2.3f, 20000.f, 300000.f);
 		TopZ = B.Max.Z + 20000.f;
-		UE_LOG(LogWeedShop, Warning, TEXT("MapCapture: centrum=(%.0f, %.0f) ortho=%.0f topZ=%.0f bron=%s"),
+		UE_LOG(LogWeedShop, Display, TEXT("MapCapture: centrum=(%.0f, %.0f) ortho=%.0f topZ=%.0f bron=%s"),
 			MapCenter.X, MapCenter.Y, MapOrtho, TopZ, bFromBorder ? TEXT("border") : TEXT("actors"));
 	}
 
@@ -424,7 +424,7 @@ void ADoorRetrofitter::CaptureMapNow()
 		}
 		if (NHidden > 0)
 		{
-			UE_LOG(LogWeedShop, Warning, TEXT("SplineEditorMesh-restjes verborgen: %d"), NHidden);
+			UE_LOG(LogWeedShop, Log, TEXT("SplineEditorMesh-restjes verborgen: %d"), NHidden);
 		}
 	}
 	// Altijd dezelfde rustige ochtend-belichting op de foto, ongeacht de kloktijd (middagzon
@@ -526,7 +526,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (LoadedChillSpots.Num() > 0)
 			{
-				UE_LOG(LogWeedShop, Warning, TEXT("Chill-plekken: %d geladen"), LoadedChillSpots.Num());
+				UE_LOG(LogWeedShop, Display, TEXT("Chill-plekken: %d geladen"), LoadedChillSpots.Num());
 			}
 		}
 		// Binnen-kettingen (StairsPath.txt) alvast parsen: de bewoners-wachtrij gebruikt ze om
@@ -583,7 +583,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (NpcChains.Num() > 0)
 			{
-				UE_LOG(LogWeedShop, Warning, TEXT("Binnen-kettingen: %d geladen+geknoopt (entry-paden voor toren-bewoners)"), NpcChains.Num());
+				UE_LOG(LogWeedShop, Display, TEXT("Binnen-kettingen: %d geladen+geknoopt (entry-paden voor toren-bewoners)"), NpcChains.Num());
 			}
 		}
 		// SPELER-ROUTES eerst: F9-marker-ringen uit NpcRoute.txt ("---" scheidt routes). Elke
@@ -748,7 +748,7 @@ void ADoorRetrofitter::ScanAndConvert()
 						}
 					}
 				}
-				UE_LOG(LogWeedShop, Warning, TEXT("Loop-graaf: %d knopen uit %d paden"), GraphNodes.Num(), Routes.Num());
+				UE_LOG(LogWeedShop, Display, TEXT("Loop-graaf: %d knopen uit %d paden"), GraphNodes.Num(), Routes.Num());
 				// CROWD SEEDEN: 70 virtuele wandelaars verspreid over de hele graaf - de stad is
 				// daarmee vanaf seconde 1 overal "bevolkt", lichamen volgen waar de speler komt.
 				if (GraphNodes.Num() >= 2)
@@ -799,14 +799,14 @@ void ADoorRetrofitter::ScanAndConvert()
 						}
 						Crowd.Add(V);
 					}
-					UE_LOG(LogWeedShop, Warning, TEXT("Virtuele crowd: %d wandelaars gespreid geseed (%d strip-vast over %d strip-knopen)"), Crowd.Num(), 105, StripNodes.Num());
+					UE_LOG(LogWeedShop, Display, TEXT("Virtuele crowd: %d wandelaars gespreid geseed (%d strip-vast over %d strip-knopen)"), Crowd.Num(), 105, StripNodes.Num());
 				}
 			}
 			if (PendingSpawnerPoints.Num() > 0)
 			{
 				// Klanten-budget: doel ~70 NPC's totaal, verdeeld over de spawn-punten.
 				RouteCustomersPerPoint = FMath::Clamp(FMath::RoundToInt(70.f / float(PendingSpawnerPoints.Num())), 1, 6);
-				UE_LOG(LogWeedShop, Warning, TEXT("NPC-routes: %d paden -> %d spawn-punten (%d klanten per punt, doel ~70)"), Routes.Num(), PendingSpawnerPoints.Num(), RouteCustomersPerPoint);
+				UE_LOG(LogWeedShop, Display, TEXT("NPC-routes: %d paden -> %d spawn-punten (%d klanten per punt, doel ~70)"), Routes.Num(), PendingSpawnerPoints.Num(), RouteCustomersPerPoint);
 			}
 			else
 			{
@@ -913,7 +913,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				NavSys->RegisterNavigationInvoker(CSw, 9000.f, 11000.f);
 			}
-			UE_LOG(LogWeedShop, Warning, TEXT("Pack-map: klanten-spawner + nav-invoker op (%.0f, %.0f, %.0f)"), Street.X, Street.Y, Street.Z);
+			UE_LOG(LogWeedShop, Log, TEXT("Pack-map: klanten-spawner + nav-invoker op (%.0f, %.0f, %.0f)"), Street.X, Street.Y, Street.Z);
 			if (!bWalkersSpawned)
 			{
 				// Retrofitter zelf als extra invoker-anker op het eerste gevonden straat-punt.
@@ -1110,7 +1110,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (WonSig != LastWoningenSig)
 			{
 				LastWoningenSig = WonSig;
-				UE_LOG(LogWeedShop, Warning, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
+				UE_LOG(LogWeedShop, Display, TEXT("Woningen: %d voordeuren + %d schuifpuien op slot (bewoners) in %d gebouwen, starter-huis = Apt %d op (%.0f, %.0f, %.0f)"), Apt.Num() - 1, NBalcLocked, Buildings.Num(), Starter->GetAptNumber(), Top.X, Top.Y, Top.Z);
 			}
 		}
 	}
@@ -1176,7 +1176,7 @@ void ADoorRetrofitter::ScanAndConvert()
 		FlushChain();
 		if (NLinks > 0)
 		{
-			UE_LOG(LogWeedShop, Warning, TEXT("Binnen-looppaden: %d smart-links gelegd uit StairsPath.txt"), NLinks);
+			UE_LOG(LogWeedShop, Display, TEXT("Binnen-looppaden: %d smart-links gelegd uit StairsPath.txt"), NLinks);
 		}
 	}
 
@@ -1194,7 +1194,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				NavSys->RegisterNavigationInvoker(Anchor, 9000.f, 11000.f);
 			}
-			UE_LOG(LogWeedShop, Warning, TEXT("Toren-navmesh anker op (%.0f, %.0f, %.0f)"), AnchorLoc.X, AnchorLoc.Y, AnchorLoc.Z);
+			UE_LOG(LogWeedShop, Display, TEXT("Toren-navmesh anker op (%.0f, %.0f, %.0f)"), AnchorLoc.X, AnchorLoc.Y, AnchorLoc.Z);
 		}
 	}
 
@@ -1265,7 +1265,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				Cb->SetActorLocation(Dest + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
 				ResidentStuckSince.Remove(Cb);
-				UE_LOG(LogWeedShop, Warning, TEXT("Bewoner %s nam de lift: van Z %.0f naar de straat (%.0f, %.0f)"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
+				UE_LOG(LogWeedShop, Verbose, TEXT("Bewoner %s nam de lift: van Z %.0f naar de straat (%.0f, %.0f)"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
 			}
 		}
 	}
@@ -1664,7 +1664,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				// (603). Zo spawnt elke speler METEEN in z'n eigen kamer - geen spawn-in-603-dan-teleport meer.
 				const FVector MyMark = (W->GetNetMode() == NM_Client) ? Mk[1] : Mk[0];
 				HomeAnchor = MyMark + FVector(0.f, 0.f, 110.f);
-				UE_LOG(LogWeedShop, Warning, TEXT("Competitive: thuis-plek -> eigen marker (%.0f,%.0f,%.0f) [client=%d]; 703-ref=(%.0f,%.0f,%.0f)"), HomeAnchor.X, HomeAnchor.Y, HomeAnchor.Z, W->GetNetMode() == NM_Client ? 1 : 0, Comp703Anchor.X, Comp703Anchor.Y, Comp703Anchor.Z);
+				UE_LOG(LogWeedShop, Log, TEXT("Competitive: thuis-plek -> eigen marker (%.0f,%.0f,%.0f) [client=%d]; 703-ref=(%.0f,%.0f,%.0f)"), HomeAnchor.X, HomeAnchor.Y, HomeAnchor.Z, W->GetNetMode() == NM_Client ? 1 : 0, Comp703Anchor.X, Comp703Anchor.Y, Comp703Anchor.Z);
 			}
 		}
 	}
@@ -1792,7 +1792,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				HomeBoxMax = FVector(HomeAnchor.X + Half(Xp), HomeAnchor.Y + Half(Yp), HomeAnchor.Z + 520.f);
 				bHomeBoxReady = true;
 				RebuildBeachHomes(); // starter-bounds zijn nu accuraat -> registry verversen
-				UE_LOG(LogWeedShop, Warning, TEXT("Huis-box gemeten: X %.0f..%.0f Y %.0f..%.0f"), HomeBoxMin.X, HomeBoxMax.X, HomeBoxMin.Y, HomeBoxMax.Y);
+				UE_LOG(LogWeedShop, Display, TEXT("Huis-box gemeten: X %.0f..%.0f Y %.0f..%.0f"), HomeBoxMin.X, HomeBoxMax.X, HomeBoxMin.Y, HomeBoxMax.Y);
 			}
 		}
 		// Elke speler die nog niet thuisgezet is naar de thuis-plek (kleine spreiding zodat
@@ -2037,7 +2037,7 @@ void ADoorRetrofitter::ScanAndConvert()
 					++NF;
 				}
 			}
-			if (NF > 0) { UE_LOG(LogWeedShop, Warning, TEXT("Starter-meubels geplaatst: %d"), NF); }
+			if (NF > 0) { UE_LOG(LogWeedShop, Display, TEXT("Starter-meubels geplaatst: %d"), NF); }
 		}
 	}
 
@@ -2097,7 +2097,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			++NShops;
 		}
-		if (NShops > 0) { UE_LOG(LogWeedShop, Warning, TEXT("Winkels geplaatst: %d (toonbank + ATM + verkoper)"), NShops); }
+		if (NShops > 0) { UE_LOG(LogWeedShop, Display, TEXT("Winkels geplaatst: %d (toonbank + ATM + verkoper)"), NShops); }
 	}
 
 	// (VIRTUELE CROWD materialiseren/opruimen draait nu op de 10Hz-tick TickVirtualMove i.p.v. hier - met een
@@ -2669,7 +2669,7 @@ void ADoorRetrofitter::ScanAndConvert()
 						Elev->RegisterButton(Btn);
 					}
 				}
-				UE_LOG(LogWeedShop, Warning, TEXT("PackElevator gebouwd: %d verdiepingen @ (%.0f, %.0f)"), Floors.Num(), CabCenter.X, CabCenter.Y);
+				UE_LOG(LogWeedShop, Display, TEXT("PackElevator gebouwd: %d verdiepingen @ (%.0f, %.0f)"), Floors.Num(), CabCenter.X, CabCenter.Y);
 			}
 		}
 	}
@@ -3378,7 +3378,7 @@ void ADoorRetrofitter::ApplyInstantGlass()
 	}
 	if (NSwapped > 0)
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("InstantGlass: %d raam-slots direct helder gemaakt (%d kolommen)"), NSwapped, GlassRects.Num());
+		UE_LOG(LogWeedShop, Log, TEXT("InstantGlass: %d raam-slots direct helder gemaakt (%d kolommen)"), NSwapped, GlassRects.Num());
 	}
 }
 
@@ -4327,7 +4327,7 @@ void ADoorRetrofitter::MakeBakedWindowsReal()
 			}
 		}
 	}
-	UE_LOG(LogWeedShop, Warning, TEXT("BakedRooms: %d nep-glas slots omgezet naar echt doorzichtig glas"), Swapped);
+	UE_LOG(LogWeedShop, Display, TEXT("BakedRooms: %d nep-glas slots omgezet naar echt doorzichtig glas"), Swapped);
 }
 
 // ===========================================================================================
@@ -4618,7 +4618,7 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 		const int32 SrcN = StarterDoor.IsValid() ? StarterDoor->GetAptNumber() : -1;
 		int32 nHost = 0, nJoin = 0;
 		if (SrcN > 0) { for (TActorIterator<ACityDoor> It(W); It; ++It) { if (!IsValid(*It)) { continue; } const int32 A = It->GetAptNumber(); if (A == SrcN - 100) { ++nHost; } else if (A == SrcN - 101) { ++nJoin; } } }
-		UE_LOG(LogWeedShop, Warning, TEXT("[CompDiag] GS=%d comp=%d boxReady=%d anchor=%d starter=Apt%d  deuren603=%d 602=%d netmode=%d"),
+		UE_LOG(LogWeedShop, Verbose, TEXT("[CompDiag] GS=%d comp=%d boxReady=%d anchor=%d starter=Apt%d  deuren603=%d 602=%d netmode=%d"),
 			GS ? 1 : 0, bComp ? 1 : 0, bHomeBoxReady ? 1 : 0, HomeAnchor.IsNearlyZero() ? 0 : 1, SrcN, nHost, nJoin, (int32)W->GetNetMode());
 	}
 	if (!bComp) { return; } // ALLEEN in Competitive co-op
@@ -4698,7 +4698,7 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 		for (ACityDoor* D : Mine) { D->SetCompPlayerHome(); }
 		for (ACityDoor* D : Partner) { D->SetCompPartner(); }
 		CompClaimedDoors = NewClaim;
-		if (CompDoorWait < 14) { ++CompDoorWait; FString Ms, Ps; for (ACityDoor* D : Mine) { Ms += FString::Printf(TEXT("#%d@(%.0f,%.0f) "), D->GetAptNumber(), D->GetActorLocation().X, D->GetActorLocation().Y); } for (ACityDoor* D : Partner) { Ps += FString::Printf(TEXT("#%d@(%.0f,%.0f) "), D->GetAptNumber(), D->GetActorLocation().X, D->GetActorLocation().Y); } UE_LOG(LogWeedShop, Warning, TEXT("[CompDoor] client=%d MyC=(%.0f,%.0f) OtherC=(%.0f,%.0f) eigen=[%s] partner=[%s]"), bClient ? 1 : 0, MyC.X, MyC.Y, OtherC.X, OtherC.Y, *Ms, *Ps); }
+		if (CompDoorWait < 14) { ++CompDoorWait; FString Ms, Ps; for (ACityDoor* D : Mine) { Ms += FString::Printf(TEXT("#%d@(%.0f,%.0f) "), D->GetAptNumber(), D->GetActorLocation().X, D->GetActorLocation().Y); } for (ACityDoor* D : Partner) { Ps += FString::Printf(TEXT("#%d@(%.0f,%.0f) "), D->GetAptNumber(), D->GetActorLocation().X, D->GetActorLocation().Y); } UE_LOG(LogWeedShop, Verbose, TEXT("[CompDoor] client=%d MyC=(%.0f,%.0f) OtherC=(%.0f,%.0f) eigen=[%s] partner=[%s]"), bClient ? 1 : 0, MyC.X, MyC.Y, OtherC.X, OtherC.Y, *Ms, *Ps); }
 	}
 
 	// COMPETITIVE: het lege 703-penthouse donker houden - plafondlampen 1x uit (de DNC zet ze anders 's avonds
@@ -4715,7 +4715,7 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 				DNC703->SetSwitchControlledLight(PL, true);
 				PL->SetIntensity(0.f);
 			}
-			if (L703.Num() > 0) { bComp703LightsOff = true; UE_LOG(LogWeedShop, Warning, TEXT("Competitive: 703-penthouse lampen uit (%d)"), L703.Num()); }
+			if (L703.Num() > 0) { bComp703LightsOff = true; UE_LOG(LogWeedShop, Log, TEXT("Competitive: 703-penthouse lampen uit (%d)"), L703.Num()); }
 		}
 	}
 
@@ -4811,7 +4811,7 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 			if (ACityDoor* DH = CompDoorHost.Get()) { DH->SetPlayerHome(); }
 			if (ACityDoor* DJ = CompDoorJoiner.Get()) { DJ->SetPlayerHome(); }
 			bCompHomesReady = true;
-			UE_LOG(LogWeedShop, Warning, TEXT("Competitive: kamers klaar via markers - host=(%.0f,%.0f,%.0f) joiner=(%.0f,%.0f,%.0f) no-build %d"), MA.X, MA.Y, MA.Z, MB.X, MB.Y, MB.Z, CompNoBuildZones.Num());
+			UE_LOG(LogWeedShop, Log, TEXT("Competitive: kamers klaar via markers - host=(%.0f,%.0f,%.0f) joiner=(%.0f,%.0f,%.0f) no-build %d"), MA.X, MA.Y, MA.Z, MB.X, MB.Y, MB.Z, CompNoBuildZones.Num());
 		}
 		else if (CompDiagCount < 40)
 		{
@@ -4862,7 +4862,7 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 					SpawnHomeItem(W, It.Id, L602, Yaw602);
 					NMir += 2;
 				}
-				UE_LOG(LogWeedShop, Warning, TEXT("Competitive: %d meubels gecentreerd; zwaartepunt 703=(%.0f,%.0f) host=(%.0f,%.0f)"), NMir, Cf.X, Cf.Y, CompMA.X, CompMA.Y);
+				UE_LOG(LogWeedShop, Log, TEXT("Competitive: %d meubels gecentreerd; zwaartepunt 703=(%.0f,%.0f) host=(%.0f,%.0f)"), NMir, Cf.X, Cf.Y, CompMA.X, CompMA.Y);
 		}
 		bCompMirrorDone = true;
 	}
@@ -4889,7 +4889,7 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 			SpawnHomeItem(W, FName(TEXT("LightSwitch")), L602, Yaw0);
 		}
 		bCompSwitchesDone = true;
-		UE_LOG(LogWeedShop, Warning, TEXT("Competitive: lichtschakelaars lokaal op client gespawnd"));
+		UE_LOG(LogWeedShop, Log, TEXT("Competitive: lichtschakelaars lokaal op client gespawnd"));
 	}
 
 
@@ -4906,7 +4906,7 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 		if (CompDiag3Count < 16)
 		{
 			++CompDiag3Count;
-			UE_LOG(LogWeedShop, Warning, TEXT("[CompDiag3] hostPawn=(%.0f,%.0f,%.0f) anchorH=(%.0f,%.0f,%.0f) homed=%d"),
+			UE_LOG(LogWeedShop, Verbose, TEXT("[CompDiag3] hostPawn=(%.0f,%.0f,%.0f) anchorH=(%.0f,%.0f,%.0f) homed=%d"),
 				HostPawn ? HostPawn->GetActorLocation().X : 0.f, HostPawn ? HostPawn->GetActorLocation().Y : 0.f, HostPawn ? HostPawn->GetActorLocation().Z : 0.f, CompAnchorHost.X, CompAnchorHost.Y, CompAnchorHost.Z, CompHomedPawns.Num());
 		}
 		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
