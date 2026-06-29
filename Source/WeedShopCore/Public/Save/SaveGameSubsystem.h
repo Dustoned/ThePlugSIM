@@ -123,6 +123,10 @@ public:
 	void SetPendingMap(const FString& MapPath) { PendingMapPath = MapPath; }
 	FString PendingMapPath;
 
+	// Warm de beach-level alvast async in terwijl het (lichte) menu draait -> het level-pakket staat
+	// al in geheugen als de speler New Game/Load kiest -> snellere OpenLevel. No-op als al op de beach.
+	void WarmupBeachLevel();
+
 	// Laad een specifiek slot.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	bool LoadSlot(int32 Slot);
@@ -209,6 +213,10 @@ protected:
 	// het toepassen reset). Bepaalt of dev-tools/free-build aan staan en wordt mee opgeslagen.
 	EGameStartMode SessionStartMode = EGameStartMode::Normal;
 	bool bPendingCompetitive = false; // co-op modus voor de volgende verse host-game
+	// Achtergrond-warmup van de beach-level (vastgehouden tegen GC tot de echte OpenLevel het hergebruikt).
+	UPROPERTY(Transient)
+	TObjectPtr<UPackage> WarmBeachPackage = nullptr;
+	bool bBeachWarmupStarted = false;
 	void ReloadCurrentLevel(const FString& Options = TEXT(""));
 	// Geef de host-speler de startstaat (geld + items) van de gekozen modus.
 	void ApplyStartMode(EGameStartMode Mode);
