@@ -438,7 +438,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		// (De "Edit lamps"-editorknop is verwijderd uit het main menu.)
 
 		// Hint tijdens het editen (bovenaan).
-		EditHintText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.9f, 1.f, 0.7f), true, true);
+		EditHintText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.85f, 0.72f, 1.f), true, true);
 		UOverlaySlot* EHS = Layers->AddChildToOverlay(EditHintText);
 		EHS->SetHorizontalAlignment(HAlign_Center); EHS->SetVerticalAlignment(VAlign_Top); EHS->SetPadding(FMargin(0.f, 16.f, 0.f, 0.f));
 		EditHintText->SetVisibility(ESlateVisibility::Collapsed);
@@ -497,7 +497,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 
 			UVerticalBox* CoopVB = WidgetTree->ConstructWidget<UVerticalBox>();
 			CoopSize->SetContent(CoopVB);
-			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CO-OP  (LAN)"), 24, FLinearColor(0.62f, 1.f, 0.74f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+			CoopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CO-OP  (LAN)"), 24, FLinearColor(0.78f, 0.55f, 1.f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 
 			auto BigBtn = [&](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
 			{
@@ -707,7 +707,7 @@ void UMainMenuWidget::RefreshSlots()
 	{
 		const bool bOn = Save ? Save->IsAutosaveEnabled() : true;
 		AutosaveLabel->SetText(FText::FromString(bOn ? TEXT("Autosave: aan") : TEXT("Autosave: uit")));
-		AutosaveLabel->SetColorAndOpacity(FSlateColor(bOn ? FLinearColor(0.65f, 1.f, 0.7f) : FLinearColor(1.f, 0.6f, 0.55f)));
+		AutosaveLabel->SetColorAndOpacity(FSlateColor(bOn ? FLinearColor(0.74f, 0.55f, 1.f) : FLinearColor(1.f, 0.6f, 0.55f)));
 	}
 	if (LastSaveText)
 	{

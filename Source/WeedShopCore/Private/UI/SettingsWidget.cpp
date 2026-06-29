@@ -147,7 +147,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// --- Header: grote titel links, Back rechts ---
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* TitleS = Header->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 30, FLinearColor(0.62f, 1.f, 0.72f), false, true));
+	UHorizontalBoxSlot* TitleS = Header->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 30, FLinearColor(0.78f, 0.55f, 1.f), false, true));
 	TitleS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TitleS->SetVerticalAlignment(VAlign_Center);
 	UWeedActionButton* BackTop = SetBtn(WidgetTree, TEXT("< Back"), FLinearColor(0.10f, 0.13f, 0.19f),
 		[this]() { if (UPhoneClientComponent* Ph = GetPhone()) { Ph->CloseSettings(); } }, 13);
@@ -156,7 +156,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// --- Accent-divider onder de header ---
 	UBorder* HDiv = WidgetTree->ConstructWidget<UBorder>();
-	HDiv->SetBrush(WeedUI::Rounded(FLinearColor(0.24f, 0.86f, 0.55f, 0.5f), 2.f));
+	HDiv->SetBrush(WeedUI::Rounded(FLinearColor(0.55f, 0.30f, 0.95f, 0.6f), 2.f));
 	USizeBox* HDivSz = WidgetTree->ConstructWidget<USizeBox>(); HDivSz->SetHeightOverride(2.f); HDivSz->SetContent(HDiv);
 	MainVB->AddChildToVerticalBox(HDivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 22.f));
 
@@ -192,7 +192,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* HintS = Footer->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Esc to go back"), 11, FLinearColor(0.5f, 0.55f, 0.64f)));
 	HintS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HintS->SetVerticalAlignment(VAlign_Center);
-	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), FLinearColor(0.18f, 0.45f, 0.24f),
+	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), FLinearColor(0.40f, 0.18f, 0.62f),
 		[this]() { if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); } bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR); RefreshContent(); }, 14);
 	Footer->AddChildToHorizontalBox(SaveBtn)->SetVerticalAlignment(VAlign_Center);
 	MainVB->AddChildToVerticalBox(Footer)->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
@@ -211,7 +211,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	UTextBlock* PopMsg = WeedUI::Text(WidgetTree, TEXT("Changes require a restart."), 12, FLinearColor(0.82f, 0.86f, 0.92f), true, false);
 	PopMsg->SetAutoWrapText(true);
 	PopVB->AddChildToVerticalBox(PopMsg)->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
-	UWeedActionButton* PopOk = SetBtn(WidgetTree, TEXT("OK"), FLinearColor(0.18f, 0.42f, 0.22f), [this]() { if (RestartPopup) { RestartPopup->SetVisibility(ESlateVisibility::Collapsed); } }, 13);
+	UWeedActionButton* PopOk = SetBtn(WidgetTree, TEXT("OK"), FLinearColor(0.40f, 0.18f, 0.62f), [this]() { if (RestartPopup) { RestartPopup->SetVisibility(ESlateVisibility::Collapsed); } }, 13);
 	PopVB->AddChildToVerticalBox(PopOk);
 	RestartPopup->SetVisibility(ESlateVisibility::Collapsed);
 
@@ -247,7 +247,7 @@ USlider* USettingsWidget::AddSliderRow(const FString& Label, float Normalized, T
 	Slider->SetMinValue(0.f); Slider->SetMaxValue(1.f);
 	Slider->SetValue(FMath::Clamp(Normalized, 0.f, 1.f));
 	Slider->SetSliderBarColor(FLinearColor(0.12f, 0.15f, 0.22f));
-	Slider->SetSliderHandleColor(FLinearColor(0.42f, 0.9f, 0.62f));
+	Slider->SetSliderHandleColor(FLinearColor(0.72f, 0.46f, 1.f));
 	USizeBox* SSz = WidgetTree->ConstructWidget<USizeBox>(); SSz->SetWidthOverride(220.f); SSz->SetHeightOverride(20.f); SSz->SetContent(Slider);
 	Row->AddChildToHorizontalBox(SSz)->SetVerticalAlignment(VAlign_Center);
 
@@ -319,8 +319,8 @@ void USettingsWidget::RefreshTabs()
 	{
 		if (!B) { return; }
 		// Geselecteerd = groen-getint accent, anders donker. Tall sidebar-tabs.
-		const FLinearColor C = bSel ? FLinearColor(0.15f, 0.42f, 0.26f, 0.98f) : FLinearColor(0.05f, 0.07f, 0.11f, 0.92f);
-		const FLinearColor H = bSel ? FLinearColor(0.19f, 0.50f, 0.32f, 1.f)  : FLinearColor(0.10f, 0.13f, 0.19f, 0.96f);
+		const FLinearColor C = bSel ? FLinearColor(0.40f, 0.18f, 0.62f, 0.98f) : FLinearColor(0.05f, 0.07f, 0.11f, 0.92f);
+		const FLinearColor H = bSel ? FLinearColor(0.50f, 0.24f, 0.74f, 1.f)  : FLinearColor(0.10f, 0.13f, 0.19f, 0.96f);
 		FButtonStyle S; S.Normal = WeedUI::Rounded(C, 8.f); S.Hovered = WeedUI::Rounded(H, 8.f); S.Pressed = WeedUI::Rounded(H, 8.f);
 		S.NormalPadding = FMargin(16.f, 13.f); S.PressedPadding = FMargin(16.f, 13.f);
 		B->SetStyle(S);
