@@ -708,24 +708,7 @@ void UMainMenuWidget::RefreshSlots()
 	// Mode-keuze (na het kiezen van een New Game-slot).
 	if (MenuMode == 3)
 	{
-		// Map-selectie: toggle bovenaan de mode-keuze. De keuze gaat via SetPendingMap mee de start in.
-		{
-			const bool bBeach = (PendingNewMap == 1);
-			const FString MapLbl = bBeach ? TEXT("Map: BEACH CITY  (main)") : TEXT("Map: CITY APARTMENT  (classic)");
-			const FLinearColor MapCol = bBeach ? FLinearColor(0.13f, 0.30f, 0.38f, 0.96f) : FLinearColor(0.16f, 0.16f, 0.22f, 0.96f);
-			UWeedActionButton* MapB = WidgetTree->ConstructWidget<UWeedActionButton>();
-			MapB->OnClicked.AddDynamic(MapB, &UWeedActionButton::Handle);
-			MapB->OnAction.BindLambda([this](int32, int32) { PendingNewMap = 1 - PendingNewMap; RefreshSlots(); });
-			FButtonStyle MpS;
-			MpS.Normal = WeedUI::Rounded(MapCol, 8.f);
-			MpS.Hovered = WeedUI::Rounded(MapCol * 1.4f, 8.f);
-			MpS.Pressed = WeedUI::Rounded(MapCol * 0.8f, 8.f);
-			MpS.NormalPadding = FMargin(16.f, 12.f); MpS.PressedPadding = FMargin(16.f, 12.f);
-			MapB->SetStyle(MpS);
-			MapB->SetContent(WeedUI::Text(WidgetTree, MapLbl + TEXT("\nClick to switch map"), 14, FLinearColor::White, true));
-			SlotsBox->AddChildToVerticalBox(MapB)->SetPadding(FMargin(0.f, 4.f, 0.f, 10.f));
-		}
-
+		// (Map-keuze verwijderd: CityBeachStrip is de enige speelmap; New Game gaat er altijd heen.)
 		struct FModeDef { const TCHAR* Name; const TCHAR* Desc; int32 Mode; FLinearColor Col; };
 		const FModeDef Modes[3] = {
 			{ TEXT("Normal"),  TEXT("Begin from scratch - earn everything"),        0, FLinearColor(0.12f, 0.13f, 0.17f, 0.96f) },
@@ -859,9 +842,9 @@ void UMainMenuWidget::OnModeChosen(int32 Mode)
 {
 	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
 	{
-		// Gekozen map meegeven (leeg = de standaard stad-map). Geldt ook voor de co-op host: de
-		// listen-server reist naar deze map en joiners volgen automatisch.
-		Save->SetPendingMap(PendingNewMap == 1 ? TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip") : TEXT(""));
+		// CityBeachStrip is de enige speelmap. Geldt ook voor de co-op host: de listen-server
+		// reist hierheen en joiners volgen automatisch.
+		Save->SetPendingMap(TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"));
 		if (bHostMode) { bHostMode = false; Save->SetPendingCoopCompetitive(bHostCompetitive); Save->HostNewGameLan(PendingNewSlot, (EGameStartMode)Mode); } // co-op host (listen)
 		else { Save->RequestNewGame(PendingNewSlot, (EGameStartMode)Mode); }
 	}

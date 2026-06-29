@@ -213,6 +213,8 @@ void USaveGameSubsystem::ReloadCurrentLevel(const FString& Options)
 	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); } // travel vanuit pauze
 	FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
 	if (!PendingMapPath.IsEmpty()) { LevelName = PendingMapPath; } // map-selectie (menu) of save-map
+	// Vangnet: Map_Apartment is verwijderd -> elke verwijzing ernaar (oude save / lege current-map) gaat naar de beach.
+	if (LevelName.Contains(TEXT("Map_Apartment"))) { LevelName = TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"); }
 	UE_LOG(LogWeedShop, Log, TEXT("Level reloaded for save action: %s (opts='%s')"), *LevelName, *Options);
 	WeedShop_RequestGameLoadingScreen(); // toon het laadscherm voor deze in-game transitie
 	UGameplayStatics::OpenLevel(W, FName(*LevelName), true, Options);
@@ -280,11 +282,13 @@ bool USaveGameSubsystem::RequestLoad(int32 Slot, bool bAutosave)
 	SetSlot(Slot);
 	Pending = EPending::Load;
 	PendingLoadName = Name;
-	// Reis naar de map waarop deze save gemaakt is (leeg veld = oude save -> huidige map).
+	// Reis naar de map waarop deze save gemaakt is. Map_Apartment is verwijderd en oude saves hebben soms
+	// een leeg map-veld -> in beide gevallen naar CityBeachStrip (de enige speelmap) i.p.v. een dode map.
 	if (const UWeedShopSaveGame* Peek = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(Name, 0)))
 	{
 		PendingMapPath = Peek->MapPath;
 	}
+	if (PendingMapPath.IsEmpty() || PendingMapPath.Contains(TEXT("Map_Apartment"))) { PendingMapPath = TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"); }
 	ReloadCurrentLevel();
 	return true;
 }
@@ -303,6 +307,7 @@ bool USaveGameSubsystem::RequestContinue()
 	{
 		PendingMapPath = Peek->MapPath;
 	}
+	if (PendingMapPath.IsEmpty() || PendingMapPath.Contains(TEXT("Map_Apartment"))) { PendingMapPath = TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"); }
 	ReloadCurrentLevel();
 	return true;
 }
