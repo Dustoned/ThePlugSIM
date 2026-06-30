@@ -593,10 +593,32 @@ namespace WeedUI
 
 	FLinearColor TagColor(const FString& Tag, float Value, float Sat)
 	{
-		// Stabiele hue uit de tag-string -> elke strain z'n eigen, herkenbare kleur.
-		const uint32 Hh = GetTypeHash(Tag);
+		// Stabiele, GOED GESPREIDE hue uit de tag-string. De extra avalanche-mixing (lowbias32) voorkomt dat korte
+		// codes als STR/SH/SM/SD toevallig vlak bij elkaar in de hue-cirkel uitkomen -> elke strain duidelijk eigen kleur.
+		uint32 Hh = GetTypeHash(Tag);
+		Hh ^= Hh >> 16; Hh *= 0x7feb352du; Hh ^= Hh >> 15; Hh *= 0x846ca68bu; Hh ^= Hh >> 16;
 		const float Hue = float(Hh % 360u);
 		return FLinearColor(Hue, FMath::Clamp(Sat, 0.f, 1.f), FMath::Clamp(Value, 0.f, 1.f), 1.f).HSVToLinearRGB();
+	}
+
+	FLinearColor TagColorForItem(FName ItemId, float Value, float Sat)
+	{
+		// Tag-pill kleur op ITEM-niveau: alleen echte wiet-/strain-producten krijgen de levendige per-strain hue.
+		// Standaard-spul (potten, flessen, grond, mest, sprays, machine-tiers, gereedschap) krijgt een NEUTRALE
+		// grijze pill - anders krijgen die betekenisloze hash-kleuren die toevallig op elkaar lijken (PLA/STR/SM-klacht).
+		const FString S = ItemId.ToString();
+		auto IsTierWord = [](const FString& V) { return V==TEXT("Cheap")||V==TEXT("Std")||V==TEXT("Pro")||V==TEXT("Basic")||V==TEXT("Rich")||V==TEXT("Premium"); };
+		static const TCHAR* StrainPrefix[] = {
+			TEXT("Seed_"), TEXT("WetBud_"), TEXT("Bud_"), TEXT("Bag_"), TEXT("Joint_"), TEXT("Crystal_"),
+			TEXT("Hash_"), TEXT("Baked_"), TEXT("ButterMix_"), TEXT("Edible_"), TEXT("Cookie_"),
+			TEXT("Gummy_"), TEXT("Moonrock_"), TEXT("Bubble_"),
+		};
+		bool bStrain = false;
+		for (const TCHAR* P : StrainPrefix) { if (S.StartsWith(P)) { bStrain = true; break; } }
+		if (!bStrain && S.StartsWith(TEXT("Rosin_"))) { bStrain = !IsTierWord(S.RightChop(6)); } // Rosin_/Oil_ = product (strain) OF machine (tier)
+		if (!bStrain && S.StartsWith(TEXT("Oil_")))   { bStrain = !IsTierWord(S.RightChop(4)); }
+		if (bStrain) { return TagColor(ItemTagShort(ItemId), Value, Sat); }
+		return FLinearColor(0.33f, 0.35f, 0.41f, 1.f); // neutrale koel-grijze pill voor standaard-items
 	}
 
 	FSlateBrush KitBrush(const FString& TexturePath, const FMargin& NineSlice, const FLinearColor& Tint)

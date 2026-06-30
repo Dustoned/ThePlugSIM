@@ -11,6 +11,7 @@
 
 class UPhoneClientComponent;
 class UInventoryComponent;
+struct FInventoryStack;
 class UCanvasPanel;
 class UWidget;
 class UTextBlock;
@@ -61,6 +62,9 @@ public:
 	int32 SlotNumber = 0;
 	TWeakObjectPtr<UInventoryComponent> Inv;
 	TWeakObjectPtr<UInventoryWidget> Owner;
+	// Alleen voor de hover-details: een hotbar-DropCell heeft geen Owner (die hoort bij de HotbarWidget) maar
+	// kan zo tóch het inventory-details-paneel vullen. Verandert NIETS aan drag/klik/drop (die blijven op Owner).
+	TWeakObjectPtr<UInventoryWidget> DetailsOwner;
 	UPROPERTY() TObjectPtr<class UBorder> HoverGlow; // glow-overlay bovenop de cel, zichtbaar bij hover
 	// Optionele Merge-knop (voor weed met meerdere batches).
 	bool bShowMerge = false;
@@ -84,6 +88,13 @@ public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 	void ShowItemDetails(class UInvCell* Cell); // vult het details-paneel links (aangeroepen vanuit UInvCell-hover)
 	void BeginDragGhost(class UInvCell* Cell);  // dimt de bron-cel tijdens slepen ("opgepakt"-look); hersteld in NativeTick
+	// Optimistische grid-swap bij een drop: wissel twee cel-widgets DIRECT om zodat de move zonder server-round-
+	// trip-flikker meteen zichtbaar is. RebuildContent reconcilieert later (signaturen meegewisseld -> no-op).
+	void OptimisticGridSwap(int32 CellA, int32 CellB);
+	// Optimistische drop-update voor cross-widget moves (bv. hotbar->grid): zet METEEN een item-cel (Fill) of lege
+	// cel (Clear) neer zonder op de server-round-trip te wachten; RebuildContent reconcilieert later (sig matcht -> no-op).
+	void OptimisticFillCell(int32 cell, int32 StackId);
+	void OptimisticClearCell(int32 cell);
 	void MarkDirty() { bDirty = true; }
 	// Een KLARE droogrek-batch in de inventory laten droppen = oogsten (drag i.p.v. klik).
 	bool AcceptDryBatchDrop(int32 EntryIndex);
@@ -101,6 +112,10 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 	void RebuildContent();
+	// Gedeelde cel-bouw + signatuur (RebuildContent én de optimistische drop-update gebruiken ze, zodat een
+	// optimistisch geplaatste cel identiek is aan de na-server-rebuild -> de reconcile slaat 'm naadloos over).
+	class UInvCell* BuildGridCellWidget(int32 cell, int32 StackId, bool bShowItem, const FInventoryStack* SPtr, UInventoryComponent* Inv, UPhoneClientComponent* Ph);
+	FString GridCellSig(int32 StackId, bool bShowItem, const FInventoryStack* SPtr, UInventoryComponent* Inv) const;
 
 	UFUNCTION()
 	void OnInvChanged();

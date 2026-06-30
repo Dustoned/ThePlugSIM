@@ -111,7 +111,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		{
 			UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 9, FLinearColor(0.98f, 1.f, 0.99f), false, true);
 			UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-			TagPill->SetBrush(WeedUI::Rounded(WeedUI::TagColor(Tag, 0.42f, 0.62f), 6.f));
+			TagPill->SetBrush(WeedUI::Rounded(WeedUI::TagColorForItem(IconId), 6.f)); // strain -> eigen kleur; standaard-item -> grijs
 			TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
 			TagPill->SetContent(TagT);
 			TagPill->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -158,7 +158,9 @@ void UInvCell::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEve
 	{
 		// Hover = glow-overlay binnen de cel (clipt niet; SetColorAndOpacity>1 wordt door UMG geclampt -> onzichtbaar).
 		if (HoverGlow) { HoverGlow->SetVisibility(ESlateVisibility::HitTestInvisible); }
-		if (Owner.IsValid()) { Owner->ShowItemDetails(this); }
+		// Details-paneel vullen: grid-cellen via Owner, hotbar-DropCells via DetailsOwner (geen Owner).
+		UInventoryWidget* DetailsW = Owner.IsValid() ? Owner.Get() : DetailsOwner.Get();
+		if (DetailsW) { DetailsW->ShowItemDetails(this); }
 	}
 }
 
@@ -295,6 +297,11 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 		{
 			// Versleept binnen het rooster -> verplaats naar deze cel (wisselt met wat hier stond).
 			Inv->MoveStackToCell(Op->StackId, GridCell);
+			// Optimistisch: toon de move METEEN (cel-widgets omwisselen) zodat de server-round-trip geen "plop"
+			// geeft. GEEN MarkDirty: dat zou RebuildContent vóór de server-bevestiging op de OUDE staat draaien
+			// en de swap terugdraaien. OnInventoryChanged (na replicatie) reconcilieert vanzelf.
+			if (Owner.IsValid()) { Owner->OptimisticGridSwap(Op->FromCell, GridCell); }
+			return true;
 		}
 		else if (Op->FromSlot >= 0)
 		{
@@ -302,6 +309,10 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 			// de losgelaten cel zetten (anders verschijnt 'ie weer op z'n oude/eerste-vrije rooster-cel).
 			Inv->UnassignHotbarStack(Op->StackId);
 			Inv->MoveStackToCell(Op->StackId, GridCell);
+			// Optimistisch: toon het item METEEN in de doel-cel (geen server-round-trip "plop"). GEEN MarkDirty:
+			// OnInventoryChanged reconcilieert straks (sig matcht -> RebuildContent slaat de cel over).
+			if (Owner.IsValid()) { Owner->OptimisticFillCell(GridCell, Op->StackId); }
+			return true;
 		}
 	}
 	if (Owner.IsValid()) { Owner->MarkDirty(); }
@@ -563,6 +574,32 @@ void UInventoryWidget::BeginDragGhost(UInvCell* Cell)
 	DragGhostCell = Cell;
 }
 
+void UInventoryWidget::OptimisticGridSwap(int32 CellA, int32 CellB)
+{
+	// Bij een grid->grid-drop: wissel de twee cel-widgets FYSIEK om i.p.v. te wachten op de server-round-trip
+	// + reconstructie. Het item staat zo DIRECT in de nieuwe cel (geen "plop"-flikker). We hergebruiken de
+	// bestaande widgets (geen ConstructWidget) en wisselen de signaturen mee, zodat RebuildContent na de
+	// server-bevestiging exact dezelfde staat ziet -> die cellen overslaat -> naadloos.
+	if (CellA == CellB || !CellBoxes.IsValidIndex(CellA) || !CellBoxes.IsValidIndex(CellB)) { return; }
+	USizeBox* BA = CellBoxes[CellA];
+	USizeBox* BB = CellBoxes[CellB];
+	if (!BA || !BB) { return; }
+
+	UWidget* WA = BA->GetContent();
+	UWidget* WB = BB->GetContent();
+	if (WA) { WA->RemoveFromParent(); }
+	if (WB) { WB->RemoveFromParent(); }
+	BA->SetContent(WB);
+	BB->SetContent(WA);
+
+	// Verplaatste cellen: GridCell bijwerken (drag/drop blijft kloppen vóór de reconcile) + de sleep-dim opheffen.
+	if (UInvCell* CWB = Cast<UInvCell>(WB)) { CWB->GridCell = CellA; CWB->SetRenderOpacity(1.f); }
+	if (UInvCell* CWA = Cast<UInvCell>(WA)) { CWA->GridCell = CellB; CWA->SetRenderOpacity(1.f); }
+
+	if (CellSigs.IsValidIndex(CellA) && CellSigs.IsValidIndex(CellB)) { CellSigs.Swap(CellA, CellB); }
+	DragGhostCell.Reset(); // ghost is hersteld (opacity 1) -> niet meer in NativeTick aanraken
+}
+
 void UInventoryWidget::OpenSplitPopup(int32 StackId)
 {
 	UInventoryComponent* I = GetInv();
@@ -820,6 +857,123 @@ void UInventoryWidget::RebuildStash()
 		StashList->AddChild(Row);
 		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
 	}
+}
+
+UInvCell* UInventoryWidget::BuildGridCellWidget(int32 cell, int32 StackId, bool bShowItem, const FInventoryStack* SPtr, UInventoryComponent* Inv, UPhoneClientComponent* Ph)
+{
+	// Bouwt één grid-cel (item óf leeg). GEDEELD door RebuildContent en de optimistische drop-update, zodat een
+	// optimistisch geplaatste cel IDENTIEK is aan wat RebuildContent zou bouwen -> naadloze reconcile (geen flikker).
+	UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
+	Cell->SlotIndex = -1; Cell->GridCell = cell;
+	Cell->Inv = Inv; Cell->Owner = this;
+	Cell->IconSize = 68.f;
+	if (bShowItem && SPtr)
+	{
+		const FInventoryStack& S = *SPtr;
+		const FName ItemId = S.ItemId;
+		const FString IdStr = ItemId.ToString();
+		const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
+		const bool bBud = IdStr.StartsWith(TEXT("Bud_")) || bWet;
+		const bool bWeed = bBud || IdStr.StartsWith(TEXT("Joint_"));
+		const bool bCash = (ItemId == TEXT("Cash"));
+
+		Cell->StackId = StackId;
+		Cell->bDraggable = true; // ook briefgeld kun je verslepen (herschikken / naar de hotbar)
+		Cell->IconId = ItemId;
+		// Waterfles: toon het vol/leeg-niveau van DEZE fles (uit z'n eigen stack-Quality), niet van de actieve fles.
+		Cell->WaterOverride = ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(S.Quality) : -1;
+		Cell->Accent = WeedUI::ItemAccent(ItemId);
+
+		// Volledige naam in de tooltip; in de cel kappen we te lange namen af met een ellips
+		// (de tooltip + het icoon maken alsnog volledig duidelijk wat het is).
+		const FString FullName = WeedUI::PrettyItemName(ItemId);
+		Cell->Line1 = (FullName.Len() > 20) ? (FullName.Left(19) + TEXT("...")) : FullName;
+		Cell->Tag = WeedUI::ItemTagShort(ItemId); // korte strain/rank-code in de bubble onderaan de cel
+		Cell->Tooltip = FullName;
+
+		if (bCash)
+		{
+			Cell->Bg = FLinearColor(0.09f, 0.14f, 0.09f, 0.97f);
+			// Toon het saldo in hele euro's (de game rekent/toont alles in hele euro's).
+			const APawn* Pw = GetOwningPlayerPawn();
+			const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
+			const int64 Euros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : static_cast<int64>(S.Quantity);
+			Cell->Line2 = FString::Printf(TEXT("EUR %lld"), (long long)Euros);
+			Cell->Badge = (Euros >= 1000) ? FString::Printf(TEXT("%.0fk"), Euros / 1000.0) : FString::Printf(TEXT("%lld"), (long long)Euros);
+			Cell->Tooltip += FString::Printf(TEXT("\nEUR %lld contant"), (long long)Euros);
+		}
+		else if (bWet)
+		{
+			Cell->Bg = FLinearColor(0.09f, 0.14f, 0.21f, 0.97f);
+			Cell->Line2 = TEXT("WET - dry it first");
+			Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
+			Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
+			Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
+		}
+		else
+		{
+			Cell->Bg = WeedUI::Hex(0x3A4152, 0.96f);
+			Cell->Line2 = bWeed
+				? FString::Printf(TEXT("THC %.0f%%  Q %.0f%%"), S.Quality, S.QualityPct)
+				: TEXT("");
+			Cell->Badge = WeedUI::ItemQtyBadge(ItemId, S.Quantity);
+			Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
+			Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
+			if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
+			{
+				Cell->bShowMerge = true;
+				Cell->MergeFn = [Ph, ItemId]() { Ph->MergeNow(ItemId); };
+			}
+		}
+	}
+	else
+	{
+		// Lege cel (of plek van een item dat nu op de hotbar staat): drop-doel, niet sleepbaar.
+		// Zelfde duidelijke contrast als het droogrek.
+		Cell->StackId = 0; Cell->bDraggable = false;
+		Cell->Bg = WeedUI::Hex(0x2A3140, 0.5f); // lege cel: subtieler/donkerder dan gevuld
+	}
+	return Cell;
+}
+
+// Signatuur van een grid-cel (zelfde formule die RebuildContent gebruikt) - gedeeld met de optimistische update
+// zodat de geoptimiseerde cel en de na-server-rebuild exact dezelfde sig hebben -> RebuildContent slaat 'm over.
+FString UInventoryWidget::GridCellSig(int32 StackId, bool bShowItem, const FInventoryStack* SPtr, UInventoryComponent* Inv) const
+{
+	if (!bShowItem || !SPtr || !Inv) { return TEXT("E"); }
+	const FInventoryStack& Sg = *SPtr;
+	int64 CashEuros = 0;
+	if (Sg.ItemId == TEXT("Cash"))
+	{
+		const APawn* Pw = GetOwningPlayerPawn();
+		const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
+		CashEuros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : (int64)Sg.Quantity;
+	}
+	const int32 WaterLv = Sg.ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(Sg.Quality) : -1;
+	return FString::Printf(TEXT("I|%s|%d|%.1f|%.1f|%d|%lld|%d"), *Sg.ItemId.ToString(), Sg.Quantity, Sg.Quality, Sg.QualityPct, WaterLv, (long long)CashEuros, Inv->CountStacksOf(Sg.ItemId));
+}
+
+// Optimistische drop-update: zet METEEN een item-cel (Fill) of lege cel (Clear) neer zonder op de server-round-trip
+// te wachten. Sig wordt mee gezet zodat RebuildContent (na server-bevestiging) de cel ongemoeid laat -> geen flikker.
+void UInventoryWidget::OptimisticFillCell(int32 cell, int32 StackId)
+{
+	UInventoryComponent* Inv = GetInv();
+	if (!Inv || !CellBoxes.IsValidIndex(cell)) { return; }
+	const int32 Idx = Inv->FindStackById(StackId);
+	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
+	if (!Stacks.IsValidIndex(Idx)) { return; }
+	const FInventoryStack& S = Stacks[Idx];
+	if (CellBoxes[cell]) { CellBoxes[cell]->SetContent(BuildGridCellWidget(cell, StackId, true, &S, Inv, PhoneComp.Get())); }
+	if (CellSigs.IsValidIndex(cell)) { CellSigs[cell] = GridCellSig(StackId, true, &S, Inv); }
+	DragGhostCell.Reset();
+}
+
+void UInventoryWidget::OptimisticClearCell(int32 cell)
+{
+	if (!CellBoxes.IsValidIndex(cell) || !CellBoxes[cell]) { return; }
+	CellBoxes[cell]->SetContent(BuildGridCellWidget(cell, 0, false, nullptr, GetInv(), PhoneComp.Get()));
+	if (CellSigs.IsValidIndex(cell)) { CellSigs[cell] = TEXT("E"); }
+	DragGhostCell.Reset();
 }
 
 void UInventoryWidget::RebuildContent()

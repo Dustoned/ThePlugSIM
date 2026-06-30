@@ -11,6 +11,7 @@ class UTextBlock;
 class UCanvasPanel;
 class USizeBox;
 class UInvCell;
+class UInventoryComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API UHotbarWidget : public UUserWidget
@@ -22,6 +23,11 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	void BuildShell(UCanvasPanel* Root);
+	void RefreshSlots(); // werkt alle slot-iconen/tags/badges bij uit de inventory (per-tick + direct bij een mutatie)
+
+	// Verversen ZODRA de voorraad wijzigt (zelfde frame als de drop), niet pas de volgende tick -> geen icon-pop.
+	UFUNCTION() void OnInvChanged();
+	TWeakObjectPtr<UInventoryComponent> BoundInv;
 
 	UPROPERTY() TArray<TObjectPtr<UBorder>> SlotBoxes;
 	UPROPERTY() TArray<TObjectPtr<USizeBox>> SlotIconBoxes; // icoon-container per slot (inhoud wisselt)

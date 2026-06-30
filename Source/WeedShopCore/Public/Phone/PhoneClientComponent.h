@@ -523,6 +523,8 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	bool IsInventoryOpen() const { return bInventoryOpen; }
+	// Voor de hotbar: zo kan een hotbar-slot bij hover het inventory-details-paneel vullen (zelfde als grid-cellen).
+	class UInventoryWidget* GetInventoryWidget() const { return InventoryWidget; }
 
 	// --- Per-pot upgrades ---
 	// Open het upgrade-paneel voor de aangekeken pot (door de interactie/U-toets aangeroepen).

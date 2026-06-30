@@ -98,6 +98,8 @@ namespace WeedUI
 	WEEDSHOPCORE_API FLinearColor ItemAccent(FName ItemId);
 	// Stabiele, per-tekst (per-strain) kleur uit een korte tag (OG/GSC/...). Value/Sat sturen helderheid (pill donker, frame fel).
 	WEEDSHOPCORE_API FLinearColor TagColor(const FString& Tag, float Value, float Sat);
+	// Tag-pill kleur per ITEM: alleen strains -> levendige per-strain hue; standaard-spul -> neutraal grijs.
+	WEEDSHOPCORE_API FLinearColor TagColorForItem(FName ItemId, float Value = 0.42f, float Sat = 0.62f);
 	// 9-slice brush uit een ontworpen kit-frame-texture (panel/slot met rand+soft-shadow), getint naar ons palet.
 	// NineSlice = randfracties (0-1). Valt terug op Rounded(Tint) als de texture mist.
 	WEEDSHOPCORE_API FSlateBrush KitBrush(const FString& TexturePath, const FMargin& NineSlice, const FLinearColor& Tint);

@@ -417,7 +417,8 @@ void UWardrobeWidget::FillBody()
 		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
 		UHorizontalBox* BodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
 		struct FBodyChoice { uint8 Idx; const TCHAR* Name; };
-		static const FBodyChoice Choices[] = { { 2, TEXT("Casual") }, { 3, TEXT("Gamer Girl") }, { 4, TEXT("School Girl") } };
+		// Gamer Girl (3) bewust uit de speler-keuzes: kapotte bind-pose (FP toont Manny, TP-anims vervormen). Asset blijft voor NPC-gebruik.
+		static const FBodyChoice Choices[] = { { 2, TEXT("Casual") }, { 4, TEXT("School Girl") } };
 		bool bFirstBody = true;
 		for (const FBodyChoice& Ch : Choices)
 		{

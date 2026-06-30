@@ -170,25 +170,20 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 	}
 }
 
-void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
+void UHotbarWidget::OnInvChanged()
 {
-	Super::NativeTick(MyGeometry, DeltaTime);
+	// Voorraad wijzigde (bv. een drop op/van de hotbar) -> meteen verversen, in HETZELFDE frame als de mutatie
+	// (AssignHotbarStack broadcast direct) -> geen 1-frame-gat -> geen icon-pop.
+	RefreshSlots();
+}
 
+void UHotbarWidget::RefreshSlots()
+{
 	APawn* P = GetOwningPlayerPawn();
 	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
-
-	// De drop-cellen zijn alleen hit-testbaar (sleep/drop) zolang de inventory open is; daarbuiten
-	// puur weergave zodat ze geen muis-input opvangen tijdens het spelen.
 	UPhoneClientComponent* Phone = P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
-	// Sleepbaar als de inventory OF het droogrek open is (vanuit de hotbar het rek in slepen).
-	const bool bInvOpen = Phone && (Phone->IsInventoryOpen() || Phone->IsDryRackOpen());
-	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	for (UInvCell* DC : DropCells)
-	{
-		if (DC) { DC->SetVisibility(bInvOpen ? ESlateVisibility::Visible : ESlateVisibility::HitTestInvisible); }
-	}
-
 	if (!Inv) { return; }
+	UInventoryWidget* InvW = Phone ? Phone->GetInventoryWidget() : nullptr; // voor de hover-details vanaf een hotbar-slot
 
 	const int32 Active = Inv->GetActiveSlot();
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
@@ -208,15 +203,20 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			DropCells[i]->Inv = Inv;
 			DropCells[i]->StackId = SlotSid;
 			DropCells[i]->bDraggable = (SlotSid != 0);
+			DropCells[i]->DetailsOwner = InvW; // hover op een hotbar-slot vult het inventory-details-paneel (zoals grid-cellen)
 			const int32 DIdx = Inv->FindStackById(SlotSid);
 			DropCells[i]->IconId = Stacks.IsValidIndex(DIdx) ? Stacks[DIdx].ItemId : NAME_None;
-			// Rijke hover-tooltip (ook als de inventory open is): naam + soort + THC/kwaliteit + gram.
+			// Rijke hover-tooltip + dezelfde velden die het details-paneel leest (naam/tooltip/water).
 			if (Stacks.IsValidIndex(DIdx))
 			{
 				const FInventoryStack& DS = Stacks[DIdx];
-				DropCells[i]->SetToolTipText(FText::FromString(WeedUI::ItemTooltip(DS.ItemId, DS.Quantity, DS.Quality, DS.QualityPct)));
+				const FString TT = WeedUI::ItemTooltip(DS.ItemId, DS.Quantity, DS.Quality, DS.QualityPct);
+				DropCells[i]->SetToolTipText(FText::FromString(TT));
+				DropCells[i]->Tooltip = TT;
+				DropCells[i]->Line1 = WeedUI::PrettyItemName(DS.ItemId);
+				DropCells[i]->WaterOverride = DS.ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(DS.Quality) : -1;
 			}
-			else { DropCells[i]->SetToolTipText(FText::GetEmpty()); }
+			else { DropCells[i]->SetToolTipText(FText::GetEmpty()); DropCells[i]->Tooltip.Empty(); }
 		}
 
 		const int32 Idx = Inv->FindStackById(SlotSid);
@@ -248,7 +248,7 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			else
 			{
 				SlotNames[i]->SetText(FText::FromString(Tag));
-				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetBrush(WeedUI::Rounded(WeedUI::TagColor(Tag, 0.42f, 0.62f), 6.f)); SlotTagPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible); }
+				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetBrush(WeedUI::Rounded(WeedUI::TagColorForItem(S.ItemId), 6.f)); SlotTagPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible); } // strain -> kleur, standaard -> grijs
 			}
 
 			// Aantal-badge: zakjes "Nx Xg", wiet "Xg", overig stapelbaar "xN", niets voor cash.
@@ -270,6 +270,35 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(ESlateVisibility::Collapsed); }
 		}
 	}
+}
+
+void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
+{
+	Super::NativeTick(MyGeometry, DeltaTime);
+
+	APawn* P = GetOwningPlayerPawn();
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+
+	// De drop-cellen zijn alleen hit-testbaar (sleep/drop) zolang de inventory open is; daarbuiten
+	// puur weergave zodat ze geen muis-input opvangen tijdens het spelen.
+	UPhoneClientComponent* Phone = P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+	// Sleepbaar als de inventory OF het droogrek open is (vanuit de hotbar het rek in slepen).
+	const bool bInvOpen = Phone && (Phone->IsInventoryOpen() || Phone->IsDryRackOpen());
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	for (UInvCell* DC : DropCells)
+	{
+		if (DC) { DC->SetVisibility(bInvOpen ? ESlateVisibility::Visible : ESlateVisibility::HitTestInvisible); }
+	}
+
+	// Bind aan voorraad-wijzigingen -> de hotbar DIRECT (zelfde frame als de drop) verversen i.p.v. pas de volgende
+	// tick. Anders zit er 1 frame tussen "drag-visual weg" en "slot gevuld" -> dat is de icon-pop tussen hotbar en inv.
+	if (Inv && Inv != BoundInv.Get())
+	{
+		if (UInventoryComponent* Old = BoundInv.Get()) { Old->OnInventoryChanged.RemoveDynamic(this, &UHotbarWidget::OnInvChanged); }
+		Inv->OnInventoryChanged.AddDynamic(this, &UHotbarWidget::OnInvChanged);
+		BoundInv = Inv;
+	}
+	RefreshSlots(); // per-tick (actieve-slot-highlight, fles vol/leeg); óók synchroon vanuit OnInvChanged bij een drop
 
 	// Telefoon-notificatie: ongelezen inkomende berichten. De bubble gaat pas weg als je de CHAT van die
 	// persoon echt opent (MarkChatSeen), niet zomaar bij het openen van de telefoon.

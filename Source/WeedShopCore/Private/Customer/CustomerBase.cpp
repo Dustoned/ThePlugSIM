@@ -511,11 +511,17 @@ static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_B.SK_Citizens_Pack_Tony_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_C.SK_Citizens_Pack_Tony_C"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Tony_D.SK_Citizens_Pack_Tony_D"),
-		// LET OP: Gamer_Girl + School_Girl bewust NIET in de crowd-pool. Het zijn complete meshes MET Chaos-Cloth
-		// (o.a. de dress). De crowd CHURNT (dagelijkse identiteit-rotatie + materialiseren/respawnen) -> telkens
-		// SetSkeletalMesh op een cloth-mesh -> de render-thread herbouwt de skeletal render-data -> RACE -> crash
-		// (access violation in RenderCore, ook als je stilstaat). Ze blijven gewoon als SPELER-skin (die churnt niet).
-		// GymGirls bleef al uit (eigen rig kapot). Wil je ze tóch in de crowd: eerst de cloth uit die meshes strippen.
+		// Gamer_Girl + School_Girl: complete meshes MET Chaos-Cloth. Veilig in de crowd MITS de cloth-actors uit staan
+		// (SetAllowClothActors(false) in BuildAppearance) - anders herbouwt de churn de cloth render-data -> RenderCore-crash.
+		// (GymGirls blijft uit: eigen rig kapot -> T-pose.)
+		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_01.SK_GamerGirl_01"),
+		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_02.SK_GamerGirl_02"),
+		TEXT("/Game/Gamer_Girl/Mesh/SK_GamerGirl_03.SK_GamerGirl_03"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_CasualOutfit.SK_SchoolGirl_CasualOutfit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SchoolOutfit.SK_SchoolGirl_SchoolOutfit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_DressOutfit.SK_SchoolGirl_DressOutfit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SportOutfit.SK_SchoolGirl_SportOutfit"),
+		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SwimSuit.SK_SchoolGirl_SwimSuit"),
 	};
 	const int32 N = UE_ARRAY_COUNT(Pool);
 	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, Pool[Seed % (uint32)N])) { return M; }
@@ -691,6 +697,10 @@ void ACustomerBase::BuildAppearance()
 	// kleur-tint). Alleen NPC's waar je mee DEALT (niet-crowd) krijgen de volle modulaire variatie.
 	if (bCrowdNpc)
 	{
+		// Crowd-NPC's simuleren GEEN cloth: RecreateClothingActors() draait alleen als bAllowClothActors true is
+		// (engine SkeletalMeshComponentPhysics.cpp). Door 'm hier uit te zetten kan de churn een cloth-mesh (Gamer/
+		// School) veilig her-zetten zonder de RenderCore-crash; achtergrond-crowd heeft cloth-sim toch niet nodig.
+		SkM->SetAllowClothActors(false);
 		// VEEL crowd-variatie: 1/3 Regular_Male civilian (honderden mesh-combo's + kleur-varianten), 1/3 Casual/Tony
 		// modulair, 1/3 goedkope vaste skin (de girls + basis). De modulaire builds geven bijna-unieke mensen;
 		// gespreid (1/tick via DoorRetrofitter) + grotendeels achter de loading-cover.
