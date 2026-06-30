@@ -230,7 +230,7 @@ void UStoreWidget::FillBody()
 	for (int32 Cat : Cats)
 	{
 		const bool bActive = (Cat == ActiveCat);
-		const FLinearColor Col = bActive ? FLinearColor(0.22f, 0.5f, 0.3f) : FLinearColor(0.14f, 0.16f, 0.22f);
+		const FLinearColor Col = bActive ? FLinearColor(0.46f, 0.28f, 0.68f) : FLinearColor(0.16f, 0.15f, 0.22f);
 		const int32 C = Cat;
 		TabRow->AddChildToHorizontalBox(StoreBtn(WidgetTree, StoreCatName(Cat), Col, 12,
 			[this, C]() { ActiveCat = C; LastSig.Reset(); }))->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
@@ -290,7 +290,7 @@ void UStoreWidget::FillBody()
 					->SetPadding(FMargin(10.f, 0.f, 4.f, 0.f));
 				Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), InCart), 13, FLinearColor::White, true, true))->SetVerticalAlignment(VAlign_Center);
 			}
-			Row->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("+"), FLinearColor(0.2f, 0.5f, 0.3f), 12, [this, AddId]() { CartAdd(AddId, 1); }))
+			Row->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("+"), FLinearColor(0.42f, 0.27f, 0.62f), 12, [this, AddId]() { CartAdd(AddId, 1); }))
 				->SetPadding(FMargin(InCart > 0 ? 4.f : 10.f, 0.f, 0.f, 0.f));
 		}
 

@@ -38,12 +38,24 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 	// (kinderen) MOGEN muis-events ontvangen wanneer de inventory open is.
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
-	UHorizontalBox* Bar = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Bar);
+	// Rij = [tray met de 9 slots] + [los telefoon-icoon]. De tray geeft de slots een bakje i.p.v. zwevende losse slots.
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Row);
 	CS->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
 	CS->SetAlignment(FVector2D(0.5f, 1.f));
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(0.f, -18.f));
+	CS->SetPosition(FVector2D(0.f, -14.f));
+
+	UBorder* Tray = WidgetTree->ConstructWidget<UBorder>();
+	FSlateBrush TrayBr = WeedUI::Rounded(WeedUI::Hex(0x252B3A, 0.94f), 14.f);
+	TrayBr.OutlineSettings.Width = 1.f;
+	TrayBr.OutlineSettings.Color = FSlateColor(WeedUI::Hex(0x3A4152, 0.5f));
+	Tray->SetBrush(TrayBr);
+	Tray->SetPadding(FMargin(8.f, 7.f, 8.f, 7.f));
+	Row->AddChildToHorizontalBox(Tray)->SetVerticalAlignment(VAlign_Center);
+
+	UHorizontalBox* Bar = WidgetTree->ConstructWidget<UHorizontalBox>();
+	Tray->SetContent(Bar);
 
 	const int32 N = UInventoryComponent::HotbarSize;
 	for (int32 i = 0; i < N; ++i)
@@ -57,7 +69,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		Sz->SetContent(SlotOv);
 
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
-		Box->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 0.9f), 8.f));
+		Box->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x2A3140, 0.9f), 10.f));
 		Box->SetPadding(FMargin(4.f, 3.f, 4.f, 3.f));
 		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
 		UOverlaySlot* BoxOS = SlotOv->AddChildToOverlay(Box);
@@ -91,7 +103,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		// TAG-bubble onderaan: korte code (OG, GSC, II, 100g, ...) in een pilletje i.p.v. de hele naam.
 		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 9, FLinearColor(0.98f, 1.f, 0.99f), false, true);
 		UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-		TagPill->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.42f, 0.20f, 0.96f), 6.f)); // groene tag-bubble
+		TagPill->SetBrush(WeedUI::Rounded(FLinearColor(0.34f, 0.16f, 0.50f, 0.96f), 6.f)); // paarse tag-bubble
 		TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
 		TagPill->SetContent(Name);
 		TagPill->SetVisibility(ESlateVisibility::Collapsed);
@@ -152,8 +164,9 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		BadgeOS->SetHorizontalAlignment(HAlign_Right); BadgeOS->SetVerticalAlignment(VAlign_Top);
 		BadgeOS->SetPadding(FMargin(0.f, 7.f, 4.f, 0.f)); // op de rechterbovenhoek van de telefoon (lager)
 
-		UHorizontalBoxSlot* PS = Bar->AddChildToHorizontalBox(Sz);
-		PS->SetPadding(FMargin(14.f, 0.f, 0.f, 0.f)); // ruimte tussen de hotbar en het telefoon-icoon
+		UHorizontalBoxSlot* PS = Row->AddChildToHorizontalBox(Sz);
+		PS->SetVerticalAlignment(VAlign_Center);
+		PS->SetPadding(FMargin(14.f, 0.f, 0.f, 0.f)); // ruimte tussen de tray en het telefoon-icoon
 	}
 }
 
@@ -184,7 +197,9 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	for (int32 i = 0; i < SlotBoxes.Num(); ++i)
 	{
 		const bool bActive = (i == Active);
-		SlotBoxes[i]->SetBrush(WeedUI::Rounded(bActive ? FLinearColor(0.20f, 0.30f, 0.16f, 0.96f) : FLinearColor(0.08f, 0.09f, 0.12f, 0.88f), 8.f));
+		FSlateBrush HB = WeedUI::Rounded(bActive ? WeedUI::Hex(0x3A2B52, 0.96f) : WeedUI::Hex(0x2A3140, 0.9f), 10.f);
+		if (bActive) { HB.OutlineSettings.Width = 1.5f; HB.OutlineSettings.Color = FSlateColor(WeedUI::Hex(0xB98CFF, 0.9f)); }
+		SlotBoxes[i]->SetBrush(HB);
 
 		const int32 SlotSid = Inv->GetHotbarStackId(i);
 		// Sleep/drop-cel up-to-date houden (geen rebuild nodig: velden worden bij het event gelezen).
@@ -233,7 +248,7 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			else
 			{
 				SlotNames[i]->SetText(FText::FromString(Tag));
-				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible); }
+				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetBrush(WeedUI::Rounded(WeedUI::TagColor(Tag, 0.42f, 0.62f), 6.f)); SlotTagPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible); }
 			}
 
 			// Aantal-badge: zakjes "Nx Xg", wiet "Xg", overig stapelbaar "xN", niets voor cash.

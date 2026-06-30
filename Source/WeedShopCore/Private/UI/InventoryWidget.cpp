@@ -28,6 +28,8 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/Image.h"
+#include "Components/ProgressBar.h"
+#include "Components/BackgroundBlur.h"
 #include "GameFramework/Pawn.h"
 #include "InputCoreTypes.h"
 #include "Input/Reply.h"
@@ -47,8 +49,12 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		FSlateBrush RB = WeedUI::Rounded(Bg, Radius);
 		if (bHasIcon)
 		{
-			RB.OutlineSettings.Width = 1.5f;
-			RB.OutlineSettings.Color = FSlateColor(FLinearColor(Accent.R, Accent.G, Accent.B, 0.55f));
+			// Strain-getagde items: per-strain gekleurde, iets dikkere frame (matcht de tag-pill).
+			const bool bTagged = !Tag.IsEmpty();
+			RB.OutlineSettings.Width = bTagged ? 2.0f : 1.5f;
+			RB.OutlineSettings.Color = bTagged
+				? FSlateColor(WeedUI::TagColor(Tag, 0.95f, 0.70f))
+				: FSlateColor(FLinearColor(Accent.R, Accent.G, Accent.B, 0.55f));
 		}
 		Root->SetBrush(RB);
 		Root->SetPadding(FMargin(bHotbar ? 4.f : 7.f));
@@ -74,9 +80,9 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 			TFunction<void()> Fn = MergeFn;
 			M->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
 			FButtonStyle S;
-			S.Normal = WeedUI::Rounded(FLinearColor(0.45f, 0.36f, 0.10f, 0.92f), 5.f);
-			S.Hovered = WeedUI::Rounded(FLinearColor(0.62f, 0.50f, 0.13f), 5.f);
-			S.Pressed = WeedUI::Rounded(FLinearColor(0.38f, 0.30f, 0.08f), 5.f);
+			S.Normal = WeedUI::Rounded(FLinearColor(0.42f, 0.27f, 0.62f, 0.92f), 5.f);
+			S.Hovered = WeedUI::Rounded(FLinearColor(0.55f, 0.36f, 0.80f), 5.f);
+			S.Pressed = WeedUI::Rounded(FLinearColor(0.32f, 0.20f, 0.50f), 5.f);
 			S.NormalPadding = FMargin(5.f, 1.f); S.PressedPadding = FMargin(5.f, 1.f);
 			M->SetStyle(S);
 			M->SetContent(WeedUI::Text(WidgetTree, TEXT("merge"), 8, FLinearColor::White, true));
@@ -111,7 +117,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		{
 			UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 9, FLinearColor(0.98f, 1.f, 0.99f), false, true);
 			UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-			TagPill->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.42f, 0.20f, 0.96f), 6.f));
+			TagPill->SetBrush(WeedUI::Rounded(WeedUI::TagColor(Tag, 0.42f, 0.62f), 6.f));
 			TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
 			TagPill->SetContent(TagT);
 			TagPill->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -327,8 +333,23 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
+	// Background-blur + dim achter het venster (premium focus); getoggled met de kaart in NativeTick.
+	UBackgroundBlur* Blur = WidgetTree->ConstructWidget<UBackgroundBlur>();
+	Blur->SetBlurStrength(6.f);
+	{ UCanvasPanelSlot* BS = Root->AddChildToCanvas(Blur); BS->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f)); BS->SetOffsets(FMargin(0.f)); }
+	Blur->SetVisibility(ESlateVisibility::Collapsed);
+	BlurBg = Blur;
+	UBorder* Dim = WidgetTree->ConstructWidget<UBorder>();
+	Dim->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x0B0E14, 0.45f), 0.f));
+	{ UCanvasPanelSlot* DS = Root->AddChildToCanvas(Dim); DS->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f)); DS->SetOffsets(FMargin(0.f)); }
+	Dim->SetVisibility(ESlateVisibility::Collapsed);
+	DimBg = Dim;
+
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("InvCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), 24.f));
+	FSlateBrush CardBr = WeedUI::Rounded(WeedUI::Hex(0x252B3A), 16.f);
+	CardBr.OutlineSettings.Width = 1.f;
+	CardBr.OutlineSettings.Color = FSlateColor(WeedUI::Hex(0x3A4152, 0.55f)); // subtiele lichtere premium-stroke
+	CardB->SetBrush(CardBr);
 	CardB->SetPadding(FMargin(18.f));
 	Card = CardB;
 
@@ -345,14 +366,29 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 
 	// Header.
 	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* HT = Head->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("INVENTORY"), 18, FLinearColor(0.6f, 1.f, 0.6f), false, true));
+	UHorizontalBoxSlot* HT = Head->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("INVENTORY"), 22, WeedUI::Hex(0xF1EAFE), false, true));
 	HT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HT->SetVerticalAlignment(VAlign_Center);
-	WeightText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.8f, 0.85f, 1.f));
-	UHorizontalBoxSlot* WS = Head->AddChildToHorizontalBox(WeightText);
-	WS->SetVerticalAlignment(VAlign_Center); WS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+	// Status: Slots/Weight-tekst + dunne weight-bar eronder.
+	UVerticalBox* StatusVB = WidgetTree->ConstructWidget<UVerticalBox>();
+	WeightText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::Hex(0xB8B4C8));
+	StatusVB->AddChildToVerticalBox(WeightText)->SetHorizontalAlignment(HAlign_Right);
+	USizeBox* WBSz = WidgetTree->ConstructWidget<USizeBox>();
+	WBSz->SetWidthOverride(160.f); WBSz->SetHeightOverride(5.f);
+	WeightBar = WidgetTree->ConstructWidget<UProgressBar>();
+	{
+		FProgressBarStyle PB;
+		PB.BackgroundImage = WeedUI::Rounded(WeedUI::Hex(0x1B202B), 3.f);
+		PB.FillImage = WeedUI::Rounded(FLinearColor::White, 3.f);
+		WeightBar->SetWidgetStyle(PB);
+		WeightBar->SetFillColorAndOpacity(WeedUI::Hex(0xB98CFF));
+	}
+	WBSz->SetContent(WeightBar);
+	StatusVB->AddChildToVerticalBox(WBSz)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+	UHorizontalBoxSlot* WS = Head->AddChildToHorizontalBox(StatusVB);
+	WS->SetVerticalAlignment(VAlign_Center); WS->SetPadding(FMargin(0.f, 0.f, 14.f, 0.f));
 	// Sorteer-knop: cyclet Name -> Amount -> Category en sorteert het rooster.
 	static const TCHAR* SortNames[3] = { TEXT("Name"), TEXT("Amount"), TEXT("Category") };
-	UWeedActionButton* SortBtn = TileButton(WidgetTree, FLinearColor(0.2f, 0.32f, 0.46f), 8.f,
+	UWeedActionButton* SortBtn = TileButton(WidgetTree, WeedUI::Hex(0x3A4152), 8.f,
 		[this]()
 		{
 			SortMode = (SortMode + 1) % 3;
@@ -363,12 +399,14 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	SortLabel = WeedUI::Text(WidgetTree, FString::Printf(TEXT("Sort: %s"), SortNames[SortMode]), 12, FLinearColor::White, true);
 	SortBtn->SetContent(SortLabel);
 	Head->AddChildToHorizontalBox(SortBtn)->SetVerticalAlignment(VAlign_Center);
-	UWeedActionButton* CloseBtn = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f,
+	UWeedActionButton* CloseBtn = TileButton(WidgetTree, WeedUI::Hex(0x3A4152), 8.f,
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->ToggleInventory(); } });
-	CloseBtn->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 12, FLinearColor::White, true));
+	CloseBtn->SetContent(WeedUI::Text(WidgetTree, TEXT("X"), 13, WeedUI::Hex(0xF1EAFE), true));
 	UHorizontalBoxSlot* CloseS = Head->AddChildToHorizontalBox(CloseBtn);
 	CloseS->SetVerticalAlignment(VAlign_Center); CloseS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	VB->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	// Accent-divider onder de kop -> scheidt header van inhoud (echte-game-look).
+	{ USizeBox* HDiv = WidgetTree->ConstructWidget<USizeBox>(); HDiv->SetHeightOverride(1.f); UBorder* HDivB = WidgetTree->ConstructWidget<UBorder>(); HDivB->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x3A4152, 0.7f), 1.f)); HDiv->SetContent(HDivB); VB->AddChildToVerticalBox(HDiv)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f)); }
 
 	// Body: links het thuis-voorraad-lijstje, rechts de slots + hotbar.
 	UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -380,12 +418,12 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	StashSize->SetWidthOverride(232.f);
 	StashBox = StashSize; // verbergen als je in een machine zit (puur preview, niet om te slepen)
 	UBorder* StashPanel = WidgetTree->ConstructWidget<UBorder>();
-	StashPanel->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.08f, 0.96f), 10.f));
+	StashPanel->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x303747), 12.f)); // inner panel (iets lichter / raised)
 	StashPanel->SetPadding(FMargin(10.f, 8.f, 10.f, 8.f));
 	StashSize->SetContent(StashPanel);
 	UVerticalBox* StashVB = WidgetTree->ConstructWidget<UVerticalBox>();
 	StashPanel->SetContent(StashVB);
-	StashVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("HOME STASH"), 13, FLinearColor(0.55f, 0.95f, 0.65f), false, true))
+	StashVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("HOME STASH"), 12, WeedUI::Hex(0xB8B4C8), false, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	UScrollBox* StashScroll = WidgetTree->ConstructWidget<UScrollBox>();
 	StashList = StashScroll;
@@ -399,9 +437,14 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBoxSlot* RS = Body->AddChildToHorizontalBox(Right);
 	RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
+	// Verzonken "well" achter de slots -> diepte (slots zitten in een paneel, niet op het platte vlak).
+	UBorder* GridWell = WidgetTree->ConstructWidget<UBorder>();
+	GridWell->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x1B202B), 12.f)); // verzonken (donkerder dan paneel)
+	GridWell->SetPadding(FMargin(10.f));
+	UVerticalBoxSlot* GS = Right->AddChildToVerticalBox(GridWell);
+	GS->SetSize(FSlateChildSize(ESlateSizeRule::Automatic)); // well hugt z'n inhoud -> hint komt er direct onder
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
-	UVerticalBoxSlot* GS = Right->AddChildToVerticalBox(Scroll);
-	GS->SetSize(FSlateChildSize(ESlateSizeRule::Automatic)); // grid hugt z'n inhoud -> hint komt er direct onder
+	GridWell->SetContent(Scroll);
 	Grid = WidgetTree->ConstructWidget<UWrapBox>();
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 	Scroll->AddChild(Grid);
@@ -729,6 +772,12 @@ void UInventoryWidget::RebuildContent()
 	for (int32 S : Inv->GetGridOrder()) { if (S != 0) { ++BackpackUsed; } }
 	WeightText->SetText(FText::FromString(FString::Printf(TEXT("Slots %d/%d    Weight %.1f / %.0f"),
 		FMath::Min(BackpackUsed, Inv->MaxStacks), Inv->MaxStacks, Inv->GetTotalWeight(), Inv->MaxWeight)));
+	if (WeightBar)
+	{
+		const float WFrac = (Inv->MaxWeight > 0.f) ? FMath::Clamp(Inv->GetTotalWeight() / Inv->MaxWeight, 0.f, 1.f) : 0.f;
+		WeightBar->SetPercent(WFrac);
+		WeightBar->SetFillColorAndOpacity(WFrac >= 0.85f ? WeedUI::Hex(0xFF6B6B) : (WFrac >= 0.65f ? WeedUI::Hex(0xFF6BD6) : WeedUI::Hex(0xB98CFF))); // bijna vol -> warm/rood
+	}
 
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 
@@ -824,7 +873,7 @@ void UInventoryWidget::RebuildContent()
 			}
 			else
 			{
-				Cell->Bg = FLinearColor(0.10f, 0.11f, 0.15f, 0.96f);
+				Cell->Bg = WeedUI::Hex(0x3A4152, 0.96f);
 				Cell->Line2 = bWeed
 					? FString::Printf(TEXT("THC %.0f%%  Q %.0f%%"), S.Quality, S.QualityPct)
 					: TEXT("");
@@ -843,7 +892,7 @@ void UInventoryWidget::RebuildContent()
 			// Lege cel (of plek van een item dat nu op de hotbar staat): drop-doel, niet sleepbaar.
 			// Zelfde duidelijke contrast als het droogrek.
 			Cell->StackId = 0; Cell->bDraggable = false;
-			Cell->Bg = FLinearColor(0.13f, 0.14f, 0.18f, 0.55f);
+			Cell->Bg = WeedUI::Hex(0x2A3140, 0.5f); // lege cel: subtieler/donkerder dan gevuld
 		}
 		CellBoxes[cell]->SetContent(Cell);
 	}
@@ -875,6 +924,9 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bOpen = PhoneComp.IsValid() && PhoneComp->IsInventoryOpen();
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	const ESlateVisibility BackdropVis = bOpen ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+	if (BlurBg) { BlurBg->SetVisibility(BackdropVis); }
+	if (DimBg) { DimBg->SetVisibility(BackdropVis); }
 	if (!bOpen) { return; }
 
 	// Naast een gekoppeld paneel (droogrek): HOME STASH verbergen (puur preview), card smaller, en het paar

@@ -96,6 +96,15 @@ namespace WeedUI
 
 	// Accentkleur per item-categorie (voor randjes/labels in de inventory).
 	WEEDSHOPCORE_API FLinearColor ItemAccent(FName ItemId);
+	// Stabiele, per-tekst (per-strain) kleur uit een korte tag (OG/GSC/...). Value/Sat sturen helderheid (pill donker, frame fel).
+	WEEDSHOPCORE_API FLinearColor TagColor(const FString& Tag, float Value, float Sat);
+	// 9-slice brush uit een ontworpen kit-frame-texture (panel/slot met rand+soft-shadow), getint naar ons palet.
+	// NineSlice = randfracties (0-1). Valt terug op Rounded(Tint) als de texture mist.
+	WEEDSHOPCORE_API FSlateBrush KitBrush(const FString& TexturePath, const FMargin& NineSlice, const FLinearColor& Tint);
+
+	// Premium-UI-palet (hex sRGB -> linear). Centrale theme: BG 151923 / Panel 252B3A / Inner 303747 /
+	// Slot 3A4152 / Accent B98CFF / Highlight FF6BD6 / Text F1EAFE / Text2 B8B4C8 / Warn FF6B6B.
+	WEEDSHOPCORE_API FLinearColor Hex(uint32 RGB, float Alpha = 1.f);
 
 	// (PlayUiSound is hierboven al gedeclareerd zodat de knop 'm kan gebruiken.)
 

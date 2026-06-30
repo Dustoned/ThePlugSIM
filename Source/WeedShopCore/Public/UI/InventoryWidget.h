@@ -106,6 +106,9 @@ protected:
 	UPROPERTY() TObjectPtr<class UCanvasPanelSlot> CardSlot; // om de inventory naast een paneel (droogrek) te schuiven
 	UPROPERTY() TObjectPtr<class USizeBox> StashBox;         // HOME STASH-kolom (verbergen in een machine)
 	UPROPERTY() TObjectPtr<UTextBlock> WeightText;
+	UPROPERTY() TObjectPtr<class UProgressBar> WeightBar;   // dunne weight-bar in de header (vult op gewicht/max, rood bij bijna-vol)
+	UPROPERTY() TObjectPtr<class UBackgroundBlur> BlurBg;   // background-blur achter het venster (premium focus)
+	UPROPERTY() TObjectPtr<UWidget> DimBg;                  // donkere dim-overlay achter het venster
 	UPROPERTY() TObjectPtr<UWrapBox> Grid;
 	UPROPERTY() TObjectPtr<UHorizontalBox> HotbarBox;
 	UPROPERTY() TObjectPtr<UTextBlock> SortLabel;

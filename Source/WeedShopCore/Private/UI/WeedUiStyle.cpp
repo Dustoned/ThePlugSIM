@@ -591,6 +591,34 @@ namespace WeedUI
 
 	FLinearColor ItemAccent(FName ItemId) { return CatFor(ItemId).Accent; }
 
+	FLinearColor TagColor(const FString& Tag, float Value, float Sat)
+	{
+		// Stabiele hue uit de tag-string -> elke strain z'n eigen, herkenbare kleur.
+		const uint32 Hh = GetTypeHash(Tag);
+		const float Hue = float(Hh % 360u);
+		return FLinearColor(Hue, FMath::Clamp(Sat, 0.f, 1.f), FMath::Clamp(Value, 0.f, 1.f), 1.f).HSVToLinearRGB();
+	}
+
+	FSlateBrush KitBrush(const FString& TexturePath, const FMargin& NineSlice, const FLinearColor& Tint)
+	{
+		FSlateBrush B;
+		if (UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *TexturePath))
+		{
+			B.SetResourceObject(Tex);
+			B.DrawAs = ESlateBrushDrawType::Box; // 9-slice -> hoeken/rand+schaduw blijven scherp, midden rekt
+			B.Margin = NineSlice;
+			B.TintColor = FSlateColor(Tint);
+			B.ImageSize = FVector2D(Tex->GetSizeX(), Tex->GetSizeY());
+		}
+		else { B = Rounded(Tint, 12.f); }
+		return B;
+	}
+
+	FLinearColor Hex(uint32 RGB, float Alpha)
+	{
+		return FLinearColor(FColor((RGB >> 16) & 0xFF, (RGB >> 8) & 0xFF, RGB & 0xFF, 255)).CopyWithNewOpacity(Alpha);
+	}
+
 	static const TCHAR* SoundCatKey(int32 Category)
 	{
 		switch (Category) { case 1: return TEXT("VolGame"); case 2: return TEXT("VolMusic"); default: return TEXT("VolUI"); }
