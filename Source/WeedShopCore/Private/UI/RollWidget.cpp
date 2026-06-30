@@ -51,7 +51,7 @@ void URollWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("RollCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), 24.f));
+	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.98f), 24.f));
 	CardB->SetPadding(FMargin(20.f));
 	Card = CardB;
 
@@ -72,15 +72,16 @@ void URollWidget::RebuildContent()
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 	Body->ClearChildren();
 
-	Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("ROLL JOINT"), 18, FLinearColor(0.6f, 1.f, 0.6f), false, true))
-		->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+	Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("ROLL JOINT"), 18, FLinearColor(0.80f, 0.62f, 1.f), false, true))
+		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	{ USizeBox* DivSz = WidgetTree->ConstructWidget<USizeBox>(); DivSz->SetHeightOverride(2.f); UBorder* Div = WidgetTree->ConstructWidget<UBorder>(); Div->SetBrush(WeedUI::Rounded(FLinearColor(0.55f, 0.38f, 0.85f, 0.75f), 1.f)); DivSz->SetContent(Div); Body->AddChildToVerticalBox(DivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f)); }
 
 	const int32 MaxG = Ph->GetMaxJointGrams();
 	if (MaxG <= 0)
 	{
 		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("No papers! Buy a pack from Suppliers (phone)."), 13, FLinearColor(1.f, 0.5f, 0.5f)))
 			->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
-		UWeedActionButton* CloseB = RollBtn(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 10.f, [Ph]() { Ph->ToggleRollUI(); });
+		UWeedActionButton* CloseB = RollBtn(WidgetTree, FLinearColor(0.22f, 0.20f, 0.28f), 10.f, [Ph]() { Ph->ToggleRollUI(); });
 		CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 13, FLinearColor::White, true));
 		Body->AddChildToVerticalBox(CloseB);
 		return;
@@ -97,7 +98,7 @@ void URollWidget::RebuildContent()
 	for (int32 g = 1; g <= MaxG; ++g)
 	{
 		const bool bSel = (g == G);
-		const FLinearColor Col = bSel ? FLinearColor(0.22f, 0.55f, 0.30f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		const FLinearColor Col = bSel ? FLinearColor(0.46f, 0.28f, 0.68f) : FLinearColor(0.16f, 0.15f, 0.22f);
 		UWeedActionButton* B = RollBtn(WidgetTree, Col, 8.f, [Ph, g]() { Ph->SetRollGrams(g); });
 		B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%dg"), g), 13, bSel ? FLinearColor::White : FLinearColor(0.7f, 0.72f, 0.8f), true));
 		UHorizontalBoxSlot* BS = Grams->AddChildToHorizontalBox(B);
@@ -143,13 +144,13 @@ void URollWidget::RebuildContent()
 	// Alleen een Load-knop tonen als je ook echt wiet hebt -> geen lege joint kunnen laden/rollen.
 	if (bHasWeed)
 	{
-		UWeedActionButton* RollB = RollBtn(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 10.f, [Ph]() { Ph->LoadRoll(); });
+		UWeedActionButton* RollB = RollBtn(WidgetTree, FLinearColor(0.48f, 0.30f, 0.70f), 10.f, [Ph]() { Ph->LoadRoll(); });
 		RollB->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Load  (%dg)  -  then hold right-click to roll"), G), 13, FLinearColor::White, true));
 		UHorizontalBoxSlot* RS = Btns->AddChildToHorizontalBox(RollB);
 		RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); RS->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	}
 
-	UWeedActionButton* CloseB = RollBtn(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 10.f, [Ph]() { Ph->ToggleRollUI(); });
+	UWeedActionButton* CloseB = RollBtn(WidgetTree, FLinearColor(0.22f, 0.20f, 0.28f), 10.f, [Ph]() { Ph->ToggleRollUI(); });
 	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 13, FLinearColor::White, true));
 	Btns->AddChildToHorizontalBox(CloseB);
 	Body->AddChildToVerticalBox(Btns);

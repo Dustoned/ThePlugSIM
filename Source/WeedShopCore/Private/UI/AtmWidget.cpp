@@ -60,7 +60,7 @@ void UAtmWidget::BuildShell(UCanvasPanel* Root)
 
 	// Donkere ATM-kast.
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("AtmCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.03f, 0.05f, 0.06f, 0.99f), 20.f));
+	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.99f), 20.f));
 	CardB->SetPadding(FMargin(16.f));
 	Card = CardB;
 
@@ -76,21 +76,22 @@ void UAtmWidget::BuildShell(UCanvasPanel* Root)
 
 	// Kop-balk: "ATM".
 	UBorder* Head = WidgetTree->ConstructWidget<UBorder>();
-	Head->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.13f, 0.16f, 1.f), 10.f));
+	Head->SetBrush(WeedUI::Rounded(FLinearColor(0.12f, 0.10f, 0.17f, 1.f), 10.f));
 	Head->SetPadding(FMargin(12.f, 8.f, 12.f, 8.f));
 	UHorizontalBox* HeadRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 	Head->SetContent(HeadRow);
-	UHorizontalBoxSlot* TS = HeadRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("ATM  -  CITY BANK"), 18, FLinearColor(0.4f, 1.f, 0.6f), false, true));
+	UHorizontalBoxSlot* TS = HeadRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("ATM  -  CITY BANK"), 18, FLinearColor(0.80f, 0.62f, 1.f), false, true));
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
 	UWeedActionButton* CloseB = AtmBtn(WidgetTree, FLinearColor(0.4f, 0.2f, 0.2f), 8.f,
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseAtm(); } });
 	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Exit"), 12, FLinearColor::White, true));
 	HeadRow->AddChildToHorizontalBox(CloseB);
-	Outer->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	Outer->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	{ USizeBox* DivSz = WidgetTree->ConstructWidget<USizeBox>(); DivSz->SetHeightOverride(2.f); UBorder* Div = WidgetTree->ConstructWidget<UBorder>(); Div->SetBrush(WeedUI::Rounded(FLinearColor(0.55f, 0.38f, 0.85f, 0.75f), 1.f)); DivSz->SetContent(Div); Outer->AddChildToVerticalBox(DivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f)); }
 
-	// "Scherm" met de inhoud (groenige rand voor de terminal-look).
+	// "Scherm" met de inhoud (donkere paars-getinte terminal-look).
 	UBorder* ScreenB = WidgetTree->ConstructWidget<UBorder>();
-	ScreenB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.10f, 0.08f, 1.f), 12.f));
+	ScreenB->SetBrush(WeedUI::Rounded(FLinearColor(0.07f, 0.06f, 0.12f, 1.f), 12.f));
 	ScreenB->SetPadding(FMargin(14.f));
 	UVerticalBoxSlot* ScS = Outer->AddChildToVerticalBox(ScreenB);
 	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -118,7 +119,7 @@ void UAtmWidget::FillBody()
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 	for (int32 i = 0; i < 2; ++i)
 	{
-		const FLinearColor Col = (i == AtmTab) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.14f, 0.18f, 0.20f);
+		const FLinearColor Col = (i == AtmTab) ? FLinearColor(0.46f, 0.28f, 0.68f) : FLinearColor(0.16f, 0.15f, 0.22f);
 		UWeedActionButton* B = AtmBtn(WidgetTree, Col, 8.f, [this, i]() { AtmTab = i; LastSig.Reset(); FillBody(); });
 		B->SetContent(WeedUI::Text(WidgetTree, TabNames[i], 12, FLinearColor::White, true));
 		UHorizontalBoxSlot* BS = Tabs->AddChildToHorizontalBox(B);
@@ -138,13 +139,13 @@ void UAtmWidget::FillBody()
 		for (int32 i = 0; i < 3; ++i)
 		{
 			const int64 A = Amts[i];
-			UWeedActionButton* B = AtmBtn(WidgetTree, FLinearColor(0.18f, 0.42f, 0.30f), 8.f, [Ph, A]() { if (Ph) { Ph->RequestDeposit(A); } });
+			UWeedActionButton* B = AtmBtn(WidgetTree, FLinearColor(0.42f, 0.27f, 0.62f), 8.f, [Ph, A]() { if (Ph) { Ph->RequestDeposit(A); } });
 			B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %lld"), (long long)(A / 100)), 13, FLinearColor::White, true));
 			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 		}
 		Row(Btns, FMargin(0, 0, 0, 6));
-		UWeedActionButton* MaxB = AtmBtn(WidgetTree, FLinearColor(0.2f, 0.5f, 0.34f), 8.f, [Ph]() { if (Ph) { Ph->RequestDeposit(-1); } });
+		UWeedActionButton* MaxB = AtmBtn(WidgetTree, FLinearColor(0.48f, 0.30f, 0.70f), 8.f, [Ph]() { if (Ph) { Ph->RequestDeposit(-1); } });
 		MaxB->SetContent(WeedUI::Text(WidgetTree, TEXT("Deposit max (up to daily limit)"), 13, FLinearColor::White, true));
 		Row(MaxB, FMargin(0, 0, 0, 0));
 	}
@@ -161,7 +162,7 @@ void UAtmWidget::FillBody()
 		{
 			const int64 A = Amts[i];
 			const int64 Fee = WeedRoundEuros((int64)(A * Econ->TransferFeePct));
-			UWeedActionButton* B = AtmBtn(WidgetTree, FLinearColor(0.2f, 0.34f, 0.5f), 8.f, [Ph, A]() { if (Ph) { Ph->RequestTransfer(A); } });
+			UWeedActionButton* B = AtmBtn(WidgetTree, FLinearColor(0.32f, 0.30f, 0.62f), 8.f, [Ph, A]() { if (Ph) { Ph->RequestTransfer(A); } });
 			B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %lld\n(fee %lld)"), (long long)(A / 100), (long long)(Fee / 100)), 12, FLinearColor::White, true));
 			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
