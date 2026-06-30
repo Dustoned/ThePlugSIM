@@ -70,6 +70,8 @@ protected:
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override; // hover: opschalen + details tonen
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 };
 
 UCLASS()
@@ -79,6 +81,7 @@ class WEEDSHOPCORE_API UInventoryWidget : public UUserWidget
 
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
+	void ShowItemDetails(class UInvCell* Cell); // vult het details-paneel links (aangeroepen vanuit UInvCell-hover)
 	void MarkDirty() { bDirty = true; }
 	// Een KLARE droogrek-batch in de inventory laten droppen = oogsten (drag i.p.v. klik).
 	bool AcceptDryBatchDrop(int32 EntryIndex);
@@ -113,6 +116,14 @@ protected:
 	UPROPERTY() TObjectPtr<UHorizontalBox> HotbarBox;
 	UPROPERTY() TObjectPtr<UTextBlock> SortLabel;
 	UPROPERTY() TObjectPtr<class UScrollBox> StashList; // thuis-voorraad uit shelves/chests
+	// Item-details-paneel (hover over een slot vult dit; anders toont het de HOME STASH).
+	UPROPERTY() TObjectPtr<UWidget> StashContent;
+	UPROPERTY() TObjectPtr<UWidget> DetailsContent;
+	UPROPERTY() TObjectPtr<class USizeBox> DetailsIconBox;
+	UPROPERTY() TObjectPtr<UTextBlock> DetailsName;
+	UPROPERTY() TObjectPtr<UTextBlock> DetailsBody;
+	UPROPERTY() TObjectPtr<UWidget> DetailsSplitBtn;
+	int32 DetailsStackId = 0;
 
 	// Vult het thuis-voorraad-lijstje (alle shelves/chests samengeteld per strain).
 	void RebuildStash();

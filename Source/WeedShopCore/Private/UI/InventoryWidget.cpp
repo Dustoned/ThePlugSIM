@@ -149,6 +149,23 @@ FReply UInvCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPoi
 	return FReply::Unhandled();
 }
 
+void UInvCell::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+	if (StackId != 0)
+	{
+		SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+		SetRenderScale(FVector2D(1.05f, 1.05f)); // subtiele hover-pop
+		if (Owner.IsValid()) { Owner->ShowItemDetails(this); }
+	}
+}
+
+void UInvCell::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseLeave(InMouseEvent);
+	SetRenderScale(FVector2D(1.f, 1.f));
+}
+
 void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
 	if (!bDraggable || StackId == 0) { return; }
@@ -421,13 +438,38 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	StashPanel->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x303747), 12.f)); // inner panel (iets lichter / raised)
 	StashPanel->SetPadding(FMargin(10.f, 8.f, 10.f, 8.f));
 	StashSize->SetContent(StashPanel);
+	UOverlay* LeftOv = WidgetTree->ConstructWidget<UOverlay>();
+	StashPanel->SetContent(LeftOv);
 	UVerticalBox* StashVB = WidgetTree->ConstructWidget<UVerticalBox>();
-	StashPanel->SetContent(StashVB);
+	{ UOverlaySlot* SOS = LeftOv->AddChildToOverlay(StashVB); SOS->SetHorizontalAlignment(HAlign_Fill); SOS->SetVerticalAlignment(VAlign_Fill); }
+	StashContent = StashVB;
 	StashVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("HOME STASH"), 12, WeedUI::Hex(0xB8B4C8), false, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	UScrollBox* StashScroll = WidgetTree->ConstructWidget<UScrollBox>();
 	StashList = StashScroll;
 	StashVB->AddChildToVerticalBox(StashScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	// Item-details-paneel (collapsed; verschijnt bij hover over een slot).
+	UVerticalBox* DetailsVB = WidgetTree->ConstructWidget<UVerticalBox>();
+	{ UOverlaySlot* DOS = LeftOv->AddChildToOverlay(DetailsVB); DOS->SetHorizontalAlignment(HAlign_Fill); DOS->SetVerticalAlignment(VAlign_Fill); }
+	DetailsVB->SetVisibility(ESlateVisibility::Collapsed);
+	DetailsContent = DetailsVB;
+	DetailsIconBox = WidgetTree->ConstructWidget<USizeBox>();
+	DetailsIconBox->SetWidthOverride(88.f); DetailsIconBox->SetHeightOverride(88.f);
+	{ UVerticalBoxSlot* DIS = DetailsVB->AddChildToVerticalBox(DetailsIconBox); DIS->SetHorizontalAlignment(HAlign_Center); DIS->SetPadding(FMargin(0.f, 6.f, 0.f, 8.f)); }
+	DetailsName = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::Hex(0xF1EAFE), false, true);
+	DetailsName->SetAutoWrapText(true);
+	DetailsVB->AddChildToVerticalBox(DetailsName)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	DetailsBody = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::Hex(0xB8B4C8));
+	DetailsBody->SetAutoWrapText(true);
+	DetailsVB->AddChildToVerticalBox(DetailsBody)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	{
+		UWeedActionButton* SplitB = TileButton(WidgetTree, WeedUI::Hex(0x3A2B52), 8.f, [this]() { if (DetailsStackId != 0) { OpenSplitPopup(DetailsStackId); } });
+		SplitB->SetContent(WeedUI::Text(WidgetTree, TEXT("Split stack"), 12, WeedUI::Hex(0xF1EAFE), true));
+		DetailsSplitBtn = SplitB;
+		DetailsVB->AddChildToVerticalBox(SplitB)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+	}
+
 	UHorizontalBoxSlot* LS = Body->AddChildToHorizontalBox(StashSize);
 	LS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
 
@@ -497,6 +539,18 @@ void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
 	PS->SetPosition(FVector2D(0.f, -30.f));
 	PS->SetZOrder(50); // boven de slots/grid (was er soms achter)
 	Sz->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UInventoryWidget::ShowItemDetails(UInvCell* Cell)
+{
+	if (!Cell || Cell->StackId == 0 || !DetailsContent || !StashContent) { return; }
+	DetailsStackId = Cell->StackId;
+	if (DetailsIconBox) { DetailsIconBox->SetContent(WeedUI::ItemIcon(WidgetTree, Cell->IconId, 84.f, Cell->WaterOverride)); }
+	if (DetailsName) { DetailsName->SetText(FText::FromString(Cell->Line1.IsEmpty() ? WeedUI::PrettyItemName(Cell->IconId) : Cell->Line1)); }
+	if (DetailsBody) { DetailsBody->SetText(FText::FromString(Cell->Tooltip)); }
+	if (DetailsSplitBtn) { DetailsSplitBtn->SetVisibility(Cell->bDraggable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
+	StashContent->SetVisibility(ESlateVisibility::Collapsed);
+	DetailsContent->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 void UInventoryWidget::OpenSplitPopup(int32 StackId)
@@ -927,7 +981,14 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const ESlateVisibility BackdropVis = bOpen ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
 	if (BlurBg) { BlurBg->SetVisibility(BackdropVis); }
 	if (DimBg) { DimBg->SetVisibility(BackdropVis); }
-	if (!bOpen) { return; }
+	if (!bOpen)
+	{
+		// Reset het details-paneel zodat de HOME STASH weer toont bij heropenen.
+		if (DetailsContent) { DetailsContent->SetVisibility(ESlateVisibility::Collapsed); }
+		if (StashContent) { StashContent->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+		DetailsStackId = 0;
+		return;
+	}
 
 	// Naast een gekoppeld paneel (droogrek): HOME STASH verbergen (puur preview), card smaller, en het paar
 	// dicht bij elkaar in het midden (rek rechts-van-midden, inventory links-van-midden). Anders: normaal gecentreerd.
