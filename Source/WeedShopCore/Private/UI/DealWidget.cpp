@@ -65,7 +65,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DealCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), 26.f));
+	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.98f), 26.f));
 	CardB->SetPadding(FMargin(20.f));
 	Card = CardB;
 
@@ -86,7 +86,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	Width->SetContent(VB);
 
 	// --- Kop: naam + status + stats (altijd zichtbaar voor ELKE NPC) ---
-	NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 22, FLinearColor(0.85f, 0.95f, 1.f), false, true);
+	NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 22, FLinearColor(0.80f, 0.62f, 1.f), false, true);
 	VB->AddChildToVerticalBox(NameText);
 	StateText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.65f, 0.7f, 0.8f), false, true);
 	VB->AddChildToVerticalBox(StateText)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
@@ -97,13 +97,14 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	TierText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.85f, 0.9f, 1.f), false, true);
 	VB->AddChildToVerticalBox(TierText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 	TierBar = WidgetTree->ConstructWidget<UProgressBar>();
-	TierBar->SetFillColorAndOpacity(FLinearColor(0.45f, 0.75f, 1.f));
-	VB->AddChildToVerticalBox(TierBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	TierBar->SetFillColorAndOpacity(FLinearColor(0.55f, 0.40f, 0.85f));
+	VB->AddChildToVerticalBox(TierBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	{ USizeBox* DivSz = WidgetTree->ConstructWidget<USizeBox>(); DivSz->SetHeightOverride(2.f); UBorder* Div = WidgetTree->ConstructWidget<UBorder>(); Div->SetBrush(WeedUI::Rounded(FLinearColor(0.55f, 0.38f, 0.85f, 0.75f), 1.f)); DivSz->SetContent(Div); VB->AddChildToVerticalBox(DivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f)); }
 
 	// --- Dialoog-kader: wat de NPC zegt ---
 	{
 		UBorder* DB = WidgetTree->ConstructWidget<UBorder>();
-		DB->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.12f, 0.16f, 1.f), 10.f));
+		DB->SetBrush(WeedUI::Rounded(FLinearColor(0.11f, 0.10f, 0.16f, 1.f), 10.f));
 		DB->SetPadding(FMargin(12.f, 10.f));
 		DialogueText = WeedUI::Text(WidgetTree, TEXT("..."), 14, FLinearColor(0.95f, 0.95f, 0.85f), false, false);
 		DialogueText->SetAutoWrapText(true);
@@ -122,7 +123,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	VB->AddChildToVerticalBox(PriceText)->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
 
 	PriceSlider = WidgetTree->ConstructWidget<USlider>();
-	PriceSlider->SetSliderHandleColor(FLinearColor::White);
+	PriceSlider->SetSliderHandleColor(FLinearColor(0.72f, 0.46f, 1.f));
 	PriceSlider->SetSliderBarColor(FLinearColor(0.2f, 0.22f, 0.28f));
 	PriceSlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnPriceSlider);
 	VB->AddChildToVerticalBox(PriceSlider)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
@@ -177,15 +178,15 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		B->SetContent(WeedUI::Text(WidgetTree, Label, 14, FLinearColor::White, true, true));
 		return B;
 	};
-	UWeedActionButton* GB = MakeBtn(TEXT("Give joint"), FLinearColor(0.45f, 0.35f, 0.15f), 2);
+	UWeedActionButton* GB = MakeBtn(TEXT("Give joint"), FLinearColor(0.34f, 0.26f, 0.50f), 2);
 	UHorizontalBoxSlot* GS = Btns->AddChildToHorizontalBox(GB);
 	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); GS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	GiveBtn = GB;
-	UWeedActionButton* OB = MakeBtn(TEXT("Offer deal"), FLinearColor(0.2f, 0.5f, 0.28f), 1);
+	UWeedActionButton* OB = MakeBtn(TEXT("Offer deal"), FLinearColor(0.48f, 0.30f, 0.70f), 1);
 	UHorizontalBoxSlot* OS = Btns->AddChildToHorizontalBox(OB);
 	OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	OfferBtn = OB;
-	UHorizontalBoxSlot* CcS = Btns->AddChildToHorizontalBox(MakeBtn(TEXT("Leave"), FLinearColor(0.4f, 0.28f, 0.22f), 0));
+	UHorizontalBoxSlot* CcS = Btns->AddChildToHorizontalBox(MakeBtn(TEXT("Leave"), FLinearColor(0.22f, 0.20f, 0.28f), 0));
 	CcS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	VB->AddChildToVerticalBox(Btns);
 }
@@ -233,7 +234,7 @@ void UDealWidget::RebuildStrains()
 		B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
 		const FName Pick = Buds[i];
 		B->OnAction.BindLambda([this, Pick](int32, int32) { if (UPhoneClientComponent* X = GetPhone()) { X->SetOfferedProduct(Pick); } });
-		const FLinearColor Col = bThis ? FLinearColor(0.22f, 0.5f, 0.3f) : FLinearColor(0.14f, 0.16f, 0.22f);
+		const FLinearColor Col = bThis ? FLinearColor(0.46f, 0.28f, 0.68f) : FLinearColor(0.16f, 0.15f, 0.22f);
 		FButtonStyle St;
 		St.Normal = WeedUI::Rounded(Col, 8.f);
 		St.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
@@ -317,7 +318,7 @@ void UDealWidget::RebuildJointPicker()
 			if (UPhoneClientComponent* X = GetPhone()) { X->RequestGiveJointId(X->GetDealCustomer(), Id); }
 			if (JointPickerBox) { JointPickerBox->SetVisibility(ESlateVisibility::Collapsed); }
 		});
-		const FLinearColor Col(0.30f, 0.26f, 0.14f);
+		const FLinearColor Col(0.20f, 0.19f, 0.26f);
 		FButtonStyle Sty;
 		Sty.Normal = WeedUI::Rounded(Col, 8.f);
 		Sty.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
