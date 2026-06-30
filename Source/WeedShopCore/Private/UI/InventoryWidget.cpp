@@ -126,6 +126,14 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 			TagOS->SetVerticalAlignment(VAlign_Bottom);
 			TagOS->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 		}
+
+		// Hover-glow bovenop alles (binnen de cel -> clipt niet); zichtbaar bij hover.
+		UBorder* Glow = WidgetTree->ConstructWidget<UBorder>();
+		Glow->SetBrush(WeedUI::Rounded(FLinearColor(0.85f, 0.82f, 1.f, 0.18f), Radius));
+		Glow->SetVisibility(ESlateVisibility::Collapsed);
+		UOverlaySlot* GlowOS = Ov->AddChildToOverlay(Glow);
+		GlowOS->SetHorizontalAlignment(HAlign_Fill); GlowOS->SetVerticalAlignment(VAlign_Fill);
+		HoverGlow = Glow;
 	}
 	// Volledige naam + details bij hover (zodat lange namen die niet in de cel passen toch leesbaar zijn).
 	if (!Tooltip.IsEmpty()) { SetToolTipText(FText::FromString(Tooltip)); }
@@ -154,8 +162,8 @@ void UInvCell::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEve
 	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
 	if (StackId != 0)
 	{
-		// Hover = oplichten i.p.v. opschalen -> niets steekt buiten de cel uit / clipt onder andere panelen.
-		SetColorAndOpacity(FLinearColor(1.22f, 1.22f, 1.22f, 1.f));
+		// Hover = glow-overlay binnen de cel (clipt niet; SetColorAndOpacity>1 wordt door UMG geclampt -> onzichtbaar).
+		if (HoverGlow) { HoverGlow->SetVisibility(ESlateVisibility::HitTestInvisible); }
 		if (Owner.IsValid()) { Owner->ShowItemDetails(this); }
 	}
 }
@@ -163,7 +171,7 @@ void UInvCell::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEve
 void UInvCell::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
 {
 	Super::NativeOnMouseLeave(InMouseEvent);
-	SetColorAndOpacity(FLinearColor::White);
+	if (HoverGlow) { HoverGlow->SetVisibility(ESlateVisibility::Collapsed); }
 }
 
 void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)

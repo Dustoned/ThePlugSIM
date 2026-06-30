@@ -61,6 +61,7 @@ public:
 	int32 SlotNumber = 0;
 	TWeakObjectPtr<UInventoryComponent> Inv;
 	TWeakObjectPtr<UInventoryWidget> Owner;
+	UPROPERTY() TObjectPtr<class UBorder> HoverGlow; // glow-overlay bovenop de cel, zichtbaar bij hover
 	// Optionele Merge-knop (voor weed met meerdere batches).
 	bool bShowMerge = false;
 	TFunction<void()> MergeFn;
