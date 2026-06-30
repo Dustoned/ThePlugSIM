@@ -138,7 +138,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	// Marge t.o.v. de schermranden (full-page, maar niet edge-glued).
 	UBorder* PagePad = WidgetTree->ConstructWidget<UBorder>();
 	PagePad->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f));
-	PagePad->SetHorizontalAlignment(HAlign_Fill); PagePad->SetVerticalAlignment(VAlign_Fill);
+	PagePad->SetHorizontalAlignment(HAlign_Center); PagePad->SetVerticalAlignment(VAlign_Fill); // content gecentreerd -> ultra-wide niet links-zwaar
 	PagePad->SetPadding(FMargin(74.f, 48.f, 74.f, 40.f));
 	Dim->SetContent(PagePad);
 
@@ -186,7 +186,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	BodyRow->AddChildToHorizontalBox(BodyCap);
 	Scroll->AddChild(BodyRow);
 	UHorizontalBoxSlot* ScS = ContentRow->AddChildToHorizontalBox(Scroll);
-	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Automatic)); // scroll = natuurlijke 860-breedte -> content blijft compact + centreerbaar
 
 	// --- Footer: Esc-hint links, Save rechts ---
 	UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>();
