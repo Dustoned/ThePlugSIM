@@ -313,6 +313,71 @@ void USettingsWidget::OnResolutionChanged(FString Item, ESelectInfo::Type Select
 	}
 }
 
+// --- Kit-W_Slider Value-reflectie (BP-var "Value" = double; val terug op float) ---
+static double KitSliderValue(UUserWidget* W)
+{
+	if (!W) { return 0.0; }
+	if (FDoubleProperty* P = FindFProperty<FDoubleProperty>(W->GetClass(), TEXT("Value"))) { return P->GetPropertyValue_InContainer(W); }
+	if (FFloatProperty* P = FindFProperty<FFloatProperty>(W->GetClass(), TEXT("Value"))) { return (double)P->GetPropertyValue_InContainer(W); }
+	return 0.0;
+}
+static void SetKitSliderValue(UUserWidget* W, double V)
+{
+	if (!W) { return; }
+	if (FDoubleProperty* DP = FindFProperty<FDoubleProperty>(W->GetClass(), TEXT("Value"))) { DP->SetPropertyValue_InContainer(W, V); }
+	else if (FFloatProperty* FP = FindFProperty<FFloatProperty>(W->GetClass(), TEXT("Value"))) { FP->SetPropertyValue_InContainer(W, (float)V); }
+}
+
+void USettingsWidget::AddKitToggle(const FString& Label, bool Initial, TFunction<void(bool)> Apply)
+{
+	if (!Body) { return; }
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
+	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
+	static UClass* ToggleCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/toggle/W_Toggle_Template.W_Toggle_Template_C"));
+	if (ToggleCls)
+	{
+		if (UUserWidget* Tog = CreateWidget<UUserWidget>(this, ToggleCls))
+		{
+			if (FBoolProperty* P = FindFProperty<FBoolProperty>(Tog->GetClass(), TEXT("IsToggled"))) { P->SetPropertyValue_InContainer(Tog, Initial); }
+			Row->AddChildToHorizontalBox(Tog)->SetVerticalAlignment(VAlign_Center);
+			KitToggles.Add({ Tog, Initial, Apply });
+		}
+	}
+	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
+}
+
+void USettingsWidget::AddKitSlider(const FString& Label, double InitialNorm, TFunction<FString(double, int32&)> Apply)
+{
+	if (!Body) { return; }
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
+	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
+
+	UTextBlock* ValText = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor(0.74f, 0.55f, 1.f));
+	static UClass* SliderCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/slider/W_Slider_Template.W_Slider_Template_C"));
+	if (SliderCls)
+	{
+		if (UUserWidget* Sld = CreateWidget<UUserWidget>(this, SliderCls))
+		{
+			SetKitSliderValue(Sld, InitialNorm);
+			USizeBox* SBox = WidgetTree->ConstructWidget<USizeBox>();
+			SBox->SetWidthOverride(250.f); SBox->SetHeightOverride(34.f);
+			SBox->SetContent(Sld);
+			UHorizontalBoxSlot* SS = Row->AddChildToHorizontalBox(SBox);
+			SS->SetVerticalAlignment(VAlign_Center); SS->SetPadding(FMargin(0.f, 0.f, 14.f, 0.f));
+
+			FKitSlider KS; KS.W = Sld; KS.Apply = Apply; KS.ValText = ValText;
+			const FString Disp = Apply ? Apply(InitialNorm, KS.LastKey) : FString();
+			if (!Disp.IsEmpty()) { ValText->SetText(FText::FromString(Disp)); }
+			KitSliders.Add(KS);
+		}
+	}
+	USizeBox* VBox = WidgetTree->ConstructWidget<USizeBox>(); VBox->SetMinDesiredWidth(56.f); VBox->SetContent(ValText);
+	Row->AddChildToHorizontalBox(VBox)->SetVerticalAlignment(VAlign_Center);
+	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
+}
+
 void USettingsWidget::RefreshTabs()
 {
 	auto Tint = [](UWeedActionButton* B, bool bSel)
@@ -335,6 +400,8 @@ void USettingsWidget::RefreshContent()
 {
 	if (!Body) { return; }
 	Body->ClearChildren();
+	KitToggles.Reset();
+	KitSliders.Reset();
 	FovSlider = nullptr; SensSlider = nullptr; FovVal = nullptr; SensVal = nullptr; ResCombo = nullptr;
 	VolUiSlider = nullptr; VolGameSlider = nullptr; VolMusicSlider = nullptr; VolUiVal = nullptr; VolGameVal = nullptr; VolMusicVal = nullptr;
 
@@ -445,12 +512,11 @@ void USettingsWidget::RefreshContent()
 		AddQ(TEXT("Textures"),         G->GetTextureQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetTextureQuality(n); });
 		{ // Shadows: ON/OFF (eigen vlag, los van de Preset; VSM aan/uit). Geldt na herstart (VSM-pool).
 			bool bL0, bP0, bM0, bV0, bR0; WeedShop_ReadGfxFlags(bL0, bP0, bM0, bV0, bR0);
-			AddValueRow(TEXT("Shadows"), bV0 ? TEXT("Off") : TEXT("On"), [this, bL0, bP0, bM0, bV0, bR0]()
+			AddKitToggle(TEXT("Shadows"), !bV0, [this, bL0, bP0, bM0, bR0](bool bOn)
 			{
-				WeedShop_WriteGfxFlags(bL0, bP0, bM0, !bV0, bR0); // VSMOff togglen = schaduwen aan/uit
-				if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(!bV0); } }
+				WeedShop_WriteGfxFlags(bL0, bP0, bM0, !bOn, bR0); // bOn = schaduwen aan -> VSMOff = !bOn
+				if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bOn); } }
 				ShowRestartPopup(); // VSM-pool kan niet live togglen -> geldt na herstart
-				RefreshContent();
 			});
 		}
 
@@ -473,11 +539,10 @@ void USettingsWidget::RefreshContent()
 		{
 			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
 			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-			AddValueRow(TEXT("Lumen (GI + reflections)"), bLumenOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
+			AddKitToggle(TEXT("Lumen (GI + reflections)"), !bLumenOff, [this, bPotato, bMbOff, bVSMOff, bRTOff](bool bOn)
 			{
-				WeedShop_ApplyLumen(!bLumenOff);
-				WeedShop_WriteGfxFlags(!bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-				RefreshContent();
+				WeedShop_ApplyLumen(bOn);
+				WeedShop_WriteGfxFlags(!bOn, bPotato, bMbOff, bVSMOff, bRTOff);
 			});
 		}
 
@@ -487,18 +552,17 @@ void USettingsWidget::RefreshContent()
 		{
 			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
 			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-			AddValueRow(TEXT("Motion blur"), bMbOff ? TEXT("Off") : TEXT("On"), [this, bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff]()
+			AddKitToggle(TEXT("Motion blur"), !bMbOff, [this, bLumenOff, bPotato, bVSMOff, bRTOff](bool bOn)
 			{
-				WeedShop_ApplyMotionBlur(!bMbOff);
-				WeedShop_WriteGfxFlags(bLumenOff, bPotato, !bMbOff, bVSMOff, bRTOff);
-				RefreshContent();
+				WeedShop_ApplyMotionBlur(bOn);
+				WeedShop_WriteGfxFlags(bLumenOff, bPotato, !bOn, bVSMOff, bRTOff);
 			});
 		}
 
-		// VSync.
-		AddValueRow(TEXT("V-Sync"), G->IsVSyncEnabled() ? TEXT("On") : TEXT("Off"), [this]()
+		// VSync — kit-W_Toggle (gepolld) i.p.v. cycle-knop (proof voor de kit-controls).
+		AddKitToggle(TEXT("V-Sync"), G->IsVSyncEnabled(), [this](bool b)
 		{
-			if (UGameUserSettings* GG = GUS()) { GG->SetVSyncEnabled(!GG->IsVSyncEnabled()); GG->ApplySettings(false); GG->SaveSettings(); RefreshContent(); }
+			if (UGameUserSettings* GG = GUS()) { GG->SetVSyncEnabled(b); GG->ApplySettings(false); GG->SaveSettings(); }
 		});
 
 		// Frame rate limit.
@@ -538,35 +602,47 @@ void USettingsWidget::RefreshContent()
 		const float Fov = Ph ? Ph->GetFov() : 90.f;          // 60..120
 		const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f; // 0.1..3.0
 
-		FovSlider = AddSliderRow(TEXT("Field of view"), (Fov - 60.f) / 60.f, FovVal);
-		if (FovVal) { FovVal->SetText(FText::FromString(FString::Printf(TEXT("%d"), (int32)Fov))); }
-		LastFovApplied = (int32)Fov;
+		AddKitSlider(TEXT("Field of view"), (Fov - 60.f) / 60.f, [this](double n, int32& Key) -> FString
+		{
+			const int32 V = FMath::RoundToInt(60.0 + n * 60.0);
+			if (V == Key) { return FString(); }
+			Key = V;
+			if (UPhoneClientComponent* P = GetPhone()) { P->ApplyFov((float)V); }
+			return FString::Printf(TEXT("%d"), V);
+		});
 
-		SensSlider = AddSliderRow(TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, SensVal);
-		if (SensVal) { SensVal->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), Sens))); }
-		LastSensApplied = FMath::RoundToInt(Sens * 10.f);
+		AddKitSlider(TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, [this](double n, int32& Key) -> FString
+		{
+			const int32 S10 = FMath::RoundToInt((0.1 + n * 2.9) * 10.0);
+			if (S10 == Key) { return FString(); }
+			Key = S10;
+			if (UPhoneClientComponent* P = GetPhone()) { P->SetLookSensitivity(S10 / 10.f); }
+			return FString::Printf(TEXT("%.1f"), S10 / 10.f);
+		});
 
 		// Head bobbing aan/uit (camera loop-wiebel).
 		const bool bBobNow = Ph ? Ph->GetHeadBob() : true;
-		AddValueRow(TEXT("Head bobbing"), bBobNow ? TEXT("On") : TEXT("Off"), [this, bBobNow]()
+		AddKitToggle(TEXT("Head bobbing"), bBobNow, [this](bool bOn)
 		{
-			if (UPhoneClientComponent* P2 = GetPhone()) { P2->SetHeadBob(!bBobNow); }
-			RefreshContent();
+			if (UPhoneClientComponent* P2 = GetPhone()) { P2->SetHeadBob(bOn); }
 		});
 	}
 	else if (Category == 3) // Audio
 	{
-		VolUiSlider = AddSliderRow(TEXT("UI volume"), WeedUI::SoundCategoryVolume(0), VolUiVal);
-		if (VolUiVal) { VolUiVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(WeedUI::SoundCategoryVolume(0) * 100.f)))); }
-		LastVolUi = FMath::RoundToInt(WeedUI::SoundCategoryVolume(0) * 100.f);
-
-		VolGameSlider = AddSliderRow(TEXT("Game volume"), WeedUI::SoundCategoryVolume(1), VolGameVal);
-		if (VolGameVal) { VolGameVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(WeedUI::SoundCategoryVolume(1) * 100.f)))); }
-		LastVolGame = FMath::RoundToInt(WeedUI::SoundCategoryVolume(1) * 100.f);
-
-		VolMusicSlider = AddSliderRow(TEXT("Music volume"), WeedUI::SoundCategoryVolume(2), VolMusicVal);
-		if (VolMusicVal) { VolMusicVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(WeedUI::SoundCategoryVolume(2) * 100.f)))); }
-		LastVolMusic = FMath::RoundToInt(WeedUI::SoundCategoryVolume(2) * 100.f);
+		auto AddVol = [this](const FString& L, int32 Cat)
+		{
+			AddKitSlider(L, WeedUI::SoundCategoryVolume(Cat), [Cat](double n, int32& Key) -> FString
+			{
+				const int32 Pct = FMath::RoundToInt(n * 100.0);
+				if (Pct == Key) { return FString(); }
+				Key = Pct;
+				WeedUI::SetSoundCategoryVolume(Cat, Pct / 100.f);
+				return FString::Printf(TEXT("%d%%"), Pct);
+			});
+		};
+		AddVol(TEXT("UI volume"), 0);
+		AddVol(TEXT("Game volume"), 1);
+		AddVol(TEXT("Music volume"), 2);
 
 		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 13, FLinearColor(0.55f, 0.6f, 0.7f)))
 			->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
@@ -574,8 +650,8 @@ void USettingsWidget::RefreshContent()
 	else // Controls
 	{
 		// Controls-overlay (de toetsen-hint rechtsonder) aan/uit.
-		AddValueRow(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled() ? TEXT("On") : TEXT("Off"),
-			[this]() { UHotkeyHintWidget::SetHintsEnabled(!UHotkeyHintWidget::AreHintsEnabled()); RefreshContent(); });
+		AddKitToggle(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled(),
+			[this](bool bOn) { UHotkeyHintWidget::SetHintsEnabled(bOn); });
 
 		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, FLinearColor(0.6f, 0.65f, 0.76f)))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
@@ -636,45 +712,26 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	if (!bOpen) { return; }
 
-	// Game-sliders live toepassen (alleen als de waarde echt verandert -> geen config-spam).
-	if (UPhoneClientComponent* PhMut = GetPhone())
+	// Kit-sliders pollen (W_Slider.Value via reflectie -> Apply mapt+past toe+geeft display; leeg = onveranderd).
+	for (FKitSlider& KS : KitSliders)
 	{
-		if (FovSlider)
+		if (UUserWidget* W = KS.W.Get())
 		{
-			const int32 Fov = FMath::RoundToInt(60.f + FovSlider->GetValue() * 60.f);
-			if (Fov != LastFovApplied)
-			{
-				LastFovApplied = Fov;
-				PhMut->ApplyFov((float)Fov);
-				if (FovVal) { FovVal->SetText(FText::FromString(FString::Printf(TEXT("%d"), Fov))); }
-			}
-		}
-		if (SensSlider)
-		{
-			const float SensRaw = 0.1f + SensSlider->GetValue() * 2.9f;
-			const int32 S10 = FMath::RoundToInt(SensRaw * 10.f);
-			if (S10 != LastSensApplied)
-			{
-				LastSensApplied = S10;
-				PhMut->SetLookSensitivity(S10 / 10.f);
-				if (SensVal) { SensVal->SetText(FText::FromString(FString::Printf(TEXT("%.1f"), S10 / 10.f))); }
-			}
+			const FString Disp = KS.Apply ? KS.Apply(KitSliderValue(W), KS.LastKey) : FString();
+			if (!Disp.IsEmpty()) { if (UTextBlock* VT = KS.ValText.Get()) { VT->SetText(FText::FromString(Disp)); } }
 		}
 	}
 
-	// Audio-sliders -> categorie-volume (alleen schrijven als de waarde echt verandert).
-	auto PollVol = [this](USlider* S, int32 Cat, int32& Last, UTextBlock* Val)
+	// Kit-toggles pollen (W_Toggle.IsToggled via reflectie -> apply bij wijziging).
+	for (FKitToggle& KT : KitToggles)
 	{
-		if (!S) { return; }
-		const int32 Pct = FMath::RoundToInt(S->GetValue() * 100.f);
-		if (Pct != Last)
+		if (UUserWidget* W = KT.W.Get())
 		{
-			Last = Pct;
-			WeedUI::SetSoundCategoryVolume(Cat, Pct / 100.f);
-			if (Val) { Val->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), Pct))); }
+			if (FBoolProperty* P = FindFProperty<FBoolProperty>(W->GetClass(), TEXT("IsToggled")))
+			{
+				const bool Cur = P->GetPropertyValue_InContainer(W);
+				if (Cur != KT.Last) { KT.Last = Cur; if (KT.Apply) { KT.Apply(Cur); } }
+			}
 		}
-	};
-	PollVol(VolUiSlider, 0, LastVolUi, VolUiVal);
-	PollVol(VolGameSlider, 1, LastVolGame, VolGameVal);
-	PollVol(VolMusicSlider, 2, LastVolMusic, VolMusicVal);
+	}
 }

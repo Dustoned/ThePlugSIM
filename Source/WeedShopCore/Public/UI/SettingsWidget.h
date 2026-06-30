@@ -41,6 +41,11 @@ protected:
 	class USlider* AddSliderRow(const FString& Label, float Normalized, TObjectPtr<class UTextBlock>& OutValue);
 	// Rij-helper: label + resolutie-dropdown.
 	void AddResolutionRow();
+	// Rij-helper: label + kit-W_Toggle (bool, gepolld in NativeTick via IsToggled-reflectie).
+	void AddKitToggle(const FString& Label, bool Initial, TFunction<void(bool)> Apply);
+	// Rij-helper: label + kit-W_Slider + waarde-tekst (genormaliseerde Value 0-1 via reflectie, gepolld).
+	// Apply(norm, key&) mapt de waarde, past 'm toe als key veranderde, en geeft de display-string (leeg = onveranderd).
+	void AddKitSlider(const FString& Label, double InitialNorm, TFunction<FString(double, int32&)> Apply);
 
 	UFUNCTION()
 	void OnResolutionChanged(FString Item, ESelectInfo::Type SelectType);
@@ -72,6 +77,14 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> VolGameVal;
 	UPROPERTY() TObjectPtr<UTextBlock> VolMusicVal;
 	int32 LastVolUi = -1, LastVolGame = -1, LastVolMusic = -1; // procenten
+
+	// Kit-toggles (W_Toggle uit de Minimalist-kit): per-setting bool, gepolld in NativeTick (IsToggled via reflectie).
+	struct FKitToggle { TWeakObjectPtr<UUserWidget> W; bool Last = false; TFunction<void(bool)> Apply; };
+	TArray<FKitToggle> KitToggles;
+
+	// Kit-sliders (W_Slider): genormaliseerde Value 0-1 via reflectie, gepolld; Apply mapt+past toe+geeft display.
+	struct FKitSlider { TWeakObjectPtr<UUserWidget> W; int32 LastKey = MIN_int32; TFunction<FString(double, int32&)> Apply; TWeakObjectPtr<UTextBlock> ValText; };
+	TArray<FKitSlider> KitSliders;
 
 	int32 Category = 0; // 0 = Graphics, 1 = Game, 2 = Controls, 3 = Audio
 	bool bLastOpen = false;
