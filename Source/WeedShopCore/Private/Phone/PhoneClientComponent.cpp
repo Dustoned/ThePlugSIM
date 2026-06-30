@@ -1077,7 +1077,7 @@ void UPhoneClientComponent::EnsureWidget()
 	PlantWidget = CreateWidget<UPlantInfoWidget>(PC, UPlantInfoWidget::StaticClass());
 	if (PlantWidget) { PlantWidget->AddToViewport(10); }
 	HotbarWidget = CreateWidget<UHotbarWidget>(PC, UHotbarWidget::StaticClass());
-	if (HotbarWidget) { HotbarWidget->AddToViewport(5); }
+	if (HotbarWidget) { HotbarWidget->AddToViewport(26); } // boven de inventory-blur/dim (25) -> hotbar blijft scherp + sleepbaar in inv-view
 	CrosshairWidget = CreateWidget<UCrosshairWidget>(PC, UCrosshairWidget::StaticClass());
 	if (CrosshairWidget) { CrosshairWidget->AddToViewport(1); }
 	HandInfoWidget = CreateWidget<UHandInfoWidget>(PC, UHandInfoWidget::StaticClass());

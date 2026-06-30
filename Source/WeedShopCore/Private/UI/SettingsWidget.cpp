@@ -334,7 +334,7 @@ void USettingsWidget::AddKitToggle(const FString& Label, bool Initial, TFunction
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
-	static UClass* ToggleCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/toggle/W_Toggle_Template.W_Toggle_Template_C"));
+	UClass* ToggleCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/toggle/W_Toggle_Template.W_Toggle_Template_C")); // NIET static -> GC kan de class opruimen, dangling pointer = crash
 	if (ToggleCls)
 	{
 		if (UUserWidget* Tog = CreateWidget<UUserWidget>(this, ToggleCls))
@@ -355,7 +355,7 @@ void USettingsWidget::AddKitSlider(const FString& Label, double InitialNorm, TFu
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 
 	UTextBlock* ValText = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor(0.74f, 0.55f, 1.f));
-	static UClass* SliderCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/slider/W_Slider_Template.W_Slider_Template_C"));
+	UClass* SliderCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/slider/W_Slider_Template.W_Slider_Template_C")); // NIET static -> GC-veilig (herlaadt indien opgeruimd)
 	if (SliderCls)
 	{
 		if (UUserWidget* Sld = CreateWidget<UUserWidget>(this, SliderCls))

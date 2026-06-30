@@ -154,8 +154,8 @@ void UInvCell::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEve
 	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
 	if (StackId != 0)
 	{
-		SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
-		SetRenderScale(FVector2D(1.05f, 1.05f)); // subtiele hover-pop
+		// Hover = oplichten i.p.v. opschalen -> niets steekt buiten de cel uit / clipt onder andere panelen.
+		SetColorAndOpacity(FLinearColor(1.22f, 1.22f, 1.22f, 1.f));
 		if (Owner.IsValid()) { Owner->ShowItemDetails(this); }
 	}
 }
@@ -163,7 +163,7 @@ void UInvCell::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEve
 void UInvCell::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
 {
 	Super::NativeOnMouseLeave(InMouseEvent);
-	SetRenderScale(FVector2D(1.f, 1.f));
+	SetColorAndOpacity(FLinearColor::White);
 }
 
 void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
