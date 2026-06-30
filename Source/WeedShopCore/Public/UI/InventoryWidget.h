@@ -83,6 +83,7 @@ class WEEDSHOPCORE_API UInventoryWidget : public UUserWidget
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 	void ShowItemDetails(class UInvCell* Cell); // vult het details-paneel links (aangeroepen vanuit UInvCell-hover)
+	void BeginDragGhost(class UInvCell* Cell);  // dimt de bron-cel tijdens slepen ("opgepakt"-look); hersteld in NativeTick
 	void MarkDirty() { bDirty = true; }
 	// Een KLARE droogrek-batch in de inventory laten droppen = oogsten (drag i.p.v. klik).
 	bool AcceptDryBatchDrop(int32 EntryIndex);
@@ -125,6 +126,7 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> DetailsBody;
 	UPROPERTY() TObjectPtr<UWidget> DetailsSplitBtn;
 	int32 DetailsStackId = 0;
+	TWeakObjectPtr<class UInvCell> DragGhostCell; // bron-cel die gedimd is tijdens slepen
 
 	// Vult het thuis-voorraad-lijstje (alle shelves/chests samengeteld per strain).
 	void RebuildStash();

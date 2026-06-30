@@ -101,7 +101,7 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	Gauges->AddChildToHorizontalBox(MakeGauge(TEXT("t_heart_red_128"), FLinearColor::White, GrH, GrHt))->SetPadding(FMargin(0.f, 0.f, 30.f, 0.f));
 	HealthRing = GrH; HealthText = GrHt;
 	UImage* GrG = nullptr; UTextBlock* GrGt = nullptr;
-	Gauges->AddChildToHorizontalBox(MakeGauge(TEXT("/Game/_Project/UI/T_WeedLeaf.T_WeedLeaf"), FLinearColor::White, GrG, GrGt));
+	Gauges->AddChildToHorizontalBox(MakeGauge(TEXT("weedleaf"), FLinearColor::White, GrG, GrGt)); // transparante gekleurde cannabis-leaf (runtime-PNG) i.p.v. T_WeedLeaf-met-bg
 	GrowthRing = GrG; GrowthTimeText = GrGt;
 	UVerticalBoxSlot* GRS = VB->AddChildToVerticalBox(Gauges); GRS->SetHorizontalAlignment(HAlign_Center); GRS->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
 	RingRow = Gauges;
@@ -118,7 +118,7 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	ThcText = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor(0.55f, 1.f, 0.6f), false, true);
 	UHorizontalBoxSlot* TS = HRow->AddChildToHorizontalBox(ThcText);
 	TS->SetVerticalAlignment(VAlign_Center); TS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
-	VB->AddChildToVerticalBox(HRow)->SetPadding(FMargin(0.f, 7.f, 0.f, 2.f));
+	{ UVerticalBoxSlot* HRS = VB->AddChildToVerticalBox(HRow); HRS->SetHorizontalAlignment(HAlign_Center); HRS->SetPadding(FMargin(0.f, 7.f, 0.f, 2.f)); } // yield+thc-rij gecentreerd
 
 	// Aarde + upgrades (klein, compact).
 	// Soil/upgrades/hint staan NIET meer op de kaart (info komt bij de pot-interact); members blijven voor NativeTick.

@@ -30,6 +30,7 @@
 #include "Components/Image.h"
 #include "Components/ProgressBar.h"
 #include "Components/BackgroundBlur.h"
+#include "Framework/Application/SlateApplication.h" // IsDragDropping() voor de drag-ghost-herstel
 #include "GameFramework/Pawn.h"
 #include "InputCoreTypes.h"
 #include "Input/Reply.h"
@@ -202,6 +203,7 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	Op->OnDragCancelled.AddDynamic(Op, &UInvDragOp::HandleDroppedOutside);
 
 	OutOperation = Op;
+	if (Owner.IsValid()) { Owner->BeginDragGhost(this); } // bron-cel dimmen tijdens slepen (pro "opgepakt"-look)
 }
 
 void UInvDragOp::HandleDroppedOutside(UDragDropOperation* Operation)
@@ -559,6 +561,13 @@ void UInventoryWidget::ShowItemDetails(UInvCell* Cell)
 	if (DetailsSplitBtn) { DetailsSplitBtn->SetVisibility(Cell->bDraggable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 	StashContent->SetVisibility(ESlateVisibility::Collapsed);
 	DetailsContent->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+}
+
+void UInventoryWidget::BeginDragGhost(UInvCell* Cell)
+{
+	if (!Cell) { return; }
+	Cell->SetRenderOpacity(0.3f); // bron-cel half-transparant zolang je sleept
+	DragGhostCell = Cell;
 }
 
 void UInventoryWidget::OpenSplitPopup(int32 StackId)
@@ -972,6 +981,13 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	// Drag-ghost herstellen zodra het slepen klaar is (drop OF cancel) -> bron-cel weer vol zichtbaar.
+	if (DragGhostCell.IsValid() && !FSlateApplication::Get().IsDragDropping())
+	{
+		DragGhostCell->SetRenderOpacity(1.f);
+		DragGhostCell.Reset();
+	}
 
 	UInventoryComponent* Inv = GetInv();
 
