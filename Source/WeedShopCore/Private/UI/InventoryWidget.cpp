@@ -48,15 +48,8 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		// Buitenkant: afgeronde kaart met een dunne accent-rand wanneer er een item in zit.
 		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CellRoot"));
 		FSlateBrush RB = WeedUI::Rounded(Bg, Radius);
-		if (bHasIcon)
-		{
-			// Strain-getagde items: per-strain gekleurde, iets dikkere frame (matcht de tag-pill).
-			const bool bTagged = !Tag.IsEmpty();
-			RB.OutlineSettings.Width = bTagged ? 2.0f : 1.5f;
-			RB.OutlineSettings.Color = bTagged
-				? FSlateColor(WeedUI::TagColor(Tag, 0.95f, 0.70f))
-				: FSlateColor(FLinearColor(Accent.R, Accent.G, Accent.B, 0.55f));
-		}
+		// Geen gekleurde rand meer om gevulde cellen (user: niet consistent met de hotbar). De per-strain
+		// tag-pill onderaan blijft wél gekleurd; de cel zelf is gewoon de afgeronde bg.
 		Root->SetBrush(RB);
 		Root->SetPadding(FMargin(bHotbar ? 4.f : 7.f));
 		WidgetTree->RootWidget = Root;
