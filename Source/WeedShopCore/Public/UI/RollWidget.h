@@ -61,4 +61,5 @@ protected:
 	// Voor verandering-detectie (alleen bijwerken als er iets wijzigt -> geen per-frame werk).
 	int32 LastGrams = -1;
 	int32 LastMaxG = -2;
+	int32 LastWeedSig = -1; // change-sig van de bruikbare wiet-voorraad (voorraadwijziging bij open scherm -> preview/Load mee-updaten)
 };

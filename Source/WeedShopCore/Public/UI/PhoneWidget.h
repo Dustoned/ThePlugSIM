@@ -15,10 +15,35 @@ class UPhoneWidget;
 class UCanvasPanel;
 class UBorder;
 class UVerticalBox;
+class UOverlay;
 class UHorizontalBox;
 class UTextBlock;
 class UUniformGridPanel;
 class UWidget;
+
+// Per-winkel-app snapshot van de gedeelde winkel-member-refs (StoreScroll/pools/tabs/AppCats/...). Zo kan een
+// switch tussen winkel-apps (Grow/Supplies/Sell/Hash) de refs HERSTELLEN uit de cache i.p.v. het paneel te
+// herbouwen -> geen ClearChildren, geen flash. De winkel-panelen zelf blijven persistent gecacht in AppPanels.
+USTRUCT()
+struct FPhoneStoreRefs
+{
+	GENERATED_BODY()
+
+	UPROPERTY() TObjectPtr<class UScrollBox> Scroll = nullptr;
+	UPROPERTY() TObjectPtr<class UVerticalBox> Footer = nullptr;
+	UPROPERTY() TObjectPtr<class UTextBlock> CartText = nullptr;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> CartToggle = nullptr;
+	UPROPERTY() TObjectPtr<class UTextBlock> PackagesLabel = nullptr;
+	UPROPERTY() TArray<TObjectPtr<class UBorder>> RowPool;
+	UPROPERTY() TArray<TObjectPtr<class UBorder>> FooterPool;
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> TabBtns;
+	UPROPERTY() TMap<FName, TObjectPtr<class UTextBlock>> QtyTexts;
+	TArray<FString> RowSigs;   // geen UObject -> geen UPROPERTY nodig
+	TArray<FString> FooterSigs;
+	TArray<int32> Cats;
+	bool bSell = false;
+	int32 LastCat = -1;
+};
 
 // Knop die een actie-id + parameter onthoudt en bij klik terugroept naar de telefoon-widget.
 UCLASS()
@@ -100,19 +125,45 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> CashText;
 	UPROPERTY() TObjectPtr<class UProgressBar> LevelXpBar; // XP-voortgang naar het volgende level (onder de statusbalk)
 	UPROPERTY() TObjectPtr<UTextBlock> LevelXpText;        // "120 / 300 XP" naast de balk
-	UPROPERTY() TObjectPtr<UVerticalBox> ContentBox;
+	UPROPERTY() TObjectPtr<UOverlay> ContentBox; // Overlay: de per-app panelen stapelen -> inactieve panelen blijven gearrangeerd (Hidden) i.p.v. Collapsed, dus app-open is instant zonder her-layout-flikker
+	// Persistente per-app panelen: één VerticalBox per app (Key = tab-index, -1 = home) die in ContentBox blijft
+	// hangen. App-wissel = puur zichtbaarheid togglen (geen ClearChildren -> geen flash); alleen een ECHTE
+	// data-wijziging (bContentDirty) herbouwt het panel van die ene app. ActiveContent = het panel dat nu bouwt/toont.
+	UPROPERTY() TMap<int32, TObjectPtr<class UVerticalBox>> AppPanels;
+	UPROPERTY() TObjectPtr<class UVerticalBox> ActiveContent;
+	// Pre-warm: we bouwen ALLE app-panelen alvast op, GESPREID (1 paneel per tick) en TERWIJL DE TELEFOON DICHT
+	// IS — dus tijdens/vlak na de load, achter het boot-scherm, zonder runtime-hitch. Zo is óók de eerste open
+	// van elke app flash-vrij (anders bouwt de lazy cache pas bij de eerste open per sessie, en die eerste-open-
+	// flash komt na elke game-restart terug). Tijdens het bouwen van één stap sturen bPrewarmHome/PrewarmApp de
+	// key-keuze in RefreshContent i.p.v. de live Phone-status.
+	bool bPrewarming = false;   // true alleen tijdens het bouwen van één stap (key-override actief)
+	bool bPrewarmHome = false;
+	int32 PrewarmApp = 0;
+	bool bPrewarmDone = false;  // true zodra alle panelen gespreid zijn voorgebouwd
+	int32 PrewarmCursor = 0;    // welke prewarm-stap we nu bouwen (0 = home, 1.. = app-tabs, Lab overgeslagen)
+	int32 SavedSupplierCat = -1;// winkel-categorie-snapshot (hersteld na de laatste prewarm-stap; -1 = nog niet genomen)
+	void PrewarmStep();         // bouwt het volgende ENE paneel deze tick (of finaliseert)
 	// Ongelezen-badge op de Messages-app in het home-rooster (live bijgewerkt, geen rebuild -> geen flash).
 	UPROPERTY() TObjectPtr<UBorder> MsgAppBadgePill;
 	UPROPERTY() TObjectPtr<UTextBlock> MsgAppBadgeText;
 	UPROPERTY() TObjectPtr<UBorder> GoalsAppBadgePill;
 	UPROPERTY() TObjectPtr<UTextBlock> GoalsAppBadgeText;
 	int32 GetClaimableGoals() const;  // aantal behaalde-maar-niet-geclaimde doelen (voor de badge)
+	int32 GoalsSignature() const;     // change-sig van de doelen (voltooiing/claim/voortgang) -> live-refresh Goals-app
 
 	// Staat-tracking voor het verversen van de inhoud.
 	bool bLastHome = true;
 	int32 bLastApp = -1;
 	bool bContentDirty = true;
 	float LastStatsRefresh = 0.f; // throttle voor de live leaderboard-refresh
+	// Welk store-app-paneel de gedeelde winkel-member-refs (StoreScroll/StoreTabBtns/AppCats/...) nu beschrijven.
+	// De 4 store-apps delen die refs; hiermee herbouwen we bij terugkeer naar een ANDER store-paneel de refs.
+	int32 StoreMembersOwnerApp = -1;
+
+	// Per-app cache van de winkel-refs, zodat switchen tussen winkel-apps de refs herstelt i.p.v. herbouwt (geen flash).
+	UPROPERTY() TMap<int32, FPhoneStoreRefs> StoreRefsByApp;
+	void SaveStoreRefs(int32 App);    // huidige gedeelde winkel-refs -> cache[App]
+	void RestoreStoreRefs(int32 App); // cache[App] -> gedeelde winkel-refs
 
 	void BuildShell(UCanvasPanel* Root);
 	void RefreshContent();
@@ -141,10 +192,38 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> PickerClockText;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> PickerProposeBtn;
 	FName PickerContact = NAME_None;
-	// Bouwt de Berichten-app: gesprekkenlijst of de open chat-thread.
+	// Bouwt de Berichten-app: één keer een persistente shell (lijst-scroll + thread-root met alle vaste
+	// sub-secties). Daarna verversen RefreshChatViews/List/Thread ALLES in-place -> nooit meer een paneel-rebuild
+	// bij open/back/accept/decline/propose/offer of een binnenkomend bericht (geen flash).
 	void BuildChatApp();
+	// Toggelt lijst vs thread (zichtbaarheid) en ververst de zichtbare kant in-place.
+	void RefreshChatViews();
+	// Reconcilieert de gesprekkenlijst-kaarten in-place (nieuw/weg contact); NOOIT ClearChildren.
+	void RefreshChatList();
+	// Werkt de open thread in-place bij (header/tier/afspraak/bubbels-pool/wacht/accept/offer/picker); NOOIT ClearChildren.
+	void RefreshChatThread();
 	// Verandert als er een bericht bijkomt of een status wijzigt (voor live verversen).
 	int32 MessagesSignature() const;
+
+	// --- Persistente chat-shell (één keer gebouwd in BuildChatApp; daarna alleen in-place ververst) ---
+	UPROPERTY() TObjectPtr<class UScrollBox> ChatListScroll;   // gesprekkenlijst-container (kaart-pool per contact)
+	UPROPERTY() TObjectPtr<UVerticalBox> ChatThreadRoot;       // thread-container met alle vaste sub-secties
+	// Thread-sub-widgets (persistent; getoond/verborgen + tekst/inhoud in-place bijgewerkt).
+	UPROPERTY() TObjectPtr<UTextBlock> ChatHeaderName;         // contact-naam in de thread-header
+	UPROPERTY() TObjectPtr<UBorder> ChatTierBox;               // klant-tier-box (verborgen als geen registry)
+	UPROPERTY() TObjectPtr<UTextBlock> ChatTierLabel;
+	UPROPERTY() TObjectPtr<class UProgressBar> ChatTierBar;
+	UPROPERTY() TObjectPtr<UBorder> ChatApptBox;               // afspraak-balk-box (arrives/at-door; wraps ApptBar)
+	UPROPERTY() TObjectPtr<class UScrollBox> ChatBubbleScroll; // bubbel-container (bubbel-pool)
+	UPROPERTY() TObjectPtr<UTextBlock> ChatNoMsgText;          // "No messages with this contact yet."
+	UPROPERTY() TObjectPtr<UBorder> ChatWaitBox;               // wacht-balk-box (wraps WaitBar)
+	UPROPERTY() TObjectPtr<UHorizontalBox> ChatRespondRow;     // Accept/Decline-rij
+	UPROPERTY() TObjectPtr<UVerticalBox> ChatOfferSection;     // offer-toggle + OfferBox + tijd-kiezer (samen tonen/verbergen)
+	UPROPERTY() TObjectPtr<UTextBlock> ChatPickerPrompt;       // "Can't make it? Pick a time:"
+	UPROPERTY() TObjectPtr<class UWeedActionButton> ChatProposeBtn;   // "Propose this time"
+	// Bubbel-pool (patroon van FillStoreListRows): per-bericht-signatuur; alleen gewijzigde bubbel krijgt nieuwe inhoud.
+	UPROPERTY() TArray<TObjectPtr<UBorder>> ChatBubblePool;
+	TArray<FString> ChatBubbleSigs;                            // geen UObject -> geen UPROPERTY nodig
 	// True als dit bericht voor de LOKALE speler is (competitive = eigen telefoon; co-op = altijd).
 	bool IsMsgForLocal(const struct FPhoneMessage& M) const;
 
@@ -225,7 +304,10 @@ protected:
 	static FLinearColor UrgencyColor(float Frac, bool bReply = false);
 	UPROPERTY() TMap<FName, TObjectPtr<class UProgressBar>> ListApptBars; // per contact in de lijst
 	UPROPERTY() TMap<FName, TObjectPtr<class UBorder>> ListCards;         // per contact (live re-tint)
-	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> ListPreviews;         // per contact (live "arrives in / left"-tekst)
+	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> ListPreviews;         // per contact (live "arrives in / left"-tekst + laatste bericht)
+	UPROPERTY() TMap<FName, TObjectPtr<class UBorder>> ListBadges;        // per contact: ongelezen-badge (altijd gebouwd, live getoggled)
+	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> ListBadgeTexts;       // per contact: het ongelezen-aantal (live)
+	UPROPERTY() TMap<FName, TObjectPtr<UTextBlock>> ListStamps;           // per contact: tijdstempel laatste bericht (live)
 	void UpdateListBarsLive();         // werkt de lijst-balken + kleuren + preview live bij (geen rebuild)
 
 	void BuildPackagesApp();           // bouwt de losse Packages-app in ContentBox
@@ -233,6 +315,21 @@ protected:
 	void FillPotUpgradesInto(class UScrollBox* Scroll); // "Pot Upgrades"-tab: per geplaatste pot (thans niet aangeroepen)
 
 	// Bank-app (na de telefoon-upgrade): storten (witwassen) + geld sturen naar co-op vrienden.
+	// PERSISTENT: de ontgrendelde bank-kaart wordt ÉÉN keer gebouwd; alleen de twee dynamische teksten (saldo +
+	// cash-to-deposit) werken IN-PLACE bij in NativeTick (geen paneel-herbouw -> geen flash). De sig hieronder dekt
+	// ALLEEN de structurele unlock/ATM-overgang (upgrade-prompt <-> bank-kaart); dan mag het paneel één keer herbouwen.
 	void BuildBankApp();
-	int32 LastBankSig = -1;
+	UPROPERTY() TObjectPtr<UTextBlock> BankBalanceText; // grote saldo-waarde (bank cents) - in-place
+	UPROPERTY() TObjectPtr<UTextBlock> BankCashText;    // "Cash to deposit: EUR X" (cash cents) - in-place
+	UPROPERTY() TObjectPtr<UVerticalBox> BankLockedBox;   // upgrade-prompt (geblokkeerd) - vast gebouwd, getoggled
+	UPROPERTY() TObjectPtr<UVerticalBox> BankUnlockedBox; // bank-kaart (ontgrendeld) - vast gebouwd, getoggled
+	int32 LastBankSig = -1;      // structurele unlock/ATM-staat (0 = geblokkeerd, 1 = ontgrendeld/ATM)
+	int32 BankUnlockSignature() const; // ALLEEN de mobile-banking/ATM-beschikbaarheid (upgrade-prompt <-> bank-kaart)
+	int32 LastGoalsSig = 0;
+
+	// Contacts-app (app-index 2): EIGEN structurele sig = alleen de contact-SET (aantal + hash van de contact-ids).
+	// Zo herbouwt Contacts NIET bij een nieuw bericht/afspraak-fase van een BESTAAND contact (dat gaf flits via de
+	// gedeelde MessagesSignature-tak); alleen een NIEUW/weg contact herbouwt 't één keer.
+	int32 LastContactsSig = 0;
+	int32 ContactsSignature() const;
 };

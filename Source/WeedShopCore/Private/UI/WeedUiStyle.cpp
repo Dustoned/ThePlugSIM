@@ -63,15 +63,15 @@ namespace WeedUI
 
 	FSlateFontInfo Font(int32 Size, bool bBold)
 	{
-		// Project-font = Aileron (uit de Dark GUI-kit). Eenmalig laden + ge-root; valt terug op de
+		// Project-font = Exo (uit de Minimalist GUI-kit). Eenmalig laden + ge-root; valt terug op de
 		// engine-default als het asset er niet is, zodat de UI nooit zonder font komt te zitten.
-		static const TCHAR* Base = TEXT("/Game/dark-gui-main-menu-pro-kit---complete-solution--honeti/dark-gui-main-menu-pro-kit---complete-solution--honeti/ultimate_dark_gui/fonts/");
+		static const TCHAR* Base = TEXT("/Game/minimalist_gui/fonts/");
 		static UObject* Reg = nullptr; static UObject* Bld = nullptr; static bool bInit = false;
 		if (!bInit)
 		{
 			bInit = true;
-			Reg = LoadObject<UObject>(nullptr, *(FString(Base) + TEXT("f_Aileron-Regular.f_Aileron-Regular")));
-			Bld = LoadObject<UObject>(nullptr, *(FString(Base) + TEXT("f_Aileron-SemiBold.f_Aileron-SemiBold")));
+			Reg = LoadObject<UObject>(nullptr, *(FString(Base) + TEXT("Exo-Regular_Font.Exo-Regular_Font")));
+			Bld = LoadObject<UObject>(nullptr, *(FString(Base) + TEXT("Exo-SemiBold_Font.Exo-SemiBold_Font")));
 			if (Reg) { Reg->AddToRoot(); }
 			if (Bld) { Bld->AddToRoot(); }
 		}

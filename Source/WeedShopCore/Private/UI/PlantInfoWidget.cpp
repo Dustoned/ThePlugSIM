@@ -122,7 +122,30 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	ThcText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColGood(), false, true);
 	UHorizontalBoxSlot* TS = HRow->AddChildToHorizontalBox(ThcText);
 	TS->SetVerticalAlignment(VAlign_Center); TS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+	YieldRow = HRow;
 	{ UVerticalBoxSlot* HRS = VB->AddChildToVerticalBox(HRow); HRS->SetHorizontalAlignment(HAlign_Center); HRS->SetPadding(FMargin(0.f, 7.f, 0.f, 2.f)); } // yield+thc-rij gecentreerd
+
+	// --- Conditie-badges (mold / pest): vast gebouwd, alleen zichtbaar zodra een plek besmet is. ---
+	// Icoon (drop-in PNG uit Icons/<key>.png) + korte label. Pest gebruikt de bestaande spray-icon;
+	// mold valt terug op een glyph tot er een 'mold.png' in Icons staat.
+	ConditionRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	auto MakeBadge = [this](TObjectPtr<UHorizontalBox>& Out, const FString& IcoKey, const FString& Label, const FLinearColor& Tint)
+	{
+		Out = WidgetTree->ConstructWidget<UHorizontalBox>();
+		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>(); Sz->SetWidthOverride(24.f); Sz->SetHeightOverride(24.f);
+		Sz->SetContent(WeedUI::UiGlyph(WidgetTree, IcoKey, 24.f, Tint, WeedUI::EIcon::Leaf));
+		Out->AddChildToHorizontalBox(Sz)->SetVerticalAlignment(VAlign_Center);
+		UTextBlock* T = WeedUI::Text(WidgetTree, Label, 13, Tint, false, true);
+		UHorizontalBoxSlot* BS = Out->AddChildToHorizontalBox(T);
+		BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+		Out->SetVisibility(ESlateVisibility::Collapsed);
+	};
+	MakeBadge(MoldBadge, TEXT("spray"), TEXT("Mold"), FLinearColor(0.78f, 0.86f, 0.55f)); // schimmel = spray-icon (zelfde als shop), groengrijze tint om van pest te scheiden
+	MakeBadge(PestBadge, TEXT("spray"), TEXT("Pest"), FLinearColor(1.f, 0.55f, 0.4f));     // ongedierte = oranjerood
+	ConditionRow->AddChildToHorizontalBox(MoldBadge)->SetPadding(FMargin(0.f, 0.f, 16.f, 0.f));
+	ConditionRow->AddChildToHorizontalBox(PestBadge);
+	{ UVerticalBoxSlot* CRS = VB->AddChildToVerticalBox(ConditionRow); CRS->SetHorizontalAlignment(HAlign_Center); CRS->SetPadding(FMargin(0.f, 3.f, 0.f, 1.f)); }
+	ConditionRow->SetVisibility(ESlateVisibility::Collapsed);
 
 	// Aarde + upgrades (klein, compact).
 	// Soil/upgrades/hint staan NIET meer op de kaart (info komt bij de pot-interact); members blijven voor NativeTick.
@@ -167,6 +190,16 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		FString Title = StrainName; // THC staat duidelijk bij de opbrengst (geen dubbele weergave)
 		if (NumSlots > 1) { Title += FString::Printf(TEXT("   (%d/%d)"), Plant->GetPlantedCount(), NumSlots); }
 		TitleText->SetText(FText::FromString(Title));
+		// Naam in de per-strain tag-kleur (zelfde hue als de strain-tags in de inventory, iets helderder voor leesbaarheid).
+		{
+			const FName StrainId = Plant->GetPrimaryStrainId();
+			if (!StrainId.IsNone())
+			{
+				const FString Code = WeedUI::ItemTagShort(FName(*(FString(TEXT("Bud_")) + StrainId.ToString())));
+				TitleText->SetColorAndOpacity(FSlateColor(WeedUI::TagColor(Code, 0.9f, 0.72f)));
+			}
+			else { TitleText->SetColorAndOpacity(FSlateColor(WeedUI::ColAccent())); }
+		}
 		if (RingRow) { RingRow->SetVisibility(ESlateVisibility::HitTestInvisible); }
 
 		// Zet een ring (Percent + Color) via z'n dynamische materiaal.
@@ -206,7 +239,19 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			HealthText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Care * 100.f)));
 			HealthText->SetColorAndOpacity(FSlateColor(SickN > 0 ? WeedUI::ColWarn() : WeedUI::ColText()));
 		}
-		YieldText->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+		// Conditie-badges: toon mold en/of pest zodra een plek besmet is (1 = mold, 2 = pest).
+		bool bMold = false, bPest = false;
+		for (int32 i = 0; i < NumSlots; ++i)
+		{
+			const uint8 A = Plant->GetSlotAfflict(i);
+			if (A == 1) { bMold = true; } else if (A == 2) { bPest = true; }
+		}
+		if (MoldBadge)      { MoldBadge->SetVisibility(bMold ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+		if (PestBadge)      { PestBadge->SetVisibility(bPest ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+		if (ConditionRow)   { ConditionRow->SetVisibility((bMold || bPest) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+
+		if (YieldRow) { YieldRow->SetVisibility(ESlateVisibility::HitTestInvisible); } // wiet erin: hele rij (weegschaal+THC-iconen + waarden) tonen
 		YieldText->SetText(FText::FromString(FString::Printf(TEXT("~%.0f g"), Plant->GetEstimatedTotalYield())));
 		if (ThcText) { ThcText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Plant->GetEstimatedThcPercent()))); }
 	}
@@ -215,8 +260,10 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		// Toon WELKE pot het is (bv. "Clay pot"), niet alleen "Empty pot".
 		const FString PotName = WeedUI::PrettyItemName(Plant->GetPotTier());
 		TitleText->SetText(FText::FromString(PotName.IsEmpty() ? TEXT("Empty pot") : (PotName + TEXT("  (empty)"))));
+		TitleText->SetColorAndOpacity(FSlateColor(WeedUI::ColTextDim())); // lege pot = geen strain-kleur
 		if (RingRow) { RingRow->SetVisibility(ESlateVisibility::Collapsed); }
-		YieldText->SetVisibility(ESlateVisibility::Collapsed);
+		if (ConditionRow) { ConditionRow->SetVisibility(ESlateVisibility::Collapsed); }
+		if (YieldRow) { YieldRow->SetVisibility(ESlateVisibility::Collapsed); } // lege pot: geen weegschaal/THC-iconen tonen
 	}
 
 	if (Plant->HasSoil())

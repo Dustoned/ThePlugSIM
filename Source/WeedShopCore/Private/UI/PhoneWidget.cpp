@@ -274,7 +274,7 @@ FReply UPhoneWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEven
 
 void UPhoneWidget::BuildSettingsApp()
 {
-	if (!ContentBox) { return; }
+	if (!ActiveContent) { return; }
 
 	// Categorie-knoppen. De 'Test'-tab (dag/nacht-switch e.d.) alleen in dev-modes (Sandbox/Testing), niet in een normaal spel.
 	SettingsTabBtns.Reset();
@@ -292,13 +292,13 @@ void UPhoneWidget::BuildSettingsApp()
 		CS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
 		SettingsTabBtns.Add(B);
 	}
-	ContentBox->AddChildToVerticalBox(Cats)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	ActiveContent->AddChildToVerticalBox(Cats)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
 	// Body in een ScrollBox zodat lange lijsten netjes binnen de telefoon blijven (scrollen ipv overlopen).
 	UScrollBox* BodyScroll = WidgetTree->ConstructWidget<UScrollBox>();
 	SettingsBody = WidgetTree->ConstructWidget<UVerticalBox>();
 	BodyScroll->AddChild(SettingsBody);
-	UVerticalBoxSlot* ScrollSlot = ContentBox->AddChildToVerticalBox(BodyScroll);
+	UVerticalBoxSlot* ScrollSlot = ActiveContent->AddChildToVerticalBox(BodyScroll);
 	ScrollSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	FillSettingsBody();
 }
@@ -1020,204 +1020,396 @@ int32 UPhoneWidget::MessagesSignature() const
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 	if (!Con) { return 0; }
 	const TArray<FPhoneMessage>& Msgs = Con->GetMessages();
-	// In een open chat-thread tellen alleen de berichten van DAT contact mee, zodat een appje van een
-	// ander contact je open thread niet herbouwt (geen flash). In de gesprekkenlijst telt alles.
+
+	if (OpenChatContact.IsNone())
+	{
+		// GESPREKKENLIJST: STRUCTURELE sig = welke contacten er zijn + hun afspraak-fase. NIET het bericht-aantal,
+		// de inhoud, tijdstempels of ongelezen-aantallen -> die werkt UpdateListBarsLive live in-place bij
+		// (preview/badge/timestamp/kleur). Zo herbouwt de lijst NIET bij elk nieuw bericht van een BESTAAND contact
+		// (dat gaf constant geflits); alleen een NIEUW/weg contact of een afspraak-fase-overgang herbouwt + hersorteert.
+		int32 Sig = 0, N = 0;
+		TArray<FName> Seen;
+		for (const FPhoneMessage& M : Msgs)
+		{
+			if (!IsMsgForLocal(M) || Seen.Contains(M.FromContactId)) { continue; }
+			Seen.Add(M.FromContactId);
+			float f; int32 s, p, c; const bool bU = GetApptUrgency(M.FromContactId, f, s, p, c);
+			Sig = Sig * 31 + (int32)GetTypeHash(M.FromContactId) + (bU ? (p + 1) * 101 : 0);
+			++N;
+		}
+		return Sig * 13 + N;
+	}
+
+	// OPEN THREAD: berichten van DIT contact (een nieuw bericht in de open chat voegt wél een bubble toe).
 	int32 Sig = 0, Cnt = 0;
 	for (const FPhoneMessage& M : Msgs)
 	{
-		if (!IsMsgForLocal(M)) { continue; }
-		if (!OpenChatContact.IsNone() && M.FromContactId != OpenChatContact) { continue; }
+		if (!IsMsgForLocal(M) || M.FromContactId != OpenChatContact) { continue; }
 		++Cnt;
 		Sig = Sig * 31 + (int32)M.Status + (M.bFromMe ? 5 : 0);
 	}
-	// GEEN urgentie-bucket meer: de balken + kleuren + sorteer-volgorde tijdens het aftellen werken live
-	// (UpdateListBarsLive) zonder herbouw. Zo herbouwt de lijst alleen nog bij een ECHT bericht-verschil,
-	// niet elke keer dat een afspraak-balk een kleur-drempel kruist (dat gaf onnodig geflits).
 	return Sig * 1000003 + Cnt;
 }
 
+int32 UPhoneWidget::ContactsSignature() const
+{
+	// STRUCTURELE sig van de Contacts-app: ALLEEN de contact-SET (aantal + hash van de contact-ids). NIET de
+	// relationship-waarde, afspraak-fase of berichten -> een nieuw bericht/afspraak van een BESTAAND contact
+	// herbouwt de Contacts-lijst niet (dat gaf flits via de gedeelde MessagesSignature). Alleen een NIEUW/weg
+	// contact wijzigt deze sig -> dan herbouwt de lijst één keer.
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return 0; }
+	int32 Sig = 0, N = 0;
+	for (const FPhoneContact& C : Con->GetContacts())
+	{
+		Sig = Sig * 31 + (int32)GetTypeHash(C.ContactId);
+		++N;
+	}
+	return Sig * 13 + N;
+}
+
+int32 UPhoneWidget::BankUnlockSignature() const
+{
+	// MINIMALE structurele sig: ALLEEN de mobile-banking/ATM-beschikbaarheid. Flipt deze staat, dan wisselt de
+	// upgrade-prompt <-> bank-kaart en mag het bank-paneel één keer herbouwen. Saldo/cash/transfers zitten er
+	// bewust NIET in -> die werken in-place bij (geen flash).
+	if (!Phone.IsValid()) { return -1; }
+	return (Phone->IsBankAppUnlocked() || Phone->IsBankViaAtm()) ? 1 : 0;
+}
+
+// Bouwt de Berichten-app als een PERSISTENTE shell in ActiveContent: één lijst-scroll + één thread-root met
+// alle vaste sub-secties. Dit draait maar één keer per paneel (bij bNew/prewarm-rebuild); daarna verversen
+// RefreshChatViews/List/Thread alles in-place, zodat GEEN enkele chat-interactie of binnenkomend bericht nog
+// het paneel via MarkDirty herbouwt (geen flash).
 void UPhoneWidget::BuildChatApp()
 {
+	// Alle chat-refs nullen: een verse BuildChatApp hoort bij een net-geleegd paneel (RefreshContent ClearChildren).
 	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None; // alleen geldig in een actieve-afspraak-thread
 	WaitBar = nullptr; WaitBarLabel = nullptr; WaitBarSentTime = -1.f;     // wacht-balk voor een open deal-bericht
-	OfferBox = nullptr; OfferToggleBtn = nullptr;                          // "Offer instead"-box (opnieuw gebouwd als een chat open is)
+	OfferBox = nullptr; OfferToggleBtn = nullptr;                          // "Offer instead"-box (gevuld bij open thread)
 	ListApptBars.Reset(); ListCards.Reset(); ListPreviews.Reset();         // lijst-urgentie-widgets (live bijgewerkt)
-	if (!Phone.IsValid()) { return; }
+	ListBadges.Reset(); ListBadgeTexts.Reset(); ListStamps.Reset();        // lijst-badge/timestamp per contact (live bijgewerkt)
+	ChatBubblePool.Reset(); ChatBubbleSigs.Reset();                        // bubbel-pool (verse scroll)
+	ChatListScroll = nullptr; ChatThreadRoot = nullptr;
+	ChatHeaderName = nullptr; ChatTierBox = nullptr; ChatTierLabel = nullptr; ChatTierBar = nullptr;
+	ChatApptBox = nullptr; ChatBubbleScroll = nullptr; ChatNoMsgText = nullptr; ChatWaitBox = nullptr;
+	ChatRespondRow = nullptr; ChatOfferSection = nullptr; ChatPickerPrompt = nullptr; ChatProposeBtn = nullptr;
+	PickerClockText = nullptr; PickerContact = NAME_None;
+	if (!Phone.IsValid() || !ActiveContent) { return; }
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 	if (!Con) { AddInfoRow(TEXT("No messages."), WeedUI::ColTextDim()); return; }
+
+	// ---- Lijst + thread stapelen in een OVERLAY (zelfde ruimte) zodat de INACTIEVE view op HIDDEN kan (blijft
+	// gearrangeerd + gerealiseerd, alleen niet getekend) i.p.v. Collapsed. Zo is switchen list<->thread én naar
+	// Messages toe instant, zonder her-layout-flikker. In een VerticalBox zou Hidden allebei ruimte laten innemen. ----
+	UOverlay* ChatOv = WidgetTree->ConstructWidget<UOverlay>();
+	UVerticalBoxSlot* COS = ActiveContent->AddChildToVerticalBox(ChatOv);
+	COS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	// ---- Gesprekkenlijst-container (persistent; kaarten reconciliëren in RefreshChatList) ----
+	ChatListScroll = WidgetTree->ConstructWidget<UScrollBox>();
+	UOverlaySlot* LS = ChatOv->AddChildToOverlay(ChatListScroll);
+	LS->SetHorizontalAlignment(HAlign_Fill); LS->SetVerticalAlignment(VAlign_Fill);
+
+	// ---- Thread-container (persistent; alle sub-secties vast, in-place bijgewerkt in RefreshChatThread) ----
+	ChatThreadRoot = WidgetTree->ConstructWidget<UVerticalBox>();
+	UOverlaySlot* TRS = ChatOv->AddChildToOverlay(ChatThreadRoot);
+	TRS->SetHorizontalAlignment(HAlign_Fill); TRS->SetVerticalAlignment(VAlign_Fill);
+
+	// Header: < Chats-knop + contact-naam (naam-tekst in-place bijgewerkt).
+	{
+		UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Head->AddChildToHorizontalBox(MakeActionBtn(TEXT("< Chats"), WeedUI::ColAccentDim(),
+			[this]() { OpenChatContact = NAME_None; bOfferStrainView = false; RefreshChatViews(); }, 11))->SetVerticalAlignment(VAlign_Center);
+		ChatHeaderName = MakeText(TEXT(""), 15, WeedUI::ColText());
+		UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(ChatHeaderName);
+		NS->SetVerticalAlignment(VAlign_Center); NS->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
+		ChatThreadRoot->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	}
+
+	// Klant-tier + XP-balk naar de volgende tier (getoond/verborgen + tekst/percent in-place).
+	{
+		ChatTierBox = WidgetTree->ConstructWidget<UBorder>();
+		ChatTierBox->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
+		ChatTierBox->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+		UVerticalBox* TV = WidgetTree->ConstructWidget<UVerticalBox>();
+		ChatTierBox->SetContent(TV);
+		ChatTierLabel = MakeText(TEXT(""), 11, WeedUI::ColText());
+		TV->AddChildToVerticalBox(ChatTierLabel);
+		ChatTierBar = WidgetTree->ConstructWidget<UProgressBar>();
+		ChatTierBar->SetFillColorAndOpacity(FLinearColor(0.45f, 0.75f, 1.f));
+		TV->AddChildToVerticalBox(ChatTierBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		ChatThreadRoot->AddChildToVerticalBox(ChatTierBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	}
+
+	// Afspraak-balk (fase 0=arrives / 1=at door). Box + label + bar persistent; ApptBar wordt hier gezet en
+	// door UpdateApptBarLive live bijgewerkt (de box wordt getoond/verborgen in RefreshChatThread).
+	{
+		ChatApptBox = WidgetTree->ConstructWidget<UBorder>();
+		ChatApptBox->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
+		ChatApptBox->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+		UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+		ChatApptBox->SetContent(VB);
+		ApptBarLabel = MakeText(TEXT("Waiting..."), 11, WeedUI::ColTextDim());
+		VB->AddChildToVerticalBox(ApptBarLabel);
+		ApptBar = WidgetTree->ConstructWidget<UProgressBar>();
+		VB->AddChildToVerticalBox(ApptBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		ChatThreadRoot->AddChildToVerticalBox(ChatApptBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	}
+
+	// Berichten-scroll (bubbel-pool) + "geen berichten"-tekst.
+	{
+		ChatBubbleScroll = WidgetTree->ConstructWidget<UScrollBox>();
+		UVerticalBoxSlot* TS = ChatThreadRoot->AddChildToVerticalBox(ChatBubbleScroll);
+		TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		ChatNoMsgText = MakeText(TEXT("No messages with this contact yet."), 12, WeedUI::ColTextDim());
+		ChatThreadRoot->AddChildToVerticalBox(ChatNoMsgText);
+	}
+
+	// Wacht-balk (onder een open deal-bericht): box + label + bar persistent; live in UpdateWaitBarLive.
+	{
+		ChatWaitBox = WidgetTree->ConstructWidget<UBorder>();
+		ChatWaitBox->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
+		ChatWaitBox->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+		UVerticalBox* WVB = WidgetTree->ConstructWidget<UVerticalBox>();
+		ChatWaitBox->SetContent(WVB);
+		WaitBarLabel = MakeText(TEXT("Waiting for your reply..."), 11, WeedUI::ColTextDim());
+		WVB->AddChildToVerticalBox(WaitBarLabel);
+		WaitBar = WidgetTree->ConstructWidget<UProgressBar>();
+		WaitBar->SetPercent(1.f);
+		WVB->AddChildToVerticalBox(WaitBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		ChatThreadRoot->AddChildToVerticalBox(ChatWaitBox)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+	}
+
+	// Accept/Decline-rij (alleen bij een open afspraak getoond).
+	{
+		ChatRespondRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+		UHorizontalBoxSlot* AS = ChatRespondRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("Accept"), WeedUI::ColAccentDim(),
+			[this]() { if (Phone.IsValid() && !OpenChatContact.IsNone()) { Phone->RespondChat(OpenChatContact, true); } RefreshChatThread(); }, 13));
+		AS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); AS->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
+		UHorizontalBoxSlot* DS = ChatRespondRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("Decline"), WeedUI::ColWarn(),
+			[this]() { if (Phone.IsValid() && !OpenChatContact.IsNone()) { Phone->RespondChat(OpenChatContact, false); } RefreshChatThread(); }, 13));
+		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+		ChatThreadRoot->AddChildToVerticalBox(ChatRespondRow)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	}
+
+	// Offer/tijd-kiezer-sectie (alleen bij een open afspraak getoond). Toggle + OfferBox + "pick a time" + stepper +
+	// "Propose this time" leven allemaal in ChatOfferSection; de OfferBox-INHOUD wordt bij RefreshChatThread gevuld.
+	{
+		ChatOfferSection = WidgetTree->ConstructWidget<UVerticalBox>();
+
+		OfferToggleBtn = MakeActionBtn(TEXT("Offer instead..."), WeedUI::ColAccentDim(), [this]()
+		{
+			bOfferStrainView = !bOfferStrainView;
+			if (OfferBox) { OfferBox->SetVisibility(bOfferStrainView ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+			if (OfferToggleBtn) { OfferToggleBtn->SetContent(MakeText(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."), 12, FLinearColor::White, true)); }
+		}, 12);
+		ChatOfferSection->AddChildToVerticalBox(OfferToggleBtn)->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
+
+		OfferBox = WidgetTree->ConstructWidget<UVerticalBox>();
+		OfferBox->SetVisibility(ESlateVisibility::Collapsed);
+		ChatOfferSection->AddChildToVerticalBox(OfferBox);
+
+		ChatPickerPrompt = MakeText(TEXT("Can't make it? Pick a time:"), 11, WeedUI::ColTextDim());
+		ChatOfferSection->AddChildToVerticalBox(ChatPickerPrompt)->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
+
+		// Klok-label wordt live bijgewerkt (Step-lambda's + NativeTick); de step-knoppen lezen de klok bij klik.
+		UHorizontalBox* Stepper = WidgetTree->ConstructWidget<UHorizontalBox>();
+		auto Step = [this](int32 Delta)
+		{
+			AWeedShopGameState* SGS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+			const int32 NowMins = (SGS && SGS->GetDayCycle()) ? (((int32)(SGS->GetDayCycle()->GetClockHour() * 60.f)) % 1440) : 0;
+			int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
+			Gap = FMath::Clamp(Gap + Delta, 30, 1410); // niet onder 30 min vooruit, niet naar gisteren
+			ProposeMins = (NowMins + Gap) % 1440;
+			if (PickerClockText) { PickerClockText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60))); }
+		};
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-1h"), WeedUI::ColSlot(), [Step]() { Step(-60); }, 13))->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-15m"), WeedUI::ColSlot(), [Step]() { Step(-15); }, 13))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+		UTextBlock* Clock = MakeText(TEXT("00:00"), 18, WeedUI::ColText());
+		PickerClockText = Clock;            // live bijwerken in NativeTick (geen rebuild -> geen flash)
+		UHorizontalBoxSlot* CS2 = Stepper->AddChildToHorizontalBox(Clock);
+		CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetHorizontalAlignment(HAlign_Center); CS2->SetVerticalAlignment(VAlign_Center);
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+15m"), WeedUI::ColSlot(), [Step]() { Step(15); }, 13))->SetPadding(FMargin(6.f, 0.f, 3.f, 0.f));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+1h"), WeedUI::ColSlot(), [Step]() { Step(60); }, 13));
+		ChatOfferSection->AddChildToVerticalBox(Stepper)->SetPadding(FMargin(0.f, 2.f, 0.f, 4.f));
+
+		// Knop leest de ACTUELE ProposeMins (member) bij klik, zodat live-bijwerken klopt.
+		ChatProposeBtn = MakeActionBtn(TEXT("Propose this time"), WeedUI::ColAccentDim(),
+			[this]() { if (Phone.IsValid() && !OpenChatContact.IsNone()) { Phone->ProposeChatTime(OpenChatContact, ProposeMins); } ProposeMins = -1; RefreshChatThread(); }, 13);
+		ChatOfferSection->AddChildToVerticalBox(ChatProposeBtn);
+
+		ChatThreadRoot->AddChildToVerticalBox(ChatOfferSection);
+	}
+
+	// Eerste keer meteen vullen (lijst of thread, afhankelijk van OpenChatContact).
+	RefreshChatViews();
+}
+
+// Toggelt lijst vs thread (puur zichtbaarheid, geen rebuild) en ververst de zichtbare kant in-place.
+void UPhoneWidget::RefreshChatViews()
+{
+	if (!ChatListScroll || !ChatThreadRoot) { return; }
+	const bool bThread = !OpenChatContact.IsNone();
+	// Inactieve view op HIDDEN (blijft gearrangeerd -> geen her-layout-flikker bij switchen), niet Collapsed.
+	ChatListScroll->SetVisibility(bThread ? ESlateVisibility::Hidden : ESlateVisibility::SelfHitTestInvisible);
+	ChatThreadRoot->SetVisibility(bThread ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden);
+	if (bThread) { RefreshChatThread(); }
+	else { ProposeMins = -1; RefreshChatList(); } // tijd-keuze reset zodra je de thread verlaat
+}
+
+// Reconcilieert de gesprekkenlijst-kaarten IN-PLACE: nieuwe contacten onderaan toevoegen, verdwenen contacten
+// verwijderen. NOOIT ClearChildren. De inhoud (preview/badge/timestamp/kleur/afspraak-balk) doet UpdateListBarsLive.
+// (Hersorteren op urgentie slaan we over: een nieuw contact onderaan toevoegen is prima -> geen flash.)
+void UPhoneWidget::RefreshChatList()
+{
+	if (!ChatListScroll || !Phone.IsValid()) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return; }
 	const TArray<FPhoneMessage>& Msgs = Con->GetMessages(); // nieuwste eerst
 
-	// ---- Gesprekkenlijst (geen chat open) ----
-	if (OpenChatContact.IsNone())
+	// Huidige contact-set (nieuwste-eerst volgorde).
+	TArray<FName> Order;
+	for (const FPhoneMessage& M : Msgs) { if (!IsMsgForLocal(M)) { continue; } Order.AddUnique(M.FromContactId); }
+
+	// Verdwenen contacten: kaart weghalen (RemoveFromParent) + uit alle lijst-maps.
+	TArray<FName> Gone;
+	for (const TPair<FName, TObjectPtr<UBorder>>& CK : ListCards) { if (!Order.Contains(CK.Key)) { Gone.Add(CK.Key); } }
+	for (const FName& Cid : Gone)
 	{
-		ProposeMins = -1; // tijd-keuze reset zodra je de thread verlaat
-		// Unieke contacten in volgorde van nieuwste bericht.
-		TArray<FName> Order;
-		for (const FPhoneMessage& M : Msgs) { if (!IsMsgForLocal(M)) { continue; } Order.AddUnique(M.FromContactId); }
-		if (Order.Num() == 0) { AddInfoRow(TEXT("No messages yet."), WeedUI::ColTextDim(), 13); return; }
-		// URGENTIE-sortering: contacten met een lopende afspraak bovenaan (meest urgent = kleinste fractie eerst),
-		// daarna de rest in de bestaande nieuwste-eerst-volgorde (stabiel). ForPlayerId-filter blijft via Order.
-		Order.StableSort([this](const FName& A, const FName& B)
-		{
-			float fa, fb; int32 sa, sb, pa, pb, ca, cb;
-			const bool ua = GetApptUrgency(A, fa, sa, pa, ca);
-			const bool ub = GetApptUrgency(B, fb, sb, pb, cb);
-			if (ua != ub) { return ua; }   // afspraken boven gewone chats
-			if (ua) { return fa < fb; }     // kleinere fractie = urgenter = hoger
-			return false;                    // anders recentheid-volgorde behouden
-		});
-
-		UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
-		UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
-		LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		for (const FName& Cid : Order)
-		{
-			// Laatste bericht + of er ONGELEZEN berichten van dit contact zijn (wist bij het openen van de chat).
-			FString LastBody; FText Name; float LastClock = -1.f;
-			for (const FPhoneMessage& M : Msgs)
-			{
-				if (!IsMsgForLocal(M)) { continue; }
-				if (M.FromContactId != Cid) { continue; }
-				if (LastBody.IsEmpty()) { LastBody = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); Name = M.SenderName; LastClock = M.SentClockHour; break; }
-			}
-			const bool bOpen = Phone.IsValid() && Phone->HasUnreadFrom(Cid);
-			// Lopende afspraak? -> live preview ("Arrives in M:SS" / "At the door - M:SS left") + urgentie-kleur.
-			float UFrac = 0.f; int32 USecs = 0, UPhase = 0, UClockM = 0;
-			const bool bUrgent = GetApptUrgency(Cid, UFrac, USecs, UPhase, UClockM);
-			if (bUrgent)
-			{
-				LastBody = (UPhase == 2) ? FString::Printf(TEXT("Reply needed - %d:%02d"), USecs / 60, USecs % 60)
-					: (UPhase == 0) ? FString::Printf(TEXT("Coming - arrives at %02d:%02d"), (UClockM / 60) % 24, UClockM % 60)
-					: FString::Printf(TEXT("At the door now - %d:%02d left"), USecs / 60, USecs % 60);
-			}
-			if (LastBody.Len() > 30) { LastBody = LastBody.Left(29) + TEXT("."); }
-
-			const FLinearColor U = UrgencyColor(UFrac, UPhase == 2);
-			UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
-			Card->SetBrush(RoundedBrush(bUrgent ? FLinearColor(U.R * 0.28f, U.G * 0.28f, U.B * 0.28f, 0.97f)
-				: (bOpen ? WeedUI::ColAccentDim(0.97f) : WeedUI::ColInner(0.95f)), 8.f));
-			ListCards.Add(Cid, Card);
-			Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
-			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			Card->SetContent(Row);
-			UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-			Info->AddChildToVerticalBox(MakeText(Name.ToString(), 14, WeedUI::ColText()));
-			if (GS && GS->GetNpcRegistry())
-			{
-				const int32 Tr = GS->GetNpcRegistry()->GetCustomerTier(Cid);
-				const FLinearColor TCol = (Tr >= 5) ? FLinearColor(1.f, 0.8f, 0.3f) : (Tr >= 4 ? FLinearColor(0.8f, 0.7f, 1.f) : FLinearColor(0.55f, 0.7f, 0.6f));
-				Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s customer"), *UNpcRegistryComponent::TierName(Tr)), 9, TCol));
-			}
-			UTextBlock* Prev = MakeText(LastBody, 10, WeedUI::ColTextDim());
-			Prev->SetClipping(EWidgetClipping::ClipToBounds);
-			ListPreviews.Add(Cid, Prev);
-			Info->AddChildToVerticalBox(Prev);
-			if (bUrgent)
-			{
-				// Slanke aftelbalk onder de preview - in één oogopslag zie je hoeveel tijd je nog hebt.
-				USizeBox* BarBox = WidgetTree->ConstructWidget<USizeBox>();
-				BarBox->SetHeightOverride(5.f);
-				UProgressBar* LB = WidgetTree->ConstructWidget<UProgressBar>();
-				LB->SetPercent(UFrac);
-				LB->SetFillColorAndOpacity(U);
-				LB->SetVisibility(ESlateVisibility::HitTestInvisible);
-				BarBox->SetContent(LB);
-				Info->AddChildToVerticalBox(BarBox)->SetPadding(FMargin(0.f, 3.f, 6.f, 0.f));
-				ListApptBars.Add(Cid, LB);
-			}
-			UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
-			IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
-			// Tijdstempel van het laatste bericht (HH:MM, in-game klok) rechts in de rij.
-			if (LastClock >= 0.f)
-			{
-				const int32 Hh = (int32)LastClock; const int32 Mm = (int32)((LastClock - Hh) * 60.f);
-				UHorizontalBoxSlot* TsS = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("%02d:%02d"), Hh, Mm), 9, WeedUI::ColTextDim()));
-				TsS->SetVerticalAlignment(VAlign_Top); TsS->SetPadding(FMargin(6.f, 1.f, 2.f, 0.f));
-			}
-			// Aantal-badge: groen pilletje met het aantal ongelezen berichten van dit contact (i.p.v. enkel "NEW").
-			const int32 UnreadN = Phone.IsValid() ? Phone->GetUnreadCountFrom(Cid) : 0;
-			if (UnreadN > 0)
-			{
-				UBorder* Badge = WidgetTree->ConstructWidget<UBorder>();
-				Badge->SetBrush(RoundedBrush(WeedUI::ColGood(1.f), 9.f));
-				Badge->SetPadding(FMargin(UnreadN > 9 ? 6.f : 8.f, 2.f, UnreadN > 9 ? 6.f : 8.f, 2.f));
-				Badge->SetContent(MakeText(FString::Printf(TEXT("%d"), UnreadN), 12, WeedUI::ColBg()));
-				UHorizontalBoxSlot* BS = Row->AddChildToHorizontalBox(Badge);
-				BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
-			}
-			const FName Pick = Cid;
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), WeedUI::ColAccentDim(),
-				[this, Pick]() { OpenChatContact = Pick; bOfferStrainView = false; ProposeMins = -1; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
-			List->AddChild(Card);
-			List->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
-		}
-		return;
+		if (TObjectPtr<UBorder>* C = ListCards.Find(Cid)) { if (*C) { (*C)->RemoveFromParent(); } }
+		ListCards.Remove(Cid); ListPreviews.Remove(Cid); ListApptBars.Remove(Cid);
+		ListBadges.Remove(Cid); ListBadgeTexts.Remove(Cid); ListStamps.Remove(Cid);
 	}
 
-	// ---- Open chat-thread ----
+	// Nieuwe contacten: bouw een kaart (met een ALTIJD-aanwezige afspraak-balk zodat urgentie later live kan
+	// aan/uit zonder herbouw) en voeg 'm onderaan toe. UpdateListBarsLive doet daarna alle inhoud/kleur.
+	for (const FName& Cid : Order)
+	{
+		if (ListCards.Contains(Cid)) { continue; }
+
+		FText Name = FText::FromName(Cid);
+		for (const FPhoneMessage& M : Msgs) { if (IsMsgForLocal(M) && M.FromContactId == Cid) { Name = M.SenderName; break; } }
+
+		UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
+		Card->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
+		Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+		ListCards.Add(Cid, Card);
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Card->SetContent(Row);
+		UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+		Info->AddChildToVerticalBox(MakeText(Name.ToString(), 14, WeedUI::ColText()));
+		if (GS && GS->GetNpcRegistry())
+		{
+			const int32 Tr = GS->GetNpcRegistry()->GetCustomerTier(Cid);
+			const FLinearColor TCol = (Tr >= 5) ? FLinearColor(1.f, 0.8f, 0.3f) : (Tr >= 4 ? FLinearColor(0.8f, 0.7f, 1.f) : FLinearColor(0.55f, 0.7f, 0.6f));
+			Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s customer"), *UNpcRegistryComponent::TierName(Tr)), 9, TCol));
+		}
+		UTextBlock* Prev = MakeText(TEXT(""), 10, WeedUI::ColTextDim());
+		Prev->SetClipping(EWidgetClipping::ClipToBounds);
+		ListPreviews.Add(Cid, Prev);
+		Info->AddChildToVerticalBox(Prev);
+		// Slanke aftelbalk: ALTIJD gebouwd (percent 0 = onzichtbaar-leeg) + opgeslagen -> live aan/uit zonder herbouw.
+		{
+			USizeBox* BarBox = WidgetTree->ConstructWidget<USizeBox>();
+			BarBox->SetHeightOverride(5.f);
+			UProgressBar* LB = WidgetTree->ConstructWidget<UProgressBar>();
+			LB->SetPercent(0.f);
+			LB->SetVisibility(ESlateVisibility::HitTestInvisible);
+			BarBox->SetContent(LB);
+			Info->AddChildToVerticalBox(BarBox)->SetPadding(FMargin(0.f, 3.f, 6.f, 0.f));
+			ListApptBars.Add(Cid, LB);
+		}
+		UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
+		IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
+		// Tijdstempel (HH:MM) rechts — ALTIJD gebouwd + opgeslagen (live via UpdateListBarsLive).
+		{
+			UTextBlock* Stamp = MakeText(TEXT(""), 9, WeedUI::ColTextDim());
+			ListStamps.Add(Cid, Stamp);
+			UHorizontalBoxSlot* TsS = Row->AddChildToHorizontalBox(Stamp);
+			TsS->SetVerticalAlignment(VAlign_Top); TsS->SetPadding(FMargin(6.f, 1.f, 2.f, 0.f));
+		}
+		// Ongelezen-badge: ALTIJD gebouwd (verborgen bij 0) + opgeslagen -> live togglebaar zonder herbouw.
+		{
+			UBorder* Badge = WidgetTree->ConstructWidget<UBorder>();
+			Badge->SetBrush(RoundedBrush(WeedUI::ColGood(1.f), 9.f));
+			Badge->SetPadding(FMargin(7.f, 2.f, 7.f, 2.f));
+			UTextBlock* BadgeT = MakeText(TEXT("0"), 12, WeedUI::ColBg());
+			Badge->SetContent(BadgeT);
+			Badge->SetVisibility(ESlateVisibility::Collapsed);
+			ListBadges.Add(Cid, Badge); ListBadgeTexts.Add(Cid, BadgeT);
+			UHorizontalBoxSlot* BS = Row->AddChildToHorizontalBox(Badge);
+			BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
+		}
+		const FName Pick = Cid;
+		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), WeedUI::ColAccentDim(),
+			[this, Pick]() { OpenChatContact = Pick; bOfferStrainView = false; ProposeMins = -1; RefreshChatViews(); }, 11))->SetVerticalAlignment(VAlign_Center);
+		ChatListScroll->AddChild(Card);
+		ChatListScroll->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
+	}
+
+	// Inhoud (preview/badge/timestamp/kleur/afspraak-balk) van ALLE kaarten bijwerken.
+	UpdateListBarsLive();
+}
+
+// Werkt de open thread voor OpenChatContact IN-PLACE bij (NOOIT ClearChildren op ChatThreadRoot):
+// header-naam, tier, afspraak-balk, bubbels (pool), wacht-balk, accept/decline, offer + tijd-kiezer.
+void UPhoneWidget::RefreshChatThread()
+{
+	if (!ChatThreadRoot || OpenChatContact.IsNone() || !Phone.IsValid()) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return; }
+	const TArray<FPhoneMessage>& Msgs = Con->GetMessages(); // nieuwste eerst
+
 	Phone->MarkChatSeen(OpenChatContact); // berichten van deze persoon zijn nu gelezen -> notificatie-bubble weg
+
+	// Header-naam.
 	FText ContactName = FText::FromName(OpenChatContact);
 	for (const FPhoneContact& C : Con->GetContacts()) { if (C.ContactId == OpenChatContact) { ContactName = C.DisplayName; break; } }
+	if (ChatHeaderName) { ChatHeaderName->SetText(ContactName); }
 
-	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
-	Head->AddChildToHorizontalBox(MakeActionBtn(TEXT("< Chats"), WeedUI::ColAccentDim(),
-		[this]() { OpenChatContact = NAME_None; bOfferStrainView = false; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
-	UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(MakeText(ContactName.ToString(), 15, WeedUI::ColText()));
-	NS->SetVerticalAlignment(VAlign_Center); NS->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
-	ContentBox->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-
-	// Klant-tier + XP-balk naar de volgende tier.
-	if (GS && GS->GetNpcRegistry())
+	// Klant-tier + XP-balk (box tonen/verbergen op basis van registry).
+	if (ChatTierBox)
 	{
-		UNpcRegistryComponent* Reg = GS->GetNpcRegistry();
-		const int32 Tier = Reg->GetCustomerTier(OpenChatContact);
-		const float Frac = Reg->GetTierProgress01(OpenChatContact);
-		UBorder* TB = WidgetTree->ConstructWidget<UBorder>();
-		TB->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
-		TB->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
-		UVerticalBox* TV = WidgetTree->ConstructWidget<UVerticalBox>();
-		TB->SetContent(TV);
-		const FString TLbl = (Tier >= 5)
-			? FString::Printf(TEXT("Tier: %s  (max)"), *UNpcRegistryComponent::TierName(Tier))
-			: FString::Printf(TEXT("Tier: %s  ->  %s"), *UNpcRegistryComponent::TierName(Tier), *UNpcRegistryComponent::TierName(Tier + 1));
-		TV->AddChildToVerticalBox(MakeText(TLbl, 11, WeedUI::ColText()));
-		UProgressBar* TPB = WidgetTree->ConstructWidget<UProgressBar>();
-		TPB->SetPercent(Frac);
-		TPB->SetFillColorAndOpacity(FLinearColor(0.45f, 0.75f, 1.f));
-		TV->AddChildToVerticalBox(TPB)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-		ContentBox->AddChildToVerticalBox(TB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+		if (GS && GS->GetNpcRegistry())
+		{
+			UNpcRegistryComponent* Reg = GS->GetNpcRegistry();
+			const int32 Tier = Reg->GetCustomerTier(OpenChatContact);
+			const float Frac = Reg->GetTierProgress01(OpenChatContact);
+			const FString TLbl = (Tier >= 5)
+				? FString::Printf(TEXT("Tier: %s  (max)"), *UNpcRegistryComponent::TierName(Tier))
+				: FString::Printf(TEXT("Tier: %s  ->  %s"), *UNpcRegistryComponent::TierName(Tier), *UNpcRegistryComponent::TierName(Tier + 1));
+			if (ChatTierLabel) { ChatTierLabel->SetText(FText::FromString(TLbl)); }
+			if (ChatTierBar) { ChatTierBar->SetPercent(Frac); }
+			ChatTierBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		}
+		else { ChatTierBox->SetVisibility(ESlateVisibility::Collapsed); }
 	}
 
-	// Loopt er een afspraak met deze persoon? Aftellende balk: fase A = tijd tot 'ie KOMT (afspraak-moment),
-	// fase B = tijd tot 'ie OPGEEFT. Werkt dus al vóór de klant fysiek is, en kleurt groen->geel->rood.
+	// Afspraak-balk (fase 0=arrives / 1=at door; fase 2 gebruikt de wacht-balk hieronder).
 	{
 		float TFrac = 0.f; int32 TSecs = 0, TPhase = 0, TClockM = 0;
-		// Fase 2 (wacht-op-antwoord) toont de aparte WaitBar hieronder; hier alleen fase 0 (arrives) + 1 (at door).
-		if (GetApptUrgency(OpenChatContact, TFrac, TSecs, TPhase, TClockM) && TPhase != 2)
+		const bool bShow = GetApptUrgency(OpenChatContact, TFrac, TSecs, TPhase, TClockM) && TPhase != 2;
+		if (ChatApptBox) { ChatApptBox->SetVisibility(bShow ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+		if (bShow)
 		{
-			UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
-			Box->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
-			Box->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
-			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-			Box->SetContent(VB);
-			ApptBarLabel = MakeText(TEXT("Waiting..."), 11, WeedUI::ColTextDim());
-			VB->AddChildToVerticalBox(ApptBarLabel);
-			ApptBar = WidgetTree->ConstructWidget<UProgressBar>();
-			ApptBar->SetPercent(TFrac);
-			ApptBar->SetFillColorAndOpacity(UrgencyColor(TFrac));
-			VB->AddChildToVerticalBox(ApptBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-			ApptBarContact = OpenChatContact;
-			ContentBox->AddChildToVerticalBox(Box)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+			if (ApptBar) { ApptBar->SetPercent(TFrac); ApptBar->SetFillColorAndOpacity(UrgencyColor(TFrac)); }
+			ApptBarContact = OpenChatContact; // UpdateApptBarLive werkt label/percent verder live bij
 		}
+		else { ApptBarContact = NAME_None; }
 	}
 
-	// Berichten chronologisch (oudste boven). Msgs is nieuwste-eerst -> achterstevoren itereren.
-	UScrollBox* Thread = WidgetTree->ConstructWidget<UScrollBox>();
-	UVerticalBoxSlot* TS = ContentBox->AddChildToVerticalBox(Thread);
-	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	// --- Bubbels via een POOL (patroon van FillStoreListRows) ---
+	// Sig per bericht = body + status + bFromMe + "ago"-emmer. Alleen een gewijzigde bubbel krijgt nieuwe inhoud.
 	bool bAny = false; bool bHasOpen = false; float OpenSentTime = -1.f;
-	for (int32 i = Msgs.Num() - 1; i >= 0; --i)
+	TArray<FString> BubSigs;
+	TArray<TFunction<UWidget*()>> BubBuilders;
+	const float RealNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	for (int32 i = Msgs.Num() - 1; i >= 0; --i) // oudste boven (Msgs is nieuwste-eerst)
 	{
 		const FPhoneMessage& M = Msgs[i];
 		if (!IsMsgForLocal(M)) { continue; }
@@ -1229,204 +1421,196 @@ void UPhoneWidget::BuildChatApp()
 		if (!M.bFromMe && M.Status == 1) { Body += TEXT("  (accepted)"); }
 		else if (!M.bFromMe && M.Status == 2) { Body += TEXT("  (declined)"); }
 
-		UBorder* Bub = WidgetTree->ConstructWidget<UBorder>();
-		Bub->SetBrush(RoundedBrush(M.bFromMe ? WeedUI::ColAccentDim(0.97f) : WeedUI::ColInner(0.97f), 10.f));
-		Bub->SetPadding(FMargin(9.f, 6.f, 9.f, 6.f));
-		// Body met de belangrijke woorden vetgedrukt (grams/%/strain/product) i.p.v. één platte tekst.
-		// Strain/product ook altijd vet: zelfde "pretty name minus bag" als waarmee de body is opgebouwd.
-		FString BoldStrain;
-		if (!M.WantProduct.IsNone()) { BoldStrain = WeedUI::PrettyItemName(M.WantProduct).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase); }
-		UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, WeedUI::ColText(), BoldStrain);
-		// Tijdstempel (HH:MM, in-game klok) onder het bericht - zoals een normale berichten-app.
-		UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		BubVB->AddChildToVerticalBox(BodyT);
-		// Tijdstempel op ECHTE tijd ("Xm ago") i.p.v. de in-game klok (die liep te snel).
-		if (M.SentRealTime >= 0.f)
-		{
-			const float RealNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
-			const int32 AgoSec = FMath::Max(0, (int32)(RealNow - M.SentRealTime));
-			const FString Ago = (AgoSec < 60) ? FString(TEXT("just now")) : (AgoSec < 3600) ? FString::Printf(TEXT("%dm ago"), AgoSec / 60) : FString::Printf(TEXT("%dh ago"), AgoSec / 3600);
-			UTextBlock* TimeT = MakeText(Ago, 8, WeedUI::ColTextDim());
-			UVerticalBoxSlot* TSl = BubVB->AddChildToVerticalBox(TimeT);
-			TSl->SetHorizontalAlignment(M.bFromMe ? HAlign_Right : HAlign_Left);
-			TSl->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
-		}
-		Bub->SetContent(BubVB);
+		// "Xm ago"-emmer voor de signatuur (zodat de bubbel alleen herbouwt als de weergegeven tekst wijzigt).
+		const int32 AgoSecRaw = (M.SentRealTime >= 0.f) ? FMath::Max(0, (int32)(RealNow - M.SentRealTime)) : -1;
+		const int32 AgoBucket = (AgoSecRaw < 0) ? -1 : (AgoSecRaw < 60 ? 0 : (AgoSecRaw < 3600 ? (1000 + AgoSecRaw / 60) : (100000 + AgoSecRaw / 3600)));
+		BubSigs.Add(FString::Printf(TEXT("%d|%d|%s|%d"), M.bFromMe ? 1 : 0, (int32)M.Status, *Body, AgoBucket));
 
-		USizeBox* Cap = WidgetTree->ConstructWidget<USizeBox>();
-		Cap->SetMaxDesiredWidth(244.f);
-		Cap->SetContent(Bub);
+		const bool bFromMe = M.bFromMe;
+		const FName WantProduct = M.WantProduct;
+		const float SentReal = M.SentRealTime;
+		BubBuilders.Add([this, Body, bFromMe, WantProduct, SentReal]() -> UWidget*
+		{
+			UBorder* Bub = WidgetTree->ConstructWidget<UBorder>();
+			Bub->SetBrush(RoundedBrush(bFromMe ? WeedUI::ColAccentDim(0.97f) : WeedUI::ColInner(0.97f), 10.f));
+			Bub->SetPadding(FMargin(9.f, 6.f, 9.f, 6.f));
+			// Body met de belangrijke woorden vetgedrukt (grams/%/strain/product) i.p.v. één platte tekst.
+			// Strain/product ook altijd vet: zelfde "pretty name minus bag" als waarmee de body is opgebouwd.
+			FString BoldStrain;
+			if (!WantProduct.IsNone()) { BoldStrain = WeedUI::PrettyItemName(WantProduct).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase); }
+			UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, WeedUI::ColText(), BoldStrain);
+			UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			BubVB->AddChildToVerticalBox(BodyT);
+			// Tijdstempel op ECHTE tijd ("Xm ago") i.p.v. de in-game klok (die liep te snel).
+			if (SentReal >= 0.f)
+			{
+				const float Now2 = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+				const int32 AgoSec = FMath::Max(0, (int32)(Now2 - SentReal));
+				const FString Ago = (AgoSec < 60) ? FString(TEXT("just now")) : (AgoSec < 3600) ? FString::Printf(TEXT("%dm ago"), AgoSec / 60) : FString::Printf(TEXT("%dh ago"), AgoSec / 3600);
+				UTextBlock* TimeT = MakeText(Ago, 8, WeedUI::ColTextDim());
+				UVerticalBoxSlot* TSl = BubVB->AddChildToVerticalBox(TimeT);
+				TSl->SetHorizontalAlignment(bFromMe ? HAlign_Right : HAlign_Left);
+				TSl->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+			}
+			Bub->SetContent(BubVB);
 
-		UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
-		if (M.bFromMe)
-		{
-			UHorizontalBoxSlot* Sp = Line->AddChildToHorizontalBox(MakeText(TEXT(""), 1, FLinearColor::Transparent));
-			Sp->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			Line->AddChildToHorizontalBox(Cap);
-		}
-		else
-		{
-			Line->AddChildToHorizontalBox(Cap);
-			UHorizontalBoxSlot* Sp = Line->AddChildToHorizontalBox(MakeText(TEXT(""), 1, FLinearColor::Transparent));
-			Sp->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		}
-		Thread->AddChild(Line);
-		Thread->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
+			USizeBox* Cap = WidgetTree->ConstructWidget<USizeBox>();
+			Cap->SetMaxDesiredWidth(244.f);
+			Cap->SetContent(Bub);
+
+			UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>();
+			if (bFromMe)
+			{
+				UHorizontalBoxSlot* Sp = Line->AddChildToHorizontalBox(MakeText(TEXT(""), 1, FLinearColor::Transparent));
+				Sp->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				Line->AddChildToHorizontalBox(Cap);
+			}
+			else
+			{
+				Line->AddChildToHorizontalBox(Cap);
+				UHorizontalBoxSlot* Sp = Line->AddChildToHorizontalBox(MakeText(TEXT(""), 1, FLinearColor::Transparent));
+				Sp->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			}
+			return Line;
+		});
 	}
-	if (!bAny) { Thread->AddChild(MakeText(TEXT("No messages with this contact yet."), 12, WeedUI::ColTextDim())); }
 
-	// Open afspraak? -> Accept/Decline onderaan.
-	if (bHasOpen)
+	// Bubbel-pool op maat brengen (persistent) + per-bubbel diff -> alleen gewijzigde bubbel krijgt nieuwe inhoud.
+	if (ChatBubbleScroll)
 	{
-		// Live wacht-balk: hoelang blijft de klant nog wachten op je antwoord voor 'ie opgeeft (150s).
-		if (OpenSentTime >= 0.f)
+		const int32 N = BubSigs.Num();
+		while (ChatBubblePool.Num() < N)
 		{
-			UBorder* WBox = WidgetTree->ConstructWidget<UBorder>();
-			WBox->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
-			WBox->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
-			UVerticalBox* WVB = WidgetTree->ConstructWidget<UVerticalBox>();
-			WBox->SetContent(WVB);
-			WaitBarLabel = MakeText(TEXT("Waiting for your reply..."), 11, WeedUI::ColTextDim());
-			WVB->AddChildToVerticalBox(WaitBarLabel);
-			WaitBar = WidgetTree->ConstructWidget<UProgressBar>();
-			WaitBar->SetPercent(1.f);
-			WVB->AddChildToVerticalBox(WaitBar)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-			WaitBarSentTime = OpenSentTime;
-			ContentBox->AddChildToVerticalBox(WBox)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+			UBorder* SlotBox = WidgetTree->ConstructWidget<UBorder>();
+			SlotBox->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f)); // transparant wrapper (geen extra rand)
+			SlotBox->SetPadding(FMargin(0.f));
+			ChatBubbleScroll->AddChild(SlotBox);
+			ChatBubblePool.Add(SlotBox); ChatBubbleSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
 		}
-		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		const FName Pick = OpenChatContact;
-		UHorizontalBoxSlot* AS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Accept"), WeedUI::ColAccentDim(),
-			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, true); } MarkDirty(); }, 13));
-		AS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); AS->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
-		UHorizontalBoxSlot* DS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Decline"), WeedUI::ColWarn(),
-			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, false); } MarkDirty(); }, 13));
-		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
-		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
-
-		// --- "Offer instead..." : een ANDERE strain aanbieden (substituut) met stats + verschil + kans ---
-		// De alternatieven-lijst wordt HIER één keer opgebouwd in een persistente OfferBox; de toggle-knop
-		// verandert alleen de zichtbaarheid van die box + z'n eigen label (geen RefreshContent-flash).
-		OfferToggleBtn = MakeActionBtn(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."),
-			WeedUI::ColAccentDim(), [this]()
-			{
-				bOfferStrainView = !bOfferStrainView;
-				if (OfferBox) { OfferBox->SetVisibility(bOfferStrainView ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
-				if (OfferToggleBtn) { OfferToggleBtn->SetContent(MakeText(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."), 12, FLinearColor::White, true)); }
-			}, 12);
-		ContentBox->AddChildToVerticalBox(OfferToggleBtn)->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
-
-		OfferBox = WidgetTree->ConstructWidget<UVerticalBox>();
-		OfferBox->SetVisibility(bOfferStrainView ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
-		ContentBox->AddChildToVerticalBox(OfferBox);
+		while (ChatBubblePool.Num() > N)
 		{
-			const FName ReqStrain = Con->GetRequestedStrain(OpenChatContact);
-			float ExpThc = 15.f;
-			if (GS && GS->GetStore()) { float t = 0.f, y = 0.f, g = 0.f; if (GS->GetStore()->GetStrainStats(ReqStrain, t, y, g) && t > 0.f) { ExpThc = t; } }
-			OfferBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock (incl. chests/shelves):"), *ReqStrain.ToString(), ExpThc), 10, WeedUI::ColTextDim()))
-				->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
-
-			// Strain uit een wiet-item halen (Bag_X_<g> of Bud_X); nat (WetBud_) telt NIET mee.
-			auto StrainOf = [](FName Id) -> FName
-			{
-				const FString S = Id.ToString();
-				if (S.StartsWith(TEXT("WetBud_"))) { return NAME_None; }
-				if (UInventoryComponent::IsBag(Id)) { return UInventoryComponent::BagStrain(Id); }
-				if (S.StartsWith(TEXT("Bud_"))) { return FName(*S.RightChop(4)); }
-				return NAME_None;
-			};
-			// Aggregeer per strain over inventory + ALLE chests/shelves (beste THC representatief).
-			struct FOfferAgg { float Thc = 0.f; float Qual = 0.f; int32 Qty = 0; };
-			TMap<FName, FOfferAgg> ByStrain;
-			auto Consider = [&](FName Id, int32 Q, float Thc, float Ql)
-			{
-				const FName Strain = StrainOf(Id);
-				if (Strain.IsNone() || Q <= 0) { return; }
-				// Tel in GRAMMEN: los gedroogd (Bud_) = 1g per stuk; zakjes (Bag_) = aantal x gram-per-zakje.
-				const int32 Grams = UInventoryComponent::IsBag(Id) ? Q * FMath::Max(1, UInventoryComponent::BagGrams(Id)) : Q;
-				FOfferAgg& O = ByStrain.FindOrAdd(Strain);
-				O.Qty += Grams;
-				if (Thc > O.Thc) { O.Thc = Thc; O.Qual = Ql; }
-			};
-			if (UInventoryComponent* Inv = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr)
-			{
-				for (const FInventoryStack& St : Inv->GetStacks()) { Consider(St.ItemId, St.Quantity, St.Quality, St.QualityPct); }
-			}
-			for (TActorIterator<AStorageShelf> It(GetWorld()); It; ++It)
-			{
-				for (const FShelfStack& C : It->Contents) { Consider(C.ItemId, C.Quantity, C.Thc, C.QualityPct); }
-			}
-
-			int32 Shown = 0;
-			for (const TPair<FName, FOfferAgg>& P : ByStrain)
-			{
-				const FName Strain = P.Key; const FOfferAgg& O = P.Value;
-				const float Delta = O.Thc - ExpThc;
-				const float Chance = Con->SubstituteAcceptChance(OpenChatContact, ReqStrain, Strain, O.Thc) * 100.f;
-				const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  %dg\n%+.0f%% THC vs ask   ~%.0f%% yes"),
-					*Strain.ToString(), O.Thc, O.Qual, O.Qty, Delta, Chance);
-				const FName SPick = Strain;
-				OfferBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? WeedUI::ColGood(0.5f) : WeedUI::ColWarn(0.5f)),
-					[this, SPick]() { if (Phone.IsValid()) { Phone->ProposeChatStrain(OpenChatContact, SPick); } bOfferStrainView = false; MarkDirty(); }, 11))
-					->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
-				++Shown;
-			}
-			if (Shown == 0) { OfferBox->AddChildToVerticalBox(MakeText(TEXT("(no dried/bagged weed in your inventory or storages)"), 10, WeedUI::ColTextDim())); }
+			const int32 Last = ChatBubblePool.Num() - 1;
+			if (ChatBubblePool[Last]) { ChatBubblePool[Last]->RemoveFromParent(); }
+			ChatBubblePool.RemoveAt(Last); ChatBubbleSigs.RemoveAt(Last);
 		}
-
-		// Of kies zelf een tijd (per kwartier). Ze gaan altijd akkoord, geen nadeel.
-		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, WeedUI::ColTextDim()))
-			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
-
-		// Huidige kloktijd (minuten) — de ondergrens loopt hiermee mee.
-		const int32 NowMins = (GS && GS->GetDayCycle()) ? (((int32)(GS->GetDayCycle()->GetClockHour() * 60.f)) % 1440) : 0;
-
-		// Startwaarde: de tijd die de KLANT voorstelde (dan klik je vandaaruit +kwartier/+uur). Geen
-		// afspraaktijd bekend -> 1 uur vanaf nu. Afgerond op een kwartier.
-		if (ProposeMins < 0)
+		for (int32 i = 0; i < N; ++i)
 		{
-			float ApptTod = -1.f;
-			for (const FPhoneMessage& M : Msgs)
-			{
-				if (!IsMsgForLocal(M)) { continue; }
-				if (M.FromContactId == OpenChatContact && M.Status == 0 && !M.bFromMe && M.AppointmentTimeOfDay >= 0.f)
-				{ ApptTod = M.AppointmentTimeOfDay; break; }
-			}
-			const int32 Mins = (ApptTod >= 0.f) ? Con->ClockMinutesOf(ApptTod) : ((NowMins + 60) % 1440);
-			ProposeMins = ((FMath::RoundToInt(Mins / 15.f) * 15) % 1440 + 1440) % 1440;
+			if (!ChatBubblePool.IsValidIndex(i) || !ChatBubblePool[i]) { continue; }
+			if (ChatBubbleSigs.IsValidIndex(i) && BubSigs[i] == ChatBubbleSigs[i]) { continue; }
+			ChatBubbleSigs[i] = BubSigs[i];
+			// Bubbel + gefoldede 4px-gap eronder (zoals de losse spacer-tekst in de oude bouw).
+			UVerticalBox* Holder = WidgetTree->ConstructWidget<UVerticalBox>();
+			Holder->AddChildToVerticalBox(BubBuilders[i]());
+			UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
+			Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+			Gap->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+			Holder->AddChildToVerticalBox(Gap);
+			ChatBubblePool[i]->SetContent(Holder);
 		}
-		// Klem in "minuten-vooruit"-ruimte: minstens 30 min, hoogstens 23,5u vooruit (nooit de vorige dag).
-		// Doordat NowMins meeloopt met de klok, schuift de ondergrens live mee.
-		{
-			int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
-			Gap = FMath::Clamp(Gap, 30, 1410);
-			ProposeMins = (NowMins + Gap) % 1440;
-		}
-		auto Step = [this, NowMins](int32 Delta)
-		{
-			int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
-			Gap = FMath::Clamp(Gap + Delta, 30, 1410); // niet onder 30 min vooruit, niet naar gisteren
-			ProposeMins = (NowMins + Gap) % 1440;
-			// Alleen het klok-label bijwerken (geen rebuild -> geen flash).
-			if (PickerClockText) { PickerClockText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60))); }
-		};
-
-		UHorizontalBox* Stepper = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-1h"), WeedUI::ColSlot(), [Step]() { Step(-60); }, 13))->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-15m"), WeedUI::ColSlot(), [Step]() { Step(-15); }, 13))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
-		UTextBlock* Clock = MakeText(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60), 18, WeedUI::ColText());
-		PickerClockText = Clock;            // live bijwerken in NativeTick (geen rebuild -> geen flash)
-		PickerContact = OpenChatContact;
-		UHorizontalBoxSlot* CS2 = Stepper->AddChildToHorizontalBox(Clock);
-		CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetHorizontalAlignment(HAlign_Center); CS2->SetVerticalAlignment(VAlign_Center);
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+15m"), WeedUI::ColSlot(), [Step]() { Step(15); }, 13))->SetPadding(FMargin(6.f, 0.f, 3.f, 0.f));
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+1h"), WeedUI::ColSlot(), [Step]() { Step(60); }, 13));
-		ContentBox->AddChildToVerticalBox(Stepper)->SetPadding(FMargin(0.f, 2.f, 0.f, 4.f));
-
-		// Knop leest de ACTUELE ProposeMins (member) bij klik, zodat live-bijwerken klopt.
-		ContentBox->AddChildToVerticalBox(MakeActionBtn(TEXT("Propose this time"), WeedUI::ColAccentDim(),
-			[this, Pick]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, ProposeMins); } ProposeMins = -1; MarkDirty(); }, 13));
 	}
+	if (ChatNoMsgText) { ChatNoMsgText->SetVisibility(bAny ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); }
+
+	// Wacht-balk + Accept/Decline + offer/tijd-kiezer alleen bij een open afspraak (Status==0 && !bFromMe).
+	if (ChatWaitBox) { ChatWaitBox->SetVisibility((bHasOpen && OpenSentTime >= 0.f) ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	WaitBarSentTime = (bHasOpen && OpenSentTime >= 0.f) ? OpenSentTime : -1.f; // basis voor UpdateWaitBarLive
+	if (bHasOpen && OpenSentTime >= 0.f && WaitBar) { WaitBar->SetPercent(1.f); }
+	if (ChatRespondRow) { ChatRespondRow->SetVisibility(bHasOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+
+	if (ChatOfferSection)
+	{
+		ChatOfferSection->SetVisibility(bHasOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		if (bHasOpen)
+		{
+			// Toggle-knop + OfferBox-zichtbaarheid synchroon met bOfferStrainView.
+			if (OfferToggleBtn) { OfferToggleBtn->SetContent(MakeText(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."), 12, FLinearColor::White, true)); }
+			if (OfferBox)
+			{
+				OfferBox->SetVisibility(bOfferStrainView ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+				// OfferBox-inhoud (her)opbouwen: aggregatie over inventory + shelves (verandert met voorraad).
+				OfferBox->ClearChildren();
+				const FName ReqStrain = Con->GetRequestedStrain(OpenChatContact);
+				float ExpThc = 15.f;
+				if (GS && GS->GetStore()) { float t = 0.f, y = 0.f, g = 0.f; if (GS->GetStore()->GetStrainStats(ReqStrain, t, y, g) && t > 0.f) { ExpThc = t; } }
+				OfferBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock (incl. chests/shelves):"), *ReqStrain.ToString(), ExpThc), 10, WeedUI::ColTextDim()))
+					->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+
+				// Strain uit een wiet-item halen (Bag_X_<g> of Bud_X); nat (WetBud_) telt NIET mee.
+				auto StrainOf = [](FName Id) -> FName
+				{
+					const FString S = Id.ToString();
+					if (S.StartsWith(TEXT("WetBud_"))) { return NAME_None; }
+					if (UInventoryComponent::IsBag(Id)) { return UInventoryComponent::BagStrain(Id); }
+					if (S.StartsWith(TEXT("Bud_"))) { return FName(*S.RightChop(4)); }
+					return NAME_None;
+				};
+				// Aggregeer per strain over inventory + ALLE chests/shelves (beste THC representatief).
+				struct FOfferAgg { float Thc = 0.f; float Qual = 0.f; int32 Qty = 0; };
+				TMap<FName, FOfferAgg> ByStrain;
+				auto Consider = [&](FName Id, int32 Q, float Thc, float Ql)
+				{
+					const FName Strain = StrainOf(Id);
+					if (Strain.IsNone() || Q <= 0) { return; }
+					// Tel in GRAMMEN: los gedroogd (Bud_) = 1g per stuk; zakjes (Bag_) = aantal x gram-per-zakje.
+					const int32 Grams = UInventoryComponent::IsBag(Id) ? Q * FMath::Max(1, UInventoryComponent::BagGrams(Id)) : Q;
+					FOfferAgg& O = ByStrain.FindOrAdd(Strain);
+					O.Qty += Grams;
+					if (Thc > O.Thc) { O.Thc = Thc; O.Qual = Ql; }
+				};
+				if (UInventoryComponent* Inv = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr)
+				{
+					for (const FInventoryStack& St : Inv->GetStacks()) { Consider(St.ItemId, St.Quantity, St.Quality, St.QualityPct); }
+				}
+				for (TActorIterator<AStorageShelf> It(GetWorld()); It; ++It)
+				{
+					for (const FShelfStack& C : It->Contents) { Consider(C.ItemId, C.Quantity, C.Thc, C.QualityPct); }
+				}
+
+				int32 Shown = 0;
+				for (const TPair<FName, FOfferAgg>& P : ByStrain)
+				{
+					const FName Strain = P.Key; const FOfferAgg& O = P.Value;
+					const float Delta = O.Thc - ExpThc;
+					const float Chance = Con->SubstituteAcceptChance(OpenChatContact, ReqStrain, Strain, O.Thc) * 100.f;
+					const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  %dg\n%+.0f%% THC vs ask   ~%.0f%% yes"),
+						*Strain.ToString(), O.Thc, O.Qual, O.Qty, Delta, Chance);
+					const FName SPick = Strain;
+					OfferBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? WeedUI::ColGood(0.5f) : WeedUI::ColWarn(0.5f)),
+						[this, SPick]() { if (Phone.IsValid() && !OpenChatContact.IsNone()) { Phone->ProposeChatStrain(OpenChatContact, SPick); } bOfferStrainView = false; RefreshChatThread(); }, 11))
+						->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+					++Shown;
+				}
+				if (Shown == 0) { OfferBox->AddChildToVerticalBox(MakeText(TEXT("(no dried/bagged weed in your inventory or storages)"), 10, WeedUI::ColTextDim())); }
+			}
+
+			// Tijd-kiezer: startwaarde + clamping (30 min..1410 min, kwartier). PickerContact stelt de live NativeTick-
+			// clamp scherp; PickerClockText krijgt de tekst.
+			const int32 NowMins = (GS && GS->GetDayCycle()) ? (((int32)(GS->GetDayCycle()->GetClockHour() * 60.f)) % 1440) : 0;
+			if (ProposeMins < 0)
+			{
+				float ApptTod = -1.f;
+				for (const FPhoneMessage& M : Msgs)
+				{
+					if (!IsMsgForLocal(M)) { continue; }
+					if (M.FromContactId == OpenChatContact && M.Status == 0 && !M.bFromMe && M.AppointmentTimeOfDay >= 0.f)
+					{ ApptTod = M.AppointmentTimeOfDay; break; }
+				}
+				const int32 Mins = (ApptTod >= 0.f) ? Con->ClockMinutesOf(ApptTod) : ((NowMins + 60) % 1440);
+				ProposeMins = ((FMath::RoundToInt(Mins / 15.f) * 15) % 1440 + 1440) % 1440;
+			}
+			{
+				int32 Gap = ((ProposeMins - NowMins) % 1440 + 1440) % 1440;
+				Gap = FMath::Clamp(Gap, 30, 1410);
+				ProposeMins = (NowMins + Gap) % 1440;
+			}
+			if (PickerClockText) { PickerClockText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60))); }
+			PickerContact = OpenChatContact;
+		}
+		else { PickerContact = NAME_None; }
+	}
+
+	// Live-elementen meteen bijwerken (label/percent van appt- en wacht-balk).
+	UpdateApptBarLive();
+	UpdateWaitBarLive();
 }
 
 void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
@@ -1571,7 +1755,7 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 void UPhoneWidget::BuildPackagesApp()
 {
 	PackagesScroll = WidgetTree->ConstructWidget<UScrollBox>();
-	UVerticalBoxSlot* PS = ContentBox->AddChildToVerticalBox(PackagesScroll);
+	UVerticalBoxSlot* PS = ActiveContent->AddChildToVerticalBox(PackagesScroll);
 	PS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	LastPkgSig = PackagesSignature();
 	FillPackagesInto(PackagesScroll);
@@ -1579,76 +1763,95 @@ void UPhoneWidget::BuildPackagesApp()
 
 void UPhoneWidget::BuildBankApp()
 {
-	if (!ContentBox || !Phone.IsValid()) { return; }
+	// Bank-app is PERSISTENT: bouw ZOWEL de upgrade-prompt (BankLockedBox) als de bank-kaart (BankUnlockedBox) één
+	// keer; NativeTick toggelt welke zichtbaar is op de live unlock/ATM-staat. Zo wisselt het KOPEN van de upgrade
+	// gewoon van box (geen ClearChildren/rebuild -> geen flash), en werken saldo + cash-to-deposit in-place bij.
+	BankBalanceText = nullptr; BankCashText = nullptr; BankLockedBox = nullptr; BankUnlockedBox = nullptr;
+	if (!ActiveContent || !Phone.IsValid()) { return; }
 	UPhoneClientComponent* Ph = Phone.Get();
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
+	const bool bUnlocked = Ph->IsBankAppUnlocked() || Ph->IsBankViaAtm();
 
-	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
-	UVerticalBoxSlot* SS = ContentBox->AddChildToVerticalBox(Scroll);
+	// Beide boxen stapelen in een OVERLAY (zelfde ruimte) -> de inactieve box kan op HIDDEN (blijft gearrangeerd,
+	// alleen niet getekend) i.p.v. Collapsed, dus de unlock-wissel bij het kopen is instant zonder her-layout-flikker.
+	UOverlay* BankOv = WidgetTree->ConstructWidget<UOverlay>();
+	UVerticalBoxSlot* SS = ActiveContent->AddChildToVerticalBox(BankOv);
 	SS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	auto AddRow = [this, Scroll](UWidget* W) { Scroll->AddChild(W); };
-
-	// Nog niet ontgrendeld -> alleen de koop-knop voor de telefoon-upgrade. (Bij een fysieke ATM
-	// mag je altijd bankieren, ook zonder upgrade.)
-	if (!Ph->IsBankAppUnlocked() && !Ph->IsBankViaAtm())
+	// --- Upgrade-prompt (geblokkeerd; alleen relevant zonder ATM). ---
+	BankLockedBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	{ UOverlaySlot* LKS = BankOv->AddChildToOverlay(BankLockedBox); LKS->SetHorizontalAlignment(HAlign_Fill); LKS->SetVerticalAlignment(VAlign_Top); }
 	{
-		AddRow(MakeText(TEXT("Mobile banking"), 16, WeedUI::ColText(), false));
+		BankLockedBox->AddChildToVerticalBox(MakeText(TEXT("Mobile banking"), 16, WeedUI::ColText(), false));
 		UTextBlock* Desc = MakeText(TEXT("Upgrade to bank anywhere (no ATM)."), 12, WeedUI::ColTextDim());
 		Desc->SetAutoWrapText(true);
-		AddRow(Desc);
-		AddRow(MakeText(TEXT(""), 8, FLinearColor::Transparent));
+		BankLockedBox->AddChildToVerticalBox(Desc);
+		BankLockedBox->AddChildToVerticalBox(MakeText(TEXT(""), 8, FLinearColor::Transparent));
 		const int64 Cost = UPhoneClientComponent::PhoneUpgradeCostCents;
-		AddRow(MakeActionBtn(FString::Printf(TEXT("Unlock  -  EUR %lld"), (long long)(WeedRoundEuros(Cost) / 100)),
-			WeedUI::ColAccentDim(), [this]() { if (Phone.IsValid()) { Phone->RequestBuyPhoneUpgrade(); } MarkDirty(); }, 14));
-		return;
+		// GEEN MarkDirty: NativeTick toggelt naar de bank-kaart zodra de unlock repliceert -> geen rebuild/flash.
+		BankLockedBox->AddChildToVerticalBox(MakeActionBtn(FString::Printf(TEXT("Unlock  -  EUR %lld"), (long long)(WeedRoundEuros(Cost) / 100)),
+			WeedUI::ColAccentDim(), [this]() { if (Phone.IsValid()) { Phone->RequestBuyPhoneUpgrade(); } }, 14));
 	}
 
-	if (!Econ) { AddRow(MakeText(TEXT("Out of service."), 14, WeedUI::ColTextDim())); return; }
-
-	// --- Balans-kaart (zoals een echte bank-app: groot saldo bovenaan) ---
-	AddRow(MakeText(TEXT("BANK BALANCE"), 11, WeedUI::ColTextDim(), false));
-	AddRow(MakeText(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(Econ->GetBankCents()) / 100)), 26, WeedUI::ColGood(), false));
-	AddRow(MakeText(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(Econ->GetCashCents()) / 100)), 12, WeedUI::ColTextDim()));
-	AddRow(MakeText(TEXT(""), 10, FLinearColor::Transparent));
-
-	// --- Storten (cash -> bank), bescheiden presets + max ---
-	AddRow(MakeText(FString::Printf(TEXT("Deposit   (%.0f%% tax)"), Econ->DepositTaxPct * 100.f), 13, WeedUI::ColGood()));
+	// --- Bank-kaart (ontgrendeld / via ATM). ---
+	BankUnlockedBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	{ UOverlaySlot* UKS = BankOv->AddChildToOverlay(BankUnlockedBox); UKS->SetHorizontalAlignment(HAlign_Fill); UKS->SetVerticalAlignment(VAlign_Top); }
+	auto AddU = [this](UWidget* W) { BankUnlockedBox->AddChildToVerticalBox(W); };
 	{
-		const int64 Amts[3] = { 10000, 50000, 100000 }; // EUR 100 / 500 / 1000
-		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		for (int32 i = 0; i < 3; ++i)
-		{
-			const int64 A = Amts[i];
-			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)), WeedUI::ColAccentDim(),
-				[this, A]() { if (Phone.IsValid()) { Phone->RequestDeposit(A); } }, 13);
-			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
-			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
-		}
-		UWeedActionButton* Mx = MakeActionBtn(TEXT("Max"), WeedUI::ColAccentDim(),
-			[this]() { if (Phone.IsValid()) { Phone->RequestDeposit(-1); } }, 13);
-		UHorizontalBoxSlot* MS = Btns->AddChildToHorizontalBox(Mx);
-		MS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); MS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
-		AddRow(Btns);
-	}
-	AddRow(MakeText(TEXT(""), 10, FLinearColor::Transparent));
+		const float DepTax = Econ ? Econ->DepositTaxPct : 0.f;
+		const float TrFee = Econ ? Econ->TransferFeePct : 0.f;
+		const int64 BankC = Econ ? Econ->GetBankCents() : 0;
+		const int64 CashC = Econ ? Econ->GetCashCents() : 0;
+		// Saldo + cash-to-deposit = de ENIGE dynamische teksten; ref bewaren -> NativeTick werkt ze IN-PLACE bij.
+		AddU(MakeText(TEXT("BANK BALANCE"), 11, WeedUI::ColTextDim(), false));
+		BankBalanceText = MakeText(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(BankC) / 100)), 26, WeedUI::ColGood(), false);
+		AddU(BankBalanceText);
+		BankCashText = MakeText(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(CashC) / 100)), 12, WeedUI::ColTextDim());
+		AddU(BankCashText);
+		AddU(MakeText(TEXT(""), 10, FLinearColor::Transparent));
 
-	// --- Sturen naar co-op vriend, bescheiden presets ---
-	AddRow(MakeText(FString::Printf(TEXT("Send to a friend   (%.0f%% fee)"), Econ->TransferFeePct * 100.f), 13, WeedUI::ColTextDim()));
-	{
-		const int64 Amts[3] = { 10000, 25000, 50000 }; // EUR 100 / 250 / 500
-		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-		for (int32 i = 0; i < 3; ++i)
+		// --- Storten (cash -> bank), bescheiden presets + max ---
+		AddU(MakeText(FString::Printf(TEXT("Deposit   (%.0f%% tax)"), DepTax * 100.f), 13, WeedUI::ColGood()));
 		{
-			const int64 A = Amts[i];
-			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)),
-				WeedUI::ColAccentDim(), [this, A]() { if (Phone.IsValid()) { Phone->RequestTransfer(A); } }, 13);
-			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
-			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+			const int64 Amts[3] = { 10000, 50000, 100000 }; // EUR 100 / 500 / 1000
+			UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+			for (int32 i = 0; i < 3; ++i)
+			{
+				const int64 A = Amts[i];
+				UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)), WeedUI::ColAccentDim(),
+					[this, A]() { if (Phone.IsValid()) { Phone->RequestDeposit(A); } }, 13);
+				UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
+				BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+			}
+			UWeedActionButton* Mx = MakeActionBtn(TEXT("Max"), WeedUI::ColAccentDim(),
+				[this]() { if (Phone.IsValid()) { Phone->RequestDeposit(-1); } }, 13);
+			UHorizontalBoxSlot* MS = Btns->AddChildToHorizontalBox(Mx);
+			MS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); MS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+			AddU(Btns);
 		}
-		AddRow(Btns);
+		AddU(MakeText(TEXT(""), 10, FLinearColor::Transparent));
+
+		// --- Sturen naar co-op vriend, bescheiden presets ---
+		AddU(MakeText(FString::Printf(TEXT("Send to a friend   (%.0f%% fee)"), TrFee * 100.f), 13, WeedUI::ColTextDim()));
+		{
+			const int64 Amts[3] = { 10000, 25000, 50000 }; // EUR 100 / 250 / 500
+			UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
+			for (int32 i = 0; i < 3; ++i)
+			{
+				const int64 A = Amts[i];
+				UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)),
+					WeedUI::ColAccentDim(), [this, A]() { if (Phone.IsValid()) { Phone->RequestTransfer(A); } }, 13);
+				UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
+				BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+			}
+			AddU(Btns);
+		}
 	}
+
+	// Init-zichtbaarheid (NativeTick houdt 'm daarna live in sync met de unlock/ATM-staat). Inactieve box op HIDDEN.
+	BankLockedBox->SetVisibility(bUnlocked ? ESlateVisibility::Hidden : ESlateVisibility::SelfHitTestInvisible);
+	BankUnlockedBox->SetVisibility(bUnlocked ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden);
 }
 
 void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
@@ -1732,6 +1935,35 @@ void UPhoneWidget::RefreshStore()
 	FillStoreList();
 }
 
+void UPhoneWidget::SaveStoreRefs(int32 App)
+{
+	// De huidige gedeelde winkel-refs horen bij App -> snapshot in de cache (incl. de gekozen categorie).
+	FPhoneStoreRefs& R = StoreRefsByApp.FindOrAdd(App);
+	R.Scroll = StoreScroll; R.Footer = StoreFooter;
+	R.CartText = StoreCartText; R.CartToggle = StoreCartToggle; R.PackagesLabel = StorePackagesLabel;
+	R.RowPool = StoreRowPool; R.RowSigs = StoreRowSigs;
+	R.FooterPool = StoreFooterPool; R.FooterSigs = StoreFooterSigs;
+	R.TabBtns = StoreTabBtns; R.QtyTexts = StoreQtyTexts;
+	R.Cats = AppCats; R.bSell = bSellApp;
+	R.LastCat = Phone.IsValid() ? Phone->GetSupplierCat() : -1;
+}
+
+void UPhoneWidget::RestoreStoreRefs(int32 App)
+{
+	// Gedeelde winkel-refs terugzetten naar App's gecachte paneel (geen herbouw). De widgets leven nog in het
+	// AppPanels[App]-paneel; we wijzen de refs er weer naartoe zodat FillStoreList/RefreshStore dat paneel raken.
+	const FPhoneStoreRefs* R = StoreRefsByApp.Find(App);
+	if (!R) { return; }
+	StoreScroll = R->Scroll; StoreFooter = R->Footer;
+	StoreCartText = R->CartText; StoreCartToggle = R->CartToggle; StorePackagesLabel = R->PackagesLabel;
+	StoreRowPool = R->RowPool; StoreRowSigs = R->RowSigs;
+	StoreFooterPool = R->FooterPool; StoreFooterSigs = R->FooterSigs;
+	StoreTabBtns = R->TabBtns; StoreQtyTexts = R->QtyTexts;
+	AppCats = R->Cats; bSellApp = R->bSell;
+	bCartView = false; bPackagesView = false; // net als (her)openen via BuildStoreApp: terug in de shop-catalogus
+	if (Phone.IsValid() && R->LastCat >= 0) { Phone->SetSupplierCat(R->LastCat); }
+}
+
 int32 UPhoneWidget::PackagesSignature() const
 {
 	if (!Phone.IsValid()) { return 0; }
@@ -1776,35 +2008,69 @@ void UPhoneWidget::UpdateApptBarLive()
 	}
 	else
 	{
-		// Afspraak voorbij (deal gesloten of vertrokken) -> balk leeg + loslaten.
+		// Afspraak voorbij (deal gesloten of vertrokken) -> balk-box verbergen + loslaten. ApptBar/ApptBarLabel zijn
+		// nu PERSISTENTE thread-widgets (in ChatApptBox): niet nullen (dan zou een volgende afspraak ze niet vinden),
+		// alleen de box verbergen en het contact loslaten. RefreshChatThread toont 'm weer bij een nieuwe afspraak.
 		ApptBar->SetPercent(0.f);
 		if (ApptBarLabel) { ApptBarLabel->SetText(FText::FromString(TEXT("Done."))); }
-		ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
+		if (ChatApptBox) { ChatApptBox->SetVisibility(ESlateVisibility::Collapsed); }
+		ApptBarContact = NAME_None;
 	}
 }
 
 void UPhoneWidget::UpdateListBarsLive()
 {
-	for (const TPair<FName, TObjectPtr<UProgressBar>>& KV : ListApptBars)
+	// Werkt de HELE gesprekkenlijst in-place bij (preview + tijdstempel + ongelezen-badge + kleur + afspraak-balk)
+	// zodat een nieuw bericht van een bestaand contact GEEN lijst-herbouw nodig heeft -> geen flash.
+	if (ListCards.Num() == 0) { return; }
+	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
+	if (!Con) { return; }
+	const TArray<FPhoneMessage>& Msgs = Con->GetMessages(); // nieuwste eerst
+	for (const TPair<FName, TObjectPtr<UBorder>>& CK : ListCards)
 	{
+		const FName Cid = CK.Key;
 		float Frac = 0.f; int32 Secs = 0, Phase = 0, ClockM = 0;
-		const bool bActive = GetApptUrgency(KV.Key, Frac, Secs, Phase, ClockM);
+		const bool bActive = GetApptUrgency(Cid, Frac, Secs, Phase, ClockM);
 		const FLinearColor U = UrgencyColor(Frac, Phase == 2);
-		if (UProgressBar* Bar = KV.Value) { Bar->SetPercent(bActive ? Frac : 0.f); Bar->SetFillColorAndOpacity(U); }
-		if (TObjectPtr<UBorder>* Card = ListCards.Find(KV.Key))
+		const bool bUnread = Phone.IsValid() && Phone->HasUnreadFrom(Cid);
+
+		// Kaart-tint (urgent > ongelezen > normaal) — nu ook terug naar normaal als de urgentie voorbij is.
+		if (UBorder* C = CK.Value)
 		{
-			if (UBorder* C = *Card) { if (bActive) { C->SetBrushColor(FLinearColor(U.R * 0.28f, U.G * 0.28f, U.B * 0.28f, 0.97f)); } }
+			C->SetBrushColor(bActive ? FLinearColor(U.R * 0.28f, U.G * 0.28f, U.B * 0.28f, 0.97f)
+				: (bUnread ? WeedUI::ColAccentDim(0.97f) : WeedUI::ColInner(0.95f)));
 		}
-		if (TObjectPtr<UTextBlock>* Prev = ListPreviews.Find(KV.Key))
+		// Afspraak-balk (alleen aanwezig als de kaart urgent gebouwd is).
+		if (TObjectPtr<UProgressBar>* Bar = ListApptBars.Find(Cid)) { if (UProgressBar* B = *Bar) { B->SetPercent(bActive ? Frac : 0.f); B->SetFillColorAndOpacity(U); } }
+
+		// Preview: afspraak-tekst indien urgent, anders het laatste bericht van dit contact.
+		FString Body; float LastClock = -1.f;
+		for (const FPhoneMessage& M : Msgs)
 		{
-			if (UTextBlock* P = *Prev)
+			if (!IsMsgForLocal(M) || M.FromContactId != Cid) { continue; }
+			Body = (M.bFromMe ? TEXT("You: ") : TEXT("")) + M.Body.ToString(); LastClock = M.SentClockHour; break;
+		}
+		if (bActive) { Body = (Phase == 2) ? FString::Printf(TEXT("Reply needed - %d:%02d"), Secs / 60, Secs % 60)
+			: (Phase == 0) ? FString::Printf(TEXT("Coming - arrives at %02d:%02d"), (ClockM / 60) % 24, ClockM % 60)
+			: FString::Printf(TEXT("At the door now - %d:%02d left"), Secs / 60, Secs % 60); }
+		if (Body.Len() > 30) { Body = Body.Left(29) + TEXT("."); }
+		if (TObjectPtr<UTextBlock>* Prev = ListPreviews.Find(Cid)) { if (UTextBlock* P = *Prev) { P->SetText(FText::FromString(Body)); } }
+
+		// Tijdstempel laatste bericht.
+		if (TObjectPtr<UTextBlock>* St = ListStamps.Find(Cid))
+		{
+			if (UTextBlock* S = *St)
 			{
-				if (bActive) { P->SetText(FText::FromString(Phase == 2
-					? FString::Printf(TEXT("Reply needed - %d:%02d"), Secs / 60, Secs % 60)
-					: Phase == 0 ? FString::Printf(TEXT("Coming - arrives at %02d:%02d"), (ClockM / 60) % 24, ClockM % 60)
-					: FString::Printf(TEXT("At the door now - %d:%02d left"), Secs / 60, Secs % 60))); }
+				if (LastClock >= 0.f) { const int32 Hh = (int32)LastClock; const int32 Mm = (int32)((LastClock - Hh) * 60.f); S->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), Hh, Mm))); }
+				else { S->SetText(FText::GetEmpty()); }
 			}
 		}
+
+		// Ongelezen-badge (aantal + zichtbaarheid).
+		const int32 UnreadN = Phone.IsValid() ? Phone->GetUnreadCountFrom(Cid) : 0;
+		if (TObjectPtr<UBorder>* Bd = ListBadges.Find(Cid)) { if (UBorder* B = *Bd) { B->SetVisibility(UnreadN > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); } }
+		if (TObjectPtr<UTextBlock>* BT = ListBadgeTexts.Find(Cid)) { if (UTextBlock* T = *BT) { T->SetText(FText::FromString(FString::Printf(TEXT("%d"), UnreadN))); } }
 	}
 }
 
@@ -2102,7 +2368,8 @@ void UPhoneWidget::FillStoreList()
 				if (!STag.IsEmpty())
 				{
 					UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-					TagPill->SetBrush(RoundedBrush(WeedUI::ColAccentDim(0.96f), 5.f));
+					FLinearColor TagCol = WeedUI::TagColorForItem(IconId); TagCol.A = 0.96f; // per-strain kleur (zoals inventory/hotbar) i.p.v. één vaste kleur
+					TagPill->SetBrush(RoundedBrush(TagCol, 5.f));
 					TagPill->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
 					TagPill->SetContent(MakeText(STag, 8, WeedUI::ColText()));
 					UOverlaySlot* TagOS = IcoOv->AddChildToOverlay(TagPill);
@@ -2386,8 +2653,8 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 
 void UPhoneWidget::AddInfoRow(const FString& Txt, const FLinearColor& Col, int32 Size)
 {
-	if (!ContentBox) { return; }
-	UVerticalBoxSlot* RowSlot = ContentBox->AddChildToVerticalBox(MakeText(Txt, Size, Col));
+	if (!ActiveContent) { return; } // loopt tijdens een build -> ActiveContent = het paneel dat nu bouwt
+	UVerticalBoxSlot* RowSlot = ActiveContent->AddChildToVerticalBox(MakeText(Txt, Size, Col));
 	RowSlot->SetPadding(FMargin(2.f, 3.f, 2.f, 3.f));
 }
 
@@ -2457,7 +2724,10 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBoxSlot* ScreenSlot = VB->AddChildToVerticalBox(Screen);
 	ScreenSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	ContentBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ContentBox"));
+	// Overlay i.p.v. VerticalBox: de per-app panelen stapelen op elkaar. Zo kunnen inactieve panelen op Hidden
+	// staan (blijven gearrangeerd, niet getekend) i.p.v. Collapsed -> een app-open is puur een teken-toggle
+	// zonder dat Slate het paneel opnieuw moet layouten (die her-layout gaf de 1-frame-flikker bij elke app-open).
+	ContentBox = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("ContentBox"));
 	Screen->SetContent(ContentBox);
 
 	// Ronde zwarte home-knop onderaan (zoals een telefoon-home-knop).
@@ -2491,25 +2761,177 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	HbSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
 }
 
+void UPhoneWidget::PrewarmStep()
+{
+	if (bPrewarmDone || !ContentBox || !Phone.IsValid()) { return; }
+
+	// Prewarm-key-volgorde: eerst home (cursor 0), daarna de app-tabs 0..GNumApps-1 (cursor 1..N), waarbij de
+	// verwijderde Lab-app (GHashApp) wordt overgeslagen. Eén stap per tick -> geen hitch; loopt terwijl de
+	// telefoon dicht is, dus de per-paneel visibility-toggles zijn onzichtbaar.
+	// Aantal echte app-stappen na home = GNumApps - 1 (Lab eruit).
+	const int32 NumSteps = 1 + (GNumApps - 1); // home + alle apps behalve Lab
+
+	// Snapshot de winkel-categorie vóór de eerste stap (winkel-panelen kunnen SetSupplierCat muteren);
+	// na de laatste stap zetten we 'm terug zodat prewarm géén netto neveneffect op de telefoon-status heeft.
+	if (PrewarmCursor == 0) { SavedSupplierCat = Phone->GetSupplierCat(); }
+
+	if (PrewarmCursor < NumSteps)
+	{
+		// Bepaal de key voor deze stap. Cursor 0 = home; cursor>=1 = app-tab (Lab overslaan).
+		bPrewarming = true;
+		if (PrewarmCursor == 0)
+		{
+			bPrewarmHome = true; PrewarmApp = 0;
+		}
+		else
+		{
+			bPrewarmHome = false;
+			// App-index = (cursor-1), maar met Lab overgeslagen: schuif één op vanaf GHashApp.
+			int32 AppIdx = PrewarmCursor - 1;
+			if (AppIdx >= GHashApp) { ++AppIdx; }
+			PrewarmApp = AppIdx;
+		}
+		RefreshContent(); // bouwt dit ENE paneel (bNew -> bouwt sowieso), rest blijft Collapsed
+		bPrewarming = false;
+		++PrewarmCursor;
+		return; // één paneel deze tick — de rest volgende ticks
+	}
+
+	// --- Finaliseren (na de laatste stap) ---
+	Phone->SetSupplierCat(SavedSupplierCat); // winkel-categorie herstellen (prewarm mag niets muteren)
+
+	// Het ECHTE huidige paneel opnieuw bouwen zodat de gedeelde single-value refs (MsgAppBadgePill, StoreScroll,
+	// PackagesScroll, OfferBox, PickerClockText, ...) bij dat paneel horen — de prewarm-loop liet ze bij het
+	// LAATST gebouwde paneel achter. bContentDirty forceert de rebuild-tak (i.p.v. de pure-switch early-return);
+	// daarna staat ActiveContent op de huidige app (zichtbaar) en is de rest Collapsed. Dit is normaal onzichtbaar
+	// want de telefoon is nog dicht (Frame Collapsed).
+	bContentDirty = true;
+	RefreshContent();
+	bContentDirty = false; // vers gebouwd -> geen directe her-refresh nodig (zou de flash terugbrengen)
+	// Change-detectie-baseline gelijk aan het net gebouwde huidige paneel, zodat de eerste OPEN geen
+	// (weliswaar flash-vrije, maar overbodige) pure-switch-refresh triggert.
+	bLastHome = Phone->IsHomeScreen();
+	bLastApp = Phone->GetTab();
+
+	// Sig-baselines gelijkzetten aan de HUIDIGE waarden zodat NativeTick de vers-gebouwde panelen als up-to-date
+	// beschouwt: de eerste ECHTE open triggert dan geen MarkDirty+herbouw (dat zou de flash juist terugbrengen).
+	// Formules exact gelijk aan die in NativeTick.
+	LastMsgSig = MessagesSignature();
+	LastContactsSig = ContactsSignature();
+	LastPkgSig = PackagesSignature();
+	LastGoalsSig = GoalsSignature();
+	LastBankSig = BankUnlockSignature();
+	if (GetWorld()) { LastStatsRefresh = GetWorld()->GetTimeSeconds(); }
+
+	bPrewarmDone = true;
+}
+
 void UPhoneWidget::RefreshContent()
 {
 	if (!ContentBox || !Phone.IsValid()) { return; }
-	ContentBox->ClearChildren();
-	PickerClockText = nullptr; PickerProposeBtn = nullptr; PickerContact = NAME_None; // oude tijd-kiezer-refs vrijgeven
-	MsgAppBadgePill = nullptr; MsgAppBadgeText = nullptr; // oude Messages-badge-refs vrijgeven (worden opnieuw gezet als 't home-rooster bouwt)
-	GoalsAppBadgePill = nullptr; GoalsAppBadgeText = nullptr;
-	OfferBox = nullptr; OfferToggleBtn = nullptr; // chat "Offer instead"-box (opnieuw gebouwd in BuildChatApp)
-	// ContentBox->ClearChildren() heeft de winkel-scroll/footer + hun gepoolde rijen vernietigd; de pool-refs
-	// vrijgeven zodat FillStoreList vers opbouwt in de nieuwe StoreScroll (anders: dangling widget-pointers).
-	StoreRowPool.Reset(); StoreRowSigs.Reset();
-	StoreFooterPool.Reset(); StoreFooterSigs.Reset();
-	StoreQtyTexts.Reset();
-	// Packages-kaarten idem: hun scroll is weg -> map + placeholder + scroll-eigenaar vrijgeven.
-	PkgCards.Reset(); PkgBars.Reset(); PkgEtas.Reset(); PkgEmptyRow = nullptr; PkgScrollOwner = nullptr;
+
+	// --- Persistente per-app panelen (cache-and-toggle) ---
+	// Home = -1, elke app = z'n tab-index. Elk paneel blijft in ContentBox hangen; een gewone app-wissel is
+	// puur een zichtbaarheid-toggle (geen ClearChildren -> geen flash). Alleen een ECHTE data-wijziging
+	// (bContentDirty, gezet door MarkDirty) herbouwt het panel van die ene app.
+	// Tijdens pre-warm sturen bPrewarmHome/PrewarmApp welk paneel we bouwen (i.p.v. de live Phone-status).
+	const bool bHome = bPrewarming ? bPrewarmHome : Phone->IsHomeScreen();
+	const int32 App = bPrewarming ? PrewarmApp : FMath::Clamp(Phone->GetTab(), 0, GNumApps - 1);
+	const int32 Key = bHome ? -1 : App;
+	// Store-apps (Grow/Supplies/Sell/Hash) delen één set member-refs (StoreScroll/StoreTabBtns/AppCats/...).
+	// Met meerdere gecachte store-panelen wijzen die naar het láátst-gebouwde paneel; herbouw dit paneel als
+	// de refs nu bij een ANDER store-paneel horen, anders vult category-switch/FillStoreList het verkeerde
+	// (verborgen) paneel -> "grow alles op 1 page / supplies 1 categorie".
+	const bool bStoreApp = !bHome && (App == GGrowApp || App == GSuppliesApp || App == GSellApp || App == GHashApp);
+	const bool bStoreRefsStale = bStoreApp && (StoreMembersOwnerApp != App);
+	bool bNew = false;
+	TObjectPtr<UVerticalBox>* Found = AppPanels.Find(Key);
+	UVerticalBox* Panel = nullptr;
+	if (Found) { Panel = *Found; }
+	else
+	{
+		Panel = WidgetTree->ConstructWidget<UVerticalBox>();
+		// Paneel vult het hele scherm-vlak (Overlay-Fill), zodat de Fill-kinderen (scroll-lijsten in
+		// chat/contacts/store/goals/bank) hun volledige hoogte houden.
+		UOverlaySlot* PanelSlot = ContentBox->AddChildToOverlay(Panel);
+		PanelSlot->SetHorizontalAlignment(HAlign_Fill);
+		PanelSlot->SetVerticalAlignment(VAlign_Fill);
+		AppPanels.Add(Key, Panel);
+		bNew = true;
+	}
+	ActiveContent = Panel;
+	// Alleen het actieve paneel tonen; de rest op HIDDEN (blijft gearrangeerd + gerealiseerd, alleen niet getekend/
+	// klikbaar). Zo hoeft Slate het paneel bij een app-open niet opnieuw te layouten -> geen 1-frame-flikker.
+	for (auto& KV : AppPanels)
+	{
+		if (KV.Value)
+		{
+			KV.Value->SetVisibility(KV.Key == Key ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden);
+		}
+	}
+	// Winkel-app-switch naar een ANDER (al gecacht) winkel-paneel: refs HERSTELLEN uit de per-app cache i.p.v.
+	// het paneel herbouwen -> geen ClearChildren, geen flash. De inhoud staat al in het paneel; RefreshStore
+	// ververst daarna alleen gewijzigde rijen/prijzen + de tab-highlight in-place.
+	{
+		auto IsStoreIdx = [](int32 A) { return A == GGrowApp || A == GSuppliesApp || A == GSellApp || A == GHashApp; };
+		if (bStoreRefsStale && !bNew && !bContentDirty && StoreRefsByApp.Contains(App))
+		{
+			if (IsStoreIdx(StoreMembersOwnerApp) && StoreMembersOwnerApp != App) { SaveStoreRefs(StoreMembersOwnerApp); }
+			RestoreStoreRefs(App);
+			StoreMembersOwnerApp = App;
+			RefreshStore();
+			return;
+		}
+	}
+	// PURE SWITCH: bestaand paneel + geen data-wijziging + winkel-refs kloppen -> niets herbouwen -> geen flash.
+	if (!bNew && !bContentDirty && !bStoreRefsStale) { return; }
+
+	// --- Rebuild-pad: alleen DIT paneel herbouwen ---
+	Panel->ClearChildren();
+	// ClearChildren() sloopte ALLEEN dit paneel z'n widgets -> geef alleen de member-refs vrij die BIJ DIT paneel
+	// horen. Refs van ANDERE (nog gecachte) panelen blijven geldig; die hier nullen zou hun in-place updates
+	// bevriezen (bv. home-badges na één app-bezoek, of de chat-picker/offer na weg-en-terug navigeren).
+	if (Key == -1) // Home-rooster (badge-refs worden opnieuw gezet door MakeAppCell)
+	{
+		MsgAppBadgePill = nullptr; MsgAppBadgeText = nullptr;
+		GoalsAppBadgePill = nullptr; GoalsAppBadgeText = nullptr;
+	}
+	if (Key == 3) // Messages/chat: hele persistente chat-shell (lijst-scroll + thread-root + sub-secties + bubbel-pool)
+	{
+		// Het paneel is net geleegd (ClearChildren) -> alle chat-widget-refs wijzen naar dode widgets. BuildChatApp
+		// nult ze zelf ook aan het begin en bouwt ze opnieuw; hier expliciet nullen zodat een BuildChatApp-early-return
+		// (bv. geen ContactsComponent) geen dangling refs in de live-updates achterlaat.
+		PickerClockText = nullptr; PickerProposeBtn = nullptr; PickerContact = NAME_None;
+		OfferBox = nullptr; OfferToggleBtn = nullptr;
+		ChatListScroll = nullptr; ChatThreadRoot = nullptr;
+		ChatHeaderName = nullptr; ChatTierBox = nullptr; ChatTierLabel = nullptr; ChatTierBar = nullptr;
+		ChatApptBox = nullptr; ChatBubbleScroll = nullptr; ChatNoMsgText = nullptr; ChatWaitBox = nullptr;
+		ChatRespondRow = nullptr; ChatOfferSection = nullptr; ChatPickerPrompt = nullptr; ChatProposeBtn = nullptr;
+		ChatBubblePool.Reset(); ChatBubbleSigs.Reset();
+		ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None;
+		WaitBar = nullptr; WaitBarLabel = nullptr; WaitBarSentTime = -1.f;
+		ListApptBars.Reset(); ListCards.Reset(); ListPreviews.Reset();
+		ListBadges.Reset(); ListBadgeTexts.Reset(); ListStamps.Reset();
+	}
+	if (bStoreApp) // Grow/Supplies/Sell/Hash delen de winkel-pools; FillStoreList vult ze vers in de nieuwe StoreScroll
+	{
+		StoreRowPool.Reset(); StoreRowSigs.Reset();
+		StoreFooterPool.Reset(); StoreFooterSigs.Reset();
+		StoreQtyTexts.Reset();
+	}
+	if (Key == GPackagesApp) // Packages-kaarten (map + placeholder + scroll-eigenaar)
+	{
+		PkgCards.Reset(); PkgBars.Reset(); PkgEtas.Reset(); PkgEmptyRow = nullptr; PkgScrollOwner = nullptr;
+	}
+	if (Key == GBankApp) // Bank: de in-place saldo/cash-tekst-refs wijzen na ClearChildren naar dode widgets
+	{
+		BankBalanceText = nullptr; BankCashText = nullptr; // BuildBankApp zet ze in de ontgrendelde tak opnieuw
+		BankLockedBox = nullptr; BankUnlockedBox = nullptr; // vaste bank-boxen (persistent, getoggled)
+	}
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
-	if (Phone->IsHomeScreen())
+	if (bHome)
 	{
 		AddInfoRow(TEXT("Apps"), WeedUI::ColText(), 16);
 		UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>();
@@ -2524,12 +2946,10 @@ void UPhoneWidget::RefreshContent()
 			GSlot->SetHorizontalAlignment(HAlign_Center);
 			++Cell;
 		}
-		UVerticalBoxSlot* GridSlot = ContentBox->AddChildToVerticalBox(Grid);
+		UVerticalBoxSlot* GridSlot = ActiveContent->AddChildToVerticalBox(Grid);
 		GridSlot->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
 		return;
 	}
-
-	const int32 App = FMath::Clamp(Phone->GetTab(), 0, GNumApps - 1);
 
 	// App-header: back-knop + titel. (Packages is nu een losse app, geen knop meer in de winkel.)
 	bPackagesView = false;
@@ -2544,20 +2964,20 @@ void UPhoneWidget::RefreshContent()
 	TitleSlot->SetPadding(FMargin(10.f, 4.f, 6.f, 0.f));
 	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TitleSlot->SetVerticalAlignment(VAlign_Center);
-	UVerticalBoxSlot* HeaderSlot = ContentBox->AddChildToVerticalBox(Header);
+	UVerticalBoxSlot* HeaderSlot = ActiveContent->AddChildToVerticalBox(Header);
 	HeaderSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	if (App == 0) // Upgrades
 	{
 		// --- Woning: 3 koopbare panden (het starter-flatje is al van jou) ---
 		{
-			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Home"), 14, WeedUI::ColText()))
+			ActiveContent->AddChildToVerticalBox(MakeText(TEXT("Home"), 14, WeedUI::ColText()))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 			TArray<FCityPropertyOffer> Offers;
 			Phone->GetPropertyOffers(Offers);
 			if (Offers.Num() == 0)
 			{
-				ContentBox->AddChildToVerticalBox(MakeText(TEXT("(city still loading...)"), 11, WeedUI::ColTextDim()));
+				ActiveContent->AddChildToVerticalBox(MakeText(TEXT("(city still loading...)"), 11, WeedUI::ColTextDim()));
 			}
 			for (const FCityPropertyOffer& O : Offers)
 			{
@@ -2605,7 +3025,7 @@ void UPhoneWidget::RefreshContent()
 				}
 				UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
 				RS->SetVerticalAlignment(VAlign_Center);
-				ContentBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
+				ActiveContent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 			}
 		}
 
@@ -2615,21 +3035,21 @@ void UPhoneWidget::RefreshContent()
 		bSellApp = false;
 		AppCats = { 0, 1, 5, 2, 8, 9 }; // Seeds, Pots, Soil, Drying, Grow Upg., Care
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
-		BuildStoreApp(ContentBox);
+		BuildStoreApp(ActiveContent);
 	}
 	else if (App == GSuppliesApp) // Supplies -> verwerken/verkopen/inrichten (papers, drogen, verpakken, meubels, keuken)
 	{
 		bSellApp = false;
 		AppCats = { 4, 6, 3, 7, 11, 12 }; // Papers, Water, Packing, Furniture, Kitchen (machines), Ingredients (boter etc.)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
-		BuildStoreApp(ContentBox);
+		BuildStoreApp(ActiveContent);
 	}
 	else if (App == GHashApp) // Lab -> de hasj-keten: machines (mesh/press) + machine-upgrades
 	{
 		bSellApp = false;
 		AppCats = { 10 }; // Hash (Mesh/Press + ProcUp-upgrades)
 		if (!AppCats.Contains(Phone->GetSupplierCat())) { Phone->SetSupplierCat(AppCats[0]); }
-		BuildStoreApp(ContentBox);
+		BuildStoreApp(ActiveContent);
 	}
 	else if (App == GPackagesApp) // Packages -> losse app met onderweg zijnde bestellingen
 	{
@@ -2651,7 +3071,7 @@ void UPhoneWidget::RefreshContent()
 		else
 		{
 			UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
-			UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
+			UVerticalBoxSlot* LS = ActiveContent->AddChildToVerticalBox(List);
 			LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			for (const FPhoneContact& C : Con->GetContacts())
 			{
@@ -2667,7 +3087,10 @@ void UPhoneWidget::RefreshContent()
 				UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
 				IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
 				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Message"), WeedUI::ColAccentDim(),
-					[this, Cid]() { OpenChatContact = Cid; if (Phone.IsValid()) { Phone->OpenApp(3); } MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+					// Zet het te openen contact + wissel naar de Messages-app. De app-open zelf gaat via de bestaande
+					// persistente-paneel-toggle; RefreshChatViews (aangeroepen bij het togglen naar app 3 in NativeTick)
+					// zorgt dat de juiste thread meteen klopt. GEEN MarkDirty (dat zou het chat-paneel herbouwen -> flash).
+					[this, Cid]() { OpenChatContact = Cid; bOfferStrainView = false; ProposeMins = -1; if (Phone.IsValid()) { Phone->OpenApp(3); } }, 11))->SetVerticalAlignment(VAlign_Center);
 				List->AddChild(Card);
 				UTextBlock* Gap = MakeText(TEXT(""), 4, FLinearColor::Transparent);
 				List->AddChild(Gap);
@@ -2685,7 +3108,7 @@ void UPhoneWidget::RefreshContent()
 	else if (App == GSellApp) // Sell -> aparte verkoop-app (zelfde store-UI, alleen verkopen)
 	{
 		bSellApp = true;
-		BuildStoreApp(ContentBox);
+		BuildStoreApp(ActiveContent);
 	}
 	else if (App == GGoalsApp) // Goals -> milestone-doelen met rewards
 	{
@@ -2699,6 +3122,9 @@ void UPhoneWidget::RefreshContent()
 	{
 		BuildMapApp();
 	}
+
+	// Onthoud welk store-paneel de gedeelde winkel-member-refs nu beschrijven (voor de stale-check bovenaan).
+	if (bStoreApp) { StoreMembersOwnerApp = App; SaveStoreRefs(App); } // vers gebouwd -> cache seeden voor latere flash-vrije restores
 }
 
 void UPhoneWidget::BuildStatsApp()
@@ -2738,7 +3164,7 @@ void UPhoneWidget::BuildStatsApp()
 			FString::Printf(TEXT("Earned EUR %lld   Customers %d"), (long long)(C.EarnedCents / 100), C.Customers), 11,
 			WeedUI::ColTextDim(), false));
 
-		UVerticalBoxSlot* CS = ContentBox->AddChildToVerticalBox(Card);
+		UVerticalBoxSlot* CS = ActiveContent->AddChildToVerticalBox(Card);
 		CS->SetPadding(FMargin(0.f, 0.f, 0.f, 7.f));
 		++Rank;
 	}
@@ -2751,15 +3177,33 @@ int32 UPhoneWidget::GetClaimableGoals() const
 	return GoalsC ? GoalsC->GetClaimableCount() : 0;
 }
 
+// Change-sig van de doelen: verandert zodra een doel voltooit, geclaimd wordt, of ~5% voortgang verschuift.
+// Zo herbouwt de Goals-app alleen bij een echte wijziging (Claim-knop verschijnt / balk loopt mee), niet per frame.
+int32 UPhoneWidget::GoalsSignature() const
+{
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
+	if (!GoalsC) { return 0; }
+	const TArray<FGoalDef>& G = UGoalsComponent::Goals();
+	int32 Sig = G.Num() * 17;
+	for (int32 i = 0; i < G.Num(); ++i)
+	{
+		// Alleen VOLTOOIING in de sig (geen voortgangs-bucket, geen IsClaimed): de lijst herbouwt dan ALLEEN als een
+		// doel net af is (Claim-knop verschijnt). Geen flash bij elke % voortgang; claimen werkt al in-place.
+		Sig += (GoalsC->IsComplete(i) ? 7 : 0) * (i + 3);
+	}
+	return Sig;
+}
+
 void UPhoneWidget::BuildGoalsApp()
 {
-	if (!ContentBox) { return; }
+	if (!ActiveContent) { return; }
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
 	if (!GoalsC) { AddInfoRow(TEXT("Goals unavailable."), WeedUI::ColTextDim()); return; }
 
 	UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
-	UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
+	UVerticalBoxSlot* LS = ActiveContent->AddChildToVerticalBox(List);
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
 	const TArray<FGoalDef>& G = UGoalsComponent::Goals();
@@ -2839,12 +3283,12 @@ void UPhoneWidget::BuildGoalsApp()
 
 void UPhoneWidget::BuildMapApp()
 {
-	if (!ContentBox) { return; }
+	if (!ActiveContent) { return; }
 
 	// Knop naar de fullscreen-kaart (zelfde als M).
 	UWeedActionButton* FB = MakeActionBtn(TEXT("Fullscreen"), WeedUI::ColAccentDim(),
 		[this]() { if (Phone.IsValid()) { Phone->ToggleMapOverlay(); } }, 13);
-	ContentBox->AddChildToVerticalBox(FB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	ActiveContent->AddChildToVerticalBox(FB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Ingebedde mini-kaart (toont winkels, huisnummers, jouw positie + de NPC's).
 	if (UMapWidget* MW = CreateWidget<UMapWidget>(GetOwningPlayer(), UMapWidget::StaticClass()))
@@ -2852,7 +3296,7 @@ void UPhoneWidget::BuildMapApp()
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 		Box->SetHeightOverride(300.f);
 		Box->SetContent(MW);
-		ContentBox->AddChildToVerticalBox(Box);
+		ActiveContent->AddChildToVerticalBox(Box);
 	}
 }
 
@@ -2861,7 +3305,7 @@ void UPhoneWidget::HandlePhoneButton(int32 Action, int32 Param)
 	if (!Phone.IsValid()) { return; }
 	switch (Action)
 	{
-	case 0: Phone->OpenApp(Param); bCartView = false; if (Param == 3) { OpenChatContact = NAME_None; } break;
+	case 0: Phone->OpenApp(Param); bCartView = false; if (Param == 3) { OpenChatContact = NAME_None; bOfferStrainView = false; ProposeMins = -1; } break; // Messages-open: het chat-paneel is persistent, dus geen MarkDirty; de app-switch-toggle in NativeTick roept RefreshChatViews aan (toont de lijst)
 	case 1: if (Phone->IsHomeScreen()) { Phone->Toggle(); } else { Phone->GoHome(); } bCartView = false; OpenChatContact = NAME_None; break;
 	case 2: Phone->Toggle(); break;
 	case 3: Phone->DoAction(Param); break;     // koop upgrade
@@ -2889,9 +3333,19 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	const bool bOpen = Phone->IsOpen();
 	if (Frame) { Frame->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bOpen) { return; }
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+
+	// Pre-warm de app-panelen GESPREID (1 per tick) terwijl de telefoon DICHT is (vlak na de load, achter het
+	// boot-scherm): geen runtime-hitch, en tegen de tijd dat de speler de telefoon opent zijn alle panelen al
+	// gebouwd -> pure toggle -> geen flash. Alleen stappen terwijl gesloten: een prewarm-stap togglet de
+	// panel-visibility op de PREWARM-key, wat een geopend paneel zou verbergen (flash). Opent de speler mid-
+	// prewarm (zeldzaam, eerste ~0.2s), dan bouwt de lazy pad het huidige scherm on-demand (één flash) en hervat
+	// de spreiding zodra de telefoon weer dicht is. Wacht op de game-state (echte data).
+	if (!bPrewarmDone && GS && !bOpen) { PrewarmStep(); }
+
+	if (!bOpen) { return; }
+
 	if (GS)
 	{
 		if (CashText && GS->GetEconomy())
@@ -2924,6 +3378,7 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bHome = Phone->IsHomeScreen();
 	const int32 App = Phone->GetTab();
+
 	// Leaderboard live houden: forceer ~elke 2s een rebuild zolang de stats-app open is (standen verversen).
 	if (!bHome && App == GStatsApp && GetWorld())
 	{
@@ -2932,10 +3387,15 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	// (Geen per-bericht home-herbouw meer: dat gaf geflits. De Messages-badge ververst bij openen/navigeren;
 	//  de live notificatie zie je sowieso op het hotbar-telefoon-icoon.)
+	const bool bSwitchedToChat = (App == 3) && !bHome && (bHome != bLastHome || App != bLastApp); // net naar Messages
 	if (bContentDirty || bHome != bLastHome || App != bLastApp)
 	{
-		bLastHome = bHome; bLastApp = App; bContentDirty = false;
-		RefreshContent();
+		bLastHome = bHome; bLastApp = App;
+		RefreshContent();      // moet bContentDirty ZIEN om het paneel te herbouwen
+		bContentDirty = false; // pas NA de (eventuele) rebuild wissen
+		// Chat-paneel is PERSISTENT: bij een pure toggle naar Messages (geen rebuild) synct RefreshChatViews de
+		// juiste lijst/thread naar de actuele OpenChatContact (bv. na Message in Contacts of gewoon de app openen).
+		if (bSwitchedToChat) { RefreshChatViews(); }
 	}
 
 	// Messages-app badge op het home-rooster LIVE bijwerken (zonder rebuild -> geen flash).
@@ -2972,12 +3432,28 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		else { UpdatePackagesLive(); }
 	}
 
-	// Berichten/Contacten open: bij een nieuw bericht of statuswijziging de inhoud herbouwen.
-	if (!bHome && (App == 2 || App == 3))
+	// Contacts open: EIGEN structurele sig = alleen de contact-SET. Zo herbouwt Contacts NIET bij een nieuw
+	// bericht/afspraak-fase van een BESTAAND contact (dat gaf flits via de gedeelde MessagesSignature); alleen een
+	// NIEUW/weg contact (zeldzaam) herbouwt de lijst één keer. (De relationship-drift laten we met rust — geen flash.)
+	if (!bHome && App == 2)
+	{
+		const int32 CSig = ContactsSignature();
+		if (CSig != LastContactsSig) { LastContactsSig = CSig; MarkDirty(); }
+	}
+
+	// Berichten open: bij een nieuw bericht of statuswijziging de inhoud verversen (App 2/Contacts zit hier NIET
+	// meer in -> die heeft z'n eigen contact-SET-sig hierboven).
+	if (!bHome && App == 3)
 	{
 		const int32 Sig = MessagesSignature();
-		if (Sig != LastMsgSig) { LastMsgSig = Sig; MarkDirty(); }
-		else { UpdateApptBarLive(); UpdateWaitBarLive(); UpdateListBarsLive(); } // balken live bijwerken (zonder herbouw)
+		if (Sig != LastMsgSig)
+		{
+			LastMsgSig = Sig;
+			// App 3 (Messages) is PERSISTENT: een structurele wijziging (nieuw/weg contact of thread-bericht-verschil)
+			// werkt IN-PLACE bij via RefreshChatViews -> GEEN paneel-herbouw, geen flash.
+			RefreshChatViews();
+		}
+		else { UpdateApptBarLive(); UpdateWaitBarLive(); UpdateListBarsLive(); } // lijst/threads live bijwerken (zonder herbouw)
 		// Tijd-kiezer-ondergrens LIVE laten meelopen zonder rebuild (geen flash): klem ProposeMins op
 		// 30 min..23,5u vooruit met de huidige klok en werk alleen het klok-label bij.
 		if (App == 3 && PickerClockText && !PickerContact.IsNone() && GS && GS->GetDayCycle())
@@ -2993,13 +3469,27 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// Bank-app open: bij saldo-/limiet-/unlock-wijziging de inhoud herbouwen.
+	// Bank-app open: het paneel is VOLLEDIG PERSISTENT (upgrade-prompt + bank-kaart allebei gebouwd). Toggle welke
+	// box zichtbaar is op de live unlock/ATM-staat (kopen van de upgrade = box-wissel, GEEN rebuild/flash), en werk
+	// saldo + cash-to-deposit IN-PLACE bij. De tax/fee-labels + presets zijn constant -> niet bijwerken.
 	if (!bHome && App == GBankApp && GS && GS->GetEconomy())
 	{
-		const UEconomyComponent* E = GS->GetEconomy();
-		const int32 Sig = (int32)(E->GetCashCents() / 100) * 7 + (int32)(E->GetBankCents() / 100) * 13
-			+ E->GetTransfersToday() * 101 + (int32)(E->GetDepositedTodayCents() / 100) * 3
-			+ (Phone->IsBankAppUnlocked() ? 1000003 : 0);
-		if (Sig != LastBankSig) { LastBankSig = Sig; MarkDirty(); }
+		const bool bBankUnlocked = Phone->IsBankAppUnlocked() || Phone->IsBankViaAtm();
+		if (BankLockedBox)   { BankLockedBox->SetVisibility(bBankUnlocked ? ESlateVisibility::Hidden : ESlateVisibility::SelfHitTestInvisible); }
+		if (BankUnlockedBox) { BankUnlockedBox->SetVisibility(bBankUnlocked ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden); }
+		if (bBankUnlocked)
+		{
+			const UEconomyComponent* E = GS->GetEconomy();
+			if (BankBalanceText) { BankBalanceText->SetText(FText::FromString(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(E->GetBankCents()) / 100)))); }
+			if (BankCashText) { BankCashText->SetText(FText::FromString(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(E->GetCashCents()) / 100)))); }
+		}
+	}
+
+	// Goals-app open: bij voltooiing/claim/voortgang de lijst herbouwen (de Claim-knop verschijnt zodra een doel
+	// af is; de balken lopen mee). Analoog aan Bank/Packages/Messages.
+	if (!bHome && App == GGoalsApp && GS && GS->GetGoals())
+	{
+		const int32 Sig = GoalsSignature();
+		if (Sig != LastGoalsSig) { LastGoalsSig = Sig; MarkDirty(); }
 	}
 }

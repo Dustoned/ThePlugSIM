@@ -15,6 +15,7 @@ class UProgressBar;
 class UCanvasPanel;
 class UImage;
 class UMaterialInterface;
+class UHorizontalBox;
 
 UCLASS()
 class WEEDSHOPCORE_API UPlantInfoWidget : public UUserWidget
@@ -42,6 +43,7 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> HealthText;
 	UPROPERTY() TObjectPtr<UTextBlock> YieldText;
 	UPROPERTY() TObjectPtr<UTextBlock> ThcText;
+	UPROPERTY() TObjectPtr<class UHorizontalBox> YieldRow; // hele yield+thc-rij (incl. iconen) -> verbergen bij een lege pot
 	UPROPERTY() TObjectPtr<UTextBlock> SoilText;
 	UPROPERTY() TObjectPtr<UTextBlock> UpgradesText; // actieve gear-upgrades op deze pot (altijd zichtbaar)
 	UPROPERTY() TObjectPtr<UTextBlock> HintText;
@@ -52,4 +54,9 @@ protected:
 	UPROPERTY() TObjectPtr<UImage> HealthRing;
 	UPROPERTY() TObjectPtr<UImage> GrowthRing;
 	UPROPERTY() TObjectPtr<UWidget> RingRow; // container voor show/hide
+
+	// Conditie-badges (mold / pest) — vast gebouwd, alleen zichtbaar bij besmetting.
+	UPROPERTY() TObjectPtr<UHorizontalBox> ConditionRow;
+	UPROPERTY() TObjectPtr<UHorizontalBox> MoldBadge;
+	UPROPERTY() TObjectPtr<UHorizontalBox> PestBadge;
 };

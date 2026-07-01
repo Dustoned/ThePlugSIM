@@ -163,6 +163,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	FText GetPrimaryStrainName() const;
 
+	// Rauwe strain-FName van de eerst-geplante plek (voor bv. de per-strain tag-kleur); NAME_None als leeg.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
+	FName GetPrimaryStrainId() const { for (const FName& S : SlotStrain) { if (!S.IsNone()) { return S; } } return NAME_None; }
+
 	// Basis-THC% van de eerst-geplante strain (0 als leeg).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetPrimaryBaseThc() const;

@@ -616,6 +616,7 @@ void UDealWidget::UpdateLive()
 	if (OfferLabel)   { OfferLabel->SetVisibility(DealVis); }
 	if (StrainBox)    { StrainBox->SetVisibility(bHasWeed ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 	if (SubText)      { SubText->SetVisibility(DealVis); }
+	if (WantsText)    { WantsText->SetVisibility(ESlateVisibility::HitTestInvisible); } // koper: altijd tonen (kan Collapsed staan door een vorige niet-koper)
 	if (!bHasWeed)
 	{
 		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.

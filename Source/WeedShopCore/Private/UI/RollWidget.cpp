@@ -236,15 +236,20 @@ void URollWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bOpen = PhoneComp.IsValid() && PhoneComp->IsRollOpen();
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bOpen) { LastGrams = -1; LastMaxG = -2; return; }
+	if (!bOpen) { LastGrams = -1; LastMaxG = -2; LastWeedSig = -1; return; }
 
-	// Alleen bijwerken als er iets veranderde (grams of papers-capaciteit) -> geen per-frame werk.
-	// De update is nu in-place (SetText/SetStyle/SetPercent/SetVisibility), dus geen flash/scroll-sprong.
+	// Alleen bijwerken als er iets veranderde -> geen per-frame widget-werk (update is in-place, geen flash/scroll-sprong).
+	// Naast grams + papers-capaciteit ook de WIET-VOORRAAD in de gate: komt er wiet bij / gaat weg terwijl het scherm
+	// open staat (droogrek klaar, oogst, delivery-pakket) dan moeten de sterkte-preview + Load-knop mee-updaten, ook
+	// bij ongewijzigd G/MaxG.
 	const int32 G = PhoneComp->GetRollGrams();
 	const int32 MaxG = PhoneComp->GetMaxJointGrams();
-	if (G != LastGrams || MaxG != LastMaxG)
+	float Thc = 0.f, Qpct = 0.f;
+	const int32 WeedSig = PhoneComp->GetRollWeedInfo(G, Thc, Qpct)
+		? (1 + (int32)(Thc * 10.f) * 131 + (int32)(Qpct * 10.f) * 17) : 0;
+	if (G != LastGrams || MaxG != LastMaxG || WeedSig != LastWeedSig)
 	{
-		LastGrams = G; LastMaxG = MaxG;
+		LastGrams = G; LastMaxG = MaxG; LastWeedSig = WeedSig;
 		UpdateContent();
 	}
 }
