@@ -1558,6 +1558,23 @@ void UPhoneClientComponent::ServerShelfStore_Implementation(AStorageShelf* Shelf
 	// Afstand-check (anti-cheat/lag).
 	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Shelf->GetActorLocation()) > 400.f) { return; }
 
+	// Cash opslaan = ECHT geld van je saldo naar het schap/de safe/de koelkast (co-op: zo deel of bewaar je
+	// briefgeld). De inventory-cash is een SPIEGEL van het saldo (SetCashDisplayEuros): dus NIET via
+	// Inv->RemoveItem (de reconcile zou de stapel herscheppen = gratis geld), maar via Economy->RemoveMoney —
+	// de spiegel-stapel volgt dan vanzelf. Quantity op het schap = hele euro's.
+	if (ItemId == FName(TEXT("Cash")))
+	{
+		UEconomyComponent* Ec = GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
+		if (!Ec) { return; }
+		const int32 HaveEur = (int32)FMath::Clamp<int64>(Ec->GetBalanceCents() / 100, 0, (int64)MAX_int32);
+		const int32 WantEur = FMath::Min(Count, HaveEur);
+		if (WantEur <= 0) { return; }
+		const int32 StoredEur = Shelf->ServerStore(ItemId, WantEur, 0.f, 0.f);
+		if (StoredEur > 0) { Ec->RemoveMoney((int64)StoredEur * 100); }
+		else if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("Shelf is full.")); }
+		return;
+	}
+
 	const int32 Have = Inv->GetQuantity(ItemId);
 	const int32 Want = FMath::Min(Count, Have);
 	if (Want <= 0) { return; }
@@ -1577,6 +1594,16 @@ void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf,
 	FName OutId; float OutThc = 0.f; float OutQual = 0.f;
 	const int32 Taken = Shelf->ServerTake(SlotIndex, Count, OutId, OutThc, OutQual);
 	if (Taken <= 0) { return; }
+	if (OutId == FName(TEXT("Cash")))
+	{
+		// Cash terugpakken = terug op je saldo (Quantity = hele euro's); de inventory-spiegel volgt vanzelf.
+		// GEEN Inv->AddItem: dat zou een tweede cash-stapel naast de spiegel zetten (dubbel geld tot reconcile).
+		if (UEconomyComponent* Ec = GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr)
+		{
+			Ec->AddMoney((int64)Taken * 100);
+		}
+		return;
+	}
 	if (!Inv->AddItem(OutId, Taken, OutThc, OutQual))
 	{
 		// Geen ruimte in de inventory -> terug op het schap.
@@ -1876,6 +1903,16 @@ namespace
 		{ TEXT("Papers_Blunt"),     7 },
 		{ TEXT("Papers_Backwoods"), 10 },
 	};
+}
+
+int32 UPhoneClientComponent::PaperCapacity(FName PaperId)
+{
+	// Capaciteit van een specifiek papers-item (voor de quick-view); 0 = geen papers.
+	for (const FPaperDef& P : GPapers)
+	{
+		if (PaperId == FName(P.Id)) { return P.Capacity; }
+	}
+	return 0;
 }
 
 int32 UPhoneClientComponent::GetMaxJointGrams() const

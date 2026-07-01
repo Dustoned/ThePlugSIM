@@ -25,6 +25,15 @@
 static constexpr int32 FoliagePerPlant = 6;
 static constexpr int32 BudsPerPlant = 4;
 
+// --- Mold/pest lockout-tuning (gedeeld door Tick + GetWorstAfflictSecondsLeft) ---
+// Gratie-periode: binnen deze tijd sprayen = geen straf, alles loopt daarna gewoon weer door.
+static constexpr float AfflictGraceSeconds = 180.f; // 3 min curable zonder straf
+// NIET binnen de gratie gesprayed -> de pot-kwaliteit (care) zakt SNEL: ~0,8% per seconde.
+// Een gezonde pot (~0,7 care) heeft dan nog ~90 sec voordat 'ie op de bodem zit — merkbaar
+// snel, maar nog te redden als je er vlot bij bent. Pas op de bodem sterft de plant (zaad weg),
+// i.p.v. het oude abrupte sterven op een vaste timer.
+static constexpr float AfflictQualityDrainPerSec = 0.008f;
+
 AGrowPlant::AGrowPlant()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -335,97 +344,104 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		return;
 	}
 
-	float GrowthBonus = 0.f, CareRetention = 0.f;
-	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	// Harde lockout: zolang een plek besmet is (mold/pest) staat de HELE pot stil — geen groei,
+	// geen water-drain, geen care/kwaliteit-verloop, geen over-rijp rot en geen auto-watering.
+	// Freeze = deze tick-updates OVERSLAAN (niets resetten); alleen de besmetting-timer loopt door
+	// (zie het mold/pest-blok onderaan). Sprayen binnen de gratie = dus geen enkele straf.
+	const bool bAfflicted = GetAfflictedCount() > 0;
+	if (!bAfflicted)
 	{
-		if (const UUpgradeComponent* Upg = GS->GetUpgrades())
+		float GrowthBonus = 0.f, CareRetention = 0.f;
+		if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 		{
-			GrowthBonus = Upg->GetEffectTotal(TEXT("GrowthSpeed"));
-			CareRetention = FMath::Clamp(Upg->GetEffectTotal(TEXT("CareRetention")), 0.f, 0.9f);
-		}
-	}
-
-	// Groei per plek (grow-lamp I/II/III = +15/30/50% sneller).
-	const int32 LampTier = HighestOwnedTier(PotUpgradeMask, { 3, 4, 5 });
-	const float LampMul = 1.f + ((LampTier == 1) ? 0.15f : (LampTier == 2) ? 0.30f : (LampTier >= 3) ? 0.50f : 0.f);
-	const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus) * LampMul;
-	for (int32 i = 0; i < SlotStrain.Num(); ++i)
-	{
-		// Besmette planten (mold/pest) stoppen met groeien tot je ze sprayt.
-		if (SlotStrain[i].IsNone() || SlotPhase[i] == EGrowthPhase::Harvestable) { continue; }
-		if (SlotAfflict.IsValidIndex(i) && SlotAfflict[i] != 0) { continue; }
-		SlotGrowth[i] = FMath::Min(SlotGrowth[i] + DeltaSeconds * Speed, SlotMaxSeconds(i));
-	}
-	UpdatePhases();
-
-	// Waterpeil loopt langzaam leeg (isolatie-upgrade + pot-retentie vertragen dit).
-	// Auto-watering I/II (bits 9/10) houdt de pot vanzelf vol -> geen handmatig water nodig.
-	const float MaxCare = GetMaxCare();
-	if (HasPotUpgrade(9) || HasPotUpgrade(10))
-	{
-		WaterLevel = 1.f;
-	}
-	else
-	{
-		const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f;
-		WaterLevel = FMath::Clamp(WaterLevel - DeltaSeconds * 0.02f * (1.f - CareRetention * 0.5f) * LeakMul, 0.f, 1.f);
-	}
-
-	const bool bAnyReady = GetReadyCount() > 0;
-	if (!bAnyReady)
-	{
-		// Normaal: gezondheid/care volgt het waterpeil. Genoeg water -> stijgt richting het pot-plafond;
-		// te droog -> zakt. Last-minute water geven herstelt de gemiddelde kwaliteit dus niet.
-		// Droog -> zakt verder weg (0.12) en herstelt LANGZAAM (interp 0.12), zodat last-minute water het
-		// tijd-gemiddelde nauwelijks meer optrekt: je moet er gedurende de hele groei water in houden.
-		const float Target = (WaterLevel >= 0.25f) ? MaxCare : 0.12f;
-		CareMultiplier = FMath::Clamp(FMath::FInterpTo(CareMultiplier, Target, DeltaSeconds, 0.12f), 0.05f, MaxCare);
-
-		// Kwaliteit = tijd-gewogen gemiddelde gezondheid.
-		CareSum += CareMultiplier * DeltaSeconds;
-		CareTime += DeltaSeconds;
-		CareAvg = (CareTime > 0.f) ? (CareSum / CareTime) : CareMultiplier;
-	}
-	else
-	{
-		// Over-rijp: niet geoogst -> de gezondheid (health) zakt LANGZAAM in ECHTE tijd (niet x groeisnelheid,
-		// anders gaat 'ie veel te snel dood). Het bulk-deel (tot 10%) duurt ~4 min, de laatste 10% nog ~3 min;
-		// pas daarna sterft de plant. Zo heb je ruim tijd om een klare plant te oogsten.
-		const float BulkRate = 0.90f / (240.f * FMath::Max(0.25f, RotBulkFactor * 0.5f)); // ~90% over ~4 min
-		const float SlowRate = 0.10f / (180.f * FMath::Max(0.25f, RotSlowFactor * 0.33f)); // laatste 10% over ~3 min
-		const float Rate = (CareMultiplier > 0.10f) ? BulkRate : SlowRate;
-		CareMultiplier = FMath::Max(0.f, CareMultiplier - DeltaSeconds * Rate);
-
-		// Kwaliteit volgt de zakkende gezondheid mee naar beneden (kan niet meer stijgen).
-		CareAvg = FMath::Min(CareAvg, CareMultiplier);
-
-		if (CareMultiplier <= 0.f)
-		{
-			// Plant(en) sterven: alle oogstklare plekken leeg, zaadjes weg.
-			bool bDied = false;
-			for (int32 i = 0; i < SlotStrain.Num(); ++i)
+			if (const UUpgradeComponent* Upg = GS->GetUpgrades())
 			{
-				if (SlotStrain[i].IsNone() || SlotPhase[i] != EGrowthPhase::Harvestable) { continue; }
-				SlotStrain[i] = NAME_None;
-				SlotGrowth[i] = 0.f;
-				SlotPhase[i] = EGrowthPhase::Seedling;
-				bDied = true;
+				GrowthBonus = Upg->GetEffectTotal(TEXT("GrowthSpeed"));
+				CareRetention = FMath::Clamp(Upg->GetEffectTotal(TEXT("CareRetention")), 0.f, 0.9f);
 			}
-			if (bDied)
+		}
+
+		// Groei per plek (grow-lamp I/II/III = +15/30/50% sneller).
+		const int32 LampTier = HighestOwnedTier(PotUpgradeMask, { 3, 4, 5 });
+		const float LampMul = 1.f + ((LampTier == 1) ? 0.15f : (LampTier == 2) ? 0.30f : (LampTier >= 3) ? 0.50f : 0.f);
+		const float Speed = FMath::Max(0.f, GrowthSpeedMultiplier) * (1.f + GrowthBonus) * LampMul;
+		for (int32 i = 0; i < SlotStrain.Num(); ++i)
+		{
+			if (SlotStrain[i].IsNone() || SlotPhase[i] == EGrowthPhase::Harvestable) { continue; }
+			SlotGrowth[i] = FMath::Min(SlotGrowth[i] + DeltaSeconds * Speed, SlotMaxSeconds(i));
+		}
+		UpdatePhases();
+
+		// Waterpeil loopt langzaam leeg (isolatie-upgrade + pot-retentie vertragen dit).
+		// Auto-watering I/II (bits 9/10) houdt de pot vanzelf vol -> geen handmatig water nodig.
+		const float MaxCare = GetMaxCare();
+		if (HasPotUpgrade(9) || HasPotUpgrade(10))
+		{
+			WaterLevel = 1.f;
+		}
+		else
+		{
+			const float LeakMul = HasPotUpgrade(1) ? 0.5f : 1.f;
+			WaterLevel = FMath::Clamp(WaterLevel - DeltaSeconds * 0.02f * (1.f - CareRetention * 0.5f) * LeakMul, 0.f, 1.f);
+		}
+
+		const bool bAnyReady = GetReadyCount() > 0;
+		if (!bAnyReady)
+		{
+			// Normaal: gezondheid/care volgt het waterpeil. Genoeg water -> stijgt richting het pot-plafond;
+			// te droog -> zakt. Last-minute water geven herstelt de gemiddelde kwaliteit dus niet.
+			// Droog -> zakt verder weg (0.12) en herstelt LANGZAAM (interp 0.12), zodat last-minute water het
+			// tijd-gemiddelde nauwelijks meer optrekt: je moet er gedurende de hele groei water in houden.
+			const float Target = (WaterLevel >= 0.25f) ? MaxCare : 0.12f;
+			CareMultiplier = FMath::Clamp(FMath::FInterpTo(CareMultiplier, Target, DeltaSeconds, 0.12f), 0.05f, MaxCare);
+
+			// Kwaliteit = tijd-gewogen gemiddelde gezondheid.
+			CareSum += CareMultiplier * DeltaSeconds;
+			CareTime += DeltaSeconds;
+			CareAvg = (CareTime > 0.f) ? (CareSum / CareTime) : CareMultiplier;
+		}
+		else
+		{
+			// Over-rijp: niet geoogst -> de gezondheid (health) zakt LANGZAAM in ECHTE tijd (niet x groeisnelheid,
+			// anders gaat 'ie veel te snel dood). Het bulk-deel (tot 10%) duurt ~4 min, de laatste 10% nog ~3 min;
+			// pas daarna sterft de plant. Zo heb je ruim tijd om een klare plant te oogsten.
+			const float BulkRate = 0.90f / (240.f * FMath::Max(0.25f, RotBulkFactor * 0.5f)); // ~90% over ~4 min
+			const float SlowRate = 0.10f / (180.f * FMath::Max(0.25f, RotSlowFactor * 0.33f)); // laatste 10% over ~3 min
+			const float Rate = (CareMultiplier > 0.10f) ? BulkRate : SlowRate;
+			CareMultiplier = FMath::Max(0.f, CareMultiplier - DeltaSeconds * Rate);
+
+			// Kwaliteit volgt de zakkende gezondheid mee naar beneden (kan niet meer stijgen).
+			CareAvg = FMath::Min(CareAvg, CareMultiplier);
+
+			if (CareMultiplier <= 0.f)
 			{
-				// Reset de meting voor wat er nog (groeiend) in de pot staat.
-				CareMultiplier = FMath::Min(0.3f, MaxCare);
-				CareSum = 0.f; CareTime = 0.f; CareAvg = CareMultiplier;
-				UpdatePlantVisual();
-				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Red, TEXT("A plant rotted away - harvested too late. Seed lost.")); }
+				// Plant(en) sterven: alle oogstklare plekken leeg, zaadjes weg.
+				bool bDied = false;
+				for (int32 i = 0; i < SlotStrain.Num(); ++i)
+				{
+					if (SlotStrain[i].IsNone() || SlotPhase[i] != EGrowthPhase::Harvestable) { continue; }
+					SlotStrain[i] = NAME_None;
+					SlotGrowth[i] = 0.f;
+					SlotPhase[i] = EGrowthPhase::Seedling;
+					bDied = true;
+				}
+				if (bDied)
+				{
+					// Reset de meting voor wat er nog (groeiend) in de pot staat.
+					CareMultiplier = FMath::Min(0.3f, MaxCare);
+					CareSum = 0.f; CareTime = 0.f; CareAvg = CareMultiplier;
+					UpdatePlantVisual();
+					if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Red, TEXT("A plant rotted away - harvested too late. Seed lost.")); }
+				}
 			}
 		}
 	}
 
 	// --- Mold / pest ---
 	// Vanaf een bepaald crew-level kunnen planten schimmel (mold) of ongedierte (pest) krijgen. De kans
-	// schaalt met de zorg-kwaliteit (slechter verzorgd = grotere kans). Een besmette plant stopt met
-	// groeien; je hebt 3 min om 'm te sprayen, anders gaat 'ie daarna langzaam dood (zaad weg).
+	// schaalt met de zorg-kwaliteit (slechter verzorgd = grotere kans). Een besmette pot staat volledig
+	// stil (harde lockout, ook water geven is dan geblokkeerd); binnen de gratie sprayen = geen straf,
+	// daarna zakt de kwaliteit snel en sterft de plant pas als die op de bodem staat.
 	{
 		int32 CrewLevel = 1;
 		if (const AWeedShopGameState* GS2 = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
@@ -434,13 +450,12 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		}
 		constexpr int32 AfflictMoldMinLevel = 12;    // mold (schimmel) kan vanaf hier
 		constexpr int32 AfflictPestMinLevel = 18;    // ongedierte (pests) pas later in het spel
-		constexpr float AfflictGraceSeconds = 180.f; // 3 min curable (groei gehalt)
-		constexpr float AfflictDeathSeconds = 150.f; // daarna langzaam dood
 		// Bewust ZELDZAAM: af en toe een dingetje, geen straf op lage kwaliteit. ~1 keer per
 		// ~20-30 min groei per plant. Lage care verhoogt het maar mild (max ~1.5x), niet eindeloos.
 		constexpr float AfflictBaseRatePerSec = 0.00009f;
 
 		bool bVisChanged = false;
+		bool bAnyPastGrace = false;
 		for (int32 i = 0; i < SlotStrain.Num(); ++i)
 		{
 			if (SlotStrain[i].IsNone())
@@ -451,12 +466,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 			if (SlotAfflict[i] != 0)
 			{
 				SlotAfflictTime[i] += DeltaSeconds; // echte tijd, niet x groeisnelheid
-				if (SlotAfflictTime[i] >= AfflictGraceSeconds + AfflictDeathSeconds)
-				{
-					SlotStrain[i] = NAME_None; SlotGrowth[i] = 0.f; SlotPhase[i] = EGrowthPhase::Seedling;
-					SlotAfflict[i] = 0; SlotAfflictTime[i] = 0.f; bVisChanged = true;
-					if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Red, TEXT("A plant died from mold/pests - you didn't spray it in time. Seed lost.")); }
-				}
+				if (SlotAfflictTime[i] >= AfflictGraceSeconds) { bAnyPastGrace = true; }
 			}
 			else if (CrewLevel >= AfflictMoldMinLevel)
 			{
@@ -469,7 +479,40 @@ void AGrowPlant::Tick(float DeltaSeconds)
 					const bool bPestUnlocked = CrewLevel >= AfflictPestMinLevel;
 					SlotAfflict[i] = (bPestUnlocked && FMath::FRand() < 0.5f) ? 2 : 1; // 1 mold, 2 pest
 					SlotAfflictTime[i] = 0.f; bVisChanged = true;
-					if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! Spray it within 3 min or it starts dying."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
+					if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor(255, 140, 40), FString::Printf(TEXT("A plant caught %s! The pot is locked - spray within 3 min or quality starts dropping fast."), SlotAfflict[i] == 1 ? TEXT("MOLD") : TEXT("PESTS"))); }
+				}
+			}
+		}
+
+		// NIET binnen de gratie gesprayed -> de kwaliteit (care) zakt SNEL i.p.v. het oude abrupte
+		// sterven op een vaste timer. De besmette plek(ken) sterven pas als de kwaliteit op de bodem
+		// (0) staat, zodat er tot het laatste moment iets te redden valt (zelfde sterf-afhandeling
+		// als over-rijp rot: plek leeg, zaad weg, meting gereset voor de rest van de pot).
+		if (bAnyPastGrace)
+		{
+			CareMultiplier = FMath::Max(0.f, CareMultiplier - DeltaSeconds * AfflictQualityDrainPerSec);
+			CareAvg = FMath::Min(CareAvg, CareMultiplier);
+			// Hersync het tijd-gewogen gemiddelde, anders veert CareAvg na genezing terug
+			// naar CareSum/CareTime en is de straf weg.
+			if (CareTime <= 0.f) { CareTime = 1.f; }
+			CareSum = CareAvg * CareTime;
+
+			if (CareMultiplier <= 0.f)
+			{
+				bool bDied = false;
+				for (int32 i = 0; i < SlotStrain.Num(); ++i)
+				{
+					if (SlotStrain[i].IsNone() || SlotAfflict[i] == 0) { continue; }
+					SlotStrain[i] = NAME_None; SlotGrowth[i] = 0.f; SlotPhase[i] = EGrowthPhase::Seedling;
+					SlotAfflict[i] = 0; SlotAfflictTime[i] = 0.f; bDied = true;
+				}
+				if (bDied)
+				{
+					// Reset de meting voor wat er nog (gezond) in de pot staat.
+					CareMultiplier = FMath::Min(0.3f, GetMaxCare());
+					CareSum = 0.f; CareTime = 0.f; CareAvg = CareMultiplier;
+					bVisChanged = true;
+					if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Red, TEXT("A plant died from mold/pests - you didn't spray it in time. Seed lost.")); }
 				}
 			}
 		}
@@ -607,12 +650,16 @@ int32 AGrowPlant::GetAfflictedCount() const
 
 float AGrowPlant::GetWorstAfflictSecondsLeft() const
 {
-	constexpr float Total = 180.f + 150.f;
+	// Resterende tijd tot sterven = resterende gratie + hoe lang de kwaliteit-drain er daarna over
+	// doet om de pot-kwaliteit (care) op de bodem te krijgen. Alles gerepliceerd, dus ook client-side
+	// klopt de countdown in de prompt.
+	const float DrainSecs = FMath::Max(0.f, CareMultiplier) / AfflictQualityDrainPerSec;
 	float Worst = -1.f;
 	for (int32 i = 0; i < SlotAfflict.Num(); ++i)
 	{
 		if (SlotAfflict[i] == 0) { continue; }
-		const float Left = FMath::Max(0.f, Total - (SlotAfflictTime.IsValidIndex(i) ? SlotAfflictTime[i] : 0.f));
+		const float GraceLeft = FMath::Max(0.f, AfflictGraceSeconds - (SlotAfflictTime.IsValidIndex(i) ? SlotAfflictTime[i] : 0.f));
+		const float Left = GraceLeft + DrainSecs;
 		if (Worst < 0.f || Left < Worst) { Worst = Left; }
 	}
 	return Worst < 0.f ? 0.f : Worst;
@@ -720,6 +767,13 @@ void AGrowPlant::WaterAll(APawn* InstigatorPawn)
 	if (GetPlantedCount() == 0)
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.f, FColor::Orange, TEXT("Nothing planted to water yet.")); }
+		return;
+	}
+	// Harde lockout: een besmette pot (mold/pest) mag je niet water geven — eerst sprayen.
+	// Server-side geweigerd (Interact loopt alleen op de server) vóór er een fles-lading verbruikt wordt.
+	if (GetAfflictedCount() > 0)
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Cure the plant first - spray it before watering.")); }
 		return;
 	}
 	UWaterCanComponent* Can = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UWaterCanComponent>() : nullptr;

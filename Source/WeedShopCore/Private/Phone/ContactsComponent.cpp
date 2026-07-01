@@ -396,23 +396,6 @@ static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
 	return true;
 }
 
-// De vaste "hotel-hoofdingang" die de speler met Shift+F7 zette (DeliveryPoint.txt) - waar ook de pakketjes
-// landen. Voor een "ik kom naar JOUW plek"-afspraak wacht de NPC daar i.p.v. op de apartment-deur (= dak).
-static bool ReadDeliveryPoint(UWorld* W, FVector& Out)
-{
-	if (!W) { return false; }
-	TArray<FString> Lines;
-	if (!FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("DeliveryPoint.txt")))) { return false; }
-	const FString CurMap = W->GetOutermost()->GetName();
-	bool bFound = false;
-	for (const FString& Raw : Lines)
-	{
-		TArray<FString> P; Raw.TrimStartAndEnd().ParseIntoArray(P, TEXT("|"));
-		if (P.Num() >= 4 && P[0] == CurMap) { Out = FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3])); bFound = true; }
-	}
-	return bFound;
-}
-
 void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 {
 	UWorld* World = GetWorld();
@@ -435,15 +418,16 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	}
 
 	// Fallback: het contact loopt niet fysiek rond (uitgeroteerd). Contacten blijven tóch bereikbaar:
-	//  - "Kom bij mij" (YouGoToThem): spawn 'm bij z'n EIGEN woning (het adres staat in het bericht).
-	//  - "Ik kom langs" (TheyComeToYou): spawn 'm vlak vóór de speler.
+	//  - "Kom bij mij" (YouGoToThem): spawn 'm op een gemarkeerde meet-spot (of anders bij de entree).
+	//  - "Ik kom langs" (TheyComeToYou): spawn 'm beneden bij de BEZOEKERS-ENTREE van het gebouw van de
+	//    speler (de bezorg-resolver), nooit binnen in de kamer.
 	const bool bComeToYou = (Msg.Kind == EAppointmentKind::TheyComeToYou);
 	FVector SpawnLoc(0.f, 0.f, 150.f);
 	FRotator SpawnRot = FRotator::ZeroRotator;
 	bool bPlacedAtHome = false;
 
 	// Beach-map: contacten lopen niet meer bij een eigen procedurele woning rond. De afspraak-NPC
-	// spawnt daarom bij de SPELER (zie de fallback hieronder), ook voor "kom bij mij langs".
+	// spawnt daarom bij de entree/meet-spot van de speler (zie hieronder), ook voor "kom bij mij langs".
 
 	if (!bPlacedAtHome)
 	{
@@ -467,7 +451,6 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 			if (Player)
 			{
 				const UPhoneClientComponent* Ph = Player->FindComponentByClass<UPhoneClientComponent>();
-				FVector HomeDoor;
 
 				// "Kom bij MIJ" (YouGoToThem): wacht op een LOGISCHE plek - een door de speler gemarkeerde
 				// meet-spot (Ctrl+F7: steegje/hotel-hal/...) of anders vlakbij een winkel. NOOIT op het dak
@@ -478,45 +461,35 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 					if (PickLogicalMeetSpot(World, MeetLoc)) { SpawnLoc = MeetLoc; bPlacedAtHome = true; }
 				}
 
-				// "Ik kom langs" (TheyComeToYou): wacht bij JOUW hoofdingang = de hotel-hal (de Shift+F7 delivery-
-				// marker), NOOIT op de apartment-deur boven (= dak). Anders de actieve-woning-deur, dan vóór jou.
-				if (!bPlacedAtHome && bComeToYou)
+				// "Ik kom langs" (TheyComeToYou) + vangnet voor "kom bij mij" zonder meet-spot: spawn waar
+				// bezoekers HOREN binnen te komen - de volledige bezorg-resolver van de telefoon (Shift+F7-
+				// marker > echte voordeur-actor net BUITEN op de stoep > DeliveryPoint-tag > spawner-punt >
+				// vóór de speler, incl. eigen vloer-trace). NOOIT GetActiveHomeLocation: DoorPos = het
+				// kamer-MIDDEN op de pack-map, waardoor de afspraak-NPC soms midden in je appartement stond.
+				if (!bPlacedAtHome && Ph)
 				{
-					FVector HotelHall;
-					if (ReadDeliveryPoint(World, HotelHall)) { SpawnLoc = HotelHall; bPlacedAtHome = true; }
+					SpawnLoc = Ph->FindDeliveryPoint();
+					bPlacedAtHome = true;
 				}
 				if (!bPlacedAtHome)
 				{
-					if (bComeToYou && Ph && Ph->GetActiveHomeLocation(HomeDoor))
-					{
-						SpawnLoc = HomeDoor + FVector(0.f, 0.f, 4.f);
-					}
-					else
-					{
-						SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
-						SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
-						SpawnRot.Pitch = 0.f;
-						SpawnRot.Roll = 0.f;
-					}
+					SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
+					SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
+					SpawnRot.Pitch = 0.f;
+					SpawnRot.Roll = 0.f;
 				}
 
-				// Bereikbaarheids-check: een gegokte meet-/home-plek kan op een dak of in geometrie liggen ->
-				// dan kun je de afspraak-NPC (en z'n groene marker) nooit bereiken. Projecteer op de navmesh;
-				// lukt dat niet, spawn dan vlak vóór de speler (altijd bereikbaar) en project die ook.
+				// Navmesh-FIJNSLIJPEN, geen veto: projecteren als het lukt (netjes op beloopbare grond), maar
+				// een marker-/deur-plek NIET terugkaatsen naar "vlak vóór de speler" als de projectie faalt -
+				// op de pack-map is de navmesh plaatselijk dood en de speler staat bij een afspraak vaak
+				// BINNEN, dus die fallback zette de NPC alsnog midden in de kamer. Markers zijn ground truth;
+				// de vloer-trace hieronder zet 'm sowieso op de echte vloer.
 				if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World))
 				{
 					FNavLocation Proj;
 					if (Nav->ProjectPointToNavigation(SpawnLoc, Proj, FVector(220.f, 220.f, 400.f)))
 					{
 						SpawnLoc = Proj.Location;
-					}
-					else
-					{
-						SpawnLoc = Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f;
-						SpawnRot = (Player->GetActorLocation() - SpawnLoc).Rotation();
-						SpawnRot.Pitch = 0.f; SpawnRot.Roll = 0.f;
-						FNavLocation Proj2;
-						if (Nav->ProjectPointToNavigation(SpawnLoc, Proj2, FVector(220.f, 220.f, 400.f))) { SpawnLoc = Proj2.Location; }
 					}
 				}
 			}

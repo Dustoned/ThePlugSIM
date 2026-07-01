@@ -78,8 +78,15 @@ namespace WeedUI
 	// Aantal-badge voor een slot: zakjes -> "Nx Xg", wiet -> "Xg", overig stapelbaar -> "xN", anders "".
 	WEEDSHOPCORE_API FString ItemQtyBadge(FName ItemId, int32 Qty);
 
-	// Rijke hover-tooltip voor een item: naam + soort + (voor wiet) THC%/kwaliteit + hoeveelheid in gram.
+	// Rijke hover-tooltip voor een item: naam + info-body (voor zwevende tooltips die LOS van het
+	// details-paneel staan; het details-paneel zelf gebruikt ItemInfoBody, de naam staat daar al groot).
 	WEEDSHOPCORE_API FString ItemTooltip(FName ItemId, int32 Qty, float Thc, float QualPct);
+
+	// Info-BODY zonder naam-regel: per item-type de relevante stats. Type-regel -> kern-stats (THC/kwaliteit,
+	// fles-vulling, oogsten-per-soil, joint-sterkte, paper-maat, strain-stats voor zaden, of de winkel-
+	// omschrijving) -> hoeveelheid (alleen als die niet al glashelder op de cel-badge staat).
+	// Thc = het Quality-veld van de stack (voor waterflessen zit daar de vulling in).
+	WEEDSHOPCORE_API FString ItemInfoBody(FName ItemId, int32 Qty, float Thc, float QualPct);
 
 	// --- Item-iconen ---------------------------------------------------------
 	// Bestandsnaam-sleutel (zonder pad/extensie) voor het icoon van een item, bv. "weed", "cash",

@@ -90,6 +90,7 @@ namespace
 	};
 	constexpr int32 GGrowApp = 1;
 	constexpr int32 GGoalsApp = 11;
+	constexpr int32 GMapApp = 5;   // Map-app is van de telefoon af (de fullscreen-kaart zit op de M-toets); overgeslagen zoals Lab
 	constexpr int32 GSellApp = 6;
 	constexpr int32 GSuppliesApp = 7;
 	constexpr int32 GPackagesApp = 8;
@@ -1767,6 +1768,7 @@ void UPhoneWidget::BuildBankApp()
 	// keer; NativeTick toggelt welke zichtbaar is op de live unlock/ATM-staat. Zo wisselt het KOPEN van de upgrade
 	// gewoon van box (geen ClearChildren/rebuild -> geen flash), en werken saldo + cash-to-deposit in-place bij.
 	BankBalanceText = nullptr; BankCashText = nullptr; BankLockedBox = nullptr; BankUnlockedBox = nullptr;
+	BankSendBox = nullptr; BankSendLabel = nullptr;
 	if (!ActiveContent || !Phone.IsValid()) { return; }
 	UPhoneClientComponent* Ph = Phone.Get();
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
@@ -1830,11 +1832,15 @@ void UPhoneWidget::BuildBankApp()
 			MS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); MS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 			AddU(Btns);
 		}
-		AddU(MakeText(TEXT(""), 10, FLinearColor::Transparent));
-
 		// --- Sturen naar co-op vriend, bescheiden presets ---
-		AddU(MakeText(FString::Printf(TEXT("Send to a friend   (%.0f%% fee)"), TrFee * 100.f), 13, WeedUI::ColTextDim()));
+		// Eigen sub-box (incl. de spacer erboven): ALLEEN zichtbaar als er echt een 2e speler in de sessie zit.
+		// NativeTick toggelt Collapsed<->zichtbaar en zet de naam van de vriend in-place in het label
+		// ("Send to <naam>"); join/leave is zeldzaam, dus die toggle flitst niet.
+		BankSendBox = WidgetTree->ConstructWidget<UVerticalBox>();
 		{
+			BankSendBox->AddChildToVerticalBox(MakeText(TEXT(""), 10, FLinearColor::Transparent));
+			BankSendLabel = MakeText(FString::Printf(TEXT("Send to a friend   (%.0f%% fee)"), TrFee * 100.f), 13, WeedUI::ColTextDim());
+			BankSendBox->AddChildToVerticalBox(BankSendLabel);
 			const int64 Amts[3] = { 10000, 25000, 50000 }; // EUR 100 / 250 / 500
 			UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 			for (int32 i = 0; i < 3; ++i)
@@ -1845,8 +1851,11 @@ void UPhoneWidget::BuildBankApp()
 				UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
 				BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 			}
-			AddU(Btns);
+			BankSendBox->AddChildToVerticalBox(Btns);
+			// Start verborgen (singleplayer-default); NativeTick toont 'm zodra er een vriend online is.
+			BankSendBox->SetVisibility(ESlateVisibility::Collapsed);
 		}
+		AddU(BankSendBox);
 	}
 
 	// Init-zichtbaarheid (NativeTick houdt 'm daarna live in sync met de unlock/ATM-staat). Inactieve box op HIDDEN.
@@ -2371,7 +2380,15 @@ void UPhoneWidget::FillStoreList()
 					FLinearColor TagCol = WeedUI::TagColorForItem(IconId); TagCol.A = 0.96f; // per-strain kleur (zoals inventory/hotbar) i.p.v. één vaste kleur
 					TagPill->SetBrush(RoundedBrush(TagCol, 5.f));
 					TagPill->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
-					TagPill->SetContent(MakeText(STag, 8, WeedUI::ColText()));
+					// Bold + dunne donkere outline (zelfde als de inventory/hotbar-tags): dunne tekst leest slecht op de gekleurde pill.
+					UTextBlock* TagT = MakeText(STag, 9, WeedUI::ColText(), true);
+					{
+						FSlateFontInfo TagFont = WeedUI::Font(9, true);
+						TagFont.OutlineSettings.OutlineSize = 1;
+						TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
+						TagT->SetFont(TagFont);
+					}
+					TagPill->SetContent(TagT);
 					UOverlaySlot* TagOS = IcoOv->AddChildToOverlay(TagPill);
 					TagOS->SetHorizontalAlignment(HAlign_Center); TagOS->SetVerticalAlignment(VAlign_Bottom);
 				}
@@ -2766,10 +2783,10 @@ void UPhoneWidget::PrewarmStep()
 	if (bPrewarmDone || !ContentBox || !Phone.IsValid()) { return; }
 
 	// Prewarm-key-volgorde: eerst home (cursor 0), daarna de app-tabs 0..GNumApps-1 (cursor 1..N), waarbij de
-	// verwijderde Lab-app (GHashApp) wordt overgeslagen. Eén stap per tick -> geen hitch; loopt terwijl de
-	// telefoon dicht is, dus de per-paneel visibility-toggles zijn onzichtbaar.
-	// Aantal echte app-stappen na home = GNumApps - 1 (Lab eruit).
-	const int32 NumSteps = 1 + (GNumApps - 1); // home + alle apps behalve Lab
+	// verwijderde Map- en Lab-apps (GMapApp/GHashApp) worden overgeslagen. Eén stap per tick -> geen hitch;
+	// loopt terwijl de telefoon dicht is, dus de per-paneel visibility-toggles zijn onzichtbaar.
+	// Aantal echte app-stappen na home = GNumApps - 2 (Map + Lab eruit).
+	const int32 NumSteps = 1 + (GNumApps - 2); // home + alle apps behalve Map en Lab
 
 	// Snapshot de winkel-categorie vóór de eerste stap (winkel-panelen kunnen SetSupplierCat muteren);
 	// na de laatste stap zetten we 'm terug zodat prewarm géén netto neveneffect op de telefoon-status heeft.
@@ -2786,8 +2803,10 @@ void UPhoneWidget::PrewarmStep()
 		else
 		{
 			bPrewarmHome = false;
-			// App-index = (cursor-1), maar met Lab overgeslagen: schuif één op vanaf GHashApp.
+			// App-index = (cursor-1), maar met Map en Lab overgeslagen: schuif één op vanaf elke
+			// verwijderde app-index (oplopend: eerst GMapApp=5, daarna GHashApp=10).
 			int32 AppIdx = PrewarmCursor - 1;
+			if (AppIdx >= GMapApp) { ++AppIdx; }
 			if (AppIdx >= GHashApp) { ++AppIdx; }
 			PrewarmApp = AppIdx;
 		}
@@ -2927,6 +2946,7 @@ void UPhoneWidget::RefreshContent()
 	{
 		BankBalanceText = nullptr; BankCashText = nullptr; // BuildBankApp zet ze in de ontgrendelde tak opnieuw
 		BankLockedBox = nullptr; BankUnlockedBox = nullptr; // vaste bank-boxen (persistent, getoggled)
+		BankSendBox = nullptr; BankSendLabel = nullptr;     // "Send to <vriend>"-sectie (co-op-only, getoggled)
 	}
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
@@ -2942,6 +2962,7 @@ void UPhoneWidget::RefreshContent()
 			const int32 i = GHomeOrder[oi]; // logische volgorde i.p.v. ruwe app-index
 			if (i == GStatsApp && !(GS && GS->IsCompetitive())) { continue; } // Leaderboard alleen in competitive
 			if (i == GHashApp) { continue; } // Lab-app weg: alle processing zit nu in Supplies -> Kitchen
+			if (i == GMapApp) { continue; } // Map-app weg: de fullscreen-kaart zit op de M-toets
 			UUniformGridSlot* GSlot = Grid->AddChildToUniformGrid(MakeAppCell(i, GAppName[i], GAppKey[i], GAppIcon[i], GAppCol[i]), Cell / 3, Cell % 3);
 			GSlot->SetHorizontalAlignment(HAlign_Center);
 			++Cell;
@@ -3118,7 +3139,7 @@ void UPhoneWidget::RefreshContent()
 	{
 		BuildStatsApp();
 	}
-	else // Map
+	else if (App == GMapApp) // Map-app weg (dode tak, zoals Lab): uit home-rooster + prewarm; M-toets = fullscreen-kaart
 	{
 		BuildMapApp();
 	}
@@ -3283,6 +3304,8 @@ void UPhoneWidget::BuildGoalsApp()
 
 void UPhoneWidget::BuildMapApp()
 {
+	// (DOOD, zoals de Lab-app) De Map-app is van de telefoon af: uit het home-rooster en de prewarm-loop,
+	// dus deze bouw wordt nooit meer aangeroepen. De fullscreen-kaart op de M-toets staat hier los van.
 	if (!ActiveContent) { return; }
 
 	// Knop naar de fullscreen-kaart (zelfde als M).
@@ -3482,6 +3505,24 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const UEconomyComponent* E = GS->GetEconomy();
 			if (BankBalanceText) { BankBalanceText->SetText(FText::FromString(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(E->GetBankCents()) / 100)))); }
 			if (BankCashText) { BankCashText->SetText(FText::FromString(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(E->GetCashCents()) / 100)))); }
+			// "Send to <vriend>": alleen tonen als er echt een 2e speler in de sessie zit (co-op), mét diens naam
+			// in het label. In-place toggle + tekst-update (geen rebuild); join/leave is zeldzaam dus geen flash.
+			if (BankSendBox)
+			{
+				const APlayerController* PC = GetOwningPlayer();
+				APlayerState* FriendPS = nullptr;
+				for (APlayerState* PS : GS->PlayerArray)
+				{
+					// De eerste ANDERE speler (bij >2 spelers pakken we die als weergegeven ontvanger).
+					if (PS && PC && PS != PC->PlayerState) { FriendPS = PS; break; }
+				}
+				BankSendBox->SetVisibility(FriendPS ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+				if (FriendPS && BankSendLabel)
+				{
+					BankSendLabel->SetText(FText::FromString(FString::Printf(TEXT("Send to %s   (%.0f%% fee)"),
+						*FriendPS->GetPlayerName(), E->TransferFeePct * 100.f)));
+				}
+			}
 		}
 	}
 

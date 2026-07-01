@@ -171,6 +171,11 @@ void UWardrobeWidget::EnsurePreview()
 		FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		ASceneCapture2D* Cap = W->SpawnActor<ASceneCapture2D>(ASceneCapture2D::StaticClass(), FTransform::Identity, SP);
 		if (!Cap) { return; }
+		// STUDIO-VRIJWARING: de DayNightController-lichtscan (elke 6-30s) loopt ALLE wereld-actors af en zette
+		// onze studio-lampen op onzichtbaar (niet-Movable-tak "static map-light = geen licht") - DAT was waarom de
+		// preview na een paar seconden donker werd, ondanks de gepinde exposure. Deze tag laat de scan (en het
+		// licht-budget/dim-systeem) de hele studio overslaan: de view blijft dag en nacht identiek verlicht.
+		Cap->Tags.Add(TEXT("NoDayNight"));
 		if (USceneCaptureComponent2D* C = Cap->GetCaptureComponent2D())
 		{
 			C->TextureTarget = PreviewRT;
@@ -196,11 +201,24 @@ void UWardrobeWidget::EnsurePreview()
 			C->PostProcessSettings.bOverride_AutoExposureBias = true;
 			C->PostProcessSettings.AutoExposureBias = 1.0f; // vaste belichting (tunebaar); geen adaptatie meer
 				C->ShowFlags.SetEyeAdaptation(false); // eye-adaptation-PAS uit -> geen overbelichte puls op de eerste frames bij het openen
+			// OOK de nacht-grading vastpinnen: de DayNightController blendt 's nachts een UNBOUND PPV in
+			// (ColorGain ~0.5x nachtblauw + saturatie 0.9 + bloom-boost) en een SCS_FinalColorLDR-capture
+			// erft wereld-PPV's. Deze overrides winnen (capture-PP blendt als laatste) -> de preview blijft
+			// dag en nacht kleur- en helderheids-identiek, niet alleen exposure-identiek.
+			C->PostProcessSettings.bOverride_ColorGain = true;
+			C->PostProcessSettings.ColorGain = FVector4(1.f, 1.f, 1.f, 1.f);
+			C->PostProcessSettings.bOverride_ColorSaturation = true;
+			C->PostProcessSettings.ColorSaturation = FVector4(1.f, 1.f, 1.f, 1.f);
+			C->PostProcessSettings.bOverride_BloomIntensity = true;
+			C->PostProcessSettings.BloomIntensity = 0.5f; // vaste, rustige gloed (nacht-PPV boostte 'm naar 1.3)
 		}
-		// Lampen aan de CAMERA: de voorkant is altijd verlicht, hoe je ook draait.
+		// Lampen aan de CAMERA: de voorkant is altijd verlicht, hoe je ook draait. Allemaal expliciet
+		// Movable: runtime-lampen zijn default Stationary, en dat is precies de tak waarop de
+		// DayNightController-scan lampen verbergt (plus: Movable is het juiste idioom voor runtime-lichten).
 		if (UPointLightComponent* Key = NewObject<UPointLightComponent>(Cap))
 		{
 			Key->SetupAttachment(Cap->GetRootComponent());
+			Key->SetMobility(EComponentMobility::Movable);
 			Key->RegisterComponent();
 			Key->SetRelativeLocation(FVector(-40.f, -60.f, 60.f));
 			Key->SetIntensity(9500.f); Key->SetAttenuationRadius(900.f);
@@ -209,6 +227,7 @@ void UWardrobeWidget::EnsurePreview()
 		if (UPointLightComponent* Fill = NewObject<UPointLightComponent>(Cap))
 		{
 			Fill->SetupAttachment(Cap->GetRootComponent());
+			Fill->SetMobility(EComponentMobility::Movable);
 			Fill->RegisterComponent();
 			Fill->SetRelativeLocation(FVector(-30.f, 80.f, -20.f));
 			Fill->SetIntensity(4000.f); Fill->SetAttenuationRadius(800.f);
@@ -220,6 +239,7 @@ void UWardrobeWidget::EnsurePreview()
 		if (UPointLightComponent* ViewLamp = NewObject<UPointLightComponent>(Cap))
 		{
 			ViewLamp->SetupAttachment(Cap->GetRootComponent());
+			ViewLamp->SetMobility(EComponentMobility::Movable);
 			ViewLamp->RegisterComponent();
 			ViewLamp->SetRelativeLocation(FVector(0.f, 0.f, 25.f));
 			ViewLamp->SetIntensity(7000.f); ViewLamp->SetAttenuationRadius(1800.f);
@@ -258,6 +278,7 @@ void UWardrobeWidget::RebuildPreviewActor()
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	ASkeletalMeshActor* Actor = W->SpawnActor<ASkeletalMeshActor>(ASkeletalMeshActor::StaticClass(), FTransform(FRotator::ZeroRotator, StageLoc), SP);
 	if (!Actor) { return; }
+	Actor->Tags.Add(TEXT("NoDayNight")); // studio-kloon hoort niet bij de wereld: dag/nacht-scan slaat 'm over
 	USkeletalMeshComponent* BodyComp = Actor->GetSkeletalMeshComponent();
 	if (!BodyComp) { Actor->Destroy(); return; }
 	BodyComp->SetMobility(EComponentMobility::Movable);

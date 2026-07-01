@@ -7,6 +7,7 @@
 #include "GameFramework/Pawn.h"
 #include "TimerManager.h"
 #include "World/WorldItemPickup.h"
+#include "Economy/EconomyComponent.h" // cash droppen = ook echt van het saldo af (spiegel-stapel)
 #include "Placement/PlaceableTypes.h" // GetPlaceableDef -> furniture-gewicht
 
 namespace
@@ -448,29 +449,45 @@ void UInventoryComponent::SetCashDisplayEuros(int64 Euros)
 	if (GetOwnerRole() != ROLE_Authority) { return; }
 	const FName Cash(TEXT("Cash"));
 	const int32 Q = (int32)FMath::Clamp<int64>(Euros, 0, (int64)MAX_int32);
-	const int32 Idx = FindStackIndex(Cash);
-	bool bChanged = false;
 
-	if (Q <= 0)
+	// Briefgeld kan GESPLITST zijn (ServerSplitStack werkt nu ook op cash) -> reconcilieer op het TOTAAL
+	// over alle cash-stapels, zodat een split niet bij de eerstvolgende saldo-wijziging wordt teruggedraaid.
+	int64 Have = 0;
+	for (const FInventoryStack& S : Stacks) { if (S.ItemId == Cash) { Have += S.Quantity; } }
+	if (Have == Q) { return; }
+
+	if (Q > Have)
 	{
-		if (Idx != INDEX_NONE) { UnassignHotbarStack(Stacks[Idx].StackId); Stacks.RemoveAt(Idx); bChanged = true; }
+		// Erbij: op de eerste cash-stapel; is er (nog) geen, maak er een.
+		const int32 Idx = FindStackIndex(Cash);
+		if (Idx != INDEX_NONE)
+		{
+			Stacks[Idx].Quantity += (int32)(Q - Have);
+		}
+		else
+		{
+			FInventoryStack NewStack;
+			NewStack.ItemId = Cash;
+			NewStack.Quantity = Q;
+			NewStack.StackId = NextStackId++;
+			Stacks.Add(NewStack);
+		}
 	}
-	else if (Idx == INDEX_NONE)
+	else
 	{
-		FInventoryStack NewStack;
-		NewStack.ItemId = Cash;
-		NewStack.Quantity = Q;
-		NewStack.StackId = NextStackId++;
-		Stacks.Add(NewStack);
-		bChanged = true;
-	}
-	else if (Stacks[Idx].Quantity != Q)
-	{
-		Stacks[Idx].Quantity = Q;
-		bChanged = true;
+		// Eraf: van ACHTEREN naar voren afboeken (afgesplitste rest-stapels eerst leeg, hoofd-stapel het laatst).
+		int64 Remove = Have - Q;
+		for (int32 i = Stacks.Num() - 1; i >= 0 && Remove > 0; --i)
+		{
+			if (Stacks[i].ItemId != Cash) { continue; }
+			const int32 Take = (int32)FMath::Min<int64>(Remove, Stacks[i].Quantity);
+			Stacks[i].Quantity -= Take;
+			Remove -= Take;
+			if (Stacks[i].Quantity <= 0) { UnassignHotbarStack(Stacks[i].StackId); Stacks.RemoveAt(i); }
+		}
 	}
 
-	if (bChanged) { OnRep_Stacks(); }
+	OnRep_Stacks();
 }
 
 float UInventoryComponent::GetItemQuality(FName ItemId) const
@@ -592,9 +609,25 @@ bool UInventoryComponent::RemoveItem(FName ItemId, int32 Count)
 void UInventoryComponent::ClearAll()
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
+
+	// Bewaar de cash-SPIEGEL (afgeleid van het economy-saldo, geen echt item): ClearAll hoort de inventory te
+	// legen, niet het geld "kwijt te maken". Zonder dit spawnde Sandbox zonder briefgeld: ApplyStartMode zet
+	// eerst het saldo (spiegel-stapel ontstaat) en doet DAARNA ClearAll -> stapel weg en geen saldo-wijziging
+	// meer die 'm terugbrengt. Zelfde idioom als RestoreStacksAndGrid.
+	FInventoryStack CashStack; bool bHadCash = false;
+	for (const FInventoryStack& S : Stacks) { if (S.ItemId == FName(TEXT("Cash"))) { CashStack = S; bHadCash = true; break; } }
+
 	Stacks.Reset();
 	KnownStacks.Reset();
 	GridOrder.Reset();
+
+	if (bHadCash)
+	{
+		CashStack.StackId = NextStackId++;
+		Stacks.Add(CashStack);
+		KnownStacks.Add(CashStack.StackId);
+	}
+
 	OnRep_Stacks();
 }
 
@@ -794,7 +827,7 @@ void UInventoryComponent::ServerMergeTwo_Implementation(int32 IntoStackId, int32
 	const int32 Bi = FindStackById(FromStackId);
 	if (!Stacks.IsValidIndex(Ai) || !Stacks.IsValidIndex(Bi)) { return; }
 	if (Stacks[Ai].ItemId != Stacks[Bi].ItemId) { return; }
-	if (!IsStackable(Stacks[Ai].ItemId) || Stacks[Ai].ItemId == TEXT("Cash")) { return; }
+	if (!IsStackable(Stacks[Ai].ItemId)) { return; } // (cash mag ook weer samengevoegd worden na een split)
 
 	const int32 Total = Stacks[Ai].Quantity + Stacks[Bi].Quantity;
 	if (Total <= 0) { return; }
@@ -812,7 +845,6 @@ void UInventoryComponent::ServerSplitStack_Implementation(int32 StackId, int32 A
 	if (GetOwnerRole() != ROLE_Authority || Amount <= 0) { return; }
 	const int32 Idx = FindStackById(StackId);
 	if (!Stacks.IsValidIndex(Idx)) { return; }
-	if (Stacks[Idx].ItemId == TEXT("Cash")) { return; }     // briefgeld niet splitsen
 	if (Stacks[Idx].Quantity <= Amount) { return; }          // niks te splitsen (zou alles zijn)
 	if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks + HotbarSize) { return; } // geen ruimte (backpack + hotbar vol)
 
@@ -833,9 +865,26 @@ void UInventoryComponent::ServerDropStack_Implementation(int32 StackId)
 	const int32 Idx = FindStackById(StackId);
 	if (!Stacks.IsValidIndex(Idx)) { return; }
 	const FInventoryStack St = Stacks[Idx];
-	if (St.ItemId.IsNone() || St.Quantity <= 0 || St.ItemId == FName(TEXT("Cash"))) { return; } // briefgeld niet zo droppen
+	if (St.ItemId.IsNone() || St.Quantity <= 0) { return; }
 
-	RemoveFromStackById(StackId, St.Quantity); // de hele stapel de inventory uit
+	int32 DropQty = St.Quantity;
+
+	if (St.ItemId == FName(TEXT("Cash")))
+	{
+		// Briefgeld: de stapel is een SPIEGEL van het cash-saldo -> het bedrag moet ook echt van de economy af.
+		// Eerst de stapel eruit, dan het saldo verlagen: de spiegel-reconcile (OnBalanceChanged ->
+		// SetCashDisplayEuros) ziet daarna een kloppend totaal en laat de overige cash-stapels met rust.
+		// De pickup zelf gaat bij oppakken weer naar de economy van de grijper (zie AWorldItemPickup::Interact).
+		UEconomyComponent* Eco = GetOwner() ? GetOwner()->FindComponentByClass<UEconomyComponent>() : nullptr;
+		if (!Eco) { return; }
+		DropQty = (int32)FMath::Min<int64>((int64)St.Quantity, Eco->GetBalanceCents() / 100); // defensief: nooit meer dan het saldo
+		RemoveFromStackById(StackId, St.Quantity);
+		if (DropQty <= 0 || !Eco->RemoveMoney((int64)DropQty * 100)) { return; } // niks te droppen -> alleen de spiegel opgeruimd
+	}
+	else
+	{
+		RemoveFromStackById(StackId, St.Quantity); // de hele stapel de inventory uit
+	}
 
 	AActor* Own = GetOwner();
 	UWorld* W = GetWorld();
@@ -846,7 +895,7 @@ void UInventoryComponent::ServerDropStack_Implementation(int32 StackId)
 	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	if (AWorldItemPickup* P = W->SpawnActor<AWorldItemPickup>(AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP))
 	{
-		P->Setup(St.ItemId, St.Quantity, St.Quality, St.QualityPct);
+		P->Setup(St.ItemId, DropQty, St.Quality, St.QualityPct);
 	}
 }
 

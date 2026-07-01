@@ -246,6 +246,11 @@ public:
 	// FrontSpot = plek vóór de voordeur (waar 'ie verschijnt/verdwijnt); InteriorPos = referentie binnen.
 	void SetupResident(const FVector& FrontSpot, const FVector& InteriorPos, const FString& HouseNumber, const FVector& HallPos = FVector::ZeroVector);
 	bool IsResident() const { return bResident; }
+	// BEWONER-WANDELAAR (woningen-pass, NpcId "Resident_..."): sinds de vereenvoudiging (bewoner = gewone
+	// geadopteerde wandelaar) wordt bResident nooit meer gezet, dus alle bewoner-uitzonderingen (cull-vrijstelling,
+	// roamer-telling, "lift nemen"-redding) moeten op DEZE check draaien - op IsResident() waren ze stilletjes dood,
+	// waardoor bewoners in het trappenhuis/de hal bevroren stonden tot de despawn ze opruimde.
+	bool IsResidentWalker() const { return bResident || NpcId.ToString().StartsWith(TEXT("Resident_")); }
 	bool ShouldShowOnCityMap() const;
 
 	// Huisnummer/adres van deze bewoner (voor afspraak-berichten "kom langs op nr X").

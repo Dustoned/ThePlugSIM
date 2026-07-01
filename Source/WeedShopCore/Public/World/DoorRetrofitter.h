@@ -66,19 +66,22 @@ protected:
 	virtual void Tick(float DeltaSeconds) override;
 	void ScanAndConvert();
 
-	// --- GESCATTERDE VINDBARE JOINTS (rond prullenbakken + bankjes op de beach-strip) ---
+	// --- GESCATTERDE VINDBARE JOINTS (rond prullenbakken/bankjes + asbakken/kliko's op de beach-strip) ---
 	// Server-authoritative: één keer spots verzamelen + tot de cap vullen, daarna periodiek bijvullen
 	// als de speler er een oppakt (oppakken vernietigt de pickup -> weak ptr null). Random strain +
 	// papier-gewicht + THC% + kwaliteit%, gewogen zodat GOEDE joints (hoge kwaliteit/hoge THC) ZELDZAAM zijn.
 	bool bJointsScattered = false;
-	TArray<FVector> JointSpots;                                          // gecachete prullenbak/bankje-locaties
+	TArray<FVector> JointSpots;                                          // gecachete spot-locaties (prullenbak/bankje/asbak/kliko)
 	TArray<TWeakObjectPtr<class AWorldItemPickup>> ScatteredJoints;      // levende gescatterde joints
 	int32 MaxScatteredJoints = 80;                                      // bovengrens op de map (tunable)
 	int32 JointTarget = 0;                                              // huidig doel-aantal (level-geschaald)
+	float NewJointSpotAcceptChance = 0.6f;                              // kans dat een NIEUW spot-type (asbak/kliko/container) als spot meetelt -> per-object-kans op een joint blijft LAGER dan bij bankjes/prullenbakken (die tellen altijd)
+	float DoubleJointChance = 0.05f;                                    // ~5%: héél af en toe liggen er 2 joints op één spot (zeldzame dubbel-vondst)
 	int32 LevelJointTarget() const;                                     // doel-aantal joints o.b.v. speler-level (~12%->60% v/d spots)
 	FTimerHandle JointRespawnTimer;
 	void ScatterJoints();                                              // one-time: vind spots + vul tot de cap
 	void TopUpJoints();                                                // respawn-tick: dode prunen + bijvullen tot cap
+	bool PlaceJointAtSpot(const FVector& Spot);                         // 1 joint (+ zeldzaam een 2e) met offset rond Spot
 	class AWorldItemPickup* MintJointAt(const FVector& Loc);            // 1 random joint spawnen op Loc
 
 	FTimerHandle ScanTimer;

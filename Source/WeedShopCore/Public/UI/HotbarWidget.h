@@ -21,6 +21,9 @@ class WEEDSHOPCORE_API UHotbarWidget : public UUserWidget
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
+	// Container-vangnet: een drop in de gaps TUSSEN de hotbar-slots snapt naar het dichtstbijzijnde slot
+	// (zelfde logica als het inventory-rooster; een slot dat de drop zelf afhandelde consumeert het event).
+	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
 	void BuildShell(UCanvasPanel* Root);
 	void RefreshSlots(); // werkt alle slot-iconen/tags/badges bij uit de inventory (per-tick + direct bij een mutatie)

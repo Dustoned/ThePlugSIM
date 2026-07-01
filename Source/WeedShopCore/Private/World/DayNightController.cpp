@@ -738,6 +738,11 @@ void ADayNightController::Tick(float DeltaSeconds)
 				AActor* A = *It;
 				if (!IsValid(A)) { continue; }
 				if (A == PackMoon.Get() || A == PackSun.Get() || A == this || A == UdsSky.Get()) { continue; } // eigen zon/maan/lampen + UDS niet mee-dimmen
+				// PREVIEW-STUDIO'S (bv. de wardrobe-capture + kloon): eigen key/fill-lampen, bewust VOLLEDIG los
+				// van dag/nacht. Zonder deze skip verborg de scan die runtime-lampen (niet-Movable-tak hieronder)
+				// -> de wardrobe-preview werd na een paar seconden donker. Vóór de seen-set: elke nieuwe spawn
+				// (herhaald openen/sluiten) wordt zo overgeslagen zonder in LightScanSeenActors te lekken.
+				if (A->ActorHasTag(TEXT("NoDayNight"))) { continue; }
 				// AL VERWERKT? Volledig overslaan: anders doen we per scan voor ELKE actor opnieuw de dure
 				// component-gather + mesh-naam-string-checks (= de periodieke hang). Map-actors krijgen runtime
 				// geen nieuwe componenten, dus 1x verwerken volstaat; nieuw-gestreamde actors zijn nog niet seen.

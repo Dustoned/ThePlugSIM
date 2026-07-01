@@ -101,7 +101,14 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		BadgeOS->SetVerticalAlignment(VAlign_Top);
 
 		// TAG-bubble onderaan: korte code (OG, GSC, II, 100g, ...) in een pilletje i.p.v. de hele naam.
-		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 9, FLinearColor(0.98f, 1.f, 0.99f), false, true);
+		// Iets groter + dunne donkere outline: op size 9 oogde de (Exo-)tekst te dun voor snelle herkenning.
+		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.98f, 1.f, 0.99f), false, true);
+		{
+			FSlateFontInfo TagFont = WeedUI::Font(10, true);
+			TagFont.OutlineSettings.OutlineSize = 1;
+			TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
+			Name->SetFont(TagFont);
+		}
 		UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
 		TagPill->SetBrush(WeedUI::Rounded(FLinearColor(0.34f, 0.16f, 0.50f, 0.96f), 6.f)); // paarse tag-bubble
 		TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
@@ -177,6 +184,23 @@ void UHotbarWidget::OnInvChanged()
 	RefreshSlots();
 }
 
+bool UHotbarWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	// Drop in de gap TUSSEN twee hotbar-slots -> snap naar het dichtstbijzijnde slot. Alleen zolang de
+	// slots ook echt drop-doelen zijn (inventory/droogrek open; anders staan ze op HitTestInvisible).
+	TArray<UInvCell*> Cells;
+	Cells.Reserve(DropCells.Num());
+	for (UInvCell* C : DropCells)
+	{
+		if (C && C->GetVisibility() == ESlateVisibility::Visible) { Cells.Add(C); }
+	}
+	if (UInvCell* Nearest = UInvCell::FindNearestCell(Cells, InDragDropEvent.GetScreenSpacePosition()))
+	{
+		return Nearest->HandleDropOp(InOperation);
+	}
+	return Super::NativeOnDrop(InGeometry, InDragDropEvent, InOperation);
+}
+
 void UHotbarWidget::RefreshSlots()
 {
 	APawn* P = GetOwningPlayerPawn();
@@ -207,13 +231,16 @@ void UHotbarWidget::RefreshSlots()
 			const int32 DIdx = Inv->FindStackById(SlotSid);
 			DropCells[i]->IconId = Stacks.IsValidIndex(DIdx) ? Stacks[DIdx].ItemId : NAME_None;
 			// Rijke hover-tooltip + dezelfde velden die het details-paneel leest (naam/tooltip/water).
+			// Tooltip = info-BODY zonder naam (het details-paneel toont de naam al groot); de zwevende
+			// tooltip krijgt naam + body.
 			if (Stacks.IsValidIndex(DIdx))
 			{
 				const FInventoryStack& DS = Stacks[DIdx];
-				const FString TT = WeedUI::ItemTooltip(DS.ItemId, DS.Quantity, DS.Quality, DS.QualityPct);
-				DropCells[i]->SetToolTipText(FText::FromString(TT));
-				DropCells[i]->Tooltip = TT;
-				DropCells[i]->Line1 = WeedUI::PrettyItemName(DS.ItemId);
+				const FString Nm = WeedUI::PrettyItemName(DS.ItemId);
+				const FString Body = WeedUI::ItemInfoBody(DS.ItemId, DS.Quantity, DS.Quality, DS.QualityPct);
+				DropCells[i]->SetToolTipText(FText::FromString(Body.IsEmpty() ? Nm : (Nm + TEXT("\n") + Body)));
+				DropCells[i]->Tooltip = Body;
+				DropCells[i]->Line1 = Nm;
 				DropCells[i]->WaterOverride = DS.ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(DS.Quality) : -1;
 			}
 			else { DropCells[i]->SetToolTipText(FText::GetEmpty()); DropCells[i]->Tooltip.Empty(); }

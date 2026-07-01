@@ -56,7 +56,7 @@ public:
 	int32 WaterOverride = -1;                         // >=0 = water van DEZE fles (per-slot vol/leeg); -1 = n.v.t.
 	FString Badge;                                   // bv. "x5" of "12g" — getoond als pill rechtsboven
 	FString Tag;                                     // korte strain/variant-tag onderaan (OG, Silver Haze, ...)
-	FString Tooltip;                                 // volledige naam + details (hover)
+	FString Tooltip;                                 // info-BODY zonder naam (details-paneel; de zwevende hover-tooltip prefixt de naam zelf)
 	FLinearColor Accent = FLinearColor(0.3f, 0.34f, 0.42f);
 	bool bSlotNumber = false;                        // hotbar: toon het slotnummer linksboven
 	int32 SlotNumber = 0;
@@ -69,6 +69,15 @@ public:
 	// Optionele Merge-knop (voor weed met meerdere batches).
 	bool bShowMerge = false;
 	TFunction<void()> MergeFn;
+
+	// De volledige drop-afhandeling van deze cel (NativeOnDrop roept dit aan). PUBLIEK zodat de container
+	// (inventory-grid/hotbar) een drop die in de GAPS tussen de cellen landde naar de dichtstbijzijnde cel
+	// kan doorsturen — die gedraagt zich dan exact alsof je er direct op dropte.
+	bool HandleDropOp(UDragDropOperation* InOperation);
+
+	// Dichtstbijzijnde cel binnen de snap-drempel (MaxEdgeFrac x cel-maat BUITEN de celrand) van een
+	// drop-positie in schermruimte; nullptr = te ver van elke cel (bestaand gedrag laten gelden).
+	static UInvCell* FindNearestCell(const TArray<UInvCell*>& Cells, const FVector2D& ScreenPos, float MaxEdgeFrac = 0.45f);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -109,6 +118,10 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
+	// Container-vangnet: een drop in de gaps/padding TUSSEN de rooster-cellen snapt naar de dichtstbijzijnde
+	// cel i.p.v. te "missen" (drag-cancel zou de stapel op de grond droppen). Cellen die de drop zelf al
+	// afhandelden consumeren het event — dit vuurt dus nooit dubbel.
+	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
 	void BuildShell(UCanvasPanel* Root);
 	void RebuildContent();
@@ -156,7 +169,6 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> SplitLabel;
 	int32 SplitStackId = 0;
 	int32 SplitTotal = 0;
-	bool bSplitIsCash = false; // split-popup staat in "drop cash"-modus (Cash-stapel)
 
 	// --- Merge-confirm-popup (alleen als de twee stapels VERSCHILLENDE THC%/kwaliteit% hebben;
 	//     gelijke kwaliteit merget direct, want dat is verliesvrij) ---

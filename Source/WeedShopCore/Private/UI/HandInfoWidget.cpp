@@ -117,8 +117,15 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
 	ColSize->SetContent(Col);
 
-	// Type-tag (klein, hoofdletters, gekleurd).
+	// Type-tag (klein, hoofdletters, gekleurd). Bold projectfont + dunne donkere outline: de letters waren
+	// te dun/onleesbaar zonder paneel-achtergrond (de kaart is transparant).
 	TypeText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
+	{
+		FSlateFontInfo TagFont = WeedUI::Font(11, true);
+		TagFont.OutlineSettings.OutlineSize = 1;
+		TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
+		TypeText->SetFont(TagFont);
+	}
 	TypeText->SetAutoWrapText(true);
 	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 12.f, 14.f, 1.f));
 
@@ -202,6 +209,17 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	FString Type, Hint; FLinearColor Col;
 	ClassifyItem(IdStr, Type, Hint, Col);
 
+	// Alleen de NAAM kleurt mee met de PER-STRAIN tag-kleur (zelfde hue als de tag-pills in de inventory/
+	// hotbar), iets helderder voor leesbaarheid als losse tekst; de type-tekst erboven ("SEED"/"JOINT") houdt
+	// z'n normale categorie-kleur uit ClassifyItem. Niet-strain-items geven bij TagColorForItem één vaste
+	// neutrale pill-kleur terug (Value/Sat genegeerd) -> die herkennen we door twee varianten te vergelijken;
+	// dan blijft de naam gewoon wit.
+	FLinearColor NameCol = WeedUI::ColText();
+	{
+		const FLinearColor StrainCol = WeedUI::TagColorForItem(Id, 0.9f, 0.72f);
+		if (!StrainCol.Equals(WeedUI::TagColorForItem(Id))) { NameCol = StrainCol; }
+	}
+
 	// Winkel-omschrijving (heeft vaak concrete getallen, bv. "+15% yield this harvest") als hint,
 	// behalve voor wiet/joints (die komen niet uit de catalogus).
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
@@ -216,8 +234,8 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bRollLoaded) { Hint = TEXT("Loaded and ready to roll"); }
 
 	if (AccentBar) { AccentBar->SetBrush(WeedUI::Rounded(Col, 3.f)); }
-	if (TypeText) { TypeText->SetText(FText::FromString(Type)); TypeText->SetColorAndOpacity(FSlateColor(Col)); }
-	if (NameText) { NameText->SetText(FText::FromString(PrettyName(WeedUI::PrettyItemName(Id)))); }
+	if (TypeText) { TypeText->SetText(FText::FromString(Type)); TypeText->SetColorAndOpacity(FSlateColor(Col)); } // categorie-kleur (bold+outline blijven)
+	if (NameText) { NameText->SetText(FText::FromString(PrettyName(WeedUI::PrettyItemName(Id)))); NameText->SetColorAndOpacity(FSlateColor(NameCol)); }
 	if (HintText) { HintText->SetText(FText::FromString(Hint)); }
 
 	// Aantal groot bij de titel: gram voor wiet/baggies, anders "x N". Voor gereedschap/plaatsbare

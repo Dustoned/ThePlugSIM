@@ -58,7 +58,7 @@ public:
 	void CycleTab();
 
 	// --- iPhone-achtige home/apps ---
-	static constexpr int32 AppCount = 12; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map 6 Sell 7 Supplies 8 Packages 9 Bank 10 Lab 11 Goals
+	static constexpr int32 AppCount = 13; // 0 Upgrades 1 Grow 2 Contacts 3 Messages 4 Settings 5 Map(dood) 6 Sell 7 Supplies 8 Packages 9 Bank 10 Lab(dood) 11 Goals 12 Leaderboard — moet gelijk zijn aan GNumApps in PhoneWidget (12 was te laag: OpenApp(12) clampte naar 11 -> Leaderboard-tegel opende Goals)
 
 	// --- Pauze-menu (ESC): overlay met Resume / Settings / Save / Load / Main Menu / Quit ---
 	// (Geen echte wereld-pauze in co-op; in standalone pauzeert de wereld wel.)
@@ -573,6 +573,10 @@ public:
 	// Maximaal gram per joint dat je huidige papers toelaten (basis 2; betere vloei verhoogt).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	int32 GetMaxJointGrams() const;
+
+	// Capaciteit (gram per joint) van een SPECIFIEK papers-item; 0 als het geen papers is.
+	// Zelfde tabel als GetMaxJointGrams - voor de item-quick-view ("Rolls joints up to 5g").
+	static int32 PaperCapacity(FName PaperId);
 
 	// 0..1 verwachte "high" van een joint: schaalt met gram + THC% + kwaliteit% (zelfde formule als
 	// het roken zelf). Gebruikt door de roll-UI als zinvolle sterkte-balk (beweegt mee met gram).

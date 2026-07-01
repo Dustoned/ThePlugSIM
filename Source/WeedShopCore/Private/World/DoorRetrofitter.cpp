@@ -1048,7 +1048,9 @@ void ADoorRetrofitter::ScanAndConvert()
 				int32 NLive = 0;
 				for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
 				{
-					if (IsValid(*CIt) && CIt->IsResident()) { ++NLive; }
+					// Op NpcId tellen (IsResidentWalker): IsResident() is altijd false sinds de vereenvoudiging,
+					// dus NLive stond vast op 0 en de LiteCap hield geen rekening met al-levende bewoners.
+					if (IsValid(*CIt) && CIt->IsResidentWalker()) { ++NLive; }
 				}
 				const int32 LiteCap = 12;
 				int32 NNew = 0;
@@ -1215,7 +1217,11 @@ void ADoorRetrofitter::ScanAndConvert()
 			for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
 			{
 				ACustomerBase* Cb = *CIt;
-				if (!IsValid(Cb) || !Cb->IsResident() || Cb->IsHidden()) { continue; }
+				// Op NpcId checken (IsResidentWalker): met IsResident() was deze redding dood (bResident wordt
+				// sinds de vereenvoudiging nooit gezet) -> boven-vastgelopen bewoners namen nooit de lift en
+				// bleven in de hal/het trappenhuis staan tot de despawn. Afspraak-NPC's (bewust wachtend op
+				// hun plek, ook met Resident_-id) NOOIT wegteleporteren.
+				if (!IsValid(Cb) || !Cb->IsResidentWalker() || Cb->IsHidden() || Cb->HasActiveAppointment()) { continue; }
 				const FVector L = Cb->GetActorLocation();
 				// Straat-niveau hier = dichtstbijzijnd spawn-punt; ruim erboven = op een verdieping.
 				float NearZ = L.Z;
@@ -1264,6 +1270,12 @@ void ADoorRetrofitter::ScanAndConvert()
 					}
 				}
 				Cb->SetActorLocation(Dest + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
+				// De patrouille-staat bij z'n spawner mee-resetten: anders liep hij vanaf de straat z'n oude
+				// entry-ketting (boven in het gebouw) weer terug op i.p.v. gewoon verder te patrouilleren.
+				for (TActorIterator<ACustomerSpawner> SpIt2(W); SpIt2; ++SpIt2)
+				{
+					if (IsValid(*SpIt2)) { SpIt2->NotifyWalkerTeleported(Cb); }
+				}
 				ResidentStuckSince.Remove(Cb);
 				UE_LOG(LogWeedShop, Verbose, TEXT("Bewoner %s nam de lift: van Z %.0f naar de straat (%.0f, %.0f)"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
 			}
@@ -2706,8 +2718,9 @@ void ADoorRetrofitter::ScanAndConvert()
 	if (!bJointsScattered && ScanPass >= 2) { ScatterJoints(); }
 }
 
-// ============================ VINDBARE JOINTS (scatter rond prullenbak/bankje) ============================
-// Server-only. Spawnt vindbare joint-pickups rond de prullenbakken + bankjes van de beach-strip. Elke joint
+// ============================ VINDBARE JOINTS (scatter rond prullenbak/bankje/asbak/kliko) ============================
+// Server-only. Spawnt vindbare joint-pickups rond de prullenbakken, bankjes, sigaretten-asbakken en
+// kliko's/vuilcontainers van de beach-strip. Elke joint
 // = random strain + papier-afgeleid gewicht + THC% + kwaliteit%, gewogen zodat GOEDE joints (hoge kwaliteit,
 // hoge-THC strain, grote backwoods) ZELDZAAM zijn. De speler loopt erheen en pakt 'm op (AWorldItemPickup-flow).
 
@@ -2768,6 +2781,28 @@ AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
 	return P;
 }
 
+// 1 joint met zijwaartse offset (~40-70cm) rond Spot plaatsen. Héél af en toe (DoubleJointChance, ~5%)
+// ligt er een TWEEDE joint naast - zeldzame dubbel-vondst, "moet afentoe blijven". De 2e telt gewoon mee
+// in ScatteredJoints en alleen als JointTarget dat nog toelaat, dus de cap blijft gerespecteerd.
+// Geeft false terug als de EERSTE spawn faalde (store ontbreekt) zodat de caller kan stoppen.
+bool ADoorRetrofitter::PlaceJointAtSpot(const FVector& Spot)
+{
+	auto OffsetLoc = [&Spot]()
+	{
+		const float Ang = FMath::FRandRange(0.f, 2.f * PI);
+		const float Rad = FMath::FRandRange(40.f, 70.f);
+		return Spot + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
+	};
+	AWorldItemPickup* P = MintJointAt(OffsetLoc());
+	if (!P) { return false; }
+	ScatteredJoints.Add(P);
+	if (ScatteredJoints.Num() < JointTarget && FMath::FRand() < DoubleJointChance)
+	{
+		if (AWorldItemPickup* P2 = MintJointAt(OffsetLoc())) { ScatteredJoints.Add(P2); }
+	}
+	return true;
+}
+
 // Doel-aantal joints op de map o.b.v. het HUIDIGE speler-level: ~12% van de spots op lvl 1, +5% per 5 levels,
 // cap ~60% (en de bovengrens). Zo vind je vroeg WEINIG en groeit het mee terwijl je levelt.
 int32 ADoorRetrofitter::LevelJointTarget() const
@@ -2779,7 +2814,7 @@ int32 ADoorRetrofitter::LevelJointTarget() const
 	return FMath::Clamp(FMath::RoundToInt(JointSpots.Num() * Frac), 3, FMath::Min(MaxScatteredJoints, JointSpots.Num()));
 }
 
-// One-time: prullenbak/bankje-locaties verzamelen en tot de cap vullen. Vond het geen spots, dan blijft
+// One-time: spot-locaties (prullenbak/bankje/asbak/kliko) verzamelen en tot de cap vullen. Vond het geen spots, dan blijft
 // bJointsScattered false zodat de volgende scan-pass het opnieuw probeert (geometrie nog niet ingestreamd).
 void ADoorRetrofitter::ScatterJoints()
 {
@@ -2787,7 +2822,9 @@ void ADoorRetrofitter::ScatterJoints()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 
-	// Spots verzamelen: static-mesh-actors met een "SM_Bench"- of "...StreetTrashBin"-mesh.
+	// Spots verzamelen: static-mesh-actors met een prullenbak/bankje-mesh (basis, telt altijd) of een
+	// asbak/kliko/container-mesh (nieuw spot-type, telt met LAGERE kans mee zodat "een rondje joints
+	// zoeken" niet opeens overal raak is).
 	JointSpots.Reset();
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -2798,7 +2835,18 @@ void ADoorRetrofitter::ScatterJoints()
 		{
 			if (!Comp || !Comp->GetStaticMesh()) { continue; }
 			const FString MeshName = Comp->GetStaticMesh()->GetName();
-			if (MeshName.Contains(TEXT("SM_Bench")) || MeshName.Contains(TEXT("StreetTrashBin")))
+			// Basis-spots (bankjes + straat-prullenbakken): volle dichtheid, zoals altijd.
+			const bool bBaseSpot = MeshName.Contains(TEXT("SM_Bench")) || MeshName.Contains(TEXT("StreetTrashBin"));
+			// Nieuwe spot-types: sigaretten-prullenbakken en grote kliko's/containers (o.a. SM_AshtrayBin,
+			// SM_Dumpster, MetalTrashCan). "Trash"/"Garbage" dekken de meeste can/bin/container-varianten;
+			// bewust GEEN kaal "Bin"/"Container" (zou Cabinet/zeecontainers e.d. matchen).
+			const bool bExtraSpot = !bBaseSpot && (
+				MeshName.Contains(TEXT("Ashtray")) || MeshName.Contains(TEXT("Dumpster")) ||
+				MeshName.Contains(TEXT("Trash")) || MeshName.Contains(TEXT("Garbage")) ||
+				MeshName.Contains(TEXT("Wheelie")) || MeshName.Contains(TEXT("Recycl")));
+			// Nieuw type telt maar met NewJointSpotAcceptChance mee -> per-object-kans op een joint blijft
+			// LAGER dan bij de basis-spots (zelfde fractie over minder geaccepteerde spots).
+			if (bBaseSpot || (bExtraSpot && FMath::FRand() < NewJointSpotAcceptChance))
 			{
 				const FVector L = Comp->GetComponentLocation();
 				if (L.ContainsNaN()) { continue; } // implausibele spot overslaan
@@ -2815,14 +2863,11 @@ void ADoorRetrofitter::ScatterJoints()
 	JointTarget = LevelJointTarget();
 	for (int32 si = 0; si < JointSpots.Num() && ScatteredJoints.Num() < JointTarget; ++si)
 	{
-		const float Ang = FMath::FRandRange(0.f, 2.f * PI);
-		const float Rad = FMath::FRandRange(40.f, 70.f);
-		const FVector Loc = JointSpots[si] + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
-		if (AWorldItemPickup* P = MintJointAt(Loc)) { ScatteredJoints.Add(P); }
+		PlaceJointAtSpot(JointSpots[si]); // spawn-fail = store nog niet klaar; volgende spots proberen kan geen kwaad
 	}
 
 	bJointsScattered = true;
-	UE_LOG(LogWeedShop, Log, TEXT("Joints gescatterd: %d pickups rond %d prullenbakken/bankjes"),
+	UE_LOG(LogWeedShop, Log, TEXT("Joints gescatterd: %d pickups rond %d spots (prullenbak/bankje/asbak/kliko)"),
 		ScatteredJoints.Num(), JointSpots.Num());
 
 	// Heel LANGZAAM bijvullen (~10 min): een leeggeraapte plek blijft lang leeg, zodat zelf joints draaien
@@ -2858,13 +2903,7 @@ void ADoorRetrofitter::TopUpJoints()
 	for (int32 s = Free.Num() - 1; s > 0; --s) { Free.Swap(s, FMath::RandRange(0, s)); }
 	for (int32 fi = 0; fi < Free.Num() && ScatteredJoints.Num() < JointTarget; ++fi)
 	{
-		const FVector Spot = JointSpots[Free[fi]];
-		const float Ang = FMath::FRandRange(0.f, 2.f * PI);
-		const float Rad = FMath::FRandRange(40.f, 70.f);
-		const FVector Loc = Spot + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
-		AWorldItemPickup* P = MintJointAt(Loc);
-		if (!P) { break; } // store/spawn faalt -> niet eindeloos doorlopen
-		ScatteredJoints.Add(P);
+		if (!PlaceJointAtSpot(JointSpots[Free[fi]])) { break; } // store/spawn faalt -> niet eindeloos doorlopen
 	}
 }
 

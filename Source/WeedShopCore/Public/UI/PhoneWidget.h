@@ -227,7 +227,8 @@ protected:
 	// True als dit bericht voor de LOKALE speler is (competitive = eigen telefoon; co-op = altijd).
 	bool IsMsgForLocal(const struct FPhoneMessage& M) const;
 
-	// Bouwt de Map-app: een mini stadskaart + knop naar de fullscreen-kaart (M).
+	// (DOOD, zoals de Lab-app) Map-app is van de telefoon af (uit home-rooster + prewarm); de M-toets
+	// fullscreen-kaart blijft gewoon bestaan. Bouwde een mini stadskaart + fullscreen-knop.
 	void BuildMapApp();
 	void BuildGoalsApp();             // milestone-doelen met rewards
 	void BuildStatsApp();             // competitive leaderboard (stats per speler)
@@ -323,6 +324,8 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> BankCashText;    // "Cash to deposit: EUR X" (cash cents) - in-place
 	UPROPERTY() TObjectPtr<UVerticalBox> BankLockedBox;   // upgrade-prompt (geblokkeerd) - vast gebouwd, getoggled
 	UPROPERTY() TObjectPtr<UVerticalBox> BankUnlockedBox; // bank-kaart (ontgrendeld) - vast gebouwd, getoggled
+	UPROPERTY() TObjectPtr<UVerticalBox> BankSendBox;     // "Send to <vriend>"-sectie: alleen zichtbaar met een 2e speler (co-op) - getoggled in NativeTick
+	UPROPERTY() TObjectPtr<UTextBlock> BankSendLabel;     // "Send to <naam>   (X% fee)" - naam in-place bijgewerkt
 	int32 LastBankSig = -1;      // structurele unlock/ATM-staat (0 = geblokkeerd, 1 = ontgrendeld/ATM)
 	int32 BankUnlockSignature() const; // ALLEEN de mobile-banking/ATM-beschikbaarheid (upgrade-prompt <-> bank-kaart)
 	int32 LastGoalsSig = 0;

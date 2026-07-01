@@ -16,12 +16,15 @@
 // Aantal WANDELAARS (ambient crowd, GEEN bewoners) in de Spawned-lijst. De spawn/cull-caps gaan over de
 // wandelaar-crowd; bewoners (Resident_-id) zitten OOK in Spawned maar tellen NIET mee - anders is de cap
 // altijd overschreden door de ~65 bewoners (= er spawnen nooit ambient-wandelaars + alles wordt ge-culld).
+// LET OP: op NpcId checken (IsResidentWalker), niet op IsResident() - bResident wordt sinds de
+// vereenvoudiging nooit meer gezet, dus bewoners telden ONBEDOELD als roamers mee (en route-spawners
+// hebben MaxCustomers=0 -> elke geadopteerde bewoner werd off-screen meteen weggeculld).
 static int32 CountRoamers(const TArray<TObjectPtr<ACustomerBase>>& Arr)
 {
 	int32 N = 0;
 	for (const TObjectPtr<ACustomerBase>& C : Arr)
 	{
-		if (IsValid(C) && !C->IsResident()) { ++N; }
+		if (IsValid(C) && !C->IsResidentWalker()) { ++N; }
 	}
 	return N;
 }
@@ -133,6 +136,31 @@ void ACustomerSpawner::AdoptWalker(ACustomerBase* C, const TArray<FVector>* Entr
 		}
 	}
 	Patrol.Add(C, St);
+}
+
+void ACustomerSpawner::NotifyWalkerTeleported(ACustomerBase* C)
+{
+	if (!C) { return; }
+	FPatrolState* St = Patrol.Find(C);
+	if (!St) { return; }
+	// Extern verplaatst (bv. "lift genomen" naar de straat): het oude entry-/terugpad is niet meer
+	// relevant - zonder dit liep hij vanaf de straat terug omhoog naar z'n oude ketting-punt.
+	St->Entry.Reset();
+	St->EntryIdx = 0;
+	St->ReturnPath.Reset();
+	St->bHomeward = false;
+	St->Stall = 0;
+	St->StallRounds = 0;
+	if (NetNodes.Num() >= 2)
+	{
+		float BD = TNumericLimits<float>::Max();
+		for (int32 ri = 0; ri < NetNodes.Num(); ++ri)
+		{
+			const float Dd = FVector::DistSquared2D(NetNodes[ri], C->GetActorLocation());
+			if (Dd < BD) { BD = Dd; St->NextIdx = ri; }
+		}
+		St->PrevIdx = -1;
+	}
 }
 
 void ACustomerSpawner::BeginPlay()
@@ -415,7 +443,10 @@ void ACustomerSpawner::TrySpawn()
 				if (Mv0->bUseRVOAvoidance == bFar) { Mv0->SetAvoidanceEnabled(!bFar); }
 			}
 
-			if (Cw0->IsResident()) { continue; }
+			// Bewoner-vrijstelling op NpcId (IsResidentWalker): met IsResident() was deze vrijstelling dood
+			// (bResident wordt nooit gezet) -> bewoners op hun entry-ketting (hal/trap, ver boven straat-Z)
+			// werden door de Dz-strikes en de MaxCustomers=0-cap opgeruimd terwijl ze gewoon onderweg waren.
+			if (Cw0->IsResidentWalker()) { continue; }
 
 			// KERN-REGEL: NOOIT voor de neus van de speler despawnen. Binnen ~80m verdwijnt er niks -> strikes
 			// resetten en door. Alleen BUITEN ZICHT (off-screen) ruimen we op. Zo zie je nooit meer een NPC
@@ -608,8 +639,9 @@ void ACustomerSpawner::TrySpawn()
 					}
 					St.PrevIdx = St.NextIdx;
 					St.NextIdx = Pick;
+					St.StallRounds = 0;
 				}
-				if (!bArrived && bMoving) { St.Stall = 0; continue; }
+				if (!bArrived && bMoving) { St.Stall = 0; St.StallRounds = 0; continue; }
 				if (!bArrived) { ++St.Stall; }
 				// VASTLOPER-HERSTEL: na 6 mislukte tikken is het doel kennelijk onbereikbaar
 				// (navmesh-gat) - dichtstbijzijnde knoop herberekenen en een ANDERE kant op.
@@ -628,6 +660,30 @@ void ACustomerSpawner::TrySpawn()
 					{
 						const int32 Cand = NbR.Num() > 0 ? NbR[FMath::RandRange(0, NbR.Num() - 1)] : NearN;
 						if (Cand != St.NextIdx) { NewPick = Cand; break; }
+					}
+					// 2e herstel-ronde ZONDER vooruitgang: klem achter geometrie - typisch de hal/lobby na
+					// het entry-pad, waar de directe ring-walk dwars door de muur naar buiten mikt en de
+					// hal->route-overdracht dus nooit afkomt (de NPC stond daar stil tot de despawn). Zelfde
+					// vangrail als op het entry-pad: BUITEN ZICHT van alle spelers naar de dichtstbijzijnde
+					// knoop hoppen en gewoon verder patrouilleren - geen zichtbare pop.
+					++St.StallRounds;
+					if (St.StallRounds >= 2)
+					{
+						bool bUnseen = true;
+						for (FConstPlayerControllerIterator PIt = World->GetPlayerControllerIterator(); PIt; ++PIt)
+						{
+							const APlayerController* PCs = PIt->Get();
+							const APawn* Pps = PCs ? PCs->GetPawn() : nullptr;
+							if (!Pps) { continue; }
+							const FVector To = Cur - Pps->GetActorLocation();
+							if (To.Size() < 1200.f) { bUnseen = false; break; }
+							if (To.Size() < 5000.f && FVector::DotProduct(PCs->GetControlRotation().Vector(), To.GetSafeNormal()) > 0.05f) { bUnseen = false; break; }
+						}
+						if (bUnseen && NetNodes.IsValidIndex(NearN))
+						{
+							Cw->SetActorLocation(NetNodes[NearN] + FVector(0.f, 0.f, 90.f), false, nullptr, ETeleportType::TeleportPhysics);
+							St.StallRounds = 0;
+						}
 					}
 					St.PrevIdx = NearN;
 					St.NextIdx = NewPick;

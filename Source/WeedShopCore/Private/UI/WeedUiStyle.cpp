@@ -21,7 +21,9 @@
 #include "Engine/Engine.h"
 #include "GameFramework/Pawn.h"
 #include "Cultivation/WaterCanComponent.h"
-#include "Phone/PhoneClientComponent.h" // geladen-vloei-status voor het paper-icoon
+#include "Cultivation/BottleTypes.h" // fles-vulling (Fill x/y) in de quick-view-body
+#include "Cultivation/SoilTypes.h"   // oogsten-per-soil in de quick-view-body
+#include "Phone/PhoneClientComponent.h" // geladen-vloei-status voor het paper-icoon + paper-capaciteit/joint-sterkte
 #include "Game/WeedShopGameState.h"
 #include "Progression/StoreComponent.h"
 #include "Engine/World.h"
@@ -90,11 +92,13 @@ namespace WeedUI
 		return T;
 	}
 
-	FString ItemTooltip(FName ItemId, int32 Qty, float Thc, float QualPct)
+	FString ItemInfoBody(FName ItemId, int32 Qty, float Thc, float QualPct)
 	{
+		// Quick-view-body ZONDER naam-regel (het details-paneel toont de naam al groot erboven).
+		// Compact: type-regel -> kern-stats -> hoeveelheid alleen waar de cel-badge dat niet al toont.
 		const FString S = ItemId.ToString();
-		FString Out = PrettyItemName(ItemId);
-		auto Add = [&Out](const FString& L) { Out += TEXT("\n") + L; };
+		FString Out;
+		auto Add = [&Out](const FString& L) { if (!Out.IsEmpty()) { Out += TEXT("\n"); } Out += L; };
 
 		const bool bWet = S.StartsWith(TEXT("WetBud_"));
 		const bool bBud = S.StartsWith(TEXT("Bud_"));
@@ -106,6 +110,10 @@ namespace WeedUI
 		const bool bRosin = S.StartsWith(TEXT("Rosin_"));
 		const bool bBubble = S.StartsWith(TEXT("Bubble_"));
 		const bool bConc = bMoon || bRosin || bBubble;
+		const bool bSeed = S.StartsWith(TEXT("Seed_"));
+		const bool bBottle = S.StartsWith(TEXT("WaterBottle"));
+		const bool bSoil = S.StartsWith(TEXT("Soil_"));
+		const bool bPapers = S.StartsWith(TEXT("Papers_"));
 
 		FString Type;
 		if (bWet)            { Type = TEXT("Wet weed - dry it first"); }
@@ -117,25 +125,99 @@ namespace WeedUI
 		else if (bMoon)      { Type = TEXT("Moonrocks"); }
 		else if (bRosin)     { Type = TEXT("Rosin"); }
 		else if (bBubble)    { Type = TEXT("Bubble hash"); }
-		else if (S.StartsWith(TEXT("Seed_")))        { Type = TEXT("Seed"); }
-		else if (S.StartsWith(TEXT("WaterBottle")))  { Type = TEXT("Water bottle"); }
-		else if (S.StartsWith(TEXT("Soil_")))        { Type = TEXT("Soil"); }
-		else if (S.StartsWith(TEXT("Papers_")))      { Type = TEXT("Rolling papers"); }
+		else if (bSeed)      { Type = TEXT("Seed"); }
+		else if (bBottle)    { Type = TEXT("Water bottle"); }
+		else if (bSoil)      { Type = TEXT("Soil"); }
+		else if (bPapers)    { Type = TEXT("Rolling papers"); }
 		else if (S.StartsWith(TEXT("Cont_")))        { Type = TEXT("Packaging"); }
-		else if (S == TEXT("Cash"))                  { Type = TEXT("Cash"); }
+		// (Cash: geen type-regel - de naam "Cash" zegt het al.)
 		if (!Type.IsEmpty()) { Add(Type); }
 
 		const bool bWeed = bWet || bBud || bBag || bJoint || bCrystal || bHash || bConc;
 		if (bWeed && Thc > 0.f) { Add(FString::Printf(TEXT("THC %.0f%%   Quality %.0f%%"), Thc, QualPct)); }
 
+		// Winkel-catalogus voor strain-stats/omschrijvingen; zelfde GWorld-idioom als PrettyItemName hierboven.
+		UStoreComponent* Store = nullptr;
+		if (GWorld)
+		{
+			if (const AWeedShopGameState* GS = GWorld->GetGameState<AWeedShopGameState>()) { Store = GS->GetStore(); }
+		}
+
+		if (bJoint)
+		{
+			// Sterkte = kwaliteit x gram (zelfde formule als roken/verkoop); strain + gram staan al in de naam.
+			const int32 JG = UInventoryComponent::JointGrams(ItemId);
+			const float Strength = UPhoneClientComponent::JointIntensity(JG, Thc, QualPct) * 100.f;
+			Add(FString::Printf(TEXT("Strength %.0f%%  (%dg rolled)"), Strength, JG));
+		}
+		else if (bSeed)
+		{
+			// Strain-stats: wat deze seed kan opleveren (zelfde bron als de hand-preview/StoreWidget).
+			float SThc = 0.f, SYield = 0.f, SGrow = 0.f;
+			if (Store && Store->GetStrainStats(UStoreComponent::StrainFromSeedItem(ItemId), SThc, SYield, SGrow))
+			{
+				Add(FString::Printf(TEXT("THC up to %.0f%%"), SThc));
+				Add(FString::Printf(TEXT("Yield ~%.0fg   Grow ~%.0f min"), SYield, SGrow));
+			}
+		}
+		else if (bBottle)
+		{
+			// Vulling van DEZE fles: het water zit in het Quality-veld van de stack (zie WaterCanComponent).
+			FBottleDef Bd;
+			if (GetBottleDef(ItemId, Bd))
+			{
+				const int32 Fill = FMath::Clamp(FMath::RoundToInt(Thc), 0, Bd.Charges);
+				Add(FString::Printf(TEXT("Fill %d / %d waterings"), Fill, Bd.Charges));
+				if (Fill <= 0) { Add(TEXT("Empty - refill at a sink")); }
+			}
+		}
+		else if (bSoil)
+		{
+			// Oogsten-per-toepassing + bonus (zelfde def als de plant-kaart z'n "(%d harvests left)").
+			FSoilDef Sd;
+			if (GetSoilDef(ItemId, Sd))
+			{
+				Add(FString::Printf(TEXT("Lasts %d harvests per use"), Sd.Harvests));
+				FString Bonus;
+				if (Sd.YieldMult > 1.001f)   { Bonus += FString::Printf(TEXT("Yield +%.0f%%"), (Sd.YieldMult - 1.f) * 100.f); }
+				if (Sd.QualityMult > 1.001f) { Bonus += FString::Printf(TEXT("%sQuality +%.0f%%"), Bonus.IsEmpty() ? TEXT("") : TEXT("   "), (Sd.QualityMult - 1.f) * 100.f); }
+				if (!Bonus.IsEmpty()) { Add(Bonus); }
+			}
+		}
+		else if (bPapers)
+		{
+			// Welke joint-maat deze papers toestaan (zelfde tabel als GetMaxJointGrams).
+			const int32 Cap = UPhoneClientComponent::PaperCapacity(ItemId);
+			if (Cap > 0) { Add(FString::Printf(TEXT("Rolls joints up to %dg"), Cap)); }
+		}
+		else if (!bWeed && ItemId != TEXT("Cash"))
+		{
+			// Overige items (mest/sprays/gear/machines/verpakking/meubels): de winkel-omschrijving heeft
+			// de concrete werking ("+15% yield this harvest") - zelfde patroon als HandInfoWidget.
+			if (Store)
+			{
+				const FString Desc = Store->GetCatalogDesc(ItemId).ToString();
+				if (!Desc.IsEmpty()) { Add(Desc); }
+			}
+		}
+
+		// Hoeveelheid alleen waar de cel-badge dat niet al glashelder toont: zakjes krijgen de totaal-som;
+		// losse grammen ("12g") en "xN"-stapels staan al op de badge en dubbelen we niet nogmaals.
 		if (bBag)
 		{
 			const int32 G = FMath::Max(1, UInventoryComponent::BagGrams(ItemId));
 			Add(FString::Printf(TEXT("%d bag(s) x %dg  =  %dg"), Qty, G, Qty * G));
 		}
-		else if (bWet || bBud || bCrystal || bHash || bConc) { Add(FString::Printf(TEXT("%dg"), Qty)); }
-		else if (S == TEXT("Cash")) { Add(FString::Printf(TEXT("€%d"), Qty)); }
-		else if (Qty > 1) { Add(FString::Printf(TEXT("Amount: %d"), Qty)); }
+		else if (S == TEXT("Cash")) { Add(FString::Printf(TEXT("€%d in cash"), Qty)); }
+		return Out;
+	}
+
+	FString ItemTooltip(FName ItemId, int32 Qty, float Thc, float QualPct)
+	{
+		// Naam + body: voor zwevende tooltips die los van het details-paneel staan (hotbar e.d.).
+		const FString Body = ItemInfoBody(ItemId, Qty, Thc, QualPct);
+		FString Out = PrettyItemName(ItemId);
+		if (!Body.IsEmpty()) { Out += TEXT("\n") + Body; }
 		return Out;
 	}
 

@@ -1044,8 +1044,11 @@ void ACustomerBase::Tick(float DeltaSeconds)
 		return; // geen 30s-patience-drain zolang de afspraak loopt
 	}
 
-	// Geduld loopt af zolang hij wacht (wil bestellen of onderhandelt).
-	if ((State == ECustomerState::WantsToOrder || State == ECustomerState::Negotiating) && !bVirtualCrowdBody) // crowd-decoratie verloopt z'n geduld NIET -> vertrekt nooit als ontevreden klant (anti-churn)
+	// Geduld loopt af zolang hij wacht (wil bestellen of onderhandelt). Crowd-decoratie EN bewoner-wandelaars
+	// verlopen hun geduld NIET: die wachten nergens op (ze patrouilleren gewoon), maar de 30s-patience maakte er
+	// LeaveAngry->Leaving->Destroy van - een verslaafde bewoner (State=WantsToOrder) verdween zo ~50s na spawn,
+	// vaak nog onderweg in de hal/het trappenhuis (anti-churn, zelfde principe als bVirtualCrowdBody).
+	if ((State == ECustomerState::WantsToOrder || State == ECustomerState::Negotiating) && !bVirtualCrowdBody && !IsResidentWalker())
 	{
 		PatienceSeconds -= DeltaSeconds;
 		if (PatienceSeconds <= 0.f)

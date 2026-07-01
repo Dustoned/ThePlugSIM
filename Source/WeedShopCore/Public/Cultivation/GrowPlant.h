@@ -189,6 +189,7 @@ public:
 	int32 GetAfflictedCount() const;
 
 	// Minste resterende seconden voor de besmette plant die het dichtst bij doodgaan is (0 = geen).
+	// = resterende gratie + de tijd die de snelle kwaliteit-drain daarna nodig heeft tot de bodem.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")
 	float GetWorstAfflictSecondsLeft() const;
 
@@ -269,11 +270,14 @@ protected:
 	int32 SoilUsesLeft = 0;
 
 	// --- Mold/pest per plek ---
+	// Besmet = harde lockout: de hele pot bevriest (groei/water/care) en water geven is geblokkeerd
+	// tot er gesprayed is. Binnen de gratie sprayen = geen straf; daarna zakt de kwaliteit snel en
+	// sterft de plant pas als die op de bodem staat (zie de afflict-constanten in GrowPlant.cpp).
 	UPROPERTY(ReplicatedUsing = OnRep_Slots)
 	TArray<uint8> SlotAfflict;        // 0 gezond, 1 mold, 2 pest
 
 	UPROPERTY(Replicated)
-	TArray<float> SlotAfflictTime;    // sec sinds besmetting (gratie -> daarna sterven)
+	TArray<float> SlotAfflictTime;    // sec sinds besmetting (gratie -> daarna kwaliteit-drain)
 
 	// Huidige-cyclus mest-bonus op de opbrengst (1 = geen). Reset na de oogst.
 	UPROPERTY(Replicated)

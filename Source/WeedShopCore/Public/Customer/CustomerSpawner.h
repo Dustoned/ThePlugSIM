@@ -83,6 +83,11 @@ public:
 	// punt afgelopen, daarna voegt de wandelaar in op de normale route-patrouille.
 	void AdoptWalker(class ACustomerBase* C, const TArray<FVector>* EntryPath = nullptr);
 
+	// Een EXTERNE teleport (bv. de "lift nemen"-redding in de DoorRetrofitter) heeft deze wandelaar
+	// verplaatst: gooi z'n entry-/terugpad weg en laat 'm vanaf de dichtstbijzijnde route-knoop verder
+	// patrouilleren - anders liep hij vanaf de straat terug omhoog naar z'n oude ketting-punt.
+	void NotifyWalkerTeleported(class ACustomerBase* C);
+
 	// Hoe ver van het spawn-punt de klanten gaan staan.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpotRadius = 350.f;
@@ -127,6 +132,7 @@ protected:
 		TArray<FVector> Entry; // eerst dit pad aflopen (trap-ketting), daarna de route
 		int32 EntryIdx = 0;
 		int32 Stall = 0;       // stilstand-teller: na 3x direct lopen i.p.v. pathfinding
+		int32 StallRounds = 0; // aantal vastloper-herstel-rondes ZONDER vooruitgang: 2e ronde = klem achter geometrie -> buiten zicht naar de knoop hoppen
 		// KRINGLOOP: bewoners met een entry-pad lopen na een tijdje de ketting omgekeerd terug
 		// naar binnen en despawnen daar - de woningen-pass zet later een verse bewoner neer.
 		TArray<FVector> ReturnPath;

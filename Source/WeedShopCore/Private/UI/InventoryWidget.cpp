@@ -6,7 +6,6 @@
 #include "UI/DryingRackWidget.h" // UDryDragOp: een klare batch in de inventory droppen = oogsten
 #include "UI/ShelfWidget.h"      // UShelfDragOp: een item uit een schap in de inventory droppen = pakken
 #include "Inventory/InventoryComponent.h"
-#include "Economy/EconomyComponent.h" // cash met centen tonen
 #include "World/StorageShelf.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -109,7 +108,14 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		// Strain/variant-TAG-bubble onderaan de cel (alleen rooster) -> onderscheid items met hetzelfde icoon.
 		if (!Tag.IsEmpty() && !bHotbar)
 		{
-			UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 9, FLinearColor(0.98f, 1.f, 0.99f), false, true);
+			// Iets groter + dunne donkere outline: op size 9 oogde de (Exo-)tekst te dun voor snelle herkenning.
+			UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 10, FLinearColor(0.98f, 1.f, 0.99f), false, true);
+			{
+				FSlateFontInfo TagFont = WeedUI::Font(10, true);
+				TagFont.OutlineSettings.OutlineSize = 1;
+				TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
+				TagT->SetFont(TagFont);
+			}
 			UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
 			TagPill->SetBrush(WeedUI::Rounded(WeedUI::TagColorForItem(IconId), 6.f)); // strain -> eigen kleur; standaard-item -> grijs
 			TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
@@ -129,8 +135,9 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		GlowOS->SetHorizontalAlignment(HAlign_Fill); GlowOS->SetVerticalAlignment(VAlign_Fill);
 		HoverGlow = Glow;
 	}
-	// Volledige naam + details bij hover (zodat lange namen die niet in de cel passen toch leesbaar zijn).
-	if (!Tooltip.IsEmpty()) { SetToolTipText(FText::FromString(Tooltip)); }
+	// Zwevende hover-tooltip = volledige naam + info-body. (Tooltip is body-only voor het details-paneel,
+	// waar de naam al groot staat; hiér prefixen we de naam zodat lange namen toch leesbaar blijven.)
+	if (!Tooltip.IsEmpty()) { SetToolTipText(FText::FromString(WeedUI::PrettyItemName(IconId) + TEXT("\n") + Tooltip)); }
 	// Hit-test zichtbaar zodat de cel muis/drag-events ontvangt.
 	SetVisibility(ESlateVisibility::Visible);
 	return Super::RebuildWidget();
@@ -140,7 +147,7 @@ FReply UInvCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPoi
 {
 	if (StackId != 0 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		// Shift+klik = split/drop-popup openen (werkt ook voor niet-sleepbare stapels zoals Cash).
+		// Shift+klik = split-popup openen (werkt op alle stapels, ook briefgeld).
 		if (InMouseEvent.IsShiftDown() && Owner.IsValid())
 		{
 			Owner->OpenSplitPopup(StackId);
@@ -211,6 +218,36 @@ void UInvDragOp::HandleDroppedOutside(UDragDropOperation* Operation)
 
 bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+	return HandleDropOp(InOperation);
+}
+
+UInvCell* UInvCell::FindNearestCell(const TArray<UInvCell*>& Cells, const FVector2D& ScreenPos, float MaxEdgeFrac)
+{
+	UInvCell* Best = nullptr;
+	float BestDist = TNumericLimits<float>::Max();
+	const FVector2f P(ScreenPos);
+	for (UInvCell* C : Cells)
+	{
+		if (!C) { continue; }
+		const FGeometry& Geo = C->GetCachedGeometry();
+		const FVector2f A(Geo.GetAbsolutePosition());
+		const FVector2f Sz(Geo.GetAbsoluteSize());
+		if (Sz.X <= 1.f || Sz.Y <= 1.f) { continue; } // nog niet gelayout (bv. net gebouwd/collapsed)
+		// Afstand van de drop-positie tot de CELRAND (0 = op de cel zelf; die had de drop dan al gepakt).
+		const float DX = FMath::Max3(A.X - P.X, P.X - (A.X + Sz.X), 0.f);
+		const float DY = FMath::Max3(A.Y - P.Y, P.Y - (A.Y + Sz.Y), 0.f);
+		const float Dist = FMath::Sqrt(DX * DX + DY * DY);
+		if (Dist <= MaxEdgeFrac * FMath::Min(Sz.X, Sz.Y) && Dist < BestDist)
+		{
+			BestDist = Dist;
+			Best = C;
+		}
+	}
+	return Best;
+}
+
+bool UInvCell::HandleDropOp(UDragDropOperation* InOperation)
+{
 	// Een KLARE droogrek-batch (UDryDragOp, niet-nat) op de inventory OF de hotbar droppen = oogsten naar je
 	// voorraad. Werkt overal: we halen de PhoneClientComponent uit de pawn (eigenaar van de inventory).
 	if (UDryDragOp* DryOp = Cast<UDryDragOp>(InOperation))
@@ -260,7 +297,7 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 		const int32 DragIdx = Inv->FindStackById(Op->StackId);
 		const TArray<FInventoryStack>& St = Inv->GetStacks();
 		if (St.IsValidIndex(ThisIdx) && St.IsValidIndex(DragIdx)
-			&& St[ThisIdx].ItemId == St[DragIdx].ItemId && St[ThisIdx].ItemId != FName(TEXT("Cash"))
+			&& St[ThisIdx].ItemId == St[DragIdx].ItemId
 			&& UInventoryComponent::IsStackable(St[ThisIdx].ItemId)) // geen flessen e.d. samenvoegen
 		{
 			// Gelijke kwaliteit -> direct mergen; verschillend -> eerst bevestigen (popup).
@@ -279,7 +316,7 @@ bool UInvCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& I
 			const int32 DragIdx = Inv->FindStackById(Op->StackId);
 			const TArray<FInventoryStack>& St = Inv->GetStacks();
 			if (St.IsValidIndex(ThisIdx) && St.IsValidIndex(DragIdx)
-				&& St[ThisIdx].ItemId == St[DragIdx].ItemId && St[ThisIdx].ItemId != FName(TEXT("Cash"))
+				&& St[ThisIdx].ItemId == St[DragIdx].ItemId
 				&& UInventoryComponent::IsStackable(St[ThisIdx].ItemId))
 			{
 				// Gelijke kwaliteit -> direct mergen; verschillend -> eerst bevestigen (popup).
@@ -342,6 +379,25 @@ TSharedRef<SWidget> UInventoryWidget::RebuildWidget()
 }
 
 void UInventoryWidget::OnInvChanged() { bDirty = true; }
+
+bool UInventoryWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	// Vangnet voor drops in de GAPS van het rooster (tussen/net naast de cellen): snap naar de dichtstbijzijnde
+	// cel binnen de drempel en handel af alsof je daar dropte. Dit draait ALLEEN als geen enkele cel de drop
+	// zelf consumeerde (Slate stopt het bubbelen bij een handled drop) -> geen dubbele afhandeling mogelijk.
+	TArray<UInvCell*> Cells;
+	Cells.Reserve(CellBoxes.Num());
+	for (USizeBox* B : CellBoxes)
+	{
+		if (UInvCell* C = B ? Cast<UInvCell>(B->GetContent()) : nullptr) { Cells.Add(C); }
+	}
+	if (UInvCell* Nearest = UInvCell::FindNearestCell(Cells, InDragDropEvent.GetScreenSpacePosition()))
+	{
+		return Nearest->HandleDropOp(InOperation);
+	}
+	// Verder weg dan de drempel: bestaand gedrag (onafgehandeld -> drag-cancel -> stapel op de grond droppen).
+	return Super::NativeOnDrop(InGeometry, InDragDropEvent, InOperation);
+}
 
 namespace
 {
@@ -560,7 +616,8 @@ void UInventoryWidget::ShowItemDetails(UInvCell* Cell)
 	if (!Cell || Cell->StackId == 0 || !DetailsContent || !StashContent) { return; }
 	DetailsStackId = Cell->StackId;
 	if (DetailsIconBox) { DetailsIconBox->SetContent(WeedUI::ItemIcon(WidgetTree, Cell->IconId, 84.f, Cell->WaterOverride)); }
-	if (DetailsName) { DetailsName->SetText(FText::FromString(Cell->Line1.IsEmpty() ? WeedUI::PrettyItemName(Cell->IconId) : Cell->Line1)); }
+	// Volledige naam (Line1 is in de cel afgekapt met "..."; hier is wél ruimte).
+	if (DetailsName) { DetailsName->SetText(FText::FromString(Cell->IconId.IsNone() ? Cell->Line1 : WeedUI::PrettyItemName(Cell->IconId))); }
 	if (DetailsBody) { DetailsBody->SetText(FText::FromString(Cell->Tooltip)); }
 	if (DetailsSplitBtn) { DetailsSplitBtn->SetVisibility(Cell->bDraggable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 	StashContent->SetVisibility(ESlateVisibility::Collapsed);
@@ -607,19 +664,8 @@ void UInventoryWidget::OpenSplitPopup(int32 StackId)
 	const int32 Idx = I->FindStackById(StackId);
 	const TArray<FInventoryStack>& St = I->GetStacks();
 	if (!St.IsValidIndex(Idx)) { return; }
-	// Cash mag NIET meer gedropt worden: geen cash-split/drop-popup openen.
-	if (St[Idx].ItemId == FName(TEXT("Cash")))
-	{
-		if (AActor* Own = I->GetOwner())
-		{
-			if (UPhoneClientComponent* Ph = Own->FindComponentByClass<UPhoneClientComponent>())
-			{
-				Ph->Toast(TEXT("You can't drop cash."), FColor(255, 90, 90), 2.0f);
-			}
-		}
-		return;
-	}
-	bSplitIsCash = false;
+	// Cash splitst/dropt nu als elk ander item: splitsen via deze popup, droppen door de stapel de
+	// inventory uit te slepen (ServerDropStack spawnt een oppakbaar geldstapeltje + boekt het saldo af).
 	if (!UInventoryComponent::IsStackable(St[Idx].ItemId) || St[Idx].Quantity < 2) { return; } // niks te splitsen
 	SplitStackId = StackId;
 	SplitTotal = St[Idx].Quantity;
@@ -631,12 +677,6 @@ void UInventoryWidget::OpenSplitPopup(int32 StackId)
 void UInventoryWidget::OnSplitSliderChanged(float V)
 {
 	if (!SplitLabel) { return; }
-	if (bSplitIsCash)
-	{
-		const int32 Amount = FMath::Clamp(FMath::RoundToInt(V * SplitTotal), 1, FMath::Max(1, SplitTotal));
-		SplitLabel->SetText(FText::FromString(FString::Printf(TEXT("Drop: EUR %d   (of EUR %d)"), Amount, SplitTotal)));
-		return;
-	}
 	const int32 Amount = FMath::Clamp(FMath::RoundToInt(V * SplitTotal), 1, FMath::Max(1, SplitTotal - 1));
 	SplitLabel->SetText(FText::FromString(FString::Printf(TEXT("Split off: %d   (of %d)"), Amount, SplitTotal)));
 }
@@ -644,24 +684,11 @@ void UInventoryWidget::OnSplitSliderChanged(float V)
 void UInventoryWidget::ConfirmSplit()
 {
 	UInventoryComponent* I = GetInv();
-	if (I && SplitStackId != 0 && SplitSlider && SplitTotal >= 1)
+	if (I && SplitStackId != 0 && SplitSlider && SplitTotal > 1)
 	{
-		if (bSplitIsCash)
-		{
-			// Cash droppen: trek het bedrag van je cash + spawn een oppakbaar geldstapeltje (server).
-			const int32 Euros = FMath::Clamp(FMath::RoundToInt(SplitSlider->GetValue() * SplitTotal), 1, SplitTotal);
-			if (AActor* Own = I->GetOwner())
-			{
-				if (UEconomyComponent* Eco = Own->FindComponentByClass<UEconomyComponent>()) { Eco->ServerDropCash(Euros); }
-			}
-			MarkDirty();
-		}
-		else if (SplitTotal > 1)
-		{
-			const int32 Amount = FMath::Clamp(FMath::RoundToInt(SplitSlider->GetValue() * SplitTotal), 1, SplitTotal - 1);
-			I->RequestSplit(SplitStackId, Amount, -1);
-			MarkDirty();
-		}
+		const int32 Amount = FMath::Clamp(FMath::RoundToInt(SplitSlider->GetValue() * SplitTotal), 1, SplitTotal - 1);
+		I->RequestSplit(SplitStackId, Amount, -1);
+		MarkDirty();
 	}
 	CancelSplit();
 }
@@ -884,30 +911,27 @@ UInvCell* UInventoryWidget::BuildGridCellWidget(int32 cell, int32 StackId, bool 
 		Cell->WaterOverride = ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(S.Quality) : -1;
 		Cell->Accent = WeedUI::ItemAccent(ItemId);
 
-		// Volledige naam in de tooltip; in de cel kappen we te lange namen af met een ellips
-		// (de tooltip + het icoon maken alsnog volledig duidelijk wat het is).
+		// In de cel kappen we te lange namen af met een ellips; het details-paneel/de tooltip tonen
+		// de volledige naam zelf (Tooltip = info-BODY zonder naam, anders stond de naam er 2x).
 		const FString FullName = WeedUI::PrettyItemName(ItemId);
 		Cell->Line1 = (FullName.Len() > 20) ? (FullName.Left(19) + TEXT("...")) : FullName;
 		Cell->Tag = WeedUI::ItemTagShort(ItemId); // korte strain/rank-code in de bubble onderaan de cel
-		Cell->Tooltip = FullName;
 
 		if (bCash)
 		{
 			Cell->Bg = FLinearColor(0.09f, 0.14f, 0.09f, 0.97f);
-			// Toon het saldo in hele euro's (de game rekent/toont alles in hele euro's).
-			const APawn* Pw = GetOwningPlayerPawn();
-			const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
-			const int64 Euros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : static_cast<int64>(S.Quantity);
+			// Toon het bedrag van DEZE stapel (cash kan gesplitst zijn); het totaal = de som van de stapels.
+			const int64 Euros = static_cast<int64>(S.Quantity);
 			Cell->Line2 = FString::Printf(TEXT("EUR %lld"), (long long)Euros);
 			Cell->Badge = (Euros >= 1000) ? FString::Printf(TEXT("%.0fk"), Euros / 1000.0) : FString::Printf(TEXT("%lld"), (long long)Euros);
-			Cell->Tooltip += FString::Printf(TEXT("\nEUR %lld contant"), (long long)Euros);
+			Cell->Tooltip = FString::Printf(TEXT("EUR %lld contant"), (long long)Euros);
 		}
 		else if (bWet)
 		{
 			Cell->Bg = FLinearColor(0.09f, 0.14f, 0.21f, 0.97f);
 			Cell->Line2 = TEXT("WET - dry it first");
 			Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
-			Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
+			Cell->Tooltip = WeedUI::ItemInfoBody(ItemId, S.Quantity, S.Quality, S.QualityPct);
 			Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
 		}
 		else
@@ -917,8 +941,9 @@ UInvCell* UInventoryWidget::BuildGridCellWidget(int32 cell, int32 StackId, bool 
 				? FString::Printf(TEXT("THC %.0f%%  Q %.0f%%"), S.Quality, S.QualityPct)
 				: TEXT("");
 			Cell->Badge = WeedUI::ItemQtyBadge(ItemId, S.Quantity);
-			Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
-			Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
+			Cell->Tooltip = WeedUI::ItemInfoBody(ItemId, S.Quantity, S.Quality, S.QualityPct);
+			// (body kan leeg zijn voor items zonder catalogus-omschrijving -> geen kale newline ervoor)
+			Cell->Tooltip += FString::Printf(TEXT("%sWeight %.1f"), Cell->Tooltip.IsEmpty() ? TEXT("") : TEXT("\n"), Inv->GetUnitWeight(ItemId) * S.Quantity);
 			if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
 			{
 				Cell->bShowMerge = true;
@@ -942,15 +967,9 @@ FString UInventoryWidget::GridCellSig(int32 StackId, bool bShowItem, const FInve
 {
 	if (!bShowItem || !SPtr || !Inv) { return TEXT("E"); }
 	const FInventoryStack& Sg = *SPtr;
-	int64 CashEuros = 0;
-	if (Sg.ItemId == TEXT("Cash"))
-	{
-		const APawn* Pw = GetOwningPlayerPawn();
-		const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
-		CashEuros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : (int64)Sg.Quantity;
-	}
+	// (Cash toont per stapel z'n eigen Quantity -> die zit al in de sig; geen aparte economy-lookup meer.)
 	const int32 WaterLv = Sg.ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(Sg.Quality) : -1;
-	return FString::Printf(TEXT("I|%s|%d|%.1f|%.1f|%d|%lld|%d"), *Sg.ItemId.ToString(), Sg.Quantity, Sg.Quality, Sg.QualityPct, WaterLv, (long long)CashEuros, Inv->CountStacksOf(Sg.ItemId));
+	return FString::Printf(TEXT("I|%s|%d|%.1f|%.1f|%d|%d"), *Sg.ItemId.ToString(), Sg.Quantity, Sg.Quality, Sg.QualityPct, WaterLv, Inv->CountStacksOf(Sg.ItemId));
 }
 
 // Optimistische drop-update: zet METEEN een item-cel (Fill) of lege cel (Clear) neer zonder op de server-round-trip
@@ -1022,97 +1041,17 @@ void UInventoryWidget::RebuildContent()
 		// Hotbar-items tonen we niet in het rooster, maar hun cel blijft als lege cel staan (rooster verspringt niet).
 		const bool bOnHotbar = (StackId != 0 && Stacks.IsValidIndex(Idx) && Inv->IsStackOnHotbar(StackId));
 		const bool bShowItem = (StackId != 0 && Stacks.IsValidIndex(Idx) && !bOnHotbar);
+		const FInventoryStack* SPtr = bShowItem ? &Stacks[Idx] : nullptr;
 
 		// Signatuur van de zichtbare cel-staat: onveranderd -> cel met rust laten (geen rebuild, geen flikker).
-		FString Sig = TEXT("E");
-		if (bShowItem)
-		{
-			const FInventoryStack& Sg = Stacks[Idx];
-			int64 CashEuros = 0;
-			if (Sg.ItemId == TEXT("Cash"))
-			{
-				const APawn* Pw = GetOwningPlayerPawn();
-				const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
-				CashEuros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : (int64)Sg.Quantity;
-			}
-			const int32 WaterLv = Sg.ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(Sg.Quality) : -1;
-			Sig = FString::Printf(TEXT("I|%s|%d|%.1f|%.1f|%d|%lld|%d"), *Sg.ItemId.ToString(), Sg.Quantity, Sg.Quality, Sg.QualityPct, WaterLv, (long long)CashEuros, Inv->CountStacksOf(Sg.ItemId));
-		}
+		// ZELFDE formule als de optimistische updates (GridCellSig) -> reconcile blijft naadloos.
+		const FString Sig = GridCellSig(StackId, bShowItem, SPtr, Inv);
 		if (!CellSigs.IsValidIndex(cell) || !CellBoxes.IsValidIndex(cell)) { continue; }
 		if (Sig == CellSigs[cell]) { continue; } // niets veranderd aan deze cel
 		CellSigs[cell] = Sig;
 
-		UInvCell* Cell = WidgetTree->ConstructWidget<UInvCell>();
-		Cell->SlotIndex = -1; Cell->GridCell = cell;
-		Cell->Inv = Inv; Cell->Owner = this;
-		Cell->IconSize = 68.f;
-		if (bShowItem)
-		{
-			const FInventoryStack& S = Stacks[Idx];
-			const FName ItemId = S.ItemId;
-			const FString IdStr = ItemId.ToString();
-			const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
-			const bool bBud = IdStr.StartsWith(TEXT("Bud_")) || bWet;
-			const bool bWeed = bBud || IdStr.StartsWith(TEXT("Joint_"));
-			const bool bCash = (ItemId == TEXT("Cash"));
-
-			Cell->StackId = StackId;
-			Cell->bDraggable = true; // ook briefgeld kun je verslepen (herschikken / naar de hotbar)
-			Cell->IconId = ItemId;
-			// Waterfles: toon het vol/leeg-niveau van DEZE fles (uit z'n eigen stack-Quality), niet van de actieve fles.
-			Cell->WaterOverride = ItemId.ToString().StartsWith(TEXT("WaterBottle")) ? FMath::RoundToInt(S.Quality) : -1;
-			Cell->Accent = WeedUI::ItemAccent(ItemId);
-
-			// Volledige naam in de tooltip; in de cel kappen we te lange namen af met een ellips
-			// (de tooltip + het icoon maken alsnog volledig duidelijk wat het is).
-			const FString FullName = WeedUI::PrettyItemName(ItemId);
-			Cell->Line1 = (FullName.Len() > 20) ? (FullName.Left(19) + TEXT("...")) : FullName;
-			Cell->Tag = WeedUI::ItemTagShort(ItemId); // korte strain/rank-code in de bubble onderaan de cel
-			Cell->Tooltip = FullName;
-
-			if (bCash)
-			{
-				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.09f, 0.97f);
-				// Toon het saldo in hele euro's (de game rekent/toont alles in hele euro's).
-				const APawn* Pw = GetOwningPlayerPawn();
-				const UEconomyComponent* Ec = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
-				const int64 Euros = Ec ? (WeedRoundEuros(Ec->GetCashCents()) / 100) : static_cast<int64>(S.Quantity);
-				Cell->Line2 = FString::Printf(TEXT("EUR %lld"), (long long)Euros);
-				Cell->Badge = (Euros >= 1000) ? FString::Printf(TEXT("%.0fk"), Euros / 1000.0) : FString::Printf(TEXT("%lld"), (long long)Euros);
-				Cell->Tooltip += FString::Printf(TEXT("\nEUR %lld contant"), (long long)Euros);
-			}
-			else if (bWet)
-			{
-				Cell->Bg = FLinearColor(0.09f, 0.14f, 0.21f, 0.97f);
-				Cell->Line2 = TEXT("WET - dry it first");
-				Cell->Badge = FString::Printf(TEXT("%dg"), S.Quantity);
-				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
-				Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
-			}
-			else
-			{
-				Cell->Bg = WeedUI::Hex(0x3A4152, 0.96f);
-				Cell->Line2 = bWeed
-					? FString::Printf(TEXT("THC %.0f%%  Q %.0f%%"), S.Quality, S.QualityPct)
-					: TEXT("");
-				Cell->Badge = WeedUI::ItemQtyBadge(ItemId, S.Quantity);
-				Cell->Tooltip = WeedUI::ItemTooltip(ItemId, S.Quantity, S.Quality, S.QualityPct);
-				Cell->Tooltip += FString::Printf(TEXT("\nWeight %.1f"), Inv->GetUnitWeight(ItemId) * S.Quantity);
-				if (bWeed && Ph && Inv->CountStacksOf(ItemId) > 1)
-				{
-					Cell->bShowMerge = true;
-					Cell->MergeFn = [Ph, ItemId]() { Ph->MergeNow(ItemId); };
-				}
-			}
-		}
-		else
-		{
-			// Lege cel (of plek van een item dat nu op de hotbar staat): drop-doel, niet sleepbaar.
-			// Zelfde duidelijke contrast als het droogrek.
-			Cell->StackId = 0; Cell->bDraggable = false;
-			Cell->Bg = WeedUI::Hex(0x2A3140, 0.5f); // lege cel: subtieler/donkerder dan gevuld
-		}
-		CellBoxes[cell]->SetContent(Cell);
+		// Gedeelde cel-bouw (zelfde code als de optimistische drop-update) -> geen dubbele opbouw-logica meer.
+		CellBoxes[cell]->SetContent(BuildGridCellWidget(cell, StackId, bShowItem, SPtr, Inv, Ph));
 	}
 }
 

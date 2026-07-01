@@ -522,25 +522,10 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 void AThePlugSIMCharacter::ServerDropActiveItem_Implementation()
 {
 	if (!Inventory) { return; }
-	const int32 Sid = Inventory->GetActiveStackId();
-	const int32 Idx = Inventory->FindStackById(Sid);
-	if (!Inventory->GetStacks().IsValidIndex(Idx)) { return; }
-	const FInventoryStack St = Inventory->GetStacks()[Idx];
-	if (St.ItemId.IsNone() || St.Quantity <= 0 || St.ItemId == FName(TEXT("Cash"))) { return; }
-
-	Inventory->RemoveFromStackById(Sid, St.Quantity); // de hele actieve stapel droppen
-
-	FVector Fwd = GetActorForwardVector(); Fwd.Z = 0.f; Fwd = Fwd.GetSafeNormal();
-	FVector Loc = GetActorLocation() + Fwd * 90.f;
-	Loc.Z -= (GetSimpleCollisionHalfHeight() - 12.f); // bij de voeten neerleggen
-	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	if (GetWorld())
-	{
-		if (AWorldItemPickup* P = GetWorld()->SpawnActor<AWorldItemPickup>(AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP))
-		{
-			P->Setup(St.ItemId, St.Quantity, St.Quality, St.QualityPct);
-		}
-	}
+	// Eén gedeeld drop-pad voor alles (ook briefgeld): ServerDropStack haalt de stapel eruit, spawnt de
+	// pickup bij de voeten, en boekt bij cash het bedrag ook echt van het saldo af. We draaien hier al op
+	// de server, dus de RPC voert direct z'n implementatie uit.
+	Inventory->ServerDropStack(Inventory->GetActiveStackId());
 }
 
 void AThePlugSIMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
