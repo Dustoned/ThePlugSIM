@@ -41,6 +41,8 @@ protected:
 	void OpenPicker(int32 Mode);
 	void ClosePicker();
 	void RefreshSlots();
+	void UpdateAutosaveLabel();                       // alleen de autosave-tekst/kleur in-place bijwerken
+	void EnsureModeButtons();                          // bouwt de 3 mode-knoppen éénmalig in ModeBox
 	void OnSlotChosen(int32 SlotIdx);                 // New Game / Load handmatige save
 	void OnLoadAutosave(int32 SlotIdx);               // Load de autosave van dit slot
 	void OnModeChosen(int32 Mode);                    // 0 Normal, 1 Sandbox, 2 Testing (na New Game-slot)
@@ -57,6 +59,7 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> CoopPanel;        // co-op kaart (host / join)
 	UPROPERTY() TObjectPtr<class UEditableTextBox> CoopIpBox; // host-IP invoerveld
 	UPROPERTY() TObjectPtr<class UWeedActionButton> CoopModeBtn; // Co-op<->Competitive toggle
+	UPROPERTY() TObjectPtr<UTextBlock> CoopModeLabel;           // persistent label van CoopModeBtn (SetText, geen rebuild)
 	UPROPERTY() TObjectPtr<UWidget> CoopChooseBox;    // stap 0: Host / Join keuze
 	UPROPERTY() TObjectPtr<UWidget> CoopHostBox;      // stap 1: host-modus + host-knop
 	UPROPERTY() TObjectPtr<UWidget> CoopJoinBox;      // stap 2: IP-veld + join-knop
@@ -84,7 +87,20 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> SlotPanel;          // de keuze-kaart (zichtbaar als MenuMode!=0)
 	UPROPERTY() TObjectPtr<UWidget> MenuCanvas;          // de 6 hoofdmenu-knoppen (verbergen tijdens picker)
 	UPROPERTY() TObjectPtr<UTextBlock> PickerTitle;
-	UPROPERTY() TObjectPtr<class UVerticalBox> SlotsBox; // rijen worden per refresh dynamisch opgebouwd
+	UPROPERTY() TObjectPtr<class UVerticalBox> SlotsBox; // persistente slot-rijen (pool hieronder)
+
+	// Persistente slot-rij-pool (1 per save-slot): geen ClearChildren, alleen per-rij diffen.
+	// Elke rij = een hoofd-knop (SlotMainBtns) met z'n label (SlotMainLabels) + een optionele
+	// autosave-sub-knop (SlotAutoBtns/SlotAutoLabels) die we Collapsen i.p.v. verwijderen.
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> SlotMainBtns;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotMainLabels;
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> SlotAutoBtns;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotAutoLabels;
+	TArray<FString> SlotRowSigs;                         // per-rij handtekening (rebuild alleen bij wijziging)
+
+	// Mode-keuze (Normal/Sandbox/Testing): éénmalig gebouwd, verborgen tot een New Game-slot is gekozen.
+	UPROPERTY() TObjectPtr<class UVerticalBox> ModeBox;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> ModeLabels; // huidige mode-labels (voor evt. in-place refresh)
 
 	// Vaste balk boven de slots: autosave aan/uit + wanneer de laatste save was.
 	UPROPERTY() TObjectPtr<class UWeedActionButton> AutosaveBtn;

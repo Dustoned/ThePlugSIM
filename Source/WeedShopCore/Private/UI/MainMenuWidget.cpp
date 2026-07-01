@@ -465,6 +465,12 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		SlotsBox = WidgetTree->ConstructWidget<UVerticalBox>();
 		PickVB->AddChildToVerticalBox(SlotsBox);
 
+		// Mode-keuze (Normal/Sandbox/Testing) — éénmalig gebouwd naast de slot-lijst en verborgen.
+		// We wisselen zichtbaarheid tussen SlotsBox en ModeBox i.p.v. de lijst te herbouwen.
+		ModeBox = WidgetTree->ConstructWidget<UVerticalBox>();
+		ModeBox->SetVisibility(ESlateVisibility::Collapsed);
+		PickVB->AddChildToVerticalBox(ModeBox);
+
 		// Autosave-toggle als gewone swatch-knop onderaan (geen losse "laatste save"-tekst).
 		AutosaveBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
 		AutosaveBtn->OnClicked.AddDynamic(AutosaveBtn, &UWeedActionButton::Handle);
@@ -524,6 +530,7 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 			CoopHostBox = HostBox;
 			bHostCompetitive = false;
 			CoopModeBtn = BigBtn(TEXT("Mode: CO-OP  (build together)"), FLinearColor(0.14f, 0.30f, 0.20f, 0.96f), [this]() { OnToggleCoopMode(); });
+			CoopModeLabel = Cast<UTextBlock>(CoopModeBtn->GetContent()); // persistent label -> later SetText i.p.v. rebuild
 			HostBox->AddChildToVerticalBox(CoopModeBtn)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 			HostBox->AddChildToVerticalBox(BigBtn(TEXT("Host new co-op game"), FLinearColor(0.16f, 0.34f, 0.22f, 0.96f), [this]() { OnHostCoop(); }))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
@@ -692,6 +699,43 @@ void UMainMenuWidget::OnJoinCoop()
 	Save->JoinLan(Ip);
 }
 
+// Alleen de autosave-knop-tekst + kleur in-place bijwerken (een toggle wijzigt géén slot-rij).
+void UMainMenuWidget::UpdateAutosaveLabel()
+{
+	if (!AutosaveLabel) { return; }
+	const USaveGameSubsystem* Save = GetSave(GetWorld());
+	const bool bOn = Save ? Save->IsAutosaveEnabled() : true;
+	AutosaveLabel->SetText(FText::FromString(bOn ? TEXT("Autosave: aan") : TEXT("Autosave: uit")));
+	AutosaveLabel->SetColorAndOpacity(FSlateColor(bOn ? FLinearColor(0.74f, 0.55f, 1.f) : FLinearColor(1.f, 0.6f, 0.55f)));
+}
+
+// De 3 mode-knoppen (Normal/Sandbox/Testing) éénmalig in ModeBox bouwen. Statisch qua inhoud,
+// dus daarna alleen nog zichtbaarheid wisselen — nooit herbouwen.
+void UMainMenuWidget::EnsureModeButtons()
+{
+	if (!ModeBox || ModeBox->GetChildrenCount() > 0) { return; }
+	// (Map-keuze verwijderd: CityBeachStrip is de enige speelmap; New Game gaat er altijd heen.)
+	struct FModeDef { const TCHAR* Name; const TCHAR* Desc; int32 Mode; };
+	const FModeDef Modes[3] = {
+		{ TEXT("Normal"),  TEXT("Begin from scratch - earn everything"),       0 },
+		{ TEXT("Sandbox"), TEXT("Loads of cash + a full kit - free play"),     1 },
+		{ TEXT("Testing"), TEXT("Starter budget + starter items (quick test)"), 2 },
+	};
+	ModeLabels.Reset();
+	for (const FModeDef& M : Modes)
+	{
+		const int32 ModeVal = M.Mode;
+		UWeedActionButton* MB = WidgetTree->ConstructWidget<UWeedActionButton>();
+		MB->OnClicked.AddDynamic(MB, &UWeedActionButton::Handle);
+		MB->OnAction.BindLambda([this, ModeVal](int32, int32) { OnModeChosen(ModeVal); });
+		MB->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 12.f)));
+		UTextBlock* Lbl = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s\n%s"), M.Name, M.Desc), 14, FLinearColor::White, true);
+		MB->SetContent(Lbl);
+		ModeBox->AddChildToVerticalBox(MB)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+		ModeLabels.Add(Lbl);
+	}
+}
+
 void UMainMenuWidget::RefreshSlots()
 {
 	if (PickerTitle)
@@ -702,13 +746,8 @@ void UMainMenuWidget::RefreshSlots()
 	}
 	USaveGameSubsystem* Save = GetSave(GetWorld());
 
-	// Vaste balk bijwerken: autosave-status + laatste save-tijdstip.
-	if (AutosaveLabel)
-	{
-		const bool bOn = Save ? Save->IsAutosaveEnabled() : true;
-		AutosaveLabel->SetText(FText::FromString(bOn ? TEXT("Autosave: aan") : TEXT("Autosave: uit")));
-		AutosaveLabel->SetColorAndOpacity(FSlateColor(bOn ? FLinearColor(0.74f, 0.55f, 1.f) : FLinearColor(1.f, 0.6f, 0.55f)));
-	}
+	// Vaste balk bijwerken: autosave-status + laatste save-tijdstip (in-place, geen rebuild).
+	UpdateAutosaveLabel();
 	if (LastSaveText)
 	{
 		FDateTime Last;
@@ -716,50 +755,76 @@ void UMainMenuWidget::RefreshSlots()
 		LastSaveText->SetText(FText::FromString(bAny ? FString::Printf(TEXT("Laatste save: %s"), *FmtAgo(Last)) : TEXT("No save yet")));
 	}
 
-	if (!SlotsBox) { return; }
-	SlotsBox->ClearChildren();
+	// Mode-keuze <-> slot-lijst: pre-gebouwde panes visibility-swappen (geen teardown).
+	EnsureModeButtons();
+	const bool bModeStage = (MenuMode == 3);
+	if (ModeBox)  { ModeBox->SetVisibility(bModeStage ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	if (SlotsBox) { SlotsBox->SetVisibility(bModeStage ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); }
+	if (bModeStage) { return; } // mode-knoppen zijn statisch; niets aan de slot-rijen te doen
 
-	// Mode-keuze (na het kiezen van een New Game-slot).
-	if (MenuMode == 3)
-	{
-		// (Map-keuze verwijderd: CityBeachStrip is de enige speelmap; New Game gaat er altijd heen.)
-		struct FModeDef { const TCHAR* Name; const TCHAR* Desc; int32 Mode; FLinearColor Col; };
-		const FModeDef Modes[3] = {
-			{ TEXT("Normal"),  TEXT("Begin from scratch - earn everything"),        0, FLinearColor(0.12f, 0.13f, 0.17f, 0.96f) },
-			{ TEXT("Sandbox"), TEXT("Loads of cash + a full kit - free play"),       1, FLinearColor(0.18f, 0.22f, 0.40f, 0.96f) },
-			{ TEXT("Testing"), TEXT("Starter budget + starter items (quick test)"),  2, FLinearColor(0.16f, 0.34f, 0.22f, 0.96f) },
-		};
-		for (const FModeDef& M : Modes)
-		{
-			const int32 ModeVal = M.Mode;
-			UWeedActionButton* MB = WidgetTree->ConstructWidget<UWeedActionButton>();
-			MB->OnClicked.AddDynamic(MB, &UWeedActionButton::Handle);
-			MB->OnAction.BindLambda([this, ModeVal](int32, int32) { OnModeChosen(ModeVal); });
-			MB->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 12.f)));
-			MB->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s\n%s"), M.Name, M.Desc), 14, FLinearColor::White, true));
-			SlotsBox->AddChildToVerticalBox(MB)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
-		}
-		return;
-	}
+	if (!SlotsBox) { return; }
 
 	const FButtonStyle MainStyle = SwatchStyle(SwatchTex, FMargin(16.f, 12.f));
 	const FButtonStyle AutoStyle = SwatchStyle(SwatchTex, FMargin(12.f, 7.f));
 
-	for (int32 s = 0; s < USaveGameSubsystem::NumSlots; ++s)
+	// Persistente rij-pool op maat brengen (1 rij per save-slot). Aantal slots is vast (NumSlots),
+	// dus dit groeit precies één keer en daarna nooit meer -> geen ClearChildren, geen flash.
+	while (SlotMainBtns.Num() < USaveGameSubsystem::NumSlots)
 	{
-		const int32 SlotIdx = s;
-		FSaveSlotInfo Manual; const bool bManual = Save && Save->GetSlotDetailsEx(s, false, Manual);
-		FSaveSlotInfo Auto;   const bool bAuto   = Save && Save->GetSlotDetailsEx(s, true, Auto);
-		const bool bHasAny = bManual || bAuto;
+		const int32 SlotIdx = SlotMainBtns.Num();
 
-		// Hoofd-knop: in Load laadt 'ie je handmatige save (of de autosave als er geen handmatige is);
-		// in New start 'ie een nieuw spel in dit slot.
+		// Hoofd-knop van deze rij.
 		UWeedActionButton* SB = WidgetTree->ConstructWidget<UWeedActionButton>();
 		SB->OnClicked.AddDynamic(SB, &UWeedActionButton::Handle);
 		SB->OnAction.BindLambda([this, SlotIdx](int32, int32) { OnSlotChosen(SlotIdx); });
 		SB->SetStyle(MainStyle);
+		UTextBlock* SLbl = WeedUI::Text(WidgetTree, FString(), 14, FLinearColor::White, true);
+		SB->SetContent(SLbl);
+		SlotsBox->AddChildToVerticalBox(SB);
 
+		// Autosave-sub-knop van deze rij (in Load, alleen als er náást een handmatige save óók een
+		// autosave is). Altijd gebouwd, standaard Collapsed -> we tonen/verbergen 'm i.p.v. add/remove.
+		UWeedActionButton* AB = WidgetTree->ConstructWidget<UWeedActionButton>();
+		AB->OnClicked.AddDynamic(AB, &UWeedActionButton::Handle);
+		AB->OnAction.BindLambda([this, SlotIdx](int32, int32) { OnLoadAutosave(SlotIdx); });
+		AB->SetStyle(AutoStyle);
+		UTextBlock* ALbl = WeedUI::Text(WidgetTree, FString(), 11, FLinearColor(0.75f, 0.86f, 1.f), true);
+		AB->SetContent(ALbl);
+		AB->SetVisibility(ESlateVisibility::Collapsed);
+		if (UVerticalBoxSlot* AS = Cast<UVerticalBoxSlot>(SlotsBox->AddChildToVerticalBox(AB)))
+		{
+			AS->SetPadding(FMargin(16.f, 0.f, 0.f, 8.f));
+		}
+
+		SlotMainBtns.Add(SB); SlotMainLabels.Add(SLbl);
+		SlotAutoBtns.Add(AB); SlotAutoLabels.Add(ALbl);
+		SlotRowSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+	}
+
+	// Per-rij diffen: alleen een rij waarvan de handtekening wijzigde krijgt nieuwe tekst/stijl.
+	for (int32 s = 0; s < USaveGameSubsystem::NumSlots; ++s)
+	{
+		FSaveSlotInfo Manual; const bool bManual = Save && Save->GetSlotDetailsEx(s, false, Manual);
+		FSaveSlotInfo Auto;   const bool bAuto   = Save && Save->GetSlotDetailsEx(s, true, Auto);
+		const bool bHasAny = bManual || bAuto;
+		const bool bShowAuto = (MenuMode == 2 && bManual && bAuto);
+
+		// Handtekening: alle zichtbare waarden + MenuMode (bepaalt enable + autosave-sub + padding).
 		const FSaveSlotInfo* Show = bManual ? &Manual : (bAuto ? &Auto : nullptr);
+		const FString Sig = FString::Printf(TEXT("M%d|%d%d|D%d|C%lld|L%d|T%lld|P%d|A%d%d|aD%d|aC%lld|aL%d|aT%lld"),
+			MenuMode,
+			bManual ? 1 : 0, bAuto ? 1 : 0,
+			Show ? Show->DayNumber : -1, (long long)(Show ? Show->TotalCents : 0), Show ? Show->CrewLevel : -1,
+			(long long)(Show ? Show->SavedAt.GetTicks() : 0), Show ? Show->NumPlayers : -1,
+			bShowAuto ? 1 : 0, 0,
+			bShowAuto ? Auto.DayNumber : -1, (long long)(bShowAuto ? Auto.TotalCents : 0), bShowAuto ? Auto.CrewLevel : -1,
+			(long long)(bShowAuto ? Auto.SavedAt.GetTicks() : 0));
+
+		if (!SlotMainBtns.IsValidIndex(s) || SlotRowSigs[s] == Sig) { continue; }
+		SlotRowSigs[s] = Sig;
+
+		// Hoofd-knop: in Load laadt 'ie je handmatige save (of de autosave als er geen handmatige is);
+		// in New start 'ie een nieuw spel in dit slot.
 		FString Line;
 		if (Show)
 		{
@@ -775,23 +840,25 @@ void UMainMenuWidget::RefreshSlots()
 		{
 			Line = FString::Printf(TEXT("SLOT %d\n(empty)"), s + 1);
 		}
-		SB->SetContent(WeedUI::Text(WidgetTree, Line, 14, FLinearColor::White, true));
-		SB->SetIsEnabled(MenuMode == 1 || bHasAny); // lege slots zijn alleen in New klikbaar
-		const float BottomPad = (MenuMode == 2 && bManual && bAuto) ? 2.f : 5.f;
-		SlotsBox->AddChildToVerticalBox(SB)->SetPadding(FMargin(0.f, 4.f, 0.f, BottomPad));
+		if (SlotMainLabels.IsValidIndex(s) && SlotMainLabels[s]) { SlotMainLabels[s]->SetText(FText::FromString(Line)); }
+		SlotMainBtns[s]->SetIsEnabled(MenuMode == 1 || bHasAny); // lege slots zijn alleen in New klikbaar
+		const float BottomPad = bShowAuto ? 2.f : 5.f;
+		if (UVerticalBoxSlot* MS = Cast<UVerticalBoxSlot>(SlotMainBtns[s]->Slot)) { MS->SetPadding(FMargin(0.f, 4.f, 0.f, BottomPad)); }
 
-		// In Load-modus en als er NAAST de handmatige save ook een autosave bestaat: een extra knop
-		// om de autosave te laden (vaak nieuwer / verder).
-		if (MenuMode == 2 && bManual && bAuto)
+		// Autosave-sub-knop: alleen tonen (met nieuwe tekst) in Load als er ook een autosave is; anders Collapsen.
+		if (SlotAutoBtns.IsValidIndex(s) && SlotAutoBtns[s])
 		{
-			UWeedActionButton* AB = WidgetTree->ConstructWidget<UWeedActionButton>();
-			AB->OnClicked.AddDynamic(AB, &UWeedActionButton::Handle);
-			AB->OnAction.BindLambda([this, SlotIdx](int32, int32) { OnLoadAutosave(SlotIdx); });
-			AB->SetStyle(AutoStyle);
-			const FString ALine = FString::Printf(TEXT("autosave  -  Day %d   %s   Lvl %d   -   %s"),
-				Auto.DayNumber, *FmtEuro(Auto.TotalCents), Auto.CrewLevel, *FmtAgo(Auto.SavedAt));
-			AB->SetContent(WeedUI::Text(WidgetTree, ALine, 11, FLinearColor(0.75f, 0.86f, 1.f), true));
-			SlotsBox->AddChildToVerticalBox(AB)->SetPadding(FMargin(16.f, 0.f, 0.f, 8.f));
+			if (bShowAuto)
+			{
+				const FString ALine = FString::Printf(TEXT("autosave  -  Day %d   %s   Lvl %d   -   %s"),
+					Auto.DayNumber, *FmtEuro(Auto.TotalCents), Auto.CrewLevel, *FmtAgo(Auto.SavedAt));
+				if (SlotAutoLabels.IsValidIndex(s) && SlotAutoLabels[s]) { SlotAutoLabels[s]->SetText(FText::FromString(ALine)); }
+				SlotAutoBtns[s]->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			}
+			else
+			{
+				SlotAutoBtns[s]->SetVisibility(ESlateVisibility::Collapsed);
+			}
 		}
 	}
 }
@@ -801,7 +868,7 @@ void UMainMenuWidget::OnToggleAutosave()
 	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
 	{
 		Save->SetAutosaveEnabled(!Save->IsAutosaveEnabled());
-		RefreshSlots();
+		UpdateAutosaveLabel(); // enkel de toggle-tekst/kleur; slot-rijen wijzigen niet
 	}
 }
 
@@ -824,11 +891,11 @@ void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
 void UMainMenuWidget::OnToggleCoopMode()
 {
 	bHostCompetitive = !bHostCompetitive;
-	if (CoopModeBtn)
+	if (CoopModeLabel)
 	{
+		// Alleen de tekst wisselen op het persistente label (geen style-rebuild / SetContent).
 		const FString L = bHostCompetitive ? TEXT("Mode: COMPETITIVE  (versus)") : TEXT("Mode: CO-OP  (build together)");
-		CoopModeBtn->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 12.f)));
-		CoopModeBtn->SetContent(WeedUI::Text(WidgetTree, L, 15, FLinearColor::White, true, true));
+		CoopModeLabel->SetText(FText::FromString(L));
 	}
 }
 

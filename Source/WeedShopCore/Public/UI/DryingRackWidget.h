@@ -16,6 +16,9 @@ class UScrollBox;
 class UTextBlock;
 class UProgressBar;
 class UDryingRackWidget;
+class UWrapBox;
+class USizeBox;
+struct FDryEntry;
 
 // Sleep-payload voor het droogrek.
 UCLASS()
@@ -86,11 +89,16 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 	void FillBody();
 	void UpdateProgress(); // elke tick: bars + resterende-tijd labels bijwerken
+	class UDryCell* MakeDryCell(int32 SlotIdx, const FDryEntry* E); // bouwt één rek-cel (drogende batch of leeg slot)
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
 	UPROPERTY() TObjectPtr<UScrollBox> DryList; // slots-grid (drogende + klare batches)
+	// Persistente grid + cel-pool -> per FillBody alleen gewijzigde cellen vervangen (geen ClearChildren -> geen flash).
+	UPROPERTY() TObjectPtr<UWrapBox> DryGrid;
+	UPROPERTY() TArray<TObjectPtr<USizeBox>> DryCellBoxes;
+	TArray<FString> DryCellSigs;
 	UPROPERTY() TObjectPtr<UScrollBox> WetList; // (ongebruikt)
 	UPROPERTY() TObjectPtr<class UVerticalBox> DetailBox; // progress + plant-info onder de slots
 	UPROPERTY() TObjectPtr<UTextBlock> TitleText;

@@ -38,7 +38,9 @@
 
 namespace
 {
-	UWeedActionButton* SetBtn(UWidgetTree* Tree, const FString& Label, const FLinearColor& Col, TFunction<void()> OnClick, int32 Font = 12)
+	// OutLabel (optioneel) = het tekstblok IN de knop, zodat een klik-lambda later ALLEEN die tekst kan
+	// bijwerken (SetText) i.p.v. de knop/rij te herbouwen -> geen flash/scroll-sprong.
+	UWeedActionButton* SetBtn(UWidgetTree* Tree, const FString& Label, const FLinearColor& Col, TFunction<void()> OnClick, int32 Font = 12, UTextBlock** OutLabel = nullptr)
 	{
 		UWeedActionButton* B = Tree->ConstructWidget<UWeedActionButton>();
 		B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
@@ -49,7 +51,9 @@ namespace
 		S.Pressed = WeedUI::Rounded(Col * 0.8f, 7.f);
 		S.NormalPadding = FMargin(13.f, 7.f); S.PressedPadding = FMargin(13.f, 7.f);
 		B->SetStyle(S);
-		B->SetContent(WeedUI::Text(Tree, Label, Font, FLinearColor::White, true));
+		UTextBlock* Lbl = WeedUI::Text(Tree, Label, Font, FLinearColor::White, true);
+		B->SetContent(Lbl);
+		if (OutLabel) { *OutLabel = Lbl; }
 		return B;
 	}
 
@@ -86,17 +90,20 @@ FReply USettingsWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyE
 {
 	if (bRebinding)
 	{
+		const FName WasAction = RebindAction; // de actie waarvan de knoppen moeten bijwerken (highlight + evt. nieuwe key)
 		const FKey K = InKeyEvent.GetKey();
 		if (K == EKeys::Escape)
 		{
-			bRebinding = false; RebindMsg = TEXT("Cancelled."); RefreshContent();
+			bRebinding = false; RebindMsg = TEXT("Cancelled.");
+			RefreshKeyButtonsFor(WasAction); // alleen de 2 knoppen van deze actie + de msg-tekst (geen lijst-rebuild)
 			return FReply::Handled();
 		}
 		if (K == EKeys::BackSpace || K == EKeys::Delete)
 		{
 			UControlSettings::Get()->ClearKey(RebindAction, bRebindAlt);
 			RebindMsg = FString::Printf(TEXT("Cleared %s key for '%s'"), bRebindAlt ? TEXT("alt") : TEXT("main"), *UControlSettings::DisplayName(RebindAction).ToString());
-			bRebinding = false; RefreshContent();
+			bRebinding = false;
+			RefreshKeyButtonsFor(WasAction);
 			return FReply::Handled();
 		}
 		FName Conflict;
@@ -110,7 +117,8 @@ FReply USettingsWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyE
 			RebindMsg = Conflict.IsNone() ? TEXT("That key can't be used.")
 				: FString::Printf(TEXT("Already used by: %s"), *UControlSettings::DisplayName(Conflict).ToString());
 		}
-		bRebinding = false; RefreshContent();
+		bRebinding = false;
+		RefreshKeyButtonsFor(WasAction);
 		return FReply::Handled();
 	}
 // Esc sluit het settings-menu (de grote Back-knop is vervangen door Save; back via Esc of de < Back linksboven).
@@ -170,10 +178,12 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* Nav = WidgetTree->ConstructWidget<UVerticalBox>(); NavSz->SetContent(Nav);
 	ContentRow->AddChildToHorizontalBox(NavSz)->SetPadding(FMargin(0.f, 0.f, 30.f, 0.f));
 
-	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 0; RefreshTabs(); RefreshContent(); }, 15);
-	TabGame     = SetBtn(WidgetTree, TEXT("Game"),     FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 1; RefreshTabs(); RefreshContent(); }, 15);
-	TabControls = SetBtn(WidgetTree, TEXT("Controls"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 2; RefreshTabs(); RefreshContent(); }, 15);
-	TabAudio    = SetBtn(WidgetTree, TEXT("Audio"),    FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 3; RefreshTabs(); RefreshContent(); }, 15);
+	// Tab-wissel: alleen de highlight her-tinten (RefreshTabs) + het zichtbare paneel togglen (ShowActiveCategory).
+	// GEEN RefreshContent -> de kit-sliders/toggles blijven bestaan (geen teardown/flash per klik).
+	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 0; RefreshTabs(); ShowActiveCategory(); }, 15);
+	TabGame     = SetBtn(WidgetTree, TEXT("Game"),     FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 1; RefreshTabs(); ShowActiveCategory(); }, 15);
+	TabControls = SetBtn(WidgetTree, TEXT("Controls"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 2; RefreshTabs(); ShowActiveCategory(); }, 15);
+	TabAudio    = SetBtn(WidgetTree, TEXT("Audio"),    FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 3; RefreshTabs(); ShowActiveCategory(); }, 15);
 	auto AddTab = [&](UWeedActionButton* B) { UVerticalBoxSlot* TS = Nav->AddChildToVerticalBox(B); TS->SetHorizontalAlignment(HAlign_Fill); TS->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f)); };
 	AddTab(TabGraphics); AddTab(TabGame); AddTab(TabControls); AddTab(TabAudio);
 
@@ -188,13 +198,34 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBoxSlot* ScS = ContentRow->AddChildToHorizontalBox(Scroll);
 	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Automatic)); // scroll = natuurlijke 860-breedte -> content blijft compact + centreerbaar
 
+	// Body bevat de 4 categorie-panelen; alleen het actieve is zichtbaar (tab-wissel togglet Visibility).
+	PanelGraphics = WidgetTree->ConstructWidget<UVerticalBox>();
+	PanelGame     = WidgetTree->ConstructWidget<UVerticalBox>();
+	PanelControls = WidgetTree->ConstructWidget<UVerticalBox>();
+	PanelAudio    = WidgetTree->ConstructWidget<UVerticalBox>();
+	Body->AddChildToVerticalBox(PanelGraphics);
+	Body->AddChildToVerticalBox(PanelGame);
+	Body->AddChildToVerticalBox(PanelControls);
+	Body->AddChildToVerticalBox(PanelAudio);
+
 	// --- Footer: Esc-hint links, Save rechts ---
 	UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* HintS = Footer->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Esc to go back"), 11, FLinearColor(0.5f, 0.55f, 0.64f)));
 	HintS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HintS->SetVerticalAlignment(VAlign_Center);
+	// "Saved"-cue: een persistent label dat na Save even oplicht (fade in NativeTick), i.p.v. de body te herbouwen.
+	SavedMsg = WeedUI::Text(WidgetTree, TEXT("Saved"), 13, FLinearColor(0.66f, 0.92f, 0.74f), false, true);
+	SavedMsg->SetRenderOpacity(0.f);
+	Footer->AddChildToHorizontalBox(SavedMsg)->SetVerticalAlignment(VAlign_Center);
 	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), FLinearColor(0.40f, 0.18f, 0.62f),
-		[this]() { if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); } bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR); RefreshContent(); }, 14);
-	Footer->AddChildToHorizontalBox(SaveBtn)->SetVerticalAlignment(VAlign_Center);
+		[this]()
+		{
+			if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); }
+			bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR);
+			// Opslaan verandert GEEN zichtbare waarde -> geen RefreshContent (dat was pure flash). Enkel de Saved-cue.
+			SavedMsgOpacity = 1.f; if (SavedMsg) { SavedMsg->SetRenderOpacity(1.f); }
+		}, 14);
+	UHorizontalBoxSlot* SaveS = Footer->AddChildToHorizontalBox(SaveBtn);
+	SaveS->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f)); SaveS->SetVerticalAlignment(VAlign_Center);
 	MainVB->AddChildToVerticalBox(Footer)->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
 
 	// === Modale "herstart nodig"-popup (verschijnt bij een schaduw-grens-wissel Potato <-> hoger). ===
@@ -223,45 +254,24 @@ void USettingsWidget::ShowRestartPopup()
 	if (RestartPopup) { RestartPopup->SetVisibility(ESlateVisibility::Visible); }
 }
 
-void USettingsWidget::AddValueRow(const FString& Label, const FString& Value, TFunction<void()> OnClick)
+void USettingsWidget::AddValueRow(UVerticalBox* Into, const FString& Label, const FString& Value, TFunction<void()> OnClick, TObjectPtr<UTextBlock>* OutValueLabel)
 {
-	if (!Body) { return; }
+	if (!Into) { return; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 	Sz->SetWidthOverride(220.f);
-	Sz->SetContent(SetBtn(WidgetTree, Value, FLinearColor(0.12f, 0.15f, 0.22f), OnClick, 16));
+	UTextBlock* ValLbl = nullptr;
+	Sz->SetContent(SetBtn(WidgetTree, Value, FLinearColor(0.12f, 0.15f, 0.22f), OnClick, 16, &ValLbl));
+	if (OutValueLabel) { *OutValueLabel = ValLbl; } // klik werkt straks alleen dit label bij (geen rebuild)
 	Row->AddChildToHorizontalBox(Sz)->SetVerticalAlignment(VAlign_Center);
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
+	Into->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
 }
 
-USlider* USettingsWidget::AddSliderRow(const FString& Label, float Normalized, TObjectPtr<UTextBlock>& OutValue)
+void USettingsWidget::AddResolutionRow(UVerticalBox* Into)
 {
-	USlider* Slider = WidgetTree->ConstructWidget<USlider>();
-	if (!Body) { return Slider; }
-	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
-	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
-
-	Slider->SetMinValue(0.f); Slider->SetMaxValue(1.f);
-	Slider->SetValue(FMath::Clamp(Normalized, 0.f, 1.f));
-	Slider->SetSliderBarColor(FLinearColor(0.12f, 0.15f, 0.22f));
-	Slider->SetSliderHandleColor(FLinearColor(0.72f, 0.46f, 1.f));
-	USizeBox* SSz = WidgetTree->ConstructWidget<USizeBox>(); SSz->SetWidthOverride(220.f); SSz->SetHeightOverride(20.f); SSz->SetContent(Slider);
-	Row->AddChildToHorizontalBox(SSz)->SetVerticalAlignment(VAlign_Center);
-
-	OutValue = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor::White, true);
-	USizeBox* VSz = WidgetTree->ConstructWidget<USizeBox>(); VSz->SetWidthOverride(56.f); VSz->SetContent(OutValue);
-	Row->AddChildToHorizontalBox(VSz)->SetVerticalAlignment(VAlign_Center);
-
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 9.f, 0.f, 9.f));
-	return Slider;
-}
-
-void USettingsWidget::AddResolutionRow()
-{
-	if (!Body) { return; }
+	if (!Into) { return; }
 	UGameUserSettings* G = GUS();
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Resolution"), 18, FLinearColor(0.88f, 0.9f, 1.f)));
@@ -293,7 +303,7 @@ void USettingsWidget::AddResolutionRow()
 
 	USizeBox* CSz = WidgetTree->ConstructWidget<USizeBox>(); CSz->SetWidthOverride(220.f); CSz->SetContent(ResCombo);
 	Row->AddChildToHorizontalBox(CSz)->SetVerticalAlignment(VAlign_Center);
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
+	Into->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
 }
 
 void USettingsWidget::OnResolutionChanged(FString Item, ESelectInfo::Type SelectType)
@@ -328,9 +338,9 @@ static void SetKitSliderValue(UUserWidget* W, double V)
 	else if (FFloatProperty* FP = FindFProperty<FFloatProperty>(W->GetClass(), TEXT("Value"))) { FP->SetPropertyValue_InContainer(W, (float)V); }
 }
 
-void USettingsWidget::AddKitToggle(const FString& Label, bool Initial, TFunction<void(bool)> Apply)
+void USettingsWidget::AddKitToggle(UVerticalBox* Into, const FString& Label, bool Initial, TFunction<void(bool)> Apply, TWeakObjectPtr<UUserWidget>* OutW)
 {
-	if (!Body) { return; }
+	if (!Into) { return; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
@@ -342,14 +352,15 @@ void USettingsWidget::AddKitToggle(const FString& Label, bool Initial, TFunction
 			if (FBoolProperty* P = FindFProperty<FBoolProperty>(Tog->GetClass(), TEXT("IsToggled"))) { P->SetPropertyValue_InContainer(Tog, Initial); }
 			Row->AddChildToHorizontalBox(Tog)->SetVerticalAlignment(VAlign_Center);
 			KitToggles.Add({ Tog, Initial, Apply });
+			if (OutW) { *OutW = Tog; } // handle zodat een andere rij (Preset) de waarde er later in kan duwen (reflectie, geen rebuild)
 		}
 	}
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
+	Into->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
 }
 
-void USettingsWidget::AddKitSlider(const FString& Label, double InitialNorm, TFunction<FString(double, int32&)> Apply)
+void USettingsWidget::AddKitSlider(UVerticalBox* Into, const FString& Label, double InitialNorm, TFunction<FString(double, int32&)> Apply)
 {
-	if (!Body) { return; }
+	if (!Into) { return; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
@@ -375,7 +386,7 @@ void USettingsWidget::AddKitSlider(const FString& Label, double InitialNorm, TFu
 	}
 	USizeBox* VBox = WidgetTree->ConstructWidget<USizeBox>(); VBox->SetMinDesiredWidth(56.f); VBox->SetContent(ValText);
 	Row->AddChildToHorizontalBox(VBox)->SetVerticalAlignment(VAlign_Center);
-	Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
+	Into->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
 }
 
 void USettingsWidget::RefreshTabs()
@@ -396,305 +407,467 @@ void USettingsWidget::RefreshTabs()
 	Tint(TabAudio, Category == 3);
 }
 
-void USettingsWidget::RefreshContent()
+// Zet een kit-W_Toggle's IsToggled via reflectie ÉN houdt de matchende FKitToggle.Last bij, zodat de
+// NativeTick-poll deze programmatische wijziging niet als speler-toggle ziet (anders vuurt Apply dubbel).
+void USettingsWidget::SetKitToggleValueInPlace(TWeakObjectPtr<UUserWidget> W, bool bValue)
 {
-	if (!Body) { return; }
-	Body->ClearChildren();
-	KitToggles.Reset();
-	KitSliders.Reset();
-	FovSlider = nullptr; SensSlider = nullptr; FovVal = nullptr; SensVal = nullptr; ResCombo = nullptr;
-	VolUiSlider = nullptr; VolGameSlider = nullptr; VolMusicSlider = nullptr; VolUiVal = nullptr; VolGameVal = nullptr; VolMusicVal = nullptr;
+	UUserWidget* Tog = W.Get();
+	if (!Tog) { return; }
+	if (FBoolProperty* P = FindFProperty<FBoolProperty>(Tog->GetClass(), TEXT("IsToggled"))) { P->SetPropertyValue_InContainer(Tog, bValue); }
+	for (FKitToggle& KT : KitToggles) { if (KT.W.Get() == Tog) { KT.Last = bValue; break; } }
+}
 
-	if (Category == 0) // Graphics
+// Bouwt de 4 categorie-panelen ÉÉN keer. Daarna wisselt een tab-klik alleen Visibility -> geen teardown/flash,
+// kit-sliders/toggles blijven bestaan (en blijven gepolld).
+void USettingsWidget::BuildAllPanels()
+{
+	if (bPanelsBuilt || !Body) { return; }
+	bPanelsBuilt = true;
+	BuildGraphicsPanel(PanelGraphics);
+	BuildGamePanel(PanelGame);
+	BuildAudioPanel(PanelAudio);
+	BuildControlsPanel(PanelControls);
+	ShowActiveCategory();
+}
+
+// Alleen de tekst van de Graphics cycle-labels naar de LIVE status zetten (bv. window mode kan door de OS
+// zijn gewijzigd tussen twee keer openen). Geen widget-constructie -> geen flash, enkel SetText.
+void USettingsWidget::RefreshGraphicsLabels()
+{
+	UGameUserSettings* G = GUS();
+	if (!G) { return; }
+
+	// Window mode (live venster).
+	EWindowMode::Type WM = G->GetFullscreenMode();
+	if (GEngine && GEngine->GameViewport)
 	{
-		UGameUserSettings* G = GUS();
-		if (!G) { Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Graphics unavailable."), 13, FLinearColor::Gray)); return; }
+		TSharedPtr<SWindow> Win = GEngine->GameViewport->GetWindow();
+		if (Win.IsValid()) { WM = Win->GetWindowMode(); }
+	}
+	if (WindowModeVal)
+	{
+		const FString WMName = (WM == EWindowMode::Fullscreen) ? TEXT("Fullscreen")
+			: (WM == EWindowMode::WindowedFullscreen) ? TEXT("Borderless") : TEXT("Windowed");
+		WindowModeVal->SetText(FText::FromString(WMName));
+	}
 
-		// Resolutie-dropdown.
-		AddResolutionRow();
+	// Preset (tier).
+	{
+		bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff; WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+		int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
+		const int32 TierNow = bPotato ? -1 : ScalQ;
+		static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+		if (PresetVal && TierNow + 1 >= 0 && TierNow + 1 < 5) { PresetVal->SetText(FText::FromString(QN[TierNow + 1])); }
+	}
 
-		// Window mode - lees de ECHTE huidige vensterstatus van het live venster. GameUserSettings::
-		// GetFullscreenMode() kan achterlopen (na alt-tab / OS-wissel / fallback), waardoor het label
-		// niet klopte met wat je zag en je vanaf een verkeerde stand cyclede.
-		EWindowMode::Type ActualWM = G->GetFullscreenMode();
+	// Textures.
+	{
+		static const TCHAR* LV[4] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+		const int32 TQ = G->GetTextureQuality();
+		if (TexturesVal) { TexturesVal->SetText(FText::FromString((TQ >= 0 && TQ <= 3) ? LV[TQ] : TEXT("Custom"))); }
+	}
+
+	// Resolution scale.
+	if (ResScaleVal)
+	{
+		const int32 RS = FMath::RoundToInt(G->GetResolutionScaleNormalized() * 100.f);
+		ResScaleVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), RS)));
+	}
+
+	// Frame limit.
+	if (FrameLimitVal)
+	{
+		const float FL = G->GetFrameRateLimit();
+		FrameLimitVal->SetText(FText::FromString((FL <= 0.f) ? FString(TEXT("Uncapped")) : FString::Printf(TEXT("%d FPS"), (int32)FL)));
+	}
+}
+
+void USettingsWidget::ShowActiveCategory()
+{
+	auto Vis = [](UVerticalBox* P, bool bShow)
+	{
+		if (P) { P->SetVisibility(bShow ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	};
+	Vis(PanelGraphics, Category == 0);
+	Vis(PanelGame,     Category == 1);
+	Vis(PanelControls, Category == 2);
+	Vis(PanelAudio,    Category == 3);
+}
+
+void USettingsWidget::BuildGraphicsPanel(UVerticalBox* P)
+{
+	if (!P) { return; }
+	UGameUserSettings* G = GUS();
+	if (!G) { P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Graphics unavailable."), 13, FLinearColor::Gray)); return; }
+
+	// Resolutie-dropdown.
+	AddResolutionRow(P);
+
+	// Window mode - lees de ECHTE huidige vensterstatus van het live venster. GameUserSettings::
+	// GetFullscreenMode() kan achterlopen (na alt-tab / OS-wissel / fallback), waardoor het label
+	// niet klopte met wat je zag en je vanaf een verkeerde stand cyclede.
+	auto ReadWindowMode = []() -> EWindowMode::Type
+	{
+		EWindowMode::Type WM = GUS() ? GUS()->GetFullscreenMode() : EWindowMode::Windowed;
 		if (GEngine && GEngine->GameViewport)
 		{
 			TSharedPtr<SWindow> Win = GEngine->GameViewport->GetWindow();
-			if (Win.IsValid()) { ActualWM = Win->GetWindowMode(); }
+			if (Win.IsValid()) { WM = Win->GetWindowMode(); }
 		}
-		const FString WMName = (ActualWM == EWindowMode::Fullscreen) ? TEXT("Fullscreen")
-			: (ActualWM == EWindowMode::WindowedFullscreen) ? TEXT("Borderless") : TEXT("Windowed");
-		AddValueRow(TEXT("Window mode"), WMName, [this, ActualWM]()
+		return WM;
+	};
+	auto WMLabel = [](EWindowMode::Type WM) -> FString
+	{
+		return (WM == EWindowMode::Fullscreen) ? TEXT("Fullscreen")
+			: (WM == EWindowMode::WindowedFullscreen) ? TEXT("Borderless") : TEXT("Windowed");
+	};
+	AddValueRow(P, TEXT("Window mode"), WMLabel(ReadWindowMode()), [this, ReadWindowMode, WMLabel]()
+	{
+		if (UGameUserSettings* GG = GUS())
 		{
-			if (UGameUserSettings* GG = GUS())
-			{
-				const EWindowMode::Type Next = (ActualWM == EWindowMode::Fullscreen) ? EWindowMode::WindowedFullscreen
-					: (ActualWM == EWindowMode::WindowedFullscreen) ? EWindowMode::Windowed : EWindowMode::Fullscreen;
-				// Multi-monitor: bij Fullscreen/Borderless kiest UE standaard de PRIMAIRE monitor i.p.v. de monitor
-				// waar je venster staat -> de game springt naar het verkeerde scherm. Zoek de monitor onder het
-				// venster, veranker het daar en zet de resolutie op die monitor, zodat UE op DAT scherm fullscreent.
-				if (Next != EWindowMode::Windowed && GEngine && GEngine->GameViewport)
+			const EWindowMode::Type ActualWM = ReadWindowMode(); // LIVE gelezen (geen rebuild meer, dus niet uit een captured build-waarde)
+			const EWindowMode::Type Next = (ActualWM == EWindowMode::Fullscreen) ? EWindowMode::WindowedFullscreen
+				: (ActualWM == EWindowMode::WindowedFullscreen) ? EWindowMode::Windowed : EWindowMode::Fullscreen;
+			// Multi-monitor: bij Fullscreen/Borderless kiest UE standaard de PRIMAIRE monitor i.p.v. de monitor
+			// waar je venster staat -> de game springt naar het verkeerde scherm. Zoek de monitor onder het
+			// venster, veranker het daar en zet de resolutie op die monitor, zodat UE op DAT scherm fullscreent.
+			if (Next != EWindowMode::Windowed && GEngine && GEngine->GameViewport)
+				{
+					TSharedPtr<SWindow> FsWin = GEngine->GameViewport->GetWindow();
+					if (FsWin.IsValid())
 					{
-						TSharedPtr<SWindow> FsWin = GEngine->GameViewport->GetWindow();
-						if (FsWin.IsValid())
-						{
 #if PLATFORM_WINDOWS
-							// Pak (DPI-onafhankelijk) de monitor ONDER het venster + diens HUIDIGE desktop-resolutie en zet die als
-							// fullscreen-resolutie -> UE fullscreent op DAT scherm op de juiste resolutie (i.p.v. 1600x900 / primair).
-							TSharedPtr<FGenericWindow> Native = FsWin->GetNativeWindow();
-							HWND Hwnd = Native.IsValid() ? (HWND)Native->GetOSWindowHandle() : nullptr;
-							HMONITOR Hmon = Hwnd ? MonitorFromWindow(Hwnd, MONITOR_DEFAULTTONEAREST) : nullptr;
-							if (Hmon)
-							{
-								MONITORINFOEXW Mi; FMemory::Memzero(&Mi, sizeof(Mi)); Mi.cbSize = sizeof(Mi);
-								DEVMODEW Dm; FMemory::Memzero(&Dm, sizeof(Dm)); Dm.dmSize = sizeof(Dm);
-								if (::GetMonitorInfoW(Hmon, &Mi) && ::EnumDisplaySettingsW(Mi.szDevice, ENUM_CURRENT_SETTINGS, &Dm) && Dm.dmPelsWidth > 0 && Dm.dmPelsHeight > 0)
-								{
-									GG->SetScreenResolution(FIntPoint((int32)Dm.dmPelsWidth, (int32)Dm.dmPelsHeight));
-								}
-							}
-#endif
-						}
-					}
-				GG->SetFullscreenMode(Next);
-				GG->ApplyResolutionSettings(false); // past venster-modus + resolutie direct + betrouwbaar toe
-				GG->SaveSettings();
-				RefreshContent();
-			}
-		});
-
-		// PRESET - zet alles in één keer. Potato (onder Low, voor zwakke pc's) -> Low -> Medium -> High -> Epic.
-		{
-			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-			int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
-			const int32 TierNow = bPotato ? -1 : ScalQ;
-			static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
-			AddValueRow(TEXT("Preset (all)"), QN[TierNow + 1], [this, TierNow]()
-			{
-				const int32 Next = (TierNow >= 3) ? -1 : TierNow + 1;
-				WeedShop_ApplyGraphicsTier(Next);
-				bool bLum, bPot, bMb, bVSM, bRT; WeedShop_ReadGfxFlags(bLum, bPot, bMb, bVSM, bRT);
-				// Vlaggen volgen de preset: Lumen + ray tracing alleen op Epic; VSM uit op Potato/Low;
-				// MotionBlur behouden.
-				WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb, bVSM, (Next < 3)); // VSMOff (schaduwen) NIET via de preset -> de Shadows-toggle bezit hem
-				if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bVSM); } } // tier-wissel past de beach-gate opnieuw toe -> schaduwen komen deterministisch terug
-				RefreshContent();
-			});
-		}
-
-
-		// --- Losse kwaliteit-instellingen (elk Low/Medium/High/Epic; samen vormen ze het preset) ---
-		auto AddQ = [this](const FString& Lbl, int32 Cur, TFunction<void(UGameUserSettings*, int32)> Apply)
-		{
-			static const TCHAR* LV[4] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
-			AddValueRow(Lbl, (Cur >= 0 && Cur <= 3) ? LV[Cur] : TEXT("Custom"), [this, Cur, Apply]()
-			{
-				if (UGameUserSettings* GG = GUS())
-				{
-					const int32 c = (Cur < 0) ? 2 : Cur;
-					Apply(GG, (c + 1) % 4);
-					GG->ApplySettings(false); GG->SaveSettings();
-					// De beach forceert de VSM-config met console-prio -> her-toepassen zodat o.a. de Shadows-setting
-					// (VSM-scherpte) METEEN zichtbaar wordt i.p.v. pas na opnieuw laden van de map.
-					if (UWorld* WB = GetWorld())
-					{
-						if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip")))
+						// Pak (DPI-onafhankelijk) de monitor ONDER het venster + diens HUIDIGE desktop-resolutie en zet die als
+						// fullscreen-resolutie -> UE fullscreent op DAT scherm op de juiste resolutie (i.p.v. 1600x900 / primair).
+						TSharedPtr<FGenericWindow> Native = FsWin->GetNativeWindow();
+						HWND Hwnd = Native.IsValid() ? (HWND)Native->GetOSWindowHandle() : nullptr;
+						HMONITOR Hmon = Hwnd ? MonitorFromWindow(Hwnd, MONITOR_DEFAULTTONEAREST) : nullptr;
+						if (Hmon)
 						{
-							bool bL2, bP2, bM2, bV2, bR2; WeedShop_ReadGfxFlags(bL2, bP2, bM2, bV2, bR2);
-							WeedShop_ApplyBeachShadows(bV2); // gedeelde gate: Potato=uit, Low+=VSM (forceerde eerder VSM altijd aan)
+							MONITORINFOEXW Mi; FMemory::Memzero(&Mi, sizeof(Mi)); Mi.cbSize = sizeof(Mi);
+							DEVMODEW Dm; FMemory::Memzero(&Dm, sizeof(Dm)); Dm.dmSize = sizeof(Dm);
+							if (::GetMonitorInfoW(Hmon, &Mi) && ::EnumDisplaySettingsW(Mi.szDevice, ENUM_CURRENT_SETTINGS, &Dm) && Dm.dmPelsWidth > 0 && Dm.dmPelsHeight > 0)
+							{
+								GG->SetScreenResolution(FIntPoint((int32)Dm.dmPelsWidth, (int32)Dm.dmPelsHeight));
+							}
 						}
+#endif
 					}
-					RefreshContent();
 				}
-			});
-		};
-		AddQ(TEXT("Textures"),         G->GetTextureQuality(),        [](UGameUserSettings* GG, int32 n){ GG->SetTextureQuality(n); });
-		{ // Shadows: ON/OFF (eigen vlag, los van de Preset; VSM aan/uit). Geldt na herstart (VSM-pool).
+			GG->SetFullscreenMode(Next);
+			GG->ApplyResolutionSettings(false); // past venster-modus + resolutie direct + betrouwbaar toe
+			GG->SaveSettings();
+			if (WindowModeVal) { WindowModeVal->SetText(FText::FromString(WMLabel(Next))); } // alleen dit label bijwerken (geen rebuild)
+		}
+	}, &WindowModeVal);
+
+	// PRESET - zet alles in één keer. Potato (onder Low, voor zwakke pc's) -> Low -> Medium -> High -> Epic.
+	{
+		bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+		WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+		int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
+		const int32 TierNow = bPotato ? -1 : ScalQ;
+		static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+		AddValueRow(P, TEXT("Preset (all)"), QN[TierNow + 1], [this]()
+		{
+			// Huidige tier LIVE lezen (geen captured build-waarde meer nu we niet meer rebuilden).
 			bool bL0, bP0, bM0, bV0, bR0; WeedShop_ReadGfxFlags(bL0, bP0, bM0, bV0, bR0);
-			AddKitToggle(TEXT("Shadows"), !bV0, [this, bL0, bP0, bM0, bR0](bool bOn)
+			UGameUserSettings* GNow = GUS();
+			int32 ScalNow = GNow ? GNow->GetOverallScalabilityLevel() : 2; if (ScalNow < 0) { ScalNow = 2; }
+			const int32 CurTier = bP0 ? -1 : ScalNow;
+			const int32 Next = (CurTier >= 3) ? -1 : CurTier + 1;
+			WeedShop_ApplyGraphicsTier(Next);
+			bool bLum, bPot, bMb, bVSM, bRT; WeedShop_ReadGfxFlags(bLum, bPot, bMb, bVSM, bRT);
+			// Vlaggen volgen de preset: Lumen + ray tracing alleen op Epic; VSM uit op Potato/Low;
+			// MotionBlur behouden.
+			WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb, bVSM, (Next < 3)); // VSMOff (schaduwen) NIET via de preset -> de Shadows-toggle bezit hem
+			if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bVSM); } } // tier-wissel past de beach-gate opnieuw toe -> schaduwen komen deterministisch terug
+			// In-place labels + afgeleide kit-toggles bijwerken (geen rebuild):
+			static const TCHAR* QNames[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+			if (PresetVal) { PresetVal->SetText(FText::FromString(QNames[Next + 1])); }
+			if (UGameUserSettings* GG = GUS())
 			{
-				WeedShop_WriteGfxFlags(bL0, bP0, bM0, !bOn, bR0); // bOn = schaduwen aan -> VSMOff = !bOn
-				if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bOn); } }
-				ShowRestartPopup(); // VSM-pool kan niet live togglen -> geldt na herstart
-			});
-		}
-
-		// Resolutie-schaal (render-%): 50 -> 75 -> 100.
-		{
-			const int32 RS = FMath::RoundToInt(G->GetResolutionScaleNormalized() * 100.f);
-			AddValueRow(TEXT("Resolution scale"), FString::Printf(TEXT("%d%%"), RS), [this]()
-			{
-				if (UGameUserSettings* GG = GUS())
-				{
-					const int32 Cur = FMath::RoundToInt(GG->GetResolutionScaleNormalized() * 100.f);
-					const int32 Next = (Cur < 63) ? 75 : (Cur < 88) ? 100 : 50;
-					GG->SetResolutionScaleNormalized(Next / 100.f);
-					GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
-				}
-			});
-		}
-
-		// Lumen (GI + reflecties op de goedkope methode) - aan/uit.
-		{
-			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-			AddKitToggle(TEXT("Lumen (GI + reflections)"), !bLumenOff, [this, bPotato, bMbOff, bVSMOff, bRTOff](bool bOn)
-			{
-				WeedShop_ApplyLumen(bOn);
-				WeedShop_WriteGfxFlags(!bOn, bPotato, bMbOff, bVSMOff, bRTOff);
-			});
-		}
+				const int32 TQ = GG->GetTextureQuality();
+				static const TCHAR* LV[4] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+				if (TexturesVal) { TexturesVal->SetText(FText::FromString((TQ >= 0 && TQ <= 3) ? LV[TQ] : TEXT("Custom"))); }
+			}
+			SetKitToggleValueInPlace(LumenToggleW, (Next >= 3));      // Lumen aan alleen op Epic
+			SetKitToggleValueInPlace(MotionBlurToggleW, !bMb);       // MotionBlur ongewijzigd -> volg de vlag
+		}, &PresetVal);
+	}
 
 
-
-		// Motion blur - aan/uit.
-		{
-			bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
-			WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-			AddKitToggle(TEXT("Motion blur"), !bMbOff, [this, bLumenOff, bPotato, bVSMOff, bRTOff](bool bOn)
-			{
-				WeedShop_ApplyMotionBlur(bOn);
-				WeedShop_WriteGfxFlags(bLumenOff, bPotato, !bOn, bVSMOff, bRTOff);
-			});
-		}
-
-		// VSync — kit-W_Toggle (gepolld) i.p.v. cycle-knop (proof voor de kit-controls).
-		AddKitToggle(TEXT("V-Sync"), G->IsVSyncEnabled(), [this](bool b)
-		{
-			if (UGameUserSettings* GG = GUS()) { GG->SetVSyncEnabled(b); GG->ApplySettings(false); GG->SaveSettings(); }
-		});
-
-		// Frame rate limit.
-		const float FL = G->GetFrameRateLimit();
-		const FString FLName = (FL <= 0.f) ? TEXT("Uncapped") : FString::Printf(TEXT("%d FPS"), (int32)FL);
-		AddValueRow(TEXT("Frame limit"), FLName, [this]()
+	// --- Losse kwaliteit-instellingen (elk Low/Medium/High/Epic; samen vormen ze het preset) ---
+	// Textures: cycle-rij met persistent waarde-label (klik = SetText alleen dit label).
+	{
+		static const TCHAR* LV[4] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+		const int32 TQ = G->GetTextureQuality();
+		AddValueRow(P, TEXT("Textures"), (TQ >= 0 && TQ <= 3) ? LV[TQ] : TEXT("Custom"), [this]()
 		{
 			if (UGameUserSettings* GG = GUS())
 			{
-				const float Cur = GG->GetFrameRateLimit();
-				float Next = 60.f;
-				if (Cur <= 0.f) Next = 30.f; else if (Cur < 45.f) Next = 60.f; else if (Cur < 90.f) Next = 120.f; else if (Cur < 132.f) Next = 144.f; else Next = 0.f;
-				GG->SetFrameRateLimit(Next); GG->ApplySettings(false); GG->SaveSettings(); RefreshContent();
-			}
-		});
-	}
-	else if (Category == 1) // Game
-	{
-		// Character: Man/Vrouw-keuze. Het MODEL/gezicht + bijbehorende kleren kies je daarna in de Wardrobe.
-		if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
-		{
-			const uint8 Sk = PA->GetPlayerSkinIndex();
-			const bool bMale = (Sk == 5 || Sk == 6 || Sk == 0); // 5/6 = man (Tony/Citizen), 0 = Manny (legacy) ; 1-4 = vrouw
-			AddValueRow(TEXT("Character"), bMale ? TEXT("Male") : TEXT("Female"), [this]()
-			{
-				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
+				int32 Cur = GG->GetTextureQuality(); // LIVE
+				const int32 c = (Cur < 0) ? 2 : Cur;
+				const int32 NextQ = (c + 1) % 4;
+				GG->SetTextureQuality(NextQ);
+				GG->ApplySettings(false); GG->SaveSettings();
+				// De beach forceert de VSM-config met console-prio -> her-toepassen zodat o.a. de Shadows-setting
+				// (VSM-scherpte) METEEN zichtbaar wordt i.p.v. pas na opnieuw laden van de map.
+				if (UWorld* WB = GetWorld())
 				{
-					const uint8 Cur = P->GetPlayerSkinIndex();
-					const bool bIsMale = (Cur == 5 || Cur == 6 || Cur == 0);
-					P->SetPlayerSkinIndex(bIsMale ? 2 : 5); // -> vrouw (Girl 1) of man (Tony)
-					RefreshContent();
+					if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip")))
+					{
+						bool bL2, bP2, bM2, bV2, bR2; WeedShop_ReadGfxFlags(bL2, bP2, bM2, bV2, bR2);
+						WeedShop_ApplyBeachShadows(bV2); // gedeelde gate: Potato=uit, Low+=VSM (forceerde eerder VSM altijd aan)
+					}
 				}
-			});
-		}
-
-		UPhoneClientComponent* Ph = GetPhone();
-		const float Fov = Ph ? Ph->GetFov() : 90.f;          // 60..120
-		const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f; // 0.1..3.0
-
-		AddKitSlider(TEXT("Field of view"), (Fov - 60.f) / 60.f, [this](double n, int32& Key) -> FString
-		{
-			const int32 V = FMath::RoundToInt(60.0 + n * 60.0);
-			if (V == Key) { return FString(); }
-			Key = V;
-			if (UPhoneClientComponent* P = GetPhone()) { P->ApplyFov((float)V); }
-			return FString::Printf(TEXT("%d"), V);
-		});
-
-		AddKitSlider(TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, [this](double n, int32& Key) -> FString
-		{
-			const int32 S10 = FMath::RoundToInt((0.1 + n * 2.9) * 10.0);
-			if (S10 == Key) { return FString(); }
-			Key = S10;
-			if (UPhoneClientComponent* P = GetPhone()) { P->SetLookSensitivity(S10 / 10.f); }
-			return FString::Printf(TEXT("%.1f"), S10 / 10.f);
-		});
-
-		// Head bobbing aan/uit (camera loop-wiebel).
-		const bool bBobNow = Ph ? Ph->GetHeadBob() : true;
-		AddKitToggle(TEXT("Head bobbing"), bBobNow, [this](bool bOn)
-		{
-			if (UPhoneClientComponent* P2 = GetPhone()) { P2->SetHeadBob(bOn); }
-		});
-	}
-	else if (Category == 3) // Audio
-	{
-		auto AddVol = [this](const FString& L, int32 Cat)
-		{
-			AddKitSlider(L, WeedUI::SoundCategoryVolume(Cat), [Cat](double n, int32& Key) -> FString
-			{
-				const int32 Pct = FMath::RoundToInt(n * 100.0);
-				if (Pct == Key) { return FString(); }
-				Key = Pct;
-				WeedUI::SetSoundCategoryVolume(Cat, Pct / 100.f);
-				return FString::Printf(TEXT("%d%%"), Pct);
-			});
-		};
-		AddVol(TEXT("UI volume"), 0);
-		AddVol(TEXT("Game volume"), 1);
-		AddVol(TEXT("Music volume"), 2);
-
-		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 13, FLinearColor(0.55f, 0.6f, 0.7f)))
-			->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
-	}
-	else // Controls
-	{
-		// Controls-overlay (de toetsen-hint rechtsonder) aan/uit.
-		AddKitToggle(TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled(),
-			[this](bool bOn) { UHotkeyHintWidget::SetHintsEnabled(bOn); });
-
-		Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, FLinearColor(0.6f, 0.65f, 0.76f)))
-			->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
-
-		// Scrollbare lijst met alle acties (Main + Alt toets).
-		UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
-		UVerticalBoxSlot* ScS = Body->AddChildToVerticalBox(Scroll);
-		ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-
-		UControlSettings* Cfg = UControlSettings::Get();
-		for (const FName& Action : UControlSettings::AllActions())
-		{
-			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UTextBlock* NameT = WeedUI::Text(WidgetTree, UControlSettings::DisplayName(Action).ToString(), 16, FLinearColor(0.9f, 0.92f, 1.f));
-			UHorizontalBoxSlot* NS = Row->AddChildToHorizontalBox(NameT);
-			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
-
-			for (int32 SlotIdx = 0; SlotIdx < 2; ++SlotIdx)
-			{
-				const bool bAlt = (SlotIdx == 1);
-				const bool bThis = bRebinding && (RebindAction == Action) && (bRebindAlt == bAlt);
-				const FKey K = Cfg->GetKey(Action, bAlt);
-				const FString Lbl = bThis ? TEXT("Press...") : (K.IsValid() ? K.GetDisplayName().ToString() : (bAlt ? TEXT("+ Alt") : TEXT("-")));
-				const FLinearColor BtnCol = bThis ? FLinearColor(0.5f, 0.4f, 0.12f) : FLinearColor(0.18f, 0.22f, 0.3f);
-				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-				Sz->SetWidthOverride(96.f);
-				Sz->SetContent(SetBtn(WidgetTree, Lbl, BtnCol,
-					[this, Action, bAlt]() { bRebinding = true; bRebindAlt = bAlt; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); RefreshContent(); }, 13));
-				Row->AddChildToHorizontalBox(Sz)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+				static const TCHAR* LVn[4] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+				if (TexturesVal) { TexturesVal->SetText(FText::FromString(LVn[NextQ])); }
 			}
-			Scroll->AddChild(Row);
-			Scroll->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
-		}
-
-		if (!RebindMsg.IsEmpty())
-		{
-			Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, RebindMsg, 12, FLinearColor(1.f, 0.85f, 0.45f)))
-				->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
-		}
-		Body->AddChildToVerticalBox(SetBtn(WidgetTree, TEXT("Reset to defaults"), FLinearColor(0.4f, 0.34f, 0.16f),
-			[this]() { UControlSettings::Get()->ResetToDefaults(); bRebinding = false; RebindMsg = TEXT("Controls reset to defaults."); RefreshContent(); }, 12))
-			->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+		}, &TexturesVal);
 	}
+	{ // Shadows: ON/OFF (eigen vlag, los van de Preset; VSM aan/uit). Geldt na herstart (VSM-pool).
+		bool bL0, bP0, bM0, bV0, bR0; WeedShop_ReadGfxFlags(bL0, bP0, bM0, bV0, bR0);
+		AddKitToggle(P, TEXT("Shadows"), !bV0, [this](bool bOn)
+		{
+			bool bLn, bPn, bMn, bVn, bRn; WeedShop_ReadGfxFlags(bLn, bPn, bMn, bVn, bRn); // LIVE (andere vlaggen niet overschrijven)
+			WeedShop_WriteGfxFlags(bLn, bPn, bMn, !bOn, bRn); // bOn = schaduwen aan -> VSMOff = !bOn
+			if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bOn); } }
+			ShowRestartPopup(); // VSM-pool kan niet live togglen -> geldt na herstart
+		}, &ShadowsToggleW);
+	}
+
+	// Resolutie-schaal (render-%): 50 -> 75 -> 100.
+	{
+		const int32 RS = FMath::RoundToInt(G->GetResolutionScaleNormalized() * 100.f);
+		AddValueRow(P, TEXT("Resolution scale"), FString::Printf(TEXT("%d%%"), RS), [this]()
+		{
+			if (UGameUserSettings* GG = GUS())
+			{
+				const int32 Cur = FMath::RoundToInt(GG->GetResolutionScaleNormalized() * 100.f);
+				const int32 Next = (Cur < 63) ? 75 : (Cur < 88) ? 100 : 50;
+				GG->SetResolutionScaleNormalized(Next / 100.f);
+				GG->ApplySettings(false); GG->SaveSettings();
+				if (ResScaleVal) { ResScaleVal->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), Next))); }
+			}
+		}, &ResScaleVal);
+	}
+
+	// Lumen (GI + reflecties op de goedkope methode) - aan/uit.
+	{
+		bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+		WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+		AddKitToggle(P, TEXT("Lumen (GI + reflections)"), !bLumenOff, [this](bool bOn)
+		{
+			WeedShop_ApplyLumen(bOn);
+			bool bLn, bPn, bMn, bVn, bRn; WeedShop_ReadGfxFlags(bLn, bPn, bMn, bVn, bRn); // LIVE
+			WeedShop_WriteGfxFlags(!bOn, bPn, bMn, bVn, bRn);
+		}, &LumenToggleW);
+	}
+
+
+
+	// Motion blur - aan/uit.
+	{
+		bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+		WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+		AddKitToggle(P, TEXT("Motion blur"), !bMbOff, [this](bool bOn)
+		{
+			WeedShop_ApplyMotionBlur(bOn);
+			bool bLn, bPn, bMn, bVn, bRn; WeedShop_ReadGfxFlags(bLn, bPn, bMn, bVn, bRn); // LIVE
+			WeedShop_WriteGfxFlags(bLn, bPn, !bOn, bVn, bRn);
+		}, &MotionBlurToggleW);
+	}
+
+	// VSync — kit-W_Toggle (gepolld) i.p.v. cycle-knop (proof voor de kit-controls).
+	AddKitToggle(P, TEXT("V-Sync"), G->IsVSyncEnabled(), [this](bool b)
+	{
+		if (UGameUserSettings* GG = GUS()) { GG->SetVSyncEnabled(b); GG->ApplySettings(false); GG->SaveSettings(); }
+	});
+
+	// Frame rate limit.
+	const float FL = G->GetFrameRateLimit();
+	const FString FLName = (FL <= 0.f) ? TEXT("Uncapped") : FString::Printf(TEXT("%d FPS"), (int32)FL);
+	AddValueRow(P, TEXT("Frame limit"), FLName, [this]()
+	{
+		if (UGameUserSettings* GG = GUS())
+		{
+			const float Cur = GG->GetFrameRateLimit();
+			float Next = 60.f;
+			if (Cur <= 0.f) Next = 30.f; else if (Cur < 45.f) Next = 60.f; else if (Cur < 90.f) Next = 120.f; else if (Cur < 132.f) Next = 144.f; else Next = 0.f;
+			GG->SetFrameRateLimit(Next); GG->ApplySettings(false); GG->SaveSettings();
+			if (FrameLimitVal) { FrameLimitVal->SetText(FText::FromString((Next <= 0.f) ? FString(TEXT("Uncapped")) : FString::Printf(TEXT("%d FPS"), (int32)Next))); }
+		}
+	}, &FrameLimitVal);
+}
+
+void USettingsWidget::BuildGamePanel(UVerticalBox* P)
+{
+	if (!P) { return; }
+
+	// Character: Man/Vrouw-keuze. Het MODEL/gezicht + bijbehorende kleren kies je daarna in de Wardrobe.
+	if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
+	{
+		const uint8 Sk = PA->GetPlayerSkinIndex();
+		const bool bMale = (Sk == 5 || Sk == 6 || Sk == 0); // 5/6 = man (Tony/Citizen), 0 = Manny (legacy) ; 1-4 = vrouw
+		AddValueRow(P, TEXT("Character"), bMale ? TEXT("Male") : TEXT("Female"), [this]()
+		{
+			if (IPlayerNpcActions* Pn = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
+			{
+				const uint8 Cur = Pn->GetPlayerSkinIndex();
+				const bool bIsMale = (Cur == 5 || Cur == 6 || Cur == 0);
+				Pn->SetPlayerSkinIndex(bIsMale ? 2 : 5); // -> vrouw (Girl 1) of man (Tony)
+				if (CharacterVal) { CharacterVal->SetText(FText::FromString(bIsMale ? TEXT("Female") : TEXT("Male"))); } // alleen dit label (geen rebuild)
+			}
+		}, &CharacterVal);
+	}
+
+	UPhoneClientComponent* Ph = GetPhone();
+	const float Fov = Ph ? Ph->GetFov() : 90.f;          // 60..120
+	const float Sens = Ph ? Ph->GetLookSensitivity() : 1.f; // 0.1..3.0
+
+	AddKitSlider(P, TEXT("Field of view"), (Fov - 60.f) / 60.f, [this](double n, int32& Key) -> FString
+	{
+		const int32 V = FMath::RoundToInt(60.0 + n * 60.0);
+		if (V == Key) { return FString(); }
+		Key = V;
+		if (UPhoneClientComponent* Pp = GetPhone()) { Pp->ApplyFov((float)V); }
+		return FString::Printf(TEXT("%d"), V);
+	});
+
+	AddKitSlider(P, TEXT("Mouse sensitivity"), (Sens - 0.1f) / 2.9f, [this](double n, int32& Key) -> FString
+	{
+		const int32 S10 = FMath::RoundToInt((0.1 + n * 2.9) * 10.0);
+		if (S10 == Key) { return FString(); }
+		Key = S10;
+		if (UPhoneClientComponent* Pp = GetPhone()) { Pp->SetLookSensitivity(S10 / 10.f); }
+		return FString::Printf(TEXT("%.1f"), S10 / 10.f);
+	});
+
+	// Head bobbing aan/uit (camera loop-wiebel).
+	const bool bBobNow = Ph ? Ph->GetHeadBob() : true;
+	AddKitToggle(P, TEXT("Head bobbing"), bBobNow, [this](bool bOn)
+	{
+		if (UPhoneClientComponent* P2 = GetPhone()) { P2->SetHeadBob(bOn); }
+	});
+}
+
+void USettingsWidget::BuildAudioPanel(UVerticalBox* P)
+{
+	if (!P) { return; }
+	auto AddVol = [this, P](const FString& L, int32 Cat)
+	{
+		AddKitSlider(P, L, WeedUI::SoundCategoryVolume(Cat), [Cat](double n, int32& Key) -> FString
+		{
+			const int32 Pct = FMath::RoundToInt(n * 100.0);
+			if (Pct == Key) { return FString(); }
+			Key = Pct;
+			WeedUI::SetSoundCategoryVolume(Cat, Pct / 100.f);
+			return FString::Printf(TEXT("%d%%"), Pct);
+		});
+	};
+	AddVol(TEXT("UI volume"), 0);
+	AddVol(TEXT("Game volume"), 1);
+	AddVol(TEXT("Music volume"), 2);
+
+	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 13, FLinearColor(0.55f, 0.6f, 0.7f)))
+		->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
+}
+
+void USettingsWidget::BuildControlsPanel(UVerticalBox* P)
+{
+	if (!P) { return; }
+
+	// Controls-overlay (de toetsen-hint rechtsonder) aan/uit.
+	AddKitToggle(P, TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled(),
+		[this](bool bOn) { UHotkeyHintWidget::SetHintsEnabled(bOn); });
+
+	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, FLinearColor(0.6f, 0.65f, 0.76f)))
+		->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
+
+	// Scrollbare lijst met alle acties (Main + Alt toets) — ÉÉN keer gebouwd; rebind/capture werkt
+	// straks alleen de getroffen key-knop(pen) bij (SetText/kleur) -> geen ClearChildren, scroll blijft.
+	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
+	UVerticalBoxSlot* ScS = P->AddChildToVerticalBox(Scroll);
+	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	KeyButtons.Reset();
+	UControlSettings* Cfg = UControlSettings::Get();
+	for (const FName& Action : UControlSettings::AllActions())
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		UTextBlock* NameT = WeedUI::Text(WidgetTree, UControlSettings::DisplayName(Action).ToString(), 16, FLinearColor(0.9f, 0.92f, 1.f));
+		UHorizontalBoxSlot* NS = Row->AddChildToHorizontalBox(NameT);
+		NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
+
+		for (int32 SlotIdx = 0; SlotIdx < 2; ++SlotIdx)
+		{
+			const bool bAlt = (SlotIdx == 1);
+			const FKey K = Cfg->GetKey(Action, bAlt);
+			const FString Lbl = K.IsValid() ? K.GetDisplayName().ToString() : (bAlt ? TEXT("+ Alt") : TEXT("-"));
+			UTextBlock* BtnLbl = nullptr;
+			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+			Sz->SetWidthOverride(96.f);
+			UWeedActionButton* Btn = SetBtn(WidgetTree, Lbl, FLinearColor(0.18f, 0.22f, 0.3f),
+				[this, Action, bAlt]() { bRebinding = true; bRebindAlt = bAlt; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); RefreshKeyButtonsFor(Action); }, 13, &BtnLbl);
+			Sz->SetContent(Btn);
+			Row->AddChildToHorizontalBox(Sz)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+			FKeyBtn KB; KB.Btn = Btn; KB.Label = BtnLbl; KB.Action = Action; KB.bAlt = bAlt;
+			KeyButtons.Add(KB);
+		}
+		Scroll->AddChild(Row);
+		Scroll->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
+	}
+
+	// Persistent RebindMsg-tekst (in-place SetText; leeg -> Collapsed).
+	RebindMsgText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(1.f, 0.85f, 0.45f));
+	RebindMsgText->SetVisibility(ESlateVisibility::Collapsed);
+	P->AddChildToVerticalBox(RebindMsgText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+
+	P->AddChildToVerticalBox(SetBtn(WidgetTree, TEXT("Reset to defaults"), FLinearColor(0.4f, 0.34f, 0.16f),
+		[this]() { UControlSettings::Get()->ResetToDefaults(); bRebinding = false; RebindMsg = TEXT("Controls reset to defaults."); RefreshAllKeyButtons(); }, 12))
+		->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+}
+
+// Werk één key-knop bij (label + kleur) zonder de rij/lijst te herbouwen.
+void USettingsWidget::UpdateKeyButtonLabel(const FKeyBtn& KB)
+{
+	UControlSettings* Cfg = UControlSettings::Get();
+	const bool bThis = bRebinding && (RebindAction == KB.Action) && (bRebindAlt == KB.bAlt);
+	const FKey K = Cfg ? Cfg->GetKey(KB.Action, KB.bAlt) : FKey();
+	const FString Lbl = bThis ? TEXT("Press...") : (K.IsValid() ? K.GetDisplayName().ToString() : (KB.bAlt ? TEXT("+ Alt") : TEXT("-")));
+	if (UTextBlock* L = KB.Label.Get()) { L->SetText(FText::FromString(Lbl)); }
+	if (UWeedActionButton* B = KB.Btn.Get())
+	{
+		const FLinearColor Col = bThis ? FLinearColor(0.5f, 0.4f, 0.12f) : FLinearColor(0.18f, 0.22f, 0.3f);
+		FButtonStyle S;
+		S.Normal = WeedUI::Rounded(Col, 7.f);
+		S.Hovered = WeedUI::Rounded(Col * 1.3f, 7.f);
+		S.Pressed = WeedUI::Rounded(Col * 0.8f, 7.f);
+		S.NormalPadding = FMargin(13.f, 7.f); S.PressedPadding = FMargin(13.f, 7.f);
+		B->SetStyle(S);
+	}
+}
+
+void USettingsWidget::UpdateRebindMsg()
+{
+	if (!RebindMsgText) { return; }
+	if (RebindMsg.IsEmpty()) { RebindMsgText->SetVisibility(ESlateVisibility::Collapsed); }
+	else { RebindMsgText->SetText(FText::FromString(RebindMsg)); RebindMsgText->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+}
+
+// Update alleen de knoppen die deze actie tonen (main+alt) + de msg-tekst. Geen lijst-teardown.
+void USettingsWidget::RefreshKeyButtonsFor(FName Action)
+{
+	for (const FKeyBtn& KB : KeyButtons) { if (KB.Action == Action) { UpdateKeyButtonLabel(KB); } }
+	UpdateRebindMsg();
+}
+
+// Na Reset-to-defaults: alle labels opnieuw zetten (nog steeds geen rebuild van de lijst).
+void USettingsWidget::RefreshAllKeyButtons()
+{
+	for (const FKeyBtn& KB : KeyButtons) { UpdateKeyButtonLabel(KB); }
+	UpdateRebindMsg();
 }
 
 void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -708,9 +881,16 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bOpen != bLastOpen)
 	{
 		bLastOpen = bOpen;
-		if (bOpen) { RefreshTabs(); RefreshContent(); }
+		if (bOpen) { BuildAllPanels(); RefreshTabs(); ShowActiveCategory(); RefreshGraphicsLabels(); } // panelen ÉÉN keer bouwen; labels naar live status (geen rebuild)
 	}
 	if (!bOpen) { return; }
+
+	// "Saved"-cue vervagen (in-place opacity, geen rebuild).
+	if (SavedMsgOpacity > 0.f)
+	{
+		SavedMsgOpacity = FMath::Max(0.f, SavedMsgOpacity - DeltaTime * 0.6f);
+		if (SavedMsg) { SavedMsg->SetRenderOpacity(SavedMsgOpacity); }
+	}
 
 	// Kit-sliders pollen (W_Slider.Value via reflectie -> Apply mapt+past toe+geeft display; leeg = onveranderd).
 	for (FKitSlider& KS : KitSliders)

@@ -36,7 +36,11 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DimmerCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.05f, 0.08f, 0.98f), 22.f));
+	{
+		FSlateBrush Br = WeedUI::Rounded(WeedUI::ColPanel(0.98f), 22.f);
+		Br.OutlineSettings.Width = 1.f; Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+		CardB->SetBrush(Br);
+	}
 	CardB->SetPadding(FMargin(22.f, 18.f));
 	Card = CardB;
 
@@ -49,9 +53,9 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(VB);
 
-	UTextBlock* Title = WeedUI::Text(WidgetTree, TEXT("Light brightness"), 18, FLinearColor(0.80f, 0.62f, 1.f), true, true);
+	UTextBlock* Title = WeedUI::Text(WidgetTree, TEXT("Light brightness"), 18, WeedUI::ColAccent(), true, true);
 	VB->AddChildToVerticalBox(Title)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	{ USizeBox* DivSz = WidgetTree->ConstructWidget<USizeBox>(); DivSz->SetHeightOverride(2.f); UBorder* Div = WidgetTree->ConstructWidget<UBorder>(); Div->SetBrush(WeedUI::Rounded(FLinearColor(0.55f, 0.38f, 0.85f, 0.75f), 1.f)); DivSz->SetContent(Div); VB->AddChildToVerticalBox(DivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f)); }
+	{ USizeBox* DivSz = WidgetTree->ConstructWidget<USizeBox>(); DivSz->SetHeightOverride(2.f); UBorder* Div = WidgetTree->ConstructWidget<UBorder>(); Div->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(0.75f), 1.f)); DivSz->SetContent(Div); VB->AddChildToVerticalBox(DivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f)); }
 
 	// Verticale dimmer-slider (default = midden).
 	Slider = WidgetTree->ConstructWidget<USlider>();
@@ -60,8 +64,8 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 	Slider->SetMaxValue(1.f);
 	Slider->SetValue(0.5f);
 	Slider->SetStepSize(0.02f);
-	Slider->SetSliderBarColor(FLinearColor(0.18f, 0.2f, 0.27f));
-	Slider->SetSliderHandleColor(FLinearColor(0.72f, 0.46f, 1.f));
+	Slider->SetSliderBarColor(WeedUI::ColSlotEmpty());
+	Slider->SetSliderHandleColor(WeedUI::ColAccent());
 	Slider->OnValueChanged.AddDynamic(this, &ULightDimmerWidget::OnSlider);
 
 	USizeBox* SSz = WidgetTree->ConstructWidget<USizeBox>();
@@ -72,7 +76,7 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 	SlotS->SetHorizontalAlignment(HAlign_Center);
 	SlotS->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
-	ValueText = WeedUI::Text(WidgetTree, TEXT("50%"), 16, FLinearColor(0.80f, 0.62f, 1.f), true, true);
+	ValueText = WeedUI::Text(WidgetTree, TEXT("50%"), 16, WeedUI::ColAccent(), true, true);
 	VB->AddChildToVerticalBox(ValueText)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	// "Link lampen"-knop: sluit de dimmer en start de link-modus (klikbare groen/wit lamp-markers).
@@ -87,7 +91,7 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 		}
 	});
 	{
-		const FLinearColor Col(0.42f, 0.27f, 0.62f);
+		const FLinearColor Col = WeedUI::ColAccentDim();
 		FButtonStyle St;
 		St.Normal = WeedUI::Rounded(Col, 10.f);
 		St.Hovered = WeedUI::Rounded(Col * 1.3f, 10.f);
@@ -96,7 +100,7 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 		LinkB->SetStyle(St);
 	}
 	LinkButton = LinkB;
-	LinkButtonText = WeedUI::Text(WidgetTree, TEXT("Link lampen"), 14, FLinearColor::White, true, true);
+	LinkButtonText = WeedUI::Text(WidgetTree, TEXT("Link lampen"), 14, WeedUI::ColText(), true, true);
 	LinkB->SetContent(LinkButtonText);
 	UVerticalBoxSlot* SlotL = VB->AddChildToVerticalBox(LinkB);
 	SlotL->SetHorizontalAlignment(HAlign_Center);
@@ -110,7 +114,7 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 		if (UPhoneClientComponent* P = Ph.Get()) { P->CloseLightDimmer(); }
 	});
 	{
-		const FLinearColor Col(0.48f, 0.30f, 0.70f);
+		const FLinearColor Col = WeedUI::ColAccentDim();
 		FButtonStyle St;
 		St.Normal = WeedUI::Rounded(Col, 10.f);
 		St.Hovered = WeedUI::Rounded(Col * 1.3f, 10.f);
@@ -118,7 +122,7 @@ void ULightDimmerWidget::BuildShell(UCanvasPanel* Root)
 		St.NormalPadding = FMargin(16.f, 8.f); St.PressedPadding = FMargin(16.f, 8.f);
 		Close->SetStyle(St);
 	}
-	Close->SetContent(WeedUI::Text(WidgetTree, TEXT("Done"), 14, FLinearColor::White, true, true));
+	Close->SetContent(WeedUI::Text(WidgetTree, TEXT("Done"), 14, WeedUI::ColText(), true, true));
 	UVerticalBoxSlot* SlotC = VB->AddChildToVerticalBox(Close);
 	SlotC->SetHorizontalAlignment(HAlign_Center);
 }

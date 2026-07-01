@@ -152,7 +152,9 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DryCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), 24.f)); // gelijk aan de inventory-card
+	FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 24.f); // zelfde card als de inventory (palet)
+	CardBr.OutlineSettings.Width = 1.f; CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+	CardB->SetBrush(CardBr);
 	CardB->SetPadding(FMargin(16.f));
 	Card = CardB;
 
@@ -169,14 +171,14 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	CardB->SetContent(Outer);
 
 	UHorizontalBox* HeadRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-	TitleText = WeedUI::Text(WidgetTree, TEXT("DRYING RACK"), 18, FLinearColor(0.75f, 0.9f, 0.6f), false, true);
+	TitleText = WeedUI::Text(WidgetTree, TEXT("DRYING RACK"), 18, WeedUI::ColText(), false, true);
 	UHorizontalBoxSlot* TS = HeadRow->AddChildToHorizontalBox(TitleText);
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
-	HeadRow->AddChildToHorizontalBox(DryBtn(WidgetTree, TEXT("Exit"), FLinearColor(0.4f, 0.2f, 0.2f),
+	HeadRow->AddChildToHorizontalBox(DryBtn(WidgetTree, TEXT("Exit"), WeedUI::ColWarn(0.55f),
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseDryRack(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag weed here to dry it. Done? Drag it back to your inventory."), 11, FLinearColor(0.6f, 0.65f, 0.78f), false))
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag weed here to dry it. Done? Drag it back to your inventory."), 11, WeedUI::ColTextDim(), false))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// Drop-zone: transparante achtergrond zodat de (flauwe) lege slots zichtbaar zijn tegen de card,
@@ -265,123 +267,140 @@ void UDryingRackWidget::HandleInvDrop(bool bDroppedOnDryingSide, UInvDragOp* Op)
 	}
 }
 
+UDryCell* UDryingRackWidget::MakeDryCell(int32 SlotIdx, const FDryEntry* E)
+{
+	UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
+	C->bWet = false; C->Owner = this;
+	if (E)
+	{
+		UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
+		FSlateBrush VisBr = WeedUI::Rounded(WeedUI::ColSlot(0.96f), 8.f); // neutrale slot zoals de inventory
+		if (E->bDone) { VisBr.OutlineSettings.Width = 1.5f; VisBr.OutlineSettings.Color = FSlateColor(WeedUI::ColGood(0.75f)); } // ready -> groene ring
+		Vis->SetBrush(VisBr);
+		Vis->SetPadding(FMargin(4.f));
+		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
+		Vis->SetContent(Ov);
+
+		// Groot, gecentreerd icoon (zoals de inventory) - de progressbar zit niet meer in de slot.
+		UOverlaySlot* IconOS = Ov->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, E->DryItemId, 50.f));
+		IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
+
+		UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
+		Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
+		Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
+		Pill->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%dg"), E->Quantity), 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
+		UOverlaySlot* BS = Ov->AddChildToOverlay(Pill);
+		BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Top);
+
+		// Klein "ready"-vinkje onderaan de slot (de volledige progress staat onder de slots).
+		if (E->bDone)
+		{
+			UOverlaySlot* DnOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("READY"), 8, WeedUI::ColGood(), true, true));
+			DnOS->SetHorizontalAlignment(HAlign_Center); DnOS->SetVerticalAlignment(VAlign_Bottom);
+			DnOS->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		}
+
+		C->EntryIndex = SlotIdx; C->ItemId = E->DryItemId; C->Qty = E->Quantity; C->bReady = E->bDone; C->Inner = Vis;
+		C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E->DryItemId), E->Quantity, E->Thc, E->bDone ? TEXT("\nReady - drag to your inventory") : TEXT("\nStill drying"))));
+	}
+	else
+	{
+		// Lege slot: zelfde flauwe vierkante stijl als een leeg inventory-vak, drop-zone voor natte wiet.
+		UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
+		Vis->SetBrush(WeedUI::Rounded(WeedUI::ColSlotEmpty(0.55f), 8.f));
+		C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Inner = Vis;
+	}
+	return C;
+}
+
 void UDryingRackWidget::FillBody()
 {
 	if (!DryList || !PhoneComp.IsValid()) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 	ADryingRack* Rack = Ph->GetDryRack();
-	DryList->ClearChildren();
-	RowBars.Reset(); RowStatus.Reset(); RowEntryIndex.Reset();
 	if (!Rack) { return; }
 
 	const int32 Used = Rack->GetEntries().Num();
 	const int32 Cap = Rack->GetCapacityPublic();
 	if (TitleText) { TitleText->SetText(FText::FromString(FString::Printf(TEXT("DRYING RACK   (%d/%d)"), Used, Cap))); }
 
-	auto AddGrid = [this](UScrollBox* Into) -> UWrapBox*
+	// Persistente grid (éénmalig) -> NOOIT ClearChildren op DryList -> geen volledige-grid-flash bij ophangen/oogsten.
+	if (!DryGrid)
 	{
-		UWrapBox* W = WidgetTree->ConstructWidget<UWrapBox>();
-		W->SetInnerSlotPadding(FVector2D(6.f, 6.f));
-		Into->AddChild(W);
-		return W;
-	};
-	auto BadgePill = [this](const FString& Txt) -> UBorder*
-	{
-		UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-		Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
-		Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
-		Pill->SetContent(WeedUI::Text(WidgetTree, Txt, 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
-		return Pill;
-	};
+		DryGrid = WidgetTree->ConstructWidget<UWrapBox>();
+		DryGrid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
+		DryList->AddChild(DryGrid);
+	}
 
-	// --- Linkerkolom: drogende/klare batches ---
+	// Vaste grid: Cap cellen (entries vullen de eerste, de rest zijn lege drop-slots).
+	while (DryCellBoxes.Num() < Cap)
 	{
-		UWrapBox* Grid = AddGrid(DryList);
+		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+		Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f);
+		DryGrid->AddChildToWrapBox(Sz);
+		DryCellBoxes.Add(Sz); DryCellSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+	}
+	while (DryCellBoxes.Num() > Cap)
+	{
+		const int32 Last = DryCellBoxes.Num() - 1;
+		if (DryCellBoxes[Last]) { DryCellBoxes[Last]->RemoveFromParent(); }
+		DryCellBoxes.RemoveAt(Last); DryCellSigs.RemoveAt(Last);
+	}
+
+	// Per-cel diff: alleen een cel waarvan de inhoud ECHT wijzigde krijgt een nieuwe UDryCell (geen flash).
+	const TArray<FDryEntry>& Entries = Rack->GetEntries();
+	for (int32 i = 0; i < Cap; ++i)
+	{
+		const bool bEntry = (i < Used);
+		FString Sig = TEXT("E");
+		if (bEntry)
+		{
+			const FDryEntry& E = Entries[i];
+			Sig = FString::Printf(TEXT("%s|%d|%d"), *E.DryItemId.ToString(), E.Quantity, E.bDone ? 1 : 0);
+		}
+		if (!DryCellSigs.IsValidIndex(i) || !DryCellBoxes.IsValidIndex(i)) { continue; }
+		if (Sig == DryCellSigs[i]) { continue; }
+		DryCellSigs[i] = Sig;
+		if (DryCellBoxes[i]) { DryCellBoxes[i]->SetContent(MakeDryCell(i, bEntry ? &Entries[i] : nullptr)); }
+	}
+
+	// --- Progress + plant-info onder de slots (aparte DetailBox; wiret RowBars/RowStatus voor UpdateProgress) ---
+	RowBars.Reset(); RowStatus.Reset(); RowEntryIndex.Reset();
+	if (DetailBox)
+	{
+		DetailBox->ClearChildren();
 		const float Total = FMath::Max(1.f, Rack->GetDryTotalSeconds());
-		for (int32 i = 0; i < Rack->GetEntries().Num(); ++i)
+		for (int32 i = 0; i < Used; ++i)
 		{
-			const FDryEntry& E = Rack->GetEntries()[i];
+			const FDryEntry& E = Entries[i];
+			UBorder* RowB = WidgetTree->ConstructWidget<UBorder>();
+			RowB->SetBrush(WeedUI::Rounded(WeedUI::ColInner(0.85f), 8.f));
+			RowB->SetPadding(FMargin(10.f, 7.f, 10.f, 8.f));
+			UVerticalBox* RV = WidgetTree->ConstructWidget<UVerticalBox>();
+			RowB->SetContent(RV);
 
-			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-			Vis->SetBrush(WeedUI::Rounded(E.bDone ? FLinearColor(0.12f, 0.20f, 0.13f, 0.96f) : FLinearColor(0.16f, 0.14f, 0.09f, 0.96f), 8.f));
-			Vis->SetPadding(FMargin(4.f));
-			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
-			Vis->SetContent(Ov);
+			UHorizontalBox* Top = WidgetTree->ConstructWidget<UHorizontalBox>();
+			UTextBlock* NameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s    %dg  -  THC %.0f%%   Q %.0f%%"),
+				*WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.Quality), 12, WeedUI::ColText(), false, true);
+			UHorizontalBoxSlot* NS = Top->AddChildToHorizontalBox(NameT);
+			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
+			UTextBlock* TimeT = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.85f, 0.88f, 0.8f), false, true);
+			Top->AddChildToHorizontalBox(TimeT)->SetVerticalAlignment(VAlign_Center);
+			RV->AddChildToVerticalBox(Top);
 
-			// Groot, gecentreerd icoon (zoals de inventory) - de progressbar zit niet meer in de slot.
-			UOverlaySlot* IconOS = Ov->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, E.DryItemId, 50.f));
-			IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
+			UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
+			Bar->SetPercent(E.bDone ? 1.f : FMath::Clamp(E.Elapsed / Total, 0.f, 1.f));
+			Bar->SetFillColorAndOpacity(E.bDone ? FLinearColor(0.4f, 0.95f, 0.5f) : FLinearColor(0.85f, 0.7f, 0.25f));
+			USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
+			BarSz->SetHeightOverride(16.f); BarSz->SetContent(Bar);
+			RV->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
 
-			UOverlaySlot* BS = Ov->AddChildToOverlay(BadgePill(FString::Printf(TEXT("%dg"), E.Quantity)));
-			BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Top);
-
-			// Klein "ready"-vinkje onderaan de slot (de volledige progress staat onder de slots).
-			if (E.bDone)
-			{
-				UOverlaySlot* DnOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("READY"), 8, FLinearColor(0.5f, 1.f, 0.6f), true, true));
-				DnOS->SetHorizontalAlignment(HAlign_Center); DnOS->SetVerticalAlignment(VAlign_Bottom);
-				DnOS->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-			}
-
-			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
-			C->bWet = false; C->EntryIndex = i; C->ItemId = E.DryItemId; C->Qty = E.Quantity; C->bReady = E.bDone; C->Owner = this; C->Inner = Vis;
-			C->SetToolTipText(FText::FromString(FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC%s"), *WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.bDone ? TEXT("\nReady - drag to your inventory") : TEXT("\nStill drying"))));
-
-			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-			Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); Sz->SetContent(C);
-			Grid->AddChildToWrapBox(Sz);
+			DetailBox->AddChildToVerticalBox(RowB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+			RowBars.Add(Bar); RowStatus.Add(TimeT); RowEntryIndex.Add(i);
 		}
-		// Lege capaciteit-slots tot het maximum (zoals de inventory laat zien hoeveel erin kan). Elk leeg
-		// vakje is een drop-zone voor natte wiet.
-		const int32 MaxCap = Rack->GetCapacityPublic();
-		for (int32 e = Rack->GetEntries().Num(); e < MaxCap; ++e)
+		if (Used == 0)
 		{
-			// Lege slot: zelfde flauwe vierkante stijl als een leeg inventory-vak (geen "+"), drop-zone voor wiet.
-			UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-			Vis->SetBrush(WeedUI::Rounded(FLinearColor(0.13f, 0.14f, 0.18f, 0.55f), 8.f));
-			UDryCell* C = WidgetTree->ConstructWidget<UDryCell>();
-			C->bWet = false; C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Owner = this; C->Inner = Vis;
-			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-			Sz->SetWidthOverride(86.f); Sz->SetHeightOverride(86.f); Sz->SetContent(C);
-			Grid->AddChildToWrapBox(Sz);
-		}
-
-		// --- Progress + plant-info onder de slots (vult het paneel netjes) ---
-		if (DetailBox)
-		{
-			DetailBox->ClearChildren();
-			for (int32 i = 0; i < Rack->GetEntries().Num(); ++i)
-			{
-				const FDryEntry& E = Rack->GetEntries()[i];
-				UBorder* RowB = WidgetTree->ConstructWidget<UBorder>();
-				RowB->SetBrush(WeedUI::Rounded(FLinearColor(0.10f, 0.11f, 0.15f, 0.85f), 8.f));
-				RowB->SetPadding(FMargin(10.f, 7.f, 10.f, 8.f));
-				UVerticalBox* RV = WidgetTree->ConstructWidget<UVerticalBox>();
-				RowB->SetContent(RV);
-
-				UHorizontalBox* Top = WidgetTree->ConstructWidget<UHorizontalBox>();
-				UTextBlock* NameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s    %dg  -  THC %.0f%%   Q %.0f%%"),
-					*WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.Quality), 12, FLinearColor(0.9f, 0.95f, 1.f), false, true);
-				UHorizontalBoxSlot* NS = Top->AddChildToHorizontalBox(NameT);
-				NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
-				UTextBlock* TimeT = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.85f, 0.88f, 0.8f), false, true);
-				Top->AddChildToHorizontalBox(TimeT)->SetVerticalAlignment(VAlign_Center);
-				RV->AddChildToVerticalBox(Top);
-
-				UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
-				Bar->SetPercent(E.bDone ? 1.f : FMath::Clamp(E.Elapsed / Total, 0.f, 1.f));
-				Bar->SetFillColorAndOpacity(E.bDone ? FLinearColor(0.4f, 0.95f, 0.5f) : FLinearColor(0.85f, 0.7f, 0.25f));
-				USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
-				BarSz->SetHeightOverride(16.f); BarSz->SetContent(Bar);
-				RV->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
-
-				DetailBox->AddChildToVerticalBox(RowB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-				RowBars.Add(Bar); RowStatus.Add(TimeT); RowEntryIndex.Add(i);
-			}
-			if (Rack->GetEntries().Num() == 0)
-			{
-				DetailBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Nothing drying. Drag wet weed into a slot."), 11, FLinearColor(0.55f, 0.6f, 0.7f)));
-			}
+			DetailBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Nothing drying. Drag wet weed into a slot."), 11, WeedUI::ColTextDim()));
 		}
 	}
 

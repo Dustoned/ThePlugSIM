@@ -41,7 +41,11 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("PlantCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.07f, 0.06f, 0.95f), 18.f));
+	{
+		FSlateBrush Br = WeedUI::Rounded(WeedUI::ColPanel(0.95f), 18.f);
+		Br.OutlineSettings.Width = 1.f; Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+		CardB->SetBrush(Br);
+	}
 	CardB->SetPadding(FMargin(30.f, 22.f, 30.f, 24.f));
 	CardB->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Card = CardB;
@@ -57,7 +61,7 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(VB);
 
-	TitleText = WeedUI::Text(WidgetTree, TEXT("Pot"), 18, FLinearColor(0.78f, 0.55f, 1.f), false, true);
+	TitleText = WeedUI::Text(WidgetTree, TEXT("Pot"), 18, WeedUI::ColAccent(), false, true);
 	VB->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 7.f));
 
 	// Kleine kit-icoon (vast 18px) voor de rijen.
@@ -87,7 +91,7 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 			: WeedUI::UiGlyph(WidgetTree, IcoName, 44.f, IcoTint, WeedUI::EIcon::Leaf));
 		UOverlaySlot* IS = Ov->AddChildToOverlay(IcoSz); IS->SetHorizontalAlignment(HAlign_Center); IS->SetVerticalAlignment(VAlign_Center);
 		UVerticalBoxSlot* SzS = Box->AddChildToVerticalBox(Sz); SzS->SetHorizontalAlignment(HAlign_Center);
-		OutVal = WeedUI::Text(WidgetTree, TEXT(""), 17, FLinearColor(0.9f, 0.92f, 1.f), true, true);
+		OutVal = WeedUI::Text(WidgetTree, TEXT(""), 17, WeedUI::ColText(), true, true);
 		UVerticalBoxSlot* VS = Box->AddChildToVerticalBox(OutVal); VS->SetHorizontalAlignment(HAlign_Center); VS->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 		return Box;
 	};
@@ -108,23 +112,23 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 
 	// Oogst: [weegschaal] gram   [THC-molecuul] thc%.
 	UHorizontalBox* HRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-	HRow->AddChildToHorizontalBox(Ico(TEXT("t_weight_128"), FLinearColor(1.f, 0.9f, 0.55f)))->SetVerticalAlignment(VAlign_Center);
-	YieldText = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor(1.f, 0.92f, 0.5f), false, true);
+	HRow->AddChildToHorizontalBox(Ico(TEXT("t_weight_128"), WeedUI::ColText()))->SetVerticalAlignment(VAlign_Center);
+	YieldText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
 	UHorizontalBoxSlot* YS = HRow->AddChildToHorizontalBox(YieldText);
 	YS->SetVerticalAlignment(VAlign_Center); YS->SetPadding(FMargin(8.f, 0.f, 18.f, 0.f));
 	USizeBox* TIco = WidgetTree->ConstructWidget<USizeBox>(); TIco->SetWidthOverride(44.f); TIco->SetHeightOverride(44.f);
 	TIco->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("thc"), 44.f, FLinearColor::White, WeedUI::EIcon::Leaf));
 	HRow->AddChildToHorizontalBox(TIco)->SetVerticalAlignment(VAlign_Center);
-	ThcText = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor(0.55f, 1.f, 0.6f), false, true);
+	ThcText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColGood(), false, true);
 	UHorizontalBoxSlot* TS = HRow->AddChildToHorizontalBox(ThcText);
 	TS->SetVerticalAlignment(VAlign_Center); TS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	{ UVerticalBoxSlot* HRS = VB->AddChildToVerticalBox(HRow); HRS->SetHorizontalAlignment(HAlign_Center); HRS->SetPadding(FMargin(0.f, 7.f, 0.f, 2.f)); } // yield+thc-rij gecentreerd
 
 	// Aarde + upgrades (klein, compact).
 	// Soil/upgrades/hint staan NIET meer op de kaart (info komt bij de pot-interact); members blijven voor NativeTick.
-	SoilText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.6f, 0.85f, 0.6f));
-	UpgradesText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.7f, 0.85f, 1.f));
-	HintText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(1.f, 0.95f, 0.5f));
+	SoilText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
+	UpgradesText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
+	HintText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColTextDim());
 }
 
 void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -184,7 +188,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const int32 Rem = FMath::CeilToInt(Plant->GetSecondsRemaining());
 			GrowthTimeText->SetText(FText::FromString(Rem > 0 ? FString::Printf(TEXT("%d:%02d"), Rem / 60, Rem % 60) : TEXT("READY")));
-			GrowthTimeText->SetColorAndOpacity(FSlateColor(Rem > 0 ? FLinearColor(0.85f, 0.9f, 1.f) : FLinearColor(0.45f, 0.95f, 0.4f)));
+			GrowthTimeText->SetColorAndOpacity(FSlateColor(Rem > 0 ? WeedUI::ColText() : WeedUI::ColGood()));
 		}
 
 		// Water-ring.
@@ -200,7 +204,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (HealthText)
 		{
 			HealthText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Care * 100.f)));
-			HealthText->SetColorAndOpacity(FSlateColor(SickN > 0 ? FLinearColor(1.f, 0.5f, 0.4f) : FLinearColor(0.85f, 0.88f, 0.95f)));
+			HealthText->SetColorAndOpacity(FSlateColor(SickN > 0 ? WeedUI::ColWarn() : WeedUI::ColText()));
 		}
 		YieldText->SetVisibility(ESlateVisibility::HitTestInvisible);
 		YieldText->SetText(FText::FromString(FString::Printf(TEXT("~%.0f g"), Plant->GetEstimatedTotalYield())));
@@ -218,12 +222,12 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Plant->HasSoil())
 	{
 		FSoilDef Sd; const FString Sn = GetSoilDef(Plant->GetSoilId(), Sd) ? Sd.DisplayName : Plant->GetSoilId().ToString();
-		SoilText->SetColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.9f, 0.6f)));
+		SoilText->SetColorAndOpacity(FSlateColor(WeedUI::ColGood()));
 		SoilText->SetText(FText::FromString(FString::Printf(TEXT("Soil: %s  (%d harvests left)"), *Sn, Plant->GetSoilUsesLeft())));
 	}
 	else
 	{
-		SoilText->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 0.7f, 0.3f)));
+		SoilText->SetColorAndOpacity(FSlateColor(WeedUI::ColWarn()));
 		SoilText->SetText(FText::FromString(TEXT("No soil")));
 	}
 
@@ -232,7 +236,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		const FString Ups = Plant->GetActiveUpgradesLabel();
 		UpgradesText->SetText(FText::FromString(Ups.IsEmpty() ? TEXT("Upgrades: none") : FString::Printf(TEXT("Upgrades: %s"), *Ups)));
-		UpgradesText->SetColorAndOpacity(FSlateColor(Ups.IsEmpty() ? FLinearColor(0.55f, 0.57f, 0.62f) : FLinearColor(0.7f, 0.85f, 1.f)));
+		UpgradesText->SetColorAndOpacity(FSlateColor(Ups.IsEmpty() ? WeedUI::ColTextDim() : WeedUI::ColAccent()));
 	}
 
 	// (De interactie-tekst staat nu rechtsonder bij Controls; geen hint-regel meer op de plantkaart.)

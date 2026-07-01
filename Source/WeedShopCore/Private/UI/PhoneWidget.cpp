@@ -285,7 +285,7 @@ void UPhoneWidget::BuildSettingsApp()
 	UHorizontalBox* Cats = WidgetTree->ConstructWidget<UHorizontalBox>();
 	for (int32 i = 0; i < NumTabs; ++i)
 	{
-		const FLinearColor Col = (i == SettingsCat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		const FLinearColor Col = (i == SettingsCat) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
 		UWeedActionButton* B = MakeActionBtn(CatNames[i], Col,
 			[this, i]() { SettingsCat = i; bRebinding = false; RebindMsg.Reset(); RefreshSettingsTabs(); FillSettingsBody(); }, 10);
 		UHorizontalBoxSlot* CS = Cats->AddChildToHorizontalBox(B);
@@ -308,7 +308,7 @@ void UPhoneWidget::RefreshSettingsTabs()
 	for (int32 i = 0; i < SettingsTabBtns.Num(); ++i)
 	{
 		if (!SettingsTabBtns[i]) { continue; }
-		const FLinearColor Col = (i == SettingsCat) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
+		const FLinearColor Col = (i == SettingsCat) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
 		FButtonStyle St;
 		St.Normal = RoundedBrush(Col, 8.f);
 		St.Hovered = RoundedBrush(Col * 1.3f, 8.f);
@@ -325,6 +325,7 @@ void UPhoneWidget::FillSettingsBody()
 	// Slider-pointers resetten: hun widgets zijn zojuist vernietigd; ApplyLightSliders mag er niet meer aan zitten.
 	TimeSpeedSlider = nullptr; TimeSpeedV = nullptr;
 	LMoon = LSun = LSkyN = LSkyD = LPitch = LLamp = LExp = nullptr;
+	SkinMaleBtn = nullptr; SkinFemaleBtn = nullptr; ShopTypeLabel = nullptr; // body-rebuild -> oude refs vrijgeven
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
 	auto BodyRow = [this](UWidget* W, const FMargin& Pad) { SettingsBody->AddChildToVerticalBox(W)->SetPadding(Pad); };
@@ -332,8 +333,8 @@ void UPhoneWidget::FillSettingsBody()
 	if (SettingsCat == 1) // Test-tools, nu in nette secties
 	{
 		// --- Compacte helpers voor deze tab ---
-		const FLinearColor CSave(0.26f, 0.42f, 0.32f), CClr(0.42f, 0.22f, 0.22f), CAim(0.28f, 0.34f, 0.48f), CKit(0.24f, 0.4f, 0.45f);
-		auto Section = [&](const TCHAR* T) { BodyRow(MakeText(T, 11, FLinearColor(0.45f, 0.72f, 1.f)), FMargin(0.f, 8.f, 0.f, 2.f)); };
+		const FLinearColor CSave = WeedUI::ColGood(0.5f), CClr = WeedUI::ColWarn(0.5f), CAim = WeedUI::ColAccentDim(), CKit = WeedUI::ColAccentDim();
+		auto Section = [&](const TCHAR* T) { BodyRow(MakeText(T, 11, WeedUI::ColAccent()), FMargin(0.f, 8.f, 0.f, 2.f)); };
 		auto Single = [&](const FString& L, const FLinearColor& C, TFunction<void()> F) { BodyRow(MakeActionBtn(L, C, F, 11), FMargin(0.f, 0.f, 0.f, 3.f)); };
 		auto Pair = [&](const FString& L1, const FLinearColor& C1, TFunction<void()> F1, const FString& L2, const FLinearColor& C2, TFunction<void()> F2)
 		{
@@ -353,7 +354,7 @@ void UPhoneWidget::FillSettingsBody()
 		{
 			const float H = GS->GetDayCycle()->GetClockHour();
 			BodyRow(MakeText(FString::Printf(TEXT("%02d:%02d  (%s)"), (int32)H, (int32)((H - (int32)H) * 60.f),
-				GS->GetDayCycle()->IsNight() ? TEXT("night") : TEXT("day")), 11, FLinearColor(0.65f, 0.7f, 0.8f)), FMargin(0.f, 0.f, 0.f, 3.f));
+				GS->GetDayCycle()->IsNight() ? TEXT("night") : TEXT("day")), 11, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 3.f));
 		}
 		Pair(TEXT("Set Day"), FLinearColor(0.85f, 0.7f, 0.2f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(false); } },
 			 TEXT("Set Night"), FLinearColor(0.25f, 0.3f, 0.55f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } });
@@ -388,7 +389,7 @@ void UPhoneWidget::FillSettingsBody()
 		Pair(TEXT("Save stairs path"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveStairsPath(); } },
 			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearStairsPath(); } });
 		Pair(TEXT("Show paths"), CAim, [this]() { if (Phone.IsValid()) { Phone->ShowAllPaths(); } },
-			 TEXT("Hide paths"), FLinearColor(0.3f, 0.3f, 0.35f), [this]() { if (Phone.IsValid()) { Phone->HideAllPaths(); } });
+			 TEXT("Hide paths"), WeedUI::ColSlot(), [this]() { if (Phone.IsValid()) { Phone->HideAllPaths(); } });
 		Single(TEXT("Delete path (aim at dot)"), CClr, [this]() { if (Phone.IsValid()) { Phone->DeletePathInCrosshair(); } });
 
 		// === SHOPS ===
@@ -396,8 +397,20 @@ void UPhoneWidget::FillSettingsBody()
 		{
 			static const TCHAR* KN[3] = { TEXT("Grow shop"), TEXT("Supplies"), TEXT("Furniture") };
 			const int32 SelK = Phone.IsValid() ? FMath::Clamp(Phone->GetSelectedShopKind(), 0, 2) : 0;
-			Single(FString::Printf(TEXT("Shop type: %s  (tap)"), KN[SelK]), FLinearColor(0.32f, 0.36f, 0.2f),
-				[this]() { if (Phone.IsValid()) { Phone->CycleSelectedShopKind(); FillSettingsBody(); } });
+			// De knop-tekst wordt in-place ge-set bij het cyclen (geen body-herbouw -> geen flash).
+			UWeedActionButton* ShopTypeBtn = MakeActionBtn(FString::Printf(TEXT("Shop type: %s  (tap)"), KN[SelK]), WeedUI::ColAccentDim(),
+				[this]()
+				{
+					if (!Phone.IsValid()) { return; }
+					Phone->CycleSelectedShopKind();
+					static const TCHAR* KN2[3] = { TEXT("Grow shop"), TEXT("Supplies"), TEXT("Furniture") };
+					const int32 NewK = FMath::Clamp(Phone->GetSelectedShopKind(), 0, 2);
+					if (ShopTypeLabel) { ShopTypeLabel->SetText(FText::FromString(FString::Printf(TEXT("Shop type: %s  (tap)"), KN2[NewK]))); }
+				}, 11);
+			// Het tekstblok in de knop onthouden zodat we het label kunnen updaten.
+			ShopTypeLabel = MakeText(FString::Printf(TEXT("Shop type: %s  (tap)"), KN[SelK]), 11, FLinearColor::White, true);
+			ShopTypeBtn->SetContent(ShopTypeLabel);
+			BodyRow(ShopTypeBtn, FMargin(0.f, 0.f, 0.f, 3.f));
 		}
 		Pair(TEXT("Save shops (at counter)"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveShopSpots(); } },
 			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearShopSpots(); } });
@@ -452,30 +465,30 @@ void UPhoneWidget::FillSettingsBody()
 	}
 	else if (SettingsCat == 2) // Rooms: kamer-builds + stamper
 	{
-		BodyRow(MakeText(TEXT("Room builder"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+		BodyRow(MakeText(TEXT("Room builder"), 14, WeedUI::ColText()), FMargin(0.f, 0.f, 0.f, 2.f));
 		// Kamer-job opslaan: huidige 3 markers worden permanent (RoomJobs.txt, elke sessie herbouwd).
-		UWeedActionButton* JobB = MakeActionBtn(TEXT("Save room build (clears markers)"), FLinearColor(0.45f, 0.35f, 0.15f),
+		UWeedActionButton* JobB = MakeActionBtn(TEXT("Save room build (clears markers)"), WeedUI::ColGood(0.5f),
 			[this]() { if (Phone.IsValid()) { Phone->SaveRoomJob(); } }, 13);
 		BodyRow(JobB, FMargin(0.f, 0.f, 0.f, 8.f));
 
 		// --- Room stamper: kamers als stempel plaatsen (deur snapt op deur, R = draaien) ---
-		BodyRow(MakeText(TEXT("Room stamper"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 6.f, 0.f, 2.f));
-		UWeedActionButton* TplB = MakeActionBtn(TEXT("Save room as template (2 markers)"), FLinearColor(0.25f, 0.4f, 0.5f),
+		BodyRow(MakeText(TEXT("Room stamper"), 14, WeedUI::ColText()), FMargin(0.f, 6.f, 0.f, 2.f));
+		UWeedActionButton* TplB = MakeActionBtn(TEXT("Save room as template (2 markers)"), WeedUI::ColAccentDim(),
 			[this]() { if (Phone.IsValid()) { Phone->SaveRoomTemplateNow(); FillSettingsBody(); } }, 12);
 		BodyRow(TplB, FMargin(0.f, 0.f, 0.f, 4.f));
 		{
 			const TArray<FString> Templates = ARoomStamper::ListTemplates();
 			if (Templates.Num() == 0)
 			{
-				BodyRow(MakeText(TEXT("No templates yet - mark a room (2 corners) and save it."), 10, FLinearColor(0.6f, 0.64f, 0.74f)), FMargin(0.f, 0.f, 0.f, 4.f));
+				BodyRow(MakeText(TEXT("No templates yet - mark a room (2 corners) and save it."), 10, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 4.f));
 			}
 			for (const FString& Tpl : Templates)
 			{
 				UHorizontalBox* TRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-				UWeedActionButton* StampB = MakeActionBtn(FString::Printf(TEXT("Stamp: %s"), *Tpl), FLinearColor(0.2f, 0.35f, 0.25f),
+				UWeedActionButton* StampB = MakeActionBtn(FString::Printf(TEXT("Stamp: %s"), *Tpl), WeedUI::ColAccentDim(),
 					[this, Tpl]() { if (Phone.IsValid()) { Phone->StartRoomStamp(Tpl); } }, 12);
 				TRow->AddChildToHorizontalBox(StampB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-				TRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+				TRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), WeedUI::ColWarn(),
 					[this, Tpl]()
 					{
 						WeedData::DeleteFile(FString(TEXT("RoomTemplates")) / (Tpl + TEXT(".txt")));
@@ -489,7 +502,7 @@ void UPhoneWidget::FillSettingsBody()
 			const TArray<FString> PlacedStamps = ARoomStamper::ListPlacedStamps(GetWorld());
 			if (PlacedStamps.Num() > 0)
 			{
-				UWeedActionButton* UndoB = MakeActionBtn(TEXT("Undo last stamp"), FLinearColor(0.55f, 0.3f, 0.2f),
+				UWeedActionButton* UndoB = MakeActionBtn(TEXT("Undo last stamp"), WeedUI::ColWarn(),
 					[this]() { FString Info; ARoomStamper::UndoLastStamp(GetWorld(), Info); FillSettingsBody(); }, 12);
 				BodyRow(UndoB, FMargin(0.f, 3.f, 0.f, 2.f));
 				for (const FString& SLine : PlacedStamps)
@@ -511,17 +524,17 @@ void UPhoneWidget::FillSettingsBody()
 					UHorizontalBox* SRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 					UHorizontalBoxSlot* SLab = SRow->AddChildToHorizontalBox(MakeText(
 						FString::Printf(TEXT("%s  (%.0f, %.0f)"), SParts.Num() > 0 ? *SParts[0] : *SLine, StampPos.X, StampPos.Y),
-						11, FLinearColor(0.85f, 0.9f, 1.f)));
+						11, WeedUI::ColText()));
 					SLab->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SLab->SetVerticalAlignment(VAlign_Center);
 					if (bHasPos)
 					{
-						SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
+						SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), WeedUI::ColAccentDim(),
 							[this, StampPos]()
 							{
 								if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(StampPos + FVector(0.f, 0.f, 120.f)); }
 							}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 					}
-					SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+					SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), WeedUI::ColWarn(),
 						[this, SLine]() { ARoomStamper::RemoveStamp(GetWorld(), SLine); FillSettingsBody(); }, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 					BodyRow(SRow, FMargin(0.f, 1.f, 0.f, 1.f));
 				}
@@ -530,7 +543,7 @@ void UPhoneWidget::FillSettingsBody()
 
 		// Deur op slot: vergrendeld zoals een bewoner-deur maar ZONDER naam (prompt "LOCKED").
 		// Permanent via Saved/LockedDoors.txt - elke sessie opnieuw toegepast.
-		UWeedActionButton* LockDoorB = MakeActionBtn(TEXT("Lock door in crosshair"), FLinearColor(0.35f, 0.3f, 0.2f),
+		UWeedActionButton* LockDoorB = MakeActionBtn(TEXT("Lock door in crosshair"), WeedUI::ColAccentDim(),
 			[this]()
 			{
 				APlayerController* PC = GetOwningPlayer();
@@ -560,7 +573,7 @@ void UPhoneWidget::FillSettingsBody()
 				Phone->Toast(TEXT("Door locked (saved)"), FColor::Cyan, 3.f);
 			}, 12);
 		BodyRow(LockDoorB, FMargin(0.f, 6.f, 0.f, 2.f));
-		UWeedActionButton* LockDoorXB = MakeActionBtn(TEXT("Clear locked doors"), FLinearColor(0.4f, 0.22f, 0.22f),
+		UWeedActionButton* LockDoorXB = MakeActionBtn(TEXT("Clear locked doors"), WeedUI::ColWarn(),
 			[this]()
 			{
 				WeedData::DeleteFile(TEXT("LockedDoors.txt"));
@@ -570,7 +583,7 @@ void UPhoneWidget::FillSettingsBody()
 
 		// Deur die naast z'n kozijn staat: richt erop + klik -> springt naar het dichtstbijzijnde deur-kozijn.
 		// Permanent via Saved/DoorSnaps.txt (DoorRetrofitter zet 'm elke sessie terug op de juiste plek).
-		UWeedActionButton* SnapDoorB = MakeActionBtn(TEXT("Snap door to frame"), FLinearColor(0.25f, 0.35f, 0.3f),
+		UWeedActionButton* SnapDoorB = MakeActionBtn(TEXT("Snap door to frame"), WeedUI::ColAccentDim(),
 			[this]()
 			{
 				APlayerController* PC = GetOwningPlayer();
@@ -594,7 +607,7 @@ void UPhoneWidget::FillSettingsBody()
 				Phone->Toast(TEXT("Door snapped to frame (saved)"), FColor::Cyan, 3.f);
 			}, 12);
 		BodyRow(SnapDoorB, FMargin(0.f, 4.f, 0.f, 2.f));
-		UWeedActionButton* SnapDoorXB = MakeActionBtn(TEXT("Clear door snaps"), FLinearColor(0.4f, 0.22f, 0.22f),
+		UWeedActionButton* SnapDoorXB = MakeActionBtn(TEXT("Clear door snaps"), WeedUI::ColWarn(),
 			[this]()
 			{
 				WeedData::DeleteFile(TEXT("DoorSnaps.txt"));
@@ -603,7 +616,7 @@ void UPhoneWidget::FillSettingsBody()
 		BodyRow(SnapDoorXB, FMargin(0.f, 0.f, 0.f, 8.f));
 
 		// Dev-opruimer: kijk naar een (zwevende of foute) deur, open de phone en klik - deur weg.
-		UWeedActionButton* KillDoorB = MakeActionBtn(TEXT("Remove door in crosshair"), FLinearColor(0.4f, 0.22f, 0.22f),
+		UWeedActionButton* KillDoorB = MakeActionBtn(TEXT("Remove door in crosshair"), WeedUI::ColWarn(),
 			[this]()
 			{
 				APlayerController* PC = GetOwningPlayer();
@@ -629,7 +642,7 @@ void UPhoneWidget::FillSettingsBody()
 	}
 	else if (SettingsCat == 3) // Light: live light-tuning (stuurt de lokale DayNightController direct aan)
 	{
-		BodyRow(MakeText(TEXT("Lighting (live)"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+		BodyRow(MakeText(TEXT("Lighting (live)"), 14, WeedUI::ColText()), FMargin(0.f, 0.f, 0.f, 2.f));
 		ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
 		const bool bPackL = DN && DN->IsPackMinimal();
 		const float Moon = DN ? DN->MoonIntensity : 0.65f;
@@ -660,21 +673,21 @@ void UPhoneWidget::FillSettingsBody()
 		}
 		ApplyLightSliders(); // labels meteen vullen met de echte waardes
 
-		UWeedActionButton* SaveB = MakeActionBtn(TEXT("Save light config"), FLinearColor(0.22f, 0.5f, 0.32f),
+		UWeedActionButton* SaveB = MakeActionBtn(TEXT("Save light config"), WeedUI::ColGood(0.5f),
 			[this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SaveLightConfig(); } }, 12);
 		BodyRow(SaveB, FMargin(0.f, 8.f, 0.f, 0.f));
 	}
 	else if (SettingsCat == 4) // Spots: F9-markers bekijken / teleporteren / verwijderen
 	{
 		{
-			BodyRow(MakeText(TEXT("Marked spots"), 14, FLinearColor(0.7f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+			BodyRow(MakeText(TEXT("Marked spots"), 14, WeedUI::ColText()), FMargin(0.f, 0.f, 0.f, 2.f));
 			const FString SpotFile = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
 			TArray<FString> SpotLines;
 			FFileHelper::LoadFileToStringArray(SpotLines, *SpotFile);
 			SpotLines.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
 			if (SpotLines.Num() == 0)
 			{
-				BodyRow(MakeText(TEXT("No spots yet - press F9 in-game to mark one."), 11, FLinearColor(0.6f, 0.64f, 0.74f)), FMargin(0.f, 0.f, 0.f, 4.f));
+				BodyRow(MakeText(TEXT("No spots yet - press F9 in-game to mark one."), 11, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 4.f));
 			}
 			const int32 MaxShow = 20;
 			for (int32 SpotIdx = FMath::Max(0, SpotLines.Num() - MaxShow); SpotIdx < SpotLines.Num(); ++SpotIdx)
@@ -707,32 +720,36 @@ void UPhoneWidget::FillSettingsBody()
 				UHorizontalBox* RowB = WidgetTree->ConstructWidget<UHorizontalBox>();
 				UHorizontalBoxSlot* LS2 = RowB->AddChildToHorizontalBox(MakeText(
 					FString::Printf(TEXT("%s  (%.0f, %.0f)"), *Label, SpotPos.X, SpotPos.Y), 11,
-					bSameMap ? FLinearColor(0.85f, 0.9f, 1.f) : FLinearColor(0.5f, 0.52f, 0.6f)));
+					bSameMap ? WeedUI::ColText() : WeedUI::ColTextDim()));
 				LS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS2->SetVerticalAlignment(VAlign_Center);
 				if (bHasPos && bSameMap)
 				{
-					RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
+					RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), WeedUI::ColAccentDim(),
 						[this, SpotPos]()
 						{
 							if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(SpotPos + FVector(0.f, 0.f, 60.f)); }
 						}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 				}
-				RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
-					[this, SpotIdx]()
+				const FString RawLine = Line; // exacte regel-inhoud -> per-content matchen (stabiel na eerdere deletes)
+				RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), WeedUI::ColWarn(),
+					[this, RawLine, RowB]()
 					{
 						const FString F = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
 						TArray<FString> Ls;
 						FFileHelper::LoadFileToStringArray(Ls, *F);
 						Ls.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
-						if (Ls.IsValidIndex(SpotIdx)) { Ls.RemoveAt(SpotIdx); }
+						// Verwijder de EERSTE regel die exact overeenkomt (index-vrij -> ook correct na eerdere deletes).
+						const int32 Found = Ls.IndexOfByKey(RawLine);
+						if (Found != INDEX_NONE) { Ls.RemoveAt(Found); }
 						FFileHelper::SaveStringToFile(FString::Join(Ls, TEXT("\n")) + (Ls.Num() ? TEXT("\n") : TEXT("")), *F);
-						FillSettingsBody();
+						// Alleen DEZE regel uit de body halen (geen hele body-herbouw -> geen flash).
+						if (RowB) { RowB->RemoveFromParent(); }
 					}, 11))->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 				BodyRow(RowB, FMargin(0.f, 1.f, 0.f, 1.f));
 			}
 			if (SpotLines.Num() > MaxShow)
 			{
-				BodyRow(MakeText(FString::Printf(TEXT("(showing last %d of %d)"), MaxShow, SpotLines.Num()), 9, FLinearColor(0.55f, 0.58f, 0.68f)), FMargin(0.f, 2.f, 0.f, 0.f));
+				BodyRow(MakeText(FString::Printf(TEXT("(showing last %d of %d)"), MaxShow, SpotLines.Num()), 9, WeedUI::ColTextDim()), FMargin(0.f, 2.f, 0.f, 0.f));
 			}
 		}
 	}
@@ -742,31 +759,50 @@ void UPhoneWidget::FillSettingsBody()
 		{
 			IPlayerNpcActions* Skn = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
 			const uint8 Cur = Skn ? Skn->GetPlayerSkinIndex() : 0;
-			BodyRow(MakeText(TEXT("Character"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0.f, 0.f, 0.f, 2.f));
+			BodyRow(MakeText(TEXT("Character"), 14, WeedUI::ColText()), FMargin(0.f, 0.f, 0.f, 2.f));
 			// Alleen Man/Vrouw hier; het EXACTE model (Casual/Gamer/School of Tony/Citizen) kies je in de Wardrobe.
 			const bool bMale = (Cur == 5 || Cur == 6 || Cur == 0);
 			UHorizontalBox* GBtns = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UWeedActionButton* MaleB = MakeActionBtn(TEXT("Male"),
-				bMale ? FLinearColor(0.20f, 0.55f, 0.85f) : FLinearColor(0.15f, 0.16f, 0.21f),
-				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { const uint8 c = S->GetPlayerSkinIndex(); if (c != 5 && c != 6) { S->SetPlayerSkinIndex(5); } } FillSettingsBody(); }, 13);
-			GBtns->AddChildToHorizontalBox(MaleB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			UWeedActionButton* FemaleB = MakeActionBtn(TEXT("Female"),
-				!bMale ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.16f, 0.21f),
-				[this]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { const uint8 c = S->GetPlayerSkinIndex(); if (c < 2 || c > 4) { S->SetPlayerSkinIndex(2); } } FillSettingsBody(); }, 13);
-			GBtns->AddChildToHorizontalBox(FemaleB)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			// Toggle-klik verandert alleen de 2 knop-kleuren in-place (mirror RefreshSettingsTabs) -> geen body-herbouw.
+			auto RefreshSkin = [this]()
+			{
+				IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
+				const uint8 c = S ? S->GetPlayerSkinIndex() : 0;
+				const bool bM = (c == 5 || c == 6 || c == 0);
+				auto Style = [this](UWeedActionButton* B, bool bSel)
+				{
+					if (!B) { return; }
+					const FLinearColor Col = bSel ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
+					FButtonStyle St;
+					St.Normal = RoundedBrush(Col, 8.f);
+					St.Hovered = RoundedBrush(Col * 1.3f, 8.f);
+					St.Pressed = RoundedBrush(Col * 0.8f, 8.f);
+					St.NormalPadding = FMargin(6.f, 4.f); St.PressedPadding = FMargin(6.f, 4.f);
+					B->SetStyle(St);
+				};
+				Style(SkinMaleBtn, bM); Style(SkinFemaleBtn, !bM);
+			};
+			SkinMaleBtn = MakeActionBtn(TEXT("Male"),
+				bMale ? WeedUI::ColAccentDim() : WeedUI::ColSlot(),
+				[this, RefreshSkin]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { const uint8 c = S->GetPlayerSkinIndex(); if (c != 5 && c != 6) { S->SetPlayerSkinIndex(5); } } RefreshSkin(); }, 13);
+			GBtns->AddChildToHorizontalBox(SkinMaleBtn)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			SkinFemaleBtn = MakeActionBtn(TEXT("Female"),
+				!bMale ? WeedUI::ColAccentDim() : WeedUI::ColSlot(),
+				[this, RefreshSkin]() { if (IPlayerNpcActions* S = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { const uint8 c = S->GetPlayerSkinIndex(); if (c < 2 || c > 4) { S->SetPlayerSkinIndex(2); } } RefreshSkin(); }, 13);
+			GBtns->AddChildToHorizontalBox(SkinFemaleBtn)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			BodyRow(GBtns, FMargin(0.f, 0.f, 0.f, 4.f));
-			BodyRow(MakeText(TEXT("Pick the exact model in the Wardrobe."), 10, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0.f, 0.f, 0.f, 10.f));
+			BodyRow(MakeText(TEXT("Pick the exact model in the Wardrobe."), 10, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 10.f));
 		}
 		if (GS && GS->GetLeveling())
 		{
 			ULevelComponent* Lv = GS->GetLeveling();
-			BodyRow(MakeText(FString::Printf(TEXT("Level %d"), Lv->GetLevel()), 15, FLinearColor(0.7f, 1.f, 0.7f)), FMargin(0.f, 0.f, 0.f, 2.f));
+			BodyRow(MakeText(FString::Printf(TEXT("Level %d"), Lv->GetLevel()), 15, WeedUI::ColGood()), FMargin(0.f, 0.f, 0.f, 2.f));
 			UProgressBar* XpBar = WidgetTree->ConstructWidget<UProgressBar>();
 			XpBar->SetPercent(Lv->GetLevelFraction());
 			XpBar->SetFillColorAndOpacity(FLinearColor(0.3f, 0.7f, 1.f));
 			BodyRow(XpBar, FMargin(0.f, 2.f, 0.f, 4.f));
 			BodyRow(MakeText(Lv->GetLevel() >= ULevelComponent::MaxLevel ? TEXT("MAX")
-				: *FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), Lv->GetXPToNext()), 12, FLinearColor(0.7f, 0.75f, 0.85f)), FMargin(0.f, 0.f, 0.f, 6.f));
+				: *FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), Lv->GetXPToNext()), 12, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 6.f));
 		}
 		if (GS && GS->GetHeat())
 		{
@@ -784,17 +820,17 @@ USlider* UPhoneWidget::AddLightSlider(const FString& Label, float Norm, TObjectP
 	USlider* Slider = WidgetTree->ConstructWidget<USlider>();
 	Slider->SetMinValue(0.f); Slider->SetMaxValue(1.f);
 	Slider->SetValue(FMath::Clamp(Norm, 0.f, 1.f));
-	Slider->SetSliderBarColor(FLinearColor(0.18f, 0.2f, 0.27f));
-	Slider->SetSliderHandleColor(FLinearColor(0.55f, 0.8f, 1.f));
+	Slider->SetSliderBarColor(WeedUI::ColSlot());
+	Slider->SetSliderHandleColor(WeedUI::ColAccent());
 	OutS = Slider;
 
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(MakeText(Label, 12, FLinearColor(0.82f, 0.86f, 0.95f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(MakeText(Label, 12, WeedUI::ColTextDim()));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	USizeBox* SSz = WidgetTree->ConstructWidget<USizeBox>();
 	SSz->SetWidthOverride(150.f); SSz->SetHeightOverride(18.f); SSz->SetContent(Slider);
 	Row->AddChildToHorizontalBox(SSz);
-	OutV = MakeText(TEXT(""), 12, FLinearColor::White, true);
+	OutV = MakeText(TEXT(""), 12, WeedUI::ColText(), true);
 	USizeBox* VSz = WidgetTree->ConstructWidget<USizeBox>();
 	VSz->SetWidthOverride(56.f); VSz->SetContent(OutV);
 	Row->AddChildToHorizontalBox(VSz);
@@ -1004,11 +1040,12 @@ void UPhoneWidget::BuildChatApp()
 {
 	ApptBar = nullptr; ApptBarLabel = nullptr; ApptBarContact = NAME_None; // alleen geldig in een actieve-afspraak-thread
 	WaitBar = nullptr; WaitBarLabel = nullptr; WaitBarSentTime = -1.f;     // wacht-balk voor een open deal-bericht
+	OfferBox = nullptr; OfferToggleBtn = nullptr;                          // "Offer instead"-box (opnieuw gebouwd als een chat open is)
 	ListApptBars.Reset(); ListCards.Reset(); ListPreviews.Reset();         // lijst-urgentie-widgets (live bijgewerkt)
 	if (!Phone.IsValid()) { return; }
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
-	if (!Con) { AddInfoRow(TEXT("No messages."), FLinearColor::Gray); return; }
+	if (!Con) { AddInfoRow(TEXT("No messages."), WeedUI::ColTextDim()); return; }
 	const TArray<FPhoneMessage>& Msgs = Con->GetMessages(); // nieuwste eerst
 
 	// ---- Gesprekkenlijst (geen chat open) ----
@@ -1018,7 +1055,7 @@ void UPhoneWidget::BuildChatApp()
 		// Unieke contacten in volgorde van nieuwste bericht.
 		TArray<FName> Order;
 		for (const FPhoneMessage& M : Msgs) { if (!IsMsgForLocal(M)) { continue; } Order.AddUnique(M.FromContactId); }
-		if (Order.Num() == 0) { AddInfoRow(TEXT("No messages yet."), FLinearColor::Gray, 13); return; }
+		if (Order.Num() == 0) { AddInfoRow(TEXT("No messages yet."), WeedUI::ColTextDim(), 13); return; }
 		// URGENTIE-sortering: contacten met een lopende afspraak bovenaan (meest urgent = kleinste fractie eerst),
 		// daarna de rest in de bestaande nieuwste-eerst-volgorde (stabiel). ForPlayerId-filter blijft via Order.
 		Order.StableSort([this](const FName& A, const FName& B)
@@ -1059,20 +1096,20 @@ void UPhoneWidget::BuildChatApp()
 			const FLinearColor U = UrgencyColor(UFrac, UPhase == 2);
 			UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
 			Card->SetBrush(RoundedBrush(bUrgent ? FLinearColor(U.R * 0.28f, U.G * 0.28f, U.B * 0.28f, 0.97f)
-				: (bOpen ? FLinearColor(0.12f, 0.17f, 0.13f, 0.97f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f)), 8.f));
+				: (bOpen ? WeedUI::ColAccentDim(0.97f) : WeedUI::ColInner(0.95f)), 8.f));
 			ListCards.Add(Cid, Card);
 			Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 			Card->SetContent(Row);
 			UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-			Info->AddChildToVerticalBox(MakeText(Name.ToString(), 14, FLinearColor(0.95f, 0.97f, 1.f)));
+			Info->AddChildToVerticalBox(MakeText(Name.ToString(), 14, WeedUI::ColText()));
 			if (GS && GS->GetNpcRegistry())
 			{
 				const int32 Tr = GS->GetNpcRegistry()->GetCustomerTier(Cid);
 				const FLinearColor TCol = (Tr >= 5) ? FLinearColor(1.f, 0.8f, 0.3f) : (Tr >= 4 ? FLinearColor(0.8f, 0.7f, 1.f) : FLinearColor(0.55f, 0.7f, 0.6f));
 				Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s customer"), *UNpcRegistryComponent::TierName(Tr)), 9, TCol));
 			}
-			UTextBlock* Prev = MakeText(LastBody, 10, FLinearColor(0.62f, 0.66f, 0.76f));
+			UTextBlock* Prev = MakeText(LastBody, 10, WeedUI::ColTextDim());
 			Prev->SetClipping(EWidgetClipping::ClipToBounds);
 			ListPreviews.Add(Cid, Prev);
 			Info->AddChildToVerticalBox(Prev);
@@ -1095,7 +1132,7 @@ void UPhoneWidget::BuildChatApp()
 			if (LastClock >= 0.f)
 			{
 				const int32 Hh = (int32)LastClock; const int32 Mm = (int32)((LastClock - Hh) * 60.f);
-				UHorizontalBoxSlot* TsS = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("%02d:%02d"), Hh, Mm), 9, FLinearColor(0.5f, 0.55f, 0.66f)));
+				UHorizontalBoxSlot* TsS = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("%02d:%02d"), Hh, Mm), 9, WeedUI::ColTextDim()));
 				TsS->SetVerticalAlignment(VAlign_Top); TsS->SetPadding(FMargin(6.f, 1.f, 2.f, 0.f));
 			}
 			// Aantal-badge: groen pilletje met het aantal ongelezen berichten van dit contact (i.p.v. enkel "NEW").
@@ -1103,14 +1140,14 @@ void UPhoneWidget::BuildChatApp()
 			if (UnreadN > 0)
 			{
 				UBorder* Badge = WidgetTree->ConstructWidget<UBorder>();
-				Badge->SetBrush(RoundedBrush(FLinearColor(0.2f, 0.72f, 0.36f, 1.f), 9.f));
+				Badge->SetBrush(RoundedBrush(WeedUI::ColGood(1.f), 9.f));
 				Badge->SetPadding(FMargin(UnreadN > 9 ? 6.f : 8.f, 2.f, UnreadN > 9 ? 6.f : 8.f, 2.f));
-				Badge->SetContent(MakeText(FString::Printf(TEXT("%d"), UnreadN), 12, FLinearColor(0.04f, 0.1f, 0.05f)));
+				Badge->SetContent(MakeText(FString::Printf(TEXT("%d"), UnreadN), 12, WeedUI::ColBg()));
 				UHorizontalBoxSlot* BS = Row->AddChildToHorizontalBox(Badge);
 				BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
 			}
 			const FName Pick = Cid;
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), FLinearColor(0.2f, 0.4f, 0.55f),
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Open"), WeedUI::ColAccentDim(),
 				[this, Pick]() { OpenChatContact = Pick; bOfferStrainView = false; ProposeMins = -1; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
 			List->AddChild(Card);
 			List->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
@@ -1124,9 +1161,9 @@ void UPhoneWidget::BuildChatApp()
 	for (const FPhoneContact& C : Con->GetContacts()) { if (C.ContactId == OpenChatContact) { ContactName = C.DisplayName; break; } }
 
 	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
-	Head->AddChildToHorizontalBox(MakeActionBtn(TEXT("< Chats"), FLinearColor(0.2f, 0.3f, 0.45f),
+	Head->AddChildToHorizontalBox(MakeActionBtn(TEXT("< Chats"), WeedUI::ColAccentDim(),
 		[this]() { OpenChatContact = NAME_None; bOfferStrainView = false; MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
-	UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(MakeText(ContactName.ToString(), 15, FLinearColor(0.92f, 0.95f, 1.f)));
+	UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(MakeText(ContactName.ToString(), 15, WeedUI::ColText()));
 	NS->SetVerticalAlignment(VAlign_Center); NS->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
 	ContentBox->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
@@ -1137,14 +1174,14 @@ void UPhoneWidget::BuildChatApp()
 		const int32 Tier = Reg->GetCustomerTier(OpenChatContact);
 		const float Frac = Reg->GetTierProgress01(OpenChatContact);
 		UBorder* TB = WidgetTree->ConstructWidget<UBorder>();
-		TB->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.12f, 0.16f, 0.95f), 8.f));
+		TB->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
 		TB->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
 		UVerticalBox* TV = WidgetTree->ConstructWidget<UVerticalBox>();
 		TB->SetContent(TV);
 		const FString TLbl = (Tier >= 5)
 			? FString::Printf(TEXT("Tier: %s  (max)"), *UNpcRegistryComponent::TierName(Tier))
 			: FString::Printf(TEXT("Tier: %s  ->  %s"), *UNpcRegistryComponent::TierName(Tier), *UNpcRegistryComponent::TierName(Tier + 1));
-		TV->AddChildToVerticalBox(MakeText(TLbl, 11, FLinearColor(0.85f, 0.9f, 1.f)));
+		TV->AddChildToVerticalBox(MakeText(TLbl, 11, WeedUI::ColText()));
 		UProgressBar* TPB = WidgetTree->ConstructWidget<UProgressBar>();
 		TPB->SetPercent(Frac);
 		TPB->SetFillColorAndOpacity(FLinearColor(0.45f, 0.75f, 1.f));
@@ -1160,11 +1197,11 @@ void UPhoneWidget::BuildChatApp()
 		if (GetApptUrgency(OpenChatContact, TFrac, TSecs, TPhase, TClockM) && TPhase != 2)
 		{
 			UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
-			Box->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.13f, 0.10f, 0.95f), 8.f));
+			Box->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
 			Box->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
 			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 			Box->SetContent(VB);
-			ApptBarLabel = MakeText(TEXT("Waiting..."), 11, FLinearColor(0.8f, 0.9f, 0.8f));
+			ApptBarLabel = MakeText(TEXT("Waiting..."), 11, WeedUI::ColTextDim());
 			VB->AddChildToVerticalBox(ApptBarLabel);
 			ApptBar = WidgetTree->ConstructWidget<UProgressBar>();
 			ApptBar->SetPercent(TFrac);
@@ -1193,13 +1230,13 @@ void UPhoneWidget::BuildChatApp()
 		else if (!M.bFromMe && M.Status == 2) { Body += TEXT("  (declined)"); }
 
 		UBorder* Bub = WidgetTree->ConstructWidget<UBorder>();
-		Bub->SetBrush(RoundedBrush(M.bFromMe ? FLinearColor(0.16f, 0.35f, 0.22f, 0.97f) : FLinearColor(0.16f, 0.18f, 0.24f, 0.97f), 10.f));
+		Bub->SetBrush(RoundedBrush(M.bFromMe ? WeedUI::ColAccentDim(0.97f) : WeedUI::ColInner(0.97f), 10.f));
 		Bub->SetPadding(FMargin(9.f, 6.f, 9.f, 6.f));
 		// Body met de belangrijke woorden vetgedrukt (grams/%/strain/product) i.p.v. één platte tekst.
 		// Strain/product ook altijd vet: zelfde "pretty name minus bag" als waarmee de body is opgebouwd.
 		FString BoldStrain;
 		if (!M.WantProduct.IsNone()) { BoldStrain = WeedUI::PrettyItemName(M.WantProduct).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase); }
-		UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, FLinearColor(0.95f, 0.97f, 1.f), BoldStrain);
+		UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, WeedUI::ColText(), BoldStrain);
 		// Tijdstempel (HH:MM, in-game klok) onder het bericht - zoals een normale berichten-app.
 		UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		BubVB->AddChildToVerticalBox(BodyT);
@@ -1209,7 +1246,7 @@ void UPhoneWidget::BuildChatApp()
 			const float RealNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
 			const int32 AgoSec = FMath::Max(0, (int32)(RealNow - M.SentRealTime));
 			const FString Ago = (AgoSec < 60) ? FString(TEXT("just now")) : (AgoSec < 3600) ? FString::Printf(TEXT("%dm ago"), AgoSec / 60) : FString::Printf(TEXT("%dh ago"), AgoSec / 3600);
-			UTextBlock* TimeT = MakeText(Ago, 8, FLinearColor(0.55f, 0.6f, 0.72f));
+			UTextBlock* TimeT = MakeText(Ago, 8, WeedUI::ColTextDim());
 			UVerticalBoxSlot* TSl = BubVB->AddChildToVerticalBox(TimeT);
 			TSl->SetHorizontalAlignment(M.bFromMe ? HAlign_Right : HAlign_Left);
 			TSl->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
@@ -1236,7 +1273,7 @@ void UPhoneWidget::BuildChatApp()
 		Thread->AddChild(Line);
 		Thread->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
 	}
-	if (!bAny) { Thread->AddChild(MakeText(TEXT("No messages with this contact yet."), 12, FLinearColor::Gray)); }
+	if (!bAny) { Thread->AddChild(MakeText(TEXT("No messages with this contact yet."), 12, WeedUI::ColTextDim())); }
 
 	// Open afspraak? -> Accept/Decline onderaan.
 	if (bHasOpen)
@@ -1245,11 +1282,11 @@ void UPhoneWidget::BuildChatApp()
 		if (OpenSentTime >= 0.f)
 		{
 			UBorder* WBox = WidgetTree->ConstructWidget<UBorder>();
-			WBox->SetBrush(RoundedBrush(FLinearColor(0.14f, 0.12f, 0.10f, 0.95f), 8.f));
+			WBox->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
 			WBox->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
 			UVerticalBox* WVB = WidgetTree->ConstructWidget<UVerticalBox>();
 			WBox->SetContent(WVB);
-			WaitBarLabel = MakeText(TEXT("Waiting for your reply..."), 11, FLinearColor(0.88f, 0.82f, 0.72f));
+			WaitBarLabel = MakeText(TEXT("Waiting for your reply..."), 11, WeedUI::ColTextDim());
 			WVB->AddChildToVerticalBox(WaitBarLabel);
 			WaitBar = WidgetTree->ConstructWidget<UProgressBar>();
 			WaitBar->SetPercent(1.f);
@@ -1259,24 +1296,34 @@ void UPhoneWidget::BuildChatApp()
 		}
 		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 		const FName Pick = OpenChatContact;
-		UHorizontalBoxSlot* AS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Accept"), FLinearColor(0.2f, 0.5f, 0.28f),
+		UHorizontalBoxSlot* AS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Accept"), WeedUI::ColAccentDim(),
 			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, true); } MarkDirty(); }, 13));
 		AS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); AS->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
-		UHorizontalBoxSlot* DS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Decline"), FLinearColor(0.5f, 0.28f, 0.2f),
+		UHorizontalBoxSlot* DS = Btns->AddChildToHorizontalBox(MakeActionBtn(TEXT("Decline"), WeedUI::ColWarn(),
 			[this, Pick]() { if (Phone.IsValid()) { Phone->RespondChat(Pick, false); } MarkDirty(); }, 13));
 		DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 		ContentBox->AddChildToVerticalBox(Btns)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 
 		// --- "Offer instead..." : een ANDERE strain aanbieden (substituut) met stats + verschil + kans ---
-		ContentBox->AddChildToVerticalBox(MakeActionBtn(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."),
-			FLinearColor(0.25f, 0.35f, 0.5f), [this]() { bOfferStrainView = !bOfferStrainView; MarkDirty(); }, 12))
-			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
-		if (bOfferStrainView)
+		// De alternatieven-lijst wordt HIER één keer opgebouwd in een persistente OfferBox; de toggle-knop
+		// verandert alleen de zichtbaarheid van die box + z'n eigen label (geen RefreshContent-flash).
+		OfferToggleBtn = MakeActionBtn(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."),
+			WeedUI::ColAccentDim(), [this]()
+			{
+				bOfferStrainView = !bOfferStrainView;
+				if (OfferBox) { OfferBox->SetVisibility(bOfferStrainView ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+				if (OfferToggleBtn) { OfferToggleBtn->SetContent(MakeText(bOfferStrainView ? TEXT("Hide alternatives") : TEXT("Offer instead..."), 12, FLinearColor::White, true)); }
+			}, 12);
+		ContentBox->AddChildToVerticalBox(OfferToggleBtn)->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
+
+		OfferBox = WidgetTree->ConstructWidget<UVerticalBox>();
+		OfferBox->SetVisibility(bOfferStrainView ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		ContentBox->AddChildToVerticalBox(OfferBox);
 		{
 			const FName ReqStrain = Con->GetRequestedStrain(OpenChatContact);
 			float ExpThc = 15.f;
 			if (GS && GS->GetStore()) { float t = 0.f, y = 0.f, g = 0.f; if (GS->GetStore()->GetStrainStats(ReqStrain, t, y, g) && t > 0.f) { ExpThc = t; } }
-			ContentBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock (incl. chests/shelves):"), *ReqStrain.ToString(), ExpThc), 10, FLinearColor(0.7f, 0.75f, 0.85f)))
+			OfferBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock (incl. chests/shelves):"), *ReqStrain.ToString(), ExpThc), 10, WeedUI::ColTextDim()))
 				->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 
 			// Strain uit een wiet-item halen (Bag_X_<g> of Bud_X); nat (WetBud_) telt NIET mee.
@@ -1319,16 +1366,16 @@ void UPhoneWidget::BuildChatApp()
 				const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  %dg\n%+.0f%% THC vs ask   ~%.0f%% yes"),
 					*Strain.ToString(), O.Thc, O.Qual, O.Qty, Delta, Chance);
 				const FName SPick = Strain;
-				ContentBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? FLinearColor(0.18f, 0.4f, 0.28f) : FLinearColor(0.36f, 0.3f, 0.2f)),
+				OfferBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? WeedUI::ColGood(0.5f) : WeedUI::ColWarn(0.5f)),
 					[this, SPick]() { if (Phone.IsValid()) { Phone->ProposeChatStrain(OpenChatContact, SPick); } bOfferStrainView = false; MarkDirty(); }, 11))
 					->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 				++Shown;
 			}
-			if (Shown == 0) { ContentBox->AddChildToVerticalBox(MakeText(TEXT("(no dried/bagged weed in your inventory or storages)"), 10, FLinearColor::Gray)); }
+			if (Shown == 0) { OfferBox->AddChildToVerticalBox(MakeText(TEXT("(no dried/bagged weed in your inventory or storages)"), 10, WeedUI::ColTextDim())); }
 		}
 
 		// Of kies zelf een tijd (per kwartier). Ze gaan altijd akkoord, geen nadeel.
-		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, FLinearColor(0.7f, 0.75f, 0.85f)))
+		ContentBox->AddChildToVerticalBox(MakeText(TEXT("Can't make it? Pick a time:"), 11, WeedUI::ColTextDim()))
 			->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
 
 		// Huidige kloktijd (minuten) — de ondergrens loopt hiermee mee.
@@ -1365,19 +1412,19 @@ void UPhoneWidget::BuildChatApp()
 		};
 
 		UHorizontalBox* Stepper = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-1h"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(-60); }, 13))->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-15m"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(-15); }, 13))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
-		UTextBlock* Clock = MakeText(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60), 18, FLinearColor(0.95f, 0.97f, 1.f));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-1h"), WeedUI::ColSlot(), [Step]() { Step(-60); }, 13))->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("-15m"), WeedUI::ColSlot(), [Step]() { Step(-15); }, 13))->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+		UTextBlock* Clock = MakeText(FString::Printf(TEXT("%02d:%02d"), ProposeMins / 60, ProposeMins % 60), 18, WeedUI::ColText());
 		PickerClockText = Clock;            // live bijwerken in NativeTick (geen rebuild -> geen flash)
 		PickerContact = OpenChatContact;
 		UHorizontalBoxSlot* CS2 = Stepper->AddChildToHorizontalBox(Clock);
 		CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetHorizontalAlignment(HAlign_Center); CS2->SetVerticalAlignment(VAlign_Center);
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+15m"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(15); }, 13))->SetPadding(FMargin(6.f, 0.f, 3.f, 0.f));
-		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+1h"), FLinearColor(0.22f, 0.28f, 0.4f), [Step]() { Step(60); }, 13));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+15m"), WeedUI::ColSlot(), [Step]() { Step(15); }, 13))->SetPadding(FMargin(6.f, 0.f, 3.f, 0.f));
+		Stepper->AddChildToHorizontalBox(MakeActionBtn(TEXT("+1h"), WeedUI::ColSlot(), [Step]() { Step(60); }, 13));
 		ContentBox->AddChildToVerticalBox(Stepper)->SetPadding(FMargin(0.f, 2.f, 0.f, 4.f));
 
 		// Knop leest de ACTUELE ProposeMins (member) bij klik, zodat live-bijwerken klopt.
-		ContentBox->AddChildToVerticalBox(MakeActionBtn(TEXT("Propose this time"), FLinearColor(0.2f, 0.45f, 0.55f),
+		ContentBox->AddChildToVerticalBox(MakeActionBtn(TEXT("Propose this time"), WeedUI::ColAccentDim(),
 			[this, Pick]() { if (Phone.IsValid()) { Phone->ProposeChatTime(Pick, ProposeMins); } ProposeMins = -1; MarkDirty(); }, 13));
 	}
 }
@@ -1386,41 +1433,35 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 {
 	if (!Scroll || !Phone.IsValid()) { return; }
 	UPhoneClientComponent* Ph = Phone.Get();
-	Scroll->ClearChildren();
-	PkgBars.Reset();
-	PkgEtas.Reset();
 
-	auto AddGap = [this, Scroll]() {
-		UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
-		Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
-		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-		Scroll->AddChild(Gap);
-	};
-
-	const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Ph->GetPendingDeliveries();
-	if (Pend.Num() == 0)
+	// Wisselt de doel-scroll (store-packages-view <-> losse Packages-app)? Dan zijn de oude kaart-refs voor een
+	// andere (mogelijk vernietigde) scroll -> map/placeholder resetten zodat we vers opbouwen (geen dangling wrap).
+	if (PkgScrollOwner != Scroll)
 	{
-		Scroll->AddChild(MakeText(TEXT("No packages on the way."), 12, FLinearColor::Gray));
-		return;
+		PkgCards.Reset();
+		PkgEmptyRow = nullptr;
+		PkgScrollOwner = Scroll;
 	}
-	for (const UPhoneClientComponent::FPendingDelivery& D : Pend)
+
+	// Bouwt de kaart-inhoud (border) voor één bestelling. De per-OrderId-kaart-widget zelf blijft persistent
+	// in PkgCards -> Cancel haalt alleen die ene kaart weg (RemoveFromParent), geen ClearChildren.
+	auto BuildCard = [this, Ph](const UPhoneClientComponent::FPendingDelivery& D) -> UBorder*
 	{
 		const int32 OrderId = D.OrderId;
-
 		UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
-		CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+		CardB->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
 		CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 		UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		CardB->SetContent(CVB);
 
 		// Titel-rij: bezorgnaam + aantal stuks.
 		CVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s delivery   -   %d item(s)"),
-			*UPhoneClientComponent::DeliveryName(D.DeliveryOpt), D.ItemCount), 13, FLinearColor(0.92f, 0.94f, 1.f)));
+			*UPhoneClientComponent::DeliveryName(D.DeliveryOpt), D.ItemCount), 13, WeedUI::ColText()));
 		// Inhoud (kort).
 		{
 			FString Sum = D.Summary;
 			if (Sum.Len() > 40) { Sum = Sum.Left(39) + TEXT("."); }
-			UTextBlock* SumT = MakeText(Sum, 10, FLinearColor(0.62f, 0.66f, 0.76f));
+			UTextBlock* SumT = MakeText(Sum, 10, WeedUI::ColTextDim());
 			SumT->SetAutoWrapText(true);
 			CVB->AddChildToVerticalBox(SumT);
 		}
@@ -1441,23 +1482,89 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 		if (bArrived)
 		{
-			UTextBlock* AtDoor = MakeText(TEXT("At the door - go pick it up"), 12, FLinearColor(0.6f, 1.f, 0.6f));
+			UTextBlock* AtDoor = MakeText(TEXT("At the door - go pick it up"), 12, WeedUI::ColGood());
 			Row->AddChildToHorizontalBox(AtDoor)->SetVerticalAlignment(VAlign_Center);
 		}
 		else
 		{
 			const int32 Left = FMath::CeilToInt(Ph->GetDeliverySecondsLeft(D));
-			UTextBlock* EtaT = MakeText(FString::Printf(TEXT("Drone on the way - %d:%02d"), Left / 60, Left % 60), 12, FLinearColor(0.85f, 0.9f, 1.f));
+			UTextBlock* EtaT = MakeText(FString::Printf(TEXT("Drone on the way - %d:%02d"), Left / 60, Left % 60), 12, WeedUI::ColTextDim());
 			UHorizontalBoxSlot* ES = Row->AddChildToHorizontalBox(EtaT);
 			ES->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); ES->SetVerticalAlignment(VAlign_Center);
 			PkgEtas.Add(OrderId, EtaT);
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.18f),
-				[this, Ph, OrderId]() { Ph->CancelDelivery(OrderId); LastPkgSig = -1; if (PackagesScroll) { FillPackagesInto(PackagesScroll); } }, 11));
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Cancel"), WeedUI::ColWarn(),
+				[this, Ph, OrderId]()
+				{
+					Ph->CancelDelivery(OrderId);
+					// Alleen DEZE kaart weg (geen hele lijst herbouwen -> geen flash). De sig-gate in NativeTick
+					// merkt de verandering en laat de rest live meelopen; LastPkgSig gelijkzetten zodat 't niet
+					// alsnog een volledige herbouw triggert.
+					if (TObjectPtr<UBorder>* Card = PkgCards.Find(OrderId)) { if (*Card) { (*Card)->RemoveFromParent(); } }
+					PkgCards.Remove(OrderId); PkgBars.Remove(OrderId); PkgEtas.Remove(OrderId);
+					LastPkgSig = PackagesSignature();
+				}, 11));
 		}
 		CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
+		return CardB;
+	};
 
-		Scroll->AddChild(CardB);
-		AddGap();
+	const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Ph->GetPendingDeliveries();
+
+	// Bars/ETA's worden per (her)bouw opnieuw verzameld; kaart-widgets zelf blijven persistent in PkgCards.
+	PkgBars.Reset();
+	PkgEtas.Reset();
+
+	// Verzamel de OrderIds die er nu zijn -> verwijder kaarten van bestellingen die weg zijn (aangekomen/geannuleerd).
+	TSet<int32> Live;
+	for (const UPhoneClientComponent::FPendingDelivery& D : Pend) { Live.Add(D.OrderId); }
+	for (auto It = PkgCards.CreateIterator(); It; ++It)
+	{
+		if (!Live.Contains(It.Key())) { if (It.Value()) { It.Value()->RemoveFromParent(); } It.RemoveCurrent(); }
+	}
+
+	// "Geen pakketten"-placeholder: apart bijhouden zodat we 'm gericht kunnen tonen/verbergen (geen ClearChildren).
+	if (Pend.Num() == 0)
+	{
+		if (PkgCards.Num() == 0 && !PkgEmptyRow)
+		{
+			PkgEmptyRow = WidgetTree->ConstructWidget<UBorder>();
+			PkgEmptyRow->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+			PkgEmptyRow->SetPadding(FMargin(0.f));
+			PkgEmptyRow->SetContent(MakeText(TEXT("No packages on the way."), 12, WeedUI::ColTextDim()));
+			Scroll->AddChild(PkgEmptyRow);
+		}
+		return;
+	}
+	if (PkgEmptyRow) { PkgEmptyRow->RemoveFromParent(); PkgEmptyRow = nullptr; }
+
+	// Wrapper (kaart + 3px-gap) als vaste holder per bestelling; alleen de inhoud wordt ververst.
+	auto WrapCard = [this](UBorder* CardInner) -> UWidget*
+	{
+		UVerticalBox* Holder = WidgetTree->ConstructWidget<UVerticalBox>();
+		Holder->AddChildToVerticalBox(CardInner);
+		UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
+		Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		Holder->AddChildToVerticalBox(Gap);
+		return Holder;
+	};
+
+	// Bestaande kaarten hun inhoud verversen (bv. onderweg -> aan de deur), nieuwe kaarten toevoegen.
+	for (const UPhoneClientComponent::FPendingDelivery& D : Pend)
+	{
+		const int32 OrderId = D.OrderId;
+		if (TObjectPtr<UBorder>* Existing = PkgCards.Find(OrderId))
+		{
+			if (*Existing) { (*Existing)->SetContent(WrapCard(BuildCard(D))); }
+			continue;
+		}
+		// Nieuwe bestelling: wrapper-border (kaart + gap) toevoegen aan het einde.
+		UBorder* Wrap = WidgetTree->ConstructWidget<UBorder>();
+		Wrap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+		Wrap->SetPadding(FMargin(0.f));
+		Wrap->SetContent(WrapCard(BuildCard(D)));
+		Scroll->AddChild(Wrap);
+		PkgCards.Add(OrderId, Wrap);
 	}
 }
 
@@ -1487,39 +1594,39 @@ void UPhoneWidget::BuildBankApp()
 	// mag je altijd bankieren, ook zonder upgrade.)
 	if (!Ph->IsBankAppUnlocked() && !Ph->IsBankViaAtm())
 	{
-		AddRow(MakeText(TEXT("Mobile banking"), 16, FLinearColor(0.95f, 0.8f, 0.5f), false));
-		UTextBlock* Desc = MakeText(TEXT("Upgrade to bank anywhere (no ATM)."), 12, FLinearColor(0.7f, 0.75f, 0.85f));
+		AddRow(MakeText(TEXT("Mobile banking"), 16, WeedUI::ColText(), false));
+		UTextBlock* Desc = MakeText(TEXT("Upgrade to bank anywhere (no ATM)."), 12, WeedUI::ColTextDim());
 		Desc->SetAutoWrapText(true);
 		AddRow(Desc);
 		AddRow(MakeText(TEXT(""), 8, FLinearColor::Transparent));
 		const int64 Cost = UPhoneClientComponent::PhoneUpgradeCostCents;
 		AddRow(MakeActionBtn(FString::Printf(TEXT("Unlock  -  EUR %lld"), (long long)(WeedRoundEuros(Cost) / 100)),
-			FLinearColor(0.16f, 0.5f, 0.85f), [this]() { if (Phone.IsValid()) { Phone->RequestBuyPhoneUpgrade(); } MarkDirty(); }, 14));
+			WeedUI::ColAccentDim(), [this]() { if (Phone.IsValid()) { Phone->RequestBuyPhoneUpgrade(); } MarkDirty(); }, 14));
 		return;
 	}
 
-	if (!Econ) { AddRow(MakeText(TEXT("Out of service."), 14, FLinearColor::Gray)); return; }
+	if (!Econ) { AddRow(MakeText(TEXT("Out of service."), 14, WeedUI::ColTextDim())); return; }
 
 	// --- Balans-kaart (zoals een echte bank-app: groot saldo bovenaan) ---
-	AddRow(MakeText(TEXT("BANK BALANCE"), 11, FLinearColor(0.5f, 0.7f, 0.95f), false));
-	AddRow(MakeText(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(Econ->GetBankCents()) / 100)), 26, FLinearColor(0.7f, 0.92f, 1.f), false));
-	AddRow(MakeText(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(Econ->GetCashCents()) / 100)), 12, FLinearColor(0.7f, 0.72f, 0.78f)));
+	AddRow(MakeText(TEXT("BANK BALANCE"), 11, WeedUI::ColTextDim(), false));
+	AddRow(MakeText(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(Econ->GetBankCents()) / 100)), 26, WeedUI::ColGood(), false));
+	AddRow(MakeText(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(Econ->GetCashCents()) / 100)), 12, WeedUI::ColTextDim()));
 	AddRow(MakeText(TEXT(""), 10, FLinearColor::Transparent));
 
 	// --- Storten (cash -> bank), bescheiden presets + max ---
-	AddRow(MakeText(FString::Printf(TEXT("Deposit   (%.0f%% tax)"), Econ->DepositTaxPct * 100.f), 13, FLinearColor(0.7f, 1.f, 0.75f)));
+	AddRow(MakeText(FString::Printf(TEXT("Deposit   (%.0f%% tax)"), Econ->DepositTaxPct * 100.f), 13, WeedUI::ColGood()));
 	{
 		const int64 Amts[3] = { 10000, 50000, 100000 }; // EUR 100 / 500 / 1000
 		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 		for (int32 i = 0; i < 3; ++i)
 		{
 			const int64 A = Amts[i];
-			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)), FLinearColor(0.18f, 0.42f, 0.30f),
+			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)), WeedUI::ColAccentDim(),
 				[this, A]() { if (Phone.IsValid()) { Phone->RequestDeposit(A); } }, 13);
 			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 		}
-		UWeedActionButton* Mx = MakeActionBtn(TEXT("Max"), FLinearColor(0.2f, 0.5f, 0.34f),
+		UWeedActionButton* Mx = MakeActionBtn(TEXT("Max"), WeedUI::ColAccentDim(),
 			[this]() { if (Phone.IsValid()) { Phone->RequestDeposit(-1); } }, 13);
 		UHorizontalBoxSlot* MS = Btns->AddChildToHorizontalBox(Mx);
 		MS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); MS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
@@ -1528,7 +1635,7 @@ void UPhoneWidget::BuildBankApp()
 	AddRow(MakeText(TEXT(""), 10, FLinearColor::Transparent));
 
 	// --- Sturen naar co-op vriend, bescheiden presets ---
-	AddRow(MakeText(FString::Printf(TEXT("Send to a friend   (%.0f%% fee)"), Econ->TransferFeePct * 100.f), 13, FLinearColor(0.7f, 0.85f, 1.f)));
+	AddRow(MakeText(FString::Printf(TEXT("Send to a friend   (%.0f%% fee)"), Econ->TransferFeePct * 100.f), 13, WeedUI::ColTextDim()));
 	{
 		const int64 Amts[3] = { 10000, 25000, 50000 }; // EUR 100 / 250 / 500
 		UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -1536,7 +1643,7 @@ void UPhoneWidget::BuildBankApp()
 		{
 			const int64 A = Amts[i];
 			UWeedActionButton* B = MakeActionBtn(FString::Printf(TEXT("%lld"), (long long)(A / 100)),
-				FLinearColor(0.2f, 0.34f, 0.5f), [this, A]() { if (Phone.IsValid()) { Phone->RequestTransfer(A); } }, 13);
+				WeedUI::ColAccentDim(), [this, A]() { if (Phone.IsValid()) { Phone->RequestTransfer(A); } }, 13);
 			UHorizontalBoxSlot* BS = Btns->AddChildToHorizontalBox(B);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 		}
@@ -1565,7 +1672,7 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 		for (int32 Idx = 0; Idx < AppCats.Num(); ++Idx)
 		{
 			const int32 Cat = AppCats[Idx];
-			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? FLinearColor(0.20f, 0.78f, 0.45f) : FLinearColor(0.13f, 0.14f, 0.18f);
+			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
 			UWeedActionButton* Pill = MakeActionBtn(CatName(Cat), Col, [this, Ph, Cat]() { Ph->SetSupplierCat(Cat); bCartView = false; RefreshStore(); }, 11);
 			UUniformGridSlot* GSlot = Tabs->AddChildToUniformGrid(Pill, Idx / Cols, Idx % Cols);
 			GSlot->SetHorizontalAlignment(HAlign_Fill);
@@ -1577,12 +1684,12 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 
 	// Winkelwagen-balk: totaal + toggle naar cart/shop.
 	UHorizontalBox* CartBar = WidgetTree->ConstructWidget<UHorizontalBox>();
-	StoreCartText = MakeText(TEXT("Cart 0"), 13, FLinearColor(1.f, 0.95f, 0.6f));
+	StoreCartText = MakeText(TEXT("Cart 0"), 13, WeedUI::ColGood());
 	StoreCartText->SetClipping(EWidgetClipping::ClipToBounds);
 	UHorizontalBoxSlot* CL = CartBar->AddChildToHorizontalBox(StoreCartText);
 	CL->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CL->SetVerticalAlignment(VAlign_Center);
 	UpdateStoreCartText();
-	StoreCartToggle = MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"), FLinearColor(0.2f, 0.35f, 0.5f), [this]() { bPackagesView = false; bCartView = !bCartView; RefreshStore(); }, 11);
+	StoreCartToggle = MakeActionBtn(bCartView ? TEXT("Shop") : TEXT("View cart"), WeedUI::ColAccentDim(), [this]() { bPackagesView = false; bCartView = !bCartView; RefreshStore(); }, 11);
 	CartBar->AddChildToHorizontalBox(StoreCartToggle)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 	// (De Packages-knop staat rechtsboven in de app-header naast "Suppliers".)
 	Into->AddChildToVerticalBox(CartBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
@@ -1607,7 +1714,7 @@ void UPhoneWidget::RefreshStore()
 	{
 		if (!StoreTabBtns[i]) { continue; }
 		const int32 TabCat = AppCats.IsValidIndex(i) ? AppCats[i] : i;
-		const FLinearColor Col = (TabCat == Cat) ? FLinearColor(0.20f, 0.78f, 0.45f) : FLinearColor(0.13f, 0.14f, 0.18f);
+		const FLinearColor Col = (TabCat == Cat) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
 		FButtonStyle St;
 		St.Normal = RoundedBrush(Col, 8.f);
 		St.Hovered = RoundedBrush(Col * 1.3f, 8.f);
@@ -1724,7 +1831,7 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 	UPhoneClientComponent* Ph = Phone.Get();
 	Scroll->ClearChildren();
 
-	Scroll->AddChild(MakeText(TEXT("Pot upgrades stay with the pot."), 11, FLinearColor(0.6f, 0.66f, 0.76f)));
+	Scroll->AddChild(MakeText(TEXT("Pot upgrades stay with the pot."), 11, WeedUI::ColTextDim()));
 
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
@@ -1744,11 +1851,11 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 			FPotDef Pd; const FString PotName = GetPotDef(Tier, Pd) ? Pd.DisplayName : TEXT("Pot");
 
 			UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
-			Card->SetBrush(WeedUI::Rounded(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+			Card->SetBrush(WeedUI::Rounded(WeedUI::ColInner(0.95f), 8.f));
 			Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 			Card->SetContent(VB);
-			VB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Pot %d   -   %s"), PotNum, *PotName), 14, FLinearColor(0.7f, 1.f, 0.7f)));
+			VB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Pot %d   -   %s"), PotNum, *PotName), 14, WeedUI::ColText()));
 
 			for (int32 i = 0; i < Ups.Num(); ++i)
 			{
@@ -1762,7 +1869,7 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				const FString Label = FString::Printf(TEXT("%s  -  %s"), *Ups[i].DisplayName, *Ups[i].Desc);
-				const FLinearColor TxtCol = bOwned ? FLinearColor(0.5f, 1.f, 0.5f) : (bBuyable ? FLinearColor(0.9f, 0.92f, 1.f) : FLinearColor(0.72f, 0.6f, 0.6f));
+				const FLinearColor TxtCol = bOwned ? WeedUI::ColGood() : (bBuyable ? WeedUI::ColText() : WeedUI::ColTextDim());
 				UTextBlock* T = MakeText(Label, 11, TxtCol);
 				T->SetClipping(EWidgetClipping::ClipToBounds);
 				UHorizontalBoxSlot* L = Row->AddChildToHorizontalBox(T);
@@ -1772,23 +1879,23 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 				RB->SetWidthOverride(124.f); RB->SetHeightOverride(26.f);
 				if (bOwned)
 				{
-					RB->SetContent(MakeText(TEXT("installed"), 11, FLinearColor(0.5f, 1.f, 0.5f), true));
+					RB->SetContent(MakeText(TEXT("installed"), 11, WeedUI::ColGood(), true));
 				}
 				else if (!bTierOk)
 				{
-					RB->SetContent(MakeText(TEXT("needs better pot"), 10, FLinearColor(1.f, 0.6f, 0.5f), true));
+					RB->SetContent(MakeText(TEXT("needs better pot"), 10, WeedUI::ColWarn(), true));
 				}
 				else if (!bPrereqOk)
 				{
-					RB->SetContent(MakeText(TEXT("prev. tier first"), 10, FLinearColor(1.f, 0.7f, 0.5f), true));
+					RB->SetContent(MakeText(TEXT("prev. tier first"), 10, WeedUI::ColWarn(), true));
 				}
 				else if (!bLevelOk)
 				{
-					RB->SetContent(MakeText(FString::Printf(TEXT("Lvl %d"), Ups[i].MinPlayerLevel), 10, FLinearColor(1.f, 0.6f, 0.5f), true));
+					RB->SetContent(MakeText(FString::Printf(TEXT("Lvl %d"), Ups[i].MinPlayerLevel), 10, WeedUI::ColWarn(), true));
 				}
 				else
 				{
-					RB->SetContent(MakeActionBtn(FString::Printf(TEXT("Buy  EUR %d"), (int32)(WeedRoundEuros((int64)Cost) / 100)), FLinearColor(0.2f, 0.5f, 0.28f),
+					RB->SetContent(MakeActionBtn(FString::Printf(TEXT("Buy  EUR %d"), (int32)(WeedRoundEuros((int64)Cost) / 100)), WeedUI::ColAccentDim(),
 						[this, Ph, WPot, ui]() { if (AGrowPlant* P = WPot.Get()) { Ph->RequestPotUpgradeFor(P, ui); RefreshStore(); } }, 10));
 				}
 				UHorizontalBoxSlot* RS2 = Row->AddChildToHorizontalBox(RB); RS2->SetVerticalAlignment(VAlign_Center);
@@ -1804,7 +1911,7 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 	}
 	if (PotCount == 0)
 	{
-		Scroll->AddChild(MakeText(TEXT("No pots placed yet."), 12, FLinearColor::Gray));
+		Scroll->AddChild(MakeText(TEXT("No pots placed yet."), 12, WeedUI::ColTextDim()));
 	}
 }
 
@@ -1816,32 +1923,51 @@ void UPhoneWidget::FillStoreList()
 	if (!Store) { return; }
 	UPhoneClientComponent* Ph = Phone.Get();
 
-	StoreScroll->ClearChildren();
-	if (StoreFooter) { StoreFooter->ClearChildren(); }
-	StoreQtyTexts.Reset();
-	PkgBars.Reset();
-	PkgEtas.Reset();
 	const int32 Cat = Ph->GetSupplierCat();
 
-	auto AddGap = [this]() {
-		UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
-		Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
-		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
-		StoreScroll->AddChild(Gap);
+	// LET OP: StoreQtyTexts NIET resetten. De qty-tekst zit in de persistente pool-kaart en wordt in-place
+	// bijgewerkt door de -/+ knoppen; alleen bij een kaart-herbouw overschrijft de builder de ref. Zo blijft
+	// de in-place update ook werken voor rijen die NIET herbouwd zijn (anders zou de ref na een refresh weg zijn).
+
+	// Helper: leeg de persistente pools (alleen bij een ECHTE view-wissel, bv. packages<->shop).
+	auto DropPools = [this]()
+	{
+		for (const TObjectPtr<UBorder>& B : StoreRowPool) { if (B) { B->RemoveFromParent(); } }
+		StoreRowPool.Reset(); StoreRowSigs.Reset();
+		for (const TObjectPtr<UBorder>& B : StoreFooterPool) { if (B) { B->RemoveFromParent(); } }
+		StoreFooterPool.Reset(); StoreFooterSigs.Reset();
 	};
 
-	// --- Packages: onderweg zijnde bestellingen (voortgang + ETA + annuleren) ---
+	// --- Packages-view is een echt àndere schermweergave (eigen per-OrderId-kaarten in dezelfde scroll).
 	if (bPackagesView)
 	{
+		DropPools();
+		StoreScroll->ClearChildren(); // whole-screen change: packages-lijst i.p.v. de winkel-pool
 		FillPackagesInto(StoreScroll);
 		return;
 	}
+	// Uit packages terug in de winkel: de losse package-kaarten (buiten de pool om toegevoegd) opruimen.
+	if (PkgScrollOwner == StoreScroll && PkgCards.Num() > 0)
+	{
+		StoreScroll->ClearChildren();
+		StoreRowPool.Reset(); StoreRowSigs.Reset(); // pool-widgets zijn net mee-geleegd -> refs vrijgeven
+		PkgCards.Reset(); PkgBars.Reset(); PkgEtas.Reset(); PkgEmptyRow = nullptr; PkgScrollOwner = nullptr;
+	}
+
+	// Verzamel eerst de rij-inhoud: per logische rij een signatuur + een bouw-lambda die de kaart maakt.
+	// (Zo herbouwen we alleen de rij die ECHT wijzigde, net als StoreWidget::FillBody.)
+	TArray<FString> Sigs;
+	TArray<TFunction<UWidget*()>> Builders;
+	auto AddRow = [&](const FString& Sig, TFunction<UWidget*()> Build) { Sigs.Add(Sig); Builders.Add(MoveTemp(Build)); };
 
 	// Pot-gear (cat 8) wordt nu een NORMALE koop-categorie: fysieke accessoires die je naast je pot zet.
 	if (bCartView)
 	{
 		const int32 Lines = Ph->GetCartNumLines();
-		if (Lines == 0) { StoreScroll->AddChild(MakeText(TEXT("Cart is empty."), 13, FLinearColor::Gray)); }
+		if (Lines == 0)
+		{
+			AddRow(TEXT("cart-empty"), [this]() -> UWidget* { return MakeText(TEXT("Cart is empty."), 13, WeedUI::ColTextDim()); });
+		}
 		for (int32 li = 0; li < Lines; ++li)
 		{
 			FName LId; int32 LQty = 0; bool bSell = false;
@@ -1853,110 +1979,33 @@ void UPhoneWidget::FillStoreList()
 			if (bSell) { LName = TEXT("Sell: ") + LName; }
 			const int32 Idx = li;
 
-			UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
-			CardB->SetBrush(RoundedBrush(bSell ? FLinearColor(0.10f, 0.15f, 0.11f, 0.95f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
-			CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
-			UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
-			CardB->SetContent(CVB);
-			UTextBlock* NameT = MakeText(LName, 12, bSell ? FLinearColor(0.7f, 1.f, 0.75f) : FLinearColor(0.9f, 0.92f, 1.f));
-			NameT->SetClipping(EWidgetClipping::ClipToBounds);
-			CVB->AddChildToVerticalBox(NameT);
-			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(MakeText(
-				bSell ? FString::Printf(TEXT("x%d   +EUR %d"), LQty, (int32)(WeedRoundEuros((int64)LineP) / 100)) : FString::Printf(TEXT("x%d   EUR %d"), LQty, (int32)(WeedRoundEuros((int64)LineP) / 100)),
-				12, bSell ? FLinearColor(0.7f, 1.f, 0.7f) : FLinearColor(1.f, 0.95f, 0.7f)));
-			T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -1); RefreshStore(); }));
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, +1); RefreshStore(); }));
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("x"), FLinearColor(0.42f, 0.18f, 0.18f), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -100000); RefreshStore(); }));
-			CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
-			StoreScroll->AddChild(CardB);
-			AddGap();
-		}
-		// Vaste voettekst. In de Sell-app: puur verkopen (geen bezorging/koop-opbouw).
-		if (StoreFooter && bSellApp)
-		{
-			const int32 SellSub = Ph->GetCartSellCents();
-			UTextBlock* TotT = MakeText(FString::Printf(TEXT("You receive: EUR %d"), (int32)(WeedRoundEuros((int64)SellSub) / 100)),
-				15, FLinearColor(0.6f, 1.f, 0.65f));
-			TotT->SetJustification(ETextJustify::Right);
-			StoreFooter->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 6.f, 4.f, 4.f));
-
-			StoreFooter->AddChildToVerticalBox(MakeActionBtn(TEXT("SELL"), FLinearColor(0.2f, 0.55f, 0.27f),
-				[this, Ph]() { Ph->Checkout(0); bCartView = false; RefreshStore(); }, 14));
-		}
-		// Koop-app cart: bezorgopties (op koopdeel) + netto-totaal (rechtsonder) + checkout.
-		else if (StoreFooter)
-		{
-			const int32 BuySub = Ph->GetCartBuyCents();
-			const int32 SellSub = Ph->GetCartSellCents();
-
-			// Bezorgopties (alleen relevant als je koopt). Fee = % van het koop-subtotaal.
-			StoreFooter->AddChildToVerticalBox(MakeText(BuySub > 0 ? TEXT("Delivery") : TEXT("Selling only - no delivery needed"), 11, FLinearColor(0.75f, 0.8f, 0.95f)))->SetPadding(FMargin(0.f, 4.f, 0.f, 2.f));
-			if (BuySub > 0)
+			const FString Sig = FString::Printf(TEXT("cart|%d|%s|%d|%d|%d"), Idx, *LId.ToString(), LQty, bSell ? 1 : 0, LineP);
+			AddRow(Sig, [this, Ph, LName, LQty, bSell, LineP, Idx]() -> UWidget*
 			{
-				UHorizontalBox* Opts = WidgetTree->ConstructWidget<UHorizontalBox>();
-				for (int32 d = 0; d < 3; ++d)
-				{
-					const int32 OptFee = (int32)WeedRoundEuros((int64)FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(d)));
-					const bool bSel = (d == DeliveryOpt);
-					const FLinearColor Col = bSel ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
-					UWeedActionButton* OB = MakeActionBtn(TEXT(""), Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
-					// Inhoud: PRIJS groot + leidend bovenaan, dan de naam, dan de tijd klein.
-					UVerticalBox* OVB = WidgetTree->ConstructWidget<UVerticalBox>();
-					FString PriceStr;
-					if (OptFee <= 0) { PriceStr = TEXT("FREE"); }
-					else { PriceStr = FString::Printf(TEXT("€%d"), (int32)(WeedRoundEuros((int64)OptFee) / 100)); }
-					OVB->AddChildToVerticalBox(MakeText(PriceStr, 15, FLinearColor(1.f, 0.95f, 0.55f), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
-					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryName(d), 11, FLinearColor(0.95f, 0.97f, 1.f), true));
-					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryTimeText(d), 9, FLinearColor(0.65f, 0.7f, 0.8f), true));
-					OB->SetContent(OVB);
-					UHorizontalBoxSlot* OS = Opts->AddChildToHorizontalBox(OB);
-					OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
-				}
-				StoreFooter->AddChildToVerticalBox(Opts)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-
-				// Bezorg-adres: bij meerdere woningen kies je waar 't heen gaat. Standaard het huis waar je
-				// nu binnen bent (groen). Anders je huidige/actieve woning.
-				const TArray<int32>& OwnedH = Ph->GetOwnedHomes();
-				if (OwnedH.Num() > 1)
-				{
-					const int32 CurTarget = Ph->ResolveDeliveryHome();
-					StoreFooter->AddChildToVerticalBox(MakeText(TEXT("Deliver to"), 11, FLinearColor(0.75f, 0.8f, 0.95f)))->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
-					UHorizontalBox* HomesRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-					for (int32 HIdx : OwnedH)
-					{
-						const FLinearColor Col = (HIdx == CurTarget) ? FLinearColor(0.22f, 0.52f, 0.32f) : FLinearColor(0.15f, 0.16f, 0.21f);
-						UWeedActionButton* HB = MakeActionBtn(Ph->GetHomeLabel(HIdx), Col,
-							[this, HIdx]() { if (Phone.IsValid()) { Phone->SetDeliveryHome(HIdx); } RefreshStore(); }, 9);
-						UHorizontalBoxSlot* HS = HomesRow->AddChildToHorizontalBox(HB);
-						HS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
-					}
-					StoreFooter->AddChildToVerticalBox(HomesRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-				}
-			}
-
-			// Opbouw-regel (kort): koop - verkoop - bezorging. Geen decimalen + alleen tonen wat van toepassing is.
-			const int32 Fee = (int32)WeedRoundEuros((int64)FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(DeliveryOpt)));
-			FString BD = FString::Printf(TEXT("Buy EUR %d"), (int32)(WeedRoundEuros((int64)BuySub) / 100));
-			if (SellSub > 0) { BD += FString::Printf(TEXT("  -  Sell EUR %d"), (int32)(WeedRoundEuros((int64)SellSub) / 100)); }
-			if (Fee > 0)     { BD += FString::Printf(TEXT("  +  Deliv EUR %d"), (int32)(WeedRoundEuros((int64)Fee) / 100)); }
-			UTextBlock* Breakdown = MakeText(BD, 10, FLinearColor(0.68f, 0.72f, 0.82f));
-			Breakdown->SetAutoWrapText(true);
-			Breakdown->SetJustification(ETextJustify::Right);
-			StoreFooter->AddChildToVerticalBox(Breakdown)->SetPadding(FMargin(0.f, 2.f, 4.f, 0.f));
-
-			// Netto: positief = betalen, negatief = ontvangen.
-			const int32 Net = Ph->GetCartNetCents(DeliveryOpt);
-			UTextBlock* TotT = MakeText(Net >= 0 ? FString::Printf(TEXT("Total: EUR %d"), (int32)(WeedRoundEuros((int64)Net) / 100))
-				: FString::Printf(TEXT("You receive: EUR %d"), (int32)(WeedRoundEuros((int64)(-Net)) / 100)),
-				15, Net >= 0 ? FLinearColor(1.f, 0.95f, 0.55f) : FLinearColor(0.6f, 1.f, 0.65f));
-			TotT->SetJustification(ETextJustify::Right);
-			StoreFooter->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 2.f, 4.f, 4.f));
-
-			StoreFooter->AddChildToVerticalBox(MakeActionBtn(TEXT("CHECKOUT"), FLinearColor(0.2f, 0.55f, 0.27f),
-				[this, Ph]() { Ph->Checkout(DeliveryOpt); bCartView = false; RefreshStore(); }, 14));
+				UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
+				CardB->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
+				CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+				UVerticalBox* CVB = WidgetTree->ConstructWidget<UVerticalBox>();
+				CardB->SetContent(CVB);
+				UTextBlock* NameT = MakeText(LName, 12, bSell ? WeedUI::ColGood() : WeedUI::ColText());
+				NameT->SetClipping(EWidgetClipping::ClipToBounds);
+				CVB->AddChildToVerticalBox(NameT);
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UHorizontalBoxSlot* T = Row->AddChildToHorizontalBox(MakeText(
+					bSell ? FString::Printf(TEXT("x%d   +EUR %d"), LQty, (int32)(WeedRoundEuros((int64)LineP) / 100)) : FString::Printf(TEXT("x%d   EUR %d"), LQty, (int32)(WeedRoundEuros((int64)LineP) / 100)),
+					12, WeedUI::ColGood()));
+				T->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); T->SetVerticalAlignment(VAlign_Center);
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), WeedUI::ColSlot(), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -1); RefreshStore(); }));
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), WeedUI::ColSlot(), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, +1); RefreshStore(); }));
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("x"), WeedUI::ColWarn(), [this, Ph, Idx]() { Ph->AdjustCartLine(Idx, -100000); RefreshStore(); }));
+				CVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+				return CardB;
+			});
 		}
+		// De voettekst wordt via een eigen pool (StoreFooterPool) gebouwd: bij bezorgoptie/deliver-to-home
+		// wijzigt alleen deze footer-handtekening -> de scroll-lijst hierboven blijft ongemoeid (geen scroll-sprong).
+		FillStoreListRows(MoveTemp(Sigs), MoveTemp(Builders));
+		FillStoreFooter();
 		return;
 	}
 
@@ -1975,111 +2024,301 @@ void UPhoneWidget::FillStoreList()
 				Totals.FindOrAdd(S.ItemId) += S.Quantity;
 			}
 		}
-		if (Order.Num() == 0) { StoreScroll->AddChild(MakeText(TEXT("(nothing sellable)"), 13, FLinearColor::Gray)); return; }
+		if (Order.Num() == 0)
+		{
+			AddRow(TEXT("nothing-sellable"), [this]() -> UWidget* { return MakeText(TEXT("(nothing sellable)"), 13, WeedUI::ColTextDim()); });
+			FillStoreListRows(MoveTemp(Sigs), MoveTemp(Builders));
+			FillStoreFooter();
+			return;
+		}
 
 		for (const FName& Id : Order)
 		{
 			const int32 Have = Totals[Id];
 			const int32 Val = Store->GetSellValueCents(Id);
 			const int32 Pend = Ph->GetPendingSellQty(Id);
-
-			UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
-			CardB->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
-			CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
-			UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
-			CardB->SetContent(CardVB);
-			CardVB->AddChildToVerticalBox(MakeText(WeedUI::PrettyItemName(Id), 14, FLinearColor(0.95f, 0.97f, 1.f)));
-			CardVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("You have %d   -   sells for EUR %d each"), Have, (int32)(WeedRoundEuros((int64)Val) / 100)), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
-
-			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("+EUR %d"), (int32)(WeedRoundEuros((int64)Val * Pend) / 100)), 13, FLinearColor(0.7f, 1.f, 0.7f)));
-			PT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PT->SetVerticalAlignment(VAlign_Center);
 			const FName PickId = Id;
-			UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, FLinearColor::White);
-			StoreQtyTexts.Add(PickId, QtyT);
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingSellQty(PickId, -1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingSellQty(PickId)))); } }));
-			Row->AddChildToHorizontalBox(QtyT)->SetVerticalAlignment(VAlign_Center);
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingSellQty(PickId, +1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingSellQty(PickId)))); } }));
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Add"), FLinearColor(0.2f, 0.45f, 0.28f), [this, Ph, PickId]() { Ph->AddSellToCart(PickId); UpdateStoreCartText(); }))->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
-			CardVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+			// GEEN Pend in de signatuur: de qty-tekst wordt in-place via StoreQtyTexts bijgewerkt (geen kaart-herbouw).
+			const FString Sig = FString::Printf(TEXT("sell|%s|%d|%d"), *Id.ToString(), Have, Val);
+			AddRow(Sig, [this, Ph, PickId, Have, Val, Pend]() -> UWidget*
+			{
+				UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
+				CardB->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
+				CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
+				UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
+				CardB->SetContent(CardVB);
+				CardVB->AddChildToVerticalBox(MakeText(WeedUI::PrettyItemName(PickId), 14, WeedUI::ColText()));
+				CardVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("You have %d   -   sells for EUR %d each"), Have, (int32)(WeedRoundEuros((int64)Val) / 100)), 10, WeedUI::ColTextDim()));
 
-			StoreScroll->AddChild(CardB);
-			AddGap();
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("+EUR %d"), (int32)(WeedRoundEuros((int64)Val * Pend) / 100)), 13, WeedUI::ColGood()));
+				PT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PT->SetVerticalAlignment(VAlign_Center);
+				UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, WeedUI::ColText());
+				StoreQtyTexts.Add(PickId, QtyT);
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), WeedUI::ColSlot(), [this, Ph, PickId]() { Ph->AdjustPendingSellQty(PickId, -1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingSellQty(PickId)))); } }));
+				Row->AddChildToHorizontalBox(QtyT)->SetVerticalAlignment(VAlign_Center);
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), WeedUI::ColSlot(), [this, Ph, PickId]() { Ph->AdjustPendingSellQty(PickId, +1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingSellQty(PickId)))); } }));
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Add"), WeedUI::ColAccentDim(), [this, Ph, PickId]() { Ph->AddSellToCart(PickId); UpdateStoreCartText(); }))->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+				CardVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+				return CardB;
+			});
 		}
+		FillStoreListRows(MoveTemp(Sigs), MoveTemp(Builders));
+		FillStoreFooter();
 		return;
 	}
 
 	// --- Catalogus (kopen) ---
+	const int32 CatPlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
 	for (const FName& Id : Store->GetSupplierCategory(Cat))
 	{
 		const int32 Price = Store->GetCatalogPriceCents(Id);
 		const int32 Pend = Ph->GetPendingQty(Id);
 		const int32 ReqLvl = Store->RequiredLevelFor(Id);
-		const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
-		const bool bLocked = ReqLvl > PlayerLvl;
-
-		UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
-		CardB->SetBrush(RoundedBrush(bLocked ? FLinearColor(0.10f, 0.09f, 0.09f, 0.95f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
-		CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
-
-		// Icoon links + tekstkolom rechts (seeds: icoon van het zaad-item).
-		UHorizontalBox* CardHB = WidgetTree->ConstructWidget<UHorizontalBox>();
-		CardB->SetContent(CardHB);
-		const FName IconId = UStoreComponent::IsSeedCategory(Cat) ? UStoreComponent::SeedItemId(Id) : Id;
-		USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
-		IcoSz->SetWidthOverride(52.f); IcoSz->SetHeightOverride(52.f);
-		{
-			// Icoon + tag-bubble (OG, GSC, II, 100g, ...) onderaan, net als in de hotbar/inventory.
-			UOverlay* IcoOv = WidgetTree->ConstructWidget<UOverlay>();
-			UOverlaySlot* IconOS = IcoOv->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, IconId, 52.f));
-			IconOS->SetHorizontalAlignment(HAlign_Fill); IconOS->SetVerticalAlignment(VAlign_Fill);
-			const FString STag = WeedUI::ItemTagShort(IconId);
-			if (!STag.IsEmpty())
-			{
-				UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-				TagPill->SetBrush(RoundedBrush(FLinearColor(0.10f, 0.42f, 0.20f, 0.96f), 5.f));
-				TagPill->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
-				TagPill->SetContent(MakeText(STag, 8, FLinearColor(0.98f, 1.f, 0.99f)));
-				UOverlaySlot* TagOS = IcoOv->AddChildToOverlay(TagPill);
-				TagOS->SetHorizontalAlignment(HAlign_Center); TagOS->SetVerticalAlignment(VAlign_Bottom);
-			}
-			IcoSz->SetContent(IcoOv);
-		}
-		UHorizontalBoxSlot* IcoSlot = CardHB->AddChildToHorizontalBox(IcoSz);
-		IcoSlot->SetVerticalAlignment(VAlign_Center); IcoSlot->SetPadding(FMargin(0.f, 0.f, 9.f, 0.f));
-
-		UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		UHorizontalBoxSlot* VBSlot = CardHB->AddChildToHorizontalBox(CardVB);
-		VBSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); VBSlot->SetVerticalAlignment(VAlign_Center);
-		// Titel (kort) + beschrijving eronder.
-		CardVB->AddChildToVerticalBox(MakeText(Store->GetCatalogName(Id).ToString(), 14, bLocked ? FLinearColor(0.6f, 0.6f, 0.62f) : FLinearColor(0.95f, 0.97f, 1.f)));
-		const FString DescStr = Store->GetCatalogDesc(Id).ToString();
-		if (!DescStr.IsEmpty())
-		{
-			UTextBlock* Desc = MakeText(DescStr, 10, FLinearColor(0.62f, 0.66f, 0.76f));
-			Desc->SetAutoWrapText(true);
-			CardVB->AddChildToVerticalBox(Desc);
-		}
-		if (ReqLvl > 0)
-		{
-			CardVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Unlocks at level %d"), ReqLvl), 10,
-				bLocked ? FLinearColor(1.f, 0.5f, 0.45f) : FLinearColor(0.5f, 0.8f, 0.55f)));
-		}
-
-		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)Price) / 100)), 13, FLinearColor(0.7f, 1.f, 0.7f)));
-		PT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PT->SetVerticalAlignment(VAlign_Center);
+		const bool bLocked = ReqLvl > CatPlayerLvl;
 		const FName PickId = Id;
-		UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, FLinearColor::White);
-		StoreQtyTexts.Add(PickId, QtyT);
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, -1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
-		Row->AddChildToHorizontalBox(QtyT)->SetVerticalAlignment(VAlign_Center);
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), FLinearColor(0.18f, 0.19f, 0.24f), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, +1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
-		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Add"), FLinearColor(0.2f, 0.4f, 0.55f), [this, Ph, PickId]() { Ph->AddToCart(PickId); UpdateStoreCartText(); }))->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
-		CardVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+		const FName IconId = UStoreComponent::IsSeedCategory(Cat) ? UStoreComponent::SeedItemId(Id) : Id;
+		const FString NameStr = Store->GetCatalogName(Id).ToString();
+		const FString DescStr = Store->GetCatalogDesc(Id).ToString();
+		// GEEN Pend in de signatuur: de qty-tekst wordt in-place via StoreQtyTexts bijgewerkt (geen kaart-herbouw).
+		const FString Sig = FString::Printf(TEXT("cat|%s|%d|%d|%d"), *Id.ToString(), Price, ReqLvl, bLocked ? 1 : 0);
+		AddRow(Sig, [this, Ph, PickId, IconId, NameStr, DescStr, Price, ReqLvl, bLocked, Pend]() -> UWidget*
+		{
+			UBorder* CardB = WidgetTree->ConstructWidget<UBorder>();
+			CardB->SetBrush(RoundedBrush(bLocked ? WeedUI::ColSlotEmpty(0.95f) : WeedUI::ColInner(0.95f), 8.f));
+			CardB->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 
-		StoreScroll->AddChild(CardB);
-		AddGap();
+			// Icoon links + tekstkolom rechts (seeds: icoon van het zaad-item).
+			UHorizontalBox* CardHB = WidgetTree->ConstructWidget<UHorizontalBox>();
+			CardB->SetContent(CardHB);
+			USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
+			IcoSz->SetWidthOverride(52.f); IcoSz->SetHeightOverride(52.f);
+			{
+				// Icoon + tag-bubble (OG, GSC, II, 100g, ...) onderaan, net als in de hotbar/inventory.
+				UOverlay* IcoOv = WidgetTree->ConstructWidget<UOverlay>();
+				UOverlaySlot* IconOS = IcoOv->AddChildToOverlay(WeedUI::ItemIcon(WidgetTree, IconId, 52.f));
+				IconOS->SetHorizontalAlignment(HAlign_Fill); IconOS->SetVerticalAlignment(VAlign_Fill);
+				const FString STag = WeedUI::ItemTagShort(IconId);
+				if (!STag.IsEmpty())
+				{
+					UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
+					TagPill->SetBrush(RoundedBrush(WeedUI::ColAccentDim(0.96f), 5.f));
+					TagPill->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
+					TagPill->SetContent(MakeText(STag, 8, WeedUI::ColText()));
+					UOverlaySlot* TagOS = IcoOv->AddChildToOverlay(TagPill);
+					TagOS->SetHorizontalAlignment(HAlign_Center); TagOS->SetVerticalAlignment(VAlign_Bottom);
+				}
+				IcoSz->SetContent(IcoOv);
+			}
+			UHorizontalBoxSlot* IcoSlot = CardHB->AddChildToHorizontalBox(IcoSz);
+			IcoSlot->SetVerticalAlignment(VAlign_Center); IcoSlot->SetPadding(FMargin(0.f, 0.f, 9.f, 0.f));
+
+			UVerticalBox* CardVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			UHorizontalBoxSlot* VBSlot = CardHB->AddChildToHorizontalBox(CardVB);
+			VBSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); VBSlot->SetVerticalAlignment(VAlign_Center);
+			// Titel (kort) + beschrijving eronder.
+			CardVB->AddChildToVerticalBox(MakeText(NameStr, 14, bLocked ? WeedUI::ColTextDim() : WeedUI::ColText()));
+			if (!DescStr.IsEmpty())
+			{
+				UTextBlock* Desc = MakeText(DescStr, 10, WeedUI::ColTextDim());
+				Desc->SetAutoWrapText(true);
+				CardVB->AddChildToVerticalBox(Desc);
+			}
+			if (ReqLvl > 0)
+			{
+				CardVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Unlocks at level %d"), ReqLvl), 10,
+					bLocked ? WeedUI::ColWarn() : WeedUI::ColGood()));
+			}
+
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+			UHorizontalBoxSlot* PT = Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)Price) / 100)), 13, WeedUI::ColGood()));
+			PT->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PT->SetVerticalAlignment(VAlign_Center);
+			UTextBlock* QtyT = MakeText(FString::Printf(TEXT("  %d  "), Pend), 13, WeedUI::ColText());
+			StoreQtyTexts.Add(PickId, QtyT);
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("-"), WeedUI::ColSlot(), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, -1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
+			Row->AddChildToHorizontalBox(QtyT)->SetVerticalAlignment(VAlign_Center);
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("+"), WeedUI::ColSlot(), [this, Ph, PickId]() { Ph->AdjustPendingQty(PickId, +1); if (TObjectPtr<UTextBlock>* X = StoreQtyTexts.Find(PickId)) { (*X)->SetText(FText::FromString(FString::Printf(TEXT("  %d  "), Ph->GetPendingQty(PickId)))); } }));
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Add"), WeedUI::ColAccentDim(), [this, Ph, PickId]() { Ph->AddToCart(PickId); UpdateStoreCartText(); }))->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+			CardVB->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+			return CardB;
+		});
+	}
+
+	// Winkel-view: geen footer (die is alleen in de cart). Leeg de footer-pool.
+	FillStoreListRows(MoveTemp(Sigs), MoveTemp(Builders));
+	FillStoreFooter();
+}
+
+void UPhoneWidget::FillStoreListRows(TArray<FString> Sigs, TArray<TFunction<UWidget*()>> Builders)
+{
+	if (!StoreScroll) { return; }
+	const int32 N = Sigs.Num();
+
+	// Pool op maat brengen (persistent) -> geen ClearChildren, dus geen flash/scroll-sprong.
+	while (StoreRowPool.Num() < N)
+	{
+		UBorder* SlotBox = WidgetTree->ConstructWidget<UBorder>();
+		SlotBox->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f)); // transparant wrapper (geen extra rand)
+		SlotBox->SetPadding(FMargin(0.f));
+		StoreScroll->AddChild(SlotBox);
+		StoreRowPool.Add(SlotBox); StoreRowSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+	}
+	while (StoreRowPool.Num() > N)
+	{
+		const int32 Last = StoreRowPool.Num() - 1;
+		if (StoreRowPool[Last]) { StoreRowPool[Last]->RemoveFromParent(); }
+		StoreRowPool.RemoveAt(Last); StoreRowSigs.RemoveAt(Last);
+	}
+
+	// Per-rij diff: alleen een rij die ECHT wijzigde krijgt nieuwe inhoud (kaart + gefoldede 3px-gap eronder).
+	for (int32 i = 0; i < N; ++i)
+	{
+		if (!StoreRowPool.IsValidIndex(i) || !StoreRowPool[i]) { continue; }
+		if (StoreRowSigs.IsValidIndex(i) && Sigs[i] == StoreRowSigs[i]) { continue; }
+		StoreRowSigs[i] = Sigs[i];
+
+		UVerticalBox* Holder = WidgetTree->ConstructWidget<UVerticalBox>();
+		Holder->AddChildToVerticalBox(Builders[i]());
+		UBorder* Gap = WidgetTree->ConstructWidget<UBorder>();
+		Gap->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+		Gap->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		Holder->AddChildToVerticalBox(Gap);
+		StoreRowPool[i]->SetContent(Holder);
+	}
+}
+
+void UPhoneWidget::FillStoreFooter()
+{
+	if (!StoreFooter || !Phone.IsValid()) { return; }
+	UPhoneClientComponent* Ph = Phone.Get();
+
+	// Bouw de voettekst als ÉÉN gepoolde entry: alleen zichtbaar in de cart. Zo blijft de scroll-lijst ongemoeid
+	// bij bezorgoptie/deliver-to-home (geen scroll-sprong) en flitst er niets.
+	FString Sig;
+	TFunction<UWidget*()> Build;
+
+	if (bCartView && bSellApp)
+	{
+		const int32 SellSub = Ph->GetCartSellCents();
+		Sig = FString::Printf(TEXT("sellfoot|%d"), SellSub);
+		Build = [this, Ph, SellSub]() -> UWidget*
+		{
+			UVerticalBox* F = WidgetTree->ConstructWidget<UVerticalBox>();
+			UTextBlock* TotT = MakeText(FString::Printf(TEXT("You receive: EUR %d"), (int32)(WeedRoundEuros((int64)SellSub) / 100)),
+				15, WeedUI::ColGood());
+			TotT->SetJustification(ETextJustify::Right);
+			F->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 6.f, 4.f, 4.f));
+			F->AddChildToVerticalBox(MakeActionBtn(TEXT("SELL"), WeedUI::ColAccentDim(),
+				[this, Ph]() { Ph->Checkout(0); bCartView = false; RefreshStore(); }, 14));
+			return F;
+		};
+	}
+	else if (bCartView)
+	{
+		const int32 BuySub = Ph->GetCartBuyCents();
+		const int32 SellSub = Ph->GetCartSellCents();
+		const int32 Net = Ph->GetCartNetCents(DeliveryOpt);
+		const int32 CurTarget = Ph->ResolveDeliveryHome();
+		const TArray<int32> OwnedH = Ph->GetOwnedHomes();
+		FString HomesSig; for (int32 H : OwnedH) { HomesSig += FString::Printf(TEXT("%d,"), H); }
+		Sig = FString::Printf(TEXT("buyfoot|%d|%d|%d|%d|%d|%s"), BuySub, SellSub, DeliveryOpt, Net, CurTarget, *HomesSig);
+		Build = [this, Ph, BuySub, SellSub, Net, CurTarget, OwnedH]() -> UWidget*
+		{
+			UVerticalBox* F = WidgetTree->ConstructWidget<UVerticalBox>();
+
+			// Bezorgopties (alleen relevant als je koopt). Fee = % van het koop-subtotaal.
+			F->AddChildToVerticalBox(MakeText(BuySub > 0 ? TEXT("Delivery") : TEXT("Selling only - no delivery needed"), 11, WeedUI::ColTextDim()))->SetPadding(FMargin(0.f, 4.f, 0.f, 2.f));
+			if (BuySub > 0)
+			{
+				UHorizontalBox* Opts = WidgetTree->ConstructWidget<UHorizontalBox>();
+				for (int32 d = 0; d < 3; ++d)
+				{
+					const int32 OptFee = (int32)WeedRoundEuros((int64)FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(d)));
+					const bool bSel = (d == DeliveryOpt);
+					const FLinearColor Col = bSel ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
+					UWeedActionButton* OB = MakeActionBtn(TEXT(""), Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
+					// Inhoud: PRIJS groot + leidend bovenaan, dan de naam, dan de tijd klein.
+					UVerticalBox* OVB = WidgetTree->ConstructWidget<UVerticalBox>();
+					FString PriceStr;
+					if (OptFee <= 0) { PriceStr = TEXT("FREE"); }
+					else { PriceStr = FString::Printf(TEXT("€%d"), (int32)(WeedRoundEuros((int64)OptFee) / 100)); }
+					OVB->AddChildToVerticalBox(MakeText(PriceStr, 15, WeedUI::ColGood(), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryName(d), 11, WeedUI::ColText(), true));
+					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryTimeText(d), 9, WeedUI::ColTextDim(), true));
+					OB->SetContent(OVB);
+					UHorizontalBoxSlot* OS = Opts->AddChildToHorizontalBox(OB);
+					OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
+				}
+				F->AddChildToVerticalBox(Opts)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+				// Bezorg-adres: bij meerdere woningen kies je waar 't heen gaat. Standaard het huis waar je
+				// nu binnen bent (groen). Anders je huidige/actieve woning.
+				if (OwnedH.Num() > 1)
+				{
+					F->AddChildToVerticalBox(MakeText(TEXT("Deliver to"), 11, WeedUI::ColTextDim()))->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+					UHorizontalBox* HomesRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+					for (int32 HIdx : OwnedH)
+					{
+						const FLinearColor Col = (HIdx == CurTarget) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
+						UWeedActionButton* HB = MakeActionBtn(Ph->GetHomeLabel(HIdx), Col,
+							[this, HIdx]() { if (Phone.IsValid()) { Phone->SetDeliveryHome(HIdx); } RefreshStore(); }, 9);
+						UHorizontalBoxSlot* HS = HomesRow->AddChildToHorizontalBox(HB);
+						HS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+					}
+					F->AddChildToVerticalBox(HomesRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+				}
+			}
+
+			// Opbouw-regel (kort): koop - verkoop - bezorging. Geen decimalen + alleen tonen wat van toepassing is.
+			const int32 Fee = (int32)WeedRoundEuros((int64)FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(DeliveryOpt)));
+			FString BD = FString::Printf(TEXT("Buy EUR %d"), (int32)(WeedRoundEuros((int64)BuySub) / 100));
+			if (SellSub > 0) { BD += FString::Printf(TEXT("  -  Sell EUR %d"), (int32)(WeedRoundEuros((int64)SellSub) / 100)); }
+			if (Fee > 0)     { BD += FString::Printf(TEXT("  +  Deliv EUR %d"), (int32)(WeedRoundEuros((int64)Fee) / 100)); }
+			UTextBlock* Breakdown = MakeText(BD, 10, WeedUI::ColTextDim());
+			Breakdown->SetAutoWrapText(true);
+			Breakdown->SetJustification(ETextJustify::Right);
+			F->AddChildToVerticalBox(Breakdown)->SetPadding(FMargin(0.f, 2.f, 4.f, 0.f));
+
+			// Netto: positief = betalen, negatief = ontvangen.
+			UTextBlock* TotT = MakeText(Net >= 0 ? FString::Printf(TEXT("Total: EUR %d"), (int32)(WeedRoundEuros((int64)Net) / 100))
+				: FString::Printf(TEXT("You receive: EUR %d"), (int32)(WeedRoundEuros((int64)(-Net)) / 100)),
+				15, WeedUI::ColGood());
+			TotT->SetJustification(ETextJustify::Right);
+			F->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 2.f, 4.f, 4.f));
+
+			F->AddChildToVerticalBox(MakeActionBtn(TEXT("CHECKOUT"), WeedUI::ColAccentDim(),
+				[this, Ph]() { Ph->Checkout(DeliveryOpt); bCartView = false; RefreshStore(); }, 14));
+			return F;
+		};
+	}
+	else
+	{
+		Sig = TEXT("nofoot"); // geen footer buiten de cart
+	}
+
+	// Footer-pool: 0 of 1 entry. Diff op signatuur -> alleen herbouwen als de footer-inhoud wijzigt.
+	const int32 Want = Build ? 1 : 0;
+	while (StoreFooterPool.Num() < Want)
+	{
+		UBorder* SlotBox = WidgetTree->ConstructWidget<UBorder>();
+		SlotBox->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+		SlotBox->SetPadding(FMargin(0.f));
+		StoreFooter->AddChildToVerticalBox(SlotBox);
+		StoreFooterPool.Add(SlotBox); StoreFooterSigs.Add(TEXT("\x01"));
+	}
+	while (StoreFooterPool.Num() > Want)
+	{
+		const int32 Last = StoreFooterPool.Num() - 1;
+		if (StoreFooterPool[Last]) { StoreFooterPool[Last]->RemoveFromParent(); }
+		StoreFooterPool.RemoveAt(Last); StoreFooterSigs.RemoveAt(Last);
+	}
+	if (Want == 1 && StoreFooterPool[0])
+	{
+		if (!StoreFooterSigs.IsValidIndex(0) || Sig != StoreFooterSigs[0])
+		{
+			StoreFooterSigs[0] = Sig;
+			StoreFooterPool[0]->SetContent(Build());
+		}
 	}
 }
 
@@ -2114,7 +2353,7 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 		const int32 Unread = Phone.IsValid() ? Phone->GetUnreadMessageCount() : 0;
 		MsgAppBadgeText = MakeText(Unread > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), FMath::Max(0, Unread)), 11, FLinearColor::White, true);
 		MsgAppBadgePill = WidgetTree->ConstructWidget<UBorder>();
-		MsgAppBadgePill->SetBrush(RoundedBrush(FLinearColor(0.90f, 0.16f, 0.16f, 0.98f), 9.f));
+		MsgAppBadgePill->SetBrush(RoundedBrush(WeedUI::ColWarn(0.98f), 9.f));
 		MsgAppBadgePill->SetPadding(FMargin(5.f, 0.f, 5.f, 0.f));
 		MsgAppBadgePill->SetContent(MsgAppBadgeText);
 		MsgAppBadgePill->SetVisibility(Unread > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
@@ -2125,9 +2364,9 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 	else if (AppIndex == 11) // Goals-app: gele badge met aantal claimbare doelen (live, geen rebuild)
 	{
 		const int32 Claim = GetClaimableGoals();
-		GoalsAppBadgeText = MakeText(Claim > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), FMath::Max(0, Claim)), 11, FLinearColor(0.08f, 0.08f, 0.08f), true);
+		GoalsAppBadgeText = MakeText(Claim > 99 ? FString(TEXT("99+")) : FString::Printf(TEXT("%d"), FMath::Max(0, Claim)), 11, WeedUI::ColBg(), true);
 		GoalsAppBadgePill = WidgetTree->ConstructWidget<UBorder>();
-		GoalsAppBadgePill->SetBrush(RoundedBrush(FLinearColor(0.95f, 0.78f, 0.20f, 0.98f), 9.f));
+		GoalsAppBadgePill->SetBrush(RoundedBrush(WeedUI::ColGood(0.98f), 9.f));
 		GoalsAppBadgePill->SetPadding(FMargin(5.f, 0.f, 5.f, 0.f));
 		GoalsAppBadgePill->SetContent(GoalsAppBadgeText);
 		GoalsAppBadgePill->SetVisibility(Claim > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
@@ -2139,7 +2378,7 @@ UWidget* UPhoneWidget::MakeAppCell(int32 AppIndex, const FString& Name, const FS
 	UVerticalBoxSlot* S1 = Cell->AddChildToVerticalBox(Ov);
 	S1->SetHorizontalAlignment(HAlign_Center);
 
-	UVerticalBoxSlot* S2 = Cell->AddChildToVerticalBox(MakeText(Name, 11, FLinearColor(0.85f, 0.88f, 0.95f), true));
+	UVerticalBoxSlot* S2 = Cell->AddChildToVerticalBox(MakeText(Name, 11, WeedUI::ColTextDim(), true));
 	S2->SetHorizontalAlignment(HAlign_Center);
 	S2->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 	return Cell;
@@ -2159,7 +2398,12 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 
 	// Telefoon-frame: afgerond, donker, rechts in beeld.
 	Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Frame"));
-	Frame->SetBrush(RoundedBrush(FLinearColor(0.04f, 0.05f, 0.07f, 0.98f), 38.f));
+	{
+		FSlateBrush FrBr = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 38.f);
+		FrBr.OutlineSettings.Width = 1.f;
+		FrBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+		Frame->SetBrush(FrBr);
+	}
 	Frame->SetPadding(FMargin(12.f));
 	Frame->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
@@ -2175,9 +2419,9 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 
 	// Statusbalk: tijd | level | cash.
 	UHorizontalBox* Status = WidgetTree->ConstructWidget<UHorizontalBox>();
-	TimeText = MakeText(TEXT("Day 00:00"), 12, FLinearColor(0.7f, 0.8f, 0.95f));
-	LevelText = MakeText(TEXT("Lv 1"), 12, FLinearColor(0.6f, 1.f, 0.7f), true);
-	CashText = MakeText(TEXT("EUR 0"), 12, FLinearColor(0.7f, 1.f, 0.7f));
+	TimeText = MakeText(TEXT("Day 00:00"), 12, WeedUI::ColTextDim());
+	LevelText = MakeText(TEXT("Lv 1"), 12, WeedUI::ColGood(), true);
+	CashText = MakeText(TEXT("EUR 0"), 12, WeedUI::ColGood());
 	TimeText->SetClipping(EWidgetClipping::ClipToBounds);
 	LevelText->SetClipping(EWidgetClipping::ClipToBounds);
 	CashText->SetClipping(EWidgetClipping::ClipToBounds);
@@ -2199,7 +2443,7 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 		BarSz->SetContent(LevelXpBar);
 		UHorizontalBoxSlot* BS = XpRow->AddChildToHorizontalBox(BarSz);
 		BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-		LevelXpText = MakeText(TEXT("0 / 0 XP"), 9, FLinearColor(0.78f, 0.96f, 0.82f));
+		LevelXpText = MakeText(TEXT("0 / 0 XP"), 9, WeedUI::ColTextDim());
 		UHorizontalBoxSlot* TS = XpRow->AddChildToHorizontalBox(LevelXpText);
 		TS->SetVerticalAlignment(VAlign_Center);
 		UVerticalBoxSlot* XpSlot = VB->AddChildToVerticalBox(XpRow);
@@ -2208,7 +2452,7 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 
 	// Scherm-vlak met de app-inhoud.
 	UBorder* Screen = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Screen"));
-	Screen->SetBrush(RoundedBrush(FLinearColor(0.07f, 0.08f, 0.11f, 1.f), 26.f));
+	Screen->SetBrush(RoundedBrush(WeedUI::ColWell(1.f), 26.f));
 	Screen->SetPadding(FMargin(12.f));
 	UVerticalBoxSlot* ScreenSlot = VB->AddChildToVerticalBox(Screen);
 	ScreenSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -2223,10 +2467,10 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	HomeBtn->OnAction.BindLambda([this](int32, int32) { if (Phone.IsValid()) { if (Phone->IsHomeScreen()) { Phone->Toggle(); } else { Phone->GoHome(); } } });
 	{
 		FButtonStyle HS;
-		HS.Normal = RoundedBrush(FLinearColor(0.02f, 0.02f, 0.03f, 1.f), 24.f);
-		HS.Hovered = RoundedBrush(FLinearColor(0.12f, 0.13f, 0.16f, 1.f), 24.f);
+		HS.Normal = RoundedBrush(WeedUI::ColBg(1.f), 24.f);
+		HS.Hovered = RoundedBrush(WeedUI::ColInner(1.f), 24.f);
 		HS.Pressed = RoundedBrush(FLinearColor(0.0f, 0.0f, 0.0f, 1.f), 24.f);
-		HS.Normal.OutlineSettings.Color = FSlateColor(FLinearColor(0.5f, 0.5f, 0.55f, 0.9f));
+		HS.Normal.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.9f));
 		HS.Normal.OutlineSettings.Width = 2.f;
 		HS.Hovered.OutlineSettings = HS.Normal.OutlineSettings;
 		HS.Pressed.OutlineSettings = HS.Normal.OutlineSettings;
@@ -2236,7 +2480,7 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	{
 		USizeBox* Hi = WidgetTree->ConstructWidget<USizeBox>();
 		Hi->SetWidthOverride(20.f); Hi->SetHeightOverride(20.f);
-		Hi->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 20.f, FLinearColor(0.85f, 0.87f, 0.95f)));
+		Hi->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 20.f, WeedUI::ColText()));
 		HomeBtn->SetContent(Hi);
 	}
 	USizeBox* HbSz = WidgetTree->ConstructWidget<USizeBox>();
@@ -2254,12 +2498,20 @@ void UPhoneWidget::RefreshContent()
 	PickerClockText = nullptr; PickerProposeBtn = nullptr; PickerContact = NAME_None; // oude tijd-kiezer-refs vrijgeven
 	MsgAppBadgePill = nullptr; MsgAppBadgeText = nullptr; // oude Messages-badge-refs vrijgeven (worden opnieuw gezet als 't home-rooster bouwt)
 	GoalsAppBadgePill = nullptr; GoalsAppBadgeText = nullptr;
+	OfferBox = nullptr; OfferToggleBtn = nullptr; // chat "Offer instead"-box (opnieuw gebouwd in BuildChatApp)
+	// ContentBox->ClearChildren() heeft de winkel-scroll/footer + hun gepoolde rijen vernietigd; de pool-refs
+	// vrijgeven zodat FillStoreList vers opbouwt in de nieuwe StoreScroll (anders: dangling widget-pointers).
+	StoreRowPool.Reset(); StoreRowSigs.Reset();
+	StoreFooterPool.Reset(); StoreFooterSigs.Reset();
+	StoreQtyTexts.Reset();
+	// Packages-kaarten idem: hun scroll is weg -> map + placeholder + scroll-eigenaar vrijgeven.
+	PkgCards.Reset(); PkgBars.Reset(); PkgEtas.Reset(); PkgEmptyRow = nullptr; PkgScrollOwner = nullptr;
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 
 	if (Phone->IsHomeScreen())
 	{
-		AddInfoRow(TEXT("Apps"), FLinearColor(0.6f, 1.f, 0.6f), 16);
+		AddInfoRow(TEXT("Apps"), WeedUI::ColText(), 16);
 		UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>();
 		Grid->SetSlotPadding(FMargin(10.f));
 		int32 Cell = 0;
@@ -2285,8 +2537,8 @@ void UPhoneWidget::RefreshContent()
 	StorePackagesLabel = nullptr;
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
 	// Linksboven: altijd een Back-knop (terug naar het home-scherm).
-	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Back"), 1, 0, FLinearColor(0.2f, 0.3f, 0.45f)));
-	UTextBlock* TitleText = MakeText(GAppName[App], 15, FLinearColor(0.9f, 0.95f, 1.f));
+	Header->AddChildToHorizontalBox(MakeButton(TEXT("< Back"), 1, 0, WeedUI::ColAccentDim()));
+	UTextBlock* TitleText = MakeText(GAppName[App], 15, WeedUI::ColText());
 	TitleText->SetClipping(EWidgetClipping::ClipToBounds);
 	UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(TitleText);
 	TitleSlot->SetPadding(FMargin(10.f, 4.f, 6.f, 0.f));
@@ -2299,13 +2551,13 @@ void UPhoneWidget::RefreshContent()
 	{
 		// --- Woning: 3 koopbare panden (het starter-flatje is al van jou) ---
 		{
-			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Home"), 14, FLinearColor(0.7f, 0.9f, 1.f)))
+			ContentBox->AddChildToVerticalBox(MakeText(TEXT("Home"), 14, WeedUI::ColText()))
 				->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 			TArray<FCityPropertyOffer> Offers;
 			Phone->GetPropertyOffers(Offers);
 			if (Offers.Num() == 0)
 			{
-				ContentBox->AddChildToVerticalBox(MakeText(TEXT("(city still loading...)"), 11, FLinearColor::Gray));
+				ContentBox->AddChildToVerticalBox(MakeText(TEXT("(city still loading...)"), 11, WeedUI::ColTextDim()));
 			}
 			for (const FCityPropertyOffer& O : Offers)
 			{
@@ -2313,17 +2565,17 @@ void UPhoneWidget::RefreshContent()
 				const bool bHereNow = bOwned && (Phone->GetHomePlayerIsInside() == O.HomeIndex);
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-				Info->AddChildToVerticalBox(MakeText(O.Title, 12, bOwned ? FLinearColor(0.7f, 1.f, 0.7f) : FLinearColor::White));
+				Info->AddChildToVerticalBox(MakeText(O.Title, 12, bOwned ? WeedUI::ColGood() : WeedUI::ColText()));
 				// Woning-info: type + huisnummer + verdieping.
 				const FString InfoLine = Phone->GetHomeInfoLine(O.HomeIndex);
 				if (!InfoLine.IsEmpty())
 				{
-					Info->AddChildToVerticalBox(MakeText(InfoLine, 10, FLinearColor(0.62f, 0.78f, 0.92f)));
+					Info->AddChildToVerticalBox(MakeText(InfoLine, 10, WeedUI::ColTextDim()));
 				}
 				const FString PriceStr = (O.PriceCents > 0)
 					? FString::Printf(TEXT("%s   EUR %lld"), *O.Sub, (long long)(WeedRoundEuros(O.PriceCents) / 100))
 					: (bOwned ? FString::Printf(TEXT("%s   (in bezit)"), *O.Sub) : FString::Printf(TEXT("%s   (starter)"), *O.Sub));
-				Info->AddChildToVerticalBox(MakeText(PriceStr, 10, FLinearColor(0.65f, 0.7f, 0.8f)));
+				Info->AddChildToVerticalBox(MakeText(PriceStr, 10, WeedUI::ColTextDim()));
 				UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
 				IL->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 				IL->SetVerticalAlignment(VAlign_Center);
@@ -2334,18 +2586,18 @@ void UPhoneWidget::RefreshContent()
 				if (!bOwned)
 				{
 					RB->SetHeightOverride(28.f);
-					RB->SetContent(MakeButton(TEXT("Buy"), 7, O.HomeIndex, FLinearColor(0.2f, 0.5f, 0.28f)));
+					RB->SetContent(MakeButton(TEXT("Buy"), 7, O.HomeIndex, WeedUI::ColAccentDim()));
 				}
 				else
 				{
 					// Eigen woning: teleport-knop (of "you are here") + verkoop-knop (~65%).
 					const int32 SellVal = Phone->GetHomeSellValueCents(O.HomeIndex);
 					UVerticalBox* OwnBox = WidgetTree->ConstructWidget<UVerticalBox>();
-					if (bHereNow) { OwnBox->AddChildToVerticalBox(MakeText(TEXT("you are here"), 11, FLinearColor(0.6f, 1.f, 0.6f), true)); }
-					else          { OwnBox->AddChildToVerticalBox(MakeButton(TEXT("Ga hierheen"), 8, O.HomeIndex, FLinearColor(0.25f, 0.45f, 0.6f))); }
+					if (bHereNow) { OwnBox->AddChildToVerticalBox(MakeText(TEXT("you are here"), 11, WeedUI::ColGood(), true)); }
+					else          { OwnBox->AddChildToVerticalBox(MakeButton(TEXT("Ga hierheen"), 8, O.HomeIndex, WeedUI::ColAccentDim())); }
 					if (SellVal > 0)
 					{
-						OwnBox->AddChildToVerticalBox(MakeButton(*FString::Printf(TEXT("Sell EUR %d"), (int32)(WeedRoundEuros((int64)SellVal) / 100)), 9, O.HomeIndex, FLinearColor(0.5f, 0.32f, 0.2f)))
+						OwnBox->AddChildToVerticalBox(MakeButton(*FString::Printf(TEXT("Sell EUR %d"), (int32)(WeedRoundEuros((int64)SellVal) / 100)), 9, O.HomeIndex, WeedUI::ColAccentDim()))
 							->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
 					}
 					RB->SetHeightOverride(SellVal > 0 ? 58.f : 28.f);
@@ -2392,9 +2644,9 @@ void UPhoneWidget::RefreshContent()
 		UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 		if (!Con || Con->GetContacts().Num() == 0)
 		{
-			AddInfoRow(TEXT("No contacts yet."), FLinearColor::Gray, 13);
-			AddInfoRow(TEXT("Deal with customers to get"), FLinearColor::Gray);
-			AddInfoRow(TEXT("their number."), FLinearColor::Gray);
+			AddInfoRow(TEXT("No contacts yet."), WeedUI::ColTextDim(), 13);
+			AddInfoRow(TEXT("Deal with customers to get"), WeedUI::ColTextDim());
+			AddInfoRow(TEXT("their number."), WeedUI::ColTextDim());
 		}
 		else
 		{
@@ -2405,16 +2657,16 @@ void UPhoneWidget::RefreshContent()
 			{
 				const FName Cid = C.ContactId;
 				UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
-				Card->SetBrush(RoundedBrush(FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+				Card->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
 				Card->SetPadding(FMargin(8.f, 6.f, 8.f, 6.f));
 				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 				Card->SetContent(Row);
 				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-				Info->AddChildToVerticalBox(MakeText(C.DisplayName.ToString(), 14, FLinearColor(0.95f, 0.97f, 1.f)));
-				Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Relationship %.0f%%"), C.Relationship), 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+				Info->AddChildToVerticalBox(MakeText(C.DisplayName.ToString(), 14, WeedUI::ColText()));
+				Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Relationship %.0f%%"), C.Relationship), 10, WeedUI::ColTextDim()));
 				UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
 				IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
-				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Message"), FLinearColor(0.2f, 0.4f, 0.55f),
+				Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Message"), WeedUI::ColAccentDim(),
 					[this, Cid]() { OpenChatContact = Cid; if (Phone.IsValid()) { Phone->OpenApp(3); } MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
 				List->AddChild(Card);
 				UTextBlock* Gap = MakeText(TEXT(""), 4, FLinearColor::Transparent);
@@ -2452,11 +2704,11 @@ void UPhoneWidget::RefreshContent()
 void UPhoneWidget::BuildStatsApp()
 {
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	if (!GS || !GS->IsCompetitive()) { AddInfoRow(TEXT("Leaderboard is only for Competitive mode."), FLinearColor::Gray, 13); return; }
+	if (!GS || !GS->IsCompetitive()) { AddInfoRow(TEXT("Leaderboard is only for Competitive mode."), WeedUI::ColTextDim(), 13); return; }
 
-	AddInfoRow(TEXT("LEADERBOARD"), FLinearColor(1.f, 0.85f, 0.35f), 17);
+	AddInfoRow(TEXT("LEADERBOARD"), WeedUI::ColText(), 17);
 	const TArray<FCompetitorScore>& St = GS->GetStandings();
-	if (St.Num() == 0) { AddInfoRow(TEXT("No players yet."), FLinearColor::Gray, 13); return; }
+	if (St.Num() == 0) { AddInfoRow(TEXT("No players yet."), WeedUI::ColTextDim(), 13); return; }
 
 	const APawn* Me = GetOwningPlayerPawn();
 	const FString MyName = (Me && Me->GetPlayerState()) ? Me->GetPlayerState()->GetPlayerName() : FString();
@@ -2465,7 +2717,7 @@ void UPhoneWidget::BuildStatsApp()
 	for (const FCompetitorScore& C : St)
 	{
 		const bool bMe = (!MyName.IsEmpty() && C.Name == MyName);
-		const FLinearColor Col = (Rank == 1) ? FLinearColor(0.16f, 0.55f, 0.95f) : FLinearColor(0.10f, 0.11f, 0.16f);
+		const FLinearColor Col = (Rank == 1) ? WeedUI::ColAccentDim() : WeedUI::ColInner();
 		UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
 		Card->SetBrush(WeedUI::Rounded(FLinearColor(Col.R, Col.G, Col.B, bMe ? 0.95f : 0.55f), 10.f));
 		Card->SetPadding(FMargin(12.f, 9.f));
@@ -2475,16 +2727,16 @@ void UPhoneWidget::BuildStatsApp()
 		const TCHAR* Medal = (Rank == 1) ? TEXT("1st") : (Rank == 2) ? TEXT("2nd") : (Rank == 3) ? TEXT("3rd") : TEXT("");
 		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
 			FString::Printf(TEXT("#%d  %s%s"), Rank, *C.Name, bMe ? TEXT("  (you)") : TEXT("")), 15,
-			FLinearColor(1.f, 1.f, 1.f), true, true));
+			WeedUI::ColText(), true, true));
 		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
 			FString::Printf(TEXT("Net worth:  EUR %lld    %s"), (long long)(C.NetWorthCents / 100), Medal), 12,
-			FLinearColor(0.85f, 1.f, 0.85f), false));
+			WeedUI::ColTextDim(), false));
 		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
 			FString::Printf(TEXT("Cash EUR %lld   Bank EUR %lld"), (long long)(C.CashCents / 100), (long long)(C.BankCents / 100)), 11,
-			FLinearColor(0.75f, 0.82f, 0.95f), false));
+			WeedUI::ColTextDim(), false));
 		VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree,
 			FString::Printf(TEXT("Earned EUR %lld   Customers %d"), (long long)(C.EarnedCents / 100), C.Customers), 11,
-			FLinearColor(0.95f, 0.85f, 0.6f), false));
+			WeedUI::ColTextDim(), false));
 
 		UVerticalBoxSlot* CS = ContentBox->AddChildToVerticalBox(Card);
 		CS->SetPadding(FMargin(0.f, 0.f, 0.f, 7.f));
@@ -2504,7 +2756,7 @@ void UPhoneWidget::BuildGoalsApp()
 	if (!ContentBox) { return; }
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
-	if (!GoalsC) { AddInfoRow(TEXT("Goals unavailable."), FLinearColor::Gray); return; }
+	if (!GoalsC) { AddInfoRow(TEXT("Goals unavailable."), WeedUI::ColTextDim()); return; }
 
 	UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
 	UVerticalBoxSlot* LS = ContentBox->AddChildToVerticalBox(List);
@@ -2521,17 +2773,18 @@ void UPhoneWidget::BuildGoalsApp()
 		const float Frac = (Tgt > 0) ? FMath::Clamp((float)Prog / (float)Tgt, 0.f, 1.f) : 0.f;
 
 		UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
-		Card->SetBrush(RoundedBrush(bClaimed ? FLinearColor(0.10f, 0.13f, 0.10f, 0.95f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f), 8.f));
+		Card->SetBrush(RoundedBrush(bClaimed ? WeedUI::ColSlotEmpty(0.95f) : WeedUI::ColInner(0.95f), 8.f));
 		Card->SetPadding(FMargin(9.f, 7.f, 9.f, 7.f));
 		UVerticalBox* CV = WidgetTree->ConstructWidget<UVerticalBox>();
 		Card->SetContent(CV);
 
-		CV->AddChildToVerticalBox(MakeText(Gd.Title, 13, bClaimed ? FLinearColor(0.6f, 0.8f, 0.6f) : FLinearColor(0.95f, 0.97f, 1.f)));
+		UTextBlock* TitleT = MakeText(Gd.Title, 13, bClaimed ? WeedUI::ColGood() : WeedUI::ColText());
+		CV->AddChildToVerticalBox(TitleT);
 
 		const FString ProgStr = (Gd.Metric == 0)
 			? FString::Printf(TEXT("EUR %lld / %lld"), (long long)(Prog / 100), (long long)(Tgt / 100))
 			: FString::Printf(TEXT("%lld / %lld"), (long long)Prog, (long long)Tgt);
-		CV->AddChildToVerticalBox(MakeText(ProgStr, 10, FLinearColor(0.62f, 0.66f, 0.76f)));
+		CV->AddChildToVerticalBox(MakeText(ProgStr, 10, WeedUI::ColTextDim()));
 
 		UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
 		Bar->SetPercent(Frac);
@@ -2547,21 +2800,35 @@ void UPhoneWidget::BuildGoalsApp()
 		{
 			RewardStr += FString::Printf(TEXT("%s%dx %s"), Gd.RewardMoneyCents > 0 ? TEXT("  +  ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem));
 		}
-		UHorizontalBoxSlot* RWS = Row->AddChildToHorizontalBox(MakeText(RewardStr, 10, FLinearColor(0.85f, 0.8f, 0.5f)));
+		UHorizontalBoxSlot* RWS = Row->AddChildToHorizontalBox(MakeText(RewardStr, 10, WeedUI::ColTextDim()));
 		RWS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); RWS->SetVerticalAlignment(VAlign_Center);
 		if (bClaimed)
 		{
-			Row->AddChildToHorizontalBox(MakeText(TEXT("Claimed"), 11, FLinearColor(0.5f, 0.8f, 0.5f)))->SetVerticalAlignment(VAlign_Center);
+			Row->AddChildToHorizontalBox(MakeText(TEXT("Claimed"), 11, WeedUI::ColGood()))->SetVerticalAlignment(VAlign_Center);
 		}
 		else if (bDone)
 		{
 			const int32 Idx = i;
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Claim"), FLinearColor(0.2f, 0.55f, 0.27f),
-				[this, Idx]() { if (Phone.IsValid()) { Phone->ClaimGoal(Idx); } MarkDirty(); }, 11))->SetVerticalAlignment(VAlign_Center);
+			// Claim werkt ALLEEN deze kaart in-place bij (grijze kaart + groene titel + "Claimed"-label i.p.v. de knop);
+			// geen MarkDirty -> geen hele Goals-lijst-herbouw/flash. De home-badge loopt live mee (GetClaimableGoals).
+			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Claim"), WeedUI::ColAccentDim(),
+				[this, Idx, Card, TitleT, Row]()
+				{
+					if (Phone.IsValid()) { Phone->ClaimGoal(Idx); }
+					if (Card) { Card->SetBrush(RoundedBrush(WeedUI::ColSlotEmpty(0.95f), 8.f)); }
+					if (TitleT) { TitleT->SetColorAndOpacity(FSlateColor(WeedUI::ColGood())); }
+					if (Row)
+					{
+						// De laatste cel (de Claim-knop) vervangen door het "Claimed"-label.
+						const int32 Last = Row->GetChildrenCount() - 1;
+						if (UWidget* W = Row->GetChildAt(Last)) { W->RemoveFromParent(); }
+						Row->AddChildToHorizontalBox(MakeText(TEXT("Claimed"), 11, WeedUI::ColGood()))->SetVerticalAlignment(VAlign_Center);
+					}
+				}, 11))->SetVerticalAlignment(VAlign_Center);
 		}
 		else
 		{
-			Row->AddChildToHorizontalBox(MakeText(TEXT("In progress"), 10, FLinearColor(0.5f, 0.52f, 0.58f)))->SetVerticalAlignment(VAlign_Center);
+			Row->AddChildToHorizontalBox(MakeText(TEXT("In progress"), 10, WeedUI::ColTextDim()))->SetVerticalAlignment(VAlign_Center);
 		}
 		CV->AddChildToVerticalBox(Row);
 
@@ -2575,7 +2842,7 @@ void UPhoneWidget::BuildMapApp()
 	if (!ContentBox) { return; }
 
 	// Knop naar de fullscreen-kaart (zelfde als M).
-	UWeedActionButton* FB = MakeActionBtn(TEXT("Fullscreen"), FLinearColor(0.20f, 0.45f, 0.62f),
+	UWeedActionButton* FB = MakeActionBtn(TEXT("Fullscreen"), WeedUI::ColAccentDim(),
 		[this]() { if (Phone.IsValid()) { Phone->ToggleMapOverlay(); } }, 13);
 	ContentBox->AddChildToVerticalBox(FB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 

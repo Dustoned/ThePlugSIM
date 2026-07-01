@@ -61,14 +61,14 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 
 	// Twee compacte horizontale stroken: LINKS (Day/tijd, Cash, Bank) en RECHTS (Heat, Level, Stoned).
 	// Geen zware "graybox": alleen een subtiele donkere scrim (lage opacity) + tekst-schaduw.
-	const FLinearColor ColScrim (0.04f, 0.045f, 0.06f, 0.34f);
-	const FLinearColor ColLabel (1.f, 1.f, 1.f, 0.55f);
-	const FLinearColor ColDiv   (1.f, 1.f, 1.f, 0.12f);
-	const FLinearColor ColGold  (0.957f, 0.773f, 0.259f);
-	const FLinearColor ColBlue  (0.325f, 0.725f, 1.f);
-	const FLinearColor ColOrange(1.f, 0.55f, 0.2f);
-	const FLinearColor ColPurple(0.694f, 0.424f, 1.f);
-	const FLinearColor ColSun   (1.f, 0.82f, 0.3f);
+	const FLinearColor ColScrim = WeedUI::ColPanel(0.34f);
+	const FLinearColor ColLabel = WeedUI::ColTextDim(0.55f);
+	const FLinearColor ColDiv   = WeedUI::ColStroke(0.12f);
+	const FLinearColor ColGold  (0.957f, 0.773f, 0.259f);   // cash/geld-cue (semantisch) -> behouden
+	const FLinearColor ColBlue  = WeedUI::ColAccent();
+	const FLinearColor ColOrange(1.f, 0.55f, 0.2f);         // heat-signaal (semantisch) -> behouden
+	const FLinearColor ColPurple= WeedUI::ColAccent();
+	const FLinearColor ColSun   (1.f, 0.82f, 0.3f);         // zon/dag-nacht-tint (semantisch) -> behouden
 
 	auto Shade = [](UTextBlock* T) { if (T) { T->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.95f)); T->SetShadowOffset(FVector2D(1.f, 1.5f)); } };
 
@@ -103,7 +103,7 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		IcoSz->SetContent(IcoKey.IsEmpty() ? WeedUI::Icon(WidgetTree, Ico, 26.f, IcoCol) : WeedUI::UiGlyph(WidgetTree, IcoKey, 26.f, IcoCol, Ico));
 		UHorizontalBoxSlot* IS = Chip->AddChildToHorizontalBox(IcoSz); IS->SetVerticalAlignment(VAlign_Center); IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		(void)Label; (void)ColLabel; // labels weg: alleen icoon + waarde (compacter, minder tekst, meer game-feel)
-		OutVal = WeedUI::Text(WidgetTree, Val, 21, FLinearColor::White, false, true); Shade(OutVal);
+		OutVal = WeedUI::Text(WidgetTree, Val, 21, WeedUI::ColText(), false, true); Shade(OutVal);
 		Chip->AddChildToHorizontalBox(OutVal)->SetVerticalAlignment(VAlign_Center);
 		Strip->AddChildToHorizontalBox(Chip)->SetVerticalAlignment(VAlign_Center);
 		return Chip;
@@ -128,7 +128,7 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
 		DayText = WeedUI::Text(WidgetTree, TEXT("Day 1"), 11, ColLabel, false, false); Shade(DayText);
 		Col->AddChildToVerticalBox(DayText);
-		TimeText = WeedUI::Text(WidgetTree, TEXT("09:04"), 20, FLinearColor::White, false, true); Shade(TimeText);
+		TimeText = WeedUI::Text(WidgetTree, TEXT("09:04"), 20, WeedUI::ColText(), false, true); Shade(TimeText);
 		Col->AddChildToVerticalBox(TimeText)->SetPadding(FMargin(0.f, -1.f, 0.f, 0.f));
 		Chip->AddChildToHorizontalBox(Col)->SetVerticalAlignment(VAlign_Center);
 		StripL->AddChildToHorizontalBox(Chip)->SetVerticalAlignment(VAlign_Center);
@@ -148,12 +148,12 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		UHorizontalBoxSlot* IS = Chip->AddChildToHorizontalBox(IcoSz); IS->SetVerticalAlignment(VAlign_Center); IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
 		UHorizontalBox* ValRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-		LevelText = WeedUI::Text(WidgetTree, TEXT("1"), 20, FLinearColor::White, false, true); Shade(LevelText);
+		LevelText = WeedUI::Text(WidgetTree, TEXT("1"), 20, WeedUI::ColText(), false, true); Shade(LevelText);
 		ValRow->AddChildToHorizontalBox(LevelText)->SetVerticalAlignment(VAlign_Center);
 		UBorder* Badge = WidgetTree->ConstructWidget<UBorder>();
 		Badge->SetBrush(WeedUI::Rounded(ColPurple, 6.f));
 		Badge->SetPadding(FMargin(6.f, 0.f, 6.f, 1.f));
-		Badge->SetContent(WeedUI::Text(WidgetTree, TEXT("MAX"), 10, FLinearColor(0.10f, 0.05f, 0.16f), true, true));
+		Badge->SetContent(WeedUI::Text(WidgetTree, TEXT("MAX"), 10, WeedUI::ColAccentDim(), true, true));
 		UHorizontalBoxSlot* BgS = ValRow->AddChildToHorizontalBox(Badge); BgS->SetVerticalAlignment(VAlign_Center); BgS->SetPadding(FMargin(7.f, 0.f, 0.f, 0.f));
 		MaxBadge = Badge; MaxBadge->SetVisibility(ESlateVisibility::Collapsed);
 		Col->AddChildToVerticalBox(ValRow)->SetPadding(FMargin(0.f, -1.f, 0.f, 0.f));
@@ -164,7 +164,7 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		// Stoned: divider + chip in een wrapper die mee verbergt (zo geen los hangend streepje als 't weg is).
 		UHorizontalBox* StWrap = WidgetTree->ConstructWidget<UHorizontalBox>();
 		AddDivider(StWrap);
-		AddChip(StWrap, WeedUI::EIcon::Leaf, FLinearColor(0.4f, 0.9f, 0.5f), FString(), TEXT("Stoned"), TEXT("0:00"), StonedText);
+		AddChip(StWrap, WeedUI::EIcon::Leaf, WeedUI::ColGood(), FString(), TEXT("Stoned"), TEXT("0:00"), StonedText);
 		StripR->AddChildToHorizontalBox(StWrap)->SetVerticalAlignment(VAlign_Center);
 		StonedRow = StWrap;
 		StonedRow->SetVisibility(ESlateVisibility::Collapsed);

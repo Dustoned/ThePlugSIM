@@ -9,6 +9,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/ScrollBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Slider.h"
@@ -77,8 +78,17 @@ void UDevMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const bool bOpen = Phone->IsDevMenuOpen();
 	if (Frame) { Frame->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen) { return; }
-	if (bContentDirty) { bContentDirty = false; FillCategory(SelectedCat); } // alleen de INHOUD herbouwen, nooit de hele menu
-	if (TimeSpeedSlider || LMoon) { ApplyLightSliders(); }
+	// Alleen de DYNAMISCHE sub-lijsten verversen (per-rij diff), en enkel die van de zichtbare categorie —
+	// de statische panel-inhoud is één keer gebouwd en blijft staan (geen rebuild, geen flash/scroll-sprong).
+	if (bContentDirty)
+	{
+		bContentDirty = false;
+		if (SelectedCat == 6) { RefreshRoomTemplates(); RefreshRoomPlaced(); }
+		else if (SelectedCat == 9) { RefreshMarkedSpots(); }
+	}
+	// Sliders alléén live toepassen als hun panel de actieve view is (World=tijd, Lighting=licht) —
+	// zo schrijven we DN niet elke frame vanuit een verborgen panel (behoud van oud gedrag).
+	if (SelectedCat == 0 || SelectedCat == 8) { ApplyLightSliders(); }
 }
 
 void UDevMenuWidget::BuildShell(UCanvasPanel* Root)
@@ -138,6 +148,19 @@ void UDevMenuWidget::BuildShell(UCanvasPanel* Root)
 	Cols->AddChildToHorizontalBox(ContentBg)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
 	BuildNav(); // nav één keer bouwen
+
+	// Alle 11 categorie-panels ÉÉN keer bouwen als persistente kinderen van Body.
+	// Tab-klik toont alleen het gekozen panel en verbergt de rest (geen ClearChildren/rebuild).
+	CatPanels.Reset();
+	const int32 NumCats = UE_ARRAY_COUNT(GCatNames);
+	for (int32 i = 0; i < NumCats; ++i)
+	{
+		UVerticalBox* Panel = WidgetTree->ConstructWidget<UVerticalBox>();
+		Body->AddChildToVerticalBox(Panel);
+		CatPanels.Add(Panel);
+		BuildCategoryPanel(i, Panel);
+	}
+	ShowCategory(SelectedCat);
 }
 
 void UDevMenuWidget::BuildNav()
@@ -149,7 +172,7 @@ void UDevMenuWidget::BuildNav()
 	for (int32 i = 0; i < N; ++i)
 	{
 		UWeedActionButton* CB = MakeActionBtn(GCatNames[i], FLinearColor(0.1f, 0.11f, 0.15f),
-			[this, i]() { if (SelectedCat != i) { SelectedCat = i; RestyleNav(); MarkDirty(); } }, 12);
+			[this, i]() { if (SelectedCat != i) { SelectedCat = i; RestyleNav(); ShowCategory(i); } }, 12);
 		CatList->AddChildToVerticalBox(CB)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 		CatButtons.Add(CB);
 	}
@@ -172,16 +195,28 @@ void UDevMenuWidget::RestyleNav()
 	}
 }
 
-void UDevMenuWidget::FillCategory(int32 Cat)
+void UDevMenuWidget::ShowCategory(int32 Cat)
 {
-	if (!Body) { return; }
-	Body->ClearChildren();
-	TimeSpeedSlider = nullptr; TimeSpeedV = nullptr;
-	LMoon = nullptr; LSun = nullptr; LSkyN = nullptr; LSkyD = nullptr; LPitch = nullptr; LLamp = nullptr; LExp = nullptr;
+	// Toon alleen het gekozen panel; verberg de andere 10. Geen teardown/rebuild.
+	for (int32 i = 0; i < CatPanels.Num(); ++i)
+	{
+		if (!CatPanels[i]) { continue; }
+		CatPanels[i]->SetVisibility(i == Cat ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	// Dynamische lijsten van het nu-zichtbare panel meteen up-to-date zetten (per-rij diff, geen rebuild).
+	if (Cat == 6) { RefreshRoomTemplates(); RefreshRoomPlaced(); }
+	else if (Cat == 9) { RefreshMarkedSpots(); }
+	// World/Lighting: value-labels meteen vullen (geen lege frame) — sliders sturen daarna live.
+	else if (Cat == 0 || Cat == 8) { ApplyLightSliders(); }
+}
+
+void UDevMenuWidget::BuildCategoryPanel(int32 Cat, UVerticalBox* Panel)
+{
+	if (!Panel) { return; }
 
 	const FLinearColor CSave(0.22f, 0.44f, 0.32f), CClr(0.45f, 0.26f, 0.26f), CAim(0.23f, 0.37f, 0.54f), CKit(0.22f, 0.42f, 0.48f);
 
-	auto BodyRow = [this](UWidget* W, const FMargin& Pad) { Body->AddChildToVerticalBox(W)->SetPadding(Pad); };
+	auto BodyRow = [Panel](UWidget* W, const FMargin& Pad) { Panel->AddChildToVerticalBox(W)->SetPadding(Pad); };
 	auto Title = [&](const TCHAR* T) { BodyRow(MakeText(T, 16, FLinearColor(0.72f, 0.86f, 1.f)), FMargin(0.f, 0.f, 0.f, 9.f)); };
 	auto Head  = [&](const TCHAR* T) { BodyRow(MakeText(T, 11, FLinearColor(0.46f, 0.7f, 1.f)), FMargin(0.f, 7.f, 0.f, 3.f)); };
 	auto Desc  = [&](const TCHAR* T) { UTextBlock* D = MakeText(T, 9, FLinearColor(0.54f, 0.59f, 0.68f)); D->SetAutoWrapText(true); BodyRow(D, FMargin(1.f, 1.f, 0.f, 9.f)); };
@@ -225,7 +260,7 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 				 TEXT("Weer vanzelf laten wisselen, of uit voor handmatige controle."));
 		{
 			const float Cur = GetWorld() ? UGameplayStatics::GetGlobalTimeDilation(GetWorld()) : 1.f;
-			AddLightSlider(TEXT("Time speed"), (FMath::Clamp(Cur, 1.f, 8.f) - 1.f) / 7.f, TimeSpeedSlider, TimeSpeedV);
+			AddLightSlider(Panel, TEXT("Time speed"), (FMath::Clamp(Cur, 1.f, 8.f) - 1.f) / 7.f, TimeSpeedSlider, TimeSpeedV);
 		}
 		Desc(TEXT("Versnel de tijd (1x-8x) om sneller te testen."));
 		Pair(TEXT("Robbery"), FLinearColor(0.5f, 0.34f, 0.18f), [this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(false); } },
@@ -291,9 +326,31 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 		{
 			static const TCHAR* KN[3] = { TEXT("Grow shop"), TEXT("Supplies"), TEXT("Furniture") };
 			const int32 SelK = Phone.IsValid() ? FMath::Clamp(Phone->GetSelectedShopKind(), 0, 2) : 0;
-			Single(FString::Printf(TEXT("Type: %s  (tap)"), KN[SelK]), FLinearColor(0.3f, 0.34f, 0.2f),
-				TEXT("Kies welk winkeltype de volgende 'Save shops' krijgt."),
-				[this]() { if (Phone.IsValid()) { Phone->CycleSelectedShopKind(); MarkDirty(); } });
+			// Type-cycle: knop met een PERSISTENTE label -> tik = SetText op ShopTypeLabel, geen rebuild.
+			UWeedActionButton* TypeBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
+			TypeBtn->OnClicked.AddDynamic(TypeBtn, &UWeedActionButton::Handle);
+			TypeBtn->OnAction.BindLambda([this](int32, int32)
+			{
+				if (!Phone.IsValid()) { return; }
+				Phone->CycleSelectedShopKind();
+				static const TCHAR* KN2[3] = { TEXT("Grow shop"), TEXT("Supplies"), TEXT("Furniture") };
+				const int32 K = FMath::Clamp(Phone->GetSelectedShopKind(), 0, 2);
+				if (ShopTypeLabel) { ShopTypeLabel->SetText(FText::FromString(FString::Printf(TEXT("Type: %s  (tap)"), KN2[K]))); }
+			});
+			{
+				const FLinearColor Col(0.3f, 0.34f, 0.2f);
+				FButtonStyle S;
+				S.Normal = DevBrush(Col, 6.f);
+				S.Hovered = DevBrush(Col * 1.4f, 6.f);
+				S.Pressed = DevBrush(Col * 0.8f, 6.f);
+				S.NormalPadding = FMargin(8.f, 5.f); S.PressedPadding = FMargin(8.f, 5.f);
+				TypeBtn->SetStyle(S);
+			}
+			ShopTypeLabel = MakeText(FString::Printf(TEXT("Type: %s  (tap)"), KN[SelK]), 11, FLinearColor(0.95f, 0.96f, 1.f), true);
+			ShopTypeLabel->SetClipping(EWidgetClipping::Inherit);
+			TypeBtn->SetContent(ShopTypeLabel);
+			BodyRow(TypeBtn, FMargin(0.f, 0.f, 0.f, 2.f));
+			Desc(TEXT("Kies welk winkeltype de volgende 'Save shops' krijgt."));
 		}
 		Pair(TEXT("Save shops"), CSave, [this]() { if (Phone.IsValid()) { Phone->SaveShopSpots(); } },
 			 TEXT("Clear"), CClr, [this]() { if (Phone.IsValid()) { Phone->ClearShopSpots(); } },
@@ -338,50 +395,24 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 		Single(TEXT("Save as template (2 markers)"), FLinearColor(0.25f, 0.4f, 0.5f),
 			TEXT("2 F9-markers -> herbruikbaar kamer-sjabloon dat je hieronder kunt stempelen."),
 			[this]() { if (Phone.IsValid()) { Phone->SaveRoomTemplateNow(); MarkDirty(); } });
+		// Templates-header + persistente template-lijst-box. Rijen worden per-diff bijgewerkt in RefreshRoomTemplates().
+		RoomTplHead = MakeText(TEXT("Templates  (click to place)"), 11, FLinearColor(0.46f, 0.7f, 1.f));
+		BodyRow(RoomTplHead, FMargin(0.f, 7.f, 0.f, 3.f));
+		RoomTplBox = WidgetTree->ConstructWidget<UVerticalBox>();
+		BodyRow(RoomTplBox, FMargin(0.f, 0.f, 0.f, 0.f));
+		// Placed-header + "Undo last stamp" samen in één toggle-bare box, daarna de persistente placed-lijst-box.
+		RoomPlacedHeadBox = WidgetTree->ConstructWidget<UVerticalBox>();
 		{
-			const TArray<FString> Templates = ARoomStamper::ListTemplates();
-			if (Templates.Num() > 0) { Head(TEXT("Templates  (click to place)")); }
-			for (const FString& Tpl : Templates)
-			{
-				UHorizontalBox* TRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-				TRow->AddChildToHorizontalBox(MakeActionBtn(FString::Printf(TEXT("Stamp: %s"), *Tpl), FLinearColor(0.2f, 0.35f, 0.25f),
-					[this, Tpl]() { if (Phone.IsValid()) { Phone->StartRoomStamp(Tpl); } }, 11))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-				TRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
-					[this, Tpl]() { WeedData::DeleteFile(FString(TEXT("RoomTemplates")) / (Tpl + TEXT(".txt"))); MarkDirty(); }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
-				BodyRow(TRow, FMargin(0.f, 0.f, 0.f, 4.f));
-			}
+			RoomPlacedHeadBox->AddChildToVerticalBox(MakeText(TEXT("Placed  (TP / remove)"), 11, FLinearColor(0.46f, 0.7f, 1.f)))->SetPadding(FMargin(0.f, 7.f, 0.f, 3.f));
+			RoomPlacedHeadBox->AddChildToVerticalBox(MakeActionBtn(TEXT("Undo last stamp"), FLinearColor(0.52f, 0.3f, 0.2f),
+				[this]() { FString Info; ARoomStamper::UndoLastStamp(GetWorld(), Info); MarkDirty(); }, 11))->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+			UTextBlock* UndoDesc = MakeText(TEXT("Verwijder de laatst geplaatste (nog niet gebakken) stempel."), 9, FLinearColor(0.54f, 0.59f, 0.68f));
+			UndoDesc->SetAutoWrapText(true);
+			RoomPlacedHeadBox->AddChildToVerticalBox(UndoDesc)->SetPadding(FMargin(1.f, 1.f, 0.f, 9.f));
 		}
-		{
-			const TArray<FString> Placed = ARoomStamper::ListPlacedStamps(GetWorld());
-			if (Placed.Num() > 0)
-			{
-				Head(TEXT("Placed  (TP / remove)"));
-				Single(TEXT("Undo last stamp"), FLinearColor(0.52f, 0.3f, 0.2f), TEXT("Verwijder de laatst geplaatste (nog niet gebakken) stempel."),
-					[this]() { FString Info; ARoomStamper::UndoLastStamp(GetWorld(), Info); MarkDirty(); });
-				for (const FString& SLine : Placed)
-				{
-					TArray<FString> SParts; SLine.ParseIntoArray(SParts, TEXT("|"));
-					FVector Pos = FVector::ZeroVector; bool bHasPos = false;
-					if (SParts.Num() > 1)
-					{
-						TArray<FString> PP; SParts[1].ParseIntoArray(PP, TEXT(","));
-						if (PP.Num() >= 3) { Pos = FVector(FCString::Atof(*PP[0]), FCString::Atof(*PP[1]), FCString::Atof(*PP[2])); bHasPos = true; }
-					}
-					UHorizontalBox* SRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-					UHorizontalBoxSlot* SLab = SRow->AddChildToHorizontalBox(MakeText(
-						FString::Printf(TEXT("%s  (%.0f, %.0f)"), SParts.Num() > 0 ? *SParts[0] : *SLine, Pos.X, Pos.Y), 11, FLinearColor(0.82f, 0.88f, 1.f)));
-					SLab->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SLab->SetVerticalAlignment(VAlign_Center);
-					if (bHasPos)
-					{
-						SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
-							[this, Pos]() { if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(Pos + FVector(0.f, 0.f, 120.f)); } }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
-					}
-					SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
-						[this, SLine]() { ARoomStamper::RemoveStamp(GetWorld(), SLine); MarkDirty(); }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
-					BodyRow(SRow, FMargin(0.f, 0.f, 0.f, 3.f));
-				}
-			}
-		}
+		BodyRow(RoomPlacedHeadBox, FMargin(0.f, 0.f, 0.f, 0.f));
+		RoomPlacedBox = WidgetTree->ConstructWidget<UVerticalBox>();
+		BodyRow(RoomPlacedBox, FMargin(0.f, 0.f, 0.f, 0.f));
 		break;
 
 	case 7: // Doors
@@ -450,32 +481,32 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 			if (bPackL)
 			{
 				// UDS bezit de lucht -> deze sliders sturen UDS LIVE aan (geen rebuild nodig).
-				AddLightSlider(TEXT("Day exposure"),   DN ? (DN->UdsExpDay + 2.f) / 3.f : 0.5f,         LSun,   LSunV);
-				AddLightSlider(TEXT("Night exposure"), DN ? (DN->UdsExpNight + 4.f) / 5.f : 0.56f,      LMoon,  LMoonV);
-				AddLightSlider(TEXT("Dawn/dusk exp"),  DN ? (DN->UdsExpDawnDusk + 2.f) / 3.f : 0.57f,   LPitch, LPitchV);
-				AddLightSlider(TEXT("Street lamps"),   DN ? DN->LampIntensity / 80000.f : 0.35f,        LLamp,  LLampV);
-				AddLightSlider(TEXT("Stars"),          DN ? DN->UdsStars / 5.f : 0.5f,                  LSkyN,  LSkyNV);
-				AddLightSlider(TEXT("Nebula"),         DN ? DN->UdsNebula / 3.f : 0.4f,                 LSkyD,  LSkyDV);
-				AddLightSlider(TEXT("Night glow"),     DN ? DN->UdsNightGlow : 0.3f,                    LExp,   LExpV);
+				AddLightSlider(Panel, TEXT("Day exposure"),   DN ? (DN->UdsExpDay + 2.f) / 3.f : 0.5f,         LSun,   LSunV);
+				AddLightSlider(Panel, TEXT("Night exposure"), DN ? (DN->UdsExpNight + 4.f) / 5.f : 0.56f,      LMoon,  LMoonV);
+				AddLightSlider(Panel, TEXT("Dawn/dusk exp"),  DN ? (DN->UdsExpDawnDusk + 2.f) / 3.f : 0.57f,   LPitch, LPitchV);
+				AddLightSlider(Panel, TEXT("Street lamps"),   DN ? DN->LampIntensity / 80000.f : 0.35f,        LLamp,  LLampV);
+				AddLightSlider(Panel, TEXT("Stars"),          DN ? DN->UdsStars / 5.f : 0.5f,                  LSkyN,  LSkyNV);
+				AddLightSlider(Panel, TEXT("Nebula"),         DN ? DN->UdsNebula / 3.f : 0.4f,                 LSkyD,  LSkyDV);
+				AddLightSlider(Panel, TEXT("Night glow"),     DN ? DN->UdsNightGlow : 0.3f,                    LExp,   LExpV);
 			}
 			else
 			{
 				const float Moon = DN ? DN->MoonIntensity : 0.65f;
 				const float Sun  = DN ? DN->SunIntensity  : 6.5f;
 				const float Lmp  = DN ? DN->LampIntensity : 28000.f;
-				AddLightSlider(TEXT("Moon (night)"), Moon / 3.f,    LMoon, LMoonV);
-				AddLightSlider(TEXT("Sun (day)"),    Sun / 12.f,    LSun,  LSunV);
-				AddLightSlider(TEXT("Street lamps"), Lmp / 80000.f, LLamp, LLampV);
+				AddLightSlider(Panel, TEXT("Moon (night)"), Moon / 3.f,    LMoon, LMoonV);
+				AddLightSlider(Panel, TEXT("Sun (day)"),    Sun / 12.f,    LSun,  LSunV);
+				AddLightSlider(Panel, TEXT("Street lamps"), Lmp / 80000.f, LLamp, LLampV);
 				const float SkN = DN ? DN->SkyNight : 0.85f;
 				const float SkD = DN ? DN->SkyDay : 1.0f;
 				const float Pit = DN ? DN->MoonPitch : -52.f;
 				const float Exp = DN ? DN->ExposureBias : 9.f;
-				AddLightSlider(TEXT("Sky night"),  SkN / 2.f,           LSkyN,  LSkyNV);
-				AddLightSlider(TEXT("Sky day"),    SkD / 2.f,           LSkyD,  LSkyDV);
-				AddLightSlider(TEXT("Moon angle"), (Pit + 90.f) / 90.f, LPitch, LPitchV);
-				AddLightSlider(TEXT("Exposure"),   Exp / 16.f,          LExp,   LExpV);
+				AddLightSlider(Panel, TEXT("Sky night"),  SkN / 2.f,           LSkyN,  LSkyNV);
+				AddLightSlider(Panel, TEXT("Sky day"),    SkD / 2.f,           LSkyD,  LSkyDV);
+				AddLightSlider(Panel, TEXT("Moon angle"), (Pit + 90.f) / 90.f, LPitch, LPitchV);
+				AddLightSlider(Panel, TEXT("Exposure"),   Exp / 16.f,          LExp,   LExpV);
 			}
-			ApplyLightSliders();
+			// (Value-labels worden gevuld door ShowCategory(8)/NativeTick -> ApplyLightSliders zodra de tab actief is.)
 			Desc(TEXT("Sleep om het licht direct aan te passen."));
 			Single(TEXT("Save light config"), CSave, TEXT("Bewaar de huidige licht-instellingen permanent voor deze map."),
 				[this]() { if (ADayNightController* D = ADayNightController::GetLocal(GetWorld())) { D->SaveLightConfig(); } });
@@ -485,54 +516,11 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 	case 9: // Marked spots
 		Title(TEXT("Marked spots"));
 		Desc(TEXT("F9-markers: teleporteer (TP) of verwijder (X). Markeren doe je met F9 in-game."));
-		{
-			TArray<FString> SpotLines;
-			FFileHelper::LoadFileToStringArray(SpotLines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
-			SpotLines.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
-			if (SpotLines.Num() == 0)
-			{
-				BodyRow(MakeText(TEXT("No spots yet."), 11, FLinearColor(0.6f, 0.64f, 0.74f)), FMargin(0.f, 0.f, 0.f, 4.f));
-			}
-			const int32 MaxShow = 24;
-			for (int32 SpotIdx = FMath::Max(0, SpotLines.Num() - MaxShow); SpotIdx < SpotLines.Num(); ++SpotIdx)
-			{
-				const FString& Line = SpotLines[SpotIdx];
-				FString Label = Line; int32 Bar = INDEX_NONE;
-				if (Label.FindChar(TEXT('|'), Bar)) { Label = Label.Left(Bar).TrimStartAndEnd(); }
-				FVector Pos = FVector::ZeroVector; bool bHasPos = false;
-				const int32 PIdx = Line.Find(TEXT("pos=("));
-				if (PIdx != INDEX_NONE)
-				{
-					FString PosStr = Line.Mid(PIdx + 5); int32 Close = INDEX_NONE;
-					if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
-					TArray<FString> PP; PosStr.ParseIntoArray(PP, TEXT(","));
-					if (PP.Num() >= 3) { Pos = FVector(FCString::Atof(*PP[0]), FCString::Atof(*PP[1]), FCString::Atof(*PP[2])); bHasPos = true; }
-				}
-				const FString CurMap = GetWorld() ? GetWorld()->GetOutermost()->GetName() : FString();
-				const bool bSameMap = !Line.Contains(TEXT("map=")) || Line.Contains(CurMap);
-				UHorizontalBox* RowB = WidgetTree->ConstructWidget<UHorizontalBox>();
-				UHorizontalBoxSlot* LS2 = RowB->AddChildToHorizontalBox(MakeText(
-					FString::Printf(TEXT("%s  (%.0f, %.0f)"), *Label, Pos.X, Pos.Y), 11,
-					bSameMap ? FLinearColor(0.82f, 0.88f, 1.f) : FLinearColor(0.5f, 0.52f, 0.6f)));
-				LS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS2->SetVerticalAlignment(VAlign_Center);
-				if (bHasPos && bSameMap)
-				{
-					RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
-						[this, Pos]() { if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(Pos + FVector(0.f, 0.f, 60.f)); } }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
-				}
-				RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
-					[this, SpotIdx]()
-					{
-						const FString F = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
-						TArray<FString> Ls; FFileHelper::LoadFileToStringArray(Ls, *F);
-						Ls.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
-						if (Ls.IsValidIndex(SpotIdx)) { Ls.RemoveAt(SpotIdx); }
-						FFileHelper::SaveStringToFile(FString::Join(Ls, TEXT("\n")) + (Ls.Num() ? TEXT("\n") : TEXT("")), *F);
-						MarkDirty();
-					}, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
-				BodyRow(RowB, FMargin(0.f, 0.f, 0.f, 3.f));
-			}
-		}
+		// "No spots yet." (toggle-baar) + persistente spot-lijst-box; rijen worden per-diff bijgewerkt in RefreshMarkedSpots().
+		SpotsEmptyText = MakeText(TEXT("No spots yet."), 11, FLinearColor(0.6f, 0.64f, 0.74f));
+		BodyRow(SpotsEmptyText, FMargin(0.f, 0.f, 0.f, 4.f));
+		SpotsBox = WidgetTree->ConstructWidget<UVerticalBox>();
+		BodyRow(SpotsBox, FMargin(0.f, 0.f, 0.f, 0.f));
 		break;
 
 	default: // Keys
@@ -555,6 +543,169 @@ void UDevMenuWidget::FillCategory(int32 Cat)
 			KeyRow(TEXT("F7"), TEXT("Vliegen / noclip  (Space = op, Ctrl = neer)"));
 		}
 		break;
+	}
+}
+
+void UDevMenuWidget::RefreshRoomTemplates()
+{
+	if (!RoomTplBox) { return; }
+
+	const TArray<FString> Templates = ARoomStamper::ListTemplates();
+	if (RoomTplHead) { RoomTplHead->SetVisibility(Templates.Num() > 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+
+	// Rij-pool op maat brengen (persistent) -> geen ClearChildren van de hele lijst.
+	while (RoomTplRows.Num() < Templates.Num())
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		RoomTplBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		RoomTplRows.Add(Row); RoomTplSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+	}
+	while (RoomTplRows.Num() > Templates.Num())
+	{
+		const int32 Last = RoomTplRows.Num() - 1;
+		if (RoomTplRows[Last]) { RoomTplRows[Last]->RemoveFromParent(); }
+		RoomTplRows.RemoveAt(Last); RoomTplSigs.RemoveAt(Last);
+	}
+
+	// Per-rij diff: alleen een rij die ECHT wijzigde (naam) krijgt nieuwe inhoud.
+	for (int32 i = 0; i < Templates.Num(); ++i)
+	{
+		const FString& Tpl = Templates[i];
+		if (!RoomTplRows.IsValidIndex(i) || !RoomTplRows[i]) { continue; }
+		if (RoomTplSigs.IsValidIndex(i) && RoomTplSigs[i] == Tpl) { continue; }
+		RoomTplSigs[i] = Tpl;
+
+		UHorizontalBox* Row = RoomTplRows[i];
+		Row->ClearChildren();
+		Row->AddChildToHorizontalBox(MakeActionBtn(FString::Printf(TEXT("Stamp: %s"), *Tpl), FLinearColor(0.2f, 0.35f, 0.25f),
+			[this, Tpl]() { if (Phone.IsValid()) { Phone->StartRoomStamp(Tpl); } }, 11))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+			[this, Tpl]() { WeedData::DeleteFile(FString(TEXT("RoomTemplates")) / (Tpl + TEXT(".txt"))); MarkDirty(); }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+	}
+}
+
+void UDevMenuWidget::RefreshRoomPlaced()
+{
+	if (!RoomPlacedBox) { return; }
+
+	const TArray<FString> Placed = ARoomStamper::ListPlacedStamps(GetWorld());
+	// Header + "Undo last stamp" alleen tonen als er iets geplaatst is (zelfde gedrag als voorheen).
+	if (RoomPlacedHeadBox) { RoomPlacedHeadBox->SetVisibility(Placed.Num() > 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+
+	while (RoomPlacedRows.Num() < Placed.Num())
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		RoomPlacedBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+		RoomPlacedRows.Add(Row); RoomPlacedSigs.Add(TEXT("\x01"));
+	}
+	while (RoomPlacedRows.Num() > Placed.Num())
+	{
+		const int32 Last = RoomPlacedRows.Num() - 1;
+		if (RoomPlacedRows[Last]) { RoomPlacedRows[Last]->RemoveFromParent(); }
+		RoomPlacedRows.RemoveAt(Last); RoomPlacedSigs.RemoveAt(Last);
+	}
+
+	for (int32 i = 0; i < Placed.Num(); ++i)
+	{
+		const FString& SLine = Placed[i];
+		if (!RoomPlacedRows.IsValidIndex(i) || !RoomPlacedRows[i]) { continue; }
+		if (RoomPlacedSigs.IsValidIndex(i) && RoomPlacedSigs[i] == SLine) { continue; }
+		RoomPlacedSigs[i] = SLine;
+
+		TArray<FString> SParts; SLine.ParseIntoArray(SParts, TEXT("|"));
+		FVector Pos = FVector::ZeroVector; bool bHasPos = false;
+		if (SParts.Num() > 1)
+		{
+			TArray<FString> PP; SParts[1].ParseIntoArray(PP, TEXT(","));
+			if (PP.Num() >= 3) { Pos = FVector(FCString::Atof(*PP[0]), FCString::Atof(*PP[1]), FCString::Atof(*PP[2])); bHasPos = true; }
+		}
+		UHorizontalBox* SRow = RoomPlacedRows[i];
+		SRow->ClearChildren();
+		UHorizontalBoxSlot* SLab = SRow->AddChildToHorizontalBox(MakeText(
+			FString::Printf(TEXT("%s  (%.0f, %.0f)"), SParts.Num() > 0 ? *SParts[0] : *SLine, Pos.X, Pos.Y), 11, FLinearColor(0.82f, 0.88f, 1.f)));
+		SLab->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SLab->SetVerticalAlignment(VAlign_Center);
+		if (bHasPos)
+		{
+			SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
+				[this, Pos]() { if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(Pos + FVector(0.f, 0.f, 120.f)); } }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+		}
+		SRow->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+			[this, SLine]() { ARoomStamper::RemoveStamp(GetWorld(), SLine); MarkDirty(); }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+	}
+}
+
+void UDevMenuWidget::RefreshMarkedSpots()
+{
+	if (!SpotsBox) { return; }
+
+	TArray<FString> SpotLines;
+	FFileHelper::LoadFileToStringArray(SpotLines, *(FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt")));
+	SpotLines.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
+	if (SpotsEmptyText) { SpotsEmptyText->SetVisibility(SpotLines.Num() == 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+
+	// Bepaal het zichtbare venster (laatste MaxShow), met bijbehorende absolute index voor delete.
+	const int32 MaxShow = 24;
+	const int32 First = FMath::Max(0, SpotLines.Num() - MaxShow);
+	const int32 Shown = SpotLines.Num() - First;
+	const FString CurMap = GetWorld() ? GetWorld()->GetOutermost()->GetName() : FString();
+
+	while (SpotRows.Num() < Shown)
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		SpotsBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+		SpotRows.Add(Row); SpotSigs.Add(TEXT("\x01"));
+	}
+	while (SpotRows.Num() > Shown)
+	{
+		const int32 Last = SpotRows.Num() - 1;
+		if (SpotRows[Last]) { SpotRows[Last]->RemoveFromParent(); }
+		SpotRows.RemoveAt(Last); SpotSigs.RemoveAt(Last);
+	}
+
+	for (int32 r = 0; r < Shown; ++r)
+	{
+		const int32 SpotIdx = First + r; // absolute regel-index in het bestand (voor delete)
+		const FString& Line = SpotLines[SpotIdx];
+		if (!SpotRows.IsValidIndex(r) || !SpotRows[r]) { continue; }
+		// Signatuur bevat de absolute index zodat na een delete de verschoven rijen mee-updaten.
+		const FString Sig = FString::Printf(TEXT("%d|%s"), SpotIdx, *Line);
+		if (SpotSigs.IsValidIndex(r) && SpotSigs[r] == Sig) { continue; }
+		SpotSigs[r] = Sig;
+
+		FString Label = Line; int32 Bar = INDEX_NONE;
+		if (Label.FindChar(TEXT('|'), Bar)) { Label = Label.Left(Bar).TrimStartAndEnd(); }
+		FVector Pos = FVector::ZeroVector; bool bHasPos = false;
+		const int32 PIdx = Line.Find(TEXT("pos=("));
+		if (PIdx != INDEX_NONE)
+		{
+			FString PosStr = Line.Mid(PIdx + 5); int32 Close = INDEX_NONE;
+			if (PosStr.FindChar(TEXT(')'), Close)) { PosStr = PosStr.Left(Close); }
+			TArray<FString> PP; PosStr.ParseIntoArray(PP, TEXT(","));
+			if (PP.Num() >= 3) { Pos = FVector(FCString::Atof(*PP[0]), FCString::Atof(*PP[1]), FCString::Atof(*PP[2])); bHasPos = true; }
+		}
+		const bool bSameMap = !Line.Contains(TEXT("map=")) || Line.Contains(CurMap);
+
+		UHorizontalBox* RowB = SpotRows[r];
+		RowB->ClearChildren();
+		UHorizontalBoxSlot* LS2 = RowB->AddChildToHorizontalBox(MakeText(
+			FString::Printf(TEXT("%s  (%.0f, %.0f)"), *Label, Pos.X, Pos.Y), 11,
+			bSameMap ? FLinearColor(0.82f, 0.88f, 1.f) : FLinearColor(0.5f, 0.52f, 0.6f)));
+		LS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS2->SetVerticalAlignment(VAlign_Center);
+		if (bHasPos && bSameMap)
+		{
+			RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("TP"), FLinearColor(0.2f, 0.4f, 0.55f),
+				[this, Pos]() { if (APawn* Pn = GetOwningPlayerPawn()) { Pn->SetActorLocation(Pos + FVector(0.f, 0.f, 60.f)); } }, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
+		}
+		RowB->AddChildToHorizontalBox(MakeActionBtn(TEXT("X"), FLinearColor(0.45f, 0.2f, 0.2f),
+			[this, SpotIdx]()
+			{
+				const FString F = FPaths::ProjectSavedDir() / TEXT("MarkedSpots.txt");
+				TArray<FString> Ls; FFileHelper::LoadFileToStringArray(Ls, *F);
+				Ls.RemoveAll([](const FString& L) { return L.TrimStartAndEnd().IsEmpty(); });
+				if (Ls.IsValidIndex(SpotIdx)) { Ls.RemoveAt(SpotIdx); }
+				FFileHelper::SaveStringToFile(FString::Join(Ls, TEXT("\n")) + (Ls.Num() ? TEXT("\n") : TEXT("")), *F);
+				MarkDirty();
+			}, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
 	}
 }
 
@@ -585,7 +736,7 @@ UWeedActionButton* UDevMenuWidget::MakeActionBtn(const FString& Label, const FLi
 	return B;
 }
 
-USlider* UDevMenuWidget::AddLightSlider(const FString& Label, float Norm, TObjectPtr<USlider>& OutS, TObjectPtr<UTextBlock>& OutV)
+USlider* UDevMenuWidget::AddLightSlider(UVerticalBox* Panel, const FString& Label, float Norm, TObjectPtr<USlider>& OutS, TObjectPtr<UTextBlock>& OutV)
 {
 	USlider* Slider = WidgetTree->ConstructWidget<USlider>();
 	Slider->SetMinValue(0.f); Slider->SetMaxValue(1.f);
@@ -605,13 +756,15 @@ USlider* UDevMenuWidget::AddLightSlider(const FString& Label, float Norm, TObjec
 	VSz->SetWidthOverride(52.f); VSz->SetContent(OutV);
 	Row->AddChildToHorizontalBox(VSz);
 
-	if (Body) { Body->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f)); }
+	if (Panel) { Panel->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f)); }
 	return Slider;
 }
 
 void UDevMenuWidget::ApplyLightSliders()
 {
-	if (TimeSpeedSlider && GetWorld())
+	// Time-speed alleen op de World-tab (0); licht alleen op de Lighting-tab (8). De sliders bestaan
+	// altijd (panels zijn persistent), dus we begrenzen op de actieve categorie i.p.v. op null-pointers.
+	if (SelectedCat == 0 && TimeSpeedSlider && GetWorld())
 	{
 		const float Speed = 1.f + TimeSpeedSlider->GetValue() * 7.f;
 		if (FMath::Abs(Speed - UGameplayStatics::GetGlobalTimeDilation(GetWorld())) > 0.01f)
@@ -621,6 +774,7 @@ void UDevMenuWidget::ApplyLightSliders()
 		if (TimeSpeedV) { TimeSpeedV->SetText(FText::FromString(FString::Printf(TEXT("%.1fx"), Speed))); }
 	}
 
+	if (SelectedCat != 8) { return; }
 	ADayNightController* DN = ADayNightController::GetLocal(GetWorld());
 	if (!DN || !LMoon) { return; }
 

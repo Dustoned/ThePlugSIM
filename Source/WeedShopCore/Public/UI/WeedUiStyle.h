@@ -108,6 +108,24 @@ namespace WeedUI
 	// Slot 3A4152 / Accent B98CFF / Highlight FF6BD6 / Text F1EAFE / Text2 B8B4C8 / Warn FF6B6B.
 	WEEDSHOPCORE_API FLinearColor Hex(uint32 RGB, float Alpha = 1.f);
 
+	// NAMED palet-kleuren -> gebruik OVERAL deze i.p.v. losse hex/FLinearColor's, zodat ALLE UI identiek oogt aan
+	// de inventory. (Inline: roepen Hex aan; de A-parameter zet de opacity.) Semantische kleuren (Good/Warn) zijn
+	// palet-afgestemd zodat ready/waarschuwing herkenbaar blijft zonder uit de toon te vallen.
+	inline FLinearColor ColBg(float A = 1.f)        { return Hex(0x151923, A); } // scherm-achtergrond
+	inline FLinearColor ColPanel(float A = 1.f)     { return Hex(0x252B3A, A); } // kaart/paneel
+	inline FLinearColor ColInner(float A = 1.f)     { return Hex(0x303747, A); } // binnen-paneel
+	inline FLinearColor ColWell(float A = 1.f)      { return Hex(0x1B202B, A); } // diepe well (achter een grid)
+	inline FLinearColor ColStroke(float A = 1.f)    { return Hex(0x3A4152, A); } // dunne rand op panelen
+	inline FLinearColor ColSlot(float A = 1.f)      { return Hex(0x3A4152, A); } // gevulde cel
+	inline FLinearColor ColSlotEmpty(float A = 1.f) { return Hex(0x2A3140, A); } // lege cel
+	inline FLinearColor ColAccent(float A = 1.f)    { return Hex(0xB98CFF, A); } // primair accent (paars)
+	inline FLinearColor ColAccentDim(float A = 1.f) { return Hex(0x3A2B52, A); } // accent-vlak/actief slot
+	inline FLinearColor ColHighlight(float A = 1.f) { return Hex(0xFF6BD6, A); } // secundair accent (roze)
+	inline FLinearColor ColText(float A = 1.f)      { return Hex(0xF1EAFE, A); } // primaire tekst
+	inline FLinearColor ColTextDim(float A = 1.f)   { return Hex(0xB8B4C8, A); } // secundaire/gedimde tekst
+	inline FLinearColor ColWarn(float A = 1.f)      { return Hex(0xFF6B6B, A); } // waarschuwing/rood
+	inline FLinearColor ColGood(float A = 1.f)      { return Hex(0x7FE0A8, A); } // positief/klaar (palet-afgestemd groen)
+
 	// (PlayUiSound is hierboven al gedeclareerd zodat de knop 'm kan gebruiken.)
 
 	// Volume per categorie (0 = UI, 1 = Game, 2 = Music), 0..1. Bewaard in GConfig; standaard 1.

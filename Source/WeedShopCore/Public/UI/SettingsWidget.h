@@ -30,22 +30,35 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 	void RefreshTabs();
-	void RefreshContent();
+	// Bouwt de 4 categorie-panelen ÉÉN keer (persistent). Daarna wisselt een tab alleen Visibility -> geen teardown/flash.
+	void BuildAllPanels();
+	void BuildGraphicsPanel(class UVerticalBox* Into);
+	void BuildGamePanel(class UVerticalBox* Into);
+	void BuildAudioPanel(class UVerticalBox* Into);
+	void BuildControlsPanel(class UVerticalBox* Into);
+	// Toont het actieve categorie-paneel (Visibility) i.p.v. de body opnieuw op te bouwen.
+	void ShowActiveCategory();
+	// Ververst ALLEEN de tekst van de Graphics cycle-labels naar de live GUS-status (bv. na alt-enter/OS-wissel).
+	// Geen widget-constructie -> geen flash; enkel SetText op bestaande labels bij (her)openen.
+	void RefreshGraphicsLabels();
 	void ShowRestartPopup(); // toont de "herstart nodig"-popup (schaduw-grens-wissel Potato <-> hoger)
 
 	UPhoneClientComponent* GetPhone() const;
 
-	// Rij-helper: label links + een knop rechts met de huidige waarde (klik = OnClick).
-	void AddValueRow(const FString& Label, const FString& Value, TFunction<void()> OnClick);
-	// Rij-helper: label + slider + waarde-tekst. Geeft de slider terug (waarde 0..1).
-	class USlider* AddSliderRow(const FString& Label, float Normalized, TObjectPtr<class UTextBlock>& OutValue);
+	// Rij-helper: label links + een knop rechts met de huidige waarde (klik = OnClick). OutValueLabel = het
+	// tekstblok IN de knop, zodat de klik-lambda later alleen dié tekst kan bijwerken (geen rebuild).
+	void AddValueRow(class UVerticalBox* Into, const FString& Label, const FString& Value, TFunction<void()> OnClick, TObjectPtr<class UTextBlock>* OutValueLabel = nullptr);
 	// Rij-helper: label + resolutie-dropdown.
-	void AddResolutionRow();
-	// Rij-helper: label + kit-W_Toggle (bool, gepolld in NativeTick via IsToggled-reflectie).
-	void AddKitToggle(const FString& Label, bool Initial, TFunction<void(bool)> Apply);
+	void AddResolutionRow(class UVerticalBox* Into);
+	// Rij-helper: label + kit-W_Toggle (bool, gepolld in NativeTick via IsToggled-reflectie). OutW = het kit-widget
+	// (voor het in-place duwen van een waarde vanuit de Preset-rij via reflectie, zonder het te herbouwen).
+	void AddKitToggle(class UVerticalBox* Into, const FString& Label, bool Initial, TFunction<void(bool)> Apply, TWeakObjectPtr<UUserWidget>* OutW = nullptr);
 	// Rij-helper: label + kit-W_Slider + waarde-tekst (genormaliseerde Value 0-1 via reflectie, gepolld).
 	// Apply(norm, key&) mapt de waarde, past 'm toe als key veranderde, en geeft de display-string (leeg = onveranderd).
-	void AddKitSlider(const FString& Label, double InitialNorm, TFunction<FString(double, int32&)> Apply);
+	void AddKitSlider(class UVerticalBox* Into, const FString& Label, double InitialNorm, TFunction<FString(double, int32&)> Apply);
+	// Duwt een waarde in een bestaand kit-W_Toggle (IsToggled via reflectie) + houdt de poll-tracker in sync
+	// (geen dubbele Apply). Voor afgeleide waarden die de Preset-rij in de losse toggles zet, zonder rebuild.
+	void SetKitToggleValueInPlace(TWeakObjectPtr<UUserWidget> W, bool bValue);
 
 	UFUNCTION()
 	void OnResolutionChanged(FString Item, ESelectInfo::Type SelectType);
@@ -53,8 +66,31 @@ protected:
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
-	UPROPERTY() TObjectPtr<UVerticalBox> Body;     // rechter inhoud (per categorie)
+	UPROPERTY() TObjectPtr<UVerticalBox> Body;     // rechter inhoud (bevat de 4 categorie-panelen)
 	UPROPERTY() TObjectPtr<UWidget> RestartPopup;  // modale "herstart nodig"-popup, standaard verborgen
+	UPROPERTY() TObjectPtr<class UTextBlock> SavedMsg; // "Saved"-cue in de footer (opacity-fade), i.p.v. een rebuild bij opslaan
+	float SavedMsgOpacity = 0.f;                    // fade-teller voor de Saved-cue
+
+	// De 4 categorie-panelen (één keer gebouwd). Tab-wissel = alleen Visibility togglen.
+	UPROPERTY() TObjectPtr<class UVerticalBox> PanelGraphics;
+	UPROPERTY() TObjectPtr<class UVerticalBox> PanelGame;
+	UPROPERTY() TObjectPtr<class UVerticalBox> PanelControls;
+	UPROPERTY() TObjectPtr<class UVerticalBox> PanelAudio;
+	bool bPanelsBuilt = false;
+
+	// --- Persistente waarde-labels van de Graphics cycle-rijen (klik = SetText alleen dit label) ---
+	UPROPERTY() TObjectPtr<class UTextBlock> WindowModeVal;
+	UPROPERTY() TObjectPtr<class UTextBlock> PresetVal;
+	UPROPERTY() TObjectPtr<class UTextBlock> ResScaleVal;
+	UPROPERTY() TObjectPtr<class UTextBlock> FrameLimitVal;
+	UPROPERTY() TObjectPtr<class UTextBlock> TexturesVal;
+	UPROPERTY() TObjectPtr<class UTextBlock> CharacterVal;
+
+	// Kit-widgets waar de Preset-rij een afgeleide waarde in duwt (via reflectie, geen rebuild).
+	TWeakObjectPtr<UUserWidget> ShadowsToggleW;
+	TWeakObjectPtr<UUserWidget> LumenToggleW;
+	TWeakObjectPtr<UUserWidget> MotionBlurToggleW;
+
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGraphics;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGame;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabControls;
@@ -94,4 +130,15 @@ protected:
 	bool bRebindAlt = false;
 	FName RebindAction;
 	FString RebindMsg;
+
+	// --- Persistente Controls-lijst: per-actie key-knoppen ÉÉN keer gebouwd; rebind/capture SetText alleen
+	// de 1-2 getroffen knoppen + de RebindMsg-tekst -> geen ClearChildren, scroll blijft staan. ---
+	struct FKeyBtn { TWeakObjectPtr<class UWeedActionButton> Btn; TWeakObjectPtr<UTextBlock> Label; FName Action; bool bAlt = false; };
+	TArray<FKeyBtn> KeyButtons;
+	UPROPERTY() TObjectPtr<UTextBlock> RebindMsgText; // "cleared/rebound"-cue onder de lijst (in-place SetText)
+	// Werk de key-knoppen bij die deze actie tonen (main+alt) + de RebindMsg-tekst. Geen lijst-teardown.
+	void RefreshKeyButtonsFor(FName Action);
+	void RefreshAllKeyButtons(); // na Reset-to-defaults: alle labels opnieuw zetten (geen rebuild)
+	void UpdateKeyButtonLabel(const FKeyBtn& KB);
+	void UpdateRebindMsg();
 };

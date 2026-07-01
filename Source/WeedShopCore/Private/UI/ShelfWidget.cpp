@@ -33,8 +33,8 @@ TSharedRef<SWidget> UShelfCell::RebuildWidget()
 	{
 		const bool bHasItem = !ItemId.IsNone();
 		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ShelfCellRoot"));
-		FSlateBrush ShRB = WeedUI::Rounded(bHasItem ? FLinearColor(0.12f, 0.11f, 0.17f, 0.96f) : FLinearColor(0.13f, 0.14f, 0.18f, 0.55f), 10.f);
-		if (bHasItem) { ShRB.OutlineSettings.Width = 1.5f; ShRB.OutlineSettings.Color = FSlateColor(FLinearColor(0.55f, 0.32f, 0.85f, 0.55f)); }
+		FSlateBrush ShRB = WeedUI::Rounded(bHasItem ? WeedUI::ColSlot(0.96f) : WeedUI::ColSlotEmpty(0.55f), 10.f);
+		if (bHasItem) { ShRB.OutlineSettings.Width = 1.5f; ShRB.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.55f)); }
 		Root->SetBrush(ShRB);
 		Root->SetPadding(FMargin(5.f));
 		WidgetTree->RootWidget = Root;
@@ -58,7 +58,7 @@ TSharedRef<SWidget> UShelfCell::RebuildWidget()
 		}
 		else
 		{
-			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("+"), 20, FLinearColor(0.4f, 0.45f, 0.55f), true));
+			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("+"), 20, WeedUI::ColTextDim(0.7f), true));
 			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
 		}
 	}
@@ -166,7 +166,9 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ShelfCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.06f, 0.08f, 0.99f), 18.f));
+	FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 18.f);
+	CardBr.OutlineSettings.Width = 1.f; CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f)); // dunne rand zoals de inventory-card
+	CardB->SetBrush(CardBr);
 	CardB->SetPadding(FMargin(16.f));
 	Card = CardB;
 
@@ -183,24 +185,24 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 	CardB->SetContent(Outer);
 
 	UHorizontalBox* HeadRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-	TitleText = WeedUI::Text(WidgetTree, TEXT("STORAGE"), 18, FLinearColor(0.6f, 0.85f, 1.f), false, true);
+	TitleText = WeedUI::Text(WidgetTree, TEXT("STORAGE"), 18, WeedUI::ColText(), false, true);
 	UHorizontalBoxSlot* TS = HeadRow->AddChildToHorizontalBox(TitleText);
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
-	HeadRow->AddChildToHorizontalBox(ShelfBtn(WidgetTree, TEXT("Exit"), FLinearColor(0.4f, 0.2f, 0.2f),
+	HeadRow->AddChildToHorizontalBox(ShelfBtn(WidgetTree, TEXT("Exit"), WeedUI::ColWarn(0.55f),
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseShelf(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag from your inventory to store. Drag a shelf item onto your inventory to take it out."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))
+	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag from your inventory to store. Drag a shelf item onto your inventory to take it out."), 11, WeedUI::ColTextDim()))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
 	// Eén kolom: de inhoud van het schap. (De rechter "jouw inventory"-kolom is weg - dat is nu je echte
 	// inventory ernaast.) Hele kolom is drop-doel zodat je overal in het vak kunt loslaten om op te slaan.
 	UBorder* B = WidgetTree->ConstructWidget<UBorder>();
-	B->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.09f, 0.12f, 1.f), 10.f));
+	B->SetBrush(WeedUI::Rounded(WeedUI::ColWell(), 10.f));
 	B->SetPadding(FMargin(8.f));
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	B->SetContent(VB);
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("On the shelf"), 13, FLinearColor(0.6f, 0.85f, 1.f), false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("On the shelf"), 13, WeedUI::ColTextDim(), false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	ShelfList = WidgetTree->ConstructWidget<UScrollBox>();
 	VB->AddChildToVerticalBox(ShelfList)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	UShelfDropZone* DZ = WidgetTree->ConstructWidget<UShelfDropZone>();
@@ -245,17 +247,26 @@ void UShelfWidget::FillBody()
 	if (!ShelfList || !PhoneComp.IsValid()) { return; }
 	UPhoneClientComponent* Ph = PhoneComp.Get();
 	AStorageShelf* Shelf = Ph->GetShelf();
-	ShelfList->ClearChildren();
 
 	if (TitleText && Shelf)
 	{
 		TitleText->SetText(FText::FromString(FString::Printf(TEXT("%s   (%d/%d)"), *Shelf->GetTitle(), Shelf->Contents.Num(), Shelf->GetCapacity())));
 	}
 
-	auto MakeCell = [this](bool bShelfSide, int32 ShelfIdx, FName Id, int32 Q, float Thc) -> UShelfCell*
+	// Persistente grid + fridge-sectie (éénmalig) -> NOOIT ClearChildren op ShelfList -> geen volledige-lijst-flash.
+	if (!ShelfGrid)
+	{
+		ShelfGrid = WidgetTree->ConstructWidget<UWrapBox>();
+		ShelfGrid->SetInnerSlotPadding(FVector2D(5.f, 5.f));
+		ShelfList->AddChild(ShelfGrid);
+		FridgeSection = WidgetTree->ConstructWidget<UVerticalBox>();
+		ShelfList->AddChild(FridgeSection);
+	}
+
+	auto MakeCell = [this](int32 ShelfIdx, FName Id, int32 Q, float Thc) -> UShelfCell*
 	{
 		UShelfCell* C = WidgetTree->ConstructWidget<UShelfCell>();
-		C->bShelfSide = bShelfSide; C->ShelfIndex = ShelfIdx; C->ItemId = Id; C->Qty = Q; C->Thc = Thc; C->Owner = this;
+		C->bShelfSide = true; C->ShelfIndex = ShelfIdx; C->ItemId = Id; C->Qty = Q; C->Thc = Thc; C->Owner = this;
 		if (!Id.IsNone())
 		{
 			const FString S = Id.ToString();
@@ -268,62 +279,77 @@ void UShelfWidget::FillBody()
 		}
 		return C;
 	};
-	auto AddGrid = [this](UScrollBox* Into) -> UWrapBox*
-	{
-		UWrapBox* W = WidgetTree->ConstructWidget<UWrapBox>();
-		W->SetInnerSlotPadding(FVector2D(5.f, 5.f));
-		Into->AddChild(W);
-		return W;
-	};
 
-	// --- Schap-kolom ---
+	// Gewenste cellen: één per schap-item + één lege "sleep hierheen"-cel (drop-doel, ook bij leeg schap).
+	const int32 N = Shelf ? Shelf->Contents.Num() : 0;
+	const int32 Desired = N + 1;
+
+	// Cel-pool op maat (alleen aan de STAART toevoegen/verwijderen -> ongewijzigde cellen blijven staan).
+	while (ShelfCellBoxes.Num() < Desired)
 	{
-		UWrapBox* Grid = AddGrid(ShelfList);
-		if (Shelf)
-		{
-			for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
-			{
-				const FShelfStack& S = Shelf->Contents[i];
-				UShelfCell* C = MakeCell(true, i, S.ItemId, S.Quantity, S.Thc);
-				USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-				Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f); Sz->SetContent(C);
-				Grid->AddChildToWrapBox(Sz);
-			}
-		}
-		// Lege "drag here"-cel (drop-doel, ook als het schap leeg is).
-		UShelfCell* Empty = MakeCell(true, -1, NAME_None, 0, 0.f);
-		USizeBox* ESz = WidgetTree->ConstructWidget<USizeBox>();
-		ESz->SetWidthOverride(78.f); ESz->SetHeightOverride(78.f); ESz->SetContent(Empty);
-		Grid->AddChildToWrapBox(ESz);
+		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+		Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f);
+		ShelfGrid->AddChildToWrapBox(Sz);
+		ShelfCellBoxes.Add(Sz); ShelfCellSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+	}
+	while (ShelfCellBoxes.Num() > Desired)
+	{
+		const int32 Last = ShelfCellBoxes.Num() - 1;
+		if (ShelfCellBoxes[Last]) { ShelfCellBoxes[Last]->RemoveFromParent(); }
+		ShelfCellBoxes.RemoveAt(Last); ShelfCellSigs.RemoveAt(Last);
 	}
 
-	// --- Koelkast: edibles maken (ButterMix -> Edible/Cookie/Gummy). Een fridge is een fridge: geen conversion kit. ---
-	if (Shelf && Shelf->IsFridge())
+	// Per-cel diff: alleen een cel waarvan de inhoud ECHT wijzigde krijgt een nieuwe UShelfCell (geen flash).
+	for (int32 i = 0; i < Desired; ++i)
 	{
-		UVerticalBox* EB = WidgetTree->ConstructWidget<UVerticalBox>();
-		EB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Make edibles"), 13, FLinearColor(0.7f, 0.9f, 0.6f), false, true))->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
-
-		bool bAnyButter = false;
-		for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
+		const bool bEmpty = (i >= N);
+		FName Id = NAME_None; int32 Q = 0; float Thc = 0.f; int32 ShelfIdx = -1;
+		FString Sig = TEXT("E");
+		if (!bEmpty)
 		{
 			const FShelfStack& S = Shelf->Contents[i];
-			if (!S.ItemId.ToString().StartsWith(TEXT("ButterMix_"))) { continue; }
-			bAnyButter = true;
-			const int32 Idx = i;
-			const FString Label = FString::Printf(TEXT("Set %s  (%dg)"), *WeedUI::PrettyItemName(S.ItemId), S.Quantity);
-			UWeedActionButton* B = ShelfBtn(WidgetTree, Label, FLinearColor(0.22f, 0.42f, 0.26f),
-				[this, Idx]() { if (PhoneComp.IsValid()) { PhoneComp->RequestShelfCook(Idx); LastSig.Reset(); } });
-			EB->AddChildToVerticalBox(B)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+			Id = S.ItemId; Q = S.Quantity; Thc = S.Thc; ShelfIdx = i;
+			Sig = FString::Printf(TEXT("%s|%d|%.0f"), *Id.ToString(), Q, Thc);
 		}
-		if (!bAnyButter)
-		{
-			EB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Store butter mix here, then set it into edibles (add sugar+flour for cookies, sugar+gelatin for gummies)."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
-		}
-		if (Shelf->Cooking.Num() > 0)
-		{
-			EB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Setting %d batch%s... (~3 min, lands in the fridge)"), Shelf->Cooking.Num(), Shelf->Cooking.Num() == 1 ? TEXT("") : TEXT("es")), 11, FLinearColor(0.55f, 0.78f, 1.f)))->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
-		}
-		ShelfList->AddChild(EB);
+		if (!ShelfCellSigs.IsValidIndex(i) || !ShelfCellBoxes.IsValidIndex(i)) { continue; }
+		if (Sig == ShelfCellSigs[i]) { continue; }
+		ShelfCellSigs[i] = Sig;
+		if (ShelfCellBoxes[i]) { ShelfCellBoxes[i]->SetContent(MakeCell(ShelfIdx, Id, Q, Thc)); }
+	}
+
+	RebuildFridgeSection(Shelf);
+}
+
+void UShelfWidget::RebuildFridgeSection(AStorageShelf* Shelf)
+{
+	// Koelkast: edibles maken (ButterMix -> Edible/Cookie/Gummy). Kleine sectie onder de grid; herbouwd bij
+	// wijziging (FillBody draait alleen op sig-change, dus geen per-tick-flikker).
+	if (!FridgeSection) { return; }
+	FridgeSection->ClearChildren();
+	if (!Shelf || !Shelf->IsFridge()) { FridgeSection->SetVisibility(ESlateVisibility::Collapsed); return; }
+	FridgeSection->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	FridgeSection->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Make edibles"), 13, FLinearColor(0.7f, 0.9f, 0.6f), false, true))->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
+
+	bool bAnyButter = false;
+	for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
+	{
+		const FShelfStack& S = Shelf->Contents[i];
+		if (!S.ItemId.ToString().StartsWith(TEXT("ButterMix_"))) { continue; }
+		bAnyButter = true;
+		const int32 Idx = i;
+		const FString Label = FString::Printf(TEXT("Set %s  (%dg)"), *WeedUI::PrettyItemName(S.ItemId), S.Quantity);
+		UWeedActionButton* B = ShelfBtn(WidgetTree, Label, FLinearColor(0.22f, 0.42f, 0.26f),
+			[this, Idx]() { if (PhoneComp.IsValid()) { PhoneComp->RequestShelfCook(Idx); LastSig.Reset(); } });
+		FridgeSection->AddChildToVerticalBox(B)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+	}
+	if (!bAnyButter)
+	{
+		FridgeSection->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Store butter mix here, then set it into edibles (add sugar+flour for cookies, sugar+gelatin for gummies)."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+	}
+	if (Shelf->Cooking.Num() > 0)
+	{
+		FridgeSection->AddChildToVerticalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Setting %d batch%s... (~3 min, lands in the fridge)"), Shelf->Cooking.Num(), Shelf->Cooking.Num() == 1 ? TEXT("") : TEXT("es")), 11, FLinearColor(0.55f, 0.78f, 1.f)))->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 	}
 }
 

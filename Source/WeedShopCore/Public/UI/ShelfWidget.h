@@ -14,6 +14,10 @@ class UCanvasPanel;
 class UWidget;
 class UScrollBox;
 class UShelfWidget;
+class UWrapBox;
+class USizeBox;
+class UVerticalBox;
+class AStorageShelf;
 
 // Sleep-payload voor het schap-scherm.
 UCLASS()
@@ -83,6 +87,7 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 	void FillBody();
+	void RebuildFridgeSection(AStorageShelf* Shelf); // fridge-edible-knoppen (apart van de gediffte grid)
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
@@ -90,6 +95,12 @@ protected:
 	UPROPERTY() TObjectPtr<UScrollBox> ShelfList; // links: schap-inhoud
 	UPROPERTY() TObjectPtr<UScrollBox> InvList;    // rechts: je eigen voorraad
 	UPROPERTY() TObjectPtr<class UTextBlock> TitleText;
+
+	// Persistente grid + cel-pool -> per FillBody alleen gewijzigde cellen vervangen (geen ClearChildren -> geen flash).
+	UPROPERTY() TObjectPtr<UWrapBox> ShelfGrid;
+	UPROPERTY() TArray<TObjectPtr<USizeBox>> ShelfCellBoxes;
+	TArray<FString> ShelfCellSigs;
+	UPROPERTY() TObjectPtr<UVerticalBox> FridgeSection;
 
 	FString LastSig; // herbouw alleen bij wijziging
 };

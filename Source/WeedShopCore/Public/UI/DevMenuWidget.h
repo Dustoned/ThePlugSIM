@@ -10,6 +10,7 @@
 
 class UPhoneClientComponent;
 class UVerticalBox;
+class UHorizontalBox;
 class UBorder;
 class UCanvasPanel;
 class UTextBlock;
@@ -33,21 +34,50 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 	void BuildNav();   // bouwt de linker categorie-knoppen ÉÉN keer (niet elke klik)
 	void RestyleNav(); // herkleurt alleen de nav-knoppen (highlight) zonder rebuild
+	void ShowCategory(int32 Cat); // toont ALLEEN het gekozen panel, verbergt de rest (geen rebuild)
 
 	UTextBlock* MakeText(const FString& Txt, int32 Size, const FLinearColor& Col, bool bCenter = false);
 	UWeedActionButton* MakeActionBtn(const FString& Label, const FLinearColor& Col, TFunction<void()> OnClick, int32 FontSize = 11);
-	USlider* AddLightSlider(const FString& Label, float Norm, TObjectPtr<USlider>& OutS, TObjectPtr<UTextBlock>& OutV);
+	// Bouwt één statische categorie-panel-inhoud (labels/knoppen die nooit wijzigen) ÉÉN keer.
+	void BuildCategoryPanel(int32 Cat, UVerticalBox* Panel);
+	USlider* AddLightSlider(UVerticalBox* Panel, const FString& Label, float Norm, TObjectPtr<USlider>& OutS, TObjectPtr<UTextBlock>& OutV);
 	void ApplyLightSliders();
+
+	// Herbouwt ALLEEN een dynamische sub-lijst (per-rij diff), niet de hele categorie.
+	void RefreshRoomTemplates(); // Rooms: templates-lijst
+	void RefreshRoomPlaced();    // Rooms: geplaatste stamps-lijst
+	void RefreshMarkedSpots();   // Marked spots: F9-marker-lijst
 
 	TWeakObjectPtr<UPhoneClientComponent> Phone;
 
 	UPROPERTY() TObjectPtr<UBorder> Frame;
 	UPROPERTY() TObjectPtr<UVerticalBox> CatList; // linker categorie-navigatie
-	UPROPERTY() TObjectPtr<UVerticalBox> Body;    // rechter inhoud van de gekozen categorie
+	UPROPERTY() TObjectPtr<UVerticalBox> Body;    // container: houdt alle 11 categorie-panels
 	UPROPERTY() TArray<TObjectPtr<UWeedActionButton>> CatButtons; // gecachte nav-knoppen (voor highlight)
+	UPROPERTY() TArray<TObjectPtr<UVerticalBox>> CatPanels;       // 11 persistente panels (één per categorie)
 
 	int32 SelectedCat = 0; // gekozen categorie (index in de nav-lijst)
-	void FillCategory(int32 Cat); // bouwt ALLEEN de rechter-inhoud voor één categorie
+
+	// --- Shops: persistent type-label (type-cycle = alleen SetText, geen rebuild) ---
+	UPROPERTY() TObjectPtr<UTextBlock> ShopTypeLabel;
+
+	// --- Rooms: templates-lijst (persistent pool + per-rij signatuur) ---
+	UPROPERTY() TObjectPtr<UTextBlock> RoomTplHead;                 // "Templates (click to place)" header, toggle-baar
+	UPROPERTY() TObjectPtr<UVerticalBox> RoomTplBox;                // persistente container voor template-rijen
+	UPROPERTY() TArray<TObjectPtr<UHorizontalBox>> RoomTplRows;     // rij-pool
+	TArray<FString> RoomTplSigs;                                    // parallelle per-rij signaturen
+
+	// --- Rooms: geplaatste stamps-lijst (persistent pool + per-rij signatuur) ---
+	UPROPERTY() TObjectPtr<UVerticalBox> RoomPlacedHeadBox;         // header + "Undo last stamp" (toggle-baar)
+	UPROPERTY() TObjectPtr<UVerticalBox> RoomPlacedBox;             // persistente container voor placed-rijen
+	UPROPERTY() TArray<TObjectPtr<UHorizontalBox>> RoomPlacedRows;  // rij-pool
+	TArray<FString> RoomPlacedSigs;                                 // parallelle per-rij signaturen
+
+	// --- Marked spots: F9-marker-lijst (persistent pool + per-rij signatuur) ---
+	UPROPERTY() TObjectPtr<UTextBlock> SpotsEmptyText;              // "No spots yet." (toggle-baar)
+	UPROPERTY() TObjectPtr<UVerticalBox> SpotsBox;                  // persistente container voor spot-rijen
+	UPROPERTY() TArray<TObjectPtr<UHorizontalBox>> SpotRows;        // rij-pool
+	TArray<FString> SpotSigs;                                       // parallelle per-rij signaturen
 
 	// Licht-/tijd-sliders (live toegepast in NativeTick), zelfde set als voorheen in de telefoon-Light/Test-tab.
 	UPROPERTY() TObjectPtr<USlider> TimeSpeedSlider;

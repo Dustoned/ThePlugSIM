@@ -123,7 +123,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 12.f, 14.f, 1.f));
 
 	// Naam (groot).
-	NameText = WeedUI::Text(WidgetTree, TEXT(""), 20, FLinearColor(0.97f, 0.98f, 1.f), false, true);
+	NameText = WeedUI::Text(WidgetTree, TEXT(""), 20, WeedUI::ColText(), false, true);
 	NameText->SetAutoWrapText(true);
 	Col->AddChildToVerticalBox(NameText)->SetPadding(FMargin(14.f, 0.f, 14.f, 2.f));
 
@@ -133,7 +133,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 
 	// Dun scheidingslijntje.
 	Divider = WidgetTree->ConstructWidget<UBorder>();
-	Divider->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.12f), 1.f));
+	Divider->SetBrush(WeedUI::Rounded(WeedUI::ColStroke(0.6f), 1.f));
 	Divider->SetPadding(FMargin(0.f, 0.7f, 0.f, 0.7f));
 	Col->AddChildToVerticalBox(Divider)->SetPadding(FMargin(14.f, 0.f, 14.f, 8.f));
 
@@ -142,7 +142,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	Col->AddChildToVerticalBox(StatBox)->SetPadding(FMargin(14.f, 0.f, 14.f, 6.f));
 
 	// Korte hint (dim) onderaan.
-	HintText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.62f, 0.66f, 0.78f), false, false);
+	HintText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim(), false, false);
 	HintText->SetAutoWrapText(true);
 	Col->AddChildToVerticalBox(HintText)->SetPadding(FMargin(14.f, 2.f, 14.f, 12.f));
 
@@ -243,7 +243,7 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			}
 			QtyText->SetVisibility(ESlateVisibility::HitTestInvisible);
 			QtyText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Cur, FMath::Max(1, Max))));
-			QtyText->SetColorAndOpacity(FSlateColor((Cur <= 0) ? FLinearColor(1.f, 0.5f, 0.4f) : FLinearColor(0.4f, 0.75f, 1.f)));
+			QtyText->SetColorAndOpacity(FSlateColor((Cur <= 0) ? WeedUI::ColWarn() : WeedUI::ColGood()));
 		}
 		else if (bEquip)
 		{
@@ -274,7 +274,7 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			{
 				// Geladen vloei -> toon de geladen-omschrijving (snapshot uit GetRollLoadDesc) bovenaan,
 				// volle breedte (wrapt). De "2g loaded"-info hoort hier bij de hand-preview, niet bij de controls.
-				UTextBlock* Ld = WeedUI::Text(WidgetTree, RollDesc, 13, FLinearColor(0.75f, 1.f, 0.78f), false, true);
+				UTextBlock* Ld = WeedUI::Text(WidgetTree, RollDesc, 13, WeedUI::ColGood(), false, true);
 				Ld->SetAutoWrapText(true);
 				Ld->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); Ld->SetShadowOffset(FVector2D(1.6f, 2.f));
 				StatBox->AddChildToVerticalBox(Ld)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
@@ -282,11 +282,11 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		auto AddStat = [this](const FString& Label, const FString& Value)
 		{
 			UHorizontalBox* RowH = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UTextBlock* L = WeedUI::Text(WidgetTree, Label, 12, FLinearColor(0.6f, 0.64f, 0.74f));
+			UTextBlock* L = WeedUI::Text(WidgetTree, Label, 12, WeedUI::ColTextDim());
 			L->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); L->SetShadowOffset(FVector2D(1.6f, 2.f));
 			UHorizontalBoxSlot* LS = RowH->AddChildToHorizontalBox(L);
 			LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
-			UTextBlock* V = WeedUI::Text(WidgetTree, Value, 13, FLinearColor(0.95f, 0.97f, 1.f), false, true);
+			UTextBlock* V = WeedUI::Text(WidgetTree, Value, 13, WeedUI::ColText(), false, true);
 			V->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); V->SetShadowOffset(FVector2D(1.6f, 2.f));
 			V->SetJustification(ETextJustify::Right);
 			UHorizontalBoxSlot* VS = RowH->AddChildToHorizontalBox(V);

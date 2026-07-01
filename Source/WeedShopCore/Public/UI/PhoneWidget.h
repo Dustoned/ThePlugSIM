@@ -18,6 +18,7 @@ class UVerticalBox;
 class UHorizontalBox;
 class UTextBlock;
 class UUniformGridPanel;
+class UWidget;
 
 // Knop die een actie-id + parameter onthoudt en bij klik terugroept naar de telefoon-widget.
 UCLASS()
@@ -63,6 +64,10 @@ protected:
 	void BuildSettingsApp();          // bouwt tabs + body één keer
 	void FillSettingsBody();          // vult alleen de body (geen flash bij tab-wissel/rebind)
 	void RefreshSettingsTabs();       // herkleurt de categorie-knoppen
+	// In-place refs voor Settings-body-acties die geen hele body-herbouw nodig hebben (geen flash).
+	UPROPERTY() TObjectPtr<class UWeedActionButton> SkinMaleBtn;   // Male/Female-toggle: alleen herkleuren
+	UPROPERTY() TObjectPtr<class UWeedActionButton> SkinFemaleBtn;
+	UPROPERTY() TObjectPtr<UTextBlock> ShopTypeLabel;             // "Shop type: X (tap)": alleen de tekst wisselt
 
 	// --- Live light-tuning sliders (Settings/Test): sturen de lokale DayNightController direct aan ---
 	UPROPERTY() TObjectPtr<class USlider> LMoon;
@@ -125,6 +130,10 @@ protected:
 	// NAME_None = gesprekkenlijst; anders is de chat-thread van dat contact open.
 	FName OpenChatContact = NAME_None;
 	bool bOfferStrainView = false; // toont de "Offer instead"-strain-lijst in de open chat
+	// Pre-gebouwde alternatieven-box in de open chat: alleen tonen/verbergen bij de "Offer instead..."-toggle
+	// (geen RefreshContent-flash). Wordt in BuildChatApp één keer gevuld voor de open thread.
+	UPROPERTY() TObjectPtr<class UVerticalBox> OfferBox;
+	UPROPERTY() TObjectPtr<class UWeedActionButton> OfferToggleBtn;
 	int32 LastMsgSig = -2;
 	int32 ProposeMins = -1; // gekozen kloktijd (min van de dag) voor een eigen-tijd-voorstel; -1 = nog niet gezet
 	int32 LastChatMin = -1; // klok-minuut bij de laatste chat-rebuild (om de tijd-kiezer-ondergrens live mee te laten lopen)
@@ -148,6 +157,11 @@ protected:
 	void BuildStoreApp(class UVerticalBox* Into);
 	// Vult alleen de scrollbare lijst (catalogus/cart/sell) — geen volledige herbouw, dus geen flash.
 	void FillStoreList();
+	// Diff-vulling van de scroll-pool: alleen rijen met een gewijzigde signatuur worden herbouwd (geen ClearChildren).
+	void FillStoreListRows(TArray<FString> Sigs, TArray<TFunction<UWidget*()>> Builders);
+	// Diff-vulling van de vaste voettekst (alleen in de cart) via een eigen pool -> bezorgoptie/deliver-to-home
+	// wijzigt enkel de footer, niet de scroll-lijst (geen scroll-sprong).
+	void FillStoreFooter();
 	// Werkt de winkel bij na een actie (tab-kleuren, cart-tekst, lijst) zonder de hele app te herbouwen.
 	void RefreshStore();
 
@@ -164,6 +178,13 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> StoreCartText;
 	UPROPERTY() TObjectPtr<class UScrollBox> StoreScroll;
 	UPROPERTY() TObjectPtr<class UVerticalBox> StoreFooter;
+	// Persistente rij-pool voor de winkel-scroll -> per FillStoreList alleen gewijzigde rijen vervangen
+	// (geen ClearChildren -> geen flash/scroll-sprong bij tab-wissel, cart +/-, pot-buy, bezorgoptie, ...).
+	UPROPERTY() TArray<TObjectPtr<UBorder>> StoreRowPool;
+	TArray<FString> StoreRowSigs;
+	// Persistente pool voor de vaste voettekst (bezorgopties + totaal + checkout) -> zelfde diff-truc.
+	UPROPERTY() TArray<TObjectPtr<UBorder>> StoreFooterPool;
+	TArray<FString> StoreFooterSigs;
 	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> StoreTabBtns;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> StoreCartToggle;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> StorePackagesToggle;
@@ -175,6 +196,9 @@ protected:
 	bool bPackagesView = false;
 	UPROPERTY() TMap<int32, TObjectPtr<class UProgressBar>> PkgBars;   // per OrderId
 	UPROPERTY() TMap<int32, TObjectPtr<UTextBlock>> PkgEtas;           // per OrderId
+	UPROPERTY() TMap<int32, TObjectPtr<UBorder>> PkgCards;            // per OrderId (Cancel = alleen deze kaart weg)
+	UPROPERTY() TObjectPtr<UBorder> PkgEmptyRow;                      // "No packages on the way."-placeholder (gericht tonen/verbergen)
+	UPROPERTY() TObjectPtr<class UScrollBox> PkgScrollOwner;          // in welke scroll de PkgCards staan (reset bij scroll-wissel)
 	UPROPERTY() TObjectPtr<class UScrollBox> PackagesScroll;           // scroll van de losse Packages-app
 	int32 LastPkgSig = -1;
 	int32 PackagesSignature() const;   // verandert als de set bestellingen wijzigt
@@ -206,7 +230,7 @@ protected:
 
 	void BuildPackagesApp();           // bouwt de losse Packages-app in ContentBox
 	void FillPackagesInto(class UScrollBox* Scroll); // vult de bestellingen-kaarten in een scroll
-	void FillPotUpgradesInto(class UScrollBox* Scroll); // "Pot Upgrades"-tab: per geplaatste pot
+	void FillPotUpgradesInto(class UScrollBox* Scroll); // "Pot Upgrades"-tab: per geplaatste pot (thans niet aangeroepen)
 
 	// Bank-app (na de telefoon-upgrade): storten (witwassen) + geld sturen naar co-op vrienden.
 	void BuildBankApp();

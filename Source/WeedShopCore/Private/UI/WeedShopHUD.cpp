@@ -104,8 +104,8 @@ void AWeedShopHUD::DrawHUD()
 			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
 			const float BW = 220.f, BH = 16.f;
 			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
-			DrawText(TEXT("Lighting joint...  (hold right-click)"), FLinearColor(0.7f, 1.f, 0.8f), BX, BY - 22.f, Font);
-			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawText(TEXT("Lighting joint...  (hold right-click)"), WeedUI::ColGood(), BX, BY - 22.f, Font);
+			DrawRect(WeedUI::ColWell(0.85f), BX, BY, BW, BH);
 			DrawRect(FLinearColor(0.4f, 0.9f, 0.5f, 0.95f), BX, BY, BW * Frac, BH);
 		}
 
@@ -117,8 +117,8 @@ void AWeedShopHUD::DrawHUD()
 			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
 			const float BW = 220.f, BH = 16.f;
 			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
-			DrawText(TEXT("Rolling joint...  (hold right-click)"), FLinearColor(0.7f, 1.f, 0.8f), BX, BY - 22.f, Font);
-			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawText(TEXT("Rolling joint...  (hold right-click)"), WeedUI::ColGood(), BX, BY - 22.f, Font);
+			DrawRect(WeedUI::ColWell(0.85f), BX, BY, BW, BH);
 			DrawRect(FLinearColor(0.9f, 0.8f, 0.4f, 0.95f), BX, BY, BW * RFrac, BH);
 		}
 
@@ -130,8 +130,8 @@ void AWeedShopHUD::DrawHUD()
 			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
 			const float BW = 220.f, BH = 16.f;
 			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
-			DrawText(TEXT("Handing over a joint..."), FLinearColor(0.7f, 1.f, 0.8f), BX, BY - 22.f, Font);
-			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawText(TEXT("Handing over a joint..."), WeedUI::ColGood(), BX, BY - 22.f, Font);
+			DrawRect(WeedUI::ColWell(0.85f), BX, BY, BW, BH);
 			DrawRect(FLinearColor(0.5f, 0.85f, 1.f, 0.95f), BX, BY, BW * GFrac, BH);
 		}
 
@@ -144,7 +144,7 @@ void AWeedShopHUD::DrawHUD()
 			const float BW = 220.f, BH = 16.f;
 			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
 			DrawText(TEXT("Dropping item...  (hold Q)"), FLinearColor(1.f, 0.85f, 0.6f), BX, BY - 22.f, Font);
-			DrawRect(FLinearColor(0.1f, 0.12f, 0.12f, 0.85f), BX, BY, BW, BH);
+			DrawRect(WeedUI::ColWell(0.85f), BX, BY, BW, BH);
 			DrawRect(FLinearColor(0.95f, 0.65f, 0.25f, 0.95f), BX, BY, BW * DFrac, BH);
 		}
 	}
@@ -158,8 +158,8 @@ void AWeedShopHUD::DrawHUD()
 			{
 				const bool bValid = BC->IsPlacementValid();
 				const FString Msg = bValid ? FString(TEXT("Ready to place")) : BC->GetPlacementHint();
-				const FLinearColor TxtCol = bValid ? FLinearColor(0.78f, 1.f, 0.80f) : FLinearColor(1.f, 0.88f, 0.55f);
-				const FLinearColor Accent = bValid ? FLinearColor(0.30f, 0.80f, 0.42f, 1.f) : FLinearColor(0.96f, 0.72f, 0.26f, 1.f);
+				const FLinearColor TxtCol = bValid ? WeedUI::ColGood() : FLinearColor(1.f, 0.88f, 0.55f);
+				const FLinearColor Accent = bValid ? WeedUI::ColGood() : FLinearColor(0.96f, 0.72f, 0.26f, 1.f);
 				// Nette gecentreerde popup-balk (zoals de toast-notificaties) i.p.v. een piepklein tekstje boven de hotbar.
 				const float Scale = 1.25f;
 				float TW = 0.f, TH = 0.f; GetTextSize(Msg, TW, TH, Font, Scale);
@@ -169,7 +169,7 @@ void AWeedShopHUD::DrawHUD()
 				const float BW = TW + PadX * 2.f, BH = TH + PadY * 2.f;
 				const float BX = (ClipXf - BW) * 0.5f;
 				const float BY = ClipYf - 210.f; // boven de hotbar
-				DrawRect(FLinearColor(0.04f, 0.05f, 0.07f, 0.9f), BX, BY, BW, BH);   // donkere popup-achtergrond
+				DrawRect(WeedUI::ColPanel(0.9f), BX, BY, BW, BH);   // donkere popup-achtergrond
 				DrawRect(Accent, BX, BY, BW, 3.f);                                   // accent-streep boven
 				DrawText(Msg, TxtCol, BX + PadX, BY + PadY, Font, Scale, false);
 			}
@@ -196,7 +196,7 @@ void AWeedShopHUD::DrawHUD()
 				const float A = BC->GetPickupAlpha();
 				if (A > 0.f)
 				{
-					DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), CX - 60.f, CY + 90.f, 160.f, 8.f);
+					DrawRect(WeedUI::ColWell(0.9f), CX - 60.f, CY + 90.f, 160.f, 8.f);
 					DrawRect(FLinearColor(1.f, 0.8f, 0.2f, 0.95f), CX - 60.f, CY + 90.f, 160.f * A, 8.f);
 				}
 			}
@@ -211,9 +211,9 @@ bool AWeedShopHUD::DrawButton(FName BoxName, const FString& Label, float X, floa
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	const bool bHover = (HoveredBox == BoxName);
 
-	DrawRect(bHover ? FLinearColor(0.25f, 0.35f, 0.5f, 0.95f) : FLinearColor(0.12f, 0.12f, 0.16f, 0.9f),
+	DrawRect(bHover ? WeedUI::ColAccentDim(0.95f) : WeedUI::ColSlot(0.9f),
 		X, Y, W, RowH - 2.f);
-	DrawText(Label, bHover ? FLinearColor::White : BaseColor, X + 6.f, Y + 3.f, Font);
+	DrawText(Label, bHover ? WeedUI::ColText() : BaseColor, X + 6.f, Y + 3.f, Font);
 	AddHitBox(FVector2D(X, Y), FVector2D(W, RowH - 2.f), BoxName, /*bConsumesInput*/ true, /*Priority*/ 1);
 	return bHover;
 }
@@ -246,8 +246,8 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	const float SW = PhoneW - 28.f;
 
 	// Telefoon-body (bezel) + scherm.
-	DrawRect(FLinearColor(0.02f, 0.02f, 0.03f, 0.99f), PX - 6.f, PY - 8.f, PhoneW + 12.f, PhoneH + 18.f);
-	DrawRect(FLinearColor(0.07f, 0.08f, 0.11f, 0.99f), PX, PY, PhoneW, PhoneH);
+	DrawRect(WeedUI::ColBg(0.99f), PX - 6.f, PY - 8.f, PhoneW + 12.f, PhoneH + 18.f);
+	DrawRect(WeedUI::ColPanel(0.99f), PX, PY, PhoneW, PhoneH);
 
 	// Statusbalk: dag/tijd links, cash rechts.
 	float y = PY + 8.f;
@@ -263,7 +263,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		{
 			Left = FString::Printf(TEXT("Lv %d   %s"), GS->GetLeveling()->GetLevel(), *Left);
 		}
-		DrawText(Left, FLinearColor(0.7f, 0.8f, 0.95f), SX, y, Font);
+		DrawText(Left, WeedUI::ColTextDim(), SX, y, Font);
 		if (GS && GS->GetEconomy())
 		{
 			DrawText(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(GS->GetEconomy()->GetCashCents()) / 100)),
@@ -271,13 +271,13 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		}
 	}
 	y += 24.f;
-	DrawRect(FLinearColor(0.2f, 0.2f, 0.25f, 0.9f), SX, y, SW, 1.f);
+	DrawRect(WeedUI::ColStroke(0.9f), SX, y, SW, 1.f);
 	y += 10.f;
 
 	if (Phone->IsHomeScreen())
 	{
 		// --- Home-scherm: app-rooster (3 kolommen) ---
-		DrawText(TEXT("Apps"), FLinearColor(0.6f, 1.f, 0.6f), SX, y, Font);
+		DrawText(TEXT("Apps"), WeedUI::ColText(), SX, y, Font);
 		y += 26.f;
 		const int32 Cols = 3;
 		const float Gap = 14.f;
@@ -292,10 +292,10 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 			const FName Box(*FString::Printf(TEXT("app_%d"), i));
 			const bool bHover = (HoveredBox == Box);
 			// Icoon (afgerond-ish via gevulde rect) + highlight bij hover.
-			if (bHover) { DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.18f), ix - 3.f, iy - 3.f, IconW + 6.f, IconH + 6.f); }
+			if (bHover) { DrawRect(WeedUI::ColAccent(0.18f), ix - 3.f, iy - 3.f, IconW + 6.f, IconH + 6.f); }
 			DrawRect(GAppCols[i], ix, iy, IconW, IconH);
 			DrawText(GAppTags[i], FLinearColor::White, ix + 8.f, iy + IconH * 0.5f - 8.f, Font);
-			DrawText(GAppNames[i], FLinearColor(0.85f, 0.88f, 0.95f), ix, iy + IconH + 3.f, Font);
+			DrawText(GAppNames[i], WeedUI::ColTextDim(), ix, iy + IconH + 3.f, Font);
 			AddHitBox(FVector2D(ix, iy), FVector2D(IconW, IconH + 24.f), Box, true, 3);
 			if (bHover) { HoverTooltip = FString::Printf(TEXT("Open %s"), GAppNames[i]); }
 		}
@@ -304,12 +304,12 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	{
 		// --- Geopende app: titelbalk + Home-knop, dan de inhoud ---
 		const int32 App = Phone->GetTab();
-		if (DrawButton(FName(TEXT("phonehome")), TEXT("< Home"), SX, y, 90.f, FLinearColor(0.7f, 0.85f, 1.f)))
+		if (DrawButton(FName(TEXT("phonehome")), TEXT("< Home"), SX, y, 90.f, WeedUI::ColAccent()))
 		{
 			HoverTooltip = TEXT("Back to the home screen");
 		}
 		DrawText(GAppNames[FMath::Clamp(App, 0, UPhoneClientComponent::AppCount - 1)],
-			FLinearColor(0.9f, 0.95f, 1.f), SX + 100.f, y + 3.f, Font);
+			WeedUI::ColText(), SX + 100.f, y + 3.f, Font);
 		y += RowH + 10.f;
 
 		const float InnerX = SX;
@@ -326,8 +326,8 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 					if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
 					{
 						const TCHAR* Suffix = bPurchased ? TEXT("  [owned]") : (bAvailable ? TEXT("") : TEXT("  [locked]"));
-						const FLinearColor Col = bPurchased ? FLinearColor::Gray
-							: (bAvailable ? FLinearColor::White : FLinearColor(0.8f, 0.55f, 0.55f));
+						const FLinearColor Col = bPurchased ? WeedUI::ColTextDim()
+							: (bAvailable ? WeedUI::ColText() : WeedUI::ColWarn(0.8f));
 						if (DrawButton(FName(*FString::Printf(TEXT("buy_%d"), idx)),
 							FString::Printf(TEXT("%s  -  EUR %d%s"), *Name.ToString(), (int32)(WeedRoundEuros((int64)Cost) / 100), Suffix),
 							InnerX, y, InnerW, Col))
@@ -344,10 +344,10 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		}
 		else if (App == 1) // Suppliers -> grote winkel naast de telefoon
 		{
-			DrawText(TEXT("Store open ->"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font); y += 22.f;
-			DrawText(TEXT("Browse on the left:"), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
-			DrawText(TEXT("set amount, add to cart,"), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
-			DrawText(TEXT("then checkout."), FLinearColor(0.6f, 0.6f, 0.7f), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("Store open ->"), WeedUI::ColAccent(), InnerX, y, Font); y += 22.f;
+			DrawText(TEXT("Browse on the left:"), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("set amount, add to cart,"), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("then checkout."), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
 			if (GS && GS->GetStore()) { DrawStoreUI(Phone); }
 		}
 		else if (App == 2) // Contacts
@@ -356,13 +356,13 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 			{
 				if (Con->GetContacts().Num() == 0)
 				{
-					DrawText(TEXT("(no contacts yet - deal with"), FLinearColor::Gray, InnerX, y, Font); y += 18.f;
-					DrawText(TEXT(" customers to get numbers)"), FLinearColor::Gray, InnerX, y, Font); y += 18.f;
+					DrawText(TEXT("(no contacts yet - deal with"), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
+					DrawText(TEXT(" customers to get numbers)"), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
 				}
 				for (const FPhoneContact& C : Con->GetContacts())
 				{
 					DrawText(FString::Printf(TEXT("%s  (%.0f%%)"), *C.DisplayName.ToString(), C.Relationship),
-						FLinearColor::White, InnerX, y, Font);
+						WeedUI::ColText(), InnerX, y, Font);
 					y += 22.f;
 					if (y > PY + PhoneH - 60.f) break;
 				}
@@ -372,25 +372,25 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		{
 			if (UContactsComponent* Con = GS ? GS->GetContacts() : nullptr)
 			{
-				if (DrawButton(FName(TEXT("buy_0")), TEXT("Accept (first message)"), InnerX, y, InnerW, FLinearColor(0.7f, 1.f, 0.7f)))
+				if (DrawButton(FName(TEXT("buy_0")), TEXT("Accept (first message)"), InnerX, y, InnerW, WeedUI::ColGood()))
 				{
 					HoverTooltip = TEXT("Make appointment -> loyalty up");
 				}
 				y += RowH;
-				if (DrawButton(FName(TEXT("buy_1")), TEXT("Decline (first message)"), InnerX, y, InnerW, FLinearColor(1.f, 0.75f, 0.6f)))
+				if (DrawButton(FName(TEXT("buy_1")), TEXT("Decline (first message)"), InnerX, y, InnerW, WeedUI::ColWarn()))
 				{
 					HoverTooltip = TEXT("Cancel -> loyalty down");
 				}
 				y += RowH + 6.f;
 				if (Con->GetMessages().Num() == 0)
 				{
-					DrawText(TEXT("(no messages)"), FLinearColor::Gray, InnerX, y, Font); y += 22.f;
+					DrawText(TEXT("(no messages)"), WeedUI::ColTextDim(), InnerX, y, Font); y += 22.f;
 				}
 				for (const FPhoneMessage& M : Con->GetMessages())
 				{
 					const TCHAR* Tag = (M.Status == 1) ? TEXT("[yes]") : (M.Status == 2 ? TEXT("[no]") : TEXT("[open]"));
-					const FLinearColor Col = (M.Status == 1) ? FLinearColor::Green
-						: (M.Status == 2 ? FLinearColor(0.7f, 0.5f, 0.5f) : FLinearColor(0.9f, 0.95f, 1.f));
+					const FLinearColor Col = (M.Status == 1) ? WeedUI::ColGood()
+						: (M.Status == 2 ? WeedUI::ColTextDim() : WeedUI::ColText());
 					DrawText(FString::Printf(TEXT("%s %s: %s"), Tag, *M.SenderName.ToString(), *M.Body.ToString()),
 						Col, InnerX, y, Font);
 					y += 22.f;
@@ -406,20 +406,20 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				ULevelComponent* Lv = GS->GetLeveling();
 				if (Lv->GetLevel() >= ULevelComponent::MaxLevel)
 				{
-					DrawText(FString::Printf(TEXT("Level %d  (MAX)"), Lv->GetLevel()), FLinearColor(0.7f, 1.f, 0.7f), InnerX, y, Font);
+					DrawText(FString::Printf(TEXT("Level %d  (MAX)"), Lv->GetLevel()), WeedUI::ColGood(), InnerX, y, Font);
 					y += 22.f;
 				}
 				else
 				{
 					DrawText(FString::Printf(TEXT("Level %d   XP %d / %d"), Lv->GetLevel(), Lv->GetCurrentXP(), Lv->GetXPToNext()),
-						FLinearColor(0.7f, 1.f, 0.7f), InnerX, y, Font);
+						WeedUI::ColGood(), InnerX, y, Font);
 					y += 20.f;
-					DrawRect(FLinearColor(0.15f, 0.15f, 0.18f, 0.95f), InnerX, y, InnerW, 12.f);
+					DrawRect(WeedUI::ColWell(0.95f), InnerX, y, InnerW, 12.f);
 					DrawRect(FLinearColor(0.3f, 0.75f, 1.f, 0.98f), InnerX, y, InnerW * Lv->GetLevelFraction(), 12.f);
 					y += 20.f;
 				}
 			}
-			DrawText(TEXT("Game"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font); y += 24.f;
+			DrawText(TEXT("Game"), WeedUI::ColText(), InnerX, y, Font); y += 24.f;
 			if (GS)
 			{
 				if (GS->GetDayCycle())
@@ -427,12 +427,12 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 					const int32 Mins = ((int32)(GS->GetDayCycle()->GetCycleFraction() * 24.f * 60.f)) % (24 * 60);
 					DrawText(FString::Printf(TEXT("Time: %s %02d:%02d"), GS->GetDayCycle()->IsNight() ? TEXT("Night") : TEXT("Day"),
 						Mins / 60, Mins % 60),
-						FLinearColor::White, InnerX, y, Font); y += 22.f;
+						WeedUI::ColText(), InnerX, y, Font); y += 22.f;
 				}
 				if (GS->GetEconomy())
 				{
 					DrawText(FString::Printf(TEXT("Cash: EUR %lld"), (long long)(WeedRoundEuros(GS->GetEconomy()->GetCashCents()) / 100)),
-						FLinearColor::White, InnerX, y, Font); y += 22.f;
+						WeedUI::ColText(), InnerX, y, Font); y += 22.f;
 				}
 				if (GS->GetHeat())
 				{
@@ -442,21 +442,21 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				if (GS->GetMilestones())
 				{
 					DrawText(FString::Printf(TEXT("Phase: %d"), (int32)GS->GetMilestones()->GetCurrentPhase()),
-						FLinearColor::White, InnerX, y, Font); y += 22.f;
+						WeedUI::ColText(), InnerX, y, Font); y += 22.f;
 				}
 			}
 			y += 8.f;
-			DrawText(TEXT("Controls"), FLinearColor(0.7f, 0.85f, 1.f), InnerX, y, Font); y += 22.f;
-			DrawText(TEXT("Tab phone   I inventory"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 18.f;
-			DrawText(TEXT("Q home   1-8 hotbar"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 18.f;
-			DrawText(TEXT("LMB use   RMB roll papers"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 18.f;
-			DrawText(TEXT("R rotate   G pick up   F sample"), FLinearColor(0.8f, 0.8f, 0.85f), InnerX, y, Font); y += 22.f;
+			DrawText(TEXT("Controls"), WeedUI::ColText(), InnerX, y, Font); y += 22.f;
+			DrawText(TEXT("Tab phone   I inventory"), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("Q home   1-8 hotbar"), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("LMB use   RMB roll papers"), WeedUI::ColTextDim(), InnerX, y, Font); y += 18.f;
+			DrawText(TEXT("R rotate   G pick up   F sample"), WeedUI::ColTextDim(), InnerX, y, Font); y += 22.f;
 		}
 		else if (App == 5) // Map
 		{
 			const float MapX = InnerX, MapY = y;
 			const float MapW = InnerW, MapH = FMath::Min(InnerW, PY + PhoneH - 44.f - y);
-			DrawRect(FLinearColor(0.10f, 0.14f, 0.12f, 0.98f), MapX, MapY, MapW, MapH);
+			DrawRect(WeedUI::ColWell(0.98f), MapX, MapY, MapW, MapH);
 			const float cx = MapX + MapW * 0.5f, cyc = MapY + MapH * 0.5f;
 			const float Range = 4000.f;
 			const float Scale = (MapW * 0.5f) / Range;
@@ -485,7 +485,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 			// Speler in het midden (wit).
 			DrawRect(FLinearColor::White, cx - 4.f, cyc - 4.f, 8.f, 8.f);
 			DrawText(TEXT("you"), FLinearColor::White, cx + 6.f, cyc - 6.f, Font);
-			DrawText(TEXT("orange=customer  green=plant"), FLinearColor(0.7f, 0.7f, 0.75f), MapX + 4.f, MapY + MapH - 18.f, Font);
+			DrawText(TEXT("orange=customer  green=plant"), WeedUI::ColTextDim(), MapX + 4.f, MapY + MapH - 18.f, Font);
 		}
 	}
 
@@ -493,13 +493,13 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 	if (!HoverTooltip.IsEmpty())
 	{
 		const float TipY = PY + PhoneH - 54.f;
-		DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f), PX + 6.f, TipY - 2.f, PhoneW - 12.f, 20.f);
+		DrawRect(WeedUI::ColBg(0.85f), PX + 6.f, TipY - 2.f, PhoneW - 12.f, 20.f);
 		DrawText(HoverTooltip, FLinearColor(1.f, 1.f, 0.6f), SX, TipY, Font);
 	}
 
 	// Home-indicator-balk onderaan + sluit-knop.
-	DrawRect(FLinearColor(0.5f, 0.5f, 0.55f, 0.9f), PX + PhoneW * 0.5f - 50.f, PY + PhoneH - 12.f, 100.f, 4.f);
-	if (DrawButton(FName(TEXT("close")), TEXT("Close"), SX, PY + PhoneH - 32.f, 120.f, FLinearColor::Yellow))
+	DrawRect(WeedUI::ColStroke(0.9f), PX + PhoneW * 0.5f - 50.f, PY + PhoneH - 12.f, 100.f, 4.f);
+	if (DrawButton(FName(TEXT("close")), TEXT("Close"), SX, PY + PhoneH - 32.f, 120.f, WeedUI::ColWarn()))
 	{
 		HoverTooltip = TEXT("Close the phone");
 	}
@@ -525,7 +525,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 		const FLinearColor& Base, const FLinearColor& TextCol) -> bool
 	{
 		const bool bH = (HoveredBox == Box);
-		DrawRect(bH ? FLinearColor(0.30f, 0.46f, 0.64f, 0.98f) : Base, bx, by, bw, bh);
+		DrawRect(bH ? WeedUI::ColAccentDim(0.98f) : Base, bx, by, bw, bh);
 		float tw = 0.f, th = 0.f; GetTextSize(Label, tw, th, Font);
 		DrawText(Label, TextCol, bx + FMath::Max(3.f, (bw - tw) * 0.5f), by + FMath::Max(1.f, (bh - th) * 0.5f), Font);
 		AddHitBox(FVector2D(bx, by), FVector2D(bw, bh), Box, true, 5);
@@ -533,14 +533,14 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 	};
 
 	// Achtergrond + bovenbalk.
-	DrawRect(FLinearColor(0.07f, 0.08f, 0.11f, 0.99f), SX, SY, StoreW, StoreH);
-	DrawRect(FLinearColor(0.11f, 0.13f, 0.18f, 1.f), SX, SY, StoreW, 38.f);
-	DrawText(TEXT("SUPPLIER STORE"), FLinearColor(0.6f, 1.f, 0.6f), SX + Pad, SY + 10.f, Font);
+	DrawRect(WeedUI::ColPanel(0.99f), SX, SY, StoreW, StoreH);
+	DrawRect(WeedUI::ColInner(), SX, SY, StoreW, 38.f);
+	DrawText(TEXT("SUPPLIER STORE"), WeedUI::ColText(), SX + Pad, SY + 10.f, Font);
 	if (GS->GetEconomy())
 	{
 		const FString Cash = FString::Printf(TEXT("Cash: EUR %lld"), (long long)(WeedRoundEuros(GS->GetEconomy()->GetCashCents()) / 100));
 		float tw = 0.f, th = 0.f; GetTextSize(Cash, tw, th, Font);
-		DrawText(Cash, FLinearColor(0.85f, 0.95f, 1.f), SX + StoreW - Pad - tw, SY + 10.f, Font);
+		DrawText(Cash, WeedUI::ColTextDim(), SX + StoreW - Pad - tw, SY + 10.f, Font);
 	}
 
 	float y = SY + 48.f;
@@ -558,9 +558,9 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 	const float CatTabW = CatZoneW / UStoreComponent::SupplierCatCount;
 	for (int32 i = 0; i < UStoreComponent::SupplierCatCount; ++i)
 	{
-		const FLinearColor Col = (i == Cat) ? FLinearColor(0.22f, 0.52f, 0.32f, 0.98f) : FLinearColor(0.15f, 0.16f, 0.21f, 0.95f);
+		const FLinearColor Col = (i == Cat) ? WeedUI::ColAccentDim(0.98f) : WeedUI::ColSlot(0.95f);
 		Btn(FName(*FString::Printf(TEXT("scat_%d"), i)), CatNames[i], CatX + i * CatTabW + 2.f, y, CatTabW - 4.f, 26.f, Col,
-			(i == Cat) ? FLinearColor::White : FLinearColor(0.75f, 0.78f, 0.85f));
+			(i == Cat) ? WeedUI::ColText() : WeedUI::ColTextDim());
 	}
 	y += 38.f;
 
@@ -569,14 +569,14 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 	const float ListBottom = SY + StoreH - Pad;
 
 	// --- Winkelwagen-paneel (rechts) tekenen we eerst als achtergrond-kolom ---
-	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.99f), CartX, ListTop, CartW, ListBottom - ListTop);
-	DrawRect(FLinearColor(0.12f, 0.14f, 0.19f, 1.f), CartX, ListTop, CartW, 28.f);
-	DrawText(FString::Printf(TEXT("CART  (%d)"), Phone->GetCartNumLines()), FLinearColor(0.7f, 1.f, 0.7f), CartX + 10.f, ListTop + 6.f, Font);
+	DrawRect(WeedUI::ColWell(0.99f), CartX, ListTop, CartW, ListBottom - ListTop);
+	DrawRect(WeedUI::ColInner(), CartX, ListTop, CartW, 28.f);
+	DrawText(FString::Printf(TEXT("CART  (%d)"), Phone->GetCartNumLines()), WeedUI::ColText(), CartX + 10.f, ListTop + 6.f, Font);
 
 	if (Cat == UStoreComponent::SupplierCatSell)
 	{
 		// Verkoop-lijst in de catalogus-zone.
-		DrawText(TEXT("Sell items back (70% of value):"), FLinearColor(0.8f, 0.8f, 0.9f), CatX, y, Font);
+		DrawText(TEXT("Sell items back (70% of value):"), WeedUI::ColTextDim(), CatX, y, Font);
 		y += 26.f;
 		APawn* PP = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
 		const UInventoryComponent* PInv = PP ? PP->FindComponentByClass<UInventoryComponent>() : nullptr;
@@ -590,20 +590,20 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 				if (Val <= 0) { continue; }
 				if (y > ListBottom - RowHt) { break; }
 				bAny = true;
-				DrawRect(FLinearColor(0.10f, 0.11f, 0.14f, 0.95f), CatX, y, CatZoneW, RowHt - 4.f);
+				DrawRect(WeedUI::ColSlot(0.95f), CatX, y, CatZoneW, RowHt - 4.f);
 				const int32 SQty = SellStacks[si].Quantity;
 				DrawText(FString::Printf(TEXT("%s   x%d"), *PrettyItemName(SellStacks[si].ItemId), SQty),
-					FLinearColor(0.9f, 0.92f, 1.f), CatX + 10.f, y + 3.f, Font);
+					WeedUI::ColText(), CatX + 10.f, y + 3.f, Font);
 				DrawText(FString::Printf(TEXT("EUR %d each  (all: EUR %d)"), (int32)(WeedRoundEuros((int64)Val) / 100), (int32)(WeedRoundEuros((int64)Val * SQty) / 100)),
-					FLinearColor(1.f, 0.85f, 0.5f), CatX + 10.f, y + 19.f, Font);
+					WeedUI::ColTextDim(), CatX + 10.f, y + 19.f, Font);
 				Btn(FName(*FString::Printf(TEXT("sella_%d"), si)), TEXT("Sell all"), CatX + CatZoneW - 190.f, y + 5.f, 90.f, RowHt - 12.f,
-					FLinearColor(0.45f, 0.30f, 0.12f, 0.98f), FLinearColor::White);
+					WeedUI::ColSlot(0.98f), WeedUI::ColText());
 				Btn(FName(*FString::Printf(TEXT("sell_%d"), si)), TEXT("Sell 1"), CatX + CatZoneW - 92.f, y + 5.f, 86.f, RowHt - 12.f,
-					FLinearColor(0.40f, 0.34f, 0.18f, 0.98f), FLinearColor::White);
+					WeedUI::ColSlot(0.98f), WeedUI::ColText());
 				y += RowHt;
 			}
 		}
-		if (!bAny) { DrawText(TEXT("(nothing sellable in your inventory)"), FLinearColor::Gray, CatX, y, Font); }
+		if (!bAny) { DrawText(TEXT("(nothing sellable in your inventory)"), WeedUI::ColTextDim(), CatX, y, Font); }
 	}
 	else
 	{
@@ -618,7 +618,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 			FString Name = Store->GetCatalogName(Id).ToString();
 
 			// Rij met lichte zebra-arcering.
-			DrawRect((idx % 2 == 0) ? FLinearColor(0.11f, 0.12f, 0.15f, 0.95f) : FLinearColor(0.09f, 0.10f, 0.13f, 0.95f),
+			DrawRect((idx % 2 == 0) ? WeedUI::ColSlot(0.95f) : WeedUI::ColSlotEmpty(0.95f),
 				CatX, y, CatZoneW, RowHt - 4.f);
 
 			// Control-cluster rechts: prijskaartje | [-] qty [+] | ADD.
@@ -630,7 +630,7 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 			// Naam (afgekapt tot aan het cluster).
 			FString NameTrim = Name;
 			if (NameTrim.Len() > 26) { NameTrim = NameTrim.Left(25) + TEXT("."); }
-			DrawText(NameTrim, FLinearColor(0.92f, 0.95f, 1.f), CatX + 10.f, y + 9.f, Font);
+			DrawText(NameTrim, WeedUI::ColText(), CatX + 10.f, y + 9.f, Font);
 
 			float bx = cxs;
 			DrawRect(FLinearColor(0.16f, 0.42f, 0.22f, 0.98f), bx, bty, TagW, bh);
@@ -640,23 +640,23 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 				DrawText(PriceStr, FLinearColor(0.88f, 1.f, 0.88f), bx + FMath::Max(3.f, (TagW - tw) * 0.5f), bty + 4.f, Font);
 			}
 			bx += TagW + G;
-			Btn(FName(*FString::Printf(TEXT("sdec_%d"), idx)), TEXT("-"), bx, bty, DecW, bh, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
+			Btn(FName(*FString::Printf(TEXT("sdec_%d"), idx)), TEXT("-"), bx, bty, DecW, bh, WeedUI::ColSlot(0.98f), WeedUI::ColText());
 			bx += DecW;
 			{
 				const FString QtyStr = FString::Printf(TEXT("%d"), Pend);
 				float tw = 0.f, th = 0.f; GetTextSize(QtyStr, tw, th, Font);
-				DrawRect(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), bx, bty, QtyW, bh);
-				DrawText(QtyStr, FLinearColor::White, bx + (QtyW - tw) * 0.5f, bty + 4.f, Font);
+				DrawRect(WeedUI::ColSlotEmpty(0.98f), bx, bty, QtyW, bh);
+				DrawText(QtyStr, WeedUI::ColText(), bx + (QtyW - tw) * 0.5f, bty + 4.f, Font);
 			}
 			bx += QtyW;
-			Btn(FName(*FString::Printf(TEXT("sinc_%d"), idx)), TEXT("+"), bx, bty, IncW, bh, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
+			Btn(FName(*FString::Printf(TEXT("sinc_%d"), idx)), TEXT("+"), bx, bty, IncW, bh, WeedUI::ColSlot(0.98f), WeedUI::ColText());
 			bx += IncW + G;
-			Btn(FName(*FString::Printf(TEXT("sadd_%d"), idx)), TEXT("ADD"), bx, bty, AddW, bh, FLinearColor(0.20f, 0.38f, 0.55f, 0.98f), FLinearColor::White);
+			Btn(FName(*FString::Printf(TEXT("sadd_%d"), idx)), TEXT("ADD"), bx, bty, AddW, bh, WeedUI::ColAccent(0.98f), WeedUI::ColText());
 
 			y += RowHt;
 			++idx;
 		}
-		if (Items.Num() == 0) { DrawText(TEXT("(nothing here yet)"), FLinearColor::Gray, CatX, ListTop, Font); }
+		if (Items.Num() == 0) { DrawText(TEXT("(nothing here yet)"), WeedUI::ColTextDim(), CatX, ListTop, Font); }
 	}
 
 	// --- Winkelwagen-inhoud ---
@@ -666,33 +666,33 @@ void AWeedShopHUD::DrawStoreUI(UPhoneClientComponent* Phone)
 	const int32 Lines = Phone->GetCartNumLines();
 	if (Lines == 0)
 	{
-		DrawText(TEXT("Cart is empty."), FLinearColor(0.6f, 0.6f, 0.68f), CartInnerX, cy, Font);
+		DrawText(TEXT("Cart is empty."), WeedUI::ColTextDim(), CartInnerX, cy, Font);
 	}
 	for (int32 li = 0; li < Lines; ++li)
 	{
 		FName LId; int32 LQty = 0; bool bSellLine = false;
 		if (!Phone->GetCartLine(li, LId, LQty, bSellLine)) { continue; }
-		if (cy > CartFooterY - 36.f) { DrawText(TEXT("..."), FLinearColor::Gray, CartInnerX, cy, Font); break; }
+		if (cy > CartFooterY - 36.f) { DrawText(TEXT("..."), WeedUI::ColTextDim(), CartInnerX, cy, Font); break; }
 		const int32 LinePrice = Store->GetCatalogPriceCents(LId) * LQty;
 		FString LName = Store->GetCatalogName(LId).ToString();
 		if (LName.Len() > 18) { LName = LName.Left(17) + TEXT("."); }
-		DrawRect(FLinearColor(0.09f, 0.10f, 0.13f, 0.95f), CartX + 4.f, cy - 2.f, CartW - 8.f, 38.f);
-		DrawText(FString::Printf(TEXT("%s  x%d"), *LName, LQty), FLinearColor(0.9f, 0.92f, 1.f), CartInnerX, cy, Font);
+		DrawRect(WeedUI::ColSlot(0.95f), CartX + 4.f, cy - 2.f, CartW - 8.f, 38.f);
+		DrawText(FString::Printf(TEXT("%s  x%d"), *LName, LQty), WeedUI::ColText(), CartInnerX, cy, Font);
 		DrawText(FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)LinePrice) / 100)), FLinearColor(1.f, 0.95f, 0.7f), CartInnerX, cy + 16.f, Font);
-		Btn(FName(*FString::Printf(TEXT("cdec_%d"), li)), TEXT("-"), CartX + CartW - 84.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
-		Btn(FName(*FString::Printf(TEXT("cinc_%d"), li)), TEXT("+"), CartX + CartW - 58.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.18f, 0.19f, 0.24f, 0.98f), FLinearColor::White);
-		Btn(FName(*FString::Printf(TEXT("cdel_%d"), li)), TEXT("x"), CartX + CartW - 32.f, cy + 7.f, 22.f, 22.f, FLinearColor(0.42f, 0.18f, 0.18f, 0.98f), FLinearColor::White);
+		Btn(FName(*FString::Printf(TEXT("cdec_%d"), li)), TEXT("-"), CartX + CartW - 84.f, cy + 7.f, 22.f, 22.f, WeedUI::ColSlot(0.98f), WeedUI::ColText());
+		Btn(FName(*FString::Printf(TEXT("cinc_%d"), li)), TEXT("+"), CartX + CartW - 58.f, cy + 7.f, 22.f, 22.f, WeedUI::ColSlot(0.98f), WeedUI::ColText());
+		Btn(FName(*FString::Printf(TEXT("cdel_%d"), li)), TEXT("x"), CartX + CartW - 32.f, cy + 7.f, 22.f, 22.f, WeedUI::ColWarn(0.98f), WeedUI::ColText());
 		cy += 42.f;
 	}
 
 	// Cart-footer: totaal + CHECKOUT + Clear.
-	DrawRect(FLinearColor(0.2f, 0.2f, 0.25f, 0.9f), CartX + 8.f, CartFooterY - 6.f, CartW - 16.f, 1.f);
+	DrawRect(WeedUI::ColStroke(0.9f), CartX + 8.f, CartFooterY - 6.f, CartW - 16.f, 1.f);
 	DrawText(FString::Printf(TEXT("Total: EUR %d"), (int32)(WeedRoundEuros((int64)Phone->GetCartTotalCents()) / 100)),
 		FLinearColor(1.f, 0.95f, 0.55f), CartInnerX, CartFooterY, Font);
 	Btn(FName(TEXT("checkout")), TEXT("CHECKOUT"), CartInnerX, CartFooterY + 24.f, CartW - 20.f, 30.f,
-		Phone->GetCartNumLines() > 0 ? FLinearColor(0.2f, 0.55f, 0.27f, 0.98f) : FLinearColor(0.18f, 0.2f, 0.22f, 0.95f), FLinearColor::White);
+		Phone->GetCartNumLines() > 0 ? WeedUI::ColGood(0.98f) : WeedUI::ColSlotEmpty(0.95f), WeedUI::ColText());
 	Btn(FName(TEXT("cartclear")), TEXT("Clear"), CartInnerX, CartFooterY + 58.f, CartW - 20.f, 24.f,
-		FLinearColor(0.3f, 0.2f, 0.2f, 0.95f), FLinearColor(0.95f, 0.85f, 0.85f));
+		WeedUI::ColWarn(0.95f), WeedUI::ColText());
 }
 
 void AWeedShopHUD::NotifyHitBoxClick(FName BoxName)
@@ -857,22 +857,22 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
 	const float InnerX = PX + 16.f;
 
-	DrawRect(FLinearColor(0.05f, 0.05f, 0.08f, 0.95f), PX, PY, W, H);
+	DrawRect(WeedUI::ColPanel(0.95f), PX, PY, W, H);
 	float y = PY + 14.f;
-	DrawText(TEXT("ROLL JOINT"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
+	DrawText(TEXT("ROLL JOINT"), WeedUI::ColText(), InnerX, y, Font); y += 28.f;
 
 	const int32 G = Phone->GetRollGrams();
 	const int32 MaxG = Phone->GetMaxJointGrams();
 	if (MaxG <= 0)
 	{
 		DrawText(TEXT("No papers! Buy some in Suppliers."),
-			FLinearColor(1.f, 0.5f, 0.5f), InnerX, y, Font);
+			WeedUI::ColWarn(), InnerX, y, Font);
 		y += 30.f;
-		DrawButton(FName(TEXT("rollclose")), TEXT("Close (right-click)"), InnerX, y, 150.f, FLinearColor::Yellow);
+		DrawButton(FName(TEXT("rollclose")), TEXT("Close (right-click)"), InnerX, y, 150.f, WeedUI::ColWarn());
 		return;
 	}
 	DrawText(FString::Printf(TEXT("Grams per joint: %d   (your papers allow up to %dg)"), G, MaxG),
-		FLinearColor::White, InnerX, y, Font);
+		WeedUI::ColText(), InnerX, y, Font);
 	y += 28.f;
 
 	// Slider met klikbare/sleepbare stops per gram (1..MaxG).
@@ -911,7 +911,7 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 	}
 
 	// Achtergrond-track + gevulde balk tot het gekozen gram.
-	DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.95f), TrackX, TrackY, TrackW, TrackH);
+	DrawRect(WeedUI::ColWell(0.95f), TrackX, TrackY, TrackW, TrackH);
 	DrawRect(FLinearColor(0.35f, 0.8f, 0.35f, 0.95f), TrackX, TrackY, SegW * G, TrackH);
 
 	for (int32 g = 1; g <= MaxG; ++g)
@@ -967,13 +967,13 @@ void AWeedShopHUD::DrawRollUI(UPhoneClientComponent* Phone)
 		ThcNorm >= 0.6f ? FLinearColor::Green : (ThcNorm >= 0.3f ? FLinearColor(1.f, 0.7f, 0.2f) : FLinearColor(1.f, 0.4f, 0.4f)),
 		InnerX, y, Font);
 	y += 24.f;
-	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 14.f);
+	DrawRect(WeedUI::ColWell(0.9f), InnerX, y, W - 32.f, 14.f);
 	DrawRect(FLinearColor(0.4f, 0.9f, 0.4f, 0.95f), InnerX, y, (W - 32.f) * ThcNorm, 14.f);
 	y += 28.f;
 
 	DrawButton(FName(TEXT("rollconfirm")), FString::Printf(TEXT("Roll joint (costs %dg weed)"), G),
-		InnerX, y, 250.f, FLinearColor::White);
-	DrawButton(FName(TEXT("rollclose")), TEXT("Close (right-click)"), InnerX + 260.f, y, 150.f, FLinearColor::Yellow);
+		InnerX, y, 250.f, WeedUI::ColText());
+	DrawButton(FName(TEXT("rollclose")), TEXT("Close (right-click)"), InnerX + 260.f, y, 150.f, WeedUI::ColWarn());
 }
 
 void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
@@ -1002,9 +1002,9 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
 	const float InnerX = PX + 16.f;
 
-	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.96f), PX, PY, W, H);
+	DrawRect(WeedUI::ColPanel(0.96f), PX, PY, W, H);
 	float y = PY + 14.f;
-	DrawText(TEXT("DEAL"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
+	DrawText(TEXT("DEAL"), WeedUI::ColText(), InnerX, y, Font); y += 28.f;
 
 	const int32 Qty = C->DesiredQuantity;
 	const int32 WantMarket = C->GetMarketPriceCents();
@@ -1012,9 +1012,9 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 
 	if (WantMarket <= 0)
 	{
-		DrawText(TEXT("This customer has no clear order right now."), FLinearColor(1.f, 0.6f, 0.6f), InnerX, y, Font);
+		DrawText(TEXT("This customer has no clear order right now."), WeedUI::ColWarn(), InnerX, y, Font);
 		y += 30.f;
-		DrawButton(FName(TEXT("dealclose")), TEXT("Close"), InnerX, y, 150.f, FLinearColor::Yellow);
+		DrawButton(FName(TEXT("dealclose")), TEXT("Close"), InnerX, y, 150.f, WeedUI::ColWarn());
 		return;
 	}
 
@@ -1024,7 +1024,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	const int32 Market = FMath::Max(1, Phone->GetOfferMarketCents());
 
 	DrawText(FString::Printf(TEXT("Wants: %dg %s   (market EUR %d)"), Qty, *WantProduct, (int32)(WeedRoundEuros((int64)WantMarket) / 100)),
-		FLinearColor::White, InnerX, y, Font);
+		WeedUI::ColText(), InnerX, y, Font);
 	y += 22.f;
 	if (bSub)
 	{
@@ -1076,7 +1076,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	const float TrackH = 16.f;
 	const float SegW = TrackW / float(N);
 
-	DrawRect(FLinearColor(0.18f, 0.18f, 0.20f, 0.95f), TrackX, TrackY, TrackW, TrackH);
+	DrawRect(WeedUI::ColWell(0.95f), TrackX, TrackY, TrackW, TrackH);
 	// Gevulde balk + handle staan op het VASTGEZETTE bod (verschuift alleen bij klik/sleep).
 	const float CommittedPct = float(CommittedAsk) / Market;
 	const FLinearColor Fill = (CommittedPct <= 1.f) ? FLinearColor(0.4f, 0.85f, 0.4f) : FLinearColor(0.9f, 0.55f, 0.3f);
@@ -1124,13 +1124,13 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	{
 		DrawText(FString::Printf(TEXT("Your stock: %dg %s  -  THC %.0f%%  Quality %.0f%%"),
 			StockQty, *PrettyItemName(OfferedId), ThcShow, QShow),
-			FLinearColor(0.8f, 0.85f, 1.f), InnerX, y, Font);
+			WeedUI::ColText(), InnerX, y, Font);
 	}
 	else
 	{
 		DrawText(FString::Printf(TEXT("Your stock: %dg of %d needed - not enough %s!"),
 			StockQty, Qty, *PrettyItemName(OfferedId)),
-			FLinearColor(1.f, 0.5f, 0.4f), InnerX, y, Font);
+			WeedUI::ColWarn(), InnerX, y, Font);
 	}
 	y += 20.f;
 
@@ -1143,23 +1143,23 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	DrawText(FString::Printf(TEXT("Chance they accept: %.0f%%%s"), Chance, bSub ? TEXT("   (substitute)") : TEXT("")),
 		ChanceCol, InnerX, y, Font);
 	y += 22.f;
-	DrawRect(FLinearColor(0.2f, 0.2f, 0.2f, 0.9f), InnerX, y, W - 32.f, 12.f);
+	DrawRect(WeedUI::ColWell(0.9f), InnerX, y, W - 32.f, 12.f);
 	DrawRect(ChanceCol, InnerX, y, (W - 32.f) * FMath::Clamp(Chance / 100.f, 0.f, 1.f), 12.f);
 	y += 16.f;
 
 	// Klant-binding nu + voorspelling NA een geslaagde deal (zelfde formule als de server).
 	DrawText(FString::Printf(TEXT("Respect %.0f   Loyalty %.0f   Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction),
-		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
+		WeedUI::ColTextDim(), InnerX, y, Font);
 	y += 20.f;
 	float pR = 0.f, pL = 0.f, pA = 0.f;
 	C->PreviewDealOutcome(EffAsk, Quality01, (StockQty > 0 ? ThcShow : -1.f), pR, pL, pA, bSub);
 	DrawText(FString::Printf(TEXT("If accepted:  R %.0f->%.0f   L %.0f->%.0f   A %.0f->%.0f"),
 		C->Respect, pR, C->Loyalty, pL, C->Addiction, pA),
-		FLinearColor(0.55f, 0.95f, 0.6f), InnerX, y, Font);
+		WeedUI::ColGood(), InnerX, y, Font);
 	y += 24.f;
 
 	// --- Strain-keuze: bied desnoods een andere strain aan die je wél hebt ---
-	DrawText(TEXT("Offer strain (click to switch):"), FLinearColor(0.75f, 0.8f, 0.95f), InnerX, y, Font);
+	DrawText(TEXT("Offer strain (click to switch):"), WeedUI::ColTextDim(), InnerX, y, Font);
 	y += 20.f;
 	TArray<FName> Buds;
 	if (PInv)
@@ -1171,7 +1171,7 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 	}
 	if (Buds.Num() == 0)
 	{
-		DrawText(TEXT("(no weed in your inventory)"), FLinearColor::Gray, InnerX, y, Font);
+		DrawText(TEXT("(no weed in your inventory)"), WeedUI::ColTextDim(), InnerX, y, Font);
 		y += 20.f;
 	}
 	else
@@ -1185,17 +1185,17 @@ void AWeedShopHUD::DrawDealUI(UPhoneClientComponent* Phone)
 			const bool bWanted = (Buds[i] == C->DesiredProductId);
 			const FName Box(*FString::Printf(TEXT("dalt_%d"), i));
 			const bool bH = (HoveredBox == Box);
-			DrawRect(bThis ? FLinearColor(0.22f, 0.5f, 0.3f, 0.98f) : (bH ? FLinearColor(0.25f, 0.32f, 0.45f, 0.95f) : FLinearColor(0.13f, 0.14f, 0.18f, 0.95f)),
+			DrawRect(bThis ? WeedUI::ColAccentDim(0.98f) : (bH ? WeedUI::ColStroke(0.95f) : WeedUI::ColSlotEmpty(0.95f)),
 				bx, by, ChipW, 24.f);
 			DrawText(FString::Printf(TEXT("%s%s T%.0f%%"), *PrettyItemName(Buds[i]), bWanted ? TEXT(" *") : TEXT(""), PInv->GetItemQuality(Buds[i])),
-				FLinearColor::White, bx + 6.f, by + 3.f, Font);
+				WeedUI::ColText(), bx + 6.f, by + 3.f, Font);
 			AddHitBox(FVector2D(bx, by), FVector2D(ChipW, 24.f), Box, true, 4);
 		}
 		y += FMath::CeilToFloat(Buds.Num() / 2.f) * 26.f + 6.f;
 	}
 
-	DrawButton(FName(TEXT("dealconfirm")), TEXT("Offer deal"), InnerX, y, 200.f, FLinearColor::White);
-	DrawButton(FName(TEXT("dealclose")), TEXT("Cancel"), InnerX + 210.f, y, 160.f, FLinearColor::Yellow);
+	DrawButton(FName(TEXT("dealconfirm")), TEXT("Offer deal"), InnerX, y, 200.f, WeedUI::ColText());
+	DrawButton(FName(TEXT("dealclose")), TEXT("Cancel"), InnerX + 210.f, y, 160.f, WeedUI::ColWarn());
 }
 
 void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
@@ -1211,10 +1211,10 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
 	const float InnerX = PX + 16.f;
 
-	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.97f), PX, PY, W, H);
+	DrawRect(WeedUI::ColPanel(0.97f), PX, PY, W, H);
 	float y = PY + 14.f;
-	DrawText(TEXT("INVENTORY"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font);
-	DrawButton(FName(TEXT("invclose")), TEXT("Close"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
+	DrawText(TEXT("INVENTORY"), WeedUI::ColText(), InnerX, y, Font);
+	DrawButton(FName(TEXT("invclose")), TEXT("Close"), PX + W - 130.f, y - 2.f, 114.f, WeedUI::ColWarn());
 	y += 28.f;
 
 	// Slots + gewicht.
@@ -1223,7 +1223,7 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 	const bool bHeavy = (Inv->MaxWeight > 0.f && Weight > Inv->MaxWeight - 0.001f);
 	DrawText(FString::Printf(TEXT("Slots %d/%d        Weight %.1f / %.0f kg"),
 		UsedSlots, Inv->MaxStacks, Weight, Inv->MaxWeight),
-		bHeavy ? FLinearColor(1.f, 0.5f, 0.4f) : FLinearColor(0.8f, 0.85f, 1.f), InnerX, y, Font);
+		bHeavy ? WeedUI::ColWarn() : WeedUI::ColTextDim(), InnerX, y, Font);
 	y += 24.f;
 
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
@@ -1263,7 +1263,7 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		if (n >= FreeStacks.Num())
 		{
 			// Lege ghost-slot.
-			DrawRect(FLinearColor(0.10f, 0.10f, 0.13f, 0.35f), cx + 2.f, cy + 2.f, CellW - 4.f, CellH - 4.f);
+			DrawRect(WeedUI::ColSlotEmpty(0.35f), cx + 2.f, cy + 2.f, CellW - 4.f, CellH - 4.f);
 			continue;
 		}
 
@@ -1271,16 +1271,16 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		const FName Box(*FString::Printf(TEXT("inv_%d"), n));
 		const bool bHover = (HoveredBox == Box);
 		const bool bIsDragged = bDraggingItem && DraggedStackId == S.StackId;
-		DrawRect(bIsDragged ? FLinearColor(0.35f, 0.30f, 0.10f, 0.85f)
-			: (bHover ? FLinearColor(0.20f, 0.26f, 0.38f, 0.95f) : FLinearColor(0.10f, 0.10f, 0.13f, 0.92f)),
+		DrawRect(bIsDragged ? WeedUI::ColAccentDim(0.85f)
+			: (bHover ? WeedUI::ColStroke(0.95f) : WeedUI::ColSlot(0.92f)),
 			cx + 2.f, cy + 2.f, CellW - 4.f, CellH - 4.f);
 		FString Lbl = PrettyItemName(S.ItemId);
 		if (Lbl.Len() > 13) { Lbl = Lbl.Left(13); }
-		DrawText(Lbl, FLinearColor(0.85f, 0.9f, 1.f), cx + 6.f, cy + 5.f, Font);
+		DrawText(Lbl, WeedUI::ColText(), cx + 6.f, cy + 5.f, Font);
 		const bool bThc = (S.ItemId.ToString().StartsWith(TEXT("Bud_")) || S.ItemId.ToString().StartsWith(TEXT("Joint_")));
 		const FString GExtra = bThc ? FString::Printf(TEXT("  THC%.0f%% Q%.0f%%"), S.Quality, S.QualityPct) : TEXT("");
 		DrawText(FString::Printf(TEXT("x%d%s"), S.Quantity, *GExtra),
-			FLinearColor(0.75f, 0.75f, 0.8f), cx + 6.f, cy + 26.f, Font);
+			WeedUI::ColTextDim(), cx + 6.f, cy + 26.f, Font);
 		AddHitBox(FVector2D(cx + 2.f, cy + 2.f), FVector2D(CellW - 4.f, CellH - 4.f), Box, true, 3);
 
 		// Meerdere batches van dit wiet-product? Toon een 'MERGE'-knop (hogere prioriteit dan de cel).
@@ -1290,14 +1290,14 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 			const float mw = 52.f, mh = 16.f;
 			const float mxp = cx + CellW - mw - 4.f, myp = cy + CellH - mh - 4.f;
 			const bool bMHover = (HoveredBox == MBox);
-			DrawRect(bMHover ? FLinearColor(0.95f, 0.7f, 0.15f, 0.95f) : FLinearColor(0.5f, 0.4f, 0.1f, 0.95f), mxp, myp, mw, mh);
-			DrawText(TEXT("MERGE"), FLinearColor::White, mxp + 4.f, myp + 1.f, Font);
+			DrawRect(bMHover ? WeedUI::ColAccent(0.95f) : WeedUI::ColAccentDim(0.95f), mxp, myp, mw, mh);
+			DrawText(TEXT("MERGE"), WeedUI::ColText(), mxp + 4.f, myp + 1.f, Font);
 			AddHitBox(FVector2D(mxp, myp), FVector2D(mw, mh), MBox, true, 5);
 		}
 	}
 
 	// Hotbar-rij (hbar_<i>).
-	DrawText(TEXT("Hotbar  (drag items here for quick-select 1-8)"), FLinearColor(0.7f, 0.7f, 0.8f), InnerX, HbY - 22.f, Font);
+	DrawText(TEXT("Hotbar  (drag items here for quick-select 1-8)"), WeedUI::ColTextDim(), InnerX, HbY - 22.f, Font);
 	const float SlotW = 60.f;
 	const float SlotH = 48.f;
 	const float Gap = 4.f;
@@ -1313,17 +1313,17 @@ void AWeedShopHUD::DrawInventoryUI(UInventoryComponent* Inv)
 		const bool bDropHere = bDraggingItem && bHover;
 		const bool bActive = (i == Inv->GetActiveSlot());
 		DrawRect(bDropHere ? FLinearColor(1.f, 0.85f, 0.1f, 0.7f)
-			: (bActive ? FLinearColor(0.16f, 0.16f, 0.10f, 0.95f) : FLinearColor(0.10f, 0.10f, 0.13f, 0.9f)),
+			: (bActive ? WeedUI::ColAccentDim(0.95f) : WeedUI::ColSlotEmpty(0.9f)),
 			hx, HbY, SlotW, SlotH);
-		DrawText(FString::Printf(TEXT("%d"), i + 1), FLinearColor(0.5f, 0.5f, 0.6f), hx + SlotW - 12.f, HbY + 1.f, Font);
+		DrawText(FString::Printf(TEXT("%d"), i + 1), WeedUI::ColTextDim(), hx + SlotW - 12.f, HbY + 1.f, Font);
 		const int32 HbStackIdx = Inv->FindStackById(Inv->GetHotbarStackId(i));
 		if (Stacks.IsValidIndex(HbStackIdx))
 		{
 			const FInventoryStack& HbS = Stacks[HbStackIdx];
 			FString Lbl = PrettyItemName(HbS.ItemId);
 			if (Lbl.Len() > 9) { Lbl = Lbl.Left(9); }
-			DrawText(Lbl, FLinearColor(0.85f, 0.9f, 1.f), hx + 4.f, HbY + 16.f, Font);
-			DrawText(FString::Printf(TEXT("x%d"), HbS.Quantity), FLinearColor(0.7f, 0.7f, 0.7f), hx + 4.f, HbY + 32.f, Font);
+			DrawText(Lbl, WeedUI::ColText(), hx + 4.f, HbY + 16.f, Font);
+			DrawText(FString::Printf(TEXT("x%d"), HbS.Quantity), WeedUI::ColTextDim(), hx + 4.f, HbY + 32.f, Font);
 		}
 		AddHitBox(FVector2D(hx, HbY), FVector2D(SlotW, SlotH), Box, true, 3);
 		hx += SlotW + Gap;
@@ -1404,16 +1404,16 @@ void AWeedShopHUD::DrawMergeUI(UPhoneClientComponent* Phone, UInventoryComponent
 
 	// Donkere dim achter de popup + paneel.
 	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), 0.f, 0.f, Canvas ? Canvas->ClipX : 1280.f, Canvas ? Canvas->ClipY : 720.f);
-	DrawRect(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), PX, PY, W, H);
+	DrawRect(WeedUI::ColPanel(0.99f), PX, PY, W, H);
 
 	float y = PY + 14.f;
-	DrawText(TEXT("MERGE WEED"), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font); y += 28.f;
+	DrawText(TEXT("MERGE WEED"), WeedUI::ColText(), InnerX, y, Font); y += 28.f;
 
 	int32 Qty = 0, Batches = 0; float AvgThc = 0.f, AvgQ = 0.f;
 	Inv->GetMergePreview(ItemId, Qty, AvgThc, AvgQ, Batches);
 
 	DrawText(FString::Printf(TEXT("Combine %d separate batches of %s into one stack."), Batches, *PrettyItemName(ItemId)),
-		FLinearColor(0.9f, 0.9f, 1.f), InnerX, y, Font); y += 24.f;
+		WeedUI::ColText(), InnerX, y, Font); y += 24.f;
 
 	// Lijst van de batches (max 4 tonen).
 	int32 shown = 0;
@@ -1423,21 +1423,21 @@ void AWeedShopHUD::DrawMergeUI(UPhoneClientComponent* Phone, UInventoryComponent
 		if (shown < 4)
 		{
 			DrawText(FString::Printf(TEXT("  - %dg  @  THC %.0f%%  /  Quality %.0f%%"), S.Quantity, S.Quality, S.QualityPct),
-				FLinearColor(0.78f, 0.8f, 0.85f), InnerX, y, Font);
+				WeedUI::ColTextDim(), InnerX, y, Font);
 			y += 19.f;
 		}
 		++shown;
 	}
-	if (shown > 4) { DrawText(FString::Printf(TEXT("  ...and %d more"), shown - 4), FLinearColor(0.6f, 0.6f, 0.65f), InnerX, y, Font); y += 19.f; }
+	if (shown > 4) { DrawText(FString::Printf(TEXT("  ...and %d more"), shown - 4), WeedUI::ColTextDim(), InnerX, y, Font); y += 19.f; }
 	y += 6.f;
 
 	DrawText(TEXT("The THC% and Quality% become the weighted average:"),
-		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font); y += 22.f;
+		WeedUI::ColTextDim(), InnerX, y, Font); y += 22.f;
 	DrawText(FString::Printf(TEXT("Result: %dg  @  THC %.0f%%  /  Quality %.0f%%"), Qty, AvgThc, AvgQ),
 		FLinearColor(1.f, 0.95f, 0.55f), InnerX, y, Font); y += 30.f;
 
-	DrawButton(FName(TEXT("mergeconfirm")), TEXT("Merge (average)"), InnerX, y, 200.f, FLinearColor::White);
-	DrawButton(FName(TEXT("mergeclose")), TEXT("Cancel"), InnerX + 210.f, y, 150.f, FLinearColor::Yellow);
+	DrawButton(FName(TEXT("mergeconfirm")), TEXT("Merge (average)"), InnerX, y, 200.f, WeedUI::ColText());
+	DrawButton(FName(TEXT("mergeclose")), TEXT("Cancel"), InnerX + 210.f, y, 150.f, WeedUI::ColWarn());
 
 	if (PlayerOwner) { PlayerOwner->CurrentMouseCursor = EMouseCursor::Default; }
 }
@@ -1457,16 +1457,16 @@ void AWeedShopHUD::DrawPotUpgradeUI(UPhoneClientComponent* Phone)
 	const float PY = (Canvas ? Canvas->ClipY : 720.f) * 0.5f - H * 0.5f;
 	const float InnerX = PX + 16.f;
 
-	DrawRect(FLinearColor(0.05f, 0.06f, 0.09f, 0.96f), PX, PY, W, H);
+	DrawRect(WeedUI::ColPanel(0.96f), PX, PY, W, H);
 	float y = PY + 14.f;
 
 	FPotDef Pd;
 	const FString PotName = GetPotDef(Pot->GetPotTier(), Pd) ? Pd.DisplayName : TEXT("Pot");
-	DrawText(FString::Printf(TEXT("POT UPGRADES  —  %s"), *PotName), FLinearColor(0.6f, 1.f, 0.6f), InnerX, y, Font);
-	DrawButton(FName(TEXT("potupgclose")), TEXT("Close (U)"), PX + W - 130.f, y - 2.f, 114.f, FLinearColor::Yellow);
+	DrawText(FString::Printf(TEXT("POT UPGRADES  —  %s"), *PotName), WeedUI::ColText(), InnerX, y, Font);
+	DrawButton(FName(TEXT("potupgclose")), TEXT("Close (U)"), PX + W - 130.f, y - 2.f, 114.f, WeedUI::ColWarn());
 	y += 28.f;
 	DrawText(TEXT("Upgrades belong to this pot."),
-		FLinearColor(0.7f, 0.7f, 0.8f), InnerX, y, Font);
+		WeedUI::ColTextDim(), InnerX, y, Font);
 	y += 26.f;
 
 	const TArray<FPotUpgradeDef>& Ups = GetPotUpgrades();
@@ -1475,16 +1475,16 @@ void AWeedShopHUD::DrawPotUpgradeUI(UPhoneClientComponent* Phone)
 		const bool bOwned = Pot->HasPotUpgrade(i);
 		const int32 Cost = GetPotUpgradeCost(i, Pot->GetPotTier());
 		DrawText(FString::Printf(TEXT("%s  —  %s"), *Ups[i].DisplayName, *Ups[i].Desc),
-			FLinearColor(0.9f, 0.9f, 0.75f), InnerX, y, Font);
+			WeedUI::ColText(), InnerX, y, Font);
 		y += 20.f;
 		if (bOwned)
 		{
-			DrawText(TEXT("   Installed"), FLinearColor(0.5f, 1.f, 0.5f), InnerX, y, Font);
+			DrawText(TEXT("   Installed"), WeedUI::ColGood(), InnerX, y, Font);
 		}
 		else
 		{
 			DrawButton(FName(*FString::Printf(TEXT("potupg_%d"), i)),
-				FString::Printf(TEXT("Buy  -  EUR %d"), (int32)(WeedRoundEuros((int64)Cost) / 100)), InnerX, y, 220.f, FLinearColor::White);
+				FString::Printf(TEXT("Buy  -  EUR %d"), (int32)(WeedRoundEuros((int64)Cost) / 100)), InnerX, y, 220.f, WeedUI::ColText());
 		}
 		y += RowH + 4.f;
 	}

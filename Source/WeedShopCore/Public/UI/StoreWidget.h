@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UWidget;
 class UScrollBox;
 class UTextBlock;
+class UBorder;
 
 UCLASS()
 class WEEDSHOPCORE_API UStoreWidget : public UUserWidget
@@ -44,6 +45,11 @@ protected:
 	int32 ActiveCat = -1;       // -1 = nog niet gekozen (eerste tab)
 	bool bConfirmPending = false; // checkout: tweede klik bevestigt
 	TMap<FName, int32> Cart;    // winkelmand: catalog-id -> aantal
+
+	// Persistente rij-pool -> per FillBody alleen gewijzigde rijen vervangen (geen ClearChildren -> geen flash/scroll-sprong bij cart +/-).
+	UPROPERTY() TArray<TObjectPtr<UBorder>> StoreRowBoxes;
+	TArray<FString> StoreRowSigs;
+	FString LastTabSig; // tabs alleen herbouwen als de tab-set/actieve tab wijzigt
 
 	int32 CartTotalCents() const;
 	void CartAdd(FName Id, int32 Delta);
