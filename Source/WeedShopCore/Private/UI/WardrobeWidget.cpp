@@ -77,7 +77,11 @@ void UWardrobeWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("WardrobeCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.04f, 0.06f, 0.99f), 20.f));
+	{
+		FSlateBrush Br = WeedUI::Rounded(WeedUI::ColPanel(0.98f), 20.f);
+		Br.OutlineSettings.Width = 1; Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+		CardB->SetBrush(Br);
+	}
 	CardB->SetPadding(FMargin(16.f));
 	Card = CardB;
 
@@ -93,20 +97,20 @@ void UWardrobeWidget::BuildShell(UCanvasPanel* Root)
 
 	// Kop-balk.
 	UBorder* Head = WidgetTree->ConstructWidget<UBorder>();
-	Head->SetBrush(WeedUI::Rounded(FLinearColor(0.13f, 0.10f, 0.16f, 1.f), 10.f));
+	Head->SetBrush(WeedUI::Rounded(WeedUI::ColInner(), 10.f));
 	Head->SetPadding(FMargin(12.f, 8.f, 12.f, 8.f));
 	UHorizontalBox* HeadRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 	Head->SetContent(HeadRow);
-	UHorizontalBoxSlot* TS = HeadRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("WARDROBE"), 18, FLinearColor(0.85f, 0.6f, 1.f), false, true));
+	UHorizontalBoxSlot* TS = HeadRow->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("WARDROBE"), 18, WeedUI::ColAccent(), false, true));
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
-	UWeedActionButton* CloseB = WrdBtn(WidgetTree, FLinearColor(0.4f, 0.2f, 0.2f), 8.f,
+	UWeedActionButton* CloseB = WrdBtn(WidgetTree, WeedUI::ColWarn(0.85f), 8.f,
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseWardrobe(); } });
-	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 12, FLinearColor::White, true));
+	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 12, WeedUI::ColText(), true));
 	HeadRow->AddChildToHorizontalBox(CloseB);
 	Outer->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	UBorder* ScreenB = WidgetTree->ConstructWidget<UBorder>();
-	ScreenB->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.06f, 0.10f, 1.f), 12.f));
+	ScreenB->SetBrush(WeedUI::Rounded(WeedUI::ColWell(), 12.f));
 	ScreenB->SetPadding(FMargin(14.f));
 	UVerticalBoxSlot* ScS = Outer->AddChildToVerticalBox(ScreenB);
 	ScS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -116,7 +120,7 @@ void UWardrobeWidget::BuildShell(UCanvasPanel* Root)
 	ScreenB->SetContent(Split);
 
 	UBorder* PrevB = WidgetTree->ConstructWidget<UBorder>();
-	PrevB->SetBrush(WeedUI::Rounded(FLinearColor(0.03f, 0.025f, 0.05f, 1.f), 10.f));
+	PrevB->SetBrush(WeedUI::Rounded(WeedUI::ColWell(), 10.f));
 	PrevB->SetPadding(FMargin(4.f));
 	PreviewImage = WidgetTree->ConstructWidget<UImage>();
 	PreviewImage->SetVisibility(ESlateVisibility::Visible); // muis-events (rotate/zoom) moeten 'm raken
@@ -426,7 +430,7 @@ void UWardrobeWidget::FillBody()
 	ModelButtons.Reset(); ModelButtonSkins.Reset();
 
 	IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn());
-	if (!Pl) { Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("No character."), 14, FLinearColor::Gray)); return; }
+	if (!Pl) { Body->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("No character."), 14, WeedUI::ColTextDim())); return; }
 	const uint8 Skin = Pl->GetPlayerSkinIndex();
 
 	auto Row = [this](UWidget* W, const FMargin& Pad) { Body->AddChildToVerticalBox(W)->SetPadding(Pad); };
@@ -435,7 +439,7 @@ void UWardrobeWidget::FillBody()
 	const bool bFemaleSkin = (Skin >= 1 && Skin <= 4); // 1 = Quinn (legacy), 2-4 = Casual girls
 	if (bFemaleSkin)
 	{
-		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
+		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, WeedUI::ColText()), FMargin(0, 0, 0, 4));
 		UHorizontalBox* BodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
 		struct FBodyChoice { uint8 Idx; const TCHAR* Name; };
 		// Gamer Girl (3) bewust uit de speler-keuzes: kapotte bind-pose (FP toont Manny, TP-anims vervormen). Asset blijft voor NPC-gebruik.
@@ -445,7 +449,7 @@ void UWardrobeWidget::FillBody()
 		{
 			const uint8 bi = Ch.Idx;
 			UWeedActionButton* BB = WrdBtn(WidgetTree,
-				(Skin == bi) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f), 8.f,
+				(Skin == bi) ? WeedUI::ColAccentDim() : WeedUI::ColInner(), 8.f,
 				[this, bi]()
 				{
 					if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); }
@@ -453,7 +457,7 @@ void UWardrobeWidget::FillBody()
 					RecolorModelButtons(bi);
 					for (const TPair<int32, TWeakObjectPtr<UTextBlock>>& KV : SlotNameTexts) { UpdateSlotText(KV.Key); }
 				});
-			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, FLinearColor::White, true));
+			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, WeedUI::ColText(), true));
 			ModelButtons.Add(BB); ModelButtonSkins.Add(bi);
 			UHorizontalBoxSlot* BS = BodyRowBox->AddChildToHorizontalBox(BB);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -465,7 +469,7 @@ void UWardrobeWidget::FillBody()
 	// --- MALE model-keuze: Tony (complete looks, 1 slot) of Citizen (volledig modulair, 7 slots). ---
 	if (Skin == 5 || Skin == 6)
 	{
-		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 0, 0, 4));
+		Row(WeedUI::Text(WidgetTree, TEXT("Model"), 14, WeedUI::ColText()), FMargin(0, 0, 0, 4));
 		UHorizontalBox* MBodyRowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
 		struct FMaleChoice { uint8 Idx; const TCHAR* Name; };
 		static const FMaleChoice MaleChoices[] = { { 5, TEXT("Tony") }, { 6, TEXT("Citizen") } };
@@ -474,14 +478,14 @@ void UWardrobeWidget::FillBody()
 		{
 			const uint8 bi = Ch.Idx;
 			UWeedActionButton* BB = WrdBtn(WidgetTree,
-				(Skin == bi) ? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f), 8.f,
+				(Skin == bi) ? WeedUI::ColAccentDim() : WeedUI::ColInner(), 8.f,
 				[this, bi]()
 				{
 					if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); }
 					RecolorModelButtons(bi);
 					// Tony<->Citizen wisselt de slot-STRUCTUUR (1 vs 7) -> categorie wijzigt -> NativeTick rebuildt FillBody (veilig, geen reentrante rebuild hier).
 				});
-			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, FLinearColor::White, true));
+			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, WeedUI::ColText(), true));
 			ModelButtons.Add(BB); ModelButtonSkins.Add(bi);
 			UHorizontalBoxSlot* BS = MBodyRowBox->AddChildToHorizontalBox(BB);
 			BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -490,12 +494,12 @@ void UWardrobeWidget::FillBody()
 		}
 		Row(MBodyRowBox, FMargin(0, 0, 0, 6));
 	}
-	Row(WeedUI::Text(WidgetTree, TEXT("Switch Male / Female in Phone - Settings - Game."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 0, 0, 10));
+	Row(WeedUI::Text(WidgetTree, TEXT("Switch Male / Female in Phone - Settings - Game."), 11, WeedUI::ColTextDim()), FMargin(0, 0, 0, 10));
 
 	// Legacy Manny/Quinn (0/1) hebben geen losse outfit-parts -> kies hierboven een model.
 	if (Skin < 2)
 	{
-		Row(WeedUI::Text(WidgetTree, TEXT("Pick a model above for outfits."), 13, FLinearColor(0.65f, 0.68f, 0.78f)), FMargin(0, 6, 0, 0));
+		Row(WeedUI::Text(WidgetTree, TEXT("Pick a model above for outfits."), 13, WeedUI::ColTextDim()), FMargin(0, 6, 0, 0));
 		return;
 	}
 
@@ -504,10 +508,10 @@ void UWardrobeWidget::FillBody()
 	{
 		const int32 VarCount = FMath::Max(1, WeedOutfit::GirlVariantCount(Skin));
 		const uint8 CurVar = (uint8)FMath::Clamp((int32)Pl->GetOutfitPart(0), 0, VarCount - 1);
-		Row(WeedUI::Text(WidgetTree, TEXT("Outfit"), 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
+		Row(WeedUI::Text(WidgetTree, TEXT("Outfit"), 13, WeedUI::ColText()), FMargin(0, 4, 0, 2));
 		UHorizontalBox* VR = WidgetTree->ConstructWidget<UHorizontalBox>();
 
-		UWeedActionButton* PrevV = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
+		UWeedActionButton* PrevV = WrdBtn(WidgetTree, WeedUI::ColInner(), 8.f,
 			[this, VarCount]()
 			{
 				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
@@ -517,16 +521,16 @@ void UWardrobeWidget::FillBody()
 				}
 				UpdateSlotText(0);
 			});
-		PrevV->SetContent(WeedUI::Text(WidgetTree, TEXT("<"), 14, FLinearColor::White, true));
+		PrevV->SetContent(WeedUI::Text(WidgetTree, TEXT("<"), 14, WeedUI::ColText(), true));
 		VR->AddChildToHorizontalBox(PrevV);
 
-		UTextBlock* VNameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s  (%d/%d)"), WeedOutfit::GirlVariantName(Skin, CurVar), CurVar + 1, VarCount), 14, FLinearColor(0.95f, 0.95f, 1.f), false, true);
+		UTextBlock* VNameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s  (%d/%d)"), WeedOutfit::GirlVariantName(Skin, CurVar), CurVar + 1, VarCount), 14, WeedUI::ColText(), false, true);
 		SlotNameTexts.Add(0, VNameT);
 		UHorizontalBoxSlot* VNS = VR->AddChildToHorizontalBox(VNameT);
 		VNS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		VNS->SetHorizontalAlignment(HAlign_Center); VNS->SetVerticalAlignment(VAlign_Center);
 
-		UWeedActionButton* NextV = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
+		UWeedActionButton* NextV = WrdBtn(WidgetTree, WeedUI::ColInner(), 8.f,
 			[this, VarCount]()
 			{
 				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
@@ -536,11 +540,11 @@ void UWardrobeWidget::FillBody()
 				}
 				UpdateSlotText(0);
 			});
-		NextV->SetContent(WeedUI::Text(WidgetTree, TEXT(">"), 14, FLinearColor::White, true));
+		NextV->SetContent(WeedUI::Text(WidgetTree, TEXT(">"), 14, WeedUI::ColText(), true));
 		VR->AddChildToHorizontalBox(NextV);
 
 		Row(VR, FMargin(0, 0, 0, 4));
-		Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom. Press B in-game for third person."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 12, 0, 0));
+		Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom. Press B in-game for third person."), 11, WeedUI::ColTextDim()), FMargin(0, 12, 0, 0));
 		return; // geen Casual-slots voor Gamer/School
 	}
 
@@ -561,10 +565,10 @@ void UWardrobeWidget::FillBody()
 		const WeedOutfit::FPart& Part = bCitMan ? WeedOutfit::PartAtM(SlotIdx, Cur, WeedOutfit::EMaleKind::CitizenMan) : WeedOutfit::PartAt(SlotIdx, Cur, bMaleSkin);
 
 		const TCHAR* SlotLbl = bCitMan ? WeedOutfit::SlotNameM(SlotIdx, WeedOutfit::EMaleKind::CitizenMan) : (bMaleSkin ? TEXT("Look") : WeedOutfit::SlotName(SlotIdx));
-		Row(WeedUI::Text(WidgetTree, SlotLbl, 13, FLinearColor(0.8f, 0.85f, 1.f)), FMargin(0, 4, 0, 2));
+		Row(WeedUI::Text(WidgetTree, SlotLbl, 13, WeedUI::ColText()), FMargin(0, 4, 0, 2));
 		UHorizontalBox* R = WidgetTree->ConstructWidget<UHorizontalBox>();
 
-		UWeedActionButton* PrevB = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
+		UWeedActionButton* PrevB = WrdBtn(WidgetTree, WeedUI::ColInner(), 8.f,
 			[this, SlotIdx, Count]()
 			{
 				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
@@ -574,16 +578,16 @@ void UWardrobeWidget::FillBody()
 				}
 				UpdateSlotText(SlotIdx); // in-place, geen rebuild
 			});
-		PrevB->SetContent(WeedUI::Text(WidgetTree, TEXT("<"), 14, FLinearColor::White, true));
+		PrevB->SetContent(WeedUI::Text(WidgetTree, TEXT("<"), 14, WeedUI::ColText(), true));
 		R->AddChildToHorizontalBox(PrevB);
 
-		UTextBlock* NameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s  (%d/%d)"), Part.Name, Cur + 1, Count), 14, FLinearColor(0.95f, 0.95f, 1.f), false, true);
+		UTextBlock* NameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s  (%d/%d)"), Part.Name, Cur + 1, Count), 14, WeedUI::ColText(), false, true);
 		SlotNameTexts.Add(SlotIdx, NameT); // bewaren -> in-place updaten bij </>
 		UHorizontalBoxSlot* NS = R->AddChildToHorizontalBox(NameT);
 		NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		NS->SetHorizontalAlignment(HAlign_Center); NS->SetVerticalAlignment(VAlign_Center);
 
-		UWeedActionButton* NextB = WrdBtn(WidgetTree, FLinearColor(0.2f, 0.25f, 0.4f), 8.f,
+		UWeedActionButton* NextB = WrdBtn(WidgetTree, WeedUI::ColInner(), 8.f,
 			[this, SlotIdx, Count]()
 			{
 				if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
@@ -593,13 +597,13 @@ void UWardrobeWidget::FillBody()
 				}
 				UpdateSlotText(SlotIdx);
 			});
-		NextB->SetContent(WeedUI::Text(WidgetTree, TEXT(">"), 14, FLinearColor::White, true));
+		NextB->SetContent(WeedUI::Text(WidgetTree, TEXT(">"), 14, WeedUI::ColText(), true));
 		R->AddChildToHorizontalBox(NextB);
 
 		Row(R, FMargin(0, 0, 0, 4));
 	}
 
-	Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom. Press B in-game for third person."), 11, FLinearColor(0.6f, 0.62f, 0.72f)), FMargin(0, 12, 0, 0));
+	Row(WeedUI::Text(WidgetTree, TEXT("Drag the preview to rotate - scroll to zoom. Press B in-game for third person."), 11, WeedUI::ColTextDim()), FMargin(0, 12, 0, 0));
 }
 
 void UWardrobeWidget::UpdateSlotText(int32 SlotIdx)
@@ -631,7 +635,7 @@ void UWardrobeWidget::RecolorModelButtons(uint8 ActiveSkin)
 		UWeedActionButton* B = ModelButtons[i].Get();
 		if (!B) { continue; }
 		const FLinearColor Col = (ModelButtonSkins.IsValidIndex(i) && ModelButtonSkins[i] == ActiveSkin)
-			? FLinearColor(0.55f, 0.30f, 0.80f) : FLinearColor(0.15f, 0.14f, 0.20f);
+			? WeedUI::ColAccentDim() : WeedUI::ColInner();
 		FButtonStyle S;
 		S.Normal = WeedUI::Rounded(Col, 8.f);
 		S.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);

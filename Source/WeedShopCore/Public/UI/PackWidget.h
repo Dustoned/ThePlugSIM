@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UWidget;
 class UVerticalBox;
 class UWeedActionButton;
+class UWeedItemPickGrid;
 
 UCLASS()
 class WEEDSHOPCORE_API UPackWidget : public UUserWidget
@@ -51,10 +52,10 @@ protected:
 	UPROPERTY() TObjectPtr<UVerticalBox> UnpackPane;
 
 	// --- Pack-flow persistente widgets (één keer gebouwd) ---
-	UPROPERTY() TObjectPtr<UVerticalBox> StrainList;   // container voor de strain-rijen
+	UPROPERTY() TObjectPtr<UWeedItemPickGrid> StrainGrid; // icoon-grid voor de strain-keuze
 	UPROPERTY() TObjectPtr<class UTextBlock> NoBudLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> ContSection;  // "2. Pick a bag/jar"-blok (titel + lijst + geen-melding)
-	UPROPERTY() TObjectPtr<UVerticalBox> ContList;     // container voor de container-rijen
+	UPROPERTY() TObjectPtr<UWeedItemPickGrid> ContGrid; // icoon-grid voor de container-keuze
 	UPROPERTY() TObjectPtr<class UTextBlock> NoContLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> GpbSection;   // "2.b Grams per bag"-blok
 	UPROPERTY() TObjectPtr<class UTextBlock> GpbLabel;
@@ -65,7 +66,7 @@ protected:
 	UPROPERTY() TObjectPtr<class UTextBlock> PackBtnLabel;
 
 	// --- Unpack-flow persistente widgets (één keer gebouwd) ---
-	UPROPERTY() TObjectPtr<UVerticalBox> UnpackList;   // container voor de bag-rijen
+	UPROPERTY() TObjectPtr<UWeedItemPickGrid> UnpackGrid; // icoon-grid voor de uit-te-pakken bag-keuze
 	UPROPERTY() TObjectPtr<class UTextBlock> UnpackEmptyLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> UnpackControls; // slider/steppers/knop-blok (verborgen als geen bags)
 	UPROPERTY() TObjectPtr<class USlider> UnpackSlider;
@@ -73,18 +74,8 @@ protected:
 	UPROPERTY() TObjectPtr<UWeedActionButton> UnpackButton;
 	UPROPERTY() TObjectPtr<class UTextBlock> UnpackBtnLabel;
 
-	// --- Persistente rij-pools + per-rij signature (ItemId+Qty+Quality) -> diff-refresh, geen teardown ---
-	UPROPERTY() TArray<TObjectPtr<UWeedActionButton>> StrainRowBtns;
-	UPROPERTY() TArray<FName> StrainRowIds;
-	TArray<FString> StrainRowSigs;
-
-	UPROPERTY() TArray<TObjectPtr<UWeedActionButton>> ContRowBtns;
-	UPROPERTY() TArray<FName> ContRowIds;
-	TArray<FString> ContRowSigs;
-
-	UPROPERTY() TArray<TObjectPtr<UWeedActionButton>> UnpackRowBtns;
-	UPROPERTY() TArray<FName> UnpackRowIds;
-	TArray<FString> UnpackRowSigs;
+	// (De strain/container/unpack-keuze draait nu op UWeedItemPickGrid — SetItems diff't intern, dus
+	//  hier zijn geen losse rij-pools/signatures meer nodig.)
 
 	UPROPERTY() TObjectPtr<class UTextBlock> TabBtnLabel; // header-knop naast Close: "Unpack bags" / "Back to packing"
 	bool bUnpackTab = false; // true = aparte unpack-tab (alleen de uitpak-lijst); false = de normale pack-flow

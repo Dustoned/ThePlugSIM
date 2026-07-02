@@ -17,6 +17,7 @@ class UShelfWidget;
 class UWrapBox;
 class USizeBox;
 class UVerticalBox;
+class UWeedItemPickGrid;
 class AStorageShelf;
 
 // Sleep-payload voor het schap-scherm.
@@ -101,6 +102,13 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<USizeBox>> ShelfCellBoxes;
 	TArray<FString> ShelfCellSigs;
 	UPROPERTY() TObjectPtr<UVerticalBox> FridgeSection;
+
+	// Fridge "Make edibles": icoon-grid-picker + in-place status/hint-teksten (éénmalig gebouwd, per refresh
+	// alleen SetItems/SetText/SetVisibility -> geen ClearChildren-flash op een klik).
+	UPROPERTY() TObjectPtr<UWeedItemPickGrid> FridgePick;
+	UPROPERTY() TObjectPtr<class UTextBlock> FridgeTitleText;  // "Make edibles"-kop
+	UPROPERTY() TObjectPtr<class UTextBlock> FridgeHintText;   // uitleg als er geen ButterMix ligt
+	UPROPERTY() TObjectPtr<class UTextBlock> FridgeStatusText; // "Setting N batches..."-regel
 
 	FString LastSig; // herbouw alleen bij wijziging
 };

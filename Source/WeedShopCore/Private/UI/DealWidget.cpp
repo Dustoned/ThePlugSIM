@@ -5,6 +5,7 @@
 #include "World/CityDoor.h" // FriendlyNpcName fallback
 
 #include "UI/WeedUiStyle.h"
+#include "UI/WeedItemPickGrid.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Inventory/InventoryComponent.h"
@@ -89,21 +90,40 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Width->SetContent(VB);
 
-	// --- Kop: naam + status + stats (altijd zichtbaar voor ELKE NPC) ---
-	NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 22, WeedUI::ColAccent(), false, true);
-	VB->AddChildToVerticalBox(NameText);
-	StateText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColTextDim(), false, true);
-	VB->AddChildToVerticalBox(StateText)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-	RelationText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColTextDim(), false, true);
-	VB->AddChildToVerticalBox(RelationText)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+	// --- Kop-rij: naam links + tier-PILL rechts (altijd zichtbaar voor ELKE NPC) ---
+	{
+		UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
+		NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 20, WeedUI::ColAccent(), false, true);
+		UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(NameText);
+		NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		NS->SetVerticalAlignment(VAlign_Center);
 
-	// Klant-tier + XP-balk naar de volgende tier.
-	TierText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColTextDim(), false, true);
-	VB->AddChildToVerticalBox(TierText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
-	TierBar = WidgetTree->ConstructWidget<UProgressBar>();
-	TierBar->SetFillColorAndOpacity(WeedUI::ColAccent());
-	VB->AddChildToVerticalBox(TierBar)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	{ USizeBox* DivSz = WidgetTree->ConstructWidget<USizeBox>(); DivSz->SetHeightOverride(2.f); UBorder* Div = WidgetTree->ConstructWidget<UBorder>(); Div->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(0.75f), 1.f)); DivSz->SetContent(Div); VB->AddChildToVerticalBox(DivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f)); }
+		// Tier-pill (accent-vlak, alleen de tier-NAAM). TierText wordt hergebruikt als pill-tekst.
+		TierPill = WidgetTree->ConstructWidget<UBorder>();
+		TierPill->SetBrush(WeedUI::Rounded(WeedUI::ColAccentDim(), 8.f));
+		TierPill->SetPadding(FMargin(8.f, 3.f));
+		TierText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColAccent(), false, true);
+		TierPill->SetContent(TierText);
+		UHorizontalBoxSlot* PS = Head->AddChildToHorizontalBox(TierPill);
+		PS->SetHorizontalAlignment(HAlign_Right);
+		PS->SetVerticalAlignment(VAlign_Center);
+		VB->AddChildToVerticalBox(Head);
+	}
+
+	// Dunne accent-balk onder de kop-rij (fungeert als tier-voortgangsindicator via de breedte niet, puur scheiding-accent).
+	TierBar = WidgetTree->ConstructWidget<USizeBox>();
+	TierBar->SetHeightOverride(3.f);
+	{
+		UBorder* Fill = WidgetTree->ConstructWidget<UBorder>();
+		Fill->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(0.8f), 2.f));
+		TierBar->SetContent(Fill);
+	}
+	VB->AddChildToVerticalBox(TierBar)->SetPadding(FMargin(0.f, 4.f, 0.f, 6.f));
+
+	StateText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColHighlight(), false, true);
+	VB->AddChildToVerticalBox(StateText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+	RelationText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim(), false, true);
+	VB->AddChildToVerticalBox(RelationText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	// --- Dialoog-kader: wat de NPC zegt ---
 	{
@@ -117,13 +137,17 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		VB->AddChildToVerticalBox(DB)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	}
 
-	WantsText = WeedUI::Text(WidgetTree, TEXT(""), 14, WeedUI::ColText());
-	VB->AddChildToVerticalBox(WantsText)->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
+	// Held: waar de klant om vraagt (groot, direct onder de kop/dialoog).
+	WantsText = WeedUI::Text(WidgetTree, TEXT(""), 17, WeedUI::ColText(), false, true);
+	VB->AddChildToVerticalBox(WantsText)->SetPadding(FMargin(0.f, 8.f, 0.f, 4.f));
 
+	// SubText vervalt als los element (substituut-info zit nu in de ChanceText-suffix). Member blijft,
+	// maar permanent verborgen + leeg -> kleinste diff, geen ruis in de layout.
 	SubText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColTextDim());
 	VB->AddChildToVerticalBox(SubText);
+	SubText->SetVisibility(ESlateVisibility::Collapsed);
 
-	PriceText = WeedUI::Text(WidgetTree, TEXT(""), 14, WeedUI::ColText());
+	PriceText = WeedUI::Text(WidgetTree, TEXT(""), 15, WeedUI::ColText(), false, true);
 	VB->AddChildToVerticalBox(PriceText)->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
 
 	PriceSlider = WidgetTree->ConstructWidget<USlider>();
@@ -141,24 +165,46 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	ChanceBar->SetFillColorAndOpacity(WeedUI::ColGood());
 	VB->AddChildToVerticalBox(ChanceBar)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
-	PreviewText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColGood());
+	PreviewText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
 	VB->AddChildToVerticalBox(PreviewText)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
 	// Grote, duidelijke melding als je niets te verkopen hebt (verbergt de hele prijs-flow).
 	NoWeedText = WeedUI::Text(WidgetTree, TEXT("No bagged weed.\nGrow -> dry -> bag first."), 14, WeedUI::ColWarn(), false, true);
 	VB->AddChildToVerticalBox(NoWeedText)->SetPadding(FMargin(0.f, 14.f, 0.f, 14.f));
 
-	OfferLabel = WeedUI::Text(WidgetTree, TEXT("Offer another strain:"), 12, WeedUI::ColTextDim());
+	// Strain-keuze-grid (B.11): welke strain bied je aan. Selectie-highlight aan; hoogte-cap 2 rijen (rest scrollt).
+	OfferLabel = WeedUI::Text(WidgetTree, TEXT("Selling:"), 11, WeedUI::ColTextDim());
 	VB->AddChildToVerticalBox(OfferLabel);
 	StrainBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(StrainBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
+	{
+		StrainGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+		StrainGrid->CellSize = 78.f;
+		StrainGrid->MaxVisibleRows = 2;
+		StrainGrid->bShowSelection = true;
+		StrainGrid->OnPick = [this](FName Id, int32 /*P*/)
+		{
+			if (UPhoneClientComponent* Ph = GetPhone()) { Ph->SetOfferedProduct(Id); }
+		};
+		StrainBox->AddChildToVerticalBox(StrainGrid);
+	}
 
-	// Joint-kiezer (verborgen tot je "Give joint" klikt): kies WELKE joint je geeft, zonder te scrollen.
+	// Joint-kiezer (verborgen tot je "Give joint" klikt): kies WELKE joint je geeft. Geen selectie (elke klik = geven).
 	JointPickerBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(JointPickerBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
 	JointPickerBox->SetVisibility(ESlateVisibility::Collapsed);
+	{
+		JointGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+		JointGrid->bShowSelection = false;
+		JointGrid->OnPick = [this](FName Id, int32 /*P*/)
+		{
+			if (UPhoneClientComponent* Ph = GetPhone()) { Ph->RequestGiveJointId(Ph->GetDealCustomer(), Id); }
+			if (JointPickerBox) { JointPickerBox->SetVisibility(ESlateVisibility::Collapsed); }
+		};
+		JointPickerBox->AddChildToVerticalBox(JointGrid);
+	}
 
-	// Knoppen: Give joint (altijd) / Offer deal (alleen kopers) / Leave.
+	// Knoppen: Offer deal (primair, alleen kopers) / Give joint / Leave.
 	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
 	auto MakeBtn = [this](const FString& Label, const FLinearColor& Col, int32 Act) -> UWeedActionButton*
 	{
@@ -182,14 +228,14 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		B->SetContent(WeedUI::Text(WidgetTree, Label, 14, WeedUI::ColText(), true, true));
 		return B;
 	};
-	UWeedActionButton* GB = MakeBtn(TEXT("Give joint"), WeedUI::ColAccentDim(), 2);
-	UHorizontalBoxSlot* GS = Btns->AddChildToHorizontalBox(GB);
-	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); GS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-	GiveBtn = GB;
 	UWeedActionButton* OB = MakeBtn(TEXT("Offer deal"), WeedUI::ColAccent(), 1);
 	UHorizontalBoxSlot* OS = Btns->AddChildToHorizontalBox(OB);
 	OS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); OS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	OfferBtn = OB;
+	UWeedActionButton* GB = MakeBtn(TEXT("Give joint"), WeedUI::ColAccentDim(), 2);
+	UHorizontalBoxSlot* GS = Btns->AddChildToHorizontalBox(GB);
+	GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); GS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	GiveBtn = GB;
 	UHorizontalBoxSlot* CcS = Btns->AddChildToHorizontalBox(MakeBtn(TEXT("Leave"), WeedUI::ColSlot(), 0));
 	CcS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	VB->AddChildToVerticalBox(Btns);
@@ -204,18 +250,6 @@ void UDealWidget::OnPriceSlider(float Value)
 	if (Market <= 0) { return; }
 	const int32 Ask = FMath::RoundToInt(Market * (0.40f + 1.60f * Value));
 	Ph->SetDealAskCents(Ask);
-}
-
-void UDealWidget::StyleStrainCell(UWeedActionButton* B, bool bSelected)
-{
-	if (!B) { return; }
-	const FLinearColor Col = bSelected ? WeedUI::ColAccentDim() : WeedUI::ColSlotEmpty();
-	FButtonStyle St;
-	St.Normal = WeedUI::Rounded(Col, 8.f);
-	St.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
-	St.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
-	St.NormalPadding = FMargin(8.f, 5.f); St.PressedPadding = FMargin(8.f, 5.f);
-	B->SetStyle(St);
 }
 
 FString UDealWidget::ComputeStrainListSig() const
@@ -249,7 +283,7 @@ FString UDealWidget::ComputeStrainListSig() const
 
 void UDealWidget::RebuildStrains()
 {
-	if (!StrainBox) { return; }
+	if (!StrainBox || !StrainGrid) { return; }
 	UPhoneClientComponent* Ph = GetPhone();
 	ACustomerBase* C = Ph ? Ph->GetDealCustomer() : nullptr;
 	APawn* P = GetOwningPlayerPawn();
@@ -281,88 +315,41 @@ void UDealWidget::RebuildStrains()
 		StrainEmptyText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
-	// Rij-containers op maat brengen: elke rij bevat max 2 cellen. Groeien/krimpen -> geen ClearChildren.
-	const int32 NeededRows = (Buds.Num() + 1) / 2;
-	while (StrainRows.Num() < NeededRows)
+	// Grid-items opbouwen: per strain één cel. Icoon = de Bag_<strain>-basis-id, badge = grammen op voorraad,
+	// subline = THC%. De gewenste strain krijgt een "* "-prefix in groen zodat 'ie meteen opvalt.
+	TArray<FWeedPickItem> Items;
+	Items.Reserve(Buds.Num());
+	for (const FName& Bud : Buds)
 	{
-		UHorizontalBox* RowBox = WidgetTree->ConstructWidget<UHorizontalBox>();
-		StrainBox->AddChildToVerticalBox(RowBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
-		StrainRows.Add(RowBox);
-	}
-	while (StrainRows.Num() > NeededRows)
-	{
-		const int32 Last = StrainRows.Num() - 1;
-		if (StrainRows[Last]) { StrainRows[Last]->RemoveFromParent(); }
-		StrainRows.RemoveAt(Last);
-	}
-
-	// Cel-pool op maat brengen (persistent). Nieuwe cellen krijgen een sentinel-sig zodat ze eerst gevuld worden.
-	while (StrainCells.Num() < Buds.Num())
-	{
-		const int32 idx = StrainCells.Num();
-		UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
-		B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
-		// De lambda leest bij klik de actuele id uit de pool (StrainCellIds), zodat een herbruikte cel de juiste strain kiest.
-		B->OnAction.BindLambda([this, idx](int32, int32)
-		{
-			if (UPhoneClientComponent* X = GetPhone())
-			{
-				if (StrainCellIds.IsValidIndex(idx) && !StrainCellIds[idx].IsNone()) { X->SetOfferedProduct(StrainCellIds[idx]); }
-			}
-		});
-		UHorizontalBox* RowBox = StrainRows.IsValidIndex(idx / 2) ? StrainRows[idx / 2].Get() : nullptr;
-		if (RowBox)
-		{
-			UHorizontalBoxSlot* S = RowBox->AddChildToHorizontalBox(B);
-			S->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			S->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
-		}
-		StrainCells.Add(B); StrainCellIds.Add(NAME_None); StrainCellSigs.Add(TEXT("\x01"));
-	}
-	while (StrainCells.Num() > Buds.Num())
-	{
-		const int32 Last = StrainCells.Num() - 1;
-		if (StrainCells[Last]) { StrainCells[Last]->RemoveFromParent(); }
-		StrainCells.RemoveAt(Last); StrainCellIds.RemoveAt(Last); StrainCellSigs.RemoveAt(Last);
-	}
-
-	// Per-cel diff: alleen de label opnieuw zetten als grammen/thc/wanted (of de getoonde strain) wijzigde.
-	// De selectie-stijl wordt hier NIET meegediffed -> die gaat via RefreshStrainSelection (2 knoppen restyle).
-	for (int32 i = 0; i < Buds.Num(); ++i)
-	{
-		UWeedActionButton* B = StrainCells.IsValidIndex(i) ? StrainCells[i].Get() : nullptr;
-		if (!B) { continue; }
-		const FName StrainNm = UInventoryComponent::BagStrain(Buds[i]);
+		const FName StrainNm = UInventoryComponent::BagStrain(Bud);
 		const int32 Avail = Inv->BagGramsAvailable(StrainNm);
 		float QThc = 0.f;
 		for (const FInventoryStack& St2 : Inv->GetStacks()) { if (UInventoryComponent::IsBag(St2.ItemId) && UInventoryComponent::BagStrain(St2.ItemId) == StrainNm) { QThc = St2.Quality; break; } }
-		const bool bWanted = (Buds[i] == C->DesiredProductId);
-		const FString Sig = FString::Printf(TEXT("%s|%d|%.0f|%d"), *Buds[i].ToString(), Avail, QThc, bWanted ? 1 : 0);
-		if (StrainCellIds[i] != Buds[i] || StrainCellSigs[i] != Sig)
-		{
-			StrainCellIds[i] = Buds[i];
-			StrainCellSigs[i] = Sig;
-			B->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s%s  %dg  T%.0f%%"), *PrettyName(Buds[i]), bWanted ? TEXT(" *") : TEXT(""), Avail, QThc), 12, WeedUI::ColText(), true));
-			StyleStrainCell(B, Buds[i] == Offered); // stijl meteen goed bij (her)vulling
-		}
+		const bool bWanted = (Bud == C->DesiredProductId);
+
+		FWeedPickItem It;
+		It.Id = Bud;
+		It.IconId = Bud;
+		It.Badge = FString::Printf(TEXT("%dg"), Avail);
+		It.SubLine = bWanted ? FString::Printf(TEXT("* T%.0f%%"), QThc) : FString::Printf(TEXT("T%.0f%%"), QThc);
+		if (bWanted) { It.SubCol = WeedUI::ColGood(); }
+		It.Tooltip = FString::Printf(TEXT("%s  %dg  THC %.0f%%%s"), *PrettyName(Bud), Avail, QThc, bWanted ? TEXT("  (what they want)") : TEXT(""));
+		Items.Add(It);
 	}
 
-	// Selectie-highlight bijwerken (in-place restyle van de betrokken knoppen).
-	RefreshStrainSelection();
+	// Persistent: het grid diff't intern (geen ClearChildren). Selectie = het aangeboden product.
+	StrainGrid->SetItems(Items, Offered);
+	StrainSelectedId = Offered;
 }
 
 void UDealWidget::RefreshStrainSelection()
 {
+	if (!StrainGrid) { return; }
 	UPhoneClientComponent* Ph = GetPhone();
 	const FName Offered = Ph ? Ph->GetOfferedProduct() : NAME_None;
 	if (Offered == StrainSelectedId) { return; }
-	// Alleen de vorige- en de nieuwe-selectie herstylen (rest blijft ongemoeid) -> geen rebuild, geen flash.
-	for (int32 i = 0; i < StrainCells.Num(); ++i)
-	{
-		if (!StrainCellIds.IsValidIndex(i)) { continue; }
-		const FName Id = StrainCellIds[i];
-		if (Id == StrainSelectedId || Id == Offered) { StyleStrainCell(StrainCells[i].Get(), Id == Offered); }
-	}
+	// Pure selectie-wissel: alleen de oude + nieuwe cel herstylen (het grid regelt dit intern) -> geen rebuild.
+	StrainGrid->SetSelected(Offered);
 	StrainSelectedId = Offered;
 }
 
@@ -400,21 +387,13 @@ void UDealWidget::GiveJointPressed()
 
 void UDealWidget::RebuildJointPicker()
 {
-	if (!JointPickerBox) { return; }
+	if (!JointPickerBox || !JointGrid) { return; }
 	APawn* P = GetOwningPlayerPawn();
 	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
 	if (!Inv) { return; }
 
-	// Titel 1x bouwen (persistent) i.p.v. elke open opnieuw.
-	if (!JointPickerTitle)
-	{
-		JointPickerTitle = WeedUI::Text(WidgetTree, TEXT("Give which joint?"), 12, WeedUI::ColTextDim());
-		JointPickerBox->AddChildToVerticalBox(JointPickerTitle);
-	}
-
-	// Zichtbare joints verzamelen (id + label-data).
-	struct FJointRow { FName Id; FString Label; };
-	TArray<FJointRow> Rows;
+	// Grid-items opbouwen: per joint-id één cel. Icoon = de joint-id, badge = aantal, subline = gram + kwaliteit.
+	TArray<FWeedPickItem> Items;
 	for (const FInventoryStack& St : Inv->GetStacks())
 	{
 		if (St.Quantity <= 0 || !St.ItemId.ToString().StartsWith(TEXT("Joint_"))) { continue; }
@@ -422,61 +401,23 @@ void UDealWidget::RebuildJointPicker()
 		const FName Strain = UInventoryComponent::JointStrain(Id);
 		const int32 Grams = UInventoryComponent::JointGrams(Id);
 		const float QPct = Inv->GetItemQualityPct(Id);
-		Rows.Add({ Id, FString::Printf(TEXT("%s   %dg   Q%.0f%%   (x%d)"),
-			Strain.IsNone() ? TEXT("Joint") : *Strain.ToString(), Grams, QPct, St.Quantity) });
+
+		FWeedPickItem It;
+		It.Id = Id;
+		It.IconId = Id;
+		It.Badge = FString::Printf(TEXT("x%d"), St.Quantity);
+		It.SubLine = FString::Printf(TEXT("%dg Q%.0f%%"), Grams, QPct);
+		It.Tooltip = FString::Printf(TEXT("%s  %dg  Quality %.0f%%  (x%d)"),
+			Strain.IsNone() ? TEXT("Joint") : *Strain.ToString(), Grams, QPct, St.Quantity);
+		Items.Add(It);
 	}
 
-	// Cel-pool op maat brengen (persistent) -> geen ClearChildren bij (her)openen.
-	while (JointCells.Num() < Rows.Num())
-	{
-		const int32 idx = JointCells.Num();
-		UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
-		B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
-		// De lambda vangt de pool-index en leest bij klik de actuele joint-id uit de parallelle JointCellIds
-		// (zodat een herbruikte cel de juiste joint geeft, ook na een lijst-wijziging).
-		B->Param = idx;
-		B->OnAction.BindLambda([this, idx](int32, int32)
-		{
-			if (JointCellIds.IsValidIndex(idx) && !JointCellIds[idx].IsNone())
-			{
-				if (UPhoneClientComponent* X = GetPhone()) { X->RequestGiveJointId(X->GetDealCustomer(), JointCellIds[idx]); }
-			}
-			if (JointPickerBox) { JointPickerBox->SetVisibility(ESlateVisibility::Collapsed); }
-		});
-		const FLinearColor Col = WeedUI::ColSlotEmpty();
-		FButtonStyle Sty;
-		Sty.Normal = WeedUI::Rounded(Col, 8.f);
-		Sty.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
-		Sty.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
-		Sty.NormalPadding = FMargin(8.f, 5.f); Sty.PressedPadding = FMargin(8.f, 5.f);
-		B->SetStyle(Sty);
-		JointPickerBox->AddChildToVerticalBox(B)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
-		JointCells.Add(B); JointCellIds.Add(NAME_None); JointCellSigs.Add(TEXT("\x01"));
-	}
-	while (JointCells.Num() > Rows.Num())
-	{
-		const int32 Last = JointCells.Num() - 1;
-		if (JointCells[Last]) { JointCells[Last]->RemoveFromParent(); } // echt losmaken -> geen orphan-cellen die ophopen
-		JointCells.RemoveAt(Last); JointCellIds.RemoveAt(Last); JointCellSigs.RemoveAt(Last);
-	}
-
-	// Per-cel diff: alleen een gewijzigde joint-rij krijgt nieuwe inhoud.
-	for (int32 i = 0; i < Rows.Num(); ++i)
-	{
-		UWeedActionButton* B = JointCells.IsValidIndex(i) ? JointCells[i].Get() : nullptr;
-		if (!B) { continue; }
-		B->SetVisibility(ESlateVisibility::Visible);
-		const FString Sig = FString::Printf(TEXT("%s|%s"), *Rows[i].Id.ToString(), *Rows[i].Label);
-		if (JointCellSigs[i] != Sig)
-		{
-			JointCellSigs[i] = Sig;
-			JointCellIds[i] = Rows[i].Id;
-			B->SetContent(WeedUI::Text(WidgetTree, Rows[i].Label, 12, WeedUI::ColText(), true));
-		}
-	}
+	// Persistent: het grid diff't intern (geen ClearChildren). Geen selectie (elke klik = joint geven).
+	JointGrid->SetItems(Items);
+	JointGrid->SetVisibility(Items.Num() > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
 	// Lege-melding tonen/verbergen zonder ClearChildren.
-	if (Rows.Num() == 0)
+	if (Items.Num() == 0)
 	{
 		if (!JointEmptyText)
 		{
@@ -510,38 +451,49 @@ void UDealWidget::UpdateLive()
 	if (NameText) { NameText->SetText(FText::FromString(NpcName)); }
 
 	const bool bBuyer = (C->State == ECustomerState::WantsToOrder || C->State == ECustomerState::Negotiating);
-	FString StateStr;
-	switch (C->State)
+
+	// Status-regel: bij kopers zegt de Wants-regel al genoeg -> verbergen. Anders 1 korte regel.
+	if (StateText)
 	{
-	case ECustomerState::WantsToOrder: StateStr = TEXT("Wants to buy"); break;
-	case ECustomerState::Negotiating:  StateStr = TEXT("Negotiating"); break;
-	case ECustomerState::Prospect:     StateStr = FString::Printf(TEXT("Not hooked yet  (addiction %.0f/%.0f)"), C->Addiction, C->AddictionToBuy); break;
-	case ECustomerState::Served:       StateStr = TEXT("Satisfied"); break;
-	default:                           StateStr = TEXT("Leaving"); break;
+		if (bBuyer)
+		{
+			StateText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			FString StateStr;
+			switch (C->State)
+			{
+			case ECustomerState::Prospect: StateStr = FString::Printf(TEXT("Not a customer yet   Addiction %.0f/%.0f"), C->Addiction, C->AddictionToBuy); break;
+			case ECustomerState::Served:   StateStr = TEXT("Satisfied"); break;
+			default:                       StateStr = TEXT("Leaving"); break;
+			}
+			StateText->SetText(FText::FromString(StateStr));
+			StateText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
 	}
-	if (StateText) { StateText->SetText(FText::FromString(StateStr)); }
+
+	// Stats op 1 regel; telefoonnummer-hint alleen zolang het nummer NIET vrijgespeeld is.
 	if (RelationText)
 	{
-		FString Rel = FString::Printf(TEXT("Respect %.0f     Loyalty %.0f     Addiction %.0f"), C->Respect, C->Loyalty, C->Addiction);
-		// Duidelijk: hoeveel respect nog nodig voor hun telefoonnummer (zodat je ze kunt appen).
+		FString Rel = FString::Printf(TEXT("R %.0f  -  L %.0f  -  A %.0f"), C->Respect, C->Loyalty, C->Addiction);
 		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 		{
 			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
 			{
-				if (!C->NpcId.IsNone())
+				if (!C->NpcId.IsNone() && !Reg->IsUnlocked(C->NpcId))
 				{
-					if (Reg->IsUnlocked(C->NpcId)) { Rel += TEXT("\nNumber saved - you can text them"); }
-					else { Rel += FString::Printf(TEXT("\nNumber: respect %.0f / %.0f to get it"), C->Respect, Reg->UnlockRespect); }
+					Rel += FString::Printf(TEXT("   nr @ R%.0f"), Reg->UnlockRespect);
 				}
 			}
 		}
 		RelationText->SetText(FText::FromString(Rel));
 	}
 
-	// Klant-tier + XP-balk naar de volgende tier (Casual -> Whale; bij Whale "(max)").
-	if (TierText && TierBar)
+	// Klant-tier: alleen de NAAM in de pill (voortgang/next vervalt).
+	if (TierText)
 	{
-		float Frac = 0.f; FString TLbl = TEXT("Tier: Casual");
+		FString TLbl = TEXT("Casual");
 		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 		{
 			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
@@ -549,31 +501,27 @@ void UDealWidget::UpdateLive()
 				if (!C->NpcId.IsNone())
 				{
 					const int32 Tier = Reg->GetCustomerTier(C->NpcId);
-					Frac = Reg->GetTierProgress01(C->NpcId);
-					TLbl = (Tier >= 5)
-						? FString::Printf(TEXT("Tier: %s  (max)"), *UNpcRegistryComponent::TierName(Tier))
-						: FString::Printf(TEXT("Tier: %s  ->  %s"), *UNpcRegistryComponent::TierName(Tier), *UNpcRegistryComponent::TierName(Tier + 1));
+					TLbl = UNpcRegistryComponent::TierName(Tier);
 				}
 			}
 		}
 		TierText->SetText(FText::FromString(TLbl));
-		TierBar->SetPercent(Frac);
 	}
 
 	// Dialoog: de server-regel (reactie op joint/deal), anders een begroeting per status.
+	// Kopers krijgen GEEN canned greeting (de Wants-regel + prijs-flow zeggen het al) -> box alleen bij een echte regel.
 	FString Line = C->SpeechLine;
-	if (Line.IsEmpty())
+	if (Line.IsEmpty() && !bBuyer)
 	{
 		switch (C->State)
 		{
 		case ECustomerState::Prospect: Line = TEXT("Yo... you holding? Hook me up with a taste."); break;
-		case ECustomerState::WantsToOrder:
-		case ECustomerState::Negotiating: Line = FString::Printf(TEXT("What's up. I need %dx %s - you got it?"), C->DesiredQuantity, *PrettyName(C->DesiredProductId)); break;
 		case ECustomerState::Served: Line = TEXT("Appreciate it, man. I'm good for now."); break;
 		default: Line = TEXT("..."); break;
 		}
 	}
 	if (DialogueText) { DialogueText->SetText(FText::FromString(Line)); }
+	if (DialogueBox) { DialogueBox->SetVisibility(Line.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
 	if (OfferBtn) { OfferBtn->SetVisibility(bBuyer ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 
 	if (!bBuyer)
@@ -609,28 +557,27 @@ void UDealWidget::UpdateLive()
 	if (NoWeedText) { NoWeedText->SetVisibility(bHasWeed ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
 	if (PriceText)    { PriceText->SetVisibility(DealVis); }
 	if (PriceSlider)  { PriceSlider->SetVisibility(SliderVis); }
-	if (StockText)    { StockText->SetVisibility(DealVis); }
 	if (ChanceText)   { ChanceText->SetVisibility(DealVis); }
 	if (ChanceBar)    { ChanceBar->SetVisibility(DealVis); }
 	if (PreviewText)  { PreviewText->SetVisibility(DealVis); }
 	if (OfferLabel)   { OfferLabel->SetVisibility(DealVis); }
 	if (StrainBox)    { StrainBox->SetVisibility(bHasWeed ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
-	if (SubText)      { SubText->SetVisibility(DealVis); }
+	// StockText: default verborgen; alleen de WARN-tak (tekort) zet 'm zichtbaar.
+	if (StockText)    { StockText->SetVisibility(ESlateVisibility::Collapsed); }
 	if (WantsText)    { WantsText->SetVisibility(ESlateVisibility::HitTestInvisible); } // koper: altijd tonen (kan Collapsed staan door een vorige niet-koper)
 	if (!bHasWeed)
 	{
 		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.
-		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dg %s  (market EUR %d)"),
-			Qty, *PrettyName(C->DesiredProductId), (int32)(WeedRoundEuros((int64)C->GetMarketPriceCents()) / 100))));
+		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
+			Qty, *PrettyName(C->DesiredProductId))));
 		return;
 	}
 
-	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants: %dx %s  (market EUR %d)"),
-		Qty, *PrettyName(C->DesiredProductId), (int32)(WeedRoundEuros((int64)C->GetMarketPriceCents()) / 100))));
-	SubText->SetText(FText::FromString(bSub ? FString::Printf(TEXT("Offering instead: %s  (substitute)"), *PrettyName(Offered)) : FString()));
+	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
+		Qty, *PrettyName(C->DesiredProductId))));
 
 	const float Pct = float(Ask) / Market * 100.f;
-	PriceText->SetText(FText::FromString(FString::Printf(TEXT("Your price: EUR %d / unit  (%.0f%%)   Total EUR %d"),
+	PriceText->SetText(FText::FromString(FString::Printf(TEXT("Your price  EUR %d/g   -   %.0f%%   -   total EUR %d"),
 		(int32)(WeedRoundEuros((int64)Ask) / 100), Pct, (int32)(WeedRoundEuros((int64)Ask * Qty) / 100))));
 	// Slider volgt het bod als de speler 'm niet vasthoudt.
 	if (PriceSlider && !bSliderHeld)
@@ -650,29 +597,26 @@ void UDealWidget::UpdateLive()
 			if (Stock > 0) { Q01 = FMath::Clamp(QPct / 100.f, 0.f, 1.f); }
 		}
 	}
-	if (Stock >= Qty)
-	{
-		StockText->SetColorAndOpacity(FSlateColor(WeedUI::ColTextDim()));
-		StockText->SetText(FText::FromString(FString::Printf(TEXT("Your stock: %dg %s  -  THC %.0f%%  Quality %.0f%%"), Stock, *PrettyName(Offered), Thc, QPct)));
-	}
-	else
+	// StockText: alleen tonen bij tekort (ingekort, ColWarn). Genoeg voorraad -> verborgen (blijft Collapsed).
+	if (Stock < Qty)
 	{
 		StockText->SetColorAndOpacity(FSlateColor(WeedUI::ColWarn()));
-		StockText->SetText(FText::FromString(FString::Printf(TEXT("Your stock: %dg of %d needed - not enough %s!"), Stock, Qty, *PrettyName(Offered))));
+		StockText->SetText(FText::FromString(FString::Printf(TEXT("Not enough %s: %dg / %dg"), *PrettyName(Offered), Stock, Qty)));
+		StockText->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
 	const float OffThc = (Stock > 0) ? Thc : -1.f;
 	const float Chance = bSub ? C->GetSubstituteAcceptance(Offered, Ask, Q01, OffThc) : C->GetAcceptanceChance(Ask, Q01, OffThc);
 	const FLinearColor CCol = Chance >= 66.f ? WeedUI::ColGood() : (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : WeedUI::ColWarn());
 	ChanceText->SetColorAndOpacity(FSlateColor(CCol));
-	ChanceText->SetText(FText::FromString(FString::Printf(TEXT("Chance they accept: %.0f%%%s"), Chance, bSub ? TEXT("  (substitute)") : TEXT(""))));
+	ChanceText->SetText(FText::FromString(FString::Printf(TEXT("Deal chance  %.0f%%%s"), Chance, bSub ? TEXT("  (sub - harder sell)") : TEXT(""))));
 	ChanceBar->SetPercent(Chance / 100.f);
 	ChanceBar->SetFillColorAndOpacity(CCol);
 
 	float pR = 0.f, pL = 0.f, pA = 0.f;
 	C->PreviewDealOutcome(Ask, Q01, (Stock > 0 ? Thc : -1.f), pR, pL, pA, bSub);
-	PreviewText->SetText(FText::FromString(FString::Printf(TEXT("If accepted:  R %.0f->%.0f   L %.0f->%.0f   A %.0f->%.0f"),
-		C->Respect, pR, C->Loyalty, pL, C->Addiction, pA)));
+	PreviewText->SetText(FText::FromString(FString::Printf(TEXT("If accepted:  R %+.0f   L %+.0f   A %+.0f"),
+		pR - C->Respect, pL - C->Loyalty, pA - C->Addiction)));
 }
 
 void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)

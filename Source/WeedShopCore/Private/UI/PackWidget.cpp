@@ -1,6 +1,7 @@
 #include "UI/PackWidget.h"
 
 #include "UI/WeedUiStyle.h"
+#include "UI/WeedItemPickGrid.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Inventory/InventoryComponent.h"
 
@@ -40,36 +41,10 @@ namespace
 		return B;
 	}
 
-	// Herkleur een bestaande rij-knop IN PLACE (selectie <-> deselectie) zonder de rij te herbouwen.
-	void Recolour(UWeedActionButton* B, const FLinearColor& Col)
-	{
-		if (B) { B->SetStyle(PackStyle(Col)); }
-	}
-
 	UInventoryComponent* GetInv(APawn* P) { return P ? P->FindComponentByClass<UInventoryComponent>() : nullptr; }
-
-	// Knop-inhoud: item-icoon links + tekst rechts (vult de breedte) - geeft de rijen een herkenbaar
-	// beeld i.p.v. kale tekst, in dezelfde stijl als hotbar/inventory/shop.
-	UWidget* IconText(UWidgetTree* Tree, FName ItemId, const FString& Txt, int32 TxtSize)
-	{
-		UHorizontalBox* HB = Tree->ConstructWidget<UHorizontalBox>();
-		USizeBox* IB = Tree->ConstructWidget<USizeBox>();
-		IB->SetWidthOverride(30.f); IB->SetHeightOverride(30.f);
-		IB->SetContent(WeedUI::ItemIcon(Tree, ItemId, 30.f));
-		UHorizontalBoxSlot* IS = HB->AddChildToHorizontalBox(IB);
-		IS->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f)); IS->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBoxSlot* TS2 = HB->AddChildToHorizontalBox(WeedUI::Text(Tree, Txt, TxtSize, FLinearColor::White, false, true));
-		TS2->SetVerticalAlignment(VAlign_Center); TS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		return HB;
-	}
 
 	// Vaste container-lijst voor het pack-scherm (zelfde volgorde/labels als voorheen).
 	static const TCHAR* const kConts[6] = { TEXT("Cont_Bag2"), TEXT("Cont_Bag5"), TEXT("Cont_Jar10"), TEXT("Cont_Jar15"), TEXT("Cont_Block100"), TEXT("Cont_Garbage500") };
-
-	const FLinearColor SelCol(0.22f, 0.52f, 0.32f);   // strain/container geselecteerd
-	const FLinearColor UnselCol(0.15f, 0.16f, 0.21f); // strain/container niet-geselecteerd
-	const FLinearColor USelCol(0.42f, 0.30f, 0.18f);  // unpack-bag geselecteerd
-	const FLinearColor UUnselCol(0.15f, 0.16f, 0.21f);// unpack-bag niet-geselecteerd
 }
 
 TSharedRef<SWidget> UPackWidget::RebuildWidget()
@@ -88,7 +63,12 @@ void UPackWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("PackCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.98f), 22.f));
+	{
+		FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.98f), 22.f);
+		CardBr.OutlineSettings.Width = 1;
+		CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+		CardB->SetBrush(CardBr);
+	}
 	CardB->SetPadding(FMargin(18.f));
 	Card = CardB;
 
@@ -110,11 +90,11 @@ void UPackWidget::BuildShell(UCanvasPanel* Root)
 	WidthBox->SetContent(Outer);
 
 	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* TS = Head->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("PACKING BENCH"), 18, FLinearColor(0.6f, 1.f, 0.6f), false, true));
+	UHorizontalBoxSlot* TS = Head->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("PACKING BENCH"), 18, WeedUI::ColAccent(), false, true));
 	TS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TS->SetVerticalAlignment(VAlign_Center);
 	// Aparte UNPACK-tab: grote knop naast Close die wisselt tussen de pack-flow en de uitpak-lijst.
 	// IN PLACE: alleen de pane-Visibility + het tab-label flippen (geen ClearChildren/rebuild).
-	UWeedActionButton* TabB = PackBtn(WidgetTree, FLinearColor(0.20f, 0.40f, 0.52f), [this]()
+	UWeedActionButton* TabB = PackBtn(WidgetTree, WeedUI::ColInner(), [this]()
 	{
 		bUnpackTab = !bUnpackTab;
 		if (PackPane)   { PackPane->SetVisibility(bUnpackTab ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); }
@@ -122,11 +102,11 @@ void UPackWidget::BuildShell(UCanvasPanel* Root)
 		if (TabBtnLabel) { TabBtnLabel->SetText(FText::FromString(bUnpackTab ? TEXT("Back to packing") : TEXT("Unpack bags"))); }
 		FillBody(); // alleen de nu-zichtbare pane in place bijwerken
 	});
-	TabBtnLabel = WeedUI::Text(WidgetTree, TEXT("Unpack bags"), 13, FLinearColor::White, true);
+	TabBtnLabel = WeedUI::Text(WidgetTree, TEXT("Unpack bags"), 13, WeedUI::ColText(), true);
 	TabB->SetContent(TabBtnLabel);
 	Head->AddChildToHorizontalBox(TabB)->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-	UWeedActionButton* CloseB = PackBtn(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), [this]() { if (PhoneComp.IsValid()) { PhoneComp->ClosePack(); } });
-	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 12, FLinearColor::White, true));
+	UWeedActionButton* CloseB = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { if (PhoneComp.IsValid()) { PhoneComp->ClosePack(); } });
+	CloseB->SetContent(WeedUI::Text(WidgetTree, TEXT("Close"), 12, WeedUI::ColText(), true));
 	Head->AddChildToHorizontalBox(CloseB);
 	Outer->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
@@ -154,10 +134,14 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 	auto Row = [Parent](UWidget* W, const FMargin& P) { Parent->AddChildToVerticalBox(W)->SetPadding(P); };
 
 	// === 1) Kies een gedroogde strain (Bud_) ===
-	Row(WeedUI::Text(WidgetTree, TEXT("1.  Pick dried weed"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 0, 0, 4));
-	StrainList = WidgetTree->ConstructWidget<UVerticalBox>();
-	Row(StrainList, FMargin(0, 0, 0, 0));
-	NoBudLabel = WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry it on a rack first."), 11, FLinearColor::Gray);
+	Row(WeedUI::Text(WidgetTree, TEXT("1.  Pick dried weed"), 13, WeedUI::ColText(), false, true), FMargin(0, 0, 0, 4));
+	// Icoon-grid i.p.v. de oude tekstlijst: bij veel strains scrollt de rest (MaxVisibleRows=2).
+	StrainGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+	StrainGrid->CellSize = 78.f;
+	StrainGrid->MaxVisibleRows = 2;
+	StrainGrid->OnPick = [this](FName Id, int32) { SelStrain = Id; RefreshPack(); };
+	Row(StrainGrid, FMargin(0, 0, 0, 0));
+	NoBudLabel = WeedUI::Text(WidgetTree, TEXT("No dried weed. Dry it on a rack first."), 11, WeedUI::ColTextDim());
 	Row(NoBudLabel, FMargin(0, 6, 0, 6));
 	NoBudLabel->SetVisibility(ESlateVisibility::Collapsed);
 
@@ -166,10 +150,13 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 	Row(ContSection, FMargin(0, 0, 0, 0));
 	{
 		auto CRow = [this](UWidget* W, const FMargin& P) { ContSection->AddChildToVerticalBox(W)->SetPadding(P); };
-		CRow(WeedUI::Text(WidgetTree, TEXT("2.  Pick a bag/jar"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 4));
-		ContList = WidgetTree->ConstructWidget<UVerticalBox>();
-		CRow(ContList, FMargin(0, 0, 0, 0));
-		NoContLabel = WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them in the Grow shop."), 11, FLinearColor(1.f, 0.7f, 0.5f));
+		CRow(WeedUI::Text(WidgetTree, TEXT("2.  Pick a bag/jar"), 13, WeedUI::ColText(), false, true), FMargin(0, 10, 0, 4));
+		// Icoon-grid voor de container-keuze (één rij hoog; MaxVisibleRows=1).
+		ContGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+		ContGrid->MaxVisibleRows = 1;
+		ContGrid->OnPick = [this](FName Id, int32) { SelContainer = Id; SelBags = MaxBags; RefreshPack(); };
+		CRow(ContGrid, FMargin(0, 0, 0, 0));
+		NoContLabel = WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them in the Grow shop."), 11, WeedUI::ColWarn());
 		CRow(NoContLabel, FMargin(0, 4, 0, 0));
 		NoContLabel->SetVisibility(ESlateVisibility::Collapsed);
 	}
@@ -179,34 +166,34 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 	Row(GpbSection, FMargin(0, 0, 0, 0));
 	{
 		auto GRow = [this](UWidget* W, const FMargin& P) { GpbSection->AddChildToVerticalBox(W)->SetPadding(P); };
-		GRow(WeedUI::Text(WidgetTree, TEXT("2.b  Grams per bag"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 2));
-		GpbLabel = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor::White, false, true);
+		GRow(WeedUI::Text(WidgetTree, TEXT("2.b  Grams per bag"), 13, WeedUI::ColText(), false, true), FMargin(0, 10, 0, 2));
+		GpbLabel = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
 		GRow(GpbLabel, FMargin(0, 0, 0, 4));
 
 		// -/+ stepper voor de gram-per-zakje. Wijziging => hergebruikt RefreshPack (recompute + in place).
 		UHorizontalBox* GpbRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		{
-			UWeedActionButton* Minus = PackBtn(WidgetTree, FLinearColor(0.20f, 0.27f, 0.22f),
+			UWeedActionButton* Minus = PackBtn(WidgetTree, WeedUI::ColInner(),
 				[this]() { SelGrams = FMath::Clamp(SelGrams - 1, 1, PackCap); RefreshPack(); });
-			Minus->SetContent(WeedUI::Text(WidgetTree, TEXT("-"), 20, FLinearColor::White, true, true));
+			Minus->SetContent(WeedUI::Text(WidgetTree, TEXT("-"), 20, WeedUI::ColText(), true, true));
 			USizeBox* MB = WidgetTree->ConstructWidget<USizeBox>(); MB->SetWidthOverride(44.f); MB->SetContent(Minus);
 			GpbRow->AddChildToHorizontalBox(MB)->SetVerticalAlignment(VAlign_Fill);
 
-			UWeedActionButton* OneB = PackBtn(WidgetTree, FLinearColor(0.18f, 0.22f, 0.30f),
+			UWeedActionButton* OneB = PackBtn(WidgetTree, WeedUI::ColInner(),
 				[this]() { SelGrams = FMath::Clamp(1, 1, PackCap); RefreshPack(); });
-			OneB->SetContent(WeedUI::Text(WidgetTree, TEXT("1g"), 12, FLinearColor::White, true));
+			OneB->SetContent(WeedUI::Text(WidgetTree, TEXT("1g"), 12, WeedUI::ColText(), true));
 			UHorizontalBoxSlot* O1 = GpbRow->AddChildToHorizontalBox(OneB);
 			O1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); O1->SetPadding(FMargin(8.f, 0.f, 4.f, 0.f)); O1->SetVerticalAlignment(VAlign_Fill);
 
-			UWeedActionButton* MaxGB = PackBtn(WidgetTree, FLinearColor(0.18f, 0.22f, 0.30f),
+			UWeedActionButton* MaxGB = PackBtn(WidgetTree, WeedUI::ColInner(),
 				[this]() { SelGrams = PackCap; RefreshPack(); });
-			MaxGB->SetContent(WeedUI::Text(WidgetTree, TEXT("Max"), 12, FLinearColor::White, true));
+			MaxGB->SetContent(WeedUI::Text(WidgetTree, TEXT("Max"), 12, WeedUI::ColText(), true));
 			UHorizontalBoxSlot* G1 = GpbRow->AddChildToHorizontalBox(MaxGB);
 			G1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); G1->SetPadding(FMargin(4.f, 0.f, 8.f, 0.f)); G1->SetVerticalAlignment(VAlign_Fill);
 
-			UWeedActionButton* Plus = PackBtn(WidgetTree, FLinearColor(0.20f, 0.27f, 0.22f),
+			UWeedActionButton* Plus = PackBtn(WidgetTree, WeedUI::ColInner(),
 				[this]() { SelGrams = FMath::Clamp(SelGrams + 1, 1, PackCap); RefreshPack(); });
-			Plus->SetContent(WeedUI::Text(WidgetTree, TEXT("+"), 20, FLinearColor::White, true, true));
+			Plus->SetContent(WeedUI::Text(WidgetTree, TEXT("+"), 20, WeedUI::ColText(), true, true));
 			USizeBox* PB = WidgetTree->ConstructWidget<USizeBox>(); PB->SetWidthOverride(44.f); PB->SetContent(Plus);
 			GpbRow->AddChildToHorizontalBox(PB)->SetVerticalAlignment(VAlign_Fill);
 		}
@@ -218,21 +205,21 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 	Row(BagsSection, FMargin(0, 0, 0, 0));
 	{
 		auto BRow = [this](UWidget* W, const FMargin& P) { BagsSection->AddChildToVerticalBox(W)->SetPadding(P); };
-		BRow(WeedUI::Text(WidgetTree, TEXT("3.  How many bags?"), 13, FLinearColor(0.7f, 1.f, 0.7f), false, true), FMargin(0, 10, 0, 2));
-		GramLabel = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor::White, false, true);
+		BRow(WeedUI::Text(WidgetTree, TEXT("3.  How many bags?"), 13, WeedUI::ColText(), false, true), FMargin(0, 10, 0, 2));
+		GramLabel = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
 		BRow(GramLabel, FMargin(0, 0, 0, 4));
 
 		GramSlider = WidgetTree->ConstructWidget<USlider>();
 		GramSlider->SetMinValue(0.f);
 		GramSlider->SetMaxValue(1.f);
-		GramSlider->SetSliderHandleColor(FLinearColor(0.5f, 1.f, 0.6f));
-		GramSlider->SetSliderBarColor(FLinearColor(0.25f, 0.4f, 0.3f));
+		GramSlider->SetSliderHandleColor(WeedUI::ColAccent());
+		GramSlider->SetSliderBarColor(WeedUI::ColStroke());
 
 		// -/+ stepper rond de slider voor precieze controle.
 		UHorizontalBox* GramRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		{
-			UWeedActionButton* Minus = PackBtn(WidgetTree, FLinearColor(0.20f, 0.27f, 0.22f), [this]() { SetB(SelBags - 1); });
-			Minus->SetContent(WeedUI::Text(WidgetTree, TEXT("-"), 20, FLinearColor::White, true, true));
+			UWeedActionButton* Minus = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetB(SelBags - 1); });
+			Minus->SetContent(WeedUI::Text(WidgetTree, TEXT("-"), 20, WeedUI::ColText(), true, true));
 			USizeBox* MB = WidgetTree->ConstructWidget<USizeBox>(); MB->SetWidthOverride(44.f); MB->SetContent(Minus);
 			GramRow->AddChildToHorizontalBox(MB)->SetVerticalAlignment(VAlign_Fill);
 
@@ -243,8 +230,8 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 			SbS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SbS->SetVerticalAlignment(VAlign_Center);
 			SbS->SetPadding(FMargin(8.f, 0.f, 8.f, 0.f));
 
-			UWeedActionButton* Plus = PackBtn(WidgetTree, FLinearColor(0.20f, 0.27f, 0.22f), [this]() { SetB(SelBags + 1); });
-			Plus->SetContent(WeedUI::Text(WidgetTree, TEXT("+"), 20, FLinearColor::White, true, true));
+			UWeedActionButton* Plus = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetB(SelBags + 1); });
+			Plus->SetContent(WeedUI::Text(WidgetTree, TEXT("+"), 20, WeedUI::ColText(), true, true));
 			USizeBox* PB = WidgetTree->ConstructWidget<USizeBox>(); PB->SetWidthOverride(44.f); PB->SetContent(Plus);
 			GramRow->AddChildToHorizontalBox(PB)->SetVerticalAlignment(VAlign_Fill);
 		}
@@ -253,23 +240,23 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 		// Snelknoppen: Half / Max (aantal bags).
 		UHorizontalBox* PresetRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		{
-			UWeedActionButton* HalfB = PackBtn(WidgetTree, FLinearColor(0.18f, 0.22f, 0.30f), [this]() { SetB(FMath::Max(1, MaxBags / 2)); });
-			HalfB->SetContent(WeedUI::Text(WidgetTree, TEXT("Half"), 12, FLinearColor::White, true));
+			UWeedActionButton* HalfB = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetB(FMath::Max(1, MaxBags / 2)); });
+			HalfB->SetContent(WeedUI::Text(WidgetTree, TEXT("Half"), 12, WeedUI::ColText(), true));
 			UHorizontalBoxSlot* H1 = PresetRow->AddChildToHorizontalBox(HalfB); H1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); H1->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
-			UWeedActionButton* MaxB = PackBtn(WidgetTree, FLinearColor(0.18f, 0.22f, 0.30f), [this]() { SetB(MaxBags); });
-			MaxB->SetContent(WeedUI::Text(WidgetTree, TEXT("Max"), 12, FLinearColor::White, true));
+			UWeedActionButton* MaxB = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetB(MaxBags); });
+			MaxB->SetContent(WeedUI::Text(WidgetTree, TEXT("Max"), 12, WeedUI::ColText(), true));
 			UHorizontalBoxSlot* M1 = PresetRow->AddChildToHorizontalBox(MaxB); M1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); M1->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 		}
 		BRow(PresetRow, FMargin(0, 0, 0, 8));
 
-		PackButton = PackBtn(WidgetTree, FLinearColor(0.2f, 0.5f, 0.3f), [this]()
+		PackButton = PackBtn(WidgetTree, WeedUI::ColAccent(), [this]()
 		{
 			if (!PhoneComp.IsValid()) { return; }
 			UPhoneClientComponent* Ph = PhoneComp.Get();
 			for (int32 i = 0; i < FMath::Max(1, SelBags); ++i) { Ph->RequestPackGrams(SelStrain, SelContainer, SelGrams); }
 			RefreshPack(); // voorraad wijzigt -> in place bijwerken (geen teardown)
 		});
-		PackBtnLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor::White, true);
+		PackBtnLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), true);
 		PackButton->SetContent(PackBtnLabel);
 		BRow(PackButton, FMargin(0, 2, 0, 2));
 	}
@@ -281,15 +268,17 @@ void UPackWidget::BuildUnpackPane(UVerticalBox* Parent)
 {
 	auto Row = [Parent](UWidget* W, const FMargin& P) { Parent->AddChildToVerticalBox(W)->SetPadding(P); };
 
-	UnpackEmptyLabel = WeedUI::Text(WidgetTree, TEXT("No packed bags to unpack - pack some first."), 11, FLinearColor::Gray);
+	UnpackEmptyLabel = WeedUI::Text(WidgetTree, TEXT("No packed bags to unpack - pack some first."), 11, WeedUI::ColTextDim());
 	Row(UnpackEmptyLabel, FMargin(0, 8, 0, 6));
 	UnpackEmptyLabel->SetVisibility(ESlateVisibility::Collapsed);
 
-	Row(WeedUI::Text(WidgetTree, TEXT("Unpack bags (back to loose weed)"), 12, FLinearColor(1.f, 0.85f, 0.6f), false, true), FMargin(0, 14, 0, 4));
+	Row(WeedUI::Text(WidgetTree, TEXT("Unpack bags (back to loose weed)"), 12, WeedUI::ColText(), false, true), FMargin(0, 14, 0, 4));
 
-	// Lijst met bag-rijen (klik = selecteren) - net als de strain/container-keuze bij packen.
-	UnpackList = WidgetTree->ConstructWidget<UVerticalBox>();
-	Row(UnpackList, FMargin(0, 0, 0, 0));
+	// Icoon-grid met de verpakte bags (klik = selecteren) - net als de strain/container-keuze bij packen.
+	UnpackGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+	UnpackGrid->MaxVisibleRows = 2;
+	UnpackGrid->OnPick = [this](FName Id, int32) { if (Id != SelUnpackBag) { SelUnpackBag = Id; SelBags = 1; RefreshUnpack(); } };
+	Row(UnpackGrid, FMargin(0, 0, 0, 0));
 
 	// Bedieningsblok (slider/steppers/knop): verborgen als er geen bags zijn.
 	UnpackControls = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -300,17 +289,17 @@ void UPackWidget::BuildUnpackPane(UVerticalBox* Parent)
 		UnpackSlider = WidgetTree->ConstructWidget<USlider>();
 		UnpackSlider->SetMinValue(0.f);
 		UnpackSlider->SetMaxValue(1.f);
-		UnpackSlider->SetSliderHandleColor(FLinearColor(0.95f, 0.75f, 0.45f));
-		UnpackSlider->SetSliderBarColor(FLinearColor(0.4f, 0.3f, 0.2f));
+		UnpackSlider->SetSliderHandleColor(WeedUI::ColAccent());
+		UnpackSlider->SetSliderBarColor(WeedUI::ColStroke());
 
-		UnpackLabel = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor::White, false);
+		UnpackLabel = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColText(), false);
 		CRow(UnpackLabel, FMargin(0, 6, 0, 2));
 
 		// -/+ stepper rond de slider.
 		UHorizontalBox* QRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		{
-			UWeedActionButton* Minus = PackBtn(WidgetTree, FLinearColor(0.27f, 0.22f, 0.18f), [this]() { SetUB(SelBags - 1); });
-			Minus->SetContent(WeedUI::Text(WidgetTree, TEXT("-"), 20, FLinearColor::White, true, true));
+			UWeedActionButton* Minus = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetUB(SelBags - 1); });
+			Minus->SetContent(WeedUI::Text(WidgetTree, TEXT("-"), 20, WeedUI::ColText(), true, true));
 			USizeBox* MB = WidgetTree->ConstructWidget<USizeBox>(); MB->SetWidthOverride(44.f); MB->SetContent(Minus);
 			QRow->AddChildToHorizontalBox(MB)->SetVerticalAlignment(VAlign_Fill);
 
@@ -321,8 +310,8 @@ void UPackWidget::BuildUnpackPane(UVerticalBox* Parent)
 			SbS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SbS->SetVerticalAlignment(VAlign_Center);
 			SbS->SetPadding(FMargin(8.f, 0.f, 8.f, 0.f));
 
-			UWeedActionButton* Plus = PackBtn(WidgetTree, FLinearColor(0.27f, 0.22f, 0.18f), [this]() { SetUB(SelBags + 1); });
-			Plus->SetContent(WeedUI::Text(WidgetTree, TEXT("+"), 20, FLinearColor::White, true, true));
+			UWeedActionButton* Plus = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetUB(SelBags + 1); });
+			Plus->SetContent(WeedUI::Text(WidgetTree, TEXT("+"), 20, WeedUI::ColText(), true, true));
 			USizeBox* PB = WidgetTree->ConstructWidget<USizeBox>(); PB->SetWidthOverride(44.f); PB->SetContent(Plus);
 			QRow->AddChildToHorizontalBox(PB)->SetVerticalAlignment(VAlign_Fill);
 		}
@@ -331,22 +320,22 @@ void UPackWidget::BuildUnpackPane(UVerticalBox* Parent)
 		// Snelknoppen: Half / Max.
 		UHorizontalBox* PresetRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		{
-			UWeedActionButton* HalfB = PackBtn(WidgetTree, FLinearColor(0.30f, 0.24f, 0.18f), [this]() { SetUB(FMath::Max(1, MaxBags / 2)); });
-			HalfB->SetContent(WeedUI::Text(WidgetTree, TEXT("Half"), 12, FLinearColor::White, true));
+			UWeedActionButton* HalfB = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetUB(FMath::Max(1, MaxBags / 2)); });
+			HalfB->SetContent(WeedUI::Text(WidgetTree, TEXT("Half"), 12, WeedUI::ColText(), true));
 			UHorizontalBoxSlot* H1 = PresetRow->AddChildToHorizontalBox(HalfB); H1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); H1->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
-			UWeedActionButton* MaxB = PackBtn(WidgetTree, FLinearColor(0.30f, 0.24f, 0.18f), [this]() { SetUB(MaxBags); });
-			MaxB->SetContent(WeedUI::Text(WidgetTree, TEXT("Max"), 12, FLinearColor::White, true));
+			UWeedActionButton* MaxB = PackBtn(WidgetTree, WeedUI::ColInner(), [this]() { SetUB(MaxBags); });
+			MaxB->SetContent(WeedUI::Text(WidgetTree, TEXT("Max"), 12, WeedUI::ColText(), true));
 			UHorizontalBoxSlot* M1 = PresetRow->AddChildToHorizontalBox(MaxB); M1->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); M1->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 		}
 		CRow(PresetRow, FMargin(0, 0, 0, 8));
 
-		UnpackButton = PackBtn(WidgetTree, FLinearColor(0.5f, 0.34f, 0.18f), [this]()
+		UnpackButton = PackBtn(WidgetTree, WeedUI::ColWarn(0.8f), [this]()
 		{
 			if (!PhoneComp.IsValid()) { return; }
 			PhoneComp->RequestUnpack(SelUnpackBag, SelBags);
 			RefreshUnpack(); // voorraad wijzigt -> in place bijwerken (geen teardown)
 		});
-		UnpackBtnLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor::White, true);
+		UnpackBtnLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), true);
 		UnpackButton->SetContent(UnpackBtnLabel);
 		CRow(UnpackButton, FMargin(0, 2, 0, 2));
 	}
@@ -380,15 +369,15 @@ void UPackWidget::SetUB(int32 N)
 	if (UnpackBtnLabel) { UnpackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Unpack %d bag%s   (%dg)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G))); }
 }
 
-// Werkt de pack-flow IN PLACE bij: diff de strain/container-rij-pools, herkleur enkel gewijzigde rijen,
-// toggle de vervolg-secties, en push slider/labels. NOOIT ClearChildren op de lijsten.
+// Werkt de pack-flow IN PLACE bij: vult de strain/container-icoon-grids (SetItems diff't intern),
+// toggle de vervolg-secties, en push slider/labels. NOOIT ClearChildren.
 void UPackWidget::RefreshPack()
 {
 	if (!PackPane || !PhoneComp.IsValid()) { return; }
 	UInventoryComponent* Inv = GetInv(GetOwningPlayerPawn());
 	if (!Inv) { return; }
 
-	// --- 1) Strain-rijen (persistent pool + per-rij signature) ---
+	// --- 1) Strain-keuze (icoon-grid; SetItems diff't intern) ---
 	struct FBudRow { FName Id; int32 Qty; float Quality; float QualityPct; };
 	TArray<FBudRow> Buds;
 	for (const FInventoryStack& S : Inv->GetStacks())
@@ -399,46 +388,26 @@ void UPackWidget::RefreshPack()
 	const bool bAnyBud = Buds.Num() > 0;
 	if (NoBudLabel) { NoBudLabel->SetVisibility(bAnyBud ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); }
 
-	// Pool op maat brengen (geen ClearChildren).
-	while (StrainRowBtns.Num() < Buds.Num())
+	if (StrainGrid)
 	{
-		UWeedActionButton* B = PackBtn(WidgetTree, UnselCol, nullptr);
-		StrainList->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 2, 0, 2));
-		StrainRowBtns.Add(B); StrainRowIds.Add(NAME_None); StrainRowSigs.Add(TEXT("\x01"));
-	}
-	while (StrainRowBtns.Num() > Buds.Num())
-	{
-		const int32 Last = StrainRowBtns.Num() - 1;
-		if (StrainRowBtns[Last]) { StrainRowBtns[Last]->RemoveFromParent(); }
-		StrainRowBtns.RemoveAt(Last); StrainRowIds.RemoveAt(Last); StrainRowSigs.RemoveAt(Last);
-	}
-	for (int32 i = 0; i < Buds.Num(); ++i)
-	{
-		const FBudRow& R = Buds[i];
-		UWeedActionButton* B = StrainRowBtns[i];
-		if (!B) { continue; }
-		const bool bSel = (R.Id == SelStrain);
-		// Content-signature ZONDER selectie: alleen rij-DATA. Zo herbouwen we de rij-inhoud niet bij een
-		// simpele selectie-flip - dan herkleuren we alleen (SetStyle), precies zoals gevraagd.
-		const FString Sig = FString::Printf(TEXT("%s|%d|%.1f|%.1f"), *R.Id.ToString(), R.Qty, R.Quality, R.QualityPct);
-		if (Sig != StrainRowSigs[i])
+		TArray<FWeedPickItem> Items;
+		Items.Reserve(Buds.Num());
+		for (const FBudRow& R : Buds)
 		{
-			StrainRowSigs[i] = Sig;
-			StrainRowIds[i] = R.Id;
-			B->SetContent(IconText(WidgetTree, R.Id, FString::Printf(TEXT("%s   %dg  (THC %.0f%%, Q %.0f%%)"),
-				*WeedUI::PrettyItemName(R.Id), R.Qty, R.Quality, R.QualityPct), 12));
+			FWeedPickItem It;
+			It.Id = R.Id;
+			It.Badge = FString::Printf(TEXT("%dg"), R.Qty);
+			It.Tooltip = FString::Printf(TEXT("%s\n%dg - THC %.0f%% Q %.0f%%"),
+				*WeedUI::PrettyItemName(R.Id), R.Qty, R.Quality, R.QualityPct);
+			Items.Add(It);
 		}
-		Recolour(B, bSel ? SelCol : UnselCol); // herkleur-in-place (goedkoop; alleen de style verandert)
-		// (Re)bind de klik-actie zodat de captured id klopt met de huidige rij-index.
-		const FName Bud = R.Id;
-		B->OnAction.Unbind();
-		B->OnAction.BindLambda([this, Bud](int32, int32) { SelStrain = Bud; RefreshPack(); });
+		StrainGrid->SetItems(Items, SelStrain);
 	}
 
 	const int32 BudHave = SelStrain.IsNone() ? 0 : Inv->GetQuantity(SelStrain);
 	const bool bStrainChosen = bAnyBud && !SelStrain.IsNone() && BudHave > 0;
 
-	// --- 2) Container-rijen (persistent pool) ---
+	// --- 2) Container-keuze (icoon-grid) ---
 	struct FContRow { FName Id; int32 Cap; int32 Owned; };
 	TArray<FContRow> Conts;
 	if (bStrainChosen)
@@ -455,36 +424,20 @@ void UPackWidget::RefreshPack()
 	if (ContSection) { ContSection->SetVisibility(bStrainChosen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (NoContLabel) { NoContLabel->SetVisibility((bStrainChosen && !bAnyCont) ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 
-	while (ContRowBtns.Num() < Conts.Num())
+	if (ContGrid)
 	{
-		UWeedActionButton* B = PackBtn(WidgetTree, UnselCol, nullptr);
-		ContList->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 2, 0, 2));
-		ContRowBtns.Add(B); ContRowIds.Add(NAME_None); ContRowSigs.Add(TEXT("\x01"));
-	}
-	while (ContRowBtns.Num() > Conts.Num())
-	{
-		const int32 Last = ContRowBtns.Num() - 1;
-		if (ContRowBtns[Last]) { ContRowBtns[Last]->RemoveFromParent(); }
-		ContRowBtns.RemoveAt(Last); ContRowIds.RemoveAt(Last); ContRowSigs.RemoveAt(Last);
-	}
-	for (int32 i = 0; i < Conts.Num(); ++i)
-	{
-		const FContRow& R = Conts[i];
-		UWeedActionButton* B = ContRowBtns[i];
-		if (!B) { continue; }
-		const bool bSel = (R.Id == SelContainer);
-		const FString Sig = FString::Printf(TEXT("%s|%d|%d"), *R.Id.ToString(), R.Cap, R.Owned);
-		if (Sig != ContRowSigs[i])
+		TArray<FWeedPickItem> Items;
+		Items.Reserve(Conts.Num());
+		for (const FContRow& R : Conts)
 		{
-			ContRowSigs[i] = Sig;
-			ContRowIds[i] = R.Id;
-			B->SetContent(IconText(WidgetTree, R.Id, FString::Printf(TEXT("%s   up to %dg   x%d"),
-				*WeedUI::PrettyItemName(R.Id), R.Cap, R.Owned), 12));
+			FWeedPickItem It;
+			It.Id = R.Id;
+			It.Badge = FString::Printf(TEXT("x%d"), R.Owned);
+			It.SubLine = FString::Printf(TEXT("%dg"), R.Cap);
+			It.Tooltip = FString::Printf(TEXT("%s\nup to %dg - x%d owned"), *WeedUI::PrettyItemName(R.Id), R.Cap, R.Owned);
+			Items.Add(It);
 		}
-		Recolour(B, bSel ? SelCol : UnselCol); // herkleur-in-place
-		const FName ContId = R.Id;
-		B->OnAction.Unbind();
-		B->OnAction.BindLambda([this, ContId](int32, int32) { SelContainer = ContId; SelBags = MaxBags; RefreshPack(); });
+		ContGrid->SetItems(Items, SelContainer);
 	}
 
 	// --- Vervolg-secties zichtbaar zodra strain + container gekozen zijn ---
@@ -510,8 +463,8 @@ void UPackWidget::RefreshPack()
 	SetB(SelBags);
 }
 
-// Werkt de unpack-flow IN PLACE bij: diff de bag-rij-pool, herkleur enkel gewijzigde rijen, toggle het
-// bedieningsblok, en push slider/labels. NOOIT ClearChildren op de lijst.
+// Werkt de unpack-flow IN PLACE bij: vult het bag-icoon-grid (SetItems diff't intern), toggle het
+// bedieningsblok, en push slider/labels. NOOIT ClearChildren.
 void UPackWidget::RefreshUnpack()
 {
 	if (!UnpackPane || !PhoneComp.IsValid()) { return; }
@@ -534,36 +487,21 @@ void UPackWidget::RefreshUnpack()
 		SelUnpackBag = Bags[0].Id;
 	}
 
-	// Pool op maat brengen (geen ClearChildren).
-	while (UnpackRowBtns.Num() < Bags.Num())
+	if (UnpackGrid)
 	{
-		UWeedActionButton* B = PackBtn(WidgetTree, UUnselCol, nullptr);
-		UnpackList->AddChildToVerticalBox(B)->SetPadding(FMargin(0, 2, 0, 2));
-		UnpackRowBtns.Add(B); UnpackRowIds.Add(NAME_None); UnpackRowSigs.Add(TEXT("\x01"));
-	}
-	while (UnpackRowBtns.Num() > Bags.Num())
-	{
-		const int32 Last = UnpackRowBtns.Num() - 1;
-		if (UnpackRowBtns[Last]) { UnpackRowBtns[Last]->RemoveFromParent(); }
-		UnpackRowBtns.RemoveAt(Last); UnpackRowIds.RemoveAt(Last); UnpackRowSigs.RemoveAt(Last);
-	}
-	for (int32 i = 0; i < Bags.Num(); ++i)
-	{
-		const FBagRow& R = Bags[i];
-		UWeedActionButton* B = UnpackRowBtns[i];
-		if (!B) { continue; }
-		const bool bSel = (R.Id == SelUnpackBag);
-		const FString Sig = FString::Printf(TEXT("%s|%d"), *R.Id.ToString(), R.Owned);
-		if (Sig != UnpackRowSigs[i])
+		TArray<FWeedPickItem> Items;
+		Items.Reserve(Bags.Num());
+		for (const FBagRow& R : Bags)
 		{
-			UnpackRowSigs[i] = Sig;
-			UnpackRowIds[i] = R.Id;
-			B->SetContent(IconText(WidgetTree, R.Id, FString::Printf(TEXT("%s   x%d"), *WeedUI::PrettyItemName(R.Id), R.Owned), 11));
+			const int32 BagG = FMath::Max(1, UInventoryComponent::BagGrams(R.Id));
+			FWeedPickItem It;
+			It.Id = R.Id;
+			It.Badge = FString::Printf(TEXT("x%d"), R.Owned);
+			It.SubLine = FString::Printf(TEXT("%dg/bag"), BagG);
+			It.Tooltip = FString::Printf(TEXT("%s\n%dg/bag - x%d owned"), *WeedUI::PrettyItemName(R.Id), BagG, R.Owned);
+			Items.Add(It);
 		}
-		Recolour(B, bSel ? USelCol : UUnselCol); // herkleur-in-place
-		const FName Bag = R.Id;
-		B->OnAction.Unbind();
-		B->OnAction.BindLambda([this, Bag](int32, int32) { if (Bag != SelUnpackBag) { SelUnpackBag = Bag; SelBags = 1; RefreshUnpack(); } });
+		UnpackGrid->SetItems(Items, SelUnpackBag);
 	}
 
 	if (!bAnyBag) { return; }

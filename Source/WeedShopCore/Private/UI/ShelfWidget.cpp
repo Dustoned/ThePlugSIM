@@ -2,6 +2,7 @@
 
 #include "UI/WeedUiStyle.h"
 #include "UI/InventoryWidget.h" // UInvDragOp: vanuit je echte inventory in het schap droppen = opslaan
+#include "UI/WeedItemPickGrid.h" // fridge "Make edibles" = icoon-grid-picker (persistent, geen rebuild-per-klik)
 #include "Phone/PhoneClientComponent.h"
 #include "World/StorageShelf.h"
 #include "Inventory/InventoryComponent.h"
@@ -322,34 +323,67 @@ void UShelfWidget::FillBody()
 
 void UShelfWidget::RebuildFridgeSection(AStorageShelf* Shelf)
 {
-	// Koelkast: edibles maken (ButterMix -> Edible/Cookie/Gummy). Kleine sectie onder de grid; herbouwd bij
-	// wijziging (FillBody draait alleen op sig-change, dus geen per-tick-flikker).
+	// Koelkast: edibles maken (ButterMix -> Edible/Cookie/Gummy). Icoon-grid-picker + in-place status-teksten;
+	// éénmalig gebouwd -> per refresh alleen SetItems/SetText/SetVisibility (geen ClearChildren-flash op een klik).
 	if (!FridgeSection) { return; }
-	FridgeSection->ClearChildren();
 	if (!Shelf || !Shelf->IsFridge()) { FridgeSection->SetVisibility(ESlateVisibility::Collapsed); return; }
 	FridgeSection->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
-	FridgeSection->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Make edibles"), 13, FLinearColor(0.7f, 0.9f, 0.6f), false, true))->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
+	// Éénmalige opbouw van de fridge-sectie: kop, icoon-grid, hint- en status-regel.
+	if (!FridgePick)
+	{
+		FridgeTitleText = WeedUI::Text(WidgetTree, TEXT("Make edibles"), 13, FLinearColor(0.7f, 0.9f, 0.6f), false, true);
+		FridgeSection->AddChildToVerticalBox(FridgeTitleText)->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
 
-	bool bAnyButter = false;
+		// Grid-config VOOR de eerste SetItems: geen selectie, kleinere cellen, max 2 rijen (rest scrollt).
+		FridgePick = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+		FridgePick->bShowSelection = false;
+		FridgePick->CellSize = 72.f;
+		FridgePick->IconSize = 46.f;
+		FridgePick->MaxVisibleRows = 2;
+		FridgePick->OnPick = [this](FName /*Id*/, int32 P)
+		{
+			// P = schap-slot-index (payload). Server hervalideert de index + ButterMix-check.
+			if (PhoneComp.IsValid()) { PhoneComp->RequestShelfCook(P); LastSig.Reset(); }
+		};
+		FridgeSection->AddChildToVerticalBox(FridgePick)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+
+		FridgeHintText = WeedUI::Text(WidgetTree, TEXT("Store butter mix here, then set it into edibles (add sugar+flour for cookies, sugar+gelatin for gummies)."), 11, FLinearColor(0.6f, 0.65f, 0.78f));
+		FridgeSection->AddChildToVerticalBox(FridgeHintText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+
+		FridgeStatusText = WeedUI::Text(WidgetTree, FString(), 11, FLinearColor(0.55f, 0.78f, 1.f));
+		FridgeSection->AddChildToVerticalBox(FridgeStatusText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+	}
+
+	// Vul het grid: één cel per ButterMix_-stapel (Id=ItemId, Payload=schap-index, Badge="Ng").
+	TArray<FWeedPickItem> Items;
 	for (int32 i = 0; i < Shelf->Contents.Num(); ++i)
 	{
 		const FShelfStack& S = Shelf->Contents[i];
 		if (!S.ItemId.ToString().StartsWith(TEXT("ButterMix_"))) { continue; }
-		bAnyButter = true;
-		const int32 Idx = i;
-		const FString Label = FString::Printf(TEXT("Set %s  (%dg)"), *WeedUI::PrettyItemName(S.ItemId), S.Quantity);
-		UWeedActionButton* B = ShelfBtn(WidgetTree, Label, FLinearColor(0.22f, 0.42f, 0.26f),
-			[this, Idx]() { if (PhoneComp.IsValid()) { PhoneComp->RequestShelfCook(Idx); LastSig.Reset(); } });
-		FridgeSection->AddChildToVerticalBox(B)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+		FWeedPickItem It;
+		It.Id = S.ItemId;
+		It.IconId = S.ItemId;
+		It.Payload = i; // schap-slot-index -> RequestShelfCook
+		It.Badge = FString::Printf(TEXT("%dg"), S.Quantity);
+		It.Tooltip = FString::Printf(TEXT("Set %s  (%dg) into edibles"), *WeedUI::PrettyItemName(S.ItemId), S.Quantity);
+		Items.Add(It);
 	}
-	if (!bAnyButter)
+	const bool bAnyButter = Items.Num() > 0;
+	FridgePick->SetItems(Items);
+	FridgePick->SetVisibility(bAnyButter ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+
+	// Hint alleen tonen als er geen ButterMix ligt; status-regel alleen tijdens het zetten.
+	if (FridgeHintText) { FridgeHintText->SetVisibility(bAnyButter ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
+	if (FridgeStatusText)
 	{
-		FridgeSection->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Store butter mix here, then set it into edibles (add sugar+flour for cookies, sugar+gelatin for gummies)."), 11, FLinearColor(0.6f, 0.65f, 0.78f)))->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
-	}
-	if (Shelf->Cooking.Num() > 0)
-	{
-		FridgeSection->AddChildToVerticalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("Setting %d batch%s... (~3 min, lands in the fridge)"), Shelf->Cooking.Num(), Shelf->Cooking.Num() == 1 ? TEXT("") : TEXT("es")), 11, FLinearColor(0.55f, 0.78f, 1.f)))->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+		const int32 C = Shelf->Cooking.Num();
+		if (C > 0)
+		{
+			FridgeStatusText->SetText(FText::FromString(FString::Printf(TEXT("Setting %d batch%s... (~3 min, lands in the fridge)"), C, C == 1 ? TEXT("") : TEXT("es"))));
+			FridgeStatusText->SetVisibility(ESlateVisibility::Visible);
+		}
+		else { FridgeStatusText->SetVisibility(ESlateVisibility::Collapsed); }
 	}
 }
 

@@ -17,6 +17,9 @@ class UTextBlock;
 class UProgressBar;
 class USlider;
 class UWeedActionButton;
+class UWeedItemPickGrid;
+class UBorder;
+class USizeBox;
 
 UCLASS()
 class WEEDSHOPCORE_API UDealWidget : public UUserWidget
@@ -58,37 +61,27 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
 	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;
 	UPROPERTY() TObjectPtr<UTextBlock> RelationText;
-	UPROPERTY() TObjectPtr<UTextBlock> TierText;     // klant-tier (Casual -> Whale)
-	UPROPERTY() TObjectPtr<UProgressBar> TierBar;    // XP-voortgang naar de volgende tier
+	UPROPERTY() TObjectPtr<UTextBlock> TierText;     // klant-tier-NAAM (in de pill rechts van de naam)
+	UPROPERTY() TObjectPtr<UBorder>    TierPill;     // pill-kader om TierText (accent-vlak)
+	UPROPERTY() TObjectPtr<USizeBox>   TierBar;      // dunne accent-balk onder de kop-rij (3px)
 	UPROPERTY() TObjectPtr<UTextBlock> PreviewText;
 	UPROPERTY() TObjectPtr<UTextBlock> OfferLabel;
-	UPROPERTY() TObjectPtr<UVerticalBox> StrainBox;
-	UPROPERTY() TObjectPtr<UVerticalBox> JointPickerBox; // joint-kiezer (welke joint geef je deze NPC)
+	UPROPERTY() TObjectPtr<UVerticalBox> StrainBox;      // container voor het strain-keuze-grid
+	UPROPERTY() TObjectPtr<UVerticalBox> JointPickerBox; // container voor het joint-keuze-grid (welke joint geef je)
 	UPROPERTY() TObjectPtr<UTextBlock> NoWeedText;
 
-	// Persistente strain-cel-pool: geen ClearChildren meer bij een klik. De pool groeit/krimpt naar het
-	// aantal strains; per cel houden we een content-signatuur (grammen/thc/wanted) + welke id 'ie toont, zodat
-	// alleen echt-gewijzigde cellen opnieuw gevuld worden en een pure selectie-wissel enkel 2 knoppen herstyled.
-	UPROPERTY() TArray<TObjectPtr<UWeedActionButton>> StrainCells;   // de knoppen zelf (persistent)
-	UPROPERTY() TArray<TObjectPtr<UHorizontalBox>> StrainRows;       // rij-containers (2 cellen per rij)
+	// Keuze-grids (B.11): strain-picker (met selectie) + joint-picker (zonder selectie). Persistent, diffen intern.
+	UPROPERTY() TObjectPtr<UWeedItemPickGrid> StrainGrid;
+	UPROPERTY() TObjectPtr<UWeedItemPickGrid> JointGrid;
 	UPROPERTY() TObjectPtr<UTextBlock> StrainEmptyText;              // "(no weed in your inventory)" melding
-	TArray<FName> StrainCellIds;                                    // welke Bag_<strain>-id elke cel toont
-	TArray<FString> StrainCellSigs;                                 // per-cel content-signatuur
-	FName StrainSelectedId = NAME_None;                             // welke cel nu de "geselecteerd"-stijl heeft
-	FString StrainListSig;                                          // signatuur van de strain-LIJST (set Bag-ids + grammen/thc)
-
-	// Persistente joint-kiezer-pool (zelfde idee; laag geprioriteerd, box is meestal Collapsed).
-	UPROPERTY() TArray<TObjectPtr<UWeedActionButton>> JointCells;
-	UPROPERTY() TObjectPtr<UTextBlock> JointPickerTitle;            // "Give which joint?"
 	UPROPERTY() TObjectPtr<UTextBlock> JointEmptyText;              // "No joints - roll one first (R)."
-	TArray<FName> JointCellIds;                                    // welke Joint_<...>-id elke cel geeft
-	TArray<FString> JointCellSigs;                                  // per-joint content-signatuur
+
+	// Signatuur-gate: wanneer roepen we StrainGrid->SetItems aan (lijst-wijziging) vs enkel SetSelected (selectie).
+	FName StrainSelectedId = NAME_None;                             // welke id nu de "geselecteerd"-stijl heeft
+	FString StrainListSig;                                          // signatuur van de strain-LIJST (set Bag-ids + grammen/thc)
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<ACustomerBase> LastCustomer;
 	FName LastOffered = NAME_None;
 	bool bSliderHeld = false;
-
-	// Zet de "geselecteerd/niet-geselecteerd"-stijl op één strain-cel (in-place restyle, geen rebuild).
-	void StyleStrainCell(UWeedActionButton* B, bool bSelected);
 };
