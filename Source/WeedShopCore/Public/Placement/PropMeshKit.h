@@ -314,11 +314,9 @@ namespace PropKit
 				// Eigen scan-materiaal behouden (bKeepMeshMaterial): geen BaseMat-kleur eroverheen.
 				SpawnItemPart(Owner, Parent, JM, FVector(JScale * 100.f) * ScaleMul, JOff * ScaleMul,
 					FLinearColor::White, JRot, bFirstPerson, bCollision, /*bKeepMeshMaterial*/ true);
-				// Gloeiende punt terug (vindbaarheid bij het joint-zoeken): oranje gloed + hete kern op
-				// de +X-punt (niet-filter-kant), meegeschaald met de joint-lengte (oude maat was op ~10cm).
-				const float G = (JTip.X * 2.f) / 10.f;
-				P(Sp, FVector(1.2f, 1.2f, 1.2f) * G, JTip, FLinearColor(1.0f, 0.5f, 0.12f));                              // gloed
-				P(Sp, FVector(0.65f, 0.65f, 0.65f) * G, JTip + FVector(0.45f * G, 0, 0), FLinearColor(1.0f, 0.85f, 0.30f)); // hete kern
+				// GEEN brandende/gloeiende punt: de speler wil het CLEAN gescande joint-model (niet alsof
+				// hij brandt) - alleen de mesh met z'n eigen scan-materiaal. (JTip ongebruikt gelaten.)
+				(void)JTip;
 			}
 			else
 			{
@@ -327,8 +325,7 @@ namespace PropKit
 				P(Co, FVector(1.3f, 1.3f, 1.9f), FVector(0, 0, 4.5f), FLinearColor(0.90f, 0.88f, 0.80f)); // gedraaide top
 				P(Cy, FVector(1.4f, 1.4f, 1.9f), FVector(0, 0, -3.6f), FLinearColor(0.76f, 0.58f, 0.34f)); // filter
 				P(Cy, FVector(1.4f, 1.4f, 0.45f), FVector(0, 0, -2.6f), Accent);                           // strain-bandje
-				P(Sp, FVector(1.2f, 1.2f, 1.2f), FVector(0, 0, 5.3f), FLinearColor(1.0f, 0.5f, 0.12f));    // gloed
-				P(Sp, FVector(0.65f, 0.65f, 0.65f), FVector(0, 0, 5.7f), FLinearColor(1.0f, 0.85f, 0.30f)); // hete kern
+				// (geen gloed/hete kern: clean model, ook in de fallback)
 			}
 		}
 		else if (S.StartsWith(TEXT("WaterBottle")))
