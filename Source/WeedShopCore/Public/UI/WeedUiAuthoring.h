@@ -9,10 +9,9 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "WeedUiAuthoring.generated.h"
 
-#if WITH_EDITOR
-
-class UWidgetBlueprint;
-
+// LET OP (Shipping): de UCLASS bestaat in ALLE targets (UHT kan een hele UCLASS niet achter WITH_EDITOR
+// verstoppen — de .gen.cpp verwees dan naar een onbestaande klasse en brak het packagen). De klasse is
+// editor-agnostisch (UObject*-param); alleen de IMPLEMENTATIE is editor-only (Shipping-stub -> false).
 UCLASS()
 class WEEDSHOPCORE_API UWeedUiAuthoring : public UBlueprintFunctionLibrary
 {
@@ -35,5 +34,3 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedUiAuthoring")
 	static bool BuildTree(UObject* WBP, const FString& JsonSpec);
 };
-
-#endif // WITH_EDITOR

@@ -249,4 +249,12 @@ bool UWeedUiAuthoring::BuildTree(UObject* InWBP, const FString& JsonSpec)
 	return true;
 }
 
+#else // !WITH_EDITOR
+
+// Shipping/game-stub: de klasse moet in alle targets bestaan (UHT), maar authoring is editor-werk.
+bool UWeedUiAuthoring::BuildTree(UObject* /*InWBP*/, const FString& /*JsonSpec*/)
+{
+	return false;
+}
+
 #endif // WITH_EDITOR
