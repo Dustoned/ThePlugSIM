@@ -956,6 +956,30 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				UE_LOG(LogWeedShop, Display, TEXT("[AutoNewGame] nieuw spel gestart (slot 0)"));
 			}
 		}
+		// Dev/co-op-repro: -AutoHostComp start een COMPETITIVE listen-server (slot 0) zodra het menu er staat.
+		static bool bAutoHostCompFired = false;
+		if (!bAutoHostCompFired && FParse::Param(FCommandLine::Get(), TEXT("AutoHostComp")))
+		{
+			bAutoHostCompFired = true;
+			if (USaveGameSubsystem* Save = GetSave(GetWorld()))
+			{
+				Save->SetPendingMap(TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"));
+				Save->SetPendingCoopCompetitive(true);
+				Save->HostNewGameLan(0);
+				UE_LOG(LogWeedShop, Display, TEXT("[AutoHostComp] competitive listen-server gestart (slot 0)"));
+			}
+		}
+		// Dev/co-op-repro: -AutoJoinComp joint een lokale host (127.0.0.1). Start dit pas nadat de host in-world is.
+		static bool bAutoJoinCompFired = false;
+		if (!bAutoJoinCompFired && FParse::Param(FCommandLine::Get(), TEXT("AutoJoinComp")))
+		{
+			bAutoJoinCompFired = true;
+			if (USaveGameSubsystem* Save = GetSave(GetWorld()))
+			{
+				Save->JoinLan(TEXT("127.0.0.1"));
+				UE_LOG(LogWeedShop, Display, TEXT("[AutoJoinComp] join -> 127.0.0.1"));
+			}
+		}
 	}
 	if (bOpen != bLastOpen)
 	{

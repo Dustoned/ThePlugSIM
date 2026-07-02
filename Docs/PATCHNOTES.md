@@ -2,8 +2,17 @@ PATCH NOTES
 Version 1.19.3 — 2 juli 2026
 
 Korte intro:
-Joints liggen weer overal, het instellingen-scherm werkt weer, en een flinke ronde UI-polish
-op de packing bench en het deal-scherm.
+Co-op werkt weer: een joiner kwam in competitive niet meer binnen (belandde na een lange laadhang
+terug in het hoofdmenu). Verder liggen de joints weer overal, werkt het instellingen-scherm weer,
+en een flinke ronde UI-polish op de packing bench en het deal-scherm.
+
+━━━━━━━━━━━━━━━━━━━━
+
+CO-OP
+
+• Een vriend kon een competitive-game niet meer joinen: je spawnde midden op straat, het laadscherm
+  bleef lang hangen en daarna vloog je terug naar het hoofdmenu. Opgelost - je komt nu netjes in je
+  eigen kamer binnen en blijft verbonden.
 
 ━━━━━━━━━━━━━━━━━━━━
 
