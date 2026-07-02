@@ -37,7 +37,8 @@ Write-Host ("{0} unieke /Game-paden gevonden in Source + Data" -f $Paths.Count)
 $Missing = @()
 foreach ($p in ($Paths | Sort-Object)) {
 	$rel = ($p -replace '^/Game/', '').Split('.')[0].TrimEnd('/')
-	$win = 'Content\' + ($rel -replace '/', '\')
+	# expliciet ThePlugSIM\Content\ - anders kan een project-miss per ongeluk tegen Engine\Content\ matchen
+	$win = 'ThePlugSIM\Content\' + ($rel -replace '/', '\')
 	$isAsset = $ManifestText.Contains($win + '.uasset') -or $ManifestText.Contains($win + '.umap')
 	$isDir = $ManifestText.Contains($win + '\')
 	# dynamische naam-basis (pad eindigt op '_', code plakt er runtime een naam achter) -> prefix-match volstaat
