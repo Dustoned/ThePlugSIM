@@ -1276,14 +1276,25 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 	// pawn: de host-pawn is daar locally-controlled, de joiner-pawn niet. Zo valideert de server tegen de
 	// JOINER-kamer voor de joiner (anders kreeg 'ie altijd de host-box en werd elke plaatsing geweigerd),
 	// en blijft de client-preview (locally-controlled) tegen z'n eigen kamer valideren.
+	// Twee onafhankelijke identiteit-signalen, OF/OF geaccepteerd (context-onafhankelijk):
+	//  - owner-tak: klopt op de SERVER (joiner-pawn is daar niet locally-controlled -> joiner-box 602)
+	//  - net-tak:   klopt op de JOINER-CLIENT (eigen pawn is daar wel locally-controlled, dus owner-tak
+	//               faalt; NM_Client verraadt dat we de joiner zijn -> joiner-box 602)
+	// Host-box 603 en joiner-box 602 overlappen fysiek niet, dus beide boxen accepteren lekt niet: een
+	// speler staat nooit fysiek in de andere kamer. Op de server geeft de net-tak (NM_ListenServer) de
+	// host-box terug - onschadelijk, want de owner-tak dekt de joiner-RPC al af.
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	const bool bJoiner = OwnerPawn && !OwnerPawn->IsLocallyControlled();
-	auto InCompHome = [this, &P, bJoiner]() -> bool
+	const bool bJoinerByOwner = OwnerPawn && !OwnerPawn->IsLocallyControlled(); // server-correct
+	const UWorld* CompW = GetWorld();
+	const bool bJoinerByNet = CompW && CompW->GetNetMode() == NM_Client;        // client-correct
+	auto InCompHome = [this, &P, bJoinerByOwner, bJoinerByNet]() -> bool
 	{
 		ADoorRetrofitter* Retro = GetCompRetro();
 		if (!Retro) { return false; }
-		TArray<FBox> CHB; Retro->GetCompetitiveHomeBoxes(bJoiner, CHB);
-		for (const FBox& B : CHB) { if (B.IsInsideOrOn(P)) { return true; } }
+		TArray<FBox> A; Retro->GetCompetitiveHomeBoxes(bJoinerByOwner, A);
+		for (const FBox& B : A) { if (B.IsInsideOrOn(P)) { return true; } }
+		TArray<FBox> Bx; Retro->GetCompetitiveHomeBoxes(bJoinerByNet, Bx);
+		for (const FBox& B : Bx) { if (B.IsInsideOrOn(P)) { return true; } }
 		return false;
 	};
 

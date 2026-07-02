@@ -35,8 +35,15 @@ public:
 	// (wereld, pocket-kant). Panels = per verdieping (index in Floors) de bestaande schuif-panelen.
 	void Setup(const TArray<float>& InFloors, const FVector& InSlideDir, const TArray<FElevPanelInit>& InPanels, const FVector& CabCenterXY, const FVector& OpeningDir);
 
-	// Roep de lift naar deze verdieping (call-knoppen).
+	// Roep de lift naar deze verdieping (call-knoppen). Alleen nog een LOKALE fallback (single-player of vóór
+	// de WorldSync klaar is); in co-op stuurt de knop het lift-id + de verdieping naar de server (WorldSync).
 	void CallToFloor(int32 FloorIdx);
+
+	// Stabiel gedeeld lift-id (positie+yaw, deterministisch gelijk op host/joiner). 0 tot Setup het berekent.
+	uint32 GetElevatorSyncId() const { return ElevSyncId; }
+
+	// Aantal verdiepingen (voor de knop-server-validatie: index-range-check).
+	int32 GetFloorCount() const { return Floors.Num(); }
 
 	// Call-knop koppelen (zodat de digit-bordjes live de cabine-verdieping tonen).
 	void RegisterButton(class APackElevatorButton* Btn);
@@ -77,6 +84,11 @@ protected:
 	TArray<float> Floors;     // vloer-Z per verdieping
 	FVector SlideDir = FVector::XAxisVector; // schuifrichting van de panelen (wereld)
 	FVector CabXY = FVector::ZeroVector;     // cabine-centrum (XY)
+
+	uint32 ElevSyncId = 0;    // gedeeld positie-id (WorldSync); in Setup berekend, deterministisch host==joiner
+	// Cache van de gedeelde WorldSync (1x resolven; her-resolven zodra invalid) - geen GetGameState per tick.
+	TWeakObjectPtr<const class UWorldSyncComponent> CachedWorldSync;
+	int32 LastWsFloor = INDEX_NONE; // laatst uit WorldSync gelezen doel: verandert deze -> deuren weer openen
 
 	int32 CurFloor = 0;
 	int32 TargetFloor = 0;

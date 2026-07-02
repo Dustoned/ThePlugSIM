@@ -29,11 +29,29 @@ public:
 	void ServerToggleDoor(uint32 DoorId);
 	void ServerSetDoor(uint32 DoorId, bool bOpen);
 
+	// LIFT (per-client deterministisch gespawnd, net als de deuren): de gedeelde staat is de DOEL-verdieping
+	// per lift-id. Elke lokale cabine (host EN joiner) leest z'n doel elke tick uit deze set -> ze rijden naar
+	// EXACT dezelfde verdieping. De cosmetische interp (CabZ/deur-slide) blijft lokaal.
+	// Onbekend id -> INDEX_NONE = "geen server-doel", de lift laat z'n eigen begin-doel staan.
+	int32 GetElevatorFloor(uint32 ElevId) const;
+
+	// Server: schrijf de doel-verdieping van een lift (door de knop-interactie aangeroepen). Repliceert.
+	void ServerSetElevatorFloor(uint32 ElevId, int32 Floor);
+
 private:
 	UFUNCTION()
 	void OnRep_OpenDoors() {}
+	UFUNCTION()
+	void OnRep_Elevators() {}
 
 	// Set van OPEN deur-ids (dicht = niet in de lijst). TArray repliceert; klein (alleen open deuren).
 	UPROPERTY(ReplicatedUsing = OnRep_OpenDoors)
 	TArray<uint32> OpenDoors;
+
+	// Gedeelde lift-staat: id -> doel-verdieping. Losse parallelle arrays (USTRUCT-vrij; TMap repliceert niet).
+	// Klein (aantal liften op de map), dus lineair zoeken is prima.
+	UPROPERTY(ReplicatedUsing = OnRep_Elevators)
+	TArray<uint32> ElevatorIds;
+	UPROPERTY(ReplicatedUsing = OnRep_Elevators)
+	TArray<int32> ElevatorFloors;
 };

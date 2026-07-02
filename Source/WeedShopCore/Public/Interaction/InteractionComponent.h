@@ -87,6 +87,11 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerToggleDoor(uint32 DoorId);
 
+	// CO-OP gedeelde lift: schrijf de doel-verdieping van een lift (stabiel positie-id) in WorldSync op de
+	// GameState. Zelfde patroon als ServerToggleDoor, maar met een verdieping i.p.v. een open/dicht-toggle.
+	UFUNCTION(Server, Reliable)
+	void ServerCallElevator(uint32 ElevId, int32 Floor);
+
 	// De daadwerkelijke uitvoering (draait op de server, of in SP/host direct).
 	void PerformInteract(AActor* Target);
 

@@ -44,4 +44,10 @@ public:
 	// via een STABIEL POSITIE-ID gesynct wordt. De interactie stuurt dan dit id naar de server (i.p.v. de
 	// actor, die geen net-identiteit heeft) -> server toggelt de gedeelde open-set -> alle clients volgen.
 	virtual uint32 GetWorldSyncDoorId() const { return 0; }
+
+	// CO-OP GEDEELDE LIFT: een lift-call-knop (niet-gerepliceerd, per-client deterministisch). != 0 id betekent:
+	// stuur dit lift-id + de gekozen verdieping naar de server -> server schrijft de doel-verdieping in WorldSync
+	// -> host EN joiner rijden hun lokale cabine naar EXACT dezelfde verdieping. Zelfde patroon als de deur, maar
+	// met een DOEL-verdieping i.p.v. een open/dicht-toggle. OutFloor = de aangevraagde verdieping-index.
+	virtual uint32 GetWorldSyncElevatorId(int32& OutFloor) const { OutFloor = 0; return 0; }
 };

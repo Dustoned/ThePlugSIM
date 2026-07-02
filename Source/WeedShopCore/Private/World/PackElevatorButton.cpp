@@ -141,7 +141,18 @@ void APackElevatorButton::SetDigit(int32 Digit)
 
 void APackElevatorButton::Interact_Implementation(APawn* InstigatorPawn)
 {
+	// Server-pad (host/SP-authority, of via ServerInteract): schrijf de doel-verdieping lokaal zodat de
+	// host-cabine meteen reageert. In co-op zet de InteractionComponent de gedeelde WorldSync-staat al via
+	// ServerCallElevator (op basis van GetWorldSyncElevatorId) -> beide cabines volgen. Deze lokale call is
+	// de fallback voor single-player en dubbelt de host-actie geen kwaad (zelfde doel-verdieping).
 	if (APackElevator* E = Elevator.Get()) { E->CallToFloor(FloorIdx); }
+}
+
+uint32 APackElevatorButton::GetWorldSyncElevatorId(int32& OutFloor) const
+{
+	OutFloor = FloorIdx;
+	const APackElevator* E = Elevator.Get();
+	return E ? E->GetElevatorSyncId() : 0u;
 }
 
 void APackElevatorButton::SetCabMode()

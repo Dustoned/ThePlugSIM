@@ -11,6 +11,8 @@ void UWorldSyncComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UWorldSyncComponent, OpenDoors);
+	DOREPLIFETIME(UWorldSyncComponent, ElevatorIds);
+	DOREPLIFETIME(UWorldSyncComponent, ElevatorFloors);
 }
 
 uint32 UWorldSyncComponent::MakeId(const FVector& Loc, float Yaw)
@@ -40,4 +42,25 @@ void UWorldSyncComponent::ServerSetDoor(uint32 DoorId, bool bOpen)
 	if (GetOwnerRole() != ROLE_Authority || DoorId == 0) { return; }
 	if (bOpen) { OpenDoors.AddUnique(DoorId); }
 	else { OpenDoors.Remove(DoorId); }
+}
+
+int32 UWorldSyncComponent::GetElevatorFloor(uint32 ElevId) const
+{
+	const int32 Idx = ElevatorIds.IndexOfByKey(ElevId);
+	return (Idx != INDEX_NONE && ElevatorFloors.IsValidIndex(Idx)) ? ElevatorFloors[Idx] : INDEX_NONE;
+}
+
+void UWorldSyncComponent::ServerSetElevatorFloor(uint32 ElevId, int32 Floor)
+{
+	if (GetOwnerRole() != ROLE_Authority || ElevId == 0) { return; }
+	const int32 Idx = ElevatorIds.IndexOfByKey(ElevId);
+	if (Idx != INDEX_NONE)
+	{
+		if (ElevatorFloors.IsValidIndex(Idx)) { ElevatorFloors[Idx] = Floor; }
+	}
+	else
+	{
+		ElevatorIds.Add(ElevId);
+		ElevatorFloors.Add(Floor);
+	}
 }

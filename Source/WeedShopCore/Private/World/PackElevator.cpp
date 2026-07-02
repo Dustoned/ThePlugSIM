@@ -2,12 +2,15 @@
 
 #include "WeedShopCore.h"
 #include "World/PackElevatorButton.h"
+#include "World/WorldSyncComponent.h"
+#include "Game/WeedShopGameState.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/TextRenderComponent.h"
 #include "EngineUtils.h"
@@ -78,6 +81,11 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 	FVector Open2D = OpeningDir; Open2D.Z = 0.f;
 	if (Open2D.Normalize()) { SetActorRotation(Open2D.Rotation()); }
 	if (Cab) { Cab->SetRelativeLocation(FVector::ZeroVector); }
+
+	// CO-OP: stabiel gedeeld lift-id uit het cabine-centrum (XY, Z=0) + de opening-yaw. CabXY en de yaw
+	// (uit OpeningDir) zijn deterministisch identiek op host EN joiner (DoorRetrofitter spawnt de lift op
+	// beide processen op exact dezelfde plek), dus dit id matcht -> de WorldSync-doelverdieping klopt overal.
+	ElevSyncId = UWorldSyncComponent::MakeId(CabXY, GetActorRotation().Yaw);
 
 	// Verdieping-display IN de cabine: tegen de achterwand, op ooghoogte, kijkend naar de opening.
 	if (Cab && !CabDigit)
@@ -245,9 +253,15 @@ bool APackElevator::IsPawnAboard() const
 {
 	UWorld* W = GetWorld();
 	if (!W) { return false; }
+	// CO-OP: de cabine is per-client lokaal en de "niet-opsluiten"-dwell gaat over de speler op DIT scherm.
+	// Filter dus op de LOKAAL bestuurde pawn (host: de host-speler; joiner: de joiner-speler) - de andere
+	// speler zit in z'n eigen lokale cabine-kopie. Blind over alle PlayerControllers zou op de listen-server
+	// ook de joiner meetellen, terwijl die z'n eigen cabine-instantie heeft.
 	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
 	{
-		const APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+		const APlayerController* PC = It->Get();
+		if (!PC || !PC->IsLocalController()) { continue; }
+		const APawn* P = PC->GetPawn();
 		if (!P) { continue; }
 		const FVector L = P->GetActorLocation();
 		if (FVector::Dist2D(L, GetActorLocation()) < 130.f && FMath::Abs(L.Z - (CabZ + 100.f)) < 160.f)
@@ -262,6 +276,34 @@ void APackElevator::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (Floors.Num() < 2) { return; }
+
+	// CO-OP: de DOEL-verdieping komt uit de gedeelde WorldSync (door de knop via een Server-RPC gezet) ->
+	// host EN joiner rijden hun lokale cabine naar EXACT dezelfde verdieping. De cosmetische interp
+	// (CabZ, deur-slide) hieronder blijft lokaal. WorldSync 1x resolven en cachen (net als ACityDoor).
+	if (ElevSyncId != 0)
+	{
+		if (!CachedWorldSync.IsValid())
+		{
+			const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+			CachedWorldSync = GS ? GS->GetWorldSync() : nullptr;
+		}
+		if (const UWorldSyncComponent* WS = CachedWorldSync.Get())
+		{
+			const int32 WsFloor = WS->GetElevatorFloor(ElevSyncId);
+			// INDEX_NONE = nog geen server-doel gezet -> laat het lokale begin-doel (begane grond) staan.
+			if (Floors.IsValidIndex(WsFloor))
+			{
+				TargetFloor = WsFloor;
+				// Doel veranderd (ook naar de huidige verdieping toe) -> deuren weer openen (dwell re-armen),
+				// zodat een call naar de verdieping waar de cabine al staat op ELK scherm de deuren opent.
+				if (WsFloor != LastWsFloor)
+				{
+					LastWsFloor = WsFloor;
+					if (WsFloor == CurFloor && !bMoving) { DwellTimer = FMath::Max(DwellTimer, DwellSeconds); }
+				}
+			}
+		}
+	}
 
 	const float TargetZ = Floors[TargetFloor];
 	bMoving = !FMath::IsNearlyEqual(CabZ, TargetZ, 1.f);

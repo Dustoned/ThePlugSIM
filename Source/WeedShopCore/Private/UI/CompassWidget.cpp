@@ -11,6 +11,8 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Border.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
@@ -18,6 +20,34 @@
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "EngineUtils.h"
+
+namespace
+{
+	// Fel poppetje MET donkere contrast-rand (goedkope outline): een iets groter bijna-zwart poppetje
+	// eronder + het felle poppetje erbovenop, gecentreerd in een SizeBox. Zo springt de speler-marker
+	// eruit tegen zowel een donkere als lichte kaart-achtergrond. Retourneert een UWidget-container die
+	// als geheel in een canvas-slot geplaatst/verborgen kan worden (bestaande pool-logica blijft werken).
+	UWidget* MakeOutlinedPersonMarker(UWidgetTree* Tree, float Size, const FLinearColor& Bright)
+	{
+		const float Outline = Size + 5.f; // donkere rand steekt ~2,5px rondom uit
+		USizeBox* Box = Tree->ConstructWidget<USizeBox>();
+		Box->SetWidthOverride(Outline); Box->SetHeightOverride(Outline);
+		UOverlay* Ov = Tree->ConstructWidget<UOverlay>();
+		Box->SetContent(Ov);
+		// Donkere rand (onder): bijna-zwart, iets groter -> vormt een contrast-halo rond het felle poppetje.
+		if (UOverlaySlot* OS = Ov->AddChildToOverlay(WeedUI::Icon(Tree, WeedUI::EIcon::Person, Outline, FLinearColor(0.02f, 0.02f, 0.02f, 0.95f))))
+		{
+			OS->SetHorizontalAlignment(HAlign_Center); OS->SetVerticalAlignment(VAlign_Center);
+		}
+		// Fel poppetje (boven).
+		if (UOverlaySlot* OS = Ov->AddChildToOverlay(WeedUI::Icon(Tree, WeedUI::EIcon::Person, Size, Bright)))
+		{
+			OS->SetHorizontalAlignment(HAlign_Center); OS->SetVerticalAlignment(VAlign_Center);
+		}
+		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Box;
+	}
+}
 
 TSharedRef<SWidget> UCompassWidget::RebuildWidget()
 {
@@ -73,16 +103,15 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 		Markers.Add(MS2);
 	}
 
-	// Marker-pool voor mede-spelers (fel goud poppetje, groter) -> mag NIET verward worden met de groene
-	// NPC-markers hierboven; goud + groter formaat maakt je co-op maatje meteen herkenbaar.
+	// Marker-pool voor mede-spelers: fel CYAAN poppetje MET donkere contrast-rand, groter dan de NPC-markers.
+	// Cyaan (0,1,1) verschilt maximaal van de blauwe NPC-stippen op de kaart en van het groene klant-poppetje;
+	// de donkere rand houdt 'm zichtbaar tegen zowel een lichte als donkere kaart-achtergrond.
 	for (int32 i = 0; i < 4; ++i)
 	{
-		USizeBox* CB = WidgetTree->ConstructWidget<USizeBox>();
-		CB->SetWidthOverride(24.f); CB->SetHeightOverride(24.f);
-		CB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 24.f, FLinearColor(1.f, 0.82f, 0.15f)));
+		UWidget* CB = MakeOutlinedPersonMarker(WidgetTree, 26.f, FLinearColor(0.f, 1.f, 1.f));
 		CB->SetVisibility(ESlateVisibility::Collapsed);
 		UCanvasPanelSlot* CS = Band->AddChildToCanvas(CB);
-		CS->SetAutoSize(false); CS->SetSize(FVector2D(24.f, 24.f)); CS->SetAlignment(FVector2D(0.5f, 0.5f));
+		CS->SetAutoSize(false); CS->SetSize(FVector2D(31.f, 31.f)); CS->SetAlignment(FVector2D(0.5f, 0.5f));
 		CoopMarkers.Add(CB);
 	}
 

@@ -260,6 +260,29 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ---
 
+## TEST-FEEDBACK 07-02 — co-op live-test (joiner, competitive) — RE-FIXES
+
+> Speler testte lokaal als joiner (2 instances, competitive). Twee items zijn RE-FIXES: de eerdere fix pakte niet.
+
+- [ ] **G.1 Lift/deur synct niet in co-op** — de lift-deur gaat visueel OPEN voor de joiner maar 'ie kan niet naar
+  BINNEN (collision/trigger/verdieping niet gesynced). Lift/elevator is `bReplicates=false` (2C.2) -> in co-op
+  desync. Fix: lift server-authoritative maken (verdieping/deur-staat repliceren) of de joiner-trigger lokaal
+  correct afhandelen. [ACityElevator/APackElevator]
+- [ ] **G.2 M-kaart NOG STEEDS zwart (RE-FIX van D.5b)** — mijn UDS-naar-middag-bij-capture-fix pakte niet: de kaart
+  blijft zwart en "verandert niks tot 6u \'s ochtends" -> de capture weerspiegelt nog de live nacht-belichting.
+  Robuuste fix nodig: ALTIJD iets zichtbaar ongeacht tijd. Waarschijnlijk UDS "Update Active Variables" is
+  async/time-sliced -> de capture in dezelfde frame pakt de zon-update niet. Route: OF base-color/unlit capture
+  (SCS_BaseColor -> altijd albedo-helder), OF een gegarandeerde capture-only fill-light + hogere map-exposure.
+  [DoorRetrofitter CaptureMapNow + MapCapture CaptureSource + DayNightController ApplyMapPhotoLight]
+- [ ] **G.3 Joiner mag NOG STEEDS niks plaatsen (RE-FIX van E.1a)** — toast "only in your own house" bij de joiner,
+  ondanks de GetCompetitiveHomeBoxes(bJoiner)-fix. Uitzoeken: welke exacte check/toast dit is (is 't een ANDERE
+  check dan de E.1a-IsInOwnedHome?), of IsLocallyControlled op de server voor de joiner-pawn wel klopt, of de
+  joiner-mirror-kamer-box wel correct berekend is. [BuildComponent ServerPlace + IsInOwnedHome + DoorRetrofitter comp-boxes]
+- [ ] **G.4 Speler-markers felle hoog-contrast kleuren** — goud (E.5) is niet goed zichtbaar. Alle speler-markers
+  fel + goed leesbaar in donker EN licht (evt. outline/contrast-rand). [CompassWidget + MapWidget speler-markers]
+
+---
+
 ## DOORLOPEND — Tech-hygiëne (oppakken tussen features door)
 
 - [ ] **T.1 Template-dead-weight verwijderen** — `Source/ThePlugSIM/Variant_Horror/` + `Variant_Shooter/` zijn nergens gerefereerd; verwijderen + `ThePlugSIM.Build.cs` include-paden opschonen (snellere builds, minder ruis).

@@ -174,7 +174,17 @@ void UInteractionComponent::TryInteract()
 			ServerToggleDoor(DoorId);
 			return;
 		}
-		// Overige niet-gerepliceerde lokale objecten (lampen/liften - nog niet gedeeld): lokaal uitvoeren.
+		// CO-OP GEDEELDE LIFT: een lift-call-knop (niet-gerepliceerd, deterministisch). Stuur lift-id + de gekozen
+		// verdieping naar de server -> die schrijft de doel-verdieping in WorldSync -> host EN joiner rijden hun
+		// lokale cabine naar EXACT dezelfde verdieping (zelfde patroon als de deur, maar met een DOEL-verdieping).
+		int32 ElevFloor = 0;
+		const uint32 ElevId = AsI->GetWorldSyncElevatorId(ElevFloor);
+		if (ElevId != 0)
+		{
+			ServerCallElevator(ElevId, ElevFloor);
+			return;
+		}
+		// Overige niet-gerepliceerde lokale objecten (lampen - nog niet gedeeld): lokaal uitvoeren.
 		if (AsI->IsClientLocalInteract())
 		{
 			PerformInteract(Target);
@@ -214,6 +224,13 @@ void UInteractionComponent::ServerToggleDoor_Implementation(uint32 DoorId)
 	const UWorld* W = GetWorld();
 	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->ServerToggleDoor(DoorId); }
+}
+
+void UInteractionComponent::ServerCallElevator_Implementation(uint32 ElevId, int32 Floor)
+{
+	const UWorld* W = GetWorld();
+	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->ServerSetElevatorFloor(ElevId, Floor); }
 }
 
 void UInteractionComponent::PerformInteract(AActor* Target)

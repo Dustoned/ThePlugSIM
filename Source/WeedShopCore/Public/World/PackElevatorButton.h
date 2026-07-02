@@ -37,7 +37,10 @@ public:
 
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
-	virtual bool IsClientLocalInteract() const override { return true; } // lift niet-gerepliceerd: lokaal per speler
+	// CO-OP: de lift is niet-gerepliceerd maar wel deterministisch gespawnd -> server-authoritative via WorldSync
+	// (net als de deur). De knop levert het lift-id + de gekozen verdieping; InteractionComponent stuurt dat naar
+	// de server, die de doel-verdieping in WorldSync schrijft. Host EN joiner rijden hun lokale cabine daarheen.
+	virtual uint32 GetWorldSyncElevatorId(int32& OutFloor) const override;
 
 protected:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Mesh;

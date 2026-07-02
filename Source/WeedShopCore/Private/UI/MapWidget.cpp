@@ -36,6 +36,28 @@
 namespace
 {
 	constexpr float GMapDS = 1000.f;  // ontwerp-grootte van het kaartvlak (px) — groot genoeg dat alle nummers passen
+
+	// Fel poppetje MET donkere contrast-rand (goedkope outline): iets groter bijna-zwart poppetje eronder +
+	// het felle poppetje erbovenop, gecentreerd in een SizeBox. Zo springt de speler-marker eruit tegen zowel
+	// een donkere als lichte kaart-render. Retourneert een UWidget-container (past in de bestaande pool-slots).
+	UWidget* MakeOutlinedPersonMarker(UWidgetTree* Tree, float Size, const FLinearColor& Bright)
+	{
+		const float Outline = Size + 6.f; // donkere rand steekt ~3px rondom uit
+		USizeBox* Box = Tree->ConstructWidget<USizeBox>();
+		Box->SetWidthOverride(Outline); Box->SetHeightOverride(Outline);
+		UOverlay* Ov = Tree->ConstructWidget<UOverlay>();
+		Box->SetContent(Ov);
+		if (UOverlaySlot* OS = Ov->AddChildToOverlay(WeedUI::Icon(Tree, WeedUI::EIcon::Person, Outline, FLinearColor(0.02f, 0.02f, 0.02f, 0.95f))))
+		{
+			OS->SetHorizontalAlignment(HAlign_Center); OS->SetVerticalAlignment(VAlign_Center);
+		}
+		if (UOverlaySlot* OS = Ov->AddChildToOverlay(WeedUI::Icon(Tree, WeedUI::EIcon::Person, Size, Bright)))
+		{
+			OS->SetHorizontalAlignment(HAlign_Center); OS->SetVerticalAlignment(VAlign_Center);
+		}
+		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Box;
+	}
 }
 
 FVector2D UMapWidget::WorldToCanvas(float Wx, float Wy) const
@@ -148,15 +170,13 @@ UWidget* UMapWidget::AddPersonIcon(const FLinearColor& Tint, float Sz, int32 ZOr
 
 UWidget* UMapWidget::AddPlayerMarker()
 {
-	// SPELER-BAKEN: fel-magenta poppetje (geen cirkel) - knalt eruit tussen het blauw van de
-	// NPC's, getekend boven alle stippen zodat je jezelf op elke zoom direct vindt.
-	USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
-	SB->SetWidthOverride(30.f);
-	SB->SetHeightOverride(30.f);
-	SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 30.f, FLinearColor(1.f, 0.1f, 0.85f))); // Icon() al ScaleToFit
+	// SPELER-BAKEN: fel-magenta poppetje MET donkere contrast-rand - knalt eruit tussen het blauw van de
+	// NPC's, getekend boven alle stippen zodat je jezelf op elke zoom direct vindt. De donkere rand houdt 'm
+	// zichtbaar tegen zowel een lichte als donkere kaart-render.
+	UWidget* SB = MakeOutlinedPersonMarker(WidgetTree, 30.f, FLinearColor(1.f, 0.1f, 0.85f));
 	UCanvasPanelSlot* Cs = Canvas->AddChildToCanvas(SB);
 	Cs->SetAutoSize(false);
-	Cs->SetSize(FVector2D(30.f, 30.f));
+	Cs->SetSize(FVector2D(36.f, 36.f));
 	Cs->SetAlignment(FVector2D(0.5f, 0.5f));
 	Cs->SetZOrder(30);
 	SB->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -248,11 +268,11 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		AddInfo(TEXT("Rechtsklik = waypoint wissen"), 13, WeedUI::ColText(), 3.f);
 		AddInfo(TEXT("M = kaart sluiten"), 12, WeedUI::ColTextDim(), 3.f);
 		AddInfo(TEXT("Legenda"), 14, WeedUI::ColText(), 24.f);
-		AddInfo(TEXT("cyan dot = you"), 12, FLinearColor(0.4f, 0.9f, 1.f), 6.f);
+		AddInfo(TEXT("magenta figure = you"), 12, FLinearColor(1.f, 0.35f, 0.85f), 6.f);
 		AddInfo(TEXT("geel = waypoint"), 12, FLinearColor(1.f, 0.85f, 0.3f), 3.f);
 		AddInfo(TEXT("blauw = NPC"), 12, FLinearColor(0.45f, 0.6f, 1.f), 3.f);
 		AddInfo(TEXT("green figure = customer for you"), 12, FLinearColor(0.5f, 1.f, 0.6f), 3.f);
-		AddInfo(TEXT("gold figure = co-op teammate"), 12, FLinearColor(1.f, 0.82f, 0.15f), 3.f);
+		AddInfo(TEXT("cyan figure = co-op teammate"), 12, FLinearColor(0.3f, 1.f, 1.f), 3.f);
 		AddInfo(TEXT("gold house = your home"), 12, FLinearColor(1.f, 0.82f, 0.3f), 3.f);
 	}
 	return Super::RebuildWidget();
@@ -418,7 +438,16 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			{
 				const APawn* Pw = PS ? PS->GetPawn() : nullptr;
 				if (!Pw || Pw == LocalPawn) { continue; }
-				while (CoopDots.Num() <= Used) { CoopDots.Add(AddPersonIcon(FLinearColor(1.f, 0.82f, 0.1f), 30.f, 28)); } // co-op maatje: fel-goud poppetje, groter -> NIET te verwarren met de blauwe NPC-stippen (noch met het groene klant-poppetje)
+				while (CoopDots.Num() <= Used)
+				{
+					// co-op maatje: fel-CYAAN poppetje MET donkere contrast-rand, groter -> NIET te verwarren
+					// met de blauwe NPC-stippen (noch met het groene klant-poppetje); rand houdt 'm zichtbaar
+					// op elke kaart-achtergrond.
+					UWidget* CoopMk = MakeOutlinedPersonMarker(WidgetTree, 30.f, FLinearColor(0.f, 1.f, 1.f));
+					UCanvasPanelSlot* Ccs = Canvas->AddChildToCanvas(CoopMk);
+					Ccs->SetAutoSize(false); Ccs->SetSize(FVector2D(36.f, 36.f)); Ccs->SetAlignment(FVector2D(0.5f, 0.5f)); Ccs->SetZOrder(28);
+					CoopDots.Add(CoopMk);
+				}
 				if (UWidget* Dot = CoopDots[Used])
 				{
 					const FVector L = Pw->GetActorLocation();

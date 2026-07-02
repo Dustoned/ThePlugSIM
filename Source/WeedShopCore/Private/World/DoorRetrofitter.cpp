@@ -392,9 +392,21 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->TextureTarget = MapRT;
 	MapCapture->bCaptureEveryFrame = false;
 	MapCapture->bCaptureOnMovement = false;
-	// FinalColor ipv BaseColor: de pack-materialen (layered/nanite) renderen zwart in een BaseColor-
-	// capture. FinalColor = een echte luchtfoto; exposure vastgepind zodat 'ie dag en nacht leesbaar is.
-	MapCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+	// BaseColor ipv FinalColorLDR: de FinalColor-capture hangt af van de SkyLight-ambient-cubemap,
+	// die real-time + time-sliced is en NIET binnen de capture-frame herberekent -> 's nachts blijft
+	// de kaart pikzwart (de UDS-naar-middag-push raakt die bottleneck niet). BaseColor = albedo =
+	// altijd helder ongeacht tijd/zon/skylight, dus belichtings-onafhankelijk leesbaar. Het
+	// M_MapDisplay-materiaal negeert de BaseColor-alpha al (zie MapWidget.cpp), dus de display-kant
+	// is klaar.
+	// LET OP: een oude waarschuwing zei dat pack/Nanite-materialen zwart kunnen renderen in een
+	// BaseColor-capture. Dit is NIET headless te verifieren - de speler checkt overdag EN 's nachts
+	// of de kaart de gebouwen/straten toont. Geeft BaseColor toch zwart? Terugval: CaptureSource
+	// terug naar SCS_FinalColorLDR en de nacht-zwart aanpakken via een SkyDims-restore + dubbele
+	// capture-flush (skylight 1 frame naar dag-cubemap dwingen, twee keer captured met een
+	// FlushRenderingCommands ertussen zodat de recompute klaar is voor de tweede capture).
+	MapCapture->CaptureSource = ESceneCaptureSource::SCS_BaseColor;
+	// (Exposure-overrides blijven staan maar zijn irrelevant voor de helderheid bij BaseColor - albedo
+	// wordt niet door auto-exposure aangeraakt. Onschadelijk; laten staan als terugval-vangnet.)
 	MapCapture->PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
 	MapCapture->PostProcessSettings.AutoExposureMinBrightness = 0.45f;
 	MapCapture->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
@@ -408,9 +420,9 @@ void ADoorRetrofitter::EnsureMapCapture()
 	MapCapture->ShowFlags.SetAmbientOcclusion(false);
 	MapCapture->ShowFlags.SetScreenSpaceAO(false);
 	MapCapture->ShowFlags.SetContactShadows(false);
-	// (Belichting/post-processing AAN laten: FinalColor-captures renderen zwart zonder lighting.
-	// Tijd-onafhankelijk: CaptureMapNow zet de belichting 1 frame in de foto-stand van de
-	// dag/nacht-controller - de kaart ziet er dus altijd uit als een rustige ochtend.)
+	// (BaseColor-capture is belichtings-onafhankelijk: de ApplyMapPhotoLight-push en de lampen-cull-
+	// omzeiling in CaptureMapNow zijn nu irrelevant voor de helderheid. Ze blijven staan - onschadelijk
+	// en handig als terugval-vangnet mocht CaptureSource ooit terug naar FinalColorLDR moeten.)
 	// Pitch -90 + yaw 0 -> beeld: rechts = wereld +Y, omhoog = wereld +X (klopt met MapWidget::WorldToCanvas).
 	MapCapture->SetWorldLocationAndRotation(FVector(MapCenter.X, MapCenter.Y, TopZ), FRotator(-90.f, 0.f, 0.f));
 }
