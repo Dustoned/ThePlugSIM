@@ -28,6 +28,9 @@
 UContactsComponent::UContactsComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	// 5 Hz is ruim genoeg: de drempels zijn 60/150s (nudge/opgeven) en het afspraak-venster is ±2s;
+	// MessageTimer telt met DeltaTime dus de uitkomst blijft identiek - alleen goedkoper.
+	PrimaryComponentTick.TickInterval = 0.2f;
 	SetIsReplicatedByDefault(true);
 
 	static ConstructorHelpers::FObjectFinder<UDataTable> ProdFinder(
@@ -236,10 +239,13 @@ void UContactsComponent::SendRandomAppointment()
 	}
 
 	// Adres opzoeken bij de bewoner met dit NpcId, zodat "kom bij mij langs" vertelt WAAR je heen moet.
+	// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
+	// Per-proces registry -> op wereld filteren (PIE/co-op-in-1-proces).
 	FString AddrStr;
-	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
 	{
-		if (It->NpcId == C.ContactId && It->IsResident()) { AddrStr = It->GetHomeNumber(); break; }
+		ACustomerBase* Cb = WCb.Get();
+		if (IsValid(Cb) && Cb->GetWorld() == GetWorld() && Cb->NpcId == C.ContactId && Cb->IsResident()) { AddrStr = Cb->GetHomeNumber(); break; }
 	}
 
 	if (!Msg.bOrder)
@@ -398,10 +404,11 @@ static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
 	}
 	DropRoomCands(Cands);
 	// Geen (bruikbare) gemarkeerde plekken -> val terug op de winkels (al gemarkeerd door de speler,
-	// dus logisch + bereikbaar) - met dezelfde kamer-filter.
+	// dus logisch + bereikbaar) - met dezelfde kamer-filter. PERF: balie-registry i.p.v. iterator
+	// (per-proces registry -> op wereld filteren, PIE/co-op-in-1-proces).
 	if (Cands.Num() == 0)
 	{
-		for (TActorIterator<AStoreCounter> It(W); It; ++It) { if (IsValid(*It)) { Cands.Add(It->GetActorLocation()); } }
+		for (const TWeakObjectPtr<AStoreCounter>& WSc : AStoreCounter::GetAll()) { AStoreCounter* Sc = WSc.Get(); if (IsValid(Sc) && Sc->GetWorld() == W) { Cands.Add(Sc->GetActorLocation()); } }
 		DropRoomCands(Cands);
 	}
 	if (Cands.Num() == 0) { return false; }
@@ -419,13 +426,16 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 
 	// Voorkeur: stuur de BESTAANDE bewoner met dit NpcId aan (geen dubbele NPC). YouGoToThem -> die
 	// verschijnt in z'n eigen unit en wacht; TheyComeToYou -> die loopt naar de speler.
-	for (TActorIterator<ACustomerBase> It(World); It; ++It)
+	// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
+	// Per-proces registry -> op wereld filteren (PIE/co-op-in-1-proces).
+	for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
 	{
-		if (It->NpcId == Msg.FromContactId && It->IsResident())
+		ACustomerBase* Cb = WCb.Get();
+		if (IsValid(Cb) && Cb->GetWorld() == World && Cb->NpcId == Msg.FromContactId && Cb->IsResident())
 		{
-			It->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
-			if (Msg.bOrder) { It->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
-			It->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
+			Cb->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
+			if (Msg.bOrder) { Cb->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
+			Cb->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
 			return;
 		}
 	}
@@ -617,11 +627,14 @@ void UContactsComponent::ApplyRelationshipDelta(FName ContactId, float Delta)
 	}
 
 	// Live klant met deze persoon ook meteen bijwerken (als die er is).
-	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
+	// Per-proces registry -> op wereld filteren (PIE/co-op-in-1-proces).
+	for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
 	{
-		if (It->NpcId == ContactId)
+		ACustomerBase* Cb = WCb.Get();
+		if (IsValid(Cb) && Cb->GetWorld() == GetWorld() && Cb->NpcId == ContactId)
 		{
-			It->Loyalty = FMath::Clamp(It->Loyalty + Delta, 0.f, 100.f);
+			Cb->Loyalty = FMath::Clamp(Cb->Loyalty + Delta, 0.f, 100.f);
 			break;
 		}
 	}

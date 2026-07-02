@@ -89,6 +89,7 @@ protected:
 	// Kit-widgets waar de Preset-rij een afgeleide waarde in duwt (via reflectie, geen rebuild).
 	TWeakObjectPtr<UUserWidget> ShadowsToggleW;
 	TWeakObjectPtr<UUserWidget> LumenToggleW;
+	TWeakObjectPtr<UUserWidget> RayTracingToggleW; // "Ray tracing (experimental)" - eigen RTOff-vlag, presets raken 'm niet
 	TWeakObjectPtr<UUserWidget> MotionBlurToggleW;
 
 	UPROPERTY() TObjectPtr<class UWeedActionButton> TabGraphics;

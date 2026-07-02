@@ -220,7 +220,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 		[this]()
 		{
 			if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); }
-			bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR);
+			bool bL, bP, bM, bV, bR; WeedShop_ReadGfxFlags(bL, bP, bM, bV, bR); WeedShop_WriteGfxFlags(bL, bP, bM, bV, bR, WeedShop_ReadTier());
 			// Opslaan verandert GEEN zichtbare waarde -> geen RefreshContent (dat was pure flash). Enkel de Saved-cue.
 			SavedMsgOpacity = 1.f; if (SavedMsg) { SavedMsg->SetRenderOpacity(1.f); }
 		}, 14);
@@ -456,11 +456,10 @@ void USettingsWidget::RefreshGraphicsLabels()
 		WindowModeVal->SetText(FText::FromString(WMName));
 	}
 
-	// Preset (tier).
+	// Preset (tier). Persistente Tier-key = source of truth (GetOverallScalabilityLevel geeft -1 "custom"
+	// zodra één sub-level afwijkt, zoals Epic's GI-op-High -> daar kun je het label niet meer op baseren).
 	{
-		bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff; WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-		int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
-		const int32 TierNow = bPotato ? -1 : ScalQ;
+		const int32 TierNow = WeedShop_ReadTier();
 		static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
 		if (PresetVal && TierNow + 1 >= 0 && TierNow + 1 < 5) { PresetVal->SetText(FText::FromString(QN[TierNow + 1])); }
 	}
@@ -568,25 +567,23 @@ void USettingsWidget::BuildGraphicsPanel(UVerticalBox* P)
 
 	// PRESET - zet alles in één keer. Potato (onder Low, voor zwakke pc's) -> Low -> Medium -> High -> Epic.
 	{
-		bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
-		WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
-		int32 ScalQ = G->GetOverallScalabilityLevel(); if (ScalQ < 0) { ScalQ = 2; }
-		const int32 TierNow = bPotato ? -1 : ScalQ;
+		const int32 TierNow = WeedShop_ReadTier(); // persistente Tier-key (GetOverallScalabilityLevel kan -1 "custom" zijn)
 		static const TCHAR* QN[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
 		AddValueRow(P, TEXT("Preset (all)"), QN[TierNow + 1], [this]()
 		{
-			// Huidige tier LIVE lezen (geen captured build-waarde meer nu we niet meer rebuilden).
-			bool bL0, bP0, bM0, bV0, bR0; WeedShop_ReadGfxFlags(bL0, bP0, bM0, bV0, bR0);
-			UGameUserSettings* GNow = GUS();
-			int32 ScalNow = GNow ? GNow->GetOverallScalabilityLevel() : 2; if (ScalNow < 0) { ScalNow = 2; }
-			const int32 CurTier = bP0 ? -1 : ScalNow;
+			// Huidige tier LIVE lezen (persistente Tier-key; geen captured build-waarde meer nu we niet meer rebuilden).
+			const int32 CurTier = WeedShop_ReadTier();
 			const int32 Next = (CurTier >= 3) ? -1 : CurTier + 1;
 			WeedShop_ApplyGraphicsTier(Next);
 			bool bLum, bPot, bMb, bVSM, bRT; WeedShop_ReadGfxFlags(bLum, bPot, bMb, bVSM, bRT);
-			// Vlaggen volgen de preset: Lumen + ray tracing alleen op Epic; VSM uit op Potato/Low;
-			// MotionBlur behouden.
-			WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb, bVSM, (Next < 3)); // VSMOff (schaduwen) NIET via de preset -> de Shadows-toggle bezit hem
-			if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bVSM); } } // tier-wissel past de beach-gate opnieuw toe -> schaduwen komen deterministisch terug
+			// Vlaggen volgen de preset: Lumen alleen op Epic; MotionBlur behouden. VSMOff (schaduwen) en
+			// RTOff (ray tracing experimental) NIET via de preset -> hun eigen toggles bezitten die vlaggen.
+			WeedShop_WriteGfxFlags((Next < 3), (Next <= -1), bMb, bVSM, bRT, Next); // + Tier=N persistent (boot leest 'm terug)
+			if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip")))
+			{
+				WeedShop_ApplyDistanceFieldGI(true); // vangnet live-switch: scalability-wissel mag DF-AO/shadows (OOM-bron) nooit terug aanzetten
+				WeedShop_ApplyBeachShadows(bVSM);    // tier-wissel past de beach-gate opnieuw toe -> schaduwen komen deterministisch terug
+			} }
 			// In-place labels + afgeleide kit-toggles bijwerken (geen rebuild):
 			static const TCHAR* QNames[5] = { TEXT("Potato"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
 			if (PresetVal) { PresetVal->SetText(FText::FromString(QNames[Next + 1])); }
@@ -636,7 +633,7 @@ void USettingsWidget::BuildGraphicsPanel(UVerticalBox* P)
 		AddKitToggle(P, TEXT("Shadows"), !bV0, [this](bool bOn)
 		{
 			bool bLn, bPn, bMn, bVn, bRn; WeedShop_ReadGfxFlags(bLn, bPn, bMn, bVn, bRn); // LIVE (andere vlaggen niet overschrijven)
-			WeedShop_WriteGfxFlags(bLn, bPn, bMn, !bOn, bRn); // bOn = schaduwen aan -> VSMOff = !bOn
+			WeedShop_WriteGfxFlags(bLn, bPn, bMn, !bOn, bRn, WeedShop_ReadTier()); // bOn = schaduwen aan -> VSMOff = !bOn
 			if (UWorld* WB = GetWorld()) { if (WB->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"))) { WeedShop_ApplyBeachShadows(bOn); } }
 			ShowRestartPopup(); // VSM-pool kan niet live togglen -> geldt na herstart
 		}, &ShadowsToggleW);
@@ -666,11 +663,24 @@ void USettingsWidget::BuildGraphicsPanel(UVerticalBox* P)
 		{
 			WeedShop_ApplyLumen(bOn);
 			bool bLn, bPn, bMn, bVn, bRn; WeedShop_ReadGfxFlags(bLn, bPn, bMn, bVn, bRn); // LIVE
-			WeedShop_WriteGfxFlags(!bOn, bPn, bMn, bVn, bRn);
+			WeedShop_WriteGfxFlags(!bOn, bPn, bMn, bVn, bRn, WeedShop_ReadTier());
 		}, &LumenToggleW);
 	}
 
-
+	// Ray tracing (experimenteel) - hardware-RT-effecten (RT-schaduwen + RT-AO). Eigen opt-in-vlag (RTOff),
+	// default UIT; de presets zetten dit NOOIT aan (per-frame TLAS over de hele geinstancede stad = zwaar).
+	{
+		bool bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff;
+		WeedShop_ReadGfxFlags(bLumenOff, bPotato, bMbOff, bVSMOff, bRTOff);
+		AddKitToggle(P, TEXT("Ray tracing (experimental)"), !bRTOff, [this](bool bOn)
+		{
+			WeedShop_ApplyRayTracing(!bOn); // bOn = RT aan -> ApplyRayTracing(bOff=false)
+			bool bLn, bPn, bMn, bVn, bRn; WeedShop_ReadGfxFlags(bLn, bPn, bMn, bVn, bRn); // LIVE (andere vlaggen niet overschrijven)
+			WeedShop_WriteGfxFlags(bLn, bPn, bMn, bVn, !bOn, WeedShop_ReadTier()); // de toggle BEZIT de RTOff-vlag (zoals VSMOff)
+		}, &RayTracingToggleW);
+		// Dim-hint onder de toggle (persistent, één keer gebouwd - geen rebuild).
+		P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Heavy - needs a strong GPU"), 12, WeedUI::ColTextDim()))->SetPadding(FMargin(0.f, -6.f, 0.f, 8.f));
+	}
 
 	// Motion blur - aan/uit.
 	{
@@ -680,7 +690,7 @@ void USettingsWidget::BuildGraphicsPanel(UVerticalBox* P)
 		{
 			WeedShop_ApplyMotionBlur(bOn);
 			bool bLn, bPn, bMn, bVn, bRn; WeedShop_ReadGfxFlags(bLn, bPn, bMn, bVn, bRn); // LIVE
-			WeedShop_WriteGfxFlags(bLn, bPn, !bOn, bVn, bRn);
+			WeedShop_WriteGfxFlags(bLn, bPn, !bOn, bVn, bRn, WeedShop_ReadTier());
 		}, &MotionBlurToggleW);
 	}
 

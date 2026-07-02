@@ -22,6 +22,7 @@
 #include "Engine/Engine.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 
@@ -129,6 +130,13 @@ void WeedShop_ApplyLumen(bool bLumenOff)
 	SetCV(TEXT("r.ReflectionMethod"), bLumenOff ? 0 : 1);
 	SetCV(TEXT("r.Lumen.DiffuseIndirect.Allow"), bLumenOff ? 0 : 1);
 	SetCV(TEXT("r.Lumen.Reflections.Allow"), bLumenOff ? 0 : 1);
+	// SOFTWARE-Lumen, global-SDF-only (het grote-werelden-recept). Hardware-RT-Lumen bouwt per frame een
+	// TLAS over de hele geinstancede stad + skeletal-BLAS voor elke NPC = zwaar; per-mesh-SDF-traces
+	// schalen met duizenden losse props. Beide ALTIJD uit (ook bij Lumen-uit onschadelijk): Lumen tracet
+	// dan alleen tegen het global distance field. De aparte "Ray tracing (experimental)"-toggle raakt
+	// Lumen NIET (die schakelt alleen r.RayTracing.Shadows/AO).
+	SetCV(TEXT("r.Lumen.HardwareRayTracing"), 0);
+	SetCV(TEXT("r.Lumen.TraceMeshSDFs.Allow"), 0);
 
 	auto GetCV = [&](const TCHAR* Name) -> int32
 	{
@@ -255,8 +263,10 @@ void WeedShop_ApplyBeachShadows(bool bPotato)
 }
 
 // Ray-tracing-EFFECTEN aan/uit. r.RayTracing zelf is een opstart-CVar (niet live te schakelen), maar de
-// effecten (schaduwen/reflecties/AO/GI via RT) wel - en die zijn de render-thread-kost. ForceRayTracingEffects=0
-// zet ze allemaal uit; de losse schakelaars als extra zekerheid. -1 = terug naar de standaard (effecten aan).
+// effecten (RT-schaduwen + RT-AO) wel - en die zijn de render-thread-kost (per-frame TLAS over de hele
+// geinstancede stad + skeletal-BLAS per NPC). AAN alleen via de "Ray tracing (experimental)"-toggle in
+// Settings (default UIT); de presets zetten dit NOOIT aan. ForceRayTracingEffects/.Reflections/
+// .GlobalIllumination bestaan niet meer in 5.8 (stille no-ops) -> verwijderd.
 void WeedShop_ApplyRayTracing(bool bOff)
 {
 	IConsoleManager& CM = IConsoleManager::Get();
@@ -264,11 +274,8 @@ void WeedShop_ApplyRayTracing(bool bOff)
 	{
 		if (IConsoleVariable* CV = CM.FindConsoleVariable(Name)) { CV->Set(Val, ECVF_SetByConsole); }
 	};
-	SetCV(TEXT("r.RayTracing.ForceRayTracingEffects"), bOff ? 0 : -1);
-	SetCV(TEXT("r.RayTracing.Shadows"),               bOff ? 0 : 1);
-	SetCV(TEXT("r.RayTracing.AmbientOcclusion"),      bOff ? 0 : 1);
-	SetCV(TEXT("r.RayTracing.Reflections"),           bOff ? 0 : 1);
-	SetCV(TEXT("r.RayTracing.GlobalIllumination"),    bOff ? 0 : 1);
+	SetCV(TEXT("r.RayTracing.Shadows"),          bOff ? 0 : 1);
+	SetCV(TEXT("r.RayTracing.AmbientOcclusion"), bOff ? 0 : 1);
 	UE_LOG(LogWeedShop, Log, TEXT("Ray-tracing-effecten %s"), bOff ? TEXT("UIT") : TEXT("AAN"));
 }
 
@@ -283,6 +290,9 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	if (UGameUserSettings* GU = GEngine ? GEngine->GetGameUserSettings() : nullptr)
 	{
 		GU->SetOverallScalabilityLevel(Scal);
+		// Epic: GI-kwaliteit één stap terug (High) = het goedkopere software-Lumen-profiel (geen
+		// mesh-SDF-traces/HitLighting-extra's van sg.GlobalIlluminationQuality=3); Lumen zelf blijft aan.
+		if (Scal >= 3) { GU->SetGlobalIlluminationQuality(2); }
 		GU->ApplySettings(false);
 		GU->SaveSettings();
 	}
@@ -298,10 +308,15 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	SetF(TEXT("r.Streaming.MipBias"),    bPotato ? 3.0f : (Tier == 0 ? 1.5f : (Tier == 1 ? 0.5f : 0.f))); // ramp 3/1.5/0.5/0/0    // veel lagere-res textures runtime
 	SetF(TEXT("r.Streaming.PoolSize"),   bPotato ? 250.f : (Tier == 0 ? 500.f : (Tier == 1 ? 800.f : (Tier == 2 ? 1200.f : 2000.f)))); // ramp; texture-pool-EFFECT pas na herstart // kleine texture-pool (VRAM)
 	// View-distance GRADUAAL per tier: schaalt ALLE cull-afstanden mee (NPC's, gebouwen/props-HISMs, foliage,
-	// algemene mesh-draw-distance). Lager = dichterbij cullen = meer FPS. Potato cullt agressief, Epic ziet ver.
-	const float ViewDist = bPotato ? 0.35f : (Tier == 0 ? 0.6f : (Tier == 1 ? 0.85f : (Tier == 2 ? 1.0f : 1.3f)));
+	// algemene mesh-draw-distance). Lager = dichterbij cullen = meer FPS. Potato cullt agressief, Epic ziet
+	// iets verder (1.15; de oude 1.3 draaide de licht-budget-winst deels terug).
+	const float ViewDist = bPotato ? 0.35f : (Tier == 0 ? 0.6f : (Tier == 1 ? 0.85f : (Tier == 2 ? 1.0f : 1.15f)));
 	SetF(TEXT("r.ViewDistanceScale"),    ViewDist);
-	SetF(TEXT("r.LightMaxDrawDistanceScale"), ViewDist); // lampen-cull-afstand schaalt mee met de view distance (potato cullt lampen dichterbij = grote Lighting-winst, behoudt nabije vibe)
+	// Lampen-cull-afstand heeft een EIGEN ramp met cap 1.0 op High én Epic: de licht-budget-pool
+	// (distance-cull + UIT-lampen verbergen) is op 1.0 getuned - erboven schalen haalt lampen terug
+	// in beeld en draait die winst terug. Potato/Low/Medium cullen lampen dichterbij (grote Lighting-winst).
+	const float LightDist = bPotato ? 0.35f : (Tier == 0 ? 0.6f : (Tier == 1 ? 0.85f : 1.0f));
+	SetF(TEXT("r.LightMaxDrawDistanceScale"), LightDist);
 	SetF(TEXT("foliage.DensityScale"),   bPotato ? 0.2f : (Tier == 0 ? 0.5f : (Tier == 1 ? 0.75f : 1.f)));
 	SetF(TEXT("grass.DensityScale"),     bPotato ? 0.2f : (Tier == 0 ? 0.5f : (Tier == 1 ? 0.75f : 1.f)));
 	SetF(TEXT("r.MaxAnisotropy"),        bPotato ? 0.f : (Tier == 0 ? 2.f : (Tier == 1 ? 4.f : (Tier == 2 ? 8.f : 16.f)))); // ramp 0/2/4/8/16
@@ -320,17 +335,21 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	SetF(TEXT("r.SceneColorFringeQuality"),    Q <= 0 ? 0.f : 1.f);                                          // chromatic aberration uit op Potato
 	SetF(TEXT("r.PostProcessAAQuality"),       Q <= 0 ? 0.f : (Q == 1 ? 2.f : (Q == 2 ? 4.f : (Q == 3 ? 5.f : 6.f)))); // TSR-kwaliteit; methode blijft TSR = nette upscale van de 42% Potato-render-res
 
-	// --- LUMEN: de #1 GPU-kost. Alleen op EPIC. Potato/Low/Medium/High draaien zonder (de speler vindt
-	//     de Lumen-uit-look prima), wat op High ~20-25 FPS scheelt. Epic blijft de mooie-maar-dure optie.
+	// --- LUMEN: de #1 GPU-kost. Alleen op EPIC (software-Lumen, SDF-only - zie WeedShop_ApplyLumen).
+	//     Potato/Low/Medium/High draaien zonder (de speler vindt de Lumen-uit-look prima), wat op High
+	//     ~20-25 FPS scheelt. Epic blijft de mooie-maar-dure optie.
 	WeedShop_ApplyLumen(Tier < 3);
 	// --- RAY TRACING + VIRTUAL SHADOW MAPS: zware render-features die de Potato-tier vroeger NIET uitzette ---
-	WeedShop_ApplyRayTracing(Tier < 3);  // RT-effecten alleen op Epic
+	// RT-effecten NOOIT via een preset (ook niet op Epic): per-frame TLAS over de hele stad = te zwaar.
+	// Alleen de aparte "Ray tracing (experimental)"-toggle (RTOff-vlag) zet ze aan.
+	WeedShop_ApplyRayTracing(true);
 	WeedShop_ApplyVSM(Tier <= 0);        // VSM uit op Potato + Low (gewone shadow maps = veel goedkoper)
 
 	// --- SCHADUWEN + dure GI-bijdragen per tier (grootste winst na Lumen) ---
 	const bool bEpic = (Tier >= 3);
-	// Distance-field shadows + volumetric fog: duur, weinig zichtbare meerwaarde -> alleen Epic.
-	SetF(TEXT("r.DistanceFieldShadowing"), bEpic ? 1.f : 0.f);
+	// Distance-field shadows ALTIJD uit, ook op Epic: de gedocumenteerde out-of-memory-bron op deze map
+	// (brick-atlas, zie WeedShop_ApplyDistanceFieldGI). Volumetric fog: duur -> alleen Epic.
+	SetF(TEXT("r.DistanceFieldShadowing"), 0.f);
 	SetF(TEXT("r.VolumetricFog"),          bEpic ? 1.f : 0.f);
 	// CSM (zonschaduw) resolutie + cascades per tier. Potato krijgt JUIST betere schaduwen (1024 i.p.v. de
 	// blokkerige 256/1-cascade default) want dat was de zwakke plek; verder oplopend.
@@ -354,8 +373,8 @@ void WeedShop_ApplyMotionBlur(bool bOff)
 	}
 }
 
-// De cvar-gebaseerde grafische vlaggen (Lumen/Potato/MotionBlur) leven samen in Saved/GraphicsConfig.txt.
-// Read/Write als geheel zodat het wijzigen van één vlag de andere niet wist.
+// De cvar-gebaseerde grafische vlaggen (Lumen/Potato/MotionBlur) + de kwaliteit-tier leven samen in
+// Saved/GraphicsConfig.txt. Read/Write als geheel zodat het wijzigen van één vlag de andere niet wist.
 void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff, bool& bVSMOff, bool& bRTOff)
 {
 	FString T;
@@ -367,10 +386,26 @@ void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff,
 	bRTOff         = T.Contains(TEXT("RTOff=1"));
 }
 
-void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff)
+// Opgeslagen kwaliteit-tier (-1=Potato, 0..3=Low..Epic). Ontbreekt de Tier-key (config van vóór de
+// tier-persistentie), val dan terug op de legacy-afleiding: Potato-vlag -> -1, anders het
+// GameUserSettings-overall-level (dat SetOverallScalabilityLevel eerder wegschreef).
+int32 WeedShop_ReadTier()
 {
-	const FString Out = FString::Printf(TEXT("LumenOff=%d\nPotato=%d\nMotionBlurOff=%d\nVSMOff=%d\nRTOff=%d\n"),
-		bLumenOff ? 1 : 0, bPotato ? 1 : 0, bMotionBlurOff ? 1 : 0, bVSMOff ? 1 : 0, bRTOff ? 1 : 0);
+	FString T;
+	FFileHelper::LoadFileToString(T, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")));
+	int32 Tier = 0;
+	if (FParse::Value(*T, TEXT("Tier="), Tier)) { return FMath::Clamp(Tier, -1, 3); }
+	if (T.Contains(TEXT("Potato=1"))) { return -1; }
+	int32 Scal = 2;
+	if (UGameUserSettings* GU = GEngine ? GEngine->GetGameUserSettings() : nullptr) { Scal = GU->GetOverallScalabilityLevel(); }
+	if (Scal < 0) { Scal = 2; } // -1 = "custom" (sub-levels wijken af) -> zelfde default als het oude preset-label
+	return FMath::Clamp(Scal, 0, 3);
+}
+
+void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff, int32 Tier)
+{
+	const FString Out = FString::Printf(TEXT("LumenOff=%d\nPotato=%d\nMotionBlurOff=%d\nVSMOff=%d\nRTOff=%d\nTier=%d\n"),
+		bLumenOff ? 1 : 0, bPotato ? 1 : 0, bMotionBlurOff ? 1 : 0, bVSMOff ? 1 : 0, bRTOff ? 1 : 0, FMath::Clamp(Tier, -1, 3));
 	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 }

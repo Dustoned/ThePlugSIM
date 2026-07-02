@@ -83,9 +83,10 @@ WEEDSHOPCORE_API void WeedShop_ApplyVSM(bool bOff);          // Virtual Shadow M
 WEEDSHOPCORE_API void WeedShop_ApplyDistanceFieldGI(bool bOff); // distance-field-AO + global-DF aan/uit (VRAM)
 WEEDSHOPCORE_API void WeedShop_ApplyBeachShadowQuality(bool bPotato = false);   // smooth moving-sun VSM (Fortnite-recept); potato = extra-zuinig (kwart-res moving, harde rays)
 WEEDSHOPCORE_API void WeedShop_ApplyBeachShadows(bool bPotato);                 // beach-schaduw-GATE per tier (gedeeld: BeginPlay + Preset + sliders) -> Potato=uit, Low+=VSM. Deterministisch bij elke tier-wissel.
-WEEDSHOPCORE_API void WeedShop_ApplyRayTracing(bool bOff);   // ray-tracing-effecten aan/uit
+WEEDSHOPCORE_API void WeedShop_ApplyRayTracing(bool bOff);   // ray-tracing-effecten (RT-schaduwen+AO) aan/uit; alleen de "Ray tracing (experimental)"-toggle zet ze aan, presets nooit
 WEEDSHOPCORE_API void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool& bMotionBlurOff, bool& bVSMOff, bool& bRTOff);
-WEEDSHOPCORE_API void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff);
+WEEDSHOPCORE_API int32 WeedShop_ReadTier();                  // opgeslagen kwaliteit-tier (-1=Potato, 0..3); key ontbreekt -> legacy-afleiding (Potato-vlag / GUS-overall-level)
+WEEDSHOPCORE_API void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff, int32 Tier);
 
 // GEBAKKEN DATA: wereld-configuratie (map-border, kamer-jobs, deur-sloten, licht-instellingen)
 // leeft tijdens het ontwikkelen in Saved/, maar Saved/ gaat NIET mee in een gepackagede build.

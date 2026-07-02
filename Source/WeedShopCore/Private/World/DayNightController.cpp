@@ -178,23 +178,22 @@ void ADayNightController::BeginPlay()
 
 	LoadLightConfig(); // opgeslagen slider-waardes terugladen
 
-	// Grafische keuze van de speler: kwaliteit-tier (incl. Potato) + Lumen uit = GI/reflecties goedkoop.
-	bool bPotato = false; bool bVSMOff = false; // gehoist: de beach-tak heeft de shadows-vlag (VSMOff) + Potato nodig
+	// Grafische keuze van de speler: opgeslagen kwaliteit-tier ALTIJD toepassen (boot = live). Voorheen
+	// kreeg alleen Potato de tier-cvars bij boot -> Low/Med/High/Epic startten op kale sg.*-scalability
+	// en dreven na een herstart weg van de preset. Daarna de losse vlag-overrides (Lumen/VSM/RT/
+	// MotionBlur): eigen toggles die van de tier MOGEN afwijken, dus na de tier in deze volgorde.
+	bool bVSMOff = false; // gehoist: de beach-tak heeft de shadows-vlag (VSMOff) nodig
 	{
 		FString GfxTxt;
-		FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt")));
+		FFileHelper::LoadFileToString(GfxTxt, *WeedData::File(TEXT("GraphicsConfig.txt"))); // File() kopieert de gebakken config naar Saved/ op een verse install
 		const bool bLumenOff = GfxTxt.Contains(TEXT("LumenOff=1"));
-		bPotato = GfxTxt.Contains(TEXT("Potato=1"));
 		const bool bMbOff = GfxTxt.Contains(TEXT("MotionBlurOff=1"));
 		bVSMOff = GfxTxt.Contains(TEXT("VSMOff=1"));
 		const bool bRTOff = GfxTxt.Contains(TEXT("RTOff=1"));
-		if (bPotato) { WeedShop_ApplyGraphicsTier(-1); } // scalability 0 + extra verlagingen + Lumen/RT/VSM uit
-		else
-		{
-			WeedShop_ApplyLumen(bLumenOff);
-			WeedShop_ApplyVSM(bVSMOff);
-			WeedShop_ApplyRayTracing(bRTOff);
-		}
+		WeedShop_ApplyGraphicsTier(WeedShop_ReadTier()); // volledige tier: scalability + console-prio cvars
+		WeedShop_ApplyLumen(bLumenOff);
+		WeedShop_ApplyVSM(bVSMOff);
+		WeedShop_ApplyRayTracing(bRTOff);
 		if (bMbOff) { WeedShop_ApplyMotionBlur(true); }
 	}
 
