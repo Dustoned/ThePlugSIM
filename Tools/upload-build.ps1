@@ -79,10 +79,29 @@ foreach ($q in $Qualities) {
         -cook -build -stage -pak -archive "-archivedirectory=$Archive" -nocompileeditor -utf8output
     if ($LASTEXITCODE -ne 0) { Write-Error "Packagen ($q) mislukt (UAT exit $LASTEXITCODE)"; exit 1 }
 
+    # GATE 1 - Cook-parity: alles wat de code runtime via een string-pad laadt MOET in deze build
+    # zitten (LoadObject/LoadClass cookt NIET vanzelf mee). Vangt stille misses zoals de settings-
+    # toggles/pauze-menu/Quinn-skin die in dev wel werkten maar in de download ontbraken (v1.19.0).
+    & (Join-Path $Proj "Tools\check-cook-parity.ps1")
+    if ($LASTEXITCODE -ne 0) { Write-Error "Cook-parity FAILED ($q) - string-geladen content mist in de build; NIET geupload. Fix DirectoriesToAlwaysCook en package opnieuw."; exit 1 }
+
     # Gestagede build vinden (de map met ThePlugSIM.exe).
     $WinDir = Join-Path $Archive "Windows"
     if (-not (Test-Path $WinDir)) { $WinDir = Join-Path $Archive "WindowsNoEditor" }
     if (-not (Test-Path $WinDir)) { Write-Error "Geen gestagede build gevonden in $Archive"; exit 1 }
+
+    # GATE 2 - Smoke-test: er gaat NOOIT een ongeteste build naar GitHub. Shipping logt niet ->
+    # start de exe, wacht 100s, proces moet nog leven en er mag geen crash-dialog staan.
+    $Exe = Join-Path $WinDir "ThePlugSIM.exe"
+    if (-not (Test-Path $Exe)) { Write-Error "Smoke-test: $Exe niet gevonden"; exit 1 }
+    Write-Host "== [$q] Smoke-test: exe starten, 100s wachten... =="
+    $Smoke = Start-Process -FilePath $Exe -PassThru
+    Start-Sleep -Seconds 100
+    $Alive = Get-Process ThePlugSIM-Win64-Shipping -ErrorAction SilentlyContinue
+    $Crash = Get-Process CrashReportClient -ErrorAction SilentlyContinue
+    Get-Process ThePlugSIM,ThePlugSIM-Win64-Shipping,CrashReportClient -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    if (-not $Alive -or $Crash) { Write-Error "Smoke-test FAILED ($q) - build crasht binnen 100s; NIET geupload."; exit 1 }
+    Write-Host "== [$q] Smoke-test PASS (proces leefde na 100s, geen crash-dialog) =="
 
     # Losse runtime-bestanden mee-kopieren: de game laadt iconen + menu-art rechtstreeks van schijf
     # (Content/_Project/UI), maar die zitten niet in de gecookte .pak. Zonder dit valt de build terug

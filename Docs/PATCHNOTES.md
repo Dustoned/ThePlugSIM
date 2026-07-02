@@ -1,4 +1,21 @@
 PATCH NOTES
+Version 1.19.1 — 2 juli 2026
+
+Korte intro:
+Hotfix voor de download-versie: een paar UI-onderdelen die in de ontwikkelversie wél werkten,
+kwamen niet mee in de gedownloade build. Nu wel — en er is een automatische controle bij die
+dit soort missers voortaan tegenhoudt vóór een build online gaat.
+
+━━━━━━━━━━━━━━━━━━━━
+
+FIXES (alleen de download-versie)
+
+• Settings: alle aan/uit-schakelaars en sliders zijn terug (die ontbraken volledig in de vorige download).
+• Het pauze-menu (Esc) doet het weer.
+• Speler-skin 1 (Quinn) laadt weer in plaats van een leeg poppetje.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.19.0 — 2 juli 2026
 
 Korte intro:
