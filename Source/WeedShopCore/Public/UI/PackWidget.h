@@ -42,6 +42,10 @@ protected:
 	void SetB(int32 N);   // pack-flow
 	void SetUB(int32 N);  // unpack-flow
 
+	// Highlight een keuze-knop (grams-per-bag / bags) als actief: accent-vlak + accent-outline (idioom uit
+	// UWeedItemPickGrid::StyleCell). In place SetStyle - geen herbouw.
+	void StyleChoiceBtn(UWeedActionButton* B, bool bActive);
+
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
@@ -64,6 +68,15 @@ protected:
 	UPROPERTY() TObjectPtr<class UTextBlock> GramLabel;
 	UPROPERTY() TObjectPtr<UWeedActionButton> PackButton;
 	UPROPERTY() TObjectPtr<class UTextBlock> PackBtnLabel;
+
+	// Keuze-knoppen die gehighlight worden (actief = accent). Grams-per-bag (1g/Max) + aantal-bags (Half/Max),
+	// zowel pack- als unpack-flow. De -/+ steppers krijgen GEEN highlight (dat zijn geen vaste keuzes).
+	UPROPERTY() TObjectPtr<UWeedActionButton> GpbOneBtn;
+	UPROPERTY() TObjectPtr<UWeedActionButton> GpbMaxBtn;
+	UPROPERTY() TObjectPtr<UWeedActionButton> BagsHalfBtn;
+	UPROPERTY() TObjectPtr<UWeedActionButton> BagsMaxBtn;
+	UPROPERTY() TObjectPtr<UWeedActionButton> UnpackHalfBtn;
+	UPROPERTY() TObjectPtr<UWeedActionButton> UnpackMaxBtn;
 
 	// --- Unpack-flow persistente widgets (één keer gebouwd) ---
 	UPROPERTY() TObjectPtr<UWeedItemPickGrid> UnpackGrid; // icoon-grid voor de uit-te-pakken bag-keuze

@@ -546,7 +546,7 @@ void UPhoneClientComponent::ApplyLocalDoors()
 		{
 			const FVector L = Dr->GetActorLocation();
 			const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
-			Dr->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+			Dr->SetResident(ACityDoor::ResidentNameForDoor(W, NameIdx)); // gender-correcte naam (voorspelde skin)
 		}
 	}
 }

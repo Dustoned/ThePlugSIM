@@ -1018,9 +1018,11 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (D == Starter) { D->SetPlayerHome(); continue; }
 					if (D->IsCompForced()) { continue; }
 					// Bewoner-naam stabiel op POSITIE (niet op lijst-volgorde): zelfde naam per deur, elke sessie.
+					// ResidentNameForDoor kiest de gender-correcte naam (voorspelde skin van Resident_<idx>) zodat
+					// bordje en rondlopende bewoner nooit verschillen.
 					const FVector L = D->GetActorLocation();
 					const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
-					D->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+					D->SetResident(ACityDoor::ResidentNameForDoor(W, NameIdx));
 				}
 			}
 			// SCHUIFPUIEN: elke balkon-pui hoort bij de dichtstbijzijnde voordeur op (ongeveer)
@@ -1043,7 +1045,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				if (Near == Starter) { Bd->SetPlayerHome(); continue; }
 				const FVector L = Near->GetActorLocation();
 				const int32 NameIdx = FMath::Abs(FMath::RoundToInt(L.X * 0.13f) + FMath::RoundToInt(L.Y * 0.31f) + FMath::RoundToInt(L.Z * 0.77f));
-				Bd->SetResident(ACityDoor::ResidentNameForIndex(NameIdx));
+				Bd->SetResident(ACityDoor::ResidentNameForDoor(W, NameIdx));
 				++NBalcLocked;
 			}
 			// BEWONERS-LITE: een deel van de BEGANE-GROND woningen (Apt 1xx) krijgt een ECHT

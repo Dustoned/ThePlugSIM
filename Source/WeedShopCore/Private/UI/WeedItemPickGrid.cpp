@@ -57,10 +57,14 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 
 	UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
 
+	// Icoon-grootte: 0 = auto = mee schalen met de cel op de inventory-ratio (68/86 = 0.79),
+	// zodat de picker-iconen even groot ogen als in de inventory (ongeacht CellSize).
+	const float IconPx = (IconSize > 0.f) ? IconSize : CellSize * 0.79f;
+
 	// Icoon gecentreerd (zelfde look als UInvCell: naam/details in de tooltip, aantal als badge in de hoek).
 	{
 		UOverlaySlot* IconOS = Ov->AddChildToOverlay(
-			bHasIcon ? WeedUI::ItemIcon(WidgetTree, UseIcon, IconSize)
+			bHasIcon ? WeedUI::ItemIcon(WidgetTree, UseIcon, IconPx)
 			         : Cast<UWidget>(WeedUI::Text(WidgetTree, TEXT(""), 8, FLinearColor::Transparent)));
 		IconOS->SetHorizontalAlignment(HAlign_Center);
 		IconOS->SetVerticalAlignment(VAlign_Center);
@@ -138,7 +142,7 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 
 	// Geselecteerd = hotbar-actief-stijl (accent-vlak + dunne accent-rand); anders neutrale lege-cel-bg.
 	FButtonStyle S;
-	FSlateBrush Base = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.96f) : WeedUI::ColSlotEmpty(0.9f), 10.f);
+	FSlateBrush Base = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.96f) : WeedUI::ColSlot(0.96f), 10.f);
 	if (bSel)
 	{
 		Base.OutlineSettings.Width = 1.5f;

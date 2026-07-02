@@ -214,6 +214,16 @@ FName UNpcRegistryComponent::EnsureNpc(FName NpcId, const FText& DisplayName, fl
 	return NpcId;
 }
 
+void UNpcRegistryComponent::SetDisplayName(FName NpcId, const FText& DisplayName)
+{
+	if (GetOwnerRole() != ROLE_Authority || DisplayName.IsEmpty()) { return; }
+	if (FNpcState* S = Find(NpcId))
+	{
+		// Alleen bij een echte wijziging schrijven -> geen onnodige replicatie elke BuildAppearance.
+		if (!S->DisplayName.EqualTo(DisplayName)) { S->DisplayName = DisplayName; }
+	}
+}
+
 FName UNpcRegistryComponent::EnsurePlayerNpc(FName Key, FName BaseNpc, const FText& DisplayName)
 {
 	if (GetOwnerRole() != ROLE_Authority || Key.IsNone()) { return Key; }

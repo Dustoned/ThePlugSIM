@@ -97,6 +97,21 @@ public:
 	void BuildAppearance();
 	bool bAppearanceBuilt = false;
 
+	// GENDER van het opgebouwde uiterlijk: true = vrouwelijke skin (Casual/Gamer_Girl/SchoolGirl), false =
+	// mannelijke (Karl/Tony/CitizenMan). Gezet in BuildAppearance via PredictFemaleAppearance. Gebruikt om de
+	// bewoner-naam (ResidentNameForIndex) bij de skin-gender te laten passen.
+	bool bFemaleAppearance = false;
+	bool IsFemaleAppearance() const { return bFemaleAppearance; }
+
+	// Stabiele look-seed uit de NpcId (zelfde persoon = altijd dezelfde look; stabiel over sessies en op
+	// host+client). Publiek zodat het deur-bordje de gender vooraf identiek kan voorspellen.
+	static uint32 StableLookSeed(FName NpcId);
+
+	// Voorspelt DETERMINISTISCH of "NpcId" met deze (voorspelde) SkinIndex + crowd-vlag een VROUWELIJKE skin
+	// krijgt in BuildAppearance. EEN bron voor de skin->gender-beslissing (BuildAppearance en het deur-bordje
+	// roepen beide dit aan), zodat bordje en rondlopende bewoner nooit verschillen. Host==client (zelfde code).
+	static bool PredictFemaleAppearance(FName NpcId, int32 SkinIndex, bool bCrowd);
+
 	// PRAAT-PAUZE: zolang dit moment in de toekomst ligt staat de wandelaar stil (het deal-HUD
 	// houdt dit elke tick vers zolang het open is). Daarna loopt hij gewoon weer door.
 	float ConversationHoldUntil = 0.f;

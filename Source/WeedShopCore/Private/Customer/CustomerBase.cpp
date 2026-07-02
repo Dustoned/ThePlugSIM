@@ -336,10 +336,8 @@ static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed);
 // hangt alleen van de tekst af, dus dezelfde persoon ziet er ALTIJD hetzelfde uit (herkenbaar).
 static uint32 WeedNpc_StableSeed(FName NpcId)
 {
-	const FString S = NpcId.ToString();
-	uint32 H = 2166136261u;
-	for (const TCHAR Ch : S) { H = (H ^ (uint32)Ch) * 16777619u; }
-	return H ? H : 1u;
+	// EEN implementatie: delegeer naar de publieke static zodat het deur-bordje exact dezelfde seed gebruikt.
+	return ACustomerBase::StableLookSeed(NpcId);
 }
 
 // MODULAIRE Casual-NPC: bouw een persoon uit losse kledingstukken (Casual_Wear_Pack1) -> elke NPC krijgt
@@ -685,6 +683,38 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 	}
 }
 
+// STABIELE look-seed uit de NpcId-string (FNV-1a), publiek zodat ook het deur-bordje 'm kan gebruiken.
+uint32 ACustomerBase::StableLookSeed(FName NpcId)
+{
+	const FString S = NpcId.ToString();
+	uint32 H = 2166136261u;
+	for (const TCHAR Ch : S) { H = (H ^ (uint32)Ch) * 16777619u; }
+	return H ? H : 1u;
+}
+
+// EEN bron voor de skin->gender-beslissing: spiegelt EXACT de takken van BuildAppearance hieronder (crowd
+// V-split incl. de CrowdSkin-pool; niet-crowd 3-5=vrouw, 6-9=man, else=SkinByIndex-pool). Deterministisch op
+// NpcId+SkinIndex+bCrowd -> host, client en het deur-bordje leiden identiek af.
+bool ACustomerBase::PredictFemaleAppearance(FName NpcId, int32 SkinIndex, bool bCrowd)
+{
+	const uint32 LookSeed = StableLookSeed(NpcId);
+	if (bCrowd)
+	{
+		const uint32 V = LookSeed % 3u;
+		if (V == 0u) { return false; }                                   // WeedNpc_BuildModularCitizenMan = man
+		if (V == 1u) { return (LookSeed & 8u) == 0u; }                   // BuildModular = vrouw / BuildModularCitizens = man
+		// V == 2u: WeedNpc_CrowdSkin(LookSeed) -> pool van 19 (0-2 Karl man, 3-5 Casual vrouw, 6-9 Tony man,
+		// 10-18 Gamer_Girl/SchoolGirl vrouw). Zelfde index-keuze (Seed % 19) als de crowd-skin.
+		const uint32 Idx = LookSeed % 19u;
+		return (Idx >= 3u && Idx <= 5u) || (Idx >= 10u);
+	}
+	// Niet-crowd (o.a. bewoners): 3-5 = Casual (vrouw), 6-9 = Tony (man), anders SkinByIndex (0-2 Karl man,
+	// 10-12 Casual vrouw, rest man).
+	if (SkinIndex >= 3 && SkinIndex <= 5) { return true; }
+	if (SkinIndex >= 6 && SkinIndex <= 9) { return false; }
+	return (SkinIndex >= 10 && SkinIndex <= 12); // SkinByIndex vrouwen-band
+}
+
 // Bouwt het uiterlijk (mesh + modulaire parts + kleur-tint) deterministisch op uit NpcId (seed) + RepSkinIndex.
 // Draait op host EN client: meshes/parts/MIDs repliceren niet, maar zijn 100% afleidbaar uit deze twee
 // gerepliceerde waarden, dus host en client bouwen exact dezelfde persoon lokaal. 1x per pawn (idempotent).
@@ -697,6 +727,10 @@ void ACustomerBase::BuildAppearance()
 
 	const uint32 LookSeed = WeedNpc_StableSeed(NpcId); // stabiel -> altijd dezelfde look
 	const int32 SkinIdx = RepSkinIndex;
+	// GENDER van de skin die we zo bouwen: EEN bron (PredictFemaleAppearance spiegelt de takken hieronder),
+	// zodat het deur-bordje exact dezelfde gender voorspelt en de bewoner-naam bij de skin past. Geen
+	// beslisboom-duplicatie: de takken hieronder blijven ongewijzigd, we leiden de gender centraal af.
+	bFemaleAppearance = PredictFemaleAppearance(NpcId, SkinIdx, bCrowdNpc);
 	// PERF: ambient achtergrond-crowd krijgt een GOEDKOPE vaste mesh (1 component) i.p.v. de modulaire build
 	// (6 component-registraties = ~30-40ms hitch per spawn). Nog steeds gevarieerd (Karl/Casual/Tony fixed +
 	// kleur-tint). Alleen NPC's waar je mee DEALT (niet-crowd) krijgen de volle modulaire variatie.
@@ -731,6 +765,29 @@ void ACustomerBase::BuildAppearance()
 		WeedNpc_TintClothing(SkM, LookSeed); // Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop
 	}
 	bAppearanceBuilt = true;
+
+	// GENDER-CORRECTE NAAM (host-authoritative): alleen voor gegenereerde bewoners ("Resident_<idx>") - hun
+	// naam is nog niet gender-gekoppeld. Bereken de canonieke naam uit de INDEX + de zojuist vastgestelde
+	// gender en schrijf 'm naar de registry-DisplayName. Alle UI (deal/map) leest die DisplayName al met
+	// voorrang, dus die tonen meteen de gender-correcte naam; het deur-bordje preferent 'm ook. Pre-authored
+	// tabelnamen (FNpcDef) laten we met rust: de "Resident_"-check filtert die eruit. Client leidt dezelfde
+	// naam af (of leest de gerepliceerde DisplayName) -> host==joiner.
+	if (HasAuthority())
+	{
+		const FString IdS = NpcId.ToString();
+		if (IdS.StartsWith(TEXT("Resident_")))
+		{
+			const int32 NameIdx = FCString::Atoi(*IdS.RightChop(9));
+			const FString GenderName = ACityDoor::ResidentNameForIndex(NameIdx, bFemaleAppearance);
+			if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+			{
+				if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+				{
+					Reg->SetDisplayName(NpcId, FText::FromString(GenderName));
+				}
+			}
+		}
+	}
 
 	// De mesh-swap hierboven (SetSkeletalMesh) RESET de single-node-anim. Opnieuw aanzetten, anders blijft een NPC
 	// die niet beweegt (bv. een wachtende afspraak-klant) in de ref-/T-pose hangen -> de leader-posed modulaire

@@ -913,9 +913,11 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (bOpen)
 		{
 			BuildAllPanels(); RefreshTabs(); ShowActiveCategory(); RefreshGraphicsLabels(); // panelen ÉÉN keer bouwen; labels naar live status (geen rebuild)
-			// Esc sluit alleen als DIT widget toetsenbord-focus heeft (NativeOnKeyDown vuurt anders niet) ->
-			// zonder dit moest de speler eerst ergens in klikken (bv. Save) voordat Esc het menu sloot.
-			SetKeyboardFocus();
+			// NIET SetKeyboardFocus() aanroepen: in de FInputModeGameAndUI-modus (met CaptureDuringMouseDown)
+			// brak dat het KLIKKEN op alle sliders/toggles/knoppen (de focus-greep verstoort de muis-capture-
+			// routing, net als NoCapture eerder deed). IN-GAME sluit Esc de settings al focus-onafhankelijk via
+			// AThePlugSIMCharacter::OnPauseKey -> CloseAllUI(); op het HOOFDMENU (geen character-input) sluit je
+			// met de "< Back"-knop. NativeOnKeyDown-Esc blijft als extra werken zodra het widget wel focus heeft.
 		}
 	}
 	if (!bOpen) { return; }

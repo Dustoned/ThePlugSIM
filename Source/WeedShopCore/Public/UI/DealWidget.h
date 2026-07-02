@@ -20,6 +20,8 @@ class UWeedActionButton;
 class UWeedItemPickGrid;
 class UBorder;
 class USizeBox;
+class UImage;
+class UMaterialInterface;
 
 UCLASS()
 class WEEDSHOPCORE_API UDealWidget : public UUserWidget
@@ -61,6 +63,22 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
 	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;
 	UPROPERTY() TObjectPtr<UTextBlock> RelationText;
+
+	// C.4 — respect/loyaliteit/addiction als 3 ring-gauges (radiaal-materiaal, PlantInfoWidget-mechanisme).
+	UPROPERTY() TObjectPtr<UMaterialInterface> RadialMat;       // /Game/_Project/UI/M_RadialProgress (1x geladen in BuildShell)
+	UPROPERTY() TObjectPtr<UHorizontalBox> StatGaugeRow;        // rij van 3 gauges (respect/loyalty/addiction)
+	UPROPERTY() TObjectPtr<UImage> RespectRing;                 // radiale ring-image (dynamisch materiaal)
+	UPROPERTY() TObjectPtr<UImage> LoyaltyRing;
+	UPROPERTY() TObjectPtr<UImage> AddictRing;
+	UPROPERTY() TObjectPtr<UTextBlock> RespectVal;             // waarde-tekst midden onder de ring
+	UPROPERTY() TObjectPtr<UTextBlock> LoyaltyVal;
+	UPROPERTY() TObjectPtr<UTextBlock> AddictVal;
+	// Delta-caches per ring: sla de MID-update over als de fractie/kleur nauwelijks wijzigt.
+	float LastRespFrac = -1.f, LastLoyalFrac = -1.f, LastAddictFrac = -1.f;
+	FLinearColor LastRespCol = FLinearColor(0.f, 0.f, 0.f, 0.f);
+	FLinearColor LastLoyalCol = FLinearColor(0.f, 0.f, 0.f, 0.f);
+	FLinearColor LastAddictCol = FLinearColor(0.f, 0.f, 0.f, 0.f);
+
 	UPROPERTY() TObjectPtr<UTextBlock> TierText;     // klant-tier-NAAM (in de pill rechts van de naam)
 	UPROPERTY() TObjectPtr<UBorder>    TierPill;     // pill-kader om TierText (accent-vlak)
 	UPROPERTY() TObjectPtr<USizeBox>   TierBar;      // dunne accent-balk onder de kop-rij (3px)

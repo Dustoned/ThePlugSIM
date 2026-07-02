@@ -129,6 +129,10 @@ public:
 	// Server: zorg dat een specifieke NPC bestaat, bv. een vaste bewoner met huisnummer-naam.
 	FName EnsureNpc(FName NpcId, const FText& DisplayName, float BaseRespect = 15.f, float BaseLoyalty = 0.f, float BaseAddiction = 10.f);
 
+	// Server: overschrijf ALLEEN de DisplayName van een bestaande NPC (geen nieuwe entry, geen stats-reset).
+	// Voor de gender-correcte bewoner-naam die de pawn na BuildAppearance vaststelt. Repliceert via States.
+	void SetDisplayName(FName NpcId, const FText& DisplayName);
+
 	// Competitive: per-speler relatie-entry (sleutel "NpcId#spelerId"). Beide spelers starten met DEZELFDE
 	// basis-personality (van de basis-NPC) zodat de competitie eerlijk begint; daarna bouwen ze los op.
 	FName EnsurePlayerNpc(FName Key, FName BaseNpc, const FText& DisplayName);

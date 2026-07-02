@@ -1540,11 +1540,47 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 
 	const bool bLikedIt = !(bPicky && Quality < 0.5f);
 
-	// NPC praat terug in het venster.
+	// NPC praat terug in het venster. Ruime variatie zodat het niet snel herhaalt; de index komt
+	// automatisch uit de array-lengte (UE_ARRAY_COUNT), dus uitbreiden hoeft nooit met de hand.
 	{
-		static const TCHAR* Good[] = { TEXT("Ahh, that's the good stuff. Respect."), TEXT("Damn, that hits nice!"), TEXT("Yesss, exactly what I needed."), TEXT("That's fire, my man.") };
-		static const TCHAR* Bad[] = { TEXT("Pfff, that's weak, bro."), TEXT("Meh... barely felt that."), TEXT("Come on, I've had better."), TEXT("That ain't it, man.") };
-		Customer->Say(bLikedIt ? Good[FMath::RandRange(0, 3)] : Bad[FMath::RandRange(0, 3)]);
+		static const TCHAR* Good[] = {
+			TEXT("Ahh, that's the good stuff. Respect."),
+			TEXT("Damn, that hits nice!"),
+			TEXT("Yesss, exactly what I needed."),
+			TEXT("That's fire, my man."),
+			TEXT("Whoa, smooth. You know your stuff."),
+			TEXT("Now THAT's a joint."),
+			TEXT("Mmm, proper. Keep this around."),
+			TEXT("Cheers, that's premium."),
+			TEXT("Oh yeah, that's the one."),
+			TEXT("Clean burn, real nice taste.")
+		};
+		static const TCHAR* Bad[] = {
+			TEXT("Pfff, that's weak, bro."),
+			TEXT("Meh... barely felt that."),
+			TEXT("Come on, I've had better."),
+			TEXT("That ain't it, man."),
+			TEXT("Tastes like lawn clippings."),
+			TEXT("Nah, this is mid at best."),
+			TEXT("You call this loud? It's a whisper."),
+			TEXT("Save the schwag for the tourists."),
+			TEXT("Barely a buzz, come on."),
+			TEXT("I've smoked better hedge trimmings.")
+		};
+		// "Nu even genoeg"-afsluiter: de NPC gaat hierna op sample-cooldown, dus de laatste zin
+		// spreekt uit waarom de give-knop straks weg is (zonder te veranderen hoe het getoond wordt).
+		static const TCHAR* CooldownTail[] = {
+			TEXT("Let me enjoy this one first."),
+			TEXT("Gimme a minute with this."),
+			TEXT("Catch me after I finish this."),
+			TEXT("Hold off, I'm set for now."),
+			TEXT("That's me for now, cheers.")
+		};
+		const FString Base = bLikedIt
+			? Good[FMath::RandRange(0, UE_ARRAY_COUNT(Good) - 1)]
+			: Bad[FMath::RandRange(0, UE_ARRAY_COUNT(Bad) - 1)];
+		const FString Tail = CooldownTail[FMath::RandRange(0, UE_ARRAY_COUNT(CooldownTail) - 1)];
+		Customer->Say(Base + TEXT(" ") + Tail);
 	}
 
 	// Een GOEDE joint die ze lekker vinden maakt 'm meteen koop-bereid: hij vraagt dan om meer (grammen).

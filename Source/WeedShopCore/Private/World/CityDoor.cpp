@@ -7,6 +7,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
 #include "Customer/CustomerBase.h"
+#include "Npc/NpcRegistryComponent.h" // gender-correcte bewoner-naam (GetStats/GetOrAssignSkin/GetCustomerTier)
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
@@ -182,9 +183,12 @@ void ACityDoor::SetAptNumber(int32 Num)
 	}
 }
 
-FString ACityDoor::ResidentNameForIndex(int32 Index)
+FString ACityDoor::ResidentNameForIndex(int32 Index, bool bFemale)
 {
-	static const TCHAR* First[] = {
+	// Gesplitst per gender zodat een vrouwelijke skin een vrouwennaam krijgt en andersom (was 1 platte
+	// lijst -> naam en skin-gender liepen los). De keuze bFemale komt uit de voorspelde skin (zie
+	// ResidentNameForDoor / ACustomerBase::PredictFemaleAppearance) -> bordje en bewoner matchen.
+	static const TCHAR* MaleFirst[] = {
 		TEXT("Jan"), TEXT("Piet"), TEXT("Kees"), TEXT("Henk"), TEXT("Cor"), TEXT("Sjonnie"), TEXT("Henkie"), TEXT("Appie"),
 		TEXT("Bertus"), TEXT("Guus"), TEXT("Klaas"), TEXT("Mees"), TEXT("Sjakie"), TEXT("Dirk"), TEXT("Wim"), TEXT("Bram"),
 		TEXT("Joost"), TEXT("Sven"), TEXT("Tim"), TEXT("Rick"), TEXT("Bas"), TEXT("Daan"), TEXT("Niels"), TEXT("Koen"),
@@ -192,8 +196,15 @@ FString ACityDoor::ResidentNameForIndex(int32 Index)
 		TEXT("Cas"), TEXT("Sander"), TEXT("Bart"), TEXT("Wout"), TEXT("Tijn"), TEXT("Siem"), TEXT("Boaz"), TEXT("Jules"),
 		TEXT("Sam"), TEXT("Mick"), TEXT("Thijs"), TEXT("Ravi"), TEXT("Roel"), TEXT("Maarten"), TEXT("Freek"), TEXT("Jelle"),
 		TEXT("Floris"), TEXT("Hugo"), TEXT("Pim"), TEXT("Joris"), TEXT("Tom"), TEXT("Wessel"), TEXT("Lucas"), TEXT("Milan"),
-		TEXT("Finn"), TEXT("Noud"), TEXT("Sanne"), TEXT("Emma"), TEXT("Lotte"), TEXT("Fleur"), TEXT("Iris"), TEXT("Roos"),
-		TEXT("Femke"), TEXT("Tessa"), TEXT("Maud"), TEXT("Nina"), TEXT("Lieke"), TEXT("Nora") };
+		TEXT("Finn"), TEXT("Noud") };
+	// Vrouwennamen: de 12 bestaande + uitgebreid met meer (ASCII, funny mag).
+	static const TCHAR* FemaleFirst[] = {
+		TEXT("Sanne"), TEXT("Emma"), TEXT("Lotte"), TEXT("Fleur"), TEXT("Iris"), TEXT("Roos"),
+		TEXT("Femke"), TEXT("Tessa"), TEXT("Maud"), TEXT("Nina"), TEXT("Lieke"), TEXT("Nora"),
+		TEXT("Sara"), TEXT("Anouk"), TEXT("Julia"), TEXT("Sophie"), TEXT("Eva"), TEXT("Isa"),
+		TEXT("Noa"), TEXT("Loes"), TEXT("Mila"), TEXT("Yara"), TEXT("Bo"), TEXT("Fenna"),
+		TEXT("Puk"), TEXT("Saar"), TEXT("Guusje"), TEXT("Marleen"), TEXT("Truus"), TEXT("Sjaan"),
+		TEXT("Rikie"), TEXT("Willemijn"), TEXT("Dientje"), TEXT("Toos"), TEXT("Greetje"), TEXT("Ans") };
 	static const TCHAR* Last[] = {
 		TEXT("Vapehoven"), TEXT("Kushman"), TEXT("Hashberg"), TEXT("Bongers"), TEXT("Highsma"), TEXT("Wietveld"), TEXT("Blunt"), TEXT("Stoner"),
 		TEXT("Greenwood"), TEXT("Hazelaar"), TEXT("Spliffstra"), TEXT("Dankzaad"), TEXT("Nugteren"), TEXT("Pofadder"), TEXT("Knaller"), TEXT("Patatje"),
@@ -208,10 +219,34 @@ FString ACityDoor::ResidentNameForIndex(int32 Index)
 		TEXT("Slagerman"), TEXT("Bakkerman"), TEXT("Sjekkie"), TEXT("Shagman"), TEXT("Grinder"), TEXT("Bongwater"), TEXT("Waterpijp"), TEXT("Stickie"),
 		TEXT("Dampman"), TEXT("Rookgordel"), TEXT("Blowveld"), TEXT("Hasjbrik"), TEXT("Wietpot"), TEXT("Hasjpijp"), TEXT("Nederwiet"), TEXT("Skunkstra"),
 		TEXT("Paddoman"), TEXT("Truffel"), TEXT("Jointman"), TEXT("Vuurtje") };
-	const int32 NF = (int32)UE_ARRAY_COUNT(First);
+	const TCHAR* const* FA = bFemale ? FemaleFirst : MaleFirst;
+	const int32 NF = bFemale ? (int32)UE_ARRAY_COUNT(FemaleFirst) : (int32)UE_ARRAY_COUNT(MaleFirst);
 	const int32 NL = (int32)UE_ARRAY_COUNT(Last);
 	const int32 I = FMath::Max(0, Index);
-	return FString::Printf(TEXT("%s %s"), First[I % NF], Last[(I * 37 + I / NF) % NL]);
+	return FString::Printf(TEXT("%s %s"), FA[I % NF], Last[(I * 37 + I / NF) % NL]);
+}
+
+FString ACityDoor::ResidentNameForDoor(UWorld* W, int32 NameIdx)
+{
+	const FName NpcId(*FString::Printf(TEXT("Resident_%d"), FMath::Max(0, NameIdx)));
+	if (const AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+		{
+			// 1) Registry-DisplayName preferen (host schreef 'm gender-correct; repliceert naar clients).
+			float r = 0.f, l = 0.f, a = 0.f; FText N;
+			if (Reg->GetStats(NpcId, r, l, a, N) && !N.IsEmpty()) { return N.ToString(); }
+			// 2) Nog niet gematerialiseerd -> gender DETERMINISTISCH uit de VOORSPELDE skin afleiden (zelfde
+			// afleiding als de rondlopende bewoner). GetOrAssignSkin is deterministisch (zelfde Seed -> zelfde
+			// index op host en client), dus bordje en bewoner krijgen dezelfde gender-naam.
+			const int32 Tier = Reg->GetCustomerTier(NpcId);
+			const int32 SkinIdx = Reg->GetOrAssignSkin(NpcId, Tier, (int32)ACustomerBase::StableLookSeed(NpcId));
+			const bool bFemale = ACustomerBase::PredictFemaleAppearance(NpcId, SkinIdx, /*bCrowd*/ false);
+			return ResidentNameForIndex(NameIdx, bFemale);
+		}
+	}
+	// Geen registry (zeldzaam): gender-loze mannen-lijst als veilige terugval.
+	return ResidentNameForIndex(NameIdx, false);
 }
 
 FString ACityDoor::FriendlyNpcName(FName NpcId)
@@ -219,6 +254,8 @@ FString ACityDoor::FriendlyNpcName(FName NpcId)
 	const FString S = NpcId.ToString();
 	if (S.StartsWith(TEXT("Resident_")))
 	{
+		// Fallback zonder wereld-context: gender-loze (mannen-)lijst. De deal/map/bordje-paden preferen de
+		// gender-correcte registry-DisplayName al, dus deze tak wordt zelden geraakt.
 		return ResidentNameForIndex(FCString::Atoi(*S.RightChop(9)));
 	}
 	return S.IsEmpty() ? FString(TEXT("Customer")) : S;

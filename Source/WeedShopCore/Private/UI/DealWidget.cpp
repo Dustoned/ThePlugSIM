@@ -24,6 +24,11 @@
 #include "Components/ProgressBar.h"
 #include "Components/Slider.h"
 #include "Components/SizeBox.h"
+#include "Components/Image.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/Pawn.h"
 
 namespace
@@ -122,8 +127,50 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 
 	StateText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColHighlight(), false, true);
 	VB->AddChildToVerticalBox(StateText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+
+	// RelationText vervalt visueel (de 3 ringen tonen R/L/A nu). Member blijft bestaan (Collapsed) -> kleinste diff.
 	RelationText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim(), false, true);
 	VB->AddChildToVerticalBox(RelationText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	RelationText->SetVisibility(ESlateVisibility::Collapsed);
+
+	// --- C.4: 3 ring-gauges (respect / loyalty / addiction), spiegel van PlantInfoWidget's MakeGauge-mechanisme.
+	// Radiaal-materiaal 1x laden; elke gauge = SizeBox 88x88 -> Overlay{ ring-image (Fill) + icoon (Center) } + waarde + label.
+	RadialMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/UI/M_RadialProgress.M_RadialProgress"));
+	{
+		auto MakeGauge = [this](const FString& IcoStem, const FLinearColor& IcoTint, const FString& Label,
+			UImage*& OutRing, UTextBlock*& OutVal) -> UWidget*
+		{
+			UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
+			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>(); Sz->SetWidthOverride(88.f); Sz->SetHeightOverride(88.f);
+			UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>(); Sz->SetContent(Ov);
+			OutRing = WidgetTree->ConstructWidget<UImage>();
+			if (RadialMat) { OutRing->SetBrushFromMaterial(RadialMat); }
+			OutRing->SetBrushSize(FVector2D(88.f, 88.f));
+			UOverlaySlot* ROS = Ov->AddChildToOverlay(OutRing); ROS->SetHorizontalAlignment(HAlign_Fill); ROS->SetVerticalAlignment(VAlign_Fill);
+			USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>(); IcoSz->SetWidthOverride(40.f); IcoSz->SetHeightOverride(40.f);
+			IcoSz->SetContent(WeedUI::KitIcon(WidgetTree, IcoStem, 40.f, IcoTint));
+			UOverlaySlot* IS = Ov->AddChildToOverlay(IcoSz); IS->SetHorizontalAlignment(HAlign_Center); IS->SetVerticalAlignment(VAlign_Center);
+			UVerticalBoxSlot* SzS = Box->AddChildToVerticalBox(Sz); SzS->SetHorizontalAlignment(HAlign_Center);
+			OutVal = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), true, true);
+			UVerticalBoxSlot* VS = Box->AddChildToVerticalBox(OutVal); VS->SetHorizontalAlignment(HAlign_Center); VS->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+			UTextBlock* Lbl = WeedUI::Text(WidgetTree, Label, 10, WeedUI::ColTextDim(), false, true);
+			UVerticalBoxSlot* LS = Box->AddChildToVerticalBox(Lbl); LS->SetHorizontalAlignment(HAlign_Center);
+			return Box;
+		};
+
+		StatGaugeRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+		UImage* Rr = nullptr; UTextBlock* Rt = nullptr;
+		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_medal_128"), FLinearColor::White, TEXT("Respect"), Rr, Rt))->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+		RespectRing = Rr; RespectVal = Rt;
+		UImage* Lr = nullptr; UTextBlock* Lt = nullptr;
+		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_heart_red_128"), FLinearColor::White, TEXT("Loyalty"), Lr, Lt))->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+		LoyaltyRing = Lr; LoyaltyVal = Lt;
+		UImage* Ar = nullptr; UTextBlock* At = nullptr;
+		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_flame_128"), FLinearColor::White, TEXT("Addiction"), Ar, At));
+		AddictRing = Ar; AddictVal = At;
+		UVerticalBoxSlot* SGS = VB->AddChildToVerticalBox(StatGaugeRow);
+		SGS->SetHorizontalAlignment(HAlign_Center); SGS->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
+	}
 
 	// --- Dialoog-kader: wat de NPC zegt ---
 	{
@@ -497,7 +544,7 @@ void UDealWidget::UpdateLive()
 			FString StateStr;
 			switch (C->State)
 			{
-			case ECustomerState::Prospect: StateStr = FString::Printf(TEXT("Not a customer yet   Addiction %.0f/%.0f"), C->Addiction, C->AddictionToBuy); break;
+			case ECustomerState::Prospect: StateStr = TEXT("Not a customer yet"); break;
 			case ECustomerState::Served:   StateStr = TEXT("Satisfied"); break;
 			default:                       StateStr = TEXT("Leaving"); break;
 			}
@@ -506,21 +553,30 @@ void UDealWidget::UpdateLive()
 		}
 	}
 
-	// Stats op 1 regel; telefoonnummer-hint alleen zolang het nummer NIET vrijgespeeld is.
-	if (RelationText)
+	// C.4 — stats als 3 ring-gauges (respect / loyalty / addiction). Huisnummer-hint vervalt.
+	// Ring-update via het dynamische materiaal, met per-ring delta-gate (spiegel van PlantInfoWidget::SetRing).
 	{
-		FString Rel = FString::Printf(TEXT("R %.0f  -  L %.0f  -  A %.0f"), C->Respect, C->Loyalty, C->Addiction);
-		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		auto SetRing = [](UImage* Ring, float Frac, const FLinearColor& Col, float& LastFrac, FLinearColor& LastCol)
 		{
-			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+			if (!Ring) { return; }
+			const float F = FMath::Clamp(Frac, 0.f, 1.f);
+			if (FMath::Abs(F - LastFrac) <= 0.001f && Col == LastCol) { return; }
+			LastFrac = F; LastCol = Col;
+			if (UMaterialInstanceDynamic* MID = Ring->GetDynamicMaterial())
 			{
-				if (!C->NpcId.IsNone() && !Reg->IsUnlocked(C->NpcId))
-				{
-					Rel += FString::Printf(TEXT("   nr @ R%.0f"), Reg->UnlockRespect);
-				}
+				MID->SetScalarParameterValue(TEXT("Percent"), F);
+				MID->SetVectorParameterValue(TEXT("Color"), Col);
 			}
-		}
-		RelationText->SetText(FText::FromString(Rel));
+		};
+		const float RespFrac  = C->Respect / 100.f;
+		const float LoyalFrac = C->Loyalty / 100.f;
+		const float AddictFrac = FMath::Clamp(C->Addiction / FMath::Max(1.f, C->AddictionToBuy), 0.f, 1.f);
+		SetRing(RespectRing,  RespFrac,   WeedUI::ColAccent(), LastRespFrac,   LastRespCol);
+		SetRing(LoyaltyRing,  LoyalFrac,  WeedUI::ColGood(),   LastLoyalFrac,  LastLoyalCol);
+		SetRing(AddictRing,   AddictFrac, WeedUI::ColWarn(),   LastAddictFrac, LastAddictCol);
+		if (RespectVal) { RespectVal->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), C->Respect))); }
+		if (LoyaltyVal) { LoyaltyVal->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), C->Loyalty))); }
+		if (AddictVal)  { AddictVal->SetText(FText::FromString(FString::Printf(TEXT("%.0f/%.0f"), C->Addiction, C->AddictionToBuy))); }
 	}
 
 	// Klant-tier: alleen de NAAM in de pill (voortgang/next vervalt).
@@ -719,6 +775,21 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		RefreshStrainSelection(); // enkel de 2 betrokken knoppen herstylen
 	}
 	UpdateLive();
+
+	// C.6a/C.6c — verberg "Give joint" tijdens de sample-cooldown (server weigert dan stil; knop zou nutteloos zijn).
+	// Buiten de UpdateLive-key-gate: die returned vroeg bij een gelijke key, waardoor de knop niet zou terugkomen
+	// zodra de cooldown afloopt. Collapsed (niet Hidden) zodat de knoppenrij herschikt.
+	if (GiveBtn && C)
+	{
+		UNpcRegistryComponent* Reg = nullptr;
+		if (UWorld* W = GetWorld())
+		{
+			if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { Reg = GS->GetNpcRegistry(); }
+		}
+		const bool bCd = (Reg && !C->NpcId.IsNone() && Reg->IsOnSampleCooldown(C->NpcId));
+		GiveBtn->SetVisibility(bCd ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
+
 	if (Card) { Card->SetVisibility(ESlateVisibility::SelfHitTestInvisible); } // nu pas zichtbaar, al op echte hoogte
 
 	// Reset de "slider held"-vlag als de muisknop los is (zodat 'ie het bod weer kan volgen).

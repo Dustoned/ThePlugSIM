@@ -339,7 +339,6 @@ void UShelfWidget::RebuildFridgeSection(AStorageShelf* Shelf)
 		FridgePick = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
 		FridgePick->bShowSelection = false;
 		FridgePick->CellSize = 72.f;
-		FridgePick->IconSize = 46.f;
 		FridgePick->MaxVisibleRows = 2;
 		FridgePick->OnPick = [this](FName /*Id*/, int32 P)
 		{

@@ -44,8 +44,15 @@ public:
 	void AddLeafExtra(class UStaticMesh* Mesh, const FTransform& WorldTM);
 
 	// Deterministische bewoner-naam per huis-index (gelijk op server EN client, zodat de client zelf
-	// de juiste "LOCKED - <naam>"-popup kan tonen zonder replicatie).
-	static FString ResidentNameForIndex(int32 Index);
+	// de juiste "LOCKED - <naam>"-popup kan tonen zonder replicatie). bFemale kiest uit de vrouwen- of
+	// mannen-voornamenlijst zodat de naam bij de (voorspelde) skin-gender past.
+	static FString ResidentNameForIndex(int32 Index, bool bFemale = false);
+
+	// Gender-correcte bewoner-naam voor een deur-bordje: bepaalt de gender DETERMINISTISCH uit de
+	// voorspelde skin van "Resident_<NameIdx>" (zelfde afleiding als de rondlopende bewoner) zodat bordje
+	// en bewoner NOOIT verschillen - werkt ook voordat de pawn bestaat. Prefereert de registry-DisplayName
+	// als die er al staat (host schreef 'm gender-correct). W mag null zijn (val terug op mannen-lijst).
+	static FString ResidentNameForDoor(class UWorld* W, int32 NameIdx);
 
 	// Nette weergavenaam voor een NpcId, ook als de registry (nog) geen naam heeft: "Resident_0121"
 	// -> de bijbehorende funny naam; lege id -> "Customer". Gebruikt door deal/map-popups als fallback.

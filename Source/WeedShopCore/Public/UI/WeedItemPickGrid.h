@@ -39,7 +39,7 @@ class WEEDSHOPCORE_API UWeedItemPickGrid : public UUserWidget
 public:
 	// --- Instelbaar VOOR de eerste RebuildWidget/SetItems ---
 	float CellSize = 86.f;          // vierkante cel-afmeting (px)
-	float IconSize = 52.f;          // icoon-grootte binnen de cel (px)
+	float IconSize = 0.f;           // 0 = auto = CellSize*0.79 (inventory-ratio)
 	int32 MaxVisibleRows = 0;       // >0 = hoogte-cap op zoveel rijen (rest scrollt); 0 = geen cap
 	bool bShowSelection = true;     // false = nooit een cel als geselecteerd markeren
 
