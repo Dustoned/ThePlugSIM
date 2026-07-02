@@ -122,6 +122,27 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ---
 
+## BACKLOG 07-02 — speler-notities (UI-polish + deal/NPC)
+
+> Vastgelegd 2026-07-02. Joint-fix (blijven liggen + meer over de map) is af en getest-OK; deze batch = UI/deal-polish.
+
+### UI-polish (icoon-grids + knoppen)
+
+- [ ] **C.1 Icoon-grids gelijktrekken met de inventory** — de picker-grids (joint rollen, packing bench, offer-picker, koelkast, etc. = `UWeedItemPickGrid`) tonen iconen NIET zoals de inventory: andere sizes, klein, onduidelijk. Alle plekken die iconen tonen moeten de iconen exact zo renderen als in de inventory (zelfde icon-size/look/celstijl).
+- [ ] **C.2 Geselecteerde knop highlighten** — bij keuze-knoppen (bv. "Grams per bag": 1g/Max/±, "How many bags": Half/Max/±) de ACTIEVE keuze visueel highlighten zodat altijd duidelijk is wat geselecteerd is. Overal toepassen waar zulke keuze-knoppen staan.
+- [ ] **C.3 Help-/clutter-tekst weg** — de subtitel-regels zoals "2 g per bag (max 2)" bij *2.b Grams per bag* en "1 bag (uses 2g, max 10)" bij *3. How many bags* weghalen. Overal waar zulke uitleg-clutter staat opschonen.
+
+### Deal / NPC-scherm
+
+- [ ] **C.4 Respect/loyaliteit/addiction als progress-cirkels** — i.p.v. losse tekst-stats (`R10 - L0 - A6`, "Not a customer yet  Addiction 6/30") de stats tonen als progress-cirkels (zoals de plant-groei-cirkels): nicer/game-ish/duidelijker. De aparte addiction-stat mag dan weg — verwerkt in de cirkel (zie in één blik wanneer hij klant wordt). Huisnummer hoeft niet per se.
+- [ ] **C.6 "Give joint"-knop verdwijnen na geven + variatie in teksten** — nu: joint vasthouden + "Give joint" opent de NPC-UI maar toont meteen wéér "Give joint". De give-joint-cooldown moet de knop LATEN VERDWIJNEN zodra de NPC net een joint heeft gekregen. Plus: meer verschillende NPC-teksten op die momenten (niet alleen "come on I've had better") en duidelijk aangeven dat hij nu even niet meer hoeft.
+
+### Content
+
+- [ ] **C.5 Skin-gebonden namen** — female skins → female (funny) namen, male skins → male namen (indien haalbaar met hoe skins/namen nu toegewezen worden).
+
+---
+
 ## DOORLOPEND — Tech-hygiëne (oppakken tussen features door)
 
 - [ ] **T.1 Template-dead-weight verwijderen** — `Source/ThePlugSIM/Variant_Horror/` + `Variant_Shooter/` zijn nergens gerefereerd; verwijderen + `ThePlugSIM.Build.cs` include-paden opschonen (snellere builds, minder ruis).
