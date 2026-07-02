@@ -639,6 +639,20 @@ void USettingsWidget::BuildGraphicsPanel(UVerticalBox* P)
 		}, &ShadowsToggleW);
 	}
 
+	// Renderer: DirectX 12 (SM6, volledige features) <-> DirectX 11 (SM5, lichter: geen Nanite/Lumen/VSM,
+	// omzeilt de D3D12 GPU-Scene reserved-buffer-VRAM-crash). RHI wordt bij boot gekozen -> geldt na herstart.
+	{
+		const int32 RHINow = WeedShop_ReadPreferredRHI(); // 0 = DX12, 1 = DX11
+		AddValueRow(P, TEXT("Renderer"), (RHINow == 1) ? TEXT("DirectX 11") : TEXT("DirectX 12"), [this]()
+		{
+			const bool bNowDX11 = (WeedShop_ReadPreferredRHI() == 1);
+			WeedShop_WritePreferredRHI(!bNowDX11); // togglen: DX12 <-> DX11
+			if (RendererVal) { RendererVal->SetText(FText::FromString(!bNowDX11 ? TEXT("DirectX 11") : TEXT("DirectX 12"))); }
+			ShowRestartPopup(); // RHI wordt bij het opstarten gekozen -> pas actief na herstart
+		}, &RendererVal);
+		P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("DX11 = lighter, no Nanite/Lumen; needs restart"), 12, WeedUI::ColTextDim()))->SetPadding(FMargin(0.f, -6.f, 0.f, 8.f));
+	}
+
 	// Resolutie-schaal (render-%): 50 -> 75 -> 100.
 	{
 		const int32 RS = FMath::RoundToInt(G->GetResolutionScaleNormalized() * 100.f);

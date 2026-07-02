@@ -88,6 +88,13 @@ WEEDSHOPCORE_API void WeedShop_ReadGfxFlags(bool& bLumenOff, bool& bPotato, bool
 WEEDSHOPCORE_API int32 WeedShop_ReadTier();                  // opgeslagen kwaliteit-tier (-1=Potato, 0..3); key ontbreekt -> legacy-afleiding (Potato-vlag / GUS-overall-level)
 WEEDSHOPCORE_API void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, bool bVSMOff, bool bRTOff, int32 Tier);
 
+// Renderer-keuze DirectX 11 vs 12. De RHI wordt bij het OPSTARTEN gekozen (WindowsDynamicRHI); UE leest
+// daarvoor zelf de key [D3DRHIPreference] PreferredRHI uit GameUserSettings.ini. Wij hoeven die dus alleen
+// te schrijven - geldt na herstart. DX11=SM5 (geen Nanite/Lumen/VSM, lichter, omzeilt de D3D12 GPU-Scene
+// reserved-buffer-VRAM-crash); DX12=SM6 (volledige features). Beide shader-formats worden al gecookt.
+WEEDSHOPCORE_API int32 WeedShop_ReadPreferredRHI();          // 0 = DX12 (default), 1 = DX11
+WEEDSHOPCORE_API void  WeedShop_WritePreferredRHI(bool bDX11);
+
 // GEBAKKEN DATA: wereld-configuratie (map-border, kamer-jobs, deur-sloten, licht-instellingen)
 // leeft tijdens het ontwikkelen in Saved/, maar Saved/ gaat NIET mee in een gepackagede build.
 // Een snapshot staat daarom in Content/BakedData/ (packaged via DirectoriesToAlwaysStageAsUFS).

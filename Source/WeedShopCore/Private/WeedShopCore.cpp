@@ -23,6 +23,7 @@
 #include "GameFramework/GameUserSettings.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
+#include "Misc/ConfigCacheIni.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 
@@ -408,6 +409,30 @@ void WeedShop_WriteGfxFlags(bool bLumenOff, bool bPotato, bool bMotionBlurOff, b
 		bLumenOff ? 1 : 0, bPotato ? 1 : 0, bMotionBlurOff ? 1 : 0, bVSMOff ? 1 : 0, bRTOff ? 1 : 0, FMath::Clamp(Tier, -1, 3));
 	FFileHelper::SaveStringToFile(Out, *(FPaths::ProjectSavedDir() / TEXT("GraphicsConfig.txt")),
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+}
+
+// De RHI (DirectX 11 vs 12) wordt bij het OPSTARTEN gekozen (Engine WindowsDynamicRHI::ChoosePreferredRHI).
+// UE leest daarvoor zelf [D3DRHIPreference] PreferredRHI uit GameUserSettings.ini -> wij hoeven alleen die
+// key te schrijven (geen eigen relaunch/haak). Werkt in de gepackagede game (IsPreferredRHIAllowed staat
+// default aan); geldt pas na herstart omdat de RHI bij het booten wordt gekozen.
+int32 WeedShop_ReadPreferredRHI()
+{
+	FString Pref;
+	if (GConfig && GConfig->GetString(TEXT("D3DRHIPreference"), TEXT("PreferredRHI"), Pref, GGameUserSettingsIni))
+	{
+		if (Pref.Equals(TEXT("dx11"), ESearchCase::IgnoreCase)) { return 1; }
+	}
+	return 0; // niets gezet of dx12 -> DX12 (matcht DefaultGraphicsRHI_DX12 uit DefaultEngine.ini)
+}
+
+void WeedShop_WritePreferredRHI(bool bDX11)
+{
+	if (!GConfig) { return; }
+	// RHI EN feature level expliciet zetten (zoals de engine zelf ook doet), zodat er nooit een
+	// DX12+SM5 of DX11+SM6 mismatch overblijft van een eerdere keuze/heuristiek.
+	GConfig->SetString(TEXT("D3DRHIPreference"), TEXT("PreferredRHI"), bDX11 ? TEXT("dx11") : TEXT("dx12"), GGameUserSettingsIni);
+	GConfig->SetString(TEXT("D3DRHIPreference"), TEXT("PreferredFeatureLevel"), bDX11 ? TEXT("sm5") : TEXT("sm6"), GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
 }
 
 // --- Slate loading screen (geen UObjects/UMG: draait veilig tijdens het laden) ---

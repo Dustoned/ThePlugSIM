@@ -84,6 +84,7 @@ protected:
 	UPROPERTY() TObjectPtr<class UTextBlock> ResScaleVal;
 	UPROPERTY() TObjectPtr<class UTextBlock> FrameLimitVal;
 	UPROPERTY() TObjectPtr<class UTextBlock> TexturesVal;
+	UPROPERTY() TObjectPtr<class UTextBlock> RendererVal; // "DirectX 12" / "DirectX 11" (RHI-voorkeur, geldt na herstart)
 	UPROPERTY() TObjectPtr<class UTextBlock> CharacterVal;
 
 	// Kit-widgets waar de Preset-rij een afgeleide waarde in duwt (via reflectie, geen rebuild).
