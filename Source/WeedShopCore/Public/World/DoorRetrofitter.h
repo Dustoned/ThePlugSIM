@@ -65,6 +65,15 @@ public:
 	// False zolang de competitive-geometrie nog niet berekend is (bCompHomesReady).
 	bool GetCompDeliverySpot(bool bJoiner, FVector& Out) const;
 
+	// --- KAMER-GUARD: in een woon-KAMER hoort nooit zomaar een NPC ---
+	// True als P (met kleine marge) binnen een geregistreerde woon-/kamer-box ligt: de gemeten
+	// starter-kamer, ALLE woningen uit de beach-registry (ook niet-gekochte units) en de
+	// competitive spiegel-kamers. Hal, trappenhuis, lift en straat vallen er bewust BUITEN -
+	// dat zijn legitieme NPC-plekken (bv. een afspraak-NPC die in de hal bij z'n deur wacht).
+	// Gebruikt door de bewoner-spawns, activity-spots, meet-spots, de bezorg-resolver en de
+	// kamer-redding hieronder.
+	bool IsInsideHomeRoom(const FVector& P, float Margin = 100.f) const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -161,6 +170,10 @@ protected:
 	TArray<FPendingResident> PendingResidents;
 	bool bTowerInvokerPlaced = false; // navmesh-anker in de starter-toren (alle verdiepingen)
 	TMap<TWeakObjectPtr<class ACustomerBase>, float> ResidentStuckSince; // boven vast: "lift nemen"-timer
+	// KAMER-REDDING: bewoner-wandelaars die BINNEN een woon-kamer belanden (oude data/nav-glitch)
+	// lopen na ~5s via een direct-walk de deur uit; na ~20s nog binnen -> teleport (ook in zicht).
+	TMap<TWeakObjectPtr<class ACustomerBase>, float> InRoomSince; // sinds wanneer binnen een woon-kamer
+	TSet<TWeakObjectPtr<class ACustomerBase>> RoomWalkIssued;     // direct-walk naar de eigen deur al ingezet
 	TArray<FVector> PlacedNavLinks; // automatische trap-naar-straat links (dedupe)
 	TArray<TArray<FVector>> NpcChains; // speler-gemarkeerde binnen-kettingen (StairsPath.txt)
 	TArray<FVector> LoadedChillSpots;  // hang-plekken (ChillSpots.txt)

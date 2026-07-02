@@ -88,6 +88,14 @@ public:
 	// patrouilleren - anders liep hij vanaf de straat terug omhoog naar z'n oude ketting-punt.
 	void NotifyWalkerTeleported(class ACustomerBase* C);
 
+	// NOOD-pad (kamer-redding in de DoorRetrofitter): zet/overschrijf het entry-pad van deze
+	// wandelaar naar dit korte DIRECT-WALK-pad (bv. kamer -> eigen deur -> hal). De patrouille
+	// loopt entry-punten rechtstreeks af (geen pathfinding), dus dit werkt ook terwijl de speler
+	// kijkt - lopen is geen pop. BEWUST zonder ReturnPath/kringloop: na het pad voegt hij gewoon
+	// in op de normale route-patrouille (teruglopen zou 'm de kamer weer in sturen). False =
+	// deze wandelaar is niet van deze spawner (en bAdoptIfUnknown staat uit).
+	bool ForceEntryPath(class ACustomerBase* C, const TArray<FVector>& Path, bool bAdoptIfUnknown = false);
+
 	// Hoe ver van het spawn-punt de klanten gaan staan.
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	float SpotRadius = 350.f;

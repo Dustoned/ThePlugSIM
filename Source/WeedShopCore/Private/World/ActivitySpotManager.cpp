@@ -3,7 +3,9 @@
 #include "Customer/CustomerBase.h"
 #include "Game/WeedShopGameState.h"
 #include "World/DayCycleComponent.h"
+#include "World/DoorRetrofitter.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/PlatformFileManager.h"
@@ -30,6 +32,15 @@ float AActivitySpotManager::CurrentHour() const
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	const UDayCycleComponent* DC = GS ? GS->GetDayCycle() : nullptr;
 	return DC ? DC->GetClockHour() : 12.f;
+}
+
+const ADoorRetrofitter* AActivitySpotManager::FindRetro()
+{
+	if (!CachedRetro.IsValid())
+	{
+		for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { CachedRetro = *It; break; }
+	}
+	return CachedRetro.Get();
 }
 
 bool AActivitySpotManager::IsWindowActive(const FActivitySpotData& S, float Hour) const
@@ -119,9 +130,15 @@ void AActivitySpotManager::Tick(float DeltaSeconds)
 	EvalTimer = 1.0f; // ~1x per seconde evalueren is ruim genoeg voor een spelklok
 
 	const float Hour = CurrentHour();
+	const ADoorRetrofitter* Retro = FindRetro();
 	for (FActivitySpotData& S : Spots)
 	{
-		const bool bActive = IsWindowActive(S, Hour);
+		// KAMER-GUARD: een spot binnen een woon-kamer (bv. oude dev-test-markers, of een woning
+		// die later rond een straat-spot geregistreerd wordt) wordt overgeslagen - activity-NPC's
+		// zijn straatleven-decoratie, in een woon-kamer hoort nooit een random NPC. Elke tick
+		// checken is goedkoop (paar box-checks) en despawnt ook een al-staande bezetter.
+		const bool bBlocked = Retro && Retro->IsInsideHomeRoom(S.Pos);
+		const bool bActive = IsWindowActive(S, Hour) && !bBlocked;
 		const bool bHasNpc = S.Npc.IsValid();
 		if (bActive && !bHasNpc)
 		{

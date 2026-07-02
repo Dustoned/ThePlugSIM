@@ -1097,9 +1097,10 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (A->ActorHasTag(TEXT("ResidentNpc"))) { continue; }
 					FPendingResident PR;
 					PR.Door = A;
-					// BINNEN spawnen alleen als er een speler-gemarkeerde ketting in de buurt van
-					// deze deur begint (zelfde verdieping-band): die ketting is dan hun looppad
-					// naar buiten. Geen ketting = op straat spawnen.
+					// BINNEN (= in de HAL bij de eigen deur, nooit in een kamer) spawnen alleen als
+					// er een speler-gemarkeerde ketting in de buurt van deze deur begint (zelfde
+					// verdieping-band): die ketting is dan hun looppad naar buiten. Geen ketting =
+					// op straat spawnen.
 					PR.bInside = false;
 					const FVector DLq = A->GetActorLocation();
 					// Binnen spawnen als ENIG punt op een keten op dezelfde verdieping vlakbij deze deur ligt
@@ -1232,6 +1233,28 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (StreetPts.Num() > 0)
 		{
 			const float Now = W->GetRealTimeSeconds();
+			// Ver route-punt kiezen (zelfde regel als bewoner-spawns: ver van de speler) - gedeeld
+			// door de lift-redding hieronder en de kamer-redding daarna.
+			auto PickFarRoutePoint = [&](const FVector& FromL) -> FVector
+			{
+				FVector Dest = StreetPts[0];
+				float BestScore = -TNumericLimits<float>::Max();
+				for (const TArray<FVector>& Ring : NpcRings)
+				{
+					for (const FVector& RP2 : Ring)
+					{
+						float MinPlayer = 99999.f;
+						for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+						{
+							const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
+							if (Pp) { MinPlayer = FMath::Min(MinPlayer, FVector::Dist2D(Pp->GetActorLocation(), RP2)); }
+						}
+						const float Score = FMath::Min(MinPlayer, 12000.f) - FVector::Dist2D(RP2, FromL) * 0.15f;
+						if (Score > BestScore) { BestScore = Score; Dest = RP2; }
+					}
+				}
+				return Dest;
+			};
 			for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
 			{
 				ACustomerBase* Cb = *CIt;
@@ -1271,22 +1294,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				if (!bUnseen) { continue; }
 				// Ver route-punt kiezen (zelfde regel als bewoner-spawns: ver van de speler).
-				FVector Dest = StreetPts[0];
-				float BestScore = -TNumericLimits<float>::Max();
-				for (const TArray<FVector>& Ring : NpcRings)
-				{
-					for (const FVector& RP2 : Ring)
-					{
-						float MinPlayer = 99999.f;
-						for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
-						{
-							const APawn* Pp = PIt->Get() ? PIt->Get()->GetPawn() : nullptr;
-							if (Pp) { MinPlayer = FMath::Min(MinPlayer, FVector::Dist2D(Pp->GetActorLocation(), RP2)); }
-						}
-						const float Score = FMath::Min(MinPlayer, 12000.f) - FVector::Dist2D(RP2, L) * 0.15f;
-						if (Score > BestScore) { BestScore = Score; Dest = RP2; }
-					}
-				}
+				const FVector Dest = PickFarRoutePoint(L);
 				Cb->SetActorLocation(Dest + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
 				// De patrouille-staat bij z'n spawner mee-resetten: anders liep hij vanaf de straat z'n oude
 				// entry-ketting (boven in het gebouw) weer terug op i.p.v. gewoon verder te patrouilleren.
@@ -1296,6 +1304,90 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				ResidentStuckSince.Remove(Cb);
 				UE_LOG(LogWeedShop, Verbose, TEXT("Bewoner %s nam de lift: van Z %.0f naar de straat (%.0f, %.0f)"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
+			}
+
+			// KAMER-REDDING (werkt OOK terwijl de speler kijkt): een bewoner-wandelaar die BINNEN
+			// een woon-kamer staat (oude data, nav-glitch, deur-doorglipper) hoort daar nooit - in
+			// geen enkele kamer, ook niet "z'n eigen". Na ~5s binnen (geen vals alarm bij een
+			// deur-passage) loopt hij met een DIRECT-WALK (zelfde waypoint-techniek als het
+			// entry-pad in de spawner) naar de eigen deur en de deur-lijn over de hal in - lopen
+			// is geen pop, dus dit mag gewoon in beeld. Staat hij na ~20s NOG binnen (walk
+			// geblokkeerd of geen deur), dan vuurt de teleport naar de straat ONGEACHT of de
+			// speler kijkt: een woon-kamer is nooit een legitieme NPC-plek. De unseen-teleport
+			// hierboven blijft de gewone off-screen redding. Afspraak-NPC's (bewust wachtend, in
+			// de HAL bij hun deur) blijven met rust - de hal ligt buiten de kamer-boxen.
+			for (auto MapIt = InRoomSince.CreateIterator(); MapIt; ++MapIt)
+			{
+				if (!MapIt.Key().IsValid()) { MapIt.RemoveCurrent(); } // gedespawnde wandelaars opruimen
+			}
+			for (TActorIterator<ACustomerBase> RIt(W); RIt; ++RIt)
+			{
+				ACustomerBase* Cb = *RIt;
+				if (!IsValid(Cb) || !Cb->IsResidentWalker() || Cb->IsHidden() || Cb->HasActiveAppointment()) { continue; }
+				const FVector L = Cb->GetActorLocation();
+				if (!IsInsideHomeRoom(L))
+				{
+					InRoomSince.Remove(Cb);
+					RoomWalkIssued.Remove(Cb);
+					continue;
+				}
+				const float Since = InRoomSince.FindOrAdd(Cb, Now);
+				const float InFor = Now - Since;
+				if (InFor < 5.f) { continue; } // korte deur-passage: nog geen redding
+				ACityDoor* OwnDoor = FindNearestDoor(L);
+				if (OwnDoor && InFor < 20.f)
+				{
+					if (!RoomWalkIssued.Contains(Cb))
+					{
+						// Route: naar de eigen deur (NPC-auto-open) en dan de deur-lijn over, de hal in.
+						const FVector DLoc = OwnDoor->GetActorLocation();
+						FVector OutDir = DLoc - L; OutDir.Z = 0.f; OutDir = OutDir.GetSafeNormal();
+						if (OutDir.IsNearlyZero()) { OutDir = OwnDoor->GetActorForwardVector().GetSafeNormal2D(); }
+						FVector Past = DLoc + OutDir * 260.f;
+						FHitResult EscFloor;
+						FCollisionQueryParams EQ(SCENE_QUERY_STAT(RoomEscape), false);
+						if (W->LineTraceSingleByChannel(EscFloor, Past + FVector(0.f, 0.f, 150.f), Past - FVector(0.f, 0.f, 450.f), ECC_WorldStatic, EQ))
+						{
+							Past.Z = EscFloor.ImpactPoint.Z + 5.f;
+						}
+						if (!IsInsideHomeRoom(Past, 0.f)) // eindpunt moet echt BUITEN de kamer liggen
+						{
+							TArray<FVector> Escape;
+							Escape.Add(DLoc);
+							Escape.Add(Past);
+							// Bij de eigen spawner het entry-pad vervangen; kent geen spawner 'm, dan
+							// adopteert de dichtstbijzijnde 'm (zonder ReturnPath - geen kringloop terug de kamer in).
+							bool bIssued = false;
+							ACustomerSpawner* NearSp = nullptr; float BestSd = TNumericLimits<float>::Max();
+							for (TActorIterator<ACustomerSpawner> SpIt3(W); SpIt3; ++SpIt3)
+							{
+								if (!IsValid(*SpIt3)) { continue; }
+								if (!bIssued && SpIt3->ForceEntryPath(Cb, Escape)) { bIssued = true; }
+								const float Dd = FVector::DistSquared2D(SpIt3->GetActorLocation(), L);
+								if (Dd < BestSd) { BestSd = Dd; NearSp = *SpIt3; }
+							}
+							if (!bIssued && NearSp) { bIssued = NearSp->ForceEntryPath(Cb, Escape, true); }
+							if (bIssued)
+							{
+								RoomWalkIssued.Add(Cb);
+								UE_LOG(LogWeedShop, Verbose, TEXT("Kamer-redding: %s loopt de kamer uit via de deur op (%.0f, %.0f, %.0f)"), *Cb->NpcId.ToString(), DLoc.X, DLoc.Y, DLoc.Z);
+							}
+						}
+					}
+					continue; // de walk de tijd geven (tot de 20s-teleport hieronder)
+				}
+				// Walk-route faalde (of geen deur binnen bereik): teleport naar een ver straat-punt,
+				// ook in zicht - liever een enkele pop dan een blijvende indringer in de kamer.
+				const FVector Dest = PickFarRoutePoint(L);
+				Cb->SetActorLocation(Dest + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
+				for (TActorIterator<ACustomerSpawner> SpIt4(W); SpIt4; ++SpIt4)
+				{
+					if (IsValid(*SpIt4)) { SpIt4->NotifyWalkerTeleported(Cb); }
+				}
+				InRoomSince.Remove(Cb);
+				RoomWalkIssued.Remove(Cb);
+				ResidentStuckSince.Remove(Cb);
+				UE_LOG(LogWeedShop, Log, TEXT("Kamer-redding: %s uit een woon-kamer (Z %.0f) naar de straat (%.0f, %.0f) geteleporteerd"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
 			}
 		}
 	}
@@ -1481,8 +1573,9 @@ void ADoorRetrofitter::ScanAndConvert()
 	}
 
 	// BEWONERS-WACHTRIJ: een bewoner per ~10 seconden laten verschijnen (niet allemaal tegelijk).
-	// Toren-woningen (bij de starter) spawnen BINNEN en lopen zelf naar buiten; de rest spawnt op
-	// het dichtstbijzijnde route-punt voor hun gebouw.
+	// Toren-woningen (bij de starter) spawnen BINNEN - in de HAL bij hun eigen deur, nooit in een
+	// kamer - en lopen zelf naar buiten; de rest spawnt op het dichtstbijzijnde route-punt voor
+	// hun gebouw.
 	if (PendingResidents.Num() > 0 && (ScanPass % 5 == 0))
 	{
 		FPendingResident PR = PendingResidents[0];
@@ -1519,48 +1612,87 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			if (PR.bInside)
 			{
-				// Spawn IN het eigen appartement. Kamer-detectie: rondom-waaier van 12 stralen
-				// per kant - de LANGSTE straal verraadt de gang (die schiet de lange gang in),
-				// in een kamer kaatst alles dichtbij. Twijfel (beide ruimtes klein/groot)? Dan
-				// beslist de zwaairichting van de deur (apt-deuren zwaaien doorgaans de kamer in).
-				const FVector Fw = A->GetActorForwardVector();
-				auto MaxRay = [&](const FVector& P) -> float
+				// HAL-SPAWN (v/h kamer-spawn): een bewoner die "van huis vertrekt" verschijnt in de
+				// HAL bij z'n eigen deur - NOOIT meer binnen in een kamer. In een woon-kamer hoort
+				// nooit een random NPC (ook niet in "z'n eigen" kamer); hal/trappenhuis zijn de
+				// legitieme binnen-plekken. De oude nav-projectie (extent 350x350x220) kon bovendien
+				// door de muur naar de navmesh van de speler-kamer snappen.
+				// COVER-FASE-GUARD: zolang de loading-cover op beeld staat of de stad nog niet
+				// omgebouwd is, is de geometrie rond de deur mogelijk half gestreamd (de waaier +
+				// vloer-trace zien dan gaten) -> bOk blijft false en de tail requeue't deze bewoner.
+				if (!IsCoverPhase() && WeedShop_IsCityConverted())
 				{
-					float MaxD = 0.f;
-					const FVector S = P + FVector(0.f, 0.f, 130.f);
-					for (int32 di = 0; di < 12; ++di)
+					// HAL-kant-detectie: rondom-waaier van 12 stralen per kant - de LANGSTE straal
+					// verraadt de gang (die schiet de lange gang in), in een kamer kaatst alles
+					// dichtbij. Twijfel (beide ruimtes klein/groot)? Dan beslist de zwaairichting
+					// van de deur (apt-deuren zwaaien doorgaans de kamer IN -> hal = andersom).
+					const FVector Fw = A->GetActorForwardVector();
+					auto MaxRay = [&](const FVector& P) -> float
 					{
-						const float Ang = di * 30.f;
-						const FVector Dir = FRotator(0.f, Ang, 0.f).Vector();
-						FHitResult H;
-						const float Dd = W->LineTraceSingleByChannel(H, S, S + Dir * 3000.f, ECC_Visibility) ? H.Distance : 3000.f;
-						MaxD = FMath::Max(MaxD, Dd);
+						float MaxD = 0.f;
+						const FVector S = P + FVector(0.f, 0.f, 130.f);
+						for (int32 di = 0; di < 12; ++di)
+						{
+							const float Ang = di * 30.f;
+							const FVector Dir = FRotator(0.f, Ang, 0.f).Vector();
+							FHitResult H;
+							const float Dd = W->LineTraceSingleByChannel(H, S, S + Dir * 3000.f, ECC_Visibility) ? H.Distance : 3000.f;
+							MaxD = FMath::Max(MaxD, Dd);
+						}
+						return MaxD;
+					};
+					const FVector CandA = DL + Fw * 240.f;
+					const FVector CandB = DL - Fw * 240.f;
+					const float RayA = MaxRay(CandA);
+					const float RayB = MaxRay(CandB);
+					FVector Hall;
+					if (FMath::Abs(RayA - RayB) > 300.f)
+					{
+						Hall = (RayA > RayB) ? CandA : CandB; // grootste max-straal = de hal/gang
 					}
-					return MaxD;
-				};
-				const FVector CandA = DL + Fw * 240.f;
-				const FVector CandB = DL - Fw * 240.f;
-				const float RayA = MaxRay(CandA);
-				const float RayB = MaxRay(CandB);
-				if (FMath::Abs(RayA - RayB) > 300.f)
-				{
-					Inside = (RayA < RayB) ? CandA : CandB; // kleinste max-straal = de kamer
+					else
+					{
+						const float SwingSide = (A->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
+						Hall = DL - Fw * 240.f * SwingSide; // kamer-kant gespiegeld = hal-kant
+					}
+					// Vangnet: koos de waaier tóch een kamer-box, dan de andere kant van de deur.
+					if (IsInsideHomeRoom(Hall)) { Hall = DL * 2.f - Hall; }
+					// Vloer-trace op de hal-kant (zelfde verdieping als de deur).
+					FHitResult HallFloor;
+					FCollisionQueryParams HQ(SCENE_QUERY_STAT(ResidentHallSpawn), false);
+					if (!IsInsideHomeRoom(Hall)
+						&& W->LineTraceSingleByChannel(HallFloor, Hall + FVector(0.f, 0.f, 150.f), Hall - FVector(0.f, 0.f, 450.f), ECC_WorldStatic, HQ)
+						&& FMath::Abs(HallFloor.ImpactPoint.Z - DL.Z) < 280.f)
+					{
+						Hall.Z = HallFloor.ImpactPoint.Z + 5.f;
+						// GEEN pop voor iemands neus: staat een speler in deze hal te kijken, dan
+						// gewoon een latere poging (tail-requeue) - zelfde regel als de straat-spawns.
+						bool bSeen = false;
+						for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+						{
+							const APlayerController* PCv = PIt->Get();
+							const APawn* Pv = PCv ? PCv->GetPawn() : nullptr;
+							if (!Pv) { continue; }
+							const FVector To = Hall - Pv->GetActorLocation();
+							if (To.Size() < 1200.f) { bSeen = true; break; }
+							if (To.Size() < 5000.f && FVector::DotProduct(PCv->GetControlRotation().Vector(), To.GetSafeNormal()) > 0.05f) { bSeen = true; break; }
+						}
+						if (!bSeen)
+						{
+							Inside = Hall; // (historische naam; nu = de hal-plek bij de eigen deur)
+							Front = DL * 2.f - Hall;
+							SpawnAt = Hall;
+							bOk = true;
+						}
+					}
+					else
+					{
+						// Geen bruikbare hal-plek (geometrie/kamer-boxen): definitief terugvallen op
+						// de STRAAT-tak - zelfde bewoner, volgende poging buiten (geen kamer-risico).
+						PR.bInside = false;
+					}
 				}
-				else
-				{
-					const float SwingSide = (A->GetOpenSwing() <= 0.f) ? 1.f : -1.f;
-					Inside = DL + Fw * 240.f * SwingSide;
-				}
-				Front = DL * 2.f - Inside;
-				UNavigationSystemV1* NavI = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
-				FNavLocation InNav;
-				if (NavI && NavI->ProjectPointToNavigation(Inside + FVector(0.f, 0.f, 50.f), InNav, FVector(350.f, 350.f, 220.f)))
-				{
-					Inside = InNav.Location;
-					SpawnAt = Inside;
-					bOk = true;
-				}
-				// anders: bOk blijft false -> achteraan de wachtrij (navmesh daar nog niet klaar)
+				// bOk false -> achteraan de wachtrij (cover-fase / speler kijkt / geen hal-plek)
 			}
 			else if (!StreetRef.IsNearlyZero())
 			{
@@ -4484,6 +4616,46 @@ bool ADoorRetrofitter::MeasureRoomCenter(const FVector& Near, FVector& OutCenter
 	if (Xp < 0.f || Xn < 0.f || Yp < 0.f || Yn < 0.f) { return false; }
 	OutCenter = Near + FVector((Xp - Xn) * 0.5f, (Yp - Yn) * 0.5f, 0.f);
 	return true;
+}
+
+bool ADoorRetrofitter::IsInsideHomeRoom(const FVector& P, float Margin) const
+{
+	// Alle geregistreerde woon-/kamer-boxes: in een woon-KAMER hoort nooit zomaar een NPC te
+	// staan of te spawnen - hal, trappenhuis, lift en straat zijn de legitieme plekken. Bewust
+	// over ALLE registry-woningen (ook niet-gekochte units), niet alleen speler-bezit.
+	for (const FApartmentHome& H : BeachHomes)
+	{
+		const FVector& C = H.InteriorPos; // op vloer-hoogte
+		const FVector& Half = H.RoomHalf; // X/Y = halve afmeting, Z = kamerhoogte omhoog
+		if (FMath::Abs(P.X - C.X) <= Half.X + Margin
+			&& FMath::Abs(P.Y - C.Y) <= Half.Y + Margin
+			&& P.Z >= C.Z - 150.f && P.Z <= C.Z + Half.Z + Margin)
+		{
+			return true;
+		}
+	}
+	// De gemeten starter-kamer-box (wand-traces): nauwkeuriger dan de registry-fallback zolang
+	// die nog op de ruime default staat.
+	if (bHomeBoxReady
+		&& P.X >= HomeBoxMin.X - Margin && P.X <= HomeBoxMax.X + Margin
+		&& P.Y >= HomeBoxMin.Y - Margin && P.Y <= HomeBoxMax.Y + Margin
+		&& P.Z >= HomeBoxMin.Z - Margin && P.Z <= HomeBoxMax.Z + Margin)
+	{
+		return true;
+	}
+	// Competitive spiegel-kamers (host 603 + joiner 602).
+	if (bCompHomesReady)
+	{
+		const FBox Boxes[2] = { CompHomeBoxHost, CompHomeBoxJoiner };
+		for (const FBox& B : Boxes)
+		{
+			if (B.IsValid && B.ExpandBy(FVector(Margin, Margin, Margin + 150.f)).IsInsideOrOn(P))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 void ADoorRetrofitter::RebuildBeachHomes()

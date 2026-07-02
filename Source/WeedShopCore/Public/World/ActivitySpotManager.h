@@ -68,9 +68,14 @@ private:
 
 	int32 IndexForNpc(const ACustomerBase* Npc) const;
 
+	// De DoorRetrofitter kent de woon-/kamer-boxes (IsInsideHomeRoom): spots binnen een kamer
+	// worden overgeslagen. Lazy gevonden + weak gecachet (de retrofitter spawnt 1x per map).
+	const class ADoorRetrofitter* FindRetro();
+
 	UPROPERTY()
 	TArray<FActivitySpotData> Spots;
 
+	TWeakObjectPtr<const class ADoorRetrofitter> CachedRetro;
 	TWeakObjectPtr<ACustomerBase> EditingNpc; // wordt niet gedespawned terwijl het menu open is
 	float EvalTimer = 0.f;
 };

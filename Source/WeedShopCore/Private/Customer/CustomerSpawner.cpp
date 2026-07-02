@@ -163,6 +163,24 @@ void ACustomerSpawner::NotifyWalkerTeleported(ACustomerBase* C)
 	}
 }
 
+bool ACustomerSpawner::ForceEntryPath(ACustomerBase* C, const TArray<FVector>& Path, bool bAdoptIfUnknown)
+{
+	if (!C || Path.Num() < 1) { return false; }
+	if (!Patrol.Contains(C))
+	{
+		if (!bAdoptIfUnknown) { return false; }
+		AdoptWalker(C); // ZONDER EntryPath adopteren: het nood-pad hieronder mag geen ReturnPath/kringloop krijgen
+	}
+	FPatrolState& St = Patrol.FindOrAdd(C);
+	St.Entry = Path;
+	St.EntryIdx = 0;
+	St.Stall = 0;
+	St.StallRounds = 0;
+	St.bHomeward = false;
+	St.ReturnPath.Reset(); // nood-pad NIET later omgekeerd teruglopen (dat is de kamer weer in)
+	return true;
+}
+
 void ACustomerSpawner::BeginPlay()
 {
 	Super::BeginPlay();

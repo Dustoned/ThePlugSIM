@@ -77,6 +77,10 @@ void ULevelUpWidget::BuildShell(UCanvasPanel* Root)
 
 	Card->SetRenderOpacity(0.f);
 	Dim->SetRenderOpacity(0.f);
+	// OOK echt dichtklappen: de RoundedBox-OUTLINE (rebrand) rendert los van RenderOpacity, dus met
+	// opacity-only-verbergen stond er permanent een spook-kader midden in beeld (anker 0.5/0.42).
+	Card->SetVisibility(ESlateVisibility::Collapsed);
+	Dim->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void ULevelUpWidget::ShowForLevel(int32 PrevLevel, int32 NewLevel)
@@ -164,6 +168,12 @@ void ULevelUpWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		Shown = FMath::FInterpTo(Shown, 0.f, DeltaTime, 6.f);
 	}
+	if (HoldTimer <= 0.f && Shown < 0.02f) { Shown = 0.f; } // fade echt laten eindigen (geen rest-outline)
 	Card->SetRenderOpacity(Shown);
 	if (Dim) { Dim->SetRenderOpacity(Shown * 0.9f); }
+	// Zichtbaarheid volgt de fade: bij (vrijwel) 0 volledig Collapsed — de RoundedBox-outline negeert
+	// RenderOpacity, dus zonder dit blijft er een permanente dunne kader-lijn in beeld staan.
+	const ESlateVisibility V = (Shown > 0.02f) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+	if (Card->GetVisibility() != V) { Card->SetVisibility(V); }
+	if (Dim && Dim->GetVisibility() != V) { Dim->SetVisibility(V); }
 }

@@ -2799,30 +2799,35 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 		if (DH >= 0)
 		{
 			TArray<FApartmentHome> Homes; GetHomesUnified(Homes);
-			if (Homes.IsValidIndex(DH))
+			if (Homes.IsValidIndex(DH) && World)
 			{
 				const FVector Interior = Homes[DH].InteriorPos;
-				Point = Homes[DH].DoorPos; bFound = true;
-				if (World)
+				// NOOIT Homes[DH].DoorPos als eindpunt laten staan: op de pack-map is DoorPos het
+				// kamer-MIDDEN - zonder echte deur-actor stond het pakket (en de afspraak-NPC die
+				// deze resolver ook gebruikt) dus midden in de kamer. Geen deur gevonden -> bFound
+				// blijft false en we vallen netjes door naar de Shift+F7-marker-tak.
+				ACityDoor* BestAny = nullptr;  float BestAnyD = TNumericLimits<float>::Max();
+				ACityDoor* BestHome = nullptr; float BestHomeD = TNumericLimits<float>::Max();
+				const float MaxR = FMath::Max(Homes[DH].RoomHalf.X, Homes[DH].RoomHalf.Y) + 400.f;
+				for (TActorIterator<ACityDoor> It(const_cast<UWorld*>(World)); It; ++It)
 				{
-					ACityDoor* BestAny = nullptr;  float BestAnyD = TNumericLimits<float>::Max();
-					ACityDoor* BestHome = nullptr; float BestHomeD = TNumericLimits<float>::Max();
-					const float MaxR = FMath::Max(Homes[DH].RoomHalf.X, Homes[DH].RoomHalf.Y) + 400.f;
-					for (TActorIterator<ACityDoor> It(const_cast<UWorld*>(World)); It; ++It)
-					{
-						if (!IsValid(*It)) { continue; }
-						const float D2 = FVector::DistSquared2D(It->GetActorLocation(), Interior);
-						if (D2 > MaxR * MaxR) { continue; }
-						if (D2 < BestAnyD) { BestAnyD = D2; BestAny = *It; }
-						if (It->IsPlayerHome() && D2 < BestHomeD) { BestHomeD = D2; BestHome = *It; }
-					}
-					if (ACityDoor* Door = BestHome ? BestHome : BestAny)
-					{
-						const FVector DoorLoc = Door->GetActorLocation();
-						FVector Outward = DoorLoc - Interior; Outward.Z = 0.f; Outward = Outward.GetSafeNormal();
-						if (Outward.IsNearlyZero()) { Outward = Door->GetActorForwardVector(); Outward.Z = 0.f; Outward = Outward.GetSafeNormal(); }
-						Point = DoorLoc + Outward * 150.f; // op de stoep, net buiten de voordeur
-					}
+					if (!IsValid(*It)) { continue; }
+					const float D2 = FVector::DistSquared2D(It->GetActorLocation(), Interior);
+					if (D2 > MaxR * MaxR) { continue; }
+					if (D2 < BestAnyD) { BestAnyD = D2; BestAny = *It; }
+					if (It->IsPlayerHome() && D2 < BestHomeD) { BestHomeD = D2; BestHome = *It; }
+				}
+				if (ACityDoor* Door = BestHome ? BestHome : BestAny)
+				{
+					const FVector DoorLoc = Door->GetActorLocation();
+					FVector Outward = DoorLoc - Interior; Outward.Z = 0.f; Outward = Outward.GetSafeNormal();
+					if (Outward.IsNearlyZero()) { Outward = Door->GetActorForwardVector(); Outward.Z = 0.f; Outward = Outward.GetSafeNormal(); }
+					Point = DoorLoc + Outward * 150.f; // op de stoep, net buiten de voordeur
+					// De BestAny-fallback (dichtstbijzijnde WILLEKEURIGE deur) alleen accepteren als
+					// het stoep-punt niet alsnog binnen een woon-kamer ligt (verkeerde deur gekozen
+					// = het punt kan aan de kamer-kant van die deur uitkomen).
+					ADoorRetrofitter* Retro = FindRetro();
+					bFound = (BestHome != nullptr) || !(Retro && Retro->IsInsideHomeRoom(Point, 0.f));
 				}
 			}
 		}

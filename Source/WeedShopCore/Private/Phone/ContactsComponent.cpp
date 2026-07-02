@@ -19,6 +19,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "World/StoreCounter.h"
+#include "World/DoorRetrofitter.h" // IsInsideHomeRoom: meet-spots binnen een woon-kamer wegfilteren
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "UObject/ConstructorHelpers.h"
@@ -372,6 +373,15 @@ void UContactsComponent::CheckAppointments()
 static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
 {
 	if (!W) { return false; }
+	// KAMER-FILTER: kandidaten binnen een woon-kamer (starter, registry-units, competitive) vallen
+	// af - een afspraak-NPC wacht in een steegje/hal/bij een toonbank, nooit zomaar binnen in een
+	// kamer (stale markers uit oude dev-sessies zetten 'm daar anders neer).
+	const ADoorRetrofitter* Retro = nullptr;
+	for (TActorIterator<ADoorRetrofitter> RIt(W); RIt; ++RIt) { Retro = *RIt; break; }
+	auto DropRoomCands = [Retro](TArray<FVector>& Arr)
+	{
+		if (Retro) { Arr.RemoveAll([Retro](const FVector& C) { return Retro->IsInsideHomeRoom(C); }); }
+	};
 	TArray<FVector> Cands;
 	TArray<FString> Lines;
 	if (FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MeetSpots.txt"))))
@@ -386,10 +396,13 @@ static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
 			}
 		}
 	}
-	// Geen gemarkeerde plekken -> val terug op de winkels (al gemarkeerd door de speler, dus logisch + bereikbaar).
+	DropRoomCands(Cands);
+	// Geen (bruikbare) gemarkeerde plekken -> val terug op de winkels (al gemarkeerd door de speler,
+	// dus logisch + bereikbaar) - met dezelfde kamer-filter.
 	if (Cands.Num() == 0)
 	{
 		for (TActorIterator<AStoreCounter> It(W); It; ++It) { if (IsValid(*It)) { Cands.Add(It->GetActorLocation()); } }
+		DropRoomCands(Cands);
 	}
 	if (Cands.Num() == 0) { return false; }
 	Out = Cands[FMath::RandRange(0, Cands.Num() - 1)];
