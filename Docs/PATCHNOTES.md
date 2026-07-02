@@ -1,4 +1,22 @@
 PATCH NOTES
+Version 1.19.3 — 2 juli 2026
+
+Korte intro:
+Joints liggen weer overal en het instellingen-scherm sluit weer netjes.
+
+━━━━━━━━━━━━━━━━━━━━
+
+FIXES
+
+• Joints op straat: die lagen wel verspreid maar verdwenen meteen (ze vielen door de grond of rolden
+  weg). Nu blijven ze netjes op de grond liggen bij bankjes, asbakken en prullenbakken - en er liggen
+  er flink meer over de map, zodat je er tijdens een rondje echt tegenaan loopt.
+• De gevonden joints zijn "clean" - geen brandende/gloeiende punt meer, gewoon het joint-model.
+• Instellingen: Escape sluit het scherm nu meteen. Eerst moest je eerst ergens in klikken (bv. Save)
+  voordat Escape werkte.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.19.2 — 2 juli 2026
 
 Korte intro:
