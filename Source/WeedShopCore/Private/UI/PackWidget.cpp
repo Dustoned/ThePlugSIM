@@ -166,11 +166,9 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 	Row(GpbSection, FMargin(0, 0, 0, 0));
 	{
 		auto GRow = [this](UWidget* W, const FMargin& P) { GpbSection->AddChildToVerticalBox(W)->SetPadding(P); };
-		GRow(WeedUI::Text(WidgetTree, TEXT("2.b  Grams per bag"), 13, WeedUI::ColText(), false, true), FMargin(0, 10, 0, 2));
-		// Value/max-uitleg is clutter (de 1g/Max-knop-highlight toont de keuze al) -> label collapsed laten.
+		// Geen "2.b Grams per bag"-kop (form-taal); de waarde-regel zelf ("N g per bag") IS het label + toont de keuze.
 		GpbLabel = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
-		GRow(GpbLabel, FMargin(0, 0, 0, 4));
-		GpbLabel->SetVisibility(ESlateVisibility::Collapsed);
+		GRow(GpbLabel, FMargin(0, 10, 0, 4));
 
 		// -/+ stepper voor de gram-per-zakje. Wijziging => hergebruikt RefreshPack (recompute + in place).
 		UHorizontalBox* GpbRow = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -209,11 +207,9 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 	Row(BagsSection, FMargin(0, 0, 0, 0));
 	{
 		auto BRow = [this](UWidget* W, const FMargin& P) { BagsSection->AddChildToVerticalBox(W)->SetPadding(P); };
-		BRow(WeedUI::Text(WidgetTree, TEXT("3.  How many bags?"), 13, WeedUI::ColText(), false, true), FMargin(0, 10, 0, 2));
-		// "(uses Ng, max N)"-uitleg is clutter (knoppen + highlight tonen de keuze al) -> label collapsed laten.
+		// Geen "3. How many bags?"-kop (form-taal); de waarde-regel zelf ("N bag(s)") IS het label + update met de slider.
 		GramLabel = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
-		BRow(GramLabel, FMargin(0, 0, 0, 4));
-		GramLabel->SetVisibility(ESlateVisibility::Collapsed);
+		BRow(GramLabel, FMargin(0, 10, 0, 4));
 
 		GramSlider = WidgetTree->ConstructWidget<USlider>();
 		GramSlider->SetMinValue(0.f);
@@ -368,8 +364,9 @@ void UPackWidget::SetB(int32 N)
 	const int32 G = FMath::Min(PackBudHave, SelBags * SelGrams);
 	if (GramSlider)   { GramSlider->SetValue(MaxBags > 1 ? float(SelBags - 1) / float(MaxBags - 1) : 1.f); }
 	if (PackBtnLabel) { PackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Pack %d bag%s   (%dg)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G))); }
+	if (GramLabel)    { GramLabel->SetText(FText::FromString(FString::Printf(TEXT("%d bag%s"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s")))); }
 
-	// Half/Max-knop-highlight (de knoppen tonen de keuze al -> GramLabel is clutter en blijft collapsed).
+	// Half/Max-knop-highlight (de knoppen tonen de keuze al).
 	const int32 HalfN = FMath::Max(1, MaxBags / 2);
 	if (BagsMaxBtn)  { StyleChoiceBtn(BagsMaxBtn,  SelBags == MaxBags); }
 	if (BagsHalfBtn) { StyleChoiceBtn(BagsHalfBtn, SelBags == HalfN && HalfN != MaxBags); }
@@ -472,7 +469,7 @@ void UPackWidget::RefreshPack()
 			FWeedPickItem It;
 			It.Id = R.Id;
 			It.Badge = FString::Printf(TEXT("x%d"), R.Owned);
-			It.SubLine = FString::Printf(TEXT("%dg"), R.Cap);
+			// Geen SubLine "%dg": de tag toont de grootte al -> anders staat er 2x hetzelfde (cel matcht zo de inventory).
 			It.Tooltip = FString::Printf(TEXT("%s\nup to %dg - x%d owned"), *WeedUI::PrettyItemName(R.Id), R.Cap, R.Owned);
 			Items.Add(It);
 		}
@@ -499,6 +496,7 @@ void UPackWidget::RefreshPack()
 	if (GpbSection) { GpbSection->SetVisibility(PackCap > 1 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	StyleChoiceBtn(GpbOneBtn, SelGrams == 1);
 	StyleChoiceBtn(GpbMaxBtn, SelGrams == PackCap);
+	if (GpbLabel) { GpbLabel->SetText(FText::FromString(FString::Printf(TEXT("%d g per bag"), SelGrams))); }
 
 	// Slider + labels + pack-knop in place (via de gedeelde helper).
 	SetB(SelBags);
@@ -538,7 +536,7 @@ void UPackWidget::RefreshUnpack()
 			FWeedPickItem It;
 			It.Id = R.Id;
 			It.Badge = FString::Printf(TEXT("x%d"), R.Owned);
-			It.SubLine = FString::Printf(TEXT("%dg/bag"), BagG);
+			// Geen SubLine "%dg/bag": de tag toont de grootte al (cel matcht zo de inventory).
 			It.Tooltip = FString::Printf(TEXT("%s\n%dg/bag - x%d owned"), *WeedUI::PrettyItemName(R.Id), BagG, R.Owned);
 			Items.Add(It);
 		}
@@ -587,6 +585,7 @@ void UPackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			{
 				const int32 G = FMath::Min(PackBudHave, SelBags * SelGrams);
 				if (PackBtnLabel) { PackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Pack %d bag%s   (%dg)"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G))); }
+				if (GramLabel)    { GramLabel->SetText(FText::FromString(FString::Printf(TEXT("%d bag%s"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s")))); }
 				if (BagsMaxBtn)  { StyleChoiceBtn(BagsMaxBtn,  SelBags == MaxBags); }
 				if (BagsHalfBtn) { StyleChoiceBtn(BagsHalfBtn, SelBags == HalfN && HalfN != MaxBags); }
 			}
