@@ -22,6 +22,7 @@
 #include "NavigationSystem.h"
 #include "World/DayNightController.h"
 #include "World/DoorRetrofitter.h"
+#include "World/PackElevator.h" // stuck-recovery overslaan als je op een bewegende lift-cabine staat (H.4)
 #include "Misc/FileHelper.h"
 #include "World/StoreCounter.h"
 #include "InputMappingContext.h"
@@ -229,6 +230,22 @@ void AThePlugSIMCharacter::TickStuckRecovery(float DeltaSeconds)
 	const bool bFloating = FloatTime > 1.5f;     // hangt stil in de lucht = vast
 	const bool bBelowWorld = Loc.Z < -3000.f;    // door de vloer gezakt
 	if (!(bTooLong || bFloating || bBelowWorld)) { return; }
+
+	// LIFT-UITZONDERING (co-op H.4): tijdens een lift-rit staat de speler op de bewegende cabine-vloer met
+	// ~0 verticale snelheid; mist de grond-check een frame, dan tikt FloatTime op en teleporteert de recovery
+	// de speler valselijk terug. Staat de movement-base op een APackElevator-cabine, dan is dit GEEN echte
+	// vastloper: reset de timer en sla over. bBelowWorld (echt door de vloer) blijft WEL herstellen - dat is
+	// nooit een normale lift-toestand. Conservatief: liever 1 valse recovery overslaan dan in de lift teleporteren.
+	if (!bBelowWorld)
+	{
+		const UPrimitiveComponent* Base = GetMovementBase(); // ACharacter::GetMovementBase (BasedMovement.MovementBase)
+		const AActor* BaseActor = Base ? Base->GetOwner() : nullptr;
+		if (BaseActor && BaseActor->IsA<APackElevator>())
+		{
+			FloatTime = 0.f; FallTime = 0.f;
+			return;
+		}
+	}
 
 	// Diagnose (key 7 = update in plaats): laat zien WAAROM 'ie vast zit.
 	{

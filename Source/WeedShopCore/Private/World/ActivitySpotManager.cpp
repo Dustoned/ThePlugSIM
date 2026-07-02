@@ -114,7 +114,7 @@ ACustomerBase* AActivitySpotManager::SpawnActivityNpc(const FActivitySpotData& S
 	UWorld* W = GetWorld();
 	// CO-OP: activity-NPC's zijn replicerende ACustomerBase-actors -> alleen de server spawnt ze (de joiner
 	// krijgt ze via replicatie). Gate op de spawn-plek zelf zodat OOK het dev-tool-pad (AddSpotLive) veilig is.
-	if (!W || !HasAuthority()) { return nullptr; }
+	if (!W || IsNetMode(NM_Client)) { return nullptr; } // CO-OP: niet-gerepliceerd -> netmode i.p.v. HasAuthority
 	const FTransform T(FRotator(0.f, S.Yaw, 0.f), S.Pos + FVector(0.f, 0.f, 20.f));
 	ACustomerBase* Npc = W->SpawnActorDeferred<ACustomerBase>(
 		ACustomerBase::StaticClass(), T, nullptr, nullptr,
@@ -128,7 +128,7 @@ ACustomerBase* AActivitySpotManager::SpawnActivityNpc(const FActivitySpotData& S
 void AActivitySpotManager::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (!HasAuthority()) { return; }
+	if (IsNetMode(NM_Client)) { return; }
 	EvalTimer -= DeltaSeconds;
 	if (EvalTimer > 0.f) { return; }
 	EvalTimer = 1.0f; // ~1x per seconde evalueren is ruim genoeg voor een spelklok

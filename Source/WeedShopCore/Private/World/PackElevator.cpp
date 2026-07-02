@@ -278,8 +278,13 @@ void APackElevator::Tick(float DeltaSeconds)
 	if (Floors.Num() < 2) { return; }
 
 	// CO-OP: de DOEL-verdieping komt uit de gedeelde WorldSync (door de knop via een Server-RPC gezet) ->
-	// host EN joiner rijden hun lokale cabine naar EXACT dezelfde verdieping. De cosmetische interp
-	// (CabZ, deur-slide) hieronder blijft lokaal. WorldSync 1x resolven en cachen (net als ACityDoor).
+	// host EN joiner rijden hun lokale cabine naar EXACT dezelfde verdieping. De deur-slide-interp blijft lokaal.
+	// De LIVE CabZ is NIET meer puur lokaal: de server interpoleert 'm en schrijft 'm naar WorldSync, de client
+	// leest 'm ervan (H.4-rubber-band-fix, zie onder). WorldSync 1x resolven en cachen (net als ACityDoor).
+	// De PackElevator zelf is per-proces niet-gerepliceerd, dus HasAuthority() deugt NIET (net als DoorRetrofitter);
+	// server-detectie via de net-mode van de wereld.
+	const bool bIsClient = GetWorld() && GetWorld()->GetNetMode() == NM_Client;
+	UWorldSyncComponent* MutableWS = nullptr; // alleen server schrijft hierop (SetElevatorZ)
 	if (ElevSyncId != 0)
 	{
 		if (!CachedWorldSync.IsValid())
@@ -289,6 +294,7 @@ void APackElevator::Tick(float DeltaSeconds)
 		}
 		if (const UWorldSyncComponent* WS = CachedWorldSync.Get())
 		{
+			MutableWS = const_cast<UWorldSyncComponent*>(WS); // WorldSync leeft op de GameState; server-schrijf is authority-gated in SetElevatorZ
 			const int32 WsFloor = WS->GetElevatorFloor(ElevSyncId);
 			// INDEX_NONE = nog geen server-doel gezet -> laat het lokale begin-doel (begane grond) staan.
 			if (Floors.IsValidIndex(WsFloor))
@@ -302,8 +308,20 @@ void APackElevator::Tick(float DeltaSeconds)
 					if (WsFloor == CurFloor && !bMoving) { DwellTimer = FMath::Max(DwellTimer, DwellSeconds); }
 				}
 			}
+			// CLIENT: NIET lokaal interpoleren maar de cabine direct op de server-Z zetten -> host en joiner staan
+			// op EXACT dezelfde hoogte (base-desync weg). Fallback = de huidige lokale CabZ als er nog geen
+			// server-waarde binnen is (voorkomt een sprong naar 0 vlak na spawn).
+			if (bIsClient)
+			{
+				CabZ = WS->GetElevatorZ(ElevSyncId, CabZ);
+				SetActorLocation(FVector(CabXY.X, CabXY.Y, CabZ));
+			}
 		}
 	}
+
+	// SERVER: publiceer de live cabine-Z elke tick (ook stilstaand) zodat een client die MIDDEN in een sessie
+	// joint direct de juiste rust-hoogte leest i.p.v. de 0-fallback (SetElevatorZ is authority-gated).
+	if (!bIsClient && MutableWS) { MutableWS->SetElevatorZ(ElevSyncId, CabZ); }
 
 	const float TargetZ = Floors[TargetFloor];
 	bMoving = !FMath::IsNearlyEqual(CabZ, TargetZ, 1.f);
@@ -383,11 +401,25 @@ void APackElevator::Tick(float DeltaSeconds)
 	{
 		// Pas rijden als de deuren dicht zijn.
 		if (DoorOpen > 0.02f) { return; }
-		CabZ = FMath::FInterpConstantTo(CabZ, TargetZ, DeltaSeconds, CabSpeed);
-		SetActorLocation(FVector(CabXY.X, CabXY.Y, CabZ));
+		// SERVER: interpoleer de cabine lokaal EN publiceer de live Z naar WorldSync zodat de client 'm 1-op-1
+		// volgt (base-desync-fix). CLIENT: NIET interpoleren - CabZ is bovenaan al uit WorldSync gezet; hier
+		// alleen de aankomst-afhandeling (deuren/verdieping) laten meelopen op de gesyncte Z.
+		if (!bIsClient)
+		{
+			CabZ = FMath::FInterpConstantTo(CabZ, TargetZ, DeltaSeconds, CabSpeed);
+			SetActorLocation(FVector(CabXY.X, CabXY.Y, CabZ));
+			// Verse post-interp Z meteen publiceren (de top-of-tick-publish gebruikt de vorige-frame-waarde) ->
+			// de client volgt met minimale lag.
+			if (MutableWS) { MutableWS->SetElevatorZ(ElevSyncId, CabZ); }
+		}
 		if (FMath::IsNearlyEqual(CabZ, TargetZ, 1.f))
 		{
 			CabZ = TargetZ;
+			if (!bIsClient)
+			{
+				SetActorLocation(FVector(CabXY.X, CabXY.Y, CabZ));
+				if (MutableWS) { MutableWS->SetElevatorZ(ElevSyncId, CabZ); }
+			}
 			CurFloor = TargetFloor;
 			ShownFloor = CurFloor;
 			DwellTimer = DwellSeconds;

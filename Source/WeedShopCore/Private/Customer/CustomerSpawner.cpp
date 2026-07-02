@@ -194,7 +194,7 @@ void ACustomerSpawner::BeginPlay()
 	{
 		NextResidentSpawnTryRealTime = World->GetRealTimeSeconds() + 0.5f;
 	}
-	if (HasAuthority())
+	if (!IsNetMode(NM_Client)) // CO-OP: spawner is per-proces + niet-gerepliceerd -> HasAuthority() is OOK true op de joiner; gebruik de wereld-netmode
 	{
 		// Snel retry-interval zodat de bewoners verschijnen zodra de stad gebouwd is.
 		GetWorldTimerManager().SetTimer(SpawnTimer, this, &ACustomerSpawner::TrySpawn, 1.0f, true, 1.0f);
@@ -211,7 +211,7 @@ void ACustomerSpawner::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UWorld* World = GetWorld();
-	if (!World || !HasAuthority())
+	if (!World || IsNetMode(NM_Client))
 	{
 		return;
 	}
@@ -406,7 +406,7 @@ void ACustomerSpawner::TrySpawn()
 	// CO-OP: server-authoritative. Alle ACustomerBase-spawns hieronder (patrouille-walkers) draaien alleen
 	// op de server; de joiner krijgt de bodies via replicatie (ACustomerBase repliceert nu). De spawner
 	// beweegt de bodies server-side, de positie repliceert via SetReplicateMovement.
-	if (!World || !HasAuthority()) { return; }
+	if (!World || IsNetMode(NM_Client)) { return; }
 	// Streaming-gate: zonder speler in de buurt is de grond hier mogelijk niet ingeladen -
 	// dan zakken verse NPC's door de wereld. Even wachten tot iemand dichtbij komt.
 	if (ActivationRange > 0.f)

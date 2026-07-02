@@ -285,6 +285,33 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ## TEST-FEEDBACK 07-03 — tweede co-op-ronde
 
+- [ ] **H.3 NPC-SYNC NOG STEEDS STUK (PRIO, grondig)** — bReplicates+ReplicateMovement + bandbreedte-fix
+  (MaxClientRate 512KB/s) waren nodig maar NIET genoeg: op de joiner staan NPC's nog BEVROREN op verkeerde
+  plekken (host loopt normaal). Vermoeden: de crowd-bodies bewegen op de server via SetActorLocation
+  (TickVirtualMove) i.p.v. CharacterMovement-velocity -> een gerepliceerde SIMULATED-PROXY Character krijgt
+  geen velocity -> beweegt niet op de client (alleen af en toe een snap). Diepe analyse: hoe bewegen
+  crowd-bodies server-side (SetActorLocation vs AI->MoveToLocation), hoe repliceert dat naar een simulated
+  proxy, en de juiste fix (CMC-velocity op server / expliciete positie-repl / SimulatedProxy-handling).
+  Ook: syncen resident/afspraak/deal-NPC's wel? [CustomerBase movement + DoorRetrofitter TickVirtualMove + CustomerSpawner]
+- [ ] **H.4 Joiner-pawn wordt teruggeteleporteerd (rubber-band) na de lift (PRIO, grondig)** — de joiner loopt uit
+  de lift en wordt soms teruggezet naar de lift tijdens gewoon rondlopen = server-correctie van de EIGEN pawn
+  (autonomous proxy). Vermoedelijk: de lift-cabine is een bewegend platform (Movable, SetWorldLocation) dat op
+  host vs joiner niet gelijk staat -> de speler wordt "based" op de cab en de server relocaliseert hem; of een
+  bredere movement-reconciliatie-desync. Grondig onderzoeken: hoe is de co-op-beweging opgezet (autonomous proxy,
+  moving-base/BasedMovement, server-relocaties van de joiner-pawn) - dit hoort met 70 NPC's gewoon te kunnen.
+  [PackElevator moving-base + AThePlugSIMCharacter CMC + GameMode/PlayerController co-op-setup]
+- [x] **H.3-echt NPC-sync root cause GEVONDEN + gefixt** — de DoorRetrofitter/spawners worden per-pawn lokaal
+  gespawnd (IsLocallyControlled) en repliceren niet -> op de joiner is HasAuthority()==TRUE -> de joiner draaide
+  z'n EIGEN volledige crowd bovenop de gerepliceerde host-bodies (log-bewezen: "70 wandelaars geseed" op de joiner).
+  FIX: crowd/joint/NPC-gates op !IsNetMode(NM_Client) i.p.v. HasAuthority() (DoorRetrofitter + CustomerSpawner +
+  ActivitySpotManager). Server-beweging bleek al correct (CMC-velocity via MoveToLocation).
+- [ ] **H.5 Speler-rubber-band op interieur-Movable-vloeren (RESTEREND)** — de speler staat op runtime-gespawnde
+  Movable AStaticMeshActors (DoorRetrofitter ~4018/4067/4212/4420/4501) die als dynamic movement-base op de joiner
+  niet resolven ("on base None", 3413x in de lokale test) -> drift + snap-back. Fix-optie: die vloeren Static/
+  Stationary maken (ze bewegen niet) - RISICO: belichting/registratie van runtime-Static-actors. Was in de lokale
+  2-instance-test versterkt door de 90s-join-stall (96 saved-moves overflow); op een echte snelle 2-PC-join
+  waarschijnlijk milder. Apart oppakken + verifieren na de crowd/lift-fix.
+
 - ✔ G.3 plaatsen joiner werkt, ✔ G.4 markers goed, ✔ G.1 lift werkt (joiner kan naar binnen).
 - [ ] **H.1 CONSISTENTE STUTTER elke paar seconden (PRIO)** — GEMETEN (stat dumphitches) + gefixt in 2 delen:
   - [x] **H.1a Skin-load-hitches (300-500ms, de grote freezes)** — body-materialisatie deed een blocking

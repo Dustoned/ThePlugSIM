@@ -13,6 +13,7 @@ void UWorldSyncComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(UWorldSyncComponent, OpenDoors);
 	DOREPLIFETIME(UWorldSyncComponent, ElevatorIds);
 	DOREPLIFETIME(UWorldSyncComponent, ElevatorFloors);
+	DOREPLIFETIME(UWorldSyncComponent, ElevatorZ);
 }
 
 uint32 UWorldSyncComponent::MakeId(const FVector& Loc, float Yaw)
@@ -60,7 +61,34 @@ void UWorldSyncComponent::ServerSetElevatorFloor(uint32 ElevId, int32 Floor)
 	}
 	else
 	{
+		// Nieuw id: alle drie de parallelle arrays gelijk laten groeien (zelfde index). ElevatorZ start op 0;
+		// SetElevatorZ (elke server-tick) schrijft er meteen de echte hoogte in.
 		ElevatorIds.Add(ElevId);
 		ElevatorFloors.Add(Floor);
+		ElevatorZ.Add(0.f);
+	}
+}
+
+float UWorldSyncComponent::GetElevatorZ(uint32 ElevId, float Fallback) const
+{
+	const int32 Idx = ElevatorIds.IndexOfByKey(ElevId);
+	return (Idx != INDEX_NONE && ElevatorZ.IsValidIndex(Idx)) ? ElevatorZ[Idx] : Fallback;
+}
+
+void UWorldSyncComponent::SetElevatorZ(uint32 ElevId, float Z)
+{
+	if (GetOwnerRole() != ROLE_Authority || ElevId == 0) { return; }
+	const int32 Idx = ElevatorIds.IndexOfByKey(ElevId);
+	if (Idx != INDEX_NONE)
+	{
+		if (ElevatorZ.IsValidIndex(Idx)) { ElevatorZ[Idx] = Z; }
+	}
+	else
+	{
+		// Nieuw id (cabine schrijft z'n hoogte voordat er een verdieping-call was): alle drie de arrays gelijk
+		// laten groeien. Floor onbekend -> INDEX_NONE, zodat GetElevatorFloor "geen server-doel" blijft geven.
+		ElevatorIds.Add(ElevId);
+		ElevatorFloors.Add(INDEX_NONE);
+		ElevatorZ.Add(Z);
 	}
 }

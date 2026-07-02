@@ -38,6 +38,18 @@ public:
 	// Server: schrijf de doel-verdieping van een lift (door de knop-interactie aangeroepen). Repliceert.
 	void ServerSetElevatorFloor(uint32 ElevId, int32 Floor);
 
+	// LIVE CABINE-HOOGTE per lift-id (co-op rubber-band-fix H.4): de cabine (APackElevator) is niet-gerepliceerd
+	// en werd op host EN joiner ONAFHANKELIJK lokaal geinterpoleerd -> tijdens de rit stonden de twee cabines op
+	// VERSCHILLENDE Z (interp-fase verschilt door replicatie-latency van het doel) -> de speler als movement-base
+	// op de cab-vloer kreeg een base-relatieve correctie -> teleport terug. Fix: de SERVER interpoleert en schrijft
+	// de live CabZ hier; de CLIENT interpoleert NIET maar volgt deze waarde -> host en joiner staan op EXACT
+	// dezelfde Z -> de base-correctie is een no-op.
+	// Fallback = de meegegeven waarde (huidige lokale CabZ) als er nog geen server-waarde binnen is.
+	float GetElevatorZ(uint32 ElevId, float Fallback) const;
+
+	// Server: schrijf de live cabine-hoogte van een lift (elke tick door APackElevator op de server). Repliceert.
+	void SetElevatorZ(uint32 ElevId, float Z);
+
 private:
 	UFUNCTION()
 	void OnRep_OpenDoors() {}
@@ -54,4 +66,8 @@ private:
 	TArray<uint32> ElevatorIds;
 	UPROPERTY(ReplicatedUsing = OnRep_Elevators)
 	TArray<int32> ElevatorFloors;
+	// Live cabine-hoogte, parallel aan ElevatorIds (zelfde index). Server schrijft, clients lezen -> cabines op
+	// exact dezelfde Z (H.4-rubber-band-fix). Geen ReplicatedUsing nodig: PackElevator leest 'm per tick uit.
+	UPROPERTY(Replicated)
+	TArray<float> ElevatorZ;
 };
