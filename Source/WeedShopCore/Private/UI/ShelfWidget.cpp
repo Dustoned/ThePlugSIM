@@ -332,7 +332,7 @@ void UShelfWidget::RebuildFridgeSection(AStorageShelf* Shelf)
 	// Éénmalige opbouw van de fridge-sectie: kop, icoon-grid, hint- en status-regel.
 	if (!FridgePick)
 	{
-		FridgeTitleText = WeedUI::Text(WidgetTree, TEXT("Make edibles"), 13, FLinearColor(0.7f, 0.9f, 0.6f), false, true);
+		FridgeTitleText = WeedUI::Text(WidgetTree, TEXT("Make edibles"), 13, WeedUI::ColText(), false, true);
 		FridgeSection->AddChildToVerticalBox(FridgeTitleText)->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
 
 		// Grid-config VOOR de eerste SetItems: geen selectie, kleinere cellen, max 2 rijen (rest scrollt).
@@ -348,10 +348,10 @@ void UShelfWidget::RebuildFridgeSection(AStorageShelf* Shelf)
 		};
 		FridgeSection->AddChildToVerticalBox(FridgePick)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 
-		FridgeHintText = WeedUI::Text(WidgetTree, TEXT("Store butter mix here, then set it into edibles (add sugar+flour for cookies, sugar+gelatin for gummies)."), 11, FLinearColor(0.6f, 0.65f, 0.78f));
+		FridgeHintText = WeedUI::Text(WidgetTree, TEXT("Store butter mix here, then set it into edibles (add sugar+flour for cookies, sugar+gelatin for gummies)."), 11, WeedUI::ColTextDim());
 		FridgeSection->AddChildToVerticalBox(FridgeHintText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 
-		FridgeStatusText = WeedUI::Text(WidgetTree, FString(), 11, FLinearColor(0.55f, 0.78f, 1.f));
+		FridgeStatusText = WeedUI::Text(WidgetTree, FString(), 11, WeedUI::ColTextDim());
 		FridgeSection->AddChildToVerticalBox(FridgeStatusText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 	}
 

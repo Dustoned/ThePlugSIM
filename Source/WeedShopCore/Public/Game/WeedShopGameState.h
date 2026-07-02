@@ -137,6 +137,14 @@ public:
 	bool IsFreeBuild() const { return bFreeBuild; }
 	void SetFreeBuild(bool b) { if (HasAuthority()) { bFreeBuild = b; } }
 
+	// Dev-tools (F10-dev-menu, F7/F9-dev-keys, marker-tools): LOS van free-build (dat is een gameplay-
+	// vlag voor het bouwen). Sessie-breed: elke speler mag 'm aanzetten via Ctrl+Shift+F10 (of `WeedDev`).
+	UPROPERTY(Replicated)
+	bool bDevTools = false;
+	UFUNCTION(BlueprintPure, Category = "WeedShop")
+	bool AreDevToolsEnabled() const { return bDevTools; }
+	void SetDevTools(bool b) { if (HasAuthority()) { bDevTools = b; } }
+
 	// Co-op speelmodus (gedeeld, gekozen bij hosten). Coop = alles samen; Competitive = ieder voor zich.
 	UPROPERTY(Replicated)
 	ECoopMode CoopMode = ECoopMode::Coop;

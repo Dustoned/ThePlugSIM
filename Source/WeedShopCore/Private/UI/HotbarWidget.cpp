@@ -110,7 +110,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 			Name->SetFont(TagFont);
 		}
 		UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-		TagPill->SetBrush(WeedUI::Rounded(FLinearColor(0.34f, 0.16f, 0.50f, 0.96f), 6.f)); // paarse tag-bubble
+		TagPill->SetBrush(WeedUI::Rounded(WeedUI::ColAccentDim(0.96f), 6.f)); // tag-bubble (default; per-item hue via TagColorForItem in RefreshSlots)
 		TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
 		TagPill->SetContent(Name);
 		TagPill->SetVisibility(ESlateVisibility::Collapsed);

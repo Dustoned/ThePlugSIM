@@ -73,12 +73,12 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 			TFunction<void()> Fn = MergeFn;
 			M->OnAction.BindLambda([Fn](int32, int32) { if (Fn) { Fn(); } });
 			FButtonStyle S;
-			S.Normal = WeedUI::Rounded(FLinearColor(0.42f, 0.27f, 0.62f, 0.92f), 5.f);
-			S.Hovered = WeedUI::Rounded(FLinearColor(0.55f, 0.36f, 0.80f), 5.f);
-			S.Pressed = WeedUI::Rounded(FLinearColor(0.32f, 0.20f, 0.50f), 5.f);
+			S.Normal = WeedUI::Rounded(WeedUI::ColAccentDim(0.96f), 5.f);
+			S.Hovered = WeedUI::Rounded(WeedUI::ColAccentDim() * 1.3f, 5.f);
+			S.Pressed = WeedUI::Rounded(WeedUI::ColAccentDim() * 0.8f, 5.f);
 			S.NormalPadding = FMargin(5.f, 1.f); S.PressedPadding = FMargin(5.f, 1.f);
 			M->SetStyle(S);
-			M->SetContent(WeedUI::Text(WidgetTree, TEXT("merge"), 8, FLinearColor::White, true));
+			M->SetContent(WeedUI::Text(WidgetTree, TEXT("merge"), 8, WeedUI::ColText(), true));
 			UOverlaySlot* MS = Ov->AddChildToOverlay(M);
 			MS->SetHorizontalAlignment(HAlign_Center);
 			MS->SetVerticalAlignment(VAlign_Bottom);
@@ -97,9 +97,9 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		if (!Badge.IsEmpty())
 		{
 			UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-			Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
+			Pill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f));
 			Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
-			Pill->SetContent(WeedUI::Text(WidgetTree, Badge, 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
+			Pill->SetContent(WeedUI::Text(WidgetTree, Badge, 10, WeedUI::ColText(), false, true));
 			UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
 			PS->SetHorizontalAlignment(HAlign_Right);
 			PS->SetVerticalAlignment(bHotbar ? VAlign_Bottom : VAlign_Top);
@@ -572,26 +572,28 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
 {
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 14.f));
+	{ FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 14.f); CardBr.OutlineSettings.Width = 1.f; CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f)); Panel->SetBrush(CardBr); }
 	Panel->SetPadding(FMargin(18.f));
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapel splitsen"), 15, FLinearColor(0.7f, 1.f, 0.7f), true, true))
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapel splitsen"), 15, WeedUI::ColAccent(), true, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	SplitLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor::White, true);
+	SplitLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), true);
 	VB->AddChildToVerticalBox(SplitLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	SplitSlider = WidgetTree->ConstructWidget<USlider>();
 	SplitSlider->SetMinValue(0.f); SplitSlider->SetMaxValue(1.f); SplitSlider->SetValue(0.5f);
+	SplitSlider->SetSliderHandleColor(WeedUI::ColAccent());
+	SplitSlider->SetSliderBarColor(WeedUI::ColStroke());
 	SplitSlider->OnValueChanged.AddDynamic(this, &UInventoryWidget::OnSplitSliderChanged);
 	VB->AddChildToVerticalBox(SplitSlider)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UWeedActionButton* Conf = TileButton(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 8.f, [this]() { ConfirmSplit(); });
-	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Splitsen"), 12, FLinearColor::White, true));
-	UWeedActionButton* Canc = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f, [this]() { CancelSplit(); });
-	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, FLinearColor::White, true));
+	UWeedActionButton* Conf = TileButton(WidgetTree, WeedUI::ColAccent(), 8.f, [this]() { ConfirmSplit(); });
+	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Splitsen"), 12, WeedUI::ColText(), true));
+	UWeedActionButton* Canc = TileButton(WidgetTree, WeedUI::ColInner(), 8.f, [this]() { CancelSplit(); });
+	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, WeedUI::ColText(), true));
 	Btns->AddChildToHorizontalBox(Conf)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	UHorizontalBoxSlot* CS2 = Btns->AddChildToHorizontalBox(Canc);
 	CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
@@ -702,21 +704,21 @@ void UInventoryWidget::CancelSplit()
 void UInventoryWidget::BuildMergePopup(UCanvasPanel* Root)
 {
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 14.f));
+	{ FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 14.f); CardBr.OutlineSettings.Width = 1.f; CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f)); Panel->SetBrush(CardBr); }
 	Panel->SetPadding(FMargin(18.f));
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapels samenvoegen"), 15, FLinearColor(0.7f, 1.f, 0.7f), true, true))
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapels samenvoegen"), 15, WeedUI::ColAccent(), true, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	MergeLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor::White, true);
+	MergeLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), true);
 	VB->AddChildToVerticalBox(MergeLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UWeedActionButton* Conf = TileButton(WidgetTree, FLinearColor(0.2f, 0.55f, 0.27f), 8.f, [this]() { ConfirmMerge(); });
-	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Samenvoegen"), 12, FLinearColor::White, true));
-	UWeedActionButton* Canc = TileButton(WidgetTree, FLinearColor(0.4f, 0.34f, 0.16f), 8.f, [this]() { CancelMerge(); });
-	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, FLinearColor::White, true));
+	UWeedActionButton* Conf = TileButton(WidgetTree, WeedUI::ColAccent(), 8.f, [this]() { ConfirmMerge(); });
+	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Samenvoegen"), 12, WeedUI::ColText(), true));
+	UWeedActionButton* Canc = TileButton(WidgetTree, WeedUI::ColInner(), 8.f, [this]() { CancelMerge(); });
+	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, WeedUI::ColText(), true));
 	Btns->AddChildToHorizontalBox(Conf)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	UHorizontalBoxSlot* CS2 = Btns->AddChildToHorizontalBox(Canc);
 	CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
@@ -829,7 +831,7 @@ void UInventoryWidget::RebuildStash()
 
 	if (Order.Num() == 0)
 	{
-		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT("Nothing stored.\nPut weed in a shelf/chest."), 11, FLinearColor(0.55f, 0.58f, 0.66f)));
+		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT("Nothing stored.\nPut weed in a shelf/chest."), 11, WeedUI::ColTextDim()));
 		return;
 	}
 
@@ -851,7 +853,7 @@ void UInventoryWidget::RebuildStash()
 		const float Thc = (N > 0) ? (ThcW[Id] / N) : 0.f;
 
 		UBorder* Row = WidgetTree->ConstructWidget<UBorder>();
-		Row->SetBrush(WeedUI::Rounded(FLinearColor(0.09f, 0.10f, 0.14f, 0.9f), 6.f));
+		Row->SetBrush(WeedUI::Rounded(WeedUI::ColInner(0.85f), 6.f));
 		Row->SetPadding(FMargin(6.f, 4.f, 6.f, 4.f));
 		UHorizontalBox* RHB = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Row->SetContent(RHB);
@@ -868,7 +870,7 @@ void UInventoryWidget::RebuildStash()
 
 		FString Nm = WeedUI::PrettyItemName(Id);
 		if (Nm.Len() > 22) { Nm = Nm.Left(21) + TEXT("."); }
-		const FLinearColor NameCol = bWet ? FLinearColor(0.55f, 0.8f, 1.f) : (bWeed ? FLinearColor(0.7f, 1.f, 0.75f) : FLinearColor(0.92f, 0.93f, 1.f));
+		const FLinearColor NameCol = bWet ? FLinearColor(0.55f, 0.8f, 1.f) : (bWeed ? FLinearColor(0.7f, 1.f, 0.75f) : WeedUI::ColText()); // nat=blauw / wiet=groen (semantisch), rest=palet
 		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Nm, 12, NameCol));
 
 		FString Sub;
@@ -879,7 +881,7 @@ void UInventoryWidget::RebuildStash()
 			Sub = FString::Printf(TEXT("%dg   %.0f%% THC%s"), Grams, Thc, bWet ? TEXT("  (wet)") : TEXT(""));
 		}
 		else { Sub = FString::Printf(TEXT("x%d"), N); }
-		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Sub, 10, FLinearColor(0.6f, 0.64f, 0.74f)));
+		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Sub, 10, WeedUI::ColTextDim()));
 
 		StashList->AddChild(Row);
 		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));

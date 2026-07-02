@@ -465,12 +465,6 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 		SlotsBox = WidgetTree->ConstructWidget<UVerticalBox>();
 		PickVB->AddChildToVerticalBox(SlotsBox);
 
-		// Mode-keuze (Normal/Sandbox/Testing) — éénmalig gebouwd naast de slot-lijst en verborgen.
-		// We wisselen zichtbaarheid tussen SlotsBox en ModeBox i.p.v. de lijst te herbouwen.
-		ModeBox = WidgetTree->ConstructWidget<UVerticalBox>();
-		ModeBox->SetVisibility(ESlateVisibility::Collapsed);
-		PickVB->AddChildToVerticalBox(ModeBox);
-
 		// Autosave-toggle als gewone swatch-knop onderaan (geen losse "laatste save"-tekst).
 		AutosaveBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
 		AutosaveBtn->OnClicked.AddDynamic(AutosaveBtn, &UWeedActionButton::Handle);
@@ -667,9 +661,9 @@ void UMainMenuWidget::SetCoopStage(int32 Stage)
 
 void UMainMenuWidget::OnHostCoop()
 {
-	// Host = vers spel als listen-server. Hergebruik de mode-keuze (Normal/Sandbox/Testing).
+	// Host = vers spel als listen-server. Hergebruik de New Game-slot-keuze (-> OnSlotChosen host-tak).
 	bHostMode = true;
-	OpenPicker(1); // toont eerst de slot-keuze, daarna de mode-keuze (-> OnModeChosen)
+	OpenPicker(1);
 }
 
 void UMainMenuWidget::OnJoinCoop()
@@ -709,39 +703,11 @@ void UMainMenuWidget::UpdateAutosaveLabel()
 	AutosaveLabel->SetColorAndOpacity(FSlateColor(bOn ? FLinearColor(0.74f, 0.55f, 1.f) : FLinearColor(1.f, 0.6f, 0.55f)));
 }
 
-// De 3 mode-knoppen (Normal/Sandbox/Testing) éénmalig in ModeBox bouwen. Statisch qua inhoud,
-// dus daarna alleen nog zichtbaarheid wisselen — nooit herbouwen.
-void UMainMenuWidget::EnsureModeButtons()
-{
-	if (!ModeBox || ModeBox->GetChildrenCount() > 0) { return; }
-	// (Map-keuze verwijderd: CityBeachStrip is de enige speelmap; New Game gaat er altijd heen.)
-	struct FModeDef { const TCHAR* Name; const TCHAR* Desc; int32 Mode; };
-	const FModeDef Modes[3] = {
-		{ TEXT("Normal"),  TEXT("Begin from scratch - earn everything"),       0 },
-		{ TEXT("Sandbox"), TEXT("Loads of cash + a full kit - free play"),     1 },
-		{ TEXT("Testing"), TEXT("Starter budget + starter items (quick test)"), 2 },
-	};
-	ModeLabels.Reset();
-	for (const FModeDef& M : Modes)
-	{
-		const int32 ModeVal = M.Mode;
-		UWeedActionButton* MB = WidgetTree->ConstructWidget<UWeedActionButton>();
-		MB->OnClicked.AddDynamic(MB, &UWeedActionButton::Handle);
-		MB->OnAction.BindLambda([this, ModeVal](int32, int32) { OnModeChosen(ModeVal); });
-		MB->SetStyle(SwatchStyle(SwatchTex, FMargin(16.f, 12.f)));
-		UTextBlock* Lbl = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s\n%s"), M.Name, M.Desc), 14, FLinearColor::White, true);
-		MB->SetContent(Lbl);
-		ModeBox->AddChildToVerticalBox(MB)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
-		ModeLabels.Add(Lbl);
-	}
-}
-
 void UMainMenuWidget::RefreshSlots()
 {
 	if (PickerTitle)
 	{
-		const TCHAR* Title = (MenuMode == 3) ? TEXT("NEW GAME  -  pick a mode")
-			: (MenuMode == 1) ? TEXT("NEW GAME  -  pick a slot") : TEXT("LOAD  -  pick a slot");
+		const TCHAR* Title = (MenuMode == 1) ? TEXT("NEW GAME  -  pick a slot") : TEXT("LOAD  -  pick a slot");
 		PickerTitle->SetText(FText::FromString(Title));
 	}
 	USaveGameSubsystem* Save = GetSave(GetWorld());
@@ -754,13 +720,6 @@ void UMainMenuWidget::RefreshSlots()
 		const bool bAny = Save && Save->GetMostRecentSaveTime(Last);
 		LastSaveText->SetText(FText::FromString(bAny ? FString::Printf(TEXT("Laatste save: %s"), *FmtAgo(Last)) : TEXT("No save yet")));
 	}
-
-	// Mode-keuze <-> slot-lijst: pre-gebouwde panes visibility-swappen (geen teardown).
-	EnsureModeButtons();
-	const bool bModeStage = (MenuMode == 3);
-	if (ModeBox)  { ModeBox->SetVisibility(bModeStage ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
-	if (SlotsBox) { SlotsBox->SetVisibility(bModeStage ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); }
-	if (bModeStage) { return; } // mode-knoppen zijn statisch; niets aan de slot-rijen te doen
 
 	if (!SlotsBox) { return; }
 
@@ -876,11 +835,13 @@ void UMainMenuWidget::OnSlotChosen(int32 SlotIdx)
 {
 	USaveGameSubsystem* Save = GetSave(GetWorld());
 	if (!Save) { return; }
-	if (MenuMode == 1) // New Game -> eerst een game-mode kiezen
+	if (MenuMode == 1) // New Game: direct starten (geen mode-keuze meer; elke verse game is Normaal)
 	{
-		PendingNewSlot = SlotIdx;
-		MenuMode = 3;     // mode-keuze
-		RefreshSlots();
+		// CityBeachStrip is de enige speelmap. Geldt ook voor de co-op host: de listen-server
+		// reist hierheen en joiners volgen automatisch.
+		Save->SetPendingMap(TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"));
+		if (bHostMode) { bHostMode = false; Save->SetPendingCoopCompetitive(bHostCompetitive); Save->HostNewGameLan(SlotIdx); } // co-op host (listen)
+		else { Save->RequestNewGame(SlotIdx); }
 	}
 	else // Load handmatige save (level herlaadt, daarna save toegepast)
 	{
@@ -896,18 +857,6 @@ void UMainMenuWidget::OnToggleCoopMode()
 		// Alleen de tekst wisselen op het persistente label (geen style-rebuild / SetContent).
 		const FString L = bHostCompetitive ? TEXT("Mode: COMPETITIVE  (versus)") : TEXT("Mode: CO-OP  (build together)");
 		CoopModeLabel->SetText(FText::FromString(L));
-	}
-}
-
-void UMainMenuWidget::OnModeChosen(int32 Mode)
-{
-	if (USaveGameSubsystem* Save = GetSave(GetWorld()))
-	{
-		// CityBeachStrip is de enige speelmap. Geldt ook voor de co-op host: de listen-server
-		// reist hierheen en joiners volgen automatisch.
-		Save->SetPendingMap(TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"));
-		if (bHostMode) { bHostMode = false; Save->SetPendingCoopCompetitive(bHostCompetitive); Save->HostNewGameLan(PendingNewSlot, (EGameStartMode)Mode); } // co-op host (listen)
-		else { Save->RequestNewGame(PendingNewSlot, (EGameStartMode)Mode); }
 	}
 }
 

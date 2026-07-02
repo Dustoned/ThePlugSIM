@@ -1,5 +1,5 @@
 // UDevMenuWidget — één dev-menu (GTA-mod-menu-stijl): een volle-hoogte SIDEBAR links, getoggled met F10
-// (alleen in free-build/Sandbox). Bundelt ALLE dev-tools die voorheen verspreid zaten over de telefoon-dev-tabs
+// (alleen met dev-tools AAN; Ctrl+Shift+F10 zet die sessie-breed aan/uit). Bundelt ALLE dev-tools die voorheen verspreid zaten over de telefoon-dev-tabs
 // (Test/Rooms/Light/Spots) in nette secties met uitleg per categorie. De knoppen roepen dezelfde bestaande
 // UPhoneClientComponent-methodes aan; de logica is dus niet verplaatst, alleen de UI.
 #pragma once
@@ -47,19 +47,23 @@ protected:
 	void RefreshRoomTemplates(); // Rooms: templates-lijst
 	void RefreshRoomPlaced();    // Rooms: geplaatste stamps-lijst
 	void RefreshMarkedSpots();   // Marked spots: F9-marker-lijst
+	void RefreshFreeBuildLabel(); // Cheats: "Free build: ON/OFF"-label syncen met de GameState (SetText-only)
 
 	TWeakObjectPtr<UPhoneClientComponent> Phone;
 
 	UPROPERTY() TObjectPtr<UBorder> Frame;
 	UPROPERTY() TObjectPtr<UVerticalBox> CatList; // linker categorie-navigatie
-	UPROPERTY() TObjectPtr<UVerticalBox> Body;    // container: houdt alle 11 categorie-panels
+	UPROPERTY() TObjectPtr<UVerticalBox> Body;    // container: houdt alle categorie-panels
 	UPROPERTY() TArray<TObjectPtr<UWeedActionButton>> CatButtons; // gecachte nav-knoppen (voor highlight)
-	UPROPERTY() TArray<TObjectPtr<UVerticalBox>> CatPanels;       // 11 persistente panels (één per categorie)
+	UPROPERTY() TArray<TObjectPtr<UVerticalBox>> CatPanels;       // persistente panels (één per categorie)
 
 	int32 SelectedCat = 0; // gekozen categorie (index in de nav-lijst)
 
 	// --- Shops: persistent type-label (type-cycle = alleen SetText, geen rebuild) ---
 	UPROPERTY() TObjectPtr<UTextBlock> ShopTypeLabel;
+
+	// --- Cheats: persistent free-build-label (toggle = alleen SetText, geen rebuild) ---
+	UPROPERTY() TObjectPtr<UTextBlock> FreeBuildLabel;
 
 	// --- Rooms: templates-lijst (persistent pool + per-rij signatuur) ---
 	UPROPERTY() TObjectPtr<UTextBlock> RoomTplHead;                 // "Templates (click to place)" header, toggle-baar

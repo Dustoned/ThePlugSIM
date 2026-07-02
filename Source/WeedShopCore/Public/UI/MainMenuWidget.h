@@ -42,16 +42,13 @@ protected:
 	void ClosePicker();
 	void RefreshSlots();
 	void UpdateAutosaveLabel();                       // alleen de autosave-tekst/kleur in-place bijwerken
-	void EnsureModeButtons();                          // bouwt de 3 mode-knoppen éénmalig in ModeBox
-	void OnSlotChosen(int32 SlotIdx);                 // New Game / Load handmatige save
+	void OnSlotChosen(int32 SlotIdx);                 // New Game starten / Load handmatige save
 	void OnLoadAutosave(int32 SlotIdx);               // Load de autosave van dit slot
-	void OnModeChosen(int32 Mode);                    // 0 Normal, 1 Sandbox, 2 Testing (na New Game-slot)
-	int32 PendingNewSlot = -1;                        // slot gekozen voor New Game, wacht op mode-keuze
 
 	// --- LAN co-op ---
 	void OpenCoop();
 	void CloseCoop();
-	void OnHostCoop();   // host: vers spel als listen-server (via de mode-keuze)
+	void OnHostCoop();   // host: vers spel als listen-server (via de slot-keuze)
 	void OnJoinCoop();   // join: verbind met het ingevoerde host-IP
 	bool bHostMode = false;                           // true = de New Game-flow host een listen-server
 	bool bHostCompetitive = false;                    // gekozen co-op modus (false = co-op samen, true = competitive)
@@ -97,10 +94,6 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> SlotAutoBtns;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> SlotAutoLabels;
 	TArray<FString> SlotRowSigs;                         // per-rij handtekening (rebuild alleen bij wijziging)
-
-	// Mode-keuze (Normal/Sandbox/Testing): éénmalig gebouwd, verborgen tot een New Game-slot is gekozen.
-	UPROPERTY() TObjectPtr<class UVerticalBox> ModeBox;
-	UPROPERTY() TArray<TObjectPtr<UTextBlock>> ModeLabels; // huidige mode-labels (voor evt. in-place refresh)
 
 	// Vaste balk boven de slots: autosave aan/uit + wanneer de laatste save was.
 	UPROPERTY() TObjectPtr<class UWeedActionButton> AutosaveBtn;

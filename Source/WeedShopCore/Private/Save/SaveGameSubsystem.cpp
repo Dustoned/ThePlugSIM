@@ -14,8 +14,6 @@
 #include "Progression/LevelComponent.h"
 #include "Npc/NpcRegistryComponent.h"   // NPC-relaties opslaan/herstellen
 #include "Phone/ContactsComponent.h"    // contacten + berichten opslaan/herstellen
-#include "Progression/StoreComponent.h"
-#include "UI/WeedToast.h"
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/DryingRack.h"
 #include "World/StorageShelf.h"
@@ -220,7 +218,7 @@ void USaveGameSubsystem::ReloadCurrentLevel(const FString& Options)
 	UGameplayStatics::OpenLevel(W, FName(*LevelName), true, Options);
 }
 
-void USaveGameSubsystem::HostNewGameLan(int32 Slot, EGameStartMode Mode)
+void USaveGameSubsystem::HostNewGameLan(int32 Slot)
 {
 	// Zelfde verse start als New Game, maar herlaad het level ALS LISTEN-SERVER (?listen). Zo kan een
 	// vriend met JoinLan() direct binnenkomen. De Pending-staat overleeft de reload (GameInstance-subsystem).
@@ -232,7 +230,6 @@ void USaveGameSubsystem::HostNewGameLan(int32 Slot, EGameStartMode Mode)
 	PlaytimeBaseSeconds = 0.0;
 	PlaytimeMark = FDateTime::UtcNow();
 	Pending = EPending::Fresh;
-	PendingStartMode = Mode;
 	PendingLoadName.Reset();
 	ReloadCurrentLevel(TEXT("listen"));
 }
@@ -253,7 +250,7 @@ void USaveGameSubsystem::JoinLan(const FString& IpPort)
 	}
 }
 
-void USaveGameSubsystem::RequestNewGame(int32 Slot, EGameStartMode Mode)
+void USaveGameSubsystem::RequestNewGame(int32 Slot)
 {
 	SetSlot(Slot);
 	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
@@ -263,7 +260,6 @@ void USaveGameSubsystem::RequestNewGame(int32 Slot, EGameStartMode Mode)
 	PlaytimeBaseSeconds = 0.0;
 	PlaytimeMark = FDateTime::UtcNow();
 	Pending = EPending::Fresh;
-	PendingStartMode = Mode;
 	PendingLoadName.Reset();
 	ReloadCurrentLevel();
 }
@@ -317,9 +313,8 @@ bool USaveGameSubsystem::RunPendingOnWorldReady()
 	if (Pending == EPending::Fresh)
 	{
 		Pending = EPending::None;
-		ApplyStartMode(PendingStartMode); // geld + items van de gekozen modus
+		ApplyNormalStart(); // startkit + start-cash voor de host
 		if (AWeedShopGameState* GS = GetWeedGameState()) { GS->SetCoopMode(bPendingCompetitive ? ECoopMode::Competitive : ECoopMode::Coop); }
-		PendingStartMode = EGameStartMode::Normal;
 		return true; // verder is een verse wereld = map-default
 	}
 	if (Pending == EPending::Load)
@@ -333,102 +328,16 @@ bool USaveGameSubsystem::RunPendingOnWorldReady()
 	return false;
 }
 
-void USaveGameSubsystem::ApplyStartMode(EGameStartMode Mode)
+void USaveGameSubsystem::ApplyNormalStart()
 {
-	SessionStartMode = Mode; // onthoud de mode voor de hele sessie (save + dev-tools)
+	// Elke verse game start Normaal: een kleine startkit + start-cash. De oude Sandbox/Testing-kits
+	// leven verder als dev-menu starter-kits (ServerDevGiveStarterKit); dev-tools zet je daar aan.
 	AWeedShopGameState* GS = GetWeedGameState();
 	UWorld* World = GS ? GS->GetWorld() : nullptr;
 	APawn* P = (World && World->GetFirstPlayerController()) ? World->GetFirstPlayerController()->GetPawn() : nullptr;
 
-	// Normale start: een kleine startkit + EUR 420 (geen free-build, geen max level).
-	if (Mode == EGameStartMode::Normal)
-	{
-		// Eén code-pad voor host + co-op joiners; de helper dedupt per speler.
-		GrantNormalStartExtrasForPawn(P);
-		return;
-	}
-
-	if (GS) { GS->SetFreeBuild(true); } // testing/sandbox: overal bouwen toegestaan
-	if (!P) { return; }
-
-	const bool bSandbox = (Mode == EGameStartMode::Sandbox);
-
-	// Geld.
-	if (UEconomyComponent* Econ = P->FindComponentByClass<UEconomyComponent>())
-	{
-		Econ->SetBalanceCents(bSandbox ? 100000000 : 500000); // Sandbox EUR 1.000.000 / Testing EUR 5.000
-		Econ->SetBankCents(bSandbox ? 100000000 : 500000);
-	}
-
-	// Level: Testing en Sandbox starten op max level (alles ontgrendeld om te testen).
-	if (ULevelComponent* Lv = GS->GetLeveling())
-	{
-		Lv->GrantLevel(ULevelComponent::MaxLevel);
-	}
-
-	// Starter-items.
-	if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
-	{
-		auto Give = [Inv](const TCHAR* Id, int32 N) { Inv->AddItem(FName(Id), N); };
-		if (bSandbox)
-		{
-			// Sandbox = NETTE set i.p.v. een volgepropte inventory. Eerst leeg (anders stapelt 'ie op de
-			// gewone starter), dan een standaard starter + precies de plaatsbare meubels die je nodig hebt
-			// om de furniture-templates in te richten (free-build = overal plaatsen).
-			Inv->ClearAll();
-			Give(TEXT("Papers_Small"), 5);
-			Give(TEXT("Soil_Basic"), 5);
-			Give(TEXT("WaterBottle_Plastic"), 2);
-			Give(TEXT("Pot_Clay"), 2);
-			Give(TEXT("Cont_Bag2"), 10);
-			// Plaatsbare meubels (authoring):
-			Give(TEXT("Table"), 5);
-			Give(TEXT("Fridge"), 5);
-			Give(TEXT("Mattress"), 5);
-			Give(TEXT("Sink"), 5); // sandbox-only: om de sink-positie voor de template in te richten
-			Give(TEXT("DryRack_Std"), 3);
-			Give(TEXT("Bench_Pack"), 3);
-			Give(TEXT("Shelf"), 3);
-			Give(TEXT("Chest"), 3);
-			Give(TEXT("Lamp_Ceiling"), 3);
-			Give(TEXT("Atm"), 2);
-			// Eén soort zaad om mee te testen.
-			if (GS->GetStore())
-			{
-				const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
-				if (Seeds.Num() > 0) { Inv->AddItem(UStoreComponent::SeedItemId(Seeds[0]), 3); }
-			}
-		}
-		else
-		{
-			// Testing: starter-budget + handige items (zoals voorheen).
-			Give(TEXT("Soil_Basic"),          3);
-			Give(TEXT("WaterBottle_Plastic"), 1);
-			Give(TEXT("Papers_Small"),        10);
-			Give(TEXT("Cont_Bag2"),           10);
-			Give(TEXT("Pot_Clay"),            1);
-			Give(TEXT("DryRack_Cheap"),       1);
-			Give(TEXT("Bench_Pack"),          1);
-			// (Geen Sink: vaste fixture.)
-			if (GS->GetStore())
-			{
-				const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
-				const int32 Count = FMath::Min(2, Seeds.Num());
-				for (int32 i = 0; i < Count; ++i) { Inv->AddItem(UStoreComponent::SeedItemId(Seeds[i]), 3); }
-			}
-		}
-	}
-
-	// Dev-modes: warm alle NPC's op (goede stats + ontgrendeld) + zet wat contacten in de telefoon,
-	// zodat je meteen overal kunt dealen/appen voor grondig testen.
-	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
-	{
-		Reg->WarmAllForTesting(GS->GetContacts());
-	}
-
-	UWeedToast::Notify(-1, 5.f, FColor::Green, bSandbox
-		? TEXT("SANDBOX - loaded with cash + a full starter kit.")
-		: TEXT("TESTING - good NPC stats, contacts + starter items added."));
+	// Eén code-pad voor host + co-op joiners; de helper dedupt per speler.
+	GrantNormalStartExtrasForPawn(P);
 }
 
 bool USaveGameSubsystem::QuickContinue()
@@ -637,7 +546,8 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
 	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); Save->bShopLicensed = Lv->IsShopLicensed(); }
 	Save->bFreeBuild = GS->IsFreeBuild();
-	Save->StartMode = (uint8)SessionStartMode; // mode meeschrijven -> op load weten we of dev-tools mogen
+	Save->StartMode = 0; // deprecated (mode-picker is weg); alleen nog gelezen voor migratie van oude saves
+	Save->bDevTools = GS->AreDevToolsEnabled(); // dev-tools meeschrijven -> op load weten we of ze aan mogen
 	if (UWorld* Wm = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr) { Save->MapPath = Wm->GetOutermost()->GetName(); }
 	Save->CoopMode = (uint8)GS->GetCoopMode();
 
@@ -703,12 +613,12 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	PlaytimeMark = FDateTime::UtcNow();
 
 	// Gedeelde staat terugzetten.
-	// Free-build/dev-tools komen NU uit de start-mode, niet meer uit de losse bFreeBuild-vlag: oude
-	// saves (die per ongeluk bFreeBuild=true kregen op de pack-map) defaulten naar StartMode 0 (Normal)
-	// en worden zo automatisch een clean playthrough. Alleen echte Sandbox/Testing-saves houden dev-tools.
-	SessionStartMode = (EGameStartMode)Save->StartMode;
-	const bool bDevMode = (SessionStartMode == EGameStartMode::Sandbox || SessionStartMode == EGameStartMode::Testing);
-	GS->SetFreeBuild(bDevMode);
+	// Dev-tools/free-build: v4+ saves dragen bDevTools; oude saves (v<=3) droegen de start-mode in
+	// StartMode (1 = Sandbox, 2 = Testing) -> die migreren naar "Normaal + dev-tools". Free-build
+	// alleen als dev-tools aan staan (een clean playthrough kan nooit per ongeluk free-build laden).
+	const bool bLegacyDev = (Save->StartMode == 1 || Save->StartMode == 2);
+	GS->SetDevTools(Save->bDevTools || bLegacyDev);
+	GS->SetFreeBuild((Save->bDevTools || bLegacyDev) && Save->bFreeBuild);
 	GS->SetCoopMode((ECoopMode)Save->CoopMode);
 	if (UDayCycleComponent* Day = GS->GetDayCycle()) { Day->SetTimeOfDaySeconds(Save->TimeOfDaySeconds); }
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }
@@ -956,14 +866,13 @@ void USaveGameSubsystem::RestorePlayerByPawn(APawn* Pawn)
 
 void USaveGameSubsystem::GrantNormalStartExtrasForPawn(APawn* Pawn)
 {
-	// Alleen server, alleen Normal, alleen een VERSE game (load herstelt zelf uit de save), exact 1x per speler.
+	// Alleen server, alleen een VERSE game (load herstelt zelf uit de save), exact 1x per speler.
 	if (!HasAuthorityWorld() || !Pawn) { return; }
-	if (SessionStartMode != EGameStartMode::Normal) { return; }
 	if (!IsFreshGame()) { return; } // Loaded != nullptr -> RestorePlayerByPawn herstelt deze speler uit de save
 	const APlayerState* PS = Pawn->GetPlayerState();
 	const int32 Pid = PS ? PS->GetPlayerId() : -1;
 	if (Pid < 0) { return; }                          // nog geen geldige speler-id
-	if (GrantedStartExtras.Contains(Pid)) { return; } // host kreeg ze al via ApplyStartMode / geen dubbele grant
+	if (GrantedStartExtras.Contains(Pid)) { return; } // host kreeg ze al via ApplyNormalStart / geen dubbele grant
 	GrantedStartExtras.Add(Pid);
 	if (UEconomyComponent* Econ = Pawn->FindComponentByClass<UEconomyComponent>())
 	{

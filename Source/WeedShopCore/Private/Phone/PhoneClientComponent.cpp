@@ -1153,7 +1153,33 @@ void UPhoneClientComponent::Toggle()
 void UPhoneClientComponent::ToggleDevMenu()
 {
 	const AWeedShopGameState* GS = GetGS();
-	if (!GS || !GS->IsFreeBuild()) { return; } // dev-menu alleen in Sandbox/Testing (stil in een normaal spel)
+	if (!GS) { return; }
+	// Chord-gate: Ctrl+Shift+F10 zet de dev-tools sessie-breed aan/uit (werkt ook in Shipping, waar
+	// console/Exec niet bestaan). Gewone F10 doet zonder dev-tools NIKS (stil - clean playthrough).
+	const APlayerController* PC = GetPC();
+	const bool bChord = PC && PC->IsInputKeyDown(EKeys::LeftControl) && PC->IsInputKeyDown(EKeys::LeftShift);
+	if (!GS->AreDevToolsEnabled())
+	{
+		if (!bChord) { return; } // stil in een normaal spel
+		ServerSetDevTools(true);
+		Toast(TEXT("Dev tools enabled"), FColor::Cyan, 3.f);
+		EnsureWidget();
+		bDevMenuOpen = true;
+		bOpen = false; // telefoon en dev-menu niet tegelijk
+		if (DevMenuWidget) { DevMenuWidget->MarkDirty(); }
+		UpdateCursor();
+		return;
+	}
+	if (bChord)
+	{
+		// Chord terwijl AAN -> dev-tools UIT + menu dicht.
+		ServerSetDevTools(false);
+		Toast(TEXT("Dev tools disabled"), FColor::Orange, 3.f);
+		bDevMenuOpen = false;
+		UpdateCursor();
+		return;
+	}
+	// Dev-tools AAN + gewone F10 -> menu-toggle zoals voorheen.
 	EnsureWidget();
 	bDevMenuOpen = !bDevMenuOpen;
 	if (bDevMenuOpen)
@@ -1194,9 +1220,9 @@ void UPhoneClientComponent::CloseAtm()
 
 void UPhoneClientComponent::ToggleSpotInfo()
 {
-	// Dev-tool (F9 spot-markers): alleen in Sandbox/Testing. In een normaal spel doet dit niks -> clean playthrough.
+	// Dev-tool (F9 spot-markers): alleen met dev-tools AAN. In een normaal spel doet dit niks -> clean playthrough.
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	if (!GS || !GS->IsFreeBuild()) { return; }
+	if (!GS || !GS->AreDevToolsEnabled()) { return; }
 	EnsureWidget();
 	if (SpotInfoWidget) { SpotInfoWidget->ToggleInfo(); }
 }
@@ -3131,6 +3157,125 @@ void UPhoneClientComponent::ServerSetDayNight_Implementation(bool bNight)
 	// Midden-dag = halverwege de lichtfase; midden-nacht = halverwege de donkerfase.
 	const float NewTime = bNight ? (DC->DayLengthSeconds + DC->NightLengthSeconds * 0.5f) : (DC->DayLengthSeconds * 0.5f);
 	DC->SetTimeOfDaySeconds(NewTime);
+}
+
+void UPhoneClientComponent::ServerSetDevTools_Implementation(bool bOn)
+{
+	// Sessie-brede dev-tools-vlag (elke speler mag 'm zetten; gerepliceerd via de GameState).
+	if (AWeedShopGameState* GS = GetGS()) { GS->SetDevTools(bOn); }
+}
+
+void UPhoneClientComponent::ServerDevGiveCash_Implementation(int64 Cents)
+{
+	const AWeedShopGameState* GS = GetGS();
+	if (!GS || !GS->AreDevToolsEnabled() || Cents <= 0) { return; }
+	if (UEconomyComponent* Econ = GetOwnerEconomy())
+	{
+		Econ->SetBalanceCents(Econ->GetBalanceCents() + Cents);
+	}
+}
+
+void UPhoneClientComponent::ServerDevSandboxMoney_Implementation()
+{
+	const AWeedShopGameState* GS = GetGS();
+	if (!GS || !GS->AreDevToolsEnabled()) { return; }
+	// Zelfde bedragen als de Sandbox-startmode: EUR 1.000.000 cash + bank.
+	if (UEconomyComponent* Econ = GetOwnerEconomy())
+	{
+		Econ->SetBalanceCents(100000000);
+		Econ->SetBankCents(100000000);
+	}
+}
+
+void UPhoneClientComponent::ServerDevSetLevel_Implementation(int32 NewLevel)
+{
+	AWeedShopGameState* GS = GetGS();
+	ULevelComponent* Lv = GS ? GS->GetLeveling() : nullptr;
+	if (!Lv || !GS->AreDevToolsEnabled()) { return; }
+	Lv->GrantLevel(NewLevel);
+	// GrantLevel zet de shop-licentie NIET (die zit alleen in het AddXP-levelup-pad - oude quirk);
+	// vanaf level 50 hoort de licentie erbij, dus hier expliciet mee-zetten.
+	if (NewLevel >= ULevelComponent::ShopLicenseLevel) { Lv->RestoreShopLicensed(true); }
+}
+
+void UPhoneClientComponent::ServerDevWarmNpcs_Implementation()
+{
+	AWeedShopGameState* GS = GetGS();
+	if (!GS || !GS->AreDevToolsEnabled()) { return; }
+	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+	{
+		Reg->WarmAllForTesting(GS->GetContacts());
+		Toast(TEXT("All NPCs warmed - good stats, unlocked + contacts added"), FColor::Green, 3.f);
+	}
+}
+
+void UPhoneClientComponent::ServerDevSetFreeBuild_Implementation(bool bOn)
+{
+	AWeedShopGameState* GS = GetGS();
+	if (!GS || !GS->AreDevToolsEnabled()) { return; }
+	GS->SetFreeBuild(bOn);
+}
+
+void UPhoneClientComponent::ServerDevGiveStarterKit_Implementation(bool bSandbox)
+{
+	// Item-lijsten 1-op-1 uit de Testing/Sandbox-startmodes (USaveGameSubsystem::ApplyStartMode),
+	// zodat je ze ook midden in een sessie kunt pakken. Alleen items + zaden (geld/level/NPC's
+	// hebben hun eigen cheat-knoppen).
+	AWeedShopGameState* GS = GetGS();
+	if (!GS || !GS->AreDevToolsEnabled()) { return; }
+	APawn* P = Cast<APawn>(GetOwner());
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Inv) { return; }
+	auto Give = [Inv](const TCHAR* Id, int32 N) { Inv->AddItem(FName(Id), N); };
+	if (bSandbox)
+	{
+		// Sandbox = NETTE set i.p.v. een volgepropte inventory. Eerst leeg (anders stapelt 'ie op wat
+		// je al had), dan een standaard starter + precies de plaatsbare meubels voor het inrichten.
+		Inv->ClearAll();
+		Give(TEXT("Papers_Small"), 5);
+		Give(TEXT("Soil_Basic"), 5);
+		Give(TEXT("WaterBottle_Plastic"), 2);
+		Give(TEXT("Pot_Clay"), 2);
+		Give(TEXT("Cont_Bag2"), 10);
+		// Plaatsbare meubels (authoring):
+		Give(TEXT("Table"), 5);
+		Give(TEXT("Fridge"), 5);
+		Give(TEXT("Mattress"), 5);
+		Give(TEXT("Sink"), 5); // sandbox-only: om de sink-positie voor de template in te richten
+		Give(TEXT("DryRack_Std"), 3);
+		Give(TEXT("Bench_Pack"), 3);
+		Give(TEXT("Shelf"), 3);
+		Give(TEXT("Chest"), 3);
+		Give(TEXT("Lamp_Ceiling"), 3);
+		Give(TEXT("Atm"), 2);
+		// Eén soort zaad om mee te testen.
+		if (GS->GetStore())
+		{
+			const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
+			if (Seeds.Num() > 0) { Inv->AddItem(UStoreComponent::SeedItemId(Seeds[0]), 3); }
+		}
+	}
+	else
+	{
+		// Testing: starter-budget + handige items (zoals voorheen).
+		Give(TEXT("Soil_Basic"),          3);
+		Give(TEXT("WaterBottle_Plastic"), 1);
+		Give(TEXT("Papers_Small"),        10);
+		Give(TEXT("Cont_Bag2"),           10);
+		Give(TEXT("Pot_Clay"),            1);
+		Give(TEXT("DryRack_Cheap"),       1);
+		Give(TEXT("Bench_Pack"),          1);
+		// (Geen Sink: vaste fixture.)
+		if (GS->GetStore())
+		{
+			const TArray<FName> Seeds = GS->GetStore()->GetSeedCatalog();
+			const int32 Count = FMath::Min(2, Seeds.Num());
+			for (int32 i = 0; i < Count; ++i) { Inv->AddItem(UStoreComponent::SeedItemId(Seeds[i]), 3); }
+		}
+	}
+	UWeedToast::NotifyPawn(P, -1, 3.f, FColor::Green, bSandbox
+		? TEXT("Sandbox kit added (inventory REPLACED - authoring set)")
+		: TEXT("Tester kit added (starter items + 2 seed types)"));
 }
 
 void UPhoneClientComponent::RequestTransfer(int64 AmountCents)

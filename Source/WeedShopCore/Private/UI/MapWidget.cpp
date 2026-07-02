@@ -104,7 +104,7 @@ UTextBlock* UMapWidget::AddCanvasText(const FString& T, FVector2D Pos, float W, 
 UWidget* UMapWidget::AddPill(const FString& T, FVector2D Pos, int32 Size, const FLinearColor& TextCol, int32 ZOrder)
 {
 	UBorder* B = WidgetTree->ConstructWidget<UBorder>();
-	B->SetBrush(WeedUI::Rounded(FLinearColor(0.01f, 0.02f, 0.03f, 0.8f), 4.f));
+	B->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.85f), 4.f));
 	B->SetPadding(FMargin(5.f, 1.f, 5.f, 2.f));
 	UTextBlock* Tb = WidgetTree->ConstructWidget<UTextBlock>();
 	Tb->SetText(FText::FromString(T));
@@ -175,7 +175,7 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 
 		// Donkere achtergrond (dekkend -> HUD erachter komt er niet doorheen).
 		UBorder* Bg = WidgetTree->ConstructWidget<UBorder>();
-		Bg->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.07f, 1.f));
+		Bg->SetBrushColor(WeedUI::ColBg());
 		Root->AddChildToOverlay(Bg);
 
 		// Hoofd-layout: kaart links/midden, info-zijpaneel rechts. Zo staat er NIETS over de kaart heen.
@@ -219,7 +219,7 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 
 		// --- Info-zijpaneel rechts (naast de kaart, niet erover) ---
 		UBorder* Side = WidgetTree->ConstructWidget<UBorder>();
-		Side->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.08f, 0.11f, 0.97f), 12.f));
+		{ FSlateBrush SideBr = WeedUI::Rounded(WeedUI::ColPanel(0.98f), 12.f); SideBr.OutlineSettings.Width = 1.f; SideBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f)); Side->SetBrush(SideBr); }
 		Side->SetPadding(FMargin(16.f, 14.f));
 		if (UHorizontalBoxSlot* SS = Main->AddChildToHorizontalBox(Side))
 		{
@@ -242,12 +242,12 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 			Tb->SetAutoWrapText(true);
 			if (UVerticalBoxSlot* Vs = Info->AddChildToVerticalBox(Tb)) { Vs->SetPadding(FMargin(0.f, TopPad, 0.f, 0.f)); }
 		};
-		AddInfo(TEXT("CITY - MAP"), 22, FLinearColor(0.8f, 0.9f, 1.f), 0.f);
-		AddInfo(TEXT("Noord is boven"), 12, FLinearColor(0.6f, 0.65f, 0.75f), 6.f);
-		AddInfo(TEXT("Klik = waypoint zetten"), 13, FLinearColor(0.75f, 0.85f, 1.f), 22.f);
-		AddInfo(TEXT("Rechtsklik = waypoint wissen"), 13, FLinearColor(0.75f, 0.85f, 1.f), 3.f);
-		AddInfo(TEXT("M = kaart sluiten"), 12, FLinearColor(0.6f, 0.65f, 0.75f), 3.f);
-		AddInfo(TEXT("Legenda"), 14, FLinearColor(0.85f, 0.9f, 1.f), 24.f);
+		AddInfo(TEXT("CITY - MAP"), 22, WeedUI::ColText(), 0.f);
+		AddInfo(TEXT("Noord is boven"), 12, WeedUI::ColTextDim(), 6.f);
+		AddInfo(TEXT("Klik = waypoint zetten"), 13, WeedUI::ColText(), 22.f);
+		AddInfo(TEXT("Rechtsklik = waypoint wissen"), 13, WeedUI::ColText(), 3.f);
+		AddInfo(TEXT("M = kaart sluiten"), 12, WeedUI::ColTextDim(), 3.f);
+		AddInfo(TEXT("Legenda"), 14, WeedUI::ColText(), 24.f);
 		AddInfo(TEXT("cyan dot = you"), 12, FLinearColor(0.4f, 0.9f, 1.f), 6.f);
 		AddInfo(TEXT("geel = waypoint"), 12, FLinearColor(1.f, 0.85f, 0.3f), 3.f);
 		AddInfo(TEXT("blauw = NPC"), 12, FLinearColor(0.45f, 0.6f, 1.f), 3.f);

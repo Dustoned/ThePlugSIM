@@ -384,7 +384,7 @@ void UDryingRackWidget::FillBody()
 				*WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.Quality), 12, WeedUI::ColText(), false, true);
 			UHorizontalBoxSlot* NS = Top->AddChildToHorizontalBox(NameT);
 			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
-			UTextBlock* TimeT = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.85f, 0.88f, 0.8f), false, true);
+			UTextBlock* TimeT = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColText(), false, true);
 			Top->AddChildToHorizontalBox(TimeT)->SetVerticalAlignment(VAlign_Center);
 			RV->AddChildToVerticalBox(Top);
 

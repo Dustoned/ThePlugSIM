@@ -140,7 +140,7 @@ class WEEDSHOPCORE_API UWeedShopSaveGame : public USaveGame
 
 public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
-	int32 SaveVersion = 3;
+	int32 SaveVersion = 4;
 
 	// Wanneer deze save geschreven is (UTC). Voor "Continue" -> nieuwste van handmatig vs autosave.
 	UPROPERTY(VisibleAnywhere, Category = "Save")
@@ -190,10 +190,14 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	bool bFreeBuild = false;
 
-	// Start-mode van deze save: 0 = Normal, 1 = Sandbox, 2 = Testing. Bepaalt op load of dev-tools/
-	// free-build aan staan. Oude saves zonder dit veld defaulten naar 0 (Normal) -> automatisch clean.
+	// DEPRECATED (SaveVersion <= 3), alleen migratie: oude start-mode (0 Normal, 1 Sandbox, 2 Testing).
+	// De mode-picker is weg; op load telt 1/2 als "dev-tools aan". Wordt altijd als 0 geschreven.
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	uint8 StartMode = 0;
+
+	// Dev-tools (dev-menu/cheats) aan voor deze save (SaveVersion >= 4; vervangt StartMode).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	bool bDevTools = false;
 
 	// Co-op speelmodus: 0 = Co-op (samen), 1 = Competitive (versus).
 	UPROPERTY(VisibleAnywhere, Category = "Save")

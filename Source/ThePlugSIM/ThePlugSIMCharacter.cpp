@@ -1004,10 +1004,10 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	{
 		if (const APlayerController* PCk = Cast<APlayerController>(GetController()))
 		{
-			// ALLE F-toetsen (F7 fly/noclip, F9 spot-overlay) zijn dev-tools: alleen in Sandbox/Testing
-			// (free-build). In een normale playthrough doen ze niets.
+			// ALLE F-toetsen (F7 fly/noclip, F9 spot-overlay) zijn dev-tools: alleen met dev-tools AAN
+			// (Ctrl+Shift+F10-chord of `WeedDev`). In een normale playthrough doen ze niets.
 			const AWeedShopGameState* GSdev = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-			const bool bDevKeys = GSdev && GSdev->IsFreeBuild();
+			const bool bDevKeys = GSdev && GSdev->AreDevToolsEnabled();
 
 			// F9: spot-overlay aan/uit + markeer je plek (basis voor routes/zones/shops). De rest (menu-cam,
 			// bezorg-/meet-plek, build-area, activity-NPC, register-home, furniture-template) zit nu in het F10-dev-menu.
@@ -2007,13 +2007,24 @@ void AThePlugSIMCharacter::WeedSaveMenuCam()
 		TEXT("Menu camera saved here. It's now the main-menu backdrop on this map."));
 }
 
+void AThePlugSIMCharacter::WeedDev()
+{
+	// Dev-tools sessie-breed aan/uit (zelfde vlag als de Ctrl+Shift+F10-chord). Editor-gemak:
+	// `WeedDev` in de console i.p.v. de chord. De toast komt lokaal (de vlag zelf repliceert).
+	if (!Phone) { return; }
+	const AWeedShopGameState* GSd = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const bool bOn = GSd && GSd->AreDevToolsEnabled();
+	Phone->ServerSetDevTools(!bOn);
+	UWeedToast::NotifyPawn(this, -1, 3.f, FColor::Cyan, !bOn ? TEXT("Dev tools enabled") : TEXT("Dev tools disabled"));
+}
+
 void AThePlugSIMCharacter::WeedRegisterHome()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
-	// Dev-tool (F6): alleen in Sandbox/Testing (free-build).
+	// Dev-tool (F6): alleen met dev-tools AAN.
 	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
-	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	if (!GSd || !GSd->AreDevToolsEnabled()) { return; }
 	for (TActorIterator<ADoorRetrofitter> It(W); It; ++It) { It->RegisterHomeAtPlayer(this); return; }
 	UWeedToast::Notify(-1, 3.f, FColor::Orange, TEXT("WeedRegisterHome: geen DoorRetrofitter (alleen op de pack-map)."));
 }
@@ -2023,7 +2034,7 @@ void AThePlugSIMCharacter::WeedMarkDeliveryPoint()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
-	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	if (!GSd || !GSd->AreDevToolsEnabled()) { return; }
 	// Eén regel (laatste wint), per map: map|X|Y|Z. FindDeliveryPoint leest dit als HOOGSTE prioriteit,
 	// dus alle pakketjes landen voortaan op deze exacte plek (bv. helemaal beneden bij de hotel-ingang).
 	const FVector L = GetActorLocation();
@@ -2040,7 +2051,7 @@ void AThePlugSIMCharacter::WeedAddMeetSpot()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
-	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	if (!GSd || !GSd->AreDevToolsEnabled()) { return; }
 	// Append (meerdere plekken per map): map|X|Y|Z. "Come by"-afspraak-NPC's kiezen willekeurig één van deze
 	// logische plekken (bij een winkel, steegje, hotel-hal) i.p.v. op een dak of midden op de weg.
 	const FVector L = GetActorLocation();
@@ -2061,7 +2072,7 @@ void AThePlugSIMCharacter::WeedMarkBuildArea()
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	const AWeedShopGameState* GSd = W->GetGameState<AWeedShopGameState>();
-	if (!GSd || !GSd->IsFreeBuild()) { return; }
+	if (!GSd || !GSd->AreDevToolsEnabled()) { return; }
 	const FVector L = GetActorLocation();
 	const FVector Corner(L.X, L.Y, L.Z - GetSimpleCollisionHalfHeight()); // voet-hoogte = vloer
 	if (!bHaveBuildCorner1)

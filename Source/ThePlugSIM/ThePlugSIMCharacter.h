@@ -173,8 +173,12 @@ public:
 	// Dev (Shift+F9): leg de huidige camera-plek vast als hoofdmenu-achtergrond (Saved/MenuCam.txt).
 	void WeedSaveMenuCam();
 
+	// `WeedDev`: dev-tools sessie-breed aan/uit (zelfde als de Ctrl+Shift+F10-chord; handig in de
+	// editor waar typen sneller is dan de chord). Routeert via de telefoon-Server-RPC.
+	UFUNCTION(Exec) void WeedDev();
+
 	// Beach-map woning-registry (ROADMAP 4.1): registreer de kamer waar je NU staat als koopbare woning
-	// (DoorRetrofitter meet de wanden + schrijft BeachHomes.txt). Dev-only (free-build). Bind: F6.
+	// (DoorRetrofitter meet de wanden + schrijft BeachHomes.txt). Dev-only (dev-tools). Bind: F6.
 	UFUNCTION(Exec) void WeedRegisterHome();
 
 	// Bezorg-punt vastleggen: sla je HUIDIGE plek op als de vaste plek waar de drone pakketjes neerzet

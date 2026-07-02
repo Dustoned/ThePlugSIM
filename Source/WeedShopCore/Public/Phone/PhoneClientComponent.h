@@ -27,10 +27,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void Toggle();
 
-	// Open/sluit het dev-menu (F10, alleen free-build) - één sidebar met alle dev-tools.
+	// Open/sluit het dev-menu (F10, alleen met dev-tools AAN) - één sidebar met alle dev-tools.
+	// Ctrl+Shift+F10 (chord) zet de dev-tools sessie-breed aan/uit (werkt ook in Shipping, waar de
+	// console/Exec niet bestaat). Dev-tools staan LOS van free-build (dat is een gameplay-vlag).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
 	void ToggleDevMenu();
 	bool IsDevMenuOpen() const { return bDevMenuOpen; }
+
+	// Dev-tools sessie-vlag aan/uit op de server (gerepliceerd via de GameState). Aangeroepen door de
+	// Ctrl+Shift+F10-chord en het `WeedDev`-Exec-commando op de character.
+	UFUNCTION(Server, Reliable)
+	void ServerSetDevTools(bool bOn);
+
+	// --- Cheats (F10-dev-menu "Cheats"-categorie; server-authoritative, alleen met dev-tools AAN) ---
+	// Geld: cash erbij op de eigen pawn-economy (Cents > 0).
+	UFUNCTION(Server, Reliable) void ServerDevGiveCash(int64 Cents);
+	// Sandbox-geld: zet cash EN bank op EUR 1.000.000 (zelfde bedragen als de Sandbox-startmode).
+	UFUNCTION(Server, Reliable) void ServerDevSandboxMoney();
+	// Level direct zetten; >= 50 zet OOK de shop-licentie (GrantLevel zelf doet dat niet - oude quirk).
+	UFUNCTION(Server, Reliable) void ServerDevSetLevel(int32 NewLevel);
+	// Alle NPC's warm (goede stats + ontgrendeld) + eerste 10 als telefoon-contact.
+	UFUNCTION(Server, Reliable) void ServerDevWarmNpcs();
+	// Free-build (gameplay-vlag: overal bouwen) los toggelen vanuit het dev-menu.
+	UFUNCTION(Server, Reliable) void ServerDevSetFreeBuild(bool bOn);
+	// Starter-kits (item-lijsten van de Testing/Sandbox-startmodes). LET OP: sandbox VERVANGT je inventory.
+	UFUNCTION(Server, Reliable) void ServerDevGiveStarterKit(bool bSandbox);
 
 	// Maakt de UMG-widgets (status/telefoon/deal) aan op de lokale client (lui, idempotent).
 	void EnsureWidget();

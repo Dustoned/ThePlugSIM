@@ -22,6 +22,8 @@
 
 #include "UI/WeedUiStyle.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Game/WeedShopGameState.h"      // Cheats: free-build-status lezen voor het toggle-label
+#include "Progression/LevelComponent.h"  // Cheats: MaxLevel voor de level-knoppen
 #include "Interaction/PlayerNpcActions.h"
 #include "World/DayNightController.h"
 #include "World/RoomStamper.h"
@@ -47,8 +49,10 @@ namespace
 	}
 	FSlateFontInfo DevFont(int32 Size) { return FCoreStyle::GetDefaultFontStyle("Regular", Size); }
 
+	// LET OP: alleen ACHTERAAN appenden - de code gebruikt hardcoded indices (Rooms=6, Lighting=8,
+	// Spots=9, Keys=10, Cheats=11); tussenvoegen zou die allemaal verschuiven.
 	const TCHAR* GCatNames[] = { TEXT("World"), TEXT("Build"), TEXT("Home"), TEXT("NPC"), TEXT("Shops"),
-		TEXT("Map fix"), TEXT("Rooms"), TEXT("Doors"), TEXT("Lighting"), TEXT("Spots"), TEXT("Keys") };
+		TEXT("Map fix"), TEXT("Rooms"), TEXT("Doors"), TEXT("Lighting"), TEXT("Spots"), TEXT("Keys"), TEXT("Cheats") };
 }
 
 void UDevMenuWidget::SetPhone(UPhoneClientComponent* InPhone) { Phone = InPhone; }
@@ -85,6 +89,7 @@ void UDevMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		bContentDirty = false;
 		if (SelectedCat == 6) { RefreshRoomTemplates(); RefreshRoomPlaced(); }
 		else if (SelectedCat == 9) { RefreshMarkedSpots(); }
+		else if (SelectedCat == 11) { RefreshFreeBuildLabel(); }
 	}
 	// Sliders alléén live toepassen als hun panel de actieve view is (World=tijd, Lighting=licht) —
 	// zo schrijven we DN niet elke frame vanuit een verborgen panel (behoud van oud gedrag).
@@ -149,7 +154,7 @@ void UDevMenuWidget::BuildShell(UCanvasPanel* Root)
 
 	BuildNav(); // nav één keer bouwen
 
-	// Alle 11 categorie-panels ÉÉN keer bouwen als persistente kinderen van Body.
+	// Alle categorie-panels ÉÉN keer bouwen als persistente kinderen van Body.
 	// Tab-klik toont alleen het gekozen panel en verbergt de rest (geen ClearChildren/rebuild).
 	CatPanels.Reset();
 	const int32 NumCats = UE_ARRAY_COUNT(GCatNames);
@@ -197,7 +202,7 @@ void UDevMenuWidget::RestyleNav()
 
 void UDevMenuWidget::ShowCategory(int32 Cat)
 {
-	// Toon alleen het gekozen panel; verberg de andere 10. Geen teardown/rebuild.
+	// Toon alleen het gekozen panel; verberg de rest. Geen teardown/rebuild.
 	for (int32 i = 0; i < CatPanels.Num(); ++i)
 	{
 		if (!CatPanels[i]) { continue; }
@@ -208,6 +213,8 @@ void UDevMenuWidget::ShowCategory(int32 Cat)
 	else if (Cat == 9) { RefreshMarkedSpots(); }
 	// World/Lighting: value-labels meteen vullen (geen lege frame) — sliders sturen daarna live.
 	else if (Cat == 0 || Cat == 8) { ApplyLightSliders(); }
+	// Cheats: free-build-label syncen met de (gerepliceerde) GameState-vlag.
+	else if (Cat == 11) { RefreshFreeBuildLabel(); }
 }
 
 void UDevMenuWidget::BuildCategoryPanel(int32 Cat, UVerticalBox* Panel)
@@ -523,7 +530,7 @@ void UDevMenuWidget::BuildCategoryPanel(int32 Cat, UVerticalBox* Panel)
 		BodyRow(SpotsBox, FMargin(0.f, 0.f, 0.f, 0.f));
 		break;
 
-	default: // Keys
+	case 10: // Keys
 		Title(TEXT("Keys"));
 		Desc(TEXT("De meeste dev-acties zijn nu knoppen. Dit zijn de losse toetsen die nog bestaan."));
 		{
@@ -531,17 +538,100 @@ void UDevMenuWidget::BuildCategoryPanel(int32 Cat, UVerticalBox* Panel)
 			{
 				UHorizontalBox* R = WidgetTree->ConstructWidget<UHorizontalBox>();
 				USizeBox* KSz = WidgetTree->ConstructWidget<USizeBox>(); KSz->SetWidthOverride(80.f);
-				KSz->SetContent(MakeText(K, 12, FLinearColor(0.85f, 0.9f, 1.f)));
+				UTextBlock* KT = MakeText(K, 12, FLinearColor(0.85f, 0.9f, 1.f));
+				KT->SetAutoWrapText(true); // lange chords ("Ctrl+Shift+F10") wrappen binnen de 80px-kolom
+				KSz->SetContent(KT);
 				R->AddChildToHorizontalBox(KSz);
 				UTextBlock* DT = MakeText(D, 10, FLinearColor(0.6f, 0.64f, 0.74f)); DT->SetAutoWrapText(true);
 				UHorizontalBoxSlot* DS = R->AddChildToHorizontalBox(DT);
 				DS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); DS->SetVerticalAlignment(VAlign_Center);
 				BodyRow(R, FMargin(0.f, 0.f, 0.f, 5.f));
 			};
+			KeyRow(TEXT("Ctrl+Shift+F10"), TEXT("Dev-tools sessie-breed AAN / UIT (werkt ook in een normaal spel)"));
 			KeyRow(TEXT("F10"), TEXT("Dit dev-menu openen / sluiten"));
 			KeyRow(TEXT("F9"), TEXT("Spot markeren + overlay (basis voor routes / zones / shops)"));
 			KeyRow(TEXT("F7"), TEXT("Vliegen / noclip  (Space = op, Ctrl = neer)"));
 		}
+		break;
+
+	default: // Cheats (index 11, achteraan geappend zodat de bestaande indices 0-10 gelijk blijven)
+		Title(TEXT("Cheats"));
+		Head(TEXT("Money"));
+		{
+			// Drie cash-knoppen op één rij (+1k / +10k / +100k euro, in cents naar de server).
+			UHorizontalBox* MB = WidgetTree->ConstructWidget<UHorizontalBox>();
+			auto CashBtn = [&](const TCHAR* L, int64 Cents, bool bFirst)
+			{
+				UHorizontalBoxSlot* S = MB->AddChildToHorizontalBox(MakeActionBtn(L, FLinearColor(0.24f, 0.42f, 0.3f),
+					[this, Cents]() { if (Phone.IsValid()) { Phone->ServerDevGiveCash(Cents); } }, 11));
+				S->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				if (!bFirst) { S->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f)); }
+			};
+			CashBtn(TEXT("+1k"),   100000,   true);
+			CashBtn(TEXT("+10k"),  1000000,  false);
+			CashBtn(TEXT("+100k"), 10000000, false);
+			BodyRow(MB, FMargin(0.f, 0.f, 0.f, 2.f));
+			Desc(TEXT("Cash erbij (EUR) op je eigen portemonnee."));
+		}
+		Single(TEXT("Sandbox money (1M cash + bank)"), FLinearColor(0.22f, 0.42f, 0.48f),
+			TEXT("Zet cash EN bank op EUR 1.000.000 (zelfde als de Sandbox-start)."),
+			[this]() { if (Phone.IsValid()) { Phone->ServerDevSandboxMoney(); } });
+		Head(TEXT("Level"));
+		{
+			// Vijf level-knoppen op één rij. Lvl 50+ zet OOK de shop-licentie (server-kant).
+			UHorizontalBox* LB = WidgetTree->ConstructWidget<UHorizontalBox>();
+			auto LvlBtn = [&](const TCHAR* L, int32 Lvl, bool bFirst)
+			{
+				UHorizontalBoxSlot* S = LB->AddChildToHorizontalBox(MakeActionBtn(L, FLinearColor(0.23f, 0.37f, 0.54f),
+					[this, Lvl]() { if (Phone.IsValid()) { Phone->ServerDevSetLevel(Lvl); } }, 11));
+				S->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				if (!bFirst) { S->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f)); }
+			};
+			LvlBtn(TEXT("1"),   1,  true);
+			LvlBtn(TEXT("10"),  10, false);
+			LvlBtn(TEXT("25"),  25, false);
+			LvlBtn(TEXT("50"),  50, false);
+			LvlBtn(TEXT("Max"), ULevelComponent::MaxLevel, false);
+			BodyRow(LB, FMargin(0.f, 0.f, 0.f, 2.f));
+			Desc(TEXT("Zet het crew-level direct. 50 of hoger geeft OOK de shop-licentie."));
+		}
+		Head(TEXT("NPC"));
+		Single(TEXT("Warm all NPCs"), FLinearColor(0.24f, 0.42f, 0.3f),
+			TEXT("Alle NPC's goede stats + ontgrendeld; de eerste 10 komen in je telefoon-contacten."),
+			[this]() { if (Phone.IsValid()) { Phone->ServerDevWarmNpcs(); } });
+		Head(TEXT("Free build"));
+		{
+			// Toggle met een PERSISTENT label -> klik = RPC + SetText, geen rebuild (patroon ShopTypeLabel).
+			UWeedActionButton* FbBtn = WidgetTree->ConstructWidget<UWeedActionButton>();
+			FbBtn->OnClicked.AddDynamic(FbBtn, &UWeedActionButton::Handle);
+			FbBtn->OnAction.BindLambda([this](int32, int32)
+			{
+				if (!Phone.IsValid()) { return; }
+				const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+				const bool bNew = !(GS && GS->IsFreeBuild());
+				Phone->ServerDevSetFreeBuild(bNew);
+				// Optimistisch meteen het label zetten (de gerepliceerde vlag volgt zo).
+				if (FreeBuildLabel) { FreeBuildLabel->SetText(FText::FromString(bNew ? TEXT("Free build: ON") : TEXT("Free build: OFF"))); }
+			});
+			{
+				const FLinearColor Col(0.3f, 0.34f, 0.2f);
+				FButtonStyle S;
+				S.Normal = DevBrush(Col, 6.f);
+				S.Hovered = DevBrush(Col * 1.4f, 6.f);
+				S.Pressed = DevBrush(Col * 0.8f, 6.f);
+				S.NormalPadding = FMargin(8.f, 5.f); S.PressedPadding = FMargin(8.f, 5.f);
+				FbBtn->SetStyle(S);
+			}
+			FreeBuildLabel = MakeText(TEXT("Free build: OFF"), 11, FLinearColor(0.95f, 0.96f, 1.f), true);
+			FreeBuildLabel->SetClipping(EWidgetClipping::Inherit);
+			FbBtn->SetContent(FreeBuildLabel);
+			BodyRow(FbBtn, FMargin(0.f, 0.f, 0.f, 2.f));
+			Desc(TEXT("Gameplay-vlag: overal bouwen (los van de dev-tools zelf)."));
+		}
+		Head(TEXT("Starter kits"));
+		Pair(TEXT("Give tester kit"), FLinearColor(0.22f, 0.42f, 0.48f), [this]() { if (Phone.IsValid()) { Phone->ServerDevGiveStarterKit(false); } },
+			 TEXT("Give sandbox kit"), FLinearColor(0.42f, 0.34f, 0.16f), [this]() { if (Phone.IsValid()) { Phone->ServerDevGiveStarterKit(true); } },
+			 TEXT("Tester = starter-items + 2 zaden. Sandbox = authoring-set en VERVANGT je inventory."));
 		break;
 	}
 }
@@ -707,6 +797,16 @@ void UDevMenuWidget::RefreshMarkedSpots()
 				MarkDirty();
 			}, 11))->SetPadding(FMargin(5.f, 0.f, 0.f, 0.f));
 	}
+}
+
+void UDevMenuWidget::RefreshFreeBuildLabel()
+{
+	// Cheats-panel: het persistente "Free build: ON/OFF"-label syncen met de gerepliceerde GameState-
+	// vlag (SetText-only, geen rebuild). Aangeroepen bij openen (MarkDirty) en bij tab-wissel.
+	if (!FreeBuildLabel) { return; }
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const bool bOn = GS && GS->IsFreeBuild();
+	FreeBuildLabel->SetText(FText::FromString(bOn ? TEXT("Free build: ON") : TEXT("Free build: OFF")));
 }
 
 UTextBlock* UDevMenuWidget::MakeText(const FString& Txt, int32 Size, const FLinearColor& Col, bool bCenter)
