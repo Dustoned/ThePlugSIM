@@ -135,8 +135,14 @@ AThePlugSIMCharacter::AThePlugSIMCharacter()
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> PJump(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Fall_Loop.MM_Fall_Loop"));
 	if (PJump.Succeeded()) { ProxyJump = PJump.Object; }
 	// 'Texting'-pose: andere spelers zien je op je telefoon staan (cellphone-check anim uit de NPC-pack).
+	// Alleen nog voor de single-node-FALLBACK (skins zonder loco-ABP); loco-ABP-skins gebruiken TextingAnim.
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> PPhone(TEXT("/Game/GenericNPCAnimPack2/Animations/Anim_Check_Cellphone.Anim_Check_Cellphone"));
 	if (PPhone.Succeeded()) { ProxyPhone = PPhone.Object; }
+	// Dezelfde cellphone-clip maar native geretarget op SK_Mannequin: die kan als dynamische montage op
+	// de 'UpperBody'-slot van ABP_Unarmed draaien -> bovenlijf sms't, benen blijven uit de loco-ABP
+	// (geen slide meer bij lopen met de telefoon open). Zie UpdateTextingMontage.
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> PTextNative(TEXT("/Game/Characters/Texting_Anim_Manny.Texting_Anim_Manny"));
+	if (PTextNative.Succeeded()) { TextingAnim = PTextNative.Object; }
 	// Symmetrische idle voor de lokale speler (rechte houding, voeten gelijk) i.p.v. de scheve template-idle.
 	// Uit de NPC-pack (ander skelet, maar speelt prima single-node op de speler - net als de telefoon-anim).
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> PLocalIdle(TEXT("/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop.M_Neutral_Stand_Idle_Loop"));
@@ -359,11 +365,17 @@ void AThePlugSIMCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode,
 
 void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 {
+	// Texting (telefoon open) draait bij loco-ABP-skins als UPPER-BODY-montage, los van de single-node-
+	// logica hieronder - en voor ALLE pawns, ook je eigen pawn in first person (de body-mesh is daar
+	// owner-no-see maar bestaat wel: schaduw + third-person-toggle B kloppen zo altijd).
+	UpdateTextingMontage();
+
 	// Mijn EIGEN pawn gebruikt de ABP/FP-view -> geen fallback. Elke ANDERE speler die ik zie (host ziet de
 	// joiner als ROLE_Authority, een client ziet 'm als SimulatedProxy - beide zijn niet-lokaal) krijgt onze
 	// single-node walk/idle/jump/telefoon. Lazy: zet de single-node-modus zodra we 'm voor het eerst tikken.
-	// In THIRD-PERSON (toets B) tonen we óók op je EIGEN body de proxy-poses (bv. de telefoon/texting-
-	// houding), want de normale ABP kent die niet -> anders zie je jezelf niks doen. In first-person
+	// In THIRD-PERSON (toets B) tonen we óók op je EIGEN body de single-node-proxy-poses van FALLBACK-skins,
+	// want de normale ABP kent die niet -> anders zie je jezelf niks doen. (Texting op loco-ABP-skins komt
+	// hier niet meer langs: dat is de upper-body-montage hierboven, die in 1p én 3p draait.) In first-person
 	// blijft de ABP/FP-view leidend, dus daar returnen we nog steeds meteen.
 	if (IsLocallyControlled() && !bThirdPerson)
 	{
@@ -396,10 +408,11 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	bool bPhone = false;
 	if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
 
-	// De texting-clip (Anim_Check_Cellphone) is een VOLLEDIGE cyclus: pakken -> kijken -> wegstoppen. We spelen
-	// 'm vooruit tot het 'kijk'-punt (PhoneHoldTime) en PAUZEREN daar zolang je telefoon open is; pas bij sluiten
-	// spelen we het laatste stuk (kijk-punt -> eind = wegstoppen). PhoneHoldFrac = waar in de clip de kijk-pose
-	// zit (visueel getuned). De cliplengte kennen we pas at runtime, dus het kijk-punt is een fractie daarvan.
+	// De texting-clip (Anim_Check_Cellphone) is een VOLLEDIGE cyclus: pakken -> kijken -> wegstoppen. In de
+	// single-node-FALLBACK (skins zonder loco-ABP, verderop) spelen we 'm vooruit tot het 'kijk'-punt
+	// (PhoneHoldTime) en PAUZEREN daar zolang je telefoon open is; pas bij sluiten spelen we het laatste stuk
+	// (kijk-punt -> eind = wegstoppen). PhoneHoldFrac = waar in de clip de kijk-pose zit (visueel getuned).
+	// De cliplengte kennen we pas at runtime, dus het kijk-punt is een fractie daarvan.
 	const float PhoneHoldFrac    = 0.45f; // waar in de clip de 'kijk'-pose zit (vasthouden)
 	const float PhonePutAwayRate = 2.4f;  // sneller afspelen bij sluiten -> telefoon vrijwel 'gelijk' terug in de zak
 	const float PhoneClipLen  = ProxyPhone ? ProxyPhone->GetPlayLength() : 0.f;
@@ -407,59 +420,15 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 
 	if (bBodyHasLocoAbp)
 	{
-		// Manny/Quinn: de locomotie-ABP doet walk/run/idle/jump. Voor TEXTING wisselen we naar de single-node
-		// telefoon-clip en spelen 'm vooruit tot het kijk-punt, waar we 'm bevriezen (rate 0) -> de pose blijft
-		// staan zolang de telefoon open is. Bij sluiten spelen we het laatste stuk vooruit (wegstoppen) en gaan
-		// dan terug naar de ABP. State 3 = pakken/vasthouden, 4 = wegstoppen.
-		const bool bWantTexting = bPhone && !bMoving && !bFalling && ProxyPhone != nullptr;
-		if (bWantTexting)
-		{
-			if (ProxyAnimState != 3 && ProxyAnimState != 4)
-			{
-				ProxyAnimState = 3;
-				M->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-				M->SetPlayRate(1.f);
-				M->PlayAnimation(ProxyPhone, false);
-			}
-			else if (ProxyAnimState == 4)
-			{
-				// Tijdens het wegstoppen weer geopend -> direct terug naar het kijk-punt en vasthouden
-				// (niet opnieuw de telefoon pakken).
-				ProxyAnimState = 3;
-				M->SetPlayRate(0.f);
-				M->SetPosition(PhoneHoldTime, false);
-			}
-			// Vasthouden: zodra we het kijk-punt bereiken, bevriezen we de pose.
-			if (ProxyAnimState == 3 && PhoneHoldTime > 0.f && M->GetPosition() >= PhoneHoldTime)
-			{
-				M->SetPosition(PhoneHoldTime, false);
-				M->SetPlayRate(0.f);
-			}
-		}
-		else if (ProxyAnimState == 3)
-		{
-			// Telefoon sluiten: vanaf het KIJK-PUNT vooruit naar het eind (= wegstoppen). De positie zetten we
-			// expliciet NA Play(), want Play() kan vanaf frame 0 herstarten -> anders pakt-ie de telefoon
-			// opnieuw i.p.v. 'm weg te stoppen.
-			ProxyAnimState = 4;
-			M->Play(false);
-			M->SetPlayRate(PhonePutAwayRate);
-			M->SetPosition(PhoneHoldTime, false);
-		}
-		else if (ProxyAnimState == 4)
-		{
-			// Klaar met wegstoppen (eind bereikt of niet meer aan het spelen)? -> terug naar de locomotie-ABP.
-			if (M->GetAnimationMode() != EAnimationMode::AnimationSingleNode || !M->IsPlaying()
-				|| (PhoneClipLen > 0.f && M->GetPosition() >= PhoneClipLen - 0.02f))
-			{
-				ProxyAnimState = 0;
-				M->SetPlayRate(1.f);
-				M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-			}
-		}
-		else if (ProxyAnimState != 0)
+		// Manny/Quinn: de locomotie-ABP doet walk/run/idle/jump. TEXTING draait hier NIET meer single-node
+		// (dat bevroor het HELE lichaam -> sliden zodra je met de telefoon open ging lopen) maar als
+		// upper-body-montage in UpdateTextingMontage(). De ABP blijft dus altijd de baas over de benen;
+		// hier alleen borgen dat de mesh in Blueprint-modus staat (bv. na een skin-wissel of een oude
+		// single-node-pose uit een 3p-sessie).
+		if (ProxyAnimState != 0)
 		{
 			ProxyAnimState = 0;
+			M->SetPlayRate(1.f);
 			M->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 		}
 		return;
@@ -517,6 +486,131 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	UAnimSequence* Seq = (NewState == 2) ? ProxyJump : (NewState == 1) ? ProxyWalk : ProxyIdle;
 	if (!Seq) { Seq = ProxyIdle; }
 	if (Seq) { M->PlayAnimation(Seq, true); }
+}
+
+// === Texting-afstelling ==========================================================================
+// Hold-trick-schakelaar: true = de oude aanpak (montage bevriezen op het kijk-punt), false = de clip
+// gewoon laten LOOPEN. De Manny-texting-clip is een doorlopende texting-loop van 18,5s; loopen oogt
+// levend (AAA-idle-gedrag: texten is bewegen, geen standbeeld) en de freeze pakte op 45% net een
+// tussenmoment van een gebaar - de rare halfuitgestoken linkerarm uit de playtest. Eén schakelaar
+// terug als de hold ooit toch nodig blijkt.
+static constexpr bool bTextingHoldAtFrac = false;
+static constexpr float TextingHoldFrac = 0.45f;     // kijk-punt-fractie (alleen gebruikt bij de hold-trick)
+// Telefoon-prop: texting-clips houden het toestel vrijwel altijd in de LINKERhand (de rechterhand
+// tikt) - andere hand = alleen dit woord wisselen. Offset/rotatie = eerste schatting "plat in de
+// handpalm, scherm naar het gezicht"; tunen op speler-feedback.
+static const FName TextingPhoneBone(TEXT("hand_l"));
+static const FVector TextingPhoneSizeCm(14.5f, 7.0f, 0.8f);        // lang x breed x dun (~gsm met hoesje)
+static const FVector TextingPhoneOffsetCm(10.0f, 2.0f, -1.0f);     // vanaf de hand-bone de handpalm in
+static const FRotator TextingPhoneRot(0.f, 0.f, 90.f);             // plat op de palm (dunne kant tegen de hand)
+static const FLinearColor TextingPhoneColor(0.02f, 0.02f, 0.025f); // donkergrijs/zwart hoesje
+
+void AThePlugSIMCharacter::UpdateTextingMontage()
+{
+	// Texting als DYNAMISCHE MONTAGE op de 'UpperBody'-slot van ABP_Unarmed (layered blend per bone vanaf
+	// spine_01, via de UnrealClaude-authoring-helper in het ABP gezet): het bovenlijf sms't, de benen
+	// blijven uit de loco-ABP komen -> lopen met de telefoon open slidet niet meer. De slot zit in een
+	// EIGEN slot-groep, dus de DefaultSlot-montages (symmetrische idle / fall-loop) draaien er gewoon
+	// naast zonder elkaar te interrupten. bPhoneOpenRep repliceert al; montages zijn client-side -> elke
+	// machine speelt 'm zelf af, geen extra replicatie nodig. De telefoon-prop in de hand volgt de
+	// montage (aan bij start, weg bij stop) en is dus ook per-client.
+	if (!bBodyHasLocoAbp || !TextingAnim) { DestroyTextingPhoneProp(); return; } // fallback-skins: single-node-pad in UpdateProxyAnim
+	UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInst) { TextingMontage = nullptr; DestroyTextingPhoneProp(); return; }
+
+	bool bPhone = false;
+	if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
+
+	const bool bActive = (TextingMontage != nullptr) && AnimInst->Montage_IsPlaying(TextingMontage);
+	if (bPhone)
+	{
+		if (!bActive)
+		{
+			// Zelfde patroon als de symmetrische idle-montage: dynamisch + root motion UIT (GASP-gotcha:
+			// clips met root motion zouden je anders op je plek vastzetten). LoopCount 99999 speelt de
+			// hele clip eindeloos door; de clip is als loop geauthored (begin- en eindpose matchen), dus
+			// de sectie-wrap knakt niet. Mocht een toekomstige clip dat wel doen: sub-range kiezen of de
+			// hold-trick (bTextingHoldAtFrac) terugzetten.
+			TextingMontage = AnimInst->PlaySlotAnimationAsDynamicMontage(TextingAnim, FName("UpperBody"), 0.25f, 0.25f, 1.0f, 99999);
+			if (TextingMontage)
+			{
+				TextingMontage->bEnableRootMotionTranslation = false;
+				TextingMontage->bEnableRootMotionRotation = false;
+				ShowTextingPhoneProp(); // toestel in de hand zolang je sms't (vers op de HUIDIGE mesh)
+			}
+		}
+		else
+		{
+			// Hold-trick (staat UIT, zie bTextingHoldAtFrac hierboven): bevries de montage op het
+			// kijk-punt zolang de telefoon open blijft - zelfde fractie als de single-node-fallback.
+			if constexpr (bTextingHoldAtFrac)
+			{
+				const float HoldTime = TextingAnim->GetPlayLength() * TextingHoldFrac;
+				if (HoldTime > 0.f
+					&& AnimInst->Montage_GetPlayRate(TextingMontage) > 0.f
+					&& AnimInst->Montage_GetPosition(TextingMontage) >= HoldTime)
+				{
+					AnimInst->Montage_SetPosition(TextingMontage, HoldTime);
+					AnimInst->Montage_SetPlayRate(TextingMontage, 0.f);
+				}
+			}
+			// Defensief: prop kwijt terwijl de montage nog draait (hoort niet, maar goedkoop te vangen).
+			if (!TextingPhoneProp) { ShowTextingPhoneProp(); }
+		}
+	}
+	else if (bActive)
+	{
+		// Telefoon dicht -> DIRECT stoppen (korte uitblend); geen wegstop-animatie op het bovenlijf.
+		AnimInst->Montage_Stop(0.15f, TextingMontage);
+		TextingMontage = nullptr;
+		DestroyTextingPhoneProp();
+	}
+	else
+	{
+		TextingMontage = nullptr; // opruimen als de montage elders gestopt/verlopen is
+		DestroyTextingPhoneProp();
+	}
+}
+
+void AThePlugSIMCharacter::ShowTextingPhoneProp()
+{
+	// Altijd VERS aanmaken op de huidige mesh: ApplySkinMesh kan de skeletal mesh vervangen hebben
+	// (de montage sterft daarbij en start hier opnieuw), dus nooit een oude prop hergebruiken.
+	DestroyTextingPhoneProp();
+	USkeletalMeshComponent* M = GetMesh();
+	if (!M || M->GetBoneIndex(TextingPhoneBone) == INDEX_NONE) { return; } // skin zonder deze hand-bone: dan maar geen toestel
+	UStaticMesh* Cu = PropKit::Cube();
+	if (!Cu) { return; }
+	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+	if (!C) { return; }
+	C->SetStaticMesh(Cu);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->SetCastShadow(false); // mini-prop, geen schaduw-kosten (licht-budget)
+	// Zelfde view-instellingen als de body-mesh: eigen pawn in first person ziet 'm niet (owner-no-see),
+	// remote spelers en je eigen 3p-view (B) wel. Wisselt B midden in het texten: zie ToggleThirdPerson.
+	C->SetOnlyOwnerSee(M->bOnlyOwnerSee);
+	C->SetOwnerNoSee(M->bOwnerNoSee);
+	C->FirstPersonPrimitiveType = M->FirstPersonPrimitiveType;
+	C->RegisterComponent();
+	// SetupAttachment kan niet runtime; AttachToComponent met de bone-naam als socket wel.
+	C->AttachToComponent(M, FAttachmentTransformRules::SnapToTargetNotIncludingScale, TextingPhoneBone);
+	C->SetRelativeLocationAndRotation(TextingPhoneOffsetCm, TextingPhoneRot);
+	C->SetRelativeScale3D(TextingPhoneSizeCm / 100.f); // BasicShapes-kubus = 100 cm
+	// Donker hoesje via het PropKit-idioom (BaseMat + kleur-MID).
+	if (UMaterialInterface* BM = PropKit::BaseMat())
+	{
+		if (UMaterialInstanceDynamic* MID = C->CreateDynamicMaterialInstance(0, BM)) { MID->SetVectorParameterValue(TEXT("Color"), TextingPhoneColor); }
+	}
+	TextingPhoneProp = C;
+}
+
+void AThePlugSIMCharacter::DestroyTextingPhoneProp()
+{
+	if (TextingPhoneProp)
+	{
+		TextingPhoneProp->DestroyComponent();
+		TextingPhoneProp = nullptr;
+	}
 }
 
 void AThePlugSIMCharacter::ServerDropActiveItem_Implementation()
@@ -681,6 +775,14 @@ void AThePlugSIMCharacter::ToggleThirdPerson()
 		M->FirstPersonPrimitiveType = bThirdPerson ? EFirstPersonPrimitiveType::None
 		                                            : EFirstPersonPrimitiveType::WorldSpaceRepresentation;
 		M->MarkRenderStateDirty();
+		// Telefoon-prop (texting) volgt de body-zichtbaarheid, net als de outfit-parts - anders zweeft er
+		// na een B-toggle midden in het texten een onzichtbaar/dubbel toestel.
+		if (TextingPhoneProp)
+		{
+			TextingPhoneProp->SetOwnerNoSee(M->bOwnerNoSee);
+			TextingPhoneProp->FirstPersonPrimitiveType = M->FirstPersonPrimitiveType;
+			TextingPhoneProp->MarkRenderStateDirty();
+		}
 	}
 	SyncOutfitViewFlags(); // outfit-parts dezelfde view-instellingen geven
 }
@@ -852,8 +954,8 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	}
 
 	// LOKALE speler: de template-ABP-idle staat scheef (1 voet voor). Bij stilstaan spelen we een symmetrische
-	// idle (single-node); zodra je beweegt/springt/telefoneert terug naar de locomotie-ABP. Alleen op state-wissel
-	// (geen per-frame gethrash) - zelfde patroon als de proxy-texting-switch in UpdateProxyAnim.
+	// idle; zodra je beweegt/springt terug naar de locomotie-ABP. Alleen op state-wissel (geen per-frame
+	// gethrash) - zelfde patroon als de proxy-texting-switch in UpdateProxyAnim.
 	if (IsLocallyControlled() && bBodyHasLocoAbp)
 	{
 		// Speel de symmetrische idle (stilstaan) OF een RUSTIGE fall-loop (sprong) als DYNAMISCHE MONTAGE op de
@@ -864,28 +966,34 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		{
 			const bool bMoving = GetVelocity().SizeSquared2D() > 100.f; // > ~10 cm/s
 			const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
-			bool bPhone = false;
-			if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
 			// 2 = sprong/val (kalme fall-pose), 1 = stilstaan (symmetrische idle), 0 = loco-ABP (lopen/rennen).
+			// Telefoon open is hier GEEN uitzondering meer: de texting-montage zit op de UpperBody-slot
+			// (eigen slot-groep), dus de idle op DefaultSlot draait er gewoon onder door.
 			int32 Want = 0;
 			if (bFalling && ProxyJump) { Want = 2; }
-			else if (!bMoving && !bPhone && LocalIdleAnim) { Want = 1; }
+			else if (!bMoving && LocalIdleAnim) { Want = 1; }
 			if (Want != LocalIdleState)
 			{
 				LocalIdleState = Want;
 				if (Want == 1)
 				{
-					UAnimMontage* IdleM = AnimInst->PlaySlotAnimationAsDynamicMontage(LocalIdleAnim, FName("DefaultSlot"), 0.25f, 0.25f, 1.0f, 99999);
+					LocalPoseMontage = AnimInst->PlaySlotAnimationAsDynamicMontage(LocalIdleAnim, FName("DefaultSlot"), 0.25f, 0.25f, 1.0f, 99999);
 					// KRITISCH: root motion uit (GASP-clips hebben root motion; die zou je op je plek houden).
-					if (IdleM) { IdleM->bEnableRootMotionTranslation = false; IdleM->bEnableRootMotionRotation = false; }
+					if (LocalPoseMontage) { LocalPoseMontage->bEnableRootMotionTranslation = false; LocalPoseMontage->bEnableRootMotionRotation = false; }
 				}
 				else if (Want == 2)
 				{
 					// Kalme fall-loop i.p.v. de schokkerige jump-start. Snelle blend-in (0.1s) om de pop af te vangen.
-					UAnimMontage* FallM = AnimInst->PlaySlotAnimationAsDynamicMontage(ProxyJump, FName("DefaultSlot"), 0.1f, 0.2f, 1.0f, 99999);
-					if (FallM) { FallM->bEnableRootMotionTranslation = false; FallM->bEnableRootMotionRotation = false; }
+					LocalPoseMontage = AnimInst->PlaySlotAnimationAsDynamicMontage(ProxyJump, FName("DefaultSlot"), 0.1f, 0.2f, 1.0f, 99999);
+					if (LocalPoseMontage) { LocalPoseMontage->bEnableRootMotionTranslation = false; LocalPoseMontage->bEnableRootMotionRotation = false; }
 				}
-				else { AnimInst->StopAllMontages(0.2f); } // blend vloeiend terug naar de loco-ABP
+				else if (LocalPoseMontage)
+				{
+					// GERICHT stoppen (niet StopAllMontages: die zou ook de texting-montage op de
+					// UpperBody-slot killen) -> blend vloeiend terug naar de loco-ABP.
+					AnimInst->Montage_Stop(0.2f, LocalPoseMontage);
+					LocalPoseMontage = nullptr;
+				}
 			}
 		}
 	}

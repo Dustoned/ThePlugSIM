@@ -336,24 +336,30 @@ void UBuildComponent::RefreshDoorCache(const FVector& Center)
 	}
 }
 
-bool UBuildComponent::UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf)
+bool UBuildComponent::UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf, float Yaw)
 {
-	(void)FootHalf;
 	UWorld* W = GetWorld();
 	if (!bShow || !W) { return false; }
 	// Deur-cache verversen zodra je ~1,5 m bent verplaatst (deuren staan stil -> geen scan per tick).
 	if (CachedDoorPositions.Num() == 0 || FVector::Dist2D(FootCenter, LastDoorCachePos) > 150.f) { RefreshDoorCache(FootCenter); }
-	// Blokkeer zodra het MIDDEN van je plaatsing in een deur-zone valt. De rode vlakken worden door
-	// UpdateNoGoGrid getekend (die hergebruikt de DoorMarks-pool) - hier alleen de boolean voor de ghost.
-	return DoorBlocksCell(FootCenter);
+	// Blokkeer zodra de FOOTPRINT van je plaatsing in een deur-zone valt (niet alleen het midden -> brede
+	// objecten hangen niet meer over de opening). De rode vlakken worden door UpdateNoGoGrid getekend (die
+	// hergebruikt de DoorMarks-pool) - hier alleen de boolean voor de ghost.
+	return DoorBlocksCell(FootCenter, FootHalf, Yaw);
 }
 
-bool UBuildComponent::DoorBlocksCell(const FVector& Cell) const
+bool UBuildComponent::DoorBlocksCell(const FVector& Cell, const FVector& BoxHalf, float Yaw) const
 {
 	const float HZone = 60.f; // halve no-go-zone rond een deur-opening (cm): de drempel/zwaai vrijhouden, niet meer
+	// Effectieve XY-half-extents na de yaw-draai (zelfde 90-graden-swap-idioom als de shift-snap, r~747-749).
+	const bool bSwap = FMath::IsNearlyEqual(FMath::Fmod(FMath::Abs(Yaw), 180.f), 90.f, 45.f);
+	const bool bAxis = FMath::IsNearlyZero(FMath::Fmod(FMath::Abs(Yaw), 90.f), 5.f); // ~0/90/180/270 -> as-uitgelijnd
+	float EffHX, EffHY;
+	if (bAxis) { EffHX = bSwap ? BoxHalf.Y : BoxHalf.X; EffHY = bSwap ? BoxHalf.X : BoxHalf.Y; }
+	else { EffHX = EffHY = FMath::Max(BoxHalf.X, BoxHalf.Y); } // niet-90°-yaw: conservatief (grootste extent op beide assen)
 	for (const FVector& DL : CachedDoorPositions)
 	{
-		if (FMath::Abs(DL.X - Cell.X) < HZone && FMath::Abs(DL.Y - Cell.Y) < HZone && FMath::Abs(Cell.Z - DL.Z) < 220.f) { return true; }
+		if (FMath::Abs(DL.X - Cell.X) < HZone + EffHX && FMath::Abs(DL.Y - Cell.Y) < HZone + EffHY && FMath::Abs(Cell.Z - DL.Z) < 220.f) { return true; }
 	}
 	return false;
 }
@@ -422,7 +428,7 @@ void UBuildComponent::UpdateNoGoGrid(bool bShow, const FVector& Center, float Ya
 			const FVector P(CellXY.X, CellXY.Y, FloorZ);
 			// ALLEEN het echte deur/obstakel tonen (deurblad/muur via IsSpotBlocked, of de smalle deur-zone) - NIET
 			// de huis-grens. Zo blijft open bouwbare vloer schoon; het rood zit op het deur-obstakel zelf.
-			const bool bObstacle = IsSpotBlocked(P, CurrentDef.BoxHalf, Yaw, CurrentDef.bIsPot) || DoorBlocksCell(P);
+			const bool bObstacle = IsSpotBlocked(P, CurrentDef.BoxHalf, Yaw, CurrentDef.bIsPot) || DoorBlocksCell(P, CurrentDef.BoxHalf, Yaw);
 			// Alleen vloer-niveau (niet een cel die op een muur-bovenkant landt -> die gaf hoge zwevende blokjes).
 			const bool bPaint = bHasFloor && FMath::Abs(FloorZ - DL.Z) < 60.f && bObstacle;
 			if (UStaticMeshComponent* M = DoorMarks[mi])
@@ -704,17 +710,25 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							Center.Z = FMath::GridSnap<float>(Center.Z, HeightStep);
 						}
 						PreviewLocation = Center;
-						// Wand-mount (rek/lamp/TV) mag alleen op een MUUR, niet op een deur/ander object, niet DOOR een
-						// ander object heen, en BINNEN je eigen huis. De huis-check pakt een punt iets DIEPER de kamer in
-						// (de muur ligt op de build-box-rand, dus de rug-positie valt anders nét buiten en weigert 'ie
+						// Geraakte mesh-naam: een RAAM (glas) is geen geldige wand-mount-drager, en een RAUWE
+						// apartment-deur-mesh (nog niet omgezet naar ACityDoor) telt ook als deur. Zelfde deur-filter
+						// als RefreshDoorCache (r~319): "Door" maar niet "DoorFrame"/"Doorway" (kozijn/opening zelf).
+						const UStaticMeshComponent* HC = Cast<UStaticMeshComponent>(Hit.GetComponent());
+						const FString HN = (HC && HC->GetStaticMesh()) ? HC->GetStaticMesh()->GetName() : FString();
+						const bool bOnWindow = HN.Contains(TEXT("Glass")) || HN.Contains(TEXT("Window"));
+						const bool bOnDoorMesh = bOnDoor || (HN.Contains(TEXT("Door")) && !HN.Contains(TEXT("DoorFrame")) && !HN.Contains(TEXT("Doorway")));
+						// Wand-mount (rek/lamp/TV) mag alleen op een MUUR, niet op een deur/raam/ander object, niet DOOR
+						// een ander object heen, en BINNEN je eigen huis. De huis-check pakt een punt iets DIEPER de kamer
+						// in (de muur ligt op de build-box-rand, dus de rug-positie valt anders nét buiten en weigert 'ie
 						// onterecht). Plus: bij rood de ECHTE reden tonen i.p.v. een oude "Aim at the floor"-hint.
 						const bool bWmOverlap = OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion());
 						const bool bWmHome = CurrentDef.bAllowOutdoors || IsInOwnedHome(Hit.ImpactPoint + D * (CurrentDef.BoxHalf.Y + 40.f));
-						bValidSpot = bWall && !bOnPlaceable && !bOnDoor && !bWmOverlap && bWmHome;
+						bValidSpot = bWall && !bOnPlaceable && !bOnDoorMesh && !bOnWindow && !bWmOverlap && bWmHome;
 						if (!bValidSpot)
 						{
 							PlacementHint = !bWall ? TEXT("Aim at a wall")
-								: bOnDoor ? TEXT("Not on a door")
+								: bOnDoorMesh ? TEXT("Not on a door")
+								: bOnWindow ? TEXT("Not on a window")
 								: bOnPlaceable ? TEXT("Can't place on top of that")
 								: !bWmHome ? TEXT("Only inside your own home")
 								: TEXT("Too close to another object");
@@ -886,7 +900,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	// DEUR-OPENING vrijhouden: valt je plaatsing in de smalle deur-zone (drempel/zwaai, ~60cm rond de deur), dan
 	// ongeldig -> de ghost wordt rood. Géén los rood raster meer (gaf bij open deuren te veel/verkeerd); alleen de
 	// ghost + de hint. Niet voor de building-tool (structures).
-	if (bShow && !CurrentDef.bIsStructure && (IsInNoBuildZone(PreviewLocation) || UpdateDoorwayMarkers(true, PreviewLocation, CurrentDef.BoxHalf)))
+	if (bShow && !CurrentDef.bIsStructure && (IsInNoBuildZone(PreviewLocation) || UpdateDoorwayMarkers(true, PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Yaw)))
 	{
 		bValidSpot = false;
 		PlacementHint = TEXT("Keep the doorway clear");
@@ -1427,6 +1441,18 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 			UWeedToast::NotifyPawn(GetOwner(),-1, 2.f, FColor::Red, TEXT("Can't place there (blocked)."));
 		}
 		return;
+	}
+	// Server-parity met de preview-ghost (r~889): weiger ook in een expliciete no-build-zone EN in de deur-
+	// footprint-zone (drempel/zwaai vrijhouden, met de object-footprint mee). Deur-cache eerst vullen (server heeft
+	// z'n eigen cache, gevuld rond de plaats-locatie). Zelfde gate als de preview: geen upgrade/lamp/wand-mount.
+	if (!bUpgrade && !Def.bIsLamp && !Def.bIsWallMount)
+	{
+		RefreshDoorCache(Location);
+		if (IsInNoBuildZone(Location) || DoorBlocksCell(Location, Def.BoxHalf, Rotation.Yaw))
+		{
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Keep the doorway clear.")); }
+			return;
+		}
 	}
 	// Niet bovenop een ander geplaatst object (stapelen): korte omlaag-trace; raakt 'ie een placeable i.p.v.
 	// de vloer, dan weigeren. Wand-mounts (muur) en plafondlampen (plafond) slaan dit over.

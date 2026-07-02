@@ -978,11 +978,11 @@ void UPhoneClientComponent::UpdateCursor()
 {
 	const bool bAnyUI = bOpen || bDevMenuOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen || bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen || bPauseOpen || bMainMenuOpen || bSettingsOpen || bWardrobeOpen || bLightDimmerOpen;
 
-	// Texting-anim: houd de telefoon-pose vast zolang je in ELK telefoon-scherm zit (home OF een app:
-	// inventory/deal/atm/pack/shelf/dryrack/store/pot/merge/roll). Pause/wardrobe/dev-menu tellen niet -
-	// dan kijk je niet op je telefoon. Dit gerepliceerde signaal stuurt de texting-anim op alle proxies.
-	const bool bPhoneVisual = bOpen || bRollOpen || bDealOpen || bInventoryOpen || bPotUpgradeOpen
-		|| bMergeOpen || bAtmOpen || bPackOpen || bShelfOpen || bDryRackOpen || bStoreOpen;
+	// Texting-anim: ALLEEN als de echte telefoon open is (bOpen = het toestel zelf, home of een app
+	// erop). De andere flags (deal/inventory/atm/pack/shelf/dryrack/store/pot/merge/roll) zijn
+	// WERELD-UIs - daar sta je bij een kassa/rek/tafel en hoort er geen telefoon-in-de-hand-pose bij.
+	// Dit gerepliceerde signaal stuurt de texting-anim op alle proxies.
+	const bool bPhoneVisual = bOpen;
 	// Dedup tegen bPhoneOpenRep (op de host meteen gezet via de Server-RPC, op een client via replicatie) -
 	// zo is geen extra member nodig en blijft dit een .cpp-only wijziging die Live Coding kan hot-patchen.
 	if (bPhoneVisual != bPhoneOpenRep && GetOwner() && GetOwner()->GetLocalRole() != ROLE_SimulatedProxy)
@@ -1060,7 +1060,9 @@ void UPhoneClientComponent::EnsureWidget()
 	// blijft tot je echt stil in de kamer staat (vloer onder je gevonden) en dan wegfade't. Ziet er
 	// identiek uit aan het oude movie-scherm. Alleen tonen als we via een laad-transitie binnenkomen
 	// (New Game / Load / Join zetten de gedeelde laad-timer); buiten een transitie is 'ie niet nodig.
-	if (WeedShop_LoadElapsedSeconds() > 0.0)
+	// NIET bij de BOOT (eerste map -> hoofdmenu): die zet ook de laad-timer (voor het boot-movie-scherm)
+	// maar heeft geen wereld-opbouw - een cover zou daar het menu afdekken tot de harde cap.
+	if (WeedShop_LoadElapsedSeconds() > 0.0 && !WeedShop_IsBootLoading())
 	{
 		if (UBootCoverWidget* Cover = CreateWidget<UBootCoverWidget>(PC, UBootCoverWidget::StaticClass()))
 		{
@@ -1288,6 +1290,9 @@ void UPhoneClientComponent::CloseAllUI()
 
 void UPhoneClientComponent::ShowMainMenu()
 {
+	// BOOT-LAADSCHERM stoppen: de movie die de eerste map-load (naar dit hoofdmenu) afdekte mag weg nu
+	// het menu op beeld komt. No-op als er geen movie speelt (reset ook de boot-vlag, zie WeedShopCore).
+	WeedShop_StopGameLoadingScreen();
 	// Dev: met -AutoSoak slaan we het titelscherm over en tickt de wereld direct (geen pauze, geen save
 	// aangeraakt) - voor headless NPC-soak-tests (bv. CENTERDIAG-runs zonder dat iemand hoeft te klikken).
 	if (FParse::Param(FCommandLine::Get(), TEXT("AutoSoak")))

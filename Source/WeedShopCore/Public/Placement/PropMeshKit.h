@@ -13,6 +13,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/UObjectGlobals.h"
 #include "Placement/PlaceableTypes.h"
+#include "Inventory/InventoryComponent.h"
 
 namespace PropKit
 {
@@ -37,6 +38,55 @@ namespace PropKit
 	inline UMaterialInterface* BaseMat()
 	{
 		return LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	}
+
+	// === Echte joint-meshes (gescande CC-BY-modellen, attributie in Docs/CREDITS.md) =================
+	// Doellengtes in de wereld (cm), speler-eis "human size": klein jointje ~13 cm, dikke ~17 cm.
+	// De uniform-schaal wordt uit de ÉCHTE mesh-bounds berekend (geen magic numbers), zodat een
+	// re-import met andere maat vanzelf goed blijft.
+	constexpr float JointSmallTargetLenCm = 13.f;
+	constexpr float JointFatTargetLenCm   = 17.f;
+
+	// Laad + cache een joint-mesh (zelfde idioom als WeedUI::LoadByStem: één keer laden, AddToRoot
+	// zodat de GC 'm niet opruimt; ook een gemiste load wordt gecached zodat we niet blijven proberen).
+	inline UStaticMesh* LoadJointMesh(const TCHAR* Path)
+	{
+		static TMap<FString, UStaticMesh*> Cache;
+		if (UStaticMesh** Found = Cache.Find(Path)) { return *Found; }
+		UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Path);
+		if (M) { M->AddToRoot(); }
+		Cache.Add(Path, M);
+		return M;
+	}
+
+	// Kies het echte joint-model + transform voor een joint-item. Gram-tier bepaalt het model:
+	// 2g/5g -> SM_JointSmall (gescand, STAAND langs Z gemodelleerd), 7g/10g -> SM_JointFat (ligt al
+	// langs X). Alles genormaliseerd: het model komt HORIZONTAAL langs X te liggen (physics-doos
+	// wordt dan lang-en-plat -> settelt altijd op de zij), gecentreerd op de parent-origin.
+	// OutTipLocCm = de punt aan de +X-kant (niet-filter-kant) voor de gloed-bolletjes.
+	// False als het asset mist -> caller valt terug op het oude procedurele model.
+	inline bool GetJointMeshModel(FName ItemId, UStaticMesh*& OutMesh, float& OutUniformScale,
+		FRotator& OutRot, FVector& OutCenterOffsetCm, FVector& OutTipLocCm)
+	{
+		const int32 Grams = UInventoryComponent::JointGrams(ItemId);
+		const bool bFat = Grams >= 7; // gram-tiers: 2/5 = klein, 7/10 = dik
+		OutMesh = LoadJointMesh(bFat
+			? TEXT("/Game/_Project/Models/Joints/SM_JointFat.SM_JointFat")
+			: TEXT("/Game/_Project/Models/Joints/SM_JointSmall.SM_JointSmall"));
+		if (!OutMesh) { return false; }
+		const FBoxSphereBounds B = OutMesh->GetBounds();
+		const float HalfLen = B.BoxExtent.GetMax(); // lange as = grootste bounds-extent
+		if (HalfLen < KINDA_SMALL_NUMBER) { return false; }
+		const float TargetLen = bFat ? JointFatTargetLenCm : JointSmallTargetLenCm;
+		OutUniformScale = TargetLen / (HalfLen * 2.f);
+		// Staand (Z-lang) gescand model plat leggen: Pitch -90 mapt +Z (gedraaide top) -> +X.
+		// Een X-lang model ligt al goed.
+		const bool bLongAxisZ = (B.BoxExtent.Z >= B.BoxExtent.X && B.BoxExtent.Z >= B.BoxExtent.Y);
+		OutRot = bLongAxisZ ? FRotator(-90.f, 0.f, 0.f) : FRotator::ZeroRotator;
+		// Centreer het visuele midden op de parent-origin (bounds-origin ligt niet per se op de pivot).
+		OutCenterOffsetCm = -(OutRot.RotateVector(B.Origin) * OutUniformScale);
+		OutTipLocCm = FVector(TargetLen * 0.5f, 0.f, 0.f);
+		return true;
 	}
 
 	// Maak een "deco-wortel": hangt aan de (vaak niet-uniform geschaalde) root maar negeert die schaal,
@@ -88,7 +138,24 @@ namespace PropKit
 		if      (S.StartsWith(TEXT("WetBud_")))     { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.20f, 0.42f, 0.18f); }
 		else if (S.StartsWith(TEXT("Bud_")))        { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.26f, 0.55f, 0.22f); }
 		else if (S.StartsWith(TEXT("Bag_")))        { Size = FVector(8.f, 5.f, 10.f); Col = FLinearColor(0.70f, 0.62f, 0.42f); }
-		else if (S.StartsWith(TEXT("Joint_")))      { M = Cylinder(); Size = FVector(1.3f, 1.3f, 6.5f); Col = FLinearColor(0.93f, 0.92f, 0.85f); Rot = FRotator(0.f, 0.f, 90.f); }
+		else if (S.StartsWith(TEXT("Joint_")))
+		{
+			// Echt gescand joint-model (gram-tier kiest klein/dik), liggend langs X, met z'n eigen
+			// scan-materiaal (dus geen kleur-MID eroverheen).
+			UStaticMesh* JM = nullptr; float JScale = 1.f; FRotator JRot = FRotator::ZeroRotator; FVector JOff = FVector::ZeroVector, JTip = FVector::ZeroVector;
+			if (GetJointMeshModel(ItemId, JM, JScale, JRot, JOff, JTip))
+			{
+				C->SetVisibility(true);
+				C->SetStaticMesh(JM);
+				C->SetRelativeScale3D(FVector(JScale * ScaleMul));
+				C->SetRelativeLocation(JOff * ScaleMul);
+				C->SetRelativeRotation(JRot);
+				C->EmptyOverrideMaterials(); // evt. oude kleur-MID van een vorig item weg -> scan-materiaal zichtbaar
+				return;
+			}
+			// Fallback (asset mist): het oude procedurele cilinder-model, nooit een kale kubus.
+			M = Cylinder(); Size = FVector(1.3f, 1.3f, 6.5f); Col = FLinearColor(0.93f, 0.92f, 0.85f); Rot = FRotator(0.f, 0.f, 90.f);
+		}
 		else if (S.StartsWith(TEXT("Crystal_")))    { Size = FVector(6.f, 6.f, 6.f);  Col = FLinearColor(0.80f, 0.85f, 0.95f); }
 		else if (S.StartsWith(TEXT("Hash_")))       { Size = FVector(6.f, 6.f, 4.f);  Col = FLinearColor(0.35f, 0.22f, 0.12f); }
 		else if (S.StartsWith(TEXT("Rosin_")))      { Size = FVector(5.f, 5.f, 3.f);  Col = FLinearColor(0.88f, 0.62f, 0.16f); } // amber rosin
@@ -116,9 +183,11 @@ namespace PropKit
 
 	// Maak één onderdeel-mesh aan (runtime). bFirstPerson = alleen-eigenaar + FP-render (voor het hand-model).
 	// bCollision = blokkeer traces (voor het wereld-item zodat je 't kunt aankijken/oppakken).
+	// bKeepMeshMaterial = het eigen materiaal van de mesh laten staan (voor echte gescande assets;
+	// géén BaseMat-kleur eroverheen).
 	inline UStaticMeshComponent* SpawnItemPart(AActor* Owner, USceneComponent* Parent, UStaticMesh* M,
 		const FVector& SizeCm, const FVector& LocCm, const FLinearColor& Col, const FRotator& Rot,
-		bool bFirstPerson, bool bCollision)
+		bool bFirstPerson, bool bCollision, bool bKeepMeshMaterial = false)
 	{
 		if (!Owner || !Parent || !M) { return nullptr; }
 		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(Owner);
@@ -132,9 +201,12 @@ namespace PropKit
 		C->SetStaticMesh(M);
 		C->SetRelativeLocationAndRotation(LocCm, Rot);
 		C->SetRelativeScale3D(SizeCm / 100.f);
-		if (UMaterialInterface* BM = BaseMat())
+		if (!bKeepMeshMaterial)
 		{
-			if (UMaterialInstanceDynamic* MID = C->CreateDynamicMaterialInstance(0, BM)) { MID->SetVectorParameterValue(TEXT("Color"), Col); }
+			if (UMaterialInterface* BM = BaseMat())
+			{
+				if (UMaterialInstanceDynamic* MID = C->CreateDynamicMaterialInstance(0, BM)) { MID->SetVectorParameterValue(TEXT("Color"), Col); }
+			}
 		}
 		return C;
 	}
@@ -233,12 +305,31 @@ namespace PropKit
 		}
 		else if (S.StartsWith(TEXT("Joint_")))
 		{
-			P(Cy, FVector(1.3f, 1.3f, 7.3f), FVector(0, 0, 0), FLinearColor(0.96f, 0.95f, 0.90f));    // vloei
-			P(Co, FVector(1.3f, 1.3f, 1.9f), FVector(0, 0, 4.5f), FLinearColor(0.90f, 0.88f, 0.80f)); // gedraaide top
-			P(Cy, FVector(1.4f, 1.4f, 1.9f), FVector(0, 0, -3.6f), FLinearColor(0.76f, 0.58f, 0.34f)); // filter
-			P(Cy, FVector(1.4f, 1.4f, 0.45f), FVector(0, 0, -2.6f), Accent);                           // strain-bandje
-			P(Sp, FVector(1.2f, 1.2f, 1.2f), FVector(0, 0, 5.3f), FLinearColor(1.0f, 0.5f, 0.12f));    // gloed
-			P(Sp, FVector(0.65f, 0.65f, 0.65f), FVector(0, 0, 5.7f), FLinearColor(1.0f, 0.85f, 0.30f)); // hete kern
+			// Echte gescande joint-meshes (CC-BY, attributie in Docs/CREDITS.md): gram-tier kiest het
+			// model (2g/5g = klein ~13cm, 7g/10g = dik ~17cm), LIGGEND langs X zodat de physics-doos
+			// lang-en-plat wordt en de joint altijd op z'n zij settelt.
+			UStaticMesh* JM = nullptr; float JScale = 1.f; FRotator JRot = FRotator::ZeroRotator; FVector JOff = FVector::ZeroVector, JTip = FVector::ZeroVector;
+			if (GetJointMeshModel(ItemId, JM, JScale, JRot, JOff, JTip))
+			{
+				// Eigen scan-materiaal behouden (bKeepMeshMaterial): geen BaseMat-kleur eroverheen.
+				SpawnItemPart(Owner, Parent, JM, FVector(JScale * 100.f) * ScaleMul, JOff * ScaleMul,
+					FLinearColor::White, JRot, bFirstPerson, bCollision, /*bKeepMeshMaterial*/ true);
+				// Gloeiende punt terug (vindbaarheid bij het joint-zoeken): oranje gloed + hete kern op
+				// de +X-punt (niet-filter-kant), meegeschaald met de joint-lengte (oude maat was op ~10cm).
+				const float G = (JTip.X * 2.f) / 10.f;
+				P(Sp, FVector(1.2f, 1.2f, 1.2f) * G, JTip, FLinearColor(1.0f, 0.5f, 0.12f));                              // gloed
+				P(Sp, FVector(0.65f, 0.65f, 0.65f) * G, JTip + FVector(0.45f * G, 0, 0), FLinearColor(1.0f, 0.85f, 0.30f)); // hete kern
+			}
+			else
+			{
+				// Fallback (asset mist): het oude procedurele model, nooit een kale kubus.
+				P(Cy, FVector(1.3f, 1.3f, 7.3f), FVector(0, 0, 0), FLinearColor(0.96f, 0.95f, 0.90f));    // vloei
+				P(Co, FVector(1.3f, 1.3f, 1.9f), FVector(0, 0, 4.5f), FLinearColor(0.90f, 0.88f, 0.80f)); // gedraaide top
+				P(Cy, FVector(1.4f, 1.4f, 1.9f), FVector(0, 0, -3.6f), FLinearColor(0.76f, 0.58f, 0.34f)); // filter
+				P(Cy, FVector(1.4f, 1.4f, 0.45f), FVector(0, 0, -2.6f), Accent);                           // strain-bandje
+				P(Sp, FVector(1.2f, 1.2f, 1.2f), FVector(0, 0, 5.3f), FLinearColor(1.0f, 0.5f, 0.12f));    // gloed
+				P(Sp, FVector(0.65f, 0.65f, 0.65f), FVector(0, 0, 5.7f), FLinearColor(1.0f, 0.85f, 0.30f)); // hete kern
+			}
 		}
 		else if (S.StartsWith(TEXT("WaterBottle")))
 		{

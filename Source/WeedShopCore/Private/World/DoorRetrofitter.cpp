@@ -109,6 +109,16 @@ namespace
 		}
 		return false;
 	}
+
+	// COVER-FASE: de loading-cover staat nog over beeld -> zwaar opbouw-werk mag VERSNELD (scan-hitches
+	// en spawn-hitches zijn achter de cover onzichtbaar, en de wereld staat er sneller). Guard op de
+	// laad-timer zodat PIE/direct-map-starts (geen cover, timer = 0) de normale cadans houden, plus een
+	// tijd-cap zodat de versnelde stand nooit blijft hangen als de cover-vlag om wat voor reden uitblijft.
+	bool IsCoverPhase()
+	{
+		const double E = WeedShop_LoadElapsedSeconds();
+		return !WeedShop_IsCrowdSpawned() && E > 0.0 && E < 120.0;
+	}
 }
 
 ADoorRetrofitter::ADoorRetrofitter()
@@ -129,6 +139,10 @@ void ADoorRetrofitter::Tick(float DeltaSeconds)
 void ADoorRetrofitter::BeginPlay()
 {
 	Super::BeginPlay();
+	// Meld de loading-cover dat deze wereld een retrofitter heeft: de cover wacht dan op de stad-ombouw
+	// (CityConverted) + crowd (CrowdWarm) + thuis-vloer (RoomReady). Maps zonder retrofitter slaan die
+	// gates over (de vlag blijft daar false; reset gebeurt in WeedShop_RequestGameLoadingScreen).
+	WeedShop_SetCityRetroActive(true);
 	// Meteen een eerste pass + daarna periodiek blijven scannen (world partition / level instances
 	// streamen gebouwen later in; die deuren pakken we dan alsnog).
 	// Renderer-warnings (bv. ForwardShadingPriority) lopen BUITEN ClearOnScreenDebugMessages om ->
@@ -154,7 +168,11 @@ void ADoorRetrofitter::BeginPlay()
 	if (UWorld* WB = GetWorld()) { WB->SpawnActor<AMapBorder>(AMapBorder::StaticClass(), FTransform::Identity); }
 
 	ScanAndConvert();
-	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, 2.0f, true);
+	// Zolang de loading-cover op beeld staat scannen we VERSNELD (0.75s i.p.v. 2s): de sweep-hitches
+	// zijn achter de cover onzichtbaar en de stad (deuren/glas/lampen/liften) staat er sneller. Na de
+	// fade schakelt de adaptieve cadans (onderaan ScanAndConvert) vanzelf terug naar 2s/8s.
+	ScanRate = IsCoverPhase() ? 0.75f : 2.0f;
+	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, ScanRate, true);
 	// Virtuele crowd beweegt op een eigen snelle tik (10x/s, kleine stapjes): vloeiend op de
 	// kaart, en het zware werk (traces voor materialiseren) blijft op de 2s-pass.
 	GetWorldTimerManager().SetTimer(CrowdMoveTimer, this, &ADoorRetrofitter::TickVirtualMove, 0.1f, true);
@@ -2705,17 +2723,38 @@ void ADoorRetrofitter::ScanAndConvert()
 	// 3 passes niks nieuws -> wereld is uitgestreamd/stabiel: scan 4x trager (8s i.p.v. 2s) zodat de
 	// onvermijdelijke volle-actor-sweep-hitch veel minder vaak gebeurt. Streamt er weer iets in (set
 	// groeit), dan meteen terug naar 2s zodat nieuwe deuren/liften snel werkend worden.
-	const bool bWantSlow = (ScanIdleStreak >= 3);
-	if (bWantSlow != bScanSlow)
+	// Zolang de loading-cover op beeld staat blijven we juist VERSNELD (0.75s) scannen: de hitches
+	// zijn onzichtbaar en de stad staat er sneller (de cover wacht op CityConverted hieronder).
+	bScanSlow = (ScanIdleStreak >= 3);
+	const float WantRate = IsCoverPhase() ? 0.75f : (bScanSlow ? 8.0f : 2.0f);
+	if (!FMath::IsNearlyEqual(WantRate, ScanRate))
 	{
-		bScanSlow = bWantSlow;
-		GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, bScanSlow ? 8.0f : 2.0f, true);
+		ScanRate = WantRate;
+		GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, ScanRate, true);
 	}
 
 	// VINDBARE JOINTS: één keer scatteren zodra de beach-geometrie (prullenbakken/bankjes) is ingestreamd.
 	// ScatterJoints() zet bJointsScattered alleen op true als het echt spots vond + joints plaatste; lukte
 	// dat (nog) niet, dan blijft de vlag false en proberen we het de volgende pass opnieuw.
 	if (!bJointsScattered && ScanPass >= 2) { ScatterJoints(); }
+
+	// LOADING-COVER-SIGNAAL "stad omgebouwd": de gebakken kamers (BakedRooms-overlay) zijn geladen +
+	// zichtbaar, DEZE sweep vond geen nieuwe geometrie meer om om te bouwen, en de joints zijn
+	// gescatterd (of het ScanPass>=4-vangnet: op co-op clients scattert de server-only ScatterJoints
+	// nooit, en als de spots-geometrie uitblijft willen we de cover ook niet eeuwig vasthouden).
+	// LET OP: bewust NIET op ScanIdleStreak gaten - die blijft 0 zolang PendingResidents leegdruppelt
+	// (1 bewoner per 5 passes, tot 12 in de rij = minuten) en dat is gespreide gameplay, geen pop-in.
+	// De BootCoverWidget wacht hierop; reset gebeurt in WeedShop_RequestGameLoadingScreen.
+	if (!WeedShop_IsCityConverted())
+	{
+		const bool bSweepIdle = (_scanWork1 == _scanWork0) && (NewThisPass == 0);
+		const bool bOverlayReady = !BakedOverlay.IsValid() || (BakedOverlay->IsLevelLoaded() && BakedOverlay->IsLevelVisible());
+		if (bOverlayReady && bSweepIdle && (bJointsScattered || ScanPass >= 4))
+		{
+			WeedShop_SetCityConverted(true);
+			UE_LOG(LogWeedShop, Display, TEXT("Stad omgebouwd (pass %d, %d deuren, joints=%d) -> loading-cover mag verder"), ScanPass, TotalConverted, bJointsScattered ? 1 : 0);
+		}
+	}
 }
 
 // ============================ VINDBARE JOINTS (scatter rond prullenbak/bankje/asbak/kliko) ============================
@@ -3247,10 +3286,12 @@ void ADoorRetrofitter::TickVirtualCrowd()
 	// modulaire build (mesh-loads + components); een hele rij in 1 frame = de periodieke hang. Met deze cap
 	// + de 10Hz-cadans (zie de call in TickVirtualMove) druppelen ze vloeiend binnen i.p.v. in bursts.
 	// Tijdens het laden (de cover staat over beeld -> de spawn-hitch is verborgen) materialiseren we de crowd
-	// VERSNELD zodat de wereld vol staat VOORDAT de cover wegfadet. De cover zet CrowdSpawned zodra 'ie fadet ->
-	// daarna terug naar 1-per-keer voor smooth gameplay. (CrowdSpawned betekent hier: "de loading-cover is weg".)
-	const int32 MaxSpawnPerTick = WeedShop_IsCrowdSpawned() ? 1 : 4;
+	// VERSNELD (8/call: de cover wacht nu op CrowdWarm, dus vol gas achter het scherm) zodat de wereld vol
+	// staat VOORDAT de cover wegfadet. De cover zet CrowdSpawned zodra 'ie fadet -> daarna terug naar
+	// 1-per-keer voor smooth gameplay. (CrowdSpawned betekent hier: "de loading-cover is weg".)
+	const int32 MaxSpawnPerTick = IsCoverPhase() ? 8 : (WeedShop_IsCrowdSpawned() ? 1 : 4);
 	int32 Spawned = 0;
+	int32 PendingSpawnable = 0; // spawnbare walkers (in bereik, straat geladen) die deze call NOG geen lichaam kregen -> CrowdWarm-vlag
 	// DAGELIJKSE CROWD-ROTATIE: bij een nieuwe dag krijgt elke body (off-screen) één verse identiteit uit de
 	// ~250-pool -> elke dag andere gezichten zonder dat je 't ziet gebeuren. AssignNpc schuift de cursor door.
 	int32 CrowdDay = 1;
@@ -3326,14 +3367,14 @@ void ADoorRetrofitter::TickVirtualCrowd()
 				// 2) Pool leeg -> ECHT bouwen (modulaire variatie zoals overal). Dit is de dure stap (~40ms),
 				//    dus maar MaxSpawnPerTick per call -> de pool warmt op over een paar seconden, daarna alleen
 				//    nog gratis hergebruik = glad (net als de dev-city die z'n NPC's maar 1x bouwt).
-				if (Spawned >= MaxSpawnPerTick) { continue; }
+				if (Spawned >= MaxSpawnPerTick) { ++PendingSpawnable; continue; } // budget op: volgende call weer (telt als nog-niet-warm)
 				++Spawned;
 				// DEFERRED zodat bCrowdNpc geZET is VOOR BeginPlay->BuildAppearance: ambient walker krijgt de
 				// goedkope 1-mesh-build i.p.v. de modulaire 6-component-build (~40ms hitch/spawn = het stotteren).
 				B = W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(SpawnP), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 				if (B) { B->bCrowdNpc = true; B->FinishSpawning(FTransform(SpawnP)); }
 			}
-			if (!B) { continue; }
+			if (!B) { ++PendingSpawnable; continue; }
 			B->bVirtualCrowdBody = true; // beheerd door de DoorRetrofitter (blijvend) - de spawner-cull laat 'm met rust
 			++NBodies;
 			V.Body = B;
@@ -3349,6 +3390,17 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			}
 			if (Near) { Near->AdoptWalker(B); }
 		}
+	}
+
+	// LOADING-COVER-SIGNAAL "crowd warm": alle spawnbare walkers binnen bereik (18000cm, straat geladen,
+	// niet pal in beeld) hebben een lichaam, of het lichaam-plafond staat. NBodies > 0 als bewijs dat de
+	// spawn-pipeline echt gedraaid heeft (anders zou een te vroege call - straten nog niet gestreamd,
+	// dus 0 spawnbaar - de vlag direct zetten). De BootCoverWidget wacht hierop (host-side; een co-op
+	// client slaat deze gate over). Reset gebeurt in WeedShop_RequestGameLoadingScreen.
+	if (!WeedShop_IsCrowdWarm() && (NBodies >= BodyCap || (PendingSpawnable == 0 && NBodies > 0)))
+	{
+		WeedShop_SetCrowdWarm(true);
+		UE_LOG(LogWeedShop, Display, TEXT("Crowd warm: %d lichamen van %d wandelaars -> loading-cover mag verder"), NBodies, Crowd.Num());
 	}
 }
 

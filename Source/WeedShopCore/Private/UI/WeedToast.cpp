@@ -145,7 +145,7 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		for (const FEntry& E : Entries)
 		{
 			UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-			Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.88f), 10.f));
+			Pill->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.9f), 10.f));
 			Pill->SetPadding(FMargin(16.f, 9.f, 16.f, 9.f));
 			UTextBlock* T = WeedUI::Text(WidgetTree, E.Msg, 15, E.Color, true, true);
 			T->SetJustification(ETextJustify::Center);

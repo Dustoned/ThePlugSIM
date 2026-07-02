@@ -41,7 +41,12 @@ void ULevelUpWidget::BuildShell(UCanvasPanel* Root)
 
 	// Gecentreerde kaart.
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("LvlCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.05f, 0.06f, 0.09f, 0.98f), 22.f));
+	{
+		FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.98f), 22.f);
+		CardBr.OutlineSettings.Width = 1.f;
+		CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+		CardB->SetBrush(CardBr);
+	}
 	CardB->SetPadding(FMargin(34.f, 26.f, 34.f, 28.f));
 	CardB->SetHorizontalAlignment(HAlign_Center);
 	CardB->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -54,13 +59,13 @@ void ULevelUpWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardB->SetContent(VB);
 
-	UTextBlock* Tag = WeedUI::Text(WidgetTree, TEXT("LEVEL UP"), 14, FLinearColor(0.55f, 0.8f, 1.f), true, true);
+	UTextBlock* Tag = WeedUI::Text(WidgetTree, TEXT("LEVEL UP"), 14, WeedUI::ColAccent(), true, true);
 	VB->AddChildToVerticalBox(Tag)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 
-	LevelText = WeedUI::Text(WidgetTree, TEXT("Level 2"), 40, FLinearColor(1.f, 0.9f, 0.5f), true, true);
+	LevelText = WeedUI::Text(WidgetTree, TEXT("Level 2"), 40, WeedUI::ColHighlight(), true, true);
 	VB->AddChildToVerticalBox(LevelText)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	SubText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.78f, 0.55f, 1.f), true, true);
+	SubText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColAccent(), true, true);
 	VB->AddChildToVerticalBox(SubText)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
 	USizeBox* GridSz = WidgetTree->ConstructWidget<USizeBox>();

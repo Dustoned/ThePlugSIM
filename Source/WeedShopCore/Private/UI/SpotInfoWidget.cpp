@@ -23,11 +23,11 @@ TSharedRef<SWidget> USpotInfoWidget::RebuildWidget()
 		Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 		UBorder* B = WidgetTree->ConstructWidget<UBorder>();
-		B->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.88f), 10.f));
+		B->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.9f), 10.f));
 		B->SetPadding(FMargin(12.f, 8.f, 12.f, 8.f));
 		Card = B;
 
-		InfoText = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.6f, 1.f, 0.8f), false, true);
+		InfoText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColGood(), false, true);
 		B->SetContent(InfoText);
 
 		UCanvasPanelSlot* CS = Canvas->AddChildToCanvas(B);

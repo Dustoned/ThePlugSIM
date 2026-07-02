@@ -35,7 +35,7 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 
 	// Achtergrondbalk bovenaan, gecentreerd.
 	UBorder* Bg = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CompassBg"));
-	Bg->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.42f), 12.f));
+	Bg->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.45f), 12.f));
 	Bg->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Bg->SetClipping(EWidgetClipping::ClipToBounds);
 	UCanvasPanelSlot* BgS = Root->AddChildToCanvas(Bg);

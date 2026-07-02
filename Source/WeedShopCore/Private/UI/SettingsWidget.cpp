@@ -136,7 +136,7 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// === Full-page achtergrond: dekt het HELE scherm (geen gecentreerd popup-kaartje meer). ===
 	UBorder* Dim = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SetDim"));
-	Dim->SetBrush(WeedUI::Rounded(FLinearColor(0.016f, 0.024f, 0.036f, 0.95f), 0.f));
+	Dim->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.95f), 0.f));
 	Dim->SetHorizontalAlignment(HAlign_Fill); Dim->SetVerticalAlignment(VAlign_Fill);
 	Dim->SetPadding(FMargin(0.f));
 	Card = Dim;
@@ -155,16 +155,16 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// --- Header: grote titel links, Back rechts ---
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* TitleS = Header->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 30, FLinearColor(0.78f, 0.55f, 1.f), false, true));
+	UHorizontalBoxSlot* TitleS = Header->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("SETTINGS"), 30, WeedUI::ColAccent(), false, true));
 	TitleS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); TitleS->SetVerticalAlignment(VAlign_Center);
-	UWeedActionButton* BackTop = SetBtn(WidgetTree, TEXT("< Back"), FLinearColor(0.10f, 0.13f, 0.19f),
+	UWeedActionButton* BackTop = SetBtn(WidgetTree, TEXT("< Back"), WeedUI::ColInner(),
 		[this]() { if (UPhoneClientComponent* Ph = GetPhone()) { Ph->CloseSettings(); } }, 13);
 	Header->AddChildToHorizontalBox(BackTop)->SetVerticalAlignment(VAlign_Center);
 	MainVB->AddChildToVerticalBox(Header)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	// --- Accent-divider onder de header ---
 	UBorder* HDiv = WidgetTree->ConstructWidget<UBorder>();
-	HDiv->SetBrush(WeedUI::Rounded(FLinearColor(0.55f, 0.30f, 0.95f, 0.6f), 2.f));
+	HDiv->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(0.75f), 2.f));
 	USizeBox* HDivSz = WidgetTree->ConstructWidget<USizeBox>(); HDivSz->SetHeightOverride(2.f); HDivSz->SetContent(HDiv);
 	MainVB->AddChildToVerticalBox(HDivSz)->SetPadding(FMargin(0.f, 0.f, 0.f, 22.f));
 
@@ -180,10 +180,10 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// Tab-wissel: alleen de highlight her-tinten (RefreshTabs) + het zichtbare paneel togglen (ShowActiveCategory).
 	// GEEN RefreshContent -> de kit-sliders/toggles blijven bestaan (geen teardown/flash per klik).
-	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 0; RefreshTabs(); ShowActiveCategory(); }, 15);
-	TabGame     = SetBtn(WidgetTree, TEXT("Game"),     FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 1; RefreshTabs(); ShowActiveCategory(); }, 15);
-	TabControls = SetBtn(WidgetTree, TEXT("Controls"), FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 2; RefreshTabs(); ShowActiveCategory(); }, 15);
-	TabAudio    = SetBtn(WidgetTree, TEXT("Audio"),    FLinearColor(0.10f, 0.13f, 0.19f), [this]() { Category = 3; RefreshTabs(); ShowActiveCategory(); }, 15);
+	TabGraphics = SetBtn(WidgetTree, TEXT("Graphics"), WeedUI::ColInner(), [this]() { Category = 0; RefreshTabs(); ShowActiveCategory(); }, 15);
+	TabGame     = SetBtn(WidgetTree, TEXT("Game"),     WeedUI::ColInner(), [this]() { Category = 1; RefreshTabs(); ShowActiveCategory(); }, 15);
+	TabControls = SetBtn(WidgetTree, TEXT("Controls"), WeedUI::ColInner(), [this]() { Category = 2; RefreshTabs(); ShowActiveCategory(); }, 15);
+	TabAudio    = SetBtn(WidgetTree, TEXT("Audio"),    WeedUI::ColInner(), [this]() { Category = 3; RefreshTabs(); ShowActiveCategory(); }, 15);
 	auto AddTab = [&](UWeedActionButton* B) { UVerticalBoxSlot* TS = Nav->AddChildToVerticalBox(B); TS->SetHorizontalAlignment(HAlign_Fill); TS->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f)); };
 	AddTab(TabGraphics); AddTab(TabGame); AddTab(TabControls); AddTab(TabAudio);
 
@@ -210,13 +210,13 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// --- Footer: Esc-hint links, Save rechts ---
 	UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* HintS = Footer->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Esc to go back"), 11, FLinearColor(0.5f, 0.55f, 0.64f)));
+	UHorizontalBoxSlot* HintS = Footer->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Esc to go back"), 11, WeedUI::ColTextDim()));
 	HintS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HintS->SetVerticalAlignment(VAlign_Center);
 	// "Saved"-cue: een persistent label dat na Save even oplicht (fade in NativeTick), i.p.v. de body te herbouwen.
-	SavedMsg = WeedUI::Text(WidgetTree, TEXT("Saved"), 13, FLinearColor(0.66f, 0.92f, 0.74f), false, true);
+	SavedMsg = WeedUI::Text(WidgetTree, TEXT("Saved"), 13, WeedUI::ColGood(), false, true);
 	SavedMsg->SetRenderOpacity(0.f);
 	Footer->AddChildToHorizontalBox(SavedMsg)->SetVerticalAlignment(VAlign_Center);
-	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), FLinearColor(0.40f, 0.18f, 0.62f),
+	UWeedActionButton* SaveBtn = SetBtn(WidgetTree, TEXT("Save settings"), WeedUI::ColAccent(),
 		[this]()
 		{
 			if (UGameUserSettings* GG = GUS()) { GG->SaveSettings(); }
@@ -230,19 +230,24 @@ void USettingsWidget::BuildShell(UCanvasPanel* Root)
 
 	// === Modale "herstart nodig"-popup (verschijnt bij een schaduw-grens-wissel Potato <-> hoger). ===
 	UBorder* PopDim = WidgetTree->ConstructWidget<UBorder>();
-	PopDim->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.62f), 0.f));
+	PopDim->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.62f), 0.f));
 	PopDim->SetHorizontalAlignment(HAlign_Center); PopDim->SetVerticalAlignment(VAlign_Center);
 	RestartPopup = PopDim;
 	UCanvasPanelSlot* PSlot = Root->AddChildToCanvas(PopDim);
 	PSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f)); PSlot->SetOffsets(FMargin(0.f));
 	USizeBox* PopBox = WidgetTree->ConstructWidget<USizeBox>(); PopBox->SetWidthOverride(560.f); PopDim->SetContent(PopBox);
-	UBorder* PopPanel = WidgetTree->ConstructWidget<UBorder>(); PopPanel->SetBrush(WeedUI::Rounded(FLinearColor(0.08f, 0.10f, 0.14f, 1.f), 16.f)); PopPanel->SetPadding(FMargin(28.f, 24.f)); PopBox->SetContent(PopPanel);
+	// Palet-card: paneel + dunne stroke-rand (card-idioom uit COMMON).
+	UBorder* PopPanel = WidgetTree->ConstructWidget<UBorder>();
+	FSlateBrush PopBr = WeedUI::Rounded(WeedUI::ColPanel(0.98f), 16.f);
+	PopBr.OutlineSettings.Width = 1.f;
+	PopBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+	PopPanel->SetBrush(PopBr); PopPanel->SetPadding(FMargin(28.f, 24.f)); PopBox->SetContent(PopPanel);
 	UVerticalBox* PopVB = WidgetTree->ConstructWidget<UVerticalBox>(); PopPanel->SetContent(PopVB);
-	PopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Restart required"), 18, FLinearColor(1.f, 0.85f, 0.4f), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
-	UTextBlock* PopMsg = WeedUI::Text(WidgetTree, TEXT("Changes require a restart."), 12, FLinearColor(0.82f, 0.86f, 0.92f), true, false);
+	PopVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Restart required"), 18, WeedUI::ColHighlight(), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	UTextBlock* PopMsg = WeedUI::Text(WidgetTree, TEXT("Changes require a restart."), 12, WeedUI::ColText(), true, false);
 	PopMsg->SetAutoWrapText(true);
 	PopVB->AddChildToVerticalBox(PopMsg)->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
-	UWeedActionButton* PopOk = SetBtn(WidgetTree, TEXT("OK"), FLinearColor(0.40f, 0.18f, 0.62f), [this]() { if (RestartPopup) { RestartPopup->SetVisibility(ESlateVisibility::Collapsed); } }, 13);
+	UWeedActionButton* PopOk = SetBtn(WidgetTree, TEXT("OK"), WeedUI::ColAccent(), [this]() { if (RestartPopup) { RestartPopup->SetVisibility(ESlateVisibility::Collapsed); } }, 13);
 	PopVB->AddChildToVerticalBox(PopOk);
 	RestartPopup->SetVisibility(ESlateVisibility::Collapsed);
 
@@ -258,12 +263,12 @@ void USettingsWidget::AddValueRow(UVerticalBox* Into, const FString& Label, cons
 {
 	if (!Into) { return; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, WeedUI::ColText()));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 	Sz->SetWidthOverride(220.f);
 	UTextBlock* ValLbl = nullptr;
-	Sz->SetContent(SetBtn(WidgetTree, Value, FLinearColor(0.12f, 0.15f, 0.22f), OnClick, 16, &ValLbl));
+	Sz->SetContent(SetBtn(WidgetTree, Value, WeedUI::ColInner(), OnClick, 16, &ValLbl));
 	if (OutValueLabel) { *OutValueLabel = ValLbl; } // klik werkt straks alleen dit label bij (geen rebuild)
 	Row->AddChildToHorizontalBox(Sz)->SetVerticalAlignment(VAlign_Center);
 	Into->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
@@ -274,7 +279,7 @@ void USettingsWidget::AddResolutionRow(UVerticalBox* Into)
 	if (!Into) { return; }
 	UGameUserSettings* G = GUS();
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Resolution"), 18, FLinearColor(0.88f, 0.9f, 1.f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, TEXT("Resolution"), 18, WeedUI::ColText()));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 
 	ResCombo = WidgetTree->ConstructWidget<UComboBoxString>();
@@ -342,7 +347,7 @@ void USettingsWidget::AddKitToggle(UVerticalBox* Into, const FString& Label, boo
 {
 	if (!Into) { return; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, WeedUI::ColText()));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 	UClass* ToggleCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/toggle/W_Toggle_Template.W_Toggle_Template_C")); // NIET static -> GC kan de class opruimen, dangling pointer = crash
 	if (ToggleCls)
@@ -362,10 +367,10 @@ void USettingsWidget::AddKitSlider(UVerticalBox* Into, const FString& Label, dou
 {
 	if (!Into) { return; }
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, FLinearColor(0.88f, 0.9f, 1.f)));
+	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Label, 18, WeedUI::ColText()));
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 
-	UTextBlock* ValText = WeedUI::Text(WidgetTree, TEXT(""), 16, FLinearColor(0.74f, 0.55f, 1.f));
+	UTextBlock* ValText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColAccent());
 	UClass* SliderCls = LoadClass<UUserWidget>(nullptr, TEXT("/Game/minimalist_gui/widgets/templates/slider/W_Slider_Template.W_Slider_Template_C")); // NIET static -> GC-veilig (herlaadt indien opgeruimd)
 	if (SliderCls)
 	{
@@ -394,9 +399,9 @@ void USettingsWidget::RefreshTabs()
 	auto Tint = [](UWeedActionButton* B, bool bSel)
 	{
 		if (!B) { return; }
-		// Geselecteerd = groen-getint accent, anders donker. Tall sidebar-tabs.
-		const FLinearColor C = bSel ? FLinearColor(0.40f, 0.18f, 0.62f, 0.98f) : FLinearColor(0.05f, 0.07f, 0.11f, 0.92f);
-		const FLinearColor H = bSel ? FLinearColor(0.50f, 0.24f, 0.74f, 1.f)  : FLinearColor(0.10f, 0.13f, 0.19f, 0.96f);
+		// Geselecteerd = accent-vlak (ColAccentDim), anders neutraal binnen-paneel. Tall sidebar-tabs.
+		const FLinearColor C = bSel ? WeedUI::ColAccentDim(0.98f) : WeedUI::ColInner(0.92f);
+		const FLinearColor H = bSel ? WeedUI::ColAccentDim(1.f)   : WeedUI::ColInner(0.96f);
 		FButtonStyle S; S.Normal = WeedUI::Rounded(C, 8.f); S.Hovered = WeedUI::Rounded(H, 8.f); S.Pressed = WeedUI::Rounded(H, 8.f);
 		S.NormalPadding = FMargin(16.f, 13.f); S.PressedPadding = FMargin(16.f, 13.f);
 		B->SetStyle(S);
@@ -498,7 +503,7 @@ void USettingsWidget::BuildGraphicsPanel(UVerticalBox* P)
 {
 	if (!P) { return; }
 	UGameUserSettings* G = GUS();
-	if (!G) { P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Graphics unavailable."), 13, FLinearColor::Gray)); return; }
+	if (!G) { P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Graphics unavailable."), 13, WeedUI::ColTextDim())); return; }
 
 	// Resolutie-dropdown.
 	AddResolutionRow(P);
@@ -770,7 +775,7 @@ void USettingsWidget::BuildAudioPanel(UVerticalBox* P)
 	AddVol(TEXT("Game volume"), 1);
 	AddVol(TEXT("Music volume"), 2);
 
-	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 13, FLinearColor(0.55f, 0.6f, 0.7f)))
+	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 13, WeedUI::ColTextDim()))
 		->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
 }
 
@@ -782,7 +787,7 @@ void USettingsWidget::BuildControlsPanel(UVerticalBox* P)
 	AddKitToggle(P, TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled(),
 		[this](bool bOn) { UHotkeyHintWidget::SetHintsEnabled(bOn); });
 
-	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, FLinearColor(0.6f, 0.65f, 0.76f)))
+	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, WeedUI::ColTextDim()))
 		->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
 
 	// Scrollbare lijst met alle acties (Main + Alt toets) — ÉÉN keer gebouwd; rebind/capture werkt
@@ -796,7 +801,7 @@ void USettingsWidget::BuildControlsPanel(UVerticalBox* P)
 	for (const FName& Action : UControlSettings::AllActions())
 	{
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UTextBlock* NameT = WeedUI::Text(WidgetTree, UControlSettings::DisplayName(Action).ToString(), 16, FLinearColor(0.9f, 0.92f, 1.f));
+		UTextBlock* NameT = WeedUI::Text(WidgetTree, UControlSettings::DisplayName(Action).ToString(), 16, WeedUI::ColText());
 		UHorizontalBoxSlot* NS = Row->AddChildToHorizontalBox(NameT);
 		NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
 
@@ -808,7 +813,7 @@ void USettingsWidget::BuildControlsPanel(UVerticalBox* P)
 			UTextBlock* BtnLbl = nullptr;
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 			Sz->SetWidthOverride(96.f);
-			UWeedActionButton* Btn = SetBtn(WidgetTree, Lbl, FLinearColor(0.18f, 0.22f, 0.3f),
+			UWeedActionButton* Btn = SetBtn(WidgetTree, Lbl, WeedUI::ColInner(),
 				[this, Action, bAlt]() { bRebinding = true; bRebindAlt = bAlt; RebindAction = Action; RebindMsg.Reset(); SetKeyboardFocus(); RefreshKeyButtonsFor(Action); }, 13, &BtnLbl);
 			Sz->SetContent(Btn);
 			Row->AddChildToHorizontalBox(Sz)->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
@@ -820,11 +825,11 @@ void USettingsWidget::BuildControlsPanel(UVerticalBox* P)
 	}
 
 	// Persistent RebindMsg-tekst (in-place SetText; leeg -> Collapsed).
-	RebindMsgText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(1.f, 0.85f, 0.45f));
+	RebindMsgText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColHighlight());
 	RebindMsgText->SetVisibility(ESlateVisibility::Collapsed);
 	P->AddChildToVerticalBox(RebindMsgText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 
-	P->AddChildToVerticalBox(SetBtn(WidgetTree, TEXT("Reset to defaults"), FLinearColor(0.4f, 0.34f, 0.16f),
+	P->AddChildToVerticalBox(SetBtn(WidgetTree, TEXT("Reset to defaults"), WeedUI::ColInner(),
 		[this]() { UControlSettings::Get()->ResetToDefaults(); bRebinding = false; RebindMsg = TEXT("Controls reset to defaults."); RefreshAllKeyButtons(); }, 12))
 		->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 }
@@ -839,7 +844,7 @@ void USettingsWidget::UpdateKeyButtonLabel(const FKeyBtn& KB)
 	if (UTextBlock* L = KB.Label.Get()) { L->SetText(FText::FromString(Lbl)); }
 	if (UWeedActionButton* B = KB.Btn.Get())
 	{
-		const FLinearColor Col = bThis ? FLinearColor(0.5f, 0.4f, 0.12f) : FLinearColor(0.18f, 0.22f, 0.3f);
+		const FLinearColor Col = bThis ? WeedUI::ColAccentDim() : WeedUI::ColInner();
 		FButtonStyle S;
 		S.Normal = WeedUI::Rounded(Col, 7.f);
 		S.Hovered = WeedUI::Rounded(Col * 1.3f, 7.f);

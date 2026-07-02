@@ -55,7 +55,7 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HintCard"));
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.74f), 10.f));
+	CardB->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.8f), 10.f));
 	CardB->SetPadding(FMargin(9.f, 6.f, 10.f, 6.f));
 	CardB->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Card = CardB;
@@ -77,7 +77,7 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	// Gecentreerde interactie-popup (net onder het midden / crosshair): toont wat je aankijkt
 	// ("LOCKED - X lives here", "Open door", ...) als nette popup i.p.v. in de hoek.
 	CenterPromptCard = WidgetTree->ConstructWidget<UBorder>();
-	CenterPromptCard->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.08f, 0.82f), 8.f));
+	CenterPromptCard->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.85f), 8.f));
 	CenterPromptCard->SetPadding(FMargin(14.f, 7.f));
 	CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed);
 	CenterPromptText = WeedUI::Text(WidgetTree, TEXT(""), 15, FLinearColor(0.95f, 0.97f, 1.f), true, true);
@@ -100,9 +100,9 @@ void UHotkeyHintWidget::AddRow(const FString& Key, const FString& Action)
 
 	// Toets-"chip" RECHTS (auto-breedte, tegen de rechterrand uitgelijnd).
 	UBorder* Chip = WidgetTree->ConstructWidget<UBorder>();
-	Chip->SetBrush(WeedUI::Rounded(FLinearColor(0.16f, 0.18f, 0.24f, 0.95f), 5.f));
+	Chip->SetBrush(WeedUI::Rounded(WeedUI::ColSlot(0.95f), 5.f));
 	Chip->SetPadding(FMargin(6.f, 1.f, 6.f, 1.f));
-	Chip->SetContent(WeedUI::Text(WidgetTree, Key, 10, FLinearColor(1.f, 0.95f, 0.7f), true, true));
+	Chip->SetContent(WeedUI::Text(WidgetTree, Key, 10, WeedUI::ColAccent(), true, true));
 	UHorizontalBoxSlot* CSlot = Row->AddChildToHorizontalBox(Chip);
 	CSlot->SetVerticalAlignment(VAlign_Center);
 	CSlot->SetHorizontalAlignment(HAlign_Right);

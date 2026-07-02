@@ -15,11 +15,15 @@ UNpcRegistryComponent::UNpcRegistryComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
 
+	// MEET-MARKER (boot-gap-diagnose, B.15): de FObjectFinder sync-laadt DT_NPCs (+ eventuele hard-refs).
+	// De static laadt maar 1x; latere constructor-runs zijn ~0.00s.
+	const double _NpcT0 = FPlatformTime::Seconds();
 	static ConstructorHelpers::FObjectFinder<UDataTable> Finder(TEXT("/Game/_Project/Data/DT_NPCs.DT_NPCs"));
 	if (Finder.Succeeded())
 	{
 		NpcTable = Finder.Object;
 	}
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] NpcRegistry-ctor: DT_NPCs-load %.2fs (+%.2fs sinds start)"), FPlatformTime::Seconds() - _NpcT0, FPlatformTime::Seconds() - GStartTime);
 }
 
 void UNpcRegistryComponent::BeginPlay()

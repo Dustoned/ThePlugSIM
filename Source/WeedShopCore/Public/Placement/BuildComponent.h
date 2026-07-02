@@ -111,9 +111,9 @@ protected:
 
 	// Pool van rode no-go-vlakken (raster-cellen) die tijdens plaatsen op de vloer verschijnen waar je NIET mag plaatsen.
 	void EnsureDoorMarks();
-	// Boolean: valt het MIDDEN van je plaatsing in een deur-no-go-zone? (Voedt de ghost-validatie op regel 777.)
-	bool UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf);
-	bool DoorBlocksCell(const FVector& Cell) const; // valt deze cel in een deur-zone (60cm rond een gecachete deur)?
+	// Boolean: valt de FOOTPRINT van je plaatsing in een deur-no-go-zone? (Voedt de ghost-validatie op regel 777.)
+	bool UpdateDoorwayMarkers(bool bShow, const FVector& FootCenter, const FVector& FootHalf, float Yaw);
+	bool DoorBlocksCell(const FVector& Cell, const FVector& BoxHalf, float Yaw) const; // valt deze footprint in een deur-zone (60cm rond een gecachete deur)?
 	// Deur-posities in de buurt verzamelen via een overlap-sphere op mesh-naam "Door" (vangt apartment-deuren
 	// of ze nu wel/niet tot ACityDoor zijn omgezet). Gecachet; ververst pas als je significant beweegt.
 	void RefreshDoorCache(const FVector& Center);

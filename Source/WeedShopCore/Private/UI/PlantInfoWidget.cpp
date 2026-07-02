@@ -148,8 +148,15 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	ConditionRow->SetVisibility(ESlateVisibility::Collapsed);
 
 	// Aarde + upgrades (klein, compact).
-	// Soil/upgrades/hint staan NIET meer op de kaart (info komt bij de pot-interact); members blijven voor NativeTick.
-	SoilText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
+	// Upgrades/hint staan NIET meer op de kaart (info komt bij de pot-interact); members blijven voor NativeTick.
+	// SoilText hangt WEL in de kaart, maar alleen zichtbaar bij een LEGE pot: dan wil je zien hoeveel
+	// harvests de soil nog kan ("Soil: 3 harvests left" / "No soil") voordat je plant.
+	SoilText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColTextDim(), false, true);
+	{
+		UVerticalBoxSlot* SS = VB->AddChildToVerticalBox(SoilText);
+		SS->SetHorizontalAlignment(HAlign_Center); SS->SetPadding(FMargin(0.f, 4.f, 0.f, 2.f));
+	}
+	SoilText->SetVisibility(ESlateVisibility::Collapsed);
 	UpgradesText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
 	HintText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColTextDim());
 }
@@ -190,6 +197,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		FString Title = StrainName; // THC staat duidelijk bij de opbrengst (geen dubbele weergave)
 		if (NumSlots > 1) { Title += FString::Printf(TEXT("   (%d/%d)"), Plant->GetPlantedCount(), NumSlots); }
 		TitleText->SetText(FText::FromString(Title));
+		if (SoilText) { SoilText->SetVisibility(ESlateVisibility::Collapsed); } // geplant: soil-info hoort bij de pot-interact, kaart blijft compact
 		// Naam in de per-strain tag-kleur (zelfde hue als de strain-tags in de inventory, iets helderder voor leesbaarheid).
 		{
 			const FName StrainId = Plant->GetPrimaryStrainId();
@@ -264,6 +272,7 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (RingRow) { RingRow->SetVisibility(ESlateVisibility::Collapsed); }
 		if (ConditionRow) { ConditionRow->SetVisibility(ESlateVisibility::Collapsed); }
 		if (YieldRow) { YieldRow->SetVisibility(ESlateVisibility::Collapsed); } // lege pot: geen weegschaal/THC-iconen tonen
+		if (SoilText) { SoilText->SetVisibility(ESlateVisibility::HitTestInvisible); } // lege pot: toon hoeveel harvests de soil nog kan
 	}
 
 	if (Plant->HasSoil())

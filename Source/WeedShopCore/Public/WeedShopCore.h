@@ -38,6 +38,30 @@ WEEDSHOPCORE_API bool WeedShop_IsCrowdSpawned();
 WEEDSHOPCORE_API void WeedShop_SetCoverUp(bool bUp);
 WEEDSHOPCORE_API bool WeedShop_IsCoverUp();
 
+// "Stad omgebouwd"-vlag: DoorRetrofitter zet 'm zodra de gebakken kamers (BakedRooms-overlay) geladen+
+// zichtbaar zijn en de ombouw-sweep een volle pass niks nieuws meer vond. De BootCoverWidget wacht hierop
+// (op maps MET een DoorRetrofitter, zie WeedShop_IsCityRetroActive). Reset bij een nieuwe load.
+WEEDSHOPCORE_API void WeedShop_SetCityConverted(bool bConverted);
+WEEDSHOPCORE_API bool WeedShop_IsCityConverted();
+
+// "Crowd warm"-vlag: DoorRetrofitter zet 'm zodra alle spawnbare walkers binnen bereik (18000cm) een
+// lichaam hebben of het lichaam-plafond staat. Host-side; co-op clients slaan deze cover-gate over
+// (daar komen de zichtbare bodies via replicatie). Reset bij een nieuwe load.
+WEEDSHOPCORE_API void WeedShop_SetCrowdWarm(bool bWarm);
+WEEDSHOPCORE_API bool WeedShop_IsCrowdWarm();
+
+// "DoorRetrofitter actief"-vlag: gezet in ADoorRetrofitter::BeginPlay (alleen op de pack-map). Maps
+// ZONDER retrofitter (geen stad-ombouw/crowd/thuis-vloer) slaan de bijbehorende cover-gates over,
+// anders zou de cover daar altijd tot de harde cap blijven staan. Reset bij een nieuwe load.
+WEEDSHOPCORE_API void WeedShop_SetCityRetroActive(bool bActive);
+WEEDSHOPCORE_API bool WeedShop_IsCityRetroActive();
+
+// "Boot-laadscherm actief": de allereerste map-load (naar het hoofdmenu) toont nu ook het movie-scherm
+// i.p.v. ~50s zwart venster. Zolang dit staat maakt EnsureWidget GEEN in-game cover aan (het menu heeft
+// geen wereld-opbouw); PhoneClientComponent::ShowMainMenu stopt de movie en reset dit.
+WEEDSHOPCORE_API void WeedShop_SetBootLoading(bool bBoot);
+WEEDSHOPCORE_API bool WeedShop_IsBootLoading();
+
 // Gedeelde laad-timer + tekst: zowel de movie-loadingscreen als het in-game cover-scherm gebruiken deze,
 // zodat ze er IDENTIEK uitzien en de progress/tekst naadloos doorlopen (geen zichtbare overgang).
 WEEDSHOPCORE_API double WeedShop_LoadElapsedSeconds();

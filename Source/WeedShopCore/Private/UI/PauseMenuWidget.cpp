@@ -69,14 +69,18 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 	Dim->SetContent(Sz);
 
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-	Panel->SetBrush(WeedUI::Rounded(FLinearColor(0.06f, 0.07f, 0.10f, 0.99f), 18.f));
+	// Palet-card: paneel-kleur + dunne stroke-rand (card-idioom uit COMMON).
+	FSlateBrush PanelBr = WeedUI::Rounded(WeedUI::ColPanel(0.98f), 18.f);
+	PanelBr.OutlineSettings.Width = 1.f;
+	PanelBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f));
+	Panel->SetBrush(PanelBr);
 	Panel->SetPadding(FMargin(22.f));
 	Sz->SetContent(Panel);
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
 
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("PAUSED"), 24, FLinearColor(0.6f, 1.f, 0.6f), true, true))
+	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("PAUSED"), 24, WeedUI::ColAccent(), true, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 
 	auto AddBtn = [this, VB](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn)
@@ -84,15 +88,16 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 		VB->AddChildToVerticalBox(PauseBtn(WidgetTree, Label, Col, Fn))->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
 	};
 
-	AddBtn(TEXT("Resume"),        FLinearColor(0.20f, 0.50f, 0.30f), [this]() { OnResume(); });
-	AddBtn(TEXT("Unstuck"),       FLinearColor(0.40f, 0.34f, 0.18f), [this]() { OnUnstuck(); });
-	AddBtn(TEXT("Settings"),      FLinearColor(0.24f, 0.30f, 0.42f), [this]() { OnSettings(); });
-	AddBtn(TEXT("Save game"),     FLinearColor(0.22f, 0.40f, 0.52f), [this]() { OnSave(); });
-	AddBtn(TEXT("Load game"),     FLinearColor(0.22f, 0.40f, 0.52f), [this]() { OnLoad(); });
-	AddBtn(TEXT("Main menu"),     FLinearColor(0.42f, 0.32f, 0.20f), [this]() { OnMainMenu(); });
-	AddBtn(TEXT("Quit to desktop"), FLinearColor(0.48f, 0.20f, 0.20f), [this]() { OnQuit(); });
+	// Alle acties = één neutrale ColInner-stijl; alleen Quit is destructief -> ColWarn.
+	AddBtn(TEXT("Resume"),        WeedUI::ColInner(), [this]() { OnResume(); });
+	AddBtn(TEXT("Unstuck"),       WeedUI::ColInner(), [this]() { OnUnstuck(); });
+	AddBtn(TEXT("Settings"),      WeedUI::ColInner(), [this]() { OnSettings(); });
+	AddBtn(TEXT("Save game"),     WeedUI::ColInner(), [this]() { OnSave(); });
+	AddBtn(TEXT("Load game"),     WeedUI::ColInner(), [this]() { OnLoad(); });
+	AddBtn(TEXT("Main menu"),     WeedUI::ColInner(), [this]() { OnMainMenu(); });
+	AddBtn(TEXT("Quit to desktop"), WeedUI::ColWarn(0.85f), [this]() { OnQuit(); });
 
-	StatusText = WeedUI::Text(WidgetTree, TEXT(""), 12, FLinearColor(0.7f, 0.85f, 1.f), true);
+	StatusText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColTextDim(), true);
 	VB->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
 }
 

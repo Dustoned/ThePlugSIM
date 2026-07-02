@@ -30,7 +30,7 @@ void USaveIndicatorWidget::BuildShell(UCanvasPanel* Root)
 
 	// Pil rechtsboven.
 	UBorder* Pill = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SavePill"));
-	Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.04f, 0.05f, 0.07f, 0.82f), 10.f));
+	Pill->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.85f), 10.f));
 	Pill->SetPadding(FMargin(12.f, 7.f, 14.f, 7.f));
 	Box = Pill;
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Pill);
@@ -45,13 +45,13 @@ void USaveIndicatorWidget::BuildShell(UCanvasPanel* Root)
 	// Draaiend "laad"-icoon (gear).
 	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
 	Sz->SetWidthOverride(18.f); Sz->SetHeightOverride(18.f);
-	UWidget* Icon = WeedUI::Icon(WidgetTree, WeedUI::EIcon::Gear, 18.f, FLinearColor(0.7f, 0.85f, 1.f));
+	UWidget* Icon = WeedUI::Icon(WidgetTree, WeedUI::EIcon::Gear, 18.f, WeedUI::ColAccent());
 	Sz->SetContent(Icon);
 	Spinner = Sz;
 	UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Sz);
 	IS->SetVerticalAlignment(VAlign_Center); IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 
-	Label = WeedUI::Text(WidgetTree, TEXT("Saving..."), 12, FLinearColor(0.9f, 0.92f, 1.f), false, true);
+	Label = WeedUI::Text(WidgetTree, TEXT("Saving..."), 12, WeedUI::ColText(), false, true);
 	UHorizontalBoxSlot* LS = Row->AddChildToHorizontalBox(Label);
 	LS->SetVerticalAlignment(VAlign_Center);
 
@@ -96,7 +96,7 @@ void USaveIndicatorWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTi
 		if (Label)
 		{
 			Label->SetText(FText::FromString(bSpin ? TEXT("Loading...") : TEXT("Loaded")));
-			Label->SetColorAndOpacity(FSlateColor(bSpin ? FLinearColor(0.7f, 0.85f, 1.f) : FLinearColor(0.5f, 1.f, 0.6f)));
+			Label->SetColorAndOpacity(FSlateColor(bSpin ? WeedUI::ColAccent() : WeedUI::ColGood()));
 		}
 		if (Spinner) { Spinner->SetRenderTransformAngle(bSpin ? (-Timer * 540.f) : 0.f); }
 	}
@@ -106,7 +106,7 @@ void USaveIndicatorWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTi
 		if (Label)
 		{
 			Label->SetText(FText::FromString(bSaving ? TEXT("Saving...") : TEXT("Saved")));
-			Label->SetColorAndOpacity(FSlateColor(bSaving ? FLinearColor(0.9f, 0.92f, 1.f) : FLinearColor(0.5f, 1.f, 0.6f)));
+			Label->SetColorAndOpacity(FSlateColor(bSaving ? WeedUI::ColText() : WeedUI::ColGood()));
 		}
 		// Spinner draait tijdens "Saving...", staat stil bij "Saved".
 		if (Spinner)

@@ -32,6 +32,10 @@ static bool GShowGameLoadingScreen = false;
 static bool GRoomFloorReady = false;
 static bool GCrowdSpawned = false; // nabije crowd-burst klaar (gezet door DoorRetrofitter) -> cover mag wegfaden
 static bool GCoverUp = false;      // in-game cover staat op beeld -> de movie mag overdragen (geen laad-gat)
+static bool GCityConverted = false;   // stad omgebouwd (BakedRooms zichtbaar + sweep idle) - gezet door DoorRetrofitter
+static bool GCrowdWarm = false;       // crowd gematerialiseerd (alle spawnbare walkers in bereik hebben een lichaam)
+static bool GCityRetroActive = false; // er draait een DoorRetrofitter in deze wereld (pack-map) -> stad/crowd-gates gelden
+static bool GBootLoading = false;     // boot-laadscherm (eerste map -> hoofdmenu) actief -> EnsureWidget maakt geen cover
 static double GLoadStartSeconds = 0.0;
 static uint32 GLoadSeed = 0; // per-launch seed -> elke keer andere laad-regels (gedeeld door movie + cover)
 void WeedShop_RequestGameLoadingScreen()
@@ -40,6 +44,10 @@ void WeedShop_RequestGameLoadingScreen()
 	GRoomFloorReady = false;
 	GCrowdSpawned = false; // verse load: crowd moet opnieuw materialiseren voordat de cover weg mag
 	GCoverUp = false;      // verse load: de movie wacht weer op de nieuwe cover
+	GCityConverted = false;   // verse load: stad moet opnieuw omgebouwd worden
+	GCrowdWarm = false;       // verse load: crowd moet opnieuw warm draaien
+	GCityRetroActive = false; // verse load: de nieuwe wereld meldt zich (of niet, op maps zonder retrofitter)
+	GBootLoading = false;     // een echte game-load overschrijft de boot-staat
 	GLoadStartSeconds = FPlatformTime::Seconds(); // gedeelde laad-timer voor movie + cover (naadloos)
 	GLoadSeed = (uint32)FPlatformTime::Cycles() * 2654435761u + 12345u; // verandert elke game-start
 }
@@ -49,6 +57,14 @@ void WeedShop_SetCrowdSpawned(bool bSpawned) { GCrowdSpawned = bSpawned; }
 bool WeedShop_IsCrowdSpawned() { return GCrowdSpawned; }
 void WeedShop_SetCoverUp(bool bUp) { GCoverUp = bUp; }
 bool WeedShop_IsCoverUp() { return GCoverUp; }
+void WeedShop_SetCityConverted(bool bConverted) { GCityConverted = bConverted; }
+bool WeedShop_IsCityConverted() { return GCityConverted; }
+void WeedShop_SetCrowdWarm(bool bWarm) { GCrowdWarm = bWarm; }
+bool WeedShop_IsCrowdWarm() { return GCrowdWarm; }
+void WeedShop_SetCityRetroActive(bool bActive) { GCityRetroActive = bActive; }
+bool WeedShop_IsCityRetroActive() { return GCityRetroActive; }
+void WeedShop_SetBootLoading(bool bBoot) { GBootLoading = bBoot; }
+bool WeedShop_IsBootLoading() { return GBootLoading; }
 double WeedShop_LoadElapsedSeconds() { return GLoadStartSeconds > 0.0 ? (FPlatformTime::Seconds() - GLoadStartSeconds) : 0.0; }
 
 // Gedeelde grappige laad-regels. Beide laadschermen kiezen via WeedShop_LoadLine(step) exact dezelfde regel.
@@ -89,6 +105,7 @@ FString WeedShop_LoadLine(int32 Step)
 
 void WeedShop_StopGameLoadingScreen()
 {
+	GBootLoading = false; // boot-laadscherm is (bij deze stop) sowieso voorbij
 	if (GetMoviePlayer() && GetMoviePlayer()->IsMovieCurrentlyPlaying())
 	{
 		GetMoviePlayer()->StopMovie();
@@ -487,9 +504,26 @@ private:
 	void OnPreLoadMap(const FString& MapName)
 	{
 		if (IsRunningDedicatedServer() || GetMoviePlayer() == nullptr) { return; }
-		// Alleen bij in-game gaan (New Game/Load/Continue). De boot naar het hoofdmenu krijgt geen laadscherm.
-		if (!GShowGameLoadingScreen) { return; }
-		GShowGameLoadingScreen = false;
+		if (!GShowGameLoadingScreen)
+		{
+			// BOOT (de allereerste map-load, naar het hoofdmenu): vroeger geen laadscherm -> de speler keek
+			// ~50s naar een zwart venster terwijl Map_MainMenu laadde. Nu tonen we HETZELFDE movie-scherm,
+			// met een eigen timer-seed (er is nog geen WeedShop_RequestGameLoadingScreen geweest).
+			// GShowGameLoadingScreen blijft onaangeraakt zodat de in-game flow (menu -> wereld) niet wijzigt.
+			// Zolang GBootLoading staat maakt EnsureWidget GEEN in-game cover aan (het menu heeft geen
+			// wereld-opbouw); PhoneClientComponent::ShowMainMenu stopt de movie zodra het menu op beeld
+			// staat (WeedShop_StopGameLoadingScreen). De 90s-cap in SWeedLoadingScreen::Tick is de vangrail.
+			if (bBootScreenShown) { return; } // niet-boot transitie zonder game-load-request: oude gedrag (geen scherm)
+			bBootScreenShown = true;
+			GBootLoading = true;
+			GLoadStartSeconds = FPlatformTime::Seconds(); // eigen boot-timer (movie-tekst/bar/cap lopen hierop)
+			GLoadSeed = (uint32)FPlatformTime::Cycles() * 2654435761u + 12345u;
+		}
+		else
+		{
+			// In-game transitie (New Game/Load/Continue/Join): de bekende twee-schermen-flow hieronder.
+			GShowGameLoadingScreen = false;
+		}
 
 		// TWEE SCHERMEN, NAADLOOS IN ELKAAR OVERLOPEND:
 		// 1) Dit MOVIE-scherm dekt de engine-map-load en VERDWIJNT automatisch zodra het level klaar is
@@ -506,6 +540,8 @@ private:
 		Attr.WidgetLoadingScreen = SNew(SWeedLoadingScreen);
 		GetMoviePlayer()->SetupLoadingScreen(Attr);
 	}
+
+	bool bBootScreenShown = false; // de boot-variant maar 1x (elke volgende load beslist GShowGameLoadingScreen)
 };
 
 // Secundaire game-module (de primaire blijft 'ThePlugSIM' uit de template).

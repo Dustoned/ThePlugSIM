@@ -392,19 +392,33 @@ public:
 	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyIdle;
 	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyWalk;
 	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyJump;
-	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyPhone; // andere spelers zien je 'texten' als je je telefoon open hebt
+	UPROPERTY() TObjectPtr<class UAnimSequence> ProxyPhone; // texting-clip voor de single-node-FALLBACK (skins zonder loco-ABP)
+	// Texting op het BOVENLIJF (loco-ABP-skins): dezelfde cellphone-clip maar native op SK_Mannequin,
+	// afgespeeld als dynamische montage op de 'UpperBody'-slot van ABP_Unarmed -> benen blijven uit de
+	// loco-ABP komen, dus lopen tijdens texten slidet niet meer (zie UpdateTextingMontage).
+	UPROPERTY() TObjectPtr<class UAnimSequence> TextingAnim;
+	UPROPERTY() TObjectPtr<class UAnimMontage> TextingMontage; // actieve texting-montage (loopt zolang de telefoon open is; gericht stoppen)
+	// Telefoon-prop in de hand zolang de texting-montage draait: klein donker toestel (BasicShapes-kubus +
+	// BaseMat-MID, PropKit-idioom), runtime aan de hand-bone van de HUIDIGE mesh gehangen. Bij elke
+	// montage-start vers aangemaakt -> overleeft skin-wissels (ApplySkinMesh herstart de montage vanzelf).
+	// Gedreven door bPhoneOpenRep, dus per-client identiek zonder extra replicatie.
+	UPROPERTY() TObjectPtr<class UStaticMeshComponent> TextingPhoneProp;
+	void ShowTextingPhoneProp();    // aanmaken + aan de hand-bone hangen (bij texting-start)
+	void DestroyTextingPhoneProp(); // opruimen (bij texting-stop)
 	bool bProxyAnim = false;
 	bool bBodyHasLocoAbp = false;     // Manny/Quinn-skin -> echte locomotie-ABP op de body; anders single-node-fallback
-	int32 ProxyAnimState = -1;        // -1 nog niet, 0 idle/ABP, 1 walk, 2 lucht, 3 telefoon
+	int32 ProxyAnimState = -1;        // -1 nog niet, 0 idle/ABP, 1 walk, 2 lucht, 3 telefoon (3/4 alleen nog in de fallback)
 	FVector ProxyPrevLoc = FVector::ZeroVector;
 
 	// LOKALE speler: de template-ABP-idle staat scheef (1 voet voor). Bij stilstaan vervangen we 'm door een
 	// symmetrische idle (single-node), en schakelen terug naar de ABP zodra je beweegt.
 	UPROPERTY() TObjectPtr<class UAnimSequence> LocalIdleAnim;
+	UPROPERTY() TObjectPtr<class UAnimMontage> LocalPoseMontage; // actieve idle/fall-montage op DefaultSlot; gericht stoppen (StopAllMontages zou ook de texting-montage killen)
 	int32 LocalIdleState = -1;        // -1 nog niet bepaald, 0 = ABP (bewegend/in de lucht/telefoon), 1 = symmetrische idle
 	bool bHasProxyPrev = false;
 	float ProxyMoveHold = 0.f;        // resterende tijd dat we 'beweegt' aanhouden tussen net-updates
 	void UpdateProxyAnim(float DeltaSeconds);
+	void UpdateTextingMontage();      // texting = dynamische montage op de UpperBody-slot (alle loco-ABP-pawns, ook lokaal/FP)
 
 
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.

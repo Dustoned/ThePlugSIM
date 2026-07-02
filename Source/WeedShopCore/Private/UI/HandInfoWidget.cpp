@@ -104,7 +104,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	CardB->SetContent(Row);
 
 	AccentBar = WidgetTree->ConstructWidget<UBorder>();
-	AccentBar->SetBrush(WeedUI::Rounded(FLinearColor(0.5f, 1.f, 0.6f, 1.f), 3.f));
+	AccentBar->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(), 3.f));
 	AccentBar->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
 	UHorizontalBoxSlot* AS = Row->AddChildToHorizontalBox(AccentBar);
 	AS->SetPadding(FMargin(0.f)); AS->SetVerticalAlignment(VAlign_Fill);
@@ -135,7 +135,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	Col->AddChildToVerticalBox(NameText)->SetPadding(FMargin(14.f, 0.f, 14.f, 2.f));
 
 	// Aantal/gram - groot en gekleurd, direct onder de titel.
-	QtyText = WeedUI::Text(WidgetTree, TEXT(""), 22, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
+	QtyText = WeedUI::Text(WidgetTree, TEXT(""), 22, WeedUI::ColGood(), false, true);
 	Col->AddChildToVerticalBox(QtyText)->SetPadding(FMargin(14.f, 0.f, 14.f, 8.f));
 
 	// Dun scheidingslijntje.

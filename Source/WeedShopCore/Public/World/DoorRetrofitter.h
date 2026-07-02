@@ -104,8 +104,10 @@ protected:
 	TSet<TWeakObjectPtr<AActor>> LampScanSeen;    // actors zonder binnen-lamp-componenten
 	TSet<TWeakObjectPtr<AActor>> ElevScanSeen;    // actors zonder lift-frame/paneel-mesh
 	// Adaptieve scan-cadans: stabiel (niks nieuws ingestreamd) -> van 2s naar 8s, scheelt 4x de sweep-hitch.
+	// Zolang de loading-cover op beeld staat juist VERSNELD (0.75s): de sweep-hitches zijn dan onzichtbaar.
 	int32 ScanIdleStreak = 0;
 	bool bScanSlow = false;
+	float ScanRate = 2.0f; // huidige timer-cadans (0.75 cover-op-beeld / 2.0 actief / 8.0 idle)
 	// Wereld 'dirty' = er is een level/cel in/uit-gestreamd sinds de vorige sweep -> 1x zwaar scannen.
 	// Staat alles stil, dan slaat de zware ombouw-sweep zichzelf over (geen periodieke freeze).
 	bool bWorldDirty = true;

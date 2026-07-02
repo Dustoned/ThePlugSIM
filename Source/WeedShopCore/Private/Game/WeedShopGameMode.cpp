@@ -22,6 +22,13 @@ AWeedShopGameMode::AWeedShopGameMode()
 	// C++ on-screen overlay (geld/dag/voorraad/prompt).
 	HUDClass = AWeedShopHUD::StaticClass();
 
+	// MEET-MARKERS (boot-gap-diagnose, B.15): de FClassFinders hieronder SYNC-loaden de FirstPerson-BP's
+	// (pawn + controller, inclusief alle hard-refs daarachter) - verdacht als bron van de ~27,6s stille
+	// gap in LoadMap(Map_MainMenu). Eén boot met deze markers geeft de tijd-verdeling; daarna pas snijden.
+	// (De statics laden maar 1x: bij elke latere constructor-run zijn beide ~0.00s.)
+	const double _FinderT0 = FPlatformTime::Seconds();
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GameMode-ctor (%s): FClassFinder pawn-BP start (+%.2fs sinds start)"), *GetName(), _FinderT0 - GStartTime);
+
 	// Hergebruik de First-Person-pawn en -controller van de template (inclusief jouw interactie-wiring).
 	static ConstructorHelpers::FClassFinder<APawn> PawnBP(
 		TEXT("/Game/FirstPerson/Blueprints/BP_FirstPersonCharacter"));
@@ -30,12 +37,17 @@ AWeedShopGameMode::AWeedShopGameMode()
 		DefaultPawnClass = PawnBP.Class;
 	}
 
+	const double _FinderT1 = FPlatformTime::Seconds();
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GameMode-ctor: pawn-BP klaar na %.2fs; FClassFinder controller-BP start"), _FinderT1 - _FinderT0);
+
 	static ConstructorHelpers::FClassFinder<APlayerController> PCBP(
 		TEXT("/Game/FirstPerson/Blueprints/BP_FirstPersonPlayerController"));
 	if (PCBP.Succeeded())
 	{
 		PlayerControllerClass = PCBP.Class;
 	}
+
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GameMode-ctor: controller-BP klaar na %.2fs (FClassFinders totaal %.2fs)"), FPlatformTime::Seconds() - _FinderT1, FPlatformTime::Seconds() - _FinderT0);
 }
 
 void AWeedShopGameMode::BeginPlay()

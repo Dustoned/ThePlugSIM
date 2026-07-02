@@ -16,6 +16,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Brushes/SlateColorBrush.h"
 #include "Styling/CoreStyle.h"
+#include "Engine/World.h" // GetNetMode: co-op client slaat de CrowdWarm-gate over
 #include "Math/UnrealMathUtility.h"
 #include "PipelineStateCache.h" // PSO-precaching-status: laadscherm wacht tot de pipeline-states klaar zijn
 #if WITH_EDITOR
@@ -136,9 +137,12 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const bool bPSOBusy = (PipelineStateCache::NumActivePrecacheRequests() > 0);
 	const bool bShadersBusy = bShaderCompile || bPSOBusy;
 
-	// Cover weghalen: kamer klaar + korte na-buffer (omgeving laat bijladen). MAAR niet zolang de
-	// shaders nog compileren (editor) - anders zie je een zwarte/onafgewerkte scene met nog-niet-klare
-	// materials. De harde cap is hoger als de shaders nog bezig zijn (eerste keer compileren duurt lang).
+	// Cover weghalen: pas als de WERELD er echt staat. MAAR niet zolang de shaders nog compileren
+	// (editor) - anders zie je een zwarte/onafgewerkte scene met nog-niet-klare materials. De harde
+	// cap is hoger als de shaders nog bezig zijn (eerste keer compileren duurt lang). LET OP: de cap
+	// gaat op TIJD-OP-BEELD (E - AppearAt), NIET op E: E deelt de timer met de movie en stond bij een
+	// lange map-load (43-58s) al boven de 45 op het moment dat de cover VERSCHEEN -> de cap vuurde
+	// direct en de fade negeerde de hele wereld-opbouw (precies de pop-in die de cover moet verbergen).
 	const float HardCap = bShadersBusy ? 120.f : 45.f;
 	// Terwijl de shaders nog compileren: duidelijke melding (niet eindeloos 'random' tekst).
 	if (bShadersBusy && bReady && StatusText)
@@ -151,16 +155,36 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// De WERELD is nog aan 't streamen/laden zolang er async package-loading loopt (precies de FlushAsyncLoading/
 	// QueuedPackages-regels in de log). Daar moet de cover op WACHTEN: pas faden als die loading ~2,5s STIL is
 	// (de initiele streaming-burst is dan klaar), EN de shaders klaar zijn, EN de cover minstens even op beeld stond.
-	// NIET op de floor-ready-vlag (die hing aan HomeAnchor en vuurde lang niet altijd). HardCap = ultieme vangrail.
 	if (IsAsyncLoading()) { LastLoadAt = E; }
 	const bool bLoadSettled = (E - FMath::Max(LastLoadAt, AppearAt)) > 2.5f;
 	const bool bMinShown = (E - AppearAt) > 3.0f;
-	if (!bFading && ((bMinShown && bLoadSettled && !bShadersBusy) || E > HardCap))
+	// WERELD-OPBOUW-GATES (DoorRetrofitter, alleen op maps waar die draait - anders vrijgeven):
+	//  - RoomReady:      de vloer onder de thuis-plek is ingestreamd (je staat echt in je kamer)
+	//  - CityConverted:  BakedRooms-overlay zichtbaar + de ombouw-sweep vond een volle pass niks nieuws
+	//  - CrowdWarm:      alle spawnbare walkers binnen bereik hebben een lichaam (geen in-druppel-show).
+	//    Host-side: een co-op client slaat deze over (bodies komen daar via replicatie binnen).
+	// De relatieve HardCap hierboven blijft de vangrail als een vlag om wat voor reden ook uitblijft.
+	const bool bRetro = WeedShop_IsCityRetroActive();
+	const bool bClient = (GetWorld() && GetWorld()->GetNetMode() == NM_Client);
+	const bool bRoomOk = !bRetro || bReady;
+	const bool bCityOk = !bRetro || WeedShop_IsCityConverted();
+	const bool bCrowdOk = !bRetro || bClient || WeedShop_IsCrowdWarm();
+	// FASE-TEKST: zolang een concrete opbouw-fase loopt, benoem die i.p.v. de random regel (zelfde
+	// patroon als de "Compiling shaders..."-override hierboven, die wint als de shaders bezig zijn).
+	if (StatusText && !bShadersBusy)
+	{
+		const TCHAR* Phase = nullptr;
+		if (!bLoadSettled)  { Phase = TEXT("Streaming the rooms..."); }
+		else if (!bCityOk)  { Phase = TEXT("Building the city..."); }
+		else if (!bCrowdOk) { Phase = TEXT("Warming up the customers..."); }
+		if (Phase) { StatusText->SetText(FText::FromString(Phase)); LastStep = -2; }
+	}
+	if (!bFading && ((bMinShown && bLoadSettled && !bShadersBusy && bRoomOk && bCityOk && bCrowdOk) || (E - AppearAt) > HardCap))
 	{
 		bFading = true;
 		WeedShop_SetCrowdSpawned(true); // DoorRetrofitter terug naar 1-per-keer (smooth gameplay)
 		WeedShop_SetCoverUp(false);     // cover is weg
-		UE_LOG(LogTemp, Verbose, TEXT("[COVER] FADE @E=%.1f appearAt=%.1f lastLoad=%.1f shaders=%d hardcap=%.0f"), E, AppearAt, LastLoadAt, bShadersBusy ? 1 : 0, HardCap);
+		UE_LOG(LogTemp, Verbose, TEXT("[COVER] FADE @E=%.1f appearAt=%.1f lastLoad=%.1f shaders=%d room=%d city=%d crowd=%d hardcap=%.0f"), E, AppearAt, LastLoadAt, bShadersBusy ? 1 : 0, bRoomOk ? 1 : 0, bCityOk ? 1 : 0, bCrowdOk ? 1 : 0, HardCap);
 	}
 
 	// VLOEIENDE, MONOTONE progress-bar: puur op TIJD, NOOIT op de togglende shader-status (die wisselt

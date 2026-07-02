@@ -34,7 +34,7 @@ private:
 	float Elapsed = 0.f;
 	float ReadyAt = -1.f;   // moment waarop de kamer klaar werd (voor een korte na-buffer)
 	float SettleAt = -1.f;  // (legacy) niet meer de gate
-	float AppearAt = -1.f;  // wanneer de cover op beeld kwam -> gate op tijd-sinds-verschijnen + shaders (NIET floor-ready)
+	float AppearAt = -1.f;  // wanneer de cover op beeld kwam -> min-toontijd + RELATIEVE harde cap (E - AppearAt)
 	float LastLoadAt = -1.f; // laatste E dat async package-loading (streaming) actief was -> cover wacht tot dat ~2,5s stil is
 	float LastDPI = -1.f;   // laatst toegepaste DPI-compensatie (alleen herrekenen als 'ie wijzigt)
 	int32 LastStep = -1;

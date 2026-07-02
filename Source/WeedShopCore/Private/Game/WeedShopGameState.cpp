@@ -1,5 +1,6 @@
 #include "Game/WeedShopGameState.h"
 
+#include "WeedShopCore.h"
 #include "Economy/EconomyComponent.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -62,6 +63,9 @@ void AWeedShopGameState::RemoveDeliveryTarget(int32 OrderId)
 
 void AWeedShopGameState::BeginPlay()
 {
+	// MEET-MARKER (boot-gap-diagnose, B.15): wanneer de wereld-state echt tot leven komt t.o.v. de
+	// proces-start - samen met de GameMode-ctor- en NpcRegistry-markers geeft dit de gap-verdeling.
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GameState::BeginPlay (+%.2fs sinds start)"), FPlatformTime::Seconds() - GStartTime);
 	Super::BeginPlay();
 	// Alleen de host/server autosavet de gedeelde + alle-spelers-staat, elke AutoSaveSeconds.
 	if (HasAuthority() && AutoSaveSeconds > 0.f && GetWorld())

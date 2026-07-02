@@ -90,7 +90,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### Content / 3D
 
-- [ ] **B.9 Nieuwe joint-modellen** — in Downloads: `joint-scan-v2.zip` (normale/kleinere joint → tier 1-2) en `fat-joint.zip` (dikke joint → tier 3-4). Joints moeten altijd netjes **op hun zij** op de grond liggen (nu staan ze vaak rechtop op de tip). **CC-BY-attributie verplicht in credits:** "Joint scan (v2)" by PreyK (skfb.ly/6RWXB) + "Fat Joint" by streetpharmacy (skfb.ly/p8HON), beide CC Attribution 4.0.
+- [ ] **B.9 Nieuwe joint-modellen** — in Downloads: `joint-scan-v2.zip` (normale/kleinere joint → 2g/5g) en `fat-joint.zip` (dikke joint → 7g/10g). Joints moeten altijd netjes **op hun zij** op de grond liggen (nu staan ze vaak rechtop op de tip — het procedurele model is langs de Z-as gebouwd) én **HUMAN SIZE blijven** (schaal normaliseren op mesh-bounds naar ~13 cm klein / ~17 cm dik — scans komen vaak op gekke schaal binnen). Joints houden **physics zoals de droppable items** (zelfde AWorldItemPickup-tuimel+settle); met de liggende mesh-oriëntatie wordt de physics-box lang-en-plat → settelen = altijd op de zij. **CC-BY-attributie verplicht in credits:** "Joint scan (v2)" by PreyK (skfb.ly/6RWXB) + "Fat Joint" by streetpharmacy (skfb.ly/p8HON), beide CC Attribution 4.0.
 
 ### UI-reworks (overleg eerst)
 
@@ -108,10 +108,17 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] **B.20 Quick/home-stash-view in inventory opschonen** — veel dubbele info én nuttige info mist: bv. hoe vol de water-bottle is, hoeveel soil er nog in zit — dat hoort juist in de quick view.
 - [ ] **B.21 Hand-preview: tag-kleur + dikkere letters** — de tag op de hand-preview meekleuren met de strain-tagkleur, en de tag-letters bold/duidelijker (nu te dun voor snelle indicatie).
 
+### Test-feedback 07-02 (Blok 2-ronde)
+
+- ~~B.22 Soil-teller op het item~~ — GESCHRAPT door de speler: soil gebruikt gewoon het aantal-badge (x3), teller niet nodig.
+- [ ] **B.23 Texting-polish** — de upper-body blend werkt, maar: geen telefoon in de hand (prop toevoegen) en de linkerarm staat raar uit (hoort natuurlijk langs het lichaam of aan de telefoon). Bekijken of de clip beter gewoon kan LOOPEN i.p.v. bevriezen op 45%.
+- [ ] **B.24 Lege pot toont soil-oogsten** — de plant-kaart bij een lege pot (bv. "Clay pot (empty)") moet tonen hoeveel harvests de soil nog kan ("Soil: 3 harvests left" / "No soil").
+- ✔ B.13 (furniture over deuren) opnieuw bevestigd in de test — plan ligt klaar in de Blok 3-verkenning.
+
 ### Systemen / infra
 
 - [ ] **B.14 2 gamemodes eruit → alles naar F10 dev-menu** — **BESLUIT: Sandbox + Testing eruit** (Normaal + Competitive blijven). Alle functies van die modes als dev-menu-functies: level kiezen, reputatie/respect/loyaliteit aan NPC's geven, etc. Sluit aan op het bestaande Unified-Dev-Menu-plan (F10 sidebar).
-- [ ] **B.15 Eerste loading screen versnellen** — duurt erg lang; de 2e is juist supersnel. Onderzoeken wat de 1e zo traag maakt (shaders/PSO-warmup? map-load? asset-registry?) en verbeteren.
+- [ ] **B.15 Loading screen (main menu → game): samenvoegen tot ÉÉN scherm + vasthouden tot de wereld klaar is** — het loading screen bestaat alléén bij de overgang main menu → game, en die ene load is in twee schermen opgeknipt: deel 1 is superlangzaam, deel 2 laat **veel te vroeg los** (je ziet alles om je heen in-spawnen: streaming/DoorRetrofitter/crowd nog bezig). Doel = echte-game-gedrag: één naadloos loading screen dat pas fadet als de wereld-klaar-signalen binnen zijn (streaming levels + bakes + spawns + prewarm), en de trage fase versnellen (onderzoeken: shaders/PSO? map-load? bakes?).
 
 ---
 
