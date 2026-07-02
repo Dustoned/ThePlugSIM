@@ -1,4 +1,23 @@
 PATCH NOTES
+Version 1.19.2 — 2 juli 2026
+
+Korte intro:
+Nieuwe grafische optie: kies zelf tussen DirectX 12 en DirectX 11. Handig als de game op DirectX 12
+hapert, crasht met een videogeheugen-fout, of gewoon zwaar draait op jouw kaart.
+
+━━━━━━━━━━━━━━━━━━━━
+
+GRAPHICS
+
+• Nieuw in Instellingen > Graphics: "Renderer" — wissel tussen DirectX 12 en DirectX 11.
+  - DirectX 12 (standaard): alle effecten, mooiste beeld.
+  - DirectX 11: lichter en stabieler op sommige pc's (geen Nanite/Lumen), en lost "Out of video
+    memory"-crashes op die op DirectX 12 kunnen voorkomen.
+  - De wissel geldt na een herstart van de game. De allereerste keer op DirectX 11 duurt het opstarten
+    wat langer (de shaders worden eenmalig klaargezet), daarna is het weer snel.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.19.1 — 2 juli 2026
 
 Korte intro:
