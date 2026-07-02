@@ -74,6 +74,11 @@ public:
 	// kamer-redding hieronder.
 	bool IsInsideHomeRoom(const FVector& P, float Margin = 100.f) const;
 
+	// SPELERS-woningen (gemeten starter-kamer + gekochte woningen van alle spelers + competitive-
+	// kamers): NUL-tolerantie — de kamer-redding teleporteert hier DIRECT weg (geen 5s-gratie,
+	// geen zichtbare naar-buiten-wandeling), zicht of geen zicht.
+	bool IsInsidePlayerHome(const FVector& P, float Margin = 100.f) const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

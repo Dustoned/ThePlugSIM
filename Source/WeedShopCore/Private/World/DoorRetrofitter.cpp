@@ -1333,8 +1333,12 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				const float Since = InRoomSince.FindOrAdd(Cb, Now);
 				const float InFor = Now - Since;
-				if (InFor < 5.f) { continue; } // korte deur-passage: nog geen redding
-				ACityDoor* OwnDoor = FindNearestDoor(L);
+				// SPELERS-woning (starter/gekocht/competitive) = nul-tolerantie: NIET 5s wachten en NIET
+				// zichtbaar naar buiten lopen (speler-besluit) — DIRECT naar de straat teleporteren,
+				// zicht of geen zicht. Valt door naar het teleport-blok onderaan.
+				const bool bPlayerRoom = IsInsidePlayerHome(L);
+				if (!bPlayerRoom && InFor < 5.f) { continue; } // korte deur-passage (niet-spelers-kamer): nog geen redding
+				ACityDoor* OwnDoor = bPlayerRoom ? nullptr : FindNearestDoor(L);
 				if (OwnDoor && InFor < 20.f)
 				{
 					if (!RoomWalkIssued.Contains(Cb))
@@ -4652,6 +4656,51 @@ bool ADoorRetrofitter::IsInsideHomeRoom(const FVector& P, float Margin) const
 			if (B.IsValid && B.ExpandBy(FVector(Margin, Margin, Margin + 150.f)).IsInsideOrOn(P))
 			{
 				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool ADoorRetrofitter::IsInsidePlayerHome(const FVector& P, float Margin) const
+{
+	// SPELERS-woningen = nul-tolerantie (speler-besluit): een NPC hier wordt DIRECT verwijderd,
+	// zonder 5s-gratie of zichtbare naar-buiten-wandeling. = de gemeten starter-kamer + de
+	// competitive spiegel-kamers + alle GEKOCHTE woningen van alle spelers.
+	if (bHomeBoxReady
+		&& P.X >= HomeBoxMin.X - Margin && P.X <= HomeBoxMax.X + Margin
+		&& P.Y >= HomeBoxMin.Y - Margin && P.Y <= HomeBoxMax.Y + Margin
+		&& P.Z >= HomeBoxMin.Z - Margin && P.Z <= HomeBoxMax.Z + Margin)
+	{
+		return true;
+	}
+	if (bCompHomesReady)
+	{
+		const FBox Boxes[2] = { CompHomeBoxHost, CompHomeBoxJoiner };
+		for (const FBox& B : Boxes)
+		{
+			if (B.IsValid && B.ExpandBy(FVector(Margin, Margin, Margin + 150.f)).IsInsideOrOn(P)) { return true; }
+		}
+	}
+	// Gekochte woningen (OwnedHomes = indices in de unified homes-lijst = BeachHomes op deze map).
+	if (UWorld* W = GetWorld())
+	{
+		for (FConstPlayerControllerIterator PIt = W->GetPlayerControllerIterator(); PIt; ++PIt)
+		{
+			const APlayerController* PC = PIt->Get();
+			const APawn* Pn = PC ? PC->GetPawn() : nullptr;
+			const UPhoneClientComponent* Ph = Pn ? Pn->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+			if (!Ph) { continue; }
+			for (int32 Idx : Ph->GetOwnedHomes())
+			{
+				if (!BeachHomes.IsValidIndex(Idx)) { continue; }
+				const FApartmentHome& H = BeachHomes[Idx];
+				if (FMath::Abs(P.X - H.InteriorPos.X) <= H.RoomHalf.X + Margin
+					&& FMath::Abs(P.Y - H.InteriorPos.Y) <= H.RoomHalf.Y + Margin
+					&& P.Z >= H.InteriorPos.Z - 150.f && P.Z <= H.InteriorPos.Z + H.RoomHalf.Z + Margin)
+				{
+					return true;
+				}
 			}
 		}
 	}
