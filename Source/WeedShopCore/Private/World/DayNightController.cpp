@@ -57,27 +57,10 @@ void ADayNightController::ApplyMapPhotoLight()
 	{
 		PackMoon->GetLightComponent()->SetIntensity(0.f);
 	}
-	// BEACH/UDS-KAART NIET ZWART 's NACHTS: op de beach is de belichting UDS-gedreven, dus de PackSun
-	// hierboven is grotendeels inactief -> een nacht-capture ziet de UDS-nachtzon = zwarte foto. Duw de
-	// UDS daarom 1 frame naar VOLLE MIDDAG (Time of Day 1200 = zon hoog) + dag-exposure, en laat de UDS
-	// z'n zon/lucht/exposure herberekenen. Zo captured de foto ALTIJD dag-helder, ongeacht de kloktijd.
-	if (bUseUDS && UdsSky.IsValid())
-	{
-		if (UdsTimeProp)
-		{
-			AActor* Uds = UdsSky.Get();
-			if (FDoubleProperty* DP = CastField<FDoubleProperty>(UdsTimeProp)) { DP->SetPropertyValue_InContainer(Uds, 1200.0); }
-			else if (FFloatProperty* FP = CastField<FFloatProperty>(UdsTimeProp)) { FP->SetPropertyValue_InContainer(Uds, 1200.f); }
-		}
-		// Dag-exposure forceren (nacht-bias zou de foto alsnog donker houden ondanks de hoge zon).
-		SetUdsBool(FName(TEXT("Apply Exposure Settings")), true);
-		SetUdsDouble(FName(TEXT("Exposure Bias Day")), UdsExpDay);
-		CallUdsUpdate(); // "Update Active Variables": zet zon-positie + lucht + exposure op de nieuwe tijd
-		// De eerstvolgende Tick roept DriveUDS(echte klok) aan en herstelt de nacht -> maar die heeft een
-		// LastUdsTod-guard die 'm zou overslaan als de echte tijd toevallig bij 1200 ligt. Sentinel resetten
-		// zodat de restore ALTIJD doorkomt (en de dag-exposure wordt in ApplyUdsLook/Tick weer teruggezet).
-		LastUdsTod = -1.f;
-	}
+	// (De UDS-naar-middag-push die hier stond is VERWIJDERD: de kaart-capture is nu SCS_BaseColor
+	//  (albedo, belichtings-onafhankelijk) dus de push was overbodig - en hij kostte ~370ms per
+	//  kaart-open omdat UDW "Update Active Variables" de rain-componenten opnieuw opbouwde met
+	//  blocking LoadAsset (gemeten met stat dumphitches, 07-03).)
 	if (NightPPV.IsValid()) { NightPPV->BlendWeight = 0.f; }
 	if (BloomPPV.IsValid()) { BloomPPV->BlendWeight = 1.f; }
 	for (FDimLight& D : DimLights)

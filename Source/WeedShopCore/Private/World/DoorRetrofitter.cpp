@@ -167,6 +167,12 @@ void ADoorRetrofitter::BeginPlay()
 	// Map-grens herstellen (als de speler er een gezet heeft; Rebuild is no-op zonder bestand).
 	if (UWorld* WB = GetWorld()) { WB->SpawnActor<AMapBorder>(AMapBorder::StaticClass(), FTransform::Identity); }
 
+	// HITCH-FIX (stat dumphitches, 07-03): alle crowd/basis-skins 1x voorladen ONDER het laadscherm +
+	// keep-alive. Zonder dit deed elke body-materialisatie tijdens het rondlopen een blocking skin-load
+	// (Flush Async Loading + skinned-asset-build) op de game-thread = 200-500ms freeze elke paar seconden.
+	// Draait op host EN joiner (de joiner laadt skins bij OnRep_Appearance en had dezelfde hitch).
+	ACustomerBase::PreloadCrowdSkins(this);
+
 	ScanAndConvert();
 	// Zolang de loading-cover op beeld staat scannen we VERSNELD (0.4s i.p.v. 2s): de sweep-hitches
 	// zijn achter de cover onzichtbaar en de stad (deuren/glas/lampen/liften) staat er sneller. Na de

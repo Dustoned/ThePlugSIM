@@ -31,6 +31,7 @@
 #include "Phone/ContactsComponent.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Save/SaveGameSubsystem.h"
+#include "Save/AssetKeepAliveSubsystem.h"
 #include "Progression/LevelComponent.h"
 #include "Progression/GoalsComponent.h"
 #include "Progression/StoreComponent.h"
@@ -519,9 +520,8 @@ static void WeedNpc_TintHair(USkeletalMeshComponent* SkM, uint32 Seed)
 // CROWD-skin-pool: alle VOLLEDIGE modellen waar de straat-crowd uit kiest (per NpcId-seed verdeeld) - de bestaande
 // Citizens/Casual + de nieuwe packs. Zo zie je ze in-game en kies je welke je houdt. Een pad dat niet laadt
 // (broken ref / verkeerd skelet) valt veilig terug op de basis-pool i.p.v. te crashen.
-static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
-{
-	static const TCHAR* Pool[] = {
+// File-scope zodat PreloadCrowdSkins dezelfde lijst kan voorladen (geen dubbele paden-lijst).
+static const TCHAR* GCrowdSkinPool[] = {
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_A.SK_Citizens_Pack_Karl_A"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_B.SK_Citizens_Pack_Karl_B"),
 		TEXT("/Game/Citizens_Pack/Meshes/SK_Citizens_Pack_Karl_C.SK_Citizens_Pack_Karl_C"),
@@ -543,10 +543,41 @@ static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
 		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_DressOutfit.SK_SchoolGirl_DressOutfit"),
 		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SportOutfit.SK_SchoolGirl_SportOutfit"),
 		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SwimSuit.SK_SchoolGirl_SwimSuit"),
-	};
-	const int32 N = UE_ARRAY_COUNT(Pool);
-	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, Pool[Seed % (uint32)N])) { return M; }
+};
+
+static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
+{
+	const int32 N = UE_ARRAY_COUNT(GCrowdSkinPool);
+	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, GCrowdSkinPool[Seed % (uint32)N])) { return M; }
 	return WeedNpc_SkinByIndex((int32)(Seed % 10u)); // niet-geladen pad -> veilige terugval op de basis-pool
+}
+
+// HITCH-FIX: laad ALLE crowd-skins 1x voor onder het laadscherm en root ze (keep-alive). Zonder dit laadt
+// elke verse body-materialisatie tijdens het rondlopen z'n skin-mesh on-demand -> Flush Async Loading +
+// skinned-asset-build op de game-thread = de gemeten 200-500ms hitch elke paar seconden (stat dumphitches).
+// Na de preload is de LoadObject bij materialiseren een gratis cache-hit. Draait op host EN client (de joiner
+// laadt skins bij OnRep_Appearance en had dezelfde hitch).
+void ACustomerBase::PreloadCrowdSkins(const UObject* WorldContext)
+{
+	const double T0 = FPlatformTime::Seconds();
+	int32 NLoaded = 0;
+	for (int32 i = 0; i < UE_ARRAY_COUNT(GCrowdSkinPool); ++i)
+	{
+		if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, GCrowdSkinPool[i]))
+		{
+			UAssetKeepAliveSubsystem::Keep(WorldContext, M);
+			++NLoaded;
+		}
+	}
+	for (int32 i = 0; i < 10; ++i) // basis-pool (terugval + residents)
+	{
+		if (USkeletalMesh* M = WeedNpc_SkinByIndex(i))
+		{
+			UAssetKeepAliveSubsystem::Keep(WorldContext, M);
+			++NLoaded;
+		}
+	}
+	UE_LOG(LogWeedShop, Display, TEXT("Crowd-skins voorgeladen: %d meshes in %.2fs (onder het laadscherm; voorkomt materialisatie-hitches)"), NLoaded, FPlatformTime::Seconds() - T0);
 }
 
 // Per-NPC HUID + GEZICHT: wissel de huid-/gezicht-materiaalslots naar een willekeurige MI_Body_/MI_Head_ uit de

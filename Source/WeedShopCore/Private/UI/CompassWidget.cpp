@@ -1,4 +1,4 @@
-#include "UI/CompassWidget.h"
+﻿#include "UI/CompassWidget.h"
 
 #include "UI/WeedUiStyle.h"
 #include "Customer/CustomerBase.h"
@@ -27,7 +27,7 @@ namespace
 	// eronder + het felle poppetje erbovenop, gecentreerd in een SizeBox. Zo springt de speler-marker
 	// eruit tegen zowel een donkere als lichte kaart-achtergrond. Retourneert een UWidget-container die
 	// als geheel in een canvas-slot geplaatst/verborgen kan worden (bestaande pool-logica blijft werken).
-	UWidget* MakeOutlinedPersonMarker(UWidgetTree* Tree, float Size, const FLinearColor& Bright)
+	UWidget* MakeOutlinedCompassPersonMarker(UWidgetTree* Tree, float Size, const FLinearColor& Bright)
 	{
 		const float Outline = Size + 5.f; // donkere rand steekt ~2,5px rondom uit
 		USizeBox* Box = Tree->ConstructWidget<USizeBox>();
@@ -108,7 +108,7 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	// de donkere rand houdt 'm zichtbaar tegen zowel een lichte als donkere kaart-achtergrond.
 	for (int32 i = 0; i < 4; ++i)
 	{
-		UWidget* CB = MakeOutlinedPersonMarker(WidgetTree, 26.f, FLinearColor(0.f, 1.f, 1.f));
+		UWidget* CB = MakeOutlinedCompassPersonMarker(WidgetTree, 26.f, FLinearColor(0.f, 1.f, 1.f));
 		CB->SetVisibility(ESlateVisibility::Collapsed);
 		UCanvasPanelSlot* CS = Band->AddChildToCanvas(CB);
 		CS->SetAutoSize(false); CS->SetSize(FVector2D(31.f, 31.f)); CS->SetAlignment(FVector2D(0.5f, 0.5f));
@@ -176,7 +176,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	// Windstreek-letters weg (D.14) -> geen plaatsing meer nodig.
 
-	// Alléén een poppetje voor klanten die je NU nodig hebt (afspraak / staat te wachten). Gewone
+	// AllÃ©Ã©n een poppetje voor klanten die je NU nodig hebt (afspraak / staat te wachten). Gewone
 	// roamende NPC's staan niet op de kompas (wel als gekleurde puntjes op de kaart).
 	// Perf: de actor-SET wordt elke 0.25s herscand (nieuwe klant verschijnt max 0.25s later);
 	// flags + positie + bearing worden nog steeds ELKE tick vers gelezen.
@@ -230,7 +230,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	for (; cm < CoopMarkers.Num(); ++cm) { CoopMarkers[cm]->SetVisibility(ESlateVisibility::Collapsed); }
 
-	// Home = JOUW woning (gekocht/starter). Alleen tonen als je er een hebt — niet het park-centrum.
+	// Home = JOUW woning (gekocht/starter). Alleen tonen als je er een hebt â€” niet het park-centrum.
 	// Perf: FindComponentByClass + GetActiveHomeLocation (kopieert homes-array) elke 0.25s i.p.v.
 	// per tick; het huis staat stil, de bearing wordt nog steeds elke tick vers berekend.
 	HomeCacheAge += DeltaTime;

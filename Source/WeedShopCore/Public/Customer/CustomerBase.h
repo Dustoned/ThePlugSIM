@@ -112,6 +112,10 @@ public:
 	// roepen beide dit aan), zodat bordje en rondlopende bewoner nooit verschillen. Host==client (zelfde code).
 	static bool PredictFemaleAppearance(FName NpcId, int32 SkinIndex, bool bCrowd);
 
+	// HITCH-FIX: laad alle crowd/basis-skin-meshes 1x voor (onder het laadscherm) + keep-alive, zodat
+	// body-materialisatie tijdens het spelen nooit meer een blocking skin-load op de game-thread doet.
+	static void PreloadCrowdSkins(const UObject* WorldContext);
+
 	// PRAAT-PAUZE: zolang dit moment in de toekomst ligt staat de wandelaar stil (het deal-HUD
 	// houdt dit elke tick vers zolang het open is). Daarna loopt hij gewoon weer door.
 	float ConversationHoldUntil = 0.f;

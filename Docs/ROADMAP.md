@@ -283,6 +283,27 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ---
 
+## TEST-FEEDBACK 07-03 — tweede co-op-ronde
+
+- ✔ G.3 plaatsen joiner werkt, ✔ G.4 markers goed, ✔ G.1 lift werkt (joiner kan naar binnen).
+- [ ] **H.1 CONSISTENTE STUTTER elke paar seconden (PRIO)** — GEMETEN (stat dumphitches) + gefixt in 2 delen:
+  - [x] **H.1a Skin-load-hitches (300-500ms, de grote freezes)** — body-materialisatie deed een blocking
+    skin-mesh-load op de game-thread (Flush Async Loading + skinned-asset-build, 194-236ms per stuk). FIX:
+    alle crowd/basis-skins voorladen onder het laadscherm + keep-alive (ACustomerBase::PreloadCrowdSkins,
+    aangeroepen in DoorRetrofitter::BeginPlay, host+joiner). Plus: de obsolete UDS-middag-push uit
+    ApplyMapPhotoLight (kostte ~370ms per kaart-open via UDW-rain blocking LoadAsset; overbodig sinds BaseColor).
+  - [ ] **H.1b Heavy-sweep bij lopen (~10-60ms elke ~2s)** — sweep-bevinding: de bRunHeavy-ombouwsweep draait
+    vrijwel elke scan-pass zolang je LOOPT (LevelAdded/Removed-delegates + het 60m-verplaatsings-vangnet zetten
+    bWorldDirty bij elke streaming-cell) -> 5+ volle actor-iteraties per pass. FIX-richting: alleen de actors
+    van de NIEUW gestreamde level verwerken (delegate geeft ULevel*), LevelRemoved geen sweep, 60m-vangnet
+    alleen voor de %20-backstop; evt. time-slicen. LET OP: scan-backstop NIET weghalen (memory). Pas oppakken
+    als de speler na H.1a nog stutter voelt bij lopen (eerst meten met een loop-test).
+- [ ] **H.2 Lift: sync tussen spelers nog niet af** — de lift werkt nu, "alleen sync nog": de cab/deur-staat
+  loopt tussen host en joiner nog niet 100% gelijk. Verifieren of de WorldSync-elevator-staat echt repliceert
+  (id-match host/joiner, ServerCallElevator komt aan) + evt. cab-Z sync voor meerijden.
+
+---
+
 ## DOORLOPEND — Tech-hygiëne (oppakken tussen features door)
 
 - [ ] **T.1 Template-dead-weight verwijderen** — `Source/ThePlugSIM/Variant_Horror/` + `Variant_Shooter/` zijn nergens gerefereerd; verwijderen + `ThePlugSIM.Build.cs` include-paden opschonen (snellere builds, minder ruis).
