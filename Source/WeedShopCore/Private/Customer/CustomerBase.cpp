@@ -61,8 +61,12 @@ ACustomerBase::ACustomerBase()
 	SetReplicateMovement(true);
 	// Vloeiend genoeg voor de map-markers zonder onnodig veel bandbreedte bij ~70 replicerende characters.
 	// (UE5.8: NetUpdateFrequency is nu private -> via de setters, net als de speler-pawn.)
-	SetNetUpdateFrequency(15.f);
-	SetMinNetUpdateFrequency(5.f);
+	// 10Hz actief / 2Hz idle (adaptive zakt vanzelf voor stilstaande NPC's): ~70 chars x 10Hz x ~100B
+	// = ~70KB/s, ruim binnen de opgehoogde client-rate (512KB/s in DefaultEngine.ini). Op 15/5 verzadigde
+	// de default-rate (~100KB/s) -> movement-updates verhongerden -> joiner zag de crowd BEVROREN op de
+	// eerste gerepliceerde positie (test-feedback 07-03).
+	SetNetUpdateFrequency(10.f);
+	SetMinNetUpdateFrequency(2.f);
 	// NIET cullen: de speelbare strip is ~150m, de crowd moet OVERAL aanwezig blijven (map-markers smooth,
 	// NPC's altijd zichtbaar). Bewust heel ruim (~450m radius) zodat een NPC nooit uit-relevant raakt en
 	// op de joiner bevriest/verdwijnt. PERF-RISICO: ~70 characters altijd relevant = veel replicatie-verkeer;
