@@ -3052,6 +3052,17 @@ void ADoorRetrofitter::ScatterJoints()
 		PlaceJointAtSpot(JointSpots[si]); // spawn-fail = store nog niet klaar; volgende spots proberen kan geen kwaad
 	}
 
+	// KRITISCH: alleen als klaar markeren als er ECHT joints geplaatst zijn. Vond hij wel spots maar faalde
+	// ELKE spawn (store/seed-catalogus nog niet klaar), dan NIET als klaar markeren -> anders bleef de map de
+	// hele sessie leeg. In de editor is de store snel genoeg klaar (leek te werken); in de PACKAGED build laadt
+	// dat later, dus daar spawnde er niks. Fix: bij 0 geplaatst kort opnieuw proberen tot de store er wel is.
+	if (ScatteredJoints.Num() == 0)
+	{
+		UE_LOG(LogWeedShop, Log, TEXT("Joint-scatter: %d spots gevonden maar 0 geplaatst (store/catalogus nog niet klaar) -> retry over 3s"), JointSpots.Num());
+		GetWorldTimerManager().SetTimer(JointRespawnTimer, this, &ADoorRetrofitter::ScatterJoints, 3.f, false); // los van de scan-tick (die idle kan gaan)
+		return; // bJointsScattered blijft false
+	}
+
 	bJointsScattered = true;
 	UE_LOG(LogWeedShop, Log, TEXT("Joints gescatterd: %d pickups rond %d spots (prullenbak/bankje/asbak/kliko)"),
 		ScatteredJoints.Num(), JointSpots.Num());
