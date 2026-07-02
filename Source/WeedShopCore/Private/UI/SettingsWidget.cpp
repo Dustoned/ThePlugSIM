@@ -21,6 +21,8 @@
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Slider.h"
+#include "Components/PanelWidget.h"
+#include "Components/ContentWidget.h"
 #include "Components/ComboBoxString.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/GameUserSettings.h"
@@ -328,10 +330,27 @@ void USettingsWidget::OnResolutionChanged(FString Item, ESelectInfo::Type Select
 	}
 }
 
-// --- Kit-W_Slider Value-reflectie (BP-var "Value" = double; val terug op float) ---
+// De kit-W_Slider is een WBP: z'n BP-"Value"-property loopt NIET mee met slepen (alleen de binnenste
+// UMG-slider beweegt + de groene vulling). Zoek die binnenste USlider zodat we de ECHTE gesleepte waarde
+// lezen i.p.v. de vastgeplakte BP-property (getal bleef anders staan bij het slepen).
+static USlider* FindInnerSlider(UWidget* W)
+{
+	if (!W) { return nullptr; }
+	if (USlider* S = Cast<USlider>(W)) { return S; }
+	if (UPanelWidget* P = Cast<UPanelWidget>(W))
+	{
+		const int32 N = P->GetChildrenCount();
+		for (int32 i = 0; i < N; ++i) { if (USlider* Found = FindInnerSlider(P->GetChildAt(i))) { return Found; } }
+	}
+	if (UContentWidget* C = Cast<UContentWidget>(W)) { return FindInnerSlider(C->GetContent()); }
+	return nullptr;
+}
+
+// --- Kit-W_Slider Value-reflectie (fallback als de binnenste slider niet gevonden is) ---
 static double KitSliderValue(UUserWidget* W)
 {
 	if (!W) { return 0.0; }
+	if (USlider* Inner = FindInnerSlider(W->GetRootWidget())) { return (double)Inner->GetValue(); }
 	if (FDoubleProperty* P = FindFProperty<FDoubleProperty>(W->GetClass(), TEXT("Value"))) { return P->GetPropertyValue_InContainer(W); }
 	if (FFloatProperty* P = FindFProperty<FFloatProperty>(W->GetClass(), TEXT("Value"))) { return (double)P->GetPropertyValue_InContainer(W); }
 	return 0.0;
@@ -376,6 +395,8 @@ void USettingsWidget::AddKitSlider(UVerticalBox* Into, const FString& Label, dou
 	{
 		if (UUserWidget* Sld = CreateWidget<UUserWidget>(this, SliderCls))
 		{
+			USlider* Inner = FindInnerSlider(Sld->GetRootWidget());
+			if (Inner) { Inner->SetValue((float)InitialNorm); } // binnenste slider = bron van waarheid bij slepen
 			SetKitSliderValue(Sld, InitialNorm);
 			USizeBox* SBox = WidgetTree->ConstructWidget<USizeBox>();
 			SBox->SetWidthOverride(250.f); SBox->SetHeightOverride(34.f);
@@ -383,7 +404,7 @@ void USettingsWidget::AddKitSlider(UVerticalBox* Into, const FString& Label, dou
 			UHorizontalBoxSlot* SS = Row->AddChildToHorizontalBox(SBox);
 			SS->SetVerticalAlignment(VAlign_Center); SS->SetPadding(FMargin(0.f, 0.f, 14.f, 0.f));
 
-			FKitSlider KS; KS.W = Sld; KS.Apply = Apply; KS.ValText = ValText;
+			FKitSlider KS; KS.W = Sld; KS.Inner = Inner; KS.Apply = Apply; KS.ValText = ValText;
 			const FString Disp = Apply ? Apply(InitialNorm, KS.LastKey) : FString();
 			if (!Disp.IsEmpty()) { ValText->SetText(FText::FromString(Disp)); }
 			KitSliders.Add(KS);
@@ -934,7 +955,8 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		if (UUserWidget* W = KS.W.Get())
 		{
-			const FString Disp = KS.Apply ? KS.Apply(KitSliderValue(W), KS.LastKey) : FString();
+			const double Val = KS.Inner.IsValid() ? (double)KS.Inner->GetValue() : KitSliderValue(W);
+			const FString Disp = KS.Apply ? KS.Apply(Val, KS.LastKey) : FString();
 			if (!Disp.IsEmpty()) { if (UTextBlock* VT = KS.ValText.Get()) { VT->SetText(FText::FromString(Disp)); } }
 		}
 	}

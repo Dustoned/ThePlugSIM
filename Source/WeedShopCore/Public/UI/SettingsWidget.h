@@ -121,7 +121,7 @@ protected:
 	TArray<FKitToggle> KitToggles;
 
 	// Kit-sliders (W_Slider): genormaliseerde Value 0-1 via reflectie, gepolld; Apply mapt+past toe+geeft display.
-	struct FKitSlider { TWeakObjectPtr<UUserWidget> W; int32 LastKey = MIN_int32; TFunction<FString(double, int32&)> Apply; TWeakObjectPtr<UTextBlock> ValText; };
+	struct FKitSlider { TWeakObjectPtr<UUserWidget> W; TWeakObjectPtr<class USlider> Inner; int32 LastKey = MIN_int32; TFunction<FString(double, int32&)> Apply; TWeakObjectPtr<UTextBlock> ValText; };
 	TArray<FKitSlider> KitSliders;
 
 	int32 Category = 0; // 0 = Graphics, 1 = Game, 2 = Controls, 3 = Audio
