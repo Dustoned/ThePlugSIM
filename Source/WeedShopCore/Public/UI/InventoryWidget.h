@@ -184,6 +184,11 @@ protected:
 	TWeakObjectPtr<UInventoryComponent> BoundInv;
 	bool bDirty = true;
 	FString LastStashSig = TEXT("\x01"); // HOME STASH alleen herbouwen als de shelf-inhoud ECHT wijzigt (niet bij elke backpack-sleep)
+	// Perf: shelf-SET als weak-array, 1x/s herscand (nieuwe/weg shelf is zeldzaam); de inhoud-sig wordt
+	// WEL per tick vers uit de gecachte actors gelezen. + layoutblok alleen bij side-by-side-wissel.
+	TArray<TWeakObjectPtr<class AStorageShelf>> CachedShelves;
+	float ShelfSetAge = 1000.f;
+	int32 LastSideBySide = -1; // -1 onbekend
 	// Vaste cel-slots: éénmalig gebouwd, daarna vervangen we alleen de inhoud van cellen die ECHT wijzigden
 	// (per-cel signatuur). Geen ClearChildren meer -> geen grid-flikker bij elke sleep.
 	UPROPERTY() TArray<TObjectPtr<class USizeBox>> CellBoxes;

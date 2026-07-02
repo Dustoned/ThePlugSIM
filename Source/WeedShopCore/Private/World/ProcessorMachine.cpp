@@ -14,6 +14,11 @@
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 
+// Statische registry van alle levende machines (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. De upgrade-scan loopt hierdoor O(machines/props) i.p.v. over alle actors.
+static TArray<TWeakObjectPtr<AProcessorMachine>> GProcessorRegistry;
+const TArray<TWeakObjectPtr<AProcessorMachine>>& AProcessorMachine::GetAll() { return GProcessorRegistry; }
+
 AProcessorMachine::AProcessorMachine()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -113,23 +118,27 @@ void AProcessorMachine::RecomputeUpgrades(float DeltaSeconds)
 	if (!W) { return; }
 	const FVector C = GetActorLocation();
 	// Een upgrade hoort bij de DICHTSTBIJZIJNDE machine (zoals pot-gear).
+	// PERF: registry-loops (O(machines/props)) i.p.v. TActorIterator over alle actors, en alloc-vrije
+	// FName-vergelijking op de 2 bekende ProcUp-ids i.p.v. ItemId.ToString()+StartsWith per prop.
+	// De registry is per-proces, dus wél op wereld filteren (PIE/co-op-in-1-proces = meerdere werelden).
+	static const FName MotorId(TEXT("ProcUp_Motor")), YieldId(TEXT("ProcUp_Yield"));
 	auto NearestProc = [W](const FVector& At) -> AProcessorMachine*
 	{
 		AProcessorMachine* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
-		for (TActorIterator<AProcessorMachine> P(W); P; ++P) { if (!IsValid(*P)) { continue; } const float d = FVector::DistSquared2D(P->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = *P; } }
+		for (const TWeakObjectPtr<AProcessorMachine>& WM : AProcessorMachine::GetAll()) { AProcessorMachine* P = WM.Get(); if (!IsValid(P) || P->GetWorld() != W) { continue; } const float d = FVector::DistSquared2D(P->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = P; } }
 		return Best;
 	};
 	float Speed = 1.f, Yield = 1.f;
-	for (TActorIterator<APlaceableProp> It(W); It; ++It)
+	for (const TWeakObjectPtr<APlaceableProp>& WProp : APlaceableProp::GetAll())
 	{
-		APlaceableProp* P = *It; if (!IsValid(P)) { continue; }
-		const FString S = P->ItemId.ToString();
-		if (!S.StartsWith(TEXT("ProcUp_"))) { continue; }
+		APlaceableProp* P = WProp.Get(); if (!IsValid(P) || P->GetWorld() != W) { continue; }
+		const FName Id = P->ItemId;
+		if (Id != MotorId && Id != YieldId) { continue; }
 		const FVector L = P->GetActorLocation();
 		if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
 		if (NearestProc(L) != this) { continue; }
-		if (S == TEXT("ProcUp_Motor")) { Speed *= 0.7f; }
-		else if (S == TEXT("ProcUp_Yield")) { Yield *= 1.3f; }
+		if (Id == MotorId) { Speed *= 0.7f; }
+		else { Yield *= 1.3f; }
 	}
 	UpSpeedMult = Speed; UpYieldMult = Yield;
 }
@@ -147,8 +156,18 @@ void AProcessorMachine::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 void AProcessorMachine::BeginPlay()
 {
 	Super::BeginPlay();
+	GProcessorRegistry.Add(this);
+	// Upgrade-scan-fase random spreiden (0..0,5s): niet alle machines scannen in HETZELFDE frame
+	// (zelfde 0,5s-cadans, zelfde uitkomst - alleen de piek verdeeld over frames).
+	UpScanTimer = FMath::FRandRange(0.f, 0.5f);
 	SetupVisual();
 	if (HasAuthority()) { UpdateRep(); }
+}
+
+void AProcessorMachine::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GProcessorRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void AProcessorMachine::OnConstruction(const FTransform& Transform)

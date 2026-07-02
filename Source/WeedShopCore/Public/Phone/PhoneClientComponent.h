@@ -497,6 +497,11 @@ public:
 	// --- Woningen (3 koopbare panden in de Upgrades-app) ---
 	// De DoorRetrofitter host de woning-registry op de beach-map (ROADMAP 4.1).
 	class ADoorRetrofitter* FindRetro() const;
+private:
+	// Cache voor FindRetro: TActorIterator-scan alleen als de cache invalid is (patroon UMapWidget).
+	// Weak -> level-wissel/destroy maakt 'm vanzelf ongeldig; mutable want FindRetro is const.
+	mutable TWeakObjectPtr<class ADoorRetrofitter> RetroCache;
+public:
 	// Woningen/aanbiedingen uit de beach-registry (DoorRetrofitter) - call-sites hoeven niet
 	// te weten welke bron actief is.
 	void GetHomesUnified(TArray<struct FApartmentHome>& Out) const;

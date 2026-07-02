@@ -28,6 +28,11 @@ namespace
 	constexpr float DryMaxLoss      = 0.70f;  // tot 70% kwaliteitsverlies als je 'm veel te lang laat hangen
 }
 
+// Statische registry van alle levende droogrekken (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. De upgrade-scan loopt hierdoor O(rekken/props) i.p.v. over alle actors.
+static TArray<TWeakObjectPtr<ADryingRack>> GDryingRackRegistry;
+const TArray<TWeakObjectPtr<ADryingRack>>& ADryingRack::GetAll() { return GDryingRackRegistry; }
+
 ADryingRack::ADryingRack()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -133,8 +138,18 @@ void ADryingRack::OnRep_Tier()
 void ADryingRack::BeginPlay()
 {
 	Super::BeginPlay();
+	GDryingRackRegistry.Add(this);
+	// Upgrade-scan-fase random spreiden (0..0,5s): niet alle rekken scannen in HETZELFDE frame
+	// (zelfde 0,5s-cadans, zelfde uitkomst - alleen de piek verdeeld over frames).
+	UpScanTimer = FMath::FRandRange(0.f, 0.5f);
 	SetupVisual();
 	if (HasAuthority()) { UpdateRep(); } // capaciteit meteen repliceren (ook bij leeg rek)
+}
+
+void ADryingRack::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GDryingRackRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void ADryingRack::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -191,24 +206,28 @@ void ADryingRack::RecomputeUpgrades(float DeltaSeconds)
 	UWorld* W = GetWorld();
 	if (!W) { return; }
 	const FVector C = GetActorLocation();
+	// PERF: registry-loops (O(rekken/props)) i.p.v. TActorIterator over alle actors, en alloc-vrije
+	// FName-vergelijking op de 3 bekende DryUp-ids i.p.v. ItemId.ToString()+StartsWith per prop.
+	// De registry is per-proces, dus wél op wereld filteren (PIE/co-op-in-1-proces = meerdere werelden).
+	static const FName FanId(TEXT("DryUp_Fan")), FanSmallId(TEXT("DryUp_FanSmall")), SealId(TEXT("DryUp_Seal"));
 	auto NearestRack = [W](const FVector& At) -> ADryingRack*
 	{
 		ADryingRack* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
-		for (TActorIterator<ADryingRack> R(W); R; ++R) { if (!IsValid(*R)) { continue; } const float d = FVector::DistSquared2D(R->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = *R; } }
+		for (const TWeakObjectPtr<ADryingRack>& WR : ADryingRack::GetAll()) { ADryingRack* R = WR.Get(); if (!IsValid(R) || R->GetWorld() != W) { continue; } const float d = FVector::DistSquared2D(R->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = R; } }
 		return Best;
 	};
 	float FanMult = 1.f; bool bSeal = false;
-	for (TActorIterator<APlaceableProp> It(W); It; ++It)
+	for (const TWeakObjectPtr<APlaceableProp>& WProp : APlaceableProp::GetAll())
 	{
-		APlaceableProp* P = *It; if (!IsValid(P)) { continue; }
-		const FString S = P->ItemId.ToString();
-		if (!S.StartsWith(TEXT("DryUp_"))) { continue; }
+		APlaceableProp* P = WProp.Get(); if (!IsValid(P) || P->GetWorld() != W) { continue; }
+		const FName Id = P->ItemId;
+		if (Id != FanId && Id != FanSmallId && Id != SealId) { continue; }
 		const FVector L = P->GetActorLocation();
 		if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
 		if (NearestRack(L) != this) { continue; }
-		if (S == TEXT("DryUp_Fan")) { FanMult = FMath::Min(FanMult, 0.7f); }
-		else if (S == TEXT("DryUp_FanSmall")) { FanMult = FMath::Min(FanMult, 0.85f); }
-		else if (S == TEXT("DryUp_Seal")) { bSeal = true; }
+		if (Id == FanId) { FanMult = FMath::Min(FanMult, 0.7f); }
+		else if (Id == FanSmallId) { FanMult = FMath::Min(FanMult, 0.85f); }
+		else { bSeal = true; }
 	}
 	UpSpeedMult = FanMult; bUpSeal = bSeal;
 }

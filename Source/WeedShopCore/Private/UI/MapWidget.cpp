@@ -486,10 +486,22 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	for (int32 k = NDel; k < DeliveryIcons.Num(); ++k) { if (DeliveryIcons[k]) { DeliveryIcons[k]->SetVisibility(ESlateVisibility::Collapsed); } }
 
-	int32 NRoam = 0, NNeed = 0;
-	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+	// Perf: de klant-SET wordt elke 0.25s herscand (nieuwe klant staat max 0.25s later op de kaart);
+	// vlaggen + POSITIES worden nog steeds ELKE tick vers gelezen -> markers bewegen frame-smooth.
+	CustomerSetAge += DeltaTime;
+	if (CustomerSetAge >= 0.25f)
 	{
-		ACustomerBase* C = *It;
+		CustomerSetAge = 0.f;
+		CachedCustomers.Reset();
+		for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+		{
+			if (IsValid(*It)) { CachedCustomers.Add(*It); }
+		}
+	}
+	int32 NRoam = 0, NNeed = 0;
+	for (const TWeakObjectPtr<ACustomerBase>& WkC : CachedCustomers)
+	{
+		ACustomerBase* C = WkC.Get();
 		if (!IsValid(C)) { continue; }
 		// Bewoners in binnen-/home-transitie niet als straat-NPC tonen: anders lijken ze vast te staan op woonblokken.
 		// Gerepliceerde, server-authoritative vlag -> client toont exact dezelfde NPC's als de host.
@@ -512,7 +524,13 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			{
 				FString Name = ACityDoor::FriendlyNpcName(C->NpcId);
 				if (Reg && !C->NpcId.IsNone()) { float r, l, a; FText Nm; if (Reg->GetStats(C->NpcId, r, l, a, Nm) && !Nm.IsEmpty()) { Name = Nm.ToString(); } }
-				NpcLabels[NNeed]->SetText(FText::FromString(Name));
+				// SetText alleen bij naam-wissel (de POSITIE hieronder blijft wél elke tick).
+				while (NpcLabelLastName.Num() <= NNeed) { NpcLabelLastName.Add(FString(TEXT("\x01"))); }
+				if (NpcLabelLastName[NNeed] != Name)
+				{
+					NpcLabelLastName[NNeed] = Name;
+					NpcLabels[NNeed]->SetText(FText::FromString(Name));
+				}
 				if (UCanvasPanelSlot* Cs = Cast<UCanvasPanelSlot>(NpcLabels[NNeed]->Slot)) { Cs->SetPosition(Pos + FVector2D(0.f, -16.f)); }
 				NpcLabels[NNeed]->SetVisibility(ESlateVisibility::HitTestInvisible);
 			}
@@ -533,11 +551,24 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// (Virtuele crowd-stippen verwijderd: die hadden geen echt lichaam, dus je kon ze nooit vinden. De kaart
 	//  toont nu ALLEEN fysiek aanwezige, rondlopende NPC's, zodat een stip altijd een vindbare NPC is.)
 	// WINKELS: duidelijk geel winkel-icoon op elke toonbank, boven de NPC-stippen.
-	int32 NShop = 0;
-	for (TActorIterator<AStoreCounter> SIt(GetWorld()); SIt; ++SIt)
+	// Perf: toonbanken zijn statisch — de SET 1x scannen + elke ~2s herchecken; de posities
+	// (WorldToCanvas/SetPosition) blijven per tick (kost bijna niets over de kleine cache).
+	CounterSetAge += DeltaTime;
+	if (CounterSetAge >= 2.f)
 	{
-		if (!IsValid(*SIt)) { continue; }
-		const FVector L = SIt->GetActorLocation();
+		CounterSetAge = 0.f;
+		CachedCounters.Reset();
+		for (TActorIterator<AStoreCounter> SIt(GetWorld()); SIt; ++SIt)
+		{
+			if (IsValid(*SIt)) { CachedCounters.Add(*SIt); }
+		}
+	}
+	int32 NShop = 0;
+	for (const TWeakObjectPtr<AStoreCounter>& WkS : CachedCounters)
+	{
+		const AStoreCounter* Counter = WkS.Get();
+		if (!IsValid(Counter)) { continue; }
+		const FVector L = Counter->GetActorLocation();
 		const FVector2D Pos = WorldToCanvas(L.X, L.Y);
 		while (ShopIcons.Num() <= NShop)
 		{

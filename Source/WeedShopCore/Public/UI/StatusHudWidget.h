@@ -51,4 +51,17 @@ protected:
 	float LoadShownTime = 0.f;
 	float LoadStillTime = 0.f;
 	bool bLoadStopped = false;
+
+	// Perf: laatst-gezette waarden -> SetText alleen bij verschil (changed-check-idioom).
+	double LastCashShown = -1.0e18;
+	double LastBankShown = -1.0e18;
+	int32 LastDayShown = -1;
+	int32 LastMinuteShown = -1;   // H*60+M
+	int32 LastHeatShown = -1;
+	int32 LastLevelShown = -1;
+	int32 LastStonedKey = -1;     // Secs*1000 + XpBoost
+	int32 LastStonedVisible = -1; // -1 onbekend
+	// Phone-component-cache (weak + pawn-check): FindComponentByClass niet elke tick.
+	TWeakObjectPtr<class UPhoneClientComponent> CachedPhone;
+	TWeakObjectPtr<APawn> CachedPhonePawn;
 };

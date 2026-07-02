@@ -6,6 +6,23 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
 
+// Statische registry van alle levende balies (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. Hot paths (afspraak-meet-spots) lopen hierdoor O(instanties).
+static TArray<TWeakObjectPtr<AStoreCounter>> GStoreCounterRegistry;
+const TArray<TWeakObjectPtr<AStoreCounter>>& AStoreCounter::GetAll() { return GStoreCounterRegistry; }
+
+void AStoreCounter::BeginPlay()
+{
+	Super::BeginPlay();
+	GStoreCounterRegistry.Add(this);
+}
+
+void AStoreCounter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GStoreCounterRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
+}
+
 AStoreCounter::AStoreCounter()
 {
 	PrimaryActorTick.bCanEverTick = false;

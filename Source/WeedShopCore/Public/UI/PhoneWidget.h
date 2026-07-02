@@ -157,6 +157,19 @@ protected:
 	int32 bLastApp = -1;
 	bool bContentDirty = true;
 	float LastStatsRefresh = 0.f; // throttle voor de live leaderboard-refresh
+
+	// Perf: statusbalk + bank-app changed-checks -> SetText alleen bij een echt verschil.
+	double LastPhoneCash = -1.0e18;
+	double LastPhoneBank = -1.0e18;
+	int32 LastPhoneTimeKey = -1;      // dag*10000 + H*60+M
+	int32 LastPhoneLevel = -1;
+	int32 LastPhoneXp = -1;
+	int32 LastPhoneXpNext = -1;
+	long long LastBankBalShown = -1;  // getoonde hele euro's (bank)
+	long long LastBankCashShown = -1; // getoonde hele euro's (cash to deposit)
+	int32 LastBankUnlocked = -1;      // -1 onbekend (reset bij bank-panel-rebuild)
+	int32 LastBankSendVis = -1;
+	FString LastBankSendLabel;
 	// Welk store-app-paneel de gedeelde winkel-member-refs (StoreScroll/StoreTabBtns/AppCats/...) nu beschrijven.
 	// De 4 store-apps delen die refs; hiermee herbouwen we bij terugkeer naar een ANDER store-paneel de refs.
 	int32 StoreMembersOwnerApp = -1;

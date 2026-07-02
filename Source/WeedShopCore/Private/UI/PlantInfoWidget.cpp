@@ -168,27 +168,110 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	APawn* P = GetOwningPlayerPawn();
-	if (!P) { if (Card) { Card->SetVisibility(ESlateVisibility::Collapsed); } return; }
+	if (!P)
+	{
+		if (Card && LastCardVis != 0) { LastCardVis = 0; Card->SetVisibility(ESlateVisibility::Collapsed); }
+		return;
+	}
+
+	// Component-cache (weak + pawn-check): niet 2x FindComponentByClass per tick.
+	if (CachedCompPawn.Get() != P || !CachedPhone.IsValid() || !CachedInteract.IsValid())
+	{
+		CachedCompPawn = P;
+		CachedPhone = P->FindComponentByClass<UPhoneClientComponent>();
+		CachedInteract = P->FindComponentByClass<UInteractionComponent>();
+	}
 
 	// Geen kaart als er een UI open is.
 	bool bUiOpen = false;
-	if (const UPhoneClientComponent* Ph = P->FindComponentByClass<UPhoneClientComponent>())
+	if (const UPhoneClientComponent* Ph = CachedPhone.Get())
 	{
 		bUiOpen = Ph->IsOpen() || Ph->IsDealOpen() || Ph->IsInventoryOpen() || Ph->IsRollOpen() || Ph->IsPotUpgradeOpen();
 	}
 
 	AGrowPlant* Plant = nullptr;
-	if (const UInteractionComponent* IC = P->FindComponentByClass<UInteractionComponent>())
+	if (const UInteractionComponent* IC = CachedInteract.Get())
 	{
 		Plant = Cast<AGrowPlant>(IC->GetFocusedActor());
 	}
 
 	const bool bShow = Plant && !bUiOpen;
-	if (Card) { Card->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bShow) { return; }
+	if (Card)
+	{
+		const int32 VisNow = bShow ? 1 : 0;
+		if (VisNow != LastCardVis) { LastCardVis = VisNow; Card->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+	}
+	if (!bShow) { LastKey.Reset(); return; }
 
 	const bool bPlanted = Plant->IsPlanted();
 	const int32 NumSlots = Plant->GetNumSlots();
+
+	// Zet een ring (Percent + Color) via z'n dynamische materiaal — alleen bij delta > 0.001 of kleur-wissel.
+	auto SetRing = [](UImage* Ring, float Frac, const FLinearColor& Col, float& LastFrac, FLinearColor& LastCol)
+	{
+		if (!Ring) { return; }
+		const float F = FMath::Clamp(Frac, 0.f, 1.f);
+		if (FMath::Abs(F - LastFrac) <= 0.001f && Col == LastCol) { return; }
+		LastFrac = F; LastCol = Col;
+		if (UMaterialInstanceDynamic* MID = Ring->GetDynamicMaterial())
+		{
+			MID->SetScalarParameterValue(TEXT("Percent"), F);
+			MID->SetVectorParameterValue(TEXT("Color"), Col);
+		}
+	};
+
+	// Alle getoonde (afgeronde) waarden verzamelen -> change-key; tekst/vis-secties alleen bij wijziging.
+	// De ringen worden hierbuiten gehouden: die updaten elke tick (met de delta-gate hierboven).
+	int32 Rem = 0, SickN = 0;
+	float Wtr = 0.f, Care = 0.f;
+	bool bMold = false, bPest = false;
+	FString Key;
+	if (bPlanted)
+	{
+		// Groei-ring = gemiddelde van de geplante plekken; besmettings-vlaggen in dezelfde loop.
+		float GrowSum = 0.f; int32 GrowN = 0;
+		for (int32 i = 0; i < NumSlots; ++i)
+		{
+			if (Plant->IsSlotPlanted(i)) { GrowSum += Plant->GetSlotFraction(i); ++GrowN; }
+			const uint8 A = Plant->GetSlotAfflict(i);
+			if (A == 1) { bMold = true; } else if (A == 2) { bPest = true; }
+		}
+		Rem = FMath::CeilToInt(Plant->GetSecondsRemaining());
+		Wtr = Plant->GetWaterLevel();
+		Care = Plant->GetCareAvg();
+		SickN = Plant->GetAfflictedCount();
+		const FLinearColor HCol = (SickN > 0 || Care < 0.5f) ? FLinearColor(1.f, 0.4f, 0.4f) : (Care >= 0.8f ? FLinearColor(0.4f, 0.9f, 0.4f) : FLinearColor(1.f, 0.7f, 0.2f));
+
+		SetRing(GrowthRing, (GrowN > 0) ? (GrowSum / GrowN) : 0.f, FLinearColor(0.45f, 0.9f, 0.4f), LastGrowFrac, LastGrowCol);
+		SetRing(WaterRing, Wtr, FLinearColor(0.3f, 0.7f, 1.f), LastWaterFrac, LastWaterCol);
+		SetRing(HealthRing, Care, HCol, LastHealthFrac, LastHealthCol);
+
+		Key = FString::Printf(TEXT("P|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d"),
+			*Plant->GetPrimaryStrainName().ToString(), *Plant->GetPrimaryStrainId().ToString(),
+			Plant->GetPlantedCount(), NumSlots, Rem,
+			(int32)FMath::RoundHalfToEven(Wtr * 100.f), (int32)FMath::RoundHalfToEven(Care * 100.f),
+			SickN > 0 ? 1 : 0, bMold ? 1 : 0, bPest ? 1 : 0,
+			(int32)FMath::RoundHalfToEven(Plant->GetEstimatedTotalYield()),
+			(int32)FMath::RoundHalfToEven(Plant->GetEstimatedThcPercent()));
+	}
+	else
+	{
+		Key = FString(TEXT("E|")) + WeedUI::PrettyItemName(Plant->GetPotTier());
+	}
+
+	// Soil + upgrades tellen ook mee in de key (worden in beide takken getoond/gezet).
+	const bool bHasSoil = Plant->HasSoil();
+	FString SoilName; int32 SoilUses = 0;
+	if (bHasSoil)
+	{
+		FSoilDef Sd; SoilName = GetSoilDef(Plant->GetSoilId(), Sd) ? Sd.DisplayName : Plant->GetSoilId().ToString();
+		SoilUses = Plant->GetSoilUsesLeft();
+	}
+	const FString Ups = Plant->GetActiveUpgradesLabel();
+	Key += FString::Printf(TEXT("|S%d|%s|%d|U|%s"), bHasSoil ? 1 : 0, *SoilName, SoilUses, *Ups);
+
+	if (Key == LastKey) { return; } // niets zichtbaars gewijzigd -> teksten/visibility overslaan
+	LastKey = Key;
 
 	if (bPlanted)
 	{
@@ -210,38 +293,12 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		if (RingRow) { RingRow->SetVisibility(ESlateVisibility::HitTestInvisible); }
 
-		// Zet een ring (Percent + Color) via z'n dynamische materiaal.
-		auto SetRing = [](UImage* Ring, float Frac, const FLinearColor& Col)
-		{
-			if (!Ring) { return; }
-			if (UMaterialInstanceDynamic* MID = Ring->GetDynamicMaterial())
-			{
-				MID->SetScalarParameterValue(TEXT("Percent"), FMath::Clamp(Frac, 0.f, 1.f));
-				MID->SetVectorParameterValue(TEXT("Color"), Col);
-			}
-		};
-
-		// Groei-ring = gemiddelde van de geplante plekken; tijd eronder.
-		float GrowSum = 0.f; int32 GrowN = 0;
-		for (int32 i = 0; i < NumSlots; ++i) { if (Plant->IsSlotPlanted(i)) { GrowSum += Plant->GetSlotFraction(i); ++GrowN; } }
-		SetRing(GrowthRing, (GrowN > 0) ? (GrowSum / GrowN) : 0.f, FLinearColor(0.45f, 0.9f, 0.4f));
 		if (GrowthTimeText)
 		{
-			const int32 Rem = FMath::CeilToInt(Plant->GetSecondsRemaining());
 			GrowthTimeText->SetText(FText::FromString(Rem > 0 ? FString::Printf(TEXT("%d:%02d"), Rem / 60, Rem % 60) : TEXT("READY")));
 			GrowthTimeText->SetColorAndOpacity(FSlateColor(Rem > 0 ? WeedUI::ColText() : WeedUI::ColGood()));
 		}
-
-		// Water-ring.
-		const float Wtr = Plant->GetWaterLevel();
-		SetRing(WaterRing, Wtr, FLinearColor(0.3f, 0.7f, 1.f));
 		if (WaterText) { WaterText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Wtr * 100.f))); }
-
-		// Health/kwaliteit-ring (CareAvg = tijd-gewogen oogst-kwaliteit; rood bij ziek/slecht, oranje mid, groen goed).
-		const float Care = Plant->GetCareAvg();
-		const int32 SickN = Plant->GetAfflictedCount();
-		const FLinearColor HCol = (SickN > 0 || Care < 0.5f) ? FLinearColor(1.f, 0.4f, 0.4f) : (Care >= 0.8f ? FLinearColor(0.4f, 0.9f, 0.4f) : FLinearColor(1.f, 0.7f, 0.2f));
-		SetRing(HealthRing, Care, HCol);
 		if (HealthText)
 		{
 			HealthText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Care * 100.f)));
@@ -249,12 +306,6 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 
 		// Conditie-badges: toon mold en/of pest zodra een plek besmet is (1 = mold, 2 = pest).
-		bool bMold = false, bPest = false;
-		for (int32 i = 0; i < NumSlots; ++i)
-		{
-			const uint8 A = Plant->GetSlotAfflict(i);
-			if (A == 1) { bMold = true; } else if (A == 2) { bPest = true; }
-		}
 		if (MoldBadge)      { MoldBadge->SetVisibility(bMold ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
 		if (PestBadge)      { PestBadge->SetVisibility(bPest ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
 		if (ConditionRow)   { ConditionRow->SetVisibility((bMold || bPest) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
@@ -275,11 +326,10 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (SoilText) { SoilText->SetVisibility(ESlateVisibility::HitTestInvisible); } // lege pot: toon hoeveel harvests de soil nog kan
 	}
 
-	if (Plant->HasSoil())
+	if (bHasSoil)
 	{
-		FSoilDef Sd; const FString Sn = GetSoilDef(Plant->GetSoilId(), Sd) ? Sd.DisplayName : Plant->GetSoilId().ToString();
 		SoilText->SetColorAndOpacity(FSlateColor(WeedUI::ColGood()));
-		SoilText->SetText(FText::FromString(FString::Printf(TEXT("Soil: %s  (%d harvests left)"), *Sn, Plant->GetSoilUsesLeft())));
+		SoilText->SetText(FText::FromString(FString::Printf(TEXT("Soil: %s  (%d harvests left)"), *SoilName, SoilUses)));
 	}
 	else
 	{
@@ -290,7 +340,6 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Actieve gear-upgrades op deze pot (altijd tonen, met of zonder soil/plant).
 	if (UpgradesText)
 	{
-		const FString Ups = Plant->GetActiveUpgradesLabel();
 		UpgradesText->SetText(FText::FromString(Ups.IsEmpty() ? TEXT("Upgrades: none") : FString::Printf(TEXT("Upgrades: %s"), *Ups)));
 		UpgradesText->SetColorAndOpacity(FSlateColor(Ups.IsEmpty() ? WeedUI::ColTextDim() : WeedUI::ColAccent()));
 	}

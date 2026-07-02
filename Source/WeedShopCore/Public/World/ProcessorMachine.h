@@ -35,8 +35,13 @@ public:
 	AProcessorMachine();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
+
+	// Registry van alle levende machines (Add in BeginPlay, Remove in EndPlay): de upgrade-scans
+	// lopen O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
+	static const TArray<TWeakObjectPtr<AProcessorMachine>>& GetAll();
 
 	// Tier-id (gezet bij plaatsen). Bepaalt rol (mesh/press), capaciteit, tijd, opbrengst, THC-boost.
 	UPROPERTY(ReplicatedUsing = OnRep_Tier, BlueprintReadOnly, Category = "WeedShop|Proc")

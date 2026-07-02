@@ -22,6 +22,10 @@ class WEEDSHOPCORE_API APlaceableProp : public AActor, public IInteractable
 public:
 	APlaceableProp();
 
+	// Registry van alle levende props (Add in BeginPlay, Remove in EndPlay): de gear-scans lopen
+	// O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
+	static const TArray<TWeakObjectPtr<APlaceableProp>>& GetAll();
+
 	// Welk item dit is (rij in de placeable-registry). Bepaalt mesh/schaal.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_ItemId, Category = "WeedShop|Placeable")
 	FName ItemId = NAME_None;
@@ -33,6 +37,7 @@ public:
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION()

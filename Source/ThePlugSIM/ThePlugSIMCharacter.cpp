@@ -57,6 +57,7 @@
 #include "Progression/LevelComponent.h"
 #include "Progression/MilestoneComponent.h"
 #include "Save/SaveGameSubsystem.h"
+#include "Save/AssetKeepAliveSubsystem.h" // runtime-geladen assets rooten over map-loads heen (laadtijd-fix)
 #include "Engine/GameInstance.h"
 #include "Input/ControlSettings.h"
 #include "World/Atm.h"
@@ -406,7 +407,7 @@ void AThePlugSIMCharacter::UpdateProxyAnim(float DeltaSeconds)
 	const bool bMoving = ProxyMoveHold > 0.f;
 	const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
 	bool bPhone = false;
-	if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
+	if (Phone) { bPhone = Phone->IsPhoneOpenReplicated(); } // bestaand member; geen FindComponentByClass per tick
 
 	// De texting-clip (Anim_Check_Cellphone) is een VOLLEDIGE cyclus: pakken -> kijken -> wegstoppen. In de
 	// single-node-FALLBACK (skins zonder loco-ABP, verderop) spelen we 'm vooruit tot het 'kijk'-punt
@@ -519,7 +520,7 @@ void AThePlugSIMCharacter::UpdateTextingMontage()
 	if (!AnimInst) { TextingMontage = nullptr; DestroyTextingPhoneProp(); return; }
 
 	bool bPhone = false;
-	if (const UPhoneClientComponent* Ph = FindComponentByClass<UPhoneClientComponent>()) { bPhone = Ph->IsPhoneOpenReplicated(); }
+	if (Phone) { bPhone = Phone->IsPhoneOpenReplicated(); } // bestaand member; geen FindComponentByClass per tick
 
 	const bool bActive = (TextingMontage != nullptr) && AnimInst->Montage_IsPlaying(TextingMontage);
 	if (bPhone)
@@ -651,25 +652,41 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 		case 6:  Path = WeedOutfit::CitizenManBodyPath; break;                      // Citizen_man: headless modulaire basis-body
 		default: Path = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"); break;
 	}
+	// [BOOTMARK]-attributie: de skin/ABP-keten was het stille ~26s-blok in BeginPlay (load + compile op
+	// ELKE map-load, want LoadMap-GC purgde de assets). Per-stap timen; het keep-alive-subsystem hieronder
+	// root de assets zodat de tweede map-load ze memory-resident vindt.
+	const double _SkinT0 = FPlatformTime::Seconds();
 	USkeletalMesh* Skin = LoadObject<USkeletalMesh>(nullptr, Path);
 	if (!Skin) { return; }
+	UAssetKeepAliveSubsystem::Keep(this, Skin); // rooten: overleeft de LoadMap-GC (laadtijd-fix)
+	const double _SkinT1 = FPlatformTime::Seconds();
 
 	// Third-person body (co-op + jij in 3rd-person) EN first-person mesh (jouw eigen view, hoofd verborgen).
+	double _AbpT0 = _SkinT1, _AbpT1 = _SkinT1, _SetT1 = _SkinT1;
 	if (USkeletalMeshComponent* M = GetMesh())
 	{
 		M->SetSkeletalMeshAsset(Skin);
+		_SetT1 = FPlatformTime::Seconds();
 		// Zet de ECHTE locomotie-ABP (ABP_Unarmed, SK_Mannequin) op de body -> vloeiende, richting-gebaseerde
 		// beweging (walk/run/idle/jump) die OOK op de simulated proxy draait (velocity repliceert). Werkt op
 		// ALLE skins: Manny/Quinn native, en Casual/Tony via compatibele-skeletons (UE4_Mannequin_Skeleton_Main
 		// + Citizens staan in SK_Mannequin's compat-lijst). Veel beter dan de kale single-node 'walk-forward'.
 		bBodyHasLocoAbp = false;
 		{
-			TSubclassOf<UAnimInstance> LocoAbp = LoadClass<UAnimInstance>(nullptr, // GEEN static: unrooted -> kan dangelen na GC
+			_AbpT0 = FPlatformTime::Seconds();
+			// GEEN static (unrooted -> kan dangelen na GC); het keep-alive-subsystem root 'm netjes met eigenaar.
+			TSubclassOf<UAnimInstance> LocoAbp = LoadClass<UAnimInstance>(nullptr,
 				TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
+			UAssetKeepAliveSubsystem::Keep(this, LocoAbp.Get()); // rooten: ABP-compile niet nóg een keer
+			_AbpT1 = FPlatformTime::Seconds();
 			if (LocoAbp) { M->SetAnimInstanceClass(LocoAbp); bBodyHasLocoAbp = true; } // anders: single-node fallback
 		}
 		ProxyAnimState = -1; // forceer her-evaluatie in UpdateProxyAnim (anim-mode kan zijn gewisseld)
 	}
+	// Eén samenvattende regel (geen spam bij outfit-wissels): waar de tijd zat. Na de keep-alive-fix
+	// horen de load-stappen op de tweede map-load ~0.00s te zijn.
+	UE_LOG(LogThePlugSIM, Display, TEXT("[BOOTMARK] ApplySkinMesh: mesh-load %.2fs, SetSkeletalMeshAsset %.2fs, ABP-load %.2fs (+%.2fs sinds start)"),
+		_SkinT1 - _SkinT0, _SetT1 - _SkinT1, _AbpT1 - _AbpT0, FPlatformTime::Seconds() - GStartTime);
 	if (FirstPersonMesh)
 	{
 		// Gamer Girl (skin 3): SK_GamerGirl heeft een verwrongen bind/ref-pose. De FP-mesh draait GEEN eigen
@@ -678,6 +695,7 @@ void AThePlugSIMCharacter::ApplySkinMesh()
 		if (PlayerSkin == 3)
 		{
 			USkeletalMesh* FpSkin = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
+			UAssetKeepAliveSubsystem::Keep(this, FpSkin); // rooten over map-loads (laadtijd-fix)
 			FirstPersonMesh->SetSkeletalMeshAsset(FpSkin ? FpSkin : Skin);
 		}
 		else
@@ -809,6 +827,7 @@ void AThePlugSIMCharacter::AttachOutfitParts(USkeletalMeshComponent* BodyComp, b
 		if (!MeshPath) { return; } // "None"-keuze
 		USkeletalMesh* PartMesh = LoadObject<USkeletalMesh>(nullptr, MeshPath);
 		if (!PartMesh) { return; }
+		UAssetKeepAliveSubsystem::Keep(this, PartMesh); // outfit-parts rooten over map-loads (laadtijd-fix)
 		USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(this);
 		C->SetupAttachment(BodyComp);
 		C->RegisterComponent();
@@ -1108,12 +1127,16 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		if (StonedSeconds <= 0.f) { StonedIntensity = 0.f; StonedXpFrac = 0.f; }
 	}
 
+	// Actieve-item-id 1x per tick naar string (FName->FString alloceert); hieronder 3x gebruikt
+	// (roken / rollen / joint overhandigen). Posities/staat blijven per frame vers gelezen.
+	const FString ActiveIdStr = Inventory ? Inventory->GetActiveItemId().ToString() : FString();
+
 	// Roken = rechtermuisknop inhouden met een joint in de hand. Duidelijke voortgangsbalk via de HUD,
 	// zodat je niet per ongeluk je eigen joint oprookt.
 	{
 		const bool bUiOpen = Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()
 			|| Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen());
-		const bool bJointInHand = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Joint_"));
+		const bool bJointInHand = Inventory && ActiveIdStr.StartsWith(TEXT("Joint_"));
 		if (bRmbDown && !bUiOpen && bJointInHand)
 		{
 			SmokeHoldTime += DeltaSeconds;
@@ -1135,7 +1158,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 
 		// Rollen: geladen vloei in de hand + rechtermuis inhouden -> rol de joint. (Laden gebeurt via
 		// de "Load"-knop in het rol-menu; de lading blijft staan tot je 'm rolt.)
-		const bool bPapersInHand = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Papers_"));
+		const bool bPapersInHand = Inventory && ActiveIdStr.StartsWith(TEXT("Papers_"));
 		if (bRmbDown && !bUiOpen && bPapersInHand && Phone && Phone->IsRollLoadedUI())
 		{
 			RollHoldTime += DeltaSeconds;
@@ -1170,11 +1193,11 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 	{
 		const bool bUiOpenG = Phone && (Phone->IsOpen() || Phone->IsRollOpen() || Phone->IsDealOpen()
 			|| Phone->IsInventoryOpen() || Phone->IsPotUpgradeOpen() || Phone->IsAtmOpen() || Phone->IsPackOpen());
-		const bool bJointG = Inventory && Inventory->GetActiveItemId().ToString().StartsWith(TEXT("Joint_"));
+		const bool bJointG = Inventory && ActiveIdStr.StartsWith(TEXT("Joint_"));
 		ACustomerBase* FocusCust = nullptr;
-		if (const UInteractionComponent* ICx = FindComponentByClass<UInteractionComponent>())
+		if (CachedInteraction) // in BeginPlay gecached; focus zelf wordt gewoon per frame vers gelezen
 		{
-			FocusCust = Cast<ACustomerBase>(ICx->GetFocusedActor());
+			FocusCust = Cast<ACustomerBase>(CachedInteraction->GetFocusedActor());
 		}
 		if (bLmbDown && !bUiOpenG && bJointG && FocusCust)
 		{
@@ -1630,10 +1653,19 @@ void AThePlugSIMCharacter::PossessedBy(AController* NewController)
 
 void AThePlugSIMCharacter::BeginPlay()
 {
+	// [BOOTMARK]-attributie (zelfde stijl als GameMode/GameState): waar de map-load-tijd in de
+	// character-boot zit. Super / ApplySkinMesh / RestorePlayerByPawn / EnsureWidget apart getimed.
+	double _BmT = FPlatformTime::Seconds();
 	Super::BeginPlay();
+	UE_LOG(LogThePlugSIM, Display, TEXT("[BOOTMARK] Character Super::BeginPlay %.2fs (+%.2fs sinds start)"), FPlatformTime::Seconds() - _BmT, FPlatformTime::Seconds() - GStartTime);
 	if (UCapsuleComponent* Cap = GetCapsuleComponent()) { Cap->OnComponentHit.AddDynamic(this, &AThePlugSIMCharacter::OnCapsuleBump); }
 
+	_BmT = FPlatformTime::Seconds();
 	ApplySkinMesh(); // skin toepassen (default man; save-restore/keuze overschrijft via RestoreSkin/OnRep)
+	UE_LOG(LogThePlugSIM, Display, TEXT("[BOOTMARK] Character ApplySkinMesh %.2fs (+%.2fs sinds start)"), FPlatformTime::Seconds() - _BmT, FPlatformTime::Seconds() - GStartTime);
+
+	// Interactie-component (op de BP-character gezet) 1x opzoeken i.p.v. FindComponentByClass per tick.
+	CachedInteraction = FindComponentByClass<UInteractionComponent>();
 
 	// Spawn-plek onthouden als gegarandeerd-veilige terugval voor anti-stuck.
 	InitialSpawnLoc = GetActorLocation();
@@ -1735,8 +1767,10 @@ void AThePlugSIMCharacter::BeginPlay()
 				// Eerst proberen te herstellen uit de save (load-game). Op een VERSE Normal-game is dat een no-op
 				// en landen i.p.v. de eenmalige Normal-extras (Silver Haze, papers, start-cash) — zo spawnt ook
 				// co-op P2 met dezelfde startspullen als P1. De helper dedupt per speler + is no-op op load/clients.
+				_BmT = FPlatformTime::Seconds();
 				Sv->RestorePlayerByPawn(this);
 				Sv->GrantNormalStartExtrasForPawn(this);
+				UE_LOG(LogThePlugSIM, Display, TEXT("[BOOTMARK] Character RestorePlayerByPawn %.2fs (+%.2fs sinds start)"), FPlatformTime::Seconds() - _BmT, FPlatformTime::Seconds() - GStartTime);
 			}
 		}
 	}
@@ -1756,7 +1790,9 @@ void AThePlugSIMCharacter::BeginPlay()
 			Nav->bAnalogNavigation = false;
 			FSlateApplication::Get().SetNavigationConfig(Nav);
 		}
+		_BmT = FPlatformTime::Seconds();
 		Phone->EnsureWidget();
+		UE_LOG(LogThePlugSIM, Display, TEXT("[BOOTMARK] Character Phone->EnsureWidget %.2fs (+%.2fs sinds start)"), FPlatformTime::Seconds() - _BmT, FPlatformTime::Seconds() - GStartTime);
 		// Host/standalone: na een New Game/Load-herlaad voert de save-subsystem de actie uit
 		// (verse start of save toepassen) en tonen we GEEN titelscherm; anders (kale boot) wel.
 		bool bShownMenu = false;
@@ -1784,8 +1820,10 @@ void AThePlugSIMCharacter::BeginPlay()
 	{
 		if (UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Default.IMC_Default")))
 		{
+			UAssetKeepAliveSubsystem::Keep(this, IMC); // rooten over map-loads (laadtijd-fix)
 			if (UInputAction* IA = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Interact.IA_Interact")))
 			{
+				UAssetKeepAliveSubsystem::Keep(this, IA);
 				IMC->UnmapAllKeysFromAction(IA);
 			}
 		}

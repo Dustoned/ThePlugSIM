@@ -13,7 +13,9 @@
 AActivitySpotManager::AActivitySpotManager()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	PrimaryActorTick.TickInterval = 0.f; // we throttlen zelf via EvalTimer
+	// Pure logica-actor (geen beweging): 4 Hz tikken is ruim genoeg - de eval-timer zelf blijft ~1s
+	// (EvalTimer telt met DeltaTime, dus de uitkomst is identiek; alleen de lege ticks zijn weg).
+	PrimaryActorTick.TickInterval = 0.25f;
 	bReplicates = false;                 // server-only: spawnt replicerende NPC's, zelf niet zichtbaar
 }
 

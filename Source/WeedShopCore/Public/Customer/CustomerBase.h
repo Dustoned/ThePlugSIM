@@ -69,6 +69,11 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	// Registry van alle levende klanten/wandelaars (Add in BeginPlay, Remove in EndPlay): hot paths
+	// lopen O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> altijd IsValid()
+	// checken bij gebruik. Crowd-bodies zijn ook ACustomerBase, dus exact dezelfde set als de iterator.
+	static const TArray<TWeakObjectPtr<ACustomerBase>>& GetAll();
+
 	// DataTable met producten (FWeedShopProductRow) voor marktprijs-opzoek.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Customer")
 	TObjectPtr<UDataTable> ProductTable;
@@ -315,6 +320,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// Zichtbaar placeholder-lichaam (tot er een echte character-mesh is).

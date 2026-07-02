@@ -3048,6 +3048,9 @@ void UPhoneWidget::RefreshContent()
 		BankBalanceText = nullptr; BankCashText = nullptr; // BuildBankApp zet ze in de ontgrendelde tak opnieuw
 		BankLockedBox = nullptr; BankUnlockedBox = nullptr; // vaste bank-boxen (persistent, getoggled)
 		BankSendBox = nullptr; BankSendLabel = nullptr;     // "Send to <vriend>"-sectie (co-op-only, getoggled)
+		// Changed-check-caches resetten: de nieuwe widgets moeten de eerste tick vers gezet worden.
+		LastBankUnlocked = -1; LastBankBalShown = -1; LastBankCashShown = -1;
+		LastBankSendVis = -1; LastBankSendLabel.Reset();
 	}
 
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
@@ -3466,36 +3469,64 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// panel-visibility op de PREWARM-key, wat een geopend paneel zou verbergen (flash). Opent de speler mid-
 	// prewarm (zeldzaam, eerste ~0.2s), dan bouwt de lazy pad het huidige scherm on-demand (één flash) en hervat
 	// de spreiding zodra de telefoon weer dicht is. Wacht op de game-state (echte data).
-	if (!bPrewarmDone && GS && !bOpen) { PrewarmStep(); }
+	if (!bPrewarmDone && GS && !bOpen)
+	{
+		PrewarmStep();
+		// Prewarm-versneller: zolang de cover/bootfase nog op beeld staat (crowd nog niet gespawnd) kan er
+		// een TWEEDE stap per tick bij — de panelen zijn toch onzichtbaar, de speler ziet er niets van.
+		if (!bPrewarmDone && !WeedShop_IsCrowdSpawned()) { PrewarmStep(); }
+	}
 
 	if (!bOpen) { return; }
 
 	if (GS)
 	{
+		// Statusbalk: changed-checks -> alleen formatteren + SetText als de waarde echt wijzigde.
 		if (CashText && GS->GetEconomy())
 		{
-			CashText->SetText(FText::FromString(FString::Printf(TEXT("C %s  B %s"),
-				*CompactEuros(GS->GetEconomy()->GetBalanceEuros()), *CompactEuros(GS->GetEconomy()->GetBankEuros()))));
+			const double CashE = GS->GetEconomy()->GetBalanceEuros();
+			const double BankE = GS->GetEconomy()->GetBankEuros();
+			if (CashE != LastPhoneCash || BankE != LastPhoneBank)
+			{
+				LastPhoneCash = CashE; LastPhoneBank = BankE;
+				CashText->SetText(FText::FromString(FString::Printf(TEXT("C %s  B %s"),
+					*CompactEuros(CashE), *CompactEuros(BankE))));
+			}
 		}
 		if (TimeText && GS->GetDayCycle())
 		{
 			const float Hour = GS->GetDayCycle()->GetClockHour();
 			const int32 H = FMath::Clamp((int32)Hour, 0, 23);
 			const int32 M = FMath::Clamp((int32)((Hour - H) * 60.f), 0, 59);
-			TimeText->SetText(FText::FromString(FString::Printf(TEXT("Day %d  %02d:%02d"),
-				GS->GetDayCycle()->GetDayNumber(), H, M)));
+			const int32 TimeKey = GS->GetDayCycle()->GetDayNumber() * 10000 + H * 60 + M;
+			if (TimeKey != LastPhoneTimeKey)
+			{
+				LastPhoneTimeKey = TimeKey;
+				TimeText->SetText(FText::FromString(FString::Printf(TEXT("Day %d  %02d:%02d"),
+					GS->GetDayCycle()->GetDayNumber(), H, M)));
+			}
 		}
 		if (LevelText && GS->GetLeveling())
 		{
 			const ULevelComponent* Lv = GS->GetLeveling();
-			LevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv %d"), Lv->GetLevel())));
-			if (LevelXpBar) { LevelXpBar->SetPercent(Lv->GetLevelFraction()); }
-			if (LevelXpText)
+			const int32 Level = Lv->GetLevel();
+			if (Level != LastPhoneLevel)
 			{
-				const int32 ToNext = Lv->GetXPToNext();
-				LevelXpText->SetText(ToNext <= 0
-					? FText::FromString(TEXT("MAX"))
-					: FText::FromString(FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), ToNext)));
+				LastPhoneLevel = Level;
+				LevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv %d"), Level)));
+			}
+			const int32 Xp = Lv->GetCurrentXP();
+			const int32 ToNext = Lv->GetXPToNext();
+			if (Xp != LastPhoneXp || ToNext != LastPhoneXpNext)
+			{
+				LastPhoneXp = Xp; LastPhoneXpNext = ToNext;
+				if (LevelXpBar) { LevelXpBar->SetPercent(Lv->GetLevelFraction()); }
+				if (LevelXpText)
+				{
+					LevelXpText->SetText(ToNext <= 0
+						? FText::FromString(TEXT("MAX"))
+						: FText::FromString(FString::Printf(TEXT("%d / %d XP"), Xp, ToNext)));
+				}
 			}
 		}
 	}
@@ -3599,13 +3630,28 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (!bHome && App == GBankApp && GS && GS->GetEconomy())
 	{
 		const bool bBankUnlocked = Phone->IsBankAppUnlocked() || Phone->IsBankViaAtm();
-		if (BankLockedBox)   { BankLockedBox->SetVisibility(bBankUnlocked ? ESlateVisibility::Hidden : ESlateVisibility::SelfHitTestInvisible); }
-		if (BankUnlockedBox) { BankUnlockedBox->SetVisibility(bBankUnlocked ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden); }
+		// Box-toggle alleen bij een unlock-wissel (changed-check; cache reset bij panel-rebuild).
+		if (LastBankUnlocked != (bBankUnlocked ? 1 : 0))
+		{
+			LastBankUnlocked = bBankUnlocked ? 1 : 0;
+			if (BankLockedBox)   { BankLockedBox->SetVisibility(bBankUnlocked ? ESlateVisibility::Hidden : ESlateVisibility::SelfHitTestInvisible); }
+			if (BankUnlockedBox) { BankUnlockedBox->SetVisibility(bBankUnlocked ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden); }
+		}
 		if (bBankUnlocked)
 		{
 			const UEconomyComponent* E = GS->GetEconomy();
-			if (BankBalanceText) { BankBalanceText->SetText(FText::FromString(FString::Printf(TEXT("EUR %lld"), (long long)(WeedRoundEuros(E->GetBankCents()) / 100)))); }
-			if (BankCashText) { BankCashText->SetText(FText::FromString(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), (long long)(WeedRoundEuros(E->GetCashCents()) / 100)))); }
+			const long long BalShown = (long long)(WeedRoundEuros(E->GetBankCents()) / 100);
+			if (BankBalanceText && BalShown != LastBankBalShown)
+			{
+				LastBankBalShown = BalShown;
+				BankBalanceText->SetText(FText::FromString(FString::Printf(TEXT("EUR %lld"), BalShown)));
+			}
+			const long long CashShown = (long long)(WeedRoundEuros(E->GetCashCents()) / 100);
+			if (BankCashText && CashShown != LastBankCashShown)
+			{
+				LastBankCashShown = CashShown;
+				BankCashText->SetText(FText::FromString(FString::Printf(TEXT("Cash to deposit:  EUR %lld"), CashShown)));
+			}
 			// "Send to <vriend>": alleen tonen als er echt een 2e speler in de sessie zit (co-op), mét diens naam
 			// in het label. In-place toggle + tekst-update (geen rebuild); join/leave is zeldzaam dus geen flash.
 			if (BankSendBox)
@@ -3617,11 +3663,21 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 					// De eerste ANDERE speler (bij >2 spelers pakken we die als weergegeven ontvanger).
 					if (PS && PC && PS != PC->PlayerState) { FriendPS = PS; break; }
 				}
-				BankSendBox->SetVisibility(FriendPS ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+				const int32 SendVis = FriendPS ? 1 : 0;
+				if (SendVis != LastBankSendVis)
+				{
+					LastBankSendVis = SendVis;
+					BankSendBox->SetVisibility(FriendPS ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+				}
 				if (FriendPS && BankSendLabel)
 				{
-					BankSendLabel->SetText(FText::FromString(FString::Printf(TEXT("Send to %s   (%.0f%% fee)"),
-						*FriendPS->GetPlayerName(), E->TransferFeePct * 100.f)));
+					FString Lbl = FString::Printf(TEXT("Send to %s   (%.0f%% fee)"),
+						*FriendPS->GetPlayerName(), E->TransferFeePct * 100.f);
+					if (Lbl != LastBankSendLabel)
+					{
+						LastBankSendLabel = MoveTemp(Lbl);
+						BankSendLabel->SetText(FText::FromString(LastBankSendLabel));
+					}
 				}
 			}
 		}

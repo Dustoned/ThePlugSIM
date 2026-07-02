@@ -34,6 +34,11 @@ static constexpr float AfflictGraceSeconds = 180.f; // 3 min curable zonder stra
 // i.p.v. het oude abrupte sterven op een vaste timer.
 static constexpr float AfflictQualityDrainPerSec = 0.008f;
 
+// Statische registry van alle levende potten (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. De gear-scan loopt hierdoor O(potten/props) i.p.v. over alle actors.
+static TArray<TWeakObjectPtr<AGrowPlant>> GGrowPlantRegistry;
+const TArray<TWeakObjectPtr<AGrowPlant>>& AGrowPlant::GetAll() { return GGrowPlantRegistry; }
+
 AGrowPlant::AGrowPlant()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -152,6 +157,10 @@ AGrowPlant::AGrowPlant()
 void AGrowPlant::BeginPlay()
 {
 	Super::BeginPlay();
+	GGrowPlantRegistry.Add(this);
+	// Gear-scan-fase random spreiden (0..0,5s): niet alle potten scannen in HETZELFDE frame
+	// (zelfde 0,5s-cadans, zelfde uitkomst - alleen de piek verdeeld over frames).
+	GearScanTimer = FMath::FRandRange(0.f, 0.5f);
 
 	if (HasAuthority())
 	{
@@ -173,6 +182,12 @@ void AGrowPlant::BeginPlay()
 	UpdatePotVisual();
 	UpdateSoilVisual();
 	UpdatePlantVisual();
+}
+
+void AGrowPlant::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GGrowPlantRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void AGrowPlant::CaptureState(FGrowPlantState& Out) const
@@ -301,23 +316,26 @@ void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
 
 	// Nieuwste regel: PER-POT. Een gear telt alleen voor de pot waar 'ie het DICHTST bij staat,
 	// niet voor alle potten in de buurt. Helper: de dichtstbijzijnde pot bij een gear-positie.
+	// PERF: registry-loops (O(potten/props)) i.p.v. TActorIterator over alle actors; zelfde set.
+	// De registry is per-proces, dus wél op wereld filteren (PIE/co-op-in-1-proces = meerdere werelden).
 	auto NearestPot = [W](const FVector& At) -> AGrowPlant*
 	{
 		AGrowPlant* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
-		for (TActorIterator<AGrowPlant> P(W); P; ++P)
+		for (const TWeakObjectPtr<AGrowPlant>& WP : AGrowPlant::GetAll())
 		{
-			if (!IsValid(*P)) { continue; }
+			AGrowPlant* P = WP.Get();
+			if (!IsValid(P) || P->GetWorld() != W) { continue; }
 			const float dSq = FVector::DistSquared2D(P->GetActorLocation(), At);
-			if (dSq < BestSq) { BestSq = dSq; Best = *P; }
+			if (dSq < BestSq) { BestSq = dSq; Best = P; }
 		}
 		return Best;
 	};
 
 	int32 Mask = 0;
-	for (TActorIterator<APlaceableProp> It(W); It; ++It)
+	for (const TWeakObjectPtr<APlaceableProp>& WProp : APlaceableProp::GetAll())
 	{
-		APlaceableProp* P = *It;
-		if (!IsValid(P)) { continue; }
+		APlaceableProp* P = WProp.Get();
+		if (!IsValid(P) || P->GetWorld() != W) { continue; }
 		const int32 Ui = GearUpgradeIndex(P->ItemId);
 		if (Ui < 0) { continue; }
 		const FVector L = P->GetActorLocation();

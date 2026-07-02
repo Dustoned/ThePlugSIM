@@ -29,6 +29,10 @@ class WEEDSHOPCORE_API AStoreCounter : public AActor, public IInteractable
 public:
 	AStoreCounter();
 
+	// Registry van alle levende balies (Add in BeginPlay, Remove in EndPlay): hot paths lopen
+	// O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
+	static const TArray<TWeakObjectPtr<AStoreCounter>>& GetAll();
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Store")
 	EShopKind Kind = EShopKind::Supplies;
 
@@ -43,6 +47,9 @@ public:
 	void SetupVisual(const FLinearColor& Accent);
 
 protected:
+	virtual void BeginPlay() override;                                       // registry-add
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
+
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Desk;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Panel;

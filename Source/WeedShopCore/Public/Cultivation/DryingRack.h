@@ -35,8 +35,13 @@ public:
 	ADryingRack();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
+
+	// Registry van alle levende droogrekken (Add in BeginPlay, Remove in EndPlay): de gear-scans
+	// lopen O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
+	static const TArray<TWeakObjectPtr<ADryingRack>>& GetAll();
 
 	// Tier-id (gezet bij plaatsen, net als de pot). Bepaalt capaciteit + droogtijd + grootte.
 	UPROPERTY(ReplicatedUsing = OnRep_Tier, BlueprintReadOnly, Category = "WeedShop|Dry")

@@ -43,6 +43,16 @@ protected:
 	TArray<int32> SlotLastWaterState;                      // per slot: -1 onbekend, 0 vol, 1 leeg (fles-icoon per fles)
 	bool bPrevWaterEmpty = false;                           // vorige vol/leeg-staat fles -> forceert icoon-refresh bij flip
 
+	// Perf: per-slot change-key (StackId|ItemId|Qty|Quality|QualityPct|bActive|RollLoaded) -> dure
+	// updates (brush/tekst/tooltip/icoon) alleen bij een echte wijziging.
+	TArray<FString> SlotLastKey;
+	int32 LastInvOpen = -1;                                 // vorige inventory-open-stand (-1 onbekend) -> DropCells-visibility alleen bij wissel
+	// Component-cache (weak + pawn-check): FindComponentByClass niet elke tick.
+	void UpdateComponentCache(APawn* P);
+	TWeakObjectPtr<APawn> CachedCompPawn;
+	TWeakObjectPtr<UInventoryComponent> CachedInv;
+	TWeakObjectPtr<class UPhoneClientComponent> CachedPhone;
+
 	// Telefoon-notificatie rechts van de hotbar: telefoon-icoon (trilt bij nieuw bericht) + bubble met aantal.
 	UPROPERTY() TObjectPtr<UTextBlock> MsgBadge;
 	UPROPERTY() TObjectPtr<UBorder> MsgBadgePill;

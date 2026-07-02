@@ -1105,36 +1105,51 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Naast een gekoppeld paneel (droogrek): HOME STASH verbergen (puur preview), card smaller, en het paar
 	// dicht bij elkaar in het midden (rek rechts-van-midden, inventory links-van-midden). Anders: normaal gecentreerd.
 	const bool bSideBySide = PhoneComp.IsValid() && (PhoneComp->IsDryRackOpen() || PhoneComp->IsShelfOpen());
-	if (StashBox) { StashBox->SetVisibility(bSideBySide ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
-	if (CardSlot)
+	// Layoutblok alleen bij een echte wissel (changed-check) — de canvas-slot-properties blijven staan.
+	if (LastSideBySide != (bSideBySide ? 1 : 0))
 	{
-		if (bSideBySide)
+		LastSideBySide = bSideBySide ? 1 : 0;
+		if (StashBox) { StashBox->SetVisibility(bSideBySide ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
+		if (CardSlot)
 		{
-			CardSlot->SetSize(FVector2D(584.f, 452.f));
-			CardSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-			CardSlot->SetAlignment(FVector2D(0.f, 0.5f));
-			CardSlot->SetPosition(FVector2D(12.f, -30.f));
-		}
-		else
-		{
-			CardSlot->SetSize(FVector2D(840.f, 452.f));
-			CardSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-			CardSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-			CardSlot->SetPosition(FVector2D(0.f, -30.f));
+			if (bSideBySide)
+			{
+				CardSlot->SetSize(FVector2D(584.f, 452.f));
+				CardSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+				CardSlot->SetAlignment(FVector2D(0.f, 0.5f));
+				CardSlot->SetPosition(FVector2D(12.f, -30.f));
+			}
+			else
+			{
+				CardSlot->SetSize(FVector2D(840.f, 452.f));
+				CardSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+				CardSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+				CardSlot->SetPosition(FVector2D(0.f, -30.f));
+			}
 		}
 	}
 
 	// HOME STASH: alleen herbouwen als de shelf-inhoud ECHT veranderde (niet bij elke grid-sleep). Goedkope
 	// signatuur i.p.v. de volledige widget-herbouw + wereld-scan elke keer (dat liet de halve inventory flikkeren).
+	// Perf: de shelf-SET (wereld-scan) wordt 1x/s ververst; de INHOUD-sig leest per tick vers uit de cache.
 	if (!bSideBySide)
 	{
-		FString SSig;
-		if (UWorld* W = GetWorld())
+		ShelfSetAge += DeltaTime;
+		if (ShelfSetAge >= 1.f)
 		{
-			for (TActorIterator<AStorageShelf> It(W); It; ++It)
+			ShelfSetAge = 0.f;
+			CachedShelves.Reset();
+			if (UWorld* W = GetWorld())
 			{
-				for (const FShelfStack& S : It->Contents) { SSig.Appendf(TEXT("%s%d|"), *S.ItemId.ToString(), S.Quantity); }
+				for (TActorIterator<AStorageShelf> It(W); It; ++It) { CachedShelves.Add(*It); }
 			}
+		}
+		FString SSig;
+		for (const TWeakObjectPtr<AStorageShelf>& WkS : CachedShelves)
+		{
+			const AStorageShelf* Shelf = WkS.Get();
+			if (!Shelf) { continue; }
+			for (const FShelfStack& S : Shelf->Contents) { SSig.Appendf(TEXT("%s%d|"), *S.ItemId.ToString(), S.Quantity); }
 		}
 		if (SSig != LastStashSig) { LastStashSig = SSig; RebuildStash(); }
 	}

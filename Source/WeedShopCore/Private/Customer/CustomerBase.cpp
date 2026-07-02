@@ -41,6 +41,11 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 
+// Statische registry van alle levende instanties (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. Hot paths (DoorRetrofitter-scan, contacten) lopen hierdoor O(instanties).
+static TArray<TWeakObjectPtr<ACustomerBase>> GCustomerRegistry;
+const TArray<TWeakObjectPtr<ACustomerBase>>& ACustomerBase::GetAll() { return GCustomerRegistry; }
+
 ACustomerBase::ACustomerBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -752,9 +757,16 @@ void ACustomerBase::OnRep_Appearance()
 	BuildAppearance(); // client: zodra NpcId + RepSkinIndex binnen zijn, bouw exact dezelfde persoon lokaal op
 }
 
+void ACustomerBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GCustomerRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
+}
+
 void ACustomerBase::BeginPlay()
 {
 	Super::BeginPlay();
+	GCustomerRegistry.Add(this);
 
 	// Loop/idle zelf aansturen (single-node) -> NPC's animeren echt i.p.v. glijden. (Een volle locomotie-
 	// AnimBP draait NIET betrouwbaar op de gemengde NPC-skeletten via compatibele-skeletons -> ref-pose/

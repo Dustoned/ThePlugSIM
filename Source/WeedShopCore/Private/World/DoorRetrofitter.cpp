@@ -168,10 +168,10 @@ void ADoorRetrofitter::BeginPlay()
 	if (UWorld* WB = GetWorld()) { WB->SpawnActor<AMapBorder>(AMapBorder::StaticClass(), FTransform::Identity); }
 
 	ScanAndConvert();
-	// Zolang de loading-cover op beeld staat scannen we VERSNELD (0.75s i.p.v. 2s): de sweep-hitches
+	// Zolang de loading-cover op beeld staat scannen we VERSNELD (0.4s i.p.v. 2s): de sweep-hitches
 	// zijn achter de cover onzichtbaar en de stad (deuren/glas/lampen/liften) staat er sneller. Na de
 	// fade schakelt de adaptieve cadans (onderaan ScanAndConvert) vanzelf terug naar 2s/8s.
-	ScanRate = IsCoverPhase() ? 0.75f : 2.0f;
+	ScanRate = IsCoverPhase() ? 0.4f : 2.0f;
 	GetWorldTimerManager().SetTimer(ScanTimer, this, &ADoorRetrofitter::ScanAndConvert, ScanRate, true);
 	// Virtuele crowd beweegt op een eigen snelle tik (10x/s, kleine stapjes): vloeiend op de
 	// kaart, en het zware werk (traces voor materialiseren) blijft op de 2s-pass.
@@ -953,11 +953,14 @@ void ADoorRetrofitter::ScanAndConvert()
 	{
 		TArray<ACityDoor*> Apt;
 		TArray<ACityDoor*> Balc;
-		for (TActorIterator<ACityDoor> It(W); It; ++It)
+		// PERF: deur-registry (O(deuren)) i.p.v. TActorIterator over alle actors - zelfde set.
+		// De registry is per-proces, dus wél op wereld filteren (PIE/co-op-in-1-proces).
+		for (const TWeakObjectPtr<ACityDoor>& WD : ACityDoor::GetAll())
 		{
-			if (!IsValid(*It)) { continue; }
-			if (It->ActorHasTag(TEXT("AptDoor"))) { Apt.Add(*It); }
-			else if (It->ActorHasTag(TEXT("BalcDoor"))) { Balc.Add(*It); }
+			ACityDoor* D = WD.Get();
+			if (!IsValid(D) || D->GetWorld() != W) { continue; }
+			if (D->ActorHasTag(TEXT("AptDoor"))) { Apt.Add(D); }
+			else if (D->ActorHasTag(TEXT("BalcDoor"))) { Balc.Add(D); }
 		}
 		if (Apt.Num() > 0 && Apt.Num() + Balc.Num() != LastAptDoorCount)
 		{
@@ -1226,9 +1229,12 @@ void ADoorRetrofitter::ScanAndConvert()
 	// lift heeft genomen terwijl jij even niet keek.
 	{
 		TArray<FVector> StreetPts;
-		for (TActorIterator<ACustomerSpawner> SIt(W); SIt; ++SIt)
+		// PERF: spawner-registry (O(spawners)) i.p.v. TActorIterator over alle actors - zelfde set.
+		// De registry is per-proces, dus wél op wereld filteren (PIE/co-op-in-1-proces).
+		for (const TWeakObjectPtr<ACustomerSpawner>& WSp : ACustomerSpawner::GetAll())
 		{
-			if (IsValid(*SIt)) { StreetPts.Add(SIt->GetActorLocation()); }
+			ACustomerSpawner* Sp = WSp.Get();
+			if (IsValid(Sp) && Sp->GetWorld() == W) { StreetPts.Add(Sp->GetActorLocation()); }
 		}
 		if (StreetPts.Num() > 0)
 		{
@@ -1255,9 +1261,12 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				return Dest;
 			};
-			for (TActorIterator<ACustomerBase> CIt(W); CIt; ++CIt)
+			// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set
+			// (crowd-bodies zijn ook ACustomerBase). Per-proces registry -> op wereld filteren (PIE).
+			for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
 			{
-				ACustomerBase* Cb = *CIt;
+				ACustomerBase* Cb = WCb.Get();
+				if (Cb && Cb->GetWorld() != W) { continue; }
 				// Op NpcId checken (IsResidentWalker): met IsResident() was deze redding dood (bResident wordt
 				// sinds de vereenvoudiging nooit gezet) -> boven-vastgelopen bewoners namen nooit de lift en
 				// bleven in de hal/het trappenhuis staan tot de despawn. Afspraak-NPC's (bewust wachtend op
@@ -1320,10 +1329,12 @@ void ADoorRetrofitter::ScanAndConvert()
 			{
 				if (!MapIt.Key().IsValid()) { MapIt.RemoveCurrent(); } // gedespawnde wandelaars opruimen
 			}
-			for (TActorIterator<ACustomerBase> RIt(W); RIt; ++RIt)
+			// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
+			// Per-proces registry -> op wereld filteren (PIE/co-op-in-1-proces).
+			for (const TWeakObjectPtr<ACustomerBase>& WRb : ACustomerBase::GetAll())
 			{
-				ACustomerBase* Cb = *RIt;
-				if (!IsValid(Cb) || !Cb->IsResidentWalker() || Cb->IsHidden() || Cb->HasActiveAppointment()) { continue; }
+				ACustomerBase* Cb = WRb.Get();
+				if (!IsValid(Cb) || Cb->GetWorld() != W || !Cb->IsResidentWalker() || Cb->IsHidden() || Cb->HasActiveAppointment()) { continue; }
 				const FVector L = Cb->GetActorLocation();
 				if (!IsInsideHomeRoom(L))
 				{
@@ -2859,10 +2870,10 @@ void ADoorRetrofitter::ScanAndConvert()
 	// 3 passes niks nieuws -> wereld is uitgestreamd/stabiel: scan 4x trager (8s i.p.v. 2s) zodat de
 	// onvermijdelijke volle-actor-sweep-hitch veel minder vaak gebeurt. Streamt er weer iets in (set
 	// groeit), dan meteen terug naar 2s zodat nieuwe deuren/liften snel werkend worden.
-	// Zolang de loading-cover op beeld staat blijven we juist VERSNELD (0.75s) scannen: de hitches
+	// Zolang de loading-cover op beeld staat blijven we juist VERSNELD (0.4s) scannen: de hitches
 	// zijn onzichtbaar en de stad staat er sneller (de cover wacht op CityConverted hieronder).
 	bScanSlow = (ScanIdleStreak >= 3);
-	const float WantRate = IsCoverPhase() ? 0.75f : (bScanSlow ? 8.0f : 2.0f);
+	const float WantRate = IsCoverPhase() ? 0.4f : (bScanSlow ? 8.0f : 2.0f);
 	if (!FMath::IsNearlyEqual(WantRate, ScanRate))
 	{
 		ScanRate = WantRate;

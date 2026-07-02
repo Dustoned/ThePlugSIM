@@ -58,6 +58,7 @@
 #include "World/WaterSink.h"
 #include "Progression/LevelComponent.h"
 #include "World/HeatComponent.h" // huur-schuld -> heat
+#include "Save/AssetKeepAliveSubsystem.h" // WBP-pauzemenu-klasse rooten over map-loads (laadtijd-fix)
 #include "World/Atm.h"           // kluis-capaciteit scannen
 #include "UI/HandInfoWidget.h"
 #include "UI/WeedToast.h"
@@ -462,8 +463,11 @@ UInventoryComponent* UPhoneClientComponent::GetOwnerInventory() const
 
 ADoorRetrofitter* UPhoneClientComponent::FindRetro() const
 {
+	// Gecached (weak): de TActorIterator-scan liep bij ELKE caller opnieuw; alleen scannen zolang de
+	// cache invalid is (zelfde patroon als UMapWidget::NativeTick). Helpt alle FindRetro-callers.
+	if (RetroCache.IsValid()) { return RetroCache.Get(); }
 	if (!GetWorld()) { return nullptr; }
-	for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { return *It; }
+	for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { RetroCache = *It; return *It; }
 	return nullptr;
 }
 
@@ -1109,6 +1113,7 @@ void UPhoneClientComponent::EnsureWidget()
 	{
 		// Pauzemenu: gebruik de kit-gestylde WBP-subclass als die bestaat, anders de C++-fallback.
 		UClass* PauseCls = LoadClass<UPauseMenuWidget>(nullptr, TEXT("/Game/UI/Screens/WBP_PauseMenu.WBP_PauseMenu_C"));
+		UAssetKeepAliveSubsystem::Keep(this, PauseCls); // WBP-klasse rooten over map-loads (laadtijd-fix; null-veilig)
 		if (!PauseCls) { PauseCls = UPauseMenuWidget::StaticClass(); }
 		PauseWidget = CreateWidget<UPauseMenuWidget>(PC, PauseCls);
 	}

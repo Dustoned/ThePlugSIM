@@ -53,6 +53,10 @@ class WEEDSHOPCORE_API AGrowPlant : public AActor, public IInteractable
 public:
 	AGrowPlant();
 
+	// Registry van alle levende potten (Add in BeginPlay, Remove in EndPlay): de gear-scans lopen
+	// O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
+	static const TArray<TWeakObjectPtr<AGrowPlant>>& GetAll();
+
 	// Save/load: lees of zet de volledige pot/plant-staat (server-only voor Restore).
 	void CaptureState(FGrowPlantState& Out) const;
 	void RestoreState(const FGrowPlantState& In);
@@ -200,6 +204,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// --- Componenten ---

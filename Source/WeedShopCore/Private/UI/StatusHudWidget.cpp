@@ -181,9 +181,23 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (CashText && GS->GetEconomy())
 	{
 		// Compact (1.0M / 12k / 523) zodat de waarden netjes in de strook passen.
+		// Changed-check: alleen formatteren + SetText als het bedrag echt wijzigde.
 		auto Compact = [](double E) { const double A = FMath::Abs(E); if (A >= 1000000.0) { return FString::Printf(TEXT("%.1fM"), E / 1000000.0); } if (A >= 1000.0) { return FString::Printf(TEXT("%.1fk"), E / 1000.0); } return FString::Printf(TEXT("%.0f"), E); };
-		CashText->SetText(FText::FromString(FString::Printf(TEXT("EUR %s"), *Compact(GS->GetEconomy()->GetBalanceEuros()))));
-		if (BankText) { BankText->SetText(FText::FromString(FString::Printf(TEXT("EUR %s"), *Compact(GS->GetEconomy()->GetBankEuros())))); }
+		const double CashE = GS->GetEconomy()->GetBalanceEuros();
+		if (CashE != LastCashShown)
+		{
+			LastCashShown = CashE;
+			CashText->SetText(FText::FromString(FString::Printf(TEXT("EUR %s"), *Compact(CashE))));
+		}
+		if (BankText)
+		{
+			const double BankE = GS->GetEconomy()->GetBankEuros();
+			if (BankE != LastBankShown)
+			{
+				LastBankShown = BankE;
+				BankText->SetText(FText::FromString(FString::Printf(TEXT("EUR %s"), *Compact(BankE))));
+			}
+		}
 	}
 	if (GS->GetDayCycle())
 	{
@@ -191,8 +205,16 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const int32 H = FMath::Clamp((int32)Hour, 0, 23);
 		const int32 M = FMath::Clamp((int32)((Hour - H) * 60.f), 0, 59);
 		const bool bNight = GS->GetDayCycle()->IsNight();
-		if (DayText) { DayText->SetText(FText::FromString(FString::Printf(TEXT("Day %d"), GS->GetDayCycle()->GetDayNumber()))); }
-		if (TimeText) { TimeText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), H, M))); }
+		if (DayText)
+		{
+			const int32 DayN = GS->GetDayCycle()->GetDayNumber();
+			if (DayN != LastDayShown) { LastDayShown = DayN; DayText->SetText(FText::FromString(FString::Printf(TEXT("Day %d"), DayN))); }
+		}
+		if (TimeText)
+		{
+			const int32 MinKey = H * 60 + M;
+			if (MinKey != LastMinuteShown) { LastMinuteShown = MinKey; TimeText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), H, M))); }
+		}
 
 		// Header-icoon volgt dag/nacht: zon overdag, maan 's nachts (alleen wisselen bij een overgang).
 		if (TimeIcon && bTimeNightShown != (int32)bNight)
@@ -205,7 +227,12 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (GS->GetHeat())
 	{
 		const float H = GS->GetHeat()->GetHeat();
-		if (HeatText) { HeatText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), H))); }
+		if (HeatText)
+		{
+			// RoundHalfToEven = zelfde afronding als printf %.0f -> getoonde int als changed-check.
+			const int32 HShown = (int32)FMath::RoundHalfToEven(H);
+			if (HShown != LastHeatShown) { LastHeatShown = HShown; HeatText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), H))); }
+		}
 		if (HeatBar)
 		{
 			HeatBar->SetPercent(H / 100.f);
@@ -215,19 +242,34 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (GS->GetLeveling())
 	{
 		const ULevelComponent* Lv = GS->GetLeveling();
-		const bool bMax = Lv->GetLevel() >= ULevelComponent::MaxLevel;
-		if (LevelText) { LevelText->SetText(FText::FromString(FString::Printf(TEXT("%d"), Lv->GetLevel()))); }
-		if (MaxBadge) { MaxBadge->SetVisibility(bMax ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+		const int32 Level = Lv->GetLevel();
+		if (Level != LastLevelShown)
+		{
+			LastLevelShown = Level;
+			const bool bMax = Level >= ULevelComponent::MaxLevel;
+			if (LevelText) { LevelText->SetText(FText::FromString(FString::Printf(TEXT("%d"), Level))); }
+			if (MaxBadge) { MaxBadge->SetVisibility(bMax ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+		}
 		if (LevelBar) { LevelBar->SetPercent(Lv->GetLevelFraction()); }
 	}
 
-	// Stoned-chip volgt de telefoon-carrier op de pawn.
-	UPhoneClientComponent* Phone = nullptr;
-	if (APawn* P = GetOwningPlayerPawn()) { Phone = P->FindComponentByClass<UPhoneClientComponent>(); }
+	// Stoned-chip volgt de telefoon-carrier op de pawn (component gecachet: weak + pawn-check).
+	APawn* P = GetOwningPlayerPawn();
+	if (CachedPhonePawn.Get() != P || (P && !CachedPhone.IsValid()))
+	{
+		CachedPhonePawn = P;
+		CachedPhone = P ? P->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+	}
+	UPhoneClientComponent* Phone = CachedPhone.Get();
 	const float SF = Phone ? Phone->GetStonedHudFrac() : 0.f;
 	if (StonedRow)
 	{
-		StonedRow->SetVisibility(SF > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		const int32 VisNow = (SF > 0.f) ? 1 : 0;
+		if (VisNow != LastStonedVisible)
+		{
+			LastStonedVisible = VisNow;
+			StonedRow->SetVisibility(SF > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		}
 	}
 	if (SF > 0.f && Phone)
 	{
@@ -236,7 +278,12 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const int32 Secs = FMath::CeilToInt(Phone->GetStonedHudSecs());
 			const int32 XpBoost = FMath::RoundToInt(Phone->GetStonedHudXpFrac() * 100.f);
-			StonedText->SetText(FText::FromString(FString::Printf(TEXT("%d:%02d  +%d%%"), Secs / 60, Secs % 60, XpBoost)));
+			const int32 Key = Secs * 1000 + XpBoost;
+			if (Key != LastStonedKey)
+			{
+				LastStonedKey = Key;
+				StonedText->SetText(FText::FromString(FString::Printf(TEXT("%d:%02d  +%d%%"), Secs / 60, Secs % 60, XpBoost)));
+			}
 		}
 	}
 }

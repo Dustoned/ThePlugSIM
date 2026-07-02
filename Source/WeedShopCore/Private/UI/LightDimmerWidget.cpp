@@ -144,11 +144,13 @@ void ULightDimmerWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime
 
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	if (!bOpen) { LastSwitch = nullptr; bSliderHeld = false; return; }
+
+	// Pas NA de bOpen-gate: het dicht-paneel hoeft z'n link-label niet elke tick te zetten.
 	if (LinkButtonText)
 	{
-		LinkButtonText->SetText(FText::FromString((P && P->IsLinkModeActive()) ? TEXT("Complete linking") : TEXT("Link lampen")));
+		LinkButtonText->SetText(FText::FromString(P->IsLinkModeActive() ? TEXT("Complete linking") : TEXT("Link lampen")));
 	}
-	if (!bOpen) { LastSwitch = nullptr; bSliderHeld = false; return; }
 
 	// Net geopend (of andere schakelaar): slider op de huidige helderheid van die schakelaar zetten.
 	if (Sw != LastSwitch.Get())

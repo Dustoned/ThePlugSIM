@@ -59,4 +59,18 @@ protected:
 	UPROPERTY() TObjectPtr<UHorizontalBox> ConditionRow;
 	UPROPERTY() TObjectPtr<UHorizontalBox> MoldBadge;
 	UPROPERTY() TObjectPtr<UHorizontalBox> PestBadge;
+
+	// Perf: component-cache (weak + pawn-check) + change-key over alle getoonde afgeronde waarden
+	// (tekst/vis-secties alleen bij wijziging) + per-ring delta-gate op de MID-parameters.
+	TWeakObjectPtr<APawn> CachedCompPawn;
+	TWeakObjectPtr<class UPhoneClientComponent> CachedPhone;
+	TWeakObjectPtr<class UInteractionComponent> CachedInteract;
+	FString LastKey;
+	int32 LastCardVis = -1; // -1 onbekend
+	float LastGrowFrac = -1.f;
+	float LastWaterFrac = -1.f;
+	float LastHealthFrac = -1.f;
+	FLinearColor LastGrowCol = FLinearColor::Transparent;
+	FLinearColor LastWaterCol = FLinearColor::Transparent;
+	FLinearColor LastHealthCol = FLinearColor::Transparent;
 };

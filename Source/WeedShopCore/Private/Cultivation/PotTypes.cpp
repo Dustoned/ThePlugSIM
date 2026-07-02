@@ -48,11 +48,15 @@ static const TCHAR* const GGearItems[] = {
 
 int32 GearUpgradeIndex(FName ItemId)
 {
-	for (int32 i = 0; i < UE_ARRAY_COUNT(GGearItems); ++i)
+	// PERF: FName-cache (1x opgebouwd) i.p.v. 11x FName-constructie (string-hash) per aanroep -
+	// dit zit in de hete pot-gear-scan (elke 0,5s per pot per prop). Uitkomst identiek (-1 = onbekend).
+	static const TArray<FName> GearNames = []
 	{
-		if (ItemId == FName(GGearItems[i])) { return i; }
-	}
-	return -1;
+		TArray<FName> A;
+		for (int32 i = 0; i < UE_ARRAY_COUNT(GGearItems); ++i) { A.Add(FName(GGearItems[i])); }
+		return A;
+	}();
+	return GearNames.IndexOfByKey(ItemId);
 }
 
 FName GearItemForUpgrade(int32 UpgIndex)

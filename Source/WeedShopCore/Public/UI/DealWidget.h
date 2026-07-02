@@ -84,4 +84,8 @@ protected:
 	TWeakObjectPtr<ACustomerBase> LastCustomer;
 	FName LastOffered = NAME_None;
 	bool bSliderHeld = false;
+
+	// Perf: value-key over alle bron-waarden van de UpdateLive-TEKSTEN (State/R/L/A/Offered/Ask/Stock/...);
+	// gelijk = alle SetText/visibility-calls overslaan. De gameplay-regels in NativeTick blijven elke tick.
+	FString LastLiveKey;
 };

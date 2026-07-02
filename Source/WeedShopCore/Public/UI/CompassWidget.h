@@ -41,6 +41,14 @@ protected:
 	FVector HomeWorld = FVector::ZeroVector;
 	bool bHomeFound = false;
 
+	// Perf: klant-SET + home-locatie worden elke 0.25s ververst; bearing/PlaceOnBand blijft per tick.
+	TArray<TWeakObjectPtr<class ACustomerBase>> CachedCustomers;
+	float CustomerCacheAge = 1000.f;
+	TWeakObjectPtr<class UPhoneClientComponent> CachedPhone;
+	TWeakObjectPtr<APawn> CachedPhonePawn;
+	bool bCachedHaveHome = false;
+	float HomeCacheAge = 1000.f;
+
 	static constexpr float BandW = 540.f;
 	static constexpr float HalfFov = 90.f; // toont 180 graden over de balk
 };

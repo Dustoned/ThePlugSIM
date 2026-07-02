@@ -65,6 +65,15 @@ protected:
 
 	TWeakObjectPtr<class ADoorRetrofitter> PackMap; // pack-map-adapter (DoorRetrofitter-capture)
 
+	// Perf: actor-SETS cachen (klanten 0.25s, toonbanken ~2s) — de POSITIES (WorldToCanvas/SetPosition)
+	// worden nog steeds ELKE tick vers gelezen, dus markers bewegen frame-smooth.
+	TArray<TWeakObjectPtr<class ACustomerBase>> CachedCustomers;
+	float CustomerSetAge = 1000.f;
+	TArray<TWeakObjectPtr<class AStoreCounter>> CachedCounters;
+	float CounterSetAge = 1000.f;
+	// NpcLabel-SetText alleen bij naam-wissel (positie blijft per tick).
+	TArray<FString> NpcLabelLastName;
+
 	FVector2D WorldToCanvas(float Wx, float Wy) const;
 	void BuildBlocks();
 	UBorder* AddDot(const FLinearColor& Col, float Sz, int32 ZOrder);

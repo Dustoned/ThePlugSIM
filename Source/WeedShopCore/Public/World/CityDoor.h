@@ -12,6 +12,7 @@ class UStaticMeshComponent;
 class USceneComponent;
 class USphereComponent;
 class UPrimitiveComponent;
+class UWorldSyncComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API ACityDoor : public AActor, public IInteractable
@@ -20,6 +21,10 @@ class WEEDSHOPCORE_API ACityDoor : public AActor, public IInteractable
 
 public:
 	ACityDoor();
+
+	// Registry van alle levende deuren (Add in BeginPlay, Remove in EndPlay): hot paths lopen
+	// O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
+	static const TArray<TWeakObjectPtr<ACityDoor>>& GetAll();
 
 	// Stel de deur in (afmeting + kleur). Hinge zit aan de -X-kant; dicht = paneel langs +X.
 	void Setup(float Width, float Height, const FLinearColor& Color);
@@ -96,7 +101,12 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
 	virtual void Tick(float DeltaSeconds) override;
+
+	// Cache van de gedeelde WorldSync (1x resolven; her-resolven zodra invalid): geen
+	// GetGameState-lookup per deur per frame in Tick.
+	TWeakObjectPtr<const UWorldSyncComponent> CachedWorldSync;
 
 	// Auto-open: deur zwaait open als iemand ervoor staat (speler of NPC die naar buiten komt).
 	UFUNCTION() void OnTriggerBegin(UPrimitiveComponent* Comp, AActor* Other, UPrimitiveComponent* OtherComp, int32 BodyIdx, bool bFromSweep, const FHitResult& Sweep);

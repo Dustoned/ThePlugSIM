@@ -40,4 +40,13 @@ protected:
 
 	// Laatst getoonde set (om alleen te herbouwen als de context wijzigt -> geen flicker).
 	FString LastSig;
+
+	// Perf: component-cache (weak + pawn-check) -> geen 4x FindComponentByClass per tick.
+	TWeakObjectPtr<APawn> CachedCompPawn;
+	TWeakObjectPtr<class UPhoneClientComponent> CachedPhone;
+	TWeakObjectPtr<class UBuildComponent> CachedBuild;
+	TWeakObjectPtr<class UInteractionComponent> CachedInteract;
+	TWeakObjectPtr<class UInventoryComponent> CachedInv;
+	// FocusPrompt changed-check: SetText/visibility alleen bij wijziging.
+	FString LastFocusPrompt;
 };

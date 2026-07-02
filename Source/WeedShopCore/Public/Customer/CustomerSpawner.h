@@ -17,6 +17,10 @@ class WEEDSHOPCORE_API ACustomerSpawner : public AActor
 public:
 	ACustomerSpawner();
 
+	// Registry van alle levende spawners (Add in BeginPlay, Remove in EndPlay): hot paths lopen
+	// O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
+	static const TArray<TWeakObjectPtr<ACustomerSpawner>>& GetAll();
+
 	// Welke klant-klasse gespawnd wordt (leeg = ACustomerBase).
 	UPROPERTY(EditAnywhere, Category = "Spawn")
 	TSubclassOf<ACustomerBase> CustomerClass;
@@ -102,6 +106,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // registry-remove
 	virtual void Tick(float DeltaSeconds) override;
 	void TrySpawn();
 	// Diagnose-monitor (logt of de crowd echt beweegt). Draait alleen na bResidentsSpawned, wat op

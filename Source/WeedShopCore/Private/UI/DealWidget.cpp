@@ -438,6 +438,39 @@ void UDealWidget::UpdateLive()
 	ACustomerBase* C = Ph ? Ph->GetDealCustomer() : nullptr;
 	if (!Ph || !C) { return; }
 
+	// --- Value-key rond de TEKST-updates: alle bron-waarden die hieronder getoond worden. Gelijk aan de
+	// vorige tick = geen enkele SetText/visibility-call nodig -> hele body overslaan (geen visueel verschil).
+	{
+		int32 KStock = 0; float KThc = 0.f, KQPct = 0.f; bool bKHasWeed = false;
+		if (APawn* P = GetOwningPlayerPawn())
+		{
+			if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+			{
+				for (const FInventoryStack& St : Inv->GetStacks())
+				{
+					if (St.ItemId.ToString().StartsWith(TEXT("Bag_")) && St.Quantity > 0) { bKHasWeed = true; break; }
+				}
+				KStock = Inv->BagStockGrams(UInventoryComponent::BagStrain(Ph->GetOfferedProduct()), KThc, KQPct);
+			}
+		}
+		int32 KUnlocked = -1, KTier = -1;
+		if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+			{
+				if (!C->NpcId.IsNone()) { KUnlocked = Reg->IsUnlocked(C->NpcId) ? 1 : 0; KTier = Reg->GetCustomerTier(C->NpcId); }
+			}
+		}
+		const FString Key = FString::Printf(TEXT("%llu|%d|%.2f|%.2f|%.2f|%.2f|%s|%d|%s|%s|%d|%d|%d|%d|%d|%.2f|%.2f|%d|%d|%d"),
+			(unsigned long long)(UPTRINT)C, (int32)C->State, C->Respect, C->Loyalty, C->Addiction, C->AddictionToBuy,
+			*C->SpeechLine, C->DesiredQuantity, *C->DesiredProductId.ToString(),
+			*Ph->GetOfferedProduct().ToString(), Ph->IsOfferingSubstitute() ? 1 : 0,
+			Ph->GetOfferMarketCents(), Ph->GetDealAskCents(),
+			bKHasWeed ? 1 : 0, KStock, KThc, KQPct, bSliderHeld ? 1 : 0, KUnlocked, KTier);
+		if (Key == LastLiveKey) { return; }
+		LastLiveKey = Key;
+	}
+
 	// --- Kop (altijd, voor ELKE NPC): naam, status, stats, dialoog ---
 	FString NpcName = ACityDoor::FriendlyNpcName(C->NpcId); // nette fallback i.p.v. ruwe "Resident_0121"
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
@@ -655,7 +688,7 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (!bOpen)
 	{
 		if (Card) { Card->SetVisibility(ESlateVisibility::Collapsed); }
-		LastCustomer = nullptr; return;
+		LastCustomer = nullptr; LastLiveKey.Reset(); return;
 	}
 
 	// EERST de inhoud (en dus de hoogte) vullen, DAARNA pas de kaart tonen -> geen 1-frame

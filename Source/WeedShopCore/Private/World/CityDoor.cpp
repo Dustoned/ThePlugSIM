@@ -17,6 +17,11 @@
 #include "Engine/World.h"
 #include "EngineUtils.h" // TActorIterator (deur-snap: kozijn zoeken)
 
+// Statische registry van alle levende deuren (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. De DoorRetrofitter-scan loopt hierdoor O(deuren) i.p.v. over alle actors.
+static TArray<TWeakObjectPtr<ACityDoor>> GCityDoorRegistry;
+const TArray<TWeakObjectPtr<ACityDoor>>& ACityDoor::GetAll() { return GCityDoorRegistry; }
+
 ACityDoor::ACityDoor()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -50,6 +55,7 @@ ACityDoor::ACityDoor()
 void ACityDoor::BeginPlay()
 {
 	Super::BeginPlay();
+	GCityDoorRegistry.Add(this);
 	// Stabiel gedeeld id uit de (deterministische) wereld-positie + yaw -> identiek op host en alle clients.
 	DoorSyncId = UWorldSyncComponent::MakeId(GetActorLocation(), GetActorRotation().Yaw);
 	if (Trigger)
@@ -57,6 +63,12 @@ void ACityDoor::BeginPlay()
 		Trigger->OnComponentBeginOverlap.AddDynamic(this, &ACityDoor::OnTriggerBegin);
 		Trigger->OnComponentEndOverlap.AddDynamic(this, &ACityDoor::OnTriggerEnd);
 	}
+}
+
+void ACityDoor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GCityDoorRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACityDoor::OnTriggerBegin(UPrimitiveComponent*, AActor* Other, UPrimitiveComponent*, int32, bool, const FHitResult&)
@@ -287,10 +299,16 @@ void ACityDoor::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	// CO-OP: de speler-open/dicht-stand komt uit de gedeelde WorldSync (door beide spelers via een Server-RPC
 	// gezet) -> elke client toont dezelfde deur. (NPC-auto-open hieronder blijft lokaal/cosmetisch.)
+	// PERF: WorldSync 1x resolven en cachen (her-resolven zodra invalid) i.p.v. GetGameState per
+	// deur per frame - zelfde gedrag, veel goedkoper met honderden deuren.
 	if (DoorSyncId != 0)
 	{
-		const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-		if (const UWorldSyncComponent* WS = GS ? GS->GetWorldSync() : nullptr)
+		if (!CachedWorldSync.IsValid())
+		{
+			const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+			CachedWorldSync = GS ? GS->GetWorldSync() : nullptr;
+		}
+		if (const UWorldSyncComponent* WS = CachedWorldSync.Get())
 		{
 			bOpen = WS->IsDoorOpen(DoorSyncId);
 		}

@@ -20,6 +20,11 @@
 #include "World/ProcessorMachine.h"
 #include "Cultivation/PotTypes.h"
 
+// Statische registry van alle levende props (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. De gear-scans (pot/rek/machine) lopen hierdoor O(props) i.p.v. over alle actors.
+static TArray<TWeakObjectPtr<APlaceableProp>> GPlaceablePropRegistry;
+const TArray<TWeakObjectPtr<APlaceableProp>>& APlaceableProp::GetAll() { return GPlaceablePropRegistry; }
+
 APlaceableProp::APlaceableProp()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -70,7 +75,14 @@ void APlaceableProp::OnConstruction(const FTransform& Transform)
 void APlaceableProp::BeginPlay()
 {
 	Super::BeginPlay();
+	GPlaceablePropRegistry.Add(this);
 	SetupVisual();
+}
+
+void APlaceableProp::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GPlaceablePropRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void APlaceableProp::OnRep_ItemId()

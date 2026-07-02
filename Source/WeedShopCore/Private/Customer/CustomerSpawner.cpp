@@ -29,6 +29,11 @@ static int32 CountRoamers(const TArray<TObjectPtr<ACustomerBase>>& Arr)
 	return N;
 }
 
+// Statische registry van alle levende spawners (zie GetAll in de header): gevuld in BeginPlay,
+// geleegd in EndPlay. Hot paths (DoorRetrofitter-reddingen) lopen hierdoor O(instanties).
+static TArray<TWeakObjectPtr<ACustomerSpawner>> GSpawnerRegistry;
+const TArray<TWeakObjectPtr<ACustomerSpawner>>& ACustomerSpawner::GetAll() { return GSpawnerRegistry; }
+
 ACustomerSpawner::ACustomerSpawner()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -184,6 +189,7 @@ bool ACustomerSpawner::ForceEntryPath(ACustomerBase* C, const TArray<FVector>& P
 void ACustomerSpawner::BeginPlay()
 {
 	Super::BeginPlay();
+	GSpawnerRegistry.Add(this);
 	if (UWorld* World = GetWorld())
 	{
 		NextResidentSpawnTryRealTime = World->GetRealTimeSeconds() + 0.5f;
@@ -193,6 +199,12 @@ void ACustomerSpawner::BeginPlay()
 		// Snel retry-interval zodat de bewoners verschijnen zodra de stad gebouwd is.
 		GetWorldTimerManager().SetTimer(SpawnTimer, this, &ACustomerSpawner::TrySpawn, 1.0f, true, 1.0f);
 	}
+}
+
+void ACustomerSpawner::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GSpawnerRegistry.Remove(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACustomerSpawner::Tick(float DeltaSeconds)

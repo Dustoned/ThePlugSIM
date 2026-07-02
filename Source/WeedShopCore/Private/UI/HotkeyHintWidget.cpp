@@ -120,17 +120,26 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// In de instellingen uit te zetten.
 	const bool bEnabled = AreHintsEnabled();
 	if (Card) { Card->SetVisibility(bEnabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bEnabled) { if (CenterPromptCard) { CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed); } return; }
+	if (!bEnabled) { if (CenterPromptCard) { CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed); LastFocusPrompt.Empty(); } return; }
 
 	APawn* P = GetOwningPlayerPawn();
 	if (!P) { return; }
 
 	FString FocusPrompt; // wat je aankijkt -> gecentreerde popup (niet in de hoek-kaart)
 
-	UPhoneClientComponent* Phone = P->FindComponentByClass<UPhoneClientComponent>();
-	UBuildComponent* Build = P->FindComponentByClass<UBuildComponent>();
-	UInteractionComponent* Interact = P->FindComponentByClass<UInteractionComponent>();
-	UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>();
+	// Component-cache (weak + pawn-check): niet 4x FindComponentByClass per tick.
+	if (CachedCompPawn.Get() != P || !CachedPhone.IsValid() || !CachedBuild.IsValid() || !CachedInteract.IsValid() || !CachedInv.IsValid())
+	{
+		CachedCompPawn = P;
+		CachedPhone = P->FindComponentByClass<UPhoneClientComponent>();
+		CachedBuild = P->FindComponentByClass<UBuildComponent>();
+		CachedInteract = P->FindComponentByClass<UInteractionComponent>();
+		CachedInv = P->FindComponentByClass<UInventoryComponent>();
+	}
+	UPhoneClientComponent* Phone = CachedPhone.Get();
+	UBuildComponent* Build = CachedBuild.Get();
+	UInteractionComponent* Interact = CachedInteract.Get();
+	UInventoryComponent* Inv = CachedInv.Get();
 
 	// Bouw de lijst (key,label) op basis van de context. De herbindbare toetsen komen uit de instellingen.
 	UControlSettings* CS = UControlSettings::Get();
@@ -233,8 +242,10 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 
 	// Gecentreerde interactie-popup bijwerken (onafhankelijk van de hoek-kaart).
-	if (CenterPromptCard && CenterPromptText)
+	// Changed-check: SetText/visibility alleen als de prompt echt wijzigde.
+	if (CenterPromptCard && CenterPromptText && FocusPrompt != LastFocusPrompt)
 	{
+		LastFocusPrompt = FocusPrompt;
 		if (!FocusPrompt.IsEmpty())
 		{
 			CenterPromptText->SetText(FText::FromString(FocusPrompt));

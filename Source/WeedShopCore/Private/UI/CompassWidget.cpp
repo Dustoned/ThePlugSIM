@@ -159,10 +159,24 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	// Alléén een poppetje voor klanten die je NU nodig hebt (afspraak / staat te wachten). Gewone
 	// roamende NPC's staan niet op de kompas (wel als gekleurde puntjes op de kaart).
-	int32 m = 0;
-	for (TActorIterator<ACustomerBase> It(GetWorld()); It && m < Markers.Num(); ++It)
+	// Perf: de actor-SET wordt elke 0.25s herscand (nieuwe klant verschijnt max 0.25s later);
+	// flags + positie + bearing worden nog steeds ELKE tick vers gelezen.
+	CustomerCacheAge += DeltaTime;
+	if (CustomerCacheAge >= 0.25f)
 	{
-		if (!IsValid(*It) || !It->bNeedsPlayer || !It->bShowOnCityMap) { continue; }
+		CustomerCacheAge = 0.f;
+		CachedCustomers.Reset();
+		for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
+		{
+			if (IsValid(*It)) { CachedCustomers.Add(*It); }
+		}
+	}
+	int32 m = 0;
+	for (const TWeakObjectPtr<ACustomerBase>& WkC : CachedCustomers)
+	{
+		if (m >= Markers.Num()) { break; }
+		ACustomerBase* It = WkC.Get();
+		if (!IsValid(It) || !It->bNeedsPlayer || !It->bShowOnCityMap) { continue; }
 		const FVector D = It->GetActorLocation() - PL;
 		if (D.SizeSquared2D() < 100.f) { continue; }
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
@@ -191,14 +205,27 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	for (; cm < CoopMarkers.Num(); ++cm) { CoopMarkers[cm]->SetVisibility(ESlateVisibility::Collapsed); }
 
 	// Home = JOUW woning (gekocht/starter). Alleen tonen als je er een hebt — niet het park-centrum.
-	bool bHaveHome = false;
-	if (APawn* OwnerPawn = GetOwningPlayerPawn())
+	// Perf: FindComponentByClass + GetActiveHomeLocation (kopieert homes-array) elke 0.25s i.p.v.
+	// per tick; het huis staat stil, de bearing wordt nog steeds elke tick vers berekend.
+	HomeCacheAge += DeltaTime;
+	if (HomeCacheAge >= 0.25f)
 	{
-		if (UPhoneClientComponent* Ph = OwnerPawn->FindComponentByClass<UPhoneClientComponent>())
+		HomeCacheAge = 0.f;
+		if (APawn* OwnerPawn = GetOwningPlayerPawn())
 		{
-			bHaveHome = Ph->GetActiveHomeLocation(HomeWorld);
+			if (!CachedPhone.IsValid() || CachedPhonePawn.Get() != OwnerPawn)
+			{
+				CachedPhone = OwnerPawn->FindComponentByClass<UPhoneClientComponent>();
+				CachedPhonePawn = OwnerPawn;
+			}
+			bCachedHaveHome = CachedPhone.IsValid() && CachedPhone->GetActiveHomeLocation(HomeWorld);
+		}
+		else
+		{
+			bCachedHaveHome = false;
 		}
 	}
+	const bool bHaveHome = bCachedHaveHome;
 	if (HomeMarker)
 	{
 		if (bHaveHome)

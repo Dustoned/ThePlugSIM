@@ -274,6 +274,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WeedShop", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UWaterCanComponent> WaterCan;
 
+	/** Interactie-component (staat op de BP-character) — 1x gecached in BeginPlay i.p.v. FindComponentByClass per tick. */
+	UPROPERTY()
+	TObjectPtr<class UInteractionComponent> CachedInteraction;
+
 	/** Straat-werving: geef de aangekeken NPC een gratis sample (toets F). */
 	void GiveSample();
 
