@@ -659,11 +659,15 @@ void UDealWidget::UpdateLive()
 		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.
 		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
 			Qty, *PrettyName(C->DesiredProductId))));
+		// D.1 - de "Wants"-regel in de strain-tagkleur (in-place, geen rebuild).
+		WantsText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
 		return;
 	}
 
 	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
 		Qty, *PrettyName(C->DesiredProductId))));
+	// D.1 - de "Wants"-regel in de strain-tagkleur (in-place, geen rebuild).
+	WantsText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
 
 	const float Pct = float(Ask) / Market * 100.f;
 	PriceText->SetText(FText::FromString(FString::Printf(TEXT("Your price  EUR %d/g   -   %.0f%%   -   total EUR %d"),

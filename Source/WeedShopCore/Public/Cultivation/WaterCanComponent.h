@@ -31,6 +31,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Water")
 	bool HasBottle() const { return GetMaxCharges() > 0; }
 
+	// Hoeveel WaterLevel (0..1) een plant per keer water geven erbij krijgt met de fles die je NU vasthoudt.
+	// Grotere fles = grotere scheut (plastic 0.25, steel 0.35, jerry 0.50, tank 0.70). Fallback 0.25 zonder fles.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Water")
+	float GetWaterPerClick() const;
+
 	// Server: doe 1 slok (FillPerClick) in de vastgehouden fles (gootsteen).
 	void Fill();
 

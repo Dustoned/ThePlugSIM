@@ -42,8 +42,9 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("Bench_Pack"),  TEXT("Packing bench"),       TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.3f, 0.7f, 0.9f), FVector(65.f, 35.f, 45.f), false, 0, false, false, false, /*bIsPackBench*/ true },
 		{ TEXT("Bench_Pack2"), TEXT("Pro packing bench"),   TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.5f, 0.8f, 0.9f), FVector(75.f, 40.f, 45.f), false, 0, false, false, false, true },
 		{ TEXT("Bench_Pack3"), TEXT("Industrial packing table"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.7f, 0.9f, 0.95f), FVector(85.f, 45.f, 47.f), false, 0, false, false, false, true },
-		// Opslag-schap: voorraad-opslag in de shop (binnen). Spawnt een AStorageShelf.
-		{ TEXT("Shelf"), TEXT("Storage shelf"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.5f, 0.4f, 1.7f), FVector(75.f, 20.f, 85.f), false, 0, false, false, false, false, /*bIsShelf*/ true },
+		// Opslag-schap: voorraad-opslag in de shop (binnen). Wand-mount (rug tegen de muur, net als het droogrek)
+		// zodat 'ie niet half door de muur steekt. Spawnt een AStorageShelf.
+		{ TEXT("Shelf"), TEXT("Storage shelf"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.5f, 0.4f, 1.7f), FVector(75.f, 20.f, 85.f), false, 0, false, false, false, false, /*bIsShelf*/ true, false, false, /*bIsWallMount*/ true },
 		// Opslag-kist: laag/breed kistje, ook gewoon opslag (spawnt een AStorageShelf, tier "Chest").
 		{ TEXT("Chest"), TEXT("Storage chest"), TEXT("/Engine/BasicShapes/Cube.Cube"), FVector(1.0f, 0.6f, 0.55f), FVector(50.f, 30.f, 27.f), false, 0, false, false, false, false, /*bIsShelf*/ true },
 		// Gootsteen: waterfles vullen. Spawnt een AWaterSink. Binnen plaatsen.

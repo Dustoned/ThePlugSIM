@@ -805,7 +805,7 @@ void AGrowPlant::WaterAll(APawn* InstigatorPawn)
 		if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.5f, FColor::Orange, TEXT("Water bottle is empty - fill it at the sink.")); }
 		return;
 	}
-	WaterLevel = FMath::Clamp(WaterLevel + 0.6f, 0.f, 1.f);
+	WaterLevel = FMath::Clamp(WaterLevel + Can->GetWaterPerClick(), 0.f, 1.f);
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.f, FColor::Cyan,
@@ -988,11 +988,16 @@ float AGrowPlant::GetEstimatedTotalYield() const
 	if (HasPotUpgrade(10)) { PotMult *= 1.1f; }
 	PotMult *= FMath::Max(1.f, FertYieldMult); // mest-bonus deze cyclus
 	float Total = 0.f;
-	for (const FName& St : SlotStrain)
+	// DISPLAY-schatting: laat de geschatte gram per plek OPLOPEN met de groei-fractie (0..1), zodat de
+	// speler de plant ziet aandikken. De ECHTE oogst-yield (HarvestReady) blijft de volle waarde.
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
 	{
-		if (const FWeedStrainRow* Row = GetStrainRow(St))
+		if (SlotStrain[i].IsNone()) { continue; }
+		if (const FWeedStrainRow* Row = GetStrainRow(SlotStrain[i]))
 		{
-			Total += Row->BaseYieldGrams * CareAvg * SoilMult * PotMult;
+			const float FullYield = Row->BaseYieldGrams * CareAvg * SoilMult * PotMult;
+			// Floor op ~1 g zodra er iets geplant staat (verse zaailing niet lelijk 0 g).
+			Total += FMath::Max(1.f, FullYield * GetSlotFraction(i));
 		}
 	}
 	return Total;

@@ -82,8 +82,8 @@ namespace
 		if (UCharacterMovementComponent* Mv = C->GetCharacterMovement())
 		{
 			Mv->SetAvoidanceEnabled(true);
-			Mv->AvoidanceConsiderationRadius = 400.f; // verder vooruit kijken -> eerder uitwijken (was 300)
-			Mv->AvoidanceWeight = 0.75f;              // steviger aan de kant sliden bij een ontmoeting (was 0.5)
+			Mv->AvoidanceConsiderationRadius = 140.f; // pas dichtbij uitwijken -> geen grote persoonlijke zone (was 400)
+			Mv->AvoidanceWeight = 0.4f;               // zachter aan de kant sliden, niet hard wegduwen (was 0.75)
 		}
 	}
 }

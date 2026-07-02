@@ -547,6 +547,19 @@ float UInventoryComponent::GetUnitWeight(FName ItemId) const
 	if (S.StartsWith(TEXT("Soil_")))   { return 5.f; }   // zak potgrond
 	if (S.StartsWith(TEXT("Pot")))     { return 2.f; }   // lege pot
 	if (S.StartsWith(TEXT("WaterBottle"))) { return 1.f; }
+
+	// CONCENTRATEN + EDIBLE-EINDPRODUCTEN (per gram, prefixes uit ProcessorMachine::OutputPrefixFor).
+	// Compact/geconcentreerd = licht (~0.01 kg/g); edibles/boter zijn verdund met vet = zwaarder.
+	if (S.StartsWith(TEXT("Crystal_")))   { return 0.01f; } // kief/crystals (los, licht)
+	if (S.StartsWith(TEXT("Hash_")))      { return 0.01f; } // geperste hasj (compact)
+	if (S.StartsWith(TEXT("Rosin_")))     { return 0.01f; } // solventless rosin
+	if (S.StartsWith(TEXT("Bubble_")))    { return 0.01f; } // bubble/ice hash
+	if (S.StartsWith(TEXT("Oil_")))       { return 0.01f; } // cannabis-olie
+	if (S.StartsWith(TEXT("Moonrock_")))  { return 0.03f; } // gecoate bud (iets zwaarder dan los concentraat)
+	if (S.StartsWith(TEXT("Baked_")))     { return 0.04f; } // gedecarbde bud voor edibles (verdund)
+	if (S.StartsWith(TEXT("ButterMix_"))) { return 0.04f; } // cannabis-boter (vet = zwaarder)
+	if (S.StartsWith(TEXT("Edible_")))    { return 0.04f; } // edible-eindproduct (verdund)
+
 	return 0.5f;
 }
 

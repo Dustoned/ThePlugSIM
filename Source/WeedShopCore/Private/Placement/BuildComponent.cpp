@@ -78,6 +78,47 @@ namespace
 		}
 		return false;
 	}
+
+	// Steekt een WAND-MOUNT-item (rug tegen de muur) met enig deel DOOR een HAAKSE / hoek-muur? De rug ligt al
+	// strak tegen het geraakte muurvlak; het item kan echter zijdelings (in een hoek) door een dwarsmuur clippen.
+	// We nemen alleen het VOORSTE stuk van de item-box (van de rug tot de voorkant), zodat de eigen draagmuur
+	// NIET meetelt, maar houden de VOLLE breedte + hoogte aan zodat een dwarsmuur die de box snijdt WEL raakt.
+	// bFaceX: het item heeft z'n diepte op lokale X (lichtschakelaar); anders op lokale Y (rek/schap/TV).
+	bool WallItemClipsWall(const UWorld* World, const AActor* Ignore, const FVector& Center, const FVector& BoxHalf, const FQuat& Rot, bool bFaceX)
+	{
+		if (!World) { return false; }
+		// D = muur-normaal de kamer in (langs de diepte-as van het item).
+		const FVector D = Rot.RotateVector(bFaceX ? FVector(1.f, 0.f, 0.f) : FVector(0.f, 1.f, 0.f));
+		const float DepthHalf = bFaceX ? BoxHalf.X : BoxHalf.Y; // halve diepte (rug -> voorkant)
+		const float WidthHalf = bFaceX ? BoxHalf.Y : BoxHalf.X; // halve breedte (langs de muur)
+		// Box = alleen de voorste helft van de diepte: back-vlak op de rug (Center - D*DepthHalf ligt op de draagmuur,
+		// de box-achterkant valt op Center, dus DepthHalf van de draagmuur af). Volle breedte/hoogte behouden.
+		const FVector CheckCenter = Center + D * (DepthHalf * 0.5f);
+		// Hoogte-band iets ingekort (top+bodem) zodat een VLOER/PLAFOND waar het item tegenaan rust NIET meetelt;
+		// een verticale dwarsmuur (~160cm hoog) snijdt de midden-band alsnog. Depth = alleen de voorste helft.
+		const float HalfZBand = FMath::Max(2.f, BoxHalf.Z - 12.f);
+		const FVector LocalHalf = bFaceX
+			? FVector(DepthHalf * 0.5f, WidthHalf, HalfZBand)
+			: FVector(WidthHalf, DepthHalf * 0.5f, HalfZBand);
+		FCollisionObjectQueryParams ObjParams;
+		ObjParams.AddObjectTypesToQuery(ECC_WorldStatic);
+		FCollisionQueryParams QP(SCENE_QUERY_STAT(WeedShopWallClip), false);
+		if (Ignore) { QP.AddIgnoredActor(Ignore); }
+		const FCollisionShape ClipBox = FCollisionShape::MakeBox(FVector(
+			FMath::Max(2.f, LocalHalf.X), FMath::Max(2.f, LocalHalf.Y), LocalHalf.Z));
+		TArray<FOverlapResult> Hits;
+		if (World->OverlapMultiByObjectType(Hits, CheckCenter, Rot, ObjParams, ClipBox, QP))
+		{
+			for (const FOverlapResult& H : Hits)
+			{
+				// Deur/deurblad telt niet als "muur waar je doorheen steekt" (aparte deur-filters vangen dat al).
+				const AActor* HA = H.GetActor();
+				if (HA && HA->IsA(ACityDoor::StaticClass())) { continue; }
+				return true; // een WorldStatic-vlak (dwarsmuur/hoek) snijdt de voorkant van het item
+			}
+		}
+		return false;
+	}
 }
 
 UBuildComponent::UBuildComponent()
@@ -723,13 +764,16 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 						// onterecht). Plus: bij rood de ECHTE reden tonen i.p.v. een oude "Aim at the floor"-hint.
 						const bool bWmOverlap = OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion());
 						const bool bWmHome = CurrentDef.bAllowOutdoors || IsInOwnedHome(Hit.ImpactPoint + D * (CurrentDef.BoxHalf.Y + 40.f));
-						bValidSpot = bWall && !bOnPlaceable && !bOnDoorMesh && !bOnWindow && !bWmOverlap && bWmHome;
+						// Steekt de VOORKANT van het item door een HAAKSE / hoek-muur (WorldStatic)? Dan ongeldig (rood).
+						const bool bWmClip = WallItemClipsWall(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion(), bFaceX);
+						bValidSpot = bWall && !bOnPlaceable && !bOnDoorMesh && !bOnWindow && !bWmOverlap && !bWmClip && bWmHome;
 						if (!bValidSpot)
 						{
 							PlacementHint = !bWall ? TEXT("Aim at a wall")
 								: bOnDoorMesh ? TEXT("Not on a door")
 								: bOnWindow ? TEXT("Not on a window")
 								: bOnPlaceable ? TEXT("Can't place on top of that")
+								: bWmClip ? TEXT("Too close to a corner or wall")
 								: !bWmHome ? TEXT("Only inside your own home")
 								: TEXT("Too close to another object");
 						}
@@ -834,6 +878,26 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				}
 				else
 				{
+					// Rand-cel strakker/blauw: zit de pivot zo dicht tegen een muur dat de item-rand er net
+					// doorheen clipt (trim/dikkere collision -> onnodig rood), duw 'm net genoeg NAAR BINNEN zodat
+					// de rand WallGap (4cm) van de muur af blijft. Zelfde marge als de shift-tak (r~781). Puur
+					// preview-positie (client-side); IsSpotBlocked bepaalt daarna nog steeds geldig/ongeldig.
+					{
+						const bool bSwapW = FMath::IsNearlyEqual(FMath::Fmod(FMath::Abs(PreviewRotation.Yaw), 180.f), 90.f, 45.f);
+						const float EffHX = bSwapW ? CurrentDef.BoxHalf.Y : CurrentDef.BoxHalf.X;
+						const float EffHY = bSwapW ? CurrentDef.BoxHalf.X : CurrentDef.BoxHalf.Y;
+						const float WallGap = 4.f;
+						const FVector TS(PreviewLocation.X, PreviewLocation.Y, PreviewLocation.Z + 30.f);
+						FHitResult HX1, HX2, HY1, HY2;
+						const bool bX1 = GetWorld()->LineTraceSingleByChannel(HX1, TS, TS + FVector(1500.f, 0, 0), ECC_Visibility, Params);
+						const bool bX2 = GetWorld()->LineTraceSingleByChannel(HX2, TS, TS + FVector(-1500.f, 0, 0), ECC_Visibility, Params);
+						if (bX1 && (!bX2 || HX1.Distance <= HX2.Distance)) { const float Lim = HX1.ImpactPoint.X - EffHX - WallGap; if (PreviewLocation.X > Lim) { PreviewLocation.X = Lim; } }
+						else if (bX2) { const float Lim = HX2.ImpactPoint.X + EffHX + WallGap; if (PreviewLocation.X < Lim) { PreviewLocation.X = Lim; } }
+						const bool bY1 = GetWorld()->LineTraceSingleByChannel(HY1, TS, TS + FVector(0, 1500.f, 0), ECC_Visibility, Params);
+						const bool bY2 = GetWorld()->LineTraceSingleByChannel(HY2, TS, TS + FVector(0, -1500.f, 0), ECC_Visibility, Params);
+						if (bY1 && (!bY2 || HY1.Distance <= HY2.Distance)) { const float Lim = HY1.ImpactPoint.Y - EffHY - WallGap; if (PreviewLocation.Y > Lim) { PreviewLocation.Y = Lim; } }
+						else if (bY2) { const float Lim = HY2.ImpactPoint.Y + EffHY + WallGap; if (PreviewLocation.Y < Lim) { PreviewLocation.Y = Lim; } }
+					}
 					const bool bFree = WorldFreeBuild(GetWorld());
 					const bool bFloor = FloorNormalZ > 0.7f;
 					const float FeetZ = OwnerPawn->GetActorLocation().Z - OwnerPawn->GetSimpleCollisionHalfHeight();
@@ -910,7 +974,8 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	float ZOff = 0.f;
 	if (CurrentDef.bIsLamp) { ZOff = -CurrentDef.BoxHalf.Z; }
 	else if (CurrentDef.bIsDryRack) { ZOff = CurrentDef.bIsWallMount ? 0.f : CurrentDef.BoxHalf.Z; }
-	else if (CurrentDef.bIsSink || CurrentDef.bIsPackBench || CurrentDef.bIsShelf || CurrentDef.bIsProcessor || CurrentDef.bIsSafe) { ZOff = CurrentDef.BoxHalf.Z; }
+	// Wand-mount (bv. het schap): Location is al het MIDDEN (preview rekent de muur-offset al uit) -> geen extra Z.
+	else if (CurrentDef.bIsSink || CurrentDef.bIsPackBench || CurrentDef.bIsShelf || CurrentDef.bIsProcessor || CurrentDef.bIsSafe) { ZOff = CurrentDef.bIsWallMount ? 0.f : CurrentDef.BoxHalf.Z; }
 	// pot / atm / generieke prop: root op de vloer (offset 0)
 
 	const bool bUsePreviewActor = PreviewActor.IsValid();
@@ -1092,7 +1157,8 @@ void UBuildComponent::UpdateRemoteGhost()
 	float ZOff = 0.f;
 	if (Def.bIsLamp) { ZOff = -Def.BoxHalf.Z; }
 	else if (Def.bIsDryRack) { ZOff = Def.bIsWallMount ? 0.f : Def.BoxHalf.Z; }
-	else if (Def.bIsSink || Def.bIsPackBench || Def.bIsShelf || Def.bIsProcessor || Def.bIsSafe) { ZOff = Def.BoxHalf.Z; }
+	// Wand-mount (bv. het schap): RepLocation is al het midden -> geen extra Z-offset.
+	else if (Def.bIsSink || Def.bIsPackBench || Def.bIsShelf || Def.bIsProcessor || Def.bIsSafe) { ZOff = Def.bIsWallMount ? 0.f : Def.BoxHalf.Z; }
 
 	if (AActor* P = PreviewActor.Get())
 	{
@@ -1476,6 +1542,13 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Can't place inside another object.")); }
 		return;
 	}
+	// Wand-mount: niet met de voorkant DOOR een haakse / hoek-muur (WorldStatic) steken. Server-parity met de preview (r~725).
+	if (!bUpgrade && Def.bIsWallMount && !Def.bIsStructure
+		&& WallItemClipsWall(World, GetOwner(), Location, Def.BoxHalf, Rotation.Quaternion(), Def.bIsLightSwitch))
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Too close to a corner or wall.")); }
+		return;
+	}
 
 	// Alleen BINNEN (je eigen woning; in free-build overal binnen) - NOOIT buiten, tenzij outdoors-toegestaan.
 	// (IsInOwnedHome regelt zelf de free-build-uitzondering via een binnen-check.)
@@ -1574,8 +1647,9 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	}
 	else if (Def.bIsShelf)
 	{
-		// Opslag-schap: idem, mesh-pivot in het midden -> origin een halve hoogte omhoog.
-		const FTransform ShelfTM(Rotation, Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
+		// Opslag-schap: wand-mount (schap) -> Location is al het midden (preview rekent de muur-offset uit).
+		// Vloer-variant (kist) -> mesh-pivot in het midden, origin een halve hoogte omhoog.
+		const FTransform ShelfTM(Rotation, Def.bIsWallMount ? Location : Location + FVector(0.f, 0.f, Def.BoxHalf.Z));
 		AStorageShelf* Shelf = World->SpawnActorDeferred<AStorageShelf>(
 			AStorageShelf::StaticClass(), ShelfTM,
 			GetOwner(), nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);

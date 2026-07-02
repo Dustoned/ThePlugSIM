@@ -1,7 +1,11 @@
 # check-cook-parity.ps1 - Release-gate: zit alle string-geladen content ECHT in de packaged build?
-# Scant de C++-source op TEXT("/Game/...")-literals en checkt elk pad tegen de staging-manifest
-# van de laatste UAT-package-run. Vangt de klassieke stille cook-miss (LoadObject/LoadClass-pad
-# dat niet onder DirectoriesToAlwaysCook valt -> asset ontbreekt stilletjes in Shipping).
+# Scant de C++-source op TEXT("/Game/...")-literals, de Data/*.csv EN de baked .txt-datafiles
+# (Content/BakedData/**, o.a. RoomTemplates die deur/kamer-meshes string-laden via RoomStamper)
+# en checkt elk /Game-pad tegen de staging-manifest van de laatste UAT-package-run. Vangt de
+# klassieke stille cook-miss (LoadObject/LoadClass-pad dat niet onder DirectoriesToAlwaysCook valt
+# -> asset ontbreekt stilletjes in Shipping). De BakedData-.txt-scan is toegevoegd omdat die tekst
+# wel als los UFS-bestand gestaged wordt (DefaultGame.ini) maar de uassets waar 'ie naar wijst NIET
+# automatisch mee-cooken - een blinde vlek waardoor een template-mesh ongemerkt kon wegvallen.
 # Gebruik: powershell -File Tools\check-cook-parity.ps1   (exit 1 = MISSING gevonden, release blokkeren)
 
 $ErrorActionPreference = 'Stop'
@@ -28,10 +32,21 @@ $rxCsv = [regex]'(/Game/[A-Za-z0-9_\-\./ ]+)'
 if (Test-Path $DataDir) {
 	Get-ChildItem -Path $DataDir -Filter *.csv | ForEach-Object {
 		$txt = [System.IO.File]::ReadAllText($_.FullName)
-		foreach ($m in $rxCsv.Matches($txt)) { [void]$Paths.Add($m.Groups[1].Value) }
+		# .TrimEnd() - de regex staat spaties toe (paden als "new models") en pikt zo een naloop-spatie
+		# aan het regel-eind mee; die zou de manifest-match ("... .uasset") onterecht laten falen.
+		foreach ($m in $rxCsv.Matches($txt)) { [void]$Paths.Add($m.Groups[1].Value.TrimEnd()) }
 	}
 }
-Write-Host ("{0} unieke /Game-paden gevonden in Source + Data" -f $Paths.Count)
+# Baked .txt-datafiles (RoomTemplates/RoomStamps/RoomJobs e.d.): string-geladen mesh/material-paden.
+# Deze tekst wordt als los UFS-bestand gestaged, maar de gerefereerde uassets cooken NIET vanzelf mee.
+$BakedDir = Join-Path $Proj 'Content\BakedData'
+if (Test-Path $BakedDir) {
+	Get-ChildItem -Path $BakedDir -Recurse -Filter *.txt -ErrorAction SilentlyContinue | ForEach-Object {
+		$txt = [System.IO.File]::ReadAllText($_.FullName)
+		foreach ($m in $rxCsv.Matches($txt)) { [void]$Paths.Add($m.Groups[1].Value.TrimEnd()) }
+	}
+}
+Write-Host ("{0} unieke /Game-paden gevonden in Source + Data + BakedData" -f $Paths.Count)
 
 # --- 3. Elk pad checken: als asset (.uasset/.umap) OF als map-prefix (dan is 't geen miss) ---
 $Missing = @()

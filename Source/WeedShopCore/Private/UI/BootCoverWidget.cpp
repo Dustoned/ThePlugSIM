@@ -27,6 +27,10 @@
 // zelfde achtergrond, fonts (FCoreStyle), kleuren, layout, progress bar + de GEDEELDE laad-timer/tekst.
 // Zo zie je geen verschil bij de overgang van het ene naar het andere laadscherm.
 
+// Seconden per laad-regel. MOET identiek zijn aan GLoadLineSeconds in WeedShopCore.cpp: beide schermen delen
+// dezelfde verstreken tijd E, dus een afwijkende deler zou de getoonde regels laten desyncen.
+static const float GLoadLineSeconds = 3.0f;
+
 TSharedRef<SWidget> UBootCoverWidget::RebuildWidget()
 {
 	if (WidgetTree && !WidgetTree->RootWidget)
@@ -119,7 +123,7 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bReady && ReadyAt < 0.f) { ReadyAt = E; UE_LOG(LogTemp, Verbose, TEXT("[COVER] floor-ready @E=%.1f"), E); }
 
 	// Zelfde tekst-formule als de movie (deterministisch) -> bij de overgang exact dezelfde regel.
-	const int32 Step = (int32)(E / 1.6f);
+	const int32 Step = (int32)(E / GLoadLineSeconds);
 	if (Step != LastStep && StatusText)
 	{
 		LastStep = Step;

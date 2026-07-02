@@ -174,8 +174,10 @@ void UContactsComponent::SendRandomAppointment()
 	float Now = 0.f, Length = 1800.f;
 	GetCycleTime(Now, Length);
 
-	// Afspraak 60-240 sec in de toekomst (binnen de cyclus).
-	const float Offset = FMath::FRandRange(60.f, 240.f);
+	// Afspraak in de toekomst (binnen de cyclus). Ondergrens = antwoord-venster + marge (ApptOffsetMinSec,
+	// ~210s) zodat de gevraagde tijd ALTIJD na het opgeef-venster (GiveUpDelay 150s) valt - anders is de
+	// afspraak al verstreken voordat je kon reageren (D.13).
+	const float Offset = FMath::FRandRange(ApptOffsetMinSec, ApptOffsetMaxSec);
 	const float ApptTime = FMath::Fmod(Now + Offset, Length);
 
 	// Formatteer als HH:MM met DEZELFDE klok als de HUD (dag/nacht-split).
@@ -313,8 +315,10 @@ void UContactsComponent::CheckAppointments()
 	// --- Onbeantwoorde verzoeken: na een tijdje "you there?", daarna opgeven (met respect/loyaliteit-straf). ---
 	{
 		const float RealNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
-		constexpr float NudgeDelay = 60.f;     // herinnering na 1 min geen antwoord
-		constexpr float GiveUpDelay = 150.f;   // geeft op na 2,5 min geen antwoord
+		// Gedeelde constanten (D.13): NudgeDelay < GiveUpDelay < min-afspraak-offset (ApptOffsetMinSec),
+		// zodat een net-op-tijd geaccepteerde afspraak nooit al verstreken is.
+		constexpr float NudgeDelay = NudgeDelaySec;       // herinnering na 1 min geen antwoord
+		constexpr float GiveUpDelay = ResponseWindowSec;  // geeft op na 2,5 min geen antwoord
 		UNpcRegistryComponent* Reg = nullptr;
 		if (const AWeedShopGameState* GSc = Cast<AWeedShopGameState>(GetOwner())) { Reg = GSc->GetNpcRegistry(); }
 
@@ -357,8 +361,15 @@ void UContactsComponent::CheckAppointments()
 		{
 			continue;
 		}
-		// Binnen 2 sec van de afspraaktijd -> aankondigen.
-		if (FMath::Abs(Now - Msg.AppointmentTimeOfDay) <= 2.f)
+		// Aankondigen zodra de afspraaktijd is GEPASSEERD, binnen een ruimere marge (AnnounceWindowSec) -
+		// wrap-veilig over de cyclus-grens. Een strak +-2s-venster miste een net-te-laat geaccepteerde
+		// afspraak (spawnde dan pas een hele cyclus later); dit venster vangt 'm alsnog op (D.13).
+		// Diff in [0, AnnounceWindowSec] = zojuist gepasseerd. Wrap: verschil kan bij een cyclus-grens
+		// als bijna-Length lezen, dus terugbrengen naar het kortste teken (Length eraf als > Length/2).
+		float PassedBy = Now - Msg.AppointmentTimeOfDay;
+		if (PassedBy < -Length * 0.5f) { PassedBy += Length; }      // net na de grens gewrapt: alsnog zojuist gepasseerd
+		else if (PassedBy > Length * 0.5f) { PassedBy -= Length; }  // net voor de grens: negatief (nog niet gepasseerd)
+		if (PassedBy >= -2.f && PassedBy <= AnnounceWindowSec)
 		{
 			Msg.bAnnounced = true;
 			UE_LOG(LogWeedShop, Log, TEXT("Appointment with %s is now."), *Msg.SenderName.ToString());
@@ -403,9 +414,18 @@ static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
 		}
 	}
 	DropRoomCands(Cands);
-	// Geen (bruikbare) gemarkeerde plekken -> val terug op de winkels (al gemarkeerd door de speler,
-	// dus logisch + bereikbaar) - met dezelfde kamer-filter. PERF: balie-registry i.p.v. iterator
-	// (per-proces registry -> op wereld filteren, PIE/co-op-in-1-proces).
+	// Geen gemarkeerde meet-spots -> automatische buiten-wachtplekken bij de commerciele deuren over de
+	// hele map (winkel/garage/lobby/steeg). Zo krijgt een YouGoToThem-afspraak altijd een logische map-deur
+	// i.p.v. alleen de eigen woning. Retro filtert woon-kamers zelf al weg; DropRoomCands als extra vangnet.
+	if (Cands.Num() == 0 && Retro)
+	{
+		TArray<FVector> WaitSpots;
+		Retro->GetOutdoorWaitSpots(WaitSpots);
+		Cands.Append(WaitSpots);
+		DropRoomCands(Cands);
+	}
+	// Nog niks -> val terug op de winkels (al gemarkeerd door de speler, dus logisch + bereikbaar) - met
+	// dezelfde kamer-filter. PERF: balie-registry i.p.v. iterator (per-proces registry -> op wereld filteren).
 	if (Cands.Num() == 0)
 	{
 		for (const TWeakObjectPtr<AStoreCounter>& WSc : AStoreCounter::GetAll()) { AStoreCounter* Sc = WSc.Get(); if (IsValid(Sc) && Sc->GetWorld() == W) { Cands.Add(Sc->GetActorLocation()); } }

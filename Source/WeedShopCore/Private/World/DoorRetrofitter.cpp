@@ -5339,6 +5339,56 @@ bool ADoorRetrofitter::GetCompDeliverySpot(bool bJoiner, FVector& Out) const
 	return true;
 }
 
+void ADoorRetrofitter::GetOutdoorWaitSpots(TArray<FVector>& Out) const
+{
+	UWorld* W = GetWorld();
+	if (!W) { Out.Reset(); return; }
+
+	// Levende deuren tellen via de per-proces registry MET GetWorld()-filter (PIE/co-op-in-1-proces).
+	const TArray<TWeakObjectPtr<ACityDoor>>& AllDoors = ACityDoor::GetAll();
+	int32 LiveCount = 0;
+	for (const TWeakObjectPtr<ACityDoor>& WD : AllDoors)
+	{
+		const ACityDoor* D = WD.Get();
+		if (IsValid(D) && D->GetWorld() == W) { ++LiveCount; }
+	}
+
+	// Cache: herbouw alleen als 't deur-aantal wijzigt (laat-gestreamde gebouwen brengen deuren bij).
+	if (bWaitSpotsBuilt && LiveCount == WaitSpotsDoorCount)
+	{
+		Out = WaitSpots;
+		return;
+	}
+
+	WaitSpots.Reset();
+	for (const TWeakObjectPtr<ACityDoor>& WD : AllDoors)
+	{
+		const ACityDoor* D = WD.Get();
+		if (!IsValid(D) || D->GetWorld() != W) { continue; }
+
+		// Alleen commerciele/niet-woning-deuren: winkel/garage/lobby/steeg. Woning-deuren hebben een
+		// appartement-nummer (verdieping*100+unit) of zijn een speler-huis; die vallen af.
+		// (Koopbare panden hebben ook een AptNumber != 0, dus die worden hierdoor eveneens uitgesloten.)
+		if (D->GetAptNumber() != 0 || D->IsPlayerHome()) { continue; }
+
+		// Stoep-punt net BUITEN de deur: zelfde 150-cm-formule als GetCompDeliverySpot/FindDeliveryPoint.
+		// Zonder interieur-anker gebruiken we de deur-voorwaartse richting; kies de kant die NIET binnen
+		// een woon-kamer valt (zodat we nooit binnen een kamer belanden).
+		const FVector DoorLoc = D->GetActorLocation();
+		FVector Fwd = D->GetActorForwardVector(); Fwd.Z = 0.f; Fwd = Fwd.GetSafeNormal();
+		if (Fwd.IsNearlyZero()) { Fwd = FVector(1.f, 0.f, 0.f); }
+		FVector Spot = DoorLoc + Fwd * 150.f;
+		if (IsInsideHomeRoom(Spot, 0.f)) { Spot = DoorLoc - Fwd * 150.f; } // andere kant proberen
+		if (IsInsideHomeRoom(Spot, 0.f)) { continue; } // beide kanten binnen -> deze deur overslaan
+
+		WaitSpots.Add(Spot);
+	}
+
+	WaitSpotsDoorCount = LiveCount;
+	bWaitSpotsBuilt = true;
+	Out = WaitSpots;
+}
+
 void ADoorRetrofitter::GetBeachPropertyOffers(TArray<FCityPropertyOffer>& Out) const
 {
 	Out.Reset();

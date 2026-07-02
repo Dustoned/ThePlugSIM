@@ -40,6 +40,9 @@ static bool GCityRetroActive = false; // er draait een DoorRetrofitter in deze w
 static bool GBootLoading = false;     // boot-laadscherm (eerste map -> hoofdmenu) actief -> EnsureWidget maakt geen cover
 static double GLoadStartSeconds = 0.0;
 static uint32 GLoadSeed = 0; // per-launch seed -> elke keer andere laad-regels (gedeeld door movie + cover)
+// Seconden per laad-regel. MOET identiek zijn aan de kopie in BootCoverWidget.cpp: movie-scherm en UMG-cover
+// delen dezelfde verstreken tijd E; een afwijkende deler zou de getoonde regels laten desyncen.
+static const float GLoadLineSeconds = 3.0f;
 void WeedShop_RequestGameLoadingScreen()
 {
 	GShowGameLoadingScreen = true;
@@ -100,9 +103,26 @@ FString WeedShop_LoadLine(int32 Step)
 	// Step + per-launch seed door een mix-hash -> elke game-start een andere volgorde, maar deterministisch
 	// per (Step, seed) zodat movie en cover exact dezelfde regel tonen. Eerste regel altijd "Building the
 	// city..." (Step 0, seed 0-pad) zou saai zijn -> we mengen de seed er ook in Step 0 doorheen.
-	uint32 H = (uint32)Step * 2654435761u + GLoadSeed;
-	H ^= H >> 13; H *= 3266489917u; H ^= H >> 16;
-	return L[(int32)(H % (uint32)L.Num())];
+	// Pure hash-functie: index enkel uit (Step, GLoadSeed, salt) -> movie en cover berekenen exact dezelfde
+	// regel zonder gedeelde runtime-state (elk widget houdt alleen z'n eigen LastStep bij).
+	auto IndexFor = [&L](int32 InStep, uint32 Salt) -> int32
+	{
+		uint32 H = (uint32)InStep * 2654435761u + GLoadSeed + Salt;
+		H ^= H >> 13; H *= 3266489917u; H ^= H >> 16;
+		return (int32)(H % (uint32)L.Num());
+	};
+	int32 Idx = IndexFor(Step, 0u);
+	// Anti-herhaal: nooit 2x dezelfde regel achter elkaar. Deterministisch (ook de vorige index is puur uit
+	// Step-1 herleid) -> beide schermen komen op dezelfde vervangende regel uit. Max ~4 pogingen, dan accepteren.
+	if (Step > 0 && L.Num() > 1)
+	{
+		const int32 PrevIdx = IndexFor(Step - 1, 0u);
+		for (int32 Attempt = 1; Attempt <= 4 && Idx == PrevIdx; ++Attempt)
+		{
+			Idx = IndexFor(Step, (uint32)Attempt * 0x9E3779B9u);
+		}
+	}
+	return L[Idx];
 }
 
 void WeedShop_StopGameLoadingScreen()
@@ -515,7 +535,7 @@ public:
 		// Zelfde EERLIJKE creep als de cover (UBootCoverWidget): vloeiend tot ~55% terwijl de map streamt.
 		// De movie verdwijnt zodra het level klaar is; de cover loopt vanaf exact deze stand verder.
 		if (Bar.IsValid()) { Bar->SetPercent(bReady ? 1.f : FMath::Clamp(0.55f * (1.f - FMath::Exp(-E / 6.f)), 0.04f, 1.f)); }
-		const int32 Step = (int32)(E / 1.6f);
+		const int32 Step = (int32)(E / GLoadLineSeconds);
 		if (Step != LastStep && StatusText.IsValid())
 		{
 			LastStep = Step;

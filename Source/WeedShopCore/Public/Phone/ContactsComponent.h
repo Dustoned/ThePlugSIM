@@ -115,6 +115,17 @@ class WEEDSHOPCORE_API UContactsComponent : public UActorComponent
 public:
 	UContactsComponent();
 
+	// --- GEDEELDE AFSPRAAK-TIMING (D.13) ---
+	// Een verzoek wacht ResponseWindowSec real-sec op antwoord voordat de klant opgeeft (GiveUpDelay).
+	// De gevraagde afspraak-offset (in cyclus-seconden) moet ALTIJD na dat antwoord-venster vallen,
+	// anders is de afspraaktijd al verstreken voordat je kon reageren. PhoneWidget's aftel-balk leest
+	// deze constanten zodat balk en cancel niet uiteenlopen.
+	static constexpr float ResponseWindowSec = 150.f; // real-sec dat een verzoek open blijft (== GiveUpDelay)
+	static constexpr float NudgeDelaySec = 60.f;       // "you there?"-herinnering na deze real-sec zonder antwoord
+	static constexpr float ApptOffsetMinSec = ResponseWindowSec + 60.f; // ondergrens gevraagde offset (cyclus-sec) = 210
+	static constexpr float ApptOffsetMaxSec = 360.f;   // bovengrens gevraagde offset (cyclus-sec)
+	static constexpr float AnnounceWindowSec = 30.f;   // ruimere "gepasseerd binnen deze marge"-marge voor de afspraak-aankondiging
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	// Hoe vaak (seconden) een willekeurig contact een afspraak-bericht stuurt.

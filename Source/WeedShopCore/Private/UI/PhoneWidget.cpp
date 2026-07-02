@@ -146,7 +146,7 @@ namespace
 
 	// Berichten-body als WrapBox van losse woorden, met de BELANGRIJKE woorden VETGEDRUKT: alles met een
 	// cijfer (grams, % THC, prijs, tijd) en strain-/product-woorden. Zo springt eruit wát en hoeveel ze vragen.
-	UWidget* MakeRichBody(UWidgetTree* Tree, const FString& Body, int32 Size, const FLinearColor& Col, const FString& BoldExtra = FString())
+	UWidget* MakeRichBody(UWidgetTree* Tree, const FString& Body, int32 Size, const FLinearColor& Col, const FString& BoldExtra = FString(), const FLinearColor& ExtraCol = FLinearColor(1.f, 1.f, 1.f))
 	{
 		// Per \n-regel een WRAPBOX (breekt lange regels netjes af BINNEN de bubbel i.p.v. eruit te lopen).
 		// Belangrijke woorden VET: getallen/%/tijd (9g, 13%, 11:14), ALL-CAPS termen (VIP, THC), EN de strain/product
@@ -169,14 +169,15 @@ namespace
 			Line.ParseIntoArray(Words, TEXT(" "), true);
 			// Woorden met dezelfde stijl samenvoegen tot 1 TextBlock (minder widgets = goedkopere telefoon-draw),
 			// maar geknipt op ~16 tekens zodat de WrapBox lange regels nog steeds binnen de bubbel afbreekt.
-			FString Run; bool bRunBold = false; int32 RunLen = 0;
+			FString Run; bool bRunBold = false; bool bRunExtra = false; int32 RunLen = 0;
 			auto Flush = [&]()
 			{
 				if (Run.IsEmpty()) { return; }
 				UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
 				T->SetText(FText::FromString(Run));
 				T->SetFont(FCoreStyle::GetDefaultFontStyle(bRunBold ? "Bold" : "Regular", Size));
-				T->SetColorAndOpacity(FSlateColor(bRunBold ? FLinearColor(1.f, 1.f, 1.f) : Col));
+				// Strain/product-run: vet EN in de strain-tagkleur; ander vet = wit; rest = Col.
+				T->SetColorAndOpacity(FSlateColor(bRunExtra ? ExtraCol : (bRunBold ? FLinearColor(1.f, 1.f, 1.f) : Col)));
 				WB->AddChildToWrapBox(T);
 				Run.Reset(); RunLen = 0;
 			};
@@ -198,8 +199,10 @@ namespace
 					bExtra = Core.Len() >= 2 && ExtraWords.Contains(Core);
 				}
 				const bool bBold = bDigit || bAllUpper || bExtra;
-				if (!Run.IsEmpty() && (bBold != bRunBold || RunLen + W.Len() + 1 > 16)) { Flush(); }
-				if (Run.IsEmpty()) { bRunBold = bBold; }
+				// Ook op bExtra breken: het gekleurde strain-woord mag NIET met omliggende vette getallen
+				// in EEN TextBlock belanden (die zijn wit), anders krijgt de hele run de strain-kleur.
+				if (!Run.IsEmpty() && (bBold != bRunBold || bExtra != bRunExtra || RunLen + W.Len() + 1 > 16)) { Flush(); }
+				if (Run.IsEmpty()) { bRunBold = bBold; bRunExtra = bExtra; }
 				Run += W; Run += TEXT(" "); RunLen += W.Len() + 1;
 			}
 			Flush();
@@ -994,19 +997,21 @@ bool UPhoneWidget::GetApptUrgency(FName ContactId, float& OutFrac, int32& OutSec
 		if (M.AppointmentTimeOfDay < 0.f) { continue; } // geen afspraak-bericht -> geen balk
 		if (M.Status == 0)
 		{
-			// Fase 2: wacht op JOUW antwoord (accept/decline) - telt af tot de klant opgeeft (150s). EERST dit.
-			const float Left = 150.f - (NowReal - M.SentRealTime);
-			OutFrac = FMath::Clamp(Left / 150.f, 0.f, 1.f);
+			// Fase 2: wacht op JOUW antwoord (accept/decline) - telt af tot de klant opgeeft. Leest de
+			// gedeelde ContactsComponent-constante zodat de balk NOOIT uiteenloopt met de echte cancel (D.13).
+			const float Left = UContactsComponent::ResponseWindowSec - (NowReal - M.SentRealTime);
+			OutFrac = FMath::Clamp(Left / UContactsComponent::ResponseWindowSec, 0.f, 1.f);
 			OutSecsLeft = FMath::CeilToInt(FMath::Max(0.f, Left));
 			OutPhase = 2;
 			return true;
 		}
 		if (M.Status == 1 && Day)
 		{
-			// Fase 0: geaccepteerd, klant nog niet gespawnd -> tijd tot het afspraak-MOMENT (vast 240s-venster).
+			// Fase 0: geaccepteerd, klant nog niet gespawnd -> tijd tot het afspraak-MOMENT. Deler = de max
+			// afspraak-offset (gedeelde constante) zodat de balk-schaal meeloopt met de echte offset-range (D.13).
 			float Remaining = M.AppointmentTimeOfDay - NowDay;
 			if (Remaining < 0.f) { Remaining += Length; }
-			OutFrac = FMath::Clamp(Remaining / 240.f, 0.f, 1.f);
+			OutFrac = FMath::Clamp(Remaining / UContactsComponent::ApptOffsetMaxSec, 0.f, 1.f);
 			OutSecsLeft = FMath::CeilToInt(Remaining);
 			OutClockMins = Con->ClockMinutesOf(M.AppointmentTimeOfDay); // kloktijd van de afspraak (bv. 11:00)
 			OutPhase = 0;
@@ -1463,7 +1468,9 @@ void UPhoneWidget::RefreshChatThread()
 			// Strain/product ook altijd vet: zelfde "pretty name minus bag" als waarmee de body is opgebouwd.
 			FString BoldStrain;
 			if (!WantProduct.IsNone()) { BoldStrain = WeedUI::PrettyItemName(WantProduct).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase); }
-			UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, WeedUI::ColText(), BoldStrain);
+			// D.1 - het strain-woord vet EN in de strain-tagkleur; overige vette woorden blijven wit.
+			const FLinearColor StrainCol = WantProduct.IsNone() ? FLinearColor(1.f, 1.f, 1.f) : WeedUI::TagColorForItem(WantProduct, 0.85f, 0.75f);
+			UWidget* BodyT = MakeRichBody(WidgetTree, Body, 12, WeedUI::ColText(), BoldStrain, StrainCol);
 			UVerticalBox* BubVB = WidgetTree->ConstructWidget<UVerticalBox>();
 			BubVB->AddChildToVerticalBox(BodyT);
 			// Tijdstempel op ECHTE tijd ("Xm ago") i.p.v. de in-game klok (die liep te snel).
@@ -2184,7 +2191,7 @@ void UPhoneWidget::UpdateListBarsLive()
 void UPhoneWidget::UpdateWaitBarLive()
 {
 	if (!WaitBar || WaitBarSentTime < 0.f || !GetWorld()) { return; }
-	const float Total = 150.f; // GiveUpDelay in ContactsComponent: na 150s zonder antwoord geeft de klant op
+	const float Total = UContactsComponent::ResponseWindowSec; // GiveUpDelay in ContactsComponent: na deze real-sec geeft de klant op
 	const float Elapsed = GetWorld()->GetTimeSeconds() - WaitBarSentTime;
 	const float Frac = FMath::Clamp(1.f - Elapsed / Total, 0.f, 1.f);
 	WaitBar->SetPercent(Frac);

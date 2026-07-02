@@ -103,8 +103,9 @@ ACustomerBase::ACustomerBase()
 		Move->bUseRVOAvoidance = true;             // ontwijk elkaar/de speler -> niet vastlopen
 		// Kleinere consideration-radius: ze ontwijken elkaar pas als ze ECHT dichtbij zijn i.p.v. al van ver om
 		// elkaar heen te dansen (dat veroorzaakte het van-plek-wisselen + samen rondjes draaien).
-		Move->AvoidanceConsiderationRadius = 90.f;
-		Move->AvoidanceWeight = 0.5f;
+		// Gelijkgetrokken met MakeWalkerCheap zodat default en override niet uiteenlopen.
+		Move->AvoidanceConsiderationRadius = 140.f;
+		Move->AvoidanceWeight = 0.4f;
 	}
 	// (Geen per-NPC navmesh-invoker meer: één centrale invoker dekt de hele map,
 	//  dat schaalt veel beter naar 40+ NPC's dan 40 losse invokers.)

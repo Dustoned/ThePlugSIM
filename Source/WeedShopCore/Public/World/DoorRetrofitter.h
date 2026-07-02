@@ -65,6 +65,13 @@ public:
 	// False zolang de competitive-geometrie nog niet berekend is (bCompHomesReady).
 	bool GetCompDeliverySpot(bool bJoiner, FVector& Out) const;
 
+	// --- BUITEN-WACHTPLEKKEN voor afspraak-NPC's ("Jij gaat langs") ---
+	// Stoep-punten net BUITEN de commerciele/niet-woning-deuren op de map (winkel/garage/lobby/steeg),
+	// verspreid over de hele beach-strip. Zo krijgt een YouGoToThem-afspraak automatisch een logische
+	// map-deur om bij te wachten i.p.v. alleen de eigen woning/markers. Filtert woon-kamers eruit.
+	// Gecachet (bWaitSpotsBuilt); herbouwt zodra het deur-aantal wijzigt (laat-gestreamde gebouwen).
+	void GetOutdoorWaitSpots(TArray<FVector>& Out) const;
+
 	// --- KAMER-GUARD: in een woon-KAMER hoort nooit zomaar een NPC ---
 	// True als P (met kleine marge) binnen een geregistreerde woon-/kamer-box ligt: de gemeten
 	// starter-kamer, ALLE woningen uit de beach-registry (ook niet-gekochte units) en de
@@ -286,6 +293,12 @@ protected:
 	int32 CloneLogCooldown = 0;
 	bool bFogTamed = false; // basis-scenario-fog 1x getemd (zon-gloed eruit)
 	TSet<TWeakObjectPtr<class ULocalLightComponent>> IndoorLightsFixed; // static -> movable gezet
+
+	// Cache voor GetOutdoorWaitSpots (const-method -> mutable): stoep-punten buiten de commerciele
+	// deuren. Herbouwt zodra het levende-deur-aantal wijzigt (laat-gestreamde gebouwen).
+	mutable TArray<FVector> WaitSpots;
+	mutable bool bWaitSpotsBuilt = false;
+	mutable int32 WaitSpotsDoorCount = -1;
 
 	// Kaart-capture (lazy aangemaakt bij de eerste CaptureMapNow).
 	void EnsureMapCapture();

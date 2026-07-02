@@ -577,11 +577,13 @@ void ADayNightController::ApplyUdsLook()
 	SetUdsBool(FName(TEXT("Apply Exposure Settings")), true); // UDS stuurt de exposure (UIT zetten blies de vloer wit + maakte de dag donker -> de UDS-exposure is juist correct voor de UDS-sky)
 	SetUdsDouble(FName(TEXT("Exposure Bias Day")), UdsExpDay);
 	SetUdsDouble(FName(TEXT("Exposure Bias Dawn/Dusk")), UdsExpDawnDusk);
-	SetUdsDouble(FName(TEXT("Exposure Bias Night")), UdsExpNight);
+	// D.5 min-licht-vloer: clamp de ONDERKANT vlak voor UDS zodat de nacht nooit volledig zwart wordt
+	// (rond 01:00 zakte de MANUAL exposure naar zwart). Sliders blijven werken; alleen de bodem is begrensd.
+	SetUdsDouble(FName(TEXT("Exposure Bias Night")), FMath::Max(UdsExpNight, -1.2f));
 	SetUdsDouble(FName(TEXT("Extra Night Brightness when Cloudy")), UdsExtraNightCloudy);
 	SetUdsDouble(FName(TEXT("Stars Intensity")), UdsStars);
 	SetUdsDouble(FName(TEXT("Nebula Intensity")), UdsNebula);
-	SetUdsDouble(FName(TEXT("Night Sky Glow")), UdsNightGlow);
+	SetUdsDouble(FName(TEXT("Night Sky Glow")), FMath::Max(UdsNightGlow, 1.0f));
 	// Cloud Coverage/Fog bewust NIET op de Sky aanraken (UDW stuurt die via de weer-state).
 	CallUdsUpdate();
 }
@@ -999,7 +1001,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// door de auto-exposure weer opgeblazen tot daglicht onder een zwarte hemel. Skylight bijna
 		// uit; alle overige lichten 7% (de emissive strips van de map blijven vanzelf - materiaal).
 		const float SunMul = 0.f;                           // map-zonnen permanent uit: onze bewegende zon is DE zon
-		const float SkyMul = FMath::Lerp(0.02f, 1.f, MinDayF);
+		const float SkyMul = FMath::Lerp(0.10f, 1.f, MinDayF); // D.5: nacht-vloer omhoog (was 0.02) - hemel nooit pikkedonker
 		if (bUpdateLights)
 		for (FDimLight& D : DimLights)
 		{
@@ -1035,7 +1037,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// hemel-cubemap. Ongated zodat een eventuele resetter naar dag-sterkte meteen weer gedimd wordt.
 		if (bUpdateLights)
 		{
-			const float SkyWant = FMath::Lerp(0.06f, 1.f, MinDayF);
+			const float SkyWant = FMath::Lerp(0.12f, 1.f, MinDayF); // D.5: nacht-specular-vloer omhoog (was 0.06)
 			for (FSkyDim& Sk : SkyDims)
 			{
 				if (USkyLightComponent* SLC = Sk.Sky.Get())
@@ -1080,6 +1082,11 @@ void ADayNightController::Tick(float DeltaSeconds)
 				// kort naar wit overschieten (de "witte flits"). Cap in BEIDE volumes = over de hele blend ~1.0 = geen overshoot.
 				NightVol->Settings.bOverride_AutoExposureMaxBrightness = true;
 				NightVol->Settings.AutoExposureMaxBrightness = 1.0f;
+				// D.5 exposure-BODEM (spiegel van de MaxBrightness-cap): 's nachts mag de auto-exposure niet
+				// verder inzakken dan deze vloer -> voorkomt het pikkedonker rond 01:00. Onderkant begrensd,
+				// bovenkant blijft op 1.0; de Night exposure/glow-sliders sturen nog steeds het niveau ertussen.
+				NightVol->Settings.bOverride_AutoExposureMinBrightness = true;
+				NightVol->Settings.AutoExposureMinBrightness = 0.4f;
 				NightPPV = NightVol;
 			}
 		}

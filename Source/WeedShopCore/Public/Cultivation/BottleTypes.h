@@ -10,6 +10,7 @@ struct FBottleDef
 	FName ItemId = NAME_None;
 	FString DisplayName;
 	int32 Charges = 3;          // aantal keer water geven voordat 'ie leeg is
+	float WaterPerClick = 0.25f;// hoeveel WaterLevel (0..1) een plant erbij krijgt per keer water geven
 	int32 BuyPriceCents = 1000;
 	uint8 MinPhase = 0;         // EShopPhase: 0=Straatdealer,1=Winkel,2=Franchise
 };

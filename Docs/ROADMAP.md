@@ -2,7 +2,7 @@
 
 > **Dit is de levende roadmap.** Het oude A–Z stappenplan in de brief is afgerond en vervangen door dit document. Volgorde = prioriteit. Afgeronde items afvinken en (groot werk) loggen in `DECISIONS.md`.
 >
-> Laatst bijgewerkt: 2026-07-01 — speler-notities toegevoegd als "BACKLOG 07-01" (polish/fixes-lijst, geprioriteerd).
+> Laatst bijgewerkt: 2026-07-02 — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
 > **Detail-uitwerking per bevinding (probleem → file → fix, afvinkbaar): [`FIXLIST.md`](FIXLIST.md).** Dit document = de grote lijn; de fixlist = het systematische afwerk-document.
 
 **Grote lijn:** eerst de **beach-map** echt het spel-wereld maken (daar speelt straks álles), dan **levels 1-50 écht goed** maken, dan pas de **50+ shop-fase**. Co-op-fixes en save-gaten lopen daar dwars doorheen omdat ze klein zijn maar sessies breken.
@@ -128,18 +128,116 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### UI-polish (icoon-grids + knoppen)
 
-- [ ] **C.1 Icoon-grids gelijktrekken met de inventory** — de picker-grids (joint rollen, packing bench, offer-picker, koelkast, etc. = `UWeedItemPickGrid`) tonen iconen NIET zoals de inventory: andere sizes, klein, onduidelijk. Alle plekken die iconen tonen moeten de iconen exact zo renderen als in de inventory (zelfde icon-size/look/celstijl).
-- [ ] **C.2 Geselecteerde knop highlighten** — bij keuze-knoppen (bv. "Grams per bag": 1g/Max/±, "How many bags": Half/Max/±) de ACTIEVE keuze visueel highlighten zodat altijd duidelijk is wat geselecteerd is. Overal toepassen waar zulke keuze-knoppen staan.
-- [ ] **C.3 Help-/clutter-tekst weg** — de subtitel-regels zoals "2 g per bag (max 2)" bij *2.b Grams per bag* en "1 bag (uses 2g, max 10)" bij *3. How many bags* weghalen. Overal waar zulke uitleg-clutter staat opschonen.
+- [x] **C.1 Icoon-grids gelijktrekken met de inventory** — de picker-grids (joint rollen, packing bench, offer-picker, koelkast, etc. = `UWeedItemPickGrid`) tonen iconen NIET zoals de inventory: andere sizes, klein, onduidelijk. Alle plekken die iconen tonen moeten de iconen exact zo renderen als in de inventory (zelfde icon-size/look/celstijl).
+- [x] **C.2 Geselecteerde knop highlighten** — bij keuze-knoppen (bv. "Grams per bag": 1g/Max/±, "How many bags": Half/Max/±) de ACTIEVE keuze visueel highlighten zodat altijd duidelijk is wat geselecteerd is. Overal toepassen waar zulke keuze-knoppen staan.
+- [x] **C.3 Help-/clutter-tekst weg** — de subtitel-regels zoals "2 g per bag (max 2)" bij *2.b Grams per bag* en "1 bag (uses 2g, max 10)" bij *3. How many bags* weghalen. Overal waar zulke uitleg-clutter staat opschonen.
 
 ### Deal / NPC-scherm
 
-- [ ] **C.4 Respect/loyaliteit/addiction als progress-cirkels** — i.p.v. losse tekst-stats (`R10 - L0 - A6`, "Not a customer yet  Addiction 6/30") de stats tonen als progress-cirkels (zoals de plant-groei-cirkels): nicer/game-ish/duidelijker. De aparte addiction-stat mag dan weg — verwerkt in de cirkel (zie in één blik wanneer hij klant wordt). Huisnummer hoeft niet per se.
-- [ ] **C.6 "Give joint"-knop verdwijnen na geven + variatie in teksten** — nu: joint vasthouden + "Give joint" opent de NPC-UI maar toont meteen wéér "Give joint". De give-joint-cooldown moet de knop LATEN VERDWIJNEN zodra de NPC net een joint heeft gekregen. Plus: meer verschillende NPC-teksten op die momenten (niet alleen "come on I've had better") en duidelijk aangeven dat hij nu even niet meer hoeft.
+- [x] **C.4 Respect/loyaliteit/addiction als progress-cirkels** — i.p.v. losse tekst-stats (`R10 - L0 - A6`, "Not a customer yet  Addiction 6/30") de stats tonen als progress-cirkels (zoals de plant-groei-cirkels): nicer/game-ish/duidelijker. De aparte addiction-stat mag dan weg — verwerkt in de cirkel (zie in één blik wanneer hij klant wordt). Huisnummer hoeft niet per se.
+- [x] **C.6 "Give joint"-knop verdwijnen na geven + variatie in teksten** — nu: joint vasthouden + "Give joint" opent de NPC-UI maar toont meteen wéér "Give joint". De give-joint-cooldown moet de knop LATEN VERDWIJNEN zodra de NPC net een joint heeft gekregen. Plus: meer verschillende NPC-teksten op die momenten (niet alleen "come on I've had better") en duidelijk aangeven dat hij nu even niet meer hoeft.
 
 ### Content
 
-- [ ] **C.5 Skin-gebonden namen** — female skins → female (funny) namen, male skins → male namen (indien haalbaar met hoe skins/namen nu toegewezen worden).
+- [x] **C.5 Skin-gebonden namen** — female skins → female (funny) namen, male skins → male namen (indien haalbaar met hoe skins/namen nu toegewezen worden).
+
+---
+
+## BACKLOG 07-02b — speler-notities ronde 2 (NPC / placement / QoL)
+
+> Vastgelegd 2026-07-02 (tweede notitie-dump, 14 punten). Prioriteit + blokken worden samen gezet; per item
+> staat de vermoedelijke plek + open vragen. Brede read-only analyse loopt (1 agent per punt: file:regel +
+> root-cause + aanpak + effort/risk + cook-parity-risico).
+
+### NPC / gedrag
+
+- [ ] **D.1 Strain-vraag in strain-kleur** — als een NPC om een strain vraagt (chat/deal), de strain-NAAM in
+  z'n strain-tagkleur tonen (zoals de tag-kleuren elders). [WeedUI tag-kleur + DealWidget/ContactsComponent]
+- [ ] **D.4 NPC's met missing body OOK in de compiled build** — er lopen poppetjes zonder lichaam rond; eerder
+  gedacht "alleen editor", maar het zit ook in de download. Vermoedelijk een crowd-skin die niet mee-cookt
+  (DirectoriesToAlwaysCook) of een modular skin zonder body-fallback. [character-packs / CustomerBase skins]
+- [ ] **D.11 NPC buiten-wachtplekken** — NPC's plekken geven om buiten op de speler te wachten: auto-plaatsen
+  bij random deuren over de HELE map (langs de weg, garagedeuren, deuren aan de back-alleys). Niet handmatig
+  gemarkeerd - automatisch verspreid. [DoorRetrofitter deur-registry + Customer meet/afspraak-systeem]
+- [ ] **D.12 NPC-onderlinge avoidance te agressief** — NPC's duwen elkaar veel te hard weg bij dichte nadering
+  (lijkt of iedereen een grote persoonlijke zone heeft). Ze mogen langs elkaar lopen op de stoep met hooguit een
+  zachte verschuiving; het HARDE wegduwen hoort alleen bij vaste obstakels (muren/objecten/map-geometrie) waar
+  ze anders vastlopen. [Customer movement / RVO-avoidance-radius, obstacle vs pawn-scheiding]
+- [ ] **D.13 Afspraak-timing klopt niet met antwoordtijd** — gevraagde tijden lopen niet synchroon met wanneer
+  je kunt antwoorden: een NPC vraagt "rond 21:41" terwijl die tijd al bijna voorbij is, of cancelt voordat je
+  fatsoenlijk kon reageren. Timer herzien: (a) gevraagde tijd altijd genoeg in de TOEKOMST, (b) genoeg respons-
+  venster voor auto-cancel. [ContactsComponent afspraak-timers]
+
+### Placement / bouwen
+
+- [ ] **D.3 Placeables snapping beter (vloer + muur)** — (a) vloer: strakker snappen zodat dingen echt geplaatst
+  kunnen worden en BLAUW worden zo dicht mogelijk tegen muur-/vloer-randen; (b) wall-placeables: kan nu nog half
+  DOOR de muur / helemaal in de hoek - de hitbox dekt niet de hele shelf. [BuildComponent footprint/no-build +
+  PropMeshKit item-bounds]
+
+### Planten / economie-feel
+
+- [ ] **D.8 Plant-gram loopt op tijdens groei** — i.p.v. meteen 6 g te tonen, het gram-gewicht laten OPLOPEN naar
+  de eindwaarde over de groei (ziet er beter uit). [PlantInfoWidget / plant-groei-model]
+- [ ] **D.9 Bottle-water schaalt per klik** — grotere fles = meer water per klik (nette progressie). Eerste fles
+  doet nu ~60% (te veel) → richting ~25% voor de eerste (mits niet te laag). [WaterCanComponent per-klik-afgifte]
+- [ ] **D.7 Items missen een eigen weight** — veel items hebben nog geen eigen gewicht; audit + invullen.
+  [item-defs / inventory weight]
+
+### Wereld / sfeer
+
+- [ ] **D.5a In-wereld nacht niet pikkedonker** — 's nachts een leesbare min-licht-vloer (nu 0). [DayNightController
+  UDS-exposure-clamp + skylight-nacht-vloer + NightPPV min-brightness] — IN BEWERKING (golf 1, agent A2).
+- [ ] **D.5b Geopende M-kaart zwart 's nachts** — de speler bedoelde de OPEN kaart (screenshot): die is 's nachts
+  pikzwart op de gele/blauwe markers na. Root cause: de map-SceneCapture (DoorRetrofitter, 1x via CaptureMapNow +
+  ApplyMapPhotoLight) zet een heldere PackSun, maar op de UDS-beach is de PackSun grotendeels inactief -> de
+  capture pakt de UDS-NACHTzon -> zwarte foto (lampen-boost toont alleen gebouw-lichtjes). Fix: map dag-helder
+  vastleggen ongeacht kloktijd (UDS-zon/exposure naar dag-stand tijdens de capture-frame, of een capture-only
+  fill-light / hogere map-exposure-vloer). Raakt DoorRetrofitter + DayNightController -> NA golf 1.
+
+### UI / iconen
+
+- [ ] **D.6 Big-joint-icon (blunt.png)** — de dikke joint (big model) een net icoon geven: `blunt.png` met nette
+  achtergrond zoals de andere download-iconen. [item-icons runtime-PNG's, Content/_Project/UI/Icons]
+- [ ] **D.10 Loading-tekst langzamer + meer random** — de loading-screen-tekst wisselt te snel; trager laten
+  roteren en meer randomiseren (elke X). [SWeedLoadingScreen / BootCoverWidget tekst-rotatie]
+- [ ] **D.14 Compass clean (AC Shadows-stijl)** — de in-game compass strak/clean maken zonder UI-blok/kader;
+  N/O/Z/W-letters mogen weg. [HUD-compass-widget]
+
+### Cook-parity / build
+
+- [ ] **D.2 Apartment-doorfix mist in de compiled build** — een deur-fix die in de editor/dev werkt maar niet in
+  de download meekomt. Uitzoeken WELKE fix (recente door-commit) + waarom 't niet cookt (string-load zonder
+  DirectoriesToAlwaysCook, of authority/runtime-gate die alleen in PIE loopt). [DoorRetrofitter + check-cook-parity]
+
+---
+
+## BACKLOG 07-02c — co-op-pariteit (2 majeure bugs + brede audit)
+
+> Vastgelegd 2026-07-02. Speler test co-op competitive met een vriend (2 PC's, packaged build). Twee majeure
+> per-speler-bugs + het verzoek om ALLES na te lopen dat per-speler hoort te werken (competitive EN normaal).
+
+- [ ] **E.1 Competitive furniture klopt niet in de packaged build (player-2-kamer)** — twee deelbugs:
+  (a) de starter-furniture staat weer SCHEEF in player-2's kamer (regressie t.o.v. de editor-fix - waarschijnlijk
+  een mirror-transform/cook-verschil: server stuurt een wereld-transform maar de joiner-spiegelkamer staat elders);
+  (b) player 2 (joiner) kan NIETS plaatsen in z'n eigen huis: klikken doet niks, OOK als de preview blauw/valid is.
+  Vermoedelijk weigert ServerPlace de plaatsing voor de joiner (IsInOwnedHome/competitive-home-box klopt niet voor
+  de joiner-spiegelkamer, of de RPC komt niet aan). [BuildComponent ServerPlace + DoorRetrofitter competitive rooms + StarterFurniture]
+- [ ] **E.2 Waterfles-vulling niet per-speler** — het vullen/vulniveau van de fles is gedeeld i.p.v. per-speler.
+  Moet per-speler-inventory zijn (replicatie/eigenaarschap). [WaterCanComponent / InventoryComponent replicatie]
+- [ ] **E.3 Brede co-op-pariteit-audit (competitive + normaal)** — systematisch nalopen wat per-speler hoort te
+  werken maar dat niet doet: meldingen/toasts (GetFirstPlayerController = alleen host, zie 2C.1), plaatsen/opslag,
+  planten/water/oogst, economie/inventory, telefoon/deals, delivery, wardrobe/skins, safe/fridge, statische
+  registries (GetWorld()-filter). Per bevinding: host vs joiner, competitive vs normaal, file:regel, fix. Levert
+  de echte co-op-fixlijst (vervangt/vult 2C aan).
+- [ ] **E.4 NPC-crowd desync in co-op (MAJEUR)** — de joiner ziet NPC's die niet syncen: BEVROREN stilstaand,
+  sommige ZWEVEND boven de grond, GEEN collision (je loopt er doorheen), en player 1 (host) ziet ze NIET op de
+  kaart. Vermoedelijk is de virtuele crowd (DoorRetrofitter TickVirtualMove, 70 walkers) CLIENT-LOKAAL/per-proces
+  en niet gerepliceerd -> host en joiner hebben losse, niet-matchende crowds; op de joiner tickt/positioneert de
+  crowd niet goed (zwevend/bevroren) en de map-markers komen uit de lokale crowd. Diepgaand: crowd-replicatie/
+  localiteit, echte-customer-replicatie (spawn server-side + movement/statemachine gerepliceerd?), Z-offset/
+  collision op de client, map-marker-bron per-speler. [DoorRetrofitter virtuele crowd + ACustomerBase/Spawner +
+  MapWidget/CompassWidget markers] (screenshots 07-02: zwevende man + bevroren cluster).
 
 ---
 

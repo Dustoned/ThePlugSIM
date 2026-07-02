@@ -33,9 +33,10 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	// Achtergrondbalk bovenaan, gecentreerd.
+	// Kader weg (D.14): volledig transparante brush; UBorder blijft als onzichtbare clip-container
+	// zodat markers binnen de band-breedte geclipt blijven.
 	UBorder* Bg = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CompassBg"));
-	Bg->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.45f), 12.f));
+	Bg->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 12.f));
 	Bg->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Bg->SetClipping(EWidgetClipping::ClipToBounds);
 	UCanvasPanelSlot* BgS = Root->AddChildToCanvas(Bg);
@@ -57,15 +58,7 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	CenS->SetAutoSize(false); CenS->SetSize(FVector2D(2.f, 38.f));
 	CenS->SetAlignment(FVector2D(0.5f, 0.5f)); CenS->SetPosition(FVector2D(BandW * 0.5f, 21.f));
 
-	// Windstreken.
-	static const TCHAR* Names[8] = { TEXT("N"), TEXT("NE"), TEXT("E"), TEXT("SE"), TEXT("S"), TEXT("SW"), TEXT("W"), TEXT("NW") };
-	for (int32 i = 0; i < 8; ++i)
-	{
-		UTextBlock* T = WeedUI::Text(WidgetTree, Names[i], (i % 2 == 0) ? 17 : 12, (i % 2 == 0) ? FLinearColor::White : FLinearColor(0.6f, 0.65f, 0.75f), true);
-		Band->AddChildToCanvas(T);
-		CardinalLabels.Add(T);
-		CardinalYaws.Add(i * 45.f);
-	}
+	// Windstreek-letters weg (D.14): alleen het midden-streepje + de markers blijven.
 
 	// Marker-pool voor mensen buiten: een persoon-icoontje (groen), duidelijk anders dan objecten.
 	for (int32 i = 0; i < 24; ++i)
@@ -150,12 +143,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const float PlayerYaw = PC->GetControlRotation().Yaw;
 	const FVector PL = P->GetActorLocation();
 
-	// Windstreken.
-	for (int32 i = 0; i < CardinalLabels.Num(); ++i)
-	{
-		const float Rel = FRotator::NormalizeAxis(CardinalYaws[i] - PlayerYaw);
-		PlaceOnBand(CardinalLabels[i], Rel, 14.f);
-	}
+	// Windstreek-letters weg (D.14) -> geen plaatsing meer nodig.
 
 	// Alléén een poppetje voor klanten die je NU nodig hebt (afspraak / staat te wachten). Gewone
 	// roamende NPC's staan niet op de kompas (wel als gekleurde puntjes op de kaart).

@@ -39,6 +39,13 @@ int32 UWaterCanComponent::GetMaxCharges() const
 	return 0;
 }
 
+float UWaterCanComponent::GetWaterPerClick() const
+{
+	FBottleDef Def;
+	if (GetBottleDef(ActiveBottleId(), Def)) { return Def.WaterPerClick; }
+	return 0.25f; // fallback (geen fles / onbekende id)
+}
+
 int32 UWaterCanComponent::GetCharges() const
 {
 	const UInventoryComponent* Inv = GetInv();
