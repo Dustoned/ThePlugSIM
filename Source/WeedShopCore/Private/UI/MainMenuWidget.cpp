@@ -317,6 +317,26 @@ void UMainMenuWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
+	// --- Boot-canary: string-geladen UI-kit-templates + joint-meshes MOETEN in de packaged build resolven.
+	// Deze werden al eerder stil weggecookt (toggles/sliders/pauzemenu/skins). Dit logt bij de eerste boot
+	// of ze laden -> een MISSING-regel wijst direct een cook-gat aan (Shipping-verificatie zonder UI-klik). ---
+	{
+		static bool bCookCheckDone = false;
+		if (!bCookCheckDone)
+		{
+			bCookCheckDone = true;
+			auto Cls = [](const TCHAR* P) { return LoadClass<UUserWidget>(nullptr, P) != nullptr; };
+			auto Obj = [](const TCHAR* P) { return LoadObject<UObject>(nullptr, P) != nullptr; };
+			const bool bT = Cls(TEXT("/Game/minimalist_gui/widgets/templates/toggle/W_Toggle_Template.W_Toggle_Template_C"));
+			const bool bS = Cls(TEXT("/Game/minimalist_gui/widgets/templates/slider/W_Slider_Template.W_Slider_Template_C"));
+			const bool bP = Cls(TEXT("/Game/UI/Screens/WBP_PauseMenu.WBP_PauseMenu_C"));
+			const bool bJS = Obj(TEXT("/Game/_Project/Models/Joints/SM_JointSmall.SM_JointSmall"));
+			const bool bJF = Obj(TEXT("/Game/_Project/Models/Joints/SM_JointFat.SM_JointFat"));
+			UE_LOG(LogWeedShop, Display, TEXT("[COOKCHECK] Toggle=%d Slider=%d Pause=%d JointSmall=%d JointFat=%d -> %s"),
+				bT, bS, bP, bJS, bJF, (bT && bS && bP && bJS && bJF) ? TEXT("ALL OK") : TEXT("*** MISSING IN BUILD ***"));
+		}
+	}
+
 	// Volledig dekkende basis-achtergrond (donkere kelder). De wereld erachter is verborgen.
 	UBorder* Bg = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("MenuBg"));
 	Bg->SetBrush(WeedUI::Rounded(FLinearColor(0.035f, 0.03f, 0.05f, 1.f), 0.f));

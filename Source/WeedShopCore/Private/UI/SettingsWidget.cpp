@@ -910,7 +910,13 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bOpen != bLastOpen)
 	{
 		bLastOpen = bOpen;
-		if (bOpen) { BuildAllPanels(); RefreshTabs(); ShowActiveCategory(); RefreshGraphicsLabels(); } // panelen ÉÉN keer bouwen; labels naar live status (geen rebuild)
+		if (bOpen)
+		{
+			BuildAllPanels(); RefreshTabs(); ShowActiveCategory(); RefreshGraphicsLabels(); // panelen ÉÉN keer bouwen; labels naar live status (geen rebuild)
+			// Esc sluit alleen als DIT widget toetsenbord-focus heeft (NativeOnKeyDown vuurt anders niet) ->
+			// zonder dit moest de speler eerst ergens in klikken (bv. Save) voordat Esc het menu sloot.
+			SetKeyboardFocus();
+		}
 	}
 	if (!bOpen) { return; }
 
