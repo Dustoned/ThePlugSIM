@@ -32,6 +32,8 @@
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Modules/ModuleManager.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
@@ -937,6 +939,24 @@ void UMainMenuWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const bool bOpen = PhoneComp.IsValid() && PhoneComp->IsMainMenuOpen();
 	if (Backdrop) { Backdrop->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+
+	// Dev/headless-hook (dormant zonder de flag, zoals -AutoSoak): met -AutoNewGame start automatisch een
+	// nieuw spel (slot 0) zodra het menu er staat. Voor headless verificatie van wereld-systemen (joint-scatter,
+	// deuren, crowd) in een packaged build zonder handmatig te klikken. Geen effect op normaal spelen.
+	if (bOpen)
+	{
+		static bool bAutoNewGameFired = false;
+		if (!bAutoNewGameFired && FParse::Param(FCommandLine::Get(), TEXT("AutoNewGame")))
+		{
+			bAutoNewGameFired = true;
+			if (USaveGameSubsystem* Save = GetSave(GetWorld()))
+			{
+				Save->SetPendingMap(TEXT("/Game/CityBeachStrip/Maps/CityBeachStrip"));
+				Save->RequestNewGame(0);
+				UE_LOG(LogWeedShop, Display, TEXT("[AutoNewGame] nieuw spel gestart (slot 0)"));
+			}
+		}
+	}
 	if (bOpen != bLastOpen)
 	{
 		bLastOpen = bOpen;
