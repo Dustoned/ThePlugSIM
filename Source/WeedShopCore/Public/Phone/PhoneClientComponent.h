@@ -436,6 +436,17 @@ public:
 		TArray<int32> Qtys;
 	};
 	const TArray<FPendingDelivery>& GetPendingDeliveries() const { return PendingDeliveries; }
+
+	// --- Geleverd-historie (opgehaalde bestellingen; backing voor de Packages-historie-UI) ---
+	struct FDeliveredRecord
+	{
+		int32 OrderId = 0;
+		TArray<FName> Ids;
+		TArray<int32> Qtys;
+		int64 PaidCents = 0;
+		int64 FeeCents = 0;
+	};
+	const TArray<FDeliveredRecord>& GetDeliveredHistory() const { return DeliveredHistory; }
 	// Save/load: een opgeslagen (nog onderweg) bestelling meteen leveren (speler had al betaald).
 	void RestoreDeliverInstant(const TArray<FName>& Ids, const TArray<int32>& Qtys) { DeliverCart(0, Ids, Qtys); }
 	int32 GetPendingCount() const { return PendingDeliveries.Num(); }
@@ -591,6 +602,12 @@ public:
 	// Beschrijving van de geladen joint (lege string = niets geladen), bv. "2g Silver Haze - 70% Q".
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Roll")
 	FString GetRollLoadDesc() const { return RollLoadDesc; }
+
+	// Gekozen strain om te rollen (client-side keuze in de roll-UI). NAME_None = pak de eerste bruikbare
+	// Bud_-stapel (oud gedrag). GetRollWeed/ServerRollJoint proberen deze strain eerst en vallen anders
+	// rock-solid terug op de eerste match zodat rollen nooit breekt.
+	void SetRollStrain(FName S) { RollStrain = S; }
+	FName GetRollStrain() const { return RollStrain; }
 
 	// Absolute grenzen (papers tussen MinGrams en GramsHardMax).
 	static constexpr int32 MinGrams = 1;
@@ -759,8 +776,9 @@ protected:
 	UFUNCTION(Client, Reliable) void ClientLandAtHome(FVector To);
 
 	// Server: maak 1 joint van Grams gram bud (item-id Joint_<Strain>_<G>g; meer gram = betere kwaliteit).
+	// Strain = gekozen bud-stapel; None of niet-in-voorraad valt terug op de eerste bruikbare Bud_-stapel.
 	UFUNCTION(Server, Reliable)
-	void ServerRollJoint(int32 Grams);
+	void ServerRollJoint(int32 Grams, FName Strain);
 
 	// Server: dien het bod in bij de klant op een specifiek product (betaalt naar de kas).
 	UFUNCTION(Server, Reliable)
@@ -938,6 +956,7 @@ protected:
 	bool bRollLoadedUI = false;
 	int32 RollLoadGramsUI = 0;
 	FString RollLoadDesc; // omschrijving van de geladen wiet (voor de hint)
+	FName RollStrain = NAME_None; // gekozen strain om te rollen (client-side; None = eerste bruikbare bud)
 	float StonedHudFrac = 0.f;      // 0..1 resterende high voor de HUD
 	float StonedHudSecs = 0.f;      // resterende high-seconden
 	float StonedHudIntensity = 0.f; // hoe high (0..1)
@@ -983,6 +1002,8 @@ protected:
 
 	// Onderweg zijnde bestellingen + hun timers (server-side).
 	TArray<FPendingDelivery> PendingDeliveries;
+	// Opgehaalde bestellingen (nieuwste voorop, gecapt op 20) - historie voor de Packages-app.
+	TArray<FDeliveredRecord> DeliveredHistory;
 	TMap<int32, FTimerHandle> DeliveryTimers;
 	int32 NextOrderId = 1;
 	TMap<FName, int32> PendingQty;

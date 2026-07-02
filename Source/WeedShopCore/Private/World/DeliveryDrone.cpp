@@ -97,8 +97,9 @@ void ADeliveryDrone::Tick(float DeltaSeconds)
 			{
 				FActorSpawnParameters P;
 				P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				// Iets hoger spawnen dan de doos-halfhoogte zodat 'ie zichtbaar valt/tuimelt/settelt (physics in SetupOrder).
 				ADeliveryPackage* Pkg = World->SpawnActor<ADeliveryPackage>(
-					ADeliveryPackage::StaticClass(), FTransform(FRotator::ZeroRotator, DropLoc + FVector(0.f, 0.f, 20.f)), P);
+					ADeliveryPackage::StaticClass(), FTransform(FRotator::ZeroRotator, DropLoc + FVector(0.f, 0.f, 60.f)), P);
 				if (Pkg) { Pkg->SetupOrder(OrderId, Ids, Qtys, Phone.Get()); }
 			}
 			if (Phone.IsValid()) { Phone->NotifyDroneArrived(OrderId); }

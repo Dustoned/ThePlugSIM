@@ -2,7 +2,7 @@
 #include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
-#include "Components/SceneComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
@@ -10,26 +10,47 @@
 #include "Progression/StoreComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Phone/PhoneClientComponent.h"
+#include "TimerManager.h"
 #include "Engine/Engine.h"
 
 ADeliveryPackage::ADeliveryPackage()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
-
-	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
-	SetRootComponent(Root);
+	SetReplicateMovement(true); // server simuleert de drop; de vallende/settelde stand repliceert naar clients
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeFinder(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> MatFinder(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 
-	// Kartonnen doos: bruine kubus ~42x42x40cm, gecentreerd op de actor-origin (zodat de drone-drop-offset blijft
-	// kloppen) met de collision erop.
+	// Body = de physics-doos + root die valt/tuimelt en ALLE collision draagt (~42x42x40cm doos). BoxExtent is de
+	// half-extent, dus (21,21,20). Zit gecentreerd op de actor-origin (zodat de drone-drop-offset blijft kloppen).
+	// Blokkeert alle kanalen zodat 'ie op de vloer valt EN de interact-line-trace (ECC_Visibility) 'm raakt; ECC_Pawn
+	// op Ignore zodat 'ie spelers niet wegduwt (co-op: geen zwevende speler).
+	Body = CreateDefaultSubobject<UBoxComponent>(TEXT("Body"));
+	SetRootComponent(Body);
+	Body->SetBoxExtent(FVector(21.f, 21.f, 20.f));
+	Body->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	Body->SetCollisionObjectType(ECC_PhysicsBody);
+	Body->SetCollisionResponseToAllChannels(ECR_Block);
+	Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	// NIET op de CDO: SetMassOverrideInKg vraagt het physics-materiaal op, en tijdens de CDO-constructie (o.a. bij het
+	// cooken) is GEngine nog niet geinitialiseerd -> "GetSimplePhysicalMaterial: GEngine not initialized" = cook-error.
+	// Op echte instances (runtime) is GEngine wel op, dus daar draait 't gewoon.
+	if (!HasAnyFlags(RF_ClassDefaultObject))
+	{
+		Body->SetMassOverrideInKg(NAME_None, 2.f, true); // een lichte doos
+		Body->SetLinearDamping(0.6f);
+		Body->SetAngularDamping(0.8f);
+		Body->SetUseCCD(true);
+	}
+	// SetSimulatePhysics zelf gebeurt server-side in SetupOrder() (niet in de CDO ivm replicatie-volgorde).
+
+	// Kartonnen doos: bruine kubus ~42x42x40cm, als kind van Body op NoCollision (Body draagt de collision).
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	Mesh->SetupAttachment(Root);
+	Mesh->SetupAttachment(Body);
 	if (CubeFinder.Succeeded()) { Mesh->SetStaticMesh(CubeFinder.Object); }
 	Mesh->SetRelativeScale3D(FVector(0.42f, 0.42f, 0.40f));
-	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (MatFinder.Succeeded())
 	{
 		if (UMaterialInstanceDynamic* M = Mesh->CreateDynamicMaterialInstance(0, MatFinder.Object))
@@ -46,7 +67,7 @@ ADeliveryPackage::ADeliveryPackage()
 	for (int32 i = 0; i < 2; ++i)
 	{
 		UStaticMeshComponent* T = Tapes[i];
-		T->SetupAttachment(Root);
+		T->SetupAttachment(Body);
 		if (CubeFinder.Succeeded()) { T->SetStaticMesh(CubeFinder.Object); }
 		T->SetRelativeScale3D(TapeScale[i]);
 		T->SetRelativeLocation(FVector(0.f, 0.f, 20.f)); // op het deksel (doos-halfhoogte = 20cm)
@@ -67,6 +88,22 @@ void ADeliveryPackage::SetupOrder(int32 InOrderId, const TArray<FName>& InIds, c
 	Ids = InIds;
 	Qtys = InQtys;
 	Phone = InPhone;
+
+	// Server simuleert de drop: de doos valt het laatste stukje + tuimelt natuurlijk neer; na settelen bevriezen we de
+	// physics (geen eindeloze sim). Clients volgen via replicated movement, dus NIET client-side simuleren.
+	if (HasAuthority() && Body)
+	{
+		Body->SetSimulatePhysics(true);
+		Body->SetPhysicsAngularVelocityInDegrees(FVector(
+			FMath::RandRange(-140.f, 140.f), FMath::RandRange(-140.f, 140.f), FMath::RandRange(-90.f, 90.f)));
+		GetWorldTimerManager().SetTimer(FreezeTimer, this, &ADeliveryPackage::FreezePhysics, 3.f, false);
+	}
+}
+
+void ADeliveryPackage::FreezePhysics()
+{
+	// Na het settelen: physics uit. Body blijft QueryAndPhysics -> nog steeds aan te kijken/op te pakken.
+	if (Body) { Body->SetSimulatePhysics(false); }
 }
 
 int32 ADeliveryPackage::TotalItems() const

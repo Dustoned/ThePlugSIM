@@ -59,6 +59,7 @@
 #include "World/DayNightController.h"
 #include "World/CityTypes.h"
 #include "UI/MapWidget.h"
+#include "UI/WeedItemPickGrid.h" // "Offer instead"-lijst = icoon-grid (persistent, diff-SetItems -> geen flash)
 #include "Phone/PhoneClientComponent.h"
 #include "Styling/SlateTypes.h"
 #include "Styling/CoreStyle.h"
@@ -357,15 +358,15 @@ void UPhoneWidget::FillSettingsBody()
 			BodyRow(MakeText(FString::Printf(TEXT("%02d:%02d  (%s)"), (int32)H, (int32)((H - (int32)H) * 60.f),
 				GS->GetDayCycle()->IsNight() ? TEXT("night") : TEXT("day")), 11, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 3.f));
 		}
-		Pair(TEXT("Set Day"), FLinearColor(0.85f, 0.7f, 0.2f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(false); } },
-			 TEXT("Set Night"), FLinearColor(0.25f, 0.3f, 0.55f), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } });
+		Pair(TEXT("Set Day"), WeedUI::ColAccentDim(), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(false); } },
+			 TEXT("Set Night"), WeedUI::ColInner(), [this]() { if (Phone.IsValid()) { Phone->RequestSetDayNight(true); } });
 		TimeSpeedSlider = nullptr; TimeSpeedV = nullptr;
 		{
 			const float CurDilation = GetWorld() ? UGameplayStatics::GetGlobalTimeDilation(GetWorld()) : 1.f;
 			AddLightSlider(TEXT("Time speed"), (FMath::Clamp(CurDilation, 1.f, 8.f) - 1.f) / 7.f, TimeSpeedSlider, TimeSpeedV);
 		}
-		Pair(TEXT("Trigger Robbery"), FLinearColor(0.7f, 0.4f, 0.15f), [this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(false); } },
-			 TEXT("Trigger Bust"), FLinearColor(0.6f, 0.2f, 0.2f), [this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(true); } });
+		Pair(TEXT("Trigger Robbery"), WeedUI::ColAccentDim(), [this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(false); } },
+			 TEXT("Trigger Bust"), WeedUI::ColInner(), [this]() { if (Phone.IsValid()) { Phone->RequestDevHeatEvent(true); } });
 
 		// === BUILD & FURNISH ===
 		Section(TEXT("BUILD & FURNISH"));
@@ -800,7 +801,7 @@ void UPhoneWidget::FillSettingsBody()
 			BodyRow(MakeText(FString::Printf(TEXT("Level %d"), Lv->GetLevel()), 15, WeedUI::ColGood()), FMargin(0.f, 0.f, 0.f, 2.f));
 			UProgressBar* XpBar = WidgetTree->ConstructWidget<UProgressBar>();
 			XpBar->SetPercent(Lv->GetLevelFraction());
-			XpBar->SetFillColorAndOpacity(FLinearColor(0.3f, 0.7f, 1.f));
+			XpBar->SetFillColorAndOpacity(WeedUI::ColAccent());
 			BodyRow(XpBar, FMargin(0.f, 2.f, 0.f, 4.f));
 			BodyRow(MakeText(Lv->GetLevel() >= ULevelComponent::MaxLevel ? TEXT("MAX")
 				: *FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), Lv->GetXPToNext()), 12, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 6.f));
@@ -1212,6 +1213,29 @@ void UPhoneWidget::BuildChatApp()
 		OfferBox = WidgetTree->ConstructWidget<UVerticalBox>();
 		OfferBox->SetVisibility(ESlateVisibility::Collapsed);
 		ChatOfferSection->AddChildToVerticalBox(OfferBox);
+		// Binnenwerk EENMALIG: header-tekst + icoon-grid + "geen voorraad"-tekst. RefreshChatThread werkt ze
+		// alleen in-place bij (SetText / SetItems-diff / visibility) -> nooit meer ClearChildren -> geen flash.
+		{
+			OfferHeadText = MakeText(TEXT(""), 10, WeedUI::ColTextDim());
+			OfferHeadText->SetAutoWrapText(true);
+			OfferBox->AddChildToVerticalBox(OfferHeadText)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+
+			OfferGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+			OfferGrid->CellSize = 72.f;
+			OfferGrid->MaxVisibleRows = 2;
+			OfferGrid->bShowSelection = false;
+			OfferGrid->OnPick = [this](FName Id, int32 /*P*/)
+			{
+				if (Phone.IsValid() && !OpenChatContact.IsNone()) { Phone->ProposeChatStrain(OpenChatContact, Id); }
+				bOfferStrainView = false;
+				RefreshChatThread();
+			};
+			OfferBox->AddChildToVerticalBox(OfferGrid);
+
+			OfferEmptyText = MakeText(TEXT("(no dried/bagged weed in your inventory or storages)"), 10, WeedUI::ColTextDim());
+			OfferEmptyText->SetVisibility(ESlateVisibility::Collapsed);
+			OfferBox->AddChildToVerticalBox(OfferEmptyText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+		}
 
 		ChatPickerPrompt = MakeText(TEXT("Can't make it? Pick a time:"), 11, WeedUI::ColTextDim());
 		ChatOfferSection->AddChildToVerticalBox(ChatPickerPrompt)->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
@@ -1527,13 +1551,15 @@ void UPhoneWidget::RefreshChatThread()
 			if (OfferBox)
 			{
 				OfferBox->SetVisibility(bOfferStrainView ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
-				// OfferBox-inhoud (her)opbouwen: aggregatie over inventory + shelves (verandert met voorraad).
-				OfferBox->ClearChildren();
+				// OfferBox-inhoud IN-PLACE bijwerken: header-tekst + grid-diff (geen ClearChildren -> geen flash).
 				const FName ReqStrain = Con->GetRequestedStrain(OpenChatContact);
 				float ExpThc = 15.f;
 				if (GS && GS->GetStore()) { float t = 0.f, y = 0.f, g = 0.f; if (GS->GetStore()->GetStrainStats(ReqStrain, t, y, g) && t > 0.f) { ExpThc = t; } }
-				OfferBox->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("They want %s (~%.0f%% THC). Your stock (incl. chests/shelves):"), *ReqStrain.ToString(), ExpThc), 10, WeedUI::ColTextDim()))
-					->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+				if (OfferHeadText)
+				{
+					OfferHeadText->SetText(FText::FromString(FString::Printf(
+						TEXT("They want %s (~%.0f%% THC). Your stock (incl. chests/shelves):"), *ReqStrain.ToString(), ExpThc)));
+				}
 
 				// Strain uit een wiet-item halen (Bag_X_<g> of Bud_X); nat (WetBud_) telt NIET mee.
 				auto StrainOf = [](FName Id) -> FName
@@ -1566,21 +1592,27 @@ void UPhoneWidget::RefreshChatThread()
 					for (const FShelfStack& C : It->Contents) { Consider(C.ItemId, C.Quantity, C.Thc, C.QualityPct); }
 				}
 
-				int32 Shown = 0;
+				// Naar grid-items: icoon = Bud_<strain>, badge = grammen, subline = THC-delta + kans (kleur per teken),
+				// tooltip = de oude 2-regel-tekst. SetItems doet de diff -> geen flash bij een gewone thread-refresh.
+				TArray<FWeedPickItem> Items;
 				for (const TPair<FName, FOfferAgg>& P : ByStrain)
 				{
 					const FName Strain = P.Key; const FOfferAgg& O = P.Value;
 					const float Delta = O.Thc - ExpThc;
 					const float Chance = Con->SubstituteAcceptChance(OpenChatContact, ReqStrain, Strain, O.Thc) * 100.f;
-					const FString Lbl = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  %dg\n%+.0f%% THC vs ask   ~%.0f%% yes"),
+					FWeedPickItem It;
+					It.Id = Strain;
+					It.IconId = FName(*(FString(TEXT("Bud_")) + Strain.ToString()));
+					It.Badge = FString::Printf(TEXT("%dg"), O.Qty);
+					It.SubLine = FString::Printf(TEXT("%+.0f%% ~%.0f%%"), Delta, Chance);
+					It.SubCol = (Delta >= 0.f) ? WeedUI::ColGood() : WeedUI::ColWarn();
+					It.Tooltip = FString::Printf(TEXT("%s   T%.0f%%  Q%.0f%%  %dg\n%+.0f%% THC vs ask   ~%.0f%% yes"),
 						*Strain.ToString(), O.Thc, O.Qual, O.Qty, Delta, Chance);
-					const FName SPick = Strain;
-					OfferBox->AddChildToVerticalBox(MakeActionBtn(Lbl, (Delta >= 0.f ? WeedUI::ColGood(0.5f) : WeedUI::ColWarn(0.5f)),
-						[this, SPick]() { if (Phone.IsValid() && !OpenChatContact.IsNone()) { Phone->ProposeChatStrain(OpenChatContact, SPick); } bOfferStrainView = false; RefreshChatThread(); }, 11))
-						->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
-					++Shown;
+					Items.Add(It);
 				}
-				if (Shown == 0) { OfferBox->AddChildToVerticalBox(MakeText(TEXT("(no dried/bagged weed in your inventory or storages)"), 10, WeedUI::ColTextDim())); }
+				if (OfferGrid) { OfferGrid->SetItems(Items); }
+				if (OfferEmptyText) { OfferEmptyText->SetVisibility(Items.Num() == 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+				if (OfferGrid) { OfferGrid->SetVisibility(Items.Num() == 0 ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); }
 			}
 
 			// Tijd-kiezer: startwaarde + clamping (30 min..1410 min, kwartier). PickerContact stelt de live NativeTick-
@@ -1625,8 +1657,54 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 	{
 		PkgCards.Reset();
 		PkgEmptyRow = nullptr;
+		PkgDeliveredBox = nullptr; PkgDeliveredSig = -1; // hoort bij de oude (mogelijk vernietigde) scroll -> vers opbouwen
 		PkgScrollOwner = Scroll;
 	}
+
+	// Bouwt/ververst de "Delivered"-sectie (kop + compacte inner-cards) onder de pending-kaarten. De container-widget
+	// blijft persistent (Scroll->AddChild eenmalig); alleen de INHOUD herbouwt als de historie-lengte wijzigt (sig).
+	auto FillDelivered = [this, Scroll, Ph]()
+	{
+		const TArray<UPhoneClientComponent::FDeliveredRecord>& Hist = Ph->GetDeliveredHistory();
+		if (!PkgDeliveredBox)
+		{
+			PkgDeliveredBox = WidgetTree->ConstructWidget<UBorder>();
+			PkgDeliveredBox->SetBrush(WeedUI::Rounded(FLinearColor(0, 0, 0, 0), 0.f));
+			PkgDeliveredBox->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+			Scroll->AddChild(PkgDeliveredBox);
+			PkgDeliveredSig = -1; // forceer eerste vulling
+		}
+		// Sig = lengte + nieuwste OrderId: de historie is gecapt (20), dus alleen-lengte zou na de cap bevriezen.
+		const int32 Sig = Hist.Num() * 131 + (Hist.Num() > 0 ? Hist[0].OrderId : 0);
+		if (Sig == PkgDeliveredSig) { return; }
+		PkgDeliveredSig = Sig;
+		PkgDeliveredBox->SetVisibility(Hist.Num() == 0 ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible);
+		if (Hist.Num() == 0) { PkgDeliveredBox->SetContent(nullptr); return; }
+
+		UVerticalBox* DVB = WidgetTree->ConstructWidget<UVerticalBox>();
+		DVB->AddChildToVerticalBox(MakeText(TEXT("Delivered"), 12, WeedUI::ColTextDim()))->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+		// Nieuwste bovenaan (de historie staat al nieuwste-voorop, Insert op 0).
+		for (const UPhoneClientComponent::FDeliveredRecord& R : Hist)
+		{
+			UBorder* Inner = WidgetTree->ConstructWidget<UBorder>();
+			Inner->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));
+			Inner->SetPadding(FMargin(8.f, 5.f, 8.f, 5.f));
+			UVerticalBox* IVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			Inner->SetContent(IVB);
+			const int32 N = FMath::Min(R.Ids.Num(), R.Qtys.Num());
+			for (int32 i = 0; i < N; ++i)
+			{
+				UTextBlock* LineT = MakeText(FString::Printf(TEXT("%dx %s"), R.Qtys[i], *WeedUI::PrettyItemName(R.Ids[i])), 10, WeedUI::ColTextDim());
+				LineT->SetAutoWrapText(true);
+				IVB->AddChildToVerticalBox(LineT);
+			}
+			IVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Paid EUR %lld  -  fee EUR %lld"),
+				(long long)(WeedRoundEuros(R.PaidCents) / 100), (long long)(WeedRoundEuros(R.FeeCents) / 100)), 10, WeedUI::ColGood()))
+				->SetPadding(FMargin(0.f, 1.f, 0.f, 0.f));
+			DVB->AddChildToVerticalBox(Inner)->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+		}
+		PkgDeliveredBox->SetContent(DVB);
+	};
 
 	// Bouwt de kaart-inhoud (border) voor één bestelling. De per-OrderId-kaart-widget zelf blijft persistent
 	// in PkgCards -> Cancel haalt alleen die ene kaart weg (RemoveFromParent), geen ClearChildren.
@@ -1642,13 +1720,20 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 		// Titel-rij: bezorgnaam + aantal stuks.
 		CVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s delivery   -   %d item(s)"),
 			*UPhoneClientComponent::DeliveryName(D.DeliveryOpt), D.ItemCount), 13, WeedUI::ColText()));
-		// Inhoud (kort).
+		// Inhoud: per-item regels ("Nx <naam>") uit de parallelle Ids/Qtys.
 		{
-			FString Sum = D.Summary;
-			if (Sum.Len() > 40) { Sum = Sum.Left(39) + TEXT("."); }
-			UTextBlock* SumT = MakeText(Sum, 10, WeedUI::ColTextDim());
-			SumT->SetAutoWrapText(true);
-			CVB->AddChildToVerticalBox(SumT);
+			const int32 N = FMath::Min(D.Ids.Num(), D.Qtys.Num());
+			for (int32 i = 0; i < N; ++i)
+			{
+				UTextBlock* LineT = MakeText(FString::Printf(TEXT("%dx %s"), D.Qtys[i], *WeedUI::PrettyItemName(D.Ids[i])), 10, WeedUI::ColTextDim());
+				LineT->SetAutoWrapText(true);
+				CVB->AddChildToVerticalBox(LineT);
+			}
+			// Betaald + fee + bezorgnaam.
+			CVB->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("Paid EUR %lld  -  fee EUR %lld  -  %s"),
+				(long long)(WeedRoundEuros(D.PaidCents) / 100), (long long)(WeedRoundEuros(D.FeeCents) / 100),
+				*UPhoneClientComponent::DeliveryName(D.DeliveryOpt)), 10, WeedUI::ColTextDim()))
+				->SetPadding(FMargin(0.f, 1.f, 0.f, 0.f));
 		}
 
 		const bool bArrived = D.bArrived;
@@ -1718,6 +1803,7 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 			PkgEmptyRow->SetContent(MakeText(TEXT("No packages on the way."), 12, WeedUI::ColTextDim()));
 			Scroll->AddChild(PkgEmptyRow);
 		}
+		FillDelivered(); // geleverd-lijstje ook zonder pending tonen (onder de placeholder)
 		return;
 	}
 	if (PkgEmptyRow) { PkgEmptyRow->RemoveFromParent(); PkgEmptyRow = nullptr; }
@@ -1735,6 +1821,7 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 	};
 
 	// Bestaande kaarten hun inhoud verversen (bv. onderweg -> aan de deur), nieuwe kaarten toevoegen.
+	bool bAddedPending = false;
 	for (const UPhoneClientComponent::FPendingDelivery& D : Pend)
 	{
 		const int32 OrderId = D.OrderId;
@@ -1750,7 +1837,13 @@ void UPhoneWidget::FillPackagesInto(UScrollBox* Scroll)
 		Wrap->SetContent(WrapCard(BuildCard(D)));
 		Scroll->AddChild(Wrap);
 		PkgCards.Add(OrderId, Wrap);
+		bAddedPending = true;
 	}
+
+	// Delivered-sectie ONDER de pending-kaarten houden: een net toegevoegde pending-kaart landt na de (al bestaande)
+	// delivered-box, dus re-anchoren we die naar het einde (AddChild verplaatst 'm). Anders alleen inhoud verversen.
+	if (bAddedPending && PkgDeliveredBox) { Scroll->AddChild(PkgDeliveredBox); }
+	FillDelivered();
 }
 
 void UPhoneWidget::BuildPackagesApp()
@@ -1979,6 +2072,11 @@ int32 UPhoneWidget::PackagesSignature() const
 	const TArray<UPhoneClientComponent::FPendingDelivery>& Pend = Phone->GetPendingDeliveries();
 	int32 Sig = Pend.Num() * 1000003;
 	for (const UPhoneClientComponent::FPendingDelivery& D : Pend) { Sig = Sig * 31 + D.OrderId + (D.bArrived ? 7 : 0); }
+	// Geleverd-historie mee-signeren: na een pickup schuift een pending naar de historie -> lijst moet verversen.
+	// Lengte + nieuwste OrderId: de historie is gecapt (20), dus alleen-lengte zou na de cap niet meer wijzigen.
+	const TArray<UPhoneClientComponent::FDeliveredRecord>& Hist = Phone->GetDeliveredHistory();
+	Sig = Sig * 31 + Hist.Num();
+	if (Hist.Num() > 0) { Sig = Sig * 31 + Hist[0].OrderId; }
 	return Sig;
 }
 
@@ -2221,12 +2319,13 @@ void UPhoneWidget::FillStoreList()
 		FillPackagesInto(StoreScroll);
 		return;
 	}
-	// Uit packages terug in de winkel: de losse package-kaarten (buiten de pool om toegevoegd) opruimen.
-	if (PkgScrollOwner == StoreScroll && PkgCards.Num() > 0)
+	// Uit packages terug in de winkel: de losse package-kaarten + delivered-box (buiten de pool om toegevoegd) opruimen.
+	if (PkgScrollOwner == StoreScroll && (PkgCards.Num() > 0 || PkgDeliveredBox || PkgEmptyRow))
 	{
 		StoreScroll->ClearChildren();
 		StoreRowPool.Reset(); StoreRowSigs.Reset(); // pool-widgets zijn net mee-geleegd -> refs vrijgeven
 		PkgCards.Reset(); PkgBars.Reset(); PkgEtas.Reset(); PkgEmptyRow = nullptr; PkgScrollOwner = nullptr;
+		PkgDeliveredBox = nullptr; PkgDeliveredSig = -1;
 	}
 
 	// Verzamel eerst de rij-inhoud: per logische rij een signatuur + een bouw-lambda die de kaart maakt.
@@ -2721,7 +2820,7 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 	{
 		UHorizontalBox* XpRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		LevelXpBar = WidgetTree->ConstructWidget<UProgressBar>();
-		LevelXpBar->SetFillColorAndOpacity(FLinearColor(0.45f, 0.85f, 0.5f));
+		LevelXpBar->SetFillColorAndOpacity(WeedUI::ColAccent());
 		LevelXpBar->SetPercent(0.f);
 		USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>(); BarSz->SetHeightOverride(10.f);
 		BarSz->SetContent(LevelXpBar);
@@ -2756,7 +2855,7 @@ void UPhoneWidget::BuildShell(UCanvasPanel* Root)
 		FButtonStyle HS;
 		HS.Normal = RoundedBrush(WeedUI::ColBg(1.f), 24.f);
 		HS.Hovered = RoundedBrush(WeedUI::ColInner(1.f), 24.f);
-		HS.Pressed = RoundedBrush(FLinearColor(0.0f, 0.0f, 0.0f, 1.f), 24.f);
+		HS.Pressed = RoundedBrush(WeedUI::ColBg(1.f), 24.f);
 		HS.Normal.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.9f));
 		HS.Normal.OutlineSettings.Width = 2.f;
 		HS.Hovered.OutlineSettings = HS.Normal.OutlineSettings;
@@ -2922,6 +3021,7 @@ void UPhoneWidget::RefreshContent()
 		// (bv. geen ContactsComponent) geen dangling refs in de live-updates achterlaat.
 		PickerClockText = nullptr; PickerProposeBtn = nullptr; PickerContact = NAME_None;
 		OfferBox = nullptr; OfferToggleBtn = nullptr;
+		OfferGrid = nullptr; OfferHeadText = nullptr; OfferEmptyText = nullptr;
 		ChatListScroll = nullptr; ChatThreadRoot = nullptr;
 		ChatHeaderName = nullptr; ChatTierBox = nullptr; ChatTierLabel = nullptr; ChatTierBar = nullptr;
 		ChatApptBox = nullptr; ChatBubbleScroll = nullptr; ChatNoMsgText = nullptr; ChatWaitBox = nullptr;
@@ -2938,9 +3038,10 @@ void UPhoneWidget::RefreshContent()
 		StoreFooterPool.Reset(); StoreFooterSigs.Reset();
 		StoreQtyTexts.Reset();
 	}
-	if (Key == GPackagesApp) // Packages-kaarten (map + placeholder + scroll-eigenaar)
+	if (Key == GPackagesApp) // Packages-kaarten (map + placeholder + delivered-box + scroll-eigenaar)
 	{
 		PkgCards.Reset(); PkgBars.Reset(); PkgEtas.Reset(); PkgEmptyRow = nullptr; PkgScrollOwner = nullptr;
+		PkgDeliveredBox = nullptr; PkgDeliveredSig = -1;
 	}
 	if (Key == GBankApp) // Bank: de in-place saldo/cash-tekst-refs wijzen na ClearChildren naar dode widgets
 	{

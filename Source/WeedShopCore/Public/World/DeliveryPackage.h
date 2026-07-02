@@ -6,10 +6,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Components/BoxComponent.h"
 #include "Interaction/Interactable.h"
 #include "DeliveryPackage.generated.h"
 
-class USceneComponent;
+class UBoxComponent;
 class UStaticMeshComponent;
 class UPhoneClientComponent;
 
@@ -29,8 +30,10 @@ public:
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
 protected:
+	// Body = de physics-doos (root): valt + tuimelt + draagt ALLE collision en de interact-line-trace.
+	// De visuele delen (Mesh/TapeX/TapeY) hangen eronder op NoCollision, zoals bij AWorldItemPickup.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Delivery")
-	TObjectPtr<USceneComponent> Root;
+	TObjectPtr<UBoxComponent> Body;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Delivery")
 	TObjectPtr<UStaticMeshComponent> Mesh; // de kartonnen doos
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop|Delivery")
@@ -43,5 +46,8 @@ protected:
 	TArray<int32> Qtys;
 	TWeakObjectPtr<UPhoneClientComponent> Phone;
 
+	FTimerHandle FreezeTimer;
+
 	int32 TotalItems() const;
+	void FreezePhysics(); // na settelen physics uit (geen eindeloze sim/perf); Body blijft aankijkbaar/oppakbaar
 };

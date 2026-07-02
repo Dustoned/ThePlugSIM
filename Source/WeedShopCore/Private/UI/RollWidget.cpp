@@ -1,7 +1,9 @@
 #include "UI/RollWidget.h"
 
 #include "UI/WeedUiStyle.h"
+#include "UI/WeedItemPickGrid.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Inventory/InventoryComponent.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -59,7 +61,9 @@ void URollWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.5f));
 	CS->SetAutoSize(false);
-	CS->SetSize(FVector2D(520.f, 320.f));
+	// Hoger dan voorheen (320) om ook het "Pick your weed"-strain-grid (2 rijen, eigen scroll) te huisvesten
+	// naast de grams-stepper + sterkte-preview + acties.
+	CS->SetSize(FVector2D(520.f, 512.f));
 	CS->SetPosition(FVector2D(0.f, 0.f));
 
 	Body = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -87,9 +91,22 @@ void URollWidget::BuildContentOnce()
 	}
 	Body->AddChildToVerticalBox(NoPapersPane);
 
-	// --- Volledige pane (grams-keuze + sterkte + acties), vooraf gebouwd ---
+	// --- Volledige pane (strain-keuze + grams-keuze + sterkte + acties), vooraf gebouwd ---
 	FullPane = WidgetTree->ConstructWidget<UVerticalBox>();
 	{
+		// Strain-keuze: icoon-grid met alle Bud_-stacks van de speler (welke wiet rol je?).
+		FullPane->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Pick your weed"), 13, WeedUI::ColText(), false, true))
+			->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		StrainGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
+		StrainGrid->CellSize = 78.f;          // config-velden VOOR de eerste SetItems
+		StrainGrid->MaxVisibleRows = 2;
+		StrainGrid->bShowSelection = true;
+		StrainGrid->OnPick = [this](FName Id, int32)
+		{
+			if (PhoneComp.IsValid()) { PhoneComp->SetRollStrain(Id); UpdateContent(); } // directe feedback; tick-sig ververst ook
+		};
+		FullPane->AddChildToVerticalBox(StrainGrid)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+
 		GramsLabel = WeedUI::Text(WidgetTree, FString(), 13, WeedUI::ColText());
 		FullPane->AddChildToVerticalBox(GramsLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
@@ -142,6 +159,29 @@ void URollWidget::UpdateContent()
 	}
 	if (NoPapersPane) { NoPapersPane->SetVisibility(ESlateVisibility::Collapsed); }
 	if (FullPane)     { FullPane->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+
+	// --- Strain-keuze: alle Bud_-stacks van de speler in het icoon-grid (SetItems diff't intern) ---
+	if (StrainGrid)
+	{
+		TArray<FWeedPickItem> Items;
+		if (const APawn* P = GetOwningPlayerPawn())
+		{
+			if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+			{
+				for (const FInventoryStack& S : Inv->GetStacks())
+				{
+					if (!S.ItemId.ToString().StartsWith(TEXT("Bud_"))) { continue; }
+					FWeedPickItem It;
+					It.Id = S.ItemId;
+					It.Badge = FString::Printf(TEXT("%dg"), S.Quantity);
+					It.Tooltip = FString::Printf(TEXT("%s\n%dg - THC %.0f%% Q %.0f%%"),
+						*WeedUI::PrettyItemName(S.ItemId), S.Quantity, S.Quality, S.QualityPct);
+					Items.Add(It);
+				}
+			}
+		}
+		StrainGrid->SetItems(Items, Ph->GetRollStrain());
+	}
 
 	const int32 G = FMath::Clamp(Ph->GetRollGrams(), 1, MaxG);
 
@@ -239,14 +279,29 @@ void URollWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (!bOpen) { LastGrams = -1; LastMaxG = -2; LastWeedSig = -1; return; }
 
 	// Alleen bijwerken als er iets veranderde -> geen per-frame widget-werk (update is in-place, geen flash/scroll-sprong).
-	// Naast grams + papers-capaciteit ook de WIET-VOORRAAD in de gate: komt er wiet bij / gaat weg terwijl het scherm
-	// open staat (droogrek klaar, oogst, delivery-pakket) dan moeten de sterkte-preview + Load-knop mee-updaten, ook
-	// bij ongewijzigd G/MaxG.
+	// Naast grams + papers-capaciteit ook de WIET-VOORRAAD + de GEKOZEN STRAIN in de gate: komt er wiet bij / gaat weg,
+	// of kiest de speler een andere strain terwijl het scherm open staat (droogrek klaar, oogst, delivery-pakket, klik in
+	// het grid) dan moeten het strain-grid + de sterkte-preview + Load-knop mee-updaten, ook bij ongewijzigd G/MaxG.
 	const int32 G = PhoneComp->GetRollGrams();
 	const int32 MaxG = PhoneComp->GetMaxJointGrams();
 	float Thc = 0.f, Qpct = 0.f;
-	const int32 WeedSig = PhoneComp->GetRollWeedInfo(G, Thc, Qpct)
+	int32 WeedSig = PhoneComp->GetRollWeedInfo(G, Thc, Qpct)
 		? (1 + (int32)(Thc * 10.f) * 131 + (int32)(Qpct * 10.f) * 17) : 0;
+	// Gekozen strain in de sig (grid-selectie moet volgen bij een klik/save-load).
+	WeedSig = WeedSig * 486187739 + GetTypeHash(PhoneComp->GetRollStrain());
+	// Complete Bud_-voorraad in de sig (som van id-hash * qty): een strain die bijkomt/leegraakt ververst het grid,
+	// ook als de nu-gekozen strain zelf niet wijzigt.
+	if (const APawn* P = GetOwningPlayerPawn())
+	{
+		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			for (const FInventoryStack& S : Inv->GetStacks())
+			{
+				if (!S.ItemId.ToString().StartsWith(TEXT("Bud_"))) { continue; }
+				WeedSig = WeedSig * 33 + (int32)(GetTypeHash(S.ItemId) * (uint32)(S.Quantity + 1));
+			}
+		}
+	}
 	if (G != LastGrams || MaxG != LastMaxG || WeedSig != LastWeedSig)
 	{
 		LastGrams = G; LastMaxG = MaxG; LastWeedSig = WeedSig;

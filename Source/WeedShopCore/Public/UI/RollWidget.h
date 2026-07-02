@@ -16,6 +16,7 @@ class UHorizontalBox;
 class UTextBlock;
 class UProgressBar;
 class UWeedActionButton;
+class UWeedItemPickGrid;
 
 UCLASS()
 class WEEDSHOPCORE_API URollWidget : public UUserWidget
@@ -45,6 +46,7 @@ protected:
 	UPROPERTY() TObjectPtr<UVerticalBox> FullPane;     // grams-keuze + sterkte + acties
 
 	// --- Persistente widgets in FullPane die in-place worden bijgewerkt ---
+	UPROPERTY() TObjectPtr<UWeedItemPickGrid> StrainGrid; // "Pick your weed": alle Bud_-stacks van de speler
 	UPROPERTY() TObjectPtr<UTextBlock>   GramsLabel;    // "Grams per joint: N (up to Mg)"
 	UPROPERTY() TObjectPtr<UHorizontalBox> GramsRow;    // container van de gram-knoppen-pool
 	UPROPERTY() TObjectPtr<UTextBlock>   StrengthLabel; // "Joint strength: ..." / "No weed ..."
@@ -61,5 +63,5 @@ protected:
 	// Voor verandering-detectie (alleen bijwerken als er iets wijzigt -> geen per-frame werk).
 	int32 LastGrams = -1;
 	int32 LastMaxG = -2;
-	int32 LastWeedSig = -1; // change-sig van de bruikbare wiet-voorraad (voorraadwijziging bij open scherm -> preview/Load mee-updaten)
+	int32 LastWeedSig = -1; // change-sig van de gekozen strain + de complete Bud_-voorraad (strain-keuze of voorraadwijziging bij open scherm -> grid/preview/Load mee-updaten)
 };

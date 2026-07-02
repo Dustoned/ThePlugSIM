@@ -60,6 +60,10 @@ public:
 	void GetCompetitiveHomeBoxes(TArray<FBox>& Out) const;
 	// Verschoven no-build-zones voor 603 + 602 (uit de solo-kamer). Leeg buiten competitive.
 	void GetCompetitiveNoBuildZones(TArray<FBox>& Out) const { Out = CompNoBuildZones; }
+	// Bezorg-punt voor de competitive-kamer van deze speler (host of joiner): op de stoep net buiten de
+	// dichtstbijzijnde geldige deur van de eigen kamer, of de anchor zelf als er geen deur gevonden is.
+	// False zolang de competitive-geometrie nog niet berekend is (bCompHomesReady).
+	bool GetCompDeliverySpot(bool bJoiner, FVector& Out) const;
 
 protected:
 	virtual void BeginPlay() override;

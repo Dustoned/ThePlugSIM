@@ -20,6 +20,7 @@ class UHorizontalBox;
 class UTextBlock;
 class UUniformGridPanel;
 class UWidget;
+class UWeedItemPickGrid;
 
 // Per-winkel-app snapshot van de gedeelde winkel-member-refs (StoreScroll/pools/tabs/AppCats/...). Zo kan een
 // switch tussen winkel-apps (Grow/Supplies/Sell/Hash) de refs HERSTELLEN uit de cache i.p.v. het paneel te
@@ -185,6 +186,11 @@ protected:
 	// (geen RefreshContent-flash). Wordt in BuildChatApp één keer gevuld voor de open thread.
 	UPROPERTY() TObjectPtr<class UVerticalBox> OfferBox;
 	UPROPERTY() TObjectPtr<class UWeedActionButton> OfferToggleBtn;
+	// Offer-box binnenwerk: header-tekst (in-place SetText), icoon-grid (diff-SetItems -> geen flash bij
+	// thread-refresh) en een "geen voorraad"-tekst die alleen zichtbaarheid toggelt.
+	UPROPERTY() TObjectPtr<class UWeedItemPickGrid> OfferGrid;
+	UPROPERTY() TObjectPtr<UTextBlock> OfferHeadText;
+	UPROPERTY() TObjectPtr<UTextBlock> OfferEmptyText;
 	int32 LastMsgSig = -2;
 	int32 ProposeMins = -1; // gekozen kloktijd (min van de dag) voor een eigen-tijd-voorstel; -1 = nog niet gezet
 	int32 LastChatMin = -1; // klok-minuut bij de laatste chat-rebuild (om de tijd-kiezer-ondergrens live mee te laten lopen)
@@ -278,6 +284,10 @@ protected:
 	UPROPERTY() TMap<int32, TObjectPtr<UTextBlock>> PkgEtas;           // per OrderId
 	UPROPERTY() TMap<int32, TObjectPtr<UBorder>> PkgCards;            // per OrderId (Cancel = alleen deze kaart weg)
 	UPROPERTY() TObjectPtr<UBorder> PkgEmptyRow;                      // "No packages on the way."-placeholder (gericht tonen/verbergen)
+	// "Delivered"-historie onder de pending-kaarten: één vaste container (kop + inner-cards) die alleen
+	// z'n INHOUD herbouwt als de historie wijzigt (sig) -> geen flash op de pending-kaarten.
+	UPROPERTY() TObjectPtr<UBorder> PkgDeliveredBox;
+	int32 PkgDeliveredSig = -1;                                       // #records-sig van de laatst getekende historie
 	UPROPERTY() TObjectPtr<class UScrollBox> PkgScrollOwner;          // in welke scroll de PkgCards staan (reset bij scroll-wissel)
 	UPROPERTY() TObjectPtr<class UScrollBox> PackagesScroll;           // scroll van de losse Packages-app
 	int32 LastPkgSig = -1;

@@ -5039,6 +5039,42 @@ void ADoorRetrofitter::TickCompetitiveRooms()
 	}
 }
 
+bool ADoorRetrofitter::GetCompDeliverySpot(bool bJoiner, FVector& Out) const
+{
+	if (!bCompHomesReady) { return false; }
+	const FVector Anchor = bJoiner ? CompAnchorJoiner : CompAnchorHost;
+	UWorld* W = GetWorld();
+	// Dichtstbijzijnde GELDIGE deur van de eigen kamer - exact hetzelfde filter als PickDoors in
+	// TickCompetitiveRooms (zelfde verdieping + binnen bereik), maar dan de allerdichtste.
+	ACityDoor* Best = nullptr; float BestD2 = TNumericLimits<float>::Max();
+	if (W)
+	{
+		for (TActorIterator<ACityDoor> It(W); It; ++It)
+		{
+			if (!IsValid(*It)) { continue; }
+			const FVector DL = It->GetActorLocation();
+			if (FMath::Abs(DL.Z - Anchor.Z) > 300.f) { continue; }
+			const float D2 = FVector::Dist2D(DL, Anchor);
+			if (D2 > 1200.f) { continue; }
+			if (D2 < BestD2) { BestD2 = D2; Best = *It; }
+		}
+	}
+	if (Best)
+	{
+		// Op de stoep, net buiten de deur (zelfde formule als de huis-deur-tak in FindDeliveryPoint):
+		// deur + (deur - anchor, in 2D genormaliseerd) * 150.
+		const FVector DoorLoc = Best->GetActorLocation();
+		FVector Outward = DoorLoc - Anchor; Outward.Z = 0.f; Outward = Outward.GetSafeNormal();
+		if (Outward.IsNearlyZero()) { Outward = Best->GetActorForwardVector(); Outward.Z = 0.f; Outward = Outward.GetSafeNormal(); }
+		Out = DoorLoc + Outward * 150.f;
+	}
+	else
+	{
+		Out = Anchor; // geen deur gevonden -> val terug op de anchor
+	}
+	return true;
+}
+
 void ADoorRetrofitter::GetBeachPropertyOffers(TArray<FCityPropertyOffer>& Out) const
 {
 	Out.Reset();

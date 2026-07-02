@@ -1871,7 +1871,8 @@ void UPhoneClientComponent::ConfirmRoll()
 		UpdateCursor();
 		return;
 	}
-	ServerRollJoint(RollGrams);
+	// GetRollWeed heeft RollStrain net op de gebruikte stapel gezet (of gelaten); geef 'm mee aan de server.
+	ServerRollJoint(RollGrams, RollStrain);
 	bRollOpen = false;
 	UpdateCursor();
 }
@@ -1954,6 +1955,21 @@ bool UPhoneClientComponent::GetRollWeed(int32 Grams, FName& OutItemId, float& Ou
 	OutItemId = NAME_None; OutThcPercent = 0.f; OutQualityPct = 0.f;
 	const UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Inv) { return false; }
+	// 1) Probeer eerst de door de speler gekozen strain (RollStrain) als die genoeg gram op voorraad heeft.
+	if (!RollStrain.IsNone())
+	{
+		for (const FInventoryStack& St : Inv->GetStacks())
+		{
+			if (St.ItemId == RollStrain && St.Quantity >= Grams)
+			{
+				OutItemId = St.ItemId;
+				OutThcPercent = St.Quality;
+				OutQualityPct = St.QualityPct;
+				return true;
+			}
+		}
+	}
+	// 2) Fallback: de eerste bruikbare Bud_-stapel. Zet RollStrain gelijk aan die match zodat de UI klopt.
 	for (const FInventoryStack& St : Inv->GetStacks())
 	{
 		if (St.ItemId.ToString().StartsWith(TEXT("Bud_")) && St.Quantity >= Grams)
@@ -1961,6 +1977,7 @@ bool UPhoneClientComponent::GetRollWeed(int32 Grams, FName& OutItemId, float& Ou
 			OutItemId = St.ItemId;
 			OutThcPercent = St.Quality;
 			OutQualityPct = St.QualityPct;
+			const_cast<UPhoneClientComponent*>(this)->RollStrain = St.ItemId;
 			return true;
 		}
 	}
@@ -1973,7 +1990,7 @@ bool UPhoneClientComponent::GetRollWeedInfo(int32 Grams, float& OutThcPercent, f
 	return GetRollWeed(Grams, Id, OutThcPercent, OutQualityPct);
 }
 
-void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
+void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams, FName Strain)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Inv)
@@ -2007,14 +2024,29 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams)
 		return;
 	}
 
-	// Zoek een bud-stapel met genoeg gram.
+	// Zoek een bud-stapel met genoeg gram. Probeer eerst de gekozen strain; val anders rock-solid terug
+	// op de eerste bruikbare Bud_-stapel (Strain None of niet-in-voorraad -> rollen mag nooit breken).
 	FName BudItem = NAME_None;
-	for (const FInventoryStack& Stack : Inv->GetStacks())
+	if (!Strain.IsNone())
 	{
-		if (Stack.ItemId.ToString().StartsWith(TEXT("Bud_")) && Stack.Quantity >= Grams)
+		for (const FInventoryStack& Stack : Inv->GetStacks())
 		{
-			BudItem = Stack.ItemId;
-			break;
+			if (Stack.ItemId == Strain && Stack.Quantity >= Grams)
+			{
+				BudItem = Stack.ItemId;
+				break;
+			}
+		}
+	}
+	if (BudItem.IsNone())
+	{
+		for (const FInventoryStack& Stack : Inv->GetStacks())
+		{
+			if (Stack.ItemId.ToString().StartsWith(TEXT("Bud_")) && Stack.Quantity >= Grams)
+			{
+				BudItem = Stack.ItemId;
+				break;
+			}
 		}
 	}
 	if (BudItem.IsNone())
@@ -2714,30 +2746,27 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 	FVector Point = FVector::ZeroVector;
 	bool bFound = false;
 
-	// HOOGSTE prioriteit: een door de speler vastgelegd bezorg-punt (Shift+F7) voor DEZE map - bv. helemaal
-	// beneden bij de hotel-hoofdingang. Overschrijft de huis-deur-heuristiek volledig (markers zijn op de
-	// pack-map ground truth; deur-heuristiek pakte de bovendeur van het appartement).
+	// 0) HOOGSTE prioriteit in Competitive: de eigen kamer-deur van DEZE speler (per-speler spiegel-kamers).
+	//    Server-side: op de listen-server is de host-pawn locally controlled, de joiner niet -> zo weten we
+	//    voor wie we het droppunt zoeken. De DoorRetrofitter kent de per-speler deur-spot.
 	{
-		TArray<FString> DpLines;
-		if (FFileHelper::LoadFileToStringArray(DpLines, *(FPaths::ProjectSavedDir() / TEXT("DeliveryPoint.txt"))))
+		AWeedShopGameState* GS = World ? World->GetGameState<AWeedShopGameState>() : nullptr;
+		if (GS && GS->IsCompetitive())
 		{
-			const FString CurMap = World ? World->GetOutermost()->GetName() : FString(TEXT("?"));
-			for (const FString& Raw : DpLines)
+			if (ADoorRetrofitter* R = FindRetro())
 			{
-				TArray<FString> P; Raw.TrimStartAndEnd().ParseIntoArray(P, TEXT("|"));
-				if (P.Num() >= 4 && P[0] == CurMap)
-				{
-					Point = FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3]));
-					bFound = true;
-				}
+				const APawn* P = Cast<APawn>(GetOwner());
+				const bool bJoiner = P && !P->IsLocallyControlled();
+				if (R->GetCompDeliverySpot(bJoiner, Point)) { bFound = true; }
 			}
 		}
 	}
 
-	// 0) Anders: voor de VOORDEUR van het GEKOZEN bezorg-huis (handmatig, het huis waar je nu binnen
-	//    bent, of je actieve woning). DoorPos is op de pack-map het kamer-MIDDEN, dus zoeken we de echte
-	//    deur-actor (dichtstbijzijnde eigen-woning-deur bij dit huis) en zetten het pakket NET BUITEN op de
-	//    stoep - niet midden in de kamer en niet door het dak.
+	// 1) Voor de VOORDEUR van het GEKOZEN bezorg-huis (handmatig, het huis waar je nu binnen bent, of je
+	//    actieve woning). DoorPos is op de pack-map het kamer-MIDDEN, dus zoeken we de echte deur-actor
+	//    (dichtstbijzijnde eigen-woning-deur bij dit huis) en zetten het pakket NET BUITEN op de stoep -
+	//    niet midden in de kamer en niet door het dak. Wint van de vaste DeliveryPoint.txt-marker: spelers
+	//    met een eigen huis krijgen het pakket aan hun eigen deur.
 	if (!bFound)
 	{
 		const int32 DH = ResolveDeliveryHome();
@@ -2773,14 +2802,35 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 		}
 	}
 
+	// 2) Fallback voor spelers ZONDER eigen huis: een door de speler vastgelegd bezorg-punt (Shift+F7) voor
+	//    DEZE map - bv. helemaal beneden bij de hotel-hoofdingang. Alleen als de huis-deur-tak niks vond
+	//    (spelers met een eigen huis krijgen het pakket aan hun eigen deur, niet bij de vaste marker).
+	if (!bFound)
+	{
+		TArray<FString> DpLines;
+		if (FFileHelper::LoadFileToStringArray(DpLines, *(FPaths::ProjectSavedDir() / TEXT("DeliveryPoint.txt"))))
+		{
+			const FString CurMap = World ? World->GetOutermost()->GetName() : FString(TEXT("?"));
+			for (const FString& Raw : DpLines)
+			{
+				TArray<FString> P; Raw.TrimStartAndEnd().ParseIntoArray(P, TEXT("|"));
+				if (P.Num() >= 4 && P[0] == CurMap)
+				{
+					Point = FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3]));
+					bFound = true;
+				}
+			}
+		}
+	}
+
 	if (World && !bFound)
 	{
-		// 1) Een door de level-designer getagde actor "DeliveryPoint".
+		// 3) Een door de level-designer getagde actor "DeliveryPoint".
 		for (TActorIterator<AActor> It(const_cast<UWorld*>(World)); It; ++It)
 		{
 			if (It->ActorHasTag(FName(TEXT("DeliveryPoint")))) { Point = It->GetActorLocation(); bFound = true; break; }
 		}
-		// 2) Anders: de (eerste) plek waar klanten verschijnen = bij de voordeur.
+		// 4) Anders: de (eerste) plek waar klanten verschijnen = bij de voordeur.
 		if (!bFound)
 		{
 			for (TActorIterator<ACustomerSpawner> It(const_cast<UWorld*>(World)); It; ++It)
@@ -2789,7 +2839,7 @@ FVector UPhoneClientComponent::FindDeliveryPoint() const
 			}
 		}
 	}
-	// 3) Fallback: voor de speler.
+	// 5) Fallback: voor de speler.
 	if (!bFound)
 	{
 		if (const APawn* P = Cast<APawn>(GetOwner()))
@@ -2824,6 +2874,21 @@ void UPhoneClientComponent::NotifyDroneArrived(int32 OrderId)
 
 void UPhoneClientComponent::OnPackagePickedUp(int32 OrderId)
 {
+	// Historie: kopieer de opgehaalde bestelling naar DeliveredHistory (nieuwste voorop, gecapt op 20)
+	// VOOR we 'm uit de pending-lijst gooien.
+	for (const FPendingDelivery& D : PendingDeliveries)
+	{
+		if (D.OrderId != OrderId) { continue; }
+		FDeliveredRecord Rec;
+		Rec.OrderId = D.OrderId;
+		Rec.Ids = D.Ids;
+		Rec.Qtys = D.Qtys;
+		Rec.PaidCents = D.PaidCents;
+		Rec.FeeCents = D.FeeCents;
+		DeliveredHistory.Insert(Rec, 0);
+		while (DeliveredHistory.Num() > 20) { DeliveredHistory.RemoveAt(DeliveredHistory.Num() - 1); }
+		break;
+	}
 	PendingDeliveries.RemoveAll([OrderId](const FPendingDelivery& D) { return D.OrderId == OrderId; });
 	// Marker weghalen (map + kompas) zodra het pakket opgehaald is.
 	if (UWorld* W = GetWorld()) { if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { GS->RemoveDeliveryTarget(OrderId); } }
