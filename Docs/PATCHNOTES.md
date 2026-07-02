@@ -2,18 +2,36 @@ PATCH NOTES
 Version 1.19.3 — 2 juli 2026
 
 Korte intro:
-Joints liggen weer overal en het instellingen-scherm sluit weer netjes.
+Joints liggen weer overal, het instellingen-scherm werkt weer, en een flinke ronde UI-polish
+op de packing bench en het deal-scherm.
 
 ━━━━━━━━━━━━━━━━━━━━
 
-FIXES
+JOINTS
 
-• Joints op straat: die lagen wel verspreid maar verdwenen meteen (ze vielen door de grond of rolden
-  weg). Nu blijven ze netjes op de grond liggen bij bankjes, asbakken en prullenbakken - en er liggen
-  er flink meer over de map, zodat je er tijdens een rondje echt tegenaan loopt.
-• De gevonden joints zijn "clean" - geen brandende/gloeiende punt meer, gewoon het joint-model.
-• Instellingen: Escape sluit het scherm nu meteen. Eerst moest je eerst ergens in klikken (bv. Save)
-  voordat Escape werkte.
+• Joints op straat lagen wel verspreid maar verdwenen meteen (ze vielen door de grond of rolden weg).
+  Nu blijven ze netjes op de grond liggen bij bankjes, asbakken en prullenbakken - en er liggen er
+  flink meer over de map, zodat je er tijdens een rondje echt tegenaan loopt.
+• Gevonden joints zijn "clean" - geen brandende punt meer, gewoon het joint-model.
+
+━━━━━━━━━━━━━━━━━━━━
+
+INSTELLINGEN
+
+• Alle sliders, toggles en knoppen doen het weer (die reageerden niet meer op je klikken/slepen).
+• Slepen aan een slider laat het getal nu meteen meelopen.
+
+━━━━━━━━━━━━━━━━━━━━
+
+UI-POLISH
+
+• Packing bench: iconen zien er nu net zo uit als in je inventory, de gekozen optie (1g/Max, Half/Max)
+  licht op, en de overbodige uitleg-regels zijn weg - strakker en sneller te lezen.
+• Deal-scherm: respect, loyaliteit en verslaving staan nu als drie ronde meters (net als de plant-
+  meters). Bij een nieuwe klant zie je in een oogopslag hoe dicht hij bij "vaste klant" zit.
+• Iemand een joint geven: de knop verdwijnt nu zolang hij aan het roken is (kon je eerst per ongeluk
+  blijven aanbieden), en de reacties die mensen geven zijn een stuk gevarieerder.
+• NPC-namen passen nu beter bij het personage (vrouwelijke skins krijgen vrouwennamen).
 
 ━━━━━━━━━━━━━━━━━━━━
 
