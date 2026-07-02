@@ -74,6 +74,19 @@ WERELD & DIVERSEN
 
 ━━━━━━━━━━━━━━━━━━━━
 
+GRAPHICS & PERFORMANCE
+
+• De graphics-tiers zijn opnieuw gebalanceerd: elke stap (Potato → Low → Medium → High → Epic) is nu
+  zichtbaar mooier voor een voorspelbare kost. High is de sweet spot voor een goede PC; Epic is eindelijk
+  speelbaar (software-belichting in plaats van de zware ray-tracing-stack).
+• Ray tracing is een aparte "experimental"-schakelaar geworden (standaard uit) — voor wie een monster-GPU heeft.
+• Je gekozen tier wordt nu onthouden en bij het opstarten volledig toegepast (instellingen "verdwenen" eerst na een herstart).
+• Flinke performance-pass door de hele game: minder werk per frame in de HUD/kompas/kaart, slimmere
+  NPC-administratie en goedkopere deur/apparaat-logica — zonder dat er iets aan het spel verandert.
+• NPC's staan nooit meer zomaar in je huis; wie er toch belandt is direct weg.
+
+━━━━━━━━━━━━━━━━━━━━
+
 GAMEMODES
 
 • Sandbox en Testing zijn als aparte modes verdwenen: elke nieuwe game start gewoon Normaal.
