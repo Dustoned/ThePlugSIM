@@ -5,7 +5,11 @@
 #include "Data/NpcDef.h"
 #include "Game/WeedShopGameState.h"
 #include "Phone/ContactsComponent.h"
+#include "Save/SaveGameSubsystem.h" // StablePlayerId: competitive contact-eigenaarschap
 #include "World/DayCycleComponent.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -511,7 +515,7 @@ bool UNpcRegistryComponent::GetStats(FName NpcId, float& OutRespect, float& OutL
 	return false;
 }
 
-void UNpcRegistryComponent::ApplyStats(FName NpcId, float Respect, float Loyalty, float Addiction)
+void UNpcRegistryComponent::ApplyStats(FName NpcId, float Respect, float Loyalty, float Addiction, APawn* DealingPawn)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
@@ -525,10 +529,10 @@ void UNpcRegistryComponent::ApplyStats(FName NpcId, float Respect, float Loyalty
 	S->Respect = FMath::Clamp(Respect, 0.f, 100.f);
 	S->Loyalty = FMath::Clamp(Loyalty, 0.f, 100.f);
 	S->Addiction = FMath::Clamp(Addiction, 0.f, 100.f);
-	CheckUnlock(*S);
+	CheckUnlock(*S, DealingPawn);
 }
 
-void UNpcRegistryComponent::CheckUnlock(FNpcState& State)
+void UNpcRegistryComponent::CheckUnlock(FNpcState& State, APawn* DealingPawn)
 {
 	// Nummer delen is RESPECT-gedreven: genoeg vertrouwen opgebouwd -> je krijgt z'n nummer.
 	if (State.bUnlocked || State.Respect < UnlockRespect)
@@ -537,19 +541,43 @@ void UNpcRegistryComponent::CheckUnlock(FNpcState& State)
 	}
 	State.bUnlocked = true;
 
-	if (AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
+	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+
+	// COMPETITIVE: het contact hoort bij de DEALENDE speler (OwnerPlayerId). Co-op (nullptr/niet-competitive) =
+	// gedeeld (leeg). De registry-sleutel State.NpcId kan een "#spelerId"-suffix dragen (per-speler-entry);
+	// RegisterContact strip die zelf naar de BASIS-NpcId, zodat het contact op de basis-id staat.
+	FString OwnerId;
+	if (GS && GS->IsCompetitive() && DealingPawn)
 	{
-		if (GS->GetContacts())
-		{
-			GS->GetContacts()->RegisterContact(State.NpcId, State.DisplayName, State.Loyalty);
-		}
+		OwnerId = USaveGameSubsystem::StablePlayerId(DealingPawn);
+	}
+
+	if (GS && GS->GetContacts())
+	{
+		GS->GetContacts()->RegisterContact(State.NpcId, State.DisplayName, State.Loyalty, OwnerId);
 	}
 
 	UE_LOG(LogWeedShop, Log, TEXT("Number unlocked: %s"), *State.DisplayName.ToString());
+	// Per-speler unlock-toast: alleen de dealende speler (competitive); co-op = alle spelers.
 	if (GEngine)
 	{
-		UWeedToast::Notify(-1, 5.f, FColor(120, 200, 255),
-			FString::Printf(TEXT("You got %s's number!"), *State.DisplayName.ToString()));
+		const FString Note = FString::Printf(TEXT("You got %s's number!"), *State.DisplayName.ToString());
+		if (!OwnerId.IsEmpty() && GetWorld())
+		{
+			for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+			{
+				APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+				if (P && USaveGameSubsystem::StablePlayerId(P) == OwnerId)
+				{
+					UWeedToast::NotifyPawn(P, -1, 5.f, FColor(120, 200, 255), Note);
+					break;
+				}
+			}
+		}
+		else
+		{
+			UWeedToast::Notify(-1, 5.f, FColor(120, 200, 255), Note);
+		}
 	}
 }
 

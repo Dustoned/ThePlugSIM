@@ -9,6 +9,8 @@
 #include "Components/ActorComponent.h"
 #include "ContactsComponent.generated.h"
 
+class APawn;
+
 UENUM(BlueprintType)
 enum class EAppointmentKind : uint8
 {
@@ -30,6 +32,11 @@ struct FPhoneContact
 	// Relatie 0..100 (gemiddelde van respect/loyaliteit/verslaving op moment van toevoegen).
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	float Relationship = 0.f;
+
+	// COMPETITIVE: welke speler dit contact BEZIT (stabiele speler-id). Leeg = gedeeld/co-op (iedereen ziet 't).
+	// De ContactId zelf is ALTIJD de BASIS-NpcId (geen "#spelerId"-suffix); het eigenaarschap zit hier.
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	FString OwnerPlayerId;
 };
 
 USTRUCT(BlueprintType)
@@ -135,9 +142,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Phone")
 	FOnPhoneMessagesChanged OnMessagesChanged;
 
-	// Server: voeg een contact toe (no-op als al bekend).
+	// Server: voeg een contact toe (no-op als al bekend). ContactId = BASIS-NpcId (een eventuele "#spelerId"-
+	// suffix wordt gestript). OwnerPlayerId = de eigenaar-speler in competitive (leeg = gedeeld/co-op).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void RegisterContact(FName ContactId, const FText& DisplayName, float Relationship);
+	void RegisterContact(FName ContactId, const FText& DisplayName, float Relationship, const FString& OwnerPlayerId = FString());
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	bool HasContact(FName ContactId) const;
@@ -150,11 +158,13 @@ public:
 
 	// Server: voeg een los info-bericht van een contact toe (afspraak-status: onderweg / ben er / te laat).
 	// Verschijnt als ongelezen inkomend bericht (telt mee voor de notificatie-bubble), geen openstaande afspraak.
-	void PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body);
+	// ForPlayerId = de eigenaar-speler (competitive; leeg = gedeeld/co-op) -> lekt niet naar de rivaal.
+	void PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body, const FString& ForPlayerId = FString());
 
 	// Server: markeer alle inkomende berichten van deze contact als gelezen (bSeen). Repliceert mee, zodat
-	// de ongelezen-badge bij BEIDE co-op-spelers tegelijk verdwijnt.
-	void MarkThreadSeen(FName ContactId);
+	// de ongelezen-badge bij BEIDE co-op-spelers tegelijk verdwijnt. CallerId = de speler die de thread opent
+	// (competitive: alleen berichten die voor hem zijn; leeg/co-op = alle berichten van dit contact, ongewijzigd).
+	void MarkThreadSeen(FName ContactId, const FString& CallerId = FString());
 
 	// Save/load: zet de hele contacten- + berichten-lijst terug.
 	void RestoreContacts(const TArray<FPhoneContact>& InContacts, const TArray<FPhoneMessage>& InMessages);
@@ -163,23 +173,25 @@ public:
 	int32 ClockMinutesOf(float TimeOfDay) const;
 
 	// Server: beantwoord het eerste open afspraak-bericht. Accept = loyaliteit +, weiger = loyaliteit -.
+	// CallerId = de antwoordende speler (competitive: alleen berichten die voor hem zijn; leeg/co-op = gedeeld).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void RespondTopPending(bool bAccept);
+	void RespondTopPending(bool bAccept, const FString& CallerId = FString());
 
 	// Server: beantwoord het nieuwste open afspraak-bericht van een specifiek contact (chat-thread).
-	// Voegt ook mijn antwoord als chat-regel toe.
+	// Voegt ook mijn antwoord als chat-regel toe. CallerId = de antwoordende speler (competitive-filter).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void RespondToContact(FName ContactId, bool bAccept);
+	void RespondToContact(FName ContactId, bool bAccept, const FString& CallerId = FString());
 
 	// Server: stel je EIGEN kloktijd voor (MinutesOfDay 0..1439). Het contact gaat altijd akkoord, geen nadeel.
+	// CallerId = de voorstellende speler (competitive-filter; leeg/co-op = gedeeld).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void ProposeTimeToContact(FName ContactId, int32 MinutesOfDay);
+	void ProposeTimeToContact(FName ContactId, int32 MinutesOfDay, const FString& CallerId = FString());
 
 	// Server: bied een ANDERE strain aan dan gevraagd (substituut) via de chat. Kans op akkoord o.b.v.
 	// loyaliteit/verslaving + of de aangeboden THC de verwachte haalt/overtreft. Bij akkoord wil de afspraak
-	// voortaan deze strain (de arriverende klant leest WantStrain).
+	// voortaan deze strain (de arriverende klant leest WantStrain). CallerId = de aanbiedende speler (comp-filter).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Phone")
-	void ProposeAlternativeStrain(FName ContactId, FName NewStrain, float OfferedThc, float OfferedQualPct);
+	void ProposeAlternativeStrain(FName ContactId, FName NewStrain, float OfferedThc, float OfferedQualPct, const FString& CallerId = FString());
 
 	// Kans (0..1) dat een contact een substituut-strain accepteert — voor de chat-preview.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
@@ -188,6 +200,11 @@ public:
 	// De strain die het open afspraak-bericht van dit contact vraagt (NAME_None als geen open afspraak).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Phone")
 	FName GetRequestedStrain(FName ContactId) const;
+
+	// Strip een eventuele "#spelerId"-suffix van een NpcId -> de BASIS-NpcId. Contacten/berichten/matching
+	// draaien ALTIJD op de basis-id; het per-speler eigenaarschap zit in OwnerPlayerId/ForPlayerId apart.
+	// Publiek zodat ACustomerBase (SubmitOfferProduct/WriteStatsToRegistry) dezelfde strip-regel deelt.
+	static FName BaseNpcId(FName NpcId);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -215,6 +232,13 @@ protected:
 
 	// Server: laat een klant verschijnen bij de speler voor deze (geaccepteerde) afspraak.
 	void SpawnAppointmentCustomer(const FPhoneMessage& Msg);
+
+	// De pawn die hoort bij een stabiele speler-id (nullptr als niet verbonden). Voor per-speler meldingen.
+	APawn* ResolvePawnForPlayer(const FString& PlayerId) const;
+
+	// Per-speler melding: leeg PlayerId (co-op) -> alle spelers (Notify -1); anders alleen de eigenaar-pawn.
+	// Voor afspraak-events (aankondiging/accept/decline/contact-unlock) die NOOIT bij de andere speler mogen lekken.
+	void NotifyOwnerPlayer(const FString& PlayerId, float Seconds, const FColor& Color, const FString& Text) const;
 
 	// Stempelt het bericht met de huidige tijd (in-game klok-uur + realtime) en zet 't bovenaan (nieuwste eerst).
 	void StampAndInsert(FPhoneMessage& M);

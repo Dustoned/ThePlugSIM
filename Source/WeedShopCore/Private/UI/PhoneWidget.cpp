@@ -972,11 +972,19 @@ bool UPhoneWidget::GetApptUrgency(FName ContactId, float& OutFrac, int32& OutSec
 {
 	OutFrac = 0.f; OutSecsLeft = 0; OutPhase = 0; OutClockMins = 0;
 	if (ContactId.IsNone() || !GetWorld()) { return false; }
+	// Competitive: koppel de live-customer-match aan de LOKALE speler, anders toont de balk de afspraak-NPC
+	// van de tegenstander (zelfde NpcId, andere eigenaar). ApptForPlayerId leeg = gedeeld/co-op -> altijd match.
+	const AWeedShopGameState* GScomp = GetWorld()->GetGameState<AWeedShopGameState>();
+	const bool bCompFilter = GScomp && GScomp->IsCompetitive();
+	const APawn* MeP = GetOwningPlayerPawn();
+	const FString MyId = (bCompFilter && MeP) ? USaveGameSubsystem::StablePlayerId(MeP) : FString();
 	// Fase B: een live klant met een lopende afspraak -> z'n ApptTimeout-fractie (telt af tot 'ie opgeeft).
 	for (TActorIterator<ACustomerBase> It(GetWorld()); It; ++It)
 	{
 		if (It->NpcId == ContactId && It->HasActiveAppointment())
 		{
+			// Afspraak-NPC van de tegenstander overslaan (leeg = gedeeld, altijd tonen).
+			if (bCompFilter && !It->ApptForPlayerId.IsEmpty() && It->ApptForPlayerId != MyId) { continue; }
 			OutFrac = It->GetApptFraction();
 			OutSecsLeft = FMath::CeilToInt(It->GetApptTimeLeft());
 			OutPhase = 1;

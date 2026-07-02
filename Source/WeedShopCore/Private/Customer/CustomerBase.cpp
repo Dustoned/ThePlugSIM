@@ -951,6 +951,7 @@ void ACustomerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACustomerBase, ApptTimeout);
 	DOREPLIFETIME(ACustomerBase, ApptTimeoutMax);
 	DOREPLIFETIME(ACustomerBase, bShowOnCityMap); // map/kompas-zichtbaarheid: server = enige waarheid
+	DOREPLIFETIME(ACustomerBase, ApptForPlayerId); // competitive: bij welke speler deze afspraak-NPC hoort (compass/telefoon-filter)
 }
 
 void ACustomerBase::PushApptMessage(const FString& InBody)
@@ -959,7 +960,10 @@ void ACustomerBase::PushApptMessage(const FString& InBody)
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UContactsComponent* Con = GS ? GS->GetContacts() : nullptr;
 	if (!Con) { return; }
-	Con->PushInfoMessage(NpcId, FText::FromString(ACityDoor::FriendlyNpcName(NpcId)), FText::FromString(InBody));
+	// Afspraak-statusbericht op de BASIS-NpcId + met de eigenaar-speler (ApptForPlayerId) zodat het bij de
+	// juiste chat-thread landt en in competitive niet naar de rivaal lekt (leeg = gedeeld/co-op).
+	const FName Base = UContactsComponent::BaseNpcId(NpcId);
+	Con->PushInfoMessage(Base, FText::FromString(ACityDoor::FriendlyNpcName(Base)), FText::FromString(InBody), ApptForPlayerId);
 }
 
 void ACustomerBase::SetTalkingToPlayer(bool b, APawn* Pawn)
@@ -1034,8 +1038,10 @@ void ACustomerBase::ReassignCrowdIdentity(FName NewId)
 
 void ACustomerBase::WriteStatsToRegistry()
 {
-	// In competitive schrijven we naar de per-speler-sleutel (ActiveRelKey); in co-op naar de gedeelde NpcId.
-	const FName Key = ActiveRelKey.IsNone() ? NpcId : ActiveRelKey;
+	// In competitive schrijven we naar de per-speler-sleutel (ActiveRelKey = "BASIS-NpcId#spelerId"); in co-op
+	// naar de gedeelde BASIS-NpcId. NpcId is altijd de basis-id (afspraak-spawn strip de suffix), maar strip
+	// hier defensief nogmaals zodat een verdwaalde suffix nooit een fantoom-entry maakt.
+	const FName Key = ActiveRelKey.IsNone() ? UContactsComponent::BaseNpcId(NpcId) : ActiveRelKey;
 	if (Key.IsNone())
 	{
 		return;
@@ -1043,7 +1049,22 @@ void ACustomerBase::WriteStatsToRegistry()
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetNpcRegistry())
 	{
-		GS->GetNpcRegistry()->ApplyStats(Key, Respect, Loyalty, Addiction);
+		// De DEALENDE speler afleiden uit de per-speler-sleutel ("...#spelerId"), zodat een unlock het contact
+		// bij de juiste speler zet (OwnerPlayerId) + de toast alleen daar toont. Co-op (geen suffix) = nullptr.
+		APawn* DealerPawn = nullptr;
+		if (!ActiveRelKey.IsNone())
+		{
+			FString Lhs, Pid;
+			if (ActiveRelKey.ToString().Split(TEXT("#"), &Lhs, &Pid) && !Pid.IsEmpty() && GetWorld())
+			{
+				for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+				{
+					APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+					if (P && USaveGameSubsystem::StablePlayerId(P) == Pid) { DealerPawn = P; break; }
+				}
+			}
+		}
+		GS->GetNpcRegistry()->ApplyStats(Key, Respect, Loyalty, Addiction, DealerPawn);
 	}
 }
 
@@ -1803,6 +1824,7 @@ void ACustomerBase::EndAppointment()
 	bApptActive = false;
 	bApptComeToPlayer = false;
 	bApptArrived = false;
+	ApptForPlayerId.Reset();   // competitive: eigenaarschap wist zodat een gerecyclede bewoner geen stale afspraak-owner houdt
 	SetNeedsPlayer(false);
 	RoamTimer = 0.f;           // pak meteen een nieuw roam-doel
 	bHasRoamGoal = false;
@@ -3092,8 +3114,12 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	if (ProductId.IsNone()) { ProductId = DesiredProductId; }
 	const bool bSubstitute = (ProductId != DesiredProductId);
 
+	// NpcId ALTIJD normaliseren naar de BASIS-id (strip een eventuele "#spelerId"-suffix): zonder dit bouwt de
+	// per-speler-sleutel hieronder "basis#Pid#BuyerPid" (dubbele suffix = fantoom-entry, respect/loyaliteit stuk).
+	NpcId = UContactsComponent::BaseNpcId(NpcId);
+
 	// COMPETITIVE: respect/loyaliteit/verslaving staan PER SPELER los. Laad de relatie van de DEALENDE speler
-	// (sleutel "NpcId#spelerId") zodat elke speler z'n eigen band met deze klant opbouwt. Co-op = gedeeld.
+	// (sleutel "BASIS-NpcId#spelerId") zodat elke speler z'n eigen band met deze klant opbouwt. Co-op = gedeeld.
 	if (PayTo && !NpcId.IsNone())
 	{
 		AWeedShopGameState* GScomp = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;

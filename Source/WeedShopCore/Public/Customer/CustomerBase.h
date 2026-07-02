@@ -183,6 +183,12 @@ public:
 	bool bNeedsPlayer = false;
 	void SetNeedsPlayer(bool b) { if (HasAuthority()) { bNeedsPlayer = b; } }
 
+	// COMPETITIVE: voor welke speler deze AFSPRAAK-NPC is (stabiele speler-id). Gezet bij het spawnen/starten
+	// van de afspraak uit Msg.ForPlayerId. Gerepliceerd zodat compass/telefoon bij BEIDE machines de afspraak-
+	// NPC alleen bij de eigenaar-speler tonen. Leeg = gedeeld/co-op (iedereen ziet 'm, ongewijzigd).
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
+	FString ApptForPlayerId;
+
 	// In gesprek met een speler -> de NPC stopt met lopen tot het gesprek sluit (server-authoritative).
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "WeedShop|Customer")
 	bool bTalkingToPlayer = false;

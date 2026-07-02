@@ -1524,7 +1524,7 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 		float R = 0.f, L = 0.f, A = 0.f; FText N;
 		if (GS->GetNpcRegistry()->GetStats(Customer->NpcId, R, L, A, N))
 		{
-			GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R + RespGain, L + LoyGain, A + AddGain);
+			GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R + RespGain, L + LoyGain, A + AddGain, this); // this = dealende speler-pawn -> per-speler OwnerPlayerId in competitive
 		}
 		GS->GetNpcRegistry()->MarkSampled(Customer->NpcId); // start de per-NPC sample-cooldown
 	}
@@ -1592,7 +1592,7 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 			float R2 = 0.f, L2 = 0.f, A2 = 0.f; FText N2;
 			if (GS->GetNpcRegistry()->GetStats(Customer->NpcId, R2, L2, A2, N2))
 			{
-				GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R2, L2, FMath::Max(A2, Customer->AddictionToBuy));
+				GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R2, L2, FMath::Max(A2, Customer->AddictionToBuy), this); // this = dealende speler-pawn -> per-speler OwnerPlayerId in competitive
 			}
 		}
 	}

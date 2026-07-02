@@ -5,6 +5,7 @@
 #include "Customer/CustomerSpawner.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "Save/SaveGameSubsystem.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -160,12 +161,19 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (IsValid(*It)) { CachedCustomers.Add(*It); }
 		}
 	}
+	// Competitive: alleen JOUW afspraak-NPC's op de kompas (ApptForPlayerId leeg = gedeeld/co-op of geen
+	// afspraak; anders match op de lokale speler z'n stabiele id). Buiten competitive is dit ongewijzigd.
+	const AWeedShopGameState* GSComp = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const bool bCompFilter = GSComp && GSComp->IsCompetitive();
+	const FString MyId = bCompFilter ? USaveGameSubsystem::StablePlayerId(P) : FString();
 	int32 m = 0;
 	for (const TWeakObjectPtr<ACustomerBase>& WkC : CachedCustomers)
 	{
 		if (m >= Markers.Num()) { break; }
 		ACustomerBase* It = WkC.Get();
 		if (!IsValid(It) || !It->bNeedsPlayer || !It->bShowOnCityMap) { continue; }
+		// Afspraak-NPC van de tegenstander niet tonen (leeg = gedeeld, altijd tonen).
+		if (bCompFilter && !It->ApptForPlayerId.IsEmpty() && It->ApptForPlayerId != MyId) { continue; }
 		const FVector D = It->GetActorLocation() - PL;
 		if (D.SizeSquared2D() < 100.f) { continue; }
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));

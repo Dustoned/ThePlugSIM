@@ -12,6 +12,7 @@
 #include "NpcRegistryComponent.generated.h"
 
 class UDataTable;
+class APawn;
 
 USTRUCT(BlueprintType)
 struct FNpcState
@@ -205,9 +206,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
 	bool GetStats(FName NpcId, float& OutRespect, float& OutLoyalty, float& OutAddiction, FText& OutName) const;
 
-	// Server: schrijf de stats terug en check de contact-unlock.
+	// Server: schrijf de stats terug en check de contact-unlock. DealingPawn = de speler die deze relatie opbouwt
+	// (competitive: die krijgt het contact + de unlock-toast; leeg/nullptr = co-op gedeeld, ongewijzigd).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
-	void ApplyStats(FName NpcId, float Respect, float Loyalty, float Addiction);
+	void ApplyStats(FName NpcId, float Respect, float Loyalty, float Addiction, APawn* DealingPawn = nullptr);
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	int32 GetUnlockedCount() const;
@@ -246,6 +248,7 @@ protected:
 	// Huidig dagnummer (0 als geen cyclus).
 	int32 CurrentDay() const;
 
-	// Check loyaliteit-drempel; ontgrendel het contact bij de ContactsComponent.
-	void CheckUnlock(FNpcState& State);
+	// Check loyaliteit-drempel; ontgrendel het contact bij de ContactsComponent. DealingPawn = de speler die
+	// deze relatie opbouwt (competitive: eigenaar van het contact + de unlock-toast; nullptr = co-op gedeeld).
+	void CheckUnlock(FNpcState& State, APawn* DealingPawn = nullptr);
 };

@@ -328,7 +328,14 @@ void UPhoneClientComponent::MarkChatSeen(FName ContactId)
 void UPhoneClientComponent::ServerMarkThreadSeen_Implementation(FName ContactId)
 {
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	if (GS && GS->GetContacts()) { GS->GetContacts()->MarkThreadSeen(ContactId); }
+	if (GS && GS->GetContacts())
+	{
+		// Competitive: server leidt de acterende speler af uit de owner-pawn (GetOwner = de speler-pawn
+		// waarop deze component draait). Buiten competitive blijft CallerId leeg = gedeeld/co-op.
+		const APawn* Me = Cast<APawn>(GetOwner());
+		const FString CallerId = (GS->IsCompetitive() && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
+		GS->GetContacts()->MarkThreadSeen(ContactId, CallerId);
+	}
 }
 
 bool UPhoneClientComponent::HasUnreadFrom(FName ContactId) const
@@ -3595,7 +3602,10 @@ void UPhoneClientComponent::ServerRespond_Implementation(bool bAccept)
 	{
 		if (GS->GetContacts())
 		{
-			GS->GetContacts()->RespondTopPending(bAccept);
+			// Competitive: server leidt de acterende speler af uit de owner-pawn; leeg buiten competitive.
+			const APawn* Me = Cast<APawn>(GetOwner());
+			const FString CallerId = (GS->IsCompetitive() && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
+			GS->GetContacts()->RespondTopPending(bAccept, CallerId);
 		}
 	}
 }
@@ -3606,7 +3616,10 @@ void UPhoneClientComponent::ServerRespondContact_Implementation(FName ContactId,
 	{
 		if (GS->GetContacts())
 		{
-			GS->GetContacts()->RespondToContact(ContactId, bAccept);
+			// Competitive: server leidt de acterende speler af uit de owner-pawn; leeg buiten competitive.
+			const APawn* Me = Cast<APawn>(GetOwner());
+			const FString CallerId = (GS->IsCompetitive() && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
+			GS->GetContacts()->RespondToContact(ContactId, bAccept, CallerId);
 		}
 	}
 }
@@ -3617,7 +3630,10 @@ void UPhoneClientComponent::ServerProposeContactTime_Implementation(FName Contac
 	{
 		if (GS->GetContacts())
 		{
-			GS->GetContacts()->ProposeTimeToContact(ContactId, MinutesOfDay);
+			// Competitive: server leidt de acterende speler af uit de owner-pawn; leeg buiten competitive.
+			const APawn* Me = Cast<APawn>(GetOwner());
+			const FString CallerId = (GS->IsCompetitive() && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
+			GS->GetContacts()->ProposeTimeToContact(ContactId, MinutesOfDay, CallerId);
 		}
 	}
 }
@@ -3673,7 +3689,10 @@ void UPhoneClientComponent::ServerProposeContactStrain_Implementation(FName Cont
 			for (const FShelfStack& C : It->Contents) { Consider(C.ItemId, C.Thc, C.QualityPct); }
 		}
 	}
-	GS->GetContacts()->ProposeAlternativeStrain(ContactId, Strain, OffThc, OffQual);
+	// Competitive: server leidt de acterende speler af uit de owner-pawn; leeg buiten competitive.
+	const APawn* Me = Cast<APawn>(GetOwner());
+	const FString CallerId = (GS->IsCompetitive() && Me) ? USaveGameSubsystem::StablePlayerId(Me) : FString();
+	GS->GetContacts()->ProposeAlternativeStrain(ContactId, Strain, OffThc, OffQual, CallerId);
 }
 
 void UPhoneClientComponent::SaveMapBorder()

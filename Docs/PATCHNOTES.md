@@ -1,4 +1,56 @@
 PATCH NOTES
+Version 1.19.4 — 2 juli 2026
+
+Korte intro:
+De grote co-op-ronde. Samen (en tegen elkaar) spelen werkt nu zoals het hoort: de mensen op straat
+lopen bij allebei dezelfde kant op, de tweede speler kan weer bouwen, meldingen komen bij de juiste
+speler aan, en jullie bank raakt niet meer per ongeluk leeg. Plus een stapel polish en een paar fixes
+waar je zelf om vroeg.
+
+━━━━━━━━━━━━━━━━━━━━
+
+CO-OP
+
+• De mensen op straat (NPC's) zijn nu gedeeld: host en gast zien exact dezelfde mensen op dezelfde
+  plek, ze lopen weer rond, hebben botsing (je loopt er niet meer doorheen) en staan op elkaars kaart.
+  Voorheen zag de gast een eigen, bevroren/zwevende set - dat is weg. Ook deals met klanten werken nu
+  voor de gast.
+• De tweede speler kan weer meubels plaatsen in z'n eigen kamer (in competitive ging dat niet meer,
+  ook al was de preview blauw).
+• Meldingen komen bij de juiste speler aan: pakket oppakken, slapen/opslaan, kopen/verkopen, level-up
+  en shop-licentie, deal-bevestigingen - de gast zag die eerder niet.
+• Een boete (inval/overval) of een upgrade wordt nu bij de juiste speler afgeschreven, niet altijd bij
+  de host.
+• De gedeelde bank raakt niet meer leeg als iemand later in de sessie binnenkomt.
+• Competitive is netter gescheiden: je ziet niet meer de opslag/klant/afspraak van je tegenstander,
+  chat-berichten lekken niet meer over, en je kunt niet per ongeluk de afspraak van de ander accepteren.
+• De mede-speler-marker op de kaart is nu goud (viel eerst weg tussen de blauwe mensen-stippen).
+
+━━━━━━━━━━━━━━━━━━━━
+
+INTERFACE & WERELD
+
+• De M-kaart is 's nachts weer leesbaar (was pikzwart) - de gebouwen/straten tonen nu dag-helder,
+  ongeacht de tijd.
+• Packing bench / joint rollen: je kiest weer netjes 1 strain (die lichtte per ongeluk allemaal op
+  als je meerdere oogsten van dezelfde soort had).
+• Als een klant om een soort vraagt, staat die soort nu in z'n eigen kleur (chat + deal-scherm).
+• Schappen/rekken snappen strak tegen de muur en kunnen er niet meer half doorheen.
+• Item-gewichten kloppen (concentraten/edibles wogen absurd zwaar in je draaggewicht).
+• Het gram-gewicht van een plant loopt netjes op tijdens het groeien i.p.v. meteen de eindwaarde.
+• Grotere waterflessen geven meer water per klik (nette opbouw).
+• De laadscherm-teksten wisselen rustiger en willekeuriger.
+• Het kompas is strakker (geen kader/windstreek-letters meer).
+• Mensen op straat duwen elkaar niet meer van meters afstand weg; ze lopen gewoon langs elkaar.
+• Afspraken via de telefoon geven nu altijd genoeg tijd om te antwoorden.
+
+━━━━━━━━━━━━━━━━━━━━
+
+(Intern: de download-controle vangt nu ook stille "wereld-layout niet meegebakken"-fouten, zodat een
+editor-fix aan de kamers/meubels altijd aantoonbaar in de download zit.)
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.19.3 — 2 juli 2026
 
 Korte intro:

@@ -70,8 +70,11 @@ void UContactsComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	CheckAppointments();
 }
 
-void UContactsComponent::RegisterContact(FName ContactId, const FText& DisplayName, float Relationship)
+void UContactsComponent::RegisterContact(FName ContactId, const FText& DisplayName, float Relationship, const FString& OwnerPlayerId)
 {
+	// ALTIJD op de BASIS-NpcId keyen (strip een eventuele "#spelerId"-suffix): matching + berichten draaien
+	// op de basis-id, het per-speler eigenaarschap zit apart in OwnerPlayerId.
+	ContactId = BaseNpcId(ContactId);
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone() || HasContact(ContactId))
 	{
 		return;
@@ -81,19 +84,56 @@ void UContactsComponent::RegisterContact(FName ContactId, const FText& DisplayNa
 	C.ContactId = ContactId;
 	C.DisplayName = DisplayName;
 	C.Relationship = Relationship;
+	C.OwnerPlayerId = OwnerPlayerId; // leeg = gedeeld/co-op; gevuld = de eigenaar-speler (competitive)
 	Contacts.Add(C);
 
 	UE_LOG(LogWeedShop, Log, TEXT("New contact: %s"), *DisplayName.ToString());
-	if (GEngine)
-	{
-		UWeedToast::Notify(-1, 3.f, FColor::Cyan,
-			FString::Printf(TEXT("New contact: %s"), *DisplayName.ToString()));
-	}
+	// Per-speler: in competitive ziet alleen de eigenaar de "New contact"-toast; in co-op iedereen.
+	NotifyOwnerPlayer(OwnerPlayerId, 3.f, FColor::Cyan,
+		FString::Printf(TEXT("New contact: %s"), *DisplayName.ToString()));
 }
 
 bool UContactsComponent::HasContact(FName ContactId) const
 {
 	return Contacts.ContainsByPredicate([ContactId](const FPhoneContact& C) { return C.ContactId == ContactId; });
+}
+
+FName UContactsComponent::BaseNpcId(FName NpcId)
+{
+	// Strip een eventuele "#spelerId"-suffix: contacten/berichten/matching draaien op de BASIS-NpcId.
+	const FString S = NpcId.ToString();
+	int32 Hash = INDEX_NONE;
+	if (S.FindChar(TEXT('#'), Hash))
+	{
+		return FName(*S.Left(Hash));
+	}
+	return NpcId;
+}
+
+APawn* UContactsComponent::ResolvePawnForPlayer(const FString& PlayerId) const
+{
+	if (PlayerId.IsEmpty() || !GetWorld()) { return nullptr; }
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+		if (P && USaveGameSubsystem::StablePlayerId(P) == PlayerId) { return P; }
+	}
+	return nullptr;
+}
+
+void UContactsComponent::NotifyOwnerPlayer(const FString& PlayerId, float Seconds, const FColor& Color, const FString& Text) const
+{
+	if (!GEngine) { return; }
+	// Co-op (leeg) -> iedereen; competitive -> alleen de eigenaar-pawn (nooit lekken naar de rivaal).
+	if (PlayerId.IsEmpty())
+	{
+		UWeedToast::Notify(-1, Seconds, Color, Text);
+		return;
+	}
+	if (APawn* Owner = ResolvePawnForPlayer(PlayerId))
+	{
+		UWeedToast::NotifyPawn(Owner, -1, Seconds, Color, Text);
+	}
 }
 
 bool UContactsComponent::GetCycleTime(float& OutNow, float& OutLength) const
@@ -280,8 +320,13 @@ void UContactsComponent::SendRandomAppointment()
 			}
 			if (Pawns.Num() > 0)
 			{
-				FString Owner;
-				if (UNpcRegistryComponent* Rg = GScm->GetNpcRegistry()) { Owner = Rg->GetTopOwner(C.ContactId); }
+				// Doel-eigenaar: eerst het contact-eigenaarschap (OwnerPlayerId), anders de favoriete speler van
+				// deze klant (GetTopOwner op de BASIS-NpcId). Beide op de basis-id -> geen dubbele-suffix-mismatch.
+				FString Owner = C.OwnerPlayerId;
+				if (Owner.IsEmpty())
+				{
+					if (UNpcRegistryComponent* Rg = GScm->GetNpcRegistry()) { Owner = Rg->GetTopOwner(BaseNpcId(C.ContactId)); }
+				}
 				for (APawn* P : Pawns) { if (USaveGameSubsystem::StablePlayerId(P) == Owner) { TargetPawn = P; break; } }
 				if (!TargetPawn) { TargetPawn = Pawns[FMath::RandRange(0, Pawns.Num() - 1)]; }
 				Msg.ForPlayerId = USaveGameSubsystem::StablePlayerId(TargetPawn);
@@ -322,24 +367,25 @@ void UContactsComponent::CheckAppointments()
 		UNpcRegistryComponent* Reg = nullptr;
 		if (const AWeedShopGameState* GSc = Cast<AWeedShopGameState>(GetOwner())) { Reg = GSc->GetNpcRegistry(); }
 
-		struct FAct { FName Id; FText Name; int32 Type; }; // 1 = nudge, 2 = opgeven
+		struct FAct { FName Id; FText Name; int32 Type; FString ForPlayerId; }; // 1 = nudge, 2 = opgeven
 		TArray<FAct> Acts;
 		for (FPhoneMessage& Msg : Messages)
 		{
 			if (Msg.Status != 0 || Msg.bFromMe || Msg.WantQty <= 0 || Msg.SentRealTime < 0.f) { continue; }
 			const float Elapsed = RealNow - Msg.SentRealTime;
-			if (!Msg.bNudged && Elapsed >= NudgeDelay) { Msg.bNudged = true; Acts.Add({ Msg.FromContactId, Msg.SenderName, 1 }); }
-			else if (Elapsed >= GiveUpDelay) { Msg.Status = 2; Acts.Add({ Msg.FromContactId, Msg.SenderName, 2 }); }
+			// AFGELEIDE berichten (nudge/opgeven) ERVEN ForPlayerId van het bron-bericht -> lekken niet naar de rivaal.
+			if (!Msg.bNudged && Elapsed >= NudgeDelay) { Msg.bNudged = true; Acts.Add({ Msg.FromContactId, Msg.SenderName, 1, Msg.ForPlayerId }); }
+			else if (Elapsed >= GiveUpDelay) { Msg.Status = 2; Acts.Add({ Msg.FromContactId, Msg.SenderName, 2, Msg.ForPlayerId }); }
 		}
 		for (const FAct& Ac : Acts)
 		{
 			if (Ac.Type == 1)
 			{
-				PushInfoMessage(Ac.Id, Ac.Name, FText::FromString(TEXT("You there? Still need it, or should I look elsewhere?")));
+				PushInfoMessage(Ac.Id, Ac.Name, FText::FromString(TEXT("You there? Still need it, or should I look elsewhere?")), Ac.ForPlayerId);
 			}
 			else
 			{
-				PushInfoMessage(Ac.Id, Ac.Name, FText::FromString(TEXT("Nvm, took too long. I'll get it somewhere else.")));
+				PushInfoMessage(Ac.Id, Ac.Name, FText::FromString(TEXT("Nvm, took too long. I'll get it somewhere else.")), Ac.ForPlayerId);
 				if (Reg)
 				{
 					float R = 0.f, L = 0.f, A = 0.f; FText N;
@@ -373,12 +419,13 @@ void UContactsComponent::CheckAppointments()
 		{
 			Msg.bAnnounced = true;
 			UE_LOG(LogWeedShop, Log, TEXT("Appointment with %s is now."), *Msg.SenderName.ToString());
-			if (GEngine)
 			{
 				const FString Where = (Msg.Kind == EAppointmentKind::TheyComeToYou)
 					? FString::Printf(TEXT("%s is on the way!"), *Msg.SenderName.ToString())
 					: FString::Printf(TEXT("%s is waiting at their place"), *Msg.SenderName.ToString());
-				UWeedToast::Notify(-1, 5.f, FColor::Magenta, FString::Printf(TEXT("Appointment: %s"), *Where));
+				// Per-speler: alleen de eigenaar van deze afspraak (Msg.ForPlayerId) krijgt de aankondiging;
+				// co-op (leeg) = alle spelers. Nooit Notify(-1) -> de rivaal ziet elkaars afspraak niet meer.
+				NotifyOwnerPlayer(Msg.ForPlayerId, 5.f, FColor::Magenta, FString::Printf(TEXT("Appointment: %s"), *Where));
 			}
 			SpawnAppointmentCustomer(Msg);
 		}
@@ -444,6 +491,10 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		return;
 	}
 
+	// Match ALTIJD op de BASIS-NpcId: het bericht draagt de basis-id, de rondlopende bewoner ook. Zonder
+	// deze strip miste een "#spelerId"-bericht elke echte NPC en viel altijd terug op de fallback-spawn.
+	const FName BaseId = BaseNpcId(Msg.FromContactId);
+
 	// Voorkeur: stuur de BESTAANDE bewoner met dit NpcId aan (geen dubbele NPC). YouGoToThem -> die
 	// verschijnt in z'n eigen unit en wacht; TheyComeToYou -> die loopt naar de speler.
 	// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
@@ -451,10 +502,11 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
 	{
 		ACustomerBase* Cb = WCb.Get();
-		if (IsValid(Cb) && Cb->GetWorld() == World && Cb->NpcId == Msg.FromContactId && Cb->IsResident())
+		if (IsValid(Cb) && Cb->GetWorld() == World && Cb->NpcId == BaseId && Cb->IsResident())
 		{
 			Cb->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
 			if (Msg.bOrder) { Cb->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
+			Cb->ApptForPlayerId = Msg.ForPlayerId; // competitive: bij welke speler deze afspraak-NPC hoort (compass/telefoon-filter)
 			Cb->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
 			return;
 		}
@@ -560,7 +612,8 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		return;
 	}
 
-	Cust->NpcId = Msg.FromContactId; // dit is dezelfde persoon als het contact
+	Cust->NpcId = BaseId; // dit is dezelfde persoon als het contact (BASIS-NpcId, geen "#spelerId"-suffix)
+	Cust->ApptForPlayerId = Msg.ForPlayerId; // competitive: bij welke speler deze afspraak-NPC hoort (gerepliceerd, vóór FinishSpawning)
 	Cust->ProductTable = ProductTable;
 	Cust->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
 	if (Msg.bOrder) { Cust->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
@@ -660,7 +713,7 @@ void UContactsComponent::ApplyRelationshipDelta(FName ContactId, float Delta)
 	}
 }
 
-void UContactsComponent::RespondTopPending(bool bAccept)
+void UContactsComponent::RespondTopPending(bool bAccept, const FString& CallerId)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
@@ -669,26 +722,29 @@ void UContactsComponent::RespondTopPending(bool bAccept)
 
 	for (const FPhoneMessage& Msg : Messages)
 	{
-		if (Msg.Status == 0 && !Msg.bFromMe)
+		// Competitive: alleen berichten die voor deze speler zijn (leeg CallerId of leeg ForPlayerId = co-op gedeeld).
+		if (Msg.Status == 0 && !Msg.bFromMe && (Msg.ForPlayerId.IsEmpty() || CallerId.IsEmpty() || Msg.ForPlayerId == CallerId))
 		{
-			RespondToContact(Msg.FromContactId, bAccept);
+			RespondToContact(Msg.FromContactId, bAccept, CallerId);
 			return;
 		}
 	}
 }
 
-void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
+void UContactsComponent::RespondToContact(FName ContactId, bool bAccept, const FString& CallerId)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone())
 	{
 		return;
 	}
 
-	// Nieuwste open afspraak-bericht van dit contact (index 0 = nieuwste).
+	// Nieuwste open afspraak-bericht van dit contact (index 0 = nieuwste). Competitive: alleen berichten die
+	// voor deze speler zijn (leeg ForPlayerId/CallerId = co-op gedeeld) -> de rivaal kan jouw afspraak niet accepteren.
 	int32 Found = INDEX_NONE;
 	for (int32 i = 0; i < Messages.Num(); ++i)
 	{
-		if (Messages[i].FromContactId == ContactId && Messages[i].Status == 0 && !Messages[i].bFromMe)
+		if (Messages[i].FromContactId == ContactId && Messages[i].Status == 0 && !Messages[i].bFromMe
+			&& (Messages[i].ForPlayerId.IsEmpty() || CallerId.IsEmpty() || Messages[i].ForPlayerId == CallerId))
 		{
 			Found = i;
 			break;
@@ -701,6 +757,7 @@ void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
 
 	const float ApptTime = Messages[Found].AppointmentTimeOfDay;
 	const FText SenderName = Messages[Found].SenderName;
+	const FString MsgForPlayer = Messages[Found].ForPlayerId; // afgeleide reply erft dit
 	Messages[Found].Status = bAccept ? 1 : 2;
 	// Accepteren geeft GEEN gratis loyaliteit meer: de beloning komt pas bij de VOLTOOIDE verkoop
 	// (ComputeAcceptedDeltas). Anders houd je +stats over aan een afspraak die je daarna alsnog laat
@@ -723,25 +780,24 @@ void UContactsComponent::RespondToContact(FName ContactId, bool bAccept)
 		}
 	}
 
-	// Mijn antwoord als chat-regel (rechts) toevoegen.
+	// Mijn antwoord als chat-regel (rechts) toevoegen. AFGELEID bericht ERFT ForPlayerId van het bron-bericht.
 	FPhoneMessage Reply;
 	Reply.FromContactId = ContactId;
 	Reply.SenderName = SenderName;
 	Reply.bFromMe = true;
 	Reply.Status = 3; // antwoord, geen openstaande afspraak
 	Reply.AppointmentTimeOfDay = -1.f;
+	Reply.ForPlayerId = MsgForPlayer; // erft van het bron-bericht -> blijft bij de juiste speler
 	Reply.Body = bAccept
 		? FText::FromString(FString::Printf(TEXT("Sure, see you at %s."), *FormatApptClock(ApptTime)))
 		: FText::FromString(TEXT("Sorry, can't make it."));
 	StampAndInsert(Reply);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 
-	if (GEngine)
-	{
-		UWeedToast::Notify(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
-			FString::Printf(TEXT("%s: appointment %s"), *SenderName.ToString(),
-				bAccept ? TEXT("accepted") : TEXT("cancelled")));
-	}
+	// Feedback alleen naar de antwoordende speler (competitive); co-op (leeg) = alle spelers.
+	NotifyOwnerPlayer(MsgForPlayer, 3.f, bAccept ? FColor::Green : FColor::Orange,
+		FString::Printf(TEXT("%s: appointment %s"), *SenderName.ToString(),
+			bAccept ? TEXT("accepted") : TEXT("cancelled")));
 
 	OnRep_Messages();
 }
@@ -751,14 +807,16 @@ void UContactsComponent::OnRep_Messages()
 	OnMessagesChanged.Broadcast();
 }
 
-void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDay)
+void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDay, const FString& CallerId)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
 
+	// Competitive: alleen een bericht dat voor deze speler is (leeg = co-op gedeeld).
 	int32 Found = INDEX_NONE;
 	for (int32 i = 0; i < Messages.Num(); ++i)
 	{
-		if (Messages[i].FromContactId == ContactId && Messages[i].Status == 0 && !Messages[i].bFromMe) { Found = i; break; }
+		if (Messages[i].FromContactId == ContactId && Messages[i].Status == 0 && !Messages[i].bFromMe
+			&& (Messages[i].ForPlayerId.IsEmpty() || CallerId.IsEmpty() || Messages[i].ForPlayerId == CallerId)) { Found = i; break; }
 	}
 	if (Found == INDEX_NONE) { return; }
 
@@ -773,28 +831,27 @@ void UContactsComponent::ProposeTimeToContact(FName ContactId, int32 MinutesOfDa
 	else { NewTime = (FMath::Clamp((float)MinutesOfDay, 0.f, 1439.f) / 1440.f) * Length; }
 
 	const FText SenderName = Messages[Found].SenderName;
+	const FString MsgForPlayer = Messages[Found].ForPlayerId; // afgeleide berichten erven dit
 	Messages[Found].Status = 1;                      // geaccepteerd op JOUW tijd
 	Messages[Found].AppointmentTimeOfDay = NewTime;
 	ApplyRelationshipDelta(ContactId, 5.f);          // zelfde als gewoon accepteren; geen nadeel
 
-	// Mijn voorstel (rechts).
+	// Mijn voorstel (rechts). AFGELEID -> erft ForPlayerId van het bron-bericht.
 	FPhoneMessage Mine;
 	Mine.FromContactId = ContactId; Mine.SenderName = SenderName; Mine.bFromMe = true;
-	Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f;
+	Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f; Mine.ForPlayerId = MsgForPlayer;
 	Mine.Body = FText::FromString(FString::Printf(TEXT("Can we do %s instead?"), *FormatApptClock(NewTime)));
 	StampAndInsert(Mine);
-	// Hun antwoord: altijd akkoord (links).
+	// Hun antwoord: altijd akkoord (links). AFGELEID -> erft ForPlayerId van het bron-bericht.
 	FPhoneMessage Theirs;
 	Theirs.FromContactId = ContactId; Theirs.SenderName = SenderName; Theirs.bFromMe = false;
-	Theirs.Status = 3; Theirs.AppointmentTimeOfDay = -1.f;
+	Theirs.Status = 3; Theirs.AppointmentTimeOfDay = -1.f; Theirs.ForPlayerId = MsgForPlayer;
 	Theirs.Body = FText::FromString(FString::Printf(TEXT("Works for me, see you at %s."), *FormatApptClock(NewTime)));
 	StampAndInsert(Theirs);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 
-	if (GEngine)
-	{
-		UWeedToast::Notify(-1, 3.f, FColor::Green, FString::Printf(TEXT("%s: agreed on %s"), *SenderName.ToString(), *FormatApptClock(NewTime)));
-	}
+	// Feedback alleen naar de voorstellende speler (competitive); co-op (leeg) = alle spelers.
+	NotifyOwnerPlayer(MsgForPlayer, 3.f, FColor::Green, FString::Printf(TEXT("%s: agreed on %s"), *SenderName.ToString(), *FormatApptClock(NewTime)));
 	OnRep_Messages();
 }
 
@@ -826,35 +883,39 @@ float UContactsComponent::SubstituteAcceptChance(FName ContactId, FName ReqStrai
 	return FMath::Clamp(Chance, 0.05f, 0.97f);
 }
 
-void UContactsComponent::ProposeAlternativeStrain(FName ContactId, FName NewStrain, float OfferedThc, float OfferedQualPct)
+void UContactsComponent::ProposeAlternativeStrain(FName ContactId, FName NewStrain, float OfferedThc, float OfferedQualPct, const FString& CallerId)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone() || NewStrain.IsNone()) { return; }
+	// Competitive: alleen een bericht dat voor deze speler is (leeg = co-op gedeeld).
+	auto MatchesCaller = [&CallerId](const FPhoneMessage& M) { return M.ForPlayerId.IsEmpty() || CallerId.IsEmpty() || M.ForPlayerId == CallerId; };
 	int32 Found = INDEX_NONE;
 	for (int32 i = 0; i < Messages.Num(); ++i)
 	{
-		if (Messages[i].FromContactId == ContactId && (Messages[i].Status == 0 || Messages[i].Status == 1) && !Messages[i].bFromMe) { Found = i; break; }
+		if (Messages[i].FromContactId == ContactId && (Messages[i].Status == 0 || Messages[i].Status == 1) && !Messages[i].bFromMe && MatchesCaller(Messages[i])) { Found = i; break; }
 	}
 	if (Found == INDEX_NONE) { return; }
 
 	const FName ReqStrain = Messages[Found].WantStrain;
 	const FText SenderName = Messages[Found].SenderName;
+	const FString MsgForPlayer = Messages[Found].ForPlayerId; // afgeleide berichten erven dit
 	const float Chance = SubstituteAcceptChance(ContactId, ReqStrain, NewStrain, OfferedThc);
 	const bool bAccept = FMath::FRand() <= Chance;
 
-	// Mijn aanbod (rechts).
+	// Mijn aanbod (rechts). AFGELEID -> erft ForPlayerId.
 	FPhoneMessage Mine;
-	Mine.FromContactId = ContactId; Mine.SenderName = SenderName; Mine.bFromMe = true; Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f;
+	Mine.FromContactId = ContactId; Mine.SenderName = SenderName; Mine.bFromMe = true; Mine.Status = 3; Mine.AppointmentTimeOfDay = -1.f; Mine.ForPlayerId = MsgForPlayer;
 	Mine.Body = FText::FromString(FString::Printf(TEXT("No %s right now - got %s at %.0f%% THC. Want that instead?"), *ReqStrain.ToString(), *NewStrain.ToString(), OfferedThc));
 	StampAndInsert(Mine);
 
 	FPhoneMessage Rep;
-	Rep.FromContactId = ContactId; Rep.SenderName = SenderName; Rep.bFromMe = false; Rep.Status = 3; Rep.AppointmentTimeOfDay = -1.f;
+	Rep.FromContactId = ContactId; Rep.SenderName = SenderName; Rep.bFromMe = false; Rep.Status = 3; Rep.AppointmentTimeOfDay = -1.f; Rep.ForPlayerId = MsgForPlayer;
 	if (bAccept)
 	{
-		// De afspraak wil voortaan deze strain (her-vinden, want de index is verschoven door de insert).
+		// De afspraak wil voortaan deze strain (her-vinden, want de index is verschoven door de insert;
+		// zelfde per-speler-filter zodat we het bericht van de JUISTE speler muteren).
 		for (FPhoneMessage& M : Messages)
 		{
-			if (M.FromContactId == ContactId && (M.Status == 0 || M.Status == 1) && !M.bFromMe) { M.WantStrain = NewStrain; break; }
+			if (M.FromContactId == ContactId && (M.Status == 0 || M.Status == 1) && !M.bFromMe && MatchesCaller(M)) { M.WantStrain = NewStrain; break; }
 		}
 		Rep.Body = FText::FromString(FString::Printf(TEXT("Yeah, %s works - bring that."), *NewStrain.ToString()));
 		ApplyRelationshipDelta(ContactId, 1.f);
@@ -866,11 +927,9 @@ void UContactsComponent::ProposeAlternativeStrain(FName ContactId, FName NewStra
 	StampAndInsert(Rep);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 
-	if (GEngine)
-	{
-		UWeedToast::Notify(-1, 3.f, bAccept ? FColor::Green : FColor::Orange,
-			FString::Printf(TEXT("%s: %s"), *SenderName.ToString(), bAccept ? TEXT("took the alternative") : TEXT("declined the swap")));
-	}
+	// Feedback alleen naar de aanbiedende speler (competitive); co-op (leeg) = alle spelers.
+	NotifyOwnerPlayer(MsgForPlayer, 3.f, bAccept ? FColor::Green : FColor::Orange,
+		FString::Printf(TEXT("%s: %s"), *SenderName.ToString(), bAccept ? TEXT("took the alternative") : TEXT("declined the swap")));
 	OnRep_Messages();
 }
 
@@ -896,7 +955,7 @@ void UContactsComponent::StampAndInsert(FPhoneMessage& M)
 	Messages.Insert(M, 0); // nieuwste bovenaan
 }
 
-void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body)
+void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderName, const FText& Body, const FString& ForPlayerId)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
 	FPhoneMessage M;
@@ -906,18 +965,22 @@ void UContactsComponent::PushInfoMessage(FName ContactId, const FText& SenderNam
 	M.AppointmentTimeOfDay = -1.f;
 	M.Status = 3;        // los info-bericht, geen openstaande afspraak (geen ja/nee nodig)
 	M.bFromMe = false;   // inkomend -> telt mee voor de ongelezen-bubble
+	M.ForPlayerId = ForPlayerId; // AFGELEID -> erft de eigenaar-speler van het bron-bericht (competitive)
 	StampAndInsert(M);
 	if (Messages.Num() > 40) { Messages.SetNum(40); }
 	OnRep_Messages();    // server: meteen lokaal de UI bijwerken
 }
 
-void UContactsComponent::MarkThreadSeen(FName ContactId)
+void UContactsComponent::MarkThreadSeen(FName ContactId, const FString& CallerId)
 {
 	if (GetOwnerRole() != ROLE_Authority || ContactId.IsNone()) { return; }
 	bool bChanged = false;
 	for (FPhoneMessage& M : Messages)
 	{
-		if (!M.bFromMe && M.FromContactId == ContactId && !M.bSeen) { M.bSeen = true; bChanged = true; }
+		// Competitive: alleen berichten die voor deze speler zijn als gelezen markeren (leeg = co-op gedeeld) -
+		// zo raakt het openen van jouw thread de ongelezen-badge van de rivaal niet.
+		if (!M.bFromMe && M.FromContactId == ContactId && !M.bSeen
+			&& (M.ForPlayerId.IsEmpty() || CallerId.IsEmpty() || M.ForPlayerId == CallerId)) { M.bSeen = true; bChanged = true; }
 	}
 	if (bChanged) { OnRep_Messages(); } // server: meteen lokaal de badge bijwerken; repliceert naar clients
 }
