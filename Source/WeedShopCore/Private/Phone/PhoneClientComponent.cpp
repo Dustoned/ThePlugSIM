@@ -3298,6 +3298,17 @@ void UPhoneClientComponent::ServerTransfer_Implementation(int64 AmountCents)
 	UEconomyComponent* Mine = GetOwnerEconomy();
 	if (!Mine || AmountCents <= 0) { return; }
 
+	// Co-op deelt EEN bank (BankOwner() = gedeelde GS-economy): een transfer is dan een no-op die alleen
+	// de fee verbrandt. Alleen in Competitive heeft ieder z'n eigen bank. Buiten competitive vroeg terug.
+	{
+		AWeedShopGameState* GScoop = GetGS();
+		if (!GScoop || !GScoop->IsCompetitive())
+		{
+			UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("No transfer needed - you share one bank."));
+			return;
+		}
+	}
+
 	// Zoek een co-op vriend (de portemonnee van een andere speler) om naar te sturen.
 	UEconomyComponent* Friend = nullptr;
 	if (UWorld* W = GetWorld())
@@ -3638,8 +3649,27 @@ void UPhoneClientComponent::ServerProposeContactStrain_Implementation(FName Cont
 	}
 	if (UWorld* W = GetWorld())
 	{
+		// COMPETITIVE: beperk de shelf-scan tot de EIGEN gespiegelde kamer, anders lek/gebruik je de opslag
+		// van de tegenstander. bJoiner EXPLICIET uit de owner-pawn (op de listen-server is de host-pawn
+		// locally-controlled, de joiner-pawn niet) - net als BuildComponent::InCompHome. Buiten competitive
+		// blijft de scan wereldwijd: gedeelde crew-voorraad is dan bedoeld.
+		TArray<FBox> CompBoxes;
+		if (GS->IsCompetitive())
+		{
+			const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+			const bool bJoiner = OwnerPawn && !OwnerPawn->IsLocallyControlled();
+			if (ADoorRetrofitter* Retro = FindRetro()) { Retro->GetCompetitiveHomeBoxes(bJoiner, CompBoxes); }
+		}
+		const bool bRestrict = (CompBoxes.Num() > 0);
 		for (TActorIterator<AStorageShelf> It(W); It; ++It)
 		{
+			if (bRestrict)
+			{
+				bool bInside = false;
+				const FVector Loc = It->GetActorLocation();
+				for (const FBox& B : CompBoxes) { if (B.IsInsideOrOn(Loc)) { bInside = true; break; } }
+				if (!bInside) { continue; }
+			}
 			for (const FShelfStack& C : It->Contents) { Consider(C.ItemId, C.Thc, C.QualityPct); }
 		}
 	}

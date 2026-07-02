@@ -174,35 +174,55 @@ void UHeatComponent::OnRep_Heat()
 
 void UHeatComponent::TriggerBust()
 {
-	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
-	if (!Econ)
+	UWorld* World = GetWorld();
+	if (!World)
 	{
 		return;
 	}
-	const int64 Loss = FMath::Max<int64>(500, WeedRoundEuros((int64)(Econ->GetBalanceCents() * 0.2)));
-	Econ->RemoveMoney(Loss);
 	SetHeat(Heat - 40.f);
-	UE_LOG(LogWeedShop, Log, TEXT("BUST! Politie pakte %lld cents."), (long long)Loss);
-	NotifyAllPlayers(GetWorld(), FColor::Red, 6.f,
-		FString::Printf(TEXT("BUST! Police took EUR %lld"), (long long)(WeedRoundEuros(Loss) / 100)));
+
+	// Co-op: beboet ELKE speler apart op DIENS EIGEN cash-saldo. GS->GetEconomy() = altijd de host
+	// (GetFirstPlayerController) -> joiner verloor anders nooit geld. Pak per pawn de eigen EconomyComponent
+	// en trek daar de bust-straf (20%, floor EUR 5) af; meld het bedrag per speler op diens eigen client.
+	UE_LOG(LogWeedShop, Log, TEXT("BUST! Politie pakt cash van elke speler."));
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+		UEconomyComponent* Econ = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
+		if (!Econ) { continue; }
+		const int64 Loss = FMath::Max<int64>(500, WeedRoundEuros((int64)(Econ->GetBalanceCents() * 0.2)));
+		Econ->RemoveMoney(Loss);
+		UWeedToast::NotifyPawn(Pw, -1, 6.f, FColor::Red,
+			FString::Printf(TEXT("BUST! Police took EUR %lld"), (long long)(WeedRoundEuros(Loss) / 100)));
+	}
 }
 
 void UHeatComponent::TriggerRobbery()
 {
-	AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
-	UEconomyComponent* Econ = GS ? GS->GetEconomy() : nullptr;
-	if (!Econ)
+	UWorld* World = GetWorld();
+	if (!World)
 	{
 		return;
 	}
-	const int64 Loss = FMath::Max<int64>(300, WeedRoundEuros((int64)(Econ->GetBalanceCents() * 0.15)));
-	Econ->RemoveMoney(Loss);   // alleen on-hand cash: de kluis (SafeCents) en de bank blijven veilig
 	SetHeat(Heat - 15.f);
+
+	// Co-op: berooft ELKE speler apart van diens EIGEN on-hand cash (15%, floor EUR 3). GS->GetEconomy() =
+	// altijd de host -> joiner verloor anders nooit cash. De kluis (SafeCents) en de bank blijven veilig.
+	// Melding per speler op diens eigen client met het eigen verloren bedrag.
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+		UEconomyComponent* Econ = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
+		if (!Econ) { continue; }
+		const int64 Loss = FMath::Max<int64>(300, WeedRoundEuros((int64)(Econ->GetBalanceCents() * 0.15)));
+		Econ->RemoveMoney(Loss);
+		UWeedToast::NotifyPawn(Pw, -1, 8.f, FColor(255, 140, 0),
+			FString::Printf(TEXT("Robbery! EUR %lld stolen from your cash. Use a safe!"),
+				(long long)(WeedRoundEuros(Loss) / 100)));
+	}
 
 	// Overvallers halen ook je ACTIEVE apartment leeg: alle groeiende planten, droogrekken en machines.
 	int32 Plants = 0, Racks = 0, Machines = 0;
-	if (UWorld* World = GetWorld())
 	{
 		// Verzamel de thuis-plek van ELKE speler (niet alleen de host): in co-op delen ze er meestal een,
 		// in competitive hebben ze er elk een -> berooft het apartment van iedereen, niet alleen speler 0.
@@ -231,9 +251,12 @@ void UHeatComponent::TriggerRobbery()
 		}
 	}
 
-	UE_LOG(LogWeedShop, Log, TEXT("Overval! %lld cents + apartment leeggehaald (%d planten, %d rekken, %d machines)."),
-		(long long)Loss, Plants, Racks, Machines);
-	NotifyAllPlayers(GetWorld(), FColor(255, 140, 0), 8.f,
-		FString::Printf(TEXT("Robbery! EUR %lld stolen + your apartment got cleaned out (%d plants, %d racks, %d machines). Use a safe!"),
-			(long long)(WeedRoundEuros(Loss) / 100), Plants, Racks, Machines));
+	UE_LOG(LogWeedShop, Log, TEXT("Overval! Cash van elke speler + apartment leeggehaald (%d planten, %d rekken, %d machines)."),
+		Plants, Racks, Machines);
+	if (Plants > 0 || Racks > 0 || Machines > 0)
+	{
+		NotifyAllPlayers(World, FColor(255, 140, 0), 8.f,
+			FString::Printf(TEXT("Robbery! Your apartment got cleaned out (%d plants, %d racks, %d machines)."),
+				Plants, Racks, Machines));
+	}
 }

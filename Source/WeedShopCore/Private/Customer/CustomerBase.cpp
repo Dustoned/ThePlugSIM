@@ -3349,7 +3349,7 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 		case EDealResult::Haggle:   C = FColor::Yellow; Msg = TEXT("Customer thinks it's too expensive"); break;
 		default:                    C = FColor::Red;    Msg = TEXT("Customer refuses"); break;
 		}
-		UWeedToast::Notify(-1, 3.f, C, Msg);
+		UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, C, Msg);
 	}
 }
 

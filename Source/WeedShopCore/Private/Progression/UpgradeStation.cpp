@@ -5,8 +5,10 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Game/WeedShopGameState.h"
 #include "Progression/UpgradeComponent.h"
+#include "Economy/EconomyComponent.h"
 #include "Data/UpgradeRow.h"
 #include "Engine/DataTable.h"
+#include "GameFramework/Pawn.h"
 
 AUpgradeStation::AUpgradeStation()
 {
@@ -33,7 +35,10 @@ void AUpgradeStation::Interact_Implementation(APawn* InstigatorPawn)
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetUpgrades())
 	{
-		GS->GetUpgrades()->BuyUpgrade(UpgradeId);
+		// Co-op: laat de KOPER-pawn betalen, niet de host. Zonder payer valt BuyUpgrade terug op
+		// GS->GetEconomy() (= altijd de host via GetFirstPlayerController) -> joiner betaalde nooit zelf.
+		UEconomyComponent* Pay = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UEconomyComponent>() : nullptr;
+		GS->GetUpgrades()->BuyUpgrade(UpgradeId, Pay);
 	}
 }
 

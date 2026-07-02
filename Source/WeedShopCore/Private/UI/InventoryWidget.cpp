@@ -7,6 +7,8 @@
 #include "UI/ShelfWidget.h"      // UShelfDragOp: een item uit een schap in de inventory droppen = pakken
 #include "Inventory/InventoryComponent.h"
 #include "World/StorageShelf.h"
+#include "Placement/BuildComponent.h" // IsInOwnedHome: competitive stash-filter (eigen kamer)
+#include "Game/WeedShopGameState.h"   // IsCompetitive
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
@@ -816,8 +818,24 @@ void UInventoryWidget::RebuildStash()
 	TMap<FName, float> ThcW; // som van thc*qty (voor gewogen gemiddelde)
 	if (UWorld* W = GetWorld())
 	{
+		// COMPETITIVE: de stash telt ALLE schappen op zonder eigenaar-filter -> elke speler zou de opslag van
+		// de tegenstander zien. Filter daarom op de EIGEN kamer/woning-box van de lokale speler (IsInOwnedHome
+		// dekt zowel de pack-map huis-box als de gespiegelde competitive-kamer). Buiten competitive ongewijzigd:
+		// de stash is dan bewust gedeeld (gewone co-op = samen 1 huis).
+		const AWeedShopGameState* GScomp = W->GetGameState<AWeedShopGameState>();
+		const bool bComp = GScomp && GScomp->IsCompetitive();
+		UBuildComponent* LocalBuild = nullptr;
+		if (bComp)
+		{
+			if (APawn* LP = GetOwningPlayerPawn())
+			{
+				LocalBuild = LP->FindComponentByClass<UBuildComponent>();
+			}
+		}
 		for (TActorIterator<AStorageShelf> It(W); It; ++It)
 		{
+			// In competitive: sla schappen over die niet in de eigen kamer/woning van de lokale speler staan.
+			if (bComp && LocalBuild && !LocalBuild->IsInOwnedHome(It->GetActorLocation())) { continue; }
 			for (const FShelfStack& S : It->Contents)
 			{
 				if (S.ItemId.IsNone() || S.Quantity <= 0) { continue; }

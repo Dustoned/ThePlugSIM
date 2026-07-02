@@ -410,5 +410,5 @@ void APlaceableProp::Interact_Implementation(APawn* InstigatorPawn)
 			if (USaveGameSubsystem* Save = GI->GetSubsystem<USaveGameSubsystem>()) { Save->SaveGame(true); }
 		}
 	}
-	UWeedToast::Notify(-1, 2.f, FColor::Cyan, TEXT("Slept - saved here."));
+	UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.f, FColor::Cyan, TEXT("Slept - saved here."));
 }

@@ -6,6 +6,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
 #include "Progression/MilestoneComponent.h"
+#include "GameFramework/Pawn.h"
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -52,10 +53,20 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 		return false;
 	}
 
+	// Co-op: leid de KOPER-pawn af uit de meegegeven portemonnee (PayFrom = de eigen EconomyComponent van
+	// de koper, zowel via de telefoon als via de UpgradeStation). Zo landen alle meldingen op DIENS client
+	// i.p.v. host-lokaal. Zonder payer (legacy/host-fallback) blijft de oude Notify(-1,...) staan.
+	APawn* BuyerPawn = PayFrom ? Cast<APawn>(PayFrom->GetOwner()) : nullptr;
+
 	// Fase-eis.
 	if (GS->GetMilestones() && GS->GetMilestones()->GetCurrentPhase() < Row->RequiredPhase)
 	{
-		if (GEngine)
+		if (BuyerPawn)
+		{
+			UWeedToast::NotifyPawn(BuyerPawn, -1, 3.f, FColor::Orange,
+				FString::Printf(TEXT("Not available yet: %s"), *Row->DisplayName.ToString()));
+		}
+		else if (GEngine)
 		{
 			UWeedToast::Notify(-1, 3.f, FColor::Orange,
 				FString::Printf(TEXT("Not available yet: %s"), *Row->DisplayName.ToString()));
@@ -68,7 +79,12 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 	const int64 UpgCost = Row->CostCents > 0 ? FMath::Max<int64>(100, WeedRoundEuros((int64)Row->CostCents)) : 0;
 	if (!Econ || !Econ->RemoveBank(UpgCost))
 	{
-		if (GEngine)
+		if (BuyerPawn)
+		{
+			UWeedToast::NotifyPawn(BuyerPawn, -1, 3.f, FColor::Red,
+				FString::Printf(TEXT("Not enough BANK money for %s (launder cash first)"), *Row->DisplayName.ToString()));
+		}
+		else if (GEngine)
 		{
 			UWeedToast::Notify(-1, 3.f, FColor::Red,
 				FString::Printf(TEXT("Not enough BANK money for %s (launder cash first)"), *Row->DisplayName.ToString()));
@@ -79,7 +95,12 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 	Purchased.Add(UpgradeId);
 	OnUpgradePurchased.Broadcast(UpgradeId);
 	UE_LOG(LogWeedShop, Log, TEXT("Upgrade bought: %s (%s)"), *UpgradeId.ToString(), *Row->DisplayName.ToString());
-	if (GEngine)
+	if (BuyerPawn)
+	{
+		UWeedToast::NotifyPawn(BuyerPawn, -1, 4.f, FColor::Green,
+			FString::Printf(TEXT("Upgrade purchased: %s"), *Row->DisplayName.ToString()));
+	}
+	else if (GEngine)
 	{
 		UWeedToast::Notify(-1, 4.f, FColor::Green,
 			FString::Printf(TEXT("Upgrade purchased: %s"), *Row->DisplayName.ToString()));

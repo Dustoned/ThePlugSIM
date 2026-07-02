@@ -3,7 +3,33 @@
 
 #include "WeedShopCore.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "Net/UnrealNetwork.h"
+
+namespace
+{
+	// Co-op: stuur een melding naar ALLE spelers (elk op z'n eigen client) i.p.v. alleen lokaal op de host.
+	// NotifyPawn routeert per pawn via de PhoneClientComponent naar de juiste client. Valt terug op een
+	// lokale melding als er (nog) geen pawns zijn. (Zelfde idioom als HeatComponent.cpp.)
+	void NotifyAllPlayers(UWorld* W, const FColor& Color, float Time, const FString& Msg)
+	{
+		bool bAny = false;
+		if (W)
+		{
+			for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+			{
+				if (APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr)
+				{
+					UWeedToast::NotifyPawn(Pw, -1, Time, Color, Msg);
+					bAny = true;
+				}
+			}
+		}
+		if (!bAny) { UWeedToast::Notify(-1, Time, Color, Msg); }
+	}
+}
 
 ULevelComponent::ULevelComponent()
 {
@@ -60,7 +86,8 @@ void ULevelComponent::AddXP(int32 Amount)
 		OnLevelUp.Broadcast(Level);
 		if (GEngine)
 		{
-			UWeedToast::Notify(-1, 5.f, FColor(120, 220, 255),
+			// Gedeelde mijlpaal: toon de level-up bij ALLE spelers (elk op eigen client).
+			NotifyAllPlayers(GetWorld(), FColor(120, 220, 255), 5.f,
 				FString::Printf(TEXT("LEVEL UP!  You reached level %d"), Level));
 		}
 		// Eind-mijlpaal: op level 50 verdien je de SHOP-LICENTIE (gate naar het weedshop-deel).
@@ -69,7 +96,8 @@ void ULevelComponent::AddXP(int32 Amount)
 			bShopLicensed = true;
 			if (GEngine)
 			{
-				UWeedToast::Notify(-1, 9.f, FColor(255, 215, 0),
+				// Gedeelde mijlpaal: shop-licentie naar ALLE spelers.
+				NotifyAllPlayers(GetWorld(), FColor(255, 215, 0), 9.f,
 					TEXT("SHOP LICENSE EARNED!  Level 50 reached - you can now run a legit weed shop."));
 			}
 		}

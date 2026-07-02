@@ -1271,11 +1271,18 @@ bool UBuildComponent::IsInOwnedHome(const FVector& P) const
 	// COMPETITIVE co-op: de eigen gespiegelde kamer (Apt 603/602) is bouwbaar. Gecachete retrofitter (geen
 	// actor-scan per call); leeg/geen effect buiten competitive. Alleen geraadpleegd op de pack-map / bij een
 	// build-marker, dus de city-map betaalt hier niets voor.
-	auto InCompHome = [this, &P]() -> bool
+	// Welke kamer valideren we? De ACTERENDE speler bepaalt dat, EXPLICIET via de owner-pawn - niet via de
+	// netmode. In ServerPlace draait dit op de listen-server (NM_ListenServer) met GetOwner() = de acterende
+	// pawn: de host-pawn is daar locally-controlled, de joiner-pawn niet. Zo valideert de server tegen de
+	// JOINER-kamer voor de joiner (anders kreeg 'ie altijd de host-box en werd elke plaatsing geweigerd),
+	// en blijft de client-preview (locally-controlled) tegen z'n eigen kamer valideren.
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	const bool bJoiner = OwnerPawn && !OwnerPawn->IsLocallyControlled();
+	auto InCompHome = [this, &P, bJoiner]() -> bool
 	{
 		ADoorRetrofitter* Retro = GetCompRetro();
 		if (!Retro) { return false; }
-		TArray<FBox> CHB; Retro->GetCompetitiveHomeBoxes(CHB);
+		TArray<FBox> CHB; Retro->GetCompetitiveHomeBoxes(bJoiner, CHB);
 		for (const FBox& B : CHB) { if (B.IsInsideOrOn(P)) { return true; } }
 		return false;
 	};

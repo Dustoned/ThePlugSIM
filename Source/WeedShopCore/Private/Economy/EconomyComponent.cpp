@@ -24,8 +24,14 @@ void UEconomyComponent::BeginPlay()
 	// Alleen de server zet het startsaldo; het repliceert daarna naar de clients.
 	if (GetOwnerRole() == ROLE_Authority)
 	{
-		SetBalance(StartingBalanceCents);   // cash (zwart)
-		SetBank(StartingBankCents);         // bank (wit) - demo: ook startgeld zodat de winkel meteen werkt
+		SetBalance(StartingBalanceCents);   // cash (zwart) - per-speler, elke pawn z'n eigen cash
+
+		// Bank is in co-op GEDEELD (BankOwner() == de GS-economy). Zet de start-bank maar EEN keer:
+		// alleen de bank-eigenaar-component doet dat. Anders nult een late joiner de crew-bank via SetBank.
+		if (BankOwner() == this)
+		{
+			SetBank(StartingBankCents);     // bank (wit) - demo: ook startgeld zodat de winkel meteen werkt
+		}
 	}
 }
 

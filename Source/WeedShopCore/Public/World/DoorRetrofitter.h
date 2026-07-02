@@ -58,6 +58,10 @@ public:
 	// Extra bouwbare home-boxes (Apt 603 host + 602 joiner) zodat beide spelers in hun eigen kamer
 	// mogen bouwen. Leeg buiten competitive (dan verandert er niets). Door BuildComponent geraadpleegd.
 	void GetCompetitiveHomeBoxes(TArray<FBox>& Out) const;
+	// EXPLICIETE speler-variant: kies host- vs joiner-kamer op bJoiner i.p.v. op de netmode. Nodig omdat een
+	// Server-RPC (ServerPlace) op de listen-server ALTIJD NM_ListenServer draait; de netmode-heuristiek zou dan
+	// voor de joiner de host-box teruggeven en z'n plaatsing weigeren. bJoiner leiden we af uit de owner-pawn.
+	void GetCompetitiveHomeBoxes(bool bJoiner, TArray<FBox>& Out) const;
 	// Verschoven no-build-zones voor 603 + 602 (uit de solo-kamer). Leeg buiten competitive.
 	void GetCompetitiveNoBuildZones(TArray<FBox>& Out) const { Out = CompNoBuildZones; }
 	// Bezorg-punt voor de competitive-kamer van deze speler (host of joiner): op de stoep net buiten de

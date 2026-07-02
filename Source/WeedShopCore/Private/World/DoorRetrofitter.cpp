@@ -4933,16 +4933,23 @@ AActor* ADoorRetrofitter::SpawnHomeItem(UWorld* W, FName ItemId, const FVector& 
 	return Spawned;
 }
 
-void ADoorRetrofitter::GetCompetitiveHomeBoxes(TArray<FBox>& Out) const
+void ADoorRetrofitter::GetCompetitiveHomeBoxes(bool bJoiner, TArray<FBox>& Out) const
 {
 	Out.Reset();
 	if (!bCompHomesReady) { return; }
-	// PER-SPELER-EIGENDOM: elke speler mag ALLEEN in z'n eigen kamer bouwen. De host-machine (listen-server,
-	// niet-client) hoort bij 603; de joiner-machine (client) bij 602. Dus geef alleen de EIGEN box terug.
-	UWorld* W = GetWorld();
-	const bool bClient = W && W->GetNetMode() == NM_Client;
-	const FBox& MyBox = bClient ? CompHomeBoxJoiner : CompHomeBoxHost;
+	// PER-SPELER-EIGENDOM: elke speler mag ALLEEN in z'n eigen kamer bouwen. De joiner hoort bij 602, de
+	// host bij 603. bJoiner is EXPLICIET meegegeven (afgeleid uit de owner-pawn), zodat dit ook klopt in een
+	// Server-RPC waar de netmode NM_ListenServer is. Dus geef alleen de EIGEN box terug.
+	const FBox& MyBox = bJoiner ? CompHomeBoxJoiner : CompHomeBoxHost;
 	if (MyBox.IsValid) { Out.Add(MyBox); }
+}
+
+void ADoorRetrofitter::GetCompetitiveHomeBoxes(TArray<FBox>& Out) const
+{
+	// Client-side (preview): leid bJoiner af uit de netmode - de client is de joiner (602), de rest host (603).
+	UWorld* W = GetWorld();
+	const bool bJoiner = W && W->GetNetMode() == NM_Client;
+	GetCompetitiveHomeBoxes(bJoiner, Out);
 }
 
 void ADoorRetrofitter::GetCompetitiveMarkers(TArray<FVector>& Out) const

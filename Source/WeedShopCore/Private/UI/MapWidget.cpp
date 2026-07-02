@@ -252,6 +252,7 @@ TSharedRef<SWidget> UMapWidget::RebuildWidget()
 		AddInfo(TEXT("geel = waypoint"), 12, FLinearColor(1.f, 0.85f, 0.3f), 3.f);
 		AddInfo(TEXT("blauw = NPC"), 12, FLinearColor(0.45f, 0.6f, 1.f), 3.f);
 		AddInfo(TEXT("green figure = customer for you"), 12, FLinearColor(0.5f, 1.f, 0.6f), 3.f);
+		AddInfo(TEXT("gold figure = co-op teammate"), 12, FLinearColor(1.f, 0.82f, 0.15f), 3.f);
 		AddInfo(TEXT("gold house = your home"), 12, FLinearColor(1.f, 0.82f, 0.3f), 3.f);
 	}
 	return Super::RebuildWidget();
@@ -408,7 +409,7 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// Mede-spelers (blauw) -> zie waar je co-op maatje is.
+	// Mede-spelers (goud, groter) -> zie waar je co-op maatje is; duidelijk anders dan de blauwe NPC-stippen.
 	{
 		int32 Used = 0;
 		if (const AGameStateBase* GSb = GetWorld() ? GetWorld()->GetGameState() : nullptr)
@@ -417,7 +418,7 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			{
 				const APawn* Pw = PS ? PS->GetPawn() : nullptr;
 				if (!Pw || Pw == LocalPawn) { continue; }
-				while (CoopDots.Num() <= Used) { CoopDots.Add(AddPersonIcon(FLinearColor(0.3f, 0.55f, 1.f), 24.f, 26)); } // co-op maatje: blauw poppetje
+				while (CoopDots.Num() <= Used) { CoopDots.Add(AddPersonIcon(FLinearColor(1.f, 0.82f, 0.1f), 30.f, 28)); } // co-op maatje: fel-goud poppetje, groter -> NIET te verwarren met de blauwe NPC-stippen (noch met het groene klant-poppetje)
 				if (UWidget* Dot = CoopDots[Used])
 				{
 					const FVector L = Pw->GetActorLocation();

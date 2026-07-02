@@ -116,6 +116,10 @@ void UAtmWidget::BuildShell(UCanvasPanel* Root)
 	BankText = WeedUI::Text(WidgetTree, TEXT("Bank (white):  EUR 0"), 15, FLinearColor(0.55f, 0.95f, 1.f));
 	Row(BankText, FMargin(0, 0, 0, 2));
 
+	// Transfer ("Send to friend") is alleen zinvol in Competitive: co-op deelt EEN bank (transfer = fee-verbrander).
+	const AWeedShopGameState* GSatm = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const bool bCompetitive = GSatm && GSatm->IsCompetitive();
+
 	// Tabs — één keer gebouwd; klik recolourt alleen de knoppen + wisselt de zichtbare pane (geen ClearChildren).
 	static const TCHAR* TabNames[2] = { TEXT("Deposit"), TEXT("Send to friend") };
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -127,6 +131,8 @@ void UAtmWidget::BuildShell(UCanvasPanel* Root)
 		B->SetContent(WeedUI::Text(WidgetTree, TabNames[i], 12, FLinearColor::White, true));
 		UHorizontalBoxSlot* BS = Tabs->AddChildToHorizontalBox(B);
 		BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); BS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
+		// In co-op de transfer-tab (index 1) verbergen: gedeelde bank, geen fee-verbrandende transfer.
+		if (i == 1 && !bCompetitive) { B->SetVisibility(ESlateVisibility::Collapsed); }
 		TabButtons.Add(B);
 	}
 	Row(Tabs, FMargin(0, 0, 0, 10));
@@ -191,6 +197,10 @@ void UAtmWidget::BuildShell(UCanvasPanel* Root)
 // Recolourt de 2 tab-knoppen in-place en toont alleen de actieve pane (geen teardown/rebuild).
 void UAtmWidget::ApplyTab()
 {
+	// Co-op deelt EEN bank: de transfer-tab bestaat niet, forceer terug naar Deposit.
+	const AWeedShopGameState* GSt = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if ((!GSt || !GSt->IsCompetitive()) && AtmTab == 1) { AtmTab = 0; }
+
 	for (int32 i = 0; i < TabButtons.Num(); ++i)
 	{
 		if (UWeedActionButton* B = TabButtons[i])

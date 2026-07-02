@@ -72,15 +72,16 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 		Markers.Add(MS2);
 	}
 
-	// Marker-pool voor mede-spelers (blauw poppetje).
+	// Marker-pool voor mede-spelers (fel goud poppetje, groter) -> mag NIET verward worden met de groene
+	// NPC-markers hierboven; goud + groter formaat maakt je co-op maatje meteen herkenbaar.
 	for (int32 i = 0; i < 4; ++i)
 	{
 		USizeBox* CB = WidgetTree->ConstructWidget<USizeBox>();
-		CB->SetWidthOverride(18.f); CB->SetHeightOverride(18.f);
-		CB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 18.f, FLinearColor(0.3f, 0.6f, 1.f)));
+		CB->SetWidthOverride(24.f); CB->SetHeightOverride(24.f);
+		CB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 24.f, FLinearColor(1.f, 0.82f, 0.15f)));
 		CB->SetVisibility(ESlateVisibility::Collapsed);
 		UCanvasPanelSlot* CS = Band->AddChildToCanvas(CB);
-		CS->SetAutoSize(false); CS->SetSize(FVector2D(18.f, 18.f)); CS->SetAlignment(FVector2D(0.5f, 0.5f));
+		CS->SetAutoSize(false); CS->SetSize(FVector2D(24.f, 24.f)); CS->SetAlignment(FVector2D(0.5f, 0.5f));
 		CoopMarkers.Add(CB);
 	}
 
@@ -174,7 +175,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
 
-	// Mede-spelers (blauw poppetje) -> zie waar je co-op maatje is.
+	// Mede-spelers (goud poppetje) -> zie waar je co-op maatje is.
 	int32 cm = 0;
 	if (const AGameStateBase* GSb = GetWorld() ? GetWorld()->GetGameState() : nullptr)
 	{
