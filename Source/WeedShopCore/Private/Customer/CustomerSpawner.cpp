@@ -403,6 +403,9 @@ void ACustomerSpawner::EnsureRouteNavProbed(UNavigationSystemV1* Nav)
 void ACustomerSpawner::TrySpawn()
 {
 	UWorld* World = GetWorld();
+	// CO-OP: server-authoritative. Alle ACustomerBase-spawns hieronder (patrouille-walkers) draaien alleen
+	// op de server; de joiner krijgt de bodies via replicatie (ACustomerBase repliceert nu). De spawner
+	// beweegt de bodies server-side, de positie repliceert via SetReplicateMovement.
 	if (!World || !HasAuthority()) { return; }
 	// Streaming-gate: zonder speler in de buurt is de grond hier mogelijk niet ingeladen -
 	// dan zakken verse NPC's door de wereld. Even wachten tot iemand dichtbij komt.

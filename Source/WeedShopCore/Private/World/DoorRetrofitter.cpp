@@ -792,7 +792,11 @@ void ADoorRetrofitter::ScanAndConvert()
 					Shuffle(StripNodes);
 					Shuffle(AllNodes);
 					int32 StripCursor = 0, AllCursor = 0;
-					for (int32 ci = 0; ci < 70; ++ci) // PERSISTENT: alle wandelaars worden 1x een blijvend lichaam
+					// CO-OP: ALLEEN de server bouwt de virtuele crowd op. De joiner krijgt de fysieke bodies
+					// via replicatie (ACustomerBase repliceert nu) - zou de client zelf ook seeden, dan kreeg je
+					// twee losse crowds (dubbele/spook-NPC's). De rest van ScanAndConvert (deuren/kamers/glas/
+					// lampen) blijft bewust WEL client-lokaal draaien; alleen dit crowd-seed-deel is server-only.
+					for (int32 ci = 0; HasAuthority() && ci < 70; ++ci) // PERSISTENT: alle wandelaars worden 1x een blijvend lichaam
 					{
 						FVirtualWalker V;
 						V.bStripLover = (ci < 49) && StripNodes.Num() > 0;
@@ -833,7 +837,9 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 	// Route-punten van de speler: direct plaatsen (positie is al ground-truth op de stoep).
-	for (int32 i = PendingSpawnerPoints.Num() - 1; i >= 0; --i)
+	// CO-OP: de patrouille-spawners bewegen server-side de NPC-bodies (die repliceren) -> alleen de server
+	// maakt ze aan. De client verwerkt de rij niet (draait de bodies niet en zou 'm anders leegpompen).
+	for (int32 i = PendingSpawnerPoints.Num() - 1; HasAuthority() && i >= 0; --i)
 	{
 		const FVector Pt = PendingSpawnerPoints[i] + FVector(0.f, 0.f, 60.f);
 		ACustomerSpawner* CSr = W->SpawnActorDeferred<ACustomerSpawner>(ACustomerSpawner::StaticClass(), FTransform(Pt));
@@ -914,7 +920,8 @@ void ADoorRetrofitter::ScanAndConvert()
 	// speler-positie - die staat tegenwoordig bij sessiestart al in het starter-appartement).
 	// Elk punt zoekt zelf de stoep via down-traces op straat-meshes en krijgt een eigen
 	// nav-invoker, zodat de navmesh overal rond de spawners groeit en NPC's daar rondlopen.
-	if (PendingSpawnerYs.Num() > 0)
+	// CO-OP: server-only (de spawners sturen de replicerende NPC-bodies aan; de client krijgt ze via replicatie).
+	if (HasAuthority() && PendingSpawnerYs.Num() > 0)
 	{
 		for (int32 i = PendingSpawnerYs.Num() - 1; i >= 0; --i)
 		{
@@ -1593,7 +1600,10 @@ void ADoorRetrofitter::ScanAndConvert()
 	// Toren-woningen (bij de starter) spawnen BINNEN - in de HAL bij hun eigen deur, nooit in een
 	// kamer - en lopen zelf naar buiten; de rest spawnt op het dichtstbijzijnde route-punt voor
 	// hun gebouw.
-	if (PendingResidents.Num() > 0 && (ScanPass % 5 == 0))
+	// CO-OP: bewoner-bodies zijn replicerende ACustomerBase-actors -> ALLEEN de server materialiseert ze
+	// (de joiner krijgt ze via replicatie). De client verwerkt de wachtrij niet: anders zou 'ie de rij
+	// eindeloos rond-pompen (pop -> geen spawn -> requeue) of dubbele NPC's maken.
+	if (HasAuthority() && PendingResidents.Num() > 0 && (ScanPass % 5 == 0))
 	{
 		FPendingResident PR = PendingResidents[0];
 		PendingResidents.RemoveAt(0);
@@ -1757,7 +1767,7 @@ void ADoorRetrofitter::ScanAndConvert()
 					bOk = false;
 				}
 			}
-			if (bOk)
+			if (bOk) // (server-only: het hele bewoner-materialisatie-blok draait achter HasAuthority, zie boven)
 			{
 				FActorSpawnParameters RP;
 				RP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -2268,7 +2278,9 @@ void ADoorRetrofitter::ScanAndConvert()
 				if (const UCapsuleComponent* Cap = CDO->GetCapsuleComponent()) { HalfH = Cap->GetScaledCapsuleHalfHeight(); }
 			}
 			FVector KPos = Pos - Fwd * 80.f; KPos.Z = Pos.Z + HalfH + 2.f;
-			if (ACustomerBase* Keeper = W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Rot, KPos), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+			// CO-OP: de verkoper is een replicerende ACustomerBase -> alleen de server spawnt 'm (joiner via
+			// replicatie). Toonbank/ATM zijn statische props en blijven bewust op beide processen (buiten scope).
+			if (ACustomerBase* Keeper = HasAuthority() ? W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Rot, KPos), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn) : nullptr)
 			{
 				Keeper->bShopkeeper = true;
 				Keeper->FinishSpawning(FTransform(Rot, KPos));
@@ -3317,6 +3329,11 @@ void ADoorRetrofitter::TickVirtualMove()
 			if (bPlace) { bRoomFloorReady = true; WeedShop_SetRoomReady(true); }
 		}
 	}
+	// CO-OP: de crowd-SIMULATIE + materialisatie is server-only (de host bezit de bodies; de client
+	// krijgt ze via replicatie). De THUIS-SETTLE hierboven draait bewust op BEIDE processen (elk pint
+	// z'n eigen lokale speler). Op de client is Crowd sowieso leeg (seed is server-gegate), maar de
+	// expliciete gate maakt zeker dat de client geen bodies materialiseert (geen dubbele NPC's).
+	if (!HasAuthority()) { return; }
 	if (GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
 	const float Step = 16.5f; // 165 cm/s wandeltred op een 0,1s-tik: vloeiend op de kaart
 	for (FVirtualWalker& V : Crowd)
@@ -3394,7 +3411,10 @@ void ADoorRetrofitter::GetVirtualWalkerPositions(TArray<FVector>& Out) const
 void ADoorRetrofitter::TickVirtualCrowd()
 {
 	UWorld* W = GetWorld();
-	if (!W || GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
+	// CO-OP: alleen de server materialiseert fysieke NPC-bodies (SpawnActorDeferred<ACustomerBase> hieronder);
+	// de client krijgt ze via replicatie. Defensieve gate zodat geen enkele (toekomstige) caller op de client
+	// bodies spawnt -> geen dubbele/spook-NPC's op de joiner.
+	if (!W || !HasAuthority() || GraphNodes.Num() < 2 || Crowd.Num() == 0) { return; }
 	CrowdBodies.RemoveAll([](const TObjectPtr<ACustomerBase>& X){ return !IsValid(X); }); // dode refs opruimen
 	// Speler-posities en kijkrichtingen cachen.
 	TArray<FVector> PlayerPos;

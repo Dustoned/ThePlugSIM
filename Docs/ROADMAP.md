@@ -223,9 +223,10 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   (b) player 2 (joiner) kan NIETS plaatsen in z'n eigen huis: klikken doet niks, OOK als de preview blauw/valid is.
   Vermoedelijk weigert ServerPlace de plaatsing voor de joiner (IsInOwnedHome/competitive-home-box klopt niet voor
   de joiner-spiegelkamer, of de RPC komt niet aan). [BuildComponent ServerPlace + DoorRetrofitter competitive rooms + StarterFurniture]
-- [ ] **E.2 Waterfles-vulling niet per-speler** — het vullen/vulniveau van de fles is gedeeld i.p.v. per-speler.
-  Moet per-speler-inventory zijn (replicatie/eigenaarschap). [WaterCanComponent / InventoryComponent replicatie]
-- [ ] **E.3 Brede co-op-pariteit-audit (competitive + normaal)** — systematisch nalopen wat per-speler hoort te
+- [x] **E.2 Waterfles-vulling niet per-speler** — AUDIT: al opgelost (commit 263f2a6b, water per-fles in het
+  Quality-veld van elke stack in de per-pawn InventoryComponent, gerepliceerd). Niet reproduceerbaar. Was stale.
+- [ ] **E.3 Brede co-op-pariteit-audit (competitive + normaal)** — AUDIT KLAAR -> alle bevindingen in
+  [`Docs/COOP_FIXLIST.md`](COOP_FIXLIST.md) (~30 items, per severity + fix-clusters). Nu uitvoeren. systematisch nalopen wat per-speler hoort te
   werken maar dat niet doet: meldingen/toasts (GetFirstPlayerController = alleen host, zie 2C.1), plaatsen/opslag,
   planten/water/oogst, economie/inventory, telefoon/deals, delivery, wardrobe/skins, safe/fridge, statische
   registries (GetWorld()-filter). Per bevinding: host vs joiner, competitive vs normaal, file:regel, fix. Levert
@@ -238,6 +239,24 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   localiteit, echte-customer-replicatie (spawn server-side + movement/statemachine gerepliceerd?), Z-offset/
   collision op de client, map-marker-bron per-speler. [DoorRetrofitter virtuele crowd + ACustomerBase/Spawner +
   MapWidget/CompassWidget markers] (screenshots 07-02: zwevende man + bevroren cluster).
+- [ ] **E.5 Co-op-speler-marker op de kaart duidelijker/andere kleur** — de mede-speler-marker op de M-kaart is
+  BLAUW, net als de NPC-dots -> verwarrend. Geef de co-op-speler-marker een eigen, duidelijke kleur (niet blauw).
+  [MapWidget + CompassWidget co-op-marker-kleur]
+- [ ] **E.6 Joints op de grond niet gesynced in co-op** — elke speler moet dezelfde joints zien liggen, en de
+  pickup/cooldown moet per-speler kloppen (nu ziet de joiner ze niet / anders). Zelfde klasse als E.4: de joint-
+  scatter (DoorRetrofitter) is per-proces lokaal i.p.v. gerepliceerd. Meenemen met de crowd-replicatie-aanpak.
+  [DoorRetrofitter joint-scatter + pickup-replicatie]
+
+---
+
+## BACKLOG 07-02d — UI-regressies (07-02, tijdens co-op-test)
+
+- [ ] **F.1 Picker pakt ALLE weed i.p.v. 1 strain (REGRESSIE)** — bij de packing bench EN joint rollen selecteert
+  'ie soms alle weed i.p.v. dat je 1 specifieke strain kiest om te gebruiken. "Dit kon eerst wel" -> regressie,
+  waarschijnlijk uit de C.1/C.2 picker-grid-wijziging (UWeedItemPickGrid). Uitzoeken: waar de picker de selectie/
+  het gekozen-item bepaalt en waarom 'ie naar "alles" valt. [UWeedItemPickGrid + PackWidget + joint-roll-UI]
+- [ ] **F.2 Give-joint-NPC-UI: joint-iconen nog niet zoals inventory** — in de NPC-UI waar je joints geeft zien de
+  joint-iconen er nog niet hetzelfde uit als in de inventory (C.1 dekte deze plek nog niet). [DealWidget / give-joint-UI icon-render]
 
 ---
 

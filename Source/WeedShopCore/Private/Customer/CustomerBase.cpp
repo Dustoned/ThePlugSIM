@@ -52,6 +52,23 @@ ACustomerBase::ACustomerBase()
 	PrimaryActorTick.TickInterval = 0.2f; // 5 Hz i.p.v. elke frame -> veel goedkoper bij veel NPC's
 	// (Beweging zelf loopt via de AIController/path-following, dus 5 Hz schaadt het lopen niet.)
 
+	// CO-OP: server-authoritative crowd. De HOST spawnt de fysieke NPC-bodies; de JOINER krijgt ze
+	// via replicatie (positie/rotatie via SetReplicateMovement, uiterlijk deterministisch uit
+	// NpcId+RepSkinIndex). Zonder deze twee vlaggen was alle DOREPLIFETIME/OnRep-infra hieronder dood
+	// -> host en joiner draaiden elk een eigen lokale crowd (2 losse menigten, bevroren/zwevend op de joiner).
+	bReplicates = true;
+	SetReplicateMovement(true);
+	// Vloeiend genoeg voor de map-markers zonder onnodig veel bandbreedte bij ~70 replicerende characters.
+	// (UE5.8: NetUpdateFrequency is nu private -> via de setters, net als de speler-pawn.)
+	SetNetUpdateFrequency(15.f);
+	SetMinNetUpdateFrequency(5.f);
+	// NIET cullen: de speelbare strip is ~150m, de crowd moet OVERAL aanwezig blijven (map-markers smooth,
+	// NPC's altijd zichtbaar). Bewust heel ruim (~450m radius) zodat een NPC nooit uit-relevant raakt en
+	// op de joiner bevriest/verdwijnt. PERF-RISICO: ~70 characters altijd relevant = veel replicatie-verkeer;
+	// bij co-op-perf-tuning is dit de eerste knop om te herzien (bv. per-speler relevance i.p.v. pure afstand).
+	// (UE5.8: publieke toegang tot NetCullDistanceSquared is deprecated -> via de setter.)
+	SetNetCullDistanceSquared(FMath::Square(45000.f));
+
 	// Zorg dat de interactie-trace (ECC_Visibility) de klant raakt.
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 

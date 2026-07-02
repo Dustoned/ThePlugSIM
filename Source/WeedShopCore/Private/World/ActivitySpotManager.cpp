@@ -112,7 +112,9 @@ void AActivitySpotManager::RewriteFile() const
 ACustomerBase* AActivitySpotManager::SpawnActivityNpc(const FActivitySpotData& S)
 {
 	UWorld* W = GetWorld();
-	if (!W) { return nullptr; }
+	// CO-OP: activity-NPC's zijn replicerende ACustomerBase-actors -> alleen de server spawnt ze (de joiner
+	// krijgt ze via replicatie). Gate op de spawn-plek zelf zodat OOK het dev-tool-pad (AddSpotLive) veilig is.
+	if (!W || !HasAuthority()) { return nullptr; }
 	const FTransform T(FRotator(0.f, S.Yaw, 0.f), S.Pos + FVector(0.f, 0.f, 20.f));
 	ACustomerBase* Npc = W->SpawnActorDeferred<ACustomerBase>(
 		ACustomerBase::StaticClass(), T, nullptr, nullptr,
