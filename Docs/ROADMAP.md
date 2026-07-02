@@ -76,48 +76,48 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### Bugs (klein, hoge irritatie)
 
-- [ ] **B.1 Texting-animatie stopt niet / speelt waar 't niet hoort** — de sms-animatie hoort ALLEEN bij een open telefoon (Tab): direct stoppen bij sluiten. Nu blijft 'ie doorgaan tijdens lopen → poppetje "slidet" rond. **BESLUIT: upper-body blend** (bovenlijf sms't, benen lopen — AAA-stijl). Én: **inventory openen triggert in third person óók de telefoon-pak-animatie** — inventory hoort géén telefoon-animatie te hebben (gewoon stilstaan).
-- [ ] **B.2 Cash niet splitbaar/dropbaar** — contant geld in de inventory: kan niet splitten, niet uit de inv draggen om te droppen, en normale drop werkt ook niet.
-- [ ] **B.3 NPC's blijven stilstaan in de hal** — na naar buiten lopen volgen ze de gezette lines niet meer; blijven staan tot despawn. Onderzoeken (nav/route-handoff).
-- [ ] **B.4 "Kom langs"-NPC spawnt soms midden in de kamer** — hoort beneden in de hal te spawnen (afspraak-deals).
-- [ ] **B.5 Wardrobe-belichting wisselt** — eerst goed, na een paar seconden te donker (dag/nacht loopt door). Fix: belichting bevriezen / geen nacht in wardrobe-view.
-- [ ] **B.6 Bank "Send to a friend" alleen in co-op** — alleen tonen als er écht een mede-speler in de sessie zit, mét diens naam op de knop; verbergen in singleplayer.
+- [x] **B.1 Texting-animatie stopt niet / speelt waar 't niet hoort** — de sms-animatie hoort ALLEEN bij een open telefoon (Tab): direct stoppen bij sluiten. Nu blijft 'ie doorgaan tijdens lopen → poppetje "slidet" rond. **BESLUIT: upper-body blend** (bovenlijf sms't, benen lopen — AAA-stijl). Én: **inventory openen triggert in third person óók de telefoon-pak-animatie** — inventory hoort géén telefoon-animatie te hebben (gewoon stilstaan).
+- [x] **B.2 Cash niet splitbaar/dropbaar** — contant geld in de inventory: kan niet splitten, niet uit de inv draggen om te droppen, en normale drop werkt ook niet.
+- [x] **B.3 NPC's blijven stilstaan in de hal** — na naar buiten lopen volgen ze de gezette lines niet meer; blijven staan tot despawn. Onderzoeken (nav/route-handoff).
+- [x] **B.4 "Kom langs"-NPC spawnt soms midden in de kamer** — hoort beneden in de hal te spawnen (afspraak-deals).
+- [x] **B.5 Wardrobe-belichting wisselt** — eerst goed, na een paar seconden te donker (dag/nacht loopt door). Fix: belichting bevriezen / geen nacht in wardrobe-view.
+- [x] **B.6 Bank "Send to a friend" alleen in co-op** — alleen tonen als er écht een mede-speler in de sessie zit, mét diens naam op de knop; verbergen in singleplayer.
 
 ### Gameplay-regels
 
-- [ ] **B.7 Pest/mold = harde lockout** — bij besmetting: géén water meer kunnen geven, ALLE stats bevriezen (water/health/groei — alles) tot er gesprayed is. Niet op tijd gesprayed → kwaliteit daalt snel. (Open: welke tijdsduur? Voorstel: bestaande gratie-tijd hergebruiken.)
-- [ ] **B.8 Meer joint-vindplekken** — extra potential spots bij sigaretten-prullenbakken en grote kliko's: `SM_AshtrayBin`, `SM_Dumpster`, `MetalTrashCan`, e.d. Niet overpowered — het blijft "een rondje lopen om joints te zoeken". Héél kleine kans op 2 joints bij één spot (zeldzaam houden).
+- [x] **B.7 Pest/mold = harde lockout** — bij besmetting: géén water meer kunnen geven, ALLE stats bevriezen (water/health/groei — alles) tot er gesprayed is. Niet op tijd gesprayed → kwaliteit daalt snel. (Open: welke tijdsduur? Voorstel: bestaande gratie-tijd hergebruiken.)
+- [x] **B.8 Meer joint-vindplekken** — extra potential spots bij sigaretten-prullenbakken en grote kliko's: `SM_AshtrayBin`, `SM_Dumpster`, `MetalTrashCan`, e.d. Niet overpowered — het blijft "een rondje lopen om joints te zoeken". Héél kleine kans op 2 joints bij één spot (zeldzaam houden).
 
 ### Content / 3D
 
-- [ ] **B.9 Nieuwe joint-modellen** — in Downloads: `joint-scan-v2.zip` (normale/kleinere joint → 2g/5g) en `fat-joint.zip` (dikke joint → 7g/10g). Joints moeten altijd netjes **op hun zij** op de grond liggen (nu staan ze vaak rechtop op de tip — het procedurele model is langs de Z-as gebouwd) én **HUMAN SIZE blijven** (schaal normaliseren op mesh-bounds naar ~13 cm klein / ~17 cm dik — scans komen vaak op gekke schaal binnen). Joints houden **physics zoals de droppable items** (zelfde AWorldItemPickup-tuimel+settle); met de liggende mesh-oriëntatie wordt de physics-box lang-en-plat → settelen = altijd op de zij. **CC-BY-attributie verplicht in credits:** "Joint scan (v2)" by PreyK (skfb.ly/6RWXB) + "Fat Joint" by streetpharmacy (skfb.ly/p8HON), beide CC Attribution 4.0.
+- [x] **B.9 Nieuwe joint-modellen** — in Downloads: `joint-scan-v2.zip` (normale/kleinere joint → 2g/5g) en `fat-joint.zip` (dikke joint → 7g/10g). Joints moeten altijd netjes **op hun zij** op de grond liggen (nu staan ze vaak rechtop op de tip — het procedurele model is langs de Z-as gebouwd) én **HUMAN SIZE blijven** (schaal normaliseren op mesh-bounds naar ~13 cm klein / ~17 cm dik — scans komen vaak op gekke schaal binnen). Joints houden **physics zoals de droppable items** (zelfde AWorldItemPickup-tuimel+settle); met de liggende mesh-oriëntatie wordt de physics-box lang-en-plat → settelen = altijd op de zij. **CC-BY-attributie verplicht in credits:** "Joint scan (v2)" by PreyK (skfb.ly/6RWXB) + "Fat Joint" by streetpharmacy (skfb.ly/p8HON), beide CC Attribution 4.0.
 
 ### UI-reworks (overleg eerst)
 
-- [ ] **B.10 Deal-scherm opruimen/reworken** — overloaded met tekst, onduidelijk waar je moet kijken. **BESLUIT: eerst opruimen** tot alleen het echt nodige (1 blik = wat wil hij / wat bied ik / kans), daarna pas beoordelen of een volle kit-rework (WBP-route) nog nodig is.
-- [ ] **B.11 Keuze-/aantal-menu's reworken** — packing bench, joint rollen e.d.: bij veel wiet wordt de keuzelijst gigantisch en onoverzichtelijk. **BESLUIT: icoon-grid** — compact grid van item-slots (icoon + strain-tag + aantal, zelfde look als inventory), klik = selecteer → aantal-stepper. Overal toepassen waar zulke lijsten voorkomen.
-- [ ] **B.12 Package-delivery herstel + upgrade** — pakketten weer netjes vóór de apartment-deur (zoals eerst), óók voor de competitive mirror-apartments. Dozen krijgen physics (zoals droppable items). Delivery-app: meer details + lijstje van wat je gekocht hebt.
-- [ ] **B.13 Furniture-placement op muren** — niet half over deuren en niet op ramen kunnen plaatsen.
+- [x] **B.10 Deal-scherm opruimen/reworken** — overloaded met tekst, onduidelijk waar je moet kijken. **BESLUIT: eerst opruimen** tot alleen het echt nodige (1 blik = wat wil hij / wat bied ik / kans), daarna pas beoordelen of een volle kit-rework (WBP-route) nog nodig is.
+- [x] **B.11 Keuze-/aantal-menu's reworken** — packing bench, joint rollen e.d.: bij veel wiet wordt de keuzelijst gigantisch en onoverzichtelijk. **BESLUIT: icoon-grid** — compact grid van item-slots (icoon + strain-tag + aantal, zelfde look als inventory), klik = selecteer → aantal-stepper. Overal toepassen waar zulke lijsten voorkomen.
+- [x] **B.12 Package-delivery herstel + upgrade** — pakketten weer netjes vóór de apartment-deur (zoals eerst), óók voor de competitive mirror-apartments. Dozen krijgen physics (zoals droppable items). Delivery-app: meer details + lijstje van wat je gekocht hebt.
+- [x] **B.13 Furniture-placement op muren** — niet half over deuren en niet op ramen kunnen plaatsen.
 
 ### UI/UX — tweede notitie-ronde (07-01)
 
-- [ ] **B.16 Map-app van de telefoon verwijderen** — nutteloos (de M-fullscreen-kaart bestaat al); app uit het home-rooster + tab eruit.
-- [ ] **B.17 Settings-app (telefoon) → speler-stats** — **BESLUIT: ombouwen tot speler-stats-pagina** (totaal verdiend, deals gedaan, planten geoogst, beste deal, speeltijd, e.d.); character-switch mag blijven.
-- [ ] **B.18 Drop tussen icon-gaps snapt naar dichtstbijzijnde slot** — item loslaten tussen/heel dicht bij een slot mag niet "missen": snap naar het dichtstbijzijnde slot (alleen bij kleine afstand, niet van ver).
-- [ ] **B.19 Minimalist-rebrand: volledige sweep over ALLE schermen** — **"bijna alles nog"**: de eerdere rebrand-ronde is halverwege onderbroken en nooit afgemaakt. Systematisch elk scherm langslopen (inventory-stijl = de referentie: palette + slot-look + spacing) en afvinken welke al goed is en welke nog moet.
-- [ ] **B.20 Quick/home-stash-view in inventory opschonen** — veel dubbele info én nuttige info mist: bv. hoe vol de water-bottle is, hoeveel soil er nog in zit — dat hoort juist in de quick view.
-- [ ] **B.21 Hand-preview: tag-kleur + dikkere letters** — de tag op de hand-preview meekleuren met de strain-tagkleur, en de tag-letters bold/duidelijker (nu te dun voor snelle indicatie).
+- [x] **B.16 Map-app van de telefoon verwijderen** — nutteloos (de M-fullscreen-kaart bestaat al); app uit het home-rooster + tab eruit.
+- [x] **B.17 Settings-app (telefoon) → speler-stats** — **BESLUIT: ombouwen tot speler-stats-pagina** (totaal verdiend, deals gedaan, planten geoogst, beste deal, speeltijd, e.d.); character-switch mag blijven.
+- [x] **B.18 Drop tussen icon-gaps snapt naar dichtstbijzijnde slot** — item loslaten tussen/heel dicht bij een slot mag niet "missen": snap naar het dichtstbijzijnde slot (alleen bij kleine afstand, niet van ver).
+- [x] **B.19 Minimalist-rebrand: volledige sweep over ALLE schermen** — **"bijna alles nog"**: de eerdere rebrand-ronde is halverwege onderbroken en nooit afgemaakt. Systematisch elk scherm langslopen (inventory-stijl = de referentie: palette + slot-look + spacing) en afvinken welke al goed is en welke nog moet.
+- [x] **B.20 Quick/home-stash-view in inventory opschonen** — veel dubbele info én nuttige info mist: bv. hoe vol de water-bottle is, hoeveel soil er nog in zit — dat hoort juist in de quick view.
+- [x] **B.21 Hand-preview: tag-kleur + dikkere letters** — de tag op de hand-preview meekleuren met de strain-tagkleur, en de tag-letters bold/duidelijker (nu te dun voor snelle indicatie).
 
 ### Test-feedback 07-02 (Blok 2-ronde)
 
 - ~~B.22 Soil-teller op het item~~ — GESCHRAPT door de speler: soil gebruikt gewoon het aantal-badge (x3), teller niet nodig.
-- [ ] **B.23 Texting-polish** — de upper-body blend werkt, maar: geen telefoon in de hand (prop toevoegen) en de linkerarm staat raar uit (hoort natuurlijk langs het lichaam of aan de telefoon). Bekijken of de clip beter gewoon kan LOOPEN i.p.v. bevriezen op 45%.
-- [ ] **B.24 Lege pot toont soil-oogsten** — de plant-kaart bij een lege pot (bv. "Clay pot (empty)") moet tonen hoeveel harvests de soil nog kan ("Soil: 3 harvests left" / "No soil").
+- [x] **B.23 Texting-polish** — de upper-body blend werkt, maar: geen telefoon in de hand (prop toevoegen) en de linkerarm staat raar uit (hoort natuurlijk langs het lichaam of aan de telefoon). Bekijken of de clip beter gewoon kan LOOPEN i.p.v. bevriezen op 45%.
+- [x] **B.24 Lege pot toont soil-oogsten** — de plant-kaart bij een lege pot (bv. "Clay pot (empty)") moet tonen hoeveel harvests de soil nog kan ("Soil: 3 harvests left" / "No soil").
 - ✔ B.13 (furniture over deuren) opnieuw bevestigd in de test — plan ligt klaar in de Blok 3-verkenning.
 
 ### Systemen / infra
 
-- [ ] **B.14 2 gamemodes eruit → alles naar F10 dev-menu** — **BESLUIT: Sandbox + Testing eruit** (Normaal + Competitive blijven). Alle functies van die modes als dev-menu-functies: level kiezen, reputatie/respect/loyaliteit aan NPC's geven, etc. Sluit aan op het bestaande Unified-Dev-Menu-plan (F10 sidebar).
+- [x] **B.14 2 gamemodes eruit → alles naar F10 dev-menu** — **BESLUIT: Sandbox + Testing eruit** (Normaal + Competitive blijven). Alle functies van die modes als dev-menu-functies: level kiezen, reputatie/respect/loyaliteit aan NPC's geven, etc. Sluit aan op het bestaande Unified-Dev-Menu-plan (F10 sidebar).
 - [ ] **B.15 Loading screen (main menu → game): samenvoegen tot ÉÉN scherm + vasthouden tot de wereld klaar is** — het loading screen bestaat alléén bij de overgang main menu → game, en die ene load is in twee schermen opgeknipt: deel 1 is superlangzaam, deel 2 laat **veel te vroeg los** (je ziet alles om je heen in-spawnen: streaming/DoorRetrofitter/crowd nog bezig). Doel = echte-game-gedrag: één naadloos loading screen dat pas fadet als de wereld-klaar-signalen binnen zijn (streaming levels + bakes + spawns + prewarm), en de trage fase versnellen (onderzoeken: shaders/PSO? map-load? bakes?). **STAND 07-02:** scherm-2-vasthouden + fase-teksten + versnelde opbouw + WBP_PauseMenu-reparatie (−9s ensure-spam) zijn ERIN; de boot ging van ~40s naar ~9,4s tot GameState. **Boot-scherm is TERUGGEDRAAID**: het movie-scherm op de allereerste map-load gaf een flaky D3D12-crash (PSO-worker, @0x260) — een nieuwe poging moet pas starten ná OnFEngineLoopInitComplete (of het standaard startup-movie-systeem gebruiken) i.p.v. in PreLoadMap van de boot.
 
 ---
