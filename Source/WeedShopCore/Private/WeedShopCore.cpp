@@ -504,26 +504,14 @@ private:
 	void OnPreLoadMap(const FString& MapName)
 	{
 		if (IsRunningDedicatedServer() || GetMoviePlayer() == nullptr) { return; }
-		if (!GShowGameLoadingScreen)
-		{
-			// BOOT (de allereerste map-load, naar het hoofdmenu): vroeger geen laadscherm -> de speler keek
-			// ~50s naar een zwart venster terwijl Map_MainMenu laadde. Nu tonen we HETZELFDE movie-scherm,
-			// met een eigen timer-seed (er is nog geen WeedShop_RequestGameLoadingScreen geweest).
-			// GShowGameLoadingScreen blijft onaangeraakt zodat de in-game flow (menu -> wereld) niet wijzigt.
-			// Zolang GBootLoading staat maakt EnsureWidget GEEN in-game cover aan (het menu heeft geen
-			// wereld-opbouw); PhoneClientComponent::ShowMainMenu stopt de movie zodra het menu op beeld
-			// staat (WeedShop_StopGameLoadingScreen). De 90s-cap in SWeedLoadingScreen::Tick is de vangrail.
-			if (bBootScreenShown) { return; } // niet-boot transitie zonder game-load-request: oude gedrag (geen scherm)
-			bBootScreenShown = true;
-			GBootLoading = true;
-			GLoadStartSeconds = FPlatformTime::Seconds(); // eigen boot-timer (movie-tekst/bar/cap lopen hierop)
-			GLoadSeed = (uint32)FPlatformTime::Cycles() * 2654435761u + 12345u;
-		}
-		else
-		{
-			// In-game transitie (New Game/Load/Continue/Join): de bekende twee-schermen-flow hieronder.
-			GShowGameLoadingScreen = false;
-		}
+		// BOOT-SCHERM UITGESCHAKELD (2026-07-02): het movie-scherm op de allereerste map-load gaf een FLAKY
+		// D3D12-crash (EXCEPTION_ACCESS_VIOLATION @0x260 op een PSO-worker-thread, ~2 van de 3 boots) — de
+		// movie rendert met bWaitForManualStop dwars door de vroege PSO-precache-storm heen. Terug naar het
+		// oude gedrag: GEEN scherm bij de boot (zwart venster is cosmetisch; een flaky crash is release-
+		// blokkerend). Race-veilige variant hoort pas te starten NA OnFEngineLoopInitComplete — zie ROADMAP B.15.
+		if (!GShowGameLoadingScreen) { return; }
+		// In-game transitie (New Game/Load/Continue/Join): de bekende twee-schermen-flow hieronder.
+		GShowGameLoadingScreen = false;
 
 		// TWEE SCHERMEN, NAADLOOS IN ELKAAR OVERLOPEND:
 		// 1) Dit MOVIE-scherm dekt de engine-map-load en VERDWIJNT automatisch zodra het level klaar is
