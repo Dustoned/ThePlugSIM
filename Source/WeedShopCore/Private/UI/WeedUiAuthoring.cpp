@@ -221,9 +221,11 @@ namespace
 	}
 }
 
-bool UWeedUiAuthoring::BuildTree(UWidgetBlueprint* WBP, const FString& JsonSpec)
+bool UWeedUiAuthoring::BuildTree(UObject* InWBP, const FString& JsonSpec)
 {
-	if (!WBP) { UE_LOG(LogTemp, Warning, TEXT("WeedUiAuthoring::BuildTree: WBP is null")); return false; }
+	// UObject*-param (UHT/Shipping-fix, zie header) -> hier pas naar het echte editor-type casten.
+	UWidgetBlueprint* WBP = Cast<UWidgetBlueprint>(InWBP);
+	if (!WBP) { UE_LOG(LogTemp, Warning, TEXT("WeedUiAuthoring::BuildTree: WBP is null of geen WidgetBlueprint")); return false; }
 	UWidgetTree* Tree = WBP->WidgetTree;
 	if (!Tree) { UE_LOG(LogTemp, Warning, TEXT("WeedUiAuthoring::BuildTree: geen WidgetTree")); return false; }
 

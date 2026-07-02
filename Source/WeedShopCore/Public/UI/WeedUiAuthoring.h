@@ -29,8 +29,11 @@ public:
 	// slot: canvas -> anchorMin "x,y", anchorMax "x,y", pos "x,y", size "x,y", align "x,y", autoSize,
 	//       offsets "l,t,r,b";  box -> padding "l,t,r,b", hAlign(0..3), vAlign(0..3), fill(0..1).
 	// Geeft true bij succes. JsonSpec is één root-node-object.
+	// Param is UObject* (niet UWidgetBlueprint*): UHT kan het editor-type niet resolven in een
+	// SHIPPING-target (UMGEditor zit daar niet in de module-graph) -> packagen brak. Binnenin gecast;
+	// voor de Python-aanroep (unreal.WeedUiAuthoring.build_tree(wbp, json)) verandert er niets.
 	UFUNCTION(BlueprintCallable, Category = "WeedUiAuthoring")
-	static bool BuildTree(UWidgetBlueprint* WBP, const FString& JsonSpec);
+	static bool BuildTree(UObject* WBP, const FString& JsonSpec);
 };
 
 #endif // WITH_EDITOR
