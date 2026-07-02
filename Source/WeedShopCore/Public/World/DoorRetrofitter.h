@@ -91,7 +91,7 @@ protected:
 	bool bJointsScattered = false;
 	TArray<FVector> JointSpots;                                          // gecachete spot-locaties (prullenbak/bankje/asbak/kliko)
 	TArray<TWeakObjectPtr<class AWorldItemPickup>> ScatteredJoints;      // levende gescatterde joints
-	int32 MaxScatteredJoints = 80;                                      // bovengrens op de map (tunable)
+	int32 MaxScatteredJoints = 110;                                     // bovengrens op de map (tunable)
 	int32 JointTarget = 0;                                              // huidig doel-aantal (level-geschaald)
 	float NewJointSpotAcceptChance = 0.6f;                              // kans dat een NIEUW spot-type (asbak/kliko/container) als spot meetelt -> per-object-kans op een joint blijft LAGER dan bij bankjes/prullenbakken (die tellen altijd)
 	float DoubleJointChance = 0.05f;                                    // ~5%: héél af en toe liggen er 2 joints op één spot (zeldzame dubbel-vondst)

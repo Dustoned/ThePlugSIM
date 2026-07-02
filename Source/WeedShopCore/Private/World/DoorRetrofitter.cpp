@@ -2961,8 +2961,10 @@ AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
 
 	FActorSpawnParameters SP;
 	SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	// Loc is al op de vloer getraced (PlaceJointAtSpot) -> maar 4cm laten vallen zodat 'ie op z'n plek settelt
+	// i.p.v. van hoog te vallen en weg te rollen/tunnelen.
 	AWorldItemPickup* P = World->SpawnActor<AWorldItemPickup>(
-		AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc + FVector(0.f, 0.f, 25.f)), SP);
+		AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc + FVector(0.f, 0.f, 4.f)), SP);
 	if (P) { P->Setup(JointId, 1, ThcPercent, QualityPct); }
 	return P;
 }
@@ -2973,18 +2975,34 @@ AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
 // Geeft false terug als de EERSTE spawn faalde (store ontbreekt) zodat de caller kan stoppen.
 bool ADoorRetrofitter::PlaceJointAtSpot(const FVector& Spot)
 {
-	auto OffsetLoc = [&Spot]()
+	UWorld* W = GetWorld();
+	// Willekeurige offset rond de spot, dan naar de ECHTE vloer eronder tracen. Spots zoals asbak-bakken kunnen
+	// BOVEN de grond zweven; zonder deze trace spawnt de joint in de lucht en valt/tunnelt hij weg (het echte
+	// "geen joints"-probleem). Geen vloer onder het punt (rand/water) -> die offset afwijzen.
+	auto GroundedOffset = [&](FVector& Out) -> bool
 	{
 		const float Ang = FMath::FRandRange(0.f, 2.f * PI);
 		const float Rad = FMath::FRandRange(40.f, 70.f);
-		return Spot + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
+		const FVector XY = Spot + FVector(FMath::Cos(Ang) * Rad, FMath::Sin(Ang) * Rad, 0.f);
+		FHitResult Hit;
+		FCollisionQueryParams Q(SCENE_QUERY_STAT(JointGround), false);
+		if (W && W->LineTraceSingleByChannel(Hit, XY + FVector(0, 0, 130.f), XY - FVector(0, 0, 500.f), ECC_WorldStatic, Q))
+		{
+			Out = Hit.ImpactPoint; // op de vloer (MintJointAt zet 'm 4cm hoger voor een korte settle)
+			return true;
+		}
+		return false;
 	};
-	AWorldItemPickup* P = MintJointAt(OffsetLoc());
+
+	FVector Loc;
+	if (!GroundedOffset(Loc) && !GroundedOffset(Loc)) { return false; } // 2x geen vloer -> spot overslaan (topup pakt 'm later)
+	AWorldItemPickup* P = MintJointAt(Loc);
 	if (!P) { return false; }
 	ScatteredJoints.Add(P);
 	if (ScatteredJoints.Num() < JointTarget && FMath::FRand() < DoubleJointChance)
 	{
-		if (AWorldItemPickup* P2 = MintJointAt(OffsetLoc())) { ScatteredJoints.Add(P2); }
+		FVector Loc2;
+		if (GroundedOffset(Loc2)) { if (AWorldItemPickup* P2 = MintJointAt(Loc2)) { ScatteredJoints.Add(P2); } }
 	}
 	return true;
 }
@@ -2996,8 +3014,9 @@ int32 ADoorRetrofitter::LevelJointTarget() const
 	if (JointSpots.Num() == 0) { return 0; }
 	int32 Level = 1;
 	if (UWorld* W = GetWorld()) { if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { if (GS->GetLeveling()) { Level = GS->GetLeveling()->GetLevel(); } } }
-	const float Frac = FMath::Clamp(0.12f + (Level / 5) * 0.05f, 0.12f, 0.60f);
-	return FMath::Clamp(FMath::RoundToInt(JointSpots.Num() * Frac), 3, FMath::Min(MaxScatteredJoints, JointSpots.Num()));
+	// Meer joints over de map (was 12%->60% = ~23 vroeg; speler kwam er zo nooit een tegen). Nu 30%->70%.
+	const float Frac = FMath::Clamp(0.30f + (Level / 5) * 0.05f, 0.30f, 0.70f);
+	return FMath::Clamp(FMath::RoundToInt(JointSpots.Num() * Frac), 8, FMath::Min(MaxScatteredJoints, JointSpots.Num()));
 }
 
 // One-time: spot-locaties (prullenbak/bankje/asbak/kliko) verzamelen en tot de cap vullen. Vond het geen spots, dan blijft
