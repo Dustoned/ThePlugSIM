@@ -414,12 +414,26 @@ void UPackWidget::RefreshPack()
 	if (!Inv) { return; }
 
 	// --- 1) Strain-keuze (icoon-grid; SetItems diff't intern) ---
-	struct FBudRow { FName Id; int32 Qty; float Quality; float QualityPct; };
+	// EEN cel PER STRAIN: twee harvests van dezelfde strain met net-andere THC% zijn losse inventory-stacks
+	// (zelfde ItemId, andere StackId). Zonder deze aggregatie kreeg het grid twee cellen met dezelfde Id ->
+	// een klik op een strain lichtte ze ALLEBEI op ("selecteert alle weed"). Aggregeer op ItemId: som de
+	// grammen, en neem Quality/QualityPct van de grootste stapel voor de tooltip.
+	struct FBudRow { FName Id; int32 Qty; float Quality; float QualityPct; int32 TopQty; };
 	TArray<FBudRow> Buds;
 	for (const FInventoryStack& S : Inv->GetStacks())
 	{
 		if (!S.ItemId.ToString().StartsWith(TEXT("Bud_"))) { continue; }
-		Buds.Add({ S.ItemId, S.Quantity, S.Quality, S.QualityPct });
+		FBudRow* Existing = Buds.FindByPredicate([&S](const FBudRow& R) { return R.Id == S.ItemId; });
+		if (Existing)
+		{
+			Existing->Qty += S.Quantity;
+			// Representatieve THC/kwaliteit = die van de grootste stapel (dominante batch).
+			if (S.Quantity > Existing->TopQty) { Existing->Quality = S.Quality; Existing->QualityPct = S.QualityPct; Existing->TopQty = S.Quantity; }
+		}
+		else
+		{
+			Buds.Add({ S.ItemId, S.Quantity, S.Quality, S.QualityPct, S.Quantity });
+		}
 	}
 	const bool bAnyBud = Buds.Num() > 0;
 	if (NoBudLabel) { NoBudLabel->SetVisibility(bAnyBud ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); }

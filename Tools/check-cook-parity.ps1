@@ -72,6 +72,58 @@ if (Test-Path $IconSrc) {
 	else { Write-Host ("Loose icons OK ({0}/{1} in staged build)" -f $stgN, $srcN) }
 }
 
+# --- 4b. BakedData-staleness: wereld-geometrie MOET byte-identiek zijn aan Saved/ ---
+# De wereld-layout (starter-meubels, competitive-kamers, home-spawns, build-area, no-build-zones,
+# meet/mark-spots, delivery-punt, licht-config, kamer-templates) wordt runtime string-geladen uit
+# Saved/*.txt. Content/BakedData/ is de snapshot die de packaged build cookt. RestoreAll kopieert
+# alleen ONTBREKENDE files (Baked -> Saved), nooit terug -> een editor-fix aan de layout kan stil in
+# een STALE BakedData-snapshot blijven hangen en dus niet in de download landen. upload-build.ps1
+# resync't Saved -> BakedData vlak voor de cook; deze gate is de vangnet: wijkt een gebakken file af
+# van z'n Saved-tegenhanger (beide aanwezig), dan HARD FAIL zodat een stale snapshot niet stil passeert.
+# Ontbreekt de Saved-file, dan is er niks te resyncen (die geometrie is niet gezet) -> geen fail.
+$GeomFiles = @(
+	'StarterFurniture.txt', 'CompSpawns.txt', 'CompDoors.txt', 'HomeSpawn.txt',
+	'BuildArea.txt', 'NoBuildZones.txt', 'MeetSpots.txt', 'MarkedSpots.txt',
+	'DeliveryPoint.txt', 'LightConfig.txt', 'RoomStamps.txt'
+)
+$SavedRoot = Join-Path $Proj 'Saved'
+$BakedRoot = Join-Path $Proj 'Content\BakedData'
+$Stale = @()
+# Byte-identiek = zelfde SHA256 van de file-inhoud (los van regeleindes/encoding-nuances: pure bytes).
+function Get-FileSha([string]$Path) { return (Get-FileHash -Path $Path -Algorithm SHA256).Hash }
+foreach ($gf in $GeomFiles) {
+	$sv = Join-Path $SavedRoot $gf
+	$bk = Join-Path $BakedRoot $gf
+	# Alleen vergelijken als BEIDE bestaan: geen Saved -> niks te resyncen; geen Baked -> valt onder de
+	# cook-miss-scan hierboven, niet onder staleness.
+	if ((Test-Path $sv) -and (Test-Path $bk)) {
+		if ((Get-FileSha $sv) -ne (Get-FileSha $bk)) { $Stale += $gf }
+	}
+}
+# RoomTemplates-map: elke Saved-template moet byte-identiek in BakedData staan (anders stale layout).
+$SavedTpl = Join-Path $SavedRoot 'RoomTemplates'
+$BakedTpl = Join-Path $BakedRoot 'RoomTemplates'
+if (Test-Path $SavedTpl) {
+	Get-ChildItem -Path $SavedTpl -Filter *.txt -File -ErrorAction SilentlyContinue | ForEach-Object {
+		$bk = Join-Path $BakedTpl $_.Name
+		if (Test-Path $bk) {
+			if ((Get-FileSha $_.FullName) -ne (Get-FileSha $bk)) { $Stale += ('RoomTemplates\' + $_.Name) }
+		} else {
+			# Saved-template die (nog) niet gebakken is -> ook stale: de packaged build mist deze kamer.
+			$Stale += ('RoomTemplates\' + $_.Name + ' (ontbreekt in BakedData)')
+		}
+	}
+}
+if ($Stale.Count -gt 0) {
+	Write-Host ''
+	Write-Host ('BAKEDDATA STALE - {0} geometrie-file(s) wijken af van Saved/ (packaged build zou de OUDE layout bakken):' -f $Stale.Count) -ForegroundColor Red
+	$Stale | ForEach-Object { Write-Host ('  STALE  BakedData stale: {0} wijkt af van Saved -> resync nodig' -f $_) -ForegroundColor Red }
+	Write-Host ''
+	Write-Host 'Fix: draai de BakedData-resync (zit in upload-build.ps1 vlak voor de cook) en package opnieuw.' -ForegroundColor Yellow
+	exit 1
+}
+Write-Host 'BakedData-parity OK - wereld-geometrie in BakedData is in sync met Saved.' -ForegroundColor Green
+
 # --- 5. Uitslag ---
 if ($Missing.Count -gt 0) {
 	Write-Host ''

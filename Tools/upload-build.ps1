@@ -62,6 +62,47 @@ Write-Host "== Editor sluiten (DLL-lock voorkomen) =="
 Get-Process UnrealEditor -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3
 
+# BakedData-resync (VOOR de cook): de wereld-geometrie (starter-meubels, competitive-kamers, home-spawns,
+# build-area, no-build-zones, meet/mark-spots, delivery-punt, licht-config, kamer-templates) wordt runtime
+# string-geladen uit Saved/*.txt. WeedData::RestoreAll kopieert een gebakken file ALLEEN als de Saved-kopie
+# ONTBREEKT (nooit bijwerken), en niks resync't de andere kant op. Een editor-fix aan de layout landt dus
+# NIET in de packaged build tenzij we de actuele Saved-versie eerst OVER de gebakken snapshot zetten.
+# Daarom hier: kopieer de bekende geometrie-datafiles van Saved/ -> Content/BakedData/ zodat de cook de
+# ACTUELE layout bakt. Absolute paden (.NET-copy gebruikt de PS-cwd NIET). Overige BakedData-files blijven.
+Write-Host "== BakedData-resync: actuele wereld-geometrie van Saved/ -> Content/BakedData/ =="
+$SavedRoot = Join-Path $Proj "Saved"
+$BakedRoot = Join-Path $Proj "Content\BakedData"
+New-Item -ItemType Directory -Force $BakedRoot | Out-Null
+# Platte geometrie-datafiles: alleen deze bekende files overschrijven (rest van BakedData ongemoeid laten).
+$GeomFiles = @(
+    "StarterFurniture.txt", "CompSpawns.txt", "CompDoors.txt", "HomeSpawn.txt",
+    "BuildArea.txt", "NoBuildZones.txt", "MeetSpots.txt", "MarkedSpots.txt",
+    "DeliveryPoint.txt", "LightConfig.txt", "RoomStamps.txt"
+)
+$Resynced = 0
+foreach ($gf in $GeomFiles) {
+    $src = Join-Path $SavedRoot $gf
+    if (Test-Path $src) {
+        $dst = Join-Path $BakedRoot $gf
+        [System.IO.File]::Copy($src, $dst, $true)
+        Write-Host ("   resync {0}" -f $gf)
+        $Resynced++
+    }
+}
+# Map-datafiles (RoomTemplates: per-kamer .txt-templates die RoomStamper string-laadt). Hele map spiegelen
+# van Saved/ -> BakedData/ (nieuwe templates mee, gewijzigde overschreven). Ontbreekt de Saved-map: niets te doen.
+$SavedTpl = Join-Path $SavedRoot "RoomTemplates"
+if (Test-Path $SavedTpl) {
+    $BakedTpl = Join-Path $BakedRoot "RoomTemplates"
+    New-Item -ItemType Directory -Force $BakedTpl | Out-Null
+    foreach ($tpl in (Get-ChildItem -Path $SavedTpl -Filter *.txt -File -ErrorAction SilentlyContinue)) {
+        [System.IO.File]::Copy($tpl.FullName, (Join-Path $BakedTpl $tpl.Name), $true)
+        Write-Host ("   resync RoomTemplates\{0}" -f $tpl.Name)
+        $Resynced++
+    }
+}
+Write-Host ("== BakedData-resync klaar: {0} bestand(en) bijgewerkt =="  -f $Resynced)
+
 # Per kwaliteit: cap zetten -> packagen -> losse UI mee -> zippen. Zips verzamelen voor de release.
 $Zips = @()
 $AssetLines = @()

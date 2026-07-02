@@ -218,6 +218,10 @@ void UWeedItemPickGrid::SetItems(const TArray<FWeedPickItem>& Items, FName Selec
 	}
 
 	// Per-cel diff: content alleen vervangen bij een sig-verschil (sig uit ALLE velden BEHALVE selectie).
+	// Selectie mag EXACT EEN cel raken: als er (per abuis) meerdere cellen dezelfde Id hebben - bv. twee
+	// stapels van dezelfde strain met net-andere THC% - highlight alleen de EERSTE match, anders lijkt de
+	// hele strain "geselecteerd". bSelSeen bewaakt dat.
+	bool bSelSeen = false;
 	for (int32 i = 0; i < Items.Num(); ++i)
 	{
 		const FWeedPickItem& It = Items[i];
@@ -236,7 +240,9 @@ void UWeedItemPickGrid::SetItems(const TArray<FWeedPickItem>& Items, FName Selec
 			if (Cells[i]) { Cells[i]->SetToolTipText(It.Tooltip.IsEmpty() ? FText::GetEmpty() : FText::FromString(It.Tooltip)); }
 		}
 
-		StyleCell(i, bShowSelection && It.Id == SelectedId);
+		const bool bSel = bShowSelection && !SelectedId.IsNone() && It.Id == SelectedId && !bSelSeen;
+		if (bSel) { bSelSeen = true; }
+		StyleCell(i, bSel);
 	}
 }
 
@@ -249,11 +255,14 @@ void UWeedItemPickGrid::SetSelected(FName Id)
 	SelId = Id;
 	if (!bShowSelection) { return; }
 
+	// Selectie raakt EXACT EEN cel: bij dubbele Ids (twee stapels van dezelfde strain) highlight alleen de
+	// EERSTE match - anders licht de hele strain op. Elke oude match wordt sowieso ge-de-highlight.
+	bool bSelSeen = false;
 	for (int32 i = 0; i < Cells.Num(); ++i)
 	{
 		if (!CellIds.IsValidIndex(i)) { continue; }
 		const FName CellId = CellIds[i];
-		if (CellId == Old) { StyleCell(i, false); }
-		if (CellId == Id) { StyleCell(i, true); }
+		if (!Id.IsNone() && CellId == Id && !bSelSeen) { StyleCell(i, true); bSelSeen = true; }
+		else if (CellId == Old || CellId == Id) { StyleCell(i, false); }
 	}
 }
