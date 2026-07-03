@@ -124,3 +124,22 @@ Volledige rapporten in de sessie; dit = de essentie per item voor de edit-golven
 5. BOOT-INDICATIE: Content/Splash/Splash.bmp toevoegen (nul risico); startup-movie ALLEEN met 3x boot-test-gate
    (zelfde PSO-race-risico als de teruggedraaide poging). Met fix 1 wordt boot->menu ~13s dev.
 6. Apart perf-punt: 21s frozen frame op de joiner direct na possession (comp-kamer-bouw/skins op de game-thread).
+
+### D29 — 27s-STALL GEMETEN (BOOTMARK, commit ab6d89e1)
+BEWEZEN: de stille 27s zit BINNEN UNpcRegistryComponent::EnsureSeeded (entry-marker +9.68s -> "NPC registry
+loaded" +37.1s = 27.4s). Idem op de beach-load (+45.2 -> +71.7 = 26.5s). Dus 2x per sessie.
+MAAR: heel EnsureSeeded is PURE CPU (naam-arrays CleanFirstName/ShortFullName, PredictPersonality = FRandomStream,
+geen enkele LoadObject/mesh/asset). 250 iteraties pure code kan geen 27s zijn -> de game-thread wordt tijdens dat
+venster UITGEHONGERD door achtergrond-worker-threads = crowd-skinned-asset-COMPILE (FSkinnedAssetCompilingManager,
+saturateert alle cores). DEV-ONLY: packaged heeft voorgecompileerde skins -> geen compile -> geen starvation.
+De menu-map (Map_MainMenu) seedt OOK 250 NPC's (28s LoadMap!) terwijl het menu geen NPC's nodig heeft = pure verspilling.
+FIXPLAN D29-stall:
+1. MENU-MAP NIET SEEDEN: EnsureSeeded lazy maken (pas seeden bij de eerste echte NPC-behoefte op de beach) OF de
+   NpcRegistry-seeding gaten op !menu-map. Verwijdert de boot-stall (dev) + de zinloze menu-seeding (ook packaged).
+2. Beach-seeding-starvation (dev): crowd-skin-compile is de bottleneck; PreloadCrowdSkins draait al maar blijkbaar
+   NA/naast de seeding -> onderzoek of de compile eerder/onder het laadscherm afgerond kan worden, of accepteren
+   als dev-only (packaged is dit weg).
+3. PACKAGED apart meten (Development-config package + zelfde BOOTMARK-analyse): de packaged traagheid heeft een
+   ANDERE bron (waarschijnlijk eerste-run PSO-precache onder de cover, BootCoverWidget HardCap 120s) - ongemeten.
+VERVOLG: BOOTMARK-markers (3 door mij toegevoegd: GameState na Super, GS-Economy-entry, EnsureSeeded-entry) blijven
+staan tot de D29-golf; daar packaged meten + dan verwijderen.
