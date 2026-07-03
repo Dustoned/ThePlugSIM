@@ -43,7 +43,14 @@ UNpcRegistryComponent::UNpcRegistryComponent()
 void UNpcRegistryComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	if (GetOwnerRole() == ROLE_Authority)
+	// D29: het seeden van 250 NPC's (EnsureSeeded) is ALLEEN nodig op de speelbare NPC-map (de beach). Op de
+	// menu-map (Map_MainMenu) draaide dit ook, VOOR NIETS - en dev-only kost het ~27s doordat de crowd-skin-
+	// compilatie de game-thread verhongert tijdens dat venster (bewezen met [BOOTMARK]-meting). Daarom hier op
+	// de beach-map gaten. Wordt sowieso lazy geseed via EnsureNpc/AssignNpc/de getters mocht een pad 'm toch
+	// nodig hebben; en een geladen save vult States al via RestoreStates (dan is EnsureSeeded een no-op).
+	const UWorld* W = GetWorld();
+	const bool bNpcMap = W && W->GetOutermost() && W->GetOutermost()->GetName().StartsWith(TEXT("/Game/CityBeachStrip"));
+	if (GetOwnerRole() == ROLE_Authority && bNpcMap)
 	{
 		EnsureSeeded();
 	}
