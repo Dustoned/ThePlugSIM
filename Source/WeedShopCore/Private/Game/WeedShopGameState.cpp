@@ -56,6 +56,7 @@ void AWeedShopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(AWeedShopGameState, ActiveDeliveries);
 	DOREPLIFETIME(AWeedShopGameState, bStarterRentOverdue);
 	DOREPLIFETIME(AWeedShopGameState, StarterRentCents);
+	DOREPLIFETIME(AWeedShopGameState, RentOverdueDoorIds);
 }
 
 void AWeedShopGameState::AddDeliveryTarget(int32 OrderId, const FVector& World, const FString& ForPlayerId)

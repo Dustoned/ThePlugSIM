@@ -29,6 +29,7 @@
 #include "Navigation/NavLinkProxy.h"
 #include "NavLinkCustomComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "World/WorldSyncComponent.h" // bestaan-sync van speler-geplaatste lichtschakelaars (server publiceert, client spiegelt)
 #include "Npc/NpcRegistryComponent.h"
 #include "World/WorldItemPickup.h"        // gescatterde joints (pickup-spawn)
 #include "Inventory/InventoryComponent.h" // UInventoryComponent::MakeJointId
@@ -2089,7 +2090,45 @@ void ADoorRetrofitter::ScanAndConvert()
 			// CO-OP: de huur is GEDEELDE wereld-staat (1 huis). De inning + de OVERDUE-lock zijn server-
 			// authoritative (een client mag de gedeelde economy niet muteren); de lock-vlag staat op de
 			// GameState en repliceert. DoorRetrofitter is per-proces -> server = !IsNetMode(NM_Client).
-			if (Left <= 0 && GSr && !GSr->IsStarterRentOverdue() && !IsNetMode(NM_Client))
+			// COMPETITIVE: ieder woont in z'n EIGEN comp-kamer (603/602), niet in het starter-penthouse ->
+			// ieder betaalt uit z'n EIGEN portemonnee en wie niet kan betalen krijgt de lock op z'n EIGEN
+			// comp-deur (per-deur-id op de GameState, gerepliceerd). 1 gedeelde cyclus (RentDueDay) voor iedereen.
+			if (Left <= 0 && GSr && !IsNetMode(NM_Client) && GSr->IsCompetitive())
+			{
+				// Wachten tot de comp-kamers staan (anders is de deur-id niet te bepalen). RentDueDay schuift
+				// pas door als de inning echt draait, dus dit retryt vanzelf volgende scan.
+				if (bCompHomesReady)
+				{
+					// Host-pawn = GetFirstPlayerController op de server (zelfde patroon als TickCompetitiveRooms).
+					APawn* HostPawn = Pr;
+					for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+					{
+						APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+						if (!Pw) { continue; }
+						const uint32 DoorId = GetCompRentDoorId(Pw != HostPawn);
+						// Nog steeds overdue van een vorige cyclus? Geen dubbele inning (zelfde gate als het
+						// enkele-vlag-pad); betalen aan de deur is de enige uitweg, schuld stapelt niet.
+						if (DoorId != 0 && GSr->IsRentOverdueDoor(DoorId)) { continue; }
+						UEconomyComponent* Ec = Pw->FindComponentByClass<UEconomyComponent>();
+						UPhoneClientComponent* Ph = Pw->FindComponentByClass<UPhoneClientComponent>();
+						if (Ec && Ec->RemoveMoney(50000))
+						{
+							if (Ph) { Ph->Toast(TEXT("Rent paid: EUR 500. Next rent in 31 days."), FColor::Green, 5.f); }
+						}
+						else
+						{
+							// Gerepliceerd -> BEIDE processen locken hun lokale deur-kopie (ApplyCompRentDoorLocks).
+							if (DoorId != 0) { GSr->AddRentOverdueDoor(DoorId); }
+							else { UE_LOG(LogWeedShop, Warning, TEXT("Huur: comp-deur-id niet gevonden voor %s - lock overgeslagen"), *GetNameSafe(Pw)); }
+							if (Ph) { Ph->Toast(TEXT("RENT OVERDUE - EUR 500. Your door is locked: pay at the door (F)."), FColor::Red, 7.f); }
+						}
+					}
+					// Gedeelde cyclus ALTIJD doorschuiven: de wanbetaler blijft gelockt tot 'ie aan de deur
+					// betaalt (dat schuift de cyclus NIET nogmaals door - zie de consume-tak hieronder).
+					RentDueDay = Day + 31;
+				}
+			}
+			else if (Left <= 0 && GSr && !GSr->IsStarterRentOverdue() && !IsNetMode(NM_Client))
 			{
 				UEconomyComponent* Ec = Pr ? Pr->FindComponentByClass<UEconomyComponent>() : nullptr;
 				UPhoneClientComponent* Phr = Pr ? Pr->FindComponentByClass<UPhoneClientComponent>() : nullptr;
@@ -2106,7 +2145,34 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			// Aan de deur betaald (host lokaal OF joiner via ServerPayRent)? Alleen de SERVER-deur krijgt
 			// bRentJustPaid (de betaling loopt server-authoritative) -> wis de gedeelde vlag + hernieuw de maand.
-			if (!IsNetMode(NM_Client) && StarterDoor->ConsumeRentJustPaid())
+			if (!IsNetMode(NM_Client) && GSr && GSr->IsCompetitive())
+			{
+				// COMPETITIVE: check de COMP-deuren op zojuist-betaald en geef ALLEEN dat deur-id vrij.
+				// De gedeelde cyclus (RentDueDay) is bij de inning al doorgeschoven - hier niet nogmaals.
+				for (const TWeakObjectPtr<ACityDoor>& WPd : ACityDoor::GetAll())
+				{
+					ACityDoor* Dp = WPd.Get();
+					if (!IsValid(Dp) || Dp->GetWorld() != W) { continue; } // registry is per-PROCES -> wereld-filter
+					if (!Dp->ConsumeRentJustPaid()) { continue; }
+					GSr->ClearRentOverdueDoor(Dp->GetWorldSyncDoorId());
+					// Melding bij de KAMER-EIGENAAR (host-deur -> host-pawn, anders de joiner-pawn; de
+					// betaler is vrijwel altijd de eigenaar zelf - alleen die deur toont de pay-prompt zinvol).
+					APawn* OwnPw = (Dp->GetWorldSyncDoorId() == GetCompRentDoorId(false)) ? Pr : nullptr;
+					if (!OwnPw)
+					{
+						for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+						{ APawn* P3 = It->Get() ? It->Get()->GetPawn() : nullptr; if (P3 && P3 != Pr) { OwnPw = P3; break; } }
+					}
+					if (OwnPw)
+					{
+						if (UPhoneClientComponent* Php = OwnPw->FindComponentByClass<UPhoneClientComponent>())
+						{
+							Php->Toast(TEXT("Rent paid: EUR 500. Your door is unlocked."), FColor::Green, 5.f);
+						}
+					}
+				}
+			}
+			else if (!IsNetMode(NM_Client) && StarterDoor->ConsumeRentJustPaid())
 			{
 				RentDueDay = Day + 31;
 				if (GSr) { GSr->SetStarterRentOverdue(false, 0); }
@@ -2281,9 +2347,84 @@ void ADoorRetrofitter::ScanAndConvert()
 		}
 	}
 
+	// SCHAKELAAR-BESTAAN-SYNC (co-op): speler-geplaatste lichtschakelaars (APackLightSwitch, bReplicates=false)
+	// spawnen op de server (plaatsen/save-load) en bestaan dus niet vanzelf op de joiner - en de joiner z'n verse
+	// StarterFurniture-default-set kan juist STALE zijn t.o.v. een geladen save (verplaatst/verwijderd op de host).
+	// De SERVER spiegelt daarom elke scan de WorldSync-arrays 1-op-1 aan z'n echte sw_*-actoren (dit is meteen de
+	// robuuste vangnet-route voor "WorldSync was nog null" bij een vroege load/plaats: volgende scan herpubliceert);
+	// de CLIENT spawnt ontbrekende schakelaars lokaal na en ruimt stale sw_*-schakelaars op. De aan/uit/dim-STAAT
+	// synct al apart (LampIds in WorldSync) - dit gaat puur om het BESTAAN. Goedkoop: een handvol actors op scan-cadans.
+	// Gate op bFurniturePlaced (en in Competitive op de comp-passes) zodat het fresh-/comp-pad niet NA deze pass
+	// alsnog duplicaten op dezelfde posities spawnt.
+	if (bFurniturePlaced)
+	{
+		AWeedShopGameState* GSsw = W->GetGameState<AWeedShopGameState>();
+		UWorldSyncComponent* WSsw = GSsw ? GSsw->GetWorldSync() : nullptr;
+		const bool bCompSw = GSsw && GSsw->IsCompetitive();
+		if (WSsw && !IsNetMode(NM_Client) && (!bCompSw || bCompMirrorDone))
+		{
+			// SERVER: reconcile-publish. Add dedupet zelf op 10cm; entries zonder levende server-actor binnen
+			// 50cm gaan eruit (oppakken, load-vervanging - elke destroy-route wordt zo vanzelf meegenomen).
+			TArray<FVector> SrvPos;
+			for (TActorIterator<APackLightSwitch> It(W); It; ++It)
+			{
+				if (!IsValid(*It) || !It->GetPersistKey().StartsWith(TEXT("sw_"))) { continue; }
+				SrvPos.Add(It->GetActorLocation());
+				WSsw->ServerAddSwitch(It->GetActorLocation(), It->GetActorRotation().Yaw);
+			}
+			for (int32 i = WSsw->GetSwitchCount() - 1; i >= 0; --i)
+			{
+				FVector SwP; float SwYaw;
+				if (!WSsw->GetSwitch(i, SwP, SwYaw)) { continue; }
+				bool bAlive = false;
+				for (const FVector& SP2 : SrvPos) { if (FVector::DistSquared(SP2, SwP) <= 50.f * 50.f) { bAlive = true; break; } }
+				if (!bAlive) { WSsw->ServerRemoveSwitch(SwP); }
+			}
+			WSsw->ServerMarkSwitchesPublished();
+		}
+		else if (WSsw && IsNetMode(NM_Client) && WSsw->AreSwitchesPublished() && (!bCompSw || bCompSwitchesDone))
+		{
+			// CLIENT: de lokale set aan de gepubliceerde set spiegelen. AreSwitchesPublished-gate: een nog niet
+			// gepubliceerde (lege) array mag de verse default-set nooit wissen.
+			for (int32 i = 0; i < WSsw->GetSwitchCount(); ++i)
+			{
+				FVector SwP; float SwYaw;
+				if (!WSsw->GetSwitch(i, SwP, SwYaw)) { continue; }
+				bool bHave = false;
+				for (TActorIterator<APackLightSwitch> It(W); It; ++It)
+				{
+					if (IsValid(*It) && FVector::DistSquared(It->GetActorLocation(), SwP) <= 50.f * 50.f) { bHave = true; break; }
+				}
+				if (bHave) { continue; }
+				// Zelfde spawn-route + PersistKey-formule als het fresh-pad hierboven, zodat Load() (stand/links)
+				// en de lamp-staat-sync (LampSyncId uit positie+yaw) op host en joiner dezelfde sleutels gebruiken.
+				const FRotator SwRot(0.f, SwYaw, 0.f);
+				if (APackLightSwitch* Sw = W->SpawnActorDeferred<APackLightSwitch>(APackLightSwitch::StaticClass(), FTransform(SwRot, SwP), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+				{
+					Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"), FMath::RoundToInt(SwP.X / 10.f), FMath::RoundToInt(SwP.Y / 10.f), FMath::RoundToInt(SwP.Z / 10.f)), 800.f);
+					Sw->FinishSpawning(FTransform(SwRot, SwP));
+				}
+			}
+			// Stale lokale sw_*-schakelaars (geen server-entry binnen 50cm) opruimen - bv. de default-set van het
+			// fresh-pad terwijl de host een geladen game draait waarin die schakelaar verplaatst/verwijderd is.
+			TArray<APackLightSwitch*> Stale;
+			for (TActorIterator<APackLightSwitch> It(W); It; ++It)
+			{
+				if (!IsValid(*It) || !It->GetPersistKey().StartsWith(TEXT("sw_"))) { continue; }
+				if (!WSsw->HasSwitchNear(It->GetActorLocation(), 50.f)) { Stale.Add(*It); }
+			}
+			for (APackLightSwitch* SwOld : Stale) { SwOld->Destroy(); }
+		}
+	}
+
 	// COMPETITIVE co-op: spiegel de solo-kamer naar Apt 603 (kopie) + 602 (echte spiegel) en zet beide
 	// spelers in hun eigen kamer. Self-gated op IsCompetitive -> in normale co-op gebeurt hier niets.
 	TickCompetitiveRooms();
+
+	// COMPETITIVE huur-lock NA de kamer-claim toepassen: de claim-pass hierboven (SetCompPlayerHome)
+	// zet bLocked elke scan weer uit, dus de per-deur overdue-staat moet er telkens NA opnieuw op.
+	// Self-gated op IsCompetitive; draait op BEIDE processen (de deuren zijn bReplicates=false).
+	ApplyCompRentDoorLocks();
 
 	// WINKELS (ShopSpots.txt): op elke speler-markeerde plek een toonbank + ATM + verkoper.
 	if (!bShopsPlaced)
@@ -5420,6 +5561,66 @@ bool ADoorRetrofitter::GetCompDeliverySpot(bool bJoiner, FVector& Out) const
 		Out = Anchor; // geen deur gevonden -> val terug op de anchor
 	}
 	return true;
+}
+
+uint32 ADoorRetrofitter::GetCompRentDoorId(bool bJoiner) const
+{
+	// COMPETITIVE huur: de VOORDEUR van de comp-kamer (host/joiner) -> WorldSync-id. Zelfde
+	// dichtstbijzijnde-deur-filter als GetCompDeliverySpot (zelfde verdieping, binnen bereik), met
+	// voorkeur voor de apt-genummerde deur (de echte voordeur) zoals PickDoors in TickCompetitiveRooms.
+	// NB: CompDoorHost/CompDoorJoiner (members) worden nergens gezet -> bewust via de anchors afleiden.
+	if (!bCompHomesReady) { return 0; }
+	UWorld* W = GetWorld();
+	if (!W) { return 0; }
+	const FVector Anchor = bJoiner ? CompAnchorJoiner : CompAnchorHost;
+	ACityDoor* Best = nullptr; float BestD2 = TNumericLimits<float>::Max();
+	ACityDoor* BestApt = nullptr; float BestAptD2 = TNumericLimits<float>::Max();
+	// PERF: deur-registry i.p.v. TActorIterator; registry is per-PROCES -> wereld-filter.
+	for (const TWeakObjectPtr<ACityDoor>& WD : ACityDoor::GetAll())
+	{
+		ACityDoor* D = WD.Get();
+		if (!IsValid(D) || D->GetWorld() != W) { continue; }
+		const FVector DL = D->GetActorLocation();
+		if (FMath::Abs(DL.Z - Anchor.Z) > 300.f) { continue; }
+		const float D2 = FVector::Dist2D(DL, Anchor);
+		if (D2 > 1200.f) { continue; }
+		if (D2 < BestD2) { BestD2 = D2; Best = D; }
+		if (D->GetAptNumber() > 0 && D2 < BestAptD2) { BestAptD2 = D2; BestApt = D; }
+	}
+	ACityDoor* Pick = BestApt ? BestApt : Best;
+	return Pick ? Pick->GetWorldSyncDoorId() : 0;
+}
+
+void ADoorRetrofitter::ApplyCompRentDoorLocks()
+{
+	// COMPETITIVE huur: pas de gerepliceerde per-deur overdue-lijst (GameState) toe op de LOKALE
+	// deur-kopieen, op BEIDE processen. Moet NA de claim-pass draaien (aanroep direct na
+	// TickCompetitiveRooms in ScanAndConvert): SetCompPlayerHome zet bLocked daar elke scan weer uit.
+	UWorld* W = GetWorld();
+	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!GS || !GS->IsCompetitive()) { return; }
+	const TArray<uint32>& Ids = GS->GetRentOverdueDoorIds();
+	for (const TWeakObjectPtr<ACityDoor>& WD : ACityDoor::GetAll())
+	{
+		ACityDoor* D = WD.Get();
+		if (!IsValid(D) || D->GetWorld() != W) { continue; } // registry is per-PROCES -> wereld-filter
+		const uint32 Id = D->GetWorldSyncDoorId();
+		if (Id != 0 && Ids.Contains(Id))
+		{
+			// ONVOORWAARDELIJK her-zetten (niet gaten op IsRentOverdue): de claim-pass laat bRentDue
+			// staan maar zet bLocked uit -> alleen-bij-transitie zetten zou de deur open laten.
+			// Bedrag = het vaste starter-huurbedrag (EUR 500, zelfde 50000 als de inning hierboven).
+			D->SetRentOverdue(50000);
+		}
+		else if (D->IsRentOverdue())
+		{
+			// Niet (meer) in de lijst -> lock eraf. Was dit op DEZE machine de PARTNER-deur (comp-geclaimd
+			// maar niet je eigen huis)? Direct weer als partner-deur op slot, anders staat 'ie een
+			// scan-rondje (~2s) open totdat de claim-pass 'm herclaimt.
+			D->ClearRentOverdue();
+			if (D->IsCompForced() && !D->IsPlayerHome()) { D->SetCompPartner(); }
+		}
+	}
 }
 
 void ADoorRetrofitter::GetOutdoorWaitSpots(TArray<FVector>& Out) const

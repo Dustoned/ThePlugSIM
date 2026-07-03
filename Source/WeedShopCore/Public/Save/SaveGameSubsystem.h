@@ -86,7 +86,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")
 	void SetPendingCoopCompetitive(bool bCompetitive) { bPendingCompetitive = bCompetitive; }
 
-	// Stabiele speler-id (platform net-id; valt terug op naam) — voor per-speler keys (bv. competitive relaties).
+	// Stabiele speler-id voor per-speler keys (bv. competitive level/heat/save-records).
+	// Keten: (1) AWeedShopPlayerState::PlugPid (login-id via join-URL, werkt zonder OSS, "#2"-dedupe),
+	// (2) platform net-id (Steam/EOS), (3) spelernaam (migratie-fallback voor oude records).
 	static FString StablePlayerId(const APawn* Pawn);
 	// Join: verbind direct met een host op IP[:poort] (LAN). Bijv. "192.168.1.50" of "192.168.1.50:7777".
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Save")

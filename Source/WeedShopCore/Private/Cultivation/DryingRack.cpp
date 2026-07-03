@@ -278,10 +278,13 @@ int32 ADryingRack::ServerHangWet(FName WetId, int32 Qty, float Thc, float QualPc
 	return Qty;
 }
 
-bool ADryingRack::ServerCollectIndex(int32 Index, FName& OutId, int32& OutQty, float& OutThc, float& OutQual)
+bool ADryingRack::ServerCollectIndex(int32 Index, FName ExpectedId, FName& OutId, int32& OutQty, float& OutThc, float& OutQual)
 {
 	if (!HasAuthority() || !Entries.IsValidIndex(Index)) { return false; }
 	const FDryEntry& E = Entries[Index];
+	// CO-OP anti-race: oogstte een ANDERE speler net een eerdere batch (RemoveAt schuift de indices op),
+	// dan wijst deze client-index nu een andere batch aan -> weiger i.p.v. de verkeerde batch te pakken.
+	if (!ExpectedId.IsNone() && E.DryItemId != ExpectedId) { return false; }
 	if (!E.bDone) { return false; }
 	// Humidity-sealer-upgrade vlakbij -> geen kwaliteitsverlies door te lang hangen.
 	const float LossFrac = bUpSeal ? 0.f : FMath::Clamp((E.OverTime - DryGraceSeconds) / DryDecayWindow, 0.f, 1.f) * DryMaxLoss;

@@ -840,6 +840,23 @@ void UPhoneClientComponent::ServerBuyProperty_Implementation(int32 HomeIndex)
 	const FCityPropertyOffer* Off = Offers.FindByPredicate([HomeIndex](const FCityPropertyOffer& O) { return O.HomeIndex == HomeIndex; });
 	if (!Off) { return; }                       // alleen de aangeboden panden
 	if (OwnedHomes.Contains(HomeIndex)) { return; }
+	// CO-OP anti-dubbelkoop: check ook de OwnedHomes van ALLE spelers (zelfde patroon als OwnedAny in
+	// ApplyLocalDoors) - anders kan speler B een pand kopen dat A al bezit en is het geld 2x weg.
+	if (UWorld* W = GetWorld())
+	{
+		for (TActorIterator<APawn> It(W); It; ++It)
+		{
+			const UPhoneClientComponent* Ph = It->FindComponentByClass<UPhoneClientComponent>();
+			if (!Ph) { continue; }
+			bool bTaken = Ph->OwnedHomes.Contains(Off->HomeIndex);
+			for (int32 Idx : Off->Homes) { bTaken = bTaken || Ph->OwnedHomes.Contains(Idx); }
+			if (bTaken)
+			{
+				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Already owned.")); }
+				return;
+			}
+		}
+	}
 	if (Off->PriceCents > 0)
 	{
 		UEconomyComponent* Econ = GetOwnerEconomy();
@@ -1481,7 +1498,14 @@ ADryingRack* UPhoneClientComponent::GetDryRack() const
 }
 
 void UPhoneClientComponent::RequestDryHang(int32 StackId) { ServerDryHang(DryRackActor.Get(), StackId); }
-void UPhoneClientComponent::RequestDryCollect(int32 Index) { ServerDryCollect(DryRackActor.Get(), Index); }
+void UPhoneClientComponent::RequestDryCollect(int32 Index)
+{
+	// CO-OP anti-race: de VERWACHTE batch-id op deze index meesturen (client-kant, uit de gerepliceerde
+	// entries) zodat de server een door een gelijktijdige collect verschoven index weigert.
+	ADryingRack* Rack = DryRackActor.Get();
+	const FName ExpId = (Rack && Rack->GetEntries().IsValidIndex(Index)) ? Rack->GetEntries()[Index].DryItemId : NAME_None;
+	ServerDryCollect(Rack, Index, ExpId);
+}
 void UPhoneClientComponent::RequestDryCollectAll() { ServerDryCollectAll(DryRackActor.Get()); }
 
 void UPhoneClientComponent::ServerDryHang_Implementation(ADryingRack* Rack, int32 StackId)
@@ -1505,14 +1529,14 @@ void UPhoneClientComponent::ServerDryHang_Implementation(ADryingRack* Rack, int3
 	else if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Drying rack is full.")); }
 }
 
-void UPhoneClientComponent::ServerDryCollect_Implementation(ADryingRack* Rack, int32 Index)
+void UPhoneClientComponent::ServerDryCollect_Implementation(ADryingRack* Rack, int32 Index, FName ExpectedId)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Rack || !Inv) { return; }
 	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Rack->GetActorLocation()) > 400.f) { return; }
 
 	FName OutId; int32 OutQty = 0; float OutThc = 0.f; float OutQual = 0.f;
-	if (Rack->ServerCollectIndex(Index, OutId, OutQty, OutThc, OutQual))
+	if (Rack->ServerCollectIndex(Index, ExpectedId, OutId, OutQty, OutThc, OutQual))
 	{
 		Inv->AddItem(OutId, OutQty, OutThc, OutQual);
 	}
@@ -1524,11 +1548,12 @@ void UPhoneClientComponent::ServerDryCollectAll_Implementation(ADryingRack* Rack
 	if (!Rack || !Inv) { return; }
 	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Rack->GetActorLocation()) > 400.f) { return; }
 
-	// Van achter naar voren zodat indices niet verschuiven.
+	// Van achter naar voren zodat indices niet verschuiven. NAME_None = geen ExpectedId-check nodig:
+	// deze loop draait op de server zelf, dus er kan niets tussendoor verschuiven.
 	for (int32 i = Rack->GetEntries().Num() - 1; i >= 0; --i)
 	{
 		FName OutId; int32 OutQty = 0; float OutThc = 0.f; float OutQual = 0.f;
-		if (Rack->ServerCollectIndex(i, OutId, OutQty, OutThc, OutQual))
+		if (Rack->ServerCollectIndex(i, NAME_None, OutId, OutQty, OutThc, OutQual))
 		{
 			Inv->AddItem(OutId, OutQty, OutThc, OutQual);
 		}
@@ -2167,7 +2192,7 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	if (const AWeedShopGameState* GSrc = GetGS())
 	{
 		if (GSrc->GetNpcRegistry() && Customer && !Customer->NpcId.IsNone()
-			&& GSrc->GetNpcRegistry()->IsOnRefusalCooldown(Customer->NpcId))
+			&& GSrc->GetNpcRegistry()->IsOnRefusalCooldown(Customer->NpcId, USaveGameSubsystem::StablePlayerId(Cast<APawn>(GetOwner())))) // B2: per-speler in competitive (registry neutraliseert in co-op)
 		{
 			UWeedToast::Notify(-1, 2.5f, FColor::Orange, TEXT("They just turned you down - give it a minute."));
 			return;
@@ -2302,7 +2327,7 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 	if (const AWeedShopGameState* GSs = GetGS())
 	{
 		if (GSs->GetNpcRegistry() && Customer && !Customer->NpcId.IsNone()
-			&& GSs->GetNpcRegistry()->IsOnRefusalCooldown(Customer->NpcId))
+			&& GSs->GetNpcRegistry()->IsOnRefusalCooldown(Customer->NpcId, USaveGameSubsystem::StablePlayerId(Cast<APawn>(GetOwner())))) // B2: per-speler in competitive (registry neutraliseert in co-op)
 		{
 			return; // net geweigerd: bod negeren tot de cooldown om is
 		}
@@ -3239,8 +3264,9 @@ void UPhoneClientComponent::ServerDevSetLevel_Implementation(int32 NewLevel)
 	if (!Lv || !GS->AreDevToolsEnabled()) { return; }
 	Lv->GrantLevelFor(Cast<APawn>(GetOwner()), NewLevel); // per-speler in competitive (deze cheat zet alleen het eigen level)
 	// GrantLevel zet de shop-licentie NIET (die zit alleen in het AddXP-levelup-pad - oude quirk);
-	// vanaf level 50 hoort de licentie erbij, dus hier expliciet mee-zetten.
-	if (NewLevel >= ULevelComponent::ShopLicenseLevel) { Lv->RestoreShopLicensed(true); }
+	// vanaf level 50 hoort de licentie erbij, dus hier expliciet mee-zetten. Per-speler: in competitive
+	// licentieert dit alleen de cheater zelf (RestoreShopLicensed schreef de GEDEELDE vlag).
+	if (NewLevel >= ULevelComponent::ShopLicenseLevel) { Lv->SetShopLicensedFor(Cast<APawn>(GetOwner()), true); }
 }
 
 void UPhoneClientComponent::ServerDevWarmNpcs_Implementation()

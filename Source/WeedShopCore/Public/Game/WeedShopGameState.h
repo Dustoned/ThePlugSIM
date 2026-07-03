@@ -191,6 +191,17 @@ public:
 	int64 GetStarterRentCents() const { return StarterRentCents; }
 	void SetStarterRentOverdue(bool bOverdue, int64 Cents) { if (HasAuthority()) { bStarterRentOverdue = bOverdue; StarterRentCents = Cents; } }
 
+	// COMPETITIVE: huur-achterstand PER DEUR (WorldSync-deur-id). In competitive woont ieder in z'n EIGEN
+	// comp-kamer (603/602), niet in het gedeelde starter-penthouse - 1 gedeelde vlag zou daar op de verkeerde
+	// (lege) deur landen. Gerepliceerd zodat host EN joiner hun LOKALE deur-kopie locken (deuren zijn
+	// bReplicates=false). Alleen de server muteert; co-op/solo blijft het enkele-vlag-pad hierboven gebruiken.
+	UPROPERTY(Replicated)
+	TArray<uint32> RentOverdueDoorIds;
+	const TArray<uint32>& GetRentOverdueDoorIds() const { return RentOverdueDoorIds; }
+	void AddRentOverdueDoor(uint32 Id) { if (HasAuthority() && Id != 0) { RentOverdueDoorIds.AddUnique(Id); } }
+	void ClearRentOverdueDoor(uint32 Id) { if (HasAuthority()) { RentOverdueDoorIds.Remove(Id); } }
+	bool IsRentOverdueDoor(uint32 Id) const { return Id != 0 && RentOverdueDoorIds.Contains(Id); }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

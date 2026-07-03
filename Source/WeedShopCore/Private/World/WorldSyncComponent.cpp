@@ -19,6 +19,9 @@ void UWorldSyncComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(UWorldSyncComponent, LampIds);
 	DOREPLIFETIME(UWorldSyncComponent, LampOn);
 	DOREPLIFETIME(UWorldSyncComponent, LampBright);
+	DOREPLIFETIME(UWorldSyncComponent, SwitchPos);
+	DOREPLIFETIME(UWorldSyncComponent, SwitchYaw);
+	DOREPLIFETIME(UWorldSyncComponent, bSwitchesPublished);
 }
 
 uint32 UWorldSyncComponent::MakeId(const FVector& Loc, float Yaw)
@@ -131,4 +134,56 @@ bool UWorldSyncComponent::GetLampState(uint32 LampId, bool& bOutOn, float& OutBr
 	bOutOn = LampOn[Idx] != 0;
 	OutBright = LampBright[Idx];
 	return true;
+}
+
+bool UWorldSyncComponent::GetSwitch(int32 Index, FVector& OutPos, float& OutYaw) const
+{
+	if (!SwitchPos.IsValidIndex(Index) || !SwitchYaw.IsValidIndex(Index)) { return false; }
+	OutPos = SwitchPos[Index];
+	OutYaw = SwitchYaw[Index];
+	return true;
+}
+
+bool UWorldSyncComponent::HasSwitchNear(const FVector& Pos, float MaxDist) const
+{
+	const float D2 = MaxDist * MaxDist;
+	for (const FVector& P : SwitchPos)
+	{
+		if (FVector::DistSquared(P, Pos) <= D2) { return true; }
+	}
+	return false;
+}
+
+void UWorldSyncComponent::ServerAddSwitch(const FVector& Pos, float Yaw)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	// Dedupe op ~10cm: dezelfde schakelaar wordt via meerdere paden gepubliceerd (direct bij plaatsen/load
+	// + de periodieke reconcile-pass in de DoorRetrofitter) - alleen de eerste telt.
+	if (HasSwitchNear(Pos, 10.f)) { return; }
+	SwitchPos.Add(Pos);
+	SwitchYaw.Add(Yaw);
+}
+
+void UWorldSyncComponent::ServerRemoveSwitch(const FVector& Pos)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	// De dichtstbijzijnde entry binnen 50cm verwijderen (de posities komen 1-op-1 van de server-actoren).
+	int32 Best = INDEX_NONE;
+	float BestD2 = 50.f * 50.f;
+	for (int32 i = 0; i < SwitchPos.Num(); ++i)
+	{
+		const float D2 = FVector::DistSquared(SwitchPos[i], Pos);
+		if (D2 <= BestD2) { BestD2 = D2; Best = i; }
+	}
+	if (Best != INDEX_NONE)
+	{
+		SwitchPos.RemoveAt(Best);
+		if (SwitchYaw.IsValidIndex(Best)) { SwitchYaw.RemoveAt(Best); }
+	}
+}
+
+void UWorldSyncComponent::ServerMarkSwitchesPublished()
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	bSwitchesPublished = 1;
 }

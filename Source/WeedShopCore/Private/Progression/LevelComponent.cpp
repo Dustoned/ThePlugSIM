@@ -73,9 +73,12 @@ FLevelState& ULevelComponent::StateForPawn(const APawn* Pawn)
 	{
 		if (E.Key == Key) { return E.State; }
 	}
-	// Lazy-create (server): nieuwe speler start op level 1 met 0 XP (default FLevelState).
+	// Lazy-create (server): seed vanaf Shared i.p.v. defaults. Verse competitive: Shared = level 1
+	// -> identiek aan voorheen. Gemigreerde oude save (v<5: alles in Shared): spelers erven zo het
+	// crew-level i.p.v. terug te vallen naar level 1.
 	FLevelPlayerEntry& New = Players.AddDefaulted_GetRef();
 	New.Key = Key;
+	New.State = Shared;
 	return New.State;
 }
 
@@ -103,11 +106,26 @@ const FLevelState& ULevelComponent::StateForPawnConst(const APawn* Pawn) const
 
 int32 ULevelComponent::GetLevelFor(const APawn* Pawn) const
 {
+	// CREW-PROXY (competitive): Pawn==nullptr is hier een bewust-GEDEELDE wereld-read (seed-scatter,
+	// joint-target, order-tier, mold/pest-min-level-gates). In competitive schrijft niets meer naar
+	// Shared -> die zou eeuwig level 1 blijven en de gates zouden NOOIT meer vuren. De wereld volgt
+	// daarom de VERSTE speler: max(Shared, hoogste level over de Players-entries).
+	if (!Pawn)
+	{
+		const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+		if (GS && GS->IsCompetitive())
+		{
+			int32 Best = Shared.Level;
+			for (const FLevelPlayerEntry& E : Players) { Best = FMath::Max(Best, E.State.Level); }
+			return Best;
+		}
+	}
 	return StateForPawnConst(Pawn).Level;
 }
 
 int32 ULevelComponent::GetCurrentXPFor(const APawn* Pawn) const
 {
+	// Geen crew-proxy: XP/fractie-reads met nullptr zijn puur display-paden -> Shared volstaat.
 	return StateForPawnConst(Pawn).CurrentXP;
 }
 
@@ -126,6 +144,18 @@ float ULevelComponent::GetLevelFractionFor(const APawn* Pawn) const
 
 bool ULevelComponent::IsShopLicensedFor(const APawn* Pawn) const
 {
+	// CREW-PROXY (competitive): zie GetLevelFor — nullptr = gedeelde wereld-read. Licensed zodra
+	// IEMAND (Shared of een per-speler-entry) de licentie heeft verdiend.
+	if (!Pawn)
+	{
+		const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+		if (GS && GS->IsCompetitive())
+		{
+			if (Shared.bShopLicensed) { return true; }
+			for (const FLevelPlayerEntry& E : Players) { if (E.State.bShopLicensed) { return true; } }
+			return false;
+		}
+	}
 	return StateForPawnConst(Pawn).bShopLicensed;
 }
 
@@ -208,6 +238,14 @@ void ULevelComponent::GrantLevelFor(const APawn* Pawn, int32 NewLevel)
 	OnRep_Level();
 }
 
+void ULevelComponent::SetShopLicensedFor(const APawn* Pawn, bool bLicensed)
+{
+	// Dev-cheat/save: zet de shop-licentie direct op de juiste state (nullptr -> Shared;
+	// competitive -> de per-speler-entry van deze pawn, lazy-created indien nodig).
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	StateForPawn(Pawn).bShopLicensed = bLicensed;
+}
+
 void ULevelComponent::RestoreLevelFor(const FName& Key, int32 InLevel, int32 InXP, bool bLicensed)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
@@ -233,5 +271,5 @@ void ULevelComponent::RestoreLevelFor(const FName& Key, int32 InLevel, int32 InX
 
 void ULevelComponent::OnRep_Level()
 {
-	// Hook voor clients (UI werkt al via de pure getters elke frame).
+	// Bewust een no-op: hook voor clients bestaat alleen als aanknopingspunt (UI werkt al via de pure getters elke frame).
 }

@@ -954,6 +954,20 @@ void ACustomerBase::BeginPlay()
 			{
 				// Walk-in: gedeelde keuze-logica (tier-weging + premium hasj/edibles + soms net boven je bereik).
 				DesiredProductId = ACustomerBase::PickDesiredProduct(GS, ProductTable, NpcId, DesiredQuantity);
+				// COMPETITIVE "hybride c": leg vast WAAR in de basis-band deze order viel (0..1). Zodra de
+				// koper bekend is (gesprek-start) herschaalt RescaleOrderForPlayer de hoeveelheid met
+				// dezelfde fractie naar de band van DIE speler. Band-breedte 0 -> midden (0.5).
+				if (UNpcRegistryComponent* RegApp = GS ? GS->GetNpcRegistry() : nullptr)
+				{
+					if (!NpcId.IsNone())
+					{
+						int32 BandMn = 1, BandMx = 3;
+						RegApp->GetTierOrderGrams(NpcId, BandMn, BandMx);
+						OrderAppetite01 = (BandMx > BandMn)
+							? FMath::Clamp(float(DesiredQuantity - BandMn) / float(BandMx - BandMn), 0.f, 1.f)
+							: 0.5f;
+					}
+				}
 			}
 		}
 
@@ -1010,7 +1024,27 @@ void ACustomerBase::SetTalkingToPlayer(bool b, APawn* Pawn)
 	if (b)
 	{
 		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
+		// COMPETITIVE: nu de KOPER bekend is de walk-in-order-grootte herschalen naar zijn tier-band.
+		RescaleOrderForPlayer(Pawn);
 	}
+}
+
+void ACustomerBase::RescaleOrderForPlayer(APawn* Player)
+{
+	// COMPETITIVE "hybride c": WAT de klant wil blijft NPC-smaak (base), maar HOEVEEL volgt de relatie/tier
+	// van de KOPENDE speler. De bij spawn vastgelegde fractie (OrderAppetite01) wordt op de per-speler-band
+	// gelegd -> deterministisch (weglopen/terugkomen re-rollt de hoeveelheid niet).
+	if (!HasAuthority() || !Player || OrderAppetite01 < 0.f) { return; }
+	if (bApptActive) { return; } // afspraak-orders zijn contractueel (exact wat het bericht beloofde)
+	if (State != ECustomerState::WantsToOrder && State != ECustomerState::Negotiating) { return; }
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!GS || !GS->IsCompetitive() || NpcId.IsNone()) { return; }
+	UNpcRegistryComponent* Reg = GS->GetNpcRegistry();
+	if (!Reg) { return; }
+	int32 Mn = 1, Mx = 3;
+	Reg->GetTierOrderGrams(UContactsComponent::BaseNpcId(NpcId), Mn, Mx, USaveGameSubsystem::StablePlayerId(Player));
+	DesiredQuantity = FMath::Max(1, FMath::RoundToInt(FMath::Lerp(float(Mn), float(Mx), OrderAppetite01)));
+	// DesiredQuantity repliceert al -> het deal-HUD/de prompt volgen vanzelf.
 }
 
 void ACustomerBase::BecomeBuyerNow()
@@ -1922,8 +1956,9 @@ void ACustomerBase::NotifyNoShowAndLeave()
 		{
 			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
 			{
-				Reg->SetApptCooldownMult(NpcId, 2.5f); // laat je daarna langer met rust
-				Reg->NoteAppointment(NpcId);           // start de (langere) cooldown
+				// COMPETITIVE: de cooldown hoort bij de EIGENAAR van de afspraak (leeg = gedeeld/co-op).
+				Reg->SetApptCooldownMult(NpcId, 2.5f, ApptForPlayerId); // laat je daarna langer met rust
+				Reg->NoteAppointment(NpcId, ApptForPlayerId);           // start de (langere) cooldown
 			}
 		}
 	}
@@ -2939,16 +2974,19 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	return Raw > 0 ? (int32)FMath::Max<int64>(100, Rounded) : (int32)Rounded;
 }
 
-FName ACustomerBase::PickDesiredProduct(AWeedShopGameState* GS, UDataTable* InProductTable, FName InNpcId, int32& OutQty)
+FName ACustomerBase::PickDesiredProduct(AWeedShopGameState* GS, UDataTable* InProductTable, FName InNpcId, int32& OutQty,
+	const FString& ForPlayerId, APawn* ForPawn)
 {
 	OutQty = FMath::RandRange(1, 3);
 	if (!InProductTable) { return NAME_None; }
-	// Order-tier/product-keuze is BEWUST gedeeld: op dit moment is er nog geen koper-speler bekend (dat is Ronde B) -> nullptr = crew-brede waarde.
-	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevelFor(nullptr) : 1;
+	// COMPETITIVE "hybride c": de PRODUCT-keuze blijft base (NPC-smaak, gedeelde tier), maar de level-gate en
+	// de order-band mogen de KOPENDE speler volgen als die bekend is (ForPawn/ForPlayerId). Defaults
+	// (nullptr/leeg) = crew-brede waarden -> walk-in-callers zonder args gedragen zich exact als voorheen.
+	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevelFor(ForPawn) : 1;
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
 	const int32 CTier = FMath::Clamp((Reg && !InNpcId.IsNone()) ? Reg->GetCustomerTier(InNpcId) : 1, 1, 5);
-	if (Reg && !InNpcId.IsNone()) { int32 Mn = 1, Mx = 3; Reg->GetTierOrderGrams(InNpcId, Mn, Mx); OutQty = FMath::RandRange(Mn, Mx); }
+	if (Reg && !InNpcId.IsNone()) { int32 Mn = 1, Mx = 3; Reg->GetTierOrderGrams(InNpcId, Mn, Mx, ForPlayerId); OutQty = FMath::RandRange(Mn, Mx); }
 
 	// Strains: ontgrendeld (Eligible) + net buiten bereik (JustAbove, voor veeleisende whales), met unlock-level.
 	TArray<TPair<int32, FName>> Eligible, JustAbove;
@@ -3063,7 +3101,13 @@ int32 ACustomerBase::GetMyCustomerTier() const
 	if (NpcId.IsNone()) { return 1; }
 	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
-		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { return Reg->GetCustomerTier(NpcId); }
+		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+		{
+			// COMPETITIVE: loopt er een deal (SubmitOfferProduct zette ActiveRelKey = "BaseNpc#spelerId"),
+			// lees dan de tier van DIE relatie -> de prijs-tolerantie volgt de kopende speler. De suffixed
+			// sleutel is zelf een registry-entry, dus direct als NpcId doorgeven (geen extra PlayerId).
+			return Reg->GetCustomerTier(ActiveRelKey.IsNone() ? NpcId : ActiveRelKey);
+		}
 	}
 	return 1;
 }
@@ -3157,16 +3201,18 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 
 	// COMPETITIVE: respect/loyaliteit/verslaving staan PER SPELER los. Laad de relatie van de DEALENDE speler
 	// (sleutel "BASIS-NpcId#spelerId") zodat elke speler z'n eigen band met deze klant opbouwt. Co-op = gedeeld.
+	// DealPlayerId blijft functie-breed beschikbaar voor de dual-writes verderop (refusal/cooldown/klantwaarde);
+	// leeg in co-op -> de registry-calls raken dan alleen de gedeelde base-relatie (ongewijzigd gedrag).
+	FString DealPlayerId;
 	if (PayTo && !NpcId.IsNone())
 	{
 		AWeedShopGameState* GScomp = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 		if (GScomp && GScomp->IsCompetitive())
 		{
-			FString Pid;
-			if (APawn* Buyer = Cast<APawn>(PayTo->GetOwner())) { Pid = USaveGameSubsystem::StablePlayerId(Buyer); }
-			if (!Pid.IsEmpty())
+			if (APawn* Buyer = Cast<APawn>(PayTo->GetOwner())) { DealPlayerId = USaveGameSubsystem::StablePlayerId(Buyer); }
+			if (!DealPlayerId.IsEmpty())
 			{
-				const FName Key(*FString::Printf(TEXT("%s#%s"), *NpcId.ToString(), *Pid));
+				const FName Key(*FString::Printf(TEXT("%s#%s"), *NpcId.ToString(), *DealPlayerId));
 				if (UNpcRegistryComponent* Reg = GScomp->GetNpcRegistry())
 				{
 					Reg->EnsurePlayerNpc(Key, NpcId, FText());
@@ -3240,10 +3286,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		}
 		Respect = ClampAttr(Respect - (bSubstitute ? 2.f : 4.f));
 		WriteStatsToRegistry();
-		// Korte her-aanbied-cooldown na een weigering (GEEN tevreden-klant/aankoop-effect).
+		// Korte her-aanbied-cooldown na een weigering (GEEN tevreden-klant/aankoop-effect). COMPETITIVE:
+		// dual-write met de id van de afgewezen speler zodat ZIJN relatie de cooldown draagt (leeg = base).
 		if (AWeedShopGameState* GSr = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 		{
-			if (GSr->GetNpcRegistry() && !NpcId.IsNone()) { GSr->GetNpcRegistry()->MarkRefused(NpcId); }
+			if (GSr->GetNpcRegistry() && !NpcId.IsNone()) { GSr->GetNpcRegistry()->MarkRefused(NpcId, DealPlayerId); }
 		}
 		return EDealResult::Refused;
 	}
@@ -3345,13 +3392,14 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			}
 		}
 	}
-	// Cooldown starten: deze NPC (in persoon of via telefoon-afspraak) komt niet meteen terug.
+	// Cooldown starten: deze NPC (in persoon of via telefoon-afspraak) komt niet meteen terug. COMPETITIVE:
+	// dual-writes met de koper-id -> cooldown + klantwaarde/XP groeien op de relatie van DEZE speler (leeg = base).
 	if (AWeedShopGameState* GSc = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (GSc->GetNpcRegistry() && !NpcId.IsNone())
 		{
-			GSc->GetNpcRegistry()->MarkDealt(NpcId);
-			GSc->GetNpcRegistry()->AddCustomerValue(NpcId, SoldGrams); // klant-tier groeit met verkochte grammen
+			GSc->GetNpcRegistry()->MarkDealt(NpcId, DealPlayerId);
+			GSc->GetNpcRegistry()->AddCustomerValue(NpcId, SoldGrams, DealPlayerId); // klant-tier groeit met verkochte grammen
 		}
 		if (UGoalsComponent* Gl = GSc->GetGoals()) { Gl->NoteDeal(); Gl->NoteGramsSold(SoldGrams); } // goal-tellers: deal + gram verkocht
 	}

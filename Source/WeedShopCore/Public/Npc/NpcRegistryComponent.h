@@ -154,53 +154,65 @@ public:
 	static void PredictPersonality(FName NpcId, float& OutRespect, float& OutLoyalty, float& OutAddiction);
 
 	// Server: leg vast dat deze NPC zojuist een deal deed (in persoon of telefoon) -> start cooldown.
+	// PlayerId = de dealende speler (competitive: dual-write basis + per-speler entry; leeg/co-op = alleen basis).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
-	void MarkDealt(FName NpcId);
+	void MarkDealt(FName NpcId, const FString& PlayerId = FString());
 
 	// Heeft deze NPC recent (binnen DealCooldownSeconds) een deal gedaan?
+	// PlayerId = de vragende speler (competitive: leest de per-speler entry; leeg/co-op = basis, ongewijzigd).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
-	bool IsOnCooldown(FName NpcId) const;
+	bool IsOnCooldown(FName NpcId, const FString& PlayerId = FString()) const;
 
+	// Refusal-cooldown: Mark* = dual-write (basis + per-speler entry in competitive), IsOn* = per-speler read.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
-	void MarkRefused(FName NpcId);
+	void MarkRefused(FName NpcId, const FString& PlayerId = FString());
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
-	bool IsOnRefusalCooldown(FName NpcId) const;
+	bool IsOnRefusalCooldown(FName NpcId, const FString& PlayerId = FString()) const;
 
 	// Sample-cooldown: leg vast dat deze NPC zojuist een gratis joint kreeg / check of 'ie op cooldown is.
+	// Zelfde per-speler patroon als de refusal-cooldown (PlayerId leeg/co-op = basis, ongewijzigd).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
-	void MarkSampled(FName NpcId);
+	void MarkSampled(FName NpcId, const FString& PlayerId = FString());
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
-	bool IsOnSampleCooldown(FName NpcId) const;
+	bool IsOnSampleCooldown(FName NpcId, const FString& PlayerId = FString()) const;
 
 	// Heeft deze NPC z'n nummer al gedeeld (contact)?
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	bool IsUnlocked(FName NpcId) const;
 
-	// Mag deze NPC vandaag (nog) een telefoon-afspraak sturen (onder de dag-cap)?
+	// Mag deze NPC vandaag (nog) een telefoon-afspraak sturen (onder de dag-cap)? Bewust ALTIJD op de
+	// basis-entry (competitive deelt de dag-cap, anders vraagt dezelfde NPC 2x per dag per speler).
 	bool CanAppointToday(FName NpcId) const;
 	// Leg vast dat er net een afspraak naar deze NPC is gestuurd (telt mee voor de dag-cap).
-	void NoteAppointment(FName NpcId);
+	// PlayerId (competitive): schrijft LastApptAbs ook op de per-speler entry; de dag-cap blijft basis.
+	void NoteAppointment(FName NpcId, const FString& PlayerId = FString());
 
 	// Zet de cooldown-multiplier voor de volgende afspraak-cooldown (snel antwoord < 1, traag/opgegeven > 1).
-	void SetApptCooldownMult(FName NpcId, float Mult);
+	// PlayerId (competitive): dual-write op basis + per-speler entry.
+	void SetApptCooldownMult(FName NpcId, float Mult, const FString& PlayerId = FString());
 
 	// --- Klant-tier (1=Casual .. 5=Whale), afgeleid van CustomerXP. Iedereen kan klimmen. ---
+	// PlayerId-param (competitive): de tier/XP van de PER-SPELER relatie-entry ("BaseNpc#PlayerId");
+	// leeg of co-op/solo = de basis-entry (bit-voor-bit ongewijzigd gedrag).
 	// Server: tel klantwaarde op na een deal (grammen). Loyaliteit + persoonlijke honger schalen mee.
-	void AddCustomerValue(FName NpcId, int32 GramsSold);
+	// Dual-write: basis blijft ALTIJD meegroeien (skin/productsmaak) + de per-speler entry (order-grootte).
+	void AddCustomerValue(FName NpcId, int32 GramsSold, const FString& PlayerId = FString());
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
-	int32 GetCustomerTier(FName NpcId) const;          // 1..5
+	int32 GetCustomerTier(FName NpcId, const FString& PlayerId = FString()) const;          // 1..5
 	// Vaste uiterlijk-skin-index: 1x toegewezen (tier-gewogen via Seed) en daarna persistent bewaard.
 	// Geeft de bewaarde index terug, of wijst er bij eerste keer één toe. Server-side.
 	int32 GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed);
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
-	int32 GetCustomerXP(FName NpcId) const;
+	int32 GetCustomerXP(FName NpcId, const FString& PlayerId = FString()) const;
 	// Naam van een tier (1..5) + de bestel-range (grammen) van een tier (met persoonlijke variatie via NpcId).
 	static FString TierName(int32 Tier);
-	void GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax) const;
+	// Tier van de RESOLVED key (per-speler band in competitive); ValueMult van de BASIS-entry
+	// (immuun voor oude saves waar de per-key ValueMult nog niet geseed was).
+	void GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax, const FString& PlayerId = FString()) const;
 	static int32 TierFromXP(int32 XP);
 	// Voortgang 0..1 binnen de huidige tier (1.0 = al Whale). Voor de XP-balk in de telefoon.
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
-	float GetTierProgress01(FName NpcId) const;
+	float GetTierProgress01(FName NpcId, const FString& PlayerId = FString()) const;
 
 	// Lees de stats van een NPC (false als onbekend).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
@@ -211,11 +223,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|NPC")
 	void ApplyStats(FName NpcId, float Respect, float Loyalty, float Addiction, APawn* DealingPawn = nullptr);
 
+	// Tellingen over ECHTE basis-NPC's; per-speler '#'-relatie-entries tellen niet mee (geen dubbele mensen).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
 	int32 GetUnlockedCount() const;
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|NPC")
-	int32 GetTotalCount() const { return States.Num(); }
+	int32 GetTotalCount() const;
 
 	// Save/load van alle NPC-relaties (respect/loyaliteit/verslaving + ontgrendeld).
 	const TArray<FNpcState>& GetStatesForSave() const { return States; }
@@ -242,6 +255,15 @@ protected:
 
 	FNpcState* Find(FName NpcId);
 	const FNpcState* Find(FName NpcId) const;
+
+	// Sleutel-resolutie voor per-speler relaties: PlayerId leeg OF geen competitive -> BaseNpc;
+	// anders "BaseNpc#PlayerId" (zelfde formaat als EnsurePlayerNpc). Reads op een niet-bestaande
+	// per-key vallen via Find gewoon op 0 XP / geen cooldown (= verse relatie, correct).
+	FName ResolveNpcKey(FName BaseNpc, const FString& PlayerId) const;
+
+	// Per-speler entry voor een resolved key ophalen; maakt 'm aan (EnsurePlayerNpc) als 'ie nog niet
+	// bestaat, zodat een dual-write (cooldown/XP) nooit verloren gaat. Alleen aanroepen met Key != BaseNpc.
+	FNpcState* FindOrAddPlayerEntry(FName BaseNpc, FName Key);
 
 	// Monotone "nu"-tijd uit de dag-cyclus (dag*1e6 + tijd-op-dag); 0 als geen cyclus.
 	float NowAbs() const;

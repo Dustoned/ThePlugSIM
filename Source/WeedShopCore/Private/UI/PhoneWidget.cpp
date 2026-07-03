@@ -1344,7 +1344,8 @@ void UPhoneWidget::RefreshChatList()
 		Info->AddChildToVerticalBox(MakeText(Name.ToString(), 14, WeedUI::ColText()));
 		if (GS && GS->GetNpcRegistry())
 		{
-			const int32 Tr = GS->GetNpcRegistry()->GetCustomerTier(Cid);
+			// Per-speler tier (competitive): de contact-kaart toont MIJN relatie-tier met dit contact.
+			const int32 Tr = GS->GetNpcRegistry()->GetCustomerTier(Cid, USaveGameSubsystem::StablePlayerId(GetOwningPlayerPawn()));
 			const FLinearColor TCol = (Tr >= 5) ? FLinearColor(1.f, 0.8f, 0.3f) : (Tr >= 4 ? FLinearColor(0.8f, 0.7f, 1.f) : FLinearColor(0.55f, 0.7f, 0.6f));
 			Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%s customer"), *UNpcRegistryComponent::TierName(Tr)), 9, TCol));
 		}
@@ -1418,8 +1419,10 @@ void UPhoneWidget::RefreshChatThread()
 		if (GS && GS->GetNpcRegistry())
 		{
 			UNpcRegistryComponent* Reg = GS->GetNpcRegistry();
-			const int32 Tier = Reg->GetCustomerTier(OpenChatContact);
-			const float Frac = Reg->GetTierProgress01(OpenChatContact);
+			// Per-speler tier + voortgang (competitive): de chat toont MIJN relatie, niet de gedeelde base.
+			const FString MyPid = USaveGameSubsystem::StablePlayerId(GetOwningPlayerPawn());
+			const int32 Tier = Reg->GetCustomerTier(OpenChatContact, MyPid);
+			const float Frac = Reg->GetTierProgress01(OpenChatContact, MyPid);
 			const FString TLbl = (Tier >= 5)
 				? FString::Printf(TEXT("Tier: %s  (max)"), *UNpcRegistryComponent::TierName(Tier))
 				: FString::Printf(TEXT("Tier: %s  ->  %s"), *UNpcRegistryComponent::TierName(Tier), *UNpcRegistryComponent::TierName(Tier + 1));

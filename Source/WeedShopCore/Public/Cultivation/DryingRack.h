@@ -83,7 +83,10 @@ public:
 	// Hangt een natte stapel op om te drogen. Geeft het aantal opgehangen gram terug (0 = vol/niet nat).
 	int32 ServerHangWet(FName WetId, int32 Qty, float Thc, float QualPct);
 	// Oogst één klare batch op index. Vult Out* en geeft true bij succes (incl. kwaliteitsverlies).
-	bool ServerCollectIndex(int32 Index, FName& OutId, int32& OutQty, float& OutThc, float& OutQual);
+	// CO-OP anti-race (zelfde patroon als AStorageShelf::ServerTake): ExpectedId = de batch-id die de
+	// client op deze index zag; mismatch (indices verschoven door een gelijktijdige collect) -> weigeren.
+	// NAME_None = geen check (alleen voor server-interne loops zoals collect-all).
+	bool ServerCollectIndex(int32 Index, FName ExpectedId, FName& OutId, int32& OutQty, float& OutThc, float& OutQual);
 
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;

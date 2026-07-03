@@ -132,6 +132,7 @@ protected:
 	UPROPERTY(Replicated)
 	TArray<FHeatPlayerEntry> Players;
 
+	// Bewust no-op-achtig restant (props zijn plain Replicated, geen ReplicatedUsing): de UI polt de getters.
 	UFUNCTION()
 	void OnRep_Heat();
 
@@ -145,20 +146,29 @@ protected:
 	// Beveiliging-dempingsfactor 0..0.9 uit de upgrades.
 	float GetSecurityResist() const;
 
-	// Server: één tick-stap (decay + event-evaluatie) op een enkele state. HomeFilterPawn = de speler wiens
-	// potten de pot-vloer bepaalden (nu al berekend en meegegeven als PotFloor; alleen voor context/log).
-	void TickState(FHeatState& St, float DeltaTime, const APawn* HomeFilterPawn, bool bNight, int32 CurDay, float Resist, float PotFloor);
+	// Server: één tick-stap (decay + event-evaluatie) op een enkele state. EventTargetPawn = de speler die
+	// bij een bust/overval beboet wordt (nullptr = iedereen, co-op). bAllowEvents=false -> alleen decayen
+	// (competitive-entry zonder levende pawn: geen events, geen notificaties).
+	void TickState(FHeatState& St, float DeltaTime, APawn* EventTargetPawn, bool bNight, int32 CurDay, float Resist, float PotFloor, bool bAllowEvents);
 
-	// Server: lichte bust (politie pakt een deel van de kas). Beboet alle spelers per-pawn (bestaand gedrag).
-	void TriggerBust();
+	// Server: lichte bust (politie pakt een deel van de kas). OnlyPawn == nullptr (co-op/solo/dev) ->
+	// beboet ALLE spelers per-pawn (bestaand gedrag); OnlyPawn gezet (competitive) -> alleen DIE speler.
+	void TriggerBust(APawn* OnlyPawn = nullptr);
 
-	// Server: overval (verlies cash). Beboet alle spelers per-pawn + leegt apartment(en) (bestaand gedrag).
-	void TriggerRobbery();
+	// Server: overval (verlies cash + apartment leeggehaald). OnlyPawn == nullptr -> iedereen + alle homes
+	// (bestaand gedrag); OnlyPawn gezet (competitive) -> alleen DIENS cash + DIENS eigen home.
+	void TriggerRobbery(APawn* OnlyPawn = nullptr);
 
 	// Pot-cap ("te veel potten"): periodieke telling -> heat-vloer + eenmalige waarschuwing bij over de cap.
 	// HomeFilterPawn != nullptr (competitive) -> tel alleen de potten rond DIENS home; nullptr -> alle homes (co-op).
 	float PotScanTimer = 0.f;
-	float CachedPotFloor = 0.f;         // co-op: gedeelde gecachte vloer (competitive: per-entry via TickState)
-	bool bWasOverPotCap = false;
+	float CachedPotFloor = 0.f;         // co-op: gedeelde gecachte vloer
+	bool bWasOverPotCap = false;        // co-op: gedeelde once-latch voor de over-cap-toast
+
+	// Competitive (transient, NIET gerepliceerd): pot-vloer-cache + over-cap-once-latch per speler-key,
+	// zodat de comp-tak de 3s-rescan-gate respecteert en de toast 1x vuurt (reset bij eronder zakken).
+	TMap<FName, float> CachedPotFloorByKey;
+	TSet<FName> OverPotCapKeys;
+
 	float ComputePotHeatFloor(const APawn* HomeFilterPawn); // telt de potten rond het/de apartment(en) -> heat-vloer
 };

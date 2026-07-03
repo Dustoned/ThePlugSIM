@@ -1482,7 +1482,8 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 	// Sample-cooldown: voorkom dat je een NPC instant maxet met een stapel joints (per-NPC, dag-cyclus-tijd).
 	if (AWeedShopGameState* GScd = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
-		if (GScd->GetNpcRegistry() && !Customer->NpcId.IsNone() && GScd->GetNpcRegistry()->IsOnSampleCooldown(Customer->NpcId))
+		// Per-speler (competitive): MIJN sample-cooldown bij deze NPC, los van die van de rivaal.
+		if (GScd->GetNpcRegistry() && !Customer->NpcId.IsNone() && GScd->GetNpcRegistry()->IsOnSampleCooldown(Customer->NpcId, USaveGameSubsystem::StablePlayerId(this)))
 		{
 			if (GEngine) { UWeedToast::NotifyPawn(this,-1, 2.5f, FColor::Orange, TEXT("They're still smoking the last one - give it a minute.")); }
 			return;
@@ -1534,7 +1535,7 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 		{
 			GS->GetNpcRegistry()->ApplyStats(Customer->NpcId, R + RespGain, L + LoyGain, A + AddGain, this); // this = dealende speler-pawn -> per-speler OwnerPlayerId in competitive
 		}
-		GS->GetNpcRegistry()->MarkSampled(Customer->NpcId); // start de per-NPC sample-cooldown
+		GS->GetNpcRegistry()->MarkSampled(Customer->NpcId, USaveGameSubsystem::StablePlayerId(this)); // start de per-NPC sample-cooldown (per-speler in competitive)
 	}
 	Customer->Respect = FMath::Clamp(Customer->Respect + RespGain, 0.f, 100.f);
 	Customer->Loyalty = FMath::Clamp(Customer->Loyalty + LoyGain, 0.f, 100.f);
@@ -1609,7 +1610,8 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 	// cooldown -> vraagt meteen grammen.
 	const bool bConverted = Customer->RefreshProspect(); // prospect -> koper als verslaving hoog genoeg
 	const bool bIsBuyer = (Customer->State == ECustomerState::WantsToOrder || Customer->State == ECustomerState::Negotiating);
-	const bool bOnCooldown = (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone()) ? GS->GetNpcRegistry()->IsOnCooldown(Customer->NpcId) : false;
+	// Deal-cooldown per-speler (competitive): of DEZE speler net gedeald heeft met deze NPC.
+	const bool bOnCooldown = (GS && GS->GetNpcRegistry() && !Customer->NpcId.IsNone()) ? GS->GetNpcRegistry()->IsOnCooldown(Customer->NpcId, USaveGameSubsystem::StablePlayerId(this)) : false;
 
 	bool bWantsNow = false;
 	if (bLikedIt && bIsBuyer && !bOnCooldown)

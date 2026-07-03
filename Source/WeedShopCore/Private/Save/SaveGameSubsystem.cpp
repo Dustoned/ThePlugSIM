@@ -5,6 +5,8 @@
 #include "Misc/Paths.h"
 #include "Save/WeedShopSaveGame.h"
 #include "Game/WeedShopGameState.h"
+#include "Game/WeedShopPlayerState.h"  // PlugPid: stabiele per-speler-id zonder OSS
+#include "HAL/PlatformMisc.h"          // FPlatformMisc::GetLoginId (PlugPid op de join-URL)
 #include "Economy/EconomyComponent.h"
 #include "World/DayCycleComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -26,6 +28,7 @@
 #include "World/ProcessorMachine.h"        // hasj-machines opslaan/herstellen
 #include "World/WaterSink.h"               // sinks opslaan/herstellen (kind 8)
 #include "World/PackLightSwitch.h"          // lichtschakelaars opslaan/herstellen (kind 9)
+#include "World/WorldSyncComponent.h"       // bestaan van speler-schakelaars naar de joiner publiceren
 #include "Cultivation/WaterCanComponent.h" // water in je fles
 #include "World/HeatComponent.h"           // politie-heat
 #include "EngineUtils.h"
@@ -253,6 +256,11 @@ void USaveGameSubsystem::JoinLan(const FString& IpPort)
 	FString Addr = IpPort.TrimStartAndEnd();
 	if (Addr.IsEmpty()) { return; }
 	if (!Addr.Contains(TEXT(":"))) { Addr += TEXT(":7777"); } // standaard UE-poort
+	// PlugPid meesturen: de login-id van deze machine wordt op de host de stabiele per-speler-key
+	// (AWeedShopGameMode::InitNewPlayer leest 'm uit de URL-opties). Zonder OSS is de UniqueNetId
+	// ongeldig en zou de key op de spelernaam terugvallen -> botsing bij 2 gelijke namen.
+	const FString LoginId = FPlatformMisc::GetLoginId();
+	if (!LoginId.IsEmpty()) { Addr += FString::Printf(TEXT("?PlugPid=%s"), *LoginId); }
 	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); }
 	WeedShop_RequestGameLoadingScreen(); // laadscherm tijdens het verbinden
 	UE_LOG(LogWeedShop, Log, TEXT("LAN join -> %s"), *Addr);
@@ -393,7 +401,13 @@ void USaveGameSubsystem::PlayerKeys(const APawn* Pawn, FString& OutId, FString& 
 	{
 		const FString N = PS->GetPlayerName();
 		if (!N.IsEmpty()) { OutName = N; }
-		// Stabiele platform-id (Steam/EOS/...). Offline/PIE is dit meestal ongeldig -> leeg.
+		// Voorkeur 1: PlugPid — eigen stabiele id (login-id via de join-URL), werkt ZONDER Online
+		// Subsystem en dedupet 2 instanties op 1 machine ("#2"-suffix; zie AWeedShopGameMode::InitNewPlayer).
+		if (const AWeedShopPlayerState* WPS = Cast<AWeedShopPlayerState>(PS))
+		{
+			if (!WPS->PlugPid.IsEmpty()) { OutId = WPS->PlugPid; return; }
+		}
+		// Voorkeur 2: stabiele platform-id (Steam/EOS/...). Offline/PIE is dit meestal ongeldig -> leeg.
 		const FUniqueNetIdRepl& Repl = PS->GetUniqueId();
 		if (Repl.IsValid())
 		{
@@ -401,12 +415,15 @@ void USaveGameSubsystem::PlayerKeys(const APawn* Pawn, FString& OutId, FString& 
 			if (!IdStr.IsEmpty() && IdStr != TEXT("INVALID")) { OutId = IdStr; }
 		}
 	}
+	// Voorkeur 3 (impliciet): blijft OutId leeg, dan gebruikt StablePlayerId de naam als key.
 }
 
 bool USaveGameSubsystem::Matches(const FPlayerSaveData& Rec, const FString& Id, const FString& Name)
 {
-	// Heb je een stabiele id, match daarop (naam mag wijzigen). Anders (offline) op naam.
-	if (!Id.IsEmpty()) { return Rec.PlayerId == Id; }
+	// Heb je een stabiele id, match daarop (naam mag wijzigen). Migratie: oude records hebben nog
+	// GEEN id (pre-PlugPid/offline was OutId leeg -> record op naam) -> die matchen op naam, zodat
+	// een bestaande save z'n spelers terugvindt; bij de eerstvolgende save krijgt het record de id.
+	if (!Id.IsEmpty() && Rec.PlayerId == Id) { return true; }
 	return Rec.PlayerId.IsEmpty() && Rec.PlayerName == Name;
 }
 
@@ -639,6 +656,7 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 		else if (World)
 		{
 			// Competitive: upsert per verbonden speler op StablePlayerId; offline-records behouden.
+			TSet<FString> WrittenPids; // per-pawn vers geschreven keys (winnen van de entry-fallback hieronder)
 			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 			{
 				APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
@@ -659,6 +677,42 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 					}
 				}
 				const int32 Idx = Save->PlayerProgress.IndexOfByPredicate([&](const FPlayerProgressSave& E) { return E.PlayerId == Pid; });
+				if (Idx != INDEX_NONE) { Save->PlayerProgress[Idx] = Rec; } else { Save->PlayerProgress.Add(Rec); }
+				WrittenPids.Add(Pid);
+			}
+
+			// OFFLINE spelers: de controller-loop hierboven ziet alleen VERBONDEN spelers. Een net-vertrokken
+			// speler leeft nog wel in de component-entries (Players-arrays van level/heat) maar kreeg hier geen
+			// vers record -> z'n sessie-delta zou verloren gaan (het uit Prev overgenomen record is stale).
+			// Upsert daarom ook alle entry-keys die geen vers per-pawn record kregen. De entry is altijd
+			// minstens zo vers als het oude save-record: bij load geseed uit datzelfde record, daarna live bijgewerkt.
+			TSet<FName> EntryKeys;
+			if (Lv) { for (const FLevelPlayerEntry& E : Lv->GetPlayerEntries()) { EntryKeys.Add(E.Key); } }
+			if (Ht) { for (const FHeatPlayerEntry& E : Ht->GetPlayerEntries()) { EntryKeys.Add(E.Key); } }
+			for (const FName& Key : EntryKeys)
+			{
+				const FString Pid = Key.ToString();
+				if (Key.IsNone() || Pid.IsEmpty() || WrittenPids.Contains(Pid)) { continue; }
+				const int32 Idx = Save->PlayerProgress.IndexOfByPredicate([&](const FPlayerProgressSave& E) { return E.PlayerId == Pid; });
+				// Start vanaf het bestaande record (indien aanwezig) zodat een veld dat maar in EEN van de twee
+				// componenten een entry heeft, niet terugvalt naar defaults.
+				FPlayerProgressSave Rec;
+				if (Idx != INDEX_NONE) { Rec = Save->PlayerProgress[Idx]; }
+				Rec.PlayerId = Pid;
+				if (Lv)
+				{
+					for (const FLevelPlayerEntry& E : Lv->GetPlayerEntries())
+					{
+						if (E.Key == Key) { Rec.Level = E.State.Level; Rec.XP = E.State.CurrentXP; Rec.bShopLicensed = E.State.bShopLicensed; break; }
+					}
+				}
+				if (Ht)
+				{
+					for (const FHeatPlayerEntry& E : Ht->GetPlayerEntries())
+					{
+						if (E.Key == Key) { Rec.Heat = E.State.Heat; Rec.HeatEventTimer = E.State.EventTimer; Rec.HeatLastEventDay = E.State.LastEventDay; break; }
+					}
+				}
 				if (Idx != INDEX_NONE) { Save->PlayerProgress[Idx] = Rec; } else { Save->PlayerProgress.Add(Rec); }
 			}
 		}
@@ -960,6 +1014,14 @@ void USaveGameSubsystem::RespawnPlaced(UWorld* World, const TArray<FPlacedObject
 					Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"),
 						FMath::RoundToInt(O.Location.X / 10.f), FMath::RoundToInt(O.Location.Y / 10.f), FMath::RoundToInt(O.Location.Z / 10.f)), 800.f);
 					Sw->FinishSpawning(TM);
+					// CO-OP: het BESTAAN publiceren naar WorldSync zodat de joiner 'm lokaal naspawnt
+					// (APackLightSwitch repliceert niet; de joiner draait het fresh-pad met de default-set).
+					// WorldSync kan bij een heel vroege load nog null zijn -> gewoon overslaan: de periodieke
+					// server-reconcile in de DoorRetrofitter (ScanAndConvert) herpubliceert alle sw_*-schakelaars.
+					if (AWeedShopGameState* GSsw = World->GetGameState<AWeedShopGameState>())
+					{
+						if (UWorldSyncComponent* WSsw = GSsw->GetWorldSync()) { WSsw->ServerAddSwitch(O.Location, O.Rotation.Yaw); }
+					}
 				}
 				break;
 			}

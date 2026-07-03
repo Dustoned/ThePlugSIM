@@ -1,10 +1,16 @@
 #include "Game/WeedShopGameMode.h"
 
 #include "Game/WeedShopGameState.h"
+#include "Game/WeedShopPlayerState.h"
 #include "World/ActivitySpotManager.h"
 #include "WeedShopCore.h"
 #include "UI/WeedShopHUD.h"
 #include "TimerManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/GameSession.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Controller.h"
@@ -18,6 +24,10 @@ AWeedShopGameMode::AWeedShopGameMode()
 {
 	// Gedeelde, replicerende game-state (kas + dag/nacht).
 	GameStateClass = AWeedShopGameState::StaticClass();
+
+	// PlayerState met de stabiele per-speler-id (PlugPid) — sleutel voor alle per-speler state
+	// (competitive level/heat, save-records) zonder Online Subsystem.
+	PlayerStateClass = AWeedShopPlayerState::StaticClass();
 
 	// C++ on-screen overlay (geld/dag/voorraad/prompt).
 	HUDClass = AWeedShopHUD::StaticClass();
@@ -48,6 +58,59 @@ AWeedShopGameMode::AWeedShopGameMode()
 	}
 
 	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GameMode-ctor: controller-BP klaar na %.2fs (FClassFinders totaal %.2fs)"), FPlatformTime::Seconds() - _FinderT1, FPlatformTime::Seconds() - _FinderT0);
+}
+
+void AWeedShopGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
+{
+	Super::InitGame(MapName, Options, ErrorMessage);
+	// 2-speler-cap: co-op EN competitive zijn voor precies 2 spelers ontworpen en getest. Een 3e
+	// joiner wordt door de sessie geweigerd i.p.v. een ongeteste 3-speler-staat in te rollen.
+	if (GameSession) { GameSession->MaxPlayers = 2; }
+}
+
+FString AWeedShopGameMode::InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal)
+{
+	const FString Err = Super::InitNewPlayer(NewPlayerController, UniqueId, Options, Portal);
+
+	// PlugPid: stabiele per-speler-key zonder Online Subsystem. Joiners sturen hun login-id mee op de
+	// join-URL (?PlugPid=..., zie USaveGameSubsystem::JoinLan); de host (lokale controller) heeft geen
+	// join-URL -> pak z'n eigen login-id. Zonder deze id viel StablePlayerId terug op de spelernaam
+	// ("Player") -> stille key-botsing bij 2 gelijke namen (deelde 1 per-speler-entry).
+	if (NewPlayerController)
+	{
+		if (AWeedShopPlayerState* PS = NewPlayerController->GetPlayerState<AWeedShopPlayerState>())
+		{
+			FString Pid = UGameplayStatics::ParseOption(Options, TEXT("PlugPid"));
+			if (Pid.IsEmpty() && NewPlayerController->IsLocalController())
+			{
+				Pid = FPlatformMisc::GetLoginId();
+			}
+			if (!Pid.IsEmpty())
+			{
+				// DEDUPE: zelfde id al in gebruik bij een ANDERE PlayerState (2 instanties op 1 machine,
+				// zoals de lokale 2-instance-test) -> "#2"/"#3"-suffix. Join-volgorde-deterministisch:
+				// dezelfde test geeft elke sessie dezelfde keys (host = kale id, joiner = id#2).
+				FString Unique = Pid;
+				int32 Suffix = 2;
+				bool bTaken = true;
+				while (bTaken)
+				{
+					bTaken = false;
+					if (GameState)
+					{
+						for (const APlayerState* Other : GameState->PlayerArray)
+						{
+							const AWeedShopPlayerState* WPS = Cast<AWeedShopPlayerState>(Other);
+							if (WPS && WPS != PS && WPS->PlugPid == Unique) { bTaken = true; break; }
+						}
+					}
+					if (bTaken) { Unique = FString::Printf(TEXT("%s#%d"), *Pid, Suffix++); }
+				}
+				PS->PlugPid = Unique;
+			}
+		}
+	}
+	return Err;
 }
 
 void AWeedShopGameMode::BeginPlay()

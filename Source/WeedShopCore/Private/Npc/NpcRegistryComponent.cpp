@@ -14,6 +14,16 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 
+namespace
+{
+	// Per-speler relatie-sleutels ("BaseNpc#PlayerId", zie EnsurePlayerNpc) herkennen: dat zijn RELATIE-entries,
+	// geen echte uitdeelbare NPC-identiteiten -> uitsluiten bij round-robin uitdelen en bij tellingen.
+	bool IsPlayerRelationKey(FName NpcId)
+	{
+		return NpcId.ToString().Contains(TEXT("#"));
+	}
+}
+
 UNpcRegistryComponent::UNpcRegistryComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -49,6 +59,26 @@ void UNpcRegistryComponent::RestoreStates(const TArray<FNpcState>& In)
 {
 	if (GetOwnerRole() != ROLE_Authority || In.Num() == 0) { return; }
 	States = In; // niet-leeg -> EnsureInit overschrijft 't niet meer
+	// Migratie (competitive-saves van vóór de per-key ValueMult-seed): '#'-entries met de default 1.0
+	// krijgen de ValueMult van hun BASIS-entry (deterministisch; de basis komt uit dezelfde save).
+	// Fallback = dezelfde seed-formule als EnsureSeeded. Idempotent: goed geseede entries blijven gelijk.
+	for (FNpcState& S : States)
+	{
+		if (!IsPlayerRelationKey(S.NpcId) || S.ValueMult != 1.f) { continue; }
+		const FString KeyStr = S.NpcId.ToString();
+		int32 HashPos = INDEX_NONE;
+		if (!KeyStr.FindChar(TEXT('#'), HashPos)) { continue; }
+		const FName BaseNpc(*KeyStr.Left(HashPos));
+		if (const FNpcState* Base = In.FindByPredicate([BaseNpc](const FNpcState& B) { return B.NpcId == BaseNpc; }))
+		{
+			S.ValueMult = Base->ValueMult;
+		}
+		else
+		{
+			FRandomStream Rng(static_cast<int32>(GetTypeHash(BaseNpc)) ^ 0x5bd1e995);
+			S.ValueMult = 0.6f + Rng.FRand() * 1.0f;
+		}
+	}
 }
 
 void UNpcRegistryComponent::WarmAllForTesting(UContactsComponent* Con)
@@ -237,6 +267,18 @@ FName UNpcRegistryComponent::EnsurePlayerNpc(FName Key, FName BaseNpc, const FTe
 	S.DisplayName = DisplayName.IsEmpty() ? FText::FromName(BaseNpc) : DisplayName;
 	// Seed vanuit de BASIS-NPC, niet de speler-sleutel: beide spelers starten identiek bij dezelfde persoon.
 	PredictPersonality(BaseNpc, S.Respect, S.Loyalty, S.Addiction);
+	// Persoonlijke klant-honger OOK vanuit de basis (bleef eerst op default 1.0 hangen -> per-speler band/XP
+	// week af van de basis-entry). Kopieer de live basis-waarde (klopt ook voor oude saves); fallback = dezelfde
+	// deterministische seed-formule als EnsureSeeded.
+	if (const FNpcState* Base = Find(BaseNpc))
+	{
+		S.ValueMult = Base->ValueMult;
+	}
+	else
+	{
+		FRandomStream Rng(static_cast<int32>(GetTypeHash(BaseNpc)) ^ 0x5bd1e995);
+		S.ValueMult = 0.6f + Rng.FRand() * 1.0f;
+	}
 	States.Add(S);
 	return Key;
 }
@@ -290,6 +332,26 @@ const FNpcState* UNpcRegistryComponent::Find(FName NpcId) const
 	return States.FindByPredicate([NpcId](const FNpcState& S) { return S.NpcId == NpcId; });
 }
 
+FName UNpcRegistryComponent::ResolveNpcKey(FName BaseNpc, const FString& PlayerId) const
+{
+	// PlayerId leeg OF geen competitive -> gewoon de basis-NPC (co-op/solo bit-voor-bit ongewijzigd).
+	if (PlayerId.IsEmpty()) { return BaseNpc; }
+	const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	if (!GS || !GS->IsCompetitive()) { return BaseNpc; }
+	// Zelfde sleutel-formaat als EnsurePlayerNpc: "BaseNpc#PlayerId".
+	return FName(*FString::Printf(TEXT("%s#%s"), *BaseNpc.ToString(), *PlayerId));
+}
+
+FNpcState* UNpcRegistryComponent::FindOrAddPlayerEntry(FName BaseNpc, FName Key)
+{
+	if (FNpcState* Existing = Find(Key)) { return Existing; }
+	// Nog geen relatie-entry (bv. eerste weigering/afspraak vóór een deal) -> maak 'm aan zodat de
+	// dual-write niet verloren gaat. EnsurePlayerNpc seed personality + ValueMult vanuit de basis.
+	const FNpcState* Base = Find(BaseNpc);
+	EnsurePlayerNpc(Key, BaseNpc, Base ? Base->DisplayName : FText());
+	return Find(Key);
+}
+
 float UNpcRegistryComponent::NowAbs() const
 {
 	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
@@ -325,7 +387,7 @@ bool UNpcRegistryComponent::CanAppointToday(FName NpcId) const
 	return S->ApptCountToday < MaxApptsPerDay;
 }
 
-void UNpcRegistryComponent::NoteAppointment(FName NpcId)
+void UNpcRegistryComponent::NoteAppointment(FName NpcId, const FString& PlayerId)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
 	FNpcState* S = Find(NpcId);
@@ -334,37 +396,67 @@ void UNpcRegistryComponent::NoteAppointment(FName NpcId)
 	if (S->ApptDay != Day) { S->ApptDay = Day; S->ApptCountToday = 0; }
 	++S->ApptCountToday;
 	S->LastApptAbs = NowAbs(); // start de cooldown zodat dezelfde persoon niet blijft vragen
+	// Competitive: de afspraak-cooldown geldt per speler -> ALLEEN LastApptAbs ook op de per-speler entry.
+	// De dag-cap (ApptDay/ApptCountToday) blijft bewust op de basis (gedeeld over spelers).
+	const FName Key = ResolveNpcKey(NpcId, PlayerId);
+	if (Key != NpcId)
+	{
+		if (FNpcState* PS = FindOrAddPlayerEntry(NpcId, Key)) { PS->LastApptAbs = S->LastApptAbs; }
+	}
 }
 
-void UNpcRegistryComponent::MarkDealt(FName NpcId)
+void UNpcRegistryComponent::MarkDealt(FName NpcId, const FString& PlayerId)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
-	if (FNpcState* S = Find(NpcId)) { S->LastDealAbs = NowAbs(); }
+	const float Now = NowAbs();
+	// Basis ALTIJD markeren (o.a. AssignNpc-rotatie blijft basis-gedreven) + de per-speler entry (dual-write).
+	if (FNpcState* S = Find(NpcId)) { S->LastDealAbs = Now; }
+	const FName Key = ResolveNpcKey(NpcId, PlayerId);
+	if (Key != NpcId)
+	{
+		if (FNpcState* PS = FindOrAddPlayerEntry(NpcId, Key)) { PS->LastDealAbs = Now; }
+	}
 }
 
-void UNpcRegistryComponent::MarkRefused(FName NpcId)
+void UNpcRegistryComponent::MarkRefused(FName NpcId, const FString& PlayerId)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
-	if (FNpcState* S = Find(NpcId)) { S->LastRefusalAbs = NowAbs(); }
+	const float Now = NowAbs();
+	// Dual-write: basis + per-speler entry (competitive), zodat de her-aanbied-cooldown per speler klopt.
+	if (FNpcState* S = Find(NpcId)) { S->LastRefusalAbs = Now; }
+	const FName Key = ResolveNpcKey(NpcId, PlayerId);
+	if (Key != NpcId)
+	{
+		if (FNpcState* PS = FindOrAddPlayerEntry(NpcId, Key)) { PS->LastRefusalAbs = Now; }
+	}
 }
 
-bool UNpcRegistryComponent::IsOnRefusalCooldown(FName NpcId) const
+bool UNpcRegistryComponent::IsOnRefusalCooldown(FName NpcId, const FString& PlayerId) const
 {
-	const FNpcState* S = Find(NpcId);
+	// Per-speler read: onbekende per-key = verse relatie -> geen cooldown.
+	const FNpcState* S = Find(ResolveNpcKey(NpcId, PlayerId));
 	if (!S) { return false; }
 	const float Now = NowAbs();
 	return (S->LastRefusalAbs >= 0.f) && ((Now - S->LastRefusalAbs) < RefusalCooldownSeconds);
 }
 
-void UNpcRegistryComponent::MarkSampled(FName NpcId)
+void UNpcRegistryComponent::MarkSampled(FName NpcId, const FString& PlayerId)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
-	if (FNpcState* S = Find(NpcId)) { S->LastSampleAbs = NowAbs(); }
+	const float Now = NowAbs();
+	// Dual-write: basis + per-speler entry (competitive), zodat sample-maxen per speler geblokt blijft.
+	if (FNpcState* S = Find(NpcId)) { S->LastSampleAbs = Now; }
+	const FName Key = ResolveNpcKey(NpcId, PlayerId);
+	if (Key != NpcId)
+	{
+		if (FNpcState* PS = FindOrAddPlayerEntry(NpcId, Key)) { PS->LastSampleAbs = Now; }
+	}
 }
 
-bool UNpcRegistryComponent::IsOnSampleCooldown(FName NpcId) const
+bool UNpcRegistryComponent::IsOnSampleCooldown(FName NpcId, const FString& PlayerId) const
 {
-	const FNpcState* S = Find(NpcId);
+	// Per-speler read: onbekende per-key = verse relatie -> geen cooldown.
+	const FNpcState* S = Find(ResolveNpcKey(NpcId, PlayerId));
 	if (!S) { return false; }
 	const float Now = NowAbs();
 	return (S->LastSampleAbs >= 0.f) && ((Now - S->LastSampleAbs) < SampleCooldownSeconds);
@@ -392,15 +484,16 @@ FString UNpcRegistryComponent::TierName(int32 Tier)
 	}
 }
 
-int32 UNpcRegistryComponent::GetCustomerXP(FName NpcId) const
+int32 UNpcRegistryComponent::GetCustomerXP(FName NpcId, const FString& PlayerId) const
 {
-	const FNpcState* S = Find(NpcId);
+	// Per-speler read via de resolver; onbekende per-key = verse relatie -> 0 XP.
+	const FNpcState* S = Find(ResolveNpcKey(NpcId, PlayerId));
 	return S ? S->CustomerXP : 0;
 }
 
-int32 UNpcRegistryComponent::GetCustomerTier(FName NpcId) const
+int32 UNpcRegistryComponent::GetCustomerTier(FName NpcId, const FString& PlayerId) const
 {
-	return TierFromXP(GetCustomerXP(NpcId));
+	return TierFromXP(GetCustomerXP(NpcId, PlayerId));
 }
 
 int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed)
@@ -423,19 +516,28 @@ int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed
 	return S->SkinIndex;
 }
 
-void UNpcRegistryComponent::AddCustomerValue(FName NpcId, int32 GramsSold)
+void UNpcRegistryComponent::AddCustomerValue(FName NpcId, int32 GramsSold, const FString& PlayerId)
 {
 	if (GetOwnerRole() != ROLE_Authority || GramsSold <= 0) { return; }
-	FNpcState* S = Find(NpcId);
-	if (!S) { return; }
 	// Verkochte grammen x loyaliteit-factor x persoonlijke honger. Grotere klanten klimmen vanzelf sneller.
-	const int32 Gain = FMath::Max(1, FMath::RoundToInt(GramsSold * (2.f + S->Loyalty / 50.f) * S->ValueMult));
-	S->CustomerXP += Gain;
+	// Elke entry rekent met z'n EIGEN loyaliteit/honger (per-speler band groeit op eigen tempo).
+	auto AddTo = [GramsSold](FNpcState& S)
+	{
+		const int32 Gain = FMath::Max(1, FMath::RoundToInt(GramsSold * (2.f + S.Loyalty / 50.f) * S.ValueMult));
+		S.CustomerXP += Gain;
+	};
+	// Dual-write: basis blijft ALTIJD meegroeien (skin/productsmaak) + de per-speler entry (order-grootte).
+	if (FNpcState* S = Find(NpcId)) { AddTo(*S); }
+	const FName Key = ResolveNpcKey(NpcId, PlayerId);
+	if (Key != NpcId)
+	{
+		if (FNpcState* PS = FindOrAddPlayerEntry(NpcId, Key)) { AddTo(*PS); }
+	}
 }
 
-float UNpcRegistryComponent::GetTierProgress01(FName NpcId) const
+float UNpcRegistryComponent::GetTierProgress01(FName NpcId, const FString& PlayerId) const
 {
-	const int32 XP = GetCustomerXP(NpcId);
+	const int32 XP = GetCustomerXP(NpcId, PlayerId);
 	const int32 Tier = TierFromXP(XP);
 	if (Tier >= 5) { return 1.f; }
 	static const int32 Floors[6] = { 0, 0, 80, 220, 500, 1000 };
@@ -444,10 +546,13 @@ float UNpcRegistryComponent::GetTierProgress01(FName NpcId) const
 	return (Hi > Lo) ? FMath::Clamp((float)(XP - Lo) / (float)(Hi - Lo), 0.f, 1.f) : 1.f;
 }
 
-void UNpcRegistryComponent::GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax) const
+void UNpcRegistryComponent::GetTierOrderGrams(FName NpcId, int32& OutMin, int32& OutMax, const FString& PlayerId) const
 {
-	const FNpcState* S = Find(NpcId);
-	const int32 Tier = TierFromXP(S ? S->CustomerXP : 0);
+	// Tier van de RESOLVED key (per-speler band in competitive); ValueMult van de BASIS-entry
+	// (immuun voor oude saves waar de per-key ValueMult nog niet geseed was).
+	const FNpcState* Resolved = Find(ResolveNpcKey(NpcId, PlayerId));
+	const FNpcState* Base = Find(NpcId);
+	const int32 Tier = TierFromXP(Resolved ? Resolved->CustomerXP : 0);
 	int32 Mn, Mx;
 	switch (Tier)
 	{
@@ -457,14 +562,15 @@ void UNpcRegistryComponent::GetTierOrderGrams(FName NpcId, int32& OutMin, int32&
 	case 2: Mn = 5;  Mx = 12;  break; // Regular
 	default: Mn = 2; Mx = 5;   break; // Casual
 	}
-	const float VM = S ? FMath::Clamp(S->ValueMult, 0.7f, 1.5f) : 1.f; // persoonlijke gulzigheid
+	const float VM = Base ? FMath::Clamp(Base->ValueMult, 0.7f, 1.5f) : 1.f; // persoonlijke gulzigheid
 	OutMin = FMath::Max(1, FMath::RoundToInt(Mn * VM));
 	OutMax = FMath::Max(OutMin, FMath::RoundToInt(Mx * VM));
 }
 
-bool UNpcRegistryComponent::IsOnCooldown(FName NpcId) const
+bool UNpcRegistryComponent::IsOnCooldown(FName NpcId, const FString& PlayerId) const
 {
-	const FNpcState* S = Find(NpcId);
+	// Per-speler read: onbekende per-key = verse relatie -> geen cooldown.
+	const FNpcState* S = Find(ResolveNpcKey(NpcId, PlayerId));
 	if (!S) { return false; }
 	const float Now = NowAbs();
 	// Cooldown na een echte deal OF na een afspraak-vraag (tegen blijven-vragen).
@@ -473,10 +579,17 @@ bool UNpcRegistryComponent::IsOnCooldown(FName NpcId) const
 	return false;
 }
 
-void UNpcRegistryComponent::SetApptCooldownMult(FName NpcId, float Mult)
+void UNpcRegistryComponent::SetApptCooldownMult(FName NpcId, float Mult, const FString& PlayerId)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
-	if (FNpcState* S = Find(NpcId)) { S->ApptCooldownMult = FMath::Clamp(Mult, 0.25f, 6.f); }
+	const float Clamped = FMath::Clamp(Mult, 0.25f, 6.f);
+	// Dual-write: basis + per-speler entry (competitive).
+	if (FNpcState* S = Find(NpcId)) { S->ApptCooldownMult = Clamped; }
+	const FName Key = ResolveNpcKey(NpcId, PlayerId);
+	if (Key != NpcId)
+	{
+		if (FNpcState* PS = FindOrAddPlayerEntry(NpcId, Key)) { PS->ApptCooldownMult = Clamped; }
+	}
 }
 
 FName UNpcRegistryComponent::AssignNpc()
@@ -487,19 +600,28 @@ FName UNpcRegistryComponent::AssignNpc()
 		return NAME_None;
 	}
 	// Sla NPC's over die net een deal deden (cooldown). Als iedereen op cooldown is, val terug op round-robin.
+	// Per-speler '#'-relatie-entries ALTIJD overslaan: dat zijn geen uitdeelbare identiteiten (anders krijgt
+	// de crowd een fantoom "Npc042#7656..." uitgedeeld).
 	const int32 N = States.Num();
 	for (int32 k = 0; k < N; ++k)
 	{
 		const int32 Idx = (AssignCursor + k) % N;
+		if (IsPlayerRelationKey(States[Idx].NpcId)) { continue; }
 		if (!IsOnCooldown(States[Idx].NpcId))
 		{
 			AssignCursor = Idx + 1;
 			return States[Idx].NpcId;
 		}
 	}
-	const FName Id = States[AssignCursor % N].NpcId;
-	AssignCursor++;
-	return Id;
+	// Iedereen op cooldown -> eerstvolgende ECHTE basis-NPC vanaf de cursor (nooit een '#'-relatie-entry).
+	for (int32 k = 0; k < N; ++k)
+	{
+		const int32 Idx = (AssignCursor + k) % N;
+		if (IsPlayerRelationKey(States[Idx].NpcId)) { continue; }
+		AssignCursor = Idx + 1;
+		return States[Idx].NpcId;
+	}
+	return NAME_None; // theoretisch: registry bevat alleen relatie-entries
 }
 
 bool UNpcRegistryComponent::GetStats(FName NpcId, float& OutRespect, float& OutLoyalty, float& OutAddiction, FText& OutName) const
@@ -586,7 +708,20 @@ int32 UNpcRegistryComponent::GetUnlockedCount() const
 	int32 N = 0;
 	for (const FNpcState& S : States)
 	{
+		// Per-speler '#'-relatie-entries niet meetellen (anders telt dezelfde persoon dubbel).
+		if (IsPlayerRelationKey(S.NpcId)) { continue; }
 		if (S.bUnlocked) ++N;
+	}
+	return N;
+}
+
+int32 UNpcRegistryComponent::GetTotalCount() const
+{
+	// Alleen echte basis-NPC's tellen; per-speler '#'-relatie-entries zijn geen extra mensen.
+	int32 N = 0;
+	for (const FNpcState& S : States)
+	{
+		if (!IsPlayerRelationKey(S.NpcId)) { ++N; }
 	}
 	return N;
 }

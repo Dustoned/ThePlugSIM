@@ -100,6 +100,9 @@ FHeatState& UHeatComponent::StateForPawn(const APawn* Pawn)
 	}
 	FHeatPlayerEntry& New = Players.AddDefaulted_GetRef();
 	New.Key = Key;
+	// Seed vanaf Shared: fresh game = 0 (identiek), maar een gemigreerde oude competitive-save (v<5,
+	// alles in Shared) laat elke speler de bestaande crew-heat erven i.p.v. op 0 te resetten.
+	New.State = Shared;
 	return New.State;
 }
 
@@ -149,7 +152,7 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	{
 		// CO-OP: één gedeelde heat-state. Potten van alle spelers samen bepalen de gedeelde vloer.
 		if (bRescan) { CachedPotFloor = ComputePotHeatFloor(nullptr) * (1.f - Resist); }
-		TickState(Shared, DeltaTime, nullptr, bNight, CurDay, Resist, CachedPotFloor);
+		TickState(Shared, DeltaTime, nullptr, bNight, CurDay, Resist, CachedPotFloor, /*bAllowEvents=*/true);
 	}
 	else
 	{
@@ -166,16 +169,32 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 				}
 			}
 		}
-		for (FHeatPlayerEntry& E : Players)
+		// Index-based loop (GEEN ref-range): TriggerBust/Robbery kunnen via StateForPawn de Players-array
+		// laten groeien -> een realloc zou een range-for-referentie laten bungelen.
+		for (int32 i = 0; i < Players.Num(); ++i)
 		{
-			APawn* Owner = FindPawnByKey(GetWorld(), E.Key);
-			const float Floor = ComputePotHeatFloor(Owner) * (1.f - Resist);
-			TickState(E.State, DeltaTime, Owner, bNight, CurDay, Resist, Floor);
+			const FName Key = Players[i].Key;
+			APawn* Owner = FindPawnByKey(GetWorld(), Key);
+			if (!Owner)
+			{
+				// Geen levende pawn voor deze entry (speler weg/nog niet gespawnd): alleen DECAYEN.
+				// GEEN pot-check (ComputePotHeatFloor(nullptr) zou ALLE homes tellen + de gedeelde
+				// co-op-latch muteren + iedereen notificeren) en GEEN events/notificaties.
+				TickState(Players[i].State, DeltaTime, nullptr, bNight, CurDay, Resist, 0.f, /*bAllowEvents=*/false);
+				continue;
+			}
+			// Pot-vloer per entry cachen (transient) en alleen op de 3s-rescan herberekenen ->
+			// geen TActorIterator-scan per speler per frame.
+			if (bRescan)
+			{
+				CachedPotFloorByKey.Add(Key, ComputePotHeatFloor(Owner) * (1.f - Resist));
+			}
+			TickState(Players[i].State, DeltaTime, Owner, bNight, CurDay, Resist, CachedPotFloorByKey.FindRef(Key), /*bAllowEvents=*/true);
 		}
 	}
 }
 
-void UHeatComponent::TickState(FHeatState& St, float DeltaTime, const APawn* /*HomeFilterPawn*/, bool bNight, int32 CurDay, float Resist, float PotFloor)
+void UHeatComponent::TickState(FHeatState& St, float DeltaTime, APawn* EventTargetPawn, bool bNight, int32 CurDay, float Resist, float PotFloor, bool bAllowEvents)
 {
 	// Heat zakt ALTIJD vanzelf ('s nachts iets langzamer), maar niet onder de pot-vloer.
 	const float Decay = bNight ? NightDecayPerSecond : DayDecayPerSecond;
@@ -183,9 +202,10 @@ void UHeatComponent::TickState(FHeatState& St, float DeltaTime, const APawn* /*H
 	if (!FMath::IsNearlyEqual(NewHeat, St.Heat)) { SetHeatState(St, NewHeat); }
 
 	// Risico-events: alleen 's nachts, bij echt hoge heat, EN niet binnen de dagen-cooldown na een
-	// vorige bust/overval (zodat je een paar dagen rust hebt).
+	// vorige bust/overval (zodat je een paar dagen rust hebt). Competitive: EventTargetPawn = alleen
+	// DIE speler wordt beboet; nullptr (co-op) = iedereen (bestaand gedrag).
 	const bool bOnCooldown = (CurDay < St.LastEventDay + EventCooldownDays);
-	if (bNight && St.Heat >= BustThreshold && !bOnCooldown)
+	if (bAllowEvents && bNight && St.Heat >= BustThreshold && !bOnCooldown)
 	{
 		St.EventTimer += DeltaTime;
 		if (St.EventTimer >= EventIntervalSeconds)
@@ -193,8 +213,10 @@ void UHeatComponent::TickState(FHeatState& St, float DeltaTime, const APawn* /*H
 			St.EventTimer = 0.f;
 			const float Chance = EventChance * (1.f - Resist);
 			const float Roll = FMath::FRand();
-			if (Roll < Chance * 0.4f)       { TriggerBust();    St.LastEventDay = CurDay; }
-			else if (Roll < Chance)         { TriggerRobbery(); St.LastEventDay = CurDay; }
+			// LastEventDay VOOR de trigger zetten: TriggerBust/Robbery kunnen via StateForPawn de
+			// Players-array laten groeien (realloc) -> geen schrijf via de St-referentie NA de call.
+			if (Roll < Chance * 0.4f)       { St.LastEventDay = CurDay; TriggerBust(EventTargetPawn); }
+			else if (Roll < Chance)         { St.LastEventDay = CurDay; TriggerRobbery(EventTargetPawn); }
 		}
 	}
 	else
@@ -268,9 +290,10 @@ float UHeatComponent::ComputePotHeatFloor(const APawn* HomeFilterPawn)
 	}
 	if (Homes.Num() == 0)
 	{
-		// In co-op laten we de "over de cap"-vlag zakken zodra er geen home meer is (bv. vroeg in het spel);
-		// in competitive per-entry NIET de gedeelde vlag rammelen (die is co-op-only) -> alleen bij nullptr.
+		// Geen home meer (bv. vroeg in het spel) -> laat de "over de cap"-latch zakken. Co-op: de gedeelde
+		// vlag; competitive: alleen de per-speler-latch van DEZE speler (de gedeelde vlag is co-op-only).
 		if (!HomeFilterPawn) { bWasOverPotCap = false; }
+		else { OverPotCapKeys.Remove(FName(*USaveGameSubsystem::StablePlayerId(HomeFilterPawn))); }
 		return 0.f;
 	}
 
@@ -290,14 +313,24 @@ float UHeatComponent::ComputePotHeatFloor(const APawn* HomeFilterPawn)
 	const int32 Excess = FMath::Max(0, PotCount - Cap);
 
 	// Eenmalige waarschuwing zodra je over de cap gaat (niet elke scan spammen). Co-op: gedeelde vlag + alle
-	// spelers gewaarschuwd. Competitive: waarschuw alleen de betreffende speler op diens eigen client.
+	// spelers gewaarschuwd. Competitive: waarschuw alleen de betreffende speler op diens eigen client,
+	// met een per-speler once-latch (toast 1x bij overschrijden, reset zodra 'ie er weer onder zakt).
 	const bool bOver = Excess > 0;
 	if (HomeFilterPawn)
 	{
+		const FName Key(*USaveGameSubsystem::StablePlayerId(HomeFilterPawn));
 		if (bOver)
 		{
-			UWeedToast::NotifyPawn(const_cast<APawn*>(HomeFilterPawn), 7788, 6.f, FColor(255, 140, 0),
-				FString::Printf(TEXT("Too many pots (%d/%d)! Extra plants keep police heat up - get a bigger place."), PotCount, Cap));
+			if (!OverPotCapKeys.Contains(Key))
+			{
+				OverPotCapKeys.Add(Key);
+				UWeedToast::NotifyPawn(const_cast<APawn*>(HomeFilterPawn), 7788, 6.f, FColor(255, 140, 0),
+					FString::Printf(TEXT("Too many pots (%d/%d)! Extra plants keep police heat up - get a bigger place."), PotCount, Cap));
+			}
+		}
+		else
+		{
+			OverPotCapKeys.Remove(Key);
 		}
 	}
 	else
@@ -321,10 +354,12 @@ void UHeatComponent::SetHeatState(FHeatState& St, float NewHeat)
 
 void UHeatComponent::OnRep_Heat()
 {
+	// Bewust no-op-restant: props zijn plain Replicated (geen ReplicatedUsing), dus dit wordt nooit
+	// door replicatie aangeroepen; de UI polt de getters.
 	OnHeatChanged.Broadcast(Shared.Heat);
 }
 
-void UHeatComponent::TriggerBust()
+void UHeatComponent::TriggerBust(APawn* OnlyPawn)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -332,14 +367,16 @@ void UHeatComponent::TriggerBust()
 		return;
 	}
 
-	// Co-op: beboet ELKE speler apart op DIENS EIGEN cash-saldo. GS->GetEconomy() = altijd de host
-	// (GetFirstPlayerController) -> joiner verloor anders nooit geld. Pak per pawn de eigen EconomyComponent
-	// en trek daar de bust-straf (20%, floor EUR 5) af; meld het bedrag per speler op diens eigen client.
+	// Co-op (OnlyPawn == nullptr): beboet ELKE speler apart op DIENS EIGEN cash-saldo. GS->GetEconomy() =
+	// altijd de host (GetFirstPlayerController) -> joiner verloor anders nooit geld. Pak per pawn de eigen
+	// EconomyComponent en trek daar de bust-straf (20%, floor EUR 5) af; meld het bedrag per speler op diens
+	// eigen client. Competitive (OnlyPawn gezet): alleen DIE speler - z'n rivaal deelt niet mee in de straf.
 	// De heat-verlaging landt op de heat-state van de betreffende speler (competitive) of de gedeelde (co-op).
-	UE_LOG(LogWeedShop, Log, TEXT("BUST! Politie pakt cash van elke speler."));
+	UE_LOG(LogWeedShop, Log, TEXT("BUST! Politie pakt cash (%s)."), OnlyPawn ? TEXT("1 speler, competitive") : TEXT("alle spelers"));
 	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 	{
 		APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+		if (OnlyPawn && Pw != OnlyPawn) { continue; }
 		UEconomyComponent* Econ = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
 		if (!Econ) { continue; }
 		FHeatState& St = StateForPawn(Pw);
@@ -351,7 +388,7 @@ void UHeatComponent::TriggerBust()
 	}
 }
 
-void UHeatComponent::TriggerRobbery()
+void UHeatComponent::TriggerRobbery(APawn* OnlyPawn)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -359,12 +396,14 @@ void UHeatComponent::TriggerRobbery()
 		return;
 	}
 
-	// Co-op: berooft ELKE speler apart van diens EIGEN on-hand cash (15%, floor EUR 3). GS->GetEconomy() =
-	// altijd de host -> joiner verloor anders nooit cash. De kluis (SafeCents) en de bank blijven veilig.
-	// Melding per speler op diens eigen client met het eigen verloren bedrag. Heat-verlaging per speler-state.
+	// Co-op (OnlyPawn == nullptr): berooft ELKE speler apart van diens EIGEN on-hand cash (15%, floor EUR 3).
+	// GS->GetEconomy() = altijd de host -> joiner verloor anders nooit cash. De kluis (SafeCents) en de bank
+	// blijven veilig. Melding per speler op diens eigen client met het eigen verloren bedrag. Heat-verlaging
+	// per speler-state. Competitive (OnlyPawn gezet): alleen DIENS cash + verderop alleen DIENS home.
 	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 	{
 		APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+		if (OnlyPawn && Pw != OnlyPawn) { continue; }
 		UEconomyComponent* Econ = Pw ? Pw->FindComponentByClass<UEconomyComponent>() : nullptr;
 		if (!Econ) { continue; }
 		FHeatState& St = StateForPawn(Pw);
@@ -379,15 +418,26 @@ void UHeatComponent::TriggerRobbery()
 	// Overvallers halen ook je ACTIEVE apartment leeg: alle groeiende planten, droogrekken en machines.
 	int32 Plants = 0, Racks = 0, Machines = 0;
 	{
-		// Verzamel de thuis-plek van ELKE speler (niet alleen de host): in co-op delen ze er meestal een,
-		// in competitive hebben ze er elk een -> berooft het apartment van iedereen, niet alleen speler 0.
 		TArray<FVector> Homes;
-		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		if (OnlyPawn)
 		{
-			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
-			UPhoneClientComponent* Ph = Pw ? Pw->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+			// Competitive: alleen het home van de beboete speler (zelfde resolutie als het per-pawn-pad
+			// in ComputePotHeatFloor: PhoneClientComponent::GetActiveHomeLocation) -> de rivaal blijft heel.
+			UPhoneClientComponent* Ph = OnlyPawn->FindComponentByClass<UPhoneClientComponent>();
 			FVector HP;
 			if (Ph && Ph->GetActiveHomeLocation(HP)) { Homes.AddUnique(HP); }
+		}
+		else
+		{
+			// Co-op: verzamel de thuis-plek van ELKE speler (niet alleen de host): ze delen er meestal een ->
+			// berooft het apartment van iedereen, niet alleen speler 0.
+			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+			{
+				APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
+				UPhoneClientComponent* Ph = Pw ? Pw->FindComponentByClass<UPhoneClientComponent>() : nullptr;
+				FVector HP;
+				if (Ph && Ph->GetActiveHomeLocation(HP)) { Homes.AddUnique(HP); }
+			}
 		}
 		if (Homes.Num() > 0)
 		{
@@ -406,12 +456,14 @@ void UHeatComponent::TriggerRobbery()
 		}
 	}
 
-	UE_LOG(LogWeedShop, Log, TEXT("Overval! Cash van elke speler + apartment leeggehaald (%d planten, %d rekken, %d machines)."),
-		Plants, Racks, Machines);
+	UE_LOG(LogWeedShop, Log, TEXT("Overval! (%s) Apartment leeggehaald (%d planten, %d rekken, %d machines)."),
+		OnlyPawn ? TEXT("1 speler, competitive") : TEXT("alle spelers"), Plants, Racks, Machines);
 	if (Plants > 0 || Racks > 0 || Machines > 0)
 	{
-		NotifyAllPlayers(World, FColor(255, 140, 0), 8.f,
-			FString::Printf(TEXT("Robbery! Your apartment got cleaned out (%d plants, %d racks, %d machines)."),
-				Plants, Racks, Machines));
+		const FString Msg = FString::Printf(TEXT("Robbery! Your apartment got cleaned out (%d plants, %d racks, %d machines)."),
+			Plants, Racks, Machines);
+		// Competitive: alleen de beroofde speler melden; co-op: iedereen (gedeeld apartment).
+		if (OnlyPawn) { UWeedToast::NotifyPawn(OnlyPawn, -1, 8.f, FColor(255, 140, 0), Msg); }
+		else          { NotifyAllPlayers(World, FColor(255, 140, 0), 8.f, Msg); }
 	}
 }

@@ -307,7 +307,10 @@ public:
 
 	// Gedeelde keuze-logica: WAT wil een klant van deze tier (volledig product-id Bag_/Hash_/Edible_<strain>) +
 	// HOEVEEL (OutQty). Gebruikt door zowel walk-ins als telefoon-afspraken zodat ze identiek schalen.
-	static FName PickDesiredProduct(class AWeedShopGameState* GS, class UDataTable* ProductTable, FName NpcId, int32& OutQty);
+	// COMPETITIVE: ForPlayerId/ForPawn = de KOPENDE speler (order-band + level-gate volgen dan ZIJN relatie/level).
+	// Defaults leeg/nullptr = gedeeld/co-op (crew-brede waarden, ongewijzigd gedrag voor walk-in-callers).
+	static FName PickDesiredProduct(class AWeedShopGameState* GS, class UDataTable* ProductTable, FName NpcId, int32& OutQty,
+		const FString& ForPlayerId = FString(), APawn* ForPawn = nullptr);
 
 	// Voor de chat-progressbar (client leest gerepliceerde ApptTimeout + ApptTimeoutMax). Loopt van 1 -> 0 tot de
 	// NPC opgeeft. ApptTimeoutMax is PER-NPC (schaalt met afstand + respect/loyaliteit) zodat de bar altijd vol start.
@@ -495,6 +498,13 @@ protected:
 	// COMPETITIVE: actieve relatie-sleutel ("NpcId#spelerId") van de speler die nu met deze klant dealt.
 	// NAME_None in co-op (dan geldt de gedeelde NpcId-relatie).
 	FName ActiveRelKey = NAME_None;
+	// COMPETITIVE "hybride c": WAAR in de basis-order-band deze walk-in-order viel (0..1), vastgelegd bij
+	// spawn. Bij gesprek-start (koper bekend) herschalen we DesiredQuantity met dezelfde fractie naar de
+	// band van DIE speler — deterministisch, dus geen re-roll bij weglopen/terugkomen. -1 = niet gezet
+	// (afspraak/geen walk-in-order). Bewust GEEN UPROPERTY: niet gerepliceerd, niet gesaved.
+	float OrderAppetite01 = -1.f;
+	// Herschaal de order-grootte naar de tier-band van de kopende speler (alleen server + competitive).
+	void RescaleOrderForPlayer(APawn* Player);
 	void PushApptMessage(const FString& InBody); // stuurt een chat-bericht namens deze NPC
 
 	// Schrijf de huidige attributen terug naar het NPC-register (persistent per persoon).

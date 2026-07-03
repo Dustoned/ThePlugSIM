@@ -275,6 +275,12 @@ protected:
 	TSet<TWeakObjectPtr<class ACityDoor>> CompClaimedDoors; // alle deuren die nu door competitive geclaimd zijn (voor loslaten als ze niet meer bij een kamer horen)
 	FVector Comp703Anchor = FVector::ZeroVector;    // de ORIGINELE 703-thuis-plek (bewaard voordat HomeAnchor naar de host-marker overschreven wordt) - referentie voor de meubel-kopie
 	void GetCompetitiveMarkers(TArray<FVector>& Out) const; // de 2 spawn-markers (CompSpawns.txt, anders de laatste 2 F9-markers)
+	// COMPETITIVE huur: WorldSync-id van de comp-VOORDEUR (host=603-kant, joiner=602-kant) - zelfde
+	// dichtstbijzijnde-deur-filter als GetCompDeliverySpot, met voorkeur voor de apt-genummerde deur.
+	uint32 GetCompRentDoorId(bool bJoiner) const;
+	// COMPETITIVE huur: past de gerepliceerde RentOverdueDoorIds (GameState) toe op de LOKALE deur-kopieen.
+	// Moet NA de claim-pass (TickCompetitiveRooms) draaien: SetCompPlayerHome zet bLocked elke scan weer uit.
+	void ApplyCompRentDoorLocks();
 	int32 RentDueDay = -1;          // dag-nummer waarop de huur vervalt
 	int32 LastRentSeenLeft = -9999; // om 1x per dag te toasten/saven
 	bool bWalkersSpawned = false;   // klanten-spawner + nav-invoker een keer plaatsen

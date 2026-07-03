@@ -66,6 +66,24 @@ public:
 	void SetLampState(uint32 LampId, bool bOn, float Brightness01);
 	bool GetLampState(uint32 LampId, bool& bOutOn, float& OutBright) const;
 
+	// SCHAKELAAR-BESTAAN (co-op-sync): speler-geplaatste lichtschakelaars (APackLightSwitch, bReplicates=false)
+	// spawnen alleen op de server (plaatsen/save-load) -> de joiner miste ze, of hield juist een stale default-set.
+	// De server publiceert hier de posities+yaws van alle sw_*-schakelaars; de client spawnt ontbrekende lokaal na
+	// en ruimt stale lokale op (reconcile-pass in de DoorRetrofitter). De aan/uit/dim-STAAT synct al via de
+	// lamp-arrays hierboven; dit gaat puur om het BESTAAN van de actor.
+	int32 GetSwitchCount() const { return SwitchPos.Num(); }
+	bool GetSwitch(int32 Index, FVector& OutPos, float& OutYaw) const;
+	bool HasSwitchNear(const FVector& Pos, float MaxDist) const;
+	// True zodra de server minstens 1 volledige publish-pass deed. De client mag pas DAARNA stale lokale
+	// schakelaars opruimen - anders zou een nog-lege (net gestarte) array de verse default-set wissen.
+	bool AreSwitchesPublished() const { return bSwitchesPublished != 0; }
+
+	// Server: schakelaar toevoegen (dedupe binnen 10cm) / de dichtstbijzijnde binnen 50cm verwijderen.
+	void ServerAddSwitch(const FVector& Pos, float Yaw);
+	void ServerRemoveSwitch(const FVector& Pos);
+	// Server: markeer de switch-set als volledig gepubliceerd (na de reconcile-pass in de DoorRetrofitter).
+	void ServerMarkSwitchesPublished();
+
 private:
 	UFUNCTION()
 	void OnRep_OpenDoors() {}
@@ -102,4 +120,16 @@ private:
 	TArray<uint8> LampOn;
 	UPROPERTY(Replicated)
 	TArray<float> LampBright;
+
+	// Bestaan van speler-geplaatste schakelaars: parallelle arrays positie + yaw. Server schrijft, clients lezen.
+	// BEWUST volle FVector (geen FVector_NetQuantize): de client leidt de PersistKey (sw_<10cm-grid>) en het
+	// WorldSync-lamp-id af uit deze positie - quantisatie naar hele cm zou op grid-grenzen (afrond-flip) een
+	// ANDERE sleutel geven dan de host, en dan breken Load() (stand/links) en de lamp-staat-sync.
+	UPROPERTY(Replicated)
+	TArray<FVector> SwitchPos;
+	UPROPERTY(Replicated)
+	TArray<float> SwitchYaw;
+	// 1 zodra de server z'n eerste volledige publish-pass deed (ook als de set leeg is).
+	UPROPERTY(Replicated)
+	uint8 bSwitchesPublished = 0;
 };

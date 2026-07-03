@@ -3,11 +3,14 @@
 #include "WeedShopCore.h"
 #include "Interaction/Interactable.h"
 #include "World/CityDoor.h" // IsLocked()-check: gelockte deuren niet via WorldSync open-toggelen
+#include "World/PackElevatorButton.h" // server-validatie: lift-knop opzoeken op ElevId (bereik-check)
+#include "World/PackLightSwitch.h" // server-validatie: lamp-schakelaar opzoeken op stabiel id (bereik-check)
 #include "Customer/CustomerBase.h"
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "World/WorldSyncComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h" // TActorIterator: lift-knoppen/lamp-schakelaars hebben geen statische registry
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
 
@@ -230,7 +233,22 @@ void UInteractionComponent::ServerInteract_Implementation(AActor* Target)
 void UInteractionComponent::ServerToggleDoor_Implementation(uint32 DoorId)
 {
 	const UWorld* W = GetWorld();
-	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!W) { return; }
+	// SERVER-VALIDATIE (zelfde lookup als ServerPayRent): zoek de SERVER-lokale deur op het stabiele id.
+	// De client checkte IsLocked/IsRentOverdue op z'n EIGEN (mogelijk verouderde) deur - hier telt alleen
+	// de server-staat, anders toggelt een client een gelockte/rent-overdue deur alsnog op afstand open.
+	for (const TWeakObjectPtr<ACityDoor>& WDr : ACityDoor::GetAll())
+	{
+		const ACityDoor* Dr = WDr.Get();
+		if (!IsValid(Dr) || Dr->GetWorld() != W) { continue; } // registry is per-PROCES -> wereld-filter
+		if (Dr->GetWorldSyncDoorId() != DoorId) { continue; }
+		// Te ver weg, op slot of huur-achterstand -> weigeren (locked/rent loopt via PerformInteract/ServerPayRent).
+		if (!IsWithinReach(Dr) || Dr->IsLocked() || Dr->IsRentOverdue()) { return; }
+		break; // gevonden + geldig -> relayen
+	}
+	// NIET gevonden = ook relayen: de server-conversie kan achterlopen op streaming -> bewust fail-open
+	// (huidig gedrag; liever een zeldzame onvalideerbare toggle dan een deur die voor iedereen klemt).
+	AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>();
 	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->ServerToggleDoor(DoorId); }
 }
 
@@ -255,14 +273,46 @@ void UInteractionComponent::ServerPayRent_Implementation(uint32 DoorId)
 void UInteractionComponent::ServerCallElevator_Implementation(uint32 ElevId, int32 Floor)
 {
 	const UWorld* W = GetWorld();
-	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!W) { return; }
+	// SERVER-VALIDATIE: lift-knoppen hebben geen statische registry -> TActorIterator (kleine set). Geldig
+	// als de speler bij MINSTENS EEN knop van deze lift (zelfde ElevId; call- OF cabine-knop) binnen bereik
+	// staat. Welke verdieping hij kiest is vrij - de cabine-knoppen bieden immers alle verdiepingen aan.
+	bool bFoundAny = false;
+	bool bInReach = false;
+	for (TActorIterator<APackElevatorButton> It(W); It; ++It)
+	{
+		const APackElevatorButton* Btn = *It;
+		int32 BtnFloor = 0;
+		if (!IsValid(Btn) || Btn->GetWorldSyncElevatorId(BtnFloor) != ElevId) { continue; }
+		bFoundAny = true;
+		if (IsWithinReach(Btn)) { bInReach = true; break; }
+	}
+	// Knoppen van deze lift bestaan maar geen enkele binnen bereik -> weigeren. HELEMAAL geen knop met dit
+	// id gevonden -> bewust fail-open: de server-spawn kan achterlopen op streaming (zelfde afweging als deur).
+	if (bFoundAny && !bInReach) { return; }
+	AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>();
 	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->ServerSetElevatorFloor(ElevId, Floor); }
 }
 
 void UInteractionComponent::ServerSetLamp_Implementation(uint32 LampId, bool bOn, float Brightness01)
 {
 	const UWorld* W = GetWorld();
-	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	if (!W) { return; }
+	// SERVER-VALIDATIE: LampSyncId is protected op APackLightSwitch, maar Setup() berekent 'm als
+	// MakeId(locatie, yaw) en de schakelaar hangt vast aan de muur (oppakken = destroy + nieuwe Setup) ->
+	// hier deterministisch herberekenbaar ZONDER de switch-klasse aan te passen. Geen statische registry ->
+	// TActorIterator. Niet gevonden -> bewust fail-open (streaming; lamp is cosmetisch, laag risico).
+	for (TActorIterator<APackLightSwitch> It(W); It; ++It)
+	{
+		const APackLightSwitch* Sw = *It;
+		if (!IsValid(Sw)) { continue; }
+		if (UWorldSyncComponent::MakeId(Sw->GetActorLocation(), Sw->GetActorRotation().Yaw) != LampId) { continue; }
+		if (!IsWithinReach(Sw)) { return; } // schakelaar bestaat maar de speler staat te ver weg -> weigeren
+		break; // gevonden + binnen bereik -> relayen
+	}
+	// De dimmer kent alleen 0..1; de client stuurt een vrije float -> server-side begrenzen.
+	Brightness01 = FMath::Clamp(Brightness01, 0.f, 1.f);
+	AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>();
 	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->SetLampState(LampId, bOn, Brightness01); }
 }
 

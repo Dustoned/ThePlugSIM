@@ -19,6 +19,7 @@
 #include "World/CityDoor.h" // geen wand-mounts/objecten op deuren plaatsen
 #include "Interaction/InteractionComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "World/WorldSyncComponent.h" // bestaan van speler-schakelaars naar de joiner publiceren
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
@@ -1107,9 +1108,21 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	{
 		ReturnItem = FName(TEXT("Atm"));
 	}
-	else if (Cast<APackLightSwitch>(Target))
+	else if (const APackLightSwitch* SwPick = Cast<APackLightSwitch>(Target))
 	{
 		ReturnItem = FName(TEXT("LightSwitch")); // schakelaar terug als inventory-item (was: viel in de else -> niets)
+		// CO-OP: de bestaan-sync bijwerken zodat de joiner z'n lokale kopie ook opruimt (client-pass in de
+		// DoorRetrofitter destroyt sw_*-schakelaars die niet meer in WorldSync staan). Alleen sw_* = speler-geplaatst.
+		if (SwPick->GetPersistKey().StartsWith(TEXT("sw_")))
+		{
+			if (UWorld* WPick = GetWorld())
+			{
+				if (AWeedShopGameState* GSsw = WPick->GetGameState<AWeedShopGameState>())
+				{
+					if (UWorldSyncComponent* WSsw = GSsw->GetWorldSync()) { WSsw->ServerRemoveSwitch(SwPick->GetActorLocation()); }
+				}
+			}
+		}
 	}
 	else
 	{
@@ -1713,6 +1726,13 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 			Sw->Setup(FString::Printf(TEXT("sw_%d_%d_%d"),
 				FMath::RoundToInt(Location.X / 10.f), FMath::RoundToInt(Location.Y / 10.f), FMath::RoundToInt(Location.Z / 10.f)), 800.f);
 			Sw->FinishSpawning(FTransform(Rotation, Location));
+			// CO-OP: het BESTAAN publiceren naar WorldSync zodat de joiner 'm lokaal naspawnt (APackLightSwitch
+			// repliceert niet -> een server-only spawn is anders onzichtbaar voor de joiner). WorldSync nog null
+			// (heel vroeg)? -> overslaan: de periodieke server-reconcile in de DoorRetrofitter herpubliceert.
+			if (AWeedShopGameState* GSsw = World->GetGameState<AWeedShopGameState>())
+			{
+				if (UWorldSyncComponent* WSsw = GSsw->GetWorldSync()) { WSsw->ServerAddSwitch(Location, Rotation.Yaw); }
+			}
 		}
 	}
 	else

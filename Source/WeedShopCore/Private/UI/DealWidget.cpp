@@ -11,6 +11,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Npc/NpcRegistryComponent.h"
+#include "Save/SaveGameSubsystem.h" // StablePlayerId: per-speler tier/cooldown-reads in competitive
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -505,7 +506,8 @@ void UDealWidget::UpdateLive()
 		{
 			if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
 			{
-				if (!C->NpcId.IsNone()) { KUnlocked = Reg->IsUnlocked(C->NpcId) ? 1 : 0; KTier = Reg->GetCustomerTier(C->NpcId); }
+				// Tier per-speler (competitive): de tier van MIJN relatie met deze klant, niet de gedeelde base.
+				if (!C->NpcId.IsNone()) { KUnlocked = Reg->IsUnlocked(C->NpcId) ? 1 : 0; KTier = Reg->GetCustomerTier(C->NpcId, USaveGameSubsystem::StablePlayerId(GetOwningPlayerPawn())); }
 			}
 		}
 		const FString Key = FString::Printf(TEXT("%llu|%d|%.2f|%.2f|%.2f|%.2f|%s|%d|%s|%s|%d|%d|%d|%d|%d|%.2f|%.2f|%d|%d|%d"),
@@ -589,7 +591,8 @@ void UDealWidget::UpdateLive()
 			{
 				if (!C->NpcId.IsNone())
 				{
-					const int32 Tier = Reg->GetCustomerTier(C->NpcId);
+					// Per-speler tier (competitive): elke speler ziet zijn EIGEN relatie-tier in de pill.
+					const int32 Tier = Reg->GetCustomerTier(C->NpcId, USaveGameSubsystem::StablePlayerId(GetOwningPlayerPawn()));
 					TLbl = UNpcRegistryComponent::TierName(Tier);
 				}
 			}
@@ -790,7 +793,8 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { Reg = GS->GetNpcRegistry(); }
 		}
-		const bool bCd = (Reg && !C->NpcId.IsNone() && Reg->IsOnSampleCooldown(C->NpcId));
+		// Per-speler sample-cooldown (competitive): MIJN give-knop hangt aan MIJN cooldown, niet die van de rivaal.
+		const bool bCd = (Reg && !C->NpcId.IsNone() && Reg->IsOnSampleCooldown(C->NpcId, USaveGameSubsystem::StablePlayerId(GetOwningPlayerPawn())));
 		GiveBtn->SetVisibility(bCd ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	}
 

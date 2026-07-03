@@ -70,6 +70,8 @@ public:
 	// Dev/save: zet het level direct / herstel exact uit een save.
 	void  GrantLevelFor(const APawn* Pawn, int32 NewLevel);
 	void  RestoreLevelFor(const FName& Key, int32 InLevel, int32 InXP, bool bLicensed); // Key==NAME_None => Shared
+	// Dev-cheat: zet de shop-licentie direct voor DEZE speler (nullptr -> Shared). Server-only.
+	void  SetShopLicensedFor(const APawn* Pawn, bool bLicensed);
 
 	// ================= Compat-wrappers (Shared-key) =================
 	// Behouden zodat niet-geconverteerde call-sites + Blueprint-refs blijven werken -> allemaal naar Shared.

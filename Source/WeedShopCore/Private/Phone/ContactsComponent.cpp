@@ -163,6 +163,20 @@ void UContactsComponent::SendRandomAppointment()
 	UNpcRegistryComponent* Reg = nullptr;
 	if (const AWeedShopGameState* GSc = Cast<AWeedShopGameState>(GetOwner())) { Reg = GSc->GetNpcRegistry(); }
 
+	// COMPETITIVE: resolve de DOEL-SPELER van een contact op EEN plek, zodat het cooldown-filter, de
+	// product-keuze, het VIP-level en het send-target hieronder allemaal DEZELFDE eigenaar gebruiken.
+	// Eerst het contact-eigenaarschap (OwnerPlayerId), anders de favoriete speler van dit contact
+	// (GetTopOwner op de BASIS-NpcId). Co-op -> leeg = gedeelde base-waarden.
+	const AWeedShopGameState* GSowner = Cast<AWeedShopGameState>(GetOwner());
+	const bool bCompetitive = GSowner && GSowner->IsCompetitive();
+	auto ResolveOwnerId = [&](const FPhoneContact& Ct) -> FString
+	{
+		if (!bCompetitive) { return FString(); }
+		FString OwnerId = Ct.OwnerPlayerId;
+		if (OwnerId.IsEmpty() && Reg) { OwnerId = Reg->GetTopOwner(BaseNpcId(Ct.ContactId)); }
+		return OwnerId;
+	};
+
 	// 's Nachts bijna geen berichten: alleen echt verslaafde klanten appen 's nachts, en veel zeldzamer.
 	bool bNight = false;
 	if (const AWeedShopGameState* GSn = Cast<AWeedShopGameState>(GetOwner()))
@@ -177,7 +191,8 @@ void UContactsComponent::SendRandomAppointment()
 	for (int32 i = 0; i < Contacts.Num(); ++i)
 	{
 		const FName Id = Contacts[i].ContactId;
-		if (Reg && Reg->IsOnCooldown(Id)) { continue; }
+		// Per-speler cooldown: check tegen de doel-speler van DIT contact (leeg = base/co-op).
+		if (Reg && Reg->IsOnCooldown(Id, ResolveOwnerId(Contacts[i]))) { continue; }
 		if (Reg && !Reg->CanAppointToday(Id)) { continue; }
 		// Niet spammen: heeft deze klant al een open (onbeantwoord) verzoek, dan niet nóg een sturen.
 		bool bHasOpen = false;
@@ -209,7 +224,11 @@ void UContactsComponent::SendRandomAppointment()
 	int32 Pick = Cands[0].Idx;
 	for (const FCand& Cd : Cands) { Roll -= (Cd.Warmth + 0.15f); if (Roll <= 0.f) { Pick = Cd.Idx; break; } }
 	const FPhoneContact& C = Contacts[Pick];
-	if (Reg) { Reg->NoteAppointment(C.ContactId); } // telt mee voor de 1-2/dag-cap
+	// GEHOISTE owner-resolve van het GEKOZEN contact: dezelfde doel-speler voor de cooldown-boekhouding,
+	// de product-keuze, het VIP-level en het send-target hieronder (leeg + nullptr in co-op).
+	const FString OwnerId = ResolveOwnerId(C);
+	APawn* OwnerPawn = ResolvePawnForPlayer(OwnerId); // nullptr als de owner niet verbonden is (of co-op)
+	if (Reg) { Reg->NoteAppointment(C.ContactId, OwnerId); } // telt mee voor de 1-2/dag-cap (per-speler)
 
 	float Now = 0.f, Length = 1800.f;
 	GetCycleTime(Now, Length);
@@ -228,7 +247,7 @@ void UContactsComponent::SendRandomAppointment()
 	// Wat + hoeveel wil de klant: DEZELFDE keuze-logica als walk-ins (tier-weging + premium hasj/edibles +
 	// soms wiet net boven je bereik). Geeft een volledig product-id (Bag_/Hash_/Edible_<strain>).
 	int32 WantQty = 1;
-	const FName WantProduct = ACustomerBase::PickDesiredProduct(Cast<AWeedShopGameState>(GetOwner()), ProductTable, C.ContactId, WantQty);
+	const FName WantProduct = ACustomerBase::PickDesiredProduct(Cast<AWeedShopGameState>(GetOwner()), ProductTable, C.ContactId, WantQty, OwnerId, OwnerPawn);
 	FName WantStrain = NAME_None;
 	{ FString L, R; if (WantProduct.ToString().Split(TEXT("_"), &L, &R)) { WantStrain = FName(*R); } }
 	const FString WantStr = WantProduct.IsNone() ? TEXT("weed") : WeedUI::PrettyItemName(WantProduct);
@@ -248,18 +267,10 @@ void UContactsComponent::SendRandomAppointment()
 	// een specifieke wiet-strain met een min-THC-eis, een ruimere deadline en een bonus-uitbetaling.
 	// Schaalt mee met level (vaker + groter + meer bonus). Beloont een goed gevulde, diverse voorraad.
 	const AWeedShopGameState* GSo = Cast<AWeedShopGameState>(GetOwner());
-	// COMPETITIVE: de VIP-order-kans/bonus schaalt met het level van de speler VOOR wie deze afspraak is.
-	// Resolve die eigenaar-speler nu al (dezelfde logica als het ForPlayerId-blok hieronder): eerst het
-	// contact-eigenaarschap (OwnerPlayerId), anders de favoriete speler van dit contact (TopOwner op de
-	// BASIS-NpcId). Geen speler-context (co-op, of niemand gematcht) -> nullptr = gedeelde crew-waarde.
-	APawn* LvlPawn = nullptr;
-	if (GSo && GSo->IsCompetitive())
-	{
-		FString OwnerId = C.OwnerPlayerId;
-		if (OwnerId.IsEmpty()) { if (UNpcRegistryComponent* Rg = GSo->GetNpcRegistry()) { OwnerId = Rg->GetTopOwner(BaseNpcId(C.ContactId)); } }
-		LvlPawn = ResolvePawnForPlayer(OwnerId); // nullptr als niets matcht -> valt terug op gedeeld
-	}
-	const int32 PlayerLvl = (GSo && GSo->GetLeveling()) ? GSo->GetLeveling()->GetLevelFor(LvlPawn) : 1;
+	// COMPETITIVE: de VIP-order-kans/bonus schaalt met het level van de speler VOOR wie deze afspraak is -
+	// de GEHOISTE OwnerPawn hierboven (zelfde resolve als filter/product-keuze/send-target). Geen
+	// speler-context (co-op, of niemand verbonden) -> nullptr = gedeelde crew-waarde.
+	const int32 PlayerLvl = (GSo && GSo->GetLeveling()) ? GSo->GetLeveling()->GetLevelFor(OwnerPawn) : 1;
 	{
 		const bool bWeedProduct = WantProduct.ToString().StartsWith(TEXT("Bag_"));
 		const float OrderChance = FMath::Clamp((PlayerLvl - 10) * 0.025f, 0.f, 0.45f);
@@ -317,32 +328,23 @@ void UContactsComponent::SendRandomAppointment()
 			WantQty, *WantClean, Msg.MinThc, (OTotalMin / 60) % 24, OTotalMin % 60, *AddrStr));
 	}
 
-	// COMPETITIVE: dit bericht is voor ÉÉN speler (eigen telefoon). Doel = de favoriete speler van dit contact
-	// (TopOwner), anders een willekeurige verbonden speler. Co-op laat ForPlayerId leeg (iedereen ziet het).
+	// COMPETITIVE: dit bericht is voor EEN speler (eigen telefoon). Doel = de GEHOISTE eigenaar van dit
+	// contact (OwnerPawn - zelfde resolve als het cooldown-filter en de product-keuze hierboven), anders
+	// een willekeurige verbonden speler. Co-op laat ForPlayerId leeg (iedereen ziet het).
 	APawn* TargetPawn = nullptr;
-	if (const AWeedShopGameState* GScm = Cast<AWeedShopGameState>(GetOwner()))
+	if (bCompetitive && GetWorld())
 	{
-		if (GScm->IsCompetitive() && GetWorld())
+		TargetPawn = OwnerPawn;
+		if (!TargetPawn)
 		{
 			TArray<APawn*> Pawns;
 			for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 			{
 				if (APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr) { Pawns.Add(P); }
 			}
-			if (Pawns.Num() > 0)
-			{
-				// Doel-eigenaar: eerst het contact-eigenaarschap (OwnerPlayerId), anders de favoriete speler van
-				// deze klant (GetTopOwner op de BASIS-NpcId). Beide op de basis-id -> geen dubbele-suffix-mismatch.
-				FString Owner = C.OwnerPlayerId;
-				if (Owner.IsEmpty())
-				{
-					if (UNpcRegistryComponent* Rg = GScm->GetNpcRegistry()) { Owner = Rg->GetTopOwner(BaseNpcId(C.ContactId)); }
-				}
-				for (APawn* P : Pawns) { if (USaveGameSubsystem::StablePlayerId(P) == Owner) { TargetPawn = P; break; } }
-				if (!TargetPawn) { TargetPawn = Pawns[FMath::RandRange(0, Pawns.Num() - 1)]; }
-				Msg.ForPlayerId = USaveGameSubsystem::StablePlayerId(TargetPawn);
-			}
+			if (Pawns.Num() > 0) { TargetPawn = Pawns[FMath::RandRange(0, Pawns.Num() - 1)]; }
 		}
+		if (TargetPawn) { Msg.ForPlayerId = USaveGameSubsystem::StablePlayerId(TargetPawn); }
 	}
 
 	StampAndInsert(Msg); // nieuwste bovenaan
@@ -404,8 +406,8 @@ void UContactsComponent::CheckAppointments()
 					{
 						Reg->ApplyStats(Ac.Id, FMath::Max(0.f, R - 4.f), FMath::Max(0.f, L - 8.f), A); // wat respect, meer loyaliteit kwijt
 					}
-					Reg->SetApptCooldownMult(Ac.Id, 2.5f); // laat je daarna langer met rust
-					Reg->NoteAppointment(Ac.Id);           // start de (langere) cooldown
+					Reg->SetApptCooldownMult(Ac.Id, 2.5f, Ac.ForPlayerId); // laat je daarna langer met rust (per-speler)
+					Reg->NoteAppointment(Ac.Id, Ac.ForPlayerId);           // start de (langere) cooldown (per-speler)
 				}
 			}
 		}
@@ -787,7 +789,8 @@ void UContactsComponent::RespondToContact(FName ContactId, bool bAccept, const F
 			float Mult = 1.f;
 			if (bAccept) { Mult = (ReplySec < 20.f) ? 0.7f : (ReplySec > 60.f ? 1.5f : 1.f); }
 			else { Mult = 1.8f; }
-			Reg->SetApptCooldownMult(ContactId, Mult);
+			// Per-speler: de cooldown hoort bij de speler VOOR wie dit bericht was (leeg = base/co-op).
+			Reg->SetApptCooldownMult(ContactId, Mult, MsgForPlayer);
 		}
 	}
 

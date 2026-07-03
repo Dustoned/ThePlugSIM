@@ -288,8 +288,10 @@ public:
 	void RequestDryCollectAll();
 	UFUNCTION(Server, Reliable)
 	void ServerDryHang(class ADryingRack* Rack, int32 StackId);
+	// CO-OP anti-race: ExpectedId = de batch-id die de client op deze index zag (zelfde patroon als
+	// ServerShelfTake), zodat de server een door RemoveAt verschoven index weigert.
 	UFUNCTION(Server, Reliable)
-	void ServerDryCollect(class ADryingRack* Rack, int32 Index);
+	void ServerDryCollect(class ADryingRack* Rack, int32 Index, FName ExpectedId);
 	UFUNCTION(Server, Reliable)
 	void ServerDryCollectAll(class ADryingRack* Rack);
 

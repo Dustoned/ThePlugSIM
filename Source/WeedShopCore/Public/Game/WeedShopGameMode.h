@@ -20,6 +20,13 @@ class WEEDSHOPCORE_API AWeedShopGameMode : public AGameModeBase
 public:
 	AWeedShopGameMode();
 
+	// 2-speler-cap op de sessie: co-op EN competitive zijn voor precies 2 spelers ontworpen/getest.
+	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
+
+	// Zet de stabiele per-speler-id (PlugPid) op de AWeedShopPlayerState: URL-optie "PlugPid" (joiner) >
+	// eigen login-id (host), met een "#2"-dedupe-suffix bij een botsing (2 instanties op 1 machine).
+	virtual FString InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal = TEXT("")) override;
+
 	// Forceer dat de speler-pawn ALTIJD spawnt (positie bijstellen indien nodig): bij co-op-join spawnt de
 	// 2e speler op dezelfde PlayerStart als de host -> botsing -> met een strikte collision-methode geeft
 	// de spawn null en crasht de engine met "Couldn't spawn player". AlwaysSpawn voorkomt dat.
