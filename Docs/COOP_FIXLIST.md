@@ -348,3 +348,17 @@ Teruggedraaid (git checkout). Manipuleer NOOIT een simulated-proxy z'n positie p
 ECHTE fix zou base-relatieve movement vereisen = de cabine een GEREPLICEERDE actor maken (NetGUID) -> grote
 architecturale wijziging tegen het per-proces/WorldSync-patroon in. BESLUIT speler 07-03: accepteren + parkeren;
 op 2 echte PC's is de 100Hz character-repli vers -> bob kleiner dan op localhost-2-instances (deels test-artefact).
+
+### UPDATE 07-03: RONDE A GEIMPLEMENTEERD (commit 6b8188a7) - per-speler level/XP/heat, WACHT OP VOLLE TEST
+Registry-keyed op ULevelComponent + UHeatComponent (Shared + Players[]-array op StablePlayerId, DOREPLIFETIME),
+...For(Pawn)-API + oude methoden als wrappers naar Shared. Co-op = gedeeld crew-level via nullptr/Shared (bit-voor-bit
+huidig gedrag). Competitive = per speler. Save v4->5 met PlayerProgress-array + migratie (oude save -> Shared).
+Level-up-toast: co-op iedereen / competitive alleen verdiener. Heat-tick/pot-vloer/event per entry in competitive.
+4 disjuncte call-site-clusters (write/display/gates) omgezet; display leest owner-pawn (GetOwningPlayerPawn/PlayerOwner).
+Build groen, boot-sanity competitive host+join = 0 fatals. "Op het oog goed", NOG NIET vol getest door speler.
+TE VERIFIEREN: (A regressie-gate) co-op = nog steeds 1 gedeeld crew-level + oude save laadt identiek; (B) competitive
+= elke speler eigen level/XP/heat/licentie, HUD/telefoon toont eigen speler, dev-set-level raakt alleen die speler.
+BEWUST GEDEELD (nullptr) in competitive: wereld-scatter (seed/joint), plant-mold, order-tier (PickDesiredProduct).
+RONDE B (nog open): tier/cooldown per-speler (raakt klant-koper-flow: GetTierOrderGrams bepaald voor koper-speler
+bekend is; IsOnCooldown ook crowd-toewijzing die gedeeld moet blijven). Aparte wave, 2-PC-getest.
+OPEN designvraag: shop-licentie post-50 per-speler (nu zo) of crew-breed? Raakt de post-50 fase (nog te ontwerpen).
