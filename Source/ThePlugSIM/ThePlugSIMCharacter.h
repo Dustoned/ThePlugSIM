@@ -459,6 +459,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop")
 	float GetStonedXpFrac() const { return StonedSeconds > 0.f ? StonedXpFrac : 0.f; }
 
+	/** IPlayerNpcActions: stoned-XP-multiplier van DEZE speler (1.0 + frac). Per-verdiener toegepast in AddXP. */
+	virtual float GetStonedXpMultiplier() const override { return 1.f + GetStonedXpFrac(); }
+
 public:
 
 	/** Returns the first person mesh **/

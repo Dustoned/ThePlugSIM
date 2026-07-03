@@ -225,3 +225,44 @@ code; nieuwe USTRUCTs/Replicated-velden correct geregistreerd voor Shipping.
 Blijft DEFER (niet-blokkerend, friends-only): ServerBuyProperty dubbel-koop; ServerCallElevator/ServerToggleDoor
 reach-validatie; geladen-co-op speler-lichtschakelaars niet op joiner (spiegel van H.6); H.16 OSS-naam-matching;
 H.17 reconnect/seamless-travel.
+
+### SYNC-COMPLETENESS-GOLF (07-03) — "synct alles wat zou moeten?"
+6 agents trokken per wereld-object de muteer->ziet-de-ander-het-keten na. Uitkomst: de sync is fundamenteel
+SOLIDE. Bevestigd gesynct (met per-veld bewijs): planten (groei/water/oogst/ziekte/mest/pot-gear 13/13),
+droogrekken, kasten/koelkast/kluis-inhoud, processor/bench-voortgang, NPC's (uiterlijk/deal/afspraak/activiteit/
+kaart), speler (skin/outfit/rook-anim/handitem), gedeelde bank + level/XP/heat/goals/milestones/upgrades/
+NPC-relaties, klok, weer, bezorg-markers. Deuren/lift via WorldSync. Prive-per-speler (cash/inventory/hotbar/
+camera/UI/toasts) blijft terecht prive.
+3 restpunten gevonden; speler koos #1 + #2 fixen (#3 blijft by-design):
+- **#1 GEFIXT** Stoned XP-bonus was een GEDEELDE crew-multiplier op LevelComponent -> op de listen-server schreven
+  host EN joiner 'm elke tick (race) + een nuchtere speler liftte mee op de high-bonus. Fix: per-verdiener via
+  IPlayerNpcActions::GetStonedXpMultiplier() -> ULevelComponent::AddXP(Amount, StonedMult) op de 3 callsites
+  (deal=PayTo-owner, oogst=InstigatorPawn, werven=this). Gedeelde XpMultiplier verwijderd.
+- **#2 GEFIXT** Rent-overdue lock zat na de H.14-fix alleen op de host-deur -> joiner-deur nooit gelockt (kon de
+  "vergrendelde" deur openen voor beiden). Fix: overdue-lock is nu een gerepliceerde GameState-vlag
+  (bStarterRentOverdue+StarterRentCents); BEIDE DoorRetrofitters passen 'm lokaal toe op hun starter-deur; de
+  betaling loopt server-authoritative via nieuwe RPC UInteractionComponent::ServerPayRent(DoorId) (deur is
+  bReplicates=false -> id-lookup zoals ServerToggleDoor) zodat de joiner ook kan betalen.
+- **#3 DEFER (by-design)** Lichtschakelaars per-speler cosmetisch (bReplicates=false, IsClientLocalInteract);
+  host/joiner kunnen verschillende lamp-staat zien. Bewust; alleen sfeer. Kan een WorldSync-id krijgen als
+  gedeelde sfeer ooit gewenst is.
+
+### MP-READY-GOLF (07-03) — races/join-timing/save-rondrit/spook-staat + verificatie #1/#2
+8 agents. De #1 (XP) + #2 (rent-lock) fixes zijn adversarieel CORRECT bevonden. De bewezen basis (crowd/
+planten/economie/deuren/lift/deal-exclusiviteit/place-race/pickup-race/join-timing) is schoon. 4 nieuwe
+must-fixes gevonden + toegepast (build groen):
+- **ATM dubbel op joiner** `[GEFIXT]` — AAtm (bReplicates=true) werd op beide processen gespawnd zonder
+  client-gate -> 2 overlappende ATM's per winkel. Fix: shop-ATM-spawn `!IsNetMode(NM_Client)` (DoorRetrofitter
+  ~2319). EXACT hetzelfde patroon als de meubel-dubbelspawn; de comment beweerde ten onrechte "ATM blijft op beide".
+- **Gedeelde bank uit stale Players[0]** `[GEFIXT]` — mijn H.7-restore pakte Players[0].BankCents; een stale
+  offline-record kon gebankt geld terugdraaien. Fix: bank als TOP-LEVEL authoritative Save->BankCents wegschrijven
+  (SaveGame) + direct teruglezen (LoadGame), alleen max-over-records-fallback voor oude saves.
+- **Rent in globaal RentState.txt** `[GEFIXT]` — 1 bestand zonder slot-suffix, niet gereset door New Game ->
+  lekte tussen slots + kon dag-1 overdue zijn (raakt ook solo). Fix: per-slot RentState_<slot>.txt (DoorRetrofitter
+  leest Sv->GetSlot()) + New Game wist het bestand (NewGameInSlot/HostNewGameLan/RequestNewGame).
+- **StorageShelf take/cook op stale client-index** `[GEFIXT]` — ServerTake pakte op een rauwe index; een
+  gelijktijdige RemoveAt door speler A schoof de indices -> speler B pakte het verkeerde item (evt. Cash). Fix:
+  RequestShelfTake/Cook sturen de VERWACHTE item-id mee (client-shelf GetSlotId); ServerTake/ServerShelfCook
+  hervalideren Contents[Index].ItemId==ExpectedId en weigeren anders (geen UI-wijziging nodig).
+DEFER (niet-blokkerend): competitive per-speler heat/XP/rent + 2-speler-cap (fairness, geen crash/geld-lek);
+lamp-late-joiner; DryingRack stale-index (guarded); rent-lock transiente 2-8s window; save-slot-menu-totaal cosmetisch.

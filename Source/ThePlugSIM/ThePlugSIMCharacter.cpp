@@ -1192,18 +1192,9 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 			RollHoldTime = 0.f;
 		}
 		if (Phone) { Phone->SetRollHoldFrac(bRollFired ? 0.f : FMath::Clamp(RollHoldTime / RollHoldRequired, 0.f, 1.f)); }
-		// Stoned = XP-bonus op basis van de THC% van je wiet (niet hoe high je bent), zodat je niet te
-		// snel levelt. Een 17%-joint -> +17% XP, max +50%. Server zet de multiplier.
-		if (HasAuthority())
-		{
-			if (AWeedShopGameState* GSx = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
-			{
-				if (ULevelComponent* Lvx = GSx->GetLeveling())
-				{
-					Lvx->SetXpMultiplier(1.f + GetStonedXpFrac());
-				}
-			}
-		}
+		// Stoned = XP-bonus op basis van de THC% van je wiet. De bonus wordt nu PER-VERDIENER toegepast bij
+		// ULevelComponent::AddXP (via GetStonedXpMultiplier op de earner-pawn) i.p.v. hier als gedeelde
+		// crew-multiplier -> in co-op geen crew-breed meeliften + geen race tussen host- en joiner-pawn.
 	}
 
 	// Joint overhandigen: korte LMB-hold terwijl je een joint vasthoudt en een klant aankijkt.
@@ -1648,7 +1639,7 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 	// XP voor het werven: klein per sample, bonus als je iemand net omzette naar koper.
 	if (GS && GS->GetLeveling())
 	{
-		GS->GetLeveling()->AddXP(bConverted ? 25 : 3);
+		GS->GetLeveling()->AddXP(bConverted ? 25 : 3, GetStonedXpMultiplier()); // stoned-bonus van DEZE speler
 	}
 
 	if (GEngine && bLikedIt)

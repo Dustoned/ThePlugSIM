@@ -249,9 +249,9 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerShelfStore(class AStorageShelf* Shelf, FName ItemId, int32 Count);
 	UFUNCTION(Server, Reliable)
-	void ServerShelfTake(class AStorageShelf* Shelf, int32 SlotIndex, int32 Count);
+	void ServerShelfTake(class AStorageShelf* Shelf, int32 SlotIndex, int32 Count, FName ExpectedId);
 	UFUNCTION(Server, Reliable)
-	void ServerShelfCook(class AStorageShelf* Shelf, int32 SlotIndex);
+	void ServerShelfCook(class AStorageShelf* Shelf, int32 SlotIndex, FName ExpectedId);
 
 	// --- Goals/milestones: een behaald doel claimen (reward naar deze speler) ---
 	void ClaimGoal(int32 Idx);

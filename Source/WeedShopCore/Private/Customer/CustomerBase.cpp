@@ -1,5 +1,6 @@
 #include "Customer/CustomerBase.h"
 #include "UI/WeedToast.h"
+#include "Interaction/PlayerNpcActions.h"
 
 #include "WeedShopCore.h"
 #include "Components/CapsuleComponent.h"
@@ -3366,7 +3367,10 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			// Basis-XP op verkoopwaarde + extra (ook waarde-gewogen) voor een vervulde VIP-order.
 			int32 DealXP = 5 + FMath::RoundToInt(Total / 500.f);
 			if (bOrderFulfilled) { DealXP += 15 + FMath::RoundToInt(Total / 1000.f); }
-			Lv->AddXP(DealXP);
+			// Stoned-XP-bonus van de VERKOPENDE speler (PayTo = z'n economy -> owner-pawn), per-verdiener.
+			float StonedMult = 1.f;
+			if (PayTo) { if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(PayTo->GetOwner())) { StonedMult = PA->GetStonedXpMultiplier(); } }
+			Lv->AddXP(DealXP, StonedMult);
 		}
 		// Heat: op straat dealen trekt aandacht. 's Nachts fors riskanter dan overdag (BustThreshold = 80).
 		if (UHeatComponent* Heat = GS->GetHeat())

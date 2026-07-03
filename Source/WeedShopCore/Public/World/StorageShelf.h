@@ -79,7 +79,9 @@ public:
 	int32 ServerStore(FName ItemId, int32 Count, float Thc, float QualityPct);
 
 	// Server: haal Count stuks uit schap-slot SlotIndex. Vult de item-info in. Geeft aantal terug.
-	int32 ServerTake(int32 SlotIndex, int32 Count, FName& OutId, float& OutThc, float& OutQualityPct);
+	int32 ServerTake(int32 SlotIndex, int32 Count, FName ExpectedId, FName& OutId, float& OutThc, float& OutQualityPct);
+	// CO-OP anti-race: de verwachte item-id op een slot (client-kant), zodat ServerTake een verschoven index weigert.
+	FName GetSlotId(int32 Index) const { return Contents.IsValidIndex(Index) ? Contents[Index].ItemId : NAME_None; }
 
 	// IInteractable (openen van de UI gebeurt lokaal in de character).
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;

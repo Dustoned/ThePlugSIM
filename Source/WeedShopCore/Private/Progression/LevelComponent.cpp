@@ -60,14 +60,14 @@ float ULevelComponent::GetLevelFraction() const
 	return FMath::Clamp(float(CurrentXP) / float(Need), 0.f, 1.f);
 }
 
-void ULevelComponent::AddXP(int32 Amount)
+void ULevelComponent::AddXP(int32 Amount, float StonedMult)
 {
 	if (GetOwnerRole() != ROLE_Authority || Amount <= 0 || Level >= MaxLevel)
 	{
 		return;
 	}
-	// Stoned-bonus e.d.: vermenigvuldig de toegekende XP.
-	Amount = FMath::Max(1, FMath::RoundToInt(Amount * XpMultiplier));
+	// Stoned-bonus van de VERDIENENDE speler (per-verdiener meegegeven; co-op: niet crew-breed/race-vast).
+	Amount = FMath::Max(1, FMath::RoundToInt(Amount * FMath::Max(1.f, StonedMult)));
 	CurrentXP += Amount;
 
 	bool bLeveled = false;

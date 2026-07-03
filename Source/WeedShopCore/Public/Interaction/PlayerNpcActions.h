@@ -36,6 +36,11 @@ public:
 	virtual uint8 GetOutfitPart(int32 Slot) const { return 0; }
 	virtual void SetOutfitPart(int32 Slot, uint8 Index) {}
 
+	// Stoned-XP-bonus van DEZE speler (1.0 = geen bonus). Per-verdiener toegepast bij ULevelComponent::AddXP
+	// zodat een nuchtere speler in co-op niet meelift op de high-bonus van z'n maat (was een gedeelde
+	// multiplier op de crew-LevelComponent -> crew-breed + race-geklobberd). Default 1.0 voor niet-speler-pawns.
+	virtual float GetStonedXpMultiplier() const { return 1.f; }
+
 	// Dev-tools (vanuit het F10-dev-menu): aim-/positie-gebaseerde acties die in de game-module leven.
 	// De bijbehorende losse hotkeys (F6/F8/F11/Shift+F7/Ctrl+F7/Shift+F9/oude F10) zijn vervallen.
 	virtual void DevRegisterHome() {}

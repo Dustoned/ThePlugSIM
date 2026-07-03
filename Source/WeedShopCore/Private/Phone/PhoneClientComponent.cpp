@@ -1547,20 +1547,25 @@ void UPhoneClientComponent::RequestShelfStore(FName ItemId, int32 Count)
 
 void UPhoneClientComponent::RequestShelfTake(int32 SlotIndex, int32 Count)
 {
-	ServerShelfTake(ShelfActor.Get(), SlotIndex, Count);
+	// De VERWACHTE item-id op dit slot meesturen (client-kant) zodat de server een verschoven index weigert.
+	const FName ExpId = ShelfActor.IsValid() ? ShelfActor->GetSlotId(SlotIndex) : NAME_None;
+	ServerShelfTake(ShelfActor.Get(), SlotIndex, Count, ExpId);
 }
 
 void UPhoneClientComponent::RequestShelfCook(int32 SlotIndex)
 {
-	ServerShelfCook(ShelfActor.Get(), SlotIndex);
+	const FName ExpId = ShelfActor.IsValid() ? ShelfActor->GetSlotId(SlotIndex) : NAME_None;
+	ServerShelfCook(ShelfActor.Get(), SlotIndex, ExpId);
 }
 
-void UPhoneClientComponent::ServerShelfCook_Implementation(AStorageShelf* Shelf, int32 SlotIndex)
+void UPhoneClientComponent::ServerShelfCook_Implementation(AStorageShelf* Shelf, int32 SlotIndex, FName ExpectedId)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Shelf || !Inv || !Shelf->IsFridge()) { return; }
 	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Shelf->GetActorLocation()) > 400.f) { return; }
 	if (!Shelf->Contents.IsValidIndex(SlotIndex)) { return; }
+	// CO-OP anti-race: verschoven index (ander speler nam iets weg) -> weiger i.p.v. het verkeerde slot koken.
+	if (!ExpectedId.IsNone() && Shelf->Contents[SlotIndex].ItemId != ExpectedId) { return; }
 
 	const FShelfStack& S = Shelf->Contents[SlotIndex];
 	const FString Id = S.ItemId.ToString();
@@ -1588,7 +1593,7 @@ void UPhoneClientComponent::ServerShelfCook_Implementation(AStorageShelf* Shelf,
 
 	// Haal de hele ButterMix-stapel uit de koelkast en start de batch met diens THC/kwaliteit.
 	FName Oid; float Ot = 0.f, Oq = 0.f;
-	const int32 Taken = Shelf->ServerTake(SlotIndex, S.Quantity, Oid, Ot, Oq);
+	const int32 Taken = Shelf->ServerTake(SlotIndex, S.Quantity, ExpectedId, Oid, Ot, Oq);
 	if (Taken <= 0) { return; }
 	if (!Shelf->ServerStartEdible(Strain, Taken, Ot, Oq, OutPre))
 	{
@@ -1639,14 +1644,14 @@ void UPhoneClientComponent::ServerShelfStore_Implementation(AStorageShelf* Shelf
 	else if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Shelf is full.")); }
 }
 
-void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf, int32 SlotIndex, int32 Count)
+void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf, int32 SlotIndex, int32 Count, FName ExpectedId)
 {
 	UInventoryComponent* Inv = GetOwnerInventory();
 	if (!Shelf || !Inv || Count <= 0) { return; }
 	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Shelf->GetActorLocation()) > 400.f) { return; }
 
 	FName OutId; float OutThc = 0.f; float OutQual = 0.f;
-	const int32 Taken = Shelf->ServerTake(SlotIndex, Count, OutId, OutThc, OutQual);
+	const int32 Taken = Shelf->ServerTake(SlotIndex, Count, ExpectedId, OutId, OutThc, OutQual);
 	if (Taken <= 0) { return; }
 	if (OutId == FName(TEXT("Cash")))
 	{

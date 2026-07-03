@@ -179,6 +179,18 @@ public:
 	// Alleen de server deelt id's uit; clients krijgen 'm mee via de RPC-flow. 0 = ongeldig (geen authority).
 	int32 AllocDeliveryId() { return HasAuthority() ? NextDeliveryId++ : 0; }
 
+	// Gedeelde starter-huur-status: de huur van het start-huis is GEDEELDE wereld-staat (1 huis). De starter-deur
+	// is bReplicates=false (deterministisch-lokaal per proces), dus we repliceren de OVERDUE-lock hier zodat host
+	// EN joiner hun lokale deur consistent vergrendelen + de "pay at the door"-prompt tonen. Alleen de server zet
+	// 'm (DoorRetrofitter int de huur / ServerPayRent wist 'm bij betaling).
+	UPROPERTY(Replicated)
+	bool bStarterRentOverdue = false;
+	UPROPERTY(Replicated)
+	int64 StarterRentCents = 0;
+	bool IsStarterRentOverdue() const { return bStarterRentOverdue; }
+	int64 GetStarterRentCents() const { return StarterRentCents; }
+	void SetStarterRentOverdue(bool bOverdue, int64 Cents) { if (HasAuthority()) { bStarterRentOverdue = bOverdue; StarterRentCents = Cents; } }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

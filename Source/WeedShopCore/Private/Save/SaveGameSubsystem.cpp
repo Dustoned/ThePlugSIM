@@ -1,6 +1,8 @@
 #include "Save/SaveGameSubsystem.h"
 
 #include "WeedShopCore.h"
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 #include "Save/WeedShopSaveGame.h"
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
@@ -192,6 +194,7 @@ void USaveGameSubsystem::NewGameInSlot(int32 Slot)
 	// Verse staat: wis dit slot (handmatig + autosave) zodat een Load straks niet de oude save pakt.
 	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
 	if (UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(AutoSlotNameFor(Slot), 0); }
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / FString::Printf(TEXT("RentState_%d.txt"), Slot)), false, true, true); // verse start: per-slot rent-teller resetten
 	Loaded = nullptr;
 	RestoredPlayers.Reset();
 	PlaytimeBaseSeconds = 0.0; // verse speeltijd
@@ -233,6 +236,7 @@ void USaveGameSubsystem::HostNewGameLan(int32 Slot)
 	SetSlot(Slot);
 	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
 	if (UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(AutoSlotNameFor(Slot), 0); }
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / FString::Printf(TEXT("RentState_%d.txt"), Slot)), false, true, true); // verse start: per-slot rent-teller resetten
 	Loaded = nullptr;
 	RestoredPlayers.Reset();
 	PlaytimeBaseSeconds = 0.0;
@@ -263,6 +267,7 @@ void USaveGameSubsystem::RequestNewGame(int32 Slot)
 	SetSlot(Slot);
 	if (UGameplayStatics::DoesSaveGameExist(SlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(SlotNameFor(Slot), 0); }
 	if (UGameplayStatics::DoesSaveGameExist(AutoSlotNameFor(Slot), 0)) { UGameplayStatics::DeleteGameInSlot(AutoSlotNameFor(Slot), 0); }
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / FString::Printf(TEXT("RentState_%d.txt"), Slot)), false, true, true); // verse start: per-slot rent-teller resetten
 	Loaded = nullptr;
 	RestoredPlayers.Reset();
 	PlaytimeBaseSeconds = 0.0;
@@ -560,6 +565,10 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	Save->bDevTools = GS->AreDevToolsEnabled(); // dev-tools meeschrijven -> op load weten we of ze aan mogen
 	if (UWorld* Wm = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr) { Save->MapPath = Wm->GetOutermost()->GetName(); }
 	Save->CoopMode = (uint8)GS->GetCoopMode();
+	// De gedeelde crew-bank als 1 TOP-LEVEL authoritative waarde wegschrijven. NIET afleiden uit een per-speler
+	// record bij load: een stale offline-speler-record (verbatim uit Prev->Players overgenomen) zou het banksaldo
+	// anders terugdraaien -> gebankt geld weg. Cash blijft per-speler (GatherPlayer).
+	if (const UEconomyComponent* SharedEc = GS->GetSharedEconomy()) { Save->BankCents = SharedEc->GetBankCents(); }
 
 	// Gedeelde wereld-staat.
 	if (const UDayCycleComponent* Day = GS->GetDayCycle()) { Save->TimeOfDaySeconds = Day->GetTimeOfDaySeconds(); Save->DayNumber = Day->GetDayNumber(); }
@@ -650,7 +659,11 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	{
 		if (UEconomyComponent* Shared = GS->GetSharedEconomy())
 		{
-			const int64 SharedBank = (Save->Players.Num() > 0) ? Save->Players[0].BankCents : Save->BankCents;
+			// Top-level authoritative gedeelde bank. Oudere saves (voor deze fix) hadden 'm alleen per-speler ->
+			// val alleen dan terug op de MAX over de records (nooit blind Players[0], dat kan een stale offline-
+			// record zijn dat gebankt geld terugdraait).
+			int64 SharedBank = Save->BankCents;
+			if (SharedBank == 0) { for (const FPlayerSaveData& PD : Save->Players) { SharedBank = FMath::Max(SharedBank, PD.BankCents); } }
 			Shared->SetBankCents(SharedBank);
 		}
 	}

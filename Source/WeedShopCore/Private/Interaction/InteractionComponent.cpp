@@ -169,7 +169,16 @@ void UInteractionComponent::TryInteract()
 			// beslissen (blokkeren, of huur betalen aan je eigen deur). Anders open je elke gelockte deur gewoon.
 			if (const ACityDoor* Dr = Cast<ACityDoor>(Target))
 			{
-				if (Dr->IsLocked()) { PerformInteract(Target); return; }
+				// Huur-achterstand: betalen = server-authoritative (client-cash-mutatie faalt). Deur is
+				// bReplicates=false, dus stuur het stabiele id (zoals ServerToggleDoor); de server betaalt met
+				// de cash van DEZE speler en wist de gedeelde overdue-vlag -> beide deuren gaan van slot.
+				if (Dr->IsRentOverdue())
+				{
+					if (GetOwnerRole() == ROLE_Authority) { PerformInteract(Target); }
+					else { ServerPayRent(DoorId); }
+					return;
+				}
+				if (Dr->IsLocked()) { PerformInteract(Target); return; } // bewoner/te-huur: lokaal (blokkeert)
 			}
 			ServerToggleDoor(DoorId);
 			return;
@@ -224,6 +233,24 @@ void UInteractionComponent::ServerToggleDoor_Implementation(uint32 DoorId)
 	const UWorld* W = GetWorld();
 	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
 	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->ServerToggleDoor(DoorId); }
+}
+
+void UInteractionComponent::ServerPayRent_Implementation(uint32 DoorId)
+{
+	const UWorld* W = GetWorld();
+	if (!W) { return; }
+	// De deur is bReplicates=false -> niet over de RPC te sturen; zoek de SERVER-lokale deur op het stabiele
+	// id (zoals ServerToggleDoor) en betaal de huur server-authoritative met de cash van DEZE speler.
+	for (const TWeakObjectPtr<ACityDoor>& WDr : ACityDoor::GetAll())
+	{
+		ACityDoor* Dr = WDr.Get();
+		if (!IsValid(Dr) || Dr->GetWorld() != W) { continue; }
+		if (Dr->GetWorldSyncDoorId() == DoorId && Dr->IsRentOverdue())
+		{
+			if (IsWithinReach(Dr)) { IInteractable::Execute_Interact(Dr, Cast<APawn>(GetOwner())); }
+			return;
+		}
+	}
 }
 
 void UInteractionComponent::ServerCallElevator_Implementation(uint32 ElevId, int32 Floor)

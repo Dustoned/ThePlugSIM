@@ -30,9 +30,10 @@ public:
 	void RestoreShopLicensed(bool b) { bShopLicensed = b; }
 
 	// Server: ken XP toe (verkopen/oogsten/werven). Verwerkt level-ups (kan meerdere tegelijk).
-	// De XP wordt vermenigvuldigd met de huidige XP-multiplier (bv. stoned-bonus).
+	// StonedMult = de stoned-XP-bonus van de VERDIENENDE speler (1.0 = geen), per-verdiener meegegeven door
+	// de caller (co-op: een nuchtere speler mag niet meeliften op de high-bonus van z'n maat).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Level")
-	void AddXP(int32 Amount);
+	void AddXP(int32 Amount, float StonedMult = 1.f);
 
 	// Server: zet het level direct (bv. Testing-mode). Reset XP binnen het level; geen level-up-spam.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Level")
@@ -40,10 +41,6 @@ public:
 
 	// Server: herstel level + XP exact uit een save (geen level-up-events).
 	void RestoreLevel(int32 InLevel, int32 InXP);
-
-	// XP-multiplier (1.0 = normaal). Stoned zijn verhoogt dit (door de speler-pawn gezet).
-	void SetXpMultiplier(float Mult) { XpMultiplier = FMath::Max(1.f, Mult); }
-	float GetXpMultiplier() const { return XpMultiplier; }
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Level")
 	int32 GetLevel() const { return Level; }
@@ -75,8 +72,6 @@ protected:
 
 	UPROPERTY(Replicated)
 	bool bShopLicensed = false;
-
-	float XpMultiplier = 1.f; // lokaal/server; stoned-bonus
 
 	UFUNCTION()
 	void OnRep_Level();

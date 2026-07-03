@@ -15,6 +15,7 @@
 #include "Progression/StoreComponent.h"
 #include "Progression/LevelComponent.h"
 #include "Progression/GoalsComponent.h"
+#include "Interaction/PlayerNpcActions.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
@@ -881,7 +882,10 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		{
 			if (ULevelComponent* Lv = GS->GetLeveling())
 			{
-				Lv->AddXP(Harvested * 10 + TotalGrams);
+				// Stoned-XP-bonus van de OOGSTENDE speler (InstigatorPawn), per-verdiener (co-op: niet crew-breed).
+				float StonedMult = 1.f;
+				if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(InstigatorPawn)) { StonedMult = PA->GetStonedXpMultiplier(); }
+				Lv->AddXP(Harvested * 10 + TotalGrams, StonedMult);
 			}
 			if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->NoteHarvest(Harvested); } // goal-teller: geoogste planten
 		}

@@ -244,9 +244,12 @@ int32 AStorageShelf::ServerStore(FName ItemId, int32 Count, float Thc, float Qua
 	return Count;
 }
 
-int32 AStorageShelf::ServerTake(int32 SlotIndex, int32 Count, FName& OutId, float& OutThc, float& OutQualityPct)
+int32 AStorageShelf::ServerTake(int32 SlotIndex, int32 Count, FName ExpectedId, FName& OutId, float& OutThc, float& OutQualityPct)
 {
 	if (!HasAuthority() || !Contents.IsValidIndex(SlotIndex) || Count <= 0) { return 0; }
+	// CO-OP anti-race: als een ANDERE speler tussentijds een eerder slot verwijderde (RemoveAt schuift de indices
+	// op), wijst deze client-index nu een ander item aan -> weiger i.p.v. het verkeerde item (evt. Cash) te pakken.
+	if (!ExpectedId.IsNone() && Contents[SlotIndex].ItemId != ExpectedId) { return 0; }
 	FShelfStack& S = Contents[SlotIndex];
 	const int32 Taken = FMath::Min(Count, S.Quantity);
 	OutId = S.ItemId; OutThc = S.Thc; OutQualityPct = S.QualityPct;

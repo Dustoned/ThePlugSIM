@@ -2058,11 +2058,16 @@ void ADoorRetrofitter::ScanAndConvert()
 		if (DCr)
 		{
 			const int32 Day = DCr->GetDayNumber();
+			// Rent-teller PER SLOT: was 1 globaal RentState.txt -> lekte tussen slots en overleefde New Game niet
+			// (verse New Game kon dag-1 overdue zijn). Slot uit het save-subsysteem; New Game wist dit bestand.
+			int32 RentSlot = 0;
+			if (UGameInstance* GI2 = GetWorld() ? GetWorld()->GetGameInstance() : nullptr) { if (USaveGameSubsystem* Sv2 = GI2->GetSubsystem<USaveGameSubsystem>()) { RentSlot = Sv2->GetSlot(); } }
+			const FString RentFile = FPaths::ProjectSavedDir() / FString::Printf(TEXT("RentState_%d.txt"), RentSlot);
 			if (RentDueDay < 0)
 			{
 				int32 DaysLeft = 31;
 				FString RS;
-				if (FFileHelper::LoadFileToString(RS, *(FPaths::ProjectSavedDir() / TEXT("RentState.txt"))))
+				if (FFileHelper::LoadFileToString(RS, *RentFile))
 				{
 					DaysLeft = FMath::Clamp(FCString::Atoi(*RS), 0, 31);
 				}
@@ -2072,7 +2077,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (Left != LastRentSeenLeft)
 			{
 				LastRentSeenLeft = Left;
-				FFileHelper::SaveStringToFile(FString::FromInt(FMath::Max(0, Left)), *(FPaths::ProjectSavedDir() / TEXT("RentState.txt")));
+				FFileHelper::SaveStringToFile(FString::FromInt(FMath::Max(0, Left)), *RentFile);
 				if (Left > 0 && Left <= 7 && Pr)
 				{
 					if (UPhoneClientComponent* Ph7 = Pr->FindComponentByClass<UPhoneClientComponent>())
@@ -2081,11 +2086,10 @@ void ADoorRetrofitter::ScanAndConvert()
 					}
 				}
 			}
-			// CO-OP: de huur-inning + deur-lock is server-authoritative. Op de joiner (client) faalt RemoveMoney
-			// ALTIJD (een client mag de gedeelde economy niet muteren) -> zonder deze gate valt de joiner in de
-			// else-tak, lockt z'n eigen deur en kan 'm niet betalen = permanent buitengesloten uit z'n eigen huis.
-			// Alleen de echte server int de huur + zet de overdue-lock; DoorRetrofitter is per-proces -> IsNetMode.
-			if (Left <= 0 && !StarterDoor->IsRentOverdue() && !IsNetMode(NM_Client))
+			// CO-OP: de huur is GEDEELDE wereld-staat (1 huis). De inning + de OVERDUE-lock zijn server-
+			// authoritative (een client mag de gedeelde economy niet muteren); de lock-vlag staat op de
+			// GameState en repliceert. DoorRetrofitter is per-proces -> server = !IsNetMode(NM_Client).
+			if (Left <= 0 && GSr && !GSr->IsStarterRentOverdue() && !IsNetMode(NM_Client))
 			{
 				UEconomyComponent* Ec = Pr ? Pr->FindComponentByClass<UEconomyComponent>() : nullptr;
 				UPhoneClientComponent* Phr = Pr ? Pr->FindComponentByClass<UPhoneClientComponent>() : nullptr;
@@ -2096,21 +2100,36 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				else
 				{
-					StarterDoor->SetRentOverdue(50000);
+					GSr->SetStarterRentOverdue(true, 50000); // gerepliceerd -> de apply-vlag hieronder lockt BEIDE deuren
 					if (Phr) { Phr->Toast(TEXT("RENT OVERDUE - EUR 500. Your door is locked: pay at the door (F)."), FColor::Red, 7.f); }
 				}
 			}
-			// Aan de deur betaald? Dan loopt de volgende maand weer.
-			if (StarterDoor->ConsumeRentJustPaid())
+			// Aan de deur betaald (host lokaal OF joiner via ServerPayRent)? Alleen de SERVER-deur krijgt
+			// bRentJustPaid (de betaling loopt server-authoritative) -> wis de gedeelde vlag + hernieuw de maand.
+			if (!IsNetMode(NM_Client) && StarterDoor->ConsumeRentJustPaid())
 			{
 				RentDueDay = Day + 31;
-				FFileHelper::SaveStringToFile(FString::FromInt(31), *(FPaths::ProjectSavedDir() / TEXT("RentState.txt")));
+				if (GSr) { GSr->SetStarterRentOverdue(false, 0); }
+				FFileHelper::SaveStringToFile(FString::FromInt(31), *RentFile);
 				if (Pr)
 				{
 					if (UPhoneClientComponent* Php = Pr->FindComponentByClass<UPhoneClientComponent>())
 					{
 						Php->Toast(TEXT("Rent paid: EUR 500. Next rent in 31 days."), FColor::Green, 5.f);
 					}
+				}
+			}
+			// BEIDE processen: pas de gedeelde overdue-vlag toe op de LOKALE starter-deur (bReplicates=false)
+			// zodat host EN joiner dezelfde vergrendelde deur + "pay at the door"-prompt zien.
+			if (GSr)
+			{
+				if (GSr->IsStarterRentOverdue())
+				{
+					if (!StarterDoor->IsRentOverdue()) { StarterDoor->SetRentOverdue(GSr->GetStarterRentCents()); }
+				}
+				else if (StarterDoor->IsRentOverdue())
+				{
+					StarterDoor->ClearRentOverdue();
 				}
 			}
 		}
@@ -2302,7 +2321,10 @@ void ADoorRetrofitter::ScanAndConvert()
 			Counter->SetupVisual(Sign);
 			const FVector Fwd = Counter->GetActorForwardVector();
 			const FVector Tang(-Fwd.Y, Fwd.X, 0.f);
-			W->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rot, Pos + Tang * 210.f + FVector(0.f, 0.f, 2.f)), SP);
+			// CO-OP: AAtm heeft bReplicates=true -> ALLEEN op de server spawnen; de joiner krijgt 'm via
+			// replicatie. Zonder deze gate spawnt de joiner z'n eigen ATM BOVENOP de gerepliceerde = 2
+			// overlappende ATM's per winkel (zelfde klasse als de gefixte meubel-dubbelspawn).
+			if (!IsNetMode(NM_Client)) { W->SpawnActor<AAtm>(AAtm::StaticClass(), FTransform(Rot, Pos + Tang * 210.f + FVector(0.f, 0.f, 2.f)), SP); }
 			// Verkoper achter de balie (de klant-kant is +Fwd, dus de keeper staat op -Fwd).
 			float HalfH = 88.f;
 			if (const ACustomerBase* CDO = ACustomerBase::StaticClass()->GetDefaultObject<ACustomerBase>())
@@ -2311,7 +2333,7 @@ void ADoorRetrofitter::ScanAndConvert()
 			}
 			FVector KPos = Pos - Fwd * 80.f; KPos.Z = Pos.Z + HalfH + 2.f;
 			// CO-OP: de verkoper is een replicerende ACustomerBase -> alleen de server spawnt 'm (joiner via
-			// replicatie). Toonbank/ATM zijn statische props en blijven bewust op beide processen (buiten scope).
+			// replicatie). De toonbank (StoreCounter, bReplicates=false) is deterministisch-lokaal op beide.
 			if (ACustomerBase* Keeper = !IsNetMode(NM_Client) ? W->SpawnActorDeferred<ACustomerBase>(ACustomerBase::StaticClass(), FTransform(Rot, KPos), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn) : nullptr)
 			{
 				Keeper->bShopkeeper = true;

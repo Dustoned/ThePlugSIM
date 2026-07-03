@@ -92,6 +92,11 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerCallElevator(uint32 ElevId, int32 Floor);
 
+	// CO-OP: betaal de achterstallige huur van de starter-deur (stabiel positie-id, zoals ServerToggleDoor).
+	// Server betaalt met de cash van DEZE speler + wist de gedeelde overdue-vlag (deur is bReplicates=false).
+	UFUNCTION(Server, Reliable)
+	void ServerPayRent(uint32 DoorId);
+
 	// De daadwerkelijke uitvoering (draait op de server, of in SP/host direct).
 	void PerformInteract(AActor* Target);
 

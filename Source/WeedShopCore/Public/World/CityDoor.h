@@ -84,6 +84,7 @@ public:
 
 	// HUUR: achterstallig -> deur op slot, F aan de deur = betalen (cash van de pawn).
 	void SetRentOverdue(int64 Cents) { bLocked = true; bRentDue = true; RentCents = Cents; bForSale = false; bOpen = false; }
+	void ClearRentOverdue() { bRentDue = false; bLocked = false; RentCents = 0; } // gedeelde overdue-vlag ging uit
 	bool IsRentOverdue() const { return bRentDue; }
 	bool ConsumeRentJustPaid() { const bool b = bRentJustPaid; bRentJustPaid = false; return b; }
 
