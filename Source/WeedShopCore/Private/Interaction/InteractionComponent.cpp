@@ -260,6 +260,13 @@ void UInteractionComponent::ServerCallElevator_Implementation(uint32 ElevId, int
 	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->ServerSetElevatorFloor(ElevId, Floor); }
 }
 
+void UInteractionComponent::ServerSetLamp_Implementation(uint32 LampId, bool bOn, float Brightness01)
+{
+	const UWorld* W = GetWorld();
+	AWeedShopGameState* GS = W ? W->GetGameState<AWeedShopGameState>() : nullptr;
+	if (GS && GS->GetWorldSync()) { GS->GetWorldSync()->SetLampState(LampId, bOn, Brightness01); }
+}
+
 void UInteractionComponent::PerformInteract(AActor* Target)
 {
 	APawn* OwnerPawn = Cast<APawn>(GetOwner());

@@ -60,6 +60,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Interaction")
 	AActor* GetFocusedActor() const { return FocusedActor.Get(); }
 
+	// CO-OP: relay de gedeelde lamp-staat naar de server. APackLightSwitch (bReplicates=false) roept dit aan op de
+	// LOKALE pawn's component; de RPC schrijft dan WorldSync (server-authoritative). Publieke wrapper om de RPC.
+	void RelayLampState(uint32 LampId, bool bOn, float Brightness01) { ServerSetLamp(LampId, bOn, Brightness01); }
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -96,6 +100,11 @@ protected:
 	// Server betaalt met de cash van DEZE speler + wist de gedeelde overdue-vlag (deur is bReplicates=false).
 	UFUNCTION(Server, Reliable)
 	void ServerPayRent(uint32 DoorId);
+
+	// CO-OP: schrijf de gedeelde lamp-staat (aan/uit + helderheid) via WorldSync. De schakelaar is
+	// bReplicates=false, dus de client relayet z'n toggle/dim via dit RPC naar de server.
+	UFUNCTION(Server, Reliable)
+	void ServerSetLamp(uint32 LampId, bool bOn, float Brightness01);
 
 	// De daadwerkelijke uitvoering (draait op de server, of in SP/host direct).
 	void PerformInteract(AActor* Target);

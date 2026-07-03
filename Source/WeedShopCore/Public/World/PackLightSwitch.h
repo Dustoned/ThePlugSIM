@@ -74,6 +74,9 @@ protected:
 
 	void Load();
 	void Save() const;
+	// CO-OP: publiceer de huidige aan/uit + helderheid naar WorldSync (server-authoritative) zodat host/joiner +
+	// late joiners dezelfde lamp-staat zien. De client relayet via de lokale pawn z'n InteractionComponent.
+	void PublishState();
 
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Plate;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Toggle; // uitstekende tuimelknop (rocker) op de plaat
@@ -96,6 +99,8 @@ protected:
 	TArray<float> PreviewEmisBright;                                   // originele Brightness om te herstellen
 
 	FString PersistKey;
+	uint32 LampSyncId = 0;         // stabiel WorldSync-id (positie) voor de gedeelde co-op lamp-staat
+	float SyncSuppressUntil = 0.f; // na een eigen toggle/dim de WorldSync-read even negeren tot de RPC rond is (geen flits)
 	float ControlRadius = 800.f; // ruim genoeg dat EEN switch een hele kamer (meerdere lampen) dekt; de
 	                             // dichtstbijzijnde-switch-check houdt andere kamers (badkamer) apart
 	bool bOn = true;

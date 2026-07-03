@@ -4,6 +4,9 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Input/ControlSettings.h"
 #include "WeedShopCore.h" // WeedData::File
+#include "World/WorldSyncComponent.h"
+#include "Game/WeedShopGameState.h"
+#include "Interaction/InteractionComponent.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -75,12 +78,15 @@ void APackLightSwitch::Setup(const FString& InKey, float InRadius)
 	if (InRadius > 0.f) { ControlRadius = InRadius; }
 	Load();
 	LoadLinks();
+	LampSyncId = UWorldSyncComponent::MakeId(GetActorLocation(), GetActorRotation().Yaw); // gedeelde co-op lamp-id
 }
 
 void APackLightSwitch::BeginPlay()
 {
 	Super::BeginPlay();
 	ClaimTimer = 1.f; // direct een eerste claim-poging in de eerste Tick
+	// CO-OP: de server publiceert de geladen lamp-staat naar WorldSync zodat clients + late joiners 'm oppikken.
+	if (GetWorld() && GetWorld()->GetNetMode() != NM_Client) { PublishState(); }
 }
 
 void APackLightSwitch::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -344,6 +350,7 @@ void APackLightSwitch::ToggleOnOff()
 	bOn = !bOn;
 	ApplyToLamps();
 	Save();
+	PublishState();
 }
 
 void APackLightSwitch::SetOn(bool bNewOn)
@@ -352,6 +359,7 @@ void APackLightSwitch::SetOn(bool bNewOn)
 	bOn = bNewOn;
 	ApplyToLamps();
 	Save();
+	PublishState();
 }
 
 void APackLightSwitch::SetBrightness01(float V)
@@ -360,6 +368,7 @@ void APackLightSwitch::SetBrightness01(float V)
 	if (!bOn) { bOn = true; } // aan de dimmer draaien = licht aan
 	ApplyToLamps();
 	Save();
+	PublishState();
 }
 
 void APackLightSwitch::Tick(float DeltaSeconds)
@@ -369,6 +378,23 @@ void APackLightSwitch::Tick(float DeltaSeconds)
 	// Periodiek (her)claimen: lampen kunnen later in-streamen (gestreamde appartement-levels).
 	ClaimTimer += DeltaSeconds;
 	if (ClaimTimer >= 1.f) { ClaimTimer = 0.f; ClaimLamps(); }
+
+	// CO-OP: de gedeelde lamp-staat lezen (server schrijft, iedereen leest) -> host/joiner + late joiner gelijk.
+	// Na een EIGEN toggle/dim even niet lezen (SyncSuppressUntil) zodat de lamp niet 1 frame terugflitst tot de RPC rond is.
+	if (LampSyncId != 0 && GetWorld() && GetWorld()->GetTimeSeconds() >= SyncSuppressUntil)
+	{
+		if (AWeedShopGameState* GSl = GetWorld()->GetGameState<AWeedShopGameState>())
+		{
+			if (UWorldSyncComponent* WS = GSl->GetWorldSync())
+			{
+				bool SOn = bOn; float SBright = Brightness01;
+				if (WS->GetLampState(LampSyncId, SOn, SBright) && (SOn != bOn || !FMath::IsNearlyEqual(SBright, Brightness01, 0.001f)))
+				{
+					bOn = SOn; Brightness01 = SBright; ApplyToLamps(); // GEEN PublishState -> geen loop
+				}
+			}
+		}
+	}
 
 	// Tap/hold oplossen op het echte keystate van de speler.
 	if (bPressArmed)
@@ -467,4 +493,30 @@ void APackLightSwitch::Save() const
 	Lines.Add(FString::Printf(TEXT("%s=%d,%.3f"), *PersistKey, bOn ? 1 : 0, Brightness01));
 	FFileHelper::SaveStringToFile(FString::Join(Lines, TEXT("\n")) + TEXT("\n"), *Path,
 		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+}
+
+void APackLightSwitch::PublishState()
+{
+	UWorld* W = GetWorld();
+	if (!W || LampSyncId == 0) { return; }
+	if (W->GetNetMode() == NM_Client)
+	{
+		// Client: de schakelaar is bReplicates=false -> relay via de LOKALE pawn z'n InteractionComponent naar de server.
+		if (APlayerController* PC = W->GetFirstPlayerController())
+		{
+			if (APawn* Pw = PC->GetPawn())
+			{
+				if (UInteractionComponent* IC = Pw->FindComponentByClass<UInteractionComponent>())
+				{
+					IC->RelayLampState(LampSyncId, bOn, Brightness01);
+				}
+			}
+		}
+	}
+	else if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>())
+	{
+		// Host/standalone heeft authority -> direct naar WorldSync.
+		if (UWorldSyncComponent* WS = GS->GetWorldSync()) { WS->SetLampState(LampSyncId, bOn, Brightness01); }
+	}
+	SyncSuppressUntil = W->GetTimeSeconds() + 0.6f; // eigen wijziging even niet terug-lezen tot de RPC rond is
 }

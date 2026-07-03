@@ -16,6 +16,9 @@ void UWorldSyncComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(UWorldSyncComponent, ElevatorZ);
 	DOREPLIFETIME(UWorldSyncComponent, WeatherIndex);
 	DOREPLIFETIME(UWorldSyncComponent, WeatherDuration);
+	DOREPLIFETIME(UWorldSyncComponent, LampIds);
+	DOREPLIFETIME(UWorldSyncComponent, LampOn);
+	DOREPLIFETIME(UWorldSyncComponent, LampBright);
 }
 
 uint32 UWorldSyncComponent::MakeId(const FVector& Loc, float Yaw)
@@ -101,4 +104,31 @@ void UWorldSyncComponent::SetWeather(int32 Index, float Duration)
 	if (GetOwnerRole() != ROLE_Authority) { return; }
 	WeatherIndex = Index;
 	WeatherDuration = Duration;
+}
+
+void UWorldSyncComponent::SetLampState(uint32 LampId, bool bOn, float Brightness01)
+{
+	if (GetOwnerRole() != ROLE_Authority || LampId == 0) { return; }
+	const uint8 On = bOn ? 1 : 0;
+	const int32 Idx = LampIds.IndexOfByKey(LampId);
+	if (Idx != INDEX_NONE)
+	{
+		if (LampOn.IsValidIndex(Idx)) { LampOn[Idx] = On; }
+		if (LampBright.IsValidIndex(Idx)) { LampBright[Idx] = Brightness01; }
+	}
+	else
+	{
+		LampIds.Add(LampId);
+		LampOn.Add(On);
+		LampBright.Add(Brightness01);
+	}
+}
+
+bool UWorldSyncComponent::GetLampState(uint32 LampId, bool& bOutOn, float& OutBright) const
+{
+	const int32 Idx = LampIds.IndexOfByKey(LampId);
+	if (Idx == INDEX_NONE || !LampOn.IsValidIndex(Idx) || !LampBright.IsValidIndex(Idx)) { return false; }
+	bOutOn = LampOn[Idx] != 0;
+	OutBright = LampBright[Idx];
+	return true;
 }

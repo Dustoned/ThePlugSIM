@@ -60,6 +60,12 @@ public:
 	// Server: schrijf de gekozen weer-index + overgangs-duur (door de DayNightController op de server). Repliceert.
 	void SetWeather(int32 Index, float Duration);
 
+	// LAMPEN (co-op-sync): APackLightSwitch is per-proces niet-gerepliceerd + client-lokale interact -> host/joiner
+	// (en late joiners) zagen verschillend lamp-aan/uit/dim. Zelfde id-patroon als de deuren: de server bewaart per
+	// stabiel lamp-id de aan/uit + helderheid; elke lokale schakelaar leest 'm elke tick + past 'm toe.
+	void SetLampState(uint32 LampId, bool bOn, float Brightness01);
+	bool GetLampState(uint32 LampId, bool& bOutOn, float& OutBright) const;
+
 private:
 	UFUNCTION()
 	void OnRep_OpenDoors() {}
@@ -88,4 +94,12 @@ private:
 	// exact dezelfde Z (H.4-rubber-band-fix). Geen ReplicatedUsing nodig: PackElevator leest 'm per tick uit.
 	UPROPERTY(Replicated)
 	TArray<float> ElevatorZ;
+
+	// Gedeelde lamp-staat: parallelle arrays id -> aan/uit (0/1) + helderheid (0..1). Server schrijft, clients lezen.
+	UPROPERTY(Replicated)
+	TArray<uint32> LampIds;
+	UPROPERTY(Replicated)
+	TArray<uint8> LampOn;
+	UPROPERTY(Replicated)
+	TArray<float> LampBright;
 };

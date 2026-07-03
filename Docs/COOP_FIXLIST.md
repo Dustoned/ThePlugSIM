@@ -266,3 +266,20 @@ must-fixes gevonden + toegepast (build groen):
   hervalideren Contents[Index].ItemId==ExpectedId en weigeren anders (geen UI-wijziging nodig).
 DEFER (niet-blokkerend): competitive per-speler heat/XP/rent + 2-speler-cap (fairness, geen crash/geld-lek);
 lamp-late-joiner; DryingRack stale-index (guarded); rent-lock transiente 2-8s window; save-slot-menu-totaal cosmetisch.
+
+### DEFERRED-GOLF (07-03) — lamp-sync gedaan, competitive-progressie = apart project
+- **Lamp late-joiner sync** `[GEFIXT]` — APackLightSwitch (bReplicates=false, client-lokale interact) kreeg het
+  WorldSync-id-patroon (zoals deuren/weer/CabZ): WorldSyncComponent bewaart per stabiel lamp-id de aan/uit +
+  helderheid (LampIds/LampOn/LampBright, gerepliceerd); de client relayet z'n toggle/dim via
+  UInteractionComponent::ServerSetLamp (publieke RelayLampState-wrapper); elke schakelaar leest z'n staat elke
+  tick + past 'm toe (SyncSuppressUntil = 0.6s eigen-wijziging-window tegen terug-flits). Server publiceert de
+  geladen staat in BeginPlay -> late joiners + host/joiner zien dezelfde lampen. 2-instance boot-sanity groen.
+- **Competitive per-speler XP/LEVEL** `[DEFER - ARCHITECTUREEL]` — ULevelComponent is een GameState-singleton;
+  GetLevel() wordt op ~15+ plekken gelezen (HUD/prijzen/item-unlocks/shop-licentie/klant-checks). Per-speler =
+  elke lezer per-speler resolven -> echt een apart project met regressie-risico, geen quick fix. Voor een
+  competitive secundaire modus is gedeelde crew-progressie verdedigbaar; anders apart scopen.
+- **Competitive per-speler HEAT** `[DEFER - MODERATE/ARCH]` — UHeatComponent GameState-singleton -> per-speler
+  map/component + alle lezers per-speler.
+- **Competitive per-speler RENT + klant-tier/cooldown** `[DEFER - MODERATE, haalbaar]` — rent-vlag per-speler +
+  klant-tier/cooldown op de al-bestaande 'NpcId#spelerId'-sleutel (relatie is al per-speler). Competitive-fairness,
+  niet-blokkerend voor normaal co-op.
