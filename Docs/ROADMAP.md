@@ -385,3 +385,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] **D26** Kompas-icons: groter/duidelijker, 3D-gevoel (schalen met afstand), winkels toevoegen met de kleur van de toonbank; 2 dubbele deduppen
 - [ ] **D27** Speler-disconnect freezet de game van de ander lang + geen disconnect-melding -> nette afhandeling
 - [ ] **D28** Joiner: altijd een "Leave session"-optie -> terug naar hoofdmenu
+- [ ] **D29** Loading/opstart-overhaul: (a) lange ZWARTE periode bij opstarten -> netter: vroege loading-indicatie
+  (let op: eerdere poging in PreLoadMap = flaky D3D12 PSO-race, teruggedraaid; nieuwe poging pas na
+  OnFEngineLoopInitComplete); (b) menu->game toont 2 trage loading-screens (ook packaged!) -> 1 mooie vaste,
+  en de laadtijd zelf fors omlaag; (c) co-op join-loading werkt maar half (geen vaste screen) + joiner spawnt
+  eerst zichtbaar op de beach -> nette join-flow met vaste loading-screen tot de echte spawn klaar is.
