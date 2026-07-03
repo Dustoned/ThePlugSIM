@@ -93,3 +93,34 @@ Volledige rapporten in de sessie; dit = de essentie per item voor de edit-golven
 - D15+D19 samen (bag-tarra veroorzaakt bagging-verlies); D13+D14+D20 samen (DealWidget/toasts).
 - D16 + D26-dubbel eerst DIAGNOSE (PDIAG + repro) voor de fix. D23 eerst introspectie-boot.
 - D27+D28 zelfde agent (GameInstance + PauseMenu). DoorRetrofitter overlapt D25+D26-kleurtabel -> zelfde golf serialiseren.
+
+## D29 — LOADING/OPSTART (2 verkenningen, log-bewezen)
+### Metingen (dev)
+- Boot->menu 40-61s VOLLEDIG ZWART (geen splash.bmp, geen startup-movie, boot-movie bewust uit wegens PSO-race).
+- Menu->game 63-66s; join-LoadMap 90s.
+- HOOFDVONDST: constante ~27s STILLE stall, 2x per sessie (menu-map EN beach), exact tussen
+  "[BOOTMARK] GameState::BeginPlay" en "NPC registry loaded" (26.6-27.8s over 11 samples). Geen shader-jobs,
+  geen asset-loads in de gap; verdenking = engine-interne blocking wait op skinned-asset-compile (dev-only;
+  bootB toont "Waiting for skinned assets ... Tony_Body_Cloth"; joiner-80s-block hangt aan SM_Flag_01 cloth).
+- PACKAGED traagheid = ONGEMETEN (Shipping logt niet) -> aparte Development-config package meten;
+  vermoedelijk eerste-run PSO-precache onder de cover (BootCoverWidget r.141, HardCap 120s r.150).
+### Fixplan (volgorde)
+1. DIAGNOSE 27s (3 regels): BOOTMARK bij NpcRegistryComponent::EnsureSeeded-entry (r.164) +
+   EconomyComponent::BeginPlay-entry (r.20) + na Super::BeginPlay in WeedShopGameState.cpp:80; LogSkinnedAsset
+   Verbose. 1 boot -> exacte call-site. Dan: Keep()-set uitbreiden (cloth/flag/skeletons) of pre-compile onder
+   het laadscherm (PreloadCrowdSkins-patroon, DoorRetrofitter.cpp:175).
+2. NAAD-FIX "1 scherm": bar springt naar 100% bij RoomReady (WeedShopCore.cpp:537) -> zelfde formule als cover.
+   LET OP: SetCoverUp verplaatsen naar cover-tick = DEADLOCK (game thread zit in WaitForMovieToFinish) - niet doen.
+3. JOIN-SCREEN (D29b, log-bewezen): (a) movie-cap E>90 (WeedShopCore.cpp:549) loopt vanaf JoinLan terwijl de
+   join-LoadMap zelf ~90s duurt -> movie sterft precies bij load-einde; cap RELATIEF maken aan load-einde
+   (PostLoadMapWithWorld-timestamp), niet verwijderen (vangrail). (b) Cover bestaat pas bij pawn-possess
+   (EnsureWidget, PhoneClientComponent.cpp:1104-1112; possess = 5-12s NA LoadMap) -> gat met rauwe beach; fix:
+   PostLoadMapWithWorld-hook zet cover ZONDER pawn (AddViewportWidgetContent). (c) Cover-fade mist pawn-gate ->
+   nieuwe vlag WeedShop_SetLocalPawnPlaced (gezet op DoorRetrofitter vloer-plaats-punten r.1913/2039/3512/5511).
+4. SPAWN DIRECT GOED: joiner spawnt op beach-PlayerStart en wordt pas een scan-pass later thuisgezet
+   (DoorRetrofitter r.1879-1928/2006-2055/comp 5491) -> HomePawnNow(PC)-helper (homing-logica extraheren) direct
+   na RestartPlayer in WeedShopGameMode (r.142-173). Homing SERVER-ONLY maken (client-homing kan op 2 echte PCs
+   afwijkende HomeSpawn.txt hebben -> rubber-band); client houdt alleen de vloer-pin.
+5. BOOT-INDICATIE: Content/Splash/Splash.bmp toevoegen (nul risico); startup-movie ALLEEN met 3x boot-test-gate
+   (zelfde PSO-race-risico als de teruggedraaide poging). Met fix 1 wordt boot->menu ~13s dev.
+6. Apart perf-punt: 21s frozen frame op de joiner direct na possession (comp-kamer-bouw/skins op de game-thread).
