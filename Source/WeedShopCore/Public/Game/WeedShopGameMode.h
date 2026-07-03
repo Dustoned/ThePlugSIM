@@ -43,6 +43,11 @@ public:
 private:
 	bool IsHostWorldReady() const;
 	void FlushPendingJoiners();
+	// Zet de zojuist-gespawnde speler DIRECT thuis via de DoorRetrofitter (server-authoritative), zodat de
+	// gerepliceerde positie al "thuis" is voordat de joiner z'n pawn possesst -> geen zichtbare beach-tussenstaat
+	// op de host. No-op als er geen retrofitter is (map zonder homing) of de thuis-plek nog niet bekend is (de
+	// scan-pass-homing pakt 'm dan alsnog als vangnet).
+	void HomePlayerViaRetrofitter(APlayerController* PC);
 
 	TArray<TWeakObjectPtr<APlayerController>> PendingJoiners;
 	FTimerHandle JoinFlushTimer;

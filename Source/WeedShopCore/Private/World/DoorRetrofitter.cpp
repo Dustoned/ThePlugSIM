@@ -144,6 +144,9 @@ void ADoorRetrofitter::BeginPlay()
 	// (CityConverted) + crowd (CrowdWarm) + thuis-vloer (RoomReady). Maps zonder retrofitter slaan die
 	// gates over (de vlag blijft daar false; reset gebeurt in WeedShop_RequestGameLoadingScreen).
 	WeedShop_SetCityRetroActive(true);
+	// JOIN-COVER: verse map-load -> de lokale speler staat nog NIET op z'n eindpositie. De cover blijft staan
+	// tot de floor-pin / HomePawnNow de lokale pawn geplaatst heeft en de vlag weer true zet.
+	WeedShop_SetLocalPawnPlaced(false);
 	// Meteen een eerste pass + daarna periodiek blijven scannen (world partition / level instances
 	// streamen gebouwen later in; die deuren pakken we dan alsnog).
 	// Renderer-warnings (bv. ForwardShadingPriority) lopen BUITEN ClearOnScreenDebugMessages om ->
@@ -1879,51 +1882,13 @@ void ADoorRetrofitter::ScanAndConvert()
 	if (!HomeAnchor.IsNearlyZero())
 	{
 		if (!bBeachHomesBuilt) { RebuildBeachHomes(); } // registry vullen zodra de thuis-plek bekend is
-		// COMPETITIVE: op de HOST staat HomeAnchor op de host-kamer (603). Een NIET-lokale pawn (= de joiner)
-		// hoort in de joiner-kamer (Mk[1]=602) -> die hier METEEN daar neerzetten i.p.v. in 603 (anders zie je
-		// 'm eerst in de host-kamer verschijnen en pas daarna wegteleporteren naar 602).
-		AWeedShopGameState* GSearly = W->GetGameState<AWeedShopGameState>();
-		const bool bCompEarly = GSearly && GSearly->IsCompetitive();
-		TArray<FVector> MkEarly; if (bCompEarly) { GetCompetitiveMarkers(MkEarly); }
+		// Elke nog-niet-thuisgezette speler DIRECT thuiszetten via de gedeelde helper (kiest per rol: normaal =
+		// HomeAnchor; de remote competitive-joiner op de host = de joiner-kamer Mk[1]=602; freeze-of-plaats naar
+		// gelang de vloer al gestreamd is). Zelfde logica die de GameMode meteen na RestartPlayer aanroept, hier
+		// als vangnet voor spelers die al aanwezig waren voordat de thuis-plek bekend was.
 		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
 		{
-			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
-			if (!Pw || HomedPawns.Contains(Pw)) { continue; }
-			const int32 Slot = HomedPawns.Num();
-			HomedPawns.Add(Pw);
-			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
-			// Thuis-plek voor DEZE pawn: lokaal = HomeAnchor (eigen kamer op deze machine); de remote joiner op
-			// de host -> de joiner-kamer (Mk[1]). Zo plaatst de server de joiner direct in 602, geen 603-flits.
-			const FVector PawnHome = (bCompEarly && MkEarly.Num() >= 2 && !Pw->IsLocallyControlled()) ? (MkEarly[1] + FVector(0.f, 0.f, 110.f)) : HomeAnchor;
-			UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
-			if (bRoomFloorReady)
-			{
-				// Vloer is AL ingestreamd (later-joinende partner): de settle-loop draait niet meer, dus zou
-				// een zweef-bevriezing nooit meer ontdooien = eeuwig zwevende joiner. Direct op de vloer + lopend.
-				// Zelfde korte CENTER-trace als de host-settle (HomeAnchor +30, 260 diep) zodat we de EIGEN
-				// penthouse-vloer pakken; de zij-offset alleen op de PLAATSING (anders trace je naast de vloer
-				// op een dak/terras). Geen hit (zou niet mogen, host staat er) -> thuis-plek, gravity zet 'm neer.
-				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandEarly), false);
-				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
-				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
-				const FVector TS = PawnHome + FVector(0.f, 0.f, 30.f);
-				FVector Dest = PawnHome + Off;
-				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, LQ))
-				{ Dest = FH.Location + FVector(Off.X, Off.Y, 96.f); }
-				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
-				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
-			}
-			else
-			{
-				// Vloer nog niet klaar -> METEEN BEVRIEZEN (vliegen, geen zwaartekracht): zo val je NIET door de
-				// nog-ladende world-partition vloer. De floor-pin in TickVirtualMove zet je op MOVE_Walking en
-				// op de ECHTE vloer zodra die is ingestreamd.
-				Pw->SetActorLocation(PawnHome + Off, false, nullptr, ETeleportType::TeleportPhysics);
-				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
-				HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
-			}
-			// Beach-map: ken de starter-woning toe in de phone-registry (idempotent via bPropertyInit).
-			if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>()) { Phw->PropertyTick(); }
+			HomePawnNow(It->Get());
 		}
 	}
 
@@ -2003,54 +1968,20 @@ void ADoorRetrofitter::ScanAndConvert()
 				UE_LOG(LogWeedShop, Display, TEXT("Huis-box gemeten: X %.0f..%.0f Y %.0f..%.0f"), HomeBoxMin.X, HomeBoxMax.X, HomeBoxMin.Y, HomeBoxMax.Y);
 			}
 		}
-		// Elke speler die nog niet thuisgezet is naar de thuis-plek (kleine spreiding zodat
-		// co-op-spelers niet in elkaar spawnen). Werkt ook voor een later-joinende partner.
+		// Elke speler die nog niet thuisgezet is naar de thuis-plek (kleine spreiding zodat co-op-spelers niet in
+		// elkaar spawnen), via de gedeelde helper - werkt ook voor een later-joinende partner. Toast alleen als de
+		// helper de pawn ECHT thuiszette (return true).
 		if (!HomeAnchor.IsNearlyZero())
 		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
 		{
-			APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr;
-			if (!Pw || HomedPawns.Contains(Pw)) { continue; }
-			const int32 Slot = HomedPawns.Num();
-			HomedPawns.Add(Pw);
-			const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
-			// COMPETITIVE: een later-joinende remote pawn op de host -> direct in de joiner-kamer (Mk[1]=602).
-				FVector PawnHome = HomeAnchor;
-				if (!Pw->IsLocallyControlled())
+			APlayerController* PCit = It->Get();
+			APawn* Pw = PCit ? PCit->GetPawn() : nullptr;
+			if (HomePawnNow(PCit) && Pw)
+			{
+				if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>())
 				{
-					AWeedShopGameState* GSl = W->GetGameState<AWeedShopGameState>();
-					if (GSl && GSl->IsCompetitive())
-					{ TArray<FVector> MkL; GetCompetitiveMarkers(MkL); if (MkL.Num() >= 2) { PawnHome = MkL[1] + FVector(0.f, 0.f, 110.f); } }
+					Phw->Toast(FString::Printf(TEXT("Welcome home - Apt %d. Rent: EUR 500 due every 31 days."), StarterDoor->GetAptNumber()), FColor::Cyan, 6.f);
 				}
-				UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
-			if (bRoomFloorReady)
-			{
-				// De vloer is AL ingestreamd (bv. een LATER-joinende partner): de settle-loop draait niet meer
-				// (die is gegate op !bRoomFloorReady), dus zou een zweef-bevriezing hier nooit meer ontdooien
-				// = eeuwig zwevende/slidende joiner. Daarom 'm hier DIRECT op de vloer zetten + lopend. Zelfde
-				// korte CENTER-trace als de host-settle (HomeAnchor +30, 260 diep) zodat we de EIGEN penthouse-
-				// vloer pakken; zij-offset alleen op de PLAATSING (anders trace je naast de vloer op een dak).
-				FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandLate), false);
-				for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
-				{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
-				const FVector TS = PawnHome + FVector(0.f, 0.f, 30.f);
-				FVector Dest = PawnHome + Off;
-				if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, LQ))
-				{ Dest = FH.Location + FVector(Off.X, Off.Y, 96.f); }
-				Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
-				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
-			}
-			else
-			{
-				// Vloer nog niet klaar -> METEEN bevriezen (vliegen, geen zwaartekracht) zodat je niet door de
-				// nog-ladende vloer valt; de floor-pin in TickVirtualMove ontdooit je op de echte vloer zodra
-				// die er is. SETTLE-venster open zetten.
-				Pw->SetActorLocation(PawnHome + Off, false, nullptr, ETeleportType::TeleportPhysics);
-				if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
-				HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
-			}
-			if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>())
-			{
-				Phw->Toast(FString::Printf(TEXT("Welcome home - Apt %d. Rent: EUR 500 due every 31 days."), StarterDoor->GetAptNumber()), FColor::Cyan, 6.f);
 			}
 		}
 		// Huur-administratie op de dag-teller.
@@ -3058,7 +2989,7 @@ void ADoorRetrofitter::ScanAndConvert()
 				for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
 				{
 					const FRotator BtnRot = (-ShaftSide).Rotation();
-					const FVector WallFace = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) - ShaftSide * 17.f;
+					const FVector WallFace = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) - ShaftSide * 12.f; // 17->12cm: knop-cijfers dichter op de muur
 					const FVector BtnLoc = WallFace + SlideDir * 110.f + FVector(0.f, 0.f, Floors[Fi] + 115.f);
 					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, BtnLoc), SP))
 					{
@@ -3069,13 +3000,13 @@ void ADoorRetrofitter::ScanAndConvert()
 						// tegen z-fighting). Geen raak -> val terug op de oude 17cm-berekening.
 						const float SignZ = Floors[Fi] + 255.f;
 						const FVector TraceLat = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) + SlideDir * 110.f;
-						const FVector TraceStart = TraceLat + ShaftSide * 60.f + FVector(0.f, 0.f, SignZ);
-						const FVector TraceEnd = TraceLat - ShaftSide * 120.f + FVector(0.f, 0.f, SignZ);
-						FVector SignLoc = WallFace + FVector(0.f, 0.f, SignZ); // fallback = oude berekening
+						const FVector TraceStart = TraceLat - ShaftSide * 150.f + FVector(0.f, 0.f, SignZ); // 150cm de GANG in (Blok4-B traceerde andersom -> bord achter de muur)
+						const FVector TraceEnd = TraceLat + ShaftSide * 40.f + FVector(0.f, 0.f, SignZ);   // naar de opening/schacht toe -> raakt het GANG-vlak
+						FVector SignLoc = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) - ShaftSide * 17.f + FVector(0.f, 0.f, SignZ); // fallback = 17cm, ALTIJD zichtbaar
 						FHitResult WallHit;
 						if (W->LineTraceSingleByChannel(WallHit, TraceStart, TraceEnd, ECC_WorldStatic, SignQP))
 						{
-							SignLoc = WallHit.ImpactPoint + WallHit.Normal * 0.5f;
+							const float OutDist = FVector::DotProduct(WallHit.ImpactPoint - FVector(OpeningCenter.X, OpeningCenter.Y, 0.f), -ShaftSide); if (OutDist > 8.f && OutDist < 90.f) { SignLoc = WallHit.ImpactPoint + WallHit.Normal * 0.5f; }
 						}
 						Btn->SetupSign(SignLoc, BtnRot);
 						Elev->RegisterButton(Btn);
@@ -3498,6 +3429,78 @@ void ADoorRetrofitter::FixBalconyPuiPositions()
 	}
 }
 
+bool ADoorRetrofitter::HomePawnNow(APlayerController* PC)
+{
+	// EEN speler DIRECT thuiszetten (server-authoritative). Aangeroepen door de GameMode meteen na RestartPlayer
+	// (joiner-spawn) en als vangnet door de scan-pass. Zelfde plaats-of-bevries-logica als de normale home-blokken
+	// hierboven, maar dan gericht op precies deze pawn zodat de gerepliceerde positie al "thuis" is voordat de
+	// joiner possesst -> geen zichtbare beach-tussenstaat op de host.
+	UWorld* W = GetWorld();
+	if (!W || !PC) { return false; }
+	// SERVER-ONLY: op een echte client teleporteren we NIET zelf (dat zou op 2 PC's kunnen afwijken -> rubber-band).
+	// De server verplaatst de pawn en repliceert de positie naar de joiner; de client houdt alleen z'n eigen
+	// vloer-pin (TickVirtualMove) aan. DoorRetrofitter is per-proces + niet-gerepliceerd, dus filteren we expliciet
+	// op NM_Client (HasAuthority is op de joiner OOK true).
+	if (W->IsNetMode(NM_Client)) { return false; }
+
+	APawn* Pw = PC->GetPawn();
+	if (!Pw || HomedPawns.Contains(Pw)) { return false; }
+
+	// Thuis-plek nog niet bekend? -> nu niet forceren; de scan-pass-homing pakt 'm alsnog zodra HomeAnchor er is.
+	if (HomeAnchor.IsNearlyZero()) { return false; }
+
+	// COMPETITIVE: op de HOST staat HomeAnchor op de host-kamer (603). Een NIET-lokale pawn (= de remote joiner)
+	// hoort in de joiner-kamer (Mk[1]=602) -> die meteen daar neerzetten i.p.v. in 603 (geen 603-flits).
+	FVector PawnHome = HomeAnchor;
+	if (!Pw->IsLocallyControlled())
+	{
+		AWeedShopGameState* GSc = W->GetGameState<AWeedShopGameState>();
+		if (GSc && GSc->IsCompetitive())
+		{
+			TArray<FVector> MkL; GetCompetitiveMarkers(MkL);
+			if (MkL.Num() >= 2) { PawnHome = MkL[1] + FVector(0.f, 0.f, 110.f); }
+		}
+	}
+
+	const int32 Slot = HomedPawns.Num();
+	HomedPawns.Add(Pw);
+	const FVector Off(((Slot % 2) ? 130.f : -130.f) * (Slot > 0 ? 1.f : 0.f), 0.f, 0.f);
+	UCharacterMovementComponent* CMv = Pw->FindComponentByClass<UCharacterMovementComponent>();
+
+	if (bRoomFloorReady)
+	{
+		// Vloer is AL ingestreamd (partner joint ná de load) -> settle-loop draait niet meer, dus DIRECT op de
+		// vloer + lopend (een zweef-bevriezing zou hier nooit ontdooien). Zelfde korte CENTER-trace als de
+		// host-settle; zij-offset alleen op de PLAATSING (anders trace je naast de vloer op een dak/terras).
+		FHitResult FH; FCollisionQueryParams LQ(SCENE_QUERY_STAT(HomeLandNow), false);
+		for (FConstPlayerControllerIterator It2 = W->GetPlayerControllerIterator(); It2; ++It2)
+		{ if (APawn* P2 = It2->Get() ? It2->Get()->GetPawn() : nullptr) { LQ.AddIgnoredActor(P2); } }
+		const FVector TS = PawnHome + FVector(0.f, 0.f, 30.f);
+		FVector Dest = PawnHome + Off;
+		if (W->LineTraceSingleByChannel(FH, TS, TS - FVector(0.f, 0.f, 260.f), ECC_WorldStatic, LQ))
+		{ Dest = FH.Location + FVector(Off.X, Off.Y, 96.f); }
+		Pw->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
+		if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
+		// Lokale speler direct op de (al klare) vloer geplaatst -> op z'n eindpositie, de join-cover mag weg.
+		if (Pw->IsLocallyControlled()) { WeedShop_SetLocalPawnPlaced(true); }
+	}
+	else
+	{
+		// Vloer nog niet klaar -> METEEN BEVRIEZEN (vliegen, geen zwaartekracht) zodat je niet door de nog-ladende
+		// world-partition vloer valt; de floor-pin in TickVirtualMove zet je op MOVE_Walking en op de ECHTE vloer
+		// zodra die is ingestreamd. Settle-venster open zetten.
+		Pw->SetActorLocation(PawnHome + Off, false, nullptr, ETeleportType::TeleportPhysics);
+		if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Flying); }
+		HomeSettleUntil = W->GetRealTimeSeconds() + 45.f;
+	}
+
+	// Beach-map: ken de starter-woning toe in de phone-registry (idempotent via bPropertyInit).
+	if (UPhoneClientComponent* Phw = Pw->FindComponentByClass<UPhoneClientComponent>()) { Phw->PropertyTick(); }
+	UE_LOG(LogWeedShop, Log, TEXT("HomePawnNow: pawn direct thuisgezet op (%.0f,%.0f,%.0f) [local=%d, floorReady=%d]"),
+		PawnHome.X, PawnHome.Y, PawnHome.Z, Pw->IsLocallyControlled() ? 1 : 0, bRoomFloorReady ? 1 : 0);
+	return true;
+}
+
 void ADoorRetrofitter::TickVirtualMove()
 {
 	// THUIS-SETTLE (10Hz): val je vlak na het thuis-teleporteren door de nog-niet-geladen
@@ -3537,6 +3540,8 @@ void ADoorRetrofitter::TickVirtualMove()
 					// Vloer (eigen, of - laatste redmiddel - eronder) gevonden -> netjes erbovenop + lopen.
 					Pp->SetActorLocation(PlaceLoc + FVector(0.f, 0.f, 96.f), false, nullptr, ETeleportType::TeleportPhysics);
 					if (CMv) { CMv->StopMovementImmediately(); CMv->SetMovementMode(MOVE_Walking); }
+					// De LOKALE speler staat nu op z'n eindpositie (op de echte vloer) -> de join-cover mag weg.
+					if (Pp->IsLocallyControlled()) { WeedShop_SetLocalPawnPlaced(true); }
 				}
 				else
 				{
@@ -3550,6 +3555,20 @@ void ADoorRetrofitter::TickVirtualMove()
 			// Pas 'klaar' melden (laadscherm mag weg) als je ECHT op een vloer staat. Geen vloer = bevroren
 			// blijven en de pin blijft draaien tot de vloer er is; de cover heeft z'n eigen tijd-cap.
 			if (bPlace) { bRoomFloorReady = true; WeedShop_SetRoomReady(true); }
+		}
+		// JOIN-COVER (per-proces, ook op de JOINER): zodra de LOKALE speler-pawn bestaat, op de vloer staat
+		// (MOVE_Walking, niet meer bevroren) en de kamer-vloer klaar is, is 'ie op z'n eindpositie -> de join-cover
+		// mag weg. Vangt de joiner die z'n eindpositie via REPLICATIE kreeg (floor-pin-blok hierboven draait dan
+		// niet, want bRoomFloorReady stond al true). Idempotent (de setter is een simpele bool).
+		if (bRoomFloorReady && !WeedShop_IsLocalPawnPlaced())
+		{
+			for (FConstPlayerControllerIterator It = WS->GetPlayerControllerIterator(); It; ++It)
+			{
+				APawn* Lp = It->Get() ? It->Get()->GetPawn() : nullptr;
+				if (!Lp || !Lp->IsLocallyControlled()) { continue; }
+				const UCharacterMovementComponent* CMv = Lp->FindComponentByClass<UCharacterMovementComponent>();
+				if (!CMv || CMv->MovementMode != MOVE_Flying) { WeedShop_SetLocalPawnPlaced(true); }
+			}
 		}
 	}
 	// CO-OP: de crowd-SIMULATIE + materialisatie is server-only (de host bezit de bodies; de client

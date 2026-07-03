@@ -173,6 +173,11 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const bool bRoomOk = !bRetro || bReady;
 	const bool bCityOk = !bRetro || WeedShop_IsCityConverted();
 	const bool bCrowdOk = !bRetro || bClient || WeedShop_IsCrowdWarm();
+	// PAWN-PLACED-GATE: de cover blijft OOK staan tot de lokale speler-pawn echt op z'n eindpositie staat.
+	// Vooral voor de co-op JOINER: die skipt de host-side CrowdWarm-gate hierboven (bodies komen via replicatie),
+	// dus de pawn-placed-vlag is z'n vervanging - anders fade de cover al weg terwijl de joiner-pawn nog
+	// verplaatst wordt (rauwe-beach-flits). De speler-character zet de vlag via WeedShop_SetLocalPawnPlaced.
+	const bool bPawnOk = !bRetro || WeedShop_IsLocalPawnPlaced();
 	// FASE-TEKST: zolang een concrete opbouw-fase loopt, benoem die i.p.v. de random regel (zelfde
 	// patroon als de "Compiling shaders..."-override hierboven, die wint als de shaders bezig zijn).
 	if (StatusText && !bShadersBusy)
@@ -181,14 +186,15 @@ void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!bLoadSettled)  { Phase = TEXT("Streaming the rooms..."); }
 		else if (!bCityOk)  { Phase = TEXT("Building the city..."); }
 		else if (!bCrowdOk) { Phase = TEXT("Warming up the customers..."); }
+		else if (!bPawnOk)  { Phase = TEXT("Finding your spot..."); }
 		if (Phase) { StatusText->SetText(FText::FromString(Phase)); LastStep = -2; }
 	}
-	if (!bFading && ((bMinShown && bLoadSettled && !bShadersBusy && bRoomOk && bCityOk && bCrowdOk) || (E - AppearAt) > HardCap))
+	if (!bFading && ((bMinShown && bLoadSettled && !bShadersBusy && bRoomOk && bCityOk && bCrowdOk && bPawnOk) || (E - AppearAt) > HardCap))
 	{
 		bFading = true;
 		WeedShop_SetCrowdSpawned(true); // DoorRetrofitter terug naar 1-per-keer (smooth gameplay)
 		WeedShop_SetCoverUp(false);     // cover is weg
-		UE_LOG(LogTemp, Verbose, TEXT("[COVER] FADE @E=%.1f appearAt=%.1f lastLoad=%.1f shaders=%d room=%d city=%d crowd=%d hardcap=%.0f"), E, AppearAt, LastLoadAt, bShadersBusy ? 1 : 0, bRoomOk ? 1 : 0, bCityOk ? 1 : 0, bCrowdOk ? 1 : 0, HardCap);
+		UE_LOG(LogTemp, Verbose, TEXT("[COVER] FADE @E=%.1f appearAt=%.1f lastLoad=%.1f shaders=%d room=%d city=%d crowd=%d pawn=%d hardcap=%.0f"), E, AppearAt, LastLoadAt, bShadersBusy ? 1 : 0, bRoomOk ? 1 : 0, bCityOk ? 1 : 0, bCrowdOk ? 1 : 0, bPawnOk ? 1 : 0, HardCap);
 	}
 
 	// VLOEIENDE, MONOTONE progress-bar: puur op TIJD, NOOIT op de togglende shader-status (die wisselt

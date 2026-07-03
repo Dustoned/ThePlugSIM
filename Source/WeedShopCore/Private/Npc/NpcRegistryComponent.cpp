@@ -170,9 +170,6 @@ void UNpcRegistryComponent::PredictPersonality(FName NpcId, float& OutRespect, f
 
 void UNpcRegistryComponent::EnsureSeeded()
 {
-	// MEET-MARKER (27s-stall-diagnose D29): de stille boot-gap zit tussen GameState::BeginPlay en
-	// "NPC registry loaded" - deze entry-marker bewijst of de gap VOOR of IN EnsureSeeded valt.
-	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] EnsureSeeded-entry (+%.2fs sinds start)"), FPlatformTime::Seconds() - GStartTime);
 	if (States.Num() > 0 || !NpcTable)
 	{
 		return;

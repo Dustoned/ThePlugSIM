@@ -90,6 +90,18 @@ public:
 	// geen zichtbare naar-buiten-wandeling), zicht of geen zicht.
 	bool IsInsidePlayerHome(const FVector& P, float Margin = 100.f) const;
 
+	// --- CO-OP JOIN: EEN speler DIRECT thuiszetten (server-authoritative) ---
+	// Zet de pawn van PC meteen op z'n eindpositie (per rol: normaal/co-op = HomeAnchor; de remote
+	// competitive-joiner op de host = de joiner-marker-kamer; late competitive = CompAnchorHost/Joiner via
+	// het aparte TickCompetitiveRooms-vangnet). Aangeroepen DIRECT na RestartPlayer in de GameMode zodat de
+	// gerepliceerde positie al "thuis" is voordat de joiner z'n pawn possesst -> geen zichtbare beach-tussenstaat
+	// op de host. Vindt de vloer met een korte down-trace: geladen -> op de vloer + MOVE_Walking; nog niet
+	// geladen -> op de anchor + MOVE_Flying-freeze (de floor-pin in TickVirtualMove ontdooit hem). SERVER-ONLY
+	// (op een client is dit een no-op: de server verplaatst de pawn en repliceert het). Voegt de pawn toe aan
+	// HomedPawns (idempotent: een al-thuisgezette pawn wordt overgeslagen). Return true als de pawn thuisgezet is
+	// (of de thuis-plek nog niet bekend is -> false, de scan-pass-homing pakt 'm dan alsnog als vangnet).
+	bool HomePawnNow(class APlayerController* PC);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

@@ -38,7 +38,9 @@ static bool GCityConverted = false;   // stad omgebouwd (BakedRooms zichtbaar + 
 static bool GCrowdWarm = false;       // crowd gematerialiseerd (alle spawnbare walkers in bereik hebben een lichaam)
 static bool GCityRetroActive = false; // er draait een DoorRetrofitter in deze wereld (pack-map) -> stad/crowd-gates gelden
 static bool GBootLoading = false;     // boot-laadscherm (eerste map -> hoofdmenu) actief -> EnsureWidget maakt geen cover
+static bool GLocalPawnPlaced = false; // lokale speler-pawn staat na de load op z'n eindpositie (co-op-joiner cover-gate)
 static double GLoadStartSeconds = 0.0;
+static double GLoadEndSeconds = 0.0;  // FPlatformTime::Seconds() bij PostLoadMapWithWorld (einde map-load); 0 = load loopt nog
 static uint32 GLoadSeed = 0; // per-launch seed -> elke keer andere laad-regels (gedeeld door movie + cover)
 // Seconden per laad-regel. MOET identiek zijn aan de kopie in BootCoverWidget.cpp: movie-scherm en UMG-cover
 // delen dezelfde verstreken tijd E; een afwijkende deler zou de getoonde regels laten desyncen.
@@ -53,6 +55,8 @@ void WeedShop_RequestGameLoadingScreen()
 	GCrowdWarm = false;       // verse load: crowd moet opnieuw warm draaien
 	GCityRetroActive = false; // verse load: de nieuwe wereld meldt zich (of niet, op maps zonder retrofitter)
 	GBootLoading = false;     // een echte game-load overschrijft de boot-staat
+	GLocalPawnPlaced = false; // verse load: de pawn moet opnieuw op z'n eindpositie geplaatst worden
+	GLoadEndSeconds = 0.0;    // verse load: het load-einde-moment wordt pas bij de volgende PostLoadMapWithWorld gezet
 	GLoadStartSeconds = FPlatformTime::Seconds(); // gedeelde laad-timer voor movie + cover (naadloos)
 	GLoadSeed = (uint32)FPlatformTime::Cycles() * 2654435761u + 12345u; // verandert elke game-start
 }
@@ -70,7 +74,10 @@ void WeedShop_SetCityRetroActive(bool bActive) { GCityRetroActive = bActive; }
 bool WeedShop_IsCityRetroActive() { return GCityRetroActive; }
 void WeedShop_SetBootLoading(bool bBoot) { GBootLoading = bBoot; }
 bool WeedShop_IsBootLoading() { return GBootLoading; }
+void WeedShop_SetLocalPawnPlaced(bool b) { GLocalPawnPlaced = b; }
+bool WeedShop_IsLocalPawnPlaced() { return GLocalPawnPlaced; }
 double WeedShop_LoadElapsedSeconds() { return GLoadStartSeconds > 0.0 ? (FPlatformTime::Seconds() - GLoadStartSeconds) : 0.0; }
+double WeedShop_SecondsSinceLoadEnd() { return GLoadEndSeconds > 0.0 ? (FPlatformTime::Seconds() - GLoadEndSeconds) : -1.0; }
 
 // Gedeelde grappige laad-regels. Beide laadschermen kiezen via WeedShop_LoadLine(step) exact dezelfde regel.
 static const TArray<FString>& GLoadLines()
@@ -533,20 +540,25 @@ public:
 		const bool bReady = WeedShop_IsRoomReady();
 		if (bReady && ReadyAt < 0.f) { ReadyAt = E; }
 		// Zelfde EERLIJKE creep als de cover (UBootCoverWidget): vloeiend tot ~55% terwijl de map streamt.
-		// De movie verdwijnt zodra het level klaar is; de cover loopt vanaf exact deze stand verder.
-		if (Bar.IsValid()) { Bar->SetPercent(bReady ? 1.f : FMath::Clamp(0.55f * (1.f - FMath::Exp(-E / 6.f)), 0.04f, 1.f)); }
+		// De movie verdwijnt zodra de COVER 't overneemt; de cover loopt vanaf exact deze ~55%-stand verder
+		// (0.55 -> 1.0). NIET naar 100% springen op bReady: dat gaf een 100%->55%-terugsprong op het moment
+		// dat de cover de movie afloste (het "2 schermen"-gevoel, D29). De bar is nu CONTINU over de naad.
+		if (Bar.IsValid()) { Bar->SetPercent(FMath::Clamp(0.55f * (1.f - FMath::Exp(-E / 6.f)), 0.04f, 1.f)); }
 		const int32 Step = (int32)(E / GLoadLineSeconds);
 		if (Step != LastStep && StatusText.IsValid())
 		{
 			LastStep = Step;
 			StatusText->SetText(FText::FromString(WeedShop_LoadLine(Step)));
 		}
-		// EEN doorlopend scherm: stopt zodra de kamer klaar is (vloer onder de speler gevonden, gemeld
-		// via WeedShop_SetRoomReady) + korte buffer. De harde cap (24s) is alleen een noodrem zodat het
-		// nooit blijft hangen als room-ready om wat voor reden ook niet binnenkomt.
 		// De movie blijft staan tot de in-game COVER er is om naadloos over te nemen (geen gat waarin je de wereld
-		// ziet inladen = de witte flash). Safety-cap (90s) zodat 'ie NOOIT blijft hangen als de cover niet verschijnt.
-		if (WeedShop_IsCoverUp() || E > 90.f)
+		// ziet inladen = de witte flash). De COVER wordt pas bij pawn-possess gemaakt (~5-12s NA LoadMap), bij een
+		// co-op-JOIN nog later -> de movie MOET dat gat overbruggen.
+		// NOODREM-CAP relatief aan het LOAD-EINDE (PostLoadMapWithWorld), NIET aan E: E deelt de timer met JoinLan
+		// en stond bij een joiner al > 90 op het moment dat de load klaar was, dus de oude 'E > 90'-cap doodde de
+		// movie precies op load-einde - vlak VOOR de cover bestond (de rauwe-beach-flits). WeedShop_SecondsSinceLoadEnd()
+		// telt pas VANAF het load-einde; < 0 zolang de load nog loopt -> de cap kan tijdens de load nooit vuren.
+		const double SinceLoadEnd = WeedShop_SecondsSinceLoadEnd();
+		if (WeedShop_IsCoverUp() || (SinceLoadEnd >= 0.0 && SinceLoadEnd > 60.0))
 		{
 			if (IGameMoviePlayer* MP = GetMoviePlayer()) { MP->StopMovie(); }
 		}
@@ -573,11 +585,16 @@ public:
 		if (IsRunningDedicatedServer()) { return; }
 		// Bind altijd (de slate/movieplayer-check gebeurt pas bij het tonen, niet hier).
 		FCoreUObjectDelegates::PreLoadMap.AddRaw(this, &FWeedShopCoreModule::OnPreLoadMap);
+		// PostLoadMapWithWorld draait NA de map-load (veilig - GEEN PreLoadMap-movie/PSO-race). Zet het
+		// load-einde-moment zodat de movie-noodrem-cap pas VANAF hier telt (i.p.v. vanaf JoinLan, zie
+		// OnPostLoadMap + de cap in SWeedLoadingScreen::Tick).
+		FCoreUObjectDelegates::PostLoadMapWithWorld.AddRaw(this, &FWeedShopCoreModule::OnPostLoadMap);
 	}
 
 	virtual void ShutdownModule() override
 	{
 		FCoreUObjectDelegates::PreLoadMap.RemoveAll(this);
+		FCoreUObjectDelegates::PostLoadMapWithWorld.RemoveAll(this);
 	}
 
 private:
@@ -607,6 +624,19 @@ private:
 		Attr.MinimumLoadingScreenDisplayTime = 1.0f;
 		Attr.WidgetLoadingScreen = SNew(SWeedLoadingScreen);
 		GetMoviePlayer()->SetupLoadingScreen(Attr);
+	}
+
+	// Draait NA elke map-load (ook menu->wereld en de co-op JOIN-load). Zet het load-einde-moment zodat de
+	// movie-noodrem-cap (SWeedLoadingScreen::Tick) pas VANAF hier telt. Alleen zetten als er een game-load-
+	// scherm liep (GLoadStartSeconds gezet): de boot naar het hoofdmenu heeft geen movie-cover-flow.
+	void OnPostLoadMap(UWorld* LoadedWorld)
+	{
+		if (IsRunningDedicatedServer()) { return; }
+		if (GLoadStartSeconds <= 0.0) { return; }   // geen actieve game-load-flow -> niets te cappen
+		if (GLoadEndSeconds <= 0.0)                 // eerste PostLoadMap na deze load = het echte load-einde
+		{
+			GLoadEndSeconds = FPlatformTime::Seconds();
+		}
 	}
 
 	bool bBootScreenShown = false; // de boot-variant maar 1x (elke volgende load beslist GShowGameLoadingScreen)

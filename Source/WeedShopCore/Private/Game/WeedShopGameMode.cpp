@@ -3,6 +3,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Game/WeedShopPlayerState.h"
 #include "World/ActivitySpotManager.h"
+#include "World/DoorRetrofitter.h" // joiner DIRECT thuiszetten na RestartPlayer (geen zichtbare beach-tussenstaat)
 #include "WeedShopCore.h"
 #include "UI/WeedShopHUD.h"
 #include "TimerManager.h"
@@ -156,6 +157,10 @@ void AWeedShopGameMode::HandleStartingNewPlayer_Implementation(APlayerController
 		return;
 	}
 	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+	// Direct thuiszetten meteen na de (base) RestartPlayer: geldt voor de host en voor joins die ná het laden
+	// binnenkomen (de wereld is dan al klaar, dus geen wachtrij). De vroeg-vastgehouden joiner gaat via
+	// FlushPendingJoiners hieronder.
+	HomePlayerViaRetrofitter(NewPlayer);
 }
 
 void AWeedShopGameMode::FlushPendingJoiners()
@@ -165,11 +170,29 @@ void AWeedShopGameMode::FlushPendingJoiners()
 	{
 		if (APlayerController* PC = WP.Get())
 		{
-			if (!PC->GetPawn()) { RestartPlayer(PC); } // nu pas de pawn spawnen (wereld is stabiel)
+			if (!PC->GetPawn())
+			{
+				RestartPlayer(PC);          // nu pas de pawn spawnen (wereld is stabiel)
+				HomePlayerViaRetrofitter(PC); // ... en DIRECT thuiszetten -> gerepliceerde positie al "thuis" bij possess
+			}
 		}
 	}
 	PendingJoiners.Reset();
 	if (UWorld* W = GetWorld()) { W->GetTimerManager().ClearTimer(JoinFlushTimer); }
+}
+
+void AWeedShopGameMode::HomePlayerViaRetrofitter(APlayerController* PC)
+{
+	// Vind de (per-proces) DoorRetrofitter in deze wereld en laat 'm deze speler DIRECT thuiszetten. GetWorld()-
+	// filter is impliciet (TActorIterator loopt alleen door de eigen wereld). HomePawnNow is server-only en
+	// idempotent: op een client of zonder bekende thuis-plek is dit een no-op en pakt de scan-pass het als vangnet.
+	if (!PC) { return; }
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	for (TActorIterator<ADoorRetrofitter> It(W); It; ++It)
+	{
+		if (*It) { It->HomePawnNow(PC); break; } // 1 retrofitter per map
+	}
 }
 
 APawn* AWeedShopGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayerController, const FTransform& SpawnTransform)

@@ -558,7 +558,7 @@ float UInventoryComponent::GetUnitWeight(FName ItemId) const
 	// LOSSE WIET (per gram) + kweek-verbruik. Ook gamey-zwaar zodat een volle voorraad telt.
 	if (S.StartsWith(TEXT("WetBud_"))) { return 0.04f; } // nat is iets zwaarder
 	if (S.StartsWith(TEXT("Bud_")))    { return 0.03f; }
-	if (S.StartsWith(TEXT("Seed_")))   { return 0.01f; }
+	if (S.StartsWith(TEXT("Seed_")))   { return 0.05f; } // zaadje: klein maar zichtbaar (0.01 rondde af naar 0.0 in de UI)
 	if (S.StartsWith(TEXT("Joint_")))  { return 0.02f; }
 	if (S.StartsWith(TEXT("Papers_"))) { return 0.05f; }
 	if (S.StartsWith(TEXT("Soil_")))   { return 5.f; }   // zak potgrond

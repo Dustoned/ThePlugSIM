@@ -62,6 +62,18 @@ WEEDSHOPCORE_API bool WeedShop_IsCityRetroActive();
 WEEDSHOPCORE_API void WeedShop_SetBootLoading(bool bBoot);
 WEEDSHOPCORE_API bool WeedShop_IsBootLoading();
 
+// "Lokale pawn staat op z'n eindpositie"-vlag: de speler-character zet 'm zodra 'ie na de load echt op de
+// juiste (thuis/spawn) plek staat en bespeelbaar is. De co-op JOINER skipt de host-side CrowdWarm-gate; deze
+// vlag is z'n vervanging: de cover blijft OOK staan tot dit waar is -> de cover verdwijnt pas als de speler
+// echt geplaatst is (geen rauwe-beach-flits terwijl de pawn nog verplaatst wordt). Reset bij een nieuwe load.
+WEEDSHOPCORE_API void WeedShop_SetLocalPawnPlaced(bool b);
+WEEDSHOPCORE_API bool WeedShop_IsLocalPawnPlaced();
+
+// Verstreken seconden SINDS het einde van de map-load (PostLoadMapWithWorld). < 0 zolang de load nog loopt.
+// De movie gebruikt dit voor een noodrem-cap die pas telt NA de load (E deelt de timer met JoinLan en stond
+// bij een joiner al > 90 op het moment dat de load klaar was -> de oude 'E > 90'-cap doodde de movie te vroeg).
+WEEDSHOPCORE_API double WeedShop_SecondsSinceLoadEnd();
+
 // Gedeelde laad-timer + tekst: zowel de movie-loadingscreen als het in-game cover-scherm gebruiken deze,
 // zodat ze er IDENTIEK uitzien en de progress/tekst naadloos doorlopen (geen zichtbare overgang).
 WEEDSHOPCORE_API double WeedShop_LoadElapsedSeconds();
