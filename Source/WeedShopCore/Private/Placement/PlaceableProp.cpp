@@ -13,12 +13,8 @@
 #include "UI/WeedToast.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
-#include "EngineUtils.h"
 #include "Interaction/Interactable.h"
-#include "Cultivation/GrowPlant.h"
-#include "Cultivation/DryingRack.h"
-#include "World/ProcessorMachine.h"
-#include "Cultivation/PotTypes.h"
+#include "Cultivation/PotTypes.h" // GearUpgradeIndex -> IsGearUpgrade()
 
 // Statische registry van alle levende props (zie GetAll in de header): gevuld in BeginPlay,
 // geleegd in EndPlay. De gear-scans (pot/rek/machine) lopen hierdoor O(props) i.p.v. over alle actors.
@@ -305,35 +301,17 @@ void APlaceableProp::SetupVisual()
 	}
 }
 
-// Het object (pot/droogrek/hasj-machine) waar deze upgrade-prop bij hoort, of nullptr als 't geen upgrade is.
-static AActor* FindUpgradeHostFor(const APlaceableProp* Prop)
+// Gear-upgrade-herkenning: pot-gear (GearUpgradeIndex), droogrek- (DryUp_) en machine- (ProcUp_) upgrades.
+// Deze props zijn bewust NIET interactable: geen prompt-/interact-forward meer naar de host (de pot/het
+// rek zelf krijgt de focus doordat de interactie-trace gear-props overslaat, zie UInteractionComponent).
+bool APlaceableProp::IsGearUpgrade() const
 {
-	if (!Prop || !Prop->GetWorld()) { return nullptr; }
-	const FString S = Prop->ItemId.ToString();
-	const int32 Kind = (GearUpgradeIndex(Prop->ItemId) >= 0) ? 1 : (S.StartsWith(TEXT("DryUp_")) ? 2 : (S.StartsWith(TEXT("ProcUp_")) ? 3 : 0));
-	if (Kind == 0) { return nullptr; }
-	const FVector P = Prop->GetActorLocation();
-	AActor* Best = nullptr; float BestSq = FMath::Square(180.f);
-	auto Consider = [&](AActor* A)
-	{
-		if (!IsValid(A)) { return; }
-		const FVector L = A->GetActorLocation();
-		if (FMath::Abs(L.Z - P.Z) > 300.f) { return; }
-		const float D = FVector::DistSquared2D(L, P);
-		if (D <= BestSq) { BestSq = D; Best = A; }
-	};
-	if (Kind == 1)      { for (TActorIterator<AGrowPlant> It(Prop->GetWorld()); It; ++It)        { Consider(*It); } }
-	else if (Kind == 2) { for (TActorIterator<ADryingRack> It(Prop->GetWorld()); It; ++It)       { Consider(*It); } }
-	else if (Kind == 3) { for (TActorIterator<AProcessorMachine> It(Prop->GetWorld()); It; ++It) { Consider(*It); } }
-	return Best;
+	const FString S = ItemId.ToString();
+	return GearUpgradeIndex(ItemId) >= 0 || S.StartsWith(TEXT("DryUp_")) || S.StartsWith(TEXT("ProcUp_"));
 }
 
 FText APlaceableProp::GetInteractionPrompt_Implementation() const
 {
-	// Upgrade -> gebruik de prompt van het object waar 'ie bij hoort (pot/rek/machine), zodat je via de
-	// upgrade direct met de pot kunt werken.
-	if (AActor* Host = FindUpgradeHostFor(this)) { return IInteractable::Execute_GetInteractionPrompt(Host); }
-
 	FPlaceableDef Def;
 	const bool bHas = GetPlaceableDef(ItemId, Def);
 	if (bHas && Def.bIsBed)
@@ -359,9 +337,6 @@ void APlaceableProp::OnRep_DoorOpen()
 
 void APlaceableProp::Interact_Implementation(APawn* InstigatorPawn)
 {
-	// Upgrade -> stuur de interactie door naar het object waar 'ie bij hoort (pot/rek/machine).
-	if (AActor* Host = FindUpgradeHostFor(this)) { IInteractable::Execute_Interact(Host, InstigatorPawn); return; }
-
 	// Scharnier-deur (building-tool): F = open/dicht.
 	{
 		FPlaceableDef DoorDef;

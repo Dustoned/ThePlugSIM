@@ -98,6 +98,14 @@ public:
 	// Of dit item stapelbaar is (bv. flessen niet). Bepaalt of merge/split mag.
 	static bool IsStackable(FName ItemId);
 
+	// Of dit item bederfelijk is (boter/edibles: QualityPct zakt buiten de koeling).
+	// Gedeelde bron van waarheid voor inventory-bederf EN shelf-bederf (AStorageShelf).
+	static bool IsPerishableItem(FName ItemId);
+
+	// Of dit item in een Fridge thuishoort: bederfelijk spul + kook-ingredienten (Sugar/Flour/Gelatin)
+	// + Cash (briefgeld bewaren/delen mag overal, huidig gedrag). De rest hoort op een gewoon schap.
+	static bool IsFridgeItem(FName ItemId);
+
 	// --- Zakjes (bags): discrete eenheden Bag_<strain>_<gram>, max BagStackMax per slot ---
 	static constexpr int32 BagStackMax = 10;          // max aantal zakjes per slot
 	static bool IsBag(FName ItemId);

@@ -199,6 +199,14 @@ void AWeedShopHUD::DrawHUD()
 					DrawRect(WeedUI::ColWell(0.9f), CX - 60.f, CY + 90.f, 160.f, 8.f);
 					DrawRect(FLinearColor(1.f, 0.8f, 0.2f, 0.95f), CX - 60.f, CY + 90.f, 160.f * A, 8.f);
 				}
+
+				// Weggooi-voortgang (hold X op een geplante pot) - zelfde balk-stijl, rood/oranje zodat 't als "weggooien" leest.
+				const float D = BC->GetDiscardAlpha();
+				if (D > 0.f)
+				{
+					DrawRect(WeedUI::ColWell(0.9f), CX - 60.f, CY + 104.f, 160.f, 8.f);
+					DrawRect(FLinearColor(0.95f, 0.3f, 0.15f, 0.95f), CX - 60.f, CY + 104.f, 160.f * D, 8.f);
+				}
 			}
 		}
 	}

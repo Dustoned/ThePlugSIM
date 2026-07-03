@@ -6,6 +6,7 @@
 #include "World/PackElevatorButton.h" // server-validatie: lift-knop opzoeken op ElevId (bereik-check)
 #include "World/PackLightSwitch.h" // server-validatie: lamp-schakelaar opzoeken op stabiel id (bereik-check)
 #include "Customer/CustomerBase.h"
+#include "Placement/PlaceableProp.h" // IsGearUpgrade(): gear-props overslaan in de focus-trace
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "World/WorldSyncComponent.h"
@@ -88,14 +89,30 @@ void UInteractionComponent::UpdateFocus()
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopInteractionTrace), /*bTraceComplex=*/false);
 		Params.AddIgnoredActor(GetOwner());
 
+		// Gear-upgrade-props (pot-gear/DryUp_/ProcUp_) krijgen NOOIT focus: ze staan pal op/voor de pot
+		// en zouden de kijk-klik onderscheppen. Hit op zo'n prop -> negeren en her-tracen, zodat de
+		// pot/het rek erachter de focus krijgt (max 3 lagen gear).
 		FHitResult Hit;
-		if (GetWorld()->LineTraceSingleByChannel(Hit, ViewLocation, TraceEnd, TraceChannel, Params))
+		for (int32 Pass = 0; Pass < 3; ++Pass)
 		{
+			if (!GetWorld()->LineTraceSingleByChannel(Hit, ViewLocation, TraceEnd, TraceChannel, Params))
+			{
+				break;
+			}
+
 			AActor* HitActor = Hit.GetActor();
+			const APlaceableProp* GearProp = Cast<APlaceableProp>(HitActor);
+			if (GearProp && GearProp->IsGearUpgrade())
+			{
+				Params.AddIgnoredActor(HitActor);
+				continue;
+			}
+
 			if (HitActor && HitActor->Implements<UInteractable>())
 			{
 				NewFocus = HitActor;
 			}
+			break;
 		}
 	}
 

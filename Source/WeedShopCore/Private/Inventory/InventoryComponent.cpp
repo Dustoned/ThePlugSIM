@@ -10,16 +10,22 @@
 #include "Economy/EconomyComponent.h" // cash droppen = ook echt van het saldo af (spiegel-stapel)
 #include "Placement/PlaceableTypes.h" // GetPlaceableDef -> furniture-gewicht
 
-namespace
+// Boter/edibles bederven buiten de koeling (ButterMix = gekookte boter, Edible = eindproduct,
+// Butter = ingredient). QualityPct zakt -> mindere edibles / lagere verkoopwaarde.
+bool UInventoryComponent::IsPerishableItem(FName ItemId)
 {
-	// Boter/edibles bederven buiten de koeling (ButterMix = gekookte boter, Edible = eindproduct,
-	// Butter = ingredient). QualityPct zakt -> mindere edibles / lagere verkoopwaarde.
-	bool IsPerishableItem(FName Id)
-	{
-		const FString S = Id.ToString();
-		return S.StartsWith(TEXT("ButterMix")) || S.StartsWith(TEXT("Edible")) || S == TEXT("Butter")
-			|| S.StartsWith(TEXT("Cookie")) || S.StartsWith(TEXT("Gummy"));
-	}
+	const FString S = ItemId.ToString();
+	return S.StartsWith(TEXT("ButterMix")) || S.StartsWith(TEXT("Edible")) || S == TEXT("Butter")
+		|| S.StartsWith(TEXT("Cookie")) || S.StartsWith(TEXT("Gummy"));
+}
+
+// Fridge-filter: bederfelijk spul + kook-ingredienten (thematisch: de kook-flow leest Sugar/Flour/Gelatin
+// uit de INVENTORY, opslaan in de fridge is puur opslag) + Cash (huidig gedrag behouden).
+bool UInventoryComponent::IsFridgeItem(FName ItemId)
+{
+	return IsPerishableItem(ItemId)
+		|| ItemId == FName(TEXT("Sugar")) || ItemId == FName(TEXT("Flour"))
+		|| ItemId == FName(TEXT("Gelatin")) || ItemId == FName(TEXT("Cash"));
 }
 
 UInventoryComponent::UInventoryComponent()

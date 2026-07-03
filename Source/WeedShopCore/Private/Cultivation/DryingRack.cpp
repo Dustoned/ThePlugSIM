@@ -26,6 +26,9 @@ namespace
 	// tot een fors verlies. Een plant verrot ~7 min tot ~0; gedroogde wiet degradeert dus trager + minder hard.
 	constexpr float DryDecayWindow  = 600.f;  // 10 min van grace-einde tot max-verlies
 	constexpr float DryMaxLoss      = 0.70f;  // tot 70% kwaliteitsverlies als je 'm veel te lang laat hangen
+
+	constexpr int32 RackBundleFirst = 10;     // Parts-index van de eerste wiet-bos (0-9 = frame/gaas/roedes)
+	constexpr int32 RackBundleMax   = 15;     // bos-slots in Parts (Pro gebruikt er 10, rest = marge)
 }
 
 // Statische registry van alle levende droogrekken (zie GetAll in de header): gevuld in BeginPlay,
@@ -56,8 +59,8 @@ ADryingRack::ADryingRack()
 	}
 
 	Deco = PropKit::MakeDeco(this, Mesh, TEXT("Deco"));
-	// 0-3 frame, 4 achtergaas, 5-9 droogroosters, 10-14 wiet-stapels (zichtbaar als er gedroogd wordt).
-	for (int32 i = 0; i < 15; ++i) { Parts.Add(PropKit::MakePart(this, Deco, *FString::Printf(TEXT("Part%d"), i))); }
+	// 0-3 frame, 4 achtergaas, 5-9 droogroedes, 10-24 wiet-bossen (1 per batch-SLOT; Pro gebruikt er 10).
+	for (int32 i = 0; i < RackBundleFirst + RackBundleMax; ++i) { Parts.Add(PropKit::MakePart(this, Deco, *FString::Printf(TEXT("Part%d"), i))); }
 }
 
 void ADryingRack::SetupVisual()
@@ -65,7 +68,7 @@ void ADryingRack::SetupVisual()
 	FPlaceableDef Def;
 	if (!Mesh || !GetPlaceableDef(RackTier, Def)) { return; }
 	Mesh->SetWorldScale3D(Def.MeshScale);
-	if (Parts.Num() < 10) { return; }
+	if (Parts.Num() < RackBundleFirst + RackBundleMax) { return; }
 
 	const float W = Def.MeshScale.X * 100.f; // breedte
 	const float D = Def.MeshScale.Y * 100.f; // diepte
@@ -88,38 +91,72 @@ void ADryingRack::SetupVisual()
 	// Hang-roedes: dunne horizontale stangen waar de wiet ONDER hangt (echt droogrek, geen schap).
 	const int32 NBars = 5;
 	const FLinearColor Weed(0.20f, 0.45f, 0.16f);
+	const float UseW = W - Post * 2.f;        // bruikbare breedte tussen de staanders
 	const float RodY = D * 0.10f;            // roedes net naar voren (van de muur af)
 	const float RodThk = FMath::Max(2.5f, H * 0.018f);
 	const float HangLen = H * 0.16f;          // hoe ver de bos naar beneden hangt
 	for (int32 b = 0; b < NBars; ++b)
 	{
 		const float Z = Floor + H * (0.30f + 0.155f * b); // roedes in de bovenste helft
-		PropKit::SetPart(Parts[5 + b], PropKit::Cube(), FVector(W - Post * 2.f, FMath::Min(4.f, D * 0.25f), RodThk), FVector(0, RodY, Z), Bar);
-		// Wiet HANGT onder de roede: een smalle, naar beneden hangende bos (zichtbaarheid via UpdateDryVisual).
-		PropKit::SetPart(Parts[10 + b], PropKit::Cube(), FVector((W - Post * 2.f) * 0.58f, D * 0.42f, HangLen), FVector(0, RodY, Z - HangLen * 0.5f - RodThk), Weed);
-		if (Parts[10 + b]) { Parts[10 + b]->SetVisibility(false); }
+		PropKit::SetPart(Parts[5 + b], PropKit::Cube(), FVector(UseW, FMath::Min(4.f, D * 0.25f), RodThk), FVector(0, RodY, Z), Bar);
+	}
+	// Wiet hangt per batch-SLOT onder een roede: Capacity() bossen, ceil(Cap/5) per roede, gelijkmatig
+	// verdeeld langs de breedte (Cheap=2 en Std=1 gecentreerd per roede, Pro=2 naast elkaar per roede).
+	// Zichtbaarheid/kleur/hanglengte per batch doet UpdateDryVisual; hier alleen de vaste slot-posities
+	// plus het hard verbergen van slots boven de capaciteit (tier-wissel laat zo geen restanten zweven).
+	const int32 Cap = FMath::Clamp(Capacity(), 0, RackBundleMax);
+	const int32 PerBar = FMath::Max(1, FMath::DivideAndRoundUp(Cap, NBars));
+	BundleTop.SetNum(RackBundleMax);
+	BundleSize.SetNum(RackBundleMax);
+	for (int32 i = 0; i < RackBundleMax; ++i)
+	{
+		UStaticMeshComponent* P = Parts[RackBundleFirst + i];
+		if (i >= Cap)
+		{
+			if (P) { P->SetVisibility(false); }
+			BundleTop[i] = FVector::ZeroVector;
+			BundleSize[i] = FVector::ZeroVector;
+			continue;
+		}
+		const int32 BarIdx = i / PerBar;                  // batches vullen roede voor roede (onder -> boven)
+		const int32 Col = i % PerBar;
+		const float SlotW = UseW / float(PerBar);
+		const float X = -UseW * 0.5f + SlotW * (float(Col) + 0.5f);
+		const float Z = Floor + H * (0.30f + 0.155f * BarIdx); // zelfde Z als de roede erboven
+		BundleSize[i] = FVector(SlotW * 0.58f, D * 0.42f, HangLen);
+		BundleTop[i] = FVector(X, RodY, Z - RodThk);      // hang-punt = onderkant roede
+		PropKit::SetPart(P, PropKit::Cube(), BundleSize[i], BundleTop[i] - FVector(0.f, 0.f, HangLen * 0.5f), Weed);
+		if (P) { P->SetVisibility(false); }
 	}
 	UpdateDryVisual();
 }
 
 void ADryingRack::UpdateDryVisual()
 {
-	if (Parts.Num() < 15) { return; }
-	const int32 Filled = FMath::Clamp(RepDrying + RepReady, 0, 5);
+	if (Parts.Num() < RackBundleFirst + RackBundleMax) { return; }
+	const int32 Cap = FMath::Clamp(Capacity(), 0, RackBundleMax);
 	const FLinearColor Drying(0.20f, 0.45f, 0.16f);  // groen (hangt te drogen)
 	const FLinearColor Ready(0.55f, 0.42f, 0.14f);   // amber/bruin (klaar)
-	for (int32 b = 0; b < 5; ++b)
+	const float DT = FMath::Max(1.f, DrySeconds());
+	for (int32 i = 0; i < RackBundleMax; ++i)
 	{
-		UStaticMeshComponent* P = Parts[10 + b];
+		UStaticMeshComponent* P = Parts[RackBundleFirst + i];
 		if (!P) { continue; }
-		const bool bShow = (b < Filled);
+		// Slot i toont batch i: Entries repliceert, dus clients volgen vanzelf (Tick roept dit elke frame).
+		const bool bShow = (i < Cap) && Entries.IsValidIndex(i) && BundleTop.IsValidIndex(i) && BundleSize.IsValidIndex(i);
 		P->SetVisibility(bShow);
-		if (bShow)
+		if (!bShow) { continue; }
+		const FDryEntry& E = Entries[i];
+		// Subtiel droog-effect: de bos zakt uit van 75% naar de volle hanglengte terwijl 'ie droogt.
+		// In 2%-stappen zodat de transform maar af en toe wijzigt (de setters early-outen op gelijk).
+		float Grow = E.bDone ? 1.f : (0.75f + 0.25f * FMath::Clamp(E.Elapsed / DT, 0.f, 1.f));
+		Grow = FMath::RoundToFloat(Grow * 50.f) / 50.f;
+		const FVector& Size = BundleSize[i];
+		P->SetRelativeScale3D(FVector(Size.X, Size.Y, Size.Z * Grow) / 100.f);
+		P->SetRelativeLocation(BundleTop[i] - FVector(0.f, 0.f, Size.Z * Grow * 0.5f));
+		if (UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(P->GetMaterial(0)))
 		{
-			if (UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(P->GetMaterial(0)))
-			{
-				MID->SetVectorParameterValue(TEXT("Color"), (b < RepReady) ? Ready : Drying);
-			}
+			MID->SetVectorParameterValue(TEXT("Color"), E.bDone ? Ready : Drying);
 		}
 	}
 }

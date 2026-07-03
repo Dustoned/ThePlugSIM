@@ -112,6 +112,7 @@ public:
 	virtual FText GetInteractionPrompt_Implementation() const override;
 
 	void RobClear(); // overval (server): alle groeiende planten weg (slots leeg)
+	void DiscardAll(); // weggooien (server): alle planten weg EN soil/mest gereset (pot helemaal leeg)
 
 	// --- Pot-/plek-info voor de UI ---
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Plant")

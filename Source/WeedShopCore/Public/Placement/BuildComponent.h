@@ -17,6 +17,7 @@
 class UStaticMeshComponent;
 class UInventoryComponent;
 class UMaterialInstanceDynamic;
+class AGrowPlant;
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
 class WEEDSHOPCORE_API UBuildComponent : public UActorComponent
@@ -64,6 +65,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
 	float GetPickupAlpha() const { return PickupHoldDuration > 0.f ? FMath::Clamp(PickupHoldAccum / PickupHoldDuration, 0.f, 1.f) : 0.f; }
 
+	// Hoe lang (sec) je de weggooi-toets (X) moet inhouden om een geplante pot te legen.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Build")
+	float DiscardHoldDuration = 1.0f;
+
+	// Voortgang van het weggooien (0..1), voor de HUD. 0 als je nu niets weggooit.
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
+	float GetDiscardAlpha() const { return DiscardHoldDuration > 0.f ? FMath::Clamp(DiscardHoldAccum / DiscardHoldDuration, 0.f, 1.f) : 0.f; }
+
 	// Of de huidige preview-positie geldig is (kijkt naar een vlak/de vloer).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Build")
 	bool IsPlacementValid() const { return bValidSpot; }
@@ -105,6 +114,10 @@ protected:
 	// Server: pak een (lege) pot weer op -> terug als item in de inventory.
 	UFUNCTION(Server, Reliable)
 	void ServerPickup(AActor* Target);
+
+	// Server: gooi de inhoud van een GEPLANTE pot weg (X-hold): leegt alle plant-plekken + soil/fert.
+	UFUNCTION(Server, Reliable)
+	void ServerDiscardPlant(AGrowPlant* Plant);
 
 	// Maakt de ghost-mesh + dynamisch materiaal aan indien nodig.
 	void EnsureGhost();
@@ -216,6 +229,11 @@ protected:
 
 	// Opgebouwde tijd dat de oppak-toets ingedrukt is terwijl je een pot aankijkt.
 	float PickupHoldAccum = 0.f;
+
+	// Opgebouwde tijd dat de weggooi-toets (X) ingedrukt is terwijl je een geplante pot aankijkt.
+	float DiscardHoldAccum = 0.f;
+	// De pot waarop de X-hold nu loopt; wisselt de focus, dan reset de voortgang.
+	TWeakObjectPtr<AGrowPlant> DiscardHoldPlant;
 
 	// --- Gerepliceerde preview-staat (voor de ghost bij andere co-op spelers) ---
 	UPROPERTY(Replicated)

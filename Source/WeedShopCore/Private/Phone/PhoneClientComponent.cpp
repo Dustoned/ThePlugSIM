@@ -1642,6 +1642,14 @@ void UPhoneClientComponent::ServerShelfStore_Implementation(AStorageShelf* Shelf
 	// Afstand-check (anti-cheat/lag).
 	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Shelf->GetActorLocation()) > 400.f) { return; }
 
+	// De koelkast accepteert alleen items die er thuishoren (bederfelijk/kook-ingredienten/cash);
+	// de rest hoort op een gewoon schap -> nette weiger-toast i.p.v. stil opslaan.
+	if (Shelf->IsFridge() && !UInventoryComponent::IsFridgeItem(ItemId))
+	{
+		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("The fridge only keeps food fresh - store that on a shelf.")); }
+		return;
+	}
+
 	// Cash opslaan = ECHT geld van je saldo naar het schap/de safe/de koelkast (co-op: zo deel of bewaar je
 	// briefgeld). De inventory-cash is een SPIEGEL van het saldo (SetCashDisplayEuros): dus NIET via
 	// Inv->RemoveItem (de reconcile zou de stapel herscheppen = gratis geld), maar via Economy->RemoveMoney —

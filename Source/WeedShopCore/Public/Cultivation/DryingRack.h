@@ -1,7 +1,7 @@
 // ADryingRack — droogrek waar je VERS geoogste (natte) wiet ophangt om te drogen. Pas na drogen wordt
 // het verkoopbare/rookbare "Bud_<strain>". Tiers (goedkoop/standaard/pro) verschillen in hoeveel batches
 // tegelijk kunnen drogen en hoe snel. Laat je een batch te lang hangen nadat 'ie klaar is (>1 min), dan
-// zakt de kwaliteit langzaam, tot maximaal 10% verlies.
+// zakt de kwaliteit langzaam (zie DryMaxLoss in de .cpp voor het maximale verlies).
 
 #pragma once
 
@@ -50,9 +50,11 @@ public:
 	UFUNCTION()
 	void OnRep_Tier();
 
-	// Zet mesh-schaal volgens de tier-definitie (zodat de plaatsing op de vloer klopt).
+	// Zet mesh-schaal volgens de tier-definitie (zodat de plaatsing op de vloer klopt) en bouwt de
+	// bos-slots: Capacity() hangposities, verdeeld over de 5 roedes.
 	void SetupVisual();
-	// Toon/verberg de wiet-stapels op de roosters o.b.v. RepDrying/RepReady (zichtbare droog-indicatie).
+	// Toon/verberg/kleur de wiet-bossen per batch-SLOT o.b.v. Entries (groen=drogend, amber=klaar;
+	// hanglengte groeit subtiel mee met de droog-progressie). Entries repliceert, dus clients volgen.
 	void UpdateDryVisual();
 
 	// Tier-definitie: capaciteit (aantal batches) + droogtijd (sec).
@@ -101,6 +103,12 @@ protected:
 	// Samengestelde look (frame + dwarsbalken), los van de root-schaal.
 	UPROPERTY() TObjectPtr<USceneComponent> Deco;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+
+	// Per bos-slot: hang-punt (onderkant roede) + volledige afmeting (cm), gevuld in SetupVisual.
+	// Puur lokaal/visueel (geen replicatie nodig): UpdateDryVisual schaalt hiermee de hanglengte
+	// van elke bos mee met de droog-progressie van die batch.
+	TArray<FVector> BundleTop;
+	TArray<FVector> BundleSize;
 
 	// Batches (repliceert zodat clients ook progress kunnen tonen).
 	UPROPERTY(Replicated)

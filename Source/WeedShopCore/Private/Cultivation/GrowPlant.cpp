@@ -1,5 +1,6 @@
 #include "Cultivation/GrowPlant.h"
 #include "UI/WeedToast.h"
+#include "UI/WeedUiStyle.h"
 
 #include "WeedShopCore.h"
 #include "Components/StaticMeshComponent.h"
@@ -326,6 +327,7 @@ void AGrowPlant::RecomputeGearUpgradeMask(float DeltaSeconds)
 		{
 			AGrowPlant* P = WP.Get();
 			if (!IsValid(P) || P->GetWorld() != W) { continue; }
+			if (!P->GetActorEnableCollision()) { continue; } // ghost-preview-pot (placement) = cosmetisch, telt niet mee
 			const float dSq = FVector::DistSquared2D(P->GetActorLocation(), At);
 			if (dSq < BestSq) { BestSq = dSq; Best = P; }
 		}
@@ -918,6 +920,8 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 
 FText AGrowPlant::GetInteractionPrompt_Implementation() const
 {
+	// Basis-prompt per staat; staat er iets geplant, dan plakken we de discard-hint eronder.
+	FText Base;
 	// Zieke planten hebben voorrang in de prompt: spray ze, met de resterende tijd.
 	const int32 Sick = GetAfflictedCount();
 	if (Sick > 0)
@@ -928,27 +932,36 @@ FText AGrowPlant::GetInteractionPrompt_Implementation() const
 		const TCHAR* Kind = (bMold && bPest) ? TEXT("MOLD+PESTS") : (bMold ? TEXT("MOLD") : TEXT("PESTS"));
 		const int32 Left = FMath::CeilToInt(GetWorstAfflictSecondsLeft());
 		// Clean prompt: type + tijd. Het aantal zieke plekken + uitleg staat op de plant-kaart (HUD).
-		return FText::FromString(FString::Printf(TEXT("%s! Spray now  (%d:%02d)"), Kind, Left / 60, Left % 60));
+		Base = FText::FromString(FString::Printf(TEXT("%s! Spray now  (%d:%02d)"), Kind, Left / 60, Left % 60));
 	}
-	if (GetReadyCount() > 0)
+	else if (GetReadyCount() > 0)
 	{
 		// Quality staat op de plant-kaart; hier kort. Wel waarschuwen als 'ie zakt.
 		const float Q = FMath::Clamp(CareAvg, 0.f, 1.f) * 100.f;
 		const FString Warn = (Q < 60.f) ? TEXT("  - quality dropping!") : TEXT("");
 		const int32 Ready = GetReadyCount();
-		return FText::FromString(Ready > 1
+		Base = FText::FromString(Ready > 1
 			? FString::Printf(TEXT("Harvest  (%d ready)%s"), Ready, *Warn)
 			: FString::Printf(TEXT("Harvest%s"), *Warn));
 	}
-	if (!HasSoil())
+	else if (!HasSoil())
 	{
-		return NSLOCTEXT("WeedShop", "AddSoil", "Add soil");
+		Base = NSLOCTEXT("WeedShop", "AddSoil", "Add soil");
 	}
-	if (GetPlantedCount() < GetNumSlots())
+	else if (GetPlantedCount() < GetNumSlots())
 	{
-		return FText::FromString(FString::Printf(TEXT("Plant a seed  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
+		Base = FText::FromString(FString::Printf(TEXT("Plant a seed  (%d/%d)"), GetPlantedCount(), GetNumSlots()));
 	}
-	return NSLOCTEXT("WeedShop", "WaterPlant", "Water the plant"); // water-% staat al op de plant-kaart
+	else
+	{
+		Base = NSLOCTEXT("WeedShop", "WaterPlant", "Water the plant"); // water-% staat al op de plant-kaart
+	}
+	// Zodra er een plant/zaad in de pot zit kan de speler alles weggooien (hold-interactie -> DiscardAll).
+	if (IsPlanted())
+	{
+		return FText::FromString(Base.ToString() + TEXT("\nHold X to discard"));
+	}
+	return Base;
 }
 
 float AGrowPlant::GetMaxCare() const
@@ -1047,6 +1060,28 @@ void AGrowPlant::RobClear()
 		if (SlotAfflictTime.IsValidIndex(i)) { SlotAfflictTime[i] = 0.f; }
 	}
 	if (bAny) { UpdatePlantVisual(); } // server: visual bijwerken (clients via OnRep_Slots)
+}
+
+void AGrowPlant::DiscardAll()
+{
+	if (!HasAuthority()) { return; }
+	// Weggooi-actie van de speler (hold-interactie): alle planten/zaden weg EN de pot weer helemaal
+	// leeg — soil + mest-bonus gereset. Alleen doen als er echt iets in zit, anders een no-op.
+	const bool bAny = IsPlanted() || !SoilId.IsNone() || SoilUsesLeft > 0 || FertYieldMult != 1.f;
+	if (!bAny) { return; }
+	for (int32 i = 0; i < SlotStrain.Num(); ++i)
+	{
+		SlotStrain[i] = NAME_None;
+		if (SlotGrowth.IsValidIndex(i))      { SlotGrowth[i] = 0.f; }
+		if (SlotPhase.IsValidIndex(i))       { SlotPhase[i] = static_cast<EGrowthPhase>(0); }
+		if (SlotAfflict.IsValidIndex(i))     { SlotAfflict[i] = 0; }
+		if (SlotAfflictTime.IsValidIndex(i)) { SlotAfflictTime[i] = 0.f; }
+	}
+	SoilId = NAME_None;
+	SoilUsesLeft = 0;
+	FertYieldMult = 1.f;
+	UpdatePlantVisual(); // server: visual bijwerken (clients via OnRep_Slots)
+	UpdateSoilVisual();  // soil-schijf weg (clients via OnRep_Soil)
 }
 
 void AGrowPlant::OnRep_Slots()  { UpdatePlantVisual(); }
@@ -1210,10 +1245,17 @@ void AGrowPlant::UpdatePlantVisual()
 		}
 
 		// Toppen/colas: rechtopstaande kegels bovenin. Verschijnen vanaf pre-bloei; bij OOGSTKLAAR
-		// worden ze fors GROTER + DONKERPAARS zodat je in één oogopslag ziet dat 'ie klaar is.
+		// worden ze fors GROTER + de volle STRAIN-kleur zodat je in één oogopslag ziet dat 'ie klaar is.
+		// Kleur = de per-strain tag-hue (zelfde als de UI-pills, via het Bud_-item): bloei laat de strain
+		// alvast doorschemeren (blend met groen), rijp = de volle kleur maar donker/verzadigd (leesbaar "klaar").
 		const float BudScaleRipe = bRipe ? 1.2f : 0.7f;
-		const FLinearColor BudFlower(0.30f, 0.55f, 0.22f); // jong = groen
-		const FLinearColor BudRipe(0.26f, 0.08f, 0.34f);   // klaar = donkerpaars
+		const FName BudId = SlotStrain.IsValidIndex(i) && !SlotStrain[i].IsNone()
+			? FName(*(TEXT("Bud_") + SlotStrain[i].ToString()))
+			: NAME_None;
+		const FLinearColor StrainCol = WeedUI::TagColorForItem(BudId);             // standaard strain-hue
+		const FLinearColor BudRipe = WeedUI::TagColorForItem(BudId, 0.35f, 0.85f); // klaar = donkerder/verzadigder
+		const FLinearColor YoungGreen(0.30f, 0.55f, 0.22f);                        // jong = groen
+		const FLinearColor BudFlower = YoungGreen * 0.6f + StrainCol * 0.4f;       // bloei = 60% groen + 40% strain
 		for (int32 b = 0; b < BudsPerPlant; ++b)
 		{
 			UStaticMeshComponent* Bd = BudAt(b);

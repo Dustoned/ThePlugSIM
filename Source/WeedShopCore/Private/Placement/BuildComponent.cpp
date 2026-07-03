@@ -584,6 +584,10 @@ AActor* UBuildComponent::FindUpgradeTarget(int32 Kind, const FVector& Near) cons
 	auto Consider = [&](AActor* A)
 	{
 		if (!IsValid(A)) { return; }
+		// Preview/ghost-exemplaren (collision uit, zie SpawnPreview) zijn nooit een geldig doel:
+		// op een listen-server bestaat de eigen ghost-pot echt in de wereld en zou 'ie anders
+		// de snap/dedup kunnen kapen.
+		if (!A->GetActorEnableCollision()) { return; }
 		const FVector L = A->GetActorLocation();
 		if (FMath::Abs(L.Z - Near.Z) > 300.f) { return; }
 		const float D = FVector::DistSquared2D(L, Near);
@@ -621,22 +625,55 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		return;
 	}
 
+	// Telefoon/UI open? Dan geen X-weggooi-hold en geen auto-preview. Een keer bepalen, gedeeld
+	// met het auto-preview-blok hieronder.
+	bool bUIOpen = false;
+	if (const UPhoneClientComponent* Ph = GetOwner()->FindComponentByClass<UPhoneClientComponent>())
+	{
+		bUIOpen = Ph->IsOpen() || Ph->IsRollOpen() || Ph->IsDealOpen() || Ph->IsInventoryOpen();
+	}
+
 	// Oppakken: houd G ingedrukt terwijl je een pot aankijkt -> na PickupHoldDuration terug
 	// als item in de inventory (server-authoritative).
 	{
 		AActor* Focus = nullptr;
-		if (const UInteractionComponent* IC = GetOwner()->FindComponentByClass<UInteractionComponent>())
+		const UInteractionComponent* IC = GetOwner()->FindComponentByClass<UInteractionComponent>();
+		if (IC)
 		{
 			Focus = IC->GetFocusedActor();
 		}
 		const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
-		const bool bPickable = IsPickable(Focus);
-		if (PC && bPickable && PC->IsInputKeyDown(EKeys::G))
+
+		// Eigen korte oppak-trace: de interact-focus kijkt bewust DOOR gear-props heen naar de pot
+		// erachter (E blijft de pot bedienen), maar G-hold op een gear moet de GEAR oppakken - niet
+		// de pot. Zelfde kanaal/afstand als de focus-trace; alleen een direct geraakte, oppakbare
+		// APlaceableProp overschrijft de focus. Alleen tracen terwijl G ingedrukt is (geen tick-kosten).
+		AActor* PickTarget = Focus;
+		const bool bGDown = PC && PC->IsInputKeyDown(EKeys::G);
+		if (bGDown && IC)
+		{
+			FVector VLoc; FRotator VRot;
+			if (GetViewPoint(VLoc, VRot))
+			{
+				FCollisionQueryParams PickParams(SCENE_QUERY_STAT(WeedShopPickupTrace), false);
+				PickParams.AddIgnoredActor(GetOwner());
+				TArray<AActor*> PickAttached;
+				GetOwner()->GetAttachedActors(PickAttached);
+				PickParams.AddIgnoredActors(PickAttached);
+				FHitResult PickHit;
+				if (GetWorld()->LineTraceSingleByChannel(PickHit, VLoc, VLoc + VRot.Vector() * IC->InteractionDistance, IC->TraceChannel, PickParams)
+					&& Cast<APlaceableProp>(PickHit.GetActor()) && IsPickable(PickHit.GetActor()))
+				{
+					PickTarget = PickHit.GetActor();
+				}
+			}
+		}
+		if (bGDown && IsPickable(PickTarget))
 		{
 			PickupHoldAccum += DeltaTime;
 			if (PickupHoldAccum >= PickupHoldDuration)
 			{
-				ServerPickup(Focus);
+				ServerPickup(PickTarget);
 				PickupHoldAccum = 0.f;
 			}
 		}
@@ -644,16 +681,32 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		{
 			PickupHoldAccum = 0.f;
 		}
+
+		// Weggooien: houd X ingedrukt terwijl je een GEPLANTE pot aankijkt -> na DiscardHoldDuration
+		// leegt de server de hele pot (planten + soil/fert). Zelfde hold-patroon als G hierboven;
+		// loslaten of van focus wisselen reset de voortgang. Niet met een open UI (zelfde gate als
+		// de auto-preview).
+		AGrowPlant* DiscardPlant = Cast<AGrowPlant>(Focus);
+		if (DiscardPlant && !DiscardPlant->IsPlanted()) { DiscardPlant = nullptr; } // lege pot: niets weg te gooien
+		if (DiscardPlant != DiscardHoldPlant.Get()) { DiscardHoldAccum = 0.f; DiscardHoldPlant = DiscardPlant; } // focus-wissel = reset
+		if (PC && DiscardPlant && !bUIOpen && PC->IsInputKeyDown(EKeys::X))
+		{
+			DiscardHoldAccum += DeltaTime;
+			if (DiscardHoldAccum >= DiscardHoldDuration)
+			{
+				ServerDiscardPlant(DiscardPlant);
+				DiscardHoldAccum = 0.f;
+			}
+		}
+		else
+		{
+			DiscardHoldAccum = 0.f;
+		}
 	}
 
 	// Auto-preview: heb je een plaatsbaar item in de hand (en geen UI open), toon meteen de
 	// preview zodat je direct kunt plaatsen. Schakel je naar iets anders, dan verdwijnt 'ie.
 	{
-		bool bUIOpen = false;
-		if (const UPhoneClientComponent* Ph = GetOwner()->FindComponentByClass<UPhoneClientComponent>())
-		{
-			bUIOpen = Ph->IsOpen() || Ph->IsRollOpen() || Ph->IsDealOpen() || Ph->IsInventoryOpen();
-		}
 		const UInventoryComponent* Inv = GetOwnerInventory();
 		const FName Held = Inv ? Inv->GetActiveItemId() : NAME_None;
 		FPlaceableDef HeldDef;
@@ -674,6 +727,10 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 	bAimHit = false;
 	bValidSpot = false;
+	// Rauw aim-punt (het onbewerkte trefpunt van de kijk-trace, vóór alle snap/duw-correcties):
+	// de upgrade-snap gebruikt dit als RICHTING, zodat de gear met je muis over de cirkel rond
+	// het doel-object glijdt i.p.v. vast aan de speler-kant te plakken.
+	FVector AimPoint = PreviewLocation;
 
 	if (bPlacing)
 	{
@@ -718,18 +775,36 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			else if (bAimHit)
 			{
 				PreviewLocation = Hit.ImpactPoint;
+				AimPoint = Hit.ImpactPoint; // rauw bewaren voor de upgrade-richting (PreviewLocation wordt hierna gesnapt/geduwd)
 				PreviewRotation = FRotator(0.f, ViewRot.Yaw + PlaceYawOffset, 0.f); // kijkrichting + handmatige R-draai
 				float FloorNormalZ = Hit.ImpactNormal.Z;
 				// Mik je (onder welke hoek dan ook) op een geplaatst object -> nooit geldig (geen stapelen).
 				bool bOnPlaceable = IsPlaceableActor(Hit.GetActor());
-				// Op een DEUR (open of dicht) mag je niks plaatsen - die telt niet als muur/vloer.
-				const bool bOnDoor = Hit.GetActor() && Hit.GetActor()->IsA(ACityDoor::StaticClass());
 
 					if (CurrentDef.bIsWallMount)
 					{
 						// Wand-mount (droogrek): rug tegen een VERTICALE muur, voorkant de kamer in.
-						const FVector N = Hit.ImpactNormal;
-						const bool bWall = FMath::Abs(N.Z) < 0.4f; // verticaal vlak
+						FHitResult WallHit = Hit; // de hit waar alle muur-logica op draait (kan de her-trace worden)
+						FVector N = WallHit.ImpactNormal;
+						bool bWall = FMath::Abs(N.Z) < 0.4f; // verticaal vlak
+						// Mik je op de VLOER of het PLAFOND (vlak bij een muur)? Her-trace dan HORIZONTAAL in je
+						// platte kijk-yaw (start iets terug richting camera, net los van het vlak): raakt die een
+						// verticale muur, dan snapt het item alsnog op DIE muur i.p.v. rood te blijven. Alle
+						// filters hieronder (raam/deur/hoek/huis) draaien dan op de her-trace-hit.
+						if (!bWall && FMath::Abs(N.Z) > 0.7f)
+						{
+							const FVector FlatDir = FRotator(0.f, ViewRot.Yaw, 0.f).Vector();
+							FVector RStart = WallHit.ImpactPoint - FlatDir * 30.f + N * 15.f; // terug + van vloer/plafond af
+							RStart.Z = FMath::Clamp(RStart.Z, WallHit.ImpactPoint.Z - 20.f, WallHit.ImpactPoint.Z + 20.f);
+							FHitResult RHit;
+							if (GetWorld()->LineTraceSingleByChannel(RHit, RStart, RStart + FlatDir * PlaceDistance, ECC_Visibility, Params)
+								&& FMath::Abs(RHit.ImpactNormal.Z) < 0.4f)
+							{
+								WallHit = RHit;
+								N = WallHit.ImpactNormal;
+								bWall = true;
+							}
+						}
 						FVector D = FVector(N.X, N.Y, 0.f).GetSafeNormal(); // horizontale muur-normaal (de kamer in)
 						if (D.IsNearlyZero()) { D = FVector(1.f, 0.f, 0.f); }
 						// De lightswitch-plaat staat dun op LOKALE X (knop op +X); rek/TV hebben hun diepte op +Y.
@@ -737,7 +812,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 						const bool bFaceX = CurrentDef.bIsLightSwitch;
 						PreviewRotation = FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X)) - (bFaceX ? 0.f : 90.f), 0.f);
 						// Midden = trefpunt + normaal * halve diepte (rug strak tegen de muur). Hoogte = waar je mikt.
-						FVector Center = Hit.ImpactPoint + D * (bFaceX ? CurrentDef.BoxHalf.X : CurrentDef.BoxHalf.Y);
+						FVector Center = WallHit.ImpactPoint + D * (bFaceX ? CurrentDef.BoxHalf.X : CurrentDef.BoxHalf.Y);
 						// Shift: snap langs de muur (horizontale tangent) en in hoogte op het raster.
 						const APlayerController* PCw = Cast<APlayerController>(OwnerPawn->GetController());
 						if (PCw && (PCw->IsInputKeyDown(EKeys::LeftShift) || PCw->IsInputKeyDown(EKeys::RightShift)) && GridSize > 1.f)
@@ -751,29 +826,48 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 							const float HeightStep = FMath::Max(20.f, CurrentDef.BoxHalf.Z * 2.f); // verticaal flush
 							Center.Z = FMath::GridSnap<float>(Center.Z, HeightStep);
 						}
+						// Hoogte ALTIJD klemmen tussen vloer en plafond op de item-positie (ook na de Shift-snap):
+						// korte up/down-traces op het midden (staat al een halve diepte de kamer in), zodat het
+						// item nooit half door de vloer of door het plafond snapt.
+						{
+							FHitResult ZUp, ZDown;
+							const FVector ZC(Center.X, Center.Y, Center.Z);
+							if (GetWorld()->LineTraceSingleByChannel(ZUp, ZC, ZC + FVector(0.f, 0.f, 600.f), ECC_Visibility, Params))
+							{
+								Center.Z = FMath::Min(Center.Z, ZUp.ImpactPoint.Z - CurrentDef.BoxHalf.Z - 4.f);
+							}
+							if (GetWorld()->LineTraceSingleByChannel(ZDown, ZC, ZC - FVector(0.f, 0.f, 600.f), ECC_Visibility, Params))
+							{
+								Center.Z = FMath::Max(Center.Z, ZDown.ImpactPoint.Z + CurrentDef.BoxHalf.Z + 4.f);
+							}
+						}
 						PreviewLocation = Center;
 						// Geraakte mesh-naam: een RAAM (glas) is geen geldige wand-mount-drager, en een RAUWE
 						// apartment-deur-mesh (nog niet omgezet naar ACityDoor) telt ook als deur. Zelfde deur-filter
 						// als RefreshDoorCache (r~319): "Door" maar niet "DoorFrame"/"Doorway" (kozijn/opening zelf).
-						const UStaticMeshComponent* HC = Cast<UStaticMeshComponent>(Hit.GetComponent());
+						const UStaticMeshComponent* HC = Cast<UStaticMeshComponent>(WallHit.GetComponent());
 						const FString HN = (HC && HC->GetStaticMesh()) ? HC->GetStaticMesh()->GetName() : FString();
 						const bool bOnWindow = HN.Contains(TEXT("Glass")) || HN.Contains(TEXT("Window"));
-						const bool bOnDoorMesh = bOnDoor || (HN.Contains(TEXT("Door")) && !HN.Contains(TEXT("DoorFrame")) && !HN.Contains(TEXT("Doorway")));
+						// Deur (open of dicht) / geplaatst object: op basis van de (eventueel her-getracede) MUUR-hit,
+						// niet de originele vloer/plafond-hit.
+						const bool bOnDoorW = WallHit.GetActor() && WallHit.GetActor()->IsA(ACityDoor::StaticClass());
+						const bool bOnPlaceableW = IsPlaceableActor(WallHit.GetActor());
+						const bool bOnDoorMesh = bOnDoorW || (HN.Contains(TEXT("Door")) && !HN.Contains(TEXT("DoorFrame")) && !HN.Contains(TEXT("Doorway")));
 						// Wand-mount (rek/lamp/TV) mag alleen op een MUUR, niet op een deur/raam/ander object, niet DOOR
 						// een ander object heen, en BINNEN je eigen huis. De huis-check pakt een punt iets DIEPER de kamer
 						// in (de muur ligt op de build-box-rand, dus de rug-positie valt anders nét buiten en weigert 'ie
 						// onterecht). Plus: bij rood de ECHTE reden tonen i.p.v. een oude "Aim at the floor"-hint.
 						const bool bWmOverlap = OverlapsOtherPlaceable(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion());
-						const bool bWmHome = CurrentDef.bAllowOutdoors || IsInOwnedHome(Hit.ImpactPoint + D * (CurrentDef.BoxHalf.Y + 40.f));
+						const bool bWmHome = CurrentDef.bAllowOutdoors || IsInOwnedHome(WallHit.ImpactPoint + D * (CurrentDef.BoxHalf.Y + 40.f));
 						// Steekt de VOORKANT van het item door een HAAKSE / hoek-muur (WorldStatic)? Dan ongeldig (rood).
 						const bool bWmClip = WallItemClipsWall(GetWorld(), GetOwner(), PreviewLocation, CurrentDef.BoxHalf, PreviewRotation.Quaternion(), bFaceX);
-						bValidSpot = bWall && !bOnPlaceable && !bOnDoorMesh && !bOnWindow && !bWmOverlap && !bWmClip && bWmHome;
+						bValidSpot = bWall && !bOnPlaceableW && !bOnDoorMesh && !bOnWindow && !bWmOverlap && !bWmClip && bWmHome;
 						if (!bValidSpot)
 						{
 							PlacementHint = !bWall ? TEXT("Aim at a wall")
 								: bOnDoorMesh ? TEXT("Not on a door")
 								: bOnWindow ? TEXT("Not on a window")
-								: bOnPlaceable ? TEXT("Can't place on top of that")
+								: bOnPlaceableW ? TEXT("Can't place on top of that")
 								: bWmClip ? TEXT("Too close to a corner or wall")
 								: !bWmHome ? TEXT("Only inside your own home")
 								: TEXT("Too close to another object");
@@ -946,8 +1040,11 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 			}
 			else
 			{
-				// Andere upgrades: net buiten de rand van het object, aan de speler-kant, op de vloer.
-				FVector Dir = OwnerPawn->GetActorLocation() - TL; Dir.Z = 0.f; Dir = Dir.GetSafeNormal();
+				// Andere upgrades: net buiten de rand van het object, op de vloer, aan de kant waar je
+				// MIKT (rauw aim-punt): de gear glijdt zo met je muis over de cirkel rond het object.
+				// Mik je (bijna) exact op het midden -> val terug op de speler-richting.
+				FVector Dir = (AimPoint - TL).GetSafeNormal2D();
+				if (Dir.IsNearlyZero()) { Dir = (OwnerPawn->GetActorLocation() - TL).GetSafeNormal2D(); }
 				if (Dir.IsNearlyZero()) { Dir = FVector(1.f, 0.f, 0.f); }
 				const float Edge = TargetRad + FMath::Max(CurrentDef.BoxHalf.X, CurrentDef.BoxHalf.Y) + 4.f;
 				PreviewLocation = FVector(TL.X, TL.Y, FeetZ) + Dir * Edge;
@@ -1138,6 +1235,20 @@ void UBuildComponent::ServerPickup_Implementation(AActor* Target)
 	{
 		UWeedToast::NotifyPawn(GetOwner(),-1, 2.f, FColor::Green, TEXT("Picked up."));
 	}
+}
+
+void UBuildComponent::ServerDiscardPlant_Implementation(AGrowPlant* Plant)
+{
+	if (!IsValid(Plant))
+	{
+		return;
+	}
+	// Afstand-check (anti-cheat/lag): zelfde marge als ServerPickup hierboven.
+	if (GetOwner() && FVector::Dist(GetOwner()->GetActorLocation(), Plant->GetActorLocation()) > PlaceDistance + 150.f)
+	{
+		return;
+	}
+	Plant->DiscardAll(); // leegt alle plant-plekken + soil/fert (intern server-only)
 }
 
 void UBuildComponent::UpdateRemoteGhost()
@@ -1475,6 +1586,36 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Place this on a pot/rack/machine.")); }
 		return;
+	}
+	// Dedup op de FYSIEKE props als autoriteit: het PotUpgradeMask/de rek-flags lopen tot 0.5s achter
+	// (gethrottlede scans), dus snel 2x plaatsen glipte door de mask-check heen - en DryUp_/ProcUp_
+	// hadden helemaal geen dedup. Zelfde criteria als RecomputeGearUpgradeMask (GrowPlant.cpp) en
+	// ADryingRack::RecomputeUpgrades: prop binnen 175cm/±280cm van het doel EN het doel is de
+	// dichtstbijzijnde van z'n soort bij de prop. Staat er zo al een prop met ditzelfde ItemId -> weigeren.
+	if (bUpgrade)
+	{
+		const FVector TC = UpgTarget->GetActorLocation();
+		// Dichtstbijzijnde doel-actor van dezelfde soort bij een prop-positie (mirror van NearestPot/NearestRack).
+		auto NearestOfKind = [World, UpKind](const FVector& At) -> AActor*
+		{
+			AActor* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
+			auto Consider = [&](AActor* A) { if (!IsValid(A) || !A->GetActorEnableCollision()) { return; } const float d = FVector::DistSquared2D(A->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = A; } };
+			if (UpKind == 1)      { for (TActorIterator<AGrowPlant> It(World); It; ++It)        { Consider(*It); } }
+			else if (UpKind == 2) { for (TActorIterator<ADryingRack> It(World); It; ++It)       { Consider(*It); } }
+			else                  { for (TActorIterator<AProcessorMachine> It(World); It; ++It) { Consider(*It); } }
+			return Best;
+		};
+		for (TActorIterator<APlaceableProp> It(World); It; ++It)
+		{
+			APlaceableProp* P = *It;
+			if (!IsValid(P) || P->ItemId != ItemId) { continue; }
+			if (!P->GetActorEnableCollision()) { continue; } // ghost-previews (collision uit) tellen niet mee
+			const FVector L = P->GetActorLocation();
+			if (FVector::Dist2D(L, TC) > 175.f || FMath::Abs(L.Z - TC.Z) > 280.f) { continue; }
+			if (NearestOfKind(L) != UpgTarget) { continue; }
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("That upgrade is already placed here.")); }
+			return;
+		}
 	}
 	// Pot-gear: max 1 per upgrade EN max 1 tier per familie (lamp/tent/water) per pot.
 	if (bUpgrade && UpKind == 1)

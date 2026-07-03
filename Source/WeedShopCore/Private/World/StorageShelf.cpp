@@ -6,6 +6,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Placement/PlaceableTypes.h"
 #include "Placement/PropMeshKit.h"
+#include "Inventory/InventoryComponent.h" // IsPerishableItem: gedeelde bederf-check (1 bron van waarheid)
 #include "Engine/StaticMesh.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
@@ -211,10 +212,8 @@ void AStorageShelf::DegradeShelfPerishables()
 	bool bChanged = false;
 	for (FShelfStack& S : Contents)
 	{
-		const FString Id = S.ItemId.ToString();
-		const bool bPerish = Id.StartsWith(TEXT("ButterMix")) || Id.StartsWith(TEXT("Edible")) || Id == TEXT("Butter")
-			|| Id.StartsWith(TEXT("Cookie")) || Id.StartsWith(TEXT("Gummy"));
-		if (bPerish && S.QualityPct > 0.f)
+		// Gedeelde bederf-check (zelfde lijst als de inventory-degrade, 1 bron van waarheid).
+		if (UInventoryComponent::IsPerishableItem(S.ItemId) && S.QualityPct > 0.f)
 		{
 			S.QualityPct = FMath::Max(0.f, S.QualityPct - Step);
 			bChanged = true;

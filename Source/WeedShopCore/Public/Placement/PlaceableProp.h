@@ -30,6 +30,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_ItemId, Category = "WeedShop|Placeable")
 	FName ItemId = NAME_None;
 
+	// Is dit een gear-upgrade-prop (pot-gear / DryUp_ / ProcUp_)? Upgrade-props zijn bewust NIET
+	// interactable: de interactie-trace slaat ze over (zie UInteractionComponent::UpdateFocus)
+	// zodat de pot/het rek/de machine erachter zelf de focus en de klik krijgt.
+	bool IsGearUpgrade() const;
+
 	// IInteractable: prompt; interact = slapen (alleen voor bedden), anders niets (oppakken via hold G).
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;

@@ -214,7 +214,10 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const bool bJointHand = ActiveF.ToString().StartsWith(TEXT("Joint_"));
 			// Klant + joint in de hand -> korte hold om 'm een hit te geven.
 			if (Cast<ACustomerBase>(Focus) && bJointHand) { Hints.Emplace(TEXT("Hold LMB"), TEXT("Give them a hit")); }
-			if (Cast<AGrowPlant>(Focus)) { Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Upgrade pot")); }
+			const AGrowPlant* FocusPot = Cast<AGrowPlant>(Focus);
+			if (FocusPot) { Hints.Emplace(K(TEXT("PotUpgrade")), TEXT("Upgrade pot")); }
+			// Geplante pot: X inhouden gooit de plant weg (voortgangsbalk op de HUD).
+			if (FocusPot && FocusPot->IsPlanted()) { Hints.Emplace(TEXT("Hold X"), TEXT("Discard plant")); }
 			// Plaatsbare objecten kun je oppakken (G inhouden).
 			if (Build && Build->IsPickable(Focus)) { Hints.Emplace(TEXT("Hold G"), TEXT("Pick up")); }
 		}
