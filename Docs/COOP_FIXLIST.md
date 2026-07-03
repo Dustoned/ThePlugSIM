@@ -314,3 +314,37 @@ de huidige beach-look behouden blijft (r.582-commentaar waarschuwt: UDS-exposure
 wit + maakte de dag donker -> dat kwam juist door het ontbreken van de PPV, nu opgelost). NightPPV/BloomPPV blijven
 (zetten alleen min/max+bias, geen methode). VERIFICATIE: 2 instances naast elkaar op dezelfde in-game tijd, dag EN nacht.
 BESLUIT speler 07-03: nu geparkeerd - het is grotendeels het 2-lokale-instances-test-artefact, geen ramp voor nu.
+
+### UPDATE 07-03: BEVESTIGD - level/XP is GEDEELD in competitive (crew-level), niet per-speler
+Workflow-verificatie (3 agents). Root: EEN ULevelComponent op de GameState (WeedShopGameState.cpp:37), enkele
+int32 Level/CurrentXP/bShopLicensed (LevelComponent.h:67-74), plain DOREPLIFETIME naar alle clients, GEEN
+#PlayerId-keying of IsCompetitive-branch. Header zegt het zelf: "Gedeeld in co-op (een crew-level)."
+GEVOLG competitive: beide spelers zien HETZELFDE levelnummer+XP-balk; XP is 1 pot (A verkoopt -> B's level stijgt);
+ALLE level-gates gemeenschappelijk incl. shop-licentie (level-50). Inconsistent: cash (pawn-Economy) + relaties
+(NpcId#StablePlayerId) + contacts zijn AL per-speler; level/XP + HEAT (ook GameState-only, WeedShopGameState.cpp:36)
+lopen achter.
+PER-SPELER-AANPAK (aangeraden = registry-keyed, zoals relaties; NIET per-pawn-component):
+- ULevelComponent: 3 scalars -> TMap<FName,FLevelState>, key = USaveGameSubsystem::StablePlayerId(Pawn), gate op
+  GS->IsCompetitive() (co-op = 1 gedeelde key); resolver GetLevelFor(Pawn) a la GetEconomy().
+- ~30 call-sites die nu GS->GetLeveling() doen moeten de speler meekrijgen:
+  Write(3): CustomerBase.cpp:3365, GrowPlant.cpp:883/888, ThePlugSIMCharacter.cpp:1640 (XP -> verdienende pawn).
+  Read/display(5): PhoneWidget.cpp:3531, StatusHudWidget.cpp:242, WeedShopHUD.cpp:262/404, LevelUpWidget.cpp:146.
+  Gates(12+): ContactsComponent.cpp:251, PhoneClientComponent.cpp:2407/2691/3505/3236, StoreWidget.cpp:232,
+  PhoneWidget.cpp:2225/2461, CustomerBase.cpp:2946, GrowPlant.cpp:468, DoorRetrofitter.cpp:3003/3084.
+  Save: SaveGameSubsystem.cpp:562/647 (CrewLevel/CrewXP -> per-speler-array + migratie bestaande saves).
+  Level-up-toast: per-speler Client-RPC (zoals contacts NotifyOwnerPlayer).
+INSCHATTING: middelgroot; kern (component+save+resolver) klein, volume zit in de ~30 resolve-sites. Hoort bij de
+competitive-per-speler-ronde SAMEN met heat + tier/cooldown. VERIFICATIE: echte 2-PC competitive-test.
+
+### UPDATE 07-03: lift joiner-ziet-host lichte bob = GEACCEPTEERDE beperking (niet verder chasen)
+Status lift co-op: FUNCTIONEEL AF. Deuren openen op beide (client-aankomst), deur-retentie wacht op beide spelers
+(geen afknellen/terug-teleport), rit-Z 30Hz + client-smoothing (host-ziet-joiner perfect), geen phasing host-kant.
+RESTEREND: de JOINER ziet de HOST tijdens de rit licht verticaal bobben. Root: de cabine is bReplicates=false
+(per-proces, WorldSync-state), dus elke speler wordt op het scherm van de ander uit TWEE losse replicatie-signalen
+opgebouwd (character 100Hz absolute Z + cabine-Z 30Hz WorldSync) met net andere lag/smoothing -> milde bob.
+VERWORPEN fix (07-03): proxy-Z-lock (remote pawn elke frame op de lokale CabZ via SetActorLocation) -> vecht met
+UCharacterMovementComponent network-smoothing -> STUTTER voor beide spelers, ook stilstaand vlakbij de lift.
+Teruggedraaid (git checkout). Manipuleer NOOIT een simulated-proxy z'n positie per frame; dat is het anti-pattern.
+ECHTE fix zou base-relatieve movement vereisen = de cabine een GEREPLICEERDE actor maken (NetGUID) -> grote
+architecturale wijziging tegen het per-proces/WorldSync-patroon in. BESLUIT speler 07-03: accepteren + parkeren;
+op 2 echte PC's is de 100Hz character-repli vers -> bob kleiner dan op localhost-2-instances (deels test-artefact).
