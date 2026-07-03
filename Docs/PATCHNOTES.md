@@ -1,4 +1,43 @@
 PATCH NOTES
+Version 1.20.0 — 3 juli 2026
+
+Korte intro:
+Multiplayer is nu compleet. In competitive speel je echt ieder-voor-zich: je hebt je eigen level,
+geld, klanten en politie-aandacht - niks wordt meer gedeeld met je tegenstander. De lift loopt soepel
+voor allebei, en een hele berg kleine multiplayer-dingen die nog scheef stonden is rechtgezet.
+
+━━━━━━━━━━━━━━━━━━━━
+
+COMPETITIVE (ieder voor zich)
+
+• Je hebt nu je EIGEN level en XP. Verkoop je, dan stijgt alleen jouw level - je tegenstander lift niet
+  meer mee. Ook de shop-licentie (level 50) verdien je zelf.
+• Elke klant onthoudt jou apart: je eigen band/tier per klant en je eigen wachttijden. De ordergrootte
+  van een klant past zich aan aan JOUW niveau zodra je 'm aanspreekt.
+• Politie-aandacht (heat) is per speler. Een inval of overval treft alleen de speler die het over
+  zichzelf afriep - en haalt alleen diens huis leeg, niet dat van de ander.
+• Huur is per speler: kun jij je huur niet betalen, dan gaat alleen jouw deur op slot, en je betaalt met
+  je eigen geld. Voorheen klopte dit niet in competitive.
+• Je kunt niet allebei hetzelfde pand kopen - de tweede krijgt netjes 'al in bezit'.
+
+━━━━━━━━━━━━━━━━━━━━
+
+CO-OP & LIFT
+
+• De lift werkt nu goed samen: de deuren gaan ook bij de gast open, je komt er soepel uit zonder vast te
+  komen of teruggetrokken te worden, en de ander schokt niet meer op en neer tijdens het rijden.
+• Klanten blijven netjes stilstaan als de gast met ze praat (voorheen liep de klant door).
+• Het weer klikt meteen goed als je joint (geen minutenlange overgang meer bij de gast).
+• Lichtschakelaars die je plaatst of verzet zie je nu ook als gast (na laden en plaatsen).
+• Een sessie is nu maximaal 2 spelers (waar co-op en competitive voor gemaakt zijn).
+
+━━━━━━━━━━━━━━━━━━━━
+
+(Intern: speler-progressie draait nu op per-speler opslag met een stabiele speler-sleutel die ook zonder
+Steam werkt; bestaande saves migreren automatisch. Deur/lift/lamp-acties zijn nu server-gevalideerd.)
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.19.4 — 2 juli 2026
 
 Korte intro:
