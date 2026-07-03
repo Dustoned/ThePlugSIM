@@ -345,3 +345,43 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - Het oude A–Z stappenplan (A t/m Y afgerond; Z = packaged build leeft door als 2C.5).
 - Procedurele-stad-uitbreidingen — de CityGenerator blijft werken als fallback, maar nieuwe wereld-features landen op de beach-map.
 - Levels 51-100 vullen met losse unlocks — die ruimte blijft gereserveerd voor de shop-fase.
+
+---
+
+## SPELER-DUMP 07-03 (na release 1.20.0) — genummerd, verkenning loopt
+
+### UI-flash / persistente UI (D1-D4)
+- [ ] **D1** Fullscreen shops hebben geen UI-overhaul gehad -> flashen nog; ombouwen naar persistent (pool+sig) zoals de rest
+- [ ] **D2** Goals-app: behaalde goals ALTIJD bovenaan (makkelijk claimen), flash weg, app opknappen (messy, meer een echt goals-menu)
+- [ ] **D3** Storage-UI's flashen/rebuilden nog (drying rack -> inv slepen e.d.); wardrobe + alle machines grondig nalopen zoals bij inventory
+- [ ] **D4** Day-counter + bank-overlay (HUD) rebuildt zichtbaar -> flash weghalen
+
+### Kweken / plaatsen (D5-D12)
+- [ ] **D5** Plant discarden: X inhouden = plant weg (altijd beschikbaar)
+- [ ] **D6** Pot-upgrade plaatsen: preview op vaste as om de pot laten draaien met de muis (niet meer omheen lopen)
+- [ ] **D7** Upgrades op pot: interact-prompt (add soil-state) HELEMAAL van upgrades af; kijk-klik kiest altijd de POT, ook achter upgrades
+- [ ] **D8** Upgrade-stack glitch: snel klikken plaatst meerdere upgrades op 1 pot -> dedup server-side
+- [ ] **D9** Drying rack: 3D-rek-modellen per SLOT tonen (geen overbodige rekken), netjes verdeeld
+- [ ] **D10** Muur-snap: bij plafond-/vloerranden snapt wand-plaatsing (bv. drying rack) niet lekker
+- [ ] **D11** Wiet-toppen kleuren mee met de strain-tag-kleur (nu altijd paars)
+- [ ] **D12** Fridge: alleen fridge-zinnige items toestaan (edibles-flow), rest weigeren
+
+### NPC / economie / inventory (D13-D21)
+- [ ] **D13** "../.."-addiction-weergave bij NPC's: uitzoeken wat dit is + hoe het hoort (speler verwachtte respect-tracking tot telefoonnummer)
+- [ ] **D14** Mooie stats-up-notificatie (minimalist-kit): "Satisfied/Happy customer +2 [Respect-icoon]" i.p.v. kale interactie-tekst
+- [ ] **D15** Inventory vol (gewicht OF slots) bij shop-koop/oppakken: overal nette notificatie + niet-passende items op de grond droppen (winkel/plek zelf); items mogen NOOIT verdwijnen
+- [ ] **D16** Missing-body NPC ook in singleplayer (man, lijkt kant-en-klare skin, niet citizen) -> skin-pool checken
+- [ ] **D17** NPC's zitten soms nog op stoep-stoelen/tafels
+- [ ] **D18** Geslacht-naam mismatch: "Freek" met vrouwenskin -> naam-pool koppelen aan skin-geslacht
+- [ ] **D19** Bag-gewicht onlogisch: 1g bag weegt evenveel als 2g bag -> gewicht schalen met inhoud (kleine bags relatief zwaarder per g, grote lichter)
+- [ ] **D20** NPC-vragen tonen rauwe id's met underscores ("critical_mass_2g") -> nette naam "Critical Mass 2g", zonder bag-vermelding
+- [ ] **D21** Sample-geven: hoeveelheid kiezen (meer gram = sneller levelen) met duidelijke indicatie per gram + maximum (anti-abuse)
+- [ ] **D22** Backpack-upgrades als categorie in de telefoon-upgrade-tab; puur geld-gelinkt (geen level-scaling)
+
+### Wereld / audio / MP (D23-D28)
+- [ ] **D23** Onweer: veel te veel bliksem-flashes achter elkaar -> realistischer (interval/intensiteit)
+- [ ] **D24** Sound-optie voor weer (volume-slider weather-audio in settings)
+- [ ] **D25** Lift-nummers zweven van de muur (in de lift + boven de deuren: zwart vlak + verlicht cijfer los ervoor) -> alles strak vlak
+- [ ] **D26** Kompas-icons: groter/duidelijker, 3D-gevoel (schalen met afstand), winkels toevoegen met de kleur van de toonbank; 2 dubbele deduppen
+- [ ] **D27** Speler-disconnect freezet de game van de ander lang + geen disconnect-melding -> nette afhandeling
+- [ ] **D28** Joiner: altijd een "Leave session"-optie -> terug naar hoofdmenu
