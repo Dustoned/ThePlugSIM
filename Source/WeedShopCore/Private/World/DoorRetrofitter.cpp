@@ -2999,8 +2999,9 @@ AWorldItemPickup* ADoorRetrofitter::MintJointAt(const FVector& Loc)
 	});
 
 	// Speler-level -> tier-fractie (0 op lvl 1, 1 op lvl 50).
+	// CO-OP/COMPETITIVE: seed-scatter is BEWUST GEDEELD (gedeelde wereld, geen speler-eigenaar) -> nullptr = crew-waarde.
 	int32 Level = 1;
-	if (GS->GetLeveling()) { Level = GS->GetLeveling()->GetLevel(); }
+	if (GS->GetLeveling()) { Level = GS->GetLeveling()->GetLevelFor(nullptr); }
 	const float LevelFrac = FMath::Clamp((Level - 1) / 49.f, 0.f, 1.f);
 
 	// Strain schaalt mee met je tier: de index volgt je level (hogere strains naarmate je levelt). (1 - FRand^1.6)
@@ -3080,8 +3081,9 @@ bool ADoorRetrofitter::PlaceJointAtSpot(const FVector& Spot)
 int32 ADoorRetrofitter::LevelJointTarget() const
 {
 	if (JointSpots.Num() == 0) { return 0; }
+	// CO-OP/COMPETITIVE: joint-scatter is BEWUST GEDEELD (gedeelde wereld, geen speler-eigenaar) -> nullptr = crew-waarde.
 	int32 Level = 1;
-	if (UWorld* W = GetWorld()) { if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { if (GS->GetLeveling()) { Level = GS->GetLeveling()->GetLevel(); } } }
+	if (UWorld* W = GetWorld()) { if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { if (GS->GetLeveling()) { Level = GS->GetLeveling()->GetLevelFor(nullptr); } } }
 	// Meer joints over de map (was 12%->60% = ~23 vroeg; speler kwam er zo nooit een tegen). Nu 30%->70%.
 	const float Frac = FMath::Clamp(0.30f + (Level / 5) * 0.05f, 0.30f, 0.70f);
 	return FMath::Clamp(FMath::RoundToInt(JointSpots.Num() * Frac), 8, FMath::Min(MaxScatteredJoints, JointSpots.Num()));

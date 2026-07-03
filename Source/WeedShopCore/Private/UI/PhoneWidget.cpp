@@ -798,22 +798,24 @@ void UPhoneWidget::FillSettingsBody()
 			BodyRow(GBtns, FMargin(0.f, 0.f, 0.f, 4.f));
 			BodyRow(MakeText(TEXT("Pick the exact model in the Wardrobe."), 10, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 10.f));
 		}
+		// Co-op: toon level/XP/heat van de LOKALE speler (eigenaar van deze widget), niet van de host.
+		APawn* OwnerPawn = GetOwningPlayerPawn();
 		if (GS && GS->GetLeveling())
 		{
 			ULevelComponent* Lv = GS->GetLeveling();
-			BodyRow(MakeText(FString::Printf(TEXT("Level %d"), Lv->GetLevel()), 15, WeedUI::ColGood()), FMargin(0.f, 0.f, 0.f, 2.f));
+			BodyRow(MakeText(FString::Printf(TEXT("Level %d"), Lv->GetLevelFor(OwnerPawn)), 15, WeedUI::ColGood()), FMargin(0.f, 0.f, 0.f, 2.f));
 			UProgressBar* XpBar = WidgetTree->ConstructWidget<UProgressBar>();
-			XpBar->SetPercent(Lv->GetLevelFraction());
+			XpBar->SetPercent(Lv->GetLevelFractionFor(OwnerPawn));
 			XpBar->SetFillColorAndOpacity(WeedUI::ColAccent());
 			BodyRow(XpBar, FMargin(0.f, 2.f, 0.f, 4.f));
-			BodyRow(MakeText(Lv->GetLevel() >= ULevelComponent::MaxLevel ? TEXT("MAX")
-				: *FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXP(), Lv->GetXPToNext()), 12, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 6.f));
+			BodyRow(MakeText(Lv->GetLevelFor(OwnerPawn) >= ULevelComponent::MaxLevel ? TEXT("MAX")
+				: *FString::Printf(TEXT("%d / %d XP"), Lv->GetCurrentXPFor(OwnerPawn), Lv->GetXPToNextFor(OwnerPawn)), 12, WeedUI::ColTextDim()), FMargin(0.f, 0.f, 0.f, 6.f));
 		}
 		if (GS && GS->GetHeat())
 		{
 			BodyRow(MakeText(TEXT("Heat"), 14, FLinearColor(1.f, 0.7f, 0.6f)), FMargin(0.f, 0.f, 0.f, 2.f));
 			UProgressBar* HeatBar = WidgetTree->ConstructWidget<UProgressBar>();
-			HeatBar->SetPercent(GS->GetHeat()->GetHeat() / 100.f);
+			HeatBar->SetPercent(GS->GetHeat()->GetHeatFor(OwnerPawn) / 100.f);
 			HeatBar->SetFillColorAndOpacity(FLinearColor(1.f, 0.45f, 0.3f));
 			BodyRow(HeatBar, FMargin(0.f, 0.f, 0.f, 0.f));
 		}
@@ -2222,7 +2224,8 @@ void UPhoneWidget::FillPotUpgradesInto(UScrollBox* Scroll)
 	Scroll->AddChild(MakeText(TEXT("Pot upgrades stay with the pot."), 11, WeedUI::ColTextDim()));
 
 	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
+	// Co-op: level-gate op de LOKALE speler (eigenaar van deze widget), niet op de host.
+	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevelFor(GetOwningPlayerPawn()) : 1;
 
 	int32 PotCount = 0;
 	if (UWorld* W = GetWorld())
@@ -2458,7 +2461,8 @@ void UPhoneWidget::FillStoreList()
 	}
 
 	// --- Catalogus (kopen) ---
-	const int32 CatPlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
+	// Co-op: level-gate op de LOKALE speler (eigenaar van deze widget), niet op de host.
+	const int32 CatPlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevelFor(GetOwningPlayerPawn()) : 1;
 	for (const FName& Id : Store->GetSupplierCategory(Cat))
 	{
 		const int32 Price = Store->GetCatalogPriceCents(Id);
@@ -3531,18 +3535,20 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (LevelText && GS->GetLeveling())
 		{
 			const ULevelComponent* Lv = GS->GetLeveling();
-			const int32 Level = Lv->GetLevel();
+			// Co-op: header toont het level/XP van de LOKALE speler (eigenaar van deze widget), niet van de host.
+			APawn* OwnerPawn = GetOwningPlayerPawn();
+			const int32 Level = Lv->GetLevelFor(OwnerPawn);
 			if (Level != LastPhoneLevel)
 			{
 				LastPhoneLevel = Level;
 				LevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv %d"), Level)));
 			}
-			const int32 Xp = Lv->GetCurrentXP();
-			const int32 ToNext = Lv->GetXPToNext();
+			const int32 Xp = Lv->GetCurrentXPFor(OwnerPawn);
+			const int32 ToNext = Lv->GetXPToNextFor(OwnerPawn);
 			if (Xp != LastPhoneXp || ToNext != LastPhoneXpNext)
 			{
 				LastPhoneXp = Xp; LastPhoneXpNext = ToNext;
-				if (LevelXpBar) { LevelXpBar->SetPercent(Lv->GetLevelFraction()); }
+				if (LevelXpBar) { LevelXpBar->SetPercent(Lv->GetLevelFractionFor(OwnerPawn)); }
 				if (LevelXpText)
 				{
 					LevelXpText->SetText(ToNext <= 0

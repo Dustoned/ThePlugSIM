@@ -248,7 +248,18 @@ void UContactsComponent::SendRandomAppointment()
 	// een specifieke wiet-strain met een min-THC-eis, een ruimere deadline en een bonus-uitbetaling.
 	// Schaalt mee met level (vaker + groter + meer bonus). Beloont een goed gevulde, diverse voorraad.
 	const AWeedShopGameState* GSo = Cast<AWeedShopGameState>(GetOwner());
-	const int32 PlayerLvl = (GSo && GSo->GetLeveling()) ? GSo->GetLeveling()->GetLevel() : 1;
+	// COMPETITIVE: de VIP-order-kans/bonus schaalt met het level van de speler VOOR wie deze afspraak is.
+	// Resolve die eigenaar-speler nu al (dezelfde logica als het ForPlayerId-blok hieronder): eerst het
+	// contact-eigenaarschap (OwnerPlayerId), anders de favoriete speler van dit contact (TopOwner op de
+	// BASIS-NpcId). Geen speler-context (co-op, of niemand gematcht) -> nullptr = gedeelde crew-waarde.
+	APawn* LvlPawn = nullptr;
+	if (GSo && GSo->IsCompetitive())
+	{
+		FString OwnerId = C.OwnerPlayerId;
+		if (OwnerId.IsEmpty()) { if (UNpcRegistryComponent* Rg = GSo->GetNpcRegistry()) { OwnerId = Rg->GetTopOwner(BaseNpcId(C.ContactId)); } }
+		LvlPawn = ResolvePawnForPlayer(OwnerId); // nullptr als niets matcht -> valt terug op gedeeld
+	}
+	const int32 PlayerLvl = (GSo && GSo->GetLeveling()) ? GSo->GetLeveling()->GetLevelFor(LvlPawn) : 1;
 	{
 		const bool bWeedProduct = WantProduct.ToString().StartsWith(TEXT("Bag_"));
 		const float OrderChance = FMath::Clamp((PlayerLvl - 10) * 0.025f, 0.f, 0.45f);

@@ -89,6 +89,22 @@ struct FSavePendingDelivery
 	UPROPERTY() TArray<int32> Qtys;
 };
 
+// Per-speler voortgang (level/XP/licentie + heat), gekeyed op StablePlayerId. APARTE array (NIET in
+// FPlayerSaveData) zodat co-op 1 record met lege PlayerId schrijft (= gedeeld) en competitive per speler een
+// record. Oude saves (SaveVersion < 5) hebben deze array niet -> gemigreerd uit de top-level velden bij load.
+USTRUCT()
+struct FPlayerProgressSave
+{
+	GENERATED_BODY()
+	UPROPERTY() FString PlayerId; // == StablePlayerId; leeg = co-op/gedeeld
+	UPROPERTY() int32 Level = 1;
+	UPROPERTY() int32 XP = 0;
+	UPROPERTY() bool bShopLicensed = false;
+	UPROPERTY() float Heat = 0.f;
+	UPROPERTY() float HeatEventTimer = 0.f;
+	UPROPERTY() int32 HeatLastEventDay = -1000;
+};
+
 // Per-speler opgeslagen staat, op username gekoppeld (co-op: ieder z'n eigen).
 USTRUCT()
 struct FPlayerSaveData
@@ -140,7 +156,7 @@ class WEEDSHOPCORE_API UWeedShopSaveGame : public USaveGame
 
 public:
 	UPROPERTY(VisibleAnywhere, Category = "Save")
-	int32 SaveVersion = 4;
+	int32 SaveVersion = 5;
 
 	// Wanneer deze save geschreven is (UTC). Voor "Continue" -> nieuwste van handmatig vs autosave.
 	UPROPERTY(VisibleAnywhere, Category = "Save")
@@ -235,6 +251,13 @@ public:
 	// --- Per-speler (op username) ---
 	UPROPERTY(VisibleAnywhere, Category = "Save")
 	TArray<FPlayerSaveData> Players;
+
+	// --- Per-speler voortgang (level/XP/licentie + heat) ---
+	// Co-op: 1 record met lege PlayerId (gedeeld). Competitive: per speler een record op StablePlayerId.
+	// Leeg = oude save (v<5) -> gemigreerd uit de top-level CrewLevel/CrewXP/bShopLicensed/Heat-velden bij load.
+	// De top-level velden blijven bestaan (save-info-UI + downgrade naar een oudere build).
+	UPROPERTY(VisibleAnywhere, Category = "Save")
+	TArray<FPlayerProgressSave> PlayerProgress;
 
 	// --- Geplaatste wereld-objecten (potten/planten, shelves/chests, rekken, tafels, meubels, ATM) ---
 	UPROPERTY(VisibleAnywhere, Category = "Save")

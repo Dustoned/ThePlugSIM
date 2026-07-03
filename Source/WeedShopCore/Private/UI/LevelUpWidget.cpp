@@ -146,7 +146,10 @@ void ULevelUpWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const ULevelComponent* Lv = GS ? GS->GetLeveling() : nullptr;
 	if (Lv)
 	{
-		const int32 Cur = Lv->GetLevel();
+		// KRITISCH co-op: de kaart mag ALLEEN poppen op een level-up van de LOKALE speler (eigenaar van
+		// deze widget). Lees daarom het level van de eigen pawn, niet de gedeelde/host-waarde -- anders
+		// ploft de kaart bij de joiner op een host-level-up.
+		const int32 Cur = Lv->GetLevelFor(GetOwningPlayerPawn());
 		if (LastSeenLevel < 0)
 		{
 			LastSeenLevel = Cur; // eerste observatie (ook na een Testing-grant) toont niets

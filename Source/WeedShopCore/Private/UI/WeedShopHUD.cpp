@@ -239,6 +239,8 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 {
 	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	// Co-op: level/XP/heat van de LOKALE speler (eigenaar van deze HUD) tonen, niet van de host.
+	const APawn* OwnerPawn = PlayerOwner ? PlayerOwner->GetPawn() : nullptr;
 
 	const float PX = (Canvas ? Canvas->ClipX : 1280.f) - PhoneW - 30.f;
 	const float PY = 50.f;
@@ -261,7 +263,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 		}
 		if (GS && GS->GetLeveling())
 		{
-			Left = FString::Printf(TEXT("Lv %d   %s"), GS->GetLeveling()->GetLevel(), *Left);
+			Left = FString::Printf(TEXT("Lv %d   %s"), GS->GetLeveling()->GetLevelFor(OwnerPawn), *Left);
 		}
 		DrawText(Left, WeedUI::ColTextDim(), SX, y, Font);
 		if (GS && GS->GetEconomy())
@@ -404,18 +406,18 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 			if (GS && GS->GetLeveling())
 			{
 				ULevelComponent* Lv = GS->GetLeveling();
-				if (Lv->GetLevel() >= ULevelComponent::MaxLevel)
+				if (Lv->GetLevelFor(OwnerPawn) >= ULevelComponent::MaxLevel)
 				{
-					DrawText(FString::Printf(TEXT("Level %d  (MAX)"), Lv->GetLevel()), WeedUI::ColGood(), InnerX, y, Font);
+					DrawText(FString::Printf(TEXT("Level %d  (MAX)"), Lv->GetLevelFor(OwnerPawn)), WeedUI::ColGood(), InnerX, y, Font);
 					y += 22.f;
 				}
 				else
 				{
-					DrawText(FString::Printf(TEXT("Level %d   XP %d / %d"), Lv->GetLevel(), Lv->GetCurrentXP(), Lv->GetXPToNext()),
+					DrawText(FString::Printf(TEXT("Level %d   XP %d / %d"), Lv->GetLevelFor(OwnerPawn), Lv->GetCurrentXPFor(OwnerPawn), Lv->GetXPToNextFor(OwnerPawn)),
 						WeedUI::ColGood(), InnerX, y, Font);
 					y += 20.f;
 					DrawRect(WeedUI::ColWell(0.95f), InnerX, y, InnerW, 12.f);
-					DrawRect(FLinearColor(0.3f, 0.75f, 1.f, 0.98f), InnerX, y, InnerW * Lv->GetLevelFraction(), 12.f);
+					DrawRect(FLinearColor(0.3f, 0.75f, 1.f, 0.98f), InnerX, y, InnerW * Lv->GetLevelFractionFor(OwnerPawn), 12.f);
 					y += 20.f;
 				}
 			}
@@ -436,7 +438,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				}
 				if (GS->GetHeat())
 				{
-					DrawText(FString::Printf(TEXT("Heat: %.0f%%"), GS->GetHeat()->GetHeat()),
+					DrawText(FString::Printf(TEXT("Heat: %.0f%%"), GS->GetHeat()->GetHeatFor(OwnerPawn)),
 						FLinearColor(1.f, 0.7f, 0.6f), InnerX, y, Font); y += 22.f;
 				}
 				if (GS->GetMilestones())

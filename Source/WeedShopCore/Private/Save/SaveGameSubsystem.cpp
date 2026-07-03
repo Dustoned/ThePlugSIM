@@ -554,12 +554,35 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 			Prev = Cast<UWeedShopSaveGame>(UGameplayStatics::LoadGameFromSlot(OtherName, 0));
 		}
 	}
-	if (Prev) { Save->Players = Prev->Players; }
+	if (Prev) { Save->Players = Prev->Players; Save->PlayerProgress = Prev->PlayerProgress; }
 
 	Save->SavedAt = FDateTime::UtcNow();
 	Save->bIsAutosave = bAutosave;
 	Save->PlaytimeSeconds = CurrentPlaytimeSeconds();
-	if (const ULevelComponent* Lv = GS->GetLeveling()) { Save->CrewLevel = Lv->GetLevel(); Save->CrewXP = Lv->GetCurrentXP(); Save->bShopLicensed = Lv->IsShopLicensed(); }
+	// Top-level level/XP/licentie = ANKER (co-op: gedeeld; competitive: host-pawn). Blijft de source of truth voor
+	// de save-info-UI + downgrade naar een oudere build. De volledige per-speler-staat gaat in PlayerProgress (onder).
+	{
+		const APawn* AnchorPawn = nullptr;
+		if (GS->IsCompetitive() && World)
+		{
+			if (const APlayerController* PC = World->GetFirstPlayerController()) { AnchorPawn = PC->GetPawn(); }
+		}
+		if (const ULevelComponent* Lv = GS->GetLeveling())
+		{
+			Save->CrewLevel = Lv->GetLevelFor(AnchorPawn);
+			Save->CrewXP = Lv->GetCurrentXPFor(AnchorPawn);
+			Save->bShopLicensed = Lv->IsShopLicensedFor(AnchorPawn);
+		}
+		if (const UHeatComponent* Ht = GS->GetHeat())
+		{
+			Save->Heat = Ht->GetHeatFor(AnchorPawn);
+			// Event-timer/last-day zijn alleen compat/downgrade-velden; de echte per-speler-timers staan in
+			// PlayerProgress. Schrijf hier de Shared-waarden (in competitive is Shared ongebruikt = 0/-1000).
+			const FHeatState& SharedHeat = Ht->GetSharedState();
+			Save->HeatEventTimer = SharedHeat.EventTimer;
+			Save->HeatLastEventDay = SharedHeat.LastEventDay;
+		}
+	}
 	Save->bFreeBuild = GS->IsFreeBuild();
 	Save->StartMode = 0; // deprecated (mode-picker is weg); alleen nog gelezen voor migratie van oude saves
 	Save->bDevTools = GS->AreDevToolsEnabled(); // dev-tools meeschrijven -> op load weten we of ze aan mogen
@@ -578,7 +601,6 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 	// NPC-relaties + telefoon-contacten/berichten (waren voorheen niet opgeslagen).
 	if (const UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Save->Npcs = Reg->GetStatesForSave(); }
 	if (const UContactsComponent* Con = GS->GetContacts()) { Save->Contacts = Con->GetContacts(); Save->Messages = Con->GetMessages(); }
-	if (const UHeatComponent* Ht = GS->GetHeat()) { Save->Heat = Ht->GetHeat(); Save->HeatEventTimer = Ht->GetEventTimer(); Save->HeatLastEventDay = Ht->GetLastEventDay(); }
 
 	// Geplaatste wereld-objecten (potten/planten, shelves/chests, rekken, tafels, meubels, ATM).
 	GatherPlaced(World, Save->Placed);
@@ -595,6 +617,50 @@ bool USaveGameSubsystem::SaveGame(bool bAutosave)
 			const int32 Idx = Save->Players.IndexOfByPredicate([&](const FPlayerSaveData& E) { return Matches(E, Data.PlayerId, Data.PlayerName); });
 			if (Idx != INDEX_NONE) { Save->Players[Idx] = Data; } else { Save->Players.Add(Data); }
 			++NumPlayers;
+		}
+	}
+
+	// Per-speler voortgang (level/XP/licentie + heat). Co-op: 1 gedeeld record (lege PlayerId) uit de Shared-state.
+	// Competitive: per verbonden pawn een record op StablePlayerId (upsert; offline-records blijven behouden ->
+	// zelfde patroon als de per-speler bank/cash hierboven). De top-level velden zijn hierboven al geschreven.
+	{
+		const ULevelComponent* Lv = GS->GetLeveling();
+		const UHeatComponent* Ht = GS->GetHeat();
+		if (!GS->IsCompetitive())
+		{
+			// Gedeeld: precies 1 record met lege PlayerId uit de Shared-state.
+			FPlayerProgressSave Rec;
+			Rec.PlayerId.Empty();
+			if (Lv) { const FLevelState& L = Lv->GetSharedState(); Rec.Level = L.Level; Rec.XP = L.CurrentXP; Rec.bShopLicensed = L.bShopLicensed; }
+			if (Ht) { const FHeatState& H = Ht->GetSharedState(); Rec.Heat = H.Heat; Rec.HeatEventTimer = H.EventTimer; Rec.HeatLastEventDay = H.LastEventDay; }
+			Save->PlayerProgress.Reset();
+			Save->PlayerProgress.Add(Rec);
+		}
+		else if (World)
+		{
+			// Competitive: upsert per verbonden speler op StablePlayerId; offline-records behouden.
+			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+			{
+				APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+				if (!P) { continue; }
+				const FString Pid = StablePlayerId(P);
+				if (Pid.IsEmpty()) { continue; } // geen stabiele id -> niet per-speler te bewaren
+				FPlayerProgressSave Rec;
+				Rec.PlayerId = Pid;
+				if (Lv) { Rec.Level = Lv->GetLevelFor(P); Rec.XP = Lv->GetCurrentXPFor(P); Rec.bShopLicensed = Lv->IsShopLicensedFor(P); }
+				if (Ht) { Rec.Heat = Ht->GetHeatFor(P); }
+				// Per-speler event-timers uit de heat-entries (geen per-pawn getter -> zoek de entry op key).
+				if (Ht)
+				{
+					const FName Key(*Pid);
+					for (const FHeatPlayerEntry& E : Ht->GetPlayerEntries())
+					{
+						if (E.Key == Key) { Rec.HeatEventTimer = E.State.EventTimer; Rec.HeatLastEventDay = E.State.LastEventDay; break; }
+					}
+				}
+				const int32 Idx = Save->PlayerProgress.IndexOfByPredicate([&](const FPlayerProgressSave& E) { return E.PlayerId == Pid; });
+				if (Idx != INDEX_NONE) { Save->PlayerProgress[Idx] = Rec; } else { Save->PlayerProgress.Add(Rec); }
+			}
 		}
 	}
 
@@ -643,11 +709,30 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	if (UMilestoneComponent* Ms = GS->GetMilestones()) { Ms->RestoreState(Save->TotalEarnedCents, Save->MilestonePhase); }
 	if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->RestoreState(Save->GoalJointsRolled, Save->GoalPlantsHarvested, Save->GoalDealsDone, Save->GoalClaimed); Gl->RestoreExtra(Save->GoalGramsSold, Save->GoalGramsCrafted); }
 	if (UUpgradeComponent* Up = GS->GetUpgrades()) { Up->RestorePurchased(Save->PurchasedUpgrades); }
-	// Level + XP, NPC-relaties en telefoon-contacten/berichten terugzetten (waren kwijt na reload).
-	if (ULevelComponent* Lv = GS->GetLeveling()) { Lv->RestoreLevel(Save->CrewLevel, Save->CrewXP); Lv->RestoreShopLicensed(Save->bShopLicensed); }
+	// Level/XP/licentie + heat terugzetten (waren kwijt na reload). Nieuw: per-speler via PlayerProgress
+	// (co-op: 1 record met lege PlayerId = gedeeld; competitive: per StablePlayerId). Oude saves (v<5) hebben
+	// geen PlayerProgress -> seed 1 gedeeld record uit de top-level CrewLevel/CrewXP/bShopLicensed/Heat-velden.
+	{
+		ULevelComponent* Lv = GS->GetLeveling();
+		UHeatComponent* Ht = GS->GetHeat();
+		if (Save->PlayerProgress.Num() == 0)
+		{
+			// Legacy-migratie: alles naar de gedeelde (Shared) state.
+			if (Lv) { Lv->RestoreLevelFor(NAME_None, Save->CrewLevel, Save->CrewXP, Save->bShopLicensed); }
+			if (Ht) { Ht->RestoreHeatFor(NAME_None, Save->Heat, Save->HeatEventTimer, Save->HeatLastEventDay); }
+		}
+		else
+		{
+			for (const FPlayerProgressSave& Rec : Save->PlayerProgress)
+			{
+				const FName Key = Rec.PlayerId.IsEmpty() ? NAME_None : FName(*Rec.PlayerId);
+				if (Lv) { Lv->RestoreLevelFor(Key, Rec.Level, Rec.XP, Rec.bShopLicensed); }
+				if (Ht) { Ht->RestoreHeatFor(Key, Rec.Heat, Rec.HeatEventTimer, Rec.HeatLastEventDay); }
+			}
+		}
+	}
 	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->RestoreStates(Save->Npcs); }
 	if (UContactsComponent* Con = GS->GetContacts()) { Con->RestoreContacts(Save->Contacts, Save->Messages); }
-	if (UHeatComponent* Ht = GS->GetHeat()) { Ht->RestoreHeat(Save->Heat); Ht->RestoreEventState(Save->HeatEventTimer, Save->HeatLastEventDay); }
 
 	// Gedeelde crew-bank (co-op EN solo, niet-competitive): de bank is GEDEELDE wereld-staat (leeft op de
 	// GS-economy, want BankOwner() routeert daar zodra !IsCompetitive), dus hier 1x herstellen i.p.v. per-pawn

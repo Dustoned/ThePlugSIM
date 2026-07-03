@@ -224,9 +224,11 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			TimeIcon->SetContent(WeedUI::UiGlyph(WidgetTree, bNight ? TEXT("ui_moon") : TEXT("ui_sun"), 26.f, Col, WeedUI::EIcon::Clock));
 		}
 	}
+	// Co-op: heat + level/XP van de LOKALE speler (eigenaar van deze HUD), niet van de host.
+	APawn* OwnerPawn = GetOwningPlayerPawn();
 	if (GS->GetHeat())
 	{
-		const float H = GS->GetHeat()->GetHeat();
+		const float H = GS->GetHeat()->GetHeatFor(OwnerPawn);
 		if (HeatText)
 		{
 			// RoundHalfToEven = zelfde afronding als printf %.0f -> getoonde int als changed-check.
@@ -242,7 +244,7 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (GS->GetLeveling())
 	{
 		const ULevelComponent* Lv = GS->GetLeveling();
-		const int32 Level = Lv->GetLevel();
+		const int32 Level = Lv->GetLevelFor(OwnerPawn);
 		if (Level != LastLevelShown)
 		{
 			LastLevelShown = Level;
@@ -250,11 +252,11 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (LevelText) { LevelText->SetText(FText::FromString(FString::Printf(TEXT("%d"), Level))); }
 			if (MaxBadge) { MaxBadge->SetVisibility(bMax ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
 		}
-		if (LevelBar) { LevelBar->SetPercent(Lv->GetLevelFraction()); }
+		if (LevelBar) { LevelBar->SetPercent(Lv->GetLevelFractionFor(OwnerPawn)); }
 	}
 
 	// Stoned-chip volgt de telefoon-carrier op de pawn (component gecachet: weak + pawn-check).
-	APawn* P = GetOwningPlayerPawn();
+	APawn* P = OwnerPawn;
 	if (CachedPhonePawn.Get() != P || (P && !CachedPhone.IsValid()))
 	{
 		CachedPhonePawn = P;

@@ -1540,10 +1540,10 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 	Customer->Loyalty = FMath::Clamp(Customer->Loyalty + LoyGain, 0.f, 100.f);
 	Customer->Addiction = FMath::Clamp(Customer->Addiction + AddGain, 0.f, 100.f);
 
-	// Straat-dealen is riskant -> heat omhoog.
+	// Straat-dealen is riskant -> heat omhoog. Op DEZE speler (this = dealende pawn) -> per-speler heat in competitive.
 	if (GS && GS->GetHeat())
 	{
-		GS->GetHeat()->AddHeat(5.f);
+		GS->GetHeat()->AddHeatFor(this, 5.f);
 	}
 
 	const bool bLikedIt = !(bPicky && Quality < 0.5f);
@@ -1639,7 +1639,7 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 	// XP voor het werven: klein per sample, bonus als je iemand net omzette naar koper.
 	if (GS && GS->GetLeveling())
 	{
-		GS->GetLeveling()->AddXP(bConverted ? 25 : 3, GetStonedXpMultiplier()); // stoned-bonus van DEZE speler
+		GS->GetLeveling()->AddXPFor(this, bConverted ? 25 : 3, GetStonedXpMultiplier()); // this = DEZE speler (per-verdiener + stoned-bonus)
 	}
 
 	if (GEngine && bLikedIt)

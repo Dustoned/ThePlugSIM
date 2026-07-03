@@ -159,7 +159,7 @@ void UPhoneClientComponent::ProcessRentForDay(int32 Day)
 		{
 			if (AWeedShopGameState* GS = GetGS())
 			{
-				if (UHeatComponent* Heat = GS->GetHeat()) { Heat->AddHeat(20.f); } // schuld trekt aandacht (gematigd)
+				if (UHeatComponent* Heat = GS->GetHeat()) { Heat->AddHeatFor(Cast<APawn>(GetOwner()), 20.f); } // schuld trekt aandacht (gematigd) - per-speler in competitive
 			}
 		}
 		if (GEngine)
@@ -2404,7 +2404,8 @@ void UPhoneClientComponent::ServerStoreCheckout_Implementation(const TArray<FNam
 	UInventoryComponent* Inv = GetOwnerInventory();
 	UEconomyComponent* Econ = GetOwnerEconomy();
 	if (!Store || !Inv || !Econ) { return; }
-	const int32 PlayerLvl = (GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 999;
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	const int32 PlayerLvl = (GS->GetLeveling()) ? GS->GetLeveling()->GetLevelFor(OwnerPawn) : 999;
 
 	// 1) Totaal + geldige regels (level-cap + bestaande catalog-artikelen).
 	struct FBuyLine { FName Id; int32 Qty; bool bSeed; int32 Pack; };
@@ -2688,7 +2689,8 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 	if (!Store || !Inv || !Econ) { return; }
 
 	// 0) Level-gate: hogere tiers (rekken/tafels/containers) vereisen een minimum level.
-	const int32 PlayerLvl = GS->GetLeveling() ? GS->GetLeveling()->GetLevel() : 1;
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	const int32 PlayerLvl = GS->GetLeveling() ? GS->GetLeveling()->GetLevelFor(OwnerPawn) : 1;
 	for (int32 i = 0; i < BuyIds.Num(); ++i)
 	{
 		const int32 Req = Store->RequiredLevelFor(BuyIds[i]);
@@ -3235,7 +3237,7 @@ void UPhoneClientComponent::ServerDevSetLevel_Implementation(int32 NewLevel)
 	AWeedShopGameState* GS = GetGS();
 	ULevelComponent* Lv = GS ? GS->GetLeveling() : nullptr;
 	if (!Lv || !GS->AreDevToolsEnabled()) { return; }
-	Lv->GrantLevel(NewLevel);
+	Lv->GrantLevelFor(Cast<APawn>(GetOwner()), NewLevel); // per-speler in competitive (deze cheat zet alleen het eigen level)
 	// GrantLevel zet de shop-licentie NIET (die zit alleen in het AddXP-levelup-pad - oude quirk);
 	// vanaf level 50 hoort de licentie erbij, dus hier expliciet mee-zetten.
 	if (NewLevel >= ULevelComponent::ShopLicenseLevel) { Lv->RestoreShopLicensed(true); }
@@ -3502,7 +3504,7 @@ void UPhoneClientComponent::ServerBuyPotUpgrade_Implementation(AGrowPlant* Pot, 
 			return;
 		}
 		// Level-eis.
-		const int32 PlayerLvl = (GetGS() && GetGS()->GetLeveling()) ? GetGS()->GetLeveling()->GetLevel() : 1;
+		const int32 PlayerLvl = (GetGS() && GetGS()->GetLeveling()) ? GetGS()->GetLeveling()->GetLevelFor(Cast<APawn>(GetOwner())) : 1;
 		if (PlayerLvl < UpgDefs[UpgIndex].MinPlayerLevel)
 		{
 			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Orange, FString::Printf(TEXT("That upgrade unlocks at level %d."), UpgDefs[UpgIndex].MinPlayerLevel)); }

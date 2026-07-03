@@ -465,7 +465,8 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		int32 CrewLevel = 1;
 		if (const AWeedShopGameState* GS2 = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 		{
-			if (const ULevelComponent* Lv = GS2->GetLeveling()) { CrewLevel = Lv->GetLevel(); }
+			// Mold/pest-gate is BEWUST gedeeld (wereld-eigenschap van de plant, geen speler-eigenaar) -> nullptr = crew-brede waarde.
+			if (const ULevelComponent* Lv = GS2->GetLeveling()) { CrewLevel = Lv->GetLevelFor(nullptr); }
 		}
 		constexpr int32 AfflictMoldMinLevel = 12;    // mold (schimmel) kan vanaf hier
 		constexpr int32 AfflictPestMinLevel = 18;    // ongedierte (pests) pas later in het spel
@@ -885,7 +886,7 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 				// Stoned-XP-bonus van de OOGSTENDE speler (InstigatorPawn), per-verdiener (co-op: niet crew-breed).
 				float StonedMult = 1.f;
 				if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(InstigatorPawn)) { StonedMult = PA->GetStonedXpMultiplier(); }
-				Lv->AddXP(Harvested * 10 + TotalGrams, StonedMult);
+				Lv->AddXPFor(InstigatorPawn, Harvested * 10 + TotalGrams, StonedMult); // XP naar de OOGSTENDE speler
 			}
 			if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->NoteHarvest(Harvested); } // goal-teller: geoogste planten
 		}

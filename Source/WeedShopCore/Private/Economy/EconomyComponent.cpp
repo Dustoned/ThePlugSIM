@@ -257,7 +257,11 @@ int64 UEconomyComponent::Deposit(int64 CashAmount)
 	{
 		if (UHeatComponent* Heat = GS->GetHeat())
 		{
-			Heat->AddHeat(HeatAdd);
+			// COMPETITIVE: witwas-heat hoort bij de speler die stort. Deze EconomyComponent zit OF op een pawn
+			// (per-speler portemonnee) OF op de GameState (gedeelde crew-kas). Owner-pawn = die speler; owner is
+			// de GameState -> Cast geeft nullptr -> valt terug op de gedeelde crew-heat (correct in co-op).
+			APawn* P = Cast<APawn>(GetOwner());
+			Heat->AddHeatFor(P, HeatAdd);
 		}
 	}
 	if (GEngine)

@@ -229,7 +229,8 @@ void UStoreWidget::FillBody()
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	if (!Store) { return; }
-	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 999;
+	// Co-op: catalogus-level-gate op de LOKALE speler (eigenaar van deze widget), niet op de host.
+	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevelFor(GetOwningPlayerPawn()) : 999;
 
 	TArray<int32> Cats; CatsForKind(Kind, Cats);
 	if (ActiveCat < 0 || !Cats.Contains(ActiveCat)) { ActiveCat = Cats.Num() > 0 ? Cats[0] : 0; }

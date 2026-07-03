@@ -2943,7 +2943,8 @@ FName ACustomerBase::PickDesiredProduct(AWeedShopGameState* GS, UDataTable* InPr
 {
 	OutQty = FMath::RandRange(1, 3);
 	if (!InProductTable) { return NAME_None; }
-	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevel() : 1;
+	// Order-tier/product-keuze is BEWUST gedeeld: op dit moment is er nog geen koper-speler bekend (dat is Ronde B) -> nullptr = crew-brede waarde.
+	const int32 PlayerLvl = (GS && GS->GetLeveling()) ? GS->GetLeveling()->GetLevelFor(nullptr) : 1;
 	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
 	const int32 CTier = FMath::Clamp((Reg && !InNpcId.IsNone()) ? Reg->GetCustomerTier(InNpcId) : 1, 1, 5);
@@ -3362,21 +3363,23 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	// (deler is de tuning-knop). Total bevat al de eventuele VIP-order-bonus.
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
+		// De VERKOPENDE speler = eigenaar van de betaal-economy (PayTo). XP + heat gaan naar HEM (per-speler in competitive).
+		APawn* DealerPawn = PayTo ? Cast<APawn>(PayTo->GetOwner()) : nullptr;
 		if (ULevelComponent* Lv = GS->GetLeveling())
 		{
 			// Basis-XP op verkoopwaarde + extra (ook waarde-gewogen) voor een vervulde VIP-order.
 			int32 DealXP = 5 + FMath::RoundToInt(Total / 500.f);
 			if (bOrderFulfilled) { DealXP += 15 + FMath::RoundToInt(Total / 1000.f); }
-			// Stoned-XP-bonus van de VERKOPENDE speler (PayTo = z'n economy -> owner-pawn), per-verdiener.
+			// Stoned-XP-bonus van de VERKOPENDE speler (DealerPawn = PayTo-owner), per-verdiener.
 			float StonedMult = 1.f;
-			if (PayTo) { if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(PayTo->GetOwner())) { StonedMult = PA->GetStonedXpMultiplier(); } }
-			Lv->AddXP(DealXP, StonedMult);
+			if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(DealerPawn)) { StonedMult = PA->GetStonedXpMultiplier(); }
+			Lv->AddXPFor(DealerPawn, DealXP, StonedMult);
 		}
-		// Heat: op straat dealen trekt aandacht. 's Nachts fors riskanter dan overdag (BustThreshold = 80).
+		// Heat: op straat dealen trekt aandacht. 's Nachts fors riskanter dan overdag (BustThreshold = 80). Op DEZE dealer.
 		if (UHeatComponent* Heat = GS->GetHeat())
 		{
 			const UDayCycleComponent* DCh = GS->GetDayCycle();
-			Heat->AddHeat((DCh && DCh->IsNight()) ? 3.0f : 0.5f);
+			Heat->AddHeatFor(DealerPawn, (DCh && DCh->IsNight()) ? 3.0f : 0.5f);
 		}
 	}
 

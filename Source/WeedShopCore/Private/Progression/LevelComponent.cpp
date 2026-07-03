@@ -2,6 +2,8 @@
 #include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
+#include "Game/WeedShopGameState.h"
+#include "Save/SaveGameSubsystem.h" // StablePlayerId: competitive per-speler-key
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -40,9 +42,8 @@ ULevelComponent::ULevelComponent()
 void ULevelComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(ULevelComponent, Level);
-	DOREPLIFETIME(ULevelComponent, CurrentXP);
-	DOREPLIFETIME(ULevelComponent, bShopLicensed);
+	DOREPLIFETIME(ULevelComponent, Shared);
+	DOREPLIFETIME(ULevelComponent, Players);
 }
 
 int32 ULevelComponent::XPForLevel(int32 Lvl)
@@ -53,70 +54,180 @@ int32 ULevelComponent::XPForLevel(int32 Lvl)
 	return 100 + (Lvl - 1) * 40;
 }
 
-float ULevelComponent::GetLevelFraction() const
+// ============================ Resolvers ============================
+
+FLevelState& ULevelComponent::StateForPawn(const APawn* Pawn)
 {
-	const int32 Need = XPForLevel(Level);
-	if (Need <= 0) { return 1.f; }
-	return FMath::Clamp(float(CurrentXP) / float(Need), 0.f, 1.f);
+	const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	const bool bComp = GS && GS->IsCompetitive();
+	if (!Pawn || !bComp)
+	{
+		return Shared;
+	}
+	const FName Key(*USaveGameSubsystem::StablePlayerId(Pawn));
+	if (Key.IsNone())
+	{
+		return Shared; // geen stabiele id (offline/verse pawn) -> val terug op gedeeld
+	}
+	for (FLevelPlayerEntry& E : Players)
+	{
+		if (E.Key == Key) { return E.State; }
+	}
+	// Lazy-create (server): nieuwe speler start op level 1 met 0 XP (default FLevelState).
+	FLevelPlayerEntry& New = Players.AddDefaulted_GetRef();
+	New.Key = Key;
+	return New.State;
 }
 
-void ULevelComponent::AddXP(int32 Amount, float StonedMult)
+const FLevelState& ULevelComponent::StateForPawnConst(const APawn* Pawn) const
 {
-	if (GetOwnerRole() != ROLE_Authority || Amount <= 0 || Level >= MaxLevel)
+	const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	const bool bComp = GS && GS->IsCompetitive();
+	if (!Pawn || !bComp)
 	{
-		return;
+		return Shared;
 	}
+	const FName Key(*USaveGameSubsystem::StablePlayerId(Pawn));
+	if (!Key.IsNone())
+	{
+		for (const FLevelPlayerEntry& E : Players)
+		{
+			if (E.Key == Key) { return E.State; }
+		}
+	}
+	// Nog geen entry (client die de rep nog niet zag, of onbekende pawn) -> Shared (nooit een dangling ref).
+	return Shared;
+}
+
+// ============================ Read/gate ============================
+
+int32 ULevelComponent::GetLevelFor(const APawn* Pawn) const
+{
+	return StateForPawnConst(Pawn).Level;
+}
+
+int32 ULevelComponent::GetCurrentXPFor(const APawn* Pawn) const
+{
+	return StateForPawnConst(Pawn).CurrentXP;
+}
+
+int32 ULevelComponent::GetXPToNextFor(const APawn* Pawn) const
+{
+	return XPForLevel(StateForPawnConst(Pawn).Level);
+}
+
+float ULevelComponent::GetLevelFractionFor(const APawn* Pawn) const
+{
+	const FLevelState& St = StateForPawnConst(Pawn);
+	const int32 Need = XPForLevel(St.Level);
+	if (Need <= 0) { return 1.f; }
+	return FMath::Clamp(float(St.CurrentXP) / float(Need), 0.f, 1.f);
+}
+
+bool ULevelComponent::IsShopLicensedFor(const APawn* Pawn) const
+{
+	return StateForPawnConst(Pawn).bShopLicensed;
+}
+
+// ============================ Write ============================
+
+void ULevelComponent::ProcessXP(FLevelState& St, const APawn* Earner, int32 Amount, float StonedMult, bool bCompetitive)
+{
+	if (Amount <= 0 || St.Level >= MaxLevel) { return; }
+
 	// Stoned-bonus van de VERDIENENDE speler (per-verdiener meegegeven; co-op: niet crew-breed/race-vast).
 	Amount = FMath::Max(1, FMath::RoundToInt(Amount * FMath::Max(1.f, StonedMult)));
-	CurrentXP += Amount;
+	St.CurrentXP += Amount;
 
 	bool bLeveled = false;
-	while (Level < MaxLevel)
+	while (St.Level < MaxLevel)
 	{
-		const int32 Need = XPForLevel(Level);
-		if (Need <= 0 || CurrentXP < Need) { break; }
-		CurrentXP -= Need;
-		++Level;
+		const int32 Need = XPForLevel(St.Level);
+		if (Need <= 0 || St.CurrentXP < Need) { break; }
+		St.CurrentXP -= Need;
+		++St.Level;
 		bLeveled = true;
 	}
-	if (Level >= MaxLevel) { CurrentXP = 0; }
+	if (St.Level >= MaxLevel) { St.CurrentXP = 0; }
 
-	if (bLeveled)
+	if (!bLeveled) { return; }
+
+	OnLevelUp.Broadcast(St.Level);
+	if (GEngine)
 	{
-		OnLevelUp.Broadcast(Level);
+		const FString LvlMsg = FString::Printf(TEXT("LEVEL UP!  You reached level %d"), St.Level);
+		// Competitive: alleen de VERDIENER ziet de melding (persoonlijke mijlpaal). Co-op: alle spelers (gedeeld).
+		if (bCompetitive && Earner)
+		{
+			UWeedToast::NotifyPawn(const_cast<APawn*>(Earner), -1, 5.f, FColor(120, 220, 255), LvlMsg);
+		}
+		else
+		{
+			NotifyAllPlayers(GetWorld(), FColor(120, 220, 255), 5.f, LvlMsg);
+		}
+	}
+
+	// Eind-mijlpaal: op level 50 verdien je de SHOP-LICENTIE (gate naar het weedshop-deel).
+	if (!St.bShopLicensed && St.Level >= ShopLicenseLevel)
+	{
+		St.bShopLicensed = true;
 		if (GEngine)
 		{
-			// Gedeelde mijlpaal: toon de level-up bij ALLE spelers (elk op eigen client).
-			NotifyAllPlayers(GetWorld(), FColor(120, 220, 255), 5.f,
-				FString::Printf(TEXT("LEVEL UP!  You reached level %d"), Level));
-		}
-		// Eind-mijlpaal: op level 50 verdien je de SHOP-LICENTIE (gate naar het weedshop-deel).
-		if (!bShopLicensed && Level >= ShopLicenseLevel)
-		{
-			bShopLicensed = true;
-			if (GEngine)
+			const FString LicMsg = TEXT("SHOP LICENSE EARNED!  Level 50 reached - you can now run a legit weed shop.");
+			if (bCompetitive && Earner)
 			{
-				// Gedeelde mijlpaal: shop-licentie naar ALLE spelers.
-				NotifyAllPlayers(GetWorld(), FColor(255, 215, 0), 9.f,
-					TEXT("SHOP LICENSE EARNED!  Level 50 reached - you can now run a legit weed shop."));
+				UWeedToast::NotifyPawn(const_cast<APawn*>(Earner), -1, 9.f, FColor(255, 215, 0), LicMsg);
+			}
+			else
+			{
+				NotifyAllPlayers(GetWorld(), FColor(255, 215, 0), 9.f, LicMsg);
 			}
 		}
 	}
 }
 
-void ULevelComponent::GrantLevel(int32 NewLevel)
+void ULevelComponent::AddXPFor(const APawn* Earner, int32 Amount, float StonedMult)
+{
+	if (GetOwnerRole() != ROLE_Authority || Amount <= 0)
+	{
+		return;
+	}
+	const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	const bool bComp = GS && GS->IsCompetitive();
+	FLevelState& St = StateForPawn(Earner);
+	if (St.Level >= MaxLevel) { return; }
+	ProcessXP(St, Earner, Amount, StonedMult, bComp);
+}
+
+void ULevelComponent::GrantLevelFor(const APawn* Pawn, int32 NewLevel)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
-	Level = FMath::Clamp(NewLevel, 1, MaxLevel);
-	CurrentXP = 0;
+	FLevelState& St = StateForPawn(Pawn);
+	St.Level = FMath::Clamp(NewLevel, 1, MaxLevel);
+	St.CurrentXP = 0;
 	OnRep_Level();
 }
 
-void ULevelComponent::RestoreLevel(int32 InLevel, int32 InXP)
+void ULevelComponent::RestoreLevelFor(const FName& Key, int32 InLevel, int32 InXP, bool bLicensed)
 {
 	if (GetOwnerRole() != ROLE_Authority) { return; }
-	Level = FMath::Clamp(InLevel, 1, MaxLevel);
-	CurrentXP = FMath::Max(0, InXP);
+
+	// Kies de doel-state op sleutel: NAME_None => Shared (co-op/legacy). Anders de competitive per-speler-entry.
+	FLevelState* St = &Shared;
+	if (!Key.IsNone())
+	{
+		FLevelPlayerEntry* Found = Players.FindByPredicate([&Key](const FLevelPlayerEntry& E) { return E.Key == Key; });
+		if (!Found)
+		{
+			Found = &Players.AddDefaulted_GetRef();
+			Found->Key = Key;
+		}
+		St = &Found->State;
+	}
+
+	St->Level = FMath::Clamp(InLevel, 1, MaxLevel);
+	St->CurrentXP = FMath::Max(0, InXP);
+	St->bShopLicensed = bLicensed;
 	OnRep_Level();
 }
 
