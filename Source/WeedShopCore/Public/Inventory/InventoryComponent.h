@@ -44,12 +44,39 @@ public:
 
 	// Max aantal slots (= aantal stapels; 0 = ongelimiteerd). Start bewust laag (je hebt ook 8 hotbar-slots);
 	// grid + UI volgen deze waarde automatisch. Cel 0 = cash-stapel, dus effectief ~9 vrije slots aan 't begin.
+	// Default = backpack-tier 0; ApplyBackpackTier zet deze waarde bij een gekochte upgrade.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")
 	int32 MaxStacks = 10;
 
-	// Max draaggewicht (abstracte kg). 0 = ongelimiteerd.
+	// Max draaggewicht (abstracte kg). 0 = ongelimiteerd. Default = backpack-tier 0 (60 kg); bewust op 60
+	// gelaten nu de bag-tarra realistisch is geworden (containergewicht i.p.v. vaste 1.5 kg per zakje) —
+	// de draagkracht-progressie zit in de backpack-tiers (ApplyBackpackTier), niet in kunstmatig zware zakjes.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Inventory")
 	float MaxWeight = 60.f;
+
+	// --- Backpack-tiers (per speler, puur geld — geen level-eis): tier bepaalt MaxStacks + MaxWeight.
+	// T0 10 slots/60 kg -> T1 14/85 -> T2 18/115 -> T3 24/150. ---
+	static constexpr int32 BackpackMaxTier = 3;
+
+	// Kosten (cents) om van CurrentTier naar CurrentTier+1 te gaan: EUR 500 / 2.500 / 10.000. 0 = al max.
+	static int64 BackpackUpgradeCostCents(int32 CurrentTier);
+
+	// Slots + draaggewicht van een tier (klemt op 0..BackpackMaxTier). Ook voor de telefoon-UI (preview volgende tier).
+	static void GetBackpackTierCaps(int32 Tier, int32& OutMaxStacks, float& OutMaxWeight);
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
+	int32 GetBackpackTier() const { return BackpackTier; }
+
+	// Server: zet de tier direct (save-restore) en pas MaxStacks/MaxWeight meteen toe.
+	void SetBackpackTier(uint8 InTier);
+
+	// Server-RPC (component zit op de pawn = per speler): koop de VOLGENDE backpack-tier, betaald met CASH
+	// via de EIGEN economy van de pawn-owner (cash = spiegel van het economy-saldo — nooit via Add/RemoveItem).
+	UFUNCTION(Server, Reliable) void ServerBuyBackpackUpgrade();
+
+	// Zet MaxStacks/MaxWeight naar de huidige BackpackTier (na koop, OnRep en save-restore); het
+	// backpack-rooster groeit mee (RefreshGridAuto) en de UI ververst via OnInventoryChanged.
+	void ApplyBackpackTier();
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Inventory")
 	float GetUnitWeight(FName ItemId) const;
@@ -247,6 +274,14 @@ protected:
 
 	UFUNCTION()
 	void OnRep_Stacks();
+
+	// Backpack-tier (0..BackpackMaxTier). Gerepliceerd zodat ook de eigenaar-CLIENT z'n grid/gewicht-cap
+	// ziet groeien (MaxStacks/MaxWeight zelf zijn niet gerepliceerd; de client leidt ze af via de OnRep).
+	UPROPERTY(ReplicatedUsing = OnRep_BackpackTier)
+	uint8 BackpackTier = 0;
+
+	UFUNCTION()
+	void OnRep_BackpackTier();
 
 	// Eerste stapel-index met dit item-id, of INDEX_NONE.
 	int32 FindStackIndex(FName ItemId) const;

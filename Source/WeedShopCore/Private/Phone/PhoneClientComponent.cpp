@@ -54,6 +54,7 @@
 #include "UI/DryingRackWidget.h"
 #include "UI/StoreWidget.h"
 #include "World/StoreCounter.h"
+#include "World/WorldItemPickup.h" // GiveOrDrop: item dat niet past NOOIT stil laten verdwijnen
 #include "Placement/PlaceableProp.h"
 #include "World/WaterSink.h"
 #include "Progression/LevelComponent.h"
@@ -1538,7 +1539,8 @@ void UPhoneClientComponent::ServerDryCollect_Implementation(ADryingRack* Rack, i
 	FName OutId; int32 OutQty = 0; float OutThc = 0.f; float OutQual = 0.f;
 	if (Rack->ServerCollectIndex(Index, ExpectedId, OutId, OutQty, OutThc, OutQual))
 	{
-		Inv->AddItem(OutId, OutQty, OutThc, OutQual);
+		// Rek is al leeggehaald -> nooit stil laten verdwijnen: past het niet, dan op de grond.
+		AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), OutId, OutQty, OutThc, OutQual);
 	}
 }
 
@@ -1555,7 +1557,8 @@ void UPhoneClientComponent::ServerDryCollectAll_Implementation(ADryingRack* Rack
 		FName OutId; int32 OutQty = 0; float OutThc = 0.f; float OutQual = 0.f;
 		if (Rack->ServerCollectIndex(i, NAME_None, OutId, OutQty, OutThc, OutQual))
 		{
-			Inv->AddItem(OutId, OutQty, OutThc, OutQual);
+			// Rek is al leeggehaald -> nooit stil laten verdwijnen: past het niet, dan op de grond.
+			AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), OutId, OutQty, OutThc, OutQual);
 		}
 	}
 }
@@ -1724,7 +1727,8 @@ void UPhoneClientComponent::ServerClaimGoal_Implementation(int32 Idx)
 	}
 	if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0)
 	{
-		if (UInventoryComponent* Inv = GetOwnerInventory()) { Inv->AddItem(Gd.RewardItem, Gd.RewardQty); }
+		// Goal is al geclaimd (MarkClaimed) -> reward nooit stil laten verdwijnen bij volle inventory.
+		if (UInventoryComponent* Inv = GetOwnerInventory()) { AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), Gd.RewardItem, Gd.RewardQty, -1.f, -1.f); }
 	}
 
 	// Nette popup (goud) bij het behalen.
@@ -1786,7 +1790,8 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 
 	Inv->RemoveFromStackById(BestSid, PackGrams);
 	Inv->RemoveItem(ContainerId, 1);
-	Inv->AddItem(BagId, 1, Thc, Q); // één zakje van PackGrams gram met de THC/kwaliteit van die stapel
+	// Wiet + container zijn al geconsumeerd -> zakje nooit stil laten verdwijnen (drop bij vol).
+	AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), BagId, 1, Thc, Q); // één zakje van PackGrams gram met de THC/kwaliteit van die stapel
 
 	if (GEngine)
 	{
@@ -1815,7 +1820,8 @@ void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId, int32 Count
 	const float Q = Inv->GetItemQualityPct(BagId);
 
 	if (!Inv->RemoveItem(BagId, N)) { return; } // alleen N zakjes openen
-	Inv->AddItem(BudId, TotalGrams, Thc, Q);     // wiet weer los terug
+	// Zakjes zijn al weg -> losse wiet nooit stil laten verdwijnen (drop bij vol).
+	AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), BudId, TotalGrams, Thc, Q); // wiet weer los terug
 
 	// Lege container(s) teruggeven: 1 per uitgepakt zakje, zodat je ze kunt hergebruiken. De bag bewaart z'n
 	// container-type niet (id = Bag_<strain>_<gram>), dus we geven de KLEINSTE container die deze gram kon bevatten.
@@ -1829,7 +1835,7 @@ void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId, int32 Count
 		else if (PerBag <= 100) { ContId = FName(TEXT("Cont_Block100")); }
 		else                    { ContId = FName(TEXT("Cont_Garbage500")); }
 	}
-	Inv->AddItem(ContId, N);                     // N lege containers terug
+	AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), ContId, N, -1.f, -1.f); // N lege containers terug (drop bij vol)
 
 	if (GEngine)
 	{
@@ -1862,7 +1868,8 @@ void UPhoneClientComponent::ServerPack_Implementation(FName BudId, FName Contain
 		const int32 Grams = FMath::Min(Cap, Have);
 		if (!Inv->RemoveItem(BudId, Grams)) { break; }
 		Inv->RemoveItem(ContainerId, 1);
-		Inv->AddItem(UInventoryComponent::MakeBagId(Strain, ContainerId, Grams), 1, Thc, Q); // één gemaatd zakje
+		// Wiet + container al geconsumeerd -> zakje nooit stil laten verdwijnen (drop bij vol).
+		AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), UInventoryComponent::MakeBagId(Strain, ContainerId, Grams), 1, Thc, Q); // één gemaatd zakje
 		++BagsMade; TotalGrams += Grams;
 	}
 	if (GEngine && BagsMade > 0)
@@ -2037,6 +2044,19 @@ float UPhoneClientComponent::JointIntensity(int32 Grams, float ThcPercent, float
 	return FMath::Clamp(Q * GramsFactor, 0.f, 1.f);
 }
 
+void UPhoneClientComponent::ComputeSampleEffect(float Grams, float WeedQuality, float& OutIntensity, float& OutAddGain, float& OutLoyGain, float& OutRespGain)
+{
+	// Afnemende meeropbrengst per gram (sqrt i.p.v. lineair): 1g=0.57Q, 3g=1.0Q, 5g~1.1Q. Zo voelt een
+	// dikke joint sterker dan een dun jointje, maar loont 5g niet 5x zoveel als 1g (anti-stapel-abuse).
+	const float Q = FMath::Clamp(WeedQuality, 0.f, 1.f);
+	OutIntensity = Q * FMath::Clamp(FMath::Sqrt(FMath::Max(0.f, Grams) / 3.f), 0.f, 1.1f);
+	// Zelfde gain-verdeling als de sample-flow: VERSLAVING dominant (de haak), loyaliteit/respect
+	// hooguit een vleugje — die verdien je via VERKOOP, niet via gratis joints.
+	OutAddGain = FMath::Min(4.f + OutIntensity * 12.f, 12.f); // harde cap 12 (anti-abuse)
+	OutLoyGain = OutIntensity * 3.f;
+	OutRespGain = OutIntensity * 2.5f;
+}
+
 bool UPhoneClientComponent::GetRollWeed(int32 Grams, FName& OutItemId, float& OutThcPercent, float& OutQualityPct) const
 {
 	OutItemId = NAME_None; OutThcPercent = 0.f; OutQualityPct = 0.f;
@@ -2158,7 +2178,8 @@ void UPhoneClientComponent::ServerRollJoint_Implementation(int32 Grams, FName St
 	FString StrainStr = BudItem.ToString();
 	StrainStr.RemoveFromStart(TEXT("Bud_"));
 	const FName JointId = UInventoryComponent::MakeJointId(FName(*StrainStr), Grams);
-	Inv->AddItem(JointId, 1, BudThc, BudQ);
+	// Wiet + vloei zijn al geconsumeerd -> joint nooit stil laten verdwijnen (drop bij vol).
+	AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), JointId, 1, BudThc, BudQ);
 	// Goal-teller: joints gerold.
 	if (AWeedShopGameState* GSg = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
@@ -2423,9 +2444,11 @@ void UPhoneClientComponent::ServerStoreBuy_Implementation(FName ItemId, bool bBa
 		return;
 	}
 
-	// Direct leveren in je inventory.
-	if (bSeed) { Inv->AddItem(Store->SeedItemId(ItemId), 1); }
-	else       { Inv->AddItem(ItemId, FMath::Max(1, Pack)); }
+	// Direct leveren in je inventory. Geld is al afgeschreven -> gekochte spullen nooit stil laten
+	// verdwijnen bij een volle inventory: dan liggen ze bij je voeten in de winkel (GiveOrDrop toast).
+	APawn* BuyPawn = Cast<APawn>(GetOwner());
+	if (bSeed) { AWorldItemPickup::GiveOrDrop(Inv, BuyPawn, Store->SeedItemId(ItemId), 1, -1.f, -1.f); }
+	else       { AWorldItemPickup::GiveOrDrop(Inv, BuyPawn, ItemId, FMath::Max(1, Pack), -1.f, -1.f); }
 
 	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor(120, 220, 160), FString::Printf(TEXT("Bought: %s"), *Name.ToString())); }
 }
@@ -2465,11 +2488,13 @@ void UPhoneClientComponent::ServerStoreCheckout_Implementation(const TArray<FNam
 		return;
 	}
 
-	// 3) Alles direct leveren.
+	// 3) Alles direct leveren. Geld is al afgeschreven -> gekochte spullen nooit stil laten verdwijnen
+	// bij een volle inventory: dan liggen ze bij je voeten in de winkel (GiveOrDrop toast).
+	APawn* BuyPawn = Cast<APawn>(GetOwner());
 	for (const FBuyLine& L : Lines)
 	{
-		if (L.bSeed) { Inv->AddItem(Store->SeedItemId(L.Id), L.Qty); }
-		else         { Inv->AddItem(L.Id, FMath::Max(1, L.Pack) * L.Qty); }
+		if (L.bSeed) { AWorldItemPickup::GiveOrDrop(Inv, BuyPawn, Store->SeedItemId(L.Id), L.Qty, -1.f, -1.f); }
+		else         { AWorldItemPickup::GiveOrDrop(Inv, BuyPawn, L.Id, FMath::Max(1, L.Pack) * L.Qty, -1.f, -1.f); }
 	}
 	if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160), FString::Printf(TEXT("Bought for EUR %lld"), (long long)(WeedRoundEuros(Total) / 100))); }
 }

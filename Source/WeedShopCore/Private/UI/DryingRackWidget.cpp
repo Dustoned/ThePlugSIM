@@ -178,9 +178,6 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseDryRack(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag weed here to dry it. Done? Drag it back to your inventory."), 11, WeedUI::ColTextDim(), false))
-		->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-
 	// Drop-zone: transparante achtergrond zodat de (flauwe) lege slots zichtbaar zijn tegen de card,
 	// net als bij de inventory (geen donkere vlak meer dat de slots opslokt).
 	UBorder* RackBg = WidgetTree->ConstructWidget<UBorder>();
@@ -231,7 +228,10 @@ void UDryingRackWidget::HandleDryDrop(bool bDroppedOnDryingSide, UDryDragOp* Op)
 		// Een niet-natte item op het rek gesleept.
 		UWeedToast::NotifyPawn(GetOwningPlayerPawn(), -1, 2.f, FColor::Orange, TEXT("Only wet weed can be dried."));
 	}
-	LastSig.Reset();
+	// GEEN LastSig.Reset(): de hang/collect zijn server-authoritative -> de rack-entries wijzigen vanzelf, wat
+	// de tick-Sig verandert en FillBody triggert (dat rebuild alleen de ECHT-gewijzigde cel via de per-cel-sig).
+	// De reset forceerde een extra FillBody-pass op nog-ongewijzigde data (overbodig; de toast-tak muteert niks).
+	// De bron-cel in de inventory-grid (bij collect naar een rooster-cel) reconcilieert via OnInventoryChanged.
 }
 
 void UDryingRackWidget::CollectReady(int32 EntryIndex)
@@ -256,8 +256,19 @@ void UDryingRackWidget::HandleInvDrop(bool bDroppedOnDryingSide, UInvDragOp* Op)
 	const FName ItemId = St[Idx].ItemId;
 	if (ItemId.ToString().StartsWith(TEXT("WetBud_")))
 	{
+		// Alleen optimistisch de BRON-cel leegmaken als het rek AANTOONBAAR ruimte heeft (server weigert exact
+		// bij Entries>=Capacity, geen stacking). Anders zou een vol-rek-weigering de cel ten onrechte leeg laten
+		// zonder OnInventoryChanged om te herstellen. Met ruimte: hang slaagt gegarandeerd -> veilig clearen.
+		const ADryingRack* Rack = PhoneComp->GetDryRack();
+		const bool bHasRoom = Rack && Rack->GetEntries().Num() < Rack->GetCapacityPublic();
 		PhoneComp->RequestDryHang(Op->StackId); // precies deze stapel (eigen THC%/kwaliteit)
-		LastSig.Reset();
+		// Optimistisch clearen tegen de flash: anders komt de gesleepte (gedimde) cel na het loslaten eerst weer
+		// op VOLLE opacity terug (ghost-restore) en verdwijnt 'ie pas als de server-hang binnen is -> zichtbare
+		// flash. Direct leegmaken = geen flash; RebuildContent reconcilieert straks (sig "E" matcht -> no-op).
+		if (bHasRoom && Op->FromCell >= 0)
+		{
+			if (UInventoryWidget* IW = PhoneComp->GetInventoryWidget()) { IW->OptimisticClearCell(Op->FromCell); }
+		}
 	}
 	else
 	{
@@ -370,7 +381,7 @@ void UDryingRackWidget::FillBody()
 		// Lege-staat-label eenmalig aanmaken, daarna alleen togglen.
 		if (!DetailEmptyText)
 		{
-			DetailEmptyText = WeedUI::Text(WidgetTree, TEXT("Nothing drying. Drag wet weed into a slot."), 11, WeedUI::ColTextDim());
+			DetailEmptyText = WeedUI::Text(WidgetTree, TEXT("Empty"), 11, WeedUI::ColTextDim());
 			DetailBox->AddChildToVerticalBox(DetailEmptyText);
 		}
 		DetailEmptyText->SetVisibility(Used == 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);

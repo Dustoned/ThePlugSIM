@@ -23,7 +23,9 @@ public:
 	// Co-op: toon de melding bij de SPELER die de actie deed (ForActor = de pawn of een component/actor
 	// waarvan de eigenaar de speler is). Routeert via de PhoneClientComponent naar de juiste client.
 	// Valt terug op lokaal tonen als er geen speler-component gevonden wordt.
-	static void NotifyPawn(class AActor* ForActor, int32 Key, float Time, const FColor& Color, const FString& Msg);
+	// IconStem (optioneel) = honeti-kit-icoonnaam (bv "t_face_smile_128") links in de toast-pil. Reist als
+	// sentinel-prefix mee in Msg zodat de bestaande Toast/ClientToast-RPC-route ongewijzigd blijft.
+	static void NotifyPawn(class AActor* ForActor, int32 Key, float Time, const FColor& Color, const FString& Msg, const FString& IconStem = FString());
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -32,9 +34,9 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	void BuildShell(UCanvasPanel* Root);
-	void Push(int32 Key, float Time, const FLinearColor& Color, const FString& Msg);
+	void Push(int32 Key, float Time, const FLinearColor& Color, const FString& Msg, const FString& Icon = FString());
 
-	struct FEntry { FString Msg; FLinearColor Color; int32 Key = -1; float Born = 0.f; float Expire = 0.f; };
+	struct FEntry { FString Msg; FString Icon; FLinearColor Color; int32 Key = -1; float Born = 0.f; float Expire = 0.f; };
 	TArray<FEntry> Entries;
 
 	UPROPERTY() TObjectPtr<UVerticalBox> Stack;

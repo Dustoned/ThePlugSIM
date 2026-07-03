@@ -119,6 +119,7 @@ struct FPlayerSaveData
 	UPROPERTY() TArray<FInvSaveItem> Items;
 	UPROPERTY() TArray<int32> HotbarCells; // per hotbar-slot: grid-cel van de toegewezen stapel (-1 = leeg)
 	UPROPERTY() int32 ActiveSlot = 0;      // geselecteerd hotbar-slot
+	UPROPERTY() uint8 BackpackTier = 0;    // backpack-upgrade-tier (0..3); ontbrekend in oude save = 0 (default)
 	UPROPERTY() int32 RentDueDay = 31;     // dag waarop de volgende huur gaat
 	UPROPERTY() bool bRentIntroShown = false;
 	UPROPERTY() int32 WaterCharges = 0;    // (legacy) water in je fles - water zit nu in de fles-stack Quality

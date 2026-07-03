@@ -21,6 +21,15 @@ public:
 	// Server: vul het gedropte item (id + aantal + THC%/kwaliteit).
 	void Setup(FName InItemId, int32 InQty, float InThc, float InQual);
 
+	// Server. Spawnt een pickup op de grond op Loc (zelfde patroon als UInventoryComponent::ServerDropStack:
+	// AlwaysSpawn + Setup). Retourneert nullptr op clients of bij een ongeldig item/aantal.
+	static AWorldItemPickup* SpawnDrop(UWorld* W, const FVector& Loc, FName ItemId, int32 Qty, float Thc, float Quality);
+
+	// Server. Probeert AddItem; past het niet -> SpawnDrop bij de voeten van de pawn + toast, zodat items
+	// NOOIT stil verdwijnen bij een volle inventory. Cash wordt nooit gedropt (cash-stapel = spiegel van
+	// het economy-saldo): daarvoor gewoon het AddItem-resultaat. True = toegevoegd OF netjes gedropt.
+	static bool GiveOrDrop(class UInventoryComponent* Inv, APawn* Pawn, FName ItemId, int32 Qty, float Thc, float Quality);
+
 	// IInteractable: oppakken.
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;

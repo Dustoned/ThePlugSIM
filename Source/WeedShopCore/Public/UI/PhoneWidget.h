@@ -374,4 +374,10 @@ protected:
 	// gedeelde MessagesSignature-tak); alleen een NIEUW/weg contact herbouwt 't één keer.
 	int32 LastContactsSig = 0;
 	int32 ContactsSignature() const;
+
+	// Upgrades-app (app-index 0): structurele sig = woning-bezit + backpack-tier van de lokale speler.
+	// Zo herbouwt het paneel IN-PLACE (via MarkDirty) na een woning-koop/verkoop of een backpack-upgrade,
+	// zonder dat de speler de app opnieuw hoeft te openen (zelfde idioom als de Contacts/Packages-sig).
+	int32 LastUpgradesSig = -1;
+	int32 UpgradesSignature() const;
 };

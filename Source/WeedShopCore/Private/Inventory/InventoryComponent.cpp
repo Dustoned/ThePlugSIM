@@ -64,6 +64,7 @@ void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UInventoryComponent, Stacks);
+	DOREPLIFETIME(UInventoryComponent, BackpackTier);
 }
 
 bool UInventoryComponent::IsStackable(FName ItemId)
@@ -531,9 +532,19 @@ float UInventoryComponent::GetUnitWeight(FName ItemId) const
 		}
 	}
 
-	// VERPAKTE ZAKKEN: verpakking + de grammen die erin zitten (hoe meer gram, hoe zwaarder).
-	// 2g-baggie ~1.56kg, 50g-jar ~3kg, 500g-vuilniszak ~16.5kg. ~3-4 stacks 2g-baggies = vol (cap 60).
-	if (S.StartsWith(TEXT("Bag_"))) { return 1.5f + (float)BagGrams(ItemId) * 0.03f; }
+	// VERPAKTE ZAKKEN: tarra = het CONTAINER-gewicht (zelfde getallen als de lege Cont_-items hieronder)
+	// + de grammen erin (0.03 kg/g, gelijk aan losse bud). BEWUST realistisch geworden i.p.v. de oude vaste
+	// 1.5 kg verpakking: een 2g-baggie is nu ~0.16 kg i.p.v. ~1.53 kg. MaxWeight blijft 60 — de draagkracht-
+	// progressie zit in de backpack-tiers (ApplyBackpackTier), niet in kunstmatig zware zakjes.
+	if (S.StartsWith(TEXT("Bag_")))
+	{
+		const FString Cont = BagContainer(ItemId).ToString(); // "Cont_Bag2"/"Cont_Jar..."/... of "None" (oude maatloze bag)
+		float Tare = 0.1f;                                     // baggie / oude 2-token bag -> baggie-fallback
+		if (Cont.Contains(TEXT("Jar")))     { Tare = 0.3f; }   // glazen pot
+		if (Cont.Contains(TEXT("Garbage"))) { Tare = 0.3f; }   // grote vuilniszak
+		if (Cont.Contains(TEXT("Block")))   { Tare = 0.2f; }   // pers-blok
+		return Tare + (float)BagGrams(ItemId) * 0.03f;
+	}
 
 	// LEGE CONTAINERS (per type: glas weegt meer dan een baggie).
 	if (S.StartsWith(TEXT("Cont_")))
@@ -577,6 +588,76 @@ float UInventoryComponent::GetTotalWeight() const
 		W += GetUnitWeight(S.ItemId) * S.Quantity;
 	}
 	return W;
+}
+
+// --- Backpack-tiers (per speler, puur geld): tier bepaalt MaxStacks + MaxWeight ---
+
+int64 UInventoryComponent::BackpackUpgradeCostCents(int32 CurrentTier)
+{
+	switch (CurrentTier)
+	{
+	case 0:  return 50000;    // T0 -> T1: EUR 500
+	case 1:  return 250000;   // T1 -> T2: EUR 2.500
+	case 2:  return 1000000;  // T2 -> T3: EUR 10.000
+	default: return 0;        // al max (of ongeldige tier)
+	}
+}
+
+void UInventoryComponent::GetBackpackTierCaps(int32 Tier, int32& OutMaxStacks, float& OutMaxWeight)
+{
+	switch (FMath::Clamp(Tier, 0, BackpackMaxTier))
+	{
+	default:
+	case 0: OutMaxStacks = 10; OutMaxWeight = 60.f;  break;
+	case 1: OutMaxStacks = 14; OutMaxWeight = 85.f;  break;
+	case 2: OutMaxStacks = 18; OutMaxWeight = 115.f; break;
+	case 3: OutMaxStacks = 24; OutMaxWeight = 150.f; break;
+	}
+}
+
+void UInventoryComponent::ApplyBackpackTier()
+{
+	GetBackpackTierCaps(BackpackTier, MaxStacks, MaxWeight);
+	// Rooster meteen laten meegroeien (RefreshGridAuto doet SetNum op MaxStacks, behoudt posities) en de
+	// UI (grid/gewichtsbalk) in-place laten verversen. Draait op server EN client (via de OnRep).
+	RefreshGridAuto();
+	OnInventoryChanged.Broadcast();
+}
+
+void UInventoryComponent::OnRep_BackpackTier()
+{
+	ApplyBackpackTier();
+}
+
+void UInventoryComponent::SetBackpackTier(uint8 InTier)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	BackpackTier = FMath::Min<uint8>(InTier, (uint8)BackpackMaxTier);
+	ApplyBackpackTier();
+}
+
+void UInventoryComponent::ServerBuyBackpackUpgrade_Implementation()
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	if (BackpackTier >= BackpackMaxTier)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Backpack is already maxed out."));
+		return;
+	}
+	// Betalen met CASH via de EIGEN economy van de pawn-owner (per speler). Cash is een SPIEGEL van het
+	// economy-saldo -> altijd via RemoveMoney, nooit via RemoveItem (reconcile zou de stapel herstellen).
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	UEconomyComponent* Econ = Pawn ? Pawn->FindComponentByClass<UEconomyComponent>() : nullptr;
+	const int64 Cost = BackpackUpgradeCostCents(BackpackTier);
+	if (!Econ || !Econ->RemoveMoney(Cost))
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Not enough cash."));
+		return;
+	}
+	++BackpackTier;
+	ApplyBackpackTier();
+	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green,
+		FString::Printf(TEXT("Backpack upgraded: %d slots / %.0f kg"), MaxStacks, MaxWeight));
 }
 
 bool UInventoryComponent::IsStackOnHotbar(int32 StackId) const

@@ -467,6 +467,7 @@ void USaveGameSubsystem::GatherPlayer(APawn* Pawn, FPlayerSaveData& Out) const
 			Out.Items.Add(It);
 		}
 		Out.ActiveSlot = Inv->GetActiveSlot();
+		Out.BackpackTier = (uint8)Inv->GetBackpackTier(); // backpack-upgrade-tier (per speler)
 	}
 	// (Water zit nu in het Quality-veld van elke fles-stack en gaat dus mee via Out.Items — geen aparte opslag.)
 
@@ -525,6 +526,9 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 		}
 		Inv->RestoreStacksAndGrid(RestoredStacks, Cells, HotbarSlots);
 		Inv->SetActiveSlot(Data.ActiveSlot);
+		// NA de stacks-restore: zet de backpack-tier zodat MaxStacks/MaxWeight + het grid (RefreshGridAuto)
+		// meteen op de opgeslagen capaciteit staan (SetBackpackTier roept ApplyBackpackTier).
+		Inv->SetBackpackTier(Data.BackpackTier);
 	}
 	// (Water zit in de fles-stack Quality en is al hersteld via de inventory-items hierboven.)
 

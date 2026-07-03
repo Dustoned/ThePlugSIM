@@ -1087,6 +1087,27 @@ int32 UPhoneWidget::ContactsSignature() const
 	return Sig * 13 + N;
 }
 
+int32 UPhoneWidget::UpgradesSignature() const
+{
+	// STRUCTURELE sig van de Upgrades-app (app 0): woning-bezit (welke panden van jou zijn) + de backpack-tier
+	// van de LOKALE speler. Wijzigt na een woning-koop/verkoop of een backpack-upgrade -> paneel herbouwt één keer
+	// (MarkDirty), zodat de knoppen/tekst meteen kloppen zonder de app opnieuw te openen. Geen live-drift erin.
+	if (!Phone.IsValid()) { return -1; }
+	int32 Sig = 0;
+	TArray<FCityPropertyOffer> Offers;
+	Phone->GetPropertyOffers(Offers);
+	for (const FCityPropertyOffer& O : Offers)
+	{
+		Sig = Sig * 31 + O.HomeIndex * 2 + (Phone->IsPropertyOwned(O.HomeIndex) ? 1 : 0);
+	}
+	int32 Tier = 0;
+	if (APawn* P = GetOwningPlayerPawn())
+	{
+		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>()) { Tier = Inv->GetBackpackTier(); }
+	}
+	return Sig * 17 + Tier;
+}
+
 int32 UPhoneWidget::BankUnlockSignature() const
 {
 	// MINIMALE structurele sig: ALLEEN de mobile-banking/ATM-beschikbaarheid. Flipt deze staat, dan wisselt de
@@ -3178,6 +3199,66 @@ void UPhoneWidget::RefreshContent()
 			}
 		}
 
+		// --- Backpack: draagcapaciteit-upgrade (per speler, puur geld). Tier bepaalt slots + draaggewicht. ---
+		{
+			ActiveContent->AddChildToVerticalBox(MakeText(TEXT("Backpack"), 14, WeedUI::ColText()))
+				->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
+
+			// Lees de tier van de LOKALE speler-pawn (de backpack-component zit op de pawn = per speler).
+			int32 Tier = 0;
+			int32 MaxStacks = 0; float MaxWeight = 0.f;
+			bool bHaveInv = false;
+			if (APawn* LP = GetOwningPlayerPawn())
+			{
+				if (const UInventoryComponent* LInv = LP->FindComponentByClass<UInventoryComponent>())
+				{
+					Tier = LInv->GetBackpackTier();
+					bHaveInv = true;
+				}
+			}
+			UInventoryComponent::GetBackpackTierCaps(Tier, MaxStacks, MaxWeight);
+			const bool bMax = (Tier >= UInventoryComponent::BackpackMaxTier);
+
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+			UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+			const FString TitleStr = bMax
+				? FString::Printf(TEXT("Backpack  Lv %d (max)"), Tier + 1)
+				: FString::Printf(TEXT("Backpack  Lv %d"), Tier + 1);
+			Info->AddChildToVerticalBox(MakeText(TitleStr, 12, bMax ? WeedUI::ColGood() : WeedUI::ColText()));
+			Info->AddChildToVerticalBox(MakeText(
+				FString::Printf(TEXT("%d slots / %.0f kg"), MaxStacks, MaxWeight), 10, WeedUI::ColTextDim()));
+			UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
+			IL->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			IL->SetVerticalAlignment(VAlign_Center);
+			IL->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+			// Nog niet max EN we hebben een lokale inventory-component -> upgrade-knop met de VOLGENDE tier + prijs.
+			if (!bMax && bHaveInv)
+			{
+				const int64 Cost = UInventoryComponent::BackpackUpgradeCostCents(Tier);
+				const FString BtnLabel = FString::Printf(TEXT("Upgrade to Lv %d  -  EUR %lld"),
+					Tier + 2, (long long)(Cost / 100));
+				USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
+				RB->SetWidthOverride(184.f);
+				RB->SetHeightOverride(28.f);
+				// Koop via de component-RPC op de LOKALE pawn (server-authoritative: betaalt met eigen cash, tier++).
+				// GEEN ClearChildren op de klik: de UpgradesSignature-check in NativeTick herbouwt dit paneel één keer
+				// zodra de gerepliceerde BackpackTier oploopt (zelfde in-place idioom als de andere apps).
+				RB->SetContent(MakeActionBtn(BtnLabel, WeedUI::ColAccentDim(), [this]()
+				{
+					if (APawn* P = GetOwningPlayerPawn())
+					{
+						if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+						{
+							Inv->ServerBuyBackpackUpgrade();
+						}
+					}
+				}, 11));
+				UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
+				RS->SetVerticalAlignment(VAlign_Center);
+			}
+			ActiveContent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
+		}
 	}
 	else if (App == GGrowApp) // Grow shop -> ALLES om te kweken (zaad, pot, aarde, water, upgrades, verzorging)
 	{
@@ -3714,6 +3795,14 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		const int32 CSig = ContactsSignature();
 		if (CSig != LastContactsSig) { LastContactsSig = CSig; MarkDirty(); }
+	}
+
+	// Upgrades open (app 0): bij een woning-koop/verkoop of een backpack-upgrade herbouwt het paneel één keer
+	// (MarkDirty) zodat de knoppen/tekst kloppen zonder de app opnieuw te openen. Structurele sig -> geen live-drift.
+	if (!bHome && App == 0)
+	{
+		const int32 USig = UpgradesSignature();
+		if (USig != LastUpgradesSig) { LastUpgradesSig = USig; MarkDirty(); }
 	}
 
 	// Berichten open: bij een nieuw bericht of statuswijziging de inhoud verversen (App 2/Contacts zit hier NIET

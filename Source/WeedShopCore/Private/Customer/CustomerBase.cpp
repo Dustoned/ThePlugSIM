@@ -1,5 +1,6 @@
 #include "Customer/CustomerBase.h"
 #include "UI/WeedToast.h"
+#include "UI/WeedUiStyle.h" // PrettyItemName voor nette productnamen in prompt/toast
 #include "Interaction/PlayerNpcActions.h"
 
 #include "WeedShopCore.h"
@@ -364,6 +365,13 @@ static uint32 WeedNpc_StableSeed(FName NpcId)
 	return ACustomerBase::StableLookSeed(NpcId);
 }
 
+// [PDIAG] NpcId van de eigenaar voor missing-asset-logs (diagnose onzichtbare NPC's). Later verwijderen.
+static FString WeedNpc_DiagId(const AActor* Owner)
+{
+	const ACustomerBase* Cb = Cast<ACustomerBase>(Owner);
+	return Cb ? Cb->NpcId.ToString() : GetNameSafe(Owner);
+}
+
 // MODULAIRE Casual-NPC: bouw een persoon uit losse kledingstukken (Casual_Wear_Pack1) -> elke NPC krijgt
 // een eigen combinatie top/broek/schoenen/kapsel/hoofd. De basis-body draait de anim; de kledingstukken
 // volgen via SetLeaderPoseComponent (zelfde UE4_Mannequin_Skeleton_Main). Plus per-part random kleur.
@@ -377,6 +385,10 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 	if (USkeletalMesh* B = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body.SK_Body")))
 	{
 		Body->SetSkeletalMesh(B);
+	}
+	else
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModular: basis-body laadde niet: /Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body (npc=%s)"), *WeedNpc_DiagId(Owner));
 	}
 	auto Pick = [&](const TArray<FString>& Opts, uint32 Salt) -> FString
 	{
@@ -406,7 +418,7 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 		if (Rel.IsEmpty()) { continue; }
 		const FString Path = FString(C) + Rel + TEXT(".") + FPaths::GetCleanFilename(Rel);
 		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
-		if (!PM) { continue; }
+		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModular: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
 		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
 		Part->SetupAttachment(Body);
 		Part->RegisterComponent();
@@ -435,7 +447,9 @@ static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* 
 	auto Load = [&](const TCHAR* Rel) -> USkeletalMesh*
 	{
 		const FString Path = FString(C) + Rel + TEXT(".SK_Citizens_Pack_Tony_") + Rel;
-		return LoadObject<USkeletalMesh>(nullptr, *Path);
+		USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, *Path);
+		if (!M) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizens: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); }
+		return M;
 	};
 	auto AddPart = [&](USkeletalMesh* PM, uint32 Salt)
 	{
@@ -459,6 +473,7 @@ static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* 
 	USkeletalMesh* BaseBody = (Torso == 2u) ? Load(TEXT("Body_Cloth")) : Load(TEXT("Body"));
 	if (!BaseBody) { BaseBody = Load(TEXT("Body")); }
 	if (BaseBody) { Body->SetSkeletalMesh(BaseBody); }
+	else { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizens: basis-body (Body/Body_Cloth) laadde niet (npc=%s)"), *WeedNpc_DiagId(Owner)); }
 	WeedNpc_TintClothing(Body, Seed); // tint een eventueel ingebakken shirt (Body_Cloth) mee
 	if (Torso == 0u) { AddPart(Load(TEXT("Tshirt")), 11u); }
 	else if (Torso == 1u) { AddPart(Load(TEXT("Shirt")), 11u); }
@@ -679,6 +694,10 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 	{
 		Body->SetSkeletalMesh(B);
 	}
+	else
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizenMan: basis-body laadde niet: /Game/Citizen_man_01/mesh/citizen_man_01_body_01 (npc=%s)"), *WeedNpc_DiagId(Owner));
+	}
 	auto Pick = [&](const TArray<FString>& Opts, uint32 Salt) -> FString
 	{
 		if (Opts.Num() == 0) { return FString(); }
@@ -704,7 +723,7 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 		if (Rel.IsEmpty()) { continue; }
 		const FString Path = FString(C) + Rel + TEXT(".") + Rel; // parts liggen plat in /mesh/, objectnaam == bestandsnaam
 		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
-		if (!PM) { continue; }
+		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizenMan: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
 		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
 		Part->SetupAttachment(Body);
 		Part->RegisterComponent();
@@ -769,6 +788,28 @@ bool ACustomerBase::PredictFemaleAppearance(FName NpcId, int32 SkinIndex, bool b
 	return (SkinIndex >= 10 && SkinIndex <= 12); // SkinByIndex vrouwen-band
 }
 
+// D18: gender van een bestaande weergavenaam bepalen door de VOORNAAM tegen beide naam-pools te leggen.
+// Loopt via de publieke ACityDoor::ResidentNameForIndex (1 bron voor de pools, geen duplicatie). De
+// voornaam-pools cyclen op Index % N (mannen 58, vrouwen 36), dus indices 0..63 dekken beide volledig.
+// Geeft false als de voornaam in geen van beide pools voorkomt (die namen laten we met rust).
+static bool WeedNpc_NameGenderKnown(const FString& DisplayName, bool& bOutFemale)
+{
+	FString First = DisplayName;
+	int32 Sp;
+	if (First.FindChar(TEXT(' '), Sp)) { First = First.Left(Sp); }
+	if (First.IsEmpty()) { return false; }
+	for (int32 i = 0; i < 64; ++i)
+	{
+		FString M = ACityDoor::ResidentNameForIndex(i, false);
+		int32 MSp; if (M.FindChar(TEXT(' '), MSp)) { M = M.Left(MSp); }
+		if (M == First) { bOutFemale = false; return true; }
+		FString F = ACityDoor::ResidentNameForIndex(i, true);
+		int32 FSp; if (F.FindChar(TEXT(' '), FSp)) { F = F.Left(FSp); }
+		if (F == First) { bOutFemale = true; return true; }
+	}
+	return false;
+}
+
 // Bouwt het uiterlijk (mesh + modulaire parts + kleur-tint) deterministisch op uit NpcId (seed) + RepSkinIndex.
 // Draait op host EN client: meshes/parts/MIDs repliceren niet, maar zijn 100% afleidbaar uit deze twee
 // gerepliceerde waarden, dus host en client bouwen exact dezelfde persoon lokaal. 1x per pawn (idempotent).
@@ -801,6 +842,7 @@ void ACustomerBase::BuildAppearance()
 		if (V == 0u) { WeedNpc_BuildModularCitizenMan(this, SkM, LookSeed); }
 		else if (V == 1u) { if ((LookSeed & 8u) == 0u) { WeedNpc_BuildModular(this, SkM, LookSeed); } else { WeedNpc_BuildModularCitizens(this, SkM, LookSeed); } }
 		else if (USkeletalMesh* Sk = WeedNpc_CrowdSkin(LookSeed)) { SkM->SetSkeletalMesh(Sk); const FString SkP = Sk->GetPathName(); if (!SkP.Contains(TEXT("/Gamer_Girl/")) && !SkP.Contains(TEXT("/SchoolGirl/"))) { WeedNpc_TintClothing(SkM, LookSeed); } } // girl-packs: eigen outfits, niet overtinten
+		else { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildAppearance: crowd-skin laadde niet (npc=%s seed=%u) - NPC blijft zonder mesh"), *NpcId.ToString(), LookSeed); }
 	}
 	else if (SkinIdx >= 3 && SkinIdx <= 5)
 	{
@@ -818,6 +860,7 @@ void ACustomerBase::BuildAppearance()
 		SkM->SetSkeletalMesh(Sk);
 		WeedNpc_TintClothing(SkM, LookSeed); // Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop
 	}
+	else { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildAppearance: skin-by-index laadde niet (npc=%s skin=%d) - NPC blijft zonder mesh"), *NpcId.ToString(), SkinIdx); }
 	bAppearanceBuilt = true;
 
 	// GENDER-CORRECTE NAAM (host-authoritative): alleen voor gegenereerde bewoners ("Resident_<idx>") - hun
@@ -838,6 +881,33 @@ void ACustomerBase::BuildAppearance()
 				if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
 				{
 					Reg->SetDisplayName(NpcId, FText::FromString(GenderName));
+				}
+			}
+		}
+		else if (!NpcId.IsNone())
+		{
+			// D18: ook DT-/pool-NPC's gender-correct hernoemen als de registry-naam niet bij de skin past
+			// (bv. vrouwennaam op een mannelijke skin). ALLEEN zolang het contact nog NIET unlocked is:
+			// een bekende contact-naam (staat al in de telefoon) mag nooit onder de speler veranderen.
+			// Naam-gender via de pools (helper); namen buiten de pools blijven met rust. Deterministische
+			// nieuwe naam uit de juiste pool (seed = NpcId-hash) -> host en save-load kiezen dezelfde.
+			if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+			{
+				if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
+				{
+					if (!Reg->IsUnlocked(NpcId))
+					{
+						float r = 0.f, l = 0.f, a = 0.f; FText Nm;
+						if (Reg->GetStats(NpcId, r, l, a, Nm) && !Nm.IsEmpty())
+						{
+							bool bNameFemale = false;
+							if (WeedNpc_NameGenderKnown(Nm.ToString(), bNameFemale) && bNameFemale != bFemaleAppearance)
+							{
+								const int32 NameIdx = (int32)(StableLookSeed(NpcId) & 0x7fffffff);
+								Reg->SetDisplayName(NpcId, FText::FromString(ACityDoor::ResidentNameForIndex(NameIdx, bFemaleAppearance)));
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1023,6 +1093,10 @@ void ACustomerBase::SetTalkingToPlayer(bool b, APawn* Pawn)
 	DealingPawn = b ? Pawn : nullptr; // gerepliceerd -> andere client weet wie bezig is
 	if (b)
 	{
+		// [PDIAG] Onzichtbare-NPC-diagnose: 1 regel per deal-open (zie ook Interact). Later verwijderen.
+		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] DealOpen npc=%s hidden=%d built=%d skin=%d crowd=%d mesh=%s"),
+			*NpcId.ToString(), IsHidden() ? 1 : 0, bAppearanceBuilt ? 1 : 0, RepSkinIndex, bCrowdNpc ? 1 : 0,
+			*GetNameSafe(GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr));
 		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
 		// COMPETITIVE: nu de KOPER bekend is de walk-in-order-grootte herschalen naar zijn tier-band.
 		RescaleOrderForPlayer(Pawn);
@@ -3335,6 +3409,10 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		}
 	}
 
+	// D14: onthoud de stats van vóór de deal zodat de toast de ECHTE (geclampte) winst toont,
+	// inclusief de eventuele over-leverings-bonus hieronder.
+	const float RespectBefore = Respect;
+	const float LoyaltyBefore = Loyalty;
 	float dR = 0.f, dL = 0.f, dA = 0.f;
 	ComputeAcceptedDeltas(AskPriceCentsPerUnit, Market, Quality01, ThcStock, bSubstitute, dR, dL, dA);
 	Respect = ClampAttr(Respect + dR);
@@ -3356,6 +3434,21 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			TEXT("More than I asked, good lookin' out!"),
 			TEXT("Aight, that's love right there.") };
 		Say(Nice[FMath::RandRange(0, 3)]);
+	}
+
+	// D14: tevreden-klant-toast met smiley-icoon naar de VERKOPENDE speler (server-side; NotifyPawn
+	// routeert per-speler naar de juiste client). Toon alleen wat echt omhoog ging (afgerond, > 0).
+	if (PayTo)
+	{
+		const int32 UpR = FMath::RoundToInt(Respect - RespectBefore);
+		const int32 UpL = FMath::RoundToInt(Loyalty - LoyaltyBefore);
+		if (UpR > 0 || UpL > 0)
+		{
+			FString StatMsg = TEXT("Happy customer");
+			if (UpR > 0) { StatMsg += FString::Printf(TEXT("  +%d respect"), UpR); }
+			if (UpL > 0) { StatMsg += FString::Printf(TEXT("  +%d loyalty"), UpL); }
+			UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 4.f, FColor(120, 255, 140), StatMsg, TEXT("t_face_smile_128"));
+		}
 	}
 
 	State = ECustomerState::Served;
@@ -3445,6 +3538,12 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 		return;
 	}
 
+	// [PDIAG] Onzichtbare-NPC-diagnose: 1 regel per interact (NIET per tick) zodat een gerichte repro
+	// de kapotte tak aanwijst (verborgen actor / appearance nooit gebouwd / mesh-load gefaald). Later verwijderen.
+	UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] Interact npc=%s hidden=%d built=%d skin=%d crowd=%d mesh=%s"),
+		*NpcId.ToString(), IsHidden() ? 1 : 0, bAppearanceBuilt ? 1 : 0, RepSkinIndex, bCrowdNpc ? 1 : 0,
+		*GetNameSafe(GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr));
+
 	// Klanten betalen de speler die ze bedient (z'n eigen portemonnee).
 	UEconomyComponent* Econ = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UEconomyComponent>() : nullptr;
 	UInventoryComponent* Stock = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
@@ -3461,7 +3560,9 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 		switch (Result)
 		{
 		case EDealResult::Accepted: C = FColor::Green;  Msg = TEXT("Sold!"); break;
-		case EDealResult::NoStock:  C = FColor::Orange; Msg = FString::Printf(TEXT("No stock: %s"), *DesiredProductId.ToString()); break;
+		// Nette productnaam i.p.v. het rauwe id ("Bag_CriticalMass" -> "Critical Mass"); " bag"-suffix
+		// eraf, zelfde patroon als de afspraak-berichten (ContactsComponent).
+		case EDealResult::NoStock:  C = FColor::Orange; Msg = FString::Printf(TEXT("No stock: %s"), *WeedUI::PrettyItemName(DesiredProductId).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase)); break;
 		case EDealResult::Haggle:   C = FColor::Yellow; Msg = TEXT("Customer thinks it's too expensive"); break;
 		default:                    C = FColor::Red;    Msg = TEXT("Customer refuses"); break;
 		}
@@ -3512,9 +3613,9 @@ FText ACustomerBase::GetInteractionPrompt_Implementation() const
 		FString S = TierTag + TEXT("Deal");
 		if (!DesiredProductId.IsNone())
 		{
-			FString Item = DesiredProductId.ToString();
-			Item.RemoveFromStart(TEXT("Bag_"));
-			Item.RemoveFromStart(TEXT("Bud_"));
+			// Nette productnaam ("Bag_CriticalMass" -> "Critical Mass"): PrettyItemName + " bag"-suffix
+			// eraf (zelfde patroon als de afspraak-berichten) -> "wants 3g Critical Mass".
+			const FString Item = WeedUI::PrettyItemName(DesiredProductId).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase);
 			S += FString::Printf(TEXT(" - wants %dg %s"), FMath::Max(1, DesiredQuantity), *Item);
 		}
 		if (bApptActive)

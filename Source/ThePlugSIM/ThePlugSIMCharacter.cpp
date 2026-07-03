@@ -1506,14 +1506,12 @@ void AThePlugSIMCharacter::GiveSampleCore(ACustomerBase* Customer, FName JointId
 		return;
 	}
 
-	// Effectieve kwaliteit = wiet-kwaliteit geschaald met het aantal gram (zelfde formule als de
-	// joint-sterkte): een dun jointje voelt zwakker en bindt/verslaaft daardoor minder.
-	const float Quality = UPhoneClientComponent::JointIntensity(BestGrams, 0.f, WeedQ * 100.f);
-	// Joints zijn er VOORAL om te verslaven (de haak). Verslaving = hoofd-gain; loyaliteit/respect verdien
-	// je via VERKOOP, dus een gratis joint geeft daar hooguit een vleugje van.
-	float AddGain = 4.f + Quality * 12.f;   // VERSLAVING dominant (top-joint ~16, brak ~4)
-	float LoyGain = Quality * 3.f;          // alleen een vleugje goodwill bij goeie wiet (top ~3)
-	float RespGain = Quality * 2.5f;        // beetje respect voor goeie wiet (top ~2.5)
+	// Gedeelde sample-formule (D21): intensiteit + gains komen uit ComputeSampleEffect (afnemende
+	// meeropbrengst-curve + AddGain-cap), zodat server-gedrag en de UI-preview in de deal-kiezer
+	// EXACT dezelfde curve delen. Joints zijn er VOORAL om te verslaven (de haak); loyaliteit/respect
+	// verdien je via VERKOOP, dus een gratis joint geeft daar hooguit een vleugje van.
+	float Quality = 0.f, AddGain = 0.f, LoyGain = 0.f, RespGain = 0.f;
+	UPhoneClientComponent::ComputeSampleEffect((float)BestGrams, WeedQ, Quality, AddGain, LoyGain, RespGain);
 
 	// Kieskeurigheid: weinig-verslaafde mensen (locals/kenners) lusten geen slappe joint.
 	const bool bPicky = Customer->Addiction < 20.f;

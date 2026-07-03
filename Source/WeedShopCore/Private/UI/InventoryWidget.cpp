@@ -359,9 +359,41 @@ bool UInvCell::HandleDropOp(UDragDropOperation* InOperation)
 }
 
 // ---------------------------------------------------------------------------
+//  UInvPopupHost — los viewport-widget dat de split/merge-popups host (hoge ZOrder)
+// ---------------------------------------------------------------------------
+TSharedRef<SWidget> UInvPopupHost::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		HostCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("PopupHostRoot"));
+		WidgetTree->RootWidget = HostCanvas;
+	}
+	// Klik-transparant waar geen popup is; de popups zelf zijn Visible en vangen hun eigen klikken.
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	return Super::RebuildWidget();
+}
+
+// ---------------------------------------------------------------------------
 //  UInventoryWidget
 // ---------------------------------------------------------------------------
 void UInventoryWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
+
+UCanvasPanel* UInventoryWidget::EnsurePopupHost()
+{
+	if (PopupHost && PopupHost->HostCanvas) { return PopupHost->HostCanvas; }
+	APlayerController* PC = GetOwningPlayer();
+	if (!PC) { return nullptr; }
+	PopupHost = CreateWidget<UInvPopupHost>(PC, UInvPopupHost::StaticClass());
+	if (!PopupHost) { return nullptr; }
+	PopupHost->AddToViewport(60); // boven pauze(40)/store(33)/droogrek(32)/schap(31) -> popup ligt bovenop alles
+	// De popup-panelen éénmalig in de host-canvas bouwen (idempotent: SplitRoot/MergeRoot pas daarna gezet).
+	if (PopupHost->HostCanvas)
+	{
+		if (!SplitRoot) { BuildSplitPopup(PopupHost->HostCanvas); }
+		if (!MergeRoot) { BuildMergePopup(PopupHost->HostCanvas); }
+	}
+	return PopupHost->HostCanvas;
+}
 
 UInventoryComponent* UInventoryWidget::GetInv() const
 {
@@ -563,45 +595,48 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 	Scroll->AddChild(Grid);
 
-	// Hint onderaan: sleep naar de hotbar onderin het scherm.
-	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag to the hotbar  ·  Shift+click = split"), 11, FLinearColor(0.55f, 0.6f, 0.72f)))
+	// Hint onderaan: alleen de nuttige split-hint (klein/dim); de sleep-uitleg is weg (spreekt voor zich).
+	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Shift+click = split"), 10, FLinearColor(0.5f, 0.54f, 0.66f)))
 		->SetPadding(FMargin(2.f, 8.f, 0.f, 0.f));
 
-	BuildSplitPopup(Root);
-	BuildMergePopup(Root);
+	// De split/merge-popups worden NIET meer hier (in de inventory-card) gebouwd -> ze zouden anders achter
+	// naast-openstaande panelen (schap/droogrek/store) vallen. Ze leven in een losse popup-host op hoge
+	// viewport-ZOrder; die + de popups worden lazy gebouwd bij de eerste popup (EnsurePopupHost).
 }
 
 void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
 {
-	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
+	// De popup leeft in de popup-HOST-tree (los viewport-widget op hoge ZOrder), niet in de inventory-card.
+	UWidgetTree* Tree = (PopupHost && PopupHost->WidgetTree) ? PopupHost->WidgetTree.Get() : WidgetTree.Get();
+	UBorder* Panel = Tree->ConstructWidget<UBorder>();
 	{ FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 14.f); CardBr.OutlineSettings.Width = 1.f; CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f)); Panel->SetBrush(CardBr); }
 	Panel->SetPadding(FMargin(18.f));
 
-	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+	UVerticalBox* VB = Tree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapel splitsen"), 15, WeedUI::ColAccent(), true, true))
+	VB->AddChildToVerticalBox(WeedUI::Text(Tree, TEXT("Stapel splitsen"), 15, WeedUI::ColAccent(), true, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	SplitLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), true);
+	SplitLabel = WeedUI::Text(Tree, TEXT(""), 13, WeedUI::ColText(), true);
 	VB->AddChildToVerticalBox(SplitLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
-	SplitSlider = WidgetTree->ConstructWidget<USlider>();
+	SplitSlider = Tree->ConstructWidget<USlider>();
 	SplitSlider->SetMinValue(0.f); SplitSlider->SetMaxValue(1.f); SplitSlider->SetValue(0.5f);
 	SplitSlider->SetSliderHandleColor(WeedUI::ColAccent());
 	SplitSlider->SetSliderBarColor(WeedUI::ColStroke());
 	SplitSlider->OnValueChanged.AddDynamic(this, &UInventoryWidget::OnSplitSliderChanged);
 	VB->AddChildToVerticalBox(SplitSlider)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
-	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UWeedActionButton* Conf = TileButton(WidgetTree, WeedUI::ColAccent(), 8.f, [this]() { ConfirmSplit(); });
-	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Splitsen"), 12, WeedUI::ColText(), true));
-	UWeedActionButton* Canc = TileButton(WidgetTree, WeedUI::ColInner(), 8.f, [this]() { CancelSplit(); });
-	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, WeedUI::ColText(), true));
+	UHorizontalBox* Btns = Tree->ConstructWidget<UHorizontalBox>();
+	UWeedActionButton* Conf = TileButton(Tree, WeedUI::ColAccent(), 8.f, [this]() { ConfirmSplit(); });
+	Conf->SetContent(WeedUI::Text(Tree, TEXT("Splitsen"), 12, WeedUI::ColText(), true));
+	UWeedActionButton* Canc = TileButton(Tree, WeedUI::ColInner(), 8.f, [this]() { CancelSplit(); });
+	Canc->SetContent(WeedUI::Text(Tree, TEXT("Cancel"), 12, WeedUI::ColText(), true));
 	Btns->AddChildToHorizontalBox(Conf)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	UHorizontalBoxSlot* CS2 = Btns->AddChildToHorizontalBox(Canc);
 	CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	VB->AddChildToVerticalBox(Btns);
 
-	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+	USizeBox* Sz = Tree->ConstructWidget<USizeBox>();
 	Sz->SetWidthOverride(300.f);
 	Sz->SetContent(Panel);
 	SplitRoot = Sz;
@@ -611,7 +646,7 @@ void UInventoryWidget::BuildSplitPopup(UCanvasPanel* Root)
 	PS->SetAlignment(FVector2D(0.5f, 0.5f));
 	PS->SetAutoSize(true);
 	PS->SetPosition(FVector2D(0.f, -30.f));
-	PS->SetZOrder(50); // boven de slots/grid (was er soms achter)
+	PS->SetZOrder(50); // binnen de host bovenaan (de host zelf ligt al op viewport-ZOrder 60)
 	Sz->SetVisibility(ESlateVisibility::Collapsed);
 }
 
@@ -664,7 +699,9 @@ void UInventoryWidget::OptimisticGridSwap(int32 CellA, int32 CellB)
 void UInventoryWidget::OpenSplitPopup(int32 StackId)
 {
 	UInventoryComponent* I = GetInv();
-	if (!I || !SplitRoot || !SplitSlider) { return; }
+	if (!I) { return; }
+	EnsurePopupHost(); // popup-host + panelen lazy bouwen (bovenop naast-openstaande panelen)
+	if (!SplitRoot || !SplitSlider) { return; }
 	const int32 Idx = I->FindStackById(StackId);
 	const TArray<FInventoryStack>& St = I->GetStacks();
 	if (!St.IsValidIndex(Idx)) { return; }
@@ -705,28 +742,30 @@ void UInventoryWidget::CancelSplit()
 
 void UInventoryWidget::BuildMergePopup(UCanvasPanel* Root)
 {
-	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
+	// De popup leeft in de popup-HOST-tree (los viewport-widget op hoge ZOrder), niet in de inventory-card.
+	UWidgetTree* Tree = (PopupHost && PopupHost->WidgetTree) ? PopupHost->WidgetTree.Get() : WidgetTree.Get();
+	UBorder* Panel = Tree->ConstructWidget<UBorder>();
 	{ FSlateBrush CardBr = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 14.f); CardBr.OutlineSettings.Width = 1.f; CardBr.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f)); Panel->SetBrush(CardBr); }
 	Panel->SetPadding(FMargin(18.f));
 
-	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+	UVerticalBox* VB = Tree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(VB);
-	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Stapels samenvoegen"), 15, WeedUI::ColAccent(), true, true))
+	VB->AddChildToVerticalBox(WeedUI::Text(Tree, TEXT("Stapels samenvoegen"), 15, WeedUI::ColAccent(), true, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	MergeLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), true);
+	MergeLabel = WeedUI::Text(Tree, TEXT(""), 13, WeedUI::ColText(), true);
 	VB->AddChildToVerticalBox(MergeLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
-	UHorizontalBox* Btns = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UWeedActionButton* Conf = TileButton(WidgetTree, WeedUI::ColAccent(), 8.f, [this]() { ConfirmMerge(); });
-	Conf->SetContent(WeedUI::Text(WidgetTree, TEXT("Samenvoegen"), 12, WeedUI::ColText(), true));
-	UWeedActionButton* Canc = TileButton(WidgetTree, WeedUI::ColInner(), 8.f, [this]() { CancelMerge(); });
-	Canc->SetContent(WeedUI::Text(WidgetTree, TEXT("Cancel"), 12, WeedUI::ColText(), true));
+	UHorizontalBox* Btns = Tree->ConstructWidget<UHorizontalBox>();
+	UWeedActionButton* Conf = TileButton(Tree, WeedUI::ColAccent(), 8.f, [this]() { ConfirmMerge(); });
+	Conf->SetContent(WeedUI::Text(Tree, TEXT("Samenvoegen"), 12, WeedUI::ColText(), true));
+	UWeedActionButton* Canc = TileButton(Tree, WeedUI::ColInner(), 8.f, [this]() { CancelMerge(); });
+	Canc->SetContent(WeedUI::Text(Tree, TEXT("Cancel"), 12, WeedUI::ColText(), true));
 	Btns->AddChildToHorizontalBox(Conf)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	UHorizontalBoxSlot* CS2 = Btns->AddChildToHorizontalBox(Canc);
 	CS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS2->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
 	VB->AddChildToVerticalBox(Btns);
 
-	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+	USizeBox* Sz = Tree->ConstructWidget<USizeBox>();
 	Sz->SetWidthOverride(320.f);
 	Sz->SetContent(Panel);
 	MergeRoot = Sz;
@@ -736,7 +775,7 @@ void UInventoryWidget::BuildMergePopup(UCanvasPanel* Root)
 	PS->SetAlignment(FVector2D(0.5f, 0.5f));
 	PS->SetAutoSize(true);
 	PS->SetPosition(FVector2D(0.f, -30.f));
-	PS->SetZOrder(50);
+	PS->SetZOrder(50); // binnen de host bovenaan (de host zelf ligt al op viewport-ZOrder 60)
 	Sz->SetVisibility(ESlateVisibility::Collapsed);
 }
 
@@ -744,6 +783,7 @@ bool UInventoryWidget::TryMergeOrConfirm(int32 IntoStackId, int32 FromStackId)
 {
 	UInventoryComponent* I = GetInv();
 	if (!I || IntoStackId == 0 || FromStackId == 0 || IntoStackId == FromStackId) { return false; }
+	EnsurePopupHost(); // zorg dat de bevestig-popup bestaat (+ op de bovenste laag) vóór we 'm nodig hebben
 	const int32 IntoIdx = I->FindStackById(IntoStackId);
 	const int32 FromIdx = I->FindStackById(FromStackId);
 	const TArray<FInventoryStack>& St = I->GetStacks();
@@ -1151,6 +1191,10 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (DetailsContent) { DetailsContent->SetVisibility(ESlateVisibility::Collapsed); }
 		if (StashContent) { StashContent->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
 		DetailsStackId = 0;
+		// Popups horen bij de open inventory: sluit ze mee (ze leven op een los viewport-widget en zouden
+		// anders blijven hangen als je de inventory dicht doet terwijl een popup open staat).
+		if ((SplitRoot && SplitRoot->GetVisibility() != ESlateVisibility::Collapsed)) { CancelSplit(); }
+		if ((MergeRoot && MergeRoot->GetVisibility() != ESlateVisibility::Collapsed)) { CancelMerge(); }
 		return;
 	}
 
@@ -1211,4 +1255,12 @@ void UInventoryWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		bDirty = false;
 		RebuildContent();
 	}
+}
+
+void UInventoryWidget::NativeDestruct()
+{
+	// De popup-host is een LOS viewport-widget (niet in onze widget-tree) -> zelf opruimen bij destruct
+	// (map-load/teardown), anders blijft 'ie op de viewport hangen.
+	if (PopupHost) { PopupHost->RemoveFromParent(); PopupHost = nullptr; }
+	Super::NativeDestruct();
 }

@@ -88,6 +88,22 @@ protected:
 	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 };
 
+// Los viewport-widget dat ALLEEN de split/merge-popups host. De inventory zit op viewport-ZOrder 25; het
+// schap/droogrek/store op 31-33. Een popup die als kind van de inventory-card leefde, rendert daardoor
+// ACHTER die naast-openstaande panelen (speler-klacht D32). Deze host wordt op een HOGE viewport-ZOrder
+// (boven pauze=40) toegevoegd -> de popup ligt gegarandeerd bovenop alles. De InventoryWidget bouwt de
+// popup-panelen in de WidgetTree van deze host (de knop-lambdas blijven op de InventoryWidget wijzen).
+UCLASS()
+class WEEDSHOPCORE_API UInvPopupHost : public UUserWidget
+{
+	GENERATED_BODY()
+public:
+	// Root-canvas waarin de InventoryWidget z'n popups plaatst (klik-transparant tenzij een popup zichtbaar is).
+	UPROPERTY() TObjectPtr<UCanvasPanel> HostCanvas;
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+};
+
 UCLASS()
 class WEEDSHOPCORE_API UInventoryWidget : public UUserWidget
 {
@@ -118,6 +134,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
+	virtual void NativeDestruct() override; // los-viewport popup-host mee opruimen
 	// Container-vangnet: een drop in de gaps/padding TUSSEN de rooster-cellen snapt naar de dichtstbijzijnde
 	// cel i.p.v. te "missen" (drag-cancel zou de stapel op de grond droppen). Cellen die de drop zelf al
 	// afhandelden consumeren het event — dit vuurt dus nooit dubbel.
@@ -179,6 +196,13 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> MergeLabel; // toont het gewogen-gemiddelde-resultaat
 	int32 PendingMergeInto = 0;
 	int32 PendingMergeFrom = 0;
+
+	// Popup-host op een hoge viewport-ZOrder: de split/merge-popups leven HIER (niet in de inventory-card)
+	// zodat ze bovenop naast-openstaande panelen (schap/droogrek/store) renderen. Lazy gebouwd bij de eerste
+	// popup (heeft een PlayerController nodig voor CreateWidget + AddToViewport). Geeft de host-canvas terug,
+	// of nullptr als er (nog) geen speler is -> de aanroeper valt dan terug op geen popup (veilig).
+	UCanvasPanel* EnsurePopupHost();
+	UPROPERTY() TObjectPtr<class UInvPopupHost> PopupHost;
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<UInventoryComponent> BoundInv;

@@ -7,6 +7,8 @@
 #include "Components/Border.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -17,28 +19,47 @@
 
 TWeakObjectPtr<UWeedToast> UWeedToast::Active;
 
-void UWeedToast::NotifyPawn(AActor* ForActor, int32 Key, float Time, const FColor& Color, const FString& Msg)
+// Icoon-sentinel: het icoon reist als prefix "[[i:<stem>]]" mee in de Msg-string, zodat de bestaande
+// Toast/ClientToast-RPC-route (PhoneClientComponent) ONGEWIJZIGD blijft. Notify parseert 'm er weer uit.
+static const TCHAR* GToastIconOpen = TEXT("[[i:");
+static const TCHAR* GToastIconClose = TEXT("]]");
+
+// Haal een eventuele icoon-prefix uit Msg. Geeft de schone tekst terug; OutIcon = de icoon-stem (of leeg).
+static FString WeedToast_ParseIcon(const FString& Msg, FString& OutIcon)
 {
+	OutIcon.Reset();
+	if (!Msg.StartsWith(GToastIconOpen)) { return Msg; }
+	const int32 Close = Msg.Find(GToastIconClose, ESearchCase::CaseSensitive, ESearchDir::FromStart, 4);
+	if (Close == INDEX_NONE) { return Msg; }
+	OutIcon = Msg.Mid(4, Close - 4);
+	return Msg.Mid(Close + 2);
+}
+
+void UWeedToast::NotifyPawn(AActor* ForActor, int32 Key, float Time, const FColor& Color, const FString& Msg, const FString& IconStem)
+{
+	const FString Routed = IconStem.IsEmpty() ? Msg : (GToastIconOpen + IconStem + GToastIconClose + Msg);
 	if (ForActor)
 	{
 		if (UPhoneClientComponent* Ph = ForActor->FindComponentByClass<UPhoneClientComponent>())
 		{
-			Ph->Toast(Msg, Color, Time); // routeert naar de juiste client (co-op)
+			Ph->Toast(Routed, Color, Time); // routeert naar de juiste client (co-op)
 			return;
 		}
 	}
-	Notify(Key, Time, Color, Msg); // geen speler-component -> lokaal (host)
+	Notify(Key, Time, Color, Routed); // geen speler-component -> lokaal (host)
 }
 
 void UWeedToast::Notify(int32 Key, float Time, const FColor& Color, const FString& Msg)
 {
+	FString Icon;
+	const FString Clean = WeedToast_ParseIcon(Msg, Icon);
 	if (UWeedToast* T = Active.Get())
 	{
-		T->Push(Key, Time, FLinearColor(Color), Msg);
+		T->Push(Key, Time, FLinearColor(Color), Clean, Icon);
 		return;
 	}
-	// Geen toast-widget (nog) -> val terug op de engine-melding.
-	if (GEngine) { GEngine->AddOnScreenDebugMessage(Key, Time, Color, Msg); }
+	// Geen toast-widget (nog) -> val terug op de engine-melding (zonder icoon).
+	if (GEngine) { GEngine->AddOnScreenDebugMessage(Key, Time, Color, Clean); }
 }
 
 TSharedRef<SWidget> UWeedToast::RebuildWidget()
@@ -76,7 +97,7 @@ void UWeedToast::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-void UWeedToast::Push(int32 Key, float Time, const FLinearColor& Color, const FString& Msg)
+void UWeedToast::Push(int32 Key, float Time, const FLinearColor& Color, const FString& Msg, const FString& Icon)
 {
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
 	const float Dur = FMath::Clamp(Time, 2.5f, 6.f);
@@ -85,15 +106,15 @@ void UWeedToast::Push(int32 Key, float Time, const FLinearColor& Color, const FS
 	{
 		for (FEntry& E : Entries)
 		{
-			if (E.Key == Key) { E.Msg = Msg; E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
+			if (E.Key == Key) { E.Msg = Msg; E.Icon = Icon; E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
 		}
 	}
 	// Dubbele identieke tekst kort na elkaar niet opnieuw stapelen.
 	for (FEntry& E : Entries)
 	{
-		if (E.Msg == Msg) { E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
+		if (E.Msg == Msg) { E.Icon = Icon; E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
 	}
-	FEntry NewE; NewE.Msg = Msg; NewE.Color = Color; NewE.Key = Key; NewE.Born = Now; NewE.Expire = Now + Dur;
+	FEntry NewE; NewE.Msg = Msg; NewE.Icon = Icon; NewE.Color = Color; NewE.Key = Key; NewE.Born = Now; NewE.Expire = Now + Dur;
 	Entries.Add(NewE);
 	if (Entries.Num() > 5) { Entries.RemoveAt(0); } // hou de stapel kort
 	LastSig.Reset(); // forceer herbouw
@@ -137,7 +158,7 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	// Alleen herbouwen als de set meldingen wijzigt (anders alleen opacity updaten).
 	FString Sig;
-	for (const FEntry& E : Entries) { Sig += E.Msg + TEXT("|"); }
+	for (const FEntry& E : Entries) { Sig += E.Icon + TEXT("@") + E.Msg + TEXT("|"); }
 	if (Sig != LastSig)
 	{
 		LastSig = Sig;
@@ -149,7 +170,21 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			Pill->SetPadding(FMargin(16.f, 9.f, 16.f, 9.f));
 			UTextBlock* T = WeedUI::Text(WidgetTree, E.Msg, 15, E.Color, true, true);
 			T->SetJustification(ETextJustify::Center);
-			Pill->SetContent(T);
+			if (!E.Icon.IsEmpty())
+			{
+				// Icoon links van de tekst (honeti-kit-icoon, bv "t_face_smile_128").
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(WeedUI::KitIcon(WidgetTree, E.Icon, 20.f));
+				IS->SetVerticalAlignment(VAlign_Center);
+				IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+				UHorizontalBoxSlot* TS = Row->AddChildToHorizontalBox(T);
+				TS->SetVerticalAlignment(VAlign_Center);
+				Pill->SetContent(Row);
+			}
+			else
+			{
+				Pill->SetContent(T);
+			}
 			Stack->AddChildToVerticalBox(Pill)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 		}
 	}

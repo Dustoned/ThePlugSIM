@@ -78,6 +78,9 @@ void AWeedShopGameState::BeginPlay()
 	// proces-start - samen met de GameMode-ctor- en NpcRegistry-markers geeft dit de gap-verdeling.
 	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GameState::BeginPlay (+%.2fs sinds start)"), FPlatformTime::Seconds() - GStartTime);
 	Super::BeginPlay();
+	// MEET-MARKER (27s-stall-diagnose D29): zit de stille gap IN Super::BeginPlay (= component-BeginPlays/
+	// engine-wait) of erna? Samen met de EnsureSeeded/Economy-markers splitst dit de gap definitief.
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GameState na Super::BeginPlay (+%.2fs sinds start)"), FPlatformTime::Seconds() - GStartTime);
 	// Alleen de host/server autosavet de gedeelde + alle-spelers-staat, elke AutoSaveSeconds.
 	if (HasAuthority() && AutoSaveSeconds > 0.f && GetWorld())
 	{

@@ -9,6 +9,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Progression/GoalsComponent.h"
 #include "Placement/PlaceableProp.h"
+#include "World/WorldItemPickup.h"
 #include "UI/WeedToast.h"
 #include "GameFramework/Pawn.h"
 #include "EngineUtils.h"
@@ -335,7 +336,9 @@ void AProcessorMachine::Interact_Implementation(APawn* InstigatorPawn)
 			FName OutId; int32 OQ; float OT, OQual;
 			if (ServerCollectIndex(i, OutId, OQ, OT, OQual))
 			{
-				Inv->AddItem(OutId, OQ, OT, OQual);
+				// De entry is hierboven al uit de machine: bij een volle inventory mag de batch niet stil
+				// verdwijnen -> GiveOrDrop dropt 'm dan bij de voeten.
+				AWorldItemPickup::GiveOrDrop(Inv, InstigatorPawn, OutId, OQ, OT, OQual);
 				if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 				{ if (UGoalsComponent* Gl = GS->GetGoals()) { Gl->NoteCrafted(OQ); } } // goal-teller: gram gecraft in de lab/keuken
 				if (GEngine) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 2.5f, FColor(150, 220, 160), FString::Printf(TEXT("Collected %dg (%.0f%% THC)"), OQ, OT)); }

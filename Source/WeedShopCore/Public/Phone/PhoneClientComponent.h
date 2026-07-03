@@ -638,6 +638,12 @@ public:
 	// het roken zelf). Gebruikt door de roll-UI als zinvolle sterkte-balk (beweegt mee met gram).
 	static float JointIntensity(int32 Grams, float ThcPercent, float QualityPct);
 
+	// Gedeelde SAMPLE-formule (joint weggeven aan een NPC): intensiteit met AFNEMENDE meeropbrengst
+	// per gram (sqrt-curve: 1g=0.57Q, 3g=1.0Q, 5g~1.1Q) + de bijbehorende stat-gains in één plek,
+	// zodat sample-flow en UI-preview exact dezelfde getallen tonen. WeedQuality = 0..1.
+	// OutAddGain is hard gecapt op 12 (anti-abuse: joints stapelen mag geen instant-max geven).
+	static void ComputeSampleEffect(float Grams, float WeedQuality, float& OutIntensity, float& OutAddGain, float& OutLoyGain, float& OutRespGain);
+
 	// THC% + kwaliteit% van de wiet-stapel die voor een joint van Grams gebruikt zou worden (de eerste
 	// Bud_-stapel met genoeg voorraad). Geeft false als er geen bruikbare wiet is.
 	bool GetRollWeedInfo(int32 Grams, float& OutThcPercent, float& OutQualityPct) const;

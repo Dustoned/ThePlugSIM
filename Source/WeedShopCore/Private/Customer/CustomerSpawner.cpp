@@ -63,6 +63,20 @@ namespace
 		const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(H.GetComponent());
 		if (!SMC || !SMC->GetStaticMesh()) { return false; }
 		const FString Nm = SMC->GetStaticMesh()->GetName();
+		// BLACKLIST eerst (D17): zit-meubilair en tafels op de stoep zijn NOOIT straat, ook niet als
+		// de mesh- of componentnaam toevallig een whitelist-token bevat. Voorkomt NPC's die hun
+		// spawn-/slenter-doel bovenop stoep-stoelen/banken/ligstoelen/tafels kiezen.
+		{
+			static const TCHAR* Meubel[] = { TEXT("Chair"), TEXT("Stool"), TEXT("Bench"), TEXT("Seat"), TEXT("Sofa"), TEXT("Lounger"), TEXT("Table") };
+			const FString CompNm = SMC->GetName();
+			for (const TCHAR* B : Meubel)
+			{
+				if (Nm.Contains(B) || CompNm.Contains(B)) { return false; }
+			}
+		}
+		// "Floor" bewust breed gelaten: alle mesh-namen met "Floor" in de packs zijn echte vloeren
+		// (SM_Floor*, SM_Steps01_Corner_01_Floor, SM_Wall01_Curve_Bespoke_01_Floor - beloopbaar
+		// landscaping); aanscherpen naar "SM_Floor" zou die laatste twee onterecht afkeuren.
 		return Nm.Contains(TEXT("Street")) || Nm.Contains(TEXT("Sidewalk")) || Nm.Contains(TEXT("Road"))
 			|| Nm.Contains(TEXT("ConcretePath")) || Nm.Contains(TEXT("Pavement")) || Nm.Contains(TEXT("Boardwalk"))
 			|| Nm.Contains(TEXT("Crosswalk")) || Nm.Contains(TEXT("Floor"));
@@ -769,6 +783,10 @@ void ACustomerSpawner::TrySpawn()
 				const FVector GAround = GetActorLocation() + FVector(FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), FMath::FRandRange(-SpotRadius * 2.f, SpotRadius * 2.f), 0.f);
 				if (!Nav->ProjectPointToNavigation(GAround, Goal, FVector(400.f, 400.f, ZTol))) { continue; }
 				if (FMath::Abs(Goal.Location.Z - GetActorLocation().Z) > ZTol) { continue; }
+				// D17: ook het losse slenter-doel moet op straat/stoep liggen (zelfde check als de
+				// andere goal-takken) - anders mikken slenteraars bovenop stoep-stoelen/tafels.
+				// 1 trace per goal-pick, nooit per frame (speler-regel).
+				if (!IsOnStreetSurface(World, Goal.Location)) { ++RejStreet; continue; }
 				if (AAIController* AI = Cast<AAIController>(Cw->GetController()))
 				{
 					AI->MoveToLocation(Goal.Location, 60.f);

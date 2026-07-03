@@ -73,6 +73,7 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> RespectVal;             // waarde-tekst midden onder de ring
 	UPROPERTY() TObjectPtr<UTextBlock> LoyaltyVal;
 	UPROPERTY() TObjectPtr<UTextBlock> AddictVal;
+	UPROPERTY() TObjectPtr<UTextBlock> RespectSub;             // D13a — mini-label "to contact" onder de respect-waarde (zichtbaar tot unlock)
 	// Delta-caches per ring: sla de MID-update over als de fractie/kleur nauwelijks wijzigt.
 	float LastRespFrac = -1.f, LastLoyalFrac = -1.f, LastAddictFrac = -1.f;
 	FLinearColor LastRespCol = FLinearColor(0.f, 0.f, 0.f, 0.f);

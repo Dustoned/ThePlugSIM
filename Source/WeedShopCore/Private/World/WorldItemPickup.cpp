@@ -10,6 +10,8 @@
 #include "UI/WeedToast.h"
 #include "UI/WeedUiStyle.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 
 AWorldItemPickup::AWorldItemPickup()
 {
@@ -112,6 +114,40 @@ void AWorldItemPickup::FreezePhysics()
 {
 	// Na het settelen: physics uit. Body blijft QueryAndPhysics -> nog steeds aan te kijken/op te pakken.
 	if (Body) { Body->SetSimulatePhysics(false); }
+}
+
+AWorldItemPickup* AWorldItemPickup::SpawnDrop(UWorld* W, const FVector& Loc, FName ItemId, int32 Qty, float Thc, float Quality)
+{
+	// Server-only: wereld-actors spawnen mag nooit op een client (replicatie brengt de drop naar iedereen).
+	if (!W || W->GetNetMode() == NM_Client || ItemId.IsNone() || Qty <= 0) { return nullptr; }
+	FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AWorldItemPickup* P = W->SpawnActor<AWorldItemPickup>(AWorldItemPickup::StaticClass(), FTransform(FRotator::ZeroRotator, Loc), SP);
+	if (P) { P->Setup(ItemId, Qty, Thc, Quality); }
+	return P;
+}
+
+bool AWorldItemPickup::GiveOrDrop(UInventoryComponent* Inv, APawn* Pawn, FName ItemId, int32 Qty, float Thc, float Quality)
+{
+	if (!Inv || ItemId.IsNone() || Qty <= 0) { return false; }
+	// Server-only semantiek (kan wereld-actors spawnen): op een client niks muteren.
+	if (Inv->GetOwnerRole() != ROLE_Authority) { return false; }
+	// Cash is een SPIEGEL van het economy-saldo -> NOOIT als wereld-item droppen (dat zou geld dupliceren).
+	if (ItemId == FName(TEXT("Cash"))) { return Inv->AddItem(ItemId, Qty, Thc, Quality); }
+	if (Inv->AddItem(ItemId, Qty, Thc, Quality)) { return true; }
+
+	// Past niet -> bij de voeten neerleggen (zelfde plek-berekening als ServerDropStack): nooit stil loot kwijt.
+	AActor* At = Pawn ? static_cast<AActor*>(Pawn) : Inv->GetOwner();
+	UWorld* W = At ? At->GetWorld() : nullptr;
+	if (!At || !W) { return false; }
+	FVector Fwd = At->GetActorForwardVector(); Fwd.Z = 0.f; Fwd = Fwd.GetSafeNormal();
+	FVector Loc = At->GetActorLocation() + Fwd * 90.f;
+	Loc.Z -= (At->GetSimpleCollisionHalfHeight() - 12.f); // bij de voeten neerleggen
+	AWorldItemPickup* P = SpawnDrop(W, Loc, ItemId, Qty, Thc, Quality);
+	if (P && GEngine)
+	{
+		UWeedToast::NotifyPawn(At, -1, 3.f, FColor::Orange, TEXT("Inventory full - dropped at your feet."));
+	}
+	return P != nullptr;
 }
 
 void AWorldItemPickup::Interact_Implementation(APawn* InstigatorPawn)

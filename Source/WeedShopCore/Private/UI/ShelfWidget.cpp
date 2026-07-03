@@ -193,9 +193,6 @@ void UShelfWidget::BuildShell(UCanvasPanel* Root)
 		[this]() { if (PhoneComp.IsValid()) { PhoneComp->CloseShelf(); } }));
 	Outer->AddChildToVerticalBox(HeadRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	Outer->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Drag from your inventory to store. Drag a shelf item onto your inventory to take it out."), 11, WeedUI::ColTextDim()))
-		->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-
 	// Eén kolom: de inhoud van het schap. (De rechter "jouw inventory"-kolom is weg - dat is nu je echte
 	// inventory ernaast.) Hele kolom is drop-doel zodat je overal in het vak kunt loslaten om op te slaan.
 	UBorder* B = WidgetTree->ConstructWidget<UBorder>();
@@ -239,8 +236,21 @@ void UShelfWidget::HandleInvStore(UInvDragOp* Op)
 	if (!St.IsValidIndex(Idx)) { return; }
 	const FInventoryStack& S = St[Idx];
 	if (S.ItemId == FName(TEXT("Cash")) || S.Quantity <= 0) { return; } // geen briefgeld opslaan
+	// Alleen optimistisch de BRON-cel leegmaken als het schap AANTOONBAAR ruimte heeft (server weigert bij
+	// Contents>=Capacity zonder mergebare stapel). Bij ruimte slaagt de store gegarandeerd -> veilig clearen;
+	// bij twijfel (vol) niet, zodat een weigering nooit een cel ten onrechte leeg laat zonder OnInventoryChanged.
+	const AStorageShelf* Shelf = PhoneComp->GetShelf();
+	const bool bHasRoom = Shelf && Shelf->Contents.Num() < Shelf->GetCapacity();
 	PhoneComp->RequestShelfStore(S.ItemId, S.Quantity); // de hele gesleepte stapel het schap in
-	LastSig.Reset();
+	// Optimistisch clearen tegen de flash: anders flitst de gesleepte (gedimde) cel na het loslaten eerst weer
+	// op VOLLE opacity terug en verdwijnt 'ie pas als de server-store binnen is. Direct leegmaken = geen flash;
+	// RebuildContent reconcilieert straks (sig "E" matcht -> cel wordt overgeslagen).
+	if (bHasRoom && Op->FromCell >= 0)
+	{
+		if (UInventoryWidget* IW = PhoneComp->GetInventoryWidget()) { IW->OptimisticClearCell(Op->FromCell); }
+	}
+	// GEEN LastSig.Reset(): de store is server-authoritative -> Shelf->Contents wijzigt vanzelf, wat de tick-Sig
+	// verandert en FillBody triggert (rebuild alleen de gewijzigde cel via de per-cel-sig).
 }
 
 void UShelfWidget::FillBody()

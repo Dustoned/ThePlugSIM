@@ -19,6 +19,12 @@ UEconomyComponent::UEconomyComponent()
 
 void UEconomyComponent::BeginPlay()
 {
+	// MEET-MARKER (27s-stall-diagnose D29): eerste component-BeginPlay op de GameState - splitst de gap
+	// "GameState::BeginPlay -> NPC registry loaded" (alleen loggen voor de GameState-instantie, geen pawn-spam).
+	if (Cast<AWeedShopGameState>(GetOwner()))
+	{
+		UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] GS-Economy::BeginPlay-entry (+%.2fs sinds start)"), FPlatformTime::Seconds() - GStartTime);
+	}
 	Super::BeginPlay();
 
 	// Alleen de server zet het startsaldo; het repliceert daarna naar de clients.

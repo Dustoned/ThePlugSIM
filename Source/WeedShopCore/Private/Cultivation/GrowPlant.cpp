@@ -17,6 +17,7 @@
 #include "Progression/LevelComponent.h"
 #include "Progression/GoalsComponent.h"
 #include "Interaction/PlayerNpcActions.h"
+#include "World/WorldItemPickup.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
@@ -866,9 +867,10 @@ void AGrowPlant::HarvestReady(APawn* InstigatorPawn)
 		const float QualityPct = FMath::RoundToFloat(FMath::Max(5.f, QualityFrac * 100.f));
 
 		// Vers geoogst = NAT: je krijgt "WetBud_<strain>", die moet eerst drogen op een droogrek
-		// voordat het verkoopbaar/rookbaar wordt.
+		// voordat het verkoopbaar/rookbaar wordt. Het slot gaat hierna sowieso leeg -> bij een volle
+		// inventory mag de oogst niet stil verdwijnen: dan dropt GiveOrDrop 'm bij de voeten.
 		const FName WetId(*FString::Printf(TEXT("Wet%s"), *Row->HarvestProductId.ToString()));
-		Inv->AddItem(WetId, YieldGrams, ThcPercent, QualityPct);
+		AWorldItemPickup::GiveOrDrop(Inv, InstigatorPawn, WetId, YieldGrams, ThcPercent, QualityPct);
 		TotalGrams += YieldGrams;
 		++Harvested;
 

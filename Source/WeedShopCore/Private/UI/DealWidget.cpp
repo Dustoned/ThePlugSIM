@@ -34,13 +34,12 @@
 
 namespace
 {
-	FString PrettyName(FName Id)
+	// D20 — nette productnaam voor de deal-teksten: volledige catalogus-naam via WeedUI::PrettyItemName,
+	// met het " bag"-suffix gestript (zelfde patroon als ContactsComponent): "Critical Mass" i.p.v.
+	// "CriticalMass_Bag2_2 bag". Hash_/Edible_/Bud_/Seed_ komen er via PrettyItemName al netjes uit.
+	FString PrettyDealName(FName Id)
 	{
-		FString S = Id.ToString();
-		if (S.StartsWith(TEXT("Bag_"))) { S = S.RightChop(4) + TEXT(" bag"); }
-		else if (S.StartsWith(TEXT("Bud_"))) { S = S.RightChop(4); }
-		else if (S.StartsWith(TEXT("Seed_"))) { S = S.RightChop(5) + TEXT(" seed"); }
-		return S;
+		return WeedUI::PrettyItemName(Id).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase);
 	}
 }
 
@@ -139,7 +138,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	RadialMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/UI/M_RadialProgress.M_RadialProgress"));
 	{
 		auto MakeGauge = [this](const FString& IcoStem, const FLinearColor& IcoTint, const FString& Label,
-			UImage*& OutRing, UTextBlock*& OutVal) -> UWidget*
+			UImage*& OutRing, UTextBlock*& OutVal, const FString& SubLabel = FString(), UTextBlock** OutSub = nullptr) -> UWidget*
 		{
 			UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
 			USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>(); Sz->SetWidthOverride(88.f); Sz->SetHeightOverride(88.f);
@@ -154,20 +153,31 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 			UVerticalBoxSlot* SzS = Box->AddChildToVerticalBox(Sz); SzS->SetHorizontalAlignment(HAlign_Center);
 			OutVal = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), true, true);
 			UVerticalBoxSlot* VS = Box->AddChildToVerticalBox(OutVal); VS->SetHorizontalAlignment(HAlign_Center); VS->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+			// D13a — optioneel mini-label direct onder de waarde (bv. "to contact"): 1x gebouwd,
+			// UpdateLive toggelt alleen de visibility (persistent, geen rebuild).
+			if (OutSub)
+			{
+				*OutSub = WeedUI::Text(WidgetTree, SubLabel, 9, WeedUI::ColTextDim(), false, false);
+				UVerticalBoxSlot* MS = Box->AddChildToVerticalBox(*OutSub); MS->SetHorizontalAlignment(HAlign_Center);
+				(*OutSub)->SetVisibility(ESlateVisibility::Collapsed);
+			}
 			UTextBlock* Lbl = WeedUI::Text(WidgetTree, Label, 10, WeedUI::ColTextDim(), false, true);
 			UVerticalBoxSlot* LS = Box->AddChildToVerticalBox(Lbl); LS->SetHorizontalAlignment(HAlign_Center);
 			return Box;
 		};
 
 		StatGaugeRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-		UImage* Rr = nullptr; UTextBlock* Rt = nullptr;
-		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_medal_128"), FLinearColor::White, TEXT("Respect"), Rr, Rt))->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
-		RespectRing = Rr; RespectVal = Rt;
+		UImage* Rr = nullptr; UTextBlock* Rt = nullptr; UTextBlock* Rs = nullptr;
+		// D13a — respect-gauge krijgt het "to contact"-mini-label: zo leest de speler de voortgang naar
+		// het telefoonnummer (waarde toont dan "X/45" in UpdateLive).
+		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_medal_128"), FLinearColor::White, TEXT("Respect"), Rr, Rt, TEXT("to contact"), &Rs))->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+		RespectRing = Rr; RespectVal = Rt; RespectSub = Rs;
 		UImage* Lr = nullptr; UTextBlock* Lt = nullptr;
 		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_heart_red_128"), FLinearColor::White, TEXT("Loyalty"), Lr, Lt))->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
 		LoyaltyRing = Lr; LoyaltyVal = Lt;
 		UImage* Ar = nullptr; UTextBlock* At = nullptr;
-		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_flame_128"), FLinearColor::White, TEXT("Addiction"), Ar, At));
+		// D13b — label "Hooked": dit is de haak die van een prospect een koper maakt.
+		StatGaugeRow->AddChildToHorizontalBox(MakeGauge(TEXT("t_flame_128"), FLinearColor::White, TEXT("Hooked"), Ar, At));
 		AddictRing = Ar; AddictVal = At;
 		UVerticalBoxSlot* SGS = VB->AddChildToVerticalBox(StatGaugeRow);
 		SGS->SetHorizontalAlignment(HAlign_Center); SGS->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
@@ -381,7 +391,7 @@ void UDealWidget::RebuildStrains()
 		It.Badge = FString::Printf(TEXT("%dg"), Avail);
 		It.SubLine = bWanted ? FString::Printf(TEXT("* T%.0f%%"), QThc) : FString::Printf(TEXT("T%.0f%%"), QThc);
 		if (bWanted) { It.SubCol = WeedUI::ColGood(); }
-		It.Tooltip = FString::Printf(TEXT("%s  %dg  THC %.0f%%%s"), *PrettyName(Bud), Avail, QThc, bWanted ? TEXT("  (what they want)") : TEXT(""));
+		It.Tooltip = FString::Printf(TEXT("%s  %dg  THC %.0f%%%s"), *PrettyDealName(Bud), Avail, QThc, bWanted ? TEXT("  (what they want)") : TEXT(""));
 		Items.Add(It);
 	}
 
@@ -440,7 +450,9 @@ void UDealWidget::RebuildJointPicker()
 	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
 	if (!Inv) { return; }
 
-	// Grid-items opbouwen: per joint-id één cel. Icoon = de joint-id, badge = aantal, subline = gram + kwaliteit.
+	// Grid-items opbouwen: per joint-id één cel. Icoon = de joint-id, badge = aantal, subline = gram +
+	// kwaliteit + de sample-opbrengst (D21): zo ziet de speler dat een dikkere joint meer oplevert
+	// (de afnemende meeropbrengst + caps zitten in ComputeSampleEffect, zelfde formule als het echte geven).
 	TArray<FWeedPickItem> Items;
 	for (const FInventoryStack& St : Inv->GetStacks())
 	{
@@ -450,13 +462,20 @@ void UDealWidget::RebuildJointPicker()
 		const int32 Grams = UInventoryComponent::JointGrams(Id);
 		const float QPct = Inv->GetItemQualityPct(Id);
 
+		// D21 — verwachte opbrengst van DEZE joint (kwaliteit 0..1, zelfde schaal als GiveSampleCore's WeedQ).
+		float Inten = 0.f, AddG = 0.f, LoyG = 0.f, RespG = 0.f;
+		UPhoneClientComponent::ComputeSampleEffect((float)Grams, FMath::Clamp(QPct / 100.f, 0.f, 1.f), Inten, AddG, LoyG, RespG);
+		FString Gains = FString::Printf(TEXT("+%.0f hooked"), AddG);
+		if (FMath::RoundToInt(LoyG) != 0) { Gains += FString::Printf(TEXT(" +%.0f loy"), LoyG); }
+
 		FWeedPickItem It;
 		It.Id = Id;
 		It.IconId = Id;
 		It.Badge = FString::Printf(TEXT("x%d"), St.Quantity);
-		It.SubLine = FString::Printf(TEXT("%dg Q%.0f%%"), Grams, QPct);
-		It.Tooltip = FString::Printf(TEXT("%s  %dg  Quality %.0f%%  (x%d)"),
-			Strain.IsNone() ? TEXT("Joint") : *Strain.ToString(), Grams, QPct, St.Quantity);
+		// Twee subregels in één tekstblok (het grid rendert \n gewoon; sig-diff dekt beide regels).
+		It.SubLine = FString::Printf(TEXT("%dg Q%.0f%%\n%s"), Grams, QPct, *Gains);
+		It.Tooltip = FString::Printf(TEXT("%s  %dg  Quality %.0f%%  (x%d)\nSample effect: +%.0f hooked, +%.0f loyalty, +%.0f respect"),
+			Strain.IsNone() ? TEXT("Joint") : *Strain.ToString(), Grams, QPct, St.Quantity, AddG, LoyG, RespG);
 		Items.Add(It);
 	}
 
@@ -522,12 +541,15 @@ void UDealWidget::UpdateLive()
 
 	// --- Kop (altijd, voor ELKE NPC): naam, status, stats, dialoog ---
 	FString NpcName = ACityDoor::FriendlyNpcName(C->NpcId); // nette fallback i.p.v. ruwe "Resident_0121"
+	// D13a — contact-unlock-status voor de respect-ring: onder de drempel toont die "X/45" + "to contact".
+	bool bUnlocked = true; float UnlockAt = 45.f;
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry())
 		{
 			float r = 0.f, l = 0.f, a = 0.f; FText N;
 			if (Reg->GetStats(C->NpcId, r, l, a, N) && !N.IsEmpty()) { NpcName = N.ToString(); }
+			if (!C->NpcId.IsNone()) { bUnlocked = Reg->IsUnlocked(C->NpcId); UnlockAt = Reg->UnlockRespect; }
 		}
 	}
 	if (NameText) { NameText->SetText(FText::FromString(NpcName)); }
@@ -576,9 +598,25 @@ void UDealWidget::UpdateLive()
 		SetRing(RespectRing,  RespFrac,   WeedUI::ColAccent(), LastRespFrac,   LastRespCol);
 		SetRing(LoyaltyRing,  LoyalFrac,  WeedUI::ColGood(),   LastLoyalFrac,  LastLoyalCol);
 		SetRing(AddictRing,   AddictFrac, WeedUI::ColWarn(),   LastAddictFrac, LastAddictCol);
-		if (RespectVal) { RespectVal->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), C->Respect))); }
+		// D13a — respect: zolang het contact niet ontgrendeld is toont de ring de voortgang naar het
+		// telefoonnummer ("X/45" + mini-label "to contact"); na unlock gewoon de kale waarde.
+		if (RespectVal)
+		{
+			RespectVal->SetText(FText::FromString(bUnlocked
+				? FString::Printf(TEXT("%.0f"), C->Respect)
+				: FString::Printf(TEXT("%.0f/%.0f"), C->Respect, UnlockAt)));
+		}
+		if (RespectSub) { RespectSub->SetVisibility(bUnlocked ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
 		if (LoyaltyVal) { LoyaltyVal->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), C->Loyalty))); }
-		if (AddictVal)  { AddictVal->SetText(FText::FromString(FString::Printf(TEXT("%.0f/%.0f"), C->Addiction, C->AddictionToBuy))); }
+		// D13b — Hooked: "X/drempel" zolang de NPC nog geen koper is; een koper (drempel gehaald of al
+		// aan het bestellen) toont alleen de kale waarde — de voortgang is dan niet meer interessant.
+		const bool bIsHooked = bBuyer || C->Addiction >= C->AddictionToBuy;
+		if (AddictVal)
+		{
+			AddictVal->SetText(FText::FromString(bIsHooked
+				? FString::Printf(TEXT("%.0f"), C->Addiction)
+				: FString::Printf(TEXT("%.0f/%.0f"), C->Addiction, C->AddictionToBuy)));
+		}
 	}
 
 	// Klant-tier: alleen de NAAM in de pill (voortgang/next vervalt).
@@ -661,14 +699,14 @@ void UDealWidget::UpdateLive()
 	{
 		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.
 		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
-			Qty, *PrettyName(C->DesiredProductId))));
+			Qty, *PrettyDealName(C->DesiredProductId))));
 		// D.1 - de "Wants"-regel in de strain-tagkleur (in-place, geen rebuild).
 		WantsText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
 		return;
 	}
 
 	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
-		Qty, *PrettyName(C->DesiredProductId))));
+		Qty, *PrettyDealName(C->DesiredProductId))));
 	// D.1 - de "Wants"-regel in de strain-tagkleur (in-place, geen rebuild).
 	WantsText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
 
@@ -697,7 +735,7 @@ void UDealWidget::UpdateLive()
 	if (Stock < Qty)
 	{
 		StockText->SetColorAndOpacity(FSlateColor(WeedUI::ColWarn()));
-		StockText->SetText(FText::FromString(FString::Printf(TEXT("Not enough %s: %dg / %dg"), *PrettyName(Offered), Stock, Qty)));
+		StockText->SetText(FText::FromString(FString::Printf(TEXT("Not enough %s: %dg / %dg"), *PrettyDealName(Offered), Stock, Qty)));
 		StockText->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
