@@ -13,6 +13,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "Components/Image.h"
@@ -131,8 +133,10 @@ void UWardrobeWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBoxSlot* PS = Split->AddChildToHorizontalBox(PrevSz);
 	PS->SetPadding(FMargin(0.f, 0.f, 14.f, 0.f));
 
-	Body = WidgetTree->ConstructWidget<UVerticalBox>();
-	UHorizontalBoxSlot* BSl = Split->AddChildToHorizontalBox(Body);
+	// Rechts: Overlay met per model-categorie een persistente pane (lazy gebouwd in ShowCategoryPane);
+	// wisselen = alleen visibility (Hidden), nooit ClearChildren/rebuild.
+	BodyOverlay = WidgetTree->ConstructWidget<UOverlay>();
+	UHorizontalBoxSlot* BSl = Split->AddChildToHorizontalBox(BodyOverlay);
 	BSl->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 }
 
@@ -422,10 +426,11 @@ FReply UWardrobeWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FP
 	return Super::NativeOnMouseWheel(InGeometry, InMouseEvent);
 }
 
+// Vult de ACTIEVE (verse, lege) categorie-pane. Wordt alleen bij het EERSTE bezoek van een categorie
+// aangeroepen (via ShowCategoryPane) -> geen ClearChildren/rebuild op een wissel of klik.
 void UWardrobeWidget::FillBody()
 {
 	if (!Body) { return; }
-	Body->ClearChildren();
 	SlotNameTexts.Reset();
 	ModelButtons.Reset(); ModelButtonSkins.Reset();
 
@@ -483,7 +488,8 @@ void UWardrobeWidget::FillBody()
 				{
 					if (IPlayerNpcActions* P = Cast<IPlayerNpcActions>(GetOwningPlayerPawn())) { P->SetPlayerSkinIndex(bi); }
 					RecolorModelButtons(bi);
-					// Tony<->Citizen wisselt de slot-STRUCTUUR (1 vs 7) -> categorie wijzigt -> NativeTick rebuildt FillBody (veilig, geen reentrante rebuild hier).
+					// Tony<->Citizen wisselt de slot-STRUCTUUR (1 vs 7) -> categorie wijzigt -> NativeTick
+					// toont de (persistente) pane van dat model via ShowCategoryPane (geen rebuild hier).
 				});
 			BB->SetContent(WeedUI::Text(WidgetTree, Ch.Name, 12, WeedUI::ColText(), true));
 			ModelButtons.Add(BB); ModelButtonSkins.Add(bi);
@@ -645,6 +651,52 @@ void UWardrobeWidget::RecolorModelButtons(uint8 ActiveSkin)
 	}
 }
 
+// Toont de pane van de gevraagde categorie; bouwt 'm 1x (lazy) bij het eerste bezoek. Een wissel is
+// daarna alleen visibility (Overlay + Hidden, geen Collapsed: geen her-layout-flits) + een in-place
+// refresh van de teksten/knop-kleuren -- nooit ClearChildren/rebuild.
+void UWardrobeWidget::ShowCategoryPane(int32 Cat, uint8 ActiveSkin)
+{
+	if (!BodyOverlay || !WidgetTree) { return; }
+
+	// Huidige pane verbergen (Hidden: overlappende panes in de Overlay, dus geen layout-verschuiving).
+	if (Cat != ActiveCat)
+	{
+		if (FWardrobePane* Old = CatPanes.Find(ActiveCat))
+		{
+			if (Old->Pane.IsValid()) { Old->Pane->SetVisibility(ESlateVisibility::Hidden); }
+		}
+	}
+	ActiveCat = Cat;
+
+	FWardrobePane& P = CatPanes.FindOrAdd(Cat);
+	if (!P.Pane.IsValid())
+	{
+		// Eerste bezoek: pane eenmalig bouwen met exact de FillBody-inhoud.
+		UVerticalBox* NewPane = WidgetTree->ConstructWidget<UVerticalBox>();
+		UOverlaySlot* OS = BodyOverlay->AddChildToOverlay(NewPane);
+		OS->SetHorizontalAlignment(HAlign_Fill);
+		OS->SetVerticalAlignment(VAlign_Fill);
+		P.Pane = NewPane;
+		Body = NewPane;
+		FillBody(); // reset + vult de actieve registries (SlotNameTexts/ModelButtons)
+		P.SlotNameTexts = SlotNameTexts;
+		P.ModelButtons = ModelButtons;
+		P.ModelButtonSkins = ModelButtonSkins;
+	}
+	else
+	{
+		// Herbezoek: registries van deze pane activeren en in-place verversen (skin/outfit kan
+		// intussen gewijzigd zijn) -- zelfde idioom als de </>-knoppen, geen rebuild.
+		Body = P.Pane.Get();
+		SlotNameTexts = P.SlotNameTexts;
+		ModelButtons = P.ModelButtons;
+		ModelButtonSkins = P.ModelButtonSkins;
+		RecolorModelButtons(ActiveSkin);
+		for (const TPair<int32, TWeakObjectPtr<UTextBlock>>& KV : SlotNameTexts) { UpdateSlotText(KV.Key); }
+	}
+	if (P.Pane.IsValid()) { P.Pane->SetVisibility(ESlateVisibility::SelfHitTestInvisible); }
+}
+
 void UWardrobeWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
@@ -654,21 +706,26 @@ void UWardrobeWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen)
 	{
-		LastSig.Reset();
+		bReopenRefresh = true; // bij heropenen: actieve pane in-place verversen (skin/outfit kan intussen gewijzigd zijn)
 		ReleasePreview();
 		SetVisibility(ESlateVisibility::SelfHitTestInvisible); // dicht: geen input-vangst
 		return;
 	}
 	EnsurePreview();
 
-	// Body alleen herbouwen bij een STRUCTURELE wijziging (legacy <2 / female 2-4 / male 5). Een outfit-keuze
-	// of model-wissel binnen dezelfde categorie updaten we IN-PLACE (geen flikker, geen rebuild).
+	// Body-pane per model-CATEGORIE (legacy <2 / casual / Tony / Citizen / Gamer / School): elke pane
+	// wordt 1x lazy gebouwd en daarna alleen getoond/verborgen -> geen ClearChildren/rebuild bij een
+	// categorie-wissel. Keuzes binnen een pane blijven in-place (UpdateSlotText/RecolorModelButtons).
 	int32 Cat = 0;
+	uint8 SkinNow = 0;
 	if (const IPlayerNpcActions* Pl = Cast<IPlayerNpcActions>(GetOwningPlayerPawn()))
 	{
-		const uint8 Sk = Pl->GetPlayerSkinIndex();
-		Cat = (Sk == 2) ? 1 : (Sk == 3 ? 4 : (Sk == 4 ? 5 : (Sk == 5 ? 2 : (Sk == 6 ? 3 : 0)))); // skin 3/4 eigen categorie -> rebuild bij Casual<->Gamer<->School (UI verschilt)
+		SkinNow = Pl->GetPlayerSkinIndex();
+		Cat = (SkinNow == 2) ? 1 : (SkinNow == 3 ? 4 : (SkinNow == 4 ? 5 : (SkinNow == 5 ? 2 : (SkinNow == 6 ? 3 : 0)))); // skin 3/4 eigen categorie (UI verschilt)
 	}
-	const FString Sig = FString::FromInt(Cat);
-	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
+	if (Cat != ActiveCat || bReopenRefresh)
+	{
+		bReopenRefresh = false;
+		ShowCategoryPane(Cat, SkinNow);
+	}
 }

@@ -54,15 +54,31 @@ protected:
 	bool IsOverPreview(const FPointerEvent& Ev) const;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
-	UPROPERTY() TObjectPtr<UVerticalBox> Body;
+	// Rechterhelft: per model-categorie een PERSISTENTE pane in deze Overlay. Elke pane wordt 1x lazy
+	// gebouwd bij het eerste bezoek en daarna alleen getoond/verborgen (Hidden, niet Collapsed) ->
+	// geen ClearChildren/rebuild meer bij een categorie-wissel.
+	UPROPERTY() TObjectPtr<class UOverlay> BodyOverlay;
+	UPROPERTY() TObjectPtr<UVerticalBox> Body; // de ACTIEVE categorie-pane (FillBody vult deze)
 
-	// In-place updates: Body wordt alleen herbouwd bij een STRUCTURELE wijziging (legacy/female/male). Een
-	// outfit-keuze (</>) of model-wissel update alleen de betreffende tekst/knop-kleur -> geen flikker.
+	// In-place updates: een outfit-keuze (</>) of model-wissel update alleen de betreffende
+	// tekst/knop-kleur -> geen flikker. De registries hieronder horen bij de ACTIEVE pane.
 	TMap<int32, TWeakObjectPtr<class UTextBlock>> SlotNameTexts; // SlotIdx -> "naam (cur/count)"-tekst
 	TArray<TWeakObjectPtr<class UWeedActionButton>> ModelButtons; // Girl 1/2/3-knoppen
 	TArray<uint8> ModelButtonSkins;                               // parallel: skin-index per knop
 	void UpdateSlotText(int32 SlotIdx);          // herbereken + SetText op de slot-naam in plaats
 	void RecolorModelButtons(uint8 ActiveSkin);  // actieve model-knop oplichten zonder rebuild
 
-	FString LastSig; // herbouw alleen bij STRUCTURELE wijziging (geen flicker)
+	// Per-categorie pane + de bijbehorende in-place-registries (teruggezet bij een pane-wissel).
+	// De pane-widgets zelf leven in BodyOverlay (widget tree houdt ze alive) -> weak ptrs volstaan.
+	struct FWardrobePane
+	{
+		TWeakObjectPtr<UVerticalBox> Pane;
+		TMap<int32, TWeakObjectPtr<class UTextBlock>> SlotNameTexts;
+		TArray<TWeakObjectPtr<class UWeedActionButton>> ModelButtons;
+		TArray<uint8> ModelButtonSkins;
+	};
+	TMap<int32, FWardrobePane> CatPanes; // categorie -> 1x gebouwde pane
+	int32 ActiveCat = -1;                // -1 = nog geen pane getoond
+	bool bReopenRefresh = false;         // na sluiten: actieve pane in-place verversen bij heropenen
+	void ShowCategoryPane(int32 Cat, uint8 ActiveSkin); // pane tonen; lazy bouwen bij eerste bezoek
 };

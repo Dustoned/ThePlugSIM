@@ -1,5 +1,5 @@
-// UDryingRackWidget — droogrek-scherm met SLEEP-slots. Links de batches die hangen te drogen (icon-cel
-// met progress-balkje); rechts je natte wiet uit je inventory. Sleep natte wiet -> het rek = ophangen;
+// UDryingRackWidget — droogrek-scherm met SLEEP-slots. Boven de slots-grid met drogende batches (met
+// progress-rijen eronder); je ECHTE inventory opent er los naast. Sleep natte wiet -> het rek = ophangen;
 // sleep een KLARE batch -> je inventory = oogsten. Server-authoritative via de telefoon.
 
 #pragma once
@@ -99,14 +99,19 @@ protected:
 	UPROPERTY() TObjectPtr<UWrapBox> DryGrid;
 	UPROPERTY() TArray<TObjectPtr<USizeBox>> DryCellBoxes;
 	TArray<FString> DryCellSigs;
-	UPROPERTY() TObjectPtr<UScrollBox> WetList; // (ongebruikt)
 	UPROPERTY() TObjectPtr<class UVerticalBox> DetailBox; // progress + plant-info onder de slots
 	UPROPERTY() TObjectPtr<UTextBlock> TitleText;
 
-	// Per drogende-batch-cel: progress-bar + statuslabel + de batch-index in de rack-Entries.
+	// Persistente detail-rijen (pool, alleen staart-groei/krimp): per rij Border + naam-tekst + tijd-tekst
+	// + progressbar. Per-rij sig -> alleen bij een echte wijziging de naam in-place bijwerken; UpdateProgress
+	// houdt bars/tijd elke tick live. NOOIT ClearChildren -> geen flash, lopende bars blijven doorlopen.
+	UPROPERTY() TArray<TObjectPtr<class UBorder>> RowBorders;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> RowNames;
 	UPROPERTY() TArray<TObjectPtr<UProgressBar>> RowBars;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> RowStatus;
 	TArray<int32> RowEntryIndex;
+	TArray<FString> DetailRowSigs;
+	UPROPERTY() TObjectPtr<UTextBlock> DetailEmptyText; // "Nothing drying"-label: togglen, niet herbouwen
 
 	FString LastSig; // herbouw alleen bij wijziging
 };

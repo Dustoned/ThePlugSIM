@@ -150,7 +150,24 @@ protected:
 	UPROPERTY() TObjectPtr<UBorder> GoalsAppBadgePill;
 	UPROPERTY() TObjectPtr<UTextBlock> GoalsAppBadgeText;
 	int32 GetClaimableGoals() const;  // aantal behaalde-maar-niet-geclaimde doelen (voor de badge)
-	int32 GoalsSignature() const;     // change-sig van de doelen (voltooiing/claim/voortgang) -> live-refresh Goals-app
+
+	// --- Goals-app: persistente kaart-pool (1x gebouwd, daarna ALLEEN in-place updates -> geen flash) ---
+	// De goals-set is statisch per sessie (UGoalsComponent::Goals()), dus er staan N vaste kaarten in de scroll.
+	// RefreshGoalsApp sorteert per refresh: claimbaar BOVENAAN, dan in-progress (bijna-klaar eerst), claimed
+	// ONDERAAN. Per POSITIE een sig (goal-index + status): alleen posities waarvan de toewijzing/status wijzigt
+	// worden hervuld/gerestyled; de voortgangstekst is changed-checked en de balk loopt live mee.
+	UPROPERTY() TArray<TObjectPtr<UBorder>> GoalCards;                     // kaart-border per positie
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> GoalTitles;                 // titel per positie
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> GoalProgTexts;              // voortgangstekst ("EUR X / Y") per positie
+	UPROPERTY() TArray<TObjectPtr<class UProgressBar>> GoalBars;           // voortgangsbalk per positie
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> GoalRewardTexts;            // reward-regel per positie
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> GoalClaimBtns; // Claim-knop per positie (Hidden-toggle in Overlay)
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> GoalStatusTexts;            // "Claimed"/"In progress" per positie (Hidden-toggle)
+	TArray<int32> GoalCardGoalIdx;    // per positie: de goal-index die er nu in zit (-1 = nog leeg); de klik leest DEZE
+	TArray<int32> GoalCardSigs;       // per positie: goal-index*4 + status -> restyle alleen bij een echte wijziging
+	TArray<FString> GoalCardProgStrs; // per positie: laatst gezette voortgangstekst (SetText alleen bij verschil)
+	float NextGoalsLiveRefresh = 0.f; // throttle (~4x/s) voor de live pool-refresh zolang de app open is
+	void RefreshGoalsApp();           // sorteert + werkt de kaart-pool in-place bij (NOOIT ClearChildren)
 
 	// Staat-tracking voor het verversen van de inhoud.
 	bool bLastHome = true;
@@ -351,7 +368,6 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> BankSendLabel;     // "Send to <naam>   (X% fee)" - naam in-place bijgewerkt
 	int32 LastBankSig = -1;      // structurele unlock/ATM-staat (0 = geblokkeerd, 1 = ontgrendeld/ATM)
 	int32 BankUnlockSignature() const; // ALLEEN de mobile-banking/ATM-beschikbaarheid (upgrade-prompt <-> bank-kaart)
-	int32 LastGoalsSig = 0;
 
 	// Contacts-app (app-index 2): EIGEN structurele sig = alleen de contact-SET (aantal + hash van de contact-ids).
 	// Zo herbouwt Contacts NIET bij een nieuw bericht/afspraak-fase van een BESTAAND contact (dat gaf flits via de

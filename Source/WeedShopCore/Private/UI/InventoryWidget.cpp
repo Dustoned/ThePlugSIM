@@ -799,8 +799,11 @@ void UInventoryWidget::MergeItemNow(FName ItemId)
 
 void UInventoryWidget::RebuildStash()
 {
+	// Pool + per-rij signatuur (zelfde patroon als RebuildContent): GEEN ClearChildren meer bij een
+	// schap-mutatie — alleen rijen waarvan de signatuur ECHT wijzigde krijgen nieuwe inhoud, de rest
+	// blijft staan. Voorkomt de volledige stash-flikker bij elke schap-mutatie (co-op: partner muteert
+	// een schap; solo: eigen mutaties terwijl de inventory open staat).
 	if (!StashList) { return; }
-	StashList->ClearChildren();
 
 	// HOME STASH toont ALLEEN kweek-/wiet-items (zaden + wiet + hash/edibles/concentraten); meubels,
 	// supplies en apparaten die je ook in een kast/chest legt horen hier niet thuis.
@@ -847,13 +850,7 @@ void UInventoryWidget::RebuildStash()
 		}
 	}
 
-	if (Order.Num() == 0)
-	{
-		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT("Nothing stored.\nPut weed in a shelf/chest."), 11, WeedUI::ColTextDim()));
-		return;
-	}
-
-	// Wiet eerst (Bud/Bag/Wet/Joint), daarna de rest; binnen groepen op naam.
+	// Wiet eerst (Bud/Bag/Wet/Joint), daarna de rest; binnen groepen op naam. (Lege lijst = no-op.)
 	auto IsWeed = [](FName Id) { const FString S = Id.ToString(); return S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Bag_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Joint_")); };
 	Order.Sort([&](const FName& A, const FName& B)
 	{
@@ -862,13 +859,46 @@ void UInventoryWidget::RebuildStash()
 		return WeedUI::PrettyItemName(A) < WeedUI::PrettyItemName(B);
 	});
 
-	for (const FName& Id : Order)
+	// Persistente lege-staat-regel: 1x aanmaken (als eerste kind), daarna alleen tonen/verbergen.
+	if (!StashEmptyText)
 	{
+		StashEmptyText = WeedUI::Text(WidgetTree, TEXT("Nothing stored.\nPut weed in a shelf/chest."), 11, WeedUI::ColTextDim());
+		StashList->AddChild(StashEmptyText);
+	}
+	StashEmptyText->SetVisibility(Order.Num() == 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+
+	// Staart-groei: alleen ontbrekende rij-slots toevoegen (structureel; bestaande slots blijven staan).
+	while (StashRows.Num() < Order.Num())
+	{
+		USizeBox* B = WidgetTree->ConstructWidget<USizeBox>();
+		StashList->AddChild(B);
+		StashRows.Add(B);
+		StashSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+	}
+	// Staart-krimp: overtollige slots alleen verbergen (inhoud + sig blijven staan; groeit de lijst later
+	// terug naar hetzelfde item, dan matcht de sig en staat de rij zonder herbouw meteen goed).
+	for (int32 i = Order.Num(); i < StashRows.Num(); ++i)
+	{
+		if (StashRows[i] && StashRows[i]->GetVisibility() != ESlateVisibility::Collapsed) { StashRows[i]->SetVisibility(ESlateVisibility::Collapsed); }
+	}
+
+	for (int32 i = 0; i < Order.Num(); ++i)
+	{
+		if (!StashRows.IsValidIndex(i) || !StashRows[i]) { continue; }
+		if (StashRows[i]->GetVisibility() != ESlateVisibility::Visible) { StashRows[i]->SetVisibility(ESlateVisibility::Visible); }
+
+		const FName Id = Order[i];
 		const int32 N = Qty[Id];
 		const FString IdStr = Id.ToString();
 		const bool bWeed = IsWeed(Id);
 		const bool bWet = IdStr.StartsWith(TEXT("WetBud_"));
 		const float Thc = (N > 0) ? (ThcW[Id] / N) : 0.f;
+
+		// Per-rij signatuur: alles wat de rij toont volgt uit Id/N/Thc (naam, kleur, badge, grammen).
+		// Onveranderd -> rij met rust laten (geen herbouw, geen flikker) — zelfde idee als GridCellSig.
+		const FString Sig = FString::Printf(TEXT("%s|%d|%.1f"), *IdStr, N, Thc);
+		if (StashSigs.IsValidIndex(i) && Sig == StashSigs[i]) { continue; } // niets veranderd aan deze rij
+		if (StashSigs.IsValidIndex(i)) { StashSigs[i] = Sig; }
 
 		UBorder* Row = WidgetTree->ConstructWidget<UBorder>();
 		Row->SetBrush(WeedUI::Rounded(WeedUI::ColInner(0.85f), 6.f));
@@ -901,8 +931,12 @@ void UInventoryWidget::RebuildStash()
 		else { Sub = FString::Printf(TEXT("x%d"), N); }
 		RVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Sub, 10, WeedUI::ColTextDim()));
 
-		StashList->AddChild(Row);
-		StashList->AddChild(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
+		// De rij + het smalle spacer-regeltje eronder samen in het vaste rij-slot (voorheen twee losse
+		// ScrollBox-kinderen; visueel identiek).
+		UVerticalBox* Wrap = WidgetTree->ConstructWidget<UVerticalBox>();
+		Wrap->AddChildToVerticalBox(Row);
+		Wrap->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT(""), 3, FLinearColor::Transparent));
+		StashRows[i]->SetContent(Wrap);
 	}
 }
 

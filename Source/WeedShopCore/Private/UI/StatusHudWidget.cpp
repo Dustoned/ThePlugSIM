@@ -118,17 +118,26 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		UHorizontalBoxSlot* DS = Strip->AddChildToHorizontalBox(Sz); DS->SetVerticalAlignment(VAlign_Center); DS->SetPadding(FMargin(13.f, 0.f, 13.f, 0.f));
 	};
 
-	// === LINKS: Time-chip (zon/maan + Day / HH:MM; TimeIcon = dag/nacht-swap), Cash, Bank ===
+	// === LINKS: Time-chip (zon/maan + Day / HH:MM), Cash, Bank ===
 	{
 		UHorizontalBox* Chip = WidgetTree->ConstructWidget<UHorizontalBox>();
 		USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>(); IcoSz->SetWidthOverride(26.f); IcoSz->SetHeightOverride(26.f);
-		IcoSz->SetContent(WeedUI::UiGlyph(WidgetTree, TEXT("ui_sun"), 26.f, ColSun, WeedUI::EIcon::Clock));
-		TimeIcon = IcoSz;
+		// Zon EN maan eenmalig bouwen in een Overlay; de dag/nacht-overgang toggelt straks alleen
+		// visibility (geen SetContent -> geen 1-frame her-layout rond de dag-teller-wissel).
+		UOverlay* IcoOv = WidgetTree->ConstructWidget<UOverlay>();
+		TimeSunGlyph = WeedUI::UiGlyph(WidgetTree, TEXT("ui_sun"), 26.f, ColSun, WeedUI::EIcon::Clock);
+		TimeMoonGlyph = WeedUI::UiGlyph(WidgetTree, TEXT("ui_moon"), 26.f, FLinearColor(0.7f, 0.78f, 1.f), WeedUI::EIcon::Clock);
+		TimeMoonGlyph->SetVisibility(ESlateVisibility::Hidden);
+		UOverlaySlot* SunS = IcoOv->AddChildToOverlay(TimeSunGlyph); SunS->SetHorizontalAlignment(HAlign_Fill); SunS->SetVerticalAlignment(VAlign_Fill);
+		UOverlaySlot* MoonS = IcoOv->AddChildToOverlay(TimeMoonGlyph); MoonS->SetHorizontalAlignment(HAlign_Fill); MoonS->SetVerticalAlignment(VAlign_Fill);
+		IcoSz->SetContent(IcoOv);
 		UHorizontalBoxSlot* IS = Chip->AddChildToHorizontalBox(IcoSz); IS->SetVerticalAlignment(VAlign_Center); IS->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
 		DayText = WeedUI::Text(WidgetTree, TEXT("Day 1"), 11, ColLabel, false, false); Shade(DayText);
+		DayText->SetMinDesiredWidth(58.f);  // dekt "Day 999"
 		Col->AddChildToVerticalBox(DayText);
 		TimeText = WeedUI::Text(WidgetTree, TEXT("09:04"), 20, WeedUI::ColText(), false, true); Shade(TimeText);
+		TimeText->SetMinDesiredWidth(58.f); // dekt "88:88" -> kolom-breedte stabiel per minuut-tick
 		Col->AddChildToVerticalBox(TimeText)->SetPadding(FMargin(0.f, -1.f, 0.f, 0.f));
 		Chip->AddChildToHorizontalBox(Col)->SetVerticalAlignment(VAlign_Center);
 		StripL->AddChildToHorizontalBox(Chip)->SetVerticalAlignment(VAlign_Center);
@@ -137,9 +146,14 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 	AddChip(StripL, WeedUI::EIcon::Coin, ColGold, FString(),    TEXT("Cash"), TEXT("EUR 0"), CashText);
 	AddDivider(StripL);
 	AddChip(StripL, WeedUI::EIcon::Coin, ColBlue, TEXT("bank"), TEXT("Bank"), TEXT("EUR 0"), BankText);
+	// De stroken zijn auto-sized: zonder minimum-breedtes verspringt de HELE strook bij elke
+	// waarde-wissel (EUR 999 -> EUR 1.0k). Minima dekken de normale compact-range ("EUR 999.9k").
+	if (CashText) { CashText->SetMinDesiredWidth(108.f); }
+	if (BankText) { BankText->SetMinDesiredWidth(108.f); }
 
 	// === RECHTS: Heat, Level (+MAX-badge), Stoned (verborgen tot je high bent) ===
 	AddChip(StripR, WeedUI::EIcon::Flame, ColOrange, FString(), TEXT("Heat"), TEXT("0%"), HeatText);
+	if (HeatText) { HeatText->SetMinDesiredWidth(48.f); } // dekt "100%" -> strook verspringt niet mee
 	AddDivider(StripR);
 	{
 		UHorizontalBox* Chip = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -165,6 +179,7 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		UHorizontalBox* StWrap = WidgetTree->ConstructWidget<UHorizontalBox>();
 		AddDivider(StWrap);
 		AddChip(StWrap, WeedUI::EIcon::Leaf, WeedUI::ColGood(), FString(), TEXT("Stoned"), TEXT("0:00"), StonedText);
+		if (StonedText) { StonedText->SetMinDesiredWidth(100.f); } // dekt "9:59  +25%" -> geen jitter per seconde
 		StripR->AddChildToHorizontalBox(StWrap)->SetVerticalAlignment(VAlign_Center);
 		StonedRow = StWrap;
 		StonedRow->SetVisibility(ESlateVisibility::Collapsed);
@@ -216,12 +231,13 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (MinKey != LastMinuteShown) { LastMinuteShown = MinKey; TimeText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), H, M))); }
 		}
 
-		// Header-icoon volgt dag/nacht: zon overdag, maan 's nachts (alleen wisselen bij een overgang).
-		if (TimeIcon && bTimeNightShown != (int32)bNight)
+		// Header-icoon volgt dag/nacht: zon overdag, maan 's nachts. Beide glyphs staan al gebouwd in
+		// de Overlay -> alleen visibility togglen (geen SetContent, dus geen 1-frame her-layout).
+		if (TimeSunGlyph && TimeMoonGlyph && bTimeNightShown != (int32)bNight)
 		{
 			bTimeNightShown = (int32)bNight;
-			const FLinearColor Col = bNight ? FLinearColor(0.7f, 0.78f, 1.f) : FLinearColor(1.f, 0.82f, 0.3f);
-			TimeIcon->SetContent(WeedUI::UiGlyph(WidgetTree, bNight ? TEXT("ui_moon") : TEXT("ui_sun"), 26.f, Col, WeedUI::EIcon::Clock));
+			TimeSunGlyph->SetVisibility(bNight ? ESlateVisibility::Hidden : ESlateVisibility::HitTestInvisible);
+			TimeMoonGlyph->SetVisibility(bNight ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
 		}
 	}
 	// Co-op: heat + level/XP van de LOKALE speler (eigenaar van deze HUD), niet van de host.

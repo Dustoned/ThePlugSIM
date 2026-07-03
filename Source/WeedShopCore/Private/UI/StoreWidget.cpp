@@ -203,6 +203,9 @@ void UStoreWidget::BuildShell(UCanvasPanel* Root)
 			PhoneComp->StoreCheckout(Ids, Qtys);
 			Cart.Empty(); bConfirmPending = false; LastSig.Reset();
 		});
+	// Persistent label: FillBody wisselt alleen de tekst (SetText), geen nieuw TextBlock per refresh.
+	CheckoutLabel = WeedUI::Text(WidgetTree, TEXT("Checkout"), 14, FLinearColor::White, true, true);
+	CheckoutBtn->SetContent(CheckoutLabel);
 	CartBar->AddChildToHorizontalBox(CheckoutBtn);
 	Outer->AddChildToVerticalBox(CartBar)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 }
@@ -215,7 +218,10 @@ void UStoreWidget::FillBody()
 	if (!Counter)
 	{
 		ItemList->ClearChildren(); TabRow->ClearChildren();
-		StoreRowBoxes.Reset(); StoreRowSigs.Reset(); LastTabSig.Reset();
+		StoreRowBoxes.Reset(); StoreRowSigs.Reset(); StoreRowIds.Reset();
+		RowNameTexts.Reset(); RowDescTexts.Reset(); RowPriceTexts.Reset();
+		RowLockTexts.Reset(); RowQtyTexts.Reset(); RowMinusBtns.Reset(); RowPlusBtns.Reset();
+		TabButtons.Reset(); TabButtonCats.Reset(); LastTabSig.Reset();
 		return;
 	}
 
@@ -235,20 +241,35 @@ void UStoreWidget::FillBody()
 	TArray<int32> Cats; CatsForKind(Kind, Cats);
 	if (ActiveCat < 0 || !Cats.Contains(ActiveCat)) { ActiveCat = Cats.Num() > 0 ? Cats[0] : 0; }
 
-	// Tabs: ALLEEN herbouwen als de tab-set of de actieve tab wijzigt (niet bij elke cart +/- ).
-	const FString TabSig = FString::Printf(TEXT("K%d|A%d|N%d"), (int32)Kind, ActiveCat, Cats.Num());
+	// Tabs: knoppen 1x bouwen per tab-SET (shop-kind); een tab-klik herkleurt alleen in-place
+	// (geen ClearChildren op klik -> geen flash, hover-state blijft staan).
+	FString TabSig = FString::Printf(TEXT("K%d"), (int32)Kind);
+	for (int32 Cat : Cats) { TabSig += FString::Printf(TEXT("|%d"), Cat); }
 	if (TabSig != LastTabSig)
 	{
 		LastTabSig = TabSig;
-		TabRow->ClearChildren();
+		TabRow->ClearChildren(); // structurele wissel (andere winkel-soort), geen klik-pad
+		TabButtons.Reset(); TabButtonCats.Reset();
 		for (int32 Cat : Cats)
 		{
-			const bool bActive = (Cat == ActiveCat);
-			const FLinearColor Col = bActive ? WeedUI::ColAccent() : WeedUI::ColInner();
 			const int32 C = Cat;
-			TabRow->AddChildToHorizontalBox(StoreBtn(WidgetTree, StoreCatName(Cat), Col, 12,
-				[this, C]() { ActiveCat = C; LastSig.Reset(); }))->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
+			UWeedActionButton* B = StoreBtn(WidgetTree, StoreCatName(Cat), WeedUI::ColInner(), 12,
+				[this, C]() { ActiveCat = C; LastSig.Reset(); });
+			TabRow->AddChildToHorizontalBox(B)->SetPadding(FMargin(0.f, 0.f, 5.f, 0.f));
+			TabButtons.Add(B); TabButtonCats.Add(Cat);
 		}
+	}
+	// Actieve tab highlighten via restyle (idem AtmWidget::ApplyTab) -> geen rebuild.
+	for (int32 i = 0; i < TabButtons.Num(); ++i)
+	{
+		UWeedActionButton* B = TabButtons[i];
+		if (!B || !TabButtonCats.IsValidIndex(i)) { continue; }
+		const FLinearColor Col = (TabButtonCats[i] == ActiveCat) ? WeedUI::ColAccent() : WeedUI::ColInner();
+		FButtonStyle S = B->GetStyle();
+		S.Normal = WeedUI::Rounded(Col, 8.f);
+		S.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
+		S.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
+		B->SetStyle(S);
 	}
 
 	// Artikelen van de actieve categorie -> eerst de zichtbare rij-data verzamelen.
@@ -285,55 +306,83 @@ void UStoreWidget::FillBody()
 		ItemList->AddChild(RowBg);
 		if (UScrollBoxSlot* Sl = Cast<UScrollBoxSlot>(RowBg->Slot)) { Sl->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f)); } // rij-spacing
 		StoreRowBoxes.Add(RowBg); StoreRowSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
+		StoreRowIds.Add(NAME_None); // sentinel -> forceer eerste structurele bouw
+		RowNameTexts.Add(nullptr); RowDescTexts.Add(nullptr); RowPriceTexts.Add(nullptr);
+		RowLockTexts.Add(nullptr); RowQtyTexts.Add(nullptr); RowMinusBtns.Add(nullptr); RowPlusBtns.Add(nullptr);
 	}
 	while (StoreRowBoxes.Num() > Rows.Num())
 	{
 		const int32 Last = StoreRowBoxes.Num() - 1;
 		if (StoreRowBoxes[Last]) { StoreRowBoxes[Last]->RemoveFromParent(); }
-		StoreRowBoxes.RemoveAt(Last); StoreRowSigs.RemoveAt(Last);
+		StoreRowBoxes.RemoveAt(Last); StoreRowSigs.RemoveAt(Last); StoreRowIds.RemoveAt(Last);
+		RowNameTexts.RemoveAt(Last); RowDescTexts.RemoveAt(Last); RowPriceTexts.RemoveAt(Last);
+		RowLockTexts.RemoveAt(Last); RowQtyTexts.RemoveAt(Last); RowMinusBtns.RemoveAt(Last); RowPlusBtns.RemoveAt(Last);
 	}
 
-	// Per-rij diff: alleen een rij die ECHT wijzigde (bv. de aangeklikte cart +/- ) krijgt nieuwe inhoud.
+	// Per-rij diff: alleen een rij die ECHT wijzigde wordt aangeraakt. STRUCTUREEL (ander item op deze
+	// rij-positie) = subtree opnieuw via SetContent; alles daarbinnen (cart +/-, prijs, lock) gaat
+	// IN-PLACE via SetText/SetVisibility -> de gehoverde knop blijft bestaan, geen flash.
 	for (int32 i = 0; i < Rows.Num(); ++i)
 	{
 		const FRowData& R = Rows[i];
-		const FString Sig = FString::Printf(TEXT("%s|%d|%d|%d|%s"), *R.Id.ToString(), R.Price, R.bLocked ? 1 : 0, R.InCart, *R.Desc);
+		const FString Sig = FString::Printf(TEXT("%s|%d|%d|%d|%d|%s"), *R.Id.ToString(), R.Price, R.bLocked ? 1 : 0, R.InCart, R.ReqLvl, *R.Desc);
 		if (!StoreRowSigs.IsValidIndex(i) || !StoreRowBoxes.IsValidIndex(i) || !StoreRowBoxes[i]) { continue; }
 		if (Sig == StoreRowSigs[i]) { continue; }
 		StoreRowSigs[i] = Sig;
 
 		UBorder* RowBg = StoreRowBoxes[i];
-		RowBg->SetBrush(WeedUI::Rounded(R.bLocked ? WeedUI::ColSlotEmpty(0.9f) : WeedUI::ColSlot(0.95f), 7.f));
-		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		RowBg->SetContent(Row);
 
-		// Links: naam + beschrijving.
-		UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-		Info->AddChildToVerticalBox(WeedUI::Text(WidgetTree, R.NameLbl, 13, R.bLocked ? WeedUI::ColTextDim() : WeedUI::ColText(), false, true));
-		if (!R.Desc.IsEmpty()) { Info->AddChildToVerticalBox(WeedUI::Text(WidgetTree, R.Desc, 10, WeedUI::ColTextDim())); }
-		UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
-		IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
-
-		// Prijs.
-		Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)R.Price) / 100)), 13, WeedUI::ColText(), false, true))
-			->SetVerticalAlignment(VAlign_Center);
-
-		if (R.bLocked)
+		// Structurele wissel: bouw de rij-subtree 1x en bewaar de sub-refs (klik-lambda's binden op het nieuwe item-id).
+		if (StoreRowIds[i] != R.Id || !RowNameTexts[i] || !RowPlusBtns[i])
 		{
-			Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("  Lvl %d"), R.ReqLvl), 12, WeedUI::ColWarn(), false, true))
-				->SetVerticalAlignment(VAlign_Center);
-		}
-		else
-		{
+			StoreRowIds[i] = R.Id;
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+			RowBg->SetContent(Row);
+
+			// Links: naam + beschrijving.
+			UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+			RowNameTexts[i] = WeedUI::Text(WidgetTree, R.NameLbl, 13, WeedUI::ColText(), false, true);
+			Info->AddChildToVerticalBox(RowNameTexts[i]);
+			RowDescTexts[i] = WeedUI::Text(WidgetTree, R.Desc, 10, WeedUI::ColTextDim());
+			Info->AddChildToVerticalBox(RowDescTexts[i]);
+			UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(Info);
+			IS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); IS->SetVerticalAlignment(VAlign_Center);
+
+			// Prijs.
+			RowPriceTexts[i] = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), false, true);
+			Row->AddChildToHorizontalBox(RowPriceTexts[i])->SetVerticalAlignment(VAlign_Center);
+
+			// Lock-label ("Lvl X") EN de cart-knoppen allebei bouwen; zichtbaarheid schakelt eronder in-place.
+			RowLockTexts[i] = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColWarn(), false, true);
+			Row->AddChildToHorizontalBox(RowLockTexts[i])->SetVerticalAlignment(VAlign_Center);
+
 			const FName AddId = R.Id;
-			if (R.InCart > 0)
-			{
-				Row->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("-"), WeedUI::ColWarn(), 12, [this, AddId]() { CartAdd(AddId, -1); }))
-					->SetPadding(FMargin(10.f, 0.f, 4.f, 0.f));
-				Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%d"), R.InCart), 13, WeedUI::ColText(), true, true))->SetVerticalAlignment(VAlign_Center);
-			}
-			Row->AddChildToHorizontalBox(StoreBtn(WidgetTree, TEXT("+"), WeedUI::ColAccent(), 12, [this, AddId]() { CartAdd(AddId, 1); }))
-				->SetPadding(FMargin(R.InCart > 0 ? 4.f : 10.f, 0.f, 0.f, 0.f));
+			RowMinusBtns[i] = StoreBtn(WidgetTree, TEXT("-"), WeedUI::ColWarn(), 12, [this, AddId]() { CartAdd(AddId, -1); });
+			Row->AddChildToHorizontalBox(RowMinusBtns[i])->SetPadding(FMargin(10.f, 0.f, 4.f, 0.f));
+			RowQtyTexts[i] = WeedUI::Text(WidgetTree, TEXT("0"), 13, WeedUI::ColText(), true, true);
+			Row->AddChildToHorizontalBox(RowQtyTexts[i])->SetVerticalAlignment(VAlign_Center);
+			RowPlusBtns[i] = StoreBtn(WidgetTree, TEXT("+"), WeedUI::ColAccent(), 12, [this, AddId]() { CartAdd(AddId, 1); });
+			Row->AddChildToHorizontalBox(RowPlusBtns[i])->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
+		}
+
+		// In-place bijwerken: waardes + zichtbaarheid (geen SetContent -> hover/scroll blijven staan).
+		RowBg->SetBrush(WeedUI::Rounded(R.bLocked ? WeedUI::ColSlotEmpty(0.9f) : WeedUI::ColSlot(0.95f), 7.f));
+		RowNameTexts[i]->SetText(FText::FromString(R.NameLbl));
+		RowNameTexts[i]->SetColorAndOpacity(FSlateColor(R.bLocked ? WeedUI::ColTextDim() : WeedUI::ColText()));
+		RowDescTexts[i]->SetText(FText::FromString(R.Desc));
+		RowDescTexts[i]->SetVisibility(R.Desc.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+		RowPriceTexts[i]->SetText(FText::FromString(FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)R.Price) / 100))));
+		RowLockTexts[i]->SetText(FText::FromString(FString::Printf(TEXT("  Lvl %d"), R.ReqLvl)));
+		RowLockTexts[i]->SetVisibility(R.bLocked ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+
+		const bool bShowQty = (!R.bLocked && R.InCart > 0); // -/aantal alleen met iets in de mand (zelfde layout als voorheen)
+		RowMinusBtns[i]->SetVisibility(bShowQty ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		RowQtyTexts[i]->SetVisibility(bShowQty ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		RowQtyTexts[i]->SetText(FText::FromString(FString::Printf(TEXT("%d"), R.InCart)));
+		RowPlusBtns[i]->SetVisibility(R.bLocked ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+		if (UHorizontalBoxSlot* PS = Cast<UHorizontalBoxSlot>(RowPlusBtns[i]->Slot))
+		{
+			PS->SetPadding(FMargin(bShowQty ? 4.f : 10.f, 0.f, 0.f, 0.f)); // + schuift mee met wel/geen -/aantal
 		}
 	}
 
@@ -355,11 +404,11 @@ void UStoreWidget::FillBody()
 			? FString(TEXT("Cart empty"))
 			: FString::Printf(TEXT("Cart: %d item(s)   EUR %d"), Lines, (int32)(WeedRoundEuros((int64)CartTotalCents()) / 100))));
 	}
-	if (CheckoutBtn)
+	if (CheckoutLabel)
 	{
-		CheckoutBtn->SetContent(WeedUI::Text(WidgetTree,
-			bConfirmPending ? FString::Printf(TEXT("Confirm purchase - EUR %d"), (int32)(WeedRoundEuros((int64)CartTotalCents()) / 100)) : FString(TEXT("Checkout")),
-			14, FLinearColor::White, true, true));
+		// In-place: alleen de label-tekst wisselt (geen nieuw TextBlock per FillBody).
+		CheckoutLabel->SetText(FText::FromString(
+			bConfirmPending ? FString::Printf(TEXT("Confirm purchase - EUR %d"), (int32)(WeedRoundEuros((int64)CartTotalCents()) / 100)) : FString(TEXT("Checkout"))));
 	}
 }
 
@@ -369,7 +418,9 @@ void UStoreWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	const bool bOpen = PhoneComp.IsValid() && PhoneComp->IsStoreOpen();
-	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	// Hidden i.p.v. Collapsed: de Card zit in een canvas-slot (vaste positie/maat), Hidden houdt de
+	// layout warm -> geen 1-frame her-layout-flits bij openen. Hidden paint niet en hit-test niet.
+	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden); }
 	if (!bOpen) { LastSig.Reset(); if (Cart.Num() > 0) { Cart.Empty(); } return; }
 
 	FString Sig;

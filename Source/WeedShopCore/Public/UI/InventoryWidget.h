@@ -193,5 +193,11 @@ protected:
 	// (per-cel signatuur). Geen ClearChildren meer -> geen grid-flikker bij elke sleep.
 	UPROPERTY() TArray<TObjectPtr<class USizeBox>> CellBoxes;
 	TArray<FString> CellSigs;
+	// HOME STASH: zelfde pool+sig-patroon als CellBoxes/CellSigs hierboven — vaste rij-slots in de
+	// StashList (staart-groei/krimp), per-rij signatuur, alleen gewijzigde rijen krijgen nieuwe inhoud.
+	// Geen ClearChildren meer bij een schap-mutatie -> geen stash-flikker (co-op: partner muteert een schap).
+	UPROPERTY() TArray<TObjectPtr<class USizeBox>> StashRows;
+	TArray<FString> StashSigs;
+	UPROPERTY() TObjectPtr<UTextBlock> StashEmptyText; // persistente "Nothing stored."-regel (alleen tonen/verbergen)
 	int32 SortMode = 0; // 0=naam, 1=aantal, 2=categorie
 };

@@ -22,6 +22,7 @@
 #include "Input/ControlSettings.h"
 #include "GameFramework/Pawn.h"
 #include "Components/ScrollBox.h"
+#include "Components/ScrollBoxSlot.h"
 #include "InputCoreTypes.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -2959,8 +2960,9 @@ void UPhoneWidget::PrewarmStep()
 	LastMsgSig = MessagesSignature();
 	LastContactsSig = ContactsSignature();
 	LastPkgSig = PackagesSignature();
-	LastGoalsSig = GoalsSignature();
 	LastBankSig = BankUnlockSignature();
+	// (Goals heeft geen sig-baseline meer: de kaart-pool is net vers gevuld door BuildGoalsApp en
+	//  updatet zichzelf in-place via RefreshGoalsApp zolang de app open is.)
 	if (GetWorld()) { LastStatsRefresh = GetWorld()->GetTimeSeconds(); }
 
 	bPrewarmDone = true;
@@ -3331,27 +3333,16 @@ int32 UPhoneWidget::GetClaimableGoals() const
 	return GoalsC ? GoalsC->GetClaimableCount() : 0;
 }
 
-// Change-sig van de doelen: verandert zodra een doel voltooit, geclaimd wordt, of ~5% voortgang verschuift.
-// Zo herbouwt de Goals-app alleen bij een echte wijziging (Claim-knop verschijnt / balk loopt mee), niet per frame.
-int32 UPhoneWidget::GoalsSignature() const
-{
-	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	const UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
-	if (!GoalsC) { return 0; }
-	const TArray<FGoalDef>& G = UGoalsComponent::Goals();
-	int32 Sig = G.Num() * 17;
-	for (int32 i = 0; i < G.Num(); ++i)
-	{
-		// Alleen VOLTOOIING in de sig (geen voortgangs-bucket, geen IsClaimed): de lijst herbouwt dan ALLEEN als een
-		// doel net af is (Claim-knop verschijnt). Geen flash bij elke % voortgang; claimen werkt al in-place.
-		Sig += (GoalsC->IsComplete(i) ? 7 : 0) * (i + 3);
-	}
-	return Sig;
-}
-
 void UPhoneWidget::BuildGoalsApp()
 {
 	if (!ActiveContent) { return; }
+
+	// Dit paneel is zojuist geleegd (ClearChildren in RefreshContent) -> alle oude kaart-refs zijn dood.
+	// Pool altijd resetten, ook op het "unavailable"-pad, zodat RefreshGoalsApp nooit aan dode widgets zit.
+	GoalCards.Reset(); GoalTitles.Reset(); GoalProgTexts.Reset(); GoalBars.Reset();
+	GoalRewardTexts.Reset(); GoalClaimBtns.Reset(); GoalStatusTexts.Reset();
+	GoalCardGoalIdx.Reset(); GoalCardSigs.Reset(); GoalCardProgStrs.Reset();
+
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
 	if (!GoalsC) { AddInfoRow(TEXT("Goals unavailable."), WeedUI::ColTextDim()); return; }
@@ -3360,78 +3351,176 @@ void UPhoneWidget::BuildGoalsApp()
 	UVerticalBoxSlot* LS = ActiveContent->AddChildToVerticalBox(List);
 	LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	const TArray<FGoalDef>& G = UGoalsComponent::Goals();
-	for (int32 i = 0; i < G.Num(); ++i)
+	// PERSISTENTE kaart-pool: de goals-set is statisch per sessie, dus N lege kaart-shells één keer bouwen.
+	// RefreshGoalsApp (hieronder + live in NativeTick) wijst per POSITIE een goal toe en vult/styled in-place;
+	// dit paneel wordt daarna NOOIT meer herbouwd -> geen flash, scroll-positie blijft staan.
+	const int32 N = UGoalsComponent::Goals().Num();
+	for (int32 p = 0; p < N; ++p)
 	{
-		const FGoalDef& Gd = G[i];
-		const int64 Prog = GoalsC->GetGoalProgress(i);
-		const int64 Tgt = Gd.Target;
-		const bool bDone = GoalsC->IsComplete(i);
-		const bool bClaimed = GoalsC->IsClaimed(i);
-		const float Frac = (Tgt > 0) ? FMath::Clamp((float)Prog / (float)Tgt, 0.f, 1.f) : 0.f;
-
 		UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
-		Card->SetBrush(RoundedBrush(bClaimed ? WeedUI::ColSlotEmpty(0.95f) : WeedUI::ColInner(0.95f), 8.f));
 		Card->SetPadding(FMargin(9.f, 7.f, 9.f, 7.f));
 		UVerticalBox* CV = WidgetTree->ConstructWidget<UVerticalBox>();
 		Card->SetContent(CV);
 
-		UTextBlock* TitleT = MakeText(Gd.Title, 13, bClaimed ? WeedUI::ColGood() : WeedUI::ColText());
+		UTextBlock* TitleT = MakeText(FString(), 13, WeedUI::ColText());
 		CV->AddChildToVerticalBox(TitleT);
-
-		const FString ProgStr = (Gd.Metric == 0)
-			? FString::Printf(TEXT("EUR %lld / %lld"), (long long)(Prog / 100), (long long)(Tgt / 100))
-			: FString::Printf(TEXT("%lld / %lld"), (long long)Prog, (long long)Tgt);
-		CV->AddChildToVerticalBox(MakeText(ProgStr, 10, WeedUI::ColTextDim()));
+		UTextBlock* ProgT = MakeText(FString(), 10, WeedUI::ColTextDim());
+		CV->AddChildToVerticalBox(ProgT);
 
 		UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
-		Bar->SetPercent(Frac);
-		Bar->SetFillColorAndOpacity(bDone ? FLinearColor(0.4f, 0.95f, 0.5f) : FLinearColor(0.85f, 0.7f, 0.25f));
 		USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
 		BarSz->SetHeightOverride(12.f); BarSz->SetContent(Bar);
 		CV->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
 
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		FString RewardStr = TEXT("Reward:  ");
-		if (Gd.RewardMoneyCents > 0) { RewardStr += FString::Printf(TEXT("EUR %lld"), (long long)(Gd.RewardMoneyCents / 100)); }
-		if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0)
-		{
-			RewardStr += FString::Printf(TEXT("%s%dx %s"), Gd.RewardMoneyCents > 0 ? TEXT("  +  ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem));
-		}
-		UHorizontalBoxSlot* RWS = Row->AddChildToHorizontalBox(MakeText(RewardStr, 10, WeedUI::ColTextDim()));
+		UTextBlock* RewardT = MakeText(FString(), 10, WeedUI::ColTextDim());
+		UHorizontalBoxSlot* RWS = Row->AddChildToHorizontalBox(RewardT);
 		RWS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); RWS->SetVerticalAlignment(VAlign_Center);
-		if (bClaimed)
-		{
-			Row->AddChildToHorizontalBox(MakeText(TEXT("Claimed"), 11, WeedUI::ColGood()))->SetVerticalAlignment(VAlign_Center);
-		}
-		else if (bDone)
-		{
-			const int32 Idx = i;
-			// Claim werkt ALLEEN deze kaart in-place bij (grijze kaart + groene titel + "Claimed"-label i.p.v. de knop);
-			// geen MarkDirty -> geen hele Goals-lijst-herbouw/flash. De home-badge loopt live mee (GetClaimableGoals).
-			Row->AddChildToHorizontalBox(MakeActionBtn(TEXT("Claim"), WeedUI::ColAccentDim(),
-				[this, Idx, Card, TitleT, Row]()
-				{
-					if (Phone.IsValid()) { Phone->ClaimGoal(Idx); }
-					if (Card) { Card->SetBrush(RoundedBrush(WeedUI::ColSlotEmpty(0.95f), 8.f)); }
-					if (TitleT) { TitleT->SetColorAndOpacity(FSlateColor(WeedUI::ColGood())); }
-					if (Row)
-					{
-						// De laatste cel (de Claim-knop) vervangen door het "Claimed"-label.
-						const int32 Last = Row->GetChildrenCount() - 1;
-						if (UWidget* W = Row->GetChildAt(Last)) { W->RemoveFromParent(); }
-						Row->AddChildToHorizontalBox(MakeText(TEXT("Claimed"), 11, WeedUI::ColGood()))->SetVerticalAlignment(VAlign_Center);
-					}
-				}, 11))->SetVerticalAlignment(VAlign_Center);
-		}
-		else
-		{
-			Row->AddChildToHorizontalBox(MakeText(TEXT("In progress"), 10, WeedUI::ColTextDim()))->SetVerticalAlignment(VAlign_Center);
-		}
+
+		// Claim-knop + status-label ("Claimed"/"In progress") samen in een Overlay; togglen = Hidden (geen
+		// Collapsed -> geen her-layout-flits, de rij houdt een vaste breedte). De klik leest de goal-index van
+		// deze POSITIE pas op het klik-moment (de sortering kan de toewijzing verschuiven) -> altijd de juiste
+		// goal zonder de delegate te herbinden.
+		const int32 Pos = p;
+		UOverlay* ActionOv = WidgetTree->ConstructWidget<UOverlay>();
+		UWeedActionButton* ClaimB = MakeActionBtn(TEXT("Claim"), WeedUI::ColGood(0.55f),
+			[this, Pos]()
+			{
+				if (!Phone.IsValid() || !GoalCardGoalIdx.IsValidIndex(Pos) || GoalCardGoalIdx[Pos] < 0) { return; }
+				Phone->ClaimGoal(GoalCardGoalIdx[Pos]);
+				// Direct hersorteren: op de host is de claim meteen verwerkt (kaart zakt gedimd naar onderen);
+				// op een joiner pakt de eerstvolgende live-refresh de gerepliceerde claim-staat op.
+				RefreshGoalsApp();
+			}, 12);
+		UOverlaySlot* OS1 = ActionOv->AddChildToOverlay(ClaimB);
+		OS1->SetHorizontalAlignment(HAlign_Fill); OS1->SetVerticalAlignment(VAlign_Center);
+		UTextBlock* StatusT = MakeText(FString(), 10, WeedUI::ColTextDim());
+		UOverlaySlot* OS2 = ActionOv->AddChildToOverlay(StatusT);
+		OS2->SetHorizontalAlignment(HAlign_Center); OS2->SetVerticalAlignment(VAlign_Center);
+		Row->AddChildToHorizontalBox(ActionOv)->SetVerticalAlignment(VAlign_Center);
 		CV->AddChildToVerticalBox(Row);
 
-		List->AddChild(Card);
-		List->AddChild(MakeText(TEXT(""), 4, FLinearColor::Transparent));
+		if (UScrollBoxSlot* SS = Cast<UScrollBoxSlot>(List->AddChild(Card)))
+		{
+			SS->SetPadding(FMargin(0.f, 0.f, 0.f, 7.f));
+		}
+
+		GoalCards.Add(Card); GoalTitles.Add(TitleT); GoalProgTexts.Add(ProgT); GoalBars.Add(Bar);
+		GoalRewardTexts.Add(RewardT); GoalClaimBtns.Add(ClaimB); GoalStatusTexts.Add(StatusT);
+		GoalCardGoalIdx.Add(-1); GoalCardSigs.Add(-1); GoalCardProgStrs.Add(FString());
+	}
+
+	// Meteen vers vullen (sigs staan op -1 -> elke positie krijgt z'n eerste toewijzing + stijl).
+	RefreshGoalsApp();
+}
+
+// Sorteert de doelen (claimbaar -> in-progress bijna-klaar-eerst -> claimed) en werkt de persistente kaart-pool
+// in-place bij. Restyle (brush/kleuren/knop-toggle/vaste teksten) alleen op posities waarvan de sig (goal-index +
+// status) wijzigt; de voortgangstekst is changed-checked en de balk loopt altijd live mee. NOOIT ClearChildren.
+void UPhoneWidget::RefreshGoalsApp()
+{
+	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+	const UGoalsComponent* GoalsC = GS ? GS->GetGoals() : nullptr;
+	const TArray<FGoalDef>& G = UGoalsComponent::Goals();
+	if (!GoalsC || GoalCards.Num() != G.Num()) { return; } // pool (nog) niet gebouwd of goals onbeschikbaar
+
+	// --- Sortering: status (0=in-progress, 1=claimbaar, 2=claimed) + voortgangs-fractie per goal ---
+	struct FGoalEntry { int32 Idx = 0; int32 Status = 0; float Frac = 0.f; };
+	TArray<FGoalEntry> Order; Order.Reserve(G.Num());
+	for (int32 i = 0; i < G.Num(); ++i)
+	{
+		const int64 Tgt = G[i].Target;
+		FGoalEntry E;
+		E.Idx = i;
+		E.Status = GoalsC->IsClaimed(i) ? 2 : (GoalsC->IsComplete(i) ? 1 : 0);
+		E.Frac = (Tgt > 0) ? FMath::Clamp((float)GoalsC->GetGoalProgress(i) / (float)Tgt, 0.f, 1.f) : 0.f;
+		Order.Add(E);
+	}
+	// Claimbaar bovenaan, dan in-progress op voortgang aflopend (bijna-klaar eerst), claimed onderaan.
+	// Index als tiebreaker -> stabiel binnen gelijke groepen (definitie-volgorde).
+	Order.Sort([](const FGoalEntry& A, const FGoalEntry& B)
+	{
+		auto Rank = [](int32 S) { return S == 1 ? 0 : (S == 0 ? 1 : 2); };
+		if (Rank(A.Status) != Rank(B.Status)) { return Rank(A.Status) < Rank(B.Status); }
+		if (A.Status == 0 && A.Frac != B.Frac) { return A.Frac > B.Frac; }
+		return A.Idx < B.Idx;
+	});
+
+	for (int32 p = 0; p < Order.Num(); ++p)
+	{
+		const FGoalEntry& E = Order[p];
+		const FGoalDef& Gd = G[E.Idx];
+		const bool bClaimed = (E.Status == 2);
+		const bool bClaimable = (E.Status == 1);
+
+		// --- Toewijzing/status van deze positie gewijzigd -> eenmalig hervullen + restylen ---
+		const int32 Sig = E.Idx * 4 + E.Status;
+		if (GoalCardSigs[p] != Sig)
+		{
+			GoalCardSigs[p] = Sig;
+			GoalCardGoalIdx[p] = E.Idx;
+			GoalCardProgStrs[p].Reset(); // andere goal/status -> voortgangstekst hieronder sowieso vers zetten
+
+			// Kaart-stijl: claimbaar = subtiel gouden randje (zelfde goud als de balk), claimed = grijs + gedimd.
+			FSlateBrush CardBr = RoundedBrush(bClaimed ? WeedUI::ColSlotEmpty(0.95f) : WeedUI::ColInner(0.95f), 8.f);
+			if (bClaimable)
+			{
+				CardBr.OutlineSettings.Width = 1.5f;
+				CardBr.OutlineSettings.Color = FSlateColor(FLinearColor(0.85f, 0.7f, 0.25f, 0.9f));
+			}
+			if (GoalCards[p])
+			{
+				GoalCards[p]->SetBrush(CardBr);
+				// Gedimde claimed-kaart: RenderOpacity is hier veilig — alleen de claimbare brush heeft een
+				// outline (de bekende spook-kader-valkuil speelt dus niet op de claimed-kaart).
+				GoalCards[p]->SetRenderOpacity(bClaimed ? 0.55f : 1.f);
+			}
+			if (GoalTitles[p])
+			{
+				GoalTitles[p]->SetText(FText::FromString(Gd.Title));
+				GoalTitles[p]->SetColorAndOpacity(FSlateColor(bClaimed ? WeedUI::ColGood() : WeedUI::ColText()));
+			}
+			if (GoalRewardTexts[p])
+			{
+				FString RewardStr = TEXT("Reward:  ");
+				if (Gd.RewardMoneyCents > 0) { RewardStr += FString::Printf(TEXT("EUR %lld"), (long long)(Gd.RewardMoneyCents / 100)); }
+				if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0)
+				{
+					RewardStr += FString::Printf(TEXT("%s%dx %s"), Gd.RewardMoneyCents > 0 ? TEXT("  +  ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem));
+				}
+				GoalRewardTexts[p]->SetText(FText::FromString(RewardStr));
+			}
+			// Claim-knop vs status-label: Hidden-toggle in de Overlay (ruimte blijft staan, geen layout-sprong;
+			// Hidden is ook niet klikbaar, dus een verborgen Claim-knop kan niet per ongeluk claimen).
+			if (GoalClaimBtns[p])
+			{
+				GoalClaimBtns[p]->SetVisibility(bClaimable ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+			}
+			if (GoalStatusTexts[p])
+			{
+				GoalStatusTexts[p]->SetVisibility(bClaimable ? ESlateVisibility::Hidden : ESlateVisibility::SelfHitTestInvisible);
+				GoalStatusTexts[p]->SetText(FText::FromString(bClaimed ? TEXT("Claimed") : TEXT("In progress")));
+				GoalStatusTexts[p]->SetColorAndOpacity(FSlateColor(bClaimed ? WeedUI::ColGood() : WeedUI::ColTextDim()));
+			}
+			// Balk-kleur per status: goud onderweg, groen zodra het doel af is (claimbaar of geclaimd).
+			if (GoalBars[p])
+			{
+				GoalBars[p]->SetFillColorAndOpacity(E.Status == 0 ? FLinearColor(0.85f, 0.7f, 0.25f) : FLinearColor(0.4f, 0.95f, 0.5f));
+			}
+		}
+
+		// --- Live waarden (elke refresh; de sig dekt voortgang bewust NIET, dus balken lopen nu WEL live) ---
+		const int64 Prog = GoalsC->GetGoalProgress(E.Idx);
+		const int64 Tgt = Gd.Target;
+		const FString ProgStr = (Gd.Metric == 0)
+			? FString::Printf(TEXT("EUR %lld / %lld"), (long long)(Prog / 100), (long long)(Tgt / 100))
+			: FString::Printf(TEXT("%lld / %lld"), (long long)Prog, (long long)Tgt);
+		if (GoalProgTexts[p] && ProgStr != GoalCardProgStrs[p])
+		{
+			GoalCardProgStrs[p] = ProgStr;
+			GoalProgTexts[p]->SetText(FText::FromString(ProgStr));
+		}
+		if (GoalBars[p]) { GoalBars[p]->SetPercent(E.Frac); }
 	}
 }
 
@@ -3714,11 +3803,26 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// Goals-app open: bij voltooiing/claim/voortgang de lijst herbouwen (de Claim-knop verschijnt zodra een doel
-	// af is; de balken lopen mee). Analoog aan Bank/Packages/Messages.
-	if (!bHome && App == GGoalsApp && GS && GS->GetGoals())
+	// Goals-app open: de persistente kaart-pool live bijwerken (~4x/s) — teksten/balken in-place, hersorteren
+	// zodra een status wijzigt (claimbaar naar boven, claimed gedimd naar onderen). Geen MarkDirty/paneel-herbouw
+	// meer voor deze app -> geen flash, scroll-positie blijft staan. App-openen is altijd vers: zolang de app
+	// dicht was liep deze throttle niet, dus de eerste tick met de app open refresht meteen.
+	if (!bHome && App == GGoalsApp && GS && GS->GetGoals() && GetWorld())
 	{
-		const int32 Sig = GoalsSignature();
-		if (Sig != LastGoalsSig) { LastGoalsSig = Sig; MarkDirty(); }
+		if (GoalCards.Num() != UGoalsComponent::Goals().Num())
+		{
+			// Zelfherstel: het paneel is ooit zonder GoalsComponent gebouwd ("Goals unavailable.") — herbouw
+			// eenmalig nu de component er wel is; daarna doet de pool alles in-place.
+			MarkDirty();
+		}
+		else
+		{
+			const float NowG = GetWorld()->GetTimeSeconds();
+			if (NowG >= NextGoalsLiveRefresh)
+			{
+				NextGoalsLiveRefresh = NowG + 0.25f;
+				RefreshGoalsApp();
+			}
+		}
 	}
 }

@@ -199,8 +199,6 @@ void UDryingRackWidget::BuildShell(UCanvasPanel* Root)
 	DetailBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	DetailScroll->AddChild(DetailBox);
 	Outer->AddChildToVerticalBox(DetailScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-
-	WetList = nullptr; // geen eigen inventory-kolom meer; we gebruiken de echte inventory
 }
 
 void UDryingRackWidget::HandleDryDrop(bool bDroppedOnDryingSide, UDryDragOp* Op)
@@ -364,15 +362,23 @@ void UDryingRackWidget::FillBody()
 		if (DryCellBoxes[i]) { DryCellBoxes[i]->SetContent(MakeDryCell(i, bEntry ? &Entries[i] : nullptr)); }
 	}
 
-	// --- Progress + plant-info onder de slots (aparte DetailBox; wiret RowBars/RowStatus voor UpdateProgress) ---
-	RowBars.Reset(); RowStatus.Reset(); RowEntryIndex.Reset();
+	// --- Progress + plant-info onder de slots: persistente RIJ-POOL (NOOIT ClearChildren -> geen flash,
+	//     lopende progressbars blijven gewoon staan). Alleen staart-groei/krimp; per-rij sig-diff werkt de
+	//     naam-tekst in-place bij; bars + tijd-labels doet UpdateProgress elke tick al. ---
 	if (DetailBox)
 	{
-		DetailBox->ClearChildren();
-		const float Total = FMath::Max(1.f, Rack->GetDryTotalSeconds());
-		for (int32 i = 0; i < Used; ++i)
+		// Lege-staat-label eenmalig aanmaken, daarna alleen togglen.
+		if (!DetailEmptyText)
 		{
-			const FDryEntry& E = Entries[i];
+			DetailEmptyText = WeedUI::Text(WidgetTree, TEXT("Nothing drying. Drag wet weed into a slot."), 11, WeedUI::ColTextDim());
+			DetailBox->AddChildToVerticalBox(DetailEmptyText);
+		}
+		DetailEmptyText->SetVisibility(Used == 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+
+		// Staart-groei: nieuwe rijen met vaste structuur (Border > VBox > [naam+tijd, bar]); inhoud komt
+		// via de sig-diff hieronder + UpdateProgress.
+		while (RowBorders.Num() < Used)
+		{
 			UBorder* RowB = WidgetTree->ConstructWidget<UBorder>();
 			RowB->SetBrush(WeedUI::Rounded(WeedUI::ColInner(0.85f), 8.f));
 			RowB->SetPadding(FMargin(10.f, 7.f, 10.f, 8.f));
@@ -380,8 +386,7 @@ void UDryingRackWidget::FillBody()
 			RowB->SetContent(RV);
 
 			UHorizontalBox* Top = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UTextBlock* NameT = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%s    %dg  -  THC %.0f%%   Q %.0f%%"),
-				*WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.Quality), 12, WeedUI::ColText(), false, true);
+			UTextBlock* NameT = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColText(), false, true);
 			UHorizontalBoxSlot* NS = Top->AddChildToHorizontalBox(NameT);
 			NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); NS->SetVerticalAlignment(VAlign_Center);
 			UTextBlock* TimeT = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColText(), false, true);
@@ -389,18 +394,38 @@ void UDryingRackWidget::FillBody()
 			RV->AddChildToVerticalBox(Top);
 
 			UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>();
-			Bar->SetPercent(E.bDone ? 1.f : FMath::Clamp(E.Elapsed / Total, 0.f, 1.f));
-			Bar->SetFillColorAndOpacity(E.bDone ? FLinearColor(0.4f, 0.95f, 0.5f) : FLinearColor(0.85f, 0.7f, 0.25f));
 			USizeBox* BarSz = WidgetTree->ConstructWidget<USizeBox>();
 			BarSz->SetHeightOverride(16.f); BarSz->SetContent(Bar);
 			RV->AddChildToVerticalBox(BarSz)->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f));
 
 			DetailBox->AddChildToVerticalBox(RowB)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-			RowBars.Add(Bar); RowStatus.Add(TimeT); RowEntryIndex.Add(i);
+			RowBorders.Add(RowB); RowNames.Add(NameT); RowBars.Add(Bar); RowStatus.Add(TimeT);
+			DetailRowSigs.Add(TEXT("\x01")); // sentinel -> forceer eerste vulling
 		}
-		if (Used == 0)
+		// Staart-krimp: overtollige rijen weghalen (alle pools synchroon houden).
+		while (RowBorders.Num() > Used)
 		{
-			DetailBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Nothing drying. Drag wet weed into a slot."), 11, WeedUI::ColTextDim()));
+			const int32 Last = RowBorders.Num() - 1;
+			if (RowBorders[Last]) { RowBorders[Last]->RemoveFromParent(); }
+			RowBorders.RemoveAt(Last); RowNames.RemoveAt(Last); RowBars.RemoveAt(Last); RowStatus.RemoveAt(Last);
+			DetailRowSigs.RemoveAt(Last);
+		}
+
+		// Per-rij diff: alleen bij een echte wijziging de naam-tekst in-place bijwerken. bDone zit in de
+		// sig zodat de rij ook ververst bij klaar-worden (bar-kleur/tijd pakt UpdateProgress elke tick op).
+		RowEntryIndex.SetNum(Used);
+		for (int32 i = 0; i < Used; ++i)
+		{
+			RowEntryIndex[i] = i;
+			const FDryEntry& E = Entries[i];
+			const FString RowSig = FString::Printf(TEXT("%s|%d|%d|%.0f|%.0f"), *E.DryItemId.ToString(), E.Quantity, E.bDone ? 1 : 0, E.Quality, E.Thc);
+			if (!DetailRowSigs.IsValidIndex(i) || RowSig == DetailRowSigs[i]) { continue; }
+			DetailRowSigs[i] = RowSig;
+			if (RowNames.IsValidIndex(i) && RowNames[i])
+			{
+				RowNames[i]->SetText(FText::FromString(FString::Printf(TEXT("%s    %dg  -  THC %.0f%%   Q %.0f%%"),
+					*WeedUI::PrettyItemName(E.DryItemId), E.Quantity, E.Thc, E.Quality)));
+			}
 		}
 	}
 
@@ -474,24 +499,14 @@ void UDryingRackWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Card) { Card->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	if (!bOpen) { LastSig.Reset(); return; }
 
+	// Sig = ALLEEN de rack-staat (entries + capaciteit/tier). De volledige inventory + hotbar zaten hier
+	// vroeger ook in (legacy van de oude eigen inventory-kolom) -> elke backpack-mutatie triggerde FillBody
+	// = flash. De echte inventory staat er als losse InventoryWidget naast en ververst zichzelf.
 	FString Sig;
 	if (ADryingRack* Rack = PhoneComp->GetDryRack())
 	{
 		Sig += FString::Printf(TEXT("D%d/%d:"), Rack->GetEntries().Num(), Rack->GetCapacityPublic());
-		for (const FDryEntry& E : Rack->GetEntries()) { Sig += FString::Printf(TEXT("%s%d%d|"), *E.DryItemId.ToString(), E.Quantity, E.bDone ? 1 : 0); }
-	}
-	if (APawn* P = GetOwningPlayerPawn())
-	{
-		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
-		{
-			Sig += TEXT("I:"); // hele inventory (de rechter tab toont alles, behalve hotbar-stapels)
-			for (const FInventoryStack& St : Inv->GetStacks())
-			{
-				Sig += FString::Printf(TEXT("%s%d|"), *St.ItemId.ToString(), St.Quantity);
-			}
-			Sig += TEXT("H:"); // hotbar-toewijzing (zodat de tab ververst als je iets op/van de hotbar zet)
-			for (int32 h = 0; h < UInventoryComponent::HotbarSize; ++h) { Sig += FString::Printf(TEXT("%d|"), Inv->GetHotbarStackId(h)); }
-		}
+		for (const FDryEntry& E : Rack->GetEntries()) { Sig += FString::Printf(TEXT("%s|%d|%d|%.0f|"), *E.DryItemId.ToString(), E.Quantity, E.bDone ? 1 : 0, E.Quality); }
 	}
 	if (Sig != LastSig) { LastSig = Sig; FillBody(); }
 

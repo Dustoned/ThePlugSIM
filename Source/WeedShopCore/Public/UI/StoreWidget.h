@@ -46,10 +46,27 @@ protected:
 	bool bConfirmPending = false; // checkout: tweede klik bevestigt
 	TMap<FName, int32> Cart;    // winkelmand: catalog-id -> aantal
 
-	// Persistente rij-pool -> per FillBody alleen gewijzigde rijen vervangen (geen ClearChildren -> geen flash/scroll-sprong bij cart +/-).
+	// Persistente rij-pool -> per FillBody alleen gewijzigde rijen bijwerken (geen ClearChildren -> geen flash/scroll-sprong bij cart +/-).
 	UPROPERTY() TArray<TObjectPtr<UBorder>> StoreRowBoxes;
 	TArray<FString> StoreRowSigs;
-	FString LastTabSig; // tabs alleen herbouwen als de tab-set/actieve tab wijzigt
+	// Per-rij sub-refs: cart/prijs-wijzigingen gaan in-place (SetText/SetVisibility, hover-state blijft staan);
+	// SetContent alleen bij een STRUCTURELE wissel (ander item op die rij-positie, zie StoreRowIds).
+	TArray<FName> StoreRowIds;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> RowNameTexts;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> RowDescTexts;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> RowPriceTexts;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> RowLockTexts;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> RowQtyTexts;
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> RowMinusBtns;
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> RowPlusBtns;
+
+	// Tab-knoppen-pool: 1x gebouwd per tab-set (shop-kind); tab-klik herkleurt alleen in-place (idem AtmWidget::ApplyTab).
+	UPROPERTY() TArray<TObjectPtr<class UWeedActionButton>> TabButtons;
+	TArray<int32> TabButtonCats; // categorie per tab-knop
+	FString LastTabSig; // tab-rij alleen herbouwen als de tab-SET wijzigt (andere winkel-soort), niet bij tab-klik
+
+	// Persistent checkout-label: tekst wisselt via SetText (geen SetContent per refresh).
+	UPROPERTY() TObjectPtr<UTextBlock> CheckoutLabel;
 
 	int32 CartTotalCents() const;
 	void CartAdd(FName Id, int32 Delta);
