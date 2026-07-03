@@ -283,3 +283,19 @@ lamp-late-joiner; DryingRack stale-index (guarded); rent-lock transiente 2-8s wi
 - **Competitive per-speler RENT + klant-tier/cooldown** `[DEFER - MODERATE, haalbaar]` — rent-vlag per-speler +
   klant-tier/cooldown op de al-bestaande 'NpcId#spelerId'-sleutel (relatie is al per-speler). Competitive-fairness,
   niet-blokkerend voor normaal co-op.
+
+### UPDATE 07-03: klant-tier/cooldown per-speler = GROTERE KLUS (onderzocht, hoort bij de per-speler-ronde)
+NIET een veilige tail-fix. Per-speler-sleutel bestaat (EnsurePlayerNpc -> 'BaseNpc#PlayerId'; relatie/loyalty gebruikt
+'m al), maar tier+cooldown per-speler loopt door de deal/crowd-kern:
+- COOLDOWN (IsOnCooldown) heeft 3 betekenissen op 3 plekken: afspraak-beschikbaarheid (ContactsComponent.cpp:180,
+  per-speler), CROWD-TOEWIJZING (NpcRegistryComponent.cpp:494, MOET gedeeld blijven), en deal-cooldown (per-speler).
+  Uit elkaar trekken zonder crowd-toewijzing te breken; MarkDealt moet in comp BEIDE base (crowd) + per-speler zetten.
+- TIER (CustomerXP) heeft een TIMING-probleem: order-grootte (GetTierOrderGrams, CustomerBase.cpp:2950) wordt bepaald
+  als de klant KOPER WORDT -> VOORDAT een speler gekozen is -> geen "welke speler" om per-speler te resolven. Per-speler
+  write + gedeelde order-read = order-tier groeit nooit meer in comp (regressie). Geen schone per-speler-order zonder de
+  klant-koper-flow te herontwerpen.
+PLAN: PlayerId-param (default leeg = base/ongewijzigd) op MarkDealt/IsOnCooldown/AddCustomerValue/GetCustomerXP/
+GetTierProgress01 + helper ResolveNpcKey(BaseNpc,PlayerId)->'BaseNpc#PlayerId' in comp; deal-completie geeft
+dealer-StablePlayerId; crowd-assign (494) blijft base; klant-koper-flow herontwerpen zodat de order-tier een speler kent.
+VERIFICATIE: echte 2-PC competitive-test (headless niet toereikend). Doe samen met XP/level/heat/rent als 1 coherente
+competitive-per-speler-ronde.
