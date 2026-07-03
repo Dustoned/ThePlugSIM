@@ -299,3 +299,18 @@ GetTierProgress01 + helper ResolveNpcKey(BaseNpc,PlayerId)->'BaseNpc#PlayerId' i
 dealer-StablePlayerId; crowd-assign (494) blijft base; klant-koper-flow herontwerpen zodat de order-tier een speler kent.
 VERIFICATIE: echte 2-PC competitive-test (headless niet toereikend). Doe samen met XP/level/heat/rent als 1 coherente
 competitive-per-speler-ronde.
+
+### UPDATE 07-03: beach-exposure per-client niet-deterministisch [DEFER - visuele kalibratie]
+SYMPTOOM: in co-op ziet 1 speler de beach veel te licht/uitgewassen (host normaal). Vooral extreem bij 2 LOKALE
+instances: het venster zonder focus wordt door de engine geknepen -> z'n eye-adaptation blijft hangen op te licht.
+ROOT CAUSE (code-bewezen, workflow 07-03): de beach is de ENIGE map zonder vaste belichting. DayNightController
+returnt in BeginPlay op de bPackMinimal-tak (DayNightController.cpp:219) VOORDAT de onbegrensde AEM_Manual-PPV
+(r.273-283) wordt gespawnd. Alle andere maps krijgen die vaste manual-exposure; de beach laat het over aan UDS'
+"Apply Exposure Settings" (ApplyUdsLook r.582-587) = engine auto-exposure/eye-adaptation -> per-client frame-afhankelijk
+-> verschilt tussen instances. Op 2 echte PC's milder (elk rendert vol) maar nog steeds niet gegarandeerd identiek.
+FIX (later, mét kalibratie): net voor de return op r.219 dezelfde AEM_Manual unbound PPV spawnen (in PPV bewaren) +
+UDS "Apply Exposure Settings" (r.582) op false; dan de beach-dag-bias (ExposureBias, header r.45=9.f) kalibreren zodat
+de huidige beach-look behouden blijft (r.582-commentaar waarschuwt: UDS-exposure-uit-zonder-PPV blies vroeger de vloer
+wit + maakte de dag donker -> dat kwam juist door het ontbreken van de PPV, nu opgelost). NightPPV/BloomPPV blijven
+(zetten alleen min/max+bias, geen methode). VERIFICATIE: 2 instances naast elkaar op dezelfde in-game tijd, dag EN nacht.
+BESLUIT speler 07-03: nu geparkeerd - het is grotendeels het 2-lokale-instances-test-artefact, geen ramp voor nu.

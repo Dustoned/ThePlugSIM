@@ -94,6 +94,8 @@ protected:
 	int32 TargetFloor = 0;
 	int32 ShownFloor = 0;      // verdieping op de displays: telt LIVE mee terwijl de cabine rijdt
 	float CabZ = 0.f;          // huidige cabine-vloerhoogte
+	float ClientCabZ = 0.f;    // client-side gesmoothe cabine-Z (interpoleert naar de gesyncte server-Z; geen trapjes)
+	bool bClientCabInit = false; // eerste gesyncte Z binnen? -> dan pas smoothen (voorkomt sprong-vanaf-spawn)
 	float DoorOpen = 0.f;      // 0 = dicht, 1 = open (animatie)
 	float DwellTimer = 0.f;    // wachttijd met open deuren
 	float BoardedTimer = 0.f;  // hoe lang er iemand in de cabine staat

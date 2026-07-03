@@ -537,7 +537,11 @@ void ACustomerSpawner::TrySpawn()
 				// PRAAT-PAUZE: ALLEEN tijdens echte interactie (deal-HUD open met deze klant)
 				// staat hij stil - daarna pakt hij z'n wandeling direct weer op. Dichtbij staan
 				// alleen is geen reden om te stoppen.
-				if (World->GetRealTimeSeconds() < Cw->ConversationHoldUntil)
+				// CO-OP: stop OOK op de gerepliceerde bTalkingToPlayer (server-authoritatief gezet zodra EEN speler het
+				// gesprek opent), niet alleen op de client-lokale ConversationHoldUntil. Anders blijft de server-route-
+				// patrouille de NPC voortduwen als de JOINER praat (ConversationHoldUntil staat dan alleen op de joiner-
+				// copy) -> de NPC vecht met de deal-stop = 'blijft proberen door te lopen' op de host.
+				if (Cw->bTalkingToPlayer || World->GetRealTimeSeconds() < Cw->ConversationHoldUntil)
 				{
 					if (AAIController* AIp = Cast<AAIController>(Cw->GetController())) { AIp->StopMovement(); }
 					continue;

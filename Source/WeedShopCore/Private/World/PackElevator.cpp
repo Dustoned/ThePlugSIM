@@ -19,7 +19,7 @@ namespace
 {
 	constexpr float CabSpeed = 240.f;     // cm/s verticaal
 	constexpr float DoorSlideTime = 0.7f; // seconden open/dicht
-	constexpr float DwellSeconds = 6.f;   // deuren open laten staan zonder passagier
+	constexpr float DwellSeconds = 10.f;  // deuren open na aankomst (co-op: ruim, zodat beide spelers rustig uitstappen)
 	constexpr float DepartSeconds = 1.6f; // na instappen: zo lang wachten en dan vertrekken
 }
 
@@ -253,18 +253,19 @@ bool APackElevator::IsPawnAboard() const
 {
 	UWorld* W = GetWorld();
 	if (!W) { return false; }
-	// CO-OP: de cabine is per-client lokaal en de "niet-opsluiten"-dwell gaat over de speler op DIT scherm.
-	// Filter dus op de LOKAAL bestuurde pawn (host: de host-speler; joiner: de joiner-speler) - de andere
-	// speler zit in z'n eigen lokale cabine-kopie. Blind over alle PlayerControllers zou op de listen-server
-	// ook de joiner meetellen, terwijl die z'n eigen cabine-instantie heeft.
+	// CO-OP "niet-opsluiten": houd de deur open zolang OP DIT SCHERM iemand in of vlak bij de cabine staat.
+	// We checken ALLE speler-pawns (lokaal + de gerepliceerde andere speler), niet alleen de lokale: loopt de
+	// host de lift uit maar staat de joiner nog in de deuropening, dan wacht de deur op elk scherm tot iedereen
+	// echt vrij is. Ruime radius dekt de deuropening zodat niemand tijdens het uitstappen wordt afgekneld
+	// (afgekneld = dichte cabine duwt je terug = de "teleport naar de lift"). Per-proces ziet elke kopie beide pawns.
 	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
 	{
 		const APlayerController* PC = It->Get();
-		if (!PC || !PC->IsLocalController()) { continue; }
+		if (!PC) { continue; }
 		const APawn* P = PC->GetPawn();
 		if (!P) { continue; }
 		const FVector L = P->GetActorLocation();
-		if (FVector::Dist2D(L, GetActorLocation()) < 130.f && FMath::Abs(L.Z - (CabZ + 100.f)) < 160.f)
+		if (FVector::Dist2D(L, GetActorLocation()) < 200.f && FMath::Abs(L.Z - (CabZ + 100.f)) < 180.f)
 		{
 			return true;
 		}
@@ -308,13 +309,35 @@ void APackElevator::Tick(float DeltaSeconds)
 					if (WsFloor == CurFloor && !bMoving) { DwellTimer = FMath::Max(DwellTimer, DwellSeconds); }
 				}
 			}
-			// CLIENT: NIET lokaal interpoleren maar de cabine direct op de server-Z zetten -> host en joiner staan
-			// op EXACT dezelfde hoogte (base-desync weg). Fallback = de huidige lokale CabZ als er nog geen
-			// server-waarde binnen is (voorkomt een sprong naar 0 vlak na spawn).
+			// CLIENT: de server-Z is de waarheid (host==joiner-Z, base-desync weg = H.4), MAAR hij komt in trapjes
+			// binnen (repli-rate) -> hard volgen schokt de based pawn en laat 'm door de host z'n cabvloer zakken.
+			// Daarom lokaal met CabSpeed naar de gesyncte Z interpoleren (glad). Vangnet: bij te grote drift
+			// (repli-gat/redirect/late-join) OF bij aankomst hard snappen -> nooit ver achterlopen + deur-timing klopt.
 			if (bIsClient)
 			{
-				CabZ = WS->GetElevatorZ(ElevSyncId, CabZ);
+				const float ServerZ = WS->GetElevatorZ(ElevSyncId, CabZ);
+				if (!bClientCabInit) { ClientCabZ = ServerZ; bClientCabInit = true; } // eerste waarde: direct overnemen (geen sprong vanaf spawn)
+				const bool bAtTarget = Floors.IsValidIndex(TargetFloor) && FMath::IsNearlyEqual(ServerZ, Floors[TargetFloor], 1.f);
+				if (FMath::Abs(ServerZ - ClientCabZ) > 20.f || bAtTarget)
+				{
+					ClientCabZ = ServerZ; // drift-snap (>20cm: repli-gat/redirect) of aankomst-snap: direct op de server-Z
+				}
+				else
+				{
+					ClientCabZ = FMath::FInterpConstantTo(ClientCabZ, ServerZ, DeltaSeconds, CabSpeed); // glad naar de server-Z met lift-snelheid
+				}
+				CabZ = ClientCabZ;
 				SetActorLocation(FVector(CabXY.X, CabXY.Y, CabZ));
+				// CLIENT-AANKOMST: de client draait het bMoving-interp-pad nooit -> hier expliciet aankomst afhandelen
+				// (DwellTimer armen = deuren open). CabZ is bij aankomst gesnapt == ServerZ == doel-Z.
+				if (Floors.IsValidIndex(TargetFloor) && FMath::IsNearlyEqual(CabZ, Floors[TargetFloor], 2.f) && CurFloor != TargetFloor)
+				{
+					CurFloor = TargetFloor;
+					ShownFloor = CurFloor;
+					DwellTimer = DwellSeconds;
+					BoardedTimer = 0.f;
+					UpdateSigns();
+				}
 			}
 		}
 	}
@@ -379,7 +402,7 @@ void APackElevator::Tick(float DeltaSeconds)
 	// netjes DICHT, ook op de begane grond. Een call-knop op de verdieping opent ze weer.
 	if (!bMoving)
 	{
-		if (IsPawnAboard()) { DwellTimer = FMath::Max(DwellTimer, 1.5f); } // niemand opsluiten
+		if (IsPawnAboard()) { DwellTimer = FMath::Max(DwellTimer, 3.f); } // iemand in/bij de cabine -> deur openhouden (niemand opsluiten)
 		DwellTimer -= DeltaSeconds;
 	}
 	const bool bWantOpen = !bMoving && DwellTimer > 0.f;

@@ -144,7 +144,6 @@ void UInteractionComponent::TryInteract()
 
 	// Deze indruk is nu afgehandeld; pas na loslaten weer toegestaan.
 	bInteractLatched = true;
-
 	// Klant -> open lokaal het deal-paneel (prijs-slider) i.p.v. direct verkopen. De bevestiging
 	// gaat daarna via een Server-RPC. Dit draait op de lokaal bestuurde speler.
 	if (ACustomerBase* Cust = Cast<ACustomerBase>(Target))

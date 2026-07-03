@@ -35,6 +35,13 @@ AWeedShopGameState::AWeedShopGameState()
 	NpcRegistry = CreateDefaultSubobject<UNpcRegistryComponent>(TEXT("NpcRegistry"));
 	Heat = CreateDefaultSubobject<UHeatComponent>(TEXT("Heat"));
 	Leveling = CreateDefaultSubobject<ULevelComponent>(TEXT("Leveling"));
+
+	// CO-OP: de WorldSync (lift-CabZ/lampen/weer) repliceert op deze GameState. De AInfo-default is ~10 Hz ->
+	// de lift-CabZ komt in trapjes (~24cm/stap) binnen -> zichtbaar schokken onder de based pawn tijdens een
+	// rit. 30 Hz halveert+ de trap-grootte aan de bron; de client-side smoothing (PackElevator) maakt de rest glad.
+	// (UE5.8: NetUpdateFrequency is private -> via de setters, net als CustomerBase/de speler-pawn.)
+	SetNetUpdateFrequency(30.f);
+	SetMinNetUpdateFrequency(10.f);
 }
 
 void AWeedShopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

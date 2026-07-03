@@ -765,8 +765,13 @@ void ADayNightController::Tick(float DeltaSeconds)
 					const int32 SrvIdx = WS->GetWeatherIndex();
 					if (SrvIdx >= 0 && SrvIdx != LastSeenWeatherIndex)
 					{
+						// Eerste sync na (late) join: de client staat nog op het UDW-default-weer (helder/te fel) en moet
+						// METEEN naar de server-staat i.p.v. 2-4 min traag overvloeien (anders ziet de joiner minutenlang
+						// lichter/ander weer dan de host = de uitgewassen look). Snap-in bij de eerste sync; latere
+						// server-wijzigingen vloeien wel normaal over met de gerepliceerde duur.
+						const bool bFirstSync = (LastSeenWeatherIndex < 0);
 						LastSeenWeatherIndex = SrvIdx;
-						ApplyWeatherByIndex(SrvIdx, WS->GetWeatherDuration());
+						ApplyWeatherByIndex(SrvIdx, bFirstSync ? 3.f : WS->GetWeatherDuration());
 					}
 				}
 			}
