@@ -398,3 +398,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   muurvlak faalt/misplaatst het bord - DoorRetrofitter ~3043); + de vloer-knop-nummers moeten nog iets dichter
   op de muur (PackElevatorButton text-offset). FIX: trace debuggen of terug naar vaste-offset (bord moet ZICHTBAAR
   blijven) + button-offset natunen. Wacht op D29-B (bezit DoorRetrofitter).
+- [ ] **D35** Cancel/"Back to menu"-knop op het laadscherm (join/normaal) zodat je terug kunt als 't hangt.
+  Cover-fase (UBootCoverWidget, na LoadMap) = game-thread leeft -> knop werkt. Movie-fase (SWeedLoadingScreen
+  tijdens LoadMap) = game-thread geblokkeerd; knop daar alleen mogelijk als de movie-Slate input verwerkt.
+  -> ReturnToMainMenu() (zelfde als D28 leave-session).
