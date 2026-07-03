@@ -390,3 +390,6 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   OnFEngineLoopInitComplete); (b) menu->game toont 2 trage loading-screens (ook packaged!) -> 1 mooie vaste,
   en de laadtijd zelf fors omlaag; (c) co-op join-loading werkt maar half (geen vaste screen) + joiner spawnt
   eerst zichtbaar op de beach -> nette join-flow met vaste loading-screen tot de echte spawn klaar is.
+- [ ] **D30** Items flashen nog bij slepen hotbar->drying rack (en mogelijk inv->rack + andere machine-UI's) -> restpad vinden+fixen
+- [ ] **D31** Overbodige instructie-teksten overal weg (bv. "Drag from your inventory to store...", "Drag weed here to dry it...", "Nothing drying...") - alleen echt nuttige info laten staan
+- [ ] **D32** Merge/samenvoegen-popup valt soms achter andere UI's -> z-order/topmost fixen
