@@ -362,3 +362,27 @@ BEWUST GEDEELD (nullptr) in competitive: wereld-scatter (seed/joint), plant-mold
 RONDE B (nog open): tier/cooldown per-speler (raakt klant-koper-flow: GetTierOrderGrams bepaald voor koper-speler
 bekend is; IsOnCooldown ook crowd-toewijzing die gedeeld moet blijven). Aparte wave, 2-PC-getest.
 OPEN designvraag: shop-licentie post-50 per-speler (nu zo) of crew-breed? Raakt de post-50 fase (nog te ontwerpen).
+
+### UPDATE 07-03 (avond): MP-PERFECTIE-GOLF (commit 728fc61f) - alle open DEFER-items opgelost
+9 edit-agents (8 parallel + 1 nagolf), build groen 1e keer, 2-instance boot-sanity 0 fatals. Gedaan:
+- RONDE B: tier/cooldown/refusal/sample per-speler (ResolveNpcKey, dual-writes, crowd=base, dag-cap=base);
+  order-grootte herschaalt bij gesprek-start (appetite-fractie); afspraak-owner-resolve gehoist; UI per-speler.
+  B1-fix: crowd-toewijzing filterde '#'-relatie-keys niet (fantoom-identiteiten). ValueMult per-key geseed uit base.
+- RONDE A-AUDIT-REPAIRS: bust/overval alleen eigen speler+home; heat-tick bRescan+cache+toast-latch; offline-entry
+  alleen decay; crew-proxy voor nullptr-level-reads (mold-freeze weg); lazy-create seedt uit Shared; save-gather
+  bewaart offline entries.
+- COMPETITIVE RENT: per-speler inning (eigen cash) + RentOverdueDoorIds (gerepliceerd) lockt de EIGEN comp-deur
+  (CompDoorHost/Joiner-members bleken dood -> deur-id afgeleid uit CompAnchor+filter). Co-op-pad ongewijzigd.
+- H.16: PlugPid = FPlatformMisc::GetLoginId via nieuwe AWeedShopPlayerState (gerepliceerd, join-URL-optie,
+  server-dedupe #2 = deterministisch voor de lokale 2-instance-test). StablePlayerId: PlugPid>NetId>naam;
+  Matches() kreeg naam-fallback voor legacy-records. LET OP: oude comp-saves met naam-keys resetten per-speler-state.
+- Server-validatie ServerToggleDoor/CallElevator/SetLamp (reach+lock+rent, fail-open bij streaming-gat, clamp).
+- ServerBuyProperty cross-speler-guard; DryingRack ExpectedId; dev-licentie SetShopLicensedFor; 2-speler-cap
+  (GameSession MaxPlayers=2, InitGame).
+- Lichtschakelaars->joiner: WorldSync switch-registry (SwitchPos/Yaw + bSwitchesPublished); server-reconcile in
+  ScanAndConvert publiceert load/plaats/pickup; client spawnt ontbrekende + ruimt stale defaults (50cm-dedupe).
+BEKEND/RESTEREND (klein): joiner kan een lichtschakelaar niet OPPAKKEN (ServerPickup(AActor*) resolvet een
+niet-gerepliceerde client-actor niet; fix = positie-id-relay zoals RelayLampState); joiner-geplaatste switch
+verschijnt na 2-8s (scan-cadans); kruisbetaling rent (A kan B's huur betalen) = geaccepteerde edge.
+H.17 reconnect = design-besluit: NIET gebouwd; joiner kan opnieuw joinen (late-join werkt).
+VERIFICATIE NODIG (speler, 2 instances): zie testlijst in de sessie.
