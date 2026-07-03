@@ -14,6 +14,8 @@ void UWorldSyncComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(UWorldSyncComponent, ElevatorIds);
 	DOREPLIFETIME(UWorldSyncComponent, ElevatorFloors);
 	DOREPLIFETIME(UWorldSyncComponent, ElevatorZ);
+	DOREPLIFETIME(UWorldSyncComponent, WeatherIndex);
+	DOREPLIFETIME(UWorldSyncComponent, WeatherDuration);
 }
 
 uint32 UWorldSyncComponent::MakeId(const FVector& Loc, float Yaw)
@@ -91,4 +93,12 @@ void UWorldSyncComponent::SetElevatorZ(uint32 ElevId, float Z)
 		ElevatorFloors.Add(INDEX_NONE);
 		ElevatorZ.Add(Z);
 	}
+}
+
+void UWorldSyncComponent::SetWeather(int32 Index, float Duration)
+{
+	// WorldSync leeft op de GameState -> ROLE_Authority is hier de correcte server-check (ook voor de listen-host).
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	WeatherIndex = Index;
+	WeatherDuration = Duration;
 }

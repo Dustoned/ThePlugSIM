@@ -29,6 +29,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Phone/PhoneClientComponent.h"
+#include "Save/SaveGameSubsystem.h" // StablePlayerId (competitive bezorg-marker-filter)
 #include "GameFramework/Pawn.h"
 #include "InputCoreTypes.h"
 #include "EngineUtils.h"
@@ -490,13 +491,19 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
 	UNpcRegistryComponent* Reg = GS ? GS->GetNpcRegistry() : nullptr;
 
-	// BEZORGINGEN: oranje pakket-icoon bij de voordeur, altijd zichtbaar tot opgehaald (gedeeld via de
-	// GameState, dus ook de mede-speler ziet 'm). Boven winkels/klanten, onder de speler-marker.
+	// BEZORGINGEN: oranje pakket-icoon bij de voordeur, altijd zichtbaar tot opgehaald. In co-op gedeeld via de
+	// GameState (ook de mede-speler ziet 'm); in COMPETITIVE alleen de EIGEN marker (ForPlayerId-filter - anders
+	// verklap je de kamer van de tegenstander). Boven winkels/klanten, onder de speler-marker.
 	int32 NDel = 0;
 	if (GS)
 	{
+		const bool bDelCompFilter = GS->IsCompetitive();
+		const APawn* DelPawn = GetOwningPlayerPawn();
+		const FString MyDelId = (bDelCompFilter && DelPawn) ? USaveGameSubsystem::StablePlayerId(DelPawn) : FString();
 		for (const FActiveDelivery& Del : GS->GetActiveDeliveries())
 		{
+			// Bezorging van de tegenstander niet tonen (leeg = gedeeld, altijd tonen).
+			if (bDelCompFilter && !Del.ForPlayerId.IsEmpty() && Del.ForPlayerId != MyDelId) { continue; }
 			while (DeliveryIcons.Num() <= NDel)
 			{
 				USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();

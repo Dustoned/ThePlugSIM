@@ -50,11 +50,29 @@ public:
 	// Server: schrijf de live cabine-hoogte van een lift (elke tick door APackElevator op de server). Repliceert.
 	void SetElevatorZ(uint32 ElevId, float Z);
 
+	// WEER (co-op-sync H.12): de DayNightController is per-proces niet-gerepliceerd en koos het weer lokaal random
+	// -> host en joiner kregen een ANDER weer. Zelfde patroon als de lift-CabZ: de SERVER kiest de preset-index
+	// (uit de deterministische WeatherPresets-volgorde) + de overgangs-duur en schrijft ze hier; de CLIENT kiest
+	// NIET zelf maar leest deze index en past hetzelfde preset toe zodra het wijzigt. -1 = "nog geen keuze".
+	int32 GetWeatherIndex() const { return WeatherIndex; }
+	float GetWeatherDuration() const { return WeatherDuration; }
+
+	// Server: schrijf de gekozen weer-index + overgangs-duur (door de DayNightController op de server). Repliceert.
+	void SetWeather(int32 Index, float Duration);
+
 private:
 	UFUNCTION()
 	void OnRep_OpenDoors() {}
 	UFUNCTION()
 	void OnRep_Elevators() {}
+
+	// Gedeeld weer (H.12): server-gekozen preset-index (index in de deterministische WeatherPresets-volgorde in de
+	// DayNightController) + overgangs-duur in seconden. -1 = nog geen keuze. Elke client leest deze in z'n Tick en
+	// past 'm toe zodra WeatherIndex wijzigt (bijhouden via een lokale last-seen; geen OnRep nodig).
+	UPROPERTY(Replicated)
+	int32 WeatherIndex = -1;
+	UPROPERTY(Replicated)
+	float WeatherDuration = 0.f;
 
 	// Set van OPEN deur-ids (dicht = niet in de lijst). TArray repliceert; klein (alleen open deuren).
 	UPROPERTY(ReplicatedUsing = OnRep_OpenDoors)

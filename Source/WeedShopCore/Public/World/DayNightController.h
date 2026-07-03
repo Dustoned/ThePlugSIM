@@ -136,9 +136,16 @@ public:
 	void SetUdsWeather(int32 WeatherType);     // (oud, ongebruikt) Sky-only weer
 	void SetWeatherPreset(const FString& PresetName, double TransitionSeconds = 0.0); // UDW Change Weather (TransitionSeconds=0 -> nette default)
 	void SetRandomWeather(bool bOn);                  // auto-weer aan/uit (eigen gewogen loting per dag)
-	void PickAndApplyWeather();                       // kiest gewogen een weer (clear/cloudy/foggy vaak, sneeuw zeldzaam)
+	void PickAndApplyWeather();                       // (server) kiest gewogen een weer + schrijft de index naar WorldSync
+	void ApplyWeatherByIndex(int32 Index, float TransitionSeconds); // index (deterministische tabel) -> preset toepassen (server+client)
 	bool bAutoWeather = true;                          // auto-weer actief
 	float WeatherTimer = 0.f;                           // game-sec tot de volgende weer-keuze (kort na slecht weer)
+	// Co-op-sync (H.12): laatst toegepaste weer-index. Server = z'n eigen keuze (niet dubbel toepassen), client =
+	// de laatst gelezen server-index (alleen bij wijziging opnieuw toepassen). -1 = nog niets toegepast.
+	int32 LastSeenWeatherIndex = -1;
+	// WorldSync (op de GameState) 1x resolven + cachen (spiegelt CityDoor::CachedWorldSync); her-resolven zodra invalid.
+	mutable TWeakObjectPtr<class UWorldSyncComponent> CachedWorldSync;
+	class UWorldSyncComponent* GetWorldSync() const;
 	// Pack-lampen: de lantaarn/plafondlamp-meshes van de map hebben geen echte lichten -
 	// wij hangen er warme puntlichten aan die op de klok aan/uit gaan.
 	UPROPERTY() TArray<TObjectPtr<class UPointLightComponent>> PackLampLights;

@@ -278,14 +278,19 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// Bezorgingen: pakket-marker richting de voordeur, altijd zichtbaar tot opgehaald (gedeeld via de
-	// GameState -> ook de mede-speler ziet 'm). Bearing vanuit de LOKALE speler.
+	// Bezorgingen: pakket-marker richting de voordeur, altijd zichtbaar tot opgehaald. In co-op gedeeld via de
+	// GameState (ook de mede-speler ziet 'm); in COMPETITIVE alleen de EIGEN marker (ForPlayerId-filter, spiegelt
+	// de afspraak-filter hierboven - anders verklap je de kamer van de tegenstander). Bearing vanuit de LOKALE speler.
 	int32 dm = 0;
 	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
+		const bool bDelCompFilter = GS->IsCompetitive();
+		const FString MyDelId = bDelCompFilter ? USaveGameSubsystem::StablePlayerId(P) : FString();
 		for (const FActiveDelivery& Del : GS->GetActiveDeliveries())
 		{
 			if (dm >= DeliveryMarkers.Num()) { break; }
+			// Bezorging van de tegenstander niet tonen (leeg = gedeeld, altijd tonen).
+			if (bDelCompFilter && !Del.ForPlayerId.IsEmpty() && Del.ForPlayerId != MyDelId) { continue; }
 			const FVector D = Del.World - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
 			PlaceOnBand(DeliveryMarkers[dm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);

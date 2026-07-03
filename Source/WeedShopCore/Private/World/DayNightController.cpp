@@ -5,6 +5,7 @@
 #include "Components/SkyAtmosphereComponent.h"
 
 #include "World/DayCycleComponent.h"
+#include "World/WorldSyncComponent.h"
 #include "Game/WeedShopGameState.h"
 
 #include "Engine/DirectionalLight.h"
@@ -660,25 +661,55 @@ void ADayNightController::SetRandomWeather(bool bOn)
 	UE_LOG(LogTemp, Verbose, TEXT("[UDW] auto-weer (gewogen, per dag) -> %s"), bOn ? TEXT("aan") : TEXT("uit"));
 }
 
+// Gewogen weer-presets. DETERMINISTISCHE VOLGORDE: de index in deze tabel is het gedeelde co-op-id (H.12) dat de
+// server via WorldSync naar de clients schrijft; server EN client mappen dezelfde index -> dezelfde preset-naam.
+// Nooit herordenen zonder je te realiseren dat oude replicatie-indices dan een ander preset raken.
+struct FWeatherPreset { const TCHAR* Name; float Weight; bool bBad; };
+static const FWeatherPreset GWeatherPresets[] = {
+	{ TEXT("Clear_Skies"), 4.0f, false }, { TEXT("Partly_Cloudy"), 4.0f, false }, { TEXT("Cloudy"), 3.0f, false },
+	{ TEXT("Overcast"), 2.0f, false }, { TEXT("Foggy"), 2.0f, false },
+	{ TEXT("Rain_Light"), 0.7f, true }, { TEXT("Rain"), 0.4f, true }, { TEXT("Rain_Thunderstorm"), 0.15f, true },
+	{ TEXT("Snow_Light"), 0.12f, true }, { TEXT("Snow"), 0.06f, true }, { TEXT("Snow_Blizzard"), 0.03f, true },
+};
+static constexpr int32 GNumWeatherPresets = (int32)UE_ARRAY_COUNT(GWeatherPresets);
+
+void ADayNightController::ApplyWeatherByIndex(int32 Index, float TransitionSeconds)
+{
+	// Server EN client landen hier: index -> preset-naam via dezelfde deterministische tabel -> identiek weer.
+	if (Index < 0 || Index >= GNumWeatherPresets) { return; }
+	SetWeatherPreset(FString(GWeatherPresets[Index].Name), (double)TransitionSeconds);
+}
+
 void ADayNightController::PickAndApplyWeather()
 {
 	// Gewogen: overwegend helder/bewolkt/mistig (~91%); regen ~7%; sneeuw/storm zeldzaam ~1,5% (beach).
-	struct FWPreset { const TCHAR* Name; float Weight; bool bBad; };
-	static const FWPreset Table[] = {
-		{ TEXT("Clear_Skies"), 4.0f, false }, { TEXT("Partly_Cloudy"), 4.0f, false }, { TEXT("Cloudy"), 3.0f, false },
-		{ TEXT("Overcast"), 2.0f, false }, { TEXT("Foggy"), 2.0f, false },
-		{ TEXT("Rain_Light"), 0.7f, true }, { TEXT("Rain"), 0.4f, true }, { TEXT("Rain_Thunderstorm"), 0.15f, true },
-		{ TEXT("Snow_Light"), 0.12f, true }, { TEXT("Snow"), 0.06f, true }, { TEXT("Snow_Blizzard"), 0.03f, true },
-	};
-	float Total = 0.f; for (const FWPreset& E : Table) { Total += E.Weight; }
+	float Total = 0.f; for (const FWeatherPreset& E : GWeatherPresets) { Total += E.Weight; }
 	float R = FMath::FRandRange(0.f, Total);
-	const FWPreset* Picked = &Table[0];
-	for (const FWPreset& E : Table) { R -= E.Weight; if (R <= 0.f) { Picked = &E; break; } }
-	const double TransSecs = (double)FMath::FRandRange(120.f, 240.f); // overgang clear->rainstorm e.d. = 2-4 min graduele opbouw (variabel)
-	SetWeatherPreset(FString(Picked->Name), TransSecs);
+	int32 PickedIdx = 0;
+	for (int32 i = 0; i < GNumWeatherPresets; ++i) { R -= GWeatherPresets[i].Weight; if (R <= 0.f) { PickedIdx = i; break; } }
+	const float TransSecs = FMath::FRandRange(120.f, 240.f); // overgang clear->rainstorm e.d. = 2-4 min graduele opbouw (variabel)
 	// Slecht weer blijft kort, maar nu mét de 20s graduele opbouw erin: 45-65s = ~20s wolken-opbouw + ~25-45s
 	// echte regen/sneeuw + daarna weer een graduele overgang weg. Mooi weer langer.
-	WeatherTimer = (float)TransSecs + (Picked->bBad ? FMath::FRandRange(60.f, 140.f) : FMath::FRandRange(150.f, 320.f)); // = overgang + settled-tijd -> overgang nooit afgekapt
+	WeatherTimer = TransSecs + (GWeatherPresets[PickedIdx].bBad ? FMath::FRandRange(60.f, 140.f) : FMath::FRandRange(150.f, 320.f)); // = overgang + settled-tijd -> overgang nooit afgekapt
+	// Co-op-sync (H.12): de SERVER schrijft z'n keuze naar WorldSync zodat elke joiner exact hetzelfde weer leest
+	// (de keuze valt alleen op de echte server; zie de guard in Tick). Lokaal meteen toepassen.
+	if (UWorldSyncComponent* WS = GetWorldSync())
+	{
+		WS->SetWeather(PickedIdx, TransSecs);
+		LastSeenWeatherIndex = PickedIdx; // eigen schrijf-actie niet als "wijziging" opnieuw toepassen op de host
+	}
+	ApplyWeatherByIndex(PickedIdx, TransSecs);
+}
+
+UWorldSyncComponent* ADayNightController::GetWorldSync() const
+{
+	// Spiegelt de CityDoor-cache: WorldSync 1x resolven en cachen (her-resolven zodra invalid).
+	if (!CachedWorldSync.IsValid())
+	{
+		const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
+		CachedWorldSync = GS ? GS->GetWorldSync() : nullptr;
+	}
+	return CachedWorldSync.Get();
 }
 
 void ADayNightController::DriveUDS(float ClockHour)
@@ -719,8 +750,25 @@ void ADayNightController::Tick(float DeltaSeconds)
 			DriveUDS(Hour); // UDS' lucht volgt onze gerepliceerde klok
 			if (bAutoWeather)
 			{
-				WeatherTimer -= DeltaSeconds;
-				if (WeatherTimer <= 0.f) { PickAndApplyWeather(); } // mooi weer ~2,5 in-game uur, slecht weer ~20-30 in-game min
+				// Co-op-sync (H.12): de DayNightController is per-proces niet-gerepliceerd, dus de weer-KEUZE mag
+				// ALLEEN op de echte server vallen (NM_Client-check, NIET HasAuthority - die is ook true op de joiner).
+				// De client kiest NIET zelf maar leest de door de server geschreven index uit WorldSync en past 'm
+				// toe zodra 'ie wijzigt -> host en joiner tonen exact hetzelfde weer.
+				const bool bIsServer = GetWorld() && GetWorld()->GetNetMode() != NM_Client;
+				if (bIsServer)
+				{
+					WeatherTimer -= DeltaSeconds;
+					if (WeatherTimer <= 0.f) { PickAndApplyWeather(); } // mooi weer ~2,5 in-game uur, slecht weer ~20-30 in-game min
+				}
+				else if (UWorldSyncComponent* WS = GetWorldSync())
+				{
+					const int32 SrvIdx = WS->GetWeatherIndex();
+					if (SrvIdx >= 0 && SrvIdx != LastSeenWeatherIndex)
+					{
+						LastSeenWeatherIndex = SrvIdx;
+						ApplyWeatherByIndex(SrvIdx, WS->GetWeatherDuration());
+					}
+				}
 			}
 		}
 

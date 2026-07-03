@@ -83,9 +83,11 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 	VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("PAUSED"), 24, WeedUI::ColAccent(), true, true))
 		->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 
-	auto AddBtn = [this, VB](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn)
+	auto AddBtn = [this, VB](const FString& Label, const FLinearColor& Col, TFunction<void()> Fn) -> UWeedActionButton*
 	{
-		VB->AddChildToVerticalBox(PauseBtn(WidgetTree, Label, Col, Fn))->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+		UWeedActionButton* B = PauseBtn(WidgetTree, Label, Col, Fn);
+		VB->AddChildToVerticalBox(B)->SetPadding(FMargin(0.f, 4.f, 0.f, 4.f));
+		return B;
 	};
 
 	// Alle acties = één neutrale ColInner-stijl; alleen Quit is destructief -> ColWarn.
@@ -93,9 +95,25 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 	AddBtn(TEXT("Unstuck"),       WeedUI::ColInner(), [this]() { OnUnstuck(); });
 	AddBtn(TEXT("Settings"),      WeedUI::ColInner(), [this]() { OnSettings(); });
 	AddBtn(TEXT("Save game"),     WeedUI::ColInner(), [this]() { OnSave(); });
-	AddBtn(TEXT("Load game"),     WeedUI::ColInner(), [this]() { OnLoad(); });
-	AddBtn(TEXT("Main menu"),     WeedUI::ColInner(), [this]() { OnMainMenu(); });
+	UWeedActionButton* LoadBtn = AddBtn(TEXT("Load game"), WeedUI::ColInner(), [this]() { OnLoad(); });
+	UWeedActionButton* MenuBtn = AddBtn(TEXT("Main menu"), WeedUI::ColInner(), [this]() { OnMainMenu(); });
 	AddBtn(TEXT("Quit to desktop"), WeedUI::ColWarn(0.85f), [this]() { OnQuit(); });
+
+	// CO-OP: Load/Main menu doen een CLIENT-lokale OpenLevel/ClientTravel -> die zou een joiner uit de
+	// co-op-sessie scheuren naar een solo save. Alleen de host (Standalone of ListenServer) mag laden/naar
+	// het menu. De widget wordt 1x gebouwd (geen rebuild-per-klik), dus dit verbergen is meteen persistent.
+	if (UWorld* W = GetWorld())
+	{
+		if (W->GetNetMode() == NM_Client)
+		{
+			if (LoadBtn) { LoadBtn->SetVisibility(ESlateVisibility::Collapsed); }
+			if (MenuBtn) { MenuBtn->SetVisibility(ESlateVisibility::Collapsed); }
+
+			// Korte grijze uitleg waarom de knoppen weg zijn (host-only).
+			VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Alleen de host kan laden of naar het menu"), 11, WeedUI::ColTextDim(), true, true))
+				->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+		}
+	}
 
 	StatusText = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::ColTextDim(), true);
 	VB->AddChildToVerticalBox(StatusText)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));

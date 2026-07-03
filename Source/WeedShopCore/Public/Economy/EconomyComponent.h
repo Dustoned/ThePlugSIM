@@ -89,6 +89,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	int64 GetBankCents() const;
 
+	// Bezit DEZE economy het bank-saldo zelf? In co-op is de bank gedeeld (GS-economy): dan geeft dit
+	// false voor de per-speler-economy. Save-restore gate: een late joiner mag de gedeelde crew-bank
+	// NIET met z'n oude save-waarde overschrijven.
+	bool IsBankOwner() const { return BankOwner() == this; }
+
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Economy")
 	float GetBankEuros() const { return static_cast<float>(GetBankCents()) / 100.0f; }
 

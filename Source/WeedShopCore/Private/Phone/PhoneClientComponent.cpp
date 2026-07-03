@@ -102,6 +102,17 @@ void UPhoneClientComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME(UPhoneClientComponent, ActiveHome);
 	DOREPLIFETIME(UPhoneClientComponent, RentDueDay);
 	DOREPLIFETIME(UPhoneClientComponent, bPhoneOpenRep);
+	// Bezorg-lijsten alleen naar de eigenaar-client (privacy in co-op/competitive: je pakketten zijn van jou).
+	DOREPLIFETIME_CONDITION(UPhoneClientComponent, PendingDeliveries, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UPhoneClientComponent, DeliveredHistory, COND_OwnerOnly);
+}
+
+void UPhoneClientComponent::OnRep_Deliveries()
+{
+	// De bezorg-lijsten zijn zojuist naar deze (eigenaar-)client gerepliceerd. De Packages-app in de
+	// PhoneWidget difft zelf elke tick op PackagesSignature() en herbouwt de kaarten wanneer de set
+	// wijzigt -> hier is geen expliciete rebuild nodig (en we raken PhoneWidget bewust niet aan). De hook
+	// bestaat zodat de replicatie-flow een OnRep heeft; het aanmaken van de widget blijft lui bij UI-gebruik.
 }
 
 void UPhoneClientComponent::ServerSetPhoneOpen_Implementation(bool bInOpen)
@@ -2733,7 +2744,10 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 
 	// 6) Koop-items: bezorgdrone naar de voordeur (items zijn al betaald -> gratis op pickup).
 	const float Flight = FMath::Max(DeliveryDelaySeconds(DeliveryOption), 5.f);
-	const int32 OrderId = NextOrderId++;
+	// Server-uniek order-id over spelers heen (H.9): de GEDEELDE ActiveDeliveries wordt op OrderId gekeyed,
+	// dus host + joiner mogen niet hetzelfde id uitdelen. De GameState deelt uit (authority-gated); valt
+	// terug op de per-component teller als er (onverwacht) geen GameState is.
+	const int32 OrderId = GS ? GS->AllocDeliveryId() : NextOrderId++;
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
 
 	FPendingDelivery PD;
@@ -2766,8 +2780,15 @@ void UPhoneClientComponent::ServerBuyCart_Implementation(const TArray<FName>& Bu
 			PD.Drone = Drone;
 		}
 		// Bezorg-marker bij de voordeur (Drop), gedeeld via de GameState -> map + kompas tonen 'm bij ALLE
-		// spelers tot het pakket opgehaald is.
-		if (GS) { GS->AddDeliveryTarget(OrderId, Drop); }
+		// spelers tot het pakket opgehaald is. In COMPETITIVE geven we de stabiele id van de bestellende
+		// speler mee zodat map/kompas alleen de EIGEN marker tonen (anders verklap je de kamer van de
+		// tegenstander); in co-op blijft 'ie leeg -> gedeelde marker (gewenst).
+		if (GS)
+		{
+			FString ForId;
+			if (GS->IsCompetitive()) { if (const APawn* Me = Cast<APawn>(GetOwner())) { ForId = USaveGameSubsystem::StablePlayerId(Me); } }
+			GS->AddDeliveryTarget(OrderId, Drop, ForId);
+		}
 	}
 	PendingDeliveries.Add(PD);
 
@@ -3422,6 +3443,9 @@ void UPhoneClientComponent::ServerCancelDelivery_Implementation(int32 OrderId)
 			FString::Printf(TEXT("Order cancelled - EUR %lld refunded"), (long long)(WeedRoundEuros(Refund) / 100)));
 	}
 	PendingDeliveries.RemoveAt(Idx);
+	// Gedeelde bezorg-marker (map + kompas) weghalen bij annuleren - anders blijft er een spook-marker bij
+	// de deur staan die nooit meer opgehaald wordt (dezelfde opruiming als bij het oppakken van het pakket).
+	if (UWorld* W = GetWorld()) { if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>()) { GS->RemoveDeliveryTarget(OrderId); } }
 }
 
 void UPhoneClientComponent::OpenPotUpgrade(AGrowPlant* Pot)

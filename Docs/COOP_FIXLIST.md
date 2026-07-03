@@ -156,3 +156,58 @@
 - **Cluster E — competitive opslag/scan-filter**: InventoryWidget + PhoneClientComponent (comp-home-box-filter).
 - **Cluster F — release-flow**: upload-build.ps1 (Saved->BakedData resync) + check-cook-parity.ps1 (hash-diff).
 - **Cluster G — crowd (E.4)**: zie deepdive.
+
+---
+
+## HER-AUDIT 2026-07-03 (na de crowd/lift/bank-golven; 8 agents + adversariele verificatie)
+
+> Doel: bewijzen dat multiplayer VOLLEDIG klopt. Uitkomst: de kern is met bewijs "ok" (crowd nu 2-instance
+> geverifieerd host==joiner, lift/WorldSync, economie/bank live, plaatsen via ServerPlace, deals, per-speler
+> meldingen via NotifyPawn, save-mechaniek, dag-nacht). Onderstaande zijn NIEUWE bevindingen die de vorige
+> golven niet raakten. `[CONFIRMED]` = adversarieel geverifieerd langs het echte code-pad.
+
+### Echte gameplay-bugs (fixbaar, veilige fix bekend)
+- **H.6 Verse co-op: joiner dupliceert de starter-meubels** `[N]` `[GAP]` — het StarterFurniture-blok in
+  DoorRetrofitter.cpp:2178-2249 (ScanAndConvert) staat NIET achter `!IsNetMode(NM_Client)`, anders dan alle
+  crowd/joint/resident-blokken. Gate is `bFresh = Loaded==nullptr`, en op de joiner is Loaded ALTIJD nullptr ->
+  joiner spawnt z'n EIGEN AStorageShelf/APlaceableProp (bReplicates=true) bovenop de gerepliceerde host-set ->
+  dubbele/overlappende meubels, alleen bij de joiner. Zelfde klasse als de crowd-bug (valkuil #5). Competitive
+  ontsnapt (bCompStarter skipt). **Fix:** wrap het fresh-furniture-blok (+ Fridge/Shelf/prop) in `!IsNetMode(NM_Client)`.
+  **Verifieren:** 2-speler verse boot -> ziet de joiner dubbele meubels?
+- **H.7 Late joiner overschrijft de gedeelde crew-bank** `[N]` `[CONFIRMED]` — SaveGameSubsystem.cpp:463 roept
+  onvoorwaardelijk `E->SetBankCents(Data.BankCents)`; in co-op routeert dat via BankOwner() naar de GEDEELDE
+  GS-economy. Een terugkerende vriend met een oudere save-record overschrijft mid-session de LIVE crew-bank ->
+  host verliest live verdiend bankgeld. De BeginPlay-init heeft wel een `BankOwner()==this`-gate, dit restore-pad
+  niet. **Fix:** `if (E->IsBankOwner()) E->SetBankCents(...)` (helper toevoegen); cash (SetBalanceCents) is per-pawn en blijft ongemoeid.
+- **H.8 Joiner ziet z'n Packages-app nooit** `[B]` `[CONFIRMED]` — PendingDeliveries/DeliveredHistory
+  (PhoneClientComponent.h:1030/1034) zijn geen UPROPERTY(Replicated); alleen server-side gevuld. Joiner leest de
+  lege lokale kopie -> geen ETA/annuleren/historie (drone vliegt + marker + ophalen werkt wel). **Fix:** structs
+  -> USTRUCT met UPROPERTY, arrays UPROPERTY(ReplicatedUsing=OnRep) met COND_OwnerOnly + DOREPLIFETIME (dekt late joiner).
+- **H.9 Bezorg-marker OrderId botst tussen spelers** `[B]` `[CONFIRMED]` — NextOrderId is per-component (start 1);
+  de gedeelde ActiveDeliveries op GameState wordt op OrderId gekeyed -> tegelijk bestellen = markers overschrijven/
+  verdwijnen (PhoneClientComponent.cpp:2736 + WeedShopGameState.cpp:55). **Fix:** server-uniek OrderId (GameState-teller
+  met HasAuthority) of FActiveDelivery een tweede owner-sleutel geven.
+
+### Competitive-lekken (medium, competitive-only)
+- **H.10 Contacten-app toont de contacten + relatie% van de tegenstander** `[C]` — PhoneWidget.cpp:3216 itereert
+  alle contacten zonder OwnerPlayerId-check (Messages-app filtert wel via IsMsgForLocal). **Fix:** contact-lijst
+  op OwnerPlayerId==lokale speler filteren.
+- **H.11 Bezorg-marker (map+kompas) toont de bestelling van de tegenstander** `[C]` — FActiveDelivery draagt geen
+  owner-id; compass/map renderen alle deliveries (CompassWidget.cpp:286, MapWidget.cpp:498). **Fix:** ForPlayerId op
+  FActiveDelivery + competitive-filter in de render. (Hangt samen met H.9's owner-sleutel.)
+
+### Klein / cosmetisch / design-keuze
+- **H.12 Weer verschilt per speler** `[B]` — PickAndApplyWeather kiest lokaal random (DayNightController.cpp:674),
+  nooit gesynct. Puur cosmetisch (weer raakt geen gameplay). Fix: weer server-kiezen + via GameState/WorldSync repliceren.
+- **H.13 Mede-speler-marker is CYAAN, niet goud** — MapWidget.cpp:446 / CompassWidget rendert FLinearColor(0,1,1);
+  patchnote v1.19.4 claimt "goud". Of kleur naar goud, of patchnote-tekst bijwerken (cyaan is wel goed zichtbaar).
+- **H.14 Huur-model niet co-op-ontworpen** `[N]` — twee onafhankelijke huur-timers per proces; op de joiner-client
+  faalt RemoveMoney (server-gate) -> joiner-deur kan onterecht op slot (SetRentOverdue). (De eerdere "huur alleen bij
+  host"-finding was REFUTED: GetFirstPlayerController is per-proces, dus elk proces pakt z'n eigen speler.)
+- **H.15 Joiner 'Load'/'Quit' in pauze -> uit de sessie** `[B]` `[GAP]` — client-lokale OpenLevel (PauseMenu ->
+  OpenMainMenuLoad -> ReloadCurrentLevel) scheurt de joiner naar een solo lokale save. **Fix:** Load/Quit-to-menu op
+  een client verbergen of via Server-RPC laten lopen.
+- **H.16 Speler-matching zonder OnlineSubsystem** `[GAP]` — StablePlayerId valt zonder OSS terug op PlayerName
+  (vaak 'Player') -> save-record-collisie bij gelijke namen. Fix: per-connectie unieke key (PlayerState->GetPlayerId()).
+- **H.17 Geen reconnect / seamless travel / network-failure-handling** `[DESIGN]` — bare LAN; elke mid-session
+  host-Load/travel dropt de joiner stil. Design-besluit nodig of dit acceptabel is voor deze release.

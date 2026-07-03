@@ -460,7 +460,9 @@ void USaveGameSubsystem::ApplyPlayer(APawn* Pawn, const FPlayerSaveData& Data)
 	if (UEconomyComponent* E = Pawn->FindComponentByClass<UEconomyComponent>())
 	{
 		E->SetBalanceCents(Data.CashCents);
-		E->SetBankCents(Data.BankCents);
+		// Bank alleen herstellen als DEZE economy de bank zelf bezit. In co-op is de bank gedeeld
+		// (GS-economy): een late joiner mag de live crew-bank NIET met z'n oude save-waarde overschrijven.
+		if (E->IsBankOwner()) { E->SetBankCents(Data.BankCents); }
 		if (Data.SafeCents > 0) { E->SetBalanceCents(E->GetBalanceCents() + Data.SafeCents); } // safe = nu item-opslag: oud gestald geld terug naar cash
 		E->SetSafeCents(0);
 		E->RestoreDailyLimits(Data.DepositedTodayCents, Data.DepositDay, Data.TransfersToday);
@@ -629,6 +631,21 @@ bool USaveGameSubsystem::LoadGameFromName(const FString& LoadName)
 	if (UNpcRegistryComponent* Reg = GS->GetNpcRegistry()) { Reg->RestoreStates(Save->Npcs); }
 	if (UContactsComponent* Con = GS->GetContacts()) { Con->RestoreContacts(Save->Contacts, Save->Messages); }
 	if (UHeatComponent* Ht = GS->GetHeat()) { Ht->RestoreHeat(Save->Heat); Ht->RestoreEventState(Save->HeatEventTimer, Save->HeatLastEventDay); }
+
+	// Gedeelde crew-bank (co-op EN solo, niet-competitive): de bank is GEDEELDE wereld-staat (leeft op de
+	// GS-economy, want BankOwner() routeert daar zodra !IsCompetitive), dus hier 1x herstellen i.p.v. per-pawn
+	// in ApplyPlayer. Zo overschrijft een LATE joiner de live crew-bank niet meer met z'n oude save-record.
+	// Elk speler-record draagt dezelfde bank-waarde (GatherPlayer leest GetBankCents = de gedeelde bank);
+	// pak de eerste, of de legacy top-level waarde. In competitive heeft ieder z'n eigen pawn-bank -> die
+	// herstelt ApplyPlayer per speler (daar is IsBankOwner() wel true).
+	if (!GS->IsCompetitive())
+	{
+		if (UEconomyComponent* Shared = GS->GetSharedEconomy())
+		{
+			const int64 SharedBank = (Save->Players.Num() > 0) ? Save->Players[0].BankCents : Save->BankCents;
+			Shared->SetBankCents(SharedBank);
+		}
+	}
 
 	// Geplaatste wereld-objecten opnieuw opbouwen (vervangt de huidige set).
 	RespawnPlaced(World, Save->Placed);

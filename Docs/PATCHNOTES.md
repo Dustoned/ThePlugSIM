@@ -17,14 +17,25 @@ CO-OP
   voor de gast.
 • De tweede speler kan weer meubels plaatsen in z'n eigen kamer (in competitive ging dat niet meer,
   ook al was de preview blauw).
+• Bij een nieuw co-op-spel staat de start-inrichting niet meer dubbel bij de gast (de gast bouwde
+  eerst z'n eigen set bovenop die van de host).
 • Meldingen komen bij de juiste speler aan: pakket oppakken, slapen/opslaan, kopen/verkopen, level-up
   en shop-licentie, deal-bevestigingen - de gast zag die eerder niet.
 • Een boete (inval/overval) of een upgrade wordt nu bij de juiste speler afgeschreven, niet altijd bij
   de host.
-• De gedeelde bank raakt niet meer leeg als iemand later in de sessie binnenkomt.
-• Competitive is netter gescheiden: je ziet niet meer de opslag/klant/afspraak van je tegenstander,
-  chat-berichten lekken niet meer over, en je kunt niet per ongeluk de afspraak van de ander accepteren.
-• De mede-speler-marker op de kaart is nu goud (viel eerst weg tussen de blauwe mensen-stippen).
+• De gedeelde bank raakt niet meer leeg als een (terugkerende) vriend later in de sessie binnenkomt.
+• De Pakketten-app werkt nu ook voor de gast: je ziet je eigen lopende bestellingen, de ETA, de
+  historie en je kunt ze annuleren (voorheen bleef die lijst leeg voor de gast).
+• Bezorg-markers op kaart/kompas botsen niet meer als host en gast tegelijk iets bestellen, en een
+  geannuleerde bestelling laat geen spook-marker meer achter.
+• Competitive is netter gescheiden: je ziet niet meer de opslag/klant/afspraak/contacten of de
+  bezorging van je tegenstander, chat-berichten lekken niet meer over, en je kunt niet per ongeluk de
+  afspraak van de ander accepteren.
+• De mede-speler-marker op de kaart heeft nu een eigen felle kleur (viel eerst weg tussen de blauwe
+  mensen-stippen).
+• Het weer is nu gelijk voor beide spelers (voorheen kon de een regen hebben en de ander zon).
+• De gast kan niet meer per ongeluk 'Laden' of 'Naar menu' in het pauzemenu kiezen - dat gooide 'm
+  uit de sessie. Alleen de host regelt laden en afsluiten.
 
 ━━━━━━━━━━━━━━━━━━━━
 

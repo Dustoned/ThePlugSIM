@@ -2189,8 +2189,15 @@ void ADoorRetrofitter::ScanAndConvert()
 		// gekopieerd waar de spelers zitten. Alleen in Competitive.
 		AWeedShopGameState* GSstarter = W->GetGameState<AWeedShopGameState>();
 		const bool bCompStarter = GSstarter && GSstarter->IsCompetitive();
+		// CO-OP: de replicerende starter-meubels (AWaterSink/AStorageShelf/APlaceableProp, bReplicates=true) alleen op de
+		// ECHTE server spawnen; de joiner krijgt ze via replicatie. Op de joiner is bFresh ALTIJD true (Loaded==nullptr),
+		// dus zonder gate zou de joiner z'n eigen dubbele set spawnen. DoorRetrofitter is per-proces + niet-gerepliceerd,
+		// dus HasAuthority() is OOK true op de joiner -> gate op IsNetMode(NM_Client). UITZONDERING: de lichtschakelaar
+		// (APackLightSwitch, bReplicates=false) is deterministisch-lokaal en MOET op BEIDE processen (zoals deuren),
+		// anders ziet de joiner geen schakelaars -> die tak spawnt wel op de client (zie de skip hieronder).
 		if (bFresh && !bCompStarter)
 		{
+			const bool bClient = IsNetMode(NM_Client);
 			TArray<FString> FL;
 			FFileHelper::LoadFileToStringArray(FL, *WeedData::File(TEXT("StarterFurniture.txt")));
 			int32 NF = 0;
@@ -2205,6 +2212,9 @@ void ADoorRetrofitter::ScanAndConvert()
 				FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 				FPlaceableDef Def;
 				const bool bShelf = GetPlaceableDef(ItemId, Def) && Def.bIsShelf; // Fridge/Shelf/Chest = eigen class
+				// De replicerende meubels (Sink/Shelf/Prop) op de client overslaan; alleen de niet-replicerende
+				// lichtschakelaar spawnt ook lokaal op de joiner (bReplicates=false = deterministisch-lokaal).
+				if (bClient && Pc[0] != TEXT("LightSwitch")) { continue; }
 				if (Pc[0] == TEXT("Sink"))
 				{
 					if (AWaterSink* Sk = W->SpawnActor<AWaterSink>(AWaterSink::StaticClass(), FTransform(Rot, Loc), SP))

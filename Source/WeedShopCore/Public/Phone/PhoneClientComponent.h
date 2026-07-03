@@ -14,6 +14,43 @@ class APlayerController;
 class UInventoryComponent;
 class ACustomerBase;
 class AGrowPlant;
+class ADeliveryDrone;
+
+// --- Onderweg zijnde bestelling (Packages-app) ---
+// USTRUCT met UPROPERTY-velden zodat de lijst PER SPELER repliceert (COND_OwnerOnly) -> ook de JOINER
+// ziet z'n eigen ETA/annuleren/historie (was voorheen server-only -> joiner-app was leeg). De Drone-
+// pointer blijft SERVER-ONLY (geen UPROPERTY -> repliceert niet); de UI gebruikt bArrived voor aankomst.
+// Historische veldnamen behouden -> PhoneWidget/SaveGameSubsystem (andere agents) blijven compileren.
+USTRUCT()
+struct FPhonePendingDelivery
+{
+	GENERATED_BODY()
+	UPROPERTY() int32 OrderId = 0;
+	UPROPERTY() int32 DeliveryOpt = 0;
+	UPROPERTY() int64 FeeCents = 0;
+	UPROPERTY() int64 PaidCents = 0;      // betaald voor het koopdeel (itemprijs + fee) -> terug bij annuleren
+	UPROPERTY() int32 ItemCount = 0;      // totaal aantal stuks
+	UPROPERTY() FString Summary;          // korte omschrijving (bv. "3x Rolling papers, 2x ...")
+	UPROPERTY() float PlacedTime = 0.f;   // wereldtijd bij plaatsen
+	UPROPERTY() float ArriveTime = 0.f;   // wereldtijd van aankomst
+	UPROPERTY() bool bArrived = false;    // drone heeft het pakket bij de deur laten vallen (wacht op oppakken)
+	UPROPERTY() TArray<FName> Ids;
+	UPROPERTY() TArray<int32> Qtys;
+	// SERVER-ONLY (geen UPROPERTY): de levende drone-actor. Niet repliceren (client stuurt 'm nooit aan).
+	TWeakObjectPtr<class ADeliveryDrone> Drone;
+};
+
+// --- Geleverd-historie (opgehaalde bestellingen; backing voor de Packages-historie-UI) ---
+USTRUCT()
+struct FPhoneDeliveredRecord
+{
+	GENERATED_BODY()
+	UPROPERTY() int32 OrderId = 0;
+	UPROPERTY() TArray<FName> Ids;
+	UPROPERTY() TArray<int32> Qtys;
+	UPROPERTY() int64 PaidCents = 0;
+	UPROPERTY() int64 FeeCents = 0;
+};
 
 UCLASS(ClassGroup = (WeedShop), meta = (BlueprintSpawnableComponent))
 class WEEDSHOPCORE_API UPhoneClientComponent : public UActorComponent
@@ -441,32 +478,12 @@ public:
 	static FString DeliveryTimeText(int32 Opt);
 
 	// --- Onderweg zijnde bestellingen (Packages-tab in de winkel) ---
-	struct FPendingDelivery
-	{
-		int32 OrderId = 0;
-		int32 DeliveryOpt = 0;
-		int64 FeeCents = 0;
-		int64 PaidCents = 0;      // betaald voor het koopdeel (itemprijs + fee) -> terug bij annuleren
-		int32 ItemCount = 0;      // totaal aantal stuks
-		FString Summary;          // korte omschrijving (bv. "3x Rolling papers, 2x ...")
-		float PlacedTime = 0.f;   // wereldtijd bij plaatsen
-		float ArriveTime = 0.f;   // wereldtijd van aankomst
-		bool bArrived = false;    // drone heeft het pakket bij de deur laten vallen (wacht op oppakken)
-		TWeakObjectPtr<class ADeliveryDrone> Drone;
-		TArray<FName> Ids;
-		TArray<int32> Qtys;
-	};
+	// De structs staan nu op file-scope (USTRUCT, zodat de lijsten per-eigenaar repliceren). De aliassen
+	// houden de bestaande namen UPhoneClientComponent::FPendingDelivery/FDeliveredRecord intact zodat de
+	// consumenten (PhoneWidget, SaveGameSubsystem) ongewijzigd blijven compileren.
+	using FPendingDelivery = FPhonePendingDelivery;
+	using FDeliveredRecord = FPhoneDeliveredRecord;
 	const TArray<FPendingDelivery>& GetPendingDeliveries() const { return PendingDeliveries; }
-
-	// --- Geleverd-historie (opgehaalde bestellingen; backing voor de Packages-historie-UI) ---
-	struct FDeliveredRecord
-	{
-		int32 OrderId = 0;
-		TArray<FName> Ids;
-		TArray<int32> Qtys;
-		int64 PaidCents = 0;
-		int64 FeeCents = 0;
-	};
 	const TArray<FDeliveredRecord>& GetDeliveredHistory() const { return DeliveredHistory; }
 	// Save/load: een opgeslagen (nog onderweg) bestelling meteen leveren (speler had al betaald).
 	void RestoreDeliverInstant(const TArray<FName>& Ids, const TArray<int32>& Qtys) { DeliverCart(0, Ids, Qtys); }
@@ -1026,14 +1043,22 @@ protected:
 	struct FCartLine { FName ItemId = NAME_None; int32 Qty = 0; bool bSell = false; };
 	TArray<FCartLine> Cart;
 
-	// Onderweg zijnde bestellingen + hun timers (server-side).
-	TArray<FPendingDelivery> PendingDeliveries;
+	// Onderweg zijnde bestellingen + hun timers. Gerepliceerd met COND_OwnerOnly (privacy in co-op/
+	// competitive: alleen de eigenaar-client krijgt z'n eigen pakketten) -> ook de JOINER heeft nu een
+	// gevulde Packages-app (ETA/annuleren/historie). OnRep_Deliveries refresht de app bij de client.
+	UPROPERTY(ReplicatedUsing = OnRep_Deliveries)
+	TArray<FPhonePendingDelivery> PendingDeliveries;
 	// Opgehaalde bestellingen (nieuwste voorop, gecapt op 20) - historie voor de Packages-app.
-	TArray<FDeliveredRecord> DeliveredHistory;
+	UPROPERTY(ReplicatedUsing = OnRep_Deliveries)
+	TArray<FPhoneDeliveredRecord> DeliveredHistory;
 	TMap<int32, FTimerHandle> DeliveryTimers;
-	int32 NextOrderId = 1;
+	int32 NextOrderId = 1; // per-component fallback-teller (server-uniek id komt uit GameState::AllocDeliveryId)
 	TMap<FName, int32> PendingQty;
 	TMap<FName, int32> PendingSellQty;
+
+	// Client: bezorg-lijsten zijn zojuist gerepliceerd -> refresh de Packages-app (via de PhoneWidget).
+	UFUNCTION()
+	void OnRep_Deliveries();
 
 	bool bPotUpgradeOpen = false;
 	TWeakObjectPtr<AGrowPlant> UpgPot;

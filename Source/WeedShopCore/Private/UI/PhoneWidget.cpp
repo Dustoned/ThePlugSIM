@@ -3213,8 +3213,15 @@ void UPhoneWidget::RefreshContent()
 			UScrollBox* List = WidgetTree->ConstructWidget<UScrollBox>();
 			UVerticalBoxSlot* LS = ActiveContent->AddChildToVerticalBox(List);
 			LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			// COMPETITIVE: toon alleen EIGEN contacten (leeg OwnerPlayerId = gedeeld/co-op, dan altijd tonen).
+			// Zelfde eigenaarschaps-filter als IsMsgForLocal voor de Messages-app; in normale co-op verandert
+			// er niks (alle OwnerPlayerId's leeg). Voorkomt dat de relatie%-waarden van de TEGENSTANDER lekken.
+			const bool bCompContacts = GS && GS->IsCompetitive();
+			const APawn* LocalPawn = GetOwningPlayerPawn();
+			const FString LocalPid = LocalPawn ? USaveGameSubsystem::StablePlayerId(LocalPawn) : FString();
 			for (const FPhoneContact& C : Con->GetContacts())
 			{
+				if (bCompContacts && !C.OwnerPlayerId.IsEmpty() && C.OwnerPlayerId != LocalPid) { continue; }
 				const FName Cid = C.ContactId;
 				UBorder* Card = WidgetTree->ConstructWidget<UBorder>();
 				Card->SetBrush(RoundedBrush(WeedUI::ColInner(0.95f), 8.f));

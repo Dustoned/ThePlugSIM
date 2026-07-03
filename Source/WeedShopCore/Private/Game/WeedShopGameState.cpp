@@ -49,11 +49,11 @@ void AWeedShopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(AWeedShopGameState, ActiveDeliveries);
 }
 
-void AWeedShopGameState::AddDeliveryTarget(int32 OrderId, const FVector& World)
+void AWeedShopGameState::AddDeliveryTarget(int32 OrderId, const FVector& World, const FString& ForPlayerId)
 {
 	if (!HasAuthority()) { return; }
-	for (FActiveDelivery& D : ActiveDeliveries) { if (D.OrderId == OrderId) { D.World = World; return; } }
-	FActiveDelivery D; D.OrderId = OrderId; D.World = World; ActiveDeliveries.Add(D);
+	for (FActiveDelivery& D : ActiveDeliveries) { if (D.OrderId == OrderId) { D.World = World; D.ForPlayerId = ForPlayerId; return; } }
+	FActiveDelivery D; D.OrderId = OrderId; D.World = World; D.ForPlayerId = ForPlayerId; ActiveDeliveries.Add(D);
 }
 
 void AWeedShopGameState::RemoveDeliveryTarget(int32 OrderId)

@@ -34,13 +34,16 @@ struct FCompetitorScore
 };
 
 // Eén actieve bezorging: de wereldlocatie van het pakket (bij de voordeur). Gerepliceerd zodat map +
-// kompas bij ALLE spelers een pakket-marker tonen tot het opgehaald is.
+// kompas bij ALLE spelers een pakket-marker tonen tot het opgehaald is. ForPlayerId = stabiele id van de
+// bestellende speler; in COMPETITIVE tonen map/kompas alleen de eigen marker (anders verklap je de kamer
+// van de tegenstander). In co-op is ForPlayerId niet-filterend -> de gedeelde marker is juist gewenst.
 USTRUCT()
 struct FActiveDelivery
 {
 	GENERATED_BODY()
 	UPROPERTY() int32 OrderId = 0;
 	UPROPERTY() FVector World = FVector::ZeroVector;
+	UPROPERTY() FString ForPlayerId; // StablePlayerId van de bestellende speler (leeg = gedeeld/co-op)
 };
 
 class UEconomyComponent;
@@ -165,8 +168,16 @@ public:
 	UPROPERTY(Replicated)
 	TArray<FActiveDelivery> ActiveDeliveries;
 	const TArray<FActiveDelivery>& GetActiveDeliveries() const { return ActiveDeliveries; }
-	void AddDeliveryTarget(int32 OrderId, const FVector& World);
+	// ForPlayerId = stabiele id van de bestellende speler (leeg = gedeeld/co-op). In competitive filteren
+	// map + kompas hierop; in co-op wordt 'ie niet gebruikt (gedeelde marker). Achterwaarts compatibel:
+	// zonder ForPlayerId -> gedeeld (oud gedrag).
+	void AddDeliveryTarget(int32 OrderId, const FVector& World, const FString& ForPlayerId = FString());
 	void RemoveDeliveryTarget(int32 OrderId);
+
+	// Server-unieke bezorg-id over spelers heen: de gedeelde ActiveDeliveries wordt op OrderId gekeyed, dus
+	// host + joiner mogen NOOIT hetzelfde id uitdelen (per-component NextOrderId begon bij beide op 1 -> botsing).
+	// Alleen de server deelt id's uit; clients krijgen 'm mee via de RPC-flow. 0 = ongeldig (geen authority).
+	int32 AllocDeliveryId() { return HasAuthority() ? NextDeliveryId++ : 0; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -181,6 +192,10 @@ protected:
 
 	FTimerHandle AutoSaveTimer;
 	FTimerHandle StandingsTimer;
+
+	// Server-unieke, oplopende bezorg-id (allocator: AllocDeliveryId). Niet gerepliceerd: alleen de server
+	// deelt id's uit en stuurt ze via de bestaande RPC-flow door naar de client-component.
+	int32 NextDeliveryId = 1;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WeedShop")
 	TObjectPtr<UEconomyComponent> Economy;
