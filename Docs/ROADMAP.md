@@ -393,3 +393,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] **D30** Items flashen nog bij slepen hotbar->drying rack (en mogelijk inv->rack + andere machine-UI's) -> restpad vinden+fixen
 - [ ] **D31** Overbodige instructie-teksten overal weg (bv. "Drag from your inventory to store...", "Drag weed here to dry it...", "Nothing drying...") - alleen echt nuttige info laten staan
 - [ ] **D32** Merge/samenvoegen-popup valt soms achter andere UI's -> z-order/topmost fixen
+- [ ] **D33** [GEFIXT deze sessie] Seeds hadden 0.01kg -> rondde af naar 0.0 in UI; nu 0.05
+- [ ] **D34** LIFT-REGRESSIE (van Blok4-B D25): nummer BOVEN de lift-deur is VERDWENEN (de line-trace naar het
+  muurvlak faalt/misplaatst het bord - DoorRetrofitter ~3043); + de vloer-knop-nummers moeten nog iets dichter
+  op de muur (PackElevatorButton text-offset). FIX: trace debuggen of terug naar vaste-offset (bord moet ZICHTBAAR
+  blijven) + button-offset natunen. Wacht op D29-B (bezit DoorRetrofitter).
