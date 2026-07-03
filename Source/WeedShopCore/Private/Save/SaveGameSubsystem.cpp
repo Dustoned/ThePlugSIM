@@ -208,6 +208,14 @@ void USaveGameSubsystem::ReloadCurrentLevel(const FString& Options)
 {
 	UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (!W) { return; }
+	// CO-OP: een CLIENT (joiner) mag NOOIT lokaal traveleren (OpenLevel) - dat scheurt 'm uit de co-op-sessie
+	// naar een lokale solo-save. Alleen host/standalone laadt/host. Dit is het gemeenschappelijke choke-point
+	// voor New/Load/Continue/Host, dus deze ene gate dekt elk UI-pad (pauzemenu EN main-menu) tegen H.15.
+	if (W->GetNetMode() == NM_Client)
+	{
+		UE_LOG(LogWeedShop, Warning, TEXT("Level-travel geweigerd: een client (joiner) mag niet lokaal traveleren - alleen de host laadt/host."));
+		return;
+	}
 	if (APlayerController* PC = W->GetFirstPlayerController()) { PC->SetPause(false); } // travel vanuit pauze
 	FString LevelName = UGameplayStatics::GetCurrentLevelName(W, true);
 	if (!PendingMapPath.IsEmpty()) { LevelName = PendingMapPath; } // map-selectie (menu) of save-map

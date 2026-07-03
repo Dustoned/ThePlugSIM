@@ -2081,7 +2081,11 @@ void ADoorRetrofitter::ScanAndConvert()
 					}
 				}
 			}
-			if (Left <= 0 && !StarterDoor->IsRentOverdue())
+			// CO-OP: de huur-inning + deur-lock is server-authoritative. Op de joiner (client) faalt RemoveMoney
+			// ALTIJD (een client mag de gedeelde economy niet muteren) -> zonder deze gate valt de joiner in de
+			// else-tak, lockt z'n eigen deur en kan 'm niet betalen = permanent buitengesloten uit z'n eigen huis.
+			// Alleen de echte server int de huur + zet de overdue-lock; DoorRetrofitter is per-proces -> IsNetMode.
+			if (Left <= 0 && !StarterDoor->IsRentOverdue() && !IsNetMode(NM_Client))
 			{
 				UEconomyComponent* Ec = Pr ? Pr->FindComponentByClass<UEconomyComponent>() : nullptr;
 				UPhoneClientComponent* Phr = Pr ? Pr->FindComponentByClass<UPhoneClientComponent>() : nullptr;

@@ -211,3 +211,17 @@
   (vaak 'Player') -> save-record-collisie bij gelijke namen. Fix: per-connectie unieke key (PlayerState->GetPlayerId()).
 - **H.17 Geen reconnect / seamless travel / network-failure-handling** `[DESIGN]` — bare LAN; elke mid-session
   host-Load/travel dropt de joiner stil. Design-besluit nodig of dit acceptabel is voor deze release.
+
+### LAATSTE CONTROLE-GOLF (07-03, adversariele verificatie van golf 2 + release-gates)
+Uitkomst: 5/6 golf-2-fixes correct+compleet+regressie-vrij geverifieerd. 3 must-fixes alsnog toegepast:
+- **H.15 was BROKEN** (guard in BuildShell, WBP_PauseMenu slaat die over) -> GEFIXT: guard naar NativeConstruct
+  (Btn_Load/Btn_MainMenu verbergen op NM_Client) + NM_Client-bail in USaveGameSubsystem::ReloadCurrentLevel
+  (choke-point van New/Load/Continue/Host -> dekt elk UI-pad).
+- **H.14 huur** bleek release-blokkerend (joiner permanent buitengesloten) -> GEFIXT: overdue-inning+lock
+  server-only (`!IsNetMode(NM_Client)` op de rent-tak in DoorRetrofitter ~2088).
+- Mechanische release-gates (build/boot/cook-parity/smoke) draaien via upload-build.ps1 vlak voor upload.
+Release-readiness verder SCHOON: golf 2 introduceert geen nieuwe string-geladen /Game-content en geen editor-only
+code; nieuwe USTRUCTs/Replicated-velden correct geregistreerd voor Shipping.
+Blijft DEFER (niet-blokkerend, friends-only): ServerBuyProperty dubbel-koop; ServerCallElevator/ServerToggleDoor
+reach-validatie; geladen-co-op speler-lichtschakelaars niet op joiner (spiegel van H.6); H.16 OSS-naam-matching;
+H.17 reconnect/seamless-travel.

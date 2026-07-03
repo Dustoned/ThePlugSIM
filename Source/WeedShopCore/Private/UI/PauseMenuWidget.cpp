@@ -179,6 +179,15 @@ void UPauseMenuWidget::NativeConstruct()
 	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Load"))))     { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnLoad); }
 	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_MainMenu")))) { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnMainMenu); }
 	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Quit"))))     { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuit); }
+	// CO-OP: op een client (joiner) 'Load game' + 'Main menu' verbergen - die doen een lokale OpenLevel die de
+	// joiner uit de sessie scheurt. Het WBP-pad (WBP_PauseMenu, eigen WidgetTree-root) slaat BuildShell OVER, dus
+	// deze guard MOET hier in NativeConstruct staan (draait op BEIDE paden). Op de C++-fallback bestaan de namen
+	// niet -> GetWidgetFromName geeft null -> no-op (daar regelt BuildShell de guard al).
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_Client)
+	{
+		if (UWidget* WL = GetWidgetFromName(TEXT("Btn_Load")))     { WL->SetVisibility(ESlateVisibility::Collapsed); }
+		if (UWidget* WM = GetWidgetFromName(TEXT("Btn_MainMenu"))) { WM->SetVisibility(ESlateVisibility::Collapsed); }
+	}
 	if (UWidget* D = GetWidgetFromName(TEXT("Dim"))) { Backdrop = D; }
 	if (UTextBlock* S = Cast<UTextBlock>(GetWidgetFromName(TEXT("StatusText")))) { StatusText = S; }
 }
