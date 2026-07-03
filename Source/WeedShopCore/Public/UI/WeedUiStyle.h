@@ -135,7 +135,7 @@ namespace WeedUI
 
 	// (PlayUiSound is hierboven al gedeclareerd zodat de knop 'm kan gebruiken.)
 
-	// Volume per categorie (0 = UI, 1 = Game, 2 = Music), 0..1. Bewaard in GConfig; standaard 1.
+	// Volume per categorie (0 = UI, 1 = Game, 2 = Music, 3 = Weather), 0..1. Bewaard in GConfig; standaard 1.
 	WEEDSHOPCORE_API float SoundCategoryVolume(int32 Category);
 	WEEDSHOPCORE_API void SetSoundCategoryVolume(int32 Category, float Volume);
 }

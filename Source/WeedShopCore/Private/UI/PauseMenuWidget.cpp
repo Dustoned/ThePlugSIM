@@ -13,6 +13,9 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
+#include "Components/Button.h"
+#include "Components/PanelWidget.h"
+#include "Components/ContentWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -35,6 +38,38 @@ namespace
 		B->SetStyle(S);
 		B->SetContent(WeedUI::Text(Tree, Label, 15, FLinearColor::White, true, true));
 		return B;
+	}
+
+	// Zoek recursief het eerste UTextBlock onder een widget (loopt door Content- en Panel-children). Gebruikt
+	// om het label van een kit-knop te vinden zonder de exacte (onbekende) WBP-boomstructuur te kennen.
+	UTextBlock* FindFirstText(UWidget* W)
+	{
+		if (!W) { return nullptr; }
+		if (UTextBlock* T = Cast<UTextBlock>(W)) { return T; }
+		if (UContentWidget* C = Cast<UContentWidget>(W))
+		{
+			if (UTextBlock* T = FindFirstText(C->GetContent())) { return T; }
+		}
+		if (UPanelWidget* P = Cast<UPanelWidget>(W))
+		{
+			const int32 N = P->GetChildrenCount();
+			for (int32 i = 0; i < N; ++i)
+			{
+				if (UTextBlock* T = FindFirstText(P->GetChildAt(i))) { return T; }
+			}
+		}
+		return nullptr;
+	}
+}
+
+void UPauseMenuWidget::RelabelButton(UButton* Btn, const FString& NewLabel)
+{
+	// Hertitel het label-TextBlock van een kit-knop. Faalt stil als er geen TextBlock in de knop zit
+	// (dan blijft de originele tekst staan; de knop werkt sowieso al door de herbinding hierboven).
+	if (!Btn) { return; }
+	if (UTextBlock* T = FindFirstText(Btn->GetContent()))
+	{
+		T->SetText(FText::FromString(NewLabel));
 	}
 }
 
@@ -101,7 +136,9 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 
 	// CO-OP: Load/Main menu doen een CLIENT-lokale OpenLevel/ClientTravel -> die zou een joiner uit de
 	// co-op-sessie scheuren naar een solo save. Alleen de host (Standalone of ListenServer) mag laden/naar
-	// het menu. De widget wordt 1x gebouwd (geen rebuild-per-klik), dus dit verbergen is meteen persistent.
+	// het menu. Op de joiner verbergen we die twee EN bieden we een echte "Leave session"-knop aan (nette
+	// ReturnToMainMenu-teardown i.p.v. alleen wegverbergen). De widget wordt 1x gebouwd (geen rebuild-per-
+	// klik), dus dit is meteen persistent.
 	if (UWorld* W = GetWorld())
 	{
 		if (W->GetNetMode() == NM_Client)
@@ -109,9 +146,9 @@ void UPauseMenuWidget::BuildShell(UCanvasPanel* Root)
 			if (LoadBtn) { LoadBtn->SetVisibility(ESlateVisibility::Collapsed); }
 			if (MenuBtn) { MenuBtn->SetVisibility(ESlateVisibility::Collapsed); }
 
-			// Korte grijze uitleg waarom de knoppen weg zijn (host-only).
-			VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Alleen de host kan laden of naar het menu"), 11, WeedUI::ColTextDim(), true, true))
-				->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+			// Zichtbare knop voor de joiner: verlaat de sessie netjes (ColWarn, zelfde destructieve-actie-
+			// stijl als Quit). Komt onderaan te staan (na Quit) zodat de "weg"-acties bij elkaar staan.
+			AddBtn(TEXT("Leave session"), WeedUI::ColWarn(0.85f), [this]() { OnLeaveSession(); });
 		}
 	}
 
@@ -167,6 +204,14 @@ void UPauseMenuWidget::OnQuit()
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 
+void UPauseMenuWidget::OnLeaveSession()
+{
+	// CO-OP joiner: verlaat de sessie netjes. ReturnToMainMenu doet de net-teardown (disconnect van de host)
+	// EN de travel terug naar het menu in een keer -> zelfde bestemming als de boot, geen lokale OpenLevel
+	// die andere clients zou raken. Werkt alleen zinvol op een client; op de host tonen we deze knop niet.
+	if (UGameInstance* GI = GetGameInstance()) { GI->ReturnToMainMenu(); }
+}
+
 void UPauseMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -179,14 +224,25 @@ void UPauseMenuWidget::NativeConstruct()
 	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Load"))))     { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnLoad); }
 	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_MainMenu")))) { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnMainMenu); }
 	if (UButton* B = Cast<UButton>(GetWidgetFromName(TEXT("Btn_Quit"))))     { B->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuit); }
-	// CO-OP: op een client (joiner) 'Load game' + 'Main menu' verbergen - die doen een lokale OpenLevel die de
-	// joiner uit de sessie scheurt. Het WBP-pad (WBP_PauseMenu, eigen WidgetTree-root) slaat BuildShell OVER, dus
-	// deze guard MOET hier in NativeConstruct staan (draait op BEIDE paden). Op de C++-fallback bestaan de namen
-	// niet -> GetWidgetFromName geeft null -> no-op (daar regelt BuildShell de guard al).
+	// CO-OP: op een client (joiner) doet 'Load game' een lokale OpenLevel die de joiner uit de sessie scheurt
+	// -> die knop verbergen. 'Main menu' hergebruiken we als "Leave session"-knop: de handler herbinden naar
+	// OnLeaveSession (nette ReturnToMainMenu-teardown i.p.v. de solo ShowMainMenu-overlay) en het label
+	// hertitelen. Het WBP-pad (WBP_PauseMenu, eigen WidgetTree-root) slaat BuildShell OVER, dus deze guard MOET
+	// hier in NativeConstruct staan (draait op BEIDE paden). Op de C++-fallback bestaan de namen niet ->
+	// GetWidgetFromName geeft null -> no-op (daar regelt BuildShell de guard al).
 	if (GetWorld() && GetWorld()->GetNetMode() == NM_Client)
 	{
 		if (UWidget* WL = GetWidgetFromName(TEXT("Btn_Load")))     { WL->SetVisibility(ESlateVisibility::Collapsed); }
-		if (UWidget* WM = GetWidgetFromName(TEXT("Btn_MainMenu"))) { WM->SetVisibility(ESlateVisibility::Collapsed); }
+		if (UButton* BM = Cast<UButton>(GetWidgetFromName(TEXT("Btn_MainMenu"))))
+		{
+			// Herbind: eerst de zojuist toegevoegde OnMainMenu-binding weghalen, dan OnLeaveSession binden.
+			BM->OnClicked.RemoveDynamic(this, &UPauseMenuWidget::OnMainMenu);
+			BM->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnLeaveSession);
+			// Label-swap: zoek het TextBlock in de knop-subtree en hertitel naar "Leave session". Lukt de swap
+			// niet (afwijkende kit-structuur), dan blijft de knop staan met de werkende leave-flow -> dat is
+			// belangrijker dan de exacte tekst.
+			RelabelButton(BM, TEXT("Leave session"));
+		}
 	}
 	if (UWidget* D = GetWidgetFromName(TEXT("Dim"))) { Backdrop = D; }
 	if (UTextBlock* S = Cast<UTextBlock>(GetWidgetFromName(TEXT("StatusText")))) { StatusText = S; }

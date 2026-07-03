@@ -4035,9 +4035,7 @@ void UPhoneClientComponent::SetShopTypeInCrosshair()
 	// Soort cyclen (Grow/Supplies/Furniture) + kleur + de prompt updaten.
 	const int32 NewKind = (((int32)Best->Kind) + 1) % 3; // enum 0=Grow 1=Supplies 2=Furniture
 	Best->Kind = (EShopKind)NewKind;
-	const FLinearColor Sign = (NewKind == 0) ? FLinearColor(0.30f, 0.85f, 0.35f)
-		: (NewKind == 1) ? FLinearColor(0.30f, 0.65f, 0.95f) : FLinearColor(0.65f, 0.45f, 0.85f);
-	Best->SetupVisual(Sign);
+	Best->SetupVisual(AStoreCounter::KindColor(Best->Kind)); // centrale winkel-soort-kleur (geen inline-tabel)
 	// In ShopSpots.txt de regel updaten waarvan de XY het dichtst bij deze toonbank ligt.
 	TArray<FString> Lines;
 	FFileHelper::LoadFileToStringArray(Lines, *WeedData::File(TEXT("ShopSpots.txt")));

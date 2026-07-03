@@ -6,11 +6,13 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Save/SaveGameSubsystem.h"
+#include "World/StoreCounter.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Border.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
@@ -92,14 +94,15 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	// Windstreek-letters weg (D.14): alleen het midden-streepje + de markers blijven.
 
 	// Marker-pool voor mensen buiten: een persoon-icoontje (groen), duidelijk anders dan objecten.
+	// D26: groter (22px) voor betere leesbaarheid; render-scale in de tick geeft de 3D-diepte.
 	for (int32 i = 0; i < 24; ++i)
 	{
 		USizeBox* MS2 = WidgetTree->ConstructWidget<USizeBox>();
-		MS2->SetWidthOverride(16.f); MS2->SetHeightOverride(16.f);
-		MS2->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 16.f, FLinearColor(0.4f, 0.95f, 0.5f)));
+		MS2->SetWidthOverride(22.f); MS2->SetHeightOverride(22.f);
+		MS2->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Person, 22.f, FLinearColor(0.4f, 0.95f, 0.5f)));
 		MS2->SetVisibility(ESlateVisibility::Collapsed);
 		UCanvasPanelSlot* MS = Band->AddChildToCanvas(MS2);
-		MS->SetAutoSize(false); MS->SetSize(FVector2D(16.f, 16.f)); MS->SetAlignment(FVector2D(0.5f, 0.5f));
+		MS->SetAutoSize(false); MS->SetSize(FVector2D(22.f, 22.f)); MS->SetAlignment(FVector2D(0.5f, 0.5f));
 		Markers.Add(MS2);
 	}
 
@@ -115,14 +118,14 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 		CoopMarkers.Add(CB);
 	}
 
-	// Home-marker: goud huisje dat naar je basis wijst.
+	// Home-marker: goud huisje dat naar je basis wijst. D26: groter (24px).
 	{
 		USizeBox* Hs = WidgetTree->ConstructWidget<USizeBox>();
-		Hs->SetWidthOverride(18.f); Hs->SetHeightOverride(18.f);
-		Hs->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 18.f, FLinearColor(1.f, 0.82f, 0.25f)));
+		Hs->SetWidthOverride(24.f); Hs->SetHeightOverride(24.f);
+		Hs->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Home, 24.f, FLinearColor(1.f, 0.82f, 0.25f)));
 		Hs->SetVisibility(ESlateVisibility::Collapsed);
 		UCanvasPanelSlot* HMS = Band->AddChildToCanvas(Hs);
-		HMS->SetAutoSize(false); HMS->SetSize(FVector2D(18.f, 18.f)); HMS->SetAlignment(FVector2D(0.5f, 0.5f));
+		HMS->SetAutoSize(false); HMS->SetSize(FVector2D(24.f, 24.f)); HMS->SetAlignment(FVector2D(0.5f, 0.5f));
 		HomeMarker = Hs;
 	}
 
@@ -133,20 +136,33 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	UCanvasPanelSlot* WS = Band->AddChildToCanvas(WaypointMarker);
 	WS->SetAutoSize(false); WS->SetSize(FVector2D(10.f, 14.f)); WS->SetAlignment(FVector2D(0.5f, 0.5f));
 
-	// Bezorg-markers: oranje pakket-icoontje dat naar de voordeur-bezorging wijst (max 4 tegelijk).
+	// Bezorg-markers: oranje pakket-icoontje dat naar de voordeur-bezorging wijst (max 4 tegelijk). D26: groter (24px).
 	for (int32 i = 0; i < 4; ++i)
 	{
 		USizeBox* DB = WidgetTree->ConstructWidget<USizeBox>();
-		DB->SetWidthOverride(18.f); DB->SetHeightOverride(18.f);
-		DB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Box, 18.f, FLinearColor(1.f, 0.6f, 0.15f)));
+		DB->SetWidthOverride(24.f); DB->SetHeightOverride(24.f);
+		DB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Box, 24.f, FLinearColor(1.f, 0.6f, 0.15f)));
 		DB->SetVisibility(ESlateVisibility::Collapsed);
 		UCanvasPanelSlot* DS = Band->AddChildToCanvas(DB);
-		DS->SetAutoSize(false); DS->SetSize(FVector2D(18.f, 18.f)); DS->SetAlignment(FVector2D(0.5f, 0.5f));
+		DS->SetAutoSize(false); DS->SetSize(FVector2D(24.f, 24.f)); DS->SetAlignment(FVector2D(0.5f, 0.5f));
 		DeliveryMarkers.Add(DB);
+	}
+
+	// Winkel-markers (D26): een shop-icoon per stad-toonbank. WeedUI::Icon bakt de kleur in bij het
+	// bouwen (PNG-tint of vorm-fill), dus de tint wordt niet per tick gezet maar bij de 2s-cache-refresh
+	// opnieuw opgebouwd (Kind is stabiel). De SizeBox blijft de pool-marker; het icoon-kind wisselt.
+	for (int32 i = 0; i < 8; ++i)
+	{
+		USizeBox* ShB = WidgetTree->ConstructWidget<USizeBox>();
+		ShB->SetWidthOverride(24.f); ShB->SetHeightOverride(24.f);
+		ShB->SetVisibility(ESlateVisibility::Collapsed);
+		UCanvasPanelSlot* ShS = Band->AddChildToCanvas(ShB);
+		ShS->SetAutoSize(false); ShS->SetSize(FVector2D(24.f, 24.f)); ShS->SetAlignment(FVector2D(0.5f, 0.5f));
+		ShopMarkers.Add(ShB);
 	}
 }
 
-void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y)
+void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y, float Dist)
 {
 	if (!W) { return; }
 	if (FMath::Abs(RelAngleDeg) > HalfFov)
@@ -160,6 +176,9 @@ void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y)
 	{
 		S->SetPosition(FVector2D(X, Y));
 	}
+	// 3D-feel (D26): dichtbij groter, ver kleiner. Render-transform -> geen re-layout (persistente-UI-regel).
+	const float s = FMath::GetMappedRangeValueClamped(FVector2f(0.f, 8000.f), FVector2f(1.3f, 0.55f), Dist);
+	W->SetRenderScale(FVector2D(s, s));
 }
 
 void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -207,7 +226,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (D.SizeSquared2D() < 100.f) { continue; }
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
 		const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
-		PlaceOnBand(Markers[m], Rel, 26.f);
+		PlaceOnBand(Markers[m], Rel, 26.f, D.Size2D());
 		++m;
 	}
 	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
@@ -224,7 +243,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const FVector D = Pw->GetActorLocation() - PL;
 			if (D.SizeSquared2D() < 100.f) { continue; }
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(CoopMarkers[cm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
+			PlaceOnBand(CoopMarkers[cm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
 			++cm;
 		}
 	}
@@ -258,7 +277,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FVector D = HomeWorld - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(HomeMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
+			PlaceOnBand(HomeMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
 		}
 		else { HomeMarker->SetVisibility(ESlateVisibility::Collapsed); }
 	}
@@ -270,13 +289,49 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FVector D = WaypointWorld - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(WaypointMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
+			PlaceOnBand(WaypointMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
 		}
 		else
 		{
 			WaypointMarker->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
+
+	// Winkels (D26): een soort-gekleurd shop-icoon per stad-toonbank op de kompasbalk. De toonbanken staan
+	// stil -> de SET elke 2s herscannen (per-proces registry -> op wereld filteren) EN dan pas de icoon-kleur
+	// (her)bouwen (Kind is stabiel; WeedUI::Icon bakt de tint in bij het bouwen, geen per-tick recolor).
+	// De positie + afstand-scale blijven ELKE tick (goedkoop over max 8 markers).
+	CounterCacheAge += DeltaTime;
+	const bool bCounterRefresh = (CounterCacheAge >= 2.f);
+	if (bCounterRefresh)
+	{
+		CounterCacheAge = 0.f;
+		CachedCounters.Reset();
+		for (const TWeakObjectPtr<AStoreCounter>& WkC : AStoreCounter::GetAll())
+		{
+			AStoreCounter* Sc = WkC.Get();
+			if (IsValid(Sc) && Sc->GetWorld() == GetWorld() && Sc->HasShop()) { CachedCounters.Add(Sc); }
+		}
+	}
+	int32 sh = 0;
+	for (const TWeakObjectPtr<AStoreCounter>& WkC : CachedCounters)
+	{
+		if (sh >= ShopMarkers.Num()) { break; }
+		const AStoreCounter* Sc = WkC.Get();
+		if (!IsValid(Sc)) { continue; }
+		USizeBox* Box = ShopMarkers[sh];
+		if (!Box) { ++sh; continue; }
+		// Kleur alleen (her)bouwen op de 2s-refresh: goedkoop en geen rebuild-per-klik/tick.
+		if (bCounterRefresh)
+		{
+			Box->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Shop, 24.f, AStoreCounter::KindColor(Sc->Kind)));
+		}
+		const FVector D = Sc->GetActorLocation() - PL;
+		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
+		PlaceOnBand(Box, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
+		++sh;
+	}
+	for (; sh < ShopMarkers.Num(); ++sh) { if (ShopMarkers[sh]) { ShopMarkers[sh]->SetVisibility(ESlateVisibility::Collapsed); } }
 
 	// Bezorgingen: pakket-marker richting de voordeur, altijd zichtbaar tot opgehaald. In co-op gedeeld via de
 	// GameState (ook de mede-speler ziet 'm); in COMPETITIVE alleen de EIGEN marker (ForPlayerId-filter, spiegelt
@@ -293,7 +348,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (bDelCompFilter && !Del.ForPlayerId.IsEmpty() && Del.ForPlayerId != MyDelId) { continue; }
 			const FVector D = Del.World - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(DeliveryMarkers[dm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f);
+			PlaceOnBand(DeliveryMarkers[dm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
 			++dm;
 		}
 	}

@@ -96,7 +96,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigit->SetMobility(EComponentMobility::Movable);
 		CabDigit->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		CabDigit->SetCanEverAffectNavigation(false);
-		CabDigit->SetRelativeLocation(FVector(-192.f, 0.f, 175.f));
+		CabDigit->SetRelativeLocation(FVector(-198.5f, 0.f, 175.f)); // plaat strak tegen de cabine-achterwand (mesh loopt tot -200)
 		CabDigit->SetRelativeRotation(FRotator::ZeroRotator); // lokale +X = naar de opening
 		CabDigit->SetRelativeScale3D(FVector(5.f));
 		// Eerst een echte mesh (cijfer 0) zodat slot 0 bestaat vóór SetMaterial (geen material/render op een
@@ -114,7 +114,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabArrow->SetupAttachment(Cab);
 		CabArrow->RegisterComponent();
 		CabArrow->SetMobility(EComponentMobility::Movable);
-		CabArrow->SetRelativeLocation(FVector(-192.f, -32.f, 178.f));
+		CabArrow->SetRelativeLocation(FVector(-198.5f, -32.f, 178.f)); // gelijk met de plaat op de achterwand
 		CabArrow->SetRelativeRotation(FRotator::ZeroRotator);
 		CabArrow->SetWorldSize(26.f);
 		CabArrow->SetHorizontalAlignment(EHTA_Center);
@@ -125,7 +125,7 @@ void APackElevator::Setup(const TArray<float>& InFloors, const FVector& InSlideD
 		CabDigitText->SetupAttachment(Cab);
 		CabDigitText->RegisterComponent();
 		CabDigitText->SetMobility(EComponentMobility::Movable);
-		CabDigitText->SetRelativeLocation(FVector(-192.f + 3.f, 0.f, 175.f));
+		CabDigitText->SetRelativeLocation(FVector(-198.5f + 0.8f, 0.f, 175.f)); // cijfer net (0.8cm) voor de plaat, tegen z-fighting
 		CabDigitText->SetRelativeRotation(FRotator::ZeroRotator);
 		CabDigitText->SetWorldSize(22.f);
 		CabDigitText->SetHorizontalAlignment(EHTA_Center);

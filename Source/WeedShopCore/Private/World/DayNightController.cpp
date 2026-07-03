@@ -7,6 +7,7 @@
 #include "World/DayCycleComponent.h"
 #include "World/WorldSyncComponent.h"
 #include "Game/WeedShopGameState.h"
+#include "UI/WeedUiStyle.h" // D24: WeedUI::SoundCategoryVolume(3=VolWeather) voor de weer-volume-slider
 
 #include "Engine/DirectionalLight.h"
 #include "Components/DirectionalLightComponent.h"
@@ -485,6 +486,15 @@ void ADayNightController::SpawnUDS()
 	{
 		UdsSound = W->SpawnActor<AActor>(SndClass, FTransform::Identity, SP);
 		UE_LOG(LogTemp, Verbose, TEXT("[UDS] sound-actor: %s"), UdsSound.IsValid() ? TEXT("OK") : TEXT("NULL"));
+		// D24: cache de default "Volume Multiplier"-BP-var 1x zodat de weer-volume-slider (categorie 3) 'm
+		// altijd vanaf de originele waarde kan schalen. -1 = var niet gevonden -> ApplyWeatherVolume valt
+		// terug op de per-state-multipliers (zie daar). Beide float/double-varianten afvangen.
+		if (AActor* Snd = UdsSound.Get())
+		{
+			if (FDoubleProperty* VmP = CastField<FDoubleProperty>(Snd->GetClass()->FindPropertyByName(FName(TEXT("Volume Multiplier")))))   { UdsSoundBaseVolMul = (float)VmP->GetPropertyValue_InContainer(Snd); }
+			else if (FFloatProperty* VmPf = CastField<FFloatProperty>(Snd->GetClass()->FindPropertyByName(FName(TEXT("Volume Multiplier"))))) { UdsSoundBaseVolMul = VmPf->GetPropertyValue_InContainer(Snd); }
+			UE_LOG(LogTemp, Verbose, TEXT("[UDS] sound Volume Multiplier default: %.3f (%s)"), UdsSoundBaseVolMul, UdsSoundBaseVolMul >= 0.f ? TEXT("gevonden") : TEXT("NIET gevonden - fallback"));
+		}
 	}
 	else { UE_LOG(LogTemp, Verbose, TEXT("[UDS] sound-class niet gevonden")); }
 
@@ -516,6 +526,21 @@ void ADayNightController::SpawnUDS()
 			}
 
 			SetRandomWeather(true); // natuurlijk wisselend weer aan bij start
+
+			// D23 onweer temperen: de pack-default vuurt bij max thunder veel te veel bliksem-flashes
+			// achter elkaar af. Frequentie omlaag (flitsen/min) + timing-randomisatie omhoog zodat de
+			// flitsen minder metronoom/burst-achtig komen. Property-namen zijn UDW-versie-afhankelijk ->
+			// SetUdwDouble null-guardt + logt per set of 'ie pakte (zie [UDW-SET] in de log).
+			SetUdwDouble(FName(TEXT("Lightning Flash Frequency")), 2.5);          // flitsen/min bij max thunder (was veel hoger)
+			SetUdwDouble(FName(TEXT("Lightning Flash Timing Randomization")), 0.85); // meer spreiding -> geen strakke bursts
+
+			// D24: cache de UDW-donder-defaults 1x zodat de weer-volume-slider (categorie 3) ze kan schalen
+			// zonder ze bij herhaald toepassen af te breken (altijd vanaf de originele waarde vermenigvuldigen).
+			if (FDoubleProperty* CtP = CastField<FDoubleProperty>(Udw->GetClass()->FindPropertyByName(FName(TEXT("Close Thunder Volume")))))   { UdwCloseThunderBase = CtP->GetPropertyValue_InContainer(Udw); }
+			else if (FFloatProperty* CtPf = CastField<FFloatProperty>(Udw->GetClass()->FindPropertyByName(FName(TEXT("Close Thunder Volume"))))) { UdwCloseThunderBase = CtPf->GetPropertyValue_InContainer(Udw); }
+			if (FDoubleProperty* DtP = CastField<FDoubleProperty>(Udw->GetClass()->FindPropertyByName(FName(TEXT("Distant Thunder Volume")))))   { UdwDistantThunderBase = DtP->GetPropertyValue_InContainer(Udw); }
+			else if (FFloatProperty* DtPf = CastField<FFloatProperty>(Udw->GetClass()->FindPropertyByName(FName(TEXT("Distant Thunder Volume"))))) { UdwDistantThunderBase = DtPf->GetPropertyValue_InContainer(Udw); }
+			UE_LOG(LogTemp, Verbose, TEXT("[UDW] donder-defaults: close=%.3f distant=%.3f"), UdwCloseThunderBase, UdwDistantThunderBase);
 		}
 	}
 	else { UE_LOG(LogTemp, Verbose, TEXT("[UDS] UDW-class niet gevonden")); }
@@ -568,6 +593,56 @@ void ADayNightController::SetUdsBool(FName P, bool V)
 	AActor* Uds = UdsSky.Get();
 	if (!Uds) { return; }
 	if (FBoolProperty* BP = CastField<FBoolProperty>(Uds->GetClass()->FindPropertyByName(P))) { BP->SetPropertyValue_InContainer(Uds, V); }
+}
+
+// Spiegel van SetUdsDouble maar op de UDW-actor. Property-namen zijn UDW-versie-afhankelijk -> null-guard
+// + 1 Verbose-log per set zodat we in de log kunnen zien of de naam bestond (pakte) of niet.
+void ADayNightController::SetUdwDouble(FName P, double V)
+{
+	AActor* Udw = UdsWeatherActor.Get();
+	if (!Udw) { UE_LOG(LogTemp, Verbose, TEXT("[UDW-SET] geen UDW-actor voor '%s'"), *P.ToString()); return; }
+	if (FProperty* Prop = Udw->GetClass()->FindPropertyByName(P))
+	{
+		if (FDoubleProperty* DP = CastField<FDoubleProperty>(Prop)) { DP->SetPropertyValue_InContainer(Udw, V); UE_LOG(LogTemp, Verbose, TEXT("[UDW-SET] %s = %.3f (double)"), *P.ToString(), V); }
+		else if (FFloatProperty* FP = CastField<FFloatProperty>(Prop)) { FP->SetPropertyValue_InContainer(Udw, (float)V); UE_LOG(LogTemp, Verbose, TEXT("[UDW-SET] %s = %.3f (float)"), *P.ToString(), V); }
+		else { UE_LOG(LogTemp, Verbose, TEXT("[UDW-SET] '%s' bestaat maar is geen float/double (%s)"), *P.ToString(), *Prop->GetClass()->GetName()); }
+	}
+	else { UE_LOG(LogTemp, Verbose, TEXT("[UDW-SET] property '%s' niet gevonden op UDW"), *P.ToString()); }
+}
+
+// D24: pas de weer-volume-slider (0..1) toe op de UDS-sound-ambience + UDW-donder. Altijd vanaf de gecachte
+// defaults schalen (herhaald toepassen breekt de waarde anders af). Route wordt 1x per wijziging gelogd.
+void ADayNightController::ApplyWeatherVolume(float Vol01)
+{
+	Vol01 = FMath::Clamp(Vol01, 0.f, 1.f);
+
+	// 1) UDS environment-sound: de BP-var "Volume Multiplier" op de gecachte default * slider zetten en de
+	//    BP z'n eigen "Update Volume Multiplier" laten uitvoeren (past de lopende ambience-loop live aan).
+	if (AActor* Snd = UdsSound.Get())
+	{
+		if (UdsSoundBaseVolMul >= 0.f)
+		{
+			const float Want = UdsSoundBaseVolMul * Vol01;
+			if (FDoubleProperty* VmP = CastField<FDoubleProperty>(Snd->GetClass()->FindPropertyByName(FName(TEXT("Volume Multiplier")))))   { VmP->SetPropertyValue_InContainer(Snd, (double)Want); }
+			else if (FFloatProperty* VmPf = CastField<FFloatProperty>(Snd->GetClass()->FindPropertyByName(FName(TEXT("Volume Multiplier"))))) { VmPf->SetPropertyValue_InContainer(Snd, Want); }
+			if (UFunction* UpdFn = Snd->GetClass()->FindFunctionByName(FName(TEXT("Update Volume Multiplier"))))
+			{
+				if (UpdFn->NumParms == 0) { Snd->ProcessEvent(UpdFn, nullptr); }
+				UE_LOG(LogTemp, Verbose, TEXT("[UDS-VOL] Volume Multiplier=%.3f (base %.3f * %.2f), Update Volume Multiplier %s"), Want, UdsSoundBaseVolMul, Vol01, UpdFn->NumParms == 0 ? TEXT("aangeroepen") : TEXT("verkeerde parms - overgeslagen"));
+			}
+			else { UE_LOG(LogTemp, Verbose, TEXT("[UDS-VOL] 'Update Volume Multiplier' niet gevonden - waarde gezet maar niet ge-refresht")); }
+		}
+		else
+		{
+			// Fallback: "Volume Multiplier" bestond niet op deze pack-versie. Log de route zodat we het zien;
+			// een per-state-schaling zonder die var is niet betrouwbaar zonder de exacte BP-namen -> hier stoppen.
+			UE_LOG(LogTemp, Verbose, TEXT("[UDS-VOL] geen 'Volume Multiplier'-var -> UDS-ambience niet geschaald (fallback-route)"));
+		}
+	}
+
+	// 2) UDW-donder mee-schalen (triviaal): de gecachte close/distant-thunder-defaults * slider.
+	if (UdwCloseThunderBase >= 0.0)   { SetUdwDouble(FName(TEXT("Close Thunder Volume")), UdwCloseThunderBase * Vol01); }
+	if (UdwDistantThunderBase >= 0.0) { SetUdwDouble(FName(TEXT("Distant Thunder Volume")), UdwDistantThunderBase * Vol01); }
 }
 
 void ADayNightController::CallUdsUpdate()
@@ -773,6 +848,20 @@ void ADayNightController::Tick(float DeltaSeconds)
 						LastSeenWeatherIndex = SrvIdx;
 						ApplyWeatherByIndex(SrvIdx, bFirstSync ? 3.f : WS->GetWeatherDuration());
 					}
+				}
+			}
+
+			// D24 weer-volume-slider: elke 0.5s de settings-waarde (categorie 3 = VolWeather) lezen en alleen
+			// bij een echte wijziging op de UDS-ambience + UDW-donder toepassen (client-side, geen replicatie).
+			WeatherVolTimer -= DeltaSeconds;
+			if (WeatherVolTimer <= 0.f)
+			{
+				WeatherVolTimer = 0.5f;
+				const float WVol = WeedUI::SoundCategoryVolume(3);
+				if (!FMath::IsNearlyEqual(WVol, LastWeatherVol, 0.005f))
+				{
+					LastWeatherVol = WVol;
+					ApplyWeatherVolume(WVol);
 				}
 			}
 		}

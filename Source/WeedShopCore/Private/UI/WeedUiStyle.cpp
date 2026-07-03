@@ -725,7 +725,8 @@ namespace WeedUI
 
 	static const TCHAR* SoundCatKey(int32 Category)
 	{
-		switch (Category) { case 1: return TEXT("VolGame"); case 2: return TEXT("VolMusic"); default: return TEXT("VolUI"); }
+		// 3 = VolWeather (weer-ambience/donder-volume; DayNightController leest deze categorie).
+		switch (Category) { case 1: return TEXT("VolGame"); case 2: return TEXT("VolMusic"); case 3: return TEXT("VolWeather"); default: return TEXT("VolUI"); }
 	}
 
 	float SoundCategoryVolume(int32 Category)

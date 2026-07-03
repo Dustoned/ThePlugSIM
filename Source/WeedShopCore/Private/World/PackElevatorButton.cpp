@@ -134,7 +134,13 @@ void APackElevatorButton::SetDigit(int32 Digit)
 		if (TextGlow) { DigitText->SetTextMaterial(TextGlow); }
 	}
 	const FVector Fwd = DigitMesh->GetForwardVector(); // +X = uit het vlak naar de kijker
-	DigitText->SetWorldLocationAndRotation(DigitMesh->GetComponentLocation() + Fwd * 3.f, DigitMesh->GetComponentRotation());
+	// Tekst op het ECHTE plaat-voorvlak zetten (niet een vaste 3cm): de plaat is geschaald, dus de
+	// voorkant zit op verschillende afstanden. Projecteer de wereld-bounds op Fwd = afstand van het
+	// mesh-centrum tot het voorvlak; tel er ~0.6cm gap bij (min 0.3cm tegen z-fighting).
+	const FVector BExt = DigitMesh->Bounds.BoxExtent;
+	const float FrontDepth = FMath::Abs(Fwd.X) * BExt.X + FMath::Abs(Fwd.Y) * BExt.Y + FMath::Abs(Fwd.Z) * BExt.Z;
+	const float TextGap = FMath::Max(0.3f, FrontDepth + 0.6f);
+	DigitText->SetWorldLocationAndRotation(DigitMesh->GetComponentLocation() + Fwd * TextGap, DigitMesh->GetComponentRotation());
 	DigitText->SetWorldSize(FMath::Max(8.f, DigitMesh->GetComponentScale().X * 4.2f));
 	DigitText->SetText(FText::AsNumber(FMath::Clamp(Digit, 0, 9)));
 }

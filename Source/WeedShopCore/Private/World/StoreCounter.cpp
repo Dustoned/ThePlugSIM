@@ -50,6 +50,22 @@ AStoreCounter::AStoreCounter()
 	Panel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
+FLinearColor AStoreCounter::KindColor(EShopKind Kind)
+{
+	// Winkel-soort-kleuren (voorheen dubbel inline in DoorRetrofitter + PhoneClientComponent):
+	// Grow = groen, Supplies = blauw, Furniture = paars. GasStation = blauw (zelfde supply-cat),
+	// Apartment = warm goud (geen winkel, maar wel een herkenbaar accent).
+	switch (Kind)
+	{
+	case EShopKind::Grow:       return FLinearColor(0.30f, 0.85f, 0.35f);
+	case EShopKind::Supplies:   return FLinearColor(0.30f, 0.65f, 0.95f);
+	case EShopKind::Furniture:  return FLinearColor(0.65f, 0.45f, 0.85f);
+	case EShopKind::GasStation: return FLinearColor(0.30f, 0.65f, 0.95f);
+	case EShopKind::Apartment:  return FLinearColor(1.00f, 0.82f, 0.25f);
+	default:                    return FLinearColor(0.30f, 0.65f, 0.95f);
+	}
+}
+
 void AStoreCounter::SetupVisual(const FLinearColor& Accent)
 {
 	if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))

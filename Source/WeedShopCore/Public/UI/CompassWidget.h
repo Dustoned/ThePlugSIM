@@ -10,6 +10,7 @@
 class UCanvasPanel;
 class UBorder;
 class UTextBlock;
+class USizeBox;
 
 UCLASS()
 class WEEDSHOPCORE_API UCompassWidget : public UUserWidget
@@ -25,13 +26,15 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	void BuildShell(UCanvasPanel* Root);
-	void PlaceOnBand(class UWidget* W, float RelAngleDeg, float Y);
+	// Dist = afstand tot het doel (cm): dichtbij groter, ver kleiner (render-transform, geen re-layout).
+	void PlaceOnBand(class UWidget* W, float RelAngleDeg, float Y, float Dist);
 
 	UPROPERTY() TObjectPtr<UCanvasPanel> Band;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> CardinalLabels;
 	UPROPERTY() TArray<TObjectPtr<UWidget>> Markers;       // mensen buiten (groen poppetje)
 	UPROPERTY() TArray<TObjectPtr<UWidget>> CoopMarkers;   // mede-spelers (blauw poppetje)
 	UPROPERTY() TArray<TObjectPtr<UWidget>> DeliveryMarkers; // bezorgingen (oranje pakket-icoon)
+	UPROPERTY() TArray<TObjectPtr<class USizeBox>> ShopMarkers; // winkels (soort-kleur, per KindColor)
 	UPROPERTY() TObjectPtr<UWidget> HomeMarker;            // je basis (goud huisje)
 	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;        // generiek waypoint (blauw)
 
@@ -48,6 +51,10 @@ protected:
 	TWeakObjectPtr<APawn> CachedPhonePawn;
 	bool bCachedHaveHome = false;
 	float HomeCacheAge = 1000.f;
+
+	// Winkels staan stil -> de SET elke 2s herscannen (zoals MapWidget), positie/bearing per tick.
+	TArray<TWeakObjectPtr<class AStoreCounter>> CachedCounters;
+	float CounterCacheAge = 1000.f;
 
 	static constexpr float BandW = 540.f;
 	static constexpr float HalfFov = 90.f; // toont 180 graden over de balk

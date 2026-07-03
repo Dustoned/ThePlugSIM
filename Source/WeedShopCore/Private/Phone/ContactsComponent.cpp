@@ -508,21 +508,42 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	// deze strip miste een "#spelerId"-bericht elke echte NPC en viel altijd terug op de fallback-spawn.
 	const FName BaseId = BaseNpcId(Msg.FromContactId);
 
-	// Voorkeur: stuur de BESTAANDE bewoner met dit NpcId aan (geen dubbele NPC). YouGoToThem -> die
+	// Voorkeur: stuur de BESTAANDE NPC met dit NpcId aan (geen dubbele NPC). YouGoToThem -> die
 	// verschijnt in z'n eigen unit en wacht; TheyComeToYou -> die loopt naar de speler.
 	// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
 	// Per-proces registry -> op wereld filteren (PIE/co-op-in-1-proces).
+	//
+	// DUBBELE MARKERS (fix): vroeger matchte dit ALLEEN residenten. Een eerder gespawnde NIET-residente
+	// fallback-afspraak-NPC met dezelfde BaseId werd dan niet hergebruikt -> een nieuwe spawn = 2 groene
+	// poppetjes (kompas + kaart). Nu matchen we elke levende NPC met NpcId==BaseId. Veilige variant:
+	// hergebruik alleen een VRIJE NPC (geen actieve afspraak) - een half-vertrokken afspraak-NPC (bApptActive)
+	// hijacken we NIET. Voorkeur voor een resident; anders de eerste vrije match. Overige vrije duplicaten
+	// met dezelfde id ruimen we op zodat er nooit twee tegelijk zichtbaar zijn.
+	ACustomerBase* Reuse = nullptr;
 	for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
 	{
 		ACustomerBase* Cb = WCb.Get();
-		if (IsValid(Cb) && Cb->GetWorld() == World && Cb->NpcId == BaseId && Cb->IsResident())
+		if (!IsValid(Cb) || Cb->GetWorld() != World || Cb->NpcId != BaseId) { continue; }
+		if (Cb->HasActiveAppointment()) { continue; } // half-vertrokken: met rust laten
+		if (!Reuse) { Reuse = Cb; }
+		else if (!Reuse->IsResident() && Cb->IsResident()) { Reuse = Cb; } // resident heeft voorrang
+	}
+	if (Reuse)
+	{
+		// Eventuele overige VRIJE duplicaten met dezelfde id opruimen (nooit 2 markers naast elkaar).
+		for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
 		{
-			Cb->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
-			if (Msg.bOrder) { Cb->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
-			Cb->ApptForPlayerId = Msg.ForPlayerId; // competitive: bij welke speler deze afspraak-NPC hoort (compass/telefoon-filter)
-			Cb->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
-			return;
+			ACustomerBase* Cb = WCb.Get();
+			if (IsValid(Cb) && Cb != Reuse && Cb->GetWorld() == World && Cb->NpcId == BaseId && !Cb->HasActiveAppointment())
+			{
+				Cb->SendHomeAndDespawn();
+			}
 		}
+		Reuse->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
+		if (Msg.bOrder) { Reuse->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
+		Reuse->ApptForPlayerId = Msg.ForPlayerId; // competitive: bij welke speler deze afspraak-NPC hoort (compass/telefoon-filter)
+		Reuse->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
+		return;
 	}
 
 	// Fallback: het contact loopt niet fysiek rond (uitgeroteerd). Contacten blijven tóch bereikbaar:

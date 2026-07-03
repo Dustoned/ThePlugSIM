@@ -120,7 +120,19 @@ protected:
 	void DriveUDS(float ClockHour);          // Time of Day uit de klok + Update Active Variables
 	void SetUdsDouble(FName P, double V);
 	void SetUdsBool(FName P, bool V);
+	// Zoals SetUdsDouble maar dan op de UDW-actor (Ultra Dynamic Weather); null-guard + Verbose-log per set
+	// zodat we in de log zien of de (versie-afhankelijke) property-naam pakte.
+	void SetUdwDouble(FName P, double V);
 	void CallUdsUpdate();
+
+	// D24 weer-volume: de settings-slider (WeedUI-categorie 3 = VolWeather) live diffen en op de UDS-sound-actor
+	// + UDW-donder toepassen. Defaults 1x cachen bij spawn zodat we altijd vanaf de originele waarde schalen.
+	float LastWeatherVol = -1.f;                 // laatst toegepaste categorie-volume (0..1); -1 = nog niet toegepast
+	float WeatherVolTimer = 0.f;                 // 0.5s-diff-cadans
+	float UdsSoundBaseVolMul = -1.f;             // cached default van de "Volume Multiplier"-BP-var op UdsSound (-1 = onbekend/route dood)
+	double UdwCloseThunderBase = -1.0;           // cached default UDW "Close Thunder Volume"
+	double UdwDistantThunderBase = -1.0;         // cached default UDW "Distant Thunder Volume"
+	void ApplyWeatherVolume(float Vol01);        // schaal de gecachte defaults met Vol01 en push naar de actors
 
 public:
 	// UDS-look LIVE tunables (dev-menu Light-tab); UDS bezit de belichting via "Apply Exposure Settings".

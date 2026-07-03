@@ -11,6 +11,7 @@ class UPhoneClientComponent;
 class UCanvasPanel;
 class UWidget;
 class UTextBlock;
+class UButton;
 
 UCLASS(Blueprintable)
 class WEEDSHOPCORE_API UPauseMenuWidget : public UUserWidget
@@ -31,6 +32,9 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 
+	// WBP-pad: hertitel het label-TextBlock van een kit-knop (bv. Btn_MainMenu -> "Leave session").
+	void RelabelButton(UButton* Btn, const FString& NewLabel);
+
 	UFUNCTION() void OnResume();
 	UFUNCTION() void OnUnstuck();
 	UFUNCTION() void OnSave();
@@ -38,6 +42,9 @@ protected:
 	UFUNCTION() void OnSettings();
 	UFUNCTION() void OnMainMenu();
 	UFUNCTION() void OnQuit();
+	// CO-OP joiner: nette teardown terug naar het hoofdmenu (client-side ReturnToMainMenu). Zelfde
+	// bestemming als de boot; geen lokale OpenLevel die de joiner uit de sessie zou scheuren.
+	UFUNCTION() void OnLeaveSession();
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 

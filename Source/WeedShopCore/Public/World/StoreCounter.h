@@ -33,6 +33,10 @@ public:
 	// O(instanties) i.p.v. TActorIterator over ALLE actors. Weak-ptrs -> IsValid() checken.
 	static const TArray<TWeakObjectPtr<AStoreCounter>>& GetAll();
 
+	// Centrale winkel-soort-kleur (accent/paneel + kompas- en kaart-markers): EEN bron van waarheid,
+	// zodat DoorRetrofitter/PhoneClientComponent/Compass niet ieder een eigen inline-tabel bijhouden.
+	static FLinearColor KindColor(EShopKind Kind);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Store")
 	EShopKind Kind = EShopKind::Supplies;
 

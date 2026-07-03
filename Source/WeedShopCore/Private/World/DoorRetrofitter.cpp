@@ -2452,8 +2452,9 @@ void ADoorRetrofitter::ScanAndConvert()
 			const float Yaw = FCString::Atof(*Pc[3]) + 180.f;
 			const int32 KindI = FCString::Atoi(*Pc[4]);
 			EShopKind Kind = (KindI == 0) ? EShopKind::Grow : (KindI == 1) ? EShopKind::Supplies : EShopKind::Furniture;
-			FLinearColor Sign = (KindI == 0) ? FLinearColor(0.30f, 0.85f, 0.35f)
-				: (KindI == 1) ? FLinearColor(0.30f, 0.65f, 0.95f) : FLinearColor(0.65f, 0.45f, 0.85f);
+			// Toonbank-kleur uit de gedeelde tabel (AStoreCounter::KindColor) - EEN bron van waarheid,
+			// zodat de balie-tint en het bordje niet uit elkaar lopen. Kind mapt 1-op-1 op EShopKind.
+			const FLinearColor Sign = AStoreCounter::KindColor(Kind);
 			const FRotator Rot(0.f, Yaw, 0.f);
 			FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			AStoreCounter* Counter = W->SpawnActor<AStoreCounter>(AStoreCounter::StaticClass(), FTransform(Rot, Pos + FVector(0.f, 0.f, 2.f)), SP);
@@ -3040,8 +3041,20 @@ void ADoorRetrofitter::ScanAndConvert()
 			if (APackElevator* Elev = W->SpawnActor<APackElevator>(APackElevator::StaticClass(), FTransform(FVector(CabCenter.X, CabCenter.Y, Floors[0])), SP))
 			{
 				Elev->Setup(Floors, SlideDir, Panels, CabCenter, -ShaftSide);
-				// Per verdieping: call-knop naast de deur + digit-bordje boven de deur, beide op het
-				// gang-muurvlak (frame is 16cm diep; pivot aan een kant -> 17cm uit het centrum).
+				// Per verdieping: call-knop naast de deur + digit-bordje boven de deur.
+				// De KNOP zit op het frame-vlak (16cm diep -> 17cm uit het centrum: dat klopt op
+				// deurhoogte). Het BORDJE zit hoger (+255) waar geen frame meer is maar de gang-MUUR:
+				// die staat verder naar buiten en varieert per gebouw, dus de 17cm-aanname liet het
+				// bordje vrij voor de muur zweven. Fix: per verdieping een line-trace op bord-hoogte
+				// naar het echte muurvlak i.p.v. de vaste 17cm.
+				// IGNORE-lijst 1x: de lift zelf (cabine/cabine-deuren/knoppen) EN alle hal-schuifpanelen,
+				// zodat de trace op de MUUR raakt en niet op een lift-component die er (half) voor staat.
+				FCollisionQueryParams SignQP(SCENE_QUERY_STAT(ElevSignWall), false);
+				SignQP.AddIgnoredActor(Elev);
+				for (const FElevPanelInit& Pn : Panels)
+				{
+					if (UStaticMeshComponent* PC = Pn.Comp) { SignQP.AddIgnoredComponent(PC); }
+				}
 				for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
 				{
 					const FRotator BtnRot = (-ShaftSide).Rotation();
@@ -3050,7 +3063,20 @@ void ADoorRetrofitter::ScanAndConvert()
 					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, BtnLoc), SP))
 					{
 						Btn->Setup(Elev, Fi);
-						const FVector SignLoc = WallFace + FVector(0.f, 0.f, Floors[Fi] + 255.f);
+						// Bord-hoogte-muurtrace: start 60cm de gang in (+ShaftSide) op bord-hoogte, exact
+						// boven de bord-lateraalpositie (dezelfde SlideDir*110 als de knop), en trace naar
+						// de muur (-ShaftSide). Raak -> plaat 0.5cm voor het muurvlak (langs de normaal,
+						// tegen z-fighting). Geen raak -> val terug op de oude 17cm-berekening.
+						const float SignZ = Floors[Fi] + 255.f;
+						const FVector TraceLat = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) + SlideDir * 110.f;
+						const FVector TraceStart = TraceLat + ShaftSide * 60.f + FVector(0.f, 0.f, SignZ);
+						const FVector TraceEnd = TraceLat - ShaftSide * 120.f + FVector(0.f, 0.f, SignZ);
+						FVector SignLoc = WallFace + FVector(0.f, 0.f, SignZ); // fallback = oude berekening
+						FHitResult WallHit;
+						if (W->LineTraceSingleByChannel(WallHit, TraceStart, TraceEnd, ECC_WorldStatic, SignQP))
+						{
+							SignLoc = WallHit.ImpactPoint + WallHit.Normal * 0.5f;
+						}
 						Btn->SetupSign(SignLoc, BtnRot);
 						Elev->RegisterButton(Btn);
 					}

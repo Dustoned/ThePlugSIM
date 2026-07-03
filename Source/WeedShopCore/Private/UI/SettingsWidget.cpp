@@ -819,6 +819,7 @@ void USettingsWidget::BuildAudioPanel(UVerticalBox* P)
 	AddVol(TEXT("UI volume"), 0);
 	AddVol(TEXT("Game volume"), 1);
 	AddVol(TEXT("Music volume"), 2);
+	AddVol(TEXT("Weather volume"), 3); // regen/wind/donder-ambience (DayNightController schaalt UDS-sound + UDW-donder)
 
 	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Music comes later; the slider is ready for it."), 13, WeedUI::ColTextDim()))
 		->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
