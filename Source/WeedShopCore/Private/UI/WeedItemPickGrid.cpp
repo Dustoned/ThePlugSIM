@@ -129,7 +129,7 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 			UOverlaySlot* BS = Ov->AddChildToOverlay(Bottom);
 			BS->SetHorizontalAlignment(HAlign_Center);
 			BS->SetVerticalAlignment(VAlign_Bottom);
-			BS->SetPadding(FMargin(0.f, 0.f, 0.f, -4.f)); // tag iets lager richting de onderrand
+			BS->SetPadding(FMargin(0.f, 0.f, 0.f, 0.f));
 		}
 	}
 
@@ -163,8 +163,8 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 
 	// Zelfde binnen-inset (7px) als de inventory-cel -> badge (rechtsboven) en tag (onder) zitten op exact
 	// dezelfde plek als in de inventory, niet pal in de hoek.
-	S.NormalPadding = FMargin(7.f);
-	S.PressedPadding = FMargin(7.f);
+	S.NormalPadding = FMargin(7.f, 7.f, 7.f, 3.f);  // minder onder -> tag zakt binnen de cel naar onderen
+	S.PressedPadding = FMargin(7.f, 7.f, 7.f, 3.f);
 	Cells[i]->SetStyle(S);
 }
 

@@ -70,7 +70,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
 		Box->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x2A3140, 0.9f), 10.f));
-		Box->SetPadding(FMargin(7.f)); // zelfde binnen-inset als de inventory-cel -> badge/tag op dezelfde plek
+		Box->SetPadding(FMargin(7.f, 7.f, 7.f, 3.f)); // zelfde inset als inventory; minder onder -> tag netjes onderin
 		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
 		UOverlaySlot* BoxOS = SlotOv->AddChildToOverlay(Box);
 		BoxOS->SetHorizontalAlignment(HAlign_Fill); BoxOS->SetVerticalAlignment(VAlign_Fill);
@@ -117,7 +117,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* NameOS = Ov->AddChildToOverlay(TagPill);
 		NameOS->SetHorizontalAlignment(HAlign_Center);
 		NameOS->SetVerticalAlignment(VAlign_Bottom);
-		NameOS->SetPadding(FMargin(0.f, 0.f, 0.f, -4.f)); // tag iets lager richting de onderrand
+		NameOS->SetPadding(FMargin(0.f, 0.f, 0.f, 0.f));
 
 		// Transparante cel bovenop die drag (vanaf dit slot) en drop (toewijzen) afhandelt. Alleen
 		// actief als de inventory open is (dan zetten we de hele hotbar hit-testbaar).

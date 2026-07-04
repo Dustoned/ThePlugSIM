@@ -53,7 +53,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		// Geen gekleurde rand meer om gevulde cellen (user: niet consistent met de hotbar). De per-strain
 		// tag-pill onderaan blijft wél gekleurd; de cel zelf is gewoon de afgeronde bg.
 		Root->SetBrush(RB);
-		Root->SetPadding(FMargin(bHotbar ? 4.f : 7.f));
+		Root->SetPadding(bHotbar ? FMargin(4.f) : FMargin(7.f, 7.f, 7.f, 3.f)); // grid: minder onder -> tag netjes onderin
 		WidgetTree->RootWidget = Root;
 
 		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
@@ -127,7 +127,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 			UOverlaySlot* TagOS = Ov->AddChildToOverlay(TagPill);
 			TagOS->SetHorizontalAlignment(HAlign_Center);
 			TagOS->SetVerticalAlignment(VAlign_Bottom);
-			TagOS->SetPadding(FMargin(0.f, 0.f, 0.f, -4.f)); // tag iets lager richting de onderrand
+			TagOS->SetPadding(FMargin(0.f, 0.f, 0.f, 0.f));
 		}
 
 		// Hover-glow bovenop alles (binnen de cel -> clipt niet); zichtbaar bij hover.
