@@ -425,8 +425,8 @@ void UDealWidget::RebuildStrains()
 		It.Id = Bud;
 		It.IconId = Bud;
 		It.Badge = FString::Printf(TEXT("%dg"), Avail);
-		It.SubLine = bWanted ? FString::Printf(TEXT("* T%.0f%%"), QThc) : FString::Printf(TEXT("T%.0f%%"), QThc);
-		if (bWanted) { It.SubCol = WeedUI::ColGood(); }
+		// Geen THC-subregel meer: zo oogt de cel exact als de inventory (badge + tag). De THC + "what they
+		// want" staan in de hover-tooltip; de gevraagde strain staat groot in de "Wants ..."-regel bovenaan.
 		It.Tooltip = FString::Printf(TEXT("%s  %dg  THC %.0f%%%s"), *PrettyDealName(Bud), Avail, QThc, bWanted ? TEXT("  (what they want)") : TEXT(""));
 		Items.Add(It);
 	}
