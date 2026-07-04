@@ -243,19 +243,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	float GetSubstituteAcceptance(FName AltProductId, int32 AskPriceCentsPerUnit, float Quality01 = -1.f, float ThcPercent = -1.f) const;
 
+	// Accept-kans-modifier voor de GEGEVEN hoeveelheid t.o.v. de gevraagde: meer = hogere kans (extra is goed,
+	// compenseert een lagere strain), minder = lagere kans. Gedeeld door de deal-logica + de UI-preview.
+	static float QuantityAcceptMod(int32 GiveGrams, int32 WantGrams);
+
 	// Server-authoritative bod op het gewenste product. Betaalt naar PayTo, haalt voorraad uit StockFrom.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Customer")
-	EDealResult SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom);
+	EDealResult SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom, int32 GiveGrams = -1);
 
 	// Server-authoritative bod op een specifiek product (kan een andere strain zijn = substituut).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Customer")
-	EDealResult SubmitOfferProduct(FName ProductId, int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom);
+	EDealResult SubmitOfferProduct(FName ProductId, int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom, int32 GiveGrams = -1);
 
 	// Voorspelt de nieuwe Respect/Loyalty/Addiction ALS deze deal (bij deze prijs + kwaliteit) lukt.
 	// Voor de UI-preview; muteert niets. bSubstitute = je biedt een andere strain aan (minder binding).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Customer")
 	void PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent,
-		float& OutRespect, float& OutLoyalty, float& OutAddiction, bool bSubstitute = false) const;
+		float& OutRespect, float& OutLoyalty, float& OutAddiction, bool bSubstitute = false, int32 GiveGrams = -1) const;
 
 	// IInteractable
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;

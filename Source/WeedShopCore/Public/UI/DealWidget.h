@@ -37,6 +37,7 @@ protected:
 
 	UFUNCTION()
 	void OnPriceSlider(float Value);
+	void OnAmountSlider(float Value);
 
 	void BuildShell(UCanvasPanel* Root);
 	void RebuildStrains();          // vult/diff de strain-cel-pool (list-change) + zet de selectie-highlight
@@ -61,6 +62,8 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> SubText;
 	UPROPERTY() TObjectPtr<UTextBlock> PriceText;
 	UPROPERTY() TObjectPtr<USlider> PriceSlider;
+	UPROPERTY() TObjectPtr<USlider> AmountSlider;
+	UPROPERTY() TObjectPtr<UTextBlock> AmountText;
 	UPROPERTY() TObjectPtr<UTextBlock> StockText;
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
 	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;
@@ -105,6 +108,7 @@ protected:
 	TWeakObjectPtr<ACustomerBase> LastCustomer;
 	FName LastOffered = NAME_None;
 	bool bSliderHeld = false;
+	bool bAmountHeld = false;
 
 	// Perf: value-key over alle bron-waarden van de UpdateLive-TEKSTEN (State/R/L/A/Offered/Ask/Stock/...);
 	// gelijk = alle SetText/visibility-calls overslaan. De gameplay-regels in NativeTick blijven elke tick.

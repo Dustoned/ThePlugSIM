@@ -673,6 +673,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
 	void SetDealAskCents(int32 Cents);
 
+	// Stel in hoeveel je GEEFT (grammen); default = wat de klant vraagt. Accept-kans + stats schalen mee.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
+	void SetDealGiveGrams(int32 Grams);
+
 	// Stuur het bod naar de server (klant beslist op basis van prijs + respect/loyaliteit/verslaving).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Deal")
 	void ConfirmDeal();
@@ -694,6 +698,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
 	int32 GetDealAskCents() const { return DealAskCents; }
+
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
+	int32 GetDealGiveGrams() const { return DealGiveGrams; }
 
 	// Welk product je nu aanbiedt (gevraagd product, of een andere strain = substituut).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Deal")
@@ -833,7 +840,7 @@ protected:
 
 	// Server: dien het bod in bij de klant op een specifiek product (betaalt naar de kas).
 	UFUNCTION(Server, Reliable)
-	void ServerSubmitOffer(ACustomerBase* Customer, FName ProductId, int32 AskCents);
+	void ServerSubmitOffer(ACustomerBase* Customer, FName ProductId, int32 AskCents, int32 GiveGrams);
 
 	// Server: zet de "in gesprek"-vlag op een klant (stopt z'n lopen zolang je 'm aanspreekt).
 	UFUNCTION(Server, Reliable)
@@ -1016,6 +1023,7 @@ protected:
 	bool bDealOpen = false;
 	TWeakObjectPtr<ACustomerBase> DealCustomer;
 	int32 DealAskCents = 0;
+	int32 DealGiveGrams = 0; // hoeveel de speler kiest te geven (grammen); 0 = gebruik de gevraagde hoeveelheid
 	FName DealAltProduct = NAME_None; // andere strain die je aanbiedt (None = het gevraagde product)
 
 	// Tijdstip (wereldseconden) waarop de UI voor het laatst een klik verwerkte.

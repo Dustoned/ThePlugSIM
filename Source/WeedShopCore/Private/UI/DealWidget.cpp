@@ -219,6 +219,15 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	PriceSlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnPriceSlider);
 	VB->AddChildToVerticalBox(PriceSlider)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
+	// Hoeveelheid-slider: kies zelf hoeveel gram je geeft (meer -> hogere accept-kans + stats; minder -> lager).
+	AmountText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), false, true);
+	VB->AddChildToVerticalBox(AmountText)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+	AmountSlider = WidgetTree->ConstructWidget<USlider>();
+	AmountSlider->SetSliderHandleColor(WeedUI::ColAccent());
+	AmountSlider->SetSliderBarColor(WeedUI::ColSlot());
+	AmountSlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnAmountSlider);
+	VB->AddChildToVerticalBox(AmountSlider)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
+
 	StockText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColTextDim());
 	VB->AddChildToVerticalBox(StockText)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
 
@@ -313,6 +322,22 @@ void UDealWidget::OnPriceSlider(float Value)
 	if (Market <= 0) { return; }
 	const int32 Ask = FMath::RoundToInt(Market * (0.40f + 1.60f * Value));
 	Ph->SetDealAskCents(Ask);
+}
+
+void UDealWidget::OnAmountSlider(float Value)
+{
+	bAmountHeld = true;
+	UPhoneClientComponent* Ph = GetPhone();
+	APawn* P = GetOwningPlayerPawn();
+	UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	if (!Ph || !Inv) { return; }
+	float Thc = 0.f, QPct = 0.f;
+	const FName Off = Ph->GetOfferedProduct();
+	const int32 Stock = Off.ToString().StartsWith(TEXT("Bag_"))
+		? Inv->BagStockGrams(UInventoryComponent::BagStrain(Off), Thc, QPct)
+		: Inv->GetQuantity(Off);
+	if (Stock <= 0) { return; }
+	Ph->SetDealGiveGrams(FMath::Clamp(FMath::RoundToInt(Value * Stock), 1, Stock));
 }
 
 FString UDealWidget::ComputeStrainListSig() const
@@ -663,7 +688,7 @@ void UDealWidget::UpdateLive()
 	{
 		// Geen koper: verberg de deal-sectie; alleen kop + dialoog + Give joint + Leave.
 		auto Hide = [](UWidget* W) { if (W) { W->SetVisibility(ESlateVisibility::Collapsed); } };
-		Hide(WantsRow); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(StockText);
+		Hide(WantsRow); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(AmountSlider); Hide(AmountText); Hide(StockText);
 		Hide(ChanceText); Hide(ChanceBar); Hide(PreviewText); Hide(NoWeedText); Hide(OfferLabel); Hide(StrainBox);
 		return;
 	}
@@ -692,6 +717,8 @@ void UDealWidget::UpdateLive()
 	if (NoWeedText) { NoWeedText->SetVisibility(bHasWeed ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
 	if (PriceText)    { PriceText->SetVisibility(DealVis); }
 	if (PriceSlider)  { PriceSlider->SetVisibility(SliderVis); }
+	if (AmountSlider) { AmountSlider->SetVisibility(SliderVis); }
+	if (AmountText)   { AmountText->SetVisibility(DealVis); }
 	if (ChanceText)   { ChanceText->SetVisibility(DealVis); }
 	if (ChanceBar)    { ChanceBar->SetVisibility(DealVis); }
 	if (PreviewText)  { PreviewText->SetVisibility(DealVis); }
@@ -728,11 +755,20 @@ void UDealWidget::UpdateLive()
 	// Voorraad in GRAMMEN (zakjes van die strain), gewogen THC/kwaliteit. Zo klopt het met wat de klant in
 	// grammen vraagt en met de echte deal-afwikkeling (RemoveBagsForGrams) - geen "not enough" meer terwijl je het wel hebt.
 	float Q01 = -1.f, Thc = 0.f, QPct = 0.f; int32 Stock = 0;
+	const bool bBagOffer = Offered.ToString().StartsWith(TEXT("Bag_"));
 	if (APawn* P = GetOwningPlayerPawn())
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			Stock = Inv->BagStockGrams(UInventoryComponent::BagStrain(Offered), Thc, QPct);
+			if (bBagOffer)
+			{
+				Stock = Inv->BagStockGrams(UInventoryComponent::BagStrain(Offered), Thc, QPct);
+			}
+			else // hasj/edibles/concentraten: losse gram-voorraad van precies dit product
+			{
+				Stock = Inv->GetQuantity(Offered);
+				for (const FInventoryStack& St : Inv->GetStacks()) { if (St.ItemId == Offered) { Thc = St.Quality; QPct = St.QualityPct; break; } }
+			}
 			if (Stock > 0) { Q01 = FMath::Clamp(QPct / 100.f, 0.f, 1.f); }
 		}
 	}
@@ -744,8 +780,21 @@ void UDealWidget::UpdateLive()
 		StockText->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
+	// Hoeveel je GEEFT (amount-slider); default = gevraagd, geklemd op je voorraad. Accept-kans + preview schalen mee.
+	int32 GiveG = Ph->GetDealGiveGrams(); if (GiveG <= 0) { GiveG = Qty; }
+	if (Stock > 0) { GiveG = FMath::Clamp(GiveG, 1, Stock); }
+	if (AmountSlider && !bAmountHeld && Stock > 0) { AmountSlider->SetValue(FMath::Clamp((float)GiveG / (float)Stock, 0.f, 1.f)); }
+	if (AmountText)
+	{
+		const FString Note = (GiveG > Qty) ? FString::Printf(TEXT("  (+%dg extra)"), GiveG - Qty)
+			: (GiveG < Qty ? FString::Printf(TEXT("  (%dg short)"), Qty - GiveG) : FString(TEXT("  (exactly asked)")));
+		AmountText->SetText(FText::FromString(FString::Printf(TEXT("Give  %dg%s"), GiveG, *Note)));
+		AmountText->SetColorAndOpacity(FSlateColor(GiveG >= Qty ? WeedUI::ColText() : FLinearColor(1.f, 0.8f, 0.2f)));
+	}
+
 	const float OffThc = (Stock > 0) ? Thc : -1.f;
-	const float Chance = bSub ? C->GetSubstituteAcceptance(Offered, Ask, Q01, OffThc) : C->GetAcceptanceChance(Ask, Q01, OffThc);
+	float Chance = bSub ? C->GetSubstituteAcceptance(Offered, Ask, Q01, OffThc) : C->GetAcceptanceChance(Ask, Q01, OffThc);
+	Chance = FMath::Clamp(Chance + ACustomerBase::QuantityAcceptMod(GiveG, Qty), 0.f, 100.f);
 	const FLinearColor CCol = Chance >= 66.f ? WeedUI::ColGood() : (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : WeedUI::ColWarn());
 	ChanceText->SetColorAndOpacity(FSlateColor(CCol));
 	ChanceText->SetText(FText::FromString(FString::Printf(TEXT("Deal chance  %.0f%%%s"), Chance, bSub ? TEXT("  (sub - harder sell)") : TEXT(""))));
@@ -753,7 +802,7 @@ void UDealWidget::UpdateLive()
 	ChanceBar->SetFillColorAndOpacity(CCol);
 
 	float pR = 0.f, pL = 0.f, pA = 0.f;
-	C->PreviewDealOutcome(Ask, Q01, (Stock > 0 ? Thc : -1.f), pR, pL, pA, bSub);
+	C->PreviewDealOutcome(Ask, Q01, (Stock > 0 ? Thc : -1.f), pR, pL, pA, bSub, GiveG);
 	PreviewText->SetText(FText::FromString(FString::Printf(TEXT("If accepted:  R %+.0f   L %+.0f   A %+.0f"),
 		pR - C->Respect, pL - C->Loyalty, pA - C->Addiction)));
 }
@@ -807,10 +856,10 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		// Nieuwe klant: slider mag het nieuwe bod volgen; joint-kiezer dicht. StrainSelectedId NIET resetten,
 		// zodat RefreshStrainSelection ook de vorige highlight netjes wist (oud + nieuw = 2 knoppen restyle).
-		LastCustomer = C; bSliderHeld = false;
+		LastCustomer = C; bSliderHeld = false; bAmountHeld = false;
 		if (JointPickerBox) { JointPickerBox->SetVisibility(ESlateVisibility::Collapsed); } // kiezer dicht bij nieuwe klant
 	}
-	if (Offered != LastOffered) { bSliderHeld = false; } // ander product gekozen -> slider mag het bod weer volgen
+	if (Offered != LastOffered) { bSliderHeld = false; bAmountHeld = false; } // ander product gekozen -> sliders mogen weer volgen
 	LastOffered = Offered;
 
 	// Alleen de cel-pool (her)vullen als de klant OF de strain-lijst zelf wijzigt (strain toegevoegd/uitverkocht).
@@ -846,6 +895,6 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Reset de "slider held"-vlag als de muisknop los is (zodat 'ie het bod weer kan volgen).
 	if (APlayerController* PC = GetOwningPlayer())
 	{
-		if (!PC->IsInputKeyDown(EKeys::LeftMouseButton)) { bSliderHeld = false; }
+		if (!PC->IsInputKeyDown(EKeys::LeftMouseButton)) { bSliderHeld = false; bAmountHeld = false; }
 	}
 }

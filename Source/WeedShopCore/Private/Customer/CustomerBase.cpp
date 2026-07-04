@@ -3212,6 +3212,14 @@ float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceC
 	return Base * Willing;
 }
 
+float ACustomerBase::QuantityAcceptMod(int32 GiveGrams, int32 WantGrams)
+{
+	if (WantGrams <= 0 || GiveGrams <= 0) { return 0.f; }
+	const float R = static_cast<float>(GiveGrams) / static_cast<float>(WantGrams);
+	if (R >= 1.f) { return FMath::Min((R - 1.f) * 40.f, 35.f); } // meer geven = tot +35% (extra is altijd goed)
+	return FMath::Max((R - 1.f) * 55.f, -55.f);                  // minder geven = tot -55%
+}
+
 namespace
 {
 	// Relatie-winst van een GESLAAGDE deal (gedeeld door SubmitOffer en de UI-preview, zodat ze
@@ -3239,24 +3247,38 @@ namespace
 		// via de prijs-termen hierboven).
 		if (bSubstitute) { dL *= 0.6f; }
 	}
+
+	// Bonus-stats voor MEER geven dan gevraagd (speler-keuze): kleine respect/loyaliteit/verslaving-boost,
+	// gecapt op de eerste paar extra grammen zodat dumpen niemand instant maxt. Gedeeld door deal + preview.
+	void SurplusStatBonus(int32 SoldGrams, int32 WantGrams, float& dR, float& dL, float& dA)
+	{
+		const int32 Surplus = SoldGrams - WantGrams;
+		if (Surplus <= 0) { return; }
+		const float Eff = static_cast<float>(FMath::Min(Surplus, 4));
+		dR += FMath::Min(Eff * 0.4f, 1.6f);
+		dL += FMath::Min(Eff * 0.6f, 2.5f);
+		dA += FMath::Min(Eff * 0.5f, 2.0f); // extra verslaving bij meer geven (speler-verzoek)
+	}
 }
 
 void ACustomerBase::PreviewDealOutcome(int32 AskPriceCentsPerUnit, float Quality01, float ThcPercent,
-	float& OutRespect, float& OutLoyalty, float& OutAddiction, bool bSubstitute) const
+	float& OutRespect, float& OutLoyalty, float& OutAddiction, bool bSubstitute, int32 GiveGrams) const
 {
 	float dR = 0.f, dL = 0.f, dA = 0.f;
 	ComputeAcceptedDeltas(AskPriceCentsPerUnit, GetMarketPriceCents(), Quality01, ThcPercent, bSubstitute, dR, dL, dA);
+	// Toon ook de extra van MEER geven dan gevraagd (zelfde bonus als de echte deal).
+	SurplusStatBonus((GiveGrams > 0) ? GiveGrams : DesiredQuantity, DesiredQuantity, dR, dL, dA);
 	OutRespect = ClampAttr(Respect + dR);
 	OutLoyalty = ClampAttr(Loyalty + dL);
 	OutAddiction = ClampAttr(Addiction + dA);
 }
 
-EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom)
+EDealResult ACustomerBase::SubmitOffer(int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom, int32 GiveGrams)
 {
-	return SubmitOfferProduct(DesiredProductId, AskPriceCentsPerUnit, PayTo, StockFrom);
+	return SubmitOfferProduct(DesiredProductId, AskPriceCentsPerUnit, PayTo, StockFrom, GiveGrams);
 }
 
-EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom)
+EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCentsPerUnit, UEconomyComponent* PayTo, UInventoryComponent* StockFrom, int32 GiveGrams)
 {
 	if (!HasAuthority())
 	{
@@ -3268,6 +3290,8 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	}
 	if (ProductId.IsNone()) { ProductId = DesiredProductId; }
 	const bool bSubstitute = (ProductId != DesiredProductId);
+	// De speler kiest zelf hoeveel te geven (GiveGrams). <=0 -> val terug op de gevraagde hoeveelheid.
+	const int32 GiveQ = (GiveGrams > 0) ? GiveGrams : DesiredQuantity;
 
 	// NpcId ALTIJD normaliseren naar de BASIS-id (strip een eventuele "#spelerId"-suffix): zonder dit bouwt de
 	// per-speler-sleutel hieronder "basis#Pid#BuyerPid" (dubbele suffix = fantoom-entry, respect/loyaliteit stuk).
@@ -3330,9 +3354,9 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			if (BS.ItemId == ProductId) { Quality01 = FMath::Clamp(BS.QualityPct / 100.f, 0.f, 1.f); ThcStock = BS.Quality; break; }
 		}
 	}
-	if (Available < DesiredQuantity)
+	if (Available < GiveQ)
 	{
-		UE_LOG(LogWeedShop, Log, TEXT("Customer: no stock of %s (%dg)."), *ProductId.ToString(), DesiredQuantity);
+		UE_LOG(LogWeedShop, Log, TEXT("Customer: no stock of %s (%dg)."), *ProductId.ToString(), GiveQ);
 		return EDealResult::NoStock;
 	}
 
@@ -3345,9 +3369,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 
 	// Substituut = ~50% basis (stats-afhankelijk); anders de normale kans. Sterkere wiet (THC) maakt ze
 	// veel bereidwilliger (zit nu in beide functies via ThcWillingnessBonus).
-	const float Chance = bSubstitute
+	float Chance = bSubstitute
 		? GetSubstituteAcceptance(ProductId, AskPriceCentsPerUnit, Quality01, ThcStock)
 		: GetAcceptanceChance(AskPriceCentsPerUnit, Quality01, ThcStock);
+	// Meer geven dan gevraagd = hogere kans (compenseert ook een lagere strain); minder = lagere kans.
+	Chance = FMath::Clamp(Chance + QuantityAcceptMod(GiveQ, DesiredQuantity), 0.f, 100.f);
 	const bool bAccepts = FMath::FRandRange(0.f, 100.f) <= Chance;
 
 	if (!bAccepts)
@@ -3374,11 +3400,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	int32 SoldGrams = 0;
 	if (bBag)
 	{
-		SoldGrams = StockFrom->RemoveBagsForGrams(Strain, DesiredQuantity, SoldThc, SoldQual);
+		SoldGrams = StockFrom->RemoveBagsForGrams(Strain, GiveQ, SoldThc, SoldQual);
 	}
 	else
 	{
-		SoldGrams = FMath::Min(DesiredQuantity, Available);
+		SoldGrams = FMath::Min(GiveQ, Available);
 		SoldThc = ThcStock; SoldQual = Quality01 * 100.f;
 		StockFrom->RemoveItem(ProductId, SoldGrams);
 	}
@@ -3425,9 +3451,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	const int32 Surplus = SoldGrams - DesiredQuantity;
 	if (Surplus > 0)
 	{
-		const float Eff = static_cast<float>(FMath::Min(Surplus, 4)); // alleen de eerste paar extra grammen tellen
-		Respect = ClampAttr(Respect + FMath::Min(Eff * 0.4f, 1.6f));
-		Loyalty = ClampAttr(Loyalty + FMath::Min(Eff * 0.6f, 2.5f));
+		float sR = 0.f, sL = 0.f, sA = 0.f;
+		SurplusStatBonus(SoldGrams, DesiredQuantity, sR, sL, sA);
+		Respect = ClampAttr(Respect + sR);
+		Loyalty = ClampAttr(Loyalty + sL);
+		Addiction = ClampAttr(Addiction + sA); // extra verslaving bij meer geven (speler-verzoek)
 		static const TCHAR* Nice[] = {
 			TEXT("Yo, extra? You're a real one!"),
 			TEXT("Damn, you hooked me up - respect!"),

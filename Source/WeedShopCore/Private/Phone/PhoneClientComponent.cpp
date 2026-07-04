@@ -2240,6 +2240,7 @@ void UPhoneClientComponent::OpenDeal(ACustomerBase* Customer)
 	// Start op de marktprijs als vraagprijs (eerlijk bod).
 	DealAskCents = Customer->GetMarketPriceCents();
 	SetDealAskCents(DealAskCents);
+	DealGiveGrams = FMath::Max(1, Customer->DesiredQuantity); // default = wat de klant vraagt
 	UpdateCursor();
 }
 
@@ -2286,6 +2287,11 @@ void UPhoneClientComponent::SetDealAskCents(int32 Cents)
 	DealAskCents = FMath::Clamp((int32)WeedRoundEuros((int64)Cents), Lo, Hi);
 }
 
+void UPhoneClientComponent::SetDealGiveGrams(int32 Grams)
+{
+	DealGiveGrams = FMath::Max(1, Grams); // minstens 1g; de UI klemt op de voorraad
+}
+
 void UPhoneClientComponent::MarkUiClickConsumed()
 {
 	if (const UWorld* W = GetWorld()) { LastUiClickTime = W->GetTimeSeconds(); }
@@ -2309,7 +2315,7 @@ void UPhoneClientComponent::ConfirmDeal()
 {
 	if (ACustomerBase* C = DealCustomer.Get())
 	{
-		ServerSubmitOffer(C, GetOfferedProduct(), DealAskCents);
+		ServerSubmitOffer(C, GetOfferedProduct(), DealAskCents, DealGiveGrams);
 		ServerSetCustomerTalking(C, false); // klaar -> NPC mag weer lopen/vertrekken
 	}
 	bDealOpen = false;
@@ -2338,7 +2344,7 @@ void UPhoneClientComponent::RequestGiveJointId(ACustomerBase* Customer, FName Jo
 	}
 }
 
-void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, FName ProductId, int32 AskCents)
+void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Customer, FName ProductId, int32 AskCents, int32 GiveGrams)
 {
 	if (!Customer)
 	{
@@ -2361,7 +2367,7 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 			return; // net geweigerd: bod negeren tot de cooldown om is
 		}
 	}
-	const EDealResult Result = Customer->SubmitOfferProduct(ProductId, AskCents, Econ, Stock);
+	const EDealResult Result = Customer->SubmitOfferProduct(ProductId, AskCents, Econ, Stock, GiveGrams);
 
 	// NPC reageert in het praat-venster.
 	switch (Result)
