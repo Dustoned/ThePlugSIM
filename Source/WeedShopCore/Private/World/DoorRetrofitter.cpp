@@ -2991,9 +2991,9 @@ void ADoorRetrofitter::ScanAndConvert()
 					// Knop EN bord flush tegen het ECHTE gang-muurvlak (trace op hoogte Z, lateraal naast de deur): de vaste
 					// 12/17cm-offset liet ze voor de muur zweven omdat de muur-diepte per gebouw verschilt. Raak -> 0.5cm voor
 					// het vlak (flush); mis/onzin -> FallbackCm uit het opening-centrum (altijd zichtbaar).
-					auto FlushWallAt = [&](float ZWorld, float FallbackCm) -> FVector
+					auto FlushWallAt = [&](float ZWorld, float LatCm, float FallbackCm) -> FVector
 					{
-						const FVector Lat = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) + SlideDir * 110.f;
+						const FVector Lat = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) + SlideDir * LatCm;
 						FVector Out = Lat - ShaftSide * FallbackCm + FVector(0.f, 0.f, ZWorld);
 						FHitResult WH;
 						if (W->LineTraceSingleByChannel(WH, Lat - ShaftSide * 150.f + FVector(0.f, 0.f, ZWorld), Lat + ShaftSide * 40.f + FVector(0.f, 0.f, ZWorld), ECC_WorldStatic, SignQP))
@@ -3004,12 +3004,12 @@ void ADoorRetrofitter::ScanAndConvert()
 						return Out;
 					};
 					const FRotator BtnRot = (-ShaftSide).Rotation();
-					const FVector BtnLoc = FlushWallAt(Floors[Fi] + 115.f, 12.f); // flush tegen de muur (trace) i.p.v. vaste 12cm
+					const FVector BtnLoc = FlushWallAt(Floors[Fi] + 115.f, 110.f, 12.f); // knop NAAST de deur // flush tegen de muur (trace) i.p.v. vaste 12cm
 					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, BtnLoc), SP))
 					{
 						Btn->Setup(Elev, Fi);
 						// Bordje op dezelfde manier flush tegen het gang-muurvlak (zelfde helper als de knop, bord-hoogte).
-						const FVector SignLoc = FlushWallAt(Floors[Fi] + 255.f, 12.f);
+						const FVector SignLoc = FlushWallAt(Floors[Fi] + 255.f, 0.f, 12.f); // bord GECENTREERD boven de deur
 						Btn->SetupSign(SignLoc, BtnRot);
 						Elev->RegisterButton(Btn);
 					}
