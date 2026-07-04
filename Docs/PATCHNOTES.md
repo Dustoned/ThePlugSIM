@@ -1,4 +1,95 @@
 PATCH NOTES
+Version 1.21.0 — 4 juli 2026
+
+Korte intro:
+De wereld laadt nu drie tot vier keer sneller - van ~45 naar ~12 seconden - en co-op joinen loopt daardoor
+soepel. Daarbovenop een flinke berg quality-of-life: een interface die nergens meer flitst, fijner kweken en
+plaatsen, duidelijkere klanten en meldingen, en een opgeruimde wereld met beter weer en een strakkere kaart.
+
+━━━━━━━━━━━━━━━━━━━━
+
+LADEN & OPSTARTEN
+
+• De beach laadt nu in ~12 seconden in plaats van ~45. De grootste oorzaak zat in het opzetten van de
+  straat-bevolking en is volledig weggewerkt - je staat dus veel sneller in de wereld, elke keer.
+• Het hoofdmenu opent zo goed als meteen.
+• Co-op joinen loopt soepel: speler 2 bleef eerst eindeloos "inladen" omdat 'ie op de host stond te wachten -
+  die wachttijd is weg.
+
+━━━━━━━━━━━━━━━━━━━━
+
+INTERFACE ZONDER GEFLITS
+
+• De fullscreen winkels, de Goals-app, de opslag-schermen (droogrek, kledingkast, apparaten) en de dag-teller
+  + bank bovenin bouwen niet meer zichtbaar opnieuw op - alles ververst nu strak op z'n plek.
+• Behaalde goals staan bovenaan en zijn zo geclaimd; de Goals-app is opgeruimd tot een echt doelen-menu.
+
+━━━━━━━━━━━━━━━━━━━━
+
+KWEKEN & PLAATSEN
+
+• Een plant weggooien kan altijd: houd X ingedrukt.
+• Pot-upgrades plaatsen: de preview draait nu met je muis om de pot heen (je hoeft er niet meer omheen te lopen).
+• Kijk-klik kiest altijd de pot, ook als er upgrades omheen staan.
+• Snel klikken plaatst niet meer per ongeluk meerdere upgrades op dezelfde pot.
+• Het droogrek toont nu per bezet slot een echt rek-model, netjes verdeeld.
+• Wand-plaatsing (bv. het droogrek) snapt beter tegen muur- en plafondranden.
+• Wiet-toppen kleuren mee met de strain-kleur (waren altijd paars).
+• De koelkast accepteert alleen nog eetbaar-gerelateerde items.
+
+━━━━━━━━━━━━━━━━━━━━
+
+KLANTEN, ECONOMIE & INVENTORY
+
+• Duidelijkere klant-info met een fijne stat-melding ("+respect") bij een geslaagde deal in plaats van een
+  kale regel.
+• Zit je inventory vol (gewicht of slots) bij kopen of oppakken, dan vallen niet-passende items netjes op de
+  grond - items verdwijnen nooit meer.
+• Namen passen bij het personage (vrouwelijke skins krijgen vrouwennamen).
+• Het gewicht van een baggie schaalt nu met de inhoud (een 1g-zak weegt niet meer hetzelfde als een 2g-zak).
+• Klant-vragen tonen nette namen ("Critical Mass 2g") in plaats van rauwe id's met underscores.
+• Een sample geven: je kiest nu de hoeveelheid (meer gram = sneller levelen) met een duidelijke indicatie en
+  een maximum.
+• Rugzak-upgrades zitten nu in de upgrade-tab van de telefoon - puur met geld te kopen (draag meer gewicht/slots).
+
+━━━━━━━━━━━━━━━━━━━━
+
+WERELD & GELUID
+
+• Onweer is realistischer: geen bak vol bliksemflitsen meer achter elkaar.
+• Nieuw in Instellingen: een volume-schuif voor het weer-geluid.
+• De cijfers in de lift en boven de liftdeuren liggen nu strak vlak op het paneel (zweefden eerst los).
+• Kompas-iconen zijn groter en duidelijker, met de winkels erin - in de kleur van het winkeltype.
+
+━━━━━━━━━━━━━━━━━━━━
+
+KAART
+
+• De winkels op de M-kaart hebben nu elk hun eigen kleur per winkeltype (groen = grow, blauw = supplies,
+  paars = meubels, goud = appartement), gelijk aan het kompas. Voorheen waren ze allemaal geel.
+
+━━━━━━━━━━━━━━━━━━━━
+
+MULTIPLAYER
+
+• Als een speler wegvalt, bevriest de game van de ander niet meer lang en krijg je een nette melding.
+• De gast heeft altijd een "Leave session"-optie om terug naar het hoofdmenu te gaan.
+
+━━━━━━━━━━━━━━━━━━━━
+
+KLEINE FIXES
+
+• Zaadjes tonen weer een gewicht (stond op 0,0 door afronding).
+• Het verdiepingsnummer boven de liftdeur is terug.
+
+━━━━━━━━━━━━━━━━━━━━
+
+(Intern: de trage wereld-load zat in de NPC-naamgenerator, die door een wiskundige fout 199 miljoen keer
+rondtolde; opgelost met een bijectieve naam-mapping. De M-kaart gebruikt nu dezelfde winkel-kleur-bron als
+het kompas.)
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.20.0 — 3 juli 2026
 
 Korte intro:

@@ -587,7 +587,7 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	// (Virtuele crowd-stippen verwijderd: die hadden geen echt lichaam, dus je kon ze nooit vinden. De kaart
 	//  toont nu ALLEEN fysiek aanwezige, rondlopende NPC's, zodat een stip altijd een vindbare NPC is.)
-	// WINKELS: duidelijk geel winkel-icoon op elke toonbank, boven de NPC-stippen.
+	// WINKELS: winkel-icoon op elke toonbank, GEKLEURD per winkel-soort (zelfde palette als de kompas), boven de NPC-stippen.
 	// Perf: toonbanken zijn statisch — de SET 1x scannen + elke ~2s herchecken; de posities
 	// (WorldToCanvas/SetPosition) blijven per tick (kost bijna niets over de kleine cache).
 	CounterSetAge += DeltaTime;
@@ -607,17 +607,30 @@ void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!IsValid(Counter)) { continue; }
 		const FVector L = Counter->GetActorLocation();
 		const FVector2D Pos = WorldToCanvas(L.X, L.Y);
+		const uint8 KindByte = (uint8)Counter->Kind;
 		while (ShopIcons.Num() <= NShop)
 		{
 			USizeBox* SB = WidgetTree->ConstructWidget<USizeBox>();
 			SB->SetWidthOverride(26.f); SB->SetHeightOverride(26.f);
-			SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Shop, 26.f, FLinearColor(1.f, 0.85f, 0.1f)));
 			UCanvasPanelSlot* Cs2 = Canvas->AddChildToCanvas(SB);
 			Cs2->SetAutoSize(false); Cs2->SetSize(FVector2D(26.f, 26.f)); Cs2->SetAlignment(FVector2D(0.5f, 0.5f)); Cs2->SetZOrder(28);
 			ShopIcons.Add(SB);
+			ShopIconKinds.Add(255); // sentinel: nog geen kleur gezet -> volgende blok kleurt 'm
 		}
 		if (UWidget* Ico = ShopIcons[NShop])
 		{
+			// Kleur per winkel-SOORT via AStoreCounter::KindColor (zelfde palette als de kompas/panels), i.p.v. de
+			// oude hardcoded gele kleur - de map liet ALLE winkels geel zien terwijl de kompas ze wel kleurde.
+			// Content (icoon+tint) alleen HERZETTEN als het type in dit pool-slot wijzigt: winkels zijn statisch,
+			// dus max 1x per slot (geen per-tick rebuild/flash; respecteert de persistente-UI-regel).
+			if (ShopIconKinds.IsValidIndex(NShop) && ShopIconKinds[NShop] != KindByte)
+			{
+				if (USizeBox* SB = Cast<USizeBox>(Ico))
+				{
+					SB->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Shop, 26.f, AStoreCounter::KindColor(Counter->Kind)));
+				}
+				ShopIconKinds[NShop] = KindByte;
+			}
 			if (UCanvasPanelSlot* Cs2 = Cast<UCanvasPanelSlot>(Ico->Slot)) { Cs2->SetPosition(Pos); }
 			Ico->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
