@@ -303,7 +303,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	// (concentraten/edibles) vallen terug op deze AmountText-regel (dan geef je automatisch de gevraagde hoeveelheid).
 	AmountText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), false, true);
 	VB->AddChildToVerticalBox(AmountText)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
-	BuildGiveTray(VB);
+	// (De geef-tray staat NIET hier maar onderaan bij "Selling:" - zo staat de deal-kans vlak onder de prijs-slider.)
 
 	StockText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColTextDim());
 	VB->AddChildToVerticalBox(StockText)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
@@ -337,6 +337,9 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		};
 		StrainBox->AddChildToVerticalBox(StrainGrid);
 	}
+
+	// Geef-tray HIER (bij "Selling:"): je zakjes staan onder de strain-keuze, sleep ze omhoog in de geef-zone.
+	BuildGiveTray(VB);
 
 	// Joint-kiezer (verborgen tot je "Give joint" klikt): kies WELKE joint je geeft. Geen selectie (elke klik = geven).
 	JointPickerBox = WidgetTree->ConstructWidget<UVerticalBox>();
