@@ -63,10 +63,10 @@ TSharedRef<SWidget> UDealBagCell::RebuildWidget()
 		}
 		else
 		{
-			// Bron-zakje (mode 0) of gegeven bag (mode 2): canonieke inventory-icon-cel als Content. Geen eigen
-			// achtergrond (de icon-cel heeft z'n eigen SizeBox-look); transparant kader zodat het icoon los oogt.
-			FSlateBrush Tr; Tr.TintColor = FSlateColor(FLinearColor(0.f, 0.f, 0.f, 0.f));
-			B->SetBrush(Tr);
+			// Bron-zakje (mode 0) of gegeven bag (mode 2): canonieke inventory-icon-cel als Content. SOLIDE cel-bg
+			// (zoals de inventory-cel) - NIET transparant: een transparant kader is niet hit-testbaar, dan kun je de
+			// cel niet vastpakken om te slepen (alleen het icoon-pixel). Solide bg = de HELE cel grijpbaar + inventory-look.
+			B->SetBrush(WeedUI::Rounded(FLinearColor(0.11f, 0.12f, 0.16f, 0.96f), 9.f));
 			B->SetPadding(FMargin(0.f));
 			if (Content) { B->SetContent(Content); }
 		}
@@ -587,7 +587,7 @@ UWidget* UDealWidget::MakeBagCellContent(FName Strain, int32 Gram, int32 Count) 
 		UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
 		Pill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f));
 		Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
-		Pill->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("x%d"), Count), 10, WeedUI::ColText(), false, true));
+		Pill->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%dx %dg"), Count, Gram), 10, WeedUI::ColText(), false, true));
 		Pill->SetVisibility(ESlateVisibility::HitTestInvisible);
 		UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
 		PS->SetHorizontalAlignment(HAlign_Right);
