@@ -70,8 +70,8 @@ KLANTEN, ECONOMIE & INVENTORY
 • Namen passen bij het personage (vrouwelijke skins krijgen vrouwennamen).
 • Het gewicht van een baggie schaalt nu met de inhoud (een 1g-zak weegt niet meer hetzelfde als een 2g-zak).
 • Klant-vragen tonen nette namen ("Critical Mass 2g") in plaats van rauwe id's met underscores.
-• Een sample geven: je kiest nu de hoeveelheid (meer gram = sneller levelen) met een duidelijke indicatie en
-  een maximum.
+• Een sample geven (= een joint aan een klant): je kiest nu WELKE joint je geeft. Een dikkere joint (meer
+  gram) laat de klant sneller wennen/levelen, met de opbrengst per joint erbij; een cooldown voorkomt spammen.
 • Rugzak-upgrades zitten nu in de upgrade-tab van de telefoon - puur met geld te kopen (draag meer gewicht/slots).
 
 ━━━━━━━━━━━━━━━━━━━━
