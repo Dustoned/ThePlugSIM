@@ -2,7 +2,7 @@
 
 > **Dit is de levende roadmap.** Het oude A–Z stappenplan in de brief is afgerond en vervangen door dit document. Volgorde = prioriteit. Afgeronde items afvinken en (groot werk) loggen in `DECISIONS.md`.
 >
-> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. 2A.2-2A.4 afgevinkt (XP-tempo doorgerekend, concentraten-budget gefixt, level 32 gevuld). Nog open: 2B (mid-game content), een paar losse D.x + H.1/H.2/H.4/H.5 (co-op-restanten, deels deferred/accepted), T.x tech-debt, D35.
+> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. 2A.2-2A.4 afgevinkt (XP-tempo doorgerekend, concentraten-budget gefixt, level 32 gevuld). Nog open: 2B (mid-game content), een paar losse D.x, T.x tech-debt, D35. Co-op compleet (alle H.x afgevinkt, speler-bevestigd 07-04).
 > (oude notitie 2026-07-02) — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
 > **Detail-uitwerking per bevinding (probleem → file → fix, afvinkbaar): [`FIXLIST.md`](FIXLIST.md).** Dit document = de grote lijn; de fixlist = het systematische afwerk-document.
 
@@ -286,6 +286,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ## TEST-FEEDBACK 07-03 — tweede co-op-ronde
 
+> BIJGEWERKT 2026-07-04: de resterende co-op-punten (H.1b/H.2/H.4/H.5) zijn door de speler bevestigd als GEFIXT in de co-op-playtests. Co-op is compleet. (H.5 bleek grotendeels een artefact van de trage lokale 90s-join; op een echte 2-PC-join geen probleem.)
+
 - [x] **H.3 NPC-SYNC NOG STEEDS STUK (PRIO, grondig)** — bReplicates+ReplicateMovement + bandbreedte-fix
   (MaxClientRate 512KB/s) waren nodig maar NIET genoeg: op de joiner staan NPC's nog BEVROREN op verkeerde
   plekken (host loopt normaal). Vermoeden: de crowd-bodies bewegen op de server via SetActorLocation
@@ -294,7 +296,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   crowd-bodies server-side (SetActorLocation vs AI->MoveToLocation), hoe repliceert dat naar een simulated
   proxy, en de juiste fix (CMC-velocity op server / expliciete positie-repl / SimulatedProxy-handling).
   Ook: syncen resident/afspraak/deal-NPC's wel? [CustomerBase movement + DoorRetrofitter TickVirtualMove + CustomerSpawner]
-- [ ] **H.4 Joiner-pawn wordt teruggeteleporteerd (rubber-band) na de lift (PRIO, grondig)** — de joiner loopt uit
+- [x] **H.4 Joiner-pawn wordt teruggeteleporteerd (rubber-band) na de lift (PRIO, grondig)** — de joiner loopt uit
   de lift en wordt soms teruggezet naar de lift tijdens gewoon rondlopen = server-correctie van de EIGEN pawn
   (autonomous proxy). Vermoedelijk: de lift-cabine is een bewegend platform (Movable, SetWorldLocation) dat op
   host vs joiner niet gelijk staat -> de speler wordt "based" op de cab en de server relocaliseert hem; of een
@@ -306,7 +308,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   z'n EIGEN volledige crowd bovenop de gerepliceerde host-bodies (log-bewezen: "70 wandelaars geseed" op de joiner).
   FIX: crowd/joint/NPC-gates op !IsNetMode(NM_Client) i.p.v. HasAuthority() (DoorRetrofitter + CustomerSpawner +
   ActivitySpotManager). Server-beweging bleek al correct (CMC-velocity via MoveToLocation).
-- [ ] **H.5 Speler-rubber-band op interieur-Movable-vloeren (RESTEREND)** — de speler staat op runtime-gespawnde
+- [x] **H.5 Speler-rubber-band op interieur-Movable-vloeren (RESTEREND)** — de speler staat op runtime-gespawnde
   Movable AStaticMeshActors (DoorRetrofitter ~4018/4067/4212/4420/4501) die als dynamic movement-base op de joiner
   niet resolven ("on base None", 3413x in de lokale test) -> drift + snap-back. Fix-optie: die vloeren Static/
   Stationary maken (ze bewegen niet) - RISICO: belichting/registratie van runtime-Static-actors. Was in de lokale
@@ -314,19 +316,19 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   waarschijnlijk milder. Apart oppakken + verifieren na de crowd/lift-fix.
 
 - ✔ G.3 plaatsen joiner werkt, ✔ G.4 markers goed, ✔ G.1 lift werkt (joiner kan naar binnen).
-- [ ] **H.1 CONSISTENTE STUTTER elke paar seconden (PRIO)** — GEMETEN (stat dumphitches) + gefixt in 2 delen:
+- [x] **H.1 CONSISTENTE STUTTER elke paar seconden (PRIO)** — GEMETEN (stat dumphitches) + gefixt in 2 delen:
   - [x] **H.1a Skin-load-hitches (300-500ms, de grote freezes)** — body-materialisatie deed een blocking
     skin-mesh-load op de game-thread (Flush Async Loading + skinned-asset-build, 194-236ms per stuk). FIX:
     alle crowd/basis-skins voorladen onder het laadscherm + keep-alive (ACustomerBase::PreloadCrowdSkins,
     aangeroepen in DoorRetrofitter::BeginPlay, host+joiner). Plus: de obsolete UDS-middag-push uit
     ApplyMapPhotoLight (kostte ~370ms per kaart-open via UDW-rain blocking LoadAsset; overbodig sinds BaseColor).
-  - [ ] **H.1b Heavy-sweep bij lopen (~10-60ms elke ~2s)** — sweep-bevinding: de bRunHeavy-ombouwsweep draait
+  - [x] **H.1b Heavy-sweep bij lopen (~10-60ms elke ~2s)** — sweep-bevinding: de bRunHeavy-ombouwsweep draait
     vrijwel elke scan-pass zolang je LOOPT (LevelAdded/Removed-delegates + het 60m-verplaatsings-vangnet zetten
     bWorldDirty bij elke streaming-cell) -> 5+ volle actor-iteraties per pass. FIX-richting: alleen de actors
     van de NIEUW gestreamde level verwerken (delegate geeft ULevel*), LevelRemoved geen sweep, 60m-vangnet
     alleen voor de %20-backstop; evt. time-slicen. LET OP: scan-backstop NIET weghalen (memory). Pas oppakken
     als de speler na H.1a nog stutter voelt bij lopen (eerst meten met een loop-test).
-- [ ] **H.2 Lift: sync tussen spelers nog niet af** — de lift werkt nu, "alleen sync nog": de cab/deur-staat
+- [x] **H.2 Lift: sync tussen spelers nog niet af** — de lift werkt nu, "alleen sync nog": de cab/deur-staat
   loopt tussen host en joiner nog niet 100% gelijk. Verifieren of de WorldSync-elevator-staat echt repliceert
   (id-match host/joiner, ServerCallElevator komt aan) + evt. cab-Z sync voor meerijden.
 
