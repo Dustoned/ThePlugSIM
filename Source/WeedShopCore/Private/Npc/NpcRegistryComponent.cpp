@@ -148,7 +148,13 @@ namespace
 			TEXT("Dampman"), TEXT("Rookgordel"), TEXT("Blowveld"), TEXT("Hasjbrik"), TEXT("Wietpot"), TEXT("Hasjpijp"), TEXT("Nederwiet"), TEXT("Skunkstra"),
 			TEXT("Paddoman"), TEXT("Truffel"), TEXT("Jointman"), TEXT("Vuurtje") };
 
-		const int32 LastIdx = FMath::Abs(Index * 37 + Index / 7) % UE_ARRAY_COUNT(Last);
+		// BIJECTIEVE 2D-decompositie: voornaam = Index % 70 (in CleanFirstName), achternaam = (Index / 70) % 100.
+		// Zo geeft elke Index in [0, 7000) een UNIEKE (voor+achternaam)-combinatie. De oude formule
+		// (Index*37 + Index/7) had een verborgen periode van 70 (Index en Index+70 -> zelfde naam), waardoor de
+		// effectieve ruimte ~70 namen was en de uniekheid-retry-loop in EnsureSeeded naar 199M iteraties
+		// explodeerde (~27s stall = de hoofdoorzaak van de trage beach-load). LET OP: de deler 70 MOET gelijk
+		// zijn aan het aantal voornamen in CleanFirstName (First[]).
+		const int32 LastIdx = (FMath::Abs(Index) / 70) % UE_ARRAY_COUNT(Last);
 		return FString::Printf(TEXT("%s %s"), *CleanFirstName(PreferredName, Index), Last[LastIdx]);
 	}
 
@@ -187,8 +193,10 @@ void UNpcRegistryComponent::EnsureSeeded()
 		BaseNames.Add(Def->DisplayName.ToString());
 		FNpcState S;
 		S.NpcId = RowName;
+		// De bijectieve naam-mapping (zie ShortFullName) maakt de eerste poging vrijwel altijd al uniek.
+		// De cap (Try < 128) is een vangrail: nooit meer eindeloos rondtollen mocht de naam-pool ooit krimpen.
 		FString UniqueName = ShortFullName(Def->DisplayName.ToString(), RowIndex);
-		for (int32 Try = 1; UsedNames.Contains(UniqueName); ++Try)
+		for (int32 Try = 1; UsedNames.Contains(UniqueName) && Try < 128; ++Try)
 		{
 			UniqueName = ShortFullName(Def->DisplayName.ToString(), RowIndex + Try * 97);
 		}
@@ -215,7 +223,7 @@ void UNpcRegistryComponent::EnsureSeeded()
 			FNpcState S;
 			S.NpcId = Id;
 			FString Nm = ShortFullName(BaseNames[Pad % BaseNames.Num()], 1000 + Pad);
-			for (int32 Try = 1; UsedNames.Contains(Nm); ++Try) { Nm = ShortFullName(BaseNames[Pad % BaseNames.Num()], 1000 + Pad + Try * 97); }
+			for (int32 Try = 1; UsedNames.Contains(Nm) && Try < 128; ++Try) { Nm = ShortFullName(BaseNames[Pad % BaseNames.Num()], 1000 + Pad + Try * 97); }
 			UsedNames.Add(Nm);
 			S.DisplayName = FText::FromString(Nm);
 			PredictPersonality(Id, S.Respect, S.Loyalty, S.Addiction);
