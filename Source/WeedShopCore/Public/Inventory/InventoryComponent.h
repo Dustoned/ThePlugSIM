@@ -155,6 +155,9 @@ public:
 	// Niet-muterende simulatie van RemoveBagsForGrams: hoeveel GRAM lever je ECHT bij dit doel (hele zakjes)?
 	// Voor de deal-UI: de amount-slider snapt hierop zodat 'wat je ziet' = 'wat je geeft'.
 	int32 BagGramsForTarget(FName Strain, int32 TargetGrams) const;
+	// Voor de deal geef-tray: de beschikbare zakje-MATEN van een strain, gegroepeerd per gram-grootte
+	// (gram -> totaal aantal zakjes), gesorteerd van groot naar klein. Bv. {5,10},{2,4} = 10x 5g + 4x 2g.
+	void ListBagSizes(FName Strain, TArray<TPair<int32, int32>>& OutSizeCount) const;
 
 	// Server. Zet de inventory EXACT terug zoals opgeslagen: elke stack op z'n opgeslagen grid-cel,
 	// geen merge/sortering. InCells[i] = grid-cel van InStacks[i] (-1 = eerste vrije). De cash-stack

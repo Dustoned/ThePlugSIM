@@ -657,7 +657,48 @@ void UInventoryWidget::ShowItemDetails(UInvCell* Cell)
 	if (DetailsIconBox) { DetailsIconBox->SetContent(WeedUI::ItemIcon(WidgetTree, Cell->IconId, 84.f, Cell->WaterOverride)); }
 	// Volledige naam (Line1 is in de cel afgekapt met "..."; hier is wél ruimte).
 	if (DetailsName) { DetailsName->SetText(FText::FromString(Cell->IconId.IsNone() ? Cell->Line1 : WeedUI::PrettyItemName(Cell->IconId))); }
-	if (DetailsBody) { DetailsBody->SetText(FText::FromString(Cell->Tooltip)); }
+	if (DetailsBody)
+	{
+		// Body netter verdelen zodat de quick-view dezelfde rustige opmaak als de hand-preview krijgt:
+		// die zet elke stat op een eigen regel (label + waarde). ItemInfoBody levert al one-stat-per-line,
+		// maar propt soms twee stats op een regel ("THC 45%   Quality 60%", "Yield ~30g   Grow ~10 min")
+		// en plakt de "Weight"-footer direct tegen de stats. We splitsen de dubbel-gespatieerde regels naar
+		// losse regels en zetten de Weight-voetregel een lege regel lager, zodat het als nette footer leest.
+		FString Body;
+		TArray<FString> Lines;
+		Cell->Tooltip.ParseIntoArray(Lines, TEXT("\n"), false);
+		for (int32 i = 0; i < Lines.Num(); ++i)
+		{
+			FString Line = Lines[i].TrimStartAndEnd();
+			if (Line.IsEmpty()) { continue; }
+
+			// Weight-voetregel: als losse footer met een lege regel erboven (net als de dim hint onderaan
+			// de hand-preview), niet vastgeplakt aan de laatste stat.
+			const bool bFooter = Line.StartsWith(TEXT("Weight "));
+			if (bFooter && !Body.IsEmpty()) { Body += TEXT("\n"); }
+
+			// Twee stats op een regel (gescheiden door 3+ spaties) -> naar aparte regels, elk op zich.
+			int32 SplitAt = INDEX_NONE;
+			if (!bFooter)
+			{
+				const int32 P = Line.Find(TEXT("   "));
+				if (P != INDEX_NONE) { SplitAt = P; }
+			}
+			if (SplitAt != INDEX_NONE)
+			{
+				if (!Body.IsEmpty()) { Body += TEXT("\n"); }
+				Body += Line.Left(SplitAt).TrimStartAndEnd();
+				Body += TEXT("\n");
+				Body += Line.RightChop(SplitAt).TrimStartAndEnd();
+			}
+			else
+			{
+				if (!Body.IsEmpty()) { Body += TEXT("\n"); }
+				Body += Line;
+			}
+		}
+		DetailsBody->SetText(FText::FromString(Body));
+	}
 	if (DetailsSplitBtn) { DetailsSplitBtn->SetVisibility(Cell->bDraggable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 	StashContent->SetVisibility(ESlateVisibility::Collapsed);
 	DetailsContent->SetVisibility(ESlateVisibility::SelfHitTestInvisible);

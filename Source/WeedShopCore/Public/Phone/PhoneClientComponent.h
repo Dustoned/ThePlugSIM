@@ -98,6 +98,13 @@ public:
 	void Toast(const FString& Msg, FColor Color = FColor::White, float Time = 2.5f);
 	UFUNCTION(Client, Reliable) void ClientToast(const FString& Msg, FColor Color, float Time);
 
+	// Deal-resultaat-popup boven de klant-NPC (na een geslaagde deal): geld/XP/respect/loyalty/hooked.
+	// Server-side aangeroepen op de PhoneClientComponent van de VERKOPENDE speler -> verschijnt alleen bij
+	// die client. Customer = wereld-anker; AnchorWorld = fallback-locatie als de actor-pointer bij de client
+	// (nog) niet relevant/gerepliceerd is. Cents = uitbetaald geld (centen), XP/dR/dL/dA = verdiende deltas.
+	UFUNCTION(Client, Reliable)
+	void ClientDealResultPopup(ACustomerBase* Customer, int32 Cents, int32 XP, int32 dR, int32 dL, int32 dA, FVector AnchorWorld);
+
 	// Fullscreen stadskaart aan/uit (M-toets of de Fullscreen-knop in de Map-app).
 	void ToggleMapOverlay();
 	bool IsMapOpen() const { return MapOverlay != nullptr; }
@@ -959,6 +966,10 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class ULevelUpWidget> LevelUpWidget;
+
+	// Zwevende deal-resultaat-popup (per deal opnieuw gespawnd; verwijdert zichzelf na de fade).
+	UPROPERTY(Transient)
+	TObjectPtr<class UDealResultPopupWidget> DealResultPopup;
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UCrosshairWidget> CrosshairWidget;

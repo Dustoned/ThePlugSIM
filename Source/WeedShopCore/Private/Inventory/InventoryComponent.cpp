@@ -240,6 +240,23 @@ int32 UInventoryComponent::BagGramsForTarget(FName Strain, int32 TargetGrams) co
 	return Sold;
 }
 
+void UInventoryComponent::ListBagSizes(FName Strain, TArray<TPair<int32, int32>>& OutSizeCount) const
+{
+	OutSizeCount.Reset();
+	// Tel het aantal zakjes per gram-grootte over alle bag-stacks van deze strain.
+	TMap<int32, int32> ByGram;
+	for (const FInventoryStack& S : Stacks)
+	{
+		if (S.Quantity <= 0 || !IsBag(S.ItemId) || BagStrain(S.ItemId) != Strain) { continue; }
+		const int32 G = BagGrams(S.ItemId);
+		if (G <= 0) { continue; }
+		ByGram.FindOrAdd(G) += S.Quantity;
+	}
+	for (const TPair<int32, int32>& P : ByGram) { OutSizeCount.Add(P); }
+	// Groot naar klein (5g voor 2g), zoals de speler ze wil zien/combineren.
+	OutSizeCount.Sort([](const TPair<int32, int32>& A, const TPair<int32, int32>& B) { return A.Key > B.Key; });
+}
+
 int32 UInventoryComponent::FindStackIndex(FName ItemId) const
 {
 	return Stacks.IndexOfByPredicate([ItemId](const FInventoryStack& S) { return S.ItemId == ItemId; });

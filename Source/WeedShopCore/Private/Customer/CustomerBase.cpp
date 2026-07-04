@@ -31,6 +31,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "Phone/ContactsComponent.h"
+#include "Phone/PhoneClientComponent.h" // ClientDealResultPopup: deal-cijfers boven de klant
 #include "Npc/NpcRegistryComponent.h"
 #include "Save/SaveGameSubsystem.h"
 #include "Save/AssetKeepAliveSubsystem.h"
@@ -3459,9 +3460,11 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	}
 
 	// D14: onthoud de stats van vóór de deal zodat de toast de ECHTE (geclampte) winst toont,
-	// inclusief de eventuele over-leverings-bonus hieronder.
+	// inclusief de eventuele over-leverings-bonus hieronder. AddictionBefore erbij zodat de deal-popup
+	// ook de verslaving-winst (+hooked) kan tonen (zelfde patroon als respect/loyalty).
 	const float RespectBefore = Respect;
 	const float LoyaltyBefore = Loyalty;
+	const float AddictionBefore = Addiction;
 	float dR = 0.f, dL = 0.f, dA = 0.f;
 	ComputeAcceptedDeltas(AskPriceCentsPerUnit, Market, Quality01, ThcStock, bSubstitute, dR, dL, dA);
 	Respect = ClampAttr(Respect + dR);
@@ -3487,19 +3490,17 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		Say(Nice[FMath::RandRange(0, 3)]);
 	}
 
-	// D14: tevreden-klant-toast met smiley-icoon naar de VERKOPENDE speler (server-side; NotifyPawn
-	// routeert per-speler naar de juiste client). Toon alleen wat echt omhoog ging (afgerond, > 0).
-	if (PayTo)
+	// D14: de ECHTE (geclampte) winst per stat, voor zowel de korte scherm-toast als de NPC-popup.
+	// Op functie-scope zodat de deal-resultaat-popup verderop (na de XP-berekening) ze kan meesturen.
+	const int32 UpR = FMath::RoundToInt(Respect - RespectBefore);
+	const int32 UpL = FMath::RoundToInt(Loyalty - LoyaltyBefore);
+	const int32 UpA = FMath::RoundToInt(Addiction - AddictionBefore);
+
+	// Korte tevreden-klant-bevestiging (smiley) naar de VERKOPENDE speler. De CIJFERS staan nu in de
+	// zwevende NPC-popup (ClientDealResultPopup verderop) -> hier alleen de bevestiging, geen dubbele getallen.
+	if (PayTo && (UpR > 0 || UpL > 0))
 	{
-		const int32 UpR = FMath::RoundToInt(Respect - RespectBefore);
-		const int32 UpL = FMath::RoundToInt(Loyalty - LoyaltyBefore);
-		if (UpR > 0 || UpL > 0)
-		{
-			FString StatMsg = TEXT("Happy customer");
-			if (UpR > 0) { StatMsg += FString::Printf(TEXT("  +%d respect"), UpR); }
-			if (UpL > 0) { StatMsg += FString::Printf(TEXT("  +%d loyalty"), UpL); }
-			UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 4.f, FColor(120, 255, 140), StatMsg, TEXT("t_face_smile_128"));
-		}
+		UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 4.f, FColor(120, 255, 140), TEXT("Happy customer"), TEXT("t_face_smile_128"));
 	}
 
 	State = ECustomerState::Served;
@@ -3553,6 +3554,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	// upgradede naar betere strains levelde juist trager. Nu lopen geld- en level-progressie gelijk op. De
 	// dure strains zijn level-gated, dus dit "balloont" niet voordat je er al bent. ~EUR5 omzet = 1 XP
 	// (deler is de tuning-knop). Total bevat al de eventuele VIP-order-bonus.
+	int32 PopupXP = 0; // verdiende XP (basis, voor de stoned-mult) -> meesturen naar de deal-popup
 	if (AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 	{
 		// De VERKOPENDE speler = eigenaar van de betaal-economy (PayTo). XP + heat gaan naar HEM (per-speler in competitive).
@@ -3562,6 +3564,7 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			// Basis-XP op verkoopwaarde + extra (ook waarde-gewogen) voor een vervulde VIP-order.
 			int32 DealXP = 5 + FMath::RoundToInt(Total / 500.f);
 			if (bOrderFulfilled) { DealXP += 15 + FMath::RoundToInt(Total / 1000.f); }
+			PopupXP = DealXP; // basis-XP (de stoned-mult is een per-speler bonus, niet in de popup-cijfers)
 			// Stoned-XP-bonus van de VERKOPENDE speler (DealerPawn = PayTo-owner), per-verdiener.
 			float StonedMult = 1.f;
 			if (IPlayerNpcActions* PA = Cast<IPlayerNpcActions>(DealerPawn)) { StonedMult = PA->GetStonedXpMultiplier(); }
@@ -3572,6 +3575,21 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		{
 			const UDayCycleComponent* DCh = GS->GetDayCycle();
 			Heat->AddHeatFor(DealerPawn, (DCh && DCh->IsNight()) ? 3.0f : 0.5f);
+		}
+	}
+
+	// Zwevende deal-resultaat-popup boven het hoofd van DEZE klant met de echte cijfers (geld/XP/respect/
+	// loyalty/hooked). Routeert per-speler via de PhoneClientComponent van de VERKOPENDE speler (PayTo-owner)
+	// -> verschijnt alleen bij de dealende client, co-op-correct. De actor-pointer (this) ankert de popup;
+	// GetActorLocation() gaat als fallback mee voor als de pointer bij die client (nog) niet relevant is.
+	if (PayTo)
+	{
+		if (AActor* DealerActor = PayTo->GetOwner())
+		{
+			if (UPhoneClientComponent* Ph = DealerActor->FindComponentByClass<UPhoneClientComponent>())
+			{
+				Ph->ClientDealResultPopup(this, Total, PopupXP, UpR, UpL, UpA, GetActorLocation());
+			}
 		}
 	}
 

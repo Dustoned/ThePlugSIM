@@ -68,6 +68,7 @@
 #include "UI/MainMenuWidget.h"
 #include "UI/SaveIndicatorWidget.h"
 #include "UI/LevelUpWidget.h"
+#include "UI/DealResultPopupWidget.h"
 #include "UI/CrosshairWidget.h"
 #include "UI/SettingsWidget.h"
 #include "UI/LightDimmerWidget.h"
@@ -433,6 +434,30 @@ void UPhoneClientComponent::Toast(const FString& Msg, FColor Color, float Time)
 void UPhoneClientComponent::ClientToast_Implementation(const FString& Msg, FColor Color, float Time)
 {
 	UWeedToast::Notify(-1, Time, Color, Msg);
+}
+
+void UPhoneClientComponent::ClientDealResultPopup_Implementation(ACustomerBase* Customer, int32 Cents, int32 XP, int32 dR, int32 dL, int32 dA, FVector AnchorWorld)
+{
+	// Client-side rendering: alleen de lokale controller ziet z'n eigen deal-popup. Zonder een lokale
+	// PC (bv. dedicated proxy) valt er niks te tonen.
+	APlayerController* PC = GetPC();
+	if (!PC || !PC->IsLocalController()) { return; }
+
+	// Idempotent: hergebruik 1 popup-instance. Nog niet gemaakt (of net opgeruimd na de vorige fade)?
+	// -> maak 'm nu aan en zet 'm net onder het pauze-menu (ZOrder 45; pauze zit op 40, LevelUp op 46).
+	if (!DealResultPopup)
+	{
+		DealResultPopup = CreateWidget<UDealResultPopupWidget>(PC, UDealResultPopupWidget::StaticClass());
+		if (DealResultPopup) { DealResultPopup->AddToViewport(45); }
+	}
+	else if (!DealResultPopup->IsInViewport())
+	{
+		DealResultPopup->AddToViewport(45);
+	}
+	if (DealResultPopup)
+	{
+		DealResultPopup->ShowResult(Customer, AnchorWorld, Cents, XP, dR, dL, dA);
+	}
 }
 
 void UPhoneClientComponent::CloseMapOverlay()
