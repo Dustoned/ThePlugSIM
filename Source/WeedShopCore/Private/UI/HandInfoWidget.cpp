@@ -87,8 +87,8 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 
 	// Kaart LINKS-midden (zo valt 'ie nooit achter de telefoon, die rechts opent).
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HandCard"));
-	// Onzichtbare achtergrond: geen paneel, geen kader. Alleen de accent-balk + tekst (met schaduw) blijven over.
-	CardB->SetBrush(WeedUI::Rounded(FLinearColor(0.f, 0.f, 0.f, 0.f), 12.f));
+	// Massief paneel (kit-look, zelfde als de inventory quick-view) i.p.v. transparant: leesbaarder + nettere kaart.
+	CardB->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.95f), 12.f));
 	CardB->SetPadding(FMargin(0.f));
 	Card = CardB;
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
@@ -117,6 +117,11 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
 	ColSize->SetContent(Col);
 
+	// Item-icoon bovenin (zoals de inventory quick-view). Content per item in NativeTick.
+	IconBox = WidgetTree->ConstructWidget<USizeBox>();
+	IconBox->SetWidthOverride(60.f); IconBox->SetHeightOverride(60.f);
+	{ UVerticalBoxSlot* IcoS = Col->AddChildToVerticalBox(IconBox); IcoS->SetHorizontalAlignment(HAlign_Center); IcoS->SetPadding(FMargin(0.f, 12.f, 0.f, 4.f)); }
+
 	// Type-tag (klein, hoofdletters, gekleurd). Bold projectfont + dunne donkere outline: de letters waren
 	// te dun/onleesbaar zonder paneel-achtergrond (de kaart is transparant).
 	TypeText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
@@ -127,7 +132,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 		TypeText->SetFont(TagFont);
 	}
 	TypeText->SetAutoWrapText(true);
-	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 12.f, 14.f, 1.f));
+	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 2.f, 14.f, 1.f));
 
 	// Naam (groot).
 	NameText = WeedUI::Text(WidgetTree, TEXT(""), 20, WeedUI::ColText(), false, true);
@@ -153,12 +158,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	HintText->SetAutoWrapText(true);
 	Col->AddChildToVerticalBox(HintText)->SetPadding(FMargin(14.f, 2.f, 14.f, 12.f));
 
-	// Schaduw op de hoofdteksten -> leesbaar zonder paneel-achtergrond.
-	auto Shade = [](UTextBlock* T)
-	{
-		if (T) { T->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); T->SetShadowOffset(FVector2D(1.6f, 2.f)); }
-	};
-	Shade(TypeText); Shade(NameText); Shade(QtyText); Shade(HintText);
+	// (Geen zware tekst-schaduw meer: op het massieve paneel is de tekst zo al leesbaar, net als de quick-view.)
 
 	Card->SetRenderOpacity(0.f);
 }
@@ -205,6 +205,19 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%.0f|%s"), *IdStr, Qty, Thc, Qpct, ActiveSid, ActiveQ, *RollDesc);
 	if (Key == LastKey) { return; }
 	LastKey = Key;
+	// Icoon (met water-vulling voor flessen) - alleen bij wijziging, geen per-tick rebuild.
+	if (IconBox)
+	{
+		int32 WaterOv = -1;
+		if (IdStr.StartsWith(TEXT("WaterBottle")))
+		{
+			if (const APawn* Pw = GetOwningPlayerPawn())
+			{
+				if (const UWaterCanComponent* Can = Pw->FindComponentByClass<UWaterCanComponent>()) { WaterOv = Can->GetCharges(); }
+			}
+		}
+		IconBox->SetContent(WeedUI::ItemIcon(WidgetTree, Id, 60.f, WaterOv));
+	}
 
 	FString Type, Hint; FLinearColor Col;
 	ClassifyItem(IdStr, Type, Hint, Col);
@@ -294,18 +307,15 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				// volle breedte (wrapt). De "2g loaded"-info hoort hier bij de hand-preview, niet bij de controls.
 				UTextBlock* Ld = WeedUI::Text(WidgetTree, RollDesc, 13, WeedUI::ColGood(), false, true);
 				Ld->SetAutoWrapText(true);
-				Ld->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); Ld->SetShadowOffset(FVector2D(1.6f, 2.f));
 				StatBox->AddChildToVerticalBox(Ld)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
 			}
 		auto AddStat = [this](const FString& Label, const FString& Value)
 		{
 			UHorizontalBox* RowH = WidgetTree->ConstructWidget<UHorizontalBox>();
 			UTextBlock* L = WeedUI::Text(WidgetTree, Label, 12, WeedUI::ColTextDim());
-			L->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); L->SetShadowOffset(FVector2D(1.6f, 2.f));
 			UHorizontalBoxSlot* LS = RowH->AddChildToHorizontalBox(L);
 			LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
 			UTextBlock* V = WeedUI::Text(WidgetTree, Value, 13, WeedUI::ColText(), false, true);
-			V->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 1.f)); V->SetShadowOffset(FVector2D(1.6f, 2.f));
 			V->SetJustification(ETextJustify::Right);
 			UHorizontalBoxSlot* VS = RowH->AddChildToHorizontalBox(V);
 			VS->SetVerticalAlignment(VAlign_Center);

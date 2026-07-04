@@ -32,6 +32,7 @@ protected:
 	UPROPERTY() TObjectPtr<UBorder> Divider;     // dun lijntje onder de naam
 	UPROPERTY() TObjectPtr<class UVerticalBox> StatBox; // nette label/waarde-rijen
 	UPROPERTY() TObjectPtr<UTextBlock> HintText; // korte hint onderaan (wat je ermee doet)
+	UPROPERTY() TObjectPtr<class USizeBox> IconBox; // item-icoon bovenin (zoals de inventory quick-view)
 
 	float Shown = 0.f;       // huidige fade (0..1)
 	FString LastKey;         // herbouw tekst alleen bij wijziging
