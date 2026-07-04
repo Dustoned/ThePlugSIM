@@ -1,4 +1,19 @@
 PATCH NOTES
+Version 1.21.3 — 4 juli 2026
+
+Korte intro:
+Kleine bijschaaf op de nieuwe hoeveelheid-schuif.
+
+━━━━━━━━━━━━━━━━━━━━
+
+DEALS
+
+• De hoeveelheid-schuif springt nu naar wat je ECHT kunt geven: wiet gaat per heel zakje, dus met alleen
+  2g-zakjes geef je 2, 4 of 6 gram - geen tussenstand meer die stiekem naar boven afrondde. Wat je ziet is
+  wat de klant krijgt. (Edibles gaan wel per losse gram.)
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.21.2 — 4 juli 2026
 
 Korte intro:
