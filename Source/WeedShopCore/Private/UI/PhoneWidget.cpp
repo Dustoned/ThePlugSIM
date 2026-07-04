@@ -3206,7 +3206,6 @@ void UPhoneWidget::RefreshContent()
 
 			// Lees de tier van de LOKALE speler-pawn (de backpack-component zit op de pawn = per speler).
 			int32 Tier = 0;
-			int32 MaxStacks = 0; float MaxWeight = 0.f;
 			bool bHaveInv = false;
 			if (APawn* LP = GetOwningPlayerPawn())
 			{
@@ -3216,48 +3215,59 @@ void UPhoneWidget::RefreshContent()
 					bHaveInv = true;
 				}
 			}
-			UInventoryComponent::GetBackpackTierCaps(Tier, MaxStacks, MaxWeight);
-			const bool bMax = (Tier >= UInventoryComponent::BackpackMaxTier);
 
-			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-			const FString TitleStr = bMax
-				? FString::Printf(TEXT("Backpack  Lv %d (max)"), Tier + 1)
-				: FString::Printf(TEXT("Backpack  Lv %d"), Tier + 1);
-			Info->AddChildToVerticalBox(MakeText(TitleStr, 12, bMax ? WeedUI::ColGood() : WeedUI::ColText()));
-			Info->AddChildToVerticalBox(MakeText(
-				FString::Printf(TEXT("%d slots / %.0f kg"), MaxStacks, MaxWeight), 10, WeedUI::ColTextDim()));
-			UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
-			IL->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			IL->SetVerticalAlignment(VAlign_Center);
-			IL->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-
-			// Nog niet max EN we hebben een lokale inventory-component -> upgrade-knop met de VOLGENDE tier + prijs.
-			if (!bMax && bHaveInv)
+			// ALLE tiers als eigen regel (slots/kg + prijs) zodat je ziet wat elke level geeft; je huidige level is
+			// gemarkeerd en de eerstvolgende tier krijgt de koop-knop. Herbouwt alleen bij tier-wijziging (signature).
+			for (int32 T = 0; T <= UInventoryComponent::BackpackMaxTier; ++T)
 			{
-				const int64 Cost = UInventoryComponent::BackpackUpgradeCostCents(Tier);
-				const FString BtnLabel = FString::Printf(TEXT("Upgrade to Lv %d  -  EUR %lld"),
-					Tier + 2, (long long)(Cost / 100));
-				USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
-				RB->SetWidthOverride(184.f);
-				RB->SetHeightOverride(28.f);
-				// Koop via de component-RPC op de LOKALE pawn (server-authoritative: betaalt met eigen cash, tier++).
-				// GEEN ClearChildren op de klik: de UpgradesSignature-check in NativeTick herbouwt dit paneel één keer
-				// zodra de gerepliceerde BackpackTier oploopt (zelfde in-place idioom als de andere apps).
-				RB->SetContent(MakeActionBtn(BtnLabel, WeedUI::ColAccentDim(), [this]()
+				int32 MaxStacks = 0; float MaxWeight = 0.f;
+				UInventoryComponent::GetBackpackTierCaps(T, MaxStacks, MaxWeight);
+				const bool bOwned = (T <= Tier);
+				const bool bNext = (T == Tier + 1);
+
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+				const FLinearColor LvCol = (T == Tier) ? WeedUI::ColGood() : (bOwned ? WeedUI::ColTextDim() : WeedUI::ColText());
+				const FString LvLabel = (T == Tier) ? FString::Printf(TEXT("Lv %d  (current)"), T + 1) : FString::Printf(TEXT("Lv %d"), T + 1);
+				Info->AddChildToVerticalBox(MakeText(LvLabel, 12, LvCol));
+				Info->AddChildToVerticalBox(MakeText(FString::Printf(TEXT("%d slots / %.0f kg"), MaxStacks, MaxWeight), 10, WeedUI::ColTextDim()));
+				UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
+				IL->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				IL->SetVerticalAlignment(VAlign_Center);
+				IL->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+				if (bNext && bHaveInv)
 				{
-					if (APawn* P = GetOwningPlayerPawn())
+					// Eerstvolgende tier: koop-knop met prijs (server-authoritative: eigen cash, tier++).
+					const int64 Cost = UInventoryComponent::BackpackUpgradeCostCents(Tier);
+					const FString BtnLabel = FString::Printf(TEXT("Upgrade  -  EUR %lld"), (long long)(Cost / 100));
+					USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
+					RB->SetWidthOverride(150.f); RB->SetHeightOverride(28.f);
+					RB->SetContent(MakeActionBtn(BtnLabel, WeedUI::ColAccentDim(), [this]()
 					{
-						if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+						if (APawn* P = GetOwningPlayerPawn())
 						{
-							Inv->ServerBuyBackpackUpgrade();
+							if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>()) { Inv->ServerBuyBackpackUpgrade(); }
 						}
-					}
-				}, 11));
-				UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
-				RS->SetVerticalAlignment(VAlign_Center);
+					}, 11));
+					UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
+					RS->SetVerticalAlignment(VAlign_Center);
+				}
+				else if (!bOwned)
+				{
+					// Latere (nog niet koopbare) tier: prijs als preview.
+					const int64 Cost = UInventoryComponent::BackpackUpgradeCostCents(T - 1);
+					Row->AddChildToHorizontalBox(MakeText(FString::Printf(TEXT("EUR %lld"), (long long)(Cost / 100)), 11, WeedUI::ColTextDim()))
+						->SetVerticalAlignment(VAlign_Center);
+				}
+				else if (T < Tier)
+				{
+					Row->AddChildToHorizontalBox(MakeText(TEXT("owned"), 10, WeedUI::ColTextDim()))
+						->SetVerticalAlignment(VAlign_Center);
+				}
+
+				ActiveContent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 			}
-			ActiveContent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 		}
 	}
 	else if (App == GGrowApp) // Grow shop -> ALLES om te kweken (zaad, pot, aarde, water, upgrades, verzorging)
