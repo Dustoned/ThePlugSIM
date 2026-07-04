@@ -37,6 +37,7 @@ protected:
 
 	UFUNCTION()
 	void OnPriceSlider(float Value);
+	UFUNCTION()
 	void OnAmountSlider(float Value);
 
 	void BuildShell(UCanvasPanel* Root);

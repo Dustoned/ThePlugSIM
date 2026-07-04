@@ -336,9 +336,9 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ## DOORLOPEND — Tech-hygiëne (oppakken tussen features door)
 
-- [ ] **T.1 Template-dead-weight verwijderen** — `Source/ThePlugSIM/Variant_Horror/` + `Variant_Shooter/` zijn nergens gerefereerd; verwijderen + `ThePlugSIM.Build.cs` include-paden opschonen (snellere builds, minder ruis).
-- [ ] **T.2 `AMoneyTestPickup` opruimen of editor-only maken** — test-actor uit de speelbare wereld houden.
-- [ ] **T.3 Performance/soak-pass** — 40+ bewoners + bakes + liften: af en toe een `-AutoSoak`-run van 15+ min, hitches en log-spam checken (zeker vóór de co-op-testronde).
+- [x] **T.1 Template-dead-weight verwijderen** — GEDAAN (geverifieerd 07-04): `Variant_Horror/` + `Variant_Shooter/` bestaan niet meer, `ThePlugSIM.Build.cs` include-paden schoon (alleen `"ThePlugSIM"`). Waren al opgeruimd (waarschijnlijk bij de 5.8-upgrade).
+- [x] **T.2 `AMoneyTestPickup` opruimen of editor-only maken** — GEDAAN (geverifieerd 07-04): klasse bestaat nergens meer in Source/, al verwijderd.
+- [x] **T.3 Performance/soak-pass** — log-health-check 07-04 (baseline: 3 warnings, ~ok). VONDST + gefixt: de deal-hoeveelheid-slider (`OnAmountSlider`, feature 1.21.2) miste `UFUNCTION()` -> `AddDynamic`-bind faalde -> ensure-spam (33 error-regels = 1 ensure-callstack) EN de slider deed niks bij slepen. Fix: UFUNCTION() toegevoegd (DealWidget.h). Brede sweep: alle 14 AddDynamic-binds nu correct. Echte 15-min in-world soak (crowd/lift-drift/geheugen) staat nog open als de speler 'm wil draaien.
 - [ ] **T.4 Bekende kleine known-issues** — Lola cloth/haar-physics, controller-support afmaken, ultrawide-iconen (uit PATCHNOTES 1.4.0). Laag, maar niet vergeten.
 
 ---
