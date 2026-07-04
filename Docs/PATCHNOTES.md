@@ -1,4 +1,26 @@
 PATCH NOTES
+Version 1.21.1 — 4 juli 2026
+
+Korte intro:
+Een ronde polish na 1.21.0: een duidelijker backpack-scherm, nettere lift-bordjes en een opgeruimde
+"wat-heb-ik-vast"-kaart.
+
+━━━━━━━━━━━━━━━━━━━━
+
+VERBETERINGEN
+
+• Backpack-upgrade: je ziet nu ALLE levels in een lijst (slots + draaggewicht per level, met de prijs), zodat
+  je vooraf weet wat je krijgt voor je geld. Je huidige level is gemarkeerd; alleen het eerstvolgende heeft de
+  koop-knop.
+• De verdieping-nummers en de call-knop bij de lift zitten nu strak tegen de muur (zweefden er wat voor), en
+  het nummer hangt weer netjes gecentreerd boven de liftdeur.
+• De "wat heb ik vast"-kaart (linksonder) is opgeruimd: een net paneel in dezelfde stijl als de inventory-
+  details, zonder zware schaduwen. Alle info blijft staan.
+• In een deal kleurt nu alleen de strain-NAAM mee met z'n eigen kleur (bv. "Wants 6g Streetweed"), niet meer
+  de hele regel.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.21.0 — 4 juli 2026
 
 Korte intro:
