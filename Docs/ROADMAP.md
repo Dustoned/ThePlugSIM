@@ -2,7 +2,7 @@
 
 > **Dit is de levende roadmap.** Het oude A–Z stappenplan in de brief is afgerond en vervangen door dit document. Volgorde = prioriteit. Afgeronde items afvinken en (groot werk) loggen in `DECISIONS.md`.
 >
-> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. Nog open: 2A/2B (balans+content), een paar losse D.x + H.1/H.2/H.4/H.5 (co-op-restanten, deels deferred/accepted), T.x tech-debt, D35.
+> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. Nog open: 2A.2-2A.4/2B (XP/cadans/concentraten + mid-game content; 2A.1 seed-ROI is OPGELOST door de V4-overhaul), een paar losse D.x + H.1/H.2/H.4/H.5 (co-op-restanten, deels deferred/accepted), T.x tech-debt, D35.
 > (oude notitie 2026-07-02) — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
 > **Detail-uitwerking per bevinding (probleem → file → fix, afvinkbaar): [`FIXLIST.md`](FIXLIST.md).** Dit document = de grote lijn; de fixlist = het systematische afwerk-document.
 
@@ -29,7 +29,7 @@ De CityBeachStrip-map heeft werkende deuren (DoorRetrofitter), room-replicatie +
 
 ### 2A. Balans-pass (data, geen nieuwe systemen)
 
-- [ ] **2A.1 Late Cali-seed-economie repareren** — Gary Payton: €5.000 zaad voor 8g basis-yield (~€320-480 opbrengst) = verlies. Hele staart (lvl 39-49) doorrekenen: seed-prijs vs. yield × marktprijs × care/fertilizer; richtlijn: een topseed verdient zich in 1-2 oogsten terug.
+- [x] **2A.1 Late Cali-seed-economie repareren** — **OPGELOST door de economy-V4-overhaul; GEVERIFIEERD 07-04 tegen DT_Strains/DT_Products.** De stale getallen (Gary Payton €5.000 zaad -> 8g = verlies) kloppen niet meer: nu €1.013 zaad -> 175g -> ~€5.812 winst (base-yield). ALLE strains winstgevend; winst/min loopt op van ~€67 (lvl1) naar ~€153 (lvl49). ROI-multiple daalt 15x->6,7x maar gecompenseerd door groeitijd+absolute winst. Geen verlies-seeds meer.
 - [ ] **2A.2 XP-tempo doorrekenen** — curve is `100 + (lvl-1)×40` (≈106k XP tot 50); verkoop geeft maar `5 + €/100` XP (deal van €500 = 10 XP), oogst draagt veel zwaarder. Checken of lvl 30→50 niet vastloopt op "alleen oogsten levelt".
 - [ ] **2A.3 Concentraten-rendement** — Oil/Moonrock/Rosin/Iso-ketens (machines lvl 30-48) moeten per uur méér opleveren dan baggies draaien, anders zijn ze dood gewicht.
 - [ ] **2A.4 Level 32 vullen + late-game cadans** — 32 is echt leeg; 35-49 is strikt "oneven = dure seed, even = pro-machine". Kleine tussenbeloningen strooien (cosmetics, QoL-unlocks, pot-upgrade-tiers) zodat elk level íets geeft. Géén grote content — die ruimte is voor 50+.
