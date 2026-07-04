@@ -585,10 +585,11 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	// Twee-koloms stat-rijen (label links dim, waarde rechts) - herbouwd bij een echte itemwissel.
 	DetailsStatBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	DetailsVB->AddChildToVerticalBox(DetailsStatBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-	// Korte hint (dim) onderaan - vult de resterende ruimte, net als de hand-preview-footer.
+	// Korte hint (dim) onderaan. AUTO-grootte (NIET Fill): met een knop eronder zou Fill bij een vol paneel
+	// negatieve ruimte krijgen -> de hint-tekst rendert dan over de "Split stack"-knop heen. Auto = netjes stapelen.
 	DetailsHint = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
 	DetailsHint->SetAutoWrapText(true);
-	DetailsVB->AddChildToVerticalBox(DetailsHint)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	DetailsVB->AddChildToVerticalBox(DetailsHint)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 	{
 		UWeedActionButton* SplitB = TileButton(WidgetTree, WeedUI::Hex(0x3A2B52), 8.f, [this]() { if (DetailsStackId != 0) { OpenSplitPopup(DetailsStackId); } });
 		SplitB->SetContent(WeedUI::Text(WidgetTree, TEXT("Split stack"), 12, WeedUI::Hex(0xF1EAFE), true));
