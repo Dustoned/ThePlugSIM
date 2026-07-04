@@ -2988,26 +2988,28 @@ void ADoorRetrofitter::ScanAndConvert()
 				}
 				for (int32 Fi = 0; Fi < Floors.Num(); ++Fi)
 				{
+					// Knop EN bord flush tegen het ECHTE gang-muurvlak (trace op hoogte Z, lateraal naast de deur): de vaste
+					// 12/17cm-offset liet ze voor de muur zweven omdat de muur-diepte per gebouw verschilt. Raak -> 0.5cm voor
+					// het vlak (flush); mis/onzin -> FallbackCm uit het opening-centrum (altijd zichtbaar).
+					auto FlushWallAt = [&](float ZWorld, float FallbackCm) -> FVector
+					{
+						const FVector Lat = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) + SlideDir * 110.f;
+						FVector Out = Lat - ShaftSide * FallbackCm + FVector(0.f, 0.f, ZWorld);
+						FHitResult WH;
+						if (W->LineTraceSingleByChannel(WH, Lat - ShaftSide * 150.f + FVector(0.f, 0.f, ZWorld), Lat + ShaftSide * 40.f + FVector(0.f, 0.f, ZWorld), ECC_WorldStatic, SignQP))
+						{
+							const float OutDist = FVector::DotProduct(WH.ImpactPoint - FVector(OpeningCenter.X, OpeningCenter.Y, 0.f), -ShaftSide);
+							if (OutDist > 4.f && OutDist < 90.f) { Out = WH.ImpactPoint + WH.Normal * 0.5f; }
+						}
+						return Out;
+					};
 					const FRotator BtnRot = (-ShaftSide).Rotation();
-					const FVector WallFace = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) - ShaftSide * 12.f; // 17->12cm: knop-cijfers dichter op de muur
-					const FVector BtnLoc = WallFace + SlideDir * 110.f + FVector(0.f, 0.f, Floors[Fi] + 115.f);
+					const FVector BtnLoc = FlushWallAt(Floors[Fi] + 115.f, 12.f); // flush tegen de muur (trace) i.p.v. vaste 12cm
 					if (APackElevatorButton* Btn = W->SpawnActor<APackElevatorButton>(APackElevatorButton::StaticClass(), FTransform(BtnRot, BtnLoc), SP))
 					{
 						Btn->Setup(Elev, Fi);
-						// Bord-hoogte-muurtrace: start 60cm de gang in (+ShaftSide) op bord-hoogte, exact
-						// boven de bord-lateraalpositie (dezelfde SlideDir*110 als de knop), en trace naar
-						// de muur (-ShaftSide). Raak -> plaat 0.5cm voor het muurvlak (langs de normaal,
-						// tegen z-fighting). Geen raak -> val terug op de oude 17cm-berekening.
-						const float SignZ = Floors[Fi] + 255.f;
-						const FVector TraceLat = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) + SlideDir * 110.f;
-						const FVector TraceStart = TraceLat - ShaftSide * 150.f + FVector(0.f, 0.f, SignZ); // 150cm de GANG in (Blok4-B traceerde andersom -> bord achter de muur)
-						const FVector TraceEnd = TraceLat + ShaftSide * 40.f + FVector(0.f, 0.f, SignZ);   // naar de opening/schacht toe -> raakt het GANG-vlak
-						FVector SignLoc = FVector(OpeningCenter.X, OpeningCenter.Y, 0.f) - ShaftSide * 17.f + FVector(0.f, 0.f, SignZ); // fallback = 17cm, ALTIJD zichtbaar
-						FHitResult WallHit;
-						if (W->LineTraceSingleByChannel(WallHit, TraceStart, TraceEnd, ECC_WorldStatic, SignQP))
-						{
-							const float OutDist = FVector::DotProduct(WallHit.ImpactPoint - FVector(OpeningCenter.X, OpeningCenter.Y, 0.f), -ShaftSide); if (OutDist > 8.f && OutDist < 90.f) { SignLoc = WallHit.ImpactPoint + WallHit.Normal * 0.5f; }
-						}
+						// Bordje op dezelfde manier flush tegen het gang-muurvlak (zelfde helper als de knop, bord-hoogte).
+						const FVector SignLoc = FlushWallAt(Floors[Fi] + 255.f, 12.f);
 						Btn->SetupSign(SignLoc, BtnRot);
 						Elev->RegisterButton(Btn);
 					}
