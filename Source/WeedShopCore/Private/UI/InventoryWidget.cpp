@@ -560,7 +560,7 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	DetailsVB->SetVisibility(ESlateVisibility::Collapsed);
 	DetailsContent = DetailsVB;
 	DetailsIconBox = WidgetTree->ConstructWidget<USizeBox>();
-	DetailsIconBox->SetWidthOverride(88.f); DetailsIconBox->SetHeightOverride(88.f);
+	DetailsIconBox->SetWidthOverride(78.f); DetailsIconBox->SetHeightOverride(78.f); // iets kleiner: knop past binnen het paneel
 	{ UVerticalBoxSlot* DIS = DetailsVB->AddChildToVerticalBox(DetailsIconBox); DIS->SetHorizontalAlignment(HAlign_Center); DIS->SetPadding(FMargin(0.f, 6.f, 0.f, 8.f)); }
 	// Type-tag (klein, hoofdletters, bold + gekleurd + dunne outline) - exact zoals de hand-preview.
 	DetailsType = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColGood(), false, true);
@@ -585,11 +585,9 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	// Twee-koloms stat-rijen (label links dim, waarde rechts) - herbouwd bij een echte itemwissel.
 	DetailsStatBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	DetailsVB->AddChildToVerticalBox(DetailsStatBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-	// Korte hint (dim) onderaan. AUTO-grootte (NIET Fill): met een knop eronder zou Fill bij een vol paneel
-	// negatieve ruimte krijgen -> de hint-tekst rendert dan over de "Split stack"-knop heen. Auto = netjes stapelen.
-	DetailsHint = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
-	DetailsHint->SetAutoWrapText(true);
-	DetailsVB->AddChildToVerticalBox(DetailsHint)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	// GEEN hint-regel in de inv quick-view: die beschrijvende tekst staat al in de hand-preview (als je het
+	// item vasthoudt). Weglaten = minder ruis + scheelt hoogte zodat de "Split stack"-knop binnen het paneel past.
+	// (DetailsHint blijft null -> de SetText in ShowItemDetails is een no-op.)
 	{
 		UWeedActionButton* SplitB = TileButton(WidgetTree, WeedUI::Hex(0x3A2B52), 8.f, [this]() { if (DetailsStackId != 0) { OpenSplitPopup(DetailsStackId); } });
 		SplitB->SetContent(WeedUI::Text(WidgetTree, TEXT("Split stack"), 12, WeedUI::Hex(0xF1EAFE), true));
