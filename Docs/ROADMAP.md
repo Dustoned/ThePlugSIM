@@ -2,7 +2,7 @@
 
 > **Dit is de levende roadmap.** Het oude A–Z stappenplan in de brief is afgerond en vervangen door dit document. Volgorde = prioriteit. Afgeronde items afvinken en (groot werk) loggen in `DECISIONS.md`.
 >
-> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. Nog open: 2A.2-2A.4/2B (XP/cadans/concentraten + mid-game content; 2A.1 seed-ROI is OPGELOST door de V4-overhaul), een paar losse D.x + H.1/H.2/H.4/H.5 (co-op-restanten, deels deferred/accepted), T.x tech-debt, D35.
+> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. 2A.2-2A.4 afgevinkt (XP-tempo doorgerekend, concentraten-budget gefixt, level 32 gevuld). Nog open: 2B (mid-game content), een paar losse D.x + H.1/H.2/H.4/H.5 (co-op-restanten, deels deferred/accepted), T.x tech-debt, D35.
 > (oude notitie 2026-07-02) — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
 > **Detail-uitwerking per bevinding (probleem → file → fix, afvinkbaar): [`FIXLIST.md`](FIXLIST.md).** Dit document = de grote lijn; de fixlist = het systematische afwerk-document.
 
@@ -30,9 +30,9 @@ De CityBeachStrip-map heeft werkende deuren (DoorRetrofitter), room-replicatie +
 ### 2A. Balans-pass (data, geen nieuwe systemen)
 
 - [x] **2A.1 Late Cali-seed-economie repareren** — **OPGELOST door de economy-V4-overhaul; GEVERIFIEERD 07-04 tegen DT_Strains/DT_Products.** De stale getallen (Gary Payton €5.000 zaad -> 8g = verlies) kloppen niet meer: nu €1.013 zaad -> 175g -> ~€5.812 winst (base-yield). ALLE strains winstgevend; winst/min loopt op van ~€67 (lvl1) naar ~€153 (lvl49). ROI-multiple daalt 15x->6,7x maar gecompenseerd door groeitijd+absolute winst. Geen verlies-seeds meer.
-- [ ] **2A.2 XP-tempo doorrekenen** — curve is `100 + (lvl-1)×40` (≈106k XP tot 50); verkoop geeft maar `5 + €/100` XP (deal van €500 = 10 XP), oogst draagt veel zwaarder. Checken of lvl 30→50 niet vastloopt op "alleen oogsten levelt".
-- [ ] **2A.3 Concentraten-rendement** — Oil/Moonrock/Rosin/Iso-ketens (machines lvl 30-48) moeten per uur méér opleveren dan baggies draaien, anders zijn ze dood gewicht.
-- [ ] **2A.4 Level 32 vullen + late-game cadans** — 32 is echt leeg; 35-49 is strikt "oneven = dure seed, even = pro-machine". Kleine tussenbeloningen strooien (cosmetics, QoL-unlocks, pot-upgrade-tiers) zodat elk level íets geeft. Géén grote content — die ruimte is voor 50+.
+- [x] **2A.2 XP-tempo doorgerekend (07-04)** - curve `100 + (lvl-1)*40` (~106k XP tot 50). Conclusie: het tempo is consistent (~1,5-2,5 kweekcycli/level), GEEN vastloper 30->50 - de speler vond het al oke, dus de XP-curve zelf ONGEWIJZIGD gelaten. Wel bleek er een profit-dip lvl 27-35 (hoge-THC-lage-yield strains): opgelost met een THC-premium op de marktprijs (commit 98e3ec38), geen XP-tik nodig.
+- [x] **2A.3 Concentraten-rendement (07-04)** - root cause: de vlakke budget-cap (EUR 80/g) sloeg de Mult-geprijsde concentraten (EUR 270-500/g) dood, klanten weigerden alles. Fix: budget is nu markt-relatief (`EffBudget = max(BudgetPerUnit, Market*1.25)`, commit 502e146a), zodat de concentraat-ketens hun hogere prijs echt kunnen vragen. Ketens leveren nu meer per uur dan baggies.
+- [x] **2A.4 Level 32 gevuld (07-04, commit 1aa94626)** - twee koopbare items op lvl 32: **Purity coil** (ProcUp_Purity, 120k) = placeable gear naast een hash/press-machine, +20% output-kwaliteit (concentraat-THC zit al aan de willingness-cap, dus kwaliteit is de zinvolle knop -> hogere accept-kans); **Smart pot** (Pot_Smart, 320k) = top-pot met ingebouwde auto-watering + hogere care (1.15)/yield (1.40). Late-game cadans-strooisel (35-49) blijft open voor later.
 
 ### 2B. Mid-game variatie (lvl ~20-35)
 
