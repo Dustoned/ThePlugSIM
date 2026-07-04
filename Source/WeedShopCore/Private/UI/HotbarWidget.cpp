@@ -117,7 +117,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* NameOS = Ov->AddChildToOverlay(TagPill);
 		NameOS->SetHorizontalAlignment(HAlign_Center);
 		NameOS->SetVerticalAlignment(VAlign_Bottom);
-		NameOS->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f)); // zelfde tag-onderrand als inventory/pickers
+		NameOS->SetPadding(FMargin(0.f, 0.f, 0.f, -4.f)); // tag iets lager richting de onderrand
 
 		// Transparante cel bovenop die drag (vanaf dit slot) en drop (toewijzen) afhandelt. Alleen
 		// actief als de inventory open is (dan zetten we de hele hotbar hit-testbaar).

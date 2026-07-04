@@ -129,7 +129,7 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 			UOverlaySlot* BS = Ov->AddChildToOverlay(Bottom);
 			BS->SetHorizontalAlignment(HAlign_Center);
 			BS->SetVerticalAlignment(VAlign_Bottom);
-			BS->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+			BS->SetPadding(FMargin(0.f, 0.f, 0.f, -4.f)); // tag iets lager richting de onderrand
 		}
 	}
 

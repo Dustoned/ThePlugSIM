@@ -127,7 +127,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 			UOverlaySlot* TagOS = Ov->AddChildToOverlay(TagPill);
 			TagOS->SetHorizontalAlignment(HAlign_Center);
 			TagOS->SetVerticalAlignment(VAlign_Bottom);
-			TagOS->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+			TagOS->SetPadding(FMargin(0.f, 0.f, 0.f, -4.f)); // tag iets lager richting de onderrand
 		}
 
 		// Hover-glow bovenop alles (binnen de cel -> clipt niet); zichtbaar bij hover.
