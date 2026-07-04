@@ -4,11 +4,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Cultivation/WaterCanComponent.h"
 #include "Phone/PhoneClientComponent.h"
-#include "Progression/StoreComponent.h"
-#include "Cultivation/PotTypes.h"
-#include "Cultivation/SoilTypes.h"
-#include "Game/WeedShopGameState.h"
-#include "Engine/World.h"
+#include "Cultivation/PotTypes.h" // IsPotItem (Qty-logica: pot = geen aantal tonen)
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -24,32 +20,6 @@
 
 namespace
 {
-	// Type-tag + korte hint + accent-kleur op basis van het item-id-prefix.
-	void ClassifyItem(const FString& Id, FString& OutType, FString& OutHint, FLinearColor& OutCol)
-	{
-		auto Starts = [&Id](const TCHAR* P) { return Id.StartsWith(P); };
-		// Hints zijn PUUR beschrijvend (geen toetsen) - de controls staan altijd links-onder.
-		if (Starts(TEXT("WetBud_")))      { OutType = TEXT("WET BUD"); OutHint = TEXT("Hang on a drying rack before you can use it"); OutCol = FLinearColor(0.45f, 0.75f, 1.f); }
-		else if (Starts(TEXT("Bud_")))    { OutType = TEXT("DRIED BUD"); OutHint = TEXT("Pack into baggies or jars, or roll into joints"); OutCol = FLinearColor(0.55f, 1.f, 0.6f); }
-		else if (Starts(TEXT("Bag_")))    { OutType = TEXT("BAGGIE"); OutHint = TEXT("A packed deal - sell it to customers"); OutCol = FLinearColor(0.4f, 0.95f, 0.55f); }
-		else if (Starts(TEXT("Joint_")))  { OutType = TEXT("JOINT"); OutHint = TEXT("Hand one to a customer, or smoke it yourself"); OutCol = FLinearColor(0.8f, 0.95f, 0.55f); }
-		else if (Starts(TEXT("Seed_")))   { OutType = TEXT("SEED"); OutHint = TEXT("Plant it in a pot filled with soil"); OutCol = FLinearColor(0.6f, 0.9f, 0.5f); }
-		else if (Starts(TEXT("Soil_")))   { OutType = TEXT("SOIL"); OutHint = TEXT("Fill an empty pot before planting"); OutCol = FLinearColor(0.7f, 0.55f, 0.35f); }
-		else if (Starts(TEXT("WaterBottle"))) { OutType = TEXT("WATER BOTTLE"); OutHint = TEXT("Water your plants to keep them growing"); OutCol = FLinearColor(0.4f, 0.7f, 1.f); }
-		else if (Starts(TEXT("Cont_")))   { OutType = TEXT("CONTAINER"); OutHint = TEXT("Used at the packing bench to bag your weed"); OutCol = FLinearColor(0.7f, 0.7f, 0.8f); }
-		else if (Starts(TEXT("Spray_")))  { OutType = TEXT("SPRAY"); OutHint = TEXT("Cures mould or pests on a plant"); OutCol = FLinearColor(0.5f, 0.85f, 0.9f); }
-		else if (Starts(TEXT("Fertilizer_"))) { OutType = TEXT("FERTILIZER"); OutHint = TEXT("Boosts a plant's yield for this harvest"); OutCol = FLinearColor(0.6f, 0.85f, 0.4f); }
-		else if (Starts(TEXT("Papers_"))) { OutType = TEXT("ROLLING PAPERS"); OutHint = TEXT("Roll your dried buds into joints"); OutCol = FLinearColor(0.85f, 0.85f, 0.7f); }
-		else if (Starts(TEXT("Pot_")))    { OutType = TEXT("PLANT POT"); OutHint = TEXT("Place it, fill with soil, then plant a seed"); OutCol = FLinearColor(0.8f, 0.6f, 0.4f); }
-		else if (Starts(TEXT("DryRack_")))   { OutType = TEXT("DRYING RACK"); OutHint = TEXT("Place it, then hang wet buds to dry"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
-		else if (Starts(TEXT("Bench_")))     { OutType = TEXT("PACKING BENCH"); OutHint = TEXT("Place it to pack buds into containers"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
-		else if (Id == TEXT("Shelf") || Id == TEXT("Chest")) { OutType = TEXT("STORAGE"); OutHint = TEXT("Place it to stash extra stock"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
-		else if (Id == TEXT("Atm"))          { OutType = TEXT("ATM"); OutHint = TEXT("Place it to deposit or withdraw money"); OutCol = FLinearColor(0.5f, 0.8f, 1.f); }
-		else if (Id == TEXT("Table") || Id == TEXT("Mattress") || Id == TEXT("Fridge"))
-			{ OutType = TEXT("FURNITURE"); OutHint = TEXT("Place it down in your home"); OutCol = FLinearColor(0.7f, 0.7f, 0.85f); }
-		else { OutType = TEXT("ITEM"); OutHint = TEXT(""); OutCol = FLinearColor(0.8f, 0.82f, 0.9f); }
-	}
-
 	// "SilverHaze" -> "Silver Haze": spaties voor binnenste hoofdletters/cijfers.
 	FString PrettyName(const FString& In)
 	{
@@ -201,8 +171,10 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Key == LastKey) { return; }
 	LastKey = Key;
 
-	FString Type, Hint; FLinearColor Col;
-	ClassifyItem(IdStr, Type, Hint, Col);
+	// Gedeelde detail-DATA (type-tag + kleur + hint + stat-rijen). Zelfde bron als de inventory-quick-view,
+	// zodat de twee NOOIT uit elkaar lopen. De rendering (AddStat/Qty/naam-kleur) blijft hier in de widget.
+	const WeedUI::FItemDetailInfo Detail = WeedUI::BuildItemDetail(this, Id, Qty, Thc, Qpct);
+	FString Type = Detail.Type, Hint = Detail.Hint; FLinearColor Col = Detail.TypeColor;
 
 	// Alleen de NAAM kleurt mee met de PER-STRAIN tag-kleur (zelfde hue als de tag-pills in de inventory/
 	// hotbar), iets helderder voor leesbaarheid als losse tekst; de type-tekst erboven ("SEED"/"JOINT") houdt
@@ -215,17 +187,6 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!StrainCol.Equals(WeedUI::TagColorForItem(Id))) { NameCol = StrainCol; }
 	}
 
-	// Winkel-omschrijving (heeft vaak concrete getallen, bv. "+15% yield this harvest") als hint,
-	// behalve voor wiet/joints (die komen niet uit de catalogus).
-	const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr;
-	UStoreComponent* Store = GS ? GS->GetStore() : nullptr;
-	const bool bWeedProduct = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_"))
-		|| IdStr.StartsWith(TEXT("Bag_")) || IdStr.StartsWith(TEXT("Joint_"));
-	if (Store && !bWeedProduct)
-	{
-		const FString Desc = Store->GetCatalogDesc(Id).ToString();
-		if (!Desc.IsEmpty()) { Hint = Desc; }
-	}
 	if (bRollLoaded) { Hint = TEXT("Loaded and ready to roll"); }
 
 	if (AccentBar) { AccentBar->SetBrush(WeedUI::Rounded(Col, 3.f)); }
@@ -304,63 +265,7 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			StatBox->AddChildToVerticalBox(RowH)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 		};
 
-		// Aantal staat al groot bij de titel - hier alleen de echte eigenschappen.
-		if (UInventoryComponent::IsBag(Id))
-		{
-			AddStat(TEXT("Per bag"), FString::Printf(TEXT("%d g"), UInventoryComponent::BagGrams(Id)));
-			AddStat(TEXT("Bag count"), FString::Printf(TEXT("%d"), Qty));
-			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
-			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));
-		}
-		else if (IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_")))
-		{
-			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
-			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));
-		}
-		else if (IdStr.StartsWith(TEXT("Joint_")))
-		{
-			const int32 G = UInventoryComponent::JointGrams(Id); // Joint_3g / Joint_SilverHaze_3g -> 3
-			const FName JStrain = UInventoryComponent::JointStrain(Id);
-			if (!JStrain.IsNone()) { AddStat(TEXT("Strain"), WeedUI::PrettyItemName(FName(*(TEXT("Bud_") + JStrain.ToString())))); }
-			AddStat(TEXT("Per joint"), FString::Printf(TEXT("%d g"), G));
-			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
-			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), Qpct));
-		}
-		else if (IdStr.StartsWith(TEXT("Seed_")))
-		{
-			// Strain-stats: hoe sterk, hoeveel opbrengst en hoe snel hij groeit.
-			float SThc = 0.f, SYield = 0.f, SGrow = 0.f;
-			if (Store && Store->GetStrainStats(UStoreComponent::StrainFromSeedItem(Id), SThc, SYield, SGrow))
-			{
-				AddStat(TEXT("THC up to"), FString::Printf(TEXT("%.0f%%"), SThc));
-				AddStat(TEXT("Max yield"), FString::Printf(TEXT("~%.0f g"), SYield));
-				AddStat(TEXT("Grow time"), FString::Printf(TEXT("~%.0f min"), SGrow));
-			}
-		}
-		else if (IsPotItem(Id))
-		{
-			FPotDef Pd;
-			if (GetPotDef(Id, Pd))
-			{
-				AddStat(TEXT("Quality cap"), FString::Printf(TEXT("%.0f%%"), Pd.CareCap * 100.f));
-				AddStat(TEXT("Yield"), Pd.YieldMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Pd.YieldMult - 1.f) * 100.f) : TEXT("base"));
-				AddStat(TEXT("Plants"), FString::Printf(TEXT("%d"), Pd.PlantSlots));
-			}
-		}
-		else if (IsSoilItem(Id))
-		{
-			FSoilDef Sd;
-			if (GetSoilDef(Id, Sd))
-			{
-				AddStat(TEXT("Yield"), Sd.YieldMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Sd.YieldMult - 1.f) * 100.f) : TEXT("base"));
-				AddStat(TEXT("Quality"), Sd.QualityMult > 1.001f ? FString::Printf(TEXT("+%.0f%%"), (Sd.QualityMult - 1.f) * 100.f) : TEXT("base"));
-				AddStat(TEXT("Lasts"), FString::Printf(TEXT("%d harvests"), Sd.Harvests));
-			}
-		}
-		else if (IdStr.StartsWith(TEXT("Cont_")))
-		{
-			const int32 Cap = UPhoneClientComponent::ContainerCapacity(Id);
-			AddStat(TEXT("Capacity"), FString::Printf(TEXT("up to %d g"), Cap));
-		}
+		// Aantal staat al groot bij de titel - hier alleen de echte eigenschappen (gedeelde stat-rijen).
+		for (const TPair<FString, FString>& Stat : Detail.Stats) { AddStat(Stat.Key, Stat.Value); }
 	}
 }

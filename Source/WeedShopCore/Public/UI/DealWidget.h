@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Blueprint/DragDropOperation.h"
 #include "DealWidget.generated.h"
 
 class UPhoneClientComponent;
@@ -23,42 +22,6 @@ class UBorder;
 class USizeBox;
 class UImage;
 class UMaterialInterface;
-class UWrapBox;
-class UDealWidget;
-
-// Sleep-payload voor de geef-tray: WELK zakje (strain + gram-maat) sleep je, en hoeveel heb je ervan.
-UCLASS()
-class WEEDSHOPCORE_API UDealBagDragOp : public UDragDropOperation
-{
-	GENERATED_BODY()
-public:
-	UPROPERTY() FName Strain;
-	UPROPERTY() int32 Gram = 0;   // gram per zakje van deze maat
-	UPROPERTY() int32 Avail = 0;  // hoeveel zakjes van deze maat je nog KUNT toevoegen (voorraad - al in de pile)
-};
-
-// Eén cel in de geef-tray. Mode 0 = bron-zakje in de voorraad-strip (sleepbaar). Mode 1 = de geef-zone
-// (drop-doel). Bouwt z'n eigen inhoud in RebuildWidget uit Gram/Avail/Mode. De DealWidget doet de logica.
-UCLASS()
-class WEEDSHOPCORE_API UDealBagCell : public UUserWidget
-{
-	GENERATED_BODY()
-public:
-	TWeakObjectPtr<UDealWidget> Owner;
-	int32 Mode = 0;          // 0 = bron (sleepbaar), 1 = geef-zone (drop-doel)
-	FName Strain;
-	int32 Gram = 0;
-	int32 Avail = 0;
-	FString Title;           // grote regel (bv "5g" of "Sleep hierheen")
-	FString SubLabel;        // kleine regel eronder (bv "x10" of "5g + 2g = 7g")
-	FLinearColor Bg = FLinearColor(0.23f, 0.25f, 0.32f, 1.f);
-	bool bDim = false;       // uitgeput/leeg -> gedimd
-protected:
-	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
-	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
-};
 
 UCLASS()
 class WEEDSHOPCORE_API UDealWidget : public UUserWidget
@@ -67,11 +30,6 @@ class WEEDSHOPCORE_API UDealWidget : public UUserWidget
 
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
-
-	// Aangeroepen door UDealBagCell (de geef-tray-cellen). Publiek zodat de cel-klasse ze kan callen.
-	void OnBagDroppedOnGive(FName Strain, int32 Gram, int32 Avail); // zakje op de geef-zone -> stack? popup, anders +1
-	void OnPileChipClicked(int32 Gram);                             // pile-chip geklikt -> 1 van die maat eruit
-	int32 PileAvailFor(FName Strain, int32 Gram) const;             // voorraad van die maat MINUS wat al in de pile ligt
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -90,18 +48,6 @@ protected:
 	void GiveJointPressed();   // "Give joint" geklikt: 0 -> melding, 1 -> direct geven, >=2 -> kiezer
 	void RebuildJointPicker(); // vult de joint-kiezer (strain - gram - kwaliteit per joint)
 
-	// --- Geef-tray ---
-	void BuildGiveTray(UVerticalBox* VB);   // bouwt de tray 1x in BuildShell (strip + geef-zone + pile)
-	void BuildHowManyPopup(UCanvasPanel* Root); // de "hoeveel zakjes?"-slider-popup (hoge ZOrder)
-	void RebuildBagStrip();                 // vult de voorraad-strip (per maat) van de aangeboden strain
-	void RefreshGivePile();                 // toont de pile-chips + totaal; zet DealGiveGrams = pile-som
-	void SyncPileToOffered();               // reset de pile bij strain-wissel (nieuwe strain = lege pile)
-	void OpenHowMany(int32 Gram, int32 Avail); // popup voor een stack: hoeveel van deze maat geven
-	UFUNCTION() void OnHowManySlider(float V);
-	void ConfirmHowMany();
-	void CancelHowMany();
-	int32 PileTotalGrams() const;           // som gram*aantal over de pile
-
 	UPhoneClientComponent* GetPhone() const;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
@@ -119,27 +65,6 @@ protected:
 	UPROPERTY() TObjectPtr<USlider> PriceSlider;
 	UPROPERTY() TObjectPtr<USlider> AmountSlider;
 	UPROPERTY() TObjectPtr<UTextBlock> AmountText;
-
-	// --- Geef-tray (vervangt de amount-slider): sleep zakjes uit je voorraad naar de geef-zone,
-	//     combineer maten (5g + 2g = 7g); een stack vraagt "hoeveel?". De pile-som = DealGiveGrams. ---
-	UPROPERTY() TObjectPtr<UVerticalBox> TrayBox;        // hele tray-blok (togglen met de amount-zone)
-	UPROPERTY() TObjectPtr<UWrapBox> BagStrip;           // je voorraad-zakjes van de aangeboden strain (sleepbaar)
-	UPROPERTY() TArray<TObjectPtr<UDealBagCell>> BagStripPool;
-	UPROPERTY() TObjectPtr<UDealBagCell> GiveZone;       // drop-doel
-	UPROPERTY() TObjectPtr<UWeedItemPickGrid> GivePileGrid; // wat je geeft (per maat; klik = verwijder er 1) - sig-diff pooling
-	FString GivePileSig;                                 // sig van de getoonde pile (alleen bij wijziging SetItems)
-	UPROPERTY() TObjectPtr<UTextBlock> GiveTotalText;    // "Geeft: 5g + 2g = 7g (+1g extra)"
-	// Pile: gram-maat -> aantal zakjes, voor de HUIDIG aangeboden strain.
-	TMap<int32, int32> PileCounts;
-	FName PileStrain = NAME_None;                        // strain waarvoor de pile geldt (reset bij strain-wissel)
-	FString BagStripSig;                                // sig van de getoonde voorraad-strip (alleen bij wijziging vullen)
-	// "Hoeveel?"-popup voor een stack.
-	UPROPERTY() TObjectPtr<UWidget> HowManyRoot;
-	UPROPERTY() TObjectPtr<USlider> HowManySlider;
-	UPROPERTY() TObjectPtr<UTextBlock> HowManyLabel;
-	int32 HowManyGram = 0;
-	int32 HowManyMax = 0;
-
 	UPROPERTY() TObjectPtr<UTextBlock> StockText;
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
 	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;

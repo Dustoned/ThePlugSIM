@@ -88,6 +88,21 @@ namespace WeedUI
 	// Thc = het Quality-veld van de stack (voor waterflessen zit daar de vulling in).
 	WEEDSHOPCORE_API FString ItemInfoBody(FName ItemId, int32 Qty, float Thc, float QualPct);
 
+	// Gedeelde item-detail-DATA voor de nette twee-koloms detail-weergave (hand-preview EN inventory-quick-view
+	// delen deze bron, zodat ze NOOIT uit elkaar lopen). Bevat de gekleurde type-tag, de accent-kleur, de korte
+	// hint (winkel-omschrijving voor niet-wiet) en de label/waarde-stat-rijen (label links, waarde rechts).
+	struct FItemDetailInfo
+	{
+		FString Type;                              // type-tag (SEED / BAGGIE / ...), UPPERCASE
+		FLinearColor TypeColor = FLinearColor::White; // accent/tag-kleur per categorie
+		FString Hint;                              // korte beschrijvende hint onderaan
+		TArray<TPair<FString, FString>> Stats;     // label -> waarde (twee-koloms rijen)
+	};
+
+	// Bouwt de detail-DATA voor een item (type-tag + kleur + hint + stat-rijen). WorldContext = een widget/actor
+	// om de GameState/Store mee te vinden (winkel-omschrijving + strain-stats). Qty/Thc/QualPct komen uit de stack.
+	WEEDSHOPCORE_API FItemDetailInfo BuildItemDetail(UObject* WorldContext, FName Id, int32 Qty, float Thc, float QualPct);
+
 	// --- Item-iconen ---------------------------------------------------------
 	// Bestandsnaam-sleutel (zonder pad/extensie) voor het icoon van een item, bv. "weed", "cash",
 	// "packaging". Drop een PNG met die naam in Content/_Project/UI/Icons/ en hij wordt gebruikt.

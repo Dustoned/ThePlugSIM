@@ -168,7 +168,14 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> DetailsContent;
 	UPROPERTY() TObjectPtr<class USizeBox> DetailsIconBox;
 	UPROPERTY() TObjectPtr<UTextBlock> DetailsName;
-	UPROPERTY() TObjectPtr<UTextBlock> DetailsBody;
+	// (DetailsBody verwijderd: de platte multi-line body is vervangen door de nette twee-koloms opmaak hieronder.)
+	// Nette detail-opmaak, exact als de hand-preview: gekleurde type-tag, groot aantal, dun lijntje,
+	// twee-koloms stat-rijen en een dim hint-footer (gedeelde bron: WeedUI::BuildItemDetail).
+	UPROPERTY() TObjectPtr<UTextBlock> DetailsType;         // type-tag (SEED / BAGGIE / ...), bold + gekleurd + outline
+	UPROPERTY() TObjectPtr<UTextBlock> DetailsQty;          // aantal/gram, groot + gekleurd onder de naam
+	UPROPERTY() TObjectPtr<class UBorder> DetailsDivider;   // dun scheidingslijntje onder het aantal
+	UPROPERTY() TObjectPtr<class UVerticalBox> DetailsStatBox; // twee-koloms label/waarde-rijen
+	UPROPERTY() TObjectPtr<UTextBlock> DetailsHint;         // korte dim hint onderaan
 	UPROPERTY() TObjectPtr<UWidget> DetailsSplitBtn;
 	int32 DetailsStackId = 0;
 	TWeakObjectPtr<class UInvCell> DragGhostCell; // bron-cel die gedimd is tijdens slepen

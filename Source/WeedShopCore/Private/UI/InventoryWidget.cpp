@@ -7,6 +7,7 @@
 #include "UI/ShelfWidget.h"      // UShelfDragOp: een item uit een schap in de inventory droppen = pakken
 #include "Inventory/InventoryComponent.h"
 #include "World/StorageShelf.h"
+#include "Cultivation/PotTypes.h"    // IsPotItem: quick-view aantal verbergen voor plaatsbare potten (zelfde regel als de hand-preview)
 #include "Placement/BuildComponent.h" // IsInOwnedHome: competitive stash-filter (eigen kamer)
 #include "Game/WeedShopGameState.h"   // IsCompetitive
 #include "Engine/World.h"
@@ -561,12 +562,33 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	DetailsIconBox = WidgetTree->ConstructWidget<USizeBox>();
 	DetailsIconBox->SetWidthOverride(88.f); DetailsIconBox->SetHeightOverride(88.f);
 	{ UVerticalBoxSlot* DIS = DetailsVB->AddChildToVerticalBox(DetailsIconBox); DIS->SetHorizontalAlignment(HAlign_Center); DIS->SetPadding(FMargin(0.f, 6.f, 0.f, 8.f)); }
+	// Type-tag (klein, hoofdletters, bold + gekleurd + dunne outline) - exact zoals de hand-preview.
+	DetailsType = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColGood(), false, true);
+	{
+		FSlateFontInfo TagFont = WeedUI::Font(11, true);
+		TagFont.OutlineSettings.OutlineSize = 1;
+		TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
+		DetailsType->SetFont(TagFont);
+	}
+	DetailsType->SetAutoWrapText(true);
+	DetailsVB->AddChildToVerticalBox(DetailsType)->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
 	DetailsName = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::Hex(0xF1EAFE), false, true);
 	DetailsName->SetAutoWrapText(true);
-	DetailsVB->AddChildToVerticalBox(DetailsName)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-	DetailsBody = WeedUI::Text(WidgetTree, TEXT(""), 12, WeedUI::Hex(0xB8B4C8));
-	DetailsBody->SetAutoWrapText(true);
-	DetailsVB->AddChildToVerticalBox(DetailsBody)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	DetailsVB->AddChildToVerticalBox(DetailsName)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+	DetailsQty = WeedUI::Text(WidgetTree, TEXT(""), 20, WeedUI::ColGood(), false, true);
+	DetailsVB->AddChildToVerticalBox(DetailsQty)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	// Dun scheidingslijntje.
+	DetailsDivider = WidgetTree->ConstructWidget<UBorder>();
+	DetailsDivider->SetBrush(WeedUI::Rounded(WeedUI::ColStroke(0.6f), 1.f));
+	DetailsDivider->SetPadding(FMargin(0.f, 0.7f, 0.f, 0.7f));
+	DetailsVB->AddChildToVerticalBox(DetailsDivider)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	// Twee-koloms stat-rijen (label links dim, waarde rechts) - herbouwd bij een echte itemwissel.
+	DetailsStatBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	DetailsVB->AddChildToVerticalBox(DetailsStatBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	// Korte hint (dim) onderaan - vult de resterende ruimte, net als de hand-preview-footer.
+	DetailsHint = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim());
+	DetailsHint->SetAutoWrapText(true);
+	DetailsVB->AddChildToVerticalBox(DetailsHint)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	{
 		UWeedActionButton* SplitB = TileButton(WidgetTree, WeedUI::Hex(0x3A2B52), 8.f, [this]() { if (DetailsStackId != 0) { OpenSplitPopup(DetailsStackId); } });
 		SplitB->SetContent(WeedUI::Text(WidgetTree, TEXT("Split stack"), 12, WeedUI::Hex(0xF1EAFE), true));
@@ -657,48 +679,86 @@ void UInventoryWidget::ShowItemDetails(UInvCell* Cell)
 	if (DetailsIconBox) { DetailsIconBox->SetContent(WeedUI::ItemIcon(WidgetTree, Cell->IconId, 84.f, Cell->WaterOverride)); }
 	// Volledige naam (Line1 is in de cel afgekapt met "..."; hier is wél ruimte).
 	if (DetailsName) { DetailsName->SetText(FText::FromString(Cell->IconId.IsNone() ? Cell->Line1 : WeedUI::PrettyItemName(Cell->IconId))); }
-	if (DetailsBody)
+
+	// Detail-DATA uit de gedeelde bron (zelfde als de hand-preview) -> nette type-tag, twee-koloms stats en hint.
+	// Thc/QualPct + aantal uit DEZE stack halen (per-slot, via de StackId van de cel).
+	const FName Id = Cell->IconId;
+	const FString IdStr = Id.ToString();
+	int32 Qty = 0; float Thc = 0.f; float QualPct = 0.f;
+	if (UInventoryComponent* Inv = GetInv())
 	{
-		// Body netter verdelen zodat de quick-view dezelfde rustige opmaak als de hand-preview krijgt:
-		// die zet elke stat op een eigen regel (label + waarde). ItemInfoBody levert al one-stat-per-line,
-		// maar propt soms twee stats op een regel ("THC 45%   Quality 60%", "Yield ~30g   Grow ~10 min")
-		// en plakt de "Weight"-footer direct tegen de stats. We splitsen de dubbel-gespatieerde regels naar
-		// losse regels en zetten de Weight-voetregel een lege regel lager, zodat het als nette footer leest.
-		FString Body;
-		TArray<FString> Lines;
-		Cell->Tooltip.ParseIntoArray(Lines, TEXT("\n"), false);
-		for (int32 i = 0; i < Lines.Num(); ++i)
+		const int32 Idx = Inv->FindStackById(Cell->StackId);
+		const TArray<FInventoryStack>& St = Inv->GetStacks();
+		if (St.IsValidIndex(Idx))
 		{
-			FString Line = Lines[i].TrimStartAndEnd();
-			if (Line.IsEmpty()) { continue; }
+			Qty = St[Idx].Quantity;
+			Thc = St[Idx].Quality;
+			QualPct = St[Idx].QualityPct;
+		}
+	}
+	const WeedUI::FItemDetailInfo Detail = WeedUI::BuildItemDetail(this, Id, Qty, Thc, QualPct);
 
-			// Weight-voetregel: als losse footer met een lege regel erboven (net als de dim hint onderaan
-			// de hand-preview), niet vastgeplakt aan de laatste stat.
-			const bool bFooter = Line.StartsWith(TEXT("Weight "));
-			if (bFooter && !Body.IsEmpty()) { Body += TEXT("\n"); }
+	// Type-tag: gekleurde categorie-tag (bold + outline blijven staan uit BuildShell).
+	if (DetailsType)
+	{
+		DetailsType->SetText(FText::FromString(Detail.Type));
+		DetailsType->SetColorAndOpacity(FSlateColor(Detail.TypeColor));
+	}
 
-			// Twee stats op een regel (gescheiden door 3+ spaties) -> naar aparte regels, elk op zich.
-			int32 SplitAt = INDEX_NONE;
-			if (!bFooter)
+	// Aantal groot bij de titel: gram voor wiet, "Nx Xg" voor zakjes, anders "xN". Voor gereedschap/plaatsbare
+	// dingen (fles, pot, rek, bench, meubels) is een aantal zinloos -> verbergen (zelfde regels als de hand-preview).
+	if (DetailsQty)
+	{
+		const bool bBottle = IdStr.StartsWith(TEXT("WaterBottle"));
+		const bool bEquip = IsPotItem(Id)
+			|| IdStr.StartsWith(TEXT("DryRack_")) || IdStr.StartsWith(TEXT("Bench_"))
+			|| IdStr.StartsWith(TEXT("Lamp")) || IdStr.StartsWith(TEXT("Tent"))
+			|| Id == TEXT("Shelf") || Id == TEXT("Chest") || Id == TEXT("Table")
+			|| Id == TEXT("Mattress") || Id == TEXT("Fridge") || Id == TEXT("Atm");
+		if (bBottle || bEquip)
+		{
+			DetailsQty->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			DetailsQty->SetVisibility(ESlateVisibility::HitTestInvisible);
+			if (UInventoryComponent::IsBag(Id))
 			{
-				const int32 P = Line.Find(TEXT("   "));
-				if (P != INDEX_NONE) { SplitAt = P; }
-			}
-			if (SplitAt != INDEX_NONE)
-			{
-				if (!Body.IsEmpty()) { Body += TEXT("\n"); }
-				Body += Line.Left(SplitAt).TrimStartAndEnd();
-				Body += TEXT("\n");
-				Body += Line.RightChop(SplitAt).TrimStartAndEnd();
+				DetailsQty->SetText(FText::FromString(WeedUI::ItemQtyBadge(Id, Qty))); // "Nx Xg"
 			}
 			else
 			{
-				if (!Body.IsEmpty()) { Body += TEXT("\n"); }
-				Body += Line;
+				const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_"));
+				DetailsQty->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%d g"), Qty) : FString::Printf(TEXT("x%d"), Qty)));
 			}
+			DetailsQty->SetColorAndOpacity(FSlateColor(Detail.TypeColor));
 		}
-		DetailsBody->SetText(FText::FromString(Body));
 	}
+
+	// Twee-koloms stat-rijen (label links dim, waarde rechts) - identiek aan de hand-preview's AddStat.
+	// Herbouw bij een echte itemwissel (net als de hand-preview die z'n StatBox bij een sleutel-wissel herbouwt);
+	// dit is GEEN per-tick/klik-rebuild van de hele lijst, dus geen schending van de persistente-UI-regel.
+	if (DetailsStatBox)
+	{
+		DetailsStatBox->ClearChildren();
+		auto AddStat = [this](const FString& Label, const FString& Value)
+		{
+			UHorizontalBox* RowH = WidgetTree->ConstructWidget<UHorizontalBox>();
+			UTextBlock* L = WeedUI::Text(WidgetTree, Label, 12, WeedUI::ColTextDim());
+			UHorizontalBoxSlot* LS2 = RowH->AddChildToHorizontalBox(L);
+			LS2->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS2->SetVerticalAlignment(VAlign_Center);
+			UTextBlock* V = WeedUI::Text(WidgetTree, Value, 13, WeedUI::ColText(), false, true);
+			V->SetJustification(ETextJustify::Right);
+			UHorizontalBoxSlot* VS = RowH->AddChildToHorizontalBox(V);
+			VS->SetVerticalAlignment(VAlign_Center);
+			DetailsStatBox->AddChildToVerticalBox(RowH)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+		};
+		for (const TPair<FString, FString>& Stat : Detail.Stats) { AddStat(Stat.Key, Stat.Value); }
+	}
+
+	// Korte hint (dim) onderaan.
+	if (DetailsHint) { DetailsHint->SetText(FText::FromString(Detail.Hint)); }
+
 	if (DetailsSplitBtn) { DetailsSplitBtn->SetVisibility(Cell->bDraggable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 	StashContent->SetVisibility(ESlateVisibility::Collapsed);
 	DetailsContent->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
