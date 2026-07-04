@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/DragDropOperation.h"
 #include "DealWidget.generated.h"
 
 class UPhoneClientComponent;
@@ -22,6 +23,42 @@ class UBorder;
 class USizeBox;
 class UImage;
 class UMaterialInterface;
+class UWrapBox;
+class UDealWidget;
+
+// Sleep-payload voor de geef-tray: welk zakje (strain + gram-maat) sleep je, en hoeveel heb je ervan.
+UCLASS()
+class WEEDSHOPCORE_API UDealBagDragOp : public UDragDropOperation
+{
+	GENERATED_BODY()
+public:
+	UPROPERTY() FName Strain;
+	UPROPERTY() int32 Gram = 0;
+	UPROPERTY() int32 Avail = 0;
+};
+
+// Eén cel in de geef-tray. Mode 0 = bron-zakje (sleepbaar), mode 1 = geef-zone (drop-doel). KRITISCH:
+// RebuildWidget MOET SetVisibility(Visible) zetten, anders is de cel niet hit-testbaar en start de sleep nooit
+// (dat was de bug van de eerste poging - UInvCell doet dit ook).
+UCLASS()
+class WEEDSHOPCORE_API UDealBagCell : public UUserWidget
+{
+	GENERATED_BODY()
+public:
+	TWeakObjectPtr<UDealWidget> Owner;
+	int32 Mode = 0;          // 0 = bron (sleepbaar), 1 = geef-zone (drop-doel)
+	FName Strain;
+	int32 Gram = 0;
+	int32 Avail = 0;
+	FString Title;           // grote regel
+	FString SubLabel;        // kleine regel eronder
+	bool bWide = false;      // geef-zone = brede balk i.p.v. vierkant
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+};
 
 UCLASS()
 class WEEDSHOPCORE_API UDealWidget : public UUserWidget
@@ -30,6 +67,11 @@ class WEEDSHOPCORE_API UDealWidget : public UUserWidget
 
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
+
+	// Aangeroepen door UDealBagCell (de geef-tray-cellen). Publiek zodat de cel-klasse ze kan callen.
+	void OnBagDroppedOnGive(FName Strain, int32 Gram, int32 Avail); // zakje op de geef-zone -> stack? popup, anders +1
+	void OnGiveZoneClicked();                                       // tik op de geef-zone -> pile leegmaken
+	int32 PileAvailFor(FName Strain, int32 Gram) const;             // voorraad van die maat MINUS wat al in de pile ligt
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -48,6 +90,18 @@ protected:
 	void GiveJointPressed();   // "Give joint" geklikt: 0 -> melding, 1 -> direct geven, >=2 -> kiezer
 	void RebuildJointPicker(); // vult de joint-kiezer (strain - gram - kwaliteit per joint)
 
+	// --- Geef-tray ---
+	void BuildGiveTray(UVerticalBox* VB);       // bouwt de tray 1x in BuildShell (geef-zone + bag-strip)
+	void BuildHowManyPopup(UCanvasPanel* Root); // de "hoeveel zakjes?"-slider-popup (hoge ZOrder)
+	void RebuildBagStrip();                     // vult de voorraad-strip (per maat) van de aangeboden strain
+	void RefreshGiveZone();                     // toont de pile-combo + totaal op de geef-zone; zet DealGiveGrams
+	void SyncPileToOffered();                   // reset+autofill de pile bij strain-wissel
+	void OpenHowMany(int32 Gram, int32 Avail);
+	UFUNCTION() void OnHowManySlider(float V);
+	void ConfirmHowMany();
+	void CancelHowMany();
+	int32 PileTotalGrams() const;
+
 	UPhoneClientComponent* GetPhone() const;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
@@ -65,6 +119,23 @@ protected:
 	UPROPERTY() TObjectPtr<USlider> PriceSlider;
 	UPROPERTY() TObjectPtr<USlider> AmountSlider;
 	UPROPERTY() TObjectPtr<UTextBlock> AmountText;
+
+	// --- Geef-tray (bag-offers): je zakjes als sleepbare cellen + een geef-zone (drop-doel). Sleep zakjes
+	//     erin, combineer maten; stack -> "hoeveel?"-popup. De pile-som = DealGiveGrams. ---
+	UPROPERTY() TObjectPtr<UVerticalBox> TrayBox;        // hele tray-blok (togglen met de amount-zone)
+	UPROPERTY() TObjectPtr<UDealBagCell> GiveZone;       // transparante drop-cel (hit-test) boven de balk
+	UPROPERTY() TObjectPtr<UTextBlock> GiveTotalText;    // "Geeft: 5g + 2g = 7g" (SetText-baar, op de zichtbare balk)
+	UPROPERTY() TObjectPtr<UWrapBox> BagStrip;           // je voorraad-zakjes van de aangeboden strain (sleepbaar)
+	UPROPERTY() TArray<TObjectPtr<UDealBagCell>> BagStripPool;
+	TMap<int32, int32> PileCounts;                       // gram-maat -> aantal zakjes in de pile
+	FName PileStrain = NAME_None;                        // strain waarvoor de pile geldt (reset bij strain-wissel)
+	FString BagStripSig;                                 // sig van de voorraad-strip (alleen bij wijziging vullen)
+	UPROPERTY() TObjectPtr<UWidget> HowManyRoot;         // "hoeveel zakjes?"-popup
+	UPROPERTY() TObjectPtr<USlider> HowManySlider;
+	UPROPERTY() TObjectPtr<UTextBlock> HowManyLabel;
+	int32 HowManyGram = 0;
+	int32 HowManyMax = 0;
+
 	UPROPERTY() TObjectPtr<UTextBlock> StockText;
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
 	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;

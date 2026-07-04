@@ -28,6 +28,8 @@
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/WrapBox.h"
+#include "Components/WrapBoxSlot.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/Pawn.h"
@@ -41,6 +43,84 @@ namespace
 	{
 		return WeedUI::PrettyItemName(Id).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase);
 	}
+}
+
+// ===================== UDealBagCell (geef-tray-cel) =====================
+TSharedRef<SWidget> UDealBagCell::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UBorder* B = WidgetTree->ConstructWidget<UBorder>();
+		if (Mode == 1)
+		{
+			// Geef-zone = transparante hit-test-overlay; de zichtbare balk + combo-tekst zit eronder in de tray.
+			FSlateBrush Tr; Tr.TintColor = FSlateColor(FLinearColor(0.f, 0.f, 0.f, 0.f));
+			B->SetBrush(Tr);
+		}
+		else
+		{
+			// Bron-zakje: vierkant cel met de gram-maat (+ aantal eronder).
+			B->SetBrush(WeedUI::Rounded(FLinearColor(0.11f, 0.12f, 0.16f, 0.96f), 9.f));
+			B->SetPadding(FMargin(8.f, 6.f));
+			B->SetHorizontalAlignment(HAlign_Center);
+			B->SetVerticalAlignment(VAlign_Center);
+			UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
+			VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, Title, 16, WeedUI::ColText(), true, true));
+			if (!SubLabel.IsEmpty())
+			{
+				VB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, SubLabel, 11, WeedUI::ColTextDim(), true))->SetPadding(FMargin(0.f, 1.f, 0.f, 0.f));
+			}
+			B->SetContent(VB);
+		}
+		WidgetTree->RootWidget = B;
+	}
+	// KRITISCH: hit-testbaar maken, anders start de sleep/drop nooit (dat was de bug van de eerste poging).
+	SetVisibility(ESlateVisibility::Visible);
+	return Super::RebuildWidget();
+}
+
+FReply UDealBagCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (Mode == 0 && Avail > 0 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+	}
+	if (Mode == 1 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) // tik op de geef-zone = leegmaken
+	{
+		if (Owner.IsValid()) { Owner->OnGiveZoneClicked(); }
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+void UDealBagCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
+{
+	if (Mode != 0 || Avail <= 0) { return; }
+	UDealBagDragOp* Op = NewObject<UDealBagDragOp>(GetTransientPackage(), UDealBagDragOp::StaticClass());
+	Op->Strain = Strain; Op->Gram = Gram; Op->Avail = Avail;
+	Op->Pivot = EDragPivot::CenterCenter;
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (UDealBagCell* Ghost = CreateWidget<UDealBagCell>(PC, UDealBagCell::StaticClass()))
+		{
+			Ghost->Mode = 0; Ghost->Gram = Gram; Ghost->Avail = Avail; Ghost->Title = Title;
+			Op->DefaultDragVisual = Ghost;
+		}
+	}
+	OutOperation = Op;
+}
+
+bool UDealBagCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	if (Mode == 1) // geef-zone: accepteer een gesleept zakje
+	{
+		if (UDealBagDragOp* Op = Cast<UDealBagDragOp>(InOperation))
+		{
+			if (Owner.IsValid()) { Owner->OnBagDroppedOnGive(Op->Strain, Op->Gram, Op->Avail); }
+			return true;
+		}
+	}
+	return false;
 }
 
 void UDealWidget::SetPhone(UPhoneClientComponent* InPhone)
@@ -219,14 +299,11 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	PriceSlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnPriceSlider);
 	VB->AddChildToVerticalBox(PriceSlider)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 
-	// Hoeveelheid-slider: kies zelf hoeveel gram je geeft (meer -> hogere accept-kans + stats; minder -> lager).
+	// Hoeveelheid: bag-offers krijgen de tastbare GEEF-TRAY (sleep zakjes). Losse gram-items
+	// (concentraten/edibles) vallen terug op deze AmountText-regel (dan geef je automatisch de gevraagde hoeveelheid).
 	AmountText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), false, true);
 	VB->AddChildToVerticalBox(AmountText)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
-	AmountSlider = WidgetTree->ConstructWidget<USlider>();
-	AmountSlider->SetSliderHandleColor(WeedUI::ColAccent());
-	AmountSlider->SetSliderBarColor(WeedUI::ColSlot());
-	AmountSlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnAmountSlider);
-	VB->AddChildToVerticalBox(AmountSlider)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
+	BuildGiveTray(VB);
 
 	StockText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColTextDim());
 	VB->AddChildToVerticalBox(StockText)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
@@ -311,6 +388,9 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	UHorizontalBoxSlot* CcS = Btns->AddChildToHorizontalBox(MakeBtn(TEXT("Leave"), WeedUI::ColSlot(), 0));
 	CcS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	VB->AddChildToVerticalBox(Btns);
+
+	// "Hoeveel zakjes?"-popup voor een stack (hoge ZOrder bovenop de kaart).
+	BuildHowManyPopup(Root);
 }
 
 void UDealWidget::OnPriceSlider(float Value)
@@ -535,6 +615,228 @@ void UDealWidget::RebuildJointPicker()
 	}
 }
 
+// ===================== Geef-tray-implementatie =====================
+
+int32 UDealWidget::PileTotalGrams() const
+{
+	int32 T = 0;
+	for (const TPair<int32, int32>& P : PileCounts) { T += P.Key * P.Value; }
+	return T;
+}
+
+int32 UDealWidget::PileAvailFor(FName Strain, int32 Gram) const
+{
+	int32 Owned = 0;
+	if (APawn* P = GetOwningPlayerPawn())
+	{
+		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			TArray<TPair<int32, int32>> Sizes; Inv->ListBagSizes(Strain, Sizes);
+			for (const TPair<int32, int32>& S : Sizes) { if (S.Key == Gram) { Owned = S.Value; break; } }
+		}
+	}
+	const int32 InPile = PileCounts.Contains(Gram) ? PileCounts[Gram] : 0;
+	return FMath::Max(0, Owned - InPile);
+}
+
+void UDealWidget::BuildGiveTray(UVerticalBox* VB)
+{
+	TrayBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	VB->AddChildToVerticalBox(TrayBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
+
+	// Geef-zone: zichtbare balk met de combo-tekst + een transparante drop-cel eroverheen (vangt de sleep).
+	UOverlay* ZoneOv = WidgetTree->ConstructWidget<UOverlay>();
+	{
+		UBorder* Bar = WidgetTree->ConstructWidget<UBorder>();
+		FSlateBrush Br = WeedUI::Rounded(WeedUI::ColSlotEmpty(0.7f), 9.f);
+		Br.OutlineSettings.Width = 1.5f; Br.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.6f));
+		Bar->SetBrush(Br);
+		Bar->SetPadding(FMargin(12.f, 12.f));
+		Bar->SetHorizontalAlignment(HAlign_Center); Bar->SetVerticalAlignment(VAlign_Center);
+		GiveTotalText = WeedUI::Text(WidgetTree, TEXT("Drag bags here to give"), 13, WeedUI::ColText(), true, true);
+		GiveTotalText->SetAutoWrapText(true);
+		Bar->SetContent(GiveTotalText);
+		UOverlaySlot* BarOS = ZoneOv->AddChildToOverlay(Bar);
+		BarOS->SetHorizontalAlignment(HAlign_Fill); BarOS->SetVerticalAlignment(VAlign_Fill);
+
+		GiveZone = WidgetTree->ConstructWidget<UDealBagCell>();
+		GiveZone->Owner = this; GiveZone->Mode = 1;
+		UOverlaySlot* ZOS = ZoneOv->AddChildToOverlay(GiveZone);
+		ZOS->SetHorizontalAlignment(HAlign_Fill); ZOS->SetVerticalAlignment(VAlign_Fill);
+	}
+	TrayBox->AddChildToVerticalBox(ZoneOv)->SetPadding(FMargin(0.f, 0.f, 0.f, 5.f));
+
+	// Voorraad-strip: je zakjes per maat (sleep ze omhoog naar de geef-zone).
+	TrayBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Your bags - drag up into the zone:"), 11, WeedUI::ColTextDim()));
+	BagStrip = WidgetTree->ConstructWidget<UWrapBox>();
+	BagStrip->SetInnerSlotPadding(FVector2D(6.f, 6.f));
+	TrayBox->AddChildToVerticalBox(BagStrip)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+}
+
+void UDealWidget::BuildHowManyPopup(UCanvasPanel* Root)
+{
+	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
+	{ FSlateBrush Br = WeedUI::Rounded(WeedUI::ColPanel(0.99f), 14.f); Br.OutlineSettings.Width = 1.f; Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.6f)); Panel->SetBrush(Br); }
+	Panel->SetPadding(FMargin(18.f));
+	UVerticalBox* PVB = WidgetTree->ConstructWidget<UVerticalBox>();
+	Panel->SetContent(PVB);
+	PVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("How many bags?"), 15, WeedUI::ColAccent(), true, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	HowManyLabel = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), true);
+	PVB->AddChildToVerticalBox(HowManyLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	HowManySlider = WidgetTree->ConstructWidget<USlider>();
+	HowManySlider->SetMinValue(0.f); HowManySlider->SetMaxValue(1.f); HowManySlider->SetValue(0.f);
+	HowManySlider->SetSliderHandleColor(WeedUI::ColAccent());
+	HowManySlider->SetSliderBarColor(WeedUI::ColStroke());
+	HowManySlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnHowManySlider);
+	PVB->AddChildToVerticalBox(HowManySlider)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	UHorizontalBox* HB = WidgetTree->ConstructWidget<UHorizontalBox>();
+	auto MkB = [this](const FString& L, const FLinearColor& Col, int32 Act) -> UWeedActionButton*
+	{
+		UWeedActionButton* B = WidgetTree->ConstructWidget<UWeedActionButton>();
+		B->Action = Act;
+		B->OnClicked.AddDynamic(B, &UWeedActionButton::Handle);
+		B->OnAction.BindLambda([this](int32 A, int32 /*P*/) { if (A == 1) { ConfirmHowMany(); } else { CancelHowMany(); } });
+		FButtonStyle St; St.Normal = WeedUI::Rounded(Col, 8.f); St.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f); St.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
+		St.NormalPadding = FMargin(10.f, 7.f); St.PressedPadding = FMargin(10.f, 7.f);
+		B->SetStyle(St);
+		B->SetContent(WeedUI::Text(WidgetTree, L, 12, WeedUI::ColText(), true, true));
+		return B;
+	};
+	HB->AddChildToHorizontalBox(MkB(TEXT("Add"), WeedUI::ColAccent(), 1))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UHorizontalBoxSlot* CS = HB->AddChildToHorizontalBox(MkB(TEXT("Cancel"), WeedUI::ColInner(), 0));
+	CS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CS->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+	PVB->AddChildToVerticalBox(HB);
+
+	USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
+	Sz->SetWidthOverride(280.f);
+	Sz->SetContent(Panel);
+	HowManyRoot = Sz;
+	UCanvasPanelSlot* PS = Root->AddChildToCanvas(Sz);
+	PS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+	PS->SetAlignment(FVector2D(0.5f, 0.5f));
+	PS->SetAutoSize(true);
+	PS->SetPosition(FVector2D(0.f, 0.f));
+	PS->SetZOrder(30);
+	Sz->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UDealWidget::RebuildBagStrip()
+{
+	if (!BagStrip) { return; }
+	APawn* P = GetOwningPlayerPawn();
+	const UInventoryComponent* Inv = P ? P->FindComponentByClass<UInventoryComponent>() : nullptr;
+	TArray<TPair<int32, int32>> Sizes;
+	if (Inv) { Inv->ListBagSizes(PileStrain, Sizes); }
+	// Sig-gated: alleen herbouwen bij een voorraad-wijziging (een drop verandert de PILE, niet de voorraad).
+	FString Sig = PileStrain.ToString() + TEXT("|");
+	for (const TPair<int32, int32>& S : Sizes) { Sig += FString::Printf(TEXT("%d:%d|"), S.Key, S.Value); }
+	if (Sig == BagStripSig) { return; }
+	BagStripSig = Sig;
+	BagStrip->ClearChildren();
+	for (const TPair<int32, int32>& S : Sizes)
+	{
+		UDealBagCell* Cell = WidgetTree->ConstructWidget<UDealBagCell>();
+		Cell->Owner = this; Cell->Mode = 0; Cell->Strain = PileStrain; Cell->Gram = S.Key; Cell->Avail = S.Value;
+		Cell->Title = FString::Printf(TEXT("%dg"), S.Key);
+		Cell->SubLabel = FString::Printf(TEXT("x%d"), S.Value);
+		BagStrip->AddChildToWrapBox(Cell);
+	}
+}
+
+void UDealWidget::RefreshGiveZone()
+{
+	TArray<int32> Grams; PileCounts.GetKeys(Grams); Grams.Sort([](const int32& A, const int32& B) { return A > B; });
+	const int32 Total = PileTotalGrams();
+	int32 Qty = 0;
+	if (UPhoneClientComponent* Ph0 = GetPhone()) { if (ACustomerBase* C0 = Ph0->GetDealCustomer()) { Qty = C0->DesiredQuantity; } }
+	if (GiveTotalText)
+	{
+		FString Combo;
+		for (int32 G : Grams) { const int32 N = PileCounts[G]; for (int32 k = 0; k < N; ++k) { if (!Combo.IsEmpty()) { Combo += TEXT(" + "); } Combo += FString::Printf(TEXT("%dg"), G); } }
+		const FString Note = (Qty > 0 && Total > Qty) ? FString::Printf(TEXT("  (+%dg extra)"), Total - Qty)
+			: (Qty > 0 && Total < Qty ? FString::Printf(TEXT("  (%dg short)"), Qty - Total) : FString(TEXT("")));
+		const FString Line = Total > 0 ? FString::Printf(TEXT("Giving: %s = %dg%s  (tap to clear)"), *Combo, Total, *Note)
+			: FString(TEXT("Drag bags here to give"));
+		GiveTotalText->SetText(FText::FromString(Line));
+		GiveTotalText->SetColorAndOpacity(FSlateColor((Qty > 0 && Total < Qty) ? FLinearColor(1.f, 0.8f, 0.2f) : WeedUI::ColText()));
+	}
+	if (UPhoneClientComponent* Ph = GetPhone()) { Ph->SetDealGiveGrams(FMath::Max(0, Total)); }
+}
+
+void UDealWidget::SyncPileToOffered()
+{
+	UPhoneClientComponent* Ph = GetPhone();
+	if (!Ph) { return; }
+	const FName Strain = UInventoryComponent::BagStrain(Ph->GetOfferedProduct());
+	if (Strain == PileStrain) { return; } // zelfde strain -> pile behouden
+	PileStrain = Strain;
+	PileCounts.Reset();
+	ACustomerBase* C = Ph->GetDealCustomer();
+	const int32 Target = C ? C->DesiredQuantity : 0;
+	if (Target > 0)
+	{
+		if (APawn* P = GetOwningPlayerPawn())
+		{
+			if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+			{
+				TArray<TPair<int32, int32>> Sizes; Inv->ListBagSizes(Strain, Sizes); // groot -> klein
+				int32 Remaining = Target;
+				for (const TPair<int32, int32>& S : Sizes)
+				{
+					int32 AvailN = S.Value;
+					while (AvailN > 0 && S.Key <= Remaining) { PileCounts.FindOrAdd(S.Key) += 1; AvailN--; Remaining -= S.Key; }
+				}
+				if (PileTotalGrams() == 0 && Sizes.Num() > 0) { PileCounts.FindOrAdd(Sizes.Last().Key) += 1; }
+			}
+		}
+	}
+	RefreshGiveZone();
+}
+
+void UDealWidget::OpenHowMany(int32 Gram, int32 Avail)
+{
+	if (!HowManyRoot || !HowManySlider || Avail <= 0) { return; }
+	HowManyGram = Gram; HowManyMax = Avail;
+	HowManySlider->SetValue(1.f / (float)FMath::Max(1, Avail));
+	if (HowManyLabel) { HowManyLabel->SetText(FText::FromString(FString::Printf(TEXT("Add 1 x %dg = %dg"), Gram, Gram))); }
+	HowManyRoot->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UDealWidget::OnHowManySlider(float V)
+{
+	const int32 N = FMath::Clamp(FMath::RoundToInt(V * (float)HowManyMax), 1, FMath::Max(1, HowManyMax));
+	if (HowManyLabel) { HowManyLabel->SetText(FText::FromString(FString::Printf(TEXT("Add %d x %dg = %dg"), N, HowManyGram, N * HowManyGram))); }
+}
+
+void UDealWidget::ConfirmHowMany()
+{
+	const float V = HowManySlider ? HowManySlider->GetValue() : 0.f;
+	const int32 N = FMath::Clamp(FMath::RoundToInt(V * (float)HowManyMax), 1, FMath::Max(1, HowManyMax));
+	PileCounts.FindOrAdd(HowManyGram) += N;
+	if (HowManyRoot) { HowManyRoot->SetVisibility(ESlateVisibility::Collapsed); }
+	RefreshGiveZone();
+}
+
+void UDealWidget::CancelHowMany()
+{
+	if (HowManyRoot) { HowManyRoot->SetVisibility(ESlateVisibility::Collapsed); }
+}
+
+void UDealWidget::OnBagDroppedOnGive(FName Strain, int32 Gram, int32 /*Avail*/)
+{
+	if (Strain != PileStrain) { return; }
+	const int32 Avail = PileAvailFor(Strain, Gram);
+	if (Avail <= 0) { return; }
+	if (Avail == 1) { PileCounts.FindOrAdd(Gram) += 1; RefreshGiveZone(); }
+	else { OpenHowMany(Gram, Avail); }
+}
+
+void UDealWidget::OnGiveZoneClicked()
+{
+	PileCounts.Reset();
+	RefreshGiveZone();
+}
+
 void UDealWidget::UpdateLive()
 {
 	UPhoneClientComponent* Ph = GetPhone();
@@ -694,7 +996,7 @@ void UDealWidget::UpdateLive()
 	{
 		// Geen koper: verberg de deal-sectie; alleen kop + dialoog + Give joint + Leave.
 		auto Hide = [](UWidget* W) { if (W) { W->SetVisibility(ESlateVisibility::Collapsed); } };
-		Hide(WantsRow); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(AmountSlider); Hide(AmountText); Hide(StockText);
+		Hide(WantsRow); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(AmountSlider); Hide(AmountText); Hide(StockText); Hide(TrayBox);
 		Hide(ChanceText); Hide(ChanceBar); Hide(PreviewText); Hide(NoWeedText); Hide(OfferLabel); Hide(StrainBox);
 		return;
 	}
@@ -725,6 +1027,7 @@ void UDealWidget::UpdateLive()
 	if (PriceSlider)  { PriceSlider->SetVisibility(SliderVis); }
 	if (AmountSlider) { AmountSlider->SetVisibility(SliderVis); }
 	if (AmountText)   { AmountText->SetVisibility(DealVis); }
+	if (TrayBox)      { TrayBox->SetVisibility(bHasWeed ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 	if (ChanceText)   { ChanceText->SetVisibility(DealVis); }
 	if (ChanceBar)    { ChanceBar->SetVisibility(DealVis); }
 	if (PreviewText)  { PreviewText->SetVisibility(DealVis); }
@@ -786,25 +1089,31 @@ void UDealWidget::UpdateLive()
 		StockText->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
-	// Hoeveel je GEEFT (amount-slider); default = gevraagd, geklemd op je voorraad. Accept-kans + preview schalen mee.
-	int32 GiveG = Ph->GetDealGiveGrams(); if (GiveG <= 0) { GiveG = Qty; }
-	if (Stock > 0) { GiveG = FMath::Clamp(GiveG, 1, Stock); }
-	// Bags per heel zakje: toon/gebruik wat je ECHT levert (geen 3g tonen terwijl je 4g geeft).
-	if (bBagOffer && GiveG > 0)
+	// Hoeveel je GEEFT. Bag-offers -> tastbare geef-tray (de pile drijft DealGiveGrams). Losse gram-items
+	// (concentraten/edibles) -> auto = gevraagd, geklemd op voorraad (geen tray, geen discrete zakjes).
+	int32 GiveG;
+	if (bBagOffer)
 	{
-		if (const UInventoryComponent* Inv3 = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr)
-		{
-			const int32 Real = Inv3->BagGramsForTarget(UInventoryComponent::BagStrain(Offered), GiveG);
-			if (Real > 0) { GiveG = Real; }
-		}
+		if (TrayBox)    { TrayBox->SetVisibility(ESlateVisibility::Visible); }
+		if (AmountText) { AmountText->SetVisibility(ESlateVisibility::Collapsed); }
+		SyncPileToOffered(); // reset+autofill bij strain-wissel (zet DealGiveGrams via RefreshGiveZone)
+		RebuildBagStrip();   // sig-gated: alleen bij voorraad-wijziging
+		GiveG = FMath::Max(1, PileTotalGrams());
 	}
-	if (AmountSlider && !bAmountHeld && Stock > 0) { AmountSlider->SetValue(FMath::Clamp((float)GiveG / (float)Stock, 0.f, 1.f)); }
-	if (AmountText)
+	else
 	{
-		const FString Note = (GiveG > Qty) ? FString::Printf(TEXT("  (+%dg extra)"), GiveG - Qty)
-			: (GiveG < Qty ? FString::Printf(TEXT("  (%dg short)"), Qty - GiveG) : FString(TEXT("  (exactly asked)")));
-		AmountText->SetText(FText::FromString(FString::Printf(TEXT("Give  %dg%s"), GiveG, *Note)));
-		AmountText->SetColorAndOpacity(FSlateColor(GiveG >= Qty ? WeedUI::ColText() : FLinearColor(1.f, 0.8f, 0.2f)));
+		if (TrayBox)    { TrayBox->SetVisibility(ESlateVisibility::Collapsed); }
+		if (AmountText) { AmountText->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		PileStrain = NAME_None; // reset zodat een volgende bag-offer opnieuw synct
+		GiveG = FMath::Clamp(Qty, 1, FMath::Max(1, Stock));
+		Ph->SetDealGiveGrams(GiveG);
+		if (AmountText)
+		{
+			const FString Note = (GiveG > Qty) ? FString::Printf(TEXT("  (+%dg extra)"), GiveG - Qty)
+				: (GiveG < Qty ? FString::Printf(TEXT("  (%dg short)"), Qty - GiveG) : FString(TEXT("  (exactly asked)")));
+			AmountText->SetText(FText::FromString(FString::Printf(TEXT("Give  %dg%s"), GiveG, *Note)));
+			AmountText->SetColorAndOpacity(FSlateColor(GiveG >= Qty ? WeedUI::ColText() : FLinearColor(1.f, 0.8f, 0.2f)));
+		}
 	}
 
 	const float OffThc = (Stock > 0) ? Thc : -1.f;
