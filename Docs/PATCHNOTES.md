@@ -1,4 +1,22 @@
 PATCH NOTES
+Version 1.21.2 — 4 juli 2026
+
+Korte intro:
+Je bepaalt nu zelf hoeveel je aan een klant geeft - bij elke deal en afspraak.
+
+━━━━━━━━━━━━━━━━━━━━
+
+DEALS
+
+• Nieuw: naast de prijs-schuif zit nu een HOEVEELHEID-schuif. Je kiest zelf hoeveel gram je geeft, meer of
+  minder dan gevraagd - bij straat-deals, telefoon-afspraken en edibles.
+• Meer geven maakt de klant eerder akkoord (de kans loopt live mee in de balk) en compenseert zelfs als je
+  een lagere soort aanbiedt dan gevraagd: extra is altijd goed. Minder geven verlaagt de kans.
+• Meer geven levert ook wat extra respect en verslaving op. De prijs blijft per gram, dus meer geven = meer geld.
+• Een sample geven blijft hier los van: dat is 1 joint met een cooldown, zoals voorheen.
+
+━━━━━━━━━━━━━━━━━━━━
+
 Version 1.21.1 — 4 juli 2026
 
 Korte intro:
