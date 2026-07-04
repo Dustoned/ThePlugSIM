@@ -3043,7 +3043,26 @@ int32 ACustomerBase::GetMarketPriceForProduct(FName ProductId) const
 	// Losse Bud_ (niet verpakt) + de tussenstappen zijn NIET verkoopbaar aan klanten. (Oil IS nu wel
 	// verkoopbaar: het was een eindproduct zonder afzet -> dead weight.)
 	if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_"))) { return 0; }
-	const int32 Raw = Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult) : 0;
+	// THC-PREMIUM (alleen wiet-zakjes): sterkere strains zijn meer waard per gram (premium = premium). Beloont
+	// potentie boven een baseline van 18% THC (+2%/punt, cap +45%). Trekt ook het XP-tempo van de high-THC-low-
+	// yield strains (Durban/Purple Haze/Cookies&Cream) recht, want XP volgt de omzet. Concentraten: eigen Mult (2A.3).
+	float ThcMult = 1.f;
+	if (S.StartsWith(TEXT("Bag_")))
+	{
+		if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+		{
+			if (UStoreComponent* Store = GS->GetStore())
+			{
+				FString StrainStr = LookupId.ToString(); StrainStr.RemoveFromStart(TEXT("Bud_"));
+				float Thc = 0.f, Y = 0.f, G = 0.f;
+				if (Store->GetStrainStats(FName(*StrainStr), Thc, Y, G) && Thc > 0.f)
+				{
+					ThcMult = 1.f + FMath::Clamp((Thc - 18.f) * 0.02f, 0.f, 0.45f);
+				}
+			}
+		}
+	}
+	const int32 Raw = Row ? FMath::RoundToInt(Row->MarketPriceCents * Mult * ThcMult) : 0;
 	const int64 Rounded = WeedRoundEuros((int64)Raw);
 	return Raw > 0 ? (int32)FMath::Max<int64>(100, Rounded) : (int32)Rounded;
 }
