@@ -98,7 +98,7 @@ void URollWidget::BuildContentOnce()
 		FullPane->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Pick your weed"), 13, WeedUI::ColText(), false, true))
 			->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 		StrainGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
-		StrainGrid->CellSize = 78.f;          // config-velden VOOR de eerste SetItems
+		StrainGrid->CellSize = 86.f;          // config-velden VOOR de eerste SetItems
 		StrainGrid->MaxVisibleRows = 2;
 		StrainGrid->bShowSelection = true;
 		StrainGrid->OnPick = [this](FName Id, int32)

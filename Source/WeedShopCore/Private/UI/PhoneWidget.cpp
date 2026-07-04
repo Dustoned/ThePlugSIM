@@ -1258,7 +1258,7 @@ void UPhoneWidget::BuildChatApp()
 			OfferBox->AddChildToVerticalBox(OfferHeadText)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
 
 			OfferGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
-			OfferGrid->CellSize = 72.f;
+			OfferGrid->CellSize = 86.f;
 			OfferGrid->MaxVisibleRows = 2;
 			OfferGrid->bShowSelection = false;
 			OfferGrid->OnPick = [this](FName Id, int32 /*P*/)

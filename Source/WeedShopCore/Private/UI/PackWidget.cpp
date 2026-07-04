@@ -137,7 +137,7 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 	Row(WeedUI::Text(WidgetTree, TEXT("1.  Pick dried weed"), 13, WeedUI::ColText(), false, true), FMargin(0, 0, 0, 4));
 	// Icoon-grid i.p.v. de oude tekstlijst: bij veel strains scrollt de rest (MaxVisibleRows=2).
 	StrainGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
-	StrainGrid->CellSize = 78.f;
+	StrainGrid->CellSize = 86.f;
 	StrainGrid->MaxVisibleRows = 2;
 	StrainGrid->OnPick = [this](FName Id, int32) { SelStrain = Id; RefreshPack(); };
 	Row(StrainGrid, FMargin(0, 0, 0, 0));

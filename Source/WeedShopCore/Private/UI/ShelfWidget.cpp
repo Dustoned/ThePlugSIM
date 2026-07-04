@@ -348,7 +348,7 @@ void UShelfWidget::RebuildFridgeSection(AStorageShelf* Shelf)
 		// Grid-config VOOR de eerste SetItems: geen selectie, kleinere cellen, max 2 rijen (rest scrollt).
 		FridgePick = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
 		FridgePick->bShowSelection = false;
-		FridgePick->CellSize = 72.f;
+		FridgePick->CellSize = 86.f;
 		FridgePick->MaxVisibleRows = 2;
 		FridgePick->OnPick = [this](FName /*Id*/, int32 P)
 		{

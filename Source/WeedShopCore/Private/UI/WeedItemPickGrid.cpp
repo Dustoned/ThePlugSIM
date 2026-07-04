@@ -74,9 +74,9 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 	if (!Item.Badge.IsEmpty())
 	{
 		UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-		Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
+		Pill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f)); // zelfde badge-pill als de inventory-cel
 		Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
-		Pill->SetContent(WeedUI::Text(WidgetTree, Item.Badge, 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
+		Pill->SetContent(WeedUI::Text(WidgetTree, Item.Badge, 10, WeedUI::ColText(), false, true));
 		Pill->SetVisibility(ESlateVisibility::HitTestInvisible);
 		UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
 		PS->SetHorizontalAlignment(HAlign_Right);
@@ -142,7 +142,9 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 
 	// Geselecteerd = hotbar-actief-stijl (accent-vlak + dunne accent-rand); anders neutrale lege-cel-bg.
 	FButtonStyle S;
-	FSlateBrush Base = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.96f) : WeedUI::ColSlot(0.96f), 10.f);
+	// Niet-geselecteerd = ZELFDE cel-bg (donker) + radius als de inventory-cel, zodat pickers en inventory matchen.
+	const FLinearColor InvCellBg = FLinearColor(0.11f, 0.12f, 0.16f, 0.96f);
+	FSlateBrush Base = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.96f) : InvCellBg, 8.f);
 	if (bSel)
 	{
 		Base.OutlineSettings.Width = 1.5f;
@@ -151,11 +153,11 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 	S.Normal = Base;
 
 	// Hover/pressed: iets lichter dan de basis, rand behouden bij selectie.
-	FSlateBrush Hover = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(1.f) : WeedUI::ColSlot(0.95f), 10.f);
+	FSlateBrush Hover = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(1.f) : FLinearColor(0.16f, 0.17f, 0.22f, 0.96f), 8.f);
 	if (bSel) { Hover.OutlineSettings.Width = 1.5f; Hover.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f)); }
 	S.Hovered = Hover;
 
-	FSlateBrush Pressed = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.9f) : WeedUI::ColSlot(0.8f), 10.f);
+	FSlateBrush Pressed = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.9f) : FLinearColor(0.09f, 0.10f, 0.13f, 0.96f), 8.f);
 	if (bSel) { Pressed.OutlineSettings.Width = 1.5f; Pressed.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.9f)); }
 	S.Pressed = Pressed;
 

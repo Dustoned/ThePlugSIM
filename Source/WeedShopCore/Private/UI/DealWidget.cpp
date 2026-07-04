@@ -251,7 +251,7 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	VB->AddChildToVerticalBox(StrainBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
 	{
 		StrainGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
-		StrainGrid->CellSize = 78.f;
+		StrainGrid->CellSize = 86.f;
 		StrainGrid->MaxVisibleRows = 2;
 		StrainGrid->bShowSelection = true;
 		StrainGrid->OnPick = [this](FName Id, int32 /*P*/)
