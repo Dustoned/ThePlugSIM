@@ -152,6 +152,9 @@ public:
 	// Verwijder HELE zakjes van een strain tot ~DesiredGrams (>= indien mogelijk, minimale overschot);
 	// geeft de werkelijk verkochte grammen + gewogen THC/kwaliteit terug. Server-only.
 	int32 RemoveBagsForGrams(FName Strain, int32 DesiredGrams, float& OutThc, float& OutQualPct);
+	// Niet-muterende simulatie van RemoveBagsForGrams: hoeveel GRAM lever je ECHT bij dit doel (hele zakjes)?
+	// Voor de deal-UI: de amount-slider snapt hierop zodat 'wat je ziet' = 'wat je geeft'.
+	int32 BagGramsForTarget(FName Strain, int32 TargetGrams) const;
 
 	// Server. Zet de inventory EXACT terug zoals opgeslagen: elke stack op z'n opgeslagen grid-cel,
 	// geen merge/sortering. InCells[i] = grid-cel van InStacks[i] (-1 = eerste vrije). De cash-stack

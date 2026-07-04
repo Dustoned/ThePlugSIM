@@ -337,7 +337,13 @@ void UDealWidget::OnAmountSlider(float Value)
 		? Inv->BagStockGrams(UInventoryComponent::BagStrain(Off), Thc, QPct)
 		: Inv->GetQuantity(Off);
 	if (Stock <= 0) { return; }
-	Ph->SetDealGiveGrams(FMath::Clamp(FMath::RoundToInt(Value * Stock), 1, Stock));
+	int32 Grams = FMath::Clamp(FMath::RoundToInt(Value * Stock), 1, Stock);
+	if (Off.ToString().StartsWith(TEXT("Bag_"))) // bags per heel zakje -> snap naar wat je echt levert
+	{
+		const int32 Real = Inv->BagGramsForTarget(UInventoryComponent::BagStrain(Off), Grams);
+		if (Real > 0) { Grams = Real; }
+	}
+	Ph->SetDealGiveGrams(Grams);
 }
 
 FString UDealWidget::ComputeStrainListSig() const
@@ -783,6 +789,15 @@ void UDealWidget::UpdateLive()
 	// Hoeveel je GEEFT (amount-slider); default = gevraagd, geklemd op je voorraad. Accept-kans + preview schalen mee.
 	int32 GiveG = Ph->GetDealGiveGrams(); if (GiveG <= 0) { GiveG = Qty; }
 	if (Stock > 0) { GiveG = FMath::Clamp(GiveG, 1, Stock); }
+	// Bags per heel zakje: toon/gebruik wat je ECHT levert (geen 3g tonen terwijl je 4g geeft).
+	if (bBagOffer && GiveG > 0)
+	{
+		if (const UInventoryComponent* Inv3 = GetOwningPlayerPawn() ? GetOwningPlayerPawn()->FindComponentByClass<UInventoryComponent>() : nullptr)
+		{
+			const int32 Real = Inv3->BagGramsForTarget(UInventoryComponent::BagStrain(Offered), GiveG);
+			if (Real > 0) { GiveG = Real; }
+		}
+	}
 	if (AmountSlider && !bAmountHeld && Stock > 0) { AmountSlider->SetValue(FMath::Clamp((float)GiveG / (float)Stock, 0.f, 1.f)); }
 	if (AmountText)
 	{

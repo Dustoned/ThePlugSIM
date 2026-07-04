@@ -209,6 +209,37 @@ int32 UInventoryComponent::RemoveBagsForGrams(FName Strain, int32 DesiredGrams, 
 	return SoldGrams;
 }
 
+int32 UInventoryComponent::BagGramsForTarget(FName Strain, int32 TargetGrams) const
+{
+	if (TargetGrams <= 0) { return 0; }
+	// Kopieer de zakje-groottes van deze strain (1 entry per zakje) en simuleer dezelfde greedy-pak als
+	// RemoveBagsForGrams (grootste-die-past; anders kleinste = overschot), zonder iets te verwijderen.
+	TArray<int32> Bags;
+	for (const FInventoryStack& S : Stacks)
+	{
+		if (S.Quantity <= 0 || !IsBag(S.ItemId) || BagStrain(S.ItemId) != Strain) { continue; }
+		const int32 G = BagGrams(S.ItemId);
+		if (G <= 0) { continue; }
+		for (int32 q = 0; q < S.Quantity; ++q) { Bags.Add(G); }
+	}
+	int32 Sold = 0, Remaining = TargetGrams, Guard = 0;
+	while (Remaining > 0 && Guard++ < 10000)
+	{
+		int32 BestFit = -1, BestIdx = INDEX_NONE, SmallIdx = INDEX_NONE, Small = MAX_int32;
+		for (int32 i = 0; i < Bags.Num(); ++i)
+		{
+			if (Bags[i] <= 0) { continue; }
+			if (Bags[i] <= Remaining && Bags[i] > BestFit) { BestFit = Bags[i]; BestIdx = i; }
+			if (Bags[i] < Small) { Small = Bags[i]; SmallIdx = i; }
+		}
+		const int32 Pick = (BestIdx != INDEX_NONE) ? BestIdx : SmallIdx;
+		if (Pick == INDEX_NONE) { break; }
+		Sold += Bags[Pick]; Remaining -= Bags[Pick]; Bags[Pick] = 0;
+		if (BestIdx == INDEX_NONE) { break; } // overschot-zakje gepakt -> klaar
+	}
+	return Sold;
+}
+
 int32 UInventoryComponent::FindStackIndex(FName ItemId) const
 {
 	return Stacks.IndexOfByPredicate([ItemId](const FInventoryStack& S) { return S.ItemId == ItemId; });
