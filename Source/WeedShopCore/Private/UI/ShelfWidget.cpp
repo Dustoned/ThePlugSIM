@@ -1,6 +1,7 @@
 #include "UI/ShelfWidget.h"
 
 #include "UI/WeedUiStyle.h"
+#include "UI/WeedToast.h" // melding als de fridge een niet-eetbaar item weigert (zoals het droogrek)
 #include "UI/InventoryWidget.h" // UInvDragOp: vanuit je echte inventory in het schap droppen = opslaan
 #include "UI/WeedItemPickGrid.h" // fridge "Make edibles" = icoon-grid-picker (persistent, geen rebuild-per-klik)
 #include "Phone/PhoneClientComponent.h"
@@ -57,11 +58,7 @@ TSharedRef<SWidget> UShelfCell::RebuildWidget()
 				PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Bottom);
 			}
 		}
-		else
-		{
-			UOverlaySlot* HS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("+"), 20, WeedUI::ColTextDim(0.7f), true));
-			HS->SetHorizontalAlignment(HAlign_Center); HS->SetVerticalAlignment(VAlign_Center);
-		}
+		// Lege slot: gewoon een leeg vakje (zoals de inventory), geen "+" in elk vakje (was rommelig bij een vol grid).
 	}
 	if (!Tooltip.IsEmpty()) { SetToolTipText(FText::FromString(Tooltip)); }
 	SetVisibility(ESlateVisibility::Visible);
@@ -240,6 +237,14 @@ void UShelfWidget::HandleInvStore(UInvDragOp* Op)
 	// Contents>=Capacity zonder mergebare stapel). Bij ruimte slaagt de store gegarandeerd -> veilig clearen;
 	// bij twijfel (vol) niet, zodat een weigering nooit een cel ten onrechte leeg laat zonder OnInventoryChanged.
 	const AStorageShelf* Shelf = PhoneComp->GetShelf();
+	// De fridge accepteert alleen eetbaar-gerelateerde items (net als het droogrek alleen natte buds).
+	// Weiger de rest METEEN met een melding -> niet opslaan EN niet clearen, zodat er geen ghost-cel
+	// achterblijft (server weigert 'm anders stil en de optimistische clear laat de cel ten onrechte leeg).
+	if (Shelf && Shelf->IsFridge() && !UInventoryComponent::IsFridgeItem(S.ItemId))
+	{
+		UWeedToast::NotifyPawn(P, -1, 3.f, FColor(255, 180, 90), TEXT("Only edibles and cooking items go in the fridge."));
+		return;
+	}
 	const bool bHasRoom = Shelf && Shelf->Contents.Num() < Shelf->GetCapacity();
 	PhoneComp->RequestShelfStore(S.ItemId, S.Quantity); // de hele gesleepte stapel het schap in
 	// Optimistisch clearen tegen de flash: anders flitst de gesleepte (gedimde) cel na het loslaten eerst weer
@@ -291,9 +296,10 @@ void UShelfWidget::FillBody()
 		return C;
 	};
 
-	// Gewenste cellen: één per schap-item + één lege "sleep hierheen"-cel (drop-doel, ook bij leeg schap).
+	// VAST slot-grid (net als de inventory): toon ALLE capaciteit-slots, gevuld + leeg. Zo is een lege fridge
+	// gewoon 8 lege vakjes i.p.v. "1 vakje met +", en zie je in een oogopslag hoeveel ruimte er is.
 	const int32 N = Shelf ? Shelf->Contents.Num() : 0;
-	const int32 Desired = N + 1;
+	const int32 Desired = Shelf ? FMath::Max(N, Shelf->GetCapacity()) : 1;
 
 	// Cel-pool op maat (alleen aan de STAART toevoegen/verwijderen -> ongewijzigde cellen blijven staan).
 	while (ShelfCellBoxes.Num() < Desired)
