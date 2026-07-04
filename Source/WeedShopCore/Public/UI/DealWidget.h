@@ -55,7 +55,9 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget>    DialogueBox;  // kader rond de dialoog
 	UPROPERTY() TObjectPtr<UWidget>    GiveBtn;      // "Give joint"-knop
 	UPROPERTY() TObjectPtr<UWidget>    OfferBtn;     // "Offer deal"-knop (alleen kopers)
-	UPROPERTY() TObjectPtr<UTextBlock> WantsText;
+	UPROPERTY() TObjectPtr<UTextBlock> WantsText;        // prefix "Wants Xg " (normale tekstkleur)
+	UPROPERTY() TObjectPtr<UTextBlock> WantsStrainText;  // alleen de strain-naam (in de strain-tagkleur)
+	UPROPERTY() TObjectPtr<class UHorizontalBox> WantsRow; // rij die beide bevat (visibility togglen)
 	UPROPERTY() TObjectPtr<UTextBlock> SubText;
 	UPROPERTY() TObjectPtr<UTextBlock> PriceText;
 	UPROPERTY() TObjectPtr<USlider> PriceSlider;

@@ -195,9 +195,14 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		VB->AddChildToVerticalBox(DB)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	}
 
-	// Held: waar de klant om vraagt (groot, direct onder de kop/dialoog).
+	// Held: waar de klant om vraagt. "Wants Xg " in normale kleur; ALLEEN de strain-naam in de strain-
+	// tagkleur (op verzoek: niet de hele regel kleuren). Twee blokken in een rij (1 blok kan maar 1 kleur).
+	WantsRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 	WantsText = WeedUI::Text(WidgetTree, TEXT(""), 17, WeedUI::ColText(), false, true);
-	VB->AddChildToVerticalBox(WantsText)->SetPadding(FMargin(0.f, 8.f, 0.f, 4.f));
+	WantsStrainText = WeedUI::Text(WidgetTree, TEXT(""), 17, WeedUI::ColText(), false, true);
+	WantsRow->AddChildToHorizontalBox(WantsText);
+	WantsRow->AddChildToHorizontalBox(WantsStrainText);
+	VB->AddChildToVerticalBox(WantsRow)->SetPadding(FMargin(0.f, 8.f, 0.f, 4.f));
 
 	// SubText vervalt als los element (substituut-info zit nu in de ChanceText-suffix). Member blijft,
 	// maar permanent verborgen + leeg -> kleinste diff, geen ruis in de layout.
@@ -658,7 +663,7 @@ void UDealWidget::UpdateLive()
 	{
 		// Geen koper: verberg de deal-sectie; alleen kop + dialoog + Give joint + Leave.
 		auto Hide = [](UWidget* W) { if (W) { W->SetVisibility(ESlateVisibility::Collapsed); } };
-		Hide(WantsText); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(StockText);
+		Hide(WantsRow); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(StockText);
 		Hide(ChanceText); Hide(ChanceBar); Hide(PreviewText); Hide(NoWeedText); Hide(OfferLabel); Hide(StrainBox);
 		return;
 	}
@@ -694,21 +699,21 @@ void UDealWidget::UpdateLive()
 	if (StrainBox)    { StrainBox->SetVisibility(bHasWeed ? ESlateVisibility::Visible : ESlateVisibility::Collapsed); }
 	// StockText: default verborgen; alleen de WARN-tak (tekort) zet 'm zichtbaar.
 	if (StockText)    { StockText->SetVisibility(ESlateVisibility::Collapsed); }
-	if (WantsText)    { WantsText->SetVisibility(ESlateVisibility::HitTestInvisible); } // koper: altijd tonen (kan Collapsed staan door een vorige niet-koper)
+	if (WantsRow)     { WantsRow->SetVisibility(ESlateVisibility::HitTestInvisible); } // koper: altijd tonen (kan Collapsed staan door een vorige niet-koper)
 	if (!bHasWeed)
 	{
 		// Alleen "Wants" + de melding tonen; de rest is verborgen. Klaar.
-		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
-			Qty, *PrettyDealName(C->DesiredProductId))));
-		// D.1 - de "Wants"-regel in de strain-tagkleur (in-place, geen rebuild).
-		WantsText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
+		WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg "), Qty)));
+		// Alleen de STRAIN-naam in de strain-tagkleur (niet de hele regel).
+		WantsStrainText->SetText(FText::FromString(PrettyDealName(C->DesiredProductId)));
+		WantsStrainText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
 		return;
 	}
 
-	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg %s"),
-		Qty, *PrettyDealName(C->DesiredProductId))));
-	// D.1 - de "Wants"-regel in de strain-tagkleur (in-place, geen rebuild).
-	WantsText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
+	WantsText->SetText(FText::FromString(FString::Printf(TEXT("Wants %dg "), Qty)));
+	// Alleen de STRAIN-naam in de strain-tagkleur (niet de hele regel).
+	WantsStrainText->SetText(FText::FromString(PrettyDealName(C->DesiredProductId)));
+	WantsStrainText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
 
 	const float Pct = float(Ask) / Market * 100.f;
 	PriceText->SetText(FText::FromString(FString::Printf(TEXT("Your price  EUR %d/g   -   %.0f%%   -   total EUR %d"),
