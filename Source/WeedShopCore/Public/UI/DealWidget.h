@@ -106,6 +106,7 @@ protected:
 	// Canonieke inventory-cel-CONTENT (bag-icoon + count-badge rechtsboven + strain-tag onderaan), zoals
 	// UWeedItemPickGrid::MakeCellContent. Gedeeld door de sell-grid (mode 0) en de geef-grid (mode 2).
 	UWidget* MakeBagCellContent(FName Strain, int32 Gram, int32 Count) const;
+	void SetCardWidth(float W);                  // kaart-breedte zetten (gecached: geen re-layout als 'ie al klopt)
 
 	UPhoneClientComponent* GetPhone() const;
 
@@ -134,6 +135,8 @@ protected:
 	TMap<int32, int32> PileCounts;                       // gram-maat -> aantal zakjes in de pile
 	FName PileStrain = NAME_None;                        // strain waarvoor de pile geldt (reset bij strain-wissel)
 	FString SellGridSig;                                 // sig van de sell-grid (alleen bij bag-voorraad-wijziging vullen)
+	UPROPERTY() TObjectPtr<USizeBox> CardWidthBox;       // vaste kaart-breedte; breder bij bag-deals (twee-koloms geef-tray) dan bij losse dialogen
+	float CurrentCardWidth = 0.f;                        // cache: alleen SetWidthOverride bij een echte wijziging (geen per-tick re-layout-flits)
 
 	UPROPERTY() TObjectPtr<UTextBlock> StockText;
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;

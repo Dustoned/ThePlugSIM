@@ -102,13 +102,16 @@ void UDealBagCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPoin
 	UDealBagDragOp* Op = NewObject<UDealBagDragOp>(GetTransientPackage(), UDealBagDragOp::StaticClass());
 	Op->Strain = Strain; Op->Gram = Gram; Op->Avail = Avail;
 	Op->Pivot = EDragPivot::CenterCenter;
-	if (APlayerController* PC = GetOwningPlayer())
+	// Sleep-visual = het ECHTE zakje-icoon dat aan de muis hangt (exact hetzelfde patroon als de inventory-drag,
+	// UInvCell::NativeOnDragDetected): een SizeBox met WeedUI::ItemIcon op de canonieke bag-id. De vorige poging
+	// hing een LEGE UDealBagCell op de muis (geen Content) -> je zag een grijs/leeg blok i.p.v. het zakje.
+	if (WidgetTree)
 	{
-		if (UDealBagCell* Ghost = CreateWidget<UDealBagCell>(PC, UDealBagCell::StaticClass()))
-		{
-			Ghost->Mode = 0; Ghost->Gram = Gram; Ghost->Avail = Avail; Ghost->Title = Title;
-			Op->DefaultDragVisual = Ghost;
-		}
+		const FName BagId = UInventoryComponent::MakeBagId(Strain, NAME_None, Gram);
+		USizeBox* Vis = WidgetTree->ConstructWidget<USizeBox>();
+		Vis->SetWidthOverride(58.f); Vis->SetHeightOverride(58.f);
+		Vis->SetContent(WeedUI::ItemIcon(WidgetTree, BagId, 58.f));
+		Op->DefaultDragVisual = Vis;
 	}
 	OutOperation = Op;
 }
@@ -170,13 +173,16 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	CS->SetAutoSize(true);
 	CS->SetPosition(FVector2D(0.f, -120.f));
 
-	// Vaste breedte (zodat de Fill-knoppen netjes uitlijnen), hoogte volgt de inhoud.
-	USizeBox* Width = WidgetTree->ConstructWidget<USizeBox>();
-	Width->SetWidthOverride(440.f);
-	CardB->SetContent(Width);
+	// Vaste breedte (zodat de Fill-knoppen netjes uitlijnen), hoogte volgt de inhoud. De breedte is DYNAMISCH:
+	// smal (460) bij losse dialogen/gram-deals, breed (660) bij bag-deals zodat de twee-koloms geef-tray
+	// (jouw bags links, geef-vak rechts) in de BREEDTE past i.p.v. het paneel hoog te maken.
+	CardWidthBox = WidgetTree->ConstructWidget<USizeBox>();
+	CardWidthBox->SetWidthOverride(460.f);
+	CurrentCardWidth = 460.f;
+	CardB->SetContent(CardWidthBox);
 
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
-	Width->SetContent(VB);
+	CardWidthBox->SetContent(VB);
 
 	// --- Kop-rij: naam links + tier-PILL rechts (altijd zichtbaar voor ELKE NPC) ---
 	{
@@ -304,8 +310,20 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	PriceSlider = WidgetTree->ConstructWidget<USlider>();
 	PriceSlider->SetSliderHandleColor(WeedUI::ColAccent());
 	PriceSlider->SetSliderBarColor(WeedUI::ColSlot());
+	// Nettere balk: dikkere bar-lijn + iets grotere greep (comfortabeler mikken/slepen dan de dunne default).
+	{
+		FSliderStyle SS = PriceSlider->GetWidgetStyle();
+		SS.SetBarThickness(8.f);
+		PriceSlider->SetWidgetStyle(SS);
+	}
 	PriceSlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnPriceSlider);
-	VB->AddChildToVerticalBox(PriceSlider)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
+	// In een SizeBox met vaste hoogte -> consistente, comfortabele greep-hoogte (i.p.v. door de handle-maat bepaald).
+	{
+		USizeBox* SliderH = WidgetTree->ConstructWidget<USizeBox>();
+		SliderH->SetHeightOverride(22.f);
+		SliderH->SetContent(PriceSlider);
+		VB->AddChildToVerticalBox(SliderH)->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
+	}
 
 	// Hoeveelheid: bag-offers krijgen de tastbare GEEF-TRAY (sleep zakjes). Losse gram-items
 	// (concentraten/edibles) vallen terug op deze AmountText-regel (dan geef je automatisch de gevraagde hoeveelheid).
@@ -533,33 +551,62 @@ int32 UDealWidget::PileAvailFor(FName Strain, int32 Gram) const
 	return FMath::Max(0, Owned - InPile);
 }
 
+void UDealWidget::SetCardWidth(float W)
+{
+	// Alleen echt herschalen bij een wijziging -> geen per-tick re-layout-flits (UpdateLive draait elke refresh).
+	if (CardWidthBox && !FMath::IsNearlyEqual(CurrentCardWidth, W))
+	{
+		CardWidthBox->SetWidthOverride(W);
+		CurrentCardWidth = W;
+	}
+}
+
 void UDealWidget::BuildGiveTray(UVerticalBox* VB)
 {
 	TrayBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	VB->AddChildToVerticalBox(TrayBox)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
 
-	// --- GEEF-ZONE: een mode-1 drop-cel die de geef-grid (echte bag-iconen) + de lege-hint als content bevat.
-	// Drop een bag uit de sell-grid hierop -> OnBagDroppedOnGive. Een drop op een gegeven bag-cel (mode 2) bubbelt
-	// hierheen omdat mode 2 NativeOnDrop niet overschrijft. ---
-	GiveZone = WidgetTree->ConstructWidget<UDealBagCell>();
-	GiveZone->Owner = this; GiveZone->Mode = 1;
-	{
-		UVerticalBox* ZoneVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		GiveHint = WeedUI::Text(WidgetTree, TEXT("Drop bags here to give"), 13, WeedUI::ColTextDim(), true, true);
-		GiveHint->SetAutoWrapText(true);
-		UVerticalBoxSlot* HS = ZoneVB->AddChildToVerticalBox(GiveHint); HS->SetHorizontalAlignment(HAlign_Center);
-		GiveGrid = WidgetTree->ConstructWidget<UWrapBox>();
-		GiveGrid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
-		ZoneVB->AddChildToVerticalBox(GiveGrid);
-		GiveZone->Content = ZoneVB; // RebuildWidget zet 'm als de zichtbare inhoud van de drop-cel
-	}
-	TrayBox->AddChildToVerticalBox(GiveZone)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	// Twee kolommen naast elkaar (BREED i.p.v. hoog): LINKS al je bags (sleepbaar), RECHTS het geef-vak voor
+	// de klant. Zo groeit het paneel in de breedte; je sleept een zakje van links naar het vak rechts.
+	UHorizontalBox* Cols = WidgetTree->ConstructWidget<UHorizontalBox>();
+	TrayBox->AddChildToVerticalBox(Cols);
 
-	// --- SELL-GRID: ALLE bags die je bij hebt (inventory + hotbar), per (strain,maat) 1 sleepbare icon-cel. ---
-	TrayBox->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Your bags - drag one into the zone above:"), 11, WeedUI::ColTextDim()));
-	SellGrid = WidgetTree->ConstructWidget<UWrapBox>();
-	SellGrid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
-	TrayBox->AddChildToVerticalBox(SellGrid)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+	// --- LINKER KOLOM: ALLE bags die je bij hebt (inventory + hotbar), per (strain,maat) 1 sleepbare icon-cel. ---
+	{
+		UVerticalBox* Left = WidgetTree->ConstructWidget<UVerticalBox>();
+		Left->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Your bags - drag into the deal:"), 11, WeedUI::ColTextDim()));
+		SellGrid = WidgetTree->ConstructWidget<UWrapBox>();
+		SellGrid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
+		Left->AddChildToVerticalBox(SellGrid)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		UHorizontalBoxSlot* LS = Cols->AddChildToHorizontalBox(Left);
+		LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		LS->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
+		LS->SetVerticalAlignment(VAlign_Top);
+	}
+
+	// --- RECHTER KOLOM: GEEF-ZONE, een mode-1 drop-cel die de geef-grid (echte bag-iconen) + de lege-hint bevat.
+	// Drop een bag uit de linker kolom hierop -> OnBagDroppedOnGive. Een drop op een gegeven bag-cel (mode 2)
+	// bubbelt hierheen omdat mode 2 NativeOnDrop niet overschrijft. ---
+	{
+		UVerticalBox* Right = WidgetTree->ConstructWidget<UVerticalBox>();
+		Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Giving to customer:"), 11, WeedUI::ColTextDim()));
+		GiveZone = WidgetTree->ConstructWidget<UDealBagCell>();
+		GiveZone->Owner = this; GiveZone->Mode = 1;
+		{
+			UVerticalBox* ZoneVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			GiveHint = WeedUI::Text(WidgetTree, TEXT("Drop bags here to give"), 13, WeedUI::ColTextDim(), true, true);
+			GiveHint->SetAutoWrapText(true);
+			UVerticalBoxSlot* HS = ZoneVB->AddChildToVerticalBox(GiveHint); HS->SetHorizontalAlignment(HAlign_Center);
+			GiveGrid = WidgetTree->ConstructWidget<UWrapBox>();
+			GiveGrid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
+			ZoneVB->AddChildToVerticalBox(GiveGrid);
+			GiveZone->Content = ZoneVB; // RebuildWidget zet 'm als de zichtbare inhoud van de drop-cel
+		}
+		Right->AddChildToVerticalBox(GiveZone)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		UHorizontalBoxSlot* RS = Cols->AddChildToHorizontalBox(Right);
+		RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		RS->SetVerticalAlignment(VAlign_Top);
+	}
 }
 
 // Canonieke inventory-icon-cel-content (spiegel van UWeedItemPickGrid::MakeCellContent): bag-icoon (68px)
@@ -927,6 +974,7 @@ void UDealWidget::UpdateLive()
 		Hide(WantsRow); Hide(SubText); Hide(PriceText); Hide(PriceSlider); Hide(AmountSlider); Hide(AmountText); Hide(StockText); Hide(TrayBox);
 		Hide(ChanceText); Hide(ChanceBar); Hide(PreviewText); Hide(NoWeedText);
 		Hide(RespectDelta); Hide(LoyaltyDelta); Hide(AddictDelta); // geen deal -> geen delta's
+		SetCardWidth(460.f); // niet-koper: smalle kaart (geen geef-tray)
 		return;
 	}
 
@@ -973,6 +1021,7 @@ void UDealWidget::UpdateLive()
 		if (RespectDelta) { RespectDelta->SetVisibility(ESlateVisibility::Collapsed); }
 		if (LoyaltyDelta) { LoyaltyDelta->SetVisibility(ESlateVisibility::Collapsed); }
 		if (AddictDelta)  { AddictDelta->SetVisibility(ESlateVisibility::Collapsed); }
+		SetCardWidth(460.f); // geen wiet: smalle kaart (alleen de melding)
 		return;
 	}
 
@@ -1026,6 +1075,7 @@ void UDealWidget::UpdateLive()
 	{
 		if (TrayBox)    { TrayBox->SetVisibility(ESlateVisibility::Visible); }
 		if (AmountText) { AmountText->SetVisibility(ESlateVisibility::Collapsed); }
+		SetCardWidth(660.f); // bag-deal: breed genoeg voor de twee-koloms geef-tray
 		SyncPileToOffered(); // reset de pile bij strain-wissel (zet DealGiveGrams via RefreshGiveZone)
 		RebuildSellGrid();   // sig-gated: alleen bij een bag-voorraad-/pile-wijziging
 		GiveG = FMath::Max(1, PileTotalGrams());
@@ -1034,6 +1084,7 @@ void UDealWidget::UpdateLive()
 	{
 		if (TrayBox)    { TrayBox->SetVisibility(ESlateVisibility::Collapsed); }
 		if (AmountText) { AmountText->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		SetCardWidth(460.f); // losse gram-deal (concentraat/edible): smal, geen geef-tray
 		PileStrain = NAME_None; // reset zodat een volgende bag-offer opnieuw synct
 		GiveG = FMath::Clamp(Qty, 1, FMath::Max(1, Stock));
 		Ph->SetDealGiveGrams(GiveG);
