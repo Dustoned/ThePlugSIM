@@ -398,6 +398,13 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
     Fix: bijectieve mapping `lastIdx=(Index/70)%100` + retry-cap. GEMETEN dev-LoadMap 67,7s->27,5s, EnsureSeeded
     26,7s->0. De co-op-joiner wachtte op deze host-stall en versnelt mee. Rest-load (~14s packaged) = content-load
     + graphics-apply (Lumen/VSM ~5s) + DoorRetrofitter-scan; verder optimaliseren = optioneel.
+  - **[RELEASED 1.21.0, build-20260704-0305]** Deze load-fix + Blok 1-4 (D1-D28) + D33/D34 + de kaart-kleur-fix
+    hieronder zijn geshipt (cook-parity PASS + smoke-test PASS). GEMETEN packaged beach-load nu 12,5s.
+- [x] **MAP winkel-markers gekleurd per soort (gevonden+gefixt 07-04, commit e3d61654)** - de M-kaart toonde ALLE
+    winkels hardcoded geel (MapWidget.cpp:614) terwijl de kompas AStoreCounter::KindColor() gebruikt
+    (groen/blauw/paars/goud). Bevestigd echte bug via de speler-clue "geel op map, gekleurd op compass" (asset-mis
+    zou beide raken). Fix: map gebruikt nu dezelfde KindColor-bron, per pool-slot getint (her-kleur alleen bij
+    type-wijziging, geen per-tick flash). Geshipt in 1.21.0.
 - [ ] **D30** Items flashen nog bij slepen hotbar->drying rack (en mogelijk inv->rack + andere machine-UI's) -> restpad vinden+fixen
 - [ ] **D31** Overbodige instructie-teksten overal weg (bv. "Drag from your inventory to store...", "Drag weed here to dry it...", "Nothing drying...") - alleen echt nuttige info laten staan
 - [ ] **D32** Merge/samenvoegen-popup valt soms achter andere UI's -> z-order/topmost fixen
