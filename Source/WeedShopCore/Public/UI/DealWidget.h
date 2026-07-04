@@ -37,22 +37,28 @@ public:
 	UPROPERTY() int32 Avail = 0;
 };
 
-// Eén cel in de geef-tray. Mode 0 = bron-zakje (sleepbaar), mode 1 = geef-zone (drop-doel). KRITISCH:
-// RebuildWidget MOET SetVisibility(Visible) zetten, anders is de cel niet hit-testbaar en start de sleep nooit
-// (dat was de bug van de eerste poging - UInvCell doet dit ook).
+// Eén cel in de geef-interactie. Mode 0 = bron-zakje in de sell-grid (sleepbaar, canonieke inventory-look),
+// mode 1 = geef-zone (drop-DOEL: bevat de geef-grid als content, klik = niks meer -> zie mode 2),
+// mode 2 = een GEGEVEN bag in de geef-grid (klik = 1 terug naar de sell-grid; overschrijft NativeOnDrop NIET,
+// zodat een drop OP zo'n cel naar de container-zone bubbelt). KRITISCH: RebuildWidget MOET SetVisibility(Visible)
+// zetten, anders is de cel niet hit-testbaar en start de sleep/klik nooit (dat was de bug van de eerste poging).
 UCLASS()
 class WEEDSHOPCORE_API UDealBagCell : public UUserWidget
 {
 	GENERATED_BODY()
 public:
 	TWeakObjectPtr<UDealWidget> Owner;
-	int32 Mode = 0;          // 0 = bron (sleepbaar), 1 = geef-zone (drop-doel)
+	int32 Mode = 0;          // 0 = bron-zakje (sleepbaar), 1 = geef-zone (drop-doel), 2 = gegeven bag (klik = -1)
 	FName Strain;
 	int32 Gram = 0;
 	int32 Avail = 0;
-	FString Title;           // grote regel
-	FString SubLabel;        // kleine regel eronder
+	FString Title;           // grote regel (ongebruikt in de icon-cel-modi, blijft voor back-compat)
+	FString SubLabel;        // kleine regel eronder (idem)
 	bool bWide = false;      // geef-zone = brede balk i.p.v. vierkant
+
+	// Optionele expliciete content (canonieke icon-cel): de DealWidget bouwt 'm via WeedItemPickGrid-recept
+	// en zet 'm hier; RebuildWidget gebruikt 'm dan i.p.v. de oude tekst-cel. WrapBox voor de geef-zone (mode 1).
+	UPROPERTY() TObjectPtr<UWidget> Content;
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
@@ -68,9 +74,10 @@ class WEEDSHOPCORE_API UDealWidget : public UUserWidget
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 
-	// Aangeroepen door UDealBagCell (de geef-tray-cellen). Publiek zodat de cel-klasse ze kan callen.
-	void OnBagDroppedOnGive(FName Strain, int32 Gram, int32 Avail); // zakje op de geef-zone -> stack? popup, anders +1
-	void OnGiveZoneClicked();                                       // tik op de geef-zone -> pile leegmaken
+	// Aangeroepen door UDealBagCell (de geef-cellen). Publiek zodat de cel-klasse ze kan callen.
+	void OnBagDroppedOnGive(FName Strain, int32 Gram, int32 Avail); // bag uit de sell-grid op de geef-zone -> +1 in de pile
+	void OnGiveZoneClicked();                                       // tik op de LEGE geef-zone -> pile leegmaken (fallback)
+	void OnGivenBagClicked(FName Strain, int32 Gram);              // klik op een gegeven bag-cel -> 1 terug naar de sell-grid
 	int32 PileAvailFor(FName Strain, int32 Gram) const;             // voorraad van die maat MINUS wat al in de pile ligt
 
 protected:
@@ -83,24 +90,22 @@ protected:
 	void OnAmountSlider(float Value);
 
 	void BuildShell(UCanvasPanel* Root);
-	void RebuildStrains();          // vult/diff de strain-cel-pool (list-change) + zet de selectie-highlight
-	void RefreshStrainSelection();  // pure selectie-wissel: alleen de 2 betrokken knoppen herstylen
-	FString ComputeStrainListSig() const; // signatuur van de aangeboden strain-lijst (set + grammen/thc/wanted)
 	void UpdateLive();
 	void GiveJointPressed();   // "Give joint" geklikt: 0 -> melding, 1 -> direct geven, >=2 -> kiezer
 	void RebuildJointPicker(); // vult de joint-kiezer (strain - gram - kwaliteit per joint)
 
-	// --- Geef-tray ---
-	void BuildGiveTray(UVerticalBox* VB);       // bouwt de tray 1x in BuildShell (geef-zone + bag-strip)
-	void BuildHowManyPopup(UCanvasPanel* Root); // de "hoeveel zakjes?"-slider-popup (hoge ZOrder)
-	void RebuildBagStrip();                     // vult de voorraad-strip (per maat) van de aangeboden strain
-	void RefreshGiveZone();                     // toont de pile-combo + totaal op de geef-zone; zet DealGiveGrams
-	void SyncPileToOffered();                   // reset+autofill de pile bij strain-wissel
-	void OpenHowMany(int32 Gram, int32 Avail);
-	UFUNCTION() void OnHowManySlider(float V);
-	void ConfirmHowMany();
-	void CancelHowMany();
+	// --- Geef-interactie (bag-offers): een SELL-GRID (al je bags, sleepbaar) + een GEEF-ZONE (drop-doel dat de
+	//     geef-grid met echte bag-iconen bevat). Sleep bag -> geef-zone = +1 in de pile; klik op een gegeven bag =
+	//     1 terug. De pile-som = DealGiveGrams (drijft kans/preview/verkoop). ---
+	void BuildGiveTray(UVerticalBox* VB);       // bouwt de geef-zone + de sell-grid 1x in BuildShell
+	void RebuildSellGrid();                     // sig-gated: vult de sell-grid met ALLE bag-stacks (inv + hotbar)
+	void RefreshGiveZone();                     // (her)vult de geef-grid met bag-iconen uit de pile; zet DealGiveGrams
+	void SyncPileToOffered();                   // reset de pile bij een strain-wissel (leeg beginnen met de nieuwe strain)
 	int32 PileTotalGrams() const;
+
+	// Canonieke inventory-cel-CONTENT (bag-icoon + count-badge rechtsboven + strain-tag onderaan), zoals
+	// UWeedItemPickGrid::MakeCellContent. Gedeeld door de sell-grid (mode 0) en de geef-grid (mode 2).
+	UWidget* MakeBagCellContent(FName Strain, int32 Gram, int32 Count) const;
 
 	UPhoneClientComponent* GetPhone() const;
 
@@ -120,21 +125,15 @@ protected:
 	UPROPERTY() TObjectPtr<USlider> AmountSlider;
 	UPROPERTY() TObjectPtr<UTextBlock> AmountText;
 
-	// --- Geef-tray (bag-offers): je zakjes als sleepbare cellen + een geef-zone (drop-doel). Sleep zakjes
-	//     erin, combineer maten; stack -> "hoeveel?"-popup. De pile-som = DealGiveGrams. ---
-	UPROPERTY() TObjectPtr<UVerticalBox> TrayBox;        // hele tray-blok (togglen met de amount-zone)
-	UPROPERTY() TObjectPtr<UDealBagCell> GiveZone;       // transparante drop-cel (hit-test) boven de balk
-	UPROPERTY() TObjectPtr<UTextBlock> GiveTotalText;    // "Geeft: 5g + 2g = 7g" (SetText-baar, op de zichtbare balk)
-	UPROPERTY() TObjectPtr<UWrapBox> BagStrip;           // je voorraad-zakjes van de aangeboden strain (sleepbaar)
-	UPROPERTY() TArray<TObjectPtr<UDealBagCell>> BagStripPool;
+	// --- Geef-interactie (bag-offers) ---
+	UPROPERTY() TObjectPtr<UVerticalBox> TrayBox;        // hele blok (geef-zone + sell-grid), togglen met de amount-zone
+	UPROPERTY() TObjectPtr<UDealBagCell> GiveZone;       // drop-DOEL (mode 1): bevat de geef-grid + de lege-hint
+	UPROPERTY() TObjectPtr<UWrapBox> GiveGrid;           // de gegeven bags als icon-cellen (mode 2, klik = -1)
+	UPROPERTY() TObjectPtr<UTextBlock> GiveHint;         // "Drop bags here to give <naam>" als de pile leeg is
+	UPROPERTY() TObjectPtr<UWrapBox> SellGrid;           // ALLE bags die je bij hebt (inv + hotbar), sleepbaar (mode 0)
 	TMap<int32, int32> PileCounts;                       // gram-maat -> aantal zakjes in de pile
 	FName PileStrain = NAME_None;                        // strain waarvoor de pile geldt (reset bij strain-wissel)
-	FString BagStripSig;                                 // sig van de voorraad-strip (alleen bij wijziging vullen)
-	UPROPERTY() TObjectPtr<UWidget> HowManyRoot;         // "hoeveel zakjes?"-popup
-	UPROPERTY() TObjectPtr<USlider> HowManySlider;
-	UPROPERTY() TObjectPtr<UTextBlock> HowManyLabel;
-	int32 HowManyGram = 0;
-	int32 HowManyMax = 0;
+	FString SellGridSig;                                 // sig van de sell-grid (alleen bij bag-voorraad-wijziging vullen)
 
 	UPROPERTY() TObjectPtr<UTextBlock> StockText;
 	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
@@ -150,6 +149,11 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> RespectVal;             // waarde-tekst midden onder de ring
 	UPROPERTY() TObjectPtr<UTextBlock> LoyaltyVal;
 	UPROPERTY() TObjectPtr<UTextBlock> AddictVal;
+	// LIVE deal-delta's onder elke waarde ("+N", groen): de +respect/+loyalty/+hooked die deze deal oplevert
+	// (uit PreviewDealOutcome met de huidige GiveG). 0 of geen deal -> leeg/verborgen. Vervangt de oude PreviewText-regel.
+	UPROPERTY() TObjectPtr<UTextBlock> RespectDelta;
+	UPROPERTY() TObjectPtr<UTextBlock> LoyaltyDelta;
+	UPROPERTY() TObjectPtr<UTextBlock> AddictDelta;
 	UPROPERTY() TObjectPtr<UTextBlock> RespectSub;             // D13a — mini-label "to contact" onder de respect-waarde (zichtbaar tot unlock)
 	// Delta-caches per ring: sla de MID-update over als de fractie/kleur nauwelijks wijzigt.
 	float LastRespFrac = -1.f, LastLoyalFrac = -1.f, LastAddictFrac = -1.f;
@@ -160,21 +164,14 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> TierText;     // klant-tier-NAAM (in de pill rechts van de naam)
 	UPROPERTY() TObjectPtr<UBorder>    TierPill;     // pill-kader om TierText (accent-vlak)
 	UPROPERTY() TObjectPtr<USizeBox>   TierBar;      // dunne accent-balk onder de kop-rij (3px)
-	UPROPERTY() TObjectPtr<UTextBlock> PreviewText;
-	UPROPERTY() TObjectPtr<UTextBlock> OfferLabel;
-	UPROPERTY() TObjectPtr<UVerticalBox> StrainBox;      // container voor het strain-keuze-grid
+	UPROPERTY() TObjectPtr<UTextBlock> PreviewText;      // dood (spec): permanent Collapsed + leeg; de gauge-delta's tonen dit nu
 	UPROPERTY() TObjectPtr<UVerticalBox> JointPickerBox; // container voor het joint-keuze-grid (welke joint geef je)
 	UPROPERTY() TObjectPtr<UTextBlock> NoWeedText;
 
-	// Keuze-grids (B.11): strain-picker (met selectie) + joint-picker (zonder selectie). Persistent, diffen intern.
-	UPROPERTY() TObjectPtr<UWeedItemPickGrid> StrainGrid;
+	// Joint-picker (zonder selectie). Persistent, diff't intern. (De strain-picker is vervangen door de
+	// strain-uit-bag-logica: de aangeboden strain volgt uit welke bag je in de geef-zone legt.)
 	UPROPERTY() TObjectPtr<UWeedItemPickGrid> JointGrid;
-	UPROPERTY() TObjectPtr<UTextBlock> StrainEmptyText;              // "(no weed in your inventory)" melding
 	UPROPERTY() TObjectPtr<UTextBlock> JointEmptyText;              // "No joints - roll one first (R)."
-
-	// Signatuur-gate: wanneer roepen we StrainGrid->SetItems aan (lijst-wijziging) vs enkel SetSelected (selectie).
-	FName StrainSelectedId = NAME_None;                             // welke id nu de "geselecteerd"-stijl heeft
-	FString StrainListSig;                                          // signatuur van de strain-LIJST (set Bag-ids + grammen/thc)
 
 	TWeakObjectPtr<UPhoneClientComponent> PhoneComp;
 	TWeakObjectPtr<ACustomerBase> LastCustomer;
