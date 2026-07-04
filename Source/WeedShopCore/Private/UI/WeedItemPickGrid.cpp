@@ -81,6 +81,7 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 		UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
 		PS->SetHorizontalAlignment(HAlign_Right);
 		PS->SetVerticalAlignment(VAlign_Top);
+		PS->SetPadding(FMargin(0.f, 7.f, 7.f, 0.f)); // 7px inset vanaf rechtsboven = zelfde als de inventory-cel
 	}
 
 	// Onderaan gestapeld: (optioneel) klein SubLine-regeltje boven de tag-pill.
@@ -129,11 +130,17 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 			UOverlaySlot* BS = Ov->AddChildToOverlay(Bottom);
 			BS->SetHorizontalAlignment(HAlign_Center);
 			BS->SetVerticalAlignment(VAlign_Bottom);
-			BS->SetPadding(FMargin(0.f, 0.f, 0.f, 0.f));
+			BS->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f)); // tag netjes onderin (3px van de celrand)
 		}
 	}
 
-	return Ov;
+	// Forceer dat de inhoud de HELE cel vult: de button centreert anders de kleine overlay -> lege ruimte
+	// onderin + de tag zweeft. SizeBox op celmaat -> icoon gecentreerd, badge rechtsboven, tag onderin.
+	USizeBox* Fill = WidgetTree->ConstructWidget<USizeBox>();
+	Fill->SetWidthOverride(CellSize);
+	Fill->SetHeightOverride(CellSize);
+	Fill->SetContent(Ov);
+	return Fill;
 }
 
 void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
@@ -161,10 +168,10 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 	if (bSel) { Pressed.OutlineSettings.Width = 1.5f; Pressed.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.9f)); }
 	S.Pressed = Pressed;
 
-	// Zelfde binnen-inset (7px) als de inventory-cel -> badge (rechtsboven) en tag (onder) zitten op exact
-	// dezelfde plek als in de inventory, niet pal in de hoek.
-	S.NormalPadding = FMargin(7.f, 7.f, 7.f, 3.f);  // minder onder -> tag zakt binnen de cel naar onderen
-	S.PressedPadding = FMargin(7.f, 7.f, 7.f, 3.f);
+	// Geen button-padding: de inhoud (SizeBox op celmaat) vult de hele cel zelf; badge/tag krijgen hun
+	// inset via hun eigen overlay-slot (7px rechtsboven / 3px onder), gelijk aan de inventory-cel.
+	S.NormalPadding = FMargin(0.f);
+	S.PressedPadding = FMargin(0.f);
 	Cells[i]->SetStyle(S);
 }
 
