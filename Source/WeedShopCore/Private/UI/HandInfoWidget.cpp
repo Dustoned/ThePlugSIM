@@ -117,11 +117,6 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
 	ColSize->SetContent(Col);
 
-	// Item-icoon bovenin (zoals de inventory quick-view). Content per item in NativeTick.
-	IconBox = WidgetTree->ConstructWidget<USizeBox>();
-	IconBox->SetWidthOverride(60.f); IconBox->SetHeightOverride(60.f);
-	{ UVerticalBoxSlot* IcoS = Col->AddChildToVerticalBox(IconBox); IcoS->SetHorizontalAlignment(HAlign_Center); IcoS->SetPadding(FMargin(0.f, 12.f, 0.f, 4.f)); }
-
 	// Type-tag (klein, hoofdletters, gekleurd). Bold projectfont + dunne donkere outline: de letters waren
 	// te dun/onleesbaar zonder paneel-achtergrond (de kaart is transparant).
 	TypeText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
@@ -132,7 +127,7 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 		TypeText->SetFont(TagFont);
 	}
 	TypeText->SetAutoWrapText(true);
-	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 2.f, 14.f, 1.f));
+	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 12.f, 14.f, 1.f));
 
 	// Naam (groot).
 	NameText = WeedUI::Text(WidgetTree, TEXT(""), 20, WeedUI::ColText(), false, true);
@@ -205,19 +200,6 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%.0f|%s"), *IdStr, Qty, Thc, Qpct, ActiveSid, ActiveQ, *RollDesc);
 	if (Key == LastKey) { return; }
 	LastKey = Key;
-	// Icoon (met water-vulling voor flessen) - alleen bij wijziging, geen per-tick rebuild.
-	if (IconBox)
-	{
-		int32 WaterOv = -1;
-		if (IdStr.StartsWith(TEXT("WaterBottle")))
-		{
-			if (const APawn* Pw = GetOwningPlayerPawn())
-			{
-				if (const UWaterCanComponent* Can = Pw->FindComponentByClass<UWaterCanComponent>()) { WaterOv = Can->GetCharges(); }
-			}
-		}
-		IconBox->SetContent(WeedUI::ItemIcon(WidgetTree, Id, 60.f, WaterOv));
-	}
 
 	FString Type, Hint; FLinearColor Col;
 	ClassifyItem(IdStr, Type, Hint, Col);
