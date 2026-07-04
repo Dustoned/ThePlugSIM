@@ -2,7 +2,8 @@
 
 > **Dit is de levende roadmap.** Het oude A–Z stappenplan in de brief is afgerond en vervangen door dit document. Volgorde = prioriteit. Afgeronde items afvinken en (groot werk) loggen in `DECISIONS.md`.
 >
-> Laatst bijgewerkt: 2026-07-02 — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
+> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. Nog open: 2A/2B (balans+content), een paar losse D.x + H.1/H.2/H.4/H.5 (co-op-restanten, deels deferred/accepted), T.x tech-debt, D35.
+> (oude notitie 2026-07-02) — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
 > **Detail-uitwerking per bevinding (probleem → file → fix, afvinkbaar): [`FIXLIST.md`](FIXLIST.md).** Dit document = de grote lijn; de fixlist = het systematische afwerk-document.
 
 **Grote lijn:** eerst de **beach-map** echt het spel-wereld maken (daar speelt straks álles), dan **levels 1-50 écht goed** maken, dan pas de **50+ shop-fase**. Co-op-fixes en save-gaten lopen daar dwars doorheen omdat ze klein zijn maar sessies breken.
@@ -13,12 +14,12 @@
 
 De CityBeachStrip-map heeft werkende deuren (DoorRetrofitter), room-replicatie + bakes en save/load van geplaatste objecten. Maar al het stads-leven hangt nog aan de procedurele `ACityGenerator` — op de beach-map bestaat dat dus niet. Dit is de port-backlog, in bouwvolgorde:
 
-- [ ] **1.1 Homes-registry voor de beach-map** — een `FApartmentHome`-equivalent (deur-positie, interieur-spawn, bounds) voor de gebakken/gestempelde woningen. Bron: de geplaatste `ACityDoor`s + baked rooms, of een hand-authored lijst. Alles hieronder hangt hiervan af.
-- [ ] **1.2 Koopbare woningen** — `GetPropertyOffers()`-equivalent op de beach-map (starter gratis + 2 koopbare), gekoppeld aan de homes-registry; `PhoneClientComponent::FindCity()` krijgt een beach-map-pad. Save (`OwnedHomes`) moet op deze map blijven kloppen.
-- [ ] **1.3 NPC-bewoners zonder CityGenerator** — `CustomerSpawner` laten werken met de nieuwe registry: bewoners toewijzen aan woningen, in/uit lopen, dag/nacht-ritme, park-bezoek (park-zone als marker/actor op de map zetten).
-- [ ] **1.4 Winkels + leveringen** — `StoreCounter`s in de echte winkelpanden plaatsen/registreren, delivery-posities (voordeur van JE woning) en ATM's op de beach-map.
-- [ ] **1.5 Navmesh + routing valideren** — dekking over de hele strip checken (soak met `-AutoSoak`); stoep-routing voor bewoners (open punt uit DECISIONS 06-04 #3).
-- [ ] **1.6 End-to-end op de beach-map** — verse start → kweken → dealen → afspraak → save/load → continue, allemaal op de beach-map. Daarna: beach-map als default new-game map.
+- [x] **1.1 Homes-registry voor de beach-map** — een `FApartmentHome`-equivalent (deur-positie, interieur-spawn, bounds) voor de gebakken/gestempelde woningen. Bron: de geplaatste `ACityDoor`s + baked rooms, of een hand-authored lijst. Alles hieronder hangt hiervan af.
+- [x] **1.2 Koopbare woningen** — `GetPropertyOffers()`-equivalent op de beach-map (starter gratis + 2 koopbare), gekoppeld aan de homes-registry; `PhoneClientComponent::FindCity()` krijgt een beach-map-pad. Save (`OwnedHomes`) moet op deze map blijven kloppen.
+- [x] **1.3 NPC-bewoners zonder CityGenerator** — `CustomerSpawner` laten werken met de nieuwe registry: bewoners toewijzen aan woningen, in/uit lopen, dag/nacht-ritme, park-bezoek (park-zone als marker/actor op de map zetten).
+- [x] **1.4 Winkels + leveringen** — `StoreCounter`s in de echte winkelpanden plaatsen/registreren, delivery-posities (voordeur van JE woning) en ATM's op de beach-map.
+- [x] **1.5 Navmesh + routing valideren** — dekking over de hele strip checken (soak met `-AutoSoak`); stoep-routing voor bewoners (open punt uit DECISIONS 06-04 #3).
+- [x] **1.6 End-to-end op de beach-map** — verse start → kweken → dealen → afspraak → save/load → continue, allemaal op de beach-map. Daarna: beach-map als default new-game map.
 
 > Hardcoded aanname om te bewaken: alles checkt `MapPath.StartsWith("/Game/CityBeachStrip")` — een tweede externe map breekt dit. Pas generaliseren als dat ooit echt speelt.
 
@@ -44,15 +45,15 @@ Tussen lvl 21 (pro-edibles) en lvl 36 (Oil_Pro) komt er geen nieuw spel-werkwoor
 
 ### 2C. Co-op-pariteit (fixes + de uitgestelde testronde)
 
-- [ ] **2C.1 Meldingen naar álle spelers** — `HeatComponent.cpp:137` (en vergelijkbare plekken) stuurt bust/overval-toasts alleen naar `GetFirstPlayerController()` = alleen de host. Omzetten naar per-speler client-melding.
-- [ ] **2C.2 Deuren/liften in co-op beslissen** — `ACityDoor`/`ACityElevator`/`APackElevator` staan bewust op `bReplicates = false` ("ieder z'n eigen deur"). Voor deuren waarschijnlijk prima; voor liften die spelers vervoeren in co-op echt testen — desyncs hier voelen kapot. Beslissing loggen in DECISIONS.
-- [ ] **2C.3 Client-save-pad verifiëren** — pauze-menu-save via `RequestSaveGame→ServerRequestSave` bestaat; checken dat een client nette feedback krijgt en niets stil faalt.
-- [ ] **2C.4 De grote 2-speler PIE-testronde** — wardrobe/skins, kluis, park-wachtrij, chat-balken, winkeliers, competitive-modus, bed-verhuizen, derde-persoon (B). Alles is replication-aware gebóuwd maar nooit met 2 spelers gedraaid. Bevindingen → fixlijst.
-- [ ] **2C.5 Packaged build (.exe)** — nooit gemaakt, wél nodig: LAN co-op met een vriend vereist een packaged build (zie DECISIONS). Eén keer packagen + firewall/poort 7777 smoke-test. Dit is ook de enige echte "werkt het buiten de editor"-check.
+- [x] **2C.1 Meldingen naar álle spelers** — `HeatComponent.cpp:137` (en vergelijkbare plekken) stuurt bust/overval-toasts alleen naar `GetFirstPlayerController()` = alleen de host. Omzetten naar per-speler client-melding.
+- [x] **2C.2 Deuren/liften in co-op beslissen** — `ACityDoor`/`ACityElevator`/`APackElevator` staan bewust op `bReplicates = false` ("ieder z'n eigen deur"). Voor deuren waarschijnlijk prima; voor liften die spelers vervoeren in co-op echt testen — desyncs hier voelen kapot. Beslissing loggen in DECISIONS.
+- [x] **2C.3 Client-save-pad verifiëren** — pauze-menu-save via `RequestSaveGame→ServerRequestSave` bestaat; checken dat een client nette feedback krijgt en niets stil faalt.
+- [x] **2C.4 De grote 2-speler PIE-testronde** — wardrobe/skins, kluis, park-wachtrij, chat-balken, winkeliers, competitive-modus, bed-verhuizen, derde-persoon (B). Alles is replication-aware gebóuwd maar nooit met 2 spelers gedraaid. Bevindingen → fixlijst.
+- [x] **2C.5 Packaged build (.exe)** — nooit gemaakt, wél nodig: LAN co-op met een vriend vereist een packaged build (zie DECISIONS). Eén keer packagen + firewall/poort 7777 smoke-test. Dit is ook de enige echte "werkt het buiten de editor"-check.
 
 ### 2D. Save-gaten dichten (klein maar irritant)
 
-- [ ] **2D.1 Waterfles-vulling** — `WaterCanComponent`-vulgraad gaat niet mee in de save; flessen zijn leeg na load → planten verdrogen onverdiend.
+- [x] **2D.1 Waterfles-vulling** — `WaterCanComponent`-vulgraad gaat niet mee in de save; flessen zijn leeg na load → planten verdrogen onverdiend.
 - [ ] **2D.2 Open kleine bugs** — `FindHomeForPoint` pakt bij gestapelde flats soms de verkeerde verdieping (fix: 3D-afstand i.p.v. XY — open sinds 06-06); machine/animatie-cosmetiek na load.
 
 ---
@@ -118,7 +119,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 ### Systemen / infra
 
 - [x] **B.14 2 gamemodes eruit → alles naar F10 dev-menu** — **BESLUIT: Sandbox + Testing eruit** (Normaal + Competitive blijven). Alle functies van die modes als dev-menu-functies: level kiezen, reputatie/respect/loyaliteit aan NPC's geven, etc. Sluit aan op het bestaande Unified-Dev-Menu-plan (F10 sidebar).
-- [ ] **B.15 Loading screen (main menu → game): samenvoegen tot ÉÉN scherm + vasthouden tot de wereld klaar is** — het loading screen bestaat alléén bij de overgang main menu → game, en die ene load is in twee schermen opgeknipt: deel 1 is superlangzaam, deel 2 laat **veel te vroeg los** (je ziet alles om je heen in-spawnen: streaming/DoorRetrofitter/crowd nog bezig). Doel = echte-game-gedrag: één naadloos loading screen dat pas fadet als de wereld-klaar-signalen binnen zijn (streaming levels + bakes + spawns + prewarm), en de trage fase versnellen (onderzoeken: shaders/PSO? map-load? bakes?). **STAND 07-02:** scherm-2-vasthouden + fase-teksten + versnelde opbouw + WBP_PauseMenu-reparatie (−9s ensure-spam) zijn ERIN; de boot ging van ~40s naar ~9,4s tot GameState. **Boot-scherm is TERUGGEDRAAID**: het movie-scherm op de allereerste map-load gaf een flaky D3D12-crash (PSO-worker, @0x260) — een nieuwe poging moet pas starten ná OnFEngineLoopInitComplete (of het standaard startup-movie-systeem gebruiken) i.p.v. in PreLoadMap van de boot.
+- [x] **B.15 Loading screen (main menu → game): samenvoegen tot ÉÉN scherm + vasthouden tot de wereld klaar is** — het loading screen bestaat alléén bij de overgang main menu → game, en die ene load is in twee schermen opgeknipt: deel 1 is superlangzaam, deel 2 laat **veel te vroeg los** (je ziet alles om je heen in-spawnen: streaming/DoorRetrofitter/crowd nog bezig). Doel = echte-game-gedrag: één naadloos loading screen dat pas fadet als de wereld-klaar-signalen binnen zijn (streaming levels + bakes + spawns + prewarm), en de trage fase versnellen (onderzoeken: shaders/PSO? map-load? bakes?). **STAND 07-02:** scherm-2-vasthouden + fase-teksten + versnelde opbouw + WBP_PauseMenu-reparatie (−9s ensure-spam) zijn ERIN; de boot ging van ~40s naar ~9,4s tot GameState. **Boot-scherm is TERUGGEDRAAID**: het movie-scherm op de allereerste map-load gaf een flaky D3D12-crash (PSO-worker, @0x260) — een nieuwe poging moet pas starten ná OnFEngineLoopInitComplete (of het standaard startup-movie-systeem gebruiken) i.p.v. in PreLoadMap van de boot.
 
 ---
 
@@ -151,7 +152,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### NPC / gedrag
 
-- [ ] **D.1 Strain-vraag in strain-kleur** — als een NPC om een strain vraagt (chat/deal), de strain-NAAM in
+- [x] **D.1 Strain-vraag in strain-kleur** — als een NPC om een strain vraagt (chat/deal), de strain-NAAM in
   z'n strain-tagkleur tonen (zoals de tag-kleuren elders). [WeedUI tag-kleur + DealWidget/ContactsComponent]
 - [ ] **D.4 NPC's met missing body OOK in de compiled build** — er lopen poppetjes zonder lichaam rond; eerder
   gedacht "alleen editor", maar het zit ook in de download. Vermoedelijk een crowd-skin die niet mee-cookt
@@ -159,11 +160,11 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] **D.11 NPC buiten-wachtplekken** — NPC's plekken geven om buiten op de speler te wachten: auto-plaatsen
   bij random deuren over de HELE map (langs de weg, garagedeuren, deuren aan de back-alleys). Niet handmatig
   gemarkeerd - automatisch verspreid. [DoorRetrofitter deur-registry + Customer meet/afspraak-systeem]
-- [ ] **D.12 NPC-onderlinge avoidance te agressief** — NPC's duwen elkaar veel te hard weg bij dichte nadering
+- [x] **D.12 NPC-onderlinge avoidance te agressief** — NPC's duwen elkaar veel te hard weg bij dichte nadering
   (lijkt of iedereen een grote persoonlijke zone heeft). Ze mogen langs elkaar lopen op de stoep met hooguit een
   zachte verschuiving; het HARDE wegduwen hoort alleen bij vaste obstakels (muren/objecten/map-geometrie) waar
   ze anders vastlopen. [Customer movement / RVO-avoidance-radius, obstacle vs pawn-scheiding]
-- [ ] **D.13 Afspraak-timing klopt niet met antwoordtijd** — gevraagde tijden lopen niet synchroon met wanneer
+- [x] **D.13 Afspraak-timing klopt niet met antwoordtijd** — gevraagde tijden lopen niet synchroon met wanneer
   je kunt antwoorden: een NPC vraagt "rond 21:41" terwijl die tijd al bijna voorbij is, of cancelt voordat je
   fatsoenlijk kon reageren. Timer herzien: (a) gevraagde tijd altijd genoeg in de TOEKOMST, (b) genoeg respons-
   venster voor auto-cancel. [ContactsComponent afspraak-timers]
@@ -177,18 +178,18 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### Planten / economie-feel
 
-- [ ] **D.8 Plant-gram loopt op tijdens groei** — i.p.v. meteen 6 g te tonen, het gram-gewicht laten OPLOPEN naar
+- [x] **D.8 Plant-gram loopt op tijdens groei** — i.p.v. meteen 6 g te tonen, het gram-gewicht laten OPLOPEN naar
   de eindwaarde over de groei (ziet er beter uit). [PlantInfoWidget / plant-groei-model]
-- [ ] **D.9 Bottle-water schaalt per klik** — grotere fles = meer water per klik (nette progressie). Eerste fles
+- [x] **D.9 Bottle-water schaalt per klik** — grotere fles = meer water per klik (nette progressie). Eerste fles
   doet nu ~60% (te veel) → richting ~25% voor de eerste (mits niet te laag). [WaterCanComponent per-klik-afgifte]
-- [ ] **D.7 Items missen een eigen weight** — veel items hebben nog geen eigen gewicht; audit + invullen.
+- [x] **D.7 Items missen een eigen weight** — veel items hebben nog geen eigen gewicht; audit + invullen.
   [item-defs / inventory weight]
 
 ### Wereld / sfeer
 
 - [ ] **D.5a In-wereld nacht niet pikkedonker** — 's nachts een leesbare min-licht-vloer (nu 0). [DayNightController
   UDS-exposure-clamp + skylight-nacht-vloer + NightPPV min-brightness] — IN BEWERKING (golf 1, agent A2).
-- [ ] **D.5b Geopende M-kaart zwart 's nachts** — de speler bedoelde de OPEN kaart (screenshot): die is 's nachts
+- [x] **D.5b Geopende M-kaart zwart 's nachts** — de speler bedoelde de OPEN kaart (screenshot): die is 's nachts
   pikzwart op de gele/blauwe markers na. Root cause: de map-SceneCapture (DoorRetrofitter, 1x via CaptureMapNow +
   ApplyMapPhotoLight) zet een heldere PackSun, maar op de UDS-beach is de PackSun grotendeels inactief -> de
   capture pakt de UDS-NACHTzon -> zwarte foto (lampen-boost toont alleen gebouw-lichtjes). Fix: map dag-helder
@@ -199,9 +200,9 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 - [ ] **D.6 Big-joint-icon (blunt.png)** — de dikke joint (big model) een net icoon geven: `blunt.png` met nette
   achtergrond zoals de andere download-iconen. [item-icons runtime-PNG's, Content/_Project/UI/Icons]
-- [ ] **D.10 Loading-tekst langzamer + meer random** — de loading-screen-tekst wisselt te snel; trager laten
+- [x] **D.10 Loading-tekst langzamer + meer random** — de loading-screen-tekst wisselt te snel; trager laten
   roteren en meer randomiseren (elke X). [SWeedLoadingScreen / BootCoverWidget tekst-rotatie]
-- [ ] **D.14 Compass clean (AC Shadows-stijl)** — de in-game compass strak/clean maken zonder UI-blok/kader;
+- [x] **D.14 Compass clean (AC Shadows-stijl)** — de in-game compass strak/clean maken zonder UI-blok/kader;
   N/O/Z/W-letters mogen weg. [HUD-compass-widget]
 
 ### Cook-parity / build
@@ -217,7 +218,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 > Vastgelegd 2026-07-02. Speler test co-op competitive met een vriend (2 PC's, packaged build). Twee majeure
 > per-speler-bugs + het verzoek om ALLES na te lopen dat per-speler hoort te werken (competitive EN normaal).
 
-- [ ] **E.1 Competitive furniture klopt niet in de packaged build (player-2-kamer)** — twee deelbugs:
+- [x] **E.1 Competitive furniture klopt niet in de packaged build (player-2-kamer)** — twee deelbugs:
   (a) de starter-furniture staat weer SCHEEF in player-2's kamer (regressie t.o.v. de editor-fix - waarschijnlijk
   een mirror-transform/cook-verschil: server stuurt een wereld-transform maar de joiner-spiegelkamer staat elders);
   (b) player 2 (joiner) kan NIETS plaatsen in z'n eigen huis: klikken doet niks, OOK als de preview blauw/valid is.
@@ -225,13 +226,13 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   de joiner-spiegelkamer, of de RPC komt niet aan). [BuildComponent ServerPlace + DoorRetrofitter competitive rooms + StarterFurniture]
 - [x] **E.2 Waterfles-vulling niet per-speler** — AUDIT: al opgelost (commit 263f2a6b, water per-fles in het
   Quality-veld van elke stack in de per-pawn InventoryComponent, gerepliceerd). Niet reproduceerbaar. Was stale.
-- [ ] **E.3 Brede co-op-pariteit-audit (competitive + normaal)** — AUDIT KLAAR -> alle bevindingen in
+- [x] **E.3 Brede co-op-pariteit-audit (competitive + normaal)** — AUDIT KLAAR -> alle bevindingen in
   [`Docs/COOP_FIXLIST.md`](COOP_FIXLIST.md) (~30 items, per severity + fix-clusters). Nu uitvoeren. systematisch nalopen wat per-speler hoort te
   werken maar dat niet doet: meldingen/toasts (GetFirstPlayerController = alleen host, zie 2C.1), plaatsen/opslag,
   planten/water/oogst, economie/inventory, telefoon/deals, delivery, wardrobe/skins, safe/fridge, statische
   registries (GetWorld()-filter). Per bevinding: host vs joiner, competitive vs normaal, file:regel, fix. Levert
   de echte co-op-fixlijst (vervangt/vult 2C aan).
-- [ ] **E.4 NPC-crowd desync in co-op (MAJEUR)** — de joiner ziet NPC's die niet syncen: BEVROREN stilstaand,
+- [x] **E.4 NPC-crowd desync in co-op (MAJEUR)** — de joiner ziet NPC's die niet syncen: BEVROREN stilstaand,
   sommige ZWEVEND boven de grond, GEEN collision (je loopt er doorheen), en player 1 (host) ziet ze NIET op de
   kaart. Vermoedelijk is de virtuele crowd (DoorRetrofitter TickVirtualMove, 70 walkers) CLIENT-LOKAAL/per-proces
   en niet gerepliceerd -> host en joiner hebben losse, niet-matchende crowds; op de joiner tickt/positioneert de
@@ -239,10 +240,10 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   localiteit, echte-customer-replicatie (spawn server-side + movement/statemachine gerepliceerd?), Z-offset/
   collision op de client, map-marker-bron per-speler. [DoorRetrofitter virtuele crowd + ACustomerBase/Spawner +
   MapWidget/CompassWidget markers] (screenshots 07-02: zwevende man + bevroren cluster).
-- [ ] **E.5 Co-op-speler-marker op de kaart duidelijker/andere kleur** — de mede-speler-marker op de M-kaart is
+- [x] **E.5 Co-op-speler-marker op de kaart duidelijker/andere kleur** — de mede-speler-marker op de M-kaart is
   BLAUW, net als de NPC-dots -> verwarrend. Geef de co-op-speler-marker een eigen, duidelijke kleur (niet blauw).
   [MapWidget + CompassWidget co-op-marker-kleur]
-- [ ] **E.6 Joints op de grond niet gesynced in co-op** — elke speler moet dezelfde joints zien liggen, en de
+- [x] **E.6 Joints op de grond niet gesynced in co-op** — elke speler moet dezelfde joints zien liggen, en de
   pickup/cooldown moet per-speler kloppen (nu ziet de joiner ze niet / anders). Zelfde klasse als E.4: de joint-
   scatter (DoorRetrofitter) is per-proces lokaal i.p.v. gerepliceerd. Meenemen met de crowd-replicatie-aanpak.
   [DoorRetrofitter joint-scatter + pickup-replicatie]
@@ -251,11 +252,11 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ## BACKLOG 07-02d — UI-regressies (07-02, tijdens co-op-test)
 
-- [ ] **F.1 Picker pakt ALLE weed i.p.v. 1 strain (REGRESSIE)** — bij de packing bench EN joint rollen selecteert
+- [x] **F.1 Picker pakt ALLE weed i.p.v. 1 strain (REGRESSIE)** — bij de packing bench EN joint rollen selecteert
   'ie soms alle weed i.p.v. dat je 1 specifieke strain kiest om te gebruiken. "Dit kon eerst wel" -> regressie,
   waarschijnlijk uit de C.1/C.2 picker-grid-wijziging (UWeedItemPickGrid). Uitzoeken: waar de picker de selectie/
   het gekozen-item bepaalt en waarom 'ie naar "alles" valt. [UWeedItemPickGrid + PackWidget + joint-roll-UI]
-- [ ] **F.2 Give-joint-NPC-UI: joint-iconen nog niet zoals inventory** — in de NPC-UI waar je joints geeft zien de
+- [x] **F.2 Give-joint-NPC-UI: joint-iconen nog niet zoals inventory** — in de NPC-UI waar je joints geeft zien de
   joint-iconen er nog niet hetzelfde uit als in de inventory (C.1 dekte deze plek nog niet). [DealWidget / give-joint-UI icon-render]
 
 ---
@@ -264,28 +265,28 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 > Speler testte lokaal als joiner (2 instances, competitive). Twee items zijn RE-FIXES: de eerdere fix pakte niet.
 
-- [ ] **G.1 Lift/deur synct niet in co-op** — de lift-deur gaat visueel OPEN voor de joiner maar 'ie kan niet naar
+- [x] **G.1 Lift/deur synct niet in co-op** — de lift-deur gaat visueel OPEN voor de joiner maar 'ie kan niet naar
   BINNEN (collision/trigger/verdieping niet gesynced). Lift/elevator is `bReplicates=false` (2C.2) -> in co-op
   desync. Fix: lift server-authoritative maken (verdieping/deur-staat repliceren) of de joiner-trigger lokaal
   correct afhandelen. [ACityElevator/APackElevator]
-- [ ] **G.2 M-kaart NOG STEEDS zwart (RE-FIX van D.5b)** — mijn UDS-naar-middag-bij-capture-fix pakte niet: de kaart
+- [x] **G.2 M-kaart NOG STEEDS zwart (RE-FIX van D.5b)** — mijn UDS-naar-middag-bij-capture-fix pakte niet: de kaart
   blijft zwart en "verandert niks tot 6u \'s ochtends" -> de capture weerspiegelt nog de live nacht-belichting.
   Robuuste fix nodig: ALTIJD iets zichtbaar ongeacht tijd. Waarschijnlijk UDS "Update Active Variables" is
   async/time-sliced -> de capture in dezelfde frame pakt de zon-update niet. Route: OF base-color/unlit capture
   (SCS_BaseColor -> altijd albedo-helder), OF een gegarandeerde capture-only fill-light + hogere map-exposure.
   [DoorRetrofitter CaptureMapNow + MapCapture CaptureSource + DayNightController ApplyMapPhotoLight]
-- [ ] **G.3 Joiner mag NOG STEEDS niks plaatsen (RE-FIX van E.1a)** — toast "only in your own house" bij de joiner,
+- [x] **G.3 Joiner mag NOG STEEDS niks plaatsen (RE-FIX van E.1a)** — toast "only in your own house" bij de joiner,
   ondanks de GetCompetitiveHomeBoxes(bJoiner)-fix. Uitzoeken: welke exacte check/toast dit is (is 't een ANDERE
   check dan de E.1a-IsInOwnedHome?), of IsLocallyControlled op de server voor de joiner-pawn wel klopt, of de
   joiner-mirror-kamer-box wel correct berekend is. [BuildComponent ServerPlace + IsInOwnedHome + DoorRetrofitter comp-boxes]
-- [ ] **G.4 Speler-markers felle hoog-contrast kleuren** — goud (E.5) is niet goed zichtbaar. Alle speler-markers
+- [x] **G.4 Speler-markers felle hoog-contrast kleuren** — goud (E.5) is niet goed zichtbaar. Alle speler-markers
   fel + goed leesbaar in donker EN licht (evt. outline/contrast-rand). [CompassWidget + MapWidget speler-markers]
 
 ---
 
 ## TEST-FEEDBACK 07-03 — tweede co-op-ronde
 
-- [ ] **H.3 NPC-SYNC NOG STEEDS STUK (PRIO, grondig)** — bReplicates+ReplicateMovement + bandbreedte-fix
+- [x] **H.3 NPC-SYNC NOG STEEDS STUK (PRIO, grondig)** — bReplicates+ReplicateMovement + bandbreedte-fix
   (MaxClientRate 512KB/s) waren nodig maar NIET genoeg: op de joiner staan NPC's nog BEVROREN op verkeerde
   plekken (host loopt normaal). Vermoeden: de crowd-bodies bewegen op de server via SetActorLocation
   (TickVirtualMove) i.p.v. CharacterMovement-velocity -> een gerepliceerde SIMULATED-PROXY Character krijgt
@@ -351,41 +352,41 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 ## SPELER-DUMP 07-03 (na release 1.20.0) — genummerd, verkenning loopt
 
 ### UI-flash / persistente UI (D1-D4)
-- [ ] **D1** Fullscreen shops hebben geen UI-overhaul gehad -> flashen nog; ombouwen naar persistent (pool+sig) zoals de rest
-- [ ] **D2** Goals-app: behaalde goals ALTIJD bovenaan (makkelijk claimen), flash weg, app opknappen (messy, meer een echt goals-menu)
-- [ ] **D3** Storage-UI's flashen/rebuilden nog (drying rack -> inv slepen e.d.); wardrobe + alle machines grondig nalopen zoals bij inventory
-- [ ] **D4** Day-counter + bank-overlay (HUD) rebuildt zichtbaar -> flash weghalen
+- [x] **D1** Fullscreen shops hebben geen UI-overhaul gehad -> flashen nog; ombouwen naar persistent (pool+sig) zoals de rest
+- [x] **D2** Goals-app: behaalde goals ALTIJD bovenaan (makkelijk claimen), flash weg, app opknappen (messy, meer een echt goals-menu)
+- [x] **D3** Storage-UI's flashen/rebuilden nog (drying rack -> inv slepen e.d.); wardrobe + alle machines grondig nalopen zoals bij inventory
+- [x] **D4** Day-counter + bank-overlay (HUD) rebuildt zichtbaar -> flash weghalen
 
 ### Kweken / plaatsen (D5-D12)
-- [ ] **D5** Plant discarden: X inhouden = plant weg (altijd beschikbaar)
-- [ ] **D6** Pot-upgrade plaatsen: preview op vaste as om de pot laten draaien met de muis (niet meer omheen lopen)
-- [ ] **D7** Upgrades op pot: interact-prompt (add soil-state) HELEMAAL van upgrades af; kijk-klik kiest altijd de POT, ook achter upgrades
-- [ ] **D8** Upgrade-stack glitch: snel klikken plaatst meerdere upgrades op 1 pot -> dedup server-side
-- [ ] **D9** Drying rack: 3D-rek-modellen per SLOT tonen (geen overbodige rekken), netjes verdeeld
-- [ ] **D10** Muur-snap: bij plafond-/vloerranden snapt wand-plaatsing (bv. drying rack) niet lekker
-- [ ] **D11** Wiet-toppen kleuren mee met de strain-tag-kleur (nu altijd paars)
-- [ ] **D12** Fridge: alleen fridge-zinnige items toestaan (edibles-flow), rest weigeren
+- [x] **D5** Plant discarden: X inhouden = plant weg (altijd beschikbaar)
+- [x] **D6** Pot-upgrade plaatsen: preview op vaste as om de pot laten draaien met de muis (niet meer omheen lopen)
+- [x] **D7** Upgrades op pot: interact-prompt (add soil-state) HELEMAAL van upgrades af; kijk-klik kiest altijd de POT, ook achter upgrades
+- [x] **D8** Upgrade-stack glitch: snel klikken plaatst meerdere upgrades op 1 pot -> dedup server-side
+- [x] **D9** Drying rack: 3D-rek-modellen per SLOT tonen (geen overbodige rekken), netjes verdeeld
+- [x] **D10** Muur-snap: bij plafond-/vloerranden snapt wand-plaatsing (bv. drying rack) niet lekker
+- [x] **D11** Wiet-toppen kleuren mee met de strain-tag-kleur (nu altijd paars)
+- [x] **D12** Fridge: alleen fridge-zinnige items toestaan (edibles-flow), rest weigeren
 
 ### NPC / economie / inventory (D13-D21)
-- [ ] **D13** "../.."-addiction-weergave bij NPC's: uitzoeken wat dit is + hoe het hoort (speler verwachtte respect-tracking tot telefoonnummer)
-- [ ] **D14** Mooie stats-up-notificatie (minimalist-kit): "Satisfied/Happy customer +2 [Respect-icoon]" i.p.v. kale interactie-tekst
-- [ ] **D15** Inventory vol (gewicht OF slots) bij shop-koop/oppakken: overal nette notificatie + niet-passende items op de grond droppen (winkel/plek zelf); items mogen NOOIT verdwijnen
-- [ ] **D16** Missing-body NPC ook in singleplayer (man, lijkt kant-en-klare skin, niet citizen) -> skin-pool checken
-- [ ] **D17** NPC's zitten soms nog op stoep-stoelen/tafels
-- [ ] **D18** Geslacht-naam mismatch: "Freek" met vrouwenskin -> naam-pool koppelen aan skin-geslacht
-- [ ] **D19** Bag-gewicht onlogisch: 1g bag weegt evenveel als 2g bag -> gewicht schalen met inhoud (kleine bags relatief zwaarder per g, grote lichter)
-- [ ] **D20** NPC-vragen tonen rauwe id's met underscores ("critical_mass_2g") -> nette naam "Critical Mass 2g", zonder bag-vermelding
-- [ ] **D21** Sample-geven: hoeveelheid kiezen (meer gram = sneller levelen) met duidelijke indicatie per gram + maximum (anti-abuse)
-- [ ] **D22** Backpack-upgrades als categorie in de telefoon-upgrade-tab; puur geld-gelinkt (geen level-scaling)
+- [x] **D13** "../.."-addiction-weergave bij NPC's: uitzoeken wat dit is + hoe het hoort (speler verwachtte respect-tracking tot telefoonnummer)
+- [x] **D14** Mooie stats-up-notificatie (minimalist-kit): "Satisfied/Happy customer +2 [Respect-icoon]" i.p.v. kale interactie-tekst
+- [x] **D15** Inventory vol (gewicht OF slots) bij shop-koop/oppakken: overal nette notificatie + niet-passende items op de grond droppen (winkel/plek zelf); items mogen NOOIT verdwijnen
+- [x] **D16** Missing-body NPC ook in singleplayer (man, lijkt kant-en-klare skin, niet citizen) -> skin-pool checken
+- [x] **D17** NPC's zitten soms nog op stoep-stoelen/tafels
+- [x] **D18** Geslacht-naam mismatch: "Freek" met vrouwenskin -> naam-pool koppelen aan skin-geslacht
+- [x] **D19** Bag-gewicht onlogisch: 1g bag weegt evenveel als 2g bag -> gewicht schalen met inhoud (kleine bags relatief zwaarder per g, grote lichter)
+- [x] **D20** NPC-vragen tonen rauwe id's met underscores ("critical_mass_2g") -> nette naam "Critical Mass 2g", zonder bag-vermelding
+- [x] **D21** Sample-geven: hoeveelheid kiezen (meer gram = sneller levelen) met duidelijke indicatie per gram + maximum (anti-abuse)
+- [x] **D22** Backpack-upgrades als categorie in de telefoon-upgrade-tab; puur geld-gelinkt (geen level-scaling)
 
 ### Wereld / audio / MP (D23-D28)
-- [ ] **D23** Onweer: veel te veel bliksem-flashes achter elkaar -> realistischer (interval/intensiteit)
-- [ ] **D24** Sound-optie voor weer (volume-slider weather-audio in settings)
-- [ ] **D25** Lift-nummers zweven van de muur (in de lift + boven de deuren: zwart vlak + verlicht cijfer los ervoor) -> alles strak vlak
-- [ ] **D26** Kompas-icons: groter/duidelijker, 3D-gevoel (schalen met afstand), winkels toevoegen met de kleur van de toonbank; 2 dubbele deduppen
-- [ ] **D27** Speler-disconnect freezet de game van de ander lang + geen disconnect-melding -> nette afhandeling
-- [ ] **D28** Joiner: altijd een "Leave session"-optie -> terug naar hoofdmenu
-- [ ] **D29** Loading/opstart-overhaul: (a) lange ZWARTE periode bij opstarten -> netter: vroege loading-indicatie
+- [x] **D23** Onweer: veel te veel bliksem-flashes achter elkaar -> realistischer (interval/intensiteit)
+- [x] **D24** Sound-optie voor weer (volume-slider weather-audio in settings)
+- [x] **D25** Lift-nummers zweven van de muur (in de lift + boven de deuren: zwart vlak + verlicht cijfer los ervoor) -> alles strak vlak
+- [x] **D26** Kompas-icons: groter/duidelijker, 3D-gevoel (schalen met afstand), winkels toevoegen met de kleur van de toonbank; 2 dubbele deduppen
+- [x] **D27** Speler-disconnect freezet de game van de ander lang + geen disconnect-melding -> nette afhandeling
+- [x] **D28** Joiner: altijd een "Leave session"-optie -> terug naar hoofdmenu
+- [x] **D29** Loading/opstart-overhaul: (a) lange ZWARTE periode bij opstarten -> netter: vroege loading-indicatie
   (let op: eerdere poging in PreLoadMap = flaky D3D12 PSO-race, teruggedraaid; nieuwe poging pas na
   OnFEngineLoopInitComplete); (b) menu->game toont 2 trage loading-screens (ook packaged!) -> 1 mooie vaste,
   en de laadtijd zelf fors omlaag; (c) co-op join-loading werkt maar half (geen vaste screen) + joiner spawnt
@@ -405,11 +406,11 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
     (groen/blauw/paars/goud). Bevestigd echte bug via de speler-clue "geel op map, gekleurd op compass" (asset-mis
     zou beide raken). Fix: map gebruikt nu dezelfde KindColor-bron, per pool-slot getint (her-kleur alleen bij
     type-wijziging, geen per-tick flash). Geshipt in 1.21.0.
-- [ ] **D30** Items flashen nog bij slepen hotbar->drying rack (en mogelijk inv->rack + andere machine-UI's) -> restpad vinden+fixen
-- [ ] **D31** Overbodige instructie-teksten overal weg (bv. "Drag from your inventory to store...", "Drag weed here to dry it...", "Nothing drying...") - alleen echt nuttige info laten staan
-- [ ] **D32** Merge/samenvoegen-popup valt soms achter andere UI's -> z-order/topmost fixen
-- [ ] **D33** [GEFIXT deze sessie] Seeds hadden 0.01kg -> rondde af naar 0.0 in UI; nu 0.05
-- [ ] **D34** LIFT-REGRESSIE (van Blok4-B D25): nummer BOVEN de lift-deur is VERDWENEN (de line-trace naar het
+- [x] **D30** Items flashen nog bij slepen hotbar->drying rack (en mogelijk inv->rack + andere machine-UI's) -> restpad vinden+fixen
+- [x] **D31** Overbodige instructie-teksten overal weg (bv. "Drag from your inventory to store...", "Drag weed here to dry it...", "Nothing drying...") - alleen echt nuttige info laten staan
+- [x] **D32** Merge/samenvoegen-popup valt soms achter andere UI's -> z-order/topmost fixen
+- [x] **D33** [GEFIXT deze sessie] Seeds hadden 0.01kg -> rondde af naar 0.0 in UI; nu 0.05
+- [x] **D34** LIFT-REGRESSIE (van Blok4-B D25): nummer BOVEN de lift-deur is VERDWENEN (de line-trace naar het
   muurvlak faalt/misplaatst het bord - DoorRetrofitter ~3043); + de vloer-knop-nummers moeten nog iets dichter
   op de muur (PackElevatorButton text-offset). FIX: trace debuggen of terug naar vaste-offset (bord moet ZICHTBAAR
   blijven) + button-offset natunen. Wacht op D29-B (bezit DoorRetrofitter).
