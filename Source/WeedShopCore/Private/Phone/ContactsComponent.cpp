@@ -666,7 +666,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		Cust->DesiredProductId = FName(TEXT("Bag_NorthernLights"));
 		Cust->DesiredQuantity = 2;
 	}
-	Cust->BudgetCentsPerUnit = 1500;
+	Cust->BudgetCentsPerUnit = 8000; // was 1500 (EUR15/g = bug: afspraken haggleden bijna alles weg). Nu de normale ~EUR80/g-basis; de markt-relatieve budget-berekening in SubmitOfferProduct dekt duurdere producten.
 	Cust->bDespawnAfterServed = true; // afspraak-klant vertrekt na de deal
 	Cust->bNeedsPlayer = true;        // afspraak: poppetje op de kompas (je moet bij deze zijn)
 

@@ -3379,8 +3379,12 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 		return EDealResult::NoStock;
 	}
 
-	// Boven budget -> dingt af.
-	if (AskPriceCentsPerUnit > BudgetCentsPerUnit)
+	// Boven budget -> dingt af. Budget is nu MARKT-RELATIEF: max(vaste basis, markt x 1.25). Zo houdt wiet z'n
+	// royale ~EUR80/g-plafond, MAAR dure concentraten (markt EUR270-500/g) krijgen een budget dat hun premium
+	// dekt -> ze verkopen weer op waarde i.p.v. altijd te haggle'n tegen de oude platte EUR80-cap (2A.3: oil/
+	// rosin/bubble/hash waren dead weight). Fixt meteen ook de veel-te-lage EUR15/g-afspraak-cap.
+	const int32 EffBudget = FMath::Max(BudgetCentsPerUnit, FMath::RoundToInt(Market * 1.25f));
+	if (AskPriceCentsPerUnit > EffBudget)
 	{
 		State = ECustomerState::Negotiating;
 		return EDealResult::Haggle;
