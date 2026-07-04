@@ -121,6 +121,7 @@ namespace
 		{ TEXT("Pot_Clay"),         TEXT("Clay pot"),    TEXT("Decent retention, 1 plant"),       8000, 1 },
 		{ TEXT("Pot_Plastic"),      TEXT("Plastic pot"), TEXT("More yield, up to 2 plants"),     30000, 1 },
 		{ TEXT("Pot_Fabric"),       TEXT("Fabric pot"),  TEXT("Best quality, up to 6 plants"),   140000, 1 },
+		{ TEXT("Pot_Smart"),        TEXT("Smart pot"),   TEXT("Self-watering - top quality, up to 6 plants"), 320000, 1 },
 		// Soil (betere soil = meer yield/kwaliteit, ontgrendelt met fase).
 		{ TEXT("Soil_Basic"),       TEXT("Basic soil"),   TEXT("Lasts 3 harvests"),               3000, 1 },
 		{ TEXT("Soil_Rich"),        TEXT("Rich soil"),    TEXT("More yield - 4 harvests"),        8000, 1 },
@@ -172,6 +173,7 @@ namespace
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("Nearby drying rack: keeps quality higher"), 42000, 1 },
 		{ TEXT("ProcUp_Motor"), TEXT("Power motor"),     TEXT("Nearby hash machine: ~30% faster"),       64000, 1 },
 		{ TEXT("ProcUp_Yield"), TEXT("Fine filter"),     TEXT("Nearby hash machine: +30% yield"),        88000, 1 },
+		{ TEXT("ProcUp_Purity"),TEXT("Purity coil"),     TEXT("Nearby hash/press machine: purer output (+quality, sells for more)"), 120000, 1 },
 		{ TEXT("Cont_Bag2"),  TEXT("Small baggies"),  TEXT("Bag up to 2g - 10 pcs"),    1600, 10 },
 		{ TEXT("Cont_Bag5"),  TEXT("Big baggies"),    TEXT("Bag up to 5g - 10 pcs"),   3000, 10 },
 		{ TEXT("Cont_Jar10"), TEXT("Small jars"),     TEXT("Jar up to 25g - 5 pcs"),   5000,  5 },
@@ -349,6 +351,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("Pot_Clay"))        { return 3; }
 	if (S == TEXT("Pot_Plastic"))     { return 10; }
 	if (S == TEXT("Pot_Fabric"))      { return 24; }
+	if (S == TEXT("Pot_Smart"))       { return 32; }
 	// Aarde
 	if (S == TEXT("Soil_Basic"))      { return 1; }
 	if (S == TEXT("Soil_Rich"))       { return 7; }
@@ -401,6 +404,7 @@ int32 UStoreComponent::RequiredLevelFor(FName CatalogId) const
 	if (S == TEXT("DryUp_Seal"))      { return 18; }
 	if (S == TEXT("ProcUp_Motor"))    { return 22; }
 	if (S == TEXT("ProcUp_Yield"))    { return 28; }
+	if (S == TEXT("ProcUp_Purity"))   { return 32; }
 	// Verpak-tafels
 	if (S == TEXT("Bench_Pack"))      { return 1; }
 	if (S == TEXT("Bench_Pack2"))     { return 19; }

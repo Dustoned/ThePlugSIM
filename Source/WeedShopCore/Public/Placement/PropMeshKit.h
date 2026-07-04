@@ -686,6 +686,15 @@ namespace PropKit
 			P(Cu, FVector(4.4f, 0.4f, 8.8f), FVector(0, 2.0f, 0), FLinearColor(0.15f, 0.18f, 0.22f));
 			P(Cu, FVector(0.5f, 0.5f, 2.0f), FVector(0, 0, 6.0f), FLinearColor(0.42f, 0.45f, 0.50f));
 		}
+		else if (S == TEXT("ProcUp_Purity"))
+		{
+			// Zuiverings-spoel: koperkleurige coil op een sokkel (onderscheidt zich van motor/filter).
+			P(Cy, FVector(3.6f, 3.6f, 1.0f), FVector(0, 0, -4.2f), FLinearColor(0.20f, 0.22f, 0.24f));
+			P(Cy, FVector(2.2f, 2.2f, 8.4f), FVector(0, 0, 0.4f),  FLinearColor(0.72f, 0.48f, 0.22f));
+			P(Cy, FVector(2.9f, 2.9f, 0.7f), FVector(0, 0, 2.6f),  FLinearColor(0.85f, 0.60f, 0.28f));
+			P(Cy, FVector(2.9f, 2.9f, 0.7f), FVector(0, 0, -1.0f), FLinearColor(0.85f, 0.60f, 0.28f));
+			P(Cu, FVector(0.5f, 0.5f, 2.0f), FVector(0, 0, 5.6f),  FLinearColor(0.40f, 0.44f, 0.48f));
+		}
 		// === Processor-machines (gegate op bIsProcessor zodat product-Oil_/Rosin_ niet hier matchen) ===
 		else if (FPlaceableDef MDef; GetPlaceableDef(ItemId, MDef) && MDef.bIsProcessor)
 		{

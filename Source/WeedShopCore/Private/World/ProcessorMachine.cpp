@@ -122,26 +122,27 @@ void AProcessorMachine::RecomputeUpgrades(float DeltaSeconds)
 	// PERF: registry-loops (O(machines/props)) i.p.v. TActorIterator over alle actors, en alloc-vrije
 	// FName-vergelijking op de 2 bekende ProcUp-ids i.p.v. ItemId.ToString()+StartsWith per prop.
 	// De registry is per-proces, dus wél op wereld filteren (PIE/co-op-in-1-proces = meerdere werelden).
-	static const FName MotorId(TEXT("ProcUp_Motor")), YieldId(TEXT("ProcUp_Yield"));
+	static const FName MotorId(TEXT("ProcUp_Motor")), YieldId(TEXT("ProcUp_Yield")), PurityId(TEXT("ProcUp_Purity"));
 	auto NearestProc = [W](const FVector& At) -> AProcessorMachine*
 	{
 		AProcessorMachine* Best = nullptr; float BestSq = TNumericLimits<float>::Max();
 		for (const TWeakObjectPtr<AProcessorMachine>& WM : AProcessorMachine::GetAll()) { AProcessorMachine* P = WM.Get(); if (!IsValid(P) || P->GetWorld() != W) { continue; } const float d = FVector::DistSquared2D(P->GetActorLocation(), At); if (d < BestSq) { BestSq = d; Best = P; } }
 		return Best;
 	};
-	float Speed = 1.f, Yield = 1.f;
+	float Speed = 1.f, Yield = 1.f, Quality = 1.f;
 	for (const TWeakObjectPtr<APlaceableProp>& WProp : APlaceableProp::GetAll())
 	{
 		APlaceableProp* P = WProp.Get(); if (!IsValid(P) || P->GetWorld() != W) { continue; }
 		const FName Id = P->ItemId;
-		if (Id != MotorId && Id != YieldId) { continue; }
+		if (Id != MotorId && Id != YieldId && Id != PurityId) { continue; }
 		const FVector L = P->GetActorLocation();
 		if (FVector::Dist2D(L, C) > 175.f || FMath::Abs(L.Z - C.Z) > 280.f) { continue; }
 		if (NearestProc(L) != this) { continue; }
 		if (Id == MotorId) { Speed *= 0.7f; }
-		else { Yield *= 1.3f; }
+		else if (Id == YieldId) { Yield *= 1.3f; }
+		else { Quality *= 1.20f; } // ProcUp_Purity: zuiverder output = hogere kwaliteit -> verkoopt beter
 	}
-	UpSpeedMult = Speed; UpYieldMult = Yield;
+	UpSpeedMult = Speed; UpYieldMult = Yield; UpQualityMult = Quality;
 }
 
 void AProcessorMachine::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -305,7 +306,7 @@ int32 AProcessorMachine::ServerLoad(FName InId, int32 Qty, float Thc, float Qual
 	E.OutItemId = FName(*(OutPre + Strain));
 	E.Quantity = FMath::Max(1, FMath::RoundToInt(Qty * Conv * UpYieldMult)); // upgrade-gear verhoogt de opbrengst
 	E.Thc = FMath::Min(90.f, (Thc > 0.f ? Thc : 15.f) * ThcMult);
-	E.Quality = QualPct > 0.f ? QualPct : 60.f;
+	E.Quality = FMath::Min(100.f, (QualPct > 0.f ? QualPct : 60.f) * UpQualityMult); // Purity-gear verhoogt de kwaliteit
 	E.Elapsed = 0.f; E.bDone = false;
 	Entries.Add(E);
 	UpdateRep();

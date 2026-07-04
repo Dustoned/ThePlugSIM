@@ -268,6 +268,7 @@ namespace WeedUI
 		if (S == TEXT("DryUp_Seal"))          { return TEXT("Humidity sealer"); }
 		if (S == TEXT("ProcUp_Motor"))        { return TEXT("Power motor"); }
 		if (S == TEXT("ProcUp_Yield"))        { return TEXT("Fine filter"); }
+		if (S == TEXT("ProcUp_Purity"))       { return TEXT("Purity coil"); }
 		if (S == TEXT("Oven_Std"))            { return TEXT("Oven / stove"); }
 		if (S == TEXT("Pan_Std"))             { return TEXT("Cooking pan"); }
 		if (S == TEXT("Fridge_Std"))          { return TEXT("Fridge conversion"); }
@@ -619,6 +620,7 @@ namespace WeedUI
 			if (Has(TEXT("DryUp_Seal")))                                 return { TEXT("seal"),      FLinearColor(0.7f, 0.75f, 0.85f),  EIcon::Upgrade };
 			if (Has(TEXT("ProcUp_Motor")))                               return { TEXT("motor"),     FLinearColor(0.7f, 0.74f, 0.8f),   EIcon::Gear };
 			if (Has(TEXT("ProcUp_Yield")))                               return { TEXT("filter"),    FLinearColor(0.7f, 0.74f, 0.8f),   EIcon::Gear };
+			if (Has(TEXT("ProcUp_Purity")))                              return { TEXT("purity"),    FLinearColor(0.72f, 0.85f, 0.72f), EIcon::Gear };
 			if (Has(TEXT("Gear_")) || Has(TEXT("DryUp_")) || Has(TEXT("ProcUp_")))
 			                                                             return { TEXT("upgrade"),   FLinearColor(0.6f, 0.85f, 0.95f),  EIcon::Upgrade };
 			// Verwerkings-machines: elk een eigen icoon (deze items zijn altijd tiers, _Std/_Pro/_Cheap).

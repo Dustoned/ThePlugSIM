@@ -123,6 +123,7 @@ const TArray<FPlaceableDef>& GetAllPlaceables()
 		{ TEXT("DryUp_Seal"),   TEXT("Humidity sealer"), TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.24f), FVector(15.f, 15.f, 12.f), false, 4500 },
 		{ TEXT("ProcUp_Motor"), TEXT("Power motor"),     TEXT("/Engine/BasicShapes/Cube.Cube"),     FVector(0.30f, 0.30f, 0.30f), FVector(15.f, 15.f, 15.f), false, 5000 },
 		{ TEXT("ProcUp_Yield"), TEXT("Fine filter"),     TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.28f, 0.28f, 0.34f), FVector(14.f, 14.f, 17.f), false, 7000 },
+		{ TEXT("ProcUp_Purity"),TEXT("Purity coil"),     TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), FVector(0.26f, 0.26f, 0.40f), FVector(13.f, 13.f, 20.f), false, 9000 },
 	};
 	return Defs;
 }

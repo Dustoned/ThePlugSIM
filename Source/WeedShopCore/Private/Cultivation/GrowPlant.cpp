@@ -397,7 +397,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		// Waterpeil loopt langzaam leeg (isolatie-upgrade + pot-retentie vertragen dit).
 		// Auto-watering I/II (bits 9/10) houdt de pot vanzelf vol -> geen handmatig water nodig.
 		const float MaxCare = GetMaxCare();
-		if (HasPotUpgrade(9) || HasPotUpgrade(10))
+		if (HasPotUpgrade(9) || HasPotUpgrade(10) || PotTier == FName(TEXT("Pot_Smart")))
 		{
 			WaterLevel = 1.f;
 		}

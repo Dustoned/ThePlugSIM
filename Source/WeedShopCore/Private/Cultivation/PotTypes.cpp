@@ -9,6 +9,7 @@ const TArray<FPotDef>& GetAllPots()
 		{ TEXT("Pot_Clay"),    TEXT("Clay pot"),    0.70f, 1.00f, 1, 4000,  1800,  0, FVector(0.50f, 0.50f, 0.40f) },
 		{ TEXT("Pot_Plastic"), TEXT("Plastic pot"), 0.85f, 1.10f, 2, 10000, 4500,  1, FVector(0.58f, 0.58f, 0.40f) },
 		{ TEXT("Pot_Fabric"),  TEXT("Fabric pot"),  1.00f, 1.25f, 6, 35000, 16000, 2, FVector(0.75f, 0.75f, 0.42f) },
+		{ TEXT("Pot_Smart"),   TEXT("Smart pot"),   1.15f, 1.40f, 6, 80000, 40000, 2, FVector(0.82f, 0.82f, 0.46f) },
 	};
 	return Defs;
 }

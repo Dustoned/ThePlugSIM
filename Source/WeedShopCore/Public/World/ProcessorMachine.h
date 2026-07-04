@@ -100,6 +100,7 @@ protected:
 	// Losse upgrade-gear (ProcUp_*) die vlakbij staat: maakt deze machine sneller / meer opbrengst.
 	float UpSpeedMult = 1.f;
 	float UpYieldMult = 1.f;
+	float UpQualityMult = 1.f;
 	float UpScanTimer = 0.f;
 	void RecomputeUpgrades(float DeltaSeconds);
 };
