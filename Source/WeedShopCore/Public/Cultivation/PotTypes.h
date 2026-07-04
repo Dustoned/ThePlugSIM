@@ -16,6 +16,7 @@ struct FPotDef
 	int32 SellPriceCents = 600;
 	uint8 MinPhase = 0;       // EShopPhase: 0=Straatdealer,1=Winkel,2=Franchise
 	FVector MeshScale = FVector(0.5f, 0.5f, 0.4f); // visuele grootte (verschilt per tier)
+	float AfflictResist = 0.f; // mold/pest-risico-reductie (0=geen, 0.70=70% minder kans); hoger = betere pot
 };
 
 const TArray<FPotDef>& GetAllPots();

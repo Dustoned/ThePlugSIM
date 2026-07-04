@@ -476,6 +476,9 @@ void AGrowPlant::Tick(float DeltaSeconds)
 		// Bewust ZELDZAAM: af en toe een dingetje, geen straf op lage kwaliteit. ~1 keer per
 		// ~20-30 min groei per plant. Lage care verhoogt het maar mild (max ~1.5x), niet eindeloos.
 		constexpr float AfflictBaseRatePerSec = 0.00009f;
+		// Betere pot = minder mold/pest-kans (per-tier resistentie, netjes oplopend Broken->Smart).
+		float PotAfflictResist = 0.f;
+		{ FPotDef AfflPd; if (GetPotDef(PotTier, AfflPd)) { PotAfflictResist = AfflPd.AfflictResist; } }
 
 		bool bVisChanged = false;
 		bool bAnyPastGrace = false;
@@ -495,7 +498,7 @@ void AGrowPlant::Tick(float DeltaSeconds)
 			{
 				// Verzorging beschermt sterker: perfecte zorg 0.5x risico, verwaarloosd ~1.7x. Niet save-bound
 				// (pure random per seconde), dus de basiskans is bewust laag gehouden.
-				const float Risk = AfflictBaseRatePerSec * (0.5f + 1.2f * (1.f - FMath::Clamp(CareMultiplier, 0.f, 1.f)));
+				const float Risk = AfflictBaseRatePerSec * (0.5f + 1.2f * (1.f - FMath::Clamp(CareMultiplier, 0.f, 1.f))) * (1.f - FMath::Clamp(PotAfflictResist, 0.f, 0.95f));
 				if (FMath::FRand() < Risk * DeltaSeconds)
 				{
 					// Mold eerst beschikbaar; pests pas vanaf een hoger level (dan 50/50).

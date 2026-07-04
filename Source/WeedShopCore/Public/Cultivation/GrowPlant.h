@@ -63,7 +63,7 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
-	static constexpr int32 MaxSlots = 6;
+	static constexpr int32 MaxSlots = 8;
 
 	// DataTable met strain-rijen (FWeedStrainRow).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Plant")

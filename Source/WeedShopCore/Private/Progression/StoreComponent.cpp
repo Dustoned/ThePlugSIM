@@ -121,7 +121,7 @@ namespace
 		{ TEXT("Pot_Clay"),         TEXT("Clay pot"),    TEXT("Decent retention, 1 plant"),       8000, 1 },
 		{ TEXT("Pot_Plastic"),      TEXT("Plastic pot"), TEXT("More yield, up to 2 plants"),     30000, 1 },
 		{ TEXT("Pot_Fabric"),       TEXT("Fabric pot"),  TEXT("Best quality, up to 6 plants"),   140000, 1 },
-		{ TEXT("Pot_Smart"),        TEXT("Smart pot"),   TEXT("Self-watering - top quality, up to 6 plants"), 320000, 1 },
+		{ TEXT("Pot_Smart"),        TEXT("Smart pot"),   TEXT("Self-watering + mold/pest-resistant, up to 8 plants"), 320000, 1 },
 		// Soil (betere soil = meer yield/kwaliteit, ontgrendelt met fase).
 		{ TEXT("Soil_Basic"),       TEXT("Basic soil"),   TEXT("Lasts 3 harvests"),               3000, 1 },
 		{ TEXT("Soil_Rich"),        TEXT("Rich soil"),    TEXT("More yield - 4 harvests"),        8000, 1 },
