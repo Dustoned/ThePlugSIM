@@ -161,8 +161,10 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 	if (bSel) { Pressed.OutlineSettings.Width = 1.5f; Pressed.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.9f)); }
 	S.Pressed = Pressed;
 
-	S.NormalPadding = FMargin(0.f);
-	S.PressedPadding = FMargin(0.f);
+	// Zelfde binnen-inset (7px) als de inventory-cel -> badge (rechtsboven) en tag (onder) zitten op exact
+	// dezelfde plek als in de inventory, niet pal in de hoek.
+	S.NormalPadding = FMargin(7.f);
+	S.PressedPadding = FMargin(7.f);
 	Cells[i]->SetStyle(S);
 }
 

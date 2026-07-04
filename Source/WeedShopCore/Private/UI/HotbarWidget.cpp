@@ -70,7 +70,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
 		Box->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x2A3140, 0.9f), 10.f));
-		Box->SetPadding(FMargin(4.f, 3.f, 4.f, 3.f));
+		Box->SetPadding(FMargin(7.f)); // zelfde binnen-inset als de inventory-cel -> badge/tag op dezelfde plek
 		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
 		UOverlaySlot* BoxOS = SlotOv->AddChildToOverlay(Box);
 		BoxOS->SetHorizontalAlignment(HAlign_Fill); BoxOS->SetVerticalAlignment(VAlign_Fill);
@@ -91,10 +91,10 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		NumOS->SetVerticalAlignment(VAlign_Top);
 
 		// Aantal/gram-badge RECHTSBOVEN als pilletje (los van de naam onderaan, zodat niets overlapt).
-		UTextBlock* Badge = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.95f, 0.97f, 1.f), false, true);
+		UTextBlock* Badge = WeedUI::Text(WidgetTree, TEXT(""), 10, WeedUI::ColText(), false, true);
 		UBorder* BadgePill = WidgetTree->ConstructWidget<UBorder>();
-		BadgePill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 6.f));
-		BadgePill->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
+		BadgePill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f)); // zelfde badge-pill als inventory/pickers
+		BadgePill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
 		BadgePill->SetContent(Badge);
 		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(BadgePill);
 		BadgeOS->SetHorizontalAlignment(HAlign_Right);
@@ -117,7 +117,7 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		UOverlaySlot* NameOS = Ov->AddChildToOverlay(TagPill);
 		NameOS->SetHorizontalAlignment(HAlign_Center);
 		NameOS->SetVerticalAlignment(VAlign_Bottom);
-		NameOS->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+		NameOS->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f)); // zelfde tag-onderrand als inventory/pickers
 
 		// Transparante cel bovenop die drag (vanaf dit slot) en drop (toewijzen) afhandelt. Alleen
 		// actief als de inventory open is (dan zetten we de hele hotbar hit-testbaar).
