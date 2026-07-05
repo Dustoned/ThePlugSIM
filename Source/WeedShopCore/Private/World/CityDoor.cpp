@@ -220,10 +220,14 @@ FString ACityDoor::ResidentNameForIndex(int32 Index, bool bFemale)
 		TEXT("Dampman"), TEXT("Rookgordel"), TEXT("Blowveld"), TEXT("Hasjbrik"), TEXT("Wietpot"), TEXT("Hasjpijp"), TEXT("Nederwiet"), TEXT("Skunkstra"),
 		TEXT("Paddoman"), TEXT("Truffel"), TEXT("Jointman"), TEXT("Vuurtje") };
 	const TCHAR* const* FA = bFemale ? FemaleFirst : MaleFirst;
-	const int32 NF = bFemale ? (int32)UE_ARRAY_COUNT(FemaleFirst) : (int32)UE_ARRAY_COUNT(MaleFirst);
-	const int32 NL = (int32)UE_ARRAY_COUNT(Last);
-	const int32 I = FMath::Max(0, Index);
-	return FString::Printf(TEXT("%s %s"), FA[I % NF], Last[(I * 37 + I / NF) % NL]);
+	const uint32 NF = bFemale ? (uint32)UE_ARRAY_COUNT(FemaleFirst) : (uint32)UE_ARRAY_COUNT(MaleFirst);
+	const uint32 NL = (uint32)UE_ARRAY_COUNT(Last);
+	const uint32 I = (uint32)FMath::Max(0, Index);
+	// 64-bit UNSIGNED rekenen: Index is hash-afgeleid en kan bijna 2^31 zijn -> `I * 37` zou als int32 OVERLOPEN
+	// naar een NEGATIEVE Last[]-index (out-of-bounds read -> garbage-pointer -> crash in Printf %s). uint64 +
+	// unsigned modulo houdt de index gegarandeerd in [0, NL).
+	const uint32 LastIdx = (uint32)(((uint64)I * 37u + (uint64)(I / NF)) % NL);
+	return FString::Printf(TEXT("%s %s"), FA[I % NF], Last[LastIdx]);
 }
 
 FString ACityDoor::ResidentNameForDoor(UWorld* W, int32 NameIdx)
