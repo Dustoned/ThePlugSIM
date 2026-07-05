@@ -380,7 +380,7 @@ void UInventoryComponent::RemoveFromStackById(int32 StackId, int32 Count)
 	OnRep_Stacks();
 }
 
-bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, float QualityPct)
+bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, float QualityPct, bool bQuietOnFull)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
@@ -395,9 +395,11 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 	// Gewicht-limiet.
 	if (MaxWeight > 0.f && GetTotalWeight() + GetUnitWeight(ItemId) * Count > MaxWeight + 0.001f)
 	{
-		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy — sell or drop something.")); }
+		if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy - sell or drop something.")); }
 		return false;
 	}
+
+	TArray<int32> FreshIds; // nieuw aangemaakte stapels -> na afloop vrije hotbar-slots mee vullen (QoL)
 
 	// Zakjes: discrete eenheden, max BagStackMax per slot; overloop -> nieuw slot.
 	if (IsBag(ItemId))
@@ -419,7 +421,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 			// Limiet = backpack (MaxStacks) + hotbar (HotbarSize): de hotbar is aparte opslag, telt los van de 10.
 			if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks + HotbarSize)
 			{
-				if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
+				if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
 				break;
 			}
 			FInventoryStack NewStack;
@@ -429,9 +431,11 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 			NewStack.QualityPct = FMath::Max(0.f, QualityPct);
 			NewStack.StackId = NextStackId++;
 			Stacks.Add(NewStack);
+			FreshIds.Add(NewStack.StackId);
 			Remaining -= NewStack.Quantity;
 		}
 		OnRep_Stacks();
+		FillFreeHotbar(FreshIds, ItemId);
 		return Remaining < Count;
 	}
 
@@ -445,7 +449,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 		// Limiet = backpack (MaxStacks) + hotbar (HotbarSize): de hotbar is aparte opslag, telt los van de 10.
 		if (GetUsedSlots() + NewStacks > MaxStacks + HotbarSize)
 		{
-			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
+			if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
 			return false;
 		}
 	}
@@ -478,6 +482,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 			NewStack.QualityPct = FMath::Max(0.f, QualityPct);
 			NewStack.StackId = NextStackId++;
 			Stacks.Add(NewStack);
+			FreshIds.Add(NewStack.StackId);
 		}
 	}
 	else
@@ -492,10 +497,12 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 			NewStack.QualityPct = FMath::Max(0.f, QualityPct);
 			NewStack.StackId = NextStackId++;
 			Stacks.Add(NewStack);
+			FreshIds.Add(NewStack.StackId);
 		}
 	}
 
 	OnRep_Stacks();
+	FillFreeHotbar(FreshIds, ItemId);
 	return true;
 }
 
@@ -896,6 +903,20 @@ void UInventoryComponent::AssignHotbarStack(int32 Slot, int32 StackId)
 	RefreshGridAuto();   // item zit nu op de hotbar -> z'n backpack-cel vrijgeven
 	RefreshActiveStack(); // hand-item kan gewisseld zijn -> server syncen
 	OnInventoryChanged.Broadcast();
+}
+
+void UInventoryComponent::FillFreeHotbar(const TArray<int32>& StackIds, FName ItemId)
+{
+	if (GetOwnerRole() != ROLE_Authority) { return; }
+	if (ItemId == FName(TEXT("Cash"))) { return; } // cash is een spiegel, hoort niet op de hotbar
+	if (HotbarStacks.Num() != HotbarSize) { HotbarStacks.SetNum(HotbarSize); }
+	for (int32 Sid : StackIds)
+	{
+		if (Sid == 0 || IsStackOnHotbar(Sid)) { continue; }
+		const int32 Free = HotbarStacks.IndexOfByKey(0);
+		if (Free == INDEX_NONE) { break; } // hotbar vol -> de rest blijft in de backpack
+		AssignHotbarStack(Free, Sid); // vult het vrije slot (en regelt grid/rep)
+	}
 }
 
 void UInventoryComponent::RefreshHotbarAuto()

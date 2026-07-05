@@ -1726,9 +1726,9 @@ void UPhoneClientComponent::ServerShelfTake_Implementation(AStorageShelf* Shelf,
 	}
 	if (!Inv->AddItem(OutId, Taken, OutThc, OutQual))
 	{
-		// Geen ruimte in de inventory -> terug op het schap.
+		// Geen ruimte in de inventory -> terug op het schap. AddItem toont zelf al de nette "geen slots"/"te zwaar"-toast
+		// (niet hier nog een tweede "No room"-melding stapelen).
 		Shelf->ServerStore(OutId, Taken, OutThc, OutQual);
-		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No room in your inventory.")); }
 	}
 }
 
@@ -2414,13 +2414,15 @@ void UPhoneClientComponent::ServerSubmitOffer_Implementation(ACustomerBase* Cust
 			Msg = FString::Printf(TEXT("Deal! Sold for EUR %d"), (int32)(WeedRoundEuros((int64)AskCents * Customer->DesiredQuantity) / 100));
 			break;
 		case EDealResult::Haggle:
-			Col = FColor::Yellow;  Msg = TEXT("Too expensive — they want to haggle."); break;
+			Col = FColor::Yellow;  Msg = TEXT("Too expensive - they want to haggle."); break;
 		case EDealResult::NoStock:
 			Col = FColor::Orange; Msg = TEXT("You don't have the stock for this order."); break;
 		default:
 			Col = FColor::Red;    Msg = TEXT("Customer refused the offer."); break;
 		}
-		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, Col, Msg);
+		// Bij een geslaagde deal NIET nog een "Deal! Sold"-toast: de deal-resultaat-popup boven de klant + de
+		// "Happy customer"-toast dekken dat al (anders drie meldingen voor een verkoop). Wel Haggle/NoStock/weiger.
+		if (Result != EDealResult::Accepted) { UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, Col, Msg); }
 	}
 }
 

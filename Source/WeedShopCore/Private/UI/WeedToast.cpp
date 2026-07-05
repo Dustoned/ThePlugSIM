@@ -100,7 +100,7 @@ void UWeedToast::NativeDestruct()
 void UWeedToast::Push(int32 Key, float Time, const FLinearColor& Color, const FString& Msg, const FString& Icon)
 {
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
-	const float Dur = FMath::Clamp(Time, 2.5f, 6.f);
+	const float Dur = FMath::Clamp(Time, 3.5f, 7.f); // iets langer laten staan (speler wilde een tikje meer leestijd)
 	// Zelfde key (>=0) -> bestaande melding bijwerken i.p.v. stapelen (bv. heat/teller).
 	if (Key >= 0)
 	{
@@ -143,7 +143,10 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (bSuppress)
 	{
 		if (Entries.Num() > 0) { Entries.Reset(); LastSig.Reset(); Stack->ClearChildren(); }
-		SetVisibility(ESlateVisibility::Collapsed);
+		// KRITISCH: NIET Collapsed! Een Collapsed UMG-widget TICKT NIET MEER -> NativeTick draait nooit meer ->
+		// de widget kan zichzelf niet un-collapsen -> permanent onzichtbaar (hij wordt toegevoegd terwijl de
+		// laad-cover nog op is, dus zit meteen vast). HitTestInvisible blijft ticken; de lege stapel toont niets.
+		SetVisibility(ESlateVisibility::HitTestInvisible);
 		return;
 	}
 	SetVisibility(ESlateVisibility::HitTestInvisible);

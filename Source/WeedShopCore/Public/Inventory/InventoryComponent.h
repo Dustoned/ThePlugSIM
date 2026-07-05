@@ -94,7 +94,7 @@ public:
 	// Server. Voegt Count toe. Stapelbare items mergen (THC% + Kwaliteit% middelen gewogen op aantal);
 	// niet-stapelbare (flessen) worden losse stapels van 1. ThcPercent/QualityPct < 0 = geen info.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
-	bool AddItem(FName ItemId, int32 Count, float ThcPercent = -1.f, float QualityPct = -1.f);
+	bool AddItem(FName ItemId, int32 Count, float ThcPercent = -1.f, float QualityPct = -1.f, bool bQuietOnFull = false);
 
 	// Server. Haalt Count weg (over meerdere stapels indien nodig). False bij te weinig.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
@@ -245,6 +245,9 @@ public:
 	// Zet een stapel in een hotbar-slot (drag-n-drop); stond 'ie al ergens, dan wisselen.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")
 	void AssignHotbarStack(int32 Slot, int32 StackId);
+
+	// QoL: nieuwe stapels (na een koop/oppakken) vullen automatisch VRIJE hotbar-slots als die er zijn (Cash uitgezonderd).
+	void FillFreeHotbar(const TArray<int32>& StackIds, FName ItemId);
 
 	// Haal een stapel van de hotbar af.
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Inventory")

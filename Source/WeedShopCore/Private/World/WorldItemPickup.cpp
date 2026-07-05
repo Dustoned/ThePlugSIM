@@ -133,7 +133,9 @@ bool AWorldItemPickup::GiveOrDrop(UInventoryComponent* Inv, APawn* Pawn, FName I
 	if (Inv->GetOwnerRole() != ROLE_Authority) { return false; }
 	// Cash is een SPIEGEL van het economy-saldo -> NOOIT als wereld-item droppen (dat zou geld dupliceren).
 	if (ItemId == FName(TEXT("Cash"))) { return Inv->AddItem(ItemId, Qty, Thc, Quality); }
-	if (Inv->AddItem(ItemId, Qty, Thc, Quality)) { return true; }
+	// bQuietOnFull: AddItem zwijgt bij een volle inventory -> hieronder tonen we EEN nette "bij je voeten"-toast
+	// (anders dubbel: AddItem's "geen slots"/"te zwaar" PLUS de drop-melding).
+	if (Inv->AddItem(ItemId, Qty, Thc, Quality, /*bQuietOnFull=*/true)) { return true; }
 
 	// Past niet -> bij de voeten neerleggen (zelfde plek-berekening als ServerDropStack): nooit stil loot kwijt.
 	AActor* At = Pawn ? static_cast<AActor*>(Pawn) : Inv->GetOwner();
@@ -166,7 +168,7 @@ void AWorldItemPickup::Interact_Implementation(APawn* InstigatorPawn)
 	}
 	UInventoryComponent* Inv = InstigatorPawn->FindComponentByClass<UInventoryComponent>();
 	if (!Inv) { return; }
-	if (Inv->AddItem(ItemId, Qty, Thc, Qual))
+	if (Inv->AddItem(ItemId, Qty, Thc, Qual, /*bQuietOnFull=*/true)) // stil: hieronder EEN nette "geen ruimte"-toast i.p.v. dubbel
 	{
 		Destroy();
 	}

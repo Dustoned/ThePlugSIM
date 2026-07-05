@@ -3682,7 +3682,8 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 		case EDealResult::Haggle:   C = FColor::Yellow; Msg = TEXT("Customer thinks it's too expensive"); break;
 		default:                    C = FColor::Red;    Msg = TEXT("Customer refuses"); break;
 		}
-		UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, C, Msg);
+		// Bij een geslaagde verkoop NIET nog een "Sold!"-toast: de deal-resultaat-popup + "Happy customer" dekken dat al.
+		if (Result != EDealResult::Accepted) { UWeedToast::NotifyPawn(InstigatorPawn, -1, 3.f, C, Msg); }
 	}
 }
 
