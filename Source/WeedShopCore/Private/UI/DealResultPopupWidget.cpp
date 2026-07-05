@@ -157,7 +157,14 @@ void UDealResultPopupWidget::NativeTick(const FGeometry& MyGeometry, float Delta
 	// zelfde idioom als de rest van de UI: UWidgetLayoutLibrary::GetViewportScale).
 	float DPI = UWidgetLayoutLibrary::GetViewportScale(this);
 	if (DPI <= 0.f) { DPI = 1.f; }
-	const FVector2D CanvasPos = Screen / DPI;
+	FVector2D CanvasPos = Screen / DPI;
+	// KRITISCH: ProjectWorldLocationToScreen geeft ook true als het punt VOOR de camera zit maar BUITEN de
+	// viewport valt (coords negatief / voorbij de rand). Vlak voor een NPC zit het kop-anker (~130cm boven de
+	// origin) vrijwel altijd BOVEN de bovenrand -> het kaartje hing daardoor onzichtbaar buiten beeld. Daarom
+	// klemmen we de positie binnen het scherm (met marge), zodat de popup ALTIJD leesbaar in beeld staat.
+	const FVector2D ViewSize = UWidgetLayoutLibrary::GetViewportSize(this) / DPI;
+	CanvasPos.X = FMath::Clamp(CanvasPos.X, 90.f, FMath::Max(90.f, ViewSize.X - 90.f));
+	CanvasPos.Y = FMath::Clamp(CanvasPos.Y, 120.f, FMath::Max(120.f, ViewSize.Y - 30.f));
 	if (UCanvasPanelSlot* CS = Cast<UCanvasPanelSlot>(Card->Slot))
 	{
 		CS->SetPosition(CanvasPos);

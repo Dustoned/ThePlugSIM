@@ -128,6 +128,28 @@ void ULevelUpWidget::ShowForLevel(int32 PrevLevel, int32 NewLevel)
 		}
 	}
 
+	// Klant-tiers vrijgespeeld: Heavy User (tier 3) op level 5, VIP (tier 4) op level 10. De "kant-en-klare"
+	// complete-skin klanten (schoolgirls/gamergirls + premium mannen) lopen pas vanaf die levels rond.
+	auto ConsiderTier = [&](int32 Req, const TCHAR* IconStem, const FString& Name)
+	{
+		if (Req <= PrevLevel || Req > NewLevel || Count >= 18) { return; }
+		UVerticalBox* Cell = WidgetTree->ConstructWidget<UVerticalBox>();
+		USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>();
+		IcoSz->SetWidthOverride(44.f); IcoSz->SetHeightOverride(44.f);
+		IcoSz->SetContent(WeedUI::KitIcon(WidgetTree, FString(IconStem), 44.f, FLinearColor::White));
+		Cell->AddChildToVerticalBox(IcoSz)->SetHorizontalAlignment(HAlign_Center);
+		UTextBlock* NameT = WeedUI::Text(WidgetTree, Name, 10, FLinearColor(0.88f, 0.9f, 0.96f), true);
+		NameT->SetAutoWrapText(true);
+		USizeBox* NameSz = WidgetTree->ConstructWidget<USizeBox>();
+		NameSz->SetWidthOverride(76.f);
+		NameSz->SetContent(NameT);
+		Cell->AddChildToVerticalBox(NameSz)->SetHorizontalAlignment(HAlign_Center);
+		UnlockBox->AddChildToWrapBox(Cell);
+		++Count;
+	};
+	ConsiderTier(5, TEXT("t_face_smile_128"), TEXT("Heavy User customers"));
+	ConsiderTier(10, TEXT("t_medal_128"), TEXT("VIP customers"));
+
 	SubText->SetText(Count > 0
 		? FText::FromString(TEXT("New in the shop:"))
 		: FText::FromString(TEXT("Keep grinding - more unlocks ahead.")));

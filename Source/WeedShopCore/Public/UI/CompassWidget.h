@@ -35,6 +35,7 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<UWidget>> CoopMarkers;   // mede-spelers (blauw poppetje)
 	UPROPERTY() TArray<TObjectPtr<UWidget>> DeliveryMarkers; // bezorgingen (oranje pakket-icoon)
 	UPROPERTY() TArray<TObjectPtr<class USizeBox>> ShopMarkers; // winkels (soort-kleur, per KindColor)
+	TArray<FLinearColor> ShopMarkerColors;                 // laatste icoon-kleur per marker: alleen bij WIJZIGING opnieuw bouwen (geen 2s-flits)
 	UPROPERTY() TObjectPtr<UWidget> HomeMarker;            // je basis (goud huisje)
 	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;        // generiek waypoint (blauw)
 

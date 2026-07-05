@@ -28,11 +28,15 @@ protected:
 
 	void BuildShell(UCanvasPanel* Root);
 
-	// Voegt een rij (toets-chip + omschrijving) toe aan de lijst.
-	void AddRow(const FString& Key, const FString& Action);
+	// Bouwt 1x een POOL van hint-rijen (toets-chip + omschrijving); de tick vult ze in-place (SetText/SetVisibility)
+	// i.p.v. ClearChildren+rebuild -> geen teardown-flits meer.
+	void BuildRowPool(int32 Count);
 
 	UPROPERTY() TObjectPtr<UBorder> Card;
 	UPROPERTY() TObjectPtr<UVerticalBox> List;
+	UPROPERTY() TArray<TObjectPtr<class UWidget>> RowPool;        // de rij-containers (HBox), Collapsed als ongebruikt
+	UPROPERTY() TArray<TObjectPtr<class UTextBlock>> RowLabels;   // omschrijving-tekst per rij (in-place SetText)
+	UPROPERTY() TArray<TObjectPtr<class UTextBlock>> RowKeys;     // toets-chip-tekst per rij (in-place SetText)
 
 	// Gecentreerde interactie-popup (onder het crosshair) i.p.v. de lange prompt in de hoek-kaart.
 	UPROPERTY() TObjectPtr<UBorder> CenterPromptCard;
@@ -49,4 +53,10 @@ protected:
 	TWeakObjectPtr<class UInventoryComponent> CachedInv;
 	// FocusPrompt changed-check: SetText/visibility alleen bij wijziging.
 	FString LastFocusPrompt;
+
+	// Focus-HOLD: de raw focus-trace klapt actor<->null als een crowd-body langs de crosshair drijft; die 1-frame
+	// misses gooiden de hint-set (en dus de sig) om -> constante ClearChildren-rebuild = de flits. We houden de
+	// laatste geldige focus kort vast zodat een korte trace-miss de rijen niet omgooit.
+	TWeakObjectPtr<class AActor> HeldFocus;
+	float FocusHoldTimer = 0.f;
 };

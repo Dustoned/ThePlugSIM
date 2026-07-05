@@ -112,6 +112,13 @@ public:
 	// roepen beide dit aan), zodat bordje en rondlopende bewoner nooit verschillen. Host==client (zelfde code).
 	static bool PredictFemaleAppearance(FName NpcId, int32 SkinIndex, bool bCrowd);
 
+	// Gedeeld crew-level (co-op-consistent host==joiner) via GameState->Leveling. Voor de tier-unlock-gate:
+	// "kant-en-klare" complete-skin NPC's (schoolgirl/gamergirl + Karl/Casual/Tony = tier 3-4) verschijnen pas
+	// later - Heavy User (tier 3) vanaf level 5, VIP (tier 4) vanaf level 10; daarvoor blijven ze modulaire casual.
+	static int32 SharedPlayerLevel(const UObject* WorldCtx);
+	// Is de complete-skin (crowd V==2) voor deze seed al ontgrendeld op dit level? (tier 3 -> lvl5, tier 4 -> lvl10)
+	static bool  IsCompleteSkinUnlocked(uint32 LookSeed, int32 PlayerLevel);
+
 	// HITCH-FIX: laad alle crowd/basis-skin-meshes 1x voor (onder het laadscherm) + keep-alive, zodat
 	// body-materialisatie tijdens het spelen nooit meer een blocking skin-load op de game-thread doet.
 	static void PreloadCrowdSkins(const UObject* WorldContext);

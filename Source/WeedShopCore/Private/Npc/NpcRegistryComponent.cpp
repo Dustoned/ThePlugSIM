@@ -1,4 +1,5 @@
 #include "Npc/NpcRegistryComponent.h"
+#include "Customer/CustomerBase.h" // ACustomerBase::StableLookSeed voor de skin->tier-bodem
 #include "UI/WeedToast.h"
 
 #include "WeedShopCore.h"
@@ -508,7 +509,17 @@ int32 UNpcRegistryComponent::GetCustomerXP(FName NpcId, const FString& PlayerId)
 
 int32 UNpcRegistryComponent::GetCustomerTier(FName NpcId, const FString& PlayerId) const
 {
-	return TierFromXP(GetCustomerXP(NpcId, PlayerId));
+	int32 T = TierFromXP(GetCustomerXP(NpcId, PlayerId));
+	// SKIN-TIER-KOPPELING (speler-wens): NPC's met een "kant-en-klare" complete skin (crowd V==2 = schoolgirl/
+	// gamergirl + Karl/Casual/Tony) zijn HOGERE-tier klanten. Maar pas ONTGRENDELD op level 5 (Heavy User/tier 3)
+	// en 10 (VIP/tier 4): daarvoor tonen ze een modulaire casual-skin (zie BuildAppearance) en krijgen ze GEEN
+	// tier-bodem, zodat look en gedrag matchen. Deterministisch op de look-seed -> geen save-mutatie, host==joiner.
+	const uint32 LookSeed = ACustomerBase::StableLookSeed(NpcId);
+	if (ACustomerBase::IsCompleteSkinUnlocked(LookSeed, ACustomerBase::SharedPlayerLevel(this)))
+	{
+		T = FMath::Max(T, ((LookSeed >> 5) & 1u) ? 4 : 3); // ~50/50 tier 3 (Heavy) vs 4 (VIP)
+	}
+	return T;
 }
 
 int32 UNpcRegistryComponent::GetOrAssignSkin(FName NpcId, int32 Tier, int32 Seed)

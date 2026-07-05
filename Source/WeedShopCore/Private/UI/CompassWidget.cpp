@@ -160,6 +160,8 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 		ShS->SetAutoSize(false); ShS->SetSize(FVector2D(24.f, 24.f)); ShS->SetAlignment(FVector2D(0.5f, 0.5f));
 		ShopMarkers.Add(ShB);
 	}
+	// Sentinel-kleur per marker (ongeldig) -> de eerste tick bouwt het icoon 1x; daarna alleen bij kleurwijziging.
+	ShopMarkerColors.Init(FLinearColor(-1.f, -1.f, -1.f, -1.f), ShopMarkers.Num());
 }
 
 void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y, float Dist)
@@ -321,10 +323,13 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		if (!IsValid(Sc)) { continue; }
 		USizeBox* Box = ShopMarkers[sh];
 		if (!Box) { ++sh; continue; }
-		// Kleur alleen (her)bouwen op de 2s-refresh: goedkoop en geen rebuild-per-klik/tick.
-		if (bCounterRefresh)
+		// Icoon-kind ALLEEN (her)bouwen als de kleur ECHT wijzigt (Kind is stabiel -> gebeurt ~1x, niet elke 2s).
+		// Dit was de flits: SetContent sloopte + herbouwde het icoon-kind elke 2 seconden.
+		const FLinearColor KCol = AStoreCounter::KindColor(Sc->Kind);
+		if (!ShopMarkerColors.IsValidIndex(sh) || !ShopMarkerColors[sh].Equals(KCol))
 		{
-			Box->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Shop, 24.f, AStoreCounter::KindColor(Sc->Kind)));
+			Box->SetContent(WeedUI::Icon(WidgetTree, WeedUI::EIcon::Shop, 24.f, KCol));
+			if (ShopMarkerColors.IsValidIndex(sh)) { ShopMarkerColors[sh] = KCol; }
 		}
 		const FVector D = Sc->GetActorLocation() - PL;
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));

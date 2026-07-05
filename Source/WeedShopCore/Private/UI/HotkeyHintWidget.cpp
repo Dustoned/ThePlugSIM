@@ -56,8 +56,12 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HintCard"));
 	CardB->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.8f), 10.f));
-	CardB->SetPadding(FMargin(9.f, 6.f, 10.f, 6.f));
+	CardB->SetPadding(FMargin(9.f, 6.f, 10.f, 7.f));
 	CardB->SetVisibility(ESlateVisibility::HitTestInvisible);
+	// Clip binnen het paneel: als de lijst bij een scroll/hint-wissel 1 frame groter is dan het AutoSize-paneel
+	// (re-measure-lag), wordt de overtollige rij AFGESNEDEN i.p.v. buiten het paneel getoond (speler-klacht: tekst
+	// die er even buiten valt). De rij verschijnt gewoon een frame later netjes binnen het paneel.
+	CardB->SetClipping(EWidgetClipping::ClipToBounds);
 	Card = CardB;
 
 	// Rechtsonder verankerd (alle controls staan hier, op één compacte plek).
@@ -73,6 +77,7 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	List = WidgetTree->ConstructWidget<UVerticalBox>();
 	ListSz->SetContent(List);
 	CardB->SetContent(ListSz);
+	BuildRowPool(12); // POOL: rijen 1x bouwen; de tick vult ze in-place (geen ClearChildren/teardown = geen flits)
 
 	// Gecentreerde interactie-popup (net onder het midden / crosshair): toont wat je aankijkt
 	// ("LOCKED - X lives here", "Open door", ...) als nette popup i.p.v. in de hoek.
@@ -89,26 +94,34 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	PS->SetPosition(FVector2D(0.f, 70.f)); // net onder het crosshair (bij het object - dat is z'n functie)
 }
 
-void UHotkeyHintWidget::AddRow(const FString& Key, const FString& Action)
+void UHotkeyHintWidget::BuildRowPool(int32 Count)
 {
-	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	if (!List) { return; }
+	for (int32 i = 0; i < Count; ++i)
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 
-	// Omschrijving LINKS (vult de rij, dus alle tekst begint op één verticale lijn).
-	UHorizontalBoxSlot* LSlot = Row->AddChildToHorizontalBox(WeedUI::Text(WidgetTree, Action, 11, FLinearColor(0.86f, 0.89f, 0.95f)));
-	LSlot->SetVerticalAlignment(VAlign_Center);
-	LSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		// Omschrijving LINKS (vult de rij, dus alle tekst begint op één verticale lijn). 1x gebouwd; tekst in-place.
+		UTextBlock* Label = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.86f, 0.89f, 0.95f));
+		UHorizontalBoxSlot* LSlot = Row->AddChildToHorizontalBox(Label);
+		LSlot->SetVerticalAlignment(VAlign_Center);
+		LSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	// Toets-"chip" RECHTS (auto-breedte, tegen de rechterrand uitgelijnd).
-	UBorder* Chip = WidgetTree->ConstructWidget<UBorder>();
-	Chip->SetBrush(WeedUI::Rounded(WeedUI::ColSlot(0.95f), 5.f));
-	Chip->SetPadding(FMargin(6.f, 1.f, 6.f, 1.f));
-	Chip->SetContent(WeedUI::Text(WidgetTree, Key, 10, WeedUI::ColAccent(), true, true));
-	UHorizontalBoxSlot* CSlot = Row->AddChildToHorizontalBox(Chip);
-	CSlot->SetVerticalAlignment(VAlign_Center);
-	CSlot->SetHorizontalAlignment(HAlign_Right);
-	CSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
+		// Toets-"chip" RECHTS (auto-breedte, tegen de rechterrand uitgelijnd). Brush 1x gezet, niet per rebuild.
+		UBorder* Chip = WidgetTree->ConstructWidget<UBorder>();
+		Chip->SetBrush(WeedUI::Rounded(WeedUI::ColSlot(0.95f), 5.f));
+		Chip->SetPadding(FMargin(6.f, 1.f, 6.f, 1.f));
+		UTextBlock* KeyT = WeedUI::Text(WidgetTree, TEXT(""), 10, WeedUI::ColAccent(), true, true);
+		Chip->SetContent(KeyT);
+		UHorizontalBoxSlot* CSlot = Row->AddChildToHorizontalBox(Chip);
+		CSlot->SetVerticalAlignment(VAlign_Center);
+		CSlot->SetHorizontalAlignment(HAlign_Right);
+		CSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
 
-	List->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 1.5f, 0.f, 1.5f));
+		List->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 1.5f, 0.f, 1.5f));
+		Row->SetVisibility(ESlateVisibility::Collapsed); // ongebruikt tot de tick 'm vult
+		RowPool.Add(Row); RowLabels.Add(Label); RowKeys.Add(KeyT);
+	}
 }
 
 void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -141,6 +154,14 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	UInteractionComponent* Interact = CachedInteract.Get();
 	UInventoryComponent* Inv = CachedInv.Get();
 
+	// Focus-HOLD: houd de laatste geldige focus ~0.2s vast. Een 1-frame trace-miss (een crowd-body die langs de
+	// crosshair drijft) gooit zo de hint-set NIET om -> de sig blijft stabiel -> geen constante rebuild = geen flits.
+	AActor* RawFocus = Interact ? Interact->GetFocusedActor() : nullptr;
+	if (RawFocus) { HeldFocus = RawFocus; FocusHoldTimer = 0.f; }
+	else if (HeldFocus.IsValid() && FocusHoldTimer < 0.2f) { FocusHoldTimer += DeltaTime; }
+	else { HeldFocus = nullptr; }
+	AActor* Focus = HeldFocus.Get();
+
 	// Bouw de lijst (key,label) op basis van de context. De herbindbare toetsen komen uit de instellingen.
 	UControlSettings* CS = UControlSettings::Get();
 	auto K = [CS](const TCHAR* Action) { return CS->GetKey(FName(Action), false).GetDisplayName().ToString(); };
@@ -161,7 +182,7 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		Hints.Emplace(TEXT("Scroll"), TEXT("Put away"));
 		// Kijk je tijdens het plaatsen een NIET-plaatsbaar wereld-object aan (deur/lift), dan kun je er nog
 		// steeds mee interacten (F) i.p.v. plaatsen -> toon de prompt + de Interact-toets.
-		AActor* Focus = Interact ? Interact->GetFocusedActor() : nullptr;
+		// (Focus = de vastgehouden focus, hierboven bepaald.)
 		if (Focus && Build && !Build->IsPickable(Focus))
 		{
 			FString Prompt = TEXT("Interact");
@@ -198,8 +219,7 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	else
 	{
-		// Vrij rondlopen: context van wat je aankijkt + wat je vasthoudt.
-		AActor* Focus = Interact ? Interact->GetFocusedActor() : nullptr;
+		// Vrij rondlopen: context van wat je aankijkt (vastgehouden focus) + wat je vasthoudt.
 		if (Focus)
 		{
 			FString Prompt = TEXT("Interact");
@@ -263,6 +283,15 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Sig == LastSig) { return; }
 	LastSig = Sig;
 
-	List->ClearChildren();
-	for (const TPair<FString, FString>& H : Hints) { AddRow(H.Key, H.Value); }
+	// POOL-update (geen ClearChildren/rebuild = geen teardown-flits): vul de eerste N rijen in-place, verberg de rest.
+	for (int32 i = 0; i < RowPool.Num(); ++i)
+	{
+		if (i < Hints.Num())
+		{
+			if (RowLabels[i]) { RowLabels[i]->SetText(FText::FromString(Hints[i].Value)); }
+			if (RowKeys[i])   { RowKeys[i]->SetText(FText::FromString(Hints[i].Key)); }
+			if (RowPool[i])   { RowPool[i]->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		}
+		else if (RowPool[i]) { RowPool[i]->SetVisibility(ESlateVisibility::Collapsed); }
+	}
 }

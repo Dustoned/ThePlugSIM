@@ -88,6 +88,8 @@ protected:
 	void OnPriceSlider(float Value);
 	UFUNCTION()
 	void OnAmountSlider(float Value);
+	UFUNCTION()
+	void OnBackdropClicked();                   // klik NAAST de kaart (op leegte) -> deal sluiten (wegklikbaar)
 
 	void BuildShell(UCanvasPanel* Root);
 	void UpdateLive();
@@ -97,7 +99,7 @@ protected:
 	// --- Geef-interactie (bag-offers): een SELL-GRID (al je bags, sleepbaar) + een GEEF-ZONE (drop-doel dat de
 	//     geef-grid met echte bag-iconen bevat). Sleep bag -> geef-zone = +1 in de pile; klik op een gegeven bag =
 	//     1 terug. De pile-som = DealGiveGrams (drijft kans/preview/verkoop). ---
-	void BuildGiveTray(UVerticalBox* VB);       // bouwt de geef-zone + de sell-grid 1x in BuildShell
+	void SetTrayVisible(bool bVis);             // toont/verbergt de bag-kolommen (SellPane + GivePane) samen
 	void RebuildSellGrid();                     // sig-gated: vult de sell-grid met ALLE bag-stacks (inv + hotbar)
 	void RefreshGiveZone();                     // (her)vult de geef-grid met bag-iconen uit de pile; zet DealGiveGrams
 	void SyncPileToOffered();                   // reset de pile bij een strain-wissel (leeg beginnen met de nieuwe strain)
@@ -108,9 +110,20 @@ protected:
 	UWidget* MakeBagCellContent(FName Strain, int32 Gram, int32 Count) const;
 	void SetCardWidth(float W);                  // kaart-breedte zetten (gecached: geen re-layout als 'ie al klopt)
 
+	// --- "Hoeveel geven?"-popup (spiegel van de inventory-split-popup): sleep je een zakje uit een stack van >1,
+	//     dan vraagt deze modal HOEVEEL van die maat je geeft. 1x gebouwd op de root-canvas (geen kaart-re-layout),
+	//     met een full-screen hit-test-blocker eronder zodat de rest van het deal-scherm modaal geblokkeerd is. ---
+	void BuildAmountPopup(class UCanvasPanel* Root);   // 1x aan het eind van BuildShell, met de Root-canvas
+	void OpenAmountPopup(FName Strain, int32 Gram, int32 MaxN); // toon de popup voor (strain,maat) met max = bezit
+	void ApplyGive(FName Strain, int32 Gram, int32 N);          // N zakjes van (strain,maat) in de pile leggen (switcht strain + reset indien nodig)
+	UFUNCTION() void OnAmountPickChanged(float V);     // slider -> label bijwerken (aantal)
+	void ConfirmAmount();                              // gekozen aantal in de pile leggen + sluiten
+	void CancelAmount();                               // sluiten zonder muteren
+
 	UPhoneClientComponent* GetPhone() const;
 
 	UPROPERTY() TObjectPtr<UWidget> Card;
+	UPROPERTY() TObjectPtr<UWidget> Backdrop;         // full-screen klik-vanger; ALLEEN zichtbaar tijdens een open deal (anders blokkeert 'ie alle UI-klikken!)
 	UPROPERTY() TObjectPtr<UTextBlock> NameText;     // NPC-naam (groot, bovenaan)
 	UPROPERTY() TObjectPtr<UTextBlock> StateText;    // status (wil kopen / prospect / tevreden)
 	UPROPERTY() TObjectPtr<UTextBlock> DialogueText; // wat de NPC zegt
@@ -121,26 +134,36 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> WantsStrainText;  // alleen de strain-naam (in de strain-tagkleur)
 	UPROPERTY() TObjectPtr<class UHorizontalBox> WantsRow; // rij die beide bevat (visibility togglen)
 	UPROPERTY() TObjectPtr<UTextBlock> SubText;
-	UPROPERTY() TObjectPtr<UTextBlock> PriceText;
+	UPROPERTY() TObjectPtr<UTextBlock> PriceText;      // "Your price EUR X/g   Y%" (links in de header)
+	UPROPERTY() TObjectPtr<UTextBlock> PriceTotalText; // totaal "EUR Z" (groot/bold, rechts-onder in de header)
 	UPROPERTY() TObjectPtr<USlider> PriceSlider;
 	UPROPERTY() TObjectPtr<USlider> AmountSlider;
 	UPROPERTY() TObjectPtr<UTextBlock> AmountText;
 
-	// --- Geef-interactie (bag-offers) ---
-	UPROPERTY() TObjectPtr<UVerticalBox> TrayBox;        // hele blok (geef-zone + sell-grid), togglen met de amount-zone
+	// --- Geef-interactie (bag-offers): 3-koloms indeling -> bags LINKS, gauges MIDDEN, geef-vak RECHTS ---
+	UPROPERTY() TObjectPtr<USizeBox> SellPane;           // LINKER kolom (vaste breedte): je bags; togglen met de bag-deal
+	UPROPERTY() TObjectPtr<USizeBox> GivePane;           // RECHTER kolom (vaste breedte): gram-teller + geef-vak
 	UPROPERTY() TObjectPtr<UDealBagCell> GiveZone;       // drop-DOEL (mode 1): bevat de geef-grid + de lege-hint
 	UPROPERTY() TObjectPtr<UWrapBox> GiveGrid;           // de gegeven bags als icon-cellen (mode 2, klik = -1)
 	UPROPERTY() TObjectPtr<UTextBlock> GiveHint;         // "Drop bags here to give <naam>" als de pile leeg is
+	UPROPERTY() TObjectPtr<UTextBlock> GiveGramsText;    // "Giving Xg / Ng" - DUIDELIJK hoeveel gram je de klant geeft
 	UPROPERTY() TObjectPtr<UWrapBox> SellGrid;           // ALLE bags die je bij hebt (inv + hotbar), sleepbaar (mode 0)
 	TMap<int32, int32> PileCounts;                       // gram-maat -> aantal zakjes in de pile
 	FName PileStrain = NAME_None;                        // strain waarvoor de pile geldt (reset bij strain-wissel)
 	FString SellGridSig;                                 // sig van de sell-grid (alleen bij bag-voorraad-wijziging vullen)
+
+	// "Hoeveel geven?"-popup (modal). AmountRoot = full-screen overlay (blocker + gecentreerd paneel), start Collapsed.
+	UPROPERTY() TObjectPtr<UWidget> AmountRoot;          // de hele modal (blocker + paneel); Collapsed<->Visible
+	UPROPERTY() TObjectPtr<USlider> AmountPickSlider;    // 1..Max aantal zakjes
+	UPROPERTY() TObjectPtr<UTextBlock> AmountPickLabel;  // "Geef: N (van Max)"
+	FName PendingStrain = NAME_None;                     // context van de open popup
+	int32 PendingGram = 0;
+	int32 PendingMax = 0;
 	UPROPERTY() TObjectPtr<USizeBox> CardWidthBox;       // vaste kaart-breedte; breder bij bag-deals (twee-koloms geef-tray) dan bij losse dialogen
 	float CurrentCardWidth = 0.f;                        // cache: alleen SetWidthOverride bij een echte wijziging (geen per-tick re-layout-flits)
 
 	UPROPERTY() TObjectPtr<UTextBlock> StockText;
-	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;
-	UPROPERTY() TObjectPtr<UProgressBar> ChanceBar;
+	UPROPERTY() TObjectPtr<UTextBlock> ChanceText;   // deal-kans als mee-kleurend % (bovenaan naast de request; geen bar meer)
 	UPROPERTY() TObjectPtr<UTextBlock> RelationText;
 
 	// C.4 — respect/loyaliteit/addiction als 3 ring-gauges (radiaal-materiaal, PlantInfoWidget-mechanisme).

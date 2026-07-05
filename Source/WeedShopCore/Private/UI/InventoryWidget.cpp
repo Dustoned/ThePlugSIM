@@ -582,9 +582,14 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	DetailsDivider->SetBrush(WeedUI::Rounded(WeedUI::ColStroke(0.6f), 1.f));
 	DetailsDivider->SetPadding(FMargin(0.f, 0.7f, 0.f, 0.7f));
 	DetailsVB->AddChildToVerticalBox(DetailsDivider)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	// Twee-koloms stat-rijen (label links dim, waarde rechts) - herbouwd bij een echte itemwissel.
+	// Twee-koloms stat-rijen (label links dim, waarde rechts) - herbouwd bij een echte itemwissel. In een
+	// SCROLLBOX met Fill-hoogte: bij veel stat-rijen (of een lange naam erboven) scrollt DIT deel i.p.v. de
+	// "Split stack"-knop buiten het paneel te duwen (speler-klacht: knop viel er soms buiten). De knop staat
+	// hieronder als vaste Auto-voet -> altijd zichtbaar binnen het paneel.
+	UScrollBox* StatScroll = WidgetTree->ConstructWidget<UScrollBox>();
 	DetailsStatBox = WidgetTree->ConstructWidget<UVerticalBox>();
-	DetailsVB->AddChildToVerticalBox(DetailsStatBox)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	StatScroll->AddChild(DetailsStatBox);
+	DetailsVB->AddChildToVerticalBox(StatScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	// GEEN hint-regel in de inv quick-view: die beschrijvende tekst staat al in de hand-preview (als je het
 	// item vasthoudt). Weglaten = minder ruis + scheelt hoogte zodat de "Split stack"-knop binnen het paneel past.
 	// (DetailsHint blijft null -> de SetText in ShowItemDetails is een no-op.)

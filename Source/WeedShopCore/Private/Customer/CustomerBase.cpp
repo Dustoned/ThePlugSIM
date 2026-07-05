@@ -566,10 +566,21 @@ static const TCHAR* GCrowdSkinPool[] = {
 		TEXT("/Game/SchoolGirl/Mesh/SK_SchoolGirl_SwimSuit.SK_SchoolGirl_SwimSuit"),
 };
 
-static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
+// DECORRELATIE-FIX: de crowd-tak bereikt de pool alleen als LookSeed%3==2, en gebruikte DAARNA dezelfde LookSeed
+// voor de pool-index %18. Omdat 18 = 6x3 waren maar 6 van de 18 skins ooit bereikbaar (o.a. GamerGirl_01/_03 = 0%),
+// waardoor je nooit gamer girls zag. We MIXEN de seed vóór de %N zodat alle 18 skins bereikbaar zijn. WeedNpc_CrowdSkin
+// EN PredictFemaleAppearance roepen deze ENE bron aan (geen 18-vs-19-drift meer tussen skin en deur-bordje-gender).
+static int32 WeedNpc_CrowdSkinIndex(uint32 Seed)
 {
 	const int32 N = UE_ARRAY_COUNT(GCrowdSkinPool);
-	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, GCrowdSkinPool[Seed % (uint32)N])) { return M; }
+	uint32 P = Seed * 2654435761u + 40503u; P ^= (P >> 15); P *= 2246822519u; P ^= (P >> 13);
+	return (int32)(P % (uint32)N);
+}
+
+static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
+{
+	const int32 Idx = WeedNpc_CrowdSkinIndex(Seed);
+	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, GCrowdSkinPool[Idx])) { return M; }
 	return WeedNpc_SkinByIndex((int32)(Seed % 10u)); // niet-geladen pad -> veilige terugval op de basis-pool
 }
 
@@ -766,6 +777,25 @@ uint32 ACustomerBase::StableLookSeed(FName NpcId)
 	return H ? H : 1u;
 }
 
+int32 ACustomerBase::SharedPlayerLevel(const UObject* WorldCtx)
+{
+	if (const UWorld* W = WorldCtx ? WorldCtx->GetWorld() : nullptr)
+	{
+		if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>())
+		{
+			if (ULevelComponent* Lv = GS->GetLeveling()) { return Lv->GetLevel(); }
+		}
+	}
+	return 1;
+}
+
+bool ACustomerBase::IsCompleteSkinUnlocked(uint32 LookSeed, int32 PlayerLevel)
+{
+	if ((LookSeed % 3u) != 2u) { return false; } // niet eens een complete-skin (V==2) NPC
+	const int32 DesignatedTier = ((LookSeed >> 5) & 1u) ? 4 : 3; // ~50/50 tier 3 (Heavy) vs 4 (VIP)
+	return (DesignatedTier == 3) ? (PlayerLevel >= 5) : (PlayerLevel >= 10);
+}
+
 // EEN bron voor de skin->gender-beslissing: spiegelt EXACT de takken van BuildAppearance hieronder (crowd
 // V-split incl. de CrowdSkin-pool; niet-crowd 3-5=vrouw, 6-9=man, else=SkinByIndex-pool). Deterministisch op
 // NpcId+SkinIndex+bCrowd -> host, client en het deur-bordje leiden identiek af.
@@ -777,10 +807,10 @@ bool ACustomerBase::PredictFemaleAppearance(FName NpcId, int32 SkinIndex, bool b
 		const uint32 V = LookSeed % 3u;
 		if (V == 0u) { return false; }                                   // WeedNpc_BuildModularCitizenMan = man
 		if (V == 1u) { return (LookSeed & 8u) == 0u; }                   // BuildModular = vrouw / BuildModularCitizens = man
-		// V == 2u: WeedNpc_CrowdSkin(LookSeed) -> pool van 19 (0-2 Karl man, 3-5 Casual vrouw, 6-9 Tony man,
-		// 10-18 Gamer_Girl/SchoolGirl vrouw). Zelfde index-keuze (Seed % 19) als de crowd-skin.
-		const uint32 Idx = LookSeed % 19u;
-		return (Idx >= 3u && Idx <= 5u) || (Idx >= 10u);
+		// V == 2u: WeedNpc_CrowdSkin -> zelfde GEMIXTE pool-index (0-2 Karl man, 3-5 Casual vrouw, 6-9 Tony man,
+		// 10-17 Gamer_Girl/SchoolGirl vrouw). EEN bron (WeedNpc_CrowdSkinIndex) zodat gender == echte skin.
+		const int32 Idx = WeedNpc_CrowdSkinIndex(LookSeed);
+		return (Idx >= 3 && Idx <= 5) || (Idx >= 10);
 	}
 	// Niet-crowd (o.a. bewoners): 3-5 = Casual (vrouw), 6-9 = Tony (man), anders SkinByIndex (0-2 Karl man,
 	// 10-12 Casual vrouw, rest man).
@@ -842,8 +872,20 @@ void ACustomerBase::BuildAppearance()
 		const uint32 V = LookSeed % 3u;
 		if (V == 0u) { WeedNpc_BuildModularCitizenMan(this, SkM, LookSeed); }
 		else if (V == 1u) { if ((LookSeed & 8u) == 0u) { WeedNpc_BuildModular(this, SkM, LookSeed); } else { WeedNpc_BuildModularCitizens(this, SkM, LookSeed); } }
-		else if (USkeletalMesh* Sk = WeedNpc_CrowdSkin(LookSeed)) { SkM->SetSkeletalMesh(Sk); const FString SkP = Sk->GetPathName(); if (!SkP.Contains(TEXT("/Gamer_Girl/")) && !SkP.Contains(TEXT("/SchoolGirl/"))) { WeedNpc_TintClothing(SkM, LookSeed); } } // girl-packs: eigen outfits, niet overtinten
-		else { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildAppearance: crowd-skin laadde niet (npc=%s seed=%u) - NPC blijft zonder mesh"), *NpcId.ToString(), LookSeed); }
+		else // V == 2u: "kant-en-klare" complete-skin pool = tier 3-4 klant -> pas ontgrendeld op level 5 (Heavy) / 10 (VIP)
+		{
+			USkeletalMesh* Sk = IsCompleteSkinUnlocked(LookSeed, SharedPlayerLevel(this)) ? WeedNpc_CrowdSkin(LookSeed) : nullptr;
+			if (Sk) { SkM->SetSkeletalMesh(Sk); const FString SkP = Sk->GetPathName(); if (!SkP.Contains(TEXT("/Gamer_Girl/")) && !SkP.Contains(TEXT("/SchoolGirl/"))) { WeedNpc_TintClothing(SkM, LookSeed); } } // girl-packs: eigen outfits, niet overtinten
+			else
+			{
+				// Nog niet ontgrendeld (of skin laadde niet): GENDER-BEHOUDENDE modulaire casual/citizen (geen fancy
+				// skin vóór level 5/10). Vrouw -> vrouwelijke modulaire, man -> mannelijke citizen; zo blijft
+				// PredictFemaleAppearance (gender uit dezelfde index) kloppen ongeacht de lock.
+				const int32 Idx = WeedNpc_CrowdSkinIndex(LookSeed);
+				const bool bFem = (Idx >= 3 && Idx <= 5) || (Idx >= 10);
+				if (bFem) { WeedNpc_BuildModular(this, SkM, LookSeed); } else { WeedNpc_BuildModularCitizenMan(this, SkM, LookSeed); }
+			}
+		}
 	}
 	else if (SkinIdx >= 3 && SkinIdx <= 5)
 	{
@@ -3228,7 +3270,12 @@ float ACustomerBase::GetSubstituteAcceptance(FName AltProductId, int32 AskPriceC
 	// prijs compenseert het substituut (goedkoper -> hij neemt het toch). Kan oplopen tot ~100%.
 	const float Ratio = FMath::Clamp(static_cast<float>(AskPriceCentsPerUnit) / static_cast<float>(Market), 0.30f, 2.20f);
 	const float PriceComp = FMath::Max(0.f, 1.f - Ratio) * 0.6f; // 40% prijs -> +0.36
-	const float Willing = FMath::Clamp(0.50f + (Loyalty - 30.f) * 0.004f + (Addiction - 30.f) * 0.005f + PriceComp, 0.30f, 1.0f);
+	// BETERE wiet dan gevraagd (hogere THC dan de verwachte strain) = een UPGRADE, geen concessie: de klant is
+	// dan veel bereidwilliger om het substituut te nemen. Zwakkere wiet krijgt geen extra straf hier (dat zit al
+	// in Base via de lagere ThcWillingnessBonus). ThcPercent < 0 (onbekend) -> geen bonus.
+	const float ThcUp = FMath::Max(0.f, ThcPercent - GetExpectedThc());
+	const float BetterBonus = FMath::Clamp(ThcUp * 0.025f, 0.f, 0.40f); // +16% THC boven verwacht -> +0.40 bereidheid
+	const float Willing = FMath::Clamp(0.50f + (Loyalty - 30.f) * 0.004f + (Addiction - 30.f) * 0.005f + PriceComp + BetterBonus, 0.30f, 1.0f);
 	return Base * Willing;
 }
 
