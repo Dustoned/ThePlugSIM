@@ -2,7 +2,7 @@
 
 > **Dit is de levende roadmap.** Het oude A–Z stappenplan in de brief is afgerond en vervangen door dit document. Volgorde = prioriteit. Afgeronde items afvinken en (groot werk) loggen in `DECISIONS.md`.
 >
-> Laatst bijgewerkt: 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. 2A.2-2A.4 afgevinkt (XP-tempo doorgerekend, concentraten-budget gefixt, level 32 gevuld). Nog open: 2B (mid-game content), een paar losse D.x, T.x tech-debt, D35. Co-op compleet (alle H.x afgevinkt, speler-bevestigd 07-04).
+> Laatst bijgewerkt: 2026-07-05 - HUD-polish overleg vastgelegd als nieuwe open batch (hand-preview, prompts, compass-rail, controls, crosshair, status/toasts). 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. 2A.2-2A.4 afgevinkt (XP-tempo doorgerekend, concentraten-budget gefixt, level 32 gevuld). Nog open: 2B (mid-game content), een paar losse D.x, T.x tech-debt, D35. Co-op compleet (alle H.x afgevinkt, speler-bevestigd 07-04).
 > (oude notitie 2026-07-02) — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
 > **Detail-uitwerking per bevinding (probleem → file → fix, afvinkbaar): [`FIXLIST.md`](FIXLIST.md).** Dit document = de grote lijn; de fixlist = het systematische afwerk-document.
 
@@ -96,6 +96,13 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 ### UI-reworks (overleg eerst)
 
 - [x] **B.10 Deal-scherm opruimen/reworken** — overloaded met tekst, onduidelijk waar je moet kijken. **BESLUIT: eerst opruimen** tot alleen het echt nodige (1 blik = wat wil hij / wat bied ik / kans), daarna pas beoordelen of een volle kit-rework (WBP-route) nog nodig is.
+  - **Status 07-05:** header compact-pass gedaan: naam/tier/kans/totaal zitten in de bovenregel; request, prijs-slider en EUR/g staan op een korte tweede regel. Oude dubbele prijsregel eruit. Build groen.
+  - **Status 07-05:** tweede header-pass na screenshot: topregel rustiger gemaakt (`naam | tier | totaal`), kans verplaatst naar de sliderkolom, en request/prijs per gram als linkerkolom gegroepeerd. Build groen.
+  - **Status 07-05:** derde header-pass na screenshot: dealdata staat nu in een compacte summary-strip met vaste kolommen (`WANTS`, `BID`, `CHANCE`, `TOTAL`) en een full-width prijsrail; losse zwevende slider/percentages eruit. Build groen.
+  - **Status 07-05:** deal-result popup omgebouwd van een grote gestapelde kaart naar losse floating chips rond hoofd/schouders (`+EUR`, `+XP`, `+respect`, `+loyalty`, `+hooked`) met lichte drift/fade en passende UI/kit-iconen per chip. Build groen.
+  - **Status 07-06:** refused offers sturen negatieve stat-deltas nu ook naar dezelfde NPC-popup (`-respect` chip) naast de bestaande refusal-toast. Popup-widget ondersteunt plus en min voor respect/loyalty/hooked. Build groen.
+  - **Status 07-06:** stat-popup timing verlengd van ~2.7s naar ~4.4s totaal zodat alle losse chips beter leesbaar zijn. Build groen.
+  - **Status 07-06:** deal-popup polish-golf: positieve statchips zijn groen, negatieve rood; negative-only/refused popups centreren met `Refused` context. Deal-trays rustiger gemaakt en bag-only deal-flow bevestigd (non-bag products zijn geen deal-offer doel).
 - [x] **B.11 Keuze-/aantal-menu's reworken** — packing bench, joint rollen e.d.: bij veel wiet wordt de keuzelijst gigantisch en onoverzichtelijk. **BESLUIT: icoon-grid** — compact grid van item-slots (icoon + strain-tag + aantal, zelfde look als inventory), klik = selecteer → aantal-stepper. Overal toepassen waar zulke lijsten voorkomen.
 - [x] **B.12 Package-delivery herstel + upgrade** — pakketten weer netjes vóór de apartment-deur (zoals eerst), óók voor de competitive mirror-apartments. Dozen krijgen physics (zoals droppable items). Delivery-app: meer details + lijstje van wat je gekocht hebt.
 - [x] **B.13 Furniture-placement op muren** — niet half over deuren en niet op ramen kunnen plaatsen.
@@ -420,3 +427,186 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   Cover-fase (UBootCoverWidget, na LoadMap) = game-thread leeft -> knop werkt. Movie-fase (SWeedLoadingScreen
   tijdens LoadMap) = game-thread geblokkeerd; knop daar alleen mogelijk als de movie-Slate input verwerkt.
   -> ReturnToMainMenu() (zelfde als D28 leave-session).
+
+---
+
+## HUD-POLISH 07-05 - echte-game HUD-laag
+
+> Vastgelegd vanuit speler-overleg 2026-07-05. Doel: de bestaande HUD-systemen houden, maar de presentatie minder
+> "debug-paneel" en meer moderne game-HUD maken. Volg de playbook: eerst meten/kijken in de huidige widgets,
+> daarna uitvoeren in file-disjuncte UI-golven, geen rebuild/ClearChildren-flitsen op slotwissel/klik, een build
+> aan het eind en daarna speler-test met screenshots.
+
+### HUDP.1 - Hand-preview als premium item-label
+
+- [ ] **HUDP.1a Compacte held-item kaart** - `UHandInfoWidget` ombouwen van tabelkaart naar item-label:
+  icoon/mini-tegel + type-tag + itemtitel + quantity, met stat-chips eronder. Geen groot zwart debug-paneel.
+  Voorbeeld joint: `JOINT`, `Silver Haze`, `x1`, chips `2g`, `THC 13%`, `Q 70%`.
+  Voorbeeld seed: `SEED`, `Streetweed Seed`, `x2`, chips `THC 16%`, `Yield 12g`, `~2 min`.
+  [HandInfoWidget.cpp/.h + WeedUiStyle.cpp]
+  - **Status 07-05:** code staat in `UHandInfoWidget`: compacte selected-item label zonder dubbel hotbar-icoon, met quantity-pill en chip-pool. Build groen; visual test in wereld nog open.
+  - **Status 07-05:** container-hints herhalen capaciteit niet meer; capaciteit blijft als chip, hint is actie/context. Build groen.
+  - **Status 07-05:** hand-preview nog compacter gemaakt: korte game-hints, gekleurde quantity-pill en compactere chips
+    (`10g max`, `~2m`). Build groen; visual tuning met screenshot nog open.
+- [ ] **HUDP.1b Dubbele info eruit** - joints/bags/seeds geen info dubbel tonen. Bij joints gaat gram-info uit
+  de grote naam en naar de chips; strainnaam blijft de titel. Niet globaal `PrettyItemName()` breken, want die
+  wordt ook elders gebruikt; voeg liever een hand-preview displaytitel/chip-helper toe.
+  [WeedUiStyle::BuildItemDetail / PrettyItemName / UInventoryComponent joint helpers]
+  - **Status 07-05:** hand-preview gebruikt eigen displaytitel/helper; `PrettyItemName()` blijft ongemoeid.
+- [ ] **HUDP.1c Stats als chips, niet als boekhoudtabel** - label/waarde-rijen vervangen door vaste chip-pool
+  of signature-diff. Geen `ClearChildren` op normale slotwissel; widgets 1x bouwen en in-place `SetText`,
+  `SetVisibility`, brush/tint updates.
+  [HandInfoWidget StatBox -> chip-pool]
+  - **Status 07-05:** `StatBox` vervangen door 5 vaste chip-widgets; slotwissel update in-place.
+- [ ] **HUDP.1d Hand-preview koppelen aan hotbar** - kaart positioneren als geselecteerd-item detail naast/boven
+  de hotbar i.p.v. los links onder. Safe-zone/ultrawide checken zodat hij niet tegen de schermrand of hotbar botst.
+  [HandInfoWidget + HotbarWidget layout]
+  - **Status 07-05:** kaart anker staat links van de hotbar; ultrawide/16:9 nog visueel checken.
+
+### HUDP.2 - Interact prompt en controls netter
+
+- [ ] **HUDP.2a Center prompt splitsen** - prompt onder crosshair tonen als titel + actie-chip:
+  `Table` met `[Hold G] Pick up`, `Door` met `[F] Open`, etc. Geen lange zin als `Table - hold G to pick up`.
+  Toetsen uit `UControlSettings`; hardcoded toetsnamen in `GetInteractionPrompt()` geleidelijk wegwerken of in
+  `UHotkeyHintWidget` strippen voor de center prompt.
+  [HotkeyHintWidget + IInteractable implementaties]
+  - **Status 07-05:** center prompt splitst nu title/key/action en stript de pickup-tail. Build groen; visual test bij pickable/interactable nog nodig.
+  - **Status 07-05:** center prompt is kleiner/transparanter en key-chip is prominenter. Build groen.
+  - **Status 07-05:** pickable focus forceert nu `Hold G` + `Pick up` in de center prompt, ook als de actor-prompt
+    alleen de objectnaam teruggeeft. Build groen; visual tuning met screenshot nog open.
+- [ ] **HUDP.2b Controls rechtsonder prioriteren/faden** - contextuele regels blijven duidelijk (`Hold Q Drop`,
+  `Hold RMB Smoke`, `Hold G Pick up`), basisregels (`Phone`, `Inventory`, `Scroll`, `Esc`) rustiger of fade/alleen
+  via controls-overlay instelling. Huidige setting `Controls overlay` blijft leidend.
+  [HotkeyHintWidget + SettingsWidget controls-toggle]
+  - **Status 07-05:** ambient loop-regels dimmen nu via render-opacity; context-acties blijven vol zichtbaar.
+  - **Status 07-05:** dubbele `1-8 Hotbar slot` regel eruit (hotbar toont de cijfers al); basisregels en key-pills
+    dimmen harder wanneer er context-acties zijn. Build groen; visual tuning met screenshot nog open.
+- [ ] **HUDP.2c Crosshair feedback** - `UCrosshairWidget` reageert op context: normaal klein puntje, interactable
+  subtiele ring/accent, pickable eventueel ander accent, placement valid/invalid volgt bestaande build-state.
+  Geen extra tekst; puur kijken voelt beter.
+  [CrosshairWidget + InteractionComponent + BuildComponent]
+  - **Status 07-05:** interact/placement ring + valid/invalid tint staat in code. Build groen; pickable-specifiek accent nog optioneel.
+
+### HUDP.3 - Compass / marker rail
+
+- [ ] **HUDP.3a AC-style marker rail** - bestaande clean compass uitbreiden met subtiele horizontale rail,
+  kleine ticks en een center-notch. Geen N/O/Z/W. Markers blijven smooth per frame; alleen presentatie wijzigt.
+  [CompassWidget::BuildShell / PlaceOnBand]
+  - **Status 07-05:** rail/ticks/V-chevron, edge-fade en center-priority staan in code. Build groen; marker-smoothness nog in-game checken.
+- [ ] **HUDP.3b Labels alleen bij focus** - afstand/label (`Home 64m`, delivery, shop) alleen tonen als marker
+  actief is of dicht bij het midden zit. Randmarkers faden/kleiner houden. Dedup/world-filter regels behouden.
+  [CompassWidget marker pools]
+  - **Status 07-05:** focuslabel onder de rail staat in code: alleen de beste marker rond het midden toont
+    label+afstand; randmarkers blijven icon-only/faded. Build groen; visuele tuning met screenshot nog open.
+  - **Status 07-05:** focuslabel fade't nu in/uit i.p.v. hard te poppen. Build groen; visual tuning met screenshot nog open.
+
+### HUDP.4 - Status, hotbar en toasts polish
+
+- [x] **HUDP.4a Top-right minder ruis** - heat `0%` niet permanent laten schreeuwen: tonen bij >0, bij recente
+  wijziging of als debug/overlay aan staat. Level/stoned blijven contextueel en per-speler.
+  [StatusHudWidget]
+  - **Status 07-05:** heat-chip + divider verbergen bij 0%; heat blijft kort zichtbaar na wijziging. Oude Settings-canvas verbergt `Heat: 0%` ook. Build groen; visual screenshot-check blijft onder HUDP.9.
+- [x] **HUDP.4b Hotbar selected-state sterker** - actieve slot subtiel groter/glow, itemkleur als rand/accent,
+  quantity badge korte pulse bij wijziging. Render-transform gebruiken, geen layout shift.
+  [HotbarWidget]
+  - **Status 07-05:** actieve slot schaalt via render-transform, gebruikt item/tag-kleur als rand en quantity-badges pulsen kort bij wijziging. Build groen.
+  - **Status 07-05:** item-tags (`PLA`, `BRK`, strain-codes) gebruiken nu gedeelde high-contrast pill/text-stijl in hotbar, inventory, pick-grids, deal-cellen en store-cards. Build groen.
+  - **Status 07-05:** lege hotbar-slots zijn rustiger gemaakt; actieve lege slot schaalt minder hard dan een gevuld actief slot.
+    Build groen; visual tuning met screenshot nog open.
+  - **Status 07-05:** rustige lege-slot stijl gecentraliseerd in `WeedUI::StorageSlotBrush` en toegepast op
+    hotbar, inventory-grid, shelf/fridge, drying rack, item-pickers/packbench/machine-keuzes en deal-dropzones.
+    Build groen; visual tuning met screenshot nog open.
+  - **Status 07-05:** screenshot-QA: droogrek toont geen dubbele `Empty` tekst meer, lege fridge verbergt de
+    edible-tools tot er ButterMix/cooking is, en packbench-keuzeknoppen gebruiken dezelfde slotstijl. Build groen; visual tuning met screenshot nog open.
+- [x] **HUDP.4c Toasts meer event-taal** - waar logisch icon-stems meegeven voor geld, warning, goal, message,
+  deal en inventory. Minder lange tekst, snellere herkenning; co-op routing via `NotifyPawn/NotifyAllPawns`
+  intact laten.
+  [WeedToast + callsites gefaseerd]
+  - **Status 07-05:** `UWeedToast` classificeert nu automatisch iconen/event-labels als callsites geen stem
+    meegeven, wrapt lange tekst in een compacte pil en gebruikt project-iconen (`ui_coin`, `ui_message`,
+    `ui_package`, `weedleaf`, etc.). High-signal callsites voor level/license, goals, contacts, inventory,
+    seed-buy, packing en VIP/deal events geven nu expliciete stems mee. Build groen; toast visual trigger-check blijft onder HUDP.9.
+  - **Status 07-05:** toast-spookrand gefixt. Root cause: `RoundedBox` outline fade't niet betrouwbaar mee
+    met alleen `RenderOpacity`; `WeedToast` fade't nu ook de brush/outline-alpha zelf en collapsed de pil aan het
+    einde. Speler bevestigd: de groene rand blijft niet meer staan.
+
+### Aanpak / golfplanning
+
+- [ ] **HUDP.5 Read-only audit voor uitvoering** - voor de edit-golf exact vastleggen welke widgets/callsites
+  geraakt worden en waar nu duplicate info ontstaat. Screenshots/pixel-checks gebruiken als referentie.
+  - **Status 07-05:** audit gedaan voor `HandInfoWidget`, `HotkeyHintWidget`, `CrosshairWidget`, `CompassWidget` en `HotbarWidget`.
+- [ ] **HUDP.6 UI-golf A: hand-preview + item-detail** - filecluster:
+  `HandInfoWidget.*`, `WeedUiStyle.*` en alleen noodzakelijke `HotbarWidget.*` layout-koppeling. Geen build in
+  parallelle edit-agent; centraal bouwen aan het eind.
+- [ ] **HUDP.7 UI-golf B: prompt/controls/crosshair** - filecluster:
+  `HotkeyHintWidget.*`, `CrosshairWidget.*` en eventueel kleine prompt-tekst cleanup in interactables. API/signatures
+  vooraf pinnen; geen overlap met hand-preview cluster.
+- [ ] **HUDP.8 UI-golf C: compass rail/status/toasts** - filecluster:
+  `CompassWidget.*`, `StatusHudWidget.*`, `WeedToast.*` plus kleine toast callsites. Markers moeten smooth blijven.
+- [ ] **HUDP.9 Verificatie** - een centrale build, daarna standalone test op minimaal normale 16:9 en ultrawide:
+  hand-preview geen overlap met hotbar/status, prompt split klopt bij pickable/interactable/plant, compass rail
+  leesbaar zonder letters, controls-overlay toggle werkt, geen UI-flash bij slotwissel.
+  - **Status 07-05:** `ThePlugSIMEditor Win64 Development` build groen. Standalone 1600x900 smoke-test haalde
+    `Map_MainMenu` + `GameState::BeginPlay` zonder fatal errors; wereld-HUD en ultrawide visual check blijven open.
+  - **Status 07-05:** MCP/UE 5.8 `AllToolsets` veroorzaakt in `UnrealEditor.exe -game` een nonfatal
+    `NiagaraToolsets` Python-error (`NiagaraToolset_Info` mist). Niet HUD-gerelateerd; apart clean-launch punt.
+  - **Status 07-05:** placement-preview lifecycle gefixt: na plaatsen van o.a. een packing bench wordt auto-preview
+    kort onderdrukt tot inventory-replicatie bij is, en `CancelPlacing()` pusht een betrouwbare `ServerClearPreview()`.
+    Build groen. De gemelde groene rand bleek daarna de toast-outline (zie HUDP.4c), maar deze cleanup blijft nodig
+    voor lokale/remote placement-ghosts.
+
+### HUDP.10 - Brede HUD polish-golf na eerste screenshotronde
+
+- [x] **HUDP.10a Placement HUD strip** - `Ready to place` vervangen door een compactere action strip:
+  primaire actie (`LMB Place`) links, daarna `R Rotate`, `Scroll Distance`, `Shift Snap`, `Q Put away`.
+  Alleen rood/waarschuwing tonen als plaatsen echt ongeldig is. [WeedShopHUD + BuildComponent state]
+  - **Status 07-05:** compacte chip-strip boven de hotbar, invalid-state `Aim at the floor`, en UI-open gate
+    verbergt placement ghost/strip tijdens inventory. Build groen + standalone screenshot gecheckt.
+- [x] **HUDP.10b Interact prompt final pass** - center prompt nog meer game-achtig: objecttitel, keycap,
+  actie, subtiele hold-progress. Rechter controls-overlay blijft contextueel en dimt ambient regels.
+  [HotkeyHintWidget + CrosshairWidget]
+  - **Status 07-05:** prompt-title wrapt, hold-progress gebruikt bestaande pickup/discard alpha, crosshair heeft
+    gecachete states voor normal/interact/pickable/place-valid/place-invalid.
+- [x] **HUDP.10c Toast stack tiers** - item/money/warning/goal toasts krijgen duidelijker typegedrag:
+  item pickup kleiner, warnings zwaarder, goals/level iets prominenter, stacking met minder visuele sprongen.
+  [WeedToast]
+  - **Status 07-05:** item-toasts compacter, warning/goal tiers duidelijker en fade zet outline-alpha mee zodat
+    er geen spookrand blijft hangen.
+  - **Status 07-06:** micro-acties zoals water geven en fles vullen zijn gedempt: routine-toasts zijn kleiner,
+    korter, zonder felle gekleurde outline/all-caps label, en water/sink updates coalescen naar een enkele
+    statusmelding i.p.v. stapelen. `Filling... keep clicking` is verwijderd uit de sink-feedback.
+- [x] **HUDP.10d Hand-preview/hotbar final pass** - itemtype, titel, quantity en 1-3 chips consequent;
+  actieve hotbar-slot premium maar zonder layout shift; lege slots rustig in alle storage/machine-views.
+  [HandInfoWidget + HotbarWidget + WeedUiStyle]
+  - **Status 07-05:** hand-preview gebruikt actieve stack-data, hotbar paper-icon wisselt alleen op actieve
+    loaded papers, lege actieve slots zijn rustiger, en de hotbar-tray is exact gecentreerd met de inventory;
+    telefoon staat los rechts en telt niet mee voor de hotbar-breedte. Build groen + screenshot gecheckt.
+- [ ] **HUDP.10e Storage/picker/phone consistency pass** - fridge, drying rack, shelf, packing bench,
+  inventory en phone app-grid dezelfde slot/heading/button-taal geven. Geen nested-card look, geen dubbele iconen.
+  [InventoryWidget, ShelfWidget, DryingRackWidget, PackWidget, WeedItemPickGrid, PhoneWidget]
+  - **Status 07-05:** gedeelde rustige slot-brush en tag-pill stijl gebruikt in hotbar/inventory/pickers; drying
+    rack `READY` is een badge. Brede phone/app-grid pass en machine-screenshots blijven vervolgcheck.
+  - **Status 07-05:** packing bench eerste consistency-pass: paneel breder/lager, dried-weed en container als
+    input-cards naast elkaar, compactere 74px pick-cells, `Per bag`/`Bags x/y` labels, output-summary en
+    icon+text CTA voor pack/unpack. Build groen; visuele screenshot-check in game blijft open.
+  - **Status 07-06:** tweede consistency-golf: gedeelde quantity-badge helper, shelf/drying slots krijgen item-tags,
+    packing bench verliest dubbele `SELECTED` sublines, picker-selectie dimt niet-gekozen items minder hard,
+    store-tags trekken naar dezelfde high-contrast tagstijl. Build/check volgt in dezelfde golf.
+- [x] **HUDP.10g Growing/plant info-card polish** - plantkaart compacter maken: header met status-pill,
+  kleinere water/care/grow-rings met labels, harvest/THC als chips, en duidelijke ready/attention states.
+  [PlantInfoWidget]
+  - **Status 07-06:** kaart is teruggebracht van dashboard-formaat naar compacte inspect-card boven de hotbar.
+    Build groen; visual screenshot-check in standalone volgt met spelerfocus op een plant.
+  - **Status 07-06:** lege-pot state opgeschoond: titel zonder `(empty)`, status `READY/EMPTY`, en soil-info
+    als compacte row (`SOIL`, naam, harvest-count) i.p.v. lange debugzin.
+- [ ] **HUDP.10f Verificatiegolf** - een centrale build, standalone 1600x900 en ultrawide screenshot-check:
+  placement-strip, pickup/interact prompt, toast fade, hotbar/hand-preview, storage/pickers en phone.
+  - **Status 07-05:** centrale build groen; standalone 1600x900 menu + wereld + inventory screenshots gecheckt.
+    Ultrawide en alle machine-schermen nog niet volledig afgevinkt.
+  - **Besluit 07-05:** center interact prompt blijft zichtbaar als controls-overlay uit staat; cash mag veilig
+    droppen via economy/inventory-route; toast stack max = 3; hotbar-slots blijven gecentreerd met telefoon los rechts.
+  - **Status 07-05:** audit-golf 1 uitgevoerd: G-hold target-lock + UI-gate, stale placement-hints gereset,
+    remote placement-ghosts ruimen op bij ongeldige item-state, Hold Q mag cash via de bestaande economy-safe
+    drop-route, controls-overlay verbergt alleen de hoekkaart en toast-stack is max 3. Build groen; lean
+    standalone smoke haalde `Map_MainMenu` + `GameState::BeginPlay` en sloot af via `ViewportClosed`,
+    zonder fatal/unhandled exception.

@@ -43,6 +43,8 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> MaxBadge;     // "MAX"-badge naast het level, verborgen tot max-level
 	UPROPERTY() TObjectPtr<UProgressBar> HeatBar;
 	UPROPERTY() TObjectPtr<UTextBlock> HeatText;
+	UPROPERTY() TObjectPtr<UWidget> HeatRow;       // heat-chip zelf; verborgen bij 0% zodat rechtsboven rustiger is
+	UPROPERTY() TObjectPtr<UWidget> HeatDivider;   // divider na heat; verdwijnt mee met HeatRow
 	UPROPERTY() TObjectPtr<UProgressBar> LevelBar;
 	UPROPERTY() TObjectPtr<UTextBlock> LevelText;
 	UPROPERTY() TObjectPtr<UWidget> StonedRow;
@@ -60,6 +62,8 @@ protected:
 	int32 LastDayShown = -1;
 	int32 LastMinuteShown = -1;   // H*60+M
 	int32 LastHeatShown = -1;
+	int32 LastHeatVisible = -1;
+	float HeatVisibleTimer = 0.f; // toont heat nog kort na een wijziging, ook als hij terug naar 0 gaat
 	int32 LastLevelShown = -1;
 	int32 LastStonedKey = -1;     // Secs*1000 + XpBoost
 	int32 LastStonedVisible = -1; // -1 onbekend

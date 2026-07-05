@@ -15,7 +15,7 @@ namespace
 	// Co-op: stuur een melding naar ALLE spelers (elk op z'n eigen client) i.p.v. alleen lokaal op de host.
 	// NotifyPawn routeert per pawn via de PhoneClientComponent naar de juiste client. Valt terug op een
 	// lokale melding als er (nog) geen pawns zijn. (Zelfde idioom als HeatComponent.cpp.)
-	void NotifyAllPlayers(UWorld* W, const FColor& Color, float Time, const FString& Msg)
+	void NotifyAllPlayers(UWorld* W, const FColor& Color, float Time, const FString& Msg, const FString& IconStem = FString())
 	{
 		bool bAny = false;
 		if (W)
@@ -24,7 +24,7 @@ namespace
 			{
 				if (APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr)
 				{
-					UWeedToast::NotifyPawn(Pw, -1, Time, Color, Msg);
+					UWeedToast::NotifyPawn(Pw, -1, Time, Color, Msg, IconStem);
 					bAny = true;
 				}
 			}
@@ -189,11 +189,11 @@ void ULevelComponent::ProcessXP(FLevelState& St, const APawn* Earner, int32 Amou
 		// Competitive: alleen de VERDIENER ziet de melding (persoonlijke mijlpaal). Co-op: alle spelers (gedeeld).
 		if (bCompetitive && Earner)
 		{
-			UWeedToast::NotifyPawn(const_cast<APawn*>(Earner), -1, 5.f, FColor(120, 220, 255), LvlMsg);
+			UWeedToast::NotifyPawn(const_cast<APawn*>(Earner), -1, 5.f, FColor(120, 220, 255), LvlMsg, TEXT("ui_level"));
 		}
 		else
 		{
-			NotifyAllPlayers(GetWorld(), FColor(120, 220, 255), 5.f, LvlMsg);
+			NotifyAllPlayers(GetWorld(), FColor(120, 220, 255), 5.f, LvlMsg, TEXT("ui_level"));
 		}
 	}
 
@@ -206,11 +206,11 @@ void ULevelComponent::ProcessXP(FLevelState& St, const APawn* Earner, int32 Amou
 			const FString LicMsg = TEXT("SHOP LICENSE EARNED!  Level 50 reached - you can now run a legit weed shop.");
 			if (bCompetitive && Earner)
 			{
-				UWeedToast::NotifyPawn(const_cast<APawn*>(Earner), -1, 9.f, FColor(255, 215, 0), LicMsg);
+				UWeedToast::NotifyPawn(const_cast<APawn*>(Earner), -1, 9.f, FColor(255, 215, 0), LicMsg, TEXT("ui_level"));
 			}
 			else
 			{
-				NotifyAllPlayers(GetWorld(), FColor(255, 215, 0), 9.f, LicMsg);
+				NotifyAllPlayers(GetWorld(), FColor(255, 215, 0), 9.f, LicMsg, TEXT("ui_level"));
 			}
 		}
 	}

@@ -111,6 +111,11 @@ protected:
 	UFUNCTION(Server, Unreliable)
 	void ServerUpdatePreview(bool bInPlacing, FVector Location, float Yaw, bool bValid, FName InItemId);
 
+	// Betrouwbare sluiting van de preview. De gewone preview-stream is bewust unreliable, maar "uit"
+	// moet als state-transition altijd aankomen.
+	UFUNCTION(Server, Reliable)
+	void ServerClearPreview();
+
 	// Server: pak een (lege) pot weer op -> terug als item in de inventory.
 	UFUNCTION(Server, Reliable)
 	void ServerPickup(AActor* Target);
@@ -162,6 +167,7 @@ protected:
 
 	// Preview = een echt (transient, cosmetisch) exemplaar van het te plaatsen model, in ghost-kleur,
 	// zodat de preview er exact zo uitziet als wat je plaatst. Lokaal.
+	void HidePlacementVisuals();
 	void SpawnPreview(const struct FPlaceableDef& Def, FName ItemId);
 	void DestroyPreview();
 
@@ -221,14 +227,23 @@ protected:
 	FVector PreviewLocation = FVector::ZeroVector;
 	FRotator PreviewRotation = FRotator::ZeroRotator;
 
+	// Na ConfirmPlacement blijft de client soms nog een paar frames dezelfde hotbar-stack zien tot de
+	// server-inventory-replicatie binnen is. Dan mag auto-preview niet direct opnieuw starten.
+	FName SuppressAutoPreviewItem = NAME_None;
+	float SuppressAutoPreviewTimer = 0.f;
+
 	// Throttle voor het versturen van de preview naar de server.
 	float PreviewSendAccum = 0.f;
+
+	// Server-side demping na een betrouwbare clear: late unreliable "aan"-updates mogen de ghost niet heropenen.
+	float PreviewClearIgnoreUntil = 0.f;
 
 	// Handmatige draai-offset (graden) bovenop de kijkrichting; toets R stapt met 90°.
 	float PlaceYawOffset = 0.f;
 
 	// Opgebouwde tijd dat de oppak-toets ingedrukt is terwijl je een pot aankijkt.
 	float PickupHoldAccum = 0.f;
+	TWeakObjectPtr<AActor> PickupHoldTarget; // G-hold hoort aan een vast doel te hangen; focus-wissel reset.
 
 	// Opgebouwde tijd dat de weggooi-toets (X) ingedrukt is terwijl je een geplante pot aankijkt.
 	float DiscardHoldAccum = 0.f;

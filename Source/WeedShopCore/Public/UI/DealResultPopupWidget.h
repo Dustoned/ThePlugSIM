@@ -1,7 +1,7 @@
-// UDealResultPopupWidget — kleine "floating" popup boven het hoofd van een klant-NPC na een
-// GESLAAGDE deal. Toont de echte winst-cijfers: +EUR (geld), +XP, +respect, +loyalty, +hooked
+// UDealResultPopupWidget - losse "floating" chips rond het hoofd/schouders van een klant-NPC na
+// een GESLAAGDE deal. Toont de echte winst-cijfers: +EUR (geld), +XP, +respect, +loyalty, +hooked
 // (verslaving). Ankert zich in NativeTick aan de wereld-locatie van de klant (ProjectWorldLocation-
-// ToScreen) zodat het kaartje boven z'n hoofd blijft plakken, faded in/uit en verwijdert zichzelf.
+// ToScreen), laat de chips licht omhoog drijven, faded in/uit en verwijdert zichzelf.
 // Client-side only; per-speler gespawnd via UPhoneClientComponent::ClientDealResultPopup.
 
 #pragma once
@@ -12,7 +12,6 @@
 
 class UWidget;
 class UBorder;
-class UVerticalBox;
 class UCanvasPanel;
 class ACustomerBase;
 
@@ -32,12 +31,15 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	void BuildShell(UCanvasPanel* Root);
-	// Voeg een regel toe (icoon-tekst). Alleen aanroepen als de waarde relevant is.
-	void AddLine(const FString& Text, const FLinearColor& Color, bool bBig = false);
+	void ClearChips();
+	// Voeg een losse chip toe. Offset is canvas-space t.o.v. het hoofdanker.
+	void AddChip(const FString& Text, const FLinearColor& Color, const FVector2D& Offset, bool bBig = false, const FString& IconName = FString(), bool bKitIcon = false);
 
 	UPROPERTY(Transient) TObjectPtr<UCanvasPanel> RootCanvas;
-	UPROPERTY(Transient) TObjectPtr<UBorder> Card;   // het zwevende kaartje (fade + positie)
-	UPROPERTY(Transient) TObjectPtr<UVerticalBox> Rows; // de regels binnenin
+	UPROPERTY(Transient) TArray<TObjectPtr<UBorder>> Chips;
+
+	TArray<FVector2D> ChipOffsets;
+	TArray<float> ChipDelays;
 
 	TWeakObjectPtr<ACustomerBase> AnchorCustomer; // wereld-anker (of null -> vaste locatie)
 	FVector FallbackWorld = FVector::ZeroVector;  // ankerpunt als de actor-pointer ontbreekt/verdwijnt

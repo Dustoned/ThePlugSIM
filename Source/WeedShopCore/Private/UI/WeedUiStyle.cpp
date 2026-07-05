@@ -93,6 +93,32 @@ namespace WeedUI
 		return T;
 	}
 
+	FSlateBrush StorageSlotBrushWithFill(FLinearColor Fill, bool bFilled, bool bActive, FLinearColor Accent, float Radius)
+	{
+		FSlateBrush B = Rounded(Fill, Radius);
+		FLinearColor UseAccent = Accent.A > 0.01f ? Accent : ColAccent(0.9f);
+		if (bActive)
+		{
+			UseAccent.A = bFilled ? 0.88f : 0.26f;
+			B.OutlineSettings.Width = bFilled ? 1.6f : 0.9f;
+			B.OutlineSettings.Color = FSlateColor(UseAccent);
+		}
+		else
+		{
+			B.OutlineSettings.Width = 1.f;
+			B.OutlineSettings.Color = FSlateColor(bFilled ? ColStroke(0.24f) : ColStroke(0.16f));
+		}
+		return B;
+	}
+
+	FSlateBrush StorageSlotBrush(bool bFilled, bool bActive, FLinearColor Accent, float Radius)
+	{
+		const FLinearColor Fill = bActive
+			? (bFilled ? ColAccentDim(0.90f) : ColSlotEmpty(0.58f))
+			: (bFilled ? ColSlot(0.86f) : ColSlotEmpty(0.46f));
+		return StorageSlotBrushWithFill(Fill, bFilled, bActive, Accent, Radius);
+	}
+
 	FString ItemInfoBody(FName ItemId, int32 Qty, float Thc, float QualPct)
 	{
 		// Quick-view-body ZONDER naam-regel (het details-paneel toont de naam al groot erboven).
@@ -209,7 +235,7 @@ namespace WeedUI
 			const int32 G = FMath::Max(1, UInventoryComponent::BagGrams(ItemId));
 			Add(FString::Printf(TEXT("%d bag(s) x %dg  =  %dg"), Qty, G, Qty * G));
 		}
-		else if (S == TEXT("Cash")) { Add(FString::Printf(TEXT("€%d in cash"), Qty)); }
+		else if (S == TEXT("Cash")) { Add(FString::Printf(TEXT("EUR %d in cash"), Qty)); }
 		return Out;
 	}
 
@@ -348,7 +374,7 @@ namespace WeedUI
 			return (Qty > 1) ? FString::Printf(TEXT("%dx %dg"), Qty, G) : FString::Printf(TEXT("%dg"), G);
 		}
 		const FString S = ItemId.ToString();
-		if (S == TEXT("Cash")) { return FString::Printf(TEXT("€%d"), Qty); } // briefgeld: toon het bedrag (Qty = euro's)
+		if (S == TEXT("Cash")) { return FString::Printf(TEXT("EUR %d"), Qty); } // briefgeld: toon het bedrag (Qty = euro's)
 		if (S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("WetBud_")) || S.StartsWith(TEXT("Crystal_")) || S.StartsWith(TEXT("Hash_"))
 			|| S.StartsWith(TEXT("Baked_")) || S.StartsWith(TEXT("ButterMix_")) || S.StartsWith(TEXT("Edible_"))
 			|| S.StartsWith(TEXT("Moonrock_")) || S.StartsWith(TEXT("Rosin_")) || S.StartsWith(TEXT("Bubble_"))) { return FString::Printf(TEXT("%dg"), Qty); }
@@ -824,6 +850,37 @@ namespace WeedUI
 		return FLinearColor(0.33f, 0.35f, 0.41f, 1.f); // neutrale koel-grijze pill voor standaard-items
 	}
 
+	FSlateFontInfo ItemTagFont(int32 Size)
+	{
+		FSlateFontInfo F = Font(Size, true);
+		F.OutlineSettings.OutlineSize = 1;
+		F.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.95f);
+		return F;
+	}
+
+	FSlateBrush ItemTagPillBrush(FName ItemId, float Radius, float Alpha)
+	{
+		FLinearColor Col = TagColorForItem(ItemId, 0.52f, 0.74f);
+		const FLinearColor Neutral = TagColorForItem(NAME_None);
+		if (Col.Equals(Neutral))
+		{
+			Col = FLinearColor(0.40f, 0.43f, 0.50f, 1.f);
+		}
+		Col.A = Alpha;
+		FSlateBrush B = Rounded(Col, Radius);
+		B.OutlineSettings.Width = 1.f;
+		B.OutlineSettings.Color = FSlateColor(FLinearColor(0.f, 0.f, 0.f, 0.68f));
+		return B;
+	}
+
+	FSlateBrush ItemQtyPillBrush(float Radius, float Alpha)
+	{
+		FSlateBrush B = Rounded(ColBg(Alpha), Radius);
+		B.OutlineSettings.Width = 1.f;
+		B.OutlineSettings.Color = FSlateColor(ColStroke(0.42f));
+		return B;
+	}
+
 	FSlateBrush KitBrush(const FString& TexturePath, const FMargin& NineSlice, const FLinearColor& Tint)
 	{
 		FSlateBrush B;
@@ -1067,7 +1124,7 @@ namespace WeedUI
 		return FString();
 	}
 
-	UTexture2D* ItemIconTexture(FName ItemId, int32 WaterChargesOverride)
+	UTexture2D* ItemIconTexture(FName ItemId, int32 WaterChargesOverride, int32 RollLoadedOverride)
 	{
 		if (IconKeyFor(ItemId).IsEmpty()) { return nullptr; }
 		// Per-item override eerst (tiers met een eigen icoon).
@@ -1101,16 +1158,27 @@ namespace WeedUI
 		// nog gerold moet worden. Terug naar het boekje zodra 'ie gerold of leeg is.
 		if (FString(CatFor(ItemId).Key) == TEXT("papers"))
 		{
-			if (UWorld* W = GWorld)
+			bool bLoaded = false;
+			bool bKnown = false;
+			if (RollLoadedOverride >= 0)
 			{
-				if (APawn* P = UGameplayStatics::GetPlayerPawn(W, 0))
+				bLoaded = RollLoadedOverride > 0;
+				bKnown = true;
+			}
+			if (!bKnown)
+			{
+				if (UWorld* W = GWorld)
 				{
-					if (UPhoneClientComponent* Ph = P->FindComponentByClass<UPhoneClientComponent>())
+					if (APawn* P = UGameplayStatics::GetPlayerPawn(W, 0))
 					{
-						if (Ph->IsRollLoadedUI()) { if (UTexture2D* T2 = LoadByStem(TEXT("joint"))) { return T2; } }
+						if (UPhoneClientComponent* Ph = P->FindComponentByClass<UPhoneClientComponent>())
+						{
+							bLoaded = Ph->IsRollLoadedUI();
+						}
 					}
 				}
 			}
+			if (bLoaded) { if (UTexture2D* T2 = LoadByStem(TEXT("joint"))) { return T2; } }
 		}
 		for (const FString& Cand : IconCandidatesFor(ItemId))
 		{
@@ -1119,12 +1187,12 @@ namespace WeedUI
 		return nullptr;
 	}
 
-	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride)
+	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride, int32 RollLoadedOverride)
 	{
 		// 1) Echt PNG-icoon als het in Content/_Project/UI/Icons/ staat. We tinten het (witte) icoon
 		//    met de categoriekleur zodat alles dezelfde kleurtaal als de rest van de game aanhoudt
 		//    (bv. nat = blauw, droog = groen op exact hetzelfde hemp-icoon).
-		if (UTexture2D* Tex = ItemIconTexture(ItemId, WaterChargesOverride))
+		if (UTexture2D* Tex = ItemIconTexture(ItemId, WaterChargesOverride, RollLoadedOverride))
 		{
 			const FLinearColor Accent = ItemAccent(ItemId);
 			FSlateBrush B;

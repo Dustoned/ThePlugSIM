@@ -80,6 +80,13 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
 - Of edibles van eigen oogst gemaakt worden (crafting) + accessoires als merch.
 - Alle balans-getallen (tunen tijdens spelen).
 
+## 2026-07-05 - HUD/UX polish beslissingen
+
+- Controls-overlay uit verbergt alleen het rechteronder controls-lijstje; de center interact prompt blijft zichtbaar.
+- Cash mag met Hold Q gedropt worden, maar alleen via een veilige economy/inventory-route zodat cash geen gratis geld of mirror-bug veroorzaakt.
+- Toast stack max = 3 tegelijk; extra/oudste meldingen moeten rustig wegfaden of doorschuiven.
+- Hotbar gameplay-slots blijven exact gecentreerd; het telefoon-icoon staat los rechts als sidecar en telt niet mee voor de hotbar-breedte.
+
 ## Woning-koopsysteem (Upgrades-app)
 - 3 koopbare panden, deterministisch gekozen door CityGenerator::GetPropertyOffers:
   starter klein flatje (hoogste verdieping, gratis/al van jou), rijtjeshuis (EUR 15.000),

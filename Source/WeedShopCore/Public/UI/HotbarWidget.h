@@ -42,6 +42,8 @@ protected:
 	TArray<FName> SlotLastIcon;                             // laatst getoonde item-id (om icoon niet elke tick te herbouwen)
 	TArray<int32> SlotLastWaterState;                      // per slot: -1 onbekend, 0 vol, 1 leeg (fles-icoon per fles)
 	bool bPrevWaterEmpty = false;                           // vorige vol/leeg-staat fles -> forceert icoon-refresh bij flip
+	TArray<FString> SlotLastBadgeText;                      // quantity-badge change detectie voor korte pulse
+	TArray<float> SlotBadgePulse;                           // resterende pulse-tijd per badge (render-transform, geen layout)
 
 	// Perf: per-slot change-key (StackId|ItemId|Qty|Quality|QualityPct|bActive|RollLoaded) -> dure
 	// updates (brush/tekst/tooltip/icoon) alleen bij een echte wijziging.

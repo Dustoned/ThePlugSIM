@@ -338,7 +338,8 @@ bool UInventoryComponent::MergeItem(FName ItemId)
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(),-1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Merged into %dx (THC %.0f%%, Quality %.0f%%)"), Qty, Stacks[FindStackIndex(ItemId)].Quality, Stacks[FindStackIndex(ItemId)].QualityPct));
+			FString::Printf(TEXT("Merged into %dx (THC %.0f%%, Quality %.0f%%)"), Qty, Stacks[FindStackIndex(ItemId)].Quality, Stacks[FindStackIndex(ItemId)].QualityPct),
+			TEXT("ui_package"));
 	}
 	return true;
 }
@@ -395,7 +396,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 	// Gewicht-limiet.
 	if (MaxWeight > 0.f && GetTotalWeight() + GetUnitWeight(ItemId) * Count > MaxWeight + 0.001f)
 	{
-		if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy - sell or drop something.")); }
+		if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("Inventory too heavy - sell or drop something."), TEXT("ui_package")); }
 		return false;
 	}
 
@@ -421,7 +422,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 			// Limiet = backpack (MaxStacks) + hotbar (HotbarSize): de hotbar is aparte opslag, telt los van de 10.
 			if (MaxStacks > 0 && GetUsedSlots() >= MaxStacks + HotbarSize)
 			{
-				if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
+				if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor::Orange, TEXT("No free inventory slots."), TEXT("ui_package")); }
 				break;
 			}
 			FInventoryStack NewStack;
@@ -449,7 +450,7 @@ bool UInventoryComponent::AddItem(FName ItemId, int32 Count, float ThcPercent, f
 		// Limiet = backpack (MaxStacks) + hotbar (HotbarSize): de hotbar is aparte opslag, telt los van de 10.
 		if (GetUsedSlots() + NewStacks > MaxStacks + HotbarSize)
 		{
-			if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No free inventory slots.")); }
+			if (GEngine && !bQuietOnFull) { UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor::Orange, TEXT("No free inventory slots."), TEXT("ui_package")); }
 			return false;
 		}
 	}
@@ -696,7 +697,7 @@ void UInventoryComponent::ServerBuyBackpackUpgrade_Implementation()
 	if (GetOwnerRole() != ROLE_Authority) { return; }
 	if (BackpackTier >= BackpackMaxTier)
 	{
-		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Backpack is already maxed out."));
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Backpack is already maxed out."), TEXT("ui_package"));
 		return;
 	}
 	// Betalen met CASH via de EIGEN economy van de pawn-owner (per speler). Cash is een SPIEGEL van het
@@ -706,13 +707,14 @@ void UInventoryComponent::ServerBuyBackpackUpgrade_Implementation()
 	const int64 Cost = BackpackUpgradeCostCents(BackpackTier);
 	if (!Econ || !Econ->RemoveMoney(Cost))
 	{
-		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Not enough cash."));
+		UWeedToast::NotifyPawn(GetOwner(), -1, 3.f, FColor::Orange, TEXT("Not enough cash."), TEXT("ui_coin"));
 		return;
 	}
 	++BackpackTier;
 	ApplyBackpackTier();
 	UWeedToast::NotifyPawn(GetOwner(), -1, 4.f, FColor::Green,
-		FString::Printf(TEXT("Backpack upgraded: %d slots / %.0f kg"), MaxStacks, MaxWeight));
+		FString::Printf(TEXT("Backpack upgraded: %d slots / %.0f kg"), MaxStacks, MaxWeight),
+		TEXT("ui_package"));
 }
 
 bool UInventoryComponent::IsStackOnHotbar(int32 StackId) const

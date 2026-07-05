@@ -133,9 +133,11 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> WantsText;        // prefix "Wants Xg " (normale tekstkleur)
 	UPROPERTY() TObjectPtr<UTextBlock> WantsStrainText;  // alleen de strain-naam (in de strain-tagkleur)
 	UPROPERTY() TObjectPtr<class UHorizontalBox> WantsRow; // rij die beide bevat (visibility togglen)
+	UPROPERTY() TObjectPtr<class UHorizontalBox> DealMetricBox; // bid/chance/total-kolommen (apart hide bij no-weed)
 	UPROPERTY() TObjectPtr<UTextBlock> SubText;
-	UPROPERTY() TObjectPtr<UTextBlock> PriceText;      // "Your price EUR X/g   Y%" (links in de header)
+	UPROPERTY() TObjectPtr<UTextBlock> PriceText;      // prijs per gram + marktpercentage (groen)
 	UPROPERTY() TObjectPtr<UTextBlock> PriceTotalText; // totaal "EUR Z" (groot/bold, rechts-onder in de header)
+	UPROPERTY() TObjectPtr<UWidget> PriceRailBox;      // container rond de prijs-slider; mee togglen zodat geen lege rail blijft
 	UPROPERTY() TObjectPtr<USlider> PriceSlider;
 	UPROPERTY() TObjectPtr<USlider> AmountSlider;
 	UPROPERTY() TObjectPtr<UTextBlock> AmountText;

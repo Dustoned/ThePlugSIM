@@ -38,6 +38,10 @@ protected:
 	TArray<FLinearColor> ShopMarkerColors;                 // laatste icoon-kleur per marker: alleen bij WIJZIGING opnieuw bouwen (geen 2s-flits)
 	UPROPERTY() TObjectPtr<UWidget> HomeMarker;            // je basis (goud huisje)
 	UPROPERTY() TObjectPtr<UBorder> WaypointMarker;        // generiek waypoint (blauw)
+	UPROPERTY() TObjectPtr<UBorder> FocusLabelCard;        // 1 label voor marker dicht bij het midden
+	UPROPERTY() TObjectPtr<UTextBlock> FocusLabelText;
+	FString LastFocusLabel;
+	float FocusLabelShown = 0.f;
 
 	TArray<float> CardinalYaws;
 	FVector WaypointWorld = FVector::ZeroVector;

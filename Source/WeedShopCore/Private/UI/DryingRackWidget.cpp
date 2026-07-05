@@ -283,8 +283,7 @@ UDryCell* UDryingRackWidget::MakeDryCell(int32 SlotIdx, const FDryEntry* E)
 	if (E)
 	{
 		UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-		FSlateBrush VisBr = WeedUI::Rounded(WeedUI::ColSlot(0.96f), 8.f); // neutrale slot zoals de inventory
-		if (E->bDone) { VisBr.OutlineSettings.Width = 1.5f; VisBr.OutlineSettings.Color = FSlateColor(WeedUI::ColGood(0.75f)); } // ready -> groene ring
+		FSlateBrush VisBr = WeedUI::StorageSlotBrush(true, E->bDone, E->bDone ? WeedUI::ColGood(0.95f) : WeedUI::ItemAccent(E->DryItemId), 8.f); // ready -> groene ring
 		Vis->SetBrush(VisBr);
 		Vis->SetPadding(FMargin(4.f));
 		UOverlay* Ov = WidgetTree->ConstructWidget<UOverlay>();
@@ -295,18 +294,45 @@ UDryCell* UDryingRackWidget::MakeDryCell(int32 SlotIdx, const FDryEntry* E)
 		IconOS->SetHorizontalAlignment(HAlign_Center); IconOS->SetVerticalAlignment(VAlign_Center);
 
 		UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-		Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
+		Pill->SetBrush(WeedUI::ItemQtyPillBrush());
 		Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
-		Pill->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%dg"), E->Quantity), 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
+		Pill->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%dg"), E->Quantity), 10, WeedUI::ColText(), false, true));
 		UOverlaySlot* BS = Ov->AddChildToOverlay(Pill);
 		BS->SetHorizontalAlignment(HAlign_Right); BS->SetVerticalAlignment(VAlign_Top);
 
-		// Klein "ready"-vinkje onderaan de slot (de volledige progress staat onder de slots).
+		// Onderin: of de strain-tag, of READY als de batch oogstbaar is.
 		if (E->bDone)
 		{
-			UOverlaySlot* DnOS = Ov->AddChildToOverlay(WeedUI::Text(WidgetTree, TEXT("READY"), 8, WeedUI::ColGood(), true, true));
+			UBorder* ReadyPill = WidgetTree->ConstructWidget<UBorder>();
+			FSlateBrush ReadyBr = WeedUI::Rounded(FLinearColor(0.10f, 0.30f, 0.20f, 0.92f), 6.f);
+			ReadyBr.OutlineSettings.Width = 1.f;
+			ReadyBr.OutlineSettings.Color = FSlateColor(WeedUI::ColGood(0.65f));
+			ReadyPill->SetBrush(ReadyBr);
+			ReadyPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+			ReadyPill->SetContent(WeedUI::Text(WidgetTree, TEXT("READY"), 8, WeedUI::ColGood(), true, true));
+			UOverlaySlot* DnOS = Ov->AddChildToOverlay(ReadyPill);
 			DnOS->SetHorizontalAlignment(HAlign_Center); DnOS->SetVerticalAlignment(VAlign_Bottom);
 			DnOS->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		}
+		else
+		{
+			const FString Tag = WeedUI::ItemTagShort(E->DryItemId);
+			if (!Tag.IsEmpty())
+			{
+				UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 10, FLinearColor::White, false, true);
+				TagT->SetFont(WeedUI::ItemTagFont(10));
+				TagT->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+				TagT->SetShadowOffset(FVector2D(1.f, 1.f));
+				UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
+				TagPill->SetBrush(WeedUI::ItemTagPillBrush(E->DryItemId, 5.f));
+				TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+				TagPill->SetContent(TagT);
+				TagPill->SetVisibility(ESlateVisibility::HitTestInvisible);
+				UOverlaySlot* TagOS = Ov->AddChildToOverlay(TagPill);
+				TagOS->SetHorizontalAlignment(HAlign_Center);
+				TagOS->SetVerticalAlignment(VAlign_Bottom);
+				TagOS->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+			}
 		}
 
 		C->EntryIndex = SlotIdx; C->ItemId = E->DryItemId; C->Qty = E->Quantity; C->bReady = E->bDone; C->Inner = Vis;
@@ -316,7 +342,7 @@ UDryCell* UDryingRackWidget::MakeDryCell(int32 SlotIdx, const FDryEntry* E)
 	{
 		// Lege slot: zelfde flauwe vierkante stijl als een leeg inventory-vak, drop-zone voor natte wiet.
 		UBorder* Vis = WidgetTree->ConstructWidget<UBorder>();
-		Vis->SetBrush(WeedUI::Rounded(WeedUI::ColSlotEmpty(0.55f), 8.f));
+		Vis->SetBrush(WeedUI::StorageSlotBrush(false, false, FLinearColor(0.f, 0.f, 0.f, 0.f), 8.f));
 		C->EntryIndex = -1; C->ItemId = NAME_None; C->bReady = false; C->Inner = Vis;
 	}
 	return C;
@@ -384,7 +410,8 @@ void UDryingRackWidget::FillBody()
 			DetailEmptyText = WeedUI::Text(WidgetTree, TEXT("Empty"), 11, WeedUI::ColTextDim());
 			DetailBox->AddChildToVerticalBox(DetailEmptyText);
 		}
-		DetailEmptyText->SetVisibility(Used == 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		// Lege slots tonen de lege staat al; extra "Empty" tekst onder de grid leest dubbel.
+		DetailEmptyText->SetVisibility(ESlateVisibility::Collapsed);
 
 		// Staart-groei: nieuwe rijen met vaste structuur (Border > VBox > [naam+tijd, bar]); inhoud komt
 		// via de sig-diff hieronder + UpdateProgress.

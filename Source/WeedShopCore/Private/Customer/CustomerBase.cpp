@@ -3455,13 +3455,25 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			State = ECustomerState::Negotiating;
 			return EDealResult::Haggle;
 		}
+		const float RespectBeforeRefusal = Respect;
 		Respect = ClampAttr(Respect - (bSubstitute ? 2.f : 4.f));
+		const int32 DownR = FMath::RoundToInt(Respect - RespectBeforeRefusal);
 		WriteStatsToRegistry();
 		// Korte her-aanbied-cooldown na een weigering (GEEN tevreden-klant/aankoop-effect). COMPETITIVE:
 		// dual-write met de id van de afgewezen speler zodat ZIJN relatie de cooldown draagt (leeg = base).
 		if (AWeedShopGameState* GSr = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
 		{
 			if (GSr->GetNpcRegistry() && !NpcId.IsNone()) { GSr->GetNpcRegistry()->MarkRefused(NpcId, DealPlayerId); }
+		}
+		if (DownR != 0 && PayTo)
+		{
+			if (AActor* DealerActor = PayTo->GetOwner())
+			{
+				if (UPhoneClientComponent* Ph = DealerActor->FindComponentByClass<UPhoneClientComponent>())
+				{
+					Ph->ClientDealResultPopup(this, 0, 0, DownR, 0, 0, GetActorLocation());
+				}
+			}
 		}
 		return EDealResult::Refused;
 	}
@@ -3502,7 +3514,8 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 			Say(TEXT("Exactly what I wanted. Pleasure doing business."));
 			UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 5.f, FColor(255, 215, 90),
 				FString::Printf(TEXT("VIP order filled! +%d%% bonus (+EUR %d)"),
-					FMath::RoundToInt((GetOrderBonusMult() - 1.f) * 100.f), (int32)(WeedRoundEuros((int64)OrderBonusCents) / 100)));
+					FMath::RoundToInt((GetOrderBonusMult() - 1.f) * 100.f), (int32)(WeedRoundEuros((int64)OrderBonusCents) / 100)),
+				TEXT("ui_coin"));
 		}
 	}
 
@@ -3566,7 +3579,8 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 				GSp->GetNpcRegistry()->GetStats(NpcId, r, l, a, Nm);
 				const FString Who = Nm.IsEmpty() ? TEXT("a regular") : Nm.ToString();
 				UWeedToast::NotifyPawn(PayTo->GetOwner(), -1, 5.f, FColor(120, 255, 140),
-					FString::Printf(TEXT("You poached %s from your rival!"), *Who));
+					FString::Printf(TEXT("You poached %s from your rival!"), *Who),
+					TEXT("ui_person"));
 				// De rivaal voelt het ook: zoek z'n pawn op (per stabiele speler-id) en meld het verlies.
 				if (UWorld* W = GetWorld())
 				{
@@ -3576,7 +3590,8 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 						if (RP && USaveGameSubsystem::StablePlayerId(RP) == PrevOwner)
 						{
 							UWeedToast::NotifyPawn(RP, -1, 5.f, FColor(255, 140, 120),
-								FString::Printf(TEXT("%s started buying from your rival!"), *Who));
+								FString::Printf(TEXT("%s started buying from your rival!"), *Who),
+								TEXT("ui_person"));
 							break;
 						}
 					}

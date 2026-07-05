@@ -12,6 +12,8 @@
 class UWidget;
 class UTextBlock;
 class UBorder;
+class USizeBox;
+class UWrapBox;
 
 UCLASS()
 class WEEDSHOPCORE_API UHandInfoWidget : public UUserWidget
@@ -29,8 +31,11 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> TypeText; // type-tag (SEED / BAGGIE / ...)
 	UPROPERTY() TObjectPtr<UTextBlock> NameText; // item-naam
 	UPROPERTY() TObjectPtr<UTextBlock> QtyText;  // aantal/gram, groot bij de titel
+	UPROPERTY() TObjectPtr<UBorder> QtyPill;     // quantity badge naast de titel
 	UPROPERTY() TObjectPtr<UBorder> Divider;     // dun lijntje onder de naam
-	UPROPERTY() TObjectPtr<class UVerticalBox> StatBox; // nette label/waarde-rijen
+	UPROPERTY() TObjectPtr<UWrapBox> ChipBox;    // vaste pool met stat-chips
+	UPROPERTY() TArray<TObjectPtr<UBorder>> ChipPills;
+	UPROPERTY() TArray<TObjectPtr<UTextBlock>> ChipTexts;
 	UPROPERTY() TObjectPtr<UTextBlock> HintText; // korte hint onderaan (wat je ermee doet)
 
 	float Shown = 0.f;       // huidige fade (0..1)

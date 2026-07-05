@@ -177,7 +177,12 @@ foreach ($q in $Qualities) {
     # ZipFile.CreateFromDirectory streamt naar disk en ondersteunt Zip64 (grote builds).
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::CreateFromDirectory($WinDir, $Zip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
-    $SizeMB = [math]::Round((Get-Item $Zip).Length / 1MB, 1)
+    $ZipInfo = Get-Item $Zip
+    $SizeMB = [math]::Round($ZipInfo.Length / 1MB, 1)
+    if ($ZipInfo.Length -ge 2GB) {
+        Write-Error ("Zip is {0} MB en past niet onder GitHub's 2GB release-asset limiet. Upload gestopt; gebruik 1K/lager of verwijder grote losse assets." -f $SizeMB)
+        exit 1
+    }
     Write-Host "== [$q] Zip klaar: $SizeMB MB =="
 
     $Zips += $Zip

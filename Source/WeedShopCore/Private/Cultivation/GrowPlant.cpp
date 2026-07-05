@@ -816,8 +816,8 @@ void AGrowPlant::WaterAll(APawn* InstigatorPawn)
 	WaterLevel = FMath::Clamp(WaterLevel + Can->GetWaterPerClick(), 0.f, 1.f);
 	if (GEngine)
 	{
-		UWeedToast::NotifyPawn(InstigatorPawn,-1, 2.f, FColor::Cyan,
-			FString::Printf(TEXT("Pot watered (water %.0f%%, bottle %d/%d)"), WaterLevel * 100.f, Can->GetCharges(), Can->GetMaxCharges()));
+		UWeedToast::NotifyPawn(InstigatorPawn, 70110, 1.25f, FColor(120, 200, 255),
+			FString::Printf(TEXT("Water %.0f%% | Bottle %d/%d"), WaterLevel * 100.f, Can->GetCharges(), Can->GetMaxCharges()), TEXT("drop"));
 	}
 }
 

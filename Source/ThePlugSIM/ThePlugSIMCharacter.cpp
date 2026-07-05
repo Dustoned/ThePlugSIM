@@ -1124,8 +1124,9 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		// spullen op de grond legt (co-op: iedereen kan 't oppakken).
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
-			const bool bUiOpen = Phone && (Phone->IsOpen() || Phone->IsInventoryOpen() || Phone->IsRollOpen() || Phone->IsDealOpen());
-			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen && !Active.IsNone() && Active != FName(TEXT("Cash"));
+			const bool bUiOpen = Phone && (Phone->IsAnyGameUIOpen() || Phone->IsMainMenuOpen());
+			const bool bPlacingItem = Build && Build->IsPlacing();
+			const bool bDown = PC->IsInputKeyDown(EKeys::Q) && !bUiOpen && !bPlacingItem && !Active.IsNone();
 			constexpr float DropHoldReq = 0.5f;
 			if (bDown)
 			{

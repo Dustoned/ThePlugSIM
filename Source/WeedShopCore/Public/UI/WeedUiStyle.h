@@ -110,11 +110,12 @@ namespace WeedUI
 
 	// Laadt (en cachet) het PNG-icoon voor dit item van schijf, of nullptr als het er (nog) niet is.
 	// WaterChargesOverride >= 0 = water van DEZE specifieke fles (per slot) voor vol/leeg; -1 = actieve fles.
-	WEEDSHOPCORE_API class UTexture2D* ItemIconTexture(FName ItemId, int32 WaterChargesOverride = -1);
+	// RollLoadedOverride: -1 = actieve speler-state, 0/1 = expliciet voor dit slot.
+	WEEDSHOPCORE_API class UTexture2D* ItemIconTexture(FName ItemId, int32 WaterChargesOverride = -1, int32 RollLoadedOverride = -1);
 
 	// Klaar-voor-gebruik icoon-widget (Size x Size): het PNG als dat bestaat, anders een nette
 	// procedurele tegel (gekleurde achtergrond per categorie + flat glyph). Altijd bruikbaar.
-	WEEDSHOPCORE_API UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride = -1);
+	WEEDSHOPCORE_API UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride = -1, int32 RollLoadedOverride = -1);
 
 	// Accentkleur per item-categorie (voor randjes/labels in de inventory).
 	WEEDSHOPCORE_API FLinearColor ItemAccent(FName ItemId);
@@ -122,6 +123,13 @@ namespace WeedUI
 	WEEDSHOPCORE_API FLinearColor TagColor(const FString& Tag, float Value, float Sat);
 	// Tag-pill kleur per ITEM: alleen strains -> levendige per-strain hue; standaard-spul -> neutraal grijs.
 	WEEDSHOPCORE_API FLinearColor TagColorForItem(FName ItemId, float Value = 0.42f, float Sat = 0.62f);
+	// Gedeelde item-tag stijl (hotbar/inventory/pickers/store): hoog contrast, zelfde outline/pill overal.
+	WEEDSHOPCORE_API FSlateFontInfo ItemTagFont(int32 Size = 11);
+	WEEDSHOPCORE_API FSlateBrush ItemTagPillBrush(FName ItemId, float Radius = 6.f, float Alpha = 0.98f);
+	WEEDSHOPCORE_API FSlateBrush ItemQtyPillBrush(float Radius = 7.f, float Alpha = 0.90f);
+	// Gedeelde storage/inventory slotstijl: gevuld duidelijk, leeg rustig; actief krijgt alleen een dun accent.
+	WEEDSHOPCORE_API FSlateBrush StorageSlotBrush(bool bFilled, bool bActive = false, FLinearColor Accent = FLinearColor(0.f, 0.f, 0.f, 0.f), float Radius = 8.f);
+	WEEDSHOPCORE_API FSlateBrush StorageSlotBrushWithFill(FLinearColor Fill, bool bFilled, bool bActive = false, FLinearColor Accent = FLinearColor(0.f, 0.f, 0.f, 0.f), float Radius = 8.f);
 	// 9-slice brush uit een ontworpen kit-frame-texture (panel/slot met rand+soft-shadow), getint naar ons palet.
 	// NineSlice = randfracties (0-1). Valt terug op Rounded(Tint) als de texture mist.
 	WEEDSHOPCORE_API FSlateBrush KitBrush(const FString& TexturePath, const FMargin& NineSlice, const FLinearColor& Tint);

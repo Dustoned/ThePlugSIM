@@ -38,40 +38,44 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 	// (kinderen) MOGEN muis-events ontvangen wanneer de inventory open is.
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
-	// Rij = [tray met de 9 slots] + [los telefoon-icoon]. De tray geeft de slots een bakje i.p.v. zwevende losse slots.
-	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UCanvasPanelSlot* CS = Root->AddChildToCanvas(Row);
-	CS->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
-	CS->SetAlignment(FVector2D(0.5f, 1.f));
-	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(0.f, -14.f));
+	constexpr float SlotOuterPx = 78.f;
+	constexpr float SlotGapEachSidePx = 3.f;
+	constexpr float TrayPadXPx = 8.f;
+	constexpr float PhoneBoxPx = 78.f;
+	constexpr float PhoneGapPx = 14.f;
+	const int32 N = UInventoryComponent::HotbarSize;
+	const float HotbarTrayW = TrayPadXPx * 2.f + N * (SlotOuterPx + SlotGapEachSidePx * 2.f);
 
 	UBorder* Tray = WidgetTree->ConstructWidget<UBorder>();
 	FSlateBrush TrayBr = WeedUI::Rounded(WeedUI::Hex(0x252B3A, 0.94f), 14.f);
 	TrayBr.OutlineSettings.Width = 1.f;
 	TrayBr.OutlineSettings.Color = FSlateColor(WeedUI::Hex(0x3A4152, 0.5f));
 	Tray->SetBrush(TrayBr);
-	Tray->SetPadding(FMargin(8.f, 7.f, 8.f, 7.f));
-	Row->AddChildToHorizontalBox(Tray)->SetVerticalAlignment(VAlign_Center);
+	Tray->SetPadding(FMargin(TrayPadXPx, 7.f, TrayPadXPx, 7.f));
+	UCanvasPanelSlot* TrayS = Root->AddChildToCanvas(Tray);
+	TrayS->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
+	TrayS->SetAlignment(FVector2D(0.5f, 1.f));
+	TrayS->SetAutoSize(true);
+	TrayS->SetPosition(FVector2D(0.f, -14.f));
 
 	UHorizontalBox* Bar = WidgetTree->ConstructWidget<UHorizontalBox>();
 	Tray->SetContent(Bar);
 
-	const int32 N = UInventoryComponent::HotbarSize;
 	for (int32 i = 0; i < N; ++i)
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(78.f);
-		Sz->SetHeightOverride(78.f);
+		Sz->SetWidthOverride(SlotOuterPx);
+		Sz->SetHeightOverride(SlotOuterPx);
 
 		// Buitenste overlay: visuele cel (onder) + transparante sleep/drop-cel (boven).
 		UOverlay* SlotOv = WidgetTree->ConstructWidget<UOverlay>();
 		Sz->SetContent(SlotOv);
 
 		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
-		Box->SetBrush(WeedUI::Rounded(WeedUI::Hex(0x2A3140, 0.9f), 10.f));
+		Box->SetBrush(WeedUI::StorageSlotBrush(false, false, FLinearColor(0.f, 0.f, 0.f, 0.f), 10.f));
 		Box->SetPadding(FMargin(7.f, 7.f, 7.f, 3.f)); // zelfde inset als inventory; minder onder -> tag netjes onderin
 		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Box->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 		UOverlaySlot* BoxOS = SlotOv->AddChildToOverlay(Box);
 		BoxOS->SetHorizontalAlignment(HAlign_Fill); BoxOS->SetVerticalAlignment(VAlign_Fill);
 
@@ -93,25 +97,23 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		// Aantal/gram-badge RECHTSBOVEN als pilletje (los van de naam onderaan, zodat niets overlapt).
 		UTextBlock* Badge = WeedUI::Text(WidgetTree, TEXT(""), 10, WeedUI::ColText(), false, true);
 		UBorder* BadgePill = WidgetTree->ConstructWidget<UBorder>();
-		BadgePill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f)); // zelfde badge-pill als inventory/pickers
+		BadgePill->SetBrush(WeedUI::ItemQtyPillBrush()); // zelfde badge-pill als inventory/pickers
 		BadgePill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
 		BadgePill->SetContent(Badge);
+		BadgePill->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 		UOverlaySlot* BadgeOS = Ov->AddChildToOverlay(BadgePill);
 		BadgeOS->SetHorizontalAlignment(HAlign_Right);
 		BadgeOS->SetVerticalAlignment(VAlign_Top);
 
 		// TAG-bubble onderaan: korte code (OG, GSC, II, 100g, ...) in een pilletje i.p.v. de hele naam.
 		// Iets groter + dunne donkere outline: op size 9 oogde de (Exo-)tekst te dun voor snelle herkenning.
-		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.98f, 1.f, 0.99f), false, true);
-		{
-			FSlateFontInfo TagFont = WeedUI::Font(10, true);
-			TagFont.OutlineSettings.OutlineSize = 1;
-			TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
-			Name->SetFont(TagFont);
-		}
+		UTextBlock* Name = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor::White, false, true);
+		Name->SetFont(WeedUI::ItemTagFont(11));
+		Name->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+		Name->SetShadowOffset(FVector2D(1.f, 1.f));
 		UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-		TagPill->SetBrush(WeedUI::Rounded(WeedUI::ColAccentDim(0.96f), 6.f)); // tag-bubble (default; per-item hue via TagColorForItem in RefreshSlots)
-		TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+		TagPill->SetBrush(WeedUI::ItemTagPillBrush(NAME_None, 6.f)); // tag-bubble (default; per-item hue via RefreshSlots)
+		TagPill->SetPadding(FMargin(6.f, 0.f, 6.f, 2.f));
 		TagPill->SetContent(Name);
 		TagPill->SetVisibility(ESlateVisibility::Collapsed);
 		UOverlaySlot* NameOS = Ov->AddChildToOverlay(TagPill);
@@ -139,13 +141,15 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		SlotBadgePills.Add(BadgePill);
 		SlotLastIcon.Add(NAME_None);
 		SlotLastWaterState.Add(-1);
+		SlotLastBadgeText.Add(FString());
+		SlotBadgePulse.Add(0.f);
 		SlotLastKey.Add(FString());
 	}
 
-	// --- Telefoon-icoon rechts van de hotbar met notificatie-bubble (aantal gemiste berichten) ---
+	// --- Telefoon-icoon los rechts van de hotbar. Hij telt niet mee voor de centrering van de echte slots. ---
 	{
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>();
-		Sz->SetWidthOverride(78.f); Sz->SetHeightOverride(78.f); // ZELFDE maat als de hotbar-slots
+		Sz->SetWidthOverride(PhoneBoxPx); Sz->SetHeightOverride(PhoneBoxPx); // zelfde maat als de hotbar-slots
 		UOverlay* SlotOv = WidgetTree->ConstructWidget<UOverlay>();
 		Sz->SetContent(SlotOv);
 
@@ -172,9 +176,11 @@ void UHotbarWidget::BuildShell(UCanvasPanel* Root)
 		BadgeOS->SetHorizontalAlignment(HAlign_Right); BadgeOS->SetVerticalAlignment(VAlign_Top);
 		BadgeOS->SetPadding(FMargin(0.f, 7.f, 4.f, 0.f)); // op de rechterbovenhoek van de telefoon (lager)
 
-		UHorizontalBoxSlot* PS = Row->AddChildToHorizontalBox(Sz);
-		PS->SetVerticalAlignment(VAlign_Center);
-		PS->SetPadding(FMargin(14.f, 0.f, 0.f, 0.f)); // ruimte tussen de tray en het telefoon-icoon
+		UCanvasPanelSlot* PhoneS = Root->AddChildToCanvas(Sz);
+		PhoneS->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
+		PhoneS->SetAlignment(FVector2D(0.5f, 1.f));
+		PhoneS->SetAutoSize(true);
+		PhoneS->SetPosition(FVector2D(HotbarTrayW * 0.5f + PhoneGapPx + PhoneBoxPx * 0.5f, -14.f));
 	}
 }
 
@@ -234,7 +240,7 @@ void UHotbarWidget::RefreshSlots()
 		if (Stacks.IsValidIndex(Idx))
 		{
 			const FInventoryStack& S = Stacks[Idx];
-			Key = FString::Printf(TEXT("%d|%s|%d|%.3f|%.3f|%d|%d"), SlotSid, *S.ItemId.ToString(), S.Quantity, S.Quality, S.QualityPct, bActive ? 1 : 0, bRollLoadedUI ? 1 : 0);
+			Key = FString::Printf(TEXT("%d|%s|%d|%.3f|%.3f|%d|%d"), SlotSid, *S.ItemId.ToString(), S.Quantity, S.Quality, S.QualityPct, bActive ? 1 : 0, (bActive && bRollLoadedUI) ? 1 : 0);
 		}
 		else
 		{
@@ -246,9 +252,13 @@ void UHotbarWidget::RefreshSlots()
 			SlotLastKey[i] = Key;
 		}
 
-		FSlateBrush HB = WeedUI::Rounded(bActive ? WeedUI::Hex(0x3A2B52, 0.96f) : WeedUI::Hex(0x2A3140, 0.9f), 10.f);
-		if (bActive) { HB.OutlineSettings.Width = 1.5f; HB.OutlineSettings.Color = FSlateColor(WeedUI::Hex(0xB98CFF, 0.9f)); }
+		const bool bHasStack = Stacks.IsValidIndex(Idx);
+		FLinearColor ActiveCol = WeedUI::Hex(0xB98CFF, 0.9f);
+		if (bHasStack) { ActiveCol = WeedUI::TagColorForItem(Stacks[Idx].ItemId, 0.86f, 0.72f); ActiveCol.A = 0.95f; }
+		FSlateBrush HB = WeedUI::StorageSlotBrush(bHasStack, bActive, ActiveCol, 10.f);
 		SlotBoxes[i]->SetBrush(HB);
+		SlotBoxes[i]->SetRenderScale(bActive && bHasStack ? FVector2D(1.055f, 1.055f) : FVector2D(1.f, 1.f));
+		SlotBoxes[i]->SetRenderOpacity(bHasStack ? 1.f : (bActive ? 0.78f : 0.72f));
 
 		// Sleep/drop-cel up-to-date houden (geen rebuild nodig: velden worden bij het event gelezen).
 		if (DropCells.IsValidIndex(i))
@@ -280,14 +290,14 @@ void UHotbarWidget::RefreshSlots()
 			// Icoon (her)bouwen als het item veranderde, of als de icon-VARIANT flipte: een fles vol<->leeg,
 			// of een vloei ongeladen<->geladen (geladen paper toont het handen-rol-icoon i.p.v. het boekje).
 			const bool bIsWater = IdStr.StartsWith(TEXT("WaterBottle"));
-			const bool bRollLoaded = IdStr.StartsWith(TEXT("Papers_")) && bRollLoadedUI;
+			const bool bRollLoaded = bActive && IdStr.StartsWith(TEXT("Papers_")) && bRollLoadedUI;
 			const int32 SlotWaterState = bIsWater ? (S.Quality <= 0.f ? 1 : 0) : (bRollLoaded ? 2 : 0);
 			if (SlotLastIcon[i] != S.ItemId || SlotWaterState != SlotLastWaterState[i])
 			{
 				SlotLastIcon[i] = S.ItemId;
 				SlotLastWaterState[i] = SlotWaterState;
 				// Geef per fles z'n eigen water mee (FMath::RoundToInt(S.Quality)) zodat vol/leeg per slot klopt.
-				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 48.f, bIsWater ? FMath::RoundToInt(S.Quality) : -1));
+				SlotIconBoxes[i]->SetContent(WeedUI::ItemIcon(WidgetTree, S.ItemId, 48.f, bIsWater ? FMath::RoundToInt(S.Quality) : -1, IdStr.StartsWith(TEXT("Papers_")) ? (bRollLoaded ? 1 : 0) : -1));
 			}
 
 			// TAG-bubble: korte code (OG, GSC, II, 100g, ...) i.p.v. de volledige naam. Leeg = geen bubble
@@ -300,11 +310,16 @@ void UHotbarWidget::RefreshSlots()
 			else
 			{
 				SlotNames[i]->SetText(FText::FromString(Tag));
-				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetBrush(WeedUI::Rounded(WeedUI::TagColorForItem(S.ItemId), 6.f)); SlotTagPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible); } // strain -> kleur, standaard -> grijs
+				if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetBrush(WeedUI::ItemTagPillBrush(S.ItemId, 6.f)); SlotTagPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible); } // strain -> kleur, standaard -> grijs
 			}
 
 			// Aantal-badge: zakjes "Nx Xg", wiet "Xg", overig stapelbaar "xN", niets voor cash.
 			const FString BadgeStr = WeedUI::ItemQtyBadge(S.ItemId, S.Quantity);
+			if (SlotLastBadgeText.IsValidIndex(i) && SlotLastBadgeText[i] != BadgeStr)
+			{
+				if (!SlotLastBadgeText[i].IsEmpty() && !BadgeStr.IsEmpty() && SlotBadgePulse.IsValidIndex(i)) { SlotBadgePulse[i] = 0.22f; }
+				SlotLastBadgeText[i] = BadgeStr;
+			}
 			SlotBadges[i]->SetText(BadgeStr.IsEmpty() ? FText::GetEmpty() : FText::FromString(BadgeStr));
 			// Pill-achtergrond alleen tonen als er ook echt een aantal staat (anders een leeg dot-je).
 			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(BadgeStr.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
@@ -320,6 +335,7 @@ void UHotbarWidget::RefreshSlots()
 			if (SlotTagPills.IsValidIndex(i)) { SlotTagPills[i]->SetVisibility(ESlateVisibility::Collapsed); }
 			SlotBadges[i]->SetText(FText::GetEmpty());
 			if (SlotBadgePills.IsValidIndex(i)) { SlotBadgePills[i]->SetVisibility(ESlateVisibility::Collapsed); }
+			if (SlotLastBadgeText.IsValidIndex(i)) { SlotLastBadgeText[i].Empty(); }
 		}
 	}
 }
@@ -367,6 +383,17 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		BoundInv = Inv;
 	}
 	RefreshSlots(); // per-tick (actieve-slot-highlight, fles vol/leeg); óók synchroon vanuit OnInvChanged bij een drop
+
+	for (int32 i = 0; i < SlotBadgePulse.Num(); ++i)
+	{
+		SlotBadgePulse[i] = FMath::Max(0.f, SlotBadgePulse[i] - DeltaTime);
+		if (SlotBadgePills.IsValidIndex(i) && SlotBadgePills[i])
+		{
+			const float Pulse = SlotBadgePulse[i] > 0.f ? (SlotBadgePulse[i] / 0.22f) : 0.f;
+			const float Scale = 1.f + 0.22f * Pulse;
+			SlotBadgePills[i]->SetRenderScale(FVector2D(Scale, Scale));
+		}
+	}
 
 	// Telefoon-notificatie: ongelezen inkomende berichten. De bubble gaat pas weg als je de CHAT van die
 	// persoon echt opent (MarkChatSeen), niet zomaar bij het openen van de telefoon.

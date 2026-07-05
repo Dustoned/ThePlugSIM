@@ -92,7 +92,8 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 		if (GEngine)
 		{
 			UWeedToast::NotifyPawn(Buyer ? Buyer->GetOwner() : nullptr, -1, 3.f, FColor::Red,
-				FString::Printf(TEXT("Not enough money for seed %s"), *StrainId.ToString()));
+				FString::Printf(TEXT("Not enough money for seed %s"), *StrainId.ToString()),
+				TEXT("ui_coin"));
 		}
 		return false;
 	}
@@ -101,7 +102,8 @@ bool UStoreComponent::BuySeed(FName StrainId, UInventoryComponent* Buyer)
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(Buyer ? Buyer->GetOwner() : nullptr, -1, 3.f, FColor::Green,
-			FString::Printf(TEXT("Seed bought: %s"), *Row->DisplayName.ToString()));
+			FString::Printf(TEXT("Seed bought: %s"), *Row->DisplayName.ToString()),
+			TEXT("seed"));
 	}
 	return true;
 }

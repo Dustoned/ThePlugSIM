@@ -1,4 +1,44 @@
 PATCH NOTES
+Version 1.21.4 - 6 juli 2026
+
+Korte intro:
+Een brede HUD- en UI-polish ronde: minder ruis, compactere schermen en nettere feedback tijdens deals,
+opslag, kweken en gewone acties zoals water geven.
+
+--------------------
+
+INTERFACE & HUD
+
+* De hotbar staat netter gecentreerd en lege slots zijn rustiger, ook in inventory/opslag-schermen.
+* De item-preview linksonder is compacter: minder dubbele info, duidelijkere tags en beter leesbare badges.
+* De compass is opgeschoond naar een subtielere marker-rail.
+* Interactie-prompts en controls zijn strakker en contextueler.
+
+KWEKEN
+
+* De plantkaart is compacter en leest sneller: status rechtsboven, kleinere water/care/grow meters en
+  harvest/THC als nette chips.
+* Lege potten tonen nu geen debug-achtige tekst meer. Je ziet gewoon de potnaam, READY/EMPTY en een compacte
+  soil-regel met soilnaam en harvest-count.
+* Water- en flesmeldingen zijn nu subtiel: een kleine updating toast in plaats van drie grote flashy kaarten.
+
+DEALS & OPSLAG
+
+* Deal-resultaten verschijnen rond de NPC als losse stat-popups met passende iconen, inclusief negatieve
+  statwijzigingen bij een geweigerde deal.
+* Non-bag weed kan niet meer als bag-deal worden aangeboden.
+* Packing bench, pickers, shelves, drying rack, fridge en inventory gebruiken consistenter dezelfde slot-,
+  tag- en quantity-stijl.
+* De packing bench slider/selectie is duidelijker en gebruikt dezelfde rustiger selectiestijl als de rest.
+
+FIXES
+
+* Cash droppen loopt via de bestaande economy-safe route, zodat cash geen gratis-geld edge case wordt.
+* Placement/hold UI blijft niet meer hangen na plaatsen of cancellen.
+* Toasts stapelen minder hard en routine-acties voelen minder schreeuwerig.
+
+--------------------
+
 Version 1.21.3 — 4 juli 2026
 
 Korte intro:

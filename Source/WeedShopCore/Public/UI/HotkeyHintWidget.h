@@ -11,6 +11,7 @@
 class UCanvasPanel;
 class UVerticalBox;
 class UBorder;
+class USizeBox;
 
 UCLASS()
 class WEEDSHOPCORE_API UHotkeyHintWidget : public UUserWidget
@@ -37,10 +38,17 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<class UWidget>> RowPool;        // de rij-containers (HBox), Collapsed als ongebruikt
 	UPROPERTY() TArray<TObjectPtr<class UTextBlock>> RowLabels;   // omschrijving-tekst per rij (in-place SetText)
 	UPROPERTY() TArray<TObjectPtr<class UTextBlock>> RowKeys;     // toets-chip-tekst per rij (in-place SetText)
+	UPROPERTY() TArray<TObjectPtr<UBorder>> RowKeyPills;          // toets-chip brush per rij (context helder, basis rustiger)
 
 	// Gecentreerde interactie-popup (onder het crosshair) i.p.v. de lange prompt in de hoek-kaart.
 	UPROPERTY() TObjectPtr<UBorder> CenterPromptCard;
-	UPROPERTY() TObjectPtr<class UTextBlock> CenterPromptText;
+	UPROPERTY() TObjectPtr<class UTextBlock> CenterPromptTitle;
+	UPROPERTY() TObjectPtr<class UTextBlock> CenterPromptKey;
+	UPROPERTY() TObjectPtr<class UTextBlock> CenterPromptAction;
+	UPROPERTY() TObjectPtr<UBorder> CenterPromptKeyPill;
+	UPROPERTY() TObjectPtr<UBorder> CenterPromptProgressTrack;
+	UPROPERTY() TObjectPtr<UBorder> CenterPromptProgressFill;
+	UPROPERTY() TObjectPtr<USizeBox> CenterPromptProgressFillSize;
 
 	// Laatst getoonde set (om alleen te herbouwen als de context wijzigt -> geen flicker).
 	FString LastSig;

@@ -59,11 +59,13 @@ protected:
 	UPROPERTY() TObjectPtr<UWeedItemPickGrid> StrainGrid; // icoon-grid voor de strain-keuze
 	UPROPERTY() TObjectPtr<class UTextBlock> NoBudLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> ContSection;  // "2. Pick a bag/jar"-blok (titel + lijst + geen-melding)
+	UPROPERTY() TObjectPtr<UWidget> ContCard;
 	UPROPERTY() TObjectPtr<UWeedItemPickGrid> ContGrid; // icoon-grid voor de container-keuze
 	UPROPERTY() TObjectPtr<class UTextBlock> NoContLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> GpbSection;   // "2.b Grams per bag"-blok
 	UPROPERTY() TObjectPtr<class UTextBlock> GpbLabel;
 	UPROPERTY() TObjectPtr<UVerticalBox> BagsSection;  // "3. How many bags?"-blok
+	UPROPERTY() TObjectPtr<class UTextBlock> PackSummaryLabel;
 	UPROPERTY() TObjectPtr<class USlider> GramSlider;
 	UPROPERTY() TObjectPtr<class UTextBlock> GramLabel;
 	UPROPERTY() TObjectPtr<UWeedActionButton> PackButton;

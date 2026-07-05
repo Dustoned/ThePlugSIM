@@ -7,10 +7,9 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Border.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/CapsuleComponent.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -19,9 +18,9 @@
 #include "Engine/World.h"
 
 // --- Timing van de fade (seconden) ---
-static constexpr float GPopFadeIn = 0.2f;   // infaden
-static constexpr float GPopHold = 2.0f;     // volledig zichtbaar
-static constexpr float GPopFadeOut = 0.5f;  // uitfaden
+static constexpr float GPopFadeIn = 0.25f;  // infaden
+static constexpr float GPopHold = 3.4f;     // volledig zichtbaar
+static constexpr float GPopFadeOut = 0.75f; // uitfaden
 static constexpr float GPopLife = GPopFadeIn + GPopHold + GPopFadeOut;
 
 TSharedRef<SWidget> UDealResultPopupWidget::RebuildWidget()
@@ -39,94 +38,146 @@ TSharedRef<SWidget> UDealResultPopupWidget::RebuildWidget()
 void UDealResultPopupWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
-
-	// Het zwevende kaartje: nette afgeronde box in het palet + dunne rand. Positie zetten we per
-	// frame via de canvas-slot (anker linksboven, uitlijning midden-onder zodat het BOVEN het punt zit).
-	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DealPopCard"));
-	{
-		FSlateBrush Br = WeedUI::Rounded(WeedUI::ColPanel(0.95f), 12.f);
-		Br.OutlineSettings.Width = 1.f;
-		Br.OutlineSettings.Color = FSlateColor(WeedUI::ColGood(0.55f)); // groene rand = geslaagde deal
-		CardB->SetBrush(Br);
-	}
-	CardB->SetPadding(FMargin(14.f, 9.f, 14.f, 9.f));
-	CardB->SetVisibility(ESlateVisibility::HitTestInvisible);
-	Card = CardB;
-
-	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	CS->SetAnchors(FAnchors(0.f, 0.f, 0.f, 0.f)); // absoluut positioneren (linksboven-anker)
-	CS->SetAlignment(FVector2D(0.5f, 1.f));       // midden-onder = het kaartje zit BOVEN het scherm-punt
-	CS->SetAutoSize(true);
-
-	Rows = WidgetTree->ConstructWidget<UVerticalBox>();
-	CardB->SetContent(Rows);
-
-	// Onzichtbaar tot ShowResult 'm aanzet.
-	Card->SetRenderOpacity(0.f);
-	Card->SetVisibility(ESlateVisibility::Collapsed);
 }
 
-void UDealResultPopupWidget::AddLine(const FString& InText, const FLinearColor& Color, bool bBig)
+void UDealResultPopupWidget::ClearChips()
 {
-	if (!Rows) { return; }
-	UTextBlock* T = WeedUI::Text(WidgetTree, InText, bBig ? 18 : 14, Color, true, true);
+	for (UBorder* Chip : Chips)
+	{
+		if (Chip) { Chip->RemoveFromParent(); }
+	}
+	Chips.Reset();
+	ChipOffsets.Reset();
+	ChipDelays.Reset();
+}
+
+void UDealResultPopupWidget::AddChip(const FString& InText, const FLinearColor& Color, const FVector2D& Offset, bool bBig, const FString& IconName, bool bKitIcon)
+{
+	if (!RootCanvas || !WidgetTree) { return; }
+
+	UBorder* Chip = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), NAME_None);
+	{
+		FSlateBrush Br = WeedUI::Rounded(WeedUI::ColBg(0.72f), 7.f);
+		Br.OutlineSettings.Width = 1.f;
+		Br.OutlineSettings.Color = FSlateColor(FLinearColor(Color.R, Color.G, Color.B, 0.48f));
+		Chip->SetBrush(Br);
+	}
+	Chip->SetPadding(FMargin(bBig ? 10.f : 8.f, bBig ? 4.f : 3.f));
+	Chip->SetVisibility(ESlateVisibility::Collapsed);
+	Chip->SetRenderOpacity(0.f);
+	Chip->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+	if (!IconName.IsEmpty())
+	{
+		const float IconSize = bBig ? 18.f : 14.f;
+		USizeBox* IconBox = WidgetTree->ConstructWidget<USizeBox>();
+		IconBox->SetWidthOverride(IconSize);
+		IconBox->SetHeightOverride(IconSize);
+		if (bKitIcon)
+		{
+			IconBox->SetContent(WeedUI::KitIcon(WidgetTree, IconName, IconSize, Color));
+		}
+		else
+		{
+			WeedUI::EIcon Fallback = WeedUI::EIcon::Coin;
+			if (IconName == TEXT("ui_level")) { Fallback = WeedUI::EIcon::Level; }
+			else if (IconName == TEXT("ui_person")) { Fallback = WeedUI::EIcon::Person; }
+			else if (IconName == TEXT("ui_flame")) { Fallback = WeedUI::EIcon::Flame; }
+			IconBox->SetContent(WeedUI::UiGlyph(WidgetTree, IconName, IconSize, Color, Fallback));
+		}
+		UHorizontalBoxSlot* IS = Row->AddChildToHorizontalBox(IconBox);
+		IS->SetVerticalAlignment(VAlign_Center);
+		IS->SetPadding(FMargin(0.f, 0.f, bBig ? 6.f : 5.f, 0.f));
+	}
+
+	UTextBlock* T = WeedUI::Text(WidgetTree, InText, bBig ? 19 : 15, Color, true, true);
 	T->SetJustification(ETextJustify::Center);
-	Rows->AddChildToVerticalBox(T)->SetPadding(FMargin(0.f, 1.f, 0.f, 1.f));
+	T->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.8f));
+	T->SetShadowOffset(FVector2D(1.f, 1.f));
+	UHorizontalBoxSlot* TS = Row->AddChildToHorizontalBox(T);
+	TS->SetVerticalAlignment(VAlign_Center);
+	Chip->SetContent(Row);
+
+	UCanvasPanelSlot* CS = RootCanvas->AddChildToCanvas(Chip);
+	CS->SetAnchors(FAnchors(0.f, 0.f, 0.f, 0.f));
+	CS->SetAlignment(FVector2D(0.5f, 0.5f));
+	CS->SetAutoSize(true);
+
+	Chips.Add(Chip);
+	ChipOffsets.Add(Offset);
+	ChipDelays.Add(0.04f * float(Chips.Num() - 1));
 }
 
 void UDealResultPopupWidget::ShowResult(ACustomerBase* Customer, const FVector& AnchorWorld, int32 Cents, int32 XP, int32 dR, int32 dL, int32 dA)
 {
-	if (!Card || !Rows) { return; }
+	if (!RootCanvas) { return; }
 
 	AnchorCustomer = Customer;
 	FallbackWorld = AnchorWorld;
 
-	// Regels opnieuw opbouwen (de popup wordt hergebruikt per deal). Geld altijd bovenaan + groot;
-	// daaronder alleen de stats die echt omhoog gingen (delta > 0), elk met eigen palet-kleur.
-	Rows->ClearChildren();
+	ClearChips();
+	const bool bNegativeOnly = Cents <= 0 && XP <= 0 && (dR < 0 || dL < 0 || dA < 0) && dR <= 0 && dL <= 0 && dA <= 0;
+	auto AddDeltaChip = [this](int32 Delta, const TCHAR* Label, const FVector2D& Offset, const FString& Icon)
+	{
+		if (Delta == 0) { return; }
+		const FLinearColor ChipColor = (Delta > 0) ? WeedUI::ColGood() : WeedUI::ColWarn();
+		AddChip(FString::Printf(TEXT("%+d %s"), Delta, Label), ChipColor, Offset, false, Icon, true);
+	};
+	if (bNegativeOnly)
+	{
+		AddChip(TEXT("Refused"), WeedUI::ColWarn(), FVector2D(0.f, -34.f), /*bBig*/ true);
+		AddDeltaChip(dR, TEXT("respect"), FVector2D(0.f, 8.f), TEXT("t_medal_128"));
+		AddDeltaChip(dL, TEXT("loyalty"), FVector2D(-70.f, 8.f), TEXT("t_heart_red_128"));
+		AddDeltaChip(dA, TEXT("hooked"), FVector2D(70.f, 8.f), TEXT("t_flame_128"));
+		Age = 0.f;
+		LifeTime = GPopLife;
+		bActive = true;
+		return;
+	}
 	if (Cents > 0)
 	{
 		// Centen -> hele euro's (afgerond naar boven zodat een deal nooit "+EUR 0" toont).
 		const int32 Euros = FMath::Max(1, (Cents + 99) / 100);
-		AddLine(FString::Printf(TEXT("+EUR %d"), Euros), WeedUI::ColGood(), /*bBig*/ true);
+		AddChip(FString::Printf(TEXT("+EUR %d"), Euros), WeedUI::ColGood(), FVector2D(0.f, -54.f), /*bBig*/ true, TEXT("ui_coin"));
 	}
-	if (XP > 0) { AddLine(FString::Printf(TEXT("+%d XP"), XP), WeedUI::ColAccent()); }
-	if (dR > 0) { AddLine(FString::Printf(TEXT("+%d respect"), dR), WeedUI::ColText()); }
-	if (dL > 0) { AddLine(FString::Printf(TEXT("+%d loyalty"), dL), WeedUI::ColHighlight()); }
-	if (dA > 0) { AddLine(FString::Printf(TEXT("+%d hooked"), dA), WeedUI::ColWarn()); }
+	if (XP > 0) { AddChip(FString::Printf(TEXT("+%d XP"), XP), WeedUI::ColAccent(), FVector2D(72.f, -18.f), false, TEXT("ui_level")); }
+	AddDeltaChip(dR, TEXT("respect"), FVector2D(-78.f, -16.f), TEXT("t_medal_128"));
+	AddDeltaChip(dL, TEXT("loyalty"), FVector2D(-68.f, 24.f), TEXT("t_heart_red_128"));
+	AddDeltaChip(dA, TEXT("hooked"), FVector2D(72.f, 24.f), TEXT("t_flame_128"));
 
 	// Niks zinnigs om te tonen? Dan toch een korte bevestiging zodat de popup nooit leeg is.
-	if (Rows->GetChildrenCount() == 0)
+	if (Chips.Num() == 0)
 	{
-		AddLine(TEXT("Sold!"), WeedUI::ColGood(), true);
+		AddChip(TEXT("Sold!"), WeedUI::ColGood(), FVector2D(0.f, -34.f), true, TEXT("ui_coin"));
 	}
 
 	Age = 0.f;
 	LifeTime = GPopLife;
 	bActive = true;
-	Card->SetVisibility(ESlateVisibility::HitTestInvisible);
-	Card->SetRenderOpacity(0.f);
 }
 
 void UDealResultPopupWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
 	SetVisibility(ESlateVisibility::HitTestInvisible);
-	if (!Card) { return; }
+	if (!RootCanvas) { return; }
 
 	if (!bActive)
 	{
-		if (Card->GetVisibility() != ESlateVisibility::Collapsed) { Card->SetVisibility(ESlateVisibility::Collapsed); }
+		for (UBorder* Chip : Chips)
+		{
+			if (Chip && Chip->GetVisibility() != ESlateVisibility::Collapsed) { Chip->SetVisibility(ESlateVisibility::Collapsed); }
+		}
 		return;
 	}
 
 	Age += DeltaTime;
 	if (Age >= LifeTime)
 	{
-		// Klaar: verberg + verwijder de widget helemaal (spawner maakt een nieuwe bij de volgende deal).
+		// Klaar: verberg + verwijder de widget helemaal (spawner maakt/hergebruikt hem bij de volgende deal).
 		bActive = false;
-		Card->SetRenderOpacity(0.f);
-		Card->SetVisibility(ESlateVisibility::Collapsed);
+		ClearChips();
 		RemoveFromParent();
 		return;
 	}
@@ -136,10 +187,10 @@ void UDealResultPopupWidget::NativeTick(const FGeometry& MyGeometry, float Delta
 	if (ACustomerBase* C = AnchorCustomer.Get())
 	{
 		Anchor = C->GetActorLocation();
-		// Boven het hoofd: halve capsule-hoogte + marge (fallback als er geen capsule is).
+		// Rond hoofd/schouders: halve capsule-hoogte + kleine marge; de chip-offsets verdelen de cijfers.
 		float Half = 90.f;
 		if (const UCapsuleComponent* Cap = C->GetCapsuleComponent()) { Half = Cap->GetScaledCapsuleHalfHeight(); }
-		Anchor.Z += Half + 40.f;
+		Anchor.Z += Half + 20.f;
 	}
 
 	// --- Projecteer naar het scherm. Achter de camera / niet-projecteerbaar -> even verbergen. ---
@@ -148,8 +199,14 @@ void UDealResultPopupWidget::NativeTick(const FGeometry& MyGeometry, float Delta
 	const bool bOnScreen = PC && PC->ProjectWorldLocationToScreen(Anchor, Screen, /*bPlayerViewportRelative*/ true);
 	if (!bOnScreen)
 	{
-		Card->SetRenderOpacity(0.f);
-		if (Card->GetVisibility() != ESlateVisibility::Collapsed) { Card->SetVisibility(ESlateVisibility::Collapsed); }
+		for (UBorder* Chip : Chips)
+		{
+			if (Chip)
+			{
+				Chip->SetRenderOpacity(0.f);
+				if (Chip->GetVisibility() != ESlateVisibility::Collapsed) { Chip->SetVisibility(ESlateVisibility::Collapsed); }
+			}
+		}
 		return;
 	}
 
@@ -163,17 +220,38 @@ void UDealResultPopupWidget::NativeTick(const FGeometry& MyGeometry, float Delta
 	// origin) vrijwel altijd BOVEN de bovenrand -> het kaartje hing daardoor onzichtbaar buiten beeld. Daarom
 	// klemmen we de positie binnen het scherm (met marge), zodat de popup ALTIJD leesbaar in beeld staat.
 	const FVector2D ViewSize = UWidgetLayoutLibrary::GetViewportSize(this) / DPI;
-	CanvasPos.X = FMath::Clamp(CanvasPos.X, 90.f, FMath::Max(90.f, ViewSize.X - 90.f));
-	CanvasPos.Y = FMath::Clamp(CanvasPos.Y, 120.f, FMath::Max(120.f, ViewSize.Y - 30.f));
-	if (UCanvasPanelSlot* CS = Cast<UCanvasPanelSlot>(Card->Slot))
-	{
-		CS->SetPosition(CanvasPos);
-	}
+	CanvasPos.X = FMath::Clamp(CanvasPos.X, 120.f, FMath::Max(120.f, ViewSize.X - 120.f));
+	CanvasPos.Y = FMath::Clamp(CanvasPos.Y, 110.f, FMath::Max(110.f, ViewSize.Y - 80.f));
 
-	// --- Fade: in (GPopFadeIn) -> hold -> uit (GPopFadeOut). ---
-	float Op = 1.f;
-	if (Age < GPopFadeIn) { Op = Age / GPopFadeIn; }
-	else if (Age > GPopFadeIn + GPopHold) { Op = FMath::Clamp((LifeTime - Age) / GPopFadeOut, 0.f, 1.f); }
-	Card->SetRenderOpacity(Op);
-	if (Card->GetVisibility() != ESlateVisibility::HitTestInvisible) { Card->SetVisibility(ESlateVisibility::HitTestInvisible); }
+	for (int32 i = 0; i < Chips.Num(); ++i)
+	{
+		UBorder* Chip = Chips[i];
+		if (!Chip) { continue; }
+
+		const float LocalAge = Age - (ChipDelays.IsValidIndex(i) ? ChipDelays[i] : 0.f);
+		if (LocalAge <= 0.f)
+		{
+			Chip->SetRenderOpacity(0.f);
+			Chip->SetVisibility(ESlateVisibility::Collapsed);
+			continue;
+		}
+
+		float Op = 1.f;
+		if (LocalAge < GPopFadeIn) { Op = LocalAge / GPopFadeIn; }
+		else if (Age > GPopFadeIn + GPopHold) { Op = FMath::Clamp((LifeTime - Age) / GPopFadeOut, 0.f, 1.f); }
+
+		const FVector2D Offset = ChipOffsets.IsValidIndex(i) ? ChipOffsets[i] : FVector2D::ZeroVector;
+		const float Drift = FMath::Clamp(LocalAge * 16.f, 0.f, 28.f);
+		FVector2D Pos = CanvasPos + Offset + FVector2D(0.f, -Drift);
+		Pos.X = FMath::Clamp(Pos.X, 70.f, FMath::Max(70.f, ViewSize.X - 70.f));
+		Pos.Y = FMath::Clamp(Pos.Y, 65.f, FMath::Max(65.f, ViewSize.Y - 45.f));
+
+		if (UCanvasPanelSlot* CS = Cast<UCanvasPanelSlot>(Chip->Slot))
+		{
+			CS->SetPosition(Pos);
+		}
+
+		Chip->SetRenderOpacity(Op);
+		if (Chip->GetVisibility() != ESlateVisibility::HitTestInvisible) { Chip->SetVisibility(ESlateVisibility::HitTestInvisible); }
+	}
 }

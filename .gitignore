@@ -8,6 +8,7 @@ Saved/
 
 # Visual Studio / projectbestanden (worden geregenereerd uit .uproject)
 *.sln
+*.slnx
 *.suo
 *.VC.db
 *.VC.opendb
@@ -33,9 +34,21 @@ Backup/
 /Content/__ExternalActors__/Sample/
 /Content/__ExternalActors__/CityBeachStrip/
 /Content/*.rar
+/Content/Citizen_man_01/
+/Content/Gamer_Girl/
+/Content/SchoolGirl/
+/Content/UltraDynamicSky/
+/Content/minimalist_gui/
+/Content/new models/
+/Content/UI/_PipeTest/
+/_IncomingKits/
 
 
 # Dev-only: UnrealClaude MCP-plugin (editor-tool, geen game-content)
 /Plugins/UnrealClaude/
+/Content/UnrealClaude/
+
+# Local Codex/MCP config
+/.codex/
 # Losse download-zip (geen repo-content)
 /ThePlugSIM_HUD_HighRes_Unreal_Rebuild.zip

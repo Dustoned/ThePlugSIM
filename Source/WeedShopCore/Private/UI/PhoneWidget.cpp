@@ -2520,17 +2520,12 @@ void UPhoneWidget::FillStoreList()
 				if (!STag.IsEmpty())
 				{
 					UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-					FLinearColor TagCol = WeedUI::TagColorForItem(IconId); TagCol.A = 0.96f; // per-strain kleur (zoals inventory/hotbar) i.p.v. één vaste kleur
-					TagPill->SetBrush(RoundedBrush(TagCol, 5.f));
-					TagPill->SetPadding(FMargin(4.f, 0.f, 4.f, 1.f));
-					// Bold + dunne donkere outline (zelfde als de inventory/hotbar-tags): dunne tekst leest slecht op de gekleurde pill.
-					UTextBlock* TagT = MakeText(STag, 9, WeedUI::ColText(), true);
-					{
-						FSlateFontInfo TagFont = WeedUI::Font(9, true);
-						TagFont.OutlineSettings.OutlineSize = 1;
-						TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
-						TagT->SetFont(TagFont);
-					}
+					TagPill->SetBrush(WeedUI::ItemTagPillBrush(IconId, 6.f));
+					TagPill->SetPadding(FMargin(6.f, 0.f, 6.f, 2.f));
+					UTextBlock* TagT = MakeText(STag, 11, FLinearColor::White, true);
+					TagT->SetFont(WeedUI::ItemTagFont(11));
+					TagT->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+					TagT->SetShadowOffset(FVector2D(1.f, 1.f));
 					TagPill->SetContent(TagT);
 					UOverlaySlot* TagOS = IcoOv->AddChildToOverlay(TagPill);
 					TagOS->SetHorizontalAlignment(HAlign_Center); TagOS->SetVerticalAlignment(VAlign_Bottom);

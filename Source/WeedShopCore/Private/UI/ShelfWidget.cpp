@@ -35,8 +35,7 @@ TSharedRef<SWidget> UShelfCell::RebuildWidget()
 	{
 		const bool bHasItem = !ItemId.IsNone();
 		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ShelfCellRoot"));
-		FSlateBrush ShRB = WeedUI::Rounded(bHasItem ? WeedUI::ColSlot(0.96f) : WeedUI::ColSlotEmpty(0.55f), 10.f);
-		if (bHasItem) { ShRB.OutlineSettings.Width = 1.5f; ShRB.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.55f)); }
+		FSlateBrush ShRB = WeedUI::StorageSlotBrush(bHasItem, false, bHasItem ? WeedUI::ItemAccent(ItemId) : FLinearColor(0.f, 0.f, 0.f, 0.f), 10.f);
 		Root->SetBrush(ShRB);
 		Root->SetPadding(FMargin(5.f));
 		WidgetTree->RootWidget = Root;
@@ -51,11 +50,27 @@ TSharedRef<SWidget> UShelfCell::RebuildWidget()
 			if (!Badge.IsEmpty())
 			{
 				UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-				Pill->SetBrush(WeedUI::Rounded(FLinearColor(0.02f, 0.03f, 0.05f, 0.85f), 7.f));
+				Pill->SetBrush(WeedUI::ItemQtyPillBrush());
 				Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
-				Pill->SetContent(WeedUI::Text(WidgetTree, Badge, 10, FLinearColor(0.92f, 0.95f, 1.f), false, true));
+				Pill->SetContent(WeedUI::Text(WidgetTree, Badge, 10, WeedUI::ColText(), false, true));
 				UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
-				PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Bottom);
+				PS->SetHorizontalAlignment(HAlign_Right); PS->SetVerticalAlignment(VAlign_Top);
+			}
+			const FString Tag = WeedUI::ItemTagShort(ItemId);
+			if (!Tag.IsEmpty())
+			{
+				UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 10, FLinearColor::White, false, true);
+				TagT->SetFont(WeedUI::ItemTagFont(10));
+				TagT->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+				TagT->SetShadowOffset(FVector2D(1.f, 1.f));
+				UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
+				TagPill->SetBrush(WeedUI::ItemTagPillBrush(ItemId, 5.f));
+				TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+				TagPill->SetContent(TagT);
+				TagPill->SetVisibility(ESlateVisibility::HitTestInvisible);
+				UOverlaySlot* TagOS = Ov->AddChildToOverlay(TagPill);
+				TagOS->SetHorizontalAlignment(HAlign_Center);
+				TagOS->SetVerticalAlignment(VAlign_Bottom);
 			}
 		}
 		// Lege slot: gewoon een leeg vakje (zoals de inventory), geen "+" in elk vakje (was rommelig bij een vol grid).
@@ -385,14 +400,18 @@ void UShelfWidget::RebuildFridgeSection(AStorageShelf* Shelf)
 		Items.Add(It);
 	}
 	const bool bAnyButter = Items.Num() > 0;
+	const int32 CookingCount = Shelf->Cooking.Num();
+	const bool bShowEdibleTools = bAnyButter || CookingCount > 0;
+	FridgeSection->SetVisibility(bShowEdibleTools ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	if (FridgeTitleText) { FridgeTitleText->SetVisibility(bShowEdibleTools ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	FridgePick->SetItems(Items);
 	FridgePick->SetVisibility(bAnyButter ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
-	// Hint alleen tonen als er geen ButterMix ligt; status-regel alleen tijdens het zetten.
-	if (FridgeHintText) { FridgeHintText->SetVisibility(bAnyButter ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
+	// Lege fridge toont alleen de lege slots. De edible-tools verschijnen pas bij ButterMix of lopende batches.
+	if (FridgeHintText) { FridgeHintText->SetVisibility(ESlateVisibility::Collapsed); }
 	if (FridgeStatusText)
 	{
-		const int32 C = Shelf->Cooking.Num();
+		const int32 C = CookingCount;
 		if (C > 0)
 		{
 			FridgeStatusText->SetText(FText::FromString(FString::Printf(TEXT("Setting %d batch%s... (~3 min, lands in the fridge)"), C, C == 1 ? TEXT("") : TEXT("es"))));

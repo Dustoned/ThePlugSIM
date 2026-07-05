@@ -49,7 +49,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 
 		// Buitenkant: afgeronde kaart met een dunne accent-rand wanneer er een item in zit.
 		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CellRoot"));
-		FSlateBrush RB = WeedUI::Rounded(Bg, Radius);
+		FSlateBrush RB = WeedUI::StorageSlotBrushWithFill(Bg, bHasIcon, false, Accent, Radius);
 		// Geen gekleurde rand meer om gevulde cellen (user: niet consistent met de hotbar). De per-strain
 		// tag-pill onderaan blijft wél gekleurd; de cel zelf is gewoon de afgeronde bg.
 		Root->SetBrush(RB);
@@ -100,7 +100,7 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		if (!Badge.IsEmpty())
 		{
 			UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-			Pill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f));
+			Pill->SetBrush(WeedUI::ItemQtyPillBrush());
 			Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
 			Pill->SetContent(WeedUI::Text(WidgetTree, Badge, 10, WeedUI::ColText(), false, true));
 			UOverlaySlot* PS = Ov->AddChildToOverlay(Pill);
@@ -111,17 +111,13 @@ TSharedRef<SWidget> UInvCell::RebuildWidget()
 		// Strain/variant-TAG-bubble onderaan de cel (alleen rooster) -> onderscheid items met hetzelfde icoon.
 		if (!Tag.IsEmpty() && !bHotbar)
 		{
-			// Iets groter + dunne donkere outline: op size 9 oogde de (Exo-)tekst te dun voor snelle herkenning.
-			UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 10, FLinearColor(0.98f, 1.f, 0.99f), false, true);
-			{
-				FSlateFontInfo TagFont = WeedUI::Font(10, true);
-				TagFont.OutlineSettings.OutlineSize = 1;
-				TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
-				TagT->SetFont(TagFont);
-			}
+			UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 11, FLinearColor::White, false, true);
+			TagT->SetFont(WeedUI::ItemTagFont(11));
+			TagT->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+			TagT->SetShadowOffset(FVector2D(1.f, 1.f));
 			UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-			TagPill->SetBrush(WeedUI::Rounded(WeedUI::TagColorForItem(IconId), 6.f)); // strain -> eigen kleur; standaard-item -> grijs
-			TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+			TagPill->SetBrush(WeedUI::ItemTagPillBrush(IconId, 6.f)); // strain -> eigen kleur; standaard-item -> grijs
+			TagPill->SetPadding(FMargin(6.f, 0.f, 6.f, 2.f));
 			TagPill->SetContent(TagT);
 			TagPill->SetVisibility(ESlateVisibility::HitTestInvisible);
 			UOverlaySlot* TagOS = Ov->AddChildToOverlay(TagPill);
@@ -1155,7 +1151,7 @@ UInvCell* UInventoryWidget::BuildGridCellWidget(int32 cell, int32 StackId, bool 
 		// Lege cel (of plek van een item dat nu op de hotbar staat): drop-doel, niet sleepbaar.
 		// Zelfde duidelijke contrast als het droogrek.
 		Cell->StackId = 0; Cell->bDraggable = false;
-		Cell->Bg = WeedUI::Hex(0x2A3140, 0.5f); // lege cel: subtieler/donkerder dan gevuld
+		Cell->Bg = WeedUI::ColSlotEmpty(0.46f); // lege cel: subtieler/donkerder dan gevuld
 	}
 	return Cell;
 }

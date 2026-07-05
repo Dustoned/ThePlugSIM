@@ -21,6 +21,7 @@
 #include "Game/WeedShopGameState.h"
 #include "World/WorldSyncComponent.h" // bestaan van speler-schakelaars naar de joiner publiceren
 #include "Components/StaticMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -491,8 +492,49 @@ void UBuildComponent::UpdateNoGoGrid(bool bShow, const FVector& Center, float Ya
 
 void UBuildComponent::DestroyPreview()
 {
-	if (AActor* A = PreviewActor.Get()) { A->Destroy(); }
+	if (AActor* A = PreviewActor.Get())
+	{
+		A->SetActorHiddenInGame(true);
+		A->SetActorEnableCollision(false);
+		TArray<UPrimitiveComponent*> Comps;
+		A->GetComponents<UPrimitiveComponent>(Comps);
+		for (UPrimitiveComponent* C : Comps)
+		{
+			if (!C) { continue; }
+			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			C->SetGenerateOverlapEvents(false);
+			C->SetVisibility(false, true);
+			C->SetHiddenInGame(true, true);
+		}
+		A->Destroy();
+	}
 	PreviewActor = nullptr;
+}
+
+void UBuildComponent::HidePlacementVisuals()
+{
+	if (Ghost)
+	{
+		Ghost->SetVisibility(false, true);
+	}
+	if (RangeRing)
+	{
+		RangeRing->SetVisibility(false, true);
+	}
+	if (TargetRing)
+	{
+		TargetRing->SetVisibility(false, true);
+	}
+	for (UStaticMeshComponent* M : DoorMarks)
+	{
+		if (M)
+		{
+			M->SetVisibility(false, true);
+		}
+	}
+	LastGridPos = FVector(1e9f);
+	RemotePreviewItem = NAME_None;
+	DestroyPreview();
 }
 
 void UBuildComponent::SpawnPreview(const FPlaceableDef& Def, FName ItemId)
@@ -557,24 +599,13 @@ void UBuildComponent::CancelPlacing()
 {
 	bPlacing = false;
 	bValidSpot = false;
+	bAimHit = false;
 	bPlacingGear = false;
 	CurUpgradeKind = 0;
 	SnapTarget = nullptr;
-	if (Ghost)
-	{
-		Ghost->SetVisibility(false);
-	}
-	if (RangeRing)
-	{
-		RangeRing->SetVisibility(false);
-	}
-	if (TargetRing)
-	{
-		TargetRing->SetVisibility(false);
-	}
-	for (UStaticMeshComponent* M : DoorMarks) { if (M) { M->SetVisibility(false); } } // no-go-raster verbergen
-	LastGridPos = FVector(1e9f);
-	DestroyPreview();
+	PreviewSendAccum = 0.f;
+	HidePlacementVisuals();
+	ServerClearPreview();
 }
 
 AActor* UBuildComponent::FindUpgradeTarget(int32 Kind, const FVector& Near) const
@@ -630,7 +661,7 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	bool bUIOpen = false;
 	if (const UPhoneClientComponent* Ph = GetOwner()->FindComponentByClass<UPhoneClientComponent>())
 	{
-		bUIOpen = Ph->IsOpen() || Ph->IsRollOpen() || Ph->IsDealOpen() || Ph->IsInventoryOpen();
+		bUIOpen = Ph->IsAnyGameUIOpen() || Ph->IsMainMenuOpen();
 	}
 
 	// Oppakken: houd G ingedrukt terwijl je een pot aankijkt -> na PickupHoldDuration terug
@@ -668,18 +699,26 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 				}
 			}
 		}
-		if (bGDown && IsPickable(PickTarget))
+		AActor* LockedPickupTarget = IsPickable(PickTarget) ? PickTarget : nullptr;
+		if (LockedPickupTarget != PickupHoldTarget.Get())
+		{
+			PickupHoldAccum = 0.f;
+			PickupHoldTarget = LockedPickupTarget;
+		}
+		if (bGDown && !bUIOpen && LockedPickupTarget)
 		{
 			PickupHoldAccum += DeltaTime;
 			if (PickupHoldAccum >= PickupHoldDuration)
 			{
-				ServerPickup(PickTarget);
+				ServerPickup(LockedPickupTarget);
 				PickupHoldAccum = 0.f;
+				PickupHoldTarget = nullptr;
 			}
 		}
 		else
 		{
 			PickupHoldAccum = 0.f;
+			if (!bGDown || bUIOpen) { PickupHoldTarget = nullptr; }
 		}
 
 		// Weggooien: houd X ingedrukt terwijl je een GEPLANTE pot aankijkt -> na DiscardHoldDuration
@@ -711,8 +750,18 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		const FName Held = Inv ? Inv->GetActiveItemId() : NAME_None;
 		FPlaceableDef HeldDef;
 		const bool bPlaceable = GetPlaceableDef(Held, HeldDef);
+		if (SuppressAutoPreviewTimer > 0.f)
+		{
+			SuppressAutoPreviewTimer = FMath::Max(0.f, SuppressAutoPreviewTimer - DeltaTime);
+			if (Held != SuppressAutoPreviewItem || !bPlaceable)
+			{
+				SuppressAutoPreviewItem = NAME_None;
+				SuppressAutoPreviewTimer = 0.f;
+			}
+		}
+		const bool bSuppressAutoPreview = SuppressAutoPreviewTimer > 0.f && Held == SuppressAutoPreviewItem;
 
-		if (bPlaceable && !bUIOpen)
+		if (bPlaceable && !bUIOpen && !bSuppressAutoPreview)
 		{
 			if (!bPlacing || PlacingItemId != Held)
 			{
@@ -725,8 +774,17 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 		}
 	}
 
+	if (!bPlacing)
+	{
+		bAimHit = false;
+		bValidSpot = false;
+		HidePlacementVisuals();
+		return;
+	}
+
 	bAimHit = false;
 	bValidSpot = false;
+	PlacementHint = CurrentDef.bIsWallMount ? TEXT("Aim at a wall") : TEXT("Aim at the floor");
 	// Rauw aim-punt (het onbewerkte trefpunt van de kijk-trace, vóór alle snap/duw-correcties):
 	// de upgrade-snap gebruikt dit als RICHTING, zodat de gear met je muis over de cirkel rond
 	// het doel-object glijdt i.p.v. vast aan de speler-kant te plakken.
@@ -1130,11 +1188,36 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 
 void UBuildComponent::ServerUpdatePreview_Implementation(bool bInPlacing, FVector Location, float Yaw, bool bValid, FName InItemId)
 {
+	if (!bInPlacing)
+	{
+		ServerClearPreview_Implementation();
+		return;
+	}
+	if (const UWorld* W = GetWorld())
+	{
+		if (W->GetTimeSeconds() < PreviewClearIgnoreUntil)
+		{
+			return;
+		}
+	}
 	bRepPlacing = bInPlacing;
 	RepLocation = Location;
 	RepYaw = Yaw;
 	bRepValid = bValid;
 	RepItemId = InItemId;
+}
+
+void UBuildComponent::ServerClearPreview_Implementation()
+{
+	bRepPlacing = false;
+	bRepValid = false;
+	RepLocation = FVector::ZeroVector;
+	RepYaw = 0.f;
+	RepItemId = NAME_None;
+	if (const UWorld* W = GetWorld())
+	{
+		PreviewClearIgnoreUntil = W->GetTimeSeconds() + 0.35f;
+	}
 }
 
 void UBuildComponent::ServerPickup_Implementation(AActor* Target)
@@ -1256,8 +1339,7 @@ void UBuildComponent::UpdateRemoteGhost()
 	// Niet aan het plaatsen -> alle preview-objecten verbergen/opruimen.
 	if (!bRepPlacing)
 	{
-		if (Ghost) { Ghost->SetVisibility(false); }
-		if (PreviewActor.IsValid()) { DestroyPreview(); }
+		HidePlacementVisuals();
 		RemotePreviewItem = NAME_None;
 		return;
 	}
@@ -1265,6 +1347,8 @@ void UBuildComponent::UpdateRemoteGhost()
 	FPlaceableDef Def;
 	if (!GetPlaceableDef(RepItemId, Def))
 	{
+		HidePlacementVisuals();
+		RemotePreviewItem = NAME_None;
 		return;
 	}
 
@@ -1550,8 +1634,13 @@ void UBuildComponent::ConfirmPlacement()
 	{
 		return;
 	}
-	ServerPlace(PlacingItemId, PreviewLocation, PreviewRotation);
+	const FName ItemToPlace = PlacingItemId;
+	const FVector PlaceLocation = PreviewLocation;
+	const FRotator PlaceRotation = PreviewRotation;
+	SuppressAutoPreviewItem = ItemToPlace;
+	SuppressAutoPreviewTimer = 1.25f;
 	CancelPlacing();
+	ServerPlace(ItemToPlace, PlaceLocation, PlaceRotation);
 }
 
 void UBuildComponent::RotatePlacement()

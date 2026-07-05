@@ -16,6 +16,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
+#include "Components/WrapBox.h"
+#include "Components/WrapBoxSlot.h"
 #include "GameFramework/Pawn.h"
 
 namespace
@@ -38,6 +40,75 @@ namespace
 		}
 		return Out;
 	}
+
+	FString CompactUnits(FString Value)
+	{
+		Value.ReplaceInline(TEXT(" g"), TEXT("g"));
+		Value.ReplaceInline(TEXT(" min"), TEXT("m"));
+		return Value;
+	}
+
+	FString HandTitleFor(FName ItemId)
+	{
+		const FString S = ItemId.ToString();
+		if (S.StartsWith(TEXT("Joint_")))
+		{
+			const FName Strain = UInventoryComponent::JointStrain(ItemId);
+			if (!Strain.IsNone()) { return PrettyName(Strain.ToString()); }
+		}
+		if (S.StartsWith(TEXT("Bag_")))
+		{
+			const FName Strain = UInventoryComponent::BagStrain(ItemId);
+			if (!Strain.IsNone()) { return PrettyName(Strain.ToString()); }
+		}
+		return PrettyName(WeedUI::PrettyItemName(ItemId));
+	}
+
+	FString ChipTextForStat(const FString& Label, const FString& Value)
+	{
+		const FString V = CompactUnits(Value);
+		if (Label == TEXT("Strain") || Label == TEXT("Bag count")) { return FString(); }
+		if (Label == TEXT("Per joint") || Label == TEXT("Per bag")) { return V; }
+		if (Label == TEXT("THC")) { return FString::Printf(TEXT("THC %s"), *V); }
+		if (Label == TEXT("Quality")) { return FString::Printf(TEXT("Q %s"), *V); }
+		if (Label == TEXT("THC up to")) { return FString::Printf(TEXT("THC %s"), *V); }
+		if (Label == TEXT("Max yield")) { return FString::Printf(TEXT("Yield %s"), *V); }
+		if (Label == TEXT("Grow time")) { return V.StartsWith(TEXT("~")) ? V : FString::Printf(TEXT("~%s"), *V); }
+		if (Label == TEXT("Quality cap")) { return FString::Printf(TEXT("Cap %s"), *V); }
+		if (Label == TEXT("Plants")) { return FString::Printf(TEXT("%s plants"), *V); }
+		if (Label == TEXT("Lasts")) { return V; }
+		if (Label == TEXT("Capacity"))
+		{
+			FString C = V;
+			C.ReplaceInline(TEXT("up to "), TEXT(""));
+			return FString::Printf(TEXT("%s max"), *C);
+		}
+		return FString::Printf(TEXT("%s %s"), *Label, *V);
+	}
+
+	FString HandHintFor(FName ItemId, const FString& DefaultHint)
+	{
+		const FString S = ItemId.ToString();
+		if (S.StartsWith(TEXT("WetBud_"))) { return TEXT("Dry before use"); }
+		if (S.StartsWith(TEXT("Bud_"))) { return TEXT("Pack or roll"); }
+		if (S.StartsWith(TEXT("Bag_"))) { return TEXT("Sell to customers"); }
+		if (S.StartsWith(TEXT("Joint_"))) { return TEXT("Smoke or sell"); }
+		if (S.StartsWith(TEXT("Seed_"))) { return TEXT("Plant in soil"); }
+		if (S.StartsWith(TEXT("Soil_"))) { return TEXT("Fill an empty pot"); }
+		if (S.StartsWith(TEXT("WaterBottle"))) { return TEXT("Water plants"); }
+		if (S.StartsWith(TEXT("Cont_"))) { return TEXT("Pack product into bags"); }
+		if (S.StartsWith(TEXT("Papers_"))) { return TEXT("Load flower, then roll"); }
+		if (S.StartsWith(TEXT("Pot_"))) { return TEXT("Place, fill, plant"); }
+		if (S.StartsWith(TEXT("DryRack_"))) { return TEXT("Dry wet buds"); }
+		if (S.StartsWith(TEXT("Bench_"))) { return TEXT("Pack buds into containers"); }
+		if (S == TEXT("Shelf") || S == TEXT("Chest")) { return TEXT("Store extra stock"); }
+		if (S == TEXT("Atm")) { return TEXT("Deposit or withdraw"); }
+		if (S == TEXT("Table") || S == TEXT("Mattress") || S == TEXT("Fridge") || S.StartsWith(TEXT("Lamp")) || S.StartsWith(TEXT("Tent")))
+		{
+			return TEXT("Place at home");
+		}
+		return DefaultHint;
+	}
 }
 
 TSharedRef<SWidget> UHandInfoWidget::RebuildWidget()
@@ -55,75 +126,94 @@ void UHandInfoWidget::BuildShell(UCanvasPanel* Root)
 {
 	Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	// Kaart LINKS-midden (zo valt 'ie nooit achter de telefoon, die rechts opent).
+	// Compacte held-item kaart, gekoppeld aan de hotbar. Geen los debug-paneel links in de hoek:
+	// dit leest als de detailkaart van het geselecteerde hotbar-item.
 	UBorder* CardB = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HandCard"));
-	// Massief paneel (kit-look, zelfde als de inventory quick-view) i.p.v. transparant: leesbaarder + nettere kaart.
-	CardB->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.95f), 12.f));
+	FSlateBrush CardBrush = WeedUI::Rounded(WeedUI::ColPanel(0.72f), 8.f);
+	CardBrush.OutlineSettings.Width = 1.f;
+	CardBrush.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.42f));
+	CardB->SetBrush(CardBrush);
 	CardB->SetPadding(FMargin(0.f));
 	Card = CardB;
 	UCanvasPanelSlot* CS = Root->AddChildToCanvas(CardB);
-	// LinksONDER (boven de hotbar), niet links-midden: zo botst de vastgehouden-item-kaart niet meer
-	// met de status-HUD linksboven.
-	CS->SetAnchors(FAnchors(0.f, 1.f, 0.f, 1.f));
-	CS->SetAlignment(FVector2D(0.f, 1.f));
+	CS->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
+	CS->SetAlignment(FVector2D(1.f, 1.f));
 	CS->SetAutoSize(true);
-	CS->SetPosition(FVector2D(24.f, -28.f));
+	const FVector2D HotbarLinkedOffset(-388.f, -18.f);
+	CS->SetPosition(HotbarLinkedOffset);
 
-	// Accent-balk links + tekstkolom (vaste, smalle breedte -> kaart wordt verticaler dan breed).
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 	CardB->SetContent(Row);
 
 	AccentBar = WidgetTree->ConstructWidget<UBorder>();
-	AccentBar->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(), 3.f));
-	AccentBar->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
+	AccentBar->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(), 2.f));
+	AccentBar->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
 	UHorizontalBoxSlot* AS = Row->AddChildToHorizontalBox(AccentBar);
 	AS->SetPadding(FMargin(0.f)); AS->SetVerticalAlignment(VAlign_Fill);
 
 	USizeBox* ColSize = WidgetTree->ConstructWidget<USizeBox>();
-	ColSize->SetWidthOverride(180.f); // smal -> tekst wrapt, kaart wordt hoger
+	ColSize->SetWidthOverride(194.f);
 	UHorizontalBoxSlot* SzS = Row->AddChildToHorizontalBox(ColSize);
 	SzS->SetVerticalAlignment(VAlign_Center);
 
 	UVerticalBox* Col = WidgetTree->ConstructWidget<UVerticalBox>();
 	ColSize->SetContent(Col);
 
-	// Type-tag (klein, hoofdletters, gekleurd). Bold projectfont + dunne donkere outline: de letters waren
-	// te dun/onleesbaar zonder paneel-achtergrond (de kaart is transparant).
-	TypeText = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
+	UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
+	Col->AddChildToVerticalBox(Head)->SetPadding(FMargin(11.f, 9.f, 11.f, 6.f));
+
+	UVerticalBox* TitleCol = WidgetTree->ConstructWidget<UVerticalBox>();
+	UHorizontalBoxSlot* TitleS = Head->AddChildToHorizontalBox(TitleCol);
+	TitleS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	TitleS->SetVerticalAlignment(VAlign_Center);
+
+	TypeText = WeedUI::Text(WidgetTree, TEXT(""), 10, FLinearColor(0.6f, 0.95f, 0.65f), false, true);
 	{
-		FSlateFontInfo TagFont = WeedUI::Font(11, true);
+		FSlateFontInfo TagFont = WeedUI::Font(10, true);
 		TagFont.OutlineSettings.OutlineSize = 1;
 		TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
 		TypeText->SetFont(TagFont);
 	}
 	TypeText->SetAutoWrapText(true);
-	Col->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(14.f, 12.f, 14.f, 1.f));
+	TitleCol->AddChildToVerticalBox(TypeText)->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
 
-	// Naam (groot).
-	NameText = WeedUI::Text(WidgetTree, TEXT(""), 20, WeedUI::ColText(), false, true);
+	NameText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
 	NameText->SetAutoWrapText(true);
-	Col->AddChildToVerticalBox(NameText)->SetPadding(FMargin(14.f, 0.f, 14.f, 2.f));
+	TitleCol->AddChildToVerticalBox(NameText)->SetPadding(FMargin(0.f));
 
-	// Aantal/gram - groot en gekleurd, direct onder de titel.
-	QtyText = WeedUI::Text(WidgetTree, TEXT(""), 22, WeedUI::ColGood(), false, true);
-	Col->AddChildToVerticalBox(QtyText)->SetPadding(FMargin(14.f, 0.f, 14.f, 8.f));
+	QtyText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), false, true);
+	QtyPill = WidgetTree->ConstructWidget<UBorder>();
+	QtyPill->SetBrush(WeedUI::Rounded(WeedUI::ColSlot(0.92f), 7.f));
+	QtyPill->SetPadding(FMargin(7.f, 2.f, 7.f, 3.f));
+	QtyPill->SetContent(QtyText);
+	UHorizontalBoxSlot* QtyS = Head->AddChildToHorizontalBox(QtyPill);
+	QtyS->SetVerticalAlignment(VAlign_Top);
+	QtyS->SetPadding(FMargin(7.f, 2.f, 0.f, 0.f));
 
-	// Dun scheidingslijntje.
 	Divider = WidgetTree->ConstructWidget<UBorder>();
-	Divider->SetBrush(WeedUI::Rounded(WeedUI::ColStroke(0.6f), 1.f));
-	Divider->SetPadding(FMargin(0.f, 0.7f, 0.f, 0.7f));
-	Col->AddChildToVerticalBox(Divider)->SetPadding(FMargin(14.f, 0.f, 14.f, 8.f));
+	Divider->SetBrush(WeedUI::Rounded(WeedUI::ColStroke(0.35f), 1.f));
+	Divider->SetPadding(FMargin(0.f, 0.5f, 0.f, 0.5f));
+	Col->AddChildToVerticalBox(Divider)->SetPadding(FMargin(11.f, 0.f, 11.f, 7.f));
 
-	// Nette label/waarde-rijen.
-	StatBox = WidgetTree->ConstructWidget<UVerticalBox>();
-	Col->AddChildToVerticalBox(StatBox)->SetPadding(FMargin(14.f, 0.f, 14.f, 6.f));
+	ChipBox = WidgetTree->ConstructWidget<UWrapBox>();
+	Col->AddChildToVerticalBox(ChipBox)->SetPadding(FMargin(11.f, 0.f, 11.f, 5.f));
+	for (int32 i = 0; i < 5; ++i)
+	{
+		UTextBlock* ChipT = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColText(), false, true);
+		UBorder* Chip = WidgetTree->ConstructWidget<UBorder>();
+		Chip->SetBrush(WeedUI::Rounded(WeedUI::ColInner(0.92f), 7.f));
+		Chip->SetPadding(FMargin(7.f, 2.f, 7.f, 3.f));
+		Chip->SetContent(ChipT);
+		Chip->SetVisibility(ESlateVisibility::Collapsed);
+		UWrapBoxSlot* ChipS = ChipBox->AddChildToWrapBox(Chip);
+		ChipS->SetPadding(FMargin(0.f, 0.f, 5.f, 5.f));
+		ChipPills.Add(Chip);
+		ChipTexts.Add(ChipT);
+	}
 
-	// Korte hint (dim) onderaan.
 	HintText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim(), false, false);
 	HintText->SetAutoWrapText(true);
-	Col->AddChildToVerticalBox(HintText)->SetPadding(FMargin(14.f, 2.f, 14.f, 12.f));
-
-	// (Geen zware tekst-schaduw meer: op het massieve paneel is de tekst zo al leesbaar, net als de quick-view.)
+	Col->AddChildToVerticalBox(HintText)->SetPadding(FMargin(11.f, 0.f, 11.f, 10.f));
 
 	Card->SetRenderOpacity(0.f);
 }
@@ -162,12 +252,14 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	// Bouw een sleutel zodat we de tekst alleen bij wijziging updaten. Neem de ACTIEVE stack-id + diens
 	// Quality mee, zodat wisselen tussen 2 gelijke items (bv. 2 flessen) én het water-niveau live verversen.
-	const int32 Qty = Inv->GetQuantity(Id);
-	const float Thc = Inv->GetItemQuality(Id);
-	const float Qpct = Inv->GetItemQualityPct(Id);
 	const int32 ActiveSid = Inv->GetActiveStackId();
-	const float ActiveQ = Inv->GetStackQualityById(ActiveSid);
-	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%.0f|%s"), *IdStr, Qty, Thc, Qpct, ActiveSid, ActiveQ, *RollDesc);
+	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
+	const int32 ActiveIdx = Inv->FindStackById(ActiveSid);
+	const FInventoryStack* ActiveStack = Stacks.IsValidIndex(ActiveIdx) ? &Stacks[ActiveIdx] : nullptr;
+	const int32 Qty = ActiveStack ? ActiveStack->Quantity : Inv->GetQuantity(Id);
+	const float Thc = ActiveStack ? ActiveStack->Quality : Inv->GetItemQuality(Id);
+	const float Qpct = ActiveStack ? ActiveStack->QualityPct : Inv->GetItemQualityPct(Id);
+	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%s"), *IdStr, Qty, Thc, Qpct, ActiveSid, *RollDesc);
 	if (Key == LastKey) { return; }
 	LastKey = Key;
 
@@ -191,8 +283,20 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	if (AccentBar) { AccentBar->SetBrush(WeedUI::Rounded(Col, 3.f)); }
 	if (TypeText) { TypeText->SetText(FText::FromString(Type)); TypeText->SetColorAndOpacity(FSlateColor(Col)); } // categorie-kleur (bold+outline blijven)
-	if (NameText) { NameText->SetText(FText::FromString(PrettyName(WeedUI::PrettyItemName(Id)))); NameText->SetColorAndOpacity(FSlateColor(NameCol)); }
-	if (HintText) { HintText->SetText(FText::FromString(Hint)); }
+	if (NameText) { NameText->SetText(FText::FromString(HandTitleFor(Id))); NameText->SetColorAndOpacity(FSlateColor(NameCol)); }
+	if (QtyPill)
+	{
+		FSlateBrush QtyBrush = WeedUI::Rounded(FLinearColor(Col.R, Col.G, Col.B, 0.16f), 7.f);
+		QtyBrush.OutlineSettings.Width = 1.f;
+		QtyBrush.OutlineSettings.Color = FSlateColor(FLinearColor(Col.R, Col.G, Col.B, 0.45f));
+		QtyPill->SetBrush(QtyBrush);
+	}
+	if (HintText)
+	{
+		const FString HintLine = bRollLoaded && !RollDesc.IsEmpty() ? RollDesc : HandHintFor(Id, Hint);
+		HintText->SetText(FText::FromString(HintLine));
+		HintText->SetVisibility(HintLine.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
 
 	// Aantal groot bij de titel: gram voor wiet/baggies, anders "x N". Voor gereedschap/plaatsbare
 	// dingen (fles, pot, rek, bench, meubels) is een aantal zinloos -> verbergen.
@@ -215,57 +319,70 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 					Cur = Can->GetCharges(); Max = Can->GetMaxCharges();
 				}
 			}
-			QtyText->SetVisibility(ESlateVisibility::HitTestInvisible);
+			if (QtyPill) { QtyPill->SetVisibility(ESlateVisibility::HitTestInvisible); }
 			QtyText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Cur, FMath::Max(1, Max))));
 			QtyText->SetColorAndOpacity(FSlateColor((Cur <= 0) ? WeedUI::ColWarn() : WeedUI::ColGood()));
 		}
 		else if (bEquip)
 		{
-			QtyText->SetVisibility(ESlateVisibility::Collapsed);
+			if (QtyPill) { QtyPill->SetVisibility(ESlateVisibility::Collapsed); }
 		}
 		else
 		{
-			QtyText->SetVisibility(ESlateVisibility::HitTestInvisible);
-			if (UInventoryComponent::IsBag(Id))
+			if (QtyPill) { QtyPill->SetVisibility(ESlateVisibility::HitTestInvisible); }
+			if (Id == TEXT("Cash"))
 			{
-				// Zakjes: "Nx Xg" (aantal x grootte), bv. 2x 2g.
-				QtyText->SetText(FText::FromString(WeedUI::ItemQtyBadge(Id, Qty)));
+				QtyText->SetText(FText::FromString(FString::Printf(TEXT("EUR %d"), Qty)));
+			}
+			else if (UInventoryComponent::IsBag(Id))
+			{
+				QtyText->SetText(FText::FromString(FString::Printf(TEXT("x%d"), FMath::Max(1, Qty))));
 			}
 			else
 			{
-				const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_"));
-				QtyText->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%d g"), Qty) : FString::Printf(TEXT("x%d"), Qty)));
+				const bool bGrams = IdStr.StartsWith(TEXT("WetBud_")) || IdStr.StartsWith(TEXT("Bud_"))
+					|| IdStr.StartsWith(TEXT("Crystal_")) || IdStr.StartsWith(TEXT("Hash_"))
+					|| IdStr.StartsWith(TEXT("Moonrock_")) || IdStr.StartsWith(TEXT("Rosin_"))
+					|| IdStr.StartsWith(TEXT("Bubble_"));
+				QtyText->SetText(FText::FromString(bGrams ? FString::Printf(TEXT("%dg"), Qty) : FString::Printf(TEXT("x%d"), FMath::Max(1, Qty))));
 			}
 			QtyText->SetColorAndOpacity(FSlateColor(Col));
 		}
 	}
 
-	// Nette label/waarde-rijen opbouwen.
-	if (StatBox)
+	if (ChipBox)
 	{
-		StatBox->ClearChildren();
-			if (bRollLoaded)
-			{
-				// Geladen vloei -> toon de geladen-omschrijving (snapshot uit GetRollLoadDesc) bovenaan,
-				// volle breedte (wrapt). De "2g loaded"-info hoort hier bij de hand-preview, niet bij de controls.
-				UTextBlock* Ld = WeedUI::Text(WidgetTree, RollDesc, 13, WeedUI::ColGood(), false, true);
-				Ld->SetAutoWrapText(true);
-				StatBox->AddChildToVerticalBox(Ld)->SetPadding(FMargin(0.f, 2.f, 0.f, 6.f));
-			}
-		auto AddStat = [this](const FString& Label, const FString& Value)
+		TArray<FString> Chips;
+		Chips.Reserve(5);
+		auto AddChipText = [&Chips](const FString& T)
 		{
-			UHorizontalBox* RowH = WidgetTree->ConstructWidget<UHorizontalBox>();
-			UTextBlock* L = WeedUI::Text(WidgetTree, Label, 12, WeedUI::ColTextDim());
-			UHorizontalBoxSlot* LS = RowH->AddChildToHorizontalBox(L);
-			LS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); LS->SetVerticalAlignment(VAlign_Center);
-			UTextBlock* V = WeedUI::Text(WidgetTree, Value, 13, WeedUI::ColText(), false, true);
-			V->SetJustification(ETextJustify::Right);
-			UHorizontalBoxSlot* VS = RowH->AddChildToHorizontalBox(V);
-			VS->SetVerticalAlignment(VAlign_Center);
-			StatBox->AddChildToVerticalBox(RowH)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+			if (!T.IsEmpty() && Chips.Num() < 5) { Chips.Add(T); }
 		};
+		for (const TPair<FString, FString>& Stat : Detail.Stats) { AddChipText(ChipTextForStat(Stat.Key, Stat.Value)); }
+		if (bRollLoaded) { AddChipText(TEXT("Loaded")); }
 
-		// Aantal staat al groot bij de titel - hier alleen de echte eigenschappen (gedeelde stat-rijen).
-		for (const TPair<FString, FString>& Stat : Detail.Stats) { AddStat(Stat.Key, Stat.Value); }
+		for (int32 i = 0; i < ChipPills.Num(); ++i)
+		{
+			if (i < Chips.Num())
+			{
+				if (ChipTexts.IsValidIndex(i) && ChipTexts[i])
+				{
+					ChipTexts[i]->SetText(FText::FromString(Chips[i]));
+					ChipTexts[i]->SetColorAndOpacity(FSlateColor(WeedUI::ColText()));
+				}
+				FSlateBrush ChipBrush = WeedUI::Rounded(WeedUI::ColInner(0.92f), 7.f);
+				ChipBrush.OutlineSettings.Width = 1.f;
+				ChipBrush.OutlineSettings.Color = FSlateColor(FLinearColor(Col.R, Col.G, Col.B, 0.35f));
+				if (ChipPills[i])
+				{
+					ChipPills[i]->SetBrush(ChipBrush);
+					ChipPills[i]->SetVisibility(ESlateVisibility::HitTestInvisible);
+				}
+			}
+			else if (ChipPills[i])
+			{
+				ChipPills[i]->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
 	}
 }

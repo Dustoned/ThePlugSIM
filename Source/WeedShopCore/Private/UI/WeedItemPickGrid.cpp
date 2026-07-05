@@ -74,7 +74,7 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 	if (!Item.Badge.IsEmpty())
 	{
 		UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-		Pill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f)); // zelfde badge-pill als de inventory-cel
+		Pill->SetBrush(WeedUI::ItemQtyPillBrush()); // zelfde badge-pill als de inventory-cel
 		Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
 		Pill->SetContent(WeedUI::Text(WidgetTree, Item.Badge, 10, WeedUI::ColText(), false, true));
 		Pill->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -110,17 +110,14 @@ UWidget* UWeedItemPickGrid::MakeCellContent(const FWeedPickItem& Item) const
 
 			if (bHasTag)
 			{
-				// Strain/variant-TAG-bubble: eigen kleur per strain (grijs voor standaard-spul), witte outline-tekst.
-				UTextBlock* TagT = WeedUI::Text(WidgetTree, UseTag, 10, FLinearColor(0.98f, 1.f, 0.99f), false, true);
-				{
-					FSlateFontInfo TagFont = WeedUI::Font(10, true);
-					TagFont.OutlineSettings.OutlineSize = 1;
-					TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
-					TagT->SetFont(TagFont);
-				}
+				// Strain/variant-TAG-bubble: gedeelde hoge-contrast tagstijl.
+				UTextBlock* TagT = WeedUI::Text(WidgetTree, UseTag, 11, FLinearColor::White, false, true);
+				TagT->SetFont(WeedUI::ItemTagFont(11));
+				TagT->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+				TagT->SetShadowOffset(FVector2D(1.f, 1.f));
 				UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-				TagPill->SetBrush(WeedUI::Rounded(WeedUI::TagColorForItem(UseIcon), 6.f));
-				TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+				TagPill->SetBrush(WeedUI::ItemTagPillBrush(UseIcon, 6.f));
+				TagPill->SetPadding(FMargin(6.f, 0.f, 6.f, 2.f));
 				TagPill->SetContent(TagT);
 				UVerticalBoxSlot* TagS = Bottom->AddChildToVerticalBox(TagPill);
 				TagS->SetHorizontalAlignment(HAlign_Center);
@@ -147,25 +144,33 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 {
 	if (!Cells.IsValidIndex(i) || !Cells[i]) { return; }
 
-	// Geselecteerd = hotbar-actief-stijl (accent-vlak + dunne accent-rand); anders neutrale lege-cel-bg.
+	// Geselecteerd = duidelijke accent-rand; niet-geselecteerd blijft vol leesbaar zoals inventory/hotbar.
 	FButtonStyle S;
-	// Niet-geselecteerd = ZELFDE cel-bg (donker) + radius als de inventory-cel, zodat pickers en inventory matchen.
-	const FLinearColor InvCellBg = FLinearColor(0.11f, 0.12f, 0.16f, 0.96f);
-	FSlateBrush Base = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.96f) : InvCellBg, 8.f);
+	FSlateBrush Base = bSel
+		? WeedUI::StorageSlotBrushWithFill(WeedUI::ColAccentDim(0.92f), true, true, WeedUI::ColAccent(1.f), 8.f)
+		: WeedUI::StorageSlotBrush(true, false, WeedUI::ColAccent(0.9f), 8.f);
 	if (bSel)
 	{
-		Base.OutlineSettings.Width = 1.5f;
-		Base.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.9f));
+		Base.OutlineSettings.Width = 2.6f;
+		Base.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f));
 	}
 	S.Normal = Base;
 
 	// Hover/pressed: iets lichter dan de basis, rand behouden bij selectie.
-	FSlateBrush Hover = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(1.f) : FLinearColor(0.16f, 0.17f, 0.22f, 0.96f), 8.f);
-	if (bSel) { Hover.OutlineSettings.Width = 1.5f; Hover.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f)); }
+	FSlateBrush Hover = WeedUI::StorageSlotBrushWithFill(bSel ? WeedUI::ColAccentDim(1.06f) : WeedUI::ColInner(0.92f), true, bSel, WeedUI::ColAccent(1.f), 8.f);
+	if (bSel)
+	{
+		Hover.OutlineSettings.Width = 2.6f;
+		Hover.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f));
+	}
 	S.Hovered = Hover;
 
-	FSlateBrush Pressed = WeedUI::Rounded(bSel ? WeedUI::ColAccentDim(0.9f) : FLinearColor(0.09f, 0.10f, 0.13f, 0.96f), 8.f);
-	if (bSel) { Pressed.OutlineSettings.Width = 1.5f; Pressed.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.9f)); }
+	FSlateBrush Pressed = WeedUI::StorageSlotBrushWithFill(bSel ? WeedUI::ColAccentDim(0.94f) : WeedUI::ColSlot(0.72f), true, bSel, WeedUI::ColAccent(0.9f), 8.f);
+	if (bSel)
+	{
+		Pressed.OutlineSettings.Width = 2.6f;
+		Pressed.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f));
+	}
 	S.Pressed = Pressed;
 
 	// Geen button-padding: de inhoud (SizeBox op celmaat) vult de hele cel zelf; badge/tag krijgen hun
@@ -173,6 +178,7 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 	S.NormalPadding = FMargin(0.f);
 	S.PressedPadding = FMargin(0.f);
 	Cells[i]->SetStyle(S);
+	Cells[i]->SetRenderOpacity((bShowSelection && !SelId.IsNone() && !bSel) ? 0.90f : 1.f);
 }
 
 void UWeedItemPickGrid::SetItems(const TArray<FWeedPickItem>& Items, FName SelectedId)

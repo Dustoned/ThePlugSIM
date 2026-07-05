@@ -49,6 +49,24 @@ namespace
 		Box->SetVisibility(ESlateVisibility::HitTestInvisible);
 		return Box;
 	}
+
+	FString DistLabel(float DistCm)
+	{
+		return FString::Printf(TEXT("%dm"), FMath::Max(1, FMath::RoundToInt(DistCm / 100.f)));
+	}
+
+	FString ShopKindLabel(EShopKind Kind)
+	{
+		switch (Kind)
+		{
+		case EShopKind::Grow:       return TEXT("Grow shop");
+		case EShopKind::Supplies:   return TEXT("Supplies");
+		case EShopKind::Furniture:  return TEXT("Furniture");
+		case EShopKind::GasStation: return TEXT("Gas station");
+		case EShopKind::Apartment:  return TEXT("Apartment");
+		default:                    return TEXT("Shop");
+		}
+	}
 }
 
 TSharedRef<SWidget> UCompassWidget::RebuildWidget()
@@ -76,22 +94,59 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	BgS->SetAnchors(FAnchors(0.5f, 0.f, 0.5f, 0.f));
 	BgS->SetAlignment(FVector2D(0.5f, 0.f));
 	BgS->SetAutoSize(false);
-	BgS->SetSize(FVector2D(BandW, 42.f));
+	BgS->SetSize(FVector2D(BandW, 56.f));
 	BgS->SetPosition(FVector2D(0.f, 12.f));
 
 	Band = WidgetTree->ConstructWidget<UCanvasPanel>();
 	Band->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Bg->SetContent(Band);
 
-	// Middenstreepje (jouw kijkrichting).
-	UBorder* Center = WidgetTree->ConstructWidget<UBorder>();
-	Center->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.85f), 1.f));
-	Center->SetVisibility(ESlateVisibility::HitTestInvisible);
-	UCanvasPanelSlot* CenS = Band->AddChildToCanvas(Center);
-	CenS->SetAutoSize(false); CenS->SetSize(FVector2D(2.f, 38.f));
-	CenS->SetAlignment(FVector2D(0.5f, 0.5f)); CenS->SetPosition(FVector2D(BandW * 0.5f, 21.f));
+	// AC-style marker-rail: geen windrichtingen, alleen een zachte navigatielijn met ticks.
+	// De rail breekt rond het midden en wordt daar verbonden door een kleine V-chevron (kijkrichting).
+	const float CenterX = BandW * 0.5f;
+	const float RailY = 21.f;
+	const float RailGap = 26.f;
+	const float RailW = BandW - 56.f;
+	const float RailSegW = (RailW - RailGap) * 0.5f;
+	auto AddRailSegment = [this, RailY](float X, float W)
+	{
+		UBorder* Rail = WidgetTree->ConstructWidget<UBorder>();
+		Rail->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.20f), 1.f));
+		Rail->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UCanvasPanelSlot* RailS = Band->AddChildToCanvas(Rail);
+		RailS->SetAutoSize(false); RailS->SetSize(FVector2D(W, 1.5f));
+		RailS->SetAlignment(FVector2D(0.5f, 0.5f)); RailS->SetPosition(FVector2D(X, RailY));
+	};
+	AddRailSegment(CenterX - (RailGap * 0.5f) - (RailSegW * 0.5f), RailSegW);
+	AddRailSegment(CenterX + (RailGap * 0.5f) + (RailSegW * 0.5f), RailSegW);
 
-	// Windstreek-letters weg (D.14): alleen het midden-streepje + de markers blijven.
+	for (int32 T = -4; T <= 4; ++T)
+	{
+		if (T == 0) { continue; }
+		const float X = CenterX + (float)T * ((BandW - 72.f) / 8.f);
+		UBorder* Tick = WidgetTree->ConstructWidget<UBorder>();
+		Tick->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.22f), 1.f));
+		Tick->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UCanvasPanelSlot* TS = Band->AddChildToCanvas(Tick);
+		TS->SetAutoSize(false); TS->SetSize(FVector2D(1.f, 6.f));
+		TS->SetAlignment(FVector2D(0.5f, 0.5f)); TS->SetPosition(FVector2D(X, RailY));
+	}
+
+	auto AddChevronArm = [this, RailY](float X, float AngleDeg)
+	{
+		UBorder* Arm = WidgetTree->ConstructWidget<UBorder>();
+		Arm->SetBrush(WeedUI::Rounded(FLinearColor(1.f, 1.f, 1.f, 0.84f), 1.f));
+		Arm->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+		Arm->SetRenderTransformAngle(AngleDeg);
+		Arm->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UCanvasPanelSlot* AS = Band->AddChildToCanvas(Arm);
+		AS->SetAutoSize(false); AS->SetSize(FVector2D(18.f, 2.f));
+		AS->SetAlignment(FVector2D(0.5f, 0.5f)); AS->SetPosition(FVector2D(X, RailY + 5.5f));
+	};
+	AddChevronArm(CenterX - 6.f, 38.f);
+	AddChevronArm(CenterX + 6.f, -38.f);
+
+	// Windstreek-letters weg (D.14): alleen rail + V-chevron + markers blijven.
 
 	// Marker-pool voor mensen buiten: een persoon-icoontje (groen), duidelijk anders dan objecten.
 	// D26: groter (22px) voor betere leesbaarheid; render-scale in de tick geeft de 3D-diepte.
@@ -162,6 +217,22 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 	}
 	// Sentinel-kleur per marker (ongeldig) -> de eerste tick bouwt het icoon 1x; daarna alleen bij kleurwijziging.
 	ShopMarkerColors.Init(FLinearColor(-1.f, -1.f, -1.f, -1.f), ShopMarkers.Num());
+
+	FocusLabelCard = WidgetTree->ConstructWidget<UBorder>();
+	FSlateBrush LabelBrush = WeedUI::Rounded(WeedUI::ColPanel(0.55f), 6.f);
+	LabelBrush.OutlineSettings.Width = 1.f;
+	LabelBrush.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.24f));
+	FocusLabelCard->SetBrush(LabelBrush);
+	FocusLabelCard->SetPadding(FMargin(8.f, 2.f, 8.f, 3.f));
+	FocusLabelCard->SetVisibility(ESlateVisibility::Collapsed);
+	FocusLabelText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColText(), false, true);
+	FocusLabelText->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+	FocusLabelText->SetShadowOffset(FVector2D(1.f, 1.f));
+	FocusLabelCard->SetContent(FocusLabelText);
+	UCanvasPanelSlot* FS = Band->AddChildToCanvas(FocusLabelCard);
+	FS->SetAutoSize(true);
+	FS->SetAlignment(FVector2D(0.5f, 0.f));
+	FS->SetPosition(FVector2D(BandW * 0.5f, 36.f));
 }
 
 void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y, float Dist)
@@ -178,9 +249,15 @@ void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y, float D
 	{
 		S->SetPosition(FVector2D(X, Y));
 	}
-	// 3D-feel (D26): dichtbij groter, ver kleiner. Render-transform -> geen re-layout (persistente-UI-regel).
+	// 3D-feel (D26): dichtbij groter, ver kleiner. Center-priority maakt de rail rustiger:
+	// markers aan de rand worden zachter/kleiner, middenmarkers lezen als de echte focus.
 	const float s = FMath::GetMappedRangeValueClamped(FVector2f(0.f, 8000.f), FVector2f(1.3f, 0.55f), Dist);
-	W->SetRenderScale(FVector2D(s, s));
+	const float AbsRel = FMath::Abs(RelAngleDeg);
+	const float CenterFocus = 1.f - FMath::Clamp(AbsRel / (HalfFov * 0.55f), 0.f, 1.f);
+	const float FocusScale = FMath::Lerp(0.84f, 1.10f, CenterFocus);
+	W->SetRenderScale(FVector2D(s * FocusScale, s * FocusScale));
+	const float EdgeFade = FMath::GetMappedRangeValueClamped(FVector2f(HalfFov * 0.42f, HalfFov), FVector2f(1.f, 0.18f), AbsRel);
+	W->SetRenderOpacity(EdgeFade);
 }
 
 void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
@@ -194,6 +271,19 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	const float PlayerYaw = PC->GetControlRotation().Yaw;
 	const FVector PL = P->GetActorLocation();
+	FString FocusLabel;
+	float FocusScore = 100000.f;
+	auto OfferFocusLabel = [&FocusLabel, &FocusScore](const FString& Label, float Rel, float Dist, float Bias)
+	{
+		const float AbsRel = FMath::Abs(Rel);
+		if (Label.IsEmpty() || AbsRel > 16.f) { return; }
+		const float Score = AbsRel + Bias + FMath::Clamp(Dist / 24000.f, 0.f, 4.f);
+		if (Score < FocusScore)
+		{
+			FocusScore = Score;
+			FocusLabel = FString::Printf(TEXT("%s  %s"), *Label, *DistLabel(Dist));
+		}
+	};
 
 	// Windstreek-letters weg (D.14) -> geen plaatsing meer nodig.
 
@@ -229,6 +319,7 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
 		const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
 		PlaceOnBand(Markers[m], Rel, 26.f, D.Size2D());
+		OfferFocusLabel(TEXT("Customer"), Rel, D.Size2D(), 8.f);
 		++m;
 	}
 	for (; m < Markers.Num(); ++m) { Markers[m]->SetVisibility(ESlateVisibility::Collapsed); }
@@ -245,7 +336,9 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const FVector D = Pw->GetActorLocation() - PL;
 			if (D.SizeSquared2D() < 100.f) { continue; }
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(CoopMarkers[cm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
+			const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
+			PlaceOnBand(CoopMarkers[cm], Rel, 26.f, D.Size2D());
+			OfferFocusLabel(TEXT("Player"), Rel, D.Size2D(), 4.f);
 			++cm;
 		}
 	}
@@ -279,7 +372,9 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FVector D = HomeWorld - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(HomeMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
+			const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
+			PlaceOnBand(HomeMarker, Rel, 26.f, D.Size2D());
+			OfferFocusLabel(TEXT("Home"), Rel, D.Size2D(), 6.f);
 		}
 		else { HomeMarker->SetVisibility(ESlateVisibility::Collapsed); }
 	}
@@ -291,7 +386,9 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		{
 			const FVector D = WaypointWorld - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(WaypointMarker, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
+			const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
+			PlaceOnBand(WaypointMarker, Rel, 26.f, D.Size2D());
+			OfferFocusLabel(TEXT("Waypoint"), Rel, D.Size2D(), 0.f);
 		}
 		else
 		{
@@ -333,7 +430,9 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		const FVector D = Sc->GetActorLocation() - PL;
 		const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-		PlaceOnBand(Box, FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
+		const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
+		PlaceOnBand(Box, Rel, 26.f, D.Size2D());
+		OfferFocusLabel(ShopKindLabel(Sc->Kind), Rel, D.Size2D(), 10.f);
 		++sh;
 	}
 	for (; sh < ShopMarkers.Num(); ++sh) { if (ShopMarkers[sh]) { ShopMarkers[sh]->SetVisibility(ESlateVisibility::Collapsed); } }
@@ -353,9 +452,32 @@ void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			if (bDelCompFilter && !Del.ForPlayerId.IsEmpty() && Del.ForPlayerId != MyDelId) { continue; }
 			const FVector D = Del.World - PL;
 			const float Bearing = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
-			PlaceOnBand(DeliveryMarkers[dm], FRotator::NormalizeAxis(Bearing - PlayerYaw), 26.f, D.Size2D());
+			const float Rel = FRotator::NormalizeAxis(Bearing - PlayerYaw);
+			PlaceOnBand(DeliveryMarkers[dm], Rel, 26.f, D.Size2D());
+			OfferFocusLabel(TEXT("Delivery"), Rel, D.Size2D(), 2.f);
 			++dm;
 		}
 	}
 	for (; dm < DeliveryMarkers.Num(); ++dm) { DeliveryMarkers[dm]->SetVisibility(ESlateVisibility::Collapsed); }
+
+	if (FocusLabelCard && FocusLabelText)
+	{
+		const float Target = FocusLabel.IsEmpty() ? 0.f : 1.f;
+		FocusLabelShown = FMath::FInterpTo(FocusLabelShown, Target, DeltaTime, 10.f);
+		if (!FocusLabel.IsEmpty() && FocusLabel != LastFocusLabel)
+		{
+			LastFocusLabel = FocusLabel;
+			FocusLabelText->SetText(FText::FromString(FocusLabel));
+		}
+		FocusLabelCard->SetRenderOpacity(FocusLabelShown);
+		if (FocusLabelShown <= 0.02f && FocusLabel.IsEmpty())
+		{
+			LastFocusLabel.Empty();
+			FocusLabelCard->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			FocusLabelCard->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+	}
 }

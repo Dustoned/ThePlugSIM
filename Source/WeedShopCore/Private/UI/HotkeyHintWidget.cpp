@@ -23,6 +23,90 @@
 #include "GameFramework/Pawn.h"
 #include "Misc/ConfigCacheIni.h"
 
+namespace
+{
+	void NormalizePromptWhitespace(FString& S)
+	{
+		S.TrimStartAndEndInline();
+		while (S.Contains(TEXT("  "))) { S.ReplaceInline(TEXT("  "), TEXT(" ")); }
+	}
+
+	void BuildCenterPromptParts(const FString& RawPrompt, const FString& InteractKey, bool bPickable,
+		FString& OutTitle, FString& OutKey, FString& OutAction)
+	{
+		OutTitle = RawPrompt;
+		OutKey = InteractKey;
+		OutAction = TEXT("Interact");
+		NormalizePromptWhitespace(OutTitle);
+
+		FString PickTitle = OutTitle;
+		const bool bHasPickupTail = PickTitle.ReplaceInline(TEXT(" - hold G to pick up"), TEXT("")) > 0
+			|| PickTitle.ReplaceInline(TEXT(" - Hold G to pick up"), TEXT("")) > 0;
+		if (bHasPickupTail)
+		{
+			NormalizePromptWhitespace(PickTitle);
+			OutTitle = PickTitle;
+			OutKey = TEXT("Hold G");
+			OutAction = TEXT("Pick up");
+		}
+
+		FString Left, Right;
+		if (OutTitle.Split(TEXT(" - "), &Left, &Right, ESearchCase::CaseSensitive, ESearchDir::FromEnd))
+		{
+			NormalizePromptWhitespace(Left);
+			NormalizePromptWhitespace(Right);
+			if (!Left.IsEmpty()) { OutTitle = Left; }
+			if (!Right.IsEmpty())
+			{
+				OutKey = InteractKey;
+				OutAction = Right;
+				if (!Right.IsEmpty())
+				{
+					OutAction = Right.Left(1).ToUpper() + Right.RightChop(1);
+				}
+			}
+		}
+
+		if (OutTitle.StartsWith(TEXT("Pick up ")))
+		{
+			OutAction = TEXT("Pick up");
+			OutTitle = OutTitle.RightChop(8);
+			NormalizePromptWhitespace(OutTitle);
+		}
+		else if (bHasPickupTail && !bPickable)
+		{
+			OutKey = InteractKey;
+			OutAction = TEXT("Interact");
+		}
+		else if (bPickable && OutAction == TEXT("Interact"))
+		{
+			OutKey = TEXT("Hold G");
+			OutAction = TEXT("Pick up");
+		}
+		if (OutTitle.IsEmpty()) { OutTitle = RawPrompt; NormalizePromptWhitespace(OutTitle); }
+	}
+
+	bool IsAmbientWalkHint(const FString& Label)
+	{
+		return Label == TEXT("Phone")
+			|| Label == TEXT("Inventory")
+			|| Label == TEXT("Hotbar slot")
+			|| Label == TEXT("Switch slot")
+			|| Label == TEXT("Pause / menu");
+	}
+
+	FSlateBrush HintKeyBrush(bool bAmbient, bool bHold)
+	{
+		const FLinearColor Fill = bAmbient
+			? WeedUI::ColInner(0.56f)
+			: (bHold ? WeedUI::ColAccentDim(0.92f) : WeedUI::ColSlot(0.96f));
+		FSlateBrush B = WeedUI::Rounded(Fill, 5.f);
+		B.OutlineSettings.Width = 1.f;
+		B.OutlineSettings.Color = FSlateColor(bAmbient ? WeedUI::ColStroke(0.18f) : WeedUI::ColAccentDim(0.38f));
+		return B;
+	}
+}
+
 bool UHotkeyHintWidget::AreHintsEnabled()
 {
 	bool bOn = true;
@@ -82,16 +166,49 @@ void UHotkeyHintWidget::BuildShell(UCanvasPanel* Root)
 	// Gecentreerde interactie-popup (net onder het midden / crosshair): toont wat je aankijkt
 	// ("LOCKED - X lives here", "Open door", ...) als nette popup i.p.v. in de hoek.
 	CenterPromptCard = WidgetTree->ConstructWidget<UBorder>();
-	CenterPromptCard->SetBrush(WeedUI::Rounded(WeedUI::ColPanel(0.85f), 8.f));
-	CenterPromptCard->SetPadding(FMargin(14.f, 7.f));
+	FSlateBrush PromptBrush = WeedUI::Rounded(WeedUI::ColPanel(0.64f), 7.f);
+	PromptBrush.OutlineSettings.Width = 1.f;
+	PromptBrush.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.28f));
+	CenterPromptCard->SetBrush(PromptBrush);
+	CenterPromptCard->SetPadding(FMargin(10.f, 6.f, 10.f, 7.f));
 	CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed);
-	CenterPromptText = WeedUI::Text(WidgetTree, TEXT(""), 15, FLinearColor(0.95f, 0.97f, 1.f), true, true);
-	CenterPromptCard->SetContent(CenterPromptText);
+	UVerticalBox* PromptCol = WidgetTree->ConstructWidget<UVerticalBox>();
+	CenterPromptTitle = WeedUI::Text(WidgetTree, TEXT(""), 13, FLinearColor(0.95f, 0.97f, 1.f), true, true);
+	CenterPromptTitle->SetMinDesiredWidth(96.f);
+	CenterPromptTitle->SetAutoWrapText(true);
+	CenterPromptTitle->SetWrapTextAt(260.f);
+	PromptCol->AddChildToVerticalBox(CenterPromptTitle)->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+	UHorizontalBox* ActionRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	CenterPromptKey = WeedUI::Text(WidgetTree, TEXT(""), 9, FLinearColor::White, false, true);
+	CenterPromptKeyPill = WidgetTree->ConstructWidget<UBorder>();
+	CenterPromptKeyPill->SetBrush(WeedUI::Rounded(WeedUI::ColAccentDim(0.96f), 5.f));
+	CenterPromptKeyPill->SetPadding(FMargin(6.f, 0.f, 6.f, 2.f));
+	CenterPromptKeyPill->SetContent(CenterPromptKey);
+	UHorizontalBoxSlot* KeyS = ActionRow->AddChildToHorizontalBox(CenterPromptKeyPill);
+	KeyS->SetVerticalAlignment(VAlign_Center);
+	KeyS->SetPadding(FMargin(0.f, 0.f, 7.f, 0.f));
+	CenterPromptAction = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim(), false, true);
+	ActionRow->AddChildToHorizontalBox(CenterPromptAction)->SetVerticalAlignment(VAlign_Center);
+	PromptCol->AddChildToVerticalBox(ActionRow)->SetHorizontalAlignment(HAlign_Center);
+	CenterPromptProgressTrack = WidgetTree->ConstructWidget<UBorder>();
+	CenterPromptProgressTrack->SetBrush(WeedUI::Rounded(WeedUI::ColWell(0.62f), 2.f));
+	CenterPromptProgressTrack->SetPadding(FMargin(0.f));
+	CenterPromptProgressTrack->SetHorizontalAlignment(HAlign_Left);
+	CenterPromptProgressTrack->SetVisibility(ESlateVisibility::Collapsed);
+	CenterPromptProgressFillSize = WidgetTree->ConstructWidget<USizeBox>();
+	CenterPromptProgressFillSize->SetWidthOverride(0.f);
+	CenterPromptProgressFillSize->SetHeightOverride(3.f);
+	CenterPromptProgressFill = WidgetTree->ConstructWidget<UBorder>();
+	CenterPromptProgressFill->SetBrush(WeedUI::Rounded(WeedUI::ColAccentDim(0.95f), 2.f));
+	CenterPromptProgressFillSize->SetContent(CenterPromptProgressFill);
+	CenterPromptProgressTrack->SetContent(CenterPromptProgressFillSize);
+	PromptCol->AddChildToVerticalBox(CenterPromptProgressTrack)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	CenterPromptCard->SetContent(PromptCol);
 	UCanvasPanelSlot* PS = Root->AddChildToCanvas(CenterPromptCard);
 	PS->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
 	PS->SetAlignment(FVector2D(0.5f, 0.f));
 	PS->SetAutoSize(true);
-	PS->SetPosition(FVector2D(0.f, 70.f)); // net onder het crosshair (bij het object - dat is z'n functie)
+	PS->SetPosition(FVector2D(0.f, 62.f)); // net onder het crosshair (bij het object - dat is z'n functie)
 }
 
 void UHotkeyHintWidget::BuildRowPool(int32 Count)
@@ -120,7 +237,7 @@ void UHotkeyHintWidget::BuildRowPool(int32 Count)
 
 		List->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 1.5f, 0.f, 1.5f));
 		Row->SetVisibility(ESlateVisibility::Collapsed); // ongebruikt tot de tick 'm vult
-		RowPool.Add(Row); RowLabels.Add(Label); RowKeys.Add(KeyT);
+		RowPool.Add(Row); RowLabels.Add(Label); RowKeys.Add(KeyT); RowKeyPills.Add(Chip);
 	}
 }
 
@@ -130,10 +247,9 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (!List) { return; }
 
-	// In de instellingen uit te zetten.
-	const bool bEnabled = AreHintsEnabled();
-	if (Card) { Card->SetVisibility(bEnabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
-	if (!bEnabled) { if (CenterPromptCard) { CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed); LastFocusPrompt.Empty(); } return; }
+	// In de instellingen uit te zetten. Alleen de controls-kaart gaat weg; de center prompt blijft gameplay-info.
+	const bool bControlsEnabled = AreHintsEnabled();
+	if (Card) { Card->SetVisibility(bControlsEnabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
 
 	APawn* P = GetOwningPlayerPawn();
 	if (!P) { return; }
@@ -259,22 +375,69 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 		Hints.Emplace(K(TEXT("Phone")), TEXT("Phone"));
 		Hints.Emplace(K(TEXT("Inventory")), TEXT("Inventory"));
-		Hints.Emplace(TEXT("1-8"), TEXT("Hotbar slot"));
 		Hints.Emplace(TEXT("Scroll"), TEXT("Switch slot"));
 		Hints.Emplace(TEXT("Esc"), TEXT("Pause / menu"));
 	}
 
+	bool bHasContextHint = false;
+	for (const TPair<FString, FString>& H : Hints)
+	{
+		if (!IsAmbientWalkHint(H.Value)) { bHasContextHint = true; break; }
+	}
+	if (Card) { Card->SetRenderOpacity(bHasContextHint ? 1.f : 0.64f); }
+
 	// Gecentreerde interactie-popup bijwerken (onafhankelijk van de hoek-kaart).
 	// Changed-check: SetText/visibility alleen als de prompt echt wijzigde.
-	if (CenterPromptCard && CenterPromptText && FocusPrompt != LastFocusPrompt)
+	const bool bFocusPickable = Focus && Build && Build->IsPickable(Focus);
+	const FString PromptSig = FocusPrompt + TEXT("|") + (bFocusPickable ? TEXT("pick") : TEXT("interact")) + TEXT("|") + K(TEXT("Interact"));
+	if (CenterPromptCard && CenterPromptTitle && CenterPromptKey && CenterPromptAction && PromptSig != LastFocusPrompt)
 	{
-		LastFocusPrompt = FocusPrompt;
+		LastFocusPrompt = PromptSig;
 		if (!FocusPrompt.IsEmpty())
 		{
-			CenterPromptText->SetText(FText::FromString(FocusPrompt));
+			FString PromptTitle, PromptKey, PromptAction;
+			BuildCenterPromptParts(FocusPrompt, K(TEXT("Interact")), bFocusPickable, PromptTitle, PromptKey, PromptAction);
+			CenterPromptTitle->SetText(FText::FromString(PromptTitle));
+			CenterPromptKey->SetText(FText::FromString(PromptKey));
+			CenterPromptAction->SetText(FText::FromString(PromptAction));
+			if (CenterPromptKeyPill)
+			{
+				CenterPromptKeyPill->SetBrush(HintKeyBrush(false, PromptKey.StartsWith(TEXT("Hold"))));
+			}
 			CenterPromptCard->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
 		else { CenterPromptCard->SetVisibility(ESlateVisibility::Collapsed); }
+	}
+	if (CenterPromptProgressTrack && CenterPromptProgressFillSize && CenterPromptProgressFill)
+	{
+		float HoldAlpha = 0.f;
+		FLinearColor HoldCol = WeedUI::ColAccentDim(0.95f);
+		if (!FocusPrompt.IsEmpty() && Build && Focus)
+		{
+			HoldAlpha = FMath::Max(HoldAlpha, Build->GetPickupAlpha());
+			if (const AGrowPlant* FocusPot = Cast<AGrowPlant>(Focus))
+			{
+				if (FocusPot->IsPlanted())
+				{
+					const float DiscardAlpha = Build->GetDiscardAlpha();
+					if (DiscardAlpha > HoldAlpha)
+					{
+						HoldAlpha = DiscardAlpha;
+						HoldCol = FLinearColor(0.95f, 0.36f, 0.20f, 0.95f);
+					}
+				}
+			}
+		}
+		if (HoldAlpha > 0.f)
+		{
+			CenterPromptProgressFillSize->SetWidthOverride(136.f * FMath::Clamp(HoldAlpha, 0.f, 1.f));
+			CenterPromptProgressFill->SetBrush(WeedUI::Rounded(HoldCol, 2.f));
+			CenterPromptProgressTrack->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			CenterPromptProgressTrack->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 
 	// Signature -> alleen herbouwen bij wijziging (geen flicker).
@@ -288,9 +451,27 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		if (i < Hints.Num())
 		{
-			if (RowLabels[i]) { RowLabels[i]->SetText(FText::FromString(Hints[i].Value)); }
-			if (RowKeys[i])   { RowKeys[i]->SetText(FText::FromString(Hints[i].Key)); }
-			if (RowPool[i])   { RowPool[i]->SetVisibility(ESlateVisibility::HitTestInvisible); }
+			const bool bAmbient = IsAmbientWalkHint(Hints[i].Value);
+			const bool bHold = Hints[i].Key.StartsWith(TEXT("Hold"));
+			if (RowLabels[i])
+			{
+				RowLabels[i]->SetText(FText::FromString(Hints[i].Value));
+				RowLabels[i]->SetColorAndOpacity(FSlateColor(bAmbient ? FLinearColor(0.58f, 0.61f, 0.70f, 1.f) : FLinearColor(0.92f, 0.95f, 1.f, 1.f)));
+			}
+			if (RowKeys[i])
+			{
+				RowKeys[i]->SetText(FText::FromString(Hints[i].Key));
+				RowKeys[i]->SetColorAndOpacity(FSlateColor(bAmbient ? FLinearColor(0.70f, 0.73f, 0.84f, 1.f) : WeedUI::ColAccent()));
+			}
+			if (RowKeyPills.IsValidIndex(i) && RowKeyPills[i])
+			{
+				RowKeyPills[i]->SetBrush(HintKeyBrush(bAmbient, bHold));
+			}
+			if (RowPool[i])
+			{
+				RowPool[i]->SetRenderOpacity(bAmbient ? (bHasContextHint ? 0.34f : 0.58f) : 1.f);
+				RowPool[i]->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
 		}
 		else if (RowPool[i]) { RowPool[i]->SetVisibility(ESlateVisibility::Collapsed); }
 	}

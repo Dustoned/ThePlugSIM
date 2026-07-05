@@ -129,12 +129,12 @@ void UContactsComponent::NotifyOwnerPlayer(const FString& PlayerId, float Second
 	// een listen-server alleen het host-scherm, waardoor de joiner z'n afspraak/bericht-toast miste.
 	if (PlayerId.IsEmpty())
 	{
-		UWeedToast::NotifyAllPawns(this, -1, Seconds, Color, Text);
+		UWeedToast::NotifyAllPawns(this, -1, Seconds, Color, Text, TEXT("ui_message"));
 		return;
 	}
 	if (APawn* Owner = ResolvePawnForPlayer(PlayerId))
 	{
-		UWeedToast::NotifyPawn(Owner, -1, Seconds, Color, Text);
+		UWeedToast::NotifyPawn(Owner, -1, Seconds, Color, Text, TEXT("ui_message"));
 	}
 }
 

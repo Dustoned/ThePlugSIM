@@ -9,6 +9,7 @@
 
 class UCanvasPanel;
 class UWidget;
+class UBorder;
 
 UCLASS()
 class WEEDSHOPCORE_API UCrosshairWidget : public UUserWidget
@@ -20,4 +21,8 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	UPROPERTY() TObjectPtr<UWidget> Dot;
+	UPROPERTY() TObjectPtr<UBorder> DotBorder;
+	UPROPERTY() TObjectPtr<UWidget> Ring;
+	UPROPERTY() TObjectPtr<UBorder> RingBorder;
+	int32 LastVisualState = -1;
 };

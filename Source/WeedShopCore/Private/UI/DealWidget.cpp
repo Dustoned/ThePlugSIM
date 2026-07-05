@@ -55,8 +55,9 @@ TSharedRef<SWidget> UDealBagCell::RebuildWidget()
 		if (Mode == 1)
 		{
 			// Geef-zone = drop-DOEL met een subtiel kader; de geef-grid (of de lege-hint) zit als Content erin.
-			FSlateBrush Br = WeedUI::Rounded(WeedUI::ColSlotEmpty(0.7f), 9.f);
-			Br.OutlineSettings.Width = 1.5f; Br.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.6f));
+			FSlateBrush Br = WeedUI::StorageSlotBrushWithFill(WeedUI::ColSlotEmpty(0.50f), false, false, WeedUI::ColAccent(0.30f), 9.f);
+			Br.OutlineSettings.Width = 1.f;
+			Br.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.30f));
 			B->SetBrush(Br);
 			B->SetPadding(FMargin(8.f, 8.f));
 			// Content bovenaan (VAlign_Top) i.p.v. gecentreerd: het geef-vak is nu een HOOG vak; label/hint horen
@@ -69,7 +70,7 @@ TSharedRef<SWidget> UDealBagCell::RebuildWidget()
 			// Bron-zakje (mode 0) of gegeven bag (mode 2): canonieke inventory-icon-cel als Content. SOLIDE cel-bg
 			// (zoals de inventory-cel) - NIET transparant: een transparant kader is niet hit-testbaar, dan kun je de
 			// cel niet vastpakken om te slepen (alleen het icoon-pixel). Solide bg = de HELE cel grijpbaar + inventory-look.
-			B->SetBrush(WeedUI::Rounded(FLinearColor(0.11f, 0.12f, 0.16f, 0.96f), 9.f));
+			B->SetBrush(WeedUI::StorageSlotBrush(true, false, WeedUI::ColAccent(0.6f), 9.f));
 			B->SetPadding(FMargin(0.f));
 			if (Content) { B->SetContent(Content); }
 		}
@@ -207,51 +208,99 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	UVerticalBox* VB = WidgetTree->ConstructWidget<UVerticalBox>();
 	CardWidthBox->SetContent(VB);
 
-	// --- Kop-rij: naam links + tier-PILL rechts (altijd zichtbaar voor ELKE NPC) ---
+	const FLinearColor Money(0.4f, 0.85f, 0.5f); // geld-groen (zelfde tint als de Cash-kleur)
+
+	// --- Kop: alleen identiteit. Deal-data staat in een vaste summary-strip eronder. ---
 	{
 		UHorizontalBox* Head = WidgetTree->ConstructWidget<UHorizontalBox>();
-		NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 17, WeedUI::ColAccent(), false, true);
+		NameText = WeedUI::Text(WidgetTree, TEXT("Customer"), 15, WeedUI::ColAccent(), false, true);
 		UHorizontalBoxSlot* NS = Head->AddChildToHorizontalBox(NameText);
 		NS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		NS->SetVerticalAlignment(VAlign_Center);
 
 		// Tier-pill (accent-vlak, alleen de tier-NAAM). TierText wordt hergebruikt als pill-tekst.
 		TierPill = WidgetTree->ConstructWidget<UBorder>();
-		TierPill->SetBrush(WeedUI::Rounded(WeedUI::ColAccentDim(), 8.f));
-		TierPill->SetPadding(FMargin(8.f, 3.f));
-		TierText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColAccent(), false, true);
+		TierPill->SetBrush(WeedUI::Rounded(WeedUI::ColAccentDim(0.88f), 6.f));
+		TierPill->SetPadding(FMargin(7.f, 2.f));
+		TierText = WeedUI::Text(WidgetTree, TEXT(""), 10, WeedUI::ColAccent(), false, true);
 		TierPill->SetContent(TierText);
 		UHorizontalBoxSlot* PS = Head->AddChildToHorizontalBox(TierPill);
 		PS->SetHorizontalAlignment(HAlign_Right);
 		PS->SetVerticalAlignment(VAlign_Center);
-		VB->AddChildToVerticalBox(Head);
+		PS->SetPadding(FMargin(0.f, 0.f, 9.f, 0.f));
+		VB->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 	}
 
-	// --- Request IN DE HEADER (direct onder de naam, BOVEN de accent-balk): "Wants Xg <strain>" + de deal-kans
-	//     als mee-kleurend % rechts ernaast (speler-wens: request in de header, GEEN kans-bar). "Wants Xg " normaal,
-	//     alleen de strain-naam in de strain-tagkleur; de kans-% (groen->rood met de kans) rechts. ---
-	// Gedeelde LINKER kolom-breedte: de request-tekst EN (op de rij eronder) de "Your price"-tekst starten allebei
-	// op deze x, zodat de prijs-tekst netjes ONDER het BEGIN van de slider uitlijnt (speler-wens, rode streep).
-	const float LabelW = 205.f;
-	const float SliderW = 235.f; // kortere slider (was Fill/over de hele kaart)
-	const FLinearColor Money(0.4f, 0.85f, 0.5f); // geld-groen (zelfde tint als de Cash-kleur)
-
+	// Compacte dealstrip met vaste informatieblokken en een full-width prijsrail eronder.
 	{
 		WantsRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-		// Request in een VASTE-breedte kolom (LabelW) -> de slider begint altijd op dezelfde x.
-		USizeBox* LabelBox = WidgetTree->ConstructWidget<USizeBox>();
-		LabelBox->SetWidthOverride(LabelW);
+
+		UBorder* Summary = WidgetTree->ConstructWidget<UBorder>();
 		{
+			FSlateBrush Br = WeedUI::Rounded(WeedUI::ColSlotEmpty(0.42f), 8.f);
+			Br.OutlineSettings.Width = 1.f;
+			Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.28f));
+			Summary->SetBrush(Br);
+		}
+		Summary->SetPadding(FMargin(8.f, 5.f, 8.f, 6.f));
+
+		UVerticalBox* SummaryVB = WidgetTree->ConstructWidget<UVerticalBox>();
+		Summary->SetContent(SummaryVB);
+
+		UHorizontalBox* Metrics = WidgetTree->ConstructWidget<UHorizontalBox>();
+		SummaryVB->AddChildToVerticalBox(Metrics);
+
+		USizeBox* RequestBox = WidgetTree->ConstructWidget<USizeBox>();
+		RequestBox->SetMinDesiredWidth(185.f);
+		{
+			UVerticalBox* RequestVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			RequestVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("WANTS"), 8, WeedUI::ColTextDim(0.78f), false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
 			UHorizontalBox* LabelHB = WidgetTree->ConstructWidget<UHorizontalBox>();
-			WantsText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
-			WantsStrainText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColText(), false, true);
+			WantsText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), false, true);
+			WantsStrainText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColText(), false, true);
 			{ UHorizontalBoxSlot* WTS = LabelHB->AddChildToHorizontalBox(WantsText); WTS->SetVerticalAlignment(VAlign_Center); }
 			{ UHorizontalBoxSlot* WSS = LabelHB->AddChildToHorizontalBox(WantsStrainText); WSS->SetVerticalAlignment(VAlign_Center); }
-			LabelBox->SetContent(LabelHB);
+			RequestVB->AddChildToVerticalBox(LabelHB);
+			RequestBox->SetContent(RequestVB);
 		}
-		{ UHorizontalBoxSlot* LBS = WantsRow->AddChildToHorizontalBox(LabelBox); LBS->SetVerticalAlignment(VAlign_Center); }
+		{ UHorizontalBoxSlot* RS = Metrics->AddChildToHorizontalBox(RequestBox); RS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); RS->SetVerticalAlignment(VAlign_Center); RS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f)); }
 
-		// Kortere slider (vaste breedte) direct na de request -> begint altijd op x = LabelW.
+		DealMetricBox = WidgetTree->ConstructWidget<UHorizontalBox>();
+
+		USizeBox* BidBox = WidgetTree->ConstructWidget<USizeBox>();
+		BidBox->SetMinDesiredWidth(92.f);
+		{
+			UVerticalBox* BidVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			BidVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("BID"), 8, WeedUI::ColTextDim(0.78f), false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+			PriceText = WeedUI::Text(WidgetTree, TEXT(""), 11, WeedUI::ColTextDim(), false, true);
+			BidVB->AddChildToVerticalBox(PriceText);
+			BidBox->SetContent(BidVB);
+		}
+		{ UHorizontalBoxSlot* BS = DealMetricBox->AddChildToHorizontalBox(BidBox); BS->SetVerticalAlignment(VAlign_Center); BS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f)); }
+
+		USizeBox* ChanceBox = WidgetTree->ConstructWidget<USizeBox>();
+		ChanceBox->SetMinDesiredWidth(52.f);
+		{
+			UVerticalBox* ChanceVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			ChanceVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("CHANCE"), 8, WeedUI::ColTextDim(0.78f), false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+			ChanceText = WeedUI::Text(WidgetTree, TEXT(""), 13, WeedUI::ColGood(), false, true);
+			ChanceVB->AddChildToVerticalBox(ChanceText);
+			ChanceBox->SetContent(ChanceVB);
+		}
+		{ UHorizontalBoxSlot* ChS = DealMetricBox->AddChildToHorizontalBox(ChanceBox); ChS->SetVerticalAlignment(VAlign_Center); ChS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f)); }
+
+		USizeBox* TotalBox = WidgetTree->ConstructWidget<USizeBox>();
+		TotalBox->SetMinDesiredWidth(72.f);
+		{
+			UVerticalBox* TotalVB = WidgetTree->ConstructWidget<UVerticalBox>();
+			TotalVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("TOTAL"), 8, WeedUI::ColTextDim(0.78f), false, true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+			PriceTotalText = WeedUI::Text(WidgetTree, TEXT(""), 15, Money, true, true);
+			TotalVB->AddChildToVerticalBox(PriceTotalText);
+			TotalBox->SetContent(TotalVB);
+		}
+		{ UHorizontalBoxSlot* TS = DealMetricBox->AddChildToHorizontalBox(TotalBox); TS->SetVerticalAlignment(VAlign_Center); }
+		{ UHorizontalBoxSlot* DMS = Metrics->AddChildToHorizontalBox(DealMetricBox); DMS->SetVerticalAlignment(VAlign_Center); }
+
 		PriceSlider = WidgetTree->ConstructWidget<USlider>();
 		PriceSlider->SetSliderHandleColor(WeedUI::ColAccent());
 		PriceSlider->SetSliderBarColor(WeedUI::ColSlot());
@@ -262,28 +311,13 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		}
 		PriceSlider->OnValueChanged.AddDynamic(this, &UDealWidget::OnPriceSlider);
 		USizeBox* SliderH = WidgetTree->ConstructWidget<USizeBox>();
-		SliderH->SetWidthOverride(SliderW);
-		SliderH->SetHeightOverride(20.f);
+		SliderH->SetHeightOverride(16.f);
 		SliderH->SetContent(PriceSlider);
-		{ UHorizontalBoxSlot* SHS = WantsRow->AddChildToHorizontalBox(SliderH); SHS->SetVerticalAlignment(VAlign_Center); }
+		PriceRailBox = SliderH;
+		{ UVerticalBoxSlot* SS = SummaryVB->AddChildToVerticalBox(SliderH); SS->SetPadding(FMargin(0.f, 5.f, 0.f, 0.f)); SS->SetHorizontalAlignment(HAlign_Fill); }
 
-		ChanceText = WeedUI::Text(WidgetTree, TEXT(""), 16, WeedUI::ColGood(), false, true);
-		{ UHorizontalBoxSlot* CTS = WantsRow->AddChildToHorizontalBox(ChanceText); CTS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); CTS->SetHorizontalAlignment(HAlign_Right); CTS->SetVerticalAlignment(VAlign_Center); }
-		VB->AddChildToVerticalBox(WantsRow)->SetPadding(FMargin(0.f, 4.f, 0.f, 2.f));
-	}
-
-	// Prijs-rij: "Your price EUR X/g  Y%" (geld-groen) LINKS uitgelijnd ONDER het slider-begin (zelfde LabelW-spacer),
-	// het totaal (geld-groen, groot/bold) rechts. Speler-wens: prijs onder de slider-start + geld-kleur groen.
-	{
-		UHorizontalBox* PriceRow = WidgetTree->ConstructWidget<UHorizontalBox>();
-		USizeBox* PriceSpacer = WidgetTree->ConstructWidget<USizeBox>();
-		PriceSpacer->SetWidthOverride(LabelW);
-		{ PriceRow->AddChildToHorizontalBox(PriceSpacer); }
-		PriceText = WeedUI::Text(WidgetTree, TEXT(""), 13, Money, false, true);
-		{ UHorizontalBoxSlot* PTS = PriceRow->AddChildToHorizontalBox(PriceText); PTS->SetVerticalAlignment(VAlign_Center); }
-		PriceTotalText = WeedUI::Text(WidgetTree, TEXT(""), 19, Money, true, true);
-		{ UHorizontalBoxSlot* PVS = PriceRow->AddChildToHorizontalBox(PriceTotalText); PVS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); PVS->SetHorizontalAlignment(HAlign_Right); PVS->SetVerticalAlignment(VAlign_Center); }
-		VB->AddChildToVerticalBox(PriceRow)->SetPadding(FMargin(0.f, 2.f, 0.f, 2.f));
+		{ UHorizontalBoxSlot* SumS = WantsRow->AddChildToHorizontalBox(Summary); SumS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); }
+		VB->AddChildToVerticalBox(WantsRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 0.f));
 	}
 
 	// Dunne accent-balk ONDER de header (naam + request + prijs) -> scheidt de header van de 3 kolommen.
@@ -291,10 +325,10 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	TierBar->SetHeightOverride(3.f);
 	{
 		UBorder* Fill = WidgetTree->ConstructWidget<UBorder>();
-		Fill->SetBrush(WeedUI::Rounded(WeedUI::ColAccent(0.8f), 2.f));
+		Fill->SetBrush(WeedUI::Rounded(WeedUI::ColStroke(0.45f), 1.f));
 		TierBar->SetContent(Fill);
 	}
-	VB->AddChildToVerticalBox(TierBar)->SetPadding(FMargin(0.f, 6.f, 0.f, 8.f));
+	VB->AddChildToVerticalBox(TierBar)->SetPadding(FMargin(0.f, 5.f, 0.f, 7.f));
 
 	// --- HOOFD-INDELING: 3 kolommen (speler-wens). LINKS je bags, MIDDEN de deal-info + ring-gauges, RECHTS het
 	// geef-vak. De 2 inventory-kolommen FLANKEREN de progress-circles; brede strook onderaan, aansluitend op de hotbar.
@@ -310,15 +344,16 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		// Gehighlight vak: dezelfde rand-look als de geef-zone, maar om het HELE bags-vak (speler-wens).
 		UBorder* SellBox = WidgetTree->ConstructWidget<UBorder>();
 		{
-			FSlateBrush Br = WeedUI::Rounded(WeedUI::ColSlotEmpty(0.7f), 9.f);
-			Br.OutlineSettings.Width = 1.5f; Br.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(0.6f));
+			FSlateBrush Br = WeedUI::StorageSlotBrushWithFill(WeedUI::ColSlotEmpty(0.50f), false, false, WeedUI::ColAccent(0.24f), 9.f);
+			Br.OutlineSettings.Width = 1.f;
+			Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.34f));
 			SellBox->SetBrush(Br);
 		}
 		SellBox->SetPadding(FMargin(8.f));
 		SellPane->SetContent(SellBox);
 		UVerticalBox* SellVB = WidgetTree->ConstructWidget<UVerticalBox>();
 		SellBox->SetContent(SellVB);
-		SellVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Your bags:"), 11, WeedUI::ColTextDim()));
+		SellVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("BAGS"), 9, WeedUI::ColTextDim(0.85f), false, true));
 		SellGrid = WidgetTree->ConstructWidget<UWrapBox>();
 		SellGrid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 		SellVB->AddChildToVerticalBox(SellGrid)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
@@ -339,10 +374,10 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		GiveZone = WidgetTree->ConstructWidget<UDealBagCell>();
 		GiveZone->Owner = this; GiveZone->Mode = 1;
 		UVerticalBox* GiveVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		GiveVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Giving to customer:"), 11, WeedUI::ColTextDim()));
+		GiveVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("GIVING"), 9, WeedUI::ColTextDim(0.85f), false, true));
 		GiveGramsText = WeedUI::Text(WidgetTree, TEXT(""), 14, WeedUI::ColTextDim(), false, true);
 		GiveVB->AddChildToVerticalBox(GiveGramsText)->SetPadding(FMargin(0.f, 1.f, 0.f, 3.f));
-		GiveHint = WeedUI::Text(WidgetTree, TEXT("Drop bags here"), 12, WeedUI::ColTextDim(), true, true);
+		GiveHint = WeedUI::Text(WidgetTree, TEXT("Drop bags"), 12, WeedUI::ColTextDim(), true, true);
 		GiveHint->SetAutoWrapText(true);
 		{ UVerticalBoxSlot* HS = GiveVB->AddChildToVerticalBox(GiveHint); HS->SetHorizontalAlignment(HAlign_Center); }
 		GiveGrid = WidgetTree->ConstructWidget<UWrapBox>();
@@ -718,7 +753,7 @@ UWidget* UDealWidget::MakeBagCellContent(FName Strain, int32 Gram, int32 Count) 
 	// Count-badge rechtsboven ("xN").
 	{
 		UBorder* Pill = WidgetTree->ConstructWidget<UBorder>();
-		Pill->SetBrush(WeedUI::Rounded(WeedUI::ColBg(0.85f), 7.f));
+		Pill->SetBrush(WeedUI::ItemQtyPillBrush());
 		Pill->SetPadding(FMargin(5.f, 1.f, 5.f, 1.f));
 		Pill->SetContent(WeedUI::Text(WidgetTree, FString::Printf(TEXT("%dx %dg"), Count, Gram), 10, WeedUI::ColText(), false, true));
 		Pill->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -732,16 +767,13 @@ UWidget* UDealWidget::MakeBagCellContent(FName Strain, int32 Gram, int32 Count) 
 	{
 		FString Tag = WeedUI::ItemTagShort(BagId);
 		if (Tag.IsEmpty()) { Tag = FString::Printf(TEXT("%dg"), Gram); }
-		UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 10, FLinearColor(0.98f, 1.f, 0.99f), false, true);
-		{
-			FSlateFontInfo TagFont = WeedUI::Font(10, true);
-			TagFont.OutlineSettings.OutlineSize = 1;
-			TagFont.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.8f);
-			TagT->SetFont(TagFont);
-		}
+		UTextBlock* TagT = WeedUI::Text(WidgetTree, Tag, 11, FLinearColor::White, false, true);
+		TagT->SetFont(WeedUI::ItemTagFont(11));
+		TagT->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+		TagT->SetShadowOffset(FVector2D(1.f, 1.f));
 		UBorder* TagPill = WidgetTree->ConstructWidget<UBorder>();
-		TagPill->SetBrush(WeedUI::Rounded(WeedUI::TagColorForItem(BagId), 6.f));
-		TagPill->SetPadding(FMargin(5.f, 0.f, 5.f, 1.f));
+		TagPill->SetBrush(WeedUI::ItemTagPillBrush(BagId, 6.f));
+		TagPill->SetPadding(FMargin(6.f, 0.f, 6.f, 2.f));
 		TagPill->SetContent(TagT);
 		TagPill->SetVisibility(ESlateVisibility::HitTestInvisible);
 		UOverlaySlot* TS = Ov->AddChildToOverlay(TagPill);
@@ -1186,7 +1218,7 @@ void UDealWidget::UpdateLive()
 	{
 		// Geen koper: verberg de deal-sectie; alleen kop + dialoog + Give joint + Leave.
 		auto Hide = [](UWidget* W) { if (W) { W->SetVisibility(ESlateVisibility::Collapsed); } };
-		Hide(WantsRow); Hide(SubText); Hide(PriceText); Hide(PriceTotalText); Hide(PriceSlider); Hide(AmountSlider); Hide(AmountText); Hide(StockText); SetTrayVisible(false);
+		Hide(WantsRow); Hide(DealMetricBox); Hide(SubText); Hide(PriceText); Hide(PriceTotalText); Hide(PriceRailBox); Hide(PriceSlider); Hide(AmountSlider); Hide(AmountText); Hide(StockText); SetTrayVisible(false);
 		Hide(ChanceText); Hide(PreviewText); Hide(NoWeedText);
 		Hide(RespectDelta); Hide(LoyaltyDelta); Hide(AddictDelta); // geen deal -> geen delta's
 		SetCardWidth(420.f); // niet-koper: smalle kaart (geen geef-tray)
@@ -1196,6 +1228,7 @@ void UDealWidget::UpdateLive()
 	const int32 Qty = C->DesiredQuantity;
 	const FName Offered = Ph->GetOfferedProduct();
 	const bool bSub = Ph->IsOfferingSubstitute();
+	const bool bBagOffer = Offered.ToString().StartsWith(TEXT("Bag_"));
 	const int32 Market = FMath::Max(1, Ph->GetOfferMarketCents());
 	const int32 Ask = Ph->GetDealAskCents();
 
@@ -1206,9 +1239,10 @@ void UDealWidget::UpdateLive()
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			for (const FInventoryStack& St : Inv->GetStacks())
+			if (bBagOffer)
 			{
-				if (St.ItemId.ToString().StartsWith(TEXT("Bag_")) && St.Quantity > 0) { bHasWeed = true; break; }
+				float DummyThc = 0.f, DummyQ = 0.f;
+				bHasWeed = Inv->BagStockGrams(UInventoryComponent::BagStrain(Offered), DummyThc, DummyQ) > 0;
 			}
 		}
 	}
@@ -1217,6 +1251,8 @@ void UDealWidget::UpdateLive()
 	if (NoWeedText) { NoWeedText->SetVisibility(bHasWeed ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
 	if (PriceText)     { PriceText->SetVisibility(DealVis); }
 	if (PriceTotalText){ PriceTotalText->SetVisibility(DealVis); }
+	if (DealMetricBox) { DealMetricBox->SetVisibility(DealVis); }
+	if (PriceRailBox)  { PriceRailBox->SetVisibility(SliderVis); }
 	if (PriceSlider)   { PriceSlider->SetVisibility(SliderVis); }
 	if (AmountSlider) { AmountSlider->SetVisibility(SliderVis); }
 	if (AmountText)   { AmountText->SetVisibility(DealVis); }
@@ -1233,6 +1269,10 @@ void UDealWidget::UpdateLive()
 		// Alleen de STRAIN-naam in de strain-tagkleur (niet de hele regel).
 		WantsStrainText->SetText(FText::FromString(PrettyDealName(C->DesiredProductId)));
 		WantsStrainText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
+		if (NoWeedText)
+		{
+			NoWeedText->SetText(FText::FromString(TEXT("No bagged weed.\nGrow -> dry -> bag first.")));
+		}
 		if (RespectDelta) { RespectDelta->SetVisibility(ESlateVisibility::Collapsed); }
 		if (LoyaltyDelta) { LoyaltyDelta->SetVisibility(ESlateVisibility::Collapsed); }
 		if (AddictDelta)  { AddictDelta->SetVisibility(ESlateVisibility::Collapsed); }
@@ -1246,8 +1286,8 @@ void UDealWidget::UpdateLive()
 	WantsStrainText->SetColorAndOpacity(FSlateColor(WeedUI::TagColorForItem(C->DesiredProductId, 0.85f, 0.75f)));
 
 	const float Pct = float(Ask) / Market * 100.f;
-	// Regel 1: prijs per gram + markt-%. Totaal apart (groot, rechts-onder) via PriceTotalText.
-	PriceText->SetText(FText::FromString(FString::Printf(TEXT("Your price  EUR %d/g     %.0f%%"),
+	// Compacte BID: bod/marktpercentage is secundair grijs; alleen TOTAL rechts blijft geld-groen.
+	PriceText->SetText(FText::FromString(FString::Printf(TEXT("EUR %d/g  %.0f%%"),
 		(int32)(WeedRoundEuros((int64)Ask) / 100), Pct)));
 	if (PriceTotalText)
 	{
@@ -1263,7 +1303,6 @@ void UDealWidget::UpdateLive()
 	// Voorraad in GRAMMEN (zakjes van die strain), gewogen THC/kwaliteit. Zo klopt het met wat de klant in
 	// grammen vraagt en met de echte deal-afwikkeling (RemoveBagsForGrams) - geen "not enough" meer terwijl je het wel hebt.
 	float Q01 = -1.f, Thc = 0.f, QPct = 0.f; int32 Stock = 0;
-	const bool bBagOffer = Offered.ToString().StartsWith(TEXT("Bag_"));
 	if (APawn* P = GetOwningPlayerPawn())
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
@@ -1322,7 +1361,7 @@ void UDealWidget::UpdateLive()
 	Chance = FMath::Clamp(Chance + ACustomerBase::QuantityAcceptMod(GiveG, Qty), 0.f, 100.f);
 	const FLinearColor CCol = Chance >= 66.f ? WeedUI::ColGood() : (Chance >= 33.f ? FLinearColor(1.f, 0.8f, 0.2f) : WeedUI::ColWarn());
 	ChanceText->SetColorAndOpacity(FSlateColor(CCol));
-	ChanceText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%%s"), Chance, bSub ? TEXT("  (sub - harder sell)") : TEXT(""))));
+	ChanceText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%%s"), Chance, bSub ? TEXT(" sub") : TEXT(""))));
 
 	// LIVE gauge-delta's: hoeveel deze deal (bij deze prijs/kwaliteit/GiveG) elke stat oplevert. Uit dezelfde
 	// preview-berekening die vroeger PreviewText vulde. 0 of geen deal -> delta verborgen.

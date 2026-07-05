@@ -157,21 +157,54 @@ void AWeedShopHUD::DrawHUD()
 			if (BC->IsPlacing())
 			{
 				const bool bValid = BC->IsPlacementValid();
-				const FString Msg = bValid ? FString(TEXT("Ready to place")) : BC->GetPlacementHint();
-				const FLinearColor TxtCol = bValid ? WeedUI::ColGood() : FLinearColor(1.f, 0.88f, 0.55f);
-				const FLinearColor Accent = bValid ? WeedUI::ColGood() : FLinearColor(0.96f, 0.72f, 0.26f, 1.f);
-				// Nette gecentreerde popup-balk (zoals de toast-notificaties) i.p.v. een piepklein tekstje boven de hotbar.
-				const float Scale = 1.25f;
-				float TW = 0.f, TH = 0.f; GetTextSize(Msg, TW, TH, Font, Scale);
 				const float ClipXf = Canvas ? Canvas->ClipX : 1280.f;
 				const float ClipYf = Canvas ? Canvas->ClipY : 720.f;
-				const float PadX = 24.f, PadY = 11.f;
-				const float BW = TW + PadX * 2.f, BH = TH + PadY * 2.f;
-				const float BX = (ClipXf - BW) * 0.5f;
-				const float BY = ClipYf - 210.f; // boven de hotbar
-				DrawRect(WeedUI::ColPanel(0.9f), BX, BY, BW, BH);   // donkere popup-achtergrond
-				DrawRect(Accent, BX, BY, BW, 3.f);                                   // accent-streep boven
-				DrawText(Msg, TxtCol, BX + PadX, BY + PadY, Font, Scale, false);
+				const FLinearColor Accent = bValid ? WeedUI::ColGood() : FLinearColor(0.96f, 0.54f, 0.24f, 1.f);
+				const FString StateMsg = bValid ? FString(TEXT("Place")) : BC->GetPlacementHint();
+				const float LabelScale = 0.92f;
+				const float KeyScale = 0.78f;
+				const float ChipH = 28.f;
+				const float Gap = 6.f;
+				struct FPlaceHintChip { FString Key; FString Action; bool bPrimary; };
+				const FPlaceHintChip Chips[] = {
+					{ TEXT("LMB"), StateMsg, true },
+					{ TEXT("R"), TEXT("Rotate"), false },
+					{ TEXT("Shift"), TEXT("Snap"), false },
+					{ TEXT("Scroll"), TEXT("Distance / put away"), false }
+				};
+				auto ChipWidth = [&](const FPlaceHintChip& C)
+				{
+					float KW = 0.f, KH = 0.f, AW = 0.f, AH = 0.f;
+					GetTextSize(C.Key, KW, KH, Font, KeyScale);
+					GetTextSize(C.Action, AW, AH, Font, LabelScale);
+					return KW + AW + 34.f;
+				};
+				float TotalW = 20.f;
+				for (const FPlaceHintChip& C : Chips) { TotalW += ChipWidth(C) + Gap; }
+				TotalW -= Gap;
+				const float PanelH = ChipH + 14.f;
+				const float BX = (ClipXf - TotalW) * 0.5f;
+				const float BY = ClipYf - 214.f; // boven de hotbar
+				DrawRect(WeedUI::ColPanel(0.78f), BX, BY, TotalW, PanelH);
+				DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.24f), BX, BY + PanelH - 1.f, TotalW, 1.f);
+				float X = BX + 10.f;
+				auto DrawChip = [&](const FPlaceHintChip& C)
+				{
+					const float W = ChipWidth(C);
+					const FLinearColor Fill = C.bPrimary ? FLinearColor(Accent.R, Accent.G, Accent.B, bValid ? 0.20f : 0.26f) : WeedUI::ColSlot(0.72f);
+					const FLinearColor KeyFill = C.bPrimary ? FLinearColor(Accent.R, Accent.G, Accent.B, 0.82f) : WeedUI::ColInner(0.86f);
+					DrawRect(Fill, X, BY + 7.f, W, ChipH);
+					DrawRect(C.bPrimary ? Accent : WeedUI::ColStroke(0.34f), X, BY + 7.f, W, 1.5f);
+					float KW = 0.f, KH = 0.f;
+					GetTextSize(C.Key, KW, KH, Font, KeyScale);
+					const float KeyW = KW + 12.f;
+					DrawRect(KeyFill, X + 6.f, BY + 12.f, KeyW, 17.f);
+					DrawText(C.Key, C.bPrimary ? FLinearColor::White : WeedUI::ColAccent(), X + 12.f, BY + 12.f, Font, KeyScale, false);
+					DrawText(C.Action, C.bPrimary ? (bValid ? WeedUI::ColText() : FLinearColor(1.f, 0.88f, 0.68f)) : WeedUI::ColTextDim(),
+						X + KeyW + 13.f, BY + 11.f, Font, LabelScale, false);
+					X += W + Gap;
+				};
+				for (const FPlaceHintChip& C : Chips) { DrawChip(C); }
 			}
 		}
 	}
@@ -179,8 +212,7 @@ void AWeedShopHUD::DrawHUD()
 	// Interactie-prompt (planten hebben hun eigen UMG-kaart; niets tonen als er een UI open is).
 	{
 		const UPhoneClientComponent* PhoneUI = GetPhone();
-		const bool bUiOpen = PhoneUI && (PhoneUI->IsOpen() || PhoneUI->IsDealOpen() || PhoneUI->IsInventoryOpen()
-			|| PhoneUI->IsRollOpen() || PhoneUI->IsPotUpgradeOpen());
+		const bool bUiOpen = PhoneUI && (PhoneUI->IsAnyGameUIOpen() || PhoneUI->IsMainMenuOpen());
 		const UInteractionComponent* IC = (P && !bUiOpen) ? P->FindComponentByClass<UInteractionComponent>() : nullptr;
 		AActor* Focus = IC ? IC->GetFocusedActor() : nullptr;
 		if (Focus)
@@ -446,8 +478,12 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				}
 				if (GS->GetHeat())
 				{
-					DrawText(FString::Printf(TEXT("Heat: %.0f%%"), GS->GetHeat()->GetHeatFor(OwnerPawn)),
-						FLinearColor(1.f, 0.7f, 0.6f), InnerX, y, Font); y += 22.f;
+					const float Heat = GS->GetHeat()->GetHeatFor(OwnerPawn);
+					if (Heat > 0.5f)
+					{
+						DrawText(FString::Printf(TEXT("Heat: %.0f%%"), Heat),
+							FLinearColor(1.f, 0.7f, 0.6f), InnerX, y, Font); y += 22.f;
+					}
 				}
 				if (GS->GetMilestones())
 				{

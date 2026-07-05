@@ -109,13 +109,14 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		return Chip;
 	};
 
-	auto AddDivider = [this, ColDiv](UHorizontalBox* Strip)
+	auto AddDivider = [this, ColDiv](UHorizontalBox* Strip) -> UWidget*
 	{
 		UBorder* D = WidgetTree->ConstructWidget<UBorder>();
 		D->SetBrush(WeedUI::Rounded(ColDiv, 1.f));
 		D->SetVisibility(ESlateVisibility::HitTestInvisible);
 		USizeBox* Sz = WidgetTree->ConstructWidget<USizeBox>(); Sz->SetWidthOverride(1.f); Sz->SetHeightOverride(30.f); Sz->SetContent(D);
 		UHorizontalBoxSlot* DS = Strip->AddChildToHorizontalBox(Sz); DS->SetVerticalAlignment(VAlign_Center); DS->SetPadding(FMargin(13.f, 0.f, 13.f, 0.f));
+		return Sz;
 	};
 
 	// === LINKS: Time-chip (zon/maan + Day / HH:MM), Cash, Bank ===
@@ -152,9 +153,11 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 	if (BankText) { BankText->SetMinDesiredWidth(108.f); }
 
 	// === RECHTS: Heat, Level (+MAX-badge), Stoned (verborgen tot je high bent) ===
-	AddChip(StripR, WeedUI::EIcon::Flame, ColOrange, FString(), TEXT("Heat"), TEXT("0%"), HeatText);
+	HeatRow = AddChip(StripR, WeedUI::EIcon::Flame, ColOrange, FString(), TEXT("Heat"), TEXT("0%"), HeatText);
 	if (HeatText) { HeatText->SetMinDesiredWidth(48.f); } // dekt "100%" -> strook verspringt niet mee
-	AddDivider(StripR);
+	HeatDivider = AddDivider(StripR);
+	if (HeatRow) { HeatRow->SetVisibility(ESlateVisibility::Collapsed); }
+	if (HeatDivider) { HeatDivider->SetVisibility(ESlateVisibility::Collapsed); }
 	{
 		UHorizontalBox* Chip = WidgetTree->ConstructWidget<UHorizontalBox>();
 		USizeBox* IcoSz = WidgetTree->ConstructWidget<USizeBox>(); IcoSz->SetWidthOverride(26.f); IcoSz->SetHeightOverride(26.f);
@@ -245,11 +248,25 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (GS->GetHeat())
 	{
 		const float H = GS->GetHeat()->GetHeatFor(OwnerPawn);
+		HeatVisibleTimer = FMath::Max(0.f, HeatVisibleTimer - DeltaTime);
 		if (HeatText)
 		{
 			// RoundHalfToEven = zelfde afronding als printf %.0f -> getoonde int als changed-check.
 			const int32 HShown = (int32)FMath::RoundHalfToEven(H);
-			if (HShown != LastHeatShown) { LastHeatShown = HShown; HeatText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), H))); }
+			if (HShown != LastHeatShown)
+			{
+				if (LastHeatShown >= 0) { HeatVisibleTimer = 4.f; }
+				LastHeatShown = HShown;
+				HeatText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), H)));
+			}
+			const int32 VisNow = (HShown > 0 || HeatVisibleTimer > 0.f) ? 1 : 0;
+			if (VisNow != LastHeatVisible)
+			{
+				LastHeatVisible = VisNow;
+				const ESlateVisibility V = VisNow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+				if (HeatRow) { HeatRow->SetVisibility(V); }
+				if (HeatDivider) { HeatDivider->SetVisibility(V); }
+			}
 		}
 		if (HeatBar)
 		{

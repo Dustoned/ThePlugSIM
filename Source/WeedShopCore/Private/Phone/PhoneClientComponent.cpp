@@ -1762,7 +1762,9 @@ void UPhoneClientComponent::ServerClaimGoal_Implementation(int32 Idx)
 		FString Reward;
 		if (RewardMoney > 0) { Reward += FString::Printf(TEXT("EUR %lld"), (long long)(RewardMoney / 100)); }
 		if (!Gd.RewardItem.IsNone() && Gd.RewardQty > 0) { Reward += FString::Printf(TEXT("%s%dx %s"), RewardMoney > 0 ? TEXT(" + ") : TEXT(""), Gd.RewardQty, *WeedUI::PrettyItemName(Gd.RewardItem)); }
-		UWeedToast::NotifyPawn(GetOwner(), -1, 4.5f, FColor(255, 210, 70), FString::Printf(TEXT("GOAL COMPLETE: %s  ->  %s"), *Gd.Title, *Reward));
+		UWeedToast::NotifyPawn(GetOwner(), -1, 4.5f, FColor(255, 210, 70),
+			FString::Printf(TEXT("GOAL COMPLETE: %s  ->  %s"), *Gd.Title, *Reward),
+			TEXT("ui_level"));
 	}
 }
 
@@ -1821,7 +1823,8 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 	if (GEngine)
 	{
 		UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Packed a %dg bag of %s."), PackGrams, *Strain.ToString()));
+			FString::Printf(TEXT("Packed a %dg bag of %s."), PackGrams, *Strain.ToString()),
+			TEXT("baggie"));
 	}
 }
 

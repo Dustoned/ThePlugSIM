@@ -30,6 +30,7 @@ protected:
 
 	UPROPERTY() TObjectPtr<UBorder> Card;
 	UPROPERTY() TObjectPtr<UTextBlock> TitleText;
+	UPROPERTY() TObjectPtr<UTextBlock> StatusText;
 	UPROPERTY() TObjectPtr<UWidget> GrowthHeader;
 	UPROPERTY() TObjectPtr<UTextBlock> GrowthLabel;
 	UPROPERTY() TObjectPtr<UTextBlock> GrowthTimeText;
@@ -44,7 +45,9 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> YieldText;
 	UPROPERTY() TObjectPtr<UTextBlock> ThcText;
 	UPROPERTY() TObjectPtr<class UHorizontalBox> YieldRow; // hele yield+thc-rij (incl. iconen) -> verbergen bij een lege pot
+	UPROPERTY() TObjectPtr<UBorder> SoilRow;
 	UPROPERTY() TObjectPtr<UTextBlock> SoilText;
+	UPROPERTY() TObjectPtr<UTextBlock> SoilUsesText;
 	UPROPERTY() TObjectPtr<UTextBlock> UpgradesText; // actieve gear-upgrades op deze pot (altijd zichtbaar)
 	UPROPERTY() TObjectPtr<UTextBlock> HintText;
 
