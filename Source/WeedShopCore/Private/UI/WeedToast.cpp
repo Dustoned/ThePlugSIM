@@ -14,6 +14,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "Phone/PhoneClientComponent.h"
 #include "WeedShopCore.h"
 
@@ -60,6 +61,26 @@ void UWeedToast::Notify(int32 Key, float Time, const FColor& Color, const FStrin
 	}
 	// Geen toast-widget (nog) -> val terug op de engine-melding (zonder icoon).
 	if (GEngine) { GEngine->AddOnScreenDebugMessage(Key, Time, Color, Clean); }
+}
+
+void UWeedToast::NotifyAllPawns(const UObject* WorldContext, int32 Key, float Time, const FColor& Color, const FString& Msg, const FString& IconStem)
+{
+	// Co-op-brede melding: itereer alle verbonden speler-pawns en route per pawn (NotifyPawn -> host lokaal,
+	// joiners via Client-RPC). Een kaal Notify() zou op een listen-server alleen het host-scherm bereiken.
+	UWorld* W = GEngine ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
+	bool bAny = false;
+	if (W)
+	{
+		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+		{
+			APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr;
+			if (!P) { continue; }
+			NotifyPawn(P, Key, Time, Color, Msg, IconStem);
+			bAny = true;
+		}
+	}
+	// Vangnet: (nog) geen pawns (bv. pre-spawn) -> toon lokaal zodat de melding niet stil verdwijnt.
+	if (!bAny) { Notify(Key, Time, Color, Msg); }
 }
 
 TSharedRef<SWidget> UWeedToast::RebuildWidget()

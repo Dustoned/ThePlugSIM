@@ -27,6 +27,12 @@ public:
 	// sentinel-prefix mee in Msg zodat de bestaande Toast/ClientToast-RPC-route ongewijzigd blijft.
 	static void NotifyPawn(class AActor* ForActor, int32 Key, float Time, const FColor& Color, const FString& Msg, const FString& IconStem = FString());
 
+	// Co-op-BREDE melding: toon 'm bij ELKE verbonden speler (gedeelde crew-events zoals een nieuw contact,
+	// een afspraak of een bericht). Op een listen-server bereikt een kaal Notify() alleen het HOST-proces;
+	// deze loop routeert per pawn -> host lokaal + joiners via Client-RPC. Vangt terug op lokaal als er (nog)
+	// geen pawns zijn. WorldContext = een actor/component om de UWorld uit te halen (bv. `this`).
+	static void NotifyAllPawns(const UObject* WorldContext, int32 Key, float Time, const FColor& Color, const FString& Msg, const FString& IconStem = FString());
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;

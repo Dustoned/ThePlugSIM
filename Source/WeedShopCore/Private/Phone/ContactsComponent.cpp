@@ -125,9 +125,11 @@ void UContactsComponent::NotifyOwnerPlayer(const FString& PlayerId, float Second
 {
 	if (!GEngine) { return; }
 	// Co-op (leeg) -> iedereen; competitive -> alleen de eigenaar-pawn (nooit lekken naar de rivaal).
+	// NotifyAllPawns route per speler (host lokaal + joiners via Client-RPC); een kaal Notify() bereikt op
+	// een listen-server alleen het host-scherm, waardoor de joiner z'n afspraak/bericht-toast miste.
 	if (PlayerId.IsEmpty())
 	{
-		UWeedToast::Notify(-1, Seconds, Color, Text);
+		UWeedToast::NotifyAllPawns(this, -1, Seconds, Color, Text);
 		return;
 	}
 	if (APawn* Owner = ResolvePawnForPlayer(PlayerId))
@@ -357,8 +359,8 @@ void UContactsComponent::SendRandomAppointment()
 	if (GEngine)
 	{
 		const FString NoteTxt = FString::Printf(TEXT("Message from %s"), *C.DisplayName.ToString());
-		if (TargetPawn) { UWeedToast::NotifyPawn(TargetPawn, -1, 4.f, FColor(120, 180, 255), NoteTxt); } // alleen de doelspeler
-		else { UWeedToast::Notify(-1, 4.f, FColor(120, 180, 255), NoteTxt); }
+		if (TargetPawn) { UWeedToast::NotifyPawn(TargetPawn, -1, 4.f, FColor(120, 180, 255), NoteTxt); } // competitive: alleen de doelspeler
+		else { UWeedToast::NotifyAllPawns(this, -1, 4.f, FColor(120, 180, 255), NoteTxt); } // co-op: iedereen (was host-only Notify)
 	}
 }
 

@@ -724,7 +724,10 @@ void UNpcRegistryComponent::CheckUnlock(FNpcState& State, APawn* DealingPawn)
 		}
 		else
 		{
-			UWeedToast::Notify(-1, 5.f, FColor(120, 200, 255), Note);
+			// Co-op: gedeeld contact -> iedereen ziet de unlock. NotifyAllPawns route per speler (host lokaal +
+			// joiners via Client-RPC); een kaal Notify() bereikt op een listen-server alleen het host-scherm,
+			// waardoor de joiner z'n eigen "nummer ontgrendeld"-toast miste.
+			UWeedToast::NotifyAllPawns(this, -1, 5.f, FColor(120, 200, 255), Note);
 		}
 	}
 }
