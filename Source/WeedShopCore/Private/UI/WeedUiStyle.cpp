@@ -13,6 +13,10 @@
 #include "Styling/CoreStyle.h"
 #include "Engine/Texture2D.h"
 #include "ImageUtils.h"
+#include "IImageWrapper.h"        // bag-silhouet witten (zwarte PNG tintbaar maken)
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
 #include "Sound/SoundBase.h"
@@ -1108,6 +1112,43 @@ namespace WeedUI
 			Cache.Add(Key, Tex);
 			return Tex;
 		}
+
+		// Zelfde PNG maar met RGB->WIT (alpha behouden): een zwart silhouet (bv. weed_bag) wordt zo tintbaar,
+		// zodat SetColorAndOpacity het in de STRAIN-kleur kan zetten. 1x gedecodeerd + gecachet + root-kept.
+		UTexture2D* LoadWhiteByStem(const FString& Stem)
+		{
+			static TMap<FString, UTexture2D*> Cache;
+			const FString Key = Stem.ToLower();
+			if (UTexture2D** Found = Cache.Find(Key)) { return *Found; }
+			UTexture2D* Out = nullptr;
+			if (const FString* Path = IconFileIndex().Find(Key))
+			{
+				TArray<uint8> Raw;
+				if (FFileHelper::LoadFileToArray(Raw, **Path))
+				{
+					IImageWrapperModule& Mod = FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
+					TSharedPtr<IImageWrapper> Wr = Mod.CreateImageWrapper(EImageFormat::PNG);
+					TArray<uint8> BGRA;
+					if (Wr.IsValid() && Wr->SetCompressed(Raw.GetData(), Raw.Num()) && Wr->GetRaw(ERGBFormat::BGRA, 8, BGRA))
+					{
+						const int32 W = Wr->GetWidth(), H = Wr->GetHeight();
+						for (int32 i = 0; i + 3 < BGRA.Num(); i += 4) { BGRA[i] = 255; BGRA[i + 1] = 255; BGRA[i + 2] = 255; } // RGB->wit, alpha blijft
+						Out = UTexture2D::CreateTransient(W, H, PF_B8G8R8A8);
+						if (Out)
+						{
+							Out->SRGB = true;
+							void* Data = Out->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
+							FMemory::Memcpy(Data, BGRA.GetData(), BGRA.Num());
+							Out->GetPlatformData()->Mips[0].BulkData.Unlock();
+							Out->UpdateResource();
+							Out->AddToRoot();
+						}
+					}
+				}
+			}
+			Cache.Add(Key, Out);
+			return Out;
+		}
 	}
 
 	// Per-ITEM icoon (heeft voorrang op de categorie) zodat tiers niet hetzelfde icoon delen:
@@ -1239,6 +1280,32 @@ namespace WeedUI
 
 	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride, int32 RollLoadedOverride)
 	{
+		// 0) BAGS: het weed_bag/jar/sack-PNG is een ZWART silhouet -> niet tintbaar via multiply. Laad een
+		//    GEWITTE versie zodat SetColorAndOpacity het silhouet in de STRAIN-kleur zet -> de bag zelf krijgt
+		//    de strain-kleur (matcht de tag-pill). Alleen gevulde wiet-bags.
+		if (ItemId.ToString().StartsWith(TEXT("Bag_")))
+		{
+			const FString Stem = ExactIconStem(ItemId);
+			if (UTexture2D* WTex = LoadWhiteByStem(Stem))
+			{
+				FSlateBrush B; B.SetResourceObject(WTex);
+				const float TW = FMath::Max(1.f, (float)WTex->GetSizeX());
+				const float TH = FMath::Max(1.f, (float)WTex->GetSizeY());
+				const float Sc = (Size * 0.94f) / FMath::Max(TW, TH);
+				B.ImageSize = FVector2D(TW * Sc, TH * Sc);
+				B.DrawAs = ESlateBrushDrawType::Image;
+				UImage* Img = Tree->ConstructWidget<UImage>();
+				Img->SetBrush(B);
+				Img->SetColorAndOpacity(TagColorForItem(ItemId, 0.95f, 0.8f)); // volle strain-kleur op het witte silhouet
+				Img->SetVisibility(ESlateVisibility::HitTestInvisible);
+				UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
+				Fit->SetStretch(EStretch::ScaleToFit);
+				Fit->AddChild(Img);
+				Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
+				return Fit;
+			}
+		}
+
 		// 1) Echt PNG-icoon als het in Content/_Project/UI/Icons/ staat. We tinten het (witte) icoon
 		//    met de categoriekleur zodat alles dezelfde kleurtaal als de rest van de game aanhoudt
 		//    (bv. nat = blauw, droog = groen op exact hetzelfde hemp-icoon).
@@ -1265,21 +1332,6 @@ namespace WeedUI
 			Fit->SetStretch(EStretch::ScaleToFit);
 			Fit->AddChild(Img);
 			Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
-
-			// ND7.1: het weed_bag/jar/sack-PNG is een ZWARTE vorm (+ groen blaadje). Slate-tint is een
-			// vermenigvuldiging -> zwart blijft zwart, dus de bag zelf is niet te kleuren. Oplossing: een
-			// afgeronde STRAIN-gekleurde achtergrond achter het icoon zodat de bag op een strain-kleur-veld
-			// staat (herkenbaar per strain, net als de tag-pill). Alleen voor gevulde wiet-bags.
-			if (ItemId.ToString().StartsWith(TEXT("Bag_")))
-			{
-				const FLinearColor Strain = TagColorForItem(ItemId, 0.85f, 0.85f);
-				UBorder* Bg = Tree->ConstructWidget<UBorder>();
-				Bg->SetBrush(Rounded(FLinearColor(Strain.R, Strain.G, Strain.B, 0.85f), Size * 0.22f));
-				Bg->SetPadding(FMargin(Size * 0.10f));
-				Bg->SetVisibility(ESlateVisibility::HitTestInvisible);
-				Bg->SetContent(Fit);
-				return Bg;
-			}
 			return Fit;
 		}
 
