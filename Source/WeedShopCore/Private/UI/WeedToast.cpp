@@ -144,6 +144,13 @@ static UWidget* WeedToast_IconWidget(UWidgetTree* Tree, const FString& Icon, flo
 	{
 		return WeedUI::KitIcon(Tree, Icon, Size, FLinearColor::White);
 	}
+	// Echt item-ID -> het WERKELIJKE item-icoon (strain-gekleurde bag/jar, gevulde container, ...) zodat de
+	// melding altijd toont wat er ECHT gebeurde i.p.v. een generiek glyph. Herkenbaar aan een item-prefix.
+	if (Icon.StartsWith(TEXT("Bag_")) || Icon.StartsWith(TEXT("Joint_")) || Icon.StartsWith(TEXT("Bud_"))
+		|| Icon.StartsWith(TEXT("Seed_")) || Icon.StartsWith(TEXT("Cont_")) || Icon.StartsWith(TEXT("WetBud_")))
+	{
+		if (UWidget* Ico = WeedUI::ItemIcon(Tree, FName(*Icon), Size)) { return Ico; }
+	}
 	return WeedUI::UiGlyph(Tree, Icon, Size, Tint, WeedUI::EIcon::Message);
 }
 

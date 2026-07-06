@@ -1828,7 +1828,7 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 			: (CS == TEXT("Cont_Garbage500")) ? TEXT("sack") : TEXT("bag");
 		UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor(120, 220, 160),
 			FString::Printf(TEXT("Packed a %dg %s of %s."), PackGrams, Noun, *Strain.ToString()),
-			TEXT("baggie"));
+			BagId.ToString()); // echte gepakte item-icoon (strain-gekleurde jar/bag) i.p.v. een generiek glyph
 	}
 }
 
