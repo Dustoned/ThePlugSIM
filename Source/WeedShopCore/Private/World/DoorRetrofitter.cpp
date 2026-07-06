@@ -140,6 +140,10 @@ void ADoorRetrofitter::Tick(float DeltaSeconds)
 void ADoorRetrofitter::BeginPlay()
 {
 	Super::BeginPlay();
+	// [BOOTMARK] load-tijd-attributie: dit BeginPlay bouwt de stad SYNCHROON (het grootste blok in de
+	// wereld-load); de marks hieronder wijzen de seconden aan de fases toe. Goedkoop (Display, 1x per load).
+	const double _RetroT0 = FPlatformTime::Seconds();
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] DoorRetrofitter::BeginPlay start (+%.2fs sinds start)"), _RetroT0 - GStartTime);
 	// Meld de loading-cover dat deze wereld een retrofitter heeft: de cover wacht dan op de stad-ombouw
 	// (CityConverted) + crowd (CrowdWarm) + thuis-vloer (RoomReady). Maps zonder retrofitter slaan die
 	// gates over (de vlag blijft daar false; reset gebeurt in WeedShop_RequestGameLoadingScreen).
@@ -170,14 +174,19 @@ void ADoorRetrofitter::BeginPlay()
 
 	// Map-grens herstellen (als de speler er een gezet heeft; Rebuild is no-op zonder bestand).
 	if (UWorld* WB = GetWorld()) { WB->SpawnActor<AMapBorder>(AMapBorder::StaticClass(), FTransform::Identity); }
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] Retro: baked-overlay+grens klaar na %.2fs"), FPlatformTime::Seconds() - _RetroT0);
 
 	// HITCH-FIX (stat dumphitches, 07-03): alle crowd/basis-skins 1x voorladen ONDER het laadscherm +
 	// keep-alive. Zonder dit deed elke body-materialisatie tijdens het rondlopen een blocking skin-load
 	// (Flush Async Loading + skinned-asset-build) op de game-thread = 200-500ms freeze elke paar seconden.
 	// Draait op host EN joiner (de joiner laadt skins bij OnRep_Appearance en had dezelfde hitch).
 	ACustomerBase::PreloadCrowdSkins(this);
+	const double _RetroT1 = FPlatformTime::Seconds();
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] Retro: PreloadCrowdSkins klaar (+%.2fs binnen BeginPlay)"), _RetroT1 - _RetroT0);
 
 	ScanAndConvert();
+	UE_LOG(LogWeedShop, Display, TEXT("[BOOTMARK] Retro: eerste ScanAndConvert-pass %.2fs; BeginPlay totaal %.2fs (+%.2fs sinds start)"),
+		FPlatformTime::Seconds() - _RetroT1, FPlatformTime::Seconds() - _RetroT0, FPlatformTime::Seconds() - GStartTime);
 	// Zolang de loading-cover op beeld staat scannen we VERSNELD (0.4s i.p.v. 2s): de sweep-hitches
 	// zijn achter de cover onzichtbaar en de stad (deuren/glas/lampen/liften) staat er sneller. Na de
 	// fade schakelt de adaptieve cadans (onderaan ScanAndConvert) vanzelf terug naar 2s/8s.

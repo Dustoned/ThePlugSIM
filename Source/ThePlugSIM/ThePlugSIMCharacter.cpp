@@ -1913,6 +1913,7 @@ void AThePlugSIMCharacter::BeginPlay()
 		// speler er DIRECT in, vóór het eerste frame. Zo zie je geen seconde het park meer (geen overzet).
 		if (Phone) { Phone->PropertyTick(); }
 	}
+
 }
 
 void AThePlugSIMCharacter::OnCashChanged(int64 NewCashCents)
