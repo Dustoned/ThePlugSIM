@@ -60,6 +60,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Interaction")
 	AActor* GetFocusedActor() const { return FocusedActor.Get(); }
 
+	// ND7.12: center-screen interact-prompt (de popup onder het crosshair) aan/uit; standaard AAN.
+	// Persistentie via GConfig in GameUserSettings.ini (zelfde patroon als UHotkeyHintWidget::AreHintsEnabled).
+	// UIT -> UHotkeyHintWidget verbergt de popup en toont de prompt-tekst in de controls-kaart rechtsonder.
+	static bool IsInteractPromptEnabled();
+	static void SetInteractPromptEnabled(bool bEnabled);
+
 	// CO-OP: relay de gedeelde lamp-staat naar de server. APackLightSwitch (bReplicates=false) roept dit aan op de
 	// LOKALE pawn's component; de RPC schrijft dan WorldSync (server-authoritative). Publieke wrapper om de RPC.
 	void RelayLampState(uint32 LampId, bool bOn, float Brightness01) { ServerSetLamp(LampId, bOn, Brightness01); }

@@ -242,10 +242,10 @@ void UWeedItemPickGrid::SetItems(const TArray<FWeedPickItem>& Items, FName Selec
 	for (int32 i = 0; i < Items.Num(); ++i)
 	{
 		const FWeedPickItem& It = Items[i];
-		const FString Sig = FString::Printf(TEXT("%s|%s|%d|%s|%s|%s|%08x|%s"),
+		const FString Sig = FString::Printf(TEXT("%s|%s|%d|%s|%s|%s|%08x|%s|%d|%.1f|%.1f"),
 			*It.Id.ToString(), *It.IconId.ToString(), It.Payload,
 			*It.Badge, *It.Tag, *It.SubLine, It.SubCol.ToFColor(true).ToPackedARGB(),
-			*It.Tooltip);
+			*It.Tooltip, It.Qty, It.Thc, It.QualPct);
 
 		if (CellSigs[i] != Sig)
 		{
@@ -254,7 +254,16 @@ void UWeedItemPickGrid::SetItems(const TArray<FWeedPickItem>& Items, FName Selec
 			// Id/Payload bijwerken zodat de (index-gevangen) klik-lambda de juiste keuze doorgeeft.
 			CellIds[i] = It.Id;
 			CellPayloads[i] = It.Payload;
-			if (Cells[i]) { Cells[i]->SetToolTipText(It.Tooltip.IsEmpty() ? FText::GetEmpty() : FText::FromString(It.Tooltip)); }
+			if (Cells[i])
+			{
+				// Tooltip alleen HIER zetten (sig-diff, waar ook het icoon gezet wordt - niet elke tick).
+				// Expliciete caller-tekst wint; anders de gedeelde item-tooltip op het icoon-id (zelfde
+				// bron als hand-preview/inventory-quick-view via WeedUI::ItemTooltipText).
+				const FName TipId = It.IconId.IsNone() ? It.Id : It.IconId;
+				if (!It.Tooltip.IsEmpty())  { Cells[i]->SetToolTipText(FText::FromString(It.Tooltip)); }
+				else if (!TipId.IsNone())   { Cells[i]->SetToolTipText(WeedUI::ItemTooltipText(this, TipId, It.Qty, It.Thc, It.QualPct)); }
+				else                        { Cells[i]->SetToolTipText(FText::GetEmpty()); }
+			}
 		}
 
 		const bool bSel = bShowSelection && !SelectedId.IsNone() && It.Id == SelectedId && !bSelSeen;

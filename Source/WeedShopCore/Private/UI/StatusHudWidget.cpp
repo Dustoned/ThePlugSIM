@@ -9,6 +9,7 @@
 #include "World/DayCycleComponent.h"
 #include "World/HeatComponent.h"
 #include "Progression/LevelComponent.h"
+#include "Progression/UpgradeComponent.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -142,8 +143,13 @@ void UStatusHudWidget::BuildShell(UCanvasPanel* Root)
 		Col->AddChildToVerticalBox(TimeText)->SetPadding(FMargin(0.f, -1.f, 0.f, 0.f));
 		Chip->AddChildToHorizontalBox(Col)->SetVerticalAlignment(VAlign_Center);
 		StripL->AddChildToHorizontalBox(Chip)->SetVerticalAlignment(VAlign_Center);
+		// Horloge-gate (ND7.16): de klok-chip start verborgen; NativeTick toont 'm (incl. divider)
+		// zodra de Wristwatch-upgrade gekocht/gerepliceerd is. Zelfde Collapsed-patroon als HeatRow.
+		TimeChip = Chip;
+		TimeChip->SetVisibility(ESlateVisibility::Collapsed);
 	}
-	AddDivider(StripL);
+	TimeDivider = AddDivider(StripL);
+	if (TimeDivider) { TimeDivider->SetVisibility(ESlateVisibility::Collapsed); }
 	AddChip(StripL, WeedUI::EIcon::Coin, ColGold, FString(),    TEXT("Cash"), TEXT("EUR 0"), CashText);
 	AddDivider(StripL);
 	AddChip(StripL, WeedUI::EIcon::Coin, ColBlue, TEXT("bank"), TEXT("Bank"), TEXT("EUR 0"), BankText);
@@ -215,6 +221,19 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 				LastBankShown = BankE;
 				BankText->SetText(FText::FromString(FString::Printf(TEXT("EUR %s"), *Compact(BankE))));
 			}
+		}
+	}
+	// Horloge-gate (ND7.16): de klok/dag-chip linksboven alleen tonen met de gekochte Wristwatch-
+	// upgrade (gedeeld op de GameState, gerepliceerd -> klopt voor host en joiner). Changed-check:
+	// visibility alleen zetten bij een echte wissel; de tekst-updates eronder blijven gewoon lopen.
+	{
+		const int32 WatchNow = (GS->GetUpgrades() && GS->GetUpgrades()->HasWatch()) ? 1 : 0;
+		if (WatchNow != LastWatchShown)
+		{
+			LastWatchShown = WatchNow;
+			const ESlateVisibility V = WatchNow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+			if (TimeChip) { TimeChip->SetVisibility(V); }
+			if (TimeDivider) { TimeDivider->SetVisibility(V); }
 		}
 	}
 	if (GS->GetDayCycle())

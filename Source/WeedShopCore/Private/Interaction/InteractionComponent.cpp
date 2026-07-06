@@ -14,6 +14,7 @@
 #include "EngineUtils.h" // TActorIterator: lift-knoppen/lamp-schakelaars hebben geen statische registry
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
+#include "Misc/ConfigCacheIni.h" // ND7.12: interact-prompt-setting persistent in GameUserSettings.ini
 
 UInteractionComponent::UInteractionComponent()
 {
@@ -21,6 +22,23 @@ UInteractionComponent::UInteractionComponent()
 
 	// Co-op: de component moet repliceren zodat de Server-RPC gerouteerd kan worden.
 	SetIsReplicatedByDefault(true);
+}
+
+bool UInteractionComponent::IsInteractPromptEnabled()
+{
+	// ND7.12: standaard AAN; zelfde persistentie-patroon als UHotkeyHintWidget::AreHintsEnabled.
+	bool bOn = true;
+	if (GConfig) { GConfig->GetBool(TEXT("ThePlugSIM.UI"), TEXT("ShowInteractPrompt"), bOn, GGameUserSettingsIni); }
+	return bOn;
+}
+
+void UInteractionComponent::SetInteractPromptEnabled(bool bEnabled)
+{
+	if (GConfig)
+	{
+		GConfig->SetBool(TEXT("ThePlugSIM.UI"), TEXT("ShowInteractPrompt"), bEnabled, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
 }
 
 void UInteractionComponent::BeginPlay()

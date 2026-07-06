@@ -6,6 +6,7 @@
 
 #include "UI/WeedUiStyle.h"
 #include "UI/WeedItemPickGrid.h"
+#include "UI/InventoryWidget.h" // UInvDragOp: bag-sleep vanaf de hotbar/inventory het geef-vak in (ND7.13)
 #include "Phone/PhoneClientComponent.h"
 #include "Customer/CustomerBase.h"
 #include "Inventory/InventoryComponent.h"
@@ -66,6 +67,17 @@ TSharedRef<SWidget> UDealBagCell::RebuildWidget()
 			B->SetHorizontalAlignment(HAlign_Fill); B->SetVerticalAlignment(VAlign_Top);
 			if (Content) { B->SetContent(Content); }
 		}
+		else if (Mode == 3)
+		{
+			// Bags-vak links = drop-DOEL voor de terug-sleep (ND7.10b). Zelfde highlight-look als de losse
+			// SellBox-border die hier eerst zat; de sell-grid (BAGS-label + cellen) zit als Content erin.
+			FSlateBrush Br = WeedUI::StorageSlotBrushWithFill(WeedUI::ColSlotEmpty(0.50f), false, false, WeedUI::ColAccent(0.24f), 9.f);
+			Br.OutlineSettings.Width = 1.f;
+			Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.34f));
+			B->SetBrush(Br);
+			B->SetPadding(FMargin(8.f));
+			if (Content) { B->SetContent(Content); }
+		}
 		else
 		{
 			// Bron-zakje (mode 0) of gegeven bag (mode 2): canonieke inventory-icon-cel als Content. SOLIDE cel-bg
@@ -88,10 +100,17 @@ FReply UDealBagCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const 
 	{
 		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 	}
-	if (Mode == 2 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) // klik op een gegeven bag = 1 terug
+	if (Mode == 2 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		if (Owner.IsValid()) { Owner->OnGivenBagClicked(Strain, Gram); }
-		return FReply::Handled();
+		// ND7.10 — symmetrisch met erin doen: een kale klik doet NIETS meer op een gegeven bag.
+		// Shift-klik = de hele gegeven stack van deze maat terug; slepen (evt. alt = 1 stuk) = terugnemen
+		// via een drop op de bags-kolom links of de hotbar.
+		if (InMouseEvent.IsShiftDown())
+		{
+			if (Owner.IsValid()) { Owner->TakeBackFromPile(Strain, Gram, 0); }
+			return FReply::Handled();
+		}
+		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 	}
 	if (Mode == 1 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) // tik op de LEGE geef-zone = leegmaken
 	{
@@ -103,9 +122,17 @@ FReply UDealBagCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const 
 
 void UDealBagCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
-	if (Mode != 0 || Avail <= 0) { return; }
+	if ((Mode != 0 && Mode != 2) || Avail <= 0) { return; }
 	UDealBagDragOp* Op = NewObject<UDealBagDragOp>(GetTransientPackage(), UDealBagDragOp::StaticClass());
 	Op->Strain = Strain; Op->Gram = Gram; Op->Avail = Avail;
+	if (Mode == 2)
+	{
+		// ND7.10 — terug-sleep uit de geef-pile: normaal = de hele stack van deze maat, alt-drag = 1 stuk.
+		// GiveOwner meesturen zodat óók de hotbar (eigen widget) het terugnemen naar dit deal-scherm kan routeren.
+		Op->bFromGive = true;
+		Op->TakeN = InMouseEvent.IsAltDown() ? 1 : 0;
+		Op->GiveOwner = Owner;
+	}
 	Op->Pivot = EDragPivot::CenterCenter;
 	// Sleep-visual = het ECHTE zakje-icoon dat aan de muis hangt (exact hetzelfde patroon als de inventory-drag,
 	// UInvCell::NativeOnDragDetected): een SizeBox met WeedUI::ItemIcon op de canonieke bag-id. De vorige poging
@@ -127,8 +154,44 @@ bool UDealBagCell::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEven
 	{
 		if (UDealBagDragOp* Op = Cast<UDealBagDragOp>(InOperation))
 		{
+			// Een terug-sleep die weer op het geef-vak landt = no-op (bag blijft gewoon in de pile liggen).
+			if (Op->bFromGive) { return true; }
 			if (Owner.IsValid()) { Owner->OnBagDroppedOnGive(Op->Strain, Op->Gram, Op->Avail); }
 			return true;
+		}
+		// ND7.13 — sleep vanaf de HOTBAR/inventory (UInvDragOp): een bag-stack in het geef-vak droppen loopt
+		// via dezelfde ApplyGive-route (OnBagDroppedOnGive kiest zelf direct-geven of de hoeveel-popup).
+		if (UInvDragOp* InvOp = Cast<UInvDragOp>(InOperation))
+		{
+			if (Owner.IsValid() && InvOp->StackId != 0)
+			{
+				if (APawn* P = Owner->GetOwningPlayerPawn())
+				{
+					if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+					{
+						const int32 Idx = Inv->FindStackById(InvOp->StackId);
+						const TArray<FInventoryStack>& St = Inv->GetStacks();
+						if (St.IsValidIndex(Idx) && UInventoryComponent::IsBag(St[Idx].ItemId))
+						{
+							Owner->OnBagDroppedOnGive(UInventoryComponent::BagStrain(St[Idx].ItemId), UInventoryComponent::BagGrams(St[Idx].ItemId), 0);
+							return true;
+						}
+					}
+				}
+			}
+			// Geen bag-stack -> niet consumeren; het DealWidget-vangnet slikt 'm (geen grond-drop).
+			return false;
+		}
+	}
+	if (Mode == 3) // bags-vak links: een terug-sleep uit de geef-pile hier droppen = terugnemen (ND7.10b)
+	{
+		if (UDealBagDragOp* Op = Cast<UDealBagDragOp>(InOperation))
+		{
+			if (Op->bFromGive)
+			{
+				if (Owner.IsValid()) { Owner->TakeBackFromPile(Op->Strain, Op->Gram, Op->TakeN); }
+				return true;
+			}
 		}
 	}
 	return false;
@@ -173,7 +236,11 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 		Bd->OnClicked.AddDynamic(this, &UDealWidget::OnBackdropClicked);
 		UCanvasPanelSlot* BS = Root->AddChildToCanvas(Bd);
 		BS->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-		BS->SetOffsets(FMargin(0.f));
+		// ND7.13: de onderste HOTBAR-strook (tray op -14, 78px slots + 2x7px padding = tot -106) vrijlaten.
+		// De hotbar leeft op viewport-ZOrder 26 (dit scherm op 30); een full-screen backdrop zou elke
+		// muis-interactie met de hotbar blokkeren, en de speler moet tijdens een deal bags vanaf de hotbar
+		// het geef-vak in kunnen slepen. Klik op die strook sluit de deal dus niet (bewuste afweging).
+		BS->SetOffsets(FMargin(0.f, 0.f, 0.f, 106.f));
 		// KRITISCH: start Collapsed. De widget hangt ALTIJD in de viewport (ZOrder 30); een zichtbare full-screen
 		// klik-vanger zou anders ALLE UI eronder (inventory/packing bench/telefoon) blokkeren als er geen deal is.
 		// NativeTick zet 'm alleen Visible zolang de deal-kaart open staat.
@@ -343,21 +410,17 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 	SellPane->SetMinDesiredHeight(172.f); // hoog vak (gauges centreren ernaast), maar NIET tot in de knoppen (gap eronder)
 	{
 		// Gehighlight vak: dezelfde rand-look als de geef-zone, maar om het HELE bags-vak (speler-wens).
-		UBorder* SellBox = WidgetTree->ConstructWidget<UBorder>();
-		{
-			FSlateBrush Br = WeedUI::StorageSlotBrushWithFill(WeedUI::ColSlotEmpty(0.50f), false, false, WeedUI::ColAccent(0.24f), 9.f);
-			Br.OutlineSettings.Width = 1.f;
-			Br.OutlineSettings.Color = FSlateColor(WeedUI::ColStroke(0.34f));
-			SellBox->SetBrush(Br);
-		}
-		SellBox->SetPadding(FMargin(8.f));
-		SellPane->SetContent(SellBox);
+		// ND7.10b: het vak is nu een mode-3 DROP-cel (de rand-look zit in RebuildWidget) — een gegeven bag
+		// hierheen terug-slepen = terugnemen uit de geef-pile.
+		UDealBagCell* SellZone = WidgetTree->ConstructWidget<UDealBagCell>();
+		SellZone->Owner = this; SellZone->Mode = 3;
 		UVerticalBox* SellVB = WidgetTree->ConstructWidget<UVerticalBox>();
-		SellBox->SetContent(SellVB);
 		SellVB->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("BAGS"), 9, WeedUI::ColTextDim(0.85f), false, true));
 		SellGrid = WidgetTree->ConstructWidget<UWrapBox>();
 		SellGrid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 		SellVB->AddChildToVerticalBox(SellGrid)->SetPadding(FMargin(0.f, 3.f, 0.f, 0.f));
+		SellZone->Content = SellVB; // RebuildWidget (mode 3) wraps dit in de rand-cel
+		SellPane->SetContent(SellZone);
 	}
 	{ UHorizontalBoxSlot* SPS = MainCols->AddChildToHorizontalBox(SellPane); SPS->SetVerticalAlignment(VAlign_Fill); SPS->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f)); }
 
@@ -813,6 +876,7 @@ void UDealWidget::RebuildSellGrid()
 	struct FBagKey { FName Strain; int32 Gram; };
 	TArray<FBagKey> Keys;
 	TMap<FString, int32> Owned; // "strain|gram" -> aantal zakjes
+	TMap<FString, float> ThcSum, QSum; // gewogen sommen (aantal x waarde) voor de hover-tooltip (ND7.6)
 	auto KeyStr = [](FName S, int32 G) { return FString::Printf(TEXT("%s|%d"), *S.ToString(), G); };
 	for (const FInventoryStack& St : Inv->GetStacks())
 	{
@@ -822,6 +886,8 @@ void UDealWidget::RebuildSellGrid()
 		const FString K = KeyStr(S, G);
 		if (!Owned.Contains(K)) { Keys.Add({ S, G }); }
 		Owned.FindOrAdd(K) += St.Quantity;
+		ThcSum.FindOrAdd(K) += St.Quality * St.Quantity;
+		QSum.FindOrAdd(K) += St.QualityPct * St.Quantity;
 	}
 	Keys.Sort([](const FBagKey& A, const FBagKey& B)
 	{
@@ -829,14 +895,16 @@ void UDealWidget::RebuildSellGrid()
 		return Cmp != 0 ? Cmp < 0 : A.Gram > B.Gram; // strain A->Z, binnen strain groot->klein
 	});
 
-	// Beschikbaar = bezit - wat al in de pile ligt (van de huidige pile-strain). Sig over strain|gram|avail.
+	// Beschikbaar = bezit - wat al in de pile ligt (van de huidige pile-strain). Sig over strain|gram|avail
+	// + kwaliteit (de tooltip toont THC/kwaliteit; die moet mee-verversen als alleen de kwaliteit wijzigt).
 	FString Sig;
 	for (const FBagKey& K : Keys)
 	{
-		const int32 Owned0 = Owned[KeyStr(K.Strain, K.Gram)];
+		const FString KS = KeyStr(K.Strain, K.Gram);
+		const int32 Owned0 = Owned[KS];
 		const int32 InPile = (K.Strain == PileStrain && PileCounts.Contains(K.Gram)) ? PileCounts[K.Gram] : 0;
 		const int32 Avail = FMath::Max(0, Owned0 - InPile);
-		Sig += FString::Printf(TEXT("%s:%d:%d|"), *K.Strain.ToString(), K.Gram, Avail);
+		Sig += FString::Printf(TEXT("%s:%d:%d:%.1f:%.1f|"), *K.Strain.ToString(), K.Gram, Avail, ThcSum[KS], QSum[KS]);
 	}
 	Sig += FString::Printf(TEXT("pile=%s"), *PileStrain.ToString());
 	if (Sig == SellGridSig) { return; } // sig-gate: alleen bij een voorraad-/pile-wijziging herbouwen
@@ -845,12 +913,16 @@ void UDealWidget::RebuildSellGrid()
 	SellGrid->ClearChildren();
 	for (const FBagKey& K : Keys)
 	{
-		const int32 Owned0 = Owned[KeyStr(K.Strain, K.Gram)];
+		const FString KS = KeyStr(K.Strain, K.Gram);
+		const int32 Owned0 = Owned[KS];
 		const int32 InPile = (K.Strain == PileStrain && PileCounts.Contains(K.Gram)) ? PileCounts[K.Gram] : 0;
 		const int32 Avail = FMath::Max(0, Owned0 - InPile);
 		UDealBagCell* Cell = WidgetTree->ConstructWidget<UDealBagCell>();
 		Cell->Owner = this; Cell->Mode = 0; Cell->Strain = K.Strain; Cell->Gram = K.Gram; Cell->Avail = Avail;
 		Cell->Content = MakeBagCellContent(K.Strain, K.Gram, Avail);
+		// ND7.6 — hover-tooltip op de bag-cel (gedeelde opmaak met inventory/hotbar), gewogen THC/kwaliteit.
+		Cell->SetToolTipText(WeedUI::ItemTooltipText(this, UInventoryComponent::MakeBagId(K.Strain, NAME_None, K.Gram),
+			Avail, Owned0 > 0 ? ThcSum[KS] / Owned0 : 0.f, Owned0 > 0 ? QSum[KS] / Owned0 : 0.f));
 		// Op = uitverkocht (alles in de pile): dimmen zodat de speler ziet dat 'ie niks meer kan slepen.
 		Cell->SetRenderOpacity(Avail > 0 ? 1.f : 0.35f);
 		SellGrid->AddChildToWrapBox(Cell);
@@ -862,6 +934,15 @@ void UDealWidget::RefreshGiveZone()
 	// De geef-grid bij een geef/verwijder-actie (of strain-wissel) opnieuw vullen = user-actie, geen per-tick rebuild.
 	if (GiveGrid)
 	{
+		// ND7.6 — gewogen THC/kwaliteit van de pile-strain (1x lezen) voor de hover-tooltips op de gegeven bags.
+		float PThc = 0.f, PQPct = 0.f;
+		if (APawn* P = GetOwningPlayerPawn())
+		{
+			if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+			{
+				Inv->BagStockGrams(PileStrain, PThc, PQPct);
+			}
+		}
 		GiveGrid->ClearChildren();
 		TArray<int32> Grams; PileCounts.GetKeys(Grams); Grams.Sort([](const int32& A, const int32& B) { return A > B; });
 		for (int32 G : Grams)
@@ -871,6 +952,7 @@ void UDealWidget::RefreshGiveZone()
 			UDealBagCell* Cell = WidgetTree->ConstructWidget<UDealBagCell>();
 			Cell->Owner = this; Cell->Mode = 2; Cell->Strain = PileStrain; Cell->Gram = G; Cell->Avail = N;
 			Cell->Content = MakeBagCellContent(PileStrain, G, N); // count = hoeveel van die maat je geeft
+			Cell->SetToolTipText(WeedUI::ItemTooltipText(this, UInventoryComponent::MakeBagId(PileStrain, NAME_None, G), N, PThc, PQPct)); // ND7.6
 			GiveGrid->AddChildToWrapBox(Cell);
 		}
 	}
@@ -945,20 +1027,36 @@ void UDealWidget::ApplyGive(FName Strain, int32 Gram, int32 N)
 	RefreshGiveZone();
 }
 
-void UDealWidget::OnGivenBagClicked(FName Strain, int32 Gram)
+void UDealWidget::TakeBackFromPile(FName Strain, int32 Gram, int32 N)
 {
+	// ND7.10 — terugnemen uit de geef-pile (terug-sleep of shift-klik). De bags verlieten de inventory nooit
+	// echt (de pile reserveert ze alleen), dus terugnemen = alleen de pile-administratie bijwerken; de prijs/
+	// kans-updates lopen via RefreshGiveZone -> SetDealGiveGrams (de vaste route, niet omzeilen).
 	if (Strain != PileStrain) { return; }
-	int32* N = PileCounts.Find(Gram);
-	if (!N) { return; }
-	*N -= 1;
-	if (*N <= 0) { PileCounts.Remove(Gram); }
+	int32* Cnt = PileCounts.Find(Gram);
+	if (!Cnt || *Cnt <= 0) { return; }
+	*Cnt -= (N <= 0) ? *Cnt : FMath::Min(N, *Cnt); // N <= 0 = hele stack van die maat
+	if (*Cnt <= 0) { PileCounts.Remove(Gram); }
 	RefreshGiveZone();
 }
 
 void UDealWidget::OnGiveZoneClicked()
 {
 	// Bewust GEEN "alles wissen" meer: nu het HELE rechter vak de drop-zone is, zou een klik op het label/hint
-	// anders per ongeluk de hele pile wissen. Je haalt zakjes er 1-voor-1 af door op een gegeven bag te klikken.
+	// anders per ongeluk de hele pile wissen. Terugnemen = terug-slepen, shift-klik (hele stack) of alt-drag (1).
+}
+
+bool UDealWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	// Vangnet tijdens een open deal: een bag-sleep (hotbar/sell-grid/geef-pile) die alle echte drop-doelen
+	// mist landt op de backdrop en zou anders als "cancelled" gelden — bij UInvDragOp dropt dat de HELE
+	// stapel op de grond (HandleDroppedOutside). Binnen het deal-scherm is niks doen de veilige uitkomst.
+	if (Cast<UInvDragOp>(InOperation) || Cast<UDealBagDragOp>(InOperation))
+	{
+		UPhoneClientComponent* Ph = GetPhone();
+		if (Ph && Ph->IsDealOpen()) { return true; }
+	}
+	return Super::NativeOnDrop(InGeometry, InDragDropEvent, InOperation);
 }
 
 // ===================== "Hoeveel geven?"-popup (modal, spiegel van de inventory-split-popup) =====================

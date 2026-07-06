@@ -1105,7 +1105,13 @@ int32 UPhoneWidget::UpgradesSignature() const
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>()) { Tier = Inv->GetBackpackTier(); }
 	}
-	return Sig * 17 + Tier;
+	// + Horloge-bezit (gedeelde upgrade, gerepliceerd): na de koop herbouwt het paneel een keer -> "owned".
+	int32 Watch = 0;
+	if (const AWeedShopGameState* GS = GetWorld() ? GetWorld()->GetGameState<AWeedShopGameState>() : nullptr)
+	{
+		if (GS->GetUpgrades() && GS->GetUpgrades()->HasWatch()) { Watch = 1; }
+	}
+	return (Sig * 17 + Tier) * 2 + Watch;
 }
 
 int32 UPhoneWidget::BankUnlockSignature() const
@@ -3261,6 +3267,49 @@ void UPhoneWidget::RefreshContent()
 						->SetVerticalAlignment(VAlign_Center);
 				}
 
+				ActiveContent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
+			}
+		}
+
+		// --- Horloge (ND7.16): gedeelde upgrade (UpgradeComponent op de GameState). Zonder horloge
+		// geen klok linksboven in de HUD; de telefoon-statusbalk toont de tijd altijd. Koop loopt via
+		// de bestaande upgrade-route: catalogus-index -> DoAction (Tab 0) -> ServerBuyUpgrade. ---
+		if (GS && GS->GetUpgrades())
+		{
+			FText WName; int32 WCost = 0; bool bWOwned = false, bWAvail = false;
+			if (GS->GetUpgrades()->GetUpgradeDisplay(UUpgradeComponent::WatchUpgradeId, WName, WCost, bWOwned, bWAvail))
+			{
+				ActiveContent->AddChildToVerticalBox(MakeText(TEXT("Watch"), 14, WeedUI::ColText()))
+					->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
+
+				UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+				UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+				Info->AddChildToVerticalBox(MakeText(WName.ToString(), 12, bWOwned ? WeedUI::ColGood() : WeedUI::ColText()));
+				Info->AddChildToVerticalBox(MakeText(TEXT("Shows the clock top-left in your HUD"), 10, WeedUI::ColTextDim()));
+				UHorizontalBoxSlot* IL = Row->AddChildToHorizontalBox(Info);
+				IL->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				IL->SetVerticalAlignment(VAlign_Center);
+				IL->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+				if (bWOwned)
+				{
+					Row->AddChildToHorizontalBox(MakeText(TEXT("owned"), 10, WeedUI::ColTextDim()))
+						->SetVerticalAlignment(VAlign_Center);
+				}
+				else
+				{
+					// Koper betaalt met EIGEN bankgeld (BuyUpgrade; co-op: toast landt op de koper-client).
+					const int32 WatchIdx = GS->GetUpgrades()->GetAllUpgradeIds().IndexOfByKey(UUpgradeComponent::WatchUpgradeId);
+					const FString BtnLabel = FString::Printf(TEXT("Buy  -  EUR %d"), WCost / 100);
+					USizeBox* RB = WidgetTree->ConstructWidget<USizeBox>();
+					RB->SetWidthOverride(150.f); RB->SetHeightOverride(28.f);
+					RB->SetContent(MakeActionBtn(BtnLabel, WeedUI::ColAccentDim(), [this, WatchIdx]()
+					{
+						if (Phone.IsValid() && WatchIdx >= 0) { Phone->DoAction(WatchIdx); }
+					}, 11));
+					UHorizontalBoxSlot* RS = Row->AddChildToHorizontalBox(RB);
+					RS->SetVerticalAlignment(VAlign_Center);
+				}
 				ActiveContent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f, 0.f, 3.f));
 			}
 		}

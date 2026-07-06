@@ -44,7 +44,7 @@ public:
 	int32 Qty = 0;
 	float Thc = 0.f;
 	FString Badge;
-	FString Tooltip;
+	FString Tooltip; // fallback-override; normaal zet FillBody de tooltip direct via WeedUI::ItemTooltipText (ND7.6)
 	float IconSize = 46.f;
 	TWeakObjectPtr<UShelfWidget> Owner;
 protected:
@@ -81,6 +81,8 @@ public:
 	// staat ernaast open, net als bij de droogrek; uit het schap halen doe je door een schap-item op je
 	// inventory te slepen - dat handelt de InventoryWidget zelf af.)
 	void HandleInvStore(class UInvDragOp* Op);
+	// ND7.14: shift+klik op een schap-cel = de hele stapel DIRECT terug naar je inventory (geen popup).
+	void QuickTakeToInventory(int32 ShelfIndex, int32 Qty);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

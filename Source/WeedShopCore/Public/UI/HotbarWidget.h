@@ -23,6 +23,7 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 	// Container-vangnet: een drop in de gaps TUSSEN de hotbar-slots snapt naar het dichtstbijzijnde slot
 	// (zelfde logica als het inventory-rooster; een slot dat de drop zelf afhandelde consumeert het event).
+	// Vangt daarnaast de terug-sleep uit het deal-geef-vak (UDealBagDragOp::bFromGive -> terugnemen, ND7.10).
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
 	void BuildShell(UCanvasPanel* Root);

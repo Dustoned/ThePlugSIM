@@ -11,6 +11,8 @@
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/DryingRack.h"
 #include "World/ProcessorMachine.h"
+#include "World/DoorRetrofitter.h"        // IsInsideHomeRoom: binnen/buiten-check voor de carry-heat (ND7.4)
+#include "Inventory/InventoryComponent.h" // gram-telling wiet op zak (bags/buds/joints)
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "EngineUtils.h"
@@ -51,6 +53,30 @@ namespace
 			if (Pw && USaveGameSubsystem::StablePlayerId(Pw) == KeyStr) { return Pw; }
 		}
 		return nullptr;
+	}
+
+	// ND7.4: totaal gram wiet "op zak" van een pawn: zakjes (aantal x gram-per-zakje), losse gedroogde
+	// buds (Bud_ = 1g per stuk) en joints (aantal x gram-per-joint). WetBud_/concentraten tellen bewust
+	// niet mee (ontwerp: bags + losse buds + joints).
+	int32 CarryGramsOnPawn(const APawn* Pawn)
+	{
+		const UInventoryComponent* Inv = Pawn ? Pawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+		if (!Inv) { return 0; }
+		int32 Grams = 0;
+		for (const FInventoryStack& S : Inv->GetStacks())
+		{
+			if (S.Quantity <= 0) { continue; }
+			if (UInventoryComponent::IsBag(S.ItemId))
+			{
+				// Oude maatloze bags (BagGrams=0) tellen als 1g - zelfde aanname als BagStockGrams.
+				Grams += S.Quantity * FMath::Max(1, UInventoryComponent::BagGrams(S.ItemId));
+				continue;
+			}
+			const FString Id = S.ItemId.ToString();
+			if (Id.StartsWith(TEXT("Bud_")))   { Grams += S.Quantity; continue; } // los gedroogd = 1g per stuk
+			if (Id.StartsWith(TEXT("Joint_"))) { Grams += S.Quantity * FMath::Max(1, UInventoryComponent::JointGrams(S.ItemId)); }
+		}
+		return Grams;
 	}
 }
 
@@ -151,7 +177,24 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	if (!bComp)
 	{
 		// CO-OP: één gedeelde heat-state. Potten van alle spelers samen bepalen de gedeelde vloer.
-		if (bRescan) { CachedPotFloor = ComputePotHeatFloor(nullptr) * (1.f - Resist); }
+		if (bRescan)
+		{
+			CachedPotFloor = ComputePotHeatFloor(nullptr) * (1.f - Resist);
+			// Carry-heat (ND7.4): per pawn bepaald (eigen inventory + eigen binnen/buiten); de GEDEELDE
+			// heat krijgt de HOOGSTE offset van de crew (max, niet som - rustig houden).
+			float Carry = 0.f;
+			if (UWorld* W = GetWorld())
+			{
+				for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+				{
+					if (APawn* Pw = It->Get() ? It->Get()->GetPawn() : nullptr)
+					{
+						Carry = FMath::Max(Carry, ComputeCarryHeatFor(Pw));
+					}
+				}
+			}
+			SetCarryHeat(Shared, Carry);
+		}
 		TickState(Shared, DeltaTime, nullptr, bNight, CurDay, Resist, CachedPotFloor, /*bAllowEvents=*/true);
 	}
 	else
@@ -180,6 +223,7 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 				// Geen levende pawn voor deze entry (speler weg/nog niet gespawnd): alleen DECAYEN.
 				// GEEN pot-check (ComputePotHeatFloor(nullptr) zou ALLE homes tellen + de gedeelde
 				// co-op-latch muteren + iedereen notificeren) en GEEN events/notificaties.
+				if (bRescan) { SetCarryHeat(Players[i].State, 0.f); } // geen pawn = geen wiet op zak
 				TickState(Players[i].State, DeltaTime, nullptr, bNight, CurDay, Resist, 0.f, /*bAllowEvents=*/false);
 				continue;
 			}
@@ -188,6 +232,8 @@ void UHeatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 			if (bRescan)
 			{
 				CachedPotFloorByKey.Add(Key, ComputePotHeatFloor(Owner) * (1.f - Resist));
+				// Carry-heat (ND7.4) per speler: DIENS eigen inventory + binnen/buiten-status.
+				SetCarryHeat(Players[i].State, ComputeCarryHeatFor(Owner));
 			}
 			TickState(Players[i].State, DeltaTime, Owner, bNight, CurDay, Resist, CachedPotFloorByKey.FindRef(Key), /*bAllowEvents=*/true);
 		}
@@ -203,9 +249,10 @@ void UHeatComponent::TickState(FHeatState& St, float DeltaTime, APawn* EventTarg
 
 	// Risico-events: alleen 's nachts, bij echt hoge heat, EN niet binnen de dagen-cooldown na een
 	// vorige bust/overval (zodat je een paar dagen rust hebt). Competitive: EventTargetPawn = alleen
-	// DIE speler wordt beboet; nullptr (co-op) = iedereen (bestaand gedrag).
+	// DIE speler wordt beboet; nullptr (co-op) = iedereen (bestaand gedrag). De drempel kijkt naar de
+	// EFFECTIEVE heat (basis + carry-offset): te veel wiet op zak telt mee in het bust-risico.
 	const bool bOnCooldown = (CurDay < St.LastEventDay + EventCooldownDays);
-	if (bAllowEvents && bNight && St.Heat >= BustThreshold && !bOnCooldown)
+	if (bAllowEvents && bNight && (St.Heat + St.CarryHeat) >= BustThreshold && !bOnCooldown)
 	{
 		St.EventTimer += DeltaTime;
 		if (St.EventTimer >= EventIntervalSeconds)
@@ -239,7 +286,9 @@ void UHeatComponent::AddHeatFor(const APawn* Instigator, float Amount)
 
 float UHeatComponent::GetHeatFor(const APawn* Pawn) const
 {
-	return StateForPawnConst(Pawn).Heat;
+	// Effectieve heat = basis + reversibele carry-offset (ND7.4), geklemd op de 0..100-balk.
+	const FHeatState& St = StateForPawnConst(Pawn);
+	return FMath::Clamp(St.Heat + St.CarryHeat, 0.f, 100.f);
 }
 
 void UHeatComponent::RestoreHeatFor(const FName& Key, float V, float Timer, int32 LastDay)
@@ -346,10 +395,40 @@ float UHeatComponent::ComputePotHeatFloor(const APawn* HomeFilterPawn)
 	return FMath::Min((float)Excess * HeatPerExcessPot, MaxPotHeat);
 }
 
+// ============================ Carry-heat (ND7.4) ============================
+
+ADoorRetrofitter* UHeatComponent::FindRetro()
+{
+	if (ADoorRetrofitter* Cached = RetroCache.Get()) { return Cached; }
+	for (TActorIterator<ADoorRetrofitter> It(GetWorld()); It; ++It) { RetroCache = *It; return *It; }
+	return nullptr;
+}
+
+float UHeatComponent::ComputeCarryHeatFor(const APawn* Pawn)
+{
+	if (!Pawn) { return 0.f; }
+	const int32 Excess = CarryGramsOnPawn(Pawn) - FMath::Max(0, CarryGramLimit);
+	if (Excess <= 0) { return 0.f; }
+	// BINNEN (apartment/home-kamer) = geen risico: daar vervalt de offset direct. Geen kamer-kennis
+	// (geen DoorRetrofitter, bv. andere map) -> veilige keuze: ook geen extra heat.
+	ADoorRetrofitter* Retro = FindRetro();
+	if (!Retro || Retro->IsInsideHomeRoom(Pawn->GetActorLocation())) { return 0.f; }
+	// Rustig oplopend: +CarryHeatPerStep per VOLLE CarryStepGrams boven de limiet, gecapt op MaxCarryHeat.
+	const int32 Steps = Excess / FMath::Max(1, CarryStepGrams);
+	return FMath::Min((float)Steps * CarryHeatPerStep, MaxCarryHeat);
+}
+
+void UHeatComponent::SetCarryHeat(FHeatState& St, float NewCarry)
+{
+	if (FMath::IsNearlyEqual(St.CarryHeat, NewCarry)) { return; }
+	St.CarryHeat = NewCarry;
+	OnHeatChanged.Broadcast(FMath::Clamp(St.Heat + St.CarryHeat, 0.f, 100.f)); // effectieve waarde voor de balk
+}
+
 void UHeatComponent::SetHeatState(FHeatState& St, float NewHeat)
 {
 	St.Heat = FMath::Clamp(NewHeat, 0.f, 100.f);
-	OnHeatChanged.Broadcast(St.Heat);
+	OnHeatChanged.Broadcast(FMath::Clamp(St.Heat + St.CarryHeat, 0.f, 100.f)); // effectief (incl. carry-offset)
 }
 
 void UHeatComponent::OnRep_Heat()

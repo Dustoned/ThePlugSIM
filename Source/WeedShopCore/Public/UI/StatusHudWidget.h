@@ -35,6 +35,12 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> TimeSunGlyph;
 	UPROPERTY() TObjectPtr<UWidget> TimeMoonGlyph;
 	int32 bTimeNightShown = -1; // -1 = nog niet gezet
+	// Horloge-gate (ND7.16): de klok-chip linksboven is 1x gebouwd maar toont alleen met de gekochte
+	// Wristwatch-upgrade; zonder horloge Collapsed (de chip heeft geen eigen tick-beheer, alle updates
+	// lopen via NativeTick van deze widget met changed-checks -> Collapsed is hier veilig).
+	UPROPERTY() TObjectPtr<UWidget> TimeChip;
+	UPROPERTY() TObjectPtr<UWidget> TimeDivider;
+	int32 LastWatchShown = -1; // -1 = nog niet gezet
 
 	UPROPERTY() TObjectPtr<UTextBlock> CashText;
 	UPROPERTY() TObjectPtr<UTextBlock> BankText;

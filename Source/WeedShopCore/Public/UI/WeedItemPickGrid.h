@@ -27,7 +27,10 @@ struct FWeedPickItem
 	FString Tag;                                           // tag-pill onder-center; leeg -> ItemTagShort(IconId)
 	FString SubLine;                                       // klein regeltje boven de tag-pill (bv. prijs), leeg = geen
 	FLinearColor SubCol = FLinearColor(0.72f, 0.75f, 0.82f); // kleur van SubLine
-	FString Tooltip;                                       // zwevende hover-tooltip
+	FString Tooltip;                                       // zwevende hover-tooltip; leeg -> automatische WeedUI::ItemTooltipText op het icoon-id
+	int32 Qty = 0;                                         // stack-aantal voor de automatische tooltip (0 = onbekend/n.v.t.)
+	float Thc = 0.f;                                       // THC% van de stack voor de automatische tooltip
+	float QualPct = 0.f;                                   // kwaliteit% van de stack voor de automatische tooltip
 };
 
 // Herbruikbaar icoon-keuze-grid. Vul via SetItems(); reageer op keuze via OnPick(Id, Payload).

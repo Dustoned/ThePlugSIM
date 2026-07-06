@@ -31,6 +31,18 @@ namespace
 		while (S.Contains(TEXT("  "))) { S.ReplaceInline(TEXT("  "), TEXT(" ")); }
 	}
 
+	// ND7.12: label voor de controls-kaart rechtsonder als de center-popup uitstaat - de beschrijvende
+	// prompt-tekst zonder de pickup-staart (daar is de aparte "Hold G / Pick up"-rij al voor).
+	FString CornerPromptLabel(const FString& RawPrompt)
+	{
+		FString S = RawPrompt;
+		NormalizePromptWhitespace(S);
+		S.ReplaceInline(TEXT(" - hold G to pick up"), TEXT(""));
+		S.ReplaceInline(TEXT(" - Hold G to pick up"), TEXT(""));
+		NormalizePromptWhitespace(S);
+		return S;
+	}
+
 	void BuildCenterPromptParts(const FString& RawPrompt, const FString& InteractKey, bool bPickable,
 		FString& OutTitle, FString& OutKey, FString& OutAction)
 	{
@@ -220,6 +232,8 @@ void UHotkeyHintWidget::BuildRowPool(int32 Count)
 
 		// Omschrijving LINKS (vult de rij, dus alle tekst begint op één verticale lijn). 1x gebouwd; tekst in-place.
 		UTextBlock* Label = WeedUI::Text(WidgetTree, TEXT(""), 11, FLinearColor(0.86f, 0.89f, 0.95f));
+		// ND7.12: prompt-teksten ("LOCKED - ...") kunnen lang zijn -> wrappen binnen de kaart i.p.v. clippen.
+		Label->SetAutoWrapText(true);
 		UHorizontalBoxSlot* LSlot = Row->AddChildToHorizontalBox(Label);
 		LSlot->SetVerticalAlignment(VAlign_Center);
 		LSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -247,8 +261,10 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (!List) { return; }
 
-	// In de instellingen uit te zetten. Alleen de controls-kaart gaat weg; de center prompt blijft gameplay-info.
+	// In de instellingen uit te zetten. "Controls overlay" bestuurt de kaart rechtsonder; "Interaction prompt"
+	// (ND7.12) de center-popup. Popup UIT -> de prompt-tekst verhuist als rij naar de kaart rechtsonder.
 	const bool bControlsEnabled = AreHintsEnabled();
+	const bool bCenterPrompt = UInteractionComponent::IsInteractPromptEnabled();
 	if (Card) { Card->SetVisibility(bControlsEnabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
 
 	APawn* P = GetOwningPlayerPawn();
@@ -305,7 +321,8 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			const FText T = IInteractable::Execute_GetInteractionPrompt(Focus);
 			if (!T.IsEmpty()) { Prompt = T.ToString(); }
 			FocusPrompt = Prompt;
-			Hints.Emplace(K(TEXT("Interact")), TEXT("Interact"));
+			// ND7.12: popup uit -> de beschrijvende actie-tekst i.p.v. het generieke "Interact".
+			Hints.Emplace(K(TEXT("Interact")), bCenterPrompt ? FString(TEXT("Interact")) : CornerPromptLabel(Prompt));
 		}
 	}
 	else if (bPhone)
@@ -346,6 +363,9 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 			}
 			// De prompt-tekst (LOCKED / Open door / ...) komt als GECENTREERDE popup, niet in de hoek.
 			FocusPrompt = Prompt;
+			// ND7.12 (setting "Interaction prompt" UIT): geen popup onder het crosshair -> toon de
+			// beschrijvende actie-tekst ("Go to floor 3", "Open door") als rij in de kaart rechtsonder.
+			if (!bCenterPrompt) { Hints.Emplace(K(TEXT("Interact")), CornerPromptLabel(Prompt)); }
 			const FName ActiveF = Inv ? Inv->GetActiveItemId() : NAME_None;
 			const bool bJointHand = ActiveF.ToString().StartsWith(TEXT("Joint_"));
 			// Klant + joint in de hand -> korte hold om 'm een hit te geven.
@@ -389,11 +409,12 @@ void UHotkeyHintWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Gecentreerde interactie-popup bijwerken (onafhankelijk van de hoek-kaart).
 	// Changed-check: SetText/visibility alleen als de prompt echt wijzigde.
 	const bool bFocusPickable = Focus && Build && Build->IsPickable(Focus);
-	const FString PromptSig = FocusPrompt + TEXT("|") + (bFocusPickable ? TEXT("pick") : TEXT("interact")) + TEXT("|") + K(TEXT("Interact"));
+	// ND7.12: de aan/uit-vlag zit mee in de sig zodat een live toggle in de settings direct doorwerkt.
+	const FString PromptSig = FocusPrompt + TEXT("|") + (bFocusPickable ? TEXT("pick") : TEXT("interact")) + TEXT("|") + K(TEXT("Interact")) + (bCenterPrompt ? TEXT("|on") : TEXT("|off"));
 	if (CenterPromptCard && CenterPromptTitle && CenterPromptKey && CenterPromptAction && PromptSig != LastFocusPrompt)
 	{
 		LastFocusPrompt = PromptSig;
-		if (!FocusPrompt.IsEmpty())
+		if (bCenterPrompt && !FocusPrompt.IsEmpty())
 		{
 			FString PromptTitle, PromptKey, PromptAction;
 			BuildCenterPromptParts(FocusPrompt, K(TEXT("Interact")), bFocusPickable, PromptTitle, PromptKey, PromptAction);

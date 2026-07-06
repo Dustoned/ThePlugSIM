@@ -22,6 +22,12 @@ class WEEDSHOPCORE_API USettingsWidget : public UUserWidget
 public:
 	void SetPhone(UPhoneClientComponent* InPhone);
 
+	// ND7.3: third-person (B-toets) is experimenteel; standaard UIT (B doet dan niets). Persistentie via
+	// GConfig in GameUserSettings.ini (zelfde patroon als UHotkeyHintWidget::AreHintsEnabled); gelezen
+	// door AThePlugSIMCharacter::ToggleThirdPerson.
+	static bool IsThirdPersonEnabled();
+	static void SetThirdPersonEnabled(bool bEnabled);
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;

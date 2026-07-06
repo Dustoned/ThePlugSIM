@@ -27,6 +27,8 @@ class UWrapBox;
 class UDealWidget;
 
 // Sleep-payload voor de geef-tray: welk zakje (strain + gram-maat) sleep je, en hoeveel heb je ervan.
+// ND7.10: geldt ook voor de TERUG-sleep uit de geef-pile (bFromGive) — een drop op de bags-kolom/hotbar
+// neemt dan TakeN zakjes terug (0 = de hele stack van die maat; alt-drag zet 'm op 1).
 UCLASS()
 class WEEDSHOPCORE_API UDealBagDragOp : public UDragDropOperation
 {
@@ -35,12 +37,17 @@ public:
 	UPROPERTY() FName Strain;
 	UPROPERTY() int32 Gram = 0;
 	UPROPERTY() int32 Avail = 0;
+	UPROPERTY() bool bFromGive = false;      // true = gesleept UIT de geef-pile (drop = terugnemen)
+	UPROPERTY() int32 TakeN = 0;             // bij bFromGive: hoeveel terug (0 = hele stack, alt-drag = 1)
+	TWeakObjectPtr<UDealWidget> GiveOwner;   // eigenaar-dealwidget (hotbar-drop routeert het terugnemen hierheen)
 };
 
 // Eén cel in de geef-interactie. Mode 0 = bron-zakje in de sell-grid (sleepbaar, canonieke inventory-look),
-// mode 1 = geef-zone (drop-DOEL: bevat de geef-grid als content, klik = niks meer -> zie mode 2),
-// mode 2 = een GEGEVEN bag in de geef-grid (klik = 1 terug naar de sell-grid; overschrijft NativeOnDrop NIET,
-// zodat een drop OP zo'n cel naar de container-zone bubbelt). KRITISCH: RebuildWidget MOET SetVisibility(Visible)
+// mode 1 = geef-zone (drop-DOEL: bevat de geef-grid als content; accepteert bag-sleep uit de sell-grid EN
+// vanaf de hotbar/inventory via UInvDragOp), mode 2 = een GEGEVEN bag in de geef-grid (ND7.10: klik = niks,
+// shift-klik = hele stack terug, slepen = terugnemen via een drop op de bags-kolom/hotbar, alt-drag = 1 stuk;
+// een drop van een BRON-bag op zo'n cel bubbelt nog steeds naar de container-zone), mode 3 = het bags-vak
+// links (drop-DOEL voor de terug-sleep). KRITISCH: RebuildWidget MOET SetVisibility(Visible)
 // zetten, anders is de cel niet hit-testbaar en start de sleep/klik nooit (dat was de bug van de eerste poging).
 UCLASS()
 class WEEDSHOPCORE_API UDealBagCell : public UUserWidget
@@ -48,7 +55,7 @@ class WEEDSHOPCORE_API UDealBagCell : public UUserWidget
 	GENERATED_BODY()
 public:
 	TWeakObjectPtr<UDealWidget> Owner;
-	int32 Mode = 0;          // 0 = bron-zakje (sleepbaar), 1 = geef-zone (drop-doel), 2 = gegeven bag (klik = -1)
+	int32 Mode = 0;          // 0 = bron-zakje (sleepbaar), 1 = geef-zone (drop-doel), 2 = gegeven bag (sleepbaar terug), 3 = bags-vak (drop-doel terugnemen)
 	FName Strain;
 	int32 Gram = 0;
 	int32 Avail = 0;
@@ -77,12 +84,17 @@ public:
 	// Aangeroepen door UDealBagCell (de geef-cellen). Publiek zodat de cel-klasse ze kan callen.
 	void OnBagDroppedOnGive(FName Strain, int32 Gram, int32 Avail); // bag uit de sell-grid op de geef-zone -> +1 in de pile
 	void OnGiveZoneClicked();                                       // tik op de LEGE geef-zone -> pile leegmaken (fallback)
-	void OnGivenBagClicked(FName Strain, int32 Gram);              // klik op een gegeven bag-cel -> 1 terug naar de sell-grid
+	// ND7.10 — N zakjes van (strain,maat) terug uit de geef-pile (N <= 0 = de hele stack van die maat).
+	// Ook publiek voor de HOTBAR: een terug-sleep die daar landt routeert via UDealBagDragOp::GiveOwner hierheen.
+	void TakeBackFromPile(FName Strain, int32 Gram, int32 N);
 	int32 PileAvailFor(FName Strain, int32 Gram) const;             // voorraad van die maat MINUS wat al in de pile ligt
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
+	// Vangnet tijdens een open deal: een bag-sleep die alle drop-doelen mist en op de backdrop landt NIET als
+	// "cancelled" laten gelden (UInvDragOp zou de hele stapel op de grond droppen) — binnen het deal-scherm slikken.
+	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
 	UFUNCTION()
 	void OnPriceSlider(float Value);
@@ -99,8 +111,9 @@ protected:
 	void RebuildJointPicker(); // vult de joint-kiezer (strain - gram - kwaliteit per joint)
 
 	// --- Geef-interactie (bag-offers): een SELL-GRID (al je bags, sleepbaar) + een GEEF-ZONE (drop-doel dat de
-	//     geef-grid met echte bag-iconen bevat). Sleep bag -> geef-zone = +1 in de pile; klik op een gegeven bag =
-	//     1 terug. De pile-som = DealGiveGrams (drijft kans/preview/verkoop). ---
+	//     geef-grid met echte bag-iconen bevat). Sleep bag (sell-grid of hotbar) -> geef-zone = erin; terugnemen
+	//     symmetrisch (ND7.10): terug-slepen naar de bags-kolom/hotbar, shift-klik = hele stack, alt-drag = 1 stuk.
+	//     De pile-som = DealGiveGrams (drijft kans/preview/verkoop). ---
 	void SetTrayVisible(bool bVis);             // toont/verbergt de bag-kolommen (SellPane + GivePane) samen
 	void RebuildSellGrid();                     // sig-gated: vult de sell-grid met ALLE bag-stacks (inv + hotbar)
 	void RefreshGiveZone();                     // (her)vult de geef-grid met bag-iconen uit de pile; zet DealGiveGrams

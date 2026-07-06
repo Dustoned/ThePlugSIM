@@ -7,6 +7,11 @@
 // CO-OP (samen) = GEDEELDE heat (Shared). COMPETITIVE (versus) = per-speler heat (Players-array, gekeyed op
 // StablePlayerId): elke speler heeft z'n eigen risico op basis van de potten rond DIENS eigen home + eigen gedrag.
 // Zelfde registry-keyed patroon als UNpcRegistryComponent. Pawn==nullptr OF !competitive -> altijd Shared.
+//
+// CARRY-HEAT (ND7.4): meer dan 25g wiet op zak (bags + losse buds + joints) BUITEN je apartment = een
+// REVERSIBELE extra heat-offset (+1 per volle 10g boven de limiet, cap +15). Los opgeslagen (CarryHeat)
+// bovenop de basis-heat: telt mee in GetHeatFor + de event-drempel, maar vervalt direct zodra je binnen
+// bent (geen permanente groei). Server bepaalt 'm per pawn op de bestaande 3s-rescan-cadans.
 
 #pragma once
 
@@ -27,6 +32,11 @@ struct FHeatState
 	UPROPERTY() float Heat = 0.f;
 	UPROPERTY() float EventTimer = 0.f;
 	UPROPERTY() int32 LastEventDay = -1000; // dag van de laatste bust/overval (voor de dagen-cooldown)
+
+	// Reversibele "carry-heat"-offset (ND7.4: te veel wiet op zak buiten). Telt mee in GetHeatFor en de
+	// event-drempel, maar NIET in de basis-heat: binnen = direct 0, wordt nooit in de save-basis gebakken.
+	// Server zet 'm op de 3s-rescan; repliceert mee met de struct zodat de client-UI 'm ook ziet.
+	UPROPERTY() float CarryHeat = 0.f;
 };
 
 // Een per-speler heat-entry (competitive), gekeyed op StablePlayerId.
@@ -84,6 +94,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
 	float MaxPotHeat = 90.f;
 
+	// "Te veel wiet op zak" (ND7.4): boven deze gram-limiet (bags + losse buds + joints samen) krijg je
+	// BUITEN je apartment een reversibele extra heat-offset: CarryHeatPerStep per VOLLE CarryStepGrams
+	// boven de limiet, gecapt op MaxCarryHeat. Binnen (home-kamer) vervalt de offset direct.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	int32 CarryGramLimit = 25;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	int32 CarryStepGrams = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	float CarryHeatPerStep = 1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeedShop|Heat")
+	float MaxCarryHeat = 15.f;
+
 	UPROPERTY(BlueprintAssignable, Category = "WeedShop|Heat")
 	FOnHeatChanged OnHeatChanged;
 
@@ -91,7 +116,7 @@ public:
 	// Server: voeg heat toe aan de INSTIGERENDE speler (riskant gedrag). Dempt mee met de beveiliging-upgrade.
 	// Co-op (nullptr/niet-competitive) -> gedeelde heat.
 	void  AddHeatFor(const APawn* Instigator, float Amount);
-	// Lees; nullptr => Shared (co-op/fallback).
+	// Lees de EFFECTIEVE heat (basis + carry-offset, geklemd 0..100); nullptr => Shared (co-op/fallback).
 	float GetHeatFor(const APawn* Pawn) const;
 	// Save/load: herstel de heat-staat op een sleutel (NAME_None => Shared).
 	void  RestoreHeatFor(const FName& Key, float V, float Timer, int32 LastDay);
@@ -171,4 +196,16 @@ protected:
 	TSet<FName> OverPotCapKeys;
 
 	float ComputePotHeatFloor(const APawn* HomeFilterPawn); // telt de potten rond het/de apartment(en) -> heat-vloer
+
+	// Carry-heat (ND7.4): bereken de reversibele offset voor een pawn (0 = binnen/onder de gram-limiet).
+	// Alleen server, op de 3s-rescan-cadans - geen per-frame inventory/kamer-checks.
+	float ComputeCarryHeatFor(const APawn* Pawn);
+
+	// Zet de carry-offset van een state (alleen bij wijziging; broadcast de effectieve waarde voor de balk).
+	void SetCarryHeat(FHeatState& St, float NewCarry);
+
+	// DoorRetrofitter-cache voor de binnen/buiten-check (TActorIterator alleen als de cache invalid is,
+	// zelfde patroon als UPhoneClientComponent::FindRetro). Weak -> level-wissel maakt 'm vanzelf ongeldig.
+	TWeakObjectPtr<class ADoorRetrofitter> RetroCache;
+	class ADoorRetrofitter* FindRetro();
 };

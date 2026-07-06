@@ -84,6 +84,12 @@ FReply UShelfCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FP
 {
 	if (!ItemId.IsNone() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		// ND7.14: shift+klik = de hele stapel DIRECT naar je inventory (geen popup, geen sleep nodig).
+		if (InMouseEvent.IsShiftDown() && bShelfSide && ShelfIndex >= 0 && Qty > 0 && Owner.IsValid())
+		{
+			Owner->QuickTakeToInventory(ShelfIndex, Qty);
+			return FReply::Handled();
+		}
 		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 	}
 	return FReply::Unhandled();
@@ -96,7 +102,8 @@ void UShelfCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointe
 	Op->bFromShelf = bShelfSide;
 	Op->ShelfIndex = ShelfIndex;
 	Op->ItemId = ItemId;
-	Op->Qty = Qty;
+	// ND7.14: ALT-sleep = exact 1 stuk meenemen (alle drop-routes gebruiken Op->Qty, dus 1 zetten volstaat).
+	Op->Qty = (InMouseEvent.IsAltDown() && Qty > 1) ? 1 : Qty;
 	Op->Pivot = EDragPivot::CenterCenter;
 
 	USizeBox* Vis = WidgetTree->ConstructWidget<USizeBox>();
@@ -260,17 +267,28 @@ void UShelfWidget::HandleInvStore(UInvDragOp* Op)
 		UWeedToast::NotifyPawn(P, -1, 3.f, FColor(255, 180, 90), TEXT("Only edibles and cooking items go in the fridge."));
 		return;
 	}
+	// ND7.14: ALT-sleep = exact 1 stuk opslaan (de rest blijft in je inventory); anders de hele stapel.
+	const bool bAltOne = Op->bAltOne && UInventoryComponent::IsStackable(S.ItemId) && S.Quantity > 1;
 	const bool bHasRoom = Shelf && Shelf->Contents.Num() < Shelf->GetCapacity();
-	PhoneComp->RequestShelfStore(S.ItemId, S.Quantity); // de hele gesleepte stapel het schap in
+	PhoneComp->RequestShelfStore(S.ItemId, bAltOne ? 1 : S.Quantity); // de gesleepte hoeveelheid het schap in
 	// Optimistisch clearen tegen de flash: anders flitst de gesleepte (gedimde) cel na het loslaten eerst weer
 	// op VOLLE opacity terug en verdwijnt 'ie pas als de server-store binnen is. Direct leegmaken = geen flash;
-	// RebuildContent reconcilieert straks (sig "E" matcht -> cel wordt overgeslagen).
-	if (bHasRoom && Op->FromCell >= 0)
+	// RebuildContent reconcilieert straks (sig "E" matcht -> cel wordt overgeslagen). Bij ALT (1 stuk) blijft
+	// de bron-cel gewoon gevuld staan -> niet clearen.
+	if (!bAltOne && bHasRoom && Op->FromCell >= 0)
 	{
 		if (UInventoryWidget* IW = PhoneComp->GetInventoryWidget()) { IW->OptimisticClearCell(Op->FromCell); }
 	}
 	// GEEN LastSig.Reset(): de store is server-authoritative -> Shelf->Contents wijzigt vanzelf, wat de tick-Sig
 	// verandert en FillBody triggert (rebuild alleen de gewijzigde cel via de per-cel-sig).
+}
+
+void UShelfWidget::QuickTakeToInventory(int32 ShelfIndex, int32 Qty)
+{
+	// ND7.14: shift+klik op een schap-cel = hele stapel direct naar je inventory. Zelfde server-route als
+	// de sleep-variant (RequestShelfTake); de server hervalideert index/aantal/inventory-ruimte.
+	if (!PhoneComp.IsValid() || ShelfIndex < 0 || Qty <= 0) { return; }
+	PhoneComp->RequestShelfTake(ShelfIndex, Qty);
 }
 
 void UShelfWidget::FillBody()
@@ -294,19 +312,15 @@ void UShelfWidget::FillBody()
 		ShelfList->AddChild(FridgeSection);
 	}
 
-	auto MakeCell = [this](int32 ShelfIdx, FName Id, int32 Q, float Thc) -> UShelfCell*
+	auto MakeCell = [this](int32 ShelfIdx, FName Id, int32 Q, float Thc, float QualPct) -> UShelfCell*
 	{
 		UShelfCell* C = WidgetTree->ConstructWidget<UShelfCell>();
 		C->bShelfSide = true; C->ShelfIndex = ShelfIdx; C->ItemId = Id; C->Qty = Q; C->Thc = Thc; C->Owner = this;
 		if (!Id.IsNone())
 		{
-			const FString S = Id.ToString();
-			const bool bBag = UInventoryComponent::IsBag(Id);
-			const bool bWeed = bBag || S.StartsWith(TEXT("Bud_")) || S.StartsWith(TEXT("Joint_")) || S.StartsWith(TEXT("WetBud_"));
 			C->Badge = WeedUI::ItemQtyBadge(Id, Q);
-			C->Tooltip = bBag ? FString::Printf(TEXT("%s\n%dx %dg bag  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, UInventoryComponent::BagGrams(Id), Thc)
-			           : (bWeed ? FString::Printf(TEXT("%s\n%dg  -  %.0f%% THC"), *WeedUI::PrettyItemName(Id), Q, Thc)
-			                    : FString::Printf(TEXT("%s\nAmount: %d"), *WeedUI::PrettyItemName(Id), Q));
+			// ND7.6: zelfde rijke hover-tooltip als de inventory-cellen (gedeelde bron -> loopt nooit uit elkaar).
+			C->SetToolTipText(WeedUI::ItemTooltipText(this, Id, Q, Thc, QualPct));
 		}
 		return C;
 	};
@@ -335,18 +349,19 @@ void UShelfWidget::FillBody()
 	for (int32 i = 0; i < Desired; ++i)
 	{
 		const bool bEmpty = (i >= N);
-		FName Id = NAME_None; int32 Q = 0; float Thc = 0.f; int32 ShelfIdx = -1;
+		FName Id = NAME_None; int32 Q = 0; float Thc = 0.f; float Qual = 0.f; int32 ShelfIdx = -1;
 		FString Sig = TEXT("E");
 		if (!bEmpty)
 		{
 			const FShelfStack& S = Shelf->Contents[i];
-			Id = S.ItemId; Q = S.Quantity; Thc = S.Thc; ShelfIdx = i;
-			Sig = FString::Printf(TEXT("%s|%d|%.0f"), *Id.ToString(), Q, Thc);
+			Id = S.ItemId; Q = S.Quantity; Thc = S.Thc; Qual = S.QualityPct; ShelfIdx = i;
+			// QualPct zit in de tooltip (ND7.6) -> hoort ook in de sig, anders blijft een oude tooltip staan.
+			Sig = FString::Printf(TEXT("%s|%d|%.0f|%.0f"), *Id.ToString(), Q, Thc, Qual);
 		}
 		if (!ShelfCellSigs.IsValidIndex(i) || !ShelfCellBoxes.IsValidIndex(i)) { continue; }
 		if (Sig == ShelfCellSigs[i]) { continue; }
 		ShelfCellSigs[i] = Sig;
-		if (ShelfCellBoxes[i]) { ShelfCellBoxes[i]->SetContent(MakeCell(ShelfIdx, Id, Q, Thc)); }
+		if (ShelfCellBoxes[i]) { ShelfCellBoxes[i]->SetContent(MakeCell(ShelfIdx, Id, Q, Thc, Qual)); }
 	}
 
 	RebuildFridgeSection(Shelf);
@@ -434,7 +449,9 @@ void UShelfWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (AStorageShelf* Shelf = PhoneComp->GetShelf())
 	{
 		Sig += FString::Printf(TEXT("S%d:"), Shelf->Contents.Num());
-		for (const FShelfStack& S : Shelf->Contents) { Sig += FString::Printf(TEXT("%s%d|"), *S.ItemId.ToString(), S.Quantity); }
+		// Thc/QualityPct horen in de sig: de hover-tooltip (ND7.6) toont ze -> een pure kwaliteits-wijziging
+		// (bv. server-merge van twee stapels) moet de cel ook verversen.
+		for (const FShelfStack& S : Shelf->Contents) { Sig += FString::Printf(TEXT("%s%d~%.0f~%.0f|"), *S.ItemId.ToString(), S.Quantity, S.Thc, S.QualityPct); }
 		Sig += FString::Printf(TEXT("C%d"), Shelf->Cooking.Num()); // koelkast: ververs als een edible-batch start/klaar is
 	}
 	// De shelf-grid toont ALLEEN de shelf-inhoud (de echte inventory staat los ernaast). Dus NIET meer op de

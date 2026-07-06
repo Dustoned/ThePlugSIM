@@ -5,6 +5,7 @@
 #include "Phone/PhoneClientComponent.h"
 #include "UI/DryingRackWidget.h" // UDryDragOp: een klare batch in de inventory droppen = oogsten
 #include "UI/ShelfWidget.h"      // UShelfDragOp: een item uit een schap in de inventory droppen = pakken
+#include "UI/WeedToast.h"        // melding als de fridge een item weigert bij shift+klik quick-transfer
 #include "Inventory/InventoryComponent.h"
 #include "World/StorageShelf.h"
 #include "Cultivation/PotTypes.h"    // IsPotItem: quick-view aantal verbergen voor plaatsbare potten (zelfde regel als de hand-preview)
@@ -146,11 +147,18 @@ FReply UInvCell::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPoi
 {
 	if (StackId != 0 && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		// Shift+klik = split-popup openen (werkt op alle stapels, ook briefgeld).
-		if (InMouseEvent.IsShiftDown() && Owner.IsValid())
+		if (InMouseEvent.IsShiftDown())
 		{
-			Owner->OpenSplitPopup(StackId);
-			return FReply::Handled();
+			// ND7.14: staat er een schap/koelkast open, dan is shift+klik = hele stapel DIRECT overzetten
+			// (geen popup). Hotbar-cellen hebben geen Owner maar wel DetailsOwner -> die route werkt ook.
+			UInventoryWidget* W = Owner.IsValid() ? Owner.Get() : DetailsOwner.Get();
+			if (W && W->QuickTransferToShelf(StackId, GridCell)) { return FReply::Handled(); }
+			// Geen schap open (of cash) -> bestaand gedrag: split-popup (werkt op alle stapels, ook briefgeld).
+			if (Owner.IsValid())
+			{
+				Owner->OpenSplitPopup(StackId);
+				return FReply::Handled();
+			}
 		}
 		if (bDraggable) { return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton); }
 	}
@@ -183,6 +191,7 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 	Op->StackId = StackId;
 	Op->FromSlot = SlotIndex;
 	Op->FromCell = GridCell;
+	Op->bAltOne = InMouseEvent.IsAltDown(); // ND7.14: ALT-sleep = exact 1 stuk meenemen (zonder popup)
 	Op->Pivot = EDragPivot::CenterCenter; // visual zit precies ONDER de cursor
 
 	// Sleep-visual = het ECHTE item-icoon, gecentreerd op de muis (geen losse tag ernaast meer).
@@ -209,6 +218,9 @@ void UInvCell::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerE
 
 void UInvDragOp::HandleDroppedOutside(UDragDropOperation* Operation)
 {
+	// ND7.14: bij een ALT-sleep (1 stuk) NIET de hele stapel op de grond droppen als je buiten alles
+	// loslaat - er is geen 1-stuk-grond-drop-route, dus niks doen is de enige veilige uitkomst.
+	if (bAltOne) { return; }
 	if (DropInv.IsValid() && StackId != 0)
 	{
 		DropInv->RequestDropStack(StackId);
@@ -288,6 +300,26 @@ bool UInvCell::HandleDropOp(UDragDropOperation* InOperation)
 
 	UInvDragOp* Op = Cast<UInvDragOp>(InOperation);
 	if (!Op || !Inv.IsValid() || Op->StackId == 0) { return false; }
+
+	// ND7.14: ALT-sleep = exact 1 stuk meenemen (zonder popup). Alleen een LEGE rooster-cel kan dat
+	// ontvangen (RequestSplit legt het 1-stuks-stapeltje precies daar). Elk ander doel (merge/swap/
+	// hotbar) doet bewust NIKS: daar is geen 1-stuk-server-route voor, en de hele stapel meenemen zou
+	// het speler-besluit schenden. Handled teruggeven voorkomt de drag-cancel (= grond-drop).
+	{
+		const int32 AltIdx = Inv->FindStackById(Op->StackId);
+		const TArray<FInventoryStack>& AltSt = Inv->GetStacks();
+		const bool bAltEff = Op->bAltOne && AltSt.IsValidIndex(AltIdx)
+			&& UInventoryComponent::IsStackable(AltSt[AltIdx].ItemId) && AltSt[AltIdx].Quantity > 1;
+		if (bAltEff)
+		{
+			if (SlotIndex < 0 && GridCell >= 0 && StackId == 0)
+			{
+				Inv->RequestSplit(Op->StackId, 1, GridCell); // 1 stuk naar precies deze cel; de rest blijft staan
+				return true;
+			}
+			return true; // afgehandeld (= geen actie) -> nooit een drag-cancel die de stapel op de grond gooit
+		}
+	}
 
 	// Sleep een stapel op een ANDERE stapel van HETZELFDE item -> samenvoegen (mergen).
 	if (SlotIndex < 0 && StackId != 0 && StackId != Op->StackId)
@@ -617,8 +649,8 @@ void UInventoryWidget::BuildShell(UCanvasPanel* Root)
 	Grid->SetInnerSlotPadding(FVector2D(6.f, 6.f));
 	Scroll->AddChild(Grid);
 
-	// Hint onderaan: alleen de nuttige split-hint (klein/dim); de sleep-uitleg is weg (spreekt voor zich).
-	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Shift+click = split"), 10, FLinearColor(0.5f, 0.54f, 0.66f)))
+	// Hint onderaan: klein/dim; shift+klik = quick-move (schap open) of split, alt+slepen = 1 stuk (ND7.14).
+	Right->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Shift+click = quick-move / split    Alt+drag = take 1"), 10, FLinearColor(0.5f, 0.54f, 0.66f)))
 		->SetPadding(FMargin(2.f, 8.f, 0.f, 0.f));
 
 	// De split/merge-popups worden NIET meer hier (in de inventory-card) gebouwd -> ze zouden anders achter
@@ -936,6 +968,34 @@ void UInventoryWidget::CancelMerge()
 void UInventoryWidget::MergeItemNow(FName ItemId)
 {
 	if (PhoneComp.IsValid()) { PhoneComp->MergeNow(ItemId); }
+}
+
+bool UInventoryWidget::QuickTransferToShelf(int32 StackId, int32 FromCell)
+{
+	// ND7.14: shift+klik terwijl een schap/koelkast open staat = de HELE stapel direct overzetten (geen
+	// popup). Zelfde server-route + regels als de sleep-variant (UShelfWidget::HandleInvStore): geen cash,
+	// fridge accepteert alleen eetbaar-gerelateerde items, en optimistisch leegmaken alleen bij bewezen ruimte.
+	if (!PhoneComp.IsValid() || !PhoneComp->IsShelfOpen()) { return false; }
+	UInventoryComponent* Inv = GetInv();
+	if (!Inv) { return false; }
+	const int32 Idx = Inv->FindStackById(StackId);
+	const TArray<FInventoryStack>& St = Inv->GetStacks();
+	if (!St.IsValidIndex(Idx)) { return false; }
+	const FInventoryStack& S = St[Idx];
+	if (S.ItemId == FName(TEXT("Cash")) || S.Quantity <= 0) { return false; } // geen briefgeld -> val terug op de split-popup
+
+	const AStorageShelf* Shelf = PhoneComp->GetShelf();
+	if (Shelf && Shelf->IsFridge() && !UInventoryComponent::IsFridgeItem(S.ItemId))
+	{
+		// Zelfde weigering + melding als de sleep-route; wel handled (anders opent de split-popup er verwarrend achteraan).
+		UWeedToast::NotifyPawn(GetOwningPlayerPawn(), -1, 3.f, FColor(255, 180, 90), TEXT("Only edibles and cooking items go in the fridge."));
+		return true;
+	}
+	const bool bHasRoom = Shelf && Shelf->Contents.Num() < Shelf->GetCapacity();
+	PhoneComp->RequestShelfStore(S.ItemId, S.Quantity); // hele stapel het schap in (server-authoritative)
+	// Optimistisch de bron-cel leegmaken tegen de flash (zelfde vangrail als HandleInvStore: alleen bij ruimte).
+	if (bHasRoom && FromCell >= 0) { OptimisticClearCell(FromCell); }
+	return true;
 }
 
 void UInventoryWidget::RebuildStash()

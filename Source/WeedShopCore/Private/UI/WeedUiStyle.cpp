@@ -358,6 +358,21 @@ namespace WeedUI
 		return Info;
 	}
 
+	FText ItemTooltipText(UObject* WorldContext, FName Id, int32 Qty, float Thc, float QualPct)
+	{
+		// Naam bovenaan, daarna de gedeelde detail-regels uit BuildItemDetail (type-tag, stat-rijen,
+		// hint) - zelfde bron als hand-preview/inventory-quick-view, dus geen eigen stat-logica hier.
+		const FItemDetailInfo Detail = BuildItemDetail(WorldContext, Id, Qty, Thc, QualPct);
+		FString Out = PrettyItemName(Id);
+		if (!Detail.Type.IsEmpty()) { Out += TEXT("\n") + Detail.Type; }
+		for (const TPair<FString, FString>& Row : Detail.Stats)
+		{
+			Out += FString::Printf(TEXT("\n%s: %s"), *Row.Key, *Row.Value);
+		}
+		if (!Detail.Hint.IsEmpty()) { Out += TEXT("\n") + Detail.Hint; }
+		return FText::FromString(Out);
+	}
+
 	FString ItemTooltip(FName ItemId, int32 Qty, float Thc, float QualPct)
 	{
 		// Naam + body: voor zwevende tooltips die los van het details-paneel staan (hotbar e.d.).

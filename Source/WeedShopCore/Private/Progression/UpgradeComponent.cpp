@@ -11,6 +11,35 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 
+const FName UUpgradeComponent::WatchUpgradeId(TEXT("Upg_Watch"));
+
+namespace
+{
+	// Ingebouwde (code-gedefinieerde) upgrades naast DT_Upgrades: een nieuwe upgrade zonder DataTable-
+	// reimport. Zelfde koop-route/replicatie/save als tabel-upgrades (Purchased-lijst). Staat er later
+	// toch een gelijknamige rij in de tabel, dan wint de tabel (deze fallback wordt dan niet geraakt).
+	const FUpgradeRow* FindBuiltInUpgradeRow(FName UpgradeId)
+	{
+		if (UpgradeId == UUpgradeComponent::WatchUpgradeId)
+		{
+			// Polshorloge (ND7.16): QoL-upgrade - toont de klok linksboven in de HUD.
+			static const FUpgradeRow WatchRow = []()
+			{
+				FUpgradeRow R;
+				R.DisplayName = FText::FromString(TEXT("Wristwatch"));
+				R.Category = EUpgradeCategory::Storage;      // categorie n.v.t. (geen gameplay-effect)
+				R.CostCents = 99900;                         // EUR 999
+				R.RequiredPhase = EShopPhase::StreetDealer;  // direct koopbaar
+				R.EffectTag = NAME_None;                     // effect = HUD-klok (StatusHudWidget checkt HasWatch)
+				R.EffectMagnitude = 0.f;
+				return R;
+			}();
+			return &WatchRow;
+		}
+		return nullptr;
+	}
+}
+
 UUpgradeComponent::UUpgradeComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -32,7 +61,7 @@ void UUpgradeComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 {
-	if (GetOwnerRole() != ROLE_Authority || !UpgradeTable || UpgradeId.IsNone())
+	if (GetOwnerRole() != ROLE_Authority || UpgradeId.IsNone())
 	{
 		return false;
 	}
@@ -41,7 +70,8 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 		return false;
 	}
 
-	const FUpgradeRow* Row = UpgradeTable->FindRow<FUpgradeRow>(UpgradeId, TEXT("BuyUpgrade"), false);
+	const FUpgradeRow* Row = UpgradeTable ? UpgradeTable->FindRow<FUpgradeRow>(UpgradeId, TEXT("BuyUpgrade"), false) : nullptr;
+	if (!Row) { Row = FindBuiltInUpgradeRow(UpgradeId); } // ingebouwde upgrades (bv. horloge)
 	if (!Row)
 	{
 		return false;
@@ -110,7 +140,9 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 
 TArray<FName> UUpgradeComponent::GetAllUpgradeIds() const
 {
-	return UpgradeTable ? UpgradeTable->GetRowNames() : TArray<FName>();
+	TArray<FName> Ids = UpgradeTable ? UpgradeTable->GetRowNames() : TArray<FName>();
+	Ids.AddUnique(WatchUpgradeId); // ingebouwde upgrades achteraan (bestaande tabel-indices blijven stabiel)
+	return Ids;
 }
 
 void UUpgradeComponent::RestorePurchased(const TArray<FName>& InIds)
@@ -123,11 +155,8 @@ void UUpgradeComponent::RestorePurchased(const TArray<FName>& InIds)
 bool UUpgradeComponent::GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32& OutCostCents,
 	bool& bOutPurchased, bool& bOutAvailable) const
 {
-	if (!UpgradeTable)
-	{
-		return false;
-	}
-	const FUpgradeRow* Row = UpgradeTable->FindRow<FUpgradeRow>(UpgradeId, TEXT("GetUpgradeDisplay"), false);
+	const FUpgradeRow* Row = UpgradeTable ? UpgradeTable->FindRow<FUpgradeRow>(UpgradeId, TEXT("GetUpgradeDisplay"), false) : nullptr;
+	if (!Row) { Row = FindBuiltInUpgradeRow(UpgradeId); } // ingebouwde upgrades (bv. horloge)
 	if (!Row)
 	{
 		return false;
@@ -149,7 +178,7 @@ bool UUpgradeComponent::GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32
 
 float UUpgradeComponent::GetEffectTotal(FName EffectTag) const
 {
-	if (!UpgradeTable || EffectTag.IsNone())
+	if (EffectTag.IsNone())
 	{
 		return 0.f;
 	}
@@ -157,7 +186,8 @@ float UUpgradeComponent::GetEffectTotal(FName EffectTag) const
 	float Total = 0.f;
 	for (const FName& Id : Purchased)
 	{
-		const FUpgradeRow* Row = UpgradeTable->FindRow<FUpgradeRow>(Id, TEXT("GetEffectTotal"), false);
+		const FUpgradeRow* Row = UpgradeTable ? UpgradeTable->FindRow<FUpgradeRow>(Id, TEXT("GetEffectTotal"), false) : nullptr;
+		if (!Row) { Row = FindBuiltInUpgradeRow(Id); } // ingebouwde upgrades (bv. horloge)
 		if (Row && Row->EffectTag == EffectTag)
 		{
 			Total += Row->EffectMagnitude;

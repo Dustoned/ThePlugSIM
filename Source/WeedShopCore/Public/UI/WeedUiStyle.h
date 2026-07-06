@@ -103,6 +103,12 @@ namespace WeedUI
 	// om de GameState/Store mee te vinden (winkel-omschrijving + strain-stats). Qty/Thc/QualPct komen uit de stack.
 	WEEDSHOPCORE_API FItemDetailInfo BuildItemDetail(UObject* WorldContext, FName Id, int32 Qty, float Thc, float QualPct);
 
+	// Kant-en-klare zwevende hover-tooltip als FText: naam bovenaan, daarna de gedeelde detail-regels uit
+	// BuildItemDetail (type-tag, stat-rijen "Label: waarde", hint). Zelfde bron als hand-preview en
+	// inventory-quick-view, dus tooltips lopen NOOIT uit de pas met de detail-panelen.
+	// Gebruik: Widget->SetToolTipText(WeedUI::ItemTooltipText(this, Id, Qty, Thc, QualPct));
+	WEEDSHOPCORE_API FText ItemTooltipText(UObject* WorldContext, FName Id, int32 Qty, float Thc, float QualPct);
+
 	// --- Item-iconen ---------------------------------------------------------
 	// Bestandsnaam-sleutel (zonder pad/extensie) voor het icoon van een item, bv. "weed", "cash",
 	// "packaging". Drop een PNG met die naam in Content/_Project/UI/Icons/ en hij wordt gebruikt.

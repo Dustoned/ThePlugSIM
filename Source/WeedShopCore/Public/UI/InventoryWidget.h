@@ -28,7 +28,7 @@ public:
 	UPROPERTY() int32 StackId = 0;
 	UPROPERTY() int32 FromSlot = -1; // >=0 = vanaf hotbar-slot
 	UPROPERTY() int32 FromCell = -1; // >=0 = vanuit een rooster-cel
-	UPROPERTY() bool bSplit = false; // true = Shift ingedrukt -> de helft afsplitsen bij drop
+	UPROPERTY() bool bAltOne = false; // true = ALT ingedrukt bij het oppakken -> exact 1 stuk meenemen (ND7.14)
 
 	// Sleep je 'm BUITEN de inventory (op niks) los -> hele stapel op de grond droppen (OnDragCancelled).
 	TWeakObjectPtr<UInventoryComponent> DropInv;
@@ -125,6 +125,10 @@ public:
 	bool AcceptDryBatchDrop(int32 EntryIndex);
 	// Shift+klik op een stapel -> open de split-popup (slider: hoeveel afsplitsen).
 	void OpenSplitPopup(int32 StackId);
+	// ND7.14: shift+klik met een OPEN schap/koelkast ernaast = de hele stapel DIRECT het schap in (geen popup).
+	// FromCell = rooster-cel van de bron (voor de optimistische leegmaak; -1 = hotbar/onbekend). Return true
+	// als de klik als quick-transfer is afgehandeld (false = geen schap open / cash -> aanroeper valt terug).
+	bool QuickTransferToShelf(int32 StackId, int32 FromCell);
 	// Voeg alle stapels van dit item samen (sleep een stapel op een gelijke -> mergen).
 	void MergeItemNow(FName ItemId);
 	// Sleep-merge van TWEE stapels: gelijke kwaliteit -> direct mergen; verschillende THC%/kwaliteit -> eerst bevestigen.

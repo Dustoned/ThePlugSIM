@@ -31,6 +31,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
 	bool IsPurchased(FName UpgradeId) const { return Purchased.Contains(UpgradeId); }
 
+	// Vast upgrade-id van het polshorloge (ND7.16): code-gedefinieerd (geen DataTable-rij nodig).
+	static const FName WatchUpgradeId;
+
+	// Horloge gekocht? De HUD-klok linksboven toont alleen met horloge (StatusHudWidget).
+	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
+	bool HasWatch() const { return IsPurchased(WatchUpgradeId); }
+
 	// Som van EffectMagnitude over alle gekochte upgrades met deze tag (0 als geen).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
 	float GetEffectTotal(FName EffectTag) const;

@@ -2,6 +2,7 @@
 
 #include "UI/WeedUiStyle.h"
 #include "UI/InventoryWidget.h" // UInvCell (sleep/drop)
+#include "UI/DealWidget.h" // UDealBagDragOp: gegeven bag uit het deal-geef-vak terug op de hotbar droppen (ND7.10)
 #include "Inventory/InventoryComponent.h"
 #include "Cultivation/WaterCanComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -193,8 +194,22 @@ void UHotbarWidget::OnInvChanged()
 
 bool UHotbarWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+	// ND7.10 — een GEGEVEN bag uit het deal-geef-vak op de hotbar droppen = terugnemen. De bags verlieten de
+	// inventory nooit echt (de deal-pile reserveert ze alleen), dus het deal-widget werkt enkel z'n
+	// pile-administratie bij (TakeN: 0 = hele stack, alt-drag = 1). De cellen zelf kennen dit payload niet
+	// (UInvCell::HandleDropOp cast faalt -> bubbelt hierheen), dus dit vangt zowel cel- als gap-drops.
+	if (UDealBagDragOp* GiveOp = Cast<UDealBagDragOp>(InOperation))
+	{
+		if (GiveOp->bFromGive && GiveOp->GiveOwner.IsValid())
+		{
+			GiveOp->GiveOwner->TakeBackFromPile(GiveOp->Strain, GiveOp->Gram, GiveOp->TakeN);
+			return true;
+		}
+		return false; // bron-bag-sleep (niet uit de pile) -> hier niks mee doen
+	}
+
 	// Drop in de gap TUSSEN twee hotbar-slots -> snap naar het dichtstbijzijnde slot. Alleen zolang de
-	// slots ook echt drop-doelen zijn (inventory/droogrek open; anders staan ze op HitTestInvisible).
+	// slots ook echt drop-doelen zijn (inventory/droogrek/deal open; anders staan ze op HitTestInvisible).
 	TArray<UInvCell*> Cells;
 	Cells.Reserve(DropCells.Num());
 	for (UInvCell* C : DropCells)
@@ -363,7 +378,9 @@ void UHotbarWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// De drop-cellen zijn alleen hit-testbaar (sleep/drop) zolang de inventory open is; daarbuiten
 	// puur weergave zodat ze geen muis-input opvangen tijdens het spelen.
 	// Sleepbaar als de inventory OF het droogrek open is (vanuit de hotbar het rek in slepen).
-	const bool bInvOpen = Phone && (Phone->IsInventoryOpen() || Phone->IsDryRackOpen());
+	// ND7.13: ook tijdens een OPEN DEAL sleepbaar -> bags direct vanaf de hotbar het geef-vak in
+	// (de deal-backdrop laat de hotbar-strook onderaan vrij, anders zou de sleep nooit kunnen starten).
+	const bool bInvOpen = Phone && (Phone->IsInventoryOpen() || Phone->IsDryRackOpen() || Phone->IsDealOpen());
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	if (LastInvOpen != (bInvOpen ? 1 : 0))
 	{

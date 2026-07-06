@@ -8,6 +8,8 @@
 #include "Phone/PhoneClientComponent.h"
 #include "Input/ControlSettings.h"
 #include "Interaction/PlayerNpcActions.h"
+#include "Interaction/InteractionComponent.h" // ND7.12: interact-prompt-toggle (statics)
+#include "Misc/ConfigCacheIni.h" // ND7.3: third-person-toggle persistent in GameUserSettings.ini
 #include "Components/ScrollBox.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -63,6 +65,23 @@ namespace
 }
 
 void USettingsWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
+
+bool USettingsWidget::IsThirdPersonEnabled()
+{
+	// ND7.3: standaard UIT (experimenteel); zelfde persistentie-patroon als UHotkeyHintWidget::AreHintsEnabled.
+	bool bOn = false;
+	if (GConfig) { GConfig->GetBool(TEXT("ThePlugSIM.UI"), TEXT("ThirdPersonEnabled"), bOn, GGameUserSettingsIni); }
+	return bOn;
+}
+
+void USettingsWidget::SetThirdPersonEnabled(bool bEnabled)
+{
+	if (GConfig)
+	{
+		GConfig->SetBool(TEXT("ThePlugSIM.UI"), TEXT("ThirdPersonEnabled"), bEnabled, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+}
 
 UPhoneClientComponent* USettingsWidget::GetPhone() const
 {
@@ -800,6 +819,10 @@ void USettingsWidget::BuildGamePanel(UVerticalBox* P)
 	{
 		if (UPhoneClientComponent* P2 = GetPhone()) { P2->SetHeadBob(bOn); }
 	});
+
+	// ND7.3: third-person (B-toets) is experimenteel en standaard uit; B doet niets tot de speler 'm aanzet.
+	AddKitToggle(P, TEXT("Third person (experimental)"), IsThirdPersonEnabled(),
+		[this](bool bOn) { SetThirdPersonEnabled(bOn); });
 }
 
 void USettingsWidget::BuildAudioPanel(UVerticalBox* P)
@@ -832,6 +855,11 @@ void USettingsWidget::BuildControlsPanel(UVerticalBox* P)
 	// Controls-overlay (de toetsen-hint rechtsonder) aan/uit.
 	AddKitToggle(P, TEXT("Controls overlay"), UHotkeyHintWidget::AreHintsEnabled(),
 		[this](bool bOn) { UHotkeyHintWidget::SetHintsEnabled(bOn); });
+
+	// ND7.12: center-screen interact-prompt (popup onder het crosshair) aan/uit; standaard aan.
+	// UIT -> de controls-kaart rechtsonder toont de beschrijvende actie-tekst van het gefocuste object.
+	AddKitToggle(P, TEXT("Interaction prompt"), UInteractionComponent::IsInteractPromptEnabled(),
+		[this](bool bOn) { UInteractionComponent::SetInteractPromptEnabled(bOn); });
 
 	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, WeedUI::ColTextDim()))
 		->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));

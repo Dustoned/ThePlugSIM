@@ -36,6 +36,7 @@
 #include "World/WorldItemPickup.h"
 #include "Components/StaticMeshComponent.h"
 #include "UI/WeedShopHUD.h"
+#include "UI/SettingsWidget.h" // ND7.3: third-person is een settings-toggle (standaard uit)
 #include "Game/WeedShopGameState.h"
 #include "Economy/EconomyComponent.h"
 #include "Phone/PhoneClientComponent.h"
@@ -798,6 +799,13 @@ void AThePlugSIMCharacter::ApplySoftPhysics()
 
 void AThePlugSIMCharacter::ToggleThirdPerson()
 {
+	// ND7.3: third-person is experimenteel en zit achter een settings-toggle (standaard UIT) -> B doet dan
+	// niets. Sta de weg TERUG naar first-person wel altijd toe, anders zit een speler die de setting uitzet
+	// terwijl hij in third-person staat vast in die view.
+	if (!bThirdPerson && !USettingsWidget::IsThirdPersonEnabled())
+	{
+		return;
+	}
 	bThirdPerson = !bThirdPerson;
 	if (FirstPersonCameraComponent) { FirstPersonCameraComponent->SetActive(!bThirdPerson); }
 	if (ThirdPersonCamera)          { ThirdPersonCamera->SetActive(bThirdPerson); }
@@ -1333,6 +1341,7 @@ void AThePlugSIMCharacter::BindGameplayKeys(UInputComponent* Input)
 	if (Ph) { Input->BindKey(EKeys::M, IE_Pressed, Ph, &UPhoneClientComponent::ToggleMapOverlay); }
 
 	// B: wissel tussen first-person en third-person (om jezelf / je skin te bekijken).
+	// ND7.3: gegate op de settings-toggle "Third person (experimental)" (standaard uit) in ToggleThirdPerson.
 	Input->BindKey(EKeys::B, IE_Pressed, this, &AThePlugSIMCharacter::ToggleThirdPerson);
 
 	// Dev: F10 = het DEV-MENU (één sidebar met ALLE dev-tools). F9 = spot-overlay, F7 = fly (per-tick, elders).
