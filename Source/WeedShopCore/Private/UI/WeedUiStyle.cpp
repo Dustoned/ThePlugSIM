@@ -1177,16 +1177,22 @@ namespace WeedUI
 		// Afgewerkte joint: eigen plaatje (joint_rolled.png). joint.png is "handen die rollen" en hoort bij
 		// de GELADEN paper (zie ItemIconTexture), niet bij de klaar-joint.
 		if (S.StartsWith(TEXT("Joint_")))   { return TEXT("joint_rolled"); }
-		// Verpakte wiet (Bag_<strain>_<gram>): GEVULDE container op gram-formaat (zakje / pot / sack).
+		// Verpakte wiet: het icoon volgt de CONTAINER (niet de gram!) -> een halfvolle jar blijft een jar-icoon
+		// i.p.v. in een zakje te veranderen. Oude maatloze/containerless bags vallen terug op de gram-heuristiek.
 		if (S.StartsWith(TEXT("Bag_")))
 		{
-			const int32 G = UInventoryComponent::BagGrams(ItemId);
+			const FName Cont = UInventoryComponent::BagContainer(ItemId);
+			if (Cont == TEXT("Cont_Jar10") || Cont == TEXT("Cont_Jar15")) { return TEXT("weed_jar"); }
+			if (Cont == TEXT("Cont_Block100"))                            { return TEXT("block"); }
+			if (Cont == TEXT("Cont_Garbage500"))                          { return TEXT("weed_sack"); }
+			if (Cont == TEXT("Cont_Bag2") || Cont == TEXT("Cont_Bag5"))   { return TEXT("weed_bag"); }
+			const int32 G = UInventoryComponent::BagGrams(ItemId); // fallback (geen container in de id)
 			if (G > 0)
 			{
-				if (G <= 5)   { return TEXT("weed_bag"); }   // gevuld zakje (Bag2/Bag5)
-				if (G <= 50)  { return TEXT("weed_jar"); }   // gevulde pot/jar (Jar10/Jar15)
-				if (G <= 100) { return TEXT("block"); }      // geperste block 100g (wiet-brick)
-				return TEXT("weed_sack");                    // bulk vuilniszak 500g (Garbage500)
+				if (G <= 5)   { return TEXT("weed_bag"); }
+				if (G <= 100) { return TEXT("weed_jar"); }
+				if (G <= 250) { return TEXT("block"); }
+				return TEXT("weed_sack");
 			}
 		}
 		if (S.StartsWith(TEXT("Bench_")))  { return TEXT("bench"); }

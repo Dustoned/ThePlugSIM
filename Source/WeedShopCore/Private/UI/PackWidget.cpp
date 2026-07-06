@@ -79,6 +79,16 @@ namespace
 
 	// Vaste container-lijst voor het pack-scherm (zelfde volgorde/labels als voorheen).
 	static const TCHAR* const kConts[6] = { TEXT("Cont_Bag2"), TEXT("Cont_Bag5"), TEXT("Cont_Jar10"), TEXT("Cont_Jar15"), TEXT("Cont_Block100"), TEXT("Cont_Garbage500") };
+
+	// Zelfstandig naamwoord per container-type (voor nette labels: "Pack 3 jars" i.p.v. "bags").
+	static const TCHAR* ContainerNoun(FName Cont)
+	{
+		const FString S = Cont.ToString();
+		if (S == TEXT("Cont_Jar10") || S == TEXT("Cont_Jar15")) { return TEXT("jar"); }
+		if (S == TEXT("Cont_Block100"))                         { return TEXT("block"); }
+		if (S == TEXT("Cont_Garbage500"))                       { return TEXT("sack"); }
+		return TEXT("bag");
+	}
 }
 
 TSharedRef<SWidget> UPackWidget::RebuildWidget()
@@ -417,13 +427,16 @@ void UPackWidget::SetB(int32 N)
 	SelBags = FMath::Clamp(N, 1, FMath::Max(1, MaxBags));
 	const int32 G = FMath::Min(PackBudHave, SelBags * SelGrams);
 	if (GramSlider)   { GramSlider->SetValue(MaxBags > 1 ? float(SelBags - 1) / float(MaxBags - 1) : 1.f); }
+	const FString Noun = ContainerNoun(SelContainer); // "bag"/"jar"/"block"/"sack"
+	const FString NounPl = Noun + (SelBags == 1 ? TEXT("") : TEXT("s"));
+	FString NounCap = Noun; if (NounCap.Len() > 0) { NounCap[0] = FChar::ToUpper(NounCap[0]); }
 	if (PackSummaryLabel)
 	{
-		PackSummaryLabel->SetText(FText::FromString(FString::Printf(TEXT("Uses %dg %s with %d %s"),
-			G, *WeedUI::PrettyItemName(SelStrain), SelBags, *WeedUI::PrettyItemName(SelContainer))));
+		PackSummaryLabel->SetText(FText::FromString(FString::Printf(TEXT("Uses %dg %s in %d %s"),
+			G, *WeedUI::PrettyItemName(SelStrain), SelBags, *NounPl)));
 	}
-	if (PackBtnLabel) { PackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Pack %d bag%s - %dg"), SelBags, SelBags == 1 ? TEXT("") : TEXT("s"), G))); }
-	if (GramLabel)    { GramLabel->SetText(FText::FromString(FString::Printf(TEXT("Bags: %d / %d"), SelBags, MaxBags))); }
+	if (PackBtnLabel) { PackBtnLabel->SetText(FText::FromString(FString::Printf(TEXT("Pack %d %s - %dg"), SelBags, *NounPl, G))); }
+	if (GramLabel)    { GramLabel->SetText(FText::FromString(FString::Printf(TEXT("%ss: %d / %d"), *NounCap, SelBags, MaxBags))); }
 
 	// Half/Max-knop-highlight (de knoppen tonen de keuze al).
 	const int32 HalfN = FMath::Max(1, MaxBags / 2);
@@ -559,7 +572,10 @@ void UPackWidget::RefreshPack()
 
 	// === 3) Rekenkern (identiek aan voorheen) ===
 	PackCap = FMath::Max(1, UPhoneClientComponent::ContainerCapacity(SelContainer));
-	if (SelGrams <= 0) { SelGrams = PackCap; }
+	// Jars/block/sack (cap > 5) worden ALTIJD VOL gevuld: 1 container = z'n volle capaciteit. De per-gram-keuze
+	// is alleen logisch voor de kleine baggies (2/5g). Zo krijg je geen 1g-"jars" meer.
+	const bool bBigContainer = PackCap > 5;
+	if (bBigContainer || SelGrams <= 0) { SelGrams = PackCap; }
 	SelGrams = FMath::Clamp(SelGrams, 1, PackCap);
 	PackBudHave = BudHave;
 	const int32 OwnedCont = Inv->GetQuantity(SelContainer);
@@ -568,7 +584,7 @@ void UPackWidget::RefreshPack()
 
 	// 2.b Gram per zakje: alleen tonen als de container meer dan 1g kan. De value/max-uitleg is clutter (de
 	// 1g/Max-knop-highlight toont de keuze al) -> GpbLabel blijft collapsed, alleen de knoppen highlighten.
-	if (GpbSection) { GpbSection->SetVisibility(PackCap > 1 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+	if (GpbSection) { GpbSection->SetVisibility((PackCap > 1 && !bBigContainer) ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 	StyleChoiceBtn(GpbOneBtn, SelGrams == 1);
 	StyleChoiceBtn(GpbMaxBtn, SelGrams == PackCap);
 	if (GpbLabel) { GpbLabel->SetText(FText::FromString(FString::Printf(TEXT("Per bag: %dg"), SelGrams))); }

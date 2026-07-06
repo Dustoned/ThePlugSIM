@@ -1774,9 +1774,9 @@ int32 UPhoneClientComponent::ContainerCapacity(FName ContainerId)
 	const FString S = ContainerId.ToString();
 	if (S == TEXT("Cont_Bag2"))     { return 2; }
 	if (S == TEXT("Cont_Bag5"))     { return 5; }
-	if (S == TEXT("Cont_Jar10"))    { return 25; }  // small jar
-	if (S == TEXT("Cont_Jar15"))    { return 50; }  // grote pot
-	if (S == TEXT("Cont_Block100")) { return 100; }
+	if (S == TEXT("Cont_Jar10"))    { return 50; }   // small jar (min 50g)
+	if (S == TEXT("Cont_Jar15"))    { return 100; }  // big jar
+	if (S == TEXT("Cont_Block100")) { return 250; }  // press block (max 250g)
 	if (S == TEXT("Cont_Garbage500")) { return 500; }
 	return 0;
 }
