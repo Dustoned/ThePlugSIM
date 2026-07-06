@@ -1372,15 +1372,18 @@ void UDealWidget::UpdateLive()
 
 	// Heb je überhaupt verpakte wiet (Bag_) om te verkopen? Zo niet: toon alleen een duidelijke
 	// melding en verberg de hele prijs/kans/preview-flow.
+	// bHasWeed = heb je UBERHAUPT een zakje om aan te bieden (welke strain dan ook). NIET strain-specifiek:
+	// anders blokkeerde de hele deal-flow (incl. de geef-tray) zodra je niet EXACT de gevraagde strain had -
+	// waardoor je geen SUBSTITUUT kon aanbieden terwijl het systeem dat juist ondersteunt. "No bagged weed"
+	// hoort alleen bij NUL zakjes ("grow -> dry -> bag first").
 	bool bHasWeed = false;
 	if (APawn* P = GetOwningPlayerPawn())
 	{
 		if (const UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
 		{
-			if (bBagOffer)
+			for (const FInventoryStack& St : Inv->GetStacks())
 			{
-				float DummyThc = 0.f, DummyQ = 0.f;
-				bHasWeed = Inv->BagStockGrams(UInventoryComponent::BagStrain(Offered), DummyThc, DummyQ) > 0;
+				if (St.Quantity > 0 && UInventoryComponent::IsBag(St.ItemId)) { bHasWeed = true; break; }
 			}
 		}
 	}

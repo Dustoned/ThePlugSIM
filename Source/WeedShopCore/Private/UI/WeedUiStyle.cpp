@@ -734,7 +734,7 @@ namespace WeedUI
 			// ND7.1: gevulde bags tinten in de STRAIN-kleur (zelfde bron als de strain-tag-pill, maar
 			// helderder voor een icoon) i.p.v. een generieke baggie-groen - zo zie je in een oogopslag
 			// welke wiet erin zit.
-			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    TagColorForItem(ItemId, 0.95f, 0.55f), EIcon::Leaf };
+			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    TagColorForItem(ItemId, 1.0f, 0.9f), EIcon::Leaf }; // ND7.1: vol-verzadigde strain-hue zodat de tint duidelijk doorkomt op het (groen-dominante) weed_bag-icoon
 			if (Has(TEXT("Joint_")))                                     return { TEXT("joint"),     FLinearColor(0.7f, 0.85f, 0.5f),   EIcon::Leaf };
 			if (Has(TEXT("Seed_")))                                      return { TEXT("seed"),      FLinearColor(0.6f, 0.8f, 0.45f),   EIcon::Leaf };
 
