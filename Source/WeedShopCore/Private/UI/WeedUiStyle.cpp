@@ -1326,7 +1326,21 @@ namespace WeedUI
 		UImage* Img = Tree->ConstructWidget<UImage>();
 		Img->SetVisibility(ESlateVisibility::HitTestInvisible);
 		const FString Path = Name.StartsWith(TEXT("/")) ? Name : (Base + Name + TEXT(".") + Name);
-		if (UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *Path))
+		// Texture-cache: LoadObject per aanroep = pad-resolutie + mogelijke sync-load (micro-hitch bij elke
+		// toast/chip met kit-icoon). 1x laden + Keep (overleeft GC-purge per LoadMap), daarna alleen de map-lookup.
+		static TMap<FString, TWeakObjectPtr<UTexture2D>> GKitIconCache;
+		UTexture2D* Tex = nullptr;
+		if (TWeakObjectPtr<UTexture2D>* Found = GKitIconCache.Find(Path)) { Tex = Found->Get(); }
+		if (!Tex)
+		{
+			Tex = LoadObject<UTexture2D>(nullptr, *Path);
+			if (Tex)
+			{
+				UAssetKeepAliveSubsystem::Keep(Tree, Tex);
+				GKitIconCache.Add(Path, Tex);
+			}
+		}
+		if (Tex)
 		{
 			Img->SetBrushFromTexture(Tex, false);
 			Img->SetBrushSize(FVector2D(Size, Size));

@@ -697,7 +697,20 @@ void ADayNightController::SetWeatherPreset(const FString& PresetName, double Tra
 	AActor* Udw = UdsWeatherActor.Get();
 	if (!Udw) { return; }
 	const FString Path = FString::Printf(TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s"), *PresetName, *PresetName);
-	UObject* Preset = LoadObject<UObject>(nullptr, *Path);
+	// Preset-cache: LoadObject bij elke weer-wissel = mogelijke sync-load-hitch runtime. 1x laden + Keep
+	// (overleeft GC-purge per LoadMap), daarna alleen de map-lookup.
+	static TMap<FString, TWeakObjectPtr<UObject>> GPresetCache;
+	UObject* Preset = nullptr;
+	if (TWeakObjectPtr<UObject>* Found = GPresetCache.Find(Path)) { Preset = Found->Get(); }
+	if (!Preset)
+	{
+		Preset = LoadObject<UObject>(nullptr, *Path);
+		if (Preset)
+		{
+			UAssetKeepAliveSubsystem::Keep(this, Preset);
+			GPresetCache.Add(Path, Preset);
+		}
+	}
 	if (!Preset) { UE_LOG(LogTemp, Verbose, TEXT("[UDW] preset niet gevonden: %s"), *PresetName); return; }
 	if (TransitionSeconds <= 0.0) { TransitionSeconds = 120.0; } // dev-knop zonder tijd -> nette graduele default
 	UFunction* Fn = Udw->FindFunction(FName(TEXT("Change Weather")));
@@ -1128,11 +1141,16 @@ void ADayNightController::Tick(float DeltaSeconds)
 				static IConsoleVariable* CVarLMD = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LightMaxDrawDistanceScale"));
 				const float Scale = CVarLMD ? FMath::Max(CVarLMD->GetFloat(), 0.05f) : 1.f;
 				const float HideD2 = FMath::Square(25000.f * Scale + 2000.f); // render-cull-afstand + marge; lamp is daar via de renderer al uitgefade -> SetVisibility = pop-vrij
+				// Max flips per pass: bij de dag/nacht-drempel slaan honderden lampen TEGELIJK om; al die
+				// SetVisibility's in EEN frame = primitive add/remove-burst -> InitViews-stall op de render-thread
+				// (gemeten 65-77ms hitches bij dageraad). De rest schuift door naar de volgende pass (0.35s later) -
+				// visueel onzichtbaar: de lampen staan op intensiteit 0 of voorbij de render-fade.
+				int32 FlipsLeft = 48;
 				auto ApplyBudget = [&](ULightComponent* L)
 				{
-					if (!L) { return; }
+					if (!L || FlipsLeft <= 0) { return; }
 					const bool bVis = (L->Intensity > 1.f) && (FVector::DistSquared(L->GetComponentLocation(), PP) < HideD2); // ook UIT-lampen (intensiteit ~0, bv. straatlampen overdag) verbergen: die kostten anders volle Lighting voor niks. Pop-vrij want ze staan toch al op 0.
-					if (L->GetVisibleFlag() != bVis) { L->SetVisibility(bVis); }
+					if (L->GetVisibleFlag() != bVis) { L->SetVisibility(bVis); --FlipsLeft; }
 				};
 				for (const FDimLight& D : DimLights) { ApplyBudget(D.Light.Get()); }
 				for (UPointLightComponent* PL : PackLampLights) { ApplyBudget(PL); }
