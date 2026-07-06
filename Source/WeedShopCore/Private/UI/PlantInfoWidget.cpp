@@ -6,6 +6,7 @@
 #include "Interaction/Interactable.h"
 #include "Cultivation/GrowPlant.h"
 #include "Cultivation/SoilTypes.h"
+#include "Save/AssetKeepAliveSubsystem.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -81,8 +82,19 @@ void UPlantInfoWidget::BuildShell(UCanvasPanel* Root)
 	StS->SetVerticalAlignment(VAlign_Center);
 	VB->AddChildToVerticalBox(Head)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	// Radiaal-materiaal voor de ring-gauges (Percent + Color params).
-	RadialMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/UI/M_RadialProgress.M_RadialProgress"));
+	// Radiaal-materiaal voor de ring-gauges (Percent + Color params). Function-local static cache +
+	// keep-alive: de LoadObject-hitch (disk + shader-keten) hoort maar 1x per proces te gebeuren, niet
+	// bij elke widget-bouw (GC purget string-geladen ketens anders per LoadMap).
+	{
+		static TWeakObjectPtr<UMaterialInterface> CachedRadialMat;
+		if (!CachedRadialMat.IsValid())
+		{
+			UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/UI/M_RadialProgress.M_RadialProgress"));
+			if (M) { UAssetKeepAliveSubsystem::Keep(this, M); }
+			CachedRadialMat = M;
+		}
+		RadialMat = CachedRadialMat.Get();
+	}
 
 	// Ring-gauge: radiale ring + kit-icoon in 't midden + waarde + label eronder.
 	auto MakeGauge = [this](const FString& IcoName, const FLinearColor& IcoTint, const FString& Label, UImage*& OutRing, UTextBlock*& OutVal) -> UWidget*
@@ -315,108 +327,101 @@ void UPlantInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	if (Key == LastKey) { return; } // niets zichtbaars gewijzigd -> teksten/visibility overslaan
 	LastKey = Key;
 
+	// Per-label changed-checks: de key wijzigt elke seconde (groei-teller), maar de meeste labels blijven
+	// dan gelijk -> alleen ECHT gewijzigde tekst/kleur naar Slate sturen. Visibility idem: alleen zetten
+	// bij een daadwerkelijke wissel (identiek werk overslaan, nooit een update vertragen).
+	auto SetTxt = [](UTextBlock* T, FLabelCache& C, const FString& S)
+	{
+		if (T && S != C.Str) { C.Str = S; T->SetText(FText::FromString(S)); }
+	};
+	auto SetTxtCol = [](UTextBlock* T, FLabelCache& C, const FString& S, const FLinearColor& Col)
+	{
+		if (!T) { return; }
+		if (S != C.Str) { C.Str = S; T->SetText(FText::FromString(S)); }
+		if (!Col.Equals(C.Col)) { C.Col = Col; T->SetColorAndOpacity(FSlateColor(Col)); }
+	};
+	auto SetVis = [](UWidget* W, ESlateVisibility V)
+	{
+		if (W && W->GetVisibility() != V) { W->SetVisibility(V); }
+	};
+
 	if (bPlanted)
 	{
 		// Titel = naam van de plant + basis-THC%, met aantal plekken als die >1 is.
 		const FString StrainName = Plant->GetPrimaryStrainName().ToString();
 		FString Title = StrainName; // THC staat duidelijk bij de opbrengst (geen dubbele weergave)
 		if (NumSlots > 1) { Title += FString::Printf(TEXT("   (%d/%d)"), Plant->GetPlantedCount(), NumSlots); }
-		TitleText->SetText(FText::FromString(Title));
-		if (SoilRow) { SoilRow->SetVisibility(ESlateVisibility::Collapsed); } // geplant: soil-info hoort bij de pot-interact, kaart blijft compact
 		// Naam in de per-strain tag-kleur (zelfde hue als de strain-tags in de inventory, iets helderder voor leesbaarheid).
+		FLinearColor TitleCol = WeedUI::ColAccent();
 		{
 			const FName StrainId = Plant->GetPrimaryStrainId();
 			if (!StrainId.IsNone())
 			{
 				const FString Code = WeedUI::ItemTagShort(FName(*(FString(TEXT("Bud_")) + StrainId.ToString())));
-				TitleText->SetColorAndOpacity(FSlateColor(WeedUI::TagColor(Code, 0.9f, 0.72f)));
+				TitleCol = WeedUI::TagColor(Code, 0.9f, 0.72f);
 			}
-			else { TitleText->SetColorAndOpacity(FSlateColor(WeedUI::ColAccent())); }
 		}
-		if (StatusText)
+		SetTxtCol(TitleText, TitleCache, Title, TitleCol);
+		SetVis(SoilRow, ESlateVisibility::Collapsed); // geplant: soil-info hoort bij de pot-interact, kaart blijft compact
 		{
 			const bool bSick = SickN > 0 || Care < 0.50f || Wtr < 0.25f;
-			StatusText->SetText(FText::FromString(ReadyN > 0 ? TEXT("READY") : (bSick ? TEXT("ATTENTION") : TEXT("GROWING"))));
-			StatusText->SetColorAndOpacity(FSlateColor(ReadyN > 0 ? WeedUI::ColGood() : (bSick ? WeedUI::ColWarn() : WeedUI::ColTextDim())));
+			SetTxtCol(StatusText, StatusCache,
+				ReadyN > 0 ? TEXT("READY") : (bSick ? TEXT("ATTENTION") : TEXT("GROWING")),
+				ReadyN > 0 ? WeedUI::ColGood() : (bSick ? WeedUI::ColWarn() : WeedUI::ColTextDim()));
 		}
-		if (RingRow) { RingRow->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		SetVis(RingRow, ESlateVisibility::HitTestInvisible);
 
-		if (GrowthTimeText)
-		{
-			GrowthTimeText->SetText(FText::FromString(ReadyN > 0 ? TEXT("READY") : (Rem > 0 ? FString::Printf(TEXT("%d:%02d"), Rem / 60, Rem % 60) : TEXT("SOON"))));
-			GrowthTimeText->SetColorAndOpacity(FSlateColor(ReadyN > 0 ? WeedUI::ColGood() : WeedUI::ColText()));
-		}
-		if (WaterText)
-		{
-			WaterText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Wtr * 100.f)));
-			WaterText->SetColorAndOpacity(FSlateColor(Wtr < 0.25f ? WeedUI::ColWarn() : WeedUI::ColText()));
-		}
-		if (HealthText)
-		{
-			HealthText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Care * 100.f)));
-			HealthText->SetColorAndOpacity(FSlateColor(SickN > 0 ? WeedUI::ColWarn() : WeedUI::ColText()));
-		}
+		SetTxtCol(GrowthTimeText, GrowTimeCache,
+			ReadyN > 0 ? TEXT("READY") : (Rem > 0 ? FString::Printf(TEXT("%d:%02d"), Rem / 60, Rem % 60) : TEXT("SOON")),
+			ReadyN > 0 ? WeedUI::ColGood() : WeedUI::ColText());
+		SetTxtCol(WaterText, WaterTxtCache,
+			FString::Printf(TEXT("%.0f%%"), Wtr * 100.f),
+			Wtr < 0.25f ? WeedUI::ColWarn() : WeedUI::ColText());
+		SetTxtCol(HealthText, HealthTxtCache,
+			FString::Printf(TEXT("%.0f%%"), Care * 100.f),
+			SickN > 0 ? WeedUI::ColWarn() : WeedUI::ColText());
 
 		// Conditie-badges: toon mold en/of pest zodra een plek besmet is (1 = mold, 2 = pest).
-		if (MoldBadge)      { MoldBadge->SetVisibility(bMold ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
-		if (PestBadge)      { PestBadge->SetVisibility(bPest ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
-		if (ConditionRow)   { ConditionRow->SetVisibility((bMold || bPest) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+		SetVis(MoldBadge, bMold ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		SetVis(PestBadge, bPest ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		SetVis(ConditionRow, (bMold || bPest) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 
-		if (YieldRow) { YieldRow->SetVisibility(ESlateVisibility::HitTestInvisible); } // wiet erin: hele rij (weegschaal+THC-iconen + waarden) tonen
-		YieldText->SetText(FText::FromString(FString::Printf(TEXT("~%.0f g"), Plant->GetEstimatedTotalYield())));
-		if (ThcText) { ThcText->SetText(FText::FromString(FString::Printf(TEXT("%.0f%%"), Plant->GetEstimatedThcPercent()))); }
+		SetVis(YieldRow, ESlateVisibility::HitTestInvisible); // wiet erin: hele rij (weegschaal+THC-iconen + waarden) tonen
+		SetTxt(YieldText, YieldCache, FString::Printf(TEXT("~%.0f g"), Plant->GetEstimatedTotalYield()));
+		SetTxt(ThcText, ThcCache, FString::Printf(TEXT("%.0f%%"), Plant->GetEstimatedThcPercent()));
 	}
 	else
 	{
 		// Toon WELKE pot het is (bv. "Clay pot"), niet alleen "Empty pot".
 		const FString PotName = WeedUI::PrettyItemName(Plant->GetPotTier());
-		TitleText->SetText(FText::FromString(PotName.IsEmpty() ? TEXT("Empty pot") : PotName));
-		TitleText->SetColorAndOpacity(FSlateColor(WeedUI::ColTextDim())); // lege pot = geen strain-kleur
-		if (StatusText)
-		{
-			StatusText->SetText(FText::FromString(bHasSoil ? TEXT("READY") : TEXT("EMPTY")));
-			StatusText->SetColorAndOpacity(FSlateColor(bHasSoil ? WeedUI::ColGood() : WeedUI::ColTextDim()));
-		}
-		if (RingRow) { RingRow->SetVisibility(ESlateVisibility::Collapsed); }
-		if (ConditionRow) { ConditionRow->SetVisibility(ESlateVisibility::Collapsed); }
-		if (YieldRow) { YieldRow->SetVisibility(ESlateVisibility::Collapsed); } // lege pot: geen weegschaal/THC-iconen tonen
-		if (SoilRow) { SoilRow->SetVisibility(ESlateVisibility::HitTestInvisible); } // lege pot: toon hoeveel harvests de soil nog kan
+		SetTxtCol(TitleText, TitleCache, PotName.IsEmpty() ? FString(TEXT("Empty pot")) : PotName, WeedUI::ColTextDim()); // lege pot = geen strain-kleur
+		SetTxtCol(StatusText, StatusCache,
+			bHasSoil ? TEXT("READY") : TEXT("EMPTY"),
+			bHasSoil ? WeedUI::ColGood() : WeedUI::ColTextDim());
+		SetVis(RingRow, ESlateVisibility::Collapsed);
+		SetVis(ConditionRow, ESlateVisibility::Collapsed);
+		SetVis(YieldRow, ESlateVisibility::Collapsed); // lege pot: geen weegschaal/THC-iconen tonen
+		SetVis(SoilRow, ESlateVisibility::HitTestInvisible); // lege pot: toon hoeveel harvests de soil nog kan
 	}
 
 	if (bHasSoil)
 	{
-		if (SoilText)
-		{
-			SoilText->SetColorAndOpacity(FSlateColor(WeedUI::ColTextDim(0.96f)));
-			SoilText->SetText(FText::FromString(SoilName));
-		}
-		if (SoilUsesText)
-		{
-			SoilUsesText->SetColorAndOpacity(FSlateColor(WeedUI::ColGood()));
-			SoilUsesText->SetText(FText::FromString(SoilUses == 1 ? FString::Printf(TEXT("%d harvest"), SoilUses) : FString::Printf(TEXT("%d harvests"), SoilUses)));
-		}
+		SetTxtCol(SoilText, SoilTxtCache, SoilName, WeedUI::ColTextDim(0.96f));
+		SetTxtCol(SoilUsesText, SoilUsesCache,
+			SoilUses == 1 ? FString::Printf(TEXT("%d harvest"), SoilUses) : FString::Printf(TEXT("%d harvests"), SoilUses),
+			WeedUI::ColGood());
 	}
 	else
 	{
-		if (SoilText)
-		{
-			SoilText->SetColorAndOpacity(FSlateColor(WeedUI::ColTextDim(0.80f)));
-			SoilText->SetText(FText::FromString(TEXT("No soil")));
-		}
-		if (SoilUsesText)
-		{
-			SoilUsesText->SetColorAndOpacity(FSlateColor(WeedUI::ColWarn()));
-			SoilUsesText->SetText(FText::FromString(TEXT("Add soil")));
-		}
+		SetTxtCol(SoilText, SoilTxtCache, TEXT("No soil"), WeedUI::ColTextDim(0.80f));
+		SetTxtCol(SoilUsesText, SoilUsesCache, TEXT("Add soil"), WeedUI::ColWarn());
 	}
 
 	// Actieve gear-upgrades op deze pot (altijd tonen, met of zonder soil/plant).
-	if (UpgradesText)
-	{
-		UpgradesText->SetText(FText::FromString(Ups.IsEmpty() ? TEXT("Upgrades: none") : FString::Printf(TEXT("Upgrades: %s"), *Ups)));
-		UpgradesText->SetColorAndOpacity(FSlateColor(Ups.IsEmpty() ? WeedUI::ColTextDim() : WeedUI::ColAccent()));
-	}
+	SetTxtCol(UpgradesText, UpgradesCache,
+		Ups.IsEmpty() ? FString(TEXT("Upgrades: none")) : FString::Printf(TEXT("Upgrades: %s"), *Ups),
+		Ups.IsEmpty() ? WeedUI::ColTextDim() : WeedUI::ColAccent());
 
 	// (De interactie-tekst staat nu rechtsonder bij Controls; geen hint-regel meer op de plantkaart.)
-	if (HintText) { HintText->SetVisibility(ESlateVisibility::Collapsed); }
+	SetVis(HintText, ESlateVisibility::Collapsed);
 }

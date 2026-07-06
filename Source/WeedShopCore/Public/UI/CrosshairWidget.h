@@ -10,6 +10,10 @@
 class UCanvasPanel;
 class UWidget;
 class UBorder;
+class APawn;
+class UPhoneClientComponent;
+class UInteractionComponent;
+class UBuildComponent;
 
 UCLASS()
 class WEEDSHOPCORE_API UCrosshairWidget : public UUserWidget
@@ -25,4 +29,11 @@ protected:
 	UPROPERTY() TObjectPtr<UWidget> Ring;
 	UPROPERTY() TObjectPtr<UBorder> RingBorder;
 	int32 LastVisualState = -1;
+
+	// Gecachte pawn-componenten: 1x opzoeken i.p.v. FindComponentByClass per frame;
+	// herzoeken alleen bij pawn-wissel of stale pointer.
+	TWeakObjectPtr<APawn> CachedPawn;
+	TWeakObjectPtr<UPhoneClientComponent> CachedPhone;
+	TWeakObjectPtr<UInteractionComponent> CachedInteraction;
+	TWeakObjectPtr<UBuildComponent> CachedBuild;
 };

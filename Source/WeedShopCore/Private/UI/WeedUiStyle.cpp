@@ -27,6 +27,7 @@
 #include "Phone/PhoneClientComponent.h" // geladen-vloei-status voor het paper-icoon + paper-capaciteit/joint-sterkte
 #include "Game/WeedShopGameState.h"
 #include "Progression/StoreComponent.h"
+#include "Save/AssetKeepAliveSubsystem.h" // PrewarmCommonAssets: voorgeladen icon-textures ook bij het keep-alive-subsystem borgen
 #include "Engine/World.h"
 #include "Misc/ConfigCacheIni.h"
 #include <initializer_list>
@@ -1185,6 +1186,37 @@ namespace WeedUI
 			if (UTexture2D* Tex = LoadByStem(Cand)) { return Tex; }
 		}
 		return nullptr;
+	}
+
+	void PrewarmCommonAssets(const UObject* WorldContext)
+	{
+		// Eenmalige prewarm ONDER de boot/laad-cover: de eerste UI-open betaalde anders 30-80ms aan
+		// synchrone font-loads + PNG-decodes. Hier alvast laden = load-time-werk i.p.v. runtime-hitch.
+		static bool bDone = false;
+		if (bDone) { return; }
+		bDone = true;
+
+		// (a) Exo-fonts: 1x Font() aanroepen zodat de eenmalige LoadObjects (regular + semibold) nu draaien.
+		Font(12, false);
+		Font(12, true);
+
+		// (b) Meest gebruikte item-icon-PNG's alvast decoderen in dezelfde LoadByStem-cache die de UI zelf
+		// gebruikt. LoadByStem root de texture al (AddToRoot); Keep() borgt 'm daarnaast netjes bij het
+		// keep-alive-subsystem (null-veilig, no-op zonder wereld). Stems = bestaande PNG's in
+		// Content/_Project/UI/Icons: de exacte stems (ExactIconStem) + de categorie-primaries.
+		static const TCHAR* Stems[] = {
+			TEXT("weed"), TEXT("weed_wet"), TEXT("weed_bag"), TEXT("weed_jar"), TEXT("weed_sack"),
+			TEXT("joint"), TEXT("joint_rolled"), TEXT("papers"), TEXT("seed"), TEXT("cash"),
+			TEXT("bottle"), TEXT("bottle_empty"), TEXT("water"), TEXT("soil"), TEXT("packaging"),
+			TEXT("fertilizer"), TEXT("baggie"), TEXT("pot"), TEXT("block")
+		};
+		for (const TCHAR* Stem : Stems)
+		{
+			if (UTexture2D* Tex = LoadByStem(FString(Stem)))
+			{
+				UAssetKeepAliveSubsystem::Keep(WorldContext, Tex);
+			}
+		}
 	}
 
 	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride, int32 RollLoadedOverride)

@@ -90,6 +90,8 @@ protected:
 	void OnAmountSlider(float Value);
 	UFUNCTION()
 	void OnBackdropClicked();                   // klik NAAST de kaart (op leegte) -> deal sluiten (wegklikbaar)
+	UFUNCTION()
+	void OnInvChangedForLive();                 // OnInventoryChanged-event -> bInvDirty (pre-key-gate mag de dure inventory-velden dan niet overslaan)
 
 	void BuildShell(UCanvasPanel* Root);
 	void UpdateLive();
@@ -210,4 +212,12 @@ protected:
 	// Perf: value-key over alle bron-waarden van de UpdateLive-TEKSTEN (State/R/L/A/Offered/Ask/Stock/...);
 	// gelijk = alle SetText/visibility-calls overslaan. De gameplay-regels in NativeTick blijven elke tick.
 	FString LastLiveKey;
+
+	// Perf: GOEDKOPE pre-key (zonder inventory-scan/BagStockGrams/registry-lookups) die VOOR de dure
+	// key-bouw vergeleken wordt: gelijk + geen inventory-event (bInvDirty) + het 0.25s-vangnet nog niet
+	// verstreken = UpdateLive meteen klaar. De VOLLEDIGE LastLiveKey blijft daarna de eind-check.
+	FString LastLivePreKey;
+	bool bInvDirty = true;                               // gezet door OnInvChangedForLive; true bij start = eerste evaluatie altijd volledig
+	float LiveFullEvalAcc = 1.f;                         // vangnet-accumulator (NativeTick telt op): elke 0.25s een volledige her-evaluatie afdwingen
+	TWeakObjectPtr<UInventoryComponent> BoundInv;        // inventory waaraan het changed-event gebonden is (rebind bij pawn-/component-wissel)
 };

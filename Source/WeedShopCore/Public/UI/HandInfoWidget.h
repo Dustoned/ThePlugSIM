@@ -39,5 +39,16 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> HintText; // korte hint onderaan (wat je ermee doet)
 
 	float Shown = 0.f;       // huidige fade (0..1)
-	FString LastKey;         // herbouw tekst alleen bij wijziging
+
+	// Change-guard: herbouw tekst alleen bij wijziging. Losse velden i.p.v. een geprintfde
+	// sleutel-string zodat de tick geen verse FString per frame alloceert (heap-churn).
+	FName LastId;
+	int32 LastQty = MIN_int32;
+	int32 LastThcR = MIN_int32;  // THC afgerond op hele punten (zelfde korrel als de oude %.0f-sleutel)
+	int32 LastQpctR = MIN_int32;
+	int32 LastSid = MIN_int32;
+	bool bLastRollLoaded = false;
+	FString LastRollDesc;
+	FName CachedIdStrId;     // welke Id CachedIdStr representeert
+	FString CachedIdStr;     // Id.ToString()-cache: prefix-checks per frame zonder allocatie
 };

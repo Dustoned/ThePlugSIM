@@ -12,6 +12,7 @@
 #include "Game/WeedShopGameState.h"
 #include "Npc/NpcRegistryComponent.h"
 #include "Save/SaveGameSubsystem.h" // StablePlayerId: per-speler tier/cooldown-reads in competitive
+#include "Save/AssetKeepAliveSubsystem.h" // Keep: string-geladen RadialMat overleeft de per-LoadMap GC-purge
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -398,7 +399,18 @@ void UDealWidget::BuildShell(UCanvasPanel* Root)
 
 	// --- C.4: 3 ring-gauges (respect / loyalty / addiction), spiegel van PlantInfoWidget's MakeGauge-mechanisme.
 	// Radiaal-materiaal 1x laden; elke gauge = SizeBox 88x88 -> Overlay{ ring-image (Fill) + icoon (Center) } + waarde + label.
-	RadialMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/UI/M_RadialProgress.M_RadialProgress"));
+	// 1x per proces laden + keep-alive (GC purget string-geladen assets per LoadMap); een her-BuildShell
+	// hergebruikt de cache i.p.v. een runtime-LoadObject-hitch.
+	{
+		static TWeakObjectPtr<UMaterialInterface> RadialMatCache;
+		if (!RadialMatCache.IsValid())
+		{
+			UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Project/UI/M_RadialProgress.M_RadialProgress"));
+			if (M) { UAssetKeepAliveSubsystem::Keep(this, M); }
+			RadialMatCache = M;
+		}
+		RadialMat = RadialMatCache.Get();
+	}
 	{
 		auto MakeGauge = [this](const FString& IcoStem, const FLinearColor& IcoTint, const FString& Label,
 			UImage*& OutRing, UTextBlock*& OutVal, UTextBlock*& OutDelta, const FString& SubLabel = FString(), UTextBlock** OutSub = nullptr) -> UWidget*
@@ -1056,6 +1068,13 @@ void UDealWidget::CancelAmount()
 	if (AmountRoot) { AmountRoot->SetVisibility(ESlateVisibility::Collapsed); }
 }
 
+void UDealWidget::OnInvChangedForLive()
+{
+	// Voorraad gewijzigd -> de dure key-velden (inventory-scan/BagStockGrams) MOETEN opnieuw geevalueerd
+	// worden; de goedkope pre-key-gate mag de eerstvolgende UpdateLive dus niet vroeg afbreken.
+	bInvDirty = true;
+}
+
 void UDealWidget::UpdateLive()
 {
 	UPhoneClientComponent* Ph = GetPhone();
@@ -1066,6 +1085,24 @@ void UDealWidget::UpdateLive()
 	// --- Value-key rond de TEKST-updates: alle bron-waarden die hieronder getoond worden. Gelijk aan de
 	// vorige tick = geen enkele SetText/visibility-call nodig -> hele body overslaan (geen visueel verschil).
 	{
+		// Perf: GOEDKOPE pre-key EERST, met alleen de direct leesbare velden (klant-ptr, state, R/L/A,
+		// dialoog, gevraagd/aangeboden product, bod/vraagprijs, slider-state, geef-grammen). Gelijk aan de
+		// vorige tick EN geen inventory-event (bInvDirty) EN het 0.25s-vangnet nog niet om -> meteen klaar,
+		// ZONDER de dure inventory-scan/BagStockGrams/registry-lookups hieronder. Dekking van de dure velden
+		// die NIET in de pre-key zitten: bKHasWeed/KStock/KThc/KQPct via bInvDirty (inventory-event) + het
+		// vangnet; KUnlocked/KTier veranderen alleen samen met Respect/verkopen (R/L zit in de pre-key) en
+		// worden sowieso elke 0.25s door het vangnet meegepakt. De VOLLEDIGE key blijft de eind-check.
+		const FString PreKey = FString::Printf(TEXT("%llu|%d|%.2f|%.2f|%.2f|%.2f|%s|%d|%s|%s|%d|%d|%d|%d|%d"),
+			(unsigned long long)(UPTRINT)C, (int32)C->State, C->Respect, C->Loyalty, C->Addiction, C->AddictionToBuy,
+			*C->SpeechLine, C->DesiredQuantity, *C->DesiredProductId.ToString(),
+			*Ph->GetOfferedProduct().ToString(), Ph->IsOfferingSubstitute() ? 1 : 0,
+			Ph->GetOfferMarketCents(), Ph->GetDealAskCents(),
+			bSliderHeld ? 1 : 0, Ph->GetDealGiveGrams());
+		if (PreKey == LastLivePreKey && !bInvDirty && LiveFullEvalAcc < 0.25f) { return; }
+		LastLivePreKey = PreKey;
+		bInvDirty = false;
+		LiveFullEvalAcc = 0.f;
+
 		int32 KStock = 0; float KThc = 0.f, KQPct = 0.f; bool bKHasWeed = false;
 		if (APawn* P = GetOwningPlayerPawn())
 		{
@@ -1419,7 +1456,7 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		if (Card) { Card->SetVisibility(ESlateVisibility::Collapsed); }
 		if (Backdrop) { Backdrop->SetVisibility(ESlateVisibility::Collapsed); } // geen deal -> klik-vanger UIT (anders blokkeert 'ie alle UI)
-		LastCustomer = nullptr; LastLiveKey.Reset(); return;
+		LastCustomer = nullptr; LastLiveKey.Reset(); LastLivePreKey.Reset(); return;
 	}
 
 	// EERST de inhoud (en dus de hoogte) vullen, DAARNA pas de kaart tonen -> geen 1-frame
@@ -1438,6 +1475,25 @@ void UDealWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	if (Offered != LastOffered) { bSliderHeld = false; bAmountHeld = false; } // ander product gekozen -> sliders mogen weer volgen
 	LastOffered = Offered;
+
+	// Bind aan voorraad-wijzigingen (zelfde patroon als HotbarWidget): een drop/verkoop/give zet bInvDirty,
+	// zodat de goedkope pre-key-gate in UpdateLive de dure inventory-velden niet ten onrechte overslaat.
+	if (APawn* P = GetOwningPlayerPawn())
+	{
+		if (UInventoryComponent* Inv = P->FindComponentByClass<UInventoryComponent>())
+		{
+			if (Inv != BoundInv.Get())
+			{
+				if (UInventoryComponent* Old = BoundInv.Get()) { Old->OnInventoryChanged.RemoveDynamic(this, &UDealWidget::OnInvChangedForLive); }
+				Inv->OnInventoryChanged.AddDynamic(this, &UDealWidget::OnInvChangedForLive);
+				BoundInv = Inv;
+				bInvDirty = true; // nieuwe bron -> eerstvolgende UpdateLive volledig evalueren
+			}
+		}
+	}
+	// Vangnet-klok voor de pre-key-gate: dwingt elke 0.25s een volledige her-evaluatie af (dekt de
+	// registry-velden unlock/tier + eventueel gemiste inventory-randgevallen). UpdateLive reset 'm.
+	LiveFullEvalAcc += DeltaTime;
 
 	// De aangeboden strain volgt uit de bag die je in de geef-zone legt; er is geen aparte strain-picker meer.
 	// De sell-grid + geef-grid worden in UpdateLive (bag-offer-tak) gevuld/ge-sig-gate.

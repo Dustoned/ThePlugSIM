@@ -373,6 +373,123 @@ static FString WeedNpc_DiagId(const AActor* Owner)
 	return Cb ? Cb->NpcId.ToString() : GetNameSafe(Owner);
 }
 
+// ---- GEDEELDE MODULAIRE-PARTS-LIJSTEN (file-scope, zelfde patroon als GCrowdSkinPool verderop) ----
+// PreloadCrowdSkins laadt EXACT dezelfde paden voor als de modulaire builds hieronder gebruiken (EEN lijst,
+// geen duplicatie). Zonder die preload laadde ~2/3 van de crowd (de modulaire builds) z'n parts SYNC bij
+// spawn -> "Waiting for skinned assets"-hitches op de game-thread. Lege string in een slot = bewust geen part.
+struct FWeedNpcPartSlot { const TCHAR* const* Opts; int32 Num; uint32 Salt; bool bCloth; };
+
+// (a) Casual_Wear_Pack1 (WeedNpc_BuildModular): paden relatief aan GCasualPartsRoot.
+static const TCHAR* GCasualPartsRoot = TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/");
+static const TCHAR* GCasualBaseBody  = TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body.SK_Body");
+static const TCHAR* GCasualHeads[] = { TEXT("Heads/SK_Head_Casual_1"), TEXT("Heads/SK_Head_Casual_2"), TEXT("Heads/SK_Head_Casual_3") };
+static const TCHAR* GCasualTops[] = { TEXT("Cloth/Torso/SK_Top_1"), TEXT("Cloth/Torso/SK_Top_2"), TEXT("Cloth/Torso/SK_Hoodies_Mini"),
+	TEXT("Cloth/Torso/SK_Top_1_Optimized_Outerwear"), TEXT("Cloth/Torso/SK_Top_2_Optimized_Outerwear"),
+	TEXT("Cloth/Torso/SK_Top_1_Optimized_Shirt") };
+static const TCHAR* GCasualLegs[] = { TEXT("Cloth/Legs/SK_Baggy_Jeans"), TEXT("Cloth/Legs/SK_Wide_Leg_Jeans"), TEXT("Cloth/Legs/SK_Shorts_1") };
+static const TCHAR* GCasualShoes[] = { TEXT("Cloth/Shoes/SK_Sneakers_2"), TEXT("Cloth/Shoes/SK_Sneakers_4"), TEXT("Cloth/Shoes/SK_Sneakers_5") };
+// Haar + hoofddeksels (kaal/pet/hoed/panama) -> veel kapsel- en hoed-variatie.
+static const TCHAR* GCasualHairs[] = { TEXT("Hairs/SK_HairShort"), TEXT("Hairs/SK_Hairshort_Cap"), TEXT("Hairs/SK_Hairshort_Hat"), TEXT("Hairs/SK_Hairshort_Panama"),
+	TEXT("Hairs/SK_Hair_Braid"),
+	TEXT("Hairs/SK_Hair_Medium_1"), TEXT("Hairs/SK_Hair_Medium_1_Cap"), TEXT("Hairs/SK_Hair_Medium_1_Hat"), TEXT("Hairs/SK_Hair_Medium_1_Panama"),
+	TEXT("Hairs/SK_Hair_Medium_2_Cap"), TEXT("Hairs/SK_Hair_Medium_2_Hat"), TEXT("Hairs/SK_Hair_Medium_2_Panama") };
+// Optionele accessoire: meestal niks, soms koptelefoon (lege string = sla over).
+static const TCHAR* GCasualAcc[] = { TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("Cloth/Accessories/Head_Accessories/SK_Headphones") };
+// Slots: salt per slot zodat keuzes onafhankelijk varieren; bCloth = kleding-tint (anders haar-tint).
+static const FWeedNpcPartSlot GCasualSlots[] = {
+	{ GCasualHeads, UE_ARRAY_COUNT(GCasualHeads),  11u, false },
+	{ GCasualTops,  UE_ARRAY_COUNT(GCasualTops),   23u, true  },
+	{ GCasualLegs,  UE_ARRAY_COUNT(GCasualLegs),   41u, true  },
+	{ GCasualShoes, UE_ARRAY_COUNT(GCasualShoes),  67u, true  },
+	{ GCasualHairs, UE_ARRAY_COUNT(GCasualHairs),  89u, false },
+	{ GCasualAcc,   UE_ARRAY_COUNT(GCasualAcc),   113u, false },
+};
+// Vol asset-pad van een Casual-part (objectnaam == bestandsnaam).
+static FString WeedNpc_CasualPartPath(const FString& Rel)
+{
+	return FString(GCasualPartsRoot) + Rel + TEXT(".") + FPaths::GetCleanFilename(Rel);
+}
+
+// (b) Citizens_Pack Tony-parts (WeedNpc_BuildModularCitizens): part-NAMEN; vol pad via de helper hieronder.
+static const TCHAR* GCitizensTonyParts[] = {
+	TEXT("Body"), TEXT("Body_Cloth"), TEXT("Tshirt"), TEXT("Shirt"), TEXT("Pants"), TEXT("Shorts"),
+	TEXT("Shoes"), TEXT("Sneakers"), TEXT("Cap"), TEXT("Hat"), TEXT("Panama"), TEXT("Glasses"), TEXT("Watch"),
+};
+static FString WeedNpc_CitizensTonyPartPath(const TCHAR* Rel)
+{
+	return FString(TEXT("/Game/Citizens_Pack/Meshes/Citizens_Pack_Parts_Tony/SK_Citizens_Pack_Tony_")) + Rel + TEXT(".SK_Citizens_Pack_Tony_") + Rel;
+}
+
+// (c) Citizen_man_01 (WeedNpc_BuildModularCitizenMan): parts liggen plat in /mesh/, objectnaam == bestandsnaam.
+static const TCHAR* GCitizenManPartsRoot = TEXT("/Game/Citizen_man_01/mesh/");
+static const TCHAR* GCitizenManBaseBody  = TEXT("/Game/Citizen_man_01/mesh/citizen_man_01_body_01.citizen_man_01_body_01");
+static const TCHAR* GCitizenManHeads[] = { TEXT("citizen_man_01_head_01"), TEXT("citizen_man_01_head_02"), TEXT("citizen_man_01_head_03"), TEXT("citizen_man_01_head_04"), TEXT("citizen_man_01_head_05") };
+static const TCHAR* GCitizenManTops[] = { TEXT("citizen_man_01_shirt_01"), TEXT("citizen_man_01_shirt_02"), TEXT("citizen_man_01_t_shirt_01"), TEXT("citizen_man_01_t_shirt_02"),
+	TEXT("citizen_man_01_sleevless_shirt_01"), TEXT("citizen_man_01_sleevless_shirt_02"),
+	TEXT("citizen_man_01_jacket_classic_01"), TEXT("citizen_man_01_jacket_classic_02"),
+	TEXT("citizen_man_01_jacket_leather_01"), TEXT("citizen_man_01_jacket_leather_02"), TEXT("citizen_man_01_jacket_leather_03") };
+static const TCHAR* GCitizenManLegs[] = { TEXT("citizen_man_01_pants_classic_01"), TEXT("citizen_man_01_pants_jeans_01"), TEXT("citizen_man_01_shorts_01") };
+static const TCHAR* GCitizenManShoes[] = { TEXT("citizen_man_01_shoes_classic_01"), TEXT("citizen_man_01_shoes_slippers_01"), TEXT("citizen_man_01_shoes_sneakers_01") };
+// Haar/hoofddeksel: kaal, haar of hoed. Bril: meestal niks.
+static const TCHAR* GCitizenManHair[] = { TEXT(""), TEXT("citizen_man_01_hair_01"), TEXT("citizen_man_01_hat_01") };
+static const TCHAR* GCitizenManGlasses[] = { TEXT(""), TEXT(""), TEXT(""), TEXT("citizen_man_01_glasses_frame_01") };
+static const FWeedNpcPartSlot GCitizenManSlots[] = {
+	{ GCitizenManHeads,   UE_ARRAY_COUNT(GCitizenManHeads),    11u, false },
+	{ GCitizenManTops,    UE_ARRAY_COUNT(GCitizenManTops),     23u, true  },
+	{ GCitizenManLegs,    UE_ARRAY_COUNT(GCitizenManLegs),     41u, true  },
+	{ GCitizenManShoes,   UE_ARRAY_COUNT(GCitizenManShoes),    67u, true  },
+	{ GCitizenManHair,    UE_ARRAY_COUNT(GCitizenManHair),     89u, false },
+	{ GCitizenManGlasses, UE_ARRAY_COUNT(GCitizenManGlasses), 113u, false },
+};
+static FString WeedNpc_CitizenManPartPath(const FString& Rel)
+{
+	return FString(GCitizenManPartsRoot) + Rel + TEXT(".") + Rel;
+}
+// Aantal kleur-materiaal-varianten per Citizen_man-kledingstuk (_01..NN): de meeste hebben _01.._05, maar
+// shoes_classic heeft er maar 2 en jacket_leather 4. Clamp per stuk, anders laadt LoadObject een
+// niet-bestaand asset (-> "Failed to find object ..._03/_05" in de log + NPC mist z'n schoenen/jas).
+static uint32 WeedNpc_CitizenManMatVarCount(const FString& Base)
+{
+	if (Base.Contains(TEXT("shoes_classic")))  { return 2u; }
+	if (Base.Contains(TEXT("jacket_leather"))) { return 4u; }
+	return 5u;
+}
+static FString WeedNpc_CitizenManMatPath(const FString& Base, uint32 Var)
+{
+	return FString::Printf(TEXT("/Game/Citizen_man_01/materials/%s_%02u.%s_%02u"), *Base, Var, *Base, Var);
+}
+
+// (d) Casual huid-/gezicht-materialen (WeedNpc_TintSkin): 10 huidskleuren + 10 gezichten.
+static const TCHAR* GCasualBodyMats[] = {
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_1.MI_Body_1"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_2.MI_Body_2"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_3.MI_Body_3"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_4.MI_Body_4"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_5.MI_Body_5"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_6.MI_Body_6"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_7.MI_Body_7"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_8.MI_Body_8"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_9.MI_Body_9"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_10.MI_Body_10") };
+static const TCHAR* GCasualHeadMats[] = {
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_1.MI_Head_1"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_2.MI_Head_2"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_3.MI_Head_3"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_4.MI_Head_4"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_5.MI_Head_5"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_6.MI_Head_6"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_7.MI_Head_7"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_8.MI_Head_8"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_9.MI_Head_9"),
+	TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_10.MI_Head_10") };
+
+// Kies een part uit een slot (zelfde formule als altijd: Seed * 131 + slot-salt, modulo het aantal opties).
+static FString WeedNpc_PickPart(const FWeedNpcPartSlot& Sl, uint32 Seed)
+{
+	if (Sl.Num == 0) { return FString(); }
+	return FString(Sl.Opts[(Seed * 131u + Sl.Salt) % (uint32)Sl.Num]);
+}
+
 // MODULAIRE Casual-NPC: bouw een persoon uit losse kledingstukken (Casual_Wear_Pack1) -> elke NPC krijgt
 // een eigen combinatie top/broek/schoenen/kapsel/hoofd. De basis-body draait de anim; de kledingstukken
 // volgen via SetLeaderPoseComponent (zelfde UE4_Mannequin_Skeleton_Main). Plus per-part random kleur.
@@ -381,9 +498,8 @@ static FString WeedNpc_DiagId(const AActor* Owner)
 static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, uint32 Seed)
 {
 	if (!Owner || !Body) { return; }
-	static const TCHAR* C = TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/");
 	// Naakte basis-body op de hoofd-mesh (wordt bedekt door de kledingstukken).
-	if (USkeletalMesh* B = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body.SK_Body")))
+	if (USkeletalMesh* B = LoadObject<USkeletalMesh>(nullptr, GCasualBaseBody))
 	{
 		Body->SetSkeletalMesh(B);
 	}
@@ -391,33 +507,12 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 	{
 		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModular: basis-body laadde niet: /Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body (npc=%s)"), *WeedNpc_DiagId(Owner));
 	}
-	auto Pick = [&](const TArray<FString>& Opts, uint32 Salt) -> FString
+	// Slots + paden: file-scope GCasualSlots (gedeeld met PreloadCrowdSkins - geen dubbele paden-lijst).
+	for (const FWeedNpcPartSlot& Sl : GCasualSlots)
 	{
-		if (Opts.Num() == 0) { return FString(); }
-		return Opts[(Seed * 131u + Salt) % (uint32)Opts.Num()];
-	};
-	// Slots: pad-lijsten (relatief aan C). Salt per slot zodat keuzes onafhankelijk variëren.
-	struct FSlot { TArray<FString> Opts; uint32 Salt; bool bCloth; };
-	const TArray<FSlot> Slots = {
-		{ { TEXT("Heads/SK_Head_Casual_1"), TEXT("Heads/SK_Head_Casual_2"), TEXT("Heads/SK_Head_Casual_3") }, 11u, false },
-		{ { TEXT("Cloth/Torso/SK_Top_1"), TEXT("Cloth/Torso/SK_Top_2"), TEXT("Cloth/Torso/SK_Hoodies_Mini"),
-		    TEXT("Cloth/Torso/SK_Top_1_Optimized_Outerwear"), TEXT("Cloth/Torso/SK_Top_2_Optimized_Outerwear"),
-		    TEXT("Cloth/Torso/SK_Top_1_Optimized_Shirt") }, 23u, true },
-		{ { TEXT("Cloth/Legs/SK_Baggy_Jeans"), TEXT("Cloth/Legs/SK_Wide_Leg_Jeans"), TEXT("Cloth/Legs/SK_Shorts_1") }, 41u, true },
-		{ { TEXT("Cloth/Shoes/SK_Sneakers_2"), TEXT("Cloth/Shoes/SK_Sneakers_4"), TEXT("Cloth/Shoes/SK_Sneakers_5") }, 67u, true },
-		// Haar + hoofddeksels (kaal/pet/hoed/panama) -> veel kapsel- en hoed-variatie.
-		{ { TEXT("Hairs/SK_HairShort"), TEXT("Hairs/SK_Hairshort_Cap"), TEXT("Hairs/SK_Hairshort_Hat"), TEXT("Hairs/SK_Hairshort_Panama"),
-		    TEXT("Hairs/SK_Hair_Braid"),
-		    TEXT("Hairs/SK_Hair_Medium_1"), TEXT("Hairs/SK_Hair_Medium_1_Cap"), TEXT("Hairs/SK_Hair_Medium_1_Hat"), TEXT("Hairs/SK_Hair_Medium_1_Panama"),
-		    TEXT("Hairs/SK_Hair_Medium_2_Cap"), TEXT("Hairs/SK_Hair_Medium_2_Hat"), TEXT("Hairs/SK_Hair_Medium_2_Panama") }, 89u, false },
-		// Optionele accessoire: meestal niks, soms koptelefoon (lege string = sla over).
-		{ { TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("Cloth/Accessories/Head_Accessories/SK_Headphones") }, 113u, false },
-	};
-	for (const FSlot& Sl : Slots)
-	{
-		const FString Rel = Pick(Sl.Opts, Sl.Salt);
+		const FString Rel = WeedNpc_PickPart(Sl, Seed);
 		if (Rel.IsEmpty()) { continue; }
-		const FString Path = FString(C) + Rel + TEXT(".") + FPaths::GetCleanFilename(Rel);
+		const FString Path = WeedNpc_CasualPartPath(Rel);
 		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
 		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModular: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
 		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
@@ -443,11 +538,11 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* Body, uint32 Seed)
 {
 	if (!Owner || !Body) { return; }
-	static const TCHAR* C = TEXT("/Game/Citizens_Pack/Meshes/Citizens_Pack_Parts_Tony/SK_Citizens_Pack_Tony_");
 
+	// Pad via de gedeelde helper (zelfde lijst als PreloadCrowdSkins -> parts zitten al in de cache).
 	auto Load = [&](const TCHAR* Rel) -> USkeletalMesh*
 	{
-		const FString Path = FString(C) + Rel + TEXT(".SK_Citizens_Pack_Tony_") + Rel;
+		const FString Path = WeedNpc_CitizensTonyPartPath(Rel);
 		USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, *Path);
 		if (!M) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizens: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); }
 		return M;
@@ -588,20 +683,25 @@ static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
 // elke verse body-materialisatie tijdens het rondlopen z'n skin-mesh on-demand -> Flush Async Loading +
 // skinned-asset-build op de game-thread = de gemeten 200-500ms hitch elke paar seconden (stat dumphitches).
 // Na de preload is de LoadObject bij materialiseren een gratis cache-hit. Draait op host EN client (de joiner
-// laadt skins bij OnRep_Appearance en had dezelfde hitch).
+// laadt skins bij OnRep_Appearance en had dezelfde hitch). Dekt naast de complete skins OOK alle MODULAIRE
+// parts + materialen (Casual/Citizens-Tony/Citizen_man + de TintSkin-huiden): ~2/3 van de crowd bouwt
+// modulair en laadde die parts anders alsnog SYNC bij spawn ("Waiting for skinned assets" in de log).
+// Zelfde file-scope lijsten als de builds -> preload en build blijven automatisch in sync.
 void ACustomerBase::PreloadCrowdSkins(const UObject* WorldContext)
 {
 	const double T0 = FPlatformTime::Seconds();
 	int32 NLoaded = 0;
-	for (int32 i = 0; i < UE_ARRAY_COUNT(GCrowdSkinPool); ++i)
+	auto KeepMesh = [&](const FString& Path)
 	{
-		if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, GCrowdSkinPool[i]))
-		{
-			UAssetKeepAliveSubsystem::Keep(WorldContext, M);
-			++NLoaded;
-		}
-	}
-	for (int32 i = 0; i < 10; ++i) // basis-pool (terugval + residents)
+		if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, *Path)) { UAssetKeepAliveSubsystem::Keep(WorldContext, M); ++NLoaded; }
+	};
+	auto KeepMat = [&](const FString& Path)
+	{
+		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Path)) { UAssetKeepAliveSubsystem::Keep(WorldContext, M); ++NLoaded; }
+	};
+	// 1) Complete skins: crowd-pool + basis-pool (terugval + residents).
+	for (int32 i = 0; i < UE_ARRAY_COUNT(GCrowdSkinPool); ++i) { KeepMesh(GCrowdSkinPool[i]); }
+	for (int32 i = 0; i < 10; ++i)
 	{
 		if (USkeletalMesh* M = WeedNpc_SkinByIndex(i))
 		{
@@ -609,7 +709,47 @@ void ACustomerBase::PreloadCrowdSkins(const UObject* WorldContext)
 			++NLoaded;
 		}
 	}
-	UE_LOG(LogWeedShop, Display, TEXT("Crowd-skins voorgeladen: %d meshes in %.2fs (onder het laadscherm; voorkomt materialisatie-hitches)"), NLoaded, FPlatformTime::Seconds() - T0);
+	// 2a) Casual-parts (WeedNpc_BuildModular): basis-body + alle slot-opties.
+	KeepMesh(GCasualBaseBody);
+	for (const FWeedNpcPartSlot& Sl : GCasualSlots)
+	{
+		for (int32 i = 0; i < Sl.Num; ++i)
+		{
+			const FString Rel = Sl.Opts[i];
+			if (!Rel.IsEmpty()) { KeepMesh(WeedNpc_CasualPartPath(Rel)); }
+		}
+	}
+	// 2b) Citizens-Tony-parts (WeedNpc_BuildModularCitizens): alle part-namen.
+	for (int32 i = 0; i < UE_ARRAY_COUNT(GCitizensTonyParts); ++i) { KeepMesh(WeedNpc_CitizensTonyPartPath(GCitizensTonyParts[i])); }
+	// 2c) Citizen_man-parts (WeedNpc_BuildModularCitizenMan): basis-body + parts + de kleur-variant-materialen.
+	KeepMesh(GCitizenManBaseBody);
+	TSet<FString> SeenMatBases; // shirt_01/shirt_02 delen dezelfde materiaal-base -> maar 1x voorladen
+	for (const FWeedNpcPartSlot& Sl : GCitizenManSlots)
+	{
+		for (int32 i = 0; i < Sl.Num; ++i)
+		{
+			const FString Rel = Sl.Opts[i];
+			if (Rel.IsEmpty()) { continue; }
+			KeepMesh(WeedNpc_CitizenManPartPath(Rel));
+			// Zelfde selectie-regel als de build: alleen kledingstukken hebben kleur-variant-materialen.
+			if (Rel.Contains(TEXT("shirt")) || Rel.Contains(TEXT("jacket")) || Rel.Contains(TEXT("pants")) || Rel.Contains(TEXT("shorts")) || Rel.Contains(TEXT("shoes")))
+			{
+				int32 us;
+				if (Rel.FindLastChar(TEXT('_'), us))
+				{
+					const FString Base = Rel.Left(us);
+					if (SeenMatBases.Contains(Base)) { continue; }
+					SeenMatBases.Add(Base);
+					const uint32 MaxVar = WeedNpc_CitizenManMatVarCount(Base);
+					for (uint32 Var = 1u; Var <= MaxVar; ++Var) { KeepMat(WeedNpc_CitizenManMatPath(Base, Var)); }
+				}
+			}
+		}
+	}
+	// 3) TintSkin huid-/gezicht-materialen (10 huiden + 10 gezichten).
+	for (int32 i = 0; i < UE_ARRAY_COUNT(GCasualBodyMats); ++i) { KeepMat(GCasualBodyMats[i]); }
+	for (int32 i = 0; i < UE_ARRAY_COUNT(GCasualHeadMats); ++i) { KeepMat(GCasualHeadMats[i]); }
+	UE_LOG(LogWeedShop, Display, TEXT("Crowd-skins voorgeladen: %d assets (complete skins + modulaire parts + materialen) in %.2fs (onder het laadscherm; voorkomt materialisatie-hitches)"), NLoaded, FPlatformTime::Seconds() - T0);
 }
 
 // Per-NPC HUID + GEZICHT: wissel de huid-/gezicht-materiaalslots naar een willekeurige MI_Body_/MI_Head_ uit de
@@ -618,30 +758,9 @@ void ACustomerBase::PreloadCrowdSkins(const UObject* WorldContext)
 static void WeedNpc_TintSkin(USkeletalMeshComponent* SkM, uint32 Seed)
 {
 	if (!SkM) { return; }
-	static const TCHAR* Body[] = {
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_1.MI_Body_1"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_2.MI_Body_2"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_3.MI_Body_3"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_4.MI_Body_4"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_5.MI_Body_5"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_6.MI_Body_6"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_7.MI_Body_7"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_8.MI_Body_8"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_9.MI_Body_9"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Body/MI_Body_10.MI_Body_10") };
-	static const TCHAR* Head[] = {
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_1.MI_Head_1"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_2.MI_Head_2"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_3.MI_Head_3"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_4.MI_Head_4"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_5.MI_Head_5"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_6.MI_Head_6"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_7.MI_Head_7"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_8.MI_Head_8"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_9.MI_Head_9"),
-		TEXT("/Game/Casual_Wear_Pack1/Materials/Head/MI_Head_10.MI_Head_10") };
-	UMaterialInterface* BodyMat = LoadObject<UMaterialInterface>(nullptr, Body[(Seed * 2654435761u) % 10]);
-	UMaterialInterface* HeadMat = LoadObject<UMaterialInterface>(nullptr, Head[((Seed >> 8) * 2246822519u) % 10]);
+	// Materialen-lijsten: file-scope GCasualBodyMats/GCasualHeadMats (gedeeld met PreloadCrowdSkins).
+	UMaterialInterface* BodyMat = LoadObject<UMaterialInterface>(nullptr, GCasualBodyMats[(Seed * 2654435761u) % 10]);
+	UMaterialInterface* HeadMat = LoadObject<UMaterialInterface>(nullptr, GCasualHeadMats[((Seed >> 8) * 2246822519u) % 10]);
 	const TArray<UMaterialInterface*> Mats = SkM->GetMaterials();
 	for (int32 i = 0; i < Mats.Num(); ++i)
 	{
@@ -700,9 +819,8 @@ static void WeedNpc_TintClothing(USkeletalMeshComponent* SkM, uint32 Seed)
 static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent* Body, uint32 Seed)
 {
 	if (!Owner || !Body) { return; }
-	static const TCHAR* C = TEXT("/Game/Citizen_man_01/mesh/");
 	// Naakte headless basis-body (wordt bedekt door hoofd + kleding).
-	if (USkeletalMesh* B = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Citizen_man_01/mesh/citizen_man_01_body_01.citizen_man_01_body_01")))
+	if (USkeletalMesh* B = LoadObject<USkeletalMesh>(nullptr, GCitizenManBaseBody))
 	{
 		Body->SetSkeletalMesh(B);
 	}
@@ -710,30 +828,12 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 	{
 		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizenMan: basis-body laadde niet: /Game/Citizen_man_01/mesh/citizen_man_01_body_01 (npc=%s)"), *WeedNpc_DiagId(Owner));
 	}
-	auto Pick = [&](const TArray<FString>& Opts, uint32 Salt) -> FString
+	// Slots + paden: file-scope GCitizenManSlots (gedeeld met PreloadCrowdSkins - geen dubbele paden-lijst).
+	for (const FWeedNpcPartSlot& Sl : GCitizenManSlots)
 	{
-		if (Opts.Num() == 0) { return FString(); }
-		return Opts[(Seed * 131u + Salt) % (uint32)Opts.Num()];
-	};
-	struct FSlot { TArray<FString> Opts; uint32 Salt; };
-	const TArray<FSlot> Slots = {
-		{ { TEXT("citizen_man_01_head_01"), TEXT("citizen_man_01_head_02"), TEXT("citizen_man_01_head_03"), TEXT("citizen_man_01_head_04"), TEXT("citizen_man_01_head_05") }, 11u },
-		{ { TEXT("citizen_man_01_shirt_01"), TEXT("citizen_man_01_shirt_02"), TEXT("citizen_man_01_t_shirt_01"), TEXT("citizen_man_01_t_shirt_02"),
-		    TEXT("citizen_man_01_sleevless_shirt_01"), TEXT("citizen_man_01_sleevless_shirt_02"),
-		    TEXT("citizen_man_01_jacket_classic_01"), TEXT("citizen_man_01_jacket_classic_02"),
-		    TEXT("citizen_man_01_jacket_leather_01"), TEXT("citizen_man_01_jacket_leather_02"), TEXT("citizen_man_01_jacket_leather_03") }, 23u },
-		{ { TEXT("citizen_man_01_pants_classic_01"), TEXT("citizen_man_01_pants_jeans_01"), TEXT("citizen_man_01_shorts_01") }, 41u },
-		{ { TEXT("citizen_man_01_shoes_classic_01"), TEXT("citizen_man_01_shoes_slippers_01"), TEXT("citizen_man_01_shoes_sneakers_01") }, 67u },
-		// Haar/hoofddeksel: kaal, haar of hoed.
-		{ { TEXT(""), TEXT("citizen_man_01_hair_01"), TEXT("citizen_man_01_hat_01") }, 89u },
-		// Optionele bril: meestal niks.
-		{ { TEXT(""), TEXT(""), TEXT(""), TEXT("citizen_man_01_glasses_frame_01") }, 113u },
-	};
-	for (const FSlot& Sl : Slots)
-	{
-		const FString Rel = Pick(Sl.Opts, Sl.Salt);
+		const FString Rel = WeedNpc_PickPart(Sl, Seed);
 		if (Rel.IsEmpty()) { continue; }
-		const FString Path = FString(C) + Rel + TEXT(".") + Rel; // parts liggen plat in /mesh/, objectnaam == bestandsnaam
+		const FString Path = WeedNpc_CitizenManPartPath(Rel);
 		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
 		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizenMan: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
 		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
@@ -754,14 +854,9 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 			if (Rel.FindLastChar(TEXT('_'), us))
 			{
 				const FString Base = Rel.Left(us);
-				// Aantal kleur-varianten verschilt PER stuk: de meeste hebben _01.._05, maar shoes_classic heeft
-				// er maar 2 en jacket_leather 4. Clamp per stuk, anders laadt LoadObject een niet-bestaand asset
-				// (-> "Failed to find object ..._03/_05" in de log + NPC mist z'n schoenen/jas).
-				uint32 MaxVar = 5u;
-				if (Base.Contains(TEXT("shoes_classic")))       { MaxVar = 2u; }
-				else if (Base.Contains(TEXT("jacket_leather"))) { MaxVar = 4u; }
-				const uint32 Var = 1u + ((Seed * 73u + Sl.Salt) % MaxVar);
-				const FString MP = FString::Printf(TEXT("/Game/Citizen_man_01/materials/%s_%02u.%s_%02u"), *Base, Var, *Base, Var);
+				// Varianten-aantal + materiaal-pad via de gedeelde helpers (zelfde bron als PreloadCrowdSkins).
+				const uint32 Var = 1u + ((Seed * 73u + Sl.Salt) % WeedNpc_CitizenManMatVarCount(Base));
+				const FString MP = WeedNpc_CitizenManMatPath(Base, Var);
 				if (UMaterialInterface* MI = LoadObject<UMaterialInterface>(nullptr, *MP)) { Part->SetMaterial(0, MI); }
 			}
 		}
@@ -779,14 +874,25 @@ uint32 ACustomerBase::StableLookSeed(FName NpcId)
 
 int32 ACustomerBase::SharedPlayerLevel(const UObject* WorldCtx)
 {
-	if (const UWorld* W = WorldCtx ? WorldCtx->GetWorld() : nullptr)
+	const UWorld* W = WorldCtx ? WorldCtx->GetWorld() : nullptr;
+	if (!W) { return 1; }
+	// PERF: wordt per BuildAppearance (crowd-materialisatie) aangeroepen; level-ups hoeven niet frame-exact
+	// in de crowd -> cache met korte TTL (ververs max 1x/s). Statics zijn per-PROCES, dus de world-key (weak)
+	// filtert PIE/co-op-in-1-proces: een andere world ververst gewoon direct (nooit een stale andere wereld).
+	static TWeakObjectPtr<const UWorld> CachedWorld;
+	static double CachedAt = -1.0;
+	static int32 CachedLevel = 1;
+	const double Now = FPlatformTime::Seconds();
+	if (CachedWorld.Get() == W && (Now - CachedAt) < 1.0) { return CachedLevel; }
+	int32 Level = 1;
+	if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>())
 	{
-		if (AWeedShopGameState* GS = W->GetGameState<AWeedShopGameState>())
-		{
-			if (ULevelComponent* Lv = GS->GetLeveling()) { return Lv->GetLevel(); }
-		}
+		if (ULevelComponent* Lv = GS->GetLeveling()) { Level = Lv->GetLevel(); }
 	}
-	return 1;
+	CachedWorld = W;
+	CachedAt = Now;
+	CachedLevel = Level;
+	return Level;
 }
 
 bool ACustomerBase::IsCompleteSkinUnlocked(uint32 LookSeed, int32 PlayerLevel)
@@ -3648,7 +3754,14 @@ EDealResult ACustomerBase::SubmitOfferProduct(FName ProductId, int32 AskPriceCen
 	{
 		if (AActor* DealerActor = PayTo->GetOwner())
 		{
-			if (UPhoneClientComponent* Ph = DealerActor->FindComponentByClass<UPhoneClientComponent>())
+			// PERF-cache: FindComponentByClass 1x per pawn opzoeken (weak, per-pawn gekeyed); een andere of
+			// verdwenen pawn (co-op/respawn) -> gewoon opnieuw opzoeken.
+			if (CachedPhoneOwner.Get() != DealerActor || !CachedPhoneClient.IsValid())
+			{
+				CachedPhoneOwner = DealerActor;
+				CachedPhoneClient = DealerActor->FindComponentByClass<UPhoneClientComponent>();
+			}
+			if (UPhoneClientComponent* Ph = CachedPhoneClient.Get())
 			{
 				Ph->ClientDealResultPopup(this, Total, PopupXP, UpR, UpL, UpA, GetActorLocation());
 			}
@@ -3675,9 +3788,16 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 		*NpcId.ToString(), IsHidden() ? 1 : 0, bAppearanceBuilt ? 1 : 0, RepSkinIndex, bCrowdNpc ? 1 : 0,
 		*GetNameSafe(GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr));
 
-	// Klanten betalen de speler die ze bedient (z'n eigen portemonnee).
-	UEconomyComponent* Econ = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UEconomyComponent>() : nullptr;
-	UInventoryComponent* Stock = InstigatorPawn ? InstigatorPawn->FindComponentByClass<UInventoryComponent>() : nullptr;
+	// Klanten betalen de speler die ze bedient (z'n eigen portemonnee). PERF-cache: FindComponentByClass
+	// 1x per pawn opzoeken (weak, per-pawn gekeyed); een andere/verdwenen pawn (co-op) -> opnieuw opzoeken.
+	if (InstigatorPawn && (CachedTradePawn.Get() != InstigatorPawn || !CachedTradeEconomy.IsValid() || !CachedTradeInventory.IsValid()))
+	{
+		CachedTradePawn = InstigatorPawn;
+		CachedTradeEconomy = InstigatorPawn->FindComponentByClass<UEconomyComponent>();
+		CachedTradeInventory = InstigatorPawn->FindComponentByClass<UInventoryComponent>();
+	}
+	UEconomyComponent* Econ = InstigatorPawn ? CachedTradeEconomy.Get() : nullptr;
+	UInventoryComponent* Stock = InstigatorPawn ? CachedTradeInventory.Get() : nullptr;
 
 	// (Contact/'nummer' krijg je via het NPC-register zodra de loyaliteit hoog genoeg is.)
 

@@ -26,6 +26,7 @@
 #include "Misc/ConfigCacheIni.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "UI/WeedUiStyle.h" // PrewarmCommonAssets: fonts + item-icon-PNG's onder de laad-cover voorladen
 
 DEFINE_LOG_CATEGORY(LogWeedShop);
 
@@ -632,6 +633,10 @@ private:
 	void OnPostLoadMap(UWorld* LoadedWorld)
 	{
 		if (IsRunningDedicatedServer()) { return; }
+		// UI-prewarm ONDER de cover: de eerste PostLoadMap valt nog in de zwarte boot-fase (menu-load),
+		// dus de eenmalige font-loads + PNG-decodes (30-80ms) landen hier i.p.v. als hitch bij de eerste
+		// UI-open. Guard tegen dubbel draaien (static bool) zit in de functie zelf.
+		WeedUI::PrewarmCommonAssets(LoadedWorld);
 		if (GLoadStartSeconds <= 0.0) { return; }   // geen actieve game-load-flow -> niets te cappen
 		if (GLoadEndSeconds <= 0.0)                 // eerste PostLoadMap na deze load = het echte load-einde
 		{

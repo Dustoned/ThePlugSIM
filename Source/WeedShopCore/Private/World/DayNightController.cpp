@@ -8,6 +8,7 @@
 #include "World/WorldSyncComponent.h"
 #include "Game/WeedShopGameState.h"
 #include "UI/WeedUiStyle.h" // D24: WeedUI::SoundCategoryVolume(3=VolWeather) voor de weer-volume-slider
+#include "Save/AssetKeepAliveSubsystem.h" // keep-alive: string-geladen UDS/UDW-klasses niet per LoadMap laten purgen/hercompileren
 
 #include "Engine/DirectionalLight.h"
 #include "Components/DirectionalLightComponent.h"
@@ -467,6 +468,7 @@ void ADayNightController::SpawnUDS()
 		UE_LOG(LogTemp, Verbose, TEXT("[UDS] Ultra_Dynamic_Sky class niet gevonden - UDS uit, klassieke zon/maan blijft"));
 		return;
 	}
+	UAssetKeepAliveSubsystem::Keep(this, UdsClass); // keep-alive: anders purget GC de BP-keten per LoadMap -> herlaad/hercompile-hitch
 	FActorSpawnParameters SP;
 	SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AActor* Uds = W->SpawnActor<AActor>(UdsClass, FTransform::Identity, SP);
@@ -484,6 +486,7 @@ void ADayNightController::SpawnUDS()
 	// Environment-sounds zitten NIET op de sky-actor -> aparte UDS-geluidsactor spawnen (tijd/weer-gestuurde ambience).
 	if (UClass* SndClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Sound/AmbientSound_Time_and_Weather_Controlled.AmbientSound_Time_and_Weather_Controlled_C")))
 	{
+		UAssetKeepAliveSubsystem::Keep(this, SndClass); // keep-alive: BP-keten niet per LoadMap opnieuw laden
 		UdsSound = W->SpawnActor<AActor>(SndClass, FTransform::Identity, SP);
 		UE_LOG(LogTemp, Verbose, TEXT("[UDS] sound-actor: %s"), UdsSound.IsValid() ? TEXT("OK") : TEXT("NULL"));
 		// D24: cache de default "Volume Multiplier"-BP-var 1x zodat de weer-volume-slider (categorie 3) 'm
@@ -502,6 +505,7 @@ void ADayNightController::SpawnUDS()
 	// UDW detecteert de Sky zelf en koppelt alles. Met UDW aanwezig stuurt het weer de cloud/fog van de Sky.
 	if (UClass* WClass = LoadClass<AActor>(nullptr, TEXT("/Game/UltraDynamicSky/Blueprints/Ultra_Dynamic_Weather.Ultra_Dynamic_Weather_C")))
 	{
+		UAssetKeepAliveSubsystem::Keep(this, WClass); // keep-alive: BP-keten niet per LoadMap opnieuw laden
 		UdsWeatherActor = W->SpawnActor<AActor>(WClass, FTransform::Identity, SP);
 		UE_LOG(LogTemp, Verbose, TEXT("[UDS] UDW (weer) gespawnd: %s"), UdsWeatherActor.IsValid() ? TEXT("OK") : TEXT("NULL"));
 		if (AActor* Udw = UdsWeatherActor.Get())

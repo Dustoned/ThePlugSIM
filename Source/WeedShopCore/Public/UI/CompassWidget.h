@@ -23,6 +23,7 @@ public:
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	void BuildShell(UCanvasPanel* Root);
@@ -60,6 +61,17 @@ protected:
 	// Winkels staan stil -> de SET elke 2s herscannen (zoals MapWidget), positie/bearing per tick.
 	TArray<TWeakObjectPtr<class AStoreCounter>> CachedCounters;
 	float CounterCacheAge = 1000.f;
+
+	// Per-marker cache van de laatst GEZETTE band-waarden (positie/scale/opacity): identieke Slate-sets
+	// per tick overslaan. De guard slaat ALLEEN onveranderd werk over; een bewegende marker wordt nog
+	// steeds elke tick direct gezet (sentinels forceren de eerste set).
+	struct FBandCache
+	{
+		FVector2D Pos = FVector2D(-99999.0, -99999.0);
+		float Scale = -1.f;
+		float Opacity = -1.f;
+	};
+	TMap<UWidget*, FBandCache> BandCache;
 
 	static constexpr float BandW = 540.f;
 	static constexpr float HalfFov = 90.f; // toont 180 graden over de balk

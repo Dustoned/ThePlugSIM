@@ -117,6 +117,11 @@ namespace WeedUI
 	// procedurele tegel (gekleurde achtergrond per categorie + flat glyph). Altijd bruikbaar.
 	WEEDSHOPCORE_API UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride = -1, int32 RollLoadedOverride = -1);
 
+	// Prewarm ONDER de boot/laad-cover: forceert de eenmalige Exo-font-loads (regular + semibold) en
+	// decodeert alvast de meest gebruikte item-icon-PNG's, zodat de eerste UI-open geen 30-80ms
+	// sync-load/decode-hitch meer geeft. Interne guard tegen dubbel draaien; veilig om vaker aan te roepen.
+	WEEDSHOPCORE_API void PrewarmCommonAssets(const UObject* WorldContext);
+
 	// Accentkleur per item-categorie (voor randjes/labels in de inventory).
 	WEEDSHOPCORE_API FLinearColor ItemAccent(FName ItemId);
 	// Stabiele, per-tekst (per-strain) kleur uit een korte tag (OG/GSC/...). Value/Sat sturen helderheid (pill donker, frame fel).

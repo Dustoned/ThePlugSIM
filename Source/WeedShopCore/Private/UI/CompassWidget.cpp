@@ -238,16 +238,25 @@ void UCompassWidget::BuildShell(UCanvasPanel* Root)
 void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y, float Dist)
 {
 	if (!W) { return; }
+	// Visibility alleen bij een ECHTE wissel zetten (geen redundante Slate-set per tick).
 	if (FMath::Abs(RelAngleDeg) > HalfFov)
 	{
-		W->SetVisibility(ESlateVisibility::Collapsed);
+		if (W->GetVisibility() != ESlateVisibility::Collapsed) { W->SetVisibility(ESlateVisibility::Collapsed); }
 		return;
 	}
-	W->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (W->GetVisibility() != ESlateVisibility::HitTestInvisible) { W->SetVisibility(ESlateVisibility::HitTestInvisible); }
 	const float X = BandW * 0.5f + (RelAngleDeg / HalfFov) * (BandW * 0.5f);
+	// Per-marker delta-gates tegen de laatst GEZETTE waarden: identiek werk overslaan (sub-pixel/sub-promille),
+	// een bewegende marker wordt nog steeds elke tick gezet.
+	FBandCache& C = BandCache.FindOrAdd(W);
 	if (UCanvasPanelSlot* S = Cast<UCanvasPanelSlot>(W->Slot))
 	{
-		S->SetPosition(FVector2D(X, Y));
+		const FVector2D NewPos(X, Y);
+		if (!NewPos.Equals(C.Pos, 0.25))
+		{
+			C.Pos = NewPos;
+			S->SetPosition(NewPos);
+		}
 	}
 	// 3D-feel (D26): dichtbij groter, ver kleiner. Center-priority maakt de rail rustiger:
 	// markers aan de rand worden zachter/kleiner, middenmarkers lezen als de echte focus.
@@ -255,15 +264,30 @@ void UCompassWidget::PlaceOnBand(UWidget* W, float RelAngleDeg, float Y, float D
 	const float AbsRel = FMath::Abs(RelAngleDeg);
 	const float CenterFocus = 1.f - FMath::Clamp(AbsRel / (HalfFov * 0.55f), 0.f, 1.f);
 	const float FocusScale = FMath::Lerp(0.84f, 1.10f, CenterFocus);
-	W->SetRenderScale(FVector2D(s * FocusScale, s * FocusScale));
+	const float Scale = s * FocusScale;
+	if (FMath::Abs(Scale - C.Scale) > 0.002f)
+	{
+		C.Scale = Scale;
+		W->SetRenderScale(FVector2D(Scale, Scale));
+	}
 	const float EdgeFade = FMath::GetMappedRangeValueClamped(FVector2f(HalfFov * 0.42f, HalfFov), FVector2f(1.f, 0.18f), AbsRel);
-	W->SetRenderOpacity(EdgeFade);
+	if (FMath::Abs(EdgeFade - C.Opacity) > 0.002f)
+	{
+		C.Opacity = EdgeFade;
+		W->SetRenderOpacity(EdgeFade);
+	}
+}
+
+void UCompassWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	// Het kompas vangt nooit input: 1x zetten bij constructie (stond eerst redundant in ELKE NativeTick).
+	SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 void UCompassWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 {
 	Super::NativeTick(MyGeometry, DeltaTime);
-	SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	APlayerController* PC = GetOwningPlayer();
 	APawn* P = GetOwningPlayerPawn();

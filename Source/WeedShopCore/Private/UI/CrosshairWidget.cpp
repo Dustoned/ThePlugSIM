@@ -73,23 +73,39 @@ void UCrosshairWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	bool bPlacementValid = false;
 	if (APawn* P = GetOwningPlayerPawn())
 	{
-		if (const UPhoneClientComponent* Ph = P->FindComponentByClass<UPhoneClientComponent>())
+		// Componenten 1x opzoeken en cachen (FindComponentByClass per frame is onnodig zoekwerk);
+		// herzoeken alleen bij pawn-wissel of als een pointer stale is geworden.
+		if (CachedPawn.Get() != P)
+		{
+			CachedPawn = P;
+			CachedPhone = P->FindComponentByClass<UPhoneClientComponent>();
+			CachedInteraction = P->FindComponentByClass<UInteractionComponent>();
+			CachedBuild = P->FindComponentByClass<UBuildComponent>();
+		}
+		else
+		{
+			if (!CachedPhone.IsValid()) { CachedPhone = P->FindComponentByClass<UPhoneClientComponent>(); }
+			if (!CachedInteraction.IsValid()) { CachedInteraction = P->FindComponentByClass<UInteractionComponent>(); }
+			if (!CachedBuild.IsValid()) { CachedBuild = P->FindComponentByClass<UBuildComponent>(); }
+		}
+
+		if (const UPhoneClientComponent* Ph = CachedPhone.Get())
 		{
 			bHide = Ph->IsAnyGameUIOpen() || Ph->IsMainMenuOpen();
 		}
-		if (const UInteractionComponent* IC = P->FindComponentByClass<UInteractionComponent>())
+		if (const UInteractionComponent* IC = CachedInteraction.Get())
 		{
 			AActor* Focus = IC->GetFocusedActor();
 			bInteract = (Focus != nullptr);
 			if (Focus)
 			{
-				if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
+				if (const UBuildComponent* BC = CachedBuild.Get())
 				{
 					bPickable = BC->IsPickable(Focus);
 				}
 			}
 		}
-		if (const UBuildComponent* BC = P->FindComponentByClass<UBuildComponent>())
+		if (const UBuildComponent* BC = CachedBuild.Get())
 		{
 			bPlacing = BC->IsPlacing();
 			bPlacementValid = BC->IsPlacementValid();

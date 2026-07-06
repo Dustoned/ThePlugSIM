@@ -232,7 +232,10 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const bool bUiBlocking = Ph && (Ph->IsOpen() || Ph->IsPauseOpen() || Ph->IsMainMenuOpen() || Ph->IsSettingsOpen());
 
 	FName Id = Inv ? Inv->GetActiveItemId() : NAME_None;
-	const FString IdStr = Id.ToString();
+	// Id.ToString() alleen bij een echte item-wissel: de prefix-checks hieronder draaien per frame,
+	// maar een verse FString-allocatie per frame is onnodige heap-churn.
+	if (Id != CachedIdStrId) { CachedIdStrId = Id; CachedIdStr = Id.ToString(); }
+	const FString& IdStr = CachedIdStr;
 	const bool bHasItem = Inv && !Id.IsNone() && !bUiBlocking; // Cash mag nu wél (toont het bedrag)
 
 	// Geladen joint: hou je vloei vast met wiet erin geladen -> die info hoort HIER bij de hand-preview
@@ -250,8 +253,9 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 
 	if (!bHasItem) { return; }
 
-	// Bouw een sleutel zodat we de tekst alleen bij wijziging updaten. Neem de ACTIEVE stack-id + diens
-	// Quality mee, zodat wisselen tussen 2 gelijke items (bv. 2 flessen) én het water-niveau live verversen.
+	// Change-guard: tekst alleen bij wijziging herbouwen. Neem de ACTIEVE stack-id + diens Quality mee,
+	// zodat wisselen tussen 2 gelijke items (bv. 2 flessen) én het water-niveau live verversen. Losse
+	// getypte velden i.p.v. een geprintfde sleutel-string -> geen FString-allocatie per frame.
 	const int32 ActiveSid = Inv->GetActiveStackId();
 	const TArray<FInventoryStack>& Stacks = Inv->GetStacks();
 	const int32 ActiveIdx = Inv->FindStackById(ActiveSid);
@@ -259,9 +263,15 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	const int32 Qty = ActiveStack ? ActiveStack->Quantity : Inv->GetQuantity(Id);
 	const float Thc = ActiveStack ? ActiveStack->Quality : Inv->GetItemQuality(Id);
 	const float Qpct = ActiveStack ? ActiveStack->QualityPct : Inv->GetItemQualityPct(Id);
-	const FString Key = FString::Printf(TEXT("%s|%d|%.0f|%.0f|%d|%s"), *IdStr, Qty, Thc, Qpct, ActiveSid, *RollDesc);
-	if (Key == LastKey) { return; }
-	LastKey = Key;
+	const int32 ThcR = FMath::RoundToInt(Thc);   // hele punten: zelfde korrel als de oude %.0f-sleutel
+	const int32 QpctR = FMath::RoundToInt(Qpct);
+	if (Id == LastId && Qty == LastQty && ThcR == LastThcR && QpctR == LastQpctR
+		&& ActiveSid == LastSid && bRollLoaded == bLastRollLoaded && RollDesc == LastRollDesc)
+	{
+		return;
+	}
+	LastId = Id; LastQty = Qty; LastThcR = ThcR; LastQpctR = QpctR; LastSid = ActiveSid;
+	bLastRollLoaded = bRollLoaded; LastRollDesc = RollDesc;
 
 	// Gedeelde detail-DATA (type-tag + kleur + hint + stat-rijen). Zelfde bron als de inventory-quick-view,
 	// zodat de twee NOOIT uit elkaar lopen. De rendering (AddStat/Qty/naam-kleur) blijft hier in de widget.

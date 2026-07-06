@@ -372,6 +372,15 @@ protected:
 	void LeaveAngry();
 	static float ClampAttr(float V) { return FMath::Clamp(V, 0.f, 100.f); }
 
+	// PERF-cache: component-lookups op de dealende speler-pawn (FindComponentByClass = lineaire scan over
+	// alle componenten). Per-pawn gekeyed (co-op: meerdere spelers kunnen dezelfde NPC bedienen) en weak
+	// (pawn kan verdwijnen/respawnen) -> validity-check bij gebruik, anders gewoon opnieuw opzoeken.
+	TWeakObjectPtr<AActor> CachedPhoneOwner;
+	TWeakObjectPtr<class UPhoneClientComponent> CachedPhoneClient;
+	TWeakObjectPtr<APawn> CachedTradePawn;
+	TWeakObjectPtr<UEconomyComponent> CachedTradeEconomy;
+	TWeakObjectPtr<UInventoryComponent> CachedTradeInventory;
+
 	// Loop/idle zelf afspelen (single-node): de meegeleverde ABP_Unarmed animeert de NPC's niet. We
 	// bepalen 'beweegt' uit de positie (werkt op host én client-proxy) en spelen walk/idle af.
 	UPROPERTY() TObjectPtr<class UAnimSequence> NpcIdle;

@@ -42,7 +42,9 @@ protected:
 	void BuildShell(UCanvasPanel* Root);
 	void Push(int32 Key, float Time, const FLinearColor& Color, const FString& Msg, const FString& Icon = FString());
 
-	struct FEntry { FString Msg; FString Icon; FLinearColor Color; int32 Key = -1; float Born = 0.f; float Expire = 0.f; };
+	// CachedLabel = classificatie 1x berekend bij Push (tick leest alleen de cache, geen ToLower per frame);
+	// LastAlpha = laatst gezette render-opacity (delta-gate; -1 = nog niet gezet, forceert de eerste set).
+	struct FEntry { FString Msg; FString Icon; FString CachedLabel; FLinearColor Color; int32 Key = -1; float Born = 0.f; float Expire = 0.f; float LastAlpha = -1.f; };
 	TArray<FEntry> Entries;
 
 	UPROPERTY() TObjectPtr<UVerticalBox> Stack;

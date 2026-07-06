@@ -76,4 +76,10 @@ protected:
 	FLinearColor LastGrowCol = FLinearColor::Transparent;
 	FLinearColor LastWaterCol = FLinearColor::Transparent;
 	FLinearColor LastHealthCol = FLinearColor::Transparent;
+
+	// Per-label cache van de laatst gezette tekst + kleur: de change-key wijzigt elke seconde (groei-teller),
+	// maar de meeste labels blijven dan gelijk -> SetText/SetColorAndOpacity alleen bij echte wijziging.
+	struct FLabelCache { FString Str; FLinearColor Col = FLinearColor(-1.f, -1.f, -1.f, -1.f); };
+	FLabelCache TitleCache, StatusCache, GrowTimeCache, WaterTxtCache, HealthTxtCache;
+	FLabelCache YieldCache, ThcCache, SoilTxtCache, SoilUsesCache, UpgradesCache;
 };

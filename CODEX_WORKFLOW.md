@@ -111,6 +111,9 @@ UnrealEditor.exe "<pad>\ThePlugSIM.uproject" -game -windowed -resx=1600 -resy=90
 
 **Verificatie-gates (build groen ≠ klaar):**
 - Na risicowerk: proces leeft + geen `CrashReportClient` + log-markers kloppen.
+- **Boot-verificatie = tot ÍN de wereld, NOOIT alleen tot het hoofdmenu.** Wacht op de marker
+  `Virtuele crowd: ... geseed` in de log — crowd/NPC/UI-werk gebeurt pas op de beach; een menu-boot
+  bewijst vrijwel niets.
 - Bij een crash-fix: boot tot voorbij de crash-plek en check de log op `0` hits van
   `EXCEPTION_ACCESS_VIOLATION|Fatal error|Assertion failed`, plus dat de relevante marker verschijnt
   (bv. `Virtuele crowd: 70 wandelaars gespreid geseed` = de crowd-spawn overleefde).

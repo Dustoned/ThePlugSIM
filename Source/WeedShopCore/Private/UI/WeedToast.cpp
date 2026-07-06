@@ -243,15 +243,15 @@ void UWeedToast::Push(int32 Key, float Time, const FLinearColor& Color, const FS
 	{
 		for (FEntry& E : Entries)
 		{
-			if (E.Key == EffectiveKey) { E.Msg = CleanMsg; E.Icon = EffectiveIcon; E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
+			if (E.Key == EffectiveKey) { E.Msg = CleanMsg; E.Icon = EffectiveIcon; E.CachedLabel = Label; E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
 		}
 	}
 	// Dubbele identieke tekst kort na elkaar niet opnieuw stapelen.
 	for (FEntry& E : Entries)
 	{
-		if (E.Msg == CleanMsg) { E.Icon = EffectiveIcon; E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
+		if (E.Msg == CleanMsg) { E.Icon = EffectiveIcon; E.CachedLabel = Label; E.Color = Color; E.Born = Now; E.Expire = Now + Dur; return; }
 	}
-	FEntry NewE; NewE.Msg = CleanMsg; NewE.Icon = EffectiveIcon; NewE.Color = Color; NewE.Key = EffectiveKey; NewE.Born = Now; NewE.Expire = Now + Dur;
+	FEntry NewE; NewE.Msg = CleanMsg; NewE.Icon = EffectiveIcon; NewE.CachedLabel = Label; NewE.Color = Color; NewE.Key = EffectiveKey; NewE.Born = Now; NewE.Expire = Now + Dur;
 	Entries.Add(NewE);
 	while (Entries.Num() > 3) { Entries.RemoveAt(0); } // max 3 meldingen tegelijk op beeld
 	LastSig.Reset(); // forceer herbouw
@@ -304,9 +304,12 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	{
 		LastSig = Sig;
 		Stack->ClearChildren();
-		for (const FEntry& E : Entries)
+		for (FEntry& E : Entries)
 		{
-			const FString Label = WeedToast_LabelFor(E.Icon, E.Msg);
+			// Classificatie komt uit de Push-cache (geen ToLower/label-berekening in de tick); de pil wordt
+			// vers gebouwd op Alpha=1 -> LastAlpha resetten zodat de fade-gate hieronder 'm direct bijzet.
+			const FString& Label = E.CachedLabel;
+			E.LastAlpha = -1.f;
 			const bool bWarn = Label == TEXT("WARNING") || Label == TEXT("HEAT");
 			const bool bMilestone = Label == TEXT("GOAL") || Label == TEXT("LEVEL");
 			const bool bRoutine = WeedToast_IsRoutineToast(Label, E.Msg, E.Color);
@@ -353,22 +356,25 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// Opacity per pil: rustig inkomen + korte fade-out, zonder neon pop.
+	// Opacity per pil: rustig inkomen + korte fade-out, zonder neon pop. Delta-gate per entry: opacity/
+	// visibility/brush ALLEEN zetten als de alpha echt wijzigde (steady-state pil = nul Slate-sets per tick;
+	// tijdens een fade wijzigt de alpha elke frame en loopt de update dus nog steeds per frame).
 	const int32 N = Stack->GetChildrenCount();
 	for (int32 i = 0; i < N && i < Entries.Num(); ++i)
 	{
-		const FEntry& E = Entries[i];
+		FEntry& E = Entries[i];
 		const float In = FMath::Clamp((Now - E.Born) / 0.22f, 0.f, 1.f);
 		const float Out = FMath::Clamp((E.Expire - Now) / 0.42f, 0.f, 1.f);
 		const float Alpha = FMath::Min(In, Out);
+		if (FMath::Abs(Alpha - E.LastAlpha) <= 0.002f) { continue; }
 		if (UWidget* W = Stack->GetChildAt(i))
 		{
+			E.LastAlpha = Alpha;
 			W->SetRenderOpacity(Alpha);
 			W->SetVisibility(Alpha > 0.02f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 			if (UBorder* Pill = Cast<UBorder>(W))
 			{
-				const FString Label = WeedToast_LabelFor(E.Icon, E.Msg);
-				Pill->SetBrush(WeedToast_PillBrush(Label, E.Msg, E.Color, Alpha));
+				Pill->SetBrush(WeedToast_PillBrush(E.CachedLabel, E.Msg, E.Color, Alpha));
 			}
 		}
 	}

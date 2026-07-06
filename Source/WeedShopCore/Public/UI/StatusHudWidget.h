@@ -63,6 +63,8 @@ protected:
 	int32 LastMinuteShown = -1;   // H*60+M
 	int32 LastHeatShown = -1;
 	int32 LastHeatVisible = -1;
+	float LastHeatPct = -1.f;     // laatst gezette HeatBar-percent (0..1); delta-gate op SetPercent
+	int32 LastHeatBand = -1;      // kleur-band van de HeatBar-fill (0=laag, 1=>=40%, 2=>=75%); -1 onbekend
 	float HeatVisibleTimer = 0.f; // toont heat nog kort na een wijziging, ook als hij terug naar 0 gaat
 	int32 LastLevelShown = -1;
 	int32 LastStonedKey = -1;     // Secs*1000 + XpBoost

@@ -270,8 +270,20 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 		if (HeatBar)
 		{
-			HeatBar->SetPercent(H / 100.f);
-			HeatBar->SetFillColorAndOpacity(H >= 75.f ? FLinearColor(1.f, 0.25f, 0.2f) : (H >= 40.f ? FLinearColor(1.f, 0.42f, 0.f) : FLinearColor(1.f, 0.55f, 0.2f)));
+			// Delta-gate: SetPercent alleen bij een echte wijziging; de fill-kleur alleen bij een band-wissel
+			// (identiek werk overslaan -> geen redundante Slate-invalidaties per tick).
+			const float Pct = H / 100.f;
+			if (FMath::Abs(Pct - LastHeatPct) > 0.004f)
+			{
+				LastHeatPct = Pct;
+				HeatBar->SetPercent(Pct);
+			}
+			const int32 Band = (H >= 75.f) ? 2 : ((H >= 40.f) ? 1 : 0);
+			if (Band != LastHeatBand)
+			{
+				LastHeatBand = Band;
+				HeatBar->SetFillColorAndOpacity(Band == 2 ? FLinearColor(1.f, 0.25f, 0.2f) : (Band == 1 ? FLinearColor(1.f, 0.42f, 0.f) : FLinearColor(1.f, 0.55f, 0.2f)));
+			}
 		}
 	}
 	if (GS->GetLeveling())

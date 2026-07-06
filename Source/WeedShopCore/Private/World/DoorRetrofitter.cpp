@@ -1338,9 +1338,12 @@ void ADoorRetrofitter::ScanAndConvert()
 				Cb->SetActorLocation(Dest + FVector(0.f, 0.f, 110.f), false, nullptr, ETeleportType::TeleportPhysics);
 				// De patrouille-staat bij z'n spawner mee-resetten: anders liep hij vanaf de straat z'n oude
 				// entry-ketting (boven in het gebouw) weer terug op i.p.v. gewoon verder te patrouilleren.
-				for (TActorIterator<ACustomerSpawner> SpIt2(W); SpIt2; ++SpIt2)
+				// PERF: spawner-registry (O(spawners)) i.p.v. TActorIterator over alle actors - zelfde set.
+				// De registry is per-proces, dus wel op wereld filteren (PIE/co-op-in-1-proces).
+				for (const TWeakObjectPtr<ACustomerSpawner>& WSp2 : ACustomerSpawner::GetAll())
 				{
-					if (IsValid(*SpIt2)) { SpIt2->NotifyWalkerTeleported(Cb); }
+					ACustomerSpawner* Sp2 = WSp2.Get();
+					if (IsValid(Sp2) && Sp2->GetWorld() == W) { Sp2->NotifyWalkerTeleported(Cb); }
 				}
 				ResidentStuckSince.Remove(Cb);
 				UE_LOG(LogWeedShop, Verbose, TEXT("Bewoner %s nam de lift: van Z %.0f naar de straat (%.0f, %.0f)"), *Cb->NpcId.ToString(), L.Z, Dest.X, Dest.Y);
@@ -3825,11 +3828,14 @@ void ADoorRetrofitter::TickVirtualCrowd()
 			// Dichtstbijzijnde spawner adopteert (patrouille-aansturing).
 			ACustomerSpawner* Near = nullptr;
 			float BD = TNumericLimits<float>::Max();
-			for (TActorIterator<ACustomerSpawner> SpIt(W); SpIt; ++SpIt)
+			// PERF: spawner-registry (O(spawners)) i.p.v. TActorIterator over alle actors - zelfde set.
+			// De registry is per-proces, dus wel op wereld filteren (PIE/co-op-in-1-proces).
+			for (const TWeakObjectPtr<ACustomerSpawner>& WSp : ACustomerSpawner::GetAll())
 			{
-				if (!IsValid(*SpIt)) { continue; }
-				const float Dd = FVector::DistSquared2D(SpIt->GetActorLocation(), Ground);
-				if (Dd < BD) { BD = Dd; Near = *SpIt; }
+				ACustomerSpawner* Sp = WSp.Get();
+				if (!IsValid(Sp) || Sp->GetWorld() != W) { continue; }
+				const float Dd = FVector::DistSquared2D(Sp->GetActorLocation(), Ground);
+				if (Dd < BD) { BD = Dd; Near = Sp; }
 			}
 			if (Near) { Near->AdoptWalker(B); }
 		}
