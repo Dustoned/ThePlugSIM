@@ -643,7 +643,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] V.3 Minder stutters bij nieuwe NPC's? (modulaire-parts-preload, commit 84053ad1)
 - [ ] V.4 Dag/nacht-wissel zonder haper? (lampen-flip-cap, commit efc76089)
 - [ ] V.5 Toasts: 1x per actie, iets langer zichtbaar; hotbar vult bij koop (commits f86f6408/bab783da)
-- [ ] AUDIT kit-toggles (ontdekt 07-06 bij ND7.12): het W_Toggle-template wijzigt z'n IsToggled-property
+- [x] AUDIT kit-toggles GEFIXT (07-06, commit 109d23fe): poll de binnenste UCheckBox i.p.v. de dode IsToggled. Het W_Toggle-template wijzigt z'n IsToggled-property
   NIET bij een klik (alleen de animatie draait) -> de reflectie-poll in SettingsWidget ziet de wissel nooit.
   Interaction-prompt is al omgezet naar een eigen ON/OFF-knop; ALLE andere kit-toggles (Shadows, Lumen,
   Controls overlay, audio, third-person...) nalopen en waar dood: zelfde knop-patroon toepassen.
