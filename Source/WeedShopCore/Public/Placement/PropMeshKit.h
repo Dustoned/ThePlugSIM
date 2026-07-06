@@ -15,6 +15,10 @@
 #include "Placement/PlaceableTypes.h"
 #include "Inventory/InventoryComponent.h"
 
+// Forward-decl (geen zware UI-header hier): de per-strain kleur uit WeedUiStyle, zodat de FYSIEKE
+// gedropte bag/seed dezelfde strain-kleur krijgt als het UI-icoon -> je ziet aan de kleur wat er ligt.
+namespace WeedUI { WEEDSHOPCORE_API FLinearColor TagColorForItem(FName ItemId, float Value, float Sat); }
+
 namespace PropKit
 {
 	// LET OP: deze helpers worden óók runtime aangeroepen (in SetupVisual), dus GEEN
@@ -137,7 +141,7 @@ namespace PropKit
 		FRotator Rot = FRotator::ZeroRotator;
 		if      (S.StartsWith(TEXT("WetBud_")))     { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.20f, 0.42f, 0.18f); }
 		else if (S.StartsWith(TEXT("Bud_")))        { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.26f, 0.55f, 0.22f); }
-		else if (S.StartsWith(TEXT("Bag_")))        { Size = FVector(8.f, 5.f, 10.f); Col = FLinearColor(0.70f, 0.62f, 0.42f); }
+		else if (S.StartsWith(TEXT("Bag_")))        { Size = FVector(8.f, 5.f, 10.f); Col = WeedUI::TagColorForItem(ItemId, 0.55f, 0.7f); } // strain-kleur (matcht het UI-icoon)
 		else if (S.StartsWith(TEXT("Joint_")))
 		{
 			// Echt gescand joint-model (gram-tier kiest klein/dik), liggend langs X, met z'n eigen
@@ -162,7 +166,7 @@ namespace PropKit
 		else if (S.StartsWith(TEXT("Bubble_")))     { Size = FVector(6.f, 6.f, 4.f);  Col = FLinearColor(0.74f, 0.62f, 0.40f); } // blonde bubble hash
 		else if (S.StartsWith(TEXT("Moonrock_")))   { Size = FVector(7.f, 7.f, 7.f);  Col = FLinearColor(0.18f, 0.28f, 0.16f); } // dark coated bud
 		else if (S.StartsWith(TEXT("Oil_")))        { M = Cylinder(); Size = FVector(3.f, 3.f, 7.f); Col = FLinearColor(0.86f, 0.54f, 0.10f); } // amber oil vial
-		else if (S.StartsWith(TEXT("Seed_")))       { Size = FVector(2.5f, 2.5f, 2.5f); Col = FLinearColor(0.45f, 0.36f, 0.22f); }
+		else if (S.StartsWith(TEXT("Seed_")))       { Size = FVector(2.5f, 2.5f, 2.5f); Col = WeedUI::TagColorForItem(ItemId, 0.5f, 0.65f); } // strain-kleur (matcht het UI-icoon)
 		else if (S.StartsWith(TEXT("WaterBottle"))) { M = Cylinder(); Size = FVector(6.f, 6.f, 16.f); Col = FLinearColor(0.30f, 0.45f, 0.65f); }
 		else if (S.StartsWith(TEXT("Papers_")))     { Size = FVector(6.f, 1.5f, 9.f); Col = FLinearColor(0.90f, 0.88f, 0.80f); }
 		else if (S.StartsWith(TEXT("Soil_")))       { Size = FVector(9.f, 6.f, 11.f); Col = FLinearColor(0.30f, 0.22f, 0.16f); }
