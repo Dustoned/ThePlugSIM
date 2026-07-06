@@ -39,6 +39,7 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> HintText; // korte hint onderaan (wat je ermee doet)
 
 	float Shown = 0.f;       // huidige fade (0..1)
+	FName DisplayedId;       // item dat NU gerenderd is (kan achterlopen op het actieve item tijdens de switch-fade)
 
 	// Change-guard: herbouw tekst alleen bij wijziging. Losse velden i.p.v. een geprintfde
 	// sleutel-string zodat de tick geen verse FString per frame alloceert (heap-churn).

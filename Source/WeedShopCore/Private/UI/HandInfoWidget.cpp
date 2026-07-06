@@ -231,27 +231,31 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// Verberg de popup als een vol-scherm menu open is (telefoon-apps/pauze/titel).
 	const bool bUiBlocking = Ph && (Ph->IsOpen() || Ph->IsPauseOpen() || Ph->IsMainMenuOpen() || Ph->IsSettingsOpen());
 
-	FName Id = Inv ? Inv->GetActiveItemId() : NAME_None;
-	// Id.ToString() alleen bij een echte item-wissel: de prefix-checks hieronder draaien per frame,
-	// maar een verse FString-allocatie per frame is onnodige heap-churn.
+	const FName WantId = (Inv && !bUiBlocking) ? Inv->GetActiveItemId() : NAME_None; // wat de speler NU vasthoudt
+
+	// SWITCH-THROUGH FADE: bij een ANDER item eerst helemaal uitfaden -> dan pas de inhoud wisselen -> weer
+	// infaden. Zo verschijnt/verdwijnt de kaart smooth als EEN geheel; nooit half-gewisselde of leftover-chips
+	// (het oude probleem: content wisselde instant terwijl de kaart nog zichtbaar was).
+	const bool bSwitching = !DisplayedId.IsNone() && WantId != DisplayedId;
+	const float Target = (!WantId.IsNone() && !bSwitching) ? 1.f : 0.f;
+	Shown = FMath::FInterpTo(Shown, Target, DeltaTime, 16.f);
+	Card->SetRenderOpacity(Shown);
+	Card->SetVisibility(Shown > 0.02f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	if (Shown <= 0.04f && DisplayedId != WantId)
+	{
+		DisplayedId = WantId;   // volledig onzichtbaar -> nu pas de inhoud overnemen (geen leftover-frame)
+		LastId = NAME_None;     // forceer de rebuild hieronder voor het nieuwe item
+	}
+	if (WantId.IsNone() || DisplayedId.IsNone() || WantId != DisplayedId) { return; } // niks te tonen / nog aan het uitfaden vóór de swap
+
+	const FName Id = DisplayedId; // vanaf hier rendert alles het GEDISPLAYde item
 	if (Id != CachedIdStrId) { CachedIdStrId = Id; CachedIdStr = Id.ToString(); }
 	const FString& IdStr = CachedIdStr;
-	const bool bHasItem = Inv && !Id.IsNone() && !bUiBlocking; // Cash mag nu wél (toont het bedrag)
 
 	// Geladen joint: hou je vloei vast met wiet erin geladen -> die info hoort HIER bij de hand-preview
 	// (niet bij de controls-kaart). RollDesc is de opgeslagen snapshot ("2g Silver Haze - 11% THC, ...").
 	const bool bRollLoaded = Ph && IdStr.StartsWith(TEXT("Papers_")) && Ph->IsRollLoadedUI();
 	const FString RollDesc = bRollLoaded ? Ph->GetRollLoadDesc() : FString();
-
-	// Fade in/uit.
-	const float Target = bHasItem ? 1.f : 0.f;
-	Shown = FMath::FInterpTo(Shown, Target, DeltaTime, 12.f);
-	Card->SetRenderOpacity(Shown);
-	// Volledig dichtklappen als 'ie weg is -> nooit een leeg kader/blok dat blijft hangen.
-	Card->SetVisibility(Shown > 0.02f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	if (Shown <= 0.02f && !bHasItem) { return; }
-
-	if (!bHasItem) { return; }
 
 	// Change-guard: tekst alleen bij wijziging herbouwen. Neem de ACTIEVE stack-id + diens Quality mee,
 	// zodat wisselen tussen 2 gelijke items (bv. 2 flessen) én het water-niveau live verversen. Losse
