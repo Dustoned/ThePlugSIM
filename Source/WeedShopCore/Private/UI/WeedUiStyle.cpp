@@ -358,6 +358,17 @@ namespace WeedUI
 			const int32 Cap = UPhoneClientComponent::ContainerCapacity(Id);
 			AddStat(TEXT("Capacity"), FString::Printf(TEXT("up to %d g"), Cap));
 		}
+		else if (IdStr.StartsWith(TEXT("WaterBottle")))
+		{
+			// ND7.9: waterstand ook in de quick-view (hand-preview had 'm al). Vulling zit in het
+			// Quality-veld van de stack -> hier binnen via Thc doorgegeven.
+			FBottleDef Bd;
+			if (GetBottleDef(Id, Bd))
+			{
+				const int32 Fill = FMath::Clamp(FMath::RoundToInt(Thc), 0, Bd.Charges);
+				AddStat(TEXT("Fill"), FString::Printf(TEXT("%d / %d waterings"), Fill, Bd.Charges));
+			}
+		}
 
 		return Info;
 	}

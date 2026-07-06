@@ -135,17 +135,15 @@ void AWeedShopHUD::DrawHUD()
 			DrawRect(FLinearColor(0.5f, 0.85f, 1.f, 0.95f), BX, BY, BW * GFrac, BH);
 		}
 
-		// Drop-inhouden indicator (midden-onder): hou Q ingedrukt om te droppen.
+		// Drop-inhouden indicator (hou Q): ZELFDE compacte balk-stijl als de pickup-hold (netter dan de
+		// grote balk + tekst). Zelfde maat/plek, oranje vulling zodat 't als "droppen" leest.
 		const float DFrac = Ph2->GetDropHoldFrac();
 		if (DFrac > 0.f)
 		{
 			const float CX = Canvas ? Canvas->ClipX * 0.5f : 640.f;
 			const float CY = Canvas ? Canvas->ClipY * 0.5f : 360.f;
-			const float BW = 220.f, BH = 16.f;
-			const float BX = CX - BW * 0.5f, BY = CY + 70.f;
-			DrawText(TEXT("Dropping item...  (hold Q)"), FLinearColor(1.f, 0.85f, 0.6f), BX, BY - 22.f, Font);
-			DrawRect(WeedUI::ColWell(0.85f), BX, BY, BW, BH);
-			DrawRect(FLinearColor(0.95f, 0.65f, 0.25f, 0.95f), BX, BY, BW * DFrac, BH);
+			DrawRect(WeedUI::ColWell(0.9f), CX - 60.f, CY + 90.f, 160.f, 8.f);
+			DrawRect(FLinearColor(1.f, 0.62f, 0.22f, 0.95f), CX - 60.f, CY + 90.f, 160.f * DFrac, 8.f);
 		}
 	}
 
