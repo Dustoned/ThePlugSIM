@@ -287,7 +287,10 @@ void WeedShop_ApplyBeachShadows(bool bPotato)
 	else
 	{
 		WeedShop_ApplyVSM(false);                // VSM aan
-		WeedShop_ApplyBeachShadowQuality(false); // zet r.ShadowQuality terug op 3
+		// Tier-bewust kwaliteit-profiel: op Potato het getunede ZUINIGE VSM-profiel (kwart-res moving,
+		// harde rays - expliciet flikkervrij ontworpen) i.p.v. hardcoded full-res. De oude hardcoded
+		// `false` gaf op Potato+Shadows-aan een half-potato/half-quality-mengvorm = schaduw-tears.
+		WeedShop_ApplyBeachShadowQuality(WeedShop_ReadTier() <= -1);
 	}
 }
 
@@ -311,7 +314,7 @@ void WeedShop_ApplyRayTracing(bool bOff)
 // Grafische kwaliteit-tier. Tier -1 = Potato (onder Low): scalability 0 PLUS extra agressieve
 // verlagingen voor hele zwakke pc's. Tier 0..3 = Low/Medium/High/Epic (puur scalability, cvars
 // terug naar normaal zodat omhoog-schakelen vanuit Potato alles weer herstelt).
-void WeedShop_ApplyGraphicsTier(int32 Tier)
+void WeedShop_ApplyGraphicsTier(int32 Tier, bool bSkipFeatureGates)
 {
 	const bool bPotato = (Tier <= -1);
 	const int32 Scal = bPotato ? 0 : FMath::Clamp(Tier, 0, 3);
@@ -367,12 +370,17 @@ void WeedShop_ApplyGraphicsTier(int32 Tier)
 	// --- LUMEN: de #1 GPU-kost. Alleen op EPIC (software-Lumen, SDF-only - zie WeedShop_ApplyLumen).
 	//     Potato/Low/Medium/High draaien zonder (de speler vindt de Lumen-uit-look prima), wat op High
 	//     ~20-25 FPS scheelt. Epic blijft de mooie-maar-dure optie.
-	WeedShop_ApplyLumen(Tier < 3);
-	// --- RAY TRACING + VIRTUAL SHADOW MAPS: zware render-features die de Potato-tier vroeger NIET uitzette ---
-	// RT-effecten NOOIT via een preset (ook niet op Epic): per-frame TLAS over de hele stad = te zwaar.
-	// Alleen de aparte "Ray tracing (experimental)"-toggle (RTOff-vlag) zet ze aan.
-	WeedShop_ApplyRayTracing(true);
-	WeedShop_ApplyVSM(Tier <= 0);        // VSM uit op Potato + Low (gewone shadow maps = veel goedkoper)
+	// bSkipFeatureGates (boot-pad): de aanroeper zet Lumen/RT/VSM er DIRECT na met de user-toggle-waarden.
+	// Ze hier ook zetten = VSM-pool slopen+heralloceren (UIT->AAN, gemeten ~2-4s in de wereld-load) voor niks.
+	if (!bSkipFeatureGates)
+	{
+		WeedShop_ApplyLumen(Tier < 3);
+		// --- RAY TRACING + VIRTUAL SHADOW MAPS: zware render-features die de Potato-tier vroeger NIET uitzette ---
+		// RT-effecten NOOIT via een preset (ook niet op Epic): per-frame TLAS over de hele stad = te zwaar.
+		// Alleen de aparte "Ray tracing (experimental)"-toggle (RTOff-vlag) zet ze aan.
+		WeedShop_ApplyRayTracing(true);
+		WeedShop_ApplyVSM(Tier <= 0);        // VSM uit op Potato + Low (gewone shadow maps = veel goedkoper)
+	}
 
 	// --- SCHADUWEN + dure GI-bijdragen per tier (grootste winst na Lumen) ---
 	const bool bEpic = (Tier >= 3);

@@ -86,7 +86,9 @@ WEEDSHOPCORE_API void WeedShop_ApplyLumen(bool bLumenOff);
 // Grafische kwaliteit-tier toepassen. Tier: -1 = Potato (onder Low, voor zwakke pc's:
 // scalability 0 + 50% render-resolutie, minimale textures/streaming, lage view-distance/
 // foliage/schaduwen, Lumen uit), 0 = Low, 1 = Medium, 2 = High, 3 = Epic.
-WEEDSHOPCORE_API void WeedShop_ApplyGraphicsTier(int32 Tier);
+// bSkipFeatureGates: Lumen/RT/VSM-gates overslaan (boot-pad zet ze er direct na met de user-toggles
+// -> voorkomt dure dubbele VSM-pool-toggles die de wereld-load seconden kostten).
+WEEDSHOPCORE_API void WeedShop_ApplyGraphicsTier(int32 Tier, bool bSkipFeatureGates = false);
 
 // Motion blur aan/uit + de cvar-gebaseerde grafische vlaggen (Lumen/Potato/MotionBlur) in
 // Saved/GraphicsConfig.txt als geheel lezen/schrijven (zo wist het zetten van één vlag de andere niet).

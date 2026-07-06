@@ -197,7 +197,9 @@ void ADayNightController::BeginPlay()
 		const bool bMbOff = GfxTxt.Contains(TEXT("MotionBlurOff=1"));
 		bVSMOff = GfxTxt.Contains(TEXT("VSMOff=1"));
 		const bool bRTOff = GfxTxt.Contains(TEXT("RTOff=1"));
-		WeedShop_ApplyGraphicsTier(WeedShop_ReadTier()); // volledige tier: scalability + console-prio cvars
+		// bSkipFeatureGates=true: Lumen/RT/VSM worden hieronder DIRECT met de user-toggle-waarden gezet;
+		// de tier ze eerst ook laten zetten = VSM UIT->AAN pool-heralloc (~2-4s wereld-load) voor niks.
+		WeedShop_ApplyGraphicsTier(WeedShop_ReadTier(), true); // volledige tier: scalability + console-prio cvars
 		WeedShop_ApplyLumen(bLumenOff);
 		WeedShop_ApplyVSM(bVSMOff);
 		WeedShop_ApplyRayTracing(bRTOff);
