@@ -231,7 +231,7 @@ void UWeedToast::NativeDestruct()
 
 void UWeedToast::Push(int32 Key, float Time, const FLinearColor& Color, const FString& Msg, const FString& Icon)
 {
-	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	const double Now = FPlatformTime::Seconds(); // ECHTE tijd: bevriest niet bij pauze/menu (zie FEntry-comment)
 	const FString CleanMsg = WeedToast_CompactText(Msg);
 	const FString EffectiveIcon = Icon.IsEmpty() ? WeedToast_AutoIcon(CleanMsg, Color) : Icon;
 	const FString Label = WeedToast_LabelFor(EffectiveIcon, CleanMsg);
@@ -288,7 +288,7 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	const double Now = FPlatformTime::Seconds(); // ECHTE tijd (zie FEntry): pauze/menu mag een toast niet laten hangen
 	// Verlopen meldingen opruimen.
 	bool bRemoved = false;
 	for (int32 i = Entries.Num() - 1; i >= 0; --i)
@@ -363,8 +363,8 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	for (int32 i = 0; i < N && i < Entries.Num(); ++i)
 	{
 		FEntry& E = Entries[i];
-		const float In = FMath::Clamp((Now - E.Born) / 0.22f, 0.f, 1.f);
-		const float Out = FMath::Clamp((E.Expire - Now) / 0.42f, 0.f, 1.f);
+		const float In = (float)FMath::Clamp((Now - E.Born) / 0.22, 0.0, 1.0);
+		const float Out = (float)FMath::Clamp((E.Expire - Now) / 0.42, 0.0, 1.0);
 		const float Alpha = FMath::Min(In, Out);
 		if (FMath::Abs(Alpha - E.LastAlpha) <= 0.002f) { continue; }
 		if (UWidget* W = Stack->GetChildAt(i))

@@ -44,7 +44,9 @@ protected:
 
 	// CachedLabel = classificatie 1x berekend bij Push (tick leest alleen de cache, geen ToLower per frame);
 	// LastAlpha = laatst gezette render-opacity (delta-gate; -1 = nog niet gezet, forceert de eerste set).
-	struct FEntry { FString Msg; FString Icon; FString CachedLabel; FLinearColor Color; int32 Key = -1; float Born = 0.f; float Expire = 0.f; float LastAlpha = -1.f; };
+	// Born/Expire in ECHTE tijd (FPlatformTime::Seconds, double): game-tijd bevriest bij pauze/menu ->
+	// een toast bleef dan halverwege de fade hangen en verliep nooit. Real-time = altijd weg-faden.
+	struct FEntry { FString Msg; FString Icon; FString CachedLabel; FLinearColor Color; int32 Key = -1; double Born = 0.0; double Expire = 0.0; float LastAlpha = -1.f; };
 	TArray<FEntry> Entries;
 
 	UPROPERTY() TObjectPtr<UVerticalBox> Stack;
