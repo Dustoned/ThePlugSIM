@@ -616,26 +616,26 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 **UI/UX:**
 - [x] ND7.1 Gevulde bag-iconen tinten in de STRAIN-kleur (zoals strain-tags) i.p.v. generieke baggie-kleur. [WeedUiStyle ItemIcon/tint]
 - [x] ND7.5 "Hoeveel?"-sliders (bag-popup e.d.) starten standaard in het MIDDEN; geldt bij voorkeur voor alle vergelijkbare hoeveelheid-sliders. [DealWidget AmountRoot, InventoryWidget split]
-- [ ] ND7.6 Hover-info (tooltip zoals inventory) OVERAL waar items staan zonder hand-preview/quick-view — o.a. deal-UI, pickers, storage-grids. [WeedItemPickGrid, DealWidget, ShelfWidget]
+- [x] ND7.6 Hover-info (tooltip zoals inventory) OVERAL waar items staan zonder hand-preview/quick-view — o.a. deal-UI, pickers, storage-grids. [WeedItemPickGrid, DealWidget, ShelfWidget]
 - [ ] ND7.7 Checkout-knop in fullscreen shop FLASHT bij klik (rebuild-flits) — persistente-UI-regel checken/fixen. [PhoneWidget store]
 - [ ] ND7.9 (LIJKT AL AANWEZIG via gedeelde BuildItemDetail - speler verifieert; zo niet: exact item melden) Inv quick-view mist info die elders wel zichtbaar is (bv. "3/3 water" bij waterfles) — quick-view compleet maken. [WeedUiStyle BuildItemDetail]
 - [x] ND7.15 Deal-UI: "TO contact"-regel weg; alleen "10/45"-notatie -> vaste layout, geen UI-verschuiving als stats wijzigen tijdens sliden. [DealWidget header]
 - [x] ND7.11 Scroll-hint uit de placement-controls (alleen nog in de control-helper rechtsonder). [BuildComponent/placement-hints]
-- [ ] ND7.12 Nieuwe setting "Interaction prompt" (naast controls-overlay), STANDAARD AAN (besluit 07-06). Uitgezet: center-prompt weg, interactie-info rechtsonder in de control-helper met beschrijvende tekst (bv. "Go to floor 3"). [InteractionComponent, HotkeyHintWidget, SettingsWidget]
+- [x] ND7.12 Nieuwe setting "Interaction prompt" (naast controls-overlay), STANDAARD AAN (besluit 07-06). Uitgezet: center-prompt weg, interactie-info rechtsonder in de control-helper met beschrijvende tekst (bv. "Go to floor 3"). [InteractionComponent, HotkeyHintWidget, SettingsWidget]
 
 **Deal/inventory-interactie:**
-- [ ] ND7.10 Deal-geef-vak: bags NIET meer klikbaar — terugpakken werkt exact zoals erin doen: terug-SLEPEN, shift-klik = hele stack, alt-drag = 1 stuk (besluit 07-06). [DealWidget/DealBagCell]
-- [ ] ND7.13 Deals: ook vanaf de HOTBAR naar het customer/geef-slot kunnen slepen (nu alleen vanuit inventory-kolom). [DealWidget, HotbarWidget drag]
-- [ ] ND7.14 Universeel sleep-gedrag: ALT-drag = altijd 1 item (geen popup); SHIFT-klik = hele stack direct naar het andere open storage-scherm. Overal (inv<->shelf/fridge/deal). [InventoryWidget, ShelfWidget, WeedItemPickGrid]
+- [x] ND7.10 Deal-geef-vak: bags NIET meer klikbaar — terugpakken werkt exact zoals erin doen: terug-SLEPEN, shift-klik = hele stack, alt-drag = 1 stuk (besluit 07-06). [DealWidget/DealBagCell]
+- [x] ND7.13 Deals: ook vanaf de HOTBAR naar het customer/geef-slot kunnen slepen (nu alleen vanuit inventory-kolom). [DealWidget, HotbarWidget drag]
+- [x] ND7.14 Universeel sleep-gedrag: ALT-drag = altijd 1 item (geen popup); SHIFT-klik = hele stack direct naar het andere open storage-scherm. Overal (inv<->shelf/fridge/deal). [InventoryWidget, ShelfWidget, WeedItemPickGrid]
 
 **Gameplay/balans:**
-- [ ] ND7.4 Heat op zak (besluit 07-06): limiet ~25g. Naar BUITEN (uit je apartment) met meer dan de limiet = een vaste extra heat-% naar rato van het teveel (rustig oplopend, niet agressief); ga je weer naar binnen dan VERVALT die extra heat direct, tot je weer met teveel naar buiten gaat. [HeatComponent + InventoryComponent gram-telling + DoorRetrofitter binnen/buiten]
-- [ ] ND7.8 Max-stack-groottes van ALLE items nalopen/balansen (audit + tabel). [InventoryComponent, Data]
-- [ ] ND7.16 Klok linksboven wordt UPGRADE: "horloge" direct koopbaar in de upgrades-app voor EUR 999 (besluit 07-06); zonder horloge zie je de tijd alleen via de telefoon. [UpgradeComponent, StatusHudWidget, PhoneWidget]
+- [x] ND7.4 Heat op zak (besluit 07-06): limiet ~25g. Naar BUITEN (uit je apartment) met meer dan de limiet = een vaste extra heat-% naar rato van het teveel (rustig oplopend, niet agressief); ga je weer naar binnen dan VERVALT die extra heat direct, tot je weer met teveel naar buiten gaat. [HeatComponent + InventoryComponent gram-telling + DoorRetrofitter binnen/buiten]
+- [x] ND7.8 (AUDIT klaar 07-06: bags=10/slot, flessen=1/slot, al het andere ONBEPERKT per slot behalve gewichtslimiet; caps toevoegen = speler-besluit, getallen welkom) Max-stack-groottes van ALLE items nalopen/balansen (audit + tabel). [InventoryComponent, Data]
+- [x] ND7.16 Klok linksboven wordt UPGRADE: "horloge" direct koopbaar in de upgrades-app voor EUR 999 (besluit 07-06); zonder horloge zie je de tijd alleen via de telefoon. [UpgradeComponent, StatusHudWidget, PhoneWidget]
 
 **Settings/audio:**
 - [x] ND7.2 Level-up-geluid standaard ~50% zachter. [LevelUpWidget/audio]
-- [ ] ND7.3 Third-person (B) wordt settings-toggle met "(experimental)"-label, standaard UIT. [SettingsWidget, ThePlugSIMCharacter]
+- [x] ND7.3 Third-person (B) wordt settings-toggle met "(experimental)"-label, standaard UIT. [SettingsWidget, ThePlugSIMCharacter]
 
 ## Open speler-verificaties (fixes staan er, alleen nog testen — NIET afvinken tot bevestigd)
 - [ ] V.1 Schaduw-tears weg? (tier-bewust VSM-profiel, commit 38e39312) — checken op de plekken waar ze zaten
