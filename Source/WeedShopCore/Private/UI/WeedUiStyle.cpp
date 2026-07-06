@@ -1113,15 +1113,16 @@ namespace WeedUI
 			return Tex;
 		}
 
-		// Zelfde PNG maar met RGB->WIT (alpha behouden): een zwart silhouet (bv. weed_bag) wordt zo tintbaar,
-		// zodat SetColorAndOpacity het in de STRAIN-kleur kan zetten. 1x gedecodeerd + gecachet + root-kept.
-		UTexture2D* LoadWhiteByStem(const FString& Stem)
+		// Zwart lijn-art bag-icoon (bag = buitenframe, wietblad = midden; ALLES zwart in het PNG) omkleuren:
+		// het MIDDEN-gebied (het blad) wordt GROEN, de rest (bag-frame + rits) de STRAIN-kleur. Kleuren worden
+		// in de textuur GEBAKKEN (twee kleuren -> kan niet met een uniforme Slate-tint). 1x per (stem,strain) gecachet.
+		UTexture2D* LoadStrainBagTex(const FString& Stem, const FColor& StrainCol)
 		{
 			static TMap<FString, UTexture2D*> Cache;
-			const FString Key = Stem.ToLower();
+			const FString Key = Stem.ToLower() + FString::Printf(TEXT("#%02x%02x%02x"), StrainCol.R, StrainCol.G, StrainCol.B);
 			if (UTexture2D** Found = Cache.Find(Key)) { return *Found; }
 			UTexture2D* Out = nullptr;
-			if (const FString* Path = IconFileIndex().Find(Key))
+			if (const FString* Path = IconFileIndex().Find(Stem.ToLower()))
 			{
 				TArray<uint8> Raw;
 				if (FFileHelper::LoadFileToArray(Raw, **Path))
@@ -1132,7 +1133,19 @@ namespace WeedUI
 					if (Wr.IsValid() && Wr->SetCompressed(Raw.GetData(), Raw.Num()) && Wr->GetRaw(ERGBFormat::BGRA, 8, BGRA))
 					{
 						const int32 W = Wr->GetWidth(), H = Wr->GetHeight();
-						for (int32 i = 0; i + 3 < BGRA.Num(); i += 4) { BGRA[i] = 255; BGRA[i + 1] = 255; BGRA[i + 2] = 255; } // RGB->wit, alpha blijft
+						const FColor Leaf(86, 194, 96); // fris wiet-groen (sRGB)
+						// Blad-venster (midden): het frame/rits zit in de buitenrand, tussenruimte is leeg ->
+						// een ruime centrale box vangt alleen het blad. (Gemeten uit de density-map van weed_bag.)
+						const int32 X0 = (int32)(W * 0.27f), X1 = (int32)(W * 0.73f);
+						const int32 Y0 = (int32)(H * 0.30f), Y1 = (int32)(H * 0.86f);
+						for (int32 i = 0; i + 3 < BGRA.Num(); i += 4)
+						{
+							if (BGRA[i + 3] == 0) { continue; } // transparant -> laten
+							const int32 n = i / 4; const int32 x = n % W; const int32 y = n / W;
+							const bool bLeaf = (x >= X0 && x < X1 && y >= Y0 && y < Y1);
+							const FColor& C = bLeaf ? Leaf : StrainCol;
+							BGRA[i] = C.B; BGRA[i + 1] = C.G; BGRA[i + 2] = C.R; // alpha (i+3) behouden
+						}
 						Out = UTexture2D::CreateTransient(W, H, PF_B8G8R8A8);
 						if (Out)
 						{
@@ -1280,23 +1293,23 @@ namespace WeedUI
 
 	UWidget* ItemIcon(UWidgetTree* Tree, FName ItemId, float Size, int32 WaterChargesOverride, int32 RollLoadedOverride)
 	{
-		// 0) BAGS: het weed_bag/jar/sack-PNG is een ZWART silhouet -> niet tintbaar via multiply. Laad een
-		//    GEWITTE versie zodat SetColorAndOpacity het silhouet in de STRAIN-kleur zet -> de bag zelf krijgt
-		//    de strain-kleur (matcht de tag-pill). Alleen gevulde wiet-bags.
+		// 0) BAGS: het weed_bag/jar-PNG is ZWARTE lijn-art (bag-frame + wietblad, allebei zwart). Bak twee
+		//    kleuren in: het BLAD (midden) groen, het bag-FRAME de strain-kleur. Wit-tint (kleuren zijn gebakken).
 		if (ItemId.ToString().StartsWith(TEXT("Bag_")))
 		{
 			const FString Stem = ExactIconStem(ItemId);
-			if (UTexture2D* WTex = LoadWhiteByStem(Stem))
+			const FColor StrainCol = TagColorForItem(ItemId, 0.92f, 0.82f).ToFColor(true);
+			if (UTexture2D* BTex = LoadStrainBagTex(Stem, StrainCol))
 			{
-				FSlateBrush B; B.SetResourceObject(WTex);
-				const float TW = FMath::Max(1.f, (float)WTex->GetSizeX());
-				const float TH = FMath::Max(1.f, (float)WTex->GetSizeY());
+				FSlateBrush B; B.SetResourceObject(BTex);
+				const float TW = FMath::Max(1.f, (float)BTex->GetSizeX());
+				const float TH = FMath::Max(1.f, (float)BTex->GetSizeY());
 				const float Sc = (Size * 0.94f) / FMath::Max(TW, TH);
 				B.ImageSize = FVector2D(TW * Sc, TH * Sc);
 				B.DrawAs = ESlateBrushDrawType::Image;
 				UImage* Img = Tree->ConstructWidget<UImage>();
 				Img->SetBrush(B);
-				Img->SetColorAndOpacity(TagColorForItem(ItemId, 0.95f, 0.8f)); // volle strain-kleur op het witte silhouet
+				Img->SetColorAndOpacity(FLinearColor::White); // kleuren zitten in de textuur -> geen tint
 				Img->SetVisibility(ESlateVisibility::HitTestInvisible);
 				UScaleBox* Fit = Tree->ConstructWidget<UScaleBox>();
 				Fit->SetStretch(EStretch::ScaleToFit);
