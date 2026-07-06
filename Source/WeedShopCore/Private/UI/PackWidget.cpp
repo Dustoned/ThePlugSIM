@@ -199,7 +199,10 @@ void UPackWidget::BuildPackPane(UVerticalBox* Parent)
 		ContGrid = WidgetTree->ConstructWidget<UWeedItemPickGrid>();
 		ContGrid->CellSize = 74.f;
 		ContGrid->MaxVisibleRows = 2;
-		ContGrid->OnPick = [this](FName Id, int32) { SelContainer = Id; SelBags = MaxBags; RefreshPack(); };
+		// SelGrams=0 bij een NIEUWE container -> defaultt naar de VOLLE container-cap (RefreshPack r.559).
+		// Zonder dit bleef een klein gram-getal van een vorige (bag-)keuze plakken -> een jar werd dan als
+		// 1-2g "zakje" verpakt i.p.v. een volle jar. Bij dezelfde container blijft je gekozen gram staan.
+		ContGrid->OnPick = [this](FName Id, int32) { if (Id != SelContainer) { SelGrams = 0; } SelContainer = Id; SelBags = MaxBags; RefreshPack(); };
 		CRow(ContGrid, FMargin(0, 0, 0, 0));
 		NoContLabel = WeedUI::Text(WidgetTree, TEXT("No bags/jars. Buy them in the Grow shop."), 11, WeedUI::ColWarn());
 		CRow(NoContLabel, FMargin(0, 6, 0, 0));

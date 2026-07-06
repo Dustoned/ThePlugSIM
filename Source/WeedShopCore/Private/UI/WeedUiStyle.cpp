@@ -303,8 +303,7 @@ namespace WeedUI
 		// Aantal staat al groot bij de titel - hier alleen de echte eigenschappen.
 		if (UInventoryComponent::IsBag(Id))
 		{
-			AddStat(TEXT("Per bag"), FString::Printf(TEXT("%d g"), UInventoryComponent::BagGrams(Id)));
-			AddStat(TEXT("Bag count"), FString::Printf(TEXT("%d"), Qty));
+			// "Per bag"/"Bag count" NIET tonen: die staan al op de badge (5x 2g) + tag -> overbodig.
 			AddStat(TEXT("THC"), FString::Printf(TEXT("%.0f%%"), Thc));
 			AddStat(TEXT("Quality"), FString::Printf(TEXT("%.0f%%"), QualPct));
 		}
