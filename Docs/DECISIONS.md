@@ -136,3 +136,9 @@ Elke architectuur-, ontwerp- of balans-beslissing hier in 1-2 regels bijschrijve
 - **Grote kamer**: begane-grond appartement-units NApt-1 per zijde = breder (eigen groter type Apt_7x11). Scheidingswanden (SegS) ook op NAptF/AptLenF i.p.v. NApt/AptLen (anders muur dwars door de kamer).
 - **Sandbox-inventory**: ClearAll + nette set (standaard starter + plaatsbare meubels), geen bulk/alle-zaden meer.
 - **Bekende capture-bug (open)**: FindHomeForPoint kan bij gestapelde appartementen de verkeerde verdieping kiezen (Z-offset ~1 etage). Fix = 3D-afstand i.p.v. XY-only; nog niet doorgevoerd.
+
+## 2026-07-06 — ND7-dump besluiten (popup-vragen)
+- **Deal-geef-vak (ND7.10):** gegeven bags zijn NIET klikbaar; terugpakken = zelfde interactie als geven (terugslepen / shift-klik hele stack / alt-drag 1 stuk).
+- **Interaction-prompt (ND7.12):** wordt een setting naast de controls-overlay, standaard AAN. Uit = geen center-prompt; beschrijvende interactie-tekst rechtsonder. (Vervangt het besluit van 05-07 "center prompt blijft altijd".)
+- **Horloge (ND7.16):** direct koopbaar in de upgrades-app voor EUR 999; zonder horloge alleen tijd via de telefoon.
+- **Heat op zak (ND7.4):** limiet ~25g; buiten komen met meer = vaste extra heat-%% naar rato van het teveel (rustig oplopend); binnen (apartment) vervalt de extra heat direct.

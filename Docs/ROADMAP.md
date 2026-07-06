@@ -621,17 +621,17 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] ND7.9 (LIJKT AL AANWEZIG via gedeelde BuildItemDetail - speler verifieert; zo niet: exact item melden) Inv quick-view mist info die elders wel zichtbaar is (bv. "3/3 water" bij waterfles) — quick-view compleet maken. [WeedUiStyle BuildItemDetail]
 - [x] ND7.15 Deal-UI: "TO contact"-regel weg; alleen "10/45"-notatie -> vaste layout, geen UI-verschuiving als stats wijzigen tijdens sliden. [DealWidget header]
 - [x] ND7.11 Scroll-hint uit de placement-controls (alleen nog in de control-helper rechtsonder). [BuildComponent/placement-hints]
-- [ ] ND7.12 Center-screen "F interact"-prompt weg; interactie-info alleen rechtsonder in de control-helper, mét beschrijvende tekst (bv. "Go to floor 3" bij lift). Optioneel aparte setting "Interaction controls" naast de controls-overlay-setting; uitgezet = rechtsonder verwerken. [InteractionComponent prompt, HotkeyHintWidget, SettingsWidget]
+- [ ] ND7.12 Nieuwe setting "Interaction prompt" (naast controls-overlay), STANDAARD AAN (besluit 07-06). Uitgezet: center-prompt weg, interactie-info rechtsonder in de control-helper met beschrijvende tekst (bv. "Go to floor 3"). [InteractionComponent, HotkeyHintWidget, SettingsWidget]
 
 **Deal/inventory-interactie:**
-- [ ] ND7.10 Bags terugklikken uit het deal-geef-vak werkt alleen als ze aan customer-kant staan — overal terug kunnen klikken. (VRAAG: exacte situatie waarin het niet werkt?) [DealWidget/DealBagCell]
+- [ ] ND7.10 Deal-geef-vak: bags NIET meer klikbaar — terugpakken werkt exact zoals erin doen: terug-SLEPEN, shift-klik = hele stack, alt-drag = 1 stuk (besluit 07-06). [DealWidget/DealBagCell]
 - [ ] ND7.13 Deals: ook vanaf de HOTBAR naar het customer/geef-slot kunnen slepen (nu alleen vanuit inventory-kolom). [DealWidget, HotbarWidget drag]
 - [ ] ND7.14 Universeel sleep-gedrag: ALT-drag = altijd 1 item (geen popup); SHIFT-klik = hele stack direct naar het andere open storage-scherm. Overal (inv<->shelf/fridge/deal). [InventoryWidget, ShelfWidget, WeedItemPickGrid]
 
 **Gameplay/balans:**
-- [ ] ND7.4 Heat-risico schaalt met hoeveel wiet je OP ZAK hebt op straat (meer gram = hogere kans op heat-events). [HeatComponent + InventoryComponent gram-telling]
+- [ ] ND7.4 Heat op zak (besluit 07-06): limiet ~25g. Naar BUITEN (uit je apartment) met meer dan de limiet = een vaste extra heat-% naar rato van het teveel (rustig oplopend, niet agressief); ga je weer naar binnen dan VERVALT die extra heat direct, tot je weer met teveel naar buiten gaat. [HeatComponent + InventoryComponent gram-telling + DoorRetrofitter binnen/buiten]
 - [ ] ND7.8 Max-stack-groottes van ALLE items nalopen/balansen (audit + tabel). [InventoryComponent, Data]
-- [ ] ND7.16 Klok linksboven wordt UPGRADE: "horloge" kopen in de upgrades-app (goede prijs); zonder horloge zie je de tijd alleen via de telefoon. [UpgradeComponent, StatusHudWidget, PhoneWidget]
+- [ ] ND7.16 Klok linksboven wordt UPGRADE: "horloge" direct koopbaar in de upgrades-app voor EUR 999 (besluit 07-06); zonder horloge zie je de tijd alleen via de telefoon. [UpgradeComponent, StatusHudWidget, PhoneWidget]
 
 **Settings/audio:**
 - [x] ND7.2 Level-up-geluid standaard ~50% zachter. [LevelUpWidget/audio]
