@@ -397,7 +397,8 @@ void WeedShop_ApplyGraphicsTier(int32 Tier, bool bSkipFeatureGates)
 	// Kleine/verre schaduwen wegcullen (perf, nauwelijks zichtbaar): hoger = meer cullen.
 	SetF(TEXT("r.Shadow.RadiusThreshold"),  bPotato ? 0.05f : (Tier == 0 ? 0.04f : (Tier == 1 ? 0.03f : (Tier == 2 ? 0.02f : 0.01f)))); // monotoon 0.05/0.04/0.03/0.02/0.01 (was niet-monotoon: High 0.03 cullde meer dan Med+Epic 0.01)
 
-	UE_LOG(LogWeedShop, Warning, TEXT("Graphics-tier: %s (scalability %d)"),
+	// Display, geen Warning: een tier-melding is een mijlpaal, geen probleem (log-discipline: Warning = alleen echt mis).
+	UE_LOG(LogWeedShop, Display, TEXT("Graphics-tier: %s (scalability %d)"),
 		bPotato ? TEXT("POTATO") : (Scal == 0 ? TEXT("Low") : Scal == 1 ? TEXT("Medium") : Scal == 2 ? TEXT("High") : TEXT("Epic")), Scal);
 }
 
