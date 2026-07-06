@@ -1144,10 +1144,14 @@ namespace WeedUI
 					{
 						const int32 W = Wr->GetWidth(), H = Wr->GetHeight();
 						const FColor Leaf(86, 194, 96); // fris wiet-groen (sRGB)
-						// Blad-venster (midden): het frame/rits zit in de buitenrand, tussenruimte is leeg ->
-						// een ruime centrale box vangt alleen het blad. (Gemeten uit de density-map van weed_bag.)
-						const int32 X0 = (int32)(W * 0.27f), X1 = (int32)(W * 0.73f);
-						const int32 Y0 = (int32)(H * 0.30f), Y1 = (int32)(H * 0.86f);
+						// Blad-venster PER ICOON (uit de density-maps): container-frame in de buitenrand, wietblad
+						// in het midden. Box zo dat 't blad erin valt en de wanden erbuiten.
+						float FX0 = 0.27f, FX1 = 0.73f, FY0 = 0.30f, FY1 = 0.86f; // weed_bag
+						const FString SL = Stem.ToLower();
+						if (SL == TEXT("weed_jar"))       { FX0 = 0.26f; FX1 = 0.66f; FY0 = 0.28f; FY1 = 0.80f; } // blad links-van-midden, rechterwand ~0.68 buitensluiten
+						else if (SL == TEXT("weed_sack")) { FX0 = 0.28f; FX1 = 0.72f; FY0 = 0.30f; FY1 = 0.82f; }
+						const int32 X0 = (int32)(W * FX0), X1 = (int32)(W * FX1);
+						const int32 Y0 = (int32)(H * FY0), Y1 = (int32)(H * FY1);
 						for (int32 i = 0; i + 3 < BGRA.Num(); i += 4)
 						{
 							if (BGRA[i + 3] == 0) { continue; } // transparant -> laten
@@ -1308,8 +1312,11 @@ namespace WeedUI
 		if (ItemId.ToString().StartsWith(TEXT("Bag_")))
 		{
 			const FString Stem = ExactIconStem(ItemId);
+			// Alleen de ZWARTE lijn-art containers omkleuren (weed_bag/jar/sack). "block" is al gekleurde
+			// art (geen zwart silhouet) -> die met rust laten, valt door naar het normale icoon-pad.
+			const bool bBlackContainer = (Stem == TEXT("weed_bag") || Stem == TEXT("weed_jar") || Stem == TEXT("weed_sack"));
 			const FColor StrainCol = TagColorForItem(ItemId, 0.92f, 0.82f).ToFColor(true);
-			if (UTexture2D* BTex = LoadStrainBagTex(Stem, StrainCol))
+			if (UTexture2D* BTex = bBlackContainer ? LoadStrainBagTex(Stem, StrainCol) : nullptr)
 			{
 				FSlateBrush B; B.SetResourceObject(BTex);
 				const float TW = FMath::Max(1.f, (float)BTex->GetSizeX());
