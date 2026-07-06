@@ -10,6 +10,7 @@
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
+#include "Save/SaveGameSubsystem.h" // StablePlayerId: per-speler horloge-sleutel in competitive
 
 const FName UUpgradeComponent::WatchUpgradeId(TEXT("Upg_Watch"));
 
@@ -59,13 +60,35 @@ void UUpgradeComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(UUpgradeComponent, Purchased);
 }
 
+FName UUpgradeComponent::WatchKeyFor(const APawn* ForPawn) const
+{
+	// Competitive: horloge is PER SPELER -> sleutel met "#<spelerId>"-suffix (zelfde patroon als de
+	// NPC-registry); co-op of geen pawn -> het gedeelde basis-id. Save/replicatie lopen gewoon mee
+	// via de bestaande Purchased-lijst.
+	const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner());
+	if (GS && GS->IsCompetitive() && ForPawn)
+	{
+		return FName(*FString::Printf(TEXT("%s#%s"), *WatchUpgradeId.ToString(), *USaveGameSubsystem::StablePlayerId(ForPawn)));
+	}
+	return WatchUpgradeId;
+}
+
+bool UUpgradeComponent::HasWatch(const APawn* ForPawn) const
+{
+	return Purchased.Contains(WatchKeyFor(ForPawn));
+}
+
 bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 {
 	if (GetOwnerRole() != ROLE_Authority || UpgradeId.IsNone())
 	{
 		return false;
 	}
-	if (Purchased.Contains(UpgradeId))
+	// Horloge in competitive: dubbelkoop-check op de PER-SPELER-sleutel (koper = eigenaar van PayFrom);
+	// het basis-id blijft de catalogus/rij-sleutel voor de row-lookup hieronder.
+	const APawn* WatchKeyPawn = (UpgradeId == WatchUpgradeId && PayFrom) ? Cast<APawn>(PayFrom->GetOwner()) : nullptr;
+	const FName StoreId = (UpgradeId == WatchUpgradeId) ? WatchKeyFor(WatchKeyPawn) : UpgradeId;
+	if (Purchased.Contains(StoreId))
 	{
 		return false;
 	}
@@ -122,9 +145,9 @@ bool UUpgradeComponent::BuyUpgrade(FName UpgradeId, UEconomyComponent* PayFrom)
 		return false;
 	}
 
-	Purchased.Add(UpgradeId);
+	Purchased.Add(StoreId); // horloge in competitive = per-speler-sleutel; anders het basis-id
 	OnUpgradePurchased.Broadcast(UpgradeId);
-	UE_LOG(LogWeedShop, Log, TEXT("Upgrade bought: %s (%s)"), *UpgradeId.ToString(), *Row->DisplayName.ToString());
+	UE_LOG(LogWeedShop, Log, TEXT("Upgrade bought: %s (%s)"), *StoreId.ToString(), *Row->DisplayName.ToString());
 	if (BuyerPawn)
 	{
 		UWeedToast::NotifyPawn(BuyerPawn, -1, 4.f, FColor::Green,
@@ -153,7 +176,7 @@ void UUpgradeComponent::RestorePurchased(const TArray<FName>& InIds)
 }
 
 bool UUpgradeComponent::GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32& OutCostCents,
-	bool& bOutPurchased, bool& bOutAvailable) const
+	bool& bOutPurchased, bool& bOutAvailable, const APawn* ForPawn) const
 {
 	const FUpgradeRow* Row = UpgradeTable ? UpgradeTable->FindRow<FUpgradeRow>(UpgradeId, TEXT("GetUpgradeDisplay"), false) : nullptr;
 	if (!Row) { Row = FindBuiltInUpgradeRow(UpgradeId); } // ingebouwde upgrades (bv. horloge)
@@ -163,7 +186,8 @@ bool UUpgradeComponent::GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32
 	}
 	OutName = Row->DisplayName;
 	OutCostCents = Row->CostCents > 0 ? (int32)FMath::Max<int64>(100, WeedRoundEuros((int64)Row->CostCents)) : 0;
-	bOutPurchased = Purchased.Contains(UpgradeId);
+	// Horloge: eigendom per-speler in competitive (ForPawn = de kijkende speler); rest = gedeeld.
+	bOutPurchased = (UpgradeId == WatchUpgradeId) ? HasWatch(ForPawn) : Purchased.Contains(UpgradeId);
 
 	bOutAvailable = true;
 	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))

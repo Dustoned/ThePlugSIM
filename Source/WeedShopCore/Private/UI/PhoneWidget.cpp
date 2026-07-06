@@ -3277,7 +3277,7 @@ void UPhoneWidget::RefreshContent()
 		if (GS && GS->GetUpgrades())
 		{
 			FText WName; int32 WCost = 0; bool bWOwned = false, bWAvail = false;
-			if (GS->GetUpgrades()->GetUpgradeDisplay(UUpgradeComponent::WatchUpgradeId, WName, WCost, bWOwned, bWAvail))
+			if (GS->GetUpgrades()->GetUpgradeDisplay(UUpgradeComponent::WatchUpgradeId, WName, WCost, bWOwned, bWAvail, GetOwningPlayerPawn()))
 			{
 				ActiveContent->AddChildToVerticalBox(MakeText(TEXT("Watch"), 14, WeedUI::ColText()))
 					->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));

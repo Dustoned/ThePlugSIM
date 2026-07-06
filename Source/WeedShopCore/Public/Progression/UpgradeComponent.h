@@ -35,8 +35,13 @@ public:
 	static const FName WatchUpgradeId;
 
 	// Horloge gekocht? De HUD-klok linksboven toont alleen met horloge (StatusHudWidget).
+	// CO-OP = gedeeld (1 koop voor de crew); COMPETITIVE = per speler (opslag via "Upg_Watch#<spelerId>"-
+	// suffix in dezelfde Purchased-lijst, zelfde patroon als de NPC-registry -> save/replicatie gratis).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
-	bool HasWatch() const { return IsPurchased(WatchUpgradeId); }
+	bool HasWatch(const APawn* ForPawn = nullptr) const;
+
+	// Opslag-sleutel voor het horloge: competitive + pawn -> per-speler-suffix, anders het gedeelde id.
+	FName WatchKeyFor(const APawn* ForPawn) const;
 
 	// Som van EffectMagnitude over alle gekochte upgrades met deze tag (0 als geen).
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Upgrades")
@@ -56,7 +61,7 @@ public:
 	TArray<FName> GetAllUpgradeIds() const;
 
 	// Weergave-info voor één upgrade (voor de telefoon-UI). False als onbekend.
-	bool GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32& OutCostCents, bool& bOutPurchased, bool& bOutAvailable) const;
+	bool GetUpgradeDisplay(FName UpgradeId, FText& OutName, int32& OutCostCents, bool& bOutPurchased, bool& bOutAvailable, const APawn* ForPawn = nullptr) const;
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

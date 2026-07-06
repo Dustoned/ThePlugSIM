@@ -227,7 +227,7 @@ void UStatusHudWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	// upgrade (gedeeld op de GameState, gerepliceerd -> klopt voor host en joiner). Changed-check:
 	// visibility alleen zetten bij een echte wissel; de tekst-updates eronder blijven gewoon lopen.
 	{
-		const int32 WatchNow = (GS->GetUpgrades() && GS->GetUpgrades()->HasWatch()) ? 1 : 0;
+		const int32 WatchNow = (GS->GetUpgrades() && GS->GetUpgrades()->HasWatch(GetOwningPlayerPawn())) ? 1 : 0;
 		if (WatchNow != LastWatchShown)
 		{
 			LastWatchShown = WatchNow;

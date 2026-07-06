@@ -366,7 +366,7 @@ void AWeedShopHUD::DrawPhone(UPhoneClientComponent* Phone)
 				for (const FName& Id : Upg->GetAllUpgradeIds())
 				{
 					FText Name; int32 Cost = 0; bool bPurchased = false; bool bAvailable = false;
-					if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable))
+					if (Upg->GetUpgradeDisplay(Id, Name, Cost, bPurchased, bAvailable, GetOwningPawn()))
 					{
 						const TCHAR* Suffix = bPurchased ? TEXT("  [owned]") : (bAvailable ? TEXT("") : TEXT("  [locked]"));
 						const FLinearColor Col = bPurchased ? WeedUI::ColTextDim()
