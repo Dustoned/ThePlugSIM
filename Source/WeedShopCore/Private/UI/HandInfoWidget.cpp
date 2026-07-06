@@ -241,9 +241,12 @@ void UHandInfoWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	Shown = FMath::FInterpTo(Shown, Target, DeltaTime, 16.f);
 	Card->SetRenderOpacity(Shown);
 	Card->SetVisibility(Shown > 0.02f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	if (Shown <= 0.04f && DisplayedId != WantId)
+	// Inhoud overnemen: bij VERS verschijnen (nog niks getoond) METEEN; bij een WISSEL pas als de kaart is
+	// uitgefade (Shown ~0) -> geen leftover-frame. Zonder de "vers"-tak bleef de kaart leeg (de eerste fade-in
+	// stijgt meteen voorbij de 0.04-drempel, dus werd nooit overgenomen).
+	if (DisplayedId != WantId && (DisplayedId.IsNone() || Shown <= 0.04f))
 	{
-		DisplayedId = WantId;   // volledig onzichtbaar -> nu pas de inhoud overnemen (geen leftover-frame)
+		DisplayedId = WantId;
 		LastId = NAME_None;     // forceer de rebuild hieronder voor het nieuwe item
 	}
 	if (WantId.IsNone() || DisplayedId.IsNone() || WantId != DisplayedId) { return; } // niks te tonen / nog aan het uitfaden vóór de swap
