@@ -48,7 +48,9 @@ protected:
 	// --- Persistente widgets in FullPane die in-place worden bijgewerkt ---
 	UPROPERTY() TObjectPtr<UWeedItemPickGrid> StrainGrid; // "Pick your weed": alle Bud_-stacks van de speler
 	UPROPERTY() TObjectPtr<UTextBlock>   GramsLabel;    // "Grams per joint: N (up to Mg)"
-	UPROPERTY() TObjectPtr<UHorizontalBox> GramsRow;    // container van de gram-knoppen-pool
+	UPROPERTY() TObjectPtr<UHorizontalBox> GramsRow;    // container van de gram-slider
+	UPROPERTY() TObjectPtr<class USlider> GramSlider;   // gram-keuze als slider (1..MaxG, snapt op hele grammen)
+	UFUNCTION() void OnGramSlider(float V);             // snap naar hele grammen + SetRollGrams
 	UPROPERTY() TObjectPtr<UTextBlock>   StrengthLabel; // "Joint strength: ..." / "No weed ..."
 	UPROPERTY() TObjectPtr<UTextBlock>   HintLabel;     // "More grams = stronger joint."
 	UPROPERTY() TObjectPtr<UProgressBar> StrengthBar;

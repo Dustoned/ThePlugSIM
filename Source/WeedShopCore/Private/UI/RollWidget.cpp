@@ -15,10 +15,20 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
+#include "Components/Slider.h"
 #include "Components/ProgressBar.h"
 #include "GameFramework/Pawn.h"
 
 void URollWidget::SetPhone(UPhoneClientComponent* InPhone) { PhoneComp = InPhone; }
+
+void URollWidget::OnGramSlider(float V)
+{
+	if (!PhoneComp.IsValid() || !GramSlider) { return; }
+	const int32 MaxG = FMath::Max(1, PhoneComp->GetMaxJointGrams());
+	const int32 g = FMath::Clamp(FMath::RoundToInt(V), 1, MaxG);
+	if (!FMath::IsNearlyEqual(GramSlider->GetValue(), (float)g)) { GramSlider->SetValue((float)g); } // snap de handle op hele grammen
+	PhoneComp->SetRollGrams(g);
+}
 
 namespace
 {
@@ -110,9 +120,20 @@ void URollWidget::BuildContentOnce()
 		GramsLabel = WeedUI::Text(WidgetTree, FString(), 13, WeedUI::ColText());
 		FullPane->AddChildToVerticalBox(GramsLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 
-		// Gram-keuze: een rij klikbare gram-knoppen (pool; geselecteerde licht op).
+		// Gram-keuze: SLIDER (1..MaxG, snapt op hele grammen) - zelfde snappy look als de deal-sliders.
 		GramsRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 		FullPane->AddChildToVerticalBox(GramsRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+		GramSlider = WidgetTree->ConstructWidget<USlider>();
+		GramSlider->SetSliderHandleColor(WeedUI::ColAccent());
+		GramSlider->SetSliderBarColor(WeedUI::ColSlot());
+		GramSlider->SetMinValue(1.f); GramSlider->SetMaxValue(10.f); GramSlider->SetStepSize(1.f); GramSlider->SetValue(1.f);
+		{ FSliderStyle SS = GramSlider->GetWidgetStyle(); SS.SetBarThickness(8.f); GramSlider->SetWidgetStyle(SS); }
+		GramSlider->OnValueChanged.AddDynamic(this, &URollWidget::OnGramSlider);
+		{
+			USizeBox* SH = WidgetTree->ConstructWidget<USizeBox>(); SH->SetHeightOverride(20.f); SH->SetContent(GramSlider);
+			UHorizontalBoxSlot* GS = GramsRow->AddChildToHorizontalBox(SH);
+			GS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); GS->SetVerticalAlignment(VAlign_Center);
+		}
 
 		// --- Sterkte (verwachte high) — schaalt mee met gram + THC% + kwaliteit% ---
 		StrengthLabel = WeedUI::Text(WidgetTree, FString(), 13, WeedUI::ColText(), false, true);
@@ -191,38 +212,11 @@ void URollWidget::UpdateContent()
 			FString::Printf(TEXT("Grams per joint: %d   (your papers allow up to %dg)"), G, MaxG)));
 	}
 
-	// Gram-knoppen-pool op maat brengen: groei tot MaxG (nooit krimpen -> knoppen worden alleen verborgen).
-	while (GramButtons.Num() < MaxG)
+	// Slider-bereik + stand in-place bijwerken (SetValue/SetMaxValue vuren OnValueChanged NIET -> geen feedback-lus).
+	if (GramSlider)
 	{
-		const int32 g = GramButtons.Num() + 1; // 1-based gram-waarde van deze knop
-		UWeedActionButton* B = RollBtn(WidgetTree, WeedUI::ColSlotEmpty(), 8.f,
-			[this, g]() { if (PhoneComp.IsValid()) { PhoneComp->SetRollGrams(g); } });
-		UTextBlock* Bt = WeedUI::Text(WidgetTree, FString::Printf(TEXT("%dg"), g), 13, WeedUI::ColTextDim(), true);
-		B->SetContent(Bt);
-		UHorizontalBoxSlot* BS = GramsRow->AddChildToHorizontalBox(B);
-		BS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		BS->SetPadding(FMargin(2.f, 0.f, 2.f, 0.f));
-		GramButtons.Add(B); GramButtonTexts.Add(Bt);
-	}
-	// Zichtbaarheid + kleur per knop in-place bijwerken (geen ClearChildren).
-	for (int32 i = 0; i < GramButtons.Num(); ++i)
-	{
-		const int32 g = i + 1;
-		UWeedActionButton* B = GramButtons[i];
-		if (!B) { continue; }
-		if (g > MaxG) { B->SetVisibility(ESlateVisibility::Collapsed); continue; }
-		B->SetVisibility(ESlateVisibility::Visible);
-		const bool bSel = (g == G);
-		FButtonStyle S = B->GetStyle();
-		const FLinearColor Col = bSel ? WeedUI::ColAccent() : WeedUI::ColSlotEmpty();
-		S.Normal = WeedUI::Rounded(Col, 8.f);
-		S.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
-		S.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
-		B->SetStyle(S);
-		if (GramButtonTexts.IsValidIndex(i) && GramButtonTexts[i])
-		{
-			GramButtonTexts[i]->SetColorAndOpacity(FSlateColor(bSel ? WeedUI::ColText() : WeedUI::ColTextDim()));
-		}
+		if (!FMath::IsNearlyEqual(GramSlider->GetMaxValue(), (float)MaxG)) { GramSlider->SetMaxValue((float)FMath::Max(1, MaxG)); }
+		if (FMath::RoundToInt(GramSlider->GetValue()) != G) { GramSlider->SetValue((float)G); }
 	}
 
 	// --- Sterkte (verwachte high) — schaalt mee met gram + THC% + kwaliteit% ---
