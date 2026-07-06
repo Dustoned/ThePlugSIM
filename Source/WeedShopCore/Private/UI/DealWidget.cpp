@@ -44,7 +44,13 @@ namespace
 	// "CriticalMass_Bag2_2 bag". Hash_/Edible_/Bud_/Seed_ komen er via PrettyItemName al netjes uit.
 	FString PrettyDealName(FName Id)
 	{
-		return WeedUI::PrettyItemName(Id).Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase);
+		// Container-suffix strippen -> alleen de strain-naam ("Critical Mass"). Alle container-woorden dekken.
+		FString N = WeedUI::PrettyItemName(Id);
+		N = N.Replace(TEXT(" bag"), TEXT(""), ESearchCase::IgnoreCase);
+		N = N.Replace(TEXT(" jar"), TEXT(""), ESearchCase::IgnoreCase);
+		N = N.Replace(TEXT(" block"), TEXT(""), ESearchCase::IgnoreCase);
+		N = N.Replace(TEXT(" sack"), TEXT(""), ESearchCase::IgnoreCase);
+		return N;
 	}
 }
 

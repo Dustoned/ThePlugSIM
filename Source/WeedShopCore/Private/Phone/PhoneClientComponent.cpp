@@ -1822,8 +1822,12 @@ void UPhoneClientComponent::ServerPackGrams_Implementation(FName BudId, FName Co
 
 	if (GEngine)
 	{
+		const FString CS = ContainerId.ToString();
+		const TCHAR* Noun = (CS == TEXT("Cont_Jar10") || CS == TEXT("Cont_Jar15")) ? TEXT("jar")
+			: (CS == TEXT("Cont_Block100")) ? TEXT("block")
+			: (CS == TEXT("Cont_Garbage500")) ? TEXT("sack") : TEXT("bag");
 		UWeedToast::NotifyPawn(GetOwner(),-1, 2.5f, FColor(120, 220, 160),
-			FString::Printf(TEXT("Packed a %dg bag of %s."), PackGrams, *Strain.ToString()),
+			FString::Printf(TEXT("Packed a %dg %s of %s."), PackGrams, Noun, *Strain.ToString()),
 			TEXT("baggie"));
 	}
 }

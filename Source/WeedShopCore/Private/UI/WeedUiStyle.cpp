@@ -419,7 +419,16 @@ namespace WeedUI
 		FString S = ItemId.ToString();
 		if (S == TEXT("Cash"))                { return TEXT("Cash"); }
 		if (S.StartsWith(TEXT("WetBud_")))    { return NiceName(S.RightChop(7)) + TEXT(" (wet)"); }
-		if (S.StartsWith(TEXT("Bag_")))       { return NiceName(UInventoryComponent::BagStrain(ItemId).ToString()) + TEXT(" bag"); }
+		if (S.StartsWith(TEXT("Bag_")))
+		{
+			// Naam volgt de CONTAINER: "Silver Haze jar" / "... block" / "... sack" / "... bag".
+			const FName Cont = UInventoryComponent::BagContainer(ItemId);
+			const TCHAR* Noun = TEXT(" bag");
+			if (Cont == TEXT("Cont_Jar10") || Cont == TEXT("Cont_Jar15")) { Noun = TEXT(" jar"); }
+			else if (Cont == TEXT("Cont_Block100"))                       { Noun = TEXT(" block"); }
+			else if (Cont == TEXT("Cont_Garbage500"))                     { Noun = TEXT(" sack"); }
+			return NiceName(UInventoryComponent::BagStrain(ItemId).ToString()) + Noun;
+		}
 		if (S.StartsWith(TEXT("DryRack_")))   { return S.RightChop(8) + TEXT(" rack"); }
 		if (S == TEXT("Bench_Pack"))          { return TEXT("Packing bench"); }
 		if (S == TEXT("Cont_Bag2"))           { return TEXT("Small baggies"); }
