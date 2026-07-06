@@ -600,11 +600,10 @@ namespace WeedUI
 		if (S.StartsWith(TEXT("Safe_")))        { return Map4(Suf(5), TEXT("Small"),TEXT("S"), TEXT("Medium"),TEXT("M"), TEXT("Large"),TEXT("L"), TEXT("Vault"),TEXT("VLT")); }
 		if (S.StartsWith(TEXT("Cont_")))
 		{
-			const FString V = Suf(5);
-			if (V==TEXT("Bag2")) return TEXT("2g");   if (V==TEXT("Bag5")) return TEXT("5g");
-			if (V==TEXT("Jar10")) return TEXT("10g"); if (V==TEXT("Jar15")) return TEXT("15g");
-			if (V==TEXT("Block100")) return TEXT("100g"); if (V==TEXT("Garbage500")) return TEXT("500g");
-			return FString();
+			// Capaciteit-tag uit ContainerCapacity (NIET uit de naam-suffix!) -> loopt nooit uit sync met
+			// de echte cap. Jar10=50g, Jar15=100g, Block100=250g, ...
+			const int32 Cap = UPhoneClientComponent::ContainerCapacity(ItemId);
+			return Cap > 0 ? FString::Printf(TEXT("%dg"), Cap) : FString();
 		}
 		if (S.StartsWith(TEXT("DryRack_")))     { return Tier(Suf(8)); }
 
