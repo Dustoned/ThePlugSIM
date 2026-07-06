@@ -21,10 +21,22 @@ $QLabel  = @{ "4K" = "4K textures - beste kwaliteit, grootste download"; "2K" = 
 New-Item -ItemType Directory -Force (Join-Path $Proj "Build") | Out-Null
 
 # Geen -Notes meegegeven? Lees dan automatisch de patch notes uit Docs\PATCHNOTES.md (UTF-8).
+# ALLEEN de bovenste versie-sectie (van de eerste "Version X.Y.Z" tot de tweede) gaat naar de release-body:
+# GitHub bewaart oudere releases al zelf, dus elke release toont alleen z'n EIGEN notes. Het bestand zelf blijft
+# de volledige changelog-historie voor eigen naslag.
 $NotesPath = Join-Path $Proj "Docs\PATCHNOTES.md"
 if ($Notes -eq "Nieuwe test-build." -and (Test-Path $NotesPath)) {
-    $Notes = [System.IO.File]::ReadAllText($NotesPath, [System.Text.Encoding]::UTF8)
-    Write-Host "== Patch notes geladen uit Docs\PATCHNOTES.md =="
+    $full = [System.IO.File]::ReadAllText($NotesPath, [System.Text.Encoding]::UTF8)
+    $vm = [regex]::Matches($full, '(?m)^Version\s+\d+\.\d+\.\d+')
+    if ($vm.Count -ge 2) {
+        $seg = $full.Substring($vm[0].Index, $vm[1].Index - $vm[0].Index)
+        $Notes = ($seg -replace '(?s)[\s\-─━]+$', '').TrimEnd()   # trailing scheidingslijn/lege regels weg
+    } elseif ($vm.Count -eq 1) {
+        $Notes = ($full.Substring($vm[0].Index)).TrimEnd()
+    } else {
+        $Notes = $full.TrimEnd()
+    }
+    Write-Host "== Patch notes (alleen de bovenste versie) geladen uit Docs\PATCHNOTES.md =="
 }
 
 # In-game versie (hoofdmenu, linksonder) synchroon houden met de bovenste "Version X.Y.Z" uit de patch
