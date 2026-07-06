@@ -1040,8 +1040,9 @@ void UDealWidget::OpenAmountPopup(FName Strain, int32 Gram, int32 MaxN)
 {
 	if (!AmountRoot || !AmountPickSlider) { return; }
 	PendingStrain = Strain; PendingGram = Gram; PendingMax = FMath::Max(1, MaxN);
-	AmountPickSlider->SetValue(1.f);
-	OnAmountPickChanged(1.f);
+	// Slider start in het MIDDEN (speler-regel ND7.5: hoeveelheid-sliders openen gecentreerd).
+	AmountPickSlider->SetValue(0.5f);
+	OnAmountPickChanged(0.5f);
 	AmountRoot->SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -1203,7 +1204,9 @@ void UDealWidget::UpdateLive()
 				? FString::Printf(TEXT("%.0f"), C->Respect)
 				: FString::Printf(TEXT("%.0f/%.0f"), C->Respect, UnlockAt)));
 		}
-		if (RespectSub) { RespectSub->SetVisibility(bUnlocked ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible); }
+		// ND7.15: "to contact"-mini-label altijd weg - "X/45" zegt genoeg en het label liet de layout
+		// verschuiven zodra stats/unlock wisselden (vaste layout = rustiger UI).
+		if (RespectSub) { RespectSub->SetVisibility(ESlateVisibility::Collapsed); }
 		if (LoyaltyVal) { LoyaltyVal->SetText(FText::FromString(FString::Printf(TEXT("%.0f"), C->Loyalty))); }
 		// D13b — Hooked: "X/drempel" zolang de NPC nog geen koper is; een koper (drempel gehaald of al
 		// aan het bestellen) toont alleen de kale waarde — de voortgang is dan niet meer interessant.

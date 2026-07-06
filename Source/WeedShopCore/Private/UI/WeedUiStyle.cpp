@@ -716,7 +716,10 @@ namespace WeedUI
 			if (Has(TEXT("Crystal_")))                                   return { TEXT("crystals"),  FLinearColor(0.7f, 0.92f, 1.0f),   EIcon::Leaf };
 			if (Has(TEXT("Hash_")))                                      return { TEXT("hash"),      FLinearColor(0.75f, 0.55f, 0.3f),  EIcon::Leaf };
 			if (Has(TEXT("Bud_")))                                       return { TEXT("weed"),      FLinearColor(0.45f, 0.95f, 0.55f), EIcon::Leaf };
-			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    FLinearColor(0.55f, 0.9f, 0.6f),   EIcon::Leaf };
+			// ND7.1: gevulde bags tinten in de STRAIN-kleur (zelfde bron als de strain-tag-pill, maar
+			// helderder voor een icoon) i.p.v. een generieke baggie-groen - zo zie je in een oogopslag
+			// welke wiet erin zit.
+			if (Has(TEXT("Bag_")))                                       return { TEXT("baggie"),    TagColorForItem(ItemId, 0.95f, 0.55f), EIcon::Leaf };
 			if (Has(TEXT("Joint_")))                                     return { TEXT("joint"),     FLinearColor(0.7f, 0.85f, 0.5f),   EIcon::Leaf };
 			if (Has(TEXT("Seed_")))                                      return { TEXT("seed"),      FLinearColor(0.6f, 0.8f, 0.45f),   EIcon::Leaf };
 

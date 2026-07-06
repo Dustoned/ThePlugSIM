@@ -166,11 +166,12 @@ void AWeedShopHUD::DrawHUD()
 				const float ChipH = 28.f;
 				const float Gap = 6.f;
 				struct FPlaceHintChip { FString Key; FString Action; bool bPrimary; };
+				// ND7.11: geen Scroll-chip in de placement-strip - die hint staat al in de control-helper
+				// rechtsonder (HotkeyHintWidget "Scroll / Put away"); hier alleen de kern-acties.
 				const FPlaceHintChip Chips[] = {
 					{ TEXT("LMB"), StateMsg, true },
 					{ TEXT("R"), TEXT("Rotate"), false },
-					{ TEXT("Shift"), TEXT("Snap"), false },
-					{ TEXT("Scroll"), TEXT("Distance / put away"), false }
+					{ TEXT("Shift"), TEXT("Snap"), false }
 				};
 				auto ChipWidth = [&](const FPlaceHintChip& C)
 				{
