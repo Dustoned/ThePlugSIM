@@ -931,6 +931,7 @@ UWeedActionButton* UPhoneWidget::MakeActionBtn(const FString& Label, const FLine
 	S.Pressed = RoundedBrush(Col * 0.8f, 8.f);
 	S.NormalPadding = FMargin(6.f, 4.f); S.PressedPadding = FMargin(6.f, 4.f);
 	B->SetStyle(S);
+	B->SetClipping(EWidgetClipping::ClipToBounds); // tekst nooit buiten de knop (ND7.7)
 	B->SetContent(MakeText(Label, FontSize, FLinearColor::White, true));
 	return B;
 }
@@ -2637,7 +2638,13 @@ void UPhoneWidget::FillStoreFooter()
 			TotT->SetJustification(ETextJustify::Right);
 			F->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 6.f, 4.f, 4.f));
 			F->AddChildToVerticalBox(MakeActionBtn(TEXT("SELL"), WeedUI::ColAccentDim(),
-				[this, Ph]() { Ph->Checkout(0); bCartView = false; RefreshStore(); }, 14));
+				[this, Ph]()
+				{
+					Ph->Checkout(0);
+					// View-wissel 1 tik uitstellen: zelfde-frame RefreshStore breekt de INGEDRUKTE knop af = flits (ND7.7).
+					FTimerHandle Th;
+					GetWorld()->GetTimerManager().SetTimer(Th, FTimerDelegate::CreateWeakLambda(this, [this]() { bCartView = false; RefreshStore(); }), 0.12f, false);
+				}, 14));
 			return F;
 		};
 	}
@@ -2669,7 +2676,7 @@ void UPhoneWidget::FillStoreFooter()
 					UVerticalBox* OVB = WidgetTree->ConstructWidget<UVerticalBox>();
 					FString PriceStr;
 					if (OptFee <= 0) { PriceStr = TEXT("FREE"); }
-					else { PriceStr = FString::Printf(TEXT("€%d"), (int32)(WeedRoundEuros((int64)OptFee) / 100)); }
+					else { PriceStr = FString::Printf(TEXT("EUR %d"), (int32)(WeedRoundEuros((int64)OptFee) / 100)); } // ASCII: echt euro-teken gaf fallback-font -> tekst viel buiten de knop
 					OVB->AddChildToVerticalBox(MakeText(PriceStr, 15, WeedUI::ColGood(), true))->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
 					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryName(d), 11, WeedUI::ColText(), true));
 					OVB->AddChildToVerticalBox(MakeText(UPhoneClientComponent::DeliveryTimeText(d), 9, WeedUI::ColTextDim(), true));
@@ -2715,7 +2722,13 @@ void UPhoneWidget::FillStoreFooter()
 			F->AddChildToVerticalBox(TotT)->SetPadding(FMargin(0.f, 2.f, 4.f, 4.f));
 
 			F->AddChildToVerticalBox(MakeActionBtn(TEXT("CHECKOUT"), WeedUI::ColAccentDim(),
-				[this, Ph]() { Ph->Checkout(DeliveryOpt); bCartView = false; RefreshStore(); }, 14));
+				[this, Ph]()
+				{
+					Ph->Checkout(DeliveryOpt);
+					// Zelfde uitstel als bij SELL: geen zelfde-frame teardown van de aangeklikte knop (ND7.7).
+					FTimerHandle Th;
+					GetWorld()->GetTimerManager().SetTimer(Th, FTimerDelegate::CreateWeakLambda(this, [this]() { bCartView = false; RefreshStore(); }), 0.12f, false);
+				}, 14));
 			return F;
 		};
 	}
