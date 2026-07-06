@@ -1,4 +1,38 @@
 PATCH NOTES
+Version 1.22.0 - 7 juli 2026
+
+Korte intro:
+De packing bench is volledig omgebouwd tot een echte inpak-werkplek: alles op een scherm, sleep-gebaseerd,
+met echte inpaktijd, bijvullen en netter uitpakken. Plus een paar vervelende crashes en scherm-flitsen weg.
+
+--------------------
+
+PACKING BENCH (grote vernieuwing)
+
+* Alles op een scherm - geen aparte "unpack"-tab meer. Sleep gedroogde wiet op een jar of zakje om in te
+  pakken, of sleep een volle jar terug op je wiet om weer uit te pakken.
+* Inpakken kost nu tijd: per container loopt een laadbalk. Blijf bij de bench (weglopen pauzeert). Een betere
+  packing-tafel is sneller EN kan meer tegelijk inpakken.
+* Heb je meer wiet dan in een container past? Dan kies je in een popup het aantal gram per zakje en hoeveel
+  zakjes je maakt - met een "All"-knop voor snel alles.
+* Niet-volle zakjes kun je BIJVULLEN: sleep er wiet van dezelfde strain op en het zakje loopt vol. De THC en
+  kwaliteit mengen netjes tot een gemiddelde.
+* Uitpakken kan nu per GRAM in plaats van alles: kies hoeveel je eruit haalt. Uitpakken duurt de helft van
+  inpakken, en volledig geleegde zakjes geven hun lege container terug.
+* Zakjes tonen hun strain-kleur en het aantal gram, en de namen passen netjes in de cellen.
+
+JOINTS
+
+* Een dikkere joint (meer gram) duurt nu langer om te rollen dan een kleintje.
+
+FIXES
+
+* Crash verholpen die kon optreden door een wapperende cloth-vlag in de wereld (render-crash tijdens spelen).
+* De zachte gloed-flits aan de schermranden (die soms uit het niets kwam, ook stilstaand) is weg.
+* Meldingen bleven soms als vage spook-tekst in beeld hangen - nu verdwijnen ze netjes.
+
+--------------------
+
 Version 1.21.4 - 6 juli 2026
 
 Korte intro:

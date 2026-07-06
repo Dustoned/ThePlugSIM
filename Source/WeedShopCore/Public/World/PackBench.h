@@ -31,9 +31,13 @@ public:
 	// Zet mesh-schaal volgens de tier-definitie (zodat de plaatsing op de vloer klopt).
 	void SetupVisual();
 
-	// Aantal containers dat dit werkblad per keer verwerkt.
+	// Aantal containers dat dit werkblad TEGELIJK kan inpakken (parallelle lanes; hogere tier = meer).
 	int32 GetPackPerAction() const;
 	static int32 PackPerActionFor(FName Tier);
+
+	// Inpak-SNELHEID-factor (hogere tier = sneller: de laadbalk per container gaat sneller vol).
+	float GetPackSpeed() const;
+	static float PackSpeedFor(FName Tier);
 
 	virtual void Interact_Implementation(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;

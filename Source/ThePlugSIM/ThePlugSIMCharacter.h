@@ -443,7 +443,8 @@ public:
 	float RollLoadQuality = 0.f;
 	bool bRollFired = false;
 	float RollHoldTime = 0.f;
-	static constexpr float RollHoldRequired = 0.6f; // ~zo lang als de pickup-hold
+	static constexpr float RollHoldRequired = 0.6f;  // basis-roltijd (1g joint), ~zo lang als de pickup-hold
+	static constexpr float RollHoldPerGram = 0.6f;   // extra roltijd per gram BOVEN de eerste -> dikke joint = langer rollen
 
 public:
 

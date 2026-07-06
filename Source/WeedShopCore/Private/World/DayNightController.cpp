@@ -22,6 +22,7 @@
 #include "Components/DecalComponent.h"
 #include "GameFramework/PlayerController.h" // licht-budget-pool: speler-positie voor de afstand-cap
 #include "GameFramework/Pawn.h"
+#include "Components/SkeletalMeshComponent.h" // cloth-afscherming op map-vlaggen (anti-crash)
 #include "HAL/IConsoleManager.h" // licht-budget-pool: r.LightMaxDrawDistanceScale uitlezen om de hide-afstand op de render-fade te knopen
 #include "UObject/UObjectIterator.h"
 #include "UObject/UnrealType.h" // FProperty/FDoubleProperty + TFieldIterator voor de UDS-brug
@@ -975,6 +976,22 @@ void ADayNightController::Tick(float DeltaSeconds)
 					SeenDecals.Add(DecalC);
 					DecalC->SetFadeScreenSize(0.12f); // hoger = meer cullen (stapelt op de cvar-flip). Knob: terug naar 0.10 als decals vlak bij je voeten poppen
 				}
+				// ANTI-CRASH: map-decoraties met Chaos-Cloth (bv. de wapperende vlag SM_Flag_01) her-creeren hun
+				// clothing-actors bij elke re-register -> RenderCore/RHI access-violation (gedocumenteerd; log toonde
+				// 'Recreating Clothing Actors for SM_Flag_01' spam vlak voor een RHI-crash). De crash-functie
+				// RecreateClothingActors() draait ALLEEN als bAllowClothActors -> SetAllowClothActors(false) skipt 'm
+				// helemaal (zelfde fix als de crowd-NPC's). De vlag blijft staan, wappert alleen niet meer. Pawns
+				// (NPC's/speler) hebben hun eigen cloth-afscherming en slaan we over.
+				if (!A->IsA(APawn::StaticClass()))
+				{
+					TInlineComponentArray<USkeletalMeshComponent*> Skels(A);
+					for (USkeletalMeshComponent* SkC : Skels)
+					{
+						if (!SkC) { continue; }
+						SkC->SetAllowClothActors(false);    // geen cloth-actors -> RecreateClothingActors() early-out -> geen crash
+						SkC->bDisableClothSimulation = true; // + sim uit (belt-and-suspenders)
+					}
+				}
 				// SKYLIGHTS apart verzamelen: USkyLightComponent is GEEN ULightComponent, dus de
 				// licht-scan hierboven miste 'm. De movable skylight spiegelt z'n hemel-cubemap als
 				// specular op water/ramen -> op volle dag-sterkte een felle "zon" 's nachts. Dimmen.
@@ -988,7 +1005,11 @@ void ADayNightController::Tick(float DeltaSeconds)
 					// onze zon/maan echt staat. Live capturen = de reflectie volgt de echte zon/maan-stand
 					// EN 's nachts is de gevangen lucht donker (geen valse dag-reflectie meer).
 					SLC->SetMobility(EComponentMobility::Movable);
-					SLC->SetRealTimeCaptureEnabled(true);
+					// GEEN continue real-time capture: die her-vangt/re-convolveert de skylight elke paar frames
+					// (time-sliced) -> zachte AMBIENT-flicker/rand-puls, ook stilstaand (speler-melding 07-06).
+					// I.p.v. dat: real-time UIT + hieronder een gecontroleerde recapture op een trage timer, zodat de
+					// reflectie de zon/maan blijft volgen zonder de flicker.
+					SLC->SetRealTimeCaptureEnabled(false);
 					// Onderste hemisfeer NIET zwart: anders verlicht de skylight alleen omhoog-kijkende
 					// vlakken (de vloer) en blijft de PLAFOND-onderkant pikzwart overdag. Nu krijgt de
 					// plafond-onderzijde ook ambient -> geen zwart dak meer binnen bij daglicht.
@@ -1238,6 +1259,19 @@ void ADayNightController::Tick(float DeltaSeconds)
 					const float Want = Sk.OrigIntensity * SkyWant;
 					if (!FMath::IsNearlyEqual(SLC->Intensity, Want, Sk.OrigIntensity * 0.01f + 0.001f)) { SLC->SetIntensity(Want); }
 				}
+			}
+		}
+
+		// Gecontroleerde skylight-recapture (i.p.v. continue real-time capture): elke ~2,5s de hemel opnieuw vangen
+		// zodat de reflectie de zon/maan blijft volgen, MAAR zonder de per-frame re-convolutie die de zachte
+		// ambient-flicker / rand-puls gaf (ook stilstaand). Elke capture is op zichzelf stabiel -> geen shimmer.
+		SkyCaptureTimer -= DeltaSeconds;
+		if (SkyCaptureTimer <= 0.f)
+		{
+			SkyCaptureTimer = 2.5f;
+			for (FSkyDim& Sk : SkyDims)
+			{
+				if (USkyLightComponent* SLC = Sk.Sky.Get()) { SLC->RecaptureSky(); }
 			}
 		}
 

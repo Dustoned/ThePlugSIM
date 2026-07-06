@@ -304,6 +304,16 @@ void UWeedToast::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 	}
 	if (bRemoved) { LastSig.Reset(); }
 
+	// GHOST-FIX: verloopt de LAATSTE toast -> Entries leeg -> nieuwe Sig "" == LastSig "" -> de rebuild-gate hieronder
+	// slaat over -> de oude pil bleef op z'n laatste opacity hangen (de verwijdering gebeurt VOOR de fade, dus die
+	// laatste opacity is soms nog >0.02 = zichtbaar) = spook-melding die blijft staan. Bij leeg: expliciet legen.
+	if (Entries.Num() == 0)
+	{
+		if (Stack->GetChildrenCount() > 0) { Stack->ClearChildren(); }
+		LastSig.Reset();
+		return;
+	}
+
 	// Alleen herbouwen als de set meldingen wijzigt (anders alleen opacity updaten).
 	FString Sig;
 	for (const FEntry& E : Entries) { Sig += E.Icon + TEXT("@") + E.Msg + TEXT("|"); }

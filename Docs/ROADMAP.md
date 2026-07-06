@@ -56,6 +56,48 @@ Tussen lvl 21 (pro-edibles) en lvl 36 (Oil_Pro) komt er geen nieuw spel-werkwoor
 - [x] **2D.1 Waterfles-vulling** — `WaterCanComponent`-vulgraad gaat niet mee in de save; flessen zijn leeg na load → planten verdrogen onverdiend.
 - [ ] **2D.2 Open kleine bugs** — `FindHomeForPoint` pakt bij gestapelde flats soms de verkeerde verdieping (fix: 3D-afstand i.p.v. XY — open sinds 06-06); machine/animatie-cosmetiek na load.
 
+### 2E. Packing bench als skill-activiteit (notitie-dump 07-06) — GEBOUWD 07-06, speler-verificatie open
+
+> **Beslist 07-06:** wachtmodel = **channel** (bij de bench blijven; balk per container, hoger tier = meer balken
+> tegelijk; sluiten/weglopen = pauze). Level-bron = **bestaande bench-tiers** (Bench_Pack / Bench_Pack2 "Pro" /
+> Bench_Pack3 "Industrial") — hogere tier = meer lanes EN sneller. "Meer tegelijk" = **parallelle lanes** (1/3/6).
+> Architectuur: balk-timer draait client-cosmetisch in UPackWidget; op voltooiing pakt de bestaande server-auth
+> RequestPackGrams echt in (per-speler inventory -> geen co-op-conflict, geen nieuwe replicatie).
+
+- [x] **2E.1 Progress-bar per ingepakte container** — sleep wiet op een container -> start een job in een vrije lane;
+  gepoolde UProgressBar-rijen (patroon uit UDryingRackWidget) lopen vol, dan verschijnt de verpakte voorraad. Channel:
+  de tick draait alleen terwijl de bench open is -> sluiten/weglopen pauzeert.
+- [x] **2E.2 Per-container tijden** — `PackDurationFor`: Bag2 1,2s / Bag5 2,0s / Jar10(50g) 4,5s / Jar15(100g) 7,5s /
+  Block(250g) 13s / Sack(500g) 22s. Gedeeld door de bench-snelheid (tier).
+- [x] **2E.3 Leveling via bench-tiers** — `APackBench::PackPerActionFor` (1/3/6 lanes) + nieuwe `PackSpeedFor`
+  (1,0 / 1,6 / 2,4x). Doorgeplumbd via `OpenPack(batch, speed)` -> `GetPackBatch()/GetPackSpeed()`.
+- [x] **2E.4 Co-op** — geen nieuwe replicatie nodig: client-cosmetische balk + bestaande server-auth pack op voltooiing;
+  per-speler inventory dus twee spelers aan één bench pakken uit hun eigen voorraad. (Nog niet 2-speler-getest.)
+- [x] **2E.5 Hoeveelheid-popup + queue (07-06)** — sleep wiet op een container -> "How many grams to pack?"-slider-popup
+  (gespiegeld van de deal-AmountPopup, GRAMMEN, met All/Pack/Cancel-knoppen). Popup ALLEEN als er meer wiet is dan in
+  EEN container past (MaxGrams > Cap); past het in een enkele container = direct inpakken, geen popup. Label toont het
+  aantal bakjes. `EnqueueGrams` verdeelt de grammen over containers (elk tot cap). Jobs = QUEUE: eerste N=lanes lopen,
+  rest "queued"; queue-cap 8. Cellen (weed/container/bag) GEPOOLD (Frame+SetInner+change-sig, geen ClearChildren-flash).
+- [x] **2E.8 Alles op 1 scherm (07-06)** — Unpack-tab WEG: uitpakken = een volle zak naar de wiet-kolom links slepen.
+  Rechter kolom toont nu lege containers + AL je zakken (sleepbaar=uitpakken, niet-vol=ook bijvullen). Uitpakken is een
+  channel-job op de HELFT van de pack-tijd. Bench-menu iets lager (16%) + ruimer (720px). Merge geeft nu ook een popup (default vol).
+- [x] **2E.7 2-slider popup + bijvullen/mergen (07-06)** — bij te veel wiet voor 1 container: popup met **gram/zakje + aantal
+  zakjes** (2 sliders, aantal-max hangt af van gram/zakje). En **niet-volle zakjes** verschijnen tussen de containers als
+  bijvul-doel: sleep zelfde-strain wiet erop -> top-up-job -> `ServerTopUp` mengt THC/kwaliteit (gewogen op gram). Cellen gepoold.
+- [x] **2E.6 Unpack-redesign (07-06)** — unpack-tab nu consistent met packen: sleepbare verpakte-zak-cellen (nette namen
+  via MakeItemCellContent, geen "SH"-afkorting meer) -> uitpak-dropzone -> "How many grams to take out?"-popup. Nieuwe
+  server-RPC `ServerUnpackGrams`: haalt X gram uit de zak(ken), geeft per VOLLE zak z'n container terug; het laatste,
+  deels-geleegde zakje komt KLEINER terug (rest blijft erin). De oude bags-slider/Half/Max is eruit.
+
+### 2F. Joint-rollen: roltijd schaalt met grammen (07-06)
+
+- [x] **2F.1 Dikke joint = langer rollen** — de RMB-hold-roltijd (`AThePlugSIMCharacter`, RollHoldRequired 0,6s) schaalt
+  nu met de geladen grammen: `RollReq = 0,6 + (gram-1)*0,6s` (2g ~1,2s, 5g ~3,0s, 10g ~6,0s). De HUD-ring (SetRollHoldFrac)
+  pakt de nieuwe tijd automatisch. Balans (per-gram-factor) speler-verificatie open.
+
+**Open na verificatie:** in-world balk boven de bench (nu alleen in de UI); evt. XP-tik per ingepakte container/joint;
+2-speler-test aan één bench; balans van de pack-tijden/snelheden + de joint-roltijd-per-gram voelen.
+
 ---
 
 ## FASE 3 — De 50+ shop-fase (GERESERVEERD — pas na fase 1+2)

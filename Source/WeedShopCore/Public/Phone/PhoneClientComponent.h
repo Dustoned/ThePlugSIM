@@ -211,10 +211,11 @@ public:
 	void CloseWardrobe();
 
 	// --- Verpak-bench (in de wereld): verdeel gedroogde wiet in bakjes/jars (verkoopbare voorraad) ---
-	// Batch = hoeveel zakjes deze tafel per keer verwerkt (tier).
+	// Batch = hoeveel containers deze tafel TEGELIJK inpakt (parallelle lanes, tier). Speed = balk-snelheid (tier).
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
-	void OpenPack(int32 Batch = 1);
+	void OpenPack(int32 Batch = 1, float Speed = 1.f);
 	int32 GetPackBatch() const { return PackBatchUI; }
+	float GetPackSpeed() const { return PackSpeedUI; }
 	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
 	void ClosePack();
 	UFUNCTION(BlueprintPure, Category = "WeedShop|Pack")
@@ -241,6 +242,20 @@ public:
 	void RequestUnpack(FName BagId, int32 Count);
 	UFUNCTION(Server, Reliable)
 	void ServerUnpack(FName BagId, int32 Count);
+
+	// UITPAKKEN op GRAM: haal een gekozen aantal gram uit de zak(ken) van BagId. Volle zakjes leveren hun
+	// container terug; het laatste, deels-geleegde zakje blijft als kleiner zakje bestaan (rest blijft erin).
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
+	void RequestUnpackGrams(FName BagId, int32 Grams);
+	UFUNCTION(Server, Reliable)
+	void ServerUnpackGrams(FName BagId, int32 Grams);
+
+	// BIJVULLEN: extra gram wiet in een niet-volle zak van dezelfde strain doen -> vollere zak; THC/kwaliteit
+	// wordt een gewogen gemiddelde (op grammen) van de zak + de toegevoegde wiet.
+	UFUNCTION(BlueprintCallable, Category = "WeedShop|Pack")
+	void RequestTopUp(FName BudId, FName BagId, int32 Grams);
+	UFUNCTION(Server, Reliable)
+	void ServerTopUp(FName BudId, FName BagId, int32 Grams);
 
 	// --- Opslag-schap (in de wereld): stacks tussen je inventory en het schap verplaatsen ---
 	void OpenShelf(class AStorageShelf* Shelf);
@@ -1045,7 +1060,8 @@ protected:
 	bool bWardrobeOpen = false; // kledingkast: outfit-menu open
 	bool bBankViaAtm = false; // Bank-app geopend via fysieke ATM (geen upgrade vereist)
 	bool bPackOpen = false;
-	int32 PackBatchUI = 1; // zakjes per verpak-actie (van de bench-tier)
+	int32 PackBatchUI = 1;    // containers tegelijk (parallelle lanes, van de bench-tier)
+	float PackSpeedUI = 1.f;  // inpak-snelheid-factor (van de bench-tier; hoger = balk sneller vol)
 
 	bool bShelfOpen = false;
 	TWeakObjectPtr<class AStorageShelf> ShelfActor; // het schap dat nu open is

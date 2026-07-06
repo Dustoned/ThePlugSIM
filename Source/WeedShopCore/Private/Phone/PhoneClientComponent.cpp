@@ -1312,10 +1312,11 @@ void UPhoneClientComponent::CloseWardrobe()
 	UpdateCursor();
 }
 
-void UPhoneClientComponent::OpenPack(int32 Batch)
+void UPhoneClientComponent::OpenPack(int32 Batch, float Speed)
 {
 	EnsureWidget();
 	PackBatchUI = FMath::Max(1, Batch);
+	PackSpeedUI = FMath::Max(0.1f, Speed);
 	bPackOpen = true;
 	bOpen = false; bRollOpen = false; bDealOpen = false; bInventoryOpen = false; bPotUpgradeOpen = false; bAtmOpen = false; bShelfOpen = false; bDryRackOpen = false;
 	UpdateCursor();
@@ -1873,6 +1874,113 @@ void UPhoneClientComponent::ServerUnpack_Implementation(FName BagId, int32 Count
 	{
 		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160),
 			FString::Printf(TEXT("Unpacked %d bag%s -> %dg %s + %d empty container%s back."), N, N == 1 ? TEXT("") : TEXT("s"), TotalGrams, *Strain.ToString(), N, N == 1 ? TEXT("") : TEXT("s")));
+	}
+}
+
+void UPhoneClientComponent::RequestUnpackGrams(FName BagId, int32 Grams) { ServerUnpackGrams(BagId, Grams); }
+
+void UPhoneClientComponent::ServerUnpackGrams_Implementation(FName BagId, int32 Grams)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv) { return; }
+	const FString BagStr = BagId.ToString();
+	if (!BagStr.StartsWith(TEXT("Bag_"))) { return; }          // alleen verpakte zakjes
+	const int32 Owned = Inv->GetQuantity(BagId);
+	if (Owned <= 0) { return; }
+	const int32 PerBag = FMath::Max(1, UInventoryComponent::BagGrams(BagId));
+	const int32 TotalGrams = Owned * PerBag;
+	const int32 Want = FMath::Clamp(Grams, 1, TotalGrams);      // gevraagde grammen, gecapt op wat er in zit
+
+	const FName Strain = UInventoryComponent::BagStrain(BagId);
+	const FName BudId(*FString::Printf(TEXT("Bud_%s"), *Strain.ToString()));
+	const float Thc = Inv->GetItemQuality(BagId);
+	const float Q = Inv->GetItemQualityPct(BagId);
+
+	// Container-type dat per VOLLE zak teruggegeven wordt (zelfde fallback als ServerUnpack).
+	FName ContId = UInventoryComponent::BagContainer(BagId);
+	if (ContId.IsNone())
+	{
+		if      (PerBag <= 2)   { ContId = FName(TEXT("Cont_Bag2")); }
+		else if (PerBag <= 5)   { ContId = FName(TEXT("Cont_Bag5")); }
+		else if (PerBag <= 25)  { ContId = FName(TEXT("Cont_Jar10")); }
+		else if (PerBag <= 50)  { ContId = FName(TEXT("Cont_Jar15")); }
+		else if (PerBag <= 100) { ContId = FName(TEXT("Cont_Block100")); }
+		else                    { ContId = FName(TEXT("Cont_Garbage500")); }
+	}
+
+	const int32 FullBags = Want / PerBag;                       // hele zakjes die volledig leeg gaan
+	const int32 Remainder = Want % PerBag;                      // restje uit 1 extra zakje (komt kleiner terug)
+	const int32 BagsToOpen = FullBags + (Remainder > 0 ? 1 : 0);
+	if (BagsToOpen <= 0 || BagsToOpen > Owned) { return; }      // veiligheid (kan niet meer openen dan je hebt)
+
+	if (!Inv->RemoveItem(BagId, BagsToOpen)) { return; }
+
+	// Losse wiet terug = exact het gevraagde aantal gram (nooit stil laten verdwijnen -> drop bij vol).
+	AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), BudId, Want, Thc, Q);
+	// Volle zakjes -> hun lege container terug (1 per volledig geleegd zakje).
+	if (FullBags > 0)
+	{
+		AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), ContId, FullBags, -1.f, -1.f);
+	}
+	// Restje -> het laatste zakje komt KLEINER terug (de rest blijft in de container zitten).
+	if (Remainder > 0)
+	{
+		const int32 LeftInBag = PerBag - Remainder;
+		const FName SmallerBag = UInventoryComponent::MakeBagId(Strain, ContId, LeftInBag);
+		AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), SmallerBag, 1, Thc, Q);
+	}
+
+	if (GEngine)
+	{
+		FString Msg = FString::Printf(TEXT("Took %dg %s out."), Want, *Strain.ToString());
+		if (FullBags > 0) { Msg += FString::Printf(TEXT(" +%d empty container%s back."), FullBags, FullBags == 1 ? TEXT("") : TEXT("s")); }
+		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160), Msg, BudId.ToString());
+	}
+}
+
+void UPhoneClientComponent::RequestTopUp(FName BudId, FName BagId, int32 Grams) { ServerTopUp(BudId, BagId, Grams); }
+
+void UPhoneClientComponent::ServerTopUp_Implementation(FName BudId, FName BagId, int32 Grams)
+{
+	UInventoryComponent* Inv = GetOwnerInventory();
+	if (!Inv) { return; }
+	const FString BudStr = BudId.ToString();
+	if (!BudStr.StartsWith(TEXT("Bud_")) || !BagId.ToString().StartsWith(TEXT("Bag_"))) { return; }
+	if (Inv->GetQuantity(BagId) <= 0) { return; }              // zak is er niet (meer) -> niks doen
+	const int32 BudHave = Inv->GetQuantity(BudId);
+	if (BudHave <= 0) { return; }
+
+	const FName Strain = UInventoryComponent::BagStrain(BagId);
+	const FName BudStrain(*BudStr.RightChop(4));               // Bud_X -> X
+	if (BudStrain != Strain) { return; }                      // andere strain -> niet in deze zak (ander product)
+
+	const FName ContId = UInventoryComponent::BagContainer(BagId);
+	if (ContId.IsNone()) { return; }                          // legacy zak zonder container-type -> geen cap bekend
+	const int32 Cap = ContainerCapacity(ContId);
+	const int32 Gb = FMath::Max(1, UInventoryComponent::BagGrams(BagId));
+	const int32 Space = FMath::Max(0, Cap - Gb);
+	if (Space <= 0) { return; }                               // al vol
+	const int32 Add = FMath::Clamp(Grams, 1, FMath::Min(Space, BudHave));
+	if (Add <= 0) { return; }
+
+	// Gewogen gemiddelde (op grammen) van THC + kwaliteit: bestaande zak-inhoud + de toegevoegde wiet.
+	const float BagThc = Inv->GetItemQuality(BagId);
+	const float BagQ   = Inv->GetItemQualityPct(BagId);
+	const float BudThc = Inv->GetItemQuality(BudId);
+	const float BudQ   = Inv->GetItemQualityPct(BudId);
+	const int32 NewG   = Gb + Add;
+	const float NewThc = (BagThc * Gb + BudThc * Add) / float(NewG);
+	const float NewQ   = (BagQ   * Gb + BudQ   * Add) / float(NewG);
+
+	if (!Inv->RemoveItem(BagId, 1)) { return; }               // 1 oude (niet-volle) zak eruit
+	Inv->RemoveItem(BudId, Add);                              // Add gram wiet eruit
+	const FName NewBag = UInventoryComponent::MakeBagId(Strain, ContId, NewG); // vollere zak, gemengde kwaliteit
+	AWorldItemPickup::GiveOrDrop(Inv, Cast<APawn>(GetOwner()), NewBag, 1, NewThc, NewQ);
+
+	if (GEngine)
+	{
+		UWeedToast::NotifyPawn(GetOwner(), -1, 2.5f, FColor(120, 220, 160),
+			FString::Printf(TEXT("Topped up %s to %dg (+%dg)."), *Strain.ToString(), NewG, Add), NewBag.ToString());
 	}
 }
 

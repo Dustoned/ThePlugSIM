@@ -109,6 +109,16 @@ int32 APackBench::PackPerActionFor(FName Tier)
 
 int32 APackBench::GetPackPerAction() const { return PackPerActionFor(BenchTier); }
 
+float APackBench::PackSpeedFor(FName Tier)
+{
+	const FString S = Tier.ToString();
+	if (S == TEXT("Bench_Pack2")) { return 1.6f; } // pro: ~40% sneller per container
+	if (S == TEXT("Bench_Pack3")) { return 2.4f; } // industrieel: ruim 2x zo snel
+	return 1.f; // Bench_Pack (basis)
+}
+
+float APackBench::GetPackSpeed() const { return PackSpeedFor(BenchTier); }
+
 void APackBench::Interact_Implementation(APawn* InstigatorPawn)
 {
 	// Het verpak-menu openen gebeurt lokaal in de character (UI-actie); hier niets te doen.

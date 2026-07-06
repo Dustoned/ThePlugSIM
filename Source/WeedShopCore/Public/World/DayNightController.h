@@ -190,6 +190,7 @@ public:
 	TSet<TWeakObjectPtr<class ULightComponent>> SeenLights;
 	float LightScanTimer = 0.f;
 	float LightBudgetTimer = 0.f; // licht-budget-pool: cap zichtbare Movable-lampen op de N-dichtstbij de speler (perf: count drijft InitViews/Lighting)
+	float SkyCaptureTimer = 0.f;  // gecontroleerde skylight-recapture (i.p.v. continue real-time capture die ambient-flicker/rand-puls gaf)
 	int32 LightScanDry = 0; // opeenvolgende scans zonder iets nieuws -> scan-interval omhoog (geen 6s-hitch meer)
 	TSet<TWeakObjectPtr<AActor>> LightScanSeenActors; // al-verwerkte actors -> volledig overslaan (geen herhaalde
 	                                                  // per-actor component-gather + string-checks elke scan = de periodieke hang)

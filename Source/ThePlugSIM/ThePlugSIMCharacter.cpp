@@ -1185,10 +1185,13 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		// Rollen: geladen vloei in de hand + rechtermuis inhouden -> rol de joint. (Laden gebeurt via
 		// de "Load"-knop in het rol-menu; de lading blijft staan tot je 'm rolt.)
 		const bool bPapersInHand = Inventory && ActiveIdStr.StartsWith(TEXT("Papers_"));
+		// Roltijd schaalt met de joint-grootte: een dikke joint (meer gram) rolt langer dan een kleintje.
+		const int32 RollLoadG = (Phone && Phone->IsRollLoadedUI()) ? FMath::Max(1, Phone->GetRollLoadGramsUI()) : 1;
+		const float RollReq = FMath::Max(0.2f, RollHoldRequired + float(RollLoadG - 1) * RollHoldPerGram);
 		if (bRmbDown && !bUiOpen && bPapersInHand && Phone && Phone->IsRollLoadedUI())
 		{
 			RollHoldTime += DeltaSeconds;
-			if (!bRollFired && RollHoldTime >= RollHoldRequired)
+			if (!bRollFired && RollHoldTime >= RollReq)
 			{
 				bRollFired = true;
 				Phone->SetRollGrams(Phone->GetRollLoadGramsUI());
@@ -1200,7 +1203,7 @@ void AThePlugSIMCharacter::Tick(float DeltaSeconds)
 		{
 			RollHoldTime = 0.f;
 		}
-		if (Phone) { Phone->SetRollHoldFrac(bRollFired ? 0.f : FMath::Clamp(RollHoldTime / RollHoldRequired, 0.f, 1.f)); }
+		if (Phone) { Phone->SetRollHoldFrac(bRollFired ? 0.f : FMath::Clamp(RollHoldTime / RollReq, 0.f, 1.f)); }
 		// Stoned = XP-bonus op basis van de THC% van je wiet. De bonus wordt nu PER-VERDIENER toegepast bij
 		// ULevelComponent::AddXP (via GetStonedXpMultiplier op de earner-pawn) i.p.v. hier als gedeelde
 		// crew-multiplier -> in co-op geen crew-breed meeliften + geen race tussen host- en joiner-pawn.
@@ -2348,7 +2351,7 @@ void AThePlugSIMCharacter::OnPrimaryClick()
 			// Verpak-tafel -> open lokaal het verpak-menu (met de batch-grootte van deze tafel).
 			if (APackBench* Bench = Cast<APackBench>(Focus))
 			{
-				if (Phone) { Phone->OpenPack(Bench->GetPackPerAction()); }
+				if (Phone) { Phone->OpenPack(Bench->GetPackPerAction(), Bench->GetPackSpeed()); }
 				return;
 			}
 			// Opslag-schap -> open lokaal het schap-menu.
@@ -2463,7 +2466,7 @@ void AThePlugSIMCharacter::OnInteractKey()
 			}
 			if (APackBench* Bench = Cast<APackBench>(Focus))
 			{
-				if (Phone) { Phone->OpenPack(Bench->GetPackPerAction()); }
+				if (Phone) { Phone->OpenPack(Bench->GetPackPerAction(), Bench->GetPackSpeed()); }
 				return;
 			}
 			if (AStorageShelf* Shelf = Cast<AStorageShelf>(Focus))
