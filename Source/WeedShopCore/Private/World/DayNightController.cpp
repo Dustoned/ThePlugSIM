@@ -1030,8 +1030,11 @@ void ADayNightController::Tick(float DeltaSeconds)
 						// afstand op alleen de KLEINE Static-meshes (bounds-radius < 1.8m) -> gebouwen (Nanite), weg, auto's en
 						// grote props blijven. r.ViewDistanceScale (per tier) schaalt mee: potato ~70m, epic ~260m = tier-trap.
 						if (!bTallLamp && !bSmallLamp && !SkyLike(MN) && !SkyLike(AN)
-							&& MC->Mobility == EComponentMobility::Static && MC->Bounds.SphereRadius < 180.f)
+							&& MC->Mobility == EComponentMobility::Static && MC->Bounds.SphereRadius < 320.f)
 						{
+							// Drempel 180->320cm: tafels/parasols/plantenbakken (terras-meubilair) vielen er net buiten
+							// terwijl juist DIE met honderden in de cafe-zones staan (gemeten: 4942 draws / Draw 23ms op de
+							// strip vs ~2300 / 10ms elders). Gebouwen (Nanite), weg en auto's blijven ruim boven de drempel.
 							MC->SetCullDistance(20000.f); // ~70m op potato (x r.ViewDistanceScale 0.35); engine dither-fade = pop-arm
 						}
 						if ((bTallLamp || bSmallLamp) && !PackLampSeen.Contains(MC))
