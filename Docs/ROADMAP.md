@@ -618,7 +618,7 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [x] ND7.5 "Hoeveel?"-sliders (bag-popup e.d.) starten standaard in het MIDDEN; geldt bij voorkeur voor alle vergelijkbare hoeveelheid-sliders. [DealWidget AmountRoot, InventoryWidget split]
 - [x] ND7.6 Hover-info (tooltip zoals inventory) OVERAL waar items staan zonder hand-preview/quick-view — o.a. deal-UI, pickers, storage-grids. [WeedItemPickGrid, DealWidget, ShelfWidget]
 - [x] ND7.7 Checkout-flits gefixt (07-06): euro-glyph->EUR (fallback-font gaf overflow), view-wissel 1 tik uitgesteld, ClipToBounds op actie-knoppen. [PhoneWidget store]
-- [ ] ND7.9 (LIJKT AL AANWEZIG via gedeelde BuildItemDetail - speler verifieert; zo niet: exact item melden) Inv quick-view mist info die elders wel zichtbaar is (bv. "3/3 water" bij waterfles) — quick-view compleet maken. [WeedUiStyle BuildItemDetail]
+- [x] ND7.9 (07-06: BuildItemDetail miste de WaterBottle-tak -> water-fill toegevoegd aan de quick-view) Inv quick-view mist info die elders wel zichtbaar is (bv. "3/3 water" bij waterfles) — quick-view compleet maken. [WeedUiStyle BuildItemDetail]
 - [x] ND7.15 Deal-UI: "TO contact"-regel weg; alleen "10/45"-notatie -> vaste layout, geen UI-verschuiving als stats wijzigen tijdens sliden. [DealWidget header]
 - [x] ND7.11 Scroll-hint uit de placement-controls (alleen nog in de control-helper rechtsonder). [BuildComponent/placement-hints]
 - [x] ND7.12 Nieuwe setting "Interaction prompt" (naast controls-overlay), STANDAARD AAN (besluit 07-06). Uitgezet: center-prompt weg, interactie-info rechtsonder in de control-helper met beschrijvende tekst (bv. "Go to floor 3"). [InteractionComponent, HotkeyHintWidget, SettingsWidget]
