@@ -1265,6 +1265,21 @@ namespace WeedUI
 			Fit->SetStretch(EStretch::ScaleToFit);
 			Fit->AddChild(Img);
 			Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+			// ND7.1: het weed_bag/jar/sack-PNG is een ZWARTE vorm (+ groen blaadje). Slate-tint is een
+			// vermenigvuldiging -> zwart blijft zwart, dus de bag zelf is niet te kleuren. Oplossing: een
+			// afgeronde STRAIN-gekleurde achtergrond achter het icoon zodat de bag op een strain-kleur-veld
+			// staat (herkenbaar per strain, net als de tag-pill). Alleen voor gevulde wiet-bags.
+			if (ItemId.ToString().StartsWith(TEXT("Bag_")))
+			{
+				const FLinearColor Strain = TagColorForItem(ItemId, 0.85f, 0.85f);
+				UBorder* Bg = Tree->ConstructWidget<UBorder>();
+				Bg->SetBrush(Rounded(FLinearColor(Strain.R, Strain.G, Strain.B, 0.85f), Size * 0.22f));
+				Bg->SetPadding(FMargin(Size * 0.10f));
+				Bg->SetVisibility(ESlateVisibility::HitTestInvisible);
+				Bg->SetContent(Fit);
+				return Bg;
+			}
 			return Fit;
 		}
 
