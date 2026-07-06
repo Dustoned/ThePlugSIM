@@ -122,8 +122,9 @@ protected:
 	UPROPERTY() TObjectPtr<UTextBlock> VolMusicVal;
 	int32 LastVolUi = -1, LastVolGame = -1, LastVolMusic = -1; // procenten
 
-	// Kit-toggles (W_Toggle uit de Minimalist-kit): per-setting bool, gepolld in NativeTick (IsToggled via reflectie).
-	struct FKitToggle { TWeakObjectPtr<UUserWidget> W; bool Last = false; TFunction<void(bool)> Apply; };
+	// Kit-toggles (W_Toggle uit de Minimalist-kit): per-setting bool, gepolld in NativeTick via de BINNENSTE
+	// UCheckBox (de eigen IsToggled-property is dood - zie FindInnerCheckBox).
+	struct FKitToggle { TWeakObjectPtr<UUserWidget> W; TWeakObjectPtr<class UCheckBox> Inner; bool Last = false; TFunction<void(bool)> Apply; };
 	TArray<FKitToggle> KitToggles;
 
 	// Kit-sliders (W_Slider): genormaliseerde Value 0-1 via reflectie, gepolld; Apply mapt+past toe+geeft display.

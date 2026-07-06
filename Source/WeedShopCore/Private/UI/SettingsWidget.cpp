@@ -13,6 +13,7 @@
 #include "Components/ScrollBox.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Components/CheckBox.h" // kit-W_Toggle's binnenste klikbare element (IsToggled is dood)
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Border.h"
@@ -365,6 +366,23 @@ static USlider* FindInnerSlider(UWidget* W)
 	return nullptr;
 }
 
+// Kit-W_Toggle: het KLIKBARE element binnenin is een UCheckBox (ToggleButton-stijl met de pil-graphic).
+// De BP-node die de checkbox-staat naar de eigen `IsToggled`-property kopieert staat DISABLED
+// (ENodeEnabledState::Disabled in de asset) -> daarom veranderde IsToggled nooit en deden de toggles niks.
+// We pollen daarom de checkbox zelf (die flipt + animeert wel native) i.p.v. de dode IsToggled-property.
+static UCheckBox* FindInnerCheckBox(UWidget* W)
+{
+	if (!W) { return nullptr; }
+	if (UCheckBox* C = Cast<UCheckBox>(W)) { return C; }
+	if (UPanelWidget* P = Cast<UPanelWidget>(W))
+	{
+		const int32 N = P->GetChildrenCount();
+		for (int32 i = 0; i < N; ++i) { if (UCheckBox* Found = FindInnerCheckBox(P->GetChildAt(i))) { return Found; } }
+	}
+	if (UContentWidget* CW = Cast<UContentWidget>(W)) { return FindInnerCheckBox(CW->GetContent()); }
+	return nullptr;
+}
+
 // --- Kit-W_Slider Value-reflectie (fallback als de binnenste slider niet gevonden is) ---
 static double KitSliderValue(UUserWidget* W)
 {
@@ -393,9 +411,15 @@ void USettingsWidget::AddKitToggle(UVerticalBox* Into, const FString& Label, boo
 		if (UUserWidget* Tog = CreateWidget<UUserWidget>(this, ToggleCls))
 		{
 			if (FBoolProperty* P = FindFProperty<FBoolProperty>(Tog->GetClass(), TEXT("IsToggled"))) { P->SetPropertyValue_InContainer(Tog, Initial); }
-			Row->AddChildToHorizontalBox(Tog)->SetVerticalAlignment(VAlign_Center);
-			KitToggles.Add({ Tog, Initial, Apply });
-			if (OutW) { *OutW = Tog; } // handle zodat een andere rij (Preset) de waarde er later in kan duwen (reflectie, geen rebuild)
+			// Het KLIKBARE + zichtbare element is de binnenste UCheckBox (ToggleButton-pil). De BP-node die
+			// de checkbox-staat naar IsToggled kopieert is DISABLED -> we zetten/lezen de checkbox zelf.
+			UCheckBox* Inner = FindInnerCheckBox(Tog->GetRootWidget());
+			if (Inner) { Inner->SetIsChecked(Initial); } // beginstand = de echte visual (pil links/rechts)
+			UHorizontalBoxSlot* TS = Row->AddChildToHorizontalBox(Tog);
+			TS->SetVerticalAlignment(VAlign_Center); TS->SetHorizontalAlignment(HAlign_Right);
+			FKitToggle KT; KT.W = Tog; KT.Inner = Inner; KT.Last = Initial; KT.Apply = Apply;
+			KitToggles.Add(KT);
+			if (OutW) { *OutW = Tog; } // handle zodat een andere rij (Preset) de waarde er later in kan duwen
 		}
 	}
 	Into->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
@@ -459,7 +483,15 @@ void USettingsWidget::SetKitToggleValueInPlace(TWeakObjectPtr<UUserWidget> W, bo
 	UUserWidget* Tog = W.Get();
 	if (!Tog) { return; }
 	if (FBoolProperty* P = FindFProperty<FBoolProperty>(Tog->GetClass(), TEXT("IsToggled"))) { P->SetPropertyValue_InContainer(Tog, bValue); }
-	for (FKitToggle& KT : KitToggles) { if (KT.W.Get() == Tog) { KT.Last = bValue; break; } }
+	for (FKitToggle& KT : KitToggles)
+	{
+		if (KT.W.Get() == Tog)
+		{
+			if (UCheckBox* CB = KT.Inner.Get()) { CB->SetIsChecked(bValue); } // de checkbox is de echte visual
+			KT.Last = bValue;
+			break;
+		}
+	}
 }
 
 // Bouwt de 4 categorie-panelen ÉÉN keer. Daarna wisselt een tab-klik alleen Visibility -> geen teardown/flash,
@@ -860,7 +892,6 @@ void USettingsWidget::BuildControlsPanel(UVerticalBox* P)
 	// UIT -> de controls-kaart rechtsonder toont de beschrijvende actie-tekst van het gefocuste object.
 	AddKitToggle(P, TEXT("Interaction prompt"), UInteractionComponent::IsInteractPromptEnabled(),
 		[this](bool bOn) { UInteractionComponent::SetInteractPromptEnabled(bOn); });
-
 	P->AddChildToVerticalBox(WeedUI::Text(WidgetTree, TEXT("Click a key, press the new one.  Esc = cancel."), 13, WeedUI::ColTextDim()))
 		->SetPadding(FMargin(0.f, 6.f, 0.f, 4.f));
 
@@ -990,16 +1021,14 @@ void USettingsWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 
-	// Kit-toggles pollen (W_Toggle.IsToggled via reflectie -> apply bij wijziging).
+	// Kit-toggles pollen via de BINNENSTE UCheckBox (IsToggled is dood: de BP-node die 'm bijwerkt is
+	// disabled) -> de checkbox flipt + animeert wel native; bij een wissel Apply aanroepen.
 	for (FKitToggle& KT : KitToggles)
 	{
-		if (UUserWidget* W = KT.W.Get())
+		if (UCheckBox* CB = KT.Inner.Get())
 		{
-			if (FBoolProperty* P = FindFProperty<FBoolProperty>(W->GetClass(), TEXT("IsToggled")))
-			{
-				const bool Cur = P->GetPropertyValue_InContainer(W);
-				if (Cur != KT.Last) { KT.Last = Cur; if (KT.Apply) { KT.Apply(Cur); } }
-			}
+			const bool Cur = CB->IsChecked();
+			if (Cur != KT.Last) { KT.Last = Cur; if (KT.Apply) { KT.Apply(Cur); } }
 		}
 	}
 }

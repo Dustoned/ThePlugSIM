@@ -1163,7 +1163,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 					float LampMaxD = 25000.f;
 					if (const UPointLightComponent* PLc = Cast<UPointLightComponent>(L))
 					{
-						if (PLc->AttenuationRadius < 650.f)
+						if (PLc->AttenuationRadius < 1500.f) // gemeten (PDIAG): 0 lampen <6.5m, de bulk (953) zit in 6.5-15m -> die klasse IS het decor
 						{
 							LampMaxD = 11000.f;
 							if (L->MaxDrawDistance != 11000.f)
