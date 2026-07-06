@@ -610,3 +610,29 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
     drop-route, controls-overlay verbergt alleen de hoekkaart en toast-stack is max 3. Build groen; lean
     standalone smoke haalde `Map_MainMenu` + `GameState::BeginPlay` en sloot af via `ViewportClosed`,
     zonder fatal/unhandled exception.
+
+## Notitie-dump speler 2026-07-06 (ND7) — vastgelegd, nog te prioriteren
+
+**UI/UX:**
+- [ ] ND7.1 Gevulde bag-iconen tinten in de STRAIN-kleur (zoals strain-tags) i.p.v. generieke baggie-kleur. [WeedUiStyle ItemIcon/tint]
+- [ ] ND7.5 "Hoeveel?"-sliders (bag-popup e.d.) starten standaard in het MIDDEN; geldt bij voorkeur voor alle vergelijkbare hoeveelheid-sliders. [DealWidget AmountRoot, InventoryWidget split]
+- [ ] ND7.6 Hover-info (tooltip zoals inventory) OVERAL waar items staan zonder hand-preview/quick-view — o.a. deal-UI, pickers, storage-grids. [WeedItemPickGrid, DealWidget, ShelfWidget]
+- [ ] ND7.7 Checkout-knop in fullscreen shop FLASHT bij klik (rebuild-flits) — persistente-UI-regel checken/fixen. [PhoneWidget store]
+- [ ] ND7.9 Inv quick-view mist info die elders wel zichtbaar is (bv. "3/3 water" bij waterfles) — quick-view compleet maken. [WeedUiStyle BuildItemDetail]
+- [ ] ND7.15 Deal-UI: "TO contact"-regel weg; alleen "10/45"-notatie -> vaste layout, geen UI-verschuiving als stats wijzigen tijdens sliden. [DealWidget header]
+- [ ] ND7.11 Scroll-hint uit de placement-controls (alleen nog in de control-helper rechtsonder). [BuildComponent/placement-hints]
+- [ ] ND7.12 Center-screen "F interact"-prompt weg; interactie-info alleen rechtsonder in de control-helper, mét beschrijvende tekst (bv. "Go to floor 3" bij lift). Optioneel aparte setting "Interaction controls" naast de controls-overlay-setting; uitgezet = rechtsonder verwerken. [InteractionComponent prompt, HotkeyHintWidget, SettingsWidget]
+
+**Deal/inventory-interactie:**
+- [ ] ND7.10 Bags terugklikken uit het deal-geef-vak werkt alleen als ze aan customer-kant staan — overal terug kunnen klikken. (VRAAG: exacte situatie waarin het niet werkt?) [DealWidget/DealBagCell]
+- [ ] ND7.13 Deals: ook vanaf de HOTBAR naar het customer/geef-slot kunnen slepen (nu alleen vanuit inventory-kolom). [DealWidget, HotbarWidget drag]
+- [ ] ND7.14 Universeel sleep-gedrag: ALT-drag = altijd 1 item (geen popup); SHIFT-klik = hele stack direct naar het andere open storage-scherm. Overal (inv<->shelf/fridge/deal). [InventoryWidget, ShelfWidget, WeedItemPickGrid]
+
+**Gameplay/balans:**
+- [ ] ND7.4 Heat-risico schaalt met hoeveel wiet je OP ZAK hebt op straat (meer gram = hogere kans op heat-events). [HeatComponent + InventoryComponent gram-telling]
+- [ ] ND7.8 Max-stack-groottes van ALLE items nalopen/balansen (audit + tabel). [InventoryComponent, Data]
+- [ ] ND7.16 Klok linksboven wordt UPGRADE: "horloge" kopen in de upgrades-app (goede prijs); zonder horloge zie je de tijd alleen via de telefoon. [UpgradeComponent, StatusHudWidget, PhoneWidget]
+
+**Settings/audio:**
+- [ ] ND7.2 Level-up-geluid standaard ~50% zachter. [LevelUpWidget/audio]
+- [ ] ND7.3 Third-person (B) wordt settings-toggle met "(experimental)"-label, standaard UIT. [SettingsWidget, ThePlugSIMCharacter]
