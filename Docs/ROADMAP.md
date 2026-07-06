@@ -636,3 +636,10 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 **Settings/audio:**
 - [ ] ND7.2 Level-up-geluid standaard ~50% zachter. [LevelUpWidget/audio]
 - [ ] ND7.3 Third-person (B) wordt settings-toggle met "(experimental)"-label, standaard UIT. [SettingsWidget, ThePlugSIMCharacter]
+
+## Open speler-verificaties (fixes staan er, alleen nog testen — NIET afvinken tot bevestigd)
+- [ ] V.1 Schaduw-tears weg? (tier-bewust VSM-profiel, commit 38e39312) — checken op de plekken waar ze zaten
+- [ ] V.2 Wereld-load merkbaar sneller? (dubbele graphics-applies weg, zelfde commit)
+- [ ] V.3 Minder stutters bij nieuwe NPC's? (modulaire-parts-preload, commit 84053ad1)
+- [ ] V.4 Dag/nacht-wissel zonder haper? (lampen-flip-cap, commit efc76089)
+- [ ] V.5 Toasts: 1x per actie, iets langer zichtbaar; hotbar vult bij koop (commits f86f6408/bab783da)
