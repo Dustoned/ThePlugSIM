@@ -1145,7 +1145,8 @@ void ADayNightController::Tick(float DeltaSeconds)
 			if (APlayerController* PC = GetWorld()->GetFirstPlayerController()) { if (APawn* Pn = PC->GetPawn()) { PP = Pn->GetActorLocation(); } }
 				static IConsoleVariable* CVarLMD = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LightMaxDrawDistanceScale"));
 				const float Scale = CVarLMD ? FMath::Max(CVarLMD->GetFloat(), 0.05f) : 1.f;
-				const float HideD2 = FMath::Square(25000.f * Scale + 2000.f); // render-cull-afstand + marge; lamp is daar via de renderer al uitgefade -> SetVisibility = pop-vrij
+				// Hide-afstand is PER LAMP (LampHideD2 in ApplyBudget): render-cull-afstand + marge; de lamp is daar
+				// via de renderer al uitgefade -> SetVisibility = pop-vrij. Decor-lichtjes krijgen een kortere afstand.
 				// Max flips per pass: bij de dag/nacht-drempel slaan honderden lampen TEGELIJK om; al die
 				// SetVisibility's in EEN frame = primitive add/remove-burst -> InitViews-stall op de render-thread
 				// (gemeten 65-77ms hitches bij dageraad). De rest schuift door naar de volgende pass (0.35s later) -
@@ -1154,7 +1155,26 @@ void ADayNightController::Tick(float DeltaSeconds)
 				auto ApplyBudget = [&](ULightComponent* L)
 				{
 					if (!L || FlipsLeft <= 0) { return; }
-					const bool bVis = (L->Intensity > 1.f) && (FVector::DistSquared(L->GetComponentLocation(), PP) < HideD2); // ook UIT-lampen (intensiteit ~0, bv. straatlampen overdag) verbergen: die kostten anders volle Lighting voor niks. Pop-vrij want ze staan toch al op 0.
+					// GELAAGD budget: DECOR-lichtjes (klein bereik: palm-slingers, gevel-spots, raam-gloed) faden +
+					// verdwijnen op ~2,3x kortere afstand dan straatlampen. Een 3-6m-lampje draagt op 40m niets meer
+					// bij maar kost wel een volle light-pass; gemeten in de neon-zones 's nachts: 662 lights in scene
+					// -> Lighting 8,5ms van de 22ms Draw. MaxDrawDistance+FadeRange 1x per lamp zetten -> de
+					// renderer-fade schaalt mee (fade-einde VOOR onze hide-afstand) -> pop-vrij.
+					float LampMaxD = 25000.f;
+					if (const UPointLightComponent* PLc = Cast<UPointLightComponent>(L))
+					{
+						if (PLc->AttenuationRadius < 650.f)
+						{
+							LampMaxD = 11000.f;
+							if (L->MaxDrawDistance != 11000.f)
+							{
+								L->SetMaxDrawDistance(11000.f);
+								L->SetMaxDistanceFadeRange(3000.f);
+							}
+						}
+					}
+					const float LampHideD2 = FMath::Square(LampMaxD * Scale + 2000.f);
+					const bool bVis = (L->Intensity > 1.f) && (FVector::DistSquared(L->GetComponentLocation(), PP) < LampHideD2); // ook UIT-lampen (intensiteit ~0, bv. straatlampen overdag) verbergen: die kostten anders volle Lighting voor niks. Pop-vrij want ze staan toch al op 0.
 					if (L->GetVisibleFlag() != bVis) { L->SetVisibility(bVis); --FlipsLeft; }
 				};
 				for (const FDimLight& D : DimLights) { ApplyBudget(D.Light.Get()); }
