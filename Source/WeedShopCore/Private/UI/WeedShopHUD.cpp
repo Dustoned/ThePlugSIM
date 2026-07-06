@@ -211,10 +211,13 @@ void AWeedShopHUD::DrawHUD()
 	}
 
 	// Interactie-prompt (planten hebben hun eigen UMG-kaart; niets tonen als er een UI open is).
+	// ND7.12: dit is de CANVAS-versie van de center-prompt - ook gaten op de "Interaction prompt"-setting
+	// (uitgezet = geen midden-prompt; de control-helper rechtsonder toont dan de actie-tekst).
 	{
 		const UPhoneClientComponent* PhoneUI = GetPhone();
 		const bool bUiOpen = PhoneUI && (PhoneUI->IsAnyGameUIOpen() || PhoneUI->IsMainMenuOpen());
-		const UInteractionComponent* IC = (P && !bUiOpen) ? P->FindComponentByClass<UInteractionComponent>() : nullptr;
+		const bool bPromptOn = UInteractionComponent::IsInteractPromptEnabled();
+		const UInteractionComponent* IC = (P && !bUiOpen && bPromptOn) ? P->FindComponentByClass<UInteractionComponent>() : nullptr;
 		AActor* Focus = IC ? IC->GetFocusedActor() : nullptr;
 		if (Focus)
 		{
