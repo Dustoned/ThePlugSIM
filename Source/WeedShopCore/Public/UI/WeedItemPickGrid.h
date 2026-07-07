@@ -1,6 +1,6 @@
 // UWeedItemPickGrid — compact, herbruikbaar icoon-grid voor keuzelijsten (pack/deal/roll/chat/fridge).
 // Zelfde cel-look als de inventory (UInvCell): 86x86-tegel in een WrapBox, icoon gecentreerd, badge-pill
-// rechtsboven, tag-pill onder-center, geselecteerde cel = hotbar-actief-stijl. Persistent: SetItems groeit/
+// rechtsboven, tag-pill onder-center, geselecteerde cel = rustige accent-rand. Persistent: SetItems groeit/
 // krimpt een cel-POOL en vervangt cel-inhoud alleen bij een sig-verschil (nooit ClearChildren op een klik).
 // De klik-lambda vangt de vaste pool-index en leest Id/Payload uit parallelle arrays, zodat een lijst-
 // wijziging geen herbind vereist. Andere UI-panelen vullen 'm via SetItems + OnPick.

@@ -124,6 +124,50 @@ namespace WeedUI
 		return StorageSlotBrushWithFill(Fill, bFilled, bActive, Accent, Radius);
 	}
 
+	FSlateBrush SelectableSlotBrush(bool bFilled, bool bSelected, FLinearColor Accent, float Radius)
+	{
+		const FLinearColor Fill = bSelected
+			? (bFilled ? ColSlot(0.98f) : ColSlotEmpty(0.58f))
+			: (bFilled ? ColSlot(0.86f) : ColSlotEmpty(0.46f));
+		FSlateBrush B = StorageSlotBrushWithFill(Fill, bFilled, false, Accent, Radius);
+		if (bSelected)
+		{
+			FLinearColor UseAccent = Accent.A > 0.01f ? Accent : ColAccent(0.95f);
+			UseAccent.A = bFilled ? 0.92f : 0.38f;
+			B.OutlineSettings.Width = bFilled ? 2.f : 1.1f;
+			B.OutlineSettings.Color = FSlateColor(UseAccent);
+		}
+		return B;
+	}
+
+	FButtonStyle SelectableSlotButtonStyle(bool bFilled, bool bSelected, FLinearColor Accent, float Radius, FMargin Padding)
+	{
+		FButtonStyle S;
+		S.Normal = SelectableSlotBrush(bFilled, bSelected, Accent, Radius);
+
+		FLinearColor HoverFill = bSelected
+			? (bFilled ? ColSlot(1.f) : ColSlotEmpty(0.64f))
+			: (bFilled ? ColInner(0.92f) : ColSlotEmpty(0.54f));
+		S.Hovered = StorageSlotBrushWithFill(HoverFill, bFilled, bSelected, Accent.A > 0.01f ? Accent : ColAccent(0.9f), Radius);
+		if (bSelected)
+		{
+			S.Hovered.OutlineSettings.Width = bFilled ? 2.f : 1.1f;
+		}
+
+		FLinearColor PressedFill = bSelected
+			? (bFilled ? ColSlot(0.88f) : ColSlotEmpty(0.50f))
+			: (bFilled ? ColSlot(0.72f) : ColSlotEmpty(0.42f));
+		S.Pressed = StorageSlotBrushWithFill(PressedFill, bFilled, bSelected, Accent.A > 0.01f ? Accent : ColAccent(0.85f), Radius);
+		if (bSelected)
+		{
+			S.Pressed.OutlineSettings.Width = bFilled ? 2.f : 1.1f;
+		}
+
+		S.NormalPadding = Padding;
+		S.PressedPadding = Padding;
+		return S;
+	}
+
 	FString ItemInfoBody(FName ItemId, int32 Qty, float Thc, float QualPct)
 	{
 		// Quick-view-body ZONDER naam-regel (het details-paneel toont de naam al groot erboven).

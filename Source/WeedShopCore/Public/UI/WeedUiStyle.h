@@ -141,6 +141,9 @@ namespace WeedUI
 	// Gedeelde storage/inventory slotstijl: gevuld duidelijk, leeg rustig; actief krijgt alleen een dun accent.
 	WEEDSHOPCORE_API FSlateBrush StorageSlotBrush(bool bFilled, bool bActive = false, FLinearColor Accent = FLinearColor(0.f, 0.f, 0.f, 0.f), float Radius = 8.f);
 	WEEDSHOPCORE_API FSlateBrush StorageSlotBrushWithFill(FLinearColor Fill, bool bFilled, bool bActive = false, FLinearColor Accent = FLinearColor(0.f, 0.f, 0.f, 0.f), float Radius = 8.f);
+	// Keuze-cellen (pickers/tabs): basis blijft rustig; geselecteerd = rand/accent, geen volledig paars vlak.
+	WEEDSHOPCORE_API FSlateBrush SelectableSlotBrush(bool bFilled, bool bSelected = false, FLinearColor Accent = FLinearColor(0.f, 0.f, 0.f, 0.f), float Radius = 8.f);
+	WEEDSHOPCORE_API FButtonStyle SelectableSlotButtonStyle(bool bFilled, bool bSelected = false, FLinearColor Accent = FLinearColor(0.f, 0.f, 0.f, 0.f), float Radius = 8.f, FMargin Padding = FMargin(0.f));
 	// 9-slice brush uit een ontworpen kit-frame-texture (panel/slot met rand+soft-shadow), getint naar ons palet.
 	// NineSlice = randfracties (0-1). Valt terug op Rounded(Tint) als de texture mist.
 	WEEDSHOPCORE_API FSlateBrush KitBrush(const FString& TexturePath, const FMargin& NineSlice, const FLinearColor& Tint);

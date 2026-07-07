@@ -201,11 +201,7 @@ TSharedRef<SWidget> UPackContCell::RebuildWidget()
 void UPackContCell::SetDragHover(bool bHover)
 {
 	if (!Frame) { return; }
-	FSlateBrush Br = WeedUI::StorageSlotBrushWithFill(bHover ? WeedUI::ColAccentDim(0.9f) : WeedUI::ColInner(0.72f),
-		true, bHover, WeedUI::ColAccent(bHover ? 1.f : 0.5f), 9.f);
-	Br.OutlineSettings.Width = bHover ? 2.f : 1.f;
-	Br.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(bHover ? 1.f : 0.45f));
-	Frame->SetBrush(Br);
+	Frame->SetBrush(WeedUI::SelectableSlotBrush(true, bHover, WeedUI::ColAccent(0.95f), 9.f));
 }
 
 void UPackContCell::SetInner(UWidget* W)
@@ -339,11 +335,7 @@ TSharedRef<SWidget> UPackUnwrapCell::RebuildWidget()
 void UPackUnwrapCell::SetDragHover(bool bHover)
 {
 	if (!Frame) { return; }
-	FSlateBrush Br = WeedUI::StorageSlotBrushWithFill(bHover ? WeedUI::ColAccentDim(0.9f) : WeedUI::ColInner(0.72f),
-		true, bHover, WeedUI::ColAccent(bHover ? 1.f : 0.5f), 9.f);
-	Br.OutlineSettings.Width = bHover ? 2.f : 1.f;
-	Br.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(bHover ? 1.f : 0.45f));
-	Frame->SetBrush(Br);
+	Frame->SetBrush(WeedUI::SelectableSlotBrush(true, bHover, WeedUI::ColAccent(0.95f), 9.f));
 }
 
 void UPackUnwrapCell::NativeOnDragEnter(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
@@ -602,20 +594,11 @@ void UPackWidget::SetUB(int32 N)
 	if (UnpackHalfBtn) { StyleChoiceBtn(UnpackHalfBtn, SelBags == HalfN && HalfN != MaxBags); }
 }
 
-// Highlight een keuze-knop als actief: accent-vlak + accent-outline (idioom uit UWeedItemPickGrid::StyleCell).
+// Highlight een keuze-knop als actief: rustige basis + accent-outline (zelfde idioom als UWeedItemPickGrid).
 void UPackWidget::StyleChoiceBtn(UWeedActionButton* B, bool bActive)
 {
 	if (!B) { return; }
-	FButtonStyle S;
-	FSlateBrush N = WeedUI::StorageSlotBrush(true, bActive, WeedUI::ColAccent(0.9f), 8.f);
-	S.Normal = N;
-	FSlateBrush H = WeedUI::StorageSlotBrushWithFill(bActive ? WeedUI::ColAccentDim(1.f) : WeedUI::ColInner(0.92f), true, bActive, WeedUI::ColAccent(1.f), 8.f);
-	S.Hovered = H;
-	FSlateBrush P = WeedUI::StorageSlotBrushWithFill(bActive ? WeedUI::ColAccentDim(0.86f) : WeedUI::ColSlot(0.72f), true, bActive, WeedUI::ColAccent(0.9f), 8.f);
-	S.Pressed = P;
-	S.NormalPadding = FMargin(8.f, 4.f);
-	S.PressedPadding = FMargin(8.f, 4.f);
-	B->SetStyle(S);
+	B->SetStyle(WeedUI::SelectableSlotButtonStyle(true, bActive, WeedUI::ColAccent(0.95f), 8.f, FMargin(8.f, 4.f)));
 }
 
 // Drag-drop van wiet op een container: kan er meer dan 1 container van gepakt worden -> vraag HOEVEEL (popup,

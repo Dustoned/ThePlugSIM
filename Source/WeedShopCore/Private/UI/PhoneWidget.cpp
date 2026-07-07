@@ -2026,8 +2026,9 @@ void UPhoneWidget::BuildStoreApp(UVerticalBox* Into)
 		for (int32 Idx = 0; Idx < AppCats.Num(); ++Idx)
 		{
 			const int32 Cat = AppCats[Idx];
-			const FLinearColor Col = (Cat == Ph->GetSupplierCat()) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
-			UWeedActionButton* Pill = MakeActionBtn(CatName(Cat), Col, [this, Ph, Cat]() { Ph->SetSupplierCat(Cat); bCartView = false; RefreshStore(); }, 11);
+			const bool bSel = (Cat == Ph->GetSupplierCat());
+			UWeedActionButton* Pill = MakeActionBtn(CatName(Cat), WeedUI::ColSlot(), [this, Ph, Cat]() { Ph->SetSupplierCat(Cat); bCartView = false; RefreshStore(); }, 11);
+			Pill->SetStyle(WeedUI::SelectableSlotButtonStyle(true, bSel, WeedUI::ColAccent(0.95f), 8.f, FMargin(6.f, 4.f)));
 			UUniformGridSlot* GSlot = Tabs->AddChildToUniformGrid(Pill, Idx / Cols, Idx % Cols);
 			GSlot->SetHorizontalAlignment(HAlign_Fill);
 			GSlot->SetVerticalAlignment(VAlign_Fill);
@@ -2068,13 +2069,7 @@ void UPhoneWidget::RefreshStore()
 	{
 		if (!StoreTabBtns[i]) { continue; }
 		const int32 TabCat = AppCats.IsValidIndex(i) ? AppCats[i] : i;
-		const FLinearColor Col = (TabCat == Cat) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
-		FButtonStyle St;
-		St.Normal = RoundedBrush(Col, 8.f);
-		St.Hovered = RoundedBrush(Col * 1.3f, 8.f);
-		St.Pressed = RoundedBrush(Col * 0.8f, 8.f);
-		St.NormalPadding = FMargin(6.f, 4.f); St.PressedPadding = FMargin(6.f, 4.f);
-		StoreTabBtns[i]->SetStyle(St);
+		StoreTabBtns[i]->SetStyle(WeedUI::SelectableSlotButtonStyle(true, TabCat == Cat, WeedUI::ColAccent(0.95f), 8.f, FMargin(6.f, 4.f)));
 	}
 	if (StoreCartToggle) { StoreCartToggle->SetContent(MakeText(bCartView ? TEXT("Shop") : TEXT("View cart"), 11, FLinearColor::White, true)); }
 	if (StorePackagesLabel)
@@ -2670,8 +2665,8 @@ void UPhoneWidget::FillStoreFooter()
 				{
 					const int32 OptFee = (int32)WeedRoundEuros((int64)FMath::RoundToInt(BuySub * UPhoneClientComponent::DeliveryFeePct(d)));
 					const bool bSel = (d == DeliveryOpt);
-					const FLinearColor Col = bSel ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
-					UWeedActionButton* OB = MakeActionBtn(TEXT(""), Col, [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
+					UWeedActionButton* OB = MakeActionBtn(TEXT(""), WeedUI::ColSlot(), [this, d]() { DeliveryOpt = d; RefreshStore(); }, 9);
+					OB->SetStyle(WeedUI::SelectableSlotButtonStyle(true, bSel, WeedUI::ColAccent(0.95f), 8.f, FMargin(6.f, 4.f)));
 					// Inhoud: PRIJS groot + leidend bovenaan, dan de naam, dan de tijd klein.
 					UVerticalBox* OVB = WidgetTree->ConstructWidget<UVerticalBox>();
 					FString PriceStr;
@@ -2694,9 +2689,10 @@ void UPhoneWidget::FillStoreFooter()
 					UHorizontalBox* HomesRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 					for (int32 HIdx : OwnedH)
 					{
-						const FLinearColor Col = (HIdx == CurTarget) ? WeedUI::ColAccentDim() : WeedUI::ColSlot();
-						UWeedActionButton* HB = MakeActionBtn(Ph->GetHomeLabel(HIdx), Col,
+						const bool bHomeSel = (HIdx == CurTarget);
+						UWeedActionButton* HB = MakeActionBtn(Ph->GetHomeLabel(HIdx), WeedUI::ColSlot(),
 							[this, HIdx]() { if (Phone.IsValid()) { Phone->SetDeliveryHome(HIdx); } RefreshStore(); }, 9);
+						HB->SetStyle(WeedUI::SelectableSlotButtonStyle(true, bHomeSel, WeedUI::ColAccent(0.95f), 8.f, FMargin(6.f, 4.f)));
 						UHorizontalBoxSlot* HS = HomesRow->AddChildToHorizontalBox(HB);
 						HS->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); HS->SetPadding(FMargin(1.f, 0.f, 1.f, 0.f));
 					}

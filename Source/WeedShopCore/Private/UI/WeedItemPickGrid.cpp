@@ -144,41 +144,10 @@ void UWeedItemPickGrid::StyleCell(int32 i, bool bSel)
 {
 	if (!Cells.IsValidIndex(i) || !Cells[i]) { return; }
 
-	// Geselecteerd = duidelijke accent-rand; niet-geselecteerd blijft vol leesbaar zoals inventory/hotbar.
-	FButtonStyle S;
-	FSlateBrush Base = bSel
-		? WeedUI::StorageSlotBrushWithFill(WeedUI::ColAccentDim(0.92f), true, true, WeedUI::ColAccent(1.f), 8.f)
-		: WeedUI::StorageSlotBrush(true, false, WeedUI::ColAccent(0.9f), 8.f);
-	if (bSel)
-	{
-		Base.OutlineSettings.Width = 2.6f;
-		Base.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f));
-	}
-	S.Normal = Base;
-
-	// Hover/pressed: iets lichter dan de basis, rand behouden bij selectie.
-	FSlateBrush Hover = WeedUI::StorageSlotBrushWithFill(bSel ? WeedUI::ColAccentDim(1.06f) : WeedUI::ColInner(0.92f), true, bSel, WeedUI::ColAccent(1.f), 8.f);
-	if (bSel)
-	{
-		Hover.OutlineSettings.Width = 2.6f;
-		Hover.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f));
-	}
-	S.Hovered = Hover;
-
-	FSlateBrush Pressed = WeedUI::StorageSlotBrushWithFill(bSel ? WeedUI::ColAccentDim(0.94f) : WeedUI::ColSlot(0.72f), true, bSel, WeedUI::ColAccent(0.9f), 8.f);
-	if (bSel)
-	{
-		Pressed.OutlineSettings.Width = 2.6f;
-		Pressed.OutlineSettings.Color = FSlateColor(WeedUI::ColAccent(1.f));
-	}
-	S.Pressed = Pressed;
-
-	// Geen button-padding: de inhoud (SizeBox op celmaat) vult de hele cel zelf; badge/tag krijgen hun
-	// inset via hun eigen overlay-slot (7px rechtsboven / 3px onder), gelijk aan de inventory-cel.
-	S.NormalPadding = FMargin(0.f);
-	S.PressedPadding = FMargin(0.f);
+	// Selectie = rand/accent, niet een volledig paarse kaart. Daardoor lijkt niet elke gevulde picker-cel geselecteerd.
+	FButtonStyle S = WeedUI::SelectableSlotButtonStyle(true, bSel, WeedUI::ColAccent(0.95f), 8.f, FMargin(0.f));
 	Cells[i]->SetStyle(S);
-	Cells[i]->SetRenderOpacity((bShowSelection && !SelId.IsNone() && !bSel) ? 0.90f : 1.f);
+	Cells[i]->SetRenderOpacity((bShowSelection && !SelId.IsNone() && !bSel) ? 0.96f : 1.f);
 }
 
 void UWeedItemPickGrid::SetItems(const TArray<FWeedPickItem>& Items, FName SelectedId)

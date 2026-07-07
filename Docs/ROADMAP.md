@@ -644,9 +644,9 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   - **Status 07-05:** hand-preview gebruikt actieve stack-data, hotbar paper-icon wisselt alleen op actieve
     loaded papers, lege actieve slots zijn rustiger, en de hotbar-tray is exact gecentreerd met de inventory;
     telefoon staat los rechts en telt niet mee voor de hotbar-breedte. Build groen + screenshot gecheckt.
-- [ ] **HUDP.10e Storage/picker/phone consistency pass** - fridge, drying rack, shelf, packing bench,
+- [x] **HUDP.10e Storage/picker/phone consistency pass** - fridge, drying rack, shelf, packing bench,
   inventory en phone app-grid dezelfde slot/heading/button-taal geven. Geen nested-card look, geen dubbele iconen.
-  [InventoryWidget, ShelfWidget, DryingRackWidget, PackWidget, WeedItemPickGrid, PhoneWidget]
+  [InventoryWidget, ShelfWidget, DryingRackWidget, PackWidget, WeedItemPickGrid, PhoneWidget, StoreWidget]
   - **Status 07-05:** gedeelde rustige slot-brush en tag-pill stijl gebruikt in hotbar/inventory/pickers; drying
     rack `READY` is een badge. Brede phone/app-grid pass en machine-screenshots blijven vervolgcheck.
   - **Status 07-05:** packing bench eerste consistency-pass: paneel breder/lager, dried-weed en container als
@@ -655,6 +655,10 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   - **Status 07-06:** tweede consistency-golf: gedeelde quantity-badge helper, shelf/drying slots krijgen item-tags,
     packing bench verliest dubbele `SELECTED` sublines, picker-selectie dimt niet-gekozen items minder hard,
     store-tags trekken naar dezelfde high-contrast tagstijl. Build/check volgt in dezelfde golf.
+  - **Status 07-07:** gedeelde `SelectableSlotBrush/ButtonStyle` toegevoegd. Picker-selectie, packing bench
+    drop/keuze-cards, phone store-tabs/delivery/home-keuzes en losse store-tabs gebruiken nu dezelfde rustige
+    slot-basis met accent-outline i.p.v. paarse geselecteerde vlakken. Build groen; screenshot/gevoel-check blijft
+    onder HUDP.10f.
 - [x] **HUDP.10g Growing/plant info-card polish** - plantkaart compacter maken: header met status-pill,
   kleinere water/care/grow-rings met labels, harvest/THC als chips, en duidelijke ready/attention states.
   [PlantInfoWidget]

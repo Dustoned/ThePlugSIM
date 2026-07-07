@@ -264,12 +264,7 @@ void UStoreWidget::FillBody()
 	{
 		UWeedActionButton* B = TabButtons[i];
 		if (!B || !TabButtonCats.IsValidIndex(i)) { continue; }
-		const FLinearColor Col = (TabButtonCats[i] == ActiveCat) ? WeedUI::ColAccent() : WeedUI::ColInner();
-		FButtonStyle S = B->GetStyle();
-		S.Normal = WeedUI::Rounded(Col, 8.f);
-		S.Hovered = WeedUI::Rounded(Col * 1.3f, 8.f);
-		S.Pressed = WeedUI::Rounded(Col * 0.8f, 8.f);
-		B->SetStyle(S);
+		B->SetStyle(WeedUI::SelectableSlotButtonStyle(true, TabButtonCats[i] == ActiveCat, WeedUI::ColAccent(0.95f), 8.f, FMargin(9.f, 4.f)));
 	}
 
 	// Artikelen van de actieve categorie -> eerst de zichtbare rij-data verzamelen.
