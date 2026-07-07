@@ -59,6 +59,29 @@ namespace
 			|| A->IsA(ACeilingLamp::StaticClass()) || A->IsA(APackLightSwitch::StaticClass()));
 	}
 
+	bool FindPlacementFloor(UWorld* World, const AActor* Ignore, const FVector& Around, float UpCm, float DownCm, FVector& OutFloor, float& OutNormalZ, bool& bOutOnPlaceable)
+	{
+		OutFloor = Around;
+		OutNormalZ = 0.f;
+		bOutOnPlaceable = false;
+		if (!World) { return false; }
+
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopPlaceFloorTrace), false);
+		if (Ignore) { Params.AddIgnoredActor(Ignore); }
+		FHitResult FloorHit;
+		const FVector Start = Around + FVector(0.f, 0.f, UpCm);
+		const FVector End = Around - FVector(0.f, 0.f, DownCm);
+		if (!World->LineTraceSingleByChannel(FloorHit, Start, End, ECC_Visibility, Params))
+		{
+			return false;
+		}
+
+		OutFloor = FloorHit.ImpactPoint;
+		OutNormalZ = FloorHit.ImpactNormal.Z;
+		bOutOnPlaceable = IsPlaceableActor(FloorHit.GetActor());
+		return true;
+	}
+
 	// Overlapt de (geroteerde) box rond Center met een ANDER geplaatst object? Muren/vloeren tellen niet mee,
 	// dus strak tegen de muur blijft prima - dit vangt alleen het door-elkaar-clippen van furniture (vooral
 	// wand-mounts/lampen, die geen vloer-gebaseerde IsSpotBlocked-check hebben).
@@ -413,18 +436,14 @@ bool UBuildComponent::IsPlacementValidAt(const FVector& Loc, float Yaw, float& F
 	FloorZOut = Loc.Z;
 	UWorld* W = GetWorld();
 	if (!W) { return false; }
-	// Zelfde down-trace als de ghost (regels 698-707): zoek de vloer onder deze XY.
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(WeedShopGridSample), false);
-	if (GetOwner()) { Params.AddIgnoredActor(GetOwner()); }
-	FHitResult Down;
-	const FVector DStart(Loc.X, Loc.Y, Loc.Z + 250.f);
-	const FVector DEnd(Loc.X, Loc.Y, Loc.Z - 250.f);
-	if (!W->LineTraceSingleByChannel(Down, DStart, DEnd, ECC_Visibility, Params)) { return false; }
+	// Zelfde floor-resolve als de ghost/server: zoek de echte vloer onder deze XY.
+	FVector FloorP; float FloorNZ = 0.f; bool bFloorOnPlaceable = false;
+	if (!FindPlacementFloor(W, GetOwner(), Loc, 250.f, 700.f, FloorP, FloorNZ, bFloorOnPlaceable)) { return false; }
 	bHasFloorOut = true;
-	FloorZOut = Down.ImpactPoint.Z;
-	const FVector P(Loc.X, Loc.Y, Down.ImpactPoint.Z);
-	const bool bFloor = Down.ImpactNormal.Z > 0.7f;
-	const bool bOnPlaceable = IsPlaceableActor(Down.GetActor());
+	FloorZOut = FloorP.Z;
+	const FVector P(Loc.X, Loc.Y, FloorP.Z);
+	const bool bFloor = FloorNZ > 0.7f;
+	const bool bOnPlaceable = bFloorOnPlaceable;
 	// Exact de ground-floor ghost-regel (727-729), zonder de bGroundLevel-term (het raster sampelt al op de vloer).
 	return bFloor && !bOnPlaceable
 		&& (CurrentDef.bAllowOutdoors || IsInOwnedHome(P))
@@ -933,6 +952,24 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 					}
 					else
 					{
+						// Vloer-items: raak je net de muur/plint, projecteer dan naar de vloer vlak voor die muur.
+						// Wand-mounts hebben hierboven hun eigen muur-snap; dit houdt vloerplaatsing dicht bij randen
+						// blauw zonder wand/plafond-gedrag te veranderen.
+						if (!CurrentDef.bIsLamp && FloorNormalZ <= 0.7f && !bOnPlaceable)
+						{
+							const FVector WallN(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f);
+							if (!WallN.IsNearlyZero())
+							{
+								const float Nudge = FMath::Clamp(FMath::Max(CurrentDef.BoxHalf.X, CurrentDef.BoxHalf.Y) * 0.25f, 18.f, 60.f);
+								FVector FloorP; float FloorNZ = 0.f; bool bFloorOnPlaceable = false;
+								if (FindPlacementFloor(GetWorld(), GetOwner(), Hit.ImpactPoint + WallN.GetSafeNormal() * Nudge, 160.f, 900.f, FloorP, FloorNZ, bFloorOnPlaceable))
+								{
+									PreviewLocation = FloorP;
+									FloorNormalZ = FloorNZ;
+									bOnPlaceable = bFloorOnPlaceable;
+								}
+							}
+						}
 
 				// Shift ingedrukt -> snap XY op het raster (en yaw op 90°-stappen) voor nette rijen.
 				const APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
@@ -1050,6 +1087,15 @@ void UBuildComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 						const bool bY2 = GetWorld()->LineTraceSingleByChannel(HY2, TS, TS + FVector(0, -1500.f, 0), ECC_Visibility, Params);
 						if (bY1 && (!bY2 || HY1.Distance <= HY2.Distance)) { const float Lim = HY1.ImpactPoint.Y - EffHY - WallGap; if (PreviewLocation.Y > Lim) { PreviewLocation.Y = Lim; } }
 						else if (bY2) { const float Lim = HY2.ImpactPoint.Y + EffHY + WallGap; if (PreviewLocation.Y < Lim) { PreviewLocation.Y = Lim; } }
+					}
+					{
+						FVector FloorP; float FloorNZ = 0.f; bool bFloorOnPlaceable = false;
+						if (FindPlacementFloor(GetWorld(), GetOwner(), PreviewLocation, 160.f, 700.f, FloorP, FloorNZ, bFloorOnPlaceable))
+						{
+							PreviewLocation = FloorP;
+							FloorNormalZ = FloorNZ;
+							bOnPlaceable = bFloorOnPlaceable;
+						}
 					}
 					const bool bFree = WorldFreeBuild(GetWorld());
 					const bool bFloor = FloorNormalZ > 0.7f;
@@ -1757,6 +1803,18 @@ void UBuildComponent::ServerPlace_Implementation(FName ItemId, FVector Location,
 	{
 		if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Orange, TEXT("Sinks are fixed fixtures.")); }
 		return;
+	}
+
+	if (!bUpgrade && !Def.bIsLamp && !Def.bIsWallMount && !Def.bIsStructure)
+	{
+		FVector FloorP; float FloorNZ = 0.f; bool bFloorOnPlaceable = false;
+		if (!FindPlacementFloor(World, GetOwner(), Location, 180.f, 700.f, FloorP, FloorNZ, bFloorOnPlaceable)
+			|| FloorNZ <= 0.7f || bFloorOnPlaceable)
+		{
+			if (GEngine) { UWeedToast::NotifyPawn(GetOwner(), -1, 2.f, FColor::Red, TEXT("Aim at the floor.")); }
+			return;
+		}
+		Location = FloorP;
 	}
 
 	// Server-side her-validatie (anti-cheat / lag): niet in een muur of (voor potten) te dicht.

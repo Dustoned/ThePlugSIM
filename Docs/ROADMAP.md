@@ -234,10 +234,13 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### Placement / bouwen
 
-- [ ] **D.3 Placeables snapping beter (vloer + muur)** — (a) vloer: strakker snappen zodat dingen echt geplaatst
+- [x] **D.3 Placeables snapping beter (vloer + muur)** — (a) vloer: strakker snappen zodat dingen echt geplaatst
   kunnen worden en BLAUW worden zo dicht mogelijk tegen muur-/vloer-randen; (b) wall-placeables: kan nu nog half
   DOOR de muur / helemaal in de hoek - de hitbox dekt niet de hele shelf. [BuildComponent footprint/no-build +
   PropMeshKit item-bounds]
+  - **Status 07-07:** floor-placeables projecteren nu naar de vloer als je net de muur/plint raakt, re-grounden na
+    rand-correcties en server-side plaatsing snapt opnieuw naar echte vloer. Wall-mount route bewust ongemoeid gelaten:
+    huidige wall snapping voelt goed volgens speler.
 
 ### Planten / economie-feel
 
@@ -715,6 +718,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] V.10 D.11 afspraak-wachtplekken thuis-test: accepteer een `Meet me outside`/`YouGoToThem` afspraak; NPC moet
   buiten bij een logische deur/steeg/garage/lobby staan en de kompas-marker moet daarheen wijzen, niet naar een
   appartementkamer of random straatpunt.
+- [ ] V.11 D.3 floor snapping thuis-test: pot/bench/shelf/machine dicht tegen muur/plint richten; ghost moet blauw
+  worden waar genoeg ruimte is en na plaatsen echt op de vloer staan, niet zweven of rood blijven op de rand.
 - [x] AUDIT kit-toggles GEFIXT (07-06, commit 109d23fe): poll de binnenste UCheckBox i.p.v. de dode IsToggled. Het W_Toggle-template wijzigt z'n IsToggled-property
   NIET bij een klik (alleen de animatie draait) -> de reflectie-poll in SettingsWidget ziet de wissel nooit.
   Interaction-prompt is al omgezet naar een eigen ON/OFF-knop; ALLE andere kit-toggles (Shadows, Lumen,
