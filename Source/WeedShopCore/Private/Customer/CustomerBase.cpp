@@ -318,6 +318,49 @@ bool ACustomerBase::WalkTo(const FVector& Dest, float AcceptanceRadius, bool bAl
 //  6-9   Tony A/B/C/D     (Citizens, net gekleed - high/whale-flavor)
 //  10-12 SK_Casual 1/2/3  (idem als 3-5, voor oude opgeslagen indices)
 // Alle skins zijn GEKLEED en SK_Mannequin-compatibel, dus de single-node walk/idle-anims blijven werken.
+static void WeedNpc_LogSkinIssueOnce(const TCHAR* Context, const TCHAR* Path, const FString& Detail)
+{
+	const FString SafeContext = Context ? FString(Context) : FString(TEXT("unknown"));
+	const FString SafePath = Path ? FString(Path) : FString(TEXT("<null>"));
+	const FString Key = SafeContext + TEXT("|") + SafePath + TEXT("|") + Detail;
+	static TSet<FString> Reported;
+	if (Reported.Contains(Key)) { return; }
+	Reported.Add(Key);
+	UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: %s skin issue: %s (%s)"), *SafeContext, *SafePath, *Detail);
+}
+
+static bool WeedNpc_IsRenderableSkin(const USkeletalMesh* Sk)
+{
+	if (!Sk) { return false; }
+	const FBoxSphereBounds B = Sk->GetImportedBounds();
+	return Sk->GetLODNum() > 0
+		&& Sk->GetMaterials().Num() > 0
+		&& Sk->GetRefSkeleton().GetRawBoneNum() > 0
+		&& B.BoxExtent.X >= 5.f
+		&& B.BoxExtent.Y >= 5.f
+		&& B.BoxExtent.Z >= 45.f;
+}
+
+static USkeletalMesh* WeedNpc_LoadSkinChecked(const TCHAR* Path, const TCHAR* Context)
+{
+	USkeletalMesh* Sk = Path ? LoadObject<USkeletalMesh>(nullptr, Path) : nullptr;
+	if (WeedNpc_IsRenderableSkin(Sk)) { return Sk; }
+	if (!Sk)
+	{
+		WeedNpc_LogSkinIssueOnce(Context, Path, FString(TEXT("load failed")));
+		return nullptr;
+	}
+	const FBoxSphereBounds B = Sk->GetImportedBounds();
+	WeedNpc_LogSkinIssueOnce(Context, Path, FString::Printf(TEXT("invalid render data bounds %.1f %.1f %.1f lods %d mats %d bones %d"),
+		B.BoxExtent.X, B.BoxExtent.Y, B.BoxExtent.Z, Sk->GetLODNum(), Sk->GetMaterials().Num(), Sk->GetRefSkeleton().GetRawBoneNum()));
+	return nullptr;
+}
+
+static USkeletalMesh* WeedNpc_EmergencySkin()
+{
+	return WeedNpc_LoadSkinChecked(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"), TEXT("emergency"));
+}
+
 static USkeletalMesh* WeedNpc_SkinByIndex(int32 Idx)
 {
 	static const TCHAR* Pool[] = {
@@ -338,7 +381,7 @@ static USkeletalMesh* WeedNpc_SkinByIndex(int32 Idx)
 		TEXT("/Game/Casual_Wear_Pack1/Mesh/Casual_3/SK_Casual_3.SK_Casual_3"),
 	};
 	const int32 N = UE_ARRAY_COUNT(Pool);
-	return LoadObject<USkeletalMesh>(nullptr, Pool[FMath::Clamp(Idx, 0, N - 1)]);
+	return WeedNpc_LoadSkinChecked(Pool[FMath::Clamp(Idx, 0, N - 1)], TEXT("skin-by-index"));
 }
 
 // Gedempte, deterministische kleding-kleur uit een hash (realistische tinten: niet te fel/donker).
@@ -366,7 +409,7 @@ static uint32 WeedNpc_StableSeed(FName NpcId)
 	return ACustomerBase::StableLookSeed(NpcId);
 }
 
-// [PDIAG] NpcId van de eigenaar voor missing-asset-logs (diagnose onzichtbare NPC's). Later verwijderen.
+// NpcId van de eigenaar voor appearance-load warnings.
 static FString WeedNpc_DiagId(const AActor* Owner)
 {
 	const ACustomerBase* Cb = Cast<ACustomerBase>(Owner);
@@ -505,7 +548,7 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 	}
 	else
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModular: basis-body laadde niet: /Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body (npc=%s)"), *WeedNpc_DiagId(Owner));
+		UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: modular casual base body failed (/Game/Casual_Wear_Pack1/Mesh/Parts/Bodys/SK_Body, npc=%s)"), *WeedNpc_DiagId(Owner));
 	}
 	// Slots + paden: file-scope GCasualSlots (gedeeld met PreloadCrowdSkins - geen dubbele paden-lijst).
 	for (const FWeedNpcPartSlot& Sl : GCasualSlots)
@@ -514,7 +557,7 @@ static void WeedNpc_BuildModular(AActor* Owner, USkeletalMeshComponent* Body, ui
 		if (Rel.IsEmpty()) { continue; }
 		const FString Path = WeedNpc_CasualPartPath(Rel);
 		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
-		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModular: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
+		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: modular casual part failed %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
 		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
 		Part->SetupAttachment(Body);
 		Part->RegisterComponent();
@@ -544,7 +587,7 @@ static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* 
 	{
 		const FString Path = WeedNpc_CitizensTonyPartPath(Rel);
 		USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, *Path);
-		if (!M) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizens: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); }
+		if (!M) { UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: modular citizens part failed %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); }
 		return M;
 	};
 	auto AddPart = [&](USkeletalMesh* PM, uint32 Salt)
@@ -569,7 +612,7 @@ static void WeedNpc_BuildModularCitizens(AActor* Owner, USkeletalMeshComponent* 
 	USkeletalMesh* BaseBody = (Torso == 2u) ? Load(TEXT("Body_Cloth")) : Load(TEXT("Body"));
 	if (!BaseBody) { BaseBody = Load(TEXT("Body")); }
 	if (BaseBody) { Body->SetSkeletalMesh(BaseBody); }
-	else { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizens: basis-body (Body/Body_Cloth) laadde niet (npc=%s)"), *WeedNpc_DiagId(Owner)); }
+	else { UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: modular citizens base body failed (npc=%s)"), *WeedNpc_DiagId(Owner)); }
 	WeedNpc_TintClothing(Body, Seed); // tint een eventueel ingebakken shirt (Body_Cloth) mee
 	if (Torso == 0u) { AddPart(Load(TEXT("Tshirt")), 11u); }
 	else if (Torso == 1u) { AddPart(Load(TEXT("Shirt")), 11u); }
@@ -672,11 +715,38 @@ static int32 WeedNpc_CrowdSkinIndex(uint32 Seed)
 	return (int32)(P % (uint32)N);
 }
 
+static bool WeedNpc_ShouldUseCompleteSkinPath(const TCHAR* Path)
+{
+#if !WITH_EDITOR
+	const FString P = Path ? FString(Path) : FString();
+	if (P.Contains(TEXT("/Gamer_Girl/")) || P.Contains(TEXT("/SchoolGirl/"))) { return false; }
+#endif
+	return true;
+}
+
+static USkeletalMesh* WeedNpc_FallbackSkinForCrowdIndex(int32 Idx, uint32 Seed)
+{
+	if (Idx >= 10 && Idx <= 17)
+	{
+		return WeedNpc_SkinByIndex(3 + (int32)((Seed >> 8) % 3u)); // vrouwelijke Casual-fallback houdt naam/gender gelijk
+	}
+	return WeedNpc_SkinByIndex(Idx % 10);
+}
+
 static USkeletalMesh* WeedNpc_CrowdSkin(uint32 Seed)
 {
 	const int32 Idx = WeedNpc_CrowdSkinIndex(Seed);
-	if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, GCrowdSkinPool[Idx])) { return M; }
-	return WeedNpc_SkinByIndex((int32)(Seed % 10u)); // niet-geladen pad -> veilige terugval op de basis-pool
+	const TCHAR* Path = GCrowdSkinPool[Idx];
+	if (WeedNpc_ShouldUseCompleteSkinPath(Path))
+	{
+		if (USkeletalMesh* M = WeedNpc_LoadSkinChecked(Path, TEXT("crowd-complete"))) { return M; }
+	}
+	else
+	{
+		WeedNpc_LogSkinIssueOnce(TEXT("crowd-complete"), Path, FString(TEXT("disabled in packaged build")));
+	}
+	if (USkeletalMesh* M = WeedNpc_FallbackSkinForCrowdIndex(Idx, Seed)) { return M; }
+	return WeedNpc_EmergencySkin();
 }
 
 // HITCH-FIX: laad ALLE crowd-skins 1x voor onder het laadscherm en root ze (keep-alive). Zonder dit laadt
@@ -695,12 +765,21 @@ void ACustomerBase::PreloadCrowdSkins(const UObject* WorldContext)
 	{
 		if (USkeletalMesh* M = LoadObject<USkeletalMesh>(nullptr, *Path)) { UAssetKeepAliveSubsystem::Keep(WorldContext, M); ++NLoaded; }
 	};
+	auto KeepCompleteMesh = [&](const TCHAR* Path)
+	{
+		if (!WeedNpc_ShouldUseCompleteSkinPath(Path)) { return; }
+		if (USkeletalMesh* M = WeedNpc_LoadSkinChecked(Path, TEXT("preload-complete")))
+		{
+			UAssetKeepAliveSubsystem::Keep(WorldContext, M);
+			++NLoaded;
+		}
+	};
 	auto KeepMat = [&](const FString& Path)
 	{
 		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Path)) { UAssetKeepAliveSubsystem::Keep(WorldContext, M); ++NLoaded; }
 	};
 	// 1) Complete skins: crowd-pool + basis-pool (terugval + residents).
-	for (int32 i = 0; i < UE_ARRAY_COUNT(GCrowdSkinPool); ++i) { KeepMesh(GCrowdSkinPool[i]); }
+	for (int32 i = 0; i < UE_ARRAY_COUNT(GCrowdSkinPool); ++i) { KeepCompleteMesh(GCrowdSkinPool[i]); }
 	for (int32 i = 0; i < 10; ++i)
 	{
 		if (USkeletalMesh* M = WeedNpc_SkinByIndex(i))
@@ -826,7 +905,7 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 	}
 	else
 	{
-		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizenMan: basis-body laadde niet: /Game/Citizen_man_01/mesh/citizen_man_01_body_01 (npc=%s)"), *WeedNpc_DiagId(Owner));
+		UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: modular citizen-man base body failed (/Game/Citizen_man_01/mesh/citizen_man_01_body_01, npc=%s)"), *WeedNpc_DiagId(Owner));
 	}
 	// Slots + paden: file-scope GCitizenManSlots (gedeeld met PreloadCrowdSkins - geen dubbele paden-lijst).
 	for (const FWeedNpcPartSlot& Sl : GCitizenManSlots)
@@ -835,7 +914,7 @@ static void WeedNpc_BuildModularCitizenMan(AActor* Owner, USkeletalMeshComponent
 		if (Rel.IsEmpty()) { continue; }
 		const FString Path = WeedNpc_CitizenManPartPath(Rel);
 		USkeletalMesh* PM = LoadObject<USkeletalMesh>(nullptr, *Path);
-		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildModularCitizenMan: part laadde niet: %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
+		if (!PM) { UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: modular citizen-man part failed %s (npc=%s)"), *Path, *WeedNpc_DiagId(Owner)); continue; }
 		USkeletalMeshComponent* Part = NewObject<USkeletalMeshComponent>(Owner);
 		Part->SetupAttachment(Body);
 		Part->RegisterComponent();
@@ -1009,7 +1088,24 @@ void ACustomerBase::BuildAppearance()
 		SkM->SetSkeletalMesh(Sk);
 		WeedNpc_TintClothing(SkM, LookSeed); // Karl/Tony (losse mesh): per-NPC random kleren-kleur bovenop
 	}
-	else { UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] BuildAppearance: skin-by-index laadde niet (npc=%s skin=%d) - NPC blijft zonder mesh"), *NpcId.ToString(), SkinIdx); }
+	else if (USkeletalMesh* Fallback = WeedNpc_EmergencySkin())
+	{
+		SkM->SetSkeletalMesh(Fallback);
+		UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: emergency fallback used (npc=%s skin=%d)"), *NpcId.ToString(), SkinIdx);
+	}
+	else
+	{
+		UE_LOG(LogWeedShop, Error, TEXT("NPC appearance: no renderable fallback available (npc=%s skin=%d)"), *NpcId.ToString(), SkinIdx);
+	}
+
+	if (!WeedNpc_IsRenderableSkin(SkM->GetSkeletalMeshAsset()))
+	{
+		if (USkeletalMesh* Fallback = WeedNpc_EmergencySkin())
+		{
+			SkM->SetSkeletalMesh(Fallback);
+			UE_LOG(LogWeedShop, Warning, TEXT("NPC appearance: post-build fallback used (npc=%s skin=%d)"), *NpcId.ToString(), SkinIdx);
+		}
+	}
 	bAppearanceBuilt = true;
 
 	// GENDER-CORRECTE NAAM (host-authoritative): alleen voor gegenereerde bewoners ("Resident_<idx>") - hun
@@ -1242,10 +1338,6 @@ void ACustomerBase::SetTalkingToPlayer(bool b, APawn* Pawn)
 	DealingPawn = b ? Pawn : nullptr; // gerepliceerd -> andere client weet wie bezig is
 	if (b)
 	{
-		// [PDIAG] Onzichtbare-NPC-diagnose: 1 regel per deal-open (zie ook Interact). Later verwijderen.
-		UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] DealOpen npc=%s hidden=%d built=%d skin=%d crowd=%d mesh=%s"),
-			*NpcId.ToString(), IsHidden() ? 1 : 0, bAppearanceBuilt ? 1 : 0, RepSkinIndex, bCrowdNpc ? 1 : 0,
-			*GetNameSafe(GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr));
 		if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
 		// COMPETITIVE: nu de KOPER bekend is de walk-in-order-grootte herschalen naar zijn tier-band.
 		RescaleOrderForPlayer(Pawn);
@@ -3781,12 +3873,6 @@ void ACustomerBase::Interact_Implementation(APawn* InstigatorPawn)
 	{
 		return;
 	}
-
-	// [PDIAG] Onzichtbare-NPC-diagnose: 1 regel per interact (NIET per tick) zodat een gerichte repro
-	// de kapotte tak aanwijst (verborgen actor / appearance nooit gebouwd / mesh-load gefaald). Later verwijderen.
-	UE_LOG(LogWeedShop, Warning, TEXT("[PDIAG] Interact npc=%s hidden=%d built=%d skin=%d crowd=%d mesh=%s"),
-		*NpcId.ToString(), IsHidden() ? 1 : 0, bAppearanceBuilt ? 1 : 0, RepSkinIndex, bCrowdNpc ? 1 : 0,
-		*GetNameSafe(GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr));
 
 	// Klanten betalen de speler die ze bedient (z'n eigen portemonnee). PERF-cache: FindComponentByClass
 	// 1x per pawn opzoeken (weak, per-pawn gekeyed); een andere/verdwenen pawn (co-op) -> opnieuw opzoeken.

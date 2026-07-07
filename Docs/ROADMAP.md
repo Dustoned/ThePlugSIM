@@ -209,6 +209,10 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] **D.4 NPC's met missing body OOK in de compiled build** — er lopen poppetjes zonder lichaam rond; eerder
   gedacht "alleen editor", maar het zit ook in de download. Vermoedelijk een crowd-skin die niet mee-cookt
   (DirectoriesToAlwaysCook) of een modular skin zonder body-fallback. [character-packs / CustomerBase skins]
+  - **Status 07-07:** cook-check lokaal: alle 18 complete crowd-skins plus Gamer_Girl/SchoolGirl materials/textures
+    zitten in `Saved/Cooked`. Fix gezet in `CustomerBase`: complete skins krijgen render-data-validatie, packaged
+    builds gebruiken de risicovolle Gamer_Girl/SchoolGirl complete skins niet meer direct maar vallen gender-correct
+    terug op Casual, en een emergency Manny-fallback voorkomt dat de hoofdmesh leeg blijft. Packaged hertest nog open.
 - [ ] **D.11 NPC buiten-wachtplekken** — NPC's plekken geven om buiten op de speler te wachten: auto-plaatsen
   bij random deuren over de HELE map (langs de weg, garagedeuren, deuren aan de back-alleys). Niet handmatig
   gemarkeerd - automatisch verspreid. [DoorRetrofitter deur-registry + Customer meet/afspraak-systeem]
@@ -699,6 +703,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   lane-timing per bench-tier, joint-roll-timing per gram en eventueel 2 spelers aan één bench.
 - [ ] V.8 D35 loading-cover Back to menu thuis-test: bij een normale load en/of LAN-join controleren dat de knop
   zichtbaar is, klikbaar is, de cover verdwijnt en je netjes terug op het hoofdmenu komt zonder stale cover of sessie-hang.
+- [ ] V.9 D.4 packaged NPC-body hertest: in de download/packaged build langs de crowd lopen; geen NPC's zonder body.
+  Als het toch nog gebeurt, log zoeken op `NPC appearance:` zodat de exacte skin-path of fallback-tak zichtbaar is.
 - [x] AUDIT kit-toggles GEFIXT (07-06, commit 109d23fe): poll de binnenste UCheckBox i.p.v. de dode IsToggled. Het W_Toggle-template wijzigt z'n IsToggled-property
   NIET bij een klik (alleen de animatie draait) -> de reflectie-poll in SettingsWidget ziet de wissel nooit.
   Interaction-prompt is al omgezet naar een eigen ON/OFF-knop; ALLE andere kit-toggles (Shadows, Lumen,
