@@ -31,6 +31,7 @@ insulation| c_ART_o         | Noun Project
 papers    | my name is mud  | Noun Project
 seal      | Oleksandr Panasovskyi | Noun Project
 joint     | Hey Rabbit      | Noun Project
+blunt     | Dustoned        | supplied PNG, processed for UI
 rack      | Amethyst Studio | Noun Project
 gummy     | ThePlugSIM      | original (AI-assisted)
 moonrock  | ThePlugSIM      | original (AI-assisted)

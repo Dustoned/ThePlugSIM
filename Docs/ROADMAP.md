@@ -264,8 +264,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### UI / iconen
 
-- [ ] **D.6 Big-joint-icon (blunt.png)** — de dikke joint (big model) een net icoon geven: `blunt.png` met nette
-  achtergrond zoals de andere download-iconen. [item-icons runtime-PNG's, Content/_Project/UI/Icons]
+- [x] **D.6 Big-joint-icon (blunt.png)** — de dikke joint (big model) heeft een eigen transparant `blunt.png`
+  icoon; 7g/10g joints gebruiken dit icoon, kleine joints blijven `joint_rolled`. [item-icons runtime-PNG's, Content/_Project/UI/Icons]
 - [x] **D.10 Loading-tekst langzamer + meer random** — de loading-screen-tekst wisselt te snel; trager laten
   roteren en meer randomiseren (elke X). [SWeedLoadingScreen / BootCoverWidget tekst-rotatie]
 - [x] **D.14 Compass clean (AC Shadows-stijl)** — de in-game compass strak/clean maken zonder UI-blok/kader;

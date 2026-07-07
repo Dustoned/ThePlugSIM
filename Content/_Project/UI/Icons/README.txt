@@ -15,6 +15,7 @@ weed       <- delapouite/hemp      ui_flame   <- carl-olsen/flame
 weed_wet   <- delapouite/monstera  ui_level   <- lorc/flat-star
 seed       <- delapouite/seedling  ui_leaf    <- lorc/maple-leaf
 joint      <- skoll/joint          ui_upgrade <- delapouite/upgrade
+blunt      <- supplied PNG
 baggie     <- delapouite/chips-bag ui_shop    <- delapouite/shop
 packaging  <- cardboard-box        ui_person  <- delapouite/person
 papers     <- john-redman/paper    ui_message <- delapouite/chat-bubble

@@ -1182,9 +1182,12 @@ namespace WeedUI
 	{
 		const FString S = ItemId.ToString();
 		if (S.StartsWith(TEXT("WetBud_")))  { return TEXT("weed_wet"); } // natte wiet: bud + druppel
-		// Afgewerkte joint: eigen plaatje (joint_rolled.png). joint.png is "handen die rollen" en hoort bij
-		// de GELADEN paper (zie ItemIconTexture), niet bij de klaar-joint.
-		if (S.StartsWith(TEXT("Joint_")))   { return TEXT("joint_rolled"); }
+		// Afgewerkte joint: kleine joints blijven joint_rolled; 7g/10g gebruiken het dikke blunt-icoon
+		// zodat het inventory-icoon dezelfde gram-tier leest als het wereldmodel.
+		if (S.StartsWith(TEXT("Joint_")))
+		{
+			return UInventoryComponent::JointGrams(ItemId) >= 7 ? TEXT("blunt") : TEXT("joint_rolled");
+		}
 		// Verpakte wiet: het icoon volgt de CONTAINER (niet de gram!) -> een halfvolle jar blijft een jar-icoon
 		// i.p.v. in een zakje te veranderen. Oude maatloze/containerless bags vallen terug op de gram-heuristiek.
 		if (S.StartsWith(TEXT("Bag_")))
@@ -1296,7 +1299,7 @@ namespace WeedUI
 		// Content/_Project/UI/Icons: de exacte stems (ExactIconStem) + de categorie-primaries.
 		static const TCHAR* Stems[] = {
 			TEXT("weed"), TEXT("weed_wet"), TEXT("weed_bag"), TEXT("weed_jar"), TEXT("weed_sack"),
-			TEXT("joint"), TEXT("joint_rolled"), TEXT("papers"), TEXT("seed"), TEXT("cash"),
+			TEXT("joint"), TEXT("joint_rolled"), TEXT("blunt"), TEXT("papers"), TEXT("seed"), TEXT("cash"),
 			TEXT("bottle"), TEXT("bottle_empty"), TEXT("water"), TEXT("soil"), TEXT("packaging"),
 			TEXT("fertilizer"), TEXT("baggie"), TEXT("pot"), TEXT("block")
 		};
