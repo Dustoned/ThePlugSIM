@@ -1020,10 +1020,10 @@ bool UPhoneWidget::GetApptUrgency(FName ContactId, float& OutFrac, int32& OutSec
 		if (M.Status == 1 && Day)
 		{
 			// Fase 0: geaccepteerd, klant nog niet gespawnd -> tijd tot het afspraak-MOMENT. Deler = de max
-			// afspraak-offset (gedeelde constante) zodat de balk-schaal meeloopt met de echte offset-range (D.13).
+			// afspraak-offset incl. YouGoToThem-reisbuffer zodat de balk meeloopt met de echte range (D.13/D.11).
 			float Remaining = M.AppointmentTimeOfDay - NowDay;
 			if (Remaining < 0.f) { Remaining += Length; }
-			OutFrac = FMath::Clamp(Remaining / UContactsComponent::ApptOffsetMaxSec, 0.f, 1.f);
+			OutFrac = FMath::Clamp(Remaining / UContactsComponent::ApptOffsetVisualMaxSec, 0.f, 1.f);
 			OutSecsLeft = FMath::CeilToInt(Remaining);
 			OutClockMins = Con->ClockMinutesOf(M.AppointmentTimeOfDay); // kloktijd van de afspraak (bv. 11:00)
 			OutPhase = 0;

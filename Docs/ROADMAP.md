@@ -219,6 +219,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   - **Status 07-07:** fallback-spawns gebruikten al `DoorRetrofitter::GetOutdoorWaitSpots`; nu gebruiken ook
     hergebruikte resident-NPC's bij `YouGoToThem` een automatische buitenplek. Berichttekst wijst naar buiten/marker
     i.p.v. een huisnummer. Eigen deur/hal blijft fallback als er geen buitenplek beschikbaar is.
+  - **Status 07-07 travel-buffer:** `YouGoToThem` berichten leggen hun buitenplek vast in het bericht en krijgen
+    op basis van speler-afstand tot die plek tot +180s extra afspraak-offset. Spawn/reused NPC gebruikt daarna diezelfde plek.
 - [x] **D.12 NPC-onderlinge avoidance te agressief** — NPC's duwen elkaar veel te hard weg bij dichte nadering
   (lijkt of iedereen een grote persoonlijke zone heeft). Ze mogen langs elkaar lopen op de stoep met hooguit een
   zachte verschuiving; het HARDE wegduwen hoort alleen bij vaste obstakels (muren/objecten/map-geometrie) waar

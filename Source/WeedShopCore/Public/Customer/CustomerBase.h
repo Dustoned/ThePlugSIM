@@ -301,7 +301,7 @@ public:
 
 	// Start een afspraak voor deze bewoner. bComeToPlayer = de NPC loopt naar de speler (TheyComeToYou);
 	// anders wacht 'ie buiten op een automatische wachtplek en volgt de speler de marker (YouGoToThem).
-	void BeginAppointment(bool bComeToPlayer);
+	void BeginAppointment(bool bComeToPlayer, bool bHasForcedWaitSpot = false, const FVector& ForcedWaitSpot = FVector::ZeroVector);
 	void EndAppointment();
 	bool HasActiveAppointment() const { return bApptActive; }
 

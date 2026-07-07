@@ -60,6 +60,12 @@ struct FPhoneMessage
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	EAppointmentKind Kind = EAppointmentKind::TheyComeToYou;
 
+	// Voor YouGoToThem: de exacte buiten-wachtplek die bij het bericht/tijdstip hoort.
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	bool bHasPlannedMeetSpot = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Phone")
+	FVector PlannedMeetSpot = FVector::ZeroVector;
+
 	// 0 = open (wacht op antwoord), 1 = geaccepteerd, 2 = geweigerd.
 	UPROPERTY(BlueprintReadOnly, Category = "Phone")
 	uint8 Status = 0;
@@ -131,6 +137,8 @@ public:
 	static constexpr float NudgeDelaySec = 60.f;       // "you there?"-herinnering na deze real-sec zonder antwoord
 	static constexpr float ApptOffsetMinSec = ResponseWindowSec + 60.f; // ondergrens gevraagde offset (cyclus-sec) = 210
 	static constexpr float ApptOffsetMaxSec = 360.f;   // bovengrens gevraagde offset (cyclus-sec)
+	static constexpr float YouGoToThemTravelExtraMaxSec = 180.f; // extra reistijd voor verre buiten-wachtplekken
+	static constexpr float ApptOffsetVisualMaxSec = ApptOffsetMaxSec + YouGoToThemTravelExtraMaxSec;
 	static constexpr float AnnounceWindowSec = 30.f;   // ruimere "gepasseerd binnen deze marge"-marge voor de afspraak-aankondiging
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;

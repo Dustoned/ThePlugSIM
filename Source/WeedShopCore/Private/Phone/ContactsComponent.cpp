@@ -138,6 +138,9 @@ void UContactsComponent::NotifyOwnerPlayer(const FString& PlayerId, float Second
 	}
 }
 
+static bool PickLogicalMeetSpot(UWorld* W, FVector& Out);
+static float ComputeYouGoToThemTravelExtra(UWorld* W, const APawn* OwnerPawn, const FVector& MeetSpot);
+
 bool UContactsComponent::GetCycleTime(float& OutNow, float& OutLength) const
 {
 	if (const AWeedShopGameState* GS = Cast<AWeedShopGameState>(GetOwner()))
@@ -235,10 +238,23 @@ void UContactsComponent::SendRandomAppointment()
 	float Now = 0.f, Length = 1800.f;
 	GetCycleTime(Now, Length);
 
+	const EAppointmentKind ApptKind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
+	FVector PlannedMeetSpot = FVector::ZeroVector;
+	bool bHasPlannedMeetSpot = false;
+	float TravelExtraSec = 0.f;
+	if (ApptKind == EAppointmentKind::YouGoToThem)
+	{
+		bHasPlannedMeetSpot = PickLogicalMeetSpot(GetWorld(), PlannedMeetSpot);
+		if (bHasPlannedMeetSpot)
+		{
+			TravelExtraSec = ComputeYouGoToThemTravelExtra(GetWorld(), OwnerPawn, PlannedMeetSpot);
+		}
+	}
+
 	// Afspraak in de toekomst (binnen de cyclus). Ondergrens = antwoord-venster + marge (ApptOffsetMinSec,
-	// ~210s) zodat de gevraagde tijd ALTIJD na het opgeef-venster (GiveUpDelay 150s) valt - anders is de
-	// afspraak al verstreken voordat je kon reageren (D.13).
-	const float Offset = FMath::FRandRange(ApptOffsetMinSec, ApptOffsetMaxSec);
+	// ~210s) zodat de gevraagde tijd ALTIJD na het opgeef-venster (GiveUpDelay 150s) valt. Als de speler
+	// naar de klant moet, krijgt een verre buiten-wachtplek extra reistijd.
+	const float Offset = FMath::Min(FMath::FRandRange(ApptOffsetMinSec, ApptOffsetMaxSec) + TravelExtraSec, ApptOffsetVisualMaxSec);
 	const float ApptTime = FMath::Fmod(Now + Offset, Length);
 
 	// Formatteer als HH:MM met DEZELFDE klok als de HUD (dag/nacht-split).
@@ -263,7 +279,9 @@ void UContactsComponent::SendRandomAppointment()
 	Msg.WantQty = WantQty;
 	Msg.WantProduct = WantProduct; // volledig product (Bag_/Hash_/Edible_<strain>)
 	Msg.SentRealTime = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.f; // voor follow-up/opgeven + reactiesnelheid
-	Msg.Kind = (FMath::RandBool()) ? EAppointmentKind::TheyComeToYou : EAppointmentKind::YouGoToThem;
+	Msg.Kind = ApptKind;
+	Msg.bHasPlannedMeetSpot = bHasPlannedMeetSpot;
+	Msg.PlannedMeetSpot = PlannedMeetSpot;
 
 	// --- DAG-ORDER: mid-game variatie. Vanaf level ~12 wordt een afspraak soms een premium VIP-order:
 	// een specifieke wiet-strain met een min-THC-eis, een ruimere deadline en een bonus-uitbetaling.
@@ -292,8 +310,9 @@ void UContactsComponent::SendRandomAppointment()
 			// Premium = grotere bestelling.
 			WantQty = FMath::Max(WantQty, FMath::RandRange(6, 14));
 			Msg.WantQty = WantQty;
-			// Ruimere deadline (3-7 min) zodat je voorraad kunt halen/aanvullen.
-			const float OrderOffset = FMath::FRandRange(180.f, 420.f);
+			// Ruimere deadline (3.5-7 min) zodat je voorraad kunt halen/aanvullen; YouGoToThem krijgt
+			// dezelfde afstandsbuffer als normale afspraken.
+			const float OrderOffset = FMath::Min(FMath::FRandRange(ApptOffsetMinSec, 420.f) + TravelExtraSec, 420.f + YouGoToThemTravelExtraMaxSec);
 			Msg.AppointmentTimeOfDay = FMath::Fmod(Now + OrderOffset, Length);
 			const int32 OTotalMin = ClockMinutesOf(Msg.AppointmentTimeOfDay);
 			const int32 OHH = (OTotalMin / 60) % 24;
@@ -304,28 +323,11 @@ void UContactsComponent::SendRandomAppointment()
 		}
 	}
 
-	// Adres opzoeken bij de bewoner met dit NpcId, zodat "kom bij mij langs" vertelt WAAR je heen moet.
-	// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
-	// Per-proces registry -> op wereld filteren (PIE/co-op-in-1-proces).
-	FString AddrStr;
-	for (const TWeakObjectPtr<ACustomerBase>& WCb : ACustomerBase::GetAll())
-	{
-		ACustomerBase* Cb = WCb.Get();
-		if (IsValid(Cb) && Cb->GetWorld() == GetWorld() && Cb->NpcId == C.ContactId && Cb->IsResident()) { AddrStr = Cb->GetHomeNumber(); break; }
-	}
-
 	if (!Msg.bOrder)
 	{
 		Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
 			? FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nI'll come by at %02d:%02d."), *WantClean, WantQty, HH, MM))
 			: FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nMeet me outside at %02d:%02d?"), *WantClean, WantQty, HH, MM));
-	}
-	else if (Msg.Kind == EAppointmentKind::YouGoToThem && !AddrStr.IsEmpty())
-	{
-		// Order waarbij jij naar de klant gaat: de marker wijst naar de automatische buitenplek.
-		const int32 OTotalMin = ClockMinutesOf(Msg.AppointmentTimeOfDay);
-		Msg.Body = FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nMeet me outside."),
-			WantQty, *WantClean, Msg.MinThc, (OTotalMin / 60) % 24, OTotalMin % 60));
 	}
 
 	// COMPETITIVE: dit bericht is voor EEN speler (eigen telefoon). Doel = de GEHOISTE eigenaar van dit
@@ -435,7 +437,7 @@ void UContactsComponent::CheckAppointments()
 			{
 				const FString Where = (Msg.Kind == EAppointmentKind::TheyComeToYou)
 					? FString::Printf(TEXT("%s is on the way!"), *Msg.SenderName.ToString())
-					: FString::Printf(TEXT("%s is waiting at their place"), *Msg.SenderName.ToString());
+					: FString::Printf(TEXT("%s is waiting outside"), *Msg.SenderName.ToString());
 				// Per-speler: alleen de eigenaar van deze afspraak (Msg.ForPlayerId) krijgt de aankondiging;
 				// co-op (leeg) = alle spelers. Nooit Notify(-1) -> de rivaal ziet elkaars afspraak niet meer.
 				NotifyOwnerPlayer(Msg.ForPlayerId, 5.f, FColor::Magenta, FString::Printf(TEXT("Appointment: %s"), *Where));
@@ -445,11 +447,31 @@ void UContactsComponent::CheckAppointments()
 	}
 }
 
-// Een LOGISCHE wacht-plek voor een afspraak: een door de speler gemarkeerde meet-spot (MeetSpots.txt) voor
-// deze map, anders vlakbij een winkel-toonbank. Geen dak, geen midden-op-de-weg. False = niks gevonden.
-static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
+static void RefineLogicalMeetSpot(UWorld* W, FVector& Spot)
 {
-	if (!W) { return false; }
+	if (!W) { return; }
+	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
+	{
+		FNavLocation Proj;
+		if (Nav->ProjectPointToNavigation(Spot, Proj, FVector(220.f, 220.f, 400.f)))
+		{
+			Spot = Proj.Location;
+		}
+	}
+	FHitResult Floor;
+	const FVector FS(Spot.X, Spot.Y, Spot.Z + 300.f);
+	const FVector FE = FS - FVector(0.f, 0.f, 1500.f);
+	FCollisionQueryParams FQ(FName(TEXT("ApptMeetSpotFloor")), false);
+	if (W->LineTraceSingleByChannel(Floor, FS, FE, ECC_WorldStatic, FQ))
+	{
+		Spot.Z = Floor.ImpactPoint.Z + 4.f;
+	}
+}
+
+static void CollectLogicalMeetSpots(UWorld* W, TArray<FVector>& Out)
+{
+	Out.Reset();
+	if (!W) { return; }
 	// KAMER-FILTER: kandidaten binnen een woon-kamer (starter, registry-units, competitive) vallen
 	// af - een afspraak-NPC wacht in een steegje/hal/bij een toonbank, nooit zomaar binnen in een
 	// kamer (stale markers uit oude dev-sessies zetten 'm daar anders neer).
@@ -459,7 +481,6 @@ static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
 	{
 		if (Retro) { Arr.RemoveAll([Retro](const FVector& C) { return Retro->IsInsideHomeRoom(C); }); }
 	};
-	TArray<FVector> Cands;
 	TArray<FString> Lines;
 	if (FFileHelper::LoadFileToStringArray(Lines, *(FPaths::ProjectSavedDir() / TEXT("MeetSpots.txt"))))
 	{
@@ -469,31 +490,65 @@ static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
 			TArray<FString> P; Raw.TrimStartAndEnd().ParseIntoArray(P, TEXT("|"));
 			if (P.Num() >= 4 && P[0] == CurMap)
 			{
-				Cands.Add(FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3])));
+				Out.Add(FVector(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3])));
 			}
 		}
 	}
-	DropRoomCands(Cands);
+	DropRoomCands(Out);
 	// Geen gemarkeerde meet-spots -> automatische buiten-wachtplekken bij de commerciele deuren over de
 	// hele map (winkel/garage/lobby/steeg). Zo krijgt een YouGoToThem-afspraak altijd een logische map-deur
 	// i.p.v. alleen de eigen woning. Retro filtert woon-kamers zelf al weg; DropRoomCands als extra vangnet.
-	if (Cands.Num() == 0 && Retro)
+	if (Out.Num() == 0 && Retro)
 	{
 		TArray<FVector> WaitSpots;
 		Retro->GetOutdoorWaitSpots(WaitSpots);
-		Cands.Append(WaitSpots);
-		DropRoomCands(Cands);
+		Out.Append(WaitSpots);
+		DropRoomCands(Out);
 	}
 	// Nog niks -> val terug op de winkels (al gemarkeerd door de speler, dus logisch + bereikbaar) - met
 	// dezelfde kamer-filter. PERF: balie-registry i.p.v. iterator (per-proces registry -> op wereld filteren).
-	if (Cands.Num() == 0)
+	if (Out.Num() == 0)
 	{
-		for (const TWeakObjectPtr<AStoreCounter>& WSc : AStoreCounter::GetAll()) { AStoreCounter* Sc = WSc.Get(); if (IsValid(Sc) && Sc->GetWorld() == W) { Cands.Add(Sc->GetActorLocation()); } }
-		DropRoomCands(Cands);
+		for (const TWeakObjectPtr<AStoreCounter>& WSc : AStoreCounter::GetAll()) { AStoreCounter* Sc = WSc.Get(); if (IsValid(Sc) && Sc->GetWorld() == W) { Out.Add(Sc->GetActorLocation()); } }
+		DropRoomCands(Out);
 	}
+}
+
+// Een LOGISCHE wacht-plek voor een afspraak: een door de speler gemarkeerde meet-spot (MeetSpots.txt) voor
+// deze map, anders een automatische buitenplek bij deuren/garages/lobby's/steegjes. False = niks gevonden.
+static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
+{
+	TArray<FVector> Cands;
+	CollectLogicalMeetSpots(W, Cands);
 	if (Cands.Num() == 0) { return false; }
 	Out = Cands[FMath::RandRange(0, Cands.Num() - 1)];
+	RefineLogicalMeetSpot(W, Out);
 	return true;
+}
+
+static float ComputeYouGoToThemTravelExtra(UWorld* W, const APawn* OwnerPawn, const FVector& MeetSpot)
+{
+	if (!W) { return 0.f; }
+	float BestDist = TNumericLimits<float>::Max();
+	if (OwnerPawn && OwnerPawn->GetWorld() == W)
+	{
+		BestDist = FVector::Dist2D(OwnerPawn->GetActorLocation(), MeetSpot);
+	}
+	else
+	{
+		for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (const APawn* P = It->Get() ? It->Get()->GetPawn() : nullptr)
+			{
+				BestDist = FMath::Min(BestDist, (float)FVector::Dist2D(P->GetActorLocation(), MeetSpot));
+			}
+		}
+	}
+	if (BestDist >= TNumericLimits<float>::Max()) { return 0.f; }
+
+	constexpr float FreeDistanceCm = 3500.f; // om-de-hoek afspraken blijven strak
+	constexpr float CmPerExtraSecond = 120.f;
+	return FMath::Clamp((BestDist - FreeDistanceCm) / CmPerExtraSecond, 0.f, UContactsComponent::YouGoToThemTravelExtraMaxSec);
 }
 
 void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
@@ -542,7 +597,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 		Reuse->SetApptWant(Msg.WantStrain, Msg.WantQty, Msg.WantProduct);
 		if (Msg.bOrder) { Reuse->SetApptOrder(Msg.MinThc, Msg.BonusMult); }
 		Reuse->ApptForPlayerId = Msg.ForPlayerId; // competitive: bij welke speler deze afspraak-NPC hoort (compass/telefoon-filter)
-		Reuse->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou);
+		Reuse->BeginAppointment(Msg.Kind == EAppointmentKind::TheyComeToYou, Msg.Kind == EAppointmentKind::YouGoToThem && Msg.bHasPlannedMeetSpot, Msg.PlannedMeetSpot);
 		return;
 	}
 
@@ -586,8 +641,16 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 				// (de apartment-pos zit boven) of midden op de weg (random nav).
 				if (!bComeToYou)
 				{
-					FVector MeetLoc;
-					if (PickLogicalMeetSpot(World, MeetLoc)) { SpawnLoc = MeetLoc; bPlacedAtHome = true; }
+					if (Msg.bHasPlannedMeetSpot)
+					{
+						SpawnLoc = Msg.PlannedMeetSpot;
+						bPlacedAtHome = true;
+					}
+					else
+					{
+						FVector MeetLoc;
+						if (PickLogicalMeetSpot(World, MeetLoc)) { SpawnLoc = MeetLoc; bPlacedAtHome = true; }
+					}
 				}
 
 				// "Ik kom langs" (TheyComeToYou) + vangnet voor "kom bij mij" zonder meet-spot: spawn waar
@@ -679,7 +742,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	// Echte afspraak-state: bApptActive + een afgetelde wachttijd die schaalt met afstand + respect/loyaliteit
 	// (ComputeApptWaitSeconds). Zo werken de chat-progressbar EN de no-show ook voor deze (niet-resident) NPC,
 	// i.p.v. de oude 30s-patience waardoor 'ie te snel vertrok.
-	Cust->BeginAppointment(bComeToYou);
+	Cust->BeginAppointment(bComeToYou, !bComeToYou && Msg.bHasPlannedMeetSpot, Msg.PlannedMeetSpot);
 
 	UE_LOG(LogWeedShop, Log, TEXT("Appointment customer spawned for %s."), *Msg.SenderName.ToString());
 }

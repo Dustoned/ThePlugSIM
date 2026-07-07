@@ -2217,7 +2217,7 @@ bool ACustomerBase::TickResidentHomeEntry(float DeltaSeconds)
 	return true;
 }
 
-void ACustomerBase::BeginAppointment(bool bComeToPlayer)
+void ACustomerBase::BeginAppointment(bool bComeToPlayer, bool bHasForcedWaitSpot, const FVector& ForcedWaitSpot)
 {
 	if (!HasAuthority()) { return; }
 	bApptActive = true;
@@ -2232,7 +2232,15 @@ void ACustomerBase::BeginAppointment(bool bComeToPlayer)
 	BecomeBuyerNow();          // afspraak = wil kopen (geen prospect-sampling meer)
 	if (!bComeToPlayer)
 	{
-		ApptWaitSpot = ResolveAppointmentWaitSpot(bApptHasWaitSpot);
+		if (bHasForcedWaitSpot)
+		{
+			ApptWaitSpot = ForcedWaitSpot;
+			bApptHasWaitSpot = true;
+		}
+		else
+		{
+			ApptWaitSpot = ResolveAppointmentWaitSpot(bApptHasWaitSpot);
+		}
 	}
 
 	// "Ik ben onderweg"-appje.
