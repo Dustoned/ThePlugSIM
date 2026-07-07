@@ -214,13 +214,15 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
     builds gebruiken de risicovolle Gamer_Girl/SchoolGirl complete skins niet meer direct maar vallen gender-correct
     terug op Casual, en een emergency Manny-fallback voorkomt dat de hoofdmesh leeg blijft. Packaged hertest nog open.
 - [x] **D.11 NPC buiten-wachtplekken** — NPC's plekken geven om buiten op de speler te wachten: auto-plaatsen
-  bij random deuren over de HELE map (langs de weg, garagedeuren, deuren aan de back-alleys). Niet handmatig
+  bij automatische deuren over de HELE map (langs de weg, garagedeuren, deuren aan de back-alleys). Niet handmatig
   gemarkeerd - automatisch verspreid. [DoorRetrofitter deur-registry + Customer meet/afspraak-systeem]
   - **Status 07-07:** fallback-spawns gebruikten al `DoorRetrofitter::GetOutdoorWaitSpots`; nu gebruiken ook
     hergebruikte resident-NPC's bij `YouGoToThem` een automatische buitenplek. Berichttekst wijst naar buiten/marker
     i.p.v. een huisnummer. Eigen deur/hal blijft fallback als er geen buitenplek beschikbaar is.
   - **Status 07-07 travel-buffer:** `YouGoToThem` berichten leggen hun buitenplek vast in het bericht en krijgen
     op basis van speler-afstand tot die plek tot +180s extra afspraak-offset. Spawn/reused NPC gebruikt daarna diezelfde plek.
+  - **Status 07-07 vaste klantplek:** de buitenplek wordt deterministisch uit de basis-`NpcId` gekozen, zodat dezelfde
+    klant steeds op dezelfde deur/steeg/garageplek afspreekt en je hun "plek" kunt leren kennen.
 - [x] **D.12 NPC-onderlinge avoidance te agressief** — NPC's duwen elkaar veel te hard weg bij dichte nadering
   (lijkt of iedereen een grote persoonlijke zone heeft). Ze mogen langs elkaar lopen op de stoep met hooguit een
   zachte verschuiving; het HARDE wegduwen hoort alleen bij vaste obstakels (muren/objecten/map-geometrie) waar

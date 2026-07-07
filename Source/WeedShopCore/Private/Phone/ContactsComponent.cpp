@@ -138,7 +138,7 @@ void UContactsComponent::NotifyOwnerPlayer(const FString& PlayerId, float Second
 	}
 }
 
-static bool PickLogicalMeetSpot(UWorld* W, FVector& Out);
+static bool PickLogicalMeetSpot(UWorld* W, FVector& Out, FName StableContactId = NAME_None);
 static float ComputeYouGoToThemTravelExtra(UWorld* W, const APawn* OwnerPawn, const FVector& MeetSpot);
 
 bool UContactsComponent::GetCycleTime(float& OutNow, float& OutLength) const
@@ -244,7 +244,7 @@ void UContactsComponent::SendRandomAppointment()
 	float TravelExtraSec = 0.f;
 	if (ApptKind == EAppointmentKind::YouGoToThem)
 	{
-		bHasPlannedMeetSpot = PickLogicalMeetSpot(GetWorld(), PlannedMeetSpot);
+		bHasPlannedMeetSpot = PickLogicalMeetSpot(GetWorld(), PlannedMeetSpot, BaseNpcId(C.ContactId));
 		if (bHasPlannedMeetSpot)
 		{
 			TravelExtraSec = ComputeYouGoToThemTravelExtra(GetWorld(), OwnerPawn, PlannedMeetSpot);
@@ -514,14 +514,30 @@ static void CollectLogicalMeetSpots(UWorld* W, TArray<FVector>& Out)
 	}
 }
 
+static uint32 StableContactSeed(FName ContactId)
+{
+	const FString S = ContactId.ToString();
+	uint32 H = 2166136261u;
+	for (TCHAR C : S)
+	{
+		H ^= (uint32)FChar::ToLower(C);
+		H *= 16777619u;
+	}
+	return H ? H : 1u;
+}
+
 // Een LOGISCHE wacht-plek voor een afspraak: een door de speler gemarkeerde meet-spot (MeetSpots.txt) voor
-// deze map, anders een automatische buitenplek bij deuren/garages/lobby's/steegjes. False = niks gevonden.
-static bool PickLogicalMeetSpot(UWorld* W, FVector& Out)
+// deze map, anders een automatische buitenplek bij deuren/garages/lobby's/steegjes. Met StableContactId
+// krijgt dezelfde klant steeds dezelfde plek, zodat "waar die klant woont/afspreekt" herkenbaar blijft.
+static bool PickLogicalMeetSpot(UWorld* W, FVector& Out, FName StableContactId)
 {
 	TArray<FVector> Cands;
 	CollectLogicalMeetSpots(W, Cands);
 	if (Cands.Num() == 0) { return false; }
-	Out = Cands[FMath::RandRange(0, Cands.Num() - 1)];
+	const int32 PickIdx = StableContactId.IsNone()
+		? FMath::RandRange(0, Cands.Num() - 1)
+		: (int32)(StableContactSeed(StableContactId) % (uint32)Cands.Num());
+	Out = Cands[PickIdx];
 	RefineLogicalMeetSpot(W, Out);
 	return true;
 }
@@ -649,7 +665,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 					else
 					{
 						FVector MeetLoc;
-						if (PickLogicalMeetSpot(World, MeetLoc)) { SpawnLoc = MeetLoc; bPlacedAtHome = true; }
+						if (PickLogicalMeetSpot(World, MeetLoc, BaseId)) { SpawnLoc = MeetLoc; bPlacedAtHome = true; }
 					}
 				}
 
