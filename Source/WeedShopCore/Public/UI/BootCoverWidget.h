@@ -12,6 +12,7 @@ class UTextBlock;
 class UProgressBar;
 class UBorder;
 class UCanvasPanel;
+class UWeedActionButton;
 
 UCLASS()
 class WEEDSHOPCORE_API UBootCoverWidget : public UUserWidget
@@ -20,9 +21,13 @@ class WEEDSHOPCORE_API UBootCoverWidget : public UUserWidget
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 private:
+	UFUNCTION() void OnBackToMenu();
+
 	UPROPERTY() TObjectPtr<UBorder> Cover;
 	UPROPERTY() TObjectPtr<class UWidget> Content;     // gecentreerde inhoud (titel/tekst/bar)
 	UPROPERTY() TObjectPtr<UTextBlock> Title;
@@ -30,7 +35,10 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> StatusText;
 	UPROPERTY() TObjectPtr<class USizeBox> BarBox;
 	UPROPERTY() TObjectPtr<UProgressBar> Bar;
+	UPROPERTY() TObjectPtr<UWeedActionButton> BackButton;
 
+	bool bInputCaptured = false;
+	bool bPrevShowMouseCursor = false;
 	float Elapsed = 0.f;
 	float ReadyAt = -1.f;   // moment waarop de kamer klaar werd (voor een korte na-buffer)
 	float SettleAt = -1.f;  // (legacy) niet meer de gate
@@ -40,5 +48,6 @@ private:
 	int32 LastStep = -1;
 	int32 ShaderPeak = 0;   // hoogste aantal shader-compile-jobs gezien (voor echte bar-voortgang)
 	bool bFading = false;
+	bool bBackRequested = false;
 	float Fade = 1.f;
 };

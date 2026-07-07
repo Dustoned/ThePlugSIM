@@ -13,10 +13,12 @@
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
 #include "Components/Widget.h"
+#include "GameFramework/PlayerController.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Brushes/SlateColorBrush.h"
 #include "Styling/CoreStyle.h"
 #include "Engine/World.h" // GetNetMode: co-op client slaat de CrowdWarm-gate over
+#include "Engine/GameInstance.h"
 #include "Math/UnrealMathUtility.h"
 #include "PipelineStateCache.h" // PSO-precaching-status: laadscherm wacht tot de pipeline-states klaar zijn
 #if WITH_EDITOR
@@ -88,8 +90,79 @@ TSharedRef<SWidget> UBootCoverWidget::RebuildWidget()
 		Bar->SetFillColorAndOpacity(FLinearColor::White); // brush is al groen -> neutrale tint (geen dubbele tint, geen witte flash)
 		BarBox->SetContent(Bar);
 		VB->AddChildToVerticalBox(BarBox)->SetHorizontalAlignment(HAlign_Center);
+
+		USizeBox* BackBox = WidgetTree->ConstructWidget<USizeBox>();
+		BackBox->SetWidthOverride(170.f);
+		BackBox->SetHeightOverride(34.f);
+		BackButton = WidgetTree->ConstructWidget<UWeedActionButton>();
+		BackButton->OnClicked.AddDynamic(BackButton, &UWeedActionButton::Handle);
+		BackButton->OnClicked.AddDynamic(this, &UBootCoverWidget::OnBackToMenu);
+		FButtonStyle BtnStyle;
+		BtnStyle.Normal = WeedUI::Rounded(FLinearColor(0.08f, 0.13f, 0.095f, 0.72f), 7.f);
+		BtnStyle.Hovered = WeedUI::Rounded(FLinearColor(0.13f, 0.22f, 0.15f, 0.92f), 7.f);
+		BtnStyle.Pressed = WeedUI::Rounded(FLinearColor(0.05f, 0.09f, 0.065f, 0.95f), 7.f);
+		BtnStyle.NormalPadding = FMargin(12.f, 7.f);
+		BtnStyle.PressedPadding = FMargin(12.f, 8.f, 12.f, 6.f);
+		BackButton->SetStyle(BtnStyle);
+		UTextBlock* BackText = WeedUI::Text(WidgetTree, TEXT("BACK TO MENU"), 11, FLinearColor(0.72f, 0.86f, 0.74f), true, true);
+		BackButton->SetContent(BackText);
+		BackBox->SetContent(BackButton);
+		UVerticalBoxSlot* BS = VB->AddChildToVerticalBox(BackBox);
+		BS->SetHorizontalAlignment(HAlign_Center);
+		BS->SetPadding(FMargin(0.f, 26.f, 0.f, 0.f));
 	}
 	return Super::RebuildWidget();
+}
+
+void UBootCoverWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		bInputCaptured = true;
+		bPrevShowMouseCursor = PC->bShowMouseCursor;
+		FInputModeGameAndUI Mode;
+		if (BackButton) { Mode.SetWidgetToFocus(BackButton->TakeWidget()); }
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Mode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
+	}
+}
+
+void UBootCoverWidget::NativeDestruct()
+{
+	if (bInputCaptured)
+	{
+		if (APlayerController* PC = GetOwningPlayer())
+		{
+			if (bPrevShowMouseCursor)
+			{
+				FInputModeGameAndUI Mode;
+				Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+				Mode.SetHideCursorDuringCapture(false);
+				PC->SetInputMode(Mode);
+			}
+			else
+			{
+				PC->SetInputMode(FInputModeGameOnly());
+			}
+			PC->bShowMouseCursor = bPrevShowMouseCursor;
+		}
+	}
+	Super::NativeDestruct();
+}
+
+void UBootCoverWidget::OnBackToMenu()
+{
+	if (bBackRequested) { return; }
+	bBackRequested = true;
+	WeedShop_CancelGameLoadingScreen();
+	RemoveFromParent();
+	if (UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
+	{
+		GI->ReturnToMainMenu();
+	}
 }
 
 void UBootCoverWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)

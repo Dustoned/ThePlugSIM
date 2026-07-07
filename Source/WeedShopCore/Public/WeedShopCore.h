@@ -21,6 +21,10 @@ WEEDSHOPCORE_API void WeedShop_RequestGameLoadingScreen();
 // aan zodra de speler stil in de kamer staat (floor ingestreamd), met een eigen safety-cap.
 WEEDSHOPCORE_API void WeedShop_StopGameLoadingScreen();
 
+// Annuleert een lopende loading-cover flow (bv. Back to menu op de cover). Dit stopt de movie
+// EN reset de gedeelde loading-flags/timer, zodat het hoofdmenu niet meteen weer een cover spawnt.
+WEEDSHOPCORE_API void WeedShop_CancelGameLoadingScreen();
+
 // "Kamer klaar"-vlag: DoorRetrofitter zet 'm zodra de penthouse-vloer onder de thuis-plek is ingestreamd.
 // Het in-game cover-scherm (UBootCoverWidget) blijft over beeld tot dit waar is. Reset bij een nieuwe load.
 WEEDSHOPCORE_API void WeedShop_SetRoomReady(bool bReady);

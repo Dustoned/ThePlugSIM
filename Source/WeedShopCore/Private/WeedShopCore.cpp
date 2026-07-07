@@ -142,6 +142,22 @@ void WeedShop_StopGameLoadingScreen()
 	}
 }
 
+void WeedShop_CancelGameLoadingScreen()
+{
+	WeedShop_StopGameLoadingScreen();
+	GShowGameLoadingScreen = false;
+	GRoomFloorReady = false;
+	GCrowdSpawned = false;
+	GCoverUp = false;
+	GCityConverted = false;
+	GCrowdWarm = false;
+	GCityRetroActive = false;
+	GBootLoading = false;
+	GLocalPawnPlaced = false;
+	GLoadStartSeconds = 0.0;
+	GLoadEndSeconds = 0.0;
+}
+
 // Lumen (GI + reflecties) aan/uit. Zet de cvars DIRECT via de console-manager op de hoogste
 // game-prioriteit, plus de harde Lumen-Allow-schakelaars (die deinst niets terug). Logt de
 // werkelijke waardes na afloop zodat we kunnen verifieren dat het echt geschakeld is.

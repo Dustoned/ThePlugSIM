@@ -468,10 +468,14 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   muurvlak faalt/misplaatst het bord - DoorRetrofitter ~3043); + de vloer-knop-nummers moeten nog iets dichter
   op de muur (PackElevatorButton text-offset). FIX: trace debuggen of terug naar vaste-offset (bord moet ZICHTBAAR
   blijven) + button-offset natunen. Wacht op D29-B (bezit DoorRetrofitter).
-- [ ] **D35** Cancel/"Back to menu"-knop op het laadscherm (join/normaal) zodat je terug kunt als 't hangt.
+- [x] **D35** Cancel/"Back to menu"-knop op het laadscherm (join/normaal) zodat je terug kunt als 't hangt.
   Cover-fase (UBootCoverWidget, na LoadMap) = game-thread leeft -> knop werkt. Movie-fase (SWeedLoadingScreen
   tijdens LoadMap) = game-thread geblokkeerd; knop daar alleen mogelijk als de movie-Slate input verwerkt.
   -> ReturnToMainMenu() (zelfde als D28 leave-session).
+  - **Status 07-07:** gebouwd in de UBootCoverWidget-coverlaag: subtiele `BACK TO MENU` knop onder de progressbar,
+    loading-state reset via `WeedShop_CancelGameLoadingScreen()`, daarna dezelfde `ReturnToMainMenu()` teardown als
+    de co-op leave-session. Editor-build groen; standalone smoke groen. Echte kliktest in trage join/load-cover blijft
+    open onder V.8.
 
 ---
 
@@ -693,6 +697,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] V.5 (later) Toasts: 1x per actie, iets langer zichtbaar; hotbar vult bij koop (commits f86f6408/bab783da)
 - [ ] V.7 1.22.0 packing-bench thuis-test: packen, bijvullen/mergen, per-gram uitpakken, jar/bag-capaciteiten,
   lane-timing per bench-tier, joint-roll-timing per gram en eventueel 2 spelers aan één bench.
+- [ ] V.8 D35 loading-cover Back to menu thuis-test: bij een normale load en/of LAN-join controleren dat de knop
+  zichtbaar is, klikbaar is, de cover verdwijnt en je netjes terug op het hoofdmenu komt zonder stale cover of sessie-hang.
 - [x] AUDIT kit-toggles GEFIXT (07-06, commit 109d23fe): poll de binnenste UCheckBox i.p.v. de dode IsToggled. Het W_Toggle-template wijzigt z'n IsToggled-property
   NIET bij een klik (alleen de animatie draait) -> de reflectie-poll in SettingsWidget ziet de wissel nooit.
   Interaction-prompt is al omgezet naar een eigen ON/OFF-knop; ALLE andere kit-toggles (Shadows, Lumen,
