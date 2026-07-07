@@ -2,7 +2,7 @@
 
 > **Dit is de levende roadmap.** Het oude A–Z stappenplan in de brief is afgerond en vervangen door dit document. Volgorde = prioriteit. Afgeronde items afvinken en (groot werk) loggen in `DECISIONS.md`.
 >
-> Laatst bijgewerkt: 2026-07-05 - HUD-polish overleg vastgelegd als nieuwe open batch (hand-preview, prompts, compass-rail, controls, crosshair, status/toasts). 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. 2A.2-2A.4 afgevinkt (XP-tempo doorgerekend, concentraten-budget gefixt, level 32 gevuld). Nog open: 2B (mid-game content), een paar losse D.x, T.x tech-debt, D35. Co-op compleet (alle H.x afgevinkt, speler-bevestigd 07-04).
+> Laatst bijgewerkt: 2026-07-07 - 1.22.0 staat live, maar packing-bench/joint-roll/player-feel verificatie is bewust open gezet tot de speler weer thuis kan testen. 2026-07-05 - HUD-polish overleg vastgelegd als nieuwe open batch (hand-preview, prompts, compass-rail, controls, crosshair, status/toasts). 2026-07-04 - grote afvink-ronde (audit tegen code/commits): D1-D34, sectie 1 (beach-map compleet), 2C/2D, Golf D/E/F/G + H.3, B.15, D.1 afgevinkt. 2A.2-2A.4 afgevinkt (XP-tempo doorgerekend, concentraten-budget gefixt, level 32 gevuld). Nog open: 2B (mid-game content), een paar losse D.x, T.x tech-debt, D35. Co-op compleet (alle H.x afgevinkt, speler-bevestigd 07-04).
 > (oude notitie 2026-07-02) — tweede notitie-dump vastgelegd als "BACKLOG 07-02b" (14 punten: NPC/placement/QoL). C.1-C.6 afgevinkt (uitgebracht in v1.19.3), co-op-disconnect opgelost + uitgebracht.
 > **Detail-uitwerking per bevinding (probleem → file → fix, afvinkbaar): [`FIXLIST.md`](FIXLIST.md).** Dit document = de grote lijn; de fixlist = het systematische afwerk-document.
 
@@ -97,6 +97,9 @@ Tussen lvl 21 (pro-edibles) en lvl 36 (Oil_Pro) komt er geen nieuw spel-werkwoor
 
 **Open na verificatie:** in-world balk boven de bench (nu alleen in de UI); evt. XP-tik per ingepakte container/joint;
 2-speler-test aan één bench; balans van de pack-tijden/snelheden + de joint-roltijd-per-gram voelen.
+**Teststatus 07-07:** verificatie bewust uitgesteld tot de speler weer thuis kan testen. Niet afvinken op basis
+van build/upload alleen; eerst in de live build voelen: packen, bijvullen, uitpakken, jar/bag-flow, lane-timing,
+joint-roll-timing en eventuele co-op bench-case.
 
 ---
 
@@ -652,6 +655,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
     drop-route, controls-overlay verbergt alleen de hoekkaart en toast-stack is max 3. Build groen; lean
     standalone smoke haalde `Map_MainMenu` + `GameState::BeginPlay` en sloot af via `ViewportClosed`,
     zonder fatal/unhandled exception.
+  - **Teststatus 07-07:** blijft open tot de speler thuis opnieuw screenshots/gevoel kan checken in de live
+    1.22.0 build. Niet administratief afvinken alleen omdat de upload groen was.
 
 ## Notitie-dump speler 2026-07-06 (ND7) — vastgelegd, nog te prioriteren
 
@@ -686,6 +691,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 - [ ] V.4 Dag/nacht-wissel zonder haper? (lampen-flip-cap, commit efc76089)
 - [~] V.6 Perf-status 07-06: schaduw-tears weg (V.1), Clearwater-zone voelt beter (lampen-cull). Load-tijd + strip-stutters: speler merkt geen duidelijk verschil (subtiel; niet slechter). Speler: 'performance kan altijd beter' -> volgende perf-ronde = game-thread/crowd (Game ~11-12ms is de vloer) of ultrawide-specifiek, op verzoek.
 - [ ] V.5 (later) Toasts: 1x per actie, iets langer zichtbaar; hotbar vult bij koop (commits f86f6408/bab783da)
+- [ ] V.7 1.22.0 packing-bench thuis-test: packen, bijvullen/mergen, per-gram uitpakken, jar/bag-capaciteiten,
+  lane-timing per bench-tier, joint-roll-timing per gram en eventueel 2 spelers aan één bench.
 - [x] AUDIT kit-toggles GEFIXT (07-06, commit 109d23fe): poll de binnenste UCheckBox i.p.v. de dode IsToggled. Het W_Toggle-template wijzigt z'n IsToggled-property
   NIET bij een klik (alleen de animatie draait) -> de reflectie-poll in SettingsWidget ziet de wissel nooit.
   Interaction-prompt is al omgezet naar een eigen ON/OFF-knop; ALLE andere kit-toggles (Shadows, Lumen,
