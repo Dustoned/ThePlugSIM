@@ -143,7 +143,11 @@ TSharedRef<SWidget> UPackWeedCell::RebuildWidget()
 		B->SetBrush(WeedUI::StorageSlotBrush(true, false, WeedUI::ColAccent(0.6f), 9.f));
 		B->SetPadding(FMargin(6.f));
 		B->SetHorizontalAlignment(HAlign_Center); B->SetVerticalAlignment(VAlign_Center);
-		if (Content) { B->SetContent(Content); }
+		if (Content)
+		{
+			Content->SetVisibility(ESlateVisibility::HitTestInvisible);
+			B->SetContent(Content);
+		}
 		WidgetTree->RootWidget = B;
 	}
 	SetVisibility(ESlateVisibility::Visible); // hit-testbaar: anders start de sleep nooit
@@ -153,6 +157,7 @@ TSharedRef<SWidget> UPackWeedCell::RebuildWidget()
 void UPackWeedCell::SetInner(UWidget* W)
 {
 	Content = W;
+	if (Content) { Content->SetVisibility(ESlateVisibility::HitTestInvisible); }
 	if (Frame) { Frame->SetContent(W); }
 }
 
@@ -190,7 +195,11 @@ TSharedRef<SWidget> UPackContCell::RebuildWidget()
 		Frame = B;
 		B->SetPadding(FMargin(6.f));
 		B->SetHorizontalAlignment(HAlign_Center); B->SetVerticalAlignment(VAlign_Center);
-		if (Content) { B->SetContent(Content); }
+		if (Content)
+		{
+			Content->SetVisibility(ESlateVisibility::HitTestInvisible);
+			B->SetContent(Content);
+		}
 		WidgetTree->RootWidget = B;
 		SetDragHover(false); // basis-brush (accent-kader = "sleep hier naartoe")
 	}
@@ -207,6 +216,7 @@ void UPackContCell::SetDragHover(bool bHover)
 void UPackContCell::SetInner(UWidget* W)
 {
 	Content = W;
+	if (Content) { Content->SetVisibility(ESlateVisibility::HitTestInvisible); }
 	if (Frame) { Frame->SetContent(W); }
 }
 
@@ -277,7 +287,11 @@ TSharedRef<SWidget> UPackBagCell::RebuildWidget()
 		B->SetBrush(WeedUI::StorageSlotBrush(true, false, WeedUI::ColAccent(0.6f), 9.f));
 		B->SetPadding(FMargin(6.f));
 		B->SetHorizontalAlignment(HAlign_Center); B->SetVerticalAlignment(VAlign_Center);
-		if (Content) { B->SetContent(Content); }
+		if (Content)
+		{
+			Content->SetVisibility(ESlateVisibility::HitTestInvisible);
+			B->SetContent(Content);
+		}
 		WidgetTree->RootWidget = B;
 	}
 	SetVisibility(ESlateVisibility::Visible);
@@ -287,6 +301,7 @@ TSharedRef<SWidget> UPackBagCell::RebuildWidget()
 void UPackBagCell::SetInner(UWidget* W)
 {
 	Content = W;                          // als de cel nog niet gebouwd is: RebuildWidget pakt dit op
+	if (Content) { Content->SetVisibility(ESlateVisibility::HitTestInvisible); }
 	if (Frame) { Frame->SetContent(W); }  // al gebouwd: meteen in-place swappen (geen herbouw van de cel)
 }
 
@@ -324,7 +339,11 @@ TSharedRef<SWidget> UPackUnwrapCell::RebuildWidget()
 		Frame = B;
 		B->SetPadding(FMargin(10.f, 8.f, 10.f, 10.f));
 		B->SetHorizontalAlignment(HAlign_Fill); B->SetVerticalAlignment(VAlign_Top); // vult de kolom (wiet-cellen)
-		if (Content) { B->SetContent(Content); }
+		if (Content)
+		{
+			Content->SetVisibility(ESlateVisibility::HitTestInvisible);
+			B->SetContent(Content);
+		}
 		WidgetTree->RootWidget = B;
 		SetDragHover(false);
 	}
