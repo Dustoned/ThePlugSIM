@@ -40,6 +40,7 @@
 #include "Progression/StoreComponent.h"
 #include "World/HeatComponent.h"
 #include "World/CityDoor.h" // FriendlyNpcName fallback
+#include "World/DoorRetrofitter.h"
 #include "Phone/ContactsComponent.h" // afspraak-statusberichten
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
@@ -1760,6 +1761,56 @@ FVector ACustomerBase::GetResidentHomeEntrySpot() const
 	return HomeFrontSpot + ToHome * EntryDepth;
 }
 
+FVector ACustomerBase::ResolveAppointmentWaitSpot(bool& bOutHasSpot) const
+{
+	bOutHasSpot = false;
+	const FVector Fallback = bHasHomeHall ? HomeHallPos : HomeFrontSpot;
+	UWorld* W = GetWorld();
+	if (!W) { return Fallback; }
+
+	const ADoorRetrofitter* Retro = nullptr;
+	for (TActorIterator<ADoorRetrofitter> It(W); It; ++It)
+	{
+		Retro = *It;
+		break;
+	}
+	if (!Retro) { return Fallback; }
+
+	TArray<FVector> Cands;
+	Retro->GetOutdoorWaitSpots(Cands);
+	Cands.RemoveAll([Retro](const FVector& P) { return Retro->IsInsideHomeRoom(P, 0.f); });
+	if (Cands.Num() == 0) { return Fallback; }
+
+	const int32 Start = (int32)(StableLookSeed(NpcId) % (uint32)Cands.Num());
+	for (int32 i = 0; i < Cands.Num(); ++i)
+	{
+		FVector Spot = Cands[(Start + i) % Cands.Num()];
+		if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(W))
+		{
+			FNavLocation Proj;
+			if (Nav->ProjectPointToNavigation(Spot, Proj, FVector(260.f, 260.f, 520.f)))
+			{
+				Spot = Proj.Location;
+			}
+		}
+
+		FHitResult Floor;
+		const FVector FS(Spot.X, Spot.Y, Spot.Z + 420.f);
+		const FVector FE = FS - FVector(0.f, 0.f, 1800.f);
+		FCollisionQueryParams Q(FName(TEXT("ApptWaitSpotFloor")), false, this);
+		if (W->LineTraceSingleByChannel(Floor, FS, FE, ECC_WorldStatic, Q))
+		{
+			Spot.Z = Floor.ImpactPoint.Z + 4.f;
+		}
+		if (Retro->IsInsideHomeRoom(Spot, 0.f)) { continue; }
+
+		bOutHasSpot = true;
+		return Spot;
+	}
+
+	return Fallback;
+}
+
 void ACustomerBase::StartResidentHomeExit(bool bFromInterior)
 {
 	bAtHomeInside = false;
@@ -2172,14 +2223,20 @@ void ACustomerBase::BeginAppointment(bool bComeToPlayer)
 	bApptActive = true;
 	bApptComeToPlayer = bComeToPlayer;
 	bApptArrived = false;
+	bApptHasWaitSpot = false;
+	ApptWaitSpot = FVector::ZeroVector;
 	ApptTimeoutMax = ComputeApptWaitSeconds(); // wacht-tijd schaalt met afstand + respect/loyaliteit van deze NPC
 	ApptTimeout = ApptTimeoutMax;              // daarna geeft de NPC de afspraak op
 	bApptSaidOnWay = bApptSaidHere = bApptSaidWaiting = false;
 	SetNeedsPlayer(true);      // poppetje op de kompas zodat de speler weet waar te zijn
 	BecomeBuyerNow();          // afspraak = wil kopen (geen prospect-sampling meer)
+	if (!bComeToPlayer)
+	{
+		ApptWaitSpot = ResolveAppointmentWaitSpot(bApptHasWaitSpot);
+	}
 
 	// "Ik ben onderweg"-appje.
-	PushApptMessage(bComeToPlayer ? TEXT("On my way - I'll wait at your main entrance.") : TEXT("Come by mine whenever, I'm home."));
+	PushApptMessage(bComeToPlayer ? TEXT("On my way - I'll wait at your main entrance.") : (bApptHasWaitSpot ? TEXT("I'm outside. Follow the marker.") : TEXT("Come by mine whenever, I'm home.")));
 	bApptSaidOnWay = true;
 
 	if (bComeToPlayer)
@@ -2209,6 +2266,8 @@ void ACustomerBase::EndAppointment()
 	bApptActive = false;
 	bApptComeToPlayer = false;
 	bApptArrived = false;
+	bApptHasWaitSpot = false;
+	ApptWaitSpot = FVector::ZeroVector;
 	ApptForPlayerId.Reset();   // competitive: eigenaarschap wist zodat een gerecyclede bewoner geen stale afspraak-owner houdt
 	SetNeedsPlayer(false);
 	RoamTimer = 0.f;           // pak meteen een nieuw roam-doel
@@ -3015,19 +3074,17 @@ void ACustomerBase::TickResident(float DeltaSeconds)
 		}
 		else
 		{
-			// "Kom bij mij": wacht ECHT bij de eigen deur (bereikbaar), niet midden in de kamer:
-			//  - appartement -> in de gang vóór de unitdeur (HomeHallPos),
-			//  - rijtjeshuis -> vóór de voordeur (HomeFrontSpot).
+			// "Kom bij mij": wacht buiten bij een logische map-deur; eigen deur/hal is fallback.
 			if (!bApptArrived)
 			{
 				bApptArrived = true;
 				bAtHomeInside = false;
 				SetActorHiddenInGame(false);
 				SetActorEnableCollision(true);
-				const FVector DoorSpot = bHasHomeHall ? HomeHallPos : HomeFrontSpot;
+				const FVector DoorSpot = bApptHasWaitSpot ? ApptWaitSpot : (bHasHomeHall ? HomeHallPos : HomeFrontSpot);
 				SetActorLocation(MakeResidentStandingLocation(DoorSpot));
 				if (AAIController* AI = Cast<AAIController>(GetController())) { AI->StopMovement(); }
-				if (!bApptSaidHere) { PushApptMessage(TEXT("I'm home, come through whenever.")); bApptSaidHere = true; }
+				if (!bApptSaidHere) { PushApptMessage(bApptHasWaitSpot ? TEXT("I'm waiting outside. Check your marker.") : TEXT("I'm home, come through whenever.")); bApptSaidHere = true; }
 			}
 			return;
 		}

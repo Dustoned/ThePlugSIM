@@ -294,13 +294,13 @@ public:
 	bool IsResidentWalker() const { return bResident || NpcId.ToString().StartsWith(TEXT("Resident_")); }
 	bool ShouldShowOnCityMap() const;
 
-	// Huisnummer/adres van deze bewoner (voor afspraak-berichten "kom langs op nr X").
+	// Huisnummer/adres van deze bewoner (metadata/fallback; afspraken wijzen via marker naar de wachtplek).
 	const FString& GetHomeNumber() const { return HomeNumber; }
 	const FVector& GetHomeInteriorPos() const { return HomeInteriorPos; }
 	bool GetResidentMovementSnapshot(FResidentMovementSnapshot& OutSnapshot);
 
 	// Start een afspraak voor deze bewoner. bComeToPlayer = de NPC loopt naar de speler (TheyComeToYou);
-	// anders verschijnt 'ie in z'n eigen unit en wacht daar tot de speler langskomt (YouGoToThem).
+	// anders wacht 'ie buiten op een automatische wachtplek en volgt de speler de marker (YouGoToThem).
 	void BeginAppointment(bool bComeToPlayer);
 	void EndAppointment();
 	bool HasActiveAppointment() const { return bApptActive; }
@@ -476,6 +476,7 @@ protected:
 	FVector ResolveResidentHomeFrontSpot(const FVector& FrontSpot);
 	FVector ResolveResidentHomeExitSidewalkSpot(const FVector& SafeFrontSpot) const;
 	FVector GetResidentHomeEntrySpot() const;
+	FVector ResolveAppointmentWaitSpot(bool& bOutHasSpot) const;
 	void StartResidentHomeExit(bool bFromInterior);
 	bool TickResidentHomeExit(float DeltaSeconds);
 	void StartResidentHomeEntry();
@@ -501,8 +502,10 @@ protected:
 	// Afspraak-staat (overschrijft tijdelijk het roam/nacht-schema).
 	UPROPERTY(Replicated)
 	bool bApptActive = false;       // er loopt een afspraak voor deze bewoner
-	bool bApptComeToPlayer = false; // true = NPC loopt naar de speler; false = NPC wacht in eigen unit
-	bool bApptArrived = false;      // (YouGoToThem) al naar de unit verplaatst
+	bool bApptComeToPlayer = false; // true = NPC loopt naar de speler; false = speler gaat naar NPC-wachtplek
+	bool bApptArrived = false;      // (YouGoToThem) al naar de wachtplek verplaatst
+	bool bApptHasWaitSpot = false;  // true = YouGoToThem wacht op een automatische buitenplek
+	FVector ApptWaitSpot = FVector::ZeroVector;
 	UPROPERTY(Replicated)
 	float ApptTimeout = 0.f;        // veiligheids-timer: na X sec geeft de NPC de afspraak op (gerepliceerd voor de chat-balk)
 

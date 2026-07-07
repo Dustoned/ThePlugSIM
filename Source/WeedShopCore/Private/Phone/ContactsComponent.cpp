@@ -300,7 +300,7 @@ void UContactsComponent::SendRandomAppointment()
 			const int32 OMM = OTotalMin % 60;
 			Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
 				? FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nI'll come to you."), WantQty, *WantClean, Msg.MinThc, OHH, OMM))
-				: FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nBring it to my place."), WantQty, *WantClean, Msg.MinThc, OHH, OMM));
+				: FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nMeet me outside."), WantQty, *WantClean, Msg.MinThc, OHH, OMM));
 		}
 	}
 
@@ -318,16 +318,14 @@ void UContactsComponent::SendRandomAppointment()
 	{
 		Msg.Body = (Msg.Kind == EAppointmentKind::TheyComeToYou)
 			? FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nI'll come by at %02d:%02d."), *WantClean, WantQty, HH, MM))
-			: (AddrStr.IsEmpty()
-				? FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nCan you come to my place at %02d:%02d?"), *WantClean, WantQty, HH, MM))
-				: FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nCome to my place (no. %s) at %02d:%02d?"), *WantClean, WantQty, *AddrStr, HH, MM)));
+			: FText::FromString(FString::Printf(TEXT("Hey, got any %s?\nI need %dg.\nMeet me outside at %02d:%02d?"), *WantClean, WantQty, HH, MM));
 	}
 	else if (Msg.Kind == EAppointmentKind::YouGoToThem && !AddrStr.IsEmpty())
 	{
-		// Order met huisadres: voeg het adres toe zodat je weet waar je moet leveren.
+		// Order waarbij jij naar de klant gaat: de marker wijst naar de automatische buitenplek.
 		const int32 OTotalMin = ClockMinutesOf(Msg.AppointmentTimeOfDay);
-		Msg.Body = FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nBring it to my place (no. %s)."),
-			WantQty, *WantClean, Msg.MinThc, (OTotalMin / 60) % 24, OTotalMin % 60, *AddrStr));
+		Msg.Body = FText::FromString(FString::Printf(TEXT("VIP order\n%dg %s\nmin %.0f%% THC\nReady by %02d:%02d\nMeet me outside."),
+			WantQty, *WantClean, Msg.MinThc, (OTotalMin / 60) % 24, OTotalMin % 60));
 	}
 
 	// COMPETITIVE: dit bericht is voor EEN speler (eigen telefoon). Doel = de GEHOISTE eigenaar van dit
@@ -511,7 +509,7 @@ void UContactsComponent::SpawnAppointmentCustomer(const FPhoneMessage& Msg)
 	const FName BaseId = BaseNpcId(Msg.FromContactId);
 
 	// Voorkeur: stuur de BESTAANDE NPC met dit NpcId aan (geen dubbele NPC). YouGoToThem -> die
-	// verschijnt in z'n eigen unit en wacht; TheyComeToYou -> die loopt naar de speler.
+	// wacht buiten op een automatische wachtplek; TheyComeToYou -> die loopt naar de speler.
 	// PERF: klant-registry (O(NPC's)) i.p.v. TActorIterator over alle actors - zelfde set.
 	// Per-proces registry -> op wereld filteren (PIE/co-op-in-1-proces).
 	//

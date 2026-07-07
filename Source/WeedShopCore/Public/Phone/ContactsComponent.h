@@ -1,6 +1,6 @@
 // UContactsComponent — telefoon-contacten + berichten op de GameState (gedeeld, co-op).
 // NPC-klanten waarmee je contact had worden contacten; ze sturen periodiek afspraak-berichten
-// ("Ik kom om HH:MM langs" of "Kom om HH:MM bij mij"). Bij de afspraaktijd volgt een melding.
+// ("Ik kom om HH:MM langs" of "Meet me outside om HH:MM"). Bij de afspraaktijd volgt een melding.
 // Server-authoritative; contacten + berichten repliceren naar de clients.
 
 #pragma once
