@@ -253,8 +253,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
 
 ### Wereld / sfeer
 
-- [ ] **D.5a In-wereld nacht niet pikkedonker** — 's nachts een leesbare min-licht-vloer (nu 0). [DayNightController
-  UDS-exposure-clamp + skylight-nacht-vloer + NightPPV min-brightness] — IN BEWERKING (golf 1, agent A2).
+- [x] **D.5a In-wereld nacht niet pikkedonker** — 's nachts een leesbare min-licht-vloer. [DayNightController
+  UDS-exposure-clamp + skylight-nacht-vloer + NightPPV min-brightness] — code + build groen 07-07; visual thuis-test blijft open als V.12.
 - [x] **D.5b Geopende M-kaart zwart 's nachts** — de speler bedoelde de OPEN kaart (screenshot): die is 's nachts
   pikzwart op de gele/blauwe markers na. Root cause: de map-SceneCapture (DoorRetrofitter, 1x via CaptureMapNow +
   ApplyMapPhotoLight) zet een heldere PackSun, maar op de UDS-beach is de PackSun grotendeels inactief -> de
@@ -720,6 +720,8 @@ Level 50 = shop-licentie = halverwege. Levels 51-100 zijn bewust leeg gehouden v
   appartementkamer of random straatpunt.
 - [ ] V.11 D.3 floor snapping thuis-test: pot/bench/shelf/machine dicht tegen muur/plint richten; ghost moet blauw
   worden waar genoeg ruimte is en na plaatsen echt op de vloer staan, niet zweven of rood blijven op de rand.
+- [ ] V.12 D.5a nachtlicht thuis-test: rond 01:00-04:00 buiten en binnen checken dat de wereld leesbaar blijft,
+  zonder dat de nacht eruitziet als dag of dat neon/lampen wit uitbijten.
 - [x] AUDIT kit-toggles GEFIXT (07-06, commit 109d23fe): poll de binnenste UCheckBox i.p.v. de dode IsToggled. Het W_Toggle-template wijzigt z'n IsToggled-property
   NIET bij een klik (alleen de animatie draait) -> de reflectie-poll in SettingsWidget ziet de wissel nooit.
   Interaction-prompt is al omgezet naar een eigen ON/OFF-knop; ALLE andere kit-toggles (Shadows, Lumen,

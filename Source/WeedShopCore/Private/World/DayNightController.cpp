@@ -41,6 +41,11 @@
 
 TWeakObjectPtr<ADayNightController> ADayNightController::LocalInstance;
 
+static constexpr float GNightSkyFloor = 0.12f;
+static constexpr float GNightExposureMinBrightness = 0.4f;
+static constexpr float GUdsNightExposureFloor = -1.2f;
+static constexpr float GUdsNightGlowFloor = 1.0f;
+
 ADayNightController::ADayNightController()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -89,7 +94,7 @@ void ADayNightController::SaveLightConfig() const
 {
 	const FString Cfg = FString::Printf(
 		TEXT("MoonIntensity=%.3f\nSunIntensity=%.3f\nSkyNight=%.3f\nSkyDay=%.3f\nMoonPitch=%.1f\nLampIntensity=%.0f\nExposureBias=%.2f\nNightGain=%.3f\nNightExposure=%.2f\nDayBloom=%.3f\nSunHaze=%.5f\nUdsExpDay=%.3f\nUdsExpDawnDusk=%.3f\nUdsExpNight=%.3f\nUdsCloud=%.3f\nUdsFog=%.3f\n"),
-		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias, NightGain, NightExposure, DayBloom, SunHaze, UdsExpDay, UdsExpDawnDusk, UdsExpNight, UdsCloud, UdsFog);
+		MoonIntensity, SunIntensity, SkyNight, SkyDay, MoonPitch, LampIntensity, ExposureBias, NightGain, NightExposure, DayBloom, SunHaze, UdsExpDay, UdsExpDawnDusk, FMath::Max(UdsExpNight, GUdsNightExposureFloor), UdsCloud, UdsFog);
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("LightConfig.txt");
 	FFileHelper::SaveStringToFile(Cfg, *Path);
 	UE_LOG(LogTemp, Log, TEXT("[LightConfig] saved to %s\n%s"), *Path, *Cfg);
@@ -666,11 +671,11 @@ void ADayNightController::ApplyUdsLook()
 	SetUdsDouble(FName(TEXT("Exposure Bias Dawn/Dusk")), UdsExpDawnDusk);
 	// D.5 min-licht-vloer: clamp de ONDERKANT vlak voor UDS zodat de nacht nooit volledig zwart wordt
 	// (rond 01:00 zakte de MANUAL exposure naar zwart). Sliders blijven werken; alleen de bodem is begrensd.
-	SetUdsDouble(FName(TEXT("Exposure Bias Night")), FMath::Max(UdsExpNight, -1.2f));
+	SetUdsDouble(FName(TEXT("Exposure Bias Night")), FMath::Max(UdsExpNight, GUdsNightExposureFloor));
 	SetUdsDouble(FName(TEXT("Extra Night Brightness when Cloudy")), UdsExtraNightCloudy);
 	SetUdsDouble(FName(TEXT("Stars Intensity")), UdsStars);
 	SetUdsDouble(FName(TEXT("Nebula Intensity")), UdsNebula);
-	SetUdsDouble(FName(TEXT("Night Sky Glow")), FMath::Max(UdsNightGlow, 1.0f));
+	SetUdsDouble(FName(TEXT("Night Sky Glow")), FMath::Max(UdsNightGlow, GUdsNightGlowFloor));
 	// Cloud Coverage/Fog bewust NIET op de Sky aanraken (UDW stuurt die via de weer-state).
 	CallUdsUpdate();
 }
@@ -1016,7 +1021,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 					SLC->bLowerHemisphereIsBlack = false;
 					SLC->RecaptureSky();
 					FSkyDim SkEntry; SkEntry.Sky = SLC; SkEntry.OrigIntensity = SLC->Intensity;
-					SLC->SetIntensity(SkEntry.OrigIntensity * FMath::Lerp(0.06f, 1.f, MinDayF)); // meteen op klok-stand
+					SLC->SetIntensity(SkEntry.OrigIntensity * FMath::Lerp(GNightSkyFloor, 1.f, MinDayF)); // meteen op klok-stand
 					SkyDims.Add(SkEntry);
 				}
 				TInlineComponentArray<UStaticMeshComponent*> Meshes(A);
@@ -1215,7 +1220,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// door de auto-exposure weer opgeblazen tot daglicht onder een zwarte hemel. Skylight bijna
 		// uit; alle overige lichten 7% (de emissive strips van de map blijven vanzelf - materiaal).
 		const float SunMul = 0.f;                           // map-zonnen permanent uit: onze bewegende zon is DE zon
-		const float SkyMul = FMath::Lerp(0.10f, 1.f, MinDayF); // D.5: nacht-vloer omhoog (was 0.02) - hemel nooit pikkedonker
+		const float SkyMul = FMath::Lerp(GNightSkyFloor, 1.f, MinDayF); // D.5: nacht-vloer omhoog (was 0.02) - hemel nooit pikkedonker
 		if (bUpdateLights)
 		for (FDimLight& D : DimLights)
 		{
@@ -1251,7 +1256,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 		// hemel-cubemap. Ongated zodat een eventuele resetter naar dag-sterkte meteen weer gedimd wordt.
 		if (bUpdateLights)
 		{
-			const float SkyWant = FMath::Lerp(0.12f, 1.f, MinDayF); // D.5: nacht-specular-vloer omhoog (was 0.06)
+			const float SkyWant = FMath::Lerp(GNightSkyFloor, 1.f, MinDayF); // D.5: nacht-specular-vloer omhoog (was 0.06)
 			for (FSkyDim& Sk : SkyDims)
 			{
 				if (USkyLightComponent* SLC = Sk.Sky.Get())
@@ -1313,7 +1318,7 @@ void ADayNightController::Tick(float DeltaSeconds)
 				// verder inzakken dan deze vloer -> voorkomt het pikkedonker rond 01:00. Onderkant begrensd,
 				// bovenkant blijft op 1.0; de Night exposure/glow-sliders sturen nog steeds het niveau ertussen.
 				NightVol->Settings.bOverride_AutoExposureMinBrightness = true;
-				NightVol->Settings.AutoExposureMinBrightness = 0.4f;
+				NightVol->Settings.AutoExposureMinBrightness = GNightExposureMinBrightness;
 				NightPPV = NightVol;
 			}
 		}

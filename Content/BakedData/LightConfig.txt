@@ -11,6 +11,6 @@ DayBloom=0.012
 SunHaze=0.00311
 UdsExpDay=-2.000
 UdsExpDawnDusk=-0.726
-UdsExpNight=-1.964
+UdsExpNight=-1.200
 UdsCloud=0.321
 UdsFog=0.226
