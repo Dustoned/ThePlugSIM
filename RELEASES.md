@@ -1,2 +1,3 @@
+- ThePlugSIM test-build 20260714-2304 (build-20260714-2304)
 - ThePlugSIM test-build 20260714-2134 (build-20260714-2134)
 - 1.27.0 (14 juli 2026)
